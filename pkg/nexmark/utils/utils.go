@@ -11,8 +11,8 @@ import (
 type RateUnit uint32
 
 const (
-	per_second RateUnit = 1_000_000
-	per_minute RateUnit = 60_000_000
+	PER_SECOND RateUnit = 1_000_000
+	PER_MINUTE RateUnit = 60_000_000
 )
 
 /// Number of us between events at given rate

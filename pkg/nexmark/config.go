@@ -7,7 +7,7 @@ import (
 type NexMarkConfig struct {
 	/// Number of events to generate. If zero, generate as many as possible without overflowing
 	/// internal counters etc.
-	NumEvents uint64 `json:"numEvents"`
+	NumEvents uint32 `json:"numEvents"`
 
 	/// Number of event generators to use. Each generates events in its own timeline.
 	NumEventGenerators uint32 `json:"numEventGenerators"`
