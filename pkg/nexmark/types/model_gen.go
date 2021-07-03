@@ -588,6 +588,190 @@ func (z *Bid) Msgsize() (s int) {
 }
 
 // DecodeMsg implements msgp.Decodable
+func (z *EType) DecodeMsg(dc *msgp.Reader) (err error) {
+	{
+		var zb0001 uint8
+		zb0001, err = dc.ReadUint8()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = EType(zb0001)
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z EType) EncodeMsg(en *msgp.Writer) (err error) {
+	err = en.WriteUint8(uint8(z))
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z EType) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendUint8(o, uint8(z))
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *EType) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 uint8
+		zb0001, bts, err = msgp.ReadUint8Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = EType(zb0001)
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z EType) Msgsize() (s int) {
+	s = msgp.Uint8Size
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *EventSerialized) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "etype":
+			z.Etype, err = dc.ReadUint8()
+			if err != nil {
+				err = msgp.WrapError(err, "Etype")
+				return
+			}
+		case "body":
+			err = z.Body.DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, "Body")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *EventSerialized) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 2
+	// write "etype"
+	err = en.Append(0x82, 0xa5, 0x65, 0x74, 0x79, 0x70, 0x65)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint8(z.Etype)
+	if err != nil {
+		err = msgp.WrapError(err, "Etype")
+		return
+	}
+	// write "body"
+	err = en.Append(0xa4, 0x62, 0x6f, 0x64, 0x79)
+	if err != nil {
+		return
+	}
+	err = z.Body.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "Body")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *EventSerialized) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 2
+	// string "etype"
+	o = append(o, 0x82, 0xa5, 0x65, 0x74, 0x79, 0x70, 0x65)
+	o = msgp.AppendUint8(o, z.Etype)
+	// string "body"
+	o = append(o, 0xa4, 0x62, 0x6f, 0x64, 0x79)
+	o, err = z.Body.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "Body")
+		return
+	}
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *EventSerialized) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "etype":
+			z.Etype, bts, err = msgp.ReadUint8Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Etype")
+				return
+			}
+		case "body":
+			bts, err = z.Body.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Body")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *EventSerialized) Msgsize() (s int) {
+	s = 1 + 6 + msgp.Uint8Size + 5 + z.Body.Msgsize()
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
 func (z *Person) DecodeMsg(dc *msgp.Reader) (err error) {
 	var field []byte
 	_ = field

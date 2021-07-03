@@ -29,7 +29,7 @@ type GeneratorConfig struct {
 	EventPerEpoch     uint64
 }
 
-func NewGeneratorConfig(configuration *nexmark.NexMarkConfig, baseTime uint64, firstEventId uint64,
+func NewGeneratorConfig(configuration *nexmark.NexMarkConfig, baseTime uint64 /* millisecond */, firstEventId uint64,
 	maxEventsOrZero uint64, firstEventNumber uint64) *GeneratorConfig {
 	g := new(GeneratorConfig)
 	g.AuctionProportion = configuration.AuctionProportion

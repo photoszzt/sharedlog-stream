@@ -8,6 +8,7 @@ import (
 )
 
 type NexMarkConfigInput struct {
+	TopicName              string        `json:"topic_name"`
 	RateShape              string        `json:"rate_shape"`
 	RatePeriod             time.Duration `json:"rate_period"`
 	RateLimited            bool          `json:"rate_limited"`
@@ -25,8 +26,9 @@ type NexMarkConfigInput struct {
 	EventsNum              uint64        `json:"events_num"`
 }
 
-func NewNexMarkConfigInput() *NexMarkConfigInput {
+func NewNexMarkConfigInput(topicName string) *NexMarkConfigInput {
 	return &NexMarkConfigInput{
+		TopicName:              topicName,
 		RateShape:              "square",
 		RatePeriod:             time.Duration(600) * time.Second,
 		RateLimited:            false,
@@ -67,4 +69,11 @@ func ConvertToNexmarkConfiguration(config *NexMarkConfigInput) (*nexmark.NexMark
 		HotSellersRatio:    config.AuctionHotRatioSellers,
 		NumEvents:          uint32(config.EventsNum),
 	}, nil
+}
+
+type FnOutput struct {
+	Success   bool    `json:"success"`
+	Message   string  `json:"message"`
+	Duration  float64 `json:"duration"`
+	Latencies []int   `json:"latencies"`
 }
