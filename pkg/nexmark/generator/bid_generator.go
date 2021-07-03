@@ -53,7 +53,7 @@ func NextBid(ctx context.Context, eventId uint64, random *rand.Rand, timestamp u
 	} else {
 		channelAndUrlMap, ok := ctx.Value("CHANNEL_URL_CACHE").(map[uint32]*ChannelUrl)
 		if !ok {
-			return nil, fmt.Errorf("Fail to cast context value to map")
+			return nil, fmt.Errorf("fail to cast context value to map")
 		}
 
 		channelAndUrl := channelAndUrlMap[uint32(random.Intn(int(CHANNELS_NUMBER)))]

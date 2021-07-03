@@ -12,9 +12,9 @@ import (
 )
 
 var (
-	emptyPayloadError   = errors.New("Payload cannot be empty")
-	kStreamEmptyError   = errors.New("Stream empty")
-	kStreamTimeoutError = errors.New("Blocking pop timeout")
+	errEmptyPayload  = errors.New("payload cannot be empty")
+	errStreamEmpty   = errors.New("stream empty")
+	errStreamTimeout = errors.New("blocking pop timeout")
 )
 
 const (
@@ -91,7 +91,7 @@ func NewSharedLogStream(ctx context.Context, env types.Environment, topicName st
 
 func (s *SharedLogStream) Push(payload []byte) error {
 	if len(payload) == 0 {
-		return emptyPayloadError
+		return errEmptyPayload
 	}
 	logEntry := &StreamLogEntry{
 		TopicName: s.topicName,
@@ -273,11 +273,11 @@ func (s *SharedLogStream) appendPopLogAndSync() error {
 }
 
 func IsStreamEmptyError(err error) bool {
-	return err == kStreamEmptyError
+	return err == errStreamEmpty
 }
 
 func IsStreamTimeoutError(err error) bool {
-	return err == kStreamTimeoutError
+	return err == errStreamTimeout
 }
 
 func (s *SharedLogStream) Pop() ([]byte /* payload */, error) {
@@ -286,7 +286,7 @@ func (s *SharedLogStream) Pop() ([]byte /* payload */, error) {
 			return nil, err
 		}
 		if s.isEmpty() {
-			return nil, kStreamEmptyError
+			return nil, errStreamEmpty
 		}
 	}
 	if err := s.appendPopLogAndSync(); err != nil {
@@ -297,7 +297,7 @@ func (s *SharedLogStream) Pop() ([]byte /* payload */, error) {
 	} else if nextLog != nil {
 		return nextLog.Payload, nil
 	} else {
-		return nil, kStreamEmptyError
+		return nil, errStreamEmpty
 	}
 }
 
@@ -325,7 +325,7 @@ func (s *SharedLogStream) PopBlocking() ([]byte /* payload */, error) {
 					}
 					seqNum = logEntry.SeqNum + 1
 				} else if time.Since(startTime) >= kBlockingPopTimeout {
-					return nil, kStreamTimeoutError
+					return nil, errStreamTimeout
 				}
 			}
 		}
@@ -338,5 +338,5 @@ func (s *SharedLogStream) PopBlocking() ([]byte /* payload */, error) {
 			return nextLog.Payload, nil
 		}
 	}
-	return nil, kStreamTimeoutError
+	return nil, errStreamTimeout
 }

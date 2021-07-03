@@ -47,12 +47,12 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 	case "query8":
 		return handlers.NewQuery8(env), nil
 	default:
-		return nil, fmt.Errorf("Unknown function name %v", funcName)
+		return nil, fmt.Errorf("unknown function name %v", funcName)
 	}
 }
 
 func (f *funcHandlerFactory) GrpcNew(env types.Environment, service string) (types.GrpcFuncHandler, error) {
-	return nil, fmt.Errorf("Not implemented")
+	return nil, fmt.Errorf("not implemented")
 }
 
 func main() {

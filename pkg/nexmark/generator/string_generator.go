@@ -17,7 +17,7 @@ const (
 func NextExactString(rand *rand.Rand, length uint32) string {
 	var b strings.Builder
 	b.Grow(int(length))
-	for i, cache, remain := length-1, rand.Int63(), letterIdxMax; i >= 0; {
+	for i, cache, remain := int(length-1), rand.Int63(), letterIdxMax; i >= 0; {
 		if remain == 0 {
 			cache, remain = rand.Int63(), letterIdxMax
 		}

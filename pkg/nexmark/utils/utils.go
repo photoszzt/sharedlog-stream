@@ -36,7 +36,7 @@ func StrToRateShape(rateShape string) (RateShape, error) {
 	} else if rateShape == "sine" || rateShape == "SINE" {
 		return SINE, nil
 	} else {
-		return UNKNOWN_RATE_SHAPE, fmt.Errorf("Unknown rate shape: %v", rateShape)
+		return UNKNOWN_RATE_SHAPE, fmt.Errorf("unknown rate shape: %v", rateShape)
 	}
 }
 
@@ -50,21 +50,21 @@ func (rs RateShape) InterEventDelayUs(rate uint64, unit RateUnit, numGenerators 
 /// achieve this shape with `firatRate/nextRate` at `unit` using `numGenerators`.
 func (rs RateShape) InterEventDelayUsArr(firstRate uint64, secondRate uint64, unit RateUnit, numGenerators uint32) ([]uint64, error) {
 	if firstRate == secondRate {
-		ret := make([]uint64, 1, 1)
+		ret := make([]uint64, 1)
 		ret[0] = unit.RateToPeriodUs(firstRate) * uint64(numGenerators)
 		return ret, nil
 	}
 
 	switch rs {
 	case SQUARE:
-		ret := make([]uint64, 2, 2)
+		ret := make([]uint64, 2)
 		ret[0] = unit.RateToPeriodUs(firstRate) * uint64(numGenerators)
 		ret[1] = unit.RateToPeriodUs(secondRate) * uint64(numGenerators)
 		return ret, nil
 	case SINE:
 		mid := float64(firstRate+secondRate) / 2.0
 		amp := float64(firstRate-secondRate) / 2.0
-		ret := make([]uint64, NUM_STEPS, NUM_STEPS)
+		ret := make([]uint64, NUM_STEPS)
 		for i := uint32(0); i < NUM_STEPS; i++ {
 			r := (2.0 * math.Pi * float64(i)) / float64(NUM_STEPS)
 			rate := mid + amp*math.Cos(r)
@@ -72,7 +72,7 @@ func (rs RateShape) InterEventDelayUsArr(firstRate uint64, secondRate uint64, un
 		}
 		return ret, nil
 	default:
-		return nil, fmt.Errorf("Unknown rate shape %v", rs)
+		return nil, fmt.Errorf("unknown rate shape %v", rs)
 	}
 }
 
