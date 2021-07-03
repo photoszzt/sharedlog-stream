@@ -17,5 +17,6 @@ func NewNexmarkSource(env types.Environment) types.FuncHandler {
 }
 
 func (h *nexmarkSourceHandler) Call(ctx context.Context, input []byte) ([]byte, error) {
+
 	return nil, nil
 }

@@ -1,11 +1,10 @@
-package model
+package generator
 
 import (
 	"math/rand"
 	"time"
 
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/generator"
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/model"
+	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/types"
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/utils"
 )
 
@@ -17,16 +16,16 @@ const (
 
 func NextAuction(eventsCountSoFar uint64,
 	eventId uint64, random *rand.Rand, timestamp uint64,
-	config generator.GeneratorConfig) *model.Auction {
-	id := LastBase0AuctionId(config, eventId) + generator.FIRST_AUCTION_ID
+	config *GeneratorConfig) *types.Auction {
+	id := LastBase0AuctionId(config, eventId) + FIRST_AUCTION_ID
 	seller := uint64(0)
 	if random.Intn(int(config.Configuration.HotSellersRatio)) > 0 {
 		seller = (LastBase0PersonId(config, eventId) / uint64(HOT_SELLER_RATIO)) * uint64(HOT_SELLER_RATIO)
 	} else {
 		seller = NextBase0PersonId(eventId, random, config)
 	}
-	seller += generator.FIRST_PERSON_ID
-	category := generator.FIRST_CATEGORY_ID + uint64(random.Intn(int(NUM_CATEGORIES)))
+	seller += FIRST_PERSON_ID
+	category := FIRST_CATEGORY_ID + uint64(random.Intn(int(NUM_CATEGORIES)))
 	initialBid := NextPrice(random)
 	expires := timestamp + nextAuctionLenghMs(eventsCountSoFar, random, timestamp, config)
 	name := NextString(random, 20)
@@ -34,7 +33,7 @@ func NextAuction(eventsCountSoFar uint64,
 	reserve := initialBid + NextPrice(random)
 	currentSize := 8 + len(name) + len(desc) + 8 + 8 + 8 + 8 + 8
 	extra := NextExtra(random, uint32(currentSize), config.Configuration.AvgAuctionByteSize)
-	return &model.Auction{
+	return &types.Auction{
 		ID:          id,
 		ItemName:    name,
 		Description: desc,
@@ -48,7 +47,7 @@ func NextAuction(eventsCountSoFar uint64,
 	}
 }
 
-func LastBase0AuctionId(config generator.GeneratorConfig, eventId uint64) uint64 {
+func LastBase0AuctionId(config *GeneratorConfig, eventId uint64) uint64 {
 	epoch := eventId / uint64(config.TotalProportion)
 	offset := eventId % uint64(config.TotalProportion)
 	if offset < uint64(config.PersonProportion) {
@@ -62,13 +61,13 @@ func LastBase0AuctionId(config generator.GeneratorConfig, eventId uint64) uint64
 	return epoch*uint64(config.AuctionProportion) + offset
 }
 
-func NextBase0AuctionId(nextEventId uint64, random *rand.Rand, config generator.GeneratorConfig) uint64 {
+func NextBase0AuctionId(nextEventId uint64, random *rand.Rand, config *GeneratorConfig) uint64 {
 	minAuction := utils.MaxUint64(LastBase0AuctionId(config, nextEventId)-uint64(config.Configuration.NumInFlightAuctions), 0)
 	maxAuction := LastBase0AuctionId(config, nextEventId)
 	return minAuction + NextUint64(random, maxAuction-minAuction+1+uint64(AUCTION_ID_LEAD))
 }
 
-func nextAuctionLenghMs(eventsCountSoFar uint64, random *rand.Rand, timestamp uint64, config generator.GeneratorConfig) uint64 {
+func nextAuctionLenghMs(eventsCountSoFar uint64, random *rand.Rand, timestamp uint64, config *GeneratorConfig) uint64 {
 	currentEventNumber := config.NextAdjustedEventNumber(eventsCountSoFar)
 	numEventsForAuctions := uint64(config.Configuration.NumInFlightAuctions) * uint64(config.TotalProportion) / uint64(config.AuctionProportion)
 	futureAuction := config.TimestampForEvent(currentEventNumber + numEventsForAuctions)

@@ -47,7 +47,7 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 	case "query8":
 		return handlers.NewQuery8(env), nil
 	default:
-		log.Fatal().Str("funcName", funcName).Msg("Unknown function name")
+		return nil, fmt.Errorf("Unknown function name %v", funcName)
 	}
 }
 

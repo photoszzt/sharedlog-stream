@@ -1,4 +1,4 @@
-package model
+package generator
 
 import (
 	"fmt"
@@ -6,8 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/generator"
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/model"
+	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/types"
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/utils"
 )
 
@@ -22,8 +21,8 @@ var (
 	LAST_NAMES  = [9]string{"Shultz", "Abrams", "Spencer", "White", "Bartels", "Walton", "Smith", "Jones", "Noris"}
 )
 
-func NextPerson(nextEventId uint64, random *rand.Rand, timestamp uint64, config generator.GeneratorConfig) *model.Person {
-	id := LastBase0PersonId(config, nextEventId) + generator.FIRST_PERSON_ID
+func NextPerson(nextEventId uint64, random *rand.Rand, timestamp uint64, config *GeneratorConfig) *types.Person {
+	id := LastBase0PersonId(config, nextEventId) + FIRST_PERSON_ID
 	name := nextPersonName(random)
 	email := nextEmail(random)
 	creditCard := nextCreditCard(random)
@@ -31,7 +30,7 @@ func NextPerson(nextEventId uint64, random *rand.Rand, timestamp uint64, config 
 	city := nextUSCity(random)
 	currentSize := 8 + len(name) + len(email) + len(creditCard) + len(city) + len(state)
 	extra := NextExtra(random, uint32(currentSize), config.Configuration.AvgPersonByteSize)
-	return &model.Person{
+	return &types.Person{
 		ID:           id,
 		Name:         name,
 		EmailAddress: email,
@@ -43,14 +42,14 @@ func NextPerson(nextEventId uint64, random *rand.Rand, timestamp uint64, config 
 	}
 }
 
-func NextBase0PersonId(eventId uint64, random *rand.Rand, config generator.GeneratorConfig) uint64 {
+func NextBase0PersonId(eventId uint64, random *rand.Rand, config *GeneratorConfig) uint64 {
 	numPeople := LastBase0PersonId(config, eventId) + 1
 	activePeople := utils.MinUint64(numPeople, uint64(config.Configuration.NumActivePeople))
 	n := NextUint64(random, activePeople+uint64(PERSON_ID_LEAD))
 	return numPeople - activePeople + n
 }
 
-func LastBase0PersonId(config generator.GeneratorConfig, eventId uint64) uint64 {
+func LastBase0PersonId(config *GeneratorConfig, eventId uint64) uint64 {
 	epoch := eventId / uint64(config.TotalProportion)
 	offset := eventId % uint64(config.TotalProportion)
 	if offset >= uint64(config.PersonProportion) {

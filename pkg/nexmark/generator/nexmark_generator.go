@@ -18,11 +18,11 @@ type NexmarkGenerator struct {
 type NextEvent struct {
 	WallclockTimestamp uint64
 	EventTimestamp     uint64
-	Event              types.Event
+	Event              *types.Event
 	Watermark          uint64
 }
 
-func NewNextEvent(wallclockTimestamp, eventTimestamp uint64, event types.Event, watermark uint64) *NextEvent {
+func NewNextEvent(wallclockTimestamp, eventTimestamp uint64, event *types.Event, watermark uint64) *NextEvent {
 	return &NextEvent{
 		WallclockTimestamp: wallclockTimestamp,
 		EventTimestamp:     eventTimestamp,
@@ -77,16 +77,16 @@ func (ng *NexmarkGenerator) NextEvent(ctx context.Context) (*NextEvent, error) {
 	rem := newEventId % uint64(ng.Config.TotalProportion)
 	var event *types.Event
 	if rem < uint64(ng.Config.PersonProportion) {
-		event = NewPersonEvent(
-			model.NextPerson(newEventId, ng.Random, adjustedEventTimestamp, ng.Config))
+		event = types.NewPersonEvent(
+			NextPerson(newEventId, ng.Random, adjustedEventTimestamp, ng.Config))
 	} else if rem < uint64(ng.Config.PersonProportion)+uint64(ng.Config.AuctionProportion) {
-		event = model.NewAuctionEvnet(gmodel.NextAuction(ng.EventsCountSoFar, newEventId, ng.Random, adjustedEventTimestamp, ng.Config))
+		event = types.NewAuctionEvnet(NextAuction(ng.EventsCountSoFar, newEventId, ng.Random, adjustedEventTimestamp, ng.Config))
 	} else {
-		bidEvent, err := gmodel.NextBid(ctx, newEventId, ng.Random, adjustedEventTimestamp, ng.Config)
+		bidEvent, err := NextBid(ctx, newEventId, ng.Random, adjustedEventTimestamp, ng.Config)
 		if err != nil {
 			return nil, err
 		}
-		event = model.NewBidEvent(bidEvent)
+		event = types.NewBidEvent(bidEvent)
 	}
 	ng.EventsCountSoFar += 1
 	return NewNextEvent(uint64(wallclockTimestamp), adjustedEventTimestamp, event, watermark), nil

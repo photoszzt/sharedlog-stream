@@ -11,8 +11,9 @@ import (
 type RateUnit uint32
 
 const (
-	PER_SECOND RateUnit = 1_000_000
-	PER_MINUTE RateUnit = 60_000_000
+	PER_SECOND        RateUnit = 1_000_000
+	PER_MINUTE        RateUnit = 60_000_000
+	UNKNOWN_RATE_UNIT RateUnit = 0
 )
 
 /// Number of us between events at given rate
@@ -23,10 +24,21 @@ func (ru RateUnit) RateToPeriodUs(rate uint64) uint64 {
 type RateShape uint8
 
 const (
-	SQUARE    RateShape = 0
-	SINE      RateShape = 1
-	NUM_STEPS uint32    = 10
+	SQUARE RateShape = iota
+	SINE
+	UNKNOWN_RATE_SHAPE
+	NUM_STEPS uint32 = 10
 )
+
+func StrToRateShape(rateShape string) (RateShape, error) {
+	if rateShape == "square" || rateShape == "SQUARE" {
+		return SQUARE, nil
+	} else if rateShape == "sine" || rateShape == "SINE" {
+		return SINE, nil
+	} else {
+		return UNKNOWN_RATE_SHAPE, fmt.Errorf("Unknown rate shape: %v", rateShape)
+	}
+}
 
 /// Return inter-event  delay, in us, for each generator to follow in order
 /// to achieve `rate` at `unit` using `numGenerators`.

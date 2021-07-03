@@ -1,3 +1,4 @@
+//go:generate msgp
 package types
 
 import (
@@ -5,35 +6,35 @@ import (
 )
 
 type Auction struct {
-	ID          uint64    `json:"id"`
-	ItemName    string    `json:"itemName"`
-	Description string    `json:"description"`
-	InitialBid  uint64    `json:"initialBid"`
-	Reserve     uint64    `json:"reserve"`
-	DateTime    time.Time `json:"dataTime"`
-	Expires     time.Time `json:"expires"`
-	Seller      uint64    `json:"seller"`
-	Category    uint64    `json:"category"`
-	Extra       string    `json:"extra"`
+	ID          uint64    `msg:"id"`
+	ItemName    string    `msg:"itemName"`
+	Description string    `msg:"description"`
+	InitialBid  uint64    `msg:"initialBid"`
+	Reserve     uint64    `msg:"reserve"`
+	DateTime    time.Time `msg:"dataTime"`
+	Expires     time.Time `msg:"expires"`
+	Seller      uint64    `msg:"seller"`
+	Category    uint64    `msg:"category"`
+	Extra       string    `msg:"extra"`
 }
 
 type Bid struct {
-	Auction  uint64    `json:"auction"`
-	Bidder   uint64    `json:"bidder"`
-	Price    uint64    `json:"price"`
-	Channel  string    `json:"channel"`
-	Url      string    `json:"url"`
-	DateTime time.Time `json:"dateTime"`
-	Extra    string    `json:"extra"`
+	Auction  uint64    `msg:"auction"`
+	Bidder   uint64    `msg:"bidder"`
+	Price    uint64    `msg:"price"`
+	Channel  string    `msg:"channel"`
+	Url      string    `msg:"url"`
+	DateTime time.Time `msg:"dateTime"`
+	Extra    string    `msg:"extra"`
 }
 
 type Person struct {
-	ID           uint64    `json:"id"`
-	Name         string    `json:"name"`
-	EmailAddress string    `json:"emailAddress"`
-	CreditCard   string    `json:"creditCard"`
-	City         string    `json:"city"`
-	State        string    `json:"state"`
-	DateTime     time.Time `json:"dateTime"`
-	Extra        string    `json:"extra"`
+	ID           uint64    `msg:"id"`
+	Name         string    `msg:"name"`
+	EmailAddress string    `msg:"emailAddress"`
+	CreditCard   string    `msg:"creditCard"`
+	City         string    `msg:"city"`
+	State        string    `msg:"state"`
+	DateTime     time.Time `msg:"dateTime"`
+	Extra        string    `msg:"extra"`
 }

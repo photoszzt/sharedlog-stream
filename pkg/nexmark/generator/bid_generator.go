@@ -1,4 +1,4 @@
-package model
+package generator
 
 import (
 	"context"
@@ -6,8 +6,7 @@ import (
 	"math/rand"
 	"time"
 
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/generator"
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/model"
+	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/types"
 )
 
 const (
@@ -27,14 +26,14 @@ type ChannelUrl struct {
 	url     string
 }
 
-func NextBid(ctx context.Context, eventId uint64, random *rand.Rand, timestamp uint64, config generator.GeneratorConfig) (*model.Bid, error) {
+func NextBid(ctx context.Context, eventId uint64, random *rand.Rand, timestamp uint64, config *GeneratorConfig) (*types.Bid, error) {
 	auction := uint64(0)
 	if random.Intn(int(config.Configuration.HotAuctionRatio)) > 0 {
 		auction = LastBase0AuctionId(config, eventId) / uint64(HOT_AUCTION_RATIO) * uint64(HOT_AUCTION_RATIO)
 	} else {
 		auction = NextBase0AuctionId(eventId, random, config)
 	}
-	auction += generator.FIRST_AUCTION_ID
+	auction += FIRST_AUCTION_ID
 
 	bidder := uint64(0)
 	if random.Intn(int(config.Configuration.HotBiddersRatio)) > 0 {
@@ -42,7 +41,7 @@ func NextBid(ctx context.Context, eventId uint64, random *rand.Rand, timestamp u
 	} else {
 		bidder = NextBase0PersonId(eventId, random, config)
 	}
-	bidder += generator.FIRST_PERSON_ID
+	bidder += FIRST_PERSON_ID
 
 	price := NextPrice(random)
 	channel := ""
@@ -61,11 +60,11 @@ func NextBid(ctx context.Context, eventId uint64, random *rand.Rand, timestamp u
 		channel = channelAndUrl.channel
 		url = channelAndUrl.url
 	}
-	bidder += generator.FIRST_PERSON_ID
+	bidder += FIRST_PERSON_ID
 
 	currentSize := 8 + 8 + 8 + 8
 	extra := NextExtra(random, uint32(currentSize), config.Configuration.AvgBidByteSize)
-	return &model.Bid{
+	return &types.Bid{
 		Auction:  auction,
 		Bidder:   bidder,
 		Price:    price,
