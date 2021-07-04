@@ -1,8 +1,11 @@
 package utils
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"math"
+	"net/http"
 
 	"github.com/rs/zerolog/log"
 )
@@ -87,4 +90,31 @@ func (rs RateShape) StepLengthSec(ratePerSec uint32) uint32 {
 		log.Fatal().Uint32("RateShape", uint32(rs)).Msg("Unknown rate shape")
 	}
 	return (ratePerSec + n - 1) / n
+}
+
+func JsonPostRequest(client *http.Client, url string, request interface{}, response interface{}) error {
+	encoded, err := json.Marshal(request)
+	if err != nil {
+		log.Fatal().Msgf("failed to encode JSON request: %v", err)
+	}
+	resp, err := client.Post(url, "application/json", bytes.NewReader(encoded))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("Non-OK response: %d", resp.StatusCode)
+	}
+	reader, err := DecompressFromReader(resp.Body)
+	if err != nil {
+		return err
+	}
+	if err := json.NewDecoder(reader).Decode(response); err != nil {
+		log.Fatal().Msgf("failed to decode JSON response: %v", err)
+	}
+	return nil
+}
+
+func BuildFunctionUrl(gatewayAddr string, fnName string) string {
+	return fmt.Sprintf("http://%s/function/%s", gatewayAddr, fnName)
 }

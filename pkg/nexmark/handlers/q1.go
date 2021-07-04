@@ -47,11 +47,18 @@ func mapFunc(e interface{}) interface{} {
 
 func Query1(ctx context.Context, env types.Environment, input *ntypes.QueryInput, output chan *ntypes.FnOutput) {
 	inputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.InputTopicName)
+	if err != nil {
+		output <- &ntypes.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("NewSharedlogStream for input stream failed: %v", err),
+		}
+		return
+	}
 	outputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.OutputTopicName)
 	if err != nil {
 		output <- &ntypes.FnOutput{
 			Success: false,
-			Message: fmt.Sprintf("NewSharedlogStream failed: %v", err),
+			Message: fmt.Sprintf("NewSharedlogStream for output stream failed: %v", err),
 		}
 		return
 	}

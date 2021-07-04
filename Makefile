@@ -1,6 +1,6 @@
 GO_FILES?=$$(find . -name '*.go' |grep -v deps)
 
-default: goimports nexmark
+default: goimports nexmark nexmark_client
 
 .PHONY: staticcheck
 staticcheck:
@@ -21,3 +21,8 @@ goimports:
 nexmark:
 	mkdir -p ./bin
 	go build -o bin/nexmark cmd/nexmark/nexmark.go
+
+.PHONY: nexmark_client
+nexmark_client:
+	mkdir -p ./bin
+	go build -o bin/nexmark_client cmd/nexmark_client/nexmark_client.go
