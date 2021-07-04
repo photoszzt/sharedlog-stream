@@ -52,10 +52,10 @@ const (
 )
 
 type Event struct {
-	newPerson  *Person
-	newAuction *Auction
-	bid        *Bid
-	etype      EType
+	NewPerson  *Person
+	NewAuction *Auction
+	Bid        *Bid
+	Etype      EType
 }
 
 type EventSerialized struct {
@@ -65,65 +65,65 @@ type EventSerialized struct {
 
 func NewPersonEvent(newPerson *Person) *Event {
 	return &Event{
-		newPerson:  newPerson,
-		newAuction: nil,
-		bid:        nil,
-		etype:      PERSON,
+		NewPerson:  newPerson,
+		NewAuction: nil,
+		Bid:        nil,
+		Etype:      PERSON,
 	}
 }
 
 func NewAuctionEvnet(newAuction *Auction) *Event {
 	return &Event{
-		newPerson:  nil,
-		newAuction: newAuction,
-		bid:        nil,
-		etype:      AUCTION,
+		NewPerson:  nil,
+		NewAuction: newAuction,
+		Bid:        nil,
+		Etype:      AUCTION,
 	}
 }
 
 func NewBidEvent(bid *Bid) *Event {
 	return &Event{
-		newPerson:  nil,
-		newAuction: nil,
-		bid:        bid,
-		etype:      BID,
+		NewPerson:  nil,
+		NewAuction: nil,
+		Bid:        bid,
+		Etype:      BID,
 	}
 }
 
 func (e *Event) MarshalMsg(b []byte) ([]byte, error) {
-	switch e.etype {
+	switch e.Etype {
 	case PERSON:
-		person_encoded, err := e.newPerson.MarshalMsg(nil)
+		person_encoded, err := e.NewPerson.MarshalMsg(nil)
 		if err != nil {
 			return nil, err
 		}
 		es := &EventSerialized{
-			Etype: uint8(e.etype),
+			Etype: uint8(e.Etype),
 			Body:  person_encoded,
 		}
 		return es.MarshalMsg(nil)
 	case AUCTION:
-		auction_encoded, err := e.newAuction.MarshalMsg(nil)
+		auction_encoded, err := e.NewAuction.MarshalMsg(nil)
 		if err != nil {
 			return nil, err
 		}
 		es := &EventSerialized{
-			Etype: uint8(e.etype),
+			Etype: uint8(e.Etype),
 			Body:  auction_encoded,
 		}
 		return es.MarshalMsg(nil)
 	case BID:
-		bid_encoded, err := e.bid.MarshalMsg(nil)
+		bid_encoded, err := e.Bid.MarshalMsg(nil)
 		if err != nil {
 			return nil, err
 		}
 		es := &EventSerialized{
-			Etype: uint8(e.etype),
+			Etype: uint8(e.Etype),
 			Body:  bid_encoded,
 		}
 		return es.MarshalMsg(nil)
 	default:
-		return nil, fmt.Errorf("wrong event type: %v", e.etype)
+		return nil, fmt.Errorf("wrong event type: %v", e.Etype)
 	}
 }
 
@@ -140,8 +140,8 @@ func (e *Event) UnmarshalMsg(b []byte) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		e.newPerson = person
-		e.etype = EType(es.Etype)
+		e.NewPerson = person
+		e.Etype = EType(es.Etype)
 		return leftover, nil
 	case AUCTION:
 		auction := &Auction{}
@@ -149,8 +149,8 @@ func (e *Event) UnmarshalMsg(b []byte) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		e.newAuction = auction
-		e.etype = EType(es.Etype)
+		e.NewAuction = auction
+		e.Etype = EType(es.Etype)
 		return leftover, nil
 	case BID:
 		bid := &Bid{}
@@ -158,8 +158,8 @@ func (e *Event) UnmarshalMsg(b []byte) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		e.bid = bid
-		e.etype = EType(es.Etype)
+		e.Bid = bid
+		e.Etype = EType(es.Etype)
 		return leftover, nil
 	default:
 		return nil, fmt.Errorf("wrong event type: %v", es.Etype)

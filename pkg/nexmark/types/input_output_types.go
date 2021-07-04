@@ -7,6 +7,11 @@ import (
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/utils"
 )
 
+type QueryInput struct {
+	InputTopicName  string `json:"input_topic_name"`
+	OutputTopicName string `json:"output_topic_name"`
+}
+
 type NexMarkConfigInput struct {
 	TopicName              string        `json:"topic_name"`
 	RateShape              string        `json:"rate_shape"`
