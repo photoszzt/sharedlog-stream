@@ -41,7 +41,7 @@ func (h *query1Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 
 func mapFunc(e interface{}) interface{} {
 	event := e.(ntypes.Event)
-	event.Bid.Price = event.Bid.Price * 89 / 100
+	event.Bid.Price = uint64(event.Bid.Price * 908 / 1000.0)
 	return event
 }
 
