@@ -61,8 +61,15 @@ func Query2(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		}
 		return
 	}
+	duration := time.Duration(input.Duration) * time.Second
 	filterOp := operator.NewFilter(filterFunc)
+	latencies := make([]int, 0, 128)
+	startTime := time.Now()
 	for {
+		if duration != 0 && time.Since(startTime) >= duration {
+			break
+		}
+		procStart := time.Now()
 		val, err := inputStream.Pop()
 		if err != nil {
 			if sharedlog_stream.IsStreamEmptyError(err) {
@@ -77,19 +84,26 @@ func Query2(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 				}
 			}
 		}
-		filterOp.In() <- val
-		go func() {
-			for elem := range filterOp.Out() {
-				event := elem.(ntypes.Event)
-				encoded, err := event.MarshalMsg(nil)
-				if err != nil {
-					panic(err)
-				}
-				err = outputStream.Push(encoded)
-				if err != nil {
-					panic(err)
-				}
+		event := &ntypes.Event{}
+		_, err = event.UnmarshalMsg(val)
+		if err != nil {
+			output <- &ntypes.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("fail to unmarshal stream item to Event: %v", err),
 			}
-		}()
+		}
+		if filterOp.FilterF(event) {
+			err = outputStream.Push(val)
+			if err != nil {
+				panic(err)
+			}
+			elapsed := time.Since(procStart)
+			latencies = append(latencies, int(elapsed.Microseconds()))
+		}
+	}
+	output <- &ntypes.FnOutput{
+		Success:   true,
+		Duration:  time.Since(startTime).Seconds(),
+		Latencies: latencies,
 	}
 }

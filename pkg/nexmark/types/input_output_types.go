@@ -8,12 +8,14 @@ import (
 )
 
 type QueryInput struct {
+	Duration        uint32 `json:"duration"`
 	InputTopicName  string `json:"input_topic_name"`
 	OutputTopicName string `json:"output_topic_name"`
 }
 
 type NexMarkConfigInput struct {
 	TopicName              string        `json:"topic_name"`
+	Duration               uint32        `json:"duration"`
 	RateShape              string        `json:"rate_shape"`
 	RatePeriod             time.Duration `json:"rate_period"`
 	RateLimited            bool          `json:"rate_limited"`
@@ -34,6 +36,7 @@ type NexMarkConfigInput struct {
 func NewNexMarkConfigInput(topicName string) *NexMarkConfigInput {
 	return &NexMarkConfigInput{
 		TopicName:              topicName,
+		Duration:               0,
 		RateShape:              "square",
 		RatePeriod:             time.Duration(600) * time.Second,
 		RateLimited:            false,
