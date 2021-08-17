@@ -60,23 +60,23 @@ func ConvertToNexmarkConfiguration(config *NexMarkConfigInput) (*nexmark.NexMark
 	if err != nil {
 		return nil, err
 	}
-	return &nexmark.NexMarkConfig{
-		RateShape:          rateUnit,
-		RatePeriodSec:      uint32(config.RatePeriod.Seconds()),
-		IsRateLimited:      config.RateLimited,
-		FirstEventRate:     uint64(config.FirstEventRate),
-		NextEventRate:      uint64(config.NextEventRate),
-		AvgPersonByteSize:  config.PersonAvgSize,
-		AvgAuctionByteSize: config.AuctionAvgSize,
-		AvgBidByteSize:     config.BidAvgSize,
-		PersonProportion:   config.PersonProportion,
-		AuctionProportion:  config.AuctionProportion,
-		BidProportion:      config.BidProportion,
-		HotAuctionRatio:    config.BidHotRatioAuctions,
-		HotBiddersRatio:    config.BidHotRatioBidders,
-		HotSellersRatio:    config.AuctionHotRatioSellers,
-		NumEvents:          uint32(config.EventsNum),
-	}, nil
+	nexmarkConfig := nexmark.NewNexMarkConfig()
+	nexmarkConfig.RateShape = rateUnit
+	nexmarkConfig.RatePeriodSec = uint32(config.RatePeriod.Seconds())
+	nexmarkConfig.IsRateLimited = config.RateLimited
+	nexmarkConfig.FirstEventRate = uint64(config.FirstEventRate)
+	nexmarkConfig.NextEventRate = uint64(config.NextEventRate)
+	nexmarkConfig.AvgPersonByteSize = config.PersonAvgSize
+	nexmarkConfig.AvgAuctionByteSize = config.AuctionAvgSize
+	nexmarkConfig.AvgBidByteSize = config.BidAvgSize
+	nexmarkConfig.PersonProportion = config.PersonProportion
+	nexmarkConfig.AuctionProportion = config.AuctionProportion
+	nexmarkConfig.BidProportion = config.BidProportion
+	nexmarkConfig.HotAuctionRatio = config.BidHotRatioAuctions
+	nexmarkConfig.HotBiddersRatio = config.BidHotRatioBidders
+	nexmarkConfig.HotSellersRatio = config.AuctionHotRatioSellers
+	nexmarkConfig.NumEvents = uint32(config.EventsNum)
+	return nexmarkConfig, nil
 }
 
 type FnOutput struct {

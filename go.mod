@@ -11,7 +11,7 @@ require (
 	github.com/tinylib/msgp v1.1.6
 	golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4
 	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c // indirect
-	golang.org/x/tools v0.1.4 // indirect
+	golang.org/x/tools v0.1.5 // indirect
 )
 
 replace cs.utexas.edu/zjia/faas => ./deps/faas/worker/golang

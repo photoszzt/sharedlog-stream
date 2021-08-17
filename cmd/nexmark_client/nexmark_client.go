@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -23,6 +24,7 @@ func invokeSourceFunc(client *http.Client, response *ntypes.FnOutput, wg *sync.W
 	nexmarkConfig := ntypes.NewNexMarkConfigInput(FLAGS_stream_prefix + "_src")
 	nexmarkConfig.Duration = uint32(FLAGS_duration)
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "source")
+	fmt.Printf("func source url is %v\n", url)
 	if err := utils.JsonPostRequest(client, url, nexmarkConfig, response); err != nil {
 		log.Error().Msgf("source request failed: %v", err)
 	} else if !response.Success {
@@ -38,6 +40,7 @@ func invokeQuery(client *http.Client, response *ntypes.FnOutput, wg *sync.WaitGr
 		OutputTopicName: FLAGS_stream_prefix + "_" + FLAGS_fn_name + "_output",
 	}
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, FLAGS_fn_name)
+	fmt.Printf("func url is %v\n", url)
 	if err := utils.JsonPostRequest(client, url, queryInput, response); err != nil {
 		log.Error().Msgf("%v request failed: %v", FLAGS_fn_name, err)
 	} else if !response.Success {

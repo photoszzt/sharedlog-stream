@@ -46,6 +46,7 @@ func mapFunc(e interface{}) interface{} {
 }
 
 func Query1(ctx context.Context, env types.Environment, input *ntypes.QueryInput, output chan *ntypes.FnOutput) {
+	fmt.Print("Enter query1 function")
 	inputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.InputTopicName)
 	if err != nil {
 		output <- &ntypes.FnOutput{
@@ -75,8 +76,10 @@ func Query1(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		if err != nil {
 			if sharedlog_stream.IsStreamEmptyError(err) {
 				time.Sleep(time.Duration(100) * time.Microsecond)
+				fmt.Println("No stream")
 				continue
 			} else if sharedlog_stream.IsStreamTimeoutError(err) {
+				fmt.Println("pop timeout")
 				continue
 			} else {
 				output <- &ntypes.FnOutput{
@@ -93,6 +96,7 @@ func Query1(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 				Message: fmt.Sprintf("fail to unmarshal stream item to Event: %v", err),
 			}
 		}
+		fmt.Printf("Got event %v\n", event)
 		trans := mapOp.MapF(event)
 		trans_event := trans.(ntypes.Event)
 		encoded, err := trans_event.MarshalMsg(nil)

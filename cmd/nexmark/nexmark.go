@@ -20,13 +20,14 @@ func init() {
 	if level, err := zerolog.ParseLevel(logLevel); err == nil {
 		zerolog.SetGlobalLevel(level)
 	} else {
-		zerolog.SetGlobalLevel(zerolog.WarnLevel)
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	}
 
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 }
 
 func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.FuncHandler, error) {
+	fmt.Print("Enter nexmark\n")
 	switch funcName {
 	case "source":
 		return handlers.NewNexmarkSource(env), nil

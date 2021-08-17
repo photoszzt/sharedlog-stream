@@ -64,7 +64,7 @@ func (ng *NexmarkGenerator) HasNext() bool {
 	return ng.EventsCountSoFar < ng.Config.MaxEvents
 }
 
-func (ng *NexmarkGenerator) NextEvent(ctx context.Context) (*NextEvent, error) {
+func (ng *NexmarkGenerator) NextEvent(ctx context.Context, bidUrlCache map[uint32]*ChannelUrl) (*NextEvent, error) {
 	if ng.WallclockBaseTime < 0 {
 		ng.WallclockBaseTime = time.Now().Unix() * 1000
 	}
@@ -82,7 +82,7 @@ func (ng *NexmarkGenerator) NextEvent(ctx context.Context) (*NextEvent, error) {
 	} else if rem < uint64(ng.Config.PersonProportion)+uint64(ng.Config.AuctionProportion) {
 		event = types.NewAuctionEvnet(NextAuction(ng.EventsCountSoFar, newEventId, ng.Random, adjustedEventTimestamp, ng.Config))
 	} else {
-		bidEvent, err := NextBid(ctx, newEventId, ng.Random, adjustedEventTimestamp, ng.Config)
+		bidEvent, err := NextBid(ctx, newEventId, ng.Random, adjustedEventTimestamp, ng.Config, bidUrlCache)
 		if err != nil {
 			return nil, err
 		}

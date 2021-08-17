@@ -24,6 +24,7 @@ func NewNexmarkSource(env types.Environment) types.FuncHandler {
 }
 
 func (h *nexmarkSourceHandler) Call(ctx context.Context, input []byte) ([]byte, error) {
+	fmt.Print("Enter source generation function")
 	inputConfig := &ntypes.NexMarkConfigInput{}
 	err := json.Unmarshal(input, inputConfig)
 	if err != nil {
@@ -58,10 +59,15 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 	generatorConfig := generator.NewGeneratorConfig(nexmarkConfig, uint64(time.Now().Unix()*1000), 1, uint64(nexmarkConfig.NumEvents), 1)
 	eventGenerator := generator.NewSimpleNexmarkGenerator(generatorConfig)
 	latencies := make([]int, 0, 128)
+	channel_url_cache := make(map[uint32]*generator.ChannelUrl)
+	duration := time.Duration(inputConfig.Duration) * time.Second
 	startTime := time.Now()
 	for eventGenerator.HasNext() {
+		if duration != 0 && time.Since(startTime) >= duration {
+			break
+		}
 		now := time.Now().Unix()
-		nextEvent, err := eventGenerator.NextEvent(ctx)
+		nextEvent, err := eventGenerator.NextEvent(ctx, channel_url_cache)
 		if err != nil {
 			return &ntypes.FnOutput{
 				Success: false,
@@ -72,6 +78,7 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		if wtsSec > uint64(now) {
 			time.Sleep(time.Duration(wtsSec-uint64(now)) * time.Second)
 		}
+		fmt.Printf("Generate event: %v\n", nextEvent.Event)
 		encoded, err := nextEvent.Event.MarshalMsg(nil)
 		if err != nil {
 			return &ntypes.FnOutput{
@@ -89,6 +96,7 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		}
 		elapsed := time.Since(pushStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
+		fmt.Printf("Down event\n")
 	}
 	return &ntypes.FnOutput{
 		Success:   true,

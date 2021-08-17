@@ -3,6 +3,7 @@ package generator
 import (
 	"context"
 	"fmt"
+	"math/bits"
 	"math/rand"
 	"time"
 
@@ -17,8 +18,9 @@ const (
 )
 
 var (
-	HOT_CHANNELS = [4]string{"Google", "Facebook", "Baidu", "Apple"}
-	HOT_URLS     = [4]string{getBaseUrl(), getBaseUrl(), getBaseUrl(), getBaseUrl()}
+	HOT_CHANNELS      = [4]string{"Google", "Facebook", "Baidu", "Apple"}
+	HOT_URLS          = [4]string{getBaseUrl(), getBaseUrl(), getBaseUrl(), getBaseUrl()}
+	CHANNEL_URL_CACHE = map[uint32]*ChannelUrl{}
 )
 
 type ChannelUrl struct {
@@ -26,7 +28,7 @@ type ChannelUrl struct {
 	url     string
 }
 
-func NextBid(ctx context.Context, eventId uint64, random *rand.Rand, timestamp uint64, config *GeneratorConfig) (*types.Bid, error) {
+func NextBid(ctx context.Context, eventId uint64, random *rand.Rand, timestamp uint64, config *GeneratorConfig, bidUrlCache map[uint32]*ChannelUrl) (*types.Bid, error) {
 	auction := uint64(0)
 	if random.Intn(int(config.Configuration.HotAuctionRatio)) > 0 {
 		auction = LastBase0AuctionId(config, eventId) / uint64(HOT_AUCTION_RATIO) * uint64(HOT_AUCTION_RATIO)
@@ -51,14 +53,22 @@ func NextBid(ctx context.Context, eventId uint64, random *rand.Rand, timestamp u
 		channel = HOT_CHANNELS[i]
 		url = HOT_URLS[i]
 	} else {
-		channelAndUrlMap, ok := ctx.Value("CHANNEL_URL_CACHE").(map[uint32]*ChannelUrl)
+		k := uint32(random.Intn(int(CHANNELS_NUMBER)))
+		channelAndUrl, ok := CHANNEL_URL_CACHE[k]
 		if !ok {
-			return nil, fmt.Errorf("fail to cast context value to map")
+			burl := getBaseUrl()
+			if random.Intn(10) > 0 {
+				url = burl + "&channel_id=" + fmt.Sprint(bits.Reverse32(k))
+			}
+			channel = "channel-" + fmt.Sprint(k)
+			bidUrlCache[k] = &ChannelUrl{
+				channel: channel,
+				url:     url,
+			}
+		} else {
+			channel = channelAndUrl.channel
+			url = channelAndUrl.url
 		}
-
-		channelAndUrl := channelAndUrlMap[uint32(random.Intn(int(CHANNELS_NUMBER)))]
-		channel = channelAndUrl.channel
-		url = channelAndUrl.url
 	}
 	bidder += FIRST_PERSON_ID
 
