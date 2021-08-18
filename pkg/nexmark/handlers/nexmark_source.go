@@ -24,7 +24,6 @@ func NewNexmarkSource(env types.Environment) types.FuncHandler {
 }
 
 func (h *nexmarkSourceHandler) Call(ctx context.Context, input []byte) ([]byte, error) {
-	fmt.Print("Enter source generation function")
 	inputConfig := &ntypes.NexMarkConfigInput{}
 	err := json.Unmarshal(input, inputConfig)
 	if err != nil {
@@ -78,7 +77,6 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		if wtsSec > uint64(now) {
 			time.Sleep(time.Duration(wtsSec-uint64(now)) * time.Second)
 		}
-		fmt.Printf("Generate event: %v\n", nextEvent.Event)
 		encoded, err := nextEvent.Event.MarshalMsg(nil)
 		if err != nil {
 			return &ntypes.FnOutput{
@@ -87,7 +85,7 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 			}, nil
 		}
 		pushStart := time.Now()
-		err = stream.Push(encoded)
+		_, err = stream.Push(encoded)
 		if err != nil {
 			return &ntypes.FnOutput{
 				Success: false,
@@ -96,7 +94,6 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		}
 		elapsed := time.Since(pushStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
-		fmt.Printf("Down event\n")
 	}
 	return &ntypes.FnOutput{
 		Success:   true,

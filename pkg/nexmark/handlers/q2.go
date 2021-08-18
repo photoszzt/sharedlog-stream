@@ -36,11 +36,12 @@ func (h *query2Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	if err != nil {
 		panic(err)
 	}
+	fmt.Printf("query 2 output: %v\n", encodedOutput)
 	return utils.CompressData(encodedOutput), nil
 }
 
 func filterFunc(e interface{}) bool {
-	event := e.(ntypes.Event)
+	event := e.(*ntypes.Event)
 	return event.Bid.Auction%123 == 0
 }
 
@@ -92,11 +93,12 @@ func Query2(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 				Message: fmt.Sprintf("fail to unmarshal stream item to Event: %v", err),
 			}
 		}
-		if filterOp.FilterF(event) {
-			err = outputStream.Push(val)
+		if event.Etype == ntypes.BID && filterOp.FilterF(event) {
+			seqNum, err := outputStream.Push(val)
 			if err != nil {
 				panic(err)
 			}
+			// fmt.Printf("Push result to queue: %v\n", seqNum)
 			elapsed := time.Since(procStart)
 			latencies = append(latencies, int(elapsed.Microseconds()))
 		}

@@ -4,6 +4,7 @@ package sharedlog_stream
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/protocol"
@@ -89,9 +90,9 @@ func NewSharedLogStream(ctx context.Context, env types.Environment, topicName st
 	return s, nil
 }
 
-func (s *SharedLogStream) Push(payload []byte) error {
+func (s *SharedLogStream) Push(payload []byte) (uint64, error) {
 	if len(payload) == 0 {
-		return errEmptyPayload
+		return 0, errEmptyPayload
 	}
 	logEntry := &StreamLogEntry{
 		TopicName: s.topicName,
@@ -102,16 +103,37 @@ func (s *SharedLogStream) Push(payload []byte) error {
 	if err != nil {
 		panic(err)
 	}
-	tags := []uint64{streamLogTag(s.topicNameHash), streamPushLogTag(s.topicNameHash)}
-	_, err = s.env.SharedLogAppend(s.ctx, tags, encoded)
-	return err
+	stag := streamLogTag(s.topicNameHash)
+	sptag := streamPushLogTag(s.topicNameHash)
+	tags := []uint64{stag, sptag}
+	seqNum, err := s.env.SharedLogAppend(s.ctx, tags, encoded)
+	// fmt.Printf("Push to stream with tag %x, %x, seqNum: %x\n", stag, sptag, seqNum)
+	/*
+		// verify that it's appended
+		if err != nil {
+			return 0, err
+		}
+		logEntryRead, err := s.env.SharedLogReadNext(s.ctx, 0, seqNum)
+		if err != nil {
+			return 0, err
+		}
+		if logEntryRead == nil || logEntryRead.SeqNum != seqNum {
+			return 0, fmt.Errorf("Fail to read the log just appended")
+		}
+		if bytes.Compare(encoded, logEntryRead.Data) != 0 {
+			return 0, fmt.Errorf("Log data mismatch")
+		}
+	*/
+	return seqNum, err
 }
 
 func (s *SharedLogStream) isEmpty() bool {
+	// fmt.Printf("consumed: %x, tail: %x\n", s.consumed, s.tail)
 	return s.consumed >= s.tail
 }
 
 func (s *SharedLogStream) findNext(minSeqNum, maxSeqNum uint64) (*StreamLogEntry, error) {
+	// fmt.Printf("find next in range min: %x, max: %x\n", minSeqNum, maxSeqNum)
 	tag := streamPushLogTag(s.topicNameHash)
 	seqNum := minSeqNum
 	for seqNum < maxSeqNum {
@@ -139,6 +161,7 @@ func (s *SharedLogStream) applyLog(streamLogEntry *StreamLogEntry) error {
 	}
 	if streamLogEntry.IsPush {
 		s.tail = streamLogEntry.seqNum + 1
+		// fmt.Printf("Update stream tail to 0x%x with push entry\n", s.tail)
 	} else {
 		nextLog, err := s.findNext(s.consumed, s.tail)
 		if err != nil {
@@ -169,6 +192,7 @@ func (s *SharedLogStream) syncToBackward(tailSeqNum uint64) error {
 			Uint64("Request seq", tailSeqNum).
 			Msg("Cannot sync to request sequence number")
 	}
+	// fmt.Printf("tail seq is %x, current nextSeqnum is %x\n", tailSeqNum, s.nextSeqNum)
 	if tailSeqNum == s.nextSeqNum {
 		return nil
 	}
@@ -197,6 +221,7 @@ func (s *SharedLogStream) syncToBackward(tailSeqNum uint64) error {
 			s.nextSeqNum = streamLogEntry.seqNum + 1
 			s.consumed = streamLogEntry.auxData.Consumed
 			s.tail = streamLogEntry.auxData.Tail
+			// fmt.Printf("Update tail with auxData to %x\n", s.tail)
 			break
 		} else {
 			streamLogs = append(streamLogs, streamLogEntry)
@@ -282,6 +307,7 @@ func IsStreamTimeoutError(err error) bool {
 
 func (s *SharedLogStream) Pop() ([]byte /* payload */, error) {
 	if s.isEmpty() {
+		// fmt.Println("stream is empty")
 		if err := s.syncTo(protocol.MaxLogSeqnum); err != nil {
 			return nil, err
 		}
@@ -290,6 +316,7 @@ func (s *SharedLogStream) Pop() ([]byte /* payload */, error) {
 		}
 	}
 	if err := s.appendPopLogAndSync(); err != nil {
+		fmt.Println("Fail to pop log and async")
 		return nil, err
 	}
 	if nextLog, err := s.findNext(s.consumed, s.tail); err != nil {
