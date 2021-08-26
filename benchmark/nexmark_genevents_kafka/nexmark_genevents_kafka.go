@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"flag"
+	"time"
+
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/generator"
 	ntypes "cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/types"
-	"flag"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/rs/zerolog/log"
 )
@@ -28,8 +30,9 @@ func main() {
 	}
 	generatorConfig := generator.NewGeneratorConfig(nexmarkConfig, uint64(time.Now().Unix()*1000), 1, uint64(nexmarkConfig.NumEvents), 1)
 	eventGenerator := generator.NewSimpleNexmarkGenerator(generatorConfig)
+	channel_url_cache := make(map[uint32]*generator.ChannelUrl)
 
-	p, err := kafka.NewProducer(&kafka.ConfigMap("bootstrap.servers"), FLAGS_broker)
+	p, err := kafka.NewProducer(&kafka.ConfigMap{"bootstrap.servers": FLAGS_broker})
 	if err != nil {
 		log.Fatal().Msgf("Failed to create producer: %s\n", err)
 	}
@@ -39,7 +42,8 @@ func main() {
 	topic := FLAGS_stream_prefix + "_src"
 	ctx := context.Background()
 	for i := 0; i < FLAGS_num_events; i++ {
-		nextEvent, err := eventGeneratior.NextEvent(ctx)
+		now := time.Now().Unix()
+		nextEvent, err := eventGenerator.NextEvent(ctx, channel_url_cache)
 		if err != nil {
 			log.Fatal().Msgf("next event failed: %s", err)
 		}
@@ -47,7 +51,7 @@ func main() {
 		if wtsSec > uint64(now) {
 			time.Sleep(time.Duration(wtsSec-uint64(now)) * time.Second)
 		}
-		encoded, err := nextEvent.Event.MarshalMsg(nil)
+		encoded, err := nextEvent.Event.MarshalMsg()
 		if err != nil {
 			log.Fatal().Msgf("event serialization failed: %s", err)
 		}

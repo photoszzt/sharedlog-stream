@@ -71,14 +71,14 @@ func Query1(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream, int(input.Duration))).
 		MapFunc("q1_map", stream.MapperFunc(mapFunc)).
 		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream))
-	tp, err_arrs := builder.Build()
+	_, err_arrs := builder.Build()
 	if err_arrs != nil {
 		output <- &ntypes.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("build stream failed: %v", err_arrs),
 		}
 	}
-	nodes := stream.flattenNodeTree
+	// nodes := stream.FlattenNodeTree
 	duration := time.Duration(input.Duration) * time.Second
 	// mapOp := operator.NewMap(mapFunc)
 	latencies := make([]int, 0, 128)

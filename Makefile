@@ -1,6 +1,6 @@
 GO_FILES?=$$(find . -name '*.go' |grep -v deps)
 
-default: goimports nexmark nexmark_client
+default: goimports nexmark nexmark_client nexmark_genevents_kafka
 
 .PHONY: staticcheck
 staticcheck:
@@ -14,7 +14,7 @@ staticcheck:
 
 .PHONY: goimports
 goimports:
-	@go get golang.org/x/tools/cmd/goimports
+	@go install golang.org/x/tools/cmd/goimports
 	goimports -w $(GO_FILES)
 
 .PHONY: nexmark

@@ -78,7 +78,7 @@ func nodesConnected(roots []Node) bool {
 	return connections == len(roots)-1
 }
 
-func flattenNodeTree(roots map[Source]Node) []Node {
+func FlattenNodeTree(roots map[Source]Node) []Node {
 	var nodes []Node
 	var visit []Node
 
