@@ -17,12 +17,17 @@ var (
 	FLAGS_fn_name       string
 	FLAGS_stream_prefix string
 	FLAGS_duration      int
+	FLAGS_events_num    int
+	FLAGS_tps           int
 )
 
 func invokeSourceFunc(client *http.Client, response *ntypes.FnOutput, wg *sync.WaitGroup) {
 	defer wg.Done()
 	nexmarkConfig := ntypes.NewNexMarkConfigInput(FLAGS_stream_prefix + "_src")
 	nexmarkConfig.Duration = uint32(FLAGS_duration)
+	nexmarkConfig.FirstEventRate = uint32(FLAGS_tps)
+	nexmarkConfig.NextEventRate = uint32(FLAGS_tps)
+	nexmarkConfig.EventsNum = uint64(FLAGS_events_num)
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "source")
 	fmt.Printf("func source url is %v\n", url)
 	if err := utils.JsonPostRequest(client, url, nexmarkConfig, response); err != nil {
@@ -53,6 +58,8 @@ func main() {
 	flag.StringVar(&FLAGS_fn_name, "fn_name", "query1", "")
 	flag.StringVar(&FLAGS_stream_prefix, "stream_prefix", "nexmark", "")
 	flag.IntVar(&FLAGS_duration, "duration", 60, "")
+	flag.IntVar(&FLAGS_events_num, "events_num", 100000000, "events.num param for nexmark")
+	flag.IntVar(&FLAGS_tps, "tps", 10000000, "tps param for nexmark")
 	flag.Parse()
 
 	client := &http.Client{

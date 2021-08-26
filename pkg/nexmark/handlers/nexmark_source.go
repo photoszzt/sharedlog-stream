@@ -61,7 +61,10 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 	channel_url_cache := make(map[uint32]*generator.ChannelUrl)
 	duration := time.Duration(inputConfig.Duration) * time.Second
 	startTime := time.Now()
-	for eventGenerator.HasNext() {
+	for {
+		if !eventGenerator.HasNext() {
+			break
+		}
 		if duration != 0 && time.Since(startTime) >= duration {
 			break
 		}
@@ -77,7 +80,7 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		if wtsSec > uint64(now) {
 			time.Sleep(time.Duration(wtsSec-uint64(now)) * time.Second)
 		}
-		encoded, err := nextEvent.Event.MarshalMsg(nil)
+		encoded, err := nextEvent.Event.MarshalMsg()
 		if err != nil {
 			return &ntypes.FnOutput{
 				Success: false,

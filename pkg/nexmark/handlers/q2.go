@@ -8,7 +8,6 @@ import (
 
 	ntypes "cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/types"
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/utils"
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/operator"
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/sharedlog_stream"
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -54,23 +53,25 @@ func Query2(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		}
 		return
 	}
-	outputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.OutputTopicName)
-	if err != nil {
-		output <- &ntypes.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("NewSharedlogStream for output stream failed: %v", err),
+	/*
+		outputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.OutputTopicName)
+		if err != nil {
+			output <- &ntypes.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("NewSharedlogStream for output stream failed: %v", err),
+			}
+			return
 		}
-		return
-	}
+	*/
 	duration := time.Duration(input.Duration) * time.Second
-	filterOp := operator.NewFilter(filterFunc)
+	// filterOp := operator.NewFilter(filterFunc)
 	latencies := make([]int, 0, 128)
 	startTime := time.Now()
 	for {
 		if duration != 0 && time.Since(startTime) >= duration {
 			break
 		}
-		procStart := time.Now()
+		// procStart := time.Now()
 		val, err := inputStream.Pop()
 		if err != nil {
 			if sharedlog_stream.IsStreamEmptyError(err) {
@@ -93,15 +94,17 @@ func Query2(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 				Message: fmt.Sprintf("fail to unmarshal stream item to Event: %v", err),
 			}
 		}
-		if event.Etype == ntypes.BID && filterOp.FilterF(event) {
-			seqNum, err := outputStream.Push(val)
-			if err != nil {
-				panic(err)
+		/*
+			if event.Etype == ntypes.BID && filterOp.FilterF(event) {
+				seqNum, err := outputStream.Push(val)
+				if err != nil {
+					panic(err)
+				}
+				// fmt.Printf("Push result to queue: %v\n", seqNum)
+				elapsed := time.Since(procStart)
+				latencies = append(latencies, int(elapsed.Microseconds()))
 			}
-			// fmt.Printf("Push result to queue: %v\n", seqNum)
-			elapsed := time.Since(procStart)
-			latencies = append(latencies, int(elapsed.Microseconds()))
-		}
+		*/
 	}
 	output <- &ntypes.FnOutput{
 		Success:   true,

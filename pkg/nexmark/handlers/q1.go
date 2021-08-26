@@ -8,8 +8,8 @@ import (
 
 	ntypes "cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/types"
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/utils"
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/operator"
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/sharedlog_stream"
+	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream"
 	"cs.utexas.edu/zjia/faas/types"
 )
 
@@ -40,13 +40,13 @@ func (h *query1Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func mapFunc(e interface{}) interface{} {
-	event := e.(*ntypes.Event)
+func mapFunc(msg stream.Message) (stream.Message, error) {
+	event := msg.Value.(*ntypes.Event)
 	if event.Etype == ntypes.BID {
 		event.Bid.Price = uint64(event.Bid.Price * 908 / 1000.0)
-		return event
+		return stream.Message{Value: event}, nil
 	} else {
-		return nil
+		return stream.EmptyMessage, nil
 	}
 }
 
@@ -67,8 +67,20 @@ func Query1(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		}
 		return
 	}
+	builder := stream.NewStreamBuilder()
+	builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream, int(input.Duration))).
+		MapFunc("q1_map", stream.MapperFunc(mapFunc)).
+		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream))
+	tp, err_arrs := builder.Build()
+	if err_arrs != nil {
+		output <- &ntypes.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("build stream failed: %v", err_arrs),
+		}
+	}
+	nodes := stream.flattenNodeTree
 	duration := time.Duration(input.Duration) * time.Second
-	mapOp := operator.NewMap(mapFunc)
+	// mapOp := operator.NewMap(mapFunc)
 	latencies := make([]int, 0, 128)
 	startTime := time.Now()
 	for {
@@ -101,18 +113,20 @@ func Query1(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 				Message: fmt.Sprintf("fail to unmarshal stream item to Event: %v", err),
 			}
 		}
-		trans := mapOp.MapF(event)
-		if trans != nil {
-			trans_event := trans.(*ntypes.Event)
-			encoded, err := trans_event.MarshalMsg(nil)
-			if err != nil {
-				panic(err)
+		/*
+			trans := mapOp.MapF(event)
+			if trans != nil {
+				trans_event := trans.(*ntypes.Event)
+				encoded, err := trans_event.MarshalMsg()
+				if err != nil {
+					panic(err)
+				}
+				_, err = outputStream.Push(encoded)
+				if err != nil {
+					panic(err)
+				}
 			}
-			_, err = outputStream.Push(encoded)
-			if err != nil {
-				panic(err)
-			}
-		}
+		*/
 		elapsed := time.Since(procStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
 	}
