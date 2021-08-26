@@ -20,9 +20,14 @@ goimports:
 .PHONY: nexmark
 nexmark:
 	mkdir -p ./bin
-	go build -o bin/nexmark cmd/nexmark/nexmark.go
+	go build -o bin/nexmark benchmark/nexmark/nexmark.go
 
 .PHONY: nexmark_client
 nexmark_client:
 	mkdir -p ./bin
-	go build -o bin/nexmark_client cmd/nexmark_client/nexmark_client.go
+	go build -o bin/nexmark_client benchmark/nexmark_client/nexmark_client.go
+
+.PHONY: nexmark_genevents_kafka
+nexmark_genevents_kafka:
+	mkdir -p ./bin
+	go build -o bin/nexmark_genevents_kafka benchmark/nexmark_genevents_kafka/nexmark_genevents_kafka.go
