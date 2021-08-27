@@ -1,3 +1,0 @@
-[submodule "vendor/faas"]
-	path = deps/faas
-	url = https://github.com/photoszzt/faas.git
