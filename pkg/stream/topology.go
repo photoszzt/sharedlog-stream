@@ -122,7 +122,7 @@ func FlattenNodeTree(roots map[Source]Node) []Node {
 	return nodes
 }
 
-func reverseNodes(nodes []Node) {
+func ReverseNodes(nodes []Node) {
 	for i := len(nodes)/2 - 1; i >= 0; i-- {
 		opp := len(nodes) - 1 - i
 		nodes[i], nodes[opp] = nodes[opp], nodes[i]
