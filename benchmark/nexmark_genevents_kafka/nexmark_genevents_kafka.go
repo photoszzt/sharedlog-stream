@@ -60,6 +60,7 @@ func main() {
 			Value:          []byte(encoded),
 		}, deliveryChan)
 	}
+	replies := 0
 	for e := range deliveryChan {
 		switch ev := e.(type) {
 		case *kafka.Message:
@@ -68,6 +69,10 @@ func main() {
 			} else {
 				log.Debug().Msgf("Delivered message to %v\n", ev.TopicPartition)
 			}
+		}
+		replies += 1
+		if replies == FLAGS_num_events {
+			break
 		}
 	}
 }
