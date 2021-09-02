@@ -53,20 +53,15 @@ const (
 )
 
 type Event struct {
-	NewPerson  *Person
-	NewAuction *Auction
-	Bid        *Bid
-	Etype      EType
+	NewPerson  *Person  `json:"newPerson",omitempty`
+	NewAuction *Auction `json:"newAuction",omitempty`
+	Bid        *Bid     `json:"bid",omitempty`
+	Etype      EType    `json:"type"`
 }
 
 type EventSerialized struct {
 	Etype uint8    `msg:"etype"`
 	Body  msgp.Raw `msg:"body"`
-}
-
-type EventSerializedJSON struct {
-	Etype uint8           `json:"etypes"`
-	Body  json.RawMessage `json:"body"`
 }
 
 func NewPersonEvent(newPerson *Person) *Event {
@@ -133,43 +128,6 @@ func (e *Event) MarshalMsg() ([]byte, error) {
 	}
 }
 
-func (e *Event) MarshalJSON() ([]byte, error) {
-	switch e.Etype {
-	case PERSON:
-		person_encoded, err := json.Marshal(e.NewPerson)
-		if err != nil {
-			return nil, err
-		}
-		es := &EventSerializedJSON{
-			Etype: uint8(e.Etype),
-			Body:  person_encoded,
-		}
-		return json.Marshal(es)
-	case AUCTION:
-		auction_encoded, err := json.Marshal(e.NewAuction)
-		if err != nil {
-			return nil, err
-		}
-		es := &EventSerializedJSON{
-			Etype: uint8(e.Etype),
-			Body:  auction_encoded,
-		}
-		return json.Marshal(es)
-	case BID:
-		bid_encoded, err := json.Marshal(e.Bid)
-		if err != nil {
-			return nil, err
-		}
-		es := &EventSerializedJSON{
-			Etype: uint8(e.Etype),
-			Body:  bid_encoded,
-		}
-		return json.Marshal(es)
-	default:
-		return nil, fmt.Errorf("wrong event type: %d", e.Etype)
-	}
-}
-
 type EventMsgpEncoder struct{}
 
 func (e EventMsgpEncoder) Encode(value interface{}) ([]byte, error) {
@@ -181,7 +139,7 @@ type EventJSONEncoder struct{}
 
 func (e EventJSONEncoder) Encode(value interface{}) ([]byte, error) {
 	event := value.(*Event)
-	return event.MarshalJSON()
+	return json.Marshal(event)
 }
 
 func (e *Event) UnmarshalMsg(b []byte) ([]byte, error) {
@@ -223,45 +181,6 @@ func (e *Event) UnmarshalMsg(b []byte) ([]byte, error) {
 	}
 }
 
-func (e *Event) UnmarshalJSON(b []byte) error {
-	es := &EventSerializedJSON{}
-	err := json.Unmarshal(b, &es)
-	if err != nil {
-		return err
-	}
-	switch EType(es.Etype) {
-	case PERSON:
-		person := &Person{}
-		err = json.Unmarshal([]byte(es.Body), person)
-		if err != nil {
-			return err
-		}
-		e.NewPerson = person
-		e.Etype = EType(es.Etype)
-		return nil
-	case AUCTION:
-		auction := &Auction{}
-		err = json.Unmarshal([]byte(es.Body), auction)
-		if err != nil {
-			return err
-		}
-		e.NewAuction = auction
-		e.Etype = EType(es.Etype)
-		return nil
-	case BID:
-		bid := &Bid{}
-		err = json.Unmarshal([]byte(es.Body), bid)
-		if err != nil {
-			return err
-		}
-		e.Bid = bid
-		e.Etype = EType(es.Etype)
-		return nil
-	default:
-		return fmt.Errorf("wrong event type: %v", es.Etype)
-	}
-}
-
 type EventMsgDecoder struct{}
 
 func (emd EventMsgDecoder) Decode(value []byte) (interface{}, error) {
@@ -278,7 +197,7 @@ type EventJSONDecoder struct{}
 
 func (ejd EventJSONDecoder) Decode(value []byte) (interface{}, error) {
 	e := Event{}
-	if err := e.UnmarshalJSON(value); err != nil {
+	if err := json.Unmarshal(value, &e); err != nil {
 		return nil, err
 	} else {
 		return e, nil

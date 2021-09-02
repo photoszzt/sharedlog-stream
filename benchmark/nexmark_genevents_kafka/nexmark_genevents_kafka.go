@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
+	"fmt"
 	"time"
 
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/generator"
@@ -51,13 +53,14 @@ func main() {
 		if wtsSec > uint64(now) {
 			time.Sleep(time.Duration(wtsSec-uint64(now)) * time.Second)
 		}
-		encoded, err := nextEvent.Event.MarshalMsg()
+		encoded, err := json.Marshal(nextEvent.Event)
 		if err != nil {
 			log.Fatal().Msgf("event serialization failed: %s", err)
 		}
+		fmt.Printf("encoded str is %s\n", encoded)
 		err = p.Produce(&kafka.Message{
 			TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
-			Value:          []byte(encoded),
+			Value:          encoded,
 		}, deliveryChan)
 	}
 	replies := 0
