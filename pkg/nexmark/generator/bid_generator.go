@@ -80,7 +80,7 @@ func NextBid(ctx context.Context, eventId uint64, random *rand.Rand, timestamp u
 		Price:    price,
 		Channel:  channel,
 		Url:      url,
-		DateTime: time.Unix(int64(timestamp/1000.0), 0),
+		DateTime: int64(timestamp),
 		Extra:    extra,
 	}, nil
 }

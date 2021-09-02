@@ -5,43 +5,42 @@ package types
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/tinylib/msgp/msgp"
 )
 
 type Auction struct {
-	ID          uint64    `msg:"id" json:"id"`
-	ItemName    string    `msg:"itemName" json:"itemName"`
-	Description string    `msg:"description" json:"description"`
-	InitialBid  uint64    `msg:"initialBid" json:"initialBid"`
-	Reserve     uint64    `msg:"reserve" json:"reserve"`
-	DateTime    time.Time `msg:"dataTime" json:"dataTime"`
-	Expires     time.Time `msg:"expires" json:"expires"`
-	Seller      uint64    `msg:"seller" json:"seller"`
-	Category    uint64    `msg:"category" json:"category"`
-	Extra       string    `msg:"extra" json:"extra"`
+	ID          uint64 `msg:"id" json:"id"`
+	ItemName    string `msg:"itemName" json:"itemName"`
+	Description string `msg:"description" json:"description"`
+	InitialBid  uint64 `msg:"initialBid" json:"initialBid"`
+	Reserve     uint64 `msg:"reserve" json:"reserve"`
+	DateTime    int64  `msg:"dataTime" json:"dataTime"` // unix timestamp in ms
+	Expires     int64  `msg:"expires" json:"expires"`   // unix timestamp in ms
+	Seller      uint64 `msg:"seller" json:"seller"`
+	Category    uint64 `msg:"category" json:"category"`
+	Extra       string `msg:"extra" json:"extra"`
 }
 
 type Bid struct {
-	Auction  uint64    `msg:"auction" json:"auction"`
-	Bidder   uint64    `msg:"bidder" json:"bidder"`
-	Price    uint64    `msg:"price" json:"price"`
-	Channel  string    `msg:"channel" json:"channel"`
-	Url      string    `msg:"url" json:"url"`
-	DateTime time.Time `msg:"dateTime" json:"dateTime"`
-	Extra    string    `msg:"extra" json:"extra"`
+	Auction  uint64 `msg:"auction" json:"auction"`
+	Bidder   uint64 `msg:"bidder" json:"bidder"`
+	Price    uint64 `msg:"price" json:"price"`
+	Channel  string `msg:"channel" json:"channel"`
+	Url      string `msg:"url" json:"url"`
+	DateTime int64  `msg:"dateTime" json:"dateTime"` // unix timestamp in ms
+	Extra    string `msg:"extra" json:"extra"`
 }
 
 type Person struct {
-	ID           uint64    `msg:"id" json:"id"`
-	Name         string    `msg:"name" json:"name"`
-	EmailAddress string    `msg:"emailAddress" json:"emailAddress"`
-	CreditCard   string    `msg:"creditCard" json:"creditCard"`
-	City         string    `msg:"city" json:"city"`
-	State        string    `msg:"state" json:"state"`
-	DateTime     time.Time `msg:"dateTime" json:"dataTime"`
-	Extra        string    `msg:"extra" json:"extra"`
+	ID           uint64 `msg:"id" json:"id"`
+	Name         string `msg:"name" json:"name"`
+	EmailAddress string `msg:"emailAddress" json:"emailAddress"`
+	CreditCard   string `msg:"creditCard" json:"creditCard"`
+	City         string `msg:"city" json:"city"`
+	State        string `msg:"state" json:"state"`
+	DateTime     int64  `msg:"dateTime" json:"dataTime"` // unix timestamp in ms
+	Extra        string `msg:"extra" json:"extra"`
 }
 
 type EType uint8

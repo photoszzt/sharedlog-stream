@@ -2,7 +2,6 @@ package generator
 
 import (
 	"math/rand"
-	"time"
 
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/types"
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/utils"
@@ -39,8 +38,8 @@ func NextAuction(eventsCountSoFar uint64,
 		Description: desc,
 		InitialBid:  initialBid,
 		Reserve:     reserve,
-		DateTime:    time.Unix(int64(timestamp/1000.0), 0),
-		Expires:     time.Unix(int64(expires/1000.0), 0),
+		DateTime:    int64(timestamp),
+		Expires:     int64(expires),
 		Seller:      seller,
 		Category:    category,
 		Extra:       extra,

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
-	"time"
 
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/types"
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/utils"
@@ -37,7 +36,7 @@ func NextPerson(nextEventId uint64, random *rand.Rand, timestamp uint64, config 
 		CreditCard:   creditCard,
 		City:         city,
 		State:        state,
-		DateTime:     time.Unix(int64(timestamp), 0),
+		DateTime:     int64(timestamp),
 		Extra:        extra,
 	}
 }
