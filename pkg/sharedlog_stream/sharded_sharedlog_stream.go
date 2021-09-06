@@ -43,6 +43,10 @@ func (s *ShardedSharedLogStream) Push(payload []byte) (uint32, uint64, error) {
 	return par, seq, err
 }
 
+func (s *ShardedSharedLogStream) PushToPartition(payload []byte, parNumber uint32) (uint64, error) {
+	return s.subSharedLogStreams[parNumber].Push(payload)
+}
+
 func (s *ShardedSharedLogStream) PopFromPartition(parNumber uint32) ([]byte, error) {
 	if 0 <= parNumber && parNumber < s.numPartitions {
 		par := parNumber

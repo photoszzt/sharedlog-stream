@@ -5,10 +5,9 @@ import (
 )
 
 type SharedLogStreamSink struct {
-	pipe         stream.Pipe
-	stream       *SharedLogStream
-	valueEncoder Encoder
-	keyEncoder   Encoder
+	pipe       stream.Pipe
+	stream     *SharedLogStream
+	msgEncoder Encoder
 }
 
 func NewSharedLogStreamSink(stream *SharedLogStream) *SharedLogStreamSink {
@@ -23,11 +22,11 @@ func (sls *SharedLogStreamSink) WithPipe(pipe stream.Pipe) {
 
 func (sls *SharedLogStreamSink) Process(msg stream.Message) error {
 	// ignore the key now
-	if msg.Value != nil {
-		bytes, err := sls.valueEncoder.Encode(msg.Value)
-		if err != nil {
-			return err
-		}
+	bytes, err := sls.msgEncoder.Encode(msg)
+	if err != nil {
+		return err
+	}
+	if bytes != nil {
 		_, err = sls.stream.Push(bytes)
 		if err != nil {
 			return err

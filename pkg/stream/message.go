@@ -5,4 +5,9 @@ type Message struct {
 	Value interface{}
 }
 
+type MessageSerialized struct {
+	Key   []byte `json:"k,omitempty"`
+	Value []byte `json:"v"`
+}
+
 var EmptyMessage = Message{}
