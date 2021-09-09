@@ -1,5 +1,7 @@
 package stream
 
+import "golang.org/x/xerrors"
+
 //
 // The window specification for windows that can be enumerated for a single event based on its time.
 //
@@ -33,3 +35,13 @@ type EnumerableWindowDefinition interface {
 	 */
 	GracePeriodMs() uint64
 }
+
+var (
+	WindowSizeLeqZero            = xerrors.New("Window size must be larger than zero")
+	WindowAdvanceLargerThanSize  = xerrors.New("window advance interval should be less than  window duration")
+	WindowAdvanceSmallerThanZero = xerrors.New("window advance interval should be larger than zero")
+)
+
+const (
+	DEFAULT_RETENTION_MS = uint64(24 * 60 * 60 * 1000)
+)
