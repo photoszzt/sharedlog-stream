@@ -1,4 +1,4 @@
-package stream
+package processor
 
 type Mapper interface {
 	Map(Message) (Message, error)

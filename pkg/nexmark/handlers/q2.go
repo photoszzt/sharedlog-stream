@@ -11,6 +11,7 @@ import (
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/utils"
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/sharedlog_stream"
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream"
+	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
 	"cs.utexas.edu/zjia/faas/types"
 )
 
@@ -41,7 +42,7 @@ func (h *query2Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func filterFunc(msg stream.Message) (bool, error) {
+func filterFunc(msg processor.Message) (bool, error) {
 	event := msg.Value.(*ntypes.Event)
 	return event.Bid.Auction%123 == 0, nil
 }
@@ -77,20 +78,20 @@ func Query2(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 			Message: fmt.Sprintf("build stream failed: %v", err_arrs),
 		}
 	}
-	pumps := make(map[stream.Node]stream.Pump)
-	var srcPumps []stream.SourcePump
-	nodes := stream.FlattenNodeTree(tp.Sources())
-	stream.ReverseNodes(nodes)
+	pumps := make(map[processor.Node]processor.Pump)
+	var srcPumps []processor.SourcePump
+	nodes := processor.FlattenNodeTree(tp.Sources())
+	processor.ReverseNodes(nodes)
 	for _, node := range nodes {
-		pipe := stream.NewPipe(node.Processor(), stream.ResolvePumps(pumps, node.Children()))
+		pipe := processor.NewPipe(node.Processor(), processor.ResolvePumps(pumps, node.Children()))
 		node.Processor().WithPipe(pipe)
 
-		pump := stream.NewSyncPump(node, pipe)
+		pump := processor.NewSyncPump(node, pipe)
 		pumps[node] = pump
 	}
 	for source, node := range tp.Sources() {
-		srcPump := stream.NewSourcePump(node.Name(), source,
-			stream.ResolvePumps(pumps, node.Children()), func(err error) {
+		srcPump := processor.NewSourcePump(node.Name(), source,
+			processor.ResolvePumps(pumps, node.Children()), func(err error) {
 				log.Fatal(err.Error())
 			})
 		srcPumps = append(srcPumps, srcPump)

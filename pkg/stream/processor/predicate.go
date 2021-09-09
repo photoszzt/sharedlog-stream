@@ -1,11 +1,4 @@
-package stream
-
-type Processor interface {
-	// WithPipe sets the pipe on the Processor.
-	WithPipe(Pipe)
-	// Process processes the stream Message.
-	Process(Message) error
-}
+package processor
 
 var _ = (Predicate)(PredicateFunc(nil))
 
@@ -18,5 +11,3 @@ type Predicate interface {
 func (fn PredicateFunc) Assert(msg Message) (bool, error) {
 	return fn(msg)
 }
-
-type MapperFunc func(Message) (Message, error)

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream"
+	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
 )
 
 var (
@@ -23,7 +23,7 @@ func NewSharedLogStreamSource(stream *SharedLogStream, timeout int) *SharedLogSt
 	}
 }
 
-func (s *SharedLogStreamSource) Consume() (stream.Message, error) {
+func (s *SharedLogStreamSource) Consume() (processor.Message, error) {
 	startTime := time.Now()
 	for {
 		if s.timeout != 0 && time.Since(startTime) >= s.timeout {
@@ -39,10 +39,10 @@ func (s *SharedLogStreamSource) Consume() (stream.Message, error) {
 				// fmt.Println("pop timeout")
 				continue
 			} else {
-				return stream.EmptyMessage, err
+				return processor.EmptyMessage, err
 			}
 		}
-		return stream.Message{Key: nil, Value: val}, nil
+		return processor.Message{Key: nil, Value: val}, nil
 	}
-	return stream.EmptyMessage, errSharedLogStreamSourceTimeout
+	return processor.EmptyMessage, errSharedLogStreamSourceTimeout
 }

@@ -1,4 +1,4 @@
-package stream
+package processor
 
 type MergeProcessor struct {
 	pipe Pipe

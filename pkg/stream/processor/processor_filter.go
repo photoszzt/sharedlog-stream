@@ -1,4 +1,4 @@
-package stream
+package processor
 
 type FilterProcessor struct {
 	pipe Pipe

@@ -1,4 +1,4 @@
-package stream
+package processor
 
 type Topology struct {
 	sources    map[Source]Node

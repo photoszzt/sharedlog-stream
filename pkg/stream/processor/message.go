@@ -1,4 +1,4 @@
-package stream
+package processor
 
 type Message struct {
 	Key   interface{}

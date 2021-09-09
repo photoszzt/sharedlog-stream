@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream"
+	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
 	"cs.utexas.edu/zjia/faas/types"
 	"golang.org/x/xerrors"
 )
@@ -75,7 +75,7 @@ func (tc *TransactionCoordinator) RegisterTopicPartition(topic string, parNum ui
 	if err != nil {
 		return err
 	}
-	msg := stream.MessageSerialized{
+	msg := processor.MessageSerialized{
 		Value: encoded,
 	}
 	msg_encoded, err := json.Marshal(msg)
@@ -95,7 +95,7 @@ func (tc *TransactionCoordinator) BeginTransaction() error {
 	if err != nil {
 		return err
 	}
-	msg := stream.MessageSerialized{
+	msg := processor.MessageSerialized{
 		Value: encoded,
 	}
 	msg_encoded, err := json.Marshal(msg)

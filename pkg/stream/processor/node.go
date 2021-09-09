@@ -1,4 +1,4 @@
-package stream
+package processor
 
 type Node interface {
 	// Name: get node name

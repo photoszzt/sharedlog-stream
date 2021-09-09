@@ -1,4 +1,4 @@
-package stream
+package processor
 
 // Branch processor
 type BranchProcessor struct {

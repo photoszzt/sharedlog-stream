@@ -11,6 +11,7 @@ import (
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/utils"
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/sharedlog_stream"
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream"
+	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
 	"cs.utexas.edu/zjia/faas/types"
 )
 
@@ -41,10 +42,10 @@ func (h *query1Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func mapFunc(msg stream.Message) (stream.Message, error) {
+func mapFunc(msg processor.Message) (processor.Message, error) {
 	event := msg.Value.(*ntypes.Event)
 	event.Bid.Price = uint64(event.Bid.Price * 908 / 1000.0)
-	return stream.Message{Value: event}, nil
+	return processor.Message{Value: event}, nil
 
 }
 
@@ -69,7 +70,7 @@ func Query1(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	builder := stream.NewStreamBuilder()
 	builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream, int(input.Duration))).
 		FilterFunc("only_bid", only_bid).
-		MapFunc("q1_map", stream.MapperFunc(mapFunc)).
+		MapFunc("q1_map", processor.MapperFunc(mapFunc)).
 		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream))
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {
@@ -78,20 +79,20 @@ func Query1(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 			Message: fmt.Sprintf("build stream failed: %v", err_arrs),
 		}
 	}
-	pumps := make(map[stream.Node]stream.Pump)
-	var srcPumps []stream.SourcePump
-	nodes := stream.FlattenNodeTree(tp.Sources())
-	stream.ReverseNodes(nodes)
+	pumps := make(map[processor.Node]processor.Pump)
+	var srcPumps []processor.SourcePump
+	nodes := processor.FlattenNodeTree(tp.Sources())
+	processor.ReverseNodes(nodes)
 	for _, node := range nodes {
-		pipe := stream.NewPipe(node.Processor(), stream.ResolvePumps(pumps, node.Children()))
+		pipe := processor.NewPipe(node.Processor(), processor.ResolvePumps(pumps, node.Children()))
 		node.Processor().WithPipe(pipe)
 
-		pump := stream.NewSyncPump(node, pipe)
+		pump := processor.NewSyncPump(node, pipe)
 		pumps[node] = pump
 	}
 	for source, node := range tp.Sources() {
-		srcPump := stream.NewSourcePump(node.Name(), source,
-			stream.ResolvePumps(pumps, node.Children()), func(err error) {
+		srcPump := processor.NewSourcePump(node.Name(), source,
+			processor.ResolvePumps(pumps, node.Children()), func(err error) {
 				log.Fatal(err.Error())
 			})
 		srcPumps = append(srcPumps, srcPump)

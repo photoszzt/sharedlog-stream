@@ -1,11 +1,11 @@
 package sharedlog_stream
 
 import (
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream"
+	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
 )
 
 type SharedLogStreamSink struct {
-	pipe       stream.Pipe
+	pipe       processor.Pipe
 	stream     *SharedLogStream
 	msgEncoder Encoder
 }
@@ -16,11 +16,11 @@ func NewSharedLogStreamSink(stream *SharedLogStream) *SharedLogStreamSink {
 	}
 }
 
-func (sls *SharedLogStreamSink) WithPipe(pipe stream.Pipe) {
+func (sls *SharedLogStreamSink) WithPipe(pipe processor.Pipe) {
 	sls.pipe = pipe
 }
 
-func (sls *SharedLogStreamSink) Process(msg stream.Message) error {
+func (sls *SharedLogStreamSink) Process(msg processor.Message) error {
 	// ignore the key now
 	bytes, err := sls.msgEncoder.Encode(msg)
 	if err != nil {

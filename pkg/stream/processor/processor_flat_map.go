@@ -1,4 +1,4 @@
-package stream
+package processor
 
 type FlatMapper interface {
 	FlatMap(Message) ([]Message, error)
