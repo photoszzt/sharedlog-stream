@@ -12,13 +12,11 @@ type Pipe interface {
 }
 
 type processorPipe struct {
-	proc     Processor
 	children []Pump
 }
 
-func NewPipe(proc Processor, children []Pump) Pipe {
+func NewPipe(children []Pump) Pipe {
 	return &processorPipe{
-		proc:     proc,
 		children: children,
 	}
 }

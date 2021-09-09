@@ -84,7 +84,7 @@ func Query1(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	nodes := processor.FlattenNodeTree(tp.Sources())
 	processor.ReverseNodes(nodes)
 	for _, node := range nodes {
-		pipe := processor.NewPipe(node.Processor(), processor.ResolvePumps(pumps, node.Children()))
+		pipe := processor.NewPipe(processor.ResolvePumps(pumps, node.Children()))
 		node.Processor().WithPipe(pipe)
 
 		pump := processor.NewSyncPump(node, pipe)
