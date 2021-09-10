@@ -1,4 +1,4 @@
-package stream
+package processor
 
 import "golang.org/x/xerrors"
 
