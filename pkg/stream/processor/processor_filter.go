@@ -2,6 +2,7 @@ package processor
 
 type FilterProcessor struct {
 	pipe Pipe
+	pctx ProcessorContext
 	pred Predicate
 }
 
@@ -9,6 +10,10 @@ func NewFilterProcessor(pred Predicate) Processor {
 	return &FilterProcessor{
 		pred: pred,
 	}
+}
+
+func (p *FilterProcessor) WithProcessorContext(pctx ProcessorContext) {
+	p.pctx = pctx
 }
 
 func (p *FilterProcessor) WithPipe(pipe Pipe) {

@@ -11,6 +11,7 @@ type QueryInput struct {
 	Duration        uint32 `json:"duration"`
 	InputTopicName  string `json:"input_topic_name"`
 	OutputTopicName string `json:"output_topic_name"`
+	SerdeFormat     uint8  `json:"serde_format"`
 }
 
 type NexMarkConfigInput struct {
@@ -31,9 +32,10 @@ type NexMarkConfigInput struct {
 	BidHotRatioBidders     uint32        `json:"bid_hot_ratio_bidders"`
 	AuctionHotRatioSellers uint32        `json:"auction_hot_ratio_sellers"`
 	EventsNum              uint64        `json:"events_num"`
+	SerdeFormat            uint8         `json:"serde_format"`
 }
 
-func NewNexMarkConfigInput(topicName string) *NexMarkConfigInput {
+func NewNexMarkConfigInput(topicName string, serdeFormat SerdeFormat) *NexMarkConfigInput {
 	return &NexMarkConfigInput{
 		TopicName:              topicName,
 		Duration:               0,
@@ -52,6 +54,7 @@ func NewNexMarkConfigInput(topicName string) *NexMarkConfigInput {
 		BidHotRatioBidders:     4,
 		AuctionHotRatioSellers: 4,
 		EventsNum:              0,
+		SerdeFormat:            uint8(serdeFormat),
 	}
 }
 

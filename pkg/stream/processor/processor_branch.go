@@ -3,6 +3,7 @@ package processor
 // Branch processor
 type BranchProcessor struct {
 	pipe  Pipe
+	pctx  ProcessorContext
 	preds []Predicate
 }
 
@@ -15,6 +16,10 @@ func NewBranchProcessor(preds []Predicate) Processor {
 // WithPipe sets the pipe on the Processor.
 func (p *BranchProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
+}
+
+func (p *BranchProcessor) WithProcessorContext(ctx ProcessorContext) {
+	p.pctx = ctx
 }
 
 func (p *BranchProcessor) Process(msg Message) error {

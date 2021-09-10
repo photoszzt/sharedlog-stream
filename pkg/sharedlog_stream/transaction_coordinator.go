@@ -1,8 +1,9 @@
+//go:generate greenpack
+//msgp:ignore TransactionCoordinator
 package sharedlog_stream
 
 import (
 	"context"
-	"encoding/json"
 
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
 	"cs.utexas.edu/zjia/faas/types"
@@ -32,18 +33,20 @@ const (
 )
 
 type TopicPartition struct {
-	Topic  string `json:"tp"`
-	ParNum uint32 `json:"pn"`
+	Topic  string `zid:"0"`
+	ParNum uint32 `zid:"1"`
 }
 
 type TxnState struct {
-	state TransactionStatus `json:"st"`
+	State TransactionStatus `zid:"0"`
 }
 
 type TransactionCoordinator struct {
 	TransactionalId string
 	TransactionLog  *SharedLogStream
 	currentStatus   TransactionStatus
+	payloadSerde    processor.Serde
+	msgSerde        processor.MsgSerde
 }
 
 func NewTransactionCoordinator(ctx context.Context, env types.Environment, transactional_id string) (*TransactionCoordinator, error) {
@@ -71,14 +74,11 @@ func (tc *TransactionCoordinator) RegisterTopicPartition(topic string, parNum ui
 		Topic:  topic,
 		ParNum: parNum,
 	}
-	encoded, err := json.Marshal(tp)
+	encoded, err := tc.payloadSerde.Encode(tp)
 	if err != nil {
 		return err
 	}
-	msg := processor.MessageSerialized{
-		Value: encoded,
-	}
-	msg_encoded, err := json.Marshal(msg)
+	msg_encoded, err := tc.msgSerde.Encode(nil, encoded)
 	if err != nil {
 		return err
 	}
@@ -89,16 +89,14 @@ func (tc *TransactionCoordinator) RegisterTopicPartition(topic string, parNum ui
 func (tc *TransactionCoordinator) BeginTransaction() error {
 	tc.currentStatus = BEGIN
 	txnState := TxnState{
-		state: BEGIN,
+		State: BEGIN,
 	}
-	encoded, err := json.Marshal(txnState)
+
+	encoded, err := tc.payloadSerde.Encode(txnState)
 	if err != nil {
 		return err
 	}
-	msg := processor.MessageSerialized{
-		Value: encoded,
-	}
-	msg_encoded, err := json.Marshal(msg)
+	msg_encoded, err := tc.msgSerde.Encode(nil, encoded)
 	if err != nil {
 		return err
 	}

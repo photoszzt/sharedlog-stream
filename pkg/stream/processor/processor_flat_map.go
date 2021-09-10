@@ -15,12 +15,17 @@ func (fn FlatMapperFunc) FlatMap(msg Message) ([]Message, error) {
 type FlatMapProcessor struct {
 	pipe   Pipe
 	mapper FlatMapper
+	pctx   ProcessorContext
 }
 
 func NewFlatMapProcessor(mapper FlatMapper) Processor {
 	return &FlatMapProcessor{
 		mapper: mapper,
 	}
+}
+
+func (p *FlatMapProcessor) WithProcessorContext(pctx ProcessorContext) {
+	p.pctx = pctx
 }
 
 func (p *FlatMapProcessor) WithPipe(pipe Pipe) {

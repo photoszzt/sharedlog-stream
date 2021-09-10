@@ -10,6 +10,7 @@ import (
 	ntypes "cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/types"
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/utils"
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/sharedlog_stream"
+	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
 	"cs.utexas.edu/zjia/faas/types"
 )
 
@@ -61,6 +62,21 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 	channel_url_cache := make(map[uint32]*generator.ChannelUrl)
 	duration := time.Duration(inputConfig.Duration) * time.Second
 	startTime := time.Now()
+	var eventEncoder processor.Encoder
+	var msgEncoder processor.MsgEncoder
+	if inputConfig.SerdeFormat == uint8(ntypes.JSON) {
+		eventEncoder = ntypes.EventJSONEncoder{}
+		msgEncoder = ntypes.MessageSerializedJSONEncoder{}
+	} else if inputConfig.SerdeFormat == uint8(ntypes.MSGP) {
+		eventEncoder = ntypes.EventMsgpEncoder{}
+		msgEncoder = ntypes.MessageSerializedMsgpEncoder{}
+	} else {
+		return &ntypes.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", inputConfig.SerdeFormat),
+		}, nil
+	}
+
 	for {
 		if !eventGenerator.HasNext() {
 			break
@@ -80,15 +96,22 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		if wtsSec > uint64(now) {
 			time.Sleep(time.Duration(wtsSec-uint64(now)) * time.Second)
 		}
-		encoded, err := nextEvent.Event.MarshalMsg()
+		encoded, err := eventEncoder.Encode(nextEvent.Event)
 		if err != nil {
 			return &ntypes.FnOutput{
 				Success: false,
 				Message: fmt.Sprintf("event serialization failed: %v", err),
 			}, nil
 		}
+		msgEncoded, err := msgEncoder.Encode(nil, encoded)
+		if err != nil {
+			return &ntypes.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("msg serialization failed: %v", err),
+			}, nil
+		}
 		pushStart := time.Now()
-		_, err = stream.Push(encoded)
+		_, err = stream.Push(msgEncoded)
 		if err != nil {
 			return &ntypes.FnOutput{
 				Success: false,

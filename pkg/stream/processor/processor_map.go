@@ -3,6 +3,7 @@ package processor
 type Mapper interface {
 	Map(Message) (Message, error)
 }
+type MapperFunc func(Message) (Message, error)
 
 var _ = (Mapper)(MapperFunc(nil))
 
@@ -13,6 +14,7 @@ func (fn MapperFunc) Map(msg Message) (Message, error) {
 type MapProcessor struct {
 	pipe   Pipe
 	mapper Mapper
+	pctx   ProcessorContext
 }
 
 func NewMapProcessor(mapper Mapper) Processor {
@@ -23,6 +25,10 @@ func NewMapProcessor(mapper Mapper) Processor {
 
 func (p *MapProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
+}
+
+func (p *MapProcessor) WithProcessorContext(pctx ProcessorContext) {
+	p.pctx = pctx
 }
 
 func (p *MapProcessor) Process(msg Message) error {

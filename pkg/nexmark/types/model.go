@@ -1,46 +1,60 @@
-//go:generate msgp
-//msgp:ignore Event
+//go:generate greenpack
+//msgp:ignore EventMsgpEncoder
+//msgp:ignore EventMsgpDecoder
+//msgp:ignore EventJSONEncoder
+//msgp:ignore EventJSONDecoder
 package types
 
 import (
 	"encoding/json"
-	"fmt"
 
-	"github.com/tinylib/msgp/msgp"
+	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
 )
 
+type SerdeFormat uint8
+
+const (
+	JSON SerdeFormat = 0
+	MSGP SerdeFormat = 1
+)
+
+type MessageSerialized struct {
+	Key   []byte `json:",omitempty" zid:"0" msg:",omitempty"`
+	Value []byte `json:",omitempty" zid:"1" msg:",omitempty"`
+}
+
 type Auction struct {
-	ID          uint64 `msg:"id" json:"id"`
-	ItemName    string `msg:"itemName" json:"itemName"`
-	Description string `msg:"description" json:"description"`
-	InitialBid  uint64 `msg:"initialBid" json:"initialBid"`
-	Reserve     uint64 `msg:"reserve" json:"reserve"`
-	DateTime    int64  `msg:"dataTime" json:"dataTime"` // unix timestamp in ms
-	Expires     int64  `msg:"expires" json:"expires"`   // unix timestamp in ms
-	Seller      uint64 `msg:"seller" json:"seller"`
-	Category    uint64 `msg:"category" json:"category"`
-	Extra       string `msg:"extra" json:"extra"`
+	ID          uint64 `zid:"0" msg:"id" json:"id"`
+	ItemName    string `zid:"1" msg:"itemName" json:"itemName"`
+	Description string `zid:"2" msg:"description" json:"description"`
+	InitialBid  uint64 `zid:"3" msg:"initialBid" json:"initialBid"`
+	Reserve     uint64 `zid:"4" msg:"reserve" json:"reserve"`
+	DateTime    int64  `zid:"5" msg:"dataTime" json:"dataTime"` // unix timestamp in ms
+	Expires     int64  `zid:"6" msg:"expires" json:"expires"`   // unix timestamp in ms
+	Seller      uint64 `zid:"7" msg:"seller" json:"seller"`
+	Category    uint64 `zid:"8" msg:"category" json:"category"`
+	Extra       string `zid:"9" msg:"extra" json:"extra"`
 }
 
 type Bid struct {
-	Auction  uint64 `msg:"auction" json:"auction"`
-	Bidder   uint64 `msg:"bidder" json:"bidder"`
-	Price    uint64 `msg:"price" json:"price"`
-	Channel  string `msg:"channel" json:"channel"`
-	Url      string `msg:"url" json:"url"`
-	DateTime int64  `msg:"dateTime" json:"dateTime"` // unix timestamp in ms
-	Extra    string `msg:"extra" json:"extra"`
+	Auction  uint64 `zid:"0" msg:"auction" json:"auction"`
+	Bidder   uint64 `zid:"1" msg:"bidder" json:"bidder"`
+	Price    uint64 `zid:"2" msg:"price" json:"price"`
+	Channel  string `zid:"3" msg:"channel" json:"channel"`
+	Url      string `zid:"4" msg:"url" json:"url"`
+	DateTime int64  `zid:"5" msg:"dateTime" json:"dateTime"` // unix timestamp in ms
+	Extra    string `zid:"6" msg:"extra" json:"extra"`
 }
 
 type Person struct {
-	ID           uint64 `msg:"id" json:"id"`
-	Name         string `msg:"name" json:"name"`
-	EmailAddress string `msg:"emailAddress" json:"emailAddress"`
-	CreditCard   string `msg:"creditCard" json:"creditCard"`
-	City         string `msg:"city" json:"city"`
-	State        string `msg:"state" json:"state"`
-	DateTime     int64  `msg:"dateTime" json:"dataTime"` // unix timestamp in ms
-	Extra        string `msg:"extra" json:"extra"`
+	ID           uint64 `zid:"0" msg:"id" json:"id"`
+	Name         string `zid:"1" msg:"name" json:"name"`
+	EmailAddress string `zid:"2" msg:"emailAddress" json:"emailAddress"`
+	CreditCard   string `zid:"3" msg:"creditCard" json:"creditCard"`
+	City         string `zid:"4" msg:"city" json:"city"`
+	State        string `zid:"5" msg:"state" json:"state"`
+	DateTime     int64  `zid:"6" msg:"dateTime" json:"dataTime"` // unix timestamp in ms
+	Extra        string `zid:"7" msg:"extra" json:"extra"`
 }
 
 type EType uint8
@@ -52,15 +66,10 @@ const (
 )
 
 type Event struct {
-	NewPerson  *Person  `json:"newPerson",omitempty`
-	NewAuction *Auction `json:"newAuction",omitempty`
-	Bid        *Bid     `json:"bid",omitempty`
-	Etype      EType    `json:"type"`
-}
-
-type EventSerialized struct {
-	Etype uint8    `msg:"etype"`
-	Body  msgp.Raw `msg:"body"`
+	Etype      EType    `json:"etype" zid:"0" msgp:"etype"`
+	NewPerson  *Person  `json:"newPerson,omitempty" zid:"1" msgp:"newPerson,omitempty"`
+	NewAuction *Auction `json:"newAuction,omitempty" zid:"2" msgp:"newAuction,omitempty"`
+	Bid        *Bid     `json:"bid,omitempty" zid:"3" msgp:"bid,omitempty"`
 }
 
 func NewPersonEvent(newPerson *Person) *Event {
@@ -90,99 +99,53 @@ func NewBidEvent(bid *Bid) *Event {
 	}
 }
 
-func (e *Event) MarshalMsg() ([]byte, error) {
-	switch e.Etype {
-	case PERSON:
-		person_encoded, err := e.NewPerson.MarshalMsg(nil)
-		if err != nil {
-			return nil, err
-		}
-		es := &EventSerialized{
-			Etype: uint8(e.Etype),
-			Body:  person_encoded,
-		}
-		return es.MarshalMsg(nil)
-	case AUCTION:
-		auction_encoded, err := e.NewAuction.MarshalMsg(nil)
-		if err != nil {
-			return nil, err
-		}
-		es := &EventSerialized{
-			Etype: uint8(e.Etype),
-			Body:  auction_encoded,
-		}
-		return es.MarshalMsg(nil)
-	case BID:
-		bid_encoded, err := e.Bid.MarshalMsg(nil)
-		if err != nil {
-			return nil, err
-		}
-		es := &EventSerialized{
-			Etype: uint8(e.Etype),
-			Body:  bid_encoded,
-		}
-		return es.MarshalMsg(nil)
-	default:
-		return nil, fmt.Errorf("wrong event type: %v", e.Etype)
-	}
-}
-
 type EventMsgpEncoder struct{}
+
+var _ = processor.Encoder(EventMsgpEncoder{})
 
 func (e EventMsgpEncoder) Encode(value interface{}) ([]byte, error) {
 	event := value.(*Event)
-	return event.MarshalMsg()
+	return event.MarshalMsg(nil)
 }
 
 type EventJSONEncoder struct{}
+
+var _ = processor.Encoder(EventJSONEncoder{})
 
 func (e EventJSONEncoder) Encode(value interface{}) ([]byte, error) {
 	event := value.(*Event)
 	return json.Marshal(event)
 }
 
-func (e *Event) UnmarshalMsg(b []byte) ([]byte, error) {
-	es := &EventSerialized{}
-	leftover, err := es.UnmarshalMsg(b)
-	if err != nil {
-		return nil, err
+var _ = processor.MsgEncoder(MessageSerializedMsgpEncoder{})
+
+type MessageSerializedMsgpEncoder struct{}
+
+func (e MessageSerializedMsgpEncoder) Encode(key []byte, value []byte) ([]byte, error) {
+	msg := MessageSerialized{
+		Key:   key,
+		Value: value,
 	}
-	switch EType(es.Etype) {
-	case PERSON:
-		person := &Person{}
-		_, err := person.UnmarshalMsg([]byte(es.Body))
-		if err != nil {
-			return nil, err
-		}
-		e.NewPerson = person
-		e.Etype = EType(es.Etype)
-		return leftover, nil
-	case AUCTION:
-		auction := &Auction{}
-		_, err := auction.UnmarshalMsg([]byte(es.Body))
-		if err != nil {
-			return nil, err
-		}
-		e.NewAuction = auction
-		e.Etype = EType(es.Etype)
-		return leftover, nil
-	case BID:
-		bid := &Bid{}
-		_, err := bid.UnmarshalMsg([]byte(es.Body))
-		if err != nil {
-			return nil, err
-		}
-		e.Bid = bid
-		e.Etype = EType(es.Etype)
-		return leftover, nil
-	default:
-		return nil, fmt.Errorf("wrong event type: %v", es.Etype)
-	}
+	return msg.MarshalMsg(nil)
 }
 
-type EventMsgDecoder struct{}
+type MessageSerializedJSONEncoder struct{}
 
-func (emd EventMsgDecoder) Decode(value []byte) (interface{}, error) {
+var _ = processor.MsgEncoder(MessageSerializedJSONEncoder{})
+
+func (e MessageSerializedJSONEncoder) Encode(key []byte, value []byte) ([]byte, error) {
+	msg := MessageSerialized{
+		Key:   key,
+		Value: value,
+	}
+	return json.Marshal(msg)
+}
+
+type EventMsgpDecoder struct{}
+
+var _ = processor.Decoder(EventMsgpDecoder{})
+
+func (emd EventMsgpDecoder) Decode(value []byte) (interface{}, error) {
 	e := Event{}
 	_, err := e.UnmarshalMsg(value)
 	if err != nil {
@@ -194,11 +157,40 @@ func (emd EventMsgDecoder) Decode(value []byte) (interface{}, error) {
 
 type EventJSONDecoder struct{}
 
+var _ = processor.Decoder(EventJSONDecoder{})
+
 func (ejd EventJSONDecoder) Decode(value []byte) (interface{}, error) {
 	e := Event{}
 	if err := json.Unmarshal(value, &e); err != nil {
 		return nil, err
 	} else {
 		return e, nil
+	}
+}
+
+type MessageSerializedMsgpDecoder struct{}
+
+var _ = processor.MsgDecoder(MessageSerializedMsgpDecoder{})
+
+func (msmd MessageSerializedMsgpDecoder) Decode(value []byte) ([]byte /* key */, []byte /* value */, error) {
+	msg := MessageSerialized{}
+	_, err := msg.UnmarshalMsg(value)
+	if err != nil {
+		return nil, nil, err
+	} else {
+		return msg.Key, msg.Value, nil
+	}
+}
+
+type MessageSerializedJSONDecoder struct{}
+
+var _ = processor.MsgDecoder(MessageSerializedJSONDecoder{})
+
+func (msmd MessageSerializedJSONDecoder) Decode(value []byte) ([]byte /* key */, []byte /* value */, error) {
+	msg := MessageSerialized{}
+	if err := json.Unmarshal(value, &msg); err != nil {
+		return nil, nil, err
+	} else {
+		return msg.Key, msg.Value, nil
 	}
 }

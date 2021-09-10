@@ -19,11 +19,21 @@ var (
 	FLAGS_duration      int
 	FLAGS_events_num    int
 	FLAGS_tps           int
+	FLAGS_serdeFormat   string
 )
 
 func invokeSourceFunc(client *http.Client, response *ntypes.FnOutput, wg *sync.WaitGroup) {
 	defer wg.Done()
-	nexmarkConfig := ntypes.NewNexMarkConfigInput(FLAGS_stream_prefix + "_src")
+	var serdeFormat ntypes.SerdeFormat
+	if FLAGS_serdeFormat == "json" {
+		serdeFormat = ntypes.JSON
+	} else if FLAGS_serdeFormat == "msgp" {
+		serdeFormat = ntypes.MSGP
+	} else {
+		log.Error().Msgf("serde format is not recognized; default back to JSON")
+		serdeFormat = ntypes.JSON
+	}
+	nexmarkConfig := ntypes.NewNexMarkConfigInput(FLAGS_stream_prefix+"_src", serdeFormat)
 	nexmarkConfig.Duration = uint32(FLAGS_duration)
 	nexmarkConfig.FirstEventRate = uint32(FLAGS_tps)
 	nexmarkConfig.NextEventRate = uint32(FLAGS_tps)
@@ -60,6 +70,7 @@ func main() {
 	flag.IntVar(&FLAGS_duration, "duration", 60, "")
 	flag.IntVar(&FLAGS_events_num, "events_num", 100000000, "events.num param for nexmark")
 	flag.IntVar(&FLAGS_tps, "tps", 10000000, "tps param for nexmark")
+	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
 	flag.Parse()
 
 	client := &http.Client{

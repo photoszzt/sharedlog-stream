@@ -6,6 +6,7 @@ require (
 	cs.utexas.edu/zjia/faas v0.0.0
 	github.com/bradfitz/gomemcache v0.0.0-20190913173617-a41fca850d0b
 	github.com/confluentinc/confluent-kafka-go v1.7.0 // indirect
+	github.com/glycerine/greenpack v5.1.1+incompatible // indirect
 	github.com/golang/protobuf v1.5.2
 	github.com/rs/zerolog v1.19.0
 	github.com/tatsuhiro-t/go-nghttp2 v0.0.0-20150408091349-4742878d9c90

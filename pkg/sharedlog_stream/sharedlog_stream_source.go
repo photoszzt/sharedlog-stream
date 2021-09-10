@@ -1,25 +1,32 @@
 package sharedlog_stream
 
 import (
-	"errors"
 	"time"
 
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
+	"golang.org/x/xerrors"
 )
 
 var (
-	errSharedLogStreamSourceTimeout = errors.New("SharedLogStreamSource consume timeout.")
+	errSharedLogStreamSourceTimeout = xerrors.New("SharedLogStreamSource consume timeout")
 )
 
 type SharedLogStreamSource struct {
-	stream  *SharedLogStream
-	timeout time.Duration
+	stream       *SharedLogStream
+	timeout      time.Duration
+	keyDecoder   processor.Decoder
+	valueDecoder processor.Decoder
+	msgDecoder   processor.MsgDecoder
 }
 
-func NewSharedLogStreamSource(stream *SharedLogStream, timeout int) *SharedLogStreamSource {
+func NewSharedLogStreamSource(stream *SharedLogStream, timeout int, keyDecoder processor.Decoder, valueDecoder processor.Decoder,
+	msgDecoder processor.MsgDecoder) *SharedLogStreamSource {
 	return &SharedLogStreamSource{
-		stream:  stream,
-		timeout: time.Duration(timeout) * time.Second,
+		stream:       stream,
+		timeout:      time.Duration(timeout) * time.Second,
+		keyDecoder:   keyDecoder,
+		valueDecoder: valueDecoder,
+		msgDecoder:   msgDecoder,
 	}
 }
 
@@ -42,7 +49,19 @@ func (s *SharedLogStreamSource) Consume() (processor.Message, error) {
 				return processor.EmptyMessage, err
 			}
 		}
-		return processor.Message{Key: nil, Value: val}, nil
+		keyEncoded, valueEncoded, err := s.msgDecoder.Decode(val)
+		if err != nil {
+			return processor.EmptyMessage, err
+		}
+		key, err := s.keyDecoder.Decode(keyEncoded)
+		if err != nil {
+			return processor.EmptyMessage, err
+		}
+		value, err := s.valueDecoder.Decode(valueEncoded)
+		if err != nil {
+			return processor.EmptyMessage, err
+		}
+		return processor.Message{Key: key, Value: value}, nil
 	}
 	return processor.EmptyMessage, errSharedLogStreamSourceTimeout
 }
