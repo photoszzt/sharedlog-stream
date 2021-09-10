@@ -1,5 +1,7 @@
 package processor
 
+import "cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/state"
+
 type ProcessorContext interface {
-	RegisterStateStore(store StateStore)
+	RegisterStateStore(store state.StateStore)
 }

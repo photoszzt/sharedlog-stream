@@ -91,8 +91,8 @@ func Query2(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	builder := stream.NewStreamBuilder()
 	builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream, int(input.Duration),
 		processor.StringDecoder{}, eventDecoder, msgDecoder)).
-		FilterFunc("only_bid", only_bid).
-		FilterFunc("q2_filter", filterFunc).
+		Filter("only_bid", processor.PredicateFunc(only_bid)).
+		Filter("q2_filter", processor.PredicateFunc(filterFunc)).
 		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, processor.StringEncoder{}, eventEncoder, msgEncoder))
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {
