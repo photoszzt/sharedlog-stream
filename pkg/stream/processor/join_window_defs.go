@@ -1,4 +1,4 @@
-package stream
+package processor
 
 import (
 	"time"
@@ -44,11 +44,11 @@ type JoinWindows struct {
 }
 
 var (
-	a = NewJoinWindows(time.Duration(5) * time.Millisecond)
-	_ = EnumerableWindowDefinition(a)
+	jw = NewJoinWindows(time.Duration(5) * time.Millisecond)
+	_  = EnumerableWindowDefinition(jw)
 )
 
-func newJoinWindows(beforeMs uint64, afterMs uint64, graceMs uint64) *JoinWindows {
+func getJoinWindows(beforeMs uint64, afterMs uint64, graceMs uint64) *JoinWindows {
 	if beforeMs+afterMs < 0 {
 		log.Fatal().Err(WindowSizeLeqZero)
 	}
@@ -62,9 +62,10 @@ func newJoinWindows(beforeMs uint64, afterMs uint64, graceMs uint64) *JoinWindow
 func NewJoinWindows(timeDifference time.Duration) *JoinWindows {
 	timeDifferenceMs := timeDifference.Milliseconds()
 	if timeDifferenceMs <= 0 {
-		log.Fatal().Err(windowSizeLeqZero)
+		log.Fatal().Err(WindowSizeLeqZero)
 	}
-	return newJoinWindows(timeDifferenceMs, timeDifferenceMs, DEFAULT_RETENTION_MS)
+	return getJoinWindows(uint64(timeDifferenceMs), uint64(timeDifferenceMs),
+		DEFAULT_RETENTION_MS)
 }
 
 /**
@@ -77,20 +78,20 @@ func NewJoinWindows(timeDifference time.Duration) *JoinWindows {
  * @param timeDifference relative window start time
  * @panic if the resulting window size is negative or {@code timeDifference} can't be represented as {@code uint64 milliseconds}
  */
-func Before(timeDifference time.Duration) *JoinWindows {
+func (w *JoinWindows) Before(timeDifference time.Duration) *JoinWindows {
 	timeDifferenceMs := timeDifference.Milliseconds()
 	if timeDifferenceMs <= 0 {
-		log.Fatal().Err(windowSizeLeqZero)
+		log.Fatal().Err(WindowSizeLeqZero)
 	}
-	return newJoinWindows(timeDifferenceMs, w.afterMs, w.graceMs)
+	return getJoinWindows(uint64(timeDifferenceMs), w.afterMs, w.graceMs)
 }
 
-func After(timeDifference time.Duration) *JoinWindows {
+func (w *JoinWindows) After(timeDifference time.Duration) *JoinWindows {
 	timeDifferenceMs := timeDifference.Milliseconds()
 	if timeDifferenceMs <= 0 {
-		log.Fatal().Err(windowSizeLeqZero)
+		log.Fatal().Err(WindowSizeLeqZero)
 	}
-	return newJoinWindows(w.beforeMs, timeDifferenceMs, graceMs)
+	return getJoinWindows(w.beforeMs, uint64(timeDifferenceMs), w.graceMs)
 }
 
 func (w *JoinWindows) WindowsFor(timestamp uint64) (map[uint64]Window, error) {
@@ -98,7 +99,7 @@ func (w *JoinWindows) WindowsFor(timestamp uint64) (map[uint64]Window, error) {
 }
 
 func (w *JoinWindows) MaxSize() uint64 {
-	return beforeMs + afterMs
+	return w.beforeMs + w.afterMs
 }
 
 func (w *JoinWindows) GracePeriodMs() uint64 {

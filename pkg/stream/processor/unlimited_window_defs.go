@@ -35,10 +35,10 @@ func NewDefaultUnlimitedWindows() *UnlimitedWindows {
 func NewUnlimitedWindowsStartOn(start time.Time) *UnlimitedWindows {
 	startMs := start.UnixMilli()
 	if startMs < 0 {
-		log.Fatal().Err("start time (ms) cannot be negative")
+		log.Fatal().Msg("start time (ms) cannot be negative")
 	}
 	return &UnlimitedWindows{
-		startMs: startMs,
+		startMs: uint64(startMs),
 	}
 }
 
@@ -53,9 +53,7 @@ func (w *UnlimitedWindows) GracePeriodMs() uint64 {
 func (w *UnlimitedWindows) WindowsFor(timestamp uint64) (map[uint64]Window, error) {
 	windows := make(map[uint64]Window)
 	if timestamp >= w.startMs {
-		windows[startMs] = &UnlimitedWindows{
-			startMs: startMs,
-		}
+		windows[w.startMs] = NewUnlimitedWindow(w.startMs)
 	}
-	return windows
+	return windows, nil
 }

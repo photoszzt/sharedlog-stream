@@ -1,4 +1,4 @@
-package stream
+package processor
 
 import (
 	"time"
@@ -35,8 +35,8 @@ type TimeWindows struct {
 }
 
 var (
-	a = NewTimeWindows(time.Duration(5) * time.Millisecond)
-	_ = EnumerableWindowDefinition(a)
+	tws = NewTimeWindows(time.Duration(5) * time.Millisecond)
+	_   = EnumerableWindowDefinition(tws)
 )
 
 //
@@ -54,7 +54,7 @@ var (
 func NewTimeWindows(size time.Duration) *TimeWindows {
 	sizeMs := size.Milliseconds()
 	if sizeMs <= 0 {
-		log.Fatal().Err(windowSizeLeqZero)
+		log.Fatal().Err(WindowSizeLeqZero)
 	}
 	return &TimeWindows{
 		SizeMs:    uint64(sizeMs),

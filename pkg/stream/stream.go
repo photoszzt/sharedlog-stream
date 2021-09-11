@@ -1,10 +1,28 @@
 package stream
 
-import "cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
+import (
+	"github.com/rs/zerolog/log"
+
+	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
+)
 
 type StreamImpl struct {
 	tp      *processor.TopologyBuilder
 	parents []processor.Node
+}
+
+type Grouped struct {
+	KeySerde   processor.Serde
+	ValueSerde processor.Serde
+	Name       string
+}
+
+func NewGrouped(keySerde processor.Serde, valueSerde processor.Serde, name string) *Grouped {
+	return &Grouped{
+		KeySerde:   keySerde,
+		ValueSerde: valueSerde,
+		Name:       name,
+	}
 }
 
 type Stream interface {
@@ -18,6 +36,10 @@ type Stream interface {
 	Merge(name string, streams ...*StreamImpl) Stream
 	Print(name string) Stream
 	Process(name string, p processor.Processor) Stream
+	ProcessWithStateStores(name string, p processor.Processor, stateStoreName ...string) Stream
+	GroupBy(name string, mapper processor.Mapper, grouped *Grouped) GroupedStream
+	GroupByKey(grouped *Grouped) GroupedStream
+	Join(other Stream, joiner processor.ValueJoiner, windows processor.JoinWindows) Stream
 }
 
 func newStream(tp *processor.TopologyBuilder, parents []processor.Node) Stream {
@@ -101,4 +123,24 @@ func (s *StreamImpl) Process(name string, p processor.Processor) Stream {
 	n := s.tp.AddProcessor(name, p, s.parents)
 
 	return newStream(s.tp, []processor.Node{n})
+}
+
+func (s *StreamImpl) ProcessWithStateStores(name string, p processor.Processor, stateStoreNames ...string) Stream {
+	log.Fatal().Msgf("Not implemented")
+	return nil
+}
+
+func (s *StreamImpl) GroupBy(name string, mapper processor.Mapper, grouped *Grouped) GroupedStream {
+	log.Fatal().Msgf("Not implemented")
+	return nil
+}
+
+func (s *StreamImpl) GroupByKey(grouped *Grouped) GroupedStream {
+	log.Fatal().Msgf("Not implemented")
+	return nil
+}
+
+func (s *StreamImpl) Join(other Stream, joiner processor.ValueJoiner, windows processor.JoinWindows) Stream {
+	log.Fatal().Msgf("Not implemented")
+	return nil
 }
