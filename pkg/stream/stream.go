@@ -39,7 +39,12 @@ type Stream interface {
 	ProcessWithStateStores(name string, p processor.Processor, stateStoreName ...string) Stream
 	GroupBy(name string, mapper processor.Mapper, grouped *Grouped) GroupedStream
 	GroupByKey(grouped *Grouped) GroupedStream
-	Join(other Stream, joiner processor.ValueJoiner, windows processor.JoinWindows) Stream
+	StreamStreamJoin(other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream
+	StreamStreamLeftJoin(other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream
+	StreamStreamOuterJoin(other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream
+	StreamTableJoin(other Table, joiner processor.ValueJoinerWithKey) Stream
+	StreamTableLeftJoin(other Table, joiner processor.ValueJoinerWithKey) Stream
+	StreamTableOuterJoin(other Table, joiner processor.ValueJoinerWithKey) Stream
 }
 
 func newStream(tp *processor.TopologyBuilder, parents []processor.Node) Stream {
@@ -140,7 +145,32 @@ func (s *StreamImpl) GroupByKey(grouped *Grouped) GroupedStream {
 	return nil
 }
 
-func (s *StreamImpl) Join(other Stream, joiner processor.ValueJoiner, windows processor.JoinWindows) Stream {
+func (s *StreamImpl) StreamStreamJoin(other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream {
+	log.Fatal().Msgf("Not implemented")
+	return nil
+}
+
+func (s *StreamImpl) StreamStreamLeftJoin(other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream {
+	log.Fatal().Msgf("Not implemented")
+	return nil
+}
+
+func (s *StreamImpl) StreamStreamOuterJoin(other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream {
+	log.Fatal().Msgf("Not implemented")
+	return nil
+}
+
+func (s *StreamImpl) StreamTableJoin(other Table, joiner processor.ValueJoinerWithKey) Stream {
+	log.Fatal().Msgf("Not implemented")
+	return nil
+}
+
+func (s *StreamImpl) StreamTableLeftJoin(other Table, joiner processor.ValueJoinerWithKey) Stream {
+	log.Fatal().Msgf("Not implemented")
+	return nil
+}
+
+func (s *StreamImpl) StreamTableOuterJoin(other Table, joiner processor.ValueJoinerWithKey) Stream {
 	log.Fatal().Msgf("Not implemented")
 	return nil
 }
