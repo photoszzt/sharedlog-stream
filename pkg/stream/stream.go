@@ -45,6 +45,7 @@ type Stream interface {
 	StreamTableJoin(other Table, joiner processor.ValueJoinerWithKey) Stream
 	StreamTableLeftJoin(other Table, joiner processor.ValueJoinerWithKey) Stream
 	StreamTableOuterJoin(other Table, joiner processor.ValueJoinerWithKey) Stream
+	ToTable(name string) Table
 }
 
 func newStream(tp *processor.TopologyBuilder, parents []processor.Node) Stream {
@@ -171,6 +172,11 @@ func (s *StreamImpl) StreamTableLeftJoin(other Table, joiner processor.ValueJoin
 }
 
 func (s *StreamImpl) StreamTableOuterJoin(other Table, joiner processor.ValueJoinerWithKey) Stream {
+	log.Fatal().Msgf("Not implemented")
+	return nil
+}
+
+func (s *StreamImpl) ToTable(name string) Table {
 	log.Fatal().Msgf("Not implemented")
 	return nil
 }

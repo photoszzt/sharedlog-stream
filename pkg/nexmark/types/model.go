@@ -1,8 +1,7 @@
 //go:generate greenpack
-//msgp:ignore EventMsgpEncoder
-//msgp:ignore EventMsgpDecoder
-//msgp:ignore EventJSONEncoder
-//msgp:ignore EventJSONDecoder
+//msgp:ignore EventMsgpEncoder EventMsgpDecoder
+//msgp:ignore EventJSONEncoder EventJSONDecoder
+//msgp:ignore MessageSerializedMsgpEncoder MessageSerializedJSONDecoder
 package types
 
 import (
@@ -21,6 +20,13 @@ const (
 type MessageSerialized struct {
 	Key   []byte `json:",omitempty" zid:"0" msg:",omitempty"`
 	Value []byte `json:",omitempty" zid:"1" msg:",omitempty"`
+}
+
+type NameCityStateId struct {
+	Name  string `zid:"0"`
+	City  string `zid:"1"`
+	State string `zid:"2"`
+	ID    uint64 `zid:"3"`
 }
 
 type Auction struct {
