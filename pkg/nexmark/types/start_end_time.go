@@ -1,6 +1,6 @@
 //go:generate greenpack
-//msgp:ignore StartEndTimeJSONEncoder StartEndTimeJSONDecoder
-//msgp:ignore StartEndTimeMsgpEncoder StartEndTimeMsgpDecoder
+//msgp:ignore StartEndTimeJSONEncoder StartEndTimeJSONDecoder StartEndTimeJSONSerde
+//msgp:ignore StartEndTimeMsgpEncoder StartEndTimeMsgpDecoder StartEndTimeMsgpSerde
 package types
 
 import (
