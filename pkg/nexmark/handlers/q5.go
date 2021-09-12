@@ -2,7 +2,16 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"time"
 
+	ntypes "cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/types"
+	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/utils"
+	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/sharedlog_stream"
+	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream"
+	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
 	"cs.utexas.edu/zjia/faas/types"
 )
 
@@ -17,5 +26,164 @@ func NewQuery5(env types.Environment) types.FuncHandler {
 }
 
 func (h *query5Handler) Call(ctx context.Context, input []byte) ([]byte, error) {
-	return nil, nil
+	parsedInput := &ntypes.QueryInput{}
+	err := json.Unmarshal(input, parsedInput)
+	if err != nil {
+		return nil, err
+	}
+	outputCh := make(chan *ntypes.FnOutput)
+	go Query5(ctx, h.env, parsedInput, outputCh)
+	output := <-outputCh
+	encodedOutput, err := json.Marshal(output)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("query 2 output: %v\n", encodedOutput)
+	return utils.CompressData(encodedOutput), nil
+}
+
+func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput, output chan *ntypes.FnOutput) {
+	inputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.InputTopicName)
+	if err != nil {
+		output <- &ntypes.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("NewSharedlogStream for input stream failed: %v", err),
+		}
+		return
+	}
+
+	/*
+		outputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.OutputTopicName)
+		if err != nil {
+			output <- &ntypes.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("NewSharedlogStream for output stream failed: %v", err),
+			}
+			return
+		}
+		var msgEncoder processor.MsgEncoder
+	*/
+	var eventDecoder processor.Decoder
+	var msgDecoder processor.MsgDecoder
+	var seSerde processor.Serde
+	var aucIdCountSerde processor.Serde
+	if input.SerdeFormat == uint8(ntypes.JSON) {
+		// msgEncoder = ntypes.MessageSerializedJSONEncoder{}
+		eventDecoder = ntypes.EventJSONDecoder{}
+		msgDecoder = ntypes.MessageSerializedJSONDecoder{}
+		seSerde = ntypes.StartEndTimeJSONSerde{}
+		aucIdCountSerde = ntypes.AuctionIdCountJSONSerde{}
+	} else if input.SerdeFormat == uint8(ntypes.MSGP) {
+		// msgEncoder = ntypes.MessageSerializedMsgpEncoder{}
+		eventDecoder = ntypes.EventMsgpDecoder{}
+		msgDecoder = ntypes.MessageSerializedMsgpDecoder{}
+		seSerde = ntypes.StartEndTimeMsgpSerde{}
+		aucIdCountSerde = ntypes.AuctionIdCountMsgpSerde{}
+	} else {
+		output <- &ntypes.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", input.SerdeFormat),
+		}
+	}
+	builder := stream.NewStreamBuilder()
+	inputs := builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream, int(input.Duration),
+		processor.StringDecoder{}, eventDecoder, msgDecoder))
+	bid := inputs.Filter("filter-bid", processor.PredicateFunc(func(msg processor.Message) (bool, error) {
+		event := msg.Value.(*ntypes.Event)
+		return event.Etype == ntypes.BID, nil
+	})).Map("select-key", processor.MapperFunc(func(msg processor.Message) (processor.Message, error) {
+		event := msg.Value.(*ntypes.Event)
+		return processor.Message{Key: event.Bid.Auction, Value: msg.Value, Timestamp: msg.Timestamp}, nil
+	}))
+	auctionBids := bid.
+		GroupByKey(&stream.Grouped{KeySerde: processor.Uint64Serde{}, Name: "group-by-auction-id"}).
+		WindowedBy(processor.NewTimeWindows(time.Duration(10)*time.Second).AdvanceBy(time.Duration(2)*time.Second)).
+		Count("count").
+		ToStream().
+		Map("change-key", processor.MapperFunc(func(msg processor.Message) (processor.Message, error) {
+			key := msg.Key.(*stream.WindowedKey)
+			value := msg.Value.(uint64)
+			newKey := &ntypes.StartEndTime{
+				StartTime: key.Window.Start(),
+				EndTime:   key.Window.End(),
+			}
+			newVal := &ntypes.AuctionIdCount{
+				AucId: key.Key.(uint64),
+				Count: value,
+			}
+			return processor.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
+		}))
+
+	maxBids := auctionBids.
+		GroupByKey(&stream.Grouped{KeySerde: seSerde, ValueSerde: aucIdCountSerde, Name: "auctionbids-groupbykey"}).
+		Aggregate("aggregate",
+			processor.InitializerFunc(func() interface{} { return 0 }),
+			processor.AggregatorFunc(func(key interface{}, value interface{}, aggregate interface{}) interface{} {
+				v := value.(*ntypes.AuctionIdCount)
+				agg := aggregate.(uint64)
+				if v.Count > agg {
+					return v.Count
+				} else {
+					return agg
+				}
+			}))
+
+	auctionBids.
+		ToTable("auctionBids-to-table").
+		Join("join-auctionbids-maxbids",
+			maxBids,
+			processor.ValueJointerFunc(func(leftValue interface{}, rightValue interface{}) interface{} {
+				lv := leftValue.(*ntypes.AuctionIdCount)
+				rv := rightValue.(uint64)
+				return &ntypes.AuctionIdCntMax{
+					AucId:  lv.AucId,
+					Count:  lv.Count,
+					MaxCnt: rv,
+				}
+			})).
+		Filter("choose-maxcnt", processor.PredicateFunc(func(msg processor.Message) (bool, error) {
+			v := msg.Value.(*ntypes.AuctionIdCntMax)
+			return v.Count >= v.MaxCnt, nil
+		}))
+	tp, err_arrs := builder.Build()
+	if err_arrs != nil {
+		output <- &ntypes.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("build stream failed: %v", err_arrs),
+		}
+	}
+	pumps := make(map[processor.Node]processor.Pump)
+	var srcPumps []processor.SourcePump
+	nodes := processor.FlattenNodeTree(tp.Sources())
+	processor.ReverseNodes(nodes)
+	for _, node := range nodes {
+		pipe := processor.NewPipe(processor.ResolvePumps(pumps, node.Children()))
+		node.Processor().WithPipe(pipe)
+
+		pump := processor.NewSyncPump(node, pipe)
+		pumps[node] = pump
+	}
+	for source, node := range tp.Sources() {
+		srcPump := processor.NewSourcePump(node.Name(), source,
+			processor.ResolvePumps(pumps, node.Children()), func(err error) {
+				log.Fatal(err.Error())
+			})
+		srcPumps = append(srcPumps, srcPump)
+	}
+
+	duration := time.Duration(input.Duration) * time.Second
+	latencies := make([]int, 0, 128)
+	startTime := time.Now()
+	select {
+	case <-time.After(duration):
+		for _, srcPump := range srcPumps {
+			srcPump.Stop()
+			srcPump.Close()
+		}
+	}
+	output <- &ntypes.FnOutput{
+		Success:   true,
+		Duration:  time.Since(startTime).Seconds(),
+		Latencies: latencies,
+	}
 }

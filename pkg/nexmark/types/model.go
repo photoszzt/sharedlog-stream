@@ -1,7 +1,7 @@
 //go:generate greenpack
 //msgp:ignore EventMsgpEncoder EventMsgpDecoder
 //msgp:ignore EventJSONEncoder EventJSONDecoder
-//msgp:ignore MessageSerializedMsgpEncoder MessageSerializedJSONDecoder
+
 package types
 
 import (
@@ -16,11 +16,6 @@ const (
 	JSON SerdeFormat = 0
 	MSGP SerdeFormat = 1
 )
-
-type MessageSerialized struct {
-	Key   []byte `json:",omitempty" zid:"0" msg:",omitempty"`
-	Value []byte `json:",omitempty" zid:"1" msg:",omitempty"`
-}
 
 type NameCityStateId struct {
 	Name  string `zid:"0"`
@@ -123,30 +118,6 @@ func (e EventJSONEncoder) Encode(value interface{}) ([]byte, error) {
 	return json.Marshal(event)
 }
 
-var _ = processor.MsgEncoder(MessageSerializedMsgpEncoder{})
-
-type MessageSerializedMsgpEncoder struct{}
-
-func (e MessageSerializedMsgpEncoder) Encode(key []byte, value []byte) ([]byte, error) {
-	msg := MessageSerialized{
-		Key:   key,
-		Value: value,
-	}
-	return msg.MarshalMsg(nil)
-}
-
-type MessageSerializedJSONEncoder struct{}
-
-var _ = processor.MsgEncoder(MessageSerializedJSONEncoder{})
-
-func (e MessageSerializedJSONEncoder) Encode(key []byte, value []byte) ([]byte, error) {
-	msg := MessageSerialized{
-		Key:   key,
-		Value: value,
-	}
-	return json.Marshal(msg)
-}
-
 type EventMsgpDecoder struct{}
 
 var _ = processor.Decoder(EventMsgpDecoder{})
@@ -156,9 +127,8 @@ func (emd EventMsgpDecoder) Decode(value []byte) (interface{}, error) {
 	_, err := e.UnmarshalMsg(value)
 	if err != nil {
 		return nil, err
-	} else {
-		return e, nil
 	}
+	return e, nil
 }
 
 type EventJSONDecoder struct{}
@@ -169,34 +139,6 @@ func (ejd EventJSONDecoder) Decode(value []byte) (interface{}, error) {
 	e := Event{}
 	if err := json.Unmarshal(value, &e); err != nil {
 		return nil, err
-	} else {
-		return e, nil
 	}
-}
-
-type MessageSerializedMsgpDecoder struct{}
-
-var _ = processor.MsgDecoder(MessageSerializedMsgpDecoder{})
-
-func (msmd MessageSerializedMsgpDecoder) Decode(value []byte) ([]byte /* key */, []byte /* value */, error) {
-	msg := MessageSerialized{}
-	_, err := msg.UnmarshalMsg(value)
-	if err != nil {
-		return nil, nil, err
-	} else {
-		return msg.Key, msg.Value, nil
-	}
-}
-
-type MessageSerializedJSONDecoder struct{}
-
-var _ = processor.MsgDecoder(MessageSerializedJSONDecoder{})
-
-func (msmd MessageSerializedJSONDecoder) Decode(value []byte) ([]byte /* key */, []byte /* value */, error) {
-	msg := MessageSerialized{}
-	if err := json.Unmarshal(value, &msg); err != nil {
-		return nil, nil, err
-	} else {
-		return msg.Key, msg.Value, nil
-	}
+	return e, nil
 }
