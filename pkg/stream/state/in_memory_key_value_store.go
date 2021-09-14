@@ -3,7 +3,10 @@ package state
 import (
 	"bytes"
 
+	"github.com/rs/zerolog/log"
+
 	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
+	"golang.org/x/xerrors"
 )
 
 //go:generate gotemplate "cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/state/treemap" "BytesTreeMap([]byte, []byte)"
@@ -38,12 +41,12 @@ func (st *InMemoryKeyValueStore) IsOpen() bool {
 	return st.open
 }
 
-func (st *InMemoryKeyValueStore) Get(key interface{}) (interface{}, bool) {
+func (st *InMemoryKeyValueStore) Get(key KeyT) (ValueT, bool) {
 	k := key.([]byte)
 	return st.store.Get(k)
 }
 
-func (st *InMemoryKeyValueStore) Put(key interface{}, value interface{}) {
+func (st *InMemoryKeyValueStore) Put(key KeyT, value ValueT) {
 	k := key.([]byte)
 	v := value.([]byte)
 	if value == nil {
@@ -53,7 +56,7 @@ func (st *InMemoryKeyValueStore) Put(key interface{}, value interface{}) {
 	}
 }
 
-func (st *InMemoryKeyValueStore) PutIfAbsent(key interface{}, value interface{}) interface{} {
+func (st *InMemoryKeyValueStore) PutIfAbsent(key KeyT, value ValueT) ValueT {
 	k := key.([]byte)
 	v := value.([]byte)
 	originalVal, exists := st.store.Get(k)
@@ -71,7 +74,7 @@ func (st *InMemoryKeyValueStore) PutAll(entries []*processor.Message) {
 	}
 }
 
-func (st *InMemoryKeyValueStore) Delete(key interface{}) {
+func (st *InMemoryKeyValueStore) Delete(key KeyT) {
 	k := key.([]byte)
 	st.store.Del(k)
 }
@@ -80,15 +83,15 @@ func (st *InMemoryKeyValueStore) ApproximateNumEntries() uint64 {
 	return uint64(st.store.Len())
 }
 
-func (st *InMemoryKeyValueStore) Range(from interface{}, to interface{}) Iterator {
+func (st *InMemoryKeyValueStore) Range(from KeyT, to KeyT) KeyValueIterator {
 	return nil
 }
 
-func (st *InMemoryKeyValueStore) ReverseRange(from interface{}, to interface{}) Iterator {
+func (st *InMemoryKeyValueStore) ReverseRange(from KeyT, to KeyT) KeyValueIterator {
 	return nil
 }
 
-func (st *InMemoryKeyValueStore) PrefixScan(prefix interface{}, prefixKeyEncoder processor.Encoder) Iterator {
+func (st *InMemoryKeyValueStore) PrefixScan(prefix interface{}, prefixKeyEncoder processor.Encoder) KeyValueIterator {
 	return nil
 }
 
@@ -96,6 +99,8 @@ type InMemoryKeyValueForwardIterator struct {
 	fromIter ForwardIteratorBytesTreeMap
 	toIter   *ForwardIteratorBytesTreeMap
 }
+
+var _ = KeyValueIterator(NewInMemoryKeyValueForwardIterator(nil, nil, nil))
 
 func NewInMemoryKeyValueForwardIterator(store *BytesTreeMap, from []byte, to []byte) InMemoryKeyValueForwardIterator {
 	if from == nil && to == nil {
@@ -123,4 +128,24 @@ func NewInMemoryKeyValueForwardIterator(store *BytesTreeMap, from []byte, to []b
 			toIter:   &toIter,
 		}
 	}
+}
+
+func (fi InMemoryKeyValueForwardIterator) HasNext() bool {
+	return fi.fromIter.Valid()
+}
+
+func (fi InMemoryKeyValueForwardIterator) Next() KeyValue {
+	fi.fromIter.Next()
+	return KeyValue{
+		Key:   fi.fromIter.Key(),
+		Value: fi.fromIter.Value(),
+	}
+}
+
+func (fi InMemoryKeyValueForwardIterator) Close() {
+}
+
+func (fi InMemoryKeyValueForwardIterator) PeekNextKey() KeyT {
+	log.Fatal().Err(xerrors.New("PeekNextKey is not supported"))
+	return nil
 }

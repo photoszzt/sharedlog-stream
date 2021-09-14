@@ -25,6 +25,8 @@
 //     }
 package state
 
+import "github.com/rs/zerolog/log"
+
 // template type TreeMap(Key, Value)
 
 // Key is a generic key type of the map
@@ -187,6 +189,68 @@ func (t *BytesTreeMap) UpperBound(key []byte) ForwardIteratorBytesTreeMap {
 				node = node.left
 			} else {
 				return ForwardIteratorBytesTreeMap{tree: t, node: result}
+			}
+		}
+	}
+}
+
+func (t *BytesTreeMap) ReverseRange(from, to []byte) (ReverseIteratorBytesTreeMap, ReverseIteratorBytesTreeMap) {
+	return t.ReverseLowerBound(from), t.ReverseUpperBound(to)
+}
+
+// ReverseUpperBound returns an reverse iterator pointing to the first element that is lower than the given key.
+func (t *BytesTreeMap) ReverseUpperBound(key []byte) ReverseIteratorBytesTreeMap {
+	result := t.endNode
+	node := t.endNode.left
+	if node == nil {
+		return ReverseIteratorBytesTreeMap{tree: t, node: t.endNode}
+	}
+	for {
+		if t.Less(node.key, key) { // node.key < key
+			result = node
+			if node.right != nil {
+				node = node.right
+			} else {
+				return ReverseIteratorBytesTreeMap{tree: t, node: node}
+			}
+		} else { // node.key >= key
+			if node.left != nil {
+				node = node.left
+			} else {
+				return ReverseIteratorBytesTreeMap{tree: t, node: result}
+			}
+		}
+	}
+}
+
+// ReverseLowerBound returns an rever iterator pointering to the first element that's lower or equal to the given key
+func (t *BytesTreeMap) ReverseLowerBound(key []byte) ReverseIteratorBytesTreeMap {
+	result := t.endNode
+	node := t.endNode.left
+	if node == nil {
+		return ReverseIteratorBytesTreeMap{tree: t, node: t.endNode}
+	}
+	for {
+		log.Info().Msgf("key: %v, node.key: %v", key, node.key)
+		if !t.Less(key, node.key) { // key >= node.key
+			result = node
+			if t.Less(node.key, key) { // key > node.key
+				if node.right != nil {
+					node = node.right
+				} else { // already reaches largest
+					log.Info().Msg("return from br1")
+					return ReverseIteratorBytesTreeMap{tree: t, node: node}
+				}
+			} else { // key = node.key
+				log.Info().Msg("return from br2")
+				return ReverseIteratorBytesTreeMap{tree: t, node: node}
+			}
+		} else { // key < node.key
+			if node.left != nil { // try to find one that's smaller
+				node = node.left
+			} else { // can't find one
+				log.Info().Msg("return from br3")
+				return ReverseIteratorBytesTreeMap{tree: t, node: result}
 			}
 		}
 	}
