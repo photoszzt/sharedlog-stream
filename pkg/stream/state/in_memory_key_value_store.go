@@ -84,15 +84,36 @@ func (st *InMemoryKeyValueStore) ApproximateNumEntries() uint64 {
 }
 
 func (st *InMemoryKeyValueStore) Range(from KeyT, to KeyT) KeyValueIterator {
-	return nil
+	fr := from.([]byte)
+	t := to.([]byte)
+	if bytes.Compare(fr, t) > 0 {
+		log.Warn().Msgf("Returning empty iterator for invalid key range from > to")
+		return EMPTY_KEY_VALUE_ITER
+	}
+	return NewInMemoryKeyValueForwardIterator(st.store, fr, t)
+
 }
 
 func (st *InMemoryKeyValueStore) ReverseRange(from KeyT, to KeyT) KeyValueIterator {
-	return nil
+	fr := from.([]byte)
+	t := to.([]byte)
+	if bytes.Compare(fr, t) < 0 {
+		log.Warn().Msgf("Returning empty iterator for invalid key range from > to")
+		return EMPTY_KEY_VALUE_ITER
+	}
+	return NewInMemoryKeyValueReverseIterator(st.store, fr, t)
 }
 
 func (st *InMemoryKeyValueStore) PrefixScan(prefix interface{}, prefixKeyEncoder processor.Encoder) KeyValueIterator {
-	return nil
+	from, err := prefixKeyEncoder.Encode(prefix)
+	if err != nil {
+		log.Fatal().Err(err)
+	}
+	to, err := byte_slice_increment(from)
+	if err != nil {
+		log.Fatal().Err(err)
+	}
+	return NewInMemoryKeyValueForwardIterator(st.store, from, to)
 }
 
 type InMemoryKeyValueForwardIterator struct {
@@ -146,6 +167,61 @@ func (fi InMemoryKeyValueForwardIterator) Close() {
 }
 
 func (fi InMemoryKeyValueForwardIterator) PeekNextKey() KeyT {
+	log.Fatal().Err(xerrors.New("PeekNextKey is not supported"))
+	return nil
+}
+
+type InMemoryKeyValueReverseIterator struct {
+	fromIter ReverseIteratorBytesTreeMap
+	toIter   *ReverseIteratorBytesTreeMap
+}
+
+var _ = KeyValueIterator(NewInMemoryKeyValueReverseIterator(nil, nil, nil))
+
+func NewInMemoryKeyValueReverseIterator(store *BytesTreeMap, from []byte, to []byte) InMemoryKeyValueReverseIterator {
+	if from == nil && to == nil {
+		iter := store.Reverse()
+		return InMemoryKeyValueReverseIterator{
+			fromIter: iter,
+			toIter:   nil,
+		}
+	} else if from == nil {
+		iter := store.ReverseUpperBound(to)
+		return InMemoryKeyValueReverseIterator{
+			fromIter: iter,
+			toIter:   nil,
+		}
+	} else if to == nil {
+		iter := store.ReverseLowerBound(from)
+		return InMemoryKeyValueReverseIterator{
+			fromIter: iter,
+			toIter:   nil,
+		}
+	} else {
+		fromIter, toIter := store.ReverseRange(from, to)
+		return InMemoryKeyValueReverseIterator{
+			fromIter: fromIter,
+			toIter:   &toIter,
+		}
+	}
+}
+
+func (fi InMemoryKeyValueReverseIterator) HasNext() bool {
+	return fi.fromIter.Valid()
+}
+
+func (fi InMemoryKeyValueReverseIterator) Next() KeyValue {
+	fi.fromIter.Next()
+	return KeyValue{
+		Key:   fi.fromIter.Key(),
+		Value: fi.fromIter.Value(),
+	}
+}
+
+func (fi InMemoryKeyValueReverseIterator) Close() {
+}
+
+func (fi InMemoryKeyValueReverseIterator) PeekNextKey() KeyT {
 	log.Fatal().Err(xerrors.New("PeekNextKey is not supported"))
 	return nil
 }
