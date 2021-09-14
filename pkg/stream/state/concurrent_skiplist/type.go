@@ -19,13 +19,19 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
+
 // skiplist adopt from https://github.com/sean-public/fast-skiplist.git
-package skiplist
+package concurrent_skiplist
 
 import (
 	"math/rand"
 	"sync"
 )
+
+// template type SkipList(ValueT)
+
+// ValueT is a generic value type of the element
+type ValueT interface{}
 
 type elementNode struct {
 	next []*Element
@@ -34,7 +40,7 @@ type elementNode struct {
 type Element struct {
 	elementNode
 	key   float64
-	value interface{}
+	value ValueT
 }
 
 // Key allows retrieval of the key for a given Element
@@ -43,7 +49,7 @@ func (e *Element) Key() float64 {
 }
 
 // Value allows retrieval of the value for a given Element
-func (e *Element) Value() interface{} {
+func (e *Element) Value() ValueT {
 	return e.value
 }
 

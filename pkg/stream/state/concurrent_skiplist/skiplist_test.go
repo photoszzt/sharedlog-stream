@@ -19,8 +19,9 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
+
 // skiplist adopt from https://github.com/sean-public/fast-skiplist.git
-package skiplist
+package concurrent_skiplist
 
 import (
 	"fmt"

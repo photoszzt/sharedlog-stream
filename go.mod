@@ -8,6 +8,7 @@ require (
 	github.com/confluentinc/confluent-kafka-go v1.7.0 // indirect
 	github.com/glycerine/greenpack v5.1.1+incompatible // indirect
 	github.com/golang/protobuf v1.5.2
+	github.com/igrmk/treemap v1.0.0 // indirect
 	github.com/rs/zerolog v1.19.0
 	github.com/tatsuhiro-t/go-nghttp2 v0.0.0-20150408091349-4742878d9c90
 	github.com/tinylib/msgp v1.1.6
