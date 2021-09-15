@@ -1,18 +1,14 @@
-package state
-
-import (
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
-)
+package processor
 
 type KeyValueStore interface {
-	processor.StateStore
+	StateStore
 	Get(key KeyT) (ValueT, bool)
 	Range(from KeyT, to KeyT) KeyValueIterator
 	ReverseRange(from KeyT, to KeyT) KeyValueIterator
-	PrefixScan(prefix interface{}, prefixKeyEncoder processor.Encoder) KeyValueIterator
+	PrefixScan(prefix interface{}, prefixKeyEncoder Encoder) KeyValueIterator
 	ApproximateNumEntries() uint64
 	Put(key KeyT, value ValueT)
 	PutIfAbsent(key KeyT, value ValueT) ValueT
-	PutAll([]*processor.Message)
+	PutAll([]*Message)
 	Delete(key KeyT)
 }

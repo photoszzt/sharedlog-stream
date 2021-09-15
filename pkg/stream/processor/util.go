@@ -1,4 +1,4 @@
-package state
+package processor
 
 import "golang.org/x/xerrors"
 

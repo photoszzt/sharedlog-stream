@@ -137,8 +137,10 @@ func (s *StreamImpl) ProcessWithStateStores(name string, p processor.Processor, 
 }
 
 func (s *StreamImpl) GroupBy(name string, mapper processor.Mapper, grouped *Grouped) GroupedStream {
-	log.Fatal().Msgf("Not implemented")
-	return nil
+	p := processor.NewMapProcessor(mapper)
+	n := s.tp.AddProcessor(grouped.Name, p, s.parents)
+	n.(*processor.ProcessorNode).SetKeyChangingOp(true)
+	return newGroupedStream(s.tp, []processor.Node{n}, grouped)
 }
 
 func (s *StreamImpl) GroupByKey(grouped *Grouped) GroupedStream {

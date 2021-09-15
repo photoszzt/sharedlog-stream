@@ -43,16 +43,36 @@ func (s *SourceNode) Processor() Processor {
 var _ = (Node)(&ProcessorNode{})
 
 type ProcessorNode struct {
-	name      string
-	processor Processor
-	children  []Node
+	name          string
+	processor     Processor
+	children      []Node
+	keyChangingOp bool
+	valChangingOp bool
 }
 
 func NewProcessorNode(name string, p Processor) *ProcessorNode {
 	return &ProcessorNode{
-		name:      name,
-		processor: p,
+		name:          name,
+		processor:     p,
+		keyChangingOp: false,
+		valChangingOp: false,
 	}
+}
+
+func (p *ProcessorNode) SetKeyChangingOp(keyChangingOp bool) {
+	p.keyChangingOp = keyChangingOp
+}
+
+func (p *ProcessorNode) SetValChangingOp(valChangingOp bool) {
+	p.valChangingOp = valChangingOp
+}
+
+func (p *ProcessorNode) KeyChangingOp() bool {
+	return p.keyChangingOp
+}
+
+func (p *ProcessorNode) ValChangingOp() bool {
+	return p.valChangingOp
 }
 
 func (p *ProcessorNode) Name() string {

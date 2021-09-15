@@ -1,9 +1,7 @@
-package state
-
-import "cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
+package processor
 
 type SegmentedBytesStore interface {
-	processor.StateStore
+	StateStore
 	Fetch(key []byte, from uint64, to uint64) Iterator
 	BackwardFetch(key []byte, from uint64, to uint64) Iterator
 	FetchWithKeyRange(keyFrom []byte, keyTo []byte, from uint64, to uint64) Iterator

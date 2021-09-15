@@ -1,15 +1,13 @@
-package state
+package processor
 
 import (
 	"time"
-
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
 )
 
 type InMemoryWindowStore struct {
 	name             string
 	windowSize       uint64
-	sctx             processor.StateStoreContext
+	sctx             StateStoreContext
 	retentionPeriod  uint64
 	retainDuplicates bool
 	open             bool
@@ -29,7 +27,7 @@ func (s *InMemoryWindowStore) Name() string {
 	return s.name
 }
 
-func (s *InMemoryWindowStore) Init(ctx processor.StateStoreContext, root processor.StateStore) {
+func (s *InMemoryWindowStore) Init(ctx StateStoreContext, root StateStore) {
 	s.sctx = ctx
 	s.open = true
 }

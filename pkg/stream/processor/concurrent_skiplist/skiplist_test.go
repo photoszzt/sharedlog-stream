@@ -63,7 +63,7 @@ func checkSanity(list *SkipList, t *testing.T) {
 		cnt := 1
 
 		for next.next[k] != nil {
-			if !(next.next[k].key >= next.key) {
+			if !(list.comparable.Compare(next.next[k].key, next.key) >= 0) {
 				t.Fatalf("next key value must be greater than prev key value. [next:%v] [prev:%v]", next.next[k].key, next.key)
 			}
 
@@ -158,7 +158,8 @@ func TestChangeLevel(t *testing.T) {
 	}
 
 	for c := list.Front(); c != nil; c = c.Next() {
-		if c.key*10 != c.value.(float64) {
+		k := c.key.(float64)
+		if k*10 != c.value.(float64) {
 			t.Fatal("wrong list element value")
 		}
 	}

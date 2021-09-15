@@ -1,11 +1,10 @@
-package state
+package processor
 
 import (
 	"bytes"
 
 	"github.com/rs/zerolog/log"
 
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
 	"golang.org/x/xerrors"
 )
 
@@ -16,8 +15,8 @@ type InMemoryKeyValueStore struct {
 	open           bool
 	name           string
 	store          *BytesTreeMap
-	sctx           processor.StateStoreContext
-	rootStateStore processor.StateStore
+	sctx           StateStoreContext
+	rootStateStore StateStore
 }
 
 var _ = KeyValueStore(NewInMemoryKeyValueStore("a"))
@@ -31,7 +30,7 @@ func NewInMemoryKeyValueStore(name string) *InMemoryKeyValueStore {
 	}
 }
 
-func (st *InMemoryKeyValueStore) Init(sctx processor.StateStoreContext, root processor.StateStore) {
+func (st *InMemoryKeyValueStore) Init(sctx StateStoreContext, root StateStore) {
 	st.sctx = sctx
 	st.rootStateStore = root
 	st.open = true
@@ -70,7 +69,7 @@ func (st *InMemoryKeyValueStore) PutIfAbsent(key KeyT, value ValueT) ValueT {
 	return originalVal
 }
 
-func (st *InMemoryKeyValueStore) PutAll(entries []*processor.Message) {
+func (st *InMemoryKeyValueStore) PutAll(entries []*Message) {
 	for _, msg := range entries {
 		k := msg.Key.([]byte)
 		v := msg.Value.([]byte)
@@ -108,7 +107,7 @@ func (st *InMemoryKeyValueStore) ReverseRange(from KeyT, to KeyT) KeyValueIterat
 	return NewInMemoryKeyValueReverseIterator(st.store, fr, t)
 }
 
-func (st *InMemoryKeyValueStore) PrefixScan(prefix interface{}, prefixKeyEncoder processor.Encoder) KeyValueIterator {
+func (st *InMemoryKeyValueStore) PrefixScan(prefix interface{}, prefixKeyEncoder Encoder) KeyValueIterator {
 	from, err := prefixKeyEncoder.Encode(prefix)
 	if err != nil {
 		log.Fatal().Err(err)

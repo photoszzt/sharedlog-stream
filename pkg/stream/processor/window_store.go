@@ -1,13 +1,11 @@
-package state
+package processor
 
 import (
 	"time"
-
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
 )
 
 type WindowStore interface {
-	processor.StateStore
+	StateStore
 	Put(key KeyT, value ValueT, windowStartTimestamp uint64) error
 	Get(key KeyT, windowStartTimestamp uint64) ValueT
 	Fetch(key KeyT, timeFrom time.Time, timeTo time.Time) KeyValueIterator
