@@ -37,8 +37,9 @@ func (p *FlatMapProcessor) Process(msg Message) error {
 	if err != nil {
 		return err
 	}
-	for _, msg := range msgs {
-		if err := p.pipe.Forward(msg); err != nil {
+	for _, m := range msgs {
+		m.Timestamp = msg.Timestamp
+		if err := p.pipe.Forward(m); err != nil {
 			return err
 		}
 	}

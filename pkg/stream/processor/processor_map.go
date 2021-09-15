@@ -32,11 +32,12 @@ func (p *MapProcessor) WithProcessorContext(pctx ProcessorContext) {
 }
 
 func (p *MapProcessor) Process(msg Message) error {
-	msg, err := p.mapper.Map(msg)
+	m, err := p.mapper.Map(msg)
 	if err != nil {
 		return err
 	}
-	return p.pipe.Forward(msg)
+	m.Timestamp = msg.Timestamp
+	return p.pipe.Forward(m)
 }
 
 type ValueMapper interface {
@@ -75,7 +76,7 @@ func (p *MapValuesProcessor) Process(msg Message) error {
 	if err != nil {
 		return err
 	}
-	return p.pipe.Forward(Message{Key: msg.Key, Value: newV})
+	return p.pipe.Forward(Message{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp})
 }
 
 type MapValuesWithKeyProcessor struct {
@@ -103,5 +104,5 @@ func (p *MapValuesWithKeyProcessor) Process(msg Message) error {
 	if err != nil {
 		return err
 	}
-	return p.pipe.Forward(Message{Key: msg.Key, Value: newMsg.Value})
+	return p.pipe.Forward(Message{Key: msg.Key, Value: newMsg.Value, Timestamp: msg.Timestamp})
 }
