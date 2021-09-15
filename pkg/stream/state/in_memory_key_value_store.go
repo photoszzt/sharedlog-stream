@@ -13,9 +13,11 @@ import (
 
 // not thread safe
 type InMemoryKeyValueStore struct {
-	open  bool
-	name  string
-	store *BytesTreeMap
+	open           bool
+	name           string
+	store          *BytesTreeMap
+	sctx           processor.StateStoreContext
+	rootStateStore processor.StateStore
 }
 
 var _ = KeyValueStore(NewInMemoryKeyValueStore("a"))
@@ -29,8 +31,10 @@ func NewInMemoryKeyValueStore(name string) *InMemoryKeyValueStore {
 	}
 }
 
-func (st *InMemoryKeyValueStore) Init(pctx processor.StateStoreContext, root processor.StateStore) {
-
+func (st *InMemoryKeyValueStore) Init(sctx processor.StateStoreContext, root processor.StateStore) {
+	st.sctx = sctx
+	st.rootStateStore = root
+	st.open = true
 }
 
 func (st *InMemoryKeyValueStore) Name() string {

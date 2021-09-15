@@ -8,11 +8,12 @@ import (
 
 type WindowStore interface {
 	processor.StateStore
-	Put(key interface{}, value interface{}, windowStartTimestamp uint64) error
-	Fetch(key interface{}, timeFrom time.Time, timeTo time.Time) Iterator
-	BackwardFetch(key interface{}, timeFrom time.Time, timeTo time.Time) Iterator
-	FetchWithKeyRange(keyFrom interface{}, keyTo interface{}, timeFrom time.Time, timeTo time.Time) Iterator
-	BackwardFetchWithKeyRange(keyFrom interface{}, keyTo interface{}, timeFrom time.Time, timeTo time.Time) Iterator
-	FetchAll(timeFrom time.Time, timeTo time.Time) Iterator
-	BackwardFetchAll(timeFrom time.Time, timeTo time.Time) Iterator
+	Put(key KeyT, value ValueT, windowStartTimestamp uint64) error
+	Get(key KeyT, windowStartTimestamp uint64) ValueT
+	Fetch(key KeyT, timeFrom time.Time, timeTo time.Time) KeyValueIterator
+	BackwardFetch(key KeyT, timeFrom time.Time, timeTo time.Time) KeyValueIterator
+	FetchWithKeyRange(keyFrom KeyT, keyTo KeyT, timeFrom time.Time, timeTo time.Time) KeyValueIterator
+	BackwardFetchWithKeyRange(keyFrom KeyT, keyTo KeyT, timeFrom time.Time, timeTo time.Time) KeyValueIterator
+	FetchAll(timeFrom time.Time, timeTo time.Time) KeyValueIterator
+	BackwardFetchAll(timeFrom time.Time, timeTo time.Time) KeyValueIterator
 }

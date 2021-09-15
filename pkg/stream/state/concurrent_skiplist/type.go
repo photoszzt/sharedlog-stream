@@ -29,6 +29,9 @@ import (
 )
 
 // template type SkipList(ValueT)
+// template type ConcurrentSkiplistMap(KeyT, ValueT)
+
+type KeyT interface{}
 
 // ValueT is a generic value type of the element
 type ValueT interface{}
@@ -39,12 +42,12 @@ type elementNode struct {
 
 type Element struct {
 	elementNode
-	key   float64
+	key   KeyT
 	value ValueT
 }
 
 // Key allows retrieval of the key for a given Element
-func (e *Element) Key() float64 {
+func (e *Element) Key() KeyT {
 	return e.key
 }
 
@@ -68,4 +71,15 @@ type SkipList struct {
 	probTable      []float64
 	mutex          sync.RWMutex
 	prevNodesCache []*elementNode
+	comparable     Comparable
+}
+
+type Comparable interface {
+	Compare(lhs, rhs interface{}) int
+}
+
+type CompareFunc func(lhs, rhs interface{}) int
+
+func (f CompareFunc) Compare(lhs, rhs interface{}) int {
+	return f(lhs, rhs)
 }
