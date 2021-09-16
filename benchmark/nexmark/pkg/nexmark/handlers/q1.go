@@ -7,11 +7,13 @@ import (
 	"log"
 	"time"
 
-	ntypes "cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/types"
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/utils"
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/sharedlog_stream"
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream"
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/stream"
+	"sharedlog-stream/pkg/stream/processor"
+
+	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
+
 	"cs.utexas.edu/zjia/faas/types"
 )
 

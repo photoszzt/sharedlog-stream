@@ -3,8 +3,8 @@ package generator
 import (
 	"math"
 
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark"
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/utils"
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark"
+	"sharedlog-stream/pkg/utils"
 )
 
 const (

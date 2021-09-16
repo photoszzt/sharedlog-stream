@@ -3,8 +3,8 @@ package types
 import (
 	"time"
 
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark"
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/utils"
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark"
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 )
 
 type QueryInput struct {

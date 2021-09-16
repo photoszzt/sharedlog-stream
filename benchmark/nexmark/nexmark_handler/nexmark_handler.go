@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/handlers"
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/handlers"
 
 	"cs.utexas.edu/zjia/faas"
 	"cs.utexas.edu/zjia/faas/types"

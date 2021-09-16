@@ -1,4 +1,4 @@
-module cs.utexas.edu/zhitingz/sharedlog-stream
+module sharedlog-stream
 
 go 1.14
 

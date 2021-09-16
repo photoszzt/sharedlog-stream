@@ -1,7 +1,7 @@
 package nexmark
 
 import (
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/utils"
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 )
 
 type NexMarkConfig struct {

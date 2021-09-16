@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"time"
 
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/types"
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 )
 
 type NexmarkGenerator struct {

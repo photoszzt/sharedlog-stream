@@ -1,7 +1,7 @@
 package sharedlog_stream
 
 import (
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor"
 )
 
 type SharedLogStreamSink struct {

@@ -3,7 +3,7 @@ package stream
 import (
 	"github.com/rs/zerolog/log"
 
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor"
 )
 
 type StreamImpl struct {

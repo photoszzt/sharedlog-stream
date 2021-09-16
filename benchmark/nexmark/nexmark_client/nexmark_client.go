@@ -7,8 +7,10 @@ import (
 	"sync"
 	"time"
 
-	ntypes "cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/types"
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/utils"
+	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
+
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+
 	"github.com/rs/zerolog/log"
 )
 

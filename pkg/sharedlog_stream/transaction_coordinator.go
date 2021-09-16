@@ -5,7 +5,8 @@ package sharedlog_stream
 import (
 	"context"
 
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor"
+
 	"cs.utexas.edu/zjia/faas/types"
 	"golang.org/x/xerrors"
 )

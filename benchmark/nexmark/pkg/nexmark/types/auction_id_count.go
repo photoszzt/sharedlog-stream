@@ -6,7 +6,7 @@ package types
 import (
 	"encoding/json"
 
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor"
 )
 
 type AuctionIdCount struct {

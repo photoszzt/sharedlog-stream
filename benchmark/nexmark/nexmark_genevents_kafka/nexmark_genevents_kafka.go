@@ -5,9 +5,12 @@ import (
 	"flag"
 	"time"
 
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/generator"
-	ntypes "cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/types"
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/generator"
+
+	"sharedlog-stream/pkg/stream/processor"
+
+	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
+
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/rs/zerolog/log"
 )

@@ -3,7 +3,8 @@ package sharedlog_stream
 import (
 	"time"
 
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor"
+
 	"golang.org/x/xerrors"
 )
 

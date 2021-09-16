@@ -5,8 +5,8 @@ import (
 	"math/rand"
 	"strings"
 
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/types"
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/utils"
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
+	"sharedlog-stream/pkg/utils"
 )
 
 const (

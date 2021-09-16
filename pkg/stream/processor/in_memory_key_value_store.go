@@ -3,7 +3,8 @@ package processor
 import (
 	"bytes"
 
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor/treemap"
+	"sharedlog-stream/pkg/stream/processor/treemap"
+
 	"github.com/rs/zerolog/log"
 
 	"golang.org/x/xerrors"

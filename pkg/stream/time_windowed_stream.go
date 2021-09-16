@@ -1,6 +1,6 @@
 package stream
 
-import "cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
+import "sharedlog-stream/pkg/stream/processor"
 
 type WindowedKey struct {
 	Key    interface{}

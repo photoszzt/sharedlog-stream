@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"time"
 
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/generator"
-	ntypes "cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/types"
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/nexmark/utils"
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/sharedlog_stream"
-	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/sharedlog_stream"
+
+	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
+	"sharedlog-stream/pkg/stream/processor"
+
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/generator"
+
 	"cs.utexas.edu/zjia/faas/types"
 )
 
