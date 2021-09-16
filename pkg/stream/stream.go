@@ -67,13 +67,13 @@ func (s *StreamImpl) Branch(name string, preds ...processor.Predicate) []Stream 
 }
 
 func (s *StreamImpl) Filter(name string, pred processor.Predicate) Stream {
-	p := processor.NewFilterProcessor(pred)
+	p := processor.NewStreamFilterProcessor(pred)
 	n := s.tp.AddProcessor(name, p, s.parents)
 	return newStream(s.tp, []processor.Node{n})
 }
 
 func (s *StreamImpl) FilterNot(name string, pred processor.Predicate) Stream {
-	p := processor.NewFilterNotProcessor(pred)
+	p := processor.NewStreamFilterNotProcessor(pred)
 	n := s.tp.AddProcessor(name, p, s.parents)
 	return newStream(s.tp, []processor.Node{n})
 }

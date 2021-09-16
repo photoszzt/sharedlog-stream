@@ -8,3 +8,8 @@ type ValueTimestamp struct {
 	Timestamp uint64
 	Value     interface{}
 }
+
+type Change struct {
+	OldValue interface{}
+	NewValue interface{}
+}

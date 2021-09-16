@@ -3,30 +3,26 @@ package processor
 import (
 	"bytes"
 
+	"cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/processor/treemap"
 	"github.com/rs/zerolog/log"
 
 	"golang.org/x/xerrors"
 )
 
-//go:generate gotemplate "cs.utexas.edu/zhitingz/sharedlog-stream/pkg/stream/state/treemap" "BytesTreeMap([]byte, []byte)"
-
-// not thread safe
 type InMemoryKeyValueStore struct {
 	open           bool
 	name           string
-	store          *BytesTreeMap
+	store          *treemap.TreeMap
 	sctx           StateStoreContext
 	rootStateStore StateStore
 }
 
-var _ = KeyValueStore(NewInMemoryKeyValueStore("a"))
+var _ = KeyValueStore(NewInMemoryKeyValueStore("a", nil))
 
-func NewInMemoryKeyValueStore(name string) *InMemoryKeyValueStore {
+func NewInMemoryKeyValueStore(name string, less func(a treemap.Key, b treemap.Key) bool) *InMemoryKeyValueStore {
 	return &InMemoryKeyValueStore{
-		name: name,
-		store: NewBytesTreeMap(func(a []byte, b []byte) bool {
-			return bytes.Compare(a, b) < 0
-		}),
+		name:  name,
+		store: treemap.New(less),
 	}
 }
 
@@ -45,26 +41,21 @@ func (st *InMemoryKeyValueStore) IsOpen() bool {
 }
 
 func (st *InMemoryKeyValueStore) Get(key KeyT) (ValueT, bool) {
-	k := key.([]byte)
-	return st.store.Get(k)
+	return st.store.Get(key)
 }
 
 func (st *InMemoryKeyValueStore) Put(key KeyT, value ValueT) {
-	k := key.([]byte)
-	v := value.([]byte)
 	if value == nil {
-		st.store.Del(k)
+		st.store.Del(key)
 	} else {
-		st.store.Set(k, v)
+		st.store.Set(key, value)
 	}
 }
 
 func (st *InMemoryKeyValueStore) PutIfAbsent(key KeyT, value ValueT) ValueT {
-	k := key.([]byte)
-	v := value.([]byte)
-	originalVal, exists := st.store.Get(k)
+	originalVal, exists := st.store.Get(key)
 	if !exists {
-		st.store.Set(k, v)
+		st.store.Set(key, value)
 	}
 	return originalVal
 }
@@ -120,13 +111,13 @@ func (st *InMemoryKeyValueStore) PrefixScan(prefix interface{}, prefixKeyEncoder
 }
 
 type InMemoryKeyValueForwardIterator struct {
-	fromIter ForwardIteratorBytesTreeMap
-	toIter   *ForwardIteratorBytesTreeMap
+	fromIter treemap.ForwardIterator
+	toIter   *treemap.ForwardIterator
 }
 
 var _ = KeyValueIterator(NewInMemoryKeyValueForwardIterator(nil, nil, nil))
 
-func NewInMemoryKeyValueForwardIterator(store *BytesTreeMap, from []byte, to []byte) InMemoryKeyValueForwardIterator {
+func NewInMemoryKeyValueForwardIterator(store *treemap.TreeMap, from KeyT, to KeyT) InMemoryKeyValueForwardIterator {
 	if from == nil && to == nil {
 		iter := store.Iterator()
 		return InMemoryKeyValueForwardIterator{
@@ -175,13 +166,13 @@ func (fi InMemoryKeyValueForwardIterator) PeekNextKey() KeyT {
 }
 
 type InMemoryKeyValueReverseIterator struct {
-	fromIter ReverseIteratorBytesTreeMap
-	toIter   *ReverseIteratorBytesTreeMap
+	fromIter treemap.ReverseIterator
+	toIter   *treemap.ReverseIterator
 }
 
 var _ = KeyValueIterator(NewInMemoryKeyValueReverseIterator(nil, nil, nil))
 
-func NewInMemoryKeyValueReverseIterator(store *BytesTreeMap, from []byte, to []byte) InMemoryKeyValueReverseIterator {
+func NewInMemoryKeyValueReverseIterator(store *treemap.TreeMap, from KeyT, to KeyT) InMemoryKeyValueReverseIterator {
 	if from == nil && to == nil {
 		iter := store.Reverse()
 		return InMemoryKeyValueReverseIterator{

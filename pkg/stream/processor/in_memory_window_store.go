@@ -32,27 +32,27 @@ func (s *InMemoryWindowStore) Init(ctx StateStoreContext, root StateStore) {
 	s.open = true
 }
 
-func (s *InMemoryWindowStore) Put(key []byte, value ValueT, windowStartTimestamp uint64) error {
+func (s *InMemoryWindowStore) Put(key KeyT, value ValueT, windowStartTimestamp uint64) error {
 	panic("not implemented")
 }
 
-func (s *InMemoryWindowStore) Get(key []byte, windowStartTimestamp uint64) ValueT {
+func (s *InMemoryWindowStore) Get(key KeyT, windowStartTimestamp uint64) ValueT {
 	panic("not implemented")
 }
 
-func (s *InMemoryWindowStore) Fetch(key []byte, timeFrom time.Time, timeTo time.Time) KeyValueIterator {
+func (s *InMemoryWindowStore) Fetch(key KeyT, timeFrom time.Time, timeTo time.Time) KeyValueIterator {
 	panic("not implemented")
 }
 
-func (s *InMemoryWindowStore) BackwardFetch(key []byte, timeFrom time.Time, timeTo time.Time) KeyValueIterator {
+func (s *InMemoryWindowStore) BackwardFetch(key KeyT, timeFrom time.Time, timeTo time.Time) KeyValueIterator {
 	panic("not implemented")
 }
 
-func (s *InMemoryWindowStore) FetchWithKeyRange(keyFrom []byte, keyTo []byte, timeFrom time.Time, timeTo time.Time) KeyValueIterator {
+func (s *InMemoryWindowStore) FetchWithKeyRange(keyFrom KeyT, keyTo KeyT, timeFrom time.Time, timeTo time.Time) KeyValueIterator {
 	panic("not implemented")
 }
 
-func (s *InMemoryWindowStore) BackwardFetchWithKeyRange(keyFrom []byte, keyTo []byte, timeFrom time.Time, timeTo time.Time) KeyValueIterator {
+func (s *InMemoryWindowStore) BackwardFetchWithKeyRange(keyFrom KeyT, keyTo KeyT, timeFrom time.Time, timeTo time.Time) KeyValueIterator {
 	panic("not implemented")
 }
 
