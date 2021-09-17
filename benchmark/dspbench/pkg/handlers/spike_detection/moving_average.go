@@ -6,28 +6,21 @@ import (
 	"github.com/gammazero/deque"
 )
 
-type ValAndAvg struct {
-	Val float64
-	Avg float64
-}
-
-type movingAverageMapper struct {
+type movingAverageAggregate struct {
 	movingAverageWindow uint32
 	deviceIDStreamMap   map[string]*deque.Deque
 	deviceIDSumOfEvents map[string]float64
-	pipe                processor.Pipe
-	pctx                processor.ProcessorContext
 }
 
 func NewMovingAverageMapper() processor.Mapper {
-	return &movingAverageMapper{
+	return &movingAverageAggregate{
 		movingAverageWindow: 1000,
 		deviceIDStreamMap:   make(map[string]*deque.Deque),
 		deviceIDSumOfEvents: make(map[string]float64),
 	}
 }
 
-func (p *movingAverageMapper) Map(msg processor.Message) (processor.Message, error) {
+func (p *movingAverageAggregate) Map(msg processor.Message) (processor.Message, error) {
 	devId := msg.Key.(string)
 	nextVal := msg.Value.(float64)
 	avg := p.movingAverage(devId, nextVal)
@@ -36,7 +29,7 @@ func (p *movingAverageMapper) Map(msg processor.Message) (processor.Message, err
 		Timestamp: msg.Timestamp}, nil
 }
 
-func (p *movingAverageMapper) movingAverage(devId string, nextVal float64) float64 {
+func (p *movingAverageAggregate) movingAverage(devId string, nextVal float64) float64 {
 	sum := 0.0
 	vallist, ok := p.deviceIDStreamMap[devId]
 	if ok {
