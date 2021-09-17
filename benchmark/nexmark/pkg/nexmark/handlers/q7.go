@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream"
@@ -67,14 +68,14 @@ func Query7(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	var eventDecoder processor.Decoder
 	var msgDecoder processor.MsgDecoder
 
-	if input.SerdeFormat == uint8(ntypes.JSON) {
+	if input.SerdeFormat == uint8(common.JSON) {
 		// msgEncoder = ntypes.MessageSerializedJSONEncoder{}
 		eventDecoder = ntypes.EventJSONDecoder{}
-		msgDecoder = ntypes.MessageSerializedJSONDecoder{}
-	} else if input.SerdeFormat == uint8(ntypes.MSGP) {
+		msgDecoder = common.MessageSerializedJSONDecoder{}
+	} else if input.SerdeFormat == uint8(common.MSGP) {
 		// msgEncoder = ntypes.MessageSerializedMsgpEncoder{}
 		eventDecoder = ntypes.EventMsgpDecoder{}
-		msgDecoder = ntypes.MessageSerializedMsgpDecoder{}
+		msgDecoder = common.MessageSerializedMsgpDecoder{}
 	} else {
 		output <- &ntypes.FnOutput{
 			Success: false,

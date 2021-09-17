@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
 
@@ -67,12 +68,12 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 	startTime := time.Now()
 	var eventEncoder processor.Encoder
 	var msgEncoder processor.MsgEncoder
-	if inputConfig.SerdeFormat == uint8(ntypes.JSON) {
+	if inputConfig.SerdeFormat == uint8(common.JSON) {
 		eventEncoder = ntypes.EventJSONEncoder{}
-		msgEncoder = ntypes.MessageSerializedJSONEncoder{}
-	} else if inputConfig.SerdeFormat == uint8(ntypes.MSGP) {
+		msgEncoder = common.MessageSerializedJSONEncoder{}
+	} else if inputConfig.SerdeFormat == uint8(common.MSGP) {
 		eventEncoder = ntypes.EventMsgpEncoder{}
-		msgEncoder = ntypes.MessageSerializedMsgpEncoder{}
+		msgEncoder = common.MessageSerializedMsgpEncoder{}
 	} else {
 		return &ntypes.FnOutput{
 			Success: false,

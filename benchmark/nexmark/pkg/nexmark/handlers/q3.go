@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 
+	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream"
@@ -67,14 +68,14 @@ func Query3(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	var eventDecoder processor.Decoder
 	var msgDecoder processor.MsgDecoder
 
-	if input.SerdeFormat == uint8(ntypes.JSON) {
-		msgEncoder = ntypes.MessageSerializedJSONEncoder{}
+	if input.SerdeFormat == uint8(common.JSON) {
+		msgEncoder = common.MessageSerializedJSONEncoder{}
 		eventDecoder = ntypes.EventJSONDecoder{}
-		msgDecoder = ntypes.MessageSerializedJSONDecoder{}
-	} else if input.SerdeFormat == uint8(ntypes.MSGP) {
-		msgEncoder = ntypes.MessageSerializedMsgpEncoder{}
+		msgDecoder = common.MessageSerializedJSONDecoder{}
+	} else if input.SerdeFormat == uint8(common.MSGP) {
+		msgEncoder = common.MessageSerializedMsgpEncoder{}
 		eventDecoder = ntypes.EventMsgpDecoder{}
-		msgDecoder = ntypes.MessageSerializedMsgpDecoder{}
+		msgDecoder = common.MessageSerializedMsgpDecoder{}
 	} else {
 		output <- &ntypes.FnOutput{
 			Success: false,
@@ -119,7 +120,7 @@ func Query3(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	})).ToStream().Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream,
 		processor.Uint64Encoder{}, processor.EncoderFunc(func(val interface{}) ([]byte, error) {
 			ret := val.(*ntypes.NameCityStateId)
-			if input.SerdeFormat == uint8(ntypes.JSON) {
+			if input.SerdeFormat == uint8(common.JSON) {
 				return json.Marshal(ret)
 			} else {
 				return ret.MarshalMsg(nil)

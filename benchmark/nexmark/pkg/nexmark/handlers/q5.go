@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 
+	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream"
@@ -69,16 +70,16 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	var msgDecoder processor.MsgDecoder
 	var seSerde processor.Serde
 	var aucIdCountSerde processor.Serde
-	if input.SerdeFormat == uint8(ntypes.JSON) {
+	if input.SerdeFormat == uint8(common.JSON) {
 		// msgEncoder = ntypes.MessageSerializedJSONEncoder{}
 		eventDecoder = ntypes.EventJSONDecoder{}
-		msgDecoder = ntypes.MessageSerializedJSONDecoder{}
+		msgDecoder = common.MessageSerializedJSONDecoder{}
 		seSerde = ntypes.StartEndTimeJSONSerde{}
 		aucIdCountSerde = ntypes.AuctionIdCountJSONSerde{}
-	} else if input.SerdeFormat == uint8(ntypes.MSGP) {
+	} else if input.SerdeFormat == uint8(common.MSGP) {
 		// msgEncoder = ntypes.MessageSerializedMsgpEncoder{}
 		eventDecoder = ntypes.EventMsgpDecoder{}
-		msgDecoder = ntypes.MessageSerializedMsgpDecoder{}
+		msgDecoder = common.MessageSerializedMsgpDecoder{}
 		seSerde = ntypes.StartEndTimeMsgpSerde{}
 		aucIdCountSerde = ntypes.AuctionIdCountMsgpSerde{}
 	} else {

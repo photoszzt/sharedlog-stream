@@ -87,6 +87,8 @@ type Float64Serde struct {
 	Float64Decoder
 }
 
+var _ = Serde(Float64Serde{})
+
 type Float32Encoder struct{}
 
 var _ = Encoder(Float32Encoder{})
@@ -415,4 +417,9 @@ func (d StringDecoder) Decode(value []byte) (interface{}, error) {
 		return nil, nil
 	}
 	return string(value), nil
+}
+
+type StringSerde struct {
+	StringEncoder
+	StringDecoder
 }

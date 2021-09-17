@@ -10,13 +10,6 @@ import (
 	"sharedlog-stream/pkg/stream/processor"
 )
 
-type SerdeFormat uint8
-
-const (
-	JSON SerdeFormat = 0
-	MSGP SerdeFormat = 1
-)
-
 type NameCityStateId struct {
 	Name  string `zid:"0"`
 	City  string `zid:"1"`

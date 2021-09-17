@@ -2,7 +2,7 @@
 //msgpack:ignore MessageSerializedMsgpEncoder MessageSerializedMsgpDecoder
 //msgpack:ignore MessageSerializedJSONEncoder MessageSerializedJSONDecoder
 
-package types
+package common
 
 import (
 	"encoding/json"

@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 
+	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream"
@@ -28,12 +29,12 @@ func NewQuery1(env types.Environment) types.FuncHandler {
 }
 
 func (h *query1Handler) Call(ctx context.Context, input []byte) ([]byte, error) {
-	parsedInput := &ntypes.QueryInput{}
+	parsedInput := &common.QueryInput{}
 	err := json.Unmarshal(input, parsedInput)
 	if err != nil {
 		return nil, err
 	}
-	outputCh := make(chan *ntypes.FnOutput)
+	outputCh := make(chan *common.FnOutput)
 	go Query1(ctx, h.env, parsedInput, outputCh)
 	output := <-outputCh
 	encodedOutput, err := json.Marshal(output)
@@ -51,10 +52,10 @@ func mapFunc(msg processor.Message) (processor.Message, error) {
 
 }
 
-func Query1(ctx context.Context, env types.Environment, input *ntypes.QueryInput, output chan *ntypes.FnOutput) {
+func Query1(ctx context.Context, env types.Environment, input *common.QueryInput, output chan *common.FnOutput) {
 	inputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.InputTopicName)
 	if err != nil {
-		output <- &ntypes.FnOutput{
+		output <- &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("NewSharedlogStream for input stream failed: %v", err),
 		}
@@ -62,7 +63,7 @@ func Query1(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	}
 	outputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.OutputTopicName)
 	if err != nil {
-		output <- &ntypes.FnOutput{
+		output <- &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("NewSharedlogStream for output stream failed: %v", err),
 		}
@@ -73,18 +74,18 @@ func Query1(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	var eventDecoder processor.Decoder
 	var msgDecoder processor.MsgDecoder
 
-	if input.SerdeFormat == uint8(ntypes.JSON) {
+	if input.SerdeFormat == uint8(common.JSON) {
 		eventEncoder = ntypes.EventJSONEncoder{}
-		msgEncoder = ntypes.MessageSerializedJSONEncoder{}
+		msgEncoder = common.MessageSerializedJSONEncoder{}
 		eventDecoder = ntypes.EventJSONDecoder{}
-		msgDecoder = ntypes.MessageSerializedJSONDecoder{}
-	} else if input.SerdeFormat == uint8(ntypes.MSGP) {
+		msgDecoder = common.MessageSerializedJSONDecoder{}
+	} else if input.SerdeFormat == uint8(common.MSGP) {
 		eventEncoder = ntypes.EventMsgpEncoder{}
-		msgEncoder = ntypes.MessageSerializedMsgpEncoder{}
+		msgEncoder = common.MessageSerializedMsgpEncoder{}
 		eventDecoder = ntypes.EventMsgpDecoder{}
-		msgDecoder = ntypes.MessageSerializedMsgpDecoder{}
+		msgDecoder = common.MessageSerializedMsgpDecoder{}
 	} else {
-		output <- &ntypes.FnOutput{
+		output <- &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", input.SerdeFormat),
 		}
@@ -98,7 +99,7 @@ func Query1(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, processor.StringEncoder{}, eventEncoder, msgEncoder))
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {
-		output <- &ntypes.FnOutput{
+		output <- &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("build stream failed: %v", err_arrs),
 		}
@@ -132,7 +133,7 @@ func Query1(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 			srcPump.Close()
 		}
 	}
-	output <- &ntypes.FnOutput{
+	output <- &common.FnOutput{
 		Success:   true,
 		Duration:  time.Since(startTime).Seconds(),
 		Latencies: latencies,
