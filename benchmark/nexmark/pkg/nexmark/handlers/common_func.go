@@ -23,16 +23,6 @@ func getEventSerde(serdeFormat uint8) (processor.Serde, error) {
 	}
 }
 
-func getMsgSerde(serdeFormat uint8) (processor.MsgSerde, error) {
-	if serdeFormat == uint8(common.JSON) {
-		return common.MessageSerializedJSONSerde{}, nil
-	} else if serdeFormat == uint8(common.MSGP) {
-		return common.MessageSerializedMsgpSerde{}, nil
-	} else {
-		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
-	}
-}
-
 func getPersonTimeSerde(serdeFormat uint8) (processor.Serde, error) {
 	if serdeFormat == uint8(common.JSON) {
 		return ntypes.PersonTimeJSONSerde{}, nil

@@ -40,7 +40,7 @@ func NewSpikeDetectionSource(env types.Environment) types.FuncHandler {
 }
 
 func (h *spikeDetectionSource) Call(ctx context.Context, input []byte) ([]byte, error) {
-	sp := &SourceParam{}
+	sp := &common.SourceParam{}
 	err := json.Unmarshal(input, sp)
 	if err != nil {
 		return nil, err
@@ -57,7 +57,8 @@ func (h *spikeDetectionSource) Call(ctx context.Context, input []byte) ([]byte, 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *spikeDetectionSource) eventGeneration(ctx context.Context, env types.Environment, sp *SourceParam) *common.FnOutput {
+func (h *spikeDetectionSource) eventGeneration(ctx context.Context,
+	env types.Environment, sp *common.SourceParam) *common.FnOutput {
 	err := h.parseFile(sp.FileName)
 	if err != nil {
 		return &common.FnOutput{

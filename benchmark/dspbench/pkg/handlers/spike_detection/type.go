@@ -7,13 +7,6 @@ import (
 	"sharedlog-stream/pkg/stream/processor"
 )
 
-type SourceParam struct {
-	TopicName   string `json:"topicName"`
-	FileName    string `json:"fname"`
-	Duration    uint32 `json:"duration"` // in sec
-	SerdeFormat uint8  `json:"serdeFormat"`
-}
-
 type SensorData struct {
 	Val       float64 `json:"val" zid:"0" msg:"val"`
 	Timestamp uint64  `json:"ts" zid:"1" msg:"ts"`

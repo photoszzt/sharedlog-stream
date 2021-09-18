@@ -1,4 +1,4 @@
-package trendingtopicshandler
+package main
 
 import (
 	"fmt"
@@ -34,6 +34,8 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return trending_topics.NewTrendingTopics(env), nil
 	case "spike-detection":
 		return spike_detection.NewSpikeDetectionHandler(env), nil
+	case "sd-source":
+		return spike_detection.NewSpikeDetectionSource(env), nil
 	default:
 		return nil, fmt.Errorf("unknown function name %v", funcName)
 	}
