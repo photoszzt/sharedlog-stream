@@ -116,8 +116,6 @@ type InMemoryKeyValueForwardIterator struct {
 	toIter   *treemap.ForwardIterator
 }
 
-var _ = KeyValueIterator(NewInMemoryKeyValueForwardIterator(nil, nil, nil))
-
 func NewInMemoryKeyValueForwardIterator(store *treemap.TreeMap, from KeyT, to KeyT) InMemoryKeyValueForwardIterator {
 	if from == nil && to == nil {
 		iter := store.Iterator()
@@ -170,8 +168,6 @@ type InMemoryKeyValueReverseIterator struct {
 	fromIter treemap.ReverseIterator
 	toIter   *treemap.ReverseIterator
 }
-
-var _ = KeyValueIterator(NewInMemoryKeyValueReverseIterator(nil, nil, nil))
 
 func NewInMemoryKeyValueReverseIterator(store *treemap.TreeMap, from KeyT, to KeyT) InMemoryKeyValueReverseIterator {
 	if from == nil && to == nil {

@@ -40,8 +40,8 @@ func NewSpikeDetectionSource(env types.Environment) types.FuncHandler {
 }
 
 func (h *spikeDetectionSource) Call(ctx context.Context, input []byte) ([]byte, error) {
-	sp := &common.SourceParam{}
-	err := json.Unmarshal(input, sp)
+	sp := common.SourceParam{}
+	err := json.Unmarshal(input, &sp)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +49,7 @@ func (h *spikeDetectionSource) Call(ctx context.Context, input []byte) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
-	output := h.eventGeneration(ctx, h.env, sp)
+	output := h.eventGeneration(ctx, h.env, &sp)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
 		panic(err)
@@ -59,11 +59,12 @@ func (h *spikeDetectionSource) Call(ctx context.Context, input []byte) ([]byte, 
 
 func (h *spikeDetectionSource) eventGeneration(ctx context.Context,
 	env types.Environment, sp *common.SourceParam) *common.FnOutput {
+	fmt.Fprintf(os.Stderr, "got file name: %v", sp.FileName)
 	err := h.parseFile(sp.FileName)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
-			Message: fmt.Sprintf("parse input file failed: %v", err),
+			Message: fmt.Sprintf("parse input file failed: %v, source param is %v", err, sp),
 		}
 	}
 
@@ -149,7 +150,7 @@ func (h *spikeDetectionSource) eventGeneration(ctx context.Context,
 func (h *spikeDetectionSource) parseFile(fileName string) error {
 	csvFile, err := os.Open(fileName)
 	if err != nil {
-		return err
+		return fmt.Errorf("fail to open file %v: %v", fileName, err)
 	}
 	defer csvFile.Close()
 

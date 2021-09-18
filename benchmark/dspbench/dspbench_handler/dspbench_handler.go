@@ -28,13 +28,13 @@ func init() {
 
 func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.FuncHandler, error) {
 	switch funcName {
-	case "tt-source":
+	case "ttsource":
 		return trending_topics.NewTrendingTopicsSource(env), nil
-	case "trending-topics":
+	case "trendingtopics":
 		return trending_topics.NewTrendingTopics(env), nil
-	case "spike-detection":
+	case "spikedetection":
 		return spike_detection.NewSpikeDetectionHandler(env), nil
-	case "sd-source":
+	case "sdsource":
 		return spike_detection.NewSpikeDetectionSource(env), nil
 	default:
 		return nil, fmt.Errorf("unknown function name %v", funcName)

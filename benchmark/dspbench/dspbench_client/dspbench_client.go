@@ -39,11 +39,12 @@ func invokeSourceFunc(client *http.Client, response *common.FnOutput, wg *sync.W
 		Duration:    uint32(FLAGS_duration),
 		SerdeFormat: uint8(serdeFormat),
 	}
-	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "source")
+	fmt.Printf("input file name is %v\n", FLAGS_file_name)
+	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "sdsource")
 	if err := utils.JsonPostRequest(client, url, sp, response); err != nil {
-		log.Error().Msgf("source request failed: %v", err)
+		log.Error().Msgf("sdsource request failed: %v", err)
 	} else if !response.Success {
-		log.Error().Msgf("source request failed: %s", response.Message)
+		log.Error().Msgf("sdsource request failed: %s", response.Message)
 	}
 }
 
@@ -66,7 +67,8 @@ func invokeQuery(client *http.Client, response *common.FnOutput, wg *sync.WaitGr
 func main() {
 	flag.StringVar(&FLAGS_faas_gateway, "faas_gateway", "127.0.0.1:8081", "")
 	flag.StringVar(&FLAGS_fn_name, "fn_name", "spike_detection_handler", "")
-	flag.StringVar(&FLAGS_stream_prefix, "stream_prefix", "nexmark", "")
+	flag.StringVar(&FLAGS_stream_prefix, "stream_prefix", "dspbench", "")
+	flag.StringVar(&FLAGS_file_name, "in_fname", "/mnt/data/data.txt", "data source file name")
 	flag.IntVar(&FLAGS_duration, "duration", 60, "")
 	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
 	flag.Parse()

@@ -97,6 +97,7 @@ func JsonPostRequest(client *http.Client, url string, request interface{}, respo
 	if err != nil {
 		log.Fatal().Msgf("failed to encode JSON request: %v", err)
 	}
+	fmt.Printf("encoded json is %v\n", string(encoded))
 	resp, err := client.Post(url, "application/json", bytes.NewReader(encoded))
 	if err != nil {
 		return err
