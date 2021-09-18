@@ -84,15 +84,13 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 		}
 	*/
 	// var msgEncoder processor.MsgEncoder
-	var msgDecoder processor.MsgDecoder
+	var msgSerde processor.MsgSerde
 	var sdSerde processor.Serde
 	if input.SerdeFormat == uint8(common.JSON) {
 		sdSerde = SensorDataJSONSerde{}
-		// msgEncoder = common.MessageSerializedJSONEncoder{}
-		msgDecoder = common.MessageSerializedJSONDecoder{}
+		msgSerde = common.MessageSerializedJSONSerde{}
 	} else if input.SerdeFormat == uint8(common.MSGP) {
-		// msgEncoder = common.MessageSerializedMsgpEncoder{}
-		msgDecoder = common.MessageSerializedMsgpDecoder{}
+		msgSerde = common.MessageSerializedMsgpSerde{}
 		sdSerde = SensorDataMsgpSerde{}
 	} else {
 		output <- &common.FnOutput{
@@ -103,7 +101,7 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 	movingAverageWindow := 1000
 	builder := stream.NewStreamBuilder()
 	builder.Source("spike-detection-src", sharedlog_stream.NewSharedLogStreamSource(inputStream,
-		int(input.Duration), processor.StringDecoder{}, sdSerde, msgDecoder)).
+		int(input.Duration), processor.StringDecoder{}, sdSerde, msgSerde)).
 		GroupByKey(&stream.Grouped{KeySerde: processor.StringSerde{},
 			ValueSerde: sdSerde, Name: "group-by-devid"}).
 		Aggregate("moving-avg", processor.InitializerFunc(func() interface{} {

@@ -93,29 +93,27 @@ func NewBidEvent(bid *Bid) *Event {
 	}
 }
 
-type EventMsgpEncoder struct{}
+type EventMsgpSerde struct{}
 
-var _ = processor.Encoder(EventMsgpEncoder{})
+var _ = processor.Encoder(EventMsgpSerde{})
 
-func (e EventMsgpEncoder) Encode(value interface{}) ([]byte, error) {
+func (e EventMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	event := value.(*Event)
 	return event.MarshalMsg(nil)
 }
 
-type EventJSONEncoder struct{}
+type EventJSONSerde struct{}
 
-var _ = processor.Encoder(EventJSONEncoder{})
+var _ = processor.Encoder(EventJSONSerde{})
 
-func (e EventJSONEncoder) Encode(value interface{}) ([]byte, error) {
+func (e EventJSONSerde) Encode(value interface{}) ([]byte, error) {
 	event := value.(*Event)
 	return json.Marshal(event)
 }
 
-type EventMsgpDecoder struct{}
+var _ = processor.Decoder(EventMsgpSerde{})
 
-var _ = processor.Decoder(EventMsgpDecoder{})
-
-func (emd EventMsgpDecoder) Decode(value []byte) (interface{}, error) {
+func (emd EventMsgpSerde) Decode(value []byte) (interface{}, error) {
 	e := Event{}
 	_, err := e.UnmarshalMsg(value)
 	if err != nil {
@@ -124,11 +122,9 @@ func (emd EventMsgpDecoder) Decode(value []byte) (interface{}, error) {
 	return e, nil
 }
 
-type EventJSONDecoder struct{}
+var _ = processor.Decoder(EventJSONSerde{})
 
-var _ = processor.Decoder(EventJSONDecoder{})
-
-func (ejd EventJSONDecoder) Decode(value []byte) (interface{}, error) {
+func (ejd EventJSONSerde) Decode(value []byte) (interface{}, error) {
 	e := Event{}
 	if err := json.Unmarshal(value, &e); err != nil {
 		return nil, err

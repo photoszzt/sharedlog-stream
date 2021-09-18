@@ -34,14 +34,14 @@ func main() {
 	var valueEncoder processor.Encoder
 	if FLAGS_serdeFormat == "json" {
 		serdeFormat = common.JSON
-		valueEncoder = ntypes.EventJSONEncoder{}
+		valueEncoder = ntypes.EventJSONSerde{}
 	} else if FLAGS_serdeFormat == "msgp" {
 		serdeFormat = common.MSGP
-		valueEncoder = ntypes.EventMsgpEncoder{}
+		valueEncoder = ntypes.EventMsgpSerde{}
 	} else {
 		log.Error().Msgf("serde format is not recognized; default back to JSON")
 		serdeFormat = common.JSON
-		valueEncoder = ntypes.EventJSONEncoder{}
+		valueEncoder = ntypes.EventJSONSerde{}
 	}
 
 	nexmarkConfigInput := ntypes.NewNexMarkConfigInput(FLAGS_stream_prefix+"_src", serdeFormat)

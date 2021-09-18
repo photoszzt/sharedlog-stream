@@ -68,35 +68,27 @@ func Query2(ctx context.Context, env types.Environment, input *common.QueryInput
 		}
 		return
 	}
-
-	var eventEncoder processor.Encoder
-	var msgEncoder processor.MsgEncoder
-	var eventDecoder processor.Decoder
-	var msgDecoder processor.MsgDecoder
-
-	if input.SerdeFormat == uint8(common.JSON) {
-		eventEncoder = ntypes.EventJSONEncoder{}
-		msgEncoder = common.MessageSerializedJSONEncoder{}
-		eventDecoder = ntypes.EventJSONDecoder{}
-		msgDecoder = common.MessageSerializedJSONDecoder{}
-	} else if input.SerdeFormat == uint8(common.MSGP) {
-		eventEncoder = ntypes.EventMsgpEncoder{}
-		msgEncoder = common.MessageSerializedMsgpEncoder{}
-		eventDecoder = ntypes.EventMsgpDecoder{}
-		msgDecoder = common.MessageSerializedMsgpDecoder{}
-	} else {
+	msgSerde, err := common.GetMsgSerde(input.SerdeFormat)
+	if err != nil {
 		output <- &common.FnOutput{
 			Success: false,
-			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", input.SerdeFormat),
+			Message: err.Error(),
+		}
+	}
+	eventSerde, err := getEventSerde(input.SerdeFormat)
+	if err != nil {
+		output <- &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
 		}
 	}
 
 	builder := stream.NewStreamBuilder()
 	builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream,
-		int(input.Duration), processor.StringDecoder{}, eventDecoder, msgDecoder)).
+		int(input.Duration), processor.StringDecoder{}, eventSerde, msgSerde)).
 		Filter("only_bid", processor.PredicateFunc(only_bid)).
 		Filter("q2_filter", processor.PredicateFunc(filterFunc)).
-		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, processor.StringEncoder{}, eventEncoder, msgEncoder))
+		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, processor.StringEncoder{}, eventSerde, msgSerde))
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {
 		output <- &common.FnOutput{

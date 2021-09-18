@@ -69,11 +69,11 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 	var eventEncoder processor.Encoder
 	var msgEncoder processor.MsgEncoder
 	if inputConfig.SerdeFormat == uint8(common.JSON) {
-		eventEncoder = ntypes.EventJSONEncoder{}
-		msgEncoder = common.MessageSerializedJSONEncoder{}
+		eventEncoder = ntypes.EventJSONSerde{}
+		msgEncoder = common.MessageSerializedJSONSerde{}
 	} else if inputConfig.SerdeFormat == uint8(common.MSGP) {
-		eventEncoder = ntypes.EventMsgpEncoder{}
-		msgEncoder = common.MessageSerializedMsgpEncoder{}
+		eventEncoder = ntypes.EventMsgpSerde{}
+		msgEncoder = common.MessageSerializedMsgpSerde{}
 	} else {
 		return &ntypes.FnOutput{
 			Success: false,

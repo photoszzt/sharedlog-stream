@@ -1,6 +1,6 @@
 GO_FILES?=$$(find . -name '*.go' |grep -v deps)
 
-default: goimports nexmark nexmark_client nexmark_genevents_kafka
+default: goimports nexmark nexmark_client nexmark_genevents_kafka dspbench
 
 .PHONY: staticcheck
 staticcheck:
@@ -31,3 +31,8 @@ nexmark_client:
 nexmark_genevents_kafka:
 	mkdir -p ./bin
 	go build -o bin/nexmark_genevents_kafka benchmark/nexmark/nexmark_genevents_kafka/nexmark_genevents_kafka.go
+
+.PHONY: dspbench
+dspbench:
+	mkdir -p ./bin
+	go build -o bin/dspbench_handler benchmark/dspbench/dspbench_handler/dspbench_handler.go

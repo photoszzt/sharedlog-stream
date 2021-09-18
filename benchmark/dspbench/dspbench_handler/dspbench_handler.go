@@ -3,6 +3,7 @@ package trendingtopicshandler
 import (
 	"fmt"
 	"os"
+	"sharedlog-stream/benchmark/dspbench/pkg/handlers/spike_detection"
 	"sharedlog-stream/benchmark/dspbench/pkg/handlers/trending_topics"
 
 	"cs.utexas.edu/zjia/faas"
@@ -31,6 +32,8 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return trending_topics.NewTrendingTopicsSource(env), nil
 	case "trending-topics":
 		return trending_topics.NewTrendingTopics(env), nil
+	case "spike-detection":
+		return spike_detection.NewSpikeDetectionHandler(env), nil
 	default:
 		return nil, fmt.Errorf("unknown function name %v", funcName)
 	}

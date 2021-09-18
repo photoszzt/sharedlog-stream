@@ -6,6 +6,7 @@ package common
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"sharedlog-stream/pkg/stream/processor"
 )
@@ -15,11 +16,11 @@ type MessageSerialized struct {
 	Value []byte `json:",omitempty" zid:"1" msg:",omitempty"`
 }
 
-var _ = processor.MsgEncoder(MessageSerializedMsgpEncoder{})
+var _ = processor.MsgEncoder(MessageSerializedMsgpSerde{})
 
-type MessageSerializedMsgpEncoder struct{}
+type MessageSerializedMsgpSerde struct{}
 
-func (e MessageSerializedMsgpEncoder) Encode(key []byte, value []byte) ([]byte, error) {
+func (e MessageSerializedMsgpSerde) Encode(key []byte, value []byte) ([]byte, error) {
 	msg := MessageSerialized{
 		Key:   key,
 		Value: value,
@@ -27,11 +28,11 @@ func (e MessageSerializedMsgpEncoder) Encode(key []byte, value []byte) ([]byte, 
 	return msg.MarshalMsg(nil)
 }
 
-type MessageSerializedJSONEncoder struct{}
+type MessageSerializedJSONSerde struct{}
 
-var _ = processor.MsgEncoder(MessageSerializedJSONEncoder{})
+var _ = processor.MsgEncoder(MessageSerializedJSONSerde{})
 
-func (e MessageSerializedJSONEncoder) Encode(key []byte, value []byte) ([]byte, error) {
+func (e MessageSerializedJSONSerde) Encode(key []byte, value []byte) ([]byte, error) {
 	msg := MessageSerialized{
 		Key:   key,
 		Value: value,
@@ -39,11 +40,9 @@ func (e MessageSerializedJSONEncoder) Encode(key []byte, value []byte) ([]byte, 
 	return json.Marshal(msg)
 }
 
-type MessageSerializedMsgpDecoder struct{}
+var _ = processor.MsgDecoder(MessageSerializedMsgpSerde{})
 
-var _ = processor.MsgDecoder(MessageSerializedMsgpDecoder{})
-
-func (msmd MessageSerializedMsgpDecoder) Decode(value []byte) ([]byte /* key */, []byte /* value */, error) {
+func (msmd MessageSerializedMsgpSerde) Decode(value []byte) ([]byte /* key */, []byte /* value */, error) {
 	msg := MessageSerialized{}
 	_, err := msg.UnmarshalMsg(value)
 	if err != nil {
@@ -52,14 +51,22 @@ func (msmd MessageSerializedMsgpDecoder) Decode(value []byte) ([]byte /* key */,
 	return msg.Key, msg.Value, nil
 }
 
-type MessageSerializedJSONDecoder struct{}
+var _ = processor.MsgDecoder(MessageSerializedJSONSerde{})
 
-var _ = processor.MsgDecoder(MessageSerializedJSONDecoder{})
-
-func (msmd MessageSerializedJSONDecoder) Decode(value []byte) ([]byte /* key */, []byte /* value */, error) {
+func (msmd MessageSerializedJSONSerde) Decode(value []byte) ([]byte /* key */, []byte /* value */, error) {
 	msg := MessageSerialized{}
 	if err := json.Unmarshal(value, &msg); err != nil {
 		return nil, nil, err
 	}
 	return msg.Key, msg.Value, nil
+}
+
+func GetMsgSerde(serdeFormat uint8) (processor.MsgSerde, error) {
+	if serdeFormat == uint8(JSON) {
+		return MessageSerializedJSONSerde{}, nil
+	} else if serdeFormat == uint8(MSGP) {
+		return MessageSerializedMsgpSerde{}, nil
+	} else {
+		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
+	}
 }
