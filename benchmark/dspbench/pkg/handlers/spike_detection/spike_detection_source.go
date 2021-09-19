@@ -40,20 +40,26 @@ func NewSpikeDetectionSource(env types.Environment) types.FuncHandler {
 }
 
 func (h *spikeDetectionSource) Call(ctx context.Context, input []byte) ([]byte, error) {
-	sp := common.SourceParam{}
-	err := json.Unmarshal(input, &sp)
+	sp := &common.SourceParam{}
+	fmt.Fprintf(os.Stderr, "before unmarshal\n")
+	fmt.Fprintf(os.Stderr, "input is %v\n", string(input))
+	err := json.Unmarshal(input, sp)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Fprintf(os.Stderr, "after unmarshal: sp %v\n", sp)
 	err = h.parseFile(sp.FileName)
 	if err != nil {
 		return nil, err
 	}
-	output := h.eventGeneration(ctx, h.env, &sp)
+	fmt.Fprintf(os.Stderr, "after parseFile\n")
+	output := h.eventGeneration(ctx, h.env, sp)
+	fmt.Fprintf(os.Stderr, "after eventGeneration\n")
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
+	fmt.Fprintf(os.Stderr, "after json marshal\n")
 	return utils.CompressData(encodedOutput), nil
 }
 
@@ -95,6 +101,7 @@ func (h *spikeDetectionSource) eventGeneration(ctx context.Context,
 	}
 	strSerde := processor.StringSerde{}
 	latencies := make([]int, 0, 128)
+	numEvents := sp.NumEvents
 	duration := time.Duration(sp.Duration) * time.Second
 	startTime := time.Now()
 	idx := 0
@@ -102,12 +109,15 @@ func (h *spikeDetectionSource) eventGeneration(ctx context.Context,
 		if duration != 0 && time.Since(startTime) >= duration || duration == 0 {
 			break
 		}
+		if numEvents != 0 && idx == int(numEvents) {
+			break
+		}
 		event := h.sensorDataList[idx]
 		sd := SensorData{
 			Val:       event.temp,
 			Timestamp: uint64(event.ts.Unix()),
 		}
-		encoded, err := sdSerde.Encode(sd)
+		encoded, err := sdSerde.Encode(&sd)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
@@ -139,6 +149,7 @@ func (h *spikeDetectionSource) eventGeneration(ctx context.Context,
 		}
 		elapsed := time.Since(pushStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
+		idx += 1
 	}
 	return &common.FnOutput{
 		Success:   true,
@@ -161,28 +172,50 @@ func (h *spikeDetectionSource) parseFile(fileName string) error {
 		return err
 	}
 	for _, each := range csvData {
+		if each[2] == "" {
+			continue
+		}
 		epoc, err := strconv.ParseUint(each[2], 10, 32)
 		if err != nil {
 			return err
+		}
+
+		if each[4] == "" {
+			continue
 		}
 		temp, err := strconv.ParseFloat(each[4], 64)
 		if err != nil {
 			return err
 		}
+
+		if each[5] == "" {
+			continue
+		}
 		humidity, err := strconv.ParseFloat(each[5], 64)
 		if err != nil {
 			return err
+		}
+
+		if each[6] == "" {
+			continue
 		}
 		light, err := strconv.ParseFloat(each[6], 64)
 		if err != nil {
 			return err
 		}
+
+		if each[6] == "" {
+			continue
+		}
+
 		voltage, err := strconv.ParseFloat(each[7], 64)
 		if err != nil {
 			return err
 		}
-		date := each[0][5:]
-		timeStr := each[1][5:]
+
+		date := each[0]
+		timeStr := each[1]
+
 		var year, month, day int
 		_, err = fmt.Sscanf(date, "%d-%d-%d", &year, &month, &day)
 		if err != nil {

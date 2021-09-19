@@ -144,8 +144,7 @@ func (s *StreamImpl) GroupBy(name string, mapper processor.Mapper, grouped *Grou
 }
 
 func (s *StreamImpl) GroupByKey(grouped *Grouped) GroupedStream {
-	log.Fatal().Msgf("Not implemented")
-	return nil
+	return newGroupedStream(s.tp, s.parents, grouped)
 }
 
 func (s *StreamImpl) StreamStreamJoin(other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream {

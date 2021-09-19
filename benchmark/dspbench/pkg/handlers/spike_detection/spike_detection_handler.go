@@ -52,6 +52,7 @@ func (h *spikeDetectionHandler) Call(ctx context.Context, input []byte) ([]byte,
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("spike detection after parse input")
 	outputCh := make(chan *common.FnOutput)
 	go SpikeDetection(ctx, h.env, parsedInput, outputCh)
 	output := <-outputCh
@@ -59,7 +60,7 @@ func (h *spikeDetectionHandler) Call(ctx context.Context, input []byte) ([]byte,
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("query 1 outputs %s\n", encodedOutput)
+	fmt.Printf("spike detection outputs %s\n", encodedOutput)
 	return utils.CompressData(encodedOutput), nil
 }
 

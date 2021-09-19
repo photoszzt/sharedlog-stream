@@ -38,6 +38,7 @@ func invokeSourceFunc(client *http.Client, response *common.FnOutput, wg *sync.W
 		FileName:    FLAGS_file_name,
 		Duration:    uint32(FLAGS_duration),
 		SerdeFormat: uint8(serdeFormat),
+		NumEvents:   uint32(FLAGS_events_num),
 	}
 	fmt.Printf("input file name is %v\n", FLAGS_file_name)
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "sdsource")
@@ -70,6 +71,7 @@ func main() {
 	flag.StringVar(&FLAGS_stream_prefix, "stream_prefix", "dspbench", "")
 	flag.StringVar(&FLAGS_file_name, "in_fname", "/mnt/data/data.txt", "data source file name")
 	flag.IntVar(&FLAGS_duration, "duration", 60, "")
+	flag.IntVar(&FLAGS_events_num, "nevent", 0, "number of events")
 	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
 	flag.Parse()
 
@@ -77,7 +79,7 @@ func main() {
 		Transport: &http.Transport{
 			IdleConnTimeout: 30 * time.Second,
 		},
-		Timeout: time.Duration(FLAGS_duration*2) * time.Second,
+		Timeout: time.Duration(FLAGS_duration*3) * time.Second,
 	}
 	var wg sync.WaitGroup
 	var sourceOutput, queryOutput common.FnOutput

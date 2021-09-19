@@ -26,4 +26,5 @@ type SourceParam struct {
 	FileName    string `json:"fname"`
 	Duration    uint32 `json:"duration"` // in sec
 	SerdeFormat uint8  `json:"serdeFormat"`
+	NumEvents   uint32 `json:"numEvents"`
 }
