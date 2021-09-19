@@ -155,7 +155,7 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		Filter("choose-maxcnt", processor.PredicateFunc(func(msg processor.Message) (bool, error) {
 			v := msg.Value.(*ntypes.AuctionIdCntMax)
 			return v.Count >= v.MaxCnt, nil
-		}))
+		}), "")
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {
 		output <- &common.FnOutput{

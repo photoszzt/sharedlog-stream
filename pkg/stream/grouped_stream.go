@@ -24,15 +24,26 @@ func newGroupedStream(tp *processor.TopologyBuilder, parents []processor.Node, g
 }
 
 func (s *GroupedStreamImpl) Count(name string) Table {
-	panic("not implemented")
+	p := processor.NewStreamAggregateProcessor(processor.InitializerFunc(func() interface{} {
+		return 0
+	}), processor.AggregatorFunc(func(key interface{}, value interface{}, agg interface{}) interface{} {
+		val := agg.(uint64)
+		return val + 1
+	}))
+	n := s.tp.AddProcessor(name, p, s.parents)
+	return newTable(s.tp, []processor.Node{n})
 }
 
 func (s *GroupedStreamImpl) Reduce(name string, reducer processor.Reducer) Table {
-	panic("not implemented")
+	p := processor.NewStreamReduceProcessor(reducer)
+	n := s.tp.AddProcessor(name, p, s.parents)
+	return newTable(s.tp, []processor.Node{n})
 }
 
 func (s *GroupedStreamImpl) Aggregate(name string, initializer processor.Initializer, aggregator processor.Aggregator) Table {
-	panic("not implemented")
+	p := processor.NewStreamAggregateProcessor(initializer, aggregator)
+	n := s.tp.AddProcessor(name, p, s.parents)
+	return newTable(s.tp, []processor.Node{n})
 }
 
 func (s *GroupedStreamImpl) WindowedBy(windows processor.EnumerableWindowDefinition) TimeWindowedStream {

@@ -122,7 +122,7 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 				Val: nextVal,
 				Avg: aggVal.Sum / float64(aggVal.history.Len()),
 			}
-		})).Filter("get-spike", processor.PredicateFunc(spikeDetectionPredicate))
+		})).Filter("get-spike", processor.PredicateFunc(spikeDetectionPredicate), "")
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {
 		output <- &common.FnOutput{
