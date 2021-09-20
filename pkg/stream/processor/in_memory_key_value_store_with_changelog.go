@@ -164,3 +164,7 @@ func (st *InMemoryKeyValueStoreWithChangelog) ReverseRange(from KeyT, to KeyT) K
 	}
 	return st.kvstore.ReverseRange(fromBytes, toBytes)
 }
+
+func (st *InMemoryKeyValueStoreWithChangelog) PrefixScan(prefix interface{}, prefixKeyEncoder Encoder) KeyValueIterator {
+	panic("not implemented")
+}
