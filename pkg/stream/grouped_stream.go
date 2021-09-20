@@ -1,11 +1,15 @@
 package stream
 
-import "sharedlog-stream/pkg/stream/processor"
+import (
+	"fmt"
+	"os"
+	"sharedlog-stream/pkg/stream/processor"
+)
 
 type GroupedStream interface {
-	Count(name string) Table
+	Count(name string, mp *processor.MaterializeParam) Table
 	Reduce(name string, reducer processor.Reducer) Table
-	Aggregate(name string, initializer processor.Initializer, aggregator processor.Aggregator) Table
+	Aggregate(name string, mp *processor.MaterializeParam, initializer processor.Initializer, aggregator processor.Aggregator) Table
 	WindowedBy(windows processor.EnumerableWindowDefinition) TimeWindowedStream
 }
 
@@ -23,13 +27,15 @@ func newGroupedStream(tp *processor.TopologyBuilder, parents []processor.Node, g
 	}
 }
 
-func (s *GroupedStreamImpl) Count(name string) Table {
-	p := processor.NewStreamAggregateProcessor(processor.InitializerFunc(func() interface{} {
-		return 0
-	}), processor.AggregatorFunc(func(key interface{}, value interface{}, agg interface{}) interface{} {
-		val := agg.(uint64)
-		return val + 1
-	}))
+func (s *GroupedStreamImpl) Count(name string, mp *processor.MaterializeParam) Table {
+	p := processor.NewStreamAggregateProcessor(mp,
+		processor.InitializerFunc(func() interface{} {
+			return 0
+		}),
+		processor.AggregatorFunc(func(key interface{}, value interface{}, agg interface{}) interface{} {
+			val := agg.(uint64)
+			return val + 1
+		}))
 	n := s.tp.AddProcessor(name, p, s.parents)
 	return newTable(s.tp, []processor.Node{n})
 }
@@ -40,12 +46,13 @@ func (s *GroupedStreamImpl) Reduce(name string, reducer processor.Reducer) Table
 	return newTable(s.tp, []processor.Node{n})
 }
 
-func (s *GroupedStreamImpl) Aggregate(name string, initializer processor.Initializer, aggregator processor.Aggregator) Table {
-	p := processor.NewStreamAggregateProcessor(initializer, aggregator)
+func (s *GroupedStreamImpl) Aggregate(name string, mp *processor.MaterializeParam, initializer processor.Initializer, aggregator processor.Aggregator) Table {
+	p := processor.NewStreamAggregateProcessor(mp, initializer, aggregator)
 	n := s.tp.AddProcessor(name, p, s.parents)
 	return newTable(s.tp, []processor.Node{n})
 }
 
 func (s *GroupedStreamImpl) WindowedBy(windows processor.EnumerableWindowDefinition) TimeWindowedStream {
+	fmt.Fprintf(os.Stderr, "window by is not implemented")
 	panic("not implemented")
 }

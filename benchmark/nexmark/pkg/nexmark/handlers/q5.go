@@ -128,6 +128,7 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	maxBids := auctionBids.
 		GroupByKey(&stream.Grouped{KeySerde: seSerde, ValueSerde: aucIdCountSerde, Name: "auctionbids-groupbykey"}).
 		Aggregate("aggregate",
+			&processor.MaterializeParam{KeySerde: seSerde, ValueSerde: aucIdCountSerde, StoreName: "agg-store"},
 			processor.InitializerFunc(func() interface{} { return 0 }),
 			processor.AggregatorFunc(func(key interface{}, value interface{}, aggregate interface{}) interface{} {
 				v := value.(*ntypes.AuctionIdCount)

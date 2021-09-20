@@ -104,29 +104,33 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 	fmt.Fprintf(os.Stderr, "after getting serde")
 	movingAverageWindow := 1000
 	builder := stream.NewStreamBuilder()
-	builder.Source("spike-detection-src", sharedlog_stream.NewSharedLogStreamSource(inputStream,
-		int(input.Duration), processor.StringDecoder{}, sdSerde, msgSerde)).
+	builder.Source("spike-detection-src",
+		sharedlog_stream.NewSharedLogStreamSource(inputStream,
+			int(input.Duration), processor.StringDecoder{}, sdSerde, msgSerde)).
 		GroupByKey(&stream.Grouped{KeySerde: processor.StringSerde{},
 			ValueSerde: sdSerde, Name: "group-by-devid"}).
-		Aggregate("moving-avg", processor.InitializerFunc(func() interface{} {
-			return &SumAndHist{
-				Sum:     0,
-				history: deque.New(movingAverageWindow),
-			}
-		}), processor.AggregatorFunc(func(key interface{}, value interface{}, agg interface{}) interface{} {
-			nextVal := value.(float64)
-			aggVal := agg.(*SumAndHist)
-			if aggVal.history.Len() > movingAverageWindow-1 {
-				valToRemove := aggVal.history.PopFront().(float64)
-				aggVal.Sum -= valToRemove
-			}
-			aggVal.history.PushBack(nextVal)
-			aggVal.Sum += nextVal
-			return ValAndAvg{
-				Val: nextVal,
-				Avg: aggVal.Sum / float64(aggVal.history.Len()),
-			}
-		})).Filter("get-spike", processor.PredicateFunc(spikeDetectionPredicate), "")
+		Aggregate("moving-avg",
+			&processor.MaterializeParam{KeySerde: processor.StringSerde{}, ValueSerde: sdSerde, StoreName: "moving-avg-store"},
+			processor.InitializerFunc(func() interface{} {
+				return &SumAndHist{
+					Sum:     0,
+					history: deque.New(movingAverageWindow),
+				}
+			}), processor.AggregatorFunc(func(key interface{}, value interface{}, agg interface{}) interface{} {
+				nextVal := value.(float64)
+				aggVal := agg.(*SumAndHist)
+				if aggVal.history.Len() > movingAverageWindow-1 {
+					valToRemove := aggVal.history.PopFront().(float64)
+					aggVal.Sum -= valToRemove
+				}
+				aggVal.history.PushBack(nextVal)
+				aggVal.Sum += nextVal
+				return ValAndAvg{
+					Val: nextVal,
+					Avg: aggVal.Sum / float64(aggVal.history.Len()),
+				}
+			})).
+		Filter("get-spike", processor.PredicateFunc(spikeDetectionPredicate), "")
 	fmt.Fprintf(os.Stderr, "after building pipeline")
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {
