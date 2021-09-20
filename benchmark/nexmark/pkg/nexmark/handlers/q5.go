@@ -66,7 +66,7 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		}
 		var msgEncoder processor.MsgEncoder
 	*/
-	msgSerde, err := common.GetMsgSerde(input.SerdeFormat)
+	msgSerde, err := processor.GetMsgSerde(input.SerdeFormat)
 	if err != nil {
 		output <- &common.FnOutput{
 			Success: false,
@@ -82,11 +82,11 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	}
 	var seSerde processor.Serde
 	var aucIdCountSerde processor.Serde
-	if input.SerdeFormat == uint8(common.JSON) {
+	if input.SerdeFormat == uint8(processor.JSON) {
 		// msgEncoder = ntypes.MessageSerializedJSONEncoder{}
 		seSerde = ntypes.StartEndTimeJSONSerde{}
 		aucIdCountSerde = ntypes.AuctionIdCountJSONSerde{}
-	} else if input.SerdeFormat == uint8(common.MSGP) {
+	} else if input.SerdeFormat == uint8(processor.MSGP) {
 		// msgEncoder = ntypes.MessageSerializedMsgpEncoder{}
 		seSerde = ntypes.StartEndTimeMsgpSerde{}
 		aucIdCountSerde = ntypes.AuctionIdCountMsgpSerde{}

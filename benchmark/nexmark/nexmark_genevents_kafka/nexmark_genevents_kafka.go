@@ -5,7 +5,6 @@ import (
 	"flag"
 	"time"
 
-	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/generator"
 
 	"sharedlog-stream/pkg/stream/processor"
@@ -30,17 +29,17 @@ func main() {
 	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
 	flag.Parse()
 
-	var serdeFormat common.SerdeFormat
+	var serdeFormat processor.SerdeFormat
 	var valueEncoder processor.Encoder
 	if FLAGS_serdeFormat == "json" {
-		serdeFormat = common.JSON
+		serdeFormat = processor.JSON
 		valueEncoder = ntypes.EventJSONSerde{}
 	} else if FLAGS_serdeFormat == "msgp" {
-		serdeFormat = common.MSGP
+		serdeFormat = processor.MSGP
 		valueEncoder = ntypes.EventMsgpSerde{}
 	} else {
 		log.Error().Msgf("serde format is not recognized; default back to JSON")
-		serdeFormat = common.JSON
+		serdeFormat = processor.JSON
 		valueEncoder = ntypes.EventJSONSerde{}
 	}
 

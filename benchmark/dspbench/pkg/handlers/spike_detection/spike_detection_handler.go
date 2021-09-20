@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -52,7 +53,7 @@ func (h *spikeDetectionHandler) Call(ctx context.Context, input []byte) ([]byte,
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("spike detection after parse input")
+	fmt.Fprintf(os.Stderr, "spike detection after parse input")
 	outputCh := make(chan *common.FnOutput)
 	go SpikeDetection(ctx, h.env, parsedInput, outputCh)
 	output := <-outputCh
@@ -74,6 +75,7 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 		}
 		return
 	}
+	fmt.Fprintf(os.Stderr, "after create input stream")
 	/*
 		outputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.OutputTopicName)
 		if err != nil {
@@ -84,14 +86,14 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 			return
 		}
 	*/
-	// var msgEncoder processor.MsgEncoder
+
 	var msgSerde processor.MsgSerde
 	var sdSerde processor.Serde
-	if input.SerdeFormat == uint8(common.JSON) {
+	if input.SerdeFormat == uint8(processor.JSON) {
 		sdSerde = SensorDataJSONSerde{}
-		msgSerde = common.MessageSerializedJSONSerde{}
-	} else if input.SerdeFormat == uint8(common.MSGP) {
-		msgSerde = common.MessageSerializedMsgpSerde{}
+		msgSerde = processor.MessageSerializedJSONSerde{}
+	} else if input.SerdeFormat == uint8(processor.MSGP) {
+		msgSerde = processor.MessageSerializedMsgpSerde{}
 		sdSerde = SensorDataMsgpSerde{}
 	} else {
 		output <- &common.FnOutput{
@@ -99,6 +101,7 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", input.SerdeFormat),
 		}
 	}
+	fmt.Fprintf(os.Stderr, "after getting serde")
 	movingAverageWindow := 1000
 	builder := stream.NewStreamBuilder()
 	builder.Source("spike-detection-src", sharedlog_stream.NewSharedLogStreamSource(inputStream,
@@ -124,6 +127,7 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 				Avg: aggVal.Sum / float64(aggVal.history.Len()),
 			}
 		})).Filter("get-spike", processor.PredicateFunc(spikeDetectionPredicate), "")
+	fmt.Fprintf(os.Stderr, "after building pipeline")
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {
 		output <- &common.FnOutput{
@@ -131,6 +135,7 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 			Message: fmt.Sprintf("build stream failed: %v", err_arrs),
 		}
 	}
+	fmt.Fprintf(os.Stderr, "after building pipeline")
 	pumps := make(map[processor.Node]processor.Pump)
 	var srcPumps []processor.SourcePump
 	nodes := processor.FlattenNodeTree(tp.Sources())

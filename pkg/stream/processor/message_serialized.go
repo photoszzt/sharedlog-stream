@@ -2,13 +2,18 @@
 //msgpack:ignore MessageSerializedMsgpEncoder MessageSerializedMsgpDecoder
 //msgpack:ignore MessageSerializedJSONEncoder MessageSerializedJSONDecoder
 
-package common
+package processor
 
 import (
 	"encoding/json"
 	"fmt"
+)
 
-	"sharedlog-stream/pkg/stream/processor"
+type SerdeFormat uint8
+
+const (
+	JSON SerdeFormat = 0
+	MSGP SerdeFormat = 1
 )
 
 type MessageSerialized struct {
@@ -16,7 +21,7 @@ type MessageSerialized struct {
 	Value []byte `json:",omitempty" zid:"1" msg:",omitempty"`
 }
 
-var _ = processor.MsgEncoder(MessageSerializedMsgpSerde{})
+var _ = MsgEncoder(MessageSerializedMsgpSerde{})
 
 type MessageSerializedMsgpSerde struct{}
 
@@ -30,7 +35,7 @@ func (e MessageSerializedMsgpSerde) Encode(key []byte, value []byte) ([]byte, er
 
 type MessageSerializedJSONSerde struct{}
 
-var _ = processor.MsgEncoder(MessageSerializedJSONSerde{})
+var _ = MsgEncoder(MessageSerializedJSONSerde{})
 
 func (e MessageSerializedJSONSerde) Encode(key []byte, value []byte) ([]byte, error) {
 	msg := MessageSerialized{
@@ -40,7 +45,7 @@ func (e MessageSerializedJSONSerde) Encode(key []byte, value []byte) ([]byte, er
 	return json.Marshal(msg)
 }
 
-var _ = processor.MsgDecoder(MessageSerializedMsgpSerde{})
+var _ = MsgDecoder(MessageSerializedMsgpSerde{})
 
 func (msmd MessageSerializedMsgpSerde) Decode(value []byte) ([]byte /* key */, []byte /* value */, error) {
 	msg := MessageSerialized{}
@@ -51,7 +56,7 @@ func (msmd MessageSerializedMsgpSerde) Decode(value []byte) ([]byte /* key */, [
 	return msg.Key, msg.Value, nil
 }
 
-var _ = processor.MsgDecoder(MessageSerializedJSONSerde{})
+var _ = MsgDecoder(MessageSerializedJSONSerde{})
 
 func (msmd MessageSerializedJSONSerde) Decode(value []byte) ([]byte /* key */, []byte /* value */, error) {
 	msg := MessageSerialized{}
@@ -61,7 +66,7 @@ func (msmd MessageSerializedJSONSerde) Decode(value []byte) ([]byte /* key */, [
 	return msg.Key, msg.Value, nil
 }
 
-func GetMsgSerde(serdeFormat uint8) (processor.MsgSerde, error) {
+func GetMsgSerde(serdeFormat uint8) (MsgSerde, error) {
 	if serdeFormat == uint8(JSON) {
 		return MessageSerializedJSONSerde{}, nil
 	} else if serdeFormat == uint8(MSGP) {

@@ -69,7 +69,7 @@ func Query1(ctx context.Context, env types.Environment, input *common.QueryInput
 		}
 		return
 	}
-	msgSerde, err := common.GetMsgSerde(input.SerdeFormat)
+	msgSerde, err := processor.GetMsgSerde(input.SerdeFormat)
 	if err != nil {
 		output <- &common.FnOutput{
 			Success: false,

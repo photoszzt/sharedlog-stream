@@ -1,9 +1,11 @@
 package processor
 
-type StateStoreContext interface {
+type StateStore interface {
+	Name() string
 }
 
-type StateStore interface {
-	Init(ctx StateStoreContext, root StateStore)
-	Name() string
+type MaterializeParam struct {
+	KeySerde   Serde
+	ValueSerde Serde
+	StoreName  string
 }

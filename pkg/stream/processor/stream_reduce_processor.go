@@ -30,7 +30,10 @@ func (p *StreamReduceProcessor) Process(msg Message) error {
 		log.Warn().Msgf("skipping record due to null key or value. key=%v, val=%v", msg.Key, msg.Value)
 		return nil
 	}
-	val, ok := p.store.Get(msg.Key)
+	val, ok, err := p.store.Get(msg.Key)
+	if err != nil {
+		return err
+	}
 	var newAgg interface{}
 	var newTs uint64
 	if ok {

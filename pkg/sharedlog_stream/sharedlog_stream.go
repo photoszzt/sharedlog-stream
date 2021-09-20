@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sharedlog-stream/pkg/stream/processor"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/protocol"
@@ -88,6 +89,14 @@ func NewSharedLogStream(ctx context.Context, env types.Environment, topicName st
 		return nil, err
 	}
 	return s, nil
+}
+
+func NewLogStore(ctx context.Context, env types.Environment, topicName string) (processor.LogStore, error) {
+	return NewSharedLogStream(ctx, env, topicName)
+}
+
+func (s *SharedLogStream) TopicName() string {
+	return s.topicName
 }
 
 func (s *SharedLogStream) Push(payload []byte) (uint64, error) {

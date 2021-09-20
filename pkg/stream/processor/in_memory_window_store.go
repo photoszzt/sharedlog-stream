@@ -7,7 +7,7 @@ import (
 type InMemoryWindowStore struct {
 	name             string
 	windowSize       uint64
-	sctx             StateStoreContext
+	sctx             ProcessorContext
 	retentionPeriod  uint64
 	retainDuplicates bool
 	open             bool
@@ -27,9 +27,10 @@ func (s *InMemoryWindowStore) Name() string {
 	return s.name
 }
 
-func (s *InMemoryWindowStore) Init(ctx StateStoreContext, root StateStore) {
+func (s *InMemoryWindowStore) Init(ctx ProcessorContext, root WindowStore) {
 	s.sctx = ctx
 	s.open = true
+	s.sctx.RegisterWindowStore(root)
 }
 
 func (s *InMemoryWindowStore) Put(key KeyT, value ValueT, windowStartTimestamp uint64) error {

@@ -1,8 +1,6 @@
 package processor
 
 import (
-	"bytes"
-
 	"sharedlog-stream/pkg/stream/processor/treemap"
 
 	"github.com/rs/zerolog/log"
@@ -14,23 +12,27 @@ type InMemoryKeyValueStore struct {
 	open           bool
 	name           string
 	store          *treemap.TreeMap
-	sctx           StateStoreContext
+	sctx           ProcessorContext
 	rootStateStore StateStore
+	compare        func(a treemap.Key, b treemap.Value) int
 }
 
 var _ = KeyValueStore(NewInMemoryKeyValueStore("a", nil))
 
-func NewInMemoryKeyValueStore(name string, less func(a treemap.Key, b treemap.Key) bool) *InMemoryKeyValueStore {
+func NewInMemoryKeyValueStore(name string, compare func(a treemap.Key, b treemap.Key) int) *InMemoryKeyValueStore {
 	return &InMemoryKeyValueStore{
-		name:  name,
-		store: treemap.New(less),
+		name: name,
+		store: treemap.New(func(a treemap.Key, b treemap.Key) bool {
+			return compare(a, b) < 0
+		}),
 	}
 }
 
-func (st *InMemoryKeyValueStore) Init(sctx StateStoreContext, root StateStore) {
+func (st *InMemoryKeyValueStore) Init(sctx ProcessorContext, root KeyValueStore) {
 	st.sctx = sctx
 	st.rootStateStore = root
 	st.open = true
+	st.sctx.RegisterKeyValueStore(root)
 }
 
 func (st *InMemoryKeyValueStore) Name() string {
@@ -41,37 +43,38 @@ func (st *InMemoryKeyValueStore) IsOpen() bool {
 	return st.open
 }
 
-func (st *InMemoryKeyValueStore) Get(key KeyT) (ValueT, bool) {
-	return st.store.Get(key)
+func (st *InMemoryKeyValueStore) Get(key KeyT) (ValueT, bool, error) {
+	val, ok := st.store.Get(key)
+	return val, ok, nil
 }
 
-func (st *InMemoryKeyValueStore) Put(key KeyT, value ValueT) {
+func (st *InMemoryKeyValueStore) Put(key KeyT, value ValueT) error {
 	if value == nil {
 		st.store.Del(key)
 	} else {
 		st.store.Set(key, value)
 	}
+	return nil
 }
 
-func (st *InMemoryKeyValueStore) PutIfAbsent(key KeyT, value ValueT) ValueT {
+func (st *InMemoryKeyValueStore) PutIfAbsent(key KeyT, value ValueT) (ValueT, error) {
 	originalVal, exists := st.store.Get(key)
 	if !exists {
 		st.store.Set(key, value)
 	}
-	return originalVal
+	return originalVal, nil
 }
 
-func (st *InMemoryKeyValueStore) PutAll(entries []*Message) {
+func (st *InMemoryKeyValueStore) PutAll(entries []*Message) error {
 	for _, msg := range entries {
-		k := msg.Key.([]byte)
-		v := msg.Value.([]byte)
-		st.store.Set(k, v)
+		st.store.Set(msg.Key, msg.Value)
 	}
+	return nil
 }
 
-func (st *InMemoryKeyValueStore) Delete(key KeyT) {
-	k := key.([]byte)
-	st.store.Del(k)
+func (st *InMemoryKeyValueStore) Delete(key KeyT) error {
+	st.store.Del(key)
+	return nil
 }
 
 func (st *InMemoryKeyValueStore) ApproximateNumEntries() uint64 {
@@ -79,36 +82,35 @@ func (st *InMemoryKeyValueStore) ApproximateNumEntries() uint64 {
 }
 
 func (st *InMemoryKeyValueStore) Range(from KeyT, to KeyT) KeyValueIterator {
-	fr := from.([]byte)
-	t := to.([]byte)
-	if bytes.Compare(fr, t) > 0 {
+	if st.compare(from, to) > 0 {
 		log.Warn().Msgf("Returning empty iterator for invalid key range from > to")
 		return EMPTY_KEY_VALUE_ITER
 	}
-	return NewInMemoryKeyValueForwardIterator(st.store, fr, t)
+	return NewInMemoryKeyValueForwardIterator(st.store, from, to)
 
 }
 
 func (st *InMemoryKeyValueStore) ReverseRange(from KeyT, to KeyT) KeyValueIterator {
-	fr := from.([]byte)
-	t := to.([]byte)
-	if bytes.Compare(fr, t) < 0 {
+	if st.compare(from, to) < 0 {
 		log.Warn().Msgf("Returning empty iterator for invalid key range from > to")
 		return EMPTY_KEY_VALUE_ITER
 	}
-	return NewInMemoryKeyValueReverseIterator(st.store, fr, t)
+	return NewInMemoryKeyValueReverseIterator(st.store, from, to)
 }
 
 func (st *InMemoryKeyValueStore) PrefixScan(prefix interface{}, prefixKeyEncoder Encoder) KeyValueIterator {
-	from, err := prefixKeyEncoder.Encode(prefix)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
-	to, err := byte_slice_increment(from)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
-	return NewInMemoryKeyValueForwardIterator(st.store, from, to)
+	panic("not implemented")
+	/*
+		from, err := prefixKeyEncoder.Encode(prefix)
+		if err != nil {
+			log.Fatal().Err(err)
+		}
+		to, err := byte_slice_increment(from)
+		if err != nil {
+			log.Fatal().Err(err)
+		}
+		return NewInMemoryKeyValueForwardIterator(st.store, from, to)
+	*/
 }
 
 type InMemoryKeyValueForwardIterator struct {

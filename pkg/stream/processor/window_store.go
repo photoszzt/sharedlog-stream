@@ -6,6 +6,7 @@ import (
 
 type WindowStore interface {
 	StateStore
+	Init(ctx ProcessorContext, root WindowStore)
 	Put(key KeyT, value ValueT, windowStartTimestamp uint64) error
 	Get(key KeyT, windowStartTimestamp uint64) (ValueT, bool)
 	Fetch(key KeyT, timeFrom time.Time, timeTo time.Time) KeyValueIterator

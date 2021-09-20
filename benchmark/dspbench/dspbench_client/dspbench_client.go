@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/stream/processor"
 	"sync"
 	"time"
 
@@ -24,14 +25,14 @@ var (
 
 func invokeSourceFunc(client *http.Client, response *common.FnOutput, wg *sync.WaitGroup) {
 	defer wg.Done()
-	var serdeFormat common.SerdeFormat
+	var serdeFormat processor.SerdeFormat
 	if FLAGS_serdeFormat == "json" {
-		serdeFormat = common.JSON
+		serdeFormat = processor.JSON
 	} else if FLAGS_serdeFormat == "msgp" {
-		serdeFormat = common.MSGP
+		serdeFormat = processor.MSGP
 	} else {
 		log.Error().Msgf("serde format is not recognized; default back to JSON")
-		serdeFormat = common.JSON
+		serdeFormat = processor.JSON
 	}
 	sp := &common.SourceParam{
 		TopicName:   FLAGS_stream_prefix + "_src",

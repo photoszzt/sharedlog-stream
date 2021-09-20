@@ -64,7 +64,7 @@ func Query8(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		return
 	}
 
-	msgSerde, err := common.GetMsgSerde(input.SerdeFormat)
+	msgSerde, err := processor.GetMsgSerde(input.SerdeFormat)
 	if err != nil {
 		output <- &common.FnOutput{
 			Success: false,

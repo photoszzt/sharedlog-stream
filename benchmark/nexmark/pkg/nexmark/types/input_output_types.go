@@ -3,9 +3,9 @@ package types
 import (
 	"time"
 
-	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/stream/processor"
 )
 
 type QueryInput struct {
@@ -36,7 +36,7 @@ type NexMarkConfigInput struct {
 	SerdeFormat            uint8         `json:"serde_format"`
 }
 
-func NewNexMarkConfigInput(topicName string, serdeFormat common.SerdeFormat) *NexMarkConfigInput {
+func NewNexMarkConfigInput(topicName string, serdeFormat processor.SerdeFormat) *NexMarkConfigInput {
 	return &NexMarkConfigInput{
 		TopicName:              topicName,
 		Duration:               0,

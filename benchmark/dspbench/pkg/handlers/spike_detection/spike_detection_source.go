@@ -82,9 +82,9 @@ func (h *spikeDetectionSource) eventGeneration(ctx context.Context,
 		}
 	}
 	var sdSerde processor.Serde
-	if sp.SerdeFormat == uint8(common.JSON) {
+	if sp.SerdeFormat == uint8(processor.JSON) {
 		sdSerde = SensorDataJSONSerde{}
-	} else if sp.SerdeFormat == uint8(common.MSGP) {
+	} else if sp.SerdeFormat == uint8(processor.MSGP) {
 		sdSerde = SensorDataMsgpSerde{}
 	} else {
 		return &common.FnOutput{
@@ -92,7 +92,7 @@ func (h *spikeDetectionSource) eventGeneration(ctx context.Context,
 			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat),
 		}
 	}
-	msgSerde, err := common.GetMsgSerde(sp.SerdeFormat)
+	msgSerde, err := processor.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

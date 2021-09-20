@@ -64,7 +64,7 @@ func Query3(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		return
 	}
 
-	msgSerde, err := common.GetMsgSerde(input.SerdeFormat)
+	msgSerde, err := processor.GetMsgSerde(input.SerdeFormat)
 	if err != nil {
 		output <- &common.FnOutput{
 			Success: false,
@@ -116,7 +116,7 @@ func Query3(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	})).ToStream().Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream,
 		processor.Uint64Encoder{}, processor.EncoderFunc(func(val interface{}) ([]byte, error) {
 			ret := val.(*ntypes.NameCityStateId)
-			if input.SerdeFormat == uint8(common.JSON) {
+			if input.SerdeFormat == uint8(processor.JSON) {
 				return json.Marshal(ret)
 			} else {
 				return ret.MarshalMsg(nil)

@@ -2,13 +2,14 @@ package processor
 
 type KeyValueStore interface {
 	StateStore
-	Get(key KeyT) (ValueT, bool)
+	Init(ctx ProcessorContext, root KeyValueStore)
+	Get(key KeyT) (ValueT, bool, error)
 	Range(from KeyT, to KeyT) KeyValueIterator
 	ReverseRange(from KeyT, to KeyT) KeyValueIterator
 	PrefixScan(prefix interface{}, prefixKeyEncoder Encoder) KeyValueIterator
 	ApproximateNumEntries() uint64
-	Put(key KeyT, value ValueT)
-	PutIfAbsent(key KeyT, value ValueT) ValueT
-	PutAll([]*Message)
-	Delete(key KeyT)
+	Put(key KeyT, value ValueT) error
+	PutIfAbsent(key KeyT, value ValueT) (ValueT, error)
+	PutAll([]*Message) error
+	Delete(key KeyT) error
 }
