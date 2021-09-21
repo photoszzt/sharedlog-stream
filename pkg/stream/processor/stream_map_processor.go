@@ -11,27 +11,27 @@ func (fn MapperFunc) Map(msg Message) (Message, error) {
 	return fn(msg)
 }
 
-type MapProcessor struct {
+type StreamMapProcessor struct {
 	pipe   Pipe
 	mapper Mapper
 	pctx   ProcessorContext
 }
 
-func NewMapProcessor(mapper Mapper) Processor {
-	return &MapProcessor{
+func NewStreamMapProcessor(mapper Mapper) Processor {
+	return &StreamMapProcessor{
 		mapper: mapper,
 	}
 }
 
-func (p *MapProcessor) WithPipe(pipe Pipe) {
+func (p *StreamMapProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *MapProcessor) WithProcessorContext(pctx ProcessorContext) {
+func (p *StreamMapProcessor) WithProcessorContext(pctx ProcessorContext) {
 	p.pctx = pctx
 }
 
-func (p *MapProcessor) Process(msg Message) error {
+func (p *StreamMapProcessor) Process(msg Message) error {
 	m, err := p.mapper.Map(msg)
 	if err != nil {
 		return err
@@ -51,27 +51,27 @@ func (fn ValueMapperFunc) MapValue(value interface{}) (interface{}, error) {
 	return fn(value)
 }
 
-type MapValuesProcessor struct {
+type StreamMapValuesProcessor struct {
 	pipe        Pipe
 	valueMapper ValueMapper
 	pctx        ProcessorContext
 }
 
-func NewMapValuesProcessor(mapper ValueMapper) Processor {
-	return &MapValuesProcessor{
+func NewStreamMapValuesProcessor(mapper ValueMapper) Processor {
+	return &StreamMapValuesProcessor{
 		valueMapper: mapper,
 	}
 }
 
-func (p *MapValuesProcessor) WithPipe(pipe Pipe) {
+func (p *StreamMapValuesProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *MapValuesProcessor) WithProcessorContext(pctx ProcessorContext) {
+func (p *StreamMapValuesProcessor) WithProcessorContext(pctx ProcessorContext) {
 	p.pctx = pctx
 }
 
-func (p *MapValuesProcessor) Process(msg Message) error {
+func (p *StreamMapValuesProcessor) Process(msg Message) error {
 	newV, err := p.valueMapper.MapValue(msg.Value)
 	if err != nil {
 		return err
@@ -79,27 +79,27 @@ func (p *MapValuesProcessor) Process(msg Message) error {
 	return p.pipe.Forward(Message{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp})
 }
 
-type MapValuesWithKeyProcessor struct {
+type StreamMapValuesWithKeyProcessor struct {
 	pipe               Pipe
 	valueWithKeyMapper Mapper
 	pctx               ProcessorContext
 }
 
-func NewMapValuesWithKeyProcessor(mapper Mapper) Processor {
-	return &MapValuesWithKeyProcessor{
+func NewStreamMapValuesWithKeyProcessor(mapper Mapper) Processor {
+	return &StreamMapValuesWithKeyProcessor{
 		valueWithKeyMapper: mapper,
 	}
 }
 
-func (p *MapValuesWithKeyProcessor) WithPipe(pipe Pipe) {
+func (p *StreamMapValuesWithKeyProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *MapValuesWithKeyProcessor) WithProcessorContext(pctx ProcessorContext) {
+func (p *StreamMapValuesWithKeyProcessor) WithProcessorContext(pctx ProcessorContext) {
 	p.pctx = pctx
 }
 
-func (p *MapValuesWithKeyProcessor) Process(msg Message) error {
+func (p *StreamMapValuesWithKeyProcessor) Process(msg Message) error {
 	newMsg, err := p.valueWithKeyMapper.Map(msg)
 	if err != nil {
 		return err

@@ -87,19 +87,19 @@ func (s *StreamImpl) FlatMap(name string, mapper processor.FlatMapper) Stream {
 }
 
 func (s *StreamImpl) Map(name string, mapper processor.Mapper) Stream {
-	p := processor.NewMapProcessor(mapper)
+	p := processor.NewStreamMapProcessor(mapper)
 	n := s.tp.AddProcessor(name, p, s.parents)
 	return newStream(s.tp, []processor.Node{n})
 }
 
 func (s *StreamImpl) MapValues(name string, mapper processor.ValueMapper) Stream {
-	p := processor.NewMapValuesProcessor(mapper)
+	p := processor.NewStreamMapValuesProcessor(mapper)
 	n := s.tp.AddProcessor(name, p, s.parents)
 	return newStream(s.tp, []processor.Node{n})
 }
 
 func (s *StreamImpl) MapValuesWithKey(name string, mapper processor.Mapper) Stream {
-	p := processor.NewMapValuesWithKeyProcessor(mapper)
+	p := processor.NewStreamMapValuesWithKeyProcessor(mapper)
 	n := s.tp.AddProcessor(name, p, s.parents)
 	return newStream(s.tp, []processor.Node{n})
 }
@@ -137,7 +137,7 @@ func (s *StreamImpl) ProcessWithStateStores(name string, p processor.Processor, 
 }
 
 func (s *StreamImpl) GroupBy(name string, mapper processor.Mapper, grouped *Grouped) GroupedStream {
-	p := processor.NewMapProcessor(mapper)
+	p := processor.NewStreamMapProcessor(mapper)
 	n := s.tp.AddProcessor(grouped.Name, p, s.parents)
 	n.(*processor.ProcessorNode).SetKeyChangingOp(true)
 	return newGroupedStream(s.tp, []processor.Node{n}, grouped)

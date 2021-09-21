@@ -15,22 +15,11 @@ import (
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
-	"github.com/gammazero/deque"
 )
 
 const (
 	SPIKE_THRESHOLD = 0.03
 )
-
-type ValAndAvg struct {
-	Val float64
-	Avg float64
-}
-
-type SumAndHist struct {
-	Sum     float64
-	history *deque.Deque
-}
 
 type spikeDetectionHandler struct {
 	env types.Environment
@@ -89,12 +78,19 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 
 	var msgSerde processor.MsgSerde
 	var sdSerde processor.Serde
+	var timeValSerde processor.Serde
 	if input.SerdeFormat == uint8(processor.JSON) {
 		sdSerde = SensorDataJSONSerde{}
 		msgSerde = processor.MessageSerializedJSONSerde{}
+		timeValSerde = processor.ValueTimestampJSONSerde{
+			ValJSONSerde: SumAndHistJSONSerde{},
+		}
 	} else if input.SerdeFormat == uint8(processor.MSGP) {
 		msgSerde = processor.MessageSerializedMsgpSerde{}
 		sdSerde = SensorDataMsgpSerde{}
+		timeValSerde = processor.ValueTimestampMsgpSerde{
+			ValMsgpSerde: SumAndHistMsgpSerde{},
+		}
 	} else {
 		output <- &common.FnOutput{
 			Success: false,
@@ -114,25 +110,37 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 		Aggregate("moving-avg",
 			&processor.MaterializeParam{KeySerde: processor.StringSerde{}, ValueSerde: sdSerde, StoreName: aggStoreName},
 			processor.InitializerFunc(func() interface{} {
-				return &SumAndHist{
+				return SumAndHist{
 					Sum:     0,
-					history: deque.New(movingAverageWindow),
+					history: make([]float64, movingAverageWindow),
 				}
-			}), processor.AggregatorFunc(func(key interface{}, value interface{}, agg interface{}) interface{} {
-				nextVal := value.(float64)
-				aggVal := agg.(*SumAndHist)
-				if aggVal.history.Len() > movingAverageWindow-1 {
-					valToRemove := aggVal.history.PopFront().(float64)
-					aggVal.Sum -= valToRemove
+			}),
+			processor.AggregatorFunc(func(key interface{}, value interface{}, agg interface{}) interface{} {
+				nextVal := value.(SensorData)
+				aggVal := agg.(SumAndHist)
+				var newHist []float64
+				newSum := aggVal.Sum
+				if len(aggVal.history) > movingAverageWindow-1 {
+					valToRemove := aggVal.history[0]
+					newHist = aggVal.history[1:]
+					newSum -= valToRemove
 				}
-				aggVal.history.PushBack(nextVal)
-				aggVal.Sum += nextVal
-				return ValAndAvg{
-					Val: nextVal,
-					Avg: aggVal.Sum / float64(aggVal.history.Len()),
+				newHist = append(newHist, nextVal.Val)
+				newSum += nextVal.Val
+				return SumAndHist{
+					Sum:     newSum,
+					history: newHist,
 				}
 			})).
+		MapValues("calc-avg", processor.ValueMapperFunc(func(value interface{}) (interface{}, error) {
+			val := value.(SumAndHist)
+			return ValAndAvg{
+				Val: val.Val,
+				Avg: val.Sum / float64(len(val.history)),
+			}, nil
+		})).
 		Filter("get-spike", processor.PredicateFunc(spikeDetectionPredicate), "")
+
 	fmt.Fprintf(os.Stderr, "after building pipeline")
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {
@@ -157,7 +165,7 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 		return
 	}
 	store := processor.NewInMemoryKeyValueStoreWithChangelog(aggStoreName,
-		processor.StringSerde{}, sdSerde, changeLog)
+		processor.StringSerde{}, timeValSerde, changeLog)
 	store.Init(pctx, store)
 
 	for _, node := range nodes {
