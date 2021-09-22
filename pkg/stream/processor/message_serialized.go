@@ -1,4 +1,4 @@
-//go:generate greenpack
+//go:generate msgp
 //msgpack:ignore MessageSerializedMsgpEncoder MessageSerializedMsgpDecoder
 //msgpack:ignore MessageSerializedJSONEncoder MessageSerializedJSONDecoder
 
@@ -17,8 +17,8 @@ const (
 )
 
 type MessageSerialized struct {
-	Key   []byte `json:",omitempty" zid:"0" msg:",omitempty"`
-	Value []byte `json:",omitempty" zid:"1" msg:",omitempty"`
+	Key   []byte `json:"key,omitempty" msg:"key,omitempty"`
+	Value []byte `json:"val,omitempty" msg:"val,omitempty"`
 }
 
 var _ = MsgEncoder(MessageSerializedMsgpSerde{})

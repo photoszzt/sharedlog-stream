@@ -41,31 +41,51 @@ func NewSpikeDetectionSource(env types.Environment) types.FuncHandler {
 
 func (h *spikeDetectionSource) Call(ctx context.Context, input []byte) ([]byte, error) {
 	sp := &common.SourceParam{}
-	fmt.Fprintf(os.Stderr, "before unmarshal\n")
-	fmt.Fprintf(os.Stderr, "input is %v\n", string(input))
 	err := json.Unmarshal(input, sp)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Fprintf(os.Stderr, "after unmarshal: sp %v\n", sp)
 	err = h.parseFile(sp.FileName)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Fprintf(os.Stderr, "after parseFile\n")
 	output := h.eventGeneration(ctx, h.env, sp)
-	fmt.Fprintf(os.Stderr, "after eventGeneration\n")
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Fprintf(os.Stderr, "after json marshal\n")
 	return utils.CompressData(encodedOutput), nil
+}
+
+func encode_sensor_event(keySerde processor.Serde,
+	valSerde processor.Serde,
+	msgSerde processor.MsgSerde, key string, val *SensorData) ([]byte, error) {
+
+	val_encoded, err := valSerde.Encode(val)
+	if err != nil {
+		return nil, fmt.Errorf("event serialization failed: %v", err)
+	}
+
+	key_encoded, err := keySerde.Encode(key)
+	if err != nil {
+		return nil, fmt.Errorf("key serialization failed: %v", err)
+	}
+	/*
+		fmt.Fprintf(os.Stderr, "key is %v, val is %v\n", string(key_encoded),
+			string(val_encoded))
+	*/
+	msgEncoded, err := msgSerde.Encode(key_encoded, val_encoded)
+	if err != nil {
+		return nil, fmt.Errorf("msg serialization failed: %v", err)
+	}
+	/*
+		fmt.Fprintf(os.Stderr, "generated msg is %v\n", string(msgEncoded))
+	*/
+	return msgEncoded, nil
 }
 
 func (h *spikeDetectionSource) eventGeneration(ctx context.Context,
 	env types.Environment, sp *common.SourceParam) *common.FnOutput {
-	fmt.Fprintf(os.Stderr, "got file name: %v", sp.FileName)
 	err := h.parseFile(sp.FileName)
 	if err != nil {
 		return &common.FnOutput{
@@ -117,26 +137,11 @@ func (h *spikeDetectionSource) eventGeneration(ctx context.Context,
 			Val:       event.temp,
 			Timestamp: uint64(event.ts.Unix()),
 		}
-		encoded, err := sdSerde.Encode(&sd)
+		msgEncoded, err := encode_sensor_event(strSerde, sdSerde, msgSerde, event.devId, &sd)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
-				Message: fmt.Sprintf("event serialization failed: %v", err),
-			}
-		}
-
-		key_encoded, err := strSerde.Encode(event.devId)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("key serialization failed: %v", err),
-			}
-		}
-		msgEncoded, err := msgSerde.Encode(key_encoded, encoded)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("msg serialization failed: %v", err),
+				Message: err.Error(),
 			}
 		}
 		pushStart := time.Now()

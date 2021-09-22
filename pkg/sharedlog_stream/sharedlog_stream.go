@@ -1,10 +1,10 @@
 //go:generate msgp
+//msg:ignore SharedLogStream
 package sharedlog_stream
 
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sharedlog-stream/pkg/stream/processor"
 	"time"
 
@@ -36,17 +36,17 @@ type SharedLogStream struct {
 }
 
 type StreamAuxData struct {
-	Consumed uint64 `msg:"h"`
-	Tail     uint64 `msg:"t"`
+	Consumed uint64 `msg:"consumed"`
+	Tail     uint64 `msg:"tail"`
 }
 
 type StreamLogEntry struct {
-	seqNum  uint64
-	auxData *StreamAuxData
+	seqNum  uint64         `msg:"-"`
+	auxData *StreamAuxData `msg:"-"`
 
-	TopicName string `msg:"n"`
-	IsPush    bool   `msg:"t"`
-	Payload   []byte `msg:"p,omitempty"`
+	TopicName string `msg:"topicName"`
+	IsPush    bool   `msg:"isPush"`
+	Payload   []byte `msg:"payload,omitempty"`
 }
 
 func streamLogTag(topicNameHash uint64) uint64 {
@@ -142,7 +142,6 @@ func (s *SharedLogStream) isEmpty() bool {
 }
 
 func (s *SharedLogStream) findNext(minSeqNum, maxSeqNum uint64) (*StreamLogEntry, error) {
-	// fmt.Printf("find next in range min: %x, max: %x\n", minSeqNum, maxSeqNum)
 	tag := streamPushLogTag(s.topicNameHash)
 	seqNum := minSeqNum
 	for seqNum < maxSeqNum {
@@ -316,7 +315,6 @@ func IsStreamTimeoutError(err error) bool {
 
 func (s *SharedLogStream) Pop() ([]byte /* payload */, error) {
 	if s.isEmpty() {
-		// fmt.Println("stream is empty")
 		if err := s.syncTo(protocol.MaxLogSeqnum); err != nil {
 			return nil, err
 		}
@@ -325,7 +323,6 @@ func (s *SharedLogStream) Pop() ([]byte /* payload */, error) {
 		}
 	}
 	if err := s.appendPopLogAndSync(); err != nil {
-		fmt.Println("Fail to pop log and async")
 		return nil, err
 	}
 	if nextLog, err := s.findNext(s.consumed, s.tail); err != nil {

@@ -1,6 +1,8 @@
 package processor
 
-import "github.com/rs/zerolog/log"
+import (
+	"github.com/rs/zerolog/log"
+)
 
 type StreamAggregateProcessor struct {
 	pipe        Pipe
@@ -8,16 +10,15 @@ type StreamAggregateProcessor struct {
 	pctx        ProcessorContext
 	initializer Initializer
 	aggregator  Aggregator
-	mp          *MaterializeParam
 }
 
 var _ = Processor(&StreamAggregateProcessor{})
 
-func NewStreamAggregateProcessor(mp *MaterializeParam, initializer Initializer, aggregator Aggregator) *StreamAggregateProcessor {
+func NewStreamAggregateProcessor(store KeyValueStore, initializer Initializer, aggregator Aggregator) *StreamAggregateProcessor {
 	return &StreamAggregateProcessor{
 		initializer: initializer,
 		aggregator:  aggregator,
-		mp:          mp,
+		store:       store,
 	}
 }
 
@@ -27,7 +28,6 @@ func (p *StreamAggregateProcessor) WithPipe(pipe Pipe) {
 
 func (p *StreamAggregateProcessor) WithProcessorContext(pctx ProcessorContext) {
 	p.pctx = pctx
-	p.store = p.pctx.GetKeyValueStore(p.mp.StoreName)
 }
 
 func (p *StreamAggregateProcessor) Process(msg Message) error {
@@ -39,11 +39,11 @@ func (p *StreamAggregateProcessor) Process(msg Message) error {
 	if err != nil {
 		return err
 	}
-	var oldAggTs *ValueTimestamp
+	var oldAggTs ValueTimestamp
 	var oldAgg interface{}
 	var newTs uint64
 	if ok {
-		oldAggTs = val.(*ValueTimestamp)
+		oldAggTs = val.(ValueTimestamp)
 		oldAgg = oldAggTs.Value
 		if msg.Timestamp > oldAggTs.Timestamp {
 			newTs = msg.Timestamp
@@ -55,6 +55,6 @@ func (p *StreamAggregateProcessor) Process(msg Message) error {
 		newTs = msg.Timestamp
 	}
 	newAgg := p.aggregator.Apply(msg.Key, msg.Value, oldAgg)
-	p.store.Put(msg.Key, &ValueTimestamp{Timestamp: newTs, Value: newAgg})
+	p.store.Put(msg.Key, ValueTimestamp{Timestamp: newTs, Value: newAgg})
 	return p.pipe.Forward(Message{Key: msg.Key, Value: newAgg, Timestamp: newTs})
 }

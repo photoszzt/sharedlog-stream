@@ -61,7 +61,11 @@ type SumAndHist struct {
 type SumAndHistJSONSerde struct{}
 
 func (s SumAndHistJSONSerde) Encode(value interface{}) ([]byte, error) {
-	val := value.(*SumAndHist)
+	val, ok := value.(*SumAndHist)
+	if !ok {
+		valTmp := value.(SumAndHist)
+		val = &valTmp
+	}
 	return json.Marshal(val)
 }
 
@@ -76,7 +80,11 @@ func (s SumAndHistJSONSerde) Decode(value []byte) (interface{}, error) {
 type SumAndHistMsgpSerde struct{}
 
 func (s SumAndHistMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	val := value.(*SumAndHist)
+	val, ok := value.(*SumAndHist)
+	if !ok {
+		valTmp := value.(SumAndHist)
+		val = &valTmp
+	}
 	return val.MarshalMsg(nil)
 }
 

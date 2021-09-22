@@ -19,6 +19,9 @@ func NewTableFilterProcessor(pred Predicate, filterNot bool, queryableName strin
 
 func (p *TableFilterProcessor) WithProcessorContext(pctx ProcessorContext) {
 	p.pctx = pctx
+	if p.queryableName != "" {
+		p.store = p.pctx.GetKeyValueStore(p.queryableName)
+	}
 }
 
 func (p *TableFilterProcessor) WithPipe(pipe Pipe) {

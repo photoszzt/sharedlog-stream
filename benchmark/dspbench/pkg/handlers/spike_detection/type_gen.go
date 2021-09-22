@@ -335,7 +335,7 @@ func (z *SumAndHist) DecodeMsg(dc *msgp.Reader) (err error) {
 
 	var field []byte
 	_ = field
-	const maxFields6zgensym_86cf238d4b0a69cf_7 = 1
+	const maxFields6zgensym_86cf238d4b0a69cf_7 = 2
 
 	// -- templateDecodeMsg starts here--
 	var totalEncodedFields6zgensym_86cf238d4b0a69cf_7 uint32
@@ -384,8 +384,14 @@ doneWithStruct6zgensym_86cf238d4b0a69cf_7:
 		switch curField6zgensym_86cf238d4b0a69cf_7 {
 		// -- templateDecodeMsg ends here --
 
-		case "sum_zid00_f64":
+		case "val_zid00_f64":
 			found6zgensym_86cf238d4b0a69cf_7[0] = true
+			z.Val, err = dc.ReadFloat64()
+			if err != nil {
+				return
+			}
+		case "sum_zid01_f64":
+			found6zgensym_86cf238d4b0a69cf_7[1] = true
 			z.Sum, err = dc.ReadFloat64()
 			if err != nil {
 				return
@@ -413,18 +419,22 @@ doneWithStruct6zgensym_86cf238d4b0a69cf_7:
 }
 
 // fields of SumAndHist
-var decodeMsgFieldOrder6zgensym_86cf238d4b0a69cf_7 = []string{"sum_zid00_f64"}
+var decodeMsgFieldOrder6zgensym_86cf238d4b0a69cf_7 = []string{"val_zid00_f64", "sum_zid01_f64"}
 
-var decodeMsgFieldSkip6zgensym_86cf238d4b0a69cf_7 = []bool{false}
+var decodeMsgFieldSkip6zgensym_86cf238d4b0a69cf_7 = []bool{false, false}
 
 // fieldsNotEmpty supports omitempty tags
 func (z SumAndHist) fieldsNotEmpty(isempty []bool) uint32 {
 	if len(isempty) == 0 {
-		return 1
+		return 2
 	}
-	var fieldsInUse uint32 = 1
-	isempty[0] = (z.Sum == 0) // number, omitempty
+	var fieldsInUse uint32 = 2
+	isempty[0] = (z.Val == 0) // number, omitempty
 	if isempty[0] {
+		fieldsInUse--
+	}
+	isempty[1] = (z.Sum == 0) // number, omitempty
+	if isempty[1] {
 		fieldsInUse--
 	}
 
@@ -438,7 +448,7 @@ func (z SumAndHist) EncodeMsg(en *msgp.Writer) (err error) {
 	}
 
 	// honor the omitempty tags
-	var empty_zgensym_86cf238d4b0a69cf_8 [1]bool
+	var empty_zgensym_86cf238d4b0a69cf_8 [2]bool
 	fieldsInUse_zgensym_86cf238d4b0a69cf_9 := z.fieldsNotEmpty(empty_zgensym_86cf238d4b0a69cf_8[:])
 
 	// map header
@@ -458,8 +468,20 @@ func (z SumAndHist) EncodeMsg(en *msgp.Writer) (err error) {
 	}
 
 	if !empty_zgensym_86cf238d4b0a69cf_8[0] {
-		// write "sum_zid00_f64"
-		err = en.Append(0xad, 0x73, 0x75, 0x6d, 0x5f, 0x7a, 0x69, 0x64, 0x30, 0x30, 0x5f, 0x66, 0x36, 0x34)
+		// write "val_zid00_f64"
+		err = en.Append(0xad, 0x76, 0x61, 0x6c, 0x5f, 0x7a, 0x69, 0x64, 0x30, 0x30, 0x5f, 0x66, 0x36, 0x34)
+		if err != nil {
+			return err
+		}
+		err = en.WriteFloat64(z.Val)
+		if err != nil {
+			return
+		}
+	}
+
+	if !empty_zgensym_86cf238d4b0a69cf_8[1] {
+		// write "sum_zid01_f64"
+		err = en.Append(0xad, 0x73, 0x75, 0x6d, 0x5f, 0x7a, 0x69, 0x64, 0x30, 0x31, 0x5f, 0x66, 0x36, 0x34)
 		if err != nil {
 			return err
 		}
@@ -481,13 +503,19 @@ func (z SumAndHist) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 
 	// honor the omitempty tags
-	var empty [1]bool
+	var empty [2]bool
 	fieldsInUse := z.fieldsNotEmpty(empty[:])
 	o = msgp.AppendMapHeader(o, fieldsInUse)
 
 	if !empty[0] {
-		// string "sum_zid00_f64"
-		o = append(o, 0xad, 0x73, 0x75, 0x6d, 0x5f, 0x7a, 0x69, 0x64, 0x30, 0x30, 0x5f, 0x66, 0x36, 0x34)
+		// string "val_zid00_f64"
+		o = append(o, 0xad, 0x76, 0x61, 0x6c, 0x5f, 0x7a, 0x69, 0x64, 0x30, 0x30, 0x5f, 0x66, 0x36, 0x34)
+		o = msgp.AppendFloat64(o, z.Val)
+	}
+
+	if !empty[1] {
+		// string "sum_zid01_f64"
+		o = append(o, 0xad, 0x73, 0x75, 0x6d, 0x5f, 0x7a, 0x69, 0x64, 0x30, 0x31, 0x5f, 0x66, 0x36, 0x34)
 		o = msgp.AppendFloat64(o, z.Sum)
 	}
 
@@ -509,7 +537,7 @@ func (z *SumAndHist) UnmarshalMsgWithCfg(bts []byte, cfg *msgp.RuntimeConfig) (o
 
 	var field []byte
 	_ = field
-	const maxFields10zgensym_86cf238d4b0a69cf_11 = 1
+	const maxFields10zgensym_86cf238d4b0a69cf_11 = 2
 
 	// -- templateUnmarshalMsg starts here--
 	var totalEncodedFields10zgensym_86cf238d4b0a69cf_11 uint32
@@ -559,8 +587,15 @@ doneWithStruct10zgensym_86cf238d4b0a69cf_11:
 		switch curField10zgensym_86cf238d4b0a69cf_11 {
 		// -- templateUnmarshalMsg ends here --
 
-		case "sum_zid00_f64":
+		case "val_zid00_f64":
 			found10zgensym_86cf238d4b0a69cf_11[0] = true
+			z.Val, bts, err = nbs.ReadFloat64Bytes(bts)
+
+			if err != nil {
+				return
+			}
+		case "sum_zid01_f64":
+			found10zgensym_86cf238d4b0a69cf_11[1] = true
 			z.Sum, bts, err = nbs.ReadFloat64Bytes(bts)
 
 			if err != nil {
@@ -589,13 +624,13 @@ doneWithStruct10zgensym_86cf238d4b0a69cf_11:
 }
 
 // fields of SumAndHist
-var unmarshalMsgFieldOrder10zgensym_86cf238d4b0a69cf_11 = []string{"sum_zid00_f64"}
+var unmarshalMsgFieldOrder10zgensym_86cf238d4b0a69cf_11 = []string{"val_zid00_f64", "sum_zid01_f64"}
 
-var unmarshalMsgFieldSkip10zgensym_86cf238d4b0a69cf_11 = []bool{false}
+var unmarshalMsgFieldSkip10zgensym_86cf238d4b0a69cf_11 = []bool{false, false}
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z SumAndHist) Msgsize() (s int) {
-	s = 1 + 14 + msgp.Float64Size
+	s = 1 + 14 + msgp.Float64Size + 14 + msgp.Float64Size
 	return
 }
 

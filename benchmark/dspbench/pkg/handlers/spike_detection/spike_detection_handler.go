@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -42,7 +41,6 @@ func (h *spikeDetectionHandler) Call(ctx context.Context, input []byte) ([]byte,
 	if err != nil {
 		return nil, err
 	}
-	fmt.Fprintf(os.Stderr, "spike detection after parse input")
 	outputCh := make(chan *common.FnOutput)
 	go SpikeDetection(ctx, h.env, parsedInput, outputCh)
 	output := <-outputCh
@@ -50,7 +48,6 @@ func (h *spikeDetectionHandler) Call(ctx context.Context, input []byte) ([]byte,
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("spike detection outputs %s\n", encodedOutput)
 	return utils.CompressData(encodedOutput), nil
 }
 
@@ -64,7 +61,14 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 		}
 		return
 	}
-	fmt.Fprintf(os.Stderr, "after create input stream")
+	changeLog, err := sharedlog_stream.NewLogStore(ctx, env, input.InputTopicName)
+	if err != nil {
+		output <- &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("NewSharedlogStream for input stream failed: %v", err),
+		}
+		return
+	}
 	/*
 		outputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.OutputTopicName)
 		if err != nil {
@@ -97,9 +101,9 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", input.SerdeFormat),
 		}
 	}
-	fmt.Fprintf(os.Stderr, "after getting serde")
 	movingAverageWindow := 1000
 
+	pctx := processor.NewProcessorContext()
 	aggStoreName := "moving-avg-store"
 	builder := stream.NewStreamBuilder()
 	builder.Source("spike-detection-src",
@@ -108,7 +112,13 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 		GroupByKey(&stream.Grouped{KeySerde: processor.StringSerde{},
 			ValueSerde: sdSerde, Name: "group-by-devid"}).
 		Aggregate("moving-avg",
-			&processor.MaterializeParam{KeySerde: processor.StringSerde{}, ValueSerde: sdSerde, StoreName: aggStoreName},
+			&processor.MaterializeParam{
+				KeySerde:   processor.StringSerde{},
+				ValueSerde: timeValSerde,
+				MsgSerde:   msgSerde,
+				StoreName:  aggStoreName,
+				Changelog:  changeLog,
+			},
 			processor.InitializerFunc(func() interface{} {
 				return SumAndHist{
 					Sum:     0,
@@ -138,10 +148,9 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 				Val: val.Val,
 				Avg: val.Sum / float64(len(val.history)),
 			}, nil
-		})).
+		}), "").
 		Filter("get-spike", processor.PredicateFunc(spikeDetectionPredicate), "")
 
-	fmt.Fprintf(os.Stderr, "after building pipeline")
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {
 		output <- &common.FnOutput{
@@ -149,24 +158,10 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 			Message: fmt.Sprintf("build stream failed: %v", err_arrs),
 		}
 	}
-	fmt.Fprintf(os.Stderr, "after building pipeline")
 	pumps := make(map[processor.Node]processor.Pump)
 	var srcPumps []processor.SourcePump
 	nodes := processor.FlattenNodeTree(tp.Sources())
 	processor.ReverseNodes(nodes)
-
-	pctx := processor.NewProcessorContext()
-	changeLog, err := sharedlog_stream.NewLogStore(ctx, env, input.InputTopicName)
-	if err != nil {
-		output <- &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("NewSharedlogStream for input stream failed: %v", err),
-		}
-		return
-	}
-	store := processor.NewInMemoryKeyValueStoreWithChangelog(aggStoreName,
-		processor.StringSerde{}, timeValSerde, changeLog)
-	store.Init(pctx, store)
 
 	for _, node := range nodes {
 		pipe := processor.NewPipe(processor.ResolvePumps(pumps, node.Children()))

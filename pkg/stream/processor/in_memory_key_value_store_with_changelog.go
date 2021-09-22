@@ -15,7 +15,8 @@ type InMemoryKeyValueStoreWithChangelog struct {
 	msgSerde   MsgSerde
 }
 
-func NewInMemoryKeyValueStoreWithChangelog(name string, keySerde Serde, valSerde Serde, logStore LogStore) *InMemoryKeyValueStoreWithChangelog {
+func NewInMemoryKeyValueStoreWithChangelog(name string,
+	keySerde Serde, valSerde Serde, msgSerde MsgSerde, logStore LogStore) *InMemoryKeyValueStoreWithChangelog {
 
 	return &InMemoryKeyValueStoreWithChangelog{
 		kvstore: NewInMemoryKeyValueStore(name, func(a treemap.Key, b treemap.Key) int {
@@ -26,7 +27,7 @@ func NewInMemoryKeyValueStoreWithChangelog(name string, keySerde Serde, valSerde
 		keySerde:   keySerde,
 		valueSerde: valSerde,
 		logStore:   logStore,
-		msgSerde:   MessageSerializedMsgpSerde{},
+		msgSerde:   msgSerde,
 	}
 }
 

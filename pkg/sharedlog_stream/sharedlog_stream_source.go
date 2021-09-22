@@ -41,10 +41,8 @@ func (s *SharedLogStreamSource) Consume() (processor.Message, error) {
 		if err != nil {
 			if IsStreamEmptyError(err) {
 				time.Sleep(time.Duration(100) * time.Microsecond)
-				// fmt.Println("No stream")
 				continue
 			} else if IsStreamTimeoutError(err) {
-				// fmt.Println("pop timeout")
 				continue
 			} else {
 				return processor.EmptyMessage, err

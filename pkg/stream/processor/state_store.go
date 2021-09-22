@@ -7,5 +7,7 @@ type StateStore interface {
 type MaterializeParam struct {
 	KeySerde   Serde
 	ValueSerde Serde
+	MsgSerde   MsgSerde
 	StoreName  string
+	Changelog  LogStore
 }

@@ -107,13 +107,13 @@ func (z *StreamAuxData) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "h":
+		case "consumed":
 			z.Consumed, err = dc.ReadUint64()
 			if err != nil {
 				err = msgp.WrapError(err, "Consumed")
 				return
 			}
-		case "t":
+		case "tail":
 			z.Tail, err = dc.ReadUint64()
 			if err != nil {
 				err = msgp.WrapError(err, "Tail")
@@ -133,8 +133,8 @@ func (z *StreamAuxData) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z StreamAuxData) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 2
-	// write "h"
-	err = en.Append(0x82, 0xa1, 0x68)
+	// write "consumed"
+	err = en.Append(0x82, 0xa8, 0x63, 0x6f, 0x6e, 0x73, 0x75, 0x6d, 0x65, 0x64)
 	if err != nil {
 		return
 	}
@@ -143,8 +143,8 @@ func (z StreamAuxData) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Consumed")
 		return
 	}
-	// write "t"
-	err = en.Append(0xa1, 0x74)
+	// write "tail"
+	err = en.Append(0xa4, 0x74, 0x61, 0x69, 0x6c)
 	if err != nil {
 		return
 	}
@@ -160,11 +160,11 @@ func (z StreamAuxData) EncodeMsg(en *msgp.Writer) (err error) {
 func (z StreamAuxData) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 2
-	// string "h"
-	o = append(o, 0x82, 0xa1, 0x68)
+	// string "consumed"
+	o = append(o, 0x82, 0xa8, 0x63, 0x6f, 0x6e, 0x73, 0x75, 0x6d, 0x65, 0x64)
 	o = msgp.AppendUint64(o, z.Consumed)
-	// string "t"
-	o = append(o, 0xa1, 0x74)
+	// string "tail"
+	o = append(o, 0xa4, 0x74, 0x61, 0x69, 0x6c)
 	o = msgp.AppendUint64(o, z.Tail)
 	return
 }
@@ -187,13 +187,13 @@ func (z *StreamAuxData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "h":
+		case "consumed":
 			z.Consumed, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Consumed")
 				return
 			}
-		case "t":
+		case "tail":
 			z.Tail, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Tail")
@@ -213,7 +213,7 @@ func (z *StreamAuxData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z StreamAuxData) Msgsize() (s int) {
-	s = 1 + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size
+	s = 1 + 9 + msgp.Uint64Size + 5 + msgp.Uint64Size
 	return
 }
 
@@ -235,19 +235,19 @@ func (z *StreamLogEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "n":
+		case "topicName":
 			z.TopicName, err = dc.ReadString()
 			if err != nil {
 				err = msgp.WrapError(err, "TopicName")
 				return
 			}
-		case "t":
+		case "isPush":
 			z.IsPush, err = dc.ReadBool()
 			if err != nil {
 				err = msgp.WrapError(err, "IsPush")
 				return
 			}
-		case "p":
+		case "payload":
 			z.Payload, err = dc.ReadBytes(z.Payload)
 			if err != nil {
 				err = msgp.WrapError(err, "Payload")
@@ -281,8 +281,8 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 	if zb0001Len == 0 {
 		return
 	}
-	// write "n"
-	err = en.Append(0xa1, 0x6e)
+	// write "topicName"
+	err = en.Append(0xa9, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x4e, 0x61, 0x6d, 0x65)
 	if err != nil {
 		return
 	}
@@ -291,8 +291,8 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "TopicName")
 		return
 	}
-	// write "t"
-	err = en.Append(0xa1, 0x74)
+	// write "isPush"
+	err = en.Append(0xa6, 0x69, 0x73, 0x50, 0x75, 0x73, 0x68)
 	if err != nil {
 		return
 	}
@@ -302,8 +302,8 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 		return
 	}
 	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// write "p"
-		err = en.Append(0xa1, 0x70)
+		// write "payload"
+		err = en.Append(0xa7, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64)
 		if err != nil {
 			return
 		}
@@ -331,15 +331,15 @@ func (z *StreamLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	if zb0001Len == 0 {
 		return
 	}
-	// string "n"
-	o = append(o, 0xa1, 0x6e)
+	// string "topicName"
+	o = append(o, 0xa9, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x4e, 0x61, 0x6d, 0x65)
 	o = msgp.AppendString(o, z.TopicName)
-	// string "t"
-	o = append(o, 0xa1, 0x74)
+	// string "isPush"
+	o = append(o, 0xa6, 0x69, 0x73, 0x50, 0x75, 0x73, 0x68)
 	o = msgp.AppendBool(o, z.IsPush)
 	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// string "p"
-		o = append(o, 0xa1, 0x70)
+		// string "payload"
+		o = append(o, 0xa7, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64)
 		o = msgp.AppendBytes(o, z.Payload)
 	}
 	return
@@ -363,19 +363,19 @@ func (z *StreamLogEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "n":
+		case "topicName":
 			z.TopicName, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "TopicName")
 				return
 			}
-		case "t":
+		case "isPush":
 			z.IsPush, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "IsPush")
 				return
 			}
-		case "p":
+		case "payload":
 			z.Payload, bts, err = msgp.ReadBytesBytes(bts, z.Payload)
 			if err != nil {
 				err = msgp.WrapError(err, "Payload")
@@ -395,6 +395,6 @@ func (z *StreamLogEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *StreamLogEntry) Msgsize() (s int) {
-	s = 1 + 2 + msgp.StringPrefixSize + len(z.TopicName) + 2 + msgp.BoolSize + 2 + msgp.BytesPrefixSize + len(z.Payload)
+	s = 1 + 10 + msgp.StringPrefixSize + len(z.TopicName) + 7 + msgp.BoolSize + 8 + msgp.BytesPrefixSize + len(z.Payload)
 	return
 }
