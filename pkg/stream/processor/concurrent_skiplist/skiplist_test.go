@@ -34,7 +34,17 @@ var benchList *SkipList
 
 func init() {
 	// Initialize a big SkipList for the Get() benchmark
-	benchList = New()
+	benchList = New(CompareFunc(func(lhs interface{}, rhs interface{}) int {
+		l := lhs.(float64)
+		r := lhs.(float64)
+		if l < r {
+			return -1
+		} else if l == r {
+			return 0
+		} else {
+			return 1
+		}
+	}))
 
 	for i := 0; i <= 10000000; i++ {
 		benchList.Set(float64(i), [1]byte{})
@@ -86,7 +96,17 @@ func checkSanity(list *SkipList, t *testing.T) {
 func TestBasicIntCRUD(t *testing.T) {
 	var list *SkipList
 
-	list = New()
+	list = New(CompareFunc(func(lhs interface{}, rhs interface{}) int {
+		l := lhs.(int)
+		r := rhs.(int)
+		if l < r {
+			return -1
+		} else if l == r {
+			return 0
+		} else {
+			return 1
+		}
+	}))
 
 	list.Set(10, 1)
 	list.Set(60, 2)
@@ -136,13 +156,33 @@ func TestBasicIntCRUD(t *testing.T) {
 
 func TestChangeLevel(t *testing.T) {
 	var i float64
-	list := New()
+	list := New(CompareFunc(func(lhs interface{}, rhs interface{}) int {
+		l := lhs.(float64)
+		r := rhs.(float64)
+		if l < r {
+			return -1
+		} else if l == r {
+			return 0
+		} else {
+			return 1
+		}
+	}))
 
 	if list.maxLevel != DefaultMaxLevel {
 		t.Fatal("max level must equal default max value")
 	}
 
-	list = NewWithMaxLevel(4)
+	list = NewWithMaxLevel(4, CompareFunc(func(lhs interface{}, rhs interface{}) int {
+		l := lhs.(float64)
+		r := rhs.(float64)
+		if l < r {
+			return -1
+		} else if l == r {
+			return 0
+		} else {
+			return 1
+		}
+	}))
 	if list.maxLevel != 4 {
 		t.Fatal("wrong maxLevel (wanted 4)", list.maxLevel)
 	}
@@ -166,12 +206,32 @@ func TestChangeLevel(t *testing.T) {
 }
 
 func TestMaxLevel(t *testing.T) {
-	list := NewWithMaxLevel(DefaultMaxLevel + 1)
+	list := NewWithMaxLevel(DefaultMaxLevel+1, CompareFunc(func(lhs interface{}, rhs interface{}) int {
+		l := lhs.(int)
+		r := rhs.(int)
+		if l < r {
+			return -1
+		} else if l == r {
+			return 0
+		} else {
+			return 1
+		}
+	}))
 	list.Set(0, struct{}{})
 }
 
 func TestChangeProbability(t *testing.T) {
-	list := New()
+	list := New(CompareFunc(func(lhs interface{}, rhs interface{}) int {
+		l := lhs.(int)
+		r := rhs.(int)
+		if l < r {
+			return -1
+		} else if l == r {
+			return 0
+		} else {
+			return 1
+		}
+	}))
 
 	if list.probability != DefaultProbability {
 		t.Fatal("new lists should have P value = DefaultProbability")
@@ -184,7 +244,17 @@ func TestChangeProbability(t *testing.T) {
 }
 
 func TestConcurrency(t *testing.T) {
-	list := New()
+	list := New(CompareFunc(func(lhs interface{}, rhs interface{}) int {
+		l := lhs.(float64)
+		r := rhs.(float64)
+		if l < r {
+			return -1
+		} else if l == r {
+			return 0
+		} else {
+			return 1
+		}
+	}))
 
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
@@ -210,7 +280,17 @@ func TestConcurrency(t *testing.T) {
 
 func BenchmarkIncSet(b *testing.B) {
 	b.ReportAllocs()
-	list := New()
+	list := New(CompareFunc(func(lhs interface{}, rhs interface{}) int {
+		l := lhs.(float64)
+		r := lhs.(float64)
+		if l < r {
+			return -1
+		} else if l == r {
+			return 0
+		} else {
+			return 1
+		}
+	}))
 
 	for i := 0; i < b.N; i++ {
 		list.Set(float64(i), [1]byte{})
@@ -233,7 +313,17 @@ func BenchmarkIncGet(b *testing.B) {
 
 func BenchmarkDecSet(b *testing.B) {
 	b.ReportAllocs()
-	list := New()
+	list := New(CompareFunc(func(lhs interface{}, rhs interface{}) int {
+		l := lhs.(float64)
+		r := lhs.(float64)
+		if l < r {
+			return -1
+		} else if l == r {
+			return 0
+		} else {
+			return 1
+		}
+	}))
 
 	for i := b.N; i > 0; i-- {
 		list.Set(float64(i), [1]byte{})

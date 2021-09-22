@@ -177,7 +177,7 @@ func probabilityTable(probability float64, MaxLevel int) (table []float64) {
 // maxLevel has to be int(math.Ceil(math.Log(N))) for DefaultProbability (where N is an upper bound on the
 // number of elements in a skip list). See http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.17.524
 // Returns a pointer to the new list.
-func NewWithMaxLevel(maxLevel int) *SkipList {
+func NewWithMaxLevel(maxLevel int, compare Comparable) *SkipList {
 	if maxLevel < 1 || maxLevel > 64 {
 		panic("maxLevel for a SkipList must be a positive integer <= 64")
 	}
@@ -189,10 +189,11 @@ func NewWithMaxLevel(maxLevel int) *SkipList {
 		randSource:     rand.New(rand.NewSource(time.Now().UnixNano())),
 		probability:    DefaultProbability,
 		probTable:      probabilityTable(DefaultProbability, maxLevel),
+		comparable:     compare,
 	}
 }
 
 // New creates a new skip list with default parameters. Returns a pointer to the new list.
-func New() *SkipList {
-	return NewWithMaxLevel(DefaultMaxLevel)
+func New(compare Comparable) *SkipList {
+	return NewWithMaxLevel(DefaultMaxLevel, compare)
 }
