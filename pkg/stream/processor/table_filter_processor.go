@@ -29,7 +29,7 @@ func (p *TableFilterProcessor) WithPipe(pipe Pipe) {
 }
 
 func (p *TableFilterProcessor) Process(msg Message) error {
-	ok, err := p.pred.Assert(msg)
+	ok, err := p.pred.Assert(&msg)
 	if err != nil {
 		return err
 	}

@@ -21,7 +21,7 @@ func (p *StreamFilterProcessor) WithPipe(pipe Pipe) {
 }
 
 func (p *StreamFilterProcessor) Process(msg Message) error {
-	ok, err := p.pred.Assert(msg)
+	ok, err := p.pred.Assert(&msg)
 	if err != nil {
 		return err
 	}
@@ -52,7 +52,7 @@ func (p *StreamFilterNotProcessor) WithPipe(pipe Pipe) {
 }
 
 func (p *StreamFilterNotProcessor) Process(msg Message) error {
-	ok, err := p.pred.Assert(msg)
+	ok, err := p.pred.Assert(&msg)
 	if err != nil {
 		return err
 	}

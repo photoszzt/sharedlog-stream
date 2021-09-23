@@ -107,7 +107,11 @@ type EventJSONSerde struct{}
 var _ = processor.Encoder(EventJSONSerde{})
 
 func (e EventJSONSerde) Encode(value interface{}) ([]byte, error) {
-	event := value.(*Event)
+	event, ok := value.(*Event)
+	if !ok {
+		evTmp := value.(Event)
+		event = &evTmp
+	}
 	return json.Marshal(event)
 }
 

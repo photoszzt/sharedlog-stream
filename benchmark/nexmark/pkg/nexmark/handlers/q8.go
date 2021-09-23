@@ -91,8 +91,8 @@ func Query8(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	inputs := builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream, int(input.Duration),
 		processor.StringDecoder{}, eventSerde, msgSerde))
 	person := inputs.Filter("filter-person",
-		processor.PredicateFunc(func(msg processor.Message) (bool, error) {
-			event := msg.Value.(*ntypes.Event)
+		processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
+			event := msg.Value.(ntypes.Event)
 			return event.Etype == ntypes.PERSON, nil
 		})).
 		Map("select-key",
@@ -101,8 +101,8 @@ func Query8(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 				return processor.Message{Key: event.NewPerson.ID, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 			}))
 	auction := inputs.Filter("filter-auction",
-		processor.PredicateFunc(func(msg processor.Message) (bool, error) {
-			event := msg.Value.(*ntypes.Event)
+		processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
+			event := msg.Value.(ntypes.Event)
 			return event.Etype == ntypes.AUCTION, nil
 		})).
 		Map("select-key",

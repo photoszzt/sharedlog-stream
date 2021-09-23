@@ -15,7 +15,10 @@ type SharedLogStreamSink struct {
 
 func NewSharedLogStreamSink(stream *SharedLogStream, keyEncoder processor.Encoder, valEncoder processor.Encoder, msgEncoder processor.MsgEncoder) *SharedLogStreamSink {
 	return &SharedLogStreamSink{
-		stream: stream,
+		stream:       stream,
+		keyEncoder:   keyEncoder,
+		valueEncoder: valEncoder,
+		msgEncoder:   msgEncoder,
 	}
 }
 
@@ -28,10 +31,16 @@ func (sls *SharedLogStreamSink) WithProcessorContext(pctx processor.ProcessorCon
 }
 
 func (sls *SharedLogStreamSink) Process(msg processor.Message) error {
-	// ignore the key now
-	keyEncoded, err := sls.keyEncoder.Encode(msg.Key)
-	if err != nil {
-		return err
+	if msg.Key == nil && msg.Value == nil {
+		return nil
+	}
+	var keyEncoded []byte
+	if msg.Key != nil {
+		keyEncodedTmp, err := sls.keyEncoder.Encode(msg.Key)
+		if err != nil {
+			return err
+		}
+		keyEncoded = keyEncodedTmp
 	}
 	valEncoded, err := sls.valueEncoder.Encode(msg.Value)
 	if err != nil {

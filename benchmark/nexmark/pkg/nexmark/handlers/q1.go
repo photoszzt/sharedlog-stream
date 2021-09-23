@@ -46,7 +46,7 @@ func (h *query1Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 }
 
 func mapFunc(msg processor.Message) (processor.Message, error) {
-	event := msg.Value.(*ntypes.Event)
+	event := msg.Value.(ntypes.Event)
 	event.Bid.Price = uint64(event.Bid.Price * 908 / 1000.0)
 	return processor.Message{Value: event}, nil
 

@@ -99,8 +99,8 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	builder := stream.NewStreamBuilder()
 	inputs := builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream, int(input.Duration),
 		processor.StringDecoder{}, eventSerde, msgSerde))
-	bid := inputs.Filter("filter-bid", processor.PredicateFunc(func(msg processor.Message) (bool, error) {
-		event := msg.Value.(*ntypes.Event)
+	bid := inputs.Filter("filter-bid", processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
+		event := msg.Value.(ntypes.Event)
 		return event.Etype == ntypes.BID, nil
 	})).Map("select-key", processor.MapperFunc(func(msg processor.Message) (processor.Message, error) {
 		event := msg.Value.(*ntypes.Event)
@@ -153,7 +153,7 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 					MaxCnt: rv,
 				}
 			})).
-		Filter("choose-maxcnt", processor.PredicateFunc(func(msg processor.Message) (bool, error) {
+		Filter("choose-maxcnt", processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
 			v := msg.Value.(*ntypes.AuctionIdCntMax)
 			return v.Count >= v.MaxCnt, nil
 		}), "")

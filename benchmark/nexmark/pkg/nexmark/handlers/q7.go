@@ -84,8 +84,8 @@ func Query7(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	inputs := builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream, int(input.Duration),
 		processor.StringDecoder{}, eventSerde, msgSerde))
 	// bid :=
-	inputs.Filter("filter-bid", processor.PredicateFunc(func(msg processor.Message) (bool, error) {
-		event := msg.Value.(*ntypes.Event)
+	inputs.Filter("filter-bid", processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
+		event := msg.Value.(ntypes.Event)
 		return event.Etype == ntypes.BID, nil
 	})).Map("select-key", processor.MapperFunc(func(msg processor.Message) (processor.Message, error) {
 		event := msg.Value.(*ntypes.Event)

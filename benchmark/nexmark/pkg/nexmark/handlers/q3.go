@@ -82,28 +82,38 @@ func Query3(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	builder := stream.NewStreamBuilder()
 	inputs := builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream, int(input.Duration),
 		processor.StringDecoder{}, eventSerde, msgSerde))
-	auctionsBySellerId := inputs.Filter("filter-auction", processor.PredicateFunc(func(msg processor.Message) (bool, error) {
-		event := msg.Value.(*ntypes.Event)
-		return event.Etype == ntypes.AUCTION, nil
-	})).Filter("filter-category", processor.PredicateFunc(func(msg processor.Message) (bool, error) {
-		event := msg.Value.(*ntypes.Event)
-		return event.NewAuction.Category == 10, nil
-	})).Map("update-key", processor.MapperFunc(func(msg processor.Message) (processor.Message, error) {
-		event := msg.Value.(*ntypes.Event)
-		return processor.Message{Key: event.NewAuction.Seller, Value: msg.Value, Timestamp: msg.Timestamp}, nil
-	})).ToTable("convert-to-table")
+	auctionsBySellerId := inputs.Filter("filter-auction",
+		processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
+			event := msg.Value.(ntypes.Event)
+			return event.Etype == ntypes.AUCTION, nil
+		})).
+		Filter("filter-category",
+			processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
+				event := msg.Value.(*ntypes.Event)
+				return event.NewAuction.Category == 10, nil
+			})).
+		Map("update-key",
+			processor.MapperFunc(func(msg processor.Message) (processor.Message, error) {
+				event := msg.Value.(*ntypes.Event)
+				return processor.Message{Key: event.NewAuction.Seller, Value: msg.Value, Timestamp: msg.Timestamp}, nil
+			})).
+		ToTable("convert-to-table")
 
-	personsById := inputs.Filter("filter-person", processor.PredicateFunc(func(msg processor.Message) (bool, error) {
-		event := msg.Value.(*ntypes.Event)
-		return event.Etype == ntypes.PERSON, nil
-	})).Filter("filter-state", processor.PredicateFunc(func(msg processor.Message) (bool, error) {
-		event := msg.Value.(*ntypes.Event)
-		state := event.NewPerson.State
-		return state == "OR" || state == "ID" || state == "CA", nil
-	})).Map("update-key", processor.MapperFunc(func(msg processor.Message) (processor.Message, error) {
-		event := msg.Value.(*ntypes.Event)
-		return processor.Message{Key: event.NewPerson.ID, Value: msg.Value, Timestamp: msg.Timestamp}, nil
-	})).ToTable("convert-to-table")
+	personsById := inputs.Filter("filter-person",
+		processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
+			event := msg.Value.(ntypes.Event)
+			return event.Etype == ntypes.PERSON, nil
+		})).
+		Filter("filter-state", processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
+			event := msg.Value.(ntypes.Event)
+			state := event.NewPerson.State
+			return state == "OR" || state == "ID" || state == "CA", nil
+		})).
+		Map("update-key", processor.MapperFunc(func(msg processor.Message) (processor.Message, error) {
+			event := msg.Value.(*ntypes.Event)
+			return processor.Message{Key: event.NewPerson.ID, Value: msg.Value, Timestamp: msg.Timestamp}, nil
+		})).
+		ToTable("convert-to-table")
 
 	auctionsBySellerId.Join("join", personsById, processor.ValueJointerFunc(func(leftVal interface{}, rightVal interface{}) interface{} {
 		event := rightVal.(*ntypes.Event)

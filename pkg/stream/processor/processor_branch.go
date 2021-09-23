@@ -24,7 +24,7 @@ func (p *BranchProcessor) WithProcessorContext(ctx ProcessorContext) {
 
 func (p *BranchProcessor) Process(msg Message) error {
 	for i, pred := range p.preds {
-		ok, err := pred.Assert(msg)
+		ok, err := pred.Assert(&msg)
 		if err != nil {
 			return err
 		}

@@ -45,8 +45,8 @@ func (h *query2Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func filterFunc(msg processor.Message) (bool, error) {
-	event := msg.Value.(*ntypes.Event)
+func filterFunc(msg *processor.Message) (bool, error) {
+	event := msg.Value.(ntypes.Event)
 	return event.Bid.Auction%123 == 0, nil
 }
 
