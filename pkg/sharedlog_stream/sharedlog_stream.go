@@ -5,6 +5,8 @@ package sharedlog_stream
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"sharedlog-stream/pkg/stream/processor"
 	"time"
 
@@ -217,11 +219,17 @@ func (s *SharedLogStream) syncToBackward(tailSeqNum uint64) error {
 		if err != nil {
 			return err
 		}
+		if logEntry != nil {
+			fmt.Fprintf(os.Stderr, "cur entry seqnum: %v, next seq num: %v\n", logEntry.SeqNum, s.nextSeqNum)
+		} else {
+			fmt.Fprintf(os.Stderr, "found nil entry\n")
+		}
 		if logEntry == nil || logEntry.SeqNum < s.nextSeqNum {
 			break
 		}
 		seqNum = logEntry.SeqNum
 		streamLogEntry := decodeStreamLogEntry(logEntry)
+		fmt.Fprintf(os.Stderr, "found tp: %v, need tp: %v\n", streamLogEntry.TopicName, s.topicName)
 		if streamLogEntry.TopicName != s.topicName {
 			continue
 		}

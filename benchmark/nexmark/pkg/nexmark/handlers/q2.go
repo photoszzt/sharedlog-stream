@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"sharedlog-stream/benchmark/common"
@@ -51,6 +52,7 @@ func filterFunc(msg *processor.Message) (bool, error) {
 }
 
 func Query2(ctx context.Context, env types.Environment, input *common.QueryInput, output chan *common.FnOutput) {
+	fmt.Fprintf(os.Stderr, "input topic name is %v\n", input.InputTopicName)
 	inputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.InputTopicName)
 	if err != nil {
 		output <- &common.FnOutput{
@@ -84,7 +86,7 @@ func Query2(ctx context.Context, env types.Environment, input *common.QueryInput
 	}
 
 	builder := stream.NewStreamBuilder()
-	builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream,
+	builder.Source("nexmark_src", sharedlog_stream.NewSharedLogStreamSource(inputStream,
 		int(input.Duration), processor.StringDecoder{}, eventSerde, msgSerde)).
 		Filter("only_bid", processor.PredicateFunc(only_bid)).
 		Filter("q2_filter", processor.PredicateFunc(filterFunc)).
@@ -116,7 +118,6 @@ func Query2(ctx context.Context, env types.Environment, input *common.QueryInput
 	}
 
 	duration := time.Duration(input.Duration) * time.Second
-	// filterOp := operator.NewFilter(filterFunc)
 	latencies := make([]int, 0, 128)
 	startTime := time.Now()
 	select {

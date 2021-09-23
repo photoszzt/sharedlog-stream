@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
@@ -52,6 +53,7 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 			Message: fmt.Sprintf("NewSharedlogStream failed: %v", err),
 		}, nil
 	}
+	fmt.Fprintf(os.Stderr, "generate event to %v\n", inputConfig.TopicName)
 	nexmarkConfig, err := ntypes.ConvertToNexmarkConfiguration(inputConfig)
 	if err != nil {
 		return &ntypes.FnOutput{
@@ -106,6 +108,7 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 				Message: fmt.Sprintf("event serialization failed: %v", err),
 			}, nil
 		}
+		fmt.Fprintf(os.Stderr, "generate event: %v\n", string(encoded))
 		msgEncoded, err := msgEncoder.Encode(nil, encoded)
 		if err != nil {
 			return &ntypes.FnOutput{

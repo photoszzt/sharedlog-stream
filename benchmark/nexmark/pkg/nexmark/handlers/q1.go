@@ -84,7 +84,7 @@ func Query1(ctx context.Context, env types.Environment, input *common.QueryInput
 		}
 	}
 	builder := stream.NewStreamBuilder()
-	builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream,
+	builder.Source("nexmark_src", sharedlog_stream.NewSharedLogStreamSource(inputStream,
 		int(input.Duration), processor.StringDecoder{}, eventSerde, msgSerde)).
 		Filter("only_bid", processor.PredicateFunc(only_bid)).
 		Map("q1_map", processor.MapperFunc(mapFunc)).

@@ -1,6 +1,8 @@
 package sharedlog_stream
 
 import (
+	"fmt"
+	"os"
 	"time"
 
 	"sharedlog-stream/pkg/stream/processor"
@@ -40,9 +42,11 @@ func (s *SharedLogStreamSource) Consume() (processor.Message, error) {
 		val, err := s.stream.Pop()
 		if err != nil {
 			if IsStreamEmptyError(err) {
+				fmt.Fprintf(os.Stderr, "stream is empty\n")
 				time.Sleep(time.Duration(100) * time.Microsecond)
 				continue
 			} else if IsStreamTimeoutError(err) {
+				fmt.Fprintf(os.Stderr, "stream time out\n")
 				continue
 			} else {
 				return processor.EmptyMessage, err
