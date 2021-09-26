@@ -92,7 +92,7 @@ func Query8(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		processor.StringDecoder{}, eventSerde, msgSerde))
 	person := inputs.Filter("filter-person",
 		processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
-			event := msg.Value.(ntypes.Event)
+			event := msg.Value.(*ntypes.Event)
 			return event.Etype == ntypes.PERSON, nil
 		})).
 		Map("select-key",
@@ -110,7 +110,7 @@ func Query8(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 				event := msg.Value.(*ntypes.Event)
 				return processor.Message{Key: event.NewAuction.Seller, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 			}))
-	auction.StreamStreamJoin(person,
+	auction.StreamStreamJoin("join-auction-persion", person,
 		processor.ValueJoinerWithKeyFunc(func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
 			key := readOnlyKey.(stream.WindowedKey)
 			rv := rightValue.(*ntypes.Event)

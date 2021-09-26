@@ -39,12 +39,12 @@ type Stream interface {
 	ProcessWithStateStores(name string, p processor.Processor, stateStoreName ...string) Stream
 	GroupBy(name string, mapper processor.Mapper, grouped *Grouped) GroupedStream
 	GroupByKey(grouped *Grouped) GroupedStream
-	StreamStreamJoin(other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream
-	StreamStreamLeftJoin(other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream
-	StreamStreamOuterJoin(other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream
-	StreamTableJoin(other Table, joiner processor.ValueJoinerWithKey) Stream
-	StreamTableLeftJoin(other Table, joiner processor.ValueJoinerWithKey) Stream
-	StreamTableOuterJoin(other Table, joiner processor.ValueJoinerWithKey) Stream
+	StreamStreamJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream
+	StreamStreamLeftJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream
+	StreamStreamOuterJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream
+	StreamTableJoin(name string, other Table, joiner processor.ValueJoinerWithKey) Stream
+	StreamTableLeftJoin(name string, other Table, joiner processor.ValueJoinerWithKey) Stream
+	StreamTableOuterJoin(name string, other Table, joiner processor.ValueJoinerWithKey) Stream
 	ToTable(name string) Table
 }
 
@@ -147,37 +147,37 @@ func (s *StreamImpl) GroupByKey(grouped *Grouped) GroupedStream {
 	return newGroupedStream(s.tp, s.parents, grouped)
 }
 
-func (s *StreamImpl) StreamStreamJoin(other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream {
-	log.Fatal().Msgf("Not implemented")
+func (s *StreamImpl) StreamStreamJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream {
+	log.Fatal().Msgf("StreamStreamJoin Not implemented")
 	return nil
 }
 
-func (s *StreamImpl) StreamStreamLeftJoin(other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream {
-	log.Fatal().Msgf("Not implemented")
+func (s *StreamImpl) StreamStreamLeftJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream {
+	log.Fatal().Msgf("StreamStreamLeftJoin Not implemented")
 	return nil
 }
 
-func (s *StreamImpl) StreamStreamOuterJoin(other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream {
-	log.Fatal().Msgf("Not implemented")
+func (s *StreamImpl) StreamStreamOuterJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream {
+	log.Fatal().Msgf("StreamStreamOuterJoin Not implemented")
 	return nil
 }
 
-func (s *StreamImpl) StreamTableJoin(other Table, joiner processor.ValueJoinerWithKey) Stream {
-	log.Fatal().Msgf("Not implemented")
+func (s *StreamImpl) StreamTableJoin(name string, other Table, joiner processor.ValueJoinerWithKey) Stream {
+	log.Fatal().Msgf("StreamTableJoin Not implemented")
 	return nil
 }
 
-func (s *StreamImpl) StreamTableLeftJoin(other Table, joiner processor.ValueJoinerWithKey) Stream {
-	log.Fatal().Msgf("Not implemented")
+func (s *StreamImpl) StreamTableLeftJoin(name string, other Table, joiner processor.ValueJoinerWithKey) Stream {
+	log.Fatal().Msgf("StreamTableLeftJoin Not implemented")
 	return nil
 }
 
-func (s *StreamImpl) StreamTableOuterJoin(other Table, joiner processor.ValueJoinerWithKey) Stream {
-	log.Fatal().Msgf("Not implemented")
+func (s *StreamImpl) StreamTableOuterJoin(name string, other Table, joiner processor.ValueJoinerWithKey) Stream {
+	log.Fatal().Msgf("StreamTableOuterJoin Not implemented")
 	return nil
 }
 
 func (s *StreamImpl) ToTable(name string) Table {
-	log.Fatal().Msgf("Not implemented")
+	log.Fatal().Msgf("ToTable Not implemented")
 	return nil
 }

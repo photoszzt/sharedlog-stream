@@ -55,17 +55,15 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		return
 	}
 
-	/*
-		outputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.OutputTopicName)
-		if err != nil {
-			output <- &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("NewSharedlogStream for output stream failed: %v", err),
-			}
-			return
+	outputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.OutputTopicName)
+	if err != nil {
+		output <- &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("NewSharedlogStream for output stream failed: %v", err),
 		}
-		var msgEncoder processor.MsgEncoder
-	*/
+		return
+	}
+
 	msgSerde, err := processor.GetMsgSerde(input.SerdeFormat)
 	if err != nil {
 		output <- &common.FnOutput{
@@ -82,14 +80,15 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	}
 	var seSerde processor.Serde
 	var aucIdCountSerde processor.Serde
+	var aucIdCntMaxSerde processor.Serde
 	if input.SerdeFormat == uint8(processor.JSON) {
-		// msgEncoder = ntypes.MessageSerializedJSONEncoder{}
 		seSerde = ntypes.StartEndTimeJSONSerde{}
 		aucIdCountSerde = ntypes.AuctionIdCountJSONSerde{}
+		aucIdCntMaxSerde = ntypes.AuctionIdCntMaxJSONSerde{}
 	} else if input.SerdeFormat == uint8(processor.MSGP) {
-		// msgEncoder = ntypes.MessageSerializedMsgpEncoder{}
 		seSerde = ntypes.StartEndTimeMsgpSerde{}
 		aucIdCountSerde = ntypes.AuctionIdCountMsgpSerde{}
+		aucIdCntMaxSerde = ntypes.AuctionIdCntMaxMsgpSerde{}
 	} else {
 		output <- &common.FnOutput{
 			Success: false,
@@ -100,7 +99,7 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	inputs := builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream, int(input.Duration),
 		processor.StringDecoder{}, eventSerde, msgSerde))
 	bid := inputs.Filter("filter-bid", processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
-		event := msg.Value.(ntypes.Event)
+		event := msg.Value.(*ntypes.Event)
 		return event.Etype == ntypes.BID, nil
 	})).Map("select-key", processor.MapperFunc(func(msg processor.Message) (processor.Message, error) {
 		event := msg.Value.(*ntypes.Event)
@@ -141,10 +140,9 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 			}))
 
 	auctionBids.
-		ToTable("auctionBids-to-table").
-		Join("join-auctionbids-maxbids",
+		StreamTableJoin("join-auctionbids-maxbids",
 			maxBids,
-			processor.ValueJointerFunc(func(leftValue interface{}, rightValue interface{}) interface{} {
+			processor.ValueJoinerWithKeyFunc(func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
 				lv := leftValue.(*ntypes.AuctionIdCount)
 				rv := rightValue.(uint64)
 				return &ntypes.AuctionIdCntMax{
@@ -156,7 +154,8 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		Filter("choose-maxcnt", processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
 			v := msg.Value.(*ntypes.AuctionIdCntMax)
 			return v.Count >= v.MaxCnt, nil
-		}), "")
+		})).
+		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, seSerde, aucIdCntMaxSerde, msgSerde))
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {
 		output <- &common.FnOutput{

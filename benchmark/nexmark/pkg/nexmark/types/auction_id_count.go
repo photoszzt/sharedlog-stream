@@ -1,4 +1,4 @@
-//go:generate greenpack
+//go:generate msgp
 //msgp:ignore AuctionIdCountJSONEncoder AuctionIdCountJSONDecoder AuctionIdCountJSONSerde
 //msgp:ignore AuctionIdCountMsgpEncoder AuctionIdCountMsgpDecoder AuctionIdCountMsgpSerde
 package types
@@ -10,8 +10,8 @@ import (
 )
 
 type AuctionIdCount struct {
-	AucId uint64 `zid:"0"`
-	Count uint64 `zid:"1"`
+	AucId uint64 `json:"aucId" msg:"aucId"`
+	Count uint64 `json:"cnt" msg:"cnt"`
 }
 
 type AuctionIdCountJSONEncoder struct{}

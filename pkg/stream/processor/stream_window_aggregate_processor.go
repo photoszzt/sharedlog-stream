@@ -31,8 +31,8 @@ func (p *StreamWindowAggregateProcessor) WithProcessorContext(pctx ProcessorCont
 }
 
 func (p *StreamWindowAggregateProcessor) Process(msg Message) error {
-	if msg.Key == nil || msg.Value == nil {
-		log.Warn().Msgf("skipping record due to null key or value. key=%v, val=%v", msg.Key, msg.Value)
+	if msg.Key == nil {
+		log.Warn().Msgf("skipping record due to null key. key=%v, val=%v", msg.Key, msg.Value)
 		return nil
 	}
 	ts := msg.Timestamp

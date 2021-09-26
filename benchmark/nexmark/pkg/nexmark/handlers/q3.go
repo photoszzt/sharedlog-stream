@@ -115,7 +115,7 @@ func Query3(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		})).
 		ToTable("convert-to-table")
 
-	auctionsBySellerId.Join("join", personsById, processor.ValueJointerFunc(func(leftVal interface{}, rightVal interface{}) interface{} {
+	auctionsBySellerId.Join("join", personsById, processor.ValueJoinerFunc(func(leftVal interface{}, rightVal interface{}) interface{} {
 		event := rightVal.(*ntypes.Event)
 		return &ntypes.NameCityStateId{
 			Name:  event.NewPerson.Name,
