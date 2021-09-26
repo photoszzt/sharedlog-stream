@@ -14,14 +14,16 @@ func (t Topology) Processors() []Node {
 }
 
 type TopologyBuilder struct {
-	sources    map[Source]Node
-	processors []Node
+	sources        map[Source]Node
+	processors     []Node
+	keyValueStores []Node
 }
 
 func NewTopologyBuilder() *TopologyBuilder {
 	return &TopologyBuilder{
-		sources:    map[Source]Node{},
-		processors: []Node{},
+		sources:        map[Source]Node{},
+		processors:     []Node{},
+		keyValueStores: []Node{},
 	}
 }
 
@@ -37,6 +39,12 @@ func (tb *TopologyBuilder) AddProcessor(name string, processor Processor, parent
 		parent.AddChild(n)
 	}
 	tb.processors = append(tb.processors, n)
+	return n
+}
+
+func (tb *TopologyBuilder) AddKeyValueStore(name string) Node {
+	n := NewKeyValueStoreNode(name)
+	tb.keyValueStores = append(tb.keyValueStores, n)
 	return n
 }
 

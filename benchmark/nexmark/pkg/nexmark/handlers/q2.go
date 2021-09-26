@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"sharedlog-stream/benchmark/common"
@@ -47,12 +46,12 @@ func (h *query2Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 }
 
 func filterFunc(msg *processor.Message) (bool, error) {
-	event := msg.Value.(ntypes.Event)
+	event := msg.Value.(*ntypes.Event)
 	return event.Bid.Auction%123 == 0, nil
 }
 
 func Query2(ctx context.Context, env types.Environment, input *common.QueryInput, output chan *common.FnOutput) {
-	fmt.Fprintf(os.Stderr, "input topic name is %v\n", input.InputTopicName)
+	// fmt.Fprintf(os.Stderr, "input topic name is %v\n", input.InputTopicName)
 	inputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.InputTopicName)
 	if err != nil {
 		output <- &common.FnOutput{

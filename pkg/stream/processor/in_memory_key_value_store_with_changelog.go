@@ -15,19 +15,18 @@ type InMemoryKeyValueStoreWithChangelog struct {
 	msgSerde   MsgSerde
 }
 
-func NewInMemoryKeyValueStoreWithChangelog(name string,
-	keySerde Serde, valSerde Serde, msgSerde MsgSerde, logStore LogStore) *InMemoryKeyValueStoreWithChangelog {
+func NewInMemoryKeyValueStoreWithChangelog(mp *MaterializeParam) *InMemoryKeyValueStoreWithChangelog {
 
 	return &InMemoryKeyValueStoreWithChangelog{
-		kvstore: NewInMemoryKeyValueStore(name, func(a treemap.Key, b treemap.Key) int {
+		kvstore: NewInMemoryKeyValueStore(mp.StoreName, func(a treemap.Key, b treemap.Key) int {
 			valA := a.([]byte)
 			valB := b.([]byte)
 			return bytes.Compare(valA, valB)
 		}),
-		keySerde:   keySerde,
-		valueSerde: valSerde,
-		logStore:   logStore,
-		msgSerde:   msgSerde,
+		keySerde:   mp.KeySerde,
+		valueSerde: mp.ValueSerde,
+		logStore:   mp.Changelog,
+		msgSerde:   mp.MsgSerde,
 	}
 }
 

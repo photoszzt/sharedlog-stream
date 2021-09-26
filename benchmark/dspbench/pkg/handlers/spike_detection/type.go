@@ -36,7 +36,7 @@ func (d SensorDataMsgpSerde) Decode(value []byte) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	return sd, nil
+	return &sd, nil
 }
 
 func (d SensorDataJSONSerde) Decode(value []byte) (interface{}, error) {
@@ -44,7 +44,7 @@ func (d SensorDataJSONSerde) Decode(value []byte) (interface{}, error) {
 	if err := json.Unmarshal(value, &sd); err != nil {
 		return nil, err
 	}
-	return sd, nil
+	return &sd, nil
 }
 
 type ValAndAvg struct {
@@ -61,11 +61,7 @@ type SumAndHist struct {
 type SumAndHistJSONSerde struct{}
 
 func (s SumAndHistJSONSerde) Encode(value interface{}) ([]byte, error) {
-	val, ok := value.(*SumAndHist)
-	if !ok {
-		valTmp := value.(SumAndHist)
-		val = &valTmp
-	}
+	val := value.(*SumAndHist)
 	return json.Marshal(val)
 }
 
@@ -74,17 +70,13 @@ func (s SumAndHistJSONSerde) Decode(value []byte) (interface{}, error) {
 	if err := json.Unmarshal(value, &sh); err != nil {
 		return nil, err
 	}
-	return sh, nil
+	return &sh, nil
 }
 
 type SumAndHistMsgpSerde struct{}
 
 func (s SumAndHistMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	val, ok := value.(*SumAndHist)
-	if !ok {
-		valTmp := value.(SumAndHist)
-		val = &valTmp
-	}
+	val := value.(*SumAndHist)
 	return val.MarshalMsg(nil)
 }
 
@@ -94,5 +86,5 @@ func (s SumAndHistMsgpSerde) Decode(value []byte) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	return value, nil
+	return &value, nil
 }

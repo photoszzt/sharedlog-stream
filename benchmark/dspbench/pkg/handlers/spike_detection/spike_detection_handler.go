@@ -120,14 +120,14 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 				Changelog:  changeLog,
 			},
 			processor.InitializerFunc(func() interface{} {
-				return SumAndHist{
+				return &SumAndHist{
 					Sum:     0,
 					history: make([]float64, movingAverageWindow),
 				}
 			}),
 			processor.AggregatorFunc(func(key interface{}, value interface{}, agg interface{}) interface{} {
-				nextVal := value.(SensorData)
-				aggVal := agg.(SumAndHist)
+				nextVal := value.(*SensorData)
+				aggVal := agg.(*SumAndHist)
 				var newHist []float64
 				newSum := aggVal.Sum
 				if len(aggVal.history) > movingAverageWindow-1 {
@@ -137,13 +137,13 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 				}
 				newHist = append(newHist, nextVal.Val)
 				newSum += nextVal.Val
-				return SumAndHist{
+				return &SumAndHist{
 					Sum:     newSum,
 					history: newHist,
 				}
 			})).
 		MapValues("calc-avg", processor.ValueMapperFunc(func(value interface{}) (interface{}, error) {
-			val := value.(SumAndHist)
+			val := value.(*SumAndHist)
 			return ValAndAvg{
 				Val: val.Val,
 				Avg: val.Sum / float64(len(val.history)),

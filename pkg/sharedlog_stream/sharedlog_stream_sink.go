@@ -46,6 +46,7 @@ func (sls *SharedLogStreamSink) Process(msg processor.Message) error {
 	if err != nil {
 		return err
 	}
+	// fmt.Fprintf(os.Stderr, "Sink: output key: %v, val: %v\n", string(keyEncoded), string(valEncoded))
 	bytes, err := sls.msgEncoder.Encode(keyEncoded, valEncoded)
 	if bytes != nil && err == nil {
 		_, err = sls.stream.Push(bytes)

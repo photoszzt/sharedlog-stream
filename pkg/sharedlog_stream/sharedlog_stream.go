@@ -3,10 +3,10 @@
 package sharedlog_stream
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"sharedlog-stream/pkg/stream/processor"
 	"time"
 
@@ -119,22 +119,22 @@ func (s *SharedLogStream) Push(payload []byte) (uint64, error) {
 	tags := []uint64{stag, sptag}
 	seqNum, err := s.env.SharedLogAppend(s.ctx, tags, encoded)
 	// fmt.Printf("Push to stream with tag %x, %x, seqNum: %x\n", stag, sptag, seqNum)
-	/*
-		// verify that it's appended
-		if err != nil {
-			return 0, err
-		}
-		logEntryRead, err := s.env.SharedLogReadNext(s.ctx, 0, seqNum)
-		if err != nil {
-			return 0, err
-		}
-		if logEntryRead == nil || logEntryRead.SeqNum != seqNum {
-			return 0, fmt.Errorf("Fail to read the log just appended")
-		}
-		if bytes.Compare(encoded, logEntryRead.Data) != 0 {
-			return 0, fmt.Errorf("Log data mismatch")
-		}
-	*/
+
+	// verify that it's appended
+	if err != nil {
+		return 0, err
+	}
+	logEntryRead, err := s.env.SharedLogReadNext(s.ctx, 0, seqNum)
+	if err != nil {
+		return 0, err
+	}
+	if logEntryRead == nil || logEntryRead.SeqNum != seqNum {
+		return 0, fmt.Errorf("fail to read the log just appended")
+	}
+	if !bytes.Equal(encoded, logEntryRead.Data) {
+		return 0, fmt.Errorf("log data mismatch")
+	}
+
 	return seqNum, err
 }
 
@@ -146,6 +146,7 @@ func (s *SharedLogStream) isEmpty() bool {
 func (s *SharedLogStream) findNext(minSeqNum, maxSeqNum uint64) (*StreamLogEntry, error) {
 	tag := streamPushLogTag(s.topicNameHash)
 	seqNum := minSeqNum
+	// fmt.Fprintf(os.Stderr, "findNext: minSeqNum 0x%x, maxSeqNum 0x%x\n", minSeqNum, maxSeqNum)
 	for seqNum < maxSeqNum {
 		logEntry, err := s.env.SharedLogReadNextBlock(s.ctx, tag, seqNum)
 		if err != nil {
@@ -156,6 +157,7 @@ func (s *SharedLogStream) findNext(minSeqNum, maxSeqNum uint64) (*StreamLogEntry
 		}
 		streamLogEntry := decodeStreamLogEntry(logEntry)
 		if streamLogEntry.IsPush && streamLogEntry.TopicName == s.topicName {
+			// fmt.Fprintf(os.Stderr, "findNext: found entry with seqNum: 0x%x\n", logEntry.SeqNum)
 			return streamLogEntry, nil
 		}
 		seqNum = logEntry.SeqNum + 1
@@ -184,6 +186,7 @@ func (s *SharedLogStream) applyLog(streamLogEntry *StreamLogEntry) error {
 		}
 	}
 	s.nextSeqNum = streamLogEntry.seqNum + 1
+	// fmt.Fprintf(os.Stderr, "update stream next seq num to %x\n", s.nextSeqNum)
 	return nil
 }
 
@@ -219,17 +222,20 @@ func (s *SharedLogStream) syncToBackward(tailSeqNum uint64) error {
 		if err != nil {
 			return err
 		}
-		if logEntry != nil {
-			fmt.Fprintf(os.Stderr, "cur entry seqnum: %v, next seq num: %v\n", logEntry.SeqNum, s.nextSeqNum)
-		} else {
-			fmt.Fprintf(os.Stderr, "found nil entry\n")
-		}
+		/*
+			if logEntry != nil {
+				fmt.Fprintf(os.Stderr, "cur entry seqnum: 0x%x, next seq num: 0x%x\n", logEntry.SeqNum, s.nextSeqNum)
+			} else {
+				fmt.Fprintf(os.Stderr, "found nil entry\n")
+			}
+		*/
 		if logEntry == nil || logEntry.SeqNum < s.nextSeqNum {
 			break
 		}
+
 		seqNum = logEntry.SeqNum
 		streamLogEntry := decodeStreamLogEntry(logEntry)
-		fmt.Fprintf(os.Stderr, "found tp: %v, need tp: %v\n", streamLogEntry.TopicName, s.topicName)
+		// fmt.Fprintf(os.Stderr, "found tp: %v, need tp: %v\n", streamLogEntry.TopicName, s.topicName)
 		if streamLogEntry.TopicName != s.topicName {
 			continue
 		}
@@ -237,7 +243,7 @@ func (s *SharedLogStream) syncToBackward(tailSeqNum uint64) error {
 			s.nextSeqNum = streamLogEntry.seqNum + 1
 			s.consumed = streamLogEntry.auxData.Consumed
 			s.tail = streamLogEntry.auxData.Tail
-			// fmt.Printf("Update tail with auxData to %x\n", s.tail)
+			// fmt.Fprintf(os.Stderr, "Update nextSeqNum to 0x%x, consumed to 0x%x, tail to 0x%x with auxData\n", s.nextSeqNum, s.consumed, s.tail)
 			break
 		} else {
 			streamLogs = append(streamLogs, streamLogEntry)

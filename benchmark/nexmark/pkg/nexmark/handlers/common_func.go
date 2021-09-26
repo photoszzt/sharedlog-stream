@@ -8,7 +8,7 @@ import (
 )
 
 func only_bid(msg *processor.Message) (bool, error) {
-	event := msg.Value.(ntypes.Event)
+	event := msg.Value.(*ntypes.Event)
 	return event.Etype == ntypes.BID, nil
 }
 

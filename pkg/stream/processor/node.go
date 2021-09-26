@@ -1,5 +1,7 @@
 package processor
 
+import "github.com/rs/zerolog/log"
+
 type Node interface {
 	// Name: get node name
 	Name() string
@@ -37,6 +39,34 @@ func (s *SourceNode) Children() []Node {
 }
 
 func (s *SourceNode) Processor() Processor {
+	return nil
+}
+
+var _ = Node(&KeyValueStoreNode{})
+
+type KeyValueStoreNode struct {
+	name string
+}
+
+func NewKeyValueStoreNode(name string) *KeyValueStoreNode {
+	return &KeyValueStoreNode{
+		name: name,
+	}
+}
+
+func (s *KeyValueStoreNode) Name() string {
+	return s.name
+}
+
+func (s *KeyValueStoreNode) AddChild(node Node) {
+	log.Error().Msg("KeyValueStoreNode doesn't have child")
+}
+
+func (s *KeyValueStoreNode) Children() []Node {
+	return nil
+}
+
+func (s *KeyValueStoreNode) Processor() Processor {
 	return nil
 }
 

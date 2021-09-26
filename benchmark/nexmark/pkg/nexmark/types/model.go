@@ -107,18 +107,14 @@ type EventJSONSerde struct{}
 var _ = processor.Encoder(EventJSONSerde{})
 
 func (e EventJSONSerde) Encode(value interface{}) ([]byte, error) {
-	event, ok := value.(*Event)
-	if !ok {
-		evTmp := value.(Event)
-		event = &evTmp
-	}
+	event := value.(*Event)
 	return json.Marshal(event)
 }
 
 var _ = processor.Decoder(EventMsgpSerde{})
 
 func (emd EventMsgpSerde) Decode(value []byte) (interface{}, error) {
-	e := Event{}
+	e := &Event{}
 	_, err := e.UnmarshalMsg(value)
 	if err != nil {
 		return nil, err
@@ -129,8 +125,8 @@ func (emd EventMsgpSerde) Decode(value []byte) (interface{}, error) {
 var _ = processor.Decoder(EventJSONSerde{})
 
 func (ejd EventJSONSerde) Decode(value []byte) (interface{}, error) {
-	e := Event{}
-	if err := json.Unmarshal(value, &e); err != nil {
+	e := &Event{}
+	if err := json.Unmarshal(value, e); err != nil {
 		return nil, err
 	}
 	return e, nil

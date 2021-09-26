@@ -46,13 +46,14 @@ func (h *query1Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 }
 
 func mapFunc(msg processor.Message) (processor.Message, error) {
-	event := msg.Value.(ntypes.Event)
+	event := msg.Value.(*ntypes.Event)
 	event.Bid.Price = uint64(event.Bid.Price * 908 / 1000.0)
 	return processor.Message{Value: event}, nil
 
 }
 
 func Query1(ctx context.Context, env types.Environment, input *common.QueryInput, output chan *common.FnOutput) {
+	// fmt.Fprintf(os.Stderr, "input topic name: %v, output topic name: %v\n", input.InputTopicName, input.OutputTopicName)
 	inputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.InputTopicName)
 	if err != nil {
 		output <- &common.FnOutput{
