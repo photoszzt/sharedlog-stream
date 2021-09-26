@@ -35,7 +35,7 @@ type TimeWindows struct {
 }
 
 var (
-	tws = NewTimeWindows(time.Duration(5) * time.Millisecond)
+	tws = NewTimeWindowsNoGrace(time.Duration(5) * time.Millisecond)
 	_   = EnumerableWindowDefinition(tws)
 )
 
@@ -51,15 +51,31 @@ var (
 // @return a new window definition with default maintain duration of 1 day
 // @return error if the specified window size is zero or negative
 //
-func NewTimeWindows(size time.Duration) *TimeWindows {
+func NewTimeWindowsNoGrace(size time.Duration) *TimeWindows {
 	sizeMs := size.Milliseconds()
 	if sizeMs <= 0 {
-		log.Fatal().Err(WindowSizeLeqZero)
+		log.Fatal().Err(DurationLeqZero)
 	}
 	return &TimeWindows{
 		SizeMs:    uint64(sizeMs),
 		AdvanceMs: uint64(sizeMs),
-		graceMs:   DEFAULT_RETENTION_MS,
+		graceMs:   0,
+	}
+}
+
+func NewTimeWindowWithGrace(size time.Duration, afterWindowEnd time.Duration) *TimeWindows {
+	sizeMs := size.Milliseconds()
+	if sizeMs <= 0 {
+		log.Fatal().Err(DurationLeqZero)
+	}
+	afterWindowEndMs := afterWindowEnd.Milliseconds()
+	if afterWindowEndMs <= 0 {
+		log.Fatal().Err(DurationLeqZero)
+	}
+	return &TimeWindows{
+		SizeMs:    uint64(sizeMs),
+		AdvanceMs: uint64(sizeMs),
+		graceMs:   uint64(afterWindowEndMs),
 	}
 }
 

@@ -39,11 +39,7 @@ type EnumerableWindowDefinition interface {
 }
 
 var (
-	WindowSizeLeqZero            = xerrors.New("Window size must be larger than zero")
+	DurationLeqZero              = xerrors.New("duration must be larger than zero")
 	WindowAdvanceLargerThanSize  = xerrors.New("window advance interval should be less than  window duration")
 	WindowAdvanceSmallerThanZero = xerrors.New("window advance interval should be larger than zero")
-)
-
-const (
-	DEFAULT_RETENTION_MS = uint64(24 * 60 * 60 * 1000)
 )

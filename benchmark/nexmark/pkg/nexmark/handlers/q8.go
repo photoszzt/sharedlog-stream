@@ -120,7 +120,7 @@ func Query8(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 				StartTime: key.Window.Start(),
 			}
 
-		}), *processor.NewJoinWindows(time.Duration(10) * time.Second)).
+		}), *processor.NewJoinWindowsNoGrace(time.Duration(10) * time.Second)).
 		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, processor.Uint64Encoder{}, ptSerde, msgSerde))
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {

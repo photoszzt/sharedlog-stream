@@ -44,13 +44,13 @@ type JoinWindows struct {
 }
 
 var (
-	jw = NewJoinWindows(time.Duration(5) * time.Millisecond)
+	jw = NewJoinWindowsNoGrace(time.Duration(5) * time.Millisecond)
 	_  = EnumerableWindowDefinition(jw)
 )
 
 func getJoinWindows(beforeMs uint64, afterMs uint64, graceMs uint64) *JoinWindows {
 	if beforeMs+afterMs < 0 {
-		log.Fatal().Err(WindowSizeLeqZero)
+		log.Fatal().Err(DurationLeqZero)
 	}
 	return &JoinWindows{
 		beforeMs: beforeMs,
@@ -59,13 +59,25 @@ func getJoinWindows(beforeMs uint64, afterMs uint64, graceMs uint64) *JoinWindow
 	}
 }
 
-func NewJoinWindows(timeDifference time.Duration) *JoinWindows {
+func NewJoinWindowsNoGrace(timeDifference time.Duration) *JoinWindows {
 	timeDifferenceMs := timeDifference.Milliseconds()
 	if timeDifferenceMs <= 0 {
-		log.Fatal().Err(WindowSizeLeqZero)
+		log.Fatal().Err(DurationLeqZero)
 	}
 	return getJoinWindows(uint64(timeDifferenceMs), uint64(timeDifferenceMs),
-		DEFAULT_RETENTION_MS)
+		0)
+}
+
+func NewJoinWindowsWithGrace(timeDifference time.Duration, afterWindowEnd time.Duration) *JoinWindows {
+	timeDifferenceMs := timeDifference.Milliseconds()
+	if timeDifferenceMs <= 0 {
+		log.Fatal().Err(DurationLeqZero)
+	}
+	afterWindowEndMs := afterWindowEnd.Milliseconds()
+	if afterWindowEndMs <= 0 {
+		log.Fatal().Err(DurationLeqZero)
+	}
+	return getJoinWindows(uint64(timeDifferenceMs), uint64(timeDifferenceMs), uint64(afterWindowEndMs))
 }
 
 /**
@@ -81,7 +93,7 @@ func NewJoinWindows(timeDifference time.Duration) *JoinWindows {
 func (w *JoinWindows) Before(timeDifference time.Duration) *JoinWindows {
 	timeDifferenceMs := timeDifference.Milliseconds()
 	if timeDifferenceMs <= 0 {
-		log.Fatal().Err(WindowSizeLeqZero)
+		log.Fatal().Err(DurationLeqZero)
 	}
 	return getJoinWindows(uint64(timeDifferenceMs), w.afterMs, w.graceMs)
 }
@@ -89,7 +101,7 @@ func (w *JoinWindows) Before(timeDifference time.Duration) *JoinWindows {
 func (w *JoinWindows) After(timeDifference time.Duration) *JoinWindows {
 	timeDifferenceMs := timeDifference.Milliseconds()
 	if timeDifferenceMs <= 0 {
-		log.Fatal().Err(WindowSizeLeqZero)
+		log.Fatal().Err(DurationLeqZero)
 	}
 	return getJoinWindows(w.beforeMs, uint64(timeDifferenceMs), w.graceMs)
 }

@@ -107,7 +107,7 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	}))
 	auctionBids := bid.
 		GroupByKey(&stream.Grouped{KeySerde: processor.Uint64Serde{}, Name: "group-by-auction-id"}).
-		WindowedBy(processor.NewTimeWindows(time.Duration(10)*time.Second).AdvanceBy(time.Duration(2)*time.Second)).
+		WindowedBy(processor.NewTimeWindowsNoGrace(time.Duration(10)*time.Second).AdvanceBy(time.Duration(2)*time.Second)).
 		Count("count").
 		ToStream().
 		Map("change-key", processor.MapperFunc(func(msg processor.Message) (processor.Message, error) {
