@@ -70,6 +70,32 @@ func (s *KeyValueStoreNode) Processor() Processor {
 	return nil
 }
 
+type WindowStoreNode struct {
+	name string
+}
+
+func NewWindowStoreNode(name string) *WindowStoreNode {
+	return &WindowStoreNode{
+		name: name,
+	}
+}
+
+func (s *WindowStoreNode) Name() string {
+	return s.name
+}
+
+func (s *WindowStoreNode) AddChild(node Node) {
+	log.Error().Msg("WindowStoreNode doesn't have child")
+}
+
+func (s *WindowStoreNode) Children() []Node {
+	return nil
+}
+
+func (s *WindowStoreNode) Processor() Processor {
+	return nil
+}
+
 var _ = (Node)(&ProcessorNode{})
 
 type ProcessorNode struct {

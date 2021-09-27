@@ -61,7 +61,7 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 		}
 		return
 	}
-	changeLog, err := sharedlog_stream.NewLogStore(ctx, env, input.InputTopicName)
+	changeLog, err := sharedlog_stream.NewLogStore(ctx, env, "moving-avg-log")
 	if err != nil {
 		output <- &common.FnOutput{
 			Success: false,

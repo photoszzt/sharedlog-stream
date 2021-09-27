@@ -8,6 +8,10 @@ type StreamJoinWindowProcessor struct {
 
 var _ = Processor(&StreamJoinWindowProcessor{})
 
+func NewStreamJoinWindowProcessor() *StreamJoinWindowProcessor {
+	return &StreamJoinWindowProcessor{}
+}
+
 // WithPipe sets the pipe on the Processor.
 func (p *StreamJoinWindowProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe

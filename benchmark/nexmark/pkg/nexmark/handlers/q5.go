@@ -64,6 +64,15 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		return
 	}
 
+	windowChangeLog, err := sharedlog_stream.NewLogStore(ctx, env, "count-log")
+	if err != nil {
+		output <- &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("NewSharedlogStream for input stream failed: %v", err),
+		}
+		return
+	}
+
 	msgSerde, err := processor.GetMsgSerde(input.SerdeFormat)
 	if err != nil {
 		output <- &common.FnOutput{
@@ -108,7 +117,13 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	auctionBids := bid.
 		GroupByKey(&stream.Grouped{KeySerde: processor.Uint64Serde{}, Name: "group-by-auction-id"}).
 		WindowedBy(processor.NewTimeWindowsNoGrace(time.Duration(10)*time.Second).AdvanceBy(time.Duration(2)*time.Second)).
-		Count("count").
+		Count("count", &processor.MaterializeParam{
+			KeySerde:   processor.Uint64Serde{},
+			ValueSerde: processor.Uint64Serde{},
+			MsgSerde:   msgSerde,
+			StoreName:  "q5-count-store",
+			Changelog:  windowChangeLog,
+		}).
 		ToStream().
 		Map("change-key", processor.MapperFunc(func(msg processor.Message) (processor.Message, error) {
 			key := msg.Key.(*stream.WindowedKey)

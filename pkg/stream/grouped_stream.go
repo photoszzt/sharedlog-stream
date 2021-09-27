@@ -1,8 +1,6 @@
 package stream
 
 import (
-	"fmt"
-	"os"
 	"sharedlog-stream/pkg/stream/processor"
 )
 
@@ -57,6 +55,5 @@ func (s *GroupedStreamImpl) Aggregate(name string, mp *processor.MaterializePara
 }
 
 func (s *GroupedStreamImpl) WindowedBy(windows processor.EnumerableWindowDefinition) TimeWindowedStream {
-	fmt.Fprintf(os.Stderr, "window by is not implemented\n")
-	panic("not implemented")
+	return newTimeWindowedStream(s.tp, s.parents, windows)
 }

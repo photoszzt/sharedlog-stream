@@ -17,6 +17,7 @@ type TopologyBuilder struct {
 	sources        map[Source]Node
 	processors     []Node
 	keyValueStores []Node
+	windowStores   []Node
 }
 
 func NewTopologyBuilder() *TopologyBuilder {
@@ -24,6 +25,7 @@ func NewTopologyBuilder() *TopologyBuilder {
 		sources:        map[Source]Node{},
 		processors:     []Node{},
 		keyValueStores: []Node{},
+		windowStores:   []Node{},
 	}
 }
 
@@ -45,6 +47,12 @@ func (tb *TopologyBuilder) AddProcessor(name string, processor Processor, parent
 func (tb *TopologyBuilder) AddKeyValueStore(name string) Node {
 	n := NewKeyValueStoreNode(name)
 	tb.keyValueStores = append(tb.keyValueStores, n)
+	return n
+}
+
+func (tb *TopologyBuilder) AddWindowStore(name string) Node {
+	n := NewWindowStoreNode(name)
+	tb.windowStores = append(tb.windowStores, n)
 	return n
 }
 

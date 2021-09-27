@@ -58,7 +58,9 @@ type StreamStreamJoinProcessor struct {
 
 var _ = Processor(&StreamStreamJoinProcessor{})
 
-func NewStreamStreamJoinProcessor() {}
+func NewStreamStreamJoinProcessor() *StreamStreamJoinProcessor {
+	return &StreamStreamJoinProcessor{}
+}
 
 func (p *StreamStreamJoinProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe

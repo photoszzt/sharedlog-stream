@@ -14,11 +14,12 @@ type StreamWindowAggregateProcessor struct {
 
 var _ = Processor(&StreamWindowAggregateProcessor{})
 
-func NewStreamWindowAggregateProcessor(initializer Initializer, aggregator Aggregator, windows EnumerableWindowDefinition) *StreamWindowAggregateProcessor {
+func NewStreamWindowAggregateProcessor(store WindowStore, initializer Initializer, aggregator Aggregator, windows EnumerableWindowDefinition) *StreamWindowAggregateProcessor {
 	return &StreamWindowAggregateProcessor{
 		initializer:        initializer,
 		aggregator:         aggregator,
 		observedStreamTime: 0,
+		store:              store,
 	}
 }
 
