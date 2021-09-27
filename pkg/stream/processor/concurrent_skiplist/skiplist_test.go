@@ -220,6 +220,39 @@ func TestMaxLevel(t *testing.T) {
 	list.Set(0, struct{}{})
 }
 
+func TestRemoveUtil(t *testing.T) {
+	list := New(CompareFunc(func(lhs interface{}, rhs interface{}) int {
+		l := lhs.(int)
+		r := rhs.(int)
+		if l < r {
+			return -1
+		} else if l == r {
+			return 0
+		} else {
+			return 1
+		}
+	}))
+	for i := 1; i <= 201; i++ {
+		list.Set(i, i*10)
+	}
+	checkSanity(list, t)
+	list.RemoveUntil(10)
+	checkSanity(list, t)
+	if list.Length != 192 {
+		t.Fatal("wrong list length", list.Length)
+	}
+
+	start := 10
+	for c := list.Front(); c != nil; c = c.Next() {
+		k := c.key.(int)
+		if k != start {
+			t.Fatalf("key order is wrong. expected %d got %d", start, k)
+		}
+		start += 1
+	}
+
+}
+
 func TestChangeProbability(t *testing.T) {
 	list := New(CompareFunc(func(lhs interface{}, rhs interface{}) int {
 		l := lhs.(int)

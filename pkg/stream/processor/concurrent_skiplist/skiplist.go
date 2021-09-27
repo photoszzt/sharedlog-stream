@@ -73,12 +73,54 @@ func (list *SkipList) Set(key KeyT, value ValueT) *Element {
 	return element
 }
 
+func (list *SkipList) SetIfAbsent(key KeyT, value ValueT) *Element {
+	list.mutex.Lock()
+	defer list.mutex.Unlock()
+	var element *Element
+	prevs := list.getPrevElementNodes(key)
+
+	if element = prevs[0].next[0]; element != nil && list.comparable.Compare(element.key, key) <= 0 {
+		return nil
+	}
+
+	element = &Element{
+		elementNode: elementNode{
+			next: make([]*Element, list.randLevel()),
+		},
+		key:   key,
+		value: value,
+	}
+
+	for i := range element.next {
+		element.next[i] = prevs[i].next[i]
+		prevs[i].next[i] = element
+	}
+
+	list.Length++
+	return element
+}
+
+func (list *SkipList) ComputeIfPresent(key KeyT, computeFunc func(*Element)) {
+	list.mutex.Lock()
+	defer list.mutex.Unlock()
+	var element *Element
+	prevs := list.getPrevElementNodes(key)
+
+	if element = prevs[0].next[0]; element != nil && list.comparable.Compare(element.key, key) == 0 {
+		computeFunc(element)
+	}
+}
+
 // Get finds an element by key. It returns element pointer if found, nil if not found.
 // Locking is optimistic and happens only after searching with a fast check for deletion after locking.
 func (list *SkipList) Get(key KeyT) *Element {
 	list.mutex.Lock()
 	defer list.mutex.Unlock()
 
+	return list.getWithLockHeld(key)
+}
+
+func (list *SkipList) getWithLockHeld(key KeyT) *Element {
 	var prev *elementNode = &list.elementNode
 	var next *Element
 
@@ -98,12 +140,28 @@ func (list *SkipList) Get(key KeyT) *Element {
 	return nil
 }
 
+func (list *SkipList) IterateRange(startK KeyT, endK KeyT, iterFunc func(KeyT, ValueT)) {
+	list.mutex.Lock()
+	defer list.mutex.Unlock()
+
+	beg := list.getWithLockHeld(startK)
+	end := list.getWithLockHeld(endK)
+
+	for i := beg; i != end; i = i.Next() {
+		iterFunc(i.key, i.value)
+	}
+}
+
 // Remove deletes an element from the list.
 // Returns removed element pointer if found, nil if not found.
 // Locking is optimistic and happens only after searching with a fast check on adjacent nodes after locking.
 func (list *SkipList) Remove(key KeyT) *Element {
 	list.mutex.Lock()
 	defer list.mutex.Unlock()
+	return list.removeWithLockHeld(key)
+}
+
+func (list *SkipList) removeWithLockHeld(key KeyT) *Element {
 	prevs := list.getPrevElementNodes(key)
 
 	// found the element, remove it
@@ -117,6 +175,24 @@ func (list *SkipList) Remove(key KeyT) *Element {
 	}
 
 	return nil
+}
+
+// Remove elements until key (key is not included)
+func (list *SkipList) RemoveUntil(key KeyT) []*Element {
+	list.mutex.Lock()
+	defer list.mutex.Unlock()
+
+	elements := make([]*Element, 0)
+	e := list.Front()
+	for e != nil {
+		if list.comparable.Compare(e.key, key) < 0 {
+			elements = append(elements, list.removeWithLockHeld(e.key))
+		} else {
+			break
+		}
+		e = list.Front()
+	}
+	return elements
 }
 
 // getPrevElementNodes is the private search mechanism that other functions use.
