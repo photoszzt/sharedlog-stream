@@ -78,7 +78,7 @@ func (p *StreamStreamJoinProcessor) Process(msg Message) error {
 	inputTs := msg.Timestamp
 	var timeFrom uint64
 	var timeTo uint64
-	timeFromTmp := inputTs - p.joinBeforeMs
+	timeFromTmp := int64(inputTs) - int64(p.joinBeforeMs)
 	if timeFromTmp < 0 {
 		timeFrom = 0
 	} else {
