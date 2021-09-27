@@ -98,22 +98,19 @@ func (p *StreamStreamJoinProcessor) Process(msg Message) error {
 
 	timeToSec := timeTo / 1000
 	timeToNs := (timeTo - timeToSec*1000) * 1000000
-	iter := p.otherWindowStore.Fetch(msg.Key,
+	p.otherWindowStore.Fetch(msg.Key,
 		time.Unix(int64(timeFromSec), int64(timeFromNs)),
-		time.Unix(int64(timeToSec), int64(timeToNs)))
-	for iter.HasNext() {
-		var newTs uint64
-		needOuterJoin = false
-		otherRecord := iter.Next()
-		otherRecordTs := otherRecord.Key.(uint64)
-		newVal := p.joiner.Apply(msg.Key, msg.Value, otherRecord.Value)
-		if inputTs > otherRecordTs {
-			newTs = inputTs
-		} else {
-			newTs = otherRecordTs
-		}
-		p.pipe.Forward(Message{Key: msg.Key, Value: newVal, Timestamp: newTs})
-	}
+		time.Unix(int64(timeToSec), int64(timeToNs)), func(otherRecordTs uint64, vt ValueT) {
+			var newTs uint64
+			needOuterJoin = false
+			newVal := p.joiner.Apply(msg.Key, msg.Value, vt)
+			if inputTs > otherRecordTs {
+				newTs = inputTs
+			} else {
+				newTs = otherRecordTs
+			}
+			p.pipe.Forward(Message{Key: msg.Key, Value: newVal, Timestamp: newTs})
+		})
 
 	if needOuterJoin {
 		// TODO

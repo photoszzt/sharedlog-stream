@@ -12,6 +12,7 @@ import (
 type InMemoryBytesWindowStore struct {
 	name       string
 	windowSize uint64
+	sctx       ProcessorContext
 
 	retentionPeriod    uint64
 	retainDuplicates   bool
@@ -21,9 +22,12 @@ type InMemoryBytesWindowStore struct {
 
 	otrMu           sync.RWMutex
 	openedTimeRange map[uint64]struct{}
+
+	valSerde Serde
 }
 
-func NewInMemoryBytesWindowStore(name string, retentionPeriod uint64, windowSize uint64, retainDuplicates bool) *InMemoryBytesWindowStore {
+func NewInMemoryBytesWindowStore(name string, retentionPeriod uint64,
+	windowSize uint64, retainDuplicates bool, valSerde Serde) *InMemoryBytesWindowStore {
 	return &InMemoryBytesWindowStore{
 		name:               name,
 		windowSize:         windowSize,
@@ -43,6 +47,11 @@ func NewInMemoryBytesWindowStore(name string, retentionPeriod uint64, windowSize
 			}
 		})),
 	}
+}
+
+func (st *InMemoryBytesWindowStore) Init(ctx ProcessorContext) {
+	st.sctx = ctx
+	st.open = true
 }
 
 func (s *InMemoryBytesWindowStore) Name() string {
@@ -95,7 +104,7 @@ func (s *InMemoryBytesWindowStore) Get(key []byte, windowStartTimestamp uint64) 
 	}
 }
 
-func (s *InMemoryBytesWindowStore) Fetch(key []byte, timeFrom time.Time, timeTo time.Time, iterFunc func(*KeyWithWindow, []byte)) {
+func (s *InMemoryBytesWindowStore) Fetch(key []byte, timeFrom time.Time, timeTo time.Time, iterFunc func(uint64, ValueT)) {
 	s.removeExpiredSegments()
 
 	tsFrom := timeFrom.UnixMilli()
@@ -110,27 +119,25 @@ func (s *InMemoryBytesWindowStore) Fetch(key []byte, timeFrom time.Time, timeTo 
 		return
 	}
 
-	s.store.IterateRange(uint64(tsFrom), uint64(tsTo), func(ts concurrent_skiplist.KeyT, val concurrent_skiplist.ValueT) {
+	s.store.IterateRange(uint64(tsFrom), uint64(tsTo), func(ts concurrent_skiplist.KeyT, val concurrent_skiplist.ValueT) error {
 		curT := ts.(uint64)
-		win, err := NewTimeWindow(curT, curT+s.windowSize)
-		if err != nil {
-			log.Fatal().Err(err)
-		}
-		kWin := &KeyWithWindow{
-			Key: curT,
-			Win: win,
-		}
 		v := val.(*concurrent_skiplist.SkipList)
 		elem := v.Get(key)
 		s.otrMu.Lock()
 		s.openedTimeRange[curT] = struct{}{}
 		s.otrMu.Unlock()
 
-		iterFunc(kWin, elem.Value().([]byte))
+		valInByte := elem.Value().([]byte)
+		realVal, err := s.valSerde.Decode(valInByte)
+		if err != nil {
+			return err
+		}
+		iterFunc(curT, realVal)
 
 		s.otrMu.Lock()
 		delete(s.openedTimeRange, curT)
 		s.otrMu.Unlock()
+		return nil
 	})
 }
 

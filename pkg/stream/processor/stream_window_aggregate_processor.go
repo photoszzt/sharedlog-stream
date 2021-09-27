@@ -50,7 +50,10 @@ func (p *StreamWindowAggregateProcessor) Process(msg Message) error {
 			var oldAgg interface{}
 			var newAgg interface{}
 			var newTs uint64
-			val, exists := p.store.Get(msg.Key, windowStart)
+			val, exists, err := p.store.Get(msg.Key, windowStart)
+			if err != nil {
+				return err
+			}
 			if exists {
 				oldAggTs := val.(*ValueTimestamp)
 				oldAgg = oldAggTs.Value

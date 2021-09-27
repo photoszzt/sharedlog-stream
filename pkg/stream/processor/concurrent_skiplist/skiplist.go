@@ -140,7 +140,7 @@ func (list *SkipList) getWithLockHeld(key KeyT) *Element {
 	return nil
 }
 
-func (list *SkipList) IterateRange(startK KeyT, endK KeyT, iterFunc func(KeyT, ValueT)) {
+func (list *SkipList) IterateRange(startK KeyT, endK KeyT, iterFunc func(KeyT, ValueT) error) error {
 	list.mutex.Lock()
 	defer list.mutex.Unlock()
 
@@ -148,8 +148,12 @@ func (list *SkipList) IterateRange(startK KeyT, endK KeyT, iterFunc func(KeyT, V
 	end := list.getWithLockHeld(endK)
 
 	for i := beg; i != end; i = i.Next() {
-		iterFunc(i.key, i.value)
+		err := iterFunc(i.key, i.value)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // Remove deletes an element from the list.
