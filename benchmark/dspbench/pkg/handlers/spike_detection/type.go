@@ -1,4 +1,4 @@
-//go:generate greenpack
+//go:generate msgp
 //msgp:ignore SensorDataMsgpEncoder
 package spike_detection
 
@@ -8,8 +8,8 @@ import (
 )
 
 type SensorData struct {
-	Val       float64 `json:"val" zid:"0" msg:"val"`
-	Timestamp uint64  `json:"ts" zid:"1" msg:"ts"`
+	Val       float64 `json:"val" msg:"val"`
+	Timestamp uint64  `json:"ts" msg:"ts"`
 }
 
 type SensorDataMsgpSerde struct{}

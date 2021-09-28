@@ -1,4 +1,4 @@
-//go:generate greenpack
+//go:generate msgp
 //msgp:ignore TransactionCoordinator
 package sharedlog_stream
 

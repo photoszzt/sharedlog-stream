@@ -1,4 +1,4 @@
-//go:generate greenpack
+//go:generate msgp
 //msgp:ignore ValueTimestamp Change ValueTimestampJSONSerde ValueTimestampMsgpSerde
 package processor
 

@@ -86,14 +86,6 @@ func encode_sensor_event(keySerde processor.Serde,
 
 func (h *spikeDetectionSource) eventGeneration(ctx context.Context,
 	env types.Environment, sp *common.SourceParam) *common.FnOutput {
-	err := h.parseFile(sp.FileName)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("parse input file failed: %v, source param is %v", err, sp),
-		}
-	}
-
 	stream, err := sharedlog_stream.NewSharedLogStream(ctx, env, sp.TopicName)
 	if err != nil {
 		return &common.FnOutput{

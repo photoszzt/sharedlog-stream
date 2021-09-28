@@ -1,4 +1,4 @@
-//go:generate greenpack
+//go:generate msgp
 //msgp:ignore PersonTimeJSONEncoder PersonTimeJSONDecoder PersonTimeJSONSerde
 //msgp:ignore PersonTimeMsgpEncoder PersonTimeMsgpDecoder PersonTimeMsgpSerde
 package types

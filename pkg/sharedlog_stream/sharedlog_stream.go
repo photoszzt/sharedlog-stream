@@ -1,5 +1,5 @@
 //go:generate msgp
-//msg:ignore SharedLogStream
+//msgp:ignore SharedLogStream
 package sharedlog_stream
 
 import (
