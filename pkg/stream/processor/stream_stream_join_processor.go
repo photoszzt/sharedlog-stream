@@ -43,9 +43,10 @@ func (t *TimeTracker) AdvanceNextTimeToEmit() {
 }
 
 type StreamStreamJoinProcessor struct {
-	pipe              Pipe
-	otherWindowStore  WindowStore
-	pctx              ProcessorContext
+	pipe             Pipe
+	pctx             ProcessorContext
+	otherWindowStore WindowStore
+
 	otherWindowName   string
 	joinBeforeMs      uint64
 	joinAfterMs       uint64
@@ -53,13 +54,29 @@ type StreamStreamJoinProcessor struct {
 	joiner            ValueJoinerWithKey
 	outer             bool
 	isLeftSide        bool
-	sharedTimeTracker TimeTracker
+	sharedTimeTracker *TimeTracker
 }
 
 var _ = Processor(&StreamStreamJoinProcessor{})
 
-func NewStreamStreamJoinProcessor() *StreamStreamJoinProcessor {
-	return &StreamStreamJoinProcessor{}
+func NewStreamStreamJoinProcessor(otherWindowName string, jw *JoinWindows, joiner ValueJoinerWithKey,
+	outer bool, isLeftSide bool, stk *TimeTracker) *StreamStreamJoinProcessor {
+	ssjp := &StreamStreamJoinProcessor{
+		isLeftSide:        isLeftSide,
+		outer:             outer,
+		otherWindowName:   otherWindowName,
+		joiner:            joiner,
+		joinGraceMs:       jw.GracePeriodMs(),
+		sharedTimeTracker: stk,
+	}
+	if isLeftSide {
+		ssjp.joinBeforeMs = jw.beforeMs
+		ssjp.joinAfterMs = jw.afterMs
+	} else {
+		ssjp.joinBeforeMs = jw.afterMs
+		ssjp.joinAfterMs = jw.beforeMs
+	}
+	return ssjp
 }
 
 func (p *StreamStreamJoinProcessor) WithPipe(pipe Pipe) {
@@ -76,7 +93,7 @@ func (p *StreamStreamJoinProcessor) Process(msg Message) error {
 		return nil
 	}
 
-	needOuterJoin := p.outer
+	// needOuterJoin := p.outer
 	inputTs := msg.Timestamp
 	var timeFrom uint64
 	var timeTo uint64
@@ -104,7 +121,7 @@ func (p *StreamStreamJoinProcessor) Process(msg Message) error {
 		time.Unix(int64(timeFromSec), int64(timeFromNs)),
 		time.Unix(int64(timeToSec), int64(timeToNs)), func(otherRecordTs uint64, vt ValueT) {
 			var newTs uint64
-			needOuterJoin = false
+			// needOuterJoin = false
 			newVal := p.joiner.Apply(msg.Key, msg.Value, vt)
 			if inputTs > otherRecordTs {
 				newTs = inputTs
@@ -113,9 +130,10 @@ func (p *StreamStreamJoinProcessor) Process(msg Message) error {
 			}
 			p.pipe.Forward(Message{Key: msg.Key, Value: newVal, Timestamp: newTs})
 		})
-
-	if needOuterJoin {
-		// TODO
-	}
+	/*
+		if needOuterJoin {
+			// TODO
+		}
+	*/
 	return nil
 }

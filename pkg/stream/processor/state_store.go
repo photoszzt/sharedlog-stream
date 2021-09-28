@@ -11,3 +11,12 @@ type MaterializeParam struct {
 	StoreName  string
 	Changelog  LogStore
 }
+
+type JoinParam struct {
+	KeySerde             Serde
+	ValueSerde           Serde
+	OtherValueSerde      Serde
+	MsgSerde             MsgSerde
+	LeftWindowStoreName  string
+	RightWindowStoreName string
+}

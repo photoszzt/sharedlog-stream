@@ -37,13 +37,17 @@ func (s *GroupedStreamImpl) Count(name string, mp *processor.MaterializeParam) T
 		}))
 	n := s.tp.AddProcessor(name, p, s.parents)
 	_ = s.tp.AddKeyValueStore(store.Name())
-	return newTable(s.tp, []processor.Node{n})
+	return newTable(s.tp, []processor.Node{n}, mp.StoreName)
 }
 
 func (s *GroupedStreamImpl) Reduce(name string, reducer processor.Reducer) Table {
-	p := processor.NewStreamReduceProcessor(reducer)
-	n := s.tp.AddProcessor(name, p, s.parents)
-	return newTable(s.tp, []processor.Node{n})
+	panic("Not fully implemented")
+	/*
+		p := processor.NewStreamReduceProcessor(reducer)
+		n := s.tp.AddProcessor(name, p, s.parents)
+		// TODO: add the table name
+		return newTable(s.tp, []processor.Node{n}, "")
+	*/
 }
 
 func (s *GroupedStreamImpl) Aggregate(name string, mp *processor.MaterializeParam, initializer processor.Initializer, aggregator processor.Aggregator) Table {
@@ -51,7 +55,7 @@ func (s *GroupedStreamImpl) Aggregate(name string, mp *processor.MaterializePara
 	p := processor.NewStreamAggregateProcessor(store, initializer, aggregator)
 	n := s.tp.AddProcessor(name, p, s.parents)
 	_ = s.tp.AddKeyValueStore(store.Name())
-	return newTable(s.tp, []processor.Node{n})
+	return newTable(s.tp, []processor.Node{n}, mp.StoreName)
 }
 
 func (s *GroupedStreamImpl) WindowedBy(windows processor.EnumerableWindowDefinition) TimeWindowedStream {

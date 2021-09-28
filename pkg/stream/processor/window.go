@@ -23,11 +23,6 @@ type Window interface {
 	Overlap(other Window) (bool, error)
 }
 
-type KeyWithWindow struct {
-	Key interface{}
-	Win Window
-}
-
 type BaseWindow struct {
 	startTs uint64 // in ms
 	endTs   uint64 // in ms

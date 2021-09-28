@@ -13,36 +13,43 @@ type Table interface {
 	ToStream() Stream
 	Process(name string, p processor.Processor) Table
 	ProcessWithStateStores(name string, p processor.Processor, stateStoreName ...string) Table
+	StoreName() string
 }
 
 type TableImpl struct {
-	tp      *processor.TopologyBuilder
-	parents []processor.Node
+	tp        *processor.TopologyBuilder
+	parents   []processor.Node
+	storeName string
 }
 
-func newTable(tp *processor.TopologyBuilder, parents []processor.Node) Table {
+func newTable(tp *processor.TopologyBuilder, parents []processor.Node, storeName string) Table {
 	return &TableImpl{
-		tp:      tp,
-		parents: parents,
+		tp:        tp,
+		parents:   parents,
+		storeName: storeName,
 	}
+}
+
+func (t *TableImpl) StoreName() string {
+	return t.storeName
 }
 
 func (t *TableImpl) Filter(name string, pred processor.Predicate, queryableName string) Table {
 	p := processor.NewTableFilterProcessor(pred, false, queryableName)
 	n := t.tp.AddProcessor(name, p, t.parents)
-	return newTable(t.tp, []processor.Node{n})
+	return newTable(t.tp, []processor.Node{n}, t.storeName)
 }
 
 func (t *TableImpl) FilterNot(name string, pred processor.Predicate, queryableName string) Table {
 	p := processor.NewTableFilterProcessor(pred, true, queryableName)
 	n := t.tp.AddProcessor(name, p, t.parents)
-	return newTable(t.tp, []processor.Node{n})
+	return newTable(t.tp, []processor.Node{n}, t.storeName)
 }
 
 func (t *TableImpl) MapValues(name string, mapper processor.ValueMapper, queryableName string) Table {
 	p := processor.NewTableMapValuesProcessor(mapper, queryableName)
 	n := t.tp.AddProcessor(name, p, t.parents)
-	return newTable(t.tp, []processor.Node{n})
+	return newTable(t.tp, []processor.Node{n}, t.storeName)
 }
 
 func (t *TableImpl) MapValuesWithKey(name string, mapper processor.Mapper, queryableName string) Table {

@@ -1,15 +1,18 @@
 package processor
 
 type StreamJoinWindowProcessor struct {
-	pipe     Pipe
-	winStore WindowStore
-	pctx     ProcessorContext
+	pipe       Pipe
+	winStore   WindowStore
+	pctx       ProcessorContext
+	windowName string
 }
 
 var _ = Processor(&StreamJoinWindowProcessor{})
 
-func NewStreamJoinWindowProcessor() *StreamJoinWindowProcessor {
-	return &StreamJoinWindowProcessor{}
+func NewStreamJoinWindowProcessor(windowName string) *StreamJoinWindowProcessor {
+	return &StreamJoinWindowProcessor{
+		windowName: windowName,
+	}
 }
 
 // WithPipe sets the pipe on the Processor.
@@ -20,6 +23,7 @@ func (p *StreamJoinWindowProcessor) WithPipe(pipe Pipe) {
 // WithProcessorContext sets the context on the processor
 func (p *StreamJoinWindowProcessor) WithProcessorContext(pctx ProcessorContext) {
 	p.pctx = pctx
+	p.winStore = p.pctx.GetWindowStore(p.windowName)
 }
 
 // Process processes the stream Message.

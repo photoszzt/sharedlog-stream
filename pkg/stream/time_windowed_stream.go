@@ -41,7 +41,7 @@ func (s *TimeWindowedStreamImpl) Count(name string, mp *processor.MaterializePar
 		}), s.windowDefs)
 	n := s.tp.AddProcessor(name, p, s.parents)
 	_ = s.tp.AddWindowStore(mp.StoreName)
-	return newTable(s.tp, []processor.Node{n})
+	return newTable(s.tp, []processor.Node{n}, mp.StoreName)
 }
 
 func (s *TimeWindowedStreamImpl) Aggregate(name string, initializer processor.Initializer, aggregator processor.Aggregator, mp *processor.MaterializeParam) Table {
@@ -51,7 +51,7 @@ func (s *TimeWindowedStreamImpl) Aggregate(name string, initializer processor.In
 	p := processor.NewStreamWindowAggregateProcessor(store, initializer, aggregator, s.windowDefs)
 	n := s.tp.AddProcessor(name, p, s.parents)
 	_ = s.tp.AddWindowStore(mp.StoreName)
-	return newTable(s.tp, []processor.Node{n})
+	return newTable(s.tp, []processor.Node{n}, mp.StoreName)
 }
 
 func (s *TimeWindowedStreamImpl) Reduce(name string, reducer processor.Reducer) Table {

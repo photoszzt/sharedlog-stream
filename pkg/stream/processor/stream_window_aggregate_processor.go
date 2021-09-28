@@ -20,6 +20,7 @@ func NewStreamWindowAggregateProcessor(store WindowStore, initializer Initialize
 		aggregator:         aggregator,
 		observedStreamTime: 0,
 		store:              store,
+		windows:            windows,
 	}
 }
 

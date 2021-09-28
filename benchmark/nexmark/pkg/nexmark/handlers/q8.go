@@ -112,15 +112,17 @@ func Query8(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 			}))
 	auction.StreamStreamJoin("join-auction-persion", person,
 		processor.ValueJoinerWithKeyFunc(func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
-			key := readOnlyKey.(stream.WindowedKey)
 			rv := rightValue.(*ntypes.Event)
 			return &ntypes.PersonTime{
 				ID:        rv.NewPerson.ID,
 				Name:      rv.NewPerson.Name,
-				StartTime: key.Window.Start(),
+				StartTime: 0,
 			}
-
-		}), *processor.NewJoinWindowsNoGrace(time.Duration(10) * time.Second)).
+		}), processor.NewJoinWindowsNoGrace(time.Duration(10)*time.Second),
+		&processor.JoinParam{
+			LeftWindowStoreName:  "auction-window-store",
+			RightWindowStoreName: "person-window-store",
+		}).
 		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, processor.Uint64Encoder{}, ptSerde, msgSerde))
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {

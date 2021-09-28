@@ -2,7 +2,7 @@ package processor
 
 type KeyValueStore interface {
 	StateStore
-	Init(ctx ProcessorContext, root KeyValueStore)
+	Init(ctx ProcessorContext)
 	Get(key KeyT) (ValueT, bool, error)
 	Range(from KeyT, to KeyT) KeyValueIterator
 	ReverseRange(from KeyT, to KeyT) KeyValueIterator

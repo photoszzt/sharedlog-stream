@@ -5,6 +5,7 @@ import "time"
 type InMemoryWindowStoreWithChangelog struct {
 	bytesWindowStore *InMemoryBytesWindowStore
 	mp               *MaterializeParam
+	storeName        string
 }
 
 var _ = WindowStore(&InMemoryWindowStoreWithChangelog{})
@@ -20,6 +21,7 @@ func NewInMemoryWindowStoreWithChangelog(name string, retensionPeriod uint64,
 
 func (st *InMemoryWindowStoreWithChangelog) Init(ctx ProcessorContext) {
 	st.bytesWindowStore.Init(ctx)
+	ctx.RegisterWindowStore(st)
 }
 
 func (st *InMemoryWindowStoreWithChangelog) Name() string {

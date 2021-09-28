@@ -9,12 +9,11 @@ import (
 )
 
 type InMemoryKeyValueStore struct {
-	open           bool
-	name           string
-	store          *treemap.TreeMap
-	sctx           ProcessorContext
-	rootStateStore StateStore
-	compare        func(a treemap.Key, b treemap.Value) int
+	open    bool
+	name    string
+	store   *treemap.TreeMap
+	sctx    ProcessorContext
+	compare func(a treemap.Key, b treemap.Value) int
 }
 
 var _ = KeyValueStore(NewInMemoryKeyValueStore("a", nil))
@@ -28,11 +27,10 @@ func NewInMemoryKeyValueStore(name string, compare func(a treemap.Key, b treemap
 	}
 }
 
-func (st *InMemoryKeyValueStore) Init(sctx ProcessorContext, root KeyValueStore) {
+func (st *InMemoryKeyValueStore) Init(sctx ProcessorContext) {
 	st.sctx = sctx
-	st.rootStateStore = root
 	st.open = true
-	st.sctx.RegisterKeyValueStore(root)
+	st.sctx.RegisterKeyValueStore(st)
 }
 
 func (st *InMemoryKeyValueStore) Name() string {

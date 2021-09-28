@@ -13,12 +13,13 @@ type InMemoryKeyValueStoreWithChangelog struct {
 	valueSerde Serde
 	logStore   LogStore
 	msgSerde   MsgSerde
+	storeName  string
 }
 
 func NewInMemoryKeyValueStoreWithChangelog(mp *MaterializeParam) *InMemoryKeyValueStoreWithChangelog {
 
 	return &InMemoryKeyValueStoreWithChangelog{
-		kvstore: NewInMemoryKeyValueStore(mp.StoreName, func(a treemap.Key, b treemap.Key) int {
+		kvstore: NewInMemoryKeyValueStore(mp.StoreName+"_bytes", func(a treemap.Key, b treemap.Key) int {
 			valA := a.([]byte)
 			valB := b.([]byte)
 			return bytes.Compare(valA, valB)
@@ -27,15 +28,17 @@ func NewInMemoryKeyValueStoreWithChangelog(mp *MaterializeParam) *InMemoryKeyVal
 		valueSerde: mp.ValueSerde,
 		logStore:   mp.Changelog,
 		msgSerde:   mp.MsgSerde,
+		storeName:  mp.StoreName,
 	}
 }
 
-func (st *InMemoryKeyValueStoreWithChangelog) Init(sctx ProcessorContext, root KeyValueStore) {
-	st.kvstore.Init(sctx, root)
+func (st *InMemoryKeyValueStoreWithChangelog) Init(sctx ProcessorContext) {
+	st.kvstore.Init(sctx)
+	sctx.RegisterKeyValueStore(st)
 }
 
 func (st *InMemoryKeyValueStoreWithChangelog) Name() string {
-	return st.kvstore.Name()
+	return st.storeName
 }
 
 func (st *InMemoryKeyValueStoreWithChangelog) IsOpen() bool {
@@ -88,6 +91,9 @@ func (st *InMemoryKeyValueStoreWithChangelog) PutIfAbsent(key KeyT, value ValueT
 		return nil, err
 	}
 	origValBytes, exists, err := st.kvstore.Get(keyBytes)
+	if err != nil {
+		return nil, err
+	}
 	if !exists {
 		valBytes, err := st.valueSerde.Encode(value)
 		if err != nil {

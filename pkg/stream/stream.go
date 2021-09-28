@@ -39,9 +39,12 @@ type Stream interface {
 	ProcessWithStateStores(name string, p processor.Processor, stateStoreName ...string) Stream
 	GroupBy(name string, mapper processor.Mapper, grouped *Grouped) GroupedStream
 	GroupByKey(grouped *Grouped) GroupedStream
-	StreamStreamJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream
-	StreamStreamLeftJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream
-	StreamStreamOuterJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream
+	StreamStreamJoin(name string, other Stream, joiner processor.ValueJoinerWithKey,
+		windows *processor.JoinWindows, jp *processor.JoinParam) Stream
+	StreamStreamLeftJoin(name string, other Stream, joiner processor.ValueJoinerWithKey,
+		windows *processor.JoinWindows, jp *processor.JoinParam) Stream
+	StreamStreamOuterJoin(name string, other Stream, joiner processor.ValueJoinerWithKey,
+		windows *processor.JoinWindows, jp *processor.JoinParam) Stream
 	StreamTableJoin(name string, other Table, joiner processor.ValueJoinerWithKey) Stream
 	StreamTableLeftJoin(name string, other Table, joiner processor.ValueJoinerWithKey) Stream
 	StreamTableOuterJoin(name string, other Table, joiner processor.ValueJoinerWithKey) Stream
@@ -147,24 +150,39 @@ func (s *StreamImpl) GroupByKey(grouped *Grouped) GroupedStream {
 	return newGroupedStream(s.tp, s.parents, grouped)
 }
 
-func (s *StreamImpl) StreamStreamJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream {
-	log.Fatal().Msgf("StreamStreamJoin Not implemented")
-	return nil
+func (s *StreamImpl) StreamStreamJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows *processor.JoinWindows, jp *processor.JoinParam) Stream {
+	lp := processor.NewStreamJoinWindowProcessor(jp.LeftWindowStoreName)
+	rp := processor.NewStreamJoinWindowProcessor(jp.RightWindowStoreName)
+
+	ln := s.tp.AddProcessor(name+"_lwp", lp, s.parents)
+	rn := s.tp.AddProcessor(name+"_rwp", rp, s.parents)
+
+	sharedTimeTracker := processor.NewTimeTracker()
+	ljp := processor.NewStreamStreamJoinProcessor(jp.RightWindowStoreName, windows, joiner, false, true, sharedTimeTracker)
+	rjp := processor.NewStreamStreamJoinProcessor(jp.LeftWindowStoreName, windows, joiner, false, false, sharedTimeTracker)
+
+	ljn := s.tp.AddProcessor(name+"_ljp", ljp, []processor.Node{ln})
+	rjn := s.tp.AddProcessor(name+"_rjp", rjp, []processor.Node{rn})
+
+	mergeProcessor := processor.NewMergeProcessor()
+	n := s.tp.AddProcessor(name+"_merge", mergeProcessor, []processor.Node{ljn, rjn})
+	return newStream(s.tp, []processor.Node{n})
 }
 
-func (s *StreamImpl) StreamStreamLeftJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream {
+func (s *StreamImpl) StreamStreamLeftJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows *processor.JoinWindows, jp *processor.JoinParam) Stream {
 	log.Fatal().Msgf("StreamStreamLeftJoin Not implemented")
 	return nil
 }
 
-func (s *StreamImpl) StreamStreamOuterJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows processor.JoinWindows) Stream {
+func (s *StreamImpl) StreamStreamOuterJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows *processor.JoinWindows, jp *processor.JoinParam) Stream {
 	log.Fatal().Msgf("StreamStreamOuterJoin Not implemented")
 	return nil
 }
 
 func (s *StreamImpl) StreamTableJoin(name string, other Table, joiner processor.ValueJoinerWithKey) Stream {
-	log.Fatal().Msgf("StreamTableJoin Not implemented")
-	return nil
+	p := processor.NewStreamTableJoinProcessor(other.StoreName(), joiner)
+	n := s.tp.AddProcessor(name, p, s.parents)
+	return newStream(s.tp, []processor.Node{n})
 }
 
 func (s *StreamImpl) StreamTableLeftJoin(name string, other Table, joiner processor.ValueJoinerWithKey) Stream {
