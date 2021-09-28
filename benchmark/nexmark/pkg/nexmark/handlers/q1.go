@@ -45,11 +45,10 @@ func (h *query1Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func mapFunc(msg processor.Message) (processor.Message, error) {
+func q1mapFunc(msg processor.Message) (processor.Message, error) {
 	event := msg.Value.(*ntypes.Event)
 	event.Bid.Price = uint64(event.Bid.Price * 908 / 1000.0)
 	return processor.Message{Value: event}, nil
-
 }
 
 func Query1(ctx context.Context, env types.Environment, input *common.QueryInput, output chan *common.FnOutput) {
@@ -88,7 +87,7 @@ func Query1(ctx context.Context, env types.Environment, input *common.QueryInput
 	builder.Source("nexmark_src", sharedlog_stream.NewSharedLogStreamSource(inputStream,
 		int(input.Duration), processor.StringDecoder{}, eventSerde, msgSerde)).
 		Filter("only_bid", processor.PredicateFunc(only_bid)).
-		Map("q1_map", processor.MapperFunc(mapFunc)).
+		Map("q1_map", processor.MapperFunc(q1mapFunc)).
 		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, processor.StringEncoder{}, eventSerde, msgSerde))
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {

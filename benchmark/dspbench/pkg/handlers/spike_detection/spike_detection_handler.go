@@ -69,20 +69,20 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 		}
 		return
 	}
-	/*
-		outputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.OutputTopicName)
-		if err != nil {
-			output <- &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("NewSharedlogStream for output stream failed: %v", err),
-			}
-			return
+
+	outputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.OutputTopicName)
+	if err != nil {
+		output <- &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("NewSharedlogStream for output stream failed: %v", err),
 		}
-	*/
+		return
+	}
 
 	var msgSerde processor.MsgSerde
 	var sdSerde processor.Serde
 	var timeValSerde processor.Serde
+	var vaSerde processor.Serde
 	if input.SerdeFormat == uint8(processor.JSON) {
 		sdSerde = SensorDataJSONSerde{}
 		msgSerde = processor.MessageSerializedJSONSerde{}
@@ -149,7 +149,8 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 				Avg: val.Sum / float64(len(val.history)),
 			}, nil
 		}), "").
-		Filter("get-spike", processor.PredicateFunc(spikeDetectionPredicate), "")
+		Filter("get-spike", processor.PredicateFunc(spikeDetectionPredicate), "").
+		Process("spike-detection-sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, processor.StringEncoder{}, vaSerde, msgSerde))
 
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {

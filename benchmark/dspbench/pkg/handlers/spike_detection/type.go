@@ -52,6 +52,37 @@ type ValAndAvg struct {
 	Avg float64 `json:"avg" zid:"1" msg:"avg"`
 }
 
+type ValAndAvgJSONSerde struct{}
+
+func (s ValAndAvgJSONSerde) Encode(value interface{}) ([]byte, error) {
+	val := value.(*ValAndAvg)
+	return json.Marshal(val)
+}
+
+func (s ValAndAvgJSONSerde) Decode(value []byte) (interface{}, error) {
+	va := ValAndAvg{}
+	if err := json.Unmarshal(value, &va); err != nil {
+		return nil, err
+	}
+	return &va, nil
+}
+
+type ValAndAvgMsgpSerde struct{}
+
+func (s ValAndAvgMsgpSerde) Encode(value interface{}) ([]byte, error) {
+	val := value.(*ValAndAvg)
+	return val.MarshalMsg(nil)
+}
+
+func (s ValAndAvgMsgpSerde) Decode(value []byte) (interface{}, error) {
+	va := ValAndAvg{}
+	_, err := va.UnmarshalMsg(value)
+	if err != nil {
+		return nil, err
+	}
+	return &va, nil
+}
+
 type SumAndHist struct {
 	Val     float64   `json:"val" zid:"0" msg:"val"`
 	Sum     float64   `json:"sum" zid:"1" msg:"sum"`
