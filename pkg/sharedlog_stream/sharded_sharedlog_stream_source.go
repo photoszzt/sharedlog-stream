@@ -29,7 +29,7 @@ func (s *ShardedSharedLogStreamSource) Consume(parNum uint32) (processor.Message
 		if s.timeout != 0 && time.Since(startTime) >= s.timeout {
 			break
 		}
-		val, err := s.stream.PopFromPartition(parNum)
+		val, err := s.stream.Pop(parNum)
 		if err != nil {
 			if IsStreamEmptyError(err) {
 				// fmt.Fprintf(os.Stderr, "stream is empty\n")

@@ -104,11 +104,17 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", input.SerdeFormat),
 		}
 	}
+
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      time.Duration(input.Duration) * time.Second,
 		KeyDecoder:   processor.StringDecoder{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
+	}
+	outConfig := &sharedlog_stream.StreamSinkConfig{
+		KeyEncoder:   seSerde,
+		ValueEncoder: aucIdCntMaxSerde,
+		MsgEncoder:   msgSerde,
 	}
 	builder := stream.NewStreamBuilder()
 	inputs := builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream, inConfig))
@@ -175,7 +181,7 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 			v := msg.Value.(*ntypes.AuctionIdCntMax)
 			return v.Count >= v.MaxCnt, nil
 		})).
-		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, seSerde, aucIdCntMaxSerde, msgSerde))
+		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, outConfig))
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {
 		output <- &common.FnOutput{

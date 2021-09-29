@@ -85,6 +85,18 @@ func Query3(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
 	}
+	outConfig := &sharedlog_stream.StreamSinkConfig{
+		KeyEncoder: processor.Uint64Encoder{},
+		ValueEncoder: processor.EncoderFunc(func(val interface{}) ([]byte, error) {
+			ret := val.(*ntypes.NameCityStateId)
+			if input.SerdeFormat == uint8(processor.JSON) {
+				return json.Marshal(ret)
+			} else {
+				return ret.MarshalMsg(nil)
+			}
+		}),
+		MsgEncoder: msgSerde,
+	}
 	builder := stream.NewStreamBuilder()
 	inputs := builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream, inConfig))
 	auctionsBySellerId := inputs.Filter("filter-auction",
@@ -120,23 +132,18 @@ func Query3(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		})).
 		ToTable("convert-to-table")
 
-	auctionsBySellerId.Join("join", personsById, processor.ValueJoinerFunc(func(leftVal interface{}, rightVal interface{}) interface{} {
-		event := rightVal.(*ntypes.Event)
-		return &ntypes.NameCityStateId{
-			Name:  event.NewPerson.Name,
-			City:  event.NewPerson.City,
-			State: event.NewPerson.State,
-			ID:    event.NewPerson.ID,
-		}
-	})).ToStream().Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream,
-		processor.Uint64Encoder{}, processor.EncoderFunc(func(val interface{}) ([]byte, error) {
-			ret := val.(*ntypes.NameCityStateId)
-			if input.SerdeFormat == uint8(processor.JSON) {
-				return json.Marshal(ret)
-			} else {
-				return ret.MarshalMsg(nil)
+	auctionsBySellerId.
+		Join("join", personsById, processor.ValueJoinerFunc(func(leftVal interface{}, rightVal interface{}) interface{} {
+			event := rightVal.(*ntypes.Event)
+			return &ntypes.NameCityStateId{
+				Name:  event.NewPerson.Name,
+				City:  event.NewPerson.City,
+				State: event.NewPerson.State,
+				ID:    event.NewPerson.ID,
 			}
-		}), msgSerde))
+		})).
+		ToStream().
+		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, outConfig))
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {
 		output <- &common.FnOutput{

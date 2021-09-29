@@ -83,7 +83,7 @@ func (tc *TransactionCoordinator) RegisterTopicPartition(topic string, parNum ui
 	if err != nil {
 		return err
 	}
-	_, err = tc.TransactionLog.Push(msg_encoded)
+	_, err = tc.TransactionLog.Push(msg_encoded, 0)
 	return err
 }
 
@@ -101,6 +101,6 @@ func (tc *TransactionCoordinator) BeginTransaction() error {
 	if err != nil {
 		return err
 	}
-	_, err = tc.TransactionLog.Push(msg_encoded)
+	_, err = tc.TransactionLog.Push(msg_encoded, 0)
 	return err
 }

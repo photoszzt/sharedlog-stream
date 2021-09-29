@@ -31,13 +31,21 @@ func (p *StreamAggregateProcessor) WithProcessorContext(pctx ProcessorContext) {
 }
 
 func (p *StreamAggregateProcessor) Process(msg Message) error {
+	msg, err := p.ProcessAndReturn(msg)
+	if err != nil {
+		return err
+	}
+	return p.pipe.Forward(msg)
+}
+
+func (p *StreamAggregateProcessor) ProcessAndReturn(msg Message) (Message, error) {
 	if msg.Key == nil || msg.Value == nil {
 		log.Warn().Msgf("skipping record due to null key or value. key=%v, val=%v", msg.Key, msg.Value)
-		return nil
+		return EmptyMessage, nil
 	}
 	val, ok, err := p.store.Get(msg.Key)
 	if err != nil {
-		return err
+		return EmptyMessage, err
 	}
 	var oldAggTs ValueTimestamp
 	var oldAgg interface{}
@@ -56,5 +64,5 @@ func (p *StreamAggregateProcessor) Process(msg Message) error {
 	}
 	newAgg := p.aggregator.Apply(msg.Key, msg.Value, oldAgg)
 	p.store.Put(msg.Key, ValueTimestamp{Timestamp: newTs, Value: newAgg})
-	return p.pipe.Forward(Message{Key: msg.Key, Value: newAgg, Timestamp: newTs})
+	return Message{Key: msg.Key, Value: newAgg, Timestamp: newTs}, nil
 }

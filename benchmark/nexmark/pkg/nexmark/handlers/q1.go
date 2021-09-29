@@ -90,11 +90,16 @@ func Query1(ctx context.Context, env types.Environment, input *common.QueryInput
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
 	}
+	outConfig := &sharedlog_stream.StreamSinkConfig{
+		KeyEncoder:   processor.StringEncoder{},
+		ValueEncoder: eventSerde,
+		MsgEncoder:   msgSerde,
+	}
 	builder := stream.NewStreamBuilder()
 	builder.Source("nexmark_src", sharedlog_stream.NewSharedLogStreamSource(inputStream, inConfig)).
 		Filter("only_bid", processor.PredicateFunc(only_bid)).
 		Map("q1_map", processor.MapperFunc(q1mapFunc)).
-		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, processor.StringEncoder{}, eventSerde, msgSerde))
+		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, outConfig))
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {
 		output <- &common.FnOutput{

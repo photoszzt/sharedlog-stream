@@ -137,7 +137,7 @@ func (h *spikeDetectionSource) eventGeneration(ctx context.Context, sp *common.S
 			}
 		}
 		pushStart := time.Now()
-		_, err = stream.Push(msgEncoded)
+		_, err = stream.Push(msgEncoded, 0)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,

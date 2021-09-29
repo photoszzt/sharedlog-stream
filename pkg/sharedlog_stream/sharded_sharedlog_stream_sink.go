@@ -1,26 +1,18 @@
 package sharedlog_stream
 
-import (
-	"sharedlog-stream/pkg/stream/processor"
-)
+import "sharedlog-stream/pkg/stream/processor"
 
-type SharedLogStreamSink struct {
+type ShardedSharedLogStreamSink struct {
 	pipe         processor.Pipe
 	pctx         processor.ProcessorContext
-	stream       *SharedLogStream
+	stream       *ShardedSharedLogStream
 	keyEncoder   processor.Encoder
 	valueEncoder processor.Encoder
 	msgEncoder   processor.MsgEncoder
 }
 
-type StreamSinkConfig struct {
-	KeyEncoder   processor.Encoder
-	ValueEncoder processor.Encoder
-	MsgEncoder   processor.MsgEncoder
-}
-
-func NewSharedLogStreamSink(stream *SharedLogStream, config *StreamSinkConfig) *SharedLogStreamSink {
-	return &SharedLogStreamSink{
+func NewShardedSharedLogStreamSink(stream *ShardedSharedLogStream, config *StreamSinkConfig) *ShardedSharedLogStreamSink {
+	return &ShardedSharedLogStreamSink{
 		stream:       stream,
 		keyEncoder:   config.KeyEncoder,
 		valueEncoder: config.ValueEncoder,
@@ -28,15 +20,7 @@ func NewSharedLogStreamSink(stream *SharedLogStream, config *StreamSinkConfig) *
 	}
 }
 
-func (sls *SharedLogStreamSink) WithPipe(pipe processor.Pipe) {
-	sls.pipe = pipe
-}
-
-func (sls *SharedLogStreamSink) WithProcessorContext(pctx processor.ProcessorContext) {
-	sls.pctx = pctx
-}
-
-func (sls *SharedLogStreamSink) Process(msg processor.Message) error {
+func (sls *ShardedSharedLogStreamSink) Sink(msg processor.Message, parNum uint32) error {
 	if msg.Key == nil && msg.Value == nil {
 		return nil
 	}
@@ -55,7 +39,7 @@ func (sls *SharedLogStreamSink) Process(msg processor.Message) error {
 	// fmt.Fprintf(os.Stderr, "Sink: output key: %v, val: %v\n", string(keyEncoded), string(valEncoded))
 	bytes, err := sls.msgEncoder.Encode(keyEncoded, valEncoded)
 	if bytes != nil && err == nil {
-		_, err = sls.stream.Push(bytes, 0)
+		_, err = sls.stream.Push(bytes, parNum)
 		if err != nil {
 			return err
 		}

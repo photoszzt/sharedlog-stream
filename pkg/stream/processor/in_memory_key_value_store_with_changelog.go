@@ -14,6 +14,7 @@ type InMemoryKeyValueStoreWithChangelog struct {
 	logStore   LogStore
 	msgSerde   MsgSerde
 	storeName  string
+	parNum     uint32
 }
 
 func NewInMemoryKeyValueStoreWithChangelog(mp *MaterializeParam) *InMemoryKeyValueStoreWithChangelog {
@@ -29,6 +30,7 @@ func NewInMemoryKeyValueStoreWithChangelog(mp *MaterializeParam) *InMemoryKeyVal
 		logStore:   mp.Changelog,
 		msgSerde:   mp.MsgSerde,
 		storeName:  mp.StoreName,
+		parNum:     mp.ParNum,
 	}
 }
 
@@ -77,7 +79,7 @@ func (st *InMemoryKeyValueStoreWithChangelog) Put(key KeyT, value ValueT) error 
 	if err != nil {
 		return err
 	}
-	_, err = st.logStore.Push(encoded)
+	_, err = st.logStore.Push(encoded, st.parNum)
 	if err != nil {
 		return err
 	}
@@ -103,7 +105,7 @@ func (st *InMemoryKeyValueStoreWithChangelog) PutIfAbsent(key KeyT, value ValueT
 		if err != nil {
 			return nil, err
 		}
-		_, err = st.logStore.Push(encoded)
+		_, err = st.logStore.Push(encoded, st.parNum)
 		if err != nil {
 			return nil, err
 		}
@@ -136,7 +138,7 @@ func (st *InMemoryKeyValueStoreWithChangelog) Delete(key KeyT) error {
 	if err != nil {
 		return err
 	}
-	_, err = st.logStore.Push(encoded)
+	_, err = st.logStore.Push(encoded, st.parNum)
 	if err != nil {
 		return err
 	}

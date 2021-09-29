@@ -105,11 +105,17 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 
 	pctx := processor.NewProcessorContext()
 	aggStoreName := "moving-avg-store"
+
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      time.Duration(input.Duration) * time.Second,
 		KeyDecoder:   processor.StringDecoder{},
 		ValueDecoder: sdSerde,
 		MsgDecoder:   msgSerde,
+	}
+	outConfig := &sharedlog_stream.StreamSinkConfig{
+		KeyEncoder:   processor.StringEncoder{},
+		ValueEncoder: vaSerde,
+		MsgEncoder:   msgSerde,
 	}
 	builder := stream.NewStreamBuilder()
 	builder.Source("spike-detection-src",
@@ -155,7 +161,7 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 			}, nil
 		}), "").
 		Filter("get-spike", processor.PredicateFunc(spikeDetectionPredicate), "").
-		Process("spike-detection-sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, processor.StringEncoder{}, vaSerde, msgSerde))
+		Process("spike-detection-sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, outConfig))
 
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {

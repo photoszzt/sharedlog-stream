@@ -93,6 +93,11 @@ func Query8(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
 	}
+	outConfig := &sharedlog_stream.StreamSinkConfig{
+		KeyEncoder:   processor.Uint64Encoder{},
+		ValueEncoder: ptSerde,
+		MsgEncoder:   msgSerde,
+	}
 	builder := stream.NewStreamBuilder()
 	inputs := builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream, inConfig))
 	person := inputs.Filter("filter-person",
@@ -128,7 +133,7 @@ func Query8(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 			LeftWindowStoreName:  "auction-window-store",
 			RightWindowStoreName: "person-window-store",
 		}).
-		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, processor.Uint64Encoder{}, ptSerde, msgSerde))
+		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, outConfig))
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {
 		output <- &common.FnOutput{
