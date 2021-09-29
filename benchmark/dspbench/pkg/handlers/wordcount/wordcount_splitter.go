@@ -18,6 +18,12 @@ type wordcountSplitFlatMap struct {
 	env types.Environment
 }
 
+func NewWordCountSplitter(env types.Environment) *wordcountSplitFlatMap {
+	return &wordcountSplitFlatMap{
+		env: env,
+	}
+}
+
 func (h *wordcountSplitFlatMap) Call(ctx context.Context, input []byte) ([]byte, error) {
 	sp := &common.QueryInput{}
 	err := json.Unmarshal(input, sp)

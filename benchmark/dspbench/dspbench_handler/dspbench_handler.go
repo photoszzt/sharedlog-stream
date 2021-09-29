@@ -5,6 +5,7 @@ import (
 	"os"
 	"sharedlog-stream/benchmark/dspbench/pkg/handlers/spike_detection"
 	"sharedlog-stream/benchmark/dspbench/pkg/handlers/trending_topics"
+	"sharedlog-stream/benchmark/dspbench/pkg/handlers/wordcount"
 
 	"cs.utexas.edu/zjia/faas"
 	"cs.utexas.edu/zjia/faas/types"
@@ -36,6 +37,12 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return spike_detection.NewSpikeDetectionHandler(env), nil
 	case "sdsource":
 		return spike_detection.NewSpikeDetectionSource(env), nil
+	case "wcsource":
+		return wordcount.NewWordCountSource(env), nil
+	case "wordcountSplit":
+		return wordcount.NewWordCountSplitter(env), nil
+	case "wordcountCounter":
+		return wordcount.NewWordCountCounterAgg(env), nil
 	default:
 		return nil, fmt.Errorf("unknown function name %v", funcName)
 	}

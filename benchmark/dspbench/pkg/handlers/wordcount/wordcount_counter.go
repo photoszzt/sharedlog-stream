@@ -17,6 +17,12 @@ type wordcountCounterAgg struct {
 	env types.Environment
 }
 
+func NewWordCountCounterAgg(env types.Environment) *wordcountCounterAgg {
+	return &wordcountCounterAgg{
+		env: env,
+	}
+}
+
 func (h *wordcountCounterAgg) Call(ctx context.Context, input []byte) ([]byte, error) {
 	sp := &common.QueryInput{}
 	err := json.Unmarshal(input, sp)
@@ -86,7 +92,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 		ValueSerde: ceSerde,
 		MsgSerde:   msgSerde,
 		StoreName:  sp.OutputTopicName,
-		LogStore:   output_stream,
+		Changelog:  output_stream,
 	}
 	store := processor.NewInMemoryKeyValueStoreWithChangelog(mp)
 	p := processor.NewStreamAggregateProcessor(store,
@@ -98,7 +104,6 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 			return val + 1
 		}))
 	startTime := time.Now()
-
 	for {
 		msg, err := src.Consume(uint32(sp.PartNum))
 		if err != nil {
@@ -107,5 +112,23 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 				Message: err.Error(),
 			}
 		}
+		ret, err := p.ProcessAndReturn(msg)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: err.Error(),
+			}
+		}
+		err = sink.Sink(ret, uint32(sp.PartNum))
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("sink failed: %v\n", err),
+			}
+		}
+	}
+	return &common.FnOutput{
+		Success:  true,
+		Duration: time.Since(startTime).Seconds(),
 	}
 }
