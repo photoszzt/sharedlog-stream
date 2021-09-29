@@ -49,7 +49,7 @@ func (h *spikeDetectionSource) Call(ctx context.Context, input []byte) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
-	output := h.eventGeneration(ctx, h.env, sp)
+	output := h.eventGeneration(ctx, sp)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
 		return nil, err
@@ -84,9 +84,8 @@ func encode_sensor_event(keySerde processor.Serde,
 	return msgEncoded, nil
 }
 
-func (h *spikeDetectionSource) eventGeneration(ctx context.Context,
-	env types.Environment, sp *common.SourceParam) *common.FnOutput {
-	stream, err := sharedlog_stream.NewSharedLogStream(ctx, env, sp.TopicName)
+func (h *spikeDetectionSource) eventGeneration(ctx context.Context, sp *common.SourceParam) *common.FnOutput {
+	stream, err := sharedlog_stream.NewSharedLogStream(ctx, h.env, sp.TopicName)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -124,6 +123,7 @@ func (h *spikeDetectionSource) eventGeneration(ctx context.Context,
 		if numEvents != 0 && idx == int(numEvents) {
 			break
 		}
+
 		event := h.sensorDataList[idx]
 		sd := SensorData{
 			Val:       event.temp,
@@ -147,6 +147,9 @@ func (h *spikeDetectionSource) eventGeneration(ctx context.Context,
 		elapsed := time.Since(pushStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
 		idx += 1
+		if idx >= len(h.sensorDataList) {
+			idx = 0
+		}
 	}
 	return &common.FnOutput{
 		Success:   true,

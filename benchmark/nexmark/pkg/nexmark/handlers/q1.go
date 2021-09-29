@@ -83,9 +83,15 @@ func Query1(ctx context.Context, env types.Environment, input *common.QueryInput
 			Message: err.Error(),
 		}
 	}
+
+	inConfig := &sharedlog_stream.SharedLogStreamConfig{
+		Timeout:      time.Duration(input.Duration) * time.Second,
+		KeyDecoder:   processor.StringDecoder{},
+		ValueDecoder: eventSerde,
+		MsgDecoder:   msgSerde,
+	}
 	builder := stream.NewStreamBuilder()
-	builder.Source("nexmark_src", sharedlog_stream.NewSharedLogStreamSource(inputStream,
-		int(input.Duration), processor.StringDecoder{}, eventSerde, msgSerde)).
+	builder.Source("nexmark_src", sharedlog_stream.NewSharedLogStreamSource(inputStream, inConfig)).
 		Filter("only_bid", processor.PredicateFunc(only_bid)).
 		Map("q1_map", processor.MapperFunc(q1mapFunc)).
 		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, processor.StringEncoder{}, eventSerde, msgSerde))

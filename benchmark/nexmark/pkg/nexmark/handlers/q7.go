@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
@@ -80,9 +81,14 @@ func Query7(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		}
 	}
 
+	inConfig := &sharedlog_stream.SharedLogStreamConfig{
+		Timeout:      time.Duration(input.Duration) * time.Second,
+		KeyDecoder:   processor.StringDecoder{},
+		ValueDecoder: eventSerde,
+		MsgDecoder:   msgSerde,
+	}
 	builder := stream.NewStreamBuilder()
-	inputs := builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream, int(input.Duration),
-		processor.StringDecoder{}, eventSerde, msgSerde))
+	inputs := builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream, inConfig))
 	// bid :=
 	inputs.Filter("filter-bid", processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
 		event := msg.Value.(ntypes.Event)

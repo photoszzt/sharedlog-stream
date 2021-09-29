@@ -1,34 +1,20 @@
 package sharedlog_stream
 
 import (
-	"time"
-
 	"sharedlog-stream/pkg/stream/processor"
-
-	"golang.org/x/xerrors"
+	"time"
 )
 
-var (
-	errStreamSourceTimeout = xerrors.New("SharedLogStreamSource consume timeout")
-)
-
-type SharedLogStreamSource struct {
-	stream       *SharedLogStream
+type ShardedSharedLogStreamSource struct {
+	stream       *ShardedSharedLogStream
 	timeout      time.Duration
 	keyDecoder   processor.Decoder
 	valueDecoder processor.Decoder
 	msgDecoder   processor.MsgDecoder
 }
 
-type SharedLogStreamConfig struct {
-	Timeout      time.Duration
-	KeyDecoder   processor.Decoder
-	ValueDecoder processor.Decoder
-	MsgDecoder   processor.MsgDecoder
-}
-
-func NewSharedLogStreamSource(stream *SharedLogStream, config *SharedLogStreamConfig) *SharedLogStreamSource {
-	return &SharedLogStreamSource{
+func NewShardedSharedLogStreamSource(stream *ShardedSharedLogStream, config *SharedLogStreamConfig) *ShardedSharedLogStreamSource {
+	return &ShardedSharedLogStreamSource{
 		stream:       stream,
 		timeout:      config.Timeout,
 		keyDecoder:   config.KeyDecoder,
@@ -37,13 +23,13 @@ func NewSharedLogStreamSource(stream *SharedLogStream, config *SharedLogStreamCo
 	}
 }
 
-func (s *SharedLogStreamSource) Consume() (processor.Message, error) {
+func (s *ShardedSharedLogStreamSource) Consume(parNum uint32) (processor.Message, error) {
 	startTime := time.Now()
 	for {
 		if s.timeout != 0 && time.Since(startTime) >= s.timeout {
 			break
 		}
-		val, err := s.stream.Pop()
+		val, err := s.stream.PopFromPartition(parNum)
 		if err != nil {
 			if IsStreamEmptyError(err) {
 				// fmt.Fprintf(os.Stderr, "stream is empty\n")

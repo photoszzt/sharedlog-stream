@@ -105,10 +105,15 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 
 	pctx := processor.NewProcessorContext()
 	aggStoreName := "moving-avg-store"
+	inConfig := &sharedlog_stream.SharedLogStreamConfig{
+		Timeout:      time.Duration(input.Duration) * time.Second,
+		KeyDecoder:   processor.StringDecoder{},
+		ValueDecoder: sdSerde,
+		MsgDecoder:   msgSerde,
+	}
 	builder := stream.NewStreamBuilder()
 	builder.Source("spike-detection-src",
-		sharedlog_stream.NewSharedLogStreamSource(inputStream,
-			int(input.Duration), processor.StringDecoder{}, sdSerde, msgSerde)).
+		sharedlog_stream.NewSharedLogStreamSource(inputStream, inConfig)).
 		GroupByKey(&stream.Grouped{KeySerde: processor.StringSerde{},
 			ValueSerde: sdSerde, Name: "group-by-devid"}).
 		Aggregate("moving-avg",

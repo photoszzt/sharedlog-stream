@@ -13,11 +13,9 @@ type PartitionFunc func(interface{}) uint32
 type ShardedSharedLogStream struct {
 	subSharedLogStreams []*SharedLogStream
 	numPartitions       uint32
-	parFunc             PartitionFunc
 }
 
-func NewShardedSharedLogStream(ctx context.Context, env types.Environment,
-	topicName string, numPartitions uint32, partitionFunc PartitionFunc) (*ShardedSharedLogStream, error) {
+func NewShardedSharedLogStream(ctx context.Context, env types.Environment, topicName string, numPartitions uint32) (*ShardedSharedLogStream, error) {
 	if numPartitions <= 0 {
 		log.Fatal().Msgf("Shards must be positive")
 	}
@@ -32,15 +30,7 @@ func NewShardedSharedLogStream(ctx context.Context, env types.Environment,
 	return &ShardedSharedLogStream{
 		subSharedLogStreams: streams,
 		numPartitions:       numPartitions,
-		parFunc:             partitionFunc,
 	}, nil
-}
-
-func (s *ShardedSharedLogStream) Push(payload []byte) (uint32, uint64, error) {
-	par := s.parFunc(payload) % s.numPartitions
-	shard := s.subSharedLogStreams[par]
-	seq, err := shard.Push(payload)
-	return par, seq, err
 }
 
 func (s *ShardedSharedLogStream) PushToPartition(payload []byte, parNumber uint32) (uint64, error) {
@@ -48,7 +38,7 @@ func (s *ShardedSharedLogStream) PushToPartition(payload []byte, parNumber uint3
 }
 
 func (s *ShardedSharedLogStream) PopFromPartition(parNumber uint32) ([]byte, error) {
-	if 0 <= parNumber && parNumber < s.numPartitions {
+	if parNumber < s.numPartitions {
 		par := parNumber
 		shard := s.subSharedLogStreams[par]
 		return shard.Pop()
