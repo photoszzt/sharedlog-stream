@@ -137,7 +137,7 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		}).
 		ToStream().
 		Map("change-key", processor.MapperFunc(func(msg processor.Message) (processor.Message, error) {
-			key := msg.Key.(*stream.WindowedKey)
+			key := msg.Key.(*processor.WindowedKey)
 			value := msg.Value.(uint64)
 			newKey := &ntypes.StartEndTime{
 				StartTime: key.Window.Start(),
