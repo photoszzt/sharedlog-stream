@@ -7,7 +7,6 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sync"
-	"time"
 
 	"github.com/rs/zerolog/log"
 )
@@ -16,7 +15,6 @@ import (
 // corresponding serverless function identified by the name
 type ClientNode struct {
 	children []*ClientNode
-	client   *http.Client
 	config   *ClientNodeConfig
 }
 
@@ -30,15 +28,8 @@ type ClientNodeConfig struct {
 }
 
 func NewClientNode(config *ClientNodeConfig) *ClientNode {
-	client := &http.Client{
-		Transport: &http.Transport{
-			IdleConnTimeout: 30 * time.Second,
-		},
-		Timeout: time.Duration(config.Duration*3) * time.Second,
-	}
 	return &ClientNode{
 		config: config,
-		client: client,
 	}
 }
 
@@ -50,15 +41,7 @@ func (n *ClientNode) AddChild(node *ClientNode) {
 	n.children = append(n.children, node)
 }
 
-func (n *ClientNode) Invoke() {
-	var wg sync.WaitGroup
-	var queryOutput common.FnOutput
-	wg.Add(1)
-	go n.invokeFunc(n.client, &queryOutput, &wg)
-	wg.Wait()
-}
-
-func (n *ClientNode) invokeFunc(client *http.Client, response *common.FnOutput, wg *sync.WaitGroup) {
+func (n *ClientNode) Invoke(client *http.Client, response *common.FnOutput, wg *sync.WaitGroup) {
 	defer wg.Done()
 	queryInput := &common.QueryInput{
 		Duration:        n.config.Duration,

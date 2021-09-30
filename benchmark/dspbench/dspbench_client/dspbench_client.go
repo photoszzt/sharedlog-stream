@@ -52,10 +52,20 @@ func invokeSourceFunc(client *http.Client, response *common.FnOutput, wg *sync.W
 
 func invokeQuery(client *http.Client, response *common.FnOutput, wg *sync.WaitGroup) {
 	defer wg.Done()
+	var serdeFormat processor.SerdeFormat
+	if FLAGS_serdeFormat == "json" {
+		serdeFormat = processor.JSON
+	} else if FLAGS_serdeFormat == "msgp" {
+		serdeFormat = processor.MSGP
+	} else {
+		log.Error().Msgf("serde format is not recognized; default back to JSON")
+		serdeFormat = processor.JSON
+	}
 	queryInput := &common.QueryInput{
 		Duration:        uint32(FLAGS_duration),
 		InputTopicName:  FLAGS_stream_prefix + "_src",
 		OutputTopicName: FLAGS_stream_prefix + "_" + FLAGS_fn_name + "_output",
+		SerdeFormat:     uint8(serdeFormat),
 	}
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, FLAGS_fn_name)
 	fmt.Printf("func url is %v\n", url)
