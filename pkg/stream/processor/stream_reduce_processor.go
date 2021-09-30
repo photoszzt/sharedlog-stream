@@ -26,13 +26,21 @@ func (p *StreamReduceProcessor) WithProcessorContext(pctx ProcessorContext) {
 }
 
 func (p *StreamReduceProcessor) Process(msg Message) error {
+	newMsg, err := p.ProcessAndReturn(msg)
+	if err != nil {
+		return err
+	}
+	return p.pipe.Forward(*newMsg)
+}
+
+func (p *StreamReduceProcessor) ProcessAndReturn(msg Message) (*Message, error) {
 	if msg.Key == nil || msg.Value == nil {
 		log.Warn().Msgf("skipping record due to null key or value. key=%v, val=%v", msg.Key, msg.Value)
-		return nil
+		return nil, nil
 	}
 	val, ok, err := p.store.Get(msg.Key)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var newAgg interface{}
 	var newTs uint64
@@ -48,6 +56,9 @@ func (p *StreamReduceProcessor) Process(msg Message) error {
 		newAgg = msg.Value
 		newTs = msg.Timestamp
 	}
-	p.store.Put(msg.Key, &ValueTimestamp{Value: newAgg, Timestamp: newTs})
-	return p.pipe.Forward(Message{Key: msg.Key, Value: newAgg, Timestamp: newTs})
+	err = p.store.Put(msg.Key, &ValueTimestamp{Value: newAgg, Timestamp: newTs})
+	if err != nil {
+		return nil, err
+	}
+	return &Message{Key: msg.Key, Value: newAgg, Timestamp: newTs}, nil
 }

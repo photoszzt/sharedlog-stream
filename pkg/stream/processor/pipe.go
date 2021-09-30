@@ -39,3 +39,21 @@ func (p *processorPipe) ForwardToChild(msg Message, index int) error {
 	err := child.Accept(msg)
 	return err
 }
+
+/*
+type pipeToStream struct {
+	streamSink []Sink
+}
+
+func NewStreamPipe(streamSink []Sink) Pipe {
+	return &pipeToStream{
+		streamSink: streamSink,
+	}
+}
+
+func (p *pipeToStream) Forward(msg Message) error {
+	for _, sink := range p.streamSink {
+		if err := sink.Sink()
+	}
+}
+*/

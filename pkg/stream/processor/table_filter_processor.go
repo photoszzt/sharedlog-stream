@@ -35,7 +35,10 @@ func (p *TableFilterProcessor) Process(msg Message) error {
 	}
 	if ok != p.filterNot {
 		if p.queryableName != "" {
-			p.store.Put(msg.Key, &ValueTimestamp{Value: msg.Value, Timestamp: msg.Timestamp})
+			err = p.store.Put(msg.Key, &ValueTimestamp{Value: msg.Value, Timestamp: msg.Timestamp})
+			if err != nil {
+				return err
+			}
 		}
 		return p.pipe.Forward(msg)
 	}

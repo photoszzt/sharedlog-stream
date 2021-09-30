@@ -29,6 +29,9 @@ type InvokeParam struct {
 	InputTopicName  string
 	OutputTopicName string
 	SerdeFormat     uint8
+	NumInPartition  uint16
+	NumOutPartition uint16
+	ParNum          uint16
 }
 
 func NewClientNode(config *ClientNodeConfig) *ClientNode {

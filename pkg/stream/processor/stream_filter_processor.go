@@ -61,3 +61,14 @@ func (p *StreamFilterNotProcessor) Process(msg Message) error {
 	}
 	return nil
 }
+
+func (p *StreamFilterNotProcessor) ProcessAndReturn(msg Message) (*Message, error) {
+	ok, err := p.pred.Assert(&msg)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return &msg, nil
+	}
+	return nil, nil
+}

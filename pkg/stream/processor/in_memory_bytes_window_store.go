@@ -104,7 +104,7 @@ func (s *InMemoryBytesWindowStore) Get(key []byte, windowStartTimestamp uint64) 
 	}
 }
 
-func (s *InMemoryBytesWindowStore) Fetch(key []byte, timeFrom time.Time, timeTo time.Time, iterFunc func(uint64, ValueT)) {
+func (s *InMemoryBytesWindowStore) Fetch(key []byte, timeFrom time.Time, timeTo time.Time, iterFunc func(uint64, ValueT)) error {
 	s.removeExpiredSegments()
 
 	tsFrom := timeFrom.UnixMilli()
@@ -116,10 +116,10 @@ func (s *InMemoryBytesWindowStore) Fetch(key []byte, timeFrom time.Time, timeTo 
 	}
 
 	if tsTo < minTime {
-		return
+		return nil
 	}
 
-	s.store.IterateRange(uint64(tsFrom), uint64(tsTo), func(ts concurrent_skiplist.KeyT, val concurrent_skiplist.ValueT) error {
+	err := s.store.IterateRange(uint64(tsFrom), uint64(tsTo), func(ts concurrent_skiplist.KeyT, val concurrent_skiplist.ValueT) error {
 		curT := ts.(uint64)
 		v := val.(*concurrent_skiplist.SkipList)
 		elem := v.Get(key)
@@ -139,6 +139,7 @@ func (s *InMemoryBytesWindowStore) Fetch(key []byte, timeFrom time.Time, timeTo 
 		s.otrMu.Unlock()
 		return nil
 	})
+	return err
 }
 
 func (s *InMemoryBytesWindowStore) BackwardFetch(key []byte, timeFrom time.Time, timeTo time.Time) {

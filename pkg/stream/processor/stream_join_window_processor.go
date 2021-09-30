@@ -34,3 +34,14 @@ func (p *StreamJoinWindowProcessor) Process(msg Message) error {
 	}
 	return nil
 }
+
+func (p *StreamJoinWindowProcessor) ProcessAndReturn(msg Message) (*Message, error) {
+	if msg.Key != nil {
+		err := p.winStore.Put(msg.Key, msg.Value, msg.Timestamp)
+		if err != nil {
+			return nil, err
+		}
+		return &msg, nil
+	}
+	return nil, nil
+}

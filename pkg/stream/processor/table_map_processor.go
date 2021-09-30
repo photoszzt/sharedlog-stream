@@ -33,7 +33,10 @@ func (p *TableMapValuesProcessor) Process(msg Message) error {
 	}
 	newMsg := Message{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp}
 	if p.queryableName != "" {
-		p.store.Put(msg.Key, &ValueTimestamp{Value: newMsg.Value, Timestamp: newMsg.Timestamp})
+		err = p.store.Put(msg.Key, &ValueTimestamp{Value: newMsg.Value, Timestamp: newMsg.Timestamp})
+		if err != nil {
+			return err
+		}
 	}
 	return p.pipe.Forward(newMsg)
 }

@@ -100,9 +100,17 @@ func (p *StreamMapValuesWithKeyProcessor) WithProcessorContext(pctx ProcessorCon
 }
 
 func (p *StreamMapValuesWithKeyProcessor) Process(msg Message) error {
-	newMsg, err := p.valueWithKeyMapper.Map(msg)
+	newMsg, err := p.ProcessAndReturn(msg)
 	if err != nil {
 		return err
 	}
-	return p.pipe.Forward(Message{Key: msg.Key, Value: newMsg.Value, Timestamp: msg.Timestamp})
+	return p.pipe.Forward(*newMsg)
+}
+
+func (p *StreamMapValuesWithKeyProcessor) ProcessAndReturn(msg Message) (*Message, error) {
+	newMsg, err := p.valueWithKeyMapper.Map(msg)
+	if err != nil {
+		return nil, err
+	}
+	return &Message{Key: msg.Key, Value: newMsg.Value, Timestamp: msg.Timestamp}, nil
 }

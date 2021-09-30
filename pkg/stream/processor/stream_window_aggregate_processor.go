@@ -33,9 +33,20 @@ func (p *StreamWindowAggregateProcessor) WithProcessorContext(pctx ProcessorCont
 }
 
 func (p *StreamWindowAggregateProcessor) Process(msg Message) error {
+	newMsgs, err := p.ProcessAndReturn(msg)
+	if err != nil {
+		return err
+	}
+	for _, newMsg := range newMsgs {
+		p.pipe.Forward(*newMsg)
+	}
+	return nil
+}
+
+func (p *StreamWindowAggregateProcessor) ProcessAndReturn(msg Message) ([]*Message, error) {
 	if msg.Key == nil {
 		log.Warn().Msgf("skipping record due to null key. key=%v, val=%v", msg.Key, msg.Value)
-		return nil
+		return nil, nil
 	}
 	ts := msg.Timestamp
 	if p.observedStreamTime < ts {
@@ -44,8 +55,9 @@ func (p *StreamWindowAggregateProcessor) Process(msg Message) error {
 	closeTime := p.observedStreamTime - p.windows.GracePeriodMs()
 	matchedWindows, err := p.windows.WindowsFor(ts)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	newMsgs := make([]*Message, 0)
 	for windowStart, window := range matchedWindows {
 		windowEnd := window.End()
 		if windowEnd > closeTime {
@@ -54,7 +66,7 @@ func (p *StreamWindowAggregateProcessor) Process(msg Message) error {
 			var newTs uint64
 			val, exists, err := p.store.Get(msg.Key, windowStart)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if exists {
 				oldAggTs := val.(*ValueTimestamp)
@@ -69,13 +81,16 @@ func (p *StreamWindowAggregateProcessor) Process(msg Message) error {
 				newTs = msg.Timestamp
 			}
 			newAgg = p.aggregator.Apply(msg.Key, msg.Value, oldAgg)
-			p.store.Put(msg.Key, &ValueTimestamp{Value: newAgg, Timestamp: newTs}, windowStart)
-			p.pipe.Forward(Message{Key: msg.Key, Value: newAgg, Timestamp: newTs})
+			err = p.store.Put(msg.Key, &ValueTimestamp{Value: newAgg, Timestamp: newTs}, windowStart)
+			if err != nil {
+				return nil, err
+			}
+			newMsgs = append(newMsgs, &Message{Key: msg.Key, Value: newAgg, Timestamp: newTs})
 		} else {
 			log.Warn().Interface("key", msg.Key).
 				Interface("value", msg.Value).
 				Uint64("timestamp", msg.Timestamp).Msg("Skipping record for expired window. ")
 		}
 	}
-	return nil
+	return newMsgs, nil
 }

@@ -63,6 +63,9 @@ func (p *StreamAggregateProcessor) ProcessAndReturn(msg Message) (Message, error
 		newTs = msg.Timestamp
 	}
 	newAgg := p.aggregator.Apply(msg.Key, msg.Value, oldAgg)
-	p.store.Put(msg.Key, ValueTimestamp{Timestamp: newTs, Value: newAgg})
+	err = p.store.Put(msg.Key, ValueTimestamp{Timestamp: newTs, Value: newAgg})
+	if err != nil {
+		return EmptyMessage, err
+	}
 	return Message{Key: msg.Key, Value: newAgg, Timestamp: newTs}, nil
 }

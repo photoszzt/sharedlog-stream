@@ -3,8 +3,8 @@ package sharedlog_stream
 import "sharedlog-stream/pkg/stream/processor"
 
 type ShardedSharedLogStreamSink struct {
-	pipe         processor.Pipe
-	pctx         processor.ProcessorContext
+	// pipe         processor.Pipe
+	// pctx         processor.ProcessorContext
 	stream       *ShardedSharedLogStream
 	keyEncoder   processor.Encoder
 	valueEncoder processor.Encoder
