@@ -2,11 +2,6 @@ package stream
 
 import "sharedlog-stream/pkg/stream/processor"
 
-type WindowedKey struct {
-	Key    interface{}
-	Window processor.Window
-}
-
 type TimeWindowedStream interface {
 	Count(name string, mp *processor.MaterializeParam) Table
 	Aggregate(name string, initializer processor.Initializer, aggregator processor.Aggregator, mp *processor.MaterializeParam) Table
