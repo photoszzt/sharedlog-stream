@@ -19,17 +19,9 @@ var (
 	FLAGS_serdeFormat  string
 )
 
-func invokeSourceFunc(client *http.Client, response *common.FnOutput, wg *sync.WaitGroup) {
+func invokeSourceFunc(client *http.Client, response *common.FnOutput, wg *sync.WaitGroup, serdeFormat processor.SerdeFormat) {
 	defer wg.Done()
-	var serdeFormat processor.SerdeFormat
-	if FLAGS_serdeFormat == "json" {
-		serdeFormat = processor.JSON
-	} else if FLAGS_serdeFormat == "msgp" {
-		serdeFormat = processor.MSGP
-	} else {
-		log.Error().Msgf("serde format is not recognized; default back to JSON")
-		serdeFormat = processor.JSON
-	}
+
 	sp := &common.SourceParam{
 		TopicName:   "wc_src",
 		Duration:    uint32(FLAGS_duration),
@@ -51,22 +43,42 @@ func main() {
 	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
 	flag.Parse()
 
-	split := processor.NewClientNode(&processor.ClientNodeConfig{
-		FuncName:        "wordcountSplit",
-		GatewayUrl:      FLAGS_faas_gateway,
-		NumInstance:     1,
+	var serdeFormat processor.SerdeFormat
+	if FLAGS_serdeFormat == "json" {
+		serdeFormat = processor.JSON
+	} else if FLAGS_serdeFormat == "msgp" {
+		serdeFormat = processor.MSGP
+	} else {
+		log.Error().Msgf("serde format is not recognized; default back to JSON")
+		serdeFormat = processor.JSON
+	}
+
+	splitInputParam := &processor.InvokeParam{
 		Duration:        uint32(FLAGS_duration),
 		InputTopicName:  "wc_src",
 		OutputTopicName: "split_out",
-	})
-	count := processor.NewClientNode(&processor.ClientNodeConfig{
-		FuncName:        "wordcountCounter",
-		GatewayUrl:      FLAGS_faas_gateway,
-		NumInstance:     1,
+		SerdeFormat:     uint8(serdeFormat),
+	}
+	splitNodeConfig := &processor.ClientNodeConfig{
+		FuncName:    "wordcountSplit",
+		GatewayUrl:  FLAGS_faas_gateway,
+		NumInstance: 1,
+	}
+	split := processor.NewClientNode(splitNodeConfig)
+
+	countInputParam := &processor.InvokeParam{
 		Duration:        uint32(FLAGS_duration),
 		InputTopicName:  "split_out",
 		OutputTopicName: "wc_out",
-	})
+		SerdeFormat:     uint8(serdeFormat),
+	}
+	countNodeConfig := &processor.ClientNodeConfig{
+		FuncName:    "wordcountCounter",
+		GatewayUrl:  FLAGS_faas_gateway,
+		NumInstance: 1,
+	}
+	count := processor.NewClientNode(countNodeConfig)
+
 	client := &http.Client{
 		Transport: &http.Transport{
 			IdleConnTimeout: 30 * time.Second,
@@ -74,12 +86,23 @@ func main() {
 		Timeout: time.Duration(FLAGS_duration*3) * time.Second,
 	}
 	var wg sync.WaitGroup
-	var sourceOutput, splitOutput, countOutput common.FnOutput
+	var sourceOutput common.FnOutput
+
+	splitOutput := make([]common.FnOutput, splitNodeConfig.NumInstance)
+	countOutput := make([]common.FnOutput, countNodeConfig.NumInstance)
+
 	wg.Add(1)
-	go invokeSourceFunc(client, &sourceOutput, &wg)
-	wg.Add(1)
-	go split.Invoke(client, &splitOutput, &wg)
-	wg.Add(1)
-	go count.Invoke(client, &countOutput, &wg)
+	go invokeSourceFunc(client, &sourceOutput, &wg, serdeFormat)
+
+	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
+		wg.Add(1)
+		go split.Invoke(client, &splitOutput[i], &wg, splitInputParam)
+	}
+
+	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
+		wg.Add(1)
+		go count.Invoke(client, &countOutput[i], &wg, countInputParam)
+	}
+
 	wg.Wait()
 }

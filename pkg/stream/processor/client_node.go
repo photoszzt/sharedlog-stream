@@ -19,12 +19,16 @@ type ClientNode struct {
 }
 
 type ClientNodeConfig struct {
-	GatewayUrl      string
-	FuncName        string
-	NumInstance     uint32
+	GatewayUrl  string
+	FuncName    string
+	NumInstance uint32
+}
+
+type InvokeParam struct {
 	Duration        uint32 // in sec
 	InputTopicName  string
 	OutputTopicName string
+	SerdeFormat     uint8
 }
 
 func NewClientNode(config *ClientNodeConfig) *ClientNode {
@@ -41,12 +45,13 @@ func (n *ClientNode) AddChild(node *ClientNode) {
 	n.children = append(n.children, node)
 }
 
-func (n *ClientNode) Invoke(client *http.Client, response *common.FnOutput, wg *sync.WaitGroup) {
+func (n *ClientNode) Invoke(client *http.Client, response *common.FnOutput, wg *sync.WaitGroup, param *InvokeParam) {
 	defer wg.Done()
 	queryInput := &common.QueryInput{
-		Duration:        n.config.Duration,
-		InputTopicName:  n.config.InputTopicName,
-		OutputTopicName: n.config.OutputTopicName,
+		Duration:        param.Duration,
+		InputTopicName:  param.InputTopicName,
+		OutputTopicName: param.OutputTopicName,
+		SerdeFormat:     param.SerdeFormat,
 	}
 	url := utils.BuildFunctionUrl(n.config.GatewayUrl, n.config.FuncName)
 	fmt.Fprintf(os.Stderr, "func url is %s\n", url)

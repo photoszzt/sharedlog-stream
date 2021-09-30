@@ -5,7 +5,8 @@ type QueryInput struct {
 	InputTopicName  string `json:"input_topic_name"`
 	OutputTopicName string `json:"output_topic_name"`
 	SerdeFormat     uint8  `json:"serde_format"`
-	NumPartition    uint16 `json:"numPartition"`
+	NumInPartition  uint16 `json:"numInPartition"`
+	NumOutPartition uint16 `json:"numOutPartition"`
 	PartNum         uint16 `json:"PartNum"`
 }
 
