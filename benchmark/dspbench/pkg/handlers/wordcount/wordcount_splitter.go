@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -36,6 +37,12 @@ func (h *wordcountSplitFlatMap) Call(ctx context.Context, input []byte) ([]byte,
 		return nil, err
 	}
 	return utils.CompressData(encodedOutput), nil
+}
+
+func hashKey(key string) uint32 {
+	h := fnv.New32a()
+	h.Write([]byte(key))
+	return h.Sum32()
 }
 
 func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -116,8 +123,11 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 				Message: fmt.Sprintf("splitter failed: %v\n", err),
 			}
 		}
+
 		for _, m := range msgs {
-			err = sink.Sink(m, uint32(sp.PartNum))
+			h := hashKey(m.Key.(string))
+			h = h % uint32(sp.NumOutPartition)
+			err = sink.Sink(m, uint32(h))
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,

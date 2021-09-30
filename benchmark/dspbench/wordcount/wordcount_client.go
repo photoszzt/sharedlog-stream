@@ -53,29 +53,40 @@ func main() {
 		serdeFormat = processor.JSON
 	}
 
-	splitInputParam := &processor.InvokeParam{
-		Duration:        uint32(FLAGS_duration),
-		InputTopicName:  "wc_src",
-		OutputTopicName: "split_out",
-		SerdeFormat:     uint8(serdeFormat),
-	}
+	numCountInstance := 5
 	splitNodeConfig := &processor.ClientNodeConfig{
 		FuncName:    "wordcountSplit",
 		GatewayUrl:  FLAGS_faas_gateway,
 		NumInstance: 1,
 	}
-	split := processor.NewClientNode(splitNodeConfig)
-
-	countInputParam := &processor.InvokeParam{
-		Duration:        uint32(FLAGS_duration),
-		InputTopicName:  "split_out",
-		OutputTopicName: "wc_out",
-		SerdeFormat:     uint8(serdeFormat),
-	}
 	countNodeConfig := &processor.ClientNodeConfig{
 		FuncName:    "wordcountCounter",
 		GatewayUrl:  FLAGS_faas_gateway,
-		NumInstance: 1,
+		NumInstance: uint32(numCountInstance),
+	}
+	splitInputParams := make([]*processor.InvokeParam, splitNodeConfig.NumInstance)
+	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
+		splitInputParams = append(splitInputParams, &processor.InvokeParam{
+			Duration:        uint32(FLAGS_duration),
+			InputTopicName:  "wc_src",
+			OutputTopicName: "split_out",
+			SerdeFormat:     uint8(serdeFormat),
+			NumInPartition:  1,
+			NumOutPartition: uint16(numCountInstance),
+		})
+	}
+	split := processor.NewClientNode(splitNodeConfig)
+
+	countInputParams := make([]*processor.InvokeParam, countNodeConfig.NumInstance)
+	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
+		countInputParams = append(countInputParams, &processor.InvokeParam{
+			Duration:        uint32(FLAGS_duration),
+			InputTopicName:  "split_out",
+			OutputTopicName: "wc_out",
+			SerdeFormat:     uint8(serdeFormat),
+			NumInPartition:  uint16(numCountInstance),
+			NumOutPartition: uint16(numCountInstance),
+		})
 	}
 	count := processor.NewClientNode(countNodeConfig)
 
@@ -96,12 +107,14 @@ func main() {
 
 	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
 		wg.Add(1)
-		go split.Invoke(client, &splitOutput[i], &wg, splitInputParam)
+		splitInputParams[i].ParNum = 0
+		go split.Invoke(client, &splitOutput[i], &wg, splitInputParams[i])
 	}
 
 	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
 		wg.Add(1)
-		go count.Invoke(client, &countOutput[i], &wg, countInputParam)
+		countInputParams[i].ParNum = uint16(i)
+		go count.Invoke(client, &countOutput[i], &wg, countInputParams[i])
 	}
 
 	wg.Wait()

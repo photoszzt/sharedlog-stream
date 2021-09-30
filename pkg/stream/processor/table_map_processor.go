@@ -27,16 +27,24 @@ func (p *TableMapValuesProcessor) WithProcessorContext(pctx ProcessorContext) {
 }
 
 func (p *TableMapValuesProcessor) Process(msg Message) error {
-	newV, err := p.valueMapper.MapValue(msg.Value)
+	newMsg, err := p.ProcessAndReturn(msg)
 	if err != nil {
 		return err
+	}
+	return p.pipe.Forward(*newMsg)
+}
+
+func (p *TableMapValuesProcessor) ProcessAndReturn(msg Message) (*Message, error) {
+	newV, err := p.valueMapper.MapValue(msg.Value)
+	if err != nil {
+		return nil, err
 	}
 	newMsg := Message{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp}
 	if p.queryableName != "" {
 		err = p.store.Put(msg.Key, &ValueTimestamp{Value: newMsg.Value, Timestamp: newMsg.Timestamp})
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return p.pipe.Forward(newMsg)
+	return &newMsg, nil
 }
