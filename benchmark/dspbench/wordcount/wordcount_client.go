@@ -2,7 +2,9 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"net/http"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/stream/processor"
@@ -66,27 +68,29 @@ func main() {
 	}
 	splitInputParams := make([]*processor.InvokeParam, splitNodeConfig.NumInstance)
 	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
-		splitInputParams = append(splitInputParams, &processor.InvokeParam{
+		splitInputParams[i] = &processor.InvokeParam{
 			Duration:        uint32(FLAGS_duration),
 			InputTopicName:  "wc_src",
 			OutputTopicName: "split_out",
 			SerdeFormat:     uint8(serdeFormat),
 			NumInPartition:  1,
 			NumOutPartition: uint16(numCountInstance),
-		})
+		}
+		fmt.Fprintf(os.Stderr, "splitInputParams of %d is %v\n", i, splitInputParams[i])
 	}
+	fmt.Fprintf(os.Stderr, "splitInputParams: %v, len: %v\n", splitInputParams, len(splitInputParams))
 	split := processor.NewClientNode(splitNodeConfig)
 
 	countInputParams := make([]*processor.InvokeParam, countNodeConfig.NumInstance)
 	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
-		countInputParams = append(countInputParams, &processor.InvokeParam{
+		countInputParams[i] = &processor.InvokeParam{
 			Duration:        uint32(FLAGS_duration),
 			InputTopicName:  "split_out",
 			OutputTopicName: "wc_out",
 			SerdeFormat:     uint8(serdeFormat),
 			NumInPartition:  uint16(numCountInstance),
 			NumOutPartition: uint16(numCountInstance),
-		})
+		}
 	}
 	count := processor.NewClientNode(countNodeConfig)
 
@@ -105,6 +109,7 @@ func main() {
 	wg.Add(1)
 	go invokeSourceFunc(client, &sourceOutput, &wg, serdeFormat)
 
+	fmt.Fprintf(os.Stderr, "splitInputParams: %v\n", splitInputParams)
 	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
 		wg.Add(1)
 		splitInputParams[i].ParNum = 0
