@@ -68,9 +68,9 @@ func (h *wordCountSource) eventGeneration(ctx context.Context, env types.Environ
 
 	var seSerde processor.Serde
 	if sp.SerdeFormat == uint8(processor.JSON) {
-		seSerde = processor.StringSerde{}
+		seSerde = SentenceEventJSONSerde{}
 	} else if sp.SerdeFormat == uint8(processor.MSGP) {
-		seSerde = processor.StringSerde{}
+		seSerde = SentenceEventMsgpSerde{}
 	} else {
 		return &common.FnOutput{
 			Success: false,
@@ -104,6 +104,7 @@ func (h *wordCountSource) eventGeneration(ctx context.Context, env types.Environ
 			Sentence: sentence,
 			Ts:       uint64(time.Now().UnixMilli()),
 		}
+		fmt.Fprintf(os.Stderr, "sentence: %v\n", sentence)
 		msgEncoded, err := encode_sentence_event(seSerde, msgSerde, &se)
 		if err != nil {
 			return &common.FnOutput{

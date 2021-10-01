@@ -39,9 +39,9 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return spike_detection.NewSpikeDetectionSource(env), nil
 	case "wcsource":
 		return wordcount.NewWordCountSource(env), nil
-	case "wordcountSplit":
+	case "wordcountsplit":
 		return wordcount.NewWordCountSplitter(env), nil
-	case "wordcountCounter":
+	case "wordcountcounter":
 		return wordcount.NewWordCountCounterAgg(env), nil
 	default:
 		return nil, fmt.Errorf("unknown function name %v", funcName)

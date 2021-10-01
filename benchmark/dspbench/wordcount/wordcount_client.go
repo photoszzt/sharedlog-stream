@@ -19,6 +19,7 @@ var (
 	FLAGS_duration     int
 	FLAGS_events_num   int
 	FLAGS_serdeFormat  string
+	FLAGS_file_name    string
 )
 
 func invokeSourceFunc(client *http.Client, response *common.FnOutput, wg *sync.WaitGroup, serdeFormat processor.SerdeFormat) {
@@ -29,6 +30,7 @@ func invokeSourceFunc(client *http.Client, response *common.FnOutput, wg *sync.W
 		Duration:    uint32(FLAGS_duration),
 		SerdeFormat: uint8(serdeFormat),
 		NumEvents:   uint32(FLAGS_events_num),
+		FileName:    FLAGS_file_name,
 	}
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "wcsource")
 	if err := utils.JsonPostRequest(client, url, sp, response); err != nil {
@@ -43,6 +45,7 @@ func main() {
 	flag.IntVar(&FLAGS_duration, "duration", 60, "")
 	flag.IntVar(&FLAGS_events_num, "nevent", 0, "number of events")
 	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
+	flag.StringVar(&FLAGS_file_name, "in_fname", "/mnt/data/books.dat", "data source file name")
 	flag.Parse()
 
 	var serdeFormat processor.SerdeFormat
@@ -57,12 +60,12 @@ func main() {
 
 	numCountInstance := 5
 	splitNodeConfig := &processor.ClientNodeConfig{
-		FuncName:    "wordcountSplit",
+		FuncName:    "wordcountsplit",
 		GatewayUrl:  FLAGS_faas_gateway,
 		NumInstance: 1,
 	}
 	countNodeConfig := &processor.ClientNodeConfig{
-		FuncName:    "wordcountCounter",
+		FuncName:    "wordcountcounter",
 		GatewayUrl:  FLAGS_faas_gateway,
 		NumInstance: uint32(numCountInstance),
 	}
