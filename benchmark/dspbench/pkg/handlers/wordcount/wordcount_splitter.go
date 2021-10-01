@@ -98,7 +98,7 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 	sink := sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig)
 	startTime := time.Now()
 	for {
-		msg, err := src.Consume(uint32(sp.PartNum))
+		msg, err := src.Consume(uint32(sp.ParNum))
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,

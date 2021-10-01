@@ -69,9 +69,9 @@ func main() {
 		GatewayUrl:  FLAGS_faas_gateway,
 		NumInstance: uint32(numCountInstance),
 	}
-	splitInputParams := make([]*processor.InvokeParam, splitNodeConfig.NumInstance)
+	splitInputParams := make([]*common.QueryInput, splitNodeConfig.NumInstance)
 	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
-		splitInputParams[i] = &processor.InvokeParam{
+		splitInputParams[i] = &common.QueryInput{
 			Duration:        uint32(FLAGS_duration),
 			InputTopicName:  "wc_src",
 			OutputTopicName: "split_out",
@@ -84,9 +84,9 @@ func main() {
 	fmt.Fprintf(os.Stderr, "splitInputParams: %v, len: %v\n", splitInputParams, len(splitInputParams))
 	split := processor.NewClientNode(splitNodeConfig)
 
-	countInputParams := make([]*processor.InvokeParam, countNodeConfig.NumInstance)
+	countInputParams := make([]*common.QueryInput, countNodeConfig.NumInstance)
 	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
-		countInputParams[i] = &processor.InvokeParam{
+		countInputParams[i] = &common.QueryInput{
 			Duration:        uint32(FLAGS_duration),
 			InputTopicName:  "split_out",
 			OutputTopicName: "wc_out",

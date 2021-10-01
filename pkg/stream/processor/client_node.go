@@ -48,14 +48,9 @@ func (n *ClientNode) AddChild(node *ClientNode) {
 	n.children = append(n.children, node)
 }
 
-func (n *ClientNode) Invoke(client *http.Client, response *common.FnOutput, wg *sync.WaitGroup, param *InvokeParam) {
+func (n *ClientNode) Invoke(client *http.Client, response *common.FnOutput, wg *sync.WaitGroup, queryInput *common.QueryInput) {
 	defer wg.Done()
-	queryInput := &common.QueryInput{
-		Duration:        param.Duration,
-		InputTopicName:  param.InputTopicName,
-		OutputTopicName: param.OutputTopicName,
-		SerdeFormat:     param.SerdeFormat,
-	}
+
 	url := utils.BuildFunctionUrl(n.config.GatewayUrl, n.config.FuncName)
 	fmt.Fprintf(os.Stderr, "func url is %s\n", url)
 	if err := utils.JsonPostRequest(client, url, queryInput, response); err != nil {

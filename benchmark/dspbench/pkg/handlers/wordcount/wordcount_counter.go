@@ -97,7 +97,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 	store := processor.NewInMemoryKeyValueStoreWithChangelog(mp)
 	p := processor.NewStreamAggregateProcessor(store,
 		processor.InitializerFunc(func() interface{} {
-			return 0
+			return uint64(0)
 		}),
 		processor.AggregatorFunc(func(key interface{}, value interface{}, agg interface{}) interface{} {
 			val := agg.(uint64)
@@ -105,7 +105,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 		}))
 	startTime := time.Now()
 	for {
-		msg, err := src.Consume(uint32(sp.PartNum))
+		msg, err := src.Consume(uint32(sp.ParNum))
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
@@ -119,7 +119,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 				Message: err.Error(),
 			}
 		}
-		err = sink.Sink(ret, uint32(sp.PartNum))
+		err = sink.Sink(ret, uint32(sp.ParNum))
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,

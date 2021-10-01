@@ -7,7 +7,7 @@ type QueryInput struct {
 	SerdeFormat     uint8  `json:"serde_format"`
 	NumInPartition  uint16 `json:"numInPartition"`
 	NumOutPartition uint16 `json:"numOutPartition"`
-	PartNum         uint16 `json:"PartNum"`
+	ParNum          uint16 `json:"ParNum"`
 }
 
 type FnOutput struct {
