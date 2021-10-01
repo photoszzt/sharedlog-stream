@@ -54,12 +54,19 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 	}
 
 	var weSerde processor.Serde
+	var vtSerde processor.Serde
 	var ceSerde processor.Serde
 	if sp.SerdeFormat == uint8(processor.JSON) {
 		weSerde = WordEventJSONSerde{}
+		vtSerde = processor.ValueTimestampJSONSerde{
+			ValJSONSerde: CountEventJSONSerde{},
+		}
 		ceSerde = CountEventJSONSerde{}
 	} else if sp.SerdeFormat == uint8(processor.MSGP) {
 		weSerde = WordEventMsgpSerde{}
+		vtSerde = processor.ValueTimestampMsgpSerde{
+			ValMsgpSerde: CountEventMsgpSerde{},
+		}
 		ceSerde = CountEventMsgpSerde{}
 	} else {
 		return &common.FnOutput{
@@ -89,7 +96,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 	sink := sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig)
 	mp := &processor.MaterializeParam{
 		KeySerde:   processor.StringSerde{},
-		ValueSerde: ceSerde,
+		ValueSerde: vtSerde,
 		MsgSerde:   msgSerde,
 		StoreName:  sp.OutputTopicName,
 		Changelog:  output_stream,
@@ -97,11 +104,17 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 	store := processor.NewInMemoryKeyValueStoreWithChangelog(mp)
 	p := processor.NewStreamAggregateProcessor(store,
 		processor.InitializerFunc(func() interface{} {
-			return uint64(0)
+			return &CountEvent{
+				Count: 0,
+			}
 		}),
 		processor.AggregatorFunc(func(key interface{}, value interface{}, agg interface{}) interface{} {
-			val := agg.(uint64)
-			return val + 1
+			aggVal := agg.(*CountEvent)
+			val := value.(*WordEvent)
+			return &CountEvent{
+				Count: aggVal.Count + 1,
+				Ts:    val.Ts,
+			}
 		}))
 	startTime := time.Now()
 	for {
