@@ -116,8 +116,14 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 				Ts:    val.Ts,
 			}
 		}))
+	latencies := make([]int, 0, 128)
+	duration := time.Duration(sp.Duration) * time.Second
 	startTime := time.Now()
 	for {
+		if duration != 0 && time.Since(startTime) >= duration {
+			break
+		}
+		procStart := time.Now()
 		msg, err := src.Consume(uint32(sp.ParNum))
 		if err != nil {
 			return &common.FnOutput{
@@ -139,9 +145,12 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 				Message: fmt.Sprintf("sink failed: %v\n", err),
 			}
 		}
+		elapsed := time.Since(procStart)
+		latencies = append(latencies, int(elapsed.Microseconds()))
 	}
 	return &common.FnOutput{
-		Success:  true,
-		Duration: time.Since(startTime).Seconds(),
+		Success:   true,
+		Duration:  time.Since(startTime).Seconds(),
+		Latencies: latencies,
 	}
 }

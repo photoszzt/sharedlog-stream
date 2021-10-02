@@ -117,7 +117,7 @@ func (h *spikeDetectionSource) eventGeneration(ctx context.Context, sp *common.S
 	startTime := time.Now()
 	idx := 0
 	for {
-		if duration != 0 && time.Since(startTime) >= duration || duration == 0 {
+		if duration != 0 && time.Since(startTime) >= duration {
 			break
 		}
 		if numEvents != 0 && idx == int(numEvents) {
@@ -148,7 +148,11 @@ func (h *spikeDetectionSource) eventGeneration(ctx context.Context, sp *common.S
 		latencies = append(latencies, int(elapsed.Microseconds()))
 		idx += 1
 		if idx >= len(h.sensorDataList) {
-			idx = 0
+			// generate more events
+			// idx = 0
+
+			// generate events until end
+			break
 		}
 	}
 	return &common.FnOutput{

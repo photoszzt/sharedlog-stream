@@ -193,13 +193,12 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 	duration := time.Duration(input.Duration) * time.Second
 	latencies := make([]int, 0, 128)
 	startTime := time.Now()
-	select {
-	case <-time.After(duration):
-		for _, srcPump := range srcPumps {
-			srcPump.Stop()
-			srcPump.Close()
-		}
+	<-time.After(duration)
+	for _, srcPump := range srcPumps {
+		srcPump.Stop()
+		srcPump.Close()
 	}
+
 	output <- &common.FnOutput{
 		Success:   true,
 		Duration:  time.Since(startTime).Seconds(),

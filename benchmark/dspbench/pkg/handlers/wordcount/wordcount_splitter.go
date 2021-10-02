@@ -96,8 +96,14 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 	}
 	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
 	sink := sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig)
+	latencies := make([]int, 0, 128)
+	duration := time.Duration(sp.Duration) * time.Second
 	startTime := time.Now()
 	for {
+		if duration != 0 && time.Since(startTime) >= duration {
+			break
+		}
+		procStart := time.Now()
 		msg, err := src.Consume(uint32(sp.ParNum))
 		if err != nil {
 			return &common.FnOutput{
@@ -135,9 +141,12 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 				}
 			}
 		}
+		elapsed := time.Since(procStart)
+		latencies = append(latencies, int(elapsed.Microseconds()))
 	}
 	return &common.FnOutput{
-		Success:  true,
-		Duration: time.Since(startTime).Seconds(),
+		Success:   true,
+		Duration:  time.Since(startTime).Seconds(),
+		Latencies: latencies,
 	}
 }
