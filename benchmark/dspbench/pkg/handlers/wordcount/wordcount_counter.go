@@ -38,14 +38,14 @@ func (h *wordcountCounterAgg) Call(ctx context.Context, input []byte) ([]byte, e
 }
 
 func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.InputTopicName, uint32(sp.NumInPartition))
+	input_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.InputTopicName, sp.NumInPartition)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
 		}
 	}
-	output_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.OutputTopicName, uint32(sp.NumOutPartition))
+	output_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.OutputTopicName, sp.NumOutPartition)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -124,7 +124,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 			break
 		}
 		procStart := time.Now()
-		msg, err := src.Consume(uint32(sp.ParNum))
+		msg, err := src.Consume(sp.ParNum)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
@@ -138,7 +138,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 				Message: err.Error(),
 			}
 		}
-		err = sink.Sink(ret, uint32(sp.ParNum))
+		err = sink.Sink(ret, sp.ParNum)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,

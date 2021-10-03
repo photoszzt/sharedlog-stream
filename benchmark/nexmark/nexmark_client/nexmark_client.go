@@ -94,9 +94,9 @@ func windowedAvg() {
 		serdeFormat = processor.JSON
 	}
 
-	numAggInstance := 5
+	numAggInstance := uint8(5)
 	groupByNodeConfig := &processor.ClientNodeConfig{
-		FuncName:    "windowavggroupBy",
+		FuncName:    "windowavggroupby",
 		GatewayUrl:  FLAGS_faas_gateway,
 		NumInstance: 1,
 	}
@@ -108,7 +108,7 @@ func windowedAvg() {
 			OutputTopicName: "grouped_bid",
 			SerdeFormat:     uint8(serdeFormat),
 			NumInPartition:  1,
-			NumOutPartition: uint16(numAggInstance),
+			NumOutPartition: numAggInstance,
 		}
 	}
 	bidGroupBy := processor.NewClientNode(groupByNodeConfig)
@@ -125,8 +125,8 @@ func windowedAvg() {
 			InputTopicName:  "grouped_bid",
 			OutputTopicName: "windowed_avg",
 			SerdeFormat:     uint8(serdeFormat),
-			NumInPartition:  uint16(numAggInstance),
-			NumOutPartition: uint16(numAggInstance),
+			NumInPartition:  numAggInstance,
+			NumOutPartition: numAggInstance,
 		}
 	}
 	avg := processor.NewClientNode(avgNodeConfig)
@@ -155,7 +155,7 @@ func windowedAvg() {
 
 	for i := 0; i < int(avgNodeConfig.NumInstance); i++ {
 		wg.Add(1)
-		avgNodeInputParams[i].ParNum = uint16(i)
+		avgNodeInputParams[i].ParNum = uint8(i)
 		go avg.Invoke(client, &avgOutput[i], &wg, avgNodeInputParams[i])
 	}
 	wg.Wait()

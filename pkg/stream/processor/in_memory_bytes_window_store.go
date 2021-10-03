@@ -26,8 +26,7 @@ type InMemoryBytesWindowStore struct {
 	valSerde Serde
 }
 
-func NewInMemoryBytesWindowStore(name string, retentionPeriod uint64,
-	windowSize uint64, retainDuplicates bool, valSerde Serde) *InMemoryBytesWindowStore {
+func NewInMemoryBytesWindowStore(name string, retentionPeriod uint64, windowSize uint64, retainDuplicates bool, valSerde Serde) *InMemoryBytesWindowStore {
 	return &InMemoryBytesWindowStore{
 		name:               name,
 		windowSize:         windowSize,

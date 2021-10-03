@@ -12,11 +12,11 @@ type PartitionFunc func(interface{}) uint32
 
 type ShardedSharedLogStream struct {
 	subSharedLogStreams []*SharedLogStream
-	numPartitions       uint32
+	numPartitions       uint8
 	topicName           string
 }
 
-func NewShardedSharedLogStream(ctx context.Context, env types.Environment, topicName string, numPartitions uint32) (*ShardedSharedLogStream, error) {
+func NewShardedSharedLogStream(ctx context.Context, env types.Environment, topicName string, numPartitions uint8) (*ShardedSharedLogStream, error) {
 	if numPartitions <= 0 {
 		log.Fatal().Msgf("Shards must be positive")
 	}
@@ -35,15 +35,15 @@ func NewShardedSharedLogStream(ctx context.Context, env types.Environment, topic
 	}, nil
 }
 
-func (s *ShardedSharedLogStream) Push(payload []byte, parNumber uint32) (uint64, error) {
-	return s.subSharedLogStreams[parNumber].Push(payload, 0)
+func (s *ShardedSharedLogStream) Push(payload []byte, parNumber uint8) (uint64, error) {
+	return s.subSharedLogStreams[parNumber].Push(payload, parNumber)
 }
 
-func (s *ShardedSharedLogStream) Pop(parNumber uint32) ([]byte, error) {
+func (s *ShardedSharedLogStream) Pop(parNumber uint8) ([]byte, error) {
 	if parNumber < s.numPartitions {
 		par := parNumber
 		shard := s.subSharedLogStreams[par]
-		return shard.Pop(0)
+		return shard.Pop(parNumber)
 	} else {
 		return nil, xerrors.Errorf("Invalid partition number: %d", parNumber)
 	}

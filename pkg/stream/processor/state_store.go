@@ -10,7 +10,7 @@ type MaterializeParam struct {
 	MsgSerde   MsgSerde
 	StoreName  string
 	Changelog  LogStore
-	ParNum     uint32
+	ParNum     uint8
 }
 
 type JoinParam struct {

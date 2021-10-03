@@ -20,7 +20,7 @@ func NewShardedSharedLogStreamSink(stream *ShardedSharedLogStream, config *Strea
 	}
 }
 
-func (sls *ShardedSharedLogStreamSink) Sink(msg processor.Message, parNum uint32) error {
+func (sls *ShardedSharedLogStreamSink) Sink(msg processor.Message, parNum uint8) error {
 	if msg.Key == nil && msg.Value == nil {
 		return nil
 	}

@@ -5,17 +5,14 @@ import "time"
 type InMemoryWindowStoreWithChangelog struct {
 	bytesWindowStore *InMemoryBytesWindowStore
 	mp               *MaterializeParam
-	storeName        string
 }
 
 var _ = WindowStore(&InMemoryWindowStoreWithChangelog{})
 
-func NewInMemoryWindowStoreWithChangelog(name string, retensionPeriod uint64,
-	windowSize uint64, mp *MaterializeParam) *InMemoryWindowStoreWithChangelog {
+func NewInMemoryWindowStoreWithChangelog(retensionPeriod uint64, windowSize uint64, mp *MaterializeParam) *InMemoryWindowStoreWithChangelog {
 	return &InMemoryWindowStoreWithChangelog{
-		bytesWindowStore: NewInMemoryBytesWindowStore(name, retensionPeriod,
-			windowSize, false, mp.ValueSerde),
-		mp: mp,
+		bytesWindowStore: NewInMemoryBytesWindowStore(mp.StoreName, retensionPeriod, windowSize, false, mp.ValueSerde),
+		mp:               mp,
 	}
 }
 

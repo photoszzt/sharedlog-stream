@@ -101,7 +101,7 @@ func (s *SharedLogStream) TopicName() string {
 	return s.topicName
 }
 
-func (s *SharedLogStream) Push(payload []byte, parNum uint32) (uint64, error) {
+func (s *SharedLogStream) Push(payload []byte, parNum uint8) (uint64, error) {
 	if len(payload) == 0 {
 		return 0, errEmptyPayload
 	}
@@ -327,7 +327,7 @@ func IsStreamTimeoutError(err error) bool {
 	return err == errStreamTimeout
 }
 
-func (s *SharedLogStream) Pop(parNum uint32) ([]byte /* payload */, error) {
+func (s *SharedLogStream) Pop(parNum uint8) ([]byte /* payload */, error) {
 	if s.isEmpty() {
 		if err := s.syncTo(protocol.MaxLogSeqnum); err != nil {
 			return nil, err

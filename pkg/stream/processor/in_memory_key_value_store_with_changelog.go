@@ -14,7 +14,7 @@ type InMemoryKeyValueStoreWithChangelog struct {
 	logStore   LogStore
 	msgSerde   MsgSerde
 	storeName  string
-	parNum     uint32
+	parNum     uint8
 }
 
 func NewInMemoryKeyValueStoreWithChangelog(mp *MaterializeParam) *InMemoryKeyValueStoreWithChangelog {

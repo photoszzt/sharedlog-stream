@@ -23,7 +23,7 @@ func NewShardedSharedLogStreamSource(stream *ShardedSharedLogStream, config *Sha
 	}
 }
 
-func (s *ShardedSharedLogStreamSource) Consume(parNum uint32) (processor.Message, error) {
+func (s *ShardedSharedLogStreamSource) Consume(parNum uint8) (processor.Message, error) {
 	startTime := time.Now()
 	for {
 		if s.timeout != 0 && time.Since(startTime) >= s.timeout {

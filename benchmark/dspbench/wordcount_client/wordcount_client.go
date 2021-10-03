@@ -56,7 +56,7 @@ func main() {
 		serdeFormat = processor.JSON
 	}
 
-	numCountInstance := 5
+	numCountInstance := uint8(5)
 	splitNodeConfig := &processor.ClientNodeConfig{
 		FuncName:    "wordcountsplit",
 		GatewayUrl:  FLAGS_faas_gateway,
@@ -71,7 +71,7 @@ func main() {
 			OutputTopicName: "split_out",
 			SerdeFormat:     uint8(serdeFormat),
 			NumInPartition:  1,
-			NumOutPartition: uint16(numCountInstance),
+			NumOutPartition: numCountInstance,
 		}
 	}
 	split := processor.NewClientNode(splitNodeConfig)
@@ -88,8 +88,8 @@ func main() {
 			InputTopicName:  "split_out",
 			OutputTopicName: "wc_out",
 			SerdeFormat:     uint8(serdeFormat),
-			NumInPartition:  uint16(numCountInstance),
-			NumOutPartition: uint16(numCountInstance),
+			NumInPartition:  numCountInstance,
+			NumOutPartition: numCountInstance,
 		}
 	}
 	count := processor.NewClientNode(countNodeConfig)
@@ -117,7 +117,7 @@ func main() {
 
 	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
 		wg.Add(1)
-		countInputParams[i].ParNum = uint16(i)
+		countInputParams[i].ParNum = uint8(i)
 		go count.Invoke(client, &countOutput[i], &wg, countInputParams[i])
 	}
 

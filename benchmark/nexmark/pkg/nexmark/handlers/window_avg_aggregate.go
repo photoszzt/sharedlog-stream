@@ -44,14 +44,14 @@ func (h *windowedAvg) Call(ctx context.Context, input []byte) ([]byte, error) {
 }
 
 func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.InputTopicName, uint32(sp.NumInPartition))
+	input_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.InputTopicName, sp.NumInPartition)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
 		}
 	}
-	output_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.OutputTopicName, uint32(sp.NumOutPartition))
+	output_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.OutputTopicName, sp.NumOutPartition)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -72,6 +72,25 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 			Message: err.Error(),
 		}
 	}
+	var scSerde processor.Serde
+	var vtSerde processor.Serde
+	if sp.SerdeFormat == uint8(processor.JSON) {
+		scSerde = ntypes.SumAndCountJSONSerde{}
+		vtSerde = processor.ValueTimestampJSONSerde{
+			ValJSONSerde: scSerde,
+		}
+	} else if sp.SerdeFormat == uint8(processor.MSGP) {
+		scSerde = ntypes.SumAndCountMsgpSerde{}
+		vtSerde = processor.ValueTimestampMsgpSerde{
+			ValMsgpSerde: scSerde,
+		}
+	} else {
+		return &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat),
+		}
+	}
+
 	duration := time.Duration(sp.Duration) * time.Second
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      duration,
@@ -83,16 +102,22 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 	outConfig := &sharedlog_stream.StreamSinkConfig{
 		MsgEncoder:   msgSerde,
 		KeyEncoder:   processor.Uint64Encoder{},
-		ValueEncoder: eventSerde,
+		ValueEncoder: processor.Float64Serde{},
 	}
 
 	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
 	sink := sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig)
 	timeWindows := processor.NewTimeWindowsNoGrace(time.Duration(10) * time.Second)
-	windowStoreName := "windowed-avg-store"
 
-	winStoreMp := &processor.MaterializeParam{}
-	store := processor.NewInMemoryWindowStoreWithChangelog(windowStoreName,
+	winStoreMp := &processor.MaterializeParam{
+		StoreName:  "windowed-avg-store",
+		MsgSerde:   msgSerde,
+		KeySerde:   processor.Uint64Serde{},
+		ValueSerde: vtSerde,
+		Changelog:  output_stream,
+		ParNum:     sp.ParNum,
+	}
+	store := processor.NewInMemoryWindowStoreWithChangelog(
 		timeWindows.MaxSize()*timeWindows.GracePeriodMs(), timeWindows.MaxSize(), winStoreMp)
 	aggProc := processor.NewStreamWindowAggregateProcessor(store,
 		processor.InitializerFunc(func() interface{} {
@@ -102,8 +127,7 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 			}
 		}),
 		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
-			vt := value.(*processor.ValueTimestamp)
-			val := vt.Value.(*ntypes.Event)
+			val := value.(*ntypes.Event)
 			agg := aggregate.(*ntypes.SumAndCount)
 			return &ntypes.SumAndCount{
 				Sum:   agg.Sum + val.Bid.Price,
@@ -122,7 +146,7 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 			break
 		}
 		procStart := time.Now()
-		msg, err := src.Consume(uint32(sp.ParNum))
+		msg, err := src.Consume(sp.ParNum)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
@@ -144,7 +168,7 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 					Message: err.Error(),
 				}
 			}
-			err = sink.Sink(*avg, uint32(sp.ParNum))
+			err = sink.Sink(*avg, sp.ParNum)
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,

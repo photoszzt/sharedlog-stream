@@ -47,7 +47,7 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewQuery7(env), nil
 	case "query8":
 		return handlers.NewQuery8(env), nil
-	case "windowavggroupBy":
+	case "windowavggroupby":
 		return handlers.NewWindowAvgGroupByHandler(env), nil
 	case "windowavgagg":
 		return handlers.NewWindowedAvg(env), nil

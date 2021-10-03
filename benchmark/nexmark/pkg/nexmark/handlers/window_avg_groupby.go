@@ -43,14 +43,14 @@ func (h *windowAvgGroupBy) Call(ctx context.Context, input []byte) ([]byte, erro
 }
 
 func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.InputTopicName, uint32(sp.NumInPartition))
+	input_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.InputTopicName, uint8(sp.NumInPartition))
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
 		}
 	}
-	output_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.OutputTopicName, uint32(sp.NumOutPartition))
+	output_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.OutputTopicName, uint8(sp.NumOutPartition))
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -94,7 +94,7 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput) *
 			break
 		}
 		procStart := time.Now()
-		msg, err := src.Consume(uint32(sp.ParNum))
+		msg, err := src.Consume(sp.ParNum)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
@@ -103,9 +103,9 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput) *
 		}
 		val := msg.Value.(*ntypes.Event)
 		if val.Etype == ntypes.BID {
-			par := val.Bid.Auction % uint64(sp.NumOutPartition)
+			par := uint8(val.Bid.Auction % uint64(sp.NumOutPartition))
 			newMsg := processor.Message{Key: val.Bid.Auction, Value: msg.Value}
-			err = sink.Sink(newMsg, uint32(par))
+			err = sink.Sink(newMsg, par)
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,
