@@ -2,9 +2,7 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"net/http"
-	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/stream/processor"
@@ -64,11 +62,7 @@ func main() {
 		GatewayUrl:  FLAGS_faas_gateway,
 		NumInstance: 1,
 	}
-	countNodeConfig := &processor.ClientNodeConfig{
-		FuncName:    "wordcountcounter",
-		GatewayUrl:  FLAGS_faas_gateway,
-		NumInstance: uint32(numCountInstance),
-	}
+
 	splitInputParams := make([]*common.QueryInput, splitNodeConfig.NumInstance)
 	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
 		splitInputParams[i] = &common.QueryInput{
@@ -79,11 +73,14 @@ func main() {
 			NumInPartition:  1,
 			NumOutPartition: uint16(numCountInstance),
 		}
-		fmt.Fprintf(os.Stderr, "splitInputParams of %d is %v\n", i, splitInputParams[i])
 	}
-	fmt.Fprintf(os.Stderr, "splitInputParams: %v, len: %v\n", splitInputParams, len(splitInputParams))
 	split := processor.NewClientNode(splitNodeConfig)
 
+	countNodeConfig := &processor.ClientNodeConfig{
+		FuncName:    "wordcountcounter",
+		GatewayUrl:  FLAGS_faas_gateway,
+		NumInstance: uint32(numCountInstance),
+	}
 	countInputParams := make([]*common.QueryInput, countNodeConfig.NumInstance)
 	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
 		countInputParams[i] = &common.QueryInput{
@@ -112,7 +109,6 @@ func main() {
 	wg.Add(1)
 	go invokeSourceFunc(client, &sourceOutput, &wg, serdeFormat)
 
-	fmt.Fprintf(os.Stderr, "splitInputParams: %v\n", splitInputParams)
 	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
 		wg.Add(1)
 		splitInputParams[i].ParNum = 0

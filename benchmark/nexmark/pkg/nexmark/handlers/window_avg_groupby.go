@@ -22,7 +22,7 @@ type windowAvgGroupBy struct {
 	env types.Environment
 }
 
-func NewWindowAbgGroupByHandler(env types.Environment) types.FuncHandler {
+func NewWindowAvgGroupByHandler(env types.Environment) types.FuncHandler {
 	return &windowAvgGroupBy{
 		env: env,
 	}
