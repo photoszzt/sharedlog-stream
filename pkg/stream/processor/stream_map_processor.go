@@ -40,6 +40,15 @@ func (p *StreamMapProcessor) Process(msg Message) error {
 	return p.pipe.Forward(m)
 }
 
+func (p *StreamMapProcessor) ProcessAndReturn(msg Message) (*Message, error) {
+	m, err := p.mapper.Map(msg)
+	if err != nil {
+		return nil, err
+	}
+	m.Timestamp = msg.Timestamp
+	return &m, nil
+}
+
 type ValueMapper interface {
 	MapValue(value interface{}) (interface{}, error)
 }
@@ -57,7 +66,7 @@ type StreamMapValuesProcessor struct {
 	pctx        ProcessorContext
 }
 
-func NewStreamMapValuesProcessor(mapper ValueMapper) Processor {
+func NewStreamMapValuesProcessor(mapper ValueMapper) *StreamMapValuesProcessor {
 	return &StreamMapValuesProcessor{
 		valueMapper: mapper,
 	}
@@ -77,6 +86,14 @@ func (p *StreamMapValuesProcessor) Process(msg Message) error {
 		return err
 	}
 	return p.pipe.Forward(Message{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp})
+}
+
+func (p *StreamMapValuesProcessor) ProcessAndReturn(msg Message) (*Message, error) {
+	newV, err := p.valueMapper.MapValue(msg.Value)
+	if err != nil {
+		return nil, err
+	}
+	return &Message{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp}, nil
 }
 
 type StreamMapValuesWithKeyProcessor struct {

@@ -30,3 +30,8 @@ func (p *PrintProcessor) Process(msg Message) error {
 
 	return p.pipe.Forward(msg)
 }
+
+func (p *PrintProcessor) ProcessAndReturn(msg Message) (*Message, error) {
+	fmt.Printf("%v:%v\n", msg.Key, msg.Value)
+	return &msg, nil
+}

@@ -18,7 +18,7 @@ type FlatMapProcessor struct {
 	pctx   ProcessorContext
 }
 
-func NewFlatMapProcessor(mapper FlatMapper) Processor {
+func NewFlatMapProcessor(mapper FlatMapper) *FlatMapProcessor {
 	return &FlatMapProcessor{
 		mapper: mapper,
 	}
@@ -44,4 +44,12 @@ func (p *FlatMapProcessor) Process(msg Message) error {
 		}
 	}
 	return nil
+}
+
+func (p *FlatMapProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
+	msgs, err := p.mapper.FlatMap(msg)
+	if err != nil {
+		return nil, err
+	}
+	return msgs, nil
 }

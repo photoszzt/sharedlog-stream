@@ -45,4 +45,4 @@ dspbench_client:
 .PHONY: wordcount_client
 wordcount_client:
 	mkdir -p ./bin
-	go build -o bin/wordcount_client benchmark/dspbench/wordcount/wordcount_client.go
+	go build -o bin/wordcount_client benchmark/dspbench/wordcount_client/wordcount_client.go

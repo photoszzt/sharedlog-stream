@@ -20,3 +20,7 @@ func (p *MergeProcessor) WithProcessorContext(pctx ProcessorContext) {
 func (p *MergeProcessor) Process(msg Message) error {
 	return p.pipe.Forward(msg)
 }
+
+func (p *MergeProcessor) ProcessAndReturn(msg Message) (*Message, error) {
+	panic("not implemented")
+}
