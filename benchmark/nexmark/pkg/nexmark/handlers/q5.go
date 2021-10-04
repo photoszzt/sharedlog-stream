@@ -155,9 +155,8 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 				agg := aggregate.(uint64)
 				if v.Count > agg {
 					return v.Count
-				} else {
-					return agg
 				}
+				return agg
 			}))
 
 	auctionBids.

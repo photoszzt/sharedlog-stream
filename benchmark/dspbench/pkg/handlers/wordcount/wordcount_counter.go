@@ -138,7 +138,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 				Message: err.Error(),
 			}
 		}
-		err = sink.Sink(ret, sp.ParNum)
+		err = sink.Sink(*ret, sp.ParNum)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
