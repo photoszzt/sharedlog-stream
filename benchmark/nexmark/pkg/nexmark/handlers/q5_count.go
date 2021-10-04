@@ -74,7 +74,9 @@ func (h *q5Count) process(ctx context.Context, sp *common.QueryInput) *common.Fn
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		MsgEncoder: msgSerde,
+		MsgEncoder:   msgSerde,
+		KeyEncoder:   processor.Uint64Encoder{},
+		ValueEncoder: processor.Uint64Encoder{},
 	}
 	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
 	sink := sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig)
@@ -86,6 +88,16 @@ func (h *q5Count) process(ctx context.Context, sp *common.QueryInput) *common.Fn
 		StoreName:  "q5-count-store",
 		Changelog:  output_stream,
 	}
+	countWindowStore := processor.NewInMemoryWindowStoreWithChangelog(
+		hopWindow.MaxSize()+hopWindow.GracePeriodMs(),
+		hopWindow.MaxSize(), countMp,
+	)
+	countProc := processor.NewStreamWindowAggregateProcessor(countWindowStore,
+		processor.InitializerFunc(func() interface{} { return 0 }),
+		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
+			val := aggregate.(uint64)
+			return val + 1
+		}), hopWindow)
 	latencies := make([]int, 0, 128)
 	startTime := time.Now()
 	for {
@@ -98,6 +110,22 @@ func (h *q5Count) process(ctx context.Context, sp *common.QueryInput) *common.Fn
 			return &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
+			}
+		}
+		countMsgs, err := countProc.ProcessAndReturn(msg)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: err.Error(),
+			}
+		}
+		for _, countMsg := range countMsgs {
+			err = sink.Sink(*countMsg, sp.ParNum)
+			if err != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
 			}
 		}
 		elapsed := time.Since(procStart)
