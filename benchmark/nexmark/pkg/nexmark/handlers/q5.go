@@ -34,9 +34,7 @@ func (h *query5Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
-	outputCh := make(chan *common.FnOutput)
-	go Query5(ctx, h.env, parsedInput, outputCh)
-	output := <-outputCh
+	output := Query5(ctx, h.env, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
 		panic(err)
@@ -45,44 +43,41 @@ func (h *query5Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput, output chan *common.FnOutput) {
+func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput) *common.FnOutput {
 	inputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.InputTopicName)
 	if err != nil {
-		output <- &common.FnOutput{
+		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("NewSharedlogStream for input stream failed: %v", err),
 		}
-		return
 	}
 
 	outputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.OutputTopicName)
 	if err != nil {
-		output <- &common.FnOutput{
+		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("NewSharedlogStream for output stream failed: %v", err),
 		}
-		return
 	}
 
 	windowChangeLog, err := sharedlog_stream.NewLogStore(ctx, env, "count-log")
 	if err != nil {
-		output <- &common.FnOutput{
+		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("NewSharedlogStream for input stream failed: %v", err),
 		}
-		return
 	}
 
 	msgSerde, err := processor.GetMsgSerde(input.SerdeFormat)
 	if err != nil {
-		output <- &common.FnOutput{
+		return &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
 	}
 	eventSerde, err := getEventSerde(input.SerdeFormat)
 	if err != nil {
-		output <- &common.FnOutput{
+		return &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
@@ -99,7 +94,7 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		aucIdCountSerde = ntypes.AuctionIdCountMsgpSerde{}
 		aucIdCntMaxSerde = ntypes.AuctionIdCntMaxMsgpSerde{}
 	} else {
-		output <- &common.FnOutput{
+		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", input.SerdeFormat),
 		}
@@ -184,7 +179,7 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, outConfig))
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {
-		output <- &common.FnOutput{
+		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("build stream failed: %v", err_arrs),
 		}
@@ -218,7 +213,7 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 			srcPump.Close()
 		}
 	}
-	output <- &common.FnOutput{
+	return &common.FnOutput{
 		Success:   true,
 		Duration:  time.Since(startTime).Seconds(),
 		Latencies: latencies,
