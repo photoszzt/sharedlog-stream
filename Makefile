@@ -46,3 +46,8 @@ dspbench_client:
 wordcount_client:
 	mkdir -p ./bin
 	go build -o bin/wordcount_client benchmark/dspbench/wordcount_client/wordcount_client.go
+
+.PHONY: download-book
+download-book:
+	mkdir -p data
+	wget -O data/books.dat https://raw.githubusercontent.com/mayconbordin/storm-applications/master/data/books.dat
