@@ -6,7 +6,7 @@ type StreamFilterProcessor struct {
 	pred Predicate
 }
 
-func NewStreamFilterProcessor(pred Predicate) Processor {
+func NewStreamFilterProcessor(pred Predicate) *StreamFilterProcessor {
 	return &StreamFilterProcessor{
 		pred: pred,
 	}
@@ -31,13 +31,24 @@ func (p *StreamFilterProcessor) Process(msg Message) error {
 	return nil
 }
 
+func (p *StreamFilterProcessor) ProcessAndReturn(msg Message) (*Message, error) {
+	ok, err := p.pred.Assert(&msg)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		return &msg, nil
+	}
+	return nil, nil
+}
+
 type StreamFilterNotProcessor struct {
 	pipe Pipe
 	pctx ProcessorContext
 	pred Predicate
 }
 
-func NewStreamFilterNotProcessor(pred Predicate) Processor {
+func NewStreamFilterNotProcessor(pred Predicate) *StreamFilterNotProcessor {
 	return &StreamFilterNotProcessor{
 		pred: pred,
 	}

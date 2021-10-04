@@ -17,7 +17,7 @@ type StreamMapProcessor struct {
 	pctx   ProcessorContext
 }
 
-func NewStreamMapProcessor(mapper Mapper) Processor {
+func NewStreamMapProcessor(mapper Mapper) *StreamMapProcessor {
 	return &StreamMapProcessor{
 		mapper: mapper,
 	}
