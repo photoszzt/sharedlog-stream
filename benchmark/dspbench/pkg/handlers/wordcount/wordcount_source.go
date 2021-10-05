@@ -99,12 +99,12 @@ func (h *wordCountSource) eventGeneration(ctx context.Context, env types.Environ
 		if numEvents != 0 && idx == int(numEvents) {
 			break
 		}
+		procStart := time.Now()
 		sentence := h.lines[idx]
 		se := SentenceEvent{
 			Sentence: sentence,
 			Ts:       uint64(time.Now().UnixMilli()),
 		}
-		fmt.Fprintf(os.Stderr, "sentence: %v\n", sentence)
 		msgEncoded, err := encode_sentence_event(seSerde, msgSerde, &se)
 		if err != nil {
 			return &common.FnOutput{
@@ -112,7 +112,6 @@ func (h *wordCountSource) eventGeneration(ctx context.Context, env types.Environ
 				Message: err.Error(),
 			}
 		}
-		pushStart := time.Now()
 		_, err = stream.Push(msgEncoded, 0)
 		if err != nil {
 			return &common.FnOutput{
@@ -120,7 +119,7 @@ func (h *wordCountSource) eventGeneration(ctx context.Context, env types.Environ
 				Message: fmt.Sprintf("stream push failed: %v", err),
 			}
 		}
-		elapsed := time.Since(pushStart)
+		elapsed := time.Since(procStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
 		idx += 1
 		if idx >= len(h.lines) {

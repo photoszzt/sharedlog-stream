@@ -2,7 +2,9 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"net/http"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/stream/processor"
@@ -122,4 +124,20 @@ func main() {
 	}
 
 	wg.Wait()
+	if sourceOutput.Success {
+		fmt.Fprintf(os.Stdout, "source duration: %v ", sourceOutput.Duration)
+		fmt.Fprintf(os.Stdout, "source latency: %v\n", sourceOutput.Latencies)
+	}
+	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
+		if splitOutput[i].Success {
+			fmt.Fprintf(os.Stdout, "split %v duration: %v ", i, splitOutput[i].Duration)
+			fmt.Fprintf(os.Stdout, "split %v latency: %v\n", i, splitOutput[i].Latencies)
+		}
+	}
+	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
+		if countOutput[i].Success {
+			fmt.Fprintf(os.Stdout, "count %v duration: %v ", i, countOutput[i].Duration)
+			fmt.Fprintf(os.Stdout, "count %v latency: %v\n", i, countOutput[i].Latencies)
+		}
+	}
 }
