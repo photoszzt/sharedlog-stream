@@ -143,10 +143,10 @@ func main() {
 			}
 			sumTime = sumTime / 1000.0 // convert to sec
 			tput := float64(len(splitOutput[i].Latencies)) / sumTime
-			fmt.Fprintf(os.Stdout, "split %v duration: %v ", i, splitOutput[i].Duration)
+			fmt.Fprintf(os.Stdout, "split %v duration: %v, ", i, splitOutput[i].Duration)
 			// fmt.Fprintf(os.Stdout, "split %v latency: %v\n", i, splitOutput[i].Latencies)
-			fmt.Fprintf(os.Stdout, "split %v sum of iter time: %v sec ", i, sumTime)
-			fmt.Fprintf(os.Stdout, "split %v throughput: (event/s) %v\n", i, tput)
+			fmt.Fprintf(os.Stdout, "sum of iter time: %v sec, ", sumTime)
+			fmt.Fprintf(os.Stdout, "processed: %v, throughput: (event/s) %v\n", len(splitOutput[i].Latencies), tput)
 		}
 	}
 	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
@@ -160,8 +160,8 @@ func main() {
 			tput := float64(len(countOutput[i].Latencies)) / sumTime
 			fmt.Fprintf(os.Stdout, "count %v duration: %v ", i, countOutput[i].Duration)
 			// fmt.Fprintf(os.Stdout, "count %v latency: %v\n", i, countOutput[i].Latencies)
-			fmt.Fprintf(os.Stdout, "count %v sum of iter time: %v sec ", i, sumTime)
-			fmt.Fprintf(os.Stdout, "count %v throughput: (event/s) %v\n", i, tput)
+			fmt.Fprintf(os.Stdout, "sum of iter time: %v sec ", sumTime)
+			fmt.Fprintf(os.Stdout, "processed: %v, throughput: (event/s) %v\n", len(countOutput[i].Latencies), tput)
 		}
 	}
 }
