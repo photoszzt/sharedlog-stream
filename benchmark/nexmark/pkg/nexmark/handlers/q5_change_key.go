@@ -36,7 +36,6 @@ func (h *q5ChangeKey) Call(ctx context.Context, input []byte) ([]byte, error) {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("query 2 output: %v\n", encodedOutput)
 	return utils.CompressData(encodedOutput), nil
 }
 
