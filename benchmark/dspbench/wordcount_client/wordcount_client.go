@@ -133,7 +133,7 @@ func main() {
 		tput := float64(len(sourceOutput.Latencies)) / sumTime
 		fmt.Fprintf(os.Stdout, "source duration: %v ", sourceOutput.Duration)
 		fmt.Fprintf(os.Stdout, "sum of iter time: %v ", sumTime)
-		fmt.Fprintf(os.Stdout, "throughput: (event/s) %v\n", tput)
+		fmt.Fprintf(os.Stdout, "processed: %v, throughput: (event/s) %v\n", len(sourceOutput.Latencies), tput)
 	}
 	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
 		if splitOutput[i].Success {
