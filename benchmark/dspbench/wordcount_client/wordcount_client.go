@@ -129,10 +129,11 @@ func main() {
 		for _, lat := range sourceOutput.Latencies {
 			sumTime += float64(lat) / 1000.0
 		}
-		tput := float64(len(sourceOutput.Latencies)) / (sumTime / 1000.0)
+		sumTime = sumTime / 1000.0 // convert to sec
+		tput := float64(len(sourceOutput.Latencies)) / sumTime
 		fmt.Fprintf(os.Stdout, "source duration: %v ", sourceOutput.Duration)
 		fmt.Fprintf(os.Stdout, "sum of iter time: %v ", sumTime)
-		fmt.Fprintf(os.Stderr, "throughput: (event/s) %v\n", tput)
+		fmt.Fprintf(os.Stdout, "throughput: (event/s) %v\n", tput)
 	}
 	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
 		if splitOutput[i].Success {
@@ -145,7 +146,7 @@ func main() {
 			fmt.Fprintf(os.Stdout, "split %v duration: %v ", i, splitOutput[i].Duration)
 			// fmt.Fprintf(os.Stdout, "split %v latency: %v\n", i, splitOutput[i].Latencies)
 			fmt.Fprintf(os.Stdout, "split %v sum of iter time: %v sec ", i, sumTime)
-			fmt.Fprintf(os.Stderr, "split %v throughput: (event/s) %v\n", i, tput)
+			fmt.Fprintf(os.Stdout, "split %v throughput: (event/s) %v\n", i, tput)
 		}
 	}
 	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
