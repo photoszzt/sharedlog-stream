@@ -8,13 +8,8 @@ import (
 )
 
 type InMemoryKeyValueStoreWithChangelog struct {
-	kvstore    *InMemoryKeyValueStore
-	keySerde   Serde
-	valueSerde Serde
-	logStore   LogStore
-	msgSerde   MsgSerde
-	storeName  string
-	parNum     uint8
+	kvstore *InMemoryKeyValueStore
+	mp      *MaterializeParam
 }
 
 func NewInMemoryKeyValueStoreWithChangelog(mp *MaterializeParam) *InMemoryKeyValueStoreWithChangelog {
@@ -25,12 +20,7 @@ func NewInMemoryKeyValueStoreWithChangelog(mp *MaterializeParam) *InMemoryKeyVal
 			valB := b.([]byte)
 			return bytes.Compare(valA, valB)
 		}),
-		keySerde:   mp.KeySerde,
-		valueSerde: mp.ValueSerde,
-		logStore:   mp.Changelog,
-		msgSerde:   mp.MsgSerde,
-		storeName:  mp.StoreName,
-		parNum:     mp.ParNum,
+		mp: mp,
 	}
 }
 
@@ -40,7 +30,7 @@ func (st *InMemoryKeyValueStoreWithChangelog) Init(sctx ProcessorContext) {
 }
 
 func (st *InMemoryKeyValueStoreWithChangelog) Name() string {
-	return st.storeName
+	return st.mp.StoreName
 }
 
 func (st *InMemoryKeyValueStoreWithChangelog) IsOpen() bool {
@@ -48,7 +38,7 @@ func (st *InMemoryKeyValueStoreWithChangelog) IsOpen() bool {
 }
 
 func (st *InMemoryKeyValueStoreWithChangelog) Get(key KeyT) (ValueT, bool, error) {
-	keyBytes, err := st.keySerde.Encode(key)
+	keyBytes, err := st.mp.KeySerde.Encode(key)
 	if err != nil {
 		return nil, false, err
 	}
@@ -57,7 +47,7 @@ func (st *InMemoryKeyValueStoreWithChangelog) Get(key KeyT) (ValueT, bool, error
 		return nil, false, err
 	}
 	if ok {
-		val, err := st.valueSerde.Decode(valBytes.([]byte))
+		val, err := st.mp.ValueSerde.Decode(valBytes.([]byte))
 		if err != nil {
 			return nil, false, err
 		}
@@ -67,19 +57,19 @@ func (st *InMemoryKeyValueStoreWithChangelog) Get(key KeyT) (ValueT, bool, error
 }
 
 func (st *InMemoryKeyValueStoreWithChangelog) Put(key KeyT, value ValueT) error {
-	keyBytes, err := st.keySerde.Encode(key)
+	keyBytes, err := st.mp.KeySerde.Encode(key)
 	if err != nil {
 		return err
 	}
-	valBytes, err := st.valueSerde.Encode(value)
+	valBytes, err := st.mp.ValueSerde.Encode(value)
 	if err != nil {
 		return err
 	}
-	encoded, err := st.msgSerde.Encode(keyBytes, valBytes)
+	encoded, err := st.mp.MsgSerde.Encode(keyBytes, valBytes)
 	if err != nil {
 		return err
 	}
-	_, err = st.logStore.Push(encoded, st.parNum)
+	_, err = st.mp.Changelog.Push(encoded, st.mp.ParNum)
 	if err != nil {
 		return err
 	}
@@ -88,7 +78,7 @@ func (st *InMemoryKeyValueStoreWithChangelog) Put(key KeyT, value ValueT) error 
 }
 
 func (st *InMemoryKeyValueStoreWithChangelog) PutIfAbsent(key KeyT, value ValueT) (ValueT, error) {
-	keyBytes, err := st.keySerde.Encode(key)
+	keyBytes, err := st.mp.KeySerde.Encode(key)
 	if err != nil {
 		return nil, err
 	}
@@ -97,22 +87,22 @@ func (st *InMemoryKeyValueStoreWithChangelog) PutIfAbsent(key KeyT, value ValueT
 		return nil, err
 	}
 	if !exists {
-		valBytes, err := st.valueSerde.Encode(value)
+		valBytes, err := st.mp.ValueSerde.Encode(value)
 		if err != nil {
 			return nil, err
 		}
-		encoded, err := st.msgSerde.Encode(keyBytes, valBytes)
+		encoded, err := st.mp.MsgSerde.Encode(keyBytes, valBytes)
 		if err != nil {
 			return nil, err
 		}
-		_, err = st.logStore.Push(encoded, st.parNum)
+		_, err = st.mp.Changelog.Push(encoded, st.mp.ParNum)
 		if err != nil {
 			return nil, err
 		}
 		st.kvstore.store.Set(keyBytes, valBytes)
 		return nil, nil
 	}
-	origVal, err := st.valueSerde.Decode(origValBytes.([]byte))
+	origVal, err := st.mp.ValueSerde.Decode(origValBytes.([]byte))
 	if err != nil {
 		return nil, err
 	}
@@ -130,15 +120,15 @@ func (st *InMemoryKeyValueStoreWithChangelog) PutAll(entries []*Message) error {
 }
 
 func (st *InMemoryKeyValueStoreWithChangelog) Delete(key KeyT) error {
-	keyBytes, err := st.keySerde.Encode(key)
+	keyBytes, err := st.mp.KeySerde.Encode(key)
 	if err != nil {
 		return err
 	}
-	encoded, err := st.msgSerde.Encode(keyBytes, nil)
+	encoded, err := st.mp.MsgSerde.Encode(keyBytes, nil)
 	if err != nil {
 		return err
 	}
-	_, err = st.logStore.Push(encoded, st.parNum)
+	_, err = st.mp.Changelog.Push(encoded, st.mp.ParNum)
 	if err != nil {
 		return err
 	}
@@ -150,11 +140,11 @@ func (st *InMemoryKeyValueStoreWithChangelog) ApproximateNumEntries() uint64 {
 }
 
 func (st *InMemoryKeyValueStoreWithChangelog) Range(from KeyT, to KeyT) KeyValueIterator {
-	fromBytes, err := st.keySerde.Encode(from)
+	fromBytes, err := st.mp.KeySerde.Encode(from)
 	if err != nil {
 		log.Fatal().Err(err)
 	}
-	toBytes, err := st.keySerde.Encode(to)
+	toBytes, err := st.mp.KeySerde.Encode(to)
 	if err != nil {
 		log.Fatal().Err(err)
 	}
@@ -162,11 +152,11 @@ func (st *InMemoryKeyValueStoreWithChangelog) Range(from KeyT, to KeyT) KeyValue
 }
 
 func (st *InMemoryKeyValueStoreWithChangelog) ReverseRange(from KeyT, to KeyT) KeyValueIterator {
-	fromBytes, err := st.keySerde.Encode(from)
+	fromBytes, err := st.mp.KeySerde.Encode(from)
 	if err != nil {
 		log.Fatal().Err(err)
 	}
-	toBytes, err := st.keySerde.Encode(to)
+	toBytes, err := st.mp.KeySerde.Encode(to)
 	if err != nil {
 		log.Fatal().Err(err)
 	}
