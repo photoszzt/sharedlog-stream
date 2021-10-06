@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"regexp"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -96,6 +97,19 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 	}
 	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
 	sink := sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig)
+	var matchStr = regexp.MustCompile(`\w+`)
+	splitter := processor.FlatMapperFunc(func(m processor.Message) ([]processor.Message, error) {
+		val := m.Value.(string)
+		val = strings.ToLower(val)
+		var splitMsgs []processor.Message
+		splits := matchStr.FindAllString(val, -1)
+		for _, s := range splits {
+			if s != "" {
+				splitMsgs = append(splitMsgs, processor.Message{Key: s, Value: s, Timestamp: m.Timestamp})
+			}
+		}
+		return splitMsgs, nil
+	})
 	latencies := make([]int, 0, 128)
 	duration := time.Duration(sp.Duration) * time.Second
 	startTime := time.Now()
@@ -111,17 +125,6 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 				Message: err.Error(),
 			}
 		}
-		splitter := processor.FlatMapperFunc(func(m processor.Message) ([]processor.Message, error) {
-			val := m.Value.(*SentenceEvent)
-			var splitMsgs []processor.Message
-			splits := strings.Split(val.Sentence, " ")
-			for _, s := range splits {
-				if s != "" {
-					splitMsgs = append(splitMsgs, processor.Message{Key: s, Value: &WordEvent{Word: s, Ts: val.Ts}, Timestamp: val.Ts})
-				}
-			}
-			return splitMsgs, nil
-		})
 		msgs, err := splitter(msg)
 		if err != nil {
 			return &common.FnOutput{
@@ -129,7 +132,6 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 				Message: fmt.Sprintf("splitter failed: %v\n", err),
 			}
 		}
-
 		for _, m := range msgs {
 			h := hashKey(m.Key.(string))
 			par := uint8(h % uint32(sp.NumOutPartition))

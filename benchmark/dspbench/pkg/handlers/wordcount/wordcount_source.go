@@ -45,7 +45,7 @@ func (h *wordCountSource) Call(ctx context.Context, input []byte) ([]byte, error
 	return utils.CompressData(encodedOutput), nil
 }
 
-func encode_sentence_event(valSerde processor.Serde, msgSerde processor.MsgSerde, val *SentenceEvent) ([]byte, error) {
+func encode_sentence_event(valSerde processor.Serde, msgSerde processor.MsgSerde, val string) ([]byte, error) {
 	val_encoded, err := valSerde.Encode(val)
 	if err != nil {
 		return nil, fmt.Errorf("event serialization failed: %v", err)
@@ -63,18 +63,6 @@ func (h *wordCountSource) eventGeneration(ctx context.Context, env types.Environ
 		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("NewSharedlogStream failed: %v", err),
-		}
-	}
-
-	var seSerde processor.Serde
-	if sp.SerdeFormat == uint8(processor.JSON) {
-		seSerde = SentenceEventJSONSerde{}
-	} else if sp.SerdeFormat == uint8(processor.MSGP) {
-		seSerde = SentenceEventMsgpSerde{}
-	} else {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat),
 		}
 	}
 
@@ -101,11 +89,7 @@ func (h *wordCountSource) eventGeneration(ctx context.Context, env types.Environ
 		}
 		procStart := time.Now()
 		sentence := h.lines[idx]
-		se := SentenceEvent{
-			Sentence: sentence,
-			Ts:       uint64(time.Now().UnixMilli()),
-		}
-		msgEncoded, err := encode_sentence_event(seSerde, msgSerde, &se)
+		msgEncoded, err := encode_sentence_event(processor.StringSerde{}, msgSerde, sentence)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
@@ -136,7 +120,7 @@ func (h *wordCountSource) eventGeneration(ctx context.Context, env types.Environ
 func (h *wordCountSource) parseFile(fileName string) error {
 	dataFile, err := os.Open(fileName)
 	if err != nil {
-		return fmt.Errorf("fail to open file %v: %v\n", fileName, err)
+		return fmt.Errorf("fail to open file %v: %v", fileName, err)
 	}
 	defer dataFile.Close()
 

@@ -53,21 +53,15 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 		}
 	}
 
-	var weSerde processor.Serde
 	var vtSerde processor.Serde
-	var ceSerde processor.Serde
 	if sp.SerdeFormat == uint8(processor.JSON) {
-		weSerde = WordEventJSONSerde{}
 		vtSerde = processor.ValueTimestampJSONSerde{
-			ValJSONSerde: CountEventJSONSerde{},
+			ValJSONSerde: processor.Uint64Serde{},
 		}
-		ceSerde = CountEventJSONSerde{}
 	} else if sp.SerdeFormat == uint8(processor.MSGP) {
-		weSerde = WordEventMsgpSerde{}
 		vtSerde = processor.ValueTimestampMsgpSerde{
-			ValMsgpSerde: CountEventMsgpSerde{},
+			ValMsgpSerde: processor.Uint64Serde{},
 		}
-		ceSerde = CountEventMsgpSerde{}
 	} else {
 		return &common.FnOutput{
 			Success: false,
@@ -84,12 +78,12 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      time.Duration(sp.Duration) * time.Second,
 		KeyDecoder:   processor.StringDecoder{},
-		ValueDecoder: weSerde,
+		ValueDecoder: processor.StringDecoder{},
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
 		KeyEncoder:   processor.StringEncoder{},
-		ValueEncoder: ceSerde,
+		ValueEncoder: processor.Uint64Encoder{},
 		MsgEncoder:   msgSerde,
 	}
 	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
@@ -104,17 +98,11 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 	store := processor.NewInMemoryKeyValueStoreWithChangelog(mp)
 	p := processor.NewStreamAggregateProcessor(store,
 		processor.InitializerFunc(func() interface{} {
-			return &CountEvent{
-				Count: 0,
-			}
+			return 0
 		}),
 		processor.AggregatorFunc(func(key interface{}, value interface{}, agg interface{}) interface{} {
-			aggVal := agg.(*CountEvent)
-			val := value.(*WordEvent)
-			return &CountEvent{
-				Count: aggVal.Count + 1,
-				Ts:    val.Ts,
-			}
+			aggVal := agg.(uint64)
+			return aggVal + 1
 		}))
 	latencies := make([]int, 0, 128)
 	duration := time.Duration(sp.Duration) * time.Second
