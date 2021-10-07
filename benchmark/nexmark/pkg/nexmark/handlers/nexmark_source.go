@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
@@ -98,6 +99,7 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		}
 		wtsSec := nextEvent.WallclockTimestamp / 1000.0
 		if wtsSec > uint64(now) {
+			fmt.Fprintf(os.Stderr, "sleep %v second to generate event\n", wtsSec-uint64(now))
 			time.Sleep(time.Duration(wtsSec-uint64(now)) * time.Second)
 		}
 		encoded, err := eventEncoder.Encode(nextEvent.Event)

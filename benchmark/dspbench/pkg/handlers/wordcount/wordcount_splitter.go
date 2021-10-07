@@ -3,6 +3,7 @@ package wordcount
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"regexp"
@@ -120,6 +121,14 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 		procStart := time.Now()
 		msg, err := src.Consume(sp.ParNum)
 		if err != nil {
+			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+				return &common.FnOutput{
+					Success:   true,
+					Message:   err.Error(),
+					Latencies: latencies,
+					Duration:  time.Since(startTime).Seconds(),
+				}
+			}
 			return &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
