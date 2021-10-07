@@ -33,7 +33,7 @@ func (h *wordCountSource) Call(ctx context.Context, input []byte) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
-	err = ParseFile(sp.FileName, h.lines)
+	err = ParseFile(sp.FileName, &h.lines)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +117,7 @@ func (h *wordCountSource) eventGeneration(ctx context.Context, env types.Environ
 	}
 }
 
-func ParseFile(fileName string, lines []string) error {
+func ParseFile(fileName string, lines *[]string) error {
 	dataFile, err := os.Open(fileName)
 	if err != nil {
 		return fmt.Errorf("fail to open file %v: %v", fileName, err)
@@ -127,7 +127,7 @@ func ParseFile(fileName string, lines []string) error {
 	sc := bufio.NewScanner(dataFile)
 	for sc.Scan() {
 		text := sc.Text()
-		lines = append(lines, text)
+		*lines = append(*lines, text)
 	}
 	if err := sc.Err(); err != nil {
 		return err

@@ -1,25 +1,26 @@
-package wordcountgeneventskafka
+package main
 
 import (
 	"flag"
 	"sharedlog-stream/benchmark/dspbench/pkg/handlers/wordcount"
 	"sharedlog-stream/pkg/stream/processor"
+	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/rs/zerolog/log"
 )
 
 var (
-	FLAGS_num_events  int
-	FLAGS_broker      string
-	FLAGS_serdeFormat string
-	FLAGS_file_name   string
+	FLAGS_num_events int
+	FLAGS_duration   int
+	FLAGS_broker     string
+	FLAGS_file_name  string
 )
 
 func main() {
-	flag.IntVar(&FLAGS_num_events, "num_events", 10, "")
+	flag.IntVar(&FLAGS_num_events, "num_events", 0, "")
+	flag.IntVar(&FLAGS_duration, "duration", 60, "")
 	flag.StringVar(&FLAGS_broker, "broker", "127.0.0.1", "")
-	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
 	flag.StringVar(&FLAGS_file_name, "in_fname", "/mnt/data/books.dat", "data source file name")
 	flag.Parse()
 
@@ -34,16 +35,26 @@ func main() {
 	strSerde := processor.StringSerde{}
 
 	lines := make([]string, 0, 128)
-	err = wordcount.ParseFile(FLAGS_file_name, lines)
+
+	err = wordcount.ParseFile(FLAGS_file_name, &lines)
 	if err != nil {
 		log.Fatal().Msgf("fail to parse file: %s", err)
 	}
-	for i := 0; i < FLAGS_num_events; i++ {
-		idx := i
-		if idx >= len(lines) {
-			idx = idx % len(lines)
+	if len(lines) == 0 {
+		log.Fatal().Msgf("fail to read files back")
+	}
+	idx := 0
+	duration := time.Duration(FLAGS_duration) * time.Second
+	start := time.Now()
+	for {
+		if time.Since(start) >= duration {
+			break
 		}
-		encoded, err := strSerde.Encode(lines[idx])
+		if FLAGS_num_events != 0 && idx > FLAGS_num_events {
+			break
+		}
+		lineNum := idx % len(lines)
+		encoded, err := strSerde.Encode(lines[lineNum])
 		if err != nil {
 			log.Fatal().Msgf("fail to serialize: %s", err)
 		}
@@ -54,6 +65,7 @@ func main() {
 		if err != nil {
 			log.Fatal().Err(err)
 		}
+		idx += 1
 	}
 	replies := 0
 	for e := range deliveryChan {
@@ -66,7 +78,7 @@ func main() {
 			}
 		}
 		replies += 1
-		if replies == FLAGS_num_events {
+		if replies == idx {
 			break
 		}
 	}
