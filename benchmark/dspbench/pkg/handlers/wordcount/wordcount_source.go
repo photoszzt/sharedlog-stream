@@ -103,7 +103,7 @@ func (h *wordCountSource) eventGeneration(ctx context.Context, env types.Environ
 		sentence := h.lines[idx]
 		se := SentenceEvent{
 			Sentence: sentence,
-			Ts:       uint64(time.Now().UnixMilli()),
+			Ts:       uint64(time.Now().Unix() * 1000),
 		}
 		msgEncoded, err := encode_sentence_event(seSerde, msgSerde, &se)
 		if err != nil {

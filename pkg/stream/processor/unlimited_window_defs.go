@@ -33,7 +33,7 @@ func NewDefaultUnlimitedWindows() *UnlimitedWindows {
 }
 
 func NewUnlimitedWindowsStartOn(start time.Time) *UnlimitedWindows {
-	startMs := start.UnixMilli()
+	startMs := start.Unix() * 1000
 	if startMs < 0 {
 		log.Fatal().Msg("start time (ms) cannot be negative")
 	}

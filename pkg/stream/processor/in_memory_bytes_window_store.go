@@ -106,8 +106,8 @@ func (s *InMemoryBytesWindowStore) Get(key []byte, windowStartTimestamp uint64) 
 func (s *InMemoryBytesWindowStore) Fetch(key []byte, timeFrom time.Time, timeTo time.Time, iterFunc func(uint64, ValueT)) error {
 	s.removeExpiredSegments()
 
-	tsFrom := timeFrom.UnixMilli()
-	tsTo := timeTo.UnixMilli()
+	tsFrom := timeFrom.Unix() * 1000
+	tsTo := timeTo.Unix() * 1000
 
 	minTime := int64(s.observedStreamTime) - int64(s.retentionPeriod) + 1
 	if minTime < tsFrom {
