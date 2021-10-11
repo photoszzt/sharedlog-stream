@@ -3,7 +3,9 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -33,11 +35,13 @@ func (h *windowedAvg) Call(ctx context.Context, input []byte) ([]byte, error) {
 	sp := &common.QueryInput{}
 	err := json.Unmarshal(input, sp)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "unmarshal error")
 		return nil, err
 	}
 	output := h.process(ctx, sp)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "marshal error")
 		return nil, err
 	}
 	return utils.CompressData(encodedOutput), nil
@@ -62,14 +66,14 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
-			Message: err.Error(),
+			Message: fmt.Sprintf("get msg serde failed: %v", err),
 		}
 	}
 	eventSerde, err := getEventSerde(sp.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
-			Message: err.Error(),
+			Message: fmt.Sprintf("get evnet serde error: %v\n", err),
 		}
 	}
 	var scSerde processor.Serde
@@ -93,7 +97,7 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 
 	duration := time.Duration(sp.Duration) * time.Second
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
-		Timeout:      duration,
+		Timeout:      time.Duration(20) * time.Second,
 		MsgDecoder:   msgSerde,
 		KeyDecoder:   processor.Uint64Decoder{},
 		ValueDecoder: eventSerde,
@@ -148,6 +152,14 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 		procStart := time.Now()
 		msg, err := src.Consume(sp.ParNum)
 		if err != nil {
+			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+				return &common.FnOutput{
+					Success:   true,
+					Message:   err.Error(),
+					Latencies: latencies,
+					Duration:  time.Since(startTime).Seconds(),
+				}
+			}
 			return &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
@@ -157,7 +169,7 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
-				Message: err.Error(),
+				Message: fmt.Sprintf("aggregate failed: %v\n", err),
 			}
 		}
 		for _, newMsg := range newMsgs {
@@ -165,14 +177,14 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,
-					Message: err.Error(),
+					Message: fmt.Sprintf("calculate avg failed: %v\n", err),
 				}
 			}
 			err = sink.Sink(*avg, sp.ParNum)
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,
-					Message: err.Error(),
+					Message: fmt.Sprintf("sink failed: %v", err),
 				}
 			}
 		}

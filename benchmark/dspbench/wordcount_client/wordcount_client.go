@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
-	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/stream/processor"
@@ -125,43 +124,16 @@ func main() {
 
 	wg.Wait()
 	if sourceOutput.Success {
-		sumTime := float64(0)
-		for _, lat := range sourceOutput.Latencies {
-			sumTime += float64(lat) / 1000.0
-		}
-		sumTime = sumTime / 1000.0 // convert to sec
-		tput := float64(len(sourceOutput.Latencies)) / sumTime
-		fmt.Fprintf(os.Stdout, "source duration: %v ", sourceOutput.Duration)
-		fmt.Fprintf(os.Stdout, "sum of iter time: %v ", sumTime)
-		fmt.Fprintf(os.Stdout, "throughput: (event/s) %v\n", tput)
+		common.ProcessThroughputLat("source", sourceOutput.Latencies, sourceOutput.Duration)
 	}
 	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
 		if splitOutput[i].Success {
-			sumTime := float64(0)
-			for _, lat := range splitOutput[i].Latencies {
-				sumTime += float64(lat) / 1000.0
-			}
-			sumTime = sumTime / 1000.0 // convert to sec
-			tput := float64(len(splitOutput[i].Latencies)) / sumTime
-			fmt.Fprintf(os.Stdout, "split %v duration: %v, ", i, splitOutput[i].Duration)
-			// fmt.Fprintf(os.Stdout, "split %v latency: %v\n", i, splitOutput[i].Latencies)
-			fmt.Fprintf(os.Stdout, "sum of iter time: %v sec, ", sumTime)
-			fmt.Fprintf(os.Stdout, "processed: %v, throughput: (event/s) %v\n", len(splitOutput[i].Latencies), tput)
+			common.ProcessThroughputLat(fmt.Sprintf("split %v", i), splitOutput[i].Latencies, splitOutput[i].Duration)
 		}
 	}
 	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
 		if countOutput[i].Success {
-
-			sumTime := float64(0)
-			for _, lat := range countOutput[i].Latencies {
-				sumTime += float64(lat) / 1000.0
-			}
-			sumTime = sumTime / 1000.0 // convert to sec
-			tput := float64(len(countOutput[i].Latencies)) / sumTime
-			fmt.Fprintf(os.Stdout, "count %v duration: %v ", i, countOutput[i].Duration)
-			// fmt.Fprintf(os.Stdout, "count %v latency: %v\n", i, countOutput[i].Latencies)
-			fmt.Fprintf(os.Stdout, "sum of iter time: %v sec ", sumTime)
-			fmt.Fprintf(os.Stdout, "processed: %v, throughput: (event/s) %v\n", len(countOutput[i].Latencies), tput)
+			common.ProcessThroughputLat(fmt.Sprintf("count %d", i), countOutput[i].Latencies, countOutput[i].Duration)
 		}
 	}
 }

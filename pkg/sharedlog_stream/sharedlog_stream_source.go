@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	errStreamSourceTimeout = xerrors.New("SharedLogStreamSource consume timeout")
+	ErrStreamSourceTimeout = xerrors.New("SharedLogStreamSource consume timeout")
 )
 
 type SharedLogStreamSource struct {
@@ -70,5 +70,5 @@ func (s *SharedLogStreamSource) Consume() (processor.Message, error) {
 		}
 		return processor.Message{Key: key, Value: value}, nil
 	}
-	return processor.EmptyMessage, errStreamSourceTimeout
+	return processor.EmptyMessage, ErrStreamSourceTimeout
 }

@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -61,10 +62,11 @@ func invokeQuery(client *http.Client, response *common.FnOutput, wg *sync.WaitGr
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, FLAGS_app_name)
 	fmt.Printf("func url is %v\n", url)
 	if err := utils.JsonPostRequest(client, url, queryInput, response); err != nil {
-		log.Error().Msgf("%v request failed: %v", FLAGS_app_name, err)
+		log.Error().Msgf("%v request failed with json post request returned err: %v", FLAGS_app_name, err)
 	} else if !response.Success {
-		log.Error().Msgf("%v request failed: %v", FLAGS_app_name, err)
+		log.Error().Msgf("%v request failed with unsuccess error: %v", FLAGS_app_name, response.Message)
 	}
+	fmt.Fprintf(os.Stderr, "response is %v\n", response)
 }
 
 func generalQuery() {
@@ -159,6 +161,19 @@ func windowedAvg() {
 		go avg.Invoke(client, &avgOutput[i], &wg, avgNodeInputParams[i])
 	}
 	wg.Wait()
+	if sourceOutput.Success {
+		common.ProcessThroughputLat("source", sourceOutput.Latencies, sourceOutput.Duration)
+	}
+	for i := 0; i < int(groupByNodeConfig.NumInstance); i++ {
+		if groupByOutput[i].Success {
+			common.ProcessThroughputLat(fmt.Sprintf("groupby %v", i), groupByOutput[i].Latencies, groupByOutput[i].Duration)
+		}
+	}
+	for i := 0; i < int(avgNodeConfig.NumInstance); i++ {
+		if avgOutput[i].Success {
+			common.ProcessThroughputLat(fmt.Sprintf("avg %v", i), avgOutput[i].Latencies, avgOutput[i].Duration)
+		}
+	}
 }
 
 func main() {
