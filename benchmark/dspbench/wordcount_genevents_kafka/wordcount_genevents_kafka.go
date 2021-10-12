@@ -92,9 +92,11 @@ func main() {
 			}
 		}
 		replies += 1
-		if replies == idx {
-			break
-		}
+		/*
+			if replies == idx {
+				break
+			}
+		*/
 	}
 	remaining := p.Flush(30)
 	log.Info().Msgf("producer: %d messages remaining in queue.", remaining)
