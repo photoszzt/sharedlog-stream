@@ -3,6 +3,7 @@ package wordcount
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
@@ -114,6 +115,14 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 		procStart := time.Now()
 		msg, err := src.Consume(sp.ParNum)
 		if err != nil {
+			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+				return &common.FnOutput{
+					Success:   true,
+					Message:   err.Error(),
+					Latencies: latencies,
+					Duration:  time.Since(startTime).Seconds(),
+				}
+			}
 			return &common.FnOutput{
 				Success: false,
 				Message: err.Error(),

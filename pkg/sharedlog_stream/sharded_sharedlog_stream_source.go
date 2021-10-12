@@ -56,5 +56,5 @@ func (s *ShardedSharedLogStreamSource) Consume(parNum uint8) (processor.Message,
 		}
 		return processor.Message{Key: key, Value: value}, nil
 	}
-	return processor.EmptyMessage, errStreamSourceTimeout
+	return processor.EmptyMessage, ErrStreamSourceTimeout
 }

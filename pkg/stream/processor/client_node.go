@@ -56,6 +56,6 @@ func (n *ClientNode) Invoke(client *http.Client, response *common.FnOutput, wg *
 	if err := utils.JsonPostRequest(client, url, queryInput, response); err != nil {
 		log.Error().Msgf("%v request failed: %v", n.config.FuncName, err)
 	} else if !response.Success {
-		log.Error().Msgf("%v request failed: %v", n.config.FuncName, err)
+		log.Error().Msgf("%v request failed with failed message: %v", n.config.FuncName, response.Message)
 	}
 }
