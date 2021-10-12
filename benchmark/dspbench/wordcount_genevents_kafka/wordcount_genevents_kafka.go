@@ -1,7 +1,9 @@
 package wordcountgeneventskafka
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	"sharedlog-stream/benchmark/dspbench/pkg/handlers/wordcount"
 	"sharedlog-stream/pkg/stream/processor"
 
@@ -16,12 +18,47 @@ var (
 	FLAGS_file_name   string
 )
 
+func createTopic(ctx context.Context, topics []kafka.TopicSpecification) error {
+	conf := kafka.ConfigMap{"bootstrap.servers": FLAGS_broker}
+	adminClient, err := kafka.NewAdminClient(&conf)
+	if err != nil {
+		return err
+	}
+	result, err := adminClient.CreateTopics(ctx, topics)
+	if err != nil {
+		return err
+	}
+	for _, res := range result {
+		switch res.Error.Code() {
+		case kafka.ErrTopicAlreadyExists:
+			log.Error().Msgf("Failed to create topic %s: %v", res.Topic, res.Error)
+		case kafka.ErrNoError:
+			log.Error().Msgf("Succeed to create topic %s", res.Topic)
+		default:
+			return fmt.Errorf("failed to create topic %s: %v", res.Topic, res.Error)
+		}
+	}
+	return nil
+}
+
 func main() {
 	flag.IntVar(&FLAGS_num_events, "num_events", 10, "")
 	flag.StringVar(&FLAGS_broker, "broker", "127.0.0.1", "")
 	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
 	flag.StringVar(&FLAGS_file_name, "in_fname", "/mnt/data/books.dat", "data source file name")
 	flag.Parse()
+
+	topic := "wc_src"
+	newTopic := []kafka.TopicSpecification{
+		{Topic: topic,
+			NumPartitions:     1,
+			ReplicationFactor: 1},
+	}
+	ctx := context.Background()
+	err := createTopic(ctx, newTopic)
+	if err != nil {
+		panic(err)
+	}
 
 	p, err := kafka.NewProducer(&kafka.ConfigMap{"bootstrap.servers": FLAGS_broker})
 	if err != nil {
@@ -30,7 +67,7 @@ func main() {
 	defer p.Close()
 
 	deliveryChan := make(chan kafka.Event)
-	topic := "wc_src"
+
 	strSerde := processor.StringSerde{}
 
 	lines := make([]string, 0, 128)
@@ -70,4 +107,8 @@ func main() {
 			break
 		}
 	}
+	remaining := p.Flush(30)
+	log.Info().Msgf("producer: %d messages remaining in queue.", remaining)
+	p.Close()
+	close(deliveryChan)
 }
