@@ -5,6 +5,7 @@ import (
 	"flag"
 	"time"
 
+	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/generator"
 
 	"sharedlog-stream/pkg/stream/processor"
@@ -43,7 +44,18 @@ func main() {
 		valueEncoder = ntypes.EventJSONSerde{}
 	}
 
-	nexmarkConfigInput := ntypes.NewNexMarkConfigInput(FLAGS_stream_prefix+"_src", serdeFormat)
+	topic := FLAGS_stream_prefix + "_src"
+	newTopic := []kafka.TopicSpecification{
+		{Topic: topic,
+			NumPartitions:     1,
+			ReplicationFactor: 1},
+	}
+	ctx := context.Background()
+	err := common.CreateTopic(ctx, newTopic, FLAGS_broker)
+	if err != nil {
+		log.Fatal().Msgf("Failed to create topic: %s", err)
+	}
+	nexmarkConfigInput := ntypes.NewNexMarkConfigInput(topic, serdeFormat)
 	nexmarkConfig, err := ntypes.ConvertToNexmarkConfiguration(nexmarkConfigInput)
 	if err != nil {
 		log.Fatal().Msgf("Failed to convert to nexmark configuration: %s", err)
@@ -59,8 +71,6 @@ func main() {
 	defer p.Close()
 
 	deliveryChan := make(chan kafka.Event)
-	topic := FLAGS_stream_prefix + "_src"
-	ctx := context.Background()
 
 	for i := 0; i < FLAGS_num_events; i++ {
 		now := time.Now().Unix()

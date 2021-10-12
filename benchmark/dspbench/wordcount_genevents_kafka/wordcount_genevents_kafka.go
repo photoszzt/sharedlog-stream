@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
+	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/dspbench/pkg/handlers/wordcount"
 	"sharedlog-stream/pkg/stream/processor"
 	"time"
@@ -19,29 +19,6 @@ var (
 	FLAGS_file_name  string
 )
 
-func createTopic(ctx context.Context, topics []kafka.TopicSpecification) error {
-	conf := kafka.ConfigMap{"bootstrap.servers": FLAGS_broker}
-	adminClient, err := kafka.NewAdminClient(&conf)
-	if err != nil {
-		return err
-	}
-	result, err := adminClient.CreateTopics(ctx, topics)
-	if err != nil {
-		return err
-	}
-	for _, res := range result {
-		switch res.Error.Code() {
-		case kafka.ErrTopicAlreadyExists:
-			log.Error().Msgf("Failed to create topic %s: %v", res.Topic, res.Error)
-		case kafka.ErrNoError:
-			log.Error().Msgf("Succeed to create topic %s", res.Topic)
-		default:
-			return fmt.Errorf("failed to create topic %s: %v", res.Topic, res.Error)
-		}
-	}
-	return nil
-}
-
 func main() {
 	flag.IntVar(&FLAGS_num_events, "num_events", 0, "")
 	flag.IntVar(&FLAGS_duration, "duration", 60, "")
@@ -56,7 +33,7 @@ func main() {
 			ReplicationFactor: 1},
 	}
 	ctx := context.Background()
-	err := createTopic(ctx, newTopic)
+	err := common.CreateTopic(ctx, newTopic, FLAGS_broker)
 	if err != nil {
 		panic(err)
 	}
