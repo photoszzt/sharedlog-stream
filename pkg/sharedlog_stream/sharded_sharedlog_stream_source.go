@@ -1,6 +1,7 @@
 package sharedlog_stream
 
 import (
+	"fmt"
 	"sharedlog-stream/pkg/stream/processor"
 	"time"
 )
@@ -44,15 +45,15 @@ func (s *ShardedSharedLogStreamSource) Consume(parNum uint8) (processor.Message,
 		}
 		keyEncoded, valueEncoded, err := s.msgDecoder.Decode(val)
 		if err != nil {
-			return processor.EmptyMessage, err
+			return processor.EmptyMessage, fmt.Errorf("fail to decode msg: %v", err)
 		}
 		key, err := s.keyDecoder.Decode(keyEncoded)
 		if err != nil {
-			return processor.EmptyMessage, err
+			return processor.EmptyMessage, fmt.Errorf("fail to decode key: %v", err)
 		}
 		value, err := s.valueDecoder.Decode(valueEncoded)
 		if err != nil {
-			return processor.EmptyMessage, err
+			return processor.EmptyMessage, fmt.Errorf("fail to decode value: %v", err)
 		}
 		return processor.Message{Key: key, Value: value}, nil
 	}

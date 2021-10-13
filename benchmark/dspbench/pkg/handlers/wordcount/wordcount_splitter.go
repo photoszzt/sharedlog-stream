@@ -63,37 +63,23 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 		}
 	}
 
-	var weSerde processor.Serde
-	var seSerde processor.Serde
-	if sp.SerdeFormat == uint8(processor.JSON) {
-		weSerde = WordEventJSONSerde{}
-		seSerde = SentenceEventJSONSerde{}
-	} else if sp.SerdeFormat == uint8(processor.MSGP) {
-		weSerde = WordEventMsgpSerde{}
-		seSerde = SentenceEventMsgpSerde{}
-	} else {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat),
-		}
-	}
 	msgSerde, err := processor.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
-			Message: err.Error(),
+			Message: fmt.Sprintf("get msg serde failed: %v", err),
 		}
 	}
 
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      time.Duration(sp.Duration) * time.Second,
 		KeyDecoder:   processor.StringDecoder{},
-		ValueDecoder: seSerde,
+		ValueDecoder: processor.StringDecoder{},
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
 		KeyEncoder:   processor.StringEncoder{},
-		ValueEncoder: weSerde,
+		ValueEncoder: processor.StringEncoder{},
 		MsgEncoder:   msgSerde,
 	}
 	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
@@ -131,8 +117,11 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 			}
 			return &common.FnOutput{
 				Success: false,
-				Message: err.Error(),
+				Message: fmt.Sprintf("consumed failed: %v", err),
 			}
+		}
+		if msg.Value == nil {
+			continue
 		}
 		msgs, err := splitter(msg)
 		if err != nil {

@@ -99,7 +99,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 	store := processor.NewInMemoryKeyValueStoreWithChangelog(mp)
 	p := processor.NewStreamAggregateProcessor(store,
 		processor.InitializerFunc(func() interface{} {
-			return 0
+			return uint64(0)
 		}),
 		processor.AggregatorFunc(func(key interface{}, value interface{}, agg interface{}) interface{} {
 			aggVal := agg.(uint64)
