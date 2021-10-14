@@ -11,44 +11,44 @@ import (
 )
 
 type NameCityStateId struct {
-	Name  string `zid:"0"`
-	City  string `zid:"1"`
-	State string `zid:"2"`
-	ID    uint64 `zid:"3"`
+	Name  string `msg:"name" json:"name"`
+	City  string `msg:"city" json:"city"`
+	State string `msg:"state" json:"state"`
+	ID    uint64 `msg:"id" json:"id"`
 }
 
 type Auction struct {
-	ID          uint64 `zid:"0" msg:"id" json:"id"`
-	ItemName    string `zid:"1" msg:"itemName" json:"itemName"`
-	Description string `zid:"2" msg:"description" json:"description"`
-	InitialBid  uint64 `zid:"3" msg:"initialBid" json:"initialBid"`
-	Reserve     uint64 `zid:"4" msg:"reserve" json:"reserve"`
-	DateTime    int64  `zid:"5" msg:"dataTime" json:"dataTime"` // unix timestamp in ms
-	Expires     int64  `zid:"6" msg:"expires" json:"expires"`   // unix timestamp in ms
-	Seller      uint64 `zid:"7" msg:"seller" json:"seller"`
-	Category    uint64 `zid:"8" msg:"category" json:"category"`
-	Extra       string `zid:"9" msg:"extra" json:"extra"`
+	ID          uint64 `msg:"id" json:"id"`
+	ItemName    string `msg:"itemName" json:"itemName"`
+	Description string `msg:"description" json:"description"`
+	InitialBid  uint64 `msg:"initialBid" json:"initialBid"`
+	Reserve     uint64 `msg:"reserve" json:"reserve"`
+	DateTime    int64  `msg:"dateTime" json:"dateTime"` // unix timestamp in ms
+	Expires     int64  `msg:"expires" json:"expires"`   // unix timestamp in ms
+	Seller      uint64 `msg:"seller" json:"seller"`
+	Category    uint64 `msg:"category" json:"category"`
+	Extra       string `msg:"extra" json:"extra"`
 }
 
 type Bid struct {
-	Auction  uint64 `zid:"0" msg:"auction" json:"auction"`
-	Bidder   uint64 `zid:"1" msg:"bidder" json:"bidder"`
-	Price    uint64 `zid:"2" msg:"price" json:"price"`
-	Channel  string `zid:"3" msg:"channel" json:"channel"`
-	Url      string `zid:"4" msg:"url" json:"url"`
-	DateTime int64  `zid:"5" msg:"dateTime" json:"dateTime"` // unix timestamp in ms
-	Extra    string `zid:"6" msg:"extra" json:"extra"`
+	Auction  uint64 `msg:"auction" json:"auction"`
+	Bidder   uint64 `msg:"bidder" json:"bidder"`
+	Price    uint64 `msg:"price" json:"price"`
+	Channel  string `msg:"channel" json:"channel"`
+	Url      string `msg:"url" json:"url"`
+	DateTime int64  `msg:"dateTime" json:"dateTime"` // unix timestamp in ms
+	Extra    string `msg:"extra" json:"extra"`
 }
 
 type Person struct {
-	ID           uint64 `zid:"0" msg:"id" json:"id"`
-	Name         string `zid:"1" msg:"name" json:"name"`
-	EmailAddress string `zid:"2" msg:"emailAddress" json:"emailAddress"`
-	CreditCard   string `zid:"3" msg:"creditCard" json:"creditCard"`
-	City         string `zid:"4" msg:"city" json:"city"`
-	State        string `zid:"5" msg:"state" json:"state"`
-	DateTime     int64  `zid:"6" msg:"dateTime" json:"dataTime"` // unix timestamp in ms
-	Extra        string `zid:"7" msg:"extra" json:"extra"`
+	ID           uint64 `msg:"id" json:"id"`
+	Name         string `msg:"name" json:"name"`
+	EmailAddress string `msg:"emailAddress" json:"emailAddress"`
+	CreditCard   string `msg:"creditCard" json:"creditCard"`
+	City         string `msg:"city" json:"city"`
+	State        string `msg:"state" json:"state"`
+	DateTime     int64  `msg:"dateTime" json:"dateTime"` // unix timestamp in ms
+	Extra        string `msg:"extra" json:"extra"`
 }
 
 type EType uint8
@@ -60,10 +60,10 @@ const (
 )
 
 type Event struct {
-	Etype      EType    `json:"etype" zid:"0" msgp:"etype"`
-	NewPerson  *Person  `json:"newPerson,omitempty" zid:"1" msgp:"newPerson,omitempty"`
-	NewAuction *Auction `json:"newAuction,omitempty" zid:"2" msgp:"newAuction,omitempty"`
-	Bid        *Bid     `json:"bid,omitempty" zid:"3" msgp:"bid,omitempty"`
+	Etype      EType    `json:"etype" msgp:"etype"`
+	NewPerson  *Person  `json:"newPerson,omitempty" msgp:"newPerson,omitempty"`
+	NewAuction *Auction `json:"newAuction,omitempty" msgp:"newAuction,omitempty"`
+	Bid        *Bid     `json:"bid,omitempty" msgp:"bid,omitempty"`
 }
 
 func NewPersonEvent(newPerson *Person) *Event {

@@ -54,7 +54,7 @@ func (z *Auction) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Reserve")
 				return
 			}
-		case "dataTime":
+		case "dateTime":
 			z.DateTime, err = dc.ReadInt64()
 			if err != nil {
 				err = msgp.WrapError(err, "DateTime")
@@ -148,8 +148,8 @@ func (z *Auction) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Reserve")
 		return
 	}
-	// write "dataTime"
-	err = en.Append(0xa8, 0x64, 0x61, 0x74, 0x61, 0x54, 0x69, 0x6d, 0x65)
+	// write "dateTime"
+	err = en.Append(0xa8, 0x64, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65)
 	if err != nil {
 		return
 	}
@@ -220,8 +220,8 @@ func (z *Auction) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "reserve"
 	o = append(o, 0xa7, 0x72, 0x65, 0x73, 0x65, 0x72, 0x76, 0x65)
 	o = msgp.AppendUint64(o, z.Reserve)
-	// string "dataTime"
-	o = append(o, 0xa8, 0x64, 0x61, 0x74, 0x61, 0x54, 0x69, 0x6d, 0x65)
+	// string "dateTime"
+	o = append(o, 0xa8, 0x64, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65)
 	o = msgp.AppendInt64(o, z.DateTime)
 	// string "expires"
 	o = append(o, 0xa7, 0x65, 0x78, 0x70, 0x69, 0x72, 0x65, 0x73)
@@ -286,7 +286,7 @@ func (z *Auction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Reserve")
 				return
 			}
-		case "dataTime":
+		case "dateTime":
 			z.DateTime, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "DateTime")
