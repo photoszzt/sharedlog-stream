@@ -85,7 +85,7 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(msg Message) ([]*Messa
 			if err != nil {
 				return nil, err
 			}
-			newMsgs = append(newMsgs, &Message{Key: msg.Key, Value: newAgg, Timestamp: newTs})
+			newMsgs = append(newMsgs, &Message{Key: WindowedKey{Key: msg.Key, Window: window}, Value: newAgg, Timestamp: newTs})
 		} else {
 			log.Warn().Interface("key", msg.Key).
 				Interface("value", msg.Value).

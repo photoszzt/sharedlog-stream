@@ -122,7 +122,7 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 		ParNum:     sp.ParNum,
 	}
 	store := processor.NewInMemoryWindowStoreWithChangelog(
-		timeWindows.MaxSize()*timeWindows.GracePeriodMs(), timeWindows.MaxSize(), winStoreMp)
+		timeWindows.MaxSize()+timeWindows.GracePeriodMs(), timeWindows.MaxSize(), winStoreMp)
 	aggProc := processor.NewStreamWindowAggregateProcessor(store,
 		processor.InitializerFunc(func() interface{} {
 			return &ntypes.SumAndCount{
