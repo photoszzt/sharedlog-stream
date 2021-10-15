@@ -78,15 +78,24 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 	}
 	var scSerde processor.Serde
 	var vtSerde processor.Serde
+	var wkSerde processor.Serde
 	if sp.SerdeFormat == uint8(processor.JSON) {
 		scSerde = ntypes.SumAndCountJSONSerde{}
 		vtSerde = processor.ValueTimestampJSONSerde{
 			ValJSONSerde: scSerde,
 		}
+		wkSerde = processor.WindowedKeyJSONSerde{
+			KeyJSONSerde:    processor.Uint64Serde{},
+			WindowJSONSerde: processor.TimeWindowJSONSerde{},
+		}
 	} else if sp.SerdeFormat == uint8(processor.MSGP) {
 		scSerde = ntypes.SumAndCountMsgpSerde{}
 		vtSerde = processor.ValueTimestampMsgpSerde{
 			ValMsgpSerde: scSerde,
+		}
+		wkSerde = processor.WindowedKeyMsgpSerde{
+			KeyMsgpSerde:    processor.Uint64Serde{},
+			WindowMsgpSerde: processor.TimeWindowMsgpSerde{},
 		}
 	} else {
 		return &common.FnOutput{
@@ -105,7 +114,7 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 
 	outConfig := &sharedlog_stream.StreamSinkConfig{
 		MsgEncoder:   msgSerde,
-		KeyEncoder:   processor.Uint64Encoder{},
+		KeyEncoder:   wkSerde,
 		ValueEncoder: processor.Float64Serde{},
 	}
 
@@ -138,11 +147,13 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 				Count: agg.Count + 1,
 			}
 		}), timeWindows)
+
 	calcAvg := processor.NewStreamMapValuesProcessor(
 		processor.ValueMapperFunc(func(value interface{}) (interface{}, error) {
 			val := value.(*ntypes.SumAndCount)
 			return float64(val.Sum) / float64(val.Count), nil
 		}))
+
 	latencies := make([]int, 0, 128)
 	startTime := time.Now()
 	for {
