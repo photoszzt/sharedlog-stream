@@ -19,8 +19,8 @@ type Change struct {
 }
 
 type ValueTimestampSerialized struct {
-	Timestamp       uint64 `json:"ts" zid:"0" msgp:"ts"`
-	ValueSerialized []byte `json:"vs" zid:"1" msgp:"vs"`
+	Timestamp       uint64 `json:"ts" msgp:"ts"`
+	ValueSerialized []byte `json:"vs" msgp:"vs"`
 }
 
 type ValueTimestampJSONSerde struct {

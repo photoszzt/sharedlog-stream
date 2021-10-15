@@ -1140,25 +1140,25 @@ func (z *NameCityStateId) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "Name":
+		case "name":
 			z.Name, err = dc.ReadString()
 			if err != nil {
 				err = msgp.WrapError(err, "Name")
 				return
 			}
-		case "City":
+		case "city":
 			z.City, err = dc.ReadString()
 			if err != nil {
 				err = msgp.WrapError(err, "City")
 				return
 			}
-		case "State":
+		case "state":
 			z.State, err = dc.ReadString()
 			if err != nil {
 				err = msgp.WrapError(err, "State")
 				return
 			}
-		case "ID":
+		case "id":
 			z.ID, err = dc.ReadUint64()
 			if err != nil {
 				err = msgp.WrapError(err, "ID")
@@ -1178,8 +1178,8 @@ func (z *NameCityStateId) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *NameCityStateId) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 4
-	// write "Name"
-	err = en.Append(0x84, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
+	// write "name"
+	err = en.Append(0x84, 0xa4, 0x6e, 0x61, 0x6d, 0x65)
 	if err != nil {
 		return
 	}
@@ -1188,8 +1188,8 @@ func (z *NameCityStateId) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Name")
 		return
 	}
-	// write "City"
-	err = en.Append(0xa4, 0x43, 0x69, 0x74, 0x79)
+	// write "city"
+	err = en.Append(0xa4, 0x63, 0x69, 0x74, 0x79)
 	if err != nil {
 		return
 	}
@@ -1198,8 +1198,8 @@ func (z *NameCityStateId) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "City")
 		return
 	}
-	// write "State"
-	err = en.Append(0xa5, 0x53, 0x74, 0x61, 0x74, 0x65)
+	// write "state"
+	err = en.Append(0xa5, 0x73, 0x74, 0x61, 0x74, 0x65)
 	if err != nil {
 		return
 	}
@@ -1208,8 +1208,8 @@ func (z *NameCityStateId) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "State")
 		return
 	}
-	// write "ID"
-	err = en.Append(0xa2, 0x49, 0x44)
+	// write "id"
+	err = en.Append(0xa2, 0x69, 0x64)
 	if err != nil {
 		return
 	}
@@ -1225,17 +1225,17 @@ func (z *NameCityStateId) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *NameCityStateId) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 4
-	// string "Name"
-	o = append(o, 0x84, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
+	// string "name"
+	o = append(o, 0x84, 0xa4, 0x6e, 0x61, 0x6d, 0x65)
 	o = msgp.AppendString(o, z.Name)
-	// string "City"
-	o = append(o, 0xa4, 0x43, 0x69, 0x74, 0x79)
+	// string "city"
+	o = append(o, 0xa4, 0x63, 0x69, 0x74, 0x79)
 	o = msgp.AppendString(o, z.City)
-	// string "State"
-	o = append(o, 0xa5, 0x53, 0x74, 0x61, 0x74, 0x65)
+	// string "state"
+	o = append(o, 0xa5, 0x73, 0x74, 0x61, 0x74, 0x65)
 	o = msgp.AppendString(o, z.State)
-	// string "ID"
-	o = append(o, 0xa2, 0x49, 0x44)
+	// string "id"
+	o = append(o, 0xa2, 0x69, 0x64)
 	o = msgp.AppendUint64(o, z.ID)
 	return
 }
@@ -1258,25 +1258,25 @@ func (z *NameCityStateId) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "Name":
+		case "name":
 			z.Name, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Name")
 				return
 			}
-		case "City":
+		case "city":
 			z.City, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "City")
 				return
 			}
-		case "State":
+		case "state":
 			z.State, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "State")
 				return
 			}
-		case "ID":
+		case "id":
 			z.ID, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "ID")
