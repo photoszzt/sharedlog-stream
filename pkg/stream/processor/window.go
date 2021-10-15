@@ -1,3 +1,5 @@
+//go:generate msgp
+//msgp:ignore Window
 package processor
 
 import (
@@ -24,10 +26,10 @@ type Window interface {
 }
 
 type BaseWindow struct {
-	startTs uint64 // in ms
-	endTs   uint64 // in ms
-	startT  *time.Time
-	endT    *time.Time
+	StartTs uint64     `json:"startTs" msg:"startTs"` // in ms
+	EndTs   uint64     `json:"endTs" msg:"endTs"`     // in ms
+	startT  *time.Time `json:"-" msg:"-"`
+	endT    *time.Time `json:"-" msg:"-"`
 }
 
 func NewBaseWindow(startTs uint64, endTs uint64) BaseWindow {
@@ -38,19 +40,19 @@ func NewBaseWindow(startTs uint64, endTs uint64) BaseWindow {
 	endNsPart := (endTs - endSecPart*1000) * 1000000
 	endTime := time.Unix(int64(endSecPart), int64(endNsPart))
 	return BaseWindow{
-		startTs: startTs,
-		endTs:   endTs,
+		StartTs: startTs,
+		EndTs:   endTs,
 		startT:  &startTime,
 		endT:    &endTime,
 	}
 }
 
 func (w *BaseWindow) Start() uint64 {
-	return w.startTs
+	return w.StartTs
 }
 
 func (w *BaseWindow) End() uint64 {
-	return w.endTs
+	return w.EndTs
 }
 
 func (w *BaseWindow) StartTime() *time.Time {
