@@ -18,13 +18,15 @@ import (
 
 var (
 	FLAGS_num_events    int
+	FLAGS_duration      int
 	FLAGS_broker        string
 	FLAGS_stream_prefix string
 	FLAGS_serdeFormat   string
 )
 
 func main() {
-	flag.IntVar(&FLAGS_num_events, "num_events", 10, "")
+	flag.IntVar(&FLAGS_num_events, "num_events", 0, "")
+	flag.IntVar(&FLAGS_duration, "duration", 60, "")
 	flag.StringVar(&FLAGS_broker, "broker", "127.0.0.1", "")
 	flag.StringVar(&FLAGS_stream_prefix, "stream_prefix", "nexmark", "")
 	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
@@ -72,7 +74,16 @@ func main() {
 
 	deliveryChan := make(chan kafka.Event)
 
-	for i := 0; i < FLAGS_num_events; i++ {
+	idx := 0
+	duration := time.Duration(FLAGS_duration) * time.Second
+	start := time.Now()
+	for {
+		if time.Since(start) >= duration {
+			break
+		}
+		if FLAGS_num_events != 0 && idx > FLAGS_num_events {
+			break
+		}
 		now := time.Now().Unix()
 		nextEvent, err := eventGenerator.NextEvent(ctx, channel_url_cache)
 		if err != nil {
@@ -93,6 +104,7 @@ func main() {
 		if err != nil {
 			log.Fatal().Err(err)
 		}
+		idx += 1
 	}
 	replies := 0
 	for e := range deliveryChan {
@@ -105,8 +117,12 @@ func main() {
 			}
 		}
 		replies += 1
-		if replies == FLAGS_num_events {
+		if replies == idx {
 			break
 		}
 	}
+	remaining := p.Flush(30)
+	log.Info().Msgf("producer: %d messages remaining in queue.", remaining)
+	p.Close()
+	close(deliveryChan)
 }
