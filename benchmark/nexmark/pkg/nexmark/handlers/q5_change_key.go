@@ -146,6 +146,6 @@ func (h *q5ChangeKey) process(ctx context.Context, sp *common.QueryInput) *commo
 	return &common.FnOutput{
 		Success:   true,
 		Duration:  time.Since(startTime).Seconds(),
-		Latencies: latencies,
+		Latencies: map[string][]int{"e2e": latencies},
 	}
 }

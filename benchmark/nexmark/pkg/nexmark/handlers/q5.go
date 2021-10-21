@@ -215,6 +215,6 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	return &common.FnOutput{
 		Success:   true,
 		Duration:  time.Since(startTime).Seconds(),
-		Latencies: latencies,
+		Latencies: map[string][]int{"e2e": latencies},
 	}
 }

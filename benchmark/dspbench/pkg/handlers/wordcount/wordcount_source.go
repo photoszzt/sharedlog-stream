@@ -113,7 +113,7 @@ func (h *wordCountSource) eventGeneration(ctx context.Context, env types.Environ
 	return &common.FnOutput{
 		Success:   true,
 		Duration:  time.Since(startTime).Seconds(),
-		Latencies: latencies,
+		Latencies: map[string][]int{"e2e": latencies},
 	}
 }
 

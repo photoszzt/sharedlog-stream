@@ -167,7 +167,7 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 				return &common.FnOutput{
 					Success:   true,
 					Message:   err.Error(),
-					Latencies: latencies,
+					Latencies: map[string][]int{"e2e": latencies},
 					Duration:  time.Since(startTime).Seconds(),
 				}
 			}
@@ -205,6 +205,6 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 	return &common.FnOutput{
 		Success:   true,
 		Duration:  time.Since(startTime).Seconds(),
-		Latencies: latencies,
+		Latencies: map[string][]int{"e2e": latencies},
 	}
 }

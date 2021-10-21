@@ -158,7 +158,7 @@ func (h *spikeDetectionSource) eventGeneration(ctx context.Context, sp *common.S
 	return &common.FnOutput{
 		Success:   true,
 		Duration:  time.Since(startTime).Seconds(),
-		Latencies: latencies,
+		Latencies: map[string][]int{"e2e": latencies},
 	}
 }
 

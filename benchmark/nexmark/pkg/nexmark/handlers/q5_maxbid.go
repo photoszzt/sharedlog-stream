@@ -142,6 +142,6 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 	return &common.FnOutput{
 		Success:   true,
 		Duration:  time.Since(startTime).Seconds(),
-		Latencies: latencies,
+		Latencies: map[string][]int{"e2e": latencies},
 	}
 }

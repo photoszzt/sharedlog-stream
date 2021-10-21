@@ -173,7 +173,7 @@ func Query8(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	output <- &common.FnOutput{
 		Success:   true,
 		Duration:  time.Since(startTime).Seconds(),
-		Latencies: latencies,
+		Latencies: map[string][]int{"e2e": latencies},
 	}
 
 }

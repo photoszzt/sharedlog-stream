@@ -11,10 +11,10 @@ type QueryInput struct {
 }
 
 type FnOutput struct {
-	Success   bool    `json:"success"`
-	Message   string  `json:"message"`
-	Duration  float64 `json:"duration"`
-	Latencies []int   `json:"latencies"`
+	Success   bool             `json:"success"`
+	Message   string           `json:"message"`
+	Duration  float64          `json:"duration"`
+	Latencies map[string][]int `json:"latencies"`
 }
 
 type SourceParam struct {

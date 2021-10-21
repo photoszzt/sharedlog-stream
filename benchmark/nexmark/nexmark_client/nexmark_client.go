@@ -162,16 +162,16 @@ func windowedAvg() {
 	}
 	wg.Wait()
 	if sourceOutput.Success {
-		common.ProcessThroughputLat("source", sourceOutput.Latencies, sourceOutput.Duration)
+		common.ProcessThroughputLat("source", sourceOutput.Latencies["e2e"], sourceOutput.Duration)
 	}
 	for i := 0; i < int(groupByNodeConfig.NumInstance); i++ {
 		if groupByOutput[i].Success {
-			common.ProcessThroughputLat(fmt.Sprintf("groupby %v", i), groupByOutput[i].Latencies, groupByOutput[i].Duration)
+			common.ProcessThroughputLat(fmt.Sprintf("groupby %v", i), groupByOutput[i].Latencies["e2e"], groupByOutput[i].Duration)
 		}
 	}
 	for i := 0; i < int(avgNodeConfig.NumInstance); i++ {
 		if avgOutput[i].Success {
-			common.ProcessThroughputLat(fmt.Sprintf("avg %v", i), avgOutput[i].Latencies, avgOutput[i].Duration)
+			common.ProcessThroughputLat(fmt.Sprintf("avg %v", i), avgOutput[i].Latencies["e2e"], avgOutput[i].Duration)
 		}
 	}
 }

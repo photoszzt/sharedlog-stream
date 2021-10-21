@@ -139,6 +139,6 @@ func Query1(ctx context.Context, env types.Environment, input *common.QueryInput
 	output <- &common.FnOutput{
 		Success:   true,
 		Duration:  time.Since(startTime).Seconds(),
-		Latencies: latencies,
+		Latencies: map[string][]int{"e2e": latencies},
 	}
 }

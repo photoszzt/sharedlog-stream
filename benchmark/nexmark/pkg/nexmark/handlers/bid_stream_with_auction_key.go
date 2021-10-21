@@ -138,6 +138,6 @@ func (h *q5FilterAndSelectKey) process(ctx context.Context, sp *common.QueryInpu
 	return &common.FnOutput{
 		Success:   true,
 		Duration:  time.Since(startTime).Seconds(),
-		Latencies: latencies,
+		Latencies: map[string][]int{"e2e": latencies},
 	}
 }
