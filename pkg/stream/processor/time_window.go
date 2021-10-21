@@ -1,4 +1,5 @@
 //go:generate msgp
+//msgp:ignore TimeWindowJSONSerde TimeWindowMsgpSerde
 package processor
 
 import (
