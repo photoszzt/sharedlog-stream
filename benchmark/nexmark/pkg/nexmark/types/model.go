@@ -60,10 +60,10 @@ const (
 )
 
 type Event struct {
-	Etype      EType    `json:"etype" msgp:"etype"`
-	NewPerson  *Person  `json:"newPerson,omitempty" msgp:"newPerson,omitempty"`
-	NewAuction *Auction `json:"newAuction,omitempty" msgp:"newAuction,omitempty"`
-	Bid        *Bid     `json:"bid,omitempty" msgp:"bid,omitempty"`
+	Etype      EType    `json:"etype" msg:"etype"`
+	NewPerson  *Person  `json:"newPerson,omitempty" msg:"newPerson,omitempty"`
+	NewAuction *Auction `json:"newAuction,omitempty" msg:"newAuction,omitempty"`
+	Bid        *Bid     `json:"bid,omitempty" msg:"bid,omitempty"`
 }
 
 func NewPersonEvent(newPerson *Person) *Event {

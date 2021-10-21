@@ -657,7 +657,7 @@ func (z *Event) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "Etype":
+		case "etype":
 			{
 				var zb0002 uint8
 				zb0002, err = dc.ReadUint8()
@@ -667,7 +667,7 @@ func (z *Event) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 				z.Etype = EType(zb0002)
 			}
-		case "NewPerson":
+		case "newPerson":
 			if dc.IsNil() {
 				err = dc.ReadNil()
 				if err != nil {
@@ -685,7 +685,7 @@ func (z *Event) DecodeMsg(dc *msgp.Reader) (err error) {
 					return
 				}
 			}
-		case "NewAuction":
+		case "newAuction":
 			if dc.IsNil() {
 				err = dc.ReadNil()
 				if err != nil {
@@ -703,7 +703,7 @@ func (z *Event) DecodeMsg(dc *msgp.Reader) (err error) {
 					return
 				}
 			}
-		case "Bid":
+		case "bid":
 			if dc.IsNil() {
 				err = dc.ReadNil()
 				if err != nil {
@@ -734,9 +734,31 @@ func (z *Event) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *Event) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 4
-	// write "Etype"
-	err = en.Append(0x84, 0xa5, 0x45, 0x74, 0x79, 0x70, 0x65)
+	// omitempty: check for empty values
+	zb0001Len := uint32(4)
+	var zb0001Mask uint8 /* 4 bits */
+	if z.NewPerson == nil {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if z.NewAuction == nil {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if z.Bid == nil {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	// variable map header, size zb0001Len
+	err = en.Append(0x80 | uint8(zb0001Len))
+	if err != nil {
+		return
+	}
+	if zb0001Len == 0 {
+		return
+	}
+	// write "etype"
+	err = en.Append(0xa5, 0x65, 0x74, 0x79, 0x70, 0x65)
 	if err != nil {
 		return
 	}
@@ -745,55 +767,61 @@ func (z *Event) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Etype")
 		return
 	}
-	// write "NewPerson"
-	err = en.Append(0xa9, 0x4e, 0x65, 0x77, 0x50, 0x65, 0x72, 0x73, 0x6f, 0x6e)
-	if err != nil {
-		return
-	}
-	if z.NewPerson == nil {
-		err = en.WriteNil()
+	if (zb0001Mask & 0x2) == 0 { // if not empty
+		// write "newPerson"
+		err = en.Append(0xa9, 0x6e, 0x65, 0x77, 0x50, 0x65, 0x72, 0x73, 0x6f, 0x6e)
 		if err != nil {
 			return
 		}
-	} else {
-		err = z.NewPerson.EncodeMsg(en)
-		if err != nil {
-			err = msgp.WrapError(err, "NewPerson")
-			return
+		if z.NewPerson == nil {
+			err = en.WriteNil()
+			if err != nil {
+				return
+			}
+		} else {
+			err = z.NewPerson.EncodeMsg(en)
+			if err != nil {
+				err = msgp.WrapError(err, "NewPerson")
+				return
+			}
 		}
 	}
-	// write "NewAuction"
-	err = en.Append(0xaa, 0x4e, 0x65, 0x77, 0x41, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e)
-	if err != nil {
-		return
-	}
-	if z.NewAuction == nil {
-		err = en.WriteNil()
-		if err != nil {
-			return
-		}
-	} else {
-		err = z.NewAuction.EncodeMsg(en)
-		if err != nil {
-			err = msgp.WrapError(err, "NewAuction")
-			return
-		}
-	}
-	// write "Bid"
-	err = en.Append(0xa3, 0x42, 0x69, 0x64)
-	if err != nil {
-		return
-	}
-	if z.Bid == nil {
-		err = en.WriteNil()
+	if (zb0001Mask & 0x4) == 0 { // if not empty
+		// write "newAuction"
+		err = en.Append(0xaa, 0x6e, 0x65, 0x77, 0x41, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e)
 		if err != nil {
 			return
 		}
-	} else {
-		err = z.Bid.EncodeMsg(en)
+		if z.NewAuction == nil {
+			err = en.WriteNil()
+			if err != nil {
+				return
+			}
+		} else {
+			err = z.NewAuction.EncodeMsg(en)
+			if err != nil {
+				err = msgp.WrapError(err, "NewAuction")
+				return
+			}
+		}
+	}
+	if (zb0001Mask & 0x8) == 0 { // if not empty
+		// write "bid"
+		err = en.Append(0xa3, 0x62, 0x69, 0x64)
 		if err != nil {
-			err = msgp.WrapError(err, "Bid")
 			return
+		}
+		if z.Bid == nil {
+			err = en.WriteNil()
+			if err != nil {
+				return
+			}
+		} else {
+			err = z.Bid.EncodeMsg(en)
+			if err != nil {
+				err = msgp.WrapError(err, "Bid")
+				return
+			}
 		}
 	}
 	return
@@ -802,41 +830,66 @@ func (z *Event) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *Event) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 4
-	// string "Etype"
-	o = append(o, 0x84, 0xa5, 0x45, 0x74, 0x79, 0x70, 0x65)
-	o = msgp.AppendUint8(o, uint8(z.Etype))
-	// string "NewPerson"
-	o = append(o, 0xa9, 0x4e, 0x65, 0x77, 0x50, 0x65, 0x72, 0x73, 0x6f, 0x6e)
+	// omitempty: check for empty values
+	zb0001Len := uint32(4)
+	var zb0001Mask uint8 /* 4 bits */
 	if z.NewPerson == nil {
-		o = msgp.AppendNil(o)
-	} else {
-		o, err = z.NewPerson.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "NewPerson")
-			return
-		}
+		zb0001Len--
+		zb0001Mask |= 0x2
 	}
-	// string "NewAuction"
-	o = append(o, 0xaa, 0x4e, 0x65, 0x77, 0x41, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e)
 	if z.NewAuction == nil {
-		o = msgp.AppendNil(o)
-	} else {
-		o, err = z.NewAuction.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "NewAuction")
-			return
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if z.Bid == nil {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len == 0 {
+		return
+	}
+	// string "etype"
+	o = append(o, 0xa5, 0x65, 0x74, 0x79, 0x70, 0x65)
+	o = msgp.AppendUint8(o, uint8(z.Etype))
+	if (zb0001Mask & 0x2) == 0 { // if not empty
+		// string "newPerson"
+		o = append(o, 0xa9, 0x6e, 0x65, 0x77, 0x50, 0x65, 0x72, 0x73, 0x6f, 0x6e)
+		if z.NewPerson == nil {
+			o = msgp.AppendNil(o)
+		} else {
+			o, err = z.NewPerson.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "NewPerson")
+				return
+			}
 		}
 	}
-	// string "Bid"
-	o = append(o, 0xa3, 0x42, 0x69, 0x64)
-	if z.Bid == nil {
-		o = msgp.AppendNil(o)
-	} else {
-		o, err = z.Bid.MarshalMsg(o)
-		if err != nil {
-			err = msgp.WrapError(err, "Bid")
-			return
+	if (zb0001Mask & 0x4) == 0 { // if not empty
+		// string "newAuction"
+		o = append(o, 0xaa, 0x6e, 0x65, 0x77, 0x41, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e)
+		if z.NewAuction == nil {
+			o = msgp.AppendNil(o)
+		} else {
+			o, err = z.NewAuction.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "NewAuction")
+				return
+			}
+		}
+	}
+	if (zb0001Mask & 0x8) == 0 { // if not empty
+		// string "bid"
+		o = append(o, 0xa3, 0x62, 0x69, 0x64)
+		if z.Bid == nil {
+			o = msgp.AppendNil(o)
+		} else {
+			o, err = z.Bid.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Bid")
+				return
+			}
 		}
 	}
 	return
@@ -860,7 +913,7 @@ func (z *Event) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "Etype":
+		case "etype":
 			{
 				var zb0002 uint8
 				zb0002, bts, err = msgp.ReadUint8Bytes(bts)
@@ -870,7 +923,7 @@ func (z *Event) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				z.Etype = EType(zb0002)
 			}
-		case "NewPerson":
+		case "newPerson":
 			if msgp.IsNil(bts) {
 				bts, err = msgp.ReadNilBytes(bts)
 				if err != nil {
@@ -887,7 +940,7 @@ func (z *Event) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
-		case "NewAuction":
+		case "newAuction":
 			if msgp.IsNil(bts) {
 				bts, err = msgp.ReadNilBytes(bts)
 				if err != nil {
@@ -904,7 +957,7 @@ func (z *Event) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
-		case "Bid":
+		case "bid":
 			if msgp.IsNil(bts) {
 				bts, err = msgp.ReadNilBytes(bts)
 				if err != nil {

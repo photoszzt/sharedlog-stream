@@ -24,13 +24,13 @@ func (z *WindowedKeySerialized) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "KeySerialized":
+		case "ks":
 			z.KeySerialized, err = dc.ReadBytes(z.KeySerialized)
 			if err != nil {
 				err = msgp.WrapError(err, "KeySerialized")
 				return
 			}
-		case "WindowSerialized":
+		case "ws":
 			z.WindowSerialized, err = dc.ReadBytes(z.WindowSerialized)
 			if err != nil {
 				err = msgp.WrapError(err, "WindowSerialized")
@@ -50,8 +50,8 @@ func (z *WindowedKeySerialized) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *WindowedKeySerialized) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 2
-	// write "KeySerialized"
-	err = en.Append(0x82, 0xad, 0x4b, 0x65, 0x79, 0x53, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x65, 0x64)
+	// write "ks"
+	err = en.Append(0x82, 0xa2, 0x6b, 0x73)
 	if err != nil {
 		return
 	}
@@ -60,8 +60,8 @@ func (z *WindowedKeySerialized) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "KeySerialized")
 		return
 	}
-	// write "WindowSerialized"
-	err = en.Append(0xb0, 0x57, 0x69, 0x6e, 0x64, 0x6f, 0x77, 0x53, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x65, 0x64)
+	// write "ws"
+	err = en.Append(0xa2, 0x77, 0x73)
 	if err != nil {
 		return
 	}
@@ -77,11 +77,11 @@ func (z *WindowedKeySerialized) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *WindowedKeySerialized) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 2
-	// string "KeySerialized"
-	o = append(o, 0x82, 0xad, 0x4b, 0x65, 0x79, 0x53, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x65, 0x64)
+	// string "ks"
+	o = append(o, 0x82, 0xa2, 0x6b, 0x73)
 	o = msgp.AppendBytes(o, z.KeySerialized)
-	// string "WindowSerialized"
-	o = append(o, 0xb0, 0x57, 0x69, 0x6e, 0x64, 0x6f, 0x77, 0x53, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x65, 0x64)
+	// string "ws"
+	o = append(o, 0xa2, 0x77, 0x73)
 	o = msgp.AppendBytes(o, z.WindowSerialized)
 	return
 }
@@ -104,13 +104,13 @@ func (z *WindowedKeySerialized) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "KeySerialized":
+		case "ks":
 			z.KeySerialized, bts, err = msgp.ReadBytesBytes(bts, z.KeySerialized)
 			if err != nil {
 				err = msgp.WrapError(err, "KeySerialized")
 				return
 			}
-		case "WindowSerialized":
+		case "ws":
 			z.WindowSerialized, bts, err = msgp.ReadBytesBytes(bts, z.WindowSerialized)
 			if err != nil {
 				err = msgp.WrapError(err, "WindowSerialized")
@@ -130,6 +130,6 @@ func (z *WindowedKeySerialized) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *WindowedKeySerialized) Msgsize() (s int) {
-	s = 1 + 14 + msgp.BytesPrefixSize + len(z.KeySerialized) + 17 + msgp.BytesPrefixSize + len(z.WindowSerialized)
+	s = 1 + 3 + msgp.BytesPrefixSize + len(z.KeySerialized) + 3 + msgp.BytesPrefixSize + len(z.WindowSerialized)
 	return
 }

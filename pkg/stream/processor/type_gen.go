@@ -24,13 +24,13 @@ func (z *ValueTimestampSerialized) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "Timestamp":
+		case "ts":
 			z.Timestamp, err = dc.ReadUint64()
 			if err != nil {
 				err = msgp.WrapError(err, "Timestamp")
 				return
 			}
-		case "ValueSerialized":
+		case "vs":
 			z.ValueSerialized, err = dc.ReadBytes(z.ValueSerialized)
 			if err != nil {
 				err = msgp.WrapError(err, "ValueSerialized")
@@ -50,8 +50,8 @@ func (z *ValueTimestampSerialized) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *ValueTimestampSerialized) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 2
-	// write "Timestamp"
-	err = en.Append(0x82, 0xa9, 0x54, 0x69, 0x6d, 0x65, 0x73, 0x74, 0x61, 0x6d, 0x70)
+	// write "ts"
+	err = en.Append(0x82, 0xa2, 0x74, 0x73)
 	if err != nil {
 		return
 	}
@@ -60,8 +60,8 @@ func (z *ValueTimestampSerialized) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Timestamp")
 		return
 	}
-	// write "ValueSerialized"
-	err = en.Append(0xaf, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x53, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x65, 0x64)
+	// write "vs"
+	err = en.Append(0xa2, 0x76, 0x73)
 	if err != nil {
 		return
 	}
@@ -77,11 +77,11 @@ func (z *ValueTimestampSerialized) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *ValueTimestampSerialized) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 2
-	// string "Timestamp"
-	o = append(o, 0x82, 0xa9, 0x54, 0x69, 0x6d, 0x65, 0x73, 0x74, 0x61, 0x6d, 0x70)
+	// string "ts"
+	o = append(o, 0x82, 0xa2, 0x74, 0x73)
 	o = msgp.AppendUint64(o, z.Timestamp)
-	// string "ValueSerialized"
-	o = append(o, 0xaf, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x53, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x69, 0x7a, 0x65, 0x64)
+	// string "vs"
+	o = append(o, 0xa2, 0x76, 0x73)
 	o = msgp.AppendBytes(o, z.ValueSerialized)
 	return
 }
@@ -104,13 +104,13 @@ func (z *ValueTimestampSerialized) UnmarshalMsg(bts []byte) (o []byte, err error
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "Timestamp":
+		case "ts":
 			z.Timestamp, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Timestamp")
 				return
 			}
-		case "ValueSerialized":
+		case "vs":
 			z.ValueSerialized, bts, err = msgp.ReadBytesBytes(bts, z.ValueSerialized)
 			if err != nil {
 				err = msgp.WrapError(err, "ValueSerialized")
@@ -130,6 +130,6 @@ func (z *ValueTimestampSerialized) UnmarshalMsg(bts []byte) (o []byte, err error
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *ValueTimestampSerialized) Msgsize() (s int) {
-	s = 1 + 10 + msgp.Uint64Size + 16 + msgp.BytesPrefixSize + len(z.ValueSerialized)
+	s = 1 + 3 + msgp.Uint64Size + 3 + msgp.BytesPrefixSize + len(z.ValueSerialized)
 	return
 }

@@ -5,8 +5,8 @@ package wordcount
 import "encoding/json"
 
 type SentenceEvent struct {
-	Sentence string `json:"sen" msgp:"sen"`
-	Ts       uint64 `json:"ts" msgp:"ts"`
+	Sentence string `json:"sen" msg:"sen"`
+	Ts       uint64 `json:"ts" msg:"ts"`
 }
 
 type SentenceEventJSONSerde struct{}
@@ -40,8 +40,8 @@ func (s SentenceEventMsgpSerde) Decode(value []byte) (interface{}, error) {
 }
 
 type WordEvent struct {
-	Word string `json:"word" msgp:"word"`
-	Ts   uint64 `json:"ts" msgp:"ts"`
+	Word string `json:"word" msg:"word"`
+	Ts   uint64 `json:"ts" msg:"ts"`
 }
 
 type WordEventJSONSerde struct{}
@@ -75,8 +75,8 @@ func (s WordEventMsgpSerde) Decode(value []byte) (interface{}, error) {
 }
 
 type CountEvent struct {
-	Count uint64 `json:"count" msgp:"count"`
-	Ts    uint64 `json:"ts" msgp:"ts"`
+	Count uint64 `json:"count" msg:"count"`
+	Ts    uint64 `json:"ts" msg:"ts"`
 }
 
 type CountEventJSONSerde struct{}

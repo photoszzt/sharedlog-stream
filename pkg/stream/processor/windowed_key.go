@@ -10,8 +10,8 @@ type WindowedKey struct {
 }
 
 type WindowedKeySerialized struct {
-	KeySerialized    []byte `json:"ks" msgp:"ks"`
-	WindowSerialized []byte `json:"ws" msgp:"ws"`
+	KeySerialized    []byte `json:"ks" msg:"ks"`
+	WindowSerialized []byte `json:"ws" msg:"ws"`
 }
 
 type WindowedKeyJSONSerde struct {
