@@ -37,7 +37,7 @@ func (z *PersonTime) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 		case "startTime":
-			z.StartTime, err = dc.ReadUint64()
+			z.StartTime, err = dc.ReadInt64()
 			if err != nil {
 				err = msgp.WrapError(err, "StartTime")
 				return
@@ -81,7 +81,7 @@ func (z PersonTime) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.StartTime)
+	err = en.WriteInt64(z.StartTime)
 	if err != nil {
 		err = msgp.WrapError(err, "StartTime")
 		return
@@ -101,7 +101,7 @@ func (z PersonTime) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendString(o, z.Name)
 	// string "startTime"
 	o = append(o, 0xa9, 0x73, 0x74, 0x61, 0x72, 0x74, 0x54, 0x69, 0x6d, 0x65)
-	o = msgp.AppendUint64(o, z.StartTime)
+	o = msgp.AppendInt64(o, z.StartTime)
 	return
 }
 
@@ -136,7 +136,7 @@ func (z *PersonTime) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "startTime":
-			z.StartTime, bts, err = msgp.ReadUint64Bytes(bts)
+			z.StartTime, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "StartTime")
 				return
@@ -155,6 +155,6 @@ func (z *PersonTime) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z PersonTime) Msgsize() (s int) {
-	s = 1 + 3 + msgp.Uint64Size + 5 + msgp.StringPrefixSize + len(z.Name) + 10 + msgp.Uint64Size
+	s = 1 + 3 + msgp.Uint64Size + 5 + msgp.StringPrefixSize + len(z.Name) + 10 + msgp.Int64Size
 	return
 }

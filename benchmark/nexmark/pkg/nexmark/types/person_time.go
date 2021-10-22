@@ -10,9 +10,9 @@ import (
 )
 
 type PersonTime struct {
-	ID        uint64 `json:"id" zid:"0" msg:"id"`
-	Name      string `json:"name" zid:"1" msg:"name"`
-	StartTime uint64 `json:"startTime" zid:"2" msg:"startTime"`
+	ID        uint64 `json:"id" msg:"id"`
+	Name      string `json:"name" msg:"name"`
+	StartTime int64  `json:"startTime" msg:"startTime"`
 }
 
 type PersonTimeJSONEncoder struct{}
