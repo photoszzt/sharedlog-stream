@@ -31,10 +31,10 @@ func (p *TableMapValuesProcessor) Process(msg Message) error {
 	if err != nil {
 		return err
 	}
-	return p.pipe.Forward(*newMsg)
+	return p.pipe.Forward(newMsg[0])
 }
 
-func (p *TableMapValuesProcessor) ProcessAndReturn(msg Message) (*Message, error) {
+func (p *TableMapValuesProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
 	newV, err := p.valueMapper.MapValue(msg.Value)
 	if err != nil {
 		return nil, err
@@ -46,5 +46,5 @@ func (p *TableMapValuesProcessor) ProcessAndReturn(msg Message) (*Message, error
 			return nil, err
 		}
 	}
-	return &newMsg, nil
+	return []Message{newMsg}, nil
 }

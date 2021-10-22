@@ -6,6 +6,8 @@ type StreamFilterProcessor struct {
 	pred Predicate
 }
 
+var _ = Processor(&StreamFilterProcessor{})
+
 func NewStreamFilterProcessor(pred Predicate) *StreamFilterProcessor {
 	return &StreamFilterProcessor{
 		pred: pred,
@@ -31,13 +33,13 @@ func (p *StreamFilterProcessor) Process(msg Message) error {
 	return nil
 }
 
-func (p *StreamFilterProcessor) ProcessAndReturn(msg Message) (*Message, error) {
+func (p *StreamFilterProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
 	ok, err := p.pred.Assert(&msg)
 	if err != nil {
 		return nil, err
 	}
 	if ok {
-		return &msg, nil
+		return []Message{msg}, nil
 	}
 	return nil, nil
 }
@@ -47,6 +49,8 @@ type StreamFilterNotProcessor struct {
 	pctx ProcessorContext
 	pred Predicate
 }
+
+var _ = Processor(&StreamFilterNotProcessor{})
 
 func NewStreamFilterNotProcessor(pred Predicate) *StreamFilterNotProcessor {
 	return &StreamFilterNotProcessor{
@@ -73,13 +77,13 @@ func (p *StreamFilterNotProcessor) Process(msg Message) error {
 	return nil
 }
 
-func (p *StreamFilterNotProcessor) ProcessAndReturn(msg Message) (*Message, error) {
+func (p *StreamFilterNotProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
 	ok, err := p.pred.Assert(&msg)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
-		return &msg, nil
+		return []Message{msg}, nil
 	}
 	return nil, nil
 }

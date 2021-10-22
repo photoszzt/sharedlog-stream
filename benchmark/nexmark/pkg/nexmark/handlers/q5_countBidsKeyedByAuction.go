@@ -122,7 +122,7 @@ func (h *q5CountBidsKeyedByAuction) process(ctx context.Context, sp *common.Quer
 			}
 		}
 		for _, countMsg := range countMsgs {
-			err = sink.Sink(*countMsg, sp.ParNum)
+			err = sink.Sink(countMsg, sp.ParNum)
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,

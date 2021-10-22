@@ -30,10 +30,10 @@ func (p *StreamReduceProcessor) Process(msg Message) error {
 	if err != nil {
 		return err
 	}
-	return p.pipe.Forward(*newMsg)
+	return p.pipe.Forward(newMsg[0])
 }
 
-func (p *StreamReduceProcessor) ProcessAndReturn(msg Message) (*Message, error) {
+func (p *StreamReduceProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
 	if msg.Key == nil || msg.Value == nil {
 		log.Warn().Msgf("skipping record due to null key or value. key=%v, val=%v", msg.Key, msg.Value)
 		return nil, nil
@@ -60,5 +60,5 @@ func (p *StreamReduceProcessor) ProcessAndReturn(msg Message) (*Message, error) 
 	if err != nil {
 		return nil, err
 	}
-	return &Message{Key: msg.Key, Value: newAgg, Timestamp: newTs}, nil
+	return []Message{Message{Key: msg.Key, Value: newAgg, Timestamp: newTs}}, nil
 }

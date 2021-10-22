@@ -11,6 +11,8 @@ type StreamTableJoinProcessor struct {
 	storeName string
 }
 
+var _ = Processor(&StreamTableJoinProcessor{})
+
 func NewStreamTableJoinProcessor(storeName string, joiner ValueJoinerWithKey) *StreamTableJoinProcessor {
 	return &StreamTableJoinProcessor{
 		storeName: storeName,
@@ -33,12 +35,12 @@ func (p *StreamTableJoinProcessor) Process(msg Message) error {
 		return err
 	}
 	if newMsg != nil {
-		p.pipe.Forward(*newMsg)
+		p.pipe.Forward(newMsg[0])
 	}
 	return nil
 }
 
-func (p *StreamTableJoinProcessor) ProcessAndReturn(msg Message) (*Message, error) {
+func (p *StreamTableJoinProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
 	if msg.Key == nil || msg.Value == nil {
 		log.Warn().Msgf("Skipping record due to null join key or value. key=%v, val=%v", msg.Key, msg.Value)
 		return nil, nil
@@ -49,7 +51,8 @@ func (p *StreamTableJoinProcessor) ProcessAndReturn(msg Message) (*Message, erro
 	}
 	if p.leftJoin || ok {
 		joined := p.joiner.Apply(msg.Key, msg.Value, val2)
-		return &Message{Key: msg.Key, Value: joined, Timestamp: msg.Timestamp}, nil
+		newMsg := Message{Key: msg.Key, Value: joined, Timestamp: msg.Timestamp}
+		return []Message{newMsg}, nil
 	}
 	return nil, nil
 }

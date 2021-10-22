@@ -17,6 +17,8 @@ type StreamMapProcessor struct {
 	pctx   ProcessorContext
 }
 
+var _ = Processor(&StreamMapProcessor{})
+
 func NewStreamMapProcessor(mapper Mapper) *StreamMapProcessor {
 	return &StreamMapProcessor{
 		mapper: mapper,
@@ -40,13 +42,13 @@ func (p *StreamMapProcessor) Process(msg Message) error {
 	return p.pipe.Forward(m)
 }
 
-func (p *StreamMapProcessor) ProcessAndReturn(msg Message) (*Message, error) {
+func (p *StreamMapProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
 	m, err := p.mapper.Map(msg)
 	if err != nil {
 		return nil, err
 	}
 	m.Timestamp = msg.Timestamp
-	return &m, nil
+	return []Message{m}, nil
 }
 
 type ValueMapper interface {
@@ -65,6 +67,8 @@ type StreamMapValuesProcessor struct {
 	valueMapper ValueMapper
 	pctx        ProcessorContext
 }
+
+var _ = Processor(&StreamMapValuesProcessor{})
 
 func NewStreamMapValuesProcessor(mapper ValueMapper) *StreamMapValuesProcessor {
 	return &StreamMapValuesProcessor{
@@ -88,12 +92,12 @@ func (p *StreamMapValuesProcessor) Process(msg Message) error {
 	return p.pipe.Forward(Message{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp})
 }
 
-func (p *StreamMapValuesProcessor) ProcessAndReturn(msg Message) (*Message, error) {
+func (p *StreamMapValuesProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
 	newV, err := p.valueMapper.MapValue(msg.Value)
 	if err != nil {
 		return nil, err
 	}
-	return &Message{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp}, nil
+	return []Message{Message{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp}}, nil
 }
 
 type StreamMapValuesWithKeyProcessor struct {
@@ -121,13 +125,13 @@ func (p *StreamMapValuesWithKeyProcessor) Process(msg Message) error {
 	if err != nil {
 		return err
 	}
-	return p.pipe.Forward(*newMsg)
+	return p.pipe.Forward(newMsg[0])
 }
 
-func (p *StreamMapValuesWithKeyProcessor) ProcessAndReturn(msg Message) (*Message, error) {
+func (p *StreamMapValuesWithKeyProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
 	newMsg, err := p.valueWithKeyMapper.Map(msg)
 	if err != nil {
 		return nil, err
 	}
-	return &Message{Key: msg.Key, Value: newMsg.Value, Timestamp: msg.Timestamp}, nil
+	return []Message{Message{Key: msg.Key, Value: newMsg.Value, Timestamp: msg.Timestamp}}, nil
 }

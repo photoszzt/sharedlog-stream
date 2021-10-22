@@ -135,14 +135,14 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 				Message: err.Error(),
 			}
 		}
-		joinedOutput, err := stJoin.ProcessAndReturn(*maxBidMsg)
+		joinedOutput, err := stJoin.ProcessAndReturn(maxBidMsg[0])
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
 			}
 		}
-		err = sink.Sink(*joinedOutput, sp.ParNum)
+		err = sink.Sink(joinedOutput[0], sp.ParNum)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,

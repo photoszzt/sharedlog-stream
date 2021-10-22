@@ -184,14 +184,14 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 			}
 		}
 		for _, newMsg := range newMsgs {
-			avg, err := calcAvg.ProcessAndReturn(*newMsg)
+			avg, err := calcAvg.ProcessAndReturn(newMsg)
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,
 					Message: fmt.Sprintf("calculate avg failed: %v\n", err),
 				}
 			}
-			err = sink.Sink(*avg, sp.ParNum)
+			err = sink.Sink(avg[0], sp.ParNum)
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,

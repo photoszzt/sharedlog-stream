@@ -7,4 +7,5 @@ type Processor interface {
 	WithProcessorContext(ProcessorContext)
 	// Process processes the stream Message.
 	Process(Message) error
+	ProcessAndReturn(Message) ([]Message, error)
 }

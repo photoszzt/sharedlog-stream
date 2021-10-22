@@ -38,3 +38,7 @@ func (p *BranchProcessor) Process(msg Message) error {
 	}
 	return nil
 }
+
+func (p *BranchProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
+	panic("not implemented")
+}

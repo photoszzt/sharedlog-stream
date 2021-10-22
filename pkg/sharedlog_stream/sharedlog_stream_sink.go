@@ -28,6 +28,8 @@ func NewSharedLogStreamSink(stream *SharedLogStream, config *StreamSinkConfig) *
 	}
 }
 
+var _ = processor.Processor(&SharedLogStreamSink{})
+
 func (sls *SharedLogStreamSink) WithPipe(pipe processor.Pipe) {
 	sls.pipe = pipe
 }
@@ -61,4 +63,8 @@ func (sls *SharedLogStreamSink) Process(msg processor.Message) error {
 		}
 	}
 	return err
+}
+
+func (sls *SharedLogStreamSink) ProcessAndReturn(msg processor.Message) ([]processor.Message, error) {
+	panic("not implemented")
 }

@@ -9,6 +9,8 @@ type TableFilterProcessor struct {
 	queryableName string
 }
 
+var _ = Processor(&TableFilterProcessor{})
+
 func NewTableFilterProcessor(pred Predicate, filterNot bool, queryableName string) *TableFilterProcessor {
 	return &TableFilterProcessor{
 		pred:          pred,
@@ -43,4 +45,8 @@ func (p *TableFilterProcessor) Process(msg Message) error {
 		return p.pipe.Forward(msg)
 	}
 	return nil
+}
+
+func (p *TableFilterProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
+	panic("not implemented")
 }

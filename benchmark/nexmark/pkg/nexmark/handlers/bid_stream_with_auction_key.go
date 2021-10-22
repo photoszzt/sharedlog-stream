@@ -115,16 +115,16 @@ func (h *bidKeyedByAuction) process(ctx context.Context, sp *common.QueryInput) 
 			}
 		}
 		if bidMsg != nil {
-			mappedKey, err := selectKey.ProcessAndReturn(*bidMsg)
+			mappedKey, err := selectKey.ProcessAndReturn(bidMsg[0])
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,
 					Message: err.Error(),
 				}
 			}
-			key := mappedKey.Key.(uint64)
+			key := mappedKey[0].Key.(uint64)
 			par := uint8(key % uint64(sp.NumOutPartition))
-			err = sink.Sink(*mappedKey, par)
+			err = sink.Sink(mappedKey[0], par)
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,

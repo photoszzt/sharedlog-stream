@@ -137,3 +137,7 @@ func (p *StreamStreamJoinProcessor) Process(msg Message) error {
 	*/
 	return nil
 }
+
+func (p *StreamStreamJoinProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
+	panic("not implemented")
+}

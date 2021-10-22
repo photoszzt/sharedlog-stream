@@ -132,8 +132,8 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 				Message: err.Error(),
 			}
 		}
-		par := uint8(hashSe(newMsg.Key.(*ntypes.StartEndTime)) % uint32(sp.NumOutPartition))
-		err = sink.Sink(*newMsg, par)
+		par := uint8(hashSe(newMsg[0].Key.(*ntypes.StartEndTime)) % uint32(sp.NumOutPartition))
+		err = sink.Sink(newMsg[0], par)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,

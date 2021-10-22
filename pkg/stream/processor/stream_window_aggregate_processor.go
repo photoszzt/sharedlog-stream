@@ -38,12 +38,12 @@ func (p *StreamWindowAggregateProcessor) Process(msg Message) error {
 		return err
 	}
 	for _, newMsg := range newMsgs {
-		p.pipe.Forward(*newMsg)
+		p.pipe.Forward(newMsg)
 	}
 	return nil
 }
 
-func (p *StreamWindowAggregateProcessor) ProcessAndReturn(msg Message) ([]*Message, error) {
+func (p *StreamWindowAggregateProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
 	if msg.Key == nil {
 		log.Warn().Msgf("skipping record due to null key. key=%v, val=%v", msg.Key, msg.Value)
 		return nil, nil
@@ -57,7 +57,7 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(msg Message) ([]*Messa
 	if err != nil {
 		return nil, err
 	}
-	newMsgs := make([]*Message, 0)
+	newMsgs := make([]Message, 0)
 	for windowStart, window := range matchedWindows {
 		windowEnd := window.End()
 		if windowEnd > closeTime {
@@ -85,7 +85,7 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(msg Message) ([]*Messa
 			if err != nil {
 				return nil, err
 			}
-			newMsgs = append(newMsgs, &Message{Key: WindowedKey{Key: msg.Key, Window: window}, Value: newAgg, Timestamp: newTs})
+			newMsgs = append(newMsgs, Message{Key: WindowedKey{Key: msg.Key, Window: window}, Value: newAgg, Timestamp: newTs})
 		} else {
 			log.Warn().Interface("key", msg.Key).
 				Interface("value", msg.Value).

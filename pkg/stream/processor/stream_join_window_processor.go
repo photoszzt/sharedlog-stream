@@ -5,6 +5,7 @@ type StreamJoinWindowProcessor struct {
 	winStore   WindowStore
 	pctx       ProcessorContext
 	windowName string
+	latencies  []int
 }
 
 var _ = Processor(&StreamJoinWindowProcessor{})
@@ -35,13 +36,23 @@ func (p *StreamJoinWindowProcessor) Process(msg Message) error {
 	return nil
 }
 
-func (p *StreamJoinWindowProcessor) ProcessAndReturn(msg Message) (*Message, error) {
+func (p *StreamJoinWindowProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
 	if msg.Key != nil {
 		err := p.winStore.Put(msg.Key, msg.Value, msg.Timestamp)
 		if err != nil {
 			return nil, err
 		}
-		return &msg, nil
+		return []Message{msg}, nil
 	}
 	return nil, nil
 }
+
+/*
+func (p *StreamJoinWindowProcessor) MeteredProcessAndReturn(msg Message) (*Message, error) {
+	procStart := time.Now()
+	newMsg, err := p.ProcessAndReturn(msg)
+	elapsed := time.Since(procStart)
+	p.latencies = append(p.latencies, int(elapsed.Microseconds()))
+	return newMsg, err
+}
+*/
