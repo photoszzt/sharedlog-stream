@@ -97,6 +97,10 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 		}
 		return splitMsgs, nil
 	})
+	srcLatencies := make([]int, 0, 128)
+	sinkLatencies := make([]int, 0, 128)
+	splitLatencies := make([]int, 0, 128)
+
 	latencies := make([]int, 0, 128)
 	duration := time.Duration(sp.Duration) * time.Second
 	startTime := time.Now()
@@ -120,9 +124,12 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 				Message: fmt.Sprintf("consumed failed: %v", err),
 			}
 		}
+		srcLat := time.Since(procStart)
+		srcLatencies = append(srcLatencies, int(srcLat.Microseconds()))
 		if msg.Value == nil {
 			continue
 		}
+		splitStart := time.Now()
 		msgs, err := splitter(msg)
 		if err != nil {
 			return &common.FnOutput{
@@ -130,9 +137,12 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 				Message: fmt.Sprintf("splitter failed: %v\n", err),
 			}
 		}
+		splitLat := time.Since(splitStart)
+		splitLatencies = append(splitLatencies, int(splitLat.Microseconds()))
 		for _, m := range msgs {
 			h := hashKey(m.Key.(string))
 			par := uint8(h % uint32(sp.NumOutPartition))
+			sinkStart := time.Now()
 			err = sink.Sink(m, par)
 			if err != nil {
 				return &common.FnOutput{
@@ -140,13 +150,20 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 					Message: fmt.Sprintf("sink failed: %v\n", err),
 				}
 			}
+			sinkLat := time.Since(sinkStart)
+			sinkLatencies = append(sinkLatencies, int(sinkLat.Microseconds()))
 		}
 		elapsed := time.Since(procStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
 	}
 	return &common.FnOutput{
-		Success:   true,
-		Duration:  time.Since(startTime).Seconds(),
-		Latencies: map[string][]int{"e2e": latencies},
+		Success:  true,
+		Duration: time.Since(startTime).Seconds(),
+		Latencies: map[string][]int{
+			"e2e":   latencies,
+			"src":   srcLatencies,
+			"sink":  sinkLatencies,
+			"split": splitLatencies,
+		},
 	}
 }

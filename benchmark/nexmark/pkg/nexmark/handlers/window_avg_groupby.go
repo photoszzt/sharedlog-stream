@@ -89,6 +89,8 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput) *
 	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
 	sink := sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig)
 	latencies := make([]int, 0, 128)
+	consumeLatencies := make([]int, 0, 128)
+	sinkLatencies := make([]int, 0, 128)
 	startTime := time.Now()
 	for {
 		if duration != 0 && time.Since(startTime) >= duration {
@@ -110,10 +112,14 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput) *
 				Message: err.Error(),
 			}
 		}
+		consumeLat := time.Since(procStart)
+		consumeLatencies = append(consumeLatencies, int(consumeLat.Microseconds()))
 		val := msg.Value.(*ntypes.Event)
 		if val.Etype == ntypes.BID {
 			par := uint8(val.Bid.Auction % uint64(sp.NumOutPartition))
 			newMsg := processor.Message{Key: val.Bid.Auction, Value: msg.Value}
+
+			sinkStart := time.Now()
 			err = sink.Sink(newMsg, par)
 			if err != nil {
 				return &common.FnOutput{
@@ -121,13 +127,19 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput) *
 					Message: fmt.Sprintf("sink failed: %v\n", err),
 				}
 			}
+			sinkLat := time.Since(sinkStart)
+			sinkLatencies = append(sinkLatencies, int(sinkLat.Microseconds()))
 		}
 		elapsed := time.Since(procStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
 	}
 	return &common.FnOutput{
-		Success:   true,
-		Duration:  time.Since(startTime).Seconds(),
-		Latencies: map[string][]int{"e2e": latencies},
+		Success:  true,
+		Duration: time.Since(startTime).Seconds(),
+		Latencies: map[string][]int{
+			"e2e":  latencies,
+			"sink": sinkLatencies,
+			"src":  consumeLatencies,
+		},
 	}
 }

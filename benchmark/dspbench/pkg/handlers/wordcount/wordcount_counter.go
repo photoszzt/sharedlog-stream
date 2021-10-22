@@ -96,15 +96,19 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 		StoreName:  sp.OutputTopicName,
 		Changelog:  output_stream,
 	}
+
 	store := processor.NewInMemoryKeyValueStoreWithChangelog(mp)
-	p := processor.NewStreamAggregateProcessor(store,
+	p := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor(store,
 		processor.InitializerFunc(func() interface{} {
 			return uint64(0)
 		}),
 		processor.AggregatorFunc(func(key interface{}, value interface{}, agg interface{}) interface{} {
 			aggVal := agg.(uint64)
 			return aggVal + 1
-		}))
+		})))
+	srcLatencies := make([]int, 0, 128)
+	sinkLatencies := make([]int, 0, 128)
+
 	latencies := make([]int, 0, 128)
 	duration := time.Duration(sp.Duration) * time.Second
 	startTime := time.Now()
@@ -128,6 +132,8 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 				Message: err.Error(),
 			}
 		}
+		srcLat := time.Since(procStart)
+		srcLatencies = append(srcLatencies, int(srcLat.Microseconds()))
 		ret, err := p.ProcessAndReturn(msg)
 		if err != nil {
 			return &common.FnOutput{
@@ -135,6 +141,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 				Message: err.Error(),
 			}
 		}
+		sinkStart := time.Now()
 		err = sink.Sink(ret[0], sp.ParNum)
 		if err != nil {
 			return &common.FnOutput{
@@ -142,12 +149,19 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 				Message: fmt.Sprintf("sink failed: %v\n", err),
 			}
 		}
+		sinkLat := time.Since(sinkStart)
+		sinkLatencies = append(sinkLatencies, int(sinkLat.Microseconds()))
 		elapsed := time.Since(procStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
 	}
 	return &common.FnOutput{
-		Success:   true,
-		Duration:  time.Since(startTime).Seconds(),
-		Latencies: map[string][]int{"e2e": latencies},
+		Success:  true,
+		Duration: time.Since(startTime).Seconds(),
+		Latencies: map[string][]int{
+			"e2e":   latencies,
+			"src":   srcLatencies,
+			"sink":  sinkLatencies,
+			"count": p.GetLatency(),
+		},
 	}
 }

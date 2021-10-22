@@ -99,7 +99,7 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 		ParNum:     sp.ParNum,
 	}
 	store := processor.NewInMemoryKeyValueStoreWithChangelog(mp)
-	maxBid := processor.NewStreamAggregateProcessor(store, processor.InitializerFunc(func() interface{} {
+	maxBid := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor(store, processor.InitializerFunc(func() interface{} {
 		return 0
 	}), processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
 		v := value.(*ntypes.AuctionIdCount)
@@ -108,11 +108,13 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 			return v.Count
 		}
 		return agg
-	}))
+	})))
 
-	stJoin := processor.NewStreamTableJoinProcessor(maxBidStoreName, processor.ValueJoinerWithKeyFunc(func(key, value, aggregate interface{}) interface{} {
+	stJoin := processor.NewMeteredProcessor(processor.NewStreamTableJoinProcessor(maxBidStoreName, processor.ValueJoinerWithKeyFunc(func(key, value, aggregate interface{}) interface{} {
 		return nil
-	}))
+	})))
+	srcLatencies := make([]int, 0, 128)
+	sinkLatencies := make([]int, 0, 128)
 	latencies := make([]int, 0, 128)
 	startTime := time.Now()
 
@@ -128,6 +130,8 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 				Message: err.Error(),
 			}
 		}
+		srcLat := time.Since(procStart)
+		srcLatencies = append(srcLatencies, int(srcLat.Microseconds()))
 		maxBidMsg, err := maxBid.ProcessAndReturn(msg)
 		if err != nil {
 			return &common.FnOutput{
@@ -142,6 +146,7 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 				Message: err.Error(),
 			}
 		}
+		sinkStart := time.Now()
 		err = sink.Sink(joinedOutput[0], sp.ParNum)
 		if err != nil {
 			return &common.FnOutput{
@@ -149,12 +154,20 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 				Message: err.Error(),
 			}
 		}
+		sinkLat := time.Since(sinkStart)
+		sinkLatencies = append(sinkLatencies, int(sinkLat.Microseconds()))
 		elapsed := time.Since(procStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
 	}
 	return &common.FnOutput{
-		Success:   true,
-		Duration:  time.Since(startTime).Seconds(),
-		Latencies: map[string][]int{"e2e": latencies},
+		Success:  true,
+		Duration: time.Since(startTime).Seconds(),
+		Latencies: map[string][]int{
+			"e2e":    latencies,
+			"sink":   sinkLatencies,
+			"src":    srcLatencies,
+			"join":   stJoin.GetLatency(),
+			"maxBid": maxBid.GetLatency(),
+		},
 	}
 }

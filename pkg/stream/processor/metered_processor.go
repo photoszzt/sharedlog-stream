@@ -1,0 +1,35 @@
+package processor
+
+import (
+	"os"
+	"time"
+)
+
+type MeteredProcessor struct {
+	proc      Processor
+	latencies []int
+}
+
+func NewMeteredProcessor(proc Processor) *MeteredProcessor {
+	return &MeteredProcessor{
+		proc:      proc,
+		latencies: make([]int, 0, 128),
+	}
+}
+
+func (p *MeteredProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
+	measure_proc := os.Getenv("MEASURE_PROC")
+	if measure_proc == "true" || measure_proc == "1" {
+		procStart := time.Now()
+		newMsg, err := p.proc.ProcessAndReturn(msg)
+		elapsed := time.Since(procStart)
+		p.latencies = append(p.latencies, int(elapsed.Microseconds()))
+		return newMsg, err
+	} else {
+		return p.proc.ProcessAndReturn(msg)
+	}
+}
+
+func (p *MeteredProcessor) GetLatency() []int {
+	return p.latencies
+}

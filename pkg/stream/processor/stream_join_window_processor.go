@@ -46,13 +46,3 @@ func (p *StreamJoinWindowProcessor) ProcessAndReturn(msg Message) ([]Message, er
 	}
 	return nil, nil
 }
-
-/*
-func (p *StreamJoinWindowProcessor) MeteredProcessAndReturn(msg Message) (*Message, error) {
-	procStart := time.Now()
-	newMsg, err := p.ProcessAndReturn(msg)
-	elapsed := time.Since(procStart)
-	p.latencies = append(p.latencies, int(elapsed.Microseconds()))
-	return newMsg, err
-}
-*/

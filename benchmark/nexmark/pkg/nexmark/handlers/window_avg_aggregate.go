@@ -130,9 +130,11 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 		Changelog:  output_stream,
 		ParNum:     sp.ParNum,
 	}
+
 	store := processor.NewInMemoryWindowStoreWithChangelog(
 		timeWindows.MaxSize()+timeWindows.GracePeriodMs(), timeWindows.MaxSize(), winStoreMp)
-	aggProc := processor.NewStreamWindowAggregateProcessor(store,
+
+	aggProc := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(store,
 		processor.InitializerFunc(func() interface{} {
 			return &ntypes.SumAndCount{
 				Sum:   0,
@@ -146,13 +148,13 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 				Sum:   agg.Sum + val.Bid.Price,
 				Count: agg.Count + 1,
 			}
-		}), timeWindows)
+		}), timeWindows))
 
-	calcAvg := processor.NewStreamMapValuesProcessor(
+	calcAvg := processor.NewMeteredProcessor(processor.NewStreamMapValuesProcessor(
 		processor.ValueMapperFunc(func(value interface{}) (interface{}, error) {
 			val := value.(*ntypes.SumAndCount)
 			return float64(val.Sum) / float64(val.Count), nil
-		}))
+		})))
 
 	latencies := make([]int, 0, 128)
 	startTime := time.Now()
@@ -203,8 +205,12 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 		latencies = append(latencies, int(elapsed.Microseconds()))
 	}
 	return &common.FnOutput{
-		Success:   true,
-		Duration:  time.Since(startTime).Seconds(),
-		Latencies: map[string][]int{"e2e": latencies},
+		Success:  true,
+		Duration: time.Since(startTime).Seconds(),
+		Latencies: map[string][]int{
+			"e2e":     latencies,
+			"agg":     aggProc.GetLatency(),
+			"calcAvg": calcAvg.GetLatency(),
+		},
 	}
 }
