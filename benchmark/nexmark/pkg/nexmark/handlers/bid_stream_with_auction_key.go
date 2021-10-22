@@ -14,17 +14,17 @@ import (
 	"cs.utexas.edu/zjia/faas/types"
 )
 
-type q5FilterAndSelectKey struct {
+type bidKeyedByAuction struct {
 	env types.Environment
 }
 
-func NewQ5FilterAndSelectKeyHandler(env types.Environment) types.FuncHandler {
-	return &q5FilterAndSelectKey{
+func NewBidKeyedByAuctionHandler(env types.Environment) types.FuncHandler {
+	return &bidKeyedByAuction{
 		env: env,
 	}
 }
 
-func (h *q5FilterAndSelectKey) Call(ctx context.Context, input []byte) ([]byte, error) {
+func (h *bidKeyedByAuction) Call(ctx context.Context, input []byte) ([]byte, error) {
 	sp := &common.QueryInput{}
 	err := json.Unmarshal(input, sp)
 	if err != nil {
@@ -38,7 +38,7 @@ func (h *q5FilterAndSelectKey) Call(ctx context.Context, input []byte) ([]byte, 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *q5FilterAndSelectKey) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+func (h *bidKeyedByAuction) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	input_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.InputTopicName, uint8(sp.NumInPartition))
 	if err != nil {
 		return &common.FnOutput{

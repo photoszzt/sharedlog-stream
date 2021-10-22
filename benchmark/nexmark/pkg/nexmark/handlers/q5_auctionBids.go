@@ -15,17 +15,17 @@ import (
 	"cs.utexas.edu/zjia/faas/types"
 )
 
-type q5ChangeKey struct {
+type q5AuctionBids struct {
 	env types.Environment
 }
 
-func NewQ5ChangeKey(env types.Environment) types.FuncHandler {
-	return &q5ChangeKey{
+func NewQ5AuctionBids(env types.Environment) types.FuncHandler {
+	return &q5AuctionBids{
 		env: env,
 	}
 }
 
-func (h *q5ChangeKey) Call(ctx context.Context, input []byte) ([]byte, error) {
+func (h *q5AuctionBids) Call(ctx context.Context, input []byte) ([]byte, error) {
 	parsedInput := &common.QueryInput{}
 	err := json.Unmarshal(input, parsedInput)
 	if err != nil {
@@ -45,7 +45,7 @@ func hashSe(key *ntypes.StartEndTime) uint32 {
 	return h.Sum32()
 }
 
-func (h *q5ChangeKey) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	input_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.InputTopicName, uint8(sp.NumInPartition))
 	if err != nil {
 		return &common.FnOutput{

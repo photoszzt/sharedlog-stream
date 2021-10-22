@@ -127,7 +127,7 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 			KeySerde:   processor.Uint64Serde{},
 			ValueSerde: processor.Uint64Serde{},
 			MsgSerde:   msgSerde,
-			StoreName:  "q5-count-store",
+			StoreName:  "auctionBidsCountStore",
 			Changelog:  windowChangeLog,
 		}).
 		ToStream().

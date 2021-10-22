@@ -89,11 +89,12 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
 	sink := sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig)
 
+	maxBidStoreName := "maxBidsKVStore"
 	mp := &processor.MaterializeParam{
 		KeySerde:   seSerde,
 		ValueSerde: aucIdCountSerde,
 		MsgSerde:   msgSerde,
-		StoreName:  "agg-store",
+		StoreName:  maxBidStoreName,
 		Changelog:  output_stream,
 		ParNum:     sp.ParNum,
 	}
@@ -108,8 +109,13 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 		}
 		return agg
 	}))
+
+	stJoin := processor.NewStreamTableJoinProcessor(maxBidStoreName, processor.ValueJoinerWithKeyFunc(func(key, value, aggregate interface{}) interface{} {
+		return nil
+	}))
 	latencies := make([]int, 0, 128)
 	startTime := time.Now()
+
 	for {
 		if duration != 0 && time.Since(startTime) >= duration {
 			break
@@ -122,14 +128,21 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 				Message: err.Error(),
 			}
 		}
-		newMsg, err := maxBid.ProcessAndReturn(msg)
+		maxBidMsg, err := maxBid.ProcessAndReturn(msg)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
 			}
 		}
-		err = sink.Sink(*newMsg, sp.ParNum)
+		joinedOutput, err := stJoin.ProcessAndReturn(*maxBidMsg)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: err.Error(),
+			}
+		}
+		err = sink.Sink(*joinedOutput, sp.ParNum)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,

@@ -13,17 +13,18 @@ import (
 	"cs.utexas.edu/zjia/faas/types"
 )
 
-type q5Count struct {
+// bid.groupByKey.windowedBy(ts).count
+type q5CountBidsKeyedByAuction struct {
 	env types.Environment
 }
 
-func NewQ5Count(env types.Environment) *q5Count {
-	return &q5Count{
+func NewQ5CountBidsKeyedByAuction(env types.Environment) *q5CountBidsKeyedByAuction {
+	return &q5CountBidsKeyedByAuction{
 		env: env,
 	}
 }
 
-func (h *q5Count) Call(ctx context.Context, input []byte) ([]byte, error) {
+func (h *q5CountBidsKeyedByAuction) Call(ctx context.Context, input []byte) ([]byte, error) {
 	sp := &common.QueryInput{}
 	err := json.Unmarshal(input, sp)
 	if err != nil {
@@ -37,7 +38,7 @@ func (h *q5Count) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *q5Count) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+func (h *q5CountBidsKeyedByAuction) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	input_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.InputTopicName, uint8(sp.NumInPartition))
 	if err != nil {
 		return &common.FnOutput{
@@ -80,12 +81,13 @@ func (h *q5Count) process(ctx context.Context, sp *common.QueryInput) *common.Fn
 	}
 	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
 	sink := sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig)
+
 	hopWindow := processor.NewTimeWindowsNoGrace(time.Duration(10) * time.Second).AdvanceBy(time.Duration(2) * time.Second)
 	countMp := &processor.MaterializeParam{
 		KeySerde:   processor.Uint64Serde{},
 		ValueSerde: processor.Uint64Serde{},
 		MsgSerde:   msgSerde,
-		StoreName:  "q5-count-store",
+		StoreName:  "auctionBidsCountStore",
 		Changelog:  output_stream,
 	}
 	countWindowStore := processor.NewInMemoryWindowStoreWithChangelog(
