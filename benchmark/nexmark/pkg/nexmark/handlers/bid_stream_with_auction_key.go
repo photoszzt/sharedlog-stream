@@ -83,7 +83,6 @@ func (h *bidKeyedByAuction) process(ctx context.Context, sp *common.QueryInput) 
 	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
 	sink := sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig)
 	latencies := make([]int, 0, 128)
-	startTime := time.Now()
 
 	filterBid := processor.NewStreamFilterProcessor(processor.PredicateFunc(
 		func(m *processor.Message) (bool, error) {
@@ -95,6 +94,7 @@ func (h *bidKeyedByAuction) process(ctx context.Context, sp *common.QueryInput) 
 			event := m.Value.(*ntypes.Event)
 			return processor.Message{Key: event.Bid.Auction, Value: m.Value, Timestamp: m.Timestamp}, nil
 		}))
+	startTime := time.Now()
 	for {
 		if duration != 0 && time.Since(startTime) >= duration {
 			break
