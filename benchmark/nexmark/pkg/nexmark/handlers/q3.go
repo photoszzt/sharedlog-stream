@@ -12,6 +12,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream"
 	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 
@@ -64,7 +65,7 @@ func Query3(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		return
 	}
 
-	msgSerde, err := processor.GetMsgSerde(input.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(input.SerdeFormat)
 	if err != nil {
 		output <- &common.FnOutput{
 			Success: false,
@@ -81,15 +82,15 @@ func Query3(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      time.Duration(input.Duration) * time.Second,
-		KeyDecoder:   processor.StringDecoder{},
+		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeyEncoder: processor.Uint64Encoder{},
-		ValueEncoder: processor.EncoderFunc(func(val interface{}) ([]byte, error) {
+		KeyEncoder: commtypes.Uint64Encoder{},
+		ValueEncoder: commtypes.EncoderFunc(func(val interface{}) ([]byte, error) {
 			ret := val.(*ntypes.NameCityStateId)
-			if input.SerdeFormat == uint8(processor.JSON) {
+			if input.SerdeFormat == uint8(commtypes.JSON) {
 				return json.Marshal(ret)
 			} else {
 				return ret.MarshalMsg(nil)
@@ -100,35 +101,35 @@ func Query3(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	builder := stream.NewStreamBuilder()
 	inputs := builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream, inConfig))
 	auctionsBySellerId := inputs.Filter("filter-auction",
-		processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
+		processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
 			event := msg.Value.(ntypes.Event)
 			return event.Etype == ntypes.AUCTION, nil
 		})).
 		Filter("filter-category",
-			processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
+			processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
 				event := msg.Value.(*ntypes.Event)
 				return event.NewAuction.Category == 10, nil
 			})).
 		Map("update-key",
-			processor.MapperFunc(func(msg processor.Message) (processor.Message, error) {
+			processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 				event := msg.Value.(*ntypes.Event)
-				return processor.Message{Key: event.NewAuction.Seller, Value: msg.Value, Timestamp: msg.Timestamp}, nil
+				return commtypes.Message{Key: event.NewAuction.Seller, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 			})).
 		ToTable("convert-to-table")
 
 	personsById := inputs.Filter("filter-person",
-		processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
+		processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
 			event := msg.Value.(ntypes.Event)
 			return event.Etype == ntypes.PERSON, nil
 		})).
-		Filter("filter-state", processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
+		Filter("filter-state", processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
 			event := msg.Value.(ntypes.Event)
 			state := event.NewPerson.State
 			return state == "OR" || state == "ID" || state == "CA", nil
 		})).
-		Map("update-key", processor.MapperFunc(func(msg processor.Message) (processor.Message, error) {
+		Map("update-key", processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 			event := msg.Value.(*ntypes.Event)
-			return processor.Message{Key: event.NewPerson.ID, Value: msg.Value, Timestamp: msg.Timestamp}, nil
+			return commtypes.Message{Key: event.NewPerson.ID, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 		})).
 		ToTable("convert-to-table")
 

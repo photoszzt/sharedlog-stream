@@ -9,6 +9,7 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -55,7 +56,7 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context, input *common.QueryInpu
 		}
 	}
 
-	msgSerde, err := processor.GetMsgSerde(input.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(input.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -71,13 +72,13 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context, input *common.QueryInpu
 	}
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      time.Duration(input.Duration) * time.Second,
-		KeyDecoder:   processor.StringDecoder{},
+		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
 		MsgEncoder:   msgSerde,
-		KeyEncoder:   processor.Uint64Encoder{},
+		KeyEncoder:   commtypes.Uint64Encoder{},
 		ValueEncoder: eventSerde,
 	}
 
@@ -85,13 +86,13 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context, input *common.QueryInpu
 	src := sharedlog_stream.NewShardedSharedLogStreamSource(inputStream, inConfig)
 	sink := sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig)
 
-	bid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
+	bid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
 		event := msg.Value.(ntypes.Event)
 		return event.Etype == ntypes.BID, nil
 	})))
-	bidKeyedByPrice := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(processor.MapperFunc(func(msg processor.Message) (processor.Message, error) {
+	bidKeyedByPrice := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 		event := msg.Value.(*ntypes.Event)
-		return processor.Message{Key: event.Bid.Price, Value: msg.Value, Timestamp: msg.Timestamp}, nil
+		return commtypes.Message{Key: event.Bid.Price, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 	})))
 	latencies := make([]int, 0, 128)
 	startTime := time.Now()

@@ -4,30 +4,31 @@ package processor
 
 import (
 	"encoding/json"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	"golang.org/x/xerrors"
 )
 
 type TimeWindow struct {
-	BaseWindow
+	commtypes.BaseWindow
 }
 
 var (
 	tw, _          = NewTimeWindow(0, 1)
-	_              = Window(tw)
+	_              = commtypes.Window(tw)
 	notATimeWindow = xerrors.New("The window is not a TimeWindow")
 )
 
 func NewTimeWindow(startMs uint64, endMs uint64) (*TimeWindow, error) {
 	if startMs == endMs {
-		return nil, windowEndNotLargerStart
+		return nil, commtypes.WindowEndNotLargerStart
 	}
 	return &TimeWindow{
-		NewBaseWindow(startMs, endMs),
+		commtypes.NewBaseWindow(startMs, endMs),
 	}, nil
 }
 
-func (w *TimeWindow) Overlap(other Window) (bool, error) {
+func (w *TimeWindow) Overlap(other commtypes.Window) (bool, error) {
 	_, ok := other.(*TimeWindow)
 	if !ok {
 		return false, notATimeWindow

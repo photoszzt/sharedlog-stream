@@ -11,7 +11,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
-	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/generator"
 
@@ -67,14 +67,14 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 	channel_url_cache := make(map[uint32]*generator.ChannelUrl)
 	duration := time.Duration(inputConfig.Duration) * time.Second
 	startTime := time.Now()
-	var eventEncoder processor.Encoder
-	var msgEncoder processor.MsgEncoder
-	if inputConfig.SerdeFormat == uint8(processor.JSON) {
+	var eventEncoder commtypes.Encoder
+	var msgEncoder commtypes.MsgEncoder
+	if inputConfig.SerdeFormat == uint8(commtypes.JSON) {
 		eventEncoder = ntypes.EventJSONSerde{}
-		msgEncoder = processor.MessageSerializedJSONSerde{}
-	} else if inputConfig.SerdeFormat == uint8(processor.MSGP) {
+		msgEncoder = commtypes.MessageSerializedJSONSerde{}
+	} else if inputConfig.SerdeFormat == uint8(commtypes.MSGP) {
 		eventEncoder = ntypes.EventMsgpSerde{}
-		msgEncoder = processor.MessageSerializedMsgpSerde{}
+		msgEncoder = commtypes.MessageSerializedMsgpSerde{}
 	} else {
 		return &ntypes.FnOutput{
 			Success: false,

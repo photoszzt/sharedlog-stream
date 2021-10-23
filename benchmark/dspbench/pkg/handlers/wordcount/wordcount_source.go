@@ -9,7 +9,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -45,7 +45,7 @@ func (h *wordCountSource) Call(ctx context.Context, input []byte) ([]byte, error
 	return utils.CompressData(encodedOutput), nil
 }
 
-func encode_sentence_event(valSerde processor.Serde, msgSerde processor.MsgSerde, val string) ([]byte, error) {
+func encode_sentence_event(valSerde commtypes.Serde, msgSerde commtypes.MsgSerde, val string) ([]byte, error) {
 	val_encoded, err := valSerde.Encode(val)
 	if err != nil {
 		return nil, fmt.Errorf("event serialization failed: %v", err)
@@ -66,7 +66,7 @@ func (h *wordCountSource) eventGeneration(ctx context.Context, env types.Environ
 		}
 	}
 
-	msgSerde, err := processor.GetMsgSerde(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -89,7 +89,7 @@ func (h *wordCountSource) eventGeneration(ctx context.Context, env types.Environ
 		}
 		procStart := time.Now()
 		sentence := h.lines[idx]
-		msgEncoded, err := encode_sentence_event(processor.StringSerde{}, msgSerde, sentence)
+		msgEncoded, err := encode_sentence_event(commtypes.StringSerde{}, msgSerde, sentence)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,

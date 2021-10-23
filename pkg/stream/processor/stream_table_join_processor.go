@@ -1,11 +1,16 @@
 package processor
 
-import "github.com/rs/zerolog/log"
+import (
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
+
+	"github.com/rs/zerolog/log"
+)
 
 type StreamTableJoinProcessor struct {
 	pipe      Pipe
-	store     KeyValueStore
-	pctx      ProcessorContext
+	store     store.KeyValueStore
+	pctx      store.ProcessorContext
 	joiner    ValueJoinerWithKey
 	leftJoin  bool
 	storeName string
@@ -24,12 +29,12 @@ func (p *StreamTableJoinProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *StreamTableJoinProcessor) WithProcessorContext(pctx ProcessorContext) {
+func (p *StreamTableJoinProcessor) WithProcessorContext(pctx store.ProcessorContext) {
 	p.pctx = pctx
 	p.store = p.pctx.GetKeyValueStore(p.storeName)
 }
 
-func (p *StreamTableJoinProcessor) Process(msg Message) error {
+func (p *StreamTableJoinProcessor) Process(msg commtypes.Message) error {
 	newMsg, err := p.ProcessAndReturn(msg)
 	if err != nil {
 		return err
@@ -40,7 +45,7 @@ func (p *StreamTableJoinProcessor) Process(msg Message) error {
 	return nil
 }
 
-func (p *StreamTableJoinProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
+func (p *StreamTableJoinProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
 	if msg.Key == nil || msg.Value == nil {
 		log.Warn().Msgf("Skipping record due to null join key or value. key=%v, val=%v", msg.Key, msg.Value)
 		return nil, nil
@@ -51,8 +56,8 @@ func (p *StreamTableJoinProcessor) ProcessAndReturn(msg Message) ([]Message, err
 	}
 	if p.leftJoin || ok {
 		joined := p.joiner.Apply(msg.Key, msg.Value, val2)
-		newMsg := Message{Key: msg.Key, Value: joined, Timestamp: msg.Timestamp}
-		return []Message{newMsg}, nil
+		newMsg := commtypes.Message{Key: msg.Key, Value: joined, Timestamp: msg.Timestamp}
+		return []commtypes.Message{newMsg}, nil
 	}
 	return nil, nil
 }

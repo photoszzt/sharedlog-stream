@@ -1,6 +1,6 @@
 //go:generate msgp
 //msgp:ignore Window
-package processor
+package commtypes
 
 import (
 	"time"
@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	windowEndNotLargerStart = xerrors.New("Window endMs should be greater than window startMs")
+	WindowEndNotLargerStart = xerrors.New("Window endMs should be greater than window startMs")
 )
 
 type Window interface {

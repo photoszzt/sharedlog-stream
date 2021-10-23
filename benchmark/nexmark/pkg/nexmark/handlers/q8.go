@@ -12,6 +12,8 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream"
 	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 
@@ -64,7 +66,7 @@ func Query8(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		return
 	}
 
-	msgSerde, err := processor.GetMsgSerde(input.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(input.SerdeFormat)
 	if err != nil {
 		output <- &common.FnOutput{
 			Success: false,
@@ -89,36 +91,36 @@ func Query8(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      time.Duration(input.Duration) * time.Second,
-		KeyDecoder:   processor.StringDecoder{},
+		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeyEncoder:   processor.Uint64Encoder{},
+		KeyEncoder:   commtypes.Uint64Encoder{},
 		ValueEncoder: ptSerde,
 		MsgEncoder:   msgSerde,
 	}
 	builder := stream.NewStreamBuilder()
 	inputs := builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream, inConfig))
 	person := inputs.Filter("filter-person",
-		processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
+		processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
 			event := msg.Value.(*ntypes.Event)
 			return event.Etype == ntypes.PERSON, nil
 		})).
 		Map("select-key",
-			processor.MapperFunc(func(msg processor.Message) (processor.Message, error) {
+			processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 				event := msg.Value.(*ntypes.Event)
-				return processor.Message{Key: event.NewPerson.ID, Value: msg.Value, Timestamp: msg.Timestamp}, nil
+				return commtypes.Message{Key: event.NewPerson.ID, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 			}))
 	auction := inputs.Filter("filter-auction",
-		processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
+		processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
 			event := msg.Value.(ntypes.Event)
 			return event.Etype == ntypes.AUCTION, nil
 		})).
 		Map("select-key",
-			processor.MapperFunc(func(msg processor.Message) (processor.Message, error) {
+			processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 				event := msg.Value.(*ntypes.Event)
-				return processor.Message{Key: event.NewAuction.Seller, Value: msg.Value, Timestamp: msg.Timestamp}, nil
+				return commtypes.Message{Key: event.NewAuction.Seller, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 			}))
 	auction.StreamStreamJoin("join-auction-persion", person,
 		processor.ValueJoinerWithKeyFunc(func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
@@ -129,7 +131,7 @@ func Query8(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 				StartTime: 0,
 			}
 		}), processor.NewJoinWindowsNoGrace(time.Duration(10)*time.Second),
-		&processor.JoinParam{
+		&store.JoinParam{
 			LeftWindowStoreName:  "auction-window-store",
 			RightWindowStoreName: "person-window-store",
 		}).

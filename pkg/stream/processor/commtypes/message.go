@@ -1,4 +1,4 @@
-package processor
+package commtypes
 
 type Message struct {
 	Key       interface{}

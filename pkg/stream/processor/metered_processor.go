@@ -2,6 +2,7 @@ package processor
 
 import (
 	"os"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
 )
 
@@ -17,7 +18,7 @@ func NewMeteredProcessor(proc Processor) *MeteredProcessor {
 	}
 }
 
-func (p *MeteredProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
+func (p *MeteredProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
 	measure_proc := os.Getenv("MEASURE_PROC")
 	if measure_proc == "true" || measure_proc == "1" {
 		procStart := time.Now()

@@ -5,7 +5,7 @@ import (
 	"flag"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/dspbench/pkg/handlers/wordcount"
-	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
@@ -46,7 +46,7 @@ func main() {
 
 	deliveryChan := make(chan kafka.Event)
 
-	strSerde := processor.StringSerde{}
+	strSerde := commtypes.StringSerde{}
 
 	lines := make([]string, 0, 128)
 

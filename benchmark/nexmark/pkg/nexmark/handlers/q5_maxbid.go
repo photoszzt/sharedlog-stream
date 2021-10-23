@@ -9,6 +9,8 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -53,19 +55,19 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
 		}
 	}
-	msgSerde, err := processor.GetMsgSerde(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
 	}
-	var seSerde processor.Serde
-	var aucIdCountSerde processor.Serde
-	if sp.SerdeFormat == uint8(processor.JSON) {
+	var seSerde commtypes.Serde
+	var aucIdCountSerde commtypes.Serde
+	if sp.SerdeFormat == uint8(commtypes.JSON) {
 		seSerde = ntypes.StartEndTimeJSONSerde{}
 		aucIdCountSerde = ntypes.AuctionIdCountJSONSerde{}
-	} else if sp.SerdeFormat == uint8(processor.MSGP) {
+	} else if sp.SerdeFormat == uint8(commtypes.MSGP) {
 		seSerde = ntypes.StartEndTimeMsgpSerde{}
 		aucIdCountSerde = ntypes.AuctionIdCountMsgpSerde{}
 	} else {
@@ -90,7 +92,7 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 	sink := sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig)
 
 	maxBidStoreName := "maxBidsKVStore"
-	mp := &processor.MaterializeParam{
+	mp := &store.MaterializeParam{
 		KeySerde:   seSerde,
 		ValueSerde: aucIdCountSerde,
 		MsgSerde:   msgSerde,
@@ -98,7 +100,7 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 		Changelog:  output_stream,
 		ParNum:     sp.ParNum,
 	}
-	store := processor.NewInMemoryKeyValueStoreWithChangelog(mp)
+	store := store.NewInMemoryKeyValueStoreWithChangelog(mp)
 	maxBid := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor(store, processor.InitializerFunc(func() interface{} {
 		return 0
 	}), processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {

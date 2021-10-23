@@ -1,7 +1,8 @@
-package processor
+package store
 
 import (
 	"bytes"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/concurrent_skiplist"
 	"sync"
 	"time"
@@ -23,10 +24,10 @@ type InMemoryBytesWindowStore struct {
 	otrMu           sync.RWMutex
 	openedTimeRange map[uint64]struct{}
 
-	valSerde Serde
+	valSerde commtypes.Serde
 }
 
-func NewInMemoryBytesWindowStore(name string, retentionPeriod uint64, windowSize uint64, retainDuplicates bool, valSerde Serde) *InMemoryBytesWindowStore {
+func NewInMemoryBytesWindowStore(name string, retentionPeriod uint64, windowSize uint64, retainDuplicates bool, valSerde commtypes.Serde) *InMemoryBytesWindowStore {
 	return &InMemoryBytesWindowStore{
 		name:               name,
 		windowSize:         windowSize,

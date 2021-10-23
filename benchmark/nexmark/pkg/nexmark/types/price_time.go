@@ -4,17 +4,17 @@ package types
 
 import (
 	"encoding/json"
-	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 )
 
 type PriceTime struct {
 	Price    uint64 `json:"price" msg:"price"`
-	dateTime int64  `json:"dateTime" msg:"dateTime"` // unix timestamp in ms
+	DateTime int64  `json:"dateTime" msg:"dateTime"` // unix timestamp in ms
 }
 
 type PriceTimeJSONSerde struct{}
 
-var _ = processor.Encoder(PriceTimeJSONSerde{})
+var _ = commtypes.Encoder(PriceTimeJSONSerde{})
 
 func (s PriceTimeJSONSerde) Encode(value interface{}) ([]byte, error) {
 	pt := value.(*PriceTime)

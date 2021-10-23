@@ -11,6 +11,7 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"strings"
 	"time"
 
@@ -63,7 +64,7 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 		}
 	}
 
-	msgSerde, err := processor.GetMsgSerde(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -73,26 +74,26 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      time.Duration(sp.Duration) * time.Second,
-		KeyDecoder:   processor.StringDecoder{},
-		ValueDecoder: processor.StringDecoder{},
+		KeyDecoder:   commtypes.StringDecoder{},
+		ValueDecoder: commtypes.StringDecoder{},
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeyEncoder:   processor.StringEncoder{},
-		ValueEncoder: processor.StringEncoder{},
+		KeyEncoder:   commtypes.StringEncoder{},
+		ValueEncoder: commtypes.StringEncoder{},
 		MsgEncoder:   msgSerde,
 	}
 	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
 	sink := sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig)
 	var matchStr = regexp.MustCompile(`\w+`)
-	splitter := processor.FlatMapperFunc(func(m processor.Message) ([]processor.Message, error) {
+	splitter := processor.FlatMapperFunc(func(m commtypes.Message) ([]commtypes.Message, error) {
 		val := m.Value.(string)
 		val = strings.ToLower(val)
-		var splitMsgs []processor.Message
+		var splitMsgs []commtypes.Message
 		splits := matchStr.FindAllString(val, -1)
 		for _, s := range splits {
 			if s != "" {
-				splitMsgs = append(splitMsgs, processor.Message{Key: s, Value: s, Timestamp: m.Timestamp})
+				splitMsgs = append(splitMsgs, commtypes.Message{Key: s, Value: s, Timestamp: m.Timestamp})
 			}
 		}
 		return splitMsgs, nil

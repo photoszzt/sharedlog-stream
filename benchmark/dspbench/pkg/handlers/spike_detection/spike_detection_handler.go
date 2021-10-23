@@ -11,6 +11,8 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream"
 	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -24,7 +26,7 @@ type spikeDetectionHandler struct {
 	env types.Environment
 }
 
-func spikeDetectionPredicate(msg *processor.Message) (bool, error) {
+func spikeDetectionPredicate(msg *commtypes.Message) (bool, error) {
 	valAvg := msg.Value.(ValAndAvg)
 	return math.Abs(valAvg.Val-valAvg.Avg) > SPIKE_THRESHOLD*valAvg.Avg, nil
 }
@@ -79,20 +81,20 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 		return
 	}
 
-	var msgSerde processor.MsgSerde
-	var sdSerde processor.Serde
-	var timeValSerde processor.Serde
-	var vaSerde processor.Serde
-	if input.SerdeFormat == uint8(processor.JSON) {
+	var msgSerde commtypes.MsgSerde
+	var sdSerde commtypes.Serde
+	var timeValSerde commtypes.Serde
+	var vaSerde commtypes.Serde
+	if input.SerdeFormat == uint8(commtypes.JSON) {
 		sdSerde = SensorDataJSONSerde{}
-		msgSerde = processor.MessageSerializedJSONSerde{}
-		timeValSerde = processor.ValueTimestampJSONSerde{
+		msgSerde = commtypes.MessageSerializedJSONSerde{}
+		timeValSerde = commtypes.ValueTimestampJSONSerde{
 			ValJSONSerde: SumAndHistJSONSerde{},
 		}
-	} else if input.SerdeFormat == uint8(processor.MSGP) {
-		msgSerde = processor.MessageSerializedMsgpSerde{}
+	} else if input.SerdeFormat == uint8(commtypes.MSGP) {
+		msgSerde = commtypes.MessageSerializedMsgpSerde{}
 		sdSerde = SensorDataMsgpSerde{}
-		timeValSerde = processor.ValueTimestampMsgpSerde{
+		timeValSerde = commtypes.ValueTimestampMsgpSerde{
 			ValMsgpSerde: SumAndHistMsgpSerde{},
 		}
 	} else {
@@ -103,28 +105,28 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 	}
 	movingAverageWindow := 1000
 
-	pctx := processor.NewProcessorContext()
+	pctx := store.NewProcessorContext()
 	aggStoreName := "moving-avg-store"
 
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      time.Duration(input.Duration) * time.Second,
-		KeyDecoder:   processor.StringDecoder{},
+		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: sdSerde,
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeyEncoder:   processor.StringEncoder{},
+		KeyEncoder:   commtypes.StringEncoder{},
 		ValueEncoder: vaSerde,
 		MsgEncoder:   msgSerde,
 	}
 	builder := stream.NewStreamBuilder()
 	builder.Source("spike-detection-src",
 		sharedlog_stream.NewSharedLogStreamSource(inputStream, inConfig)).
-		GroupByKey(&stream.Grouped{KeySerde: processor.StringSerde{},
+		GroupByKey(&stream.Grouped{KeySerde: commtypes.StringSerde{},
 			ValueSerde: sdSerde, Name: "group-by-devid"}).
 		Aggregate("moving-avg",
-			&processor.MaterializeParam{
-				KeySerde:   processor.StringSerde{},
+			&store.MaterializeParam{
+				KeySerde:   commtypes.StringSerde{},
 				ValueSerde: timeValSerde,
 				MsgSerde:   msgSerde,
 				StoreName:  aggStoreName,

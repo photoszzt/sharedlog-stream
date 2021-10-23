@@ -4,7 +4,7 @@ package spike_detection
 
 import (
 	"encoding/json"
-	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 )
 
 type SensorData struct {
@@ -14,11 +14,11 @@ type SensorData struct {
 
 type SensorDataMsgpSerde struct{}
 
-var _ = processor.Serde(SensorDataMsgpSerde{})
+var _ = commtypes.Serde(SensorDataMsgpSerde{})
 
 type SensorDataJSONSerde struct{}
 
-var _ = processor.Serde(SensorDataJSONSerde{})
+var _ = commtypes.Serde(SensorDataJSONSerde{})
 
 func (e SensorDataMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	sd := value.(*SensorData)

@@ -7,7 +7,7 @@ package types
 import (
 	"encoding/json"
 
-	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 )
 
 type NameCityStateId struct {
@@ -95,7 +95,7 @@ func NewBidEvent(bid *Bid) *Event {
 
 type EventMsgpSerde struct{}
 
-var _ = processor.Encoder(EventMsgpSerde{})
+var _ = commtypes.Encoder(EventMsgpSerde{})
 
 func (e EventMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	event := value.(*Event)
@@ -104,14 +104,14 @@ func (e EventMsgpSerde) Encode(value interface{}) ([]byte, error) {
 
 type EventJSONSerde struct{}
 
-var _ = processor.Encoder(EventJSONSerde{})
+var _ = commtypes.Encoder(EventJSONSerde{})
 
 func (e EventJSONSerde) Encode(value interface{}) ([]byte, error) {
 	event := value.(*Event)
 	return json.Marshal(event)
 }
 
-var _ = processor.Decoder(EventMsgpSerde{})
+var _ = commtypes.Decoder(EventMsgpSerde{})
 
 func (emd EventMsgpSerde) Decode(value []byte) (interface{}, error) {
 	e := &Event{}
@@ -122,7 +122,7 @@ func (emd EventMsgpSerde) Decode(value []byte) (interface{}, error) {
 	return e, nil
 }
 
-var _ = processor.Decoder(EventJSONSerde{})
+var _ = commtypes.Decoder(EventJSONSerde{})
 
 func (ejd EventJSONSerde) Decode(value []byte) (interface{}, error) {
 	e := &Event{}

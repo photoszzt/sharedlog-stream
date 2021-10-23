@@ -76,13 +76,13 @@ func (z *TopicPartition) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "Topic":
+		case "topic":
 			z.Topic, err = dc.ReadString()
 			if err != nil {
 				err = msgp.WrapError(err, "Topic")
 				return
 			}
-		case "ParNum":
+		case "parnum":
 			z.ParNum, err = dc.ReadUint32()
 			if err != nil {
 				err = msgp.WrapError(err, "ParNum")
@@ -102,8 +102,8 @@ func (z *TopicPartition) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z TopicPartition) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 2
-	// write "Topic"
-	err = en.Append(0x82, 0xa5, 0x54, 0x6f, 0x70, 0x69, 0x63)
+	// write "topic"
+	err = en.Append(0x82, 0xa5, 0x74, 0x6f, 0x70, 0x69, 0x63)
 	if err != nil {
 		return
 	}
@@ -112,8 +112,8 @@ func (z TopicPartition) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Topic")
 		return
 	}
-	// write "ParNum"
-	err = en.Append(0xa6, 0x50, 0x61, 0x72, 0x4e, 0x75, 0x6d)
+	// write "parnum"
+	err = en.Append(0xa6, 0x70, 0x61, 0x72, 0x6e, 0x75, 0x6d)
 	if err != nil {
 		return
 	}
@@ -129,11 +129,11 @@ func (z TopicPartition) EncodeMsg(en *msgp.Writer) (err error) {
 func (z TopicPartition) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 2
-	// string "Topic"
-	o = append(o, 0x82, 0xa5, 0x54, 0x6f, 0x70, 0x69, 0x63)
+	// string "topic"
+	o = append(o, 0x82, 0xa5, 0x74, 0x6f, 0x70, 0x69, 0x63)
 	o = msgp.AppendString(o, z.Topic)
-	// string "ParNum"
-	o = append(o, 0xa6, 0x50, 0x61, 0x72, 0x4e, 0x75, 0x6d)
+	// string "parnum"
+	o = append(o, 0xa6, 0x70, 0x61, 0x72, 0x6e, 0x75, 0x6d)
 	o = msgp.AppendUint32(o, z.ParNum)
 	return
 }
@@ -156,13 +156,13 @@ func (z *TopicPartition) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "Topic":
+		case "topic":
 			z.Topic, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Topic")
 				return
 			}
-		case "ParNum":
+		case "parnum":
 			z.ParNum, bts, err = msgp.ReadUint32Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "ParNum")
@@ -256,7 +256,7 @@ func (z *TxnState) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "State":
+		case "state":
 			{
 				var zb0002 uint8
 				zb0002, err = dc.ReadUint8()
@@ -280,8 +280,8 @@ func (z *TxnState) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z TxnState) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 1
-	// write "State"
-	err = en.Append(0x81, 0xa5, 0x53, 0x74, 0x61, 0x74, 0x65)
+	// write "state"
+	err = en.Append(0x81, 0xa5, 0x73, 0x74, 0x61, 0x74, 0x65)
 	if err != nil {
 		return
 	}
@@ -297,8 +297,8 @@ func (z TxnState) EncodeMsg(en *msgp.Writer) (err error) {
 func (z TxnState) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 1
-	// string "State"
-	o = append(o, 0x81, 0xa5, 0x53, 0x74, 0x61, 0x74, 0x65)
+	// string "state"
+	o = append(o, 0x81, 0xa5, 0x73, 0x74, 0x61, 0x74, 0x65)
 	o = msgp.AppendUint8(o, uint8(z.State))
 	return
 }
@@ -321,7 +321,7 @@ func (z *TxnState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "State":
+		case "state":
 			{
 				var zb0002 uint8
 				zb0002, bts, err = msgp.ReadUint8Bytes(bts)

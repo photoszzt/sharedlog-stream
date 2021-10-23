@@ -1,20 +1,23 @@
 package processor
 
 import (
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
+
 	"github.com/rs/zerolog/log"
 )
 
 type StreamAggregateProcessor struct {
 	pipe        Pipe
-	store       KeyValueStore
-	pctx        ProcessorContext
+	store       store.KeyValueStore
+	pctx        store.ProcessorContext
 	initializer Initializer
 	aggregator  Aggregator
 }
 
 var _ = Processor(&StreamAggregateProcessor{})
 
-func NewStreamAggregateProcessor(store KeyValueStore, initializer Initializer, aggregator Aggregator) *StreamAggregateProcessor {
+func NewStreamAggregateProcessor(store store.KeyValueStore, initializer Initializer, aggregator Aggregator) *StreamAggregateProcessor {
 	return &StreamAggregateProcessor{
 		initializer: initializer,
 		aggregator:  aggregator,
@@ -26,11 +29,11 @@ func (p *StreamAggregateProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *StreamAggregateProcessor) WithProcessorContext(pctx ProcessorContext) {
+func (p *StreamAggregateProcessor) WithProcessorContext(pctx store.ProcessorContext) {
 	p.pctx = pctx
 }
 
-func (p *StreamAggregateProcessor) Process(msg Message) error {
+func (p *StreamAggregateProcessor) Process(msg commtypes.Message) error {
 	newMsg, err := p.ProcessAndReturn(msg)
 	if err != nil {
 		return err
@@ -38,7 +41,7 @@ func (p *StreamAggregateProcessor) Process(msg Message) error {
 	return p.pipe.Forward(newMsg[0])
 }
 
-func (p *StreamAggregateProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
+func (p *StreamAggregateProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
 	if msg.Key == nil || msg.Value == nil {
 		log.Warn().Msgf("skipping record due to null key or value. key=%v, val=%v", msg.Key, msg.Value)
 		return nil, nil
@@ -47,11 +50,11 @@ func (p *StreamAggregateProcessor) ProcessAndReturn(msg Message) ([]Message, err
 	if err != nil {
 		return nil, err
 	}
-	var oldAggTs ValueTimestamp
+	var oldAggTs commtypes.ValueTimestamp
 	var oldAgg interface{}
 	var newTs uint64
 	if ok {
-		oldAggTs = val.(ValueTimestamp)
+		oldAggTs = val.(commtypes.ValueTimestamp)
 		oldAgg = oldAggTs.Value
 		if msg.Timestamp > oldAggTs.Timestamp {
 			newTs = msg.Timestamp
@@ -63,9 +66,9 @@ func (p *StreamAggregateProcessor) ProcessAndReturn(msg Message) ([]Message, err
 		newTs = msg.Timestamp
 	}
 	newAgg := p.aggregator.Apply(msg.Key, msg.Value, oldAgg)
-	err = p.store.Put(msg.Key, ValueTimestamp{Timestamp: newTs, Value: newAgg})
+	err = p.store.Put(msg.Key, commtypes.ValueTimestamp{Timestamp: newTs, Value: newAgg})
 	if err != nil {
 		return nil, err
 	}
-	return []Message{Message{Key: msg.Key, Value: newAgg, Timestamp: newTs}}, nil
+	return []commtypes.Message{commtypes.Message{Key: msg.Key, Value: newAgg, Timestamp: newTs}}, nil
 }

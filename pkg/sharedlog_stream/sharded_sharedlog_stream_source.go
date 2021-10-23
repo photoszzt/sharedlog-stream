@@ -2,16 +2,16 @@ package sharedlog_stream
 
 import (
 	"fmt"
-	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
 )
 
 type ShardedSharedLogStreamSource struct {
 	stream       *ShardedSharedLogStream
 	timeout      time.Duration
-	keyDecoder   processor.Decoder
-	valueDecoder processor.Decoder
-	msgDecoder   processor.MsgDecoder
+	keyDecoder   commtypes.Decoder
+	valueDecoder commtypes.Decoder
+	msgDecoder   commtypes.MsgDecoder
 }
 
 func NewShardedSharedLogStreamSource(stream *ShardedSharedLogStream, config *SharedLogStreamConfig) *ShardedSharedLogStreamSource {
@@ -24,7 +24,7 @@ func NewShardedSharedLogStreamSource(stream *ShardedSharedLogStream, config *Sha
 	}
 }
 
-func (s *ShardedSharedLogStreamSource) Consume(parNum uint8) (processor.Message, error) {
+func (s *ShardedSharedLogStreamSource) Consume(parNum uint8) (commtypes.Message, error) {
 	startTime := time.Now()
 	for {
 		if s.timeout != 0 && time.Since(startTime) >= s.timeout {
@@ -40,22 +40,22 @@ func (s *ShardedSharedLogStreamSource) Consume(parNum uint8) (processor.Message,
 				// fmt.Fprintf(os.Stderr, "stream time out\n")
 				continue
 			} else {
-				return processor.EmptyMessage, err
+				return commtypes.EmptyMessage, err
 			}
 		}
 		keyEncoded, valueEncoded, err := s.msgDecoder.Decode(val)
 		if err != nil {
-			return processor.EmptyMessage, fmt.Errorf("fail to decode msg: %v", err)
+			return commtypes.EmptyMessage, fmt.Errorf("fail to decode msg: %v", err)
 		}
 		key, err := s.keyDecoder.Decode(keyEncoded)
 		if err != nil {
-			return processor.EmptyMessage, fmt.Errorf("fail to decode key: %v", err)
+			return commtypes.EmptyMessage, fmt.Errorf("fail to decode key: %v", err)
 		}
 		value, err := s.valueDecoder.Decode(valueEncoded)
 		if err != nil {
-			return processor.EmptyMessage, fmt.Errorf("fail to decode value: %v", err)
+			return commtypes.EmptyMessage, fmt.Errorf("fail to decode value: %v", err)
 		}
-		return processor.Message{Key: key, Value: value}, nil
+		return commtypes.Message{Key: key, Value: value}, nil
 	}
-	return processor.EmptyMessage, ErrStreamSourceTimeout
+	return commtypes.EmptyMessage, ErrStreamSourceTimeout
 }

@@ -6,7 +6,7 @@ package types
 import (
 	"encoding/json"
 
-	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 )
 
 type StartEndTime struct {
@@ -16,7 +16,7 @@ type StartEndTime struct {
 
 type StartEndTimeJSONEncoder struct{}
 
-var _ = processor.Encoder(StartEndTimeJSONEncoder{})
+var _ = commtypes.Encoder(StartEndTimeJSONEncoder{})
 
 func (e StartEndTimeJSONEncoder) Encode(value interface{}) ([]byte, error) {
 	se := value.(*StartEndTime)
@@ -25,7 +25,7 @@ func (e StartEndTimeJSONEncoder) Encode(value interface{}) ([]byte, error) {
 
 type StartEndTimeJSONDecoder struct{}
 
-var _ = processor.Decoder(StartEndTimeJSONDecoder{})
+var _ = commtypes.Decoder(StartEndTimeJSONDecoder{})
 
 func (d StartEndTimeJSONDecoder) Decode(value []byte) (interface{}, error) {
 	se := &StartEndTime{}
@@ -43,7 +43,7 @@ type StartEndTimeJSONSerde struct {
 
 type StartEndTimeMsgpEncoder struct{}
 
-var _ = processor.Encoder(StartEndTimeMsgpEncoder{})
+var _ = commtypes.Encoder(StartEndTimeMsgpEncoder{})
 
 func (e StartEndTimeMsgpEncoder) Encode(value interface{}) ([]byte, error) {
 	se := value.(*StartEndTime)
@@ -52,7 +52,7 @@ func (e StartEndTimeMsgpEncoder) Encode(value interface{}) ([]byte, error) {
 
 type StartEndTimeMsgpDecoder struct{}
 
-var _ = processor.Decoder(StartEndTimeMsgpDecoder{})
+var _ = commtypes.Decoder(StartEndTimeMsgpDecoder{})
 
 func (d StartEndTimeMsgpDecoder) Decode(value []byte) (interface{}, error) {
 	se := &StartEndTime{}

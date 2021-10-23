@@ -1,6 +1,8 @@
 package processor
 
 import (
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+
 	"golang.org/x/xerrors"
 )
 
@@ -21,7 +23,7 @@ type EnumerableWindowDefinition interface {
 	 * @param timestamp the timestamp window should get created for
 	 * @return a map of windowStartTimestamp -> Window entries
 	 */
-	WindowsFor(timestamp uint64) (map[uint64]Window, error)
+	WindowsFor(timestamp uint64) (map[uint64]commtypes.Window, error)
 	/**
 	 * Return an upper bound on the size of windows in milliseconds.
 	 * Used to determine the lower bound on store retention time.

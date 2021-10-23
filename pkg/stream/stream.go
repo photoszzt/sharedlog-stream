@@ -4,6 +4,8 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 )
 
 type StreamImpl struct {
@@ -12,12 +14,12 @@ type StreamImpl struct {
 }
 
 type Grouped struct {
-	KeySerde   processor.Serde
-	ValueSerde processor.Serde
+	KeySerde   commtypes.Serde
+	ValueSerde commtypes.Serde
 	Name       string
 }
 
-func NewGrouped(keySerde processor.Serde, valueSerde processor.Serde, name string) *Grouped {
+func NewGrouped(keySerde commtypes.Serde, valueSerde commtypes.Serde, name string) *Grouped {
 	return &Grouped{
 		KeySerde:   keySerde,
 		ValueSerde: valueSerde,
@@ -40,11 +42,11 @@ type Stream interface {
 	GroupBy(name string, mapper processor.Mapper, grouped *Grouped) GroupedStream
 	GroupByKey(grouped *Grouped) GroupedStream
 	StreamStreamJoin(name string, other Stream, joiner processor.ValueJoinerWithKey,
-		windows *processor.JoinWindows, jp *processor.JoinParam) Stream
+		windows *processor.JoinWindows, jp *store.JoinParam) Stream
 	StreamStreamLeftJoin(name string, other Stream, joiner processor.ValueJoinerWithKey,
-		windows *processor.JoinWindows, jp *processor.JoinParam) Stream
+		windows *processor.JoinWindows, jp *store.JoinParam) Stream
 	StreamStreamOuterJoin(name string, other Stream, joiner processor.ValueJoinerWithKey,
-		windows *processor.JoinWindows, jp *processor.JoinParam) Stream
+		windows *processor.JoinWindows, jp *store.JoinParam) Stream
 	StreamTableJoin(name string, other Table, joiner processor.ValueJoinerWithKey) Stream
 	StreamTableLeftJoin(name string, other Table, joiner processor.ValueJoinerWithKey) Stream
 	StreamTableOuterJoin(name string, other Table, joiner processor.ValueJoinerWithKey) Stream
@@ -150,7 +152,7 @@ func (s *StreamImpl) GroupByKey(grouped *Grouped) GroupedStream {
 	return newGroupedStream(s.tp, s.parents, grouped)
 }
 
-func (s *StreamImpl) StreamStreamJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows *processor.JoinWindows, jp *processor.JoinParam) Stream {
+func (s *StreamImpl) StreamStreamJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows *processor.JoinWindows, jp *store.JoinParam) Stream {
 	lp := processor.NewStreamJoinWindowProcessor(jp.LeftWindowStoreName)
 	rp := processor.NewStreamJoinWindowProcessor(jp.RightWindowStoreName)
 
@@ -169,12 +171,12 @@ func (s *StreamImpl) StreamStreamJoin(name string, other Stream, joiner processo
 	return newStream(s.tp, []processor.Node{n})
 }
 
-func (s *StreamImpl) StreamStreamLeftJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows *processor.JoinWindows, jp *processor.JoinParam) Stream {
+func (s *StreamImpl) StreamStreamLeftJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows *processor.JoinWindows, jp *store.JoinParam) Stream {
 	log.Fatal().Msgf("StreamStreamLeftJoin Not implemented")
 	return nil
 }
 
-func (s *StreamImpl) StreamStreamOuterJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows *processor.JoinWindows, jp *processor.JoinParam) Stream {
+func (s *StreamImpl) StreamStreamOuterJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows *processor.JoinWindows, jp *store.JoinParam) Stream {
 	log.Fatal().Msgf("StreamStreamOuterJoin Not implemented")
 	return nil
 }

@@ -1,21 +1,26 @@
 package processor
 
+import (
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
+)
+
 type FlatMapper interface {
-	FlatMap(Message) ([]Message, error)
+	FlatMap(commtypes.Message) ([]commtypes.Message, error)
 }
 
 var _ = (FlatMapper)(FlatMapperFunc(nil))
 
-type FlatMapperFunc func(Message) ([]Message, error)
+type FlatMapperFunc func(commtypes.Message) ([]commtypes.Message, error)
 
-func (fn FlatMapperFunc) FlatMap(msg Message) ([]Message, error) {
+func (fn FlatMapperFunc) FlatMap(msg commtypes.Message) ([]commtypes.Message, error) {
 	return fn(msg)
 }
 
 type FlatMapProcessor struct {
 	pipe   Pipe
 	mapper FlatMapper
-	pctx   ProcessorContext
+	pctx   store.ProcessorContext
 }
 
 func NewFlatMapProcessor(mapper FlatMapper) *FlatMapProcessor {
@@ -24,7 +29,7 @@ func NewFlatMapProcessor(mapper FlatMapper) *FlatMapProcessor {
 	}
 }
 
-func (p *FlatMapProcessor) WithProcessorContext(pctx ProcessorContext) {
+func (p *FlatMapProcessor) WithProcessorContext(pctx store.ProcessorContext) {
 	p.pctx = pctx
 }
 
@@ -32,7 +37,7 @@ func (p *FlatMapProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *FlatMapProcessor) Process(msg Message) error {
+func (p *FlatMapProcessor) Process(msg commtypes.Message) error {
 	msgs, err := p.mapper.FlatMap(msg)
 	if err != nil {
 		return err
@@ -46,7 +51,7 @@ func (p *FlatMapProcessor) Process(msg Message) error {
 	return nil
 }
 
-func (p *FlatMapProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
+func (p *FlatMapProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
 	msgs, err := p.mapper.FlatMap(msg)
 	if err != nil {
 		return nil, err

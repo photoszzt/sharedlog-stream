@@ -9,6 +9,8 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -54,14 +56,14 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 		}
 	}
 
-	var vtSerde processor.Serde
-	if sp.SerdeFormat == uint8(processor.JSON) {
-		vtSerde = processor.ValueTimestampJSONSerde{
-			ValJSONSerde: processor.Uint64Serde{},
+	var vtSerde commtypes.Serde
+	if sp.SerdeFormat == uint8(commtypes.JSON) {
+		vtSerde = commtypes.ValueTimestampJSONSerde{
+			ValJSONSerde: commtypes.Uint64Serde{},
 		}
-	} else if sp.SerdeFormat == uint8(processor.MSGP) {
-		vtSerde = processor.ValueTimestampMsgpSerde{
-			ValMsgpSerde: processor.Uint64Serde{},
+	} else if sp.SerdeFormat == uint8(commtypes.MSGP) {
+		vtSerde = commtypes.ValueTimestampMsgpSerde{
+			ValMsgpSerde: commtypes.Uint64Serde{},
 		}
 	} else {
 		return &common.FnOutput{
@@ -69,7 +71,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat),
 		}
 	}
-	msgSerde, err := processor.GetMsgSerde(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -78,26 +80,26 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 	}
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      time.Duration(sp.Duration) * time.Second,
-		KeyDecoder:   processor.StringDecoder{},
-		ValueDecoder: processor.StringDecoder{},
+		KeyDecoder:   commtypes.StringDecoder{},
+		ValueDecoder: commtypes.StringDecoder{},
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeyEncoder:   processor.StringEncoder{},
-		ValueEncoder: processor.Uint64Encoder{},
+		KeyEncoder:   commtypes.StringEncoder{},
+		ValueEncoder: commtypes.Uint64Encoder{},
 		MsgEncoder:   msgSerde,
 	}
 	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
 	sink := sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig)
-	mp := &processor.MaterializeParam{
-		KeySerde:   processor.StringSerde{},
+	mp := &store.MaterializeParam{
+		KeySerde:   commtypes.StringSerde{},
 		ValueSerde: vtSerde,
 		MsgSerde:   msgSerde,
 		StoreName:  sp.OutputTopicName,
 		Changelog:  output_stream,
 	}
 
-	store := processor.NewInMemoryKeyValueStoreWithChangelog(mp)
+	store := store.NewInMemoryKeyValueStoreWithChangelog(mp)
 	p := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor(store,
 		processor.InitializerFunc(func() interface{} {
 			return uint64(0)

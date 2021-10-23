@@ -1,7 +1,7 @@
 package spike_detection
 
 import (
-	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"testing"
 )
 
@@ -11,7 +11,7 @@ func TestMsgEncodeAndDecode(t *testing.T) {
 		Timestamp: 1,
 	}
 	k := "1"
-	k_serde := processor.StringSerde{}
+	k_serde := commtypes.StringSerde{}
 	v_msgSerde := SensorDataMsgpSerde{}
 	v_encoded, err := v_msgSerde.Encode(&v)
 	if err != nil {
@@ -22,7 +22,7 @@ func TestMsgEncodeAndDecode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgMsgpSerde := processor.MessageSerializedMsgpSerde{}
+	msgMsgpSerde := commtypes.MessageSerializedMsgpSerde{}
 	msg_encoded, err := msgMsgpSerde.Encode(k_encoded, v_encoded)
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +55,7 @@ func TestMsgJSONEncodeAndDecode(t *testing.T) {
 		Timestamp: 1,
 	}
 	k := "1"
-	k_serde := processor.StringSerde{}
+	k_serde := commtypes.StringSerde{}
 	v_jsonSerde := SensorDataJSONSerde{}
 	v_encoded, err := v_jsonSerde.Encode(&v)
 	if err != nil {
@@ -66,7 +66,7 @@ func TestMsgJSONEncodeAndDecode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgJSONSerde := processor.MessageSerializedJSONSerde{}
+	msgJSONSerde := commtypes.MessageSerializedJSONSerde{}
 	msg_encoded, err := msgJSONSerde.Encode(k_encoded, v_encoded)
 	if err != nil {
 		t.Fatal(err)

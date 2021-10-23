@@ -2,6 +2,8 @@ package processor
 
 import (
 	"math"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -44,8 +46,8 @@ func (t *TimeTracker) AdvanceNextTimeToEmit() {
 
 type StreamStreamJoinProcessor struct {
 	pipe             Pipe
-	pctx             ProcessorContext
-	otherWindowStore WindowStore
+	pctx             store.ProcessorContext
+	otherWindowStore store.WindowStore
 
 	otherWindowName   string
 	joinBeforeMs      uint64
@@ -83,11 +85,11 @@ func (p *StreamStreamJoinProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *StreamStreamJoinProcessor) WithProcessorContext(pctx ProcessorContext) {
+func (p *StreamStreamJoinProcessor) WithProcessorContext(pctx store.ProcessorContext) {
 	p.pctx = pctx
 }
 
-func (p *StreamStreamJoinProcessor) Process(msg Message) error {
+func (p *StreamStreamJoinProcessor) Process(msg commtypes.Message) error {
 	if msg.Key == nil || msg.Value == nil {
 		log.Warn().Msgf("skipping record due to null key or value. key=%v, val=%v", msg.Key, msg.Value)
 		return nil
@@ -119,7 +121,7 @@ func (p *StreamStreamJoinProcessor) Process(msg Message) error {
 	timeToNs := (timeTo - timeToSec*1000) * 1000000
 	p.otherWindowStore.Fetch(msg.Key,
 		time.Unix(int64(timeFromSec), int64(timeFromNs)),
-		time.Unix(int64(timeToSec), int64(timeToNs)), func(otherRecordTs uint64, vt ValueT) {
+		time.Unix(int64(timeToSec), int64(timeToNs)), func(otherRecordTs uint64, vt store.ValueT) {
 			var newTs uint64
 			// needOuterJoin = false
 			newVal := p.joiner.Apply(msg.Key, msg.Value, vt)
@@ -128,7 +130,7 @@ func (p *StreamStreamJoinProcessor) Process(msg Message) error {
 			} else {
 				newTs = otherRecordTs
 			}
-			p.pipe.Forward(Message{Key: msg.Key, Value: newVal, Timestamp: newTs})
+			p.pipe.Forward(commtypes.Message{Key: msg.Key, Value: newVal, Timestamp: newTs})
 		})
 	/*
 		if needOuterJoin {
@@ -138,6 +140,6 @@ func (p *StreamStreamJoinProcessor) Process(msg Message) error {
 	return nil
 }
 
-func (p *StreamStreamJoinProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
+func (p *StreamStreamJoinProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
 	panic("not implemented")
 }

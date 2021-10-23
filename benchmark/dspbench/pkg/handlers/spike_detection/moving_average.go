@@ -2,6 +2,7 @@ package spike_detection
 
 import (
 	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	"github.com/gammazero/deque"
 )
@@ -20,11 +21,11 @@ func NewMovingAverageMapper() processor.Mapper {
 	}
 }
 
-func (p *movingAverageAggregate) Map(msg processor.Message) (processor.Message, error) {
+func (p *movingAverageAggregate) Map(msg commtypes.Message) (commtypes.Message, error) {
 	devId := msg.Key.(string)
 	nextVal := msg.Value.(float64)
 	avg := p.movingAverage(devId, nextVal)
-	return processor.Message{Key: msg.Key,
+	return commtypes.Message{Key: msg.Key,
 		Value:     ValAndAvg{Val: nextVal, Avg: avg},
 		Timestamp: msg.Timestamp}, nil
 }

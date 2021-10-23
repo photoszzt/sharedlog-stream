@@ -1,13 +1,14 @@
 package processor
 
 import (
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sync"
 )
 
 type Pump interface {
 	sync.Locker
 
-	Accept(Message) error
+	Accept(commtypes.Message) error
 	Stop()
 	Close() error
 }
@@ -30,7 +31,7 @@ func NewSyncPump(node Node, pipe Pipe) Pump {
 	return p
 }
 
-func (p *syncPump) Accept(msg Message) error {
+func (p *syncPump) Accept(msg commtypes.Message) error {
 	err := p.processor.Process(msg)
 	if err != nil {
 		return err
@@ -53,7 +54,7 @@ type asyncPump struct {
 	pipe Pipe,
 	errFn ErrorFunc
 
-	ch chan Message
+	ch chan commtypes.Message
 	wg sync.WaitGroup
 }
 
@@ -63,7 +64,7 @@ func NewAsyncPump(node Node, pipe Pipe, errFn ErrorFunc) Pump {
 		processor: node.Processor(),
 		pipe: pipe,
 		errFn: errFn,
-		ch: make(chan Message),
+		ch: make(chan commtypes.Message),
 	}
 }
 

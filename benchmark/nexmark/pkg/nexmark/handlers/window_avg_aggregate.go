@@ -10,6 +10,8 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 	"time"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -62,7 +64,7 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
 		}
 	}
-	msgSerde, err := processor.GetMsgSerde(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -76,25 +78,25 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 			Message: fmt.Sprintf("get evnet serde error: %v\n", err),
 		}
 	}
-	var scSerde processor.Serde
-	var vtSerde processor.Serde
-	var wkSerde processor.Serde
-	if sp.SerdeFormat == uint8(processor.JSON) {
+	var scSerde commtypes.Serde
+	var vtSerde commtypes.Serde
+	var wkSerde commtypes.Serde
+	if sp.SerdeFormat == uint8(commtypes.JSON) {
 		scSerde = ntypes.SumAndCountJSONSerde{}
-		vtSerde = processor.ValueTimestampJSONSerde{
+		vtSerde = commtypes.ValueTimestampJSONSerde{
 			ValJSONSerde: scSerde,
 		}
-		wkSerde = processor.WindowedKeyJSONSerde{
-			KeyJSONSerde:    processor.Uint64Serde{},
+		wkSerde = commtypes.WindowedKeyJSONSerde{
+			KeyJSONSerde:    commtypes.Uint64Serde{},
 			WindowJSONSerde: processor.TimeWindowJSONSerde{},
 		}
-	} else if sp.SerdeFormat == uint8(processor.MSGP) {
+	} else if sp.SerdeFormat == uint8(commtypes.MSGP) {
 		scSerde = ntypes.SumAndCountMsgpSerde{}
-		vtSerde = processor.ValueTimestampMsgpSerde{
+		vtSerde = commtypes.ValueTimestampMsgpSerde{
 			ValMsgpSerde: scSerde,
 		}
-		wkSerde = processor.WindowedKeyMsgpSerde{
-			KeyMsgpSerde:    processor.Uint64Serde{},
+		wkSerde = commtypes.WindowedKeyMsgpSerde{
+			KeyMsgpSerde:    commtypes.Uint64Serde{},
 			WindowMsgpSerde: processor.TimeWindowMsgpSerde{},
 		}
 	} else {
@@ -108,30 +110,30 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      time.Duration(20) * time.Second,
 		MsgDecoder:   msgSerde,
-		KeyDecoder:   processor.Uint64Decoder{},
+		KeyDecoder:   commtypes.Uint64Decoder{},
 		ValueDecoder: eventSerde,
 	}
 
 	outConfig := &sharedlog_stream.StreamSinkConfig{
 		MsgEncoder:   msgSerde,
 		KeyEncoder:   wkSerde,
-		ValueEncoder: processor.Float64Serde{},
+		ValueEncoder: commtypes.Float64Serde{},
 	}
 
 	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
 	sink := sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig)
 	timeWindows := processor.NewTimeWindowsNoGrace(time.Duration(10) * time.Second)
 
-	winStoreMp := &processor.MaterializeParam{
+	winStoreMp := &store.MaterializeParam{
 		StoreName:  "windowed-avg-store",
 		MsgSerde:   msgSerde,
-		KeySerde:   processor.Uint64Serde{},
+		KeySerde:   commtypes.Uint64Serde{},
 		ValueSerde: vtSerde,
 		Changelog:  output_stream,
 		ParNum:     sp.ParNum,
 	}
 
-	store := processor.NewInMemoryWindowStoreWithChangelog(
+	store := store.NewInMemoryWindowStoreWithChangelog(
 		timeWindows.MaxSize()+timeWindows.GracePeriodMs(), timeWindows.MaxSize(), winStoreMp)
 
 	aggProc := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(store,

@@ -1,20 +1,25 @@
 package processor
 
+import (
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
+)
+
 type Mapper interface {
-	Map(Message) (Message, error)
+	Map(commtypes.Message) (commtypes.Message, error)
 }
-type MapperFunc func(Message) (Message, error)
+type MapperFunc func(commtypes.Message) (commtypes.Message, error)
 
 var _ = (Mapper)(MapperFunc(nil))
 
-func (fn MapperFunc) Map(msg Message) (Message, error) {
+func (fn MapperFunc) Map(msg commtypes.Message) (commtypes.Message, error) {
 	return fn(msg)
 }
 
 type StreamMapProcessor struct {
 	pipe   Pipe
 	mapper Mapper
-	pctx   ProcessorContext
+	pctx   store.ProcessorContext
 }
 
 var _ = Processor(&StreamMapProcessor{})
@@ -29,11 +34,11 @@ func (p *StreamMapProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *StreamMapProcessor) WithProcessorContext(pctx ProcessorContext) {
+func (p *StreamMapProcessor) WithProcessorContext(pctx store.ProcessorContext) {
 	p.pctx = pctx
 }
 
-func (p *StreamMapProcessor) Process(msg Message) error {
+func (p *StreamMapProcessor) Process(msg commtypes.Message) error {
 	m, err := p.mapper.Map(msg)
 	if err != nil {
 		return err
@@ -42,13 +47,13 @@ func (p *StreamMapProcessor) Process(msg Message) error {
 	return p.pipe.Forward(m)
 }
 
-func (p *StreamMapProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
+func (p *StreamMapProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
 	m, err := p.mapper.Map(msg)
 	if err != nil {
 		return nil, err
 	}
 	m.Timestamp = msg.Timestamp
-	return []Message{m}, nil
+	return []commtypes.Message{m}, nil
 }
 
 type ValueMapper interface {
@@ -65,7 +70,7 @@ func (fn ValueMapperFunc) MapValue(value interface{}) (interface{}, error) {
 type StreamMapValuesProcessor struct {
 	pipe        Pipe
 	valueMapper ValueMapper
-	pctx        ProcessorContext
+	pctx        store.ProcessorContext
 }
 
 var _ = Processor(&StreamMapValuesProcessor{})
@@ -80,30 +85,30 @@ func (p *StreamMapValuesProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *StreamMapValuesProcessor) WithProcessorContext(pctx ProcessorContext) {
+func (p *StreamMapValuesProcessor) WithProcessorContext(pctx store.ProcessorContext) {
 	p.pctx = pctx
 }
 
-func (p *StreamMapValuesProcessor) Process(msg Message) error {
+func (p *StreamMapValuesProcessor) Process(msg commtypes.Message) error {
 	newV, err := p.valueMapper.MapValue(msg.Value)
 	if err != nil {
 		return err
 	}
-	return p.pipe.Forward(Message{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp})
+	return p.pipe.Forward(commtypes.Message{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp})
 }
 
-func (p *StreamMapValuesProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
+func (p *StreamMapValuesProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
 	newV, err := p.valueMapper.MapValue(msg.Value)
 	if err != nil {
 		return nil, err
 	}
-	return []Message{Message{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp}}, nil
+	return []commtypes.Message{commtypes.Message{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp}}, nil
 }
 
 type StreamMapValuesWithKeyProcessor struct {
 	pipe               Pipe
 	valueWithKeyMapper Mapper
-	pctx               ProcessorContext
+	pctx               store.ProcessorContext
 }
 
 func NewStreamMapValuesWithKeyProcessor(mapper Mapper) Processor {
@@ -116,11 +121,11 @@ func (p *StreamMapValuesWithKeyProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *StreamMapValuesWithKeyProcessor) WithProcessorContext(pctx ProcessorContext) {
+func (p *StreamMapValuesWithKeyProcessor) WithProcessorContext(pctx store.ProcessorContext) {
 	p.pctx = pctx
 }
 
-func (p *StreamMapValuesWithKeyProcessor) Process(msg Message) error {
+func (p *StreamMapValuesWithKeyProcessor) Process(msg commtypes.Message) error {
 	newMsg, err := p.ProcessAndReturn(msg)
 	if err != nil {
 		return err
@@ -128,10 +133,10 @@ func (p *StreamMapValuesWithKeyProcessor) Process(msg Message) error {
 	return p.pipe.Forward(newMsg[0])
 }
 
-func (p *StreamMapValuesWithKeyProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
+func (p *StreamMapValuesWithKeyProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
 	newMsg, err := p.valueWithKeyMapper.Map(msg)
 	if err != nil {
 		return nil, err
 	}
-	return []Message{Message{Key: msg.Key, Value: newMsg.Value, Timestamp: msg.Timestamp}}, nil
+	return []commtypes.Message{commtypes.Message{Key: msg.Key, Value: newMsg.Value, Timestamp: msg.Timestamp}}, nil
 }

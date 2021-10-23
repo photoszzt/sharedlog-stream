@@ -9,7 +9,7 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -58,7 +58,7 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput) *
 			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
 		}
 	}
-	msgSerde, err := processor.GetMsgSerde(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -76,13 +76,13 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput) *
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      duration,
 		MsgDecoder:   msgSerde,
-		KeyDecoder:   processor.StringDecoder{},
+		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: eventSerde,
 	}
 
 	outConfig := &sharedlog_stream.StreamSinkConfig{
 		MsgEncoder:   msgSerde,
-		KeyEncoder:   processor.Uint64Encoder{},
+		KeyEncoder:   commtypes.Uint64Encoder{},
 		ValueEncoder: eventSerde,
 	}
 
@@ -117,7 +117,7 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput) *
 		val := msg.Value.(*ntypes.Event)
 		if val.Etype == ntypes.BID {
 			par := uint8(val.Bid.Auction % uint64(sp.NumOutPartition))
-			newMsg := processor.Message{Key: val.Bid.Auction, Value: msg.Value}
+			newMsg := commtypes.Message{Key: val.Bid.Auction, Value: msg.Value}
 
 			sinkStart := time.Now()
 			err = sink.Sink(newMsg, par)

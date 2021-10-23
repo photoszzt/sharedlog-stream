@@ -2,18 +2,11 @@
 //msgpack:ignore MessageSerializedMsgpEncoder MessageSerializedMsgpDecoder
 //msgpack:ignore MessageSerializedJSONEncoder MessageSerializedJSONDecoder
 
-package processor
+package commtypes
 
 import (
 	"encoding/json"
 	"fmt"
-)
-
-type SerdeFormat uint8
-
-const (
-	JSON SerdeFormat = 0
-	MSGP SerdeFormat = 1
 )
 
 type MessageSerialized struct {

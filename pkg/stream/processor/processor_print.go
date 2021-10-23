@@ -2,12 +2,14 @@ package processor
 
 import (
 	"fmt"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 )
 
 // PrintProcessor is a processor that prints the stream to stdout.
 type PrintProcessor struct {
 	pipe Pipe
-	pctx ProcessorContext
+	pctx store.ProcessorContext
 }
 
 // NewPrintProcessor creates a new PrintProcessor instance.
@@ -20,18 +22,18 @@ func (p *PrintProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *PrintProcessor) WithProcessorContext(pctx ProcessorContext) {
+func (p *PrintProcessor) WithProcessorContext(pctx store.ProcessorContext) {
 	p.pctx = pctx
 }
 
-// Process processes the stream Message.
-func (p *PrintProcessor) Process(msg Message) error {
+// Process processes the stream commtypes.Message.
+func (p *PrintProcessor) Process(msg commtypes.Message) error {
 	fmt.Printf("%v:%v\n", msg.Key, msg.Value)
 
 	return p.pipe.Forward(msg)
 }
 
-func (p *PrintProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
+func (p *PrintProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
 	fmt.Printf("%v:%v\n", msg.Key, msg.Value)
-	return []Message{msg}, nil
+	return []commtypes.Message{msg}, nil
 }

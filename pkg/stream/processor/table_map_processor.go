@@ -1,9 +1,14 @@
 package processor
 
+import (
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
+)
+
 type TableMapValuesProcessor struct {
 	pipe          Pipe
-	pctx          ProcessorContext
-	store         KeyValueStore
+	pctx          store.ProcessorContext
+	store         store.KeyValueStore
 	queryableName string
 	valueMapper   ValueMapper
 }
@@ -19,14 +24,14 @@ func (p *TableMapValuesProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *TableMapValuesProcessor) WithProcessorContext(pctx ProcessorContext) {
+func (p *TableMapValuesProcessor) WithProcessorContext(pctx store.ProcessorContext) {
 	p.pctx = pctx
 	if p.queryableName != "" {
 		p.store = p.pctx.GetKeyValueStore(p.queryableName)
 	}
 }
 
-func (p *TableMapValuesProcessor) Process(msg Message) error {
+func (p *TableMapValuesProcessor) Process(msg commtypes.Message) error {
 	newMsg, err := p.ProcessAndReturn(msg)
 	if err != nil {
 		return err
@@ -34,17 +39,17 @@ func (p *TableMapValuesProcessor) Process(msg Message) error {
 	return p.pipe.Forward(newMsg[0])
 }
 
-func (p *TableMapValuesProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
+func (p *TableMapValuesProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
 	newV, err := p.valueMapper.MapValue(msg.Value)
 	if err != nil {
 		return nil, err
 	}
-	newMsg := Message{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp}
+	newMsg := commtypes.Message{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp}
 	if p.queryableName != "" {
-		err = p.store.Put(msg.Key, &ValueTimestamp{Value: newMsg.Value, Timestamp: newMsg.Timestamp})
+		err = p.store.Put(msg.Key, &commtypes.ValueTimestamp{Value: newMsg.Value, Timestamp: newMsg.Timestamp})
 		if err != nil {
 			return nil, err
 		}
 	}
-	return []Message{newMsg}, nil
+	return []commtypes.Message{newMsg}, nil
 }

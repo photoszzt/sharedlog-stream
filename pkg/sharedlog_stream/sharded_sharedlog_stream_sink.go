@@ -1,14 +1,16 @@
 package sharedlog_stream
 
-import "sharedlog-stream/pkg/stream/processor"
+import (
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+)
 
 type ShardedSharedLogStreamSink struct {
 	// pipe         processor.Pipe
 	// pctx         processor.ProcessorContext
 	stream       *ShardedSharedLogStream
-	keyEncoder   processor.Encoder
-	valueEncoder processor.Encoder
-	msgEncoder   processor.MsgEncoder
+	keyEncoder   commtypes.Encoder
+	valueEncoder commtypes.Encoder
+	msgEncoder   commtypes.MsgEncoder
 }
 
 func NewShardedSharedLogStreamSink(stream *ShardedSharedLogStream, config *StreamSinkConfig) *ShardedSharedLogStreamSink {
@@ -20,7 +22,7 @@ func NewShardedSharedLogStreamSink(stream *ShardedSharedLogStream, config *Strea
 	}
 }
 
-func (sls *ShardedSharedLogStreamSink) Sink(msg processor.Message, parNum uint8) error {
+func (sls *ShardedSharedLogStreamSink) Sink(msg commtypes.Message, parNum uint8) error {
 	if msg.Key == nil && msg.Value == nil {
 		return nil
 	}

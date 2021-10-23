@@ -1,21 +1,12 @@
 //go:generate msgp
-//msgp:ignore ValueTimestamp Change ValueTimestampJSONSerde ValueTimestampMsgpSerde
-package processor
+//msgp:ignore ValueTimestampJSONSerde ValueTimestampMsgpSerde
+package commtypes
 
 import "encoding/json"
-
-type KeyT interface{}
-
-type ValueT interface{}
 
 type ValueTimestamp struct {
 	Timestamp uint64
 	Value     interface{}
-}
-
-type Change struct {
-	OldValue interface{}
-	NewValue interface{}
 }
 
 type ValueTimestampSerialized struct {

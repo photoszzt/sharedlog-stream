@@ -10,6 +10,7 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -60,7 +61,7 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
 		}
 	}
-	msgSerde, err := processor.GetMsgSerde(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -68,12 +69,12 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 		}
 	}
 
-	var seSerde processor.Serde
-	var aucIdCountSerde processor.Serde
-	if sp.SerdeFormat == uint8(processor.JSON) {
+	var seSerde commtypes.Serde
+	var aucIdCountSerde commtypes.Serde
+	if sp.SerdeFormat == uint8(commtypes.JSON) {
 		seSerde = ntypes.StartEndTimeJSONSerde{}
 		aucIdCountSerde = ntypes.AuctionIdCountJSONSerde{}
-	} else if sp.SerdeFormat == uint8(processor.MSGP) {
+	} else if sp.SerdeFormat == uint8(commtypes.MSGP) {
 		seSerde = ntypes.StartEndTimeMsgpSerde{}
 		aucIdCountSerde = ntypes.AuctionIdCountMsgpSerde{}
 	} else {
@@ -86,8 +87,8 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 	duration := time.Duration(sp.Duration) * time.Second
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      time.Duration(sp.Duration),
-		KeyDecoder:   processor.Uint64Serde{},
-		ValueDecoder: processor.Uint64Serde{},
+		KeyDecoder:   commtypes.Uint64Serde{},
+		ValueDecoder: commtypes.Uint64Serde{},
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
@@ -98,8 +99,8 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
 	sink := sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig)
 	groupByAuction := processor.NewStreamMapProcessor(processor.MapperFunc(
-		func(msg processor.Message) (processor.Message, error) {
-			key := msg.Key.(*processor.WindowedKey)
+		func(msg commtypes.Message) (commtypes.Message, error) {
+			key := msg.Key.(*commtypes.WindowedKey)
 			value := msg.Value.(uint64)
 			newKey := &ntypes.StartEndTime{
 				StartTime: key.Window.Start(),
@@ -109,7 +110,7 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 				AucId: key.Key.(uint64),
 				Count: value,
 			}
-			return processor.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
+			return commtypes.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
 		}))
 	latencies := make([]int, 0, 128)
 	startTime := time.Now()

@@ -1,6 +1,6 @@
 //go:generate msgp
 //msgp:ignore WindowedKey WindowedKeyJSONSerde WindowedKeyMsgpSerde
-package processor
+package commtypes
 
 import "encoding/json"
 

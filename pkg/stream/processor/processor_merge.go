@@ -1,8 +1,13 @@
 package processor
 
+import (
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
+)
+
 type MergeProcessor struct {
 	pipe Pipe
-	pctx ProcessorContext
+	pctx store.ProcessorContext
 }
 
 func NewMergeProcessor() Processor {
@@ -13,14 +18,14 @@ func (p *MergeProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *MergeProcessor) WithProcessorContext(pctx ProcessorContext) {
+func (p *MergeProcessor) WithProcessorContext(pctx store.ProcessorContext) {
 	p.pctx = pctx
 }
 
-func (p *MergeProcessor) Process(msg Message) error {
+func (p *MergeProcessor) Process(msg commtypes.Message) error {
 	return p.pipe.Forward(msg)
 }
 
-func (p *MergeProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
+func (p *MergeProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
 	panic("not implemented")
 }

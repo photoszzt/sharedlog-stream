@@ -12,6 +12,8 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream"
 	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 
@@ -68,7 +70,7 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		}
 	}
 
-	msgSerde, err := processor.GetMsgSerde(input.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(input.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -82,14 +84,14 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 			Message: err.Error(),
 		}
 	}
-	var seSerde processor.Serde
-	var aucIdCountSerde processor.Serde
-	var aucIdCntMaxSerde processor.Serde
-	if input.SerdeFormat == uint8(processor.JSON) {
+	var seSerde commtypes.Serde
+	var aucIdCountSerde commtypes.Serde
+	var aucIdCntMaxSerde commtypes.Serde
+	if input.SerdeFormat == uint8(commtypes.JSON) {
 		seSerde = ntypes.StartEndTimeJSONSerde{}
 		aucIdCountSerde = ntypes.AuctionIdCountJSONSerde{}
 		aucIdCntMaxSerde = ntypes.AuctionIdCntMaxJSONSerde{}
-	} else if input.SerdeFormat == uint8(processor.MSGP) {
+	} else if input.SerdeFormat == uint8(commtypes.MSGP) {
 		seSerde = ntypes.StartEndTimeMsgpSerde{}
 		aucIdCountSerde = ntypes.AuctionIdCountMsgpSerde{}
 		aucIdCntMaxSerde = ntypes.AuctionIdCntMaxMsgpSerde{}
@@ -102,7 +104,7 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      time.Duration(input.Duration) * time.Second,
-		KeyDecoder:   processor.StringDecoder{},
+		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
 	}
@@ -113,26 +115,26 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	}
 	builder := stream.NewStreamBuilder()
 	inputs := builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream, inConfig))
-	bid := inputs.Filter("filter-bid", processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
+	bid := inputs.Filter("filter-bid", processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
 		event := msg.Value.(*ntypes.Event)
 		return event.Etype == ntypes.BID, nil
-	})).Map("select-key", processor.MapperFunc(func(msg processor.Message) (processor.Message, error) {
+	})).Map("select-key", processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 		event := msg.Value.(*ntypes.Event)
-		return processor.Message{Key: event.Bid.Auction, Value: msg.Value, Timestamp: msg.Timestamp}, nil
+		return commtypes.Message{Key: event.Bid.Auction, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 	}))
 	auctionBids := bid.
-		GroupByKey(&stream.Grouped{KeySerde: processor.Uint64Serde{}, Name: "group-by-auction-id"}).
+		GroupByKey(&stream.Grouped{KeySerde: commtypes.Uint64Serde{}, Name: "group-by-auction-id"}).
 		WindowedBy(processor.NewTimeWindowsNoGrace(time.Duration(10)*time.Second).AdvanceBy(time.Duration(2)*time.Second)).
-		Count("count", &processor.MaterializeParam{
-			KeySerde:   processor.Uint64Serde{},
-			ValueSerde: processor.Uint64Serde{},
+		Count("count", &store.MaterializeParam{
+			KeySerde:   commtypes.Uint64Serde{},
+			ValueSerde: commtypes.Uint64Serde{},
 			MsgSerde:   msgSerde,
 			StoreName:  "auctionBidsCountStore",
 			Changelog:  windowChangeLog,
 		}).
 		ToStream().
-		Map("change-key", processor.MapperFunc(func(msg processor.Message) (processor.Message, error) {
-			key := msg.Key.(*processor.WindowedKey)
+		Map("change-key", processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
+			key := msg.Key.(*commtypes.WindowedKey)
 			value := msg.Value.(uint64)
 			newKey := &ntypes.StartEndTime{
 				StartTime: key.Window.Start(),
@@ -142,13 +144,13 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 				AucId: key.Key.(uint64),
 				Count: value,
 			}
-			return processor.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
+			return commtypes.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
 		}))
 
 	maxBids := auctionBids.
 		GroupByKey(&stream.Grouped{KeySerde: seSerde, ValueSerde: aucIdCountSerde, Name: "auctionbids-groupbykey"}).
 		Aggregate("aggregate",
-			&processor.MaterializeParam{KeySerde: seSerde, ValueSerde: aucIdCountSerde, StoreName: "agg-store"},
+			&store.MaterializeParam{KeySerde: seSerde, ValueSerde: aucIdCountSerde, StoreName: "agg-store"},
 			processor.InitializerFunc(func() interface{} { return 0 }),
 			processor.AggregatorFunc(func(key interface{}, value interface{}, aggregate interface{}) interface{} {
 				v := value.(*ntypes.AuctionIdCount)
@@ -171,7 +173,7 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 					MaxCnt: rv,
 				}
 			})).
-		Filter("choose-maxcnt", processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
+		Filter("choose-maxcnt", processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
 			v := msg.Value.(*ntypes.AuctionIdCntMax)
 			return v.Count >= v.MaxCnt, nil
 		})).

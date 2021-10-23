@@ -12,6 +12,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream"
 	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 
@@ -45,10 +46,10 @@ func (h *query1Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func q1mapFunc(msg processor.Message) (processor.Message, error) {
+func q1mapFunc(msg commtypes.Message) (commtypes.Message, error) {
 	event := msg.Value.(*ntypes.Event)
 	event.Bid.Price = uint64(event.Bid.Price * 908 / 1000.0)
-	return processor.Message{Value: event}, nil
+	return commtypes.Message{Value: event}, nil
 }
 
 func Query1(ctx context.Context, env types.Environment, input *common.QueryInput, output chan *common.FnOutput) {
@@ -69,7 +70,7 @@ func Query1(ctx context.Context, env types.Environment, input *common.QueryInput
 		}
 		return
 	}
-	msgSerde, err := processor.GetMsgSerde(input.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(input.SerdeFormat)
 	if err != nil {
 		output <- &common.FnOutput{
 			Success: false,
@@ -86,12 +87,12 @@ func Query1(ctx context.Context, env types.Environment, input *common.QueryInput
 
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      time.Duration(input.Duration) * time.Second,
-		KeyDecoder:   processor.StringDecoder{},
+		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeyEncoder:   processor.StringEncoder{},
+		KeyEncoder:   commtypes.StringEncoder{},
 		ValueEncoder: eventSerde,
 		MsgEncoder:   msgSerde,
 	}

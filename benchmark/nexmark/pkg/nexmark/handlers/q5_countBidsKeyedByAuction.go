@@ -8,6 +8,8 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -53,7 +55,7 @@ func (h *q5CountBidsKeyedByAuction) process(ctx context.Context, sp *common.Quer
 			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
 		}
 	}
-	msgSerde, err := processor.GetMsgSerde(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -70,27 +72,27 @@ func (h *q5CountBidsKeyedByAuction) process(ctx context.Context, sp *common.Quer
 	duration := time.Duration(sp.Duration) * time.Second
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      time.Duration(sp.Duration),
-		KeyDecoder:   processor.Uint64Serde{},
+		KeyDecoder:   commtypes.Uint64Serde{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
 		MsgEncoder:   msgSerde,
-		KeyEncoder:   processor.Uint64Encoder{},
-		ValueEncoder: processor.Uint64Encoder{},
+		KeyEncoder:   commtypes.Uint64Encoder{},
+		ValueEncoder: commtypes.Uint64Encoder{},
 	}
 	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
 	sink := sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig)
 
 	hopWindow := processor.NewTimeWindowsNoGrace(time.Duration(10) * time.Second).AdvanceBy(time.Duration(2) * time.Second)
-	countMp := &processor.MaterializeParam{
-		KeySerde:   processor.Uint64Serde{},
-		ValueSerde: processor.Uint64Serde{},
+	countMp := &store.MaterializeParam{
+		KeySerde:   commtypes.Uint64Serde{},
+		ValueSerde: commtypes.Uint64Serde{},
 		MsgSerde:   msgSerde,
 		StoreName:  "auctionBidsCountStore",
 		Changelog:  output_stream,
 	}
-	countWindowStore := processor.NewInMemoryWindowStoreWithChangelog(
+	countWindowStore := store.NewInMemoryWindowStoreWithChangelog(
 		hopWindow.MaxSize()+hopWindow.GracePeriodMs(),
 		hopWindow.MaxSize(), countMp,
 	)

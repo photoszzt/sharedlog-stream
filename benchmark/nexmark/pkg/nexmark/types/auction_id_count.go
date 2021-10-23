@@ -6,7 +6,7 @@ package types
 import (
 	"encoding/json"
 
-	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 )
 
 type AuctionIdCount struct {
@@ -16,7 +16,7 @@ type AuctionIdCount struct {
 
 type AuctionIdCountJSONEncoder struct{}
 
-var _ = processor.Encoder(AuctionIdCountJSONEncoder{})
+var _ = commtypes.Encoder(AuctionIdCountJSONEncoder{})
 
 func (e AuctionIdCountJSONEncoder) Encode(value interface{}) ([]byte, error) {
 	se := value.(*AuctionIdCount)
@@ -25,7 +25,7 @@ func (e AuctionIdCountJSONEncoder) Encode(value interface{}) ([]byte, error) {
 
 type AuctionIdCountJSONDecoder struct{}
 
-var _ = processor.Decoder(AuctionIdCountJSONDecoder{})
+var _ = commtypes.Decoder(AuctionIdCountJSONDecoder{})
 
 func (d AuctionIdCountJSONDecoder) Decode(value []byte) (interface{}, error) {
 	se := &AuctionIdCount{}
@@ -43,7 +43,7 @@ type AuctionIdCountJSONSerde struct {
 
 type AuctionIdCountMsgpEncoder struct{}
 
-var _ = processor.Encoder(AuctionIdCountMsgpEncoder{})
+var _ = commtypes.Encoder(AuctionIdCountMsgpEncoder{})
 
 func (e AuctionIdCountMsgpEncoder) Encode(value interface{}) ([]byte, error) {
 	se := value.(*AuctionIdCount)
@@ -52,7 +52,7 @@ func (e AuctionIdCountMsgpEncoder) Encode(value interface{}) ([]byte, error) {
 
 type AuctionIdCountMsgpDecoder struct{}
 
-var _ = processor.Decoder(AuctionIdCountMsgpDecoder{})
+var _ = commtypes.Decoder(AuctionIdCountMsgpDecoder{})
 
 func (d AuctionIdCountMsgpDecoder) Decode(value []byte) (interface{}, error) {
 	se := &AuctionIdCount{}

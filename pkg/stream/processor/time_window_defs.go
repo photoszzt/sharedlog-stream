@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -113,9 +114,9 @@ func MaxUint64(a, b uint64) uint64 {
 	}
 }
 
-func (w *TimeWindows) WindowsFor(timestamp uint64) (map[uint64]Window, error) {
+func (w *TimeWindows) WindowsFor(timestamp uint64) (map[uint64]commtypes.Window, error) {
 	windowStart := MaxUint64(0, timestamp-w.SizeMs+w.AdvanceMs) / w.AdvanceMs * w.AdvanceMs
-	windows := make(map[uint64]Window)
+	windows := make(map[uint64]commtypes.Window)
 	for windowStart <= timestamp {
 		window, err := NewTimeWindow(windowStart, windowStart+w.SizeMs)
 		if err != nil {

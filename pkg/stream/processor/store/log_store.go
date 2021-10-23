@@ -1,4 +1,4 @@
-package processor
+package store
 
 type LogStore interface {
 	Push(payload []byte, parNum uint8) (uint64, error)

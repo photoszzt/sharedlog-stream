@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -106,7 +107,7 @@ func (w *JoinWindows) After(timeDifference time.Duration) *JoinWindows {
 	return getJoinWindows(w.beforeMs, uint64(timeDifferenceMs), w.graceMs)
 }
 
-func (w *JoinWindows) WindowsFor(timestamp uint64) (map[uint64]Window, error) {
+func (w *JoinWindows) WindowsFor(timestamp uint64) (map[uint64]commtypes.Window, error) {
 	return nil, xerrors.New("WindowsFor is not supported by JoinWindows")
 }
 

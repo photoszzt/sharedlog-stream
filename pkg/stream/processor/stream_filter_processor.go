@@ -1,8 +1,13 @@
 package processor
 
+import (
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
+)
+
 type StreamFilterProcessor struct {
 	pipe Pipe
-	pctx ProcessorContext
+	pctx store.ProcessorContext
 	pred Predicate
 }
 
@@ -14,7 +19,7 @@ func NewStreamFilterProcessor(pred Predicate) *StreamFilterProcessor {
 	}
 }
 
-func (p *StreamFilterProcessor) WithProcessorContext(pctx ProcessorContext) {
+func (p *StreamFilterProcessor) WithProcessorContext(pctx store.ProcessorContext) {
 	p.pctx = pctx
 }
 
@@ -22,7 +27,7 @@ func (p *StreamFilterProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *StreamFilterProcessor) Process(msg Message) error {
+func (p *StreamFilterProcessor) Process(msg commtypes.Message) error {
 	ok, err := p.pred.Assert(&msg)
 	if err != nil {
 		return err
@@ -33,20 +38,20 @@ func (p *StreamFilterProcessor) Process(msg Message) error {
 	return nil
 }
 
-func (p *StreamFilterProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
+func (p *StreamFilterProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
 	ok, err := p.pred.Assert(&msg)
 	if err != nil {
 		return nil, err
 	}
 	if ok {
-		return []Message{msg}, nil
+		return []commtypes.Message{msg}, nil
 	}
 	return nil, nil
 }
 
 type StreamFilterNotProcessor struct {
 	pipe Pipe
-	pctx ProcessorContext
+	pctx store.ProcessorContext
 	pred Predicate
 }
 
@@ -58,7 +63,7 @@ func NewStreamFilterNotProcessor(pred Predicate) *StreamFilterNotProcessor {
 	}
 }
 
-func (p *StreamFilterNotProcessor) WithProcessorContext(pctx ProcessorContext) {
+func (p *StreamFilterNotProcessor) WithProcessorContext(pctx store.ProcessorContext) {
 	p.pctx = pctx
 }
 
@@ -66,7 +71,7 @@ func (p *StreamFilterNotProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *StreamFilterNotProcessor) Process(msg Message) error {
+func (p *StreamFilterNotProcessor) Process(msg commtypes.Message) error {
 	ok, err := p.pred.Assert(&msg)
 	if err != nil {
 		return err
@@ -77,13 +82,13 @@ func (p *StreamFilterNotProcessor) Process(msg Message) error {
 	return nil
 }
 
-func (p *StreamFilterNotProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
+func (p *StreamFilterNotProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
 	ok, err := p.pred.Assert(&msg)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
-		return []Message{msg}, nil
+		return []commtypes.Message{msg}, nil
 	}
 	return nil, nil
 }

@@ -1,11 +1,16 @@
 package processor
 
-import "github.com/rs/zerolog/log"
+import (
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
+
+	"github.com/rs/zerolog/log"
+)
 
 type StreamWindowAggregateProcessor struct {
 	pipe               Pipe
-	store              WindowStore
-	pctx               ProcessorContext
+	store              store.WindowStore
+	pctx               store.ProcessorContext
 	initializer        Initializer
 	aggregator         Aggregator
 	observedStreamTime uint64
@@ -14,7 +19,7 @@ type StreamWindowAggregateProcessor struct {
 
 var _ = Processor(&StreamWindowAggregateProcessor{})
 
-func NewStreamWindowAggregateProcessor(store WindowStore, initializer Initializer, aggregator Aggregator, windows EnumerableWindowDefinition) *StreamWindowAggregateProcessor {
+func NewStreamWindowAggregateProcessor(store store.WindowStore, initializer Initializer, aggregator Aggregator, windows EnumerableWindowDefinition) *StreamWindowAggregateProcessor {
 	return &StreamWindowAggregateProcessor{
 		initializer:        initializer,
 		aggregator:         aggregator,
@@ -28,11 +33,11 @@ func (p *StreamWindowAggregateProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *StreamWindowAggregateProcessor) WithProcessorContext(pctx ProcessorContext) {
+func (p *StreamWindowAggregateProcessor) WithProcessorContext(pctx store.ProcessorContext) {
 	p.pctx = pctx
 }
 
-func (p *StreamWindowAggregateProcessor) Process(msg Message) error {
+func (p *StreamWindowAggregateProcessor) Process(msg commtypes.Message) error {
 	newMsgs, err := p.ProcessAndReturn(msg)
 	if err != nil {
 		return err
@@ -43,7 +48,7 @@ func (p *StreamWindowAggregateProcessor) Process(msg Message) error {
 	return nil
 }
 
-func (p *StreamWindowAggregateProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
+func (p *StreamWindowAggregateProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
 	if msg.Key == nil {
 		log.Warn().Msgf("skipping record due to null key. key=%v, val=%v", msg.Key, msg.Value)
 		return nil, nil
@@ -57,7 +62,7 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(msg Message) ([]Messag
 	if err != nil {
 		return nil, err
 	}
-	newMsgs := make([]Message, 0)
+	newMsgs := make([]commtypes.Message, 0)
 	for windowStart, window := range matchedWindows {
 		windowEnd := window.End()
 		if windowEnd > closeTime {
@@ -69,7 +74,7 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(msg Message) ([]Messag
 				return nil, err
 			}
 			if exists {
-				oldAggTs := val.(*ValueTimestamp)
+				oldAggTs := val.(*commtypes.ValueTimestamp)
 				oldAgg = oldAggTs.Value
 				if msg.Timestamp > oldAggTs.Timestamp {
 					newTs = msg.Timestamp
@@ -81,11 +86,11 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(msg Message) ([]Messag
 				newTs = msg.Timestamp
 			}
 			newAgg = p.aggregator.Apply(msg.Key, msg.Value, oldAgg)
-			err = p.store.Put(msg.Key, &ValueTimestamp{Value: newAgg, Timestamp: newTs}, windowStart)
+			err = p.store.Put(msg.Key, &commtypes.ValueTimestamp{Value: newAgg, Timestamp: newTs}, windowStart)
 			if err != nil {
 				return nil, err
 			}
-			newMsgs = append(newMsgs, Message{Key: WindowedKey{Key: msg.Key, Window: window}, Value: newAgg, Timestamp: newTs})
+			newMsgs = append(newMsgs, commtypes.Message{Key: commtypes.WindowedKey{Key: msg.Key, Window: window}, Value: newAgg, Timestamp: newTs})
 		} else {
 			log.Warn().Interface("key", msg.Key).
 				Interface("value", msg.Value).

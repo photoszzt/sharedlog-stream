@@ -1,4 +1,4 @@
-package processor
+package commtypes
 
 import (
 	"encoding/binary"
@@ -12,6 +12,13 @@ var (
 	sizeNot4 = xerrors.New("size of value to deserialized is not 4")
 	sizeNot2 = xerrors.New("size of value to deserialized is not 2")
 	sizeNot1 = xerrors.New("size of value to deserialized is not 1")
+)
+
+type SerdeFormat uint8
+
+const (
+	JSON SerdeFormat = 0
+	MSGP SerdeFormat = 1
 )
 
 type Encoder interface {

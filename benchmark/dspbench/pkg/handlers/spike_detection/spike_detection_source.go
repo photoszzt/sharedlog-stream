@@ -10,7 +10,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"strconv"
 	"time"
 
@@ -57,9 +57,9 @@ func (h *spikeDetectionSource) Call(ctx context.Context, input []byte) ([]byte, 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func encode_sensor_event(keySerde processor.Serde,
-	valSerde processor.Serde,
-	msgSerde processor.MsgSerde, key string, val *SensorData) ([]byte, error) {
+func encode_sensor_event(keySerde commtypes.Serde,
+	valSerde commtypes.Serde,
+	msgSerde commtypes.MsgSerde, key string, val *SensorData) ([]byte, error) {
 
 	val_encoded, err := valSerde.Encode(val)
 	if err != nil {
@@ -92,10 +92,10 @@ func (h *spikeDetectionSource) eventGeneration(ctx context.Context, sp *common.S
 			Message: fmt.Sprintf("NewSharedlogStream failed: %v", err),
 		}
 	}
-	var sdSerde processor.Serde
-	if sp.SerdeFormat == uint8(processor.JSON) {
+	var sdSerde commtypes.Serde
+	if sp.SerdeFormat == uint8(commtypes.JSON) {
 		sdSerde = SensorDataJSONSerde{}
-	} else if sp.SerdeFormat == uint8(processor.MSGP) {
+	} else if sp.SerdeFormat == uint8(commtypes.MSGP) {
 		sdSerde = SensorDataMsgpSerde{}
 	} else {
 		return &common.FnOutput{
@@ -103,14 +103,14 @@ func (h *spikeDetectionSource) eventGeneration(ctx context.Context, sp *common.S
 			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat),
 		}
 	}
-	msgSerde, err := processor.GetMsgSerde(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
 	}
-	strSerde := processor.StringSerde{}
+	strSerde := commtypes.StringSerde{}
 	latencies := make([]int, 0, 128)
 	numEvents := sp.NumEvents
 	duration := time.Duration(sp.Duration) * time.Second

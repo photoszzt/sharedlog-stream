@@ -3,7 +3,7 @@ package types
 
 import (
 	"encoding/json"
-	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 )
 
 type AuctionIdCntMax struct {
@@ -14,8 +14,8 @@ type AuctionIdCntMax struct {
 
 type AuctionIdCntMaxJSONSerde struct{}
 
-var _ = processor.Encoder(AuctionIdCntMaxJSONSerde{})
-var _ = processor.Decoder(AuctionIdCntMaxJSONSerde{})
+var _ = commtypes.Encoder(AuctionIdCntMaxJSONSerde{})
+var _ = commtypes.Decoder(AuctionIdCntMaxJSONSerde{})
 
 func (s AuctionIdCntMaxJSONSerde) Encode(value interface{}) ([]byte, error) {
 	ai := value.(*AuctionIdCntMax)
@@ -33,7 +33,7 @@ func (s AuctionIdCntMaxJSONSerde) Decode(value []byte) (interface{}, error) {
 
 type AuctionIdCntMaxMsgpSerde struct{}
 
-var _ = processor.Encoder(AuctionIdCntMaxMsgpSerde{})
+var _ = commtypes.Encoder(AuctionIdCntMaxMsgpSerde{})
 
 func (s AuctionIdCntMaxMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	ai := value.(*AuctionIdCntMax)

@@ -9,8 +9,9 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/stream"
 	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 
@@ -28,73 +29,131 @@ func NewQuery7(env types.Environment) types.FuncHandler {
 }
 
 func (h *query7Handler) Call(ctx context.Context, input []byte) ([]byte, error) {
-	parsedInput := &ntypes.QueryInput{}
+	parsedInput := &common.QueryInput{}
 	err := json.Unmarshal(input, parsedInput)
 	if err != nil {
 		return nil, err
 	}
-	outputCh := make(chan *common.FnOutput)
-	go Query7(ctx, h.env, parsedInput, outputCh)
-	output := <-outputCh
+	output := h.process(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("query 2 output: %v\n", encodedOutput)
 	return utils.CompressData(encodedOutput), nil
 }
 
-func Query7(ctx context.Context, env types.Environment, input *ntypes.QueryInput, output chan *common.FnOutput) {
-	inputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.InputTopicName)
+func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *common.FnOutput {
+	inputStream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, input.InputTopicName, uint8(input.NumInPartition))
 	if err != nil {
-		output <- &common.FnOutput{
+		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("NewSharedlogStream for input stream failed: %v", err),
 		}
-		return
 	}
 
-	/*
-		outputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.OutputTopicName)
-		if err != nil {
-			output <- &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("NewSharedlogStream for output stream failed: %v", err),
-			}
-			return
-		}
-	*/
-
-	// var msgEncoder processor.MsgEncoder
-	msgSerde, err := processor.GetMsgSerde(input.SerdeFormat)
+	outputStream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, input.OutputTopicName, uint8(input.NumOutPartition))
 	if err != nil {
-		output <- &common.FnOutput{
+		return &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("NewSharedlogStream for output stream failed: %v", err),
+		}
+	}
+
+	msgSerde, err := commtypes.GetMsgSerde(input.SerdeFormat)
+	if err != nil {
+		return &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
 	}
 	eventSerde, err := getEventSerde(input.SerdeFormat)
 	if err != nil {
-		output <- &common.FnOutput{
+		return &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
 	}
 
+	var ptSerde commtypes.Serde
+	if input.SerdeFormat == uint8(commtypes.JSON) {
+		ptSerde = ntypes.PriceTimeJSONSerde{}
+	} else if input.SerdeFormat == uint8(commtypes.MSGP) {
+		ptSerde = ntypes.PriceTimeMsgpSerde{}
+	} else {
+		return &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", input.SerdeFormat),
+		}
+	}
+
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      time.Duration(input.Duration) * time.Second,
-		KeyDecoder:   processor.StringDecoder{},
+		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
 	}
-	builder := stream.NewStreamBuilder()
-	inputs := builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream, inConfig))
-	// bid :=
-	inputs.Filter("filter-bid", processor.PredicateFunc(func(msg *processor.Message) (bool, error) {
-		event := msg.Value.(ntypes.Event)
-		return event.Etype == ntypes.BID, nil
-	})).Map("select-key", processor.MapperFunc(func(msg processor.Message) (processor.Message, error) {
-		event := msg.Value.(*ntypes.Event)
-		return processor.Message{Key: event.Bid.Auction, Value: msg.Value, Timestamp: msg.Timestamp}, nil
-	}))
+	outConfig := &sharedlog_stream.StreamSinkConfig{
+		MsgEncoder: msgSerde,
+	}
+	duration := time.Duration(input.Duration) * time.Second
+	src := sharedlog_stream.NewShardedSharedLogStreamSource(inputStream, inConfig)
+	sink := sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig)
+
+	tw := processor.NewTimeWindowsNoGrace(time.Duration(10) * time.Second)
+	maxPriceBidStoreName := "max-price-bid-tab"
+	mp := &store.MaterializeParam{
+		KeySerde:   commtypes.Uint64Serde{},
+		ValueSerde: ptSerde,
+		StoreName:  maxPriceBidStoreName,
+		ParNum:     input.ParNum,
+		Changelog:  outputStream,
+		MsgSerde:   msgSerde,
+	}
+	store := store.NewInMemoryWindowStoreWithChangelog(tw.MaxSize()+tw.GracePeriodMs(), tw.MaxSize(), mp)
+	maxPriceBid := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(store,
+		processor.InitializerFunc(func() interface{} {
+			return ntypes.PriceTime{
+				Price:    0,
+				DateTime: 0,
+			}
+		}),
+		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
+			val := value.(*ntypes.Event)
+			agg := aggregate.(ntypes.PriceTime)
+			if val.Bid.Price > agg.Price {
+				return ntypes.PriceTime{
+					Price:    val.Bid.Price,
+					DateTime: val.Bid.DateTime,
+				}
+			} else {
+				return agg
+			}
+
+		}), tw))
+
+	latencies := make([]int, 0, 128)
+	startTime := time.Now()
+	for {
+		if duration != 0 && time.Since(startTime) >= duration {
+			break
+		}
+		procStart := time.Now()
+		msg, err := src.Consume(input.ParNum)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: err.Error(),
+			}
+		}
+		maxPriceBidMsg, err := maxPriceBid.ProcessAndReturn(msg)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: err.Error(),
+			}
+		}
+
+	}
+
+	return nil
 }

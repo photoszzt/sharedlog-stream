@@ -2,21 +2,23 @@ package sharedlog_stream
 
 import (
 	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 )
 
 type SharedLogStreamSink struct {
 	pipe         processor.Pipe
-	pctx         processor.ProcessorContext
+	pctx         store.ProcessorContext
 	stream       *SharedLogStream
-	keyEncoder   processor.Encoder
-	valueEncoder processor.Encoder
-	msgEncoder   processor.MsgEncoder
+	keyEncoder   commtypes.Encoder
+	valueEncoder commtypes.Encoder
+	msgEncoder   commtypes.MsgEncoder
 }
 
 type StreamSinkConfig struct {
-	KeyEncoder   processor.Encoder
-	ValueEncoder processor.Encoder
-	MsgEncoder   processor.MsgEncoder
+	KeyEncoder   commtypes.Encoder
+	ValueEncoder commtypes.Encoder
+	MsgEncoder   commtypes.MsgEncoder
 }
 
 func NewSharedLogStreamSink(stream *SharedLogStream, config *StreamSinkConfig) *SharedLogStreamSink {
@@ -34,11 +36,11 @@ func (sls *SharedLogStreamSink) WithPipe(pipe processor.Pipe) {
 	sls.pipe = pipe
 }
 
-func (sls *SharedLogStreamSink) WithProcessorContext(pctx processor.ProcessorContext) {
+func (sls *SharedLogStreamSink) WithProcessorContext(pctx store.ProcessorContext) {
 	sls.pctx = pctx
 }
 
-func (sls *SharedLogStreamSink) Process(msg processor.Message) error {
+func (sls *SharedLogStreamSink) Process(msg commtypes.Message) error {
 	if msg.Key == nil && msg.Value == nil {
 		return nil
 	}
@@ -65,6 +67,6 @@ func (sls *SharedLogStreamSink) Process(msg processor.Message) error {
 	return err
 }
 
-func (sls *SharedLogStreamSink) ProcessAndReturn(msg processor.Message) ([]processor.Message, error) {
+func (sls *SharedLogStreamSink) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
 	panic("not implemented")
 }

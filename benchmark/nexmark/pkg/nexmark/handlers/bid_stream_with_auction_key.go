@@ -9,6 +9,7 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -53,7 +54,7 @@ func (h *bidKeyedByAuction) process(ctx context.Context, sp *common.QueryInput) 
 			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
 		}
 	}
-	msgSerde, err := processor.GetMsgSerde(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -71,13 +72,13 @@ func (h *bidKeyedByAuction) process(ctx context.Context, sp *common.QueryInput) 
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      duration,
 		MsgDecoder:   msgSerde,
-		KeyDecoder:   processor.StringDecoder{},
+		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: eventSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
 		MsgEncoder:   msgSerde,
 		ValueEncoder: eventSerde,
-		KeyEncoder:   processor.Uint64Encoder{},
+		KeyEncoder:   commtypes.Uint64Encoder{},
 	}
 
 	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
@@ -85,14 +86,14 @@ func (h *bidKeyedByAuction) process(ctx context.Context, sp *common.QueryInput) 
 	latencies := make([]int, 0, 128)
 
 	filterBid := processor.NewStreamFilterProcessor(processor.PredicateFunc(
-		func(m *processor.Message) (bool, error) {
+		func(m *commtypes.Message) (bool, error) {
 			event := m.Value.(*ntypes.Event)
 			return event.Etype == ntypes.BID, nil
 		}))
 	selectKey := processor.NewStreamMapProcessor(processor.MapperFunc(
-		func(m processor.Message) (processor.Message, error) {
+		func(m commtypes.Message) (commtypes.Message, error) {
 			event := m.Value.(*ntypes.Event)
-			return processor.Message{Key: event.Bid.Auction, Value: m.Value, Timestamp: m.Timestamp}, nil
+			return commtypes.Message{Key: event.Bid.Auction, Value: m.Value, Timestamp: m.Timestamp}, nil
 		}))
 	startTime := time.Now()
 	for {

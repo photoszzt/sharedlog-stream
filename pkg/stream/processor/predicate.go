@@ -1,13 +1,15 @@
 package processor
 
+import "sharedlog-stream/pkg/stream/processor/commtypes"
+
 var _ = (Predicate)(PredicateFunc(nil))
 
-type PredicateFunc func(*Message) (bool, error)
+type PredicateFunc func(*commtypes.Message) (bool, error)
 
 type Predicate interface {
-	Assert(*Message) (bool, error)
+	Assert(*commtypes.Message) (bool, error)
 }
 
-func (fn PredicateFunc) Assert(msg *Message) (bool, error) {
+func (fn PredicateFunc) Assert(msg *commtypes.Message) (bool, error) {
 	return fn(msg)
 }

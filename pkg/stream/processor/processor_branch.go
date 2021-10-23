@@ -1,9 +1,14 @@
 package processor
 
+import (
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
+)
+
 // Branch processor
 type BranchProcessor struct {
 	pipe  Pipe
-	pctx  ProcessorContext
+	pctx  store.ProcessorContext
 	preds []Predicate
 }
 
@@ -18,11 +23,11 @@ func (p *BranchProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *BranchProcessor) WithProcessorContext(ctx ProcessorContext) {
+func (p *BranchProcessor) WithProcessorContext(ctx store.ProcessorContext) {
 	p.pctx = ctx
 }
 
-func (p *BranchProcessor) Process(msg Message) error {
+func (p *BranchProcessor) Process(msg commtypes.Message) error {
 	for i, pred := range p.preds {
 		ok, err := pred.Assert(&msg)
 		if err != nil {
@@ -39,6 +44,6 @@ func (p *BranchProcessor) Process(msg Message) error {
 	return nil
 }
 
-func (p *BranchProcessor) ProcessAndReturn(msg Message) ([]Message, error) {
+func (p *BranchProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
 	panic("not implemented")
 }

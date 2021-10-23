@@ -7,6 +7,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sync"
 	"time"
 
@@ -21,7 +22,7 @@ var (
 	FLAGS_file_name    string
 )
 
-func invokeSourceFunc(client *http.Client, response *common.FnOutput, wg *sync.WaitGroup, serdeFormat processor.SerdeFormat) {
+func invokeSourceFunc(client *http.Client, response *common.FnOutput, wg *sync.WaitGroup, serdeFormat commtypes.SerdeFormat) {
 	defer wg.Done()
 
 	sp := &common.SourceParam{
@@ -47,14 +48,14 @@ func main() {
 	flag.StringVar(&FLAGS_file_name, "in_fname", "/mnt/data/books.dat", "data source file name")
 	flag.Parse()
 
-	var serdeFormat processor.SerdeFormat
+	var serdeFormat commtypes.SerdeFormat
 	if FLAGS_serdeFormat == "json" {
-		serdeFormat = processor.JSON
+		serdeFormat = commtypes.JSON
 	} else if FLAGS_serdeFormat == "msgp" {
-		serdeFormat = processor.MSGP
+		serdeFormat = commtypes.MSGP
 	} else {
 		log.Error().Msgf("serde format is not recognized; default back to JSON")
-		serdeFormat = processor.JSON
+		serdeFormat = commtypes.JSON
 	}
 
 	numCountInstance := uint8(5)

@@ -1,7 +1,8 @@
-package processor
+package store
 
 import (
 	"bytes"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/treemap"
 
 	"github.com/rs/zerolog/log"
@@ -109,7 +110,7 @@ func (st *InMemoryKeyValueStoreWithChangelog) PutIfAbsent(key KeyT, value ValueT
 	return origVal, nil
 }
 
-func (st *InMemoryKeyValueStoreWithChangelog) PutAll(entries []*Message) error {
+func (st *InMemoryKeyValueStoreWithChangelog) PutAll(entries []*commtypes.Message) error {
 	for _, msg := range entries {
 		err := st.Put(msg.Key, msg.Value)
 		if err != nil {
@@ -163,6 +164,6 @@ func (st *InMemoryKeyValueStoreWithChangelog) ReverseRange(from KeyT, to KeyT) K
 	return st.kvstore.ReverseRange(fromBytes, toBytes)
 }
 
-func (st *InMemoryKeyValueStoreWithChangelog) PrefixScan(prefix interface{}, prefixKeyEncoder Encoder) KeyValueIterator {
+func (st *InMemoryKeyValueStoreWithChangelog) PrefixScan(prefix interface{}, prefixKeyEncoder commtypes.Encoder) KeyValueIterator {
 	panic("not implemented")
 }

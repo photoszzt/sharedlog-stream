@@ -6,7 +6,7 @@ package types
 import (
 	"encoding/json"
 
-	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 )
 
 type PersonTime struct {
@@ -17,7 +17,7 @@ type PersonTime struct {
 
 type PersonTimeJSONEncoder struct{}
 
-var _ = processor.Encoder(PersonTimeJSONEncoder{})
+var _ = commtypes.Encoder(PersonTimeJSONEncoder{})
 
 func (e PersonTimeJSONEncoder) Encode(value interface{}) ([]byte, error) {
 	se := value.(*PersonTime)
@@ -26,7 +26,7 @@ func (e PersonTimeJSONEncoder) Encode(value interface{}) ([]byte, error) {
 
 type PersonTimeJSONDecoder struct{}
 
-var _ = processor.Decoder(PersonTimeJSONDecoder{})
+var _ = commtypes.Decoder(PersonTimeJSONDecoder{})
 
 func (d PersonTimeJSONDecoder) Decode(value []byte) (interface{}, error) {
 	se := &PersonTime{}
@@ -44,7 +44,7 @@ type PersonTimeJSONSerde struct {
 
 type PersonTimeMsgpEncoder struct{}
 
-var _ = processor.Encoder(PersonTimeMsgpEncoder{})
+var _ = commtypes.Encoder(PersonTimeMsgpEncoder{})
 
 func (e PersonTimeMsgpEncoder) Encode(value interface{}) ([]byte, error) {
 	se := value.(*PersonTime)
@@ -53,7 +53,7 @@ func (e PersonTimeMsgpEncoder) Encode(value interface{}) ([]byte, error) {
 
 type PersonTimeMsgpDecoder struct{}
 
-var _ = processor.Decoder(PersonTimeMsgpDecoder{})
+var _ = commtypes.Decoder(PersonTimeMsgpDecoder{})
 
 func (d PersonTimeMsgpDecoder) Decode(value []byte) (interface{}, error) {
 	se := &PersonTime{}

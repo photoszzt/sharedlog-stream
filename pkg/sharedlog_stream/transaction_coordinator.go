@@ -5,7 +5,7 @@ package sharedlog_stream
 import (
 	"context"
 
-	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	"cs.utexas.edu/zjia/faas/types"
 	"golang.org/x/xerrors"
@@ -34,20 +34,20 @@ const (
 )
 
 type TopicPartition struct {
-	Topic  string `zid:"0"`
-	ParNum uint32 `zid:"1"`
+	Topic  string `json:"topic" msg:"topic"`
+	ParNum uint32 `json:"parnum" msg:"parnum"`
 }
 
 type TxnState struct {
-	State TransactionStatus `zid:"0"`
+	State TransactionStatus `json:"state" msg:"state"`
 }
 
 type TransactionCoordinator struct {
 	TransactionalId string
 	TransactionLog  *SharedLogStream
 	currentStatus   TransactionStatus
-	payloadSerde    processor.Serde
-	msgSerde        processor.MsgSerde
+	payloadSerde    commtypes.Serde
+	msgSerde        commtypes.MsgSerde
 }
 
 func NewTransactionCoordinator(ctx context.Context, env types.Environment, transactional_id string) (*TransactionCoordinator, error) {
