@@ -110,6 +110,7 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 		MsgSerde:   msgSerde,
 	}
 	store := store.NewInMemoryWindowStoreWithChangelog(tw.MaxSize()+tw.GracePeriodMs(), tw.MaxSize(), mp)
+
 	maxPriceBid := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(store,
 		processor.InitializerFunc(func() interface{} {
 			return ntypes.PriceTime{
@@ -130,6 +131,15 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 			}
 
 		}), tw))
+	transformWithStore := processor.NewMeteredProcessor(NewQ7TransformProcessor(store))
+	filterTime := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(func(m *commtypes.Message) (bool, error) {
+		bm := m.Value.(ntypes.BidAndMax)
+		lb := bm.MaxDateTime - 10*1000
+		return bm.DateTime >= lb && bm.DateTime <= bm.MaxDateTime, nil
+	})))
+
+	srcLatencies := make([]int, 0, 128)
+	sinkLatencies := make([]int, 0, 128)
 
 	latencies := make([]int, 0, 128)
 	startTime := time.Now()
@@ -145,6 +155,8 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 				Message: err.Error(),
 			}
 		}
+		srcLat := time.Since(procStart)
+		srcLatencies = append(srcLatencies, int(srcLat.Microseconds()))
 		maxPriceBidMsg, err := maxPriceBid.ProcessAndReturn(msg)
 		if err != nil {
 			return &common.FnOutput{
@@ -152,8 +164,46 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 				Message: err.Error(),
 			}
 		}
-
+		transformedMsgs, err := transformWithStore.ProcessAndReturn(maxPriceBidMsg[0])
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: err.Error(),
+			}
+		}
+		for _, tmsg := range transformedMsgs {
+			filtered, err := filterTime.ProcessAndReturn(tmsg)
+			if err != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
+			}
+			sinkStart := time.Now()
+			err = sink.Sink(filtered[0], input.ParNum)
+			if err != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
+			}
+			sinkLat := time.Since(sinkStart)
+			sinkLatencies = append(sinkLatencies, int(sinkLat.Microseconds()))
+		}
+		elapsed := time.Since(procStart)
+		latencies = append(latencies, int(elapsed.Microseconds()))
 	}
 
-	return nil
+	return &common.FnOutput{
+		Success:  true,
+		Duration: time.Since(startTime).Seconds(),
+		Latencies: map[string][]int{
+			"e2e":    latencies,
+			"sink":   sinkLatencies,
+			"src":    srcLatencies,
+			"maxBid": maxPriceBid.GetLatency(),
+			"trans":  transformWithStore.GetLatency(),
+			"filtT":  filterTime.GetLatency(),
+		},
+	}
 }
