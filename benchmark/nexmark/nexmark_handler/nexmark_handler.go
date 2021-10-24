@@ -41,10 +41,18 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewQuery4(env), nil
 	case "query5":
 		return handlers.NewQuery5(env), nil
+	case "q5bidkeyedbyauction":
+		return handlers.NewBidKeyedByAuctionHandler(env), nil
+	case "q5aucbids":
+		return handlers.NewQ5AuctionBids(env), nil
+	case "q5maxbid":
+		return handlers.NewQ5MaxBid(env), nil
 	case "query6":
 		return handlers.NewQuery6(env), nil
 	case "query7":
 		return handlers.NewQuery7(env), nil
+	case "q7bidskeyedbyprice":
+		return handlers.NewQ7BidKeyedByPriceHandler(env), nil
 	case "query8":
 		return handlers.NewQuery8(env), nil
 	case "windowavggroupby":

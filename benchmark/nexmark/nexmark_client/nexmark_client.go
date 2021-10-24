@@ -86,7 +86,7 @@ func generalQuery() {
 	wg.Wait()
 }
 
-func windowedAvg() {
+func getSerdeFormat() commtypes.SerdeFormat {
 	var serdeFormat commtypes.SerdeFormat
 	if FLAGS_serdeFormat == "json" {
 		serdeFormat = commtypes.JSON
@@ -96,6 +96,128 @@ func windowedAvg() {
 		log.Error().Msgf("serde format is not recognized; default back to JSON")
 		serdeFormat = commtypes.JSON
 	}
+	return serdeFormat
+}
+
+func query5() {
+	serdeFormat := getSerdeFormat()
+
+	numInstance := uint8(5)
+
+	q5BidKeyedByAuctionNodeConfig := &processor.ClientNodeConfig{
+		FuncName:    "q5bidkeyedbyauction",
+		GatewayUrl:  FLAGS_faas_gateway,
+		NumInstance: 1,
+	}
+	q5BidKeyedByAuctionInputParams := make([]*common.QueryInput, q5BidKeyedByAuctionNodeConfig.NumInstance)
+	for i := 0; i < int(q5BidKeyedByAuctionNodeConfig.NumInstance); i++ {
+		q5BidKeyedByAuctionInputParams[i] = &common.QueryInput{
+			Duration:        uint32(FLAGS_duration),
+			InputTopicName:  "nexmark_src",
+			OutputTopicName: "bids-repartition",
+			SerdeFormat:     uint8(serdeFormat),
+			NumInPartition:  1,
+			NumOutPartition: numInstance,
+		}
+	}
+	q5BidKeyedByAuction := processor.NewClientNode(q5BidKeyedByAuctionNodeConfig)
+
+	q5AucBidsNodeConfig := &processor.ClientNodeConfig{
+		FuncName:    "q5aucbids",
+		GatewayUrl:  FLAGS_faas_gateway,
+		NumInstance: uint32(numInstance),
+	}
+	q5aucBidsInputParams := make([]*common.QueryInput, q5AucBidsNodeConfig.NumInstance)
+	for i := 0; i < int(q5AucBidsNodeConfig.NumInstance); i++ {
+		q5aucBidsInputParams[i] = &common.QueryInput{
+			Duration:        uint32(FLAGS_duration),
+			InputTopicName:  "bids-repartition",
+			OutputTopicName: "auctionBids-repartition",
+			SerdeFormat:     uint8(serdeFormat),
+			NumInPartition:  numInstance,
+			NumOutPartition: numInstance,
+		}
+	}
+	q5aucBids := processor.NewClientNode(q5AucBidsNodeConfig)
+
+	q5maxbidNodeConfig := &processor.ClientNodeConfig{
+		FuncName:    "q5maxbid",
+		GatewayUrl:  FLAGS_faas_gateway,
+		NumInstance: uint32(numInstance),
+	}
+	q5maxbidInputParams := make([]*common.QueryInput, q5maxbidNodeConfig.NumInstance)
+	for i := 0; i < int(q5maxbidNodeConfig.NumInstance); i++ {
+		q5maxbidInputParams[i] = &common.QueryInput{
+			Duration:        uint32(FLAGS_duration),
+			InputTopicName:  "auctionBids-repartition",
+			OutputTopicName: "nexmark-q5-out",
+			SerdeFormat:     uint8(serdeFormat),
+			NumInPartition:  numInstance,
+			NumOutPartition: numInstance,
+		}
+	}
+	q5maxBid := processor.NewClientNode(q5maxbidNodeConfig)
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			IdleConnTimeout: 30 * time.Second,
+		},
+		Timeout: time.Duration(FLAGS_duration*2) * time.Second,
+	}
+
+	var wg sync.WaitGroup
+	var sourceOutput common.FnOutput
+	q5BidKeyedByAuctionOutput := make([]common.FnOutput, q5BidKeyedByAuctionNodeConfig.NumInstance)
+	q5AucBidsOutput := make([]common.FnOutput, q5AucBidsNodeConfig.NumInstance)
+	q5maxBidOutput := make([]common.FnOutput, q5maxbidNodeConfig.NumInstance)
+
+	wg.Add(1)
+	go invokeSourceFunc(client, &sourceOutput, &wg)
+
+	for i := 0; i < int(q5BidKeyedByAuctionNodeConfig.NumInstance); i++ {
+		wg.Add(1)
+		q5BidKeyedByAuctionInputParams[i].ParNum = 0
+		go q5BidKeyedByAuction.Invoke(client, &q5BidKeyedByAuctionOutput[i], &wg, q5BidKeyedByAuctionInputParams[i])
+	}
+
+	for i := 0; i < int(q5AucBidsNodeConfig.NumInstance); i++ {
+		wg.Add(1)
+		q5aucBidsInputParams[i].ParNum = uint8(i)
+		go q5aucBids.Invoke(client, &q5AucBidsOutput[i], &wg, q5aucBidsInputParams[i])
+	}
+
+	for i := 0; i < int(q5maxbidNodeConfig.NumInstance); i++ {
+		wg.Add(1)
+		q5maxbidInputParams[i].ParNum = uint8(i)
+		go q5maxBid.Invoke(client, &q5maxBidOutput[i], &wg, q5maxbidInputParams[i])
+	}
+	wg.Wait()
+
+	if sourceOutput.Success {
+		common.ProcessThroughputLat("source", sourceOutput.Latencies["e2e"], sourceOutput.Duration)
+	}
+
+	for i := 0; i < int(q5BidKeyedByAuctionNodeConfig.NumInstance); i++ {
+		if q5BidKeyedByAuctionOutput[i].Success {
+			common.ProcessThroughputLat("q5-bid-keyed-by-auciton", q5BidKeyedByAuctionOutput[i].Latencies["e2e"], q5BidKeyedByAuctionOutput[i].Duration)
+		}
+	}
+
+	for i := 0; i < int(q5AucBidsNodeConfig.NumInstance); i++ {
+		if q5AucBidsOutput[i].Success {
+			common.ProcessThroughputLat("q5-auction-bids", q5BidKeyedByAuctionOutput[i].Latencies["e2e"], q5BidKeyedByAuctionOutput[i].Duration)
+		}
+	}
+
+	for i := 0; i < int(q5maxbidNodeConfig.NumInstance); i++ {
+		if q5maxBidOutput[i].Success {
+			common.ProcessThroughputLat("q5-max-bids", q5maxBidOutput[i].Latencies["e2e"], q5maxBidOutput[i].Duration)
+		}
+	}
+}
+
+func windowedAvg() {
+	serdeFormat := getSerdeFormat()
 
 	numAggInstance := uint8(5)
 	groupByNodeConfig := &processor.ClientNodeConfig{

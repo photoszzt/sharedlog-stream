@@ -11,6 +11,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -20,30 +21,30 @@ type q5AuctionBids struct {
 	env types.Environment
 }
 
-func NewQ5AuctionBids(env types.Environment) types.FuncHandler {
+func hashSe(key *ntypes.StartEndTime) uint32 {
+	h := fnv.New32a()
+	h.Write([]byte(fmt.Sprintf("%v", key)))
+	return h.Sum32()
+}
+
+func NewQ5AuctionBids(env types.Environment) *q5AuctionBids {
 	return &q5AuctionBids{
 		env: env,
 	}
 }
 
 func (h *q5AuctionBids) Call(ctx context.Context, input []byte) ([]byte, error) {
-	parsedInput := &common.QueryInput{}
-	err := json.Unmarshal(input, parsedInput)
+	sp := &common.QueryInput{}
+	err := json.Unmarshal(input, sp)
 	if err != nil {
 		return nil, err
 	}
-	output := h.process(ctx, parsedInput)
+	output := h.process(ctx, sp)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	return utils.CompressData(encodedOutput), nil
-}
-
-func hashSe(key *ntypes.StartEndTime) uint32 {
-	h := fnv.New32a()
-	h.Write([]byte(fmt.Sprintf("%v", key)))
-	return h.Sum32()
 }
 
 func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -61,7 +62,15 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
 		}
 	}
+
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+	eventSerde, err := getEventSerde(sp.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -88,7 +97,7 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      time.Duration(sp.Duration),
 		KeyDecoder:   commtypes.Uint64Serde{},
-		ValueDecoder: commtypes.Uint64Serde{},
+		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
@@ -98,6 +107,35 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 	}
 	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
 	sink := sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig)
+
+	hopWindow := processor.NewTimeWindowsNoGrace(time.Duration(10) * time.Second).AdvanceBy(time.Duration(2) * time.Second)
+	countStoreName := "auctionBidsCountStore"
+	changelogName := countStoreName + "-changelog"
+	changelog, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, changelogName, uint8(sp.NumOutPartition))
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
+		}
+	}
+	countMp := &store.MaterializeParam{
+		KeySerde:   commtypes.Uint64Serde{},
+		ValueSerde: commtypes.Uint64Serde{},
+		MsgSerde:   msgSerde,
+		StoreName:  countStoreName,
+		Changelog:  changelog,
+	}
+	countWindowStore := store.NewInMemoryWindowStoreWithChangelog(
+		hopWindow.MaxSize()+hopWindow.GracePeriodMs(),
+		hopWindow.MaxSize(), countMp,
+	)
+	countProc := processor.NewStreamWindowAggregateProcessor(countWindowStore,
+		processor.InitializerFunc(func() interface{} { return 0 }),
+		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
+			val := aggregate.(uint64)
+			return val + 1
+		}), hopWindow)
+
 	groupByAuction := processor.NewStreamMapProcessor(processor.MapperFunc(
 		func(msg commtypes.Message) (commtypes.Message, error) {
 			key := msg.Key.(*commtypes.WindowedKey)
@@ -126,19 +164,28 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 				Message: err.Error(),
 			}
 		}
-		newMsg, err := groupByAuction.ProcessAndReturn(msg)
+		countMsgs, err := countProc.ProcessAndReturn(msg)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
 			}
 		}
-		par := uint8(hashSe(newMsg[0].Key.(*ntypes.StartEndTime)) % uint32(sp.NumOutPartition))
-		err = sink.Sink(newMsg[0], par)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
+		for _, countMsg := range countMsgs {
+			changeKeyedMsg, err := groupByAuction.ProcessAndReturn(countMsg)
+			if err != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
+			}
+			par := uint8(hashSe(changeKeyedMsg[0].Key.(*ntypes.StartEndTime)) % uint32(sp.NumOutPartition))
+			err = sink.Sink(changeKeyedMsg[0], par)
+			if err != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
 			}
 		}
 		elapsed := time.Since(procStart)
