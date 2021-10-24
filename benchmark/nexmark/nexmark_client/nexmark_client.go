@@ -312,6 +312,8 @@ func main() {
 	switch FLAGS_app_name {
 	case "windowedAvg":
 		windowedAvg()
+	case "q5":
+		query5()
 	default:
 		generalQuery()
 	}
