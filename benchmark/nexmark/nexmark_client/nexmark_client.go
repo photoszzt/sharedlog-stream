@@ -216,6 +216,91 @@ func query5() {
 	}
 }
 
+func query7() {
+	serdeFormat := getSerdeFormat()
+
+	numInstance := uint8(5)
+	q7BidKeyedByPriceNodeConfig := &processor.ClientNodeConfig{
+		FuncName:    "q7bidskeyedbyprice",
+		GatewayUrl:  FLAGS_faas_gateway,
+		NumInstance: 1,
+	}
+	q7BidKeyedByPriceInputParams := make([]*common.QueryInput, q7BidKeyedByPriceNodeConfig.NumInstance)
+	for i := 0; i < int(q7BidKeyedByPriceNodeConfig.NumInstance); i++ {
+		q7BidKeyedByPriceInputParams[i] = &common.QueryInput{
+			Duration:        uint32(FLAGS_duration),
+			InputTopicName:  "nexmark_src",
+			OutputTopicName: "bids-repartition",
+			SerdeFormat:     uint8(serdeFormat),
+			NumInPartition:  1,
+			NumOutPartition: numInstance,
+		}
+	}
+	q7BidKeyedByPrice := processor.NewClientNode(q7BidKeyedByPriceNodeConfig)
+
+	q7TransNodeConfig := &processor.ClientNodeConfig{
+		FuncName:    "query7",
+		GatewayUrl:  FLAGS_faas_gateway,
+		NumInstance: uint32(numInstance),
+	}
+	q7TransInputParams := make([]*common.QueryInput, q7TransNodeConfig.NumInstance)
+	for i := 0; i < int(q7TransNodeConfig.NumInstance); i++ {
+		q7TransInputParams[i] = &common.QueryInput{
+			Duration:        uint32(FLAGS_duration),
+			InputTopicName:  "bids-repartition",
+			OutputTopicName: "nexmark-q7-out",
+			SerdeFormat:     uint8(serdeFormat),
+			NumInPartition:  numInstance,
+			NumOutPartition: numInstance,
+		}
+	}
+	q7Trans := processor.NewClientNode(q7TransNodeConfig)
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			IdleConnTimeout: 30 * time.Second,
+		},
+		Timeout: time.Duration(FLAGS_duration*2) * time.Second,
+	}
+
+	var wg sync.WaitGroup
+	var sourceOutput common.FnOutput
+	q7BidKeyedByPriceOutput := make([]common.FnOutput, q7BidKeyedByPriceNodeConfig.NumInstance)
+	q7TransOutput := make([]common.FnOutput, q7TransNodeConfig.NumInstance)
+
+	wg.Add(1)
+	go invokeSourceFunc(client, &sourceOutput, &wg)
+
+	for i := 0; i < int(q7BidKeyedByPriceNodeConfig.NumInstance); i++ {
+		wg.Add(1)
+		q7BidKeyedByPriceInputParams[i].ParNum = 0
+		go q7BidKeyedByPrice.Invoke(client, &q7BidKeyedByPriceOutput[i], &wg, q7BidKeyedByPriceInputParams[i])
+	}
+
+	for i := 0; i < int(q7TransNodeConfig.NumInstance); i++ {
+		wg.Add(1)
+		q7TransInputParams[i].ParNum = uint8(i)
+		go q7Trans.Invoke(client, &q7TransOutput[i], &wg, q7TransInputParams[i])
+	}
+	wg.Wait()
+
+	if sourceOutput.Success {
+		common.ProcessThroughputLat("source", sourceOutput.Latencies["e2e"], sourceOutput.Duration)
+	}
+
+	for i := 0; i < int(q7BidKeyedByPriceNodeConfig.NumInstance); i++ {
+		wg.Add(1)
+		q7BidKeyedByPriceInputParams[i].ParNum = 0
+		go q7BidKeyedByPrice.Invoke(client, &q7BidKeyedByPriceOutput[i], &wg, q7BidKeyedByPriceInputParams[i])
+	}
+
+	for i := 0; i < int(q7TransNodeConfig.NumInstance); i++ {
+		wg.Add(1)
+		q7TransInputParams[i].ParNum = uint8(i)
+		go q7Trans.Invoke(client, &q7TransOutput[i], &wg, q7TransInputParams[i])
+	}
+}
+
 func windowedAvg() {
 	serdeFormat := getSerdeFormat()
 
@@ -314,6 +399,8 @@ func main() {
 		windowedAvg()
 	case "q5":
 		query5()
+	case "q7":
+		query7()
 	default:
 		generalQuery()
 	}
