@@ -158,6 +158,8 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 			return float64(val.Sum) / float64(val.Count), nil
 		})))
 
+	srcLatencies := make([]int, 0, 128)
+	sinkLatencies := make([]int, 0, 128)
 	latencies := make([]int, 0, 128)
 	startTime := time.Now()
 	for {
@@ -175,6 +177,8 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 						"e2e":     latencies,
 						"agg":     aggProc.GetLatency(),
 						"calcAvg": calcAvg.GetLatency(),
+						"src":     srcLatencies,
+						"sink":    sinkLatencies,
 					},
 					Duration: time.Since(startTime).Seconds(),
 				}
@@ -184,6 +188,8 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 				Message: err.Error(),
 			}
 		}
+		srcLat := time.Since(procStart)
+		srcLatencies = append(srcLatencies, int(srcLat.Microseconds()))
 		newMsgs, err := aggProc.ProcessAndReturn(msg)
 		if err != nil {
 			return &common.FnOutput{
@@ -199,6 +205,7 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 					Message: fmt.Sprintf("calculate avg failed: %v\n", err),
 				}
 			}
+			sinkStart := time.Now()
 			err = sink.Sink(avg[0], sp.ParNum)
 			if err != nil {
 				return &common.FnOutput{
@@ -206,6 +213,8 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 					Message: fmt.Sprintf("sink failed: %v", err),
 				}
 			}
+			sinkLat := time.Since(sinkStart)
+			sinkLatencies = append(sinkLatencies, int(sinkLat.Microseconds()))
 		}
 		elapsed := time.Since(procStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
@@ -217,6 +226,8 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 			"e2e":     latencies,
 			"agg":     aggProc.GetLatency(),
 			"calcAvg": calcAvg.GetLatency(),
+			"src":     srcLatencies,
+			"sink":    sinkLatencies,
 		},
 	}
 }
