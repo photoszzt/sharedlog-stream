@@ -365,7 +365,8 @@ func windowedAvg() {
 
 	for i := 0; i < int(avgNodeConfig.NumInstance); i++ {
 		wg.Add(1)
-		avgNodeInputParams[i].ParNum = uint8(i)
+		idx := i
+		avgNodeInputParams[i].ParNum = uint8(idx)
 		go avg.Invoke(client, &avgOutput[i], &wg, avgNodeInputParams[i])
 	}
 	wg.Wait()
@@ -373,13 +374,15 @@ func windowedAvg() {
 		common.ProcessThroughputLat("source", sourceOutput.Latencies, sourceOutput.Duration)
 	}
 	for i := 0; i < int(groupByNodeConfig.NumInstance); i++ {
-		if groupByOutput[i].Success {
-			common.ProcessThroughputLat(fmt.Sprintf("groupby %v", i), groupByOutput[i].Latencies, groupByOutput[i].Duration)
+		idx := i
+		if groupByOutput[idx].Success {
+			common.ProcessThroughputLat(fmt.Sprintf("groupby %v", idx), groupByOutput[idx].Latencies, groupByOutput[idx].Duration)
 		}
 	}
 	for i := 0; i < int(avgNodeConfig.NumInstance); i++ {
-		if avgOutput[i].Success {
-			common.ProcessThroughputLat(fmt.Sprintf("avg %v", i), avgOutput[i].Latencies, avgOutput[i].Duration)
+		idx := i
+		if avgOutput[idx].Success {
+			common.ProcessThroughputLat(fmt.Sprintf("avg %v", idx), avgOutput[idx].Latencies, avgOutput[idx].Duration)
 		}
 	}
 }
