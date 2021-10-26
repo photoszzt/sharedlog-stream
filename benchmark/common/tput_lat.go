@@ -17,6 +17,5 @@ func ProcessThroughputLat(name string, latencies map[string][]int, duration floa
 		fmt.Fprintf(os.Stdout, "sum of %s time: %v ", n, sumTime)
 		fmt.Fprintf(os.Stdout, "processed: %v, throughput: (event/s) %v\n", len(lat_arr), tput)
 	}
-	fmt.Fprintf(os.Stdout, "%s duration: %v\n", name, duration)
-	fmt.Fprintf(os.Stderr, "\n")
+	fmt.Fprintf(os.Stdout, "%s duration: %v\n\n", name, duration)
 }
