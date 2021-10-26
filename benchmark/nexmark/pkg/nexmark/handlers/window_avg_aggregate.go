@@ -169,10 +169,14 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
-					Success:   true,
-					Message:   err.Error(),
-					Latencies: map[string][]int{"e2e": latencies},
-					Duration:  time.Since(startTime).Seconds(),
+					Success: true,
+					Message: err.Error(),
+					Latencies: map[string][]int{
+						"e2e":     latencies,
+						"agg":     aggProc.GetLatency(),
+						"calcAvg": calcAvg.GetLatency(),
+					},
+					Duration: time.Since(startTime).Seconds(),
 				}
 			}
 			return &common.FnOutput{
