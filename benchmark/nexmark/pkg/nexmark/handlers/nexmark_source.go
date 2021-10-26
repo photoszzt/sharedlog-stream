@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
 
@@ -45,10 +46,10 @@ func (h *nexmarkSourceHandler) Call(ctx context.Context, input []byte) ([]byte, 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func eventGeneration(ctx context.Context, env types.Environment, inputConfig *ntypes.NexMarkConfigInput) (*ntypes.FnOutput, error) {
+func eventGeneration(ctx context.Context, env types.Environment, inputConfig *ntypes.NexMarkConfigInput) (*common.FnOutput, error) {
 	stream, err := sharedlog_stream.NewSharedLogStream(ctx, env, inputConfig.TopicName)
 	if err != nil {
-		return &ntypes.FnOutput{
+		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("NewSharedlogStream failed: %v", err),
 		}, nil
@@ -56,7 +57,7 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 	// fmt.Fprintf(os.Stderr, "generate event to %v\n", inputConfig.TopicName)
 	nexmarkConfig, err := ntypes.ConvertToNexmarkConfiguration(inputConfig)
 	if err != nil {
-		return &ntypes.FnOutput{
+		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("fail to convert to nexmark configuration: %v", err),
 		}, nil
@@ -76,7 +77,7 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		eventEncoder = ntypes.EventMsgpSerde{}
 		msgEncoder = commtypes.MessageSerializedMsgpSerde{}
 	} else {
-		return &ntypes.FnOutput{
+		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", inputConfig.SerdeFormat),
 		}, nil
@@ -92,7 +93,7 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		now := time.Now().Unix()
 		nextEvent, err := eventGenerator.NextEvent(ctx, channel_url_cache)
 		if err != nil {
-			return &ntypes.FnOutput{
+			return &common.FnOutput{
 				Success: false,
 				Message: fmt.Sprintf("next event failed: %v", err),
 			}, nil
@@ -104,7 +105,7 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		}
 		encoded, err := eventEncoder.Encode(nextEvent.Event)
 		if err != nil {
-			return &ntypes.FnOutput{
+			return &common.FnOutput{
 				Success: false,
 				Message: fmt.Sprintf("event serialization failed: %v", err),
 			}, nil
@@ -112,7 +113,7 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		// fmt.Fprintf(os.Stderr, "generate event: %v\n", string(encoded))
 		msgEncoded, err := msgEncoder.Encode(nil, encoded)
 		if err != nil {
-			return &ntypes.FnOutput{
+			return &common.FnOutput{
 				Success: false,
 				Message: fmt.Sprintf("msg serialization failed: %v", err),
 			}, nil
@@ -121,7 +122,7 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		pushStart := time.Now()
 		_, err = stream.Push(msgEncoded, 0)
 		if err != nil {
-			return &ntypes.FnOutput{
+			return &common.FnOutput{
 				Success: false,
 				Message: fmt.Sprintf("stream push failed: %v", err),
 			}, nil
@@ -130,9 +131,11 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		elapsed := time.Since(pushStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
 	}
-	return &ntypes.FnOutput{
-		Success:   true,
-		Duration:  time.Since(startTime).Seconds(),
-		Latencies: latencies,
+	return &common.FnOutput{
+		Success:  true,
+		Duration: time.Since(startTime).Seconds(),
+		Latencies: map[string][]int{
+			"e2e": latencies,
+		},
 	}, nil
 }
