@@ -194,24 +194,24 @@ func query5() {
 	wg.Wait()
 
 	if sourceOutput.Success {
-		common.ProcessThroughputLat("source", sourceOutput.Latencies["e2e"], sourceOutput.Duration)
+		common.ProcessThroughputLat("source", sourceOutput.Latencies, sourceOutput.Duration)
 	}
 
 	for i := 0; i < int(q5BidKeyedByAuctionNodeConfig.NumInstance); i++ {
 		if q5BidKeyedByAuctionOutput[i].Success {
-			common.ProcessThroughputLat("q5-bid-keyed-by-auciton", q5BidKeyedByAuctionOutput[i].Latencies["e2e"], q5BidKeyedByAuctionOutput[i].Duration)
+			common.ProcessThroughputLat("q5-bid-keyed-by-auciton", q5BidKeyedByAuctionOutput[i].Latencies, q5BidKeyedByAuctionOutput[i].Duration)
 		}
 	}
 
 	for i := 0; i < int(q5AucBidsNodeConfig.NumInstance); i++ {
 		if q5AucBidsOutput[i].Success {
-			common.ProcessThroughputLat("q5-auction-bids", q5BidKeyedByAuctionOutput[i].Latencies["e2e"], q5BidKeyedByAuctionOutput[i].Duration)
+			common.ProcessThroughputLat("q5-auction-bids", q5BidKeyedByAuctionOutput[i].Latencies, q5BidKeyedByAuctionOutput[i].Duration)
 		}
 	}
 
 	for i := 0; i < int(q5maxbidNodeConfig.NumInstance); i++ {
 		if q5maxBidOutput[i].Success {
-			common.ProcessThroughputLat("q5-max-bids", q5maxBidOutput[i].Latencies["e2e"], q5maxBidOutput[i].Duration)
+			common.ProcessThroughputLat("q5-max-bids", q5maxBidOutput[i].Latencies, q5maxBidOutput[i].Duration)
 		}
 	}
 }
@@ -285,7 +285,7 @@ func query7() {
 	wg.Wait()
 
 	if sourceOutput.Success {
-		common.ProcessThroughputLat("source", sourceOutput.Latencies["e2e"], sourceOutput.Duration)
+		common.ProcessThroughputLat("source", sourceOutput.Latencies, sourceOutput.Duration)
 	}
 
 	for i := 0; i < int(q7BidKeyedByPriceNodeConfig.NumInstance); i++ {
@@ -370,16 +370,16 @@ func windowedAvg() {
 	}
 	wg.Wait()
 	if sourceOutput.Success {
-		common.ProcessThroughputLat("source", sourceOutput.Latencies["e2e"], sourceOutput.Duration)
+		common.ProcessThroughputLat("source", sourceOutput.Latencies, sourceOutput.Duration)
 	}
 	for i := 0; i < int(groupByNodeConfig.NumInstance); i++ {
 		if groupByOutput[i].Success {
-			common.ProcessThroughputLat(fmt.Sprintf("groupby %v", i), groupByOutput[i].Latencies["e2e"], groupByOutput[i].Duration)
+			common.ProcessThroughputLat(fmt.Sprintf("groupby %v", i), groupByOutput[i].Latencies, groupByOutput[i].Duration)
 		}
 	}
 	for i := 0; i < int(avgNodeConfig.NumInstance); i++ {
 		if avgOutput[i].Success {
-			common.ProcessThroughputLat(fmt.Sprintf("avg %v", i), avgOutput[i].Latencies["e2e"], avgOutput[i].Duration)
+			common.ProcessThroughputLat(fmt.Sprintf("avg %v", i), avgOutput[i].Latencies, avgOutput[i].Duration)
 		}
 	}
 }
