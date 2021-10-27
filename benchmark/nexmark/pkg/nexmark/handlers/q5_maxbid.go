@@ -78,7 +78,7 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 	}
 	duration := time.Duration(sp.Duration) * time.Second
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
-		Timeout:      time.Duration(sp.Duration),
+		Timeout:      duration,
 		KeyDecoder:   seSerde,
 		ValueDecoder: aucIdCountSerde,
 		MsgDecoder:   msgSerde,

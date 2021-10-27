@@ -95,7 +95,7 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 
 	duration := time.Duration(sp.Duration) * time.Second
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
-		Timeout:      time.Duration(sp.Duration),
+		Timeout:      duration,
 		KeyDecoder:   commtypes.Uint64Serde{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
