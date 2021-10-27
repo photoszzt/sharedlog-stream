@@ -87,7 +87,7 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context, input *common.QueryInpu
 	sink := sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig)
 
 	bid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
-		event := msg.Value.(ntypes.Event)
+		event := msg.Value.(*ntypes.Event)
 		return event.Etype == ntypes.BID, nil
 	})))
 	bidKeyedByPrice := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {

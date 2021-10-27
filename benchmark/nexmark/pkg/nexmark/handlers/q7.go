@@ -74,11 +74,21 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 		}
 	}
 
+	var vtSerde commtypes.Serde
 	var ptSerde commtypes.Serde
+	var bmSerde commtypes.Serde
 	if input.SerdeFormat == uint8(commtypes.JSON) {
 		ptSerde = ntypes.PriceTimeJSONSerde{}
+		vtSerde = commtypes.ValueTimestampJSONSerde{
+			ValJSONSerde: ptSerde,
+		}
+		bmSerde = ntypes.BidAndMaxJSONSerde{}
 	} else if input.SerdeFormat == uint8(commtypes.MSGP) {
 		ptSerde = ntypes.PriceTimeMsgpSerde{}
+		vtSerde = commtypes.ValueTimestampMsgpSerde{
+			ValMsgpSerde: ptSerde,
+		}
+		bmSerde = ntypes.BidAndMaxMsgpSerde{}
 	} else {
 		return &common.FnOutput{
 			Success: false,
@@ -88,12 +98,14 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      time.Duration(input.Duration) * time.Second,
-		KeyDecoder:   commtypes.StringDecoder{},
+		KeyDecoder:   commtypes.Uint64Serde{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		MsgEncoder: msgSerde,
+		MsgEncoder:   msgSerde,
+		KeyEncoder:   commtypes.Uint64Encoder{},
+		ValueEncoder: bmSerde,
 	}
 	duration := time.Duration(input.Duration) * time.Second
 	src := sharedlog_stream.NewShardedSharedLogStreamSource(inputStream, inConfig)
@@ -103,7 +115,7 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 	maxPriceBidStoreName := "max-price-bid-tab"
 	mp := &store.MaterializeParam{
 		KeySerde:   commtypes.Uint64Serde{},
-		ValueSerde: ptSerde,
+		ValueSerde: vtSerde,
 		StoreName:  maxPriceBidStoreName,
 		ParNum:     input.ParNum,
 		Changelog:  outputStream,
@@ -113,16 +125,16 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 
 	maxPriceBid := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(store,
 		processor.InitializerFunc(func() interface{} {
-			return ntypes.PriceTime{
+			return &ntypes.PriceTime{
 				Price:    0,
 				DateTime: 0,
 			}
 		}),
 		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
 			val := value.(*ntypes.Event)
-			agg := aggregate.(ntypes.PriceTime)
+			agg := aggregate.(*ntypes.PriceTime)
 			if val.Bid.Price > agg.Price {
-				return ntypes.PriceTime{
+				return &ntypes.PriceTime{
 					Price:    val.Bid.Price,
 					DateTime: val.Bid.DateTime,
 				}
