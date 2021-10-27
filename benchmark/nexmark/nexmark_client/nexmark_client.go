@@ -205,7 +205,7 @@ func query5() {
 
 	for i := 0; i < int(q5AucBidsNodeConfig.NumInstance); i++ {
 		if q5AucBidsOutput[i].Success {
-			common.ProcessThroughputLat("q5-auction-bids", q5BidKeyedByAuctionOutput[i].Latencies, q5BidKeyedByAuctionOutput[i].Duration)
+			common.ProcessThroughputLat("q5-auction-bids", q5AucBidsOutput[i].Latencies, q5AucBidsOutput[i].Duration)
 		}
 	}
 
