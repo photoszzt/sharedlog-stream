@@ -260,7 +260,7 @@ func query7() {
 		Transport: &http.Transport{
 			IdleConnTimeout: 30 * time.Second,
 		},
-		Timeout: time.Duration(FLAGS_duration*2) * time.Second,
+		Timeout: time.Duration(FLAGS_duration*3) * time.Second,
 	}
 
 	var wg sync.WaitGroup
@@ -289,15 +289,15 @@ func query7() {
 	}
 
 	for i := 0; i < int(q7BidKeyedByPriceNodeConfig.NumInstance); i++ {
-		wg.Add(1)
-		q7BidKeyedByPriceInputParams[i].ParNum = 0
-		go q7BidKeyedByPrice.Invoke(client, &q7BidKeyedByPriceOutput[i], &wg, q7BidKeyedByPriceInputParams[i])
+		if q7BidKeyedByPriceOutput[i].Success {
+			common.ProcessThroughputLat("q7-bid-keyed-by-price", q7BidKeyedByPriceOutput[i].Latencies, q7BidKeyedByPriceOutput[i].Duration)
+		}
 	}
 
 	for i := 0; i < int(q7TransNodeConfig.NumInstance); i++ {
-		wg.Add(1)
-		q7TransInputParams[i].ParNum = uint8(i)
-		go q7Trans.Invoke(client, &q7TransOutput[i], &wg, q7TransInputParams[i])
+		if q7TransOutput[i].Success {
+			common.ProcessThroughputLat("q7-transform", q7TransOutput[i].Latencies, q7TransOutput[i].Duration)
+		}
 	}
 }
 

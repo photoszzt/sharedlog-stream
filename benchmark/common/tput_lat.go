@@ -25,18 +25,19 @@ func (t timeSlice) p(percent float64) int {
 }
 
 func ProcessThroughputLat(name string, latencies map[string][]int, duration float64) {
-
 	for n, lat_arr := range latencies {
-		sumTime := float64(0)
-		ts := timeSlice(lat_arr)
-		sort.Sort(ts)
-		for _, lat := range lat_arr {
-			sumTime += float64(lat) / 1000.0
+		if len(lat_arr) != 0 {
+			sumTime := float64(0)
+			ts := timeSlice(lat_arr)
+			sort.Sort(ts)
+			for _, lat := range lat_arr {
+				sumTime += float64(lat) / 1000.0
+			}
+			sumTime = sumTime / 1000.0 // convert to sec
+			tput := float64(len(lat_arr)) / sumTime
+			fmt.Fprintf(os.Stdout, "sum of %s time: %v ", n, sumTime)
+			fmt.Fprintf(os.Stdout, "processed: %v, throughput: (event/s) %v, p50: %d us, p90: %d us\n", len(lat_arr), tput, ts.p(0.5), ts.p(0.9))
 		}
-		sumTime = sumTime / 1000.0 // convert to sec
-		tput := float64(len(lat_arr)) / sumTime
-		fmt.Fprintf(os.Stdout, "sum of %s time: %v ", n, sumTime)
-		fmt.Fprintf(os.Stdout, "processed: %v, throughput: (event/s) %v, p50: %d us, p90: %d us\n", len(lat_arr), tput, ts.p(0.5), ts.p(0.9))
 	}
 	fmt.Fprintf(os.Stdout, "%s duration: %v\n\n", name, duration)
 }
