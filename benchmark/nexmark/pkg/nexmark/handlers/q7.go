@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -162,6 +163,21 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 		procStart := time.Now()
 		msg, err := src.Consume(input.ParNum)
 		if err != nil {
+			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+				return &common.FnOutput{
+					Success:  true,
+					Message:  err.Error(),
+					Duration: time.Since(startTime).Seconds(),
+					Latencies: map[string][]int{
+						"e2e":    latencies,
+						"sink":   sinkLatencies,
+						"src":    srcLatencies,
+						"maxBid": maxPriceBid.GetLatency(),
+						"trans":  transformWithStore.GetLatency(),
+						"filtT":  filterTime.GetLatency(),
+					},
+				}
+			}
 			return &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
@@ -169,14 +185,14 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 		}
 		srcLat := time.Since(procStart)
 		srcLatencies = append(srcLatencies, int(srcLat.Microseconds()))
-		maxPriceBidMsg, err := maxPriceBid.ProcessAndReturn(msg)
+		_, err = maxPriceBid.ProcessAndReturn(msg)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
 			}
 		}
-		transformedMsgs, err := transformWithStore.ProcessAndReturn(maxPriceBidMsg[0])
+		transformedMsgs, err := transformWithStore.ProcessAndReturn(msg)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
