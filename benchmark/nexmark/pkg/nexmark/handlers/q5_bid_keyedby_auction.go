@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -81,20 +82,20 @@ func (h *bidKeyedByAuction) process(ctx context.Context, sp *common.QueryInput) 
 		KeyEncoder:   commtypes.Uint64Encoder{},
 	}
 
-	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
-	sink := sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig)
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
+	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
 	latencies := make([]int, 0, 128)
 
-	filterBid := processor.NewStreamFilterProcessor(processor.PredicateFunc(
+	filterBid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
 		func(m *commtypes.Message) (bool, error) {
 			event := m.Value.(*ntypes.Event)
 			return event.Etype == ntypes.BID, nil
-		}))
-	selectKey := processor.NewStreamMapProcessor(processor.MapperFunc(
+		})))
+	selectKey := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(processor.MapperFunc(
 		func(m commtypes.Message) (commtypes.Message, error) {
 			event := m.Value.(*ntypes.Event)
 			return commtypes.Message{Key: event.Bid.Auction, Value: m.Value, Timestamp: m.Timestamp}, nil
-		}))
+		})))
 	startTime := time.Now()
 	for {
 		if duration != 0 && time.Since(startTime) >= duration {
@@ -103,6 +104,20 @@ func (h *bidKeyedByAuction) process(ctx context.Context, sp *common.QueryInput) 
 		procStart := time.Now()
 		msg, err := src.Consume(sp.ParNum)
 		if err != nil {
+			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+				return &common.FnOutput{
+					Success:  true,
+					Message:  err.Error(),
+					Duration: time.Since(startTime).Seconds(),
+					Latencies: map[string][]int{
+						"e2e":       latencies,
+						"src":       src.GetLatency(),
+						"sink":      sink.GetLatency(),
+						"filterBid": filterBid.GetLatency(),
+						"selectKey": selectKey.GetLatency(),
+					},
+				}
+			}
 			return &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
@@ -137,8 +152,14 @@ func (h *bidKeyedByAuction) process(ctx context.Context, sp *common.QueryInput) 
 		latencies = append(latencies, int(elapsed.Microseconds()))
 	}
 	return &common.FnOutput{
-		Success:   true,
-		Duration:  time.Since(startTime).Seconds(),
-		Latencies: map[string][]int{"e2e": latencies},
+		Success:  true,
+		Duration: time.Since(startTime).Seconds(),
+		Latencies: map[string][]int{
+			"e2e":       latencies,
+			"src":       src.GetLatency(),
+			"sink":      sink.GetLatency(),
+			"filterBid": filterBid.GetLatency(),
+			"selectKey": selectKey.GetLatency(),
+		},
 	}
 }

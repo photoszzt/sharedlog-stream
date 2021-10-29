@@ -96,19 +96,21 @@ type SourcePump interface {
 type sourcePump struct {
 	name   string
 	source Source
+	parNum uint8
 	pumps  []Pump
 	errFn  ErrorFunc
 	quit   chan struct{}
 	wg     sync.WaitGroup
 }
 
-func NewSourcePump(name string, source Source, pumps []Pump, errFn ErrorFunc) SourcePump {
+func NewSourcePump(name string, source Source, parNum uint8, pumps []Pump, errFn ErrorFunc) SourcePump {
 	p := &sourcePump{
 		name:   name,
 		source: source,
 		pumps:  pumps,
 		errFn:  errFn,
 		quit:   make(chan struct{}, 2),
+		parNum: parNum,
 	}
 	go p.run()
 	return p
@@ -123,7 +125,7 @@ func (p *sourcePump) run() {
 		case <-p.quit:
 			return
 		default:
-			msg, err := p.source.Consume()
+			msg, err := p.source.Consume(p.parNum)
 			if err != nil {
 				go p.errFn(err)
 				return

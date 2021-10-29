@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"sharedlog-stream/benchmark/common"
@@ -105,8 +106,8 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 		KeyEncoder:   seSerde,
 		ValueEncoder: aucIdCountSerde,
 	}
-	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
-	sink := sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig)
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
+	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
 
 	hopWindow := processor.NewTimeWindowsNoGrace(time.Duration(10) * time.Second).AdvanceBy(time.Duration(2) * time.Second)
 	countStoreName := "auctionBidsCountStore"
@@ -129,14 +130,14 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 		hopWindow.MaxSize()+hopWindow.GracePeriodMs(),
 		hopWindow.MaxSize(), countMp,
 	)
-	countProc := processor.NewStreamWindowAggregateProcessor(countWindowStore,
+	countProc := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(countWindowStore,
 		processor.InitializerFunc(func() interface{} { return 0 }),
 		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
 			val := aggregate.(uint64)
 			return val + 1
-		}), hopWindow)
+		}), hopWindow))
 
-	groupByAuction := processor.NewStreamMapProcessor(processor.MapperFunc(
+	groupByAuction := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(processor.MapperFunc(
 		func(msg commtypes.Message) (commtypes.Message, error) {
 			key := msg.Key.(*commtypes.WindowedKey)
 			value := msg.Value.(uint64)
@@ -149,7 +150,7 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 				Count: value,
 			}
 			return commtypes.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
-		}))
+		})))
 	latencies := make([]int, 0, 128)
 	startTime := time.Now()
 	for {
@@ -159,6 +160,20 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 		procStart := time.Now()
 		msg, err := src.Consume(sp.ParNum)
 		if err != nil {
+			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+				return &common.FnOutput{
+					Success:  true,
+					Message:  err.Error(),
+					Duration: time.Since(startTime).Seconds(),
+					Latencies: map[string][]int{
+						"e2e":       latencies,
+						"count":     countProc.GetLatency(),
+						"changeKey": groupByAuction.GetLatency(),
+						"src":       src.GetLatency(),
+						"sink":      sink.GetLatency(),
+					},
+				}
+			}
 			return &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
@@ -192,8 +207,14 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 		latencies = append(latencies, int(elapsed.Microseconds()))
 	}
 	return &common.FnOutput{
-		Success:   true,
-		Duration:  time.Since(startTime).Seconds(),
-		Latencies: map[string][]int{"e2e": latencies},
+		Success:  true,
+		Duration: time.Since(startTime).Seconds(),
+		Latencies: map[string][]int{
+			"e2e":       latencies,
+			"count":     countProc.GetLatency(),
+			"changeKey": groupByAuction.GetLatency(),
+			"src":       src.GetLatency(),
+			"sink":      sink.GetLatency(),
+		},
 	}
 }

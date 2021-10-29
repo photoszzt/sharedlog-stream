@@ -155,7 +155,7 @@ func Query8(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		pumps[node] = pump
 	}
 	for source, node := range tp.Sources() {
-		srcPump := processor.NewSourcePump(node.Name(), source,
+		srcPump := processor.NewSourcePump(node.Name(), source, 0,
 			processor.ResolvePumps(pumps, node.Children()), func(err error) {
 				log.Fatal(err.Error())
 			})

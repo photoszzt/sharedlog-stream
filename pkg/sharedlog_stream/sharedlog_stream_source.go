@@ -37,7 +37,7 @@ func NewSharedLogStreamSource(stream *SharedLogStream, config *SharedLogStreamCo
 	}
 }
 
-func (s *SharedLogStreamSource) Consume() (commtypes.Message, error) {
+func (s *SharedLogStreamSource) Consume(parNum uint8) (commtypes.Message, error) {
 	startTime := time.Now()
 	for {
 		if s.timeout != 0 && time.Since(startTime) >= s.timeout {

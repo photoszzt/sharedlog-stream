@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -88,8 +89,8 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 		KeyEncoder:   seSerde,
 		ValueEncoder: aucIdCountSerde,
 	}
-	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
-	sink := sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig)
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
+	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
 
 	maxBidStoreName := "maxBidsKVStore"
 	mp := &store.MaterializeParam{
@@ -115,8 +116,6 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 	stJoin := processor.NewMeteredProcessor(processor.NewStreamTableJoinProcessor(maxBidStoreName, processor.ValueJoinerWithKeyFunc(func(key, value, aggregate interface{}) interface{} {
 		return nil
 	})))
-	srcLatencies := make([]int, 0, 128)
-	sinkLatencies := make([]int, 0, 128)
 	latencies := make([]int, 0, 128)
 	startTime := time.Now()
 
@@ -127,13 +126,25 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 		procStart := time.Now()
 		msg, err := src.Consume(sp.ParNum)
 		if err != nil {
+			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+				return &common.FnOutput{
+					Success:  true,
+					Message:  err.Error(),
+					Duration: time.Since(startTime).Seconds(),
+					Latencies: map[string][]int{
+						"e2e":    latencies,
+						"sink":   sink.GetLatency(),
+						"src":    src.GetLatency(),
+						"maxBid": maxBid.GetLatency(),
+						"join":   stJoin.GetLatency(),
+					},
+				}
+			}
 			return &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
 			}
 		}
-		srcLat := time.Since(procStart)
-		srcLatencies = append(srcLatencies, int(srcLat.Microseconds()))
 		maxBidMsg, err := maxBid.ProcessAndReturn(msg)
 		if err != nil {
 			return &common.FnOutput{
@@ -148,7 +159,6 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 				Message: err.Error(),
 			}
 		}
-		sinkStart := time.Now()
 		err = sink.Sink(joinedOutput[0], sp.ParNum)
 		if err != nil {
 			return &common.FnOutput{
@@ -156,8 +166,6 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 				Message: err.Error(),
 			}
 		}
-		sinkLat := time.Since(sinkStart)
-		sinkLatencies = append(sinkLatencies, int(sinkLat.Microseconds()))
 		elapsed := time.Since(procStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
 	}
@@ -166,8 +174,8 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 		Duration: time.Since(startTime).Seconds(),
 		Latencies: map[string][]int{
 			"e2e":    latencies,
-			"sink":   sinkLatencies,
-			"src":    srcLatencies,
+			"sink":   sink.GetLatency(),
+			"src":    src.GetLatency(),
 			"join":   stJoin.GetLatency(),
 			"maxBid": maxBid.GetLatency(),
 		},

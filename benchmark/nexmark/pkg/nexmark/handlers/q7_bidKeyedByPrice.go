@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -83,8 +84,8 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context, input *common.QueryInpu
 	}
 
 	duration := time.Duration(input.Duration) * time.Second
-	src := sharedlog_stream.NewShardedSharedLogStreamSource(inputStream, inConfig)
-	sink := sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig)
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(inputStream, inConfig))
+	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
 
 	bid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
 		event := msg.Value.(*ntypes.Event)
@@ -103,6 +104,20 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context, input *common.QueryInpu
 		procStart := time.Now()
 		msg, err := src.Consume(input.ParNum)
 		if err != nil {
+			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+				return &common.FnOutput{
+					Success:  true,
+					Message:  err.Error(),
+					Duration: time.Since(startTime).Seconds(),
+					Latencies: map[string][]int{
+						"e2e":       latencies,
+						"sink":      sink.GetLatency(),
+						"src":       src.GetLatency(),
+						"filterBid": bid.GetLatency(),
+						"selectKey": bidKeyedByPrice.GetLatency(),
+					},
+				}
+			}
 			return &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
@@ -137,8 +152,14 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context, input *common.QueryInpu
 		latencies = append(latencies, int(elapsed.Microseconds()))
 	}
 	return &common.FnOutput{
-		Success:   true,
-		Duration:  time.Since(startTime).Seconds(),
-		Latencies: map[string][]int{"e2e": latencies},
+		Success:  true,
+		Duration: time.Since(startTime).Seconds(),
+		Latencies: map[string][]int{
+			"e2e":       latencies,
+			"sink":      sink.GetLatency(),
+			"src":       src.GetLatency(),
+			"filterBid": bid.GetLatency(),
+			"selectKey": bidKeyedByPrice.GetLatency(),
+		},
 	}
 }
