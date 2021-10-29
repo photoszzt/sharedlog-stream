@@ -51,7 +51,7 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewQuery6(env), nil
 	case "query7":
 		return handlers.NewQuery7(env), nil
-	case "q7bidskeyedbyprice":
+	case "q7bidkeyedbyprice":
 		return handlers.NewQ7BidKeyedByPriceHandler(env), nil
 	case "query8":
 		return handlers.NewQuery8(env), nil

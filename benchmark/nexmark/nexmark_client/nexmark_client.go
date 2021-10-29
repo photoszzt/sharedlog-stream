@@ -221,7 +221,7 @@ func query7() {
 
 	numInstance := uint8(5)
 	q7BidKeyedByPriceNodeConfig := &processor.ClientNodeConfig{
-		FuncName:    "q7bidskeyedbyprice",
+		FuncName:    "q7bidkeyedbyprice",
 		GatewayUrl:  FLAGS_faas_gateway,
 		NumInstance: 1,
 	}

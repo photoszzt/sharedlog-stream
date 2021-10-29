@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"time"
 
 	"sharedlog-stream/benchmark/common"
@@ -185,7 +184,6 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 				Message: err.Error(),
 			}
 		}
-		fmt.Fprintf(os.Stderr, "after consume\n")
 		srcLat := time.Since(procStart)
 		srcLatencies = append(srcLatencies, int(srcLat.Microseconds()))
 		_, err = maxPriceBid.ProcessAndReturn(msg)
@@ -195,7 +193,6 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 				Message: err.Error(),
 			}
 		}
-		fmt.Fprintf(os.Stderr, "after max price bid\n")
 		transformedMsgs, err := transformWithStore.ProcessAndReturn(msg)
 		if err != nil {
 			return &common.FnOutput{
@@ -203,7 +200,6 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 				Message: err.Error(),
 			}
 		}
-		fmt.Fprintf(os.Stderr, "after transform msgs\n")
 		for _, tmsg := range transformedMsgs {
 			filtered, err := filterTime.ProcessAndReturn(tmsg)
 			if err != nil {
@@ -223,7 +219,6 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 			sinkLat := time.Since(sinkStart)
 			sinkLatencies = append(sinkLatencies, int(sinkLat.Microseconds()))
 		}
-		fmt.Fprintf(os.Stderr, "after push to sink\n")
 		elapsed := time.Since(procStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
 	}
