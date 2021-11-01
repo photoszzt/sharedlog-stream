@@ -101,10 +101,14 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput) *
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
-					Success:   true,
-					Message:   err.Error(),
-					Latencies: map[string][]int{"e2e": latencies},
-					Duration:  time.Since(startTime).Seconds(),
+					Success: true,
+					Message: err.Error(),
+					Latencies: map[string][]int{
+						"e2e":  latencies,
+						"sink": sinkLatencies,
+						"src":  consumeLatencies,
+					},
+					Duration: time.Since(startTime).Seconds(),
 				}
 			}
 			return &common.FnOutput{
