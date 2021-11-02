@@ -120,7 +120,7 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		}
 		// fmt.Fprintf(os.Stderr, "msg: %v\n", string(msgEncoded))
 		pushStart := time.Now()
-		_, err = stream.Push(msgEncoded, 0)
+		_, err = stream.Push(msgEncoded, 0, nil)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,

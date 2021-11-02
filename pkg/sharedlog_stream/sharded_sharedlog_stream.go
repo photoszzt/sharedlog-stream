@@ -35,8 +35,8 @@ func NewShardedSharedLogStream(ctx context.Context, env types.Environment, topic
 	}, nil
 }
 
-func (s *ShardedSharedLogStream) Push(payload []byte, parNumber uint8) (uint64, error) {
-	return s.subSharedLogStreams[parNumber].Push(payload, parNumber)
+func (s *ShardedSharedLogStream) Push(payload []byte, parNumber uint8, additionalTag []uint64) (uint64, error) {
+	return s.subSharedLogStreams[parNumber].Push(payload, parNumber, additionalTag)
 }
 
 func (s *ShardedSharedLogStream) Pop(parNumber uint8) ([]byte, error) {

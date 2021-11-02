@@ -101,7 +101,7 @@ func (s *SharedLogStream) TopicName() string {
 	return s.topicName
 }
 
-func (s *SharedLogStream) Push(payload []byte, parNum uint8) (uint64, error) {
+func (s *SharedLogStream) Push(payload []byte, parNum uint8, additionalTag []uint64) (uint64, error) {
 	if len(payload) == 0 {
 		return 0, errEmptyPayload
 	}
@@ -117,6 +117,7 @@ func (s *SharedLogStream) Push(payload []byte, parNum uint8) (uint64, error) {
 	stag := streamLogTag(s.topicNameHash)
 	sptag := streamPushLogTag(s.topicNameHash)
 	tags := []uint64{stag, sptag}
+	tags = append(tags, additionalTag...)
 	seqNum, err := s.env.SharedLogAppend(s.ctx, tags, encoded)
 	// fmt.Printf("Push to stream with tag %x, %x, seqNum: %x\n", stag, sptag, seqNum)
 
