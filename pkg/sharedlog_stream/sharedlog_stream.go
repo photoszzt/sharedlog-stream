@@ -3,10 +3,8 @@
 package sharedlog_stream
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"time"
 
@@ -121,21 +119,22 @@ func (s *SharedLogStream) Push(payload []byte, parNum uint8, additionalTag []uin
 	seqNum, err := s.env.SharedLogAppend(s.ctx, tags, encoded)
 	// fmt.Printf("Push to stream with tag %x, %x, seqNum: %x\n", stag, sptag, seqNum)
 
-	// verify that it's appended
-	if err != nil {
-		return 0, err
-	}
-	logEntryRead, err := s.env.SharedLogReadNext(s.ctx, 0, seqNum)
-	if err != nil {
-		return 0, err
-	}
-	if logEntryRead == nil || logEntryRead.SeqNum != seqNum {
-		return 0, fmt.Errorf("fail to read the log just appended")
-	}
-	if !bytes.Equal(encoded, logEntryRead.Data) {
-		return 0, fmt.Errorf("log data mismatch")
-	}
-
+	/*
+		// verify that it's appended
+		if err != nil {
+			return 0, err
+		}
+		logEntryRead, err := s.env.SharedLogReadNext(s.ctx, 0, seqNum)
+		if err != nil {
+			return 0, err
+		}
+		if logEntryRead == nil || logEntryRead.SeqNum != seqNum {
+			return 0, fmt.Errorf("fail to read the log just appended")
+		}
+		if !bytes.Equal(encoded, logEntryRead.Data) {
+			return 0, fmt.Errorf("log data mismatch")
+		}
+	*/
 	return seqNum, err
 }
 
