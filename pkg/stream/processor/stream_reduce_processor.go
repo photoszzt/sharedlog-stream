@@ -65,5 +65,5 @@ func (p *StreamReduceProcessor) ProcessAndReturn(msg commtypes.Message) ([]commt
 	if err != nil {
 		return nil, err
 	}
-	return []commtypes.Message{commtypes.Message{Key: msg.Key, Value: newAgg, Timestamp: newTs}}, nil
+	return []commtypes.Message{{Key: msg.Key, Value: newAgg, Timestamp: newTs}}, nil
 }

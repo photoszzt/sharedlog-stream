@@ -94,9 +94,8 @@ func checkSanity(list *SkipList, t *testing.T) {
 }
 
 func TestBasicIntCRUD(t *testing.T) {
-	var list *SkipList
 
-	list = New(CompareFunc(func(lhs interface{}, rhs interface{}) int {
+	list := New(CompareFunc(func(lhs interface{}, rhs interface{}) int {
 		l := lhs.(int)
 		r := rhs.(int)
 		if l < r {

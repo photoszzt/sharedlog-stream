@@ -135,7 +135,7 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 			processor.InitializerFunc(func() interface{} {
 				return &SumAndHist{
 					Sum:     0,
-					history: make([]float64, movingAverageWindow),
+					History: make([]float64, movingAverageWindow),
 				}
 			}),
 			processor.AggregatorFunc(func(key interface{}, value interface{}, agg interface{}) interface{} {
@@ -143,23 +143,23 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 				aggVal := agg.(*SumAndHist)
 				var newHist []float64
 				newSum := aggVal.Sum
-				if len(aggVal.history) > movingAverageWindow-1 {
-					valToRemove := aggVal.history[0]
-					newHist = aggVal.history[1:]
+				if len(aggVal.History) > movingAverageWindow-1 {
+					valToRemove := aggVal.History[0]
+					newHist = aggVal.History[1:]
 					newSum -= valToRemove
 				}
 				newHist = append(newHist, nextVal.Val)
 				newSum += nextVal.Val
 				return &SumAndHist{
 					Sum:     newSum,
-					history: newHist,
+					History: newHist,
 				}
 			})).
 		MapValues("calc-avg", processor.ValueMapperFunc(func(value interface{}) (interface{}, error) {
 			val := value.(*SumAndHist)
 			return ValAndAvg{
 				Val: val.Val,
-				Avg: val.Sum / float64(len(val.history)),
+				Avg: val.Sum / float64(len(val.History)),
 			}, nil
 		}), "").
 		Filter("get-spike", processor.PredicateFunc(spikeDetectionPredicate), "").

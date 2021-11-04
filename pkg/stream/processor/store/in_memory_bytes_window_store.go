@@ -11,20 +11,19 @@ import (
 )
 
 type InMemoryBytesWindowStore struct {
-	name       string
-	windowSize uint64
-	sctx       ProcessorContext
-
-	retentionPeriod    uint64
-	retainDuplicates   bool
-	open               bool
-	store              *concurrent_skiplist.SkipList
-	observedStreamTime uint64
-
 	otrMu           sync.RWMutex
 	openedTimeRange map[uint64]struct{}
 
+	sctx     ProcessorContext
 	valSerde commtypes.Serde
+
+	store              *concurrent_skiplist.SkipList
+	name               string
+	windowSize         uint64
+	retentionPeriod    uint64
+	observedStreamTime uint64
+	retainDuplicates   bool
+	open               bool
 }
 
 func NewInMemoryBytesWindowStore(name string, retentionPeriod uint64, windowSize uint64, retainDuplicates bool, valSerde commtypes.Serde) *InMemoryBytesWindowStore {

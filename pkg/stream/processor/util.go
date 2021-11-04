@@ -1,7 +1,6 @@
 package processor
 
-import "golang.org/x/xerrors"
-
+/*
 func byte_slice_increment(input []byte) ([]byte, error) {
 	out := make([]byte, len(input))
 	carry := 1
@@ -19,3 +18,4 @@ func byte_slice_increment(input []byte) ([]byte, error) {
 		return nil, xerrors.New("index out of bound")
 	}
 }
+*/

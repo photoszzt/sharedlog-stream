@@ -18,8 +18,8 @@ type Table interface {
 
 type TableImpl struct {
 	tp        *processor.TopologyBuilder
-	parents   []processor.Node
 	storeName string
+	parents   []processor.Node
 }
 
 func newTable(tp *processor.TopologyBuilder, parents []processor.Node, storeName string) Table {

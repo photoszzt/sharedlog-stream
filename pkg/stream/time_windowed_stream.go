@@ -12,9 +12,9 @@ type TimeWindowedStream interface {
 }
 
 type TimeWindowedStreamImpl struct {
+	windowDefs processor.EnumerableWindowDefinition
 	tp         *processor.TopologyBuilder
 	parents    []processor.Node
-	windowDefs processor.EnumerableWindowDefinition
 }
 
 func newTimeWindowedStream(tp *processor.TopologyBuilder, parents []processor.Node, windowDefs processor.EnumerableWindowDefinition) TimeWindowedStream {

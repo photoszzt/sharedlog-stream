@@ -8,9 +8,9 @@ import (
 )
 
 type movingAverageAggregate struct {
-	movingAverageWindow uint32
 	deviceIDStreamMap   map[string]*deque.Deque
 	deviceIDSumOfEvents map[string]float64
+	movingAverageWindow uint32
 }
 
 func NewMovingAverageMapper() processor.Mapper {

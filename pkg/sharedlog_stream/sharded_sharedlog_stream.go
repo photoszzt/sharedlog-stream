@@ -11,9 +11,9 @@ import (
 type PartitionFunc func(interface{}) uint32
 
 type ShardedSharedLogStream struct {
+	topicName           string
 	subSharedLogStreams []*SharedLogStream
 	numPartitions       uint8
-	topicName           string
 }
 
 func NewShardedSharedLogStream(ctx context.Context, env types.Environment, topicName string, numPartitions uint8) (*ShardedSharedLogStream, error) {

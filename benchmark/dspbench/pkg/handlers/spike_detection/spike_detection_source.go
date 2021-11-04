@@ -19,12 +19,12 @@ import (
 
 type rawSensorData struct {
 	ts       time.Time
-	epoc     uint32
 	devId    string
 	temp     float64
 	humidity float64
 	light    float64
 	voltage  float64
+	epoc     uint32
 }
 
 type spikeDetectionSource struct {

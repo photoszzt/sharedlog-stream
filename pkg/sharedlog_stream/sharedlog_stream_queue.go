@@ -40,12 +40,11 @@ type StreamQueueAuxData struct {
 }
 
 type StreamQueueLogEntry struct {
-	seqNum  uint64              `msg:"-"`
-	auxData *StreamQueueAuxData `msg:"-"`
-
-	TopicName string `msg:"topicName"`
-	IsPush    bool   `msg:"isPush"`
-	Payload   []byte `msg:"payload,omitempty"`
+	auxData   *StreamQueueAuxData `msg:"-"`
+	TopicName string              `msg:"topicName"`
+	Payload   []byte              `msg:"payload,omitempty"`
+	seqNum    uint64              `msg:"-"`
+	IsPush    bool                `msg:"isPush"`
 }
 
 func streamLogTag(topicNameHash uint64) uint64 {

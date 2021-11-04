@@ -12,8 +12,8 @@ type StreamTableJoinProcessor struct {
 	store     store.KeyValueStore
 	pctx      store.ProcessorContext
 	joiner    ValueJoinerWithKey
-	leftJoin  bool
 	storeName string
+	leftJoin  bool
 }
 
 var _ = Processor(&StreamTableJoinProcessor{})

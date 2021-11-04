@@ -15,10 +15,9 @@ type Pump interface {
 
 type syncPump struct {
 	sync.Mutex
-
-	name      string
 	processor Processor
 	pipe      Pipe
+	name      string
 }
 
 func NewSyncPump(node Node, pipe Pipe) Pump {
@@ -94,13 +93,13 @@ type SourcePump interface {
 }
 
 type sourcePump struct {
-	name   string
+	wg     sync.WaitGroup
 	source Source
-	parNum uint8
-	pumps  []Pump
 	errFn  ErrorFunc
 	quit   chan struct{}
-	wg     sync.WaitGroup
+	name   string
+	pumps  []Pump
+	parNum uint8
 }
 
 func NewSourcePump(name string, source Source, parNum uint8, pumps []Pump, errFn ErrorFunc) SourcePump {

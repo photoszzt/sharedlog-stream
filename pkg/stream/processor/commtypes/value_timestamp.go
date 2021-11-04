@@ -5,13 +5,13 @@ package commtypes
 import "encoding/json"
 
 type ValueTimestamp struct {
-	Timestamp uint64
 	Value     interface{}
+	Timestamp uint64
 }
 
 type ValueTimestampSerialized struct {
-	Timestamp       uint64 `json:"ts" msg:"ts"`
 	ValueSerialized []byte `json:"vs" msg:"vs"`
+	Timestamp       uint64 `json:"ts" msg:"ts"`
 }
 
 type ValueTimestampJSONSerde struct {

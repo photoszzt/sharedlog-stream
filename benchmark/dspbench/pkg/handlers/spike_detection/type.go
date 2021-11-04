@@ -84,9 +84,9 @@ func (s ValAndAvgMsgpSerde) Decode(value []byte) (interface{}, error) {
 }
 
 type SumAndHist struct {
-	Val     float64   `json:"val" zid:"0" msg:"val"`
-	Sum     float64   `json:"sum" zid:"1" msg:"sum"`
-	history []float64 `json:"hist" zid:"2" msg:"hist"`
+	History []float64 `json:"hist" msg:"hist"`
+	Val     float64   `json:"val" msg:"val"`
+	Sum     float64   `json:"sum" msg:"sum"`
 }
 
 type SumAndHistJSONSerde struct{}

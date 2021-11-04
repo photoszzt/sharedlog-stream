@@ -70,5 +70,5 @@ func (p *StreamAggregateProcessor) ProcessAndReturn(msg commtypes.Message) ([]co
 	if err != nil {
 		return nil, err
 	}
-	return []commtypes.Message{commtypes.Message{Key: msg.Key, Value: newAgg, Timestamp: newTs}}, nil
+	return []commtypes.Message{{Key: msg.Key, Value: newAgg, Timestamp: newTs}}, nil
 }

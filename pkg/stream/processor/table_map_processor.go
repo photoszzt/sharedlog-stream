@@ -9,8 +9,8 @@ type TableMapValuesProcessor struct {
 	pipe          Pipe
 	pctx          store.ProcessorContext
 	store         store.KeyValueStore
-	queryableName string
 	valueMapper   ValueMapper
+	queryableName string
 }
 
 func NewTableMapValuesProcessor(mapper ValueMapper, queryableName string) Processor {

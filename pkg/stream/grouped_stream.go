@@ -14,8 +14,8 @@ type GroupedStream interface {
 
 type GroupedStreamImpl struct {
 	tp      *processor.TopologyBuilder
-	parents []processor.Node
 	grouped *Grouped
+	parents []processor.Node
 }
 
 func newGroupedStream(tp *processor.TopologyBuilder, parents []processor.Node, grouped *Grouped) GroupedStream {

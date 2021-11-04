@@ -10,8 +10,8 @@ type MaterializeParam struct {
 	KeySerde   commtypes.Serde
 	ValueSerde commtypes.Serde
 	MsgSerde   commtypes.MsgSerde
-	StoreName  string
 	Changelog  LogStore
+	StoreName  string
 	ParNum     uint8
 }
 

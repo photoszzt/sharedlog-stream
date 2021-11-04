@@ -13,8 +13,8 @@ type StreamWindowAggregateProcessor struct {
 	pctx               store.ProcessorContext
 	initializer        Initializer
 	aggregator         Aggregator
-	observedStreamTime uint64
 	windows            EnumerableWindowDefinition
+	observedStreamTime uint64
 }
 
 var _ = Processor(&StreamWindowAggregateProcessor{})

@@ -102,7 +102,7 @@ func (p *StreamMapValuesProcessor) ProcessAndReturn(msg commtypes.Message) ([]co
 	if err != nil {
 		return nil, err
 	}
-	return []commtypes.Message{commtypes.Message{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp}}, nil
+	return []commtypes.Message{{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp}}, nil
 }
 
 type StreamMapValuesWithKeyProcessor struct {
@@ -138,5 +138,5 @@ func (p *StreamMapValuesWithKeyProcessor) ProcessAndReturn(msg commtypes.Message
 	if err != nil {
 		return nil, err
 	}
-	return []commtypes.Message{commtypes.Message{Key: msg.Key, Value: newMsg.Value, Timestamp: msg.Timestamp}}, nil
+	return []commtypes.Message{{Key: msg.Key, Value: newMsg.Value, Timestamp: msg.Timestamp}}, nil
 }

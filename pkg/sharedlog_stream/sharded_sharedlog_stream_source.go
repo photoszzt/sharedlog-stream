@@ -7,11 +7,11 @@ import (
 )
 
 type ShardedSharedLogStreamSource struct {
-	stream       *ShardedSharedLogStream
-	timeout      time.Duration
 	keyDecoder   commtypes.Decoder
 	valueDecoder commtypes.Decoder
 	msgDecoder   commtypes.MsgDecoder
+	stream       *ShardedSharedLogStream
+	timeout      time.Duration
 }
 
 func NewShardedSharedLogStreamSource(stream *ShardedSharedLogStream, config *SharedLogStreamConfig) *ShardedSharedLogStreamSource {

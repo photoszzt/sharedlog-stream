@@ -14,8 +14,8 @@ import (
 // ClientNode is used to construct the dag at the client; Each node is responsible to invoke the
 // corresponding serverless function identified by the name
 type ClientNode struct {
-	children []*ClientNode
 	config   *ClientNodeConfig
+	children []*ClientNode
 }
 
 type ClientNodeConfig struct {
@@ -25,13 +25,13 @@ type ClientNodeConfig struct {
 }
 
 type InvokeParam struct {
-	Duration        uint32 // in sec
 	InputTopicName  string
 	OutputTopicName string
-	SerdeFormat     uint8
+	Duration        uint32 // in sec
 	NumInPartition  uint16
 	NumOutPartition uint16
 	ParNum          uint16
+	SerdeFormat     uint8
 }
 
 func NewClientNode(config *ClientNodeConfig) *ClientNode {

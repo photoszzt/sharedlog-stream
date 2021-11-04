@@ -64,6 +64,7 @@ func (tb *TopologyBuilder) Build() (*Topology, []error) {
 	}, errs
 }
 
+/*
 func nodesConnected(roots []Node) bool {
 	if len(roots) <= 1 {
 		return true
@@ -93,6 +94,7 @@ func nodesConnected(roots []Node) bool {
 
 	return connections == len(roots)-1
 }
+*/
 
 func FlattenNodeTree(roots map[Source]Node) []Node {
 	var nodes []Node

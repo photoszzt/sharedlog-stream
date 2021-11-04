@@ -10,8 +10,8 @@ type TableFilterProcessor struct {
 	pctx          store.ProcessorContext
 	pred          Predicate
 	store         store.KeyValueStore
-	filterNot     bool
 	queryableName string
+	filterNot     bool
 }
 
 var _ = Processor(&TableFilterProcessor{})

@@ -63,15 +63,16 @@ func (element *Element) Next() *Element {
 }
 
 type SkipList struct {
-	elementNode
-	maxLevel       int
-	Length         int
-	randSource     rand.Source
-	probability    float64
-	probTable      []float64
 	mutex          sync.RWMutex
 	prevNodesCache []*elementNode
 	comparable     Comparable
+	randSource     rand.Source
+
+	probTable []float64
+	elementNode
+	probability float64
+	maxLevel    int
+	Length      int
 }
 
 type Comparable interface {

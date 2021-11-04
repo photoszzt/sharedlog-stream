@@ -26,10 +26,10 @@ type Window interface {
 }
 
 type BaseWindow struct {
-	StartTs uint64     `json:"startTs" msg:"startTs"` // in ms
-	EndTs   uint64     `json:"endTs" msg:"endTs"`     // in ms
 	startT  *time.Time `json:"-" msg:"-"`
 	endT    *time.Time `json:"-" msg:"-"`
+	StartTs uint64     `json:"startTs" msg:"startTs"`
+	EndTs   uint64     `json:"endTs" msg:"endTs"`
 }
 
 func NewBaseWindow(startTs uint64, endTs uint64) BaseWindow {

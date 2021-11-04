@@ -37,18 +37,18 @@ type Value interface{}
 type TreeMap struct {
 	endNode   *node
 	beginNode *node
-	count     uint64
 	// Less returns a < b
-	Less func(a Key, b Key) bool
+	Less  func(a Key, b Key) bool
+	count uint64
 }
 
 type node struct {
+	key     Key
+	value   Value
 	right   *node
 	left    *node
 	parent  *node
 	isBlack bool
-	key     Key
-	value   Value
 }
 
 // New creates and returns new TreeMap.

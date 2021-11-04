@@ -23,9 +23,9 @@ type SharedLogStream struct {
 }
 
 type StreamLogEntry struct {
-	seqNum    uint64 `msg:"-"`
-	Payload   []byte `msg:"payload,omitempty"`
 	TopicName string `msg:"topicName"`
+	Payload   []byte `msg:"payload,omitempty"`
+	seqNum    uint64 `msg:"-"`
 }
 
 func decodeStreamLogEntry(logEntry *types.LogEntry) *StreamLogEntry {

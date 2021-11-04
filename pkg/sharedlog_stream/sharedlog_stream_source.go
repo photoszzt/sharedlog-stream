@@ -13,18 +13,18 @@ var (
 )
 
 type SharedLogStreamSource struct {
-	stream       *SharedLogStream
-	timeout      time.Duration
 	keyDecoder   commtypes.Decoder
 	valueDecoder commtypes.Decoder
 	msgDecoder   commtypes.MsgDecoder
+	stream       *SharedLogStream
+	timeout      time.Duration
 }
 
 type SharedLogStreamConfig struct {
-	Timeout      time.Duration
 	KeyDecoder   commtypes.Decoder
 	ValueDecoder commtypes.Decoder
 	MsgDecoder   commtypes.MsgDecoder
+	Timeout      time.Duration
 }
 
 func NewSharedLogStreamSource(stream *SharedLogStream, config *SharedLogStreamConfig) *SharedLogStreamSource {

@@ -10,7 +10,6 @@ type StreamJoinWindowProcessor struct {
 	winStore   store.WindowStore
 	pctx       store.ProcessorContext
 	windowName string
-	latencies  []int
 }
 
 var _ = Processor(&StreamJoinWindowProcessor{})

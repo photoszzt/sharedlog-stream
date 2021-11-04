@@ -10,11 +10,11 @@ import (
 )
 
 type InMemoryKeyValueStore struct {
-	open    bool
-	name    string
-	store   *treemap.TreeMap
 	sctx    ProcessorContext
+	store   *treemap.TreeMap
 	compare func(a treemap.Key, b treemap.Value) int
+	name    string
+	open    bool
 }
 
 var _ = KeyValueStore(NewInMemoryKeyValueStore("a", nil))
