@@ -1,4 +1,4 @@
-package driverinterfaces
+package driver_interfaces
 
 type BenchmarkDriver interface {
 	Init(configFile string) error
