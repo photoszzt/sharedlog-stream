@@ -5,12 +5,12 @@ package types
 import "encoding/json"
 
 type BidAndMax struct {
+	Extra       string `json:"extra" msg:"extra"`
 	Price       uint64 `json:"price" msg:"price"`
 	Auction     uint64 `json:"auction" msg:"auction"`
 	Bidder      uint64 `json:"bidder" msg:"bidder"`
 	DateTime    int64  `json:"dateTime" msg:"dateTime"`
 	MaxDateTime int64  `json:"maxDateTime" msg:"maxDateTime"`
-	Extra       string `json:"extra" msg:"extra"`
 }
 
 type BidAndMaxJSONSerde struct{}

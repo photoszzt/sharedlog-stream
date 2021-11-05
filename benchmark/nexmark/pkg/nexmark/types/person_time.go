@@ -10,8 +10,8 @@ import (
 )
 
 type PersonTime struct {
-	ID        uint64 `json:"id" msg:"id"`
 	Name      string `json:"name" msg:"name"`
+	ID        uint64 `json:"id" msg:"id"`
 	StartTime int64  `json:"startTime" msg:"startTime"`
 }
 

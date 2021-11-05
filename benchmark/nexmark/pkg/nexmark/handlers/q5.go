@@ -207,13 +207,12 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	duration := time.Duration(input.Duration) * time.Second
 	latencies := make([]int, 0, 128)
 	startTime := time.Now()
-	select {
-	case <-time.After(duration):
-		for _, srcPump := range srcPumps {
-			srcPump.Stop()
-			srcPump.Close()
-		}
+	time.After(duration)
+	for _, srcPump := range srcPumps {
+		srcPump.Stop()
+		srcPump.Close()
 	}
+
 	return &common.FnOutput{
 		Success:   true,
 		Duration:  time.Since(startTime).Seconds(),

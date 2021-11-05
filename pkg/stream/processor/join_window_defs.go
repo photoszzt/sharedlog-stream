@@ -50,9 +50,6 @@ var (
 )
 
 func getJoinWindows(beforeMs uint64, afterMs uint64, graceMs uint64) *JoinWindows {
-	if beforeMs+afterMs < 0 {
-		log.Fatal().Err(DurationLeqZero)
-	}
 	return &JoinWindows{
 		beforeMs: beforeMs,
 		afterMs:  afterMs,

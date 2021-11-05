@@ -16,9 +16,9 @@ type NexmarkGenerator struct {
 }
 
 type NextEvent struct {
+	Event              *types.Event
 	WallclockTimestamp uint64
 	EventTimestamp     uint64
-	Event              *types.Event
 	Watermark          uint64
 }
 
@@ -40,9 +40,11 @@ func NewNexmarkGenerator(config *GeneratorConfig, eventsCountSoFar uint64, wallc
 	}
 }
 
+/*
 func (ng *NexmarkGenerator) copy() *NexmarkGenerator {
 	return NewNexmarkGenerator(ng.Config, ng.EventsCountSoFar, ng.WallclockBaseTime)
 }
+*/
 
 func NewSimpleNexmarkGenerator(config *GeneratorConfig) *NexmarkGenerator {
 	return NewNexmarkGenerator(config, 0, -1)

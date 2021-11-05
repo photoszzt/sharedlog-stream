@@ -9,30 +9,30 @@ import (
 )
 
 type QueryInput struct {
-	Duration        uint32 `json:"duration"`
 	InputTopicName  string `json:"input_topic_name"`
 	OutputTopicName string `json:"output_topic_name"`
+	Duration        uint32 `json:"duration"`
 	SerdeFormat     uint8  `json:"serde_format"`
 }
 
 type NexMarkConfigInput struct {
 	TopicName              string        `json:"topic_name"`
-	Duration               uint32        `json:"duration"`
 	RateShape              string        `json:"rate_shape"`
+	EventsNum              uint64        `json:"events_num"`
 	RatePeriod             time.Duration `json:"rate_period"`
-	RateLimited            bool          `json:"rate_limited"`
+	BidAvgSize             uint32        `json:"bid_avg_size"`
 	FirstEventRate         uint32        `json:"first_event_rate"`
 	NextEventRate          uint32        `json:"next_event_rate"`
-	PersonAvgSize          uint32        `json:"person_avg_size"`  // in bytes
-	AuctionAvgSize         uint32        `json:"auction_avg_size"` // in bytes
-	BidAvgSize             uint32        `json:"bid_avg_size"`     // in bytes
+	PersonAvgSize          uint32        `json:"person_avg_size"`
+	AuctionAvgSize         uint32        `json:"auction_avg_size"`
+	Duration               uint32        `json:"duration"`
 	PersonProportion       uint32        `json:"person_proportion"`
 	AuctionProportion      uint32        `json:"auction_proportion"`
 	BidProportion          uint32        `json:"bid_proportion"`
 	BidHotRatioAuctions    uint32        `json:"bid_hot_ratio_auctions"`
 	BidHotRatioBidders     uint32        `json:"bid_hot_ratio_bidders"`
 	AuctionHotRatioSellers uint32        `json:"auction_hot_ratio_sellers"`
-	EventsNum              uint64        `json:"events_num"`
+	RateLimited            bool          `json:"rate_limited"`
 	SerdeFormat            uint8         `json:"serde_format"`
 }
 
@@ -84,8 +84,8 @@ func ConvertToNexmarkConfiguration(config *NexMarkConfigInput) (*nexmark.NexMark
 }
 
 type FnOutput struct {
-	Success   bool    `json:"success"`
 	Message   string  `json:"message"`
-	Duration  float64 `json:"duration"`
 	Latencies []int   `json:"latencies"`
+	Duration  float64 `json:"duration"`
+	Success   bool    `json:"success"`
 }

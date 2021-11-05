@@ -14,19 +14,19 @@ const (
 )
 
 type GeneratorConfig struct {
-	PersonProportion  uint32
-	AuctionProportion uint32
-	BidProportion     uint32
-	TotalProportion   uint32
 	Configuration     *nexmark.NexMarkConfig
 	InterEventDelayUs []float64
-	StepLengthSec     uint64
-	BaseTime          uint64
-	FirstEventId      uint64
+	EventPerEpoch     uint64
 	MaxEvents         uint64
 	FirstEventNumber  uint64
 	EpochPeriodMs     uint64
-	EventPerEpoch     uint64
+	StepLengthSec     uint64
+	BaseTime          uint64
+	FirstEventId      uint64
+	TotalProportion   uint32
+	BidProportion     uint32
+	AuctionProportion uint32
+	PersonProportion  uint32
 }
 
 func NewGeneratorConfig(configuration *nexmark.NexMarkConfig, baseTime uint64 /* millisecond */, firstEventId uint64,

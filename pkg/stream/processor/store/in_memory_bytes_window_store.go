@@ -171,7 +171,7 @@ func (s *InMemoryBytesWindowStore) removeExpiredSegments() {
 
 	s.otrMu.RLock()
 	defer s.otrMu.RUnlock()
-	for minT, _ := range s.openedTimeRange {
+	for minT := range s.openedTimeRange {
 		if minT < minLiveTime {
 			minLiveTime = minT
 		}

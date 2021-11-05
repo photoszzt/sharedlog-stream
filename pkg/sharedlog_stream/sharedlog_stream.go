@@ -62,7 +62,7 @@ func (s *SharedLogStream) TopicName() string {
 }
 
 func (s *SharedLogStream) Push(payload []byte, parNum uint8, additionalTag []uint64) (uint64, error) {
-	if payload == nil || len(payload) == 0 {
+	if len(payload) == 0 {
 		return 0, errEmptyPayload
 	}
 	logEntry := &StreamLogEntry{
