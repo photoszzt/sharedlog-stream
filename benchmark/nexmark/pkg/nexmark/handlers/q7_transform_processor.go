@@ -36,7 +36,10 @@ func (p *Q7TransformProcessor) Process(msg commtypes.Message) error {
 		return err
 	}
 	for _, ret := range rets {
-		p.pipe.Forward(ret)
+		err := p.pipe.Forward(ret)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -45,7 +48,7 @@ func (p *Q7TransformProcessor) ProcessAndReturn(msg commtypes.Message) ([]commty
 	key := msg.Key.(uint64)
 	event := msg.Value.(*ntypes.Event)
 	result := make([]commtypes.Message, 0, 128)
-	p.windowStore.Fetch(key, time.UnixMilli((event.Bid.DateTime - 10*1000)), time.UnixMilli(event.Bid.DateTime), func(u uint64, vt store.ValueT) {
+	err := p.windowStore.Fetch(key, time.UnixMilli((event.Bid.DateTime - 10*1000)), time.UnixMilli(event.Bid.DateTime), func(u uint64, vt store.ValueT) error {
 		val := vt.(commtypes.ValueTimestamp).Value.(ntypes.PriceTime)
 		if event.Bid.Price == val.Price {
 			result = append(result, commtypes.Message{Key: key, Value: ntypes.BidAndMax{
@@ -57,6 +60,10 @@ func (p *Q7TransformProcessor) ProcessAndReturn(msg commtypes.Message) ([]commty
 				MaxDateTime: val.DateTime,
 			}})
 		}
+		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 	return result, nil
 }

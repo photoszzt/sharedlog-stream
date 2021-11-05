@@ -43,7 +43,10 @@ func (p *StreamWindowAggregateProcessor) Process(msg commtypes.Message) error {
 		return err
 	}
 	for _, newMsg := range newMsgs {
-		p.pipe.Forward(newMsg)
+		err := p.pipe.Forward(newMsg)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

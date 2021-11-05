@@ -40,7 +40,10 @@ func (p *StreamTableJoinProcessor) Process(msg commtypes.Message) error {
 		return err
 	}
 	if newMsg != nil {
-		p.pipe.Forward(newMsg[0])
+		err := p.pipe.Forward(newMsg[0])
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

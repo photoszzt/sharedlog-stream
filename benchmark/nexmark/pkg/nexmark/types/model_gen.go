@@ -24,12 +24,6 @@ func (z *Auction) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "id":
-			z.ID, err = dc.ReadUint64()
-			if err != nil {
-				err = msgp.WrapError(err, "ID")
-				return
-			}
 		case "itemName":
 			z.ItemName, err = dc.ReadString()
 			if err != nil {
@@ -42,10 +36,16 @@ func (z *Auction) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Description")
 				return
 			}
-		case "initialBid":
-			z.InitialBid, err = dc.ReadUint64()
+		case "extra":
+			z.Extra, err = dc.ReadString()
 			if err != nil {
-				err = msgp.WrapError(err, "InitialBid")
+				err = msgp.WrapError(err, "Extra")
+				return
+			}
+		case "id":
+			z.ID, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "ID")
 				return
 			}
 		case "reserve":
@@ -78,10 +78,10 @@ func (z *Auction) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Category")
 				return
 			}
-		case "extra":
-			z.Extra, err = dc.ReadString()
+		case "initialBid":
+			z.InitialBid, err = dc.ReadUint64()
 			if err != nil {
-				err = msgp.WrapError(err, "Extra")
+				err = msgp.WrapError(err, "InitialBid")
 				return
 			}
 		default:
@@ -98,18 +98,8 @@ func (z *Auction) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *Auction) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 10
-	// write "id"
-	err = en.Append(0x8a, 0xa2, 0x69, 0x64)
-	if err != nil {
-		return
-	}
-	err = en.WriteUint64(z.ID)
-	if err != nil {
-		err = msgp.WrapError(err, "ID")
-		return
-	}
 	// write "itemName"
-	err = en.Append(0xa8, 0x69, 0x74, 0x65, 0x6d, 0x4e, 0x61, 0x6d, 0x65)
+	err = en.Append(0x8a, 0xa8, 0x69, 0x74, 0x65, 0x6d, 0x4e, 0x61, 0x6d, 0x65)
 	if err != nil {
 		return
 	}
@@ -128,14 +118,24 @@ func (z *Auction) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Description")
 		return
 	}
-	// write "initialBid"
-	err = en.Append(0xaa, 0x69, 0x6e, 0x69, 0x74, 0x69, 0x61, 0x6c, 0x42, 0x69, 0x64)
+	// write "extra"
+	err = en.Append(0xa5, 0x65, 0x78, 0x74, 0x72, 0x61)
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.InitialBid)
+	err = en.WriteString(z.Extra)
 	if err != nil {
-		err = msgp.WrapError(err, "InitialBid")
+		err = msgp.WrapError(err, "Extra")
+		return
+	}
+	// write "id"
+	err = en.Append(0xa2, 0x69, 0x64)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.ID)
+	if err != nil {
+		err = msgp.WrapError(err, "ID")
 		return
 	}
 	// write "reserve"
@@ -188,14 +188,14 @@ func (z *Auction) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Category")
 		return
 	}
-	// write "extra"
-	err = en.Append(0xa5, 0x65, 0x78, 0x74, 0x72, 0x61)
+	// write "initialBid"
+	err = en.Append(0xaa, 0x69, 0x6e, 0x69, 0x74, 0x69, 0x61, 0x6c, 0x42, 0x69, 0x64)
 	if err != nil {
 		return
 	}
-	err = en.WriteString(z.Extra)
+	err = en.WriteUint64(z.InitialBid)
 	if err != nil {
-		err = msgp.WrapError(err, "Extra")
+		err = msgp.WrapError(err, "InitialBid")
 		return
 	}
 	return
@@ -205,18 +205,18 @@ func (z *Auction) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *Auction) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 10
-	// string "id"
-	o = append(o, 0x8a, 0xa2, 0x69, 0x64)
-	o = msgp.AppendUint64(o, z.ID)
 	// string "itemName"
-	o = append(o, 0xa8, 0x69, 0x74, 0x65, 0x6d, 0x4e, 0x61, 0x6d, 0x65)
+	o = append(o, 0x8a, 0xa8, 0x69, 0x74, 0x65, 0x6d, 0x4e, 0x61, 0x6d, 0x65)
 	o = msgp.AppendString(o, z.ItemName)
 	// string "description"
 	o = append(o, 0xab, 0x64, 0x65, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x69, 0x6f, 0x6e)
 	o = msgp.AppendString(o, z.Description)
-	// string "initialBid"
-	o = append(o, 0xaa, 0x69, 0x6e, 0x69, 0x74, 0x69, 0x61, 0x6c, 0x42, 0x69, 0x64)
-	o = msgp.AppendUint64(o, z.InitialBid)
+	// string "extra"
+	o = append(o, 0xa5, 0x65, 0x78, 0x74, 0x72, 0x61)
+	o = msgp.AppendString(o, z.Extra)
+	// string "id"
+	o = append(o, 0xa2, 0x69, 0x64)
+	o = msgp.AppendUint64(o, z.ID)
 	// string "reserve"
 	o = append(o, 0xa7, 0x72, 0x65, 0x73, 0x65, 0x72, 0x76, 0x65)
 	o = msgp.AppendUint64(o, z.Reserve)
@@ -232,9 +232,9 @@ func (z *Auction) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "category"
 	o = append(o, 0xa8, 0x63, 0x61, 0x74, 0x65, 0x67, 0x6f, 0x72, 0x79)
 	o = msgp.AppendUint64(o, z.Category)
-	// string "extra"
-	o = append(o, 0xa5, 0x65, 0x78, 0x74, 0x72, 0x61)
-	o = msgp.AppendString(o, z.Extra)
+	// string "initialBid"
+	o = append(o, 0xaa, 0x69, 0x6e, 0x69, 0x74, 0x69, 0x61, 0x6c, 0x42, 0x69, 0x64)
+	o = msgp.AppendUint64(o, z.InitialBid)
 	return
 }
 
@@ -256,12 +256,6 @@ func (z *Auction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "id":
-			z.ID, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "ID")
-				return
-			}
 		case "itemName":
 			z.ItemName, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
@@ -274,10 +268,16 @@ func (z *Auction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Description")
 				return
 			}
-		case "initialBid":
-			z.InitialBid, bts, err = msgp.ReadUint64Bytes(bts)
+		case "extra":
+			z.Extra, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "InitialBid")
+				err = msgp.WrapError(err, "Extra")
+				return
+			}
+		case "id":
+			z.ID, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "ID")
 				return
 			}
 		case "reserve":
@@ -310,10 +310,10 @@ func (z *Auction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Category")
 				return
 			}
-		case "extra":
-			z.Extra, bts, err = msgp.ReadStringBytes(bts)
+		case "initialBid":
+			z.InitialBid, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "Extra")
+				err = msgp.WrapError(err, "InitialBid")
 				return
 			}
 		default:
@@ -330,7 +330,7 @@ func (z *Auction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Auction) Msgsize() (s int) {
-	s = 1 + 3 + msgp.Uint64Size + 9 + msgp.StringPrefixSize + len(z.ItemName) + 12 + msgp.StringPrefixSize + len(z.Description) + 11 + msgp.Uint64Size + 8 + msgp.Uint64Size + 9 + msgp.Int64Size + 8 + msgp.Int64Size + 7 + msgp.Uint64Size + 9 + msgp.Uint64Size + 6 + msgp.StringPrefixSize + len(z.Extra)
+	s = 1 + 9 + msgp.StringPrefixSize + len(z.ItemName) + 12 + msgp.StringPrefixSize + len(z.Description) + 6 + msgp.StringPrefixSize + len(z.Extra) + 3 + msgp.Uint64Size + 8 + msgp.Uint64Size + 9 + msgp.Int64Size + 8 + msgp.Int64Size + 7 + msgp.Uint64Size + 9 + msgp.Uint64Size + 11 + msgp.Uint64Size
 	return
 }
 
@@ -352,22 +352,10 @@ func (z *Bid) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "auction":
-			z.Auction, err = dc.ReadUint64()
+		case "extra":
+			z.Extra, err = dc.ReadString()
 			if err != nil {
-				err = msgp.WrapError(err, "Auction")
-				return
-			}
-		case "bidder":
-			z.Bidder, err = dc.ReadUint64()
-			if err != nil {
-				err = msgp.WrapError(err, "Bidder")
-				return
-			}
-		case "price":
-			z.Price, err = dc.ReadUint64()
-			if err != nil {
-				err = msgp.WrapError(err, "Price")
+				err = msgp.WrapError(err, "Extra")
 				return
 			}
 		case "channel":
@@ -382,16 +370,28 @@ func (z *Bid) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Url")
 				return
 			}
+		case "bidder":
+			z.Bidder, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "Bidder")
+				return
+			}
+		case "price":
+			z.Price, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "Price")
+				return
+			}
 		case "dateTime":
 			z.DateTime, err = dc.ReadInt64()
 			if err != nil {
 				err = msgp.WrapError(err, "DateTime")
 				return
 			}
-		case "extra":
-			z.Extra, err = dc.ReadString()
+		case "auction":
+			z.Auction, err = dc.ReadUint64()
 			if err != nil {
-				err = msgp.WrapError(err, "Extra")
+				err = msgp.WrapError(err, "Auction")
 				return
 			}
 		default:
@@ -408,34 +408,14 @@ func (z *Bid) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *Bid) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 7
-	// write "auction"
-	err = en.Append(0x87, 0xa7, 0x61, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e)
+	// write "extra"
+	err = en.Append(0x87, 0xa5, 0x65, 0x78, 0x74, 0x72, 0x61)
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.Auction)
+	err = en.WriteString(z.Extra)
 	if err != nil {
-		err = msgp.WrapError(err, "Auction")
-		return
-	}
-	// write "bidder"
-	err = en.Append(0xa6, 0x62, 0x69, 0x64, 0x64, 0x65, 0x72)
-	if err != nil {
-		return
-	}
-	err = en.WriteUint64(z.Bidder)
-	if err != nil {
-		err = msgp.WrapError(err, "Bidder")
-		return
-	}
-	// write "price"
-	err = en.Append(0xa5, 0x70, 0x72, 0x69, 0x63, 0x65)
-	if err != nil {
-		return
-	}
-	err = en.WriteUint64(z.Price)
-	if err != nil {
-		err = msgp.WrapError(err, "Price")
+		err = msgp.WrapError(err, "Extra")
 		return
 	}
 	// write "channel"
@@ -458,6 +438,26 @@ func (z *Bid) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Url")
 		return
 	}
+	// write "bidder"
+	err = en.Append(0xa6, 0x62, 0x69, 0x64, 0x64, 0x65, 0x72)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.Bidder)
+	if err != nil {
+		err = msgp.WrapError(err, "Bidder")
+		return
+	}
+	// write "price"
+	err = en.Append(0xa5, 0x70, 0x72, 0x69, 0x63, 0x65)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.Price)
+	if err != nil {
+		err = msgp.WrapError(err, "Price")
+		return
+	}
 	// write "dateTime"
 	err = en.Append(0xa8, 0x64, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65)
 	if err != nil {
@@ -468,14 +468,14 @@ func (z *Bid) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "DateTime")
 		return
 	}
-	// write "extra"
-	err = en.Append(0xa5, 0x65, 0x78, 0x74, 0x72, 0x61)
+	// write "auction"
+	err = en.Append(0xa7, 0x61, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e)
 	if err != nil {
 		return
 	}
-	err = en.WriteString(z.Extra)
+	err = en.WriteUint64(z.Auction)
 	if err != nil {
-		err = msgp.WrapError(err, "Extra")
+		err = msgp.WrapError(err, "Auction")
 		return
 	}
 	return
@@ -485,27 +485,27 @@ func (z *Bid) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *Bid) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 7
-	// string "auction"
-	o = append(o, 0x87, 0xa7, 0x61, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e)
-	o = msgp.AppendUint64(o, z.Auction)
-	// string "bidder"
-	o = append(o, 0xa6, 0x62, 0x69, 0x64, 0x64, 0x65, 0x72)
-	o = msgp.AppendUint64(o, z.Bidder)
-	// string "price"
-	o = append(o, 0xa5, 0x70, 0x72, 0x69, 0x63, 0x65)
-	o = msgp.AppendUint64(o, z.Price)
+	// string "extra"
+	o = append(o, 0x87, 0xa5, 0x65, 0x78, 0x74, 0x72, 0x61)
+	o = msgp.AppendString(o, z.Extra)
 	// string "channel"
 	o = append(o, 0xa7, 0x63, 0x68, 0x61, 0x6e, 0x6e, 0x65, 0x6c)
 	o = msgp.AppendString(o, z.Channel)
 	// string "url"
 	o = append(o, 0xa3, 0x75, 0x72, 0x6c)
 	o = msgp.AppendString(o, z.Url)
+	// string "bidder"
+	o = append(o, 0xa6, 0x62, 0x69, 0x64, 0x64, 0x65, 0x72)
+	o = msgp.AppendUint64(o, z.Bidder)
+	// string "price"
+	o = append(o, 0xa5, 0x70, 0x72, 0x69, 0x63, 0x65)
+	o = msgp.AppendUint64(o, z.Price)
 	// string "dateTime"
 	o = append(o, 0xa8, 0x64, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65)
 	o = msgp.AppendInt64(o, z.DateTime)
-	// string "extra"
-	o = append(o, 0xa5, 0x65, 0x78, 0x74, 0x72, 0x61)
-	o = msgp.AppendString(o, z.Extra)
+	// string "auction"
+	o = append(o, 0xa7, 0x61, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e)
+	o = msgp.AppendUint64(o, z.Auction)
 	return
 }
 
@@ -527,22 +527,10 @@ func (z *Bid) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "auction":
-			z.Auction, bts, err = msgp.ReadUint64Bytes(bts)
+		case "extra":
+			z.Extra, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "Auction")
-				return
-			}
-		case "bidder":
-			z.Bidder, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Bidder")
-				return
-			}
-		case "price":
-			z.Price, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Price")
+				err = msgp.WrapError(err, "Extra")
 				return
 			}
 		case "channel":
@@ -557,16 +545,28 @@ func (z *Bid) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Url")
 				return
 			}
+		case "bidder":
+			z.Bidder, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Bidder")
+				return
+			}
+		case "price":
+			z.Price, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Price")
+				return
+			}
 		case "dateTime":
 			z.DateTime, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "DateTime")
 				return
 			}
-		case "extra":
-			z.Extra, bts, err = msgp.ReadStringBytes(bts)
+		case "auction":
+			z.Auction, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "Extra")
+				err = msgp.WrapError(err, "Auction")
 				return
 			}
 		default:
@@ -583,7 +583,7 @@ func (z *Bid) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Bid) Msgsize() (s int) {
-	s = 1 + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 6 + msgp.Uint64Size + 8 + msgp.StringPrefixSize + len(z.Channel) + 4 + msgp.StringPrefixSize + len(z.Url) + 9 + msgp.Int64Size + 6 + msgp.StringPrefixSize + len(z.Extra)
+	s = 1 + 6 + msgp.StringPrefixSize + len(z.Extra) + 8 + msgp.StringPrefixSize + len(z.Channel) + 4 + msgp.StringPrefixSize + len(z.Url) + 7 + msgp.Uint64Size + 6 + msgp.Uint64Size + 9 + msgp.Int64Size + 8 + msgp.Uint64Size
 	return
 }
 
@@ -657,16 +657,6 @@ func (z *Event) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "etype":
-			{
-				var zb0002 uint8
-				zb0002, err = dc.ReadUint8()
-				if err != nil {
-					err = msgp.WrapError(err, "Etype")
-					return
-				}
-				z.Etype = EType(zb0002)
-			}
 		case "newPerson":
 			if dc.IsNil() {
 				err = dc.ReadNil()
@@ -721,6 +711,16 @@ func (z *Event) DecodeMsg(dc *msgp.Reader) (err error) {
 					return
 				}
 			}
+		case "etype":
+			{
+				var zb0002 uint8
+				zb0002, err = dc.ReadUint8()
+				if err != nil {
+					err = msgp.WrapError(err, "Etype")
+					return
+				}
+				z.Etype = EType(zb0002)
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -739,15 +739,15 @@ func (z *Event) EncodeMsg(en *msgp.Writer) (err error) {
 	var zb0001Mask uint8 /* 4 bits */
 	if z.NewPerson == nil {
 		zb0001Len--
-		zb0001Mask |= 0x2
+		zb0001Mask |= 0x1
 	}
 	if z.NewAuction == nil {
 		zb0001Len--
-		zb0001Mask |= 0x4
+		zb0001Mask |= 0x2
 	}
 	if z.Bid == nil {
 		zb0001Len--
-		zb0001Mask |= 0x8
+		zb0001Mask |= 0x4
 	}
 	// variable map header, size zb0001Len
 	err = en.Append(0x80 | uint8(zb0001Len))
@@ -757,17 +757,7 @@ func (z *Event) EncodeMsg(en *msgp.Writer) (err error) {
 	if zb0001Len == 0 {
 		return
 	}
-	// write "etype"
-	err = en.Append(0xa5, 0x65, 0x74, 0x79, 0x70, 0x65)
-	if err != nil {
-		return
-	}
-	err = en.WriteUint8(uint8(z.Etype))
-	if err != nil {
-		err = msgp.WrapError(err, "Etype")
-		return
-	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
+	if (zb0001Mask & 0x1) == 0 { // if not empty
 		// write "newPerson"
 		err = en.Append(0xa9, 0x6e, 0x65, 0x77, 0x50, 0x65, 0x72, 0x73, 0x6f, 0x6e)
 		if err != nil {
@@ -786,7 +776,7 @@ func (z *Event) EncodeMsg(en *msgp.Writer) (err error) {
 			}
 		}
 	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
+	if (zb0001Mask & 0x2) == 0 { // if not empty
 		// write "newAuction"
 		err = en.Append(0xaa, 0x6e, 0x65, 0x77, 0x41, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e)
 		if err != nil {
@@ -805,7 +795,7 @@ func (z *Event) EncodeMsg(en *msgp.Writer) (err error) {
 			}
 		}
 	}
-	if (zb0001Mask & 0x8) == 0 { // if not empty
+	if (zb0001Mask & 0x4) == 0 { // if not empty
 		// write "bid"
 		err = en.Append(0xa3, 0x62, 0x69, 0x64)
 		if err != nil {
@@ -824,6 +814,16 @@ func (z *Event) EncodeMsg(en *msgp.Writer) (err error) {
 			}
 		}
 	}
+	// write "etype"
+	err = en.Append(0xa5, 0x65, 0x74, 0x79, 0x70, 0x65)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint8(uint8(z.Etype))
+	if err != nil {
+		err = msgp.WrapError(err, "Etype")
+		return
+	}
 	return
 }
 
@@ -835,25 +835,22 @@ func (z *Event) MarshalMsg(b []byte) (o []byte, err error) {
 	var zb0001Mask uint8 /* 4 bits */
 	if z.NewPerson == nil {
 		zb0001Len--
-		zb0001Mask |= 0x2
+		zb0001Mask |= 0x1
 	}
 	if z.NewAuction == nil {
 		zb0001Len--
-		zb0001Mask |= 0x4
+		zb0001Mask |= 0x2
 	}
 	if z.Bid == nil {
 		zb0001Len--
-		zb0001Mask |= 0x8
+		zb0001Mask |= 0x4
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len == 0 {
 		return
 	}
-	// string "etype"
-	o = append(o, 0xa5, 0x65, 0x74, 0x79, 0x70, 0x65)
-	o = msgp.AppendUint8(o, uint8(z.Etype))
-	if (zb0001Mask & 0x2) == 0 { // if not empty
+	if (zb0001Mask & 0x1) == 0 { // if not empty
 		// string "newPerson"
 		o = append(o, 0xa9, 0x6e, 0x65, 0x77, 0x50, 0x65, 0x72, 0x73, 0x6f, 0x6e)
 		if z.NewPerson == nil {
@@ -866,7 +863,7 @@ func (z *Event) MarshalMsg(b []byte) (o []byte, err error) {
 			}
 		}
 	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
+	if (zb0001Mask & 0x2) == 0 { // if not empty
 		// string "newAuction"
 		o = append(o, 0xaa, 0x6e, 0x65, 0x77, 0x41, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e)
 		if z.NewAuction == nil {
@@ -879,7 +876,7 @@ func (z *Event) MarshalMsg(b []byte) (o []byte, err error) {
 			}
 		}
 	}
-	if (zb0001Mask & 0x8) == 0 { // if not empty
+	if (zb0001Mask & 0x4) == 0 { // if not empty
 		// string "bid"
 		o = append(o, 0xa3, 0x62, 0x69, 0x64)
 		if z.Bid == nil {
@@ -892,6 +889,9 @@ func (z *Event) MarshalMsg(b []byte) (o []byte, err error) {
 			}
 		}
 	}
+	// string "etype"
+	o = append(o, 0xa5, 0x65, 0x74, 0x79, 0x70, 0x65)
+	o = msgp.AppendUint8(o, uint8(z.Etype))
 	return
 }
 
@@ -913,16 +913,6 @@ func (z *Event) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "etype":
-			{
-				var zb0002 uint8
-				zb0002, bts, err = msgp.ReadUint8Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Etype")
-					return
-				}
-				z.Etype = EType(zb0002)
-			}
 		case "newPerson":
 			if msgp.IsNil(bts) {
 				bts, err = msgp.ReadNilBytes(bts)
@@ -974,6 +964,16 @@ func (z *Event) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+		case "etype":
+			{
+				var zb0002 uint8
+				zb0002, bts, err = msgp.ReadUint8Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Etype")
+					return
+				}
+				z.Etype = EType(zb0002)
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -988,7 +988,7 @@ func (z *Event) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Event) Msgsize() (s int) {
-	s = 1 + 6 + msgp.Uint8Size + 10
+	s = 1 + 10
 	if z.NewPerson == nil {
 		s += msgp.NilSize
 	} else {
@@ -1006,6 +1006,7 @@ func (z *Event) Msgsize() (s int) {
 	} else {
 		s += z.Bid.Msgsize()
 	}
+	s += 6 + msgp.Uint8Size
 	return
 }
 
@@ -1371,12 +1372,6 @@ func (z *Person) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "id":
-			z.ID, err = dc.ReadUint64()
-			if err != nil {
-				err = msgp.WrapError(err, "ID")
-				return
-			}
 		case "name":
 			z.Name, err = dc.ReadString()
 			if err != nil {
@@ -1407,16 +1402,22 @@ func (z *Person) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "State")
 				return
 			}
-		case "dateTime":
-			z.DateTime, err = dc.ReadInt64()
-			if err != nil {
-				err = msgp.WrapError(err, "DateTime")
-				return
-			}
 		case "extra":
 			z.Extra, err = dc.ReadString()
 			if err != nil {
 				err = msgp.WrapError(err, "Extra")
+				return
+			}
+		case "id":
+			z.ID, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "ID")
+				return
+			}
+		case "dateTime":
+			z.DateTime, err = dc.ReadInt64()
+			if err != nil {
+				err = msgp.WrapError(err, "DateTime")
 				return
 			}
 		default:
@@ -1433,18 +1434,8 @@ func (z *Person) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *Person) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 8
-	// write "id"
-	err = en.Append(0x88, 0xa2, 0x69, 0x64)
-	if err != nil {
-		return
-	}
-	err = en.WriteUint64(z.ID)
-	if err != nil {
-		err = msgp.WrapError(err, "ID")
-		return
-	}
 	// write "name"
-	err = en.Append(0xa4, 0x6e, 0x61, 0x6d, 0x65)
+	err = en.Append(0x88, 0xa4, 0x6e, 0x61, 0x6d, 0x65)
 	if err != nil {
 		return
 	}
@@ -1493,16 +1484,6 @@ func (z *Person) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "State")
 		return
 	}
-	// write "dateTime"
-	err = en.Append(0xa8, 0x64, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65)
-	if err != nil {
-		return
-	}
-	err = en.WriteInt64(z.DateTime)
-	if err != nil {
-		err = msgp.WrapError(err, "DateTime")
-		return
-	}
 	// write "extra"
 	err = en.Append(0xa5, 0x65, 0x78, 0x74, 0x72, 0x61)
 	if err != nil {
@@ -1513,6 +1494,26 @@ func (z *Person) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Extra")
 		return
 	}
+	// write "id"
+	err = en.Append(0xa2, 0x69, 0x64)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.ID)
+	if err != nil {
+		err = msgp.WrapError(err, "ID")
+		return
+	}
+	// write "dateTime"
+	err = en.Append(0xa8, 0x64, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt64(z.DateTime)
+	if err != nil {
+		err = msgp.WrapError(err, "DateTime")
+		return
+	}
 	return
 }
 
@@ -1520,11 +1521,8 @@ func (z *Person) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *Person) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 8
-	// string "id"
-	o = append(o, 0x88, 0xa2, 0x69, 0x64)
-	o = msgp.AppendUint64(o, z.ID)
 	// string "name"
-	o = append(o, 0xa4, 0x6e, 0x61, 0x6d, 0x65)
+	o = append(o, 0x88, 0xa4, 0x6e, 0x61, 0x6d, 0x65)
 	o = msgp.AppendString(o, z.Name)
 	// string "emailAddress"
 	o = append(o, 0xac, 0x65, 0x6d, 0x61, 0x69, 0x6c, 0x41, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73)
@@ -1538,12 +1536,15 @@ func (z *Person) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "state"
 	o = append(o, 0xa5, 0x73, 0x74, 0x61, 0x74, 0x65)
 	o = msgp.AppendString(o, z.State)
-	// string "dateTime"
-	o = append(o, 0xa8, 0x64, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65)
-	o = msgp.AppendInt64(o, z.DateTime)
 	// string "extra"
 	o = append(o, 0xa5, 0x65, 0x78, 0x74, 0x72, 0x61)
 	o = msgp.AppendString(o, z.Extra)
+	// string "id"
+	o = append(o, 0xa2, 0x69, 0x64)
+	o = msgp.AppendUint64(o, z.ID)
+	// string "dateTime"
+	o = append(o, 0xa8, 0x64, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65)
+	o = msgp.AppendInt64(o, z.DateTime)
 	return
 }
 
@@ -1565,12 +1566,6 @@ func (z *Person) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "id":
-			z.ID, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "ID")
-				return
-			}
 		case "name":
 			z.Name, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
@@ -1601,16 +1596,22 @@ func (z *Person) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "State")
 				return
 			}
-		case "dateTime":
-			z.DateTime, bts, err = msgp.ReadInt64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "DateTime")
-				return
-			}
 		case "extra":
 			z.Extra, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Extra")
+				return
+			}
+		case "id":
+			z.ID, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "ID")
+				return
+			}
+		case "dateTime":
+			z.DateTime, bts, err = msgp.ReadInt64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "DateTime")
 				return
 			}
 		default:
@@ -1627,6 +1628,6 @@ func (z *Person) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *Person) Msgsize() (s int) {
-	s = 1 + 3 + msgp.Uint64Size + 5 + msgp.StringPrefixSize + len(z.Name) + 13 + msgp.StringPrefixSize + len(z.EmailAddress) + 11 + msgp.StringPrefixSize + len(z.CreditCard) + 5 + msgp.StringPrefixSize + len(z.City) + 6 + msgp.StringPrefixSize + len(z.State) + 9 + msgp.Int64Size + 6 + msgp.StringPrefixSize + len(z.Extra)
+	s = 1 + 5 + msgp.StringPrefixSize + len(z.Name) + 13 + msgp.StringPrefixSize + len(z.EmailAddress) + 11 + msgp.StringPrefixSize + len(z.CreditCard) + 5 + msgp.StringPrefixSize + len(z.City) + 6 + msgp.StringPrefixSize + len(z.State) + 6 + msgp.StringPrefixSize + len(z.Extra) + 3 + msgp.Uint64Size + 9 + msgp.Int64Size
 	return
 }

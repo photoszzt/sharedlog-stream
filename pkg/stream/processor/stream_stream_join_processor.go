@@ -118,9 +118,9 @@ func (p *StreamStreamJoinProcessor) Process(msg commtypes.Message) error {
 
 	timeToSec := timeTo / 1000
 	timeToNs := (timeTo - timeToSec*1000) * 1000000
-	p.otherWindowStore.Fetch(msg.Key,
+	err := p.otherWindowStore.Fetch(msg.Key,
 		time.Unix(int64(timeFromSec), int64(timeFromNs)),
-		time.Unix(int64(timeToSec), int64(timeToNs)), func(otherRecordTs uint64, vt store.ValueT) {
+		time.Unix(int64(timeToSec), int64(timeToNs)), func(otherRecordTs uint64, vt store.ValueT) error {
 			var newTs uint64
 			// needOuterJoin = false
 			newVal := p.joiner.Apply(msg.Key, msg.Value, vt)
@@ -129,8 +129,11 @@ func (p *StreamStreamJoinProcessor) Process(msg commtypes.Message) error {
 			} else {
 				newTs = otherRecordTs
 			}
-			p.pipe.Forward(commtypes.Message{Key: msg.Key, Value: newVal, Timestamp: newTs})
+			return p.pipe.Forward(commtypes.Message{Key: msg.Key, Value: newVal, Timestamp: newTs})
 		})
+	if err != nil {
+		return err
+	}
 	/*
 		if needOuterJoin {
 			// TODO

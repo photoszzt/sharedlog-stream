@@ -24,16 +24,16 @@ func (z *StreamLogEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "payload":
-			z.Payload, err = dc.ReadBytes(z.Payload)
-			if err != nil {
-				err = msgp.WrapError(err, "Payload")
-				return
-			}
 		case "topicName":
 			z.TopicName, err = dc.ReadString()
 			if err != nil {
 				err = msgp.WrapError(err, "TopicName")
+				return
+			}
+		case "payload":
+			z.Payload, err = dc.ReadBytes(z.Payload)
+			if err != nil {
+				err = msgp.WrapError(err, "Payload")
 				return
 			}
 		default:
@@ -54,7 +54,7 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 	var zb0001Mask uint8 /* 2 bits */
 	if z.Payload == nil {
 		zb0001Len--
-		zb0001Mask |= 0x1
+		zb0001Mask |= 0x2
 	}
 	// variable map header, size zb0001Len
 	err = en.Append(0x80 | uint8(zb0001Len))
@@ -63,18 +63,6 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 	}
 	if zb0001Len == 0 {
 		return
-	}
-	if (zb0001Mask & 0x1) == 0 { // if not empty
-		// write "payload"
-		err = en.Append(0xa7, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64)
-		if err != nil {
-			return
-		}
-		err = en.WriteBytes(z.Payload)
-		if err != nil {
-			err = msgp.WrapError(err, "Payload")
-			return
-		}
 	}
 	// write "topicName"
 	err = en.Append(0xa9, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x4e, 0x61, 0x6d, 0x65)
@@ -85,6 +73,18 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		err = msgp.WrapError(err, "TopicName")
 		return
+	}
+	if (zb0001Mask & 0x2) == 0 { // if not empty
+		// write "payload"
+		err = en.Append(0xa7, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64)
+		if err != nil {
+			return
+		}
+		err = en.WriteBytes(z.Payload)
+		if err != nil {
+			err = msgp.WrapError(err, "Payload")
+			return
+		}
 	}
 	return
 }
@@ -97,21 +97,21 @@ func (z *StreamLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	var zb0001Mask uint8 /* 2 bits */
 	if z.Payload == nil {
 		zb0001Len--
-		zb0001Mask |= 0x1
+		zb0001Mask |= 0x2
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
 	if zb0001Len == 0 {
 		return
 	}
-	if (zb0001Mask & 0x1) == 0 { // if not empty
+	// string "topicName"
+	o = append(o, 0xa9, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x4e, 0x61, 0x6d, 0x65)
+	o = msgp.AppendString(o, z.TopicName)
+	if (zb0001Mask & 0x2) == 0 { // if not empty
 		// string "payload"
 		o = append(o, 0xa7, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64)
 		o = msgp.AppendBytes(o, z.Payload)
 	}
-	// string "topicName"
-	o = append(o, 0xa9, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x4e, 0x61, 0x6d, 0x65)
-	o = msgp.AppendString(o, z.TopicName)
 	return
 }
 
@@ -133,16 +133,16 @@ func (z *StreamLogEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "payload":
-			z.Payload, bts, err = msgp.ReadBytesBytes(bts, z.Payload)
-			if err != nil {
-				err = msgp.WrapError(err, "Payload")
-				return
-			}
 		case "topicName":
 			z.TopicName, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "TopicName")
+				return
+			}
+		case "payload":
+			z.Payload, bts, err = msgp.ReadBytesBytes(bts, z.Payload)
+			if err != nil {
+				err = msgp.WrapError(err, "Payload")
 				return
 			}
 		default:
@@ -159,6 +159,6 @@ func (z *StreamLogEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *StreamLogEntry) Msgsize() (s int) {
-	s = 1 + 8 + msgp.BytesPrefixSize + len(z.Payload) + 10 + msgp.StringPrefixSize + len(z.TopicName)
+	s = 1 + 10 + msgp.StringPrefixSize + len(z.TopicName) + 8 + msgp.BytesPrefixSize + len(z.Payload)
 	return
 }

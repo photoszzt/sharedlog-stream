@@ -103,7 +103,7 @@ func (s *InMemoryBytesWindowStore) Get(key []byte, windowStartTimestamp uint64) 
 	}
 }
 
-func (s *InMemoryBytesWindowStore) Fetch(key []byte, timeFrom time.Time, timeTo time.Time, iterFunc func(uint64, ValueT)) error {
+func (s *InMemoryBytesWindowStore) Fetch(key []byte, timeFrom time.Time, timeTo time.Time, iterFunc func(uint64, ValueT) error) error {
 	s.removeExpiredSegments()
 
 	tsFrom := timeFrom.Unix() * 1000
@@ -131,7 +131,10 @@ func (s *InMemoryBytesWindowStore) Fetch(key []byte, timeFrom time.Time, timeTo 
 		if err != nil {
 			return err
 		}
-		iterFunc(curT, realVal)
+		err = iterFunc(curT, realVal)
+		if err != nil {
+			return err
+		}
 
 		s.otrMu.Lock()
 		delete(s.openedTimeRange, curT)

@@ -34,8 +34,11 @@ func (p *StreamJoinWindowProcessor) WithProcessorContext(pctx store.ProcessorCon
 // Process processes the stream commtypes.Message.
 func (p *StreamJoinWindowProcessor) Process(msg commtypes.Message) error {
 	if msg.Key != nil {
-		p.winStore.Put(msg.Key, msg.Value, msg.Timestamp)
-		p.pipe.Forward(msg)
+		err := p.winStore.Put(msg.Key, msg.Value, msg.Timestamp)
+		if err != nil {
+			return err
+		}
+		return p.pipe.Forward(msg)
 	}
 	return nil
 }

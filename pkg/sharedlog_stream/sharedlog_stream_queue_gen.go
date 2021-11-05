@@ -158,16 +158,16 @@ func (z *StreamQueueLogEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "TopicName")
 				return
 			}
-		case "isPush":
-			z.IsPush, err = dc.ReadBool()
-			if err != nil {
-				err = msgp.WrapError(err, "IsPush")
-				return
-			}
 		case "payload":
 			z.Payload, err = dc.ReadBytes(z.Payload)
 			if err != nil {
 				err = msgp.WrapError(err, "Payload")
+				return
+			}
+		case "isPush":
+			z.IsPush, err = dc.ReadBool()
+			if err != nil {
+				err = msgp.WrapError(err, "IsPush")
 				return
 			}
 		default:
@@ -188,7 +188,7 @@ func (z *StreamQueueLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 	var zb0001Mask uint8 /* 3 bits */
 	if z.Payload == nil {
 		zb0001Len--
-		zb0001Mask |= 0x4
+		zb0001Mask |= 0x2
 	}
 	// variable map header, size zb0001Len
 	err = en.Append(0x80 | uint8(zb0001Len))
@@ -208,17 +208,7 @@ func (z *StreamQueueLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "TopicName")
 		return
 	}
-	// write "isPush"
-	err = en.Append(0xa6, 0x69, 0x73, 0x50, 0x75, 0x73, 0x68)
-	if err != nil {
-		return
-	}
-	err = en.WriteBool(z.IsPush)
-	if err != nil {
-		err = msgp.WrapError(err, "IsPush")
-		return
-	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
+	if (zb0001Mask & 0x2) == 0 { // if not empty
 		// write "payload"
 		err = en.Append(0xa7, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64)
 		if err != nil {
@@ -229,6 +219,16 @@ func (z *StreamQueueLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 			err = msgp.WrapError(err, "Payload")
 			return
 		}
+	}
+	// write "isPush"
+	err = en.Append(0xa6, 0x69, 0x73, 0x50, 0x75, 0x73, 0x68)
+	if err != nil {
+		return
+	}
+	err = en.WriteBool(z.IsPush)
+	if err != nil {
+		err = msgp.WrapError(err, "IsPush")
+		return
 	}
 	return
 }
@@ -241,7 +241,7 @@ func (z *StreamQueueLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	var zb0001Mask uint8 /* 3 bits */
 	if z.Payload == nil {
 		zb0001Len--
-		zb0001Mask |= 0x4
+		zb0001Mask |= 0x2
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -251,14 +251,14 @@ func (z *StreamQueueLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "topicName"
 	o = append(o, 0xa9, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x4e, 0x61, 0x6d, 0x65)
 	o = msgp.AppendString(o, z.TopicName)
-	// string "isPush"
-	o = append(o, 0xa6, 0x69, 0x73, 0x50, 0x75, 0x73, 0x68)
-	o = msgp.AppendBool(o, z.IsPush)
-	if (zb0001Mask & 0x4) == 0 { // if not empty
+	if (zb0001Mask & 0x2) == 0 { // if not empty
 		// string "payload"
 		o = append(o, 0xa7, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64)
 		o = msgp.AppendBytes(o, z.Payload)
 	}
+	// string "isPush"
+	o = append(o, 0xa6, 0x69, 0x73, 0x50, 0x75, 0x73, 0x68)
+	o = msgp.AppendBool(o, z.IsPush)
 	return
 }
 
@@ -286,16 +286,16 @@ func (z *StreamQueueLogEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "TopicName")
 				return
 			}
-		case "isPush":
-			z.IsPush, bts, err = msgp.ReadBoolBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "IsPush")
-				return
-			}
 		case "payload":
 			z.Payload, bts, err = msgp.ReadBytesBytes(bts, z.Payload)
 			if err != nil {
 				err = msgp.WrapError(err, "Payload")
+				return
+			}
+		case "isPush":
+			z.IsPush, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "IsPush")
 				return
 			}
 		default:
@@ -312,6 +312,6 @@ func (z *StreamQueueLogEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *StreamQueueLogEntry) Msgsize() (s int) {
-	s = 1 + 10 + msgp.StringPrefixSize + len(z.TopicName) + 7 + msgp.BoolSize + 8 + msgp.BytesPrefixSize + len(z.Payload)
+	s = 1 + 10 + msgp.StringPrefixSize + len(z.TopicName) + 8 + msgp.BytesPrefixSize + len(z.Payload) + 7 + msgp.BoolSize
 	return
 }

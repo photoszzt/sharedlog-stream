@@ -70,9 +70,9 @@ const (
 )
 
 type TxnMarker struct {
-	mark     uint8
-	appEpoch uint16
-	appId    uint64
+	Mark     uint8  `json:"mk" msg:"mk"`
+	AppEpoch uint16 `json:"ae" msg:"ae"`
+	AppId    uint64 `json:"aid" msg:"aid"`
 }
 
 type TransactionManager struct {

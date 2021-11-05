@@ -292,6 +292,24 @@ func (z *TxnMarker) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
+		case "mk":
+			z.Mark, err = dc.ReadUint8()
+			if err != nil {
+				err = msgp.WrapError(err, "Mark")
+				return
+			}
+		case "ae":
+			z.AppEpoch, err = dc.ReadUint16()
+			if err != nil {
+				err = msgp.WrapError(err, "AppEpoch")
+				return
+			}
+		case "aid":
+			z.AppId, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "AppId")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -305,9 +323,35 @@ func (z *TxnMarker) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z TxnMarker) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 0
-	err = en.Append(0x80)
+	// map header, size 3
+	// write "mk"
+	err = en.Append(0x83, 0xa2, 0x6d, 0x6b)
 	if err != nil {
+		return
+	}
+	err = en.WriteUint8(z.Mark)
+	if err != nil {
+		err = msgp.WrapError(err, "Mark")
+		return
+	}
+	// write "ae"
+	err = en.Append(0xa2, 0x61, 0x65)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint16(z.AppEpoch)
+	if err != nil {
+		err = msgp.WrapError(err, "AppEpoch")
+		return
+	}
+	// write "aid"
+	err = en.Append(0xa3, 0x61, 0x69, 0x64)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.AppId)
+	if err != nil {
+		err = msgp.WrapError(err, "AppId")
 		return
 	}
 	return
@@ -316,8 +360,16 @@ func (z TxnMarker) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z TxnMarker) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 0
-	o = append(o, 0x80)
+	// map header, size 3
+	// string "mk"
+	o = append(o, 0x83, 0xa2, 0x6d, 0x6b)
+	o = msgp.AppendUint8(o, z.Mark)
+	// string "ae"
+	o = append(o, 0xa2, 0x61, 0x65)
+	o = msgp.AppendUint16(o, z.AppEpoch)
+	// string "aid"
+	o = append(o, 0xa3, 0x61, 0x69, 0x64)
+	o = msgp.AppendUint64(o, z.AppId)
 	return
 }
 
@@ -339,6 +391,24 @@ func (z *TxnMarker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
+		case "mk":
+			z.Mark, bts, err = msgp.ReadUint8Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Mark")
+				return
+			}
+		case "ae":
+			z.AppEpoch, bts, err = msgp.ReadUint16Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "AppEpoch")
+				return
+			}
+		case "aid":
+			z.AppId, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "AppId")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -353,7 +423,7 @@ func (z *TxnMarker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z TxnMarker) Msgsize() (s int) {
-	s = 1
+	s = 1 + 3 + msgp.Uint8Size + 3 + msgp.Uint16Size + 4 + msgp.Uint64Size
 	return
 }
 

@@ -318,6 +318,25 @@ func (z *SumAndHist) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
+		case "hist":
+			var zb0002 uint32
+			zb0002, err = dc.ReadArrayHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "History")
+				return
+			}
+			if cap(z.History) >= int(zb0002) {
+				z.History = (z.History)[:zb0002]
+			} else {
+				z.History = make([]float64, zb0002)
+			}
+			for za0001 := range z.History {
+				z.History[za0001], err = dc.ReadFloat64()
+				if err != nil {
+					err = msgp.WrapError(err, "History", za0001)
+					return
+				}
+			}
 		case "val":
 			z.Val, err = dc.ReadFloat64()
 			if err != nil {
@@ -342,10 +361,27 @@ func (z *SumAndHist) DecodeMsg(dc *msgp.Reader) (err error) {
 }
 
 // EncodeMsg implements msgp.Encodable
-func (z SumAndHist) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 2
+func (z *SumAndHist) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 3
+	// write "hist"
+	err = en.Append(0x83, 0xa4, 0x68, 0x69, 0x73, 0x74)
+	if err != nil {
+		return
+	}
+	err = en.WriteArrayHeader(uint32(len(z.History)))
+	if err != nil {
+		err = msgp.WrapError(err, "History")
+		return
+	}
+	for za0001 := range z.History {
+		err = en.WriteFloat64(z.History[za0001])
+		if err != nil {
+			err = msgp.WrapError(err, "History", za0001)
+			return
+		}
+	}
 	// write "val"
-	err = en.Append(0x82, 0xa3, 0x76, 0x61, 0x6c)
+	err = en.Append(0xa3, 0x76, 0x61, 0x6c)
 	if err != nil {
 		return
 	}
@@ -368,11 +404,17 @@ func (z SumAndHist) EncodeMsg(en *msgp.Writer) (err error) {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z SumAndHist) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *SumAndHist) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
+	// map header, size 3
+	// string "hist"
+	o = append(o, 0x83, 0xa4, 0x68, 0x69, 0x73, 0x74)
+	o = msgp.AppendArrayHeader(o, uint32(len(z.History)))
+	for za0001 := range z.History {
+		o = msgp.AppendFloat64(o, z.History[za0001])
+	}
 	// string "val"
-	o = append(o, 0x82, 0xa3, 0x76, 0x61, 0x6c)
+	o = append(o, 0xa3, 0x76, 0x61, 0x6c)
 	o = msgp.AppendFloat64(o, z.Val)
 	// string "sum"
 	o = append(o, 0xa3, 0x73, 0x75, 0x6d)
@@ -398,6 +440,25 @@ func (z *SumAndHist) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
+		case "hist":
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "History")
+				return
+			}
+			if cap(z.History) >= int(zb0002) {
+				z.History = (z.History)[:zb0002]
+			} else {
+				z.History = make([]float64, zb0002)
+			}
+			for za0001 := range z.History {
+				z.History[za0001], bts, err = msgp.ReadFloat64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "History", za0001)
+					return
+				}
+			}
 		case "val":
 			z.Val, bts, err = msgp.ReadFloat64Bytes(bts)
 			if err != nil {
@@ -423,8 +484,8 @@ func (z *SumAndHist) UnmarshalMsg(bts []byte) (o []byte, err error) {
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z SumAndHist) Msgsize() (s int) {
-	s = 1 + 4 + msgp.Float64Size + 4 + msgp.Float64Size
+func (z *SumAndHist) Msgsize() (s int) {
+	s = 1 + 5 + msgp.ArrayHeaderSize + (len(z.History) * (msgp.Float64Size)) + 4 + msgp.Float64Size + 4 + msgp.Float64Size
 	return
 }
 

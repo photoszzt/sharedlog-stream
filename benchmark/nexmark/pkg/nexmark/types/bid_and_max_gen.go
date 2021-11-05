@@ -24,6 +24,12 @@ func (z *BidAndMax) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
+		case "extra":
+			z.Extra, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "Extra")
+				return
+			}
 		case "price":
 			z.Price, err = dc.ReadUint64()
 			if err != nil {
@@ -54,12 +60,6 @@ func (z *BidAndMax) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "MaxDateTime")
 				return
 			}
-		case "extra":
-			z.Extra, err = dc.ReadString()
-			if err != nil {
-				err = msgp.WrapError(err, "Extra")
-				return
-			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -74,8 +74,18 @@ func (z *BidAndMax) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *BidAndMax) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 6
+	// write "extra"
+	err = en.Append(0x86, 0xa5, 0x65, 0x78, 0x74, 0x72, 0x61)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.Extra)
+	if err != nil {
+		err = msgp.WrapError(err, "Extra")
+		return
+	}
 	// write "price"
-	err = en.Append(0x86, 0xa5, 0x70, 0x72, 0x69, 0x63, 0x65)
+	err = en.Append(0xa5, 0x70, 0x72, 0x69, 0x63, 0x65)
 	if err != nil {
 		return
 	}
@@ -124,16 +134,6 @@ func (z *BidAndMax) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "MaxDateTime")
 		return
 	}
-	// write "extra"
-	err = en.Append(0xa5, 0x65, 0x78, 0x74, 0x72, 0x61)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.Extra)
-	if err != nil {
-		err = msgp.WrapError(err, "Extra")
-		return
-	}
 	return
 }
 
@@ -141,8 +141,11 @@ func (z *BidAndMax) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *BidAndMax) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 6
+	// string "extra"
+	o = append(o, 0x86, 0xa5, 0x65, 0x78, 0x74, 0x72, 0x61)
+	o = msgp.AppendString(o, z.Extra)
 	// string "price"
-	o = append(o, 0x86, 0xa5, 0x70, 0x72, 0x69, 0x63, 0x65)
+	o = append(o, 0xa5, 0x70, 0x72, 0x69, 0x63, 0x65)
 	o = msgp.AppendUint64(o, z.Price)
 	// string "auction"
 	o = append(o, 0xa7, 0x61, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e)
@@ -156,9 +159,6 @@ func (z *BidAndMax) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "maxDateTime"
 	o = append(o, 0xab, 0x6d, 0x61, 0x78, 0x44, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65)
 	o = msgp.AppendInt64(o, z.MaxDateTime)
-	// string "extra"
-	o = append(o, 0xa5, 0x65, 0x78, 0x74, 0x72, 0x61)
-	o = msgp.AppendString(o, z.Extra)
 	return
 }
 
@@ -180,6 +180,12 @@ func (z *BidAndMax) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
+		case "extra":
+			z.Extra, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Extra")
+				return
+			}
 		case "price":
 			z.Price, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
@@ -210,12 +216,6 @@ func (z *BidAndMax) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "MaxDateTime")
 				return
 			}
-		case "extra":
-			z.Extra, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Extra")
-				return
-			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -230,6 +230,6 @@ func (z *BidAndMax) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BidAndMax) Msgsize() (s int) {
-	s = 1 + 6 + msgp.Uint64Size + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 9 + msgp.Int64Size + 12 + msgp.Int64Size + 6 + msgp.StringPrefixSize + len(z.Extra)
+	s = 1 + 6 + msgp.StringPrefixSize + len(z.Extra) + 6 + msgp.Uint64Size + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 9 + msgp.Int64Size + 12 + msgp.Int64Size
 	return
 }

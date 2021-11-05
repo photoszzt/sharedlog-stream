@@ -245,7 +245,10 @@ func (s *SharedLogStreamQueue) syncToBackward(tailSeqNum uint64) error {
 	}
 	for i := len(streamLogs) - 1; i >= 0; i-- {
 		streamLogEntry := streamLogs[i]
-		s.applyLog(streamLogEntry)
+		err := s.applyLog(streamLogEntry)
+		if err != nil {
+			return err
+		}
 		auxData := &StreamQueueAuxData{
 			Consumed: s.consumed,
 			Tail:     s.tail,
@@ -257,7 +260,7 @@ func (s *SharedLogStreamQueue) syncToBackward(tailSeqNum uint64) error {
 	return nil
 }
 
-func (s *SharedLogStreamQueue) syncToForward(tailSeqNum uint64) error {
+func (s *SharedLogStreamQueue) SyncToForward(tailSeqNum uint64) error {
 	if tailSeqNum < s.nextSeqNum {
 		log.Fatal().
 			Uint64("Current seqNum", s.nextSeqNum).
@@ -277,7 +280,10 @@ func (s *SharedLogStreamQueue) syncToForward(tailSeqNum uint64) error {
 		seqNum = logEntry.SeqNum + 1
 		streamLogEntry := decodeStreamQueueLogEntry(logEntry)
 		if streamLogEntry.TopicName == s.topicName {
-			s.applyLog(streamLogEntry)
+			err = s.applyLog(streamLogEntry)
+			if err != nil {
+				return err
+			}
 			if streamLogEntry.auxData == nil {
 				auxData := &StreamQueueAuxData{
 					Consumed: s.consumed,
@@ -354,7 +360,8 @@ func (s *SharedLogStreamQueue) PopBlocking() ([]byte /* payload */, error) {
 		if s.isEmpty() {
 			seqNum := s.nextSeqNum
 			for {
-				newCtx, _ := context.WithTimeout(s.ctx, kBlockingPopTimeout)
+				newCtx, cancel := context.WithTimeout(s.ctx, kBlockingPopTimeout)
+				defer cancel()
 				logEntry, err := s.env.SharedLogReadNextBlock(newCtx, tag, seqNum)
 				if err != nil {
 					return nil, err

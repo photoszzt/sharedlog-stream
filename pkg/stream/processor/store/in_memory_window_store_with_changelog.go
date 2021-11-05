@@ -53,13 +53,12 @@ func (st *InMemoryWindowStoreWithChangelog) Get(key KeyT, windowStartTimestamp u
 	return val, ok, nil
 }
 
-func (st *InMemoryWindowStoreWithChangelog) Fetch(key KeyT, timeFrom time.Time, timeTo time.Time, iterFunc func(uint64, ValueT)) error {
+func (st *InMemoryWindowStoreWithChangelog) Fetch(key KeyT, timeFrom time.Time, timeTo time.Time, iterFunc func(uint64, ValueT) error) error {
 	keyBytes, err := st.mp.KeySerde.Encode(key)
 	if err != nil {
 		return err
 	}
-	st.bytesWindowStore.Fetch(keyBytes, timeFrom, timeTo, iterFunc)
-	return nil
+	return st.bytesWindowStore.Fetch(keyBytes, timeFrom, timeTo, iterFunc)
 }
 
 func (st *InMemoryWindowStoreWithChangelog) BackwardFetch(key KeyT, timeFrom time.Time, timeTo time.Time) {
