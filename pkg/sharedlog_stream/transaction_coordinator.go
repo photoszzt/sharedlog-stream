@@ -1,5 +1,3 @@
-//go:generate msgp
-//msgp:ignore TransactionManager
 package sharedlog_stream
 
 import (
@@ -18,80 +16,47 @@ const (
 	NUM_TRANSACTION_LOG_PARTITION  = 50
 )
 
-type TransactionState uint8
-
-const (
-	EMPTY = TransactionState(iota) // transaction has not existed yet
-	BEGIN                          // transaction has started and ongoing
-	PREPARE_COMMIT
-	PREPARE_ABORT
-	COMPLETE_COMMIT
-	COMPLETE_ABORT
-)
-
-func (ts TransactionState) String() string {
-	return []string{"EMPTY", "BEGIN", "PREPARE_COMMIT", "PREPARE_ABORT", "COMPLETE_COMMIT", "COMPLETE_ABORT"}[ts]
-}
-
-func (ts TransactionState) IsValidPreviousState(prevState TransactionState) bool {
-	switch ts {
-	case EMPTY:
-		return prevState == EMPTY || prevState == COMPLETE_ABORT || prevState == COMPLETE_COMMIT
-	case BEGIN:
-		return prevState == BEGIN || prevState == EMPTY || prevState == COMPLETE_ABORT || prevState == COMPLETE_COMMIT
-	case PREPARE_COMMIT:
-		return prevState == BEGIN
-	case PREPARE_ABORT:
-		return prevState == BEGIN
-	case COMPLETE_ABORT:
-		return prevState == PREPARE_ABORT
-	case COMPLETE_COMMIT:
-		return prevState == PREPARE_COMMIT
-	default:
-		panic(fmt.Sprintf("transaction state is not recognized: %d", ts))
-	}
-}
-
-type TopicPartition struct {
-	Topic  string  `json:"topic" msg:"topic"`
-	ParNum []uint8 `json:"parnum" msg:"parnum"`
-}
-
-// log entries in transaction log
-type TxnMetadata struct {
-	State TransactionState `json:"st" msg:"st"`
-}
-
-type TxnMark uint8
-
-const (
-	COMMIT TxnMark = 0
-	ABORT  TxnMark = 1
-)
-
-type TxnMarker struct {
-	Mark     uint8  `json:"mk" msg:"mk"`
-	AppEpoch uint16 `json:"ae" msg:"ae"`
-	AppId    uint64 `json:"aid" msg:"aid"`
-}
-
 type TransactionManager struct {
-	payloadSerde    commtypes.Serde
 	msgSerde        commtypes.MsgSerde
+	txnMdSerde      commtypes.Serde
+	tpSerde         commtypes.Serde
+	txnMarkerSerde  commtypes.Serde
 	TransactionLog  *SharedLogStream
 	TransactionalId string
 	currentStatus   TransactionState
 }
 
-func NewTransactionCoordinator(ctx context.Context, env types.Environment, transactional_id string) (*TransactionManager, error) {
+func NewTransactionManager(ctx context.Context, env types.Environment, transactional_id string, serdeFormat commtypes.SerdeFormat) (*TransactionManager, error) {
 	log, err := NewSharedLogStream(ctx, env,
 		TRANSACTION_LOG_TOPIC_NAME+"_"+transactional_id)
 	if err != nil {
 		return nil, err
 	}
+	var msgSerde commtypes.MsgSerde
+	var txnMdSerde commtypes.Serde
+	var tpSerde commtypes.Serde
+	var txnMarkerSerde commtypes.Serde
+	if serdeFormat == commtypes.JSON {
+		msgSerde = commtypes.MessageSerializedJSONSerde{}
+		txnMdSerde = TxnMetadataJSONSerde{}
+		tpSerde = TopicPartitionJSONSerde{}
+		txnMarkerSerde = TxnMarkerJSONSerde{}
+	} else if serdeFormat == commtypes.MSGP {
+		msgSerde = commtypes.MessageSerializedMsgpSerde{}
+		txnMdSerde = TxnMetadataMsgpSerde{}
+		tpSerde = TopicPartitionMsgpSerde{}
+		txnMarkerSerde = TxnMarkerMsgpSerde{}
+	} else {
+		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
+	}
 	return &TransactionManager{
 		TransactionLog:  log,
 		TransactionalId: transactional_id,
+		msgSerde:        msgSerde,
+		txnMdSerde:      txnMdSerde,
+		currentStatus:   EMPTY,
+		tpSerde:         tpSerde,
+		txnMarkerSerde:  txnMarkerSerde,
 	}, nil
 }
 
@@ -100,19 +65,17 @@ func (tc *TransactionManager) InitTransaction() {
 	// 1. roll forward/backward the transactions that are not finished
 }
 
-func (tc *TransactionManager) RegisterTopicPartition(topic string, parNum []uint8) error {
-	if tc.currentStatus != BEGIN {
-		return xerrors.Errorf("should begin transaction first")
-	}
-	tp := TopicPartition{
-		Topic:  topic,
-		ParNum: parNum,
-	}
-	encoded, err := tc.payloadSerde.Encode(tp)
+func (tc *TransactionManager) appendToLog(transactionalId string, tm *TxnMetadata) error {
+	encoded, err := tc.txnMdSerde.Encode(tm)
 	if err != nil {
 		return err
 	}
-	msg_encoded, err := tc.msgSerde.Encode(nil, encoded)
+	strSerde := commtypes.StringEncoder{}
+	keyEncoded, err := strSerde.Encode(transactionalId)
+	if err != nil {
+		return err
+	}
+	msg_encoded, err := tc.msgSerde.Encode(keyEncoded, encoded)
 	if err != nil {
 		return err
 	}
@@ -120,22 +83,26 @@ func (tc *TransactionManager) RegisterTopicPartition(topic string, parNum []uint
 	return err
 }
 
-func (tc *TransactionManager) BeginTransaction() error {
+func (tc *TransactionManager) RegisterTopicPartitions(transactionalId string, appId uint64, appEpoch uint16, topicPartitions []TopicPartition) error {
+	if tc.currentStatus != BEGIN {
+		return xerrors.Errorf("should begin transaction first")
+	}
+	txnMd := TxnMetadata{
+		AppId:           appId,
+		AppEpoch:        appEpoch,
+		TopicPartitions: topicPartitions,
+		State:           tc.currentStatus,
+	}
+	err := tc.appendToLog(transactionalId, &txnMd)
+	return err
+}
+
+func (tc *TransactionManager) BeginTransaction(transactionalId string) error {
 	tc.currentStatus = BEGIN
 	txnState := TxnMetadata{
 		State: BEGIN,
 	}
-
-	encoded, err := tc.payloadSerde.Encode(txnState)
-	if err != nil {
-		return err
-	}
-	msg_encoded, err := tc.msgSerde.Encode(nil, encoded)
-	if err != nil {
-		return err
-	}
-	_, err = tc.TransactionLog.Push(msg_encoded, 0, nil)
-	return err
+	return tc.appendToLog(transactionalId, &txnState)
 }
 
 func (tc *TransactionManager) CommitTransaction() error {
