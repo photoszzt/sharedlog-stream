@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 
 	"cs.utexas.edu/zjia/faas/types"
 	"golang.org/x/xerrors"
@@ -29,6 +30,11 @@ type TransactionManager struct {
 	currentTopicPartition map[string][]uint8
 	TransactionalId       string
 	currentStatus         TransactionState
+}
+
+type StreamPartition struct {
+	Stream store.Stream
+	ParNum uint8
 }
 
 func NewTransactionManager(ctx context.Context, env types.Environment, transactional_id string, serdeFormat commtypes.SerdeFormat) (*TransactionManager, error) {
@@ -71,7 +77,7 @@ func (tc *TransactionManager) InitTransaction() {
 	// 1. roll forward/backward the transactions that are not finished
 }
 
-func (tc *TransactionManager) appendToLog(tm *TxnMetadata) error {
+func (tc *TransactionManager) appendToTransactionLog(tm *TxnMetadata) error {
 	encoded, err := tc.txnMdSerde.Encode(tm)
 	if err != nil {
 		return err
@@ -87,6 +93,30 @@ func (tc *TransactionManager) appendToLog(tm *TxnMetadata) error {
 	}
 	_, err = tc.TransactionLog.Push(msg_encoded, 0, nil)
 	return err
+}
+
+func (tc *TransactionManager) appendTxnMarkerToStream(tm *TxnMarker, sp *StreamPartition) error {
+	encoded, err := tc.txnMarkerSerde.Encode(tm)
+	if err != nil {
+		return err
+	}
+	msg_encoded, err := tc.msgSerde.Encode(nil, encoded)
+	if err != nil {
+		return err
+	}
+	_, err = sp.Stream.Push(msg_encoded, sp.ParNum, nil)
+	return err
+}
+
+func (tc *TransactionManager) appendTxnMarkerToStreams(marker TxnMark, appId uint64, appEpoch uint16, sps []StreamPartition) {
+	tm := TxnMarker{
+		Mark:     uint8(marker),
+		AppEpoch: appEpoch,
+		AppId:    appId,
+	}
+	for sp := range sps {
+
+	}
 }
 
 func (tc *TransactionManager) registerTopicPartitions(appId uint64, appEpoch uint16) error {
@@ -107,7 +137,7 @@ func (tc *TransactionManager) registerTopicPartitions(appId uint64, appEpoch uin
 		TopicPartitions: tps,
 		State:           tc.currentStatus,
 	}
-	err := tc.appendToLog(&txnMd)
+	err := tc.appendToTransactionLog(&txnMd)
 	return err
 }
 
@@ -134,21 +164,40 @@ func (tc *TransactionManager) BeginTransaction(appId uint64, appEpoch uint16) er
 		AppId:    appId,
 		AppEpoch: appEpoch,
 	}
-	return tc.appendToLog(&txnState)
+	return tc.appendToTransactionLog(&txnState)
 }
 
-func (tc *TransactionManager) CommitTransaction(appId uint64, appEpoch uint16) error {
+func (tc *TransactionManager) CommitTransaction(appId uint64, appEpoch uint16, streams []StreamPartition) error {
 	if !PREPARE_COMMIT.IsValidPreviousState(tc.currentStatus) {
 		return ErrInvalidStateTransition
 	}
+
 	tc.currentStatus = PREPARE_COMMIT
+	err := tc.registerTopicPartitions(appId, appEpoch)
+	if err != nil {
+		return err
+	}
+
+	tc.cleanupState()
 	return nil
 }
 
-func (tc *TransactionManager) AbortTransaction(appId uint64, appEpoch uint16) error {
+func (tc *TransactionManager) AbortTransaction(appId uint64, appEpoch uint16, streams []StreamPartition) error {
 	if !PREPARE_ABORT.IsValidPreviousState(tc.currentStatus) {
 		return ErrInvalidStateTransition
 	}
 	tc.currentStatus = PREPARE_ABORT
+	err := tc.registerTopicPartitions(appId, appEpoch)
+	if err != nil {
+		return err
+	}
+
+	// append
+	tc.cleanupState()
 	return nil
+}
+
+func (tc *TransactionManager) cleanupState() {
+	tc.currentStatus = EMPTY
+	tc.currentTopicPartition = make(map[string][]uint8)
 }

@@ -43,7 +43,7 @@ func (s *SharedLogStreamSource) Consume(parNum uint8) (commtypes.Message, error)
 		if s.timeout != 0 && time.Since(startTime) >= s.timeout {
 			break
 		}
-		val, err := s.stream.Pop(0)
+		val, err := s.stream.ReadNext(0)
 		if err != nil {
 			if IsStreamEmptyError(err) {
 				// fmt.Fprintf(os.Stderr, "stream is empty\n")

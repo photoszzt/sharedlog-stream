@@ -53,7 +53,7 @@ func NewSharedLogStream(ctx context.Context, env types.Environment, topicName st
 	return s, nil
 }
 
-func NewLogStore(ctx context.Context, env types.Environment, topicName string) (store.LogStore, error) {
+func NewStream(ctx context.Context, env types.Environment, topicName string) (store.Stream, error) {
 	return NewSharedLogStream(ctx, env, topicName)
 }
 
@@ -84,7 +84,7 @@ func (s *SharedLogStream) isEmpty() bool {
 	return s.cursor >= s.tail
 }
 
-func (s *SharedLogStream) Pop(parNum uint8) ([]byte, error) {
+func (s *SharedLogStream) ReadNext(parNum uint8) ([]byte, error) {
 	if s.isEmpty() {
 		if err := s.findLastEntryBackward(protocol.MaxLogSeqnum); err != nil {
 			return nil, err

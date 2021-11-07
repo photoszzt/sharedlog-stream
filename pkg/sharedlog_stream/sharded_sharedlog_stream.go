@@ -39,11 +39,11 @@ func (s *ShardedSharedLogStream) Push(payload []byte, parNumber uint8, additiona
 	return s.subSharedLogStreams[parNumber].Push(payload, parNumber, additionalTag)
 }
 
-func (s *ShardedSharedLogStream) Pop(parNumber uint8) ([]byte, error) {
+func (s *ShardedSharedLogStream) ReadNext(parNumber uint8) ([]byte, error) {
 	if parNumber < s.numPartitions {
 		par := parNumber
 		shard := s.subSharedLogStreams[par]
-		return shard.Pop(parNumber)
+		return shard.ReadNext(parNumber)
 	} else {
 		return nil, xerrors.Errorf("Invalid partition number: %d", parNumber)
 	}
