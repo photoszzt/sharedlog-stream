@@ -16,10 +16,11 @@ const (
 	PREPARE_ABORT
 	COMPLETE_COMMIT
 	COMPLETE_ABORT
+	FENCE
 )
 
 func (ts TransactionState) String() string {
-	return []string{"EMPTY", "BEGIN", "PREPARE_COMMIT", "PREPARE_ABORT", "COMPLETE_COMMIT", "COMPLETE_ABORT"}[ts]
+	return []string{"EMPTY", "BEGIN", "PREPARE_COMMIT", "PREPARE_ABORT", "COMPLETE_COMMIT", "COMPLETE_ABORT", "FENCE"}[ts]
 }
 
 func (ts TransactionState) IsValidPreviousState(prevState TransactionState) bool {
@@ -33,9 +34,11 @@ func (ts TransactionState) IsValidPreviousState(prevState TransactionState) bool
 	case PREPARE_ABORT:
 		return prevState == BEGIN
 	case COMPLETE_ABORT:
-		return prevState == PREPARE_ABORT
+		return prevState == PREPARE_ABORT || prevState == FENCE
 	case COMPLETE_COMMIT:
 		return prevState == PREPARE_COMMIT
+	case FENCE:
+		return prevState == BEGIN
 	default:
 		panic(fmt.Sprintf("transaction state is not recognized: %d", ts))
 	}

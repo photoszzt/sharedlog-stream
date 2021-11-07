@@ -16,14 +16,19 @@ const (
 	NUM_TRANSACTION_LOG_PARTITION  = 50
 )
 
+var (
+	ErrInvalidStateTransition = xerrors.New("invalid state transition")
+)
+
 type TransactionManager struct {
-	msgSerde        commtypes.MsgSerde
-	txnMdSerde      commtypes.Serde
-	tpSerde         commtypes.Serde
-	txnMarkerSerde  commtypes.Serde
-	TransactionLog  *SharedLogStream
-	TransactionalId string
-	currentStatus   TransactionState
+	msgSerde              commtypes.MsgSerde
+	txnMdSerde            commtypes.Serde
+	tpSerde               commtypes.Serde
+	txnMarkerSerde        commtypes.Serde
+	TransactionLog        *SharedLogStream
+	currentTopicPartition map[string][]uint8
+	TransactionalId       string
+	currentStatus         TransactionState
 }
 
 func NewTransactionManager(ctx context.Context, env types.Environment, transactional_id string, serdeFormat commtypes.SerdeFormat) (*TransactionManager, error) {
@@ -50,13 +55,14 @@ func NewTransactionManager(ctx context.Context, env types.Environment, transacti
 		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
 	}
 	return &TransactionManager{
-		TransactionLog:  log,
-		TransactionalId: transactional_id,
-		msgSerde:        msgSerde,
-		txnMdSerde:      txnMdSerde,
-		currentStatus:   EMPTY,
-		tpSerde:         tpSerde,
-		txnMarkerSerde:  txnMarkerSerde,
+		TransactionLog:        log,
+		TransactionalId:       transactional_id,
+		msgSerde:              msgSerde,
+		txnMdSerde:            txnMdSerde,
+		currentStatus:         EMPTY,
+		tpSerde:               tpSerde,
+		txnMarkerSerde:        txnMarkerSerde,
+		currentTopicPartition: make(map[string][]uint8),
 	}, nil
 }
 
@@ -65,13 +71,13 @@ func (tc *TransactionManager) InitTransaction() {
 	// 1. roll forward/backward the transactions that are not finished
 }
 
-func (tc *TransactionManager) appendToLog(transactionalId string, tm *TxnMetadata) error {
+func (tc *TransactionManager) appendToLog(tm *TxnMetadata) error {
 	encoded, err := tc.txnMdSerde.Encode(tm)
 	if err != nil {
 		return err
 	}
 	strSerde := commtypes.StringEncoder{}
-	keyEncoded, err := strSerde.Encode(transactionalId)
+	keyEncoded, err := strSerde.Encode(tc.TransactionalId)
 	if err != nil {
 		return err
 	}
@@ -83,34 +89,66 @@ func (tc *TransactionManager) appendToLog(transactionalId string, tm *TxnMetadat
 	return err
 }
 
-func (tc *TransactionManager) RegisterTopicPartitions(transactionalId string, appId uint64, appEpoch uint16, topicPartitions []TopicPartition) error {
+func (tc *TransactionManager) registerTopicPartitions(appId uint64, appEpoch uint16) error {
 	if tc.currentStatus != BEGIN {
 		return xerrors.Errorf("should begin transaction first")
+	}
+	var tps []TopicPartition
+	for topic, pars := range tc.currentTopicPartition {
+		tp := TopicPartition{
+			Topic:  topic,
+			ParNum: pars,
+		}
+		tps = append(tps, tp)
 	}
 	txnMd := TxnMetadata{
 		AppId:           appId,
 		AppEpoch:        appEpoch,
-		TopicPartitions: topicPartitions,
+		TopicPartitions: tps,
 		State:           tc.currentStatus,
 	}
-	err := tc.appendToLog(transactionalId, &txnMd)
+	err := tc.appendToLog(&txnMd)
 	return err
 }
 
-func (tc *TransactionManager) BeginTransaction(transactionalId string) error {
-	tc.currentStatus = BEGIN
-	txnState := TxnMetadata{
-		State: BEGIN,
+func (tc *TransactionManager) AddTopicPartition(topic string, partition uint8) error {
+	if tc.currentStatus != BEGIN {
+		return xerrors.Errorf("should begin transaction first")
 	}
-	return tc.appendToLog(transactionalId, &txnState)
+	par, ok := tc.currentTopicPartition[topic]
+	if !ok {
+		par = make([]uint8, 0)
+	}
+	par = append(par, partition)
+	tc.currentTopicPartition[topic] = par
+	return nil
 }
 
-func (tc *TransactionManager) CommitTransaction() error {
+func (tc *TransactionManager) BeginTransaction(appId uint64, appEpoch uint16) error {
+	if !BEGIN.IsValidPreviousState(tc.currentStatus) {
+		return ErrInvalidStateTransition
+	}
+	tc.currentStatus = BEGIN
+	txnState := TxnMetadata{
+		State:    tc.currentStatus,
+		AppId:    appId,
+		AppEpoch: appEpoch,
+	}
+	return tc.appendToLog(&txnState)
+}
+
+func (tc *TransactionManager) CommitTransaction(appId uint64, appEpoch uint16) error {
+	if !PREPARE_COMMIT.IsValidPreviousState(tc.currentStatus) {
+		return ErrInvalidStateTransition
+	}
 	tc.currentStatus = PREPARE_COMMIT
 	return nil
 }
 
-func (tc *TransactionManager) AbortTransaction() error {
+func (tc *TransactionManager) AbortTransaction(appId uint64, appEpoch uint16) error {
+	if !PREPARE_ABORT.IsValidPreviousState(tc.currentStatus) {
+		return ErrInvalidStateTransition
+	}
 	tc.currentStatus = PREPARE_ABORT
 	return nil
 }
