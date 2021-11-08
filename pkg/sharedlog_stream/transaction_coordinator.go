@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/store"
 
 	"cs.utexas.edu/zjia/faas/types"
 	"golang.org/x/sync/errgroup"
@@ -30,17 +29,12 @@ type TransactionManager struct {
 	offsetRecordSerde     commtypes.Serde
 	ctx                   context.Context // background ctx
 	TransactionLog        *SharedLogStream
-	OffsetLogs            map[string]*ShardedSharedLogStream
-	currentTopicPartition map[string][]uint8
+	TopicStreams          map[string]*ShardedSharedLogStream
+	currentTopicPartition map[string]map[uint8]struct{}
 	errg                  *errgroup.Group // err group for background tasks
 	TransactionalId       string
 	currentStatus         TransactionState
 	currentEpoch          uint16
-}
-
-type StreamPartition struct {
-	Stream store.Stream
-	ParNum uint8
 }
 
 func NewTransactionManager(ctx context.Context, env types.Environment, transactional_id string, serdeFormat commtypes.SerdeFormat) (*TransactionManager, error) {
@@ -79,7 +73,7 @@ func NewTransactionManager(ctx context.Context, env types.Environment, transacti
 		tpSerde:               tpSerde,
 		txnMarkerSerde:        txnMarkerSerde,
 		offsetRecordSerde:     offsetRecordSerde,
-		currentTopicPartition: make(map[string][]uint8),
+		currentTopicPartition: make(map[string]map[uint8]struct{}),
 		errg:                  errg,
 		ctx:                   gctx,
 	}, nil
@@ -111,7 +105,7 @@ func (tc *TransactionManager) appendToTransactionLog(ctx context.Context, tm *Tx
 	return err
 }
 
-func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, marker TxnMark, appId uint64, appEpoch uint16, sps []StreamPartition) error {
+func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, marker TxnMark, appId uint64, appEpoch uint16) error {
 	tm := TxnMarker{
 		Mark:     uint8(marker),
 		AppEpoch: appEpoch,
@@ -126,12 +120,15 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 		return err
 	}
 	g, ctx := errgroup.WithContext(ctx)
-	for _, sp := range sps {
-		streamPar := sp
-		g.Go(func() error {
-			_, err = streamPar.Stream.Push(ctx, msg_encoded, streamPar.ParNum, nil)
-			return err
-		})
+	for topic, partitions := range tc.currentTopicPartition {
+		stream := tc.TopicStreams[topic]
+		for par := range partitions {
+			parNum := par
+			g.Go(func() error {
+				_, err = stream.Push(ctx, msg_encoded, parNum, nil)
+				return err
+			})
+		}
 	}
 	return g.Wait()
 }
@@ -142,9 +139,13 @@ func (tc *TransactionManager) registerTopicPartitions(ctx context.Context, appId
 	}
 	var tps []TopicPartition
 	for topic, pars := range tc.currentTopicPartition {
+		pars_arr := make([]uint8, 0, len(pars))
+		for p := range pars {
+			pars_arr = append(pars_arr, p)
+		}
 		tp := TopicPartition{
 			Topic:  topic,
-			ParNum: pars,
+			ParNum: pars_arr,
 		}
 		tps = append(tps, tp)
 	}
@@ -164,16 +165,16 @@ func (tc *TransactionManager) AddTopicPartition(topic string, partition uint8) e
 	}
 	par, ok := tc.currentTopicPartition[topic]
 	if !ok {
-		par = make([]uint8, 0)
+		par = make(map[uint8]struct{})
 	}
-	par = append(par, partition)
+	par[partition] = struct{}{}
 	tc.currentTopicPartition[topic] = par
 	return nil
 }
 
 func (tc *TransactionManager) CreateOffsetTopic(topicToTrack string, numPartition uint8) error {
 	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + topicToTrack
-	_, ok := tc.OffsetLogs[offsetTopic]
+	_, ok := tc.TopicStreams[offsetTopic]
 	if ok {
 		// already exists
 		return nil
@@ -182,8 +183,16 @@ func (tc *TransactionManager) CreateOffsetTopic(topicToTrack string, numPartitio
 	if err != nil {
 		return err
 	}
-	tc.OffsetLogs[offsetTopic] = off
+	tc.TopicStreams[offsetTopic] = off
 	return nil
+}
+
+func (tc *TransactionManager) RecordTopicStreams(topicToTrack string, stream *ShardedSharedLogStream) {
+	_, ok := tc.TopicStreams[topicToTrack]
+	if ok {
+		return
+	}
+	tc.TopicStreams[topicToTrack] = stream
 }
 
 func (tc *TransactionManager) AddOffsets(topicToTrack string, partition uint8) error {
@@ -201,7 +210,7 @@ type OffsetConfig struct {
 
 func (tc *TransactionManager) AppendOffset(ctx context.Context, offsetConfig OffsetConfig) error {
 	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + offsetConfig.TopicToTrack
-	offsetLog := tc.OffsetLogs[offsetTopic]
+	offsetLog := tc.TopicStreams[offsetTopic]
 	offsetRecord := OffsetRecord{
 		Offset:   offsetConfig.Offset,
 		AppId:    offsetConfig.AppId,
@@ -228,7 +237,7 @@ func (tc *TransactionManager) BeginTransaction(ctx context.Context, appId uint64
 	return tc.appendToTransactionLog(ctx, &txnState)
 }
 
-func (tc *TransactionManager) CommitTransaction(ctx context.Context, appId uint64, appEpoch uint16, streams []StreamPartition) error {
+func (tc *TransactionManager) CommitTransaction(ctx context.Context, appId uint64, appEpoch uint16) error {
 	if !PREPARE_COMMIT.IsValidPreviousState(tc.currentStatus) {
 		return ErrInvalidStateTransition
 	}
@@ -240,7 +249,7 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context, appId uint6
 	}
 
 	// append txn marker to all topic partitions
-	err = tc.appendTxnMarkerToStreams(ctx, COMMIT, appId, appEpoch, streams)
+	err = tc.appendTxnMarkerToStreams(ctx, COMMIT, appId, appEpoch)
 	if err != nil {
 		return err
 	}
@@ -258,7 +267,7 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context, appId uint6
 	return nil
 }
 
-func (tc *TransactionManager) AbortTransaction(ctx context.Context, appId uint64, appEpoch uint16, streams []StreamPartition) error {
+func (tc *TransactionManager) AbortTransaction(ctx context.Context, appId uint64, appEpoch uint16) error {
 	if !PREPARE_ABORT.IsValidPreviousState(tc.currentStatus) {
 		return ErrInvalidStateTransition
 	}
@@ -269,7 +278,7 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context, appId uint64
 	}
 
 	// append txn mark to all topic partitions
-	err = tc.appendTxnMarkerToStreams(ctx, ABORT, appId, appEpoch, streams)
+	err = tc.appendTxnMarkerToStreams(ctx, ABORT, appId, appEpoch)
 	if err != nil {
 		return err
 	}
@@ -289,7 +298,7 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context, appId uint64
 
 func (tc *TransactionManager) cleanupState() {
 	tc.currentStatus = EMPTY
-	tc.currentTopicPartition = make(map[string][]uint8)
+	tc.currentTopicPartition = make(map[string]map[uint8]struct{})
 }
 
 func (tc *TransactionManager) Close() error {

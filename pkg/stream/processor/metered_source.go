@@ -19,14 +19,14 @@ func NewMeteredSource(src Source) *MeteredSource {
 	}
 }
 
-func (s *MeteredSource) Consume(ctx context.Context, parNum uint8) (commtypes.Message, error) {
+func (s *MeteredSource) Consume(ctx context.Context, parNum uint8) (commtypes.Message, uint64, error) {
 	measure_proc := os.Getenv("MEASURE_PROC")
 	if measure_proc == "true" || measure_proc == "1" {
 		procStart := time.Now()
-		msg, err := s.src.Consume(ctx, parNum)
+		msg, seqNum, err := s.src.Consume(ctx, parNum)
 		elapsed := time.Since(procStart)
 		s.latencies = append(s.latencies, int(elapsed.Microseconds()))
-		return msg, err
+		return msg, seqNum, err
 	} else {
 		return s.src.Consume(ctx, parNum)
 	}

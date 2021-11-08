@@ -154,7 +154,7 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 			break
 		}
 		procStart := time.Now()
-		msg, err := src.Consume(ctx, input.ParNum)
+		msg, _, err := src.Consume(ctx, input.ParNum)
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				return &common.FnOutput{

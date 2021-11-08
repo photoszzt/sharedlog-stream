@@ -118,7 +118,7 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 			break
 		}
 		procStart := time.Now()
-		msg, err := src.Consume(ctx, sp.ParNum)
+		msg, _, err := src.Consume(ctx, sp.ParNum)
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				return &common.FnOutput{

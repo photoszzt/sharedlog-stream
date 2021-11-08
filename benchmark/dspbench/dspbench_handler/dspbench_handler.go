@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/dspbench/pkg/handlers/spike_detection"
-	"sharedlog-stream/benchmark/dspbench/pkg/handlers/trending_topics"
 	"sharedlog-stream/benchmark/dspbench/pkg/handlers/wordcount"
 
 	"cs.utexas.edu/zjia/faas"
@@ -29,10 +28,6 @@ func init() {
 
 func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.FuncHandler, error) {
 	switch funcName {
-	case "ttsource":
-		return trending_topics.NewTrendingTopicsSource(env), nil
-	case "trendingtopics":
-		return trending_topics.NewTrendingTopics(env), nil
 	case "spikedetection":
 		return spike_detection.NewSpikeDetectionHandler(env), nil
 	case "sdsource":

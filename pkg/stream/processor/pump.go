@@ -127,7 +127,7 @@ func (p *sourcePump) run() {
 		case <-p.quit:
 			return
 		default:
-			msg, err := p.source.Consume(p.ctx, p.parNum)
+			msg, _, err := p.source.Consume(p.ctx, p.parNum)
 			if err != nil {
 				go p.errFn(err)
 				return

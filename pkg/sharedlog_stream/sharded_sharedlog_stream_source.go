@@ -25,13 +25,13 @@ func NewShardedSharedLogStreamSource(stream *ShardedSharedLogStream, config *Sha
 	}
 }
 
-func (s *ShardedSharedLogStreamSource) Consume(ctx context.Context, parNum uint8) (commtypes.Message, error) {
+func (s *ShardedSharedLogStreamSource) Consume(ctx context.Context, parNum uint8) (commtypes.Message, uint64, error) {
 	startTime := time.Now()
 	for {
 		if s.timeout != 0 && time.Since(startTime) >= s.timeout {
 			break
 		}
-		val, err := s.stream.ReadNext(ctx, parNum)
+		val, seqNum, err := s.stream.ReadNext(ctx, parNum)
 		if err != nil {
 			if IsStreamEmptyError(err) {
 				// fmt.Fprintf(os.Stderr, "stream is empty\n")
@@ -41,22 +41,22 @@ func (s *ShardedSharedLogStreamSource) Consume(ctx context.Context, parNum uint8
 				// fmt.Fprintf(os.Stderr, "stream time out\n")
 				continue
 			} else {
-				return commtypes.EmptyMessage, err
+				return commtypes.EmptyMessage, 0, err
 			}
 		}
 		keyEncoded, valueEncoded, err := s.msgDecoder.Decode(val)
 		if err != nil {
-			return commtypes.EmptyMessage, fmt.Errorf("fail to decode msg: %v", err)
+			return commtypes.EmptyMessage, 0, fmt.Errorf("fail to decode msg: %v", err)
 		}
 		key, err := s.keyDecoder.Decode(keyEncoded)
 		if err != nil {
-			return commtypes.EmptyMessage, fmt.Errorf("fail to decode key: %v", err)
+			return commtypes.EmptyMessage, 0, fmt.Errorf("fail to decode key: %v", err)
 		}
 		value, err := s.valueDecoder.Decode(valueEncoded)
 		if err != nil {
-			return commtypes.EmptyMessage, fmt.Errorf("fail to decode value: %v", err)
+			return commtypes.EmptyMessage, 0, fmt.Errorf("fail to decode value: %v", err)
 		}
-		return commtypes.Message{Key: key, Value: value}, nil
+		return commtypes.Message{Key: key, Value: value}, seqNum, nil
 	}
-	return commtypes.EmptyMessage, ErrStreamSourceTimeout
+	return commtypes.EmptyMessage, 0, ErrStreamSourceTimeout
 }

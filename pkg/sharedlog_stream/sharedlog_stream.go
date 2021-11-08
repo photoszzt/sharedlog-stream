@@ -86,13 +86,13 @@ func (s *SharedLogStream) isEmpty() bool {
 	return s.cursor >= s.tail
 }
 
-func (s *SharedLogStream) ReadNext(ctx context.Context, parNum uint8) ([]byte, error) {
+func (s *SharedLogStream) ReadNext(ctx context.Context, parNum uint8) ([]byte, uint64, error) {
 	if s.isEmpty() {
 		if err := s.findLastEntryBackward(ctx, protocol.MaxLogSeqnum); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if s.isEmpty() {
-			return nil, errStreamEmpty
+			return nil, 0, errStreamEmpty
 		}
 	}
 	tag := s.topicNameHash
@@ -100,19 +100,19 @@ func (s *SharedLogStream) ReadNext(ctx context.Context, parNum uint8) ([]byte, e
 	for seqNum < s.tail {
 		logEntry, err := s.env.SharedLogReadNextBlock(ctx, tag, seqNum)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if logEntry == nil || logEntry.SeqNum >= s.tail {
-			return nil, errStreamEmpty
+			return nil, 0, errStreamEmpty
 		}
 		streamLogEntry := decodeStreamLogEntry(logEntry)
 		if streamLogEntry.TopicName == s.topicName {
 			s.cursor = streamLogEntry.seqNum + 1
-			return streamLogEntry.Payload, nil
+			return streamLogEntry.Payload, streamLogEntry.seqNum, nil
 		}
 		seqNum = logEntry.SeqNum + 1
 	}
-	return nil, errStreamEmpty
+	return nil, 0, errStreamEmpty
 }
 
 func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum uint64) error {
