@@ -1,6 +1,7 @@
 package sharedlog_stream
 
 import (
+	"context"
 	"time"
 
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -37,13 +38,13 @@ func NewSharedLogStreamSource(stream *SharedLogStream, config *SharedLogStreamCo
 	}
 }
 
-func (s *SharedLogStreamSource) Consume(parNum uint8) (commtypes.Message, error) {
+func (s *SharedLogStreamSource) Consume(ctx context.Context, parNum uint8) (commtypes.Message, error) {
 	startTime := time.Now()
 	for {
 		if s.timeout != 0 && time.Since(startTime) >= s.timeout {
 			break
 		}
-		val, err := s.stream.ReadNext(0)
+		val, err := s.stream.ReadNext(ctx, 0)
 		if err != nil {
 			if IsStreamEmptyError(err) {
 				// fmt.Fprintf(os.Stderr, "stream is empty\n")

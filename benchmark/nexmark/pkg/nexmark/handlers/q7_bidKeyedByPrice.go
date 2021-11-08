@@ -41,19 +41,11 @@ func (h *q7BidKeyedByPrice) Call(ctx context.Context, input []byte) ([]byte, err
 }
 
 func (h *q7BidKeyedByPrice) process(ctx context.Context, input *common.QueryInput) *common.FnOutput {
-	inputStream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, input.InputTopicName, uint8(input.NumInPartition))
+	input_stream, output_stream, err := getShardedInputOutputStreams(ctx, h.env, input)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
-			Message: fmt.Sprintf("NewSharedlogStream for input stream failed: %v", err),
-		}
-	}
-
-	outputStream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, input.OutputTopicName, uint8(input.NumOutPartition))
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("NewSharedlogStream for output stream failed: %v", err),
+			Message: err.Error(),
 		}
 	}
 
@@ -84,8 +76,8 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context, input *common.QueryInpu
 	}
 
 	duration := time.Duration(input.Duration) * time.Second
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(inputStream, inConfig))
-	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
+	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
 
 	bid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
 		event := msg.Value.(*ntypes.Event)
@@ -102,7 +94,7 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context, input *common.QueryInpu
 			break
 		}
 		procStart := time.Now()
-		msg, err := src.Consume(input.ParNum)
+		msg, err := src.Consume(ctx, input.ParNum)
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
@@ -123,7 +115,7 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context, input *common.QueryInpu
 				Message: err.Error(),
 			}
 		}
-		bidMsg, err := bid.ProcessAndReturn(msg)
+		bidMsg, err := bid.ProcessAndReturn(ctx, msg)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
@@ -131,7 +123,7 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context, input *common.QueryInpu
 			}
 		}
 		if bidMsg != nil {
-			mappedKey, err := bidKeyedByPrice.ProcessAndReturn(bidMsg[0])
+			mappedKey, err := bidKeyedByPrice.ProcessAndReturn(ctx, bidMsg[0])
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,
@@ -140,7 +132,7 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context, input *common.QueryInpu
 			}
 			key := mappedKey[0].Key.(uint64)
 			par := uint8(key % uint64(input.NumOutPartition))
-			err = sink.Sink(mappedKey[0], par)
+			err = sink.Sink(ctx, mappedKey[0], par)
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,

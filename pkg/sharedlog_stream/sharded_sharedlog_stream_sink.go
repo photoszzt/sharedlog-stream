@@ -1,6 +1,7 @@
 package sharedlog_stream
 
 import (
+	"context"
 	"hash"
 	"hash/fnv"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -26,7 +27,7 @@ func NewShardedSharedLogStreamSink(stream *ShardedSharedLogStream, config *Strea
 	}
 }
 
-func (sls *ShardedSharedLogStreamSink) Sink(msg commtypes.Message, parNum uint8) error {
+func (sls *ShardedSharedLogStreamSink) Sink(ctx context.Context, msg commtypes.Message, parNum uint8) error {
 	if msg.Key == nil && msg.Value == nil {
 		return nil
 	}
@@ -47,7 +48,7 @@ func (sls *ShardedSharedLogStreamSink) Sink(msg commtypes.Message, parNum uint8)
 	}
 	bytes, err := sls.msgEncoder.Encode(keyEncoded, valEncoded)
 	if bytes != nil && err == nil {
-		_, err = sls.stream.Push(bytes, parNum, additionalTag)
+		_, err = sls.stream.Push(ctx, bytes, parNum, additionalTag)
 		if err != nil {
 			return err
 		}

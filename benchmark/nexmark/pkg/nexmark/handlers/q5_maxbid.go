@@ -42,20 +42,14 @@ func (h *q5MaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 }
 
 func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.InputTopicName, uint8(sp.NumInPartition))
+	input_stream, output_stream, err := getShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
-			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
+			Message: err.Error(),
 		}
 	}
-	output_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.OutputTopicName, uint8(sp.NumOutPartition))
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
-		}
-	}
+
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{
@@ -124,7 +118,7 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 			break
 		}
 		procStart := time.Now()
-		msg, err := src.Consume(sp.ParNum)
+		msg, err := src.Consume(ctx, sp.ParNum)
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
@@ -145,21 +139,21 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 				Message: err.Error(),
 			}
 		}
-		maxBidMsg, err := maxBid.ProcessAndReturn(msg)
+		maxBidMsg, err := maxBid.ProcessAndReturn(ctx, msg)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
 			}
 		}
-		joinedOutput, err := stJoin.ProcessAndReturn(maxBidMsg[0])
+		joinedOutput, err := stJoin.ProcessAndReturn(ctx, maxBidMsg[0])
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
 			}
 		}
-		err = sink.Sink(joinedOutput[0], sp.ParNum)
+		err = sink.Sink(ctx, joinedOutput[0], sp.ParNum)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,

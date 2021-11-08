@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 )
@@ -35,23 +36,23 @@ func (p *TableFilterProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *TableFilterProcessor) Process(msg commtypes.Message) error {
+func (p *TableFilterProcessor) Process(ctx context.Context, msg commtypes.Message) error {
 	ok, err := p.pred.Assert(&msg)
 	if err != nil {
 		return err
 	}
 	if ok != p.filterNot {
 		if p.queryableName != "" {
-			err = p.store.Put(msg.Key, &commtypes.ValueTimestamp{Value: msg.Value, Timestamp: msg.Timestamp})
+			err = p.store.Put(ctx, msg.Key, &commtypes.ValueTimestamp{Value: msg.Value, Timestamp: msg.Timestamp})
 			if err != nil {
 				return err
 			}
 		}
-		return p.pipe.Forward(msg)
+		return p.pipe.Forward(ctx, msg)
 	}
 	return nil
 }
 
-func (p *TableFilterProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
+func (p *TableFilterProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	panic("not implemented")
 }

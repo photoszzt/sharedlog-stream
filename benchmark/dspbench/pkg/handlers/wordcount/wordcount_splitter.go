@@ -49,18 +49,32 @@ func hashKey(key string) uint32 {
 }
 
 func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.InputTopicName, sp.NumInPartition)
+	input_stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, sp.InputTopicName, sp.NumInPartition)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
 		}
 	}
-	output_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.OutputTopicName, sp.NumOutPartition)
+	err = input_stream.InitStream(ctx)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("InitStream failed: %v", err),
+		}
+	}
+	output_stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, sp.OutputTopicName, sp.NumOutPartition)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
+		}
+	}
+	err = output_stream.InitStream(ctx)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("InitStream failed: %v", err),
 		}
 	}
 
@@ -110,7 +124,7 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 			break
 		}
 		procStart := time.Now()
-		msg, err := src.Consume(sp.ParNum)
+		msg, err := src.Consume(ctx, sp.ParNum)
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
@@ -144,7 +158,7 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 			h := hashKey(m.Key.(string))
 			par := uint8(h % uint32(sp.NumOutPartition))
 			sinkStart := time.Now()
-			err = sink.Sink(m, par)
+			err = sink.Sink(ctx, m, par)
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,

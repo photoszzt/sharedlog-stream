@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 
@@ -30,15 +31,15 @@ func (p *StreamReduceProcessor) WithProcessorContext(pctx store.ProcessorContext
 	p.pctx = pctx
 }
 
-func (p *StreamReduceProcessor) Process(msg commtypes.Message) error {
-	newMsg, err := p.ProcessAndReturn(msg)
+func (p *StreamReduceProcessor) Process(ctx context.Context, msg commtypes.Message) error {
+	newMsg, err := p.ProcessAndReturn(ctx, msg)
 	if err != nil {
 		return err
 	}
-	return p.pipe.Forward(newMsg[0])
+	return p.pipe.Forward(ctx, newMsg[0])
 }
 
-func (p *StreamReduceProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
+func (p *StreamReduceProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	if msg.Key == nil || msg.Value == nil {
 		log.Warn().Msgf("skipping record due to null key or value. key=%v, val=%v", msg.Key, msg.Value)
 		return nil, nil
@@ -61,7 +62,7 @@ func (p *StreamReduceProcessor) ProcessAndReturn(msg commtypes.Message) ([]commt
 		newAgg = msg.Value
 		newTs = msg.Timestamp
 	}
-	err = p.store.Put(msg.Key, &commtypes.ValueTimestamp{Value: newAgg, Timestamp: newTs})
+	err = p.store.Put(ctx, msg.Key, &commtypes.ValueTimestamp{Value: newAgg, Timestamp: newTs})
 	if err != nil {
 		return nil, err
 	}

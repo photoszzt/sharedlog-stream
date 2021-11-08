@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"fmt"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
@@ -27,13 +28,13 @@ func (p *PrintProcessor) WithProcessorContext(pctx store.ProcessorContext) {
 }
 
 // Process processes the stream commtypes.Message.
-func (p *PrintProcessor) Process(msg commtypes.Message) error {
+func (p *PrintProcessor) Process(ctx context.Context, msg commtypes.Message) error {
 	fmt.Printf("%v:%v\n", msg.Key, msg.Value)
 
-	return p.pipe.Forward(msg)
+	return p.pipe.Forward(ctx, msg)
 }
 
-func (p *PrintProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
+func (p *PrintProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	fmt.Printf("%v:%v\n", msg.Key, msg.Value)
 	return []commtypes.Message{msg}, nil
 }

@@ -47,7 +47,8 @@ func (h *nexmarkSourceHandler) Call(ctx context.Context, input []byte) ([]byte, 
 }
 
 func eventGeneration(ctx context.Context, env types.Environment, inputConfig *ntypes.NexMarkConfigInput) (*common.FnOutput, error) {
-	stream, err := sharedlog_stream.NewSharedLogStream(ctx, env, inputConfig.TopicName)
+	stream := sharedlog_stream.NewSharedLogStream(env, inputConfig.TopicName)
+	err := stream.InitStream(ctx)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -120,7 +121,7 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		}
 		// fmt.Fprintf(os.Stderr, "msg: %v\n", string(msgEncoded))
 		pushStart := time.Now()
-		_, err = stream.Push(msgEncoded, 0, nil)
+		_, err = stream.Push(ctx, msgEncoded, 0, nil)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,

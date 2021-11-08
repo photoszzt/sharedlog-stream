@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"os"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
@@ -18,16 +19,16 @@ func NewMeteredSink(sink Sink) *MeteredSink {
 	}
 }
 
-func (s *MeteredSink) Sink(msg commtypes.Message, parNum uint8) error {
+func (s *MeteredSink) Sink(ctx context.Context, msg commtypes.Message, parNum uint8) error {
 	measure_proc := os.Getenv("MEASURE_PROC")
 	if measure_proc == "true" || measure_proc == "1" {
 		procStart := time.Now()
-		err := s.sink.Sink(msg, parNum)
+		err := s.sink.Sink(ctx, msg, parNum)
 		elapsed := time.Since(procStart)
 		s.latencies = append(s.latencies, int(elapsed.Microseconds()))
 		return err
 	} else {
-		return s.sink.Sink(msg, parNum)
+		return s.sink.Sink(ctx, msg, parNum)
 	}
 }
 

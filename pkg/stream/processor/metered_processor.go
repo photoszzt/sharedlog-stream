@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"os"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
@@ -18,16 +19,16 @@ func NewMeteredProcessor(proc Processor) *MeteredProcessor {
 	}
 }
 
-func (p *MeteredProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
+func (p *MeteredProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	measure_proc := os.Getenv("MEASURE_PROC")
 	if measure_proc == "true" || measure_proc == "1" {
 		procStart := time.Now()
-		newMsg, err := p.proc.ProcessAndReturn(msg)
+		newMsg, err := p.proc.ProcessAndReturn(ctx, msg)
 		elapsed := time.Since(procStart)
 		p.latencies = append(p.latencies, int(elapsed.Microseconds()))
 		return newMsg, err
 	} else {
-		return p.proc.ProcessAndReturn(msg)
+		return p.proc.ProcessAndReturn(ctx, msg)
 	}
 }
 

@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 )
@@ -38,16 +39,16 @@ func (p *StreamMapProcessor) WithProcessorContext(pctx store.ProcessorContext) {
 	p.pctx = pctx
 }
 
-func (p *StreamMapProcessor) Process(msg commtypes.Message) error {
+func (p *StreamMapProcessor) Process(ctx context.Context, msg commtypes.Message) error {
 	m, err := p.mapper.Map(msg)
 	if err != nil {
 		return err
 	}
 	m.Timestamp = msg.Timestamp
-	return p.pipe.Forward(m)
+	return p.pipe.Forward(ctx, m)
 }
 
-func (p *StreamMapProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
+func (p *StreamMapProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	m, err := p.mapper.Map(msg)
 	if err != nil {
 		return nil, err
@@ -89,15 +90,15 @@ func (p *StreamMapValuesProcessor) WithProcessorContext(pctx store.ProcessorCont
 	p.pctx = pctx
 }
 
-func (p *StreamMapValuesProcessor) Process(msg commtypes.Message) error {
+func (p *StreamMapValuesProcessor) Process(ctx context.Context, msg commtypes.Message) error {
 	newV, err := p.valueMapper.MapValue(msg.Value)
 	if err != nil {
 		return err
 	}
-	return p.pipe.Forward(commtypes.Message{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp})
+	return p.pipe.Forward(ctx, commtypes.Message{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp})
 }
 
-func (p *StreamMapValuesProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
+func (p *StreamMapValuesProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	newV, err := p.valueMapper.MapValue(msg.Value)
 	if err != nil {
 		return nil, err
@@ -125,15 +126,15 @@ func (p *StreamMapValuesWithKeyProcessor) WithProcessorContext(pctx store.Proces
 	p.pctx = pctx
 }
 
-func (p *StreamMapValuesWithKeyProcessor) Process(msg commtypes.Message) error {
-	newMsg, err := p.ProcessAndReturn(msg)
+func (p *StreamMapValuesWithKeyProcessor) Process(ctx context.Context, msg commtypes.Message) error {
+	newMsg, err := p.ProcessAndReturn(ctx, msg)
 	if err != nil {
 		return err
 	}
-	return p.pipe.Forward(newMsg[0])
+	return p.pipe.Forward(ctx, newMsg[0])
 }
 
-func (p *StreamMapValuesWithKeyProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
+func (p *StreamMapValuesWithKeyProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	newMsg, err := p.valueWithKeyMapper.Map(msg)
 	if err != nil {
 		return nil, err

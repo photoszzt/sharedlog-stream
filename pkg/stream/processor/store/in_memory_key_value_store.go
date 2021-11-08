@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/treemap"
 
@@ -47,7 +48,7 @@ func (st *InMemoryKeyValueStore) Get(key KeyT) (ValueT, bool, error) {
 	return val, ok, nil
 }
 
-func (st *InMemoryKeyValueStore) Put(key KeyT, value ValueT) error {
+func (st *InMemoryKeyValueStore) Put(ctx context.Context, key KeyT, value ValueT) error {
 	if value == nil {
 		st.store.Del(key)
 	} else {
@@ -56,7 +57,7 @@ func (st *InMemoryKeyValueStore) Put(key KeyT, value ValueT) error {
 	return nil
 }
 
-func (st *InMemoryKeyValueStore) PutIfAbsent(key KeyT, value ValueT) (ValueT, error) {
+func (st *InMemoryKeyValueStore) PutIfAbsent(ctx context.Context, key KeyT, value ValueT) (ValueT, error) {
 	originalVal, exists := st.store.Get(key)
 	if !exists {
 		st.store.Set(key, value)
@@ -64,14 +65,14 @@ func (st *InMemoryKeyValueStore) PutIfAbsent(key KeyT, value ValueT) (ValueT, er
 	return originalVal, nil
 }
 
-func (st *InMemoryKeyValueStore) PutAll(entries []*commtypes.Message) error {
+func (st *InMemoryKeyValueStore) PutAll(ctx context.Context, entries []*commtypes.Message) error {
 	for _, msg := range entries {
 		st.store.Set(msg.Key, msg.Value)
 	}
 	return nil
 }
 
-func (st *InMemoryKeyValueStore) Delete(key KeyT) error {
+func (st *InMemoryKeyValueStore) Delete(ctx context.Context, key KeyT) error {
 	st.store.Del(key)
 	return nil
 }

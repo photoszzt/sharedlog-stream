@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"math"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
@@ -88,7 +89,7 @@ func (p *StreamStreamJoinProcessor) WithProcessorContext(pctx store.ProcessorCon
 	p.pctx = pctx
 }
 
-func (p *StreamStreamJoinProcessor) Process(msg commtypes.Message) error {
+func (p *StreamStreamJoinProcessor) Process(ctx context.Context, msg commtypes.Message) error {
 	if msg.Key == nil || msg.Value == nil {
 		log.Warn().Msgf("skipping record due to null key or value. key=%v, val=%v", msg.Key, msg.Value)
 		return nil
@@ -129,7 +130,7 @@ func (p *StreamStreamJoinProcessor) Process(msg commtypes.Message) error {
 			} else {
 				newTs = otherRecordTs
 			}
-			return p.pipe.Forward(commtypes.Message{Key: msg.Key, Value: newVal, Timestamp: newTs})
+			return p.pipe.Forward(ctx, commtypes.Message{Key: msg.Key, Value: newVal, Timestamp: newTs})
 		})
 	if err != nil {
 		return err
@@ -142,6 +143,6 @@ func (p *StreamStreamJoinProcessor) Process(msg commtypes.Message) error {
 	return nil
 }
 
-func (p *StreamStreamJoinProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
+func (p *StreamStreamJoinProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	panic("not implemented")
 }

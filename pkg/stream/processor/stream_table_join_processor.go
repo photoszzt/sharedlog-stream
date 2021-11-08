@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 
@@ -34,13 +35,13 @@ func (p *StreamTableJoinProcessor) WithProcessorContext(pctx store.ProcessorCont
 	p.store = p.pctx.GetKeyValueStore(p.storeName)
 }
 
-func (p *StreamTableJoinProcessor) Process(msg commtypes.Message) error {
-	newMsg, err := p.ProcessAndReturn(msg)
+func (p *StreamTableJoinProcessor) Process(ctx context.Context, msg commtypes.Message) error {
+	newMsg, err := p.ProcessAndReturn(ctx, msg)
 	if err != nil {
 		return err
 	}
 	if newMsg != nil {
-		err := p.pipe.Forward(newMsg[0])
+		err := p.pipe.Forward(ctx, newMsg[0])
 		if err != nil {
 			return err
 		}
@@ -48,7 +49,7 @@ func (p *StreamTableJoinProcessor) Process(msg commtypes.Message) error {
 	return nil
 }
 
-func (p *StreamTableJoinProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
+func (p *StreamTableJoinProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	if msg.Key == nil || msg.Value == nil {
 		log.Warn().Msgf("Skipping record due to null join key or value. key=%v, val=%v", msg.Key, msg.Value)
 		return nil, nil

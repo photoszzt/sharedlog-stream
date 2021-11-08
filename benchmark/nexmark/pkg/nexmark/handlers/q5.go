@@ -46,7 +46,8 @@ func (h *query5Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 }
 
 func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput) *common.FnOutput {
-	inputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.InputTopicName)
+	inputStream := sharedlog_stream.NewSharedLogStream(env, input.InputTopicName)
+	err := inputStream.InitStream(ctx)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -54,7 +55,8 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		}
 	}
 
-	outputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.OutputTopicName)
+	outputStream := sharedlog_stream.NewSharedLogStream(env, input.OutputTopicName)
+	err = outputStream.InitStream(ctx)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -62,7 +64,8 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		}
 	}
 
-	windowChangeLog, err := sharedlog_stream.NewLogStore(ctx, env, "count-log")
+	windowChangeLog := sharedlog_stream.NewStream(env, "count-log")
+	err = windowChangeLog.InitStream(ctx)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -197,10 +200,9 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		pumps[node] = pump
 	}
 	for source, node := range tp.Sources() {
-		srcPump := processor.NewSourcePump(node.Name(), source, 0,
-			processor.ResolvePumps(pumps, node.Children()), func(err error) {
-				log.Fatal(err.Error())
-			})
+		srcPump := processor.NewSourcePump(ctx, node.Name(), source, 0, processor.ResolvePumps(pumps, node.Children()), func(err error) {
+			log.Fatal(err.Error())
+		})
 		srcPumps = append(srcPumps, srcPump)
 	}
 

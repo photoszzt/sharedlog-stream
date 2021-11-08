@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 )
@@ -32,18 +33,18 @@ func (p *StreamJoinWindowProcessor) WithProcessorContext(pctx store.ProcessorCon
 }
 
 // Process processes the stream commtypes.Message.
-func (p *StreamJoinWindowProcessor) Process(msg commtypes.Message) error {
+func (p *StreamJoinWindowProcessor) Process(ctx context.Context, msg commtypes.Message) error {
 	if msg.Key != nil {
 		err := p.winStore.Put(msg.Key, msg.Value, msg.Timestamp)
 		if err != nil {
 			return err
 		}
-		return p.pipe.Forward(msg)
+		return p.pipe.Forward(ctx, msg)
 	}
 	return nil
 }
 
-func (p *StreamJoinWindowProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
+func (p *StreamJoinWindowProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	if msg.Key != nil {
 		err := p.winStore.Put(msg.Key, msg.Value, msg.Timestamp)
 		if err != nil {

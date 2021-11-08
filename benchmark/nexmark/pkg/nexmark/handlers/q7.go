@@ -44,19 +44,11 @@ func (h *query7Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 }
 
 func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *common.FnOutput {
-	inputStream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, input.InputTopicName, uint8(input.NumInPartition))
+	inputStream, outputStream, err := getShardedInputOutputStreams(ctx, h.env, input)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
-			Message: fmt.Sprintf("NewSharedlogStream for input stream failed: %v", err),
-		}
-	}
-
-	outputStream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, input.OutputTopicName, uint8(input.NumOutPartition))
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("NewSharedlogStream for output stream failed: %v", err),
+			Message: err.Error(),
 		}
 	}
 
@@ -162,7 +154,7 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 			break
 		}
 		procStart := time.Now()
-		msg, err := src.Consume(input.ParNum)
+		msg, err := src.Consume(ctx, input.ParNum)
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
@@ -186,14 +178,14 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 		}
 		srcLat := time.Since(procStart)
 		srcLatencies = append(srcLatencies, int(srcLat.Microseconds()))
-		_, err = maxPriceBid.ProcessAndReturn(msg)
+		_, err = maxPriceBid.ProcessAndReturn(ctx, msg)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
 			}
 		}
-		transformedMsgs, err := transformWithStore.ProcessAndReturn(msg)
+		transformedMsgs, err := transformWithStore.ProcessAndReturn(ctx, msg)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
@@ -201,7 +193,7 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 			}
 		}
 		for _, tmsg := range transformedMsgs {
-			filtered, err := filterTime.ProcessAndReturn(tmsg)
+			filtered, err := filterTime.ProcessAndReturn(ctx, tmsg)
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,
@@ -209,7 +201,7 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 				}
 			}
 			sinkStart := time.Now()
-			err = sink.Sink(filtered[0], input.ParNum)
+			err = sink.Sink(ctx, filtered[0], input.ParNum)
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,

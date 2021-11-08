@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	"golang.org/x/xerrors"
@@ -8,9 +9,9 @@ import (
 
 type Pipe interface {
 	// Forward passes the message with all processor children in the topology.
-	Forward(commtypes.Message) error
+	Forward(context.Context, commtypes.Message) error
 	// ForwardToChild passes the message with the given processor child in the topology.
-	ForwardToChild(commtypes.Message, int) error
+	ForwardToChild(context.Context, commtypes.Message, int) error
 }
 
 type processorPipe struct {
@@ -23,22 +24,22 @@ func NewPipe(children []Pump) Pipe {
 	}
 }
 
-func (p *processorPipe) Forward(msg commtypes.Message) error {
+func (p *processorPipe) Forward(ctx context.Context, msg commtypes.Message) error {
 	for _, child := range p.children {
-		if err := child.Accept(msg); err != nil {
+		if err := child.Accept(ctx, msg); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (p *processorPipe) ForwardToChild(msg commtypes.Message, index int) error {
+func (p *processorPipe) ForwardToChild(ctx context.Context, msg commtypes.Message, index int) error {
 	if index > len(p.children)-1 {
 		return xerrors.New("stream: child index out of bounds")
 	}
 
 	child := p.children[index]
-	err := child.Accept(msg)
+	err := child.Accept(ctx, msg)
 	return err
 }
 

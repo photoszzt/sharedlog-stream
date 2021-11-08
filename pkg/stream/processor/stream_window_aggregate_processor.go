@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 
@@ -37,13 +38,13 @@ func (p *StreamWindowAggregateProcessor) WithProcessorContext(pctx store.Process
 	p.pctx = pctx
 }
 
-func (p *StreamWindowAggregateProcessor) Process(msg commtypes.Message) error {
-	newMsgs, err := p.ProcessAndReturn(msg)
+func (p *StreamWindowAggregateProcessor) Process(ctx context.Context, msg commtypes.Message) error {
+	newMsgs, err := p.ProcessAndReturn(ctx, msg)
 	if err != nil {
 		return err
 	}
 	for _, newMsg := range newMsgs {
-		err := p.pipe.Forward(newMsg)
+		err := p.pipe.Forward(ctx, newMsg)
 		if err != nil {
 			return err
 		}
@@ -51,7 +52,7 @@ func (p *StreamWindowAggregateProcessor) Process(msg commtypes.Message) error {
 	return nil
 }
 
-func (p *StreamWindowAggregateProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
+func (p *StreamWindowAggregateProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	if msg.Key == nil {
 		log.Warn().Msgf("skipping record due to null key. key=%v, val=%v", msg.Key, msg.Value)
 		return nil, nil

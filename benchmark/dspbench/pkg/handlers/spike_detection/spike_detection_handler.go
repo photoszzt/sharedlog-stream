@@ -55,7 +55,8 @@ func (h *spikeDetectionHandler) Call(ctx context.Context, input []byte) ([]byte,
 
 func SpikeDetection(ctx context.Context, env types.Environment,
 	input *common.QueryInput, output chan *common.FnOutput) {
-	inputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.InputTopicName)
+	inputStream := sharedlog_stream.NewSharedLogStream(env, input.InputTopicName)
+	err := inputStream.InitStream(ctx)
 	if err != nil {
 		output <- &common.FnOutput{
 			Success: false,
@@ -63,7 +64,8 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 		}
 		return
 	}
-	changeLog, err := sharedlog_stream.NewLogStore(ctx, env, "moving-avg-log")
+	changeLog := sharedlog_stream.NewStream(env, "moving-avg-log")
+	err = changeLog.InitStream(ctx)
 	if err != nil {
 		output <- &common.FnOutput{
 			Success: false,
@@ -72,7 +74,8 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 		return
 	}
 
-	outputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.OutputTopicName)
+	outputStream := sharedlog_stream.NewSharedLogStream(env, input.OutputTopicName)
+	err = outputStream.InitStream(ctx)
 	if err != nil {
 		output <- &common.FnOutput{
 			Success: false,
@@ -185,7 +188,7 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 		pumps[node] = pump
 	}
 	for source, node := range tp.Sources() {
-		srcPump := processor.NewSourcePump(node.Name(), source, 0,
+		srcPump := processor.NewSourcePump(ctx, node.Name(), source, 0,
 			processor.ResolvePumps(pumps, node.Children()), func(err error) {
 				log.Fatal(err.Error())
 			})

@@ -50,18 +50,11 @@ func (h *windowedAvg) Call(ctx context.Context, input []byte) ([]byte, error) {
 }
 
 func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.InputTopicName, sp.NumInPartition)
+	input_stream, output_stream, err := getShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
-			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
-		}
-	}
-	output_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.OutputTopicName, sp.NumOutPartition)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
+			Message: err.Error(),
 		}
 	}
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
@@ -167,7 +160,7 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 			break
 		}
 		procStart := time.Now()
-		msg, err := src.Consume(sp.ParNum)
+		msg, err := src.Consume(ctx, sp.ParNum)
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
@@ -190,7 +183,7 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 		}
 		srcLat := time.Since(procStart)
 		srcLatencies = append(srcLatencies, int(srcLat.Microseconds()))
-		newMsgs, err := aggProc.ProcessAndReturn(msg)
+		newMsgs, err := aggProc.ProcessAndReturn(ctx, msg)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
@@ -198,7 +191,7 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 			}
 		}
 		for _, newMsg := range newMsgs {
-			avg, err := calcAvg.ProcessAndReturn(newMsg)
+			avg, err := calcAvg.ProcessAndReturn(ctx, newMsg)
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,
@@ -206,7 +199,7 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 				}
 			}
 			sinkStart := time.Now()
-			err = sink.Sink(avg[0], sp.ParNum)
+			err = sink.Sink(ctx, avg[0], sp.ParNum)
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,

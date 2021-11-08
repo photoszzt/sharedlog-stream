@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
@@ -41,20 +40,14 @@ func (h *bidKeyedByAuction) Call(ctx context.Context, input []byte) ([]byte, err
 }
 
 func (h *bidKeyedByAuction) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.InputTopicName, uint8(sp.NumInPartition))
+	input_stream, output_stream, err := getShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
-			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
+			Message: err.Error(),
 		}
 	}
-	output_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.OutputTopicName, uint8(sp.NumOutPartition))
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
-		}
-	}
+
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{
@@ -102,7 +95,7 @@ func (h *bidKeyedByAuction) process(ctx context.Context, sp *common.QueryInput) 
 			break
 		}
 		procStart := time.Now()
-		msg, err := src.Consume(sp.ParNum)
+		msg, err := src.Consume(ctx, sp.ParNum)
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
@@ -123,7 +116,7 @@ func (h *bidKeyedByAuction) process(ctx context.Context, sp *common.QueryInput) 
 				Message: err.Error(),
 			}
 		}
-		bidMsg, err := filterBid.ProcessAndReturn(msg)
+		bidMsg, err := filterBid.ProcessAndReturn(ctx, msg)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
@@ -131,7 +124,7 @@ func (h *bidKeyedByAuction) process(ctx context.Context, sp *common.QueryInput) 
 			}
 		}
 		if bidMsg != nil {
-			mappedKey, err := selectKey.ProcessAndReturn(bidMsg[0])
+			mappedKey, err := selectKey.ProcessAndReturn(ctx, bidMsg[0])
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,
@@ -140,7 +133,7 @@ func (h *bidKeyedByAuction) process(ctx context.Context, sp *common.QueryInput) 
 			}
 			key := mappedKey[0].Key.(uint64)
 			par := uint8(key % uint64(sp.NumOutPartition))
-			err = sink.Sink(mappedKey[0], par)
+			err = sink.Sink(ctx, mappedKey[0], par)
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,

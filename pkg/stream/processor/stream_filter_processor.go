@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 )
@@ -27,18 +28,18 @@ func (p *StreamFilterProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *StreamFilterProcessor) Process(msg commtypes.Message) error {
+func (p *StreamFilterProcessor) Process(ctx context.Context, msg commtypes.Message) error {
 	ok, err := p.pred.Assert(&msg)
 	if err != nil {
 		return err
 	}
 	if ok {
-		return p.pipe.Forward(msg)
+		return p.pipe.Forward(ctx, msg)
 	}
 	return nil
 }
 
-func (p *StreamFilterProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
+func (p *StreamFilterProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	ok, err := p.pred.Assert(&msg)
 	if err != nil {
 		return nil, err
@@ -71,18 +72,18 @@ func (p *StreamFilterNotProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *StreamFilterNotProcessor) Process(msg commtypes.Message) error {
+func (p *StreamFilterNotProcessor) Process(ctx context.Context, msg commtypes.Message) error {
 	ok, err := p.pred.Assert(&msg)
 	if err != nil {
 		return err
 	}
 	if !ok {
-		return p.pipe.Forward(msg)
+		return p.pipe.Forward(ctx, msg)
 	}
 	return nil
 }
 
-func (p *StreamFilterNotProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
+func (p *StreamFilterNotProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	ok, err := p.pred.Assert(&msg)
 	if err != nil {
 		return nil, err

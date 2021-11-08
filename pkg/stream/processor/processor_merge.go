@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 )
@@ -22,10 +23,10 @@ func (p *MergeProcessor) WithProcessorContext(pctx store.ProcessorContext) {
 	p.pctx = pctx
 }
 
-func (p *MergeProcessor) Process(msg commtypes.Message) error {
-	return p.pipe.Forward(msg)
+func (p *MergeProcessor) Process(ctx context.Context, msg commtypes.Message) error {
+	return p.pipe.Forward(ctx, msg)
 }
 
-func (p *MergeProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
+func (p *MergeProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	panic("not implemented")
 }

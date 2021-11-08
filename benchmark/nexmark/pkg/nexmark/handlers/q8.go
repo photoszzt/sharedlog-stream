@@ -31,51 +31,48 @@ func NewQuery8(env types.Environment) types.FuncHandler {
 }
 
 func (h *query8Handler) Call(ctx context.Context, input []byte) ([]byte, error) {
-	parsedInput := &ntypes.QueryInput{}
+	parsedInput := &common.QueryInput{}
 	err := json.Unmarshal(input, parsedInput)
 	if err != nil {
 		return nil, err
 	}
-	outputCh := make(chan *common.FnOutput)
-	go Query8(ctx, h.env, parsedInput, outputCh)
-	output := <-outputCh
+	output := Query8(ctx, h.env, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("query 2 output: %v\n", encodedOutput)
+	fmt.Printf("query 8 output: %v\n", encodedOutput)
 	return utils.CompressData(encodedOutput), nil
 }
 
-func Query8(ctx context.Context, env types.Environment, input *ntypes.QueryInput, output chan *common.FnOutput) {
-	inputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.InputTopicName)
+func Query8(ctx context.Context, env types.Environment, input *common.QueryInput) *common.FnOutput {
+	inputStream := sharedlog_stream.NewSharedLogStream(env, input.InputTopicName)
+	err := inputStream.InitStream(ctx)
 	if err != nil {
-		output <- &common.FnOutput{
+		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("NewSharedlogStream for input stream failed: %v", err),
 		}
-		return
 	}
-
-	outputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.OutputTopicName)
+	outputStream := sharedlog_stream.NewSharedLogStream(env, input.OutputTopicName)
+	err = outputStream.InitStream(ctx)
 	if err != nil {
-		output <- &common.FnOutput{
+		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("NewSharedlogStream for output stream failed: %v", err),
 		}
-		return
 	}
 
 	msgSerde, err := commtypes.GetMsgSerde(input.SerdeFormat)
 	if err != nil {
-		output <- &common.FnOutput{
+		return &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
 	}
 	eventSerde, err := getEventSerde(input.SerdeFormat)
 	if err != nil {
-		output <- &common.FnOutput{
+		return &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
@@ -83,7 +80,7 @@ func Query8(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 
 	ptSerde, err := getPersonTimeSerde(input.SerdeFormat)
 	if err != nil {
-		output <- &common.FnOutput{
+		return &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
@@ -138,7 +135,7 @@ func Query8(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, outConfig))
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {
-		output <- &common.FnOutput{
+		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("build stream failed: %v", err_arrs),
 		}
@@ -155,7 +152,7 @@ func Query8(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		pumps[node] = pump
 	}
 	for source, node := range tp.Sources() {
-		srcPump := processor.NewSourcePump(node.Name(), source, 0,
+		srcPump := processor.NewSourcePump(ctx, node.Name(), source, 0,
 			processor.ResolvePumps(pumps, node.Children()), func(err error) {
 				log.Fatal(err.Error())
 			})
@@ -172,7 +169,7 @@ func Query8(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		srcPump.Close()
 	}
 
-	output <- &common.FnOutput{
+	return &common.FnOutput{
 		Success:   true,
 		Duration:  time.Since(startTime).Seconds(),
 		Latencies: map[string][]int{"e2e": latencies},

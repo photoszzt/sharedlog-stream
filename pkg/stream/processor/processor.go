@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 )
@@ -11,6 +12,6 @@ type Processor interface {
 	// WithProcessorContext sets the context on the processor
 	WithProcessorContext(store.ProcessorContext)
 	// Process processes the stream commtypes.Message.
-	Process(commtypes.Message) error
-	ProcessAndReturn(commtypes.Message) ([]commtypes.Message, error)
+	Process(context.Context, commtypes.Message) error
+	ProcessAndReturn(context.Context, commtypes.Message) ([]commtypes.Message, error)
 }

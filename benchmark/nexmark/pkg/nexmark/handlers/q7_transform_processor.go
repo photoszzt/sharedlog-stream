@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -30,13 +31,13 @@ func (p *Q7TransformProcessor) WithProcessorContext(pctx store.ProcessorContext)
 	p.pctx = pctx
 }
 
-func (p *Q7TransformProcessor) Process(msg commtypes.Message) error {
-	rets, err := p.ProcessAndReturn(msg)
+func (p *Q7TransformProcessor) Process(ctx context.Context, msg commtypes.Message) error {
+	rets, err := p.ProcessAndReturn(ctx, msg)
 	if err != nil {
 		return err
 	}
 	for _, ret := range rets {
-		err := p.pipe.Forward(ret)
+		err := p.pipe.Forward(ctx, ret)
 		if err != nil {
 			return err
 		}
@@ -44,7 +45,7 @@ func (p *Q7TransformProcessor) Process(msg commtypes.Message) error {
 	return nil
 }
 
-func (p *Q7TransformProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
+func (p *Q7TransformProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	key := msg.Key.(uint64)
 	event := msg.Value.(*ntypes.Event)
 	result := make([]commtypes.Message, 0, 128)

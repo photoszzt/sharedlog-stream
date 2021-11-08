@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"context"
 	"hash"
 	"hash/fnv"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -60,7 +61,7 @@ func (st *InMemoryKeyValueStoreWithChangelog) Get(key KeyT) (ValueT, bool, error
 	return valBytes, ok, nil
 }
 
-func (st *InMemoryKeyValueStoreWithChangelog) Put(key KeyT, value ValueT) error {
+func (st *InMemoryKeyValueStoreWithChangelog) Put(ctx context.Context, key KeyT, value ValueT) error {
 	keyBytes, err := st.mp.KeySerde.Encode(key)
 	if err != nil {
 		return err
@@ -75,15 +76,15 @@ func (st *InMemoryKeyValueStoreWithChangelog) Put(key KeyT, value ValueT) error 
 	}
 	keyTag := st.hasher.Sum64()
 	additionalTag := []uint64{keyTag}
-	_, err = st.mp.Changelog.Push(encoded, st.mp.ParNum, additionalTag)
+	_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, additionalTag)
 	if err != nil {
 		return err
 	}
-	err = st.kvstore.Put(keyBytes, valBytes)
+	err = st.kvstore.Put(ctx, keyBytes, valBytes)
 	return err
 }
 
-func (st *InMemoryKeyValueStoreWithChangelog) PutIfAbsent(key KeyT, value ValueT) (ValueT, error) {
+func (st *InMemoryKeyValueStoreWithChangelog) PutIfAbsent(ctx context.Context, key KeyT, value ValueT) (ValueT, error) {
 	keyBytes, err := st.mp.KeySerde.Encode(key)
 	if err != nil {
 		return nil, err
@@ -103,7 +104,7 @@ func (st *InMemoryKeyValueStoreWithChangelog) PutIfAbsent(key KeyT, value ValueT
 		}
 		keyTag := st.hasher.Sum64()
 		additionalTag := []uint64{keyTag}
-		_, err = st.mp.Changelog.Push(encoded, st.mp.ParNum, additionalTag)
+		_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, additionalTag)
 		if err != nil {
 			return nil, err
 		}
@@ -117,9 +118,9 @@ func (st *InMemoryKeyValueStoreWithChangelog) PutIfAbsent(key KeyT, value ValueT
 	return origVal, nil
 }
 
-func (st *InMemoryKeyValueStoreWithChangelog) PutAll(entries []*commtypes.Message) error {
+func (st *InMemoryKeyValueStoreWithChangelog) PutAll(ctx context.Context, entries []*commtypes.Message) error {
 	for _, msg := range entries {
-		err := st.Put(msg.Key, msg.Value)
+		err := st.Put(ctx, msg.Key, msg.Value)
 		if err != nil {
 			return err
 		}
@@ -127,7 +128,7 @@ func (st *InMemoryKeyValueStoreWithChangelog) PutAll(entries []*commtypes.Messag
 	return nil
 }
 
-func (st *InMemoryKeyValueStoreWithChangelog) Delete(key KeyT) error {
+func (st *InMemoryKeyValueStoreWithChangelog) Delete(ctx context.Context, key KeyT) error {
 	keyBytes, err := st.mp.KeySerde.Encode(key)
 	if err != nil {
 		return err
@@ -138,11 +139,11 @@ func (st *InMemoryKeyValueStoreWithChangelog) Delete(key KeyT) error {
 	}
 	keyTag := st.hasher.Sum64()
 	additionalTag := []uint64{keyTag}
-	_, err = st.mp.Changelog.Push(encoded, st.mp.ParNum, additionalTag)
+	_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, additionalTag)
 	if err != nil {
 		return err
 	}
-	return st.kvstore.Delete(keyBytes)
+	return st.kvstore.Delete(ctx, keyBytes)
 }
 
 func (st *InMemoryKeyValueStoreWithChangelog) ApproximateNumEntries() uint64 {

@@ -1,6 +1,7 @@
 package sharedlog_stream
 
 import (
+	"context"
 	"hash"
 	"hash/fnv"
 	"sharedlog-stream/pkg/stream/processor"
@@ -34,8 +35,6 @@ func NewSharedLogStreamSink(stream *SharedLogStream, config *StreamSinkConfig) *
 	}
 }
 
-var _ = processor.Processor(&SharedLogStreamSink{})
-
 func (sls *SharedLogStreamSink) WithPipe(pipe processor.Pipe) {
 	sls.pipe = pipe
 }
@@ -44,7 +43,7 @@ func (sls *SharedLogStreamSink) WithProcessorContext(pctx store.ProcessorContext
 	sls.pctx = pctx
 }
 
-func (sls *SharedLogStreamSink) Process(msg commtypes.Message) error {
+func (sls *SharedLogStreamSink) Sink(ctx context.Context, msg commtypes.Message) error {
 	if msg.Key == nil && msg.Value == nil {
 		return nil
 	}
@@ -66,7 +65,7 @@ func (sls *SharedLogStreamSink) Process(msg commtypes.Message) error {
 	// fmt.Fprintf(os.Stderr, "Sink: output key: %v, val: %v\n", string(keyEncoded), string(valEncoded))
 	bytes, err := sls.msgEncoder.Encode(keyEncoded, valEncoded)
 	if bytes != nil && err == nil {
-		_, err = sls.stream.Push(bytes, 0, additionalTag)
+		_, err = sls.stream.Push(ctx, bytes, 0, additionalTag)
 		if err != nil {
 			return err
 		}
@@ -74,6 +73,10 @@ func (sls *SharedLogStreamSink) Process(msg commtypes.Message) error {
 	return err
 }
 
-func (sls *SharedLogStreamSink) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
+func (sls *SharedLogStreamSink) Process(ctx context.Context, msg commtypes.Message) error {
+	return sls.Sink(ctx, msg)
+}
+
+func (sls *SharedLogStreamSink) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	panic("not implemented")
 }

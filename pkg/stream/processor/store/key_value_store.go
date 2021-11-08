@@ -1,6 +1,9 @@
 package store
 
-import "sharedlog-stream/pkg/stream/processor/commtypes"
+import (
+	"context"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+)
 
 type KeyValueStore interface {
 	StateStore
@@ -10,8 +13,8 @@ type KeyValueStore interface {
 	ReverseRange(from KeyT, to KeyT) KeyValueIterator
 	PrefixScan(prefix interface{}, prefixKeyEncoder commtypes.Encoder) KeyValueIterator
 	ApproximateNumEntries() uint64
-	Put(key KeyT, value ValueT) error
-	PutIfAbsent(key KeyT, value ValueT) (ValueT, error)
-	PutAll([]*commtypes.Message) error
-	Delete(key KeyT) error
+	Put(ctx context.Context, key KeyT, value ValueT) error
+	PutIfAbsent(ctx context.Context, key KeyT, value ValueT) (ValueT, error)
+	PutAll(context.Context, []*commtypes.Message) error
+	Delete(ctx context.Context, key KeyT) error
 }

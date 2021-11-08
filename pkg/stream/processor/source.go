@@ -1,8 +1,11 @@
 package processor
 
-import "sharedlog-stream/pkg/stream/processor/commtypes"
+import (
+	"context"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+)
 
 type Source interface {
 	// Consume gets the next commtypes.Message from the source
-	Consume(parNum uint8) (commtypes.Message, error)
+	Consume(ctx context.Context, parNum uint8) (commtypes.Message, error)
 }

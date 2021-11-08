@@ -53,7 +53,8 @@ func filterFunc(msg *commtypes.Message) (bool, error) {
 
 func Query2(ctx context.Context, env types.Environment, input *common.QueryInput, output chan *common.FnOutput) {
 	// fmt.Fprintf(os.Stderr, "input topic name is %v\n", input.InputTopicName)
-	inputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.InputTopicName)
+	inputStream := sharedlog_stream.NewSharedLogStream(env, input.InputTopicName)
+	err := inputStream.InitStream(ctx)
 	if err != nil {
 		output <- &common.FnOutput{
 			Success: false,
@@ -62,7 +63,8 @@ func Query2(ctx context.Context, env types.Environment, input *common.QueryInput
 		return
 	}
 
-	outputStream, err := sharedlog_stream.NewSharedLogStream(ctx, env, input.OutputTopicName)
+	outputStream := sharedlog_stream.NewSharedLogStream(env, input.OutputTopicName)
+	err = outputStream.InitStream(ctx)
 	if err != nil {
 		output <- &common.FnOutput{
 			Success: false,
@@ -121,7 +123,7 @@ func Query2(ctx context.Context, env types.Environment, input *common.QueryInput
 		pumps[node] = pump
 	}
 	for source, node := range tp.Sources() {
-		srcPump := processor.NewSourcePump(node.Name(), source, 0,
+		srcPump := processor.NewSourcePump(ctx, node.Name(), source, 0,
 			processor.ResolvePumps(pumps, node.Children()), func(err error) {
 				log.Fatal(err.Error())
 			})

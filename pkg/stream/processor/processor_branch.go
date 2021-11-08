@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 )
@@ -27,7 +28,7 @@ func (p *BranchProcessor) WithProcessorContext(ctx store.ProcessorContext) {
 	p.pctx = ctx
 }
 
-func (p *BranchProcessor) Process(msg commtypes.Message) error {
+func (p *BranchProcessor) Process(ctx context.Context, msg commtypes.Message) error {
 	for i, pred := range p.preds {
 		ok, err := pred.Assert(&msg)
 		if err != nil {
@@ -37,13 +38,13 @@ func (p *BranchProcessor) Process(msg commtypes.Message) error {
 			continue
 		}
 
-		if err := p.pipe.ForwardToChild(msg, i); err != nil {
+		if err := p.pipe.ForwardToChild(ctx, msg, i); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (p *BranchProcessor) ProcessAndReturn(msg commtypes.Message) ([]commtypes.Message, error) {
+func (p *BranchProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	panic("not implemented")
 }

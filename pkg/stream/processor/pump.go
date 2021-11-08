@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sync"
 )
@@ -8,7 +9,7 @@ import (
 type Pump interface {
 	sync.Locker
 
-	Accept(commtypes.Message) error
+	Accept(context.Context, commtypes.Message) error
 	Stop()
 	Close() error
 }
@@ -30,8 +31,8 @@ func NewSyncPump(node Node, pipe Pipe) Pump {
 	return p
 }
 
-func (p *syncPump) Accept(msg commtypes.Message) error {
-	err := p.processor.Process(msg)
+func (p *syncPump) Accept(ctx context.Context, msg commtypes.Message) error {
+	err := p.processor.Process(ctx, msg)
 	if err != nil {
 		return err
 	}
@@ -100,9 +101,10 @@ type sourcePump struct {
 	name   string
 	pumps  []Pump
 	parNum uint8
+	ctx    context.Context
 }
 
-func NewSourcePump(name string, source Source, parNum uint8, pumps []Pump, errFn ErrorFunc) SourcePump {
+func NewSourcePump(ctx context.Context, name string, source Source, parNum uint8, pumps []Pump, errFn ErrorFunc) SourcePump {
 	p := &sourcePump{
 		name:   name,
 		source: source,
@@ -110,6 +112,7 @@ func NewSourcePump(name string, source Source, parNum uint8, pumps []Pump, errFn
 		errFn:  errFn,
 		quit:   make(chan struct{}, 2),
 		parNum: parNum,
+		ctx:    ctx,
 	}
 	go p.run()
 	return p
@@ -124,7 +127,7 @@ func (p *sourcePump) run() {
 		case <-p.quit:
 			return
 		default:
-			msg, err := p.source.Consume(p.parNum)
+			msg, err := p.source.Consume(p.ctx, p.parNum)
 			if err != nil {
 				go p.errFn(err)
 				return
@@ -135,7 +138,7 @@ func (p *sourcePump) run() {
 			}
 
 			for _, pump := range p.pumps {
-				err = pump.Accept(msg)
+				err = pump.Accept(p.ctx, msg)
 				if err != nil {
 					go p.errFn(err)
 					return

@@ -41,18 +41,32 @@ func (h *wordcountCounterAgg) Call(ctx context.Context, input []byte) ([]byte, e
 }
 
 func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.InputTopicName, sp.NumInPartition)
+	input_stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, sp.InputTopicName, sp.NumInPartition)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
 		}
 	}
-	output_stream, err := sharedlog_stream.NewShardedSharedLogStream(ctx, h.env, sp.OutputTopicName, sp.NumOutPartition)
+	err = input_stream.InitStream(ctx)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("InitStream failed: %v", err),
+		}
+	}
+	output_stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, sp.OutputTopicName, sp.NumOutPartition)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
+		}
+	}
+	err = output_stream.InitStream(ctx)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("InitStream failed: %v", err),
 		}
 	}
 
@@ -119,7 +133,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 			break
 		}
 		procStart := time.Now()
-		msg, err := src.Consume(sp.ParNum)
+		msg, err := src.Consume(ctx, sp.ParNum)
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
@@ -136,7 +150,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 		}
 		srcLat := time.Since(procStart)
 		srcLatencies = append(srcLatencies, int(srcLat.Microseconds()))
-		ret, err := p.ProcessAndReturn(msg)
+		ret, err := p.ProcessAndReturn(ctx, msg)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
@@ -144,7 +158,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 			}
 		}
 		sinkStart := time.Now()
-		err = sink.Sink(ret[0], sp.ParNum)
+		err = sink.Sink(ctx, ret[0], sp.ParNum)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,

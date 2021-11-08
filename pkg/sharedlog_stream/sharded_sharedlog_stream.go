@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"cs.utexas.edu/zjia/faas/types"
-	"github.com/rs/zerolog/log"
 	"golang.org/x/xerrors"
 )
 
@@ -16,16 +15,17 @@ type ShardedSharedLogStream struct {
 	numPartitions       uint8
 }
 
-func NewShardedSharedLogStream(ctx context.Context, env types.Environment, topicName string, numPartitions uint8) (*ShardedSharedLogStream, error) {
-	if numPartitions <= 0 {
-		log.Fatal().Msgf("Shards must be positive")
+var (
+	ErrZeroParNum = xerrors.New("Shards must be positive")
+)
+
+func NewShardedSharedLogStream(env types.Environment, topicName string, numPartitions uint8) (*ShardedSharedLogStream, error) {
+	if numPartitions == 0 {
+		return nil, ErrZeroParNum
 	}
 	streams := make([]*SharedLogStream, 0, 16)
 	for i := 0; i < int(numPartitions); i++ {
-		s, err := NewSharedLogStream(ctx, env, topicName)
-		if err != nil {
-			return nil, err
-		}
+		s := NewSharedLogStream(env, topicName)
 		streams = append(streams, s)
 	}
 	return &ShardedSharedLogStream{
@@ -35,15 +35,25 @@ func NewShardedSharedLogStream(ctx context.Context, env types.Environment, topic
 	}, nil
 }
 
-func (s *ShardedSharedLogStream) Push(payload []byte, parNumber uint8, additionalTag []uint64) (uint64, error) {
-	return s.subSharedLogStreams[parNumber].Push(payload, parNumber, additionalTag)
+func (s *ShardedSharedLogStream) InitStream(ctx context.Context) error {
+	for i := 0; i < int(s.numPartitions); i++ {
+		err := s.subSharedLogStreams[i].InitStream(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-func (s *ShardedSharedLogStream) ReadNext(parNumber uint8) ([]byte, error) {
+func (s *ShardedSharedLogStream) Push(ctx context.Context, payload []byte, parNumber uint8, additionalTag []uint64) (uint64, error) {
+	return s.subSharedLogStreams[parNumber].Push(ctx, payload, parNumber, additionalTag)
+}
+
+func (s *ShardedSharedLogStream) ReadNext(ctx context.Context, parNumber uint8) ([]byte, error) {
 	if parNumber < s.numPartitions {
 		par := parNumber
 		shard := s.subSharedLogStreams[par]
-		return shard.ReadNext(parNumber)
+		return shard.ReadNext(ctx, parNumber)
 	} else {
 		return nil, xerrors.Errorf("Invalid partition number: %d", parNumber)
 	}
