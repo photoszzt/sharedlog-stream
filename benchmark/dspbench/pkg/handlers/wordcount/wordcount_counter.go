@@ -41,32 +41,11 @@ func (h *wordcountCounterAgg) Call(ctx context.Context, input []byte) ([]byte, e
 }
 
 func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, sp.InputTopicName, sp.NumInPartition)
+	input_stream, output_stream, err := getShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
-			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
-		}
-	}
-	err = input_stream.InitStream(ctx)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("InitStream failed: %v", err),
-		}
-	}
-	output_stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, sp.OutputTopicName, sp.NumOutPartition)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
-		}
-	}
-	err = output_stream.InitStream(ctx)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("InitStream failed: %v", err),
+			Message: err.Error(),
 		}
 	}
 
@@ -122,6 +101,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 			aggVal := agg.(uint64)
 			return aggVal + 1
 		})))
+
 	srcLatencies := make([]int, 0, 128)
 	sinkLatencies := make([]int, 0, 128)
 

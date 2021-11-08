@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 
 	"cs.utexas.edu/zjia/faas/types"
 	"golang.org/x/sync/errgroup"
@@ -29,7 +30,7 @@ type TransactionManager struct {
 	offsetRecordSerde     commtypes.Serde
 	ctx                   context.Context // background ctx
 	TransactionLog        *SharedLogStream
-	TopicStreams          map[string]*ShardedSharedLogStream
+	TopicStreams          map[string]store.Stream
 	currentTopicPartition map[string]map[uint8]struct{}
 	errg                  *errgroup.Group // err group for background tasks
 	TransactionalId       string
@@ -187,7 +188,7 @@ func (tc *TransactionManager) CreateOffsetTopic(topicToTrack string, numPartitio
 	return nil
 }
 
-func (tc *TransactionManager) RecordTopicStreams(topicToTrack string, stream *ShardedSharedLogStream) {
+func (tc *TransactionManager) RecordTopicStreams(topicToTrack string, stream store.Stream) {
 	_, ok := tc.TopicStreams[topicToTrack]
 	if ok {
 		return
