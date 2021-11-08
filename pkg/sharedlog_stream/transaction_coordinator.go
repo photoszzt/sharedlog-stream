@@ -27,8 +27,10 @@ type TransactionManager struct {
 	txnMdSerde            commtypes.Serde
 	tpSerde               commtypes.Serde
 	txnMarkerSerde        commtypes.Serde
+	offsetRecordSerde     commtypes.Serde
 	ctx                   context.Context // background ctx
 	TransactionLog        *SharedLogStream
+	OffsetLogs            map[string]*ShardedSharedLogStream
 	currentTopicPartition map[string][]uint8
 	errg                  *errgroup.Group // err group for background tasks
 	TransactionalId       string
@@ -51,16 +53,19 @@ func NewTransactionManager(ctx context.Context, env types.Environment, transacti
 	var txnMdSerde commtypes.Serde
 	var tpSerde commtypes.Serde
 	var txnMarkerSerde commtypes.Serde
+	var offsetRecordSerde commtypes.Serde
 	if serdeFormat == commtypes.JSON {
 		msgSerde = commtypes.MessageSerializedJSONSerde{}
 		txnMdSerde = TxnMetadataJSONSerde{}
 		tpSerde = TopicPartitionJSONSerde{}
 		txnMarkerSerde = TxnMarkerJSONSerde{}
+		offsetRecordSerde = OffsetRecordJSONSerde{}
 	} else if serdeFormat == commtypes.MSGP {
 		msgSerde = commtypes.MessageSerializedMsgpSerde{}
 		txnMdSerde = TxnMetadataMsgpSerde{}
 		tpSerde = TopicPartitionMsgpSerde{}
 		txnMarkerSerde = TxnMarkerMsgpSerde{}
+		offsetRecordSerde = OffsetRecordMsgpSerde{}
 	} else {
 		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
 	}
@@ -73,6 +78,7 @@ func NewTransactionManager(ctx context.Context, env types.Environment, transacti
 		currentStatus:         EMPTY,
 		tpSerde:               tpSerde,
 		txnMarkerSerde:        txnMarkerSerde,
+		offsetRecordSerde:     offsetRecordSerde,
 		currentTopicPartition: make(map[string][]uint8),
 		errg:                  errg,
 		ctx:                   gctx,
@@ -163,6 +169,50 @@ func (tc *TransactionManager) AddTopicPartition(topic string, partition uint8) e
 	par = append(par, partition)
 	tc.currentTopicPartition[topic] = par
 	return nil
+}
+
+func (tc *TransactionManager) CreateOffsetTopic(topicToTrack string, numPartition uint8) error {
+	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + topicToTrack
+	_, ok := tc.OffsetLogs[offsetTopic]
+	if ok {
+		// already exists
+		return nil
+	}
+	off, err := NewShardedSharedLogStream(tc.TransactionLog.env, offsetTopic, numPartition)
+	if err != nil {
+		return err
+	}
+	tc.OffsetLogs[offsetTopic] = off
+	return nil
+}
+
+func (tc *TransactionManager) AddOffsets(topicToTrack string, partition uint8) error {
+	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + topicToTrack
+	return tc.AddTopicPartition(offsetTopic, partition)
+}
+
+type OffsetConfig struct {
+	TopicToTrack string
+	AppId        uint64
+	Offset       uint64
+	AppEpoch     uint16
+	Partition    uint8
+}
+
+func (tc *TransactionManager) AppendOffset(ctx context.Context, offsetConfig OffsetConfig) error {
+	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + offsetConfig.TopicToTrack
+	offsetLog := tc.OffsetLogs[offsetTopic]
+	offsetRecord := OffsetRecord{
+		Offset:   offsetConfig.Offset,
+		AppId:    offsetConfig.AppId,
+		AppEpoch: offsetConfig.AppEpoch,
+	}
+	encoded, err := tc.offsetRecordSerde.Encode(offsetRecord)
+	if err != nil {
+		return err
+	}
+	_, err = offsetLog.Push(ctx, encoded, offsetConfig.Partition, nil)
+	return err
 }
 
 func (tc *TransactionManager) BeginTransaction(ctx context.Context, appId uint64, appEpoch uint16) error {
