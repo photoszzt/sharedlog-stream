@@ -77,19 +77,14 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 		ValueDecoder: commtypes.StringDecoder{},
 		MsgDecoder:   msgSerde,
 	}
-	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeyEncoder:   commtypes.StringEncoder{},
-		ValueEncoder: commtypes.Uint64Encoder{},
-		MsgEncoder:   msgSerde,
-	}
 	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
-	sink := sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig)
 	mp := &store.MaterializeParam{
 		KeySerde:   commtypes.StringSerde{},
 		ValueSerde: vtSerde,
 		MsgSerde:   msgSerde,
 		StoreName:  sp.OutputTopicName,
 		Changelog:  output_stream,
+		ParNum:     sp.ParNum,
 	}
 
 	store := store.NewInMemoryKeyValueStoreWithChangelog(mp)
@@ -103,10 +98,134 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 		})))
 
 	srcLatencies := make([]int, 0, 128)
-	sinkLatencies := make([]int, 0, 128)
 
 	latencies := make([]int, 0, 128)
 	duration := time.Duration(sp.Duration) * time.Second
+	if sp.EnableTransaction {
+		transactionalId := fmt.Sprintf("wordcount-counter-%d", sp.ParNum)
+		tm, err := sharedlog_stream.NewTransactionManager(ctx, h.env, transactionalId, commtypes.SerdeFormat(sp.SerdeFormat))
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("NewTransactionManager failed: %v\n", err),
+			}
+		}
+		appId, appEpoch := tm.InitTransaction()
+
+		err = tm.CreateOffsetTopic(sp.InputTopicName, sp.NumInPartition)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("create offset topic failed: %v", err),
+			}
+		}
+		tm.RecordTopicStreams(sp.OutputTopicName, output_stream)
+		tm.RecordTopicStreams(mp.Changelog.TopicName(), mp.Changelog)
+		hasLiveTransaction := false
+		startTime := time.Now()
+		trackConsumePar := false
+		currentOffset := uint64(0)
+		commitTimer := time.Now()
+		commitEvery := time.Duration(1) * time.Millisecond
+		var msg commtypes.Message
+		for {
+			timeSinceTranStart := time.Since(commitTimer)
+			timeout := duration != 0 && time.Since(startTime) >= duration
+			if (commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout {
+				err = tm.AppendOffset(ctx, sharedlog_stream.OffsetConfig{
+					TopicToTrack: sp.InputTopicName,
+					AppId:        appId,
+					AppEpoch:     appEpoch,
+					Partition:    sp.ParNum,
+					Offset:       currentOffset,
+				})
+				if err != nil {
+					return &common.FnOutput{
+						Success: false,
+						Message: fmt.Sprintf("append offset failed: %v\n", err),
+					}
+				}
+				err = tm.CommitTransaction(ctx, appId, appEpoch)
+				if err != nil {
+					return &common.FnOutput{
+						Success: false,
+						Message: fmt.Sprintf("commit failed: %v\n", err),
+					}
+				}
+				hasLiveTransaction = false
+				trackConsumePar = false
+			}
+			if timeout {
+				err = tm.Close()
+				if err != nil {
+					return &common.FnOutput{
+						Success: false,
+						Message: fmt.Sprintf("close transaction manager: %v\n", err),
+					}
+				}
+				break
+			}
+			if !hasLiveTransaction {
+				err = tm.BeginTransaction(ctx, appId, appEpoch)
+				if err != nil {
+					return &common.FnOutput{
+						Success: false,
+						Message: fmt.Sprintf("transaction begin failed: %v\n", err),
+					}
+				}
+				hasLiveTransaction = true
+				commitTimer = time.Now()
+			}
+			procStart := time.Now()
+			msg, currentOffset, err = src.Consume(ctx, sp.ParNum)
+			if err != nil {
+				if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+					return &common.FnOutput{
+						Success:   true,
+						Message:   err.Error(),
+						Latencies: map[string][]int{"e2e": latencies},
+						Duration:  time.Since(startTime).Seconds(),
+					}
+				}
+				return &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
+			}
+			srcLat := time.Since(procStart)
+			srcLatencies = append(srcLatencies, int(srcLat.Microseconds()))
+
+			if !trackConsumePar {
+				err = tm.AddOffsets(sp.InputTopicName, sp.ParNum)
+				if err != nil {
+					return &common.FnOutput{
+						Success: false,
+						Message: fmt.Sprintf("add offsets failed: %v", err),
+					}
+				}
+				trackConsumePar = true
+			}
+			_, err = p.ProcessAndReturn(ctx, msg)
+			if err != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
+			}
+			elapsed := time.Since(procStart)
+			latencies = append(latencies, int(elapsed.Microseconds()))
+		}
+		return &common.FnOutput{
+			Success:  true,
+			Duration: time.Since(startTime).Seconds(),
+			Latencies: map[string][]int{
+				"e2e":   latencies,
+				"src":   srcLatencies,
+				"count": p.GetLatency(),
+			},
+		}
+
+	}
 	startTime := time.Now()
 	for {
 		if duration != 0 && time.Since(startTime) >= duration {
@@ -130,23 +249,13 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 		}
 		srcLat := time.Since(procStart)
 		srcLatencies = append(srcLatencies, int(srcLat.Microseconds()))
-		ret, err := p.ProcessAndReturn(ctx, msg)
+		_, err = p.ProcessAndReturn(ctx, msg)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
 			}
 		}
-		sinkStart := time.Now()
-		err = sink.Sink(ctx, ret[0], sp.ParNum)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("sink failed: %v\n", err),
-			}
-		}
-		sinkLat := time.Since(sinkStart)
-		sinkLatencies = append(sinkLatencies, int(sinkLat.Microseconds()))
 		elapsed := time.Since(procStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
 	}
@@ -156,7 +265,6 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 		Latencies: map[string][]int{
 			"e2e":   latencies,
 			"src":   srcLatencies,
-			"sink":  sinkLatencies,
 			"count": p.GetLatency(),
 		},
 	}

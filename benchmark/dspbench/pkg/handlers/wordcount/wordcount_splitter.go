@@ -117,12 +117,12 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 	duration := time.Duration(sp.Duration) * time.Second
 
 	if sp.EnableTransaction {
-		transactionalId := "wordcount"
+		transactionalId := fmt.Sprintf("wordcount-splitter-%d", sp.ParNum)
 		tm, err := sharedlog_stream.NewTransactionManager(ctx, h.env, transactionalId, commtypes.SerdeFormat(sp.SerdeFormat))
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
-				Message: err.Error(),
+				Message: fmt.Sprintf("NewTransactionManager failed: %v\n", err),
 			}
 		}
 		appId, appEpoch := tm.InitTransaction()
@@ -185,7 +185,7 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 				if err != nil {
 					return &common.FnOutput{
 						Success: false,
-						Message: fmt.Sprintf("transaction begin failed: %v", err),
+						Message: fmt.Sprintf("transaction begin failed: %v\n", err),
 					}
 				}
 				hasLiveTransaction = true
