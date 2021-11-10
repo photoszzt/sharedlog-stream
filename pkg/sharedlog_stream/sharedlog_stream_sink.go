@@ -17,12 +17,14 @@ type SharedLogStreamSink struct {
 	valueEncoder commtypes.Encoder
 	msgEncoder   commtypes.MsgEncoder
 	hasher       hash.Hash64
+	inTran       bool
 }
 
 type StreamSinkConfig struct {
-	KeyEncoder   commtypes.Encoder
-	ValueEncoder commtypes.Encoder
-	MsgEncoder   commtypes.MsgEncoder
+	KeyEncoder    commtypes.Encoder
+	ValueEncoder  commtypes.Encoder
+	MsgEncoder    commtypes.MsgEncoder
+	InTransaction bool
 }
 
 func NewSharedLogStreamSink(stream *SharedLogStream, config *StreamSinkConfig) *SharedLogStreamSink {
@@ -32,6 +34,7 @@ func NewSharedLogStreamSink(stream *SharedLogStream, config *StreamSinkConfig) *
 		valueEncoder: config.ValueEncoder,
 		msgEncoder:   config.MsgEncoder,
 		hasher:       fnv.New64(),
+		inTran:       config.InTransaction,
 	}
 }
 

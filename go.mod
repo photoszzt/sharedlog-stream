@@ -7,6 +7,7 @@ require (
 	github.com/confluentinc/confluent-kafka-go v1.7.0
 	github.com/gammazero/deque v0.1.0
 	github.com/igrmk/treemap v1.0.0 // indirect
+	github.com/ncw/gotemplate v0.0.0-20210105194706-14f008362492 // indirect
 	github.com/rs/zerolog v1.19.0
 	github.com/tinylib/msgp v1.1.6
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect

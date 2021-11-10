@@ -20,6 +20,8 @@ var (
 	FLAGS_events_num   int
 	FLAGS_serdeFormat  string
 	FLAGS_file_name    string
+	FLAGS_tran         bool
+	FLAGS_commit_every uint64
 )
 
 func invokeSourceFunc(client *http.Client, response *common.FnOutput, wg *sync.WaitGroup, serdeFormat commtypes.SerdeFormat) {
@@ -46,6 +48,8 @@ func main() {
 	flag.IntVar(&FLAGS_events_num, "nevent", 0, "number of events")
 	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
 	flag.StringVar(&FLAGS_file_name, "in_fname", "/mnt/data/books.dat", "data source file name")
+	flag.BoolVar(&FLAGS_tran, "tran", false, "enable transaction or not")
+	flag.Uint64Var(&FLAGS_commit_every, "comm_every", 0, "commit a transaction every (ms)")
 	flag.Parse()
 
 	var serdeFormat commtypes.SerdeFormat
@@ -68,12 +72,14 @@ func main() {
 	splitInputParams := make([]*common.QueryInput, splitNodeConfig.NumInstance)
 	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
 		splitInputParams[i] = &common.QueryInput{
-			Duration:        uint32(FLAGS_duration),
-			InputTopicName:  "wc_src",
-			OutputTopicName: "split_out",
-			SerdeFormat:     uint8(serdeFormat),
-			NumInPartition:  1,
-			NumOutPartition: numCountInstance,
+			Duration:          uint32(FLAGS_duration),
+			InputTopicName:    "wc_src",
+			OutputTopicName:   "split_out",
+			SerdeFormat:       uint8(serdeFormat),
+			NumInPartition:    1,
+			NumOutPartition:   numCountInstance,
+			EnableTransaction: FLAGS_tran,
+			CommitEvery:       FLAGS_commit_every,
 		}
 	}
 	split := processor.NewClientNode(splitNodeConfig)
@@ -86,12 +92,14 @@ func main() {
 	countInputParams := make([]*common.QueryInput, countNodeConfig.NumInstance)
 	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
 		countInputParams[i] = &common.QueryInput{
-			Duration:        uint32(FLAGS_duration),
-			InputTopicName:  "split_out",
-			OutputTopicName: "wc_out",
-			SerdeFormat:     uint8(serdeFormat),
-			NumInPartition:  numCountInstance,
-			NumOutPartition: numCountInstance,
+			Duration:          uint32(FLAGS_duration),
+			InputTopicName:    "split_out",
+			OutputTopicName:   "wc_out",
+			SerdeFormat:       uint8(serdeFormat),
+			NumInPartition:    numCountInstance,
+			NumOutPartition:   numCountInstance,
+			EnableTransaction: FLAGS_tran,
+			CommitEvery:       FLAGS_commit_every,
 		}
 	}
 	count := processor.NewClientNode(countNodeConfig)

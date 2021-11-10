@@ -117,7 +117,7 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 	duration := time.Duration(sp.Duration) * time.Second
 
 	if sp.EnableTransaction {
-		transactionalId := fmt.Sprintf("wordcount-splitter-%d", sp.ParNum)
+		transactionalId := fmt.Sprintf("wordcount-splitter-%s-%d", sp.InputTopicName, sp.ParNum)
 		tm, err := sharedlog_stream.NewTransactionManager(ctx, h.env, transactionalId, commtypes.SerdeFormat(sp.SerdeFormat))
 		if err != nil {
 			return &common.FnOutput{

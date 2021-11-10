@@ -12,9 +12,7 @@ const (
 )
 
 type TxnMarker struct {
-	Mark     uint8  `json:"mk" msg:"mk"`
-	AppEpoch uint16 `json:"ae" msg:"ae"`
-	AppId    uint64 `json:"aid" msg:"aid"`
+	Mark uint8 `json:"mk" msg:"mk"`
 }
 
 type TxnMarkerJSONSerde struct{}

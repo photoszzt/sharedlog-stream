@@ -36,6 +36,24 @@ func (z *StreamLogEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Payload")
 				return
 			}
+		case "aid":
+			z.AppId, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "AppId")
+				return
+			}
+		case "mseq":
+			z.MsgSeqNum, err = dc.ReadUint32()
+			if err != nil {
+				err = msgp.WrapError(err, "MsgSeqNum")
+				return
+			}
+		case "ae":
+			z.AppEpoch, err = dc.ReadUint16()
+			if err != nil {
+				err = msgp.WrapError(err, "AppEpoch")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -50,11 +68,23 @@ func (z *StreamLogEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
-	zb0001Len := uint32(2)
-	var zb0001Mask uint8 /* 2 bits */
+	zb0001Len := uint32(5)
+	var zb0001Mask uint8 /* 5 bits */
 	if z.Payload == nil {
 		zb0001Len--
 		zb0001Mask |= 0x2
+	}
+	if z.AppId == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if z.MsgSeqNum == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	if z.AppEpoch == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x10
 	}
 	// variable map header, size zb0001Len
 	err = en.Append(0x80 | uint8(zb0001Len))
@@ -86,6 +116,42 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
+	if (zb0001Mask & 0x4) == 0 { // if not empty
+		// write "aid"
+		err = en.Append(0xa3, 0x61, 0x69, 0x64)
+		if err != nil {
+			return
+		}
+		err = en.WriteUint64(z.AppId)
+		if err != nil {
+			err = msgp.WrapError(err, "AppId")
+			return
+		}
+	}
+	if (zb0001Mask & 0x8) == 0 { // if not empty
+		// write "mseq"
+		err = en.Append(0xa4, 0x6d, 0x73, 0x65, 0x71)
+		if err != nil {
+			return
+		}
+		err = en.WriteUint32(z.MsgSeqNum)
+		if err != nil {
+			err = msgp.WrapError(err, "MsgSeqNum")
+			return
+		}
+	}
+	if (zb0001Mask & 0x10) == 0 { // if not empty
+		// write "ae"
+		err = en.Append(0xa2, 0x61, 0x65)
+		if err != nil {
+			return
+		}
+		err = en.WriteUint16(z.AppEpoch)
+		if err != nil {
+			err = msgp.WrapError(err, "AppEpoch")
+			return
+		}
+	}
 	return
 }
 
@@ -93,11 +159,23 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *StreamLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(2)
-	var zb0001Mask uint8 /* 2 bits */
+	zb0001Len := uint32(5)
+	var zb0001Mask uint8 /* 5 bits */
 	if z.Payload == nil {
 		zb0001Len--
 		zb0001Mask |= 0x2
+	}
+	if z.AppId == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if z.MsgSeqNum == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	if z.AppEpoch == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x10
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -111,6 +189,21 @@ func (z *StreamLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 		// string "payload"
 		o = append(o, 0xa7, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64)
 		o = msgp.AppendBytes(o, z.Payload)
+	}
+	if (zb0001Mask & 0x4) == 0 { // if not empty
+		// string "aid"
+		o = append(o, 0xa3, 0x61, 0x69, 0x64)
+		o = msgp.AppendUint64(o, z.AppId)
+	}
+	if (zb0001Mask & 0x8) == 0 { // if not empty
+		// string "mseq"
+		o = append(o, 0xa4, 0x6d, 0x73, 0x65, 0x71)
+		o = msgp.AppendUint32(o, z.MsgSeqNum)
+	}
+	if (zb0001Mask & 0x10) == 0 { // if not empty
+		// string "ae"
+		o = append(o, 0xa2, 0x61, 0x65)
+		o = msgp.AppendUint16(o, z.AppEpoch)
 	}
 	return
 }
@@ -145,6 +238,24 @@ func (z *StreamLogEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Payload")
 				return
 			}
+		case "aid":
+			z.AppId, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "AppId")
+				return
+			}
+		case "mseq":
+			z.MsgSeqNum, bts, err = msgp.ReadUint32Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "MsgSeqNum")
+				return
+			}
+		case "ae":
+			z.AppEpoch, bts, err = msgp.ReadUint16Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "AppEpoch")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -159,6 +270,6 @@ func (z *StreamLogEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *StreamLogEntry) Msgsize() (s int) {
-	s = 1 + 10 + msgp.StringPrefixSize + len(z.TopicName) + 8 + msgp.BytesPrefixSize + len(z.Payload)
+	s = 1 + 10 + msgp.StringPrefixSize + len(z.TopicName) + 8 + msgp.BytesPrefixSize + len(z.Payload) + 4 + msgp.Uint64Size + 5 + msgp.Uint32Size + 3 + msgp.Uint16Size
 	return
 }

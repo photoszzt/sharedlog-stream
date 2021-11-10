@@ -20,11 +20,19 @@ type SharedLogStream struct {
 
 	cursor uint64
 	tail   uint64
+
+	curMsgSeqNum  uint32
+	appId         uint64
+	appEpoch      uint16
+	inTransaction bool
 }
 
 type StreamLogEntry struct {
 	TopicName string `msg:"topicName"`
 	Payload   []byte `msg:"payload,omitempty"`
+	AppId     uint64 `msg:"aid,omitempty"`
+	MsgSeqNum uint32 `msg:"mseq,omitempty"`
+	AppEpoch  uint16 `msg:"ae,omitempty"`
 	seqNum    uint64 `msg:"-"`
 }
 
@@ -45,7 +53,23 @@ func NewSharedLogStream(env types.Environment, topicName string) *SharedLogStrea
 		topicNameHash: NameHash(topicName),
 		cursor:        0,
 		tail:          0,
+
+		appId:        0,
+		appEpoch:     0,
+		curMsgSeqNum: 0,
 	}
+}
+
+func (s *SharedLogStream) SetMsgSeqNum(val uint32) {
+	s.curMsgSeqNum = val
+}
+
+func (s *SharedLogStream) SetAppId(appId uint64) {
+	s.appId = appId
+}
+
+func (s *SharedLogStream) SetAppEpoch(epoch uint16) {
+	s.appEpoch = epoch
 }
 
 func (s *SharedLogStream) InitStream(ctx context.Context) error {
@@ -70,6 +94,12 @@ func (s *SharedLogStream) Push(ctx context.Context, payload []byte, parNum uint8
 	logEntry := &StreamLogEntry{
 		TopicName: s.topicName,
 		Payload:   payload,
+	}
+	if s.inTransaction {
+		s.curMsgSeqNum += 1
+		logEntry.MsgSeqNum = s.curMsgSeqNum
+		logEntry.AppEpoch = s.appEpoch
+		logEntry.AppId = s.appId
 	}
 	encoded, err := logEntry.MarshalMsg(nil)
 	if err != nil {

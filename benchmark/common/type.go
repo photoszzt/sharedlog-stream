@@ -9,6 +9,7 @@ type QueryInput struct {
 	NumOutPartition   uint8  `json:"numOutPartition"`
 	ParNum            uint8  `json:"ParNum"`
 	EnableTransaction bool   `json:"enTran"`
+	CommitEvery       uint64 `json:"commEvery"`
 }
 
 type FnOutput struct {

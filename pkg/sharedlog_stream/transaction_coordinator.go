@@ -108,9 +108,7 @@ func (tc *TransactionManager) appendToTransactionLog(ctx context.Context, tm *Tx
 
 func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, marker TxnMark, appId uint64, appEpoch uint16) error {
 	tm := TxnMarker{
-		Mark:     uint8(marker),
-		AppEpoch: appEpoch,
-		AppId:    appId,
+		Mark: uint8(marker),
 	}
 	encoded, err := tc.txnMarkerSerde.Encode(tm)
 	if err != nil {
@@ -151,8 +149,6 @@ func (tc *TransactionManager) registerTopicPartitions(ctx context.Context, appId
 		tps = append(tps, tp)
 	}
 	txnMd := TxnMetadata{
-		AppId:           appId,
-		AppEpoch:        appEpoch,
 		TopicPartitions: tps,
 		State:           tc.currentStatus,
 	}
@@ -231,9 +227,7 @@ func (tc *TransactionManager) BeginTransaction(ctx context.Context, appId uint64
 	}
 	tc.currentStatus = BEGIN
 	txnState := TxnMetadata{
-		State:    tc.currentStatus,
-		AppId:    appId,
-		AppEpoch: appEpoch,
+		State: tc.currentStatus,
 	}
 	return tc.appendToTransactionLog(ctx, &txnState)
 }
@@ -257,9 +251,7 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context, appId uint6
 	// async append complete_commit
 	tc.currentStatus = COMPLETE_COMMIT
 	txnMd := TxnMetadata{
-		State:    tc.currentStatus,
-		AppId:    appId,
-		AppEpoch: appEpoch,
+		State: tc.currentStatus,
 	}
 	tc.errg.Go(func() error {
 		return tc.appendToTransactionLog(tc.ctx, &txnMd)
@@ -286,9 +278,7 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context, appId uint64
 	// async append complete_abort
 	tc.currentStatus = COMPLETE_ABORT
 	txnMd := TxnMetadata{
-		State:    tc.currentStatus,
-		AppId:    appId,
-		AppEpoch: appEpoch,
+		State: tc.currentStatus,
 	}
 	tc.errg.Go(func() error {
 		return tc.appendToTransactionLog(tc.ctx, &txnMd)
