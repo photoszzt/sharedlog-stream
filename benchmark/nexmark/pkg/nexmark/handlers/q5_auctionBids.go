@@ -119,10 +119,16 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 		StoreName:  countStoreName,
 		Changelog:  changelog,
 	}
-	countWindowStore := store.NewInMemoryWindowStoreWithChangelog(
+	countWindowStore, err := store.NewInMemoryWindowStoreWithChangelog(
 		hopWindow.MaxSize()+hopWindow.GracePeriodMs(),
 		hopWindow.MaxSize(), countMp,
 	)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
 	countProc := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(countWindowStore,
 		processor.InitializerFunc(func() interface{} { return 0 }),
 		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {

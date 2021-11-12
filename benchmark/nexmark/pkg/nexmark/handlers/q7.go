@@ -114,7 +114,13 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 		Changelog:  outputStream,
 		MsgSerde:   msgSerde,
 	}
-	store := store.NewInMemoryWindowStoreWithChangelog(tw.MaxSize()+tw.GracePeriodMs(), tw.MaxSize(), mp)
+	store, err := store.NewInMemoryWindowStoreWithChangelog(tw.MaxSize()+tw.GracePeriodMs(), tw.MaxSize(), mp)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
 
 	maxPriceBid := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(store,
 		processor.InitializerFunc(func() interface{} {

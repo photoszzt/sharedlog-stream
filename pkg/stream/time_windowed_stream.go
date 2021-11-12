@@ -26,9 +26,12 @@ func newTimeWindowedStream(tp *processor.TopologyBuilder, parents []processor.No
 }
 
 func (s *TimeWindowedStreamImpl) Count(name string, mp *store.MaterializeParam) Table {
-	store := store.NewInMemoryWindowStoreWithChangelog(
+	store, err := store.NewInMemoryWindowStoreWithChangelog(
 		s.windowDefs.MaxSize()+s.windowDefs.GracePeriodMs(),
 		s.windowDefs.MaxSize(), mp)
+	if err != nil {
+		panic(err)
+	}
 	p := processor.NewStreamWindowAggregateProcessor(store,
 		processor.InitializerFunc(func() interface{} {
 			return 0
@@ -43,9 +46,12 @@ func (s *TimeWindowedStreamImpl) Count(name string, mp *store.MaterializeParam) 
 }
 
 func (s *TimeWindowedStreamImpl) Aggregate(name string, initializer processor.Initializer, aggregator processor.Aggregator, mp *store.MaterializeParam) Table {
-	store := store.NewInMemoryWindowStoreWithChangelog(
+	store, err := store.NewInMemoryWindowStoreWithChangelog(
 		s.windowDefs.MaxSize()+s.windowDefs.GracePeriodMs(),
 		s.windowDefs.MaxSize(), mp)
+	if err != nil {
+		panic(err)
+	}
 	p := processor.NewStreamWindowAggregateProcessor(store, initializer, aggregator, s.windowDefs)
 	n := s.tp.AddProcessor(name, p, s.parents)
 	_ = s.tp.AddWindowStore(mp.StoreName)

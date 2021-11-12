@@ -148,8 +148,14 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 		ParNum:     sp.ParNum,
 	}
 
-	store := store.NewInMemoryWindowStoreWithChangelog(
+	store, err := store.NewInMemoryWindowStoreWithChangelog(
 		timeWindows.MaxSize()+timeWindows.GracePeriodMs(), timeWindows.MaxSize(), winStoreMp)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
 
 	aggProc := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(store,
 		processor.InitializerFunc(func() interface{} {

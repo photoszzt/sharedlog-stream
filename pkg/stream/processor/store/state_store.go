@@ -7,12 +7,13 @@ type StateStore interface {
 }
 
 type MaterializeParam struct {
-	KeySerde   commtypes.Serde
-	ValueSerde commtypes.Serde
-	MsgSerde   commtypes.MsgSerde
-	Changelog  Stream
-	StoreName  string
-	ParNum     uint8
+	KeySerde    commtypes.Serde
+	ValueSerde  commtypes.Serde
+	MsgSerde    commtypes.MsgSerde
+	Changelog   Stream
+	StoreName   string
+	ParNum      uint8
+	serdeFormat commtypes.SerdeFormat
 }
 
 type JoinParam struct {
