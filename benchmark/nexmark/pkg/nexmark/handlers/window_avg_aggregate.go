@@ -49,6 +49,34 @@ func (h *windowedAvg) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return utils.CompressData(encodedOutput), nil
 }
 
+func getSerde(sf commtypes.SerdeFormat) (commtypes.Serde, commtypes.Serde, error) {
+	var scSerde commtypes.Serde
+	var vtSerde commtypes.Serde
+	var wkSerde commtypes.Serde
+	if sf == commtypes.JSON {
+		scSerde = ntypes.SumAndCountJSONSerde{}
+		vtSerde = commtypes.ValueTimestampJSONSerde{
+			ValJSONSerde: scSerde,
+		}
+		wkSerde = commtypes.WindowedKeyJSONSerde{
+			KeyJSONSerde:    commtypes.Uint64Serde{},
+			WindowJSONSerde: processor.TimeWindowJSONSerde{},
+		}
+	} else if sf == commtypes.MSGP {
+		scSerde = ntypes.SumAndCountMsgpSerde{}
+		vtSerde = commtypes.ValueTimestampMsgpSerde{
+			ValMsgpSerde: scSerde,
+		}
+		wkSerde = commtypes.WindowedKeyMsgpSerde{
+			KeyMsgpSerde:    commtypes.Uint64Serde{},
+			WindowMsgpSerde: processor.TimeWindowMsgpSerde{},
+		}
+	} else {
+		return nil, nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", sf)
+	}
+	return vtSerde, wkSerde, nil
+}
+
 func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	input_stream, output_stream, err := getShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
@@ -85,31 +113,11 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 			Message: fmt.Sprintf("get evnet serde error: %v\n", err),
 		}
 	}
-	var scSerde commtypes.Serde
-	var vtSerde commtypes.Serde
-	var wkSerde commtypes.Serde
-	if sp.SerdeFormat == uint8(commtypes.JSON) {
-		scSerde = ntypes.SumAndCountJSONSerde{}
-		vtSerde = commtypes.ValueTimestampJSONSerde{
-			ValJSONSerde: scSerde,
-		}
-		wkSerde = commtypes.WindowedKeyJSONSerde{
-			KeyJSONSerde:    commtypes.Uint64Serde{},
-			WindowJSONSerde: processor.TimeWindowJSONSerde{},
-		}
-	} else if sp.SerdeFormat == uint8(commtypes.MSGP) {
-		scSerde = ntypes.SumAndCountMsgpSerde{}
-		vtSerde = commtypes.ValueTimestampMsgpSerde{
-			ValMsgpSerde: scSerde,
-		}
-		wkSerde = commtypes.WindowedKeyMsgpSerde{
-			KeyMsgpSerde:    commtypes.Uint64Serde{},
-			WindowMsgpSerde: processor.TimeWindowMsgpSerde{},
-		}
-	} else {
+	vtSerde, wkSerde, err := getSerde(commtypes.SerdeFormat(sp.SerdeFormat))
+	if err != nil {
 		return &common.FnOutput{
 			Success: false,
-			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat),
+			Message: err.Error(),
 		}
 	}
 

@@ -16,16 +16,16 @@ import (
 type SharedLogStream struct {
 	ctx                context.Context
 	env                types.Environment
+	txnMarkerSerde     commtypes.Serde
 	curReadMap         map[commtypes.AppIDGen]commtypes.ReadMsgAndProgress
 	topicName          string
 	topicNameHash      uint64
-	tail               uint64
 	appId              uint64
 	cursor             uint64
+	tail               uint64
 	curAppendMsgSeqNum uint32
 	appEpoch           uint16
 	inTransaction      bool
-	txnMarkerSerde     commtypes.Serde
 }
 
 const (
