@@ -77,7 +77,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 		ValueDecoder: commtypes.StringDecoder{},
 		MsgDecoder:   msgSerde,
 	}
-	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
 	mp := &store.MaterializeParam{
 		KeySerde:   commtypes.StringSerde{},
 		ValueSerde: vtSerde,
@@ -96,8 +96,6 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 			aggVal := agg.(uint64)
 			return aggVal + 1
 		})))
-
-	srcLatencies := make([]int, 0, 128)
 
 	latencies := make([]int, 0, 128)
 	duration := time.Duration(sp.Duration) * time.Second
@@ -125,9 +123,8 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 		startTime := time.Now()
 		trackConsumePar := false
 		currentOffset := uint64(0)
-		commitTimer := time.Now()
-		commitEvery := time.Duration(1) * time.Millisecond
-		var msg commtypes.Message
+		var commitTimer time.Time
+		commitEvery := time.Duration(sp.CommitEvery) * time.Millisecond
 		for {
 			timeSinceTranStart := time.Since(commitTimer)
 			timeout := duration != 0 && time.Since(startTime) >= duration
@@ -177,7 +174,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 				commitTimer = time.Now()
 			}
 			procStart := time.Now()
-			msg, currentOffset, err = src.Consume(ctx, sp.ParNum)
+			msgs, err := src.Consume(ctx, sp.ParNum)
 			if err != nil {
 				if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 					return &common.FnOutput{
@@ -192,9 +189,6 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 					Message: err.Error(),
 				}
 			}
-			srcLat := time.Since(procStart)
-			srcLatencies = append(srcLatencies, int(srcLat.Microseconds()))
-
 			if !trackConsumePar {
 				err = tm.AddOffsets(sp.InputTopicName, sp.ParNum)
 				if err != nil {
@@ -205,11 +199,13 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 				}
 				trackConsumePar = true
 			}
-			_, err = p.ProcessAndReturn(ctx, msg)
-			if err != nil {
-				return &common.FnOutput{
-					Success: false,
-					Message: err.Error(),
+			for _, msg := range msgs {
+				_, err = p.ProcessAndReturn(ctx, msg.Msg)
+				if err != nil {
+					return &common.FnOutput{
+						Success: false,
+						Message: err.Error(),
+					}
 				}
 			}
 			elapsed := time.Since(procStart)
@@ -220,7 +216,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 			Duration: time.Since(startTime).Seconds(),
 			Latencies: map[string][]int{
 				"e2e":   latencies,
-				"src":   srcLatencies,
+				"src":   src.GetLatency(),
 				"count": p.GetLatency(),
 			},
 		}
@@ -232,7 +228,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 			break
 		}
 		procStart := time.Now()
-		msg, _, err := src.Consume(ctx, sp.ParNum)
+		msgs, err := src.Consume(ctx, sp.ParNum)
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
@@ -247,13 +243,13 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 				Message: err.Error(),
 			}
 		}
-		srcLat := time.Since(procStart)
-		srcLatencies = append(srcLatencies, int(srcLat.Microseconds()))
-		_, err = p.ProcessAndReturn(ctx, msg)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
+		for _, msg := range msgs {
+			_, err = p.ProcessAndReturn(ctx, msg.Msg)
+			if err != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
 			}
 		}
 		elapsed := time.Since(procStart)
@@ -264,7 +260,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 		Duration: time.Since(startTime).Seconds(),
 		Latencies: map[string][]int{
 			"e2e":   latencies,
-			"src":   srcLatencies,
+			"src":   src.GetLatency(),
 			"count": p.GetLatency(),
 		},
 	}

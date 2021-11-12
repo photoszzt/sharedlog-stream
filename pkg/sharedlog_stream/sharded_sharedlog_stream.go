@@ -2,6 +2,7 @@ package sharedlog_stream
 
 import (
 	"context"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	"cs.utexas.edu/zjia/faas/types"
 	"golang.org/x/xerrors"
@@ -45,17 +46,17 @@ func (s *ShardedSharedLogStream) InitStream(ctx context.Context) error {
 	return nil
 }
 
-func (s *ShardedSharedLogStream) Push(ctx context.Context, payload []byte, parNumber uint8, additionalTag []uint64) (uint64, error) {
-	return s.subSharedLogStreams[parNumber].Push(ctx, payload, parNumber, additionalTag)
+func (s *ShardedSharedLogStream) Push(ctx context.Context, payload []byte, parNumber uint8, isControl bool) (uint64, error) {
+	return s.subSharedLogStreams[parNumber].Push(ctx, payload, parNumber, isControl)
 }
 
-func (s *ShardedSharedLogStream) ReadNext(ctx context.Context, parNumber uint8) ([]byte, uint64, error) {
+func (s *ShardedSharedLogStream) ReadNext(ctx context.Context, parNumber uint8) (commtypes.AppIDGen, []commtypes.RawMsg, error) {
 	if parNumber < s.numPartitions {
 		par := parNumber
 		shard := s.subSharedLogStreams[par]
 		return shard.ReadNext(ctx, parNumber)
 	} else {
-		return nil, 0, xerrors.Errorf("Invalid partition number: %d", parNumber)
+		return commtypes.EmptyAppIDGen, nil, xerrors.Errorf("Invalid partition number: %d", parNumber)
 	}
 }
 

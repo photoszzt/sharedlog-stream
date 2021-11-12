@@ -151,7 +151,7 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 			break
 		}
 		procStart := time.Now()
-		msg, _, err := src.Consume(ctx, sp.ParNum)
+		msgs, err := src.Consume(ctx, sp.ParNum)
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
@@ -172,27 +172,29 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 				Message: err.Error(),
 			}
 		}
-		countMsgs, err := countProc.ProcessAndReturn(ctx, msg)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
-			}
-		}
-		for _, countMsg := range countMsgs {
-			changeKeyedMsg, err := groupByAuction.ProcessAndReturn(ctx, countMsg)
+		for _, msg := range msgs {
+			countMsgs, err := countProc.ProcessAndReturn(ctx, msg.Msg)
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,
 					Message: err.Error(),
 				}
 			}
-			par := uint8(hashSe(changeKeyedMsg[0].Key.(*ntypes.StartEndTime)) % uint32(sp.NumOutPartition))
-			err = sink.Sink(ctx, changeKeyedMsg[0], par)
-			if err != nil {
-				return &common.FnOutput{
-					Success: false,
-					Message: err.Error(),
+			for _, countMsg := range countMsgs {
+				changeKeyedMsg, err := groupByAuction.ProcessAndReturn(ctx, countMsg)
+				if err != nil {
+					return &common.FnOutput{
+						Success: false,
+						Message: err.Error(),
+					}
+				}
+				par := uint8(hashSe(changeKeyedMsg[0].Key.(*ntypes.StartEndTime)) % uint32(sp.NumOutPartition))
+				err = sink.Sink(ctx, changeKeyedMsg[0], par, false)
+				if err != nil {
+					return &common.FnOutput{
+						Success: false,
+						Message: err.Error(),
+					}
 				}
 			}
 		}

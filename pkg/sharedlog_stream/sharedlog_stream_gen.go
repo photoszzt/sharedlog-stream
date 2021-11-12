@@ -54,6 +54,12 @@ func (z *StreamLogEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "AppEpoch")
 				return
 			}
+		case "isCtrl":
+			z.IsControl, err = dc.ReadBool()
+			if err != nil {
+				err = msgp.WrapError(err, "IsControl")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -68,8 +74,8 @@ func (z *StreamLogEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
-	zb0001Len := uint32(5)
-	var zb0001Mask uint8 /* 5 bits */
+	zb0001Len := uint32(6)
+	var zb0001Mask uint8 /* 6 bits */
 	if z.Payload == nil {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -152,6 +158,16 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
+	// write "isCtrl"
+	err = en.Append(0xa6, 0x69, 0x73, 0x43, 0x74, 0x72, 0x6c)
+	if err != nil {
+		return
+	}
+	err = en.WriteBool(z.IsControl)
+	if err != nil {
+		err = msgp.WrapError(err, "IsControl")
+		return
+	}
 	return
 }
 
@@ -159,8 +175,8 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *StreamLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(5)
-	var zb0001Mask uint8 /* 5 bits */
+	zb0001Len := uint32(6)
+	var zb0001Mask uint8 /* 6 bits */
 	if z.Payload == nil {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -205,6 +221,9 @@ func (z *StreamLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 		o = append(o, 0xa2, 0x61, 0x65)
 		o = msgp.AppendUint16(o, z.AppEpoch)
 	}
+	// string "isCtrl"
+	o = append(o, 0xa6, 0x69, 0x73, 0x43, 0x74, 0x72, 0x6c)
+	o = msgp.AppendBool(o, z.IsControl)
 	return
 }
 
@@ -256,6 +275,12 @@ func (z *StreamLogEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "AppEpoch")
 				return
 			}
+		case "isCtrl":
+			z.IsControl, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "IsControl")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -270,6 +295,6 @@ func (z *StreamLogEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *StreamLogEntry) Msgsize() (s int) {
-	s = 1 + 10 + msgp.StringPrefixSize + len(z.TopicName) + 8 + msgp.BytesPrefixSize + len(z.Payload) + 4 + msgp.Uint64Size + 5 + msgp.Uint32Size + 3 + msgp.Uint16Size
+	s = 1 + 10 + msgp.StringPrefixSize + len(z.TopicName) + 8 + msgp.BytesPrefixSize + len(z.Payload) + 4 + msgp.Uint64Size + 5 + msgp.Uint32Size + 3 + msgp.Uint16Size + 7 + msgp.BoolSize
 	return
 }

@@ -94,7 +94,7 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context, input *common.QueryInpu
 			break
 		}
 		procStart := time.Now()
-		msg, _, err := src.Consume(ctx, input.ParNum)
+		msgs, err := src.Consume(ctx, input.ParNum)
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
@@ -115,28 +115,31 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context, input *common.QueryInpu
 				Message: err.Error(),
 			}
 		}
-		bidMsg, err := bid.ProcessAndReturn(ctx, msg)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("filter bid err: %v", err),
-			}
-		}
-		if bidMsg != nil {
-			mappedKey, err := bidKeyedByPrice.ProcessAndReturn(ctx, bidMsg[0])
+
+		for _, msg := range msgs {
+			bidMsg, err := bid.ProcessAndReturn(ctx, msg.Msg)
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,
-					Message: fmt.Sprintf("bid keyed by price error: %v\n", err),
+					Message: fmt.Sprintf("filter bid err: %v", err),
 				}
 			}
-			key := mappedKey[0].Key.(uint64)
-			par := uint8(key % uint64(input.NumOutPartition))
-			err = sink.Sink(ctx, mappedKey[0], par)
-			if err != nil {
-				return &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("sink err: %v\n", err),
+			if bidMsg != nil {
+				mappedKey, err := bidKeyedByPrice.ProcessAndReturn(ctx, bidMsg[0])
+				if err != nil {
+					return &common.FnOutput{
+						Success: false,
+						Message: fmt.Sprintf("bid keyed by price error: %v\n", err),
+					}
+				}
+				key := mappedKey[0].Key.(uint64)
+				par := uint8(key % uint64(input.NumOutPartition))
+				err = sink.Sink(ctx, mappedKey[0], par, false)
+				if err != nil {
+					return &common.FnOutput{
+						Success: false,
+						Message: fmt.Sprintf("sink err: %v\n", err),
+					}
 				}
 			}
 		}

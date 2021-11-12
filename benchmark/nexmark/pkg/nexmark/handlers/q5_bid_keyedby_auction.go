@@ -95,7 +95,7 @@ func (h *bidKeyedByAuction) process(ctx context.Context, sp *common.QueryInput) 
 			break
 		}
 		procStart := time.Now()
-		msg, _, err := src.Consume(ctx, sp.ParNum)
+		msgs, err := src.Consume(ctx, sp.ParNum)
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
@@ -116,28 +116,31 @@ func (h *bidKeyedByAuction) process(ctx context.Context, sp *common.QueryInput) 
 				Message: err.Error(),
 			}
 		}
-		bidMsg, err := filterBid.ProcessAndReturn(ctx, msg)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
-			}
-		}
-		if bidMsg != nil {
-			mappedKey, err := selectKey.ProcessAndReturn(ctx, bidMsg[0])
+
+		for _, msg := range msgs {
+			bidMsg, err := filterBid.ProcessAndReturn(ctx, msg.Msg)
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,
 					Message: err.Error(),
 				}
 			}
-			key := mappedKey[0].Key.(uint64)
-			par := uint8(key % uint64(sp.NumOutPartition))
-			err = sink.Sink(ctx, mappedKey[0], par)
-			if err != nil {
-				return &common.FnOutput{
-					Success: false,
-					Message: err.Error(),
+			if bidMsg != nil {
+				mappedKey, err := selectKey.ProcessAndReturn(ctx, bidMsg[0])
+				if err != nil {
+					return &common.FnOutput{
+						Success: false,
+						Message: err.Error(),
+					}
+				}
+				key := mappedKey[0].Key.(uint64)
+				par := uint8(key % uint64(sp.NumOutPartition))
+				err = sink.Sink(ctx, mappedKey[0], par, false)
+				if err != nil {
+					return &common.FnOutput{
+						Success: false,
+						Message: err.Error(),
+					}
 				}
 			}
 		}

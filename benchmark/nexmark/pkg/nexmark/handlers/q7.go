@@ -101,8 +101,8 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 		ValueEncoder: bmSerde,
 	}
 	duration := time.Duration(input.Duration) * time.Second
-	src := sharedlog_stream.NewShardedSharedLogStreamSource(inputStream, inConfig)
-	sink := sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig)
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(inputStream, inConfig))
+	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
 
 	tw := processor.NewTimeWindowsNoGrace(time.Duration(10) * time.Second)
 	maxPriceBidStoreName := "max-price-bid-tab"
@@ -143,10 +143,6 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 			lb := bm.MaxDateTime - 10*1000
 			return bm.DateTime >= lb && bm.DateTime <= bm.MaxDateTime, nil
 		})))
-
-	srcLatencies := make([]int, 0, 128)
-	sinkLatencies := make([]int, 0, 128)
-
 	latencies := make([]int, 0, 128)
 	startTime := time.Now()
 	for {
@@ -154,7 +150,7 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 			break
 		}
 		procStart := time.Now()
-		msg, _, err := src.Consume(ctx, input.ParNum)
+		msgs, err := src.Consume(ctx, input.ParNum)
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
@@ -163,8 +159,8 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 					Duration: time.Since(startTime).Seconds(),
 					Latencies: map[string][]int{
 						"e2e":    latencies,
-						"sink":   sinkLatencies,
-						"src":    srcLatencies,
+						"sink":   sink.GetLatency(),
+						"src":    src.GetLatency(),
 						"maxBid": maxPriceBid.GetLatency(),
 						"trans":  transformWithStore.GetLatency(),
 						"filtT":  filterTime.GetLatency(),
@@ -176,40 +172,38 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 				Message: err.Error(),
 			}
 		}
-		srcLat := time.Since(procStart)
-		srcLatencies = append(srcLatencies, int(srcLat.Microseconds()))
-		_, err = maxPriceBid.ProcessAndReturn(ctx, msg)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
-			}
-		}
-		transformedMsgs, err := transformWithStore.ProcessAndReturn(ctx, msg)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
-			}
-		}
-		for _, tmsg := range transformedMsgs {
-			filtered, err := filterTime.ProcessAndReturn(ctx, tmsg)
+
+		for _, msg := range msgs {
+			_, err = maxPriceBid.ProcessAndReturn(ctx, msg.Msg)
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,
 					Message: err.Error(),
 				}
 			}
-			sinkStart := time.Now()
-			err = sink.Sink(ctx, filtered[0], input.ParNum)
+			transformedMsgs, err := transformWithStore.ProcessAndReturn(ctx, msg.Msg)
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,
 					Message: err.Error(),
 				}
 			}
-			sinkLat := time.Since(sinkStart)
-			sinkLatencies = append(sinkLatencies, int(sinkLat.Microseconds()))
+			for _, tmsg := range transformedMsgs {
+				filtered, err := filterTime.ProcessAndReturn(ctx, tmsg)
+				if err != nil {
+					return &common.FnOutput{
+						Success: false,
+						Message: err.Error(),
+					}
+				}
+				err = sink.Sink(ctx, filtered[0], input.ParNum, false)
+				if err != nil {
+					return &common.FnOutput{
+						Success: false,
+						Message: err.Error(),
+					}
+				}
+			}
 		}
 		elapsed := time.Since(procStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
@@ -220,8 +214,8 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 		Duration: time.Since(startTime).Seconds(),
 		Latencies: map[string][]int{
 			"e2e":    latencies,
-			"sink":   sinkLatencies,
-			"src":    srcLatencies,
+			"sink":   sink.GetLatency(),
+			"src":    src.GetLatency(),
 			"maxBid": maxPriceBid.GetLatency(),
 			"trans":  transformWithStore.GetLatency(),
 			"filtT":  filterTime.GetLatency(),

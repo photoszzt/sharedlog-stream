@@ -38,13 +38,14 @@ func NewSharedLogStreamSource(stream *SharedLogStream, config *SharedLogStreamCo
 	}
 }
 
-func (s *SharedLogStreamSource) Consume(ctx context.Context, parNum uint8) (commtypes.Message, uint64, error) {
+func (s *SharedLogStreamSource) Consume(ctx context.Context, parNum uint8) ([]commtypes.MsgAndSeq, error) {
 	startTime := time.Now()
+	var msgs []commtypes.MsgAndSeq
 	for {
 		if s.timeout != 0 && time.Since(startTime) >= s.timeout {
 			break
 		}
-		val, seqNum, err := s.stream.ReadNext(ctx, 0)
+		_, rawMsgs, err := s.stream.ReadNext(ctx, 0)
 		if err != nil {
 			if IsStreamEmptyError(err) {
 				// fmt.Fprintf(os.Stderr, "stream is empty\n")
@@ -54,22 +55,32 @@ func (s *SharedLogStreamSource) Consume(ctx context.Context, parNum uint8) (comm
 				// fmt.Fprintf(os.Stderr, "stream time out\n")
 				continue
 			} else {
-				return commtypes.EmptyMessage, 0, err
+				return nil, err
 			}
 		}
-		keyEncoded, valueEncoded, err := s.msgDecoder.Decode(val)
-		if err != nil {
-			return commtypes.EmptyMessage, 0, err
+		for _, rawMsg := range rawMsgs {
+			keyEncoded, valueEncoded, err := s.msgDecoder.Decode(rawMsg.Payload)
+			if err != nil {
+				return nil, err
+			}
+			key, err := s.keyDecoder.Decode(keyEncoded)
+			if err != nil {
+				return nil, err
+			}
+			value, err := s.valueDecoder.Decode(valueEncoded)
+			if err != nil {
+				return nil, err
+			}
+			msgs = append(msgs, commtypes.MsgAndSeq{
+				Msg: commtypes.Message{
+					Key:   key,
+					Value: value,
+				},
+				MsgSeqNum: rawMsg.MsgSeqNum,
+				LogSeqNum: rawMsg.LogSeqNum,
+			})
 		}
-		key, err := s.keyDecoder.Decode(keyEncoded)
-		if err != nil {
-			return commtypes.EmptyMessage, 0, err
-		}
-		value, err := s.valueDecoder.Decode(valueEncoded)
-		if err != nil {
-			return commtypes.EmptyMessage, 0, err
-		}
-		return commtypes.Message{Key: key, Value: value}, seqNum, nil
+		return msgs, nil
 	}
-	return commtypes.EmptyMessage, 0, ErrStreamSourceTimeout
+	return nil, ErrStreamSourceTimeout
 }

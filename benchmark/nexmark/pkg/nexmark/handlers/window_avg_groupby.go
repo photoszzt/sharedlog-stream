@@ -9,6 +9,7 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
 
@@ -79,18 +80,16 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput) *
 		ValueEncoder: eventSerde,
 	}
 
-	src := sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig)
-	sink := sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig)
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
+	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
 	latencies := make([]int, 0, 128)
-	consumeLatencies := make([]int, 0, 128)
-	sinkLatencies := make([]int, 0, 128)
 	startTime := time.Now()
 	for {
 		if duration != 0 && time.Since(startTime) >= duration {
 			break
 		}
 		procStart := time.Now()
-		msg, _, err := src.Consume(ctx, sp.ParNum)
+		msgs, err := src.Consume(ctx, sp.ParNum)
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
@@ -98,8 +97,8 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput) *
 					Message: err.Error(),
 					Latencies: map[string][]int{
 						"e2e":  latencies,
-						"sink": sinkLatencies,
-						"src":  consumeLatencies,
+						"sink": sink.GetLatency(),
+						"src":  src.GetLatency(),
 					},
 					Duration: time.Since(startTime).Seconds(),
 				}
@@ -109,23 +108,20 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput) *
 				Message: err.Error(),
 			}
 		}
-		consumeLat := time.Since(procStart)
-		consumeLatencies = append(consumeLatencies, int(consumeLat.Microseconds()))
-		val := msg.Value.(*ntypes.Event)
-		if val.Etype == ntypes.BID {
-			par := uint8(val.Bid.Auction % uint64(sp.NumOutPartition))
-			newMsg := commtypes.Message{Key: val.Bid.Auction, Value: msg.Value}
 
-			sinkStart := time.Now()
-			err = sink.Sink(ctx, newMsg, par)
-			if err != nil {
-				return &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("sink failed: %v\n", err),
+		for _, msg := range msgs {
+			val := msg.Msg.Value.(*ntypes.Event)
+			if val.Etype == ntypes.BID {
+				par := uint8(val.Bid.Auction % uint64(sp.NumOutPartition))
+				newMsg := commtypes.Message{Key: val.Bid.Auction, Value: msg.Msg.Value}
+				err = sink.Sink(ctx, newMsg, par, false)
+				if err != nil {
+					return &common.FnOutput{
+						Success: false,
+						Message: fmt.Sprintf("sink failed: %v\n", err),
+					}
 				}
 			}
-			sinkLat := time.Since(sinkStart)
-			sinkLatencies = append(sinkLatencies, int(sinkLat.Microseconds()))
 		}
 		elapsed := time.Since(procStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
@@ -135,8 +131,8 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput) *
 		Duration: time.Since(startTime).Seconds(),
 		Latencies: map[string][]int{
 			"e2e":  latencies,
-			"sink": sinkLatencies,
-			"src":  consumeLatencies,
+			"sink": sink.GetLatency(),
+			"src":  src.GetLatency(),
 		},
 	}
 }

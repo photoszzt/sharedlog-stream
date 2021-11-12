@@ -102,7 +102,7 @@ func (tc *TransactionManager) appendToTransactionLog(ctx context.Context, tm *Tx
 	if err != nil {
 		return err
 	}
-	_, err = tc.TransactionLog.Push(ctx, msg_encoded, 0, nil)
+	_, err = tc.TransactionLog.Push(ctx, msg_encoded, 0, false)
 	return err
 }
 
@@ -124,7 +124,7 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 		for par := range partitions {
 			parNum := par
 			g.Go(func() error {
-				_, err = stream.Push(ctx, msg_encoded, parNum, nil)
+				_, err = stream.Push(ctx, msg_encoded, parNum, true)
 				return err
 			})
 		}
@@ -217,7 +217,7 @@ func (tc *TransactionManager) AppendOffset(ctx context.Context, offsetConfig Off
 	if err != nil {
 		return err
 	}
-	_, err = offsetLog.Push(ctx, encoded, offsetConfig.Partition, nil)
+	_, err = offsetLog.Push(ctx, encoded, offsetConfig.Partition, false)
 	return err
 }
 

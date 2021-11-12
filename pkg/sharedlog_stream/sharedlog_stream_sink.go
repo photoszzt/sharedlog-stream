@@ -20,6 +20,8 @@ type SharedLogStreamSink struct {
 	inTran       bool
 }
 
+var _ = processor.Sink(&SharedLogStreamSink{})
+
 type StreamSinkConfig struct {
 	KeyEncoder    commtypes.Encoder
 	ValueEncoder  commtypes.Encoder
@@ -46,11 +48,10 @@ func (sls *SharedLogStreamSink) WithProcessorContext(pctx store.ProcessorContext
 	sls.pctx = pctx
 }
 
-func (sls *SharedLogStreamSink) Sink(ctx context.Context, msg commtypes.Message) error {
+func (sls *SharedLogStreamSink) Sink(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
 	if msg.Key == nil && msg.Value == nil {
 		return nil
 	}
-	var additionalTag []uint64
 	var keyEncoded []byte
 	if msg.Key != nil {
 		keyEncodedTmp, err := sls.keyEncoder.Encode(msg.Key)
@@ -58,8 +59,6 @@ func (sls *SharedLogStreamSink) Sink(ctx context.Context, msg commtypes.Message)
 			return err
 		}
 		keyEncoded = keyEncodedTmp
-		keyTag := sls.hasher.Sum64()
-		additionalTag = []uint64{keyTag}
 	}
 	valEncoded, err := sls.valueEncoder.Encode(msg.Value)
 	if err != nil {
@@ -68,7 +67,7 @@ func (sls *SharedLogStreamSink) Sink(ctx context.Context, msg commtypes.Message)
 	// fmt.Fprintf(os.Stderr, "Sink: output key: %v, val: %v\n", string(keyEncoded), string(valEncoded))
 	bytes, err := sls.msgEncoder.Encode(keyEncoded, valEncoded)
 	if bytes != nil && err == nil {
-		_, err = sls.stream.Push(ctx, bytes, 0, additionalTag)
+		_, err = sls.stream.Push(ctx, bytes, 0, isControl)
 		if err != nil {
 			return err
 		}
@@ -77,7 +76,7 @@ func (sls *SharedLogStreamSink) Sink(ctx context.Context, msg commtypes.Message)
 }
 
 func (sls *SharedLogStreamSink) Process(ctx context.Context, msg commtypes.Message) error {
-	return sls.Sink(ctx, msg)
+	return sls.Sink(ctx, msg, 0, false)
 }
 
 func (sls *SharedLogStreamSink) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {

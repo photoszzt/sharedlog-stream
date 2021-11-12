@@ -12,6 +12,8 @@ type MeteredSource struct {
 	latencies []int
 }
 
+var _ = Source(&MeteredSource{})
+
 func NewMeteredSource(src Source) *MeteredSource {
 	return &MeteredSource{
 		src:       src,
@@ -19,14 +21,14 @@ func NewMeteredSource(src Source) *MeteredSource {
 	}
 }
 
-func (s *MeteredSource) Consume(ctx context.Context, parNum uint8) (commtypes.Message, uint64, error) {
+func (s *MeteredSource) Consume(ctx context.Context, parNum uint8) ([]commtypes.MsgAndSeq, error) {
 	measure_proc := os.Getenv("MEASURE_PROC")
 	if measure_proc == "true" || measure_proc == "1" {
 		procStart := time.Now()
-		msg, seqNum, err := s.src.Consume(ctx, parNum)
+		msgs, err := s.src.Consume(ctx, parNum)
 		elapsed := time.Since(procStart)
 		s.latencies = append(s.latencies, int(elapsed.Microseconds()))
-		return msg, seqNum, err
+		return msgs, err
 	} else {
 		return s.src.Consume(ctx, parNum)
 	}

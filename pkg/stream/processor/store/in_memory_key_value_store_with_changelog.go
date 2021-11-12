@@ -3,8 +3,6 @@ package store
 import (
 	"bytes"
 	"context"
-	"hash"
-	"hash/fnv"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/treemap"
 
@@ -14,7 +12,6 @@ import (
 type InMemoryKeyValueStoreWithChangelog struct {
 	kvstore *InMemoryKeyValueStore
 	mp      *MaterializeParam
-	hasher  hash.Hash64
 }
 
 func NewInMemoryKeyValueStoreWithChangelog(mp *MaterializeParam) *InMemoryKeyValueStoreWithChangelog {
@@ -24,8 +21,7 @@ func NewInMemoryKeyValueStoreWithChangelog(mp *MaterializeParam) *InMemoryKeyVal
 			valB := b.([]byte)
 			return bytes.Compare(valA, valB)
 		}),
-		mp:     mp,
-		hasher: fnv.New64(),
+		mp: mp,
 	}
 }
 
@@ -74,9 +70,7 @@ func (st *InMemoryKeyValueStoreWithChangelog) Put(ctx context.Context, key KeyT,
 	if err != nil {
 		return err
 	}
-	keyTag := st.hasher.Sum64()
-	additionalTag := []uint64{keyTag}
-	_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, additionalTag)
+	_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, false)
 	if err != nil {
 		return err
 	}
@@ -102,9 +96,7 @@ func (st *InMemoryKeyValueStoreWithChangelog) PutIfAbsent(ctx context.Context, k
 		if err != nil {
 			return nil, err
 		}
-		keyTag := st.hasher.Sum64()
-		additionalTag := []uint64{keyTag}
-		_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, additionalTag)
+		_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, false)
 		if err != nil {
 			return nil, err
 		}
@@ -137,9 +129,7 @@ func (st *InMemoryKeyValueStoreWithChangelog) Delete(ctx context.Context, key Ke
 	if err != nil {
 		return err
 	}
-	keyTag := st.hasher.Sum64()
-	additionalTag := []uint64{keyTag}
-	_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, additionalTag)
+	_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, false)
 	if err != nil {
 		return err
 	}

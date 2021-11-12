@@ -172,7 +172,7 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 			break
 		}
 		procStart := time.Now()
-		msg, _, err := src.Consume(ctx, sp.ParNum)
+		msgs, err := src.Consume(ctx, sp.ParNum)
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
@@ -193,26 +193,29 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *commo
 				Message: err.Error(),
 			}
 		}
-		newMsgs, err := aggProc.ProcessAndReturn(ctx, msg)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("aggregate failed: %v\n", err),
-			}
-		}
-		for _, newMsg := range newMsgs {
-			avg, err := calcAvg.ProcessAndReturn(ctx, newMsg)
+
+		for _, msg := range msgs {
+			newMsgs, err := aggProc.ProcessAndReturn(ctx, msg.Msg)
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,
-					Message: fmt.Sprintf("calculate avg failed: %v\n", err),
+					Message: fmt.Sprintf("aggregate failed: %v\n", err),
 				}
 			}
-			err = sink.Sink(ctx, avg[0], sp.ParNum)
-			if err != nil {
-				return &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("sink failed: %v", err),
+			for _, newMsg := range newMsgs {
+				avg, err := calcAvg.ProcessAndReturn(ctx, newMsg)
+				if err != nil {
+					return &common.FnOutput{
+						Success: false,
+						Message: fmt.Sprintf("calculate avg failed: %v\n", err),
+					}
+				}
+				err = sink.Sink(ctx, avg[0], sp.ParNum, false)
+				if err != nil {
+					return &common.FnOutput{
+						Success: false,
+						Message: fmt.Sprintf("sink failed: %v", err),
+					}
 				}
 			}
 		}

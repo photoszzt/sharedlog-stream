@@ -118,7 +118,7 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 			break
 		}
 		procStart := time.Now()
-		msg, _, err := src.Consume(ctx, sp.ParNum)
+		msgs, err := src.Consume(ctx, sp.ParNum)
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
@@ -139,25 +139,28 @@ func (h *q5MaxBid) process(ctx context.Context, sp *common.QueryInput) *common.F
 				Message: err.Error(),
 			}
 		}
-		maxBidMsg, err := maxBid.ProcessAndReturn(ctx, msg)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
+
+		for _, msg := range msgs {
+			maxBidMsg, err := maxBid.ProcessAndReturn(ctx, msg.Msg)
+			if err != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
 			}
-		}
-		joinedOutput, err := stJoin.ProcessAndReturn(ctx, maxBidMsg[0])
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
+			joinedOutput, err := stJoin.ProcessAndReturn(ctx, maxBidMsg[0])
+			if err != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
 			}
-		}
-		err = sink.Sink(ctx, joinedOutput[0], sp.ParNum)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
+			err = sink.Sink(ctx, joinedOutput[0], sp.ParNum, false)
+			if err != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
 			}
 		}
 		elapsed := time.Since(procStart)

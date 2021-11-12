@@ -127,21 +127,23 @@ func (p *sourcePump) run() {
 		case <-p.quit:
 			return
 		default:
-			msg, _, err := p.source.Consume(p.ctx, p.parNum)
+			msgs, err := p.source.Consume(p.ctx, p.parNum)
 			if err != nil {
 				go p.errFn(err)
 				return
 			}
 
-			if msg.Value == nil {
-				continue
-			}
+			for _, msg := range msgs {
+				if msg.Msg.Value == nil {
+					continue
+				}
 
-			for _, pump := range p.pumps {
-				err = pump.Accept(p.ctx, msg)
-				if err != nil {
-					go p.errFn(err)
-					return
+				for _, pump := range p.pumps {
+					err = pump.Accept(p.ctx, msg.Msg)
+					if err != nil {
+						go p.errFn(err)
+						return
+					}
 				}
 			}
 		}

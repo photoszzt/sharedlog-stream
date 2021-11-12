@@ -105,6 +105,18 @@ func (z *TxnMetadata) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 				z.State = TransactionState(zb0003)
 			}
+		case "aid":
+			z.AppId, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "AppId")
+				return
+			}
+		case "ae":
+			z.AppEpoch, err = dc.ReadUint16()
+			if err != nil {
+				err = msgp.WrapError(err, "AppEpoch")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -119,8 +131,8 @@ func (z *TxnMetadata) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *TxnMetadata) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
-	zb0001Len := uint32(2)
-	var zb0001Mask uint8 /* 2 bits */
+	zb0001Len := uint32(4)
+	var zb0001Mask uint8 /* 4 bits */
 	if z.TopicPartitions == nil {
 		zb0001Len--
 		zb0001Mask |= 0x1
@@ -162,6 +174,26 @@ func (z *TxnMetadata) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "State")
 		return
 	}
+	// write "aid"
+	err = en.Append(0xa3, 0x61, 0x69, 0x64)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.AppId)
+	if err != nil {
+		err = msgp.WrapError(err, "AppId")
+		return
+	}
+	// write "ae"
+	err = en.Append(0xa2, 0x61, 0x65)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint16(z.AppEpoch)
+	if err != nil {
+		err = msgp.WrapError(err, "AppEpoch")
+		return
+	}
 	return
 }
 
@@ -169,8 +201,8 @@ func (z *TxnMetadata) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *TxnMetadata) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(2)
-	var zb0001Mask uint8 /* 2 bits */
+	zb0001Len := uint32(4)
+	var zb0001Mask uint8 /* 4 bits */
 	if z.TopicPartitions == nil {
 		zb0001Len--
 		zb0001Mask |= 0x1
@@ -195,6 +227,12 @@ func (z *TxnMetadata) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "st"
 	o = append(o, 0xa2, 0x73, 0x74)
 	o = msgp.AppendUint8(o, uint8(z.State))
+	// string "aid"
+	o = append(o, 0xa3, 0x61, 0x69, 0x64)
+	o = msgp.AppendUint64(o, z.AppId)
+	// string "ae"
+	o = append(o, 0xa2, 0x61, 0x65)
+	o = msgp.AppendUint16(o, z.AppEpoch)
 	return
 }
 
@@ -245,6 +283,18 @@ func (z *TxnMetadata) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				z.State = TransactionState(zb0003)
 			}
+		case "aid":
+			z.AppId, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "AppId")
+				return
+			}
+		case "ae":
+			z.AppEpoch, bts, err = msgp.ReadUint16Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "AppEpoch")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -263,6 +313,6 @@ func (z *TxnMetadata) Msgsize() (s int) {
 	for za0001 := range z.TopicPartitions {
 		s += z.TopicPartitions[za0001].Msgsize()
 	}
-	s += 3 + msgp.Uint8Size
+	s += 3 + msgp.Uint8Size + 4 + msgp.Uint64Size + 3 + msgp.Uint16Size
 	return
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"hash"
 	"hash/fnv"
+	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 )
 
@@ -17,6 +18,8 @@ type ShardedSharedLogStreamSink struct {
 	hasher       hash.Hash64
 }
 
+var _ = processor.Sink(&ShardedSharedLogStreamSink{})
+
 func NewShardedSharedLogStreamSink(stream *ShardedSharedLogStream, config *StreamSinkConfig) *ShardedSharedLogStreamSink {
 	return &ShardedSharedLogStreamSink{
 		stream:       stream,
@@ -27,20 +30,17 @@ func NewShardedSharedLogStreamSink(stream *ShardedSharedLogStream, config *Strea
 	}
 }
 
-func (sls *ShardedSharedLogStreamSink) Sink(ctx context.Context, msg commtypes.Message, parNum uint8) error {
+func (sls *ShardedSharedLogStreamSink) Sink(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
 	if msg.Key == nil && msg.Value == nil {
 		return nil
 	}
 	var keyEncoded []byte
-	var additionalTag []uint64
 	if msg.Key != nil {
 		keyEncodedTmp, err := sls.keyEncoder.Encode(msg.Key)
 		if err != nil {
 			return err
 		}
 		keyEncoded = keyEncodedTmp
-		keyTag := sls.hasher.Sum64()
-		additionalTag = []uint64{keyTag}
 	}
 	valEncoded, err := sls.valueEncoder.Encode(msg.Value)
 	if err != nil {
@@ -48,7 +48,7 @@ func (sls *ShardedSharedLogStreamSink) Sink(ctx context.Context, msg commtypes.M
 	}
 	bytes, err := sls.msgEncoder.Encode(keyEncoded, valEncoded)
 	if bytes != nil && err == nil {
-		_, err = sls.stream.Push(ctx, bytes, parNum, additionalTag)
+		_, err = sls.stream.Push(ctx, bytes, parNum, isControl)
 		if err != nil {
 			return err
 		}

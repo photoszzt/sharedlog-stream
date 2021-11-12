@@ -1,10 +1,13 @@
 package store
 
-import "context"
+import (
+	"context"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+)
 
 type Stream interface {
-	Push(ctx context.Context, payload []byte, parNum uint8, additionalTag []uint64) (uint64, error)
-	ReadNext(ctx context.Context, parNum uint8) ([]byte /* payload */, uint64 /* seq num */, error)
+	Push(ctx context.Context, payload []byte, parNum uint8, isControl bool) (uint64, error)
+	ReadNext(ctx context.Context, parNum uint8) (commtypes.AppIDGen, []commtypes.RawMsg /* payload */, error)
 	TopicName() string
 	InitStream(ctx context.Context) error
 }
