@@ -21,7 +21,7 @@ func (fn FlatMapperFunc) FlatMap(msg commtypes.Message) ([]commtypes.Message, er
 type FlatMapProcessor struct {
 	pipe   Pipe
 	mapper FlatMapper
-	pctx   store.ProcessorContext
+	pctx   store.StoreContext
 }
 
 func NewFlatMapProcessor(mapper FlatMapper) *FlatMapProcessor {
@@ -30,7 +30,7 @@ func NewFlatMapProcessor(mapper FlatMapper) *FlatMapProcessor {
 	}
 }
 
-func (p *FlatMapProcessor) WithProcessorContext(pctx store.ProcessorContext) {
+func (p *FlatMapProcessor) WithProcessorContext(pctx store.StoreContext) {
 	p.pctx = pctx
 }
 

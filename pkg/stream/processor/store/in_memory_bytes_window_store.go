@@ -14,7 +14,7 @@ type InMemoryBytesWindowStore struct {
 	otrMu           sync.RWMutex
 	openedTimeRange map[uint64]struct{}
 
-	sctx     ProcessorContext
+	sctx     StoreContext
 	valSerde commtypes.Serde
 
 	store              *concurrent_skiplist.SkipList
@@ -48,7 +48,7 @@ func NewInMemoryBytesWindowStore(name string, retentionPeriod uint64, windowSize
 	}
 }
 
-func (st *InMemoryBytesWindowStore) Init(ctx ProcessorContext) {
+func (st *InMemoryBytesWindowStore) Init(ctx StoreContext) {
 	st.sctx = ctx
 	st.open = true
 }

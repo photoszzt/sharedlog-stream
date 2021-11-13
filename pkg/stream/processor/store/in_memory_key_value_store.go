@@ -11,7 +11,7 @@ import (
 )
 
 type InMemoryKeyValueStore struct {
-	sctx    ProcessorContext
+	sctx    StoreContext
 	store   *treemap.TreeMap
 	compare func(a treemap.Key, b treemap.Value) int
 	name    string
@@ -29,7 +29,7 @@ func NewInMemoryKeyValueStore(name string, compare func(a treemap.Key, b treemap
 	}
 }
 
-func (st *InMemoryKeyValueStore) Init(sctx ProcessorContext) {
+func (st *InMemoryKeyValueStore) Init(sctx StoreContext) {
 	st.sctx = sctx
 	st.open = true
 	st.sctx.RegisterKeyValueStore(st)

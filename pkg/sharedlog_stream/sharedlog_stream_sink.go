@@ -11,7 +11,7 @@ import (
 
 type SharedLogStreamSink struct {
 	pipe         processor.Pipe
-	pctx         store.ProcessorContext
+	pctx         store.StoreContext
 	stream       *SharedLogStream
 	keyEncoder   commtypes.Encoder
 	valueEncoder commtypes.Encoder
@@ -44,7 +44,7 @@ func (sls *SharedLogStreamSink) WithPipe(pipe processor.Pipe) {
 	sls.pipe = pipe
 }
 
-func (sls *SharedLogStreamSink) WithProcessorContext(pctx store.ProcessorContext) {
+func (sls *SharedLogStreamSink) WithProcessorContext(pctx store.StoreContext) {
 	sls.pctx = pctx
 }
 

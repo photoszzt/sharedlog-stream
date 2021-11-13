@@ -11,7 +11,7 @@ import (
 type StreamWindowAggregateProcessor struct {
 	pipe               Pipe
 	store              store.WindowStore
-	pctx               store.ProcessorContext
+	pctx               store.StoreContext
 	initializer        Initializer
 	aggregator         Aggregator
 	windows            EnumerableWindowDefinition
@@ -34,7 +34,7 @@ func (p *StreamWindowAggregateProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *StreamWindowAggregateProcessor) WithProcessorContext(pctx store.ProcessorContext) {
+func (p *StreamWindowAggregateProcessor) WithProcessorContext(pctx store.StoreContext) {
 	p.pctx = pctx
 }
 

@@ -9,7 +9,7 @@ import (
 // Branch processor
 type BranchProcessor struct {
 	pipe  Pipe
-	pctx  store.ProcessorContext
+	pctx  store.StoreContext
 	preds []Predicate
 }
 
@@ -24,7 +24,7 @@ func (p *BranchProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *BranchProcessor) WithProcessorContext(ctx store.ProcessorContext) {
+func (p *BranchProcessor) WithProcessorContext(ctx store.StoreContext) {
 	p.pctx = ctx
 }
 

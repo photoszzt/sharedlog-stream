@@ -8,7 +8,7 @@ import (
 
 type TableMapValuesProcessor struct {
 	pipe          Pipe
-	pctx          store.ProcessorContext
+	pctx          store.StoreContext
 	store         store.KeyValueStore
 	valueMapper   ValueMapper
 	queryableName string
@@ -25,7 +25,7 @@ func (p *TableMapValuesProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *TableMapValuesProcessor) WithProcessorContext(pctx store.ProcessorContext) {
+func (p *TableMapValuesProcessor) WithProcessorContext(pctx store.StoreContext) {
 	p.pctx = pctx
 	if p.queryableName != "" {
 		p.store = p.pctx.GetKeyValueStore(p.queryableName)

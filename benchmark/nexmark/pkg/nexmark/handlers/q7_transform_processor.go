@@ -12,7 +12,7 @@ import (
 type Q7TransformProcessor struct {
 	pipe        processor.Pipe
 	windowStore store.WindowStore
-	pctx        store.ProcessorContext
+	pctx        store.StoreContext
 }
 
 var _ = processor.Processor(&Q7TransformProcessor{})
@@ -27,7 +27,7 @@ func (p *Q7TransformProcessor) WithPipe(pipe processor.Pipe) {
 	p.pipe = pipe
 }
 
-func (p *Q7TransformProcessor) WithProcessorContext(pctx store.ProcessorContext) {
+func (p *Q7TransformProcessor) WithProcessorContext(pctx store.StoreContext) {
 	p.pctx = pctx
 }
 

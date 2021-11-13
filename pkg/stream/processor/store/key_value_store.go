@@ -7,7 +7,7 @@ import (
 
 type KeyValueStore interface {
 	StateStore
-	Init(ctx ProcessorContext)
+	Init(ctx StoreContext)
 	Get(key KeyT) (ValueT, bool, error)
 	Range(from KeyT, to KeyT) KeyValueIterator
 	ReverseRange(from KeyT, to KeyT) KeyValueIterator

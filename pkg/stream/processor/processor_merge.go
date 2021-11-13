@@ -8,7 +8,7 @@ import (
 
 type MergeProcessor struct {
 	pipe Pipe
-	pctx store.ProcessorContext
+	pctx store.StoreContext
 }
 
 func NewMergeProcessor() Processor {
@@ -19,7 +19,7 @@ func (p *MergeProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *MergeProcessor) WithProcessorContext(pctx store.ProcessorContext) {
+func (p *MergeProcessor) WithProcessorContext(pctx store.StoreContext) {
 	p.pctx = pctx
 }
 

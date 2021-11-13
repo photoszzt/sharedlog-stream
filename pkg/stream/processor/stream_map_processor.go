@@ -20,7 +20,7 @@ func (fn MapperFunc) Map(msg commtypes.Message) (commtypes.Message, error) {
 type StreamMapProcessor struct {
 	pipe   Pipe
 	mapper Mapper
-	pctx   store.ProcessorContext
+	pctx   store.StoreContext
 }
 
 var _ = Processor(&StreamMapProcessor{})
@@ -35,7 +35,7 @@ func (p *StreamMapProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *StreamMapProcessor) WithProcessorContext(pctx store.ProcessorContext) {
+func (p *StreamMapProcessor) WithProcessorContext(pctx store.StoreContext) {
 	p.pctx = pctx
 }
 
@@ -71,7 +71,7 @@ func (fn ValueMapperFunc) MapValue(value interface{}) (interface{}, error) {
 type StreamMapValuesProcessor struct {
 	pipe        Pipe
 	valueMapper ValueMapper
-	pctx        store.ProcessorContext
+	pctx        store.StoreContext
 }
 
 var _ = Processor(&StreamMapValuesProcessor{})
@@ -86,7 +86,7 @@ func (p *StreamMapValuesProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *StreamMapValuesProcessor) WithProcessorContext(pctx store.ProcessorContext) {
+func (p *StreamMapValuesProcessor) WithProcessorContext(pctx store.StoreContext) {
 	p.pctx = pctx
 }
 
@@ -109,7 +109,7 @@ func (p *StreamMapValuesProcessor) ProcessAndReturn(ctx context.Context, msg com
 type StreamMapValuesWithKeyProcessor struct {
 	pipe               Pipe
 	valueWithKeyMapper Mapper
-	pctx               store.ProcessorContext
+	pctx               store.StoreContext
 }
 
 func NewStreamMapValuesWithKeyProcessor(mapper Mapper) Processor {
@@ -122,7 +122,7 @@ func (p *StreamMapValuesWithKeyProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *StreamMapValuesWithKeyProcessor) WithProcessorContext(pctx store.ProcessorContext) {
+func (p *StreamMapValuesWithKeyProcessor) WithProcessorContext(pctx store.StoreContext) {
 	p.pctx = pctx
 }
 

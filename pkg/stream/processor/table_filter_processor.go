@@ -8,7 +8,7 @@ import (
 
 type TableFilterProcessor struct {
 	pipe          Pipe
-	pctx          store.ProcessorContext
+	pctx          store.StoreContext
 	pred          Predicate
 	store         store.KeyValueStore
 	queryableName string
@@ -25,7 +25,7 @@ func NewTableFilterProcessor(pred Predicate, filterNot bool, queryableName strin
 	}
 }
 
-func (p *TableFilterProcessor) WithProcessorContext(pctx store.ProcessorContext) {
+func (p *TableFilterProcessor) WithProcessorContext(pctx store.StoreContext) {
 	p.pctx = pctx
 	if p.queryableName != "" {
 		p.store = p.pctx.GetKeyValueStore(p.queryableName)

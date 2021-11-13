@@ -3,6 +3,7 @@ package sharedlog_stream
 import (
 	"context"
 	"fmt"
+	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
@@ -37,11 +38,11 @@ func (s *ShardedSharedLogStreamSource) Consume(ctx context.Context, parNum uint8
 		}
 		_, rawMsgs, err := s.stream.ReadNext(ctx, parNum)
 		if err != nil {
-			if IsStreamEmptyError(err) {
+			if errors.IsStreamEmptyError(err) {
 				// fmt.Fprintf(os.Stderr, "stream is empty\n")
 				time.Sleep(time.Duration(100) * time.Microsecond)
 				continue
-			} else if IsStreamTimeoutError(err) {
+			} else if errors.IsStreamTimeoutError(err) {
 				// fmt.Fprintf(os.Stderr, "stream time out\n")
 				continue
 			} else {

@@ -4,18 +4,12 @@ package sharedlog_stream
 
 import (
 	"context"
-	"errors"
+	"sharedlog-stream/pkg/errors"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/protocol"
 	"cs.utexas.edu/zjia/faas/types"
 	"github.com/rs/zerolog/log"
-)
-
-var (
-	errEmptyPayload  = errors.New("payload cannot be empty")
-	errStreamEmpty   = errors.New("stream empty")
-	errStreamTimeout = errors.New("blocking pop timeout")
 )
 
 const (
@@ -95,7 +89,7 @@ func (s *SharedLogStreamQueue) TopicName() string {
 
 func (s *SharedLogStreamQueue) Push(payload []byte, parNum uint8, additionalTag []uint64) (uint64, error) {
 	if len(payload) == 0 {
-		return 0, errEmptyPayload
+		return 0, errors.ErrEmptyPayload
 	}
 	logEntry := &StreamQueueLogEntry{
 		TopicName: s.topicName,
@@ -319,21 +313,13 @@ func (s *SharedLogStreamQueue) appendPopLogAndSync() error {
 	}
 }
 
-func IsStreamEmptyError(err error) bool {
-	return err == errStreamEmpty
-}
-
-func IsStreamTimeoutError(err error) bool {
-	return err == errStreamTimeout
-}
-
 func (s *SharedLogStreamQueue) Pop(parNum uint8) ([]byte /* payload */, error) {
 	if s.isEmpty() {
 		if err := s.syncTo(protocol.MaxLogSeqnum); err != nil {
 			return nil, err
 		}
 		if s.isEmpty() {
-			return nil, errStreamEmpty
+			return nil, errors.ErrStreamEmpty
 		}
 	}
 	if err := s.appendPopLogAndSync(); err != nil {
@@ -344,7 +330,7 @@ func (s *SharedLogStreamQueue) Pop(parNum uint8) ([]byte /* payload */, error) {
 	} else if nextLog != nil {
 		return nextLog.Payload, nil
 	} else {
-		return nil, errStreamEmpty
+		return nil, errors.ErrStreamEmpty
 	}
 }
 
@@ -373,7 +359,7 @@ func (s *SharedLogStreamQueue) PopBlocking() ([]byte /* payload */, error) {
 					}
 					seqNum = logEntry.SeqNum + 1
 				} else if time.Since(startTime) >= kBlockingPopTimeout {
-					return nil, errStreamTimeout
+					return nil, errors.ErrStreamTimeout
 				}
 			}
 		}
@@ -386,5 +372,5 @@ func (s *SharedLogStreamQueue) PopBlocking() ([]byte /* payload */, error) {
 			return nextLog.Payload, nil
 		}
 	}
-	return nil, errStreamTimeout
+	return nil, errors.ErrStreamTimeout
 }

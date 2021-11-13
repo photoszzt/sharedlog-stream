@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	"golang.org/x/xerrors"
@@ -47,11 +48,11 @@ func (s *SharedLogStreamSource) Consume(ctx context.Context, parNum uint8) ([]co
 		}
 		_, rawMsgs, err := s.stream.ReadNext(ctx, 0)
 		if err != nil {
-			if IsStreamEmptyError(err) {
+			if errors.IsStreamEmptyError(err) {
 				// fmt.Fprintf(os.Stderr, "stream is empty\n")
 				time.Sleep(time.Duration(100) * time.Microsecond)
 				continue
-			} else if IsStreamTimeoutError(err) {
+			} else if errors.IsStreamTimeoutError(err) {
 				// fmt.Fprintf(os.Stderr, "stream time out\n")
 				continue
 			} else {

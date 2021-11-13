@@ -9,7 +9,7 @@ import (
 type StreamJoinWindowProcessor struct {
 	pipe       Pipe
 	winStore   store.WindowStore
-	pctx       store.ProcessorContext
+	pctx       store.StoreContext
 	windowName string
 }
 
@@ -27,7 +27,7 @@ func (p *StreamJoinWindowProcessor) WithPipe(pipe Pipe) {
 }
 
 // WithProcessorContext sets the context on the processor
-func (p *StreamJoinWindowProcessor) WithProcessorContext(pctx store.ProcessorContext) {
+func (p *StreamJoinWindowProcessor) WithProcessorContext(pctx store.StoreContext) {
 	p.pctx = pctx
 	p.winStore = p.pctx.GetWindowStore(p.windowName)
 }

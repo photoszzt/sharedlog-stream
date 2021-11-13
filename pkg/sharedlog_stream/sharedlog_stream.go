@@ -4,6 +4,7 @@ package sharedlog_stream
 
 import (
 	"context"
+	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 
@@ -103,7 +104,7 @@ func (s *SharedLogStream) TopicName() string {
 
 func (s *SharedLogStream) Push(ctx context.Context, payload []byte, parNum uint8, isControl bool) (uint64, error) {
 	if len(payload) == 0 {
-		return 0, errEmptyPayload
+		return 0, errors.ErrEmptyPayload
 	}
 	logEntry := &StreamLogEntry{
 		TopicName: s.topicName,
@@ -137,7 +138,7 @@ func (s *SharedLogStream) ReadNext(ctx context.Context, parNum uint8) (commtypes
 			return commtypes.EmptyAppIDGen, nil, err
 		}
 		if s.isEmpty() {
-			return commtypes.EmptyAppIDGen, nil, errStreamEmpty
+			return commtypes.EmptyAppIDGen, nil, errors.ErrStreamEmpty
 		}
 	}
 	seqNumInSharedLog := s.cursor
@@ -148,7 +149,7 @@ func (s *SharedLogStream) ReadNext(ctx context.Context, parNum uint8) (commtypes
 			return commtypes.EmptyAppIDGen, nil, err
 		}
 		if logEntry == nil || logEntry.SeqNum >= s.tail {
-			return commtypes.EmptyAppIDGen, nil, errStreamEmpty
+			return commtypes.EmptyAppIDGen, nil, errors.ErrStreamEmpty
 		}
 		streamLogEntry := decodeStreamLogEntry(logEntry)
 		if streamLogEntry.TopicName == s.topicName {
@@ -201,7 +202,7 @@ func (s *SharedLogStream) ReadNext(ctx context.Context, parNum uint8) (commtypes
 		}
 		seqNumInSharedLog = logEntry.SeqNum + 1
 	}
-	return commtypes.EmptyAppIDGen, nil, errStreamEmpty
+	return commtypes.EmptyAppIDGen, nil, errors.ErrStreamEmpty
 }
 
 func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum uint64) error {

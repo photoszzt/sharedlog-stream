@@ -11,7 +11,7 @@ import (
 type StreamReduceProcessor struct {
 	pipe    Pipe
 	store   store.KeyValueStore
-	pctx    store.ProcessorContext
+	pctx    store.StoreContext
 	reducer Reducer
 }
 
@@ -27,7 +27,7 @@ func (p *StreamReduceProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *StreamReduceProcessor) WithProcessorContext(pctx store.ProcessorContext) {
+func (p *StreamReduceProcessor) WithProcessorContext(pctx store.StoreContext) {
 	p.pctx = pctx
 }
 

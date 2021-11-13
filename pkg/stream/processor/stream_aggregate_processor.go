@@ -11,7 +11,7 @@ import (
 type StreamAggregateProcessor struct {
 	pipe        Pipe
 	store       store.KeyValueStore
-	pctx        store.ProcessorContext
+	pctx        store.StoreContext
 	initializer Initializer
 	aggregator  Aggregator
 }
@@ -30,7 +30,7 @@ func (p *StreamAggregateProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *StreamAggregateProcessor) WithProcessorContext(pctx store.ProcessorContext) {
+func (p *StreamAggregateProcessor) WithProcessorContext(pctx store.StoreContext) {
 	p.pctx = pctx
 }
 

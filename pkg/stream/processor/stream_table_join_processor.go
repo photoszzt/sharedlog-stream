@@ -11,7 +11,7 @@ import (
 type StreamTableJoinProcessor struct {
 	pipe      Pipe
 	store     store.KeyValueStore
-	pctx      store.ProcessorContext
+	pctx      store.StoreContext
 	joiner    ValueJoinerWithKey
 	storeName string
 	leftJoin  bool
@@ -30,7 +30,7 @@ func (p *StreamTableJoinProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *StreamTableJoinProcessor) WithProcessorContext(pctx store.ProcessorContext) {
+func (p *StreamTableJoinProcessor) WithProcessorContext(pctx store.StoreContext) {
 	p.pctx = pctx
 	p.store = p.pctx.GetKeyValueStore(p.storeName)
 }

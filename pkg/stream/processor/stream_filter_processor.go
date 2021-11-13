@@ -8,7 +8,7 @@ import (
 
 type StreamFilterProcessor struct {
 	pipe Pipe
-	pctx store.ProcessorContext
+	pctx store.StoreContext
 	pred Predicate
 }
 
@@ -20,7 +20,7 @@ func NewStreamFilterProcessor(pred Predicate) *StreamFilterProcessor {
 	}
 }
 
-func (p *StreamFilterProcessor) WithProcessorContext(pctx store.ProcessorContext) {
+func (p *StreamFilterProcessor) WithProcessorContext(pctx store.StoreContext) {
 	p.pctx = pctx
 }
 
@@ -52,7 +52,7 @@ func (p *StreamFilterProcessor) ProcessAndReturn(ctx context.Context, msg commty
 
 type StreamFilterNotProcessor struct {
 	pipe Pipe
-	pctx store.ProcessorContext
+	pctx store.StoreContext
 	pred Predicate
 }
 
@@ -64,7 +64,7 @@ func NewStreamFilterNotProcessor(pred Predicate) *StreamFilterNotProcessor {
 	}
 }
 
-func (p *StreamFilterNotProcessor) WithProcessorContext(pctx store.ProcessorContext) {
+func (p *StreamFilterNotProcessor) WithProcessorContext(pctx store.StoreContext) {
 	p.pctx = pctx
 }
 

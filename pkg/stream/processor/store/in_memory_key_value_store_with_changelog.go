@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"context"
+	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/treemap"
 
@@ -25,7 +26,29 @@ func NewInMemoryKeyValueStoreWithChangelog(mp *MaterializeParam) *InMemoryKeyVal
 	}
 }
 
-func (st *InMemoryKeyValueStoreWithChangelog) Init(sctx ProcessorContext) {
+func (st *InMemoryKeyValueStoreWithChangelog) RestoreStateStore(ctx context.Context) error {
+	for {
+		_, msgs, err := st.mp.Changelog.ReadNext(ctx, st.mp.ParNum)
+		// nothing to restore
+		if errors.IsStreamEmptyError(err) {
+			return nil
+		} else if err != nil {
+			return err
+		}
+		for _, msg := range msgs {
+			keyBytes, valBytes, err := st.mp.MsgSerde.Decode(msg.Payload)
+			if err != nil {
+				return err
+			}
+			err = st.kvstore.Put(ctx, keyBytes, valBytes)
+			if err != nil {
+				return err
+			}
+		}
+	}
+}
+
+func (st *InMemoryKeyValueStoreWithChangelog) Init(sctx StoreContext) {
 	st.kvstore.Init(sctx)
 	sctx.RegisterKeyValueStore(st)
 }

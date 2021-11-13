@@ -47,7 +47,7 @@ func (t *TimeTracker) AdvanceNextTimeToEmit() {
 
 type StreamStreamJoinProcessor struct {
 	pipe              Pipe
-	pctx              store.ProcessorContext
+	pctx              store.StoreContext
 	otherWindowStore  store.WindowStore
 	joiner            ValueJoinerWithKey
 	sharedTimeTracker *TimeTracker
@@ -85,7 +85,7 @@ func (p *StreamStreamJoinProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *StreamStreamJoinProcessor) WithProcessorContext(pctx store.ProcessorContext) {
+func (p *StreamStreamJoinProcessor) WithProcessorContext(pctx store.StoreContext) {
 	p.pctx = pctx
 }
 

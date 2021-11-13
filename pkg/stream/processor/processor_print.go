@@ -10,7 +10,7 @@ import (
 // PrintProcessor is a processor that prints the stream to stdout.
 type PrintProcessor struct {
 	pipe Pipe
-	pctx store.ProcessorContext
+	pctx store.StoreContext
 }
 
 // NewPrintProcessor creates a new PrintProcessor instance.
@@ -23,7 +23,7 @@ func (p *PrintProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *PrintProcessor) WithProcessorContext(pctx store.ProcessorContext) {
+func (p *PrintProcessor) WithProcessorContext(pctx store.StoreContext) {
 	p.pctx = pctx
 }
 
