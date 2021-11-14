@@ -123,13 +123,19 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 				Message: fmt.Sprintf("NewTransactionManager failed: %v\n", err),
 			}
 		}
-		appId, appEpoch := tm.InitTransaction()
+		appId, appEpoch, err := tm.InitTransaction(ctx)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("InitTransaction failed: %v\n", err),
+			}
+		}
 
 		err = tm.CreateOffsetTopic(sp.InputTopicName, uint8(sp.NumInPartition))
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
-				Message: fmt.Sprintf("create offset topic failed: %v", err),
+				Message: fmt.Sprintf("create offset topic failed: %v\n", err),
 			}
 		}
 		tm.RecordTopicStreams(sp.OutputTopicName, output_stream)
@@ -202,7 +208,7 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 				}
 				return &common.FnOutput{
 					Success: false,
-					Message: fmt.Sprintf("consumed failed: %v", err),
+					Message: fmt.Sprintf("consumed failed: %v\n", err),
 				}
 			}
 			if !trackConsumePar {
@@ -210,7 +216,7 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 				if err != nil {
 					return &common.FnOutput{
 						Success: false,
-						Message: fmt.Sprintf("add offsets failed: %v", err),
+						Message: fmt.Sprintf("add offsets failed: %v\n", err),
 					}
 				}
 				trackConsumePar = true
@@ -280,7 +286,7 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 			}
 			return &common.FnOutput{
 				Success: false,
-				Message: fmt.Sprintf("consumed failed: %v", err),
+				Message: fmt.Sprintf("consumed failed: %v\n", err),
 			}
 		}
 		for _, msg := range gotMsgs {

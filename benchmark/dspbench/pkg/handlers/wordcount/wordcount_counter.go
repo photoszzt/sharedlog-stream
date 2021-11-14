@@ -108,7 +108,13 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 				Message: fmt.Sprintf("NewTransactionManager failed: %v\n", err),
 			}
 		}
-		appId, appEpoch := tm.InitTransaction()
+		appId, appEpoch, err := tm.InitTransaction(ctx)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("InitTransaction failed: %v\n", err),
+			}
+		}
 
 		err = tm.CreateOffsetTopic(sp.InputTopicName, sp.NumInPartition)
 		if err != nil {

@@ -3,11 +3,14 @@ package sharedlog_stream
 import (
 	"context"
 	"fmt"
+	"math"
 
+	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 
 	"cs.utexas.edu/zjia/faas/types"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/xerrors"
 )
@@ -28,14 +31,16 @@ type TransactionManager struct {
 	tpSerde               commtypes.Serde
 	txnMarkerSerde        commtypes.Serde
 	offsetRecordSerde     commtypes.Serde
-	ctx                   context.Context // background ctx
-	TransactionLog        *SharedLogStream
+	backgroundJobCtx      context.Context
 	TopicStreams          map[string]store.Stream
+	TransactionLog        *SharedLogStream
 	currentTopicPartition map[string]map[uint8]struct{}
-	errg                  *errgroup.Group // err group for background tasks
-	TransactionalId       string
-	currentStatus         TransactionState
-	currentEpoch          uint16
+	backgroundJobErrg     *errgroup.Group
+	// assume there's only one transaction id for a application
+	TransactionalId string
+	currentAppId    uint64 // 0 is NONE
+	currentEpoch    uint16 // 0 is NONE
+	currentStatus   TransactionState
 }
 
 func NewTransactionManager(ctx context.Context, env types.Environment, transactional_id string, serdeFormat commtypes.SerdeFormat) (*TransactionManager, error) {
@@ -75,17 +80,123 @@ func NewTransactionManager(ctx context.Context, env types.Environment, transacti
 		txnMarkerSerde:        txnMarkerSerde,
 		offsetRecordSerde:     offsetRecordSerde,
 		currentTopicPartition: make(map[string]map[uint8]struct{}),
-		errg:                  errg,
-		ctx:                   gctx,
+		backgroundJobErrg:     errg,
+		backgroundJobCtx:      gctx,
+		currentEpoch:          0,
+		currentAppId:          0,
 	}, nil
 }
 
-func (tc *TransactionManager) InitTransaction() (uint64, uint16) {
+func (tc *TransactionManager) genAppId() {
+	for tc.currentAppId == 0 {
+		tc.currentAppId = tc.TransactionLog.env.GenerateUniqueID()
+	}
+}
+
+func (tc *TransactionManager) loadCurrentTopicPartitions(lastTopicPartitions []TopicPartition) {
+	for _, tp := range lastTopicPartitions {
+		pars, ok := tc.currentTopicPartition[tp.Topic]
+		if !ok {
+			pars = make(map[uint8]struct{})
+		}
+		for _, par := range tp.ParNum {
+			pars[par] = struct{}{}
+		}
+	}
+}
+
+// each transaction id corresponds to a separate transaction log; we only have one transaction id per serverless function
+func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error {
+	strSerde := commtypes.StringSerde{}
+	var lastTopicPartitions []TopicPartition
+	for {
+		_, msgs, err := tc.TransactionLog.ReadNext(ctx, 0)
+		if errors.IsStreamEmptyError(err) {
+			break
+		} else if err != nil {
+			return err
+		}
+		for _, msg := range msgs {
+			keyEncoded, valEncoded, err := tc.msgSerde.Decode(msg.Payload)
+			if err != nil {
+				return err
+			}
+			key, err := strSerde.Decode(keyEncoded)
+			if err != nil {
+				return err
+			}
+			tc.TransactionalId = key.(string)
+			val, err := tc.txnMarkerSerde.Decode(valEncoded)
+			if err != nil {
+				return err
+			}
+			txnMeta := val.(TxnMetadata)
+			tc.currentStatus = txnMeta.State
+			tc.currentAppId = txnMeta.AppId
+			tc.currentEpoch = txnMeta.AppEpoch
+			if txnMeta.TopicPartitions != nil {
+				lastTopicPartitions = txnMeta.TopicPartitions
+			}
+		}
+	}
+	// check the last status of the transaction
+	switch tc.currentStatus {
+	case EMPTY, COMPLETE_COMMIT, COMPLETE_ABORT:
+		log.Info().Msgf("examed all previous transaction with no error")
+	case BEGIN:
+		// need to abort
+		err := tc.AbortTransaction(ctx, tc.currentAppId, tc.currentEpoch)
+		if err != nil {
+			return err
+		}
+	case PREPARE_ABORT:
+		// the transaction is aborted but the marker might not pushed to the relevant partitions yet
+		tc.loadCurrentTopicPartitions(lastTopicPartitions)
+		err := tc.completeTransaction(ctx, tc.currentAppId, tc.currentEpoch, ABORT, COMPLETE_ABORT)
+		if err != nil {
+			return err
+		}
+	case PREPARE_COMMIT:
+		// the transaction is commited but the marker might not pushed to the relevant partitions yet
+		tc.loadCurrentTopicPartitions(lastTopicPartitions)
+		err := tc.completeTransaction(ctx, tc.currentAppId, tc.currentEpoch, COMMIT, COMPLETE_COMMIT)
+		if err != nil {
+			return err
+		}
+	case FENCE:
+		// it's in a view change.
+		log.Info().Msgf("Last operation in the log is fence to update the epoch. We are updating the epoch again.")
+	}
+	return nil
+}
+
+func (tc *TransactionManager) InitTransaction(ctx context.Context) (uint64, uint16, error) {
 	// Steps:
 	// 1. roll forward/backward the transactions that are not finished
 	// 2. generate app id and epoch number
-	appId := tc.TransactionLog.env.GenerateUniqueID()
-	return appId, tc.currentEpoch
+	tc.currentStatus = FENCE
+	err := tc.loadTransactionFromLog(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	if tc.currentAppId == 0 {
+		tc.genAppId()
+	}
+	if tc.currentEpoch == math.MaxUint16 {
+		tc.genAppId()
+		tc.currentEpoch = 0
+	}
+	tc.currentEpoch += 1
+	txnMeta := TxnMetadata{
+		AppId:    tc.currentAppId,
+		AppEpoch: tc.currentEpoch,
+		State:    tc.currentStatus,
+	}
+	err = tc.appendToTransactionLog(ctx, &txnMeta)
+	if err != nil {
+		return 0, 0, err
+	}
+	return tc.currentAppId, tc.currentEpoch, nil
 }
 
 func (tc *TransactionManager) appendToTransactionLog(ctx context.Context, tm *TxnMetadata) error {
@@ -232,30 +343,41 @@ func (tc *TransactionManager) BeginTransaction(ctx context.Context, appId uint64
 	return tc.appendToTransactionLog(ctx, &txnState)
 }
 
+// second phase of the 2-phase commit protocol
+func (tc *TransactionManager) completeTransaction(ctx context.Context, appId uint64, appEpoch uint16, trMark TxnMark, trState TransactionState) error {
+	// append txn marker to all topic partitions
+	err := tc.appendTxnMarkerToStreams(ctx, trMark, appId, appEpoch)
+	if err != nil {
+		return err
+	}
+	// async append complete_commit
+	tc.currentStatus = trState
+	txnMd := TxnMetadata{
+		State: tc.currentStatus,
+	}
+	tc.backgroundJobErrg.Go(func() error {
+		return tc.appendToTransactionLog(tc.backgroundJobCtx, &txnMd)
+	})
+	return nil
+}
+
 func (tc *TransactionManager) CommitTransaction(ctx context.Context, appId uint64, appEpoch uint16) error {
 	if !PREPARE_COMMIT.IsValidPreviousState(tc.currentStatus) {
 		return ErrInvalidStateTransition
 	}
 
+	// first phase of the commit
 	tc.currentStatus = PREPARE_COMMIT
 	err := tc.registerTopicPartitions(ctx, appId, appEpoch)
 	if err != nil {
 		return err
 	}
 
-	// append txn marker to all topic partitions
-	err = tc.appendTxnMarkerToStreams(ctx, COMMIT, appId, appEpoch)
+	// second phase of the commit
+	err = tc.completeTransaction(ctx, appId, appEpoch, COMMIT, COMPLETE_COMMIT)
 	if err != nil {
 		return err
 	}
-	// async append complete_commit
-	tc.currentStatus = COMPLETE_COMMIT
-	txnMd := TxnMetadata{
-		State: tc.currentStatus,
-	}
-	tc.errg.Go(func() error {
-		return tc.appendToTransactionLog(tc.ctx, &txnMd)
-	})
 	tc.cleanupState()
 	return nil
 }
@@ -270,19 +392,10 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context, appId uint64
 		return err
 	}
 
-	// append txn mark to all topic partitions
-	err = tc.appendTxnMarkerToStreams(ctx, ABORT, appId, appEpoch)
+	err = tc.completeTransaction(ctx, appId, appEpoch, ABORT, COMPLETE_ABORT)
 	if err != nil {
 		return err
 	}
-	// async append complete_abort
-	tc.currentStatus = COMPLETE_ABORT
-	txnMd := TxnMetadata{
-		State: tc.currentStatus,
-	}
-	tc.errg.Go(func() error {
-		return tc.appendToTransactionLog(tc.ctx, &txnMd)
-	})
 	tc.cleanupState()
 	return nil
 }
@@ -294,5 +407,5 @@ func (tc *TransactionManager) cleanupState() {
 
 func (tc *TransactionManager) Close() error {
 	// wait for all background go rountine to finish
-	return tc.errg.Wait()
+	return tc.backgroundJobErrg.Wait()
 }

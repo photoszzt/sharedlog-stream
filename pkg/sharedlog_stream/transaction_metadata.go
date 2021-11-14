@@ -32,9 +32,9 @@ func (ts TransactionState) IsValidPreviousState(prevState TransactionState) bool
 	case PREPARE_COMMIT:
 		return prevState == BEGIN
 	case PREPARE_ABORT:
-		return prevState == BEGIN
+		return prevState == BEGIN || prevState == FENCE
 	case COMPLETE_ABORT:
-		return prevState == PREPARE_ABORT || prevState == FENCE
+		return prevState == PREPARE_ABORT
 	case COMPLETE_COMMIT:
 		return prevState == PREPARE_COMMIT
 	case FENCE:
