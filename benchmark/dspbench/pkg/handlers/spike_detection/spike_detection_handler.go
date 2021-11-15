@@ -2,18 +2,8 @@ package spike_detection
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"log"
 	"math"
-	"sharedlog-stream/benchmark/common"
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/stream"
-	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/store"
-	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -38,25 +28,30 @@ func NewSpikeDetectionHandler(env types.Environment) types.FuncHandler {
 }
 
 func (h *spikeDetectionHandler) Call(ctx context.Context, input []byte) ([]byte, error) {
-	parsedInput := &common.QueryInput{}
-	err := json.Unmarshal(input, parsedInput)
-	if err != nil {
-		return nil, err
-	}
-	outputCh := make(chan *common.FnOutput)
-	go SpikeDetection(ctx, h.env, parsedInput, outputCh)
-	output := <-outputCh
-	encodedOutput, err := json.Marshal(output)
-	if err != nil {
-		panic(err)
-	}
-	return utils.CompressData(encodedOutput), nil
+	return nil, nil
+	/*
+		parsedInput := &common.QueryInput{}
+		err := json.Unmarshal(input, parsedInput)
+		if err != nil {
+			return nil, err
+		}
+		outputCh := make(chan *common.FnOutput)
+		go SpikeDetection(ctx, h.env, parsedInput, outputCh)
+		output := <-outputCh
+		encodedOutput, err := json.Marshal(output)
+		if err != nil {
+			panic(err)
+		}
+		return utils.CompressData(encodedOutput), nil
+	*/
 }
+
+/*
 
 func SpikeDetection(ctx context.Context, env types.Environment,
 	input *common.QueryInput, output chan *common.FnOutput) {
 	inputStream := sharedlog_stream.NewSharedLogStream(env, input.InputTopicName)
-	err := inputStream.InitStream(ctx)
+	err := inputStream.InitStream(ctx, 0)
 	if err != nil {
 		output <- &common.FnOutput{
 			Success: false,
@@ -75,7 +70,7 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 	}
 
 	outputStream := sharedlog_stream.NewSharedLogStream(env, input.OutputTopicName)
-	err = outputStream.InitStream(ctx)
+	err = outputStream.InitStream(ctx, 0)
 	if err != nil {
 		output <- &common.FnOutput{
 			Success: false,
@@ -211,3 +206,5 @@ func SpikeDetection(ctx context.Context, env types.Environment,
 	}
 
 }
+
+*/

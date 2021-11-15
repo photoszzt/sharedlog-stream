@@ -14,6 +14,7 @@ type AppIDGen struct {
 }
 
 var EmptyAppIDGen = AppIDGen{AppId: 0, AppEpoch: 0}
+var EmptyRawMsg = RawMsg{Payload: nil, MsgSeqNum: 0, LogSeqNum: 0}
 
 type ReadMsgAndProgress struct {
 	MsgBuff          []RawMsg

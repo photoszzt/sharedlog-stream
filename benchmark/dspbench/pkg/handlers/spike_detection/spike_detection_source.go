@@ -86,7 +86,7 @@ func encode_sensor_event(keySerde commtypes.Serde,
 
 func (h *spikeDetectionSource) eventGeneration(ctx context.Context, sp *common.SourceParam) *common.FnOutput {
 	stream := sharedlog_stream.NewSharedLogStream(h.env, sp.TopicName)
-	err := stream.InitStream(ctx)
+	err := stream.InitStream(ctx, 0)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

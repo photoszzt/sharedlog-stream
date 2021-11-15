@@ -6,7 +6,6 @@ import (
 	"context"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/store"
 
 	"github.com/rs/zerolog/log"
 
@@ -28,10 +27,6 @@ type SharedLogStream struct {
 	appEpoch           uint16
 	inTransaction      bool
 }
-
-const (
-	PartitionBits = 8
-)
 
 func NameHashWithPartition(nameHash uint64, par uint8) uint64 {
 	return (nameHash << PartitionBits) + uint64(par)
@@ -87,22 +82,18 @@ func (s *SharedLogStream) TopicNameHash() uint64 {
 	return s.topicNameHash
 }
 
-func (s *SharedLogStream) InitStream(ctx context.Context) error {
-	if err := s.findLastEntryBackward(ctx, protocol.MaxLogSeqnum); err != nil {
+func (s *SharedLogStream) InitStream(ctx context.Context, parNum uint8) error {
+	if err := s.findLastEntryBackward(ctx, protocol.MaxLogSeqnum, parNum); err != nil {
 		return err
 	}
 	return nil
-}
-
-func NewStream(env types.Environment, topicName string) store.Stream {
-	return NewSharedLogStream(env, topicName)
 }
 
 func (s *SharedLogStream) TopicName() string {
 	return s.topicName
 }
 
-func (s *SharedLogStream) Push(ctx context.Context, payload []byte, parNum uint8, isControl bool) (uint64, error) {
+func (s *SharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNum uint8, tags []uint64, isControl bool) (uint64, error) {
 	if len(payload) == 0 {
 		return 0, errors.ErrEmptyPayload
 	}
@@ -122,19 +113,54 @@ func (s *SharedLogStream) Push(ctx context.Context, payload []byte, parNum uint8
 	if err != nil {
 		return 0, err
 	}
-	tags := []uint64{NameHashWithPartition(s.topicNameHash, parNum)}
+
 	seqNum, err := s.env.SharedLogAppend(ctx, tags, encoded)
 	s.tail = seqNum
 	return seqNum, err
+}
+
+func (s *SharedLogStream) Push(ctx context.Context, payload []byte, parNum uint8, isControl bool) (uint64, error) {
+	tags := []uint64{NameHashWithPartition(s.topicNameHash, parNum)}
+	return s.PushWithTag(ctx, payload, parNum, tags, isControl)
 }
 
 func (s *SharedLogStream) isEmpty() bool {
 	return s.cursor >= s.tail
 }
 
+func (s *SharedLogStream) readBackwardWithTag(ctx context.Context, parNum uint8, tag uint64) (commtypes.AppIDGen, commtypes.RawMsg, error) {
+	seqNum := s.tail + 1
+	for seqNum >= 0 {
+		logEntry, err := s.env.SharedLogReadPrev(ctx, tag, seqNum)
+		if err != nil {
+			return commtypes.EmptyAppIDGen, commtypes.EmptyRawMsg, err
+		}
+		seqNum = logEntry.SeqNum
+		streamLogEntry := decodeStreamLogEntry(logEntry)
+		if streamLogEntry.TopicName != s.topicName {
+			continue
+		} else {
+			return commtypes.AppIDGen{
+					AppId:    streamLogEntry.AppId,
+					AppEpoch: streamLogEntry.AppEpoch,
+				}, commtypes.RawMsg{
+					Payload:   streamLogEntry.Payload,
+					MsgSeqNum: streamLogEntry.MsgSeqNum,
+					LogSeqNum: streamLogEntry.seqNum,
+				}, nil
+		}
+	}
+	return commtypes.EmptyAppIDGen, commtypes.EmptyRawMsg, errors.ErrStreamEmpty
+}
+
 func (s *SharedLogStream) ReadNext(ctx context.Context, parNum uint8) (commtypes.AppIDGen, []commtypes.RawMsg, error) {
+	tag := NameHashWithPartition(s.topicNameHash, parNum)
+	return s.ReadNextWithTag(ctx, parNum, tag)
+}
+
+func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag uint64) (commtypes.AppIDGen, []commtypes.RawMsg, error) {
 	if s.isEmpty() {
-		if err := s.findLastEntryBackward(ctx, protocol.MaxLogSeqnum); err != nil {
+		if err := s.findLastEntryBackward(ctx, protocol.MaxLogSeqnum, parNum); err != nil {
 			return commtypes.EmptyAppIDGen, nil, err
 		}
 		if s.isEmpty() {
@@ -142,7 +168,7 @@ func (s *SharedLogStream) ReadNext(ctx context.Context, parNum uint8) (commtypes
 		}
 	}
 	seqNumInSharedLog := s.cursor
-	tag := NameHashWithPartition(s.topicNameHash, parNum)
+
 	for seqNumInSharedLog < s.tail {
 		logEntry, err := s.env.SharedLogReadNextBlock(ctx, tag, seqNumInSharedLog)
 		if err != nil {
@@ -205,7 +231,7 @@ func (s *SharedLogStream) ReadNext(ctx context.Context, parNum uint8) (commtypes
 	return commtypes.EmptyAppIDGen, nil, errors.ErrStreamEmpty
 }
 
-func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum uint64) error {
+func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum uint64, parNum uint8) error {
 	if tailSeqNum < s.cursor {
 		log.Fatal().
 			Uint64("Current seq", s.cursor).
@@ -217,7 +243,7 @@ func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum 
 		return nil
 	}
 
-	tag := s.topicNameHash
+	tag := NameHashWithPartition(s.topicNameHash, parNum)
 
 	seqNum := tailSeqNum
 	for seqNum > s.cursor+1 {
@@ -230,7 +256,8 @@ func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum 
 			return err
 		}
 
-		if logEntry != nil || logEntry.SeqNum < s.cursor+1 {
+		if logEntry != nil && logEntry.SeqNum < s.cursor+1 {
+			// we are already at the tail
 			break
 		}
 		seqNum = logEntry.SeqNum

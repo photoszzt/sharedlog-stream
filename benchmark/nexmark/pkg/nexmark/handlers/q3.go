@@ -48,7 +48,7 @@ func (h *query3Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 
 func Query3(ctx context.Context, env types.Environment, input *ntypes.QueryInput, output chan *common.FnOutput) {
 	inputStream := sharedlog_stream.NewSharedLogStream(env, input.InputTopicName)
-	err := inputStream.InitStream(ctx)
+	err := inputStream.InitStream(ctx, 0)
 	if err != nil {
 		output <- &common.FnOutput{
 			Success: false,
@@ -58,7 +58,7 @@ func Query3(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 	}
 
 	outputStream := sharedlog_stream.NewSharedLogStream(env, input.OutputTopicName)
-	err = outputStream.InitStream(ctx)
+	err = outputStream.InitStream(ctx, 0)
 	if err != nil {
 		output <- &common.FnOutput{
 			Success: false,

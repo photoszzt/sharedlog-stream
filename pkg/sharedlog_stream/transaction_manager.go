@@ -19,11 +19,6 @@ import (
 const (
 	TRANSACTION_LOG_TOPIC_NAME     = "__transaction_log"
 	CONSUMER_OFFSET_LOG_TOPIC_NAME = "__offset_log"
-	NUM_TRANSACTION_LOG_PARTITION  = 50
-)
-
-var (
-	ErrInvalidStateTransition = xerrors.New("invalid state transition")
 )
 
 // each transaction manager manages one topic partition;
@@ -47,9 +42,13 @@ type TransactionManager struct {
 	currentStatus         TransactionState
 }
 
+func BeginTag(nameHash uint64, parNum uint8) uint64 {
+	return nameHash<<(PartitionBits+LogTagReserveBits) + uint64(parNum)<<LogTagReserveBits + TransactionLogBegin
+}
+
 func NewTransactionManager(ctx context.Context, env types.Environment, transactional_id string, serdeFormat commtypes.SerdeFormat) (*TransactionManager, error) {
 	log := NewSharedLogStream(env, TRANSACTION_LOG_TOPIC_NAME+"_"+transactional_id)
-	err := log.InitStream(ctx)
+	err := log.InitStream(ctx, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -113,6 +112,16 @@ func (tc *TransactionManager) loadCurrentTopicPartitions(lastTopicPartitions []T
 func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error {
 	strSerde := commtypes.StringSerde{}
 	var lastTopicPartitions []TopicPartition
+
+	// find the begin of the last transaction
+	_, rawMsg, err := tc.TransactionLog.readBackwardWithTag(ctx, 0, BeginTag(tc.TransactionLog.topicNameHash, 0))
+	if err != nil {
+		return err
+	}
+	// empty log
+	if rawMsg.Payload == nil && rawMsg.LogSeqNum == 0 && rawMsg.MsgSeqNum == 0 {
+		return nil
+	}
 	for {
 		_, msgs, err := tc.TransactionLog.ReadNext(ctx, 0)
 		if errors.IsStreamEmptyError(err) {
@@ -139,16 +148,17 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 			tc.currentAppId = txnMeta.AppId
 			tc.currentEpoch = txnMeta.AppEpoch
 			if txnMeta.TopicPartitions != nil {
-				lastTopicPartitions = txnMeta.TopicPartitions
+				lastTopicPartitions = append(lastTopicPartitions, txnMeta.TopicPartitions...)
 			}
 		}
 	}
 	// check the last status of the transaction
 	switch tc.currentStatus {
 	case EMPTY, COMPLETE_COMMIT, COMPLETE_ABORT:
-		log.Info().Msgf("examed all previous transaction with no error")
+		log.Info().Msgf("examed previous transaction with no error")
 	case BEGIN:
 		// need to abort
+		tc.loadCurrentTopicPartitions(lastTopicPartitions)
 		err := tc.AbortTransaction(ctx)
 		if err != nil {
 			return err
@@ -203,14 +213,14 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) (uint64, uint
 		State:    tc.currentStatus,
 	}
 
-	err = tc.appendToTransactionLog(ctx, &txnMeta)
+	err = tc.appendToTransactionLog(ctx, &txnMeta, nil)
 	if err != nil {
 		return 0, 0, err
 	}
 	return tc.currentAppId, tc.currentEpoch, nil
 }
 
-func (tc *TransactionManager) appendToTransactionLog(ctx context.Context, tm *TxnMetadata) error {
+func (tc *TransactionManager) appendToTransactionLog(ctx context.Context, tm *TxnMetadata, tags []uint64) error {
 	encoded, err := tc.txnMdSerde.Encode(tm)
 	if err != nil {
 		return err
@@ -224,7 +234,11 @@ func (tc *TransactionManager) appendToTransactionLog(ctx context.Context, tm *Tx
 	if err != nil {
 		return err
 	}
-	_, err = tc.TransactionLog.Push(ctx, msg_encoded, 0, false)
+	if tags != nil {
+		_, err = tc.TransactionLog.PushWithTag(ctx, msg_encoded, 0, tags, false)
+	} else {
+		_, err = tc.TransactionLog.Push(ctx, msg_encoded, 0, false)
+	}
 	return err
 }
 
@@ -276,7 +290,7 @@ func (tc *TransactionManager) registerTopicPartitions(ctx context.Context) error
 		AppId:           tc.currentAppId,
 		AppEpoch:        tc.currentEpoch,
 	}
-	err := tc.appendToTransactionLog(ctx, &txnMd)
+	err := tc.appendToTransactionLog(ctx, &txnMd, nil)
 	return err
 }
 
@@ -308,7 +322,7 @@ func (tc *TransactionManager) AddTopicPartition(ctx context.Context, topic strin
 			AppId:           tc.currentAppId,
 			AppEpoch:        tc.currentEpoch,
 		}
-		return tc.appendToTransactionLog(ctx, &txnMd)
+		return tc.appendToTransactionLog(ctx, &txnMd, nil)
 	}
 	return nil
 }
@@ -378,7 +392,7 @@ func (tc *TransactionManager) BeginTransaction(ctx context.Context) error {
 	tc.tmMu.Lock()
 	defer tc.tmMu.Unlock()
 	if !BEGIN.IsValidPreviousState(tc.currentStatus) {
-		return ErrInvalidStateTransition
+		return errors.ErrInvalidStateTransition
 	}
 	tc.currentStatus = BEGIN
 
@@ -387,8 +401,8 @@ func (tc *TransactionManager) BeginTransaction(ctx context.Context) error {
 		AppId:    tc.currentAppId,
 		AppEpoch: tc.currentEpoch,
 	}
-
-	return tc.appendToTransactionLog(ctx, &txnState)
+	tags := []uint64{NameHashWithPartition(tc.TransactionLog.topicNameHash, 0), BeginTag(tc.TransactionLog.topicNameHash, 0)}
+	return tc.appendToTransactionLog(ctx, &txnState, tags)
 }
 
 // second phase of the 2-phase commit protocol
@@ -404,7 +418,7 @@ func (tc *TransactionManager) completeTransaction(ctx context.Context, trMark Tx
 		State: tc.currentStatus,
 	}
 	tc.backgroundJobErrg.Go(func() error {
-		return tc.appendToTransactionLog(tc.backgroundJobCtx, &txnMd)
+		return tc.appendToTransactionLog(tc.backgroundJobCtx, &txnMd, nil)
 	})
 	return nil
 }
@@ -413,7 +427,7 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context) error {
 	tc.tmMu.Lock()
 	defer tc.tmMu.Unlock()
 	if !PREPARE_COMMIT.IsValidPreviousState(tc.currentStatus) {
-		return ErrInvalidStateTransition
+		return errors.ErrInvalidStateTransition
 	}
 
 	// first phase of the commit
@@ -436,7 +450,7 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context) error {
 	tc.tmMu.Lock()
 	defer tc.tmMu.Unlock()
 	if !PREPARE_ABORT.IsValidPreviousState(tc.currentStatus) {
-		return ErrInvalidStateTransition
+		return errors.ErrInvalidStateTransition
 	}
 	tc.currentStatus = PREPARE_ABORT
 	err := tc.registerTopicPartitions(ctx)

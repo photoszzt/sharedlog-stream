@@ -38,7 +38,7 @@ func NewShardedSharedLogStream(env types.Environment, topicName string, numParti
 
 func (s *ShardedSharedLogStream) InitStream(ctx context.Context) error {
 	for i := 0; i < int(s.numPartitions); i++ {
-		err := s.subSharedLogStreams[i].InitStream(ctx)
+		err := s.subSharedLogStreams[i].InitStream(ctx, uint8(i))
 		if err != nil {
 			return err
 		}

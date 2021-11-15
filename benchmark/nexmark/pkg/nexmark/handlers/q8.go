@@ -47,7 +47,7 @@ func (h *query8Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 
 func Query8(ctx context.Context, env types.Environment, input *common.QueryInput) *common.FnOutput {
 	inputStream := sharedlog_stream.NewSharedLogStream(env, input.InputTopicName)
-	err := inputStream.InitStream(ctx)
+	err := inputStream.InitStream(ctx, 0)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -55,7 +55,7 @@ func Query8(ctx context.Context, env types.Environment, input *common.QueryInput
 		}
 	}
 	outputStream := sharedlog_stream.NewSharedLogStream(env, input.OutputTopicName)
-	err = outputStream.InitStream(ctx)
+	err = outputStream.InitStream(ctx, 0)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

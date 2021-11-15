@@ -100,7 +100,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 	latencies := make([]int, 0, 128)
 	duration := time.Duration(sp.Duration) * time.Second
 	if sp.EnableTransaction {
-		transactionalId := fmt.Sprintf("wordcount-counter-%s-%s-%d", sp.OutputTopicName, mp.Changelog.TopicName(), sp.ParNum)
+		transactionalId := fmt.Sprintf("wordcount-counter-%s-%s-%d", sp.InputTopicName, mp.Changelog.TopicName(), sp.ParNum)
 		tm, err := sharedlog_stream.NewTransactionManager(ctx, h.env, transactionalId, commtypes.SerdeFormat(sp.SerdeFormat))
 		if err != nil {
 			return &common.FnOutput{

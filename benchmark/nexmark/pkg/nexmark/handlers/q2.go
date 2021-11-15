@@ -54,7 +54,7 @@ func filterFunc(msg *commtypes.Message) (bool, error) {
 func Query2(ctx context.Context, env types.Environment, input *common.QueryInput, output chan *common.FnOutput) {
 	// fmt.Fprintf(os.Stderr, "input topic name is %v\n", input.InputTopicName)
 	inputStream := sharedlog_stream.NewSharedLogStream(env, input.InputTopicName)
-	err := inputStream.InitStream(ctx)
+	err := inputStream.InitStream(ctx, 0)
 	if err != nil {
 		output <- &common.FnOutput{
 			Success: false,
@@ -64,7 +64,7 @@ func Query2(ctx context.Context, env types.Environment, input *common.QueryInput
 	}
 
 	outputStream := sharedlog_stream.NewSharedLogStream(env, input.OutputTopicName)
-	err = outputStream.InitStream(ctx)
+	err = outputStream.InitStream(ctx, 0)
 	if err != nil {
 		output <- &common.FnOutput{
 			Success: false,

@@ -1,15 +1,18 @@
 package errors
 
-import "errors"
+import (
+	"golang.org/x/xerrors"
+)
 
 var (
-	ErrEmptyPayload  = errors.New("payload cannot be empty")
-	ErrStreamEmpty   = errors.New("stream empty")
-	ErrStreamTimeout = errors.New("blocking pop timeout")
+	ErrEmptyPayload           = xerrors.New("payload cannot be empty")
+	ErrStreamEmpty            = xerrors.New("stream empty")
+	ErrStreamTimeout          = xerrors.New("blocking pop timeout")
+	ErrInvalidStateTransition = xerrors.New("invalid state transition")
 )
 
 func IsStreamEmptyError(err error) bool {
-	return err == ErrStreamEmpty
+	return xerrors.Is(err, ErrEmptyPayload)
 }
 
 func IsStreamTimeoutError(err error) bool {

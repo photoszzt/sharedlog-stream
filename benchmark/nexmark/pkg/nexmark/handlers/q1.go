@@ -55,7 +55,7 @@ func q1mapFunc(msg commtypes.Message) (commtypes.Message, error) {
 func Query1(ctx context.Context, env types.Environment, input *common.QueryInput, output chan *common.FnOutput) {
 	// fmt.Fprintf(os.Stderr, "input topic name: %v, output topic name: %v\n", input.InputTopicName, input.OutputTopicName)
 	inputStream := sharedlog_stream.NewSharedLogStream(env, input.InputTopicName)
-	err := inputStream.InitStream(ctx)
+	err := inputStream.InitStream(ctx, 0)
 	if err != nil {
 		output <- &common.FnOutput{
 			Success: false,
@@ -64,7 +64,7 @@ func Query1(ctx context.Context, env types.Environment, input *common.QueryInput
 		return
 	}
 	outputStream := sharedlog_stream.NewSharedLogStream(env, input.OutputTopicName)
-	err = outputStream.InitStream(ctx)
+	err = outputStream.InitStream(ctx, 0)
 	if err != nil {
 		output <- &common.FnOutput{
 			Success: false,
