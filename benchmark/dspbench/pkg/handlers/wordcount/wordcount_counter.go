@@ -196,7 +196,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 				}
 			}
 			if !trackConsumePar {
-				err = tm.AddOffsets(sp.InputTopicName, sp.ParNum)
+				err = tm.AddOffsets(ctx, sp.InputTopicName, []uint8{sp.ParNum})
 				if err != nil {
 					return &common.FnOutput{
 						Success: false,

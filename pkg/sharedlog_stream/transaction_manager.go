@@ -156,6 +156,7 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 		if err != nil {
 			return err
 		}
+		tc.cleanupState()
 	case PREPARE_COMMIT:
 		// the transaction is commited but the marker might not pushed to the relevant partitions yet
 		tc.loadCurrentTopicPartitions(lastTopicPartitions)
@@ -163,6 +164,7 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 		if err != nil {
 			return err
 		}
+		tc.cleanupState()
 	case FENCE:
 		// it's in a view change.
 		log.Info().Msgf("Last operation in the log is fence to update the epoch. We are updating the epoch again.")
@@ -243,7 +245,7 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 	return g.Wait()
 }
 
-func (tc *TransactionManager) registerTopicPartitions(ctx context.Context, appId uint64, appEpoch uint16) error {
+func (tc *TransactionManager) registerTopicPartitions(ctx context.Context) error {
 	if tc.currentStatus != BEGIN {
 		return xerrors.Errorf("should begin transaction first")
 	}
@@ -262,21 +264,40 @@ func (tc *TransactionManager) registerTopicPartitions(ctx context.Context, appId
 	txnMd := TxnMetadata{
 		TopicPartitions: tps,
 		State:           tc.currentStatus,
+		AppId:           tc.currentAppId,
+		AppEpoch:        tc.currentEpoch,
 	}
 	err := tc.appendToTransactionLog(ctx, &txnMd)
 	return err
 }
 
-func (tc *TransactionManager) AddTopicPartition(topic string, partition uint8) error {
+func (tc *TransactionManager) AddTopicPartition(ctx context.Context, topic string, partitions []uint8) error {
 	if tc.currentStatus != BEGIN {
 		return xerrors.Errorf("should begin transaction first")
 	}
-	par, ok := tc.currentTopicPartition[topic]
+	needToAppendToLog := false
+	parSet, ok := tc.currentTopicPartition[topic]
 	if !ok {
-		par = make(map[uint8]struct{})
+		parSet = make(map[uint8]struct{})
+		needToAppendToLog = true
 	}
-	par[partition] = struct{}{}
-	tc.currentTopicPartition[topic] = par
+	for _, parNum := range partitions {
+		_, ok = parSet[parNum]
+		if !ok {
+			needToAppendToLog = true
+			parSet[parNum] = struct{}{}
+		}
+	}
+	tc.currentTopicPartition[topic] = parSet
+	if needToAppendToLog {
+		txnMd := TxnMetadata{
+			TopicPartitions: []TopicPartition{{Topic: topic, ParNum: partitions}},
+			State:           tc.currentStatus,
+			AppId:           tc.currentAppId,
+			AppEpoch:        tc.currentEpoch,
+		}
+		return tc.appendToTransactionLog(ctx, &txnMd)
+	}
 	return nil
 }
 
@@ -303,9 +324,9 @@ func (tc *TransactionManager) RecordTopicStreams(topicToTrack string, stream sto
 	tc.TopicStreams[topicToTrack] = stream
 }
 
-func (tc *TransactionManager) AddOffsets(topicToTrack string, partition uint8) error {
+func (tc *TransactionManager) AddOffsets(ctx context.Context, topicToTrack string, partitions []uint8) error {
 	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + topicToTrack
-	return tc.AddTopicPartition(offsetTopic, partition)
+	return tc.AddTopicPartition(ctx, offsetTopic, partitions)
 }
 
 type OffsetConfig struct {
@@ -368,7 +389,7 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context, appId uint6
 
 	// first phase of the commit
 	tc.currentStatus = PREPARE_COMMIT
-	err := tc.registerTopicPartitions(ctx, appId, appEpoch)
+	err := tc.registerTopicPartitions(ctx)
 	if err != nil {
 		return err
 	}
@@ -387,7 +408,7 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context, appId uint64
 		return ErrInvalidStateTransition
 	}
 	tc.currentStatus = PREPARE_ABORT
-	err := tc.registerTopicPartitions(ctx, appId, appEpoch)
+	err := tc.registerTopicPartitions(ctx)
 	if err != nil {
 		return err
 	}

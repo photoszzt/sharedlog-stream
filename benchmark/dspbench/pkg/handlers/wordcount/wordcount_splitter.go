@@ -212,7 +212,7 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 				}
 			}
 			if !trackConsumePar {
-				err = tm.AddOffsets(sp.InputTopicName, sp.ParNum)
+				err = tm.AddOffsets(ctx, sp.InputTopicName, []uint8{sp.ParNum})
 				if err != nil {
 					return &common.FnOutput{
 						Success: false,
@@ -238,7 +238,7 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 				for _, m := range msgs {
 					h := hashKey(m.Key.(string))
 					par := uint8(h % uint32(sp.NumOutPartition))
-					err = tm.AddTopicPartition(output_stream.TopicName(), par)
+					err = tm.AddTopicPartition(ctx, output_stream.TopicName(), []uint8{par})
 					if err != nil {
 						return &common.FnOutput{
 							Success: false,
