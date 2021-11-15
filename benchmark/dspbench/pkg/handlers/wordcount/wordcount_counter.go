@@ -100,7 +100,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 	latencies := make([]int, 0, 128)
 	duration := time.Duration(sp.Duration) * time.Second
 	if sp.EnableTransaction {
-		transactionalId := fmt.Sprintf("wordcount-counter-%s-%d", sp.InputTopicName, sp.ParNum)
+		transactionalId := fmt.Sprintf("wordcount-counter-%s-%s-%d", sp.OutputTopicName, mp.Changelog.TopicName(), sp.ParNum)
 		tm, err := sharedlog_stream.NewTransactionManager(ctx, h.env, transactionalId, commtypes.SerdeFormat(sp.SerdeFormat))
 		if err != nil {
 			return &common.FnOutput{
@@ -148,7 +148,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 						Message: fmt.Sprintf("append offset failed: %v\n", err),
 					}
 				}
-				err = tm.CommitTransaction(ctx, appId, appEpoch)
+				err = tm.CommitTransaction(ctx)
 				if err != nil {
 					return &common.FnOutput{
 						Success: false,
@@ -169,7 +169,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 				break
 			}
 			if !hasLiveTransaction {
-				err = tm.BeginTransaction(ctx, appId, appEpoch)
+				err = tm.BeginTransaction(ctx)
 				if err != nil {
 					return &common.FnOutput{
 						Success: false,

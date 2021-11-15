@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sync"
 
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -25,7 +26,11 @@ var (
 	ErrInvalidStateTransition = xerrors.New("invalid state transition")
 )
 
+// each transaction manager manages one topic partition;
+// assume each transactional_id correspond to one output partition
 type TransactionManager struct {
+	tmMu sync.RWMutex
+
 	msgSerde              commtypes.MsgSerde
 	txnMdSerde            commtypes.Serde
 	tpSerde               commtypes.Serde
@@ -36,11 +41,10 @@ type TransactionManager struct {
 	TransactionLog        *SharedLogStream
 	currentTopicPartition map[string]map[uint8]struct{}
 	backgroundJobErrg     *errgroup.Group
-	// assume there's only one transaction id for a application
-	TransactionalId string
-	currentAppId    uint64 // 0 is NONE
-	currentEpoch    uint16 // 0 is NONE
-	currentStatus   TransactionState
+	TransactionalId       string
+	currentAppId          uint64 // 0 is NONE
+	currentEpoch          uint16 // 0 is NONE
+	currentStatus         TransactionState
 }
 
 func NewTransactionManager(ctx context.Context, env types.Environment, transactional_id string, serdeFormat commtypes.SerdeFormat) (*TransactionManager, error) {
@@ -145,14 +149,14 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 		log.Info().Msgf("examed all previous transaction with no error")
 	case BEGIN:
 		// need to abort
-		err := tc.AbortTransaction(ctx, tc.currentAppId, tc.currentEpoch)
+		err := tc.AbortTransaction(ctx)
 		if err != nil {
 			return err
 		}
 	case PREPARE_ABORT:
 		// the transaction is aborted but the marker might not pushed to the relevant partitions yet
 		tc.loadCurrentTopicPartitions(lastTopicPartitions)
-		err := tc.completeTransaction(ctx, tc.currentAppId, tc.currentEpoch, ABORT, COMPLETE_ABORT)
+		err := tc.completeTransaction(ctx, ABORT, COMPLETE_ABORT)
 		if err != nil {
 			return err
 		}
@@ -160,7 +164,7 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 	case PREPARE_COMMIT:
 		// the transaction is commited but the marker might not pushed to the relevant partitions yet
 		tc.loadCurrentTopicPartitions(lastTopicPartitions)
-		err := tc.completeTransaction(ctx, tc.currentAppId, tc.currentEpoch, COMMIT, COMPLETE_COMMIT)
+		err := tc.completeTransaction(ctx, COMMIT, COMPLETE_COMMIT)
 		if err != nil {
 			return err
 		}
@@ -176,6 +180,10 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) (uint64, uint
 	// Steps:
 	// 1. roll forward/backward the transactions that are not finished
 	// 2. generate app id and epoch number
+
+	tc.tmMu.Lock()
+	defer tc.tmMu.Unlock()
+
 	tc.currentStatus = FENCE
 	err := tc.loadTransactionFromLog(ctx)
 	if err != nil {
@@ -194,6 +202,7 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) (uint64, uint
 		AppEpoch: tc.currentEpoch,
 		State:    tc.currentStatus,
 	}
+
 	err = tc.appendToTransactionLog(ctx, &txnMeta)
 	if err != nil {
 		return 0, 0, err
@@ -272,6 +281,9 @@ func (tc *TransactionManager) registerTopicPartitions(ctx context.Context) error
 }
 
 func (tc *TransactionManager) AddTopicPartition(ctx context.Context, topic string, partitions []uint8) error {
+	tc.tmMu.Lock()
+	defer tc.tmMu.Unlock()
+
 	if tc.currentStatus != BEGIN {
 		return xerrors.Errorf("should begin transaction first")
 	}
@@ -302,6 +314,9 @@ func (tc *TransactionManager) AddTopicPartition(ctx context.Context, topic strin
 }
 
 func (tc *TransactionManager) CreateOffsetTopic(topicToTrack string, numPartition uint8) error {
+	tc.tmMu.Lock()
+	defer tc.tmMu.Unlock()
+
 	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + topicToTrack
 	_, ok := tc.TopicStreams[offsetTopic]
 	if ok {
@@ -317,6 +332,9 @@ func (tc *TransactionManager) CreateOffsetTopic(topicToTrack string, numPartitio
 }
 
 func (tc *TransactionManager) RecordTopicStreams(topicToTrack string, stream store.Stream) {
+	tc.tmMu.Lock()
+	defer tc.tmMu.Unlock()
+
 	_, ok := tc.TopicStreams[topicToTrack]
 	if ok {
 		return
@@ -338,6 +356,9 @@ type OffsetConfig struct {
 }
 
 func (tc *TransactionManager) AppendOffset(ctx context.Context, offsetConfig OffsetConfig) error {
+	tc.tmMu.RLock()
+	defer tc.tmMu.RUnlock()
+
 	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + offsetConfig.TopicToTrack
 	offsetLog := tc.TopicStreams[offsetTopic]
 	offsetRecord := OffsetRecord{
@@ -353,21 +374,27 @@ func (tc *TransactionManager) AppendOffset(ctx context.Context, offsetConfig Off
 	return err
 }
 
-func (tc *TransactionManager) BeginTransaction(ctx context.Context, appId uint64, appEpoch uint16) error {
+func (tc *TransactionManager) BeginTransaction(ctx context.Context) error {
+	tc.tmMu.Lock()
+	defer tc.tmMu.Unlock()
 	if !BEGIN.IsValidPreviousState(tc.currentStatus) {
 		return ErrInvalidStateTransition
 	}
 	tc.currentStatus = BEGIN
+
 	txnState := TxnMetadata{
-		State: tc.currentStatus,
+		State:    tc.currentStatus,
+		AppId:    tc.currentAppId,
+		AppEpoch: tc.currentEpoch,
 	}
+
 	return tc.appendToTransactionLog(ctx, &txnState)
 }
 
 // second phase of the 2-phase commit protocol
-func (tc *TransactionManager) completeTransaction(ctx context.Context, appId uint64, appEpoch uint16, trMark TxnMark, trState TransactionState) error {
+func (tc *TransactionManager) completeTransaction(ctx context.Context, trMark TxnMark, trState TransactionState) error {
 	// append txn marker to all topic partitions
-	err := tc.appendTxnMarkerToStreams(ctx, trMark, appId, appEpoch)
+	err := tc.appendTxnMarkerToStreams(ctx, trMark, tc.currentAppId, tc.currentEpoch)
 	if err != nil {
 		return err
 	}
@@ -382,7 +409,9 @@ func (tc *TransactionManager) completeTransaction(ctx context.Context, appId uin
 	return nil
 }
 
-func (tc *TransactionManager) CommitTransaction(ctx context.Context, appId uint64, appEpoch uint16) error {
+func (tc *TransactionManager) CommitTransaction(ctx context.Context) error {
+	tc.tmMu.Lock()
+	defer tc.tmMu.Unlock()
 	if !PREPARE_COMMIT.IsValidPreviousState(tc.currentStatus) {
 		return ErrInvalidStateTransition
 	}
@@ -395,7 +424,7 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context, appId uint6
 	}
 
 	// second phase of the commit
-	err = tc.completeTransaction(ctx, appId, appEpoch, COMMIT, COMPLETE_COMMIT)
+	err = tc.completeTransaction(ctx, COMMIT, COMPLETE_COMMIT)
 	if err != nil {
 		return err
 	}
@@ -403,7 +432,9 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context, appId uint6
 	return nil
 }
 
-func (tc *TransactionManager) AbortTransaction(ctx context.Context, appId uint64, appEpoch uint16) error {
+func (tc *TransactionManager) AbortTransaction(ctx context.Context) error {
+	tc.tmMu.Lock()
+	defer tc.tmMu.Unlock()
 	if !PREPARE_ABORT.IsValidPreviousState(tc.currentStatus) {
 		return ErrInvalidStateTransition
 	}
@@ -413,7 +444,7 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context, appId uint64
 		return err
 	}
 
-	err = tc.completeTransaction(ctx, appId, appEpoch, ABORT, COMPLETE_ABORT)
+	err = tc.completeTransaction(ctx, ABORT, COMPLETE_ABORT)
 	if err != nil {
 		return err
 	}
