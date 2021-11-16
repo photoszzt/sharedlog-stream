@@ -128,29 +128,32 @@ func (s *SharedLogStream) isEmpty() bool {
 	return s.cursor >= s.tail
 }
 
-func (s *SharedLogStream) readBackwardWithTag(ctx context.Context, parNum uint8, tag uint64) (commtypes.AppIDGen, commtypes.RawMsg, error) {
+func (s *SharedLogStream) readBackwardWithTag(ctx context.Context, parNum uint8, tag uint64) (*commtypes.AppIDGen, *commtypes.RawMsg, error) {
 	seqNum := s.tail + 1
-	for seqNum >= 0 {
+	for {
 		logEntry, err := s.env.SharedLogReadPrev(ctx, tag, seqNum)
 		if err != nil {
-			return commtypes.EmptyAppIDGen, commtypes.EmptyRawMsg, err
+			return nil, nil, err
+		}
+		if logEntry == nil {
+			break
 		}
 		seqNum = logEntry.SeqNum
 		streamLogEntry := decodeStreamLogEntry(logEntry)
 		if streamLogEntry.TopicName != s.topicName {
 			continue
 		} else {
-			return commtypes.AppIDGen{
+			return &commtypes.AppIDGen{
 					AppId:    streamLogEntry.AppId,
 					AppEpoch: streamLogEntry.AppEpoch,
-				}, commtypes.RawMsg{
+				}, &commtypes.RawMsg{
 					Payload:   streamLogEntry.Payload,
 					MsgSeqNum: streamLogEntry.MsgSeqNum,
 					LogSeqNum: streamLogEntry.seqNum,
 				}, nil
 		}
 	}
-	return commtypes.EmptyAppIDGen, commtypes.EmptyRawMsg, errors.ErrStreamEmpty
+	return nil, nil, errors.ErrStreamEmpty
 }
 
 func (s *SharedLogStream) ReadNext(ctx context.Context, parNum uint8) (commtypes.AppIDGen, []commtypes.RawMsg, error) {
@@ -256,7 +259,7 @@ func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum 
 			return err
 		}
 
-		if logEntry != nil && logEntry.SeqNum < s.cursor+1 {
+		if logEntry == nil || logEntry.SeqNum < s.cursor+1 {
 			// we are already at the tail
 			break
 		}

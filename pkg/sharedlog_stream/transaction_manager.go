@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sync"
+	"sync/atomic"
 
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -32,8 +33,8 @@ type TransactionManager struct {
 	txnMarkerSerde        commtypes.Serde
 	offsetRecordSerde     commtypes.Serde
 	backgroundJobCtx      context.Context
-	TopicStreams          map[string]store.Stream
-	TransactionLog        *SharedLogStream
+	topicStreams          map[string]store.Stream
+	transactionLog        *SharedLogStream
 	currentTopicPartition map[string]map[uint8]struct{}
 	backgroundJobErrg     *errgroup.Group
 	TransactionalId       string
@@ -46,53 +47,56 @@ func BeginTag(nameHash uint64, parNum uint8) uint64 {
 	return nameHash<<(PartitionBits+LogTagReserveBits) + uint64(parNum)<<LogTagReserveBits + TransactionLogBegin
 }
 
+func FenceTag(nameHash uint64, parNum uint8) uint64 {
+	return nameHash<<(PartitionBits+LogTagReserveBits) + uint64(parNum)<<LogTagReserveBits + TransactionLogFence
+}
+
 func NewTransactionManager(ctx context.Context, env types.Environment, transactional_id string, serdeFormat commtypes.SerdeFormat) (*TransactionManager, error) {
 	log := NewSharedLogStream(env, TRANSACTION_LOG_TOPIC_NAME+"_"+transactional_id)
 	err := log.InitStream(ctx, 0)
 	if err != nil {
 		return nil, err
 	}
-	var msgSerde commtypes.MsgSerde
-	var txnMdSerde commtypes.Serde
-	var tpSerde commtypes.Serde
-	var txnMarkerSerde commtypes.Serde
-	var offsetRecordSerde commtypes.Serde
-	if serdeFormat == commtypes.JSON {
-		msgSerde = commtypes.MessageSerializedJSONSerde{}
-		txnMdSerde = TxnMetadataJSONSerde{}
-		tpSerde = TopicPartitionJSONSerde{}
-		txnMarkerSerde = TxnMarkerJSONSerde{}
-		offsetRecordSerde = OffsetRecordJSONSerde{}
-	} else if serdeFormat == commtypes.MSGP {
-		msgSerde = commtypes.MessageSerializedMsgpSerde{}
-		txnMdSerde = TxnMetadataMsgpSerde{}
-		tpSerde = TopicPartitionMsgpSerde{}
-		txnMarkerSerde = TxnMarkerMsgpSerde{}
-		offsetRecordSerde = OffsetRecordMsgpSerde{}
-	} else {
-		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
-	}
 	errg, gctx := errgroup.WithContext(ctx)
-	return &TransactionManager{
-		TransactionLog:        log,
+	tm := &TransactionManager{
+		transactionLog:        log,
 		TransactionalId:       transactional_id,
-		msgSerde:              msgSerde,
-		txnMdSerde:            txnMdSerde,
 		currentStatus:         EMPTY,
-		tpSerde:               tpSerde,
-		txnMarkerSerde:        txnMarkerSerde,
-		offsetRecordSerde:     offsetRecordSerde,
 		currentTopicPartition: make(map[string]map[uint8]struct{}),
 		backgroundJobErrg:     errg,
 		backgroundJobCtx:      gctx,
 		currentEpoch:          0,
 		currentAppId:          0,
-	}, nil
+	}
+	err = tm.setupSerde(serdeFormat)
+	if err != nil {
+		return nil, err
+	}
+	return tm, nil
+}
+
+func (tc *TransactionManager) setupSerde(serdeFormat commtypes.SerdeFormat) error {
+	if serdeFormat == commtypes.JSON {
+		tc.msgSerde = commtypes.MessageSerializedJSONSerde{}
+		tc.txnMdSerde = TxnMetadataJSONSerde{}
+		tc.tpSerde = TopicPartitionJSONSerde{}
+		tc.txnMarkerSerde = TxnMarkerJSONSerde{}
+		tc.offsetRecordSerde = OffsetRecordJSONSerde{}
+	} else if serdeFormat == commtypes.MSGP {
+		tc.msgSerde = commtypes.MessageSerializedMsgpSerde{}
+		tc.txnMdSerde = TxnMetadataMsgpSerde{}
+		tc.tpSerde = TopicPartitionMsgpSerde{}
+		tc.txnMarkerSerde = TxnMarkerMsgpSerde{}
+		tc.offsetRecordSerde = OffsetRecordMsgpSerde{}
+	} else {
+		return fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
+	}
+	return nil
 }
 
 func (tc *TransactionManager) genAppId() {
 	for tc.currentAppId == 0 {
-		tc.currentAppId = tc.TransactionLog.env.GenerateUniqueID()
+		tc.currentAppId = tc.transactionLog.env.GenerateUniqueID()
 	}
 }
 
@@ -114,16 +118,16 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 	var lastTopicPartitions []TopicPartition
 
 	// find the begin of the last transaction
-	_, rawMsg, err := tc.TransactionLog.readBackwardWithTag(ctx, 0, BeginTag(tc.TransactionLog.topicNameHash, 0))
+	_, rawMsg, err := tc.transactionLog.readBackwardWithTag(ctx, 0, BeginTag(tc.transactionLog.topicNameHash, 0))
 	if err != nil {
 		return err
 	}
 	// empty log
-	if rawMsg.Payload == nil && rawMsg.LogSeqNum == 0 && rawMsg.MsgSeqNum == 0 {
+	if rawMsg == nil {
 		return nil
 	}
 	for {
-		_, msgs, err := tc.TransactionLog.ReadNext(ctx, 0)
+		_, msgs, err := tc.transactionLog.ReadNext(ctx, 0)
 		if errors.IsStreamEmptyError(err) {
 			break
 		} else if err != nil {
@@ -212,12 +216,51 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) (uint64, uint
 		AppEpoch: tc.currentEpoch,
 		State:    tc.currentStatus,
 	}
-
-	err = tc.appendToTransactionLog(ctx, &txnMeta, nil)
+	tags := []uint64{NameHashWithPartition(tc.transactionLog.topicNameHash, 0), FenceTag(tc.transactionLog.topicNameHash, 0)}
+	err = tc.appendToTransactionLog(ctx, &txnMeta, tags)
 	if err != nil {
 		return 0, 0, err
 	}
 	return tc.currentAppId, tc.currentEpoch, nil
+}
+
+func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, shouldStop *uint32) error {
+	fenceTag := FenceTag(tc.transactionLog.topicNameHash, 0)
+	strSerde := commtypes.StringSerde{}
+	for {
+		_, rawMsgs, err := tc.transactionLog.ReadNextWithTag(ctx, 0, fenceTag)
+		if err != nil {
+			return err
+		}
+		for _, rawMsg := range rawMsgs {
+			keyBytes, valBytes, err := tc.msgSerde.Decode(rawMsg.Payload)
+			if err != nil {
+				return err
+			}
+			trStr, err := strSerde.Decode(keyBytes)
+			if err != nil {
+				return err
+			}
+			transactionalId := trStr.(string)
+			// not the fence it's looking at
+			if transactionalId != tc.TransactionalId {
+				continue
+			}
+			txnMetaTmp, err := tc.txnMdSerde.Decode(valBytes)
+			if err != nil {
+				return err
+			}
+			txnMeta := txnMetaTmp.(TxnMetadata)
+			if txnMeta.State != FENCE {
+				panic("fence state should be fence")
+			}
+			if txnMeta.AppId == tc.currentAppId && txnMeta.AppEpoch > tc.currentEpoch {
+				// I'm the zoombie
+				atomic.StoreUint32(shouldStop, 1)
+				return nil
+			}
+		}
+	}
 }
 
 func (tc *TransactionManager) appendToTransactionLog(ctx context.Context, tm *TxnMetadata, tags []uint64) error {
@@ -235,9 +278,9 @@ func (tc *TransactionManager) appendToTransactionLog(ctx context.Context, tm *Tx
 		return err
 	}
 	if tags != nil {
-		_, err = tc.TransactionLog.PushWithTag(ctx, msg_encoded, 0, tags, false)
+		_, err = tc.transactionLog.PushWithTag(ctx, msg_encoded, 0, tags, false)
 	} else {
-		_, err = tc.TransactionLog.Push(ctx, msg_encoded, 0, false)
+		_, err = tc.transactionLog.Push(ctx, msg_encoded, 0, false)
 	}
 	return err
 }
@@ -256,7 +299,7 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 	}
 	g, ctx := errgroup.WithContext(ctx)
 	for topic, partitions := range tc.currentTopicPartition {
-		stream := tc.TopicStreams[topic]
+		stream := tc.topicStreams[topic]
 		for par := range partitions {
 			parNum := par
 			g.Go(func() error {
@@ -332,16 +375,16 @@ func (tc *TransactionManager) CreateOffsetTopic(topicToTrack string, numPartitio
 	defer tc.tmMu.Unlock()
 
 	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + topicToTrack
-	_, ok := tc.TopicStreams[offsetTopic]
+	_, ok := tc.topicStreams[offsetTopic]
 	if ok {
 		// already exists
 		return nil
 	}
-	off, err := NewShardedSharedLogStream(tc.TransactionLog.env, offsetTopic, numPartition)
+	off, err := NewShardedSharedLogStream(tc.transactionLog.env, offsetTopic, numPartition)
 	if err != nil {
 		return err
 	}
-	tc.TopicStreams[offsetTopic] = off
+	tc.topicStreams[offsetTopic] = off
 	return nil
 }
 
@@ -349,11 +392,11 @@ func (tc *TransactionManager) RecordTopicStreams(topicToTrack string, stream sto
 	tc.tmMu.Lock()
 	defer tc.tmMu.Unlock()
 
-	_, ok := tc.TopicStreams[topicToTrack]
+	_, ok := tc.topicStreams[topicToTrack]
 	if ok {
 		return
 	}
-	tc.TopicStreams[topicToTrack] = stream
+	tc.topicStreams[topicToTrack] = stream
 }
 
 func (tc *TransactionManager) AddOffsets(ctx context.Context, topicToTrack string, partitions []uint8) error {
@@ -374,7 +417,7 @@ func (tc *TransactionManager) AppendOffset(ctx context.Context, offsetConfig Off
 	defer tc.tmMu.RUnlock()
 
 	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + offsetConfig.TopicToTrack
-	offsetLog := tc.TopicStreams[offsetTopic]
+	offsetLog := tc.topicStreams[offsetTopic]
 	offsetRecord := OffsetRecord{
 		Offset:   offsetConfig.Offset,
 		AppId:    offsetConfig.AppId,
@@ -401,7 +444,7 @@ func (tc *TransactionManager) BeginTransaction(ctx context.Context) error {
 		AppId:    tc.currentAppId,
 		AppEpoch: tc.currentEpoch,
 	}
-	tags := []uint64{NameHashWithPartition(tc.TransactionLog.topicNameHash, 0), BeginTag(tc.TransactionLog.topicNameHash, 0)}
+	tags := []uint64{NameHashWithPartition(tc.transactionLog.topicNameHash, 0), BeginTag(tc.transactionLog.topicNameHash, 0)}
 	return tc.appendToTransactionLog(ctx, &txnState, tags)
 }
 

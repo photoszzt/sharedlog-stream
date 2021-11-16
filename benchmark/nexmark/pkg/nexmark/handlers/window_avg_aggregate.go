@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
@@ -78,7 +79,7 @@ func getSerde(sf commtypes.SerdeFormat) (commtypes.Serde, commtypes.Serde, error
 }
 
 func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_stream, err := getShardedInputOutputStreams(ctx, h.env, sp)
+	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

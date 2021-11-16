@@ -8,14 +8,17 @@ import (
 	"hash/fnv"
 	"regexp"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
+	"golang.org/x/sync/errgroup"
 )
 
 type wordcountSplitFlatMap struct {
@@ -34,7 +37,7 @@ func (h *wordcountSplitFlatMap) Call(ctx context.Context, input []byte) ([]byte,
 	if err != nil {
 		return nil, err
 	}
-	output := h.process(ctx, sp)
+	output := h.wordcount_split(ctx, sp)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
 		return nil, err
@@ -48,42 +51,11 @@ func hashKey(key string) uint32 {
 	return h.Sum32()
 }
 
-func getShardedInputOutputStreams(ctx context.Context, env types.Environment, input *common.QueryInput) (*sharedlog_stream.ShardedSharedLogStream, *sharedlog_stream.ShardedSharedLogStream, error) {
-	inputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicName, uint8(input.NumInPartition))
-	if err != nil {
-		return nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
-	}
-	err = inputStream.InitStream(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("InitStream failed: %v", err)
-	}
-	outputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.OutputTopicName, uint8(input.NumOutPartition))
-	if err != nil {
-		return nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
-	}
-	err = outputStream.InitStream(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("InitStream failed: %v", err)
-	}
-	return inputStream, outputStream, nil
-}
-
-func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_stream, err := getShardedInputOutputStreams(ctx, h.env, sp)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
-	}
+func getSrcSink(ctx context.Context, sp *common.QueryInput, input_stream *sharedlog_stream.ShardedSharedLogStream, output_stream *sharedlog_stream.ShardedSharedLogStream) (*processor.MeteredSource, *processor.MeteredSink, error) {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("get msg serde failed: %v", err),
-		}
+		return nil, nil, fmt.Errorf("get msg serde failed: %v", err)
 	}
-
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      time.Duration(sp.Duration) * time.Second,
 		KeyDecoder:   commtypes.StringDecoder{},
@@ -97,177 +69,179 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 	}
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
 	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
-	var matchStr = regexp.MustCompile(`\w+`)
-	splitter := processor.FlatMapperFunc(func(m commtypes.Message) ([]commtypes.Message, error) {
-		val := m.Value.(string)
-		val = strings.ToLower(val)
-		var splitMsgs []commtypes.Message
-		splits := matchStr.FindAllString(val, -1)
-		for _, s := range splits {
-			if s != "" {
-				splitMsgs = append(splitMsgs, commtypes.Message{Key: s, Value: s, Timestamp: m.Timestamp})
-			}
-		}
-		return splitMsgs, nil
-	})
+	return src, sink, nil
+}
+
+func (h *wordcountSplitFlatMap) processWithTransaction(
+	ctx context.Context, sp *common.QueryInput,
+	src *processor.MeteredSource, sink *processor.MeteredSink,
+	output_stream *sharedlog_stream.ShardedSharedLogStream, splitter processor.FlatMapperFunc,
+) *common.FnOutput {
 	splitLatencies := make([]int, 0, 128)
 	latencies := make([]int, 0, 128)
 	duration := time.Duration(sp.Duration) * time.Second
 
-	if sp.EnableTransaction {
-		transactionalId := fmt.Sprintf("wordcount-splitter-%s-%d", sp.InputTopicName, sp.ParNum)
-		tm, err := sharedlog_stream.NewTransactionManager(ctx, h.env, transactionalId, commtypes.SerdeFormat(sp.SerdeFormat))
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("NewTransactionManager failed: %v\n", err),
-			}
-		}
-		appId, appEpoch, err := tm.InitTransaction(ctx)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("InitTransaction failed: %v\n", err),
-			}
-		}
-
-		err = tm.CreateOffsetTopic(sp.InputTopicName, uint8(sp.NumInPartition))
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("create offset topic failed: %v\n", err),
-			}
-		}
-		tm.RecordTopicStreams(sp.OutputTopicName, output_stream)
-		hasLiveTransaction := false
-		startTime := time.Now()
-		trackConsumePar := false
-		currentOffset := uint64(0)
-		commitTimer := time.Now()
-		commitEvery := time.Duration(sp.CommitEvery) * time.Millisecond
-
-		for {
-			timeSinceTranStart := time.Since(commitTimer)
-			timeout := duration != 0 && time.Since(startTime) >= duration
-			if (commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout {
-				err = tm.AppendOffset(ctx, sharedlog_stream.OffsetConfig{
-					TopicToTrack: sp.InputTopicName,
-					AppId:        appId,
-					AppEpoch:     appEpoch,
-					Partition:    sp.ParNum,
-					Offset:       currentOffset,
-				})
-				if err != nil {
-					return &common.FnOutput{
-						Success: false,
-						Message: err.Error(),
-					}
-				}
-				err = tm.CommitTransaction(ctx)
-				if err != nil {
-					return &common.FnOutput{
-						Success: false,
-						Message: fmt.Sprintf("commit failed: %v\n", err),
-					}
-				}
-				hasLiveTransaction = false
-				trackConsumePar = false
-			}
-			if timeout {
-				err = tm.Close()
-				if err != nil {
-					return &common.FnOutput{
-						Success: false,
-						Message: fmt.Sprintf("close transaction manager: %v\n", err),
-					}
-				}
-				break
-			}
-			if !hasLiveTransaction {
-				err = tm.BeginTransaction(ctx)
-				if err != nil {
-					return &common.FnOutput{
-						Success: false,
-						Message: fmt.Sprintf("transaction begin failed: %v\n", err),
-					}
-				}
-				hasLiveTransaction = true
-				commitTimer = time.Now()
-			}
-
-			procStart := time.Now()
-			gotMsgs, err := src.Consume(ctx, sp.ParNum)
-			if err != nil {
-				if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
-					return &common.FnOutput{
-						Success:   true,
-						Message:   err.Error(),
-						Latencies: map[string][]int{"e2e": latencies},
-						Duration:  time.Since(startTime).Seconds(),
-					}
-				}
-				return &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("consumed failed: %v\n", err),
-				}
-			}
-			if !trackConsumePar {
-				err = tm.AddOffsets(ctx, sp.InputTopicName, []uint8{sp.ParNum})
-				if err != nil {
-					return &common.FnOutput{
-						Success: false,
-						Message: fmt.Sprintf("add offsets failed: %v\n", err),
-					}
-				}
-				trackConsumePar = true
-			}
-			for _, msg := range gotMsgs {
-				if msg.Msg.Value == nil {
-					continue
-				}
-				splitStart := time.Now()
-				msgs, err := splitter(msg.Msg)
-				if err != nil {
-					return &common.FnOutput{
-						Success: false,
-						Message: fmt.Sprintf("splitter failed: %v\n", err),
-					}
-				}
-				splitLat := time.Since(splitStart)
-				splitLatencies = append(splitLatencies, int(splitLat.Microseconds()))
-				for _, m := range msgs {
-					h := hashKey(m.Key.(string))
-					par := uint8(h % uint32(sp.NumOutPartition))
-					err = tm.AddTopicPartition(ctx, output_stream.TopicName(), []uint8{par})
-					if err != nil {
-						return &common.FnOutput{
-							Success: false,
-							Message: fmt.Sprintf("add topic partition failed: %v\n", err),
-						}
-					}
-					err = sink.Sink(ctx, m, par, false)
-					if err != nil {
-						return &common.FnOutput{
-							Success: false,
-							Message: fmt.Sprintf("sink failed: %v\n", err),
-						}
-					}
-				}
-			}
-			elapsed := time.Since(procStart)
-			latencies = append(latencies, int(elapsed.Microseconds()))
-		}
+	transactionalId := fmt.Sprintf("wordcount-splitter-%s-%d", sp.InputTopicName, sp.ParNum)
+	tm, appId, appEpoch, err := benchutil.SetupTransactionManager(ctx, h.env, transactionalId, sp)
+	if err != nil {
 		return &common.FnOutput{
-			Success:  true,
-			Duration: time.Since(startTime).Seconds(),
-			Latencies: map[string][]int{
-				"e2e":   latencies,
-				"src":   src.GetLatency(),
-				"sink":  sink.GetLatency(),
-				"split": splitLatencies,
-			},
+			Success: false,
+			Message: err.Error(),
 		}
 	}
+	tm.RecordTopicStreams(sp.OutputTopicName, output_stream)
+	hasLiveTransaction := false
+	trackConsumePar := false
+	currentOffset := uint64(0)
+	commitTimer := time.Now()
+	commitEvery := time.Duration(sp.CommitEvery) * time.Millisecond
+
+	shouldStop := uint32(0)
+	errBackground, mctx := errgroup.WithContext(ctx)
+	errBackground.Go(func() error {
+		return tm.MonitorTransactionLog(mctx, &shouldStop)
+	})
+
+	startTime := time.Now()
+	for atomic.LoadUint32(&shouldStop) == 0 {
+		timeSinceTranStart := time.Since(commitTimer)
+		timeout := duration != 0 && time.Since(startTime) >= duration
+		if (commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout {
+			err = tm.AppendOffset(ctx, sharedlog_stream.OffsetConfig{
+				TopicToTrack: sp.InputTopicName,
+				AppId:        appId,
+				AppEpoch:     appEpoch,
+				Partition:    sp.ParNum,
+				Offset:       currentOffset,
+			})
+			if err != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
+			}
+			err = tm.CommitTransaction(ctx)
+			if err != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("commit failed: %v\n", err),
+				}
+			}
+			hasLiveTransaction = false
+			trackConsumePar = false
+		}
+		if timeout {
+			err = tm.Close()
+			if err != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("close transaction manager: %v\n", err),
+				}
+			}
+			break
+		}
+		if !hasLiveTransaction {
+			err = tm.BeginTransaction(ctx)
+			if err != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("transaction begin failed: %v\n", err),
+				}
+			}
+			hasLiveTransaction = true
+			commitTimer = time.Now()
+		}
+
+		procStart := time.Now()
+		gotMsgs, err := src.Consume(ctx, sp.ParNum)
+		if err != nil {
+			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+				return &common.FnOutput{
+					Success:   true,
+					Message:   err.Error(),
+					Latencies: map[string][]int{"e2e": latencies},
+					Duration:  time.Since(startTime).Seconds(),
+				}
+			}
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("consumed failed: %v\n", err),
+			}
+		}
+		if !trackConsumePar {
+			err = tm.AddOffsets(ctx, sp.InputTopicName, []uint8{sp.ParNum})
+			if err != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("add offsets failed: %v\n", err),
+				}
+			}
+			trackConsumePar = true
+		}
+		for _, msg := range gotMsgs {
+			if msg.Msg.Value == nil {
+				continue
+			}
+			splitStart := time.Now()
+			msgs, err := splitter(msg.Msg)
+			if err != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("splitter failed: %v\n", err),
+				}
+			}
+			splitLat := time.Since(splitStart)
+			splitLatencies = append(splitLatencies, int(splitLat.Microseconds()))
+			for _, m := range msgs {
+				h := hashKey(m.Key.(string))
+				par := uint8(h % uint32(sp.NumOutPartition))
+				err = tm.AddTopicPartition(ctx, output_stream.TopicName(), []uint8{par})
+				if err != nil {
+					return &common.FnOutput{
+						Success: false,
+						Message: fmt.Sprintf("add topic partition failed: %v\n", err),
+					}
+				}
+				err = sink.Sink(ctx, m, par, false)
+				if err != nil {
+					return &common.FnOutput{
+						Success: false,
+						Message: fmt.Sprintf("sink failed: %v\n", err),
+					}
+				}
+			}
+		}
+		elapsed := time.Since(procStart)
+		latencies = append(latencies, int(elapsed.Microseconds()))
+	}
+	err = errBackground.Wait()
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+	return &common.FnOutput{
+		Success:  true,
+		Duration: time.Since(startTime).Seconds(),
+		Latencies: map[string][]int{
+			"e2e":   latencies,
+			"src":   src.GetLatency(),
+			"sink":  sink.GetLatency(),
+			"split": splitLatencies,
+		},
+	}
+}
+
+func (h *wordcountSplitFlatMap) process(
+	ctx context.Context, sp *common.QueryInput,
+	src *processor.MeteredSource, sink *processor.MeteredSink,
+	output_stream *sharedlog_stream.ShardedSharedLogStream, splitter processor.FlatMapperFunc,
+) *common.FnOutput {
+	splitLatencies := make([]int, 0, 128)
+	latencies := make([]int, 0, 128)
+	duration := time.Duration(sp.Duration) * time.Second
+
 	startTime := time.Now()
 	for {
 		if duration != 0 && time.Since(startTime) >= duration {
@@ -328,4 +302,40 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context, sp *common.QueryInp
 			"split": splitLatencies,
 		},
 	}
+}
+
+func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+	src, sink, err := getSrcSink(ctx, sp, input_stream, output_stream)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+
+	var matchStr = regexp.MustCompile(`\w+`)
+	splitter := processor.FlatMapperFunc(func(m commtypes.Message) ([]commtypes.Message, error) {
+		val := m.Value.(string)
+		val = strings.ToLower(val)
+		var splitMsgs []commtypes.Message
+		splits := matchStr.FindAllString(val, -1)
+		for _, s := range splits {
+			if s != "" {
+				splitMsgs = append(splitMsgs, commtypes.Message{Key: s, Value: s, Timestamp: m.Timestamp})
+			}
+		}
+		return splitMsgs, nil
+	})
+
+	if sp.EnableTransaction {
+		return h.processWithTransaction(ctx, sp, src, sink, output_stream, splitter)
+	}
+	return h.process(ctx, sp, src, sink, output_stream, splitter)
 }

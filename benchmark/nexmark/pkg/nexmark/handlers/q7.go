@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
@@ -44,7 +45,7 @@ func (h *query7Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 }
 
 func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *common.FnOutput {
-	inputStream, outputStream, err := getShardedInputOutputStreams(ctx, h.env, input)
+	inputStream, outputStream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, input)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

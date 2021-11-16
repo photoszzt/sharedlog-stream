@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -41,7 +42,7 @@ func (h *q7BidKeyedByPrice) Call(ctx context.Context, input []byte) ([]byte, err
 }
 
 func (h *q7BidKeyedByPrice) process(ctx context.Context, input *common.QueryInput) *common.FnOutput {
-	input_stream, output_stream, err := getShardedInputOutputStreams(ctx, h.env, input)
+	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, input)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
@@ -40,15 +41,7 @@ func (h *wordcountCounterAgg) Call(ctx context.Context, input []byte) ([]byte, e
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_stream, err := getShardedInputOutputStreams(ctx, h.env, sp)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
-	}
-
+func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde, output_stream *sharedlog_stream.ShardedSharedLogStream) (*processor.MeteredProcessor, error) {
 	var vtSerde commtypes.Serde
 	if sp.SerdeFormat == uint8(commtypes.JSON) {
 		vtSerde = commtypes.ValueTimestampJSONSerde{
@@ -59,11 +52,41 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 			ValMsgpSerde: commtypes.Uint64Serde{},
 		}
 	} else {
+		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat)
+	}
+	mp := &store.MaterializeParam{
+		KeySerde:   commtypes.StringSerde{},
+		ValueSerde: vtSerde,
+		MsgSerde:   msgSerde,
+		StoreName:  sp.OutputTopicName,
+		Changelog:  output_stream,
+		ParNum:     sp.ParNum,
+	}
+	store := store.NewInMemoryKeyValueStoreWithChangelog(mp)
+	err := store.RestoreStateStore(ctx)
+	if err != nil {
+		return nil, err
+	}
+	p := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor(store,
+		processor.InitializerFunc(func() interface{} {
+			return uint64(0)
+		}),
+		processor.AggregatorFunc(func(key interface{}, value interface{}, agg interface{}) interface{} {
+			aggVal := agg.(uint64)
+			return aggVal + 1
+		})))
+	return p, nil
+}
+
+func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	if err != nil {
 		return &common.FnOutput{
 			Success: false,
-			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat),
+			Message: err.Error(),
 		}
 	}
+
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{
@@ -78,59 +101,32 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 		MsgDecoder:   msgSerde,
 	}
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
-	mp := &store.MaterializeParam{
-		KeySerde:   commtypes.StringSerde{},
-		ValueSerde: vtSerde,
-		MsgSerde:   msgSerde,
-		StoreName:  sp.OutputTopicName,
-		Changelog:  output_stream,
-		ParNum:     sp.ParNum,
+	p, err := setupCounter(ctx, sp, msgSerde, output_stream)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
 	}
-
-	store := store.NewInMemoryKeyValueStoreWithChangelog(mp)
-	p := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor(store,
-		processor.InitializerFunc(func() interface{} {
-			return uint64(0)
-		}),
-		processor.AggregatorFunc(func(key interface{}, value interface{}, agg interface{}) interface{} {
-			aggVal := agg.(uint64)
-			return aggVal + 1
-		})))
 
 	latencies := make([]int, 0, 128)
 	duration := time.Duration(sp.Duration) * time.Second
 	if sp.EnableTransaction {
-		transactionalId := fmt.Sprintf("wordcount-counter-%s-%s-%d", sp.InputTopicName, mp.Changelog.TopicName(), sp.ParNum)
-		tm, err := sharedlog_stream.NewTransactionManager(ctx, h.env, transactionalId, commtypes.SerdeFormat(sp.SerdeFormat))
+		transactionalId := fmt.Sprintf("wordcount-counter-%s-%s-%d", sp.InputTopicName, sp.OutputTopicName, sp.ParNum)
+		tm, appId, appEpoch, err := benchutil.SetupTransactionManager(ctx, h.env, transactionalId, sp)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
-				Message: fmt.Sprintf("NewTransactionManager failed: %v\n", err),
-			}
-		}
-		appId, appEpoch, err := tm.InitTransaction(ctx)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("InitTransaction failed: %v\n", err),
-			}
-		}
-
-		err = tm.CreateOffsetTopic(sp.InputTopicName, sp.NumInPartition)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("create offset topic failed: %v", err),
+				Message: err.Error(),
 			}
 		}
 		tm.RecordTopicStreams(sp.OutputTopicName, output_stream)
-		tm.RecordTopicStreams(mp.Changelog.TopicName(), mp.Changelog)
 		hasLiveTransaction := false
-		startTime := time.Now()
 		trackConsumePar := false
 		currentOffset := uint64(0)
 		var commitTimer time.Time
 		commitEvery := time.Duration(sp.CommitEvery) * time.Millisecond
+		startTime := time.Now()
 		for {
 			timeSinceTranStart := time.Since(commitTimer)
 			timeout := duration != 0 && time.Since(startTime) >= duration
