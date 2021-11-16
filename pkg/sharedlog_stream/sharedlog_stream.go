@@ -14,7 +14,6 @@ import (
 )
 
 type SharedLogStream struct {
-	ctx                context.Context
 	env                types.Environment
 	txnMarkerSerde     commtypes.Serde
 	curReadMap         map[commtypes.AppIDGen]commtypes.ReadMsgAndProgress
@@ -254,7 +253,7 @@ func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum 
 			seqNum -= 1
 		}
 
-		logEntry, err := s.env.SharedLogReadPrev(s.ctx, tag, seqNum)
+		logEntry, err := s.env.SharedLogReadPrev(ctx, tag, seqNum)
 		if err != nil {
 			return err
 		}
