@@ -37,7 +37,7 @@ func (h *windowAvgGroupBy) Call(ctx context.Context, input []byte) ([]byte, erro
 	if err != nil {
 		return nil, err
 	}
-	output := h.process(ctx, sp)
+	output := h.windowavg_groupby(ctx, sp)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
 		return nil, err
@@ -45,27 +45,17 @@ func (h *windowAvgGroupBy) Call(ctx context.Context, input []byte) ([]byte, erro
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
-	}
+func (h *windowAvgGroupBy) getSrcSink(sp *common.QueryInput,
+	input_stream *sharedlog_stream.ShardedSharedLogStream,
+	output_stream *sharedlog_stream.ShardedSharedLogStream,
+) (*processor.MeteredSource, *processor.MeteredSink, error) {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return nil, nil, err
 	}
 	eventSerde, err := getEventSerde(sp.SerdeFormat)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return nil, nil, err
 	}
 	duration := time.Duration(sp.Duration) * time.Second
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
@@ -83,6 +73,11 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput) *
 
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
 	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
+	return src, sink, nil
+}
+
+func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput, src *processor.MeteredSource, sink *processor.MeteredSink) *common.FnOutput {
+	duration := time.Duration(sp.Duration) * time.Second
 	latencies := make([]int, 0, 128)
 	startTime := time.Now()
 	for {
@@ -136,4 +131,22 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput) *
 			"src":  src.GetLatency(),
 		},
 	}
+}
+
+func (h *windowAvgGroupBy) windowavg_groupby(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+	src, sink, err := h.getSrcSink(sp, input_stream, output_stream)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+	return h.process(ctx, sp, src, sink)
 }
