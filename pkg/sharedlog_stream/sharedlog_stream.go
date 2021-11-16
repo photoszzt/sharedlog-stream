@@ -3,7 +3,10 @@
 package sharedlog_stream
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"os"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 
@@ -115,6 +118,21 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNu
 
 	seqNum, err := s.env.SharedLogAppend(ctx, tags, encoded)
 	s.tail = seqNum
+
+	if err != nil {
+		return 0, err
+	}
+	logEntryRead, err := s.env.SharedLogReadNext(ctx, 0, seqNum)
+	if err != nil {
+		return 0, err
+	}
+	if logEntryRead == nil || logEntryRead.SeqNum != seqNum {
+		return 0, fmt.Errorf("fail to read the log just appended")
+	}
+	if !bytes.Equal(encoded, logEntryRead.Data) {
+		return 0, fmt.Errorf("log data mismatch")
+	}
+
 	return seqNum, err
 }
 
@@ -249,6 +267,7 @@ func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum 
 
 	seqNum := tailSeqNum
 	for seqNum > s.cursor+1 {
+		fmt.Fprintf(os.Stderr, "current sequence number: %d, cursor: %d\n", seqNum, s.cursor)
 		if seqNum != protocol.MaxLogSeqnum {
 			seqNum -= 1
 		}
@@ -256,6 +275,10 @@ func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum 
 		logEntry, err := s.env.SharedLogReadPrev(ctx, tag, seqNum)
 		if err != nil {
 			return err
+		}
+
+		if logEntry == nil {
+			fmt.Fprintf(os.Stderr, "stream might be empty\n")
 		}
 
 		if logEntry == nil || logEntry.SeqNum < s.cursor+1 {
@@ -268,6 +291,7 @@ func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum 
 			continue
 		} else {
 			s.tail = logEntry.SeqNum + 1
+			fmt.Fprintf(os.Stderr, "current tail is %d\n", s.tail)
 			break
 		}
 	}
