@@ -117,18 +117,32 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNu
 	}
 
 	seqNum, err := s.env.SharedLogAppend(ctx, tags, encoded)
-	s.tail = seqNum
+	s.tail = seqNum + 1
 
 	if err != nil {
 		return 0, err
 	}
-	logEntryRead, err := s.env.SharedLogReadNext(ctx, 0, seqNum)
+	fmt.Fprintf(os.Stderr, "append val %s with tag: %x to topic %s par %d, seqNum: %x\n",
+		string(payload), tags[0], s.topicName, parNum, seqNum)
+	logEntryRead, err := s.env.SharedLogReadNext(ctx, tags[0], seqNum)
 	if err != nil {
 		return 0, err
 	}
 	if logEntryRead == nil || logEntryRead.SeqNum != seqNum {
 		return 0, fmt.Errorf("fail to read the log just appended")
 	}
+	if !bytes.Equal(encoded, logEntryRead.Data) {
+		return 0, fmt.Errorf("log data mismatch")
+	}
+
+	logEntryRead, err = s.env.SharedLogReadPrev(ctx, tags[0], seqNum+1)
+	if err != nil {
+		return 0, err
+	}
+	if logEntryRead == nil || logEntryRead.SeqNum != seqNum {
+		return 0, fmt.Errorf("fail to read the log just appended from backward")
+	}
+
 	if !bytes.Equal(encoded, logEntryRead.Data) {
 		return 0, fmt.Errorf("log data mismatch")
 	}
@@ -179,11 +193,14 @@ func (s *SharedLogStream) ReadNext(ctx context.Context, parNum uint8) (commtypes
 }
 
 func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag uint64) (commtypes.AppIDGen, []commtypes.RawMsg, error) {
+	fmt.Fprintf(os.Stderr, "read topic %s with parNum %d tag %x\n", s.topicName, parNum, tag)
 	if s.isEmpty() {
+		fmt.Fprintf(os.Stderr, "stream is empty\n")
 		if err := s.findLastEntryBackward(ctx, protocol.MaxLogSeqnum, parNum); err != nil {
 			return commtypes.EmptyAppIDGen, nil, err
 		}
 		if s.isEmpty() {
+			fmt.Fprintf(os.Stderr, "stream is still empty\n")
 			return commtypes.EmptyAppIDGen, nil, errors.ErrStreamEmpty
 		}
 	}
@@ -266,19 +283,21 @@ func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum 
 	tag := NameHashWithPartition(s.topicNameHash, parNum)
 
 	seqNum := tailSeqNum
-	for seqNum > s.cursor+1 {
-		fmt.Fprintf(os.Stderr, "current sequence number: %d, cursor: %d\n", seqNum, s.cursor)
-		if seqNum != protocol.MaxLogSeqnum {
-			seqNum -= 1
-		}
-
-		logEntry, err := s.env.SharedLogReadPrev(ctx, tag, seqNum)
+	fmt.Fprintf(os.Stderr, "find tail for topic: %s, par: %d\n", s.topicName, parNum)
+	retry_times := 0
+	for seqNum >= s.cursor+1 {
+		fmt.Fprintf(os.Stderr, "current sequence number: 0x%x, cursor: %d, tag: %x\n", seqNum, s.cursor, tag)
+		logEntry, err := s.env.SharedLogReadPrev(ctx, 0, seqNum)
 		if err != nil {
 			return err
 		}
 
 		if logEntry == nil {
-			fmt.Fprintf(os.Stderr, "stream might be empty\n")
+			if retry_times <= 3 {
+				retry_times += 1
+				seqNum -= 1
+				continue
+			}
 		}
 
 		if logEntry == nil || logEntry.SeqNum < s.cursor+1 {
@@ -288,12 +307,12 @@ func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum 
 		seqNum = logEntry.SeqNum
 		streamLogEntry := decodeStreamLogEntry(logEntry)
 		if streamLogEntry.TopicName != s.topicName {
+			seqNum -= 1
 			continue
-		} else {
-			s.tail = logEntry.SeqNum + 1
-			fmt.Fprintf(os.Stderr, "current tail is %d\n", s.tail)
-			break
 		}
+		s.tail = logEntry.SeqNum + 1
+		fmt.Fprintf(os.Stderr, "current tail is %d\n", s.tail)
+		break
 	}
 	return nil
 }
