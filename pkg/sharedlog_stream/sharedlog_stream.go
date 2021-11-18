@@ -286,6 +286,8 @@ func (s *SharedLogStream) readPrevWithTimeout(ctx context.Context, tag uint64, s
 			return logEntry, nil
 		} else if time.Since(startTime) >= kBlockingRevReadTimeout {
 			return logEntry, nil
+		} else {
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
 }
