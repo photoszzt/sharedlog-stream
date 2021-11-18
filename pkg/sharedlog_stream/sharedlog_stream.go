@@ -274,7 +274,8 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 }
 
 func (s *SharedLogStream) readPrevWithTimeout(ctx context.Context, tag uint64, seqNum uint64) (*types.LogEntry, error) {
-	startTime := time.Now()
+	maxRetryTimes := 100
+	idx := 0
 	for {
 		newCtx, cancel := context.WithTimeout(ctx, kBlockingRevReadTimeout)
 		defer cancel()
@@ -284,9 +285,11 @@ func (s *SharedLogStream) readPrevWithTimeout(ctx context.Context, tag uint64, s
 		}
 		if logEntry != nil {
 			return logEntry, nil
-		} else if time.Since(startTime) >= kBlockingRevReadTimeout {
-			return logEntry, nil
 		} else {
+			idx += 1
+			if idx >= maxRetryTimes {
+				return logEntry, nil
+			}
 			time.Sleep(10 * time.Millisecond)
 		}
 	}

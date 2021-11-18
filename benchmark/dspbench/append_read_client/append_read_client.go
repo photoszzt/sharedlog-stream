@@ -45,6 +45,7 @@ func main() {
 	var readRet common.FnOutput
 	wg.Add(1)
 	go invokeFunc(client, &appendRet, &wg, "streamAppend")
+	time.Sleep(5 * time.Second)
 
 	wg.Add(1)
 	go invokeFunc(client, &readRet, &wg, "streamRead")

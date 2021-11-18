@@ -127,6 +127,8 @@ func main() {
 		go split.Invoke(client, &splitOutput[i], &wg, splitInputParams[i])
 	}
 
+	time.Sleep(time.Duration(5) * time.Second)
+
 	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
 		wg.Add(1)
 		countInputParams[i].ParNum = uint8(i)
