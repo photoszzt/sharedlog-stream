@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"sharedlog-stream/benchmark/dspbench/pkg/handlers/append_read"
 	"sharedlog-stream/benchmark/dspbench/pkg/handlers/spike_detection"
 	"sharedlog-stream/benchmark/dspbench/pkg/handlers/wordcount"
 
@@ -38,6 +39,10 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return wordcount.NewWordCountSplitter(env), nil
 	case "wordcountcounter":
 		return wordcount.NewWordCountCounterAgg(env), nil
+	case "streamAppend":
+		return append_read.NewAppendHandler(env), nil
+	case "streamRead":
+		return append_read.NewReadHandler(env), nil
 	default:
 		return nil, fmt.Errorf("unknown function name %v", funcName)
 	}

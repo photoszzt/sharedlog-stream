@@ -1,6 +1,6 @@
 GO_FILES?=$$(find . -name '*.go' |grep -v deps)
 
-default: goimports nexmark nexmark_client nexmark_genevents_kafka dspbench dspbench_client wordcount_client wordcount_genevents_kafka
+default: goimports nexmark nexmark_client nexmark_genevents_kafka dspbench dspbench_client wordcount_client wordcount_genevents_kafka append_read_client
 
 .PHONY: staticcheck
 staticcheck:
@@ -51,6 +51,11 @@ dspbench_client:
 wordcount_client:
 	mkdir -p ./bin
 	go build -o bin/wordcount_client benchmark/dspbench/wordcount_client/wordcount_client.go
+
+.PHONY: append_read_client
+append_read_client:
+	mkdir -p ./bin
+	go build -o bin/append_read_client benchmark/dspbench/append_read_client/append_read_client.go
 
 .PHONY: download-book
 download-book:
