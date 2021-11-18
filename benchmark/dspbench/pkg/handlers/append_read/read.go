@@ -47,8 +47,9 @@ func (h *ReadHandler) process(ctx context.Context) *common.FnOutput {
 	// read backward
 
 	idx := 0
+	seqNum := protocol.MaxLogSeqnum
 	for {
-		entry, err := h.env.SharedLogReadPrev(ctx, tag, protocol.MaxLogSeqnum)
+		entry, err := h.env.SharedLogReadPrev(ctx, tag, seqNum)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
@@ -60,6 +61,7 @@ func (h *ReadHandler) process(ctx context.Context) *common.FnOutput {
 		} else {
 			fmt.Fprintf(os.Stderr, "reverse read entry is %v, seqNum 0x%x\n", string(entry.Data), entry.SeqNum)
 			idx += 1
+			seqNum = entry.SeqNum
 			if idx == 10 {
 				break
 			}
@@ -68,8 +70,9 @@ func (h *ReadHandler) process(ctx context.Context) *common.FnOutput {
 
 	// read forward with log api
 	idx = 0
+	seqNum = 0
 	for {
-		entry, err := h.env.SharedLogReadNext(ctx, 0, 0)
+		entry, err := h.env.SharedLogReadNext(ctx, tag, seqNum)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
@@ -79,6 +82,7 @@ func (h *ReadHandler) process(ctx context.Context) *common.FnOutput {
 		if entry != nil {
 			fmt.Fprintf(os.Stderr, "forward read entry is %v, seqNum 0x%x\n", string(entry.Data), entry.SeqNum)
 			idx += 1
+			seqNum = entry.SeqNum
 			if idx == 10 {
 				break
 			}

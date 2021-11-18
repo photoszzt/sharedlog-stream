@@ -9,11 +9,16 @@ import (
 	"os"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"time"
 
 	"github.com/rs/zerolog/log"
 
 	"cs.utexas.edu/zjia/faas/protocol"
 	"cs.utexas.edu/zjia/faas/types"
+)
+
+const (
+	kBlockingRevReadTimeout = 10 * time.Second
 )
 
 type SharedLogStream struct {
@@ -268,6 +273,23 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 	return commtypes.EmptyAppIDGen, nil, errors.ErrStreamEmpty
 }
 
+func (s *SharedLogStream) readPrevWithTimeout(ctx context.Context, tag uint64, seqNum uint64) (*types.LogEntry, error) {
+	startTime := time.Now()
+	for {
+		newCtx, cancel := context.WithTimeout(ctx, kBlockingRevReadTimeout)
+		defer cancel()
+		logEntry, err := s.env.SharedLogReadPrev(newCtx, tag, seqNum)
+		if err != nil {
+			return nil, err
+		}
+		if logEntry != nil {
+			return logEntry, nil
+		} else if time.Since(startTime) >= kBlockingRevReadTimeout {
+			return logEntry, nil
+		}
+	}
+}
+
 func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum uint64, parNum uint8) error {
 	if tailSeqNum < s.cursor {
 		log.Fatal().
@@ -284,20 +306,11 @@ func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum 
 
 	seqNum := tailSeqNum
 	fmt.Fprintf(os.Stderr, "find tail for topic: %s, par: %d\n", s.topicName, parNum)
-	retry_times := 0
 	for seqNum >= s.cursor+1 {
-		fmt.Fprintf(os.Stderr, "current sequence number: 0x%x, cursor: %d, tag: %x\n", seqNum, s.cursor, tag)
-		logEntry, err := s.env.SharedLogReadPrev(ctx, 0, seqNum)
+		fmt.Fprintf(os.Stderr, "current sequence number: 0x%x, tail: 0x%x, tag: %x\n", seqNum, s.tail, tag)
+		logEntry, err := s.readPrevWithTimeout(ctx, tag, seqNum)
 		if err != nil {
 			return err
-		}
-
-		if logEntry == nil {
-			if retry_times <= 3 {
-				retry_times += 1
-				seqNum -= 1
-				continue
-			}
 		}
 
 		if logEntry == nil || logEntry.SeqNum < s.cursor+1 {

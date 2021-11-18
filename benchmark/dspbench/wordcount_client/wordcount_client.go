@@ -119,6 +119,8 @@ func main() {
 	wg.Add(1)
 	go invokeSourceFunc(client, &sourceOutput, &wg, serdeFormat)
 
+	time.Sleep(time.Duration(5) * time.Second)
+
 	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
 		wg.Add(1)
 		splitInputParams[i].ParNum = 0
