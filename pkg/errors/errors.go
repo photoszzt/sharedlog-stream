@@ -12,7 +12,7 @@ var (
 )
 
 func IsStreamEmptyError(err error) bool {
-	return xerrors.Is(err, ErrEmptyPayload)
+	return err == ErrStreamEmpty
 }
 
 func IsStreamTimeoutError(err error) bool {

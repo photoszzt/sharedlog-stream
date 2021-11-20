@@ -54,7 +54,7 @@ func (s *SharedLogStreamSource) Consume(ctx context.Context, parNum uint8) ([]co
 				continue
 			} else if errors.IsStreamTimeoutError(err) {
 				// fmt.Fprintf(os.Stderr, "stream time out\n")
-				continue
+				break
 			} else {
 				return nil, err
 			}

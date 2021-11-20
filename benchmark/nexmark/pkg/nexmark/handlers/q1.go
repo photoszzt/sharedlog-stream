@@ -55,23 +55,27 @@ func q1mapFunc(msg commtypes.Message) (commtypes.Message, error) {
 func Query1(ctx context.Context, env types.Environment, input *common.QueryInput, output chan *common.FnOutput) {
 	// fmt.Fprintf(os.Stderr, "input topic name: %v, output topic name: %v\n", input.InputTopicName, input.OutputTopicName)
 	inputStream := sharedlog_stream.NewSharedLogStream(env, input.InputTopicName)
-	err := inputStream.InitStream(ctx, 0)
-	if err != nil {
-		output <- &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("NewSharedlogStream for input stream failed: %v", err),
+	/*
+		err := inputStream.InitStream(ctx, 0, true)
+		if err != nil {
+			output <- &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("NewSharedlogStream for input stream failed: %v", err),
+			}
+			return
 		}
-		return
-	}
+	*/
 	outputStream := sharedlog_stream.NewSharedLogStream(env, input.OutputTopicName)
-	err = outputStream.InitStream(ctx, 0)
-	if err != nil {
-		output <- &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("NewSharedlogStream for output stream failed: %v", err),
+	/*
+		err = outputStream.InitStream(ctx, 0, false)
+		if err != nil {
+			output <- &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("NewSharedlogStream for output stream failed: %v", err),
+			}
+			return
 		}
-		return
-	}
+	*/
 	msgSerde, err := commtypes.GetMsgSerde(input.SerdeFormat)
 	if err != nil {
 		output <- &common.FnOutput{

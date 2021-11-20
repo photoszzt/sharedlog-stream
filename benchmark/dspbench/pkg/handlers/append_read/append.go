@@ -33,13 +33,15 @@ func (h *AppendHandler) Call(ctx context.Context, input []byte) ([]byte, error) 
 
 func (h *AppendHandler) process(ctx context.Context) *common.FnOutput {
 	s1 := sharedlog_stream.NewSharedLogStream(h.env, "t1")
-	err := s1.InitStream(ctx, 0)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
+	/*
+		err := s1.InitStream(ctx, 0, false)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: err.Error(),
+			}
 		}
-	}
+	*/
 
 	var pushSeqNum []uint64
 	for i := 0; i < 10; i++ {

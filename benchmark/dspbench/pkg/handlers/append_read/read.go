@@ -10,7 +10,6 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
 
-	"cs.utexas.edu/zjia/faas/protocol"
 	"cs.utexas.edu/zjia/faas/types"
 )
 
@@ -35,61 +34,64 @@ func (h *ReadHandler) Call(ctx context.Context, input []byte) ([]byte, error) {
 
 func (h *ReadHandler) process(ctx context.Context) *common.FnOutput {
 	s1 := sharedlog_stream.NewSharedLogStream(h.env, "t1")
-	err := s1.InitStream(ctx, 0)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
-	}
-
-	tag := sharedlog_stream.NameHashWithPartition(s1.TopicNameHash(), 0)
-	// read backward
-
-	idx := 0
-	seqNum := protocol.MaxLogSeqnum
-	for {
-		entry, err := h.env.SharedLogReadPrev(ctx, tag, seqNum)
+	/*
+		err := s1.InitStream(ctx, 0, true)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
 			}
 		}
-		if entry == nil {
-			continue
-		} else {
-			fmt.Fprintf(os.Stderr, "reverse read entry is %v, seqNum 0x%x\n", string(entry.Data), entry.SeqNum)
-			idx += 1
-			seqNum = entry.SeqNum
-			if idx == 10 {
-				break
-			}
-		}
-	}
+	*/
 
-	// read forward with log api
-	idx = 0
-	seqNum = 0
-	for {
-		entry, err := h.env.SharedLogReadNext(ctx, tag, seqNum)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
+	/*
+		tag := sharedlog_stream.NameHashWithPartition(s1.TopicNameHash(), 0)
+		// read backward
+		idx := 0
+		seqNum := protocol.MaxLogSeqnum
+		for {
+			entry, err := h.env.SharedLogReadPrev(ctx, tag, seqNum)
+			if err != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
+			}
+			if entry == nil {
+				continue
+			} else {
+				fmt.Fprintf(os.Stderr, "reverse read entry is %v, seqNum 0x%x\n", string(entry.Data), entry.SeqNum)
+				idx += 1
+				seqNum = entry.SeqNum
+				if idx == 10 {
+					break
+				}
 			}
 		}
-		if entry != nil {
-			fmt.Fprintf(os.Stderr, "forward read entry is %v, seqNum 0x%x\n", string(entry.Data), entry.SeqNum)
-			idx += 1
-			seqNum = entry.SeqNum
-			if idx == 10 {
-				break
+
+		// read forward with log api
+		idx = 0
+		seqNum = 0
+		for {
+			entry, err := h.env.SharedLogReadNext(ctx, tag, seqNum)
+			if err != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
 			}
-		} else {
-			continue
+			if entry != nil {
+				fmt.Fprintf(os.Stderr, "forward read entry is %v, seqNum 0x%x\n", string(entry.Data), entry.SeqNum)
+				idx += 1
+				seqNum = entry.SeqNum
+				if idx == 10 {
+					break
+				}
+			} else {
+				continue
+			}
 		}
-	}
+	*/
 	// read forward
 	for i := 0; i < 10; i++ {
 		_, rawMsgs, err := s1.ReadNext(ctx, 0)
@@ -101,6 +103,7 @@ func (h *ReadHandler) process(ctx context.Context) *common.FnOutput {
 		}
 		for _, rawMsg := range rawMsgs {
 			expected_str := fmt.Sprintf("test %d\n", i)
+			fmt.Fprintf(os.Stderr, "read msg is %s", string(rawMsg.Payload))
 			if !bytes.Equal(rawMsg.Payload, []byte(expected_str)) {
 				return &common.FnOutput{
 					Success: false,

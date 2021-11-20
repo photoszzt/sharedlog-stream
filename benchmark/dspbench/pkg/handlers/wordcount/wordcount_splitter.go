@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"os"
 	"regexp"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
@@ -335,6 +336,7 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 	})
 
 	if sp.EnableTransaction {
+		fmt.Fprintf(os.Stderr, "word count counter function enables exactly once semantics\n")
 		return h.processWithTransaction(ctx, sp, src, sink, output_stream, splitter)
 	}
 	return h.process(ctx, sp, src, sink, output_stream, splitter)

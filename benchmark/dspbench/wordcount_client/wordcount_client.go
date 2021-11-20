@@ -106,7 +106,7 @@ func main() {
 
 	client := &http.Client{
 		Transport: &http.Transport{
-			IdleConnTimeout: 30 * time.Second,
+			IdleConnTimeout: 90 * time.Second,
 		},
 		Timeout: time.Duration(FLAGS_duration*3) * time.Second,
 	}
@@ -119,15 +119,11 @@ func main() {
 	wg.Add(1)
 	go invokeSourceFunc(client, &sourceOutput, &wg, serdeFormat)
 
-	time.Sleep(time.Duration(5) * time.Second)
-
 	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
 		wg.Add(1)
 		splitInputParams[i].ParNum = 0
 		go split.Invoke(client, &splitOutput[i], &wg, splitInputParams[i])
 	}
-
-	time.Sleep(time.Duration(5) * time.Second)
 
 	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
 		wg.Add(1)

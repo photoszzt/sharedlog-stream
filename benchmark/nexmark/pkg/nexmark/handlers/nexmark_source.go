@@ -48,13 +48,15 @@ func (h *nexmarkSourceHandler) Call(ctx context.Context, input []byte) ([]byte, 
 
 func eventGeneration(ctx context.Context, env types.Environment, inputConfig *ntypes.NexMarkConfigInput) (*common.FnOutput, error) {
 	stream := sharedlog_stream.NewSharedLogStream(env, inputConfig.TopicName)
-	err := stream.InitStream(ctx, 0)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("NewSharedlogStream failed: %v", err),
-		}, nil
-	}
+	/*
+		err := stream.InitStream(ctx, 0, false)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("NewSharedlogStream failed: %v", err),
+			}, nil
+		}
+	*/
 	// fmt.Fprintf(os.Stderr, "generate event to %v\n", inputConfig.TopicName)
 	nexmarkConfig, err := ntypes.ConvertToNexmarkConfiguration(inputConfig)
 	if err != nil {

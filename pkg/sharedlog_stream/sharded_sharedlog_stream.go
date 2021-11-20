@@ -36,15 +36,17 @@ func NewShardedSharedLogStream(env types.Environment, topicName string, numParti
 	}, nil
 }
 
-func (s *ShardedSharedLogStream) InitStream(ctx context.Context) error {
+/*
+func (s *ShardedSharedLogStream) InitStream(ctx context.Context, findTail bool) error {
 	for i := 0; i < int(s.numPartitions); i++ {
-		err := s.subSharedLogStreams[i].InitStream(ctx, uint8(i))
+		err := s.subSharedLogStreams[i].InitStream(ctx, uint8(i), findTail)
 		if err != nil {
 			return err
 		}
 	}
 	return nil
 }
+*/
 
 func (s *ShardedSharedLogStream) Push(ctx context.Context, payload []byte, parNumber uint8, isControl bool) (uint64, error) {
 	return s.subSharedLogStreams[parNumber].Push(ctx, payload, parNumber, isControl)

@@ -13,7 +13,6 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"cs.utexas.edu/zjia/faas/protocol"
 	"cs.utexas.edu/zjia/faas/types"
 )
 
@@ -27,9 +26,9 @@ type SharedLogStream struct {
 	curReadMap         map[commtypes.AppIDGen]commtypes.ReadMsgAndProgress
 	topicName          string
 	topicNameHash      uint64
-	appId              uint64
 	cursor             uint64
 	tail               uint64
+	appId              uint64
 	curAppendMsgSeqNum uint32
 	appEpoch           uint16
 	inTransaction      bool
@@ -89,12 +88,17 @@ func (s *SharedLogStream) TopicNameHash() uint64 {
 	return s.topicNameHash
 }
 
-func (s *SharedLogStream) InitStream(ctx context.Context, parNum uint8) error {
-	if err := s.findLastEntryBackward(ctx, protocol.MaxLogSeqnum, parNum); err != nil {
-		return err
+/*
+func (s *SharedLogStream) InitStream(ctx context.Context, parNum uint8, findTail bool) error {
+	if findTail {
+		fmt.Fprintf(os.Stderr, "find tail in InitStream\n")
+		if err := s.findLastEntryBackward(ctx, protocol.MaxLogSeqnum, parNum); err != nil {
+			return err
+		}
 	}
 	return nil
 }
+*/
 
 func (s *SharedLogStream) TopicName() string {
 	return s.topicName
@@ -199,24 +203,16 @@ func (s *SharedLogStream) ReadNext(ctx context.Context, parNum uint8) (commtypes
 
 func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag uint64) (commtypes.AppIDGen, []commtypes.RawMsg, error) {
 	fmt.Fprintf(os.Stderr, "read topic %s with parNum %d tag %x\n", s.topicName, parNum, tag)
-	if s.isEmpty() {
-		fmt.Fprintf(os.Stderr, "stream is empty\n")
-		if err := s.findLastEntryBackward(ctx, protocol.MaxLogSeqnum, parNum); err != nil {
-			return commtypes.EmptyAppIDGen, nil, err
-		}
-		if s.isEmpty() {
-			fmt.Fprintf(os.Stderr, "stream is still empty\n")
-			return commtypes.EmptyAppIDGen, nil, errors.ErrStreamEmpty
-		}
-	}
 	seqNumInSharedLog := s.cursor
-
-	for seqNumInSharedLog < s.tail {
+	for {
+		fmt.Fprintf(os.Stderr, "read tag: 0x%x, seqNum: 0x%x\n", tag, seqNumInSharedLog)
 		logEntry, err := s.env.SharedLogReadNextBlock(ctx, tag, seqNumInSharedLog)
+		fmt.Fprintf(os.Stderr, "after read next block\n")
 		if err != nil {
 			return commtypes.EmptyAppIDGen, nil, err
 		}
-		if logEntry == nil || logEntry.SeqNum >= s.tail {
+		if logEntry == nil {
+			fmt.Fprintf(os.Stderr, "got empty entry\n")
 			return commtypes.EmptyAppIDGen, nil, errors.ErrStreamEmpty
 		}
 		streamLogEntry := decodeStreamLogEntry(logEntry)
@@ -270,7 +266,6 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 		}
 		seqNumInSharedLog = logEntry.SeqNum + 1
 	}
-	return commtypes.EmptyAppIDGen, nil, errors.ErrStreamEmpty
 }
 
 func (s *SharedLogStream) readPrevWithTimeout(ctx context.Context, tag uint64, seqNum uint64) (*types.LogEntry, error) {

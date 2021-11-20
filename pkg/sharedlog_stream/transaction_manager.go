@@ -53,10 +53,12 @@ func FenceTag(nameHash uint64, parNum uint8) uint64 {
 
 func NewTransactionManager(ctx context.Context, env types.Environment, transactional_id string, serdeFormat commtypes.SerdeFormat) (*TransactionManager, error) {
 	log := NewSharedLogStream(env, TRANSACTION_LOG_TOPIC_NAME+"_"+transactional_id)
-	err := log.InitStream(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
+	/*
+		err := log.InitStream(ctx, 0, true)
+		if err != nil {
+			return nil, err
+		}
+	*/
 	errg, gctx := errgroup.WithContext(ctx)
 	tm := &TransactionManager{
 		transactionLog:        log,
@@ -68,7 +70,7 @@ func NewTransactionManager(ctx context.Context, env types.Environment, transacti
 		currentEpoch:          0,
 		currentAppId:          0,
 	}
-	err = tm.setupSerde(serdeFormat)
+	err := tm.setupSerde(serdeFormat)
 	if err != nil {
 		return nil, err
 	}

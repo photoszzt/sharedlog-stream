@@ -99,10 +99,12 @@ func (h *windowedAvg) getAggProcessor(ctx context.Context, sp *common.QueryInput
 	if err != nil {
 		return nil, fmt.Errorf("create changelog stream failed: %v", err)
 	}
-	err = changelog_stream.InitStream(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("changelog stream init failed: %v", err)
-	}
+	/*
+		err = changelog_stream.InitStream(ctx, true)
+		if err != nil {
+			return nil, fmt.Errorf("changelog stream init failed: %v", err)
+		}
+	*/
 	if sp.SerdeFormat == uint8(commtypes.JSON) {
 		scSerde = ntypes.SumAndCountJSONSerde{}
 		vtSerde = commtypes.ValueTimestampJSONSerde{

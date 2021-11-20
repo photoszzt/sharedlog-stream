@@ -59,13 +59,15 @@ func encode_sentence_event(valSerde commtypes.Serde, msgSerde commtypes.MsgSerde
 
 func (h *wordCountSource) eventGeneration(ctx context.Context, env types.Environment, sp *common.SourceParam) *common.FnOutput {
 	stream := sharedlog_stream.NewSharedLogStream(env, sp.TopicName)
-	err := stream.InitStream(ctx, 0)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("NewSharedlogStream failed: %v", err),
+	/*
+		err := stream.InitStream(ctx, 0, false)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("NewSharedlogStream failed: %v", err),
+			}
 		}
-	}
+	*/
 
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
