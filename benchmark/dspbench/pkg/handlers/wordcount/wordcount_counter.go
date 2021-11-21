@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
@@ -65,7 +64,7 @@ func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes
 		ParNum:     sp.ParNum,
 	}
 	store := store.NewInMemoryKeyValueStoreWithChangelog(mp)
-	fmt.Fprintf(os.Stderr, "before restore\n")
+	// fmt.Fprintf(os.Stderr, "before restore\n")
 	err := store.RestoreStateStore(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("restore failed: %v", err)
@@ -88,7 +87,7 @@ func (h *wordcountCounterAgg) processWithTransaction(ctx context.Context, sp *co
 	latencies := make([]int, 0, 128)
 	duration := time.Duration(sp.Duration) * time.Second
 
-	fmt.Fprintf(os.Stderr, "word count counter function enables exactly once semantics\n")
+	// fmt.Fprintf(os.Stderr, "word count counter function enables exactly once semantics\n")
 	transactionalId := fmt.Sprintf("wordcount-counter-%s-%s-%d", sp.InputTopicName, sp.OutputTopicName, sp.ParNum)
 	tm, appId, appEpoch, err := benchutil.SetupTransactionManager(ctx, h.env, transactionalId, sp)
 	if err != nil {

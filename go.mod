@@ -14,6 +14,6 @@ require (
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
 )
 
-replace cs.utexas.edu/zjia/faas => ../boki/worker/golang
+replace cs.utexas.edu/zjia/faas => ../faas/worker/golang
 
-replace cs.utexas.edu/zjia/faas/slib => ../boki/faas/slib
+replace cs.utexas.edu/zjia/faas/slib => ../faas/faas/slib
