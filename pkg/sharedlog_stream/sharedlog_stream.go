@@ -3,9 +3,7 @@
 package sharedlog_stream
 
 import (
-	"bytes"
 	"context"
-	"fmt"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
@@ -128,33 +126,36 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNu
 	seqNum, err := s.env.SharedLogAppend(ctx, tags, encoded)
 	s.tail = seqNum + 1
 
-	if err != nil {
-		return 0, err
-	}
-	// fmt.Fprintf(os.Stderr, "append val %s with tag: %x to topic %s par %d, seqNum: %x\n",
-	// 	string(payload), tags[0], s.topicName, parNum, seqNum)
-	logEntryRead, err := s.env.SharedLogReadNext(ctx, tags[0], seqNum)
-	if err != nil {
-		return 0, err
-	}
-	if logEntryRead == nil || logEntryRead.SeqNum != seqNum {
-		return 0, fmt.Errorf("fail to read the log just appended")
-	}
-	if !bytes.Equal(encoded, logEntryRead.Data) {
-		return 0, fmt.Errorf("log data mismatch")
-	}
+	// verify that push is successful
+	/*
+		if err != nil {
+			return 0, err
+		}
+		// fmt.Fprintf(os.Stderr, "append val %s with tag: %x to topic %s par %d, seqNum: %x\n",
+		// 	string(payload), tags[0], s.topicName, parNum, seqNum)
+		logEntryRead, err := s.env.SharedLogReadNext(ctx, tags[0], seqNum)
+		if err != nil {
+			return 0, err
+		}
+		if logEntryRead == nil || logEntryRead.SeqNum != seqNum {
+			return 0, fmt.Errorf("fail to read the log just appended")
+		}
+		if !bytes.Equal(encoded, logEntryRead.Data) {
+			return 0, fmt.Errorf("log data mismatch")
+		}
 
-	logEntryRead, err = s.env.SharedLogReadPrev(ctx, tags[0], seqNum+1)
-	if err != nil {
-		return 0, err
-	}
-	if logEntryRead == nil || logEntryRead.SeqNum != seqNum {
-		return 0, fmt.Errorf("fail to read the log just appended from backward")
-	}
+		logEntryRead, err = s.env.SharedLogReadPrev(ctx, tags[0], seqNum+1)
+		if err != nil {
+			return 0, err
+		}
+		if logEntryRead == nil || logEntryRead.SeqNum != seqNum {
+			return 0, fmt.Errorf("fail to read the log just appended from backward")
+		}
 
-	if !bytes.Equal(encoded, logEntryRead.Data) {
-		return 0, fmt.Errorf("log data mismatch")
-	}
+		if !bytes.Equal(encoded, logEntryRead.Data) {
+			return 0, fmt.Errorf("log data mismatch")
+		}
+	*/
 
 	return seqNum, err
 }
