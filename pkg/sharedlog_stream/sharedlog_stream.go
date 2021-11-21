@@ -13,11 +13,12 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"cs.utexas.edu/zjia/faas/protocol"
 	"cs.utexas.edu/zjia/faas/types"
 )
 
 const (
-	kBlockingRevReadTimeout = 10 * time.Second
+	kBlockingReadTimeout = 1 * time.Second
 )
 
 type SharedLogStream struct {
@@ -203,16 +204,25 @@ func (s *SharedLogStream) ReadNext(ctx context.Context, parNum uint8) (commtypes
 
 func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag uint64) (commtypes.AppIDGen, []commtypes.RawMsg, error) {
 	fmt.Fprintf(os.Stderr, "read topic %s with parNum %d tag %x\n", s.topicName, parNum, tag)
+	if s.isEmpty() {
+		if err := s.findLastEntryBackward(ctx, protocol.MaxLogSeqnum, parNum); err != nil {
+			return commtypes.EmptyAppIDGen, nil, err
+		}
+		if s.isEmpty() {
+			return commtypes.EmptyAppIDGen, nil, errors.ErrStreamEmpty
+		}
+	}
 	seqNumInSharedLog := s.cursor
-	for {
+	for seqNumInSharedLog < s.tail {
 		fmt.Fprintf(os.Stderr, "read tag: 0x%x, seqNum: 0x%x\n", tag, seqNumInSharedLog)
-		logEntry, err := s.env.SharedLogReadNextBlock(ctx, tag, seqNumInSharedLog)
+		newCtx, cancel := context.WithTimeout(ctx, kBlockingReadTimeout)
+		defer cancel()
+		logEntry, err := s.env.SharedLogReadNextBlock(newCtx, tag, seqNumInSharedLog)
 		fmt.Fprintf(os.Stderr, "after read next block\n")
 		if err != nil {
 			return commtypes.EmptyAppIDGen, nil, err
 		}
 		if logEntry == nil {
-			fmt.Fprintf(os.Stderr, "got empty entry\n")
 			return commtypes.EmptyAppIDGen, nil, errors.ErrStreamEmpty
 		}
 		streamLogEntry := decodeStreamLogEntry(logEntry)
@@ -266,13 +276,14 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 		}
 		seqNumInSharedLog = logEntry.SeqNum + 1
 	}
+	return commtypes.EmptyAppIDGen, nil, errors.ErrStreamEmpty
 }
 
 func (s *SharedLogStream) readPrevWithTimeout(ctx context.Context, tag uint64, seqNum uint64) (*types.LogEntry, error) {
 	maxRetryTimes := 100
 	idx := 0
 	for {
-		newCtx, cancel := context.WithTimeout(ctx, kBlockingRevReadTimeout)
+		newCtx, cancel := context.WithTimeout(ctx, kBlockingReadTimeout)
 		defer cancel()
 		logEntry, err := s.env.SharedLogReadPrev(newCtx, tag, seqNum)
 		if err != nil {

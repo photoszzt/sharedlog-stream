@@ -57,9 +57,8 @@ func (h *windowAvgGroupBy) getSrcSink(sp *common.QueryInput,
 	if err != nil {
 		return nil, nil, err
 	}
-	duration := time.Duration(sp.Duration) * time.Second
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
-		Timeout:      duration,
+		Timeout:      common.SrcConsumeTimeout,
 		MsgDecoder:   msgSerde,
 		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: eventSerde,

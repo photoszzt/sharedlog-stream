@@ -75,7 +75,7 @@ func (h *windowedAvg) getSrcSink(ctx context.Context, sp *common.QueryInput, msg
 		return nil, nil, err
 	}
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
-		Timeout:      time.Duration(20) * time.Second,
+		Timeout:      common.SrcConsumeTimeout,
 		MsgDecoder:   msgSerde,
 		KeyDecoder:   commtypes.Uint64Decoder{},
 		ValueDecoder: eventSerde,

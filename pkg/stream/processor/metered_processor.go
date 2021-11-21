@@ -27,9 +27,8 @@ func (p *MeteredProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.M
 		elapsed := time.Since(procStart)
 		p.latencies = append(p.latencies, int(elapsed.Microseconds()))
 		return newMsg, err
-	} else {
-		return p.proc.ProcessAndReturn(ctx, msg)
 	}
+	return p.proc.ProcessAndReturn(ctx, msg)
 }
 
 func (p *MeteredProcessor) GetLatency() []int {

@@ -1,5 +1,11 @@
 package common
 
+import "time"
+
+const (
+	SrcConsumeTimeout = 5 * time.Second
+)
+
 type QueryInput struct {
 	OutputTopicName   string `json:"outputTopicName"`
 	InputTopicName    string `json:"inputTopicName"`

@@ -42,7 +42,8 @@ func (h *wordcountCounterAgg) Call(ctx context.Context, input []byte) ([]byte, e
 	return utils.CompressData(encodedOutput), nil
 }
 
-func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde, output_stream *sharedlog_stream.ShardedSharedLogStream) (*processor.MeteredProcessor, error) {
+func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde,
+	output_stream store.Stream) (*processor.MeteredProcessor, error) {
 	var vtSerde commtypes.Serde
 	if sp.SerdeFormat == uint8(commtypes.JSON) {
 		vtSerde = commtypes.ValueTimestampJSONSerde{
@@ -81,7 +82,8 @@ func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes
 }
 
 func (h *wordcountCounterAgg) processWithTransaction(ctx context.Context, sp *common.QueryInput,
-	output_stream *sharedlog_stream.ShardedSharedLogStream, src *processor.MeteredSource, p *processor.MeteredProcessor,
+	output_stream *store.MeteredStream,
+	src *processor.MeteredSource, p *processor.MeteredProcessor,
 ) *common.FnOutput {
 	latencies := make([]int, 0, 128)
 	duration := time.Duration(sp.Duration) * time.Second
@@ -154,11 +156,17 @@ func (h *wordcountCounterAgg) processWithTransaction(ctx context.Context, sp *co
 		msgs, err := src.Consume(ctx, sp.ParNum)
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+				elapsed := time.Since(procStart)
+				latencies = append(latencies, int(elapsed.Microseconds()))
 				return &common.FnOutput{
-					Success:   true,
-					Message:   err.Error(),
-					Latencies: map[string][]int{"e2e": latencies},
-					Duration:  time.Since(startTime).Seconds(),
+					Success: true,
+					Message: err.Error(),
+					Latencies: map[string][]int{
+						"e2e":   latencies,
+						"src":   src.GetLatency(),
+						"count": p.GetLatency(),
+					},
+					Duration: time.Since(startTime).Seconds(),
 				}
 			}
 			return &common.FnOutput{
@@ -200,7 +208,8 @@ func (h *wordcountCounterAgg) processWithTransaction(ctx context.Context, sp *co
 }
 
 func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput,
-	output_stream *sharedlog_stream.ShardedSharedLogStream, src *processor.MeteredSource, p *processor.MeteredProcessor,
+	output_stream *store.MeteredStream,
+	src *processor.MeteredSource, p *processor.MeteredProcessor,
 ) *common.FnOutput {
 	latencies := make([]int, 0, 128)
 	duration := time.Duration(sp.Duration) * time.Second
@@ -210,15 +219,22 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 			break
 		}
 		procStart := time.Now()
-		fmt.Fprintf(os.Stderr, "before consume\n")
 		msgs, err := src.Consume(ctx, sp.ParNum)
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+				elapsed := time.Since(procStart)
+				latencies = append(latencies, int(elapsed.Microseconds()))
 				return &common.FnOutput{
-					Success:   true,
-					Message:   err.Error(),
-					Latencies: map[string][]int{"e2e": latencies},
-					Duration:  time.Since(startTime).Seconds(),
+					Success: true,
+					Message: err.Error(),
+					Latencies: map[string][]int{
+						"e2e":           latencies,
+						"src":           src.GetLatency(),
+						"count":         p.GetLatency(),
+						"changelogRead": output_stream.GetReadNextLatencies(),
+						"changelogPush": output_stream.GetPushLatencies(),
+					},
+					Duration: time.Since(startTime).Seconds(),
 				}
 			}
 			return &common.FnOutput{
@@ -242,9 +258,11 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 		Success:  true,
 		Duration: time.Since(startTime).Seconds(),
 		Latencies: map[string][]int{
-			"e2e":   latencies,
-			"src":   src.GetLatency(),
-			"count": p.GetLatency(),
+			"e2e":           latencies,
+			"src":           src.GetLatency(),
+			"count":         p.GetLatency(),
+			"changelogRead": output_stream.GetReadNextLatencies(),
+			"changelogPush": output_stream.GetPushLatencies(),
 		},
 	}
 }
@@ -257,6 +275,7 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 			Message: fmt.Sprintf("get input output stream failed: %v", err),
 		}
 	}
+	meteredOutputStream := store.NewMeteredStream(output_stream)
 
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
@@ -266,13 +285,13 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 		}
 	}
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
-		Timeout:      time.Duration(sp.Duration) * time.Second,
+		Timeout:      common.SrcConsumeTimeout,
 		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: commtypes.StringDecoder{},
 		MsgDecoder:   msgSerde,
 	}
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
-	p, err := setupCounter(ctx, sp, msgSerde, output_stream)
+	p, err := setupCounter(ctx, sp, msgSerde, meteredOutputStream)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -281,7 +300,7 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 	}
 
 	if sp.EnableTransaction {
-		return h.processWithTransaction(ctx, sp, output_stream, src, p)
+		return h.processWithTransaction(ctx, sp, meteredOutputStream, src, p)
 	}
-	return h.process(ctx, sp, output_stream, src, p)
+	return h.process(ctx, sp, meteredOutputStream, src, p)
 }
