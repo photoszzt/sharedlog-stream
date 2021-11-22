@@ -172,7 +172,7 @@ func (s *SharedLogStream) isEmpty() bool {
 func (s *SharedLogStream) readBackwardWithTag(ctx context.Context, parNum uint8, tag uint64) (*commtypes.AppIDGen, *commtypes.RawMsg, error) {
 	seqNum := s.tail + 1
 	for {
-		logEntry, err := s.env.SharedLogReadPrev(ctx, tag, seqNum)
+		logEntry, err := s.readPrevWithTimeout(ctx, tag, seqNum)
 		if err != nil {
 			return nil, nil, err
 		}

@@ -26,9 +26,9 @@ func (ts TransactionState) String() string {
 func (ts TransactionState) IsValidPreviousState(prevState TransactionState) bool {
 	switch ts {
 	case EMPTY:
-		return prevState == EMPTY || prevState == COMPLETE_ABORT || prevState == COMPLETE_COMMIT
+		return prevState == EMPTY || prevState == COMPLETE_ABORT || prevState == COMPLETE_COMMIT || prevState == FENCE
 	case BEGIN:
-		return prevState == BEGIN || prevState == EMPTY || prevState == COMPLETE_ABORT || prevState == COMPLETE_COMMIT
+		return prevState == BEGIN || prevState == EMPTY || prevState == COMPLETE_ABORT || prevState == COMPLETE_COMMIT || prevState == FENCE
 	case PREPARE_COMMIT:
 		return prevState == BEGIN
 	case PREPARE_ABORT:
@@ -38,7 +38,7 @@ func (ts TransactionState) IsValidPreviousState(prevState TransactionState) bool
 	case COMPLETE_COMMIT:
 		return prevState == PREPARE_COMMIT
 	case FENCE:
-		return prevState == BEGIN
+		return prevState == EMPTY
 	default:
 		panic(fmt.Sprintf("transaction state is not recognized: %d", ts))
 	}

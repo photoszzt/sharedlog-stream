@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
 	"sync"
-	"sync/atomic"
 
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -65,6 +65,7 @@ func NewTransactionManager(ctx context.Context, env types.Environment, transacti
 		TransactionalId:       transactional_id,
 		currentStatus:         EMPTY,
 		currentTopicPartition: make(map[string]map[uint8]struct{}),
+		topicStreams:          make(map[string]store.Stream),
 		backgroundJobErrg:     errg,
 		backgroundJobCtx:      gctx,
 		currentEpoch:          0,
@@ -119,9 +120,17 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 	strSerde := commtypes.StringSerde{}
 	var lastTopicPartitions []TopicPartition
 
+	tmpStatus := EMPTY
+	tmpAppID := uint64(0)
+	tmpEpoch := uint16(0)
+
 	// find the begin of the last transaction
 	_, rawMsg, err := tc.transactionLog.readBackwardWithTag(ctx, 0, BeginTag(tc.transactionLog.topicNameHash, 0))
 	if err != nil {
+		// empty log
+		if errors.IsStreamEmptyError(err) {
+			return nil
+		}
 		return err
 	}
 	// empty log
@@ -150,26 +159,51 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 				return err
 			}
 			txnMeta := val.(TxnMetadata)
-			tc.currentStatus = txnMeta.State
-			tc.currentAppId = txnMeta.AppId
-			tc.currentEpoch = txnMeta.AppEpoch
+			// We have updated our app id; the fence will be the last entry in the transaction log
+			if txnMeta.State != FENCE || (tmpAppID != tc.currentAppId && tmpEpoch != tc.currentEpoch) {
+				tmpStatus = txnMeta.State
+				tmpAppID = txnMeta.AppId
+				tmpEpoch = txnMeta.AppEpoch
+			}
 			if txnMeta.TopicPartitions != nil {
 				lastTopicPartitions = append(lastTopicPartitions, txnMeta.TopicPartitions...)
 			}
 		}
 	}
 	// check the last status of the transaction
-	switch tc.currentStatus {
+	switch tmpStatus {
 	case EMPTY, COMPLETE_COMMIT, COMPLETE_ABORT:
 		log.Info().Msgf("examed previous transaction with no error")
 	case BEGIN:
 		// need to abort
+		currentStatus := tc.currentStatus
+		currentAppId := tc.currentAppId
+		currentEpoch := tc.currentEpoch
+
+		// use the previous app id to finish the previous transaction
+		tc.currentStatus = tmpStatus
+		tc.currentAppId = tmpAppID
+		tc.currentEpoch = tmpEpoch
 		tc.loadCurrentTopicPartitions(lastTopicPartitions)
 		err := tc.AbortTransaction(ctx)
 		if err != nil {
 			return err
 		}
+		// swap back
+		tc.currentStatus = currentStatus
+		tc.currentAppId = currentAppId
+		tc.currentEpoch = currentEpoch
 	case PREPARE_ABORT:
+		// need to abort
+		currentStatus := tc.currentStatus
+		currentAppId := tc.currentAppId
+		currentEpoch := tc.currentEpoch
+
+		// use the previous app id to finish the previous transaction
+		tc.currentStatus = tmpStatus
+		tc.currentAppId = tmpAppID
+		tc.currentEpoch = tmpEpoch
+
 		// the transaction is aborted but the marker might not pushed to the relevant partitions yet
 		tc.loadCurrentTopicPartitions(lastTopicPartitions)
 		err := tc.completeTransaction(ctx, ABORT, COMPLETE_ABORT)
@@ -177,14 +211,33 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 			return err
 		}
 		tc.cleanupState()
+		// swap back
+		tc.currentStatus = currentStatus
+		tc.currentAppId = currentAppId
+		tc.currentEpoch = currentEpoch
 	case PREPARE_COMMIT:
 		// the transaction is commited but the marker might not pushed to the relevant partitions yet
+		// need to abort
+		currentStatus := tc.currentStatus
+		currentAppId := tc.currentAppId
+		currentEpoch := tc.currentEpoch
+
+		// use the previous app id to finish the previous transaction
+		tc.currentStatus = tmpStatus
+		tc.currentAppId = tmpAppID
+		tc.currentEpoch = tmpEpoch
+
 		tc.loadCurrentTopicPartitions(lastTopicPartitions)
 		err := tc.completeTransaction(ctx, COMMIT, COMPLETE_COMMIT)
 		if err != nil {
 			return err
 		}
 		tc.cleanupState()
+
+		// swap back
+		tc.currentStatus = currentStatus
+		tc.currentAppId = currentAppId
+		tc.currentEpoch = currentEpoch
 	case FENCE:
 		// it's in a view change.
 		log.Info().Msgf("Last operation in the log is fence to update the epoch. We are updating the epoch again.")
@@ -194,17 +247,13 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 
 func (tc *TransactionManager) InitTransaction(ctx context.Context) (uint64, uint16, error) {
 	// Steps:
-	// 1. roll forward/backward the transactions that are not finished
-	// 2. generate app id and epoch number
+	// fence first, to stop the zoombie instance from writing to the transaction log
+	// clean up the log
 
 	tc.tmMu.Lock()
 	defer tc.tmMu.Unlock()
 
 	tc.currentStatus = FENCE
-	err := tc.loadTransactionFromLog(ctx)
-	if err != nil {
-		return 0, 0, err
-	}
 	if tc.currentAppId == 0 {
 		tc.genAppId()
 	}
@@ -219,48 +268,66 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) (uint64, uint
 		State:    tc.currentStatus,
 	}
 	tags := []uint64{NameHashWithPartition(tc.transactionLog.topicNameHash, 0), FenceTag(tc.transactionLog.topicNameHash, 0)}
-	err = tc.appendToTransactionLog(ctx, &txnMeta, tags)
+	err := tc.appendToTransactionLog(ctx, &txnMeta, tags)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("appendToTransactionLog failed: %v", err)
 	}
+	err = tc.loadTransactionFromLog(ctx)
+	if err != nil {
+		return 0, 0, fmt.Errorf("loadTransactinoFromLog failed: %v", err)
+	}
+
 	return tc.currentAppId, tc.currentEpoch, nil
 }
 
-func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, shouldStop *uint32) error {
+func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, quit chan bool, errc chan error, dcancel context.CancelFunc) {
 	fenceTag := FenceTag(tc.transactionLog.topicNameHash, 0)
 	strSerde := commtypes.StringSerde{}
 	for {
 		_, rawMsgs, err := tc.transactionLog.ReadNextWithTag(ctx, 0, fenceTag)
 		if err != nil {
-			return err
-		}
-		for _, rawMsg := range rawMsgs {
-			keyBytes, valBytes, err := tc.msgSerde.Decode(rawMsg.Payload)
-			if err != nil {
-				return err
-			}
-			trStr, err := strSerde.Decode(keyBytes)
-			if err != nil {
-				return err
-			}
-			transactionalId := trStr.(string)
-			// not the fence it's looking at
-			if transactionalId != tc.TransactionalId {
+			if errors.IsStreamEmptyError(err) {
 				continue
 			}
-			txnMetaTmp, err := tc.txnMdSerde.Decode(valBytes)
-			if err != nil {
-				return err
+			errc <- err
+		} else {
+			for _, rawMsg := range rawMsgs {
+				keyBytes, valBytes, err := tc.msgSerde.Decode(rawMsg.Payload)
+				if err != nil {
+					errc <- err
+					break
+				}
+				trStr, err := strSerde.Decode(keyBytes)
+				if err != nil {
+					errc <- err
+					break
+				}
+				transactionalId := trStr.(string)
+				// not the fence it's looking at
+				if transactionalId != tc.TransactionalId {
+					continue
+				}
+				txnMetaTmp, err := tc.txnMdSerde.Decode(valBytes)
+				if err != nil {
+					errc <- err
+					break
+				}
+				txnMeta := txnMetaTmp.(TxnMetadata)
+				if txnMeta.State != FENCE {
+					panic("fence state should be fence")
+				}
+				if txnMeta.AppId == tc.currentAppId && txnMeta.AppEpoch > tc.currentEpoch {
+					// I'm the zoombie
+					dcancel()
+					errc <- nil
+					break
+				}
 			}
-			txnMeta := txnMetaTmp.(TxnMetadata)
-			if txnMeta.State != FENCE {
-				panic("fence state should be fence")
-			}
-			if txnMeta.AppId == tc.currentAppId && txnMeta.AppEpoch > tc.currentEpoch {
-				// I'm the zoombie
-				atomic.StoreUint32(shouldStop, 1)
-				return nil
-			}
+		}
+		select {
+		case <-quit:
+			return
+		default:
 		}
 	}
 }
@@ -437,6 +504,7 @@ func (tc *TransactionManager) BeginTransaction(ctx context.Context) error {
 	tc.tmMu.Lock()
 	defer tc.tmMu.Unlock()
 	if !BEGIN.IsValidPreviousState(tc.currentStatus) {
+		fmt.Fprintf(os.Stderr, "current state is %d\n", tc.currentStatus)
 		return errors.ErrInvalidStateTransition
 	}
 	tc.currentStatus = BEGIN
