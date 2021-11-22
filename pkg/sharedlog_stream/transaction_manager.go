@@ -381,9 +381,6 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 }
 
 func (tc *TransactionManager) registerTopicPartitions(ctx context.Context) error {
-	if tc.currentStatus != BEGIN {
-		return xerrors.Errorf("should begin transaction first")
-	}
 	var tps []TopicPartition
 	for topic, pars := range tc.currentTopicPartition {
 		pars_arr := make([]uint8, 0, len(pars))
@@ -492,7 +489,7 @@ func (tc *TransactionManager) AppendOffset(ctx context.Context, offsetConfig Off
 		AppId:    offsetConfig.AppId,
 		AppEpoch: offsetConfig.AppEpoch,
 	}
-	encoded, err := tc.offsetRecordSerde.Encode(offsetRecord)
+	encoded, err := tc.offsetRecordSerde.Encode(&offsetRecord)
 	if err != nil {
 		return err
 	}
