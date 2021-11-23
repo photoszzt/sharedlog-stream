@@ -80,12 +80,132 @@ func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes
 	return p, nil
 }
 
-func (h *wordcountCounterAgg) processWithTransaction(ctx context.Context, sp *common.QueryInput,
-	output_stream *store.MeteredStream,
-	src *processor.MeteredSource, p *processor.MeteredProcessor,
-) *common.FnOutput {
+type wordcountCounterAggProcessArg struct {
+	src           *processor.MeteredSource
+	output_stream *store.MeteredStream
+	counter       *processor.MeteredProcessor
+}
+
+func (h *wordcountCounterAgg) processWithTranLoop(
+	ctx context.Context,
+	sp *common.QueryInput,
+	args wordcountCounterAggProcessArg,
+	tm *sharedlog_stream.TransactionManager, appId uint64, appEpoch uint16,
+	retc chan *common.FnOutput,
+) {
 	latencies := make([]int, 0, 128)
 	duration := time.Duration(sp.Duration) * time.Second
+
+	hasLiveTransaction := false
+	trackConsumePar := false
+	currentOffset := uint64(0)
+
+	var commitTimer time.Time
+	commitEvery := time.Duration(sp.CommitEvery) * time.Millisecond
+	startTime := time.Now()
+L:
+	for {
+		select {
+		case <-ctx.Done():
+			break L
+		default:
+		}
+		timeSinceTranStart := time.Since(commitTimer)
+		timeout := duration != 0 && time.Since(startTime) >= duration
+		isTimeToCommit := commitEvery != 0 && timeSinceTranStart > commitEvery
+		if hasLiveTransaction && (isTimeToCommit || timeout) {
+			benchutil.TrackOffsetAndCommit(ctx, sharedlog_stream.OffsetConfig{
+				TopicToTrack: sp.InputTopicName,
+				AppId:        appId,
+				AppEpoch:     appEpoch,
+				Partition:    sp.ParNum,
+				Offset:       currentOffset,
+			}, tm, &hasLiveTransaction, &trackConsumePar, retc)
+		}
+		if timeout {
+			err := tm.Close()
+			if err != nil {
+				retc <- &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("close transaction manager: %v\n", err),
+				}
+			}
+			break
+		}
+		if !hasLiveTransaction {
+			err := tm.BeginTransaction(ctx)
+			if err != nil {
+				retc <- &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("transaction begin failed: %v\n", err),
+				}
+			}
+			hasLiveTransaction = true
+			commitTimer = time.Now()
+		}
+		procStart := time.Now()
+		msgs, err := args.src.Consume(ctx, sp.ParNum)
+		if err != nil {
+			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+				elapsed := time.Since(procStart)
+				latencies = append(latencies, int(elapsed.Microseconds()))
+				retc <- &common.FnOutput{
+					Success: true,
+					Message: err.Error(),
+					Latencies: map[string][]int{
+						"e2e":           latencies,
+						"src":           args.src.GetLatency(),
+						"count":         args.counter.GetLatency(),
+						"changelogRead": args.output_stream.GetReadNextLatencies(),
+						"changelogPush": args.output_stream.GetPushLatencies(),
+					},
+					Duration: time.Since(startTime).Seconds(),
+				}
+			}
+			retc <- &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("consume failed: %v", err),
+			}
+		}
+		if !trackConsumePar {
+			err = tm.AddOffsets(ctx, sp.InputTopicName, []uint8{sp.ParNum})
+			if err != nil {
+				retc <- &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("add offsets failed: %v", err),
+				}
+			}
+			trackConsumePar = true
+		}
+		for _, msg := range msgs {
+			_, err = args.counter.ProcessAndReturn(ctx, msg.Msg)
+			if err != nil {
+				retc <- &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("counter failed: %v", err),
+				}
+			}
+		}
+		elapsed := time.Since(procStart)
+		latencies = append(latencies, int(elapsed.Microseconds()))
+	}
+	retc <- &common.FnOutput{
+		Success:  true,
+		Duration: time.Since(startTime).Seconds(),
+		Latencies: map[string][]int{
+			"e2e":           latencies,
+			"src":           args.src.GetLatency(),
+			"count":         args.counter.GetLatency(),
+			"changelogRead": args.output_stream.GetReadNextLatencies(),
+			"changelogPush": args.output_stream.GetPushLatencies(),
+		},
+	}
+}
+
+func (h *wordcountCounterAgg) processWithTransaction(ctx context.Context,
+	sp *common.QueryInput,
+	args wordcountCounterAggProcessArg,
+) *common.FnOutput {
 
 	// fmt.Fprintf(os.Stderr, "word count counter function enables exactly once semantics\n")
 	transactionalId := fmt.Sprintf("wordcount-counter-%s-%s-%d", sp.InputTopicName, sp.OutputTopicName, sp.ParNum)
@@ -96,119 +216,36 @@ func (h *wordcountCounterAgg) processWithTransaction(ctx context.Context, sp *co
 			Message: fmt.Sprintf("setup transaction manager failed: %v", err),
 		}
 	}
-	tm.RecordTopicStreams(sp.OutputTopicName, output_stream)
-	hasLiveTransaction := false
-	trackConsumePar := false
-	currentOffset := uint64(0)
-	var commitTimer time.Time
-	commitEvery := time.Duration(sp.CommitEvery) * time.Millisecond
-	startTime := time.Now()
+	tm.RecordTopicStreams(sp.OutputTopicName, args.output_stream)
+
+	monitorQuit := make(chan struct{})
+	monitorErrc := make(chan error)
+
+	dctx, dcancel := context.WithCancel(ctx)
+	go tm.MonitorTransactionLog(ctx, monitorQuit, monitorErrc, dcancel)
+
+	retc := make(chan *common.FnOutput)
+	go h.processWithTranLoop(dctx, sp, args, tm, appId, appEpoch, retc)
+
 	for {
-		timeSinceTranStart := time.Since(commitTimer)
-		timeout := duration != 0 && time.Since(startTime) >= duration
-		if (commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout {
-			err = tm.AppendOffset(ctx, sharedlog_stream.OffsetConfig{
-				TopicToTrack: sp.InputTopicName,
-				AppId:        appId,
-				AppEpoch:     appEpoch,
-				Partition:    sp.ParNum,
-				Offset:       currentOffset,
-			})
-			if err != nil {
+		select {
+		case ret := <-retc:
+			close(monitorQuit)
+			return ret
+		case merr := <-monitorErrc:
+			close(monitorQuit)
+			if merr != nil {
 				return &common.FnOutput{
 					Success: false,
-					Message: fmt.Sprintf("append offset failed: %v\n", err),
-				}
-			}
-			err = tm.CommitTransaction(ctx)
-			if err != nil {
-				return &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("commit failed: %v\n", err),
-				}
-			}
-			hasLiveTransaction = false
-			trackConsumePar = false
-		}
-		if timeout {
-			err = tm.Close()
-			if err != nil {
-				return &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("close transaction manager: %v\n", err),
-				}
-			}
-			break
-		}
-		if !hasLiveTransaction {
-			err = tm.BeginTransaction(ctx)
-			if err != nil {
-				return &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("transaction begin failed: %v\n", err),
-				}
-			}
-			hasLiveTransaction = true
-			commitTimer = time.Now()
-		}
-		procStart := time.Now()
-		msgs, err := src.Consume(ctx, sp.ParNum)
-		if err != nil {
-			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
-				elapsed := time.Since(procStart)
-				latencies = append(latencies, int(elapsed.Microseconds()))
-				return &common.FnOutput{
-					Success: true,
-					Message: err.Error(),
-					Latencies: map[string][]int{
-						"e2e":   latencies,
-						"src":   src.GetLatency(),
-						"count": p.GetLatency(),
-					},
-					Duration: time.Since(startTime).Seconds(),
-				}
-			}
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("consume failed: %v", err),
-			}
-		}
-		if !trackConsumePar {
-			err = tm.AddOffsets(ctx, sp.InputTopicName, []uint8{sp.ParNum})
-			if err != nil {
-				return &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("add offsets failed: %v", err),
-				}
-			}
-			trackConsumePar = true
-		}
-		for _, msg := range msgs {
-			_, err = p.ProcessAndReturn(ctx, msg.Msg)
-			if err != nil {
-				return &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("counter failed: %v", err),
+					Message: fmt.Sprintf("monitor failed: %v", merr),
 				}
 			}
 		}
-		elapsed := time.Since(procStart)
-		latencies = append(latencies, int(elapsed.Microseconds()))
-	}
-	return &common.FnOutput{
-		Success:  true,
-		Duration: time.Since(startTime).Seconds(),
-		Latencies: map[string][]int{
-			"e2e":   latencies,
-			"src":   src.GetLatency(),
-			"count": p.GetLatency(),
-		},
 	}
 }
 
 func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput,
-	output_stream *store.MeteredStream,
-	src *processor.MeteredSource, p *processor.MeteredProcessor,
+	args wordcountCounterAggProcessArg,
 ) *common.FnOutput {
 	latencies := make([]int, 0, 128)
 	duration := time.Duration(sp.Duration) * time.Second
@@ -218,7 +255,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 			break
 		}
 		procStart := time.Now()
-		msgs, err := src.Consume(ctx, sp.ParNum)
+		msgs, err := args.src.Consume(ctx, sp.ParNum)
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				elapsed := time.Since(procStart)
@@ -228,10 +265,10 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 					Message: err.Error(),
 					Latencies: map[string][]int{
 						"e2e":           latencies,
-						"src":           src.GetLatency(),
-						"count":         p.GetLatency(),
-						"changelogRead": output_stream.GetReadNextLatencies(),
-						"changelogPush": output_stream.GetPushLatencies(),
+						"src":           args.src.GetLatency(),
+						"count":         args.counter.GetLatency(),
+						"changelogRead": args.output_stream.GetReadNextLatencies(),
+						"changelogPush": args.output_stream.GetPushLatencies(),
 					},
 					Duration: time.Since(startTime).Seconds(),
 				}
@@ -242,7 +279,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 			}
 		}
 		for _, msg := range msgs {
-			_, err = p.ProcessAndReturn(ctx, msg.Msg)
+			_, err = args.counter.ProcessAndReturn(ctx, msg.Msg)
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,
@@ -258,10 +295,10 @@ func (h *wordcountCounterAgg) process(ctx context.Context, sp *common.QueryInput
 		Duration: time.Since(startTime).Seconds(),
 		Latencies: map[string][]int{
 			"e2e":           latencies,
-			"src":           src.GetLatency(),
-			"count":         p.GetLatency(),
-			"changelogRead": output_stream.GetReadNextLatencies(),
-			"changelogPush": output_stream.GetPushLatencies(),
+			"src":           args.src.GetLatency(),
+			"count":         args.counter.GetLatency(),
+			"changelogRead": args.output_stream.GetReadNextLatencies(),
+			"changelogPush": args.output_stream.GetPushLatencies(),
 		},
 	}
 }
@@ -298,8 +335,14 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 		}
 	}
 
-	if sp.EnableTransaction {
-		return h.processWithTransaction(ctx, sp, meteredOutputStream, src, p)
+	args := wordcountCounterAggProcessArg{
+		src:           src,
+		output_stream: meteredOutputStream,
+		counter:       p,
 	}
-	return h.process(ctx, sp, meteredOutputStream, src, p)
+
+	if sp.EnableTransaction {
+		return h.processWithTransaction(ctx, sp, args)
+	}
+	return h.process(ctx, sp, args)
 }

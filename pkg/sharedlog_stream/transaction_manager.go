@@ -154,7 +154,7 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 				return err
 			}
 			tc.TransactionalId = key.(string)
-			val, err := tc.txnMarkerSerde.Decode(valEncoded)
+			val, err := tc.txnMdSerde.Decode(valEncoded)
 			if err != nil {
 				return err
 			}
@@ -182,6 +182,7 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 
 		// use the previous app id to finish the previous transaction
 		tc.currentStatus = tmpStatus
+		fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 		tc.currentAppId = tmpAppID
 		tc.currentEpoch = tmpEpoch
 		tc.loadCurrentTopicPartitions(lastTopicPartitions)
@@ -191,16 +192,19 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 		}
 		// swap back
 		tc.currentStatus = currentStatus
+		fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 		tc.currentAppId = currentAppId
 		tc.currentEpoch = currentEpoch
 	case PREPARE_ABORT:
 		// need to abort
 		currentStatus := tc.currentStatus
+
 		currentAppId := tc.currentAppId
 		currentEpoch := tc.currentEpoch
 
 		// use the previous app id to finish the previous transaction
 		tc.currentStatus = tmpStatus
+		fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 		tc.currentAppId = tmpAppID
 		tc.currentEpoch = tmpEpoch
 
@@ -213,6 +217,7 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 		tc.cleanupState()
 		// swap back
 		tc.currentStatus = currentStatus
+		fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 		tc.currentAppId = currentAppId
 		tc.currentEpoch = currentEpoch
 	case PREPARE_COMMIT:
@@ -224,6 +229,7 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 
 		// use the previous app id to finish the previous transaction
 		tc.currentStatus = tmpStatus
+		fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 		tc.currentAppId = tmpAppID
 		tc.currentEpoch = tmpEpoch
 
@@ -236,6 +242,7 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 
 		// swap back
 		tc.currentStatus = currentStatus
+		fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 		tc.currentAppId = currentAppId
 		tc.currentEpoch = currentEpoch
 	case FENCE:
@@ -254,6 +261,7 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) (uint64, uint
 	defer tc.tmMu.Unlock()
 
 	tc.currentStatus = FENCE
+	fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 	if tc.currentAppId == 0 {
 		tc.genAppId()
 	}
@@ -280,10 +288,15 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) (uint64, uint
 	return tc.currentAppId, tc.currentEpoch, nil
 }
 
-func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, quit chan bool, errc chan error, dcancel context.CancelFunc) {
+func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, quit chan struct{}, errc chan error, dcancel context.CancelFunc) {
 	fenceTag := FenceTag(tc.transactionLog.topicNameHash, 0)
 	strSerde := commtypes.StringSerde{}
 	for {
+		select {
+		case <-quit:
+			return
+		default:
+		}
 		_, rawMsgs, err := tc.transactionLog.ReadNextWithTag(ctx, 0, fenceTag)
 		if err != nil {
 			if errors.IsStreamEmptyError(err) {
@@ -324,11 +337,6 @@ func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, quit ch
 				}
 			}
 		}
-		select {
-		case <-quit:
-			return
-		default:
-		}
 	}
 }
 
@@ -358,7 +366,7 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 	tm := TxnMarker{
 		Mark: uint8(marker),
 	}
-	encoded, err := tc.txnMarkerSerde.Encode(tm)
+	encoded, err := tc.txnMarkerSerde.Encode(&tm)
 	if err != nil {
 		return err
 	}
@@ -505,6 +513,7 @@ func (tc *TransactionManager) BeginTransaction(ctx context.Context) error {
 		return errors.ErrInvalidStateTransition
 	}
 	tc.currentStatus = BEGIN
+	fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 
 	txnState := TxnMetadata{
 		State:    tc.currentStatus,
@@ -524,6 +533,7 @@ func (tc *TransactionManager) completeTransaction(ctx context.Context, trMark Tx
 	}
 	// async append complete_commit
 	tc.currentStatus = trState
+	fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 	txnMd := TxnMetadata{
 		State: tc.currentStatus,
 	}
@@ -537,11 +547,13 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context) error {
 	tc.tmMu.Lock()
 	defer tc.tmMu.Unlock()
 	if !PREPARE_COMMIT.IsValidPreviousState(tc.currentStatus) {
+		fmt.Fprintf(os.Stderr, "Fail to transition from %s to PREPARE_COMMIT\n", tc.currentStatus.String())
 		return errors.ErrInvalidStateTransition
 	}
 
 	// first phase of the commit
 	tc.currentStatus = PREPARE_COMMIT
+	fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 	err := tc.registerTopicPartitions(ctx)
 	if err != nil {
 		return err
@@ -563,6 +575,7 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context) error {
 		return errors.ErrInvalidStateTransition
 	}
 	tc.currentStatus = PREPARE_ABORT
+	fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 	err := tc.registerTopicPartitions(ctx)
 	if err != nil {
 		return err
@@ -578,6 +591,7 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context) error {
 
 func (tc *TransactionManager) cleanupState() {
 	tc.currentStatus = EMPTY
+	fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 	tc.currentTopicPartition = make(map[string]map[uint8]struct{})
 }
 

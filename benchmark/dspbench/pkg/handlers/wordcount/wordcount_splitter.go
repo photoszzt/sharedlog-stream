@@ -93,37 +93,23 @@ func (h *wordcountSplitFlatMap) processWithTranLoop(
 	duration := time.Duration(sp.Duration) * time.Second
 
 	startTime := time.Now()
+L:
 	for {
 		select {
 		case <-ctx.Done():
-			break
+			break L
 		default:
 		}
 		timeSinceTranStart := time.Since(commitTimer)
 		timeout := duration != 0 && time.Since(startTime) >= duration
 		if (commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout {
-			err := tm.AppendOffset(ctx, sharedlog_stream.OffsetConfig{
+			benchutil.TrackOffsetAndCommit(ctx, sharedlog_stream.OffsetConfig{
 				TopicToTrack: sp.InputTopicName,
 				AppId:        appId,
 				AppEpoch:     appEpoch,
 				Partition:    sp.ParNum,
 				Offset:       currentOffset,
-			})
-			if err != nil {
-				retc <- &common.FnOutput{
-					Success: false,
-					Message: err.Error(),
-				}
-			}
-			err = tm.CommitTransaction(ctx)
-			if err != nil {
-				retc <- &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("commit failed: %v\n", err),
-				}
-			}
-			hasLiveTransaction = false
-			trackConsumePar = false
+			}, tm, &hasLiveTransaction, &trackConsumePar, retc)
 		}
 		if timeout {
 			err := tm.Close()
@@ -235,7 +221,7 @@ func (h *wordcountSplitFlatMap) processWithTransaction(
 	}
 	tm.RecordTopicStreams(sp.OutputTopicName, args.output_stream)
 
-	monitorQuit := make(chan bool)
+	monitorQuit := make(chan struct{})
 	monitorErrc := make(chan error)
 
 	dctx, dcancel := context.WithCancel(ctx)

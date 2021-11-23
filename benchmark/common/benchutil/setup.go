@@ -51,3 +51,26 @@ func SetupTransactionManager(ctx context.Context, env types.Environment, transac
 	}
 	return tm, appId, appEpoch, nil
 }
+
+func TrackOffsetAndCommit(ctx context.Context,
+	offsetConfig sharedlog_stream.OffsetConfig,
+	tm *sharedlog_stream.TransactionManager, hasLiveTransaction *bool, trackConsumePar *bool,
+	retc chan *common.FnOutput,
+) {
+	err := tm.AppendOffset(ctx, offsetConfig)
+	if err != nil {
+		retc <- &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("append offset failed: %v\n", err),
+		}
+	}
+	err = tm.CommitTransaction(ctx)
+	if err != nil {
+		retc <- &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("commit failed: %v\n", err),
+		}
+	}
+	*hasLiveTransaction = false
+	*trackConsumePar = false
+}
