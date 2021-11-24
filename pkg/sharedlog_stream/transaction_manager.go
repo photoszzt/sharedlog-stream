@@ -38,7 +38,7 @@ type TransactionManager struct {
 	currentTopicPartition map[string]map[uint8]struct{}
 	backgroundJobErrg     *errgroup.Group
 	TransactionalId       string
-	currentAppId          uint64 // 0 is NONE
+	currentTaskId         uint64 // 0 is NONE
 	currentEpoch          uint16 // 0 is NONE
 	currentStatus         TransactionState
 }
@@ -69,7 +69,7 @@ func NewTransactionManager(ctx context.Context, env types.Environment, transacti
 		backgroundJobErrg:     errg,
 		backgroundJobCtx:      gctx,
 		currentEpoch:          0,
-		currentAppId:          0,
+		currentTaskId:         0,
 	}
 	err := tm.setupSerde(serdeFormat)
 	if err != nil {
@@ -98,8 +98,8 @@ func (tc *TransactionManager) setupSerde(serdeFormat commtypes.SerdeFormat) erro
 }
 
 func (tc *TransactionManager) genAppId() {
-	for tc.currentAppId == 0 {
-		tc.currentAppId = tc.transactionLog.env.GenerateUniqueID()
+	for tc.currentTaskId == 0 {
+		tc.currentTaskId = tc.transactionLog.env.GenerateUniqueID()
 	}
 }
 
@@ -121,7 +121,7 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 	var lastTopicPartitions []TopicPartition
 
 	tmpStatus := EMPTY
-	tmpAppID := uint64(0)
+	tmpTaskID := uint64(0)
 	tmpEpoch := uint16(0)
 
 	// find the begin of the last transaction
@@ -160,10 +160,10 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 			}
 			txnMeta := val.(TxnMetadata)
 			// We have updated our app id; the fence will be the last entry in the transaction log
-			if txnMeta.State != FENCE || (tmpAppID != tc.currentAppId && tmpEpoch != tc.currentEpoch) {
+			if txnMeta.State != FENCE || (tmpTaskID != tc.currentTaskId && tmpEpoch != tc.currentEpoch) {
 				tmpStatus = txnMeta.State
-				tmpAppID = txnMeta.AppId
-				tmpEpoch = txnMeta.AppEpoch
+				tmpTaskID = txnMeta.TaskId
+				tmpEpoch = txnMeta.TaskEpoch
 			}
 			if txnMeta.TopicPartitions != nil {
 				lastTopicPartitions = append(lastTopicPartitions, txnMeta.TopicPartitions...)
@@ -177,13 +177,13 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 	case BEGIN:
 		// need to abort
 		currentStatus := tc.currentStatus
-		currentAppId := tc.currentAppId
+		currentAppId := tc.currentTaskId
 		currentEpoch := tc.currentEpoch
 
 		// use the previous app id to finish the previous transaction
 		tc.currentStatus = tmpStatus
 		fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
-		tc.currentAppId = tmpAppID
+		tc.currentTaskId = tmpTaskID
 		tc.currentEpoch = tmpEpoch
 		tc.loadCurrentTopicPartitions(lastTopicPartitions)
 		err := tc.AbortTransaction(ctx)
@@ -193,19 +193,19 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 		// swap back
 		tc.currentStatus = currentStatus
 		fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
-		tc.currentAppId = currentAppId
+		tc.currentTaskId = currentAppId
 		tc.currentEpoch = currentEpoch
 	case PREPARE_ABORT:
 		// need to abort
 		currentStatus := tc.currentStatus
 
-		currentAppId := tc.currentAppId
+		currentAppId := tc.currentTaskId
 		currentEpoch := tc.currentEpoch
 
 		// use the previous app id to finish the previous transaction
 		tc.currentStatus = tmpStatus
 		fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
-		tc.currentAppId = tmpAppID
+		tc.currentTaskId = tmpTaskID
 		tc.currentEpoch = tmpEpoch
 
 		// the transaction is aborted but the marker might not pushed to the relevant partitions yet
@@ -218,19 +218,19 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 		// swap back
 		tc.currentStatus = currentStatus
 		fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
-		tc.currentAppId = currentAppId
+		tc.currentTaskId = currentAppId
 		tc.currentEpoch = currentEpoch
 	case PREPARE_COMMIT:
 		// the transaction is commited but the marker might not pushed to the relevant partitions yet
 		// need to abort
 		currentStatus := tc.currentStatus
-		currentAppId := tc.currentAppId
+		currentAppId := tc.currentTaskId
 		currentEpoch := tc.currentEpoch
 
 		// use the previous app id to finish the previous transaction
 		tc.currentStatus = tmpStatus
 		fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
-		tc.currentAppId = tmpAppID
+		tc.currentTaskId = tmpTaskID
 		tc.currentEpoch = tmpEpoch
 
 		tc.loadCurrentTopicPartitions(lastTopicPartitions)
@@ -243,7 +243,7 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 		// swap back
 		tc.currentStatus = currentStatus
 		fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
-		tc.currentAppId = currentAppId
+		tc.currentTaskId = currentAppId
 		tc.currentEpoch = currentEpoch
 	case FENCE:
 		// it's in a view change.
@@ -262,7 +262,7 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) (uint64, uint
 
 	tc.currentStatus = FENCE
 	fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
-	if tc.currentAppId == 0 {
+	if tc.currentTaskId == 0 {
 		tc.genAppId()
 	}
 	if tc.currentEpoch == math.MaxUint16 {
@@ -271,9 +271,9 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) (uint64, uint
 	}
 	tc.currentEpoch += 1
 	txnMeta := TxnMetadata{
-		AppId:    tc.currentAppId,
-		AppEpoch: tc.currentEpoch,
-		State:    tc.currentStatus,
+		TaskId:    tc.currentTaskId,
+		TaskEpoch: tc.currentEpoch,
+		State:     tc.currentStatus,
 	}
 	tags := []uint64{NameHashWithPartition(tc.transactionLog.topicNameHash, 0), FenceTag(tc.transactionLog.topicNameHash, 0)}
 	err := tc.appendToTransactionLog(ctx, &txnMeta, tags)
@@ -285,7 +285,7 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) (uint64, uint
 		return 0, 0, fmt.Errorf("loadTransactinoFromLog failed: %v", err)
 	}
 
-	return tc.currentAppId, tc.currentEpoch, nil
+	return tc.currentTaskId, tc.currentEpoch, nil
 }
 
 func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, quit chan struct{}, errc chan error, dcancel context.CancelFunc) {
@@ -329,7 +329,7 @@ func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, quit ch
 				if txnMeta.State != FENCE {
 					panic("fence state should be fence")
 				}
-				if txnMeta.AppId == tc.currentAppId && txnMeta.AppEpoch > tc.currentEpoch {
+				if txnMeta.TaskId == tc.currentTaskId && txnMeta.TaskEpoch > tc.currentEpoch {
 					// I'm the zoombie
 					dcancel()
 					errc <- nil
@@ -404,8 +404,8 @@ func (tc *TransactionManager) registerTopicPartitions(ctx context.Context) error
 	txnMd := TxnMetadata{
 		TopicPartitions: tps,
 		State:           tc.currentStatus,
-		AppId:           tc.currentAppId,
-		AppEpoch:        tc.currentEpoch,
+		TaskId:          tc.currentTaskId,
+		TaskEpoch:       tc.currentEpoch,
 	}
 	err := tc.appendToTransactionLog(ctx, &txnMd, nil)
 	return err
@@ -436,8 +436,8 @@ func (tc *TransactionManager) AddTopicPartition(ctx context.Context, topic strin
 		txnMd := TxnMetadata{
 			TopicPartitions: []TopicPartition{{Topic: topic, ParNum: partitions}},
 			State:           tc.currentStatus,
-			AppId:           tc.currentAppId,
-			AppEpoch:        tc.currentEpoch,
+			TaskId:          tc.currentTaskId,
+			TaskEpoch:       tc.currentEpoch,
 		}
 		return tc.appendToTransactionLog(ctx, &txnMd, nil)
 	}
@@ -516,9 +516,9 @@ func (tc *TransactionManager) BeginTransaction(ctx context.Context) error {
 	fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 
 	txnState := TxnMetadata{
-		State:    tc.currentStatus,
-		AppId:    tc.currentAppId,
-		AppEpoch: tc.currentEpoch,
+		State:     tc.currentStatus,
+		TaskId:    tc.currentTaskId,
+		TaskEpoch: tc.currentEpoch,
 	}
 	tags := []uint64{NameHashWithPartition(tc.transactionLog.topicNameHash, 0), BeginTag(tc.transactionLog.topicNameHash, 0)}
 	return tc.appendToTransactionLog(ctx, &txnState, tags)
@@ -527,7 +527,7 @@ func (tc *TransactionManager) BeginTransaction(ctx context.Context) error {
 // second phase of the 2-phase commit protocol
 func (tc *TransactionManager) completeTransaction(ctx context.Context, trMark TxnMark, trState TransactionState) error {
 	// append txn marker to all topic partitions
-	err := tc.appendTxnMarkerToStreams(ctx, trMark, tc.currentAppId, tc.currentEpoch)
+	err := tc.appendTxnMarkerToStreams(ctx, trMark, tc.currentTaskId, tc.currentEpoch)
 	if err != nil {
 		return err
 	}

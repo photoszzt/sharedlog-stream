@@ -95,16 +95,16 @@ func (z *TxnMetadata) DecodeMsg(dc *msgp.Reader) (err error) {
 					return
 				}
 			}
-		case "aid":
-			z.AppId, err = dc.ReadUint64()
+		case "tid":
+			z.TaskId, err = dc.ReadUint64()
 			if err != nil {
-				err = msgp.WrapError(err, "AppId")
+				err = msgp.WrapError(err, "TaskId")
 				return
 			}
-		case "ae":
-			z.AppEpoch, err = dc.ReadUint16()
+		case "te":
+			z.TaskEpoch, err = dc.ReadUint16()
 			if err != nil {
-				err = msgp.WrapError(err, "AppEpoch")
+				err = msgp.WrapError(err, "TaskEpoch")
 				return
 			}
 		case "st":
@@ -164,24 +164,24 @@ func (z *TxnMetadata) EncodeMsg(en *msgp.Writer) (err error) {
 			}
 		}
 	}
-	// write "aid"
-	err = en.Append(0xa3, 0x61, 0x69, 0x64)
+	// write "tid"
+	err = en.Append(0xa3, 0x74, 0x69, 0x64)
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.AppId)
+	err = en.WriteUint64(z.TaskId)
 	if err != nil {
-		err = msgp.WrapError(err, "AppId")
+		err = msgp.WrapError(err, "TaskId")
 		return
 	}
-	// write "ae"
-	err = en.Append(0xa2, 0x61, 0x65)
+	// write "te"
+	err = en.Append(0xa2, 0x74, 0x65)
 	if err != nil {
 		return
 	}
-	err = en.WriteUint16(z.AppEpoch)
+	err = en.WriteUint16(z.TaskEpoch)
 	if err != nil {
-		err = msgp.WrapError(err, "AppEpoch")
+		err = msgp.WrapError(err, "TaskEpoch")
 		return
 	}
 	// write "st"
@@ -224,12 +224,12 @@ func (z *TxnMetadata) MarshalMsg(b []byte) (o []byte, err error) {
 			}
 		}
 	}
-	// string "aid"
-	o = append(o, 0xa3, 0x61, 0x69, 0x64)
-	o = msgp.AppendUint64(o, z.AppId)
-	// string "ae"
-	o = append(o, 0xa2, 0x61, 0x65)
-	o = msgp.AppendUint16(o, z.AppEpoch)
+	// string "tid"
+	o = append(o, 0xa3, 0x74, 0x69, 0x64)
+	o = msgp.AppendUint64(o, z.TaskId)
+	// string "te"
+	o = append(o, 0xa2, 0x74, 0x65)
+	o = msgp.AppendUint16(o, z.TaskEpoch)
 	// string "st"
 	o = append(o, 0xa2, 0x73, 0x74)
 	o = msgp.AppendUint8(o, uint8(z.State))
@@ -273,16 +273,16 @@ func (z *TxnMetadata) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
-		case "aid":
-			z.AppId, bts, err = msgp.ReadUint64Bytes(bts)
+		case "tid":
+			z.TaskId, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "AppId")
+				err = msgp.WrapError(err, "TaskId")
 				return
 			}
-		case "ae":
-			z.AppEpoch, bts, err = msgp.ReadUint16Bytes(bts)
+		case "te":
+			z.TaskEpoch, bts, err = msgp.ReadUint16Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "AppEpoch")
+				err = msgp.WrapError(err, "TaskEpoch")
 				return
 			}
 		case "st":
