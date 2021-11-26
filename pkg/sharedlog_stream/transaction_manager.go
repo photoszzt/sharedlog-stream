@@ -11,6 +11,7 @@ import (
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 
+	"cs.utexas.edu/zjia/faas/protocol"
 	"cs.utexas.edu/zjia/faas/types"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
@@ -44,11 +45,13 @@ type TransactionManager struct {
 }
 
 func BeginTag(nameHash uint64, parNum uint8) uint64 {
-	return nameHash<<(PartitionBits+LogTagReserveBits) + uint64(parNum)<<LogTagReserveBits + TransactionLogBegin
+	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
+	return nameHash&mask + uint64(parNum)<<LogTagReserveBits + TransactionLogBegin
 }
 
 func FenceTag(nameHash uint64, parNum uint8) uint64 {
-	return nameHash<<(PartitionBits+LogTagReserveBits) + uint64(parNum)<<LogTagReserveBits + TransactionLogFence
+	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
+	return nameHash&mask + uint64(parNum)<<LogTagReserveBits + TransactionLogFence
 }
 
 func NewTransactionManager(ctx context.Context, env types.Environment, transactional_id string, serdeFormat commtypes.SerdeFormat) (*TransactionManager, error) {
@@ -125,18 +128,37 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 	tmpEpoch := uint16(0)
 
 	// find the begin of the last transaction
-	_, rawMsg, err := tc.transactionLog.readBackwardWithTag(ctx, 0, BeginTag(tc.transactionLog.topicNameHash, 0))
-	if err != nil {
+	for {
+		_, rawMsg, err := tc.transactionLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, 0, BeginTag(tc.transactionLog.topicNameHash, 0))
+		if err != nil {
+			// empty log
+			if errors.IsStreamEmptyError(err) {
+				return nil
+			}
+			return err
+		}
 		// empty log
-		if errors.IsStreamEmptyError(err) {
+		if rawMsg == nil {
 			return nil
 		}
-		return err
+		_, valEncoded, err := tc.msgSerde.Decode(rawMsg.Payload)
+		if err != nil {
+			return err
+		}
+		val, err := tc.txnMdSerde.Decode(valEncoded)
+		if err != nil {
+			return err
+		}
+		txnMeta := val.(TxnMetadata)
+		if txnMeta.State != BEGIN {
+			continue
+		} else {
+			// read from the begin of the last transaction
+			tc.transactionLog.cursor = rawMsg.LogSeqNum
+			break
+		}
 	}
-	// empty log
-	if rawMsg == nil {
-		return nil
-	}
+
 	for {
 		_, msgs, err := tc.transactionLog.ReadNext(ctx, 0)
 		if errors.IsStreamEmptyError(err) {
@@ -374,13 +396,13 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 	if err != nil {
 		return err
 	}
-	g, ctx := errgroup.WithContext(ctx)
+	g, ectx := errgroup.WithContext(ctx)
 	for topic, partitions := range tc.currentTopicPartition {
 		stream := tc.topicStreams[topic]
 		for par := range partitions {
 			parNum := par
 			g.Go(func() error {
-				_, err = stream.Push(ctx, msg_encoded, parNum, true)
+				_, err = stream.Push(ectx, msg_encoded, parNum, true)
 				return err
 			})
 		}
@@ -488,7 +510,6 @@ type OffsetConfig struct {
 
 func (tc *TransactionManager) AppendOffset(ctx context.Context, offsetConfig OffsetConfig) error {
 	tc.tmMu.RLock()
-	defer tc.tmMu.RUnlock()
 
 	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + offsetConfig.TopicToTrack
 	offsetLog := tc.topicStreams[offsetTopic]
@@ -499,10 +520,38 @@ func (tc *TransactionManager) AppendOffset(ctx context.Context, offsetConfig Off
 	}
 	encoded, err := tc.offsetRecordSerde.Encode(&offsetRecord)
 	if err != nil {
+		tc.tmMu.RUnlock()
 		return err
 	}
+
 	_, err = offsetLog.Push(ctx, encoded, offsetConfig.Partition, false)
+	tc.tmMu.RUnlock()
 	return err
+}
+
+func (tc *TransactionManager) FindLastOffset(ctx context.Context, topicToTrack string, parNum uint8) error {
+	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + topicToTrack
+	offsetLog := tc.topicStreams[offsetTopic]
+
+	txnMarkerTag := TxnMarkerTag(offsetLog.TopicNameHash(), parNum)
+	var txnMkRawMsg *commtypes.RawMsg = nil
+	for {
+		_, rawMsg, err := offsetLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, parNum, txnMarkerTag)
+		if err != nil {
+			return err
+		}
+		if !rawMsg.IsControl {
+			continue
+		} else {
+			break
+		}
+	}
+	if txnMkRawMsg == nil {
+		return errors.ErrStreamEmpty
+	}
+
+	// tag := NameHashWithPartition(offsetLog.TopicNameHash(), parNum)
+	return nil
 }
 
 func (tc *TransactionManager) BeginTransaction(ctx context.Context) error {

@@ -8,10 +8,11 @@ const (
 
 	PartitionBits = 8
 
-	TransactionLogBegin = iota + 1
+	TransactionLogBegin = iota
 	TransactionLogPreCommit
 	TransactionLogPreAbort
 	TransactionLogCompleteCommit
 	TransactionLogCompleteAbort
 	TransactionLogFence
+	TxnMarkLowBits
 )

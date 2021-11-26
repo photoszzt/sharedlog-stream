@@ -3,6 +3,7 @@ package sharedlog_stream
 import (
 	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 
 	"cs.utexas.edu/zjia/faas/types"
 	"golang.org/x/xerrors"
@@ -15,6 +16,8 @@ type ShardedSharedLogStream struct {
 	subSharedLogStreams []*SharedLogStream
 	numPartitions       uint8
 }
+
+var _ = store.Stream(&ShardedSharedLogStream{})
 
 var (
 	ErrZeroParNum = xerrors.New("Shards must be positive")
@@ -35,18 +38,6 @@ func NewShardedSharedLogStream(env types.Environment, topicName string, numParti
 		topicName:           topicName,
 	}, nil
 }
-
-/*
-func (s *ShardedSharedLogStream) InitStream(ctx context.Context, findTail bool) error {
-	for i := 0; i < int(s.numPartitions); i++ {
-		err := s.subSharedLogStreams[i].InitStream(ctx, uint8(i), findTail)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-*/
 
 func (s *ShardedSharedLogStream) Push(ctx context.Context, payload []byte, parNumber uint8, isControl bool) (uint64, error) {
 	return s.subSharedLogStreams[parNumber].Push(ctx, payload, parNumber, isControl)
@@ -76,6 +67,20 @@ func (s *ShardedSharedLogStream) ReadNextWithTag(ctx context.Context, parNumber 
 	}
 }
 
+func (s *ShardedSharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum uint64, parNum uint8, tag uint64) (*commtypes.AppIDGen, *commtypes.RawMsg, error) {
+	if parNum < s.numPartitions {
+		par := parNum
+		shard := s.subSharedLogStreams[par]
+		return shard.ReadBackwardWithTag(ctx, tailSeqNum, parNum, tag)
+	} else {
+		return nil, nil, xerrors.Errorf("Invalid partition number: %d", parNum)
+	}
+}
+
 func (s *ShardedSharedLogStream) TopicName() string {
 	return s.topicName
+}
+
+func (s *ShardedSharedLogStream) TopicNameHash() uint64 {
+	return s.subSharedLogStreams[0].topicNameHash
 }

@@ -4,8 +4,10 @@ package sharedlog_stream
 
 import (
 	"context"
+	"math"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -32,8 +34,16 @@ type SharedLogStream struct {
 	inTransaction      bool
 }
 
+var _ = store.Stream(&SharedLogStream{})
+
 func NameHashWithPartition(nameHash uint64, par uint8) uint64 {
-	return (nameHash << PartitionBits) + uint64(par)
+	mask := uint64(math.MaxUint64) - (1<<PartitionBits - 1)
+	return (nameHash & mask) + uint64(par)
+}
+
+func TxnMarkerTag(nameHash uint64, par uint8) uint64 {
+	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
+	return nameHash&mask + uint64(par)<<LogTagReserveBits + TxnMarkLowBits
 }
 
 type StreamLogEntry struct {
@@ -85,18 +95,6 @@ func (s *SharedLogStream) SetAppEpoch(epoch uint16) {
 func (s *SharedLogStream) TopicNameHash() uint64 {
 	return s.topicNameHash
 }
-
-/*
-func (s *SharedLogStream) InitStream(ctx context.Context, parNum uint8, findTail bool) error {
-	if findTail {
-		fmt.Fprintf(os.Stderr, "find tail in InitStream\n")
-		if err := s.findLastEntryBackward(ctx, protocol.MaxLogSeqnum, parNum); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-*/
 
 func (s *SharedLogStream) TopicName() string {
 	return s.topicName
@@ -169,8 +167,8 @@ func (s *SharedLogStream) isEmpty() bool {
 	return s.cursor >= s.tail
 }
 
-func (s *SharedLogStream) readBackwardWithTag(ctx context.Context, parNum uint8, tag uint64) (*commtypes.AppIDGen, *commtypes.RawMsg, error) {
-	seqNum := s.tail + 1
+func (s *SharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum uint64, parNum uint8, tag uint64) (*commtypes.AppIDGen, *commtypes.RawMsg, error) {
+	seqNum := tailSeqNum
 	for {
 		logEntry, err := s.readPrevWithTimeout(ctx, tag, seqNum)
 		if err != nil {
