@@ -100,6 +100,10 @@ func (s *SharedLogStream) TopicName() string {
 	return s.topicName
 }
 
+func (s *SharedLogStream) SetCursor(cursor uint64, parNum uint8) {
+	s.cursor = cursor
+}
+
 func (s *SharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNum uint8, tags []uint64, isControl bool) (uint64, error) {
 	if len(payload) == 0 {
 		return 0, errors.ErrEmptyPayload

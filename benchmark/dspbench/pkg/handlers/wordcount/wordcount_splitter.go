@@ -3,7 +3,6 @@ package wordcount
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"hash/fnv"
 	"os"
@@ -11,6 +10,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
+	"golang.org/x/xerrors"
 )
 
 type wordcountSplitFlatMap struct {
@@ -136,7 +137,7 @@ L:
 		procStart := time.Now()
 		gotMsgs, err := args.src.Consume(ctx, sp.ParNum)
 		if err != nil {
-			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+			if xerrors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				retc <- &common.FnOutput{
 					Success:   true,
 					Message:   err.Error(),
@@ -224,6 +225,19 @@ func (h *wordcountSplitFlatMap) processWithTransaction(
 	monitorQuit := make(chan struct{})
 	monitorErrc := make(chan error)
 
+	offset, err := tm.FindLastOffset(ctx, sp.InputTopicName, sp.ParNum)
+	if err != nil {
+		if !errors.IsStreamEmptyError(err) {
+			return &common.FnOutput{
+				Success: false,
+				Message: err.Error(),
+			}
+		}
+	}
+	if offset != 0 {
+
+	}
+
 	dctx, dcancel := context.WithCancel(ctx)
 	go tm.MonitorTransactionLog(ctx, monitorQuit, monitorErrc, dcancel)
 
@@ -261,7 +275,7 @@ func (h *wordcountSplitFlatMap) process(
 		procStart := time.Now()
 		gotMsgs, err := args.src.Consume(ctx, sp.ParNum)
 		if err != nil {
-			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+			if xerrors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
 					Success:   true,
 					Message:   err.Error(),

@@ -84,3 +84,7 @@ func (s *ShardedSharedLogStream) TopicName() string {
 func (s *ShardedSharedLogStream) TopicNameHash() uint64 {
 	return s.subSharedLogStreams[0].topicNameHash
 }
+
+func (s *ShardedSharedLogStream) SetCursor(cursor uint64, parNum uint8) {
+	s.subSharedLogStreams[parNum].cursor = cursor
+}

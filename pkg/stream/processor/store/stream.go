@@ -15,6 +15,7 @@ type Stream interface {
 	ReadBackwardWithTag(ctx context.Context, tailSeqNum uint64, parNum uint8, tag uint64) (*commtypes.AppIDGen, *commtypes.RawMsg, error)
 	TopicName() string
 	TopicNameHash() uint64
+	SetCursor(cursor uint64, parNum uint8)
 }
 
 type MeteredStream struct {
@@ -104,6 +105,10 @@ func (ms *MeteredStream) TopicName() string {
 
 func (ms *MeteredStream) TopicNameHash() uint64 {
 	return ms.stream.TopicNameHash()
+}
+
+func (ms *MeteredStream) SetCursor(cursor uint64, parNum uint8) {
+	ms.stream.SetCursor(cursor, parNum)
 }
 
 func (ms *MeteredStream) GetPushLatencies() []int {
