@@ -529,29 +529,34 @@ func (tc *TransactionManager) AppendOffset(ctx context.Context, offsetConfig Off
 	return err
 }
 
-func (tc *TransactionManager) FindLastOffset(ctx context.Context, topicToTrack string, parNum uint8) error {
+func (tc *TransactionManager) FindLastOffset(ctx context.Context, topicToTrack string, parNum uint8) (uint64, error) {
 	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + topicToTrack
 	offsetLog := tc.topicStreams[offsetTopic]
 
 	txnMarkerTag := TxnMarkerTag(offsetLog.TopicNameHash(), parNum)
 	var txnMkRawMsg *commtypes.RawMsg = nil
 	for {
-		_, rawMsg, err := offsetLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, parNum, txnMarkerTag)
+		_, txnMkRawMsg, err := offsetLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, parNum, txnMarkerTag)
 		if err != nil {
-			return err
+			return 0, err
 		}
-		if !rawMsg.IsControl {
+		if !txnMkRawMsg.IsControl {
 			continue
 		} else {
 			break
 		}
 	}
 	if txnMkRawMsg == nil {
-		return errors.ErrStreamEmpty
+		return 0, errors.ErrStreamEmpty
 	}
 
-	// tag := NameHashWithPartition(offsetLog.TopicNameHash(), parNum)
-	return nil
+	tag := NameHashWithPartition(offsetLog.TopicNameHash(), parNum)
+
+	_, rawMsg, err := offsetLog.ReadBackwardWithTag(ctx, txnMkRawMsg.LogSeqNum, parNum, tag)
+	if err != nil {
+		return 0, err
+	}
+	return rawMsg.LogSeqNum, nil
 }
 
 func (tc *TransactionManager) BeginTransaction(ctx context.Context) error {
