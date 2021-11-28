@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -35,7 +37,9 @@ func GetShardedInputOutputStreams(ctx context.Context, env types.Environment, in
 	return inputStream, outputStream, nil
 }
 
-func SetupTransactionManager(ctx context.Context, env types.Environment, transactionalId string, sp *common.QueryInput) (*sharedlog_stream.TransactionManager, uint64, uint16, error) {
+func SetupTransactionManager(ctx context.Context, env types.Environment,
+	transactionalId string, sp *common.QueryInput, src processor.Source,
+) (*sharedlog_stream.TransactionManager, uint64, uint16, error) {
 	tm, err := sharedlog_stream.NewTransactionManager(ctx, env, transactionalId, commtypes.SerdeFormat(sp.SerdeFormat))
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("NewTransactionManager failed: %v", err)
@@ -48,6 +52,16 @@ func SetupTransactionManager(ctx context.Context, env types.Environment, transac
 	err = tm.CreateOffsetTopic(sp.InputTopicName, uint8(sp.NumInPartition))
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("create offset topic failed: %v", err)
+	}
+
+	offset, err := tm.FindLastOffset(ctx, sp.InputTopicName, sp.ParNum)
+	if err != nil {
+		if !errors.IsStreamEmptyError(err) {
+			return nil, 0, 0, err
+		}
+	}
+	if offset != 0 {
+		src.SetCursor(offset+1, sp.ParNum)
 	}
 	return tm, appId, appEpoch, nil
 }

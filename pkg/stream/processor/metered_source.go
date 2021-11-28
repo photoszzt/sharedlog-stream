@@ -37,3 +37,7 @@ func (s *MeteredSource) Consume(ctx context.Context, parNum uint8) ([]commtypes.
 func (s *MeteredSource) GetLatency() []int {
 	return s.latencies
 }
+
+func (s *MeteredSource) SetCursor(cursor uint64, parNum uint8) {
+	s.src.SetCursor(cursor, parNum)
+}

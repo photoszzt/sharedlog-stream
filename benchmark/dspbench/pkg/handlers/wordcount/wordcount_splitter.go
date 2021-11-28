@@ -10,7 +10,6 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -213,7 +212,7 @@ func (h *wordcountSplitFlatMap) processWithTransaction(
 ) *common.FnOutput {
 
 	transactionalId := fmt.Sprintf("wordcount-splitter-%s-%d", sp.InputTopicName, sp.ParNum)
-	tm, appId, appEpoch, err := benchutil.SetupTransactionManager(ctx, h.env, transactionalId, sp)
+	tm, appId, appEpoch, err := benchutil.SetupTransactionManager(ctx, h.env, transactionalId, sp, args.src)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -224,19 +223,6 @@ func (h *wordcountSplitFlatMap) processWithTransaction(
 
 	monitorQuit := make(chan struct{})
 	monitorErrc := make(chan error)
-
-	offset, err := tm.FindLastOffset(ctx, sp.InputTopicName, sp.ParNum)
-	if err != nil {
-		if !errors.IsStreamEmptyError(err) {
-			return &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
-			}
-		}
-	}
-	if offset != 0 {
-
-	}
 
 	dctx, dcancel := context.WithCancel(ctx)
 	go tm.MonitorTransactionLog(ctx, monitorQuit, monitorErrc, dcancel)

@@ -39,6 +39,10 @@ func NewSharedLogStreamSource(stream *SharedLogStream, config *SharedLogStreamCo
 	}
 }
 
+func (s *SharedLogStreamSource) SetCursor(cursor uint64, parNum uint8) {
+	s.stream.SetCursor(cursor, parNum)
+}
+
 func (s *SharedLogStreamSource) Consume(ctx context.Context, parNum uint8) ([]commtypes.MsgAndSeq, error) {
 	startTime := time.Now()
 	var msgs []commtypes.MsgAndSeq
