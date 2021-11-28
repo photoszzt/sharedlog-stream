@@ -209,7 +209,7 @@ func (h *wordcountCounterAgg) processWithTransaction(ctx context.Context,
 
 	// fmt.Fprintf(os.Stderr, "word count counter function enables exactly once semantics\n")
 	transactionalId := fmt.Sprintf("wordcount-counter-%s-%s-%d", sp.InputTopicName, sp.OutputTopicName, sp.ParNum)
-	tm, appId, appEpoch, err := benchutil.SetupTransactionManager(ctx, h.env, transactionalId, sp)
+	tm, appId, appEpoch, err := benchutil.SetupTransactionManager(ctx, h.env, transactionalId, sp, args.src)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
