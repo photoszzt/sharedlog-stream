@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
@@ -75,6 +76,7 @@ func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes
 		}),
 		processor.AggregatorFunc(func(key interface{}, value interface{}, agg interface{}) interface{} {
 			aggVal := agg.(uint64)
+			fmt.Fprintf(os.Stderr, "update %v count to %d\n", key, aggVal+1)
 			return aggVal + 1
 		})))
 	return p, nil

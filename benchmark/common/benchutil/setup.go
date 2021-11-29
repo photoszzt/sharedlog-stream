@@ -3,16 +3,19 @@ package benchutil
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"path"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sync"
 
 	"cs.utexas.edu/zjia/faas/types"
-	"cs.utexas.edu/zjia/faas/worker"
+	"github.com/rs/zerolog/log"
 )
 
 func GetShardedInputOutputStreams(ctx context.Context, env types.Environment, input *common.QueryInput) (*sharedlog_stream.ShardedSharedLogStream, *sharedlog_stream.ShardedSharedLogStream, error) {
@@ -21,22 +24,10 @@ func GetShardedInputOutputStreams(ctx context.Context, env types.Environment, in
 		return nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
 
 	}
-	/*
-		err = inputStream.InitStream(ctx, true)
-		if err != nil {
-			return nil, nil, fmt.Errorf("InitStream failed: %v", err)
-		}
-	*/
 	outputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.OutputTopicName, uint8(input.NumOutPartition))
 	if err != nil {
 		return nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
 	}
-	/*
-		err = outputStream.InitStream(ctx, false)
-		if err != nil {
-			return nil, nil, fmt.Errorf("InitStream failed: %v", err)
-		}
-	*/
 	return inputStream, outputStream, nil
 }
 
@@ -101,17 +92,8 @@ type DumpOutputStreamConfig struct {
 	NumPartitions uint8
 }
 
-func DumpOutputStream(args DumpOutputStreamConfig) error {
-	err := os.Setenv("FAAS_ENGINE_ID", "10")
-	if err != nil {
-		return err
-	}
-	client_func, err := worker.NewFuncWorker(100, 100, nil)
-	if err != nil {
-		return err
-	}
-	ctx := context.Background()
-	log, err := sharedlog_stream.NewShardedSharedLogStream(client_func, args.TopicName, args.NumPartitions)
+func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutputStreamConfig) error {
+	log, err := sharedlog_stream.NewShardedSharedLogStream(env, args.TopicName, args.NumPartitions)
 	if err != nil {
 		return err
 	}
@@ -127,9 +109,13 @@ func DumpOutputStream(args DumpOutputStreamConfig) error {
 			return err
 		}
 		for {
+			fmt.Fprintf(os.Stderr, "before read next\n")
 			_, rawMsgs, err := log.ReadNext(ctx, i)
 			if errors.IsStreamEmptyError(err) {
 				break
+			}
+			if err != nil {
+				return err
 			}
 			for _, rawMsg := range rawMsgs {
 				keyBytes, valBytes, err := args.MsgSerde.Decode(rawMsg.Payload)
@@ -157,4 +143,16 @@ func DumpOutputStream(args DumpOutputStreamConfig) error {
 		}
 	}
 	return nil
+}
+
+func InvokeFunc(client *http.Client, response *common.FnOutput,
+	wg *sync.WaitGroup, request interface{}, funcName string, gateway string,
+) {
+	defer wg.Done()
+	url := utils.BuildFunctionUrl(gateway, funcName)
+	if err := utils.JsonPostRequest(client, url, request, response); err != nil {
+		log.Error().Msgf("%s request failed: %v", funcName, err)
+	} else if !response.Success {
+		log.Error().Msgf("%s request failed: %s", funcName, response.Message)
+	}
 }

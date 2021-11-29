@@ -291,6 +291,7 @@ func (h *wordcountSplitFlatMap) process(
 			for _, m := range msgs {
 				h := hashKey(m.Key.(string))
 				par := uint8(h % uint32(sp.NumOutPartition))
+				fmt.Fprintf(os.Stderr, "append %v to %d\n", m, par)
 				err = args.sink.Sink(ctx, m, par, false)
 				if err != nil {
 					return &common.FnOutput{

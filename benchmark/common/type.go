@@ -9,13 +9,20 @@ const (
 type QueryInput struct {
 	OutputTopicName   string `json:"outputTopicName"`
 	InputTopicName    string `json:"inputTopicName"`
-	Duration          uint32 `json:"duration"`
-	SerdeFormat       uint8  `json:"serdeFormat"`
+	CommitEvery       uint64 `json:"commEvery"`
+	Duration          uint32 `json:"duration,omitempty"`
 	NumInPartition    uint8  `json:"numInPartition"`
 	NumOutPartition   uint8  `json:"numOutPartition"`
 	ParNum            uint8  `json:"ParNum"`
 	EnableTransaction bool   `json:"enTran"`
-	CommitEvery       uint64 `json:"commEvery"`
+	SerdeFormat       uint8  `json:"serdeFormat"`
+}
+
+type DumpInput struct {
+	DumpDir       string `json:"dumpDir"`
+	TopicName     string `json:"tp"`
+	NumPartitions uint8  `json:"numPartitions"`
+	SerdeFormat   uint8  `json:"serdeFormat"`
 }
 
 type FnOutput struct {
@@ -27,8 +34,8 @@ type FnOutput struct {
 
 type SourceParam struct {
 	TopicName   string `json:"topicName"`
-	FileName    string `json:"fname"`
-	Duration    uint32 `json:"duration"` // in sec
+	FileName    string `json:"fname,omitempty"`
+	Duration    uint32 `json:"duration,omitempty"` // in sec
 	SerdeFormat uint8  `json:"serdeFormat"`
-	NumEvents   uint32 `json:"numEvents"`
+	NumEvents   uint32 `json:"numEvents,omitempty"`
 }

@@ -39,6 +39,8 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return wordcount.NewWordCountSplitter(env), nil
 	case "wordcountcounter":
 		return wordcount.NewWordCountCounterAgg(env), nil
+	case "wordcountDump":
+		return wordcount.NewWordCountDump(env), nil
 	case "streamAppend":
 		return append_read.NewAppendHandler(env), nil
 	case "streamRead":

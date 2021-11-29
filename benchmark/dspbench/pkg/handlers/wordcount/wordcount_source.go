@@ -79,19 +79,22 @@ func (h *wordCountSource) eventGeneration(ctx context.Context, env types.Environ
 
 	latencies := make([]int, 0, 128)
 	numEvents := sp.NumEvents
+	fmt.Fprintf(os.Stderr, "num events is %d\n", sp.NumEvents)
 	duration := time.Duration(sp.Duration) * time.Second
 	startTime := time.Now()
 	idx := 0
+	nEmitEvent := 0
 
 	for {
 		if duration != 0 && time.Since(startTime) >= duration || duration == 0 {
 			break
 		}
-		if numEvents != 0 && idx == int(numEvents) {
+		if numEvents != 0 && nEmitEvent == int(numEvents) {
 			break
 		}
 		procStart := time.Now()
 		sentence := h.lines[idx]
+		fmt.Fprintf(os.Stderr, "append %s\n", sentence)
 		msgEncoded, err := encode_sentence_event(commtypes.StringSerde{}, msgSerde, sentence)
 		if err != nil {
 			return &common.FnOutput{
@@ -109,6 +112,7 @@ func (h *wordCountSource) eventGeneration(ctx context.Context, env types.Environ
 		elapsed := time.Since(procStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
 		idx += 1
+		nEmitEvent += 1
 		if idx >= len(h.lines) {
 			idx = 0
 		}

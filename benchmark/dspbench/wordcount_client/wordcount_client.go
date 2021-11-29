@@ -56,33 +56,26 @@ func main() {
 	flag.Parse()
 
 	var serdeFormat commtypes.SerdeFormat
-	var msgSerde commtypes.MsgSerde
-	var vtSerde commtypes.Serde
+
 	if FLAGS_serdeFormat == "json" {
 		serdeFormat = commtypes.JSON
-		msgSerde = commtypes.MessageSerializedJSONSerde{}
-		vtSerde = commtypes.ValueTimestampJSONSerde{
-			ValJSONSerde: commtypes.Uint64Serde{},
-		}
 	} else if FLAGS_serdeFormat == "msgp" {
 		serdeFormat = commtypes.MSGP
-		msgSerde = commtypes.MessageSerializedMsgpSerde{}
-		vtSerde = commtypes.ValueTimestampJSONSerde{
-			ValJSONSerde: commtypes.Uint64Serde{},
-		}
 	} else {
 		log.Error().Msgf("serde format is not recognized; default back to JSON")
 		serdeFormat = commtypes.JSON
 	}
 
 	numCountInstance := uint8(5)
+	splitOutputTopic := "split_out"
+	countOutputTopic := "wc_out"
 
 	splitNodeConfig := &processor.ClientNodeConfig{
 		FuncName:    "wordcountsplit",
 		GatewayUrl:  FLAGS_faas_gateway,
 		NumInstance: 1,
 	}
-	splitOutputTopic := "split_out"
+
 	splitInputParams := make([]*common.QueryInput, splitNodeConfig.NumInstance)
 	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
 		splitInputParams[i] = &common.QueryInput{
@@ -104,7 +97,7 @@ func main() {
 		NumInstance: uint32(numCountInstance),
 	}
 	countInputParams := make([]*common.QueryInput, countNodeConfig.NumInstance)
-	countOutputTopic := "wc_out"
+
 	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
 		countInputParams[i] = &common.QueryInput{
 			Duration:          uint32(FLAGS_duration),
@@ -126,6 +119,7 @@ func main() {
 		Timeout: time.Duration(FLAGS_duration*3) * time.Second,
 	}
 	var wg sync.WaitGroup
+
 	var sourceOutput common.FnOutput
 
 	splitOutput := make([]common.FnOutput, splitNodeConfig.NumInstance)
@@ -162,14 +156,14 @@ func main() {
 	}
 
 	if FLAGS_dump_file_folder != "" {
-		err := benchutil.DumpOutputStream(benchutil.DumpOutputStreamConfig{
-			OutputDir:     FLAGS_dump_file_folder,
+		var dumpOutput common.FnOutput
+		wg.Add(1)
+		go benchutil.InvokeFunc(client, &dumpOutput, &wg, &common.DumpInput{
+			DumpDir:       FLAGS_dump_file_folder,
 			TopicName:     countOutputTopic,
 			NumPartitions: numCountInstance,
-			MsgSerde:      msgSerde,
-			KeySerde:      commtypes.StringSerde{},
-			ValSerde:      vtSerde,
-		})
-		panic(err)
+			SerdeFormat:   uint8(serdeFormat),
+		}, "wordcountDump", FLAGS_faas_gateway)
+		wg.Wait()
 	}
 }
