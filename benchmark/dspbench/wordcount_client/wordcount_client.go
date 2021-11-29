@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -15,13 +16,14 @@ import (
 )
 
 var (
-	FLAGS_faas_gateway string
-	FLAGS_duration     int
-	FLAGS_events_num   int
-	FLAGS_serdeFormat  string
-	FLAGS_file_name    string
-	FLAGS_tran         bool
-	FLAGS_commit_every uint64
+	FLAGS_faas_gateway     string
+	FLAGS_duration         int
+	FLAGS_events_num       int
+	FLAGS_serdeFormat      string
+	FLAGS_file_name        string
+	FLAGS_tran             bool
+	FLAGS_commit_every     uint64
+	FLAGS_dump_file_folder string
 )
 
 func invokeSourceFunc(client *http.Client, response *common.FnOutput, wg *sync.WaitGroup, serdeFormat commtypes.SerdeFormat) {
@@ -50,31 +52,43 @@ func main() {
 	flag.StringVar(&FLAGS_file_name, "in_fname", "/mnt/data/books.dat", "data source file name")
 	flag.BoolVar(&FLAGS_tran, "tran", false, "enable transaction or not")
 	flag.Uint64Var(&FLAGS_commit_every, "comm_every", 0, "commit a transaction every (ms)")
+	flag.StringVar(&FLAGS_dump_file_folder, "dump_dir", "", "folder to dump the final output")
 	flag.Parse()
 
 	var serdeFormat commtypes.SerdeFormat
+	var msgSerde commtypes.MsgSerde
+	var vtSerde commtypes.Serde
 	if FLAGS_serdeFormat == "json" {
 		serdeFormat = commtypes.JSON
+		msgSerde = commtypes.MessageSerializedJSONSerde{}
+		vtSerde = commtypes.ValueTimestampJSONSerde{
+			ValJSONSerde: commtypes.Uint64Serde{},
+		}
 	} else if FLAGS_serdeFormat == "msgp" {
 		serdeFormat = commtypes.MSGP
+		msgSerde = commtypes.MessageSerializedMsgpSerde{}
+		vtSerde = commtypes.ValueTimestampJSONSerde{
+			ValJSONSerde: commtypes.Uint64Serde{},
+		}
 	} else {
 		log.Error().Msgf("serde format is not recognized; default back to JSON")
 		serdeFormat = commtypes.JSON
 	}
 
 	numCountInstance := uint8(5)
+
 	splitNodeConfig := &processor.ClientNodeConfig{
 		FuncName:    "wordcountsplit",
 		GatewayUrl:  FLAGS_faas_gateway,
 		NumInstance: 1,
 	}
-
+	splitOutputTopic := "split_out"
 	splitInputParams := make([]*common.QueryInput, splitNodeConfig.NumInstance)
 	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
 		splitInputParams[i] = &common.QueryInput{
 			Duration:          uint32(FLAGS_duration),
 			InputTopicName:    "wc_src",
-			OutputTopicName:   "split_out",
+			OutputTopicName:   splitOutputTopic,
 			SerdeFormat:       uint8(serdeFormat),
 			NumInPartition:    1,
 			NumOutPartition:   numCountInstance,
@@ -90,11 +104,12 @@ func main() {
 		NumInstance: uint32(numCountInstance),
 	}
 	countInputParams := make([]*common.QueryInput, countNodeConfig.NumInstance)
+	countOutputTopic := "wc_out"
 	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
 		countInputParams[i] = &common.QueryInput{
 			Duration:          uint32(FLAGS_duration),
-			InputTopicName:    "split_out",
-			OutputTopicName:   "wc_out",
+			InputTopicName:    splitOutputTopic,
+			OutputTopicName:   countOutputTopic,
 			SerdeFormat:       uint8(serdeFormat),
 			NumInPartition:    numCountInstance,
 			NumOutPartition:   numCountInstance,
@@ -144,5 +159,17 @@ func main() {
 		if countOutput[i].Success {
 			common.ProcessThroughputLat(fmt.Sprintf("count %d", i), countOutput[i].Latencies, countOutput[i].Duration)
 		}
+	}
+
+	if FLAGS_dump_file_folder != "" {
+		err := benchutil.DumpOutputStream(benchutil.DumpOutputStreamConfig{
+			OutputDir:     FLAGS_dump_file_folder,
+			TopicName:     countOutputTopic,
+			NumPartitions: numCountInstance,
+			MsgSerde:      msgSerde,
+			KeySerde:      commtypes.StringSerde{},
+			ValSerde:      vtSerde,
+		})
+		panic(err)
 	}
 }

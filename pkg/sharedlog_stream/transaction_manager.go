@@ -120,6 +120,7 @@ func (tc *TransactionManager) loadCurrentTopicPartitions(lastTopicPartitions []T
 
 // each transaction id corresponds to a separate transaction log; we only have one transaction id per serverless function
 func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error {
+	fmt.Fprintf(os.Stderr, "load transaction log\n")
 	strSerde := commtypes.StringSerde{}
 	var lastTopicPartitions []TopicPartition
 
@@ -204,17 +205,21 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 
 		// use the previous app id to finish the previous transaction
 		tc.currentStatus = tmpStatus
-		fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
+		fmt.Fprintf(os.Stderr, "In repair: Transition to %s to restore\n", tc.currentStatus)
 		tc.currentTaskId = tmpTaskID
 		tc.currentEpoch = tmpEpoch
+
+		fmt.Fprintf(os.Stderr, "before load current topic partitions\n")
 		tc.loadCurrentTopicPartitions(lastTopicPartitions)
-		err := tc.AbortTransaction(ctx)
+		fmt.Fprintf(os.Stderr, "after load current topic partitions\n")
+		err := tc.abortTransactionLocked(ctx)
+		fmt.Fprintf(os.Stderr, "after abort transactions\n")
 		if err != nil {
 			return err
 		}
 		// swap back
 		tc.currentStatus = currentStatus
-		fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
+		fmt.Fprintf(os.Stderr, "In repair: Transition back to %s\n", tc.currentStatus)
 		tc.currentTaskId = currentAppId
 		tc.currentEpoch = currentEpoch
 	case PREPARE_ABORT:
@@ -226,7 +231,7 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 
 		// use the previous app id to finish the previous transaction
 		tc.currentStatus = tmpStatus
-		fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
+		fmt.Fprintf(os.Stderr, "In repair: Transition to %s to restore\n", tc.currentStatus)
 		tc.currentTaskId = tmpTaskID
 		tc.currentEpoch = tmpEpoch
 
@@ -239,7 +244,7 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 		tc.cleanupState()
 		// swap back
 		tc.currentStatus = currentStatus
-		fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
+		fmt.Fprintf(os.Stderr, "In repair: Transition back to %s\n", tc.currentStatus)
 		tc.currentTaskId = currentAppId
 		tc.currentEpoch = currentEpoch
 	case PREPARE_COMMIT:
@@ -251,7 +256,7 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 
 		// use the previous app id to finish the previous transaction
 		tc.currentStatus = tmpStatus
-		fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
+		fmt.Fprintf(os.Stderr, "In repair: Transition to %s to restore\n", tc.currentStatus)
 		tc.currentTaskId = tmpTaskID
 		tc.currentEpoch = tmpEpoch
 
@@ -264,7 +269,7 @@ func (tc *TransactionManager) loadTransactionFromLog(ctx context.Context) error 
 
 		// swap back
 		tc.currentStatus = currentStatus
-		fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
+		fmt.Fprintf(os.Stderr, "In repair: Transition back to %s\n", tc.currentStatus)
 		tc.currentTaskId = currentAppId
 		tc.currentEpoch = currentEpoch
 	case FENCE:
@@ -283,7 +288,7 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) (uint64, uint
 	defer tc.tmMu.Unlock()
 
 	tc.currentStatus = FENCE
-	fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
+	fmt.Fprintf(os.Stderr, "Init transaction: Transition to %s\n", tc.currentStatus)
 	if tc.currentTaskId == 0 {
 		tc.genAppId()
 	}
@@ -625,6 +630,11 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context) error {
 func (tc *TransactionManager) AbortTransaction(ctx context.Context) error {
 	tc.tmMu.Lock()
 	defer tc.tmMu.Unlock()
+
+	return tc.abortTransactionLocked(ctx)
+}
+
+func (tc *TransactionManager) abortTransactionLocked(ctx context.Context) error {
 	if !PREPARE_ABORT.IsValidPreviousState(tc.currentStatus) {
 		return errors.ErrInvalidStateTransition
 	}

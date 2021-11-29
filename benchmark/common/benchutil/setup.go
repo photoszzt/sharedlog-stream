@@ -3,6 +3,8 @@ package benchutil
 import (
 	"context"
 	"fmt"
+	"os"
+	"path"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -10,6 +12,7 @@ import (
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	"cs.utexas.edu/zjia/faas/types"
+	"cs.utexas.edu/zjia/faas/worker"
 )
 
 func GetShardedInputOutputStreams(ctx context.Context, env types.Environment, input *common.QueryInput) (*sharedlog_stream.ShardedSharedLogStream, *sharedlog_stream.ShardedSharedLogStream, error) {
@@ -87,4 +90,71 @@ func TrackOffsetAndCommit(ctx context.Context,
 	}
 	*hasLiveTransaction = false
 	*trackConsumePar = false
+}
+
+type DumpOutputStreamConfig struct {
+	MsgSerde      commtypes.MsgSerde
+	KeySerde      commtypes.Serde
+	ValSerde      commtypes.Serde
+	OutputDir     string
+	TopicName     string
+	NumPartitions uint8
+}
+
+func DumpOutputStream(args DumpOutputStreamConfig) error {
+	err := os.Setenv("FAAS_ENGINE_ID", "10")
+	if err != nil {
+		return err
+	}
+	client_func, err := worker.NewFuncWorker(100, 100, nil)
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	log, err := sharedlog_stream.NewShardedSharedLogStream(client_func, args.TopicName, args.NumPartitions)
+	if err != nil {
+		return err
+	}
+	for i := uint8(0); i < args.NumPartitions; i++ {
+		outFilePath := path.Join(args.OutputDir, fmt.Sprintf("%s-%d.txt", args.TopicName, i))
+		outFile, err := os.Create(outFilePath)
+		defer func() {
+			if err := outFile.Close(); err != nil {
+				panic(err)
+			}
+		}()
+		if err != nil {
+			return err
+		}
+		for {
+			_, rawMsgs, err := log.ReadNext(ctx, i)
+			if errors.IsStreamEmptyError(err) {
+				break
+			}
+			for _, rawMsg := range rawMsgs {
+				keyBytes, valBytes, err := args.MsgSerde.Decode(rawMsg.Payload)
+				if err != nil {
+					return err
+				}
+				key, err := args.KeySerde.Decode(keyBytes)
+				if err != nil {
+					return err
+				}
+				val, err := args.ValSerde.Decode(valBytes)
+				if err != nil {
+					return err
+				}
+				outStr := fmt.Sprintf("%v, %v\n", key, val)
+				fmt.Fprint(os.Stderr, outStr)
+				writted, err := outFile.WriteString(outStr)
+				if err != nil {
+					return err
+				}
+				if writted != len(outStr) {
+					panic("written is smaller than expected")
+				}
+			}
+		}
+	}
+	return nil
 }
