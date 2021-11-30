@@ -308,6 +308,13 @@ L:
 					}
 				}
 				par := uint8(hashSe(changeKeyedMsg[0].Key.(*ntypes.StartEndTime)) % uint32(sp.NumOutPartition))
+				err = tm.AddTopicPartition(ctx, args.output_stream.TopicName(), []uint8{par})
+				if err != nil {
+					retc <- &common.FnOutput{
+						Success: false,
+						Message: fmt.Sprintf("add topic partition failed: %v\n", err),
+					}
+				}
 				err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
 				if err != nil {
 					retc <- &common.FnOutput{
