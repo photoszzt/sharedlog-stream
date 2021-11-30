@@ -18,6 +18,15 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+type DumpOutputStreamConfig struct {
+	MsgSerde      commtypes.MsgSerde
+	KeySerde      commtypes.Serde
+	ValSerde      commtypes.Serde
+	OutputDir     string
+	TopicName     string
+	NumPartitions uint8
+}
+
 func GetShardedInputOutputStreams(ctx context.Context, env types.Environment, input *common.QueryInput) (*sharedlog_stream.ShardedSharedLogStream, *sharedlog_stream.ShardedSharedLogStream, error) {
 	inputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicName, uint8(input.NumInPartition))
 	if err != nil {
@@ -81,15 +90,6 @@ func TrackOffsetAndCommit(ctx context.Context,
 	}
 	*hasLiveTransaction = false
 	*trackConsumePar = false
-}
-
-type DumpOutputStreamConfig struct {
-	MsgSerde      commtypes.MsgSerde
-	KeySerde      commtypes.Serde
-	ValSerde      commtypes.Serde
-	OutputDir     string
-	TopicName     string
-	NumPartitions uint8
 }
 
 func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutputStreamConfig) error {

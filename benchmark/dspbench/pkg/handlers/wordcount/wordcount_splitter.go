@@ -210,7 +210,6 @@ L:
 func (h *wordcountSplitFlatMap) processWithTransaction(
 	ctx context.Context, sp *common.QueryInput, args wordcountSplitterProcessArg,
 ) *common.FnOutput {
-
 	transactionalId := fmt.Sprintf("wordcount-splitter-%s-%d", sp.InputTopicName, sp.ParNum)
 	tm, appId, appEpoch, err := benchutil.SetupTransactionManager(ctx, h.env, transactionalId, sp, args.src)
 	if err != nil {

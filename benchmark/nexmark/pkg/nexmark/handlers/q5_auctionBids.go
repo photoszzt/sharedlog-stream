@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
+	"golang.org/x/xerrors"
 )
 
 type q5AuctionBids struct {
@@ -41,7 +42,7 @@ func (h *q5AuctionBids) Call(ctx context.Context, input []byte) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
-	output := h.process(ctx, sp)
+	output := h.processQ5AuctionBids(ctx, sp)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
 		return nil, err
@@ -49,30 +50,10 @@ func (h *q5AuctionBids) Call(ctx context.Context, input []byte) ([]byte, error) 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
-	}
-
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
-	}
-	eventSerde, err := getEventSerde(sp.SerdeFormat)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
-	}
-
+func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput,
+	msgSerde commtypes.MsgSerde, input_stream *sharedlog_stream.ShardedSharedLogStream,
+	output_stream *sharedlog_stream.ShardedSharedLogStream,
+) (*processor.MeteredSource, *processor.MeteredSink, error) {
 	var seSerde commtypes.Serde
 	var aucIdCountSerde commtypes.Serde
 	if sp.SerdeFormat == uint8(commtypes.JSON) {
@@ -82,15 +63,16 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 		seSerde = ntypes.StartEndTimeMsgpSerde{}
 		aucIdCountSerde = ntypes.AuctionIdCountMsgpSerde{}
 	} else {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat),
-		}
+		return nil, nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat)
 	}
 
-	duration := time.Duration(sp.Duration) * time.Second
+	eventSerde, err := getEventSerde(sp.SerdeFormat)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
-		Timeout:      duration,
+		Timeout:      common.SrcConsumeTimeout,
 		KeyDecoder:   commtypes.Uint64Serde{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
@@ -102,16 +84,16 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 	}
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
 	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
+	return src, sink, nil
+}
 
+func (h *q5AuctionBids) getCountAggProc(sp *common.QueryInput, msgSerde commtypes.MsgSerde) (*processor.MeteredProcessor, error) {
 	hopWindow := processor.NewTimeWindowsNoGrace(time.Duration(10) * time.Second).AdvanceBy(time.Duration(2) * time.Second)
 	countStoreName := "auctionBidsCountStore"
 	changelogName := countStoreName + "-changelog"
 	changelog, err := sharedlog_stream.NewShardedSharedLogStream(h.env, changelogName, uint8(sp.NumOutPartition))
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err),
-		}
+		return nil, fmt.Errorf("NewShardedSharedLogStream failed: %v", err)
 	}
 	countMp := &store.MaterializeParam{
 		KeySerde:   commtypes.Uint64Serde{},
@@ -125,10 +107,7 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 		hopWindow.MaxSize(), countMp,
 	)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return nil, err
 	}
 	countProc := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(countWindowStore,
 		processor.InitializerFunc(func() interface{} { return 0 }),
@@ -136,21 +115,21 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 			val := aggregate.(uint64)
 			return val + 1
 		}), hopWindow))
+	return countProc, nil
+}
 
-	groupByAuction := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(processor.MapperFunc(
-		func(msg commtypes.Message) (commtypes.Message, error) {
-			key := msg.Key.(*commtypes.WindowedKey)
-			value := msg.Value.(uint64)
-			newKey := &ntypes.StartEndTime{
-				StartTime: key.Window.Start(),
-				EndTime:   key.Window.End(),
-			}
-			newVal := &ntypes.AuctionIdCount{
-				AucId: key.Key.(uint64),
-				Count: value,
-			}
-			return commtypes.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
-		})))
+type q5AuctionBidsProcessArg struct {
+	countProc      *processor.MeteredProcessor
+	groupByAuction *processor.MeteredProcessor
+	src            *processor.MeteredSource
+	sink           *processor.MeteredSink
+	output_stream  *sharedlog_stream.ShardedSharedLogStream
+}
+
+func (h *q5AuctionBids) process(ctx context.Context,
+	sp *common.QueryInput, args q5AuctionBidsProcessArg,
+) *common.FnOutput {
+	duration := time.Duration(sp.Duration) * time.Second
 	latencies := make([]int, 0, 128)
 	startTime := time.Now()
 	for {
@@ -158,7 +137,7 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 			break
 		}
 		procStart := time.Now()
-		msgs, err := src.Consume(ctx, sp.ParNum)
+		msgs, err := args.src.Consume(ctx, sp.ParNum)
 		if err != nil {
 			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
@@ -167,10 +146,10 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 					Duration: time.Since(startTime).Seconds(),
 					Latencies: map[string][]int{
 						"e2e":       latencies,
-						"count":     countProc.GetLatency(),
-						"changeKey": groupByAuction.GetLatency(),
-						"src":       src.GetLatency(),
-						"sink":      sink.GetLatency(),
+						"count":     args.countProc.GetLatency(),
+						"changeKey": args.groupByAuction.GetLatency(),
+						"src":       args.src.GetLatency(),
+						"sink":      args.sink.GetLatency(),
 					},
 				}
 			}
@@ -180,7 +159,7 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 			}
 		}
 		for _, msg := range msgs {
-			countMsgs, err := countProc.ProcessAndReturn(ctx, msg.Msg)
+			countMsgs, err := args.countProc.ProcessAndReturn(ctx, msg.Msg)
 			if err != nil {
 				return &common.FnOutput{
 					Success: false,
@@ -188,7 +167,7 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 				}
 			}
 			for _, countMsg := range countMsgs {
-				changeKeyedMsg, err := groupByAuction.ProcessAndReturn(ctx, countMsg)
+				changeKeyedMsg, err := args.groupByAuction.ProcessAndReturn(ctx, countMsg)
 				if err != nil {
 					return &common.FnOutput{
 						Success: false,
@@ -196,7 +175,7 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 					}
 				}
 				par := uint8(hashSe(changeKeyedMsg[0].Key.(*ntypes.StartEndTime)) % uint32(sp.NumOutPartition))
-				err = sink.Sink(ctx, changeKeyedMsg[0], par, false)
+				err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
 				if err != nil {
 					return &common.FnOutput{
 						Success: false,
@@ -213,10 +192,237 @@ func (h *q5AuctionBids) process(ctx context.Context, sp *common.QueryInput) *com
 		Duration: time.Since(startTime).Seconds(),
 		Latencies: map[string][]int{
 			"e2e":       latencies,
-			"count":     countProc.GetLatency(),
-			"changeKey": groupByAuction.GetLatency(),
-			"src":       src.GetLatency(),
-			"sink":      sink.GetLatency(),
+			"count":     args.countProc.GetLatency(),
+			"changeKey": args.groupByAuction.GetLatency(),
+			"src":       args.src.GetLatency(),
+			"sink":      args.sink.GetLatency(),
 		},
 	}
+}
+
+func (h *q5AuctionBids) processWithTranLoop(ctx context.Context,
+	sp *common.QueryInput, args q5AuctionBidsProcessArg,
+	tm *sharedlog_stream.TransactionManager, appId uint64, appEpoch uint16,
+	retc chan *common.FnOutput,
+) {
+	duration := time.Duration(sp.Duration) * time.Second
+	latencies := make([]int, 0, 128)
+	hasLiveTransaction := false
+	trackConsumePar := false
+	currentOffset := uint64(0)
+	commitTimer := time.Now()
+	commitEvery := time.Duration(sp.CommitEvery) * time.Millisecond
+
+	startTime := time.Now()
+
+L:
+	for {
+		select {
+		case <-ctx.Done():
+			break L
+		default:
+		}
+
+		timeSinceTranStart := time.Since(commitTimer)
+		timeout := duration != 0 && time.Since(startTime) >= duration
+		if (commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout {
+			benchutil.TrackOffsetAndCommit(ctx, sharedlog_stream.OffsetConfig{
+				TopicToTrack: sp.InputTopicName,
+				AppId:        appId,
+				AppEpoch:     appEpoch,
+				Partition:    sp.ParNum,
+				Offset:       currentOffset,
+			}, tm, &hasLiveTransaction, &trackConsumePar, retc)
+		}
+		if timeout {
+			err := tm.Close()
+			if err != nil {
+				retc <- &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("close transaction manager: %v\n", err),
+				}
+			}
+			break
+		}
+		if !hasLiveTransaction {
+			err := tm.BeginTransaction(ctx)
+			if err != nil {
+				retc <- &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("transaction begin failed: %v\n", err),
+				}
+			}
+			hasLiveTransaction = true
+			commitTimer = time.Now()
+		}
+
+		procStart := time.Now()
+		gotMsgs, err := args.src.Consume(ctx, sp.ParNum)
+		if err != nil {
+			if xerrors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+				retc <- &common.FnOutput{
+					Success:  true,
+					Message:  err.Error(),
+					Duration: time.Since(startTime).Seconds(),
+					Latencies: map[string][]int{
+						"e2e":       latencies,
+						"count":     args.countProc.GetLatency(),
+						"changeKey": args.groupByAuction.GetLatency(),
+						"src":       args.src.GetLatency(),
+						"sink":      args.sink.GetLatency(),
+					},
+				}
+			}
+			retc <- &common.FnOutput{
+				Success: false,
+				Message: err.Error(),
+			}
+		}
+		if !trackConsumePar {
+			err = tm.AddOffsets(ctx, sp.InputTopicName, []uint8{sp.ParNum})
+			if err != nil {
+				retc <- &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("add offsets failed: %v\n", err),
+				}
+			}
+			trackConsumePar = true
+		}
+		for _, msg := range gotMsgs {
+			if msg.Msg.Value == nil {
+				continue
+			}
+			countMsgs, err := args.countProc.ProcessAndReturn(ctx, msg.Msg)
+			if err != nil {
+				retc <- &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
+			}
+			for _, countMsg := range countMsgs {
+				changeKeyedMsg, err := args.groupByAuction.ProcessAndReturn(ctx, countMsg)
+				if err != nil {
+					retc <- &common.FnOutput{
+						Success: false,
+						Message: err.Error(),
+					}
+				}
+				par := uint8(hashSe(changeKeyedMsg[0].Key.(*ntypes.StartEndTime)) % uint32(sp.NumOutPartition))
+				err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
+				if err != nil {
+					retc <- &common.FnOutput{
+						Success: false,
+						Message: err.Error(),
+					}
+				}
+			}
+		}
+		elapsed := time.Since(procStart)
+		latencies = append(latencies, int(elapsed.Microseconds()))
+	}
+	retc <- &common.FnOutput{
+		Success:  true,
+		Duration: time.Since(startTime).Seconds(),
+		Latencies: map[string][]int{
+			"e2e":       latencies,
+			"count":     args.countProc.GetLatency(),
+			"changeKey": args.groupByAuction.GetLatency(),
+			"src":       args.src.GetLatency(),
+			"sink":      args.sink.GetLatency(),
+		},
+	}
+}
+
+func (h *q5AuctionBids) processWithTransaction(
+	ctx context.Context, sp *common.QueryInput, args q5AuctionBidsProcessArg,
+) *common.FnOutput {
+	transactionalId := fmt.Sprintf("q5AuctionBids-%s-%d-%s", sp.InputTopicName, sp.ParNum, sp.OutputTopicName)
+	tm, appId, appEpoch, err := benchutil.SetupTransactionManager(ctx, h.env, transactionalId, sp, args.src)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+	tm.RecordTopicStreams(sp.OutputTopicName, args.output_stream)
+	monitorQuit := make(chan struct{})
+	monitorErrc := make(chan error)
+
+	dctx, dcancel := context.WithCancel(ctx)
+	go tm.MonitorTransactionLog(ctx, monitorQuit, monitorErrc, dcancel)
+
+	retc := make(chan *common.FnOutput)
+	go h.processWithTranLoop(dctx, sp, args, tm, appId, appEpoch, retc)
+	for {
+		select {
+		case ret := <-retc:
+			close(monitorQuit)
+			return ret
+		case merr := <-monitorErrc:
+			close(monitorQuit)
+			if merr != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("monitor failed: %v", merr),
+				}
+			}
+		}
+	}
+}
+
+func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+	src, sink, err := h.getSrcSink(ctx, sp, msgSerde, input_stream, output_stream)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+	countProc, err := h.getCountAggProc(sp, msgSerde)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+	groupByAuction := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(processor.MapperFunc(
+		func(msg commtypes.Message) (commtypes.Message, error) {
+			key := msg.Key.(*commtypes.WindowedKey)
+			value := msg.Value.(uint64)
+			newKey := &ntypes.StartEndTime{
+				StartTime: key.Window.Start(),
+				EndTime:   key.Window.End(),
+			}
+			newVal := &ntypes.AuctionIdCount{
+				AucId: key.Key.(uint64),
+				Count: value,
+			}
+			return commtypes.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
+		})))
+	args := q5AuctionBidsProcessArg{
+		countProc:      countProc,
+		groupByAuction: groupByAuction,
+		src:            src,
+		sink:           sink,
+		output_stream:  output_stream,
+	}
+
+	if sp.EnableTransaction {
+		return h.processWithTransaction(ctx, sp, args)
+	}
+	return h.process(ctx, sp, args)
 }
