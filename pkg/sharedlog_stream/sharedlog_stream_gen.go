@@ -36,10 +36,10 @@ func (z *StreamLogEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Payload")
 				return
 			}
-		case "aid":
-			z.AppId, err = dc.ReadUint64()
+		case "tid":
+			z.TaskId, err = dc.ReadUint64()
 			if err != nil {
-				err = msgp.WrapError(err, "AppId")
+				err = msgp.WrapError(err, "TaskId")
 				return
 			}
 		case "mseq":
@@ -48,10 +48,10 @@ func (z *StreamLogEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "MsgSeqNum")
 				return
 			}
-		case "ae":
-			z.AppEpoch, err = dc.ReadUint16()
+		case "te":
+			z.TaskEpoch, err = dc.ReadUint16()
 			if err != nil {
-				err = msgp.WrapError(err, "AppEpoch")
+				err = msgp.WrapError(err, "TaskEpoch")
 				return
 			}
 		case "isCtrl":
@@ -80,7 +80,7 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if z.AppId == 0 {
+	if z.TaskId == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
@@ -88,7 +88,7 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if z.AppEpoch == 0 {
+	if z.TaskEpoch == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
@@ -123,14 +123,14 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 		}
 	}
 	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// write "aid"
-		err = en.Append(0xa3, 0x61, 0x69, 0x64)
+		// write "tid"
+		err = en.Append(0xa3, 0x74, 0x69, 0x64)
 		if err != nil {
 			return
 		}
-		err = en.WriteUint64(z.AppId)
+		err = en.WriteUint64(z.TaskId)
 		if err != nil {
-			err = msgp.WrapError(err, "AppId")
+			err = msgp.WrapError(err, "TaskId")
 			return
 		}
 	}
@@ -147,14 +147,14 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 		}
 	}
 	if (zb0001Mask & 0x10) == 0 { // if not empty
-		// write "ae"
-		err = en.Append(0xa2, 0x61, 0x65)
+		// write "te"
+		err = en.Append(0xa2, 0x74, 0x65)
 		if err != nil {
 			return
 		}
-		err = en.WriteUint16(z.AppEpoch)
+		err = en.WriteUint16(z.TaskEpoch)
 		if err != nil {
-			err = msgp.WrapError(err, "AppEpoch")
+			err = msgp.WrapError(err, "TaskEpoch")
 			return
 		}
 	}
@@ -181,7 +181,7 @@ func (z *StreamLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if z.AppId == 0 {
+	if z.TaskId == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
@@ -189,7 +189,7 @@ func (z *StreamLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if z.AppEpoch == 0 {
+	if z.TaskEpoch == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
@@ -207,9 +207,9 @@ func (z *StreamLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 		o = msgp.AppendBytes(o, z.Payload)
 	}
 	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// string "aid"
-		o = append(o, 0xa3, 0x61, 0x69, 0x64)
-		o = msgp.AppendUint64(o, z.AppId)
+		// string "tid"
+		o = append(o, 0xa3, 0x74, 0x69, 0x64)
+		o = msgp.AppendUint64(o, z.TaskId)
 	}
 	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// string "mseq"
@@ -217,9 +217,9 @@ func (z *StreamLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 		o = msgp.AppendUint32(o, z.MsgSeqNum)
 	}
 	if (zb0001Mask & 0x10) == 0 { // if not empty
-		// string "ae"
-		o = append(o, 0xa2, 0x61, 0x65)
-		o = msgp.AppendUint16(o, z.AppEpoch)
+		// string "te"
+		o = append(o, 0xa2, 0x74, 0x65)
+		o = msgp.AppendUint16(o, z.TaskEpoch)
 	}
 	// string "isCtrl"
 	o = append(o, 0xa6, 0x69, 0x73, 0x43, 0x74, 0x72, 0x6c)
@@ -257,10 +257,10 @@ func (z *StreamLogEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Payload")
 				return
 			}
-		case "aid":
-			z.AppId, bts, err = msgp.ReadUint64Bytes(bts)
+		case "tid":
+			z.TaskId, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "AppId")
+				err = msgp.WrapError(err, "TaskId")
 				return
 			}
 		case "mseq":
@@ -269,10 +269,10 @@ func (z *StreamLogEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "MsgSeqNum")
 				return
 			}
-		case "ae":
-			z.AppEpoch, bts, err = msgp.ReadUint16Bytes(bts)
+		case "te":
+			z.TaskEpoch, bts, err = msgp.ReadUint16Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "AppEpoch")
+				err = msgp.WrapError(err, "TaskEpoch")
 				return
 			}
 		case "isCtrl":

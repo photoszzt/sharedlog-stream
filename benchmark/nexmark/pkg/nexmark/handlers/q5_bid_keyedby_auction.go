@@ -178,8 +178,8 @@ L:
 		if (commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout {
 			benchutil.TrackOffsetAndCommit(ctx, sharedlog_stream.ConsumedSeqNumConfig{
 				TopicToTrack:   sp.InputTopicName,
-				AppId:          appId,
-				AppEpoch:       appEpoch,
+				TaskId:         appId,
+				TaskEpoch:      appEpoch,
 				Partition:      sp.ParNum,
 				ConsumedSeqNum: currentSeqNum,
 			}, tm, &hasLiveTransaction, &trackConsumePar, retc)

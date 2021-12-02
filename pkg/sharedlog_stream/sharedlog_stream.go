@@ -28,9 +28,9 @@ type SharedLogStream struct {
 	topicNameHash      uint64
 	cursor             uint64
 	tail               uint64
-	appId              uint64
+	taskId             uint64
 	curAppendMsgSeqNum uint32
-	appEpoch           uint16
+	taskEpoch          uint16
 	inTransaction      bool
 }
 
@@ -49,9 +49,9 @@ func TxnMarkerTag(nameHash uint64, par uint8) uint64 {
 type StreamLogEntry struct {
 	TopicName string `msg:"topicName"`
 	Payload   []byte `msg:"payload,omitempty"`
-	AppId     uint64 `msg:"aid,omitempty"`
+	TaskId    uint64 `msg:"tid,omitempty"`
 	MsgSeqNum uint32 `msg:"mseq,omitempty"`
-	AppEpoch  uint16 `msg:"ae,omitempty"`
+	TaskEpoch uint16 `msg:"te,omitempty"`
 	IsControl bool   `msg:"isCtrl"`
 	seqNum    uint64 `msg:"-"`
 }
@@ -74,8 +74,8 @@ func NewSharedLogStream(env types.Environment, topicName string) *SharedLogStrea
 		cursor:        0,
 		tail:          0,
 
-		appId:              0,
-		appEpoch:           0,
+		taskId:             0,
+		taskEpoch:          0,
 		curAppendMsgSeqNum: 0,
 	}
 }
@@ -84,12 +84,12 @@ func (s *SharedLogStream) SetAppendMsgSeqNum(val uint32) {
 	s.curAppendMsgSeqNum = val
 }
 
-func (s *SharedLogStream) SetAppId(appId uint64) {
-	s.appId = appId
+func (s *SharedLogStream) SetTaskId(appId uint64) {
+	s.taskId = appId
 }
 
-func (s *SharedLogStream) SetAppEpoch(epoch uint16) {
-	s.appEpoch = epoch
+func (s *SharedLogStream) SetTaskEpoch(epoch uint16) {
+	s.taskEpoch = epoch
 }
 
 func (s *SharedLogStream) TopicNameHash() uint64 {
@@ -117,8 +117,8 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNu
 		// TODO: need to deal with sequence number overflow
 		s.curAppendMsgSeqNum += 1
 		logEntry.MsgSeqNum = s.curAppendMsgSeqNum
-		logEntry.AppEpoch = s.appEpoch
-		logEntry.AppId = s.appId
+		logEntry.TaskEpoch = s.taskEpoch
+		logEntry.TaskId = s.taskId
 	}
 	encoded, err := logEntry.MarshalMsg(nil)
 	if err != nil {
@@ -187,8 +187,8 @@ func (s *SharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum ui
 			continue
 		} else {
 			return &commtypes.AppIDGen{
-					AppId:    streamLogEntry.AppId,
-					AppEpoch: streamLogEntry.AppEpoch,
+					AppId:    streamLogEntry.TaskId,
+					AppEpoch: streamLogEntry.TaskEpoch,
 				}, &commtypes.RawMsg{
 					Payload:   streamLogEntry.Payload,
 					MsgSeqNum: streamLogEntry.MsgSeqNum,
@@ -231,8 +231,8 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 		if streamLogEntry.TopicName == s.topicName {
 			if s.inTransaction {
 				appKey := commtypes.AppIDGen{
-					AppId:    streamLogEntry.AppId,
-					AppEpoch: streamLogEntry.AppEpoch,
+					AppId:    streamLogEntry.TaskId,
+					AppEpoch: streamLogEntry.TaskEpoch,
 				}
 				readMsgProc, ok := s.curReadMap[appKey]
 				if streamLogEntry.IsControl {

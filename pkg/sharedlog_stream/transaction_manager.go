@@ -507,9 +507,9 @@ func (tc *TransactionManager) AddTopicTrackConsumedSeqs(ctx context.Context, top
 
 type ConsumedSeqNumConfig struct {
 	TopicToTrack   string
-	AppId          uint64
+	TaskId         uint64
 	ConsumedSeqNum uint64
-	AppEpoch       uint16
+	TaskEpoch      uint16
 	Partition      uint8
 }
 
@@ -519,9 +519,9 @@ func (tc *TransactionManager) AppendConsumedSeqNum(ctx context.Context, consumed
 	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + consumedSeqNumConfig.TopicToTrack
 	offsetLog := tc.topicStreams[offsetTopic]
 	offsetRecord := OffsetRecord{
-		Offset:   consumedSeqNumConfig.ConsumedSeqNum,
-		AppId:    consumedSeqNumConfig.AppId,
-		AppEpoch: consumedSeqNumConfig.AppEpoch,
+		Offset:    consumedSeqNumConfig.ConsumedSeqNum,
+		TaskId:    consumedSeqNumConfig.TaskId,
+		TaskEpoch: consumedSeqNumConfig.TaskEpoch,
 	}
 	encoded, err := tc.offsetRecordSerde.Encode(&offsetRecord)
 	if err != nil {

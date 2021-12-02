@@ -31,15 +31,15 @@ func (z *OffsetRecord) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 		case "aid":
-			z.AppId, err = dc.ReadUint64()
+			z.TaskId, err = dc.ReadUint64()
 			if err != nil {
-				err = msgp.WrapError(err, "AppId")
+				err = msgp.WrapError(err, "TaskId")
 				return
 			}
 		case "ae":
-			z.AppEpoch, err = dc.ReadUint16()
+			z.TaskEpoch, err = dc.ReadUint16()
 			if err != nil {
-				err = msgp.WrapError(err, "AppEpoch")
+				err = msgp.WrapError(err, "TaskEpoch")
 				return
 			}
 		default:
@@ -71,9 +71,9 @@ func (z OffsetRecord) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.AppId)
+	err = en.WriteUint64(z.TaskId)
 	if err != nil {
-		err = msgp.WrapError(err, "AppId")
+		err = msgp.WrapError(err, "TaskId")
 		return
 	}
 	// write "ae"
@@ -81,9 +81,9 @@ func (z OffsetRecord) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteUint16(z.AppEpoch)
+	err = en.WriteUint16(z.TaskEpoch)
 	if err != nil {
-		err = msgp.WrapError(err, "AppEpoch")
+		err = msgp.WrapError(err, "TaskEpoch")
 		return
 	}
 	return
@@ -98,10 +98,10 @@ func (z OffsetRecord) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendUint64(o, z.Offset)
 	// string "aid"
 	o = append(o, 0xa3, 0x61, 0x69, 0x64)
-	o = msgp.AppendUint64(o, z.AppId)
+	o = msgp.AppendUint64(o, z.TaskId)
 	// string "ae"
 	o = append(o, 0xa2, 0x61, 0x65)
-	o = msgp.AppendUint16(o, z.AppEpoch)
+	o = msgp.AppendUint16(o, z.TaskEpoch)
 	return
 }
 
@@ -130,15 +130,15 @@ func (z *OffsetRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "aid":
-			z.AppId, bts, err = msgp.ReadUint64Bytes(bts)
+			z.TaskId, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "AppId")
+				err = msgp.WrapError(err, "TaskId")
 				return
 			}
 		case "ae":
-			z.AppEpoch, bts, err = msgp.ReadUint16Bytes(bts)
+			z.TaskEpoch, bts, err = msgp.ReadUint16Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "AppEpoch")
+				err = msgp.WrapError(err, "TaskEpoch")
 				return
 			}
 		default:

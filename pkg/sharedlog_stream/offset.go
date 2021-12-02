@@ -5,9 +5,9 @@ package sharedlog_stream
 import "encoding/json"
 
 type OffsetRecord struct {
-	Offset   uint64 `json:"offset" msg:"os"`
-	AppId    uint64 `json:"aid" msg:"aid"`
-	AppEpoch uint16 `json:"ae" msg:"ae"`
+	Offset    uint64 `json:"offset" msg:"os"`
+	TaskId    uint64 `json:"aid" msg:"aid"`
+	TaskEpoch uint16 `json:"ae" msg:"ae"`
 }
 
 type OffsetRecordJSONSerde struct{}
