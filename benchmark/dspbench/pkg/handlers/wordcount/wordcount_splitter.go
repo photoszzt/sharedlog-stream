@@ -163,6 +163,7 @@ L:
 			if msg.Msg.Value == nil {
 				continue
 			}
+			currentOffset = msg.LogSeqNum
 			splitStart := time.Now()
 			msgs, err := args.splitter(msg.Msg)
 			if err != nil {

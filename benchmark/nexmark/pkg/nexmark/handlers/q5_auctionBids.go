@@ -292,6 +292,7 @@ L:
 			if msg.Msg.Value == nil {
 				continue
 			}
+			currentOffset = msg.LogSeqNum
 			countMsgs, err := args.countProc.ProcessAndReturn(ctx, msg.Msg)
 			if err != nil {
 				retc <- &common.FnOutput{

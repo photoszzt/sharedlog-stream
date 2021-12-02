@@ -241,6 +241,10 @@ L:
 		}
 
 		for _, msg := range gotMsgs {
+			if msg.Msg.Value == nil {
+				continue
+			}
+			currentOffset = msg.LogSeqNum
 			bidMsg, err := args.filterBid.ProcessAndReturn(ctx, msg.Msg)
 			if err != nil {
 				retc <- &common.FnOutput{

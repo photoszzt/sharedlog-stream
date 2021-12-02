@@ -180,6 +180,7 @@ L:
 			trackConsumePar = true
 		}
 		for _, msg := range msgs {
+			currentOffset = msg.LogSeqNum
 			_, err = args.counter.ProcessAndReturn(ctx, msg.Msg)
 			if err != nil {
 				retc <- &common.FnOutput{
