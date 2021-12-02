@@ -500,28 +500,28 @@ func (tc *TransactionManager) RecordTopicStreams(topicToTrack string, stream sto
 	tc.topicStreams[topicToTrack] = stream
 }
 
-func (tc *TransactionManager) AddOffsets(ctx context.Context, topicToTrack string, partitions []uint8) error {
+func (tc *TransactionManager) AddTopicTrackConsumedSeqs(ctx context.Context, topicToTrack string, partitions []uint8) error {
 	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + topicToTrack
 	return tc.AddTopicPartition(ctx, offsetTopic, partitions)
 }
 
-type OffsetConfig struct {
-	TopicToTrack string
-	AppId        uint64
-	Offset       uint64
-	AppEpoch     uint16
-	Partition    uint8
+type ConsumedSeqNumConfig struct {
+	TopicToTrack   string
+	AppId          uint64
+	ConsumedSeqNum uint64
+	AppEpoch       uint16
+	Partition      uint8
 }
 
-func (tc *TransactionManager) AppendOffset(ctx context.Context, offsetConfig OffsetConfig) error {
+func (tc *TransactionManager) AppendConsumedSeqNum(ctx context.Context, consumedSeqNumConfig ConsumedSeqNumConfig) error {
 	tc.tmMu.RLock()
 
-	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + offsetConfig.TopicToTrack
+	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + consumedSeqNumConfig.TopicToTrack
 	offsetLog := tc.topicStreams[offsetTopic]
 	offsetRecord := OffsetRecord{
-		Offset:   offsetConfig.Offset,
-		AppId:    offsetConfig.AppId,
-		AppEpoch: offsetConfig.AppEpoch,
+		Offset:   consumedSeqNumConfig.ConsumedSeqNum,
+		AppId:    consumedSeqNumConfig.AppId,
+		AppEpoch: consumedSeqNumConfig.AppEpoch,
 	}
 	encoded, err := tc.offsetRecordSerde.Encode(&offsetRecord)
 	if err != nil {
@@ -529,12 +529,12 @@ func (tc *TransactionManager) AppendOffset(ctx context.Context, offsetConfig Off
 		return err
 	}
 
-	_, err = offsetLog.Push(ctx, encoded, offsetConfig.Partition, false)
+	_, err = offsetLog.Push(ctx, encoded, consumedSeqNumConfig.Partition, false)
 	tc.tmMu.RUnlock()
 	return err
 }
 
-func (tc *TransactionManager) FindLastOffset(ctx context.Context, topicToTrack string, parNum uint8) (uint64, error) {
+func (tc *TransactionManager) FindLastConsumedSeqNum(ctx context.Context, topicToTrack string, parNum uint8) (uint64, error) {
 	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + topicToTrack
 	offsetLog := tc.topicStreams[offsetTopic]
 

@@ -57,7 +57,7 @@ func SetupTransactionManager(ctx context.Context, env types.Environment,
 		return nil, 0, 0, fmt.Errorf("create offset topic failed: %v", err)
 	}
 
-	offset, err := tm.FindLastOffset(ctx, sp.InputTopicName, sp.ParNum)
+	offset, err := tm.FindLastConsumedSeqNum(ctx, sp.InputTopicName, sp.ParNum)
 	if err != nil {
 		if !errors.IsStreamEmptyError(err) {
 			return nil, 0, 0, err
@@ -70,11 +70,11 @@ func SetupTransactionManager(ctx context.Context, env types.Environment,
 }
 
 func TrackOffsetAndCommit(ctx context.Context,
-	offsetConfig sharedlog_stream.OffsetConfig,
+	consumedSeqNumConfig sharedlog_stream.ConsumedSeqNumConfig,
 	tm *sharedlog_stream.TransactionManager, hasLiveTransaction *bool, trackConsumePar *bool,
 	retc chan *common.FnOutput,
 ) {
-	err := tm.AppendOffset(ctx, offsetConfig)
+	err := tm.AppendConsumedSeqNum(ctx, consumedSeqNumConfig)
 	if err != nil {
 		retc <- &common.FnOutput{
 			Success: false,

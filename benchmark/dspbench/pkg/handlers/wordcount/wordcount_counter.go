@@ -116,12 +116,12 @@ L:
 		timeout := duration != 0 && time.Since(startTime) >= duration
 		isTimeToCommit := commitEvery != 0 && timeSinceTranStart > commitEvery
 		if hasLiveTransaction && (isTimeToCommit || timeout) {
-			benchutil.TrackOffsetAndCommit(ctx, sharedlog_stream.OffsetConfig{
-				TopicToTrack: sp.InputTopicName,
-				AppId:        appId,
-				AppEpoch:     appEpoch,
-				Partition:    sp.ParNum,
-				Offset:       currentOffset,
+			benchutil.TrackOffsetAndCommit(ctx, sharedlog_stream.ConsumedSeqNumConfig{
+				TopicToTrack:   sp.InputTopicName,
+				AppId:          appId,
+				AppEpoch:       appEpoch,
+				Partition:      sp.ParNum,
+				ConsumedSeqNum: currentOffset,
 			}, tm, &hasLiveTransaction, &trackConsumePar, retc)
 		}
 		if timeout {
@@ -170,7 +170,7 @@ L:
 			}
 		}
 		if !trackConsumePar {
-			err = tm.AddOffsets(ctx, sp.InputTopicName, []uint8{sp.ParNum})
+			err = tm.AddTopicTrackConsumedSeqs(ctx, sp.InputTopicName, []uint8{sp.ParNum})
 			if err != nil {
 				retc <- &common.FnOutput{
 					Success: false,
