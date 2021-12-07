@@ -10,7 +10,6 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sync"
 
@@ -38,58 +37,6 @@ func GetShardedInputOutputStreams(ctx context.Context, env types.Environment, in
 		return nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
 	}
 	return inputStream, outputStream, nil
-}
-
-func SetupTransactionManager(ctx context.Context, env types.Environment,
-	transactionalId string, sp *common.QueryInput, src processor.Source,
-) (*sharedlog_stream.TransactionManager, uint64, uint16, error) {
-	tm, err := sharedlog_stream.NewTransactionManager(ctx, env, transactionalId, commtypes.SerdeFormat(sp.SerdeFormat))
-	if err != nil {
-		return nil, 0, 0, fmt.Errorf("NewTransactionManager failed: %v", err)
-	}
-	appId, appEpoch, err := tm.InitTransaction(ctx)
-	if err != nil {
-		return nil, 0, 0, fmt.Errorf("InitTransaction failed: %v", err)
-	}
-
-	err = tm.CreateOffsetTopic(sp.InputTopicName, uint8(sp.NumInPartition))
-	if err != nil {
-		return nil, 0, 0, fmt.Errorf("create offset topic failed: %v", err)
-	}
-
-	offset, err := tm.FindLastConsumedSeqNum(ctx, sp.InputTopicName, sp.ParNum)
-	if err != nil {
-		if !errors.IsStreamEmptyError(err) {
-			return nil, 0, 0, err
-		}
-	}
-	if offset != 0 {
-		src.SetCursor(offset+1, sp.ParNum)
-	}
-	return tm, appId, appEpoch, nil
-}
-
-func TrackOffsetAndCommit(ctx context.Context,
-	consumedSeqNumConfig sharedlog_stream.ConsumedSeqNumConfig,
-	tm *sharedlog_stream.TransactionManager, hasLiveTransaction *bool, trackConsumePar *bool,
-	retc chan *common.FnOutput,
-) {
-	err := tm.AppendConsumedSeqNum(ctx, consumedSeqNumConfig)
-	if err != nil {
-		retc <- &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("append offset failed: %v\n", err),
-		}
-	}
-	err = tm.CommitTransaction(ctx)
-	if err != nil {
-		retc <- &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("commit failed: %v\n", err),
-		}
-	}
-	*hasLiveTransaction = false
-	*trackConsumePar = false
 }
 
 func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutputStreamConfig) error {

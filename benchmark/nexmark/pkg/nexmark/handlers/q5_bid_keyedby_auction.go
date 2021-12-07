@@ -72,13 +72,77 @@ func (h *bidKeyedByAuction) getSrcSink(
 }
 
 type bidKeyedByAuctionProcessArgs struct {
-	src           *processor.MeteredSource
-	sink          *processor.MeteredSink
-	filterBid     *processor.MeteredProcessor
-	selectKey     *processor.MeteredProcessor
-	output_stream *sharedlog_stream.ShardedSharedLogStream
+	src             *processor.MeteredSource
+	sink            *processor.MeteredSink
+	filterBid       *processor.MeteredProcessor
+	selectKey       *processor.MeteredProcessor
+	output_stream   *sharedlog_stream.ShardedSharedLogStream
+	parNum          uint8
+	numOutPartition uint8
 }
 
+func (h *bidKeyedByAuction) process(ctx context.Context,
+	argsTmp interface{},
+	trackParFunc func([]uint8) error,
+) (uint64, *common.FnOutput) {
+	currentOffset := uint64(0)
+	args := argsTmp.(*bidKeyedByAuctionProcessArgs)
+	gotMsgs, err := args.src.Consume(ctx, args.parNum)
+	if err != nil {
+		if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+			return currentOffset, &common.FnOutput{
+				Success: true,
+				Message: err.Error(),
+			}
+		}
+		return currentOffset, &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+
+	for _, msg := range gotMsgs {
+		if msg.Msg.Value == nil {
+			continue
+		}
+		currentOffset = msg.LogSeqNum
+		bidMsg, err := args.filterBid.ProcessAndReturn(ctx, msg.Msg)
+		if err != nil {
+			return currentOffset, &common.FnOutput{
+				Success: false,
+				Message: err.Error(),
+			}
+		}
+		if bidMsg != nil {
+			mappedKey, err := args.selectKey.ProcessAndReturn(ctx, bidMsg[0])
+			if err != nil {
+				return currentOffset, &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
+			}
+			key := mappedKey[0].Key.(uint64)
+			par := uint8(key % uint64(args.numOutPartition))
+			err = trackParFunc([]uint8{par})
+			if err != nil {
+				return currentOffset, &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("add topic partition failed: %v\n", err),
+				}
+			}
+			err = args.sink.Sink(ctx, mappedKey[0], par, false)
+			if err != nil {
+				return currentOffset, &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
+			}
+		}
+	}
+	return currentOffset, nil
+}
+
+/*
 func (h *bidKeyedByAuction) process(ctx context.Context, sp *common.QueryInput, args bidKeyedByAuctionProcessArgs) *common.FnOutput {
 	duration := time.Duration(sp.Duration) * time.Second
 	latencies := make([]int, 0, 128)
@@ -207,6 +271,18 @@ L:
 			commitTimer = time.Now()
 		}
 
+		if !trackConsumePar {
+			err = tm.AddTopicTrackConsumedSeqs(ctx, sp.InputTopicName, []uint8{sp.ParNum})
+			if err != nil {
+				retc <- &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("add offsets failed: %v\n", err),
+				}
+			}
+			trackConsumePar = true
+		}
+
+
 		procStart := time.Now()
 		gotMsgs, err := args.src.Consume(ctx, sp.ParNum)
 		if err != nil {
@@ -228,16 +304,6 @@ L:
 				Success: false,
 				Message: err.Error(),
 			}
-		}
-		if !trackConsumePar {
-			err = tm.AddTopicTrackConsumedSeqs(ctx, sp.InputTopicName, []uint8{sp.ParNum})
-			if err != nil {
-				retc <- &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("add offsets failed: %v\n", err),
-				}
-			}
-			trackConsumePar = true
 		}
 
 		for _, msg := range gotMsgs {
@@ -330,6 +396,7 @@ func (h *bidKeyedByAuction) processWithTransaction(ctx context.Context, sp *comm
 		}
 	}
 }
+*/
 
 func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 	sp *common.QueryInput,
@@ -360,15 +427,50 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 			return commtypes.Message{Key: event.Bid.Auction, Value: m.Value, Timestamp: m.Timestamp}, nil
 		})))
 
-	args := bidKeyedByAuctionProcessArgs{
-		src:           src,
-		sink:          sink,
-		filterBid:     filterBid,
-		selectKey:     selectKey,
-		output_stream: output_stream,
+	procArgs := bidKeyedByAuctionProcessArgs{
+		src:             src,
+		sink:            sink,
+		filterBid:       filterBid,
+		selectKey:       selectKey,
+		output_stream:   output_stream,
+		parNum:          sp.ParNum,
+		numOutPartition: sp.NumOutPartition,
 	}
+
+	task := sharedlog_stream.StreamTask{
+		ProcessFunc: h.process,
+	}
+
 	if sp.EnableTransaction {
-		return h.processWithTransaction(ctx, sp, args)
+		// return h.processWithTransaction(ctx, sp, args)
+		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
+			ProcArgs:        procArgs,
+			Env:             h.env,
+			Src:             src,
+			OutputStream:    output_stream,
+			QueryInput:      sp,
+			TransactionalId: fmt.Sprintf("bidKeyedByAuction-%s-%d-%s", sp.InputTopicName, sp.ParNum, sp.OutputTopicName),
+		}
+		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
+		if ret != nil && ret.Success {
+			ret.Latencies["src"] = src.GetLatency()
+			ret.Latencies["sink"] = sink.GetLatency()
+			ret.Latencies["filterBid"] = filterBid.GetLatency()
+			ret.Latencies["selectKey"] = selectKey.GetLatency()
+		}
+		return ret
 	}
-	return h.process(ctx, sp, args)
+	// return h.process(ctx, sp, args)
+	streamTaskArgs := sharedlog_stream.StreamTaskArgs{
+		ProcArgs: procArgs,
+		Duration: time.Duration(sp.Duration) * time.Second,
+	}
+	ret := task.Process(ctx, &streamTaskArgs)
+	if ret != nil && ret.Success {
+		ret.Latencies["src"] = src.GetLatency()
+		ret.Latencies["sink"] = sink.GetLatency()
+		ret.Latencies["filterBid"] = filterBid.GetLatency()
+		ret.Latencies["selectKey"] = selectKey.GetLatency()
+	}
+	return ret
 }

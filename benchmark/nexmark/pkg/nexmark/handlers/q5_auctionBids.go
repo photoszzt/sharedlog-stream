@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"hash/fnv"
 	"sharedlog-stream/benchmark/common"
@@ -119,13 +118,76 @@ func (h *q5AuctionBids) getCountAggProc(sp *common.QueryInput, msgSerde commtype
 }
 
 type q5AuctionBidsProcessArg struct {
-	countProc      *processor.MeteredProcessor
-	groupByAuction *processor.MeteredProcessor
-	src            *processor.MeteredSource
-	sink           *processor.MeteredSink
-	output_stream  *sharedlog_stream.ShardedSharedLogStream
+	countProc       *processor.MeteredProcessor
+	groupByAuction  *processor.MeteredProcessor
+	src             *processor.MeteredSource
+	sink            *processor.MeteredSink
+	output_stream   *sharedlog_stream.ShardedSharedLogStream
+	parNum          uint8
+	numOutPartition uint8
 }
 
+func (h *q5AuctionBids) process(ctx context.Context,
+	argsTmp interface{},
+	trackParFunc func([]uint8) error,
+) (uint64, *common.FnOutput) {
+	args := argsTmp.(*q5AuctionBidsProcessArg)
+	currentOffset := uint64(0)
+	gotMsgs, err := args.src.Consume(ctx, args.parNum)
+	if err != nil {
+		if xerrors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+			return currentOffset, &common.FnOutput{
+				Success: true,
+				Message: err.Error(),
+			}
+		}
+		return currentOffset, &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+
+	for _, msg := range gotMsgs {
+		if msg.Msg.Value == nil {
+			continue
+		}
+		currentOffset = msg.LogSeqNum
+		countMsgs, err := args.countProc.ProcessAndReturn(ctx, msg.Msg)
+		if err != nil {
+			return currentOffset, &common.FnOutput{
+				Success: false,
+				Message: err.Error(),
+			}
+		}
+		for _, countMsg := range countMsgs {
+			changeKeyedMsg, err := args.groupByAuction.ProcessAndReturn(ctx, countMsg)
+			if err != nil {
+				return currentOffset, &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
+			}
+			par := uint8(hashSe(changeKeyedMsg[0].Key.(*ntypes.StartEndTime)) % uint32(args.numOutPartition))
+			err = trackParFunc([]uint8{par})
+			if err != nil {
+				return currentOffset, &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("add topic partition failed: %v\n", err),
+				}
+			}
+			err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
+			if err != nil {
+				return currentOffset, &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
+			}
+		}
+	}
+	return currentOffset, nil
+}
+
+/*
 func (h *q5AuctionBids) process(ctx context.Context,
 	sp *common.QueryInput, args q5AuctionBidsProcessArg,
 ) *common.FnOutput {
@@ -256,6 +318,17 @@ L:
 			commitTimer = time.Now()
 		}
 
+		if !trackConsumePar {
+			err = tm.AddTopicTrackConsumedSeqs(ctx, sp.InputTopicName, []uint8{sp.ParNum})
+			if err != nil {
+				retc <- &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("add offsets failed: %v\n", err),
+				}
+			}
+			trackConsumePar = true
+		}
+
 		procStart := time.Now()
 		gotMsgs, err := args.src.Consume(ctx, sp.ParNum)
 		if err != nil {
@@ -278,16 +351,7 @@ L:
 				Message: err.Error(),
 			}
 		}
-		if !trackConsumePar {
-			err = tm.AddTopicTrackConsumedSeqs(ctx, sp.InputTopicName, []uint8{sp.ParNum})
-			if err != nil {
-				retc <- &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("add offsets failed: %v\n", err),
-				}
-			}
-			trackConsumePar = true
-		}
+
 		for _, msg := range gotMsgs {
 			if msg.Msg.Value == nil {
 				continue
@@ -377,6 +441,7 @@ func (h *q5AuctionBids) processWithTransaction(
 		}
 	}
 }
+*/
 
 func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
@@ -421,16 +486,50 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			}
 			return commtypes.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
 		})))
-	args := q5AuctionBidsProcessArg{
-		countProc:      countProc,
-		groupByAuction: groupByAuction,
-		src:            src,
-		sink:           sink,
-		output_stream:  output_stream,
+	procArgs := q5AuctionBidsProcessArg{
+		countProc:       countProc,
+		groupByAuction:  groupByAuction,
+		src:             src,
+		sink:            sink,
+		output_stream:   output_stream,
+		parNum:          sp.ParNum,
+		numOutPartition: sp.NumOutPartition,
+	}
+
+	task := sharedlog_stream.StreamTask{
+		ProcessFunc: h.process,
 	}
 
 	if sp.EnableTransaction {
-		return h.processWithTransaction(ctx, sp, args)
+		// return h.processWithTransaction(ctx, sp, args)
+		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
+			ProcArgs:        procArgs,
+			Env:             h.env,
+			Src:             src,
+			OutputStream:    output_stream,
+			QueryInput:      sp,
+			TransactionalId: fmt.Sprintf("q5AuctionBids-%s-%d-%s", sp.InputTopicName, sp.ParNum, sp.OutputTopicName),
+		}
+		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
+		if ret != nil && ret.Success {
+			ret.Latencies["src"] = src.GetLatency()
+			ret.Latencies["sink"] = sink.GetLatency()
+			ret.Latencies["count"] = countProc.GetLatency()
+			ret.Latencies["changeKey"] = groupByAuction.GetLatency()
+		}
+		return ret
 	}
-	return h.process(ctx, sp, args)
+	// return h.process(ctx, sp, args)
+	streamTaskArgs := sharedlog_stream.StreamTaskArgs{
+		ProcArgs: procArgs,
+		Duration: time.Duration(sp.Duration) * time.Second,
+	}
+	ret := task.Process(ctx, &streamTaskArgs)
+	if ret != nil && ret.Success {
+		ret.Latencies["src"] = src.GetLatency()
+		ret.Latencies["sink"] = sink.GetLatency()
+		ret.Latencies["count"] = countProc.GetLatency()
+		ret.Latencies["changeKey"] = groupByAuction.GetLatency()
+	}
+	return ret
 }
