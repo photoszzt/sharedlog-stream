@@ -375,7 +375,7 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 		}
 	}
 
-	procArgs := wordcountCounterAggProcessArg{
+	procArgs := &wordcountCounterAggProcessArg{
 		src:           src,
 		output_stream: meteredOutputStream,
 		counter:       count,

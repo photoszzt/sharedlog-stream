@@ -90,6 +90,14 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 		procStart := time.Now()
 		_, ret := t.ProcessFunc(ctx, args.ProcArgs, func(u []uint8) error { return nil })
 		if ret != nil {
+			if ret.Success {
+				elapsed := time.Since(procStart)
+				latencies = append(latencies, int(elapsed.Microseconds()))
+				ret.Latencies = map[string][]int{
+					"e2e": latencies,
+				}
+				ret.Duration = time.Since(startTime).Seconds()
+			}
 			return ret
 		}
 		elapsed := time.Since(procStart)
@@ -204,6 +212,14 @@ L:
 			return tm.AddTopicPartition(ctx, args.QueryInput.OutputTopicName, u)
 		})
 		if ret != nil {
+			if ret.Success {
+				elapsed := time.Since(procStart)
+				latencies = append(latencies, int(elapsed.Microseconds()))
+				ret.Latencies = map[string][]int{
+					"e2e": latencies,
+				}
+				ret.Duration = time.Since(startTime).Seconds()
+			}
 			retc <- ret
 		}
 		currentOffset = off
