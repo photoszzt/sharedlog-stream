@@ -5,6 +5,7 @@ package sharedlog_stream
 import (
 	"context"
 	"math"
+	"sharedlog-stream/benchmark/common/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
@@ -23,7 +24,7 @@ const (
 type SharedLogStream struct {
 	env                types.Environment
 	txnMarkerSerde     commtypes.Serde
-	curReadMap         map[commtypes.AppIDGen]commtypes.ReadMsgAndProgress
+	curReadMap         map[commtypes.TaskIDGen]commtypes.ReadMsgAndProgress
 	topicName          string
 	topicNameHash      uint64
 	cursor             uint64
@@ -171,7 +172,7 @@ func (s *SharedLogStream) isEmpty() bool {
 	return s.cursor >= s.tail
 }
 
-func (s *SharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum uint64, parNum uint8, tag uint64) (*commtypes.AppIDGen, *commtypes.RawMsg, error) {
+func (s *SharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum uint64, parNum uint8, tag uint64) (*commtypes.TaskIDGen, *commtypes.RawMsg, error) {
 	seqNum := tailSeqNum
 	for {
 		logEntry, err := s.readPrevWithTimeout(ctx, tag, seqNum)
@@ -186,9 +187,9 @@ func (s *SharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum ui
 		if streamLogEntry.TopicName != s.topicName {
 			continue
 		} else {
-			return &commtypes.AppIDGen{
-					AppId:    streamLogEntry.TaskId,
-					AppEpoch: streamLogEntry.TaskEpoch,
+			return &commtypes.TaskIDGen{
+					TaskId:    streamLogEntry.TaskId,
+					TaskEpoch: streamLogEntry.TaskEpoch,
 				}, &commtypes.RawMsg{
 					Payload:   streamLogEntry.Payload,
 					MsgSeqNum: streamLogEntry.MsgSeqNum,
@@ -199,12 +200,12 @@ func (s *SharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum ui
 	return nil, nil, errors.ErrStreamEmpty
 }
 
-func (s *SharedLogStream) ReadNext(ctx context.Context, parNum uint8) (commtypes.AppIDGen, []commtypes.RawMsg, error) {
+func (s *SharedLogStream) ReadNext(ctx context.Context, parNum uint8) (commtypes.TaskIDGen, []commtypes.RawMsg, error) {
 	tag := NameHashWithPartition(s.topicNameHash, parNum)
 	return s.ReadNextWithTag(ctx, parNum, tag)
 }
 
-func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag uint64) (commtypes.AppIDGen, []commtypes.RawMsg, error) {
+func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag uint64) (commtypes.TaskIDGen, []commtypes.RawMsg, error) {
 	// fmt.Fprintf(os.Stderr, "read topic %s with parNum %d tag %x\n", s.topicName, parNum, tag)
 	if s.isEmpty() {
 		if err := s.findLastEntryBackward(ctx, protocol.MaxLogSeqnum, parNum); err != nil {
@@ -230,9 +231,11 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 		streamLogEntry := decodeStreamLogEntry(logEntry)
 		if streamLogEntry.TopicName == s.topicName {
 			if s.inTransaction {
-				appKey := commtypes.AppIDGen{
-					AppId:    streamLogEntry.TaskId,
-					AppEpoch: streamLogEntry.TaskEpoch,
+				debug.Assert(streamLogEntry.TaskId != 0, "stream log entry's task id should not be zero")
+				debug.Assert(streamLogEntry.TaskEpoch != 0, "stream log entry's epoch should not be zero")
+				appKey := commtypes.TaskIDGen{
+					TaskId:    streamLogEntry.TaskId,
+					TaskEpoch: streamLogEntry.TaskEpoch,
 				}
 				readMsgProc, ok := s.curReadMap[appKey]
 				if streamLogEntry.IsControl {

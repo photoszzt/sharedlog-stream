@@ -371,7 +371,7 @@ func (tc *TransactionManager) appendToTransactionLog(ctx context.Context, tm *Tx
 	return err
 }
 
-func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, marker TxnMark, appId uint64, appEpoch uint16) error {
+func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, marker TxnMark) error {
 	tm := TxnMarker{
 		Mark: uint8(marker),
 	}
@@ -553,7 +553,7 @@ func (tc *TransactionManager) BeginTransaction(ctx context.Context) error {
 // second phase of the 2-phase commit protocol
 func (tc *TransactionManager) completeTransaction(ctx context.Context, trMark TxnMark, trState TransactionState) error {
 	// append txn marker to all topic partitions
-	err := tc.appendTxnMarkerToStreams(ctx, trMark, tc.CurrentTaskId, tc.CurrentEpoch)
+	err := tc.appendTxnMarkerToStreams(ctx, trMark)
 	if err != nil {
 		return err
 	}

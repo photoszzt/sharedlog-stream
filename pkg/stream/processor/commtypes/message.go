@@ -8,12 +8,12 @@ type Message struct {
 
 var EmptyMessage = Message{}
 
-type AppIDGen struct {
-	AppId    uint64
-	AppEpoch uint16
+type TaskIDGen struct {
+	TaskId    uint64
+	TaskEpoch uint16
 }
 
-var EmptyAppIDGen = AppIDGen{AppId: 0, AppEpoch: 0}
+var EmptyAppIDGen = TaskIDGen{TaskId: 0, TaskEpoch: 0}
 var EmptyRawMsg = RawMsg{Payload: nil, MsgSeqNum: 0, LogSeqNum: 0}
 
 type ReadMsgAndProgress struct {

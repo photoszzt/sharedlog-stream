@@ -47,7 +47,7 @@ func (s *ShardedSharedLogStream) PushWithTag(ctx context.Context, payload []byte
 	return s.subSharedLogStreams[parNumber].PushWithTag(ctx, payload, parNumber, tags, isControl)
 }
 
-func (s *ShardedSharedLogStream) ReadNext(ctx context.Context, parNumber uint8) (commtypes.AppIDGen, []commtypes.RawMsg, error) {
+func (s *ShardedSharedLogStream) ReadNext(ctx context.Context, parNumber uint8) (commtypes.TaskIDGen, []commtypes.RawMsg, error) {
 	if parNumber < s.numPartitions {
 		par := parNumber
 		shard := s.subSharedLogStreams[par]
@@ -57,7 +57,7 @@ func (s *ShardedSharedLogStream) ReadNext(ctx context.Context, parNumber uint8) 
 	}
 }
 
-func (s *ShardedSharedLogStream) ReadNextWithTag(ctx context.Context, parNumber uint8, tag uint64) (commtypes.AppIDGen, []commtypes.RawMsg, error) {
+func (s *ShardedSharedLogStream) ReadNextWithTag(ctx context.Context, parNumber uint8, tag uint64) (commtypes.TaskIDGen, []commtypes.RawMsg, error) {
 	if parNumber < s.numPartitions {
 		par := parNumber
 		shard := s.subSharedLogStreams[par]
@@ -67,7 +67,7 @@ func (s *ShardedSharedLogStream) ReadNextWithTag(ctx context.Context, parNumber 
 	}
 }
 
-func (s *ShardedSharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum uint64, parNum uint8, tag uint64) (*commtypes.AppIDGen, *commtypes.RawMsg, error) {
+func (s *ShardedSharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum uint64, parNum uint8, tag uint64) (*commtypes.TaskIDGen, *commtypes.RawMsg, error) {
 	if parNum < s.numPartitions {
 		par := parNum
 		shard := s.subSharedLogStreams[par]
