@@ -30,7 +30,7 @@ func NewQuery3(env types.Environment) types.FuncHandler {
 }
 
 func (h *query3Handler) Call(ctx context.Context, input []byte) ([]byte, error) {
-	parsedInput := &ntypes.QueryInput{}
+	parsedInput := &common.QueryInput{}
 	err := json.Unmarshal(input, parsedInput)
 	if err != nil {
 		return nil, err
@@ -46,7 +46,7 @@ func (h *query3Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func Query3(ctx context.Context, env types.Environment, input *ntypes.QueryInput, output chan *common.FnOutput) {
+func Query3(ctx context.Context, env types.Environment, input *common.QueryInput, output chan *common.FnOutput) {
 	inputStream := sharedlog_stream.NewSharedLogStream(env, input.InputTopicName)
 	/*
 		err := inputStream.InitStream(ctx, 0, true)

@@ -55,7 +55,7 @@ func invokeSourceFunc(client *http.Client, response *common.FnOutput, wg *sync.W
 
 func invokeQuery(client *http.Client, response *common.FnOutput, wg *sync.WaitGroup) {
 	defer wg.Done()
-	queryInput := &ntypes.QueryInput{
+	queryInput := &common.QueryInput{
 		Duration:        uint32(FLAGS_duration),
 		InputTopicName:  FLAGS_stream_prefix + "_src",
 		OutputTopicName: FLAGS_stream_prefix + "_" + FLAGS_app_name + "_output",

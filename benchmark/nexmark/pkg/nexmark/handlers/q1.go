@@ -3,14 +3,14 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 
@@ -35,14 +35,11 @@ func (h *query1Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
-	outputCh := make(chan *common.FnOutput)
-	go Query1(ctx, h.env, parsedInput, outputCh)
-	output := <-outputCh
+	output := h.Query1(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("query 1 outputs %s\n", encodedOutput)
 	return utils.CompressData(encodedOutput), nil
 }
 
@@ -52,30 +49,169 @@ func q1mapFunc(msg commtypes.Message) (commtypes.Message, error) {
 	return commtypes.Message{Value: event}, nil
 }
 
+func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("get input output stream failed: %v", err),
+		}
+	}
+	src, sink, err := getSrcSink(ctx, sp, input_stream, output_stream)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+
+	filterBid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
+		only_bid)))
+	q1Map := processor.NewMeteredProcessor(processor.NewStreamMapValuesWithKeyProcessor(processor.MapperFunc(q1mapFunc)))
+
+	procArgs := query1ProcessArgs{
+		src:           src,
+		sink:          sink,
+		filterBid:     filterBid,
+		q1Map:         q1Map,
+		output_stream: output_stream,
+		parNum:        sp.ParNum,
+	}
+	task := sharedlog_stream.StreamTask{
+		ProcessFunc: h.process,
+	}
+	if sp.EnableTransaction {
+		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
+			ProcArgs:        procArgs,
+			Env:             h.env,
+			Src:             src,
+			OutputStream:    output_stream,
+			QueryInput:      sp,
+			TransactionalId: fmt.Sprintf("q1Query-%s-%d-%s", sp.InputTopicName, sp.ParNum, sp.OutputTopicName),
+		}
+		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
+		if ret != nil && ret.Success {
+			ret.Latencies["src"] = src.GetLatency()
+			ret.Latencies["sink"] = sink.GetLatency()
+			ret.Latencies["filterBids"] = filterBid.GetLatency()
+			ret.Latencies["q1Map"] = q1Map.GetLatency()
+		}
+		return ret
+	}
+	streamTaskArgs := sharedlog_stream.StreamTaskArgs{
+		ProcArgs: procArgs,
+		Duration: time.Duration(sp.Duration) * time.Second,
+	}
+	ret := task.Process(ctx, &streamTaskArgs)
+	if ret != nil && ret.Success {
+		ret.Latencies["src"] = src.GetLatency()
+		ret.Latencies["sink"] = sink.GetLatency()
+		ret.Latencies["filterBids"] = filterBid.GetLatency()
+		ret.Latencies["q1Map"] = q1Map.GetLatency()
+	}
+	return ret
+}
+
+type query1ProcessArgs struct {
+	src           *processor.MeteredSource
+	sink          *processor.MeteredSink
+	filterBid     *processor.MeteredProcessor
+	q1Map         *processor.MeteredProcessor
+	output_stream *sharedlog_stream.ShardedSharedLogStream
+	parNum        uint8
+}
+
+func (h *query1Handler) process(ctx context.Context, argsTmp interface{},
+	trackParFunc func([]uint8) error,
+) (uint64, *common.FnOutput) {
+	currentOffset := uint64(0)
+	args := argsTmp.(*query1ProcessArgs)
+	gotMsgs, err := args.src.Consume(ctx, args.parNum)
+	if err != nil {
+		if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+			return currentOffset, &common.FnOutput{
+				Success: true,
+				Message: err.Error(),
+			}
+		}
+		return currentOffset, &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+	err = trackParFunc([]uint8{args.parNum})
+	if err != nil {
+		return currentOffset, &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("add topic partition failed: %v\n", err),
+		}
+	}
+
+	for _, msg := range gotMsgs {
+		if msg.Msg.Value == nil {
+			continue
+		}
+		currentOffset = msg.LogSeqNum
+		bidMsg, err := args.filterBid.ProcessAndReturn(ctx, msg.Msg)
+		if err != nil {
+			return currentOffset, &common.FnOutput{
+				Success: false,
+				Message: err.Error(),
+			}
+		}
+		if bidMsg != nil {
+			filtered, err := args.q1Map.ProcessAndReturn(ctx, bidMsg[0])
+			if err != nil {
+				return currentOffset, &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
+			}
+			err = args.sink.Sink(ctx, filtered[0], args.parNum, false)
+			if err != nil {
+				return currentOffset, &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
+			}
+		}
+	}
+	return currentOffset, nil
+}
+
+func getSrcSink(ctx context.Context, sp *common.QueryInput,
+	input_stream *sharedlog_stream.ShardedSharedLogStream,
+	output_stream *sharedlog_stream.ShardedSharedLogStream,
+) (*processor.MeteredSource, *processor.MeteredSink, error) {
+	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	if err != nil {
+		return nil, nil, fmt.Errorf("get msg serde failed: %v", err)
+	}
+	eventSerde, err := getEventSerde(sp.SerdeFormat)
+	if err != nil {
+		return nil, nil, err
+	}
+	inConfig := &sharedlog_stream.SharedLogStreamConfig{
+		Timeout:      common.SrcConsumeTimeout,
+		KeyDecoder:   commtypes.StringDecoder{},
+		ValueDecoder: eventSerde,
+		MsgDecoder:   msgSerde,
+	}
+	outConfig := &sharedlog_stream.StreamSinkConfig{
+		KeyEncoder:   commtypes.StringEncoder{},
+		ValueEncoder: eventSerde,
+		MsgEncoder:   msgSerde,
+	}
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
+	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
+	return src, sink, nil
+}
+
+/*
 func Query1(ctx context.Context, env types.Environment, input *common.QueryInput, output chan *common.FnOutput) {
 	// fmt.Fprintf(os.Stderr, "input topic name: %v, output topic name: %v\n", input.InputTopicName, input.OutputTopicName)
 	inputStream := sharedlog_stream.NewSharedLogStream(env, input.InputTopicName)
-	/*
-		err := inputStream.InitStream(ctx, 0, true)
-		if err != nil {
-			output <- &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("NewSharedlogStream for input stream failed: %v", err),
-			}
-			return
-		}
-	*/
 	outputStream := sharedlog_stream.NewSharedLogStream(env, input.OutputTopicName)
-	/*
-		err = outputStream.InitStream(ctx, 0, false)
-		if err != nil {
-			output <- &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("NewSharedlogStream for output stream failed: %v", err),
-			}
-			return
-		}
-	*/
 	msgSerde, err := commtypes.GetMsgSerde(input.SerdeFormat)
 	if err != nil {
 		output <- &common.FnOutput{
@@ -148,3 +284,4 @@ func Query1(ctx context.Context, env types.Environment, input *common.QueryInput
 		Latencies: map[string][]int{"e2e": latencies},
 	}
 }
+*/

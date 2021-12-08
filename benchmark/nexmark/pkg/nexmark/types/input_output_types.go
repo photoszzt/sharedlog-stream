@@ -8,13 +8,6 @@ import (
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 )
 
-type QueryInput struct {
-	InputTopicName  string `json:"input_topic_name"`
-	OutputTopicName string `json:"output_topic_name"`
-	Duration        uint32 `json:"duration"`
-	SerdeFormat     uint8  `json:"serde_format"`
-}
-
 type NexMarkConfigInput struct {
 	TopicName              string        `json:"topic_name"`
 	RateShape              string        `json:"rate_shape"`
@@ -81,11 +74,4 @@ func ConvertToNexmarkConfiguration(config *NexMarkConfigInput) (*nexmark.NexMark
 	nexmarkConfig.HotSellersRatio = config.AuctionHotRatioSellers
 	nexmarkConfig.NumEvents = uint32(config.EventsNum)
 	return nexmarkConfig, nil
-}
-
-type FnOutput struct {
-	Message   string  `json:"message"`
-	Latencies []int   `json:"latencies"`
-	Duration  float64 `json:"duration"`
-	Success   bool    `json:"success"`
 }
