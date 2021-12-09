@@ -2,6 +2,19 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/stream"
+	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
+	"time"
+
+	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -17,51 +30,24 @@ func NewQuery5(env types.Environment) types.FuncHandler {
 }
 
 func (h *query5Handler) Call(ctx context.Context, input []byte) ([]byte, error) {
-	return nil, nil
-	/*
-		parsedInput := &ntypes.QueryInput{}
-		err := json.Unmarshal(input, parsedInput)
-		if err != nil {
-			return nil, err
-		}
-		output := Query5(ctx, h.env, parsedInput)
-		encodedOutput, err := json.Marshal(output)
-		if err != nil {
-			panic(err)
-		}
-		fmt.Printf("query 2 output: %v\n", encodedOutput)
-		return utils.CompressData(encodedOutput), nil
-	*/
+	parsedInput := &common.QueryInput{}
+	err := json.Unmarshal(input, parsedInput)
+	if err != nil {
+		return nil, err
+	}
+	output := Query5(ctx, h.env, parsedInput)
+	encodedOutput, err := json.Marshal(output)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("query 2 output: %v\n", encodedOutput)
+	return utils.CompressData(encodedOutput), nil
 }
 
-/*
-func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput) *common.FnOutput {
+func Query5(ctx context.Context, env types.Environment, input *common.QueryInput) *common.FnOutput {
 	inputStream := sharedlog_stream.NewSharedLogStream(env, input.InputTopicName)
-	err := inputStream.InitStream(ctx, 0)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("NewSharedlogStream for input stream failed: %v", err),
-		}
-	}
-
 	outputStream := sharedlog_stream.NewSharedLogStream(env, input.OutputTopicName)
-	err = outputStream.InitStream(ctx, 0)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("NewSharedlogStream for output stream failed: %v", err),
-		}
-	}
-
-	windowChangeLog := sharedlog_stream.NewStream(env, "count-log")
-	err = windowChangeLog.InitStream(ctx)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("NewSharedlogStream for input stream failed: %v", err),
-		}
-	}
+	windowChangeLog := sharedlog_stream.NewSharedLogStream(env, "count-log")
 
 	msgSerde, err := commtypes.GetMsgSerde(input.SerdeFormat)
 	if err != nil {
@@ -211,4 +197,3 @@ func Query5(ctx context.Context, env types.Environment, input *ntypes.QueryInput
 		Latencies: map[string][]int{"e2e": latencies},
 	}
 }
-*/

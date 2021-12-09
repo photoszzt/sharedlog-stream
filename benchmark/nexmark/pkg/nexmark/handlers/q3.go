@@ -48,29 +48,7 @@ func (h *query3Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 
 func Query3(ctx context.Context, env types.Environment, input *common.QueryInput, output chan *common.FnOutput) {
 	inputStream := sharedlog_stream.NewSharedLogStream(env, input.InputTopicName)
-	/*
-		err := inputStream.InitStream(ctx, 0, true)
-		if err != nil {
-			output <- &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("NewSharedlogStream for input stream failed: %v", err),
-			}
-			return
-		}
-	*/
-
 	outputStream := sharedlog_stream.NewSharedLogStream(env, input.OutputTopicName)
-	/*
-		err = outputStream.InitStream(ctx, 0, false)
-		if err != nil {
-			output <- &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("NewSharedlogStream for output stream failed: %v", err),
-			}
-			return
-		}
-	*/
-
 	msgSerde, err := commtypes.GetMsgSerde(input.SerdeFormat)
 	if err != nil {
 		output <- &common.FnOutput{
