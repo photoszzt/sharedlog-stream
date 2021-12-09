@@ -57,7 +57,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 			Message: fmt.Sprintf("get input output stream failed: %v", err),
 		}
 	}
-	src, sink, err := getSrcSink(ctx, sp, input_stream, output_stream)
+	src, sink, err := h.getSrcSink(ctx, sp, input_stream, output_stream)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -69,7 +69,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 		only_bid)))
 	q1Map := processor.NewMeteredProcessor(processor.NewStreamMapValuesWithKeyProcessor(processor.MapperFunc(q1mapFunc)))
 
-	procArgs := query1ProcessArgs{
+	procArgs := &query1ProcessArgs{
 		src:           src,
 		sink:          sink,
 		filterBid:     filterBid,
@@ -179,7 +179,7 @@ func (h *query1Handler) process(ctx context.Context, argsTmp interface{},
 	return currentOffset, nil
 }
 
-func getSrcSink(ctx context.Context, sp *common.QueryInput,
+func (h *query1Handler) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
 ) (*processor.MeteredSource, *processor.MeteredSink, error) {
