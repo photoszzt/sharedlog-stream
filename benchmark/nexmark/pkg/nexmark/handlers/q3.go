@@ -35,9 +35,7 @@ func (h *query3Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
-	outputCh := make(chan *common.FnOutput)
-	go Query3(ctx, h.env, parsedInput, outputCh)
-	output := <-outputCh
+	output := h.Query3(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
 		panic(err)
@@ -46,19 +44,19 @@ func (h *query3Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func Query3(ctx context.Context, env types.Environment, input *common.QueryInput, output chan *common.FnOutput) {
-	inputStream := sharedlog_stream.NewSharedLogStream(env, input.InputTopicName)
-	outputStream := sharedlog_stream.NewSharedLogStream(env, input.OutputTopicName)
+func (h *query3Handler) Query3(ctx context.Context, input *common.QueryInput) *common.FnOutput {
+	inputStream := sharedlog_stream.NewSharedLogStream(h.env, input.InputTopicName)
+	outputStream := sharedlog_stream.NewSharedLogStream(h.env, input.OutputTopicName)
 	msgSerde, err := commtypes.GetMsgSerde(input.SerdeFormat)
 	if err != nil {
-		output <- &common.FnOutput{
+		return &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
 	}
 	eventSerde, err := getEventSerde(input.SerdeFormat)
 	if err != nil {
-		output <- &common.FnOutput{
+		return &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
@@ -131,7 +129,7 @@ func Query3(ctx context.Context, env types.Environment, input *common.QueryInput
 		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, outConfig))
 	tp, err_arrs := builder.Build()
 	if err_arrs != nil {
-		output <- &common.FnOutput{
+		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("build stream failed: %v", err_arrs),
 		}
@@ -164,7 +162,7 @@ func Query3(ctx context.Context, env types.Environment, input *common.QueryInput
 		srcPump.Close()
 	}
 
-	output <- &common.FnOutput{
+	return &common.FnOutput{
 		Success:   true,
 		Duration:  time.Since(startTime).Seconds(),
 		Latencies: map[string][]int{"e2e": latencies},
