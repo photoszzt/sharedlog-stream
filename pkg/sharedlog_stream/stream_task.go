@@ -78,6 +78,7 @@ type StreamTaskArgsTransaction struct {
 	OutputStream    *ShardedSharedLogStream
 	QueryInput      *common.QueryInput
 	TransactionalId string
+	FixedOutParNum  uint8
 }
 
 func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.FnOutput {
@@ -147,7 +148,10 @@ func (t *StreamTask) ProcessWithTransaction(ctx context.Context, args *StreamTas
 	}
 }
 
-func (t *StreamTask) processWithTranLoop(ctx context.Context, tm *TransactionManager, args *StreamTaskArgsTransaction, retc chan *common.FnOutput) {
+func (t *StreamTask) processWithTranLoop(ctx context.Context,
+	tm *TransactionManager, args *StreamTaskArgsTransaction,
+	retc chan *common.FnOutput,
+) {
 	latencies := make([]int, 0, 128)
 	hasLiveTransaction := false
 	trackConsumePar := false
@@ -195,6 +199,15 @@ L:
 			}
 			hasLiveTransaction = true
 			commitTimer = time.Now()
+			if args.FixedOutParNum != 0 {
+				err = tm.AddTopicPartition(ctx, args.QueryInput.OutputTopicName, []uint8{args.FixedOutParNum})
+				if err != nil {
+					retc <- &common.FnOutput{
+						Success: false,
+						Message: fmt.Sprintf("track topic partition failed: %v\n", err),
+					}
+				}
+			}
 		}
 		if !trackConsumePar {
 			err := tm.AddTopicTrackConsumedSeqs(ctx, args.QueryInput.InputTopicName, []uint8{args.QueryInput.ParNum})
@@ -213,14 +226,35 @@ L:
 		})
 		if ret != nil {
 			if ret.Success {
+				if hasLiveTransaction {
+					TrackOffsetAndCommit(ctx, ConsumedSeqNumConfig{
+						TopicToTrack:   args.QueryInput.InputTopicName,
+						TaskId:         tm.CurrentTaskId,
+						TaskEpoch:      tm.CurrentEpoch,
+						Partition:      args.QueryInput.ParNum,
+						ConsumedSeqNum: currentOffset,
+					}, tm, &hasLiveTransaction, &trackConsumePar, retc)
+				}
 				elapsed := time.Since(procStart)
 				latencies = append(latencies, int(elapsed.Microseconds()))
 				ret.Latencies = map[string][]int{
 					"e2e": latencies,
 				}
 				ret.Duration = time.Since(startTime).Seconds()
+			} else {
+				if hasLiveTransaction {
+					err := tm.AbortTransaction(ctx)
+					if err != nil {
+						retc <- &common.FnOutput{
+							Success: false,
+							Message: fmt.Sprintf("abort failed: %v\n", err),
+						}
+						return
+					}
+				}
 			}
 			retc <- ret
+			return
 		}
 		currentOffset = off
 		elapsed := time.Since(procStart)

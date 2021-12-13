@@ -88,6 +88,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 			OutputStream:    output_stream,
 			QueryInput:      sp,
 			TransactionalId: fmt.Sprintf("q1Query-%s-%d-%s", sp.InputTopicName, sp.ParNum, sp.OutputTopicName),
+			FixedOutParNum:  sp.ParNum,
 		}
 		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
 		if ret != nil && ret.Success {
@@ -137,13 +138,6 @@ func (h *query1Handler) process(ctx context.Context, argsTmp interface{},
 		return currentOffset, &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
-		}
-	}
-	err = trackParFunc([]uint8{args.parNum})
-	if err != nil {
-		return currentOffset, &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("add topic partition failed: %v\n", err),
 		}
 	}
 

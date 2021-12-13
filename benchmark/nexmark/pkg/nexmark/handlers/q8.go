@@ -47,26 +47,7 @@ func (h *query8Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 
 func Query8(ctx context.Context, env types.Environment, input *common.QueryInput) *common.FnOutput {
 	inputStream := sharedlog_stream.NewSharedLogStream(env, input.InputTopicName)
-	/*
-		err := inputStream.InitStream(ctx, 0, true)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("NewSharedlogStream for input stream failed: %v", err),
-			}
-		}
-	*/
 	outputStream := sharedlog_stream.NewSharedLogStream(env, input.OutputTopicName)
-	/*
-		err = outputStream.InitStream(ctx, 0, false)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("NewSharedlogStream for output stream failed: %v", err),
-			}
-		}
-	*/
-
 	msgSerde, err := commtypes.GetMsgSerde(input.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{

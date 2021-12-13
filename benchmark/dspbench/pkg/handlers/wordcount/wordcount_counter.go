@@ -174,6 +174,7 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 			OutputStream:    output_stream,
 			QueryInput:      sp,
 			TransactionalId: fmt.Sprintf("wordcount-counter-%s-%s-%d", sp.InputTopicName, sp.OutputTopicName, sp.ParNum),
+			FixedOutParNum:  sp.ParNum,
 		}
 		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
 		if ret != nil && ret.Success {

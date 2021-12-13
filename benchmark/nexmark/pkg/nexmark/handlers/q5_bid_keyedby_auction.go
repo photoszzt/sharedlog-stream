@@ -450,6 +450,7 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 			OutputStream:    output_stream,
 			QueryInput:      sp,
 			TransactionalId: fmt.Sprintf("bidKeyedByAuction-%s-%d-%s", sp.InputTopicName, sp.ParNum, sp.OutputTopicName),
+			FixedOutParNum:  0,
 		}
 		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
 		if ret != nil && ret.Success {

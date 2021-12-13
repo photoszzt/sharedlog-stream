@@ -122,6 +122,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 			OutputStream:    output_stream,
 			QueryInput:      sp,
 			TransactionalId: fmt.Sprintf("q2Query-%s-%d-%s", sp.InputTopicName, sp.ParNum, sp.OutputTopicName),
+			FixedOutParNum:  sp.ParNum,
 		}
 		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
 		if ret != nil && ret.Success {
@@ -162,14 +163,6 @@ func (h *query2Handler) process(ctx context.Context, argsTmp interface{},
 			Message: err.Error(),
 		}
 	}
-	err = trackParFunc([]uint8{args.parNum})
-	if err != nil {
-		return currentOffset, &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("add topic partition failed: %v\n", err),
-		}
-	}
-
 	for _, msg := range gotMsgs {
 		if msg.Msg.Value == nil {
 			continue

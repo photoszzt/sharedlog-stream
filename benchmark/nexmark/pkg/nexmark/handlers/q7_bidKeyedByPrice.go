@@ -89,6 +89,13 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context,
 			}
 			key := mappedKey[0].Key.(uint64)
 			par := uint8(key % uint64(args.numOutPartition))
+			err = trackParFunc([]uint8{par})
+			if err != nil {
+				return currentOffset, &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("track par err: %v\n", err),
+				}
+			}
 			err = args.sink.Sink(ctx, mappedKey[0], par, false)
 			if err != nil {
 				return currentOffset, &common.FnOutput{
@@ -178,6 +185,7 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 			OutputStream:    output_stream,
 			QueryInput:      input,
 			TransactionalId: fmt.Sprintf("q7BidKeyedByPrice-%s-%d-%s", input.InputTopicName, input.ParNum, input.OutputTopicName),
+			FixedOutParNum:  0,
 		}
 		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
 		if ret != nil && ret.Success {

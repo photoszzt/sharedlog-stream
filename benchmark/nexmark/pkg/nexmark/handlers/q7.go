@@ -257,6 +257,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 			OutputStream:    outputStream,
 			QueryInput:      input,
 			TransactionalId: fmt.Sprintf("processQ7ProcessArgs-%s-%d-%s", input.InputTopicName, input.NumInPartition, input.OutputTopicName),
+			FixedOutParNum:  input.ParNum,
 		}
 		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
 		if ret != nil && ret.Success {

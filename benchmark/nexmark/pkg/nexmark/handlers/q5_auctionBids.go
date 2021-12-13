@@ -509,6 +509,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			OutputStream:    output_stream,
 			QueryInput:      sp,
 			TransactionalId: fmt.Sprintf("q5AuctionBids-%s-%d-%s", sp.InputTopicName, sp.ParNum, sp.OutputTopicName),
+			FixedOutParNum:  0,
 		}
 		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
 		if ret != nil && ret.Success {
