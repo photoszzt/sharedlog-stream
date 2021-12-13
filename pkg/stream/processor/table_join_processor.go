@@ -8,7 +8,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type StreamTableJoinProcessor struct {
+type TableJoinProcessor struct {
 	pipe      Pipe
 	store     store.KeyValueStore
 	pctx      store.StoreContext
@@ -17,25 +17,25 @@ type StreamTableJoinProcessor struct {
 	leftJoin  bool
 }
 
-var _ = Processor(&StreamTableJoinProcessor{})
+var _ = Processor(&TableJoinProcessor{})
 
-func NewStreamTableJoinProcessor(storeName string, joiner ValueJoinerWithKey) *StreamTableJoinProcessor {
-	return &StreamTableJoinProcessor{
+func NewTableJoinProcessor(storeName string, joiner ValueJoinerWithKey) *TableJoinProcessor {
+	return &TableJoinProcessor{
 		storeName: storeName,
 		joiner:    joiner,
 	}
 }
 
-func (p *StreamTableJoinProcessor) WithPipe(pipe Pipe) {
+func (p *TableJoinProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *StreamTableJoinProcessor) WithProcessorContext(pctx store.StoreContext) {
+func (p *TableJoinProcessor) WithProcessorContext(pctx store.StoreContext) {
 	p.pctx = pctx
 	p.store = p.pctx.GetKeyValueStore(p.storeName)
 }
 
-func (p *StreamTableJoinProcessor) Process(ctx context.Context, msg commtypes.Message) error {
+func (p *TableJoinProcessor) Process(ctx context.Context, msg commtypes.Message) error {
 	newMsg, err := p.ProcessAndReturn(ctx, msg)
 	if err != nil {
 		return err
@@ -49,7 +49,7 @@ func (p *StreamTableJoinProcessor) Process(ctx context.Context, msg commtypes.Me
 	return nil
 }
 
-func (p *StreamTableJoinProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
+func (p *TableJoinProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	if msg.Key == nil || msg.Value == nil {
 		log.Warn().Msgf("Skipping record due to null join key or value. key=%v, val=%v", msg.Key, msg.Value)
 		return nil, nil

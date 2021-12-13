@@ -182,7 +182,7 @@ func (s *StreamImpl) StreamStreamOuterJoin(name string, other Stream, joiner pro
 }
 
 func (s *StreamImpl) StreamTableJoin(name string, other Table, joiner processor.ValueJoinerWithKey) Stream {
-	p := processor.NewStreamTableJoinProcessor(other.StoreName(), joiner)
+	p := processor.NewTableJoinProcessor(other.StoreName(), joiner)
 	n := s.tp.AddProcessor(name, p, s.parents)
 	return newStream(s.tp, []processor.Node{n})
 }
