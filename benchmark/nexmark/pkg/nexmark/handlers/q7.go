@@ -80,69 +80,69 @@ func (h *query7Handler) getSrcSink(
 }
 
 type processQ7ProcessArgs struct {
-	src  *processor.MeteredSource
-	sink *processor.MeteredSink
+	src                *processor.MeteredSource
+	sink               *processor.MeteredSink
+	output_stream      *sharedlog_stream.ShardedSharedLogStream
+	maxPriceBid        *processor.MeteredProcessor
+	transformWithStore *processor.MeteredProcessor
+	filterTime         *processor.MeteredProcessor
+	parNum             uint8
 }
 
-func (h *query7Handler) process(ctx context.Context,
+func (h *query7Handler) process(
+	ctx context.Context,
 	argsTmp interface{},
 	trackParFunc func([]uint8) error,
 ) (uint64, *common.FnOutput) {
-	gotMsgs, err := src.Consume(ctx, input.ParNum)
+	args := argsTmp.(*processQ7ProcessArgs)
+	currentOffset := uint64(0)
+	gotMsgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {
 		if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
-			return &common.FnOutput{
-				Success:  true,
-				Message:  err.Error(),
-				Duration: time.Since(startTime).Seconds(),
-				Latencies: map[string][]int{
-					"e2e":    latencies,
-					"sink":   sink.GetLatency(),
-					"src":    src.GetLatency(),
-					"maxBid": maxPriceBid.GetLatency(),
-					"trans":  transformWithStore.GetLatency(),
-					"filtT":  filterTime.GetLatency(),
-				},
+			return currentOffset, &common.FnOutput{
+				Success: true,
+				Message: err.Error(),
 			}
 		}
-		return &common.FnOutput{
+		return currentOffset, &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
 	}
 
 	for _, msg := range gotMsgs {
-		_, err = maxPriceBid.ProcessAndReturn(ctx, msg.Msg)
+		_, err = args.maxPriceBid.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
-			return &common.FnOutput{
+			return currentOffset, &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
 			}
 		}
-		transformedMsgs, err := transformWithStore.ProcessAndReturn(ctx, msg.Msg)
+		transformedMsgs, err := args.transformWithStore.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
-			return &common.FnOutput{
+			return currentOffset, &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
 			}
 		}
 		for _, tmsg := range transformedMsgs {
-			filtered, err := filterTime.ProcessAndReturn(ctx, tmsg)
+			filtered, err := args.filterTime.ProcessAndReturn(ctx, tmsg)
 			if err != nil {
-				return &common.FnOutput{
+				return currentOffset, &common.FnOutput{
 					Success: false,
 					Message: err.Error(),
 				}
 			}
-			err = sink.Sink(ctx, filtered[0], input.ParNum, false)
+			err = args.sink.Sink(ctx, filtered[0], args.parNum, false)
 			if err != nil {
-				return &common.FnOutput{
+				return currentOffset, &common.FnOutput{
 					Success: false,
 					Message: err.Error(),
 				}
 			}
 		}
 	}
+	return currentOffset, nil
 }
 
 func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput) *common.FnOutput {
@@ -236,29 +236,49 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 			lb := bm.MaxDateTime - 10*1000
 			return bm.DateTime >= lb && bm.DateTime <= bm.MaxDateTime, nil
 		})))
-	duration := time.Duration(input.Duration) * time.Second
-	latencies := make([]int, 0, 128)
-	startTime := time.Now()
-	for {
-		if duration != 0 && time.Since(startTime) >= duration {
-			break
+
+	procArgs := &processQ7ProcessArgs{
+		src:                src,
+		sink:               sink,
+		output_stream:      outputStream,
+		parNum:             input.ParNum,
+		maxPriceBid:        maxPriceBid,
+		transformWithStore: transformWithStore,
+		filterTime:         filterTime,
+	}
+	task := sharedlog_stream.StreamTask{
+		ProcessFunc: h.process,
+	}
+	if input.EnableTransaction {
+		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
+			ProcArgs:        procArgs,
+			Env:             h.env,
+			Src:             src,
+			OutputStream:    outputStream,
+			QueryInput:      input,
+			TransactionalId: fmt.Sprintf("processQ7ProcessArgs-%s-%d-%s", input.InputTopicName, input.NumInPartition, input.OutputTopicName),
 		}
-		procStart := time.Now()
-
-		elapsed := time.Since(procStart)
-		latencies = append(latencies, int(elapsed.Microseconds()))
+		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
+		if ret != nil && ret.Success {
+			ret.Latencies["src"] = src.GetLatency()
+			ret.Latencies["sink"] = sink.GetLatency()
+			ret.Latencies["maxPriceBid"] = maxPriceBid.GetLatency()
+			ret.Latencies["transformWithStore"] = transformWithStore.GetLatency()
+			ret.Latencies["filterTime"] = filterTime.GetLatency()
+		}
+		return ret
 	}
-
-	return &common.FnOutput{
-		Success:  true,
-		Duration: time.Since(startTime).Seconds(),
-		Latencies: map[string][]int{
-			"e2e":    latencies,
-			"sink":   sink.GetLatency(),
-			"src":    src.GetLatency(),
-			"maxBid": maxPriceBid.GetLatency(),
-			"trans":  transformWithStore.GetLatency(),
-			"filtT":  filterTime.GetLatency(),
-		},
+	streamTaskArgs := sharedlog_stream.StreamTaskArgs{
+		ProcArgs: procArgs,
+		Duration: time.Duration(input.Duration) * time.Second,
 	}
+	ret := task.Process(ctx, &streamTaskArgs)
+	if ret != nil && ret.Success {
+		ret.Latencies["src"] = src.GetLatency()
+		ret.Latencies["sink"] = sink.GetLatency()
+		ret.Latencies["maxPriceBid"] = maxPriceBid.GetLatency()
+		ret.Latencies["transformWithStore"] = transformWithStore.GetLatency()
+		ret.Latencies["filterTime"] = filterTime.GetLatency()
+	}
+	return ret
 }
