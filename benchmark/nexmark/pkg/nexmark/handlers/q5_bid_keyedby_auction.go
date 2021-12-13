@@ -427,7 +427,7 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 			return commtypes.Message{Key: event.Bid.Auction, Value: m.Value, Timestamp: m.Timestamp}, nil
 		})))
 
-	procArgs := bidKeyedByAuctionProcessArgs{
+	procArgs := &bidKeyedByAuctionProcessArgs{
 		src:             src,
 		sink:            sink,
 		filterBid:       filterBid,

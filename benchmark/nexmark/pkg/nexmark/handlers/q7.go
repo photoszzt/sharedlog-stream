@@ -36,7 +36,7 @@ func (h *query7Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
-	output := h.process(ctx, parsedInput)
+	output := h.processQ7(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
 		panic(err)
@@ -44,7 +44,108 @@ func (h *query7Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *common.FnOutput {
+func (h *query7Handler) getSrcSink(
+	input *common.QueryInput,
+	input_stream *sharedlog_stream.ShardedSharedLogStream,
+	output_stream *sharedlog_stream.ShardedSharedLogStream,
+	msgSerde commtypes.MsgSerde,
+) (*processor.MeteredSource, *processor.MeteredSink, error) {
+	eventSerde, err := getEventSerde(input.SerdeFormat)
+	if err != nil {
+		return nil, nil, err
+	}
+	var bmSerde commtypes.Serde
+	if input.SerdeFormat == uint8(commtypes.JSON) {
+		bmSerde = ntypes.BidAndMaxJSONSerde{}
+	} else if input.SerdeFormat == uint8(commtypes.MSGP) {
+		bmSerde = ntypes.BidAndMaxMsgpSerde{}
+	} else {
+		return nil, nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", input.SerdeFormat)
+	}
+	inConfig := &sharedlog_stream.SharedLogStreamConfig{
+		Timeout:      time.Duration(input.Duration) * time.Second,
+		KeyDecoder:   commtypes.Uint64Serde{},
+		ValueDecoder: eventSerde,
+		MsgDecoder:   msgSerde,
+	}
+	outConfig := &sharedlog_stream.StreamSinkConfig{
+		MsgEncoder:   msgSerde,
+		KeyEncoder:   commtypes.Uint64Encoder{},
+		ValueEncoder: bmSerde,
+	}
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
+	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
+
+	return src, sink, nil
+}
+
+type processQ7ProcessArgs struct {
+	src  *processor.MeteredSource
+	sink *processor.MeteredSink
+}
+
+func (h *query7Handler) process(ctx context.Context,
+	argsTmp interface{},
+	trackParFunc func([]uint8) error,
+) (uint64, *common.FnOutput) {
+	gotMsgs, err := src.Consume(ctx, input.ParNum)
+	if err != nil {
+		if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+			return &common.FnOutput{
+				Success:  true,
+				Message:  err.Error(),
+				Duration: time.Since(startTime).Seconds(),
+				Latencies: map[string][]int{
+					"e2e":    latencies,
+					"sink":   sink.GetLatency(),
+					"src":    src.GetLatency(),
+					"maxBid": maxPriceBid.GetLatency(),
+					"trans":  transformWithStore.GetLatency(),
+					"filtT":  filterTime.GetLatency(),
+				},
+			}
+		}
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+
+	for _, msg := range gotMsgs {
+		_, err = maxPriceBid.ProcessAndReturn(ctx, msg.Msg)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: err.Error(),
+			}
+		}
+		transformedMsgs, err := transformWithStore.ProcessAndReturn(ctx, msg.Msg)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: err.Error(),
+			}
+		}
+		for _, tmsg := range transformedMsgs {
+			filtered, err := filterTime.ProcessAndReturn(ctx, tmsg)
+			if err != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
+			}
+			err = sink.Sink(ctx, filtered[0], input.ParNum, false)
+			if err != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: err.Error(),
+				}
+			}
+		}
+	}
+}
+
+func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput) *common.FnOutput {
 	inputStream, outputStream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, input)
 	if err != nil {
 		return &common.FnOutput{
@@ -60,29 +161,21 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 			Message: err.Error(),
 		}
 	}
-	eventSerde, err := getEventSerde(input.SerdeFormat)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
-	}
 
 	var vtSerde commtypes.Serde
 	var ptSerde commtypes.Serde
-	var bmSerde commtypes.Serde
 	if input.SerdeFormat == uint8(commtypes.JSON) {
 		ptSerde = ntypes.PriceTimeJSONSerde{}
 		vtSerde = commtypes.ValueTimestampJSONSerde{
 			ValJSONSerde: ptSerde,
 		}
-		bmSerde = ntypes.BidAndMaxJSONSerde{}
+
 	} else if input.SerdeFormat == uint8(commtypes.MSGP) {
 		ptSerde = ntypes.PriceTimeMsgpSerde{}
 		vtSerde = commtypes.ValueTimestampMsgpSerde{
 			ValMsgpSerde: ptSerde,
 		}
-		bmSerde = ntypes.BidAndMaxMsgpSerde{}
+
 	} else {
 		return &common.FnOutput{
 			Success: false,
@@ -90,20 +183,13 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 		}
 	}
 
-	inConfig := &sharedlog_stream.SharedLogStreamConfig{
-		Timeout:      time.Duration(input.Duration) * time.Second,
-		KeyDecoder:   commtypes.Uint64Serde{},
-		ValueDecoder: eventSerde,
-		MsgDecoder:   msgSerde,
+	src, sink, err := h.getSrcSink(input, inputStream, outputStream, msgSerde)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
 	}
-	outConfig := &sharedlog_stream.StreamSinkConfig{
-		MsgEncoder:   msgSerde,
-		KeyEncoder:   commtypes.Uint64Encoder{},
-		ValueEncoder: bmSerde,
-	}
-	duration := time.Duration(input.Duration) * time.Second
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(inputStream, inConfig))
-	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
 
 	tw := processor.NewTimeWindowsNoGrace(time.Duration(10) * time.Second)
 	maxPriceBidStoreName := "max-price-bid-tab"
@@ -150,6 +236,7 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 			lb := bm.MaxDateTime - 10*1000
 			return bm.DateTime >= lb && bm.DateTime <= bm.MaxDateTime, nil
 		})))
+	duration := time.Duration(input.Duration) * time.Second
 	latencies := make([]int, 0, 128)
 	startTime := time.Now()
 	for {
@@ -157,61 +244,7 @@ func (h *query7Handler) process(ctx context.Context, input *common.QueryInput) *
 			break
 		}
 		procStart := time.Now()
-		msgs, err := src.Consume(ctx, input.ParNum)
-		if err != nil {
-			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
-				return &common.FnOutput{
-					Success:  true,
-					Message:  err.Error(),
-					Duration: time.Since(startTime).Seconds(),
-					Latencies: map[string][]int{
-						"e2e":    latencies,
-						"sink":   sink.GetLatency(),
-						"src":    src.GetLatency(),
-						"maxBid": maxPriceBid.GetLatency(),
-						"trans":  transformWithStore.GetLatency(),
-						"filtT":  filterTime.GetLatency(),
-					},
-				}
-			}
-			return &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
-			}
-		}
 
-		for _, msg := range msgs {
-			_, err = maxPriceBid.ProcessAndReturn(ctx, msg.Msg)
-			if err != nil {
-				return &common.FnOutput{
-					Success: false,
-					Message: err.Error(),
-				}
-			}
-			transformedMsgs, err := transformWithStore.ProcessAndReturn(ctx, msg.Msg)
-			if err != nil {
-				return &common.FnOutput{
-					Success: false,
-					Message: err.Error(),
-				}
-			}
-			for _, tmsg := range transformedMsgs {
-				filtered, err := filterTime.ProcessAndReturn(ctx, tmsg)
-				if err != nil {
-					return &common.FnOutput{
-						Success: false,
-						Message: err.Error(),
-					}
-				}
-				err = sink.Sink(ctx, filtered[0], input.ParNum, false)
-				if err != nil {
-					return &common.FnOutput{
-						Success: false,
-						Message: err.Error(),
-					}
-				}
-			}
-		}
 		elapsed := time.Since(procStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
 	}
