@@ -163,6 +163,7 @@ func (t *StreamTask) processWithTranLoop(ctx context.Context,
 	duration := time.Duration(args.QueryInput.Duration) * time.Second
 
 	startTime := time.Now()
+	idx := 0
 L:
 	for {
 		select {
@@ -172,8 +173,9 @@ L:
 		}
 		timeSinceTranStart := time.Since(commitTimer)
 		timeout := duration != 0 && time.Since(startTime) >= duration
-		if (commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout {
+		if (commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout || idx == 10 {
 			if val, ok := args.TestParams["FailBeforeCommit"]; ok && val {
+				fmt.Fprintf(os.Stderr, "about to fail before commit")
 				retc <- &common.FnOutput{
 					Success: false,
 					Message: "fail before commit",
@@ -187,7 +189,9 @@ L:
 				Partition:      args.QueryInput.ParNum,
 				ConsumedSeqNum: currentOffset,
 			}, tm, &hasLiveTransaction, &trackConsumePar, retc)
+
 			if val, ok := args.TestParams["FailAfterCommit"]; ok && val {
+				fmt.Fprintf(os.Stderr, "about to fail after commit")
 				retc <- &common.FnOutput{
 					Success: false,
 					Message: "fail after commit",
@@ -215,12 +219,15 @@ L:
 				}
 				return
 			}
-			if val, ok := args.TestParams["FailAfterBegin"]; ok && val {
-				retc <- &common.FnOutput{
-					Success: false,
-					Message: "fail after begin",
+			if idx == 5 {
+				if val, ok := args.TestParams["FailAfterBegin"]; ok && val {
+					fmt.Fprintf(os.Stderr, "about to fail after begin")
+					retc <- &common.FnOutput{
+						Success: false,
+						Message: "fail after begin",
+					}
+					return
 				}
-				return
 			}
 			hasLiveTransaction = true
 			commitTimer = time.Now()
@@ -283,12 +290,20 @@ L:
 			retc <- ret
 			return
 		}
-		if os.Getenv("FailAfterProcess") == "1" {
-			panic("fail after process")
+		if idx == 5 {
+			if val, ok := args.TestParams["FailAfterProcess"]; ok && val {
+				fmt.Fprintf(os.Stderr, "about to fail after process\n")
+				retc <- &common.FnOutput{
+					Success: false,
+					Message: "fail after begin",
+				}
+				return
+			}
 		}
 		currentOffset = off
 		elapsed := time.Since(procStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
+		idx += 1
 	}
 	retc <- &common.FnOutput{
 		Success:  true,
