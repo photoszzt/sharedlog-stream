@@ -5,7 +5,6 @@ package sharedlog_stream
 import (
 	"context"
 	"math"
-	"sharedlog-stream/benchmark/common/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
@@ -231,8 +230,14 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 		streamLogEntry := decodeStreamLogEntry(logEntry)
 		if streamLogEntry.TopicName == s.topicName {
 			if s.inTransaction {
-				debug.Assert(streamLogEntry.TaskId != 0, "stream log entry's task id should not be zero")
-				debug.Assert(streamLogEntry.TaskEpoch != 0, "stream log entry's epoch should not be zero")
+				// debug.Assert(streamLogEntry.TaskId != 0, "stream log entry's task id should not be zero")
+				// debug.Assert(streamLogEntry.TaskEpoch != 0, "stream log entry's epoch should not be zero")
+				if streamLogEntry.TaskId == 0 {
+					panic("stream log entry's task id should not be zero")
+				}
+				if streamLogEntry.TaskEpoch == 0 {
+					panic("stream log entry's epoch should not be zero")
+				}
 				appKey := commtypes.TaskIDGen{
 					TaskId:    streamLogEntry.TaskId,
 					TaskEpoch: streamLogEntry.TaskEpoch,

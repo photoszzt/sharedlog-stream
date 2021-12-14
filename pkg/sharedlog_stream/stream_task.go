@@ -3,6 +3,7 @@ package sharedlog_stream
 import (
 	"context"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor"
@@ -77,6 +78,7 @@ type StreamTaskArgsTransaction struct {
 	Src             processor.Source
 	OutputStream    *ShardedSharedLogStream
 	QueryInput      *common.QueryInput
+	TestParams      map[string]bool
 	TransactionalId string
 	FixedOutParNum  uint8
 }
@@ -171,6 +173,13 @@ L:
 		timeSinceTranStart := time.Since(commitTimer)
 		timeout := duration != 0 && time.Since(startTime) >= duration
 		if (commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout {
+			if val, ok := args.TestParams["FailBeforeCommit"]; ok && val {
+				retc <- &common.FnOutput{
+					Success: false,
+					Message: "fail before commit",
+				}
+				return
+			}
 			TrackOffsetAndCommit(ctx, ConsumedSeqNumConfig{
 				TopicToTrack:   args.QueryInput.InputTopicName,
 				TaskId:         tm.CurrentTaskId,
@@ -178,6 +187,13 @@ L:
 				Partition:      args.QueryInput.ParNum,
 				ConsumedSeqNum: currentOffset,
 			}, tm, &hasLiveTransaction, &trackConsumePar, retc)
+			if val, ok := args.TestParams["FailAfterCommit"]; ok && val {
+				retc <- &common.FnOutput{
+					Success: false,
+					Message: "fail after commit",
+				}
+				return
+			}
 		}
 		if timeout {
 			err := tm.Close()
@@ -186,6 +202,7 @@ L:
 					Success: false,
 					Message: fmt.Sprintf("close transaction manager: %v\n", err),
 				}
+				return
 			}
 			break
 		}
@@ -196,6 +213,14 @@ L:
 					Success: false,
 					Message: fmt.Sprintf("transaction begin failed: %v\n", err),
 				}
+				return
+			}
+			if val, ok := args.TestParams["FailAfterBegin"]; ok && val {
+				retc <- &common.FnOutput{
+					Success: false,
+					Message: "fail after begin",
+				}
+				return
 			}
 			hasLiveTransaction = true
 			commitTimer = time.Now()
@@ -206,6 +231,7 @@ L:
 						Success: false,
 						Message: fmt.Sprintf("track topic partition failed: %v\n", err),
 					}
+					return
 				}
 			}
 		}
@@ -216,6 +242,7 @@ L:
 					Success: false,
 					Message: fmt.Sprintf("add offsets failed: %v\n", err),
 				}
+				return
 			}
 			trackConsumePar = true
 		}
@@ -255,6 +282,9 @@ L:
 			}
 			retc <- ret
 			return
+		}
+		if os.Getenv("FailAfterProcess") == "1" {
+			panic("fail after process")
 		}
 		currentOffset = off
 		elapsed := time.Since(procStart)

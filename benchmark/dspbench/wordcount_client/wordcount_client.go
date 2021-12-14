@@ -4,11 +4,13 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"strings"
 	"sync"
 	"time"
 
@@ -98,6 +100,17 @@ func main() {
 	}
 	countInputParams := make([]*common.QueryInput, countNodeConfig.NumInstance)
 
+	testParams := make(map[string]bool)
+	envs := os.Environ()
+	for _, env := range envs {
+		if strings.HasPrefix(env, "Fail") {
+			envSp := strings.Split(env, "=")
+			testParams[envSp[0]] = true
+		}
+	}
+	if len(testParams) == 0 {
+		testParams = nil
+	}
 	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
 		countInputParams[i] = &common.QueryInput{
 			Duration:          uint32(FLAGS_duration),
@@ -108,6 +121,7 @@ func main() {
 			NumOutPartition:   numCountInstance,
 			EnableTransaction: FLAGS_tran,
 			CommitEvery:       FLAGS_commit_every,
+			TestParams:        testParams,
 		}
 	}
 	count := processor.NewClientNode(countNodeConfig)

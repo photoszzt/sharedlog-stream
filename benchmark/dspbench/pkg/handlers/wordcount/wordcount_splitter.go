@@ -191,6 +191,7 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 			QueryInput:      sp,
 			TransactionalId: fmt.Sprintf("wordcount-splitter-%s-%d", sp.InputTopicName, sp.ParNum),
 			FixedOutParNum:  0,
+			TestParams:      sp.TestParams,
 		}
 		ret := task.ProcessWithTransaction(ctx, streamTaskArgs)
 		if ret != nil && ret.Success {

@@ -4,18 +4,20 @@ import "time"
 
 const (
 	SrcConsumeTimeout = 5 * time.Second
+	ClientRetryTimes  = 5
 )
 
 type QueryInput struct {
-	OutputTopicName   string `json:"outputTopicName"`
-	InputTopicName    string `json:"inputTopicName"`
-	CommitEvery       uint64 `json:"commEvery"`
-	Duration          uint32 `json:"duration,omitempty"`
-	NumInPartition    uint8  `json:"numInPartition"`
-	NumOutPartition   uint8  `json:"numOutPartition"`
-	ParNum            uint8  `json:"ParNum"`
-	EnableTransaction bool   `json:"enTran"`
-	SerdeFormat       uint8  `json:"serdeFormat"`
+	TestParams        map[string]bool `json:"testParams,omitempty"`
+	OutputTopicName   string          `json:"outputTopicName,omitempty"`
+	InputTopicName    string          `json:"inputTopicName,omitempty"`
+	CommitEvery       uint64          `json:"commEvery,omitempty"`
+	Duration          uint32          `json:"duration,omitempty"`
+	NumInPartition    uint8           `json:"numInPartition,omitempty"`
+	NumOutPartition   uint8           `json:"numOutPartition,omitempty"`
+	ParNum            uint8           `json:"ParNum,omitempty"`
+	EnableTransaction bool            `json:"enTran,omitempty"`
+	SerdeFormat       uint8           `json:"serdeFormat,omitempty"`
 }
 
 type DumpInput struct {
@@ -26,9 +28,9 @@ type DumpInput struct {
 }
 
 type FnOutput struct {
-	Latencies map[string][]int `json:"latencies"`
-	Message   string           `json:"message"`
-	Duration  float64          `json:"duration"`
+	Latencies map[string][]int `json:"latencies,omitempty"`
+	Message   string           `json:"message,omitempty"`
+	Duration  float64          `json:"duration,omitempty"`
 	Success   bool             `json:"success"`
 }
 

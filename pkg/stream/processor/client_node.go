@@ -53,9 +53,21 @@ func (n *ClientNode) Invoke(client *http.Client, response *common.FnOutput, wg *
 
 	url := utils.BuildFunctionUrl(n.config.GatewayUrl, n.config.FuncName)
 	fmt.Fprintf(os.Stderr, "func url is %s\n", url)
-	if err := utils.JsonPostRequest(client, url, queryInput, response); err != nil {
-		log.Error().Msgf("%v request failed: %v", n.config.FuncName, err)
-	} else if !response.Success {
-		log.Error().Msgf("%v request failed with failed message: %v", n.config.FuncName, response.Message)
+	i := 0
+	for i < common.ClientRetryTimes {
+		if i != 0 {
+			// remove the test error on retry
+			if queryInput.TestParams != nil {
+				queryInput.TestParams = nil
+			}
+		}
+		if err := utils.JsonPostRequest(client, url, queryInput, response); err != nil {
+			log.Error().Msgf("%v request failed: %v", n.config.FuncName, err)
+		} else if !response.Success {
+			log.Error().Msgf("%v request failed with failed message: %v", n.config.FuncName, response.Message)
+		} else {
+			break
+		}
+		i += 1
 	}
 }
