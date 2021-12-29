@@ -47,17 +47,13 @@ func (h *nexmarkSourceHandler) Call(ctx context.Context, input []byte) ([]byte, 
 }
 
 func eventGeneration(ctx context.Context, env types.Environment, inputConfig *ntypes.NexMarkConfigInput) (*common.FnOutput, error) {
-	stream := sharedlog_stream.NewSharedLogStream(env, inputConfig.TopicName)
-	/*
-		err := stream.InitStream(ctx, 0, false)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("NewSharedlogStream failed: %v", err),
-			}, nil
-		}
-	*/
-	// fmt.Fprintf(os.Stderr, "generate event to %v\n", inputConfig.TopicName)
+	stream, err := sharedlog_stream.NewShardedSharedLogStream(env, inputConfig.TopicName, inputConfig.NumOutPartition)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: "fail to create output stream",
+		}, nil
+	}
 	nexmarkConfig, err := ntypes.ConvertToNexmarkConfiguration(inputConfig)
 	if err != nil {
 		return &common.FnOutput{
@@ -113,7 +109,6 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 				Message: fmt.Sprintf("event serialization failed: %v", err),
 			}, nil
 		}
-		// fmt.Fprintf(os.Stderr, "generate event: %v\n", string(encoded))
 		msgEncoded, err := msgEncoder.Encode(nil, encoded)
 		if err != nil {
 			return &common.FnOutput{
@@ -123,7 +118,7 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		}
 		// fmt.Fprintf(os.Stderr, "msg: %v\n", string(msgEncoded))
 		pushStart := time.Now()
-		_, err = stream.Push(ctx, msgEncoded, 0, false)
+		_, err = stream.Push(ctx, msgEncoded, inputConfig.ParNum, false)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,

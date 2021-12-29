@@ -27,6 +27,8 @@ type NexMarkConfigInput struct {
 	AuctionHotRatioSellers uint32        `json:"auction_hot_ratio_sellers"`
 	RateLimited            bool          `json:"rate_limited"`
 	SerdeFormat            uint8         `json:"serde_format"`
+	NumOutPartition        uint8         `json:"numOutPar,omitempty"`
+	ParNum                 uint8         `json:"parNum,omitempty"`
 }
 
 func NewNexMarkConfigInput(topicName string, serdeFormat commtypes.SerdeFormat) *NexMarkConfigInput {

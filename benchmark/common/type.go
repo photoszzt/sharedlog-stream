@@ -35,9 +35,11 @@ type FnOutput struct {
 }
 
 type SourceParam struct {
-	TopicName   string `json:"topicName"`
-	FileName    string `json:"fname,omitempty"`
-	Duration    uint32 `json:"duration,omitempty"` // in sec
-	SerdeFormat uint8  `json:"serdeFormat"`
-	NumEvents   uint32 `json:"numEvents,omitempty"`
+	TopicName       string `json:"topicName"`
+	FileName        string `json:"fname,omitempty"`
+	Duration        uint32 `json:"duration,omitempty"` // in sec
+	SerdeFormat     uint8  `json:"serdeFormat"`
+	NumEvents       uint32 `json:"numEvents,omitempty"`
+	NumOutPartition uint8  `json:"numOutPar,omitempty"`
+	ParNum          uint8  `json:"parNum,omitempty"`
 }
