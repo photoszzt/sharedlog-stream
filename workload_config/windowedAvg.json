@@ -1,5 +1,7 @@
 {
     "srcOutTopic": "nexmark_src",
     "groupByOutTopic": "grouped_bids",
-    "avgOutTopic": "avg-sink"
+    "avgOutTopic": "avg-sink",
+    "numSrcPartition": 5,
+    "numInstance": 5
 }
