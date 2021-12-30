@@ -21,7 +21,7 @@ type ClientNode struct {
 type ClientNodeConfig struct {
 	GatewayUrl  string
 	FuncName    string
-	NumInstance uint32
+	NumInstance uint8
 }
 
 type InvokeParam struct {

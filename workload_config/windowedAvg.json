@@ -1,0 +1,5 @@
+{
+    "srcOutTopic": "nexmark_src",
+    "groupByOutTopic": "grouped_bids",
+    "avgOutTopic": "avg-sink"
+}

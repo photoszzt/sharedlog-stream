@@ -1,0 +1,8 @@
+{
+    "srcPartition": 5,
+    "numInstance": 5,
+    "srcOutTopic": "nexmark_src",
+    "bidKeyedByAucOutTopic": "bids",
+    "aucBidsOutTopic": "aucBids",
+    "maxBidsOutTopic": "nexmark_q5_sink"
+}

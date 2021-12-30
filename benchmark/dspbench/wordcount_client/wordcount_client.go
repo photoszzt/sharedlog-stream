@@ -96,7 +96,7 @@ func main() {
 	countNodeConfig := &processor.ClientNodeConfig{
 		FuncName:    "wordcountcounter",
 		GatewayUrl:  FLAGS_faas_gateway,
-		NumInstance: uint32(numCountInstance),
+		NumInstance: numCountInstance,
 	}
 	countInputParams := make([]*common.QueryInput, countNodeConfig.NumInstance)
 

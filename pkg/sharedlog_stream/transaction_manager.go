@@ -299,7 +299,6 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) error {
 
 func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, quit chan struct{}, errc chan error, dcancel context.CancelFunc) {
 	fenceTag := FenceTag(tc.transactionLog.topicNameHash, 0)
-	strSerde := commtypes.StringSerde{}
 	for {
 		select {
 		case <-quit:
@@ -314,20 +313,10 @@ func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, quit ch
 			errc <- err
 		} else {
 			for _, rawMsg := range rawMsgs {
-				keyBytes, valBytes, err := tc.msgSerde.Decode(rawMsg.Payload)
+				_, valBytes, err := tc.msgSerde.Decode(rawMsg.Payload)
 				if err != nil {
 					errc <- err
 					break
-				}
-				trStr, err := strSerde.Decode(keyBytes)
-				if err != nil {
-					errc <- err
-					break
-				}
-				transactionalId := trStr.(string)
-				// not the fence it's looking at
-				if transactionalId != tc.TransactionalId {
-					continue
 				}
 				txnMetaTmp, err := tc.txnMdSerde.Decode(valBytes)
 				if err != nil {
@@ -354,12 +343,7 @@ func (tc *TransactionManager) appendToTransactionLog(ctx context.Context, tm *Tx
 	if err != nil {
 		return err
 	}
-	strSerde := commtypes.StringEncoder{}
-	keyEncoded, err := strSerde.Encode(tc.TransactionalId)
-	if err != nil {
-		return err
-	}
-	msg_encoded, err := tc.msgSerde.Encode(keyEncoded, encoded)
+	msg_encoded, err := tc.msgSerde.Encode(nil, encoded)
 	if err != nil {
 		return err
 	}
