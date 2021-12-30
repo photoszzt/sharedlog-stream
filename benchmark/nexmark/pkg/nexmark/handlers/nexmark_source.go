@@ -51,7 +51,7 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
-			Message: "fail to create output stream",
+			Message: fmt.Sprintf("fail to create output stream: %v", err),
 		}, nil
 	}
 	nexmarkConfig, err := ntypes.ConvertToNexmarkConfiguration(inputConfig)

@@ -83,7 +83,7 @@ func query7() {
 	for i := 0; i < int(q7conf.NumSrcPartition); i++ {
 		wg.Add(1)
 		idx := i
-		go invokeSourceFunc(client, uint8(idx), &sourceOutput[idx], &wg)
+		go invokeSourceFunc(client, q7conf.NumSrcPartition, uint8(idx), &sourceOutput[idx], &wg)
 	}
 
 	for i := 0; i < int(q7BidKeyedByPriceNodeConfig.NumInstance); i++ {
@@ -102,23 +102,26 @@ func query7() {
 	wg.Wait()
 
 	for i := 0; i < int(q7conf.NumSrcPartition); i++ {
-		if sourceOutput[i].Success {
-			common.ProcessThroughputLat(fmt.Sprintf("source-%d", i),
-				sourceOutput[i].Latencies, sourceOutput[i].Duration)
+		idx := i
+		if sourceOutput[idx].Success {
+			common.ProcessThroughputLat(fmt.Sprintf("source-%d", idx),
+				sourceOutput[idx].Latencies, sourceOutput[idx].Duration)
 		}
 	}
 
 	for i := 0; i < int(q7BidKeyedByPriceNodeConfig.NumInstance); i++ {
-		if q7BidKeyedByPriceOutput[i].Success {
-			common.ProcessThroughputLat(fmt.Sprintf("q7-bid-keyed-by-price-%d", i),
-				q7BidKeyedByPriceOutput[i].Latencies, q7BidKeyedByPriceOutput[i].Duration)
+		idx := i
+		if q7BidKeyedByPriceOutput[idx].Success {
+			common.ProcessThroughputLat(fmt.Sprintf("q7-bid-keyed-by-price-%d", idx),
+				q7BidKeyedByPriceOutput[idx].Latencies, q7BidKeyedByPriceOutput[idx].Duration)
 		}
 	}
 
 	for i := 0; i < int(q7TransNodeConfig.NumInstance); i++ {
-		if q7TransOutput[i].Success {
-			common.ProcessThroughputLat(fmt.Sprintf("q7-transform-%d", i),
-				q7TransOutput[i].Latencies, q7TransOutput[i].Duration)
+		idx := i
+		if q7TransOutput[idx].Success {
+			common.ProcessThroughputLat(fmt.Sprintf("q7-transform-%d", idx),
+				q7TransOutput[idx].Latencies, q7TransOutput[idx].Duration)
 		}
 	}
 }

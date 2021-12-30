@@ -1,5 +1,5 @@
 {
-    "srcPartition": 5,
+    "numSrcPartition": 5,
     "numInstance": 5,
     "srcOutTopic": "nexmark_src",
     "bidKeyedByAucOutTopic": "bids",

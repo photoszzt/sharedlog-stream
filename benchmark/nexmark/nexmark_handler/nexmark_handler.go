@@ -27,7 +27,7 @@ func init() {
 }
 
 func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.FuncHandler, error) {
-	fmt.Print("Enter nexmark\n")
+	fmt.Fprint(os.Stderr, "Enter nexmark\n")
 	switch funcName {
 	case "source":
 		return handlers.NewNexmarkSource(env), nil

@@ -31,9 +31,10 @@ func query1() {
 	if err != nil {
 		panic(err)
 	}
+	fmt.Fprintf(os.Stderr, "q1 config is %v\n", q1conf)
 
 	q1NodeConfig := &processor.ClientNodeConfig{
-		FuncName:    "q1",
+		FuncName:    "query1",
 		GatewayUrl:  FLAGS_faas_gateway,
 		NumInstance: q1conf.NumSrcPartition,
 	}
@@ -64,12 +65,14 @@ func query1() {
 
 	for i := 0; i < int(q1conf.NumSrcPartition); i++ {
 		wg.Add(1)
-		go invokeSourceFunc(client, uint8(i), &sourceOutput[i], &wg)
+		fmt.Fprintf(os.Stderr, "invoking src %d\n", i)
+		go invokeSourceFunc(client, q1conf.NumSrcPartition, uint8(i), &sourceOutput[i], &wg)
 	}
 
 	for i := 0; i < int(q1conf.NumSrcPartition); i++ {
 		wg.Add(1)
 		q1InputParams[i].ParNum = uint8(i)
+		fmt.Fprintf(os.Stderr, "invoking q1 %d\n", i)
 		go q1Node.Invoke(client, &q1Output[i], &wg, q1InputParams[i])
 	}
 	wg.Wait()

@@ -83,7 +83,7 @@ func windowedAvg() {
 	for i := 0; i < int(wconf.NumSrcPartition); i++ {
 		wg.Add(1)
 		idx := i
-		go invokeSourceFunc(client, uint8(idx), &sourceOutput[i], &wg)
+		go invokeSourceFunc(client, wconf.NumSrcPartition, uint8(idx), &sourceOutput[i], &wg)
 	}
 
 	for i := 0; i < int(groupByNodeConfig.NumInstance); i++ {

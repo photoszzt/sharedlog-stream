@@ -101,53 +101,61 @@ func query5() {
 
 	for i := 0; i < int(q5conf.NumSrcPartition); i++ {
 		wg.Add(1)
-		go invokeSourceFunc(client, uint8(i), &sourceOutput[i], &wg)
+		idx := i
+		go invokeSourceFunc(client, q5conf.NumSrcPartition, uint8(idx), &sourceOutput[i], &wg)
 	}
 
 	for i := 0; i < int(q5BidKeyedByAuctionNodeConfig.NumInstance); i++ {
 		wg.Add(1)
-		q5BidKeyedByAuctionInputParams[i].ParNum = uint8(i)
-		go q5BidKeyedByAuction.Invoke(client, &q5BidKeyedByAuctionOutput[i], &wg, q5BidKeyedByAuctionInputParams[i])
+		idx := i
+		q5BidKeyedByAuctionInputParams[i].ParNum = uint8(idx)
+		go q5BidKeyedByAuction.Invoke(client, &q5BidKeyedByAuctionOutput[idx], &wg, q5BidKeyedByAuctionInputParams[idx])
 	}
 
 	for i := 0; i < int(q5AucBidsNodeConfig.NumInstance); i++ {
 		wg.Add(1)
-		q5aucBidsInputParams[i].ParNum = uint8(i)
-		go q5aucBids.Invoke(client, &q5AucBidsOutput[i], &wg, q5aucBidsInputParams[i])
+		idx := i
+		q5aucBidsInputParams[idx].ParNum = uint8(idx)
+		go q5aucBids.Invoke(client, &q5AucBidsOutput[idx], &wg, q5aucBidsInputParams[idx])
 	}
 
 	for i := 0; i < int(q5maxbidNodeConfig.NumInstance); i++ {
 		wg.Add(1)
-		q5maxbidInputParams[i].ParNum = uint8(i)
-		go q5maxBid.Invoke(client, &q5maxBidOutput[i], &wg, q5maxbidInputParams[i])
+		idx := i
+		q5maxbidInputParams[idx].ParNum = uint8(idx)
+		go q5maxBid.Invoke(client, &q5maxBidOutput[idx], &wg, q5maxbidInputParams[idx])
 	}
 	wg.Wait()
 
 	for i := 0; i < int(q5conf.NumSrcPartition); i++ {
-		if sourceOutput[i].Success {
-			common.ProcessThroughputLat(fmt.Sprintf("source-%d", i),
-				sourceOutput[i].Latencies, sourceOutput[i].Duration)
+		idx := i
+		if sourceOutput[idx].Success {
+			common.ProcessThroughputLat(fmt.Sprintf("source-%d", idx),
+				sourceOutput[idx].Latencies, sourceOutput[idx].Duration)
 		}
 	}
 
 	for i := 0; i < int(q5BidKeyedByAuctionNodeConfig.NumInstance); i++ {
-		if q5BidKeyedByAuctionOutput[i].Success {
-			common.ProcessThroughputLat(fmt.Sprintf("q5-bid-keyed-by-auciton-%d", i),
-				q5BidKeyedByAuctionOutput[i].Latencies, q5BidKeyedByAuctionOutput[i].Duration)
+		idx := i
+		if q5BidKeyedByAuctionOutput[idx].Success {
+			common.ProcessThroughputLat(fmt.Sprintf("q5-bid-keyed-by-auciton-%d", idx),
+				q5BidKeyedByAuctionOutput[idx].Latencies, q5BidKeyedByAuctionOutput[idx].Duration)
 		}
 	}
 
 	for i := 0; i < int(q5AucBidsNodeConfig.NumInstance); i++ {
-		if q5AucBidsOutput[i].Success {
-			common.ProcessThroughputLat(fmt.Sprintf("q5-auction-bids-%d", i),
-				q5AucBidsOutput[i].Latencies, q5AucBidsOutput[i].Duration)
+		idx := i
+		if q5AucBidsOutput[idx].Success {
+			common.ProcessThroughputLat(fmt.Sprintf("q5-auction-bids-%d", idx),
+				q5AucBidsOutput[idx].Latencies, q5AucBidsOutput[idx].Duration)
 		}
 	}
 
 	for i := 0; i < int(q5maxbidNodeConfig.NumInstance); i++ {
-		if q5maxBidOutput[i].Success {
-			common.ProcessThroughputLat(fmt.Sprintf("q5-max-bids-%d", i),
-				q5maxBidOutput[i].Latencies, q5maxBidOutput[i].Duration)
+		idx := i
+		if q5maxBidOutput[idx].Success {
+			common.ProcessThroughputLat(fmt.Sprintf("q5-max-bids-%d", idx),
+				q5maxBidOutput[idx].Latencies, q5maxBidOutput[idx].Duration)
 		}
 	}
 }

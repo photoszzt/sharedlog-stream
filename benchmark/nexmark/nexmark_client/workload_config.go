@@ -19,7 +19,7 @@ type Q7WorkloadConfig struct {
 	SrcOutTopic             string `json:"srcOutTopic"`
 	BidKeyedByPriceOutTopic string `json:"bidKeyedByPriceOutTopic"`
 	Q7TransOutTopic         string `json:"q7TransOutTopic"`
-	NumSrcPartition         uint8  `json:"srcPartition"`
+	NumSrcPartition         uint8  `json:"numSrcPartition"`
 	NumInstance             uint8  `json:"numInstance"`
 }
 
