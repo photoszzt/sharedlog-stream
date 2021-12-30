@@ -1,7 +1,7 @@
 package benchmarkframework
 
 type WorkloadGenerator struct {
-	worker     Worker
-	driverName string
-	workload   Workload
+	Worker     Worker
+	DriverName string
+	Workload   Workload
 }

@@ -4,9 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
-	"os"
 	"sync"
-	"time"
 
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -54,6 +52,7 @@ func invokeSourceFunc(client *http.Client, parNum uint8, response *common.FnOutp
 	}
 }
 
+/*
 func invokeQuery(client *http.Client, response *common.FnOutput, wg *sync.WaitGroup) {
 	defer wg.Done()
 	queryInput := &common.QueryInput{
@@ -86,6 +85,7 @@ func generalQuery() {
 	go invokeQuery(client, &queryOutput, &wg)
 	wg.Wait()
 }
+*/
 
 func getSerdeFormat() commtypes.SerdeFormat {
 	var serdeFormat commtypes.SerdeFormat

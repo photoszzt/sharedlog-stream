@@ -5,11 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sharedlog-stream/benchmark/common"
-	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/stream/processor"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -39,6 +35,7 @@ func (h *query3ProcessorHandler) Call(ctx context.Context, input []byte) ([]byte
 	return utils.CompressData(encodedOutput), nil
 }
 
+/*
 func (h *query3ProcessorHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
@@ -86,6 +83,7 @@ type query3ProcessArgs struct {
 	personsByIDMap        *processor.MeteredProcessor
 	parNum                uint8
 }
+*/
 
 func (h *query3ProcessorHandler) Query3(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	/*
