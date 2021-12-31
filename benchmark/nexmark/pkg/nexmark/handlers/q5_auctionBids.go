@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"hash/fnv"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -20,18 +20,22 @@ import (
 )
 
 type q5AuctionBids struct {
-	env types.Environment
+	env   types.Environment
+	cHash *hash.ConsistentHash
 }
 
+/*
 func hashSe(key *ntypes.StartEndTime) uint32 {
 	h := fnv.New32a()
 	h.Write([]byte(fmt.Sprintf("%v", key)))
 	return h.Sum32()
 }
+*/
 
 func NewQ5AuctionBids(env types.Environment) *q5AuctionBids {
 	return &q5AuctionBids{
-		env: env,
+		env:   env,
+		cHash: hash.NewConsistentHash(),
 	}
 }
 
@@ -167,7 +171,15 @@ func (h *q5AuctionBids) process(ctx context.Context,
 					Message: err.Error(),
 				}
 			}
-			par := uint8(hashSe(changeKeyedMsg[0].Key.(*ntypes.StartEndTime)) % uint32(args.numOutPartition))
+			// par := uint8(hashSe(changeKeyedMsg[0].Key.(*ntypes.StartEndTime)) % uint32(args.numOutPartition))
+			parTmp, ok := h.cHash.Get(changeKeyedMsg[0].Key.(*ntypes.StartEndTime))
+			if !ok {
+				return currentOffset, &common.FnOutput{
+					Success: false,
+					Message: "fail to get output partition",
+				}
+			}
+			par := parTmp.(uint8)
 			err = trackParFunc([]uint8{par})
 			if err != nil {
 				return currentOffset, &common.FnOutput{
@@ -498,6 +510,10 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 
 	task := sharedlog_stream.StreamTask{
 		ProcessFunc: h.process,
+	}
+
+	for i := 0; i < int(sp.NumOutPartition); i++ {
+		h.cHash.Add(i)
 	}
 
 	if sp.EnableTransaction {

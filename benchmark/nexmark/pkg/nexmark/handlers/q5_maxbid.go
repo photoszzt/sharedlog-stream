@@ -9,6 +9,7 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -19,12 +20,14 @@ import (
 )
 
 type q5MaxBid struct {
-	env types.Environment
+	env   types.Environment
+	cHash *hash.ConsistentHash
 }
 
 func NewQ5MaxBid(env types.Environment) types.FuncHandler {
 	return &q5MaxBid{
-		env: env,
+		env:   env,
+		cHash: hash.NewConsistentHash(),
 	}
 }
 
@@ -216,6 +219,10 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 
 	task := sharedlog_stream.StreamTask{
 		ProcessFunc: h.process,
+	}
+
+	for i := 0; i < int(sp.NumOutPartition); i++ {
+		h.cHash.Add(i)
 	}
 
 	if sp.EnableTransaction {

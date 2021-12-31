@@ -5,13 +5,18 @@ package types
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 )
 
 type StartEndTime struct {
-	StartTime uint64 `json:"startTime" zid:"0" msg:"startTime"`
-	EndTime   uint64 `json:"endTime" zid:"1" msg:"endTime"`
+	StartTime uint64 `json:"startTime" msg:"startTime"`
+	EndTime   uint64 `json:"endTime" msg:"endTime"`
+}
+
+func (se StartEndTime) String() string {
+	return fmt.Sprintf("%d %d", se.StartTime, se.EndTime)
 }
 
 type StartEndTimeJSONEncoder struct{}
