@@ -486,7 +486,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			}
 			return commtypes.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
 		})))
-	procArgs := q5AuctionBidsProcessArg{
+	procArgs := &q5AuctionBidsProcessArg{
 		countProc:       countProc,
 		groupByAuction:  groupByAuction,
 		src:             src,

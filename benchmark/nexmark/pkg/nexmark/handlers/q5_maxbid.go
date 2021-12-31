@@ -204,7 +204,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		return v.Count >= v.MaxCnt, nil
 	})))
 
-	procArgs := q5MaxBidProcessArgs{
+	procArgs := &q5MaxBidProcessArgs{
 		maxBid:        maxBid,
 		stJoin:        stJoin,
 		chooseMaxCnt:  chooseMaxCnt,
