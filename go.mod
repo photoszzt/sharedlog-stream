@@ -8,6 +8,7 @@ require (
 	github.com/gammazero/deque v0.1.0
 	github.com/igrmk/treemap v1.0.0 // indirect
 	github.com/rs/zerolog v1.19.0
+	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/tinylib/msgp v1.1.6
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/time v0.0.0-20211116232009-f0f3c7e86c11
