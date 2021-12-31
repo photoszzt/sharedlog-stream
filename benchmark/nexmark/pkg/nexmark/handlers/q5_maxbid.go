@@ -9,7 +9,6 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -20,14 +19,12 @@ import (
 )
 
 type q5MaxBid struct {
-	env   types.Environment
-	cHash *hash.ConsistentHash
+	env types.Environment
 }
 
 func NewQ5MaxBid(env types.Environment) types.FuncHandler {
 	return &q5MaxBid{
-		env:   env,
-		cHash: hash.NewConsistentHash(),
+		env: env,
 	}
 }
 
@@ -92,7 +89,7 @@ func (h *q5MaxBid) process(ctx context.Context,
 		}
 		return currentOffset, &common.FnOutput{
 			Success: false,
-			Message: err.Error(),
+			Message: fmt.Sprintf("consume err: %v", err),
 		}
 	}
 
@@ -105,28 +102,28 @@ func (h *q5MaxBid) process(ctx context.Context,
 		if err != nil {
 			return currentOffset, &common.FnOutput{
 				Success: false,
-				Message: err.Error(),
+				Message: fmt.Sprintf("maxBid err: %v", err),
 			}
 		}
 		joinedOutput, err := args.stJoin.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
 			return currentOffset, &common.FnOutput{
 				Success: false,
-				Message: err.Error(),
+				Message: fmt.Sprintf("joined err: %v", err),
 			}
 		}
 		filteredMx, err := args.chooseMaxCnt.ProcessAndReturn(ctx, joinedOutput[0])
 		if err != nil {
 			return currentOffset, &common.FnOutput{
 				Success: false,
-				Message: err.Error(),
+				Message: fmt.Sprintf("filteredMx err: %v", err),
 			}
 		}
 		err = args.sink.Sink(ctx, filteredMx[0], args.parNum, false)
 		if err != nil {
 			return currentOffset, &common.FnOutput{
 				Success: false,
-				Message: err.Error(),
+				Message: fmt.Sprintf("sink err: %v", err),
 			}
 		}
 	}
@@ -219,10 +216,6 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 
 	task := sharedlog_stream.StreamTask{
 		ProcessFunc: h.process,
-	}
-
-	for i := 0; i < int(sp.NumOutPartition); i++ {
-		h.cHash.Add(i)
 	}
 
 	if sp.EnableTransaction {

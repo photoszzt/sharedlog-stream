@@ -88,7 +88,7 @@ func main() {
 			NumInPartition:    1,
 			NumOutPartition:   numCountInstance,
 			EnableTransaction: FLAGS_tran,
-			CommitEvery:       FLAGS_commit_every,
+			CommitEveryMs:     FLAGS_commit_every,
 		}
 	}
 	split := processor.NewClientNode(splitNodeConfig)
@@ -120,7 +120,7 @@ func main() {
 			NumInPartition:    numCountInstance,
 			NumOutPartition:   numCountInstance,
 			EnableTransaction: FLAGS_tran,
-			CommitEvery:       FLAGS_commit_every,
+			CommitEveryMs:     FLAGS_commit_every,
 			TestParams:        testParams,
 		}
 	}

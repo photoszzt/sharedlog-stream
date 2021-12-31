@@ -40,12 +40,14 @@ func query7() {
 	q7BidKeyedByPriceInputParams := make([]*common.QueryInput, q7BidKeyedByPriceNodeConfig.NumInstance)
 	for i := 0; i < int(q7BidKeyedByPriceNodeConfig.NumInstance); i++ {
 		q7BidKeyedByPriceInputParams[i] = &common.QueryInput{
-			Duration:        uint32(FLAGS_duration),
-			InputTopicName:  q7conf.SrcOutTopic,
-			OutputTopicName: q7conf.BidKeyedByPriceOutTopic,
-			SerdeFormat:     uint8(serdeFormat),
-			NumInPartition:  q7conf.NumSrcPartition,
-			NumOutPartition: q7conf.NumInstance,
+			Duration:          uint32(FLAGS_duration),
+			InputTopicName:    q7conf.SrcOutTopic,
+			OutputTopicName:   q7conf.BidKeyedByPriceOutTopic,
+			SerdeFormat:       uint8(serdeFormat),
+			NumInPartition:    q7conf.NumSrcPartition,
+			NumOutPartition:   q7conf.NumInstance,
+			EnableTransaction: FLAGS_tran,
+			CommitEveryMs:     FLAGS_commit_every,
 		}
 	}
 	q7BidKeyedByPrice := processor.NewClientNode(q7BidKeyedByPriceNodeConfig)
@@ -58,12 +60,14 @@ func query7() {
 	q7TransInputParams := make([]*common.QueryInput, q7TransNodeConfig.NumInstance)
 	for i := 0; i < int(q7TransNodeConfig.NumInstance); i++ {
 		q7TransInputParams[i] = &common.QueryInput{
-			Duration:        uint32(FLAGS_duration),
-			InputTopicName:  q7conf.BidKeyedByPriceOutTopic,
-			OutputTopicName: q7conf.Q7TransOutTopic,
-			SerdeFormat:     uint8(serdeFormat),
-			NumInPartition:  q7conf.NumInstance,
-			NumOutPartition: q7conf.NumInstance,
+			Duration:          uint32(FLAGS_duration),
+			InputTopicName:    q7conf.BidKeyedByPriceOutTopic,
+			OutputTopicName:   q7conf.Q7TransOutTopic,
+			SerdeFormat:       uint8(serdeFormat),
+			NumInPartition:    q7conf.NumInstance,
+			NumOutPartition:   q7conf.NumInstance,
+			EnableTransaction: FLAGS_tran,
+			CommitEveryMs:     FLAGS_commit_every,
 		}
 	}
 	q7Trans := processor.NewClientNode(q7TransNodeConfig)

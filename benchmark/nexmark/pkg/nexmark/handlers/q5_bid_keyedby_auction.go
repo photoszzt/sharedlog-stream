@@ -453,7 +453,7 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 	}
 
 	for i := 0; i < int(sp.NumOutPartition); i++ {
-		h.cHash.Add(i)
+		h.cHash.Add(uint8(i))
 	}
 	if sp.EnableTransaction {
 		// return h.processWithTransaction(ctx, sp, args)

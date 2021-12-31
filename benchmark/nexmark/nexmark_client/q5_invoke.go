@@ -40,12 +40,14 @@ func query5() {
 	q5BidKeyedByAuctionInputParams := make([]*common.QueryInput, q5BidKeyedByAuctionNodeConfig.NumInstance)
 	for i := 0; i < int(q5BidKeyedByAuctionNodeConfig.NumInstance); i++ {
 		q5BidKeyedByAuctionInputParams[i] = &common.QueryInput{
-			Duration:        uint32(FLAGS_duration),
-			InputTopicName:  q5conf.SrcOutTopic,
-			OutputTopicName: q5conf.BidKeyedByAuctionOutTopic,
-			SerdeFormat:     uint8(serdeFormat),
-			NumInPartition:  q5conf.NumSrcPartition,
-			NumOutPartition: q5conf.NumInstance,
+			Duration:          uint32(FLAGS_duration),
+			InputTopicName:    q5conf.SrcOutTopic,
+			OutputTopicName:   q5conf.BidKeyedByAuctionOutTopic,
+			SerdeFormat:       uint8(serdeFormat),
+			NumInPartition:    q5conf.NumSrcPartition,
+			NumOutPartition:   q5conf.NumInstance,
+			EnableTransaction: FLAGS_tran,
+			CommitEveryMs:     FLAGS_commit_every,
 		}
 	}
 	q5BidKeyedByAuction := processor.NewClientNode(q5BidKeyedByAuctionNodeConfig)
@@ -58,12 +60,14 @@ func query5() {
 	q5aucBidsInputParams := make([]*common.QueryInput, q5AucBidsNodeConfig.NumInstance)
 	for i := 0; i < int(q5AucBidsNodeConfig.NumInstance); i++ {
 		q5aucBidsInputParams[i] = &common.QueryInput{
-			Duration:        uint32(FLAGS_duration),
-			InputTopicName:  q5conf.BidKeyedByAuctionOutTopic,
-			OutputTopicName: q5conf.AucBidsOutTopic,
-			SerdeFormat:     uint8(serdeFormat),
-			NumInPartition:  q5conf.NumInstance,
-			NumOutPartition: q5conf.NumInstance,
+			Duration:          uint32(FLAGS_duration),
+			InputTopicName:    q5conf.BidKeyedByAuctionOutTopic,
+			OutputTopicName:   q5conf.AucBidsOutTopic,
+			SerdeFormat:       uint8(serdeFormat),
+			NumInPartition:    q5conf.NumInstance,
+			NumOutPartition:   q5conf.NumInstance,
+			EnableTransaction: FLAGS_tran,
+			CommitEveryMs:     FLAGS_commit_every,
 		}
 	}
 	q5aucBids := processor.NewClientNode(q5AucBidsNodeConfig)
@@ -76,12 +80,14 @@ func query5() {
 	q5maxbidInputParams := make([]*common.QueryInput, q5maxbidNodeConfig.NumInstance)
 	for i := 0; i < int(q5maxbidNodeConfig.NumInstance); i++ {
 		q5maxbidInputParams[i] = &common.QueryInput{
-			Duration:        uint32(FLAGS_duration),
-			InputTopicName:  q5conf.AucBidsOutTopic,
-			OutputTopicName: q5conf.MaxBidsOutTopic,
-			SerdeFormat:     uint8(serdeFormat),
-			NumInPartition:  q5conf.NumInstance,
-			NumOutPartition: q5conf.NumInstance,
+			Duration:          uint32(FLAGS_duration),
+			InputTopicName:    q5conf.AucBidsOutTopic,
+			OutputTopicName:   q5conf.MaxBidsOutTopic,
+			SerdeFormat:       uint8(serdeFormat),
+			NumInPartition:    q5conf.NumInstance,
+			NumOutPartition:   q5conf.NumInstance,
+			EnableTransaction: FLAGS_tran,
+			CommitEveryMs:     FLAGS_commit_every,
 		}
 	}
 	q5maxBid := processor.NewClientNode(q5maxbidNodeConfig)

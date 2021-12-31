@@ -9,6 +9,7 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -18,12 +19,14 @@ import (
 )
 
 type q7BidKeyedByPrice struct {
-	env types.Environment
+	env   types.Environment
+	cHash *hash.ConsistentHash
 }
 
 func NewQ7BidKeyedByPriceHandler(env types.Environment) types.FuncHandler {
 	return &q7BidKeyedByPrice{
-		env: env,
+		env:   env,
+		cHash: hash.NewConsistentHash(),
 	}
 }
 
@@ -88,7 +91,15 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context,
 				}
 			}
 			key := mappedKey[0].Key.(uint64)
-			par := uint8(key % uint64(args.numOutPartition))
+			parTmp, ok := h.cHash.Get(key)
+			if !ok {
+				return currentOffset, &common.FnOutput{
+					Success: false,
+					Message: "fail to get output substream number",
+				}
+			}
+			par := parTmp.(uint8)
+			// par := uint8(key % uint64(args.numOutPartition))
 			err = trackParFunc([]uint8{par})
 			if err != nil {
 				return currentOffset, &common.FnOutput{
@@ -175,6 +186,10 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 
 	task := sharedlog_stream.StreamTask{
 		ProcessFunc: h.process,
+	}
+
+	for i := 0; i < int(input.NumOutPartition); i++ {
+		h.cHash.Add(i)
 	}
 
 	if input.EnableTransaction {

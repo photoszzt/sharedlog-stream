@@ -159,7 +159,7 @@ func (t *StreamTask) processWithTranLoop(ctx context.Context,
 	trackConsumePar := false
 	currentOffset := uint64(0)
 	commitTimer := time.Now()
-	commitEvery := time.Duration(args.QueryInput.CommitEvery) * time.Millisecond
+	commitEvery := time.Duration(args.QueryInput.CommitEveryMs) * time.Millisecond
 	duration := time.Duration(args.QueryInput.Duration) * time.Second
 
 	startTime := time.Now()

@@ -24,6 +24,8 @@ var (
 	FLAGS_tps             int
 	FLAGS_serdeFormat     string
 	FLAGS_workload_config string
+	FLAGS_tran            bool
+	FLAGS_commit_every    uint64
 )
 
 func invokeSourceFunc(client *http.Client, numOutPartition uint8, parNum uint8, response *common.FnOutput, wg *sync.WaitGroup) {
@@ -110,6 +112,8 @@ func main() {
 	flag.IntVar(&FLAGS_tps, "tps", 10000000, "tps param for nexmark")
 	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
 	flag.StringVar(&FLAGS_workload_config, "wconfig", "./wconfig.json", "path to a json file that stores workload config")
+	flag.BoolVar(&FLAGS_tran, "tran", false, "enable transaction or not")
+	flag.Uint64Var(&FLAGS_commit_every, "comm_every", 0, "commit a transaction every (ms)")
 	flag.Parse()
 
 	switch FLAGS_app_name {

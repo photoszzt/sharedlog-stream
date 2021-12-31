@@ -513,7 +513,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	}
 
 	for i := 0; i < int(sp.NumOutPartition); i++ {
-		h.cHash.Add(i)
+		h.cHash.Add(uint8(i))
 	}
 
 	if sp.EnableTransaction {
