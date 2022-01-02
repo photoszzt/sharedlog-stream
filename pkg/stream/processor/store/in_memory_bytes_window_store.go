@@ -12,21 +12,21 @@ import (
 
 type InMemoryBytesWindowStore struct {
 	otrMu           sync.RWMutex
-	openedTimeRange map[uint64]struct{}
+	openedTimeRange map[int64]struct{}
 
 	sctx     StoreContext
 	valSerde commtypes.Serde
 
 	store              *concurrent_skiplist.SkipList
 	name               string
-	windowSize         uint64
-	retentionPeriod    uint64
-	observedStreamTime uint64
+	windowSize         int64
+	retentionPeriod    int64
+	observedStreamTime int64
 	retainDuplicates   bool
 	open               bool
 }
 
-func NewInMemoryBytesWindowStore(name string, retentionPeriod uint64, windowSize uint64, retainDuplicates bool, valSerde commtypes.Serde) *InMemoryBytesWindowStore {
+func NewInMemoryBytesWindowStore(name string, retentionPeriod int64, windowSize int64, retainDuplicates bool, valSerde commtypes.Serde) *InMemoryBytesWindowStore {
 	return &InMemoryBytesWindowStore{
 		name:               name,
 		windowSize:         windowSize,
@@ -57,7 +57,7 @@ func (s *InMemoryBytesWindowStore) Name() string {
 	return s.name
 }
 
-func (s *InMemoryBytesWindowStore) Put(key []byte, value []byte, windowStartTimestamp uint64) error {
+func (s *InMemoryBytesWindowStore) Put(key []byte, value []byte, windowStartTimestamp int64) error {
 	s.removeExpiredSegments()
 	if windowStartTimestamp > s.observedStreamTime {
 		s.observedStreamTime = windowStartTimestamp
@@ -83,7 +83,7 @@ func (s *InMemoryBytesWindowStore) Put(key []byte, value []byte, windowStartTime
 	return nil
 }
 
-func (s *InMemoryBytesWindowStore) Get(key []byte, windowStartTimestamp uint64) ([]byte, bool) {
+func (s *InMemoryBytesWindowStore) Get(key []byte, windowStartTimestamp int64) ([]byte, bool) {
 	s.removeExpiredSegments()
 	if windowStartTimestamp <= s.observedStreamTime-s.retentionPeriod {
 		return nil, false
@@ -103,7 +103,7 @@ func (s *InMemoryBytesWindowStore) Get(key []byte, windowStartTimestamp uint64) 
 	}
 }
 
-func (s *InMemoryBytesWindowStore) Fetch(key []byte, timeFrom time.Time, timeTo time.Time, iterFunc func(uint64, ValueT) error) error {
+func (s *InMemoryBytesWindowStore) Fetch(key []byte, timeFrom time.Time, timeTo time.Time, iterFunc func(int64, ValueT) error) error {
 	s.removeExpiredSegments()
 
 	tsFrom := timeFrom.Unix() * 1000
@@ -119,7 +119,7 @@ func (s *InMemoryBytesWindowStore) Fetch(key []byte, timeFrom time.Time, timeTo 
 	}
 
 	err := s.store.IterateRange(uint64(tsFrom), uint64(tsTo), func(ts concurrent_skiplist.KeyT, val concurrent_skiplist.ValueT) error {
-		curT := ts.(uint64)
+		curT := ts.(int64)
 		v := val.(*concurrent_skiplist.SkipList)
 		elem := v.Get(key)
 		s.otrMu.Lock()
@@ -166,10 +166,10 @@ func (s *InMemoryBytesWindowStore) BackwardFetchAll(timeFrom time.Time, timeTo t
 
 func (s *InMemoryBytesWindowStore) removeExpiredSegments() {
 	minLiveTimeTmp := int64(s.observedStreamTime) - int64(s.retentionPeriod) + 1
-	minLiveTime := uint64(0)
+	minLiveTime := int64(0)
 
 	if minLiveTimeTmp > 0 {
-		minLiveTime = uint64(minLiveTimeTmp)
+		minLiveTime = int64(minLiveTimeTmp)
 	}
 
 	s.otrMu.RLock()

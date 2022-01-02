@@ -39,9 +39,9 @@ import (
  * timestamp.
  */
 type JoinWindows struct {
-	beforeMs uint64
-	afterMs  uint64
-	graceMs  uint64
+	beforeMs int64
+	afterMs  int64
+	graceMs  int64
 }
 
 var (
@@ -49,7 +49,7 @@ var (
 	_  = EnumerableWindowDefinition(jw)
 )
 
-func getJoinWindows(beforeMs uint64, afterMs uint64, graceMs uint64) *JoinWindows {
+func getJoinWindows(beforeMs int64, afterMs int64, graceMs int64) *JoinWindows {
 	return &JoinWindows{
 		beforeMs: beforeMs,
 		afterMs:  afterMs,
@@ -62,8 +62,7 @@ func NewJoinWindowsNoGrace(timeDifference time.Duration) *JoinWindows {
 	if timeDifferenceMs <= 0 {
 		log.Fatal().Err(DurationLeqZero)
 	}
-	return getJoinWindows(uint64(timeDifferenceMs), uint64(timeDifferenceMs),
-		0)
+	return getJoinWindows(timeDifferenceMs, timeDifferenceMs, 0)
 }
 
 func NewJoinWindowsWithGrace(timeDifference time.Duration, afterWindowEnd time.Duration) *JoinWindows {
@@ -75,7 +74,7 @@ func NewJoinWindowsWithGrace(timeDifference time.Duration, afterWindowEnd time.D
 	if afterWindowEndMs <= 0 {
 		log.Fatal().Err(DurationLeqZero)
 	}
-	return getJoinWindows(uint64(timeDifferenceMs), uint64(timeDifferenceMs), uint64(afterWindowEndMs))
+	return getJoinWindows(timeDifferenceMs, timeDifferenceMs, afterWindowEndMs)
 }
 
 /**
@@ -93,7 +92,7 @@ func (w *JoinWindows) Before(timeDifference time.Duration) *JoinWindows {
 	if timeDifferenceMs <= 0 {
 		log.Fatal().Err(DurationLeqZero)
 	}
-	return getJoinWindows(uint64(timeDifferenceMs), w.afterMs, w.graceMs)
+	return getJoinWindows(timeDifferenceMs, w.afterMs, w.graceMs)
 }
 
 func (w *JoinWindows) After(timeDifference time.Duration) *JoinWindows {
@@ -101,17 +100,17 @@ func (w *JoinWindows) After(timeDifference time.Duration) *JoinWindows {
 	if timeDifferenceMs <= 0 {
 		log.Fatal().Err(DurationLeqZero)
 	}
-	return getJoinWindows(w.beforeMs, uint64(timeDifferenceMs), w.graceMs)
+	return getJoinWindows(w.beforeMs, timeDifferenceMs, w.graceMs)
 }
 
-func (w *JoinWindows) WindowsFor(timestamp uint64) (map[uint64]commtypes.Window, error) {
+func (w *JoinWindows) WindowsFor(timestamp int64) (map[int64]commtypes.Window, error) {
 	return nil, xerrors.New("WindowsFor is not supported by JoinWindows")
 }
 
-func (w *JoinWindows) MaxSize() uint64 {
+func (w *JoinWindows) MaxSize() int64 {
 	return w.beforeMs + w.afterMs
 }
 
-func (w *JoinWindows) GracePeriodMs() uint64 {
+func (w *JoinWindows) GracePeriodMs() int64 {
 	return w.graceMs
 }

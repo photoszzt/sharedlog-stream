@@ -15,7 +15,7 @@ type StreamWindowAggregateProcessor struct {
 	initializer        Initializer
 	aggregator         Aggregator
 	windows            EnumerableWindowDefinition
-	observedStreamTime uint64
+	observedStreamTime int64
 }
 
 var _ = Processor(&StreamWindowAggregateProcessor{})
@@ -72,7 +72,7 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(ctx context.Context, m
 		if windowEnd > closeTime {
 			var oldAgg interface{}
 			var newAgg interface{}
-			var newTs uint64
+			var newTs int64
 			val, exists, err := p.store.Get(msg.Key, windowStart)
 			if err != nil {
 				return nil, err
@@ -98,7 +98,7 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(ctx context.Context, m
 		} else {
 			log.Warn().Interface("key", msg.Key).
 				Interface("value", msg.Value).
-				Uint64("timestamp", msg.Timestamp).Msg("Skipping record for expired window. ")
+				Int64("timestamp", msg.Timestamp).Msg("Skipping record for expired window. ")
 		}
 	}
 	return newMsgs, nil

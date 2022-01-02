@@ -65,8 +65,12 @@ func (n *ClientNode) Invoke(client *http.Client, response *common.FnOutput, wg *
 			log.Error().Msgf("%v request failed: %v", n.config.FuncName, err)
 		} else if !response.Success {
 			log.Error().Msgf("%v request failed with failed message: %v", n.config.FuncName, response.Message)
-		} else {
-			break
+		} else if response.Success {
+			if response.Message != "" {
+				continue
+			} else {
+				break
+			}
 		}
 		i += 1
 	}

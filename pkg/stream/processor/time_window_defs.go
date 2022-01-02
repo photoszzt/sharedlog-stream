@@ -28,11 +28,11 @@ import (
 //
 type TimeWindows struct {
 	// size of the windows in ms
-	SizeMs uint64
+	SizeMs int64
 	// size of the window's advance interval in ms, i.e., by how much a window moves forward relative to
 	// the previous one.
-	AdvanceMs uint64
-	graceMs   uint64
+	AdvanceMs int64
+	graceMs   int64
 }
 
 var (
@@ -58,8 +58,8 @@ func NewTimeWindowsNoGrace(size time.Duration) *TimeWindows {
 		log.Fatal().Err(DurationLeqZero)
 	}
 	return &TimeWindows{
-		SizeMs:    uint64(sizeMs),
-		AdvanceMs: uint64(sizeMs),
+		SizeMs:    sizeMs,
+		AdvanceMs: sizeMs,
 		graceMs:   0,
 	}
 }
@@ -74,9 +74,9 @@ func NewTimeWindowWithGrace(size time.Duration, afterWindowEnd time.Duration) *T
 		log.Fatal().Err(DurationLeqZero)
 	}
 	return &TimeWindows{
-		SizeMs:    uint64(sizeMs),
-		AdvanceMs: uint64(sizeMs),
-		graceMs:   uint64(afterWindowEndMs),
+		SizeMs:    sizeMs,
+		AdvanceMs: sizeMs,
+		graceMs:   afterWindowEndMs,
 	}
 }
 
@@ -100,13 +100,13 @@ func (w *TimeWindows) AdvanceBy(advance time.Duration) *TimeWindows {
 	}
 	return &TimeWindows{
 		SizeMs:    w.SizeMs,
-		AdvanceMs: uint64(advanceMs),
+		AdvanceMs: advanceMs,
 		graceMs:   w.graceMs,
 	}
 
 }
 
-func MaxUint64(a, b uint64) uint64 {
+func MaxInt64(a, b int64) int64 {
 	if a > b {
 		return a
 	} else {
@@ -114,9 +114,9 @@ func MaxUint64(a, b uint64) uint64 {
 	}
 }
 
-func (w *TimeWindows) WindowsFor(timestamp uint64) (map[uint64]commtypes.Window, error) {
-	windowStart := MaxUint64(0, timestamp-w.SizeMs+w.AdvanceMs) / w.AdvanceMs * w.AdvanceMs
-	windows := make(map[uint64]commtypes.Window)
+func (w *TimeWindows) WindowsFor(timestamp int64) (map[int64]commtypes.Window, error) {
+	windowStart := MaxInt64(0, timestamp-w.SizeMs+w.AdvanceMs) / w.AdvanceMs * w.AdvanceMs
+	windows := make(map[int64]commtypes.Window)
 	for windowStart <= timestamp {
 		window, err := NewTimeWindow(windowStart, windowStart+w.SizeMs)
 		if err != nil {
@@ -128,10 +128,10 @@ func (w *TimeWindows) WindowsFor(timestamp uint64) (map[uint64]commtypes.Window,
 	return windows, nil
 }
 
-func (w *TimeWindows) MaxSize() uint64 {
+func (w *TimeWindows) MaxSize() int64 {
 	return w.SizeMs
 }
 
-func (w *TimeWindows) GracePeriodMs() uint64 {
+func (w *TimeWindows) GracePeriodMs() int64 {
 	return w.graceMs
 }

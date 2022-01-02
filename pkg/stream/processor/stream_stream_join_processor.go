@@ -12,8 +12,8 @@ import (
 
 type TimeTracker struct {
 	emitIntervalMs uint64
-	streamTime     uint64
-	minTime        uint64
+	streamTime     int64
+	minTime        int64
 	nextTimeToEmit uint64
 }
 
@@ -21,7 +21,7 @@ func NewTimeTracker() *TimeTracker {
 	return &TimeTracker{
 		emitIntervalMs: 1000,
 		streamTime:     0,
-		minTime:        math.MaxUint64,
+		minTime:        math.MaxInt64,
 	}
 }
 
@@ -29,13 +29,13 @@ func (t *TimeTracker) SetEmitInterval(emitIntervalMs uint64) {
 	t.emitIntervalMs = emitIntervalMs
 }
 
-func (t *TimeTracker) AdvanceStreamTime(recordTs uint64) {
+func (t *TimeTracker) AdvanceStreamTime(recordTs int64) {
 	if recordTs > t.streamTime {
 		t.streamTime = recordTs
 	}
 }
 
-func (t *TimeTracker) UpdatedMinTime(recordTs uint64) {
+func (t *TimeTracker) UpdatedMinTime(recordTs int64) {
 	if recordTs < t.minTime {
 		t.minTime = recordTs
 	}
@@ -52,9 +52,9 @@ type StreamStreamJoinProcessor struct {
 	joiner            ValueJoinerWithKey
 	sharedTimeTracker *TimeTracker
 	otherWindowName   string
-	joinAfterMs       uint64
-	joinGraceMs       uint64
-	joinBeforeMs      uint64
+	joinAfterMs       int64
+	joinGraceMs       int64
+	joinBeforeMs      int64
 	outer             bool
 	isLeftSide        bool
 }
@@ -105,7 +105,7 @@ func (p *StreamStreamJoinProcessor) Process(ctx context.Context, msg commtypes.M
 	} else {
 		timeFrom = uint64(timeFromTmp)
 	}
-	timeToTmp := inputTs + p.joinAfterMs
+	timeToTmp := inputTs + int64(p.joinAfterMs)
 	if timeToTmp > 0 {
 		timeTo = uint64(timeToTmp)
 	} else {
@@ -121,8 +121,8 @@ func (p *StreamStreamJoinProcessor) Process(ctx context.Context, msg commtypes.M
 	timeToNs := (timeTo - timeToSec*1000) * 1000000
 	err := p.otherWindowStore.Fetch(msg.Key,
 		time.Unix(int64(timeFromSec), int64(timeFromNs)),
-		time.Unix(int64(timeToSec), int64(timeToNs)), func(otherRecordTs uint64, vt store.ValueT) error {
-			var newTs uint64
+		time.Unix(int64(timeToSec), int64(timeToNs)), func(otherRecordTs int64, vt store.ValueT) error {
+			var newTs int64
 			// needOuterJoin = false
 			newVal := p.joiner.Apply(msg.Key, msg.Value, vt)
 			if inputTs > otherRecordTs {

@@ -53,7 +53,7 @@ func (p *StreamAggregateProcessor) ProcessAndReturn(ctx context.Context, msg com
 	}
 	var oldAggTs commtypes.ValueTimestamp
 	var oldAgg interface{}
-	var newTs uint64
+	var newTs int64
 	if ok {
 		oldAggTs = val.(commtypes.ValueTimestamp)
 		oldAgg = oldAggTs.Value

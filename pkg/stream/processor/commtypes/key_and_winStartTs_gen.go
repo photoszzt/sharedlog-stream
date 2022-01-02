@@ -31,7 +31,7 @@ func (z *KeyAndWindowStartTs) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 		case "ts":
-			z.WindowStartTs, err = dc.ReadUint64()
+			z.WindowStartTs, err = dc.ReadInt64()
 			if err != nil {
 				err = msgp.WrapError(err, "WindowStartTs")
 				return
@@ -65,7 +65,7 @@ func (z *KeyAndWindowStartTs) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.WindowStartTs)
+	err = en.WriteInt64(z.WindowStartTs)
 	if err != nil {
 		err = msgp.WrapError(err, "WindowStartTs")
 		return
@@ -82,7 +82,7 @@ func (z *KeyAndWindowStartTs) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendBytes(o, z.Key)
 	// string "ts"
 	o = append(o, 0xa2, 0x74, 0x73)
-	o = msgp.AppendUint64(o, z.WindowStartTs)
+	o = msgp.AppendInt64(o, z.WindowStartTs)
 	return
 }
 
@@ -111,7 +111,7 @@ func (z *KeyAndWindowStartTs) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "ts":
-			z.WindowStartTs, bts, err = msgp.ReadUint64Bytes(bts)
+			z.WindowStartTs, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "WindowStartTs")
 				return
@@ -130,6 +130,6 @@ func (z *KeyAndWindowStartTs) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *KeyAndWindowStartTs) Msgsize() (s int) {
-	s = 1 + 2 + msgp.BytesPrefixSize + len(z.Key) + 3 + msgp.Uint64Size
+	s = 1 + 2 + msgp.BytesPrefixSize + len(z.Key) + 3 + msgp.Int64Size
 	return
 }

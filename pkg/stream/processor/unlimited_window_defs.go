@@ -18,10 +18,10 @@ var (
 )
 
 type UnlimitedWindows struct {
-	startMs uint64
+	startMs int64
 }
 
-func NewUnlimitedWindows(startMs uint64) *UnlimitedWindows {
+func NewUnlimitedWindows(startMs int64) *UnlimitedWindows {
 	return &UnlimitedWindows{
 		startMs: startMs,
 	}
@@ -39,20 +39,20 @@ func NewUnlimitedWindowsStartOn(start time.Time) *UnlimitedWindows {
 		log.Fatal().Msg("start time (ms) cannot be negative")
 	}
 	return &UnlimitedWindows{
-		startMs: uint64(startMs),
+		startMs: startMs,
 	}
 }
 
-func (w *UnlimitedWindows) MaxSize() uint64 {
-	return math.MaxUint64
+func (w *UnlimitedWindows) MaxSize() int64 {
+	return math.MaxInt64
 }
 
-func (w *UnlimitedWindows) GracePeriodMs() uint64 {
+func (w *UnlimitedWindows) GracePeriodMs() int64 {
 	return 0
 }
 
-func (w *UnlimitedWindows) WindowsFor(timestamp uint64) (map[uint64]commtypes.Window, error) {
-	windows := make(map[uint64]commtypes.Window)
+func (w *UnlimitedWindows) WindowsFor(timestamp int64) (map[int64]commtypes.Window, error) {
+	windows := make(map[int64]commtypes.Window)
 	if timestamp >= w.startMs {
 		windows[w.startMs] = NewUnlimitedWindow(w.startMs)
 	}

@@ -25,13 +25,13 @@ func (z *BaseWindow) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "startTs":
-			z.StartTs, err = dc.ReadUint64()
+			z.StartTs, err = dc.ReadInt64()
 			if err != nil {
 				err = msgp.WrapError(err, "StartTs")
 				return
 			}
 		case "endTs":
-			z.EndTs, err = dc.ReadUint64()
+			z.EndTs, err = dc.ReadInt64()
 			if err != nil {
 				err = msgp.WrapError(err, "EndTs")
 				return
@@ -55,7 +55,7 @@ func (z BaseWindow) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.StartTs)
+	err = en.WriteInt64(z.StartTs)
 	if err != nil {
 		err = msgp.WrapError(err, "StartTs")
 		return
@@ -65,7 +65,7 @@ func (z BaseWindow) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.EndTs)
+	err = en.WriteInt64(z.EndTs)
 	if err != nil {
 		err = msgp.WrapError(err, "EndTs")
 		return
@@ -79,10 +79,10 @@ func (z BaseWindow) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 2
 	// string "startTs"
 	o = append(o, 0x82, 0xa7, 0x73, 0x74, 0x61, 0x72, 0x74, 0x54, 0x73)
-	o = msgp.AppendUint64(o, z.StartTs)
+	o = msgp.AppendInt64(o, z.StartTs)
 	// string "endTs"
 	o = append(o, 0xa5, 0x65, 0x6e, 0x64, 0x54, 0x73)
-	o = msgp.AppendUint64(o, z.EndTs)
+	o = msgp.AppendInt64(o, z.EndTs)
 	return
 }
 
@@ -105,13 +105,13 @@ func (z *BaseWindow) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "startTs":
-			z.StartTs, bts, err = msgp.ReadUint64Bytes(bts)
+			z.StartTs, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "StartTs")
 				return
 			}
 		case "endTs":
-			z.EndTs, bts, err = msgp.ReadUint64Bytes(bts)
+			z.EndTs, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "EndTs")
 				return
@@ -130,6 +130,6 @@ func (z *BaseWindow) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z BaseWindow) Msgsize() (s int) {
-	s = 1 + 8 + msgp.Uint64Size + 6 + msgp.Uint64Size
+	s = 1 + 8 + msgp.Int64Size + 6 + msgp.Int64Size
 	return
 }

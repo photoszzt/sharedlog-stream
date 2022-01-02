@@ -6,7 +6,7 @@ import "encoding/json"
 
 type KeyAndWindowStartTs struct {
 	Key           []byte `msg:"k" json:"k"`
-	WindowStartTs uint64 `msg:"ts" json:"ts"`
+	WindowStartTs int64  `msg:"ts" json:"ts"`
 }
 
 type KeyAndWindowStartTsJSONSerde struct{}

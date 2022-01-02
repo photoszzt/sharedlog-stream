@@ -16,7 +16,7 @@ type InMemoryWindowStoreWithChangelog struct {
 
 var _ = WindowStore(&InMemoryWindowStoreWithChangelog{})
 
-func NewInMemoryWindowStoreWithChangelog(retensionPeriod uint64, windowSize uint64, mp *MaterializeParam) (*InMemoryWindowStoreWithChangelog, error) {
+func NewInMemoryWindowStoreWithChangelog(retensionPeriod int64, windowSize int64, mp *MaterializeParam) (*InMemoryWindowStoreWithChangelog, error) {
 	var ktsSerde commtypes.Serde
 	if mp.serdeFormat == commtypes.JSON {
 		ktsSerde = commtypes.KeyAndWindowStartTsJSONSerde{}
@@ -68,7 +68,7 @@ func (st *InMemoryWindowStoreWithChangelog) Name() string {
 	return st.bytesWindowStore.name
 }
 
-func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context, key KeyT, value ValueT, windowStartTimestamp uint64) error {
+func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context, key KeyT, value ValueT, windowStartTimestamp int64) error {
 	keyBytes, err := st.mp.KeySerde.Encode(key)
 	if err != nil {
 		return err
@@ -98,7 +98,7 @@ func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context, key KeyT, v
 	return err
 }
 
-func (st *InMemoryWindowStoreWithChangelog) Get(key KeyT, windowStartTimestamp uint64) (ValueT, bool, error) {
+func (st *InMemoryWindowStoreWithChangelog) Get(key KeyT, windowStartTimestamp int64) (ValueT, bool, error) {
 	keyBytes, err := st.mp.KeySerde.Encode(key)
 	if err != nil {
 		return nil, false, err
@@ -114,7 +114,7 @@ func (st *InMemoryWindowStoreWithChangelog) Get(key KeyT, windowStartTimestamp u
 	return val, ok, nil
 }
 
-func (st *InMemoryWindowStoreWithChangelog) Fetch(key KeyT, timeFrom time.Time, timeTo time.Time, iterFunc func(uint64, ValueT) error) error {
+func (st *InMemoryWindowStoreWithChangelog) Fetch(key KeyT, timeFrom time.Time, timeTo time.Time, iterFunc func(int64, ValueT) error) error {
 	keyBytes, err := st.mp.KeySerde.Encode(key)
 	if err != nil {
 		return err

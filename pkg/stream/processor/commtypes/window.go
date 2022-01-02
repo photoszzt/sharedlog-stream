@@ -14,9 +14,9 @@ var (
 
 type Window interface {
 	// returns window start in unix timestamp (ms)
-	Start() uint64
+	Start() int64
 	// returns window end in unix timestamp (ms)
-	End() uint64
+	End() int64
 	// returns window start time
 	StartTime() *time.Time
 	// returns window end time
@@ -28,11 +28,11 @@ type Window interface {
 type BaseWindow struct {
 	startT  *time.Time `json:"-" msg:"-"`
 	endT    *time.Time `json:"-" msg:"-"`
-	StartTs uint64     `json:"startTs" msg:"startTs"`
-	EndTs   uint64     `json:"endTs" msg:"endTs"`
+	StartTs int64      `json:"startTs" msg:"startTs"`
+	EndTs   int64      `json:"endTs" msg:"endTs"`
 }
 
-func NewBaseWindow(startTs uint64, endTs uint64) BaseWindow {
+func NewBaseWindow(startTs int64, endTs int64) BaseWindow {
 	startSecPart := startTs / 1000
 	startNsPart := (startTs - startSecPart*1000) * 1000000
 	startTime := time.Unix(int64(startSecPart), int64(startNsPart))
@@ -47,11 +47,11 @@ func NewBaseWindow(startTs uint64, endTs uint64) BaseWindow {
 	}
 }
 
-func (w *BaseWindow) Start() uint64 {
+func (w *BaseWindow) Start() int64 {
 	return w.StartTs
 }
 
-func (w *BaseWindow) End() uint64 {
+func (w *BaseWindow) End() int64 {
 	return w.EndTs
 }
 

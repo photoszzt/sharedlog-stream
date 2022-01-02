@@ -49,7 +49,7 @@ func (p *Q7TransformProcessor) ProcessAndReturn(ctx context.Context, msg commtyp
 	key := msg.Key.(uint64)
 	event := msg.Value.(*ntypes.Event)
 	result := make([]commtypes.Message, 0, 128)
-	err := p.windowStore.Fetch(key, time.UnixMilli((event.Bid.DateTime - 10*1000)), time.UnixMilli(event.Bid.DateTime), func(u uint64, vt store.ValueT) error {
+	err := p.windowStore.Fetch(key, time.UnixMilli((event.Bid.DateTime - 10*1000)), time.UnixMilli(event.Bid.DateTime), func(u int64, vt store.ValueT) error {
 		val := vt.(commtypes.ValueTimestamp).Value.(ntypes.PriceTime)
 		if event.Bid.Price == val.Price {
 			result = append(result, commtypes.Message{Key: key, Value: ntypes.BidAndMax{

@@ -11,8 +11,8 @@ import (
 )
 
 type StartEndTime struct {
-	StartTime uint64 `json:"startTime" msg:"startTime"`
-	EndTime   uint64 `json:"endTime" msg:"endTime"`
+	StartTime int64 `json:"startTime" msg:"startTime"`
+	EndTime   int64 `json:"endTime" msg:"endTime"`
 }
 
 func (se StartEndTime) String() string {

@@ -25,13 +25,13 @@ func (z *StartEndTime) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "startTime":
-			z.StartTime, err = dc.ReadUint64()
+			z.StartTime, err = dc.ReadInt64()
 			if err != nil {
 				err = msgp.WrapError(err, "StartTime")
 				return
 			}
 		case "endTime":
-			z.EndTime, err = dc.ReadUint64()
+			z.EndTime, err = dc.ReadInt64()
 			if err != nil {
 				err = msgp.WrapError(err, "EndTime")
 				return
@@ -55,7 +55,7 @@ func (z StartEndTime) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.StartTime)
+	err = en.WriteInt64(z.StartTime)
 	if err != nil {
 		err = msgp.WrapError(err, "StartTime")
 		return
@@ -65,7 +65,7 @@ func (z StartEndTime) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.EndTime)
+	err = en.WriteInt64(z.EndTime)
 	if err != nil {
 		err = msgp.WrapError(err, "EndTime")
 		return
@@ -79,10 +79,10 @@ func (z StartEndTime) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 2
 	// string "startTime"
 	o = append(o, 0x82, 0xa9, 0x73, 0x74, 0x61, 0x72, 0x74, 0x54, 0x69, 0x6d, 0x65)
-	o = msgp.AppendUint64(o, z.StartTime)
+	o = msgp.AppendInt64(o, z.StartTime)
 	// string "endTime"
 	o = append(o, 0xa7, 0x65, 0x6e, 0x64, 0x54, 0x69, 0x6d, 0x65)
-	o = msgp.AppendUint64(o, z.EndTime)
+	o = msgp.AppendInt64(o, z.EndTime)
 	return
 }
 
@@ -105,13 +105,13 @@ func (z *StartEndTime) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "startTime":
-			z.StartTime, bts, err = msgp.ReadUint64Bytes(bts)
+			z.StartTime, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "StartTime")
 				return
 			}
 		case "endTime":
-			z.EndTime, bts, err = msgp.ReadUint64Bytes(bts)
+			z.EndTime, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "EndTime")
 				return
@@ -130,6 +130,6 @@ func (z *StartEndTime) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z StartEndTime) Msgsize() (s int) {
-	s = 1 + 10 + msgp.Uint64Size + 8 + msgp.Uint64Size
+	s = 1 + 10 + msgp.Int64Size + 8 + msgp.Int64Size
 	return
 }

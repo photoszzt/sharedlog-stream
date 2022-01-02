@@ -23,21 +23,21 @@ type EnumerableWindowDefinition interface {
 	 * @param timestamp the timestamp window should get created for
 	 * @return a map of windowStartTimestamp -> Window entries
 	 */
-	WindowsFor(timestamp uint64) (map[uint64]commtypes.Window, error)
+	WindowsFor(timestamp int64) (map[int64]commtypes.Window, error)
 	/**
 	 * Return an upper bound on the size of windows in milliseconds.
 	 * Used to determine the lower bound on store retention time.
 	 *
 	 * @return the maximum size of the specified windows
 	 */
-	MaxSize() uint64
+	MaxSize() int64
 	/**
 	 * Return the window grace period (the time to admit
 	 * out-of-order events after the end of the window.)
 	 *
 	 * Delay is defined as (stream_time - record_timestamp).
 	 */
-	GracePeriodMs() uint64
+	GracePeriodMs() int64
 }
 
 var (

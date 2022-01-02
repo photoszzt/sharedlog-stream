@@ -6,12 +6,12 @@ import "encoding/json"
 
 type ValueTimestamp struct {
 	Value     interface{}
-	Timestamp uint64
+	Timestamp int64
 }
 
 type ValueTimestampSerialized struct {
 	ValueSerialized []byte `json:"vs" msg:"vs"`
-	Timestamp       uint64 `json:"ts" msg:"ts"`
+	Timestamp       int64  `json:"ts" msg:"ts"`
 }
 
 type ValueTimestampJSONSerde struct {

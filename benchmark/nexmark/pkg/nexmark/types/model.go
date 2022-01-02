@@ -6,6 +6,7 @@ package types
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 )
@@ -130,4 +131,17 @@ func (ejd EventJSONSerde) Decode(value []byte) (interface{}, error) {
 		return nil, err
 	}
 	return e, nil
+}
+
+func (e *Event) ExtractStreamTime() (int64, error) {
+	switch e.Etype {
+	case PERSON:
+		return e.NewPerson.DateTime, nil
+	case BID:
+		return e.Bid.DateTime, nil
+	case AUCTION:
+		return e.NewAuction.DateTime, nil
+	default:
+		return 0, fmt.Errorf("failed to recognize event type")
+	}
 }

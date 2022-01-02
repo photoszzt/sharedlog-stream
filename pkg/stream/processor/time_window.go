@@ -19,7 +19,7 @@ var (
 	notATimeWindow = xerrors.New("The window is not a TimeWindow")
 )
 
-func NewTimeWindow(startMs uint64, endMs uint64) (*TimeWindow, error) {
+func NewTimeWindow(startMs int64, endMs int64) (*TimeWindow, error) {
 	if startMs == endMs {
 		return nil, commtypes.WindowEndNotLargerStart
 	}

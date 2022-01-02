@@ -17,9 +17,9 @@ type UnlimitedWindow struct {
 	commtypes.BaseWindow
 }
 
-func NewUnlimitedWindow(startMs uint64) *UnlimitedWindow {
+func NewUnlimitedWindow(startMs int64) *UnlimitedWindow {
 	return &UnlimitedWindow{
-		commtypes.NewBaseWindow(startMs, math.MaxUint64),
+		commtypes.NewBaseWindow(startMs, math.MaxInt64),
 	}
 }
 

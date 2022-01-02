@@ -49,7 +49,7 @@ func (p *StreamReduceProcessor) ProcessAndReturn(ctx context.Context, msg commty
 		return nil, err
 	}
 	var newAgg interface{}
-	var newTs uint64
+	var newTs int64
 	if ok {
 		oldAggTs := val.(*commtypes.ValueTimestamp)
 		newAgg = p.reducer.Apply(oldAggTs.Value, msg.Value)

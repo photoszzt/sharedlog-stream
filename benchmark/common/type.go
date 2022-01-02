@@ -4,7 +4,7 @@ import "time"
 
 const (
 	SrcConsumeTimeout = 5 * time.Second
-	ClientRetryTimes  = 5
+	ClientRetryTimes  = 100
 )
 
 type QueryInput struct {
