@@ -78,7 +78,7 @@ func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context, key KeyT, v
 		return err
 	}
 
-	keyAndTs := commtypes.KeyAndWindowStartTs{
+	keyAndTs := &commtypes.KeyAndWindowStartTs{
 		Key:           keyBytes,
 		WindowStartTs: windowStartTimestamp,
 	}

@@ -35,8 +35,8 @@ func NewInMemoryBytesWindowStore(name string, retentionPeriod int64, windowSize 
 		open:               false,
 		observedStreamTime: 0,
 		store: concurrent_skiplist.New(concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
-			l := lhs.(uint64)
-			r := rhs.(uint64)
+			l := lhs.(int64)
+			r := rhs.(int64)
 			if l < r {
 				return -1
 			} else if l == r {
@@ -118,7 +118,7 @@ func (s *InMemoryBytesWindowStore) Fetch(key []byte, timeFrom time.Time, timeTo 
 		return nil
 	}
 
-	err := s.store.IterateRange(uint64(tsFrom), uint64(tsTo), func(ts concurrent_skiplist.KeyT, val concurrent_skiplist.ValueT) error {
+	err := s.store.IterateRange(tsFrom, tsTo, func(ts concurrent_skiplist.KeyT, val concurrent_skiplist.ValueT) error {
 		curT := ts.(int64)
 		v := val.(*concurrent_skiplist.SkipList)
 		elem := v.Get(key)

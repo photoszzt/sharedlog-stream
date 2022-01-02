@@ -98,9 +98,21 @@ func (h *q5AuctionBids) getCountAggProc(sp *common.QueryInput, msgSerde commtype
 	if err != nil {
 		return nil, fmt.Errorf("NewShardedSharedLogStream failed: %v", err)
 	}
+	var vtSerde commtypes.Serde
+	if sp.SerdeFormat == uint8(commtypes.JSON) {
+		vtSerde = commtypes.ValueTimestampJSONSerde{
+			ValJSONSerde: commtypes.Uint64Serde{},
+		}
+	} else if sp.SerdeFormat == uint8(commtypes.MSGP) {
+		vtSerde = commtypes.ValueTimestampMsgpSerde{
+			ValMsgpSerde: commtypes.Uint64Serde{},
+		}
+	} else {
+		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat)
+	}
 	countMp := &store.MaterializeParam{
 		KeySerde:   commtypes.Uint64Serde{},
-		ValueSerde: commtypes.Uint64Serde{},
+		ValueSerde: vtSerde,
 		MsgSerde:   msgSerde,
 		StoreName:  countStoreName,
 		Changelog:  changelog,
@@ -113,7 +125,7 @@ func (h *q5AuctionBids) getCountAggProc(sp *common.QueryInput, msgSerde commtype
 		return nil, err
 	}
 	countProc := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(countWindowStore,
-		processor.InitializerFunc(func() interface{} { return 0 }),
+		processor.InitializerFunc(func() interface{} { return uint64(0) }),
 		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
 			val := aggregate.(uint64)
 			return val + 1

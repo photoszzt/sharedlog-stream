@@ -75,6 +75,15 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context,
 	}
 
 	for _, msg := range gotMsgs {
+		event := msg.Msg.Value.(*ntypes.Event)
+		ts, err := event.ExtractStreamTime()
+		if err != nil {
+			return currentOffset, &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("fail to extract timestamp: %v", err),
+			}
+		}
+		msg.Msg.Timestamp = ts
 		bidMsg, err := args.bid.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
 			return currentOffset, &common.FnOutput{

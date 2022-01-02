@@ -179,7 +179,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	}
 	store := store.NewInMemoryKeyValueStoreWithChangelog(mp)
 	maxBid := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor(store, processor.InitializerFunc(func() interface{} {
-		return 0
+		return uint64(0)
 	}), processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
 		v := value.(*ntypes.AuctionIdCount)
 		agg := aggregate.(uint64)

@@ -109,6 +109,15 @@ func (h *bidKeyedByAuction) process(ctx context.Context,
 			continue
 		}
 		currentOffset = msg.LogSeqNum
+		event := msg.Msg.Value.(*ntypes.Event)
+		ts, err := event.ExtractStreamTime()
+		if err != nil {
+			return currentOffset, &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("fail to extract timestamp: %v", err),
+			}
+		}
+		msg.Msg.Timestamp = ts
 		bidMsg, err := args.filterBid.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
 			return currentOffset, &common.FnOutput{

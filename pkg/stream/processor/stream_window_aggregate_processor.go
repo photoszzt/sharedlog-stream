@@ -78,7 +78,7 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(ctx context.Context, m
 				return nil, err
 			}
 			if exists {
-				oldAggTs := val.(*commtypes.ValueTimestamp)
+				oldAggTs := val.(commtypes.ValueTimestamp)
 				oldAgg = oldAggTs.Value
 				if msg.Timestamp > oldAggTs.Timestamp {
 					newTs = msg.Timestamp
@@ -94,7 +94,7 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(ctx context.Context, m
 			if err != nil {
 				return nil, err
 			}
-			newMsgs = append(newMsgs, commtypes.Message{Key: commtypes.WindowedKey{Key: msg.Key, Window: window}, Value: newAgg, Timestamp: newTs})
+			newMsgs = append(newMsgs, commtypes.Message{Key: &commtypes.WindowedKey{Key: msg.Key, Window: window}, Value: newAgg, Timestamp: newTs})
 		} else {
 			log.Warn().Interface("key", msg.Key).
 				Interface("value", msg.Value).
