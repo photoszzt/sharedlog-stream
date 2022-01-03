@@ -26,7 +26,7 @@ func query1() {
 	if err != nil {
 		panic(err)
 	}
-	var q1conf Q1WorkloadConfig
+	var q1conf BasicWorkloadConfig
 	err = json.Unmarshal(byteVal, &q1conf)
 	if err != nil {
 		panic(err)

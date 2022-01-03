@@ -9,7 +9,7 @@ type Q5WorkloadConfig struct {
 	NumInstance               uint8  `json:"numInstance"`
 }
 
-type Q1WorkloadConfig struct {
+type BasicWorkloadConfig struct {
 	SrcOutTopic     string `json:"srcOutTopic"`
 	SinkOutTopic    string `json:"sinkOutTopic"`
 	NumSrcPartition uint8  `json:"numSrcPartition"`

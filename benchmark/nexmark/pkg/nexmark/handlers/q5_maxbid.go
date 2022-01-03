@@ -46,6 +46,7 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
 	seSerde commtypes.Serde, aucIdCountSerde commtypes.Serde,
+	aucIdCountMaxSerde commtypes.Serde,
 	msgSerde commtypes.MsgSerde,
 ) (*processor.MeteredSource, *processor.MeteredSink, error) {
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
@@ -57,7 +58,7 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	outConfig := &sharedlog_stream.StreamSinkConfig{
 		MsgEncoder:   msgSerde,
 		KeyEncoder:   seSerde,
-		ValueEncoder: aucIdCountSerde,
+		ValueEncoder: aucIdCountMaxSerde,
 	}
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
 	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
@@ -119,11 +120,13 @@ func (h *q5MaxBid) process(ctx context.Context,
 				Message: fmt.Sprintf("filteredMx err: %v", err),
 			}
 		}
-		err = args.sink.Sink(ctx, filteredMx[0], args.parNum, false)
-		if err != nil {
-			return currentOffset, &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("sink err: %v", err),
+		for _, filtered := range filteredMx {
+			err = args.sink.Sink(ctx, filtered, args.parNum, false)
+			if err != nil {
+				return currentOffset, &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("sink err: %v", err),
+				}
 			}
 		}
 	}
@@ -140,13 +143,23 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	}
 
 	var seSerde commtypes.Serde
+	var vtSerde commtypes.Serde
 	var aucIdCountSerde commtypes.Serde
+	var aucIdCountMaxSerde commtypes.Serde
 	if sp.SerdeFormat == uint8(commtypes.JSON) {
 		seSerde = ntypes.StartEndTimeJSONSerde{}
 		aucIdCountSerde = ntypes.AuctionIdCountJSONSerde{}
+		vtSerde = commtypes.ValueTimestampJSONSerde{
+			ValJSONSerde: commtypes.Uint64Serde{},
+		}
+		aucIdCountMaxSerde = ntypes.AuctionIdCntMaxJSONSerde{}
 	} else if sp.SerdeFormat == uint8(commtypes.MSGP) {
 		seSerde = ntypes.StartEndTimeMsgpSerde{}
 		aucIdCountSerde = ntypes.AuctionIdCountMsgpSerde{}
+		vtSerde = commtypes.ValueTimestampMsgpSerde{
+			ValMsgpSerde: commtypes.Uint64Serde{},
+		}
+		aucIdCountMaxSerde = ntypes.AuctionIdCntMaxMsgpSerde{}
 	} else {
 		return &common.FnOutput{
 			Success: false,
@@ -161,7 +174,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		}
 	}
 	src, sink, err := h.getSrcSink(ctx, sp,
-		input_stream, output_stream, seSerde, aucIdCountSerde, msgSerde)
+		input_stream, output_stream, seSerde, aucIdCountSerde, aucIdCountMaxSerde, msgSerde)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -171,7 +184,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	maxBidStoreName := "maxBidsKVStore"
 	mp := &store.MaterializeParam{
 		KeySerde:   seSerde,
-		ValueSerde: aucIdCountSerde,
+		ValueSerde: vtSerde,
 		MsgSerde:   msgSerde,
 		StoreName:  maxBidStoreName,
 		Changelog:  output_stream,
@@ -188,21 +201,23 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		}
 		return agg
 	})))
-	stJoin := processor.NewMeteredProcessor(processor.NewTableJoinProcessor(maxBidStoreName,
+	stJoin := processor.NewMeteredProcessor(processor.NewTableJoinProcessor(maxBidStoreName, store,
 		processor.ValueJoinerWithKeyFunc(
 			func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
 				lv := leftValue.(*ntypes.AuctionIdCount)
-				rv := rightValue.(uint64)
+				rv := rightValue.(commtypes.ValueTimestamp)
 				return &ntypes.AuctionIdCntMax{
 					AucId:  lv.AucId,
 					Count:  lv.Count,
-					MaxCnt: rv,
+					MaxCnt: rv.Value.(uint64),
 				}
 			})))
-	chooseMaxCnt := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
-		v := msg.Value.(*ntypes.AuctionIdCntMax)
-		return v.Count >= v.MaxCnt, nil
-	})))
+	chooseMaxCnt := processor.NewMeteredProcessor(
+		processor.NewStreamFilterProcessor(
+			processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
+				v := msg.Value.(*ntypes.AuctionIdCntMax)
+				return v.Count >= v.MaxCnt, nil
+			})))
 
 	procArgs := &q5MaxBidProcessArgs{
 		maxBid:        maxBid,

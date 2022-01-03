@@ -19,10 +19,11 @@ type TableJoinProcessor struct {
 
 var _ = Processor(&TableJoinProcessor{})
 
-func NewTableJoinProcessor(storeName string, joiner ValueJoinerWithKey) *TableJoinProcessor {
+func NewTableJoinProcessor(storeName string, store store.KeyValueStore, joiner ValueJoinerWithKey) *TableJoinProcessor {
 	return &TableJoinProcessor{
 		storeName: storeName,
 		joiner:    joiner,
+		store:     store,
 	}
 }
 

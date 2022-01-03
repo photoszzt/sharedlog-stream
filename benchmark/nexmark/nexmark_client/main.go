@@ -121,6 +121,8 @@ func main() {
 		windowedAvg()
 	case "q1":
 		query1()
+	case "q2":
+		query2()
 	case "q5":
 		query5()
 	case "q7":
