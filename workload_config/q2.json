@@ -1,0 +1,5 @@
+{
+    "numSrcPartition": 5,
+    "srcOutTopic": "nexmark_src",
+    "sinkOutTopic": "nexmark_q2_sink"
+}
