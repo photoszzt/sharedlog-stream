@@ -1,3 +1,4 @@
+// This function is from https://github.com/zeromicro/go-zero/blob/master/core/hash/consistenthash.go
 package hash
 
 import (
