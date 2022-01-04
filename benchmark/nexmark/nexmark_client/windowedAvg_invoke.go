@@ -76,14 +76,14 @@ func windowedAvg() {
 	}
 
 	var wg sync.WaitGroup
-	sourceOutput := make([]common.FnOutput, wconf.NumSrcPartition)
+	sourceOutput := make([]common.FnOutput, wconf.NumSrcInstance)
 	groupByOutput := make([]common.FnOutput, groupByNodeConfig.NumInstance)
 	avgOutput := make([]common.FnOutput, avgNodeConfig.NumInstance)
 
-	for i := 0; i < int(wconf.NumSrcPartition); i++ {
+	for i := 0; i < int(wconf.NumSrcInstance); i++ {
 		wg.Add(1)
 		idx := i
-		go invokeSourceFunc(client, wconf.NumSrcPartition, uint8(idx), &sourceOutput[i], &wg)
+		go invokeSourceFunc(client, wconf.NumSrcPartition, &sourceOutput[idx], &wg)
 	}
 
 	for i := 0; i < int(groupByNodeConfig.NumInstance); i++ {

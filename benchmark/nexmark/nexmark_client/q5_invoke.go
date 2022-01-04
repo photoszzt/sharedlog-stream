@@ -100,15 +100,15 @@ func query5() {
 	}
 
 	var wg sync.WaitGroup
-	sourceOutput := make([]common.FnOutput, q5conf.NumSrcPartition)
+	sourceOutput := make([]common.FnOutput, q5conf.NumSrcInstance)
 	q5BidKeyedByAuctionOutput := make([]common.FnOutput, q5BidKeyedByAuctionNodeConfig.NumInstance)
 	q5AucBidsOutput := make([]common.FnOutput, q5AucBidsNodeConfig.NumInstance)
 	q5maxBidOutput := make([]common.FnOutput, q5maxbidNodeConfig.NumInstance)
 
-	for i := 0; i < int(q5conf.NumSrcPartition); i++ {
+	for i := 0; i < int(q5conf.NumSrcInstance); i++ {
 		wg.Add(1)
 		idx := i
-		go invokeSourceFunc(client, q5conf.NumSrcPartition, uint8(idx), &sourceOutput[i], &wg)
+		go invokeSourceFunc(client, q5conf.NumSrcPartition, &sourceOutput[idx], &wg)
 	}
 
 	for i := 0; i < int(q5BidKeyedByAuctionNodeConfig.NumInstance); i++ {
@@ -133,7 +133,7 @@ func query5() {
 	}
 	wg.Wait()
 
-	for i := 0; i < int(q5conf.NumSrcPartition); i++ {
+	for i := 0; i < int(q5conf.NumSrcInstance); i++ {
 		idx := i
 		if sourceOutput[idx].Success {
 			common.ProcessThroughputLat(fmt.Sprintf("source-%d", idx),

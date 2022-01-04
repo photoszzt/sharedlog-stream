@@ -41,5 +41,4 @@ type SourceParam struct {
 	SerdeFormat     uint8  `json:"serdeFormat"`
 	NumEvents       uint32 `json:"numEvents,omitempty"`
 	NumOutPartition uint8  `json:"numOutPar,omitempty"`
-	ParNum          uint8  `json:"parNum,omitempty"`
 }

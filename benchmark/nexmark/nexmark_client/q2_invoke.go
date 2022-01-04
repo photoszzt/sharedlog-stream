@@ -62,13 +62,13 @@ func query2() {
 
 	var wg sync.WaitGroup
 
-	sourceOutput := make([]common.FnOutput, q2conf.NumSrcPartition)
+	sourceOutput := make([]common.FnOutput, q2conf.NumSrcInstance)
 	q2Output := make([]common.FnOutput, q2conf.NumSrcPartition)
 
-	for i := 0; i < int(q2conf.NumSrcPartition); i++ {
+	for i := 0; i < int(q2conf.NumSrcInstance); i++ {
 		wg.Add(1)
 		fmt.Fprintf(os.Stderr, "invoking src %d\n", i)
-		go invokeSourceFunc(client, q2conf.NumSrcPartition, uint8(i), &sourceOutput[i], &wg)
+		go invokeSourceFunc(client, q2conf.NumSrcInstance, &sourceOutput[i], &wg)
 	}
 
 	for i := 0; i < int(q2conf.NumSrcPartition); i++ {

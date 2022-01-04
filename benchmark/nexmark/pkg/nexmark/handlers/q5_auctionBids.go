@@ -184,7 +184,8 @@ func (h *q5AuctionBids) process(ctx context.Context,
 				}
 			}
 			// par := uint8(hashSe(changeKeyedMsg[0].Key.(*ntypes.StartEndTime)) % uint32(args.numOutPartition))
-			parTmp, ok := h.cHash.Get(changeKeyedMsg[0].Key.(*ntypes.StartEndTime))
+			k := changeKeyedMsg[0].Key.(*ntypes.StartEndTime)
+			parTmp, ok := h.cHash.Get(k)
 			if !ok {
 				return currentOffset, &common.FnOutput{
 					Success: false,
@@ -192,6 +193,7 @@ func (h *q5AuctionBids) process(ctx context.Context,
 				}
 			}
 			par := parTmp.(uint8)
+			// fmt.Fprintf(os.Stderr, "key is %s, output to substream %d\n", k.String(), par)
 			err = trackParFunc([]uint8{par})
 			if err != nil {
 				return currentOffset, &common.FnOutput{

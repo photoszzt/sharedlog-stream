@@ -6,6 +6,7 @@ type Q5WorkloadConfig struct {
 	AucBidsOutTopic           string `json:"aucBidsOutTopic"`
 	MaxBidsOutTopic           string `json:"maxBidsOutTopic"`
 	NumSrcPartition           uint8  `json:"numSrcPartition"`
+	NumSrcInstance            uint8  `json:"numSrcInstance"`
 	NumInstance               uint8  `json:"numInstance"`
 }
 
@@ -13,6 +14,7 @@ type BasicWorkloadConfig struct {
 	SrcOutTopic     string `json:"srcOutTopic"`
 	SinkOutTopic    string `json:"sinkOutTopic"`
 	NumSrcPartition uint8  `json:"numSrcPartition"`
+	NumSrcInstance  uint8  `json:"numSrcInstance"`
 }
 
 type Q7WorkloadConfig struct {
@@ -21,6 +23,7 @@ type Q7WorkloadConfig struct {
 	Q7TransOutTopic         string `json:"q7TransOutTopic"`
 	NumSrcPartition         uint8  `json:"numSrcPartition"`
 	NumInstance             uint8  `json:"numInstance"`
+	NumSrcInstance          uint8  `json:"numSrcInstance"`
 }
 
 type WindowedAvgConfig struct {
@@ -29,4 +32,5 @@ type WindowedAvgConfig struct {
 	AvgOutTopic     string `json:"avgOutTopic"`
 	NumSrcPartition uint8  `json:"numSrcPartition"`
 	NumInstance     uint8  `json:"numInstance"`
+	NumSrcInstance  uint8  `json:"numSrcInstance"`
 }

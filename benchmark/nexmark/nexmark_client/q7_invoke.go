@@ -80,14 +80,14 @@ func query7() {
 	}
 
 	var wg sync.WaitGroup
-	sourceOutput := make([]common.FnOutput, q7conf.NumSrcPartition)
+	sourceOutput := make([]common.FnOutput, q7conf.NumSrcInstance)
 	q7BidKeyedByPriceOutput := make([]common.FnOutput, q7BidKeyedByPriceNodeConfig.NumInstance)
 	q7TransOutput := make([]common.FnOutput, q7TransNodeConfig.NumInstance)
 
-	for i := 0; i < int(q7conf.NumSrcPartition); i++ {
+	for i := 0; i < int(q7conf.NumSrcInstance); i++ {
 		wg.Add(1)
 		idx := i
-		go invokeSourceFunc(client, q7conf.NumSrcPartition, uint8(idx), &sourceOutput[idx], &wg)
+		go invokeSourceFunc(client, q7conf.NumSrcPartition, &sourceOutput[idx], &wg)
 	}
 
 	for i := 0; i < int(q7BidKeyedByPriceNodeConfig.NumInstance); i++ {

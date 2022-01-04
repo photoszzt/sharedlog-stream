@@ -82,6 +82,8 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		}, nil
 	}
 
+	idx := 0
+
 	for {
 		if !eventGenerator.HasNext() {
 			break
@@ -117,8 +119,10 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 			}, nil
 		}
 		// fmt.Fprintf(os.Stderr, "msg: %v\n", string(msgEncoded))
+		idx += 1
+		idx = idx % int(inputConfig.NumOutPartition)
 		pushStart := time.Now()
-		_, err = stream.Push(ctx, msgEncoded, inputConfig.ParNum, false)
+		_, err = stream.Push(ctx, msgEncoded, uint8(idx), false)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,

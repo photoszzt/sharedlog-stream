@@ -1,5 +1,6 @@
 {
     "numSrcPartition": 5,
+    "numSrcInstance": 1,
     "srcOutTopic": "nexmark_src",
     "sinkOutTopic": "nexmark_q2_sink"
 }

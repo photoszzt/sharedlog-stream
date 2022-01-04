@@ -28,7 +28,7 @@ var (
 	FLAGS_commit_every    uint64
 )
 
-func invokeSourceFunc(client *http.Client, numOutPartition uint8, parNum uint8, response *common.FnOutput, wg *sync.WaitGroup) {
+func invokeSourceFunc(client *http.Client, numOutPartition uint8, response *common.FnOutput, wg *sync.WaitGroup) {
 	defer wg.Done()
 	var serdeFormat commtypes.SerdeFormat
 	if FLAGS_serdeFormat == "json" {
@@ -45,7 +45,6 @@ func invokeSourceFunc(client *http.Client, numOutPartition uint8, parNum uint8, 
 	nexmarkConfig.NextEventRate = uint32(FLAGS_tps)
 	nexmarkConfig.EventsNum = uint64(FLAGS_events_num)
 	nexmarkConfig.NumOutPartition = numOutPartition
-	nexmarkConfig.ParNum = parNum
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "source")
 	fmt.Printf("func source url is %v\n", url)
 	if err := utils.JsonPostRequest(client, url, nexmarkConfig, response); err != nil {
