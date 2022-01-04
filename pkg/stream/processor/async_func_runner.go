@@ -7,15 +7,15 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type ProcessorRunner struct {
+type AsyncFuncRunner struct {
 	group *errgroup.Group
-	proc  Processor
+	f     func(context.Context, commtypes.Message) error
 	input chan interface{}
 }
 
-func NewProcessorRunner(ctx context.Context, p Processor) *ProcessorRunner {
-	pr := &ProcessorRunner{
-		proc:  p,
+func NewAsyncFuncRunner(ctx context.Context, f func(context.Context, commtypes.Message) error) *AsyncFuncRunner {
+	pr := &AsyncFuncRunner{
+		f:     f,
 		input: make(chan interface{}),
 	}
 	g, ectx := errgroup.WithContext(ctx)
@@ -26,10 +26,10 @@ func NewProcessorRunner(ctx context.Context, p Processor) *ProcessorRunner {
 	return pr
 }
 
-func (p *ProcessorRunner) run(ctx context.Context) error {
+func (p *AsyncFuncRunner) run(ctx context.Context) error {
 	for m := range p.input {
 		msg := m.(commtypes.Message)
-		err := p.proc.Process(ctx, msg)
+		err := p.f(ctx, msg)
 		if err != nil {
 			return err
 		}
@@ -37,7 +37,7 @@ func (p *ProcessorRunner) run(ctx context.Context) error {
 	return nil
 }
 
-func (p *ProcessorRunner) Wait() error {
+func (p *AsyncFuncRunner) Wait() error {
 	close(p.input)
 	if err := p.group.Wait(); err != nil {
 		return err

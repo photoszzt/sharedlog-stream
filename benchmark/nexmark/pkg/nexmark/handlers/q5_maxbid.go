@@ -201,7 +201,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		}
 		return agg
 	})))
-	stJoin := processor.NewMeteredProcessor(processor.NewTableJoinProcessor(maxBidStoreName, store,
+	stJoin := processor.NewMeteredProcessor(processor.NewStreamTableJoinProcessor(maxBidStoreName, store,
 		processor.ValueJoinerWithKeyFunc(
 			func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
 				lv := leftValue.(*ntypes.AuctionIdCount)
