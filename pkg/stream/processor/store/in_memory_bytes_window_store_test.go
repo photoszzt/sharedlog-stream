@@ -690,3 +690,40 @@ func TestShouldGetAllNonDeletedMsgs(t *testing.T) {
 		t.Error("expected key 3 doesn't exist")
 	}
 }
+
+func TestExpiration(t *testing.T) {
+	currentTime := int64(0)
+	store := getWindowStore()
+	iSerde := commtypes.Uint32Serde{}
+	sSerde := commtypes.StringSerde{}
+
+	err := putKV(store, 1, "one", int64(currentTime), iSerde, sSerde)
+	if err != nil {
+		t.Errorf("put err: %v", err)
+	}
+	currentTime += RETENTION_PERIOD / 4
+	err = putKV(store, 1, "two", int64(currentTime), iSerde, sSerde)
+	if err != nil {
+		t.Errorf("put err: %v", err)
+	}
+
+	currentTime += RETENTION_PERIOD / 4
+	err = putKV(store, 1, "three", int64(currentTime), iSerde, sSerde)
+	if err != nil {
+		t.Errorf("put err: %v", err)
+	}
+
+	currentTime += RETENTION_PERIOD / 4
+	err = putKV(store, 1, "four", int64(currentTime), iSerde, sSerde)
+	if err != nil {
+		t.Errorf("put err: %v", err)
+	}
+
+	// increase current time to the full RETENTION_PERIOD to expire first record
+	currentTime += RETENTION_PERIOD / 4
+	err = putKV(store, 1, "five", int64(currentTime), iSerde, sSerde)
+	if err != nil {
+		t.Errorf("put err: %v", err)
+	}
+
+}
