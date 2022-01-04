@@ -109,7 +109,7 @@ func (s *InMemoryBytesWindowStore) Fetch(key []byte, timeFrom time.Time, timeTo 
 	tsFrom := timeFrom.Unix() * 1000
 	tsTo := timeTo.Unix() * 1000
 
-	minTime := int64(s.observedStreamTime) - int64(s.retentionPeriod) + 1
+	minTime := s.observedStreamTime - s.retentionPeriod + 1
 	if minTime < tsFrom {
 		minTime = tsFrom
 	}
