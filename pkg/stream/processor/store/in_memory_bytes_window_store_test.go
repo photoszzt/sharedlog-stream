@@ -726,4 +726,138 @@ func TestExpiration(t *testing.T) {
 		t.Errorf("put err: %v", err)
 	}
 
+	k := uint32(1)
+	expected := "two"
+	vBytes, ok, err := getK(store, k, RETENTION_PERIOD/4, iSerde)
+	if err != nil {
+		t.Errorf("get err: %v", err)
+	}
+	if !ok {
+		t.Errorf("expected key %d exists", 0)
+	}
+	val, err := sSerde.Decode(vBytes)
+	if err != nil {
+		t.Errorf("decode err: %v", err)
+	}
+	if val != expected {
+		t.Errorf("got unexpected val: %s, expected %s", val, expected)
+	}
+
+	expected = "three"
+	vBytes, ok, err = getK(store, k, RETENTION_PERIOD/2, iSerde)
+	if err != nil {
+		t.Errorf("get err: %v", err)
+	}
+	if !ok {
+		t.Errorf("expected key %d exists", 0)
+	}
+	val, err = sSerde.Decode(vBytes)
+	if err != nil {
+		t.Errorf("decode err: %v", err)
+	}
+	if val != expected {
+		t.Errorf("got unexpected val: %s, expected %s", val, expected)
+	}
+
+	expected = "four"
+	vBytes, ok, err = getK(store, k, 3*RETENTION_PERIOD/4, iSerde)
+	if err != nil {
+		t.Errorf("get err: %v", err)
+	}
+	if !ok {
+		t.Errorf("expected key %d exists", 0)
+	}
+	val, err = sSerde.Decode(vBytes)
+	if err != nil {
+		t.Errorf("decode err: %v", err)
+	}
+	if val != expected {
+		t.Errorf("got unexpected val: %s, expected %s", val, expected)
+	}
+
+	expected = "five"
+	vBytes, ok, err = getK(store, k, RETENTION_PERIOD, iSerde)
+	if err != nil {
+		t.Errorf("get err: %v", err)
+	}
+	if !ok {
+		t.Errorf("expected key %d exists", 0)
+	}
+	val, err = sSerde.Decode(vBytes)
+	if err != nil {
+		t.Errorf("decode err: %v", err)
+	}
+	if val != expected {
+		t.Errorf("got unexpected val: %s, expected %s", val, expected)
+	}
+
+	currentTime += RETENTION_PERIOD / 4
+	err = putKV(store, 1, "six", int64(currentTime), iSerde, sSerde)
+	if err != nil {
+		t.Errorf("put err: %v", err)
+	}
+
+	expected = "three"
+	vBytes, ok, err = getK(store, k, RETENTION_PERIOD/2, iSerde)
+	if err != nil {
+		t.Errorf("get err: %v", err)
+	}
+	if !ok {
+		t.Errorf("expected key %d exists", 0)
+	}
+	val, err = sSerde.Decode(vBytes)
+	if err != nil {
+		t.Errorf("decode err: %v", err)
+	}
+	if val != expected {
+		t.Errorf("got unexpected val: %s, expected %s", val, expected)
+	}
+
+	expected = "four"
+	vBytes, ok, err = getK(store, k, 3*RETENTION_PERIOD/4, iSerde)
+	if err != nil {
+		t.Errorf("get err: %v", err)
+	}
+	if !ok {
+		t.Errorf("expected key %d exists", 0)
+	}
+	val, err = sSerde.Decode(vBytes)
+	if err != nil {
+		t.Errorf("decode err: %v", err)
+	}
+	if val != expected {
+		t.Errorf("got unexpected val: %s, expected %s", val, expected)
+	}
+
+	expected = "five"
+	vBytes, ok, err = getK(store, k, RETENTION_PERIOD, iSerde)
+	if err != nil {
+		t.Errorf("get err: %v", err)
+	}
+	if !ok {
+		t.Errorf("expected key %d exists", 0)
+	}
+	val, err = sSerde.Decode(vBytes)
+	if err != nil {
+		t.Errorf("decode err: %v", err)
+	}
+	if val != expected {
+		t.Errorf("got unexpected val: %s, expected %s", val, expected)
+	}
+
+	expected = "six"
+	vBytes, ok, err = getK(store, k, 5*RETENTION_PERIOD/4, iSerde)
+	if err != nil {
+		t.Errorf("get err: %v", err)
+	}
+	if !ok {
+		t.Errorf("expected key %d exists", 0)
+	}
+	val, err = sSerde.Decode(vBytes)
+	if err != nil {
+		t.Errorf("decode err: %v", err)
+	}
+	if val != expected {
+		t.Errorf("got unexpected val: %s, expected %s", val, expected)
+	}
 }
