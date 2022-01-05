@@ -79,7 +79,7 @@ func query2() {
 	}
 	wg.Wait()
 
-	for i := 0; i < int(q2conf.NumSrcPartition); i++ {
+	for i := 0; i < int(q2conf.NumSrcInstance); i++ {
 		if sourceOutput[i].Success {
 			common.ProcessThroughputLat(fmt.Sprintf("source-%d", i),
 				sourceOutput[i].Latencies, sourceOutput[i].Duration)
