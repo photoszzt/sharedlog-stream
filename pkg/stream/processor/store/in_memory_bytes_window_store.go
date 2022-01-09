@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"fmt"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/concurrent_skiplist"
 	"sync"
@@ -34,6 +35,7 @@ func NewInMemoryBytesWindowStore(name string, retentionPeriod int64, windowSize 
 		retainDuplicates:   retainDuplicates,
 		open:               false,
 		observedStreamTime: 0,
+		openedTimeRange:    make(map[int64]struct{}),
 		store: concurrent_skiplist.New(concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
 			l := lhs.(int64)
 			r := rhs.(int64)
@@ -45,6 +47,7 @@ func NewInMemoryBytesWindowStore(name string, retentionPeriod int64, windowSize 
 				return 1
 			}
 		})),
+		valSerde: valSerde,
 	}
 }
 
@@ -106,8 +109,8 @@ func (s *InMemoryBytesWindowStore) Get(key []byte, windowStartTimestamp int64) (
 func (s *InMemoryBytesWindowStore) Fetch(key []byte, timeFrom time.Time, timeTo time.Time, iterFunc func(int64, ValueT) error) error {
 	s.removeExpiredSegments()
 
-	tsFrom := timeFrom.Unix() * 1000
-	tsTo := timeTo.Unix() * 1000
+	tsFrom := timeFrom.UnixMilli()
+	tsTo := timeTo.UnixMilli()
 
 	minTime := s.observedStreamTime - s.retentionPeriod + 1
 	if minTime < tsFrom {
@@ -122,23 +125,25 @@ func (s *InMemoryBytesWindowStore) Fetch(key []byte, timeFrom time.Time, timeTo 
 		curT := ts.(int64)
 		v := val.(*concurrent_skiplist.SkipList)
 		elem := v.Get(key)
-		s.otrMu.Lock()
-		s.openedTimeRange[curT] = struct{}{}
-		s.otrMu.Unlock()
+		if elem != nil {
+			s.otrMu.Lock()
+			s.openedTimeRange[curT] = struct{}{}
+			s.otrMu.Unlock()
 
-		valInByte := elem.Value().([]byte)
-		realVal, err := s.valSerde.Decode(valInByte)
-		if err != nil {
-			return err
-		}
-		err = iterFunc(curT, realVal)
-		if err != nil {
-			return err
-		}
+			valInByte := elem.Value().([]byte)
+			realVal, err := s.valSerde.Decode(valInByte)
+			if err != nil {
+				return fmt.Errorf("fail to decode valBytes: %v", err)
+			}
+			err = iterFunc(curT, realVal)
+			if err != nil {
+				return fmt.Errorf("iter func failed: %v", err)
+			}
 
-		s.otrMu.Lock()
-		delete(s.openedTimeRange, curT)
-		s.otrMu.Unlock()
+			s.otrMu.Lock()
+			delete(s.openedTimeRange, curT)
+			s.otrMu.Unlock()
+		}
 		return nil
 	})
 	return err

@@ -140,14 +140,52 @@ func (list *SkipList) getWithLockHeld(key KeyT) *Element {
 	return nil
 }
 
+func (list *SkipList) findBeginNode(key KeyT) *Element {
+	var prev *elementNode = &list.elementNode
+	var next *Element
+
+	for i := list.maxLevel - 1; i >= 0; i-- {
+		next = prev.next[i]
+
+		for next != nil && list.comparable.Compare(key, next.key) > 0 {
+			prev = &next.elementNode
+			next = next.next[i]
+		}
+	}
+
+	return next
+}
+
+func (list *SkipList) findEndNode(key KeyT) *Element {
+	var prev *elementNode = &list.elementNode
+	var next *Element
+	var curMaxWithinKey *Element
+
+	for i := list.maxLevel - 1; i >= 0; i-- {
+		next = prev.next[i]
+
+		for next != nil && list.comparable.Compare(key, next.key) > 0 {
+			curMaxWithinKey = next
+			prev = &next.elementNode
+			next = next.next[i]
+		}
+	}
+
+	if next != nil && list.comparable.Compare(next.key, key) <= 0 {
+		return next
+	}
+
+	return curMaxWithinKey
+}
+
 func (list *SkipList) IterateRange(startK KeyT, endK KeyT, iterFunc func(KeyT, ValueT) error) error {
 	list.mutex.Lock()
 	defer list.mutex.Unlock()
 
-	beg := list.getWithLockHeld(startK)
-	end := list.getWithLockHeld(endK)
+	beg := list.findBeginNode(startK)
+	end := list.findEndNode(endK)
 
-	for i := beg; i != end; i = i.Next() {
+	for i := beg; i != nil && list.comparable.Compare(i.key, end.key) <= 0; i = i.Next() {
 		err := iterFunc(i.key, i.value)
 		if err != nil {
 			return err

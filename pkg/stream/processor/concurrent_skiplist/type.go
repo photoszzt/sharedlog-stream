@@ -41,9 +41,9 @@ type elementNode struct {
 }
 
 type Element struct {
-	elementNode
 	key   KeyT
 	value ValueT
+	elementNode
 }
 
 // Key allows retrieval of the key for a given Element

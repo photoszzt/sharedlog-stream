@@ -2,7 +2,6 @@ package store
 
 import (
 	"fmt"
-	"os"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"testing"
 	"time"
@@ -15,8 +14,12 @@ const (
 )
 
 func getWindowStore() *InMemoryBytesWindowStore {
+	sSerde := commtypes.StringSerde{}
+	// vtSerde := commtypes.ValueTimestampJSONSerde{
+	// 	ValJSONSerde: sSerde,
+	// }
 	store := NewInMemoryBytesWindowStore("test1", RETENTION_PERIOD, WINDOW_SIZE, false,
-		commtypes.StringSerde{})
+		sSerde)
 	return store
 }
 
@@ -127,19 +130,13 @@ func assertFetch(store *InMemoryBytesWindowStore, k uint32, timeFrom int64, time
 	}
 	res := make(map[string]struct{})
 	err = store.Fetch(key, time.UnixMilli(timeFrom), time.UnixMilli(timeTo), func(i int64, vt ValueT) error {
-		vtTmp := vt.(commtypes.ValueTimestamp)
-		valBytes := vtTmp.Value.([]byte)
-		val, err := valSerde.Decode(valBytes)
-		if err != nil {
-			return err
-		}
-		res[val.(string)] = struct{}{}
+		val := vt.(string)
+		res[val] = struct{}{}
 		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("fail to fetch: %v", err)
 	}
-	fmt.Fprintf(os.Stderr, "res is %v\n", res)
 	return res, nil
 }
 
@@ -148,7 +145,7 @@ func TestGetAndRange(t *testing.T) {
 	store := getWindowStore()
 	err := putFirstBatch(store, startTime)
 	if err != nil {
-		t.Errorf("fail to set up window store: %v\n", err)
+		t.Fatalf("fail to set up window store: %v\n", err)
 	}
 	iSerde := commtypes.Uint32Serde{}
 	sSerde := commtypes.StringSerde{}
@@ -157,429 +154,425 @@ func TestGetAndRange(t *testing.T) {
 	expected_val := "zero"
 	key, err := iSerde.Encode(k)
 	if err != nil {
-		t.Errorf("fail to encode key: %v\n", err)
+		t.Fatalf("fail to encode key: %v\n", err)
 	}
 	v, ok := store.Get(key, startTime)
 	if !ok {
-		t.Errorf("key %d should exists\n", 0)
+		t.Fatalf("key %d should exists\n", 0)
 	}
 	val, err := sSerde.Decode(v)
 	if err != nil {
-		t.Errorf("fail to decode val: %v\n", err)
+		t.Fatalf("fail to decode val: %v\n", err)
 	}
 	if val != expected_val {
-		t.Errorf("should be %s, but got %s", expected_val, val)
+		t.Fatalf("should be %s, but got %s", expected_val, val)
 	}
 
 	k = uint32(1)
 	expected_val = "one"
 	key, err = iSerde.Encode(k)
 	if err != nil {
-		t.Errorf("fail to encode key: %v\n", err)
+		t.Fatalf("fail to encode key: %v\n", err)
 	}
 	v, ok = store.Get(key, startTime+1)
 	if !ok {
-		t.Errorf("key %d should exists\n", 0)
+		t.Fatalf("key %d should exists\n", 0)
 	}
 	val, err = sSerde.Decode(v)
 	if err != nil {
-		t.Errorf("fail to decode val: %v\n", err)
+		t.Fatalf("fail to decode val: %v\n", err)
 	}
 	if val != expected_val {
-		t.Errorf("should be %s, but got %s", expected_val, val)
+		t.Fatalf("should be %s, but got %s", expected_val, val)
 	}
 
 	k = uint32(2)
 	expected_val = "two"
 	key, err = iSerde.Encode(k)
 	if err != nil {
-		t.Errorf("fail to encode key: %v\n", err)
+		t.Fatalf("fail to encode key: %v\n", err)
 	}
 	v, ok = store.Get(key, startTime+2)
 	if !ok {
-		t.Errorf("key %d should exists\n", 0)
+		t.Fatalf("key %d should exists\n", 0)
 	}
 	val, err = sSerde.Decode(v)
 	if err != nil {
-		t.Errorf("fail to decode val: %v\n", err)
+		t.Fatalf("fail to decode val: %v\n", err)
 	}
 	if val != expected_val {
-		t.Errorf("should be %s, but got %s", expected_val, val)
+		t.Fatalf("should be %s, but got %s", expected_val, val)
 	}
 
 	k = uint32(4)
 	expected_val = "four"
 	key, err = iSerde.Encode(k)
 	if err != nil {
-		t.Errorf("fail to encode key: %v\n", err)
+		t.Fatalf("fail to encode key: %v\n", err)
 	}
 	v, ok = store.Get(key, startTime+4)
 	if !ok {
-		t.Errorf("key %d should exists\n", 0)
+		t.Fatalf("key %d should exists\n", 0)
 	}
 	val, err = sSerde.Decode(v)
 	if err != nil {
-		t.Errorf("fail to decode val: %v\n", err)
+		t.Fatalf("fail to decode val: %v\n", err)
 	}
 	if val != expected_val {
-		t.Errorf("should be %s, but got %s", expected_val, val)
+		t.Fatalf("should be %s, but got %s", expected_val, val)
 	}
 
 	k = uint32(5)
 	expected_val = "five"
 	key, err = iSerde.Encode(k)
 	if err != nil {
-		t.Errorf("fail to encode key: %v\n", err)
+		t.Fatalf("fail to encode key: %v\n", err)
 	}
 	v, ok = store.Get(key, startTime+5)
 	if !ok {
-		t.Errorf("key %d should exists\n", 0)
+		t.Fatalf("key %d should exists\n", 0)
 	}
 	val, err = sSerde.Decode(v)
 	if err != nil {
-		t.Errorf("fail to decode val: %v\n", err)
+		t.Fatalf("fail to decode val: %v\n", err)
 	}
 	if val != expected_val {
-		t.Errorf("should be %s, but got %s", expected_val, val)
+		t.Fatalf("should be %s, but got %s", expected_val, val)
 	}
 
-	/*
-		resM, err := assertFetch(store, 0, startTime-WINDOW_SIZE, startTime+WINDOW_SIZE, iSerde, sSerde)
-		if err != nil {
-			t.Errorf("fail to fetch: %v", err)
-		}
-		expected := "zero"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-	*/
+	resM, err := assertFetch(store, 0, startTime-WINDOW_SIZE, startTime+WINDOW_SIZE, iSerde, sSerde)
+	if err != nil {
+		t.Fatalf("fail to fetch: %v", err)
+	}
+	expected := "zero"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
 
 	err = putSecondBatch(store, startTime)
 	if err != nil {
-		t.Errorf("fail to put second batch")
+		t.Fatalf("fail to put second batch")
 	}
 
 	k = uint32(2)
 	expected_val = "two+1"
 	key, err = iSerde.Encode(k)
 	if err != nil {
-		t.Errorf("fail to encode key: %v\n", err)
+		t.Fatalf("fail to encode key: %v\n", err)
 	}
 	v, ok = store.Get(key, startTime+3)
 	if !ok {
-		t.Errorf("key %d should exists\n", 0)
+		t.Fatalf("key %d should exists\n", 0)
 	}
 	val, err = sSerde.Decode(v)
 	if err != nil {
-		t.Errorf("fail to decode val: %v\n", err)
+		t.Fatalf("fail to decode val: %v\n", err)
 	}
 	if val != expected_val {
-		t.Errorf("should be %s, but got %s", expected_val, val)
+		t.Fatalf("should be %s, but got %s", expected_val, val)
 	}
 
 	err = assertGet(store, 2, "two+2", startTime+4, iSerde, sSerde)
 	if err != nil {
-		t.Error(err.Error())
+		t.Fatalf("assertGet err: %v", err)
 	}
 
 	err = assertGet(store, 2, "two+3", startTime+5, iSerde, sSerde)
 	if err != nil {
-		t.Error(err.Error())
+		t.Fatalf("assertGet err: %v", err)
 	}
 
 	err = assertGet(store, 2, "two+4", startTime+6, iSerde, sSerde)
 	if err != nil {
-		t.Error(err.Error())
+		t.Fatalf("assertGet err: %v", err)
 	}
 
 	err = assertGet(store, 2, "two+5", startTime+7, iSerde, sSerde)
 	if err != nil {
-		t.Error(err.Error())
+		t.Fatalf("assertGet err: %v", err)
 	}
 
 	err = assertGet(store, 2, "two+6", startTime+8, iSerde, sSerde)
 	if err != nil {
-		t.Error(err.Error())
+		t.Fatalf("assertGet err: %v", err)
 	}
 
 	// TODO: fetch is broken
-	/*
-		resM, err := assertFetch(store, 2, startTime-2-WINDOW_SIZE, startTime+2+WINDOW_SIZE, iSerde, sSerde)
-		if err != nil {
-			t.Error(err.Error())
-		}
-		if len(resM) != 0 {
-			t.Errorf("expected empty list but got %v", resM)
-		}
+	resM, err = assertFetch(store, 2, startTime-2-WINDOW_SIZE, startTime-2+WINDOW_SIZE, iSerde, sSerde)
+	if err != nil {
+		t.Fatalf("assertFetch err: %v", err)
+	}
+	if len(resM) != 0 {
+		t.Fatalf("expected empty list but got %v", resM)
+	}
 
-		resM, err = assertFetch(store, 2, startTime-1-WINDOW_SIZE, startTime+1+WINDOW_SIZE, iSerde, sSerde)
-		if err != nil {
-			t.Error(err.Error())
-		}
-		if _, ok := resM["two"]; !ok {
-			t.Errorf("expected list contains two but got %v", resM)
-		}
+	resM, err = assertFetch(store, 2, startTime-1-WINDOW_SIZE, startTime-1+WINDOW_SIZE, iSerde, sSerde)
+	if err != nil {
+		t.Fatalf("assertFetch err: %v", err)
+	}
+	if _, ok := resM["two"]; !ok {
+		t.Fatalf("expected list contains two but got %v", resM)
+	}
 
-		resM, err = assertFetch(store, 2, startTime-WINDOW_SIZE, startTime+WINDOW_SIZE, iSerde, sSerde)
-		if err != nil {
-			t.Error(err.Error())
-		}
-		expected := "two"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+1"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
+	resM, err = assertFetch(store, 2, startTime-WINDOW_SIZE, startTime+WINDOW_SIZE, iSerde, sSerde)
+	if err != nil {
+		t.Fatalf("assertFetch err: %v", err)
+	}
+	expected = "two"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+1"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
 
-		resM, err = assertFetch(store, 2, startTime+1-WINDOW_SIZE, startTime+1+WINDOW_SIZE, iSerde, sSerde)
-		if err != nil {
-			t.Error(err.Error())
-		}
-		expected = "two"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+1"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+2"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
+	resM, err = assertFetch(store, 2, startTime+1-WINDOW_SIZE, startTime+1+WINDOW_SIZE, iSerde, sSerde)
+	if err != nil {
+		t.Fatalf("assertFetch err: %v", err)
+	}
+	expected = "two"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+1"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+2"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
 
-		resM, err = assertFetch(store, 2, startTime+2-WINDOW_SIZE, startTime+2+WINDOW_SIZE, iSerde, sSerde)
-		if err != nil {
-			t.Error(err.Error())
-		}
-		expected = "two"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+1"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+2"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+3"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
+	resM, err = assertFetch(store, 2, startTime+2-WINDOW_SIZE, startTime+2+WINDOW_SIZE, iSerde, sSerde)
+	if err != nil {
+		t.Fatalf("assertFetch err: %v", err)
+	}
+	expected = "two"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+1"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+2"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+3"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
 
-		resM, err = assertFetch(store, 2, startTime+3-WINDOW_SIZE, startTime+3+WINDOW_SIZE, iSerde, sSerde)
-		if err != nil {
-			t.Error(err.Error())
-		}
-		expected = "two"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+1"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+2"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+3"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+4"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
+	resM, err = assertFetch(store, 2, startTime+3-WINDOW_SIZE, startTime+3+WINDOW_SIZE, iSerde, sSerde)
+	if err != nil {
+		t.Fatalf("assertFetch err: %v", err)
+	}
+	expected = "two"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+1"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+2"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+3"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+4"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
 
-		resM, err = assertFetch(store, 2, startTime+4-WINDOW_SIZE, startTime+4+WINDOW_SIZE, iSerde, sSerde)
-		if err != nil {
-			t.Error(err.Error())
-		}
-		expected = "two"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+1"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+2"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+3"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+4"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+5"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
+	resM, err = assertFetch(store, 2, startTime+4-WINDOW_SIZE, startTime+4+WINDOW_SIZE, iSerde, sSerde)
+	if err != nil {
+		t.Fatalf("assertFetch err: %v", err)
+	}
+	expected = "two"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+1"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+2"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+3"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+4"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+5"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
 
-		resM, err = assertFetch(store, 2, startTime+5-WINDOW_SIZE, startTime+5+WINDOW_SIZE, iSerde, sSerde)
-		if err != nil {
-			t.Error(err.Error())
-		}
-		expected = "two"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+1"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+2"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+3"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+4"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+5"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+6"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
+	resM, err = assertFetch(store, 2, startTime+5-WINDOW_SIZE, startTime+5+WINDOW_SIZE, iSerde, sSerde)
+	if err != nil {
+		t.Fatalf("assertFetch err: %v", err)
+	}
+	expected = "two"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+1"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+2"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+3"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+4"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+5"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+6"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
 
-		resM, err = assertFetch(store, 2, startTime+6-WINDOW_SIZE, startTime+6+WINDOW_SIZE, iSerde, sSerde)
-		if err != nil {
-			t.Error(err.Error())
-		}
-		expected = "two+1"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+2"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+3"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+4"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+5"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+6"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
+	resM, err = assertFetch(store, 2, startTime+6-WINDOW_SIZE, startTime+6+WINDOW_SIZE, iSerde, sSerde)
+	if err != nil {
+		t.Fatalf("assertFetch err: %v", err)
+	}
+	expected = "two+1"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+2"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+3"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+4"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+5"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+6"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
 
-		resM, err = assertFetch(store, 2, startTime+7-WINDOW_SIZE, startTime+7+WINDOW_SIZE, iSerde, sSerde)
-		if err != nil {
-			t.Error(err.Error())
-		}
-		expected = "two+2"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+3"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+4"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+5"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+6"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
+	resM, err = assertFetch(store, 2, startTime+7-WINDOW_SIZE, startTime+7+WINDOW_SIZE, iSerde, sSerde)
+	if err != nil {
+		t.Fatalf("assertFetch err: %v", err)
+	}
+	expected = "two+2"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+3"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+4"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+5"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+6"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
 
-		resM, err = assertFetch(store, 2, startTime+8-WINDOW_SIZE, startTime+8+WINDOW_SIZE, iSerde, sSerde)
-		if err != nil {
-			t.Error(err.Error())
-		}
-		expected = "two+3"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+4"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+5"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+6"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
+	resM, err = assertFetch(store, 2, startTime+8-WINDOW_SIZE, startTime+8+WINDOW_SIZE, iSerde, sSerde)
+	if err != nil {
+		t.Fatalf("assertFetch err: %v", err)
+	}
+	expected = "two+3"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+4"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+5"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+6"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
 
-		resM, err = assertFetch(store, 2, startTime+9-WINDOW_SIZE, startTime+9+WINDOW_SIZE, iSerde, sSerde)
-		if err != nil {
-			t.Error(err.Error())
-		}
-		expected = "two+4"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+5"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+6"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
+	resM, err = assertFetch(store, 2, startTime+9-WINDOW_SIZE, startTime+9+WINDOW_SIZE, iSerde, sSerde)
+	if err != nil {
+		t.Fatalf("assertFetch err: %v", err)
+	}
+	expected = "two+4"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+5"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+6"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
 
-		resM, err = assertFetch(store, 2, startTime+10-WINDOW_SIZE, startTime+10+WINDOW_SIZE, iSerde, sSerde)
-		if err != nil {
-			t.Error(err.Error())
-		}
-		expected = "two+5"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
-		expected = "two+6"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
+	resM, err = assertFetch(store, 2, startTime+10-WINDOW_SIZE, startTime+10+WINDOW_SIZE, iSerde, sSerde)
+	if err != nil {
+		t.Fatalf("assertFetch err: %v", err)
+	}
+	expected = "two+5"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
+	expected = "two+6"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
 
-		resM, err = assertFetch(store, 2, startTime+11-WINDOW_SIZE, startTime+11+WINDOW_SIZE, iSerde, sSerde)
-		if err != nil {
-			t.Error(err.Error())
-		}
-		expected = "two+6"
-		if _, ok := resM[expected]; !ok {
-			t.Errorf("expected list contains %s but got %v", expected, resM)
-		}
+	resM, err = assertFetch(store, 2, startTime+11-WINDOW_SIZE, startTime+11+WINDOW_SIZE, iSerde, sSerde)
+	if err != nil {
+		t.Fatalf("assertFetch err: %v", err)
+	}
+	expected = "two+6"
+	if _, ok := resM[expected]; !ok {
+		t.Fatalf("expected list contains %s but got %v", expected, resM)
+	}
 
-		resM, err = assertFetch(store, 2, startTime+12-WINDOW_SIZE, startTime+12+WINDOW_SIZE, iSerde, sSerde)
-		if err != nil {
-			t.Error(err.Error())
-		}
-		if len(resM) != 0 {
-			t.Errorf("expected empty list but got %v", resM)
-		}
-	*/
+	resM, err = assertFetch(store, 2, startTime+12-WINDOW_SIZE, startTime+12+WINDOW_SIZE, iSerde, sSerde)
+	if err != nil {
+		t.Fatalf("assertFetch err: %v", err)
+	}
+	if len(resM) != 0 {
+		t.Fatalf("expected empty list but got %v", resM)
+	}
 }
 
 func TestShouldGetAllNonDeletedMsgs(t *testing.T) {
@@ -590,93 +583,93 @@ func TestShouldGetAllNonDeletedMsgs(t *testing.T) {
 
 	err := putKV(store, 0, "zero", startTime, iSerde, sSerde)
 	if err != nil {
-		t.Errorf("put err: %v", err)
+		t.Fatalf("put err: %v", err)
 	}
 
 	err = putKV(store, 1, "one", startTime+1, iSerde, sSerde)
 	if err != nil {
-		t.Errorf("put err: %v", err)
+		t.Fatalf("put err: %v", err)
 	}
 
 	err = putKV(store, 2, "two", startTime+2, iSerde, sSerde)
 	if err != nil {
-		t.Errorf("put err: %v", err)
+		t.Fatalf("put err: %v", err)
 	}
 
 	err = putKV(store, 3, "three", startTime+3, iSerde, sSerde)
 	if err != nil {
-		t.Errorf("put err: %v", err)
+		t.Fatalf("put err: %v", err)
 	}
 
 	err = putKV(store, 4, "four", startTime+4, iSerde, sSerde)
 	if err != nil {
-		t.Errorf("put err: %v", err)
+		t.Fatalf("put err: %v", err)
 	}
 
 	err = putNil(store, 1, startTime+1, iSerde)
 	if err != nil {
-		t.Errorf("put err: %v", err)
+		t.Fatalf("put err: %v", err)
 	}
 
 	err = putNil(store, 3, startTime+3, iSerde)
 	if err != nil {
-		t.Errorf("put err: %v", err)
+		t.Fatalf("put err: %v", err)
 	}
 
 	k := uint32(0)
 	expected := "zero"
 	vBytes, ok, err := getK(store, k, startTime, iSerde)
 	if err != nil {
-		t.Errorf("get err: %v", err)
+		t.Fatalf("get err: %v", err)
 	}
 	if !ok {
-		t.Errorf("expected key %d exists", 0)
+		t.Fatalf("expected key %d exists", 0)
 	}
 	val, err := sSerde.Decode(vBytes)
 	if err != nil {
-		t.Errorf("decode err: %v", err)
+		t.Fatalf("decode err: %v", err)
 	}
 	if val != expected {
-		t.Errorf("got unexpected val: %s, expected %s", val, expected)
+		t.Fatalf("got unexpected val: %s, expected %s", val, expected)
 	}
 
 	k = 2
 	expected = "two"
 	vBytes, ok, err = getK(store, k, startTime+2, iSerde)
 	if err != nil {
-		t.Errorf("get err: %v", err)
+		t.Fatalf("get err: %v", err)
 	}
 	if !ok {
-		t.Errorf("expected key %d exists", 0)
+		t.Fatalf("expected key %d exists", 0)
 	}
 	val, err = sSerde.Decode(vBytes)
 	if err != nil {
-		t.Errorf("decode err: %v", err)
+		t.Fatalf("decode err: %v", err)
 	}
 	if val != expected {
-		t.Errorf("got unexpected val: %s, expected %s", val, expected)
+		t.Fatalf("got unexpected val: %s, expected %s", val, expected)
 	}
 
 	k = 4
 	expected = "four"
 	vBytes, ok, err = getK(store, k, startTime+4, iSerde)
 	if err != nil {
-		t.Errorf("get err: %v", err)
+		t.Fatalf("get err: %v", err)
 	}
 	if !ok {
-		t.Errorf("expected key %d exists", 0)
+		t.Fatalf("expected key %d exists", 0)
 	}
 	val, err = sSerde.Decode(vBytes)
 	if err != nil {
-		t.Errorf("decode err: %v", err)
+		t.Fatalf("decode err: %v", err)
 	}
 	if val != expected {
-		t.Errorf("got unexpected val: %s, expected %s", val, expected)
+		t.Fatalf("got unexpected val: %s, expected %s", val, expected)
 	}
 
 	vBytes, _, err = getK(store, 1, startTime+1, iSerde)
 	if err != nil {
-		t.Errorf("get err: %v", err)
+		t.Fatalf("get err: %v", err)
 	}
 	if vBytes != nil {
 		t.Error("expected key 1 doesn't exist")
@@ -684,7 +677,7 @@ func TestShouldGetAllNonDeletedMsgs(t *testing.T) {
 
 	vBytes, _, err = getK(store, 3, startTime+3, iSerde)
 	if err != nil {
-		t.Errorf("get err: %v", err)
+		t.Fatalf("get err: %v", err)
 	}
 	if vBytes != nil {
 		t.Error("expected key 3 doesn't exist")
@@ -699,165 +692,165 @@ func TestExpiration(t *testing.T) {
 
 	err := putKV(store, 1, "one", int64(currentTime), iSerde, sSerde)
 	if err != nil {
-		t.Errorf("put err: %v", err)
+		t.Fatalf("put err: %v", err)
 	}
 	currentTime += RETENTION_PERIOD / 4
 	err = putKV(store, 1, "two", int64(currentTime), iSerde, sSerde)
 	if err != nil {
-		t.Errorf("put err: %v", err)
+		t.Fatalf("put err: %v", err)
 	}
 
 	currentTime += RETENTION_PERIOD / 4
 	err = putKV(store, 1, "three", int64(currentTime), iSerde, sSerde)
 	if err != nil {
-		t.Errorf("put err: %v", err)
+		t.Fatalf("put err: %v", err)
 	}
 
 	currentTime += RETENTION_PERIOD / 4
 	err = putKV(store, 1, "four", int64(currentTime), iSerde, sSerde)
 	if err != nil {
-		t.Errorf("put err: %v", err)
+		t.Fatalf("put err: %v", err)
 	}
 
 	// increase current time to the full RETENTION_PERIOD to expire first record
 	currentTime += RETENTION_PERIOD / 4
 	err = putKV(store, 1, "five", int64(currentTime), iSerde, sSerde)
 	if err != nil {
-		t.Errorf("put err: %v", err)
+		t.Fatalf("put err: %v", err)
 	}
 
 	k := uint32(1)
 	expected := "two"
 	vBytes, ok, err := getK(store, k, RETENTION_PERIOD/4, iSerde)
 	if err != nil {
-		t.Errorf("get err: %v", err)
+		t.Fatalf("get err: %v", err)
 	}
 	if !ok {
-		t.Errorf("expected key %d exists", 0)
+		t.Fatalf("expected key %d exists", 0)
 	}
 	val, err := sSerde.Decode(vBytes)
 	if err != nil {
-		t.Errorf("decode err: %v", err)
+		t.Fatalf("decode err: %v", err)
 	}
 	if val != expected {
-		t.Errorf("got unexpected val: %s, expected %s", val, expected)
+		t.Fatalf("got unexpected val: %s, expected %s", val, expected)
 	}
 
 	expected = "three"
 	vBytes, ok, err = getK(store, k, RETENTION_PERIOD/2, iSerde)
 	if err != nil {
-		t.Errorf("get err: %v", err)
+		t.Fatalf("get err: %v", err)
 	}
 	if !ok {
-		t.Errorf("expected key %d exists", 0)
+		t.Fatalf("expected key %d exists", 0)
 	}
 	val, err = sSerde.Decode(vBytes)
 	if err != nil {
-		t.Errorf("decode err: %v", err)
+		t.Fatalf("decode err: %v", err)
 	}
 	if val != expected {
-		t.Errorf("got unexpected val: %s, expected %s", val, expected)
+		t.Fatalf("got unexpected val: %s, expected %s", val, expected)
 	}
 
 	expected = "four"
 	vBytes, ok, err = getK(store, k, 3*RETENTION_PERIOD/4, iSerde)
 	if err != nil {
-		t.Errorf("get err: %v", err)
+		t.Fatalf("get err: %v", err)
 	}
 	if !ok {
-		t.Errorf("expected key %d exists", 0)
+		t.Fatalf("expected key %d exists", 0)
 	}
 	val, err = sSerde.Decode(vBytes)
 	if err != nil {
-		t.Errorf("decode err: %v", err)
+		t.Fatalf("decode err: %v", err)
 	}
 	if val != expected {
-		t.Errorf("got unexpected val: %s, expected %s", val, expected)
+		t.Fatalf("got unexpected val: %s, expected %s", val, expected)
 	}
 
 	expected = "five"
 	vBytes, ok, err = getK(store, k, RETENTION_PERIOD, iSerde)
 	if err != nil {
-		t.Errorf("get err: %v", err)
+		t.Fatalf("get err: %v", err)
 	}
 	if !ok {
-		t.Errorf("expected key %d exists", 0)
+		t.Fatalf("expected key %d exists", 0)
 	}
 	val, err = sSerde.Decode(vBytes)
 	if err != nil {
-		t.Errorf("decode err: %v", err)
+		t.Fatalf("decode err: %v", err)
 	}
 	if val != expected {
-		t.Errorf("got unexpected val: %s, expected %s", val, expected)
+		t.Fatalf("got unexpected val: %s, expected %s", val, expected)
 	}
 
 	currentTime += RETENTION_PERIOD / 4
 	err = putKV(store, 1, "six", int64(currentTime), iSerde, sSerde)
 	if err != nil {
-		t.Errorf("put err: %v", err)
+		t.Fatalf("put err: %v", err)
 	}
 
 	expected = "three"
 	vBytes, ok, err = getK(store, k, RETENTION_PERIOD/2, iSerde)
 	if err != nil {
-		t.Errorf("get err: %v", err)
+		t.Fatalf("get err: %v", err)
 	}
 	if !ok {
-		t.Errorf("expected key %d exists", 0)
+		t.Fatalf("expected key %d exists", 0)
 	}
 	val, err = sSerde.Decode(vBytes)
 	if err != nil {
-		t.Errorf("decode err: %v", err)
+		t.Fatalf("decode err: %v", err)
 	}
 	if val != expected {
-		t.Errorf("got unexpected val: %s, expected %s", val, expected)
+		t.Fatalf("got unexpected val: %s, expected %s", val, expected)
 	}
 
 	expected = "four"
 	vBytes, ok, err = getK(store, k, 3*RETENTION_PERIOD/4, iSerde)
 	if err != nil {
-		t.Errorf("get err: %v", err)
+		t.Fatalf("get err: %v", err)
 	}
 	if !ok {
-		t.Errorf("expected key %d exists", 0)
+		t.Fatalf("expected key %d exists", 0)
 	}
 	val, err = sSerde.Decode(vBytes)
 	if err != nil {
-		t.Errorf("decode err: %v", err)
+		t.Fatalf("decode err: %v", err)
 	}
 	if val != expected {
-		t.Errorf("got unexpected val: %s, expected %s", val, expected)
+		t.Fatalf("got unexpected val: %s, expected %s", val, expected)
 	}
 
 	expected = "five"
 	vBytes, ok, err = getK(store, k, RETENTION_PERIOD, iSerde)
 	if err != nil {
-		t.Errorf("get err: %v", err)
+		t.Fatalf("get err: %v", err)
 	}
 	if !ok {
-		t.Errorf("expected key %d exists", 0)
+		t.Fatalf("expected key %d exists", 0)
 	}
 	val, err = sSerde.Decode(vBytes)
 	if err != nil {
-		t.Errorf("decode err: %v", err)
+		t.Fatalf("decode err: %v", err)
 	}
 	if val != expected {
-		t.Errorf("got unexpected val: %s, expected %s", val, expected)
+		t.Fatalf("got unexpected val: %s, expected %s", val, expected)
 	}
 
 	expected = "six"
 	vBytes, ok, err = getK(store, k, 5*RETENTION_PERIOD/4, iSerde)
 	if err != nil {
-		t.Errorf("get err: %v", err)
+		t.Fatalf("get err: %v", err)
 	}
 	if !ok {
-		t.Errorf("expected key %d exists", 0)
+		t.Fatalf("expected key %d exists", 0)
 	}
 	val, err = sSerde.Decode(vBytes)
 	if err != nil {
-		t.Errorf("decode err: %v", err)
+		t.Fatalf("decode err: %v", err)
 	}
 	if val != expected {
-		t.Errorf("got unexpected val: %s, expected %s", val, expected)
+		t.Fatalf("got unexpected val: %s, expected %s", val, expected)
 	}
 }

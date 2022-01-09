@@ -68,7 +68,7 @@ func (ng *NexmarkGenerator) HasNext() bool {
 
 func (ng *NexmarkGenerator) NextEvent(ctx context.Context, bidUrlCache map[uint32]*ChannelUrl) (*NextEvent, error) {
 	if ng.WallclockBaseTime < 0 {
-		ng.WallclockBaseTime = time.Now().Unix() * 1000
+		ng.WallclockBaseTime = time.Now().UnixMilli()
 	}
 
 	eventTimestamp := ng.Config.TimestampForEvent(ng.Config.NextEventNumber(ng.EventsCountSoFar))

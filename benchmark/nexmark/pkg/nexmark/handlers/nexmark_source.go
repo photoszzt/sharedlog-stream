@@ -61,7 +61,7 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 			Message: fmt.Sprintf("fail to convert to nexmark configuration: %v", err),
 		}, nil
 	}
-	generatorConfig := generator.NewGeneratorConfig(nexmarkConfig, uint64(time.Now().Unix()*1000), 1, uint64(nexmarkConfig.NumEvents), 1)
+	generatorConfig := generator.NewGeneratorConfig(nexmarkConfig, uint64(time.Now().UnixMilli()), 1, uint64(nexmarkConfig.NumEvents), 1)
 	eventGenerator := generator.NewSimpleNexmarkGenerator(generatorConfig)
 	latencies := make([]int, 0, 128)
 	channel_url_cache := make(map[uint32]*generator.ChannelUrl)

@@ -62,7 +62,7 @@ func main() {
 	if err != nil {
 		log.Fatal().Msgf("Failed to convert to nexmark configuration: %s", err)
 	}
-	generatorConfig := generator.NewGeneratorConfig(nexmarkConfig, uint64(time.Now().Unix()*1000), 1, uint64(nexmarkConfig.NumEvents), 1)
+	generatorConfig := generator.NewGeneratorConfig(nexmarkConfig, uint64(time.Now().UnixMilli()), 1, uint64(nexmarkConfig.NumEvents), 1)
 	eventGenerator := generator.NewSimpleNexmarkGenerator(generatorConfig)
 	channel_url_cache := make(map[uint32]*generator.ChannelUrl)
 
