@@ -100,17 +100,6 @@ func (st *InMemoryKeyValueStore) ReverseRange(from KeyT, to KeyT) KeyValueIterat
 
 func (st *InMemoryKeyValueStore) PrefixScan(prefix interface{}, prefixKeyEncoder commtypes.Encoder) KeyValueIterator {
 	panic("not implemented")
-	/*
-		from, err := prefixKeyEncoder.Encode(prefix)
-		if err != nil {
-			log.Fatal().Err(err)
-		}
-		to, err := byte_slice_increment(from)
-		if err != nil {
-			log.Fatal().Err(err)
-		}
-		return NewInMemoryKeyValueForwardIterator(st.store, from, to)
-	*/
 }
 
 type InMemoryKeyValueForwardIterator struct {

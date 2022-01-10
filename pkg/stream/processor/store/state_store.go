@@ -1,6 +1,9 @@
 package store
 
-import "sharedlog-stream/pkg/stream/processor/commtypes"
+import (
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/concurrent_skiplist"
+)
 
 type StateStore interface {
 	Name() string
@@ -11,9 +14,10 @@ type MaterializeParam struct {
 	ValueSerde  commtypes.Serde
 	MsgSerde    commtypes.MsgSerde
 	Changelog   Stream
+	Comparable  concurrent_skiplist.Comparable
 	StoreName   string
 	ParNum      uint8
-	serdeFormat commtypes.SerdeFormat
+	SerdeFormat commtypes.SerdeFormat
 }
 
 type JoinParam struct {

@@ -9,7 +9,7 @@ import (
 )
 
 type InMemoryWindowStoreWithChangelog struct {
-	bytesWindowStore *InMemoryBytesWindowStore
+	windowStore      *InMemoryWindowStore
 	mp               *MaterializeParam
 	keyWindowTsSerde commtypes.Serde
 }
@@ -18,15 +18,15 @@ var _ = WindowStore(&InMemoryWindowStoreWithChangelog{})
 
 func NewInMemoryWindowStoreWithChangelog(retensionPeriod int64, windowSize int64, mp *MaterializeParam) (*InMemoryWindowStoreWithChangelog, error) {
 	var ktsSerde commtypes.Serde
-	if mp.serdeFormat == commtypes.JSON {
+	if mp.SerdeFormat == commtypes.JSON {
 		ktsSerde = commtypes.KeyAndWindowStartTsJSONSerde{}
-	} else if mp.serdeFormat == commtypes.MSGP {
+	} else if mp.SerdeFormat == commtypes.MSGP {
 		ktsSerde = commtypes.KeyAndWindowStartTsMsgpSerde{}
 	} else {
-		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", mp.serdeFormat)
+		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", mp.SerdeFormat)
 	}
 	return &InMemoryWindowStoreWithChangelog{
-		bytesWindowStore: NewInMemoryBytesWindowStore(mp.StoreName, retensionPeriod, windowSize, false, mp.ValueSerde),
+		windowStore:      NewInMemoryWindowStore(mp.StoreName, retensionPeriod, windowSize, false, mp.Comparable),
 		mp:               mp,
 		keyWindowTsSerde: ktsSerde,
 	}, nil
@@ -51,7 +51,7 @@ func (st *InMemoryWindowStoreWithChangelog) RestoreStateStore(ctx context.Contex
 				return err
 			}
 			keyWin := keyWinTmp.(commtypes.KeyAndWindowStartTs)
-			err = st.bytesWindowStore.Put(keyWin.Key, valBytes, keyWin.WindowStartTs)
+			err = st.windowStore.Put(keyWin.Key, valBytes, keyWin.WindowStartTs)
 			if err != nil {
 				return err
 			}
@@ -60,12 +60,12 @@ func (st *InMemoryWindowStoreWithChangelog) RestoreStateStore(ctx context.Contex
 }
 
 func (st *InMemoryWindowStoreWithChangelog) Init(ctx StoreContext) {
-	st.bytesWindowStore.Init(ctx)
+	st.windowStore.Init(ctx)
 	ctx.RegisterWindowStore(st)
 }
 
 func (st *InMemoryWindowStoreWithChangelog) Name() string {
-	return st.bytesWindowStore.name
+	return st.windowStore.name
 }
 
 func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context, key KeyT, value ValueT, windowStartTimestamp int64) error {
@@ -94,32 +94,20 @@ func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context, key KeyT, v
 	if err != nil {
 		return err
 	}
-	err = st.bytesWindowStore.Put(keyBytes, valBytes, windowStartTimestamp)
+	err = st.windowStore.Put(key, value, windowStartTimestamp)
 	return err
 }
 
 func (st *InMemoryWindowStoreWithChangelog) Get(key KeyT, windowStartTimestamp int64) (ValueT, bool, error) {
-	keyBytes, err := st.mp.KeySerde.Encode(key)
-	if err != nil {
-		return nil, false, err
-	}
-	valBytes, ok := st.bytesWindowStore.Get(keyBytes, windowStartTimestamp)
+	val, ok := st.windowStore.Get(key, windowStartTimestamp)
 	if !ok {
 		return nil, false, nil
-	}
-	val, err := st.mp.ValueSerde.Decode(valBytes)
-	if err != nil {
-		return nil, false, err
 	}
 	return val, ok, nil
 }
 
 func (st *InMemoryWindowStoreWithChangelog) Fetch(key KeyT, timeFrom time.Time, timeTo time.Time, iterFunc func(int64, ValueT) error) error {
-	keyBytes, err := st.mp.KeySerde.Encode(key)
-	if err != nil {
-		return err
-	}
-	return st.bytesWindowStore.Fetch(keyBytes, timeFrom, timeTo, iterFunc)
+	return st.windowStore.Fetch(key, timeFrom, timeTo, iterFunc)
 }
 
 func (st *InMemoryWindowStoreWithChangelog) BackwardFetch(key KeyT, timeFrom time.Time, timeTo time.Time) {

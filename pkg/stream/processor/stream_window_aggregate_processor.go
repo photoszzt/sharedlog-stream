@@ -78,7 +78,7 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(ctx context.Context, m
 				return nil, err
 			}
 			if exists {
-				oldAggTs := val.(commtypes.ValueTimestamp)
+				oldAggTs := val.(*commtypes.ValueTimestamp)
 				oldAgg = oldAggTs.Value
 				if msg.Timestamp > oldAggTs.Timestamp {
 					newTs = msg.Timestamp

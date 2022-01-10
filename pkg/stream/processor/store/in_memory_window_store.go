@@ -1,9 +1,7 @@
 package store
 
 import (
-	"bytes"
 	"fmt"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/concurrent_skiplist"
 	"sync"
 	"time"
@@ -11,12 +9,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type InMemoryBytesWindowStore struct {
+type InMemoryWindowStore struct {
 	otrMu           sync.RWMutex
 	openedTimeRange map[int64]struct{}
 
-	sctx     StoreContext
-	valSerde commtypes.Serde
+	sctx StoreContext
+	// for val comparison
+	comparable concurrent_skiplist.Comparable
 
 	store              *concurrent_skiplist.SkipList
 	name               string
@@ -27,8 +26,10 @@ type InMemoryBytesWindowStore struct {
 	open               bool
 }
 
-func NewInMemoryBytesWindowStore(name string, retentionPeriod int64, windowSize int64, retainDuplicates bool, valSerde commtypes.Serde) *InMemoryBytesWindowStore {
-	return &InMemoryBytesWindowStore{
+func NewInMemoryWindowStore(name string, retentionPeriod int64, windowSize int64, retainDuplicates bool,
+	compare concurrent_skiplist.Comparable,
+) *InMemoryWindowStore {
+	return &InMemoryWindowStore{
 		name:               name,
 		windowSize:         windowSize,
 		retentionPeriod:    retentionPeriod,
@@ -47,20 +48,20 @@ func NewInMemoryBytesWindowStore(name string, retentionPeriod int64, windowSize 
 				return 1
 			}
 		})),
-		valSerde: valSerde,
+		comparable: compare,
 	}
 }
 
-func (st *InMemoryBytesWindowStore) Init(ctx StoreContext) {
+func (st *InMemoryWindowStore) Init(ctx StoreContext) {
 	st.sctx = ctx
 	st.open = true
 }
 
-func (s *InMemoryBytesWindowStore) Name() string {
+func (s *InMemoryWindowStore) Name() string {
 	return s.name
 }
 
-func (s *InMemoryBytesWindowStore) Put(key []byte, value []byte, windowStartTimestamp int64) error {
+func (s *InMemoryWindowStore) Put(key interface{}, value interface{}, windowStartTimestamp int64) error {
 	s.removeExpiredSegments()
 	if windowStartTimestamp > s.observedStreamTime {
 		s.observedStreamTime = windowStartTimestamp
@@ -69,12 +70,7 @@ func (s *InMemoryBytesWindowStore) Put(key []byte, value []byte, windowStartTime
 		log.Warn().Msgf("Skipping record for expired segment.")
 	} else {
 		if value != nil {
-			s.store.SetIfAbsent(windowStartTimestamp,
-				concurrent_skiplist.New(concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
-					l := lhs.([]byte)
-					r := rhs.([]byte)
-					return bytes.Compare(l, r)
-				})))
+			s.store.SetIfAbsent(windowStartTimestamp, concurrent_skiplist.New(s.comparable))
 			s.store.Get(windowStartTimestamp).Value().(*concurrent_skiplist.SkipList).Set(key, value)
 		} else {
 			s.store.ComputeIfPresent(windowStartTimestamp, func(e *concurrent_skiplist.Element) {
@@ -86,7 +82,7 @@ func (s *InMemoryBytesWindowStore) Put(key []byte, value []byte, windowStartTime
 	return nil
 }
 
-func (s *InMemoryBytesWindowStore) Get(key []byte, windowStartTimestamp int64) ([]byte, bool) {
+func (s *InMemoryWindowStore) Get(key interface{}, windowStartTimestamp int64) (interface{}, bool) {
 	s.removeExpiredSegments()
 	if windowStartTimestamp <= s.observedStreamTime-s.retentionPeriod {
 		return nil, false
@@ -101,12 +97,12 @@ func (s *InMemoryBytesWindowStore) Get(key []byte, windowStartTimestamp int64) (
 		if v == nil {
 			return nil, false
 		} else {
-			return v.Value().([]byte), true
+			return v.Value(), true
 		}
 	}
 }
 
-func (s *InMemoryBytesWindowStore) Fetch(key []byte, timeFrom time.Time, timeTo time.Time, iterFunc func(int64, ValueT) error) error {
+func (s *InMemoryWindowStore) Fetch(key interface{}, timeFrom time.Time, timeTo time.Time, iterFunc func(int64, ValueT) error) error {
 	s.removeExpiredSegments()
 
 	tsFrom := timeFrom.UnixMilli()
@@ -130,12 +126,7 @@ func (s *InMemoryBytesWindowStore) Fetch(key []byte, timeFrom time.Time, timeTo 
 			s.openedTimeRange[curT] = struct{}{}
 			s.otrMu.Unlock()
 
-			valInByte := elem.Value().([]byte)
-			realVal, err := s.valSerde.Decode(valInByte)
-			if err != nil {
-				return fmt.Errorf("fail to decode valBytes: %v", err)
-			}
-			err = iterFunc(curT, realVal)
+			err := iterFunc(curT, elem.Value())
 			if err != nil {
 				return fmt.Errorf("iter func failed: %v", err)
 			}
@@ -149,27 +140,27 @@ func (s *InMemoryBytesWindowStore) Fetch(key []byte, timeFrom time.Time, timeTo 
 	return err
 }
 
-func (s *InMemoryBytesWindowStore) BackwardFetch(key []byte, timeFrom time.Time, timeTo time.Time) {
+func (s *InMemoryWindowStore) BackwardFetch(key interface{}, timeFrom time.Time, timeTo time.Time) {
 	panic("not implemented")
 }
 
-func (s *InMemoryBytesWindowStore) FetchWithKeyRange(keyFrom []byte, keyTo []byte, timeFrom time.Time, timeTo time.Time) {
+func (s *InMemoryWindowStore) FetchWithKeyRange(keyFrom interface{}, keyTo interface{}, timeFrom time.Time, timeTo time.Time) {
 	panic("not implemented")
 }
 
-func (s *InMemoryBytesWindowStore) BackwardFetchWithKeyRange(keyFrom []byte, keyTo []byte, timeFrom time.Time, timeTo time.Time) KeyValueIterator {
+func (s *InMemoryWindowStore) BackwardFetchWithKeyRange(keyFrom interface{}, keyTo interface{}, timeFrom time.Time, timeTo time.Time) KeyValueIterator {
 	panic("not implemented")
 }
 
-func (s *InMemoryBytesWindowStore) FetchAll(timeFrom time.Time, timeTo time.Time) KeyValueIterator {
+func (s *InMemoryWindowStore) FetchAll(timeFrom time.Time, timeTo time.Time) KeyValueIterator {
 	panic("not implemented")
 }
 
-func (s *InMemoryBytesWindowStore) BackwardFetchAll(timeFrom time.Time, timeTo time.Time) KeyValueIterator {
+func (s *InMemoryWindowStore) BackwardFetchAll(timeFrom time.Time, timeTo time.Time) KeyValueIterator {
 	panic("not implemented")
 }
 
-func (s *InMemoryBytesWindowStore) removeExpiredSegments() {
+func (s *InMemoryWindowStore) removeExpiredSegments() {
 	minLiveTimeTmp := int64(s.observedStreamTime) - int64(s.retentionPeriod) + 1
 	minLiveTime := int64(0)
 

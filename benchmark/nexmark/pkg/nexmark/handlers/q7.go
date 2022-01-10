@@ -13,6 +13,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/concurrent_skiplist"
 	"sharedlog-stream/pkg/stream/processor/store"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -200,6 +201,17 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		ParNum:     input.ParNum,
 		Changelog:  outputStream,
 		MsgSerde:   msgSerde,
+		Comparable: concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
+			l := lhs.(uint64)
+			r := rhs.(uint64)
+			if l < r {
+				return -1
+			} else if l == r {
+				return 0
+			} else {
+				return 1
+			}
+		}),
 	}
 	store, err := store.NewInMemoryWindowStoreWithChangelog(tw.MaxSize()+tw.GracePeriodMs(), tw.MaxSize(), mp)
 	if err != nil {

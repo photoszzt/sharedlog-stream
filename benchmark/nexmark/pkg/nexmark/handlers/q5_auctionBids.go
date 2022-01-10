@@ -12,6 +12,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/concurrent_skiplist"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"time"
 
@@ -116,6 +117,17 @@ func (h *q5AuctionBids) getCountAggProc(sp *common.QueryInput, msgSerde commtype
 		MsgSerde:   msgSerde,
 		StoreName:  countStoreName,
 		Changelog:  changelog,
+		Comparable: concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
+			l := lhs.(uint64)
+			r := rhs.(uint64)
+			if l < r {
+				return -1
+			} else if l == r {
+				return 0
+			} else {
+				return 1
+			}
+		}),
 	}
 	countWindowStore, err := store.NewInMemoryWindowStoreWithChangelog(
 		hopWindow.MaxSize()+hopWindow.GracePeriodMs(),
