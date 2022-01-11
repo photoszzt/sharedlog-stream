@@ -5,7 +5,7 @@ import (
 	"context"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/treemap"
+	"sharedlog-stream/pkg/treemap"
 
 	"github.com/rs/zerolog/log"
 )

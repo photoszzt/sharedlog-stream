@@ -1,8 +1,8 @@
 package store
 
 import (
+	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/concurrent_skiplist"
 )
 
 type StateStore interface {

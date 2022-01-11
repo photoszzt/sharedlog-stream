@@ -2,7 +2,7 @@ package store
 
 import (
 	"fmt"
-	"sharedlog-stream/pkg/stream/processor/concurrent_skiplist"
+	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sync"
 	"time"
 
