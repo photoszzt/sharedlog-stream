@@ -33,7 +33,7 @@ func query7() {
 	}
 
 	q7BidKeyedByPriceNodeConfig := &processor.ClientNodeConfig{
-		FuncName:    "q7bidkeyedbyprice",
+		FuncName:    "q7bidskeyedbyprice",
 		GatewayUrl:  FLAGS_faas_gateway,
 		NumInstance: q7conf.NumSrcPartition,
 	}
@@ -105,7 +105,7 @@ func query7() {
 	}
 	wg.Wait()
 
-	for i := 0; i < int(q7conf.NumSrcPartition); i++ {
+	for i := 0; i < int(q7conf.NumSrcInstance); i++ {
 		idx := i
 		if sourceOutput[idx].Success {
 			common.ProcessThroughputLat(fmt.Sprintf("source-%d", idx),

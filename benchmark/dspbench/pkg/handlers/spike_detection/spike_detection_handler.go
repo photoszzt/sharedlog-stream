@@ -16,7 +16,7 @@ type spikeDetectionHandler struct {
 	env types.Environment
 }
 
-func spikeDetectionPredicate(msg *commtypes.Message) (bool, error) {
+func SpikeDetectionPredicate(msg *commtypes.Message) (bool, error) {
 	valAvg := msg.Value.(ValAndAvg)
 	return math.Abs(valAvg.Val-valAvg.Avg) > SPIKE_THRESHOLD*valAvg.Avg, nil
 }

@@ -112,6 +112,15 @@ func (h *query7Handler) process(
 	}
 
 	for _, msg := range gotMsgs {
+		event := msg.Msg.Value.(*ntypes.Event)
+		ts, err := event.ExtractStreamTime()
+		if err != nil {
+			return currentOffset, &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("fail to extract timestamp: %v", err),
+			}
+		}
+		msg.Msg.Timestamp = ts
 		_, err = args.maxPriceBid.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
 			return currentOffset, &common.FnOutput{
@@ -134,11 +143,13 @@ func (h *query7Handler) process(
 					Message: err.Error(),
 				}
 			}
-			err = args.sink.Sink(ctx, filtered[0], args.parNum, false)
-			if err != nil {
-				return currentOffset, &common.FnOutput{
-					Success: false,
-					Message: err.Error(),
+			for _, fmsg := range filtered {
+				err = args.sink.Sink(ctx, fmsg, args.parNum, false)
+				if err != nil {
+					return currentOffset, &common.FnOutput{
+						Success: false,
+						Message: err.Error(),
+					}
 				}
 			}
 		}
@@ -244,7 +255,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 	transformWithStore := processor.NewMeteredProcessor(NewQ7TransformProcessor(store))
 	filterTime := processor.NewMeteredProcessor(
 		processor.NewStreamFilterProcessor(processor.PredicateFunc(func(m *commtypes.Message) (bool, error) {
-			bm := m.Value.(ntypes.BidAndMax)
+			bm := m.Value.(*ntypes.BidAndMax)
 			lb := bm.MaxDateTime - 10*1000
 			return bm.DateTime >= lb && bm.DateTime <= bm.MaxDateTime, nil
 		})))

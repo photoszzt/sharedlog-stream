@@ -1,21 +1,10 @@
 GO_FILES?=$$(find . -name '*.go' |grep -v deps)
 
-default: goimports nexmark nexmark_debug nexmark_client nexmark_genevents_kafka dspbench dspbench_debug dspbench_client wordcount_client wordcount_genevents_kafka append_read_client
+default: golangci-lint nexmark nexmark_debug nexmark_client nexmark_genevents_kafka dspbench dspbench_debug dspbench_client wordcount_client wordcount_genevents_kafka append_read_client
 
-.PHONY: staticcheck
-staticcheck:
-	@staticcheck ./...
-	@staticcheck ./... | grep -v deps ; if [ $$? -eq 1 ]; then \
-		echo ""; \
-		echo "Vet found suspicious constructs. Please check the reported constructs"; \
-		echo "and fix them if necessary before submitting the code for review."; \
-		exit 1; \
-	fi
-
-.PHONY: goimports
-goimports:
-	@go install golang.org/x/tools/cmd/goimports
-	goimports -w $(GO_FILES)
+.PHONY: golangci-lint
+golangci-lint:
+	@golangci-lint -E goimports run ./...
 
 .PHONY: nexmark
 nexmark:

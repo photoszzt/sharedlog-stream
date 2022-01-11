@@ -2,7 +2,7 @@
     "srcOutTopic": "nexmark_src",
     "bidKeyedByPriceOutTopic": "bids",
     "q7TransOutTopic": "nexmark-q7-out",
-    "numSrcPartition": 5,
+    "numSrcPartition": 4,
     "numSrcInstance": 1,
-    "numInstance": 5
+    "numInstance": 4
 }

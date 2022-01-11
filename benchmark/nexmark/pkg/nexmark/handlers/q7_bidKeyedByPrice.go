@@ -197,7 +197,7 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 		ProcessFunc: h.process,
 	}
 
-	for i := 0; i < int(input.NumOutPartition); i++ {
+	for i := uint8(0); i < input.NumOutPartition; i++ {
 		h.cHash.Add(i)
 	}
 

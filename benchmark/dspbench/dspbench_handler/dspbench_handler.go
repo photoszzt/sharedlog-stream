@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/dspbench/pkg/handlers/append_read"
-	"sharedlog-stream/benchmark/dspbench/pkg/handlers/spike_detection"
 	"sharedlog-stream/benchmark/dspbench/pkg/handlers/wordcount"
 
 	"cs.utexas.edu/zjia/faas"
@@ -29,10 +28,6 @@ func init() {
 
 func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.FuncHandler, error) {
 	switch funcName {
-	case "spikedetection":
-		return spike_detection.NewSpikeDetectionHandler(env), nil
-	case "sdsource":
-		return spike_detection.NewSpikeDetectionSource(env), nil
 	case "wcsource":
 		return wordcount.NewWordCountSource(env), nil
 	case "wordcountsplit":
