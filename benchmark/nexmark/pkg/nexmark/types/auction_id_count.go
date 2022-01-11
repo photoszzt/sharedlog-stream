@@ -10,8 +10,13 @@ import (
 )
 
 type AuctionIdCount struct {
-	AucId uint64 `json:"aucId" msg:"aucId"`
-	Count uint64 `json:"cnt" msg:"cnt"`
+	AucId     uint64 `json:"aucId,omitempty" msg:"aucId,omitempty"`
+	Count     uint64 `json:"cnt,omitempty" msg:"cnt,omitempty"`
+	TimeStamp int64  `json:"ts,omitempty" msg:"ts,omitempty"`
+}
+
+func (aic *AuctionIdCount) ExtractStreamTime() (int64, error) {
+	return aic.TimeStamp, nil
 }
 
 type AuctionIdCountJSONEncoder struct{}

@@ -36,6 +36,12 @@ func (z *AuctionIdCount) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Count")
 				return
 			}
+		case "ts":
+			z.TimeStamp, err = dc.ReadInt64()
+			if err != nil {
+				err = msgp.WrapError(err, "TimeStamp")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -49,26 +55,64 @@ func (z *AuctionIdCount) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z AuctionIdCount) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 2
-	// write "aucId"
-	err = en.Append(0x82, 0xa5, 0x61, 0x75, 0x63, 0x49, 0x64)
+	// omitempty: check for empty values
+	zb0001Len := uint32(3)
+	var zb0001Mask uint8 /* 3 bits */
+	if z.AucId == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x1
+	}
+	if z.Count == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if z.TimeStamp == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	// variable map header, size zb0001Len
+	err = en.Append(0x80 | uint8(zb0001Len))
 	if err != nil {
 		return
 	}
-	err = en.WriteUint64(z.AucId)
-	if err != nil {
-		err = msgp.WrapError(err, "AucId")
+	if zb0001Len == 0 {
 		return
 	}
-	// write "cnt"
-	err = en.Append(0xa3, 0x63, 0x6e, 0x74)
-	if err != nil {
-		return
+	if (zb0001Mask & 0x1) == 0 { // if not empty
+		// write "aucId"
+		err = en.Append(0xa5, 0x61, 0x75, 0x63, 0x49, 0x64)
+		if err != nil {
+			return
+		}
+		err = en.WriteUint64(z.AucId)
+		if err != nil {
+			err = msgp.WrapError(err, "AucId")
+			return
+		}
 	}
-	err = en.WriteUint64(z.Count)
-	if err != nil {
-		err = msgp.WrapError(err, "Count")
-		return
+	if (zb0001Mask & 0x2) == 0 { // if not empty
+		// write "cnt"
+		err = en.Append(0xa3, 0x63, 0x6e, 0x74)
+		if err != nil {
+			return
+		}
+		err = en.WriteUint64(z.Count)
+		if err != nil {
+			err = msgp.WrapError(err, "Count")
+			return
+		}
+	}
+	if (zb0001Mask & 0x4) == 0 { // if not empty
+		// write "ts"
+		err = en.Append(0xa2, 0x74, 0x73)
+		if err != nil {
+			return
+		}
+		err = en.WriteInt64(z.TimeStamp)
+		if err != nil {
+			err = msgp.WrapError(err, "TimeStamp")
+			return
+		}
 	}
 	return
 }
@@ -76,13 +120,41 @@ func (z AuctionIdCount) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z AuctionIdCount) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
-	// string "aucId"
-	o = append(o, 0x82, 0xa5, 0x61, 0x75, 0x63, 0x49, 0x64)
-	o = msgp.AppendUint64(o, z.AucId)
-	// string "cnt"
-	o = append(o, 0xa3, 0x63, 0x6e, 0x74)
-	o = msgp.AppendUint64(o, z.Count)
+	// omitempty: check for empty values
+	zb0001Len := uint32(3)
+	var zb0001Mask uint8 /* 3 bits */
+	if z.AucId == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x1
+	}
+	if z.Count == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if z.TimeStamp == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len == 0 {
+		return
+	}
+	if (zb0001Mask & 0x1) == 0 { // if not empty
+		// string "aucId"
+		o = append(o, 0xa5, 0x61, 0x75, 0x63, 0x49, 0x64)
+		o = msgp.AppendUint64(o, z.AucId)
+	}
+	if (zb0001Mask & 0x2) == 0 { // if not empty
+		// string "cnt"
+		o = append(o, 0xa3, 0x63, 0x6e, 0x74)
+		o = msgp.AppendUint64(o, z.Count)
+	}
+	if (zb0001Mask & 0x4) == 0 { // if not empty
+		// string "ts"
+		o = append(o, 0xa2, 0x74, 0x73)
+		o = msgp.AppendInt64(o, z.TimeStamp)
+	}
 	return
 }
 
@@ -116,6 +188,12 @@ func (z *AuctionIdCount) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Count")
 				return
 			}
+		case "ts":
+			z.TimeStamp, bts, err = msgp.ReadInt64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "TimeStamp")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -130,6 +208,6 @@ func (z *AuctionIdCount) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z AuctionIdCount) Msgsize() (s int) {
-	s = 1 + 6 + msgp.Uint64Size + 4 + msgp.Uint64Size
+	s = 1 + 6 + msgp.Uint64Size + 4 + msgp.Uint64Size + 3 + msgp.Int64Size
 	return
 }

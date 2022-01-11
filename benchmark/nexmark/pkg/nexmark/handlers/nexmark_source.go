@@ -104,6 +104,7 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 			fmt.Fprintf(os.Stderr, "sleep %v second to generate event\n", wtsSec-uint64(now))
 			time.Sleep(time.Duration(wtsSec-uint64(now)) * time.Second)
 		}
+		fmt.Fprintf(os.Stderr, "gen event with ts: %v\n", nextEvent.EventTimestamp)
 		encoded, err := eventEncoder.Encode(nextEvent.Event)
 		if err != nil {
 			return &common.FnOutput{

@@ -7,6 +7,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog/log"
 )
@@ -54,7 +55,8 @@ func (n *ClientNode) Invoke(client *http.Client, response *common.FnOutput, wg *
 	url := utils.BuildFunctionUrl(n.config.GatewayUrl, n.config.FuncName)
 	fmt.Fprintf(os.Stderr, "func url is %s\n", url)
 	i := 0
-	for i < common.ClientRetryTimes {
+	startTime := time.Now()
+	for {
 		if i != 0 {
 			// remove the test error on retry
 			if queryInput.TestParams != nil {
@@ -66,6 +68,12 @@ func (n *ClientNode) Invoke(client *http.Client, response *common.FnOutput, wg *
 		} else if !response.Success {
 			log.Error().Msgf("%v request failed with failed message: %v", n.config.FuncName, response.Message)
 		} else {
+			if response.Success && response.Message != "" {
+				if time.Since(startTime) >= time.Duration(queryInput.Duration)*time.Second {
+					break
+				}
+				continue
+			}
 			break
 		}
 		i += 1

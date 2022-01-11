@@ -4,15 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/concurrent_skiplist"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"time"
 
@@ -180,6 +181,15 @@ func (h *q5AuctionBids) process(ctx context.Context,
 			continue
 		}
 		currentOffset = msg.LogSeqNum
+		event := msg.Msg.Value.(*ntypes.Event)
+		ts, err := event.ExtractStreamTime()
+		if err != nil {
+			return currentOffset, &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("fail to extract timestamp: %v", err),
+			}
+		}
+		msg.Msg.Timestamp = ts
 		countMsgs, err := args.countProc.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
 			return currentOffset, &common.FnOutput{
@@ -188,6 +198,7 @@ func (h *q5AuctionBids) process(ctx context.Context,
 			}
 		}
 		for _, countMsg := range countMsgs {
+			fmt.Fprintf(os.Stderr, "count msg ts: %v, ", countMsg.Timestamp)
 			changeKeyedMsg, err := args.groupByAuction.ProcessAndReturn(ctx, countMsg)
 			if err != nil {
 				return currentOffset, &common.FnOutput{
@@ -195,6 +206,7 @@ func (h *q5AuctionBids) process(ctx context.Context,
 					Message: err.Error(),
 				}
 			}
+			fmt.Fprintf(os.Stderr, "changeKeyedMsg ts: %v\n", changeKeyedMsg[0].Timestamp)
 			// par := uint8(hashSe(changeKeyedMsg[0].Key.(*ntypes.StartEndTime)) % uint32(args.numOutPartition))
 			k := changeKeyedMsg[0].Key.(*ntypes.StartEndTime)
 			parTmp, ok := h.cHash.Get(k)
@@ -519,8 +531,9 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 				EndTime:   key.Window.End(),
 			}
 			newVal := &ntypes.AuctionIdCount{
-				AucId: key.Key.(uint64),
-				Count: value,
+				AucId:     key.Key.(uint64),
+				Count:     value,
+				TimeStamp: msg.Timestamp,
 			}
 			return commtypes.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
 		})))

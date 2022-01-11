@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -98,8 +99,18 @@ func (h *q5MaxBid) process(ctx context.Context,
 		if msg.Msg.Value == nil {
 			continue
 		}
+		aic := msg.Msg.Value.(*ntypes.AuctionIdCount)
+		ts, err := aic.ExtractStreamTime()
+		if err != nil {
+			return currentOffset, &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("fail to extract timestamp: %v", err),
+			}
+		}
+		msg.Msg.Timestamp = ts
+		fmt.Fprintf(os.Stderr, "got msg with key: %v, val: %v, ts: %v\n", msg.Msg.Key, msg.Msg.Value, msg.Msg.Timestamp)
 		currentOffset := msg.LogSeqNum
-		_, err := args.maxBid.ProcessAndReturn(ctx, msg.Msg)
+		_, err = args.maxBid.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
 			return currentOffset, &common.FnOutput{
 				Success: false,
