@@ -6,7 +6,7 @@ import (
 	"os"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
-	"sharedlog-stream/pkg/stream/processor/treemap"
+	"sharedlog-stream/pkg/treemap"
 	"testing"
 )
 
