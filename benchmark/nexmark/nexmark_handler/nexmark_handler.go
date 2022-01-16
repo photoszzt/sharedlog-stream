@@ -37,6 +37,10 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewQuery2(env), nil
 	case "query3":
 		return handlers.NewQuery3(env), nil
+	case "q3PersonsByID":
+		return handlers.NewQuery3PersonsByID(env), nil
+	case "q3AuctionsBySellerID":
+		return handlers.NewQuery3AuctionsBySellerID(env), nil
 	case "query4":
 		return handlers.NewQuery4(env), nil
 	case "query5":
@@ -55,6 +59,10 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewQ7BidKeyedByPriceHandler(env), nil
 	case "query8":
 		return handlers.NewQuery8(env), nil
+	case "q8PersonsByID":
+		return handlers.NewQ8PersonsByID(env), nil
+	case "q8AuctionsBySellerID":
+		return handlers.NewQ8AuctionsBySellerIDHandler(env), nil
 	case "windowavggroupby":
 		return handlers.NewWindowAvgGroupByHandler(env), nil
 	case "windowavgagg":

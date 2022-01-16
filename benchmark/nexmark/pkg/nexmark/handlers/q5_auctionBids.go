@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -25,14 +24,6 @@ type q5AuctionBids struct {
 	env   types.Environment
 	cHash *hash.ConsistentHash
 }
-
-/*
-func hashSe(key *ntypes.StartEndTime) uint32 {
-	h := fnv.New32a()
-	h.Write([]byte(fmt.Sprintf("%v", key)))
-	return h.Sum32()
-}
-*/
 
 func NewQ5AuctionBids(env types.Environment) *q5AuctionBids {
 	return &q5AuctionBids{
@@ -96,7 +87,7 @@ func (h *q5AuctionBids) getCountAggProc(sp *common.QueryInput, msgSerde commtype
 	hopWindow := processor.NewTimeWindowsNoGrace(time.Duration(10) * time.Second).AdvanceBy(time.Duration(2) * time.Second)
 	countStoreName := "auctionBidsCountStore"
 	changelogName := countStoreName + "-changelog"
-	changelog, err := sharedlog_stream.NewShardedSharedLogStream(h.env, changelogName, uint8(sp.NumOutPartition))
+	changelog, err := sharedlog_stream.NewShardedSharedLogStream(h.env, changelogName, 1)
 	if err != nil {
 		return nil, fmt.Errorf("NewShardedSharedLogStream failed: %v", err)
 	}
@@ -198,7 +189,7 @@ func (h *q5AuctionBids) process(ctx context.Context,
 			}
 		}
 		for _, countMsg := range countMsgs {
-			fmt.Fprintf(os.Stderr, "count msg ts: %v, ", countMsg.Timestamp)
+			// fmt.Fprintf(os.Stderr, "count msg ts: %v, ", countMsg.Timestamp)
 			changeKeyedMsg, err := args.groupByAuction.ProcessAndReturn(ctx, countMsg)
 			if err != nil {
 				return currentOffset, &common.FnOutput{
@@ -206,7 +197,7 @@ func (h *q5AuctionBids) process(ctx context.Context,
 					Message: err.Error(),
 				}
 			}
-			fmt.Fprintf(os.Stderr, "changeKeyedMsg ts: %v\n", changeKeyedMsg[0].Timestamp)
+			// fmt.Fprintf(os.Stderr, "changeKeyedMsg ts: %v\n", changeKeyedMsg[0].Timestamp)
 			// par := uint8(hashSe(changeKeyedMsg[0].Key.(*ntypes.StartEndTime)) % uint32(args.numOutPartition))
 			k := changeKeyedMsg[0].Key.(*ntypes.StartEndTime)
 			parTmp, ok := h.cHash.Get(k)
@@ -551,8 +542,8 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		ProcessFunc: h.process,
 	}
 
-	for i := 0; i < int(sp.NumOutPartition); i++ {
-		h.cHash.Add(uint8(i))
+	for i := uint8(0); i < sp.NumOutPartition; i++ {
+		h.cHash.Add(i)
 	}
 
 	if sp.EnableTransaction {

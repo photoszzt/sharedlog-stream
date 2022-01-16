@@ -1,6 +1,6 @@
 GO_FILES?=$$(find . -name '*.go' |grep -v deps)
 
-default: golangci-lint nexmark nexmark_debug nexmark_client nexmark_genevents_kafka dspbench dspbench_debug dspbench_client wordcount_client wordcount_genevents_kafka append_read_client
+default: nexmark nexmark_debug nexmark_client nexmark_genevents_kafka dspbench dspbench_debug dspbench_client wordcount_client wordcount_genevents_kafka append_read_client
 
 .PHONY: golangci-lint
 golangci-lint:

@@ -104,7 +104,7 @@ func Query8(ctx context.Context, env types.Environment, input *common.QueryInput
 				event := msg.Value.(*ntypes.Event)
 				return commtypes.Message{Key: event.NewAuction.Seller, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 			}))
-	auction.StreamStreamJoin("join-auction-persion", person,
+	auction.StreamStreamJoin("join-auction-person", person,
 		processor.ValueJoinerWithKeyFunc(func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
 			rv := rightValue.(*ntypes.Event)
 			return &ntypes.PersonTime{
