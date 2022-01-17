@@ -41,7 +41,7 @@ func windowedAvg() {
 	for i := 0; i < int(groupByNodeConfig.NumInstance); i++ {
 		groupByInputParams[i] = &common.QueryInput{
 			Duration:        uint32(FLAGS_duration),
-			InputTopicName:  wconf.SrcOutTopic,
+			InputTopicNames: []string{wconf.SrcOutTopic},
 			OutputTopicName: wconf.GroupByOutTopic,
 			SerdeFormat:     uint8(serdeFormat),
 			NumInPartition:  wconf.NumSrcPartition,
@@ -59,7 +59,7 @@ func windowedAvg() {
 	for i := 0; i < int(avgNodeConfig.NumInstance); i++ {
 		avgNodeInputParams[i] = &common.QueryInput{
 			Duration:        uint32(FLAGS_duration),
-			InputTopicName:  wconf.GroupByOutTopic,
+			InputTopicNames: []string{wconf.GroupByOutTopic},
 			OutputTopicName: wconf.AvgOutTopic,
 			SerdeFormat:     uint8(serdeFormat),
 			NumInPartition:  wconf.NumInstance,

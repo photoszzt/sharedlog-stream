@@ -41,3 +41,7 @@ func (s *MeteredSource) GetLatency() []int {
 func (s *MeteredSource) SetCursor(cursor uint64, parNum uint8) {
 	s.src.SetCursor(cursor, parNum)
 }
+
+func (s *MeteredSource) TopicName() string {
+	return s.src.TopicName()
+}

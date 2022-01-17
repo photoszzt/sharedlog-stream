@@ -6,21 +6,23 @@ import (
 	"fmt"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/treemap"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
 
 type query3JoinTableProcessorHandler struct {
-	env types.Environment
+	env           types.Environment
+	currentOffset map[string]uint64
 }
 
 func NewQuery3JoinTableProcessor(env types.Environment) types.FuncHandler {
 	return &query3JoinTableProcessorHandler{
-		env: env,
+		env:           env,
+		currentOffset: make(map[string]uint64),
 	}
 }
 
@@ -42,9 +44,8 @@ func (h *query3JoinTableProcessorHandler) Call(ctx context.Context, input []byte
 func (h *query3JoinTableProcessorHandler) process(ctx context.Context,
 	argsTmp interface{},
 	trackParFunc func([]uint8) error,
-) (uint64, *common.FnOutput) {
-	currentOffset := uint64(0)
-	return currentOffset, nil
+) (map[string]uint64, *common.FnOutput) {
+	return h.currentOffset, nil
 }
 
 func (h *query3JoinTableProcessorHandler) toAuctionsBySellerIDTable(
@@ -53,19 +54,17 @@ func (h *query3JoinTableProcessorHandler) toAuctionsBySellerIDTable(
 	msgSerde commtypes.MsgSerde,
 ) (*processor.MeteredProcessor, error) {
 	auctionsBySellerIDStoreName := "auctionsBySellerIDStore"
-	changelogName := auctionsBySellerIDStoreName + "-changelog"
-	changelog, err := sharedlog_stream.NewShardedSharedLogStream(h.env, changelogName, 1)
-	if err != nil {
-		return nil, fmt.Errorf("NewShardedSharedLogStream err: %v", err)
-	}
-	mp := &store.MaterializeParam{
-		KeySerde:   commtypes.Uint64Serde{},
-		ValueSerde: eventSerde,
-		MsgSerde:   msgSerde,
-		StoreName:  auctionsBySellerIDStoreName,
-		Changelog:  changelog,
-	}
-	auctionsBySellerIDStore := store.NewInMemoryKeyValueStoreWithChangelog(mp)
+	auctionsBySellerIDStore := store.NewInMemoryKeyValueStore(auctionsBySellerIDStoreName, func(a, b treemap.Key) int {
+		valA := a.(uint64)
+		valB := b.(uint64)
+		if valA < valB {
+			return -1
+		} else if valA == valB {
+			return 0
+		} else {
+			return 1
+		}
+	})
 	toTableProc := processor.NewMeteredProcessor(processor.NewStoreToKVTableProcessor(auctionsBySellerIDStore))
 	return toTableProc, nil
 }
@@ -76,19 +75,17 @@ func (h *query3JoinTableProcessorHandler) toPersonsByIDMapTable(
 	msgSerde commtypes.MsgSerde,
 ) (*processor.MeteredProcessor, error) {
 	personsByIDStoreName := "personsByIDStore"
-	changelogName := personsByIDStoreName + "-changelog"
-	changelog, err := sharedlog_stream.NewShardedSharedLogStream(h.env, changelogName, 1)
-	if err != nil {
-		return nil, fmt.Errorf("NewShardedSharedLogStream err: %v", err)
-	}
-	mp := &store.MaterializeParam{
-		KeySerde:   commtypes.Uint64Serde{},
-		ValueSerde: eventSerde,
-		MsgSerde:   msgSerde,
-		StoreName:  personsByIDStoreName,
-		Changelog:  changelog,
-	}
-	personsByIDStore := store.NewInMemoryKeyValueStoreWithChangelog(mp)
+	personsByIDStore := store.NewInMemoryKeyValueStore(personsByIDStoreName, func(a, b treemap.Key) int {
+		valA := a.(uint64)
+		valB := b.(uint64)
+		if valA < valB {
+			return -1
+		} else if valA == valB {
+			return 0
+		} else {
+			return 1
+		}
+	})
 	toTableProc := processor.NewMeteredProcessor(processor.NewStoreToKVTableProcessor(personsByIDStore))
 	return toTableProc, nil
 }

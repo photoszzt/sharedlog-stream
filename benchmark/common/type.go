@@ -10,7 +10,7 @@ const (
 type QueryInput struct {
 	TestParams        map[string]bool `json:"testParams,omitempty"`
 	OutputTopicName   string          `json:"outputTopicName,omitempty"`
-	InputTopicName    string          `json:"inputTopicName,omitempty"`
+	InputTopicNames   []string        `json:"inputTopicName,omitempty"`
 	CommitEveryMs     uint64          `json:"commEvery,omitempty"`
 	Duration          uint32          `json:"duration,omitempty"`
 	NumInPartition    uint8           `json:"numInPartition,omitempty"`

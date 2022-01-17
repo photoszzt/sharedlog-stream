@@ -22,12 +22,14 @@ import (
 )
 
 type query7Handler struct {
-	env types.Environment
+	env           types.Environment
+	currentOffset map[string]uint64
 }
 
 func NewQuery7(env types.Environment) types.FuncHandler {
 	return &query7Handler{
-		env: env,
+		env:           env,
+		currentOffset: make(map[string]uint64),
 	}
 }
 
@@ -94,28 +96,31 @@ func (h *query7Handler) process(
 	ctx context.Context,
 	argsTmp interface{},
 	trackParFunc func([]uint8) error,
-) (uint64, *common.FnOutput) {
+) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*processQ7ProcessArgs)
-	currentOffset := uint64(0)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {
 		if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: true,
 				Message: err.Error(),
 			}
 		}
-		return currentOffset, &common.FnOutput{
+		return h.currentOffset, &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
 	}
 
 	for _, msg := range gotMsgs {
+		if msg.Msg.Value == nil {
+			continue
+		}
+		h.currentOffset[args.src.TopicName()] = msg.LogSeqNum
 		event := msg.Msg.Value.(*ntypes.Event)
 		ts, err := event.ExtractStreamTime()
 		if err != nil {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: false,
 				Message: fmt.Sprintf("fail to extract timestamp: %v", err),
 			}
@@ -123,14 +128,14 @@ func (h *query7Handler) process(
 		msg.Msg.Timestamp = ts
 		_, err = args.maxPriceBid.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
 			}
 		}
 		transformedMsgs, err := args.transformWithStore.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
 			}
@@ -138,7 +143,7 @@ func (h *query7Handler) process(
 		for _, tmsg := range transformedMsgs {
 			filtered, err := args.filterTime.ProcessAndReturn(ctx, tmsg)
 			if err != nil {
-				return currentOffset, &common.FnOutput{
+				return h.currentOffset, &common.FnOutput{
 					Success: false,
 					Message: err.Error(),
 				}
@@ -146,7 +151,7 @@ func (h *query7Handler) process(
 			for _, fmsg := range filtered {
 				err = args.sink.Sink(ctx, fmsg, args.parNum, false)
 				if err != nil {
-					return currentOffset, &common.FnOutput{
+					return h.currentOffset, &common.FnOutput{
 						Success: false,
 						Message: err.Error(),
 					}
@@ -154,7 +159,7 @@ func (h *query7Handler) process(
 			}
 		}
 	}
-	return currentOffset, nil
+	return h.currentOffset, nil
 }
 
 func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput) *common.FnOutput {
@@ -274,13 +279,14 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 	}
 	if input.EnableTransaction {
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
-			ProcArgs:        procArgs,
-			Env:             h.env,
-			Src:             src,
-			OutputStream:    outputStream,
-			QueryInput:      input,
-			TransactionalId: fmt.Sprintf("processQ7ProcessArgs-%s-%d-%s", input.InputTopicName, input.NumInPartition, input.OutputTopicName),
-			FixedOutParNum:  input.ParNum,
+			ProcArgs:     procArgs,
+			Env:          h.env,
+			Src:          src,
+			OutputStream: outputStream,
+			QueryInput:   input,
+			TransactionalId: fmt.Sprintf("processQ7ProcessArgs-%s-%d-%s",
+				input.InputTopicNames[0], input.NumInPartition, input.OutputTopicName),
+			FixedOutParNum: input.ParNum,
 		}
 		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
 		if ret != nil && ret.Success {

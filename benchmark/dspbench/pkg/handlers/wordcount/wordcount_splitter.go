@@ -21,12 +21,14 @@ import (
 )
 
 type wordcountSplitFlatMap struct {
-	env types.Environment
+	env           types.Environment
+	currentOffset map[string]uint64
 }
 
 func NewWordCountSplitter(env types.Environment) *wordcountSplitFlatMap {
 	return &wordcountSplitFlatMap{
-		env: env,
+		env:           env,
+		currentOffset: make(map[string]uint64),
 	}
 }
 
@@ -84,18 +86,17 @@ type wordcountSplitterProcessArg struct {
 func (h *wordcountSplitFlatMap) process(ctx context.Context,
 	argsTmp interface{},
 	trackParFunc func([]uint8) error,
-) (uint64, *common.FnOutput) {
+) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*wordcountSplitterProcessArg)
-	currentOffset := uint64(0)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {
 		if xerrors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: true,
 				Message: err.Error(),
 			}
 		}
-		return currentOffset, &common.FnOutput{
+		return h.currentOffset, &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("consumed failed: %v\n", err),
 		}
@@ -104,11 +105,11 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context,
 		if msg.Msg.Value == nil {
 			continue
 		}
-		currentOffset = msg.LogSeqNum
+		h.currentOffset[args.src.TopicName()] = msg.LogSeqNum
 		splitStart := time.Now()
 		msgs, err := args.splitter(msg.Msg)
 		if err != nil {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: false,
 				Message: fmt.Sprintf("splitter failed: %v\n", err),
 			}
@@ -116,25 +117,25 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context,
 		splitLat := time.Since(splitStart)
 		args.splitLatencies = append(args.splitLatencies, int(splitLat.Microseconds()))
 		for _, m := range msgs {
-			h := hashKey(m.Key.(string))
-			par := uint8(h % uint32(args.numOutPartition))
+			hashed := hashKey(m.Key.(string))
+			par := uint8(hashed % uint32(args.numOutPartition))
 			err = trackParFunc([]uint8{par})
 			if err != nil {
-				return currentOffset, &common.FnOutput{
+				return h.currentOffset, &common.FnOutput{
 					Success: false,
 					Message: fmt.Sprintf("add topic partition failed: %v\n", err),
 				}
 			}
 			err = args.sink.Sink(ctx, m, par, false)
 			if err != nil {
-				return currentOffset, &common.FnOutput{
+				return h.currentOffset, &common.FnOutput{
 					Success: false,
 					Message: fmt.Sprintf("sink failed: %v\n", err),
 				}
 			}
 		}
 	}
-	return currentOffset, nil
+	return h.currentOffset, nil
 }
 
 func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -189,7 +190,7 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 			Src:             src,
 			OutputStream:    output_stream,
 			QueryInput:      sp,
-			TransactionalId: fmt.Sprintf("wordcount-splitter-%s-%d", sp.InputTopicName, sp.ParNum),
+			TransactionalId: fmt.Sprintf("wordcount-splitter-%s-%d", sp.InputTopicNames[0], sp.ParNum),
 			FixedOutParNum:  0,
 			TestParams:      sp.TestParams,
 		}

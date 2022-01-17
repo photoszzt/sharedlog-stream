@@ -45,7 +45,7 @@ func (h *query5Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 }
 
 func Query5(ctx context.Context, env types.Environment, input *common.QueryInput) *common.FnOutput {
-	inputStream := sharedlog_stream.NewSharedLogStream(env, input.InputTopicName)
+	inputStream := sharedlog_stream.NewSharedLogStream(env, input.InputTopicNames[0])
 	outputStream := sharedlog_stream.NewSharedLogStream(env, input.OutputTopicName)
 	windowChangeLog := sharedlog_stream.NewSharedLogStream(env, "count-log")
 

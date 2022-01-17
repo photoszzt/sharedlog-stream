@@ -19,12 +19,14 @@ import (
 )
 
 type wordcountCounterAgg struct {
-	env types.Environment
+	env           types.Environment
+	currentOffset map[string]uint64
 }
 
 func NewWordCountCounterAgg(env types.Environment) *wordcountCounterAgg {
 	return &wordcountCounterAgg{
-		env: env,
+		env:           env,
+		currentOffset: make(map[string]uint64),
 	}
 }
 
@@ -92,34 +94,33 @@ type wordcountCounterAggProcessArg struct {
 func (h *wordcountCounterAgg) process(ctx context.Context,
 	argsTmp interface{},
 	trackParFunc func([]uint8) error,
-) (uint64, *common.FnOutput) {
+) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*wordcountCounterAggProcessArg)
-	currentOffset := uint64(0)
 	msgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {
 		if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: true,
 				Message: err.Error(),
 			}
 		}
-		return currentOffset, &common.FnOutput{
+		return h.currentOffset, &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("consume failed: %v", err),
 		}
 	}
 
 	for _, msg := range msgs {
-		currentOffset = msg.LogSeqNum
+		h.currentOffset[args.src.TopicName()] = msg.LogSeqNum
 		_, err = args.counter.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: false,
 				Message: fmt.Sprintf("counter failed: %v", err),
 			}
 		}
 	}
-	return currentOffset, nil
+	return h.currentOffset, nil
 }
 
 func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -173,7 +174,7 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 			Src:             src,
 			OutputStream:    output_stream,
 			QueryInput:      sp,
-			TransactionalId: fmt.Sprintf("wordcount-counter-%s-%s-%d", sp.InputTopicName, sp.OutputTopicName, sp.ParNum),
+			TransactionalId: fmt.Sprintf("wordcount-counter-%s-%s-%d", sp.InputTopicNames[0], sp.OutputTopicName, sp.ParNum),
 			FixedOutParNum:  sp.ParNum,
 			TestParams:      sp.TestParams,
 		}

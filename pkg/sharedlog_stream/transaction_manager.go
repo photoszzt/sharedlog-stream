@@ -470,21 +470,26 @@ type ConsumedSeqNumConfig struct {
 	Partition      uint8
 }
 
-func (tc *TransactionManager) AppendConsumedSeqNum(ctx context.Context, consumedSeqNumConfig ConsumedSeqNumConfig) error {
-	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + consumedSeqNumConfig.TopicToTrack
-	offsetLog := tc.topicStreams[offsetTopic]
-	offsetRecord := OffsetRecord{
-		Offset:    consumedSeqNumConfig.ConsumedSeqNum,
-		TaskId:    consumedSeqNumConfig.TaskId,
-		TaskEpoch: consumedSeqNumConfig.TaskEpoch,
-	}
-	encoded, err := tc.offsetRecordSerde.Encode(&offsetRecord)
-	if err != nil {
-		return err
-	}
+func (tc *TransactionManager) AppendConsumedSeqNum(ctx context.Context, consumedSeqNumConfigs []ConsumedSeqNumConfig) error {
+	for _, consumedSeqNumConfig := range consumedSeqNumConfigs {
+		offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + consumedSeqNumConfig.TopicToTrack
+		offsetLog := tc.topicStreams[offsetTopic]
+		offsetRecord := OffsetRecord{
+			Offset:    consumedSeqNumConfig.ConsumedSeqNum,
+			TaskId:    consumedSeqNumConfig.TaskId,
+			TaskEpoch: consumedSeqNumConfig.TaskEpoch,
+		}
+		encoded, err := tc.offsetRecordSerde.Encode(&offsetRecord)
+		if err != nil {
+			return err
+		}
 
-	_, err = offsetLog.Push(ctx, encoded, consumedSeqNumConfig.Partition, false)
-	return err
+		_, err = offsetLog.Push(ctx, encoded, consumedSeqNumConfig.Partition, false)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (tc *TransactionManager) FindLastConsumedSeqNum(ctx context.Context, topicToTrack string, parNum uint8) (uint64, error) {

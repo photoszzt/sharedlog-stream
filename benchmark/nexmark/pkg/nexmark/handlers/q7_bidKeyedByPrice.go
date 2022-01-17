@@ -19,14 +19,16 @@ import (
 )
 
 type q7BidKeyedByPrice struct {
-	env   types.Environment
-	cHash *hash.ConsistentHash
+	env           types.Environment
+	cHash         *hash.ConsistentHash
+	currentOffset map[string]uint64
 }
 
 func NewQ7BidKeyedByPriceHandler(env types.Environment) types.FuncHandler {
 	return &q7BidKeyedByPrice{
-		env:   env,
-		cHash: hash.NewConsistentHash(),
+		env:           env,
+		cHash:         hash.NewConsistentHash(),
+		currentOffset: make(map[string]uint64),
 	}
 }
 
@@ -57,28 +59,28 @@ type q7BidKeyedByPriceProcessArgs struct {
 func (h *q7BidKeyedByPrice) process(ctx context.Context,
 	argsTmp interface{},
 	trackParFunc func([]uint8) error,
-) (uint64, *common.FnOutput) {
-	currentOffset := uint64(0)
+) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*q7BidKeyedByPriceProcessArgs)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {
 		if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: true,
 				Message: err.Error(),
 			}
 		}
-		return currentOffset, &common.FnOutput{
+		return h.currentOffset, &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
 	}
 
 	for _, msg := range gotMsgs {
+		h.currentOffset[args.src.TopicName()] = msg.LogSeqNum
 		event := msg.Msg.Value.(*ntypes.Event)
 		ts, err := event.ExtractStreamTime()
 		if err != nil {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: false,
 				Message: fmt.Sprintf("fail to extract timestamp: %v", err),
 			}
@@ -86,7 +88,7 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context,
 		msg.Msg.Timestamp = ts
 		bidMsg, err := args.bid.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: false,
 				Message: fmt.Sprintf("filter bid err: %v", err),
 			}
@@ -94,7 +96,7 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context,
 		if bidMsg != nil {
 			mappedKey, err := args.bidKeyedByPrice.ProcessAndReturn(ctx, bidMsg[0])
 			if err != nil {
-				return currentOffset, &common.FnOutput{
+				return h.currentOffset, &common.FnOutput{
 					Success: false,
 					Message: fmt.Sprintf("bid keyed by price error: %v\n", err),
 				}
@@ -102,7 +104,7 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context,
 			key := mappedKey[0].Key.(uint64)
 			parTmp, ok := h.cHash.Get(key)
 			if !ok {
-				return currentOffset, &common.FnOutput{
+				return h.currentOffset, &common.FnOutput{
 					Success: false,
 					Message: "fail to get output substream number",
 				}
@@ -111,21 +113,21 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context,
 			// par := uint8(key % uint64(args.numOutPartition))
 			err = trackParFunc([]uint8{par})
 			if err != nil {
-				return currentOffset, &common.FnOutput{
+				return h.currentOffset, &common.FnOutput{
 					Success: false,
 					Message: fmt.Sprintf("track par err: %v\n", err),
 				}
 			}
 			err = args.sink.Sink(ctx, mappedKey[0], par, false)
 			if err != nil {
-				return currentOffset, &common.FnOutput{
+				return h.currentOffset, &common.FnOutput{
 					Success: false,
 					Message: fmt.Sprintf("sink err: %v\n", err),
 				}
 			}
 		}
 	}
-	return currentOffset, nil
+	return h.currentOffset, nil
 }
 
 func (h *q7BidKeyedByPrice) getSrcSink(
@@ -208,7 +210,7 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 			Src:             src,
 			OutputStream:    output_stream,
 			QueryInput:      input,
-			TransactionalId: fmt.Sprintf("q7BidKeyedByPrice-%s-%d-%s", input.InputTopicName, input.ParNum, input.OutputTopicName),
+			TransactionalId: fmt.Sprintf("q7BidKeyedByPrice-%s-%d-%s", input.InputTopicNames[0], input.ParNum, input.OutputTopicName),
 			FixedOutParNum:  0,
 		}
 		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)

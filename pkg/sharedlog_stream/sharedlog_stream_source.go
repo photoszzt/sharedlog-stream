@@ -39,6 +39,10 @@ func NewSharedLogStreamSource(stream *SharedLogStream, config *SharedLogStreamCo
 	}
 }
 
+func (s *SharedLogStreamSource) TopicName() string {
+	return s.stream.topicName
+}
+
 func (s *SharedLogStreamSource) SetCursor(cursor uint64, parNum uint8) {
 	s.stream.SetCursor(cursor, parNum)
 }

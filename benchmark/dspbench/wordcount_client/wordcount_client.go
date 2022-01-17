@@ -82,7 +82,7 @@ func main() {
 	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
 		splitInputParams[i] = &common.QueryInput{
 			Duration:          uint32(FLAGS_duration),
-			InputTopicName:    "wc_src",
+			InputTopicNames:   []string{"wc_src"},
 			OutputTopicName:   splitOutputTopic,
 			SerdeFormat:       uint8(serdeFormat),
 			NumInPartition:    1,
@@ -114,7 +114,7 @@ func main() {
 	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
 		countInputParams[i] = &common.QueryInput{
 			Duration:          uint32(FLAGS_duration),
-			InputTopicName:    splitOutputTopic,
+			InputTopicNames:   []string{splitOutputTopic},
 			OutputTopicName:   countOutputTopic,
 			SerdeFormat:       uint8(serdeFormat),
 			NumInPartition:    numCountInstance,

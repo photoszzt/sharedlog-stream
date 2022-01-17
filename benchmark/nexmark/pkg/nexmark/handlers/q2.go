@@ -20,12 +20,14 @@ import (
 )
 
 type query2Handler struct {
-	env types.Environment
+	env           types.Environment
+	currentOffset map[string]uint64
 }
 
 func NewQuery2(env types.Environment) types.FuncHandler {
 	return &query2Handler{
-		env: env,
+		env:           env,
+		currentOffset: make(map[string]uint64),
 	}
 }
 
@@ -120,7 +122,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 			Src:             src,
 			OutputStream:    output_stream,
 			QueryInput:      sp,
-			TransactionalId: fmt.Sprintf("q2Query-%s-%d-%s", sp.InputTopicName, sp.ParNum, sp.OutputTopicName),
+			TransactionalId: fmt.Sprintf("q2Query-%s-%d-%s", sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
 			FixedOutParNum:  sp.ParNum,
 		}
 		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
@@ -146,18 +148,17 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 
 func (h *query2Handler) process(ctx context.Context, argsTmp interface{},
 	trackParFunc func([]uint8) error,
-) (uint64, *common.FnOutput) {
-	currentOffset := uint64(0)
+) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*query2ProcessArgs)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {
 		if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: true,
 				Message: err.Error(),
 			}
 		}
-		return currentOffset, &common.FnOutput{
+		return h.currentOffset, &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
@@ -166,10 +167,10 @@ func (h *query2Handler) process(ctx context.Context, argsTmp interface{},
 		if msg.Msg.Value == nil {
 			continue
 		}
-		currentOffset = msg.LogSeqNum
+		h.currentOffset[args.src.TopicName()] = msg.LogSeqNum
 		outMsg, err := args.q2Filter.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
 			}
@@ -177,14 +178,14 @@ func (h *query2Handler) process(ctx context.Context, argsTmp interface{},
 		if outMsg != nil {
 			err = args.sink.Sink(ctx, outMsg[0], args.parNum, false)
 			if err != nil {
-				return currentOffset, &common.FnOutput{
+				return h.currentOffset, &common.FnOutput{
 					Success: false,
 					Message: err.Error(),
 				}
 			}
 		}
 	}
-	return currentOffset, nil
+	return h.currentOffset, nil
 }
 
 /*

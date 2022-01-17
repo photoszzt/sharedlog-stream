@@ -42,7 +42,7 @@ func query2() {
 	for i := 0; i < int(q2NodeConfig.NumInstance); i++ {
 		q2InputParams[i] = &common.QueryInput{
 			Duration:          uint32(FLAGS_duration),
-			InputTopicName:    q2conf.SrcOutTopic,
+			InputTopicNames:   []string{q2conf.SrcOutTopic},
 			OutputTopicName:   q2conf.SinkOutTopic,
 			SerdeFormat:       uint8(serdeFormat),
 			NumInPartition:    q2conf.NumSrcPartition,

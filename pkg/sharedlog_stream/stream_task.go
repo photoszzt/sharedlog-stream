@@ -14,7 +14,7 @@ import (
 )
 
 type StreamTask struct {
-	ProcessFunc func(ctx context.Context, args interface{}, trackParFunc func([]uint8) error) (uint64, *common.FnOutput)
+	ProcessFunc func(ctx context.Context, args interface{}, trackParFunc func([]uint8) error) (map[string]uint64, *common.FnOutput)
 }
 
 func SetupTransactionManager(ctx context.Context, args *StreamTaskArgsTransaction) (*TransactionManager, error) {
@@ -27,29 +27,31 @@ func SetupTransactionManager(ctx context.Context, args *StreamTaskArgsTransactio
 		return nil, fmt.Errorf("InitTransaction failed: %v", err)
 	}
 
-	err = tm.CreateOffsetTopic(args.QueryInput.InputTopicName, uint8(args.QueryInput.NumInPartition))
-	if err != nil {
-		return nil, fmt.Errorf("create offset topic failed: %v", err)
-	}
-
-	offset, err := tm.FindLastConsumedSeqNum(ctx, args.QueryInput.InputTopicName, args.QueryInput.ParNum)
-	if err != nil {
-		if !errors.IsStreamEmptyError(err) {
-			return nil, err
+	for _, inputTopicName := range args.QueryInput.InputTopicNames {
+		err = tm.CreateOffsetTopic(inputTopicName, uint8(args.QueryInput.NumInPartition))
+		if err != nil {
+			return nil, fmt.Errorf("create offset topic failed: %v", err)
+		}
+		offset, err := tm.FindLastConsumedSeqNum(ctx, inputTopicName, args.QueryInput.ParNum)
+		if err != nil {
+			if !errors.IsStreamEmptyError(err) {
+				return nil, err
+			}
+		}
+		if offset != 0 {
+			args.Src.SetCursor(offset+1, args.QueryInput.ParNum)
 		}
 	}
-	if offset != 0 {
-		args.Src.SetCursor(offset+1, args.QueryInput.ParNum)
-	}
+
 	return tm, nil
 }
 
 func TrackOffsetAndCommit(ctx context.Context,
-	consumedSeqNumConfig ConsumedSeqNumConfig,
+	consumedSeqNumConfigs []ConsumedSeqNumConfig,
 	tm *TransactionManager, hasLiveTransaction *bool, trackConsumePar *bool,
 	retc chan *common.FnOutput,
 ) {
-	err := tm.AppendConsumedSeqNum(ctx, consumedSeqNumConfig)
+	err := tm.AppendConsumedSeqNum(ctx, consumedSeqNumConfigs)
 	if err != nil {
 		retc <- &common.FnOutput{
 			Success: false,
@@ -157,7 +159,7 @@ func (t *StreamTask) processWithTranLoop(ctx context.Context,
 	latencies := make([]int, 0, 128)
 	hasLiveTransaction := false
 	trackConsumePar := false
-	currentOffset := uint64(0)
+	var currentOffset map[string]uint64
 	commitTimer := time.Now()
 	commitEvery := time.Duration(args.QueryInput.CommitEveryMs) * time.Millisecond
 	duration := time.Duration(args.QueryInput.Duration) * time.Second
@@ -182,14 +184,17 @@ L:
 				}
 				return
 			}
-			TrackOffsetAndCommit(ctx, ConsumedSeqNumConfig{
-				TopicToTrack:   args.QueryInput.InputTopicName,
-				TaskId:         tm.CurrentTaskId,
-				TaskEpoch:      tm.CurrentEpoch,
-				Partition:      args.QueryInput.ParNum,
-				ConsumedSeqNum: currentOffset,
-			}, tm, &hasLiveTransaction, &trackConsumePar, retc)
-
+			consumedSeqNumConfigs := make([]ConsumedSeqNumConfig, 0)
+			for topic, offset := range currentOffset {
+				consumedSeqNumConfigs = append(consumedSeqNumConfigs, ConsumedSeqNumConfig{
+					TopicToTrack:   topic,
+					TaskId:         tm.CurrentTaskId,
+					TaskEpoch:      tm.CurrentEpoch,
+					Partition:      args.QueryInput.ParNum,
+					ConsumedSeqNum: uint64(offset),
+				})
+			}
+			TrackOffsetAndCommit(ctx, consumedSeqNumConfigs, tm, &hasLiveTransaction, &trackConsumePar, retc)
 			if val, ok := args.TestParams["FailAfterCommit"]; ok && val {
 				fmt.Fprintf(os.Stderr, "about to fail after commit")
 				retc <- &common.FnOutput{
@@ -243,13 +248,15 @@ L:
 			}
 		}
 		if !trackConsumePar {
-			err := tm.AddTopicTrackConsumedSeqs(ctx, args.QueryInput.InputTopicName, []uint8{args.QueryInput.ParNum})
-			if err != nil {
-				retc <- &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("add offsets failed: %v\n", err),
+			for _, inputTopicName := range args.QueryInput.InputTopicNames {
+				err := tm.AddTopicTrackConsumedSeqs(ctx, inputTopicName, []uint8{args.QueryInput.ParNum})
+				if err != nil {
+					retc <- &common.FnOutput{
+						Success: false,
+						Message: fmt.Sprintf("add offsets failed: %v\n", err),
+					}
+					return
 				}
-				return
 			}
 			trackConsumePar = true
 		}
@@ -261,13 +268,17 @@ L:
 		if ret != nil {
 			if ret.Success {
 				if hasLiveTransaction {
-					TrackOffsetAndCommit(ctx, ConsumedSeqNumConfig{
-						TopicToTrack:   args.QueryInput.InputTopicName,
-						TaskId:         tm.CurrentTaskId,
-						TaskEpoch:      tm.CurrentEpoch,
-						Partition:      args.QueryInput.ParNum,
-						ConsumedSeqNum: currentOffset,
-					}, tm, &hasLiveTransaction, &trackConsumePar, retc)
+					consumedSeqNumConfigs := make([]ConsumedSeqNumConfig, 0)
+					for topic, offset := range currentOffset {
+						consumedSeqNumConfigs = append(consumedSeqNumConfigs, ConsumedSeqNumConfig{
+							TopicToTrack:   topic,
+							TaskId:         tm.CurrentTaskId,
+							TaskEpoch:      tm.CurrentEpoch,
+							Partition:      args.QueryInput.ParNum,
+							ConsumedSeqNum: uint64(offset),
+						})
+					}
+					TrackOffsetAndCommit(ctx, consumedSeqNumConfigs, tm, &hasLiveTransaction, &trackConsumePar, retc)
 				}
 				elapsed := time.Since(procStart)
 				latencies = append(latencies, int(elapsed.Microseconds()))

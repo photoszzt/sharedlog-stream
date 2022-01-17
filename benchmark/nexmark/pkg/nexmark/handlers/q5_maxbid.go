@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -20,12 +19,14 @@ import (
 )
 
 type q5MaxBid struct {
-	env types.Environment
+	env           types.Environment
+	currentOffset map[string]uint64
 }
 
 func NewQ5MaxBid(env types.Environment) types.FuncHandler {
 	return &q5MaxBid{
-		env: env,
+		env:           env,
+		currentOffset: make(map[string]uint64),
 	}
 }
 
@@ -78,18 +79,17 @@ type q5MaxBidProcessArgs struct {
 
 func (h *q5MaxBid) process(ctx context.Context,
 	argsTmp interface{}, trackParFunc func([]uint8) error,
-) (uint64, *common.FnOutput) {
+) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*q5MaxBidProcessArgs)
-	currentOffset := uint64(0)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {
 		if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: true,
 				Message: err.Error(),
 			}
 		}
-		return currentOffset, &common.FnOutput{
+		return h.currentOffset, &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("consume err: %v", err),
 		}
@@ -102,31 +102,31 @@ func (h *q5MaxBid) process(ctx context.Context,
 		aic := msg.Msg.Value.(*ntypes.AuctionIdCount)
 		ts, err := aic.ExtractStreamTime()
 		if err != nil {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: false,
 				Message: fmt.Sprintf("fail to extract timestamp: %v", err),
 			}
 		}
 		msg.Msg.Timestamp = ts
-		fmt.Fprintf(os.Stderr, "got msg with key: %v, val: %v, ts: %v\n", msg.Msg.Key, msg.Msg.Value, msg.Msg.Timestamp)
-		currentOffset := msg.LogSeqNum
+		// fmt.Fprintf(os.Stderr, "got msg with key: %v, val: %v, ts: %v\n", msg.Msg.Key, msg.Msg.Value, msg.Msg.Timestamp)
+		h.currentOffset[args.src.TopicName()] = msg.LogSeqNum
 		_, err = args.maxBid.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: false,
 				Message: fmt.Sprintf("maxBid err: %v", err),
 			}
 		}
 		joinedOutput, err := args.stJoin.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: false,
 				Message: fmt.Sprintf("joined err: %v", err),
 			}
 		}
 		filteredMx, err := args.chooseMaxCnt.ProcessAndReturn(ctx, joinedOutput[0])
 		if err != nil {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: false,
 				Message: fmt.Sprintf("filteredMx err: %v", err),
 			}
@@ -134,14 +134,14 @@ func (h *q5MaxBid) process(ctx context.Context,
 		for _, filtered := range filteredMx {
 			err = args.sink.Sink(ctx, filtered, args.parNum, false)
 			if err != nil {
-				return currentOffset, &common.FnOutput{
+				return h.currentOffset, &common.FnOutput{
 					Success: false,
 					Message: fmt.Sprintf("sink err: %v", err),
 				}
 			}
 		}
 	}
-	return currentOffset, nil
+	return h.currentOffset, nil
 }
 
 func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -246,13 +246,14 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 
 	if sp.EnableTransaction {
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
-			ProcArgs:        procArgs,
-			Env:             h.env,
-			Src:             src,
-			OutputStream:    output_stream,
-			QueryInput:      sp,
-			TransactionalId: fmt.Sprintf("q5MaxBid-%s-%d-%s", sp.InputTopicName, sp.ParNum, sp.OutputTopicName),
-			FixedOutParNum:  sp.ParNum,
+			ProcArgs:     procArgs,
+			Env:          h.env,
+			Src:          src,
+			OutputStream: output_stream,
+			QueryInput:   sp,
+			TransactionalId: fmt.Sprintf("q5MaxBid-%s-%d-%s",
+				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
+			FixedOutParNum: sp.ParNum,
 		}
 		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
 		if ret != nil && ret.Success {

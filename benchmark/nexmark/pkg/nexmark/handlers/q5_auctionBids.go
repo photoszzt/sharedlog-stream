@@ -21,14 +21,16 @@ import (
 )
 
 type q5AuctionBids struct {
-	env   types.Environment
-	cHash *hash.ConsistentHash
+	env           types.Environment
+	cHash         *hash.ConsistentHash
+	currentOffset map[string]uint64
 }
 
 func NewQ5AuctionBids(env types.Environment) *q5AuctionBids {
 	return &q5AuctionBids{
-		env:   env,
-		cHash: hash.NewConsistentHash(),
+		env:           env,
+		cHash:         hash.NewConsistentHash(),
+		currentOffset: make(map[string]uint64),
 	}
 }
 
@@ -150,18 +152,17 @@ type q5AuctionBidsProcessArg struct {
 func (h *q5AuctionBids) process(ctx context.Context,
 	argsTmp interface{},
 	trackParFunc func([]uint8) error,
-) (uint64, *common.FnOutput) {
+) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*q5AuctionBidsProcessArg)
-	currentOffset := uint64(0)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {
 		if xerrors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: true,
 				Message: err.Error(),
 			}
 		}
-		return currentOffset, &common.FnOutput{
+		return h.currentOffset, &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
@@ -171,11 +172,11 @@ func (h *q5AuctionBids) process(ctx context.Context,
 		if msg.Msg.Value == nil {
 			continue
 		}
-		currentOffset = msg.LogSeqNum
+		h.currentOffset[args.src.TopicName()] = msg.LogSeqNum
 		event := msg.Msg.Value.(*ntypes.Event)
 		ts, err := event.ExtractStreamTime()
 		if err != nil {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: false,
 				Message: fmt.Sprintf("fail to extract timestamp: %v", err),
 			}
@@ -183,7 +184,7 @@ func (h *q5AuctionBids) process(ctx context.Context,
 		msg.Msg.Timestamp = ts
 		countMsgs, err := args.countProc.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
 			}
@@ -192,7 +193,7 @@ func (h *q5AuctionBids) process(ctx context.Context,
 			// fmt.Fprintf(os.Stderr, "count msg ts: %v, ", countMsg.Timestamp)
 			changeKeyedMsg, err := args.groupByAuction.ProcessAndReturn(ctx, countMsg)
 			if err != nil {
-				return currentOffset, &common.FnOutput{
+				return h.currentOffset, &common.FnOutput{
 					Success: false,
 					Message: err.Error(),
 				}
@@ -202,7 +203,7 @@ func (h *q5AuctionBids) process(ctx context.Context,
 			k := changeKeyedMsg[0].Key.(*ntypes.StartEndTime)
 			parTmp, ok := h.cHash.Get(k)
 			if !ok {
-				return currentOffset, &common.FnOutput{
+				return h.currentOffset, &common.FnOutput{
 					Success: false,
 					Message: "fail to get output partition",
 				}
@@ -211,21 +212,21 @@ func (h *q5AuctionBids) process(ctx context.Context,
 			// fmt.Fprintf(os.Stderr, "key is %s, output to substream %d\n", k.String(), par)
 			err = trackParFunc([]uint8{par})
 			if err != nil {
-				return currentOffset, &common.FnOutput{
+				return h.currentOffset, &common.FnOutput{
 					Success: false,
 					Message: fmt.Sprintf("add topic partition failed: %v\n", err),
 				}
 			}
 			err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
 			if err != nil {
-				return currentOffset, &common.FnOutput{
+				return h.currentOffset, &common.FnOutput{
 					Success: false,
 					Message: err.Error(),
 				}
 			}
 		}
 	}
-	return currentOffset, nil
+	return h.currentOffset, nil
 }
 
 /*
@@ -549,13 +550,14 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	if sp.EnableTransaction {
 		// return h.processWithTransaction(ctx, sp, args)
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
-			ProcArgs:        procArgs,
-			Env:             h.env,
-			Src:             src,
-			OutputStream:    output_stream,
-			QueryInput:      sp,
-			TransactionalId: fmt.Sprintf("q5AuctionBids-%s-%d-%s", sp.InputTopicName, sp.ParNum, sp.OutputTopicName),
-			FixedOutParNum:  0,
+			ProcArgs:     procArgs,
+			Env:          h.env,
+			Src:          src,
+			OutputStream: output_stream,
+			QueryInput:   sp,
+			TransactionalId: fmt.Sprintf("q5AuctionBids-%s-%d-%s", sp.InputTopicNames[0],
+				sp.ParNum, sp.OutputTopicName),
+			FixedOutParNum: 0,
 		}
 		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
 		if ret != nil && ret.Success {

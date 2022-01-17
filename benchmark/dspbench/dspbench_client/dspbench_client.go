@@ -63,7 +63,7 @@ func invokeQuery(client *http.Client, response *common.FnOutput, wg *sync.WaitGr
 	}
 	queryInput := &common.QueryInput{
 		Duration:        uint32(FLAGS_duration),
-		InputTopicName:  FLAGS_stream_prefix + "_src",
+		InputTopicNames: []string{FLAGS_stream_prefix + "_src"},
 		OutputTopicName: FLAGS_stream_prefix + "_" + FLAGS_fn_name + "_output",
 		SerdeFormat:     uint8(serdeFormat),
 	}

@@ -45,7 +45,7 @@ func (h *query3Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 }
 
 func (h *query3Handler) Query3(ctx context.Context, input *common.QueryInput) *common.FnOutput {
-	inputStream := sharedlog_stream.NewSharedLogStream(h.env, input.InputTopicName)
+	inputStream := sharedlog_stream.NewSharedLogStream(h.env, input.InputTopicNames[0])
 	outputStream := sharedlog_stream.NewSharedLogStream(h.env, input.OutputTopicName)
 	msgSerde, err := commtypes.GetMsgSerde(input.SerdeFormat)
 	if err != nil {

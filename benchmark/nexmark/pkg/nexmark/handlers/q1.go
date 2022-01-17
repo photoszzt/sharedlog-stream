@@ -20,12 +20,14 @@ import (
 )
 
 type query1Handler struct {
-	env types.Environment
+	env           types.Environment
+	currentOffset map[string]uint64
 }
 
 func NewQuery1(env types.Environment) types.FuncHandler {
 	return &query1Handler{
-		env: env,
+		env:           env,
+		currentOffset: make(map[string]uint64),
 	}
 }
 
@@ -87,7 +89,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 			Src:             src,
 			OutputStream:    output_stream,
 			QueryInput:      sp,
-			TransactionalId: fmt.Sprintf("q1Query-%s-%d-%s", sp.InputTopicName, sp.ParNum, sp.OutputTopicName),
+			TransactionalId: fmt.Sprintf("q1Query-%s-%d-%s", sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
 			FixedOutParNum:  sp.ParNum,
 		}
 		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
@@ -124,18 +126,17 @@ type query1ProcessArgs struct {
 
 func (h *query1Handler) process(ctx context.Context, argsTmp interface{},
 	trackParFunc func([]uint8) error,
-) (uint64, *common.FnOutput) {
-	currentOffset := uint64(0)
+) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*query1ProcessArgs)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {
 		if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: true,
 				Message: err.Error(),
 			}
 		}
-		return currentOffset, &common.FnOutput{
+		return h.currentOffset, &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
@@ -145,10 +146,10 @@ func (h *query1Handler) process(ctx context.Context, argsTmp interface{},
 		if msg.Msg.Value == nil {
 			continue
 		}
-		currentOffset = msg.LogSeqNum
+		h.currentOffset[args.src.TopicName()] = msg.LogSeqNum
 		bidMsg, err := args.filterBid.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
-			return currentOffset, &common.FnOutput{
+			return h.currentOffset, &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
 			}
@@ -156,21 +157,21 @@ func (h *query1Handler) process(ctx context.Context, argsTmp interface{},
 		if bidMsg != nil {
 			filtered, err := args.q1Map.ProcessAndReturn(ctx, bidMsg[0])
 			if err != nil {
-				return currentOffset, &common.FnOutput{
+				return h.currentOffset, &common.FnOutput{
 					Success: false,
 					Message: err.Error(),
 				}
 			}
 			err = args.sink.Sink(ctx, filtered[0], args.parNum, false)
 			if err != nil {
-				return currentOffset, &common.FnOutput{
+				return h.currentOffset, &common.FnOutput{
 					Success: false,
 					Message: err.Error(),
 				}
 			}
 		}
 	}
-	return currentOffset, nil
+	return h.currentOffset, nil
 }
 
 func (h *query1Handler) getSrcSink(ctx context.Context, sp *common.QueryInput,

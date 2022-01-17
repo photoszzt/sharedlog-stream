@@ -41,7 +41,7 @@ func query5() {
 	for i := 0; i < int(q5BidKeyedByAuctionNodeConfig.NumInstance); i++ {
 		q5BidKeyedByAuctionInputParams[i] = &common.QueryInput{
 			Duration:          uint32(FLAGS_duration),
-			InputTopicName:    q5conf.SrcOutTopic,
+			InputTopicNames:   []string{q5conf.SrcOutTopic},
 			OutputTopicName:   q5conf.BidKeyedByAuctionOutTopic,
 			SerdeFormat:       uint8(serdeFormat),
 			NumInPartition:    q5conf.NumSrcPartition,
@@ -61,7 +61,7 @@ func query5() {
 	for i := 0; i < int(q5AucBidsNodeConfig.NumInstance); i++ {
 		q5aucBidsInputParams[i] = &common.QueryInput{
 			Duration:          uint32(FLAGS_duration),
-			InputTopicName:    q5conf.BidKeyedByAuctionOutTopic,
+			InputTopicNames:   []string{q5conf.BidKeyedByAuctionOutTopic},
 			OutputTopicName:   q5conf.AucBidsOutTopic,
 			SerdeFormat:       uint8(serdeFormat),
 			NumInPartition:    q5conf.NumInstance,
@@ -81,7 +81,7 @@ func query5() {
 	for i := 0; i < int(q5maxbidNodeConfig.NumInstance); i++ {
 		q5maxbidInputParams[i] = &common.QueryInput{
 			Duration:          uint32(FLAGS_duration),
-			InputTopicName:    q5conf.AucBidsOutTopic,
+			InputTopicNames:   []string{q5conf.AucBidsOutTopic},
 			OutputTopicName:   q5conf.MaxBidsOutTopic,
 			SerdeFormat:       uint8(serdeFormat),
 			NumInPartition:    q5conf.NumInstance,

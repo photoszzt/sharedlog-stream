@@ -41,7 +41,7 @@ func query7() {
 	for i := 0; i < int(q7BidKeyedByPriceNodeConfig.NumInstance); i++ {
 		q7BidKeyedByPriceInputParams[i] = &common.QueryInput{
 			Duration:          uint32(FLAGS_duration),
-			InputTopicName:    q7conf.SrcOutTopic,
+			InputTopicNames:   []string{q7conf.SrcOutTopic},
 			OutputTopicName:   q7conf.BidKeyedByPriceOutTopic,
 			SerdeFormat:       uint8(serdeFormat),
 			NumInPartition:    q7conf.NumSrcPartition,
@@ -61,7 +61,7 @@ func query7() {
 	for i := 0; i < int(q7TransNodeConfig.NumInstance); i++ {
 		q7TransInputParams[i] = &common.QueryInput{
 			Duration:          uint32(FLAGS_duration),
-			InputTopicName:    q7conf.BidKeyedByPriceOutTopic,
+			InputTopicNames:   []string{q7conf.BidKeyedByPriceOutTopic},
 			OutputTopicName:   q7conf.Q7TransOutTopic,
 			SerdeFormat:       uint8(serdeFormat),
 			NumInPartition:    q7conf.NumInstance,

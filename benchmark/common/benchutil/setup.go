@@ -27,7 +27,7 @@ type DumpOutputStreamConfig struct {
 }
 
 func GetShardedInputOutputStreams(ctx context.Context, env types.Environment, input *common.QueryInput) (*sharedlog_stream.ShardedSharedLogStream, *sharedlog_stream.ShardedSharedLogStream, error) {
-	inputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicName, uint8(input.NumInPartition))
+	inputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[0], uint8(input.NumInPartition))
 	if err != nil {
 		return nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
 
