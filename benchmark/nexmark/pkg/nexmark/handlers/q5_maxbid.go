@@ -245,10 +245,12 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	}
 
 	if sp.EnableTransaction {
+		srcs := make(map[string]processor.Source)
+		srcs[sp.InputTopicNames[0]] = src
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
 			ProcArgs:     procArgs,
 			Env:          h.env,
-			Src:          src,
+			Srcs:         srcs,
 			OutputStream: output_stream,
 			QueryInput:   sp,
 			TransactionalId: fmt.Sprintf("q5MaxBid-%s-%d-%s",

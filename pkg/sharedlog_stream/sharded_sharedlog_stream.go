@@ -2,6 +2,7 @@ package sharedlog_stream
 
 import (
 	"context"
+	"fmt"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 
@@ -28,7 +29,7 @@ func NewShardedSharedLogStream(env types.Environment, topicName string, numParti
 		return nil, ErrZeroParNum
 	}
 	streams := make([]*SharedLogStream, 0, 16)
-	for i := 0; i < int(numPartitions); i++ {
+	for i := uint8(0); i < numPartitions; i++ {
 		s := NewSharedLogStream(env, topicName)
 		streams = append(streams, s)
 	}
@@ -37,6 +38,25 @@ func NewShardedSharedLogStream(env types.Environment, topicName string, numParti
 		numPartitions:       numPartitions,
 		topicName:           topicName,
 	}, nil
+}
+
+// assume single thread
+func (s *ShardedSharedLogStream) AddSubStreams(env types.Environment, numAdd uint8) {
+	for i := uint8(0); i < numAdd; i++ {
+		subs := NewSharedLogStream(env, s.topicName)
+		s.subSharedLogStreams = append(s.subSharedLogStreams, subs)
+	}
+	s.numPartitions += numAdd
+}
+
+// assume single thread
+func (s *ShardedSharedLogStream) RemoveSubStreams(env types.Environment, numRemove uint8) error {
+	if numRemove >= s.numPartitions {
+		return fmt.Errorf("number of substream(%d) to remove is too large; this stream has %d substreams", numRemove, s.numPartitions)
+	}
+	s.subSharedLogStreams = s.subSharedLogStreams[0 : s.numPartitions-numRemove]
+	s.numPartitions = s.numPartitions - numRemove
+	return nil
 }
 
 func (s *ShardedSharedLogStream) Push(ctx context.Context, payload []byte, parNumber uint8, isControl bool) (uint64, error) {

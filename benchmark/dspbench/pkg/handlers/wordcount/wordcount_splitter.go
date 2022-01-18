@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
-	"os"
 	"regexp"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
@@ -183,11 +182,13 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 	}
 
 	if sp.EnableTransaction {
-		fmt.Fprintf(os.Stderr, "word count counter function enables exactly once semantics\n")
+		// fmt.Fprintf(os.Stderr, "word count counter function enables exactly once semantics\n")
+		srcs := make(map[string]processor.Source)
+		srcs[sp.InputTopicNames[0]] = src
 		streamTaskArgs := &sharedlog_stream.StreamTaskArgsTransaction{
 			ProcArgs:        procArgs,
 			Env:             h.env,
-			Src:             src,
+			Srcs:            srcs,
 			OutputStream:    output_stream,
 			QueryInput:      sp,
 			TransactionalId: fmt.Sprintf("wordcount-splitter-%s-%d", sp.InputTopicNames[0], sp.ParNum),

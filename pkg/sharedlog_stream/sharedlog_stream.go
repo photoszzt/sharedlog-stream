@@ -8,6 +8,8 @@ import (
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -21,6 +23,8 @@ const (
 )
 
 type SharedLogStream struct {
+	mux sync.Mutex
+
 	env                types.Environment
 	txnMarkerSerde     commtypes.Serde
 	curReadMap         map[commtypes.TaskIDGen]commtypes.ReadMsgAndProgress
@@ -101,9 +105,12 @@ func (s *SharedLogStream) TopicName() string {
 }
 
 func (s *SharedLogStream) SetCursor(cursor uint64, parNum uint8) {
+	s.mux.Lock()
+	defer s.mux.Unlock()
 	s.cursor = cursor
 }
 
+// multiple thread could push to the same stream but only one reader
 func (s *SharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNum uint8, tags []uint64, isControl bool) (uint64, error) {
 	if len(payload) == 0 {
 		return 0, errors.ErrEmptyPayload
@@ -115,7 +122,7 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNu
 	}
 	if s.inTransaction {
 		// TODO: need to deal with sequence number overflow
-		s.curAppendMsgSeqNum += 1
+		atomic.AddUint32(&s.curAppendMsgSeqNum, 1)
 		logEntry.MsgSeqNum = s.curAppendMsgSeqNum
 		logEntry.TaskEpoch = s.taskEpoch
 		logEntry.TaskId = s.taskId
@@ -126,7 +133,9 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNu
 	}
 
 	seqNum, err := s.env.SharedLogAppend(ctx, tags, encoded)
+	s.mux.Lock()
 	s.tail = seqNum + 1
+	s.mux.Unlock()
 
 	// verify that push is successful
 	/*
@@ -168,6 +177,8 @@ func (s *SharedLogStream) Push(ctx context.Context, payload []byte, parNum uint8
 }
 
 func (s *SharedLogStream) isEmpty() bool {
+	s.mux.Lock()
+	defer s.mux.Unlock()
 	return s.cursor >= s.tail
 }
 

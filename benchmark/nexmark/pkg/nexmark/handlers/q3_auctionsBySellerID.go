@@ -225,10 +225,12 @@ func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(ctx context.C
 	}
 
 	if sp.EnableTransaction {
+		srcs := make(map[string]processor.Source)
+		srcs[sp.InputTopicNames[0]] = src
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
 			ProcArgs:        procArgs,
 			Env:             h.env,
-			Src:             src,
+			Srcs:            srcs,
 			OutputStream:    output_stream,
 			QueryInput:      sp,
 			TransactionalId: fmt.Sprintf("q3AuctionBySellerID-%s-%d-%s", sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),

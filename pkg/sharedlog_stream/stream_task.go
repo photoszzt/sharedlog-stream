@@ -39,7 +39,7 @@ func SetupTransactionManager(ctx context.Context, args *StreamTaskArgsTransactio
 			}
 		}
 		if offset != 0 {
-			args.Src.SetCursor(offset+1, args.QueryInput.ParNum)
+			args.Srcs[inputTopicName].SetCursor(offset+1, args.QueryInput.ParNum)
 		}
 	}
 
@@ -77,7 +77,7 @@ type StreamTaskArgs struct {
 type StreamTaskArgsTransaction struct {
 	ProcArgs        interface{}
 	Env             types.Environment
-	Src             processor.Source
+	Srcs            map[string]processor.Source
 	OutputStream    *ShardedSharedLogStream
 	QueryInput      *common.QueryInput
 	TestParams      map[string]bool

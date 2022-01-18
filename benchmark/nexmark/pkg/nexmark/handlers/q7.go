@@ -278,10 +278,12 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		ProcessFunc: h.process,
 	}
 	if input.EnableTransaction {
+		srcs := make(map[string]processor.Source)
+		srcs[input.InputTopicNames[0]] = src
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
 			ProcArgs:     procArgs,
 			Env:          h.env,
-			Src:          src,
+			Srcs:         srcs,
 			OutputStream: outputStream,
 			QueryInput:   input,
 			TransactionalId: fmt.Sprintf("processQ7ProcessArgs-%s-%d-%s",

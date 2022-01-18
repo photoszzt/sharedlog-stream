@@ -204,10 +204,12 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 	}
 
 	if input.EnableTransaction {
+		srcs := make(map[string]processor.Source)
+		srcs[input.InputTopicNames[0]] = src
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
 			ProcArgs:        procArgs,
 			Env:             h.env,
-			Src:             src,
+			Srcs:            srcs,
 			OutputStream:    output_stream,
 			QueryInput:      input,
 			TransactionalId: fmt.Sprintf("q7BidKeyedByPrice-%s-%d-%s", input.InputTopicNames[0], input.ParNum, input.OutputTopicName),
