@@ -17,6 +17,7 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/generator"
 
 	"cs.utexas.edu/zjia/faas/types"
+	"golang.org/x/sync/errgroup"
 )
 
 type nexmarkSourceHandler struct {
@@ -35,10 +36,7 @@ func (h *nexmarkSourceHandler) Call(ctx context.Context, input []byte) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
-	output, err := eventGeneration(ctx, h.env, inputConfig)
-	if err != nil {
-		return nil, err
-	}
+	output := eventGeneration(ctx, h.env, inputConfig)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
 		panic(err)
@@ -46,20 +44,31 @@ func (h *nexmarkSourceHandler) Call(ctx context.Context, input []byte) ([]byte, 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func eventGeneration(ctx context.Context, env types.Environment, inputConfig *ntypes.NexMarkConfigInput) (*common.FnOutput, error) {
+type sinkMsg struct {
+	encoded []byte
+	parNum  uint8
+}
+
+func closeAllChan(inChans []chan sinkMsg) {
+	for _, inChan := range inChans {
+		close(inChan)
+	}
+}
+
+func eventGeneration(ctx context.Context, env types.Environment, inputConfig *ntypes.NexMarkConfigInput) *common.FnOutput {
 	stream, err := sharedlog_stream.NewShardedSharedLogStream(env, inputConfig.TopicName, inputConfig.NumOutPartition)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("fail to create output stream: %v", err),
-		}, nil
+		}
 	}
 	nexmarkConfig, err := ntypes.ConvertToNexmarkConfiguration(inputConfig)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("fail to convert to nexmark configuration: %v", err),
-		}, nil
+		}
 	}
 	generatorConfig := generator.NewGeneratorConfig(nexmarkConfig, uint64(time.Now().UnixMilli()), 1, uint64(nexmarkConfig.NumEvents), 1)
 	eventGenerator := generator.NewSimpleNexmarkGenerator(generatorConfig)
@@ -79,10 +88,27 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", inputConfig.SerdeFormat),
-		}, nil
+		}
 	}
 
 	idx := 0
+
+	inChans := make([]chan sinkMsg, 0)
+	g, ectx := errgroup.WithContext(ctx)
+
+	for i := uint8(0); i < inputConfig.NumOutPartition; i++ {
+		inChans = append(inChans, make(chan sinkMsg, 10))
+		idx := i
+		g.Go(func() error {
+			for sinkMsg := range inChans[idx] {
+				_, err = stream.Push(ectx, sinkMsg.encoded, sinkMsg.parNum, false)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
 
 	for {
 		if !eventGenerator.HasNext() {
@@ -94,45 +120,66 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		now := time.Now().Unix()
 		nextEvent, err := eventGenerator.NextEvent(ctx, channel_url_cache)
 		if err != nil {
+			closeAllChan(inChans)
+			g.Wait()
 			return &common.FnOutput{
 				Success: false,
 				Message: fmt.Sprintf("next event failed: %v", err),
-			}, nil
+			}
 		}
 		wtsSec := nextEvent.WallclockTimestamp / 1000.0
 		if wtsSec > uint64(now) {
 			fmt.Fprintf(os.Stderr, "sleep %v second to generate event\n", wtsSec-uint64(now))
 			time.Sleep(time.Duration(wtsSec-uint64(now)) * time.Second)
 		}
-		fmt.Fprintf(os.Stderr, "gen event with ts: %v\n", nextEvent.EventTimestamp)
+		// fmt.Fprintf(os.Stderr, "gen event with ts: %v\n", nextEvent.EventTimestamp)
 		encoded, err := eventEncoder.Encode(nextEvent.Event)
 		if err != nil {
+			closeAllChan(inChans)
+			g.Wait()
 			return &common.FnOutput{
 				Success: false,
 				Message: fmt.Sprintf("event serialization failed: %v", err),
-			}, nil
+			}
 		}
 		msgEncoded, err := msgEncoder.Encode(nil, encoded)
 		if err != nil {
+			closeAllChan(inChans)
+			g.Wait()
 			return &common.FnOutput{
 				Success: false,
 				Message: fmt.Sprintf("msg serialization failed: %v", err),
-			}, nil
+			}
 		}
 		// fmt.Fprintf(os.Stderr, "msg: %v\n", string(msgEncoded))
 		idx += 1
 		idx = idx % int(inputConfig.NumOutPartition)
 		pushStart := time.Now()
-		_, err = stream.Push(ctx, msgEncoded, uint8(idx), false)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("stream push failed: %v", err),
-			}, nil
+		/*
+			_, err = stream.Push(ctx, msgEncoded, uint8(idx), false)
+			if err != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("stream push failed: %v", err),
+				}, nil
+			}
+			// fmt.Fprintf(os.Stderr, "inserted to pos: 0x%x\n", pos)
+		*/
+		inChan := inChans[idx]
+		sinkMsg := sinkMsg{
+			encoded: msgEncoded,
+			parNum:  uint8(idx),
 		}
-		// fmt.Fprintf(os.Stderr, "inserted to pos: 0x%x\n", pos)
+		inChan <- sinkMsg
 		elapsed := time.Since(pushStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
+	}
+	closeAllChan(inChans)
+	if err := g.Wait(); err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("fail to wait for goroutine: %v", err),
+		}
 	}
 	return &common.FnOutput{
 		Success:  true,
@@ -140,5 +187,5 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		Latencies: map[string][]int{
 			"e2e": latencies,
 		},
-	}, nil
+	}
 }
