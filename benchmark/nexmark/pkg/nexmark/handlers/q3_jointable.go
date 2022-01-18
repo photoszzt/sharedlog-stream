@@ -7,6 +7,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -18,12 +19,14 @@ import (
 
 type q3JoinTableHandler struct {
 	env           types.Environment
+	cHash         *hash.ConsistentHash
 	currentOffset map[string]uint64
 }
 
 func NewQ3JoinTableHandler(env types.Environment) types.FuncHandler {
 	return &q3JoinTableHandler{
 		env:           env,
+		cHash:         hash.NewConsistentHash(),
 		currentOffset: make(map[string]uint64),
 	}
 }
@@ -223,6 +226,76 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 
 		auctionJoinsPersons := processor.NewMeteredProcessor(
 			processor.NewTableTableJoinProcessor(personsStore.Name(), personsStore, joiner))
+
+		pJoinA := processor.NewAsyncFuncRunner(ctx, func(c context.Context, m commtypes.Message) error {
+			// msg is person
+			_, err := toPersonsTable.ProcessAndReturn(ctx, m)
+			if err != nil {
+				return err
+			}
+			joinedMsgs, err := personJoinsAuctions.ProcessAndReturn(ctx, m)
+			if err != nil {
+				return err
+			}
+
+			k := joinedMsgs[0].Key.(uint64)
+			parTmp, ok := h.cHash.Get(k)
+			if !ok {
+				return fmt.Errorf("fail to get output partition")
+			}
+			par := parTmp.(uint8)
+			err = sink.Sink(ctx, joinedMsgs[0], par, false)
+			if err != nil {
+				return fmt.Errorf("sink err: %v", err)
+			}
+			return nil
+		})
+
+		for i := uint8(0); i < sp.NumOutPartition; i++ {
+			h.cHash.Add(i)
+		}
+
+		procArgs := &q3JoinTableProcessArgs{
+			auctionSrc: auctionsSrc,
+			personSrc:  personsSrc,
+			sink:       sink,
+		}
+
+		task := sharedlog_stream.StreamTask{
+			ProcessFunc: h.process,
+		}
+		if sp.EnableTransaction {
+			srcs := make(map[string]processor.Source)
+			srcs[sp.InputTopicNames[0]] = auctionsSrc
+			srcs[sp.InputTopicNames[1]] = personsSrc
+			streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
+				ProcArgs:     procArgs,
+				Env:          h.env,
+				Srcs:         srcs,
+				OutputStream: outputStream,
+				QueryInput:   sp,
+				TransactionalId: fmt.Sprintf("q3JoinTable-%s-%d-%s",
+					sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
+			}
+			ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
+			if ret != nil && ret.Success {
+				ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()
+				ret.Latencies["personsSrc"] = personsSrc.GetLatency()
+				ret.Latencies["sink"] = sink.GetLatency()
+			}
+			return ret
+		}
+		streamTaskArgs := sharedlog_stream.StreamTaskArgs{
+			ProcArgs: procArgs,
+			Duration: time.Duration(sp.Duration) * time.Second,
+		}
+		ret := task.Process(ctx, &streamTaskArgs)
+		if ret != nil && ret.Success {
+			ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()
+			ret.Latencies["personsSrc"] = personsSrc.GetLatency()
+			ret.Latencies["sink"] = sink.GetLatency()
+		}
+		return ret
 	*/
 	return nil
 }
