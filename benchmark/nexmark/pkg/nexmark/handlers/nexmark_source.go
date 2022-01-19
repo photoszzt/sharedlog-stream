@@ -95,12 +95,11 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 
 	inChans := make([]chan sinkMsg, 0)
 	g, ectx := errgroup.WithContext(ctx)
-
 	for i := uint8(0); i < inputConfig.NumOutPartition; i++ {
-		inChans = append(inChans, make(chan sinkMsg, 10))
-		idx := i
+		inChans = append(inChans, make(chan sinkMsg, 2))
+		idxi := i
 		g.Go(func() error {
-			for sinkMsg := range inChans[idx] {
+			for sinkMsg := range inChans[idxi] {
 				_, err = stream.Push(ectx, sinkMsg.encoded, sinkMsg.parNum, false)
 				if err != nil {
 					return err
