@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -152,7 +151,7 @@ func (h *bidKeyedByAuction) process(ctx context.Context,
 					Message: fmt.Sprintf("add topic partition failed: %v\n", err),
 				}
 			}
-			fmt.Fprintf(os.Stderr, "out msg ts: %v\n", mappedKey[0].Timestamp)
+			// fmt.Fprintf(os.Stderr, "out msg ts: %v\n", mappedKey[0].Timestamp)
 			err = args.sink.Sink(ctx, mappedKey[0], par, false)
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{

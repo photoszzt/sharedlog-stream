@@ -8,12 +8,15 @@ import (
 )
 
 type AsyncFuncRunner struct {
-	group *errgroup.Group
-	f     func(context.Context, commtypes.Message) error
-	input chan interface{}
+	group  *errgroup.Group
+	f      func(context.Context, commtypes.Message) ([]commtypes.Message, error)
+	input  chan interface{}
+	output chan []commtypes.Message
 }
 
-func NewAsyncFuncRunner(ctx context.Context, f func(context.Context, commtypes.Message) error) *AsyncFuncRunner {
+func NewAsyncFuncRunner(ctx context.Context,
+	f func(context.Context, commtypes.Message) ([]commtypes.Message, error),
+) *AsyncFuncRunner {
 	pr := &AsyncFuncRunner{
 		f:     f,
 		input: make(chan interface{}),
@@ -29,12 +32,23 @@ func NewAsyncFuncRunner(ctx context.Context, f func(context.Context, commtypes.M
 func (p *AsyncFuncRunner) run(ctx context.Context) error {
 	for m := range p.input {
 		msg := m.(commtypes.Message)
-		err := p.f(ctx, msg)
+		msgs, err := p.f(ctx, msg)
 		if err != nil {
 			return err
 		}
+		if msgs != nil {
+			p.output <- msgs
+		}
 	}
 	return nil
+}
+
+func (p *AsyncFuncRunner) Accept(msg commtypes.Message) {
+	p.input <- msg
+}
+
+func (p *AsyncFuncRunner) OutChan() chan []commtypes.Message {
+	return p.output
 }
 
 func (p *AsyncFuncRunner) Wait() error {
