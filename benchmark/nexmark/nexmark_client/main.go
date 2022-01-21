@@ -122,6 +122,8 @@ func main() {
 		query1()
 	case "q2":
 		query2()
+	case "q3":
+		query3()
 	case "q5":
 		query5()
 	case "q7":

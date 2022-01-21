@@ -165,7 +165,7 @@ func (h *query3PersonsByIDHandler) Query3PersonsByID(ctx context.Context, sp *co
 
 	filterPerson := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
 		func(msg *commtypes.Message) (bool, error) {
-			event := msg.Value.(ntypes.Event)
+			event := msg.Value.(*ntypes.Event)
 			return event.Etype == ntypes.PERSON && ((event.NewPerson.State == "OR") ||
 				event.NewPerson.State == "ID" || event.NewPerson.State == "CA"), nil
 		})))

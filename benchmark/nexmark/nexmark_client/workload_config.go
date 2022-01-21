@@ -26,6 +26,16 @@ type Q7WorkloadConfig struct {
 	NumSrcInstance          uint8  `json:"numSrcInstance"`
 }
 
+type Q3WorkloadConfig struct {
+	SrcOutTopic            string `json:"srcOutTopic"`
+	AucsBySellerIDOutTopic string `json:"aucsBySellerIDOutTopic"`
+	PersonsByIDOutTopic    string `json:"persByIDOutTopic"`
+	JoinTableOutTopic      string `json:"joinTableOutTopic"`
+	NumSrcPartition        uint8  `json:"numSrcPartition"`
+	NumInstance            uint8  `json:"numInstance"`
+	NumSrcInstance         uint8  `json:"numSrcInstance"`
+}
+
 type WindowedAvgConfig struct {
 	SrcOutTopic     string `json:"srcOutTopic"`
 	GroupByOutTopic string `json:"groupByOutTopic"`

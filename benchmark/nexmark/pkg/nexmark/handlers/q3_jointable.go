@@ -14,6 +14,7 @@ import (
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/treemap"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -85,6 +86,7 @@ func (h *q3JoinTableHandler) process(ctx context.Context,
 
 	personsOutChan := make(chan *common.FnOutput)
 	auctionsOutChan := make(chan *common.FnOutput)
+	completed := uint32(0)
 	wg.Add(1)
 	go func(out chan *common.FnOutput) {
 		defer wg.Done()
@@ -162,10 +164,17 @@ L:
 			if personOutput != nil {
 				return h.currentOffset, personOutput
 			}
-			break L
+			atomic.AddUint32(&completed, 1)
+			if atomic.LoadUint32(&completed) == 2 {
+				break L
+			}
 		case auctionOutput := <-auctionsOutChan:
 			if auctionOutput != nil {
 				return h.currentOffset, auctionOutput
+			}
+			atomic.AddUint32(&completed, 1)
+			if atomic.LoadUint32(&completed) == 2 {
+				break L
 			}
 			break L
 		case aJoinPMsgs := <-args.aJoinP.OutChan():
@@ -189,6 +198,20 @@ L:
 	wg.Wait()
 	close(personsOutChan)
 	close(auctionsOutChan)
+	err := args.aJoinP.Wait()
+	if err != nil {
+		return h.currentOffset, &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("aJoinP fail: %v", err),
+		}
+	}
+	err = args.pJoinA.Wait()
+	if err != nil {
+		return h.currentOffset, &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("pJoinA fail: %v", err),
+		}
+	}
 	return h.currentOffset, nil
 }
 

@@ -41,6 +41,8 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewQuery3PersonsByID(env), nil
 	case "q3AuctionsBySellerID":
 		return handlers.NewQuery3AuctionsBySellerID(env), nil
+	case "q3JoinTable":
+		return handlers.NewQ3JoinTableHandler(env), nil
 	case "query4":
 		return handlers.NewQuery4(env), nil
 	case "query5":

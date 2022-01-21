@@ -38,7 +38,7 @@ func query7() {
 		NumInstance: q7conf.NumSrcPartition,
 	}
 	q7BidKeyedByPriceInputParams := make([]*common.QueryInput, q7BidKeyedByPriceNodeConfig.NumInstance)
-	for i := 0; i < int(q7BidKeyedByPriceNodeConfig.NumInstance); i++ {
+	for i := uint8(0); i < q7BidKeyedByPriceNodeConfig.NumInstance; i++ {
 		q7BidKeyedByPriceInputParams[i] = &common.QueryInput{
 			Duration:          uint32(FLAGS_duration),
 			InputTopicNames:   []string{q7conf.SrcOutTopic},
@@ -84,20 +84,20 @@ func query7() {
 	q7BidKeyedByPriceOutput := make([]common.FnOutput, q7BidKeyedByPriceNodeConfig.NumInstance)
 	q7TransOutput := make([]common.FnOutput, q7TransNodeConfig.NumInstance)
 
-	for i := 0; i < int(q7conf.NumSrcInstance); i++ {
+	for i := uint8(0); i < q7conf.NumSrcInstance; i++ {
 		wg.Add(1)
 		idx := i
 		go invokeSourceFunc(client, q7conf.NumSrcPartition, &sourceOutput[idx], &wg)
 	}
 
-	for i := 0; i < int(q7BidKeyedByPriceNodeConfig.NumInstance); i++ {
+	for i := uint8(0); i < q7BidKeyedByPriceNodeConfig.NumInstance; i++ {
 		wg.Add(1)
 		idx := i
 		q7BidKeyedByPriceInputParams[idx].ParNum = uint8(idx)
 		go q7BidKeyedByPrice.Invoke(client, &q7BidKeyedByPriceOutput[idx], &wg, q7BidKeyedByPriceInputParams[idx])
 	}
 
-	for i := 0; i < int(q7TransNodeConfig.NumInstance); i++ {
+	for i := uint8(0); i < q7TransNodeConfig.NumInstance; i++ {
 		wg.Add(1)
 		idx := i
 		q7TransInputParams[idx].ParNum = uint8(i)
@@ -105,7 +105,7 @@ func query7() {
 	}
 	wg.Wait()
 
-	for i := 0; i < int(q7conf.NumSrcInstance); i++ {
+	for i := uint8(0); i < q7conf.NumSrcInstance; i++ {
 		idx := i
 		if sourceOutput[idx].Success {
 			common.ProcessThroughputLat(fmt.Sprintf("source-%d", idx),
@@ -113,7 +113,7 @@ func query7() {
 		}
 	}
 
-	for i := 0; i < int(q7BidKeyedByPriceNodeConfig.NumInstance); i++ {
+	for i := uint8(0); i < q7BidKeyedByPriceNodeConfig.NumInstance; i++ {
 		idx := i
 		if q7BidKeyedByPriceOutput[idx].Success {
 			common.ProcessThroughputLat(fmt.Sprintf("q7-bid-keyed-by-price-%d", idx),
@@ -121,7 +121,7 @@ func query7() {
 		}
 	}
 
-	for i := 0; i < int(q7TransNodeConfig.NumInstance); i++ {
+	for i := uint8(0); i < q7TransNodeConfig.NumInstance; i++ {
 		idx := i
 		if q7TransOutput[idx].Success {
 			common.ProcessThroughputLat(fmt.Sprintf("q7-transform-%d", idx),
