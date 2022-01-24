@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"math"
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sync"
 	"time"
@@ -22,8 +23,12 @@ type InMemoryWindowStore struct {
 	windowSize         int64
 	retentionPeriod    int64
 	observedStreamTime int64
-	retainDuplicates   bool
-	open               bool
+
+	seqNumMu sync.Mutex
+	seqNum   uint32
+
+	retainDuplicates bool
+	open             bool
 }
 
 func NewInMemoryWindowStore(name string, retentionPeriod int64, windowSize int64, retainDuplicates bool,
@@ -52,6 +57,17 @@ func NewInMemoryWindowStore(name string, retentionPeriod int64, windowSize int64
 	}
 }
 
+func (st *InMemoryWindowStore) updateSeqnumForDups() {
+	if st.retainDuplicates {
+		st.seqNumMu.Lock()
+		defer st.seqNumMu.Unlock()
+		if st.seqNum == math.MaxUint32 {
+			st.seqNum = 0
+		}
+		st.seqNum += 1
+	}
+}
+
 func (st *InMemoryWindowStore) Init(ctx StoreContext) {
 	st.sctx = ctx
 	st.open = true
@@ -70,9 +86,18 @@ func (s *InMemoryWindowStore) Put(key interface{}, value interface{}, windowStar
 		log.Warn().Msgf("Skipping record for expired segment.")
 	} else {
 		if value != nil {
+			s.updateSeqnumForDups()
+			k := key
+			if s.retainDuplicates {
+				k = versionedKey{
+					version: s.seqNum,
+					key:     k,
+				}
+			}
 			s.store.SetIfAbsent(windowStartTimestamp, concurrent_skiplist.New(s.comparable))
-			s.store.Get(windowStartTimestamp).Value().(*concurrent_skiplist.SkipList).Set(key, value)
-		} else {
+			s.store.Get(windowStartTimestamp).Value().(*concurrent_skiplist.SkipList).Set(k, value)
+		} else if !s.retainDuplicates {
+			// Skip if value is null and duplicates are allowed since this delete is a no-op
 			s.store.ComputeIfPresent(windowStartTimestamp, func(e *concurrent_skiplist.Element) {
 				kvmap := e.Value().(*concurrent_skiplist.SkipList)
 				kvmap.Remove(key)
@@ -102,7 +127,12 @@ func (s *InMemoryWindowStore) Get(key interface{}, windowStartTimestamp int64) (
 	}
 }
 
-func (s *InMemoryWindowStore) Fetch(key interface{}, timeFrom time.Time, timeTo time.Time, iterFunc func(int64, ValueT) error) error {
+func (s *InMemoryWindowStore) Fetch(
+	key interface{},
+	timeFrom time.Time,
+	timeTo time.Time,
+	iterFunc func(int64, ValueT) error,
+) error {
 	s.removeExpiredSegments()
 
 	tsFrom := timeFrom.UnixMilli()
@@ -117,35 +147,96 @@ func (s *InMemoryWindowStore) Fetch(key interface{}, timeFrom time.Time, timeTo 
 		return nil
 	}
 
-	err := s.store.IterateRange(tsFrom, tsTo, func(ts concurrent_skiplist.KeyT, val concurrent_skiplist.ValueT) error {
-		curT := ts.(int64)
-		v := val.(*concurrent_skiplist.SkipList)
-		elem := v.Get(key)
-		if elem != nil {
-			s.otrMu.Lock()
-			s.openedTimeRange[curT] = struct{}{}
-			s.otrMu.Unlock()
+	if !s.retainDuplicates {
+		err := s.store.IterateRange(tsFrom, tsTo, func(ts concurrent_skiplist.KeyT, val concurrent_skiplist.ValueT) error {
+			curT := ts.(int64)
+			v := val.(*concurrent_skiplist.SkipList)
+			elem := v.Get(key)
+			if elem != nil {
+				s.otrMu.Lock()
+				s.openedTimeRange[curT] = struct{}{}
+				s.otrMu.Unlock()
 
-			err := iterFunc(curT, elem.Value())
-			if err != nil {
-				return fmt.Errorf("iter func failed: %v", err)
+				err := iterFunc(curT, elem.Value())
+				if err != nil {
+					return fmt.Errorf("iter func failed: %v", err)
+				}
+
+				s.otrMu.Lock()
+				delete(s.openedTimeRange, curT)
+				s.otrMu.Unlock()
 			}
-
-			s.otrMu.Lock()
-			delete(s.openedTimeRange, curT)
-			s.otrMu.Unlock()
+			return nil
+		})
+		return err
+	} else {
+		keyFrom := versionedKey{
+			key:     key,
+			version: 0,
 		}
-		return nil
-	})
-	return err
+		keyTo := versionedKey{
+			key:     key,
+			version: math.MaxUint32,
+		}
+		return s.fetchWithKeyRange(keyFrom, keyTo, tsFrom, tsTo, iterFunc)
+	}
 }
 
 func (s *InMemoryWindowStore) BackwardFetch(key interface{}, timeFrom time.Time, timeTo time.Time) {
 	panic("not implemented")
 }
 
-func (s *InMemoryWindowStore) FetchWithKeyRange(keyFrom interface{}, keyTo interface{}, timeFrom time.Time, timeTo time.Time) {
-	panic("not implemented")
+func (s *InMemoryWindowStore) FetchWithKeyRange(
+	keyFrom interface{},
+	keyTo interface{},
+	timeFrom time.Time,
+	timeTo time.Time,
+	iterFunc func(int64, ValueT) error,
+) error {
+	s.removeExpiredSegments()
+
+	tsFrom := timeFrom.UnixMilli()
+	tsTo := timeTo.UnixMilli()
+
+	if tsFrom > tsTo {
+		return nil
+	}
+
+	minTime := s.observedStreamTime - s.retentionPeriod + 1
+	if minTime < tsFrom {
+		minTime = tsFrom
+	}
+
+	if tsTo < minTime {
+		return nil
+	}
+
+	return s.fetchWithKeyRange(keyFrom, keyTo, tsFrom, tsTo, iterFunc)
+}
+
+func (s *InMemoryWindowStore) fetchWithKeyRange(
+	keyFrom interface{},
+	keyTo interface{},
+	tsFrom int64,
+	tsTo int64,
+	iterFunc func(int64, ValueT) error,
+) error {
+	err := s.store.IterateRange(tsFrom, tsTo, func(ts concurrent_skiplist.KeyT, val concurrent_skiplist.ValueT) error {
+		curT := ts.(int64)
+		v := val.(*concurrent_skiplist.SkipList)
+		s.otrMu.Lock()
+		s.openedTimeRange[curT] = struct{}{}
+		s.otrMu.Unlock()
+		v.IterateRange(keyFrom, keyTo, func(kt concurrent_skiplist.KeyT, vt concurrent_skiplist.ValueT) error {
+			err := iterFunc(curT, vt)
+			return err
+		})
+		s.otrMu.Lock()
+		delete(s.openedTimeRange, curT)
+		s.otrMu.Unlock()
+		return nil
+	})
+	return err
 }
 
 func (s *InMemoryWindowStore) BackwardFetchWithKeyRange(keyFrom interface{}, keyTo interface{}, timeFrom time.Time, timeTo time.Time) KeyValueIterator {
