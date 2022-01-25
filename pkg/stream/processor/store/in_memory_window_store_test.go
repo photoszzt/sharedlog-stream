@@ -16,14 +16,37 @@ const (
 )
 
 func getWindowStore(retainDuplicates bool) *InMemoryWindowStore {
+	if !retainDuplicates {
+		store := NewInMemoryWindowStore("test1", RETENTION_PERIOD, WINDOW_SIZE, retainDuplicates,
+			concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
+				l := lhs.(uint32)
+				r := rhs.(uint32)
+				if l < r {
+					return -1
+				} else if l == r {
+					return 0
+				} else {
+					return 1
+				}
+			}))
+		return store
+	}
 	store := NewInMemoryWindowStore("test1", RETENTION_PERIOD, WINDOW_SIZE, retainDuplicates,
 		concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
-			l := lhs.(uint32)
-			r := rhs.(uint32)
+			ltmp := lhs.(versionedKey)
+			rtmp := rhs.(versionedKey)
+			l := ltmp.key.(uint32)
+			r := rtmp.key.(uint32)
 			if l < r {
 				return -1
 			} else if l == r {
-				return 0
+				if ltmp.version < rtmp.version {
+					return -1
+				} else if ltmp.version == rtmp.version {
+					return 0
+				} else {
+					return 1
+				}
 			} else {
 				return 1
 			}
@@ -1991,6 +2014,133 @@ func TestPutAndFetchAfter(t *testing.T) {
 	fmt.Fprint(os.Stderr, "35\n")
 	msgs = make([]commtypes.Message, 0)
 	store.Fetch(uint32(2), time.UnixMilli(startTime+12), time.UnixMilli(startTime+12+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = make([]commtypes.Message, 0)
+	checkSlice(ref_msgs, msgs, t)
+}
+
+func TestPutSameKeyTs(t *testing.T) {
+	startTime := SEGMENT_INTERVAL - 4
+	store := getWindowStore(true)
+
+	err := store.Put(uint32(0), "zero", startTime)
+	if err != nil {
+		t.Fatalf("fail to put err: %v", err)
+	}
+
+	msgs := make([]commtypes.Message, 0)
+	store.Fetch(uint32(0), time.UnixMilli(startTime-WINDOW_SIZE), time.UnixMilli(startTime+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs := []commtypes.Message{
+		{
+			Key:       uint32(0),
+			Value:     "zero",
+			Timestamp: startTime,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	err = store.Put(uint32(0), "zero", startTime)
+	if err != nil {
+		t.Fatalf("fail to put err: %v", err)
+	}
+
+	err = store.Put(uint32(0), "zero+", startTime)
+	if err != nil {
+		t.Fatalf("fail to put err: %v", err)
+	}
+
+	err = store.Put(uint32(0), "zero++", startTime)
+	if err != nil {
+		t.Fatalf("fail to put err: %v", err)
+	}
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(0), time.UnixMilli(startTime-WINDOW_SIZE), time.UnixMilli(startTime+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(0),
+			Value:     "zero",
+			Timestamp: startTime,
+		},
+		{
+			Key:       uint32(0),
+			Value:     "zero",
+			Timestamp: startTime,
+		},
+		{
+			Key:       uint32(0),
+			Value:     "zero+",
+			Timestamp: startTime,
+		},
+		{
+			Key:       uint32(0),
+			Value:     "zero++",
+			Timestamp: startTime,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(0), time.UnixMilli(startTime+1-WINDOW_SIZE), time.UnixMilli(startTime+1+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(0), time.UnixMilli(startTime+2-WINDOW_SIZE), time.UnixMilli(startTime+2+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(0), time.UnixMilli(startTime+3-WINDOW_SIZE), time.UnixMilli(startTime+3+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(0), time.UnixMilli(startTime+4-WINDOW_SIZE), time.UnixMilli(startTime+4+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
 		msg := commtypes.Message{
 			Key:       kt,
 			Value:     vt,
