@@ -131,7 +131,7 @@ func (s *InMemoryWindowStore) Fetch(
 	key interface{},
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, ValueT) error,
+	iterFunc func(int64, KeyT, ValueT) error,
 ) error {
 	s.removeExpiredSegments()
 
@@ -157,7 +157,7 @@ func (s *InMemoryWindowStore) Fetch(
 				s.openedTimeRange[curT] = struct{}{}
 				s.otrMu.Unlock()
 
-				err := iterFunc(curT, elem.Value())
+				err := iterFunc(curT, elem.Key(), elem.Value())
 				if err != nil {
 					return fmt.Errorf("iter func failed: %v", err)
 				}
@@ -182,7 +182,12 @@ func (s *InMemoryWindowStore) Fetch(
 	}
 }
 
-func (s *InMemoryWindowStore) BackwardFetch(key interface{}, timeFrom time.Time, timeTo time.Time) {
+func (s *InMemoryWindowStore) BackwardFetch(
+	key interface{},
+	timeFrom time.Time,
+	timeTo time.Time,
+	iterFunc func(int64, ValueT) error,
+) error {
 	panic("not implemented")
 }
 
@@ -191,7 +196,7 @@ func (s *InMemoryWindowStore) FetchWithKeyRange(
 	keyTo interface{},
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, ValueT) error,
+	iterFunc func(int64, KeyT, ValueT) error,
 ) error {
 	s.removeExpiredSegments()
 
@@ -219,7 +224,7 @@ func (s *InMemoryWindowStore) fetchWithKeyRange(
 	keyTo interface{},
 	tsFrom int64,
 	tsTo int64,
-	iterFunc func(int64, ValueT) error,
+	iterFunc func(int64, KeyT, ValueT) error,
 ) error {
 	err := s.store.IterateRange(tsFrom, tsTo, func(ts concurrent_skiplist.KeyT, val concurrent_skiplist.ValueT) error {
 		curT := ts.(int64)
@@ -228,7 +233,7 @@ func (s *InMemoryWindowStore) fetchWithKeyRange(
 		s.openedTimeRange[curT] = struct{}{}
 		s.otrMu.Unlock()
 		v.IterateRange(keyFrom, keyTo, func(kt concurrent_skiplist.KeyT, vt concurrent_skiplist.ValueT) error {
-			err := iterFunc(curT, vt)
+			err := iterFunc(curT, kt, vt)
 			return err
 		})
 		s.otrMu.Lock()
@@ -239,16 +244,30 @@ func (s *InMemoryWindowStore) fetchWithKeyRange(
 	return err
 }
 
-func (s *InMemoryWindowStore) BackwardFetchWithKeyRange(keyFrom interface{}, keyTo interface{}, timeFrom time.Time, timeTo time.Time) KeyValueIterator {
-	panic("not implemented")
-}
+func (s *InMemoryWindowStore) IterAll(iterFunc func(int64, KeyT, ValueT) error) error {
+	s.removeExpiredSegments()
+	minTime := s.observedStreamTime - s.retentionPeriod
 
-func (s *InMemoryWindowStore) FetchAll(timeFrom time.Time, timeTo time.Time) KeyValueIterator {
-	panic("not implemented")
-}
+	err := s.store.IterFrom(minTime, func(kt concurrent_skiplist.KeyT, vt concurrent_skiplist.ValueT) error {
+		curT := kt.(int64)
+		v := vt.(*concurrent_skiplist.SkipList)
+		s.otrMu.Lock()
+		s.openedTimeRange[curT] = struct{}{}
+		s.otrMu.Unlock()
 
-func (s *InMemoryWindowStore) BackwardFetchAll(timeFrom time.Time, timeTo time.Time) KeyValueIterator {
-	panic("not implemented")
+		for i := v.Front(); i != nil; i = i.Next() {
+			err := iterFunc(curT, i.Key(), i.Value())
+			if err != nil {
+				return err
+			}
+		}
+
+		s.otrMu.Lock()
+		delete(s.openedTimeRange, curT)
+		s.otrMu.Unlock()
+		return nil
+	})
+	return err
 }
 
 func (s *InMemoryWindowStore) removeExpiredSegments() {
@@ -267,4 +286,30 @@ func (s *InMemoryWindowStore) removeExpiredSegments() {
 		}
 	}
 	s.store.RemoveUntil(minLiveTime)
+}
+
+func (s *InMemoryWindowStore) BackwardFetchWithKeyRange(
+	keyFrom interface{},
+	keyTo interface{},
+	timeFrom time.Time,
+	timeTo time.Time,
+	iterFunc func(int64, ValueT) error,
+) error {
+	panic("not implemented")
+}
+
+func (s *InMemoryWindowStore) FetchAll(
+	timeFrom time.Time,
+	timeTo time.Time,
+	iterFunc func(int64, ValueT) error,
+) error {
+	panic("not implemented")
+}
+
+func (s *InMemoryWindowStore) BackwardFetchAll(
+	timeFrom time.Time,
+	timeTo time.Time,
+	iterFunc func(int64, ValueT) error,
+) error {
+	panic("not implemented")
 }

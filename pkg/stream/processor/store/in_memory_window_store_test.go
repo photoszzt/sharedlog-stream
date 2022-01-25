@@ -2,7 +2,9 @@ package store
 
 import (
 	"fmt"
+	"os"
 	"sharedlog-stream/pkg/concurrent_skiplist"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"testing"
 	"time"
 )
@@ -13,8 +15,8 @@ const (
 	RETENTION_PERIOD = 2 * SEGMENT_INTERVAL
 )
 
-func getWindowStore() *InMemoryWindowStore {
-	store := NewInMemoryWindowStore("test1", RETENTION_PERIOD, WINDOW_SIZE, false,
+func getWindowStore(retainDuplicates bool) *InMemoryWindowStore {
+	store := NewInMemoryWindowStore("test1", RETENTION_PERIOD, WINDOW_SIZE, retainDuplicates,
 		concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
 			l := lhs.(uint32)
 			r := rhs.(uint32)
@@ -88,7 +90,7 @@ func assertGet(store *InMemoryWindowStore, k uint32, expected_val string, startT
 
 func assertFetch(store *InMemoryWindowStore, k uint32, timeFrom int64, timeTo int64) (map[string]struct{}, error) {
 	res := make(map[string]struct{})
-	err := store.Fetch(k, time.UnixMilli(timeFrom), time.UnixMilli(timeTo), func(i int64, vt ValueT) error {
+	err := store.Fetch(k, time.UnixMilli(timeFrom), time.UnixMilli(timeTo), func(i int64, kt KeyT, vt ValueT) error {
 		val := vt.(string)
 		res[val] = struct{}{}
 		return nil
@@ -101,7 +103,7 @@ func assertFetch(store *InMemoryWindowStore, k uint32, timeFrom int64, timeTo in
 
 func TestGetAndRange(t *testing.T) {
 	startTime := SEGMENT_INTERVAL - 4
-	store := getWindowStore()
+	store := getWindowStore(false)
 	err := putFirstBatch(store, startTime)
 	if err != nil {
 		t.Fatalf("fail to set up window store: %v\n", err)
@@ -486,7 +488,7 @@ func TestGetAndRange(t *testing.T) {
 
 func TestShouldGetAllNonDeletedMsgs(t *testing.T) {
 	startTime := SEGMENT_INTERVAL - 4
-	store := getWindowStore()
+	store := getWindowStore(false)
 
 	err := store.Put(uint32(0), "zero", startTime)
 	if err != nil {
@@ -569,7 +571,7 @@ func TestShouldGetAllNonDeletedMsgs(t *testing.T) {
 
 func TestExpiration(t *testing.T) {
 	currentTime := int64(0)
-	store := getWindowStore()
+	store := getWindowStore(false)
 	err := store.Put(uint32(1), "one", int64(currentTime))
 	if err != nil {
 		t.Fatalf("put err: %v", err)
@@ -677,4 +679,1326 @@ func TestExpiration(t *testing.T) {
 	if val != expected {
 		t.Fatalf("got unexpected val: %s, expected %s", val, expected)
 	}
+}
+
+func TestShouldGetAll(t *testing.T) {
+	startTime := SEGMENT_INTERVAL - 4
+	store := getWindowStore(false)
+	err := putFirstBatch(store, startTime)
+	if err != nil {
+		t.Fatalf("fail to set up window store: %v\n", err)
+	}
+
+	msgs := make([]commtypes.Message, 0)
+	store.IterAll(func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs := []commtypes.Message{
+		{
+			Key:       uint32(0),
+			Value:     "zero",
+			Timestamp: startTime,
+		},
+		{
+			Key:       uint32(1),
+			Value:     "one",
+			Timestamp: startTime + 1,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two",
+			Timestamp: startTime + 2,
+		},
+		{
+			Key:       uint32(4),
+			Value:     "four",
+			Timestamp: startTime + 4,
+		},
+		{
+			Key:       uint32(5),
+			Value:     "five",
+			Timestamp: startTime + 5,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+}
+
+func checkSlice(ref_msgs []commtypes.Message, msgs []commtypes.Message, t *testing.T) {
+	if len(msgs) != len(ref_msgs) {
+		t.Fatalf("store contains different number of elements. expected: %d, got %d", len(ref_msgs), len(msgs))
+	}
+
+	for idx, msg := range msgs {
+		ref_msg := ref_msgs[idx]
+		if msg.Key.(uint32) != ref_msg.Key {
+			t.Fatalf("%dth item's key should be %v but got %v",
+				idx, ref_msg.Key, msg.Key)
+		}
+		if msg.Value.(string) != ref_msg.Value {
+			t.Fatalf("%dth item's val should be %v but got %v",
+				idx, ref_msg.Value, msg.Value)
+		}
+		if msg.Timestamp != ref_msg.Timestamp {
+			t.Fatalf("%dth item's ts should be %v but got %v",
+				idx, ref_msg.Timestamp, msg.Timestamp)
+		}
+	}
+}
+
+func outOfOrderPut(store *InMemoryWindowStore, startTime int64) error {
+	err := store.Put(uint32(4), "four", startTime+4)
+	if err != nil {
+		return err
+	}
+	err = store.Put(uint32(0), "zero", startTime)
+	if err != nil {
+		return err
+	}
+	err = store.Put(uint32(2), "two", startTime+2)
+	if err != nil {
+		return err
+	}
+	err = store.Put(uint32(3), "three", startTime+3)
+	if err != nil {
+		return err
+	}
+	err = store.Put(uint32(1), "one", startTime+1)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func TestShouldGetAllReturnTimestampOrdered(t *testing.T) {
+	startTime := SEGMENT_INTERVAL - 4
+	store := getWindowStore(false)
+	err := outOfOrderPut(store, startTime)
+	if err != nil {
+		t.Fatalf("fail to setup entries in store: %v", err)
+	}
+
+	msgs := make([]commtypes.Message, 0)
+	store.IterAll(func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs := []commtypes.Message{
+		{
+			Key:       uint32(0),
+			Value:     "zero",
+			Timestamp: startTime,
+		},
+		{
+			Key:       uint32(1),
+			Value:     "one",
+			Timestamp: startTime + 1,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two",
+			Timestamp: startTime + 2,
+		},
+		{
+			Key:       uint32(3),
+			Value:     "three",
+			Timestamp: startTime + 3,
+		},
+		{
+			Key:       uint32(4),
+			Value:     "four",
+			Timestamp: startTime + 4,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+}
+
+func TestFetchRange(t *testing.T) {
+	startTime := SEGMENT_INTERVAL - 4
+	store := getWindowStore(false)
+	err := putFirstBatch(store, startTime)
+	if err != nil {
+		t.Fatalf("fail to set up window store: %v\n", err)
+	}
+
+	fmt.Fprint(os.Stderr, "1\n")
+	msgs := make([]commtypes.Message, 0)
+	store.FetchWithKeyRange(uint32(0), uint32(1),
+		time.UnixMilli(startTime-WINDOW_SIZE),
+		time.UnixMilli(startTime+WINDOW_SIZE),
+		func(ts int64, kt KeyT, vt ValueT) error {
+			msg := commtypes.Message{
+				Key:       kt,
+				Value:     vt,
+				Timestamp: ts,
+			}
+			msgs = append(msgs, msg)
+			return nil
+		})
+	ref_msgs := []commtypes.Message{
+		{
+			Key:       uint32(0),
+			Value:     "zero",
+			Timestamp: startTime,
+		},
+		{
+			Key:       uint32(1),
+			Value:     "one",
+			Timestamp: startTime + 1,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "2\n")
+	msgs = make([]commtypes.Message, 0)
+	store.FetchWithKeyRange(uint32(1), uint32(1),
+		time.UnixMilli(startTime-WINDOW_SIZE),
+		time.UnixMilli(startTime+WINDOW_SIZE),
+		func(ts int64, kt KeyT, vt ValueT) error {
+			msg := commtypes.Message{
+				Key:       kt,
+				Value:     vt,
+				Timestamp: ts,
+			}
+			msgs = append(msgs, msg)
+			return nil
+		})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(1),
+			Value:     "one",
+			Timestamp: startTime + 1,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "3\n")
+	msgs = make([]commtypes.Message, 0)
+	store.FetchWithKeyRange(uint32(1), uint32(3),
+		time.UnixMilli(startTime-WINDOW_SIZE),
+		time.UnixMilli(startTime+WINDOW_SIZE),
+		func(ts int64, kt KeyT, vt ValueT) error {
+			msg := commtypes.Message{
+				Key:       kt,
+				Value:     vt,
+				Timestamp: ts,
+			}
+			msgs = append(msgs, msg)
+			return nil
+		})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(1),
+			Value:     "one",
+			Timestamp: startTime + 1,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two",
+			Timestamp: startTime + 2,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "4\n")
+	msgs = make([]commtypes.Message, 0)
+	store.FetchWithKeyRange(uint32(0), uint32(5),
+		time.UnixMilli(startTime-WINDOW_SIZE),
+		time.UnixMilli(startTime+WINDOW_SIZE),
+		func(ts int64, kt KeyT, vt ValueT) error {
+			msg := commtypes.Message{
+				Key:       kt,
+				Value:     vt,
+				Timestamp: ts,
+			}
+			msgs = append(msgs, msg)
+			return nil
+		})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(0),
+			Value:     "zero",
+			Timestamp: startTime,
+		},
+		{
+			Key:       uint32(1),
+			Value:     "one",
+			Timestamp: startTime + 1,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two",
+			Timestamp: startTime + 2,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "5\n")
+	msgs = make([]commtypes.Message, 0)
+	store.FetchWithKeyRange(uint32(0), uint32(5),
+		time.UnixMilli(startTime-WINDOW_SIZE),
+		time.UnixMilli(startTime+WINDOW_SIZE+5),
+		func(ts int64, kt KeyT, vt ValueT) error {
+			msg := commtypes.Message{
+				Key:       kt,
+				Value:     vt,
+				Timestamp: ts,
+			}
+			msgs = append(msgs, msg)
+			return nil
+		})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(0),
+			Value:     "zero",
+			Timestamp: startTime,
+		},
+		{
+			Key:       uint32(1),
+			Value:     "one",
+			Timestamp: startTime + 1,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two",
+			Timestamp: startTime + 2,
+		},
+		{
+			Key:       uint32(4),
+			Value:     "four",
+			Timestamp: startTime + 4,
+		},
+		{
+			Key:       uint32(5),
+			Value:     "five",
+			Timestamp: startTime + 5,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "6\n")
+	msgs = make([]commtypes.Message, 0)
+	store.FetchWithKeyRange(uint32(0), uint32(5),
+		time.UnixMilli(startTime+2),
+		time.UnixMilli(startTime+WINDOW_SIZE+5),
+		func(ts int64, kt KeyT, vt ValueT) error {
+			msg := commtypes.Message{
+				Key:       kt,
+				Value:     vt,
+				Timestamp: ts,
+			}
+			msgs = append(msgs, msg)
+			return nil
+		})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two",
+			Timestamp: startTime + 2,
+		},
+		{
+			Key:       uint32(4),
+			Value:     "four",
+			Timestamp: startTime + 4,
+		},
+		{
+			Key:       uint32(5),
+			Value:     "five",
+			Timestamp: startTime + 5,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "7\n")
+	msgs = make([]commtypes.Message, 0)
+	store.FetchWithKeyRange(uint32(4), uint32(5),
+		time.UnixMilli(startTime+2),
+		time.UnixMilli(startTime+WINDOW_SIZE),
+		func(ts int64, kt KeyT, vt ValueT) error {
+			msg := commtypes.Message{
+				Key:       kt,
+				Value:     vt,
+				Timestamp: ts,
+			}
+			msgs = append(msgs, msg)
+			return nil
+		})
+	ref_msgs = make([]commtypes.Message, 0)
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "8\n")
+	msgs = make([]commtypes.Message, 0)
+	store.FetchWithKeyRange(uint32(0), uint32(3),
+		time.UnixMilli(startTime+3),
+		time.UnixMilli(startTime+WINDOW_SIZE+5),
+		func(ts int64, kt KeyT, vt ValueT) error {
+			msg := commtypes.Message{
+				Key:       kt,
+				Value:     vt,
+				Timestamp: ts,
+			}
+			msgs = append(msgs, msg)
+			return nil
+		})
+	ref_msgs = make([]commtypes.Message, 0)
+	checkSlice(ref_msgs, msgs, t)
+}
+
+func TestPutAndFetchBefore(t *testing.T) {
+	startTime := SEGMENT_INTERVAL - 4
+	store := getWindowStore(false)
+	err := putFirstBatch(store, startTime)
+	if err != nil {
+		t.Fatalf("fail to set up window store: %v\n", err)
+	}
+
+	msgs := make([]commtypes.Message, 0)
+	store.Fetch(uint32(0), time.UnixMilli(startTime-WINDOW_SIZE), time.UnixMilli(startTime), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs := []commtypes.Message{
+		{
+			Key:       uint32(0),
+			Value:     "zero",
+			Timestamp: startTime,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(1), time.UnixMilli(startTime+1-WINDOW_SIZE), time.UnixMilli(startTime+1), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(1),
+			Value:     "one",
+			Timestamp: startTime + 1,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+2-WINDOW_SIZE), time.UnixMilli(startTime+2), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two",
+			Timestamp: startTime + 2,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(3), time.UnixMilli(startTime+3-WINDOW_SIZE), time.UnixMilli(startTime+3), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = make([]commtypes.Message, 0)
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(4), time.UnixMilli(startTime+4-WINDOW_SIZE), time.UnixMilli(startTime+4), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(4),
+			Value:     "four",
+			Timestamp: startTime + 4,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(5), time.UnixMilli(startTime+5-WINDOW_SIZE), time.UnixMilli(startTime+5), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(5),
+			Value:     "five",
+			Timestamp: startTime + 5,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	putSecondBatch(store, startTime)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime-1-WINDOW_SIZE), time.UnixMilli(startTime-1), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = make([]commtypes.Message, 0)
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+0-WINDOW_SIZE), time.UnixMilli(startTime+0), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = make([]commtypes.Message, 0)
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+1-WINDOW_SIZE), time.UnixMilli(startTime+1), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = make([]commtypes.Message, 0)
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+2-WINDOW_SIZE), time.UnixMilli(startTime+2), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two",
+			Timestamp: startTime + 2,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+3-WINDOW_SIZE), time.UnixMilli(startTime+3), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two",
+			Timestamp: startTime + 2,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+1",
+			Timestamp: startTime + 3,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+4-WINDOW_SIZE), time.UnixMilli(startTime+4), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two",
+			Timestamp: startTime + 2,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+1",
+			Timestamp: startTime + 3,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+2",
+			Timestamp: startTime + 4,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+5-WINDOW_SIZE), time.UnixMilli(startTime+5), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two",
+			Timestamp: startTime + 2,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+1",
+			Timestamp: startTime + 3,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+2",
+			Timestamp: startTime + 4,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+3",
+			Timestamp: startTime + 5,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+6-WINDOW_SIZE), time.UnixMilli(startTime+6), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two+1",
+			Timestamp: startTime + 3,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+2",
+			Timestamp: startTime + 4,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+3",
+			Timestamp: startTime + 5,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+4",
+			Timestamp: startTime + 6,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+7-WINDOW_SIZE), time.UnixMilli(startTime+7), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two+2",
+			Timestamp: startTime + 4,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+3",
+			Timestamp: startTime + 5,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+4",
+			Timestamp: startTime + 6,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+5",
+			Timestamp: startTime + 7,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+8-WINDOW_SIZE), time.UnixMilli(startTime+8), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two+3",
+			Timestamp: startTime + 5,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+4",
+			Timestamp: startTime + 6,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+5",
+			Timestamp: startTime + 7,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+6",
+			Timestamp: startTime + 8,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+9-WINDOW_SIZE), time.UnixMilli(startTime+9), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two+4",
+			Timestamp: startTime + 6,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+5",
+			Timestamp: startTime + 7,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+6",
+			Timestamp: startTime + 8,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+10-WINDOW_SIZE), time.UnixMilli(startTime+10), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two+5",
+			Timestamp: startTime + 7,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+6",
+			Timestamp: startTime + 8,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+11-WINDOW_SIZE), time.UnixMilli(startTime+11), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two+6",
+			Timestamp: startTime + 8,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+12-WINDOW_SIZE), time.UnixMilli(startTime+12), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = make([]commtypes.Message, 0)
+	checkSlice(ref_msgs, msgs, t)
+
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+13-WINDOW_SIZE), time.UnixMilli(startTime+13), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = make([]commtypes.Message, 0)
+	checkSlice(ref_msgs, msgs, t)
+}
+
+func TestPutAndFetchAfter(t *testing.T) {
+	startTime := SEGMENT_INTERVAL - 4
+	store := getWindowStore(false)
+	err := putFirstBatch(store, startTime)
+	if err != nil {
+		t.Fatalf("fail to set up window store: %v\n", err)
+	}
+
+	fmt.Fprint(os.Stderr, "11\n")
+	msgs := make([]commtypes.Message, 0)
+	store.Fetch(uint32(0), time.UnixMilli(startTime), time.UnixMilli(startTime+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs := []commtypes.Message{
+		{
+			Key:       uint32(0),
+			Value:     "zero",
+			Timestamp: startTime,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "12\n")
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(1), time.UnixMilli(startTime+1), time.UnixMilli(startTime+1+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(1),
+			Value:     "one",
+			Timestamp: startTime + 1,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "13\n")
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+2), time.UnixMilli(startTime+2+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two",
+			Timestamp: startTime + 2,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "14\n")
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(3), time.UnixMilli(startTime+3), time.UnixMilli(startTime+3+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = make([]commtypes.Message, 0)
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "15\n")
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(4), time.UnixMilli(startTime+4), time.UnixMilli(startTime+4+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(4),
+			Value:     "four",
+			Timestamp: startTime + 4,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "16\n")
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(5), time.UnixMilli(startTime+5), time.UnixMilli(startTime+5+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(5),
+			Value:     "five",
+			Timestamp: startTime + 5,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	putSecondBatch(store, startTime)
+
+	fmt.Fprint(os.Stderr, "21\n")
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime-2), time.UnixMilli(startTime-2+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = make([]commtypes.Message, 0)
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "22\n")
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime-1), time.UnixMilli(startTime-1+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two",
+			Timestamp: startTime + 2,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "23\n")
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime), time.UnixMilli(startTime+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two",
+			Timestamp: startTime + 2,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+1",
+			Timestamp: startTime + 3,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "24\n")
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+1), time.UnixMilli(startTime+1+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two",
+			Timestamp: startTime + 2,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+1",
+			Timestamp: startTime + 3,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+2",
+			Timestamp: startTime + 4,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "25\n")
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+2), time.UnixMilli(startTime+2+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two",
+			Timestamp: startTime + 2,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+1",
+			Timestamp: startTime + 3,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+2",
+			Timestamp: startTime + 4,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+3",
+			Timestamp: startTime + 5,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "26\n")
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+3), time.UnixMilli(startTime+3+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two+1",
+			Timestamp: startTime + 3,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+2",
+			Timestamp: startTime + 4,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+3",
+			Timestamp: startTime + 5,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+4",
+			Timestamp: startTime + 6,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "27\n")
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+4), time.UnixMilli(startTime+4+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two+2",
+			Timestamp: startTime + 4,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+3",
+			Timestamp: startTime + 5,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+4",
+			Timestamp: startTime + 6,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+5",
+			Timestamp: startTime + 7,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "28\n")
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+5), time.UnixMilli(startTime+5+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two+3",
+			Timestamp: startTime + 5,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+4",
+			Timestamp: startTime + 6,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+5",
+			Timestamp: startTime + 7,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+6",
+			Timestamp: startTime + 8,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "29\n")
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+6), time.UnixMilli(startTime+6+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two+4",
+			Timestamp: startTime + 6,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+5",
+			Timestamp: startTime + 7,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+6",
+			Timestamp: startTime + 8,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "30\n")
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+7), time.UnixMilli(startTime+7+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two+5",
+			Timestamp: startTime + 7,
+		},
+		{
+			Key:       uint32(2),
+			Value:     "two+6",
+			Timestamp: startTime + 8,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "31\n")
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+8), time.UnixMilli(startTime+8+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = []commtypes.Message{
+		{
+			Key:       uint32(2),
+			Value:     "two+6",
+			Timestamp: startTime + 8,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "32\n")
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+9), time.UnixMilli(startTime+9+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = make([]commtypes.Message, 0)
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "33\n")
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+10), time.UnixMilli(startTime+10+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = make([]commtypes.Message, 0)
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "34\n")
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+11), time.UnixMilli(startTime+11+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = make([]commtypes.Message, 0)
+	checkSlice(ref_msgs, msgs, t)
+
+	fmt.Fprint(os.Stderr, "35\n")
+	msgs = make([]commtypes.Message, 0)
+	store.Fetch(uint32(2), time.UnixMilli(startTime+12), time.UnixMilli(startTime+12+WINDOW_SIZE), func(ts int64, kt KeyT, vt ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	ref_msgs = make([]commtypes.Message, 0)
+	checkSlice(ref_msgs, msgs, t)
 }

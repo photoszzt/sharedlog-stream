@@ -106,31 +106,60 @@ func (st *InMemoryWindowStoreWithChangelog) Get(key KeyT, windowStartTimestamp i
 	return val, ok, nil
 }
 
-func (st *InMemoryWindowStoreWithChangelog) Fetch(key KeyT, timeFrom time.Time, timeTo time.Time, iterFunc func(int64, ValueT) error) error {
+func (st *InMemoryWindowStoreWithChangelog) Fetch(
+	key KeyT,
+	timeFrom time.Time,
+	timeTo time.Time,
+	iterFunc func(int64, KeyT, ValueT) error,
+) error {
 	return st.windowStore.Fetch(key, timeFrom, timeTo, iterFunc)
 }
 
-func (st *InMemoryWindowStoreWithChangelog) BackwardFetch(key KeyT, timeFrom time.Time, timeTo time.Time) {
+func (st *InMemoryWindowStoreWithChangelog) BackwardFetch(
+	key KeyT,
+	timeFrom time.Time,
+	timeTo time.Time,
+	iterFunc func(int64, KeyT, ValueT) error,
+) error {
 	panic("not implemented")
 
 }
 
-func (st *InMemoryWindowStoreWithChangelog) FetchWithKeyRange(keyFrom KeyT, keyTo KeyT, timeFrom time.Time, timeTo time.Time) {
+func (st *InMemoryWindowStoreWithChangelog) FetchWithKeyRange(
+	keyFrom KeyT,
+	keyTo KeyT,
+	timeFrom time.Time,
+	timeTo time.Time,
+	iterFunc func(int64, KeyT, ValueT) error,
+) error {
+	panic("not implemented")
+}
+
+func (st *InMemoryWindowStoreWithChangelog) BackwardFetchWithKeyRange(
+	keyFrom KeyT,
+	keyTo KeyT,
+	timeFrom time.Time,
+	timeTo time.Time,
+	iterFunc func(int64, KeyT, ValueT) error,
+) error {
 	panic("not implemented")
 
 }
 
-func (st *InMemoryWindowStoreWithChangelog) BackwardFetchWithKeyRange(keyFrom KeyT, keyTo KeyT, timeFrom time.Time, timeTo time.Time) {
+func (st *InMemoryWindowStoreWithChangelog) FetchAll(
+	timeFrom time.Time,
+	timeTo time.Time,
+	iterFunc func(int64, KeyT, ValueT) error,
+) error {
 	panic("not implemented")
 
 }
 
-func (st *InMemoryWindowStoreWithChangelog) FetchAll(timeFrom time.Time, timeTo time.Time) {
-	panic("not implemented")
-
-}
-
-func (st *InMemoryWindowStoreWithChangelog) BackwardFetchAll(timeFrom time.Time, timeTo time.Time) {
+func (st *InMemoryWindowStoreWithChangelog) BackwardFetchAll(
+	timeFrom time.Time,
+	timeTo time.Time,
+	iterFunc func(int64, KeyT, ValueT) error,
+) error {
 	panic("not implemented")
 
 }

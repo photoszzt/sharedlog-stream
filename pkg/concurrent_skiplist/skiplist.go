@@ -185,7 +185,22 @@ func (list *SkipList) IterateRange(startK KeyT, endK KeyT, iterFunc func(KeyT, V
 	beg := list.findBeginNode(startK)
 	end := list.findEndNode(endK)
 
-	for i := beg; i != nil && list.comparable.Compare(i.key, end.key) <= 0; i = i.Next() {
+	for i := beg; i != nil && end != nil && list.comparable.Compare(i.key, end.key) <= 0; i = i.Next() {
+		err := iterFunc(i.key, i.value)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (list *SkipList) IterFrom(startK KeyT, iterFunc func(KeyT, ValueT) error) error {
+	list.mutex.Lock()
+	defer list.mutex.Unlock()
+
+	beg := list.findBeginNode(startK)
+
+	for i := beg; i != nil; i = i.Next() {
 		err := iterFunc(i.key, i.value)
 		if err != nil {
 			return err

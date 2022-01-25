@@ -121,7 +121,7 @@ func (p *StreamStreamJoinProcessor) Process(ctx context.Context, msg commtypes.M
 	timeToNs := (timeTo - timeToSec*1000) * 1000000
 	err := p.otherWindowStore.Fetch(msg.Key,
 		time.Unix(int64(timeFromSec), int64(timeFromNs)),
-		time.Unix(int64(timeToSec), int64(timeToNs)), func(otherRecordTs int64, vt store.ValueT) error {
+		time.Unix(int64(timeToSec), int64(timeToNs)), func(otherRecordTs int64, kt store.KeyT, vt store.ValueT) error {
 			var newTs int64
 			// needOuterJoin = false
 			newVal := p.joiner.Apply(msg.Key, msg.Value, vt)
