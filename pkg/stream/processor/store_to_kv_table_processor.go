@@ -4,6 +4,7 @@ import (
 	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/treemap"
 )
 
 type StoreToKVTableProcessor struct {
@@ -48,4 +49,10 @@ func (p *StoreToKVTableProcessor) ProcessAndReturn(ctx context.Context, msg comm
 		return nil, err
 	}
 	return []commtypes.Message{msg}, nil
+}
+
+func ToInMemKVTable(storeName string, compare func(a, b treemap.Key) int) (*MeteredProcessor, store.KeyValueStore, error) {
+	store := store.NewInMemoryKeyValueStore(storeName, compare)
+	toTableProc := NewMeteredProcessor(NewStoreToKVTableProcessor(store))
+	return toTableProc, store, nil
 }

@@ -6,9 +6,9 @@ type KeyT interface{}
 
 type ValueT interface{}
 
-type versionedKey struct {
-	key     interface{}
-	version uint32
+type VersionedKey struct {
+	Key     interface{}
+	Version uint32
 }
 
 type versionedKeySerialized struct {

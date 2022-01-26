@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -97,6 +98,7 @@ func (h *query3AuctionsBySellerIDHandler) process(
 					Message: fmt.Sprintf("add topic partition failed: %v\n", err),
 				}
 			}
+			fmt.Fprintf(os.Stderr, "append %v to substream %v\n", changeKeyedMsg[0], par)
 			err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{
@@ -132,20 +134,11 @@ func CommonGetSrcSink(ctx context.Context, sp *common.QueryInput,
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeyEncoder: commtypes.Uint64Encoder{},
-		/*
-			ValueEncoder: commtypes.EncoderFunc(func(val interface{}) ([]byte, error) {
-				ret := val.(*ntypes.NameCityStateId)
-				if sp.SerdeFormat == uint8(commtypes.JSON) {
-					return json.Marshal(ret)
-				} else {
-					return ret.MarshalMsg(nil)
-				}
-			}),
-		*/
+		KeyEncoder:   commtypes.Uint64Encoder{},
 		ValueEncoder: eventSerde,
 		MsgEncoder:   msgSerde,
 	}
+	fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
 	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
 	return src, sink, nil

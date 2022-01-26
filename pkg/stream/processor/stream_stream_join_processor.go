@@ -51,7 +51,6 @@ type StreamStreamJoinProcessor struct {
 	otherWindowStore  store.WindowStore
 	joiner            ValueJoinerWithKey
 	sharedTimeTracker *TimeTracker
-	otherWindowName   string
 	joinAfterMs       int64
 	joinGraceMs       int64
 	joinBeforeMs      int64
@@ -61,12 +60,18 @@ type StreamStreamJoinProcessor struct {
 
 var _ = Processor(&StreamStreamJoinProcessor{})
 
-func NewStreamStreamJoinProcessor(otherWindowName string, jw *JoinWindows, joiner ValueJoinerWithKey,
-	outer bool, isLeftSide bool, stk *TimeTracker) *StreamStreamJoinProcessor {
+func NewStreamStreamJoinProcessor(
+	otherWindowStore store.WindowStore,
+	jw *JoinWindows,
+	joiner ValueJoinerWithKey,
+	outer bool,
+	isLeftSide bool,
+	stk *TimeTracker,
+) *StreamStreamJoinProcessor {
 	ssjp := &StreamStreamJoinProcessor{
 		isLeftSide:        isLeftSide,
 		outer:             outer,
-		otherWindowName:   otherWindowName,
+		otherWindowStore:  otherWindowStore,
 		joiner:            joiner,
 		joinGraceMs:       jw.GracePeriodMs(),
 		sharedTimeTracker: stk,
@@ -90,9 +95,23 @@ func (p *StreamStreamJoinProcessor) WithProcessorContext(pctx store.StoreContext
 }
 
 func (p *StreamStreamJoinProcessor) Process(ctx context.Context, msg commtypes.Message) error {
+	newMsgs, err := p.ProcessAndReturn(ctx, msg)
+	if err != nil {
+		return err
+	}
+	for _, newMsg := range newMsgs {
+		err := p.pipe.Forward(ctx, newMsg)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *StreamStreamJoinProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	if msg.Key == nil || msg.Value == nil {
 		log.Warn().Msgf("skipping record due to null key or value. key=%v, val=%v", msg.Key, msg.Value)
-		return nil
+		return nil, nil
 	}
 
 	// needOuterJoin := p.outer
@@ -119,6 +138,7 @@ func (p *StreamStreamJoinProcessor) Process(ctx context.Context, msg commtypes.M
 
 	timeToSec := timeTo / 1000
 	timeToNs := (timeTo - timeToSec*1000) * 1000000
+	msgs := make([]commtypes.Message, 0)
 	err := p.otherWindowStore.Fetch(msg.Key,
 		time.Unix(int64(timeFromSec), int64(timeFromNs)),
 		time.Unix(int64(timeToSec), int64(timeToNs)), func(otherRecordTs int64, kt store.KeyT, vt store.ValueT) error {
@@ -130,19 +150,13 @@ func (p *StreamStreamJoinProcessor) Process(ctx context.Context, msg commtypes.M
 			} else {
 				newTs = otherRecordTs
 			}
-			return p.pipe.Forward(ctx, commtypes.Message{Key: msg.Key, Value: newVal, Timestamp: newTs})
+			msgs = append(msgs, commtypes.Message{Key: msg.Key, Value: newVal, Timestamp: newTs})
+			return nil
 		})
-	if err != nil {
-		return err
-	}
+	return msgs, err
 	/*
 		if needOuterJoin {
 			// TODO
 		}
 	*/
-	return nil
-}
-
-func (p *StreamStreamJoinProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	panic("not implemented")
 }

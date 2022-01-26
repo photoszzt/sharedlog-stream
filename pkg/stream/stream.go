@@ -153,22 +153,26 @@ func (s *StreamImpl) GroupByKey(grouped *Grouped) GroupedStream {
 }
 
 func (s *StreamImpl) StreamStreamJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows *processor.JoinWindows, jp *store.JoinParam) Stream {
-	lp := processor.NewStreamJoinWindowProcessor(jp.LeftWindowStoreName)
-	rp := processor.NewStreamJoinWindowProcessor(jp.RightWindowStoreName)
+	log.Fatal().Msgf("StreamStreamLeftJoin Not implemented")
+	return nil
+	/*
+		lp := processor.NewStreamJoinWindowProcessor(jp.LeftWindowStoreName)
+		rp := processor.NewStreamJoinWindowProcessor(jp.RightWindowStoreName)
 
-	ln := s.tp.AddProcessor(name+"_lwp", lp, s.parents)
-	rn := s.tp.AddProcessor(name+"_rwp", rp, s.parents)
+		ln := s.tp.AddProcessor(name+"_lwp", lp, s.parents)
+		rn := s.tp.AddProcessor(name+"_rwp", rp, s.parents)
 
-	sharedTimeTracker := processor.NewTimeTracker()
-	ljp := processor.NewStreamStreamJoinProcessor(jp.RightWindowStoreName, windows, joiner, false, true, sharedTimeTracker)
-	rjp := processor.NewStreamStreamJoinProcessor(jp.LeftWindowStoreName, windows, joiner, false, false, sharedTimeTracker)
+		sharedTimeTracker := processor.NewTimeTracker()
+		ljp := processor.NewStreamStreamJoinProcessor(jp.RightWindowStoreName, windows, joiner, false, true, sharedTimeTracker)
+		rjp := processor.NewStreamStreamJoinProcessor(jp.LeftWindowStoreName, windows, joiner, false, false, sharedTimeTracker)
 
-	ljn := s.tp.AddProcessor(name+"_ljp", ljp, []processor.Node{ln})
-	rjn := s.tp.AddProcessor(name+"_rjp", rjp, []processor.Node{rn})
+		ljn := s.tp.AddProcessor(name+"_ljp", ljp, []processor.Node{ln})
+		rjn := s.tp.AddProcessor(name+"_rjp", rjp, []processor.Node{rn})
 
-	mergeProcessor := processor.NewMergeProcessor()
-	n := s.tp.AddProcessor(name+"_merge", mergeProcessor, []processor.Node{ljn, rjn})
-	return newStream(s.tp, []processor.Node{n})
+		mergeProcessor := processor.NewMergeProcessor()
+		n := s.tp.AddProcessor(name+"_merge", mergeProcessor, []processor.Node{ljn, rjn})
+		return newStream(s.tp, []processor.Node{n})
+	*/
 }
 
 func (s *StreamImpl) StreamStreamLeftJoin(name string, other Stream, joiner processor.ValueJoinerWithKey, windows *processor.JoinWindows, jp *store.JoinParam) Stream {

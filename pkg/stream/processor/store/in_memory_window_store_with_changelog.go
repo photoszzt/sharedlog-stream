@@ -51,7 +51,7 @@ func (st *InMemoryWindowStoreWithChangelog) RestoreStateStore(ctx context.Contex
 				return err
 			}
 			keyWin := keyWinTmp.(commtypes.KeyAndWindowStartTs)
-			err = st.windowStore.Put(keyWin.Key, valBytes, keyWin.WindowStartTs)
+			err = st.windowStore.Put(ctx, keyWin.Key, valBytes, keyWin.WindowStartTs)
 			if err != nil {
 				return err
 			}
@@ -94,16 +94,16 @@ func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context, key KeyT, v
 	if err != nil {
 		return err
 	}
-	err = st.windowStore.Put(key, value, windowStartTimestamp)
+	err = st.windowStore.Put(ctx, key, value, windowStartTimestamp)
 	return err
 }
 
-func (st *InMemoryWindowStoreWithChangelog) Get(key KeyT, windowStartTimestamp int64) (ValueT, bool, error) {
+func (st *InMemoryWindowStoreWithChangelog) Get(key KeyT, windowStartTimestamp int64) (ValueT, bool) {
 	val, ok := st.windowStore.Get(key, windowStartTimestamp)
 	if !ok {
-		return nil, false, nil
+		return nil, false
 	}
-	return val, ok, nil
+	return val, ok
 }
 
 func (st *InMemoryWindowStoreWithChangelog) Fetch(

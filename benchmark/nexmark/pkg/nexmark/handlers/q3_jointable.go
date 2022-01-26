@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
@@ -11,7 +12,6 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/treemap"
 	"sync"
 	"sync/atomic"
@@ -48,26 +48,27 @@ func (h *q3JoinTableHandler) Call(ctx context.Context, input []byte) ([]byte, er
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("query 3 output: %v\n", encodedOutput)
+	// fmt.Printf("query 3 output: %v\n", encodedOutput)
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *q3JoinTableHandler) pushMsgsToSink(
+func pushMsgsToSink(
 	ctx context.Context,
 	sink *processor.MeteredSink,
+	cHash *hash.ConsistentHash,
 	msgs []commtypes.Message,
 	trackParFunc func([]uint8) error,
 ) error {
 	for _, msg := range msgs {
 		key := msg.Key.(uint64)
-		parTmp, ok := h.cHash.Get(key)
+		parTmp, ok := cHash.Get(key)
 		if !ok {
 			return fmt.Errorf("fail to calculate partition")
 		}
 		par := parTmp.(uint8)
 		err := trackParFunc([]uint8{par})
 		if err != nil {
-			return fmt.Errorf("add topic partition failed: %v\n", err)
+			return fmt.Errorf("add topic partition failed: %v", err)
 		}
 		err = sink.Sink(ctx, msg, par, false)
 		if err != nil {
@@ -75,6 +76,47 @@ func (h *q3JoinTableHandler) pushMsgsToSink(
 		}
 	}
 	return nil
+}
+
+func (h *q3JoinTableHandler) proc(
+	ctx context.Context,
+	out chan *common.FnOutput,
+	src *processor.MeteredSource,
+	wg *sync.WaitGroup,
+	parNum uint8,
+	runner *processor.AsyncFuncRunner,
+) {
+	defer wg.Done()
+	gotMsgs, err := src.Consume(ctx, parNum)
+	if err != nil {
+		if xerrors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+			out <- &common.FnOutput{
+				Success: true,
+				Message: err.Error(),
+			}
+		}
+		out <- &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+	for _, msg := range gotMsgs {
+		h.offMu.Lock()
+		h.currentOffset[src.TopicName()] = msg.LogSeqNum
+		h.offMu.Unlock()
+
+		event := msg.Msg.Value.(*ntypes.Event)
+		ts, err := event.ExtractStreamTime()
+		if err != nil {
+			out <- &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("fail to extract timestamp: %v", err),
+			}
+		}
+		msg.Msg.Timestamp = ts
+		runner.Accept(msg.Msg)
+	}
+	out <- nil
 }
 
 func (h *q3JoinTableHandler) process(ctx context.Context,
@@ -88,74 +130,9 @@ func (h *q3JoinTableHandler) process(ctx context.Context,
 	auctionsOutChan := make(chan *common.FnOutput)
 	completed := uint32(0)
 	wg.Add(1)
-	go func(out chan *common.FnOutput) {
-		defer wg.Done()
-		gotPersonsMsgs, err := args.personSrc.Consume(ctx, args.parNum)
-		if err != nil {
-			if xerrors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
-				out <- &common.FnOutput{
-					Success: true,
-					Message: err.Error(),
-				}
-			}
-			out <- &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
-			}
-		}
-		for _, personMsg := range gotPersonsMsgs {
-			h.offMu.Lock()
-			h.currentOffset[args.personSrc.TopicName()] = personMsg.LogSeqNum
-			h.offMu.Unlock()
-
-			event := personMsg.Msg.Value.(*ntypes.Event)
-			ts, err := event.ExtractStreamTime()
-			if err != nil {
-				out <- &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("fail to extract timestamp: %v", err),
-				}
-			}
-			personMsg.Msg.Timestamp = ts
-			args.pJoinA.Accept(personMsg.Msg)
-		}
-		out <- nil
-	}(personsOutChan)
-
+	go h.proc(ctx, personsOutChan, args.personSrc, &wg, args.parNum, args.pJoinA)
 	wg.Add(1)
-	go func(out chan *common.FnOutput) {
-		defer wg.Done()
-		gotAuctionsMsgs, err := args.auctionSrc.Consume(ctx, args.parNum)
-		if err != nil {
-			if xerrors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
-				out <- &common.FnOutput{
-					Success: true,
-					Message: err.Error(),
-				}
-			}
-			out <- &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
-			}
-		}
-		for _, auctionMsg := range gotAuctionsMsgs {
-			h.offMu.Lock()
-			h.currentOffset[args.auctionSrc.TopicName()] = auctionMsg.LogSeqNum
-			h.offMu.Unlock()
-
-			event := auctionMsg.Msg.Value.(*ntypes.Event)
-			ts, err := event.ExtractStreamTime()
-			if err != nil {
-				out <- &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("fail to extract timestamp: %v", err),
-				}
-			}
-			auctionMsg.Msg.Timestamp = ts
-			args.aJoinP.Accept(auctionMsg.Msg)
-		}
-		out <- nil
-	}(auctionsOutChan)
+	go h.proc(ctx, auctionsOutChan, args.auctionSrc, &wg, args.parNum, args.aJoinP)
 
 L:
 	for {
@@ -176,9 +153,8 @@ L:
 			if atomic.LoadUint32(&completed) == 2 {
 				break L
 			}
-			break L
 		case aJoinPMsgs := <-args.aJoinP.OutChan():
-			err := h.pushMsgsToSink(ctx, args.sink, aJoinPMsgs, trackParFunc)
+			err := pushMsgsToSink(ctx, args.sink, h.cHash, aJoinPMsgs, trackParFunc)
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{
 					Success: false,
@@ -186,7 +162,7 @@ L:
 				}
 			}
 		case pJoinAMsgs := <-args.pJoinA.OutChan():
-			err := h.pushMsgsToSink(ctx, args.sink, pJoinAMsgs, trackParFunc)
+			err := pushMsgsToSink(ctx, args.sink, h.cHash, pJoinAMsgs, trackParFunc)
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{
 					Success: false,
@@ -195,9 +171,12 @@ L:
 			}
 		}
 	}
+	fmt.Fprint(os.Stderr, "before wait group\n")
 	wg.Wait()
+	fmt.Fprint(os.Stderr, "after wait group\n")
 	close(personsOutChan)
 	close(auctionsOutChan)
+	fmt.Fprint(os.Stderr, "before aJoinP wait\n")
 	err := args.aJoinP.Wait()
 	if err != nil {
 		return h.currentOffset, &common.FnOutput{
@@ -205,6 +184,7 @@ L:
 			Message: fmt.Sprintf("aJoinP fail: %v", err),
 		}
 	}
+	fmt.Fprint(os.Stderr, "before pJoinA wait\n")
 	err = args.pJoinA.Wait()
 	if err != nil {
 		return h.currentOffset, &common.FnOutput{
@@ -212,49 +192,8 @@ L:
 			Message: fmt.Sprintf("pJoinA fail: %v", err),
 		}
 	}
+	fmt.Fprint(os.Stderr, "wait all\n")
 	return h.currentOffset, nil
-}
-
-func (h *q3JoinTableHandler) toAuctionsBySellerIDTable(
-	sp *common.QueryInput,
-	eventSerde commtypes.Serde,
-	msgSerde commtypes.MsgSerde,
-) (*processor.MeteredProcessor, *store.InMemoryKeyValueStore, error) {
-	auctionsBySellerIDStoreName := "auctionsBySellerIDStore"
-	auctionsBySellerIDStore := store.NewInMemoryKeyValueStore(auctionsBySellerIDStoreName, func(a, b treemap.Key) int {
-		valA := a.(uint64)
-		valB := b.(uint64)
-		if valA < valB {
-			return -1
-		} else if valA == valB {
-			return 0
-		} else {
-			return 1
-		}
-	})
-	toTableProc := processor.NewMeteredProcessor(processor.NewStoreToKVTableProcessor(auctionsBySellerIDStore))
-	return toTableProc, auctionsBySellerIDStore, nil
-}
-
-func (h *q3JoinTableHandler) toPersonsByIDMapTable(
-	sp *common.QueryInput,
-	eventSerde commtypes.Serde,
-	msgSerde commtypes.MsgSerde,
-) (*processor.MeteredProcessor, *store.InMemoryKeyValueStore, error) {
-	personsByIDStoreName := "personsByIDStore"
-	personsByIDStore := store.NewInMemoryKeyValueStore(personsByIDStoreName, func(a, b treemap.Key) int {
-		valA := a.(uint64)
-		valB := b.(uint64)
-		if valA < valB {
-			return -1
-		} else if valA == valB {
-			return 0
-		} else {
-			return 1
-		}
-	})
-	toTableProc := processor.NewMeteredProcessor(processor.NewStoreToKVTableProcessor(personsByIDStore))
-	return toTableProc, personsByIDStore, nil
 }
 
 func (h *q3JoinTableHandler) getShardedInputOutputStreams(ctx context.Context,
@@ -269,11 +208,13 @@ func (h *q3JoinTableHandler) getShardedInputOutputStreams(ctx context.Context,
 		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
 
 	}
+	fmt.Fprintf(os.Stderr, "reading auctions from %v\n", inputStreamAuction.TopicName())
+
 	inputStreamPerson, err := sharedlog_stream.NewShardedSharedLogStream(h.env, input.InputTopicNames[1], uint8(input.NumInPartition))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
-
 	}
+	fmt.Fprintf(os.Stderr, "reading persons from %v\n", inputStreamPerson.TopicName())
 	outputStream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, input.OutputTopicName, uint8(input.NumOutPartition))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
@@ -285,12 +226,19 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	auctionsStream *sharedlog_stream.ShardedSharedLogStream,
 	personsStream *sharedlog_stream.ShardedSharedLogStream,
 	outputStream *sharedlog_stream.ShardedSharedLogStream,
-	eventSerde commtypes.Serde,
-	msgSerde commtypes.MsgSerde,
 ) (*processor.MeteredSource, /* auctionSrc */
 	*processor.MeteredSource, /* personsSrc */
 	*processor.MeteredSink, error,
 ) {
+	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("get msg serde err: %v", err)
+	}
+
+	eventSerde, err := getEventSerde(sp.SerdeFormat)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("get event serde err: %v", err)
+	}
 	auctionsConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      common.SrcConsumeTimeout,
 		KeyDecoder:   commtypes.Uint64Decoder{},
@@ -330,21 +278,6 @@ type q3JoinTableProcessArgs struct {
 }
 
 func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("get msg serde err: %v", err),
-		}
-	}
-	eventSerde, err := getEventSerde(sp.SerdeFormat)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("get event serde err: %v", err),
-		}
-	}
 	auctionsStream, personsStream, outputStream, err := h.getShardedInputOutputStreams(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{
@@ -352,7 +285,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			Message: fmt.Sprintf("get input output err: %v", err),
 		}
 	}
-	auctionsSrc, personsSrc, sink, err := h.getSrcSink(ctx, sp, auctionsStream, personsStream, outputStream, eventSerde, msgSerde)
+	auctionsSrc, personsSrc, sink, err := h.getSrcSink(ctx, sp, auctionsStream, personsStream, outputStream)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -360,7 +293,19 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		}
 	}
 
-	toAuctionsTable, auctionsStore, err := h.toAuctionsBySellerIDTable(sp, eventSerde, msgSerde)
+	compare := func(a, b treemap.Key) int {
+		valA := a.(uint64)
+		valB := b.(uint64)
+		if valA < valB {
+			return -1
+		} else if valA == valB {
+			return 0
+		} else {
+			return 1
+		}
+	}
+
+	toAuctionsTable, auctionsStore, err := processor.ToInMemKVTable("auctionsBySellerIDStore", compare)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -368,7 +313,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		}
 	}
 
-	toPersonsTable, personsStore, err := h.toPersonsByIDMapTable(sp, eventSerde, msgSerde)
+	toPersonsTable, personsStore, err := processor.ToInMemKVTable("personsByIDStore", compare)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

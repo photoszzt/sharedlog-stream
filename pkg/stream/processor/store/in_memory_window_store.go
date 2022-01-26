@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"sharedlog-stream/pkg/concurrent_skiplist"
@@ -30,6 +31,8 @@ type InMemoryWindowStore struct {
 	retainDuplicates bool
 	open             bool
 }
+
+var _ = WindowStore(&InMemoryWindowStore{})
 
 func NewInMemoryWindowStore(name string, retentionPeriod int64, windowSize int64, retainDuplicates bool,
 	compare concurrent_skiplist.Comparable,
@@ -77,7 +80,7 @@ func (s *InMemoryWindowStore) Name() string {
 	return s.name
 }
 
-func (s *InMemoryWindowStore) Put(key interface{}, value interface{}, windowStartTimestamp int64) error {
+func (s *InMemoryWindowStore) Put(ctx context.Context, key KeyT, value ValueT, windowStartTimestamp int64) error {
 	s.removeExpiredSegments()
 	if windowStartTimestamp > s.observedStreamTime {
 		s.observedStreamTime = windowStartTimestamp
@@ -89,9 +92,9 @@ func (s *InMemoryWindowStore) Put(key interface{}, value interface{}, windowStar
 			s.updateSeqnumForDups()
 			k := key
 			if s.retainDuplicates {
-				k = versionedKey{
-					version: s.seqNum,
-					key:     k,
+				k = VersionedKey{
+					Version: s.seqNum,
+					Key:     k,
 				}
 			}
 			s.store.SetIfAbsent(windowStartTimestamp, concurrent_skiplist.New(s.comparable))
@@ -107,7 +110,7 @@ func (s *InMemoryWindowStore) Put(key interface{}, value interface{}, windowStar
 	return nil
 }
 
-func (s *InMemoryWindowStore) Get(key interface{}, windowStartTimestamp int64) (interface{}, bool) {
+func (s *InMemoryWindowStore) Get(key KeyT, windowStartTimestamp int64) (ValueT, bool) {
 	s.removeExpiredSegments()
 	if windowStartTimestamp <= s.observedStreamTime-s.retentionPeriod {
 		return nil, false
@@ -128,7 +131,7 @@ func (s *InMemoryWindowStore) Get(key interface{}, windowStartTimestamp int64) (
 }
 
 func (s *InMemoryWindowStore) Fetch(
-	key interface{},
+	key KeyT,
 	timeFrom time.Time,
 	timeTo time.Time,
 	iterFunc func(int64, KeyT, ValueT) error,
@@ -170,30 +173,30 @@ func (s *InMemoryWindowStore) Fetch(
 		})
 		return err
 	} else {
-		keyFrom := versionedKey{
-			key:     key,
-			version: 0,
+		keyFrom := VersionedKey{
+			Key:     key,
+			Version: 0,
 		}
-		keyTo := versionedKey{
-			key:     key,
-			version: math.MaxUint32,
+		keyTo := VersionedKey{
+			Key:     key,
+			Version: math.MaxUint32,
 		}
 		return s.fetchWithKeyRange(keyFrom, keyTo, tsFrom, tsTo, iterFunc)
 	}
 }
 
 func (s *InMemoryWindowStore) BackwardFetch(
-	key interface{},
+	key KeyT,
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, ValueT) error,
+	iterFunc func(int64, KeyT, ValueT) error,
 ) error {
 	panic("not implemented")
 }
 
 func (s *InMemoryWindowStore) FetchWithKeyRange(
-	keyFrom interface{},
-	keyTo interface{},
+	keyFrom KeyT,
+	keyTo KeyT,
 	timeFrom time.Time,
 	timeTo time.Time,
 	iterFunc func(int64, KeyT, ValueT) error,
@@ -235,8 +238,8 @@ func (s *InMemoryWindowStore) fetchWithKeyRange(
 		v.IterateRange(keyFrom, keyTo, func(kt concurrent_skiplist.KeyT, vt concurrent_skiplist.ValueT) error {
 			k := kt
 			if s.retainDuplicates {
-				ktTmp := kt.(versionedKey)
-				k = ktTmp.key
+				ktTmp := kt.(VersionedKey)
+				k = ktTmp.Key
 			}
 			err := iterFunc(curT, k, vt)
 			return err
@@ -294,11 +297,11 @@ func (s *InMemoryWindowStore) removeExpiredSegments() {
 }
 
 func (s *InMemoryWindowStore) BackwardFetchWithKeyRange(
-	keyFrom interface{},
-	keyTo interface{},
+	keyFrom KeyT,
+	keyTo KeyT,
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, ValueT) error,
+	iterFunc func(int64, KeyT, ValueT) error,
 ) error {
 	panic("not implemented")
 }
@@ -306,7 +309,7 @@ func (s *InMemoryWindowStore) BackwardFetchWithKeyRange(
 func (s *InMemoryWindowStore) FetchAll(
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, ValueT) error,
+	iterFunc func(int64, KeyT, ValueT) error,
 ) error {
 	panic("not implemented")
 }
@@ -314,7 +317,7 @@ func (s *InMemoryWindowStore) FetchAll(
 func (s *InMemoryWindowStore) BackwardFetchAll(
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, ValueT) error,
+	iterFunc func(int64, KeyT, ValueT) error,
 ) error {
 	panic("not implemented")
 }
