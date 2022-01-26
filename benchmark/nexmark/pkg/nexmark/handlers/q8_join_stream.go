@@ -56,12 +56,18 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	auctionsStream *sharedlog_stream.ShardedSharedLogStream,
 	personsStream *sharedlog_stream.ShardedSharedLogStream,
 	outputStream *sharedlog_stream.ShardedSharedLogStream,
-	eventSerde commtypes.Serde,
-	msgSerde commtypes.MsgSerde,
 ) (*processor.MeteredSource, /* auctionSrc */
 	*processor.MeteredSource, /* personsSrc */
 	*processor.MeteredSink, error,
 ) {
+	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("get msg serde err: %v", err)
+	}
+	eventSerde, err := getEventSerde(sp.SerdeFormat)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("get event serde err: %v", err)
+	}
 	auctionsConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      common.SrcConsumeTimeout,
 		KeyDecoder:   commtypes.Uint64Decoder{},
@@ -241,20 +247,7 @@ L:
 }
 
 func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("get msg serde err: %v", err),
-		}
-	}
-	eventSerde, err := getEventSerde(sp.SerdeFormat)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("get event serde err: %v", err),
-		}
-	}
+
 	auctionsStream, personsStream, outputStream, err := h.getShardedInputOutputStreams(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{
@@ -262,7 +255,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			Message: fmt.Sprintf("get input output err: %v", err),
 		}
 	}
-	auctionsSrc, personsSrc, sink, err := h.getSrcSink(ctx, sp, auctionsStream, personsStream, outputStream, eventSerde, msgSerde)
+	auctionsSrc, personsSrc, sink, err := h.getSrcSink(ctx, sp, auctionsStream, personsStream, outputStream)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

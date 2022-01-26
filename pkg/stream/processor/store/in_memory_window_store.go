@@ -235,7 +235,7 @@ func (s *InMemoryWindowStore) fetchWithKeyRange(
 		s.otrMu.Lock()
 		s.openedTimeRange[curT] = struct{}{}
 		s.otrMu.Unlock()
-		v.IterateRange(keyFrom, keyTo, func(kt concurrent_skiplist.KeyT, vt concurrent_skiplist.ValueT) error {
+		err := v.IterateRange(keyFrom, keyTo, func(kt concurrent_skiplist.KeyT, vt concurrent_skiplist.ValueT) error {
 			k := kt
 			if s.retainDuplicates {
 				ktTmp := kt.(VersionedKey)
@@ -244,6 +244,9 @@ func (s *InMemoryWindowStore) fetchWithKeyRange(
 			err := iterFunc(curT, k, vt)
 			return err
 		})
+		if err != nil {
+			return err
+		}
 		s.otrMu.Lock()
 		delete(s.openedTimeRange, curT)
 		s.otrMu.Unlock()

@@ -128,6 +128,8 @@ func main() {
 		query5()
 	case "q7":
 		query7()
+	case "q8":
+		query8()
 	default:
 		panic("unrecognized app")
 	}

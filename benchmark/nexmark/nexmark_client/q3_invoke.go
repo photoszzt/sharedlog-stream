@@ -75,7 +75,7 @@ func query3() {
 	joinTableNodeConfig := &processor.ClientNodeConfig{
 		FuncName:    "q3JoinTable",
 		GatewayUrl:  FLAGS_faas_gateway,
-		NumInstance: q3conf.NumSrcPartition,
+		NumInstance: q3conf.NumInstance,
 	}
 	joinTableInputParams := make([]*common.QueryInput, joinTableNodeConfig.NumInstance)
 	for i := uint8(0); i < joinTableNodeConfig.NumInstance; i++ {
@@ -84,7 +84,7 @@ func query3() {
 			InputTopicNames:   []string{q3conf.AucsBySellerIDOutTopic, q3conf.PersonsByIDOutTopic},
 			OutputTopicName:   q3conf.JoinTableOutTopic,
 			SerdeFormat:       uint8(serdeFormat),
-			NumInPartition:    q3conf.NumSrcPartition,
+			NumInPartition:    q3conf.NumInstance,
 			NumOutPartition:   q3conf.NumInstance,
 			EnableTransaction: FLAGS_tran,
 			CommitEveryMs:     FLAGS_commit_every,

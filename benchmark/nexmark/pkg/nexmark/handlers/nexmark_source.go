@@ -120,10 +120,16 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		nextEvent, err := eventGenerator.NextEvent(ctx, channel_url_cache)
 		if err != nil {
 			closeAllChan(inChans)
-			g.Wait()
+			gerr := g.Wait()
+			if gerr != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("next event failed : %v and wait failed: %v\n", err, gerr),
+				}
+			}
 			return &common.FnOutput{
 				Success: false,
-				Message: fmt.Sprintf("next event failed: %v", err),
+				Message: fmt.Sprintf("next event failed: %v\n", err),
 			}
 		}
 		wtsSec := nextEvent.WallclockTimestamp / 1000.0
@@ -135,7 +141,13 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		encoded, err := eventEncoder.Encode(nextEvent.Event)
 		if err != nil {
 			closeAllChan(inChans)
-			g.Wait()
+			gerr := g.Wait()
+			if gerr != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("next event failed : %v and wait failed: %v\n", err, gerr),
+				}
+			}
 			return &common.FnOutput{
 				Success: false,
 				Message: fmt.Sprintf("event serialization failed: %v", err),
@@ -144,7 +156,13 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		msgEncoded, err := msgEncoder.Encode(nil, encoded)
 		if err != nil {
 			closeAllChan(inChans)
-			g.Wait()
+			gerr := g.Wait()
+			if gerr != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("next event failed : %v and wait failed: %v\n", err, gerr),
+				}
+			}
 			return &common.FnOutput{
 				Success: false,
 				Message: fmt.Sprintf("msg serialization failed: %v", err),

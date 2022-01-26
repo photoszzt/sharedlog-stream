@@ -115,14 +115,17 @@ func (st *InMemoryWindowStoreWithChangelog) Fetch(
 	return st.windowStore.Fetch(key, timeFrom, timeTo, iterFunc)
 }
 
+func (st *InMemoryWindowStoreWithChangelog) IterAll(iterFunc func(int64, KeyT, ValueT) error) error {
+	return st.windowStore.IterAll(iterFunc)
+}
+
 func (st *InMemoryWindowStoreWithChangelog) BackwardFetch(
 	key KeyT,
 	timeFrom time.Time,
 	timeTo time.Time,
 	iterFunc func(int64, KeyT, ValueT) error,
 ) error {
-	panic("not implemented")
-
+	return st.windowStore.BackwardFetch(key, timeFrom, timeTo, iterFunc)
 }
 
 func (st *InMemoryWindowStoreWithChangelog) FetchWithKeyRange(
@@ -132,7 +135,7 @@ func (st *InMemoryWindowStoreWithChangelog) FetchWithKeyRange(
 	timeTo time.Time,
 	iterFunc func(int64, KeyT, ValueT) error,
 ) error {
-	panic("not implemented")
+	return st.windowStore.FetchWithKeyRange(keyFrom, keyTo, timeFrom, timeTo, iterFunc)
 }
 
 func (st *InMemoryWindowStoreWithChangelog) BackwardFetchWithKeyRange(
@@ -142,8 +145,7 @@ func (st *InMemoryWindowStoreWithChangelog) BackwardFetchWithKeyRange(
 	timeTo time.Time,
 	iterFunc func(int64, KeyT, ValueT) error,
 ) error {
-	panic("not implemented")
-
+	return st.windowStore.BackwardFetchWithKeyRange(keyFrom, keyTo, timeFrom, timeTo, iterFunc)
 }
 
 func (st *InMemoryWindowStoreWithChangelog) FetchAll(
@@ -151,8 +153,7 @@ func (st *InMemoryWindowStoreWithChangelog) FetchAll(
 	timeTo time.Time,
 	iterFunc func(int64, KeyT, ValueT) error,
 ) error {
-	panic("not implemented")
-
+	return st.windowStore.FetchAll(timeFrom, timeTo, iterFunc)
 }
 
 func (st *InMemoryWindowStoreWithChangelog) BackwardFetchAll(
@@ -160,6 +161,5 @@ func (st *InMemoryWindowStoreWithChangelog) BackwardFetchAll(
 	timeTo time.Time,
 	iterFunc func(int64, KeyT, ValueT) error,
 ) error {
-	panic("not implemented")
-
+	return st.windowStore.BackwardFetchAll(timeFrom, timeTo, iterFunc)
 }

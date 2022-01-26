@@ -63,8 +63,10 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewQuery8(env), nil
 	case "q8PersonsByID":
 		return handlers.NewQ8PersonsByID(env), nil
-	case "q8AuctionsBySellerID":
+	case "q8AucsBySellerID":
 		return handlers.NewQ8AuctionsBySellerIDHandler(env), nil
+	case "q8JoinStream":
+		return handlers.NewQ8JoinStreamHandler(env), nil
 	case "windowavggroupby":
 		return handlers.NewWindowAvgGroupByHandler(env), nil
 	case "windowavgagg":
