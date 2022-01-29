@@ -1,0 +1,9 @@
+{
+    "numSrcPartition": 4,
+    "numSrcInstance": 1,
+    "numInstance": 4,
+    "srcOutTopic": "nexmark_src",
+    "aucsBySellerIDOutTopic": "q8_aucsBySellerID_out",
+    "persByIDOutTopic": "q8_personsByID_out",
+    "joinStreamOutTopic": "q8_out"
+}

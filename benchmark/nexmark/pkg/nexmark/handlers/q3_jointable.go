@@ -60,6 +60,7 @@ func pushMsgsToSink(
 	trackParFunc func([]uint8) error,
 ) error {
 	for _, msg := range msgs {
+		fmt.Fprintf(os.Stderr, "push %v to sink\n", msg)
 		key := msg.Key.(uint64)
 		parTmp, ok := cHash.Get(key)
 		if !ok {

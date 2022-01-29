@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
@@ -14,7 +15,6 @@ import (
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -148,11 +148,23 @@ func (h *q8JoinStreamHandler) proc(
 				Success: true,
 				Message: err.Error(),
 			}
+			runner.Close()
+			err = runner.Wait()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "runner failed: %v\n", err)
+			}
+			return
 		}
 		out <- &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
+		runner.Close()
+		err = runner.Wait()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "runner failed: %v\n", err)
+		}
+		return
 	}
 	for _, msg := range gotMsgs {
 		h.offMu.Lock()
@@ -166,6 +178,12 @@ func (h *q8JoinStreamHandler) proc(
 				Success: false,
 				Message: fmt.Sprintf("fail to extract timestamp: %v", err),
 			}
+			runner.Close()
+			err = runner.Wait()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "runner failed: %v\n", err)
+			}
+			return
 		}
 		msg.Msg.Timestamp = ts
 		runner.Accept(msg.Msg)
@@ -196,16 +214,16 @@ L:
 			if personOutput != nil {
 				return h.currentOffset, personOutput
 			}
-			atomic.AddUint32(&completed, 1)
-			if atomic.LoadUint32(&completed) == 2 {
+			completed += 1
+			if completed == 2 {
 				break L
 			}
 		case auctionOutput := <-auctionsOutChan:
 			if auctionOutput != nil {
 				return h.currentOffset, auctionOutput
 			}
-			atomic.AddUint32(&completed, 1)
-			if atomic.LoadUint32(&completed) == 2 {
+			completed += 1
+			if completed == 2 {
 				break L
 			}
 		case aJoinPMsgs := <-args.aJoinP.OutChan():
@@ -227,22 +245,6 @@ L:
 		}
 	}
 	wg.Wait()
-	close(personsOutChan)
-	close(auctionsOutChan)
-	err := args.aJoinP.Wait()
-	if err != nil {
-		return h.currentOffset, &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("aJoinP fail: %v", err),
-		}
-	}
-	err = args.pJoinA.Wait()
-	if err != nil {
-		return h.currentOffset, &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("pJoinA fail: %v", err),
-		}
-	}
 	return h.currentOffset, nil
 }
 

@@ -2,6 +2,8 @@ package processor
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	"golang.org/x/sync/errgroup"
@@ -19,7 +21,7 @@ func NewAsyncFuncRunner(ctx context.Context,
 ) *AsyncFuncRunner {
 	pr := &AsyncFuncRunner{
 		f:     f,
-		input: make(chan interface{}),
+		input: make(chan interface{}, 1),
 	}
 	g, ectx := errgroup.WithContext(ctx)
 	pr.group = g
@@ -31,12 +33,13 @@ func NewAsyncFuncRunner(ctx context.Context,
 
 func (p *AsyncFuncRunner) run(ctx context.Context) error {
 	for m := range p.input {
+		fmt.Fprintf(os.Stderr, "got msg: %v\n", m)
 		msg := m.(commtypes.Message)
 		msgs, err := p.f(ctx, msg)
 		if err != nil {
 			return err
 		}
-		if msgs != nil {
+		if len(msgs) != 0 {
 			p.output <- msgs
 		}
 	}
@@ -51,8 +54,11 @@ func (p *AsyncFuncRunner) OutChan() chan []commtypes.Message {
 	return p.output
 }
 
-func (p *AsyncFuncRunner) Wait() error {
+func (p *AsyncFuncRunner) Close() {
 	close(p.input)
+}
+
+func (p *AsyncFuncRunner) Wait() error {
 	if err := p.group.Wait(); err != nil {
 		return err
 	}

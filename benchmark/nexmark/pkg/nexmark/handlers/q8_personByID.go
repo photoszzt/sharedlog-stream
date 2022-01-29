@@ -165,7 +165,7 @@ func (h *q8PersonsByIDHandler) Q8PersonsByID(ctx context.Context, sp *common.Que
 
 	filterPerson := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
 		func(msg *commtypes.Message) (bool, error) {
-			event := msg.Value.(ntypes.Event)
+			event := msg.Value.(*ntypes.Event)
 			return event.Etype == ntypes.PERSON, nil
 		})))
 	personsByIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(

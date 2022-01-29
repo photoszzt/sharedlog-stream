@@ -52,6 +52,7 @@ func (n *ClientNode) AddChild(node *ClientNode) {
 func (n *ClientNode) Invoke(client *http.Client, response *common.FnOutput, wg *sync.WaitGroup, queryInput *common.QueryInput) {
 	defer wg.Done()
 
+	fmt.Fprintf(os.Stderr, "func name is %v\n", n.config.FuncName)
 	url := utils.BuildFunctionUrl(n.config.GatewayUrl, n.config.FuncName)
 	fmt.Fprintf(os.Stderr, "func url is %s\n", url)
 	i := 0

@@ -155,7 +155,7 @@ func (h *q8AuctionsBySellerIDHandler) q8AuctionsBySellerID(ctx context.Context, 
 
 	filterAuctions := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
 		func(m *commtypes.Message) (bool, error) {
-			event := m.Value.(ntypes.Event)
+			event := m.Value.(*ntypes.Event)
 			return event.Etype == ntypes.AUCTION, nil
 		})))
 
