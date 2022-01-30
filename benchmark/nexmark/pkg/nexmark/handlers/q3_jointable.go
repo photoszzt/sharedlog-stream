@@ -14,7 +14,6 @@ import (
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/treemap"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -60,7 +59,6 @@ func pushMsgsToSink(
 	trackParFunc func([]uint8) error,
 ) error {
 	for _, msg := range msgs {
-		fmt.Fprintf(os.Stderr, "push %v to sink\n", msg)
 		key := msg.Key.(uint64)
 		parTmp, ok := cHash.Get(key)
 		if !ok {
@@ -95,11 +93,23 @@ func (h *q3JoinTableHandler) proc(
 				Success: true,
 				Message: err.Error(),
 			}
+			runner.Close()
+			err = runner.Wait()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "runner failed: %v\n", err)
+			}
+			return
 		}
 		out <- &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
+		runner.Close()
+		err = runner.Wait()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "runner failed: %v\n", err)
+		}
+		return
 	}
 	for _, msg := range gotMsgs {
 		h.offMu.Lock()
@@ -113,6 +123,12 @@ func (h *q3JoinTableHandler) proc(
 				Success: false,
 				Message: fmt.Sprintf("fail to extract timestamp: %v", err),
 			}
+			runner.Close()
+			err = runner.Wait()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "runner failed: %v\n", err)
+			}
+			return
 		}
 		msg.Msg.Timestamp = ts
 		runner.Accept(msg.Msg)
@@ -142,16 +158,16 @@ L:
 			if personOutput != nil {
 				return h.currentOffset, personOutput
 			}
-			atomic.AddUint32(&completed, 1)
-			if atomic.LoadUint32(&completed) == 2 {
+			completed += 1
+			if completed == 2 {
 				break L
 			}
 		case auctionOutput := <-auctionsOutChan:
 			if auctionOutput != nil {
 				return h.currentOffset, auctionOutput
 			}
-			atomic.AddUint32(&completed, 1)
-			if atomic.LoadUint32(&completed) == 2 {
+			completed += 1
+			if completed == 2 {
 				break L
 			}
 		case aJoinPMsgs := <-args.aJoinP.OutChan():
@@ -172,28 +188,7 @@ L:
 			}
 		}
 	}
-	fmt.Fprint(os.Stderr, "before wait group\n")
 	wg.Wait()
-	fmt.Fprint(os.Stderr, "after wait group\n")
-	close(personsOutChan)
-	close(auctionsOutChan)
-	fmt.Fprint(os.Stderr, "before aJoinP wait\n")
-	err := args.aJoinP.Wait()
-	if err != nil {
-		return h.currentOffset, &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("aJoinP fail: %v", err),
-		}
-	}
-	fmt.Fprint(os.Stderr, "before pJoinA wait\n")
-	err = args.pJoinA.Wait()
-	if err != nil {
-		return h.currentOffset, &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("pJoinA fail: %v", err),
-		}
-	}
-	fmt.Fprint(os.Stderr, "wait all\n")
 	return h.currentOffset, nil
 }
 
@@ -209,13 +204,11 @@ func (h *q3JoinTableHandler) getShardedInputOutputStreams(ctx context.Context,
 		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
 
 	}
-	fmt.Fprintf(os.Stderr, "reading auctions from %v\n", inputStreamAuction.TopicName())
 
 	inputStreamPerson, err := sharedlog_stream.NewShardedSharedLogStream(h.env, input.InputTopicNames[1], uint8(input.NumInPartition))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
 	}
-	fmt.Fprintf(os.Stderr, "reading persons from %v\n", inputStreamPerson.TopicName())
 	outputStream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, input.OutputTopicName, uint8(input.NumOutPartition))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
@@ -391,6 +384,10 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		if ret != nil && ret.Success {
 			ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()
 			ret.Latencies["personsSrc"] = personsSrc.GetLatency()
+			ret.Latencies["toAuctionsTable"] = toAuctionsTable.GetLatency()
+			ret.Latencies["toPersonsTable"] = toPersonsTable.GetLatency()
+			ret.Latencies["personJoinsAuctions"] = personJoinsAuctions.GetLatency()
+			ret.Latencies["auctionJoinsPersons"] = auctionJoinsPersons.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()
 		}
 		return ret
@@ -403,6 +400,10 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	if ret != nil && ret.Success {
 		ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()
 		ret.Latencies["personsSrc"] = personsSrc.GetLatency()
+		ret.Latencies["toAuctionsTable"] = toAuctionsTable.GetLatency()
+		ret.Latencies["toPersonsTable"] = toPersonsTable.GetLatency()
+		ret.Latencies["personJoinsAuctions"] = personJoinsAuctions.GetLatency()
+		ret.Latencies["auctionJoinsPersons"] = auctionJoinsPersons.GetLatency()
 		ret.Latencies["sink"] = sink.GetLatency()
 	}
 	return ret

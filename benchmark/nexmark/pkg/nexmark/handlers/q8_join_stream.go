@@ -385,6 +385,10 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		if ret != nil && ret.Success {
 			ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()
 			ret.Latencies["personsSrc"] = personsSrc.GetLatency()
+			ret.Latencies["toAuctionsWindowTab"] = toAuctionsWindowTab.GetLatency()
+			ret.Latencies["toPersonsWinTab"] = toPersonsWinTab.GetLatency()
+			ret.Latencies["personsJoinsAuctions"] = personsJoinsAuctions.GetLatency()
+			ret.Latencies["auctionsJoinsPersons"] = auctionsJoinsPersons.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()
 		}
 		return ret
@@ -398,6 +402,10 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()
 		ret.Latencies["personsSrc"] = personsSrc.GetLatency()
 		ret.Latencies["sink"] = sink.GetLatency()
+		ret.Latencies["toAuctionsWindowTab"] = toAuctionsWindowTab.GetLatency()
+		ret.Latencies["toPersonsWinTab"] = toPersonsWinTab.GetLatency()
+		ret.Latencies["personsJoinsAuctions"] = personsJoinsAuctions.GetLatency()
+		ret.Latencies["auctionsJoinsPersons"] = auctionsJoinsPersons.GetLatency()
 	}
 	return ret
 }
