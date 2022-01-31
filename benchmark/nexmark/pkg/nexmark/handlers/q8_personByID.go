@@ -141,21 +141,7 @@ func (h *q8PersonsByIDHandler) Q8PersonsByID(ctx context.Context, sp *common.Que
 			Message: fmt.Sprintf("get input output stream failed: %v", err),
 		}
 	}
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("get msg serde err: %v", err),
-		}
-	}
-	eventSerde, err := getEventSerde(sp.SerdeFormat)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("get event serde err: %v", err),
-		}
-	}
-	src, sink, err := CommonGetSrcSink(ctx, sp, input_stream, output_stream, eventSerde, msgSerde)
+	src, sink, err := CommonGetSrcSink(ctx, sp, input_stream, output_stream)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

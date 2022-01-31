@@ -131,21 +131,7 @@ func (h *q8AuctionsBySellerIDHandler) q8AuctionsBySellerID(ctx context.Context, 
 			Message: fmt.Sprintf("get input output stream failed: %v", err),
 		}
 	}
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("get msg serde err: %v", err),
-		}
-	}
-	eventSerde, err := getEventSerde(sp.SerdeFormat)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("get event serde err: %v", err),
-		}
-	}
-	src, sink, err := CommonGetSrcSink(ctx, sp, input_stream, output_stream, eventSerde, msgSerde)
+	src, sink, err := CommonGetSrcSink(ctx, sp, input_stream, output_stream)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -168,7 +154,6 @@ func (h *q8AuctionsBySellerIDHandler) q8AuctionsBySellerID(ctx context.Context, 
 	procArgs := &AuctionsBySellerIDProcessArgs{
 		src:                   src,
 		sink:                  sink,
-		output_stream:         output_stream,
 		filterAuctions:        filterAuctions,
 		auctionsBySellerIDMap: auctionsBySellerIDMap,
 		parNum:                sp.ParNum,
@@ -198,6 +183,8 @@ func (h *q8AuctionsBySellerIDHandler) q8AuctionsBySellerID(ctx context.Context, 
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()
+			ret.Latencies["filterAuctions"] = filterAuctions.GetLatency()
+			ret.Latencies["auctionsBySellerIDMap"] = auctionsBySellerIDMap.GetLatency()
 		}
 		return ret
 	}
@@ -209,6 +196,8 @@ func (h *q8AuctionsBySellerIDHandler) q8AuctionsBySellerID(ctx context.Context, 
 	if ret != nil && ret.Success {
 		ret.Latencies["src"] = src.GetLatency()
 		ret.Latencies["sink"] = sink.GetLatency()
+		ret.Latencies["filterAuctions"] = filterAuctions.GetLatency()
+		ret.Latencies["auctionsBySellerIDMap"] = auctionsBySellerIDMap.GetLatency()
 	}
 	return ret
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -19,26 +18,26 @@ import (
 	"golang.org/x/xerrors"
 )
 
-type query3AuctionsBySellerIDHandler struct {
+type bidByAuctionIDHandler struct {
 	env           types.Environment
 	cHash         *hash.ConsistentHash
 	currentOffset map[string]uint64
 }
 
-func NewQuery3AuctionsBySellerID(env types.Environment) types.FuncHandler {
-	return &query3AuctionsBySellerIDHandler{
+func NewBidByAuctionIDHandler(env types.Environment) types.FuncHandler {
+	return &bidByAuctionIDHandler{
 		env:           env,
 		cHash:         hash.NewConsistentHash(),
 		currentOffset: make(map[string]uint64),
 	}
 }
 
-func (h *query3AuctionsBySellerIDHandler) process(
+func (h *bidByAuctionIDHandler) process(
 	ctx context.Context,
 	argsTmp interface{},
 	trackParFunc func([]uint8) error,
 ) (map[string]uint64, *common.FnOutput) {
-	args := argsTmp.(*AuctionsBySellerIDProcessArgs)
+	args := argsTmp.(*bidsByAuctionIDProcessArgs)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {
 		if xerrors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
@@ -66,7 +65,7 @@ func (h *query3AuctionsBySellerIDHandler) process(
 			}
 		}
 		msg.Msg.Timestamp = ts
-		filteredMsgs, err := args.filterAuctions.ProcessAndReturn(ctx, msg.Msg)
+		filteredMsgs, err := args.filterBids.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
 			return h.currentOffset, &common.FnOutput{
 				Success: false,
@@ -74,7 +73,7 @@ func (h *query3AuctionsBySellerIDHandler) process(
 			}
 		}
 		for _, filteredMsg := range filteredMsgs {
-			changeKeyedMsg, err := args.auctionsBySellerIDMap.ProcessAndReturn(ctx, filteredMsg)
+			changeKeyedMsg, err := args.bidsByAuctionID.ProcessAndReturn(ctx, filteredMsg)
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{
 					Success: false,
@@ -98,7 +97,6 @@ func (h *query3AuctionsBySellerIDHandler) process(
 					Message: fmt.Sprintf("add topic partition failed: %v\n", err),
 				}
 			}
-			fmt.Fprintf(os.Stderr, "append %v to substream %v\n", changeKeyedMsg[0], par)
 			err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{
@@ -111,51 +109,13 @@ func (h *query3AuctionsBySellerIDHandler) process(
 	return h.currentOffset, nil
 }
 
-type AuctionsBySellerIDProcessArgs struct {
-	src  *processor.MeteredSource
-	sink *processor.MeteredSink
-
-	filterAuctions        *processor.MeteredProcessor
-	auctionsBySellerIDMap *processor.MeteredProcessor
-	parNum                uint8
-}
-
-func CommonGetSrcSink(ctx context.Context, sp *common.QueryInput,
-	input_stream *sharedlog_stream.ShardedSharedLogStream,
-	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*processor.MeteredSource, *processor.MeteredSink, error) {
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
-	if err != nil {
-		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
-	}
-	eventSerde, err := getEventSerde(sp.SerdeFormat)
-	if err != nil {
-		return nil, nil, fmt.Errorf("get event serde err: %v", err)
-	}
-	inConfig := &sharedlog_stream.SharedLogStreamConfig{
-		Timeout:      common.SrcConsumeTimeout,
-		KeyDecoder:   commtypes.StringDecoder{},
-		ValueDecoder: eventSerde,
-		MsgDecoder:   msgSerde,
-	}
-	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeyEncoder:   commtypes.Uint64Encoder{},
-		ValueEncoder: eventSerde,
-		MsgEncoder:   msgSerde,
-	}
-	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
-	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
-	return src, sink, nil
-}
-
-func (h *query3AuctionsBySellerIDHandler) Call(ctx context.Context, input []byte) ([]byte, error) {
+func (h *bidByAuctionIDHandler) Call(ctx context.Context, input []byte) ([]byte, error) {
 	parsedInput := &common.QueryInput{}
 	err := json.Unmarshal(input, parsedInput)
 	if err != nil {
 		return nil, err
 	}
-	output := h.Query3AuctionsBySellerID(ctx, parsedInput)
+	output := h.bidByAuctionID(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
 		panic(err)
@@ -163,7 +123,17 @@ func (h *query3AuctionsBySellerIDHandler) Call(ctx context.Context, input []byte
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+type bidsByAuctionIDProcessArgs struct {
+	src  *processor.MeteredSource
+	sink *processor.MeteredSink
+
+	filterBids      *processor.MeteredProcessor
+	bidsByAuctionID *processor.MeteredProcessor
+
+	parNum uint8
+}
+
+func (h *bidByAuctionIDHandler) bidByAuctionID(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{
@@ -171,7 +141,6 @@ func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(ctx context.C
 			Message: fmt.Sprintf("get input output stream failed: %v", err),
 		}
 	}
-
 	src, sink, err := CommonGetSrcSink(ctx, sp, input_stream, output_stream)
 	if err != nil {
 		return &common.FnOutput{
@@ -180,24 +149,23 @@ func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(ctx context.C
 		}
 	}
 
-	filterAuctions := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
+	filterBids := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
 		func(m *commtypes.Message) (bool, error) {
 			event := m.Value.(*ntypes.Event)
-			return event.Etype == ntypes.AUCTION && event.NewAuction.Category == 10, nil
+			return event.Etype == ntypes.BID, nil
 		})))
 
-	auctionsBySellerIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
+	bidsByAuctionIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
 		processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 			event := msg.Value.(*ntypes.Event)
-			return commtypes.Message{Key: event.NewAuction.Seller, Value: msg.Value, Timestamp: msg.Timestamp}, nil
+			return commtypes.Message{Key: event.Bid.Auction, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 		})))
-
-	procArgs := &AuctionsBySellerIDProcessArgs{
-		src:                   src,
-		sink:                  sink,
-		filterAuctions:        filterAuctions,
-		auctionsBySellerIDMap: auctionsBySellerIDMap,
-		parNum:                sp.ParNum,
+	procArgs := &bidsByAuctionIDProcessArgs{
+		src:             src,
+		sink:            sink,
+		filterBids:      filterBids,
+		bidsByAuctionID: bidsByAuctionIDMap,
+		parNum:          sp.ParNum,
 	}
 
 	task := sharedlog_stream.StreamTask{
@@ -212,19 +180,20 @@ func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(ctx context.C
 		srcs := make(map[string]processor.Source)
 		srcs[sp.InputTopicNames[0]] = src
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
-			ProcArgs:        procArgs,
-			Env:             h.env,
-			Srcs:            srcs,
-			OutputStream:    output_stream,
-			QueryInput:      sp,
-			TransactionalId: fmt.Sprintf("q3AuctionBySellerID-%s-%d-%s", sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
+			ProcArgs:     procArgs,
+			Env:          h.env,
+			Srcs:         srcs,
+			OutputStream: output_stream,
+			QueryInput:   sp,
+			TransactionalId: fmt.Sprintf("q8AuctionBySellerID-%s-%d-%s",
+				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
 		}
 		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()
-			ret.Latencies["filterAuctions"] = filterAuctions.GetLatency()
-			ret.Latencies["auctionsBySellerIDMap"] = auctionsBySellerIDMap.GetLatency()
+			ret.Latencies["filterBids"] = filterBids.GetLatency()
+			ret.Latencies["bidsByAuctionIDMap"] = bidsByAuctionIDMap.GetLatency()
 		}
 		return ret
 	}
@@ -236,8 +205,8 @@ func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(ctx context.C
 	if ret != nil && ret.Success {
 		ret.Latencies["src"] = src.GetLatency()
 		ret.Latencies["sink"] = sink.GetLatency()
-		ret.Latencies["filterAuctions"] = filterAuctions.GetLatency()
-		ret.Latencies["auctionsBySellerIDMap"] = auctionsBySellerIDMap.GetLatency()
+		ret.Latencies["filterBids"] = filterBids.GetLatency()
+		ret.Latencies["bidsByAuctionIDMap"] = bidsByAuctionIDMap.GetLatency()
 	}
 	return ret
 }

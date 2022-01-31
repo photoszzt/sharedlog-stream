@@ -143,21 +143,7 @@ func (h *query3PersonsByIDHandler) Query3PersonsByID(ctx context.Context, sp *co
 			Message: fmt.Sprintf("get input output stream failed: %v", err),
 		}
 	}
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("get msg serde err: %v", err),
-		}
-	}
-	eventSerde, err := getEventSerde(sp.SerdeFormat)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("get event serde err: %v", err),
-		}
-	}
-	src, sink, err := CommonGetSrcSink(ctx, sp, input_stream, output_stream, eventSerde, msgSerde)
+	src, sink, err := CommonGetSrcSink(ctx, sp, input_stream, output_stream)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -217,6 +203,8 @@ func (h *query3PersonsByIDHandler) Query3PersonsByID(ctx context.Context, sp *co
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()
+			ret.Latencies["filterPerson"] = filterPerson.GetLatency()
+			ret.Latencies["personsByIDMap"] = personsByIDMap.GetLatency()
 		}
 		return ret
 	}
@@ -228,6 +216,8 @@ func (h *query3PersonsByIDHandler) Query3PersonsByID(ctx context.Context, sp *co
 	if ret != nil && ret.Success {
 		ret.Latencies["src"] = src.GetLatency()
 		ret.Latencies["sink"] = sink.GetLatency()
+		ret.Latencies["filterPerson"] = filterPerson.GetLatency()
+		ret.Latencies["personsByIDMap"] = personsByIDMap.GetLatency()
 	}
 	return ret
 }
