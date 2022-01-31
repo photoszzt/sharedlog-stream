@@ -47,8 +47,8 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewAuctionsByIDHandler(env), nil
 	case "bidsByAuctionID":
 		return handlers.NewBidByAuctionIDHandler(env), nil
-	case "q4JoinTable":
-		return handlers.NewQ4JoinTableHandler(env), nil
+	case "q4JoinStream":
+		return handlers.NewQ4JoinStreamHandler(env), nil
 	case "query5":
 		return handlers.NewQuery5(env), nil
 	case "q5bidkeyedbyauction":
