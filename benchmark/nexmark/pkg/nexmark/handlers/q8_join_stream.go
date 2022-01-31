@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
@@ -18,7 +17,6 @@ import (
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
-	"golang.org/x/xerrors"
 )
 
 type q8JoinStreamHandler struct {
@@ -52,77 +50,6 @@ func (h *q8JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, e
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
-	auctionsStream *sharedlog_stream.ShardedSharedLogStream,
-	personsStream *sharedlog_stream.ShardedSharedLogStream,
-	outputStream *sharedlog_stream.ShardedSharedLogStream,
-) (*processor.MeteredSource, /* auctionSrc */
-	*processor.MeteredSource, /* personsSrc */
-	*processor.MeteredSink, error,
-) {
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("get msg serde err: %v", err)
-	}
-	eventSerde, err := getEventSerde(sp.SerdeFormat)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("get event serde err: %v", err)
-	}
-	auctionsConfig := &sharedlog_stream.SharedLogStreamConfig{
-		Timeout:      common.SrcConsumeTimeout,
-		KeyDecoder:   commtypes.Uint64Decoder{},
-		ValueDecoder: eventSerde,
-		MsgDecoder:   msgSerde,
-	}
-	personsConfig := &sharedlog_stream.SharedLogStreamConfig{
-		Timeout:      common.SrcConsumeTimeout,
-		KeyDecoder:   commtypes.Uint64Decoder{},
-		ValueDecoder: eventSerde,
-		MsgDecoder:   msgSerde,
-	}
-	outConfig := &sharedlog_stream.StreamSinkConfig{
-		ValueEncoder: commtypes.EncoderFunc(func(val interface{}) ([]byte, error) {
-			ret := val.(*ntypes.NameCityStateId)
-			if sp.SerdeFormat == uint8(commtypes.JSON) {
-				return json.Marshal(ret)
-			} else {
-				return ret.MarshalMsg(nil)
-			}
-		}),
-	}
-
-	auctionsSrc := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(auctionsStream, auctionsConfig))
-	personsSrc := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(personsStream, personsConfig))
-	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
-	return auctionsSrc, personsSrc, sink, nil
-}
-
-func (h *q8JoinStreamHandler) getShardedInputOutputStreams(ctx context.Context,
-	input *common.QueryInput,
-) (*sharedlog_stream.ShardedSharedLogStream, /* auction */
-	*sharedlog_stream.ShardedSharedLogStream, /* person */
-	*sharedlog_stream.ShardedSharedLogStream, /* output */
-	error,
-) {
-	inputStreamAuction, err := sharedlog_stream.NewShardedSharedLogStream(h.env, input.InputTopicNames[0], uint8(input.NumInPartition))
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
-
-	}
-	// fmt.Fprintf(os.Stderr, "reading auctions from %v\n", inputStreamAuction.TopicName())
-
-	inputStreamPerson, err := sharedlog_stream.NewShardedSharedLogStream(h.env, input.InputTopicNames[1], uint8(input.NumInPartition))
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
-	}
-	// fmt.Fprintf(os.Stderr, "reading persons from %v\n", inputStreamPerson.TopicName())
-	outputStream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, input.OutputTopicName, uint8(input.NumOutPartition))
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
-	}
-	return inputStreamAuction, inputStreamPerson, outputStream, nil
-}
-
 type q8JoinStreamProcessArgs struct {
 	personSrc  *processor.MeteredSource
 	auctionSrc *processor.MeteredSource
@@ -130,65 +57,6 @@ type q8JoinStreamProcessArgs struct {
 	pJoinA     *processor.AsyncFuncRunner
 	aJoinP     *processor.AsyncFuncRunner
 	parNum     uint8
-}
-
-func (h *q8JoinStreamHandler) proc(
-	ctx context.Context,
-	out chan *common.FnOutput,
-	src *processor.MeteredSource,
-	wg *sync.WaitGroup,
-	parNum uint8,
-	runner *processor.AsyncFuncRunner,
-) {
-	defer wg.Done()
-	gotMsgs, err := src.Consume(ctx, parNum)
-	if err != nil {
-		if xerrors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
-			out <- &common.FnOutput{
-				Success: true,
-				Message: err.Error(),
-			}
-			runner.Close()
-			err = runner.Wait()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "runner failed: %v\n", err)
-			}
-			return
-		}
-		out <- &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
-		runner.Close()
-		err = runner.Wait()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "runner failed: %v\n", err)
-		}
-		return
-	}
-	for _, msg := range gotMsgs {
-		h.offMu.Lock()
-		h.currentOffset[src.TopicName()] = msg.LogSeqNum
-		h.offMu.Unlock()
-
-		event := msg.Msg.Value.(*ntypes.Event)
-		ts, err := event.ExtractStreamTime()
-		if err != nil {
-			out <- &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("fail to extract timestamp: %v", err),
-			}
-			runner.Close()
-			err = runner.Wait()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "runner failed: %v\n", err)
-			}
-			return
-		}
-		msg.Msg.Timestamp = ts
-		runner.Accept(msg.Msg)
-	}
-	out <- nil
 }
 
 func (h *q8JoinStreamHandler) process(
@@ -203,9 +71,11 @@ func (h *q8JoinStreamHandler) process(
 	auctionsOutChan := make(chan *common.FnOutput)
 	completed := uint32(0)
 	wg.Add(1)
-	go h.proc(ctx, personsOutChan, args.personSrc, &wg, args.parNum, args.pJoinA)
+	go proc(ctx, personsOutChan, args.personSrc, &wg,
+		args.parNum, args.pJoinA, &h.offMu, h.currentOffset)
 	wg.Add(1)
-	go h.proc(ctx, auctionsOutChan, args.auctionSrc, &wg, args.parNum, args.aJoinP)
+	go proc(ctx, auctionsOutChan, args.auctionSrc, &wg,
+		args.parNum, args.aJoinP, &h.offMu, h.currentOffset)
 
 L:
 	for {
@@ -249,15 +119,15 @@ L:
 }
 
 func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-
-	auctionsStream, personsStream, outputStream, err := h.getShardedInputOutputStreams(ctx, sp)
+	auctionsStream, personsStream, outputStream, err := getInOutStreams(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("get input output err: %v", err),
 		}
 	}
-	auctionsSrc, personsSrc, sink, err := h.getSrcSink(ctx, sp, auctionsStream, personsStream, outputStream)
+	auctionsSrc, personsSrc, sink, err := getSrcSink(ctx, sp, auctionsStream,
+		personsStream, outputStream)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

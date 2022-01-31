@@ -77,13 +77,15 @@ func pushMsgsToSink(
 	return nil
 }
 
-func (h *q3JoinTableHandler) proc(
+func proc(
 	ctx context.Context,
 	out chan *common.FnOutput,
 	src *processor.MeteredSource,
 	wg *sync.WaitGroup,
 	parNum uint8,
 	runner *processor.AsyncFuncRunner,
+	offMu *sync.Mutex,
+	currentOffset map[string]uint64,
 ) {
 	defer wg.Done()
 	gotMsgs, err := src.Consume(ctx, parNum)
@@ -112,9 +114,9 @@ func (h *q3JoinTableHandler) proc(
 		return
 	}
 	for _, msg := range gotMsgs {
-		h.offMu.Lock()
-		h.currentOffset[src.TopicName()] = msg.LogSeqNum
-		h.offMu.Unlock()
+		offMu.Lock()
+		currentOffset[src.TopicName()] = msg.LogSeqNum
+		offMu.Unlock()
 
 		event := msg.Msg.Value.(*ntypes.Event)
 		ts, err := event.ExtractStreamTime()
@@ -147,9 +149,11 @@ func (h *q3JoinTableHandler) process(ctx context.Context,
 	auctionsOutChan := make(chan *common.FnOutput)
 	completed := uint32(0)
 	wg.Add(1)
-	go h.proc(ctx, personsOutChan, args.personSrc, &wg, args.parNum, args.pJoinA)
+	go proc(ctx, personsOutChan, args.personSrc, &wg,
+		args.parNum, args.pJoinA, &h.offMu, h.currentOffset)
 	wg.Add(1)
-	go h.proc(ctx, auctionsOutChan, args.auctionSrc, &wg, args.parNum, args.aJoinP)
+	go proc(ctx, auctionsOutChan, args.auctionSrc, &wg,
+		args.parNum, args.aJoinP, &h.offMu, h.currentOffset)
 
 L:
 	for {
@@ -192,36 +196,38 @@ L:
 	return h.currentOffset, nil
 }
 
-func (h *q3JoinTableHandler) getShardedInputOutputStreams(ctx context.Context,
+func getInOutStreams(
+	ctx context.Context,
+	env types.Environment,
 	input *common.QueryInput,
 ) (*sharedlog_stream.ShardedSharedLogStream, /* auction */
 	*sharedlog_stream.ShardedSharedLogStream, /* person */
 	*sharedlog_stream.ShardedSharedLogStream, /* output */
 	error,
 ) {
-	inputStreamAuction, err := sharedlog_stream.NewShardedSharedLogStream(h.env, input.InputTopicNames[0], uint8(input.NumInPartition))
+	inputStreamAuction, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[0], uint8(input.NumInPartition))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
 
 	}
 
-	inputStreamPerson, err := sharedlog_stream.NewShardedSharedLogStream(h.env, input.InputTopicNames[1], uint8(input.NumInPartition))
+	inputStreamPerson, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[1], uint8(input.NumInPartition))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
 	}
-	outputStream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, input.OutputTopicName, uint8(input.NumOutPartition))
+	outputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.OutputTopicName, uint8(input.NumOutPartition))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
 	}
 	return inputStreamAuction, inputStreamPerson, outputStream, nil
 }
 
-func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
-	auctionsStream *sharedlog_stream.ShardedSharedLogStream,
-	personsStream *sharedlog_stream.ShardedSharedLogStream,
+func getSrcSink(ctx context.Context, sp *common.QueryInput,
+	stream1 *sharedlog_stream.ShardedSharedLogStream,
+	stream2 *sharedlog_stream.ShardedSharedLogStream,
 	outputStream *sharedlog_stream.ShardedSharedLogStream,
-) (*processor.MeteredSource, /* auctionSrc */
-	*processor.MeteredSource, /* personsSrc */
+) (*processor.MeteredSource, /* src1 */
+	*processor.MeteredSource, /* src2 */
 	*processor.MeteredSink, error,
 ) {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
@@ -256,10 +262,10 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 		}),
 	}
 
-	auctionsSrc := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(auctionsStream, auctionsConfig))
-	personsSrc := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(personsStream, personsConfig))
+	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, auctionsConfig))
+	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, personsConfig))
 	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
-	return auctionsSrc, personsSrc, sink, nil
+	return src1, src2, sink, nil
 }
 
 type q3JoinTableProcessArgs struct {
@@ -272,14 +278,15 @@ type q3JoinTableProcessArgs struct {
 }
 
 func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	auctionsStream, personsStream, outputStream, err := h.getShardedInputOutputStreams(ctx, sp)
+	auctionsStream, personsStream, outputStream, err := getInOutStreams(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("get input output err: %v", err),
 		}
 	}
-	auctionsSrc, personsSrc, sink, err := h.getSrcSink(ctx, sp, auctionsStream, personsStream, outputStream)
+	auctionsSrc, personsSrc, sink, err := getSrcSink(ctx, sp, auctionsStream,
+		personsStream, outputStream)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
