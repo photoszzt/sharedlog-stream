@@ -50,14 +50,12 @@ func FenceTag(nameHash uint64, parNum uint8) uint64 {
 	return nameHash&mask + uint64(parNum)<<LogTagReserveBits + TransactionLogFence
 }
 
-func NewTransactionManager(ctx context.Context, env types.Environment, transactional_id string, serdeFormat commtypes.SerdeFormat) (*TransactionManager, error) {
+func NewTransactionManager(ctx context.Context,
+	env types.Environment,
+	transactional_id string,
+	serdeFormat commtypes.SerdeFormat,
+) (*TransactionManager, error) {
 	log := NewSharedLogStream(env, TRANSACTION_LOG_TOPIC_NAME+"_"+transactional_id)
-	/*
-		err := log.InitStream(ctx, 0, true)
-		if err != nil {
-			return nil, err
-		}
-	*/
 	errg, gctx := errgroup.WithContext(ctx)
 	tm := &TransactionManager{
 		transactionLog:        log,
@@ -297,7 +295,9 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) error {
 	return nil
 }
 
-func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, quit chan struct{}, errc chan error, dcancel context.CancelFunc) {
+func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, quit chan struct{},
+	errc chan error, dcancel context.CancelFunc,
+) {
 	fenceTag := FenceTag(tc.transactionLog.topicNameHash, 0)
 	for {
 		select {
