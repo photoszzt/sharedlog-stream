@@ -59,6 +59,10 @@ func (s *ShardedSharedLogStream) RemoveSubStreams(env types.Environment, numRemo
 	return nil
 }
 
+func (s *ShardedSharedLogStream) NumPartition() uint8 {
+	return s.numPartitions
+}
+
 func (s *ShardedSharedLogStream) Push(ctx context.Context, payload []byte, parNumber uint8, isControl bool) (uint64, error) {
 	return s.subSharedLogStreams[parNumber].Push(ctx, payload, parNumber, isControl)
 }

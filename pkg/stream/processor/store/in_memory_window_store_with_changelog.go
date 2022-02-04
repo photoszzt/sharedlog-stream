@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"fmt"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
 )
@@ -32,36 +31,17 @@ func NewInMemoryWindowStoreWithChangelog(retensionPeriod int64, windowSize int64
 	}, nil
 }
 
-func (st *InMemoryWindowStoreWithChangelog) RestoreStateStore(ctx context.Context) error {
-	for {
-		_, msgs, err := st.mp.Changelog.ReadNext(ctx, st.mp.ParNum)
-		// nothing to restore
-		if errors.IsStreamEmptyError(err) {
-			return nil
-		} else if err != nil {
-			return err
-		}
-		for _, msg := range msgs {
-			keyWinBytes, valBytes, err := st.mp.MsgSerde.Decode(msg.Payload)
-			if err != nil {
-				return err
-			}
-			keyWinTmp, err := st.keyWindowTsSerde.Decode(keyWinBytes)
-			if err != nil {
-				return err
-			}
-			keyWin := keyWinTmp.(commtypes.KeyAndWindowStartTs)
-			err = st.windowStore.Put(ctx, keyWin.Key, valBytes, keyWin.WindowStartTs)
-			if err != nil {
-				return err
-			}
-		}
-	}
-}
-
 func (st *InMemoryWindowStoreWithChangelog) Init(ctx StoreContext) {
 	st.windowStore.Init(ctx)
 	ctx.RegisterWindowStore(st)
+}
+
+func (st *InMemoryWindowStoreWithChangelog) MaterializeParam() *MaterializeParam {
+	return st.mp
+}
+
+func (st *InMemoryWindowStoreWithChangelog) KeyWindowTsSerde() commtypes.Serde {
+	return st.keyWindowTsSerde
 }
 
 func (st *InMemoryWindowStoreWithChangelog) Name() string {

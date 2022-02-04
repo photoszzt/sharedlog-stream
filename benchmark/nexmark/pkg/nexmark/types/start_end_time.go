@@ -15,6 +15,24 @@ type StartEndTime struct {
 	EndTime   int64 `json:"endTime" msg:"endTime"`
 }
 
+func CompareStartEndTime(a, b *StartEndTime) int {
+	if a.StartTime < b.StartTime {
+		return -1
+	} else { // a.st >= b.st
+		if a.StartTime == b.StartTime {
+			if a.EndTime < b.EndTime {
+				return -1
+			} else if a.EndTime == b.EndTime {
+				return 0
+			} else {
+				return 1
+			}
+		} else {
+			return 1
+		}
+	}
+}
+
 func (se StartEndTime) String() string {
 	return fmt.Sprintf("%d %d", se.StartTime, se.EndTime)
 }

@@ -26,7 +26,7 @@ const (
 type TransactionManager struct {
 	msgSerde              commtypes.MsgSerde
 	txnMdSerde            commtypes.Serde
-	tpSerde               commtypes.Serde
+	topicPartitionSerde   commtypes.Serde
 	txnMarkerSerde        commtypes.Serde
 	offsetRecordSerde     commtypes.Serde
 	backgroundJobCtx      context.Context
@@ -79,13 +79,13 @@ func (tc *TransactionManager) setupSerde(serdeFormat commtypes.SerdeFormat) erro
 	if serdeFormat == commtypes.JSON {
 		tc.msgSerde = commtypes.MessageSerializedJSONSerde{}
 		tc.txnMdSerde = TxnMetadataJSONSerde{}
-		tc.tpSerde = TopicPartitionJSONSerde{}
+		tc.topicPartitionSerde = TopicPartitionJSONSerde{}
 		tc.txnMarkerSerde = TxnMarkerJSONSerde{}
 		tc.offsetRecordSerde = OffsetRecordJSONSerde{}
 	} else if serdeFormat == commtypes.MSGP {
 		tc.msgSerde = commtypes.MessageSerializedMsgpSerde{}
 		tc.txnMdSerde = TxnMetadataMsgpSerde{}
-		tc.tpSerde = TopicPartitionMsgpSerde{}
+		tc.topicPartitionSerde = TopicPartitionMsgpSerde{}
 		tc.txnMarkerSerde = TxnMarkerMsgpSerde{}
 		tc.offsetRecordSerde = OffsetRecordMsgpSerde{}
 	} else {
@@ -470,9 +470,13 @@ type ConsumedSeqNumConfig struct {
 	Partition      uint8
 }
 
+func OffsetTopic(topicToTrack string) string {
+	return CONSUMER_OFFSET_LOG_TOPIC_NAME + topicToTrack
+}
+
 func (tc *TransactionManager) AppendConsumedSeqNum(ctx context.Context, consumedSeqNumConfigs []ConsumedSeqNumConfig) error {
 	for _, consumedSeqNumConfig := range consumedSeqNumConfigs {
-		offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + consumedSeqNumConfig.TopicToTrack
+		offsetTopic := OffsetTopic(consumedSeqNumConfig.TopicToTrack)
 		offsetLog := tc.topicStreams[offsetTopic]
 		offsetRecord := OffsetRecord{
 			Offset:    consumedSeqNumConfig.ConsumedSeqNum,

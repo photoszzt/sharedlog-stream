@@ -13,6 +13,7 @@ import (
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/treemap"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -201,7 +202,11 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		Changelog:  output_stream,
 		ParNum:     sp.ParNum,
 	}
-	store := store.NewInMemoryKeyValueStoreWithChangelog(mp)
+	store := store.NewInMemoryKeyValueStoreWithChangelog(mp, func(a, b treemap.Key) int {
+		ka := a.(*ntypes.StartEndTime)
+		kb := b.(*ntypes.StartEndTime)
+		return ntypes.CompareStartEndTime(ka, kb)
+	})
 	maxBid := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor(store, processor.InitializerFunc(func() interface{} {
 		return uint64(0)
 	}), processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
@@ -256,6 +261,10 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			TransactionalId: fmt.Sprintf("q5MaxBid-%s-%d-%s",
 				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
 			FixedOutParNum: sp.ParNum,
+			KVChangelogs: []*sharedlog_stream.KVStoreChangelog{
+				sharedlog_stream.NewKVStoreChangelog(store, mp.Changelog, sp.ParNum),
+			},
+			MsgSerde: msgSerde,
 		}
 		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
 		if ret != nil && ret.Success {

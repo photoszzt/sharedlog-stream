@@ -289,6 +289,15 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 			TransactionalId: fmt.Sprintf("processQ7ProcessArgs-%s-%d-%s",
 				input.InputTopicNames[0], input.NumInPartition, input.OutputTopicName),
 			FixedOutParNum: input.ParNum,
+			MsgSerde:       msgSerde,
+			WindowStoreChangelogs: []*sharedlog_stream.WindowStoreChangelog{
+				sharedlog_stream.NewWindowStoreChangelog(store,
+					store.MaterializeParam().Changelog,
+					store.KeyWindowTsSerde(),
+					store.MaterializeParam().KeySerde,
+					store.MaterializeParam().ValueSerde,
+					store.MaterializeParam().ParNum),
+			},
 		}
 		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
 		if ret != nil && ret.Success {

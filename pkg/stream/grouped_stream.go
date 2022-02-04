@@ -3,12 +3,14 @@ package stream
 import (
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/treemap"
 )
 
 type GroupedStream interface {
-	Count(name string, mp *store.MaterializeParam) Table
+	Count(name string, mp *store.MaterializeParam, compare func(a, b treemap.Key) int) Table
 	Reduce(name string, reducer processor.Reducer) Table
-	Aggregate(name string, mp *store.MaterializeParam, initializer processor.Initializer, aggregator processor.Aggregator) Table
+	Aggregate(name string, mp *store.MaterializeParam, initializer processor.Initializer,
+		aggregator processor.Aggregator, compare func(a, b treemap.Key) int) Table
 	WindowedBy(windows processor.EnumerableWindowDefinition) TimeWindowedStream
 }
 
@@ -26,8 +28,8 @@ func newGroupedStream(tp *processor.TopologyBuilder, parents []processor.Node, g
 	}
 }
 
-func (s *GroupedStreamImpl) Count(name string, mp *store.MaterializeParam) Table {
-	store := store.NewInMemoryKeyValueStoreWithChangelog(mp)
+func (s *GroupedStreamImpl) Count(name string, mp *store.MaterializeParam, compare func(a, b treemap.Key) int) Table {
+	store := store.NewInMemoryKeyValueStoreWithChangelog(mp, compare)
 	p := processor.NewStreamAggregateProcessor(store,
 		processor.InitializerFunc(func() interface{} {
 			return 0
@@ -51,8 +53,13 @@ func (s *GroupedStreamImpl) Reduce(name string, reducer processor.Reducer) Table
 	*/
 }
 
-func (s *GroupedStreamImpl) Aggregate(name string, mp *store.MaterializeParam, initializer processor.Initializer, aggregator processor.Aggregator) Table {
-	store := store.NewInMemoryKeyValueStoreWithChangelog(mp)
+func (s *GroupedStreamImpl) Aggregate(name string,
+	mp *store.MaterializeParam,
+	initializer processor.Initializer,
+	aggregator processor.Aggregator,
+	compare func(a, b treemap.Key) int,
+) Table {
+	store := store.NewInMemoryKeyValueStoreWithChangelog(mp, compare)
 	p := processor.NewStreamAggregateProcessor(store, initializer, aggregator)
 	n := s.tp.AddProcessor(name, p, s.parents)
 	_ = s.tp.AddKeyValueStore(store.Name())

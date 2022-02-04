@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sync"
 	"time"
 )
 
@@ -16,14 +17,25 @@ type Stream interface {
 	TopicName() string
 	TopicNameHash() uint64
 	SetCursor(cursor uint64, parNum uint8)
+	NumPartition() uint8
 }
 
 type MeteredStream struct {
-	stream                       Stream
-	pushLatencies                []int
-	pushWithTagLatencies         []int
-	readNextLatencies            []int
-	readNextWithTagLatencies     []int
+	stream Stream
+
+	pLMu          sync.Mutex
+	pushLatencies []int
+
+	pWTLMu               sync.Mutex
+	pushWithTagLatencies []int
+
+	rNLMu             sync.Mutex
+	readNextLatencies []int
+
+	rNWTLMu                  sync.Mutex
+	readNextWithTagLatencies []int
+
+	rBWTLMu                      sync.Mutex
 	readBackwardWithTagLatencies []int
 }
 
@@ -45,7 +57,11 @@ func (ms *MeteredStream) Push(ctx context.Context, payload []byte, parNum uint8,
 		procStart := time.Now()
 		seq, err := ms.stream.Push(ctx, payload, parNum, isControl)
 		elapsed := time.Since(procStart)
+
+		ms.pLMu.Lock()
 		ms.pushLatencies = append(ms.pushLatencies, int(elapsed.Microseconds()))
+		ms.pLMu.Unlock()
+
 		return seq, err
 	}
 	return ms.stream.Push(ctx, payload, parNum, isControl)
@@ -57,7 +73,11 @@ func (ms *MeteredStream) PushWithTag(ctx context.Context, payload []byte, parNum
 		procStart := time.Now()
 		seq, err := ms.stream.PushWithTag(ctx, payload, parNumber, tags, isControl)
 		elapsed := time.Since(procStart)
+
+		ms.pWTLMu.Lock()
 		ms.pushWithTagLatencies = append(ms.pushWithTagLatencies, int(elapsed.Microseconds()))
+		ms.pWTLMu.Unlock()
+
 		return seq, err
 	}
 	return ms.stream.PushWithTag(ctx, payload, parNumber, tags, isControl)
@@ -69,7 +89,11 @@ func (ms *MeteredStream) ReadNext(ctx context.Context, parNum uint8) (commtypes.
 		procStart := time.Now()
 		appIdGen, rawMsgs, err := ms.stream.ReadNext(ctx, parNum)
 		elapsed := time.Since(procStart)
+
+		ms.rNLMu.Lock()
 		ms.readNextLatencies = append(ms.readNextLatencies, int(elapsed.Microseconds()))
+		ms.rNLMu.Unlock()
+
 		return appIdGen, rawMsgs, err
 	}
 	return ms.stream.ReadNext(ctx, parNum)
@@ -81,7 +105,11 @@ func (ms *MeteredStream) ReadNextWithTag(ctx context.Context, parNumber uint8, t
 		procStart := time.Now()
 		appIdGen, rawMsgs, err := ms.stream.ReadNextWithTag(ctx, parNumber, tag)
 		elapsed := time.Since(procStart)
+
+		ms.rNWTLMu.Lock()
 		ms.readNextWithTagLatencies = append(ms.readNextWithTagLatencies, int(elapsed.Microseconds()))
+		ms.rNWTLMu.Unlock()
+
 		return appIdGen, rawMsgs, err
 	}
 	return ms.stream.ReadNextWithTag(ctx, parNumber, tag)
@@ -93,10 +121,18 @@ func (ms *MeteredStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum uin
 		procStart := time.Now()
 		appIdGen, rawMsg, err := ms.stream.ReadBackwardWithTag(ctx, tailSeqNum, parNum, tag)
 		elapsed := time.Since(procStart)
+
+		ms.rBWTLMu.Lock()
 		ms.readBackwardWithTagLatencies = append(ms.readBackwardWithTagLatencies, int(elapsed.Microseconds()))
+		ms.rBWTLMu.Unlock()
+
 		return appIdGen, rawMsg, err
 	}
 	return ms.stream.ReadBackwardWithTag(ctx, tailSeqNum, parNum, tag)
+}
+
+func (ms *MeteredStream) NumPartition() uint8 {
+	return ms.stream.NumPartition()
 }
 
 func (ms *MeteredStream) TopicName() string {
@@ -112,17 +148,25 @@ func (ms *MeteredStream) SetCursor(cursor uint64, parNum uint8) {
 }
 
 func (ms *MeteredStream) GetPushLatencies() []int {
+	ms.pLMu.Lock()
+	defer ms.pLMu.Unlock()
 	return ms.pushLatencies
 }
 
 func (ms *MeteredStream) GetPushWithTagLatencies() []int {
+	ms.pWTLMu.Lock()
+	defer ms.pWTLMu.Unlock()
 	return ms.pushWithTagLatencies
 }
 
 func (ms *MeteredStream) GetReadNextLatencies() []int {
+	ms.rNLMu.Lock()
+	defer ms.rNLMu.Unlock()
 	return ms.readNextLatencies
 }
 
 func (ms *MeteredStream) GetReadNextWithTagLatencies() []int {
+	ms.rNWTLMu.Lock()
+	defer ms.rNWTLMu.Unlock()
 	return ms.readNextWithTagLatencies
 }

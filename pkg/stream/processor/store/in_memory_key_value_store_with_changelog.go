@@ -1,13 +1,9 @@
 package store
 
 import (
-	"bytes"
 	"context"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/treemap"
-
-	"github.com/rs/zerolog/log"
 )
 
 type InMemoryKeyValueStoreWithChangelog struct {
@@ -15,36 +11,10 @@ type InMemoryKeyValueStoreWithChangelog struct {
 	mp      *MaterializeParam
 }
 
-func NewInMemoryKeyValueStoreWithChangelog(mp *MaterializeParam) *InMemoryKeyValueStoreWithChangelog {
+func NewInMemoryKeyValueStoreWithChangelog(mp *MaterializeParam, compare func(a, b treemap.Key) int) *InMemoryKeyValueStoreWithChangelog {
 	return &InMemoryKeyValueStoreWithChangelog{
-		kvstore: NewInMemoryKeyValueStore(mp.StoreName+"_bytes", func(a treemap.Key, b treemap.Key) int {
-			valA := a.([]byte)
-			valB := b.([]byte)
-			return bytes.Compare(valA, valB)
-		}),
-		mp: mp,
-	}
-}
-
-func (st *InMemoryKeyValueStoreWithChangelog) RestoreStateStore(ctx context.Context) error {
-	for {
-		_, msgs, err := st.mp.Changelog.ReadNext(ctx, st.mp.ParNum)
-		// nothing to restore
-		if errors.IsStreamEmptyError(err) {
-			return nil
-		} else if err != nil {
-			return err
-		}
-		for _, msg := range msgs {
-			keyBytes, valBytes, err := st.mp.MsgSerde.Decode(msg.Payload)
-			if err != nil {
-				return err
-			}
-			err = st.kvstore.Put(ctx, keyBytes, valBytes)
-			if err != nil {
-				return err
-			}
-		}
+		kvstore: NewInMemoryKeyValueStore(mp.StoreName, compare),
+		mp:      mp,
 	}
 }
 
@@ -62,22 +32,7 @@ func (st *InMemoryKeyValueStoreWithChangelog) IsOpen() bool {
 }
 
 func (st *InMemoryKeyValueStoreWithChangelog) Get(key KeyT) (ValueT, bool, error) {
-	keyBytes, err := st.mp.KeySerde.Encode(key)
-	if err != nil {
-		return nil, false, err
-	}
-	valBytes, ok, err := st.kvstore.Get(keyBytes)
-	if err != nil {
-		return nil, false, err
-	}
-	if ok {
-		val, err := st.mp.ValueSerde.Decode(valBytes.([]byte))
-		if err != nil {
-			return nil, false, err
-		}
-		return val, ok, nil
-	}
-	return valBytes, ok, nil
+	return st.kvstore.Get(key)
 }
 
 func (st *InMemoryKeyValueStoreWithChangelog) Put(ctx context.Context, key KeyT, value ValueT) error {
@@ -97,20 +52,20 @@ func (st *InMemoryKeyValueStoreWithChangelog) Put(ctx context.Context, key KeyT,
 	if err != nil {
 		return err
 	}
-	err = st.kvstore.Put(ctx, keyBytes, valBytes)
+	err = st.kvstore.Put(ctx, key, value)
 	return err
 }
 
 func (st *InMemoryKeyValueStoreWithChangelog) PutIfAbsent(ctx context.Context, key KeyT, value ValueT) (ValueT, error) {
-	keyBytes, err := st.mp.KeySerde.Encode(key)
-	if err != nil {
-		return nil, err
-	}
-	origValBytes, exists, err := st.kvstore.Get(keyBytes)
+	origVal, exists, err := st.kvstore.Get(key)
 	if err != nil {
 		return nil, err
 	}
 	if !exists {
+		keyBytes, err := st.mp.KeySerde.Encode(key)
+		if err != nil {
+			return nil, err
+		}
 		valBytes, err := st.mp.ValueSerde.Encode(value)
 		if err != nil {
 			return nil, err
@@ -123,12 +78,8 @@ func (st *InMemoryKeyValueStoreWithChangelog) PutIfAbsent(ctx context.Context, k
 		if err != nil {
 			return nil, err
 		}
-		st.kvstore.store.Set(keyBytes, valBytes)
+		st.kvstore.store.Set(key, value)
 		return nil, nil
-	}
-	origVal, err := st.mp.ValueSerde.Decode(origValBytes.([]byte))
-	if err != nil {
-		return nil, err
 	}
 	return origVal, nil
 }
@@ -156,7 +107,7 @@ func (st *InMemoryKeyValueStoreWithChangelog) Delete(ctx context.Context, key Ke
 	if err != nil {
 		return err
 	}
-	return st.kvstore.Delete(ctx, keyBytes)
+	return st.kvstore.Delete(ctx, key)
 }
 
 func (st *InMemoryKeyValueStoreWithChangelog) ApproximateNumEntries() uint64 {
@@ -164,27 +115,11 @@ func (st *InMemoryKeyValueStoreWithChangelog) ApproximateNumEntries() uint64 {
 }
 
 func (st *InMemoryKeyValueStoreWithChangelog) Range(from KeyT, to KeyT) KeyValueIterator {
-	fromBytes, err := st.mp.KeySerde.Encode(from)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
-	toBytes, err := st.mp.KeySerde.Encode(to)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
-	return st.kvstore.Range(fromBytes, toBytes)
+	return st.kvstore.Range(from, to)
 }
 
 func (st *InMemoryKeyValueStoreWithChangelog) ReverseRange(from KeyT, to KeyT) KeyValueIterator {
-	fromBytes, err := st.mp.KeySerde.Encode(from)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
-	toBytes, err := st.mp.KeySerde.Encode(to)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
-	return st.kvstore.ReverseRange(fromBytes, toBytes)
+	return st.kvstore.ReverseRange(from, to)
 }
 
 func (st *InMemoryKeyValueStoreWithChangelog) PrefixScan(prefix interface{}, prefixKeyEncoder commtypes.Encoder) KeyValueIterator {

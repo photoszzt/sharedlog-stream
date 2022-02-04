@@ -13,6 +13,8 @@ import (
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/treemap"
+	"strings"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -66,12 +68,12 @@ func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes
 		Changelog:  output_stream,
 		ParNum:     sp.ParNum,
 	}
-	store := store.NewInMemoryKeyValueStoreWithChangelog(mp)
+	store := store.NewInMemoryKeyValueStoreWithChangelog(mp, func(a, b treemap.Key) int {
+		ka := a.(string)
+		kb := b.(string)
+		return strings.Compare(ka, kb)
+	})
 	// fmt.Fprintf(os.Stderr, "before restore\n")
-	err := store.RestoreStateStore(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("restore failed: %v", err)
-	}
 	p := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor(store,
 		processor.InitializerFunc(func() interface{} {
 			return uint64(0)

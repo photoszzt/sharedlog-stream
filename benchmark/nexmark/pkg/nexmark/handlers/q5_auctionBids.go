@@ -85,13 +85,14 @@ func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	return src, sink, nil
 }
 
-func (h *q5AuctionBids) getCountAggProc(sp *common.QueryInput, msgSerde commtypes.MsgSerde) (*processor.MeteredProcessor, error) {
+func (h *q5AuctionBids) getCountAggProc(sp *common.QueryInput, msgSerde commtypes.MsgSerde,
+) (*processor.MeteredProcessor, *store.InMemoryWindowStoreWithChangelog, error) {
 	hopWindow := processor.NewTimeWindowsNoGrace(time.Duration(10) * time.Second).AdvanceBy(time.Duration(2) * time.Second)
 	countStoreName := "auctionBidsCountStore"
 	changelogName := countStoreName + "-changelog"
 	changelog, err := sharedlog_stream.NewShardedSharedLogStream(h.env, changelogName, 1)
 	if err != nil {
-		return nil, fmt.Errorf("NewShardedSharedLogStream failed: %v", err)
+		return nil, nil, fmt.Errorf("NewShardedSharedLogStream failed: %v", err)
 	}
 	var vtSerde commtypes.Serde
 	if sp.SerdeFormat == uint8(commtypes.JSON) {
@@ -103,7 +104,7 @@ func (h *q5AuctionBids) getCountAggProc(sp *common.QueryInput, msgSerde commtype
 			ValMsgpSerde: commtypes.Uint64Serde{},
 		}
 	} else {
-		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat)
+		return nil, nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat)
 	}
 	countMp := &store.MaterializeParam{
 		KeySerde:   commtypes.Uint64Serde{},
@@ -128,7 +129,7 @@ func (h *q5AuctionBids) getCountAggProc(sp *common.QueryInput, msgSerde commtype
 		hopWindow.MaxSize(), countMp,
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	countProc := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(countWindowStore,
 		processor.InitializerFunc(func() interface{} { return uint64(0) }),
@@ -136,7 +137,7 @@ func (h *q5AuctionBids) getCountAggProc(sp *common.QueryInput, msgSerde commtype
 			val := aggregate.(uint64)
 			return val + 1
 		}), hopWindow))
-	return countProc, nil
+	return countProc, countWindowStore, nil
 }
 
 type q5AuctionBidsProcessArg struct {
@@ -251,7 +252,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			Message: err.Error(),
 		}
 	}
-	countProc, err := h.getCountAggProc(sp, msgSerde)
+	countProc, countStore, err := h.getCountAggProc(sp, msgSerde)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -303,6 +304,15 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			TransactionalId: fmt.Sprintf("q5AuctionBids-%s-%d-%s", sp.InputTopicNames[0],
 				sp.ParNum, sp.OutputTopicName),
 			FixedOutParNum: 0,
+			WindowStoreChangelogs: []*sharedlog_stream.WindowStoreChangelog{
+				sharedlog_stream.NewWindowStoreChangelog(
+					countStore,
+					countStore.MaterializeParam().Changelog,
+					countStore.KeyWindowTsSerde(),
+					countStore.MaterializeParam().KeySerde,
+					countStore.MaterializeParam().ValueSerde, 0),
+			},
+			MsgSerde: msgSerde,
 		}
 		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
 		if ret != nil && ret.Success {

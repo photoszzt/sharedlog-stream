@@ -16,7 +16,8 @@ type ControlChannelManager struct {
 	controlLog       *SharedLogStream
 	controlMetaSerde commtypes.Serde
 	msgSerde         commtypes.MsgSerde
-	epoch            uint32
+	keyMappings      map[string]map[interface{}][]uint8 // topic -> (key -> list of substreams)
+	currentEpoch     uint64
 }
 
 func NewControlChannelManager(env types.Environment,
@@ -25,8 +26,8 @@ func NewControlChannelManager(env types.Environment,
 ) (*ControlChannelManager, error) {
 	log := NewSharedLogStream(env, app_id+"_"+CONTROL_LOG_TOPIC_NAME)
 	cm := &ControlChannelManager{
-		controlLog: log,
-		epoch:      0,
+		controlLog:   log,
+		currentEpoch: 0,
 	}
 	if serdeFormat == commtypes.JSON {
 		cm.controlMetaSerde = ControlMetadataJSONSerde{}
@@ -53,11 +54,11 @@ func (cmm *ControlChannelManager) appendToControlLog(ctx context.Context, cm *Co
 	return err
 }
 
-func (cmm *ControlChannelManager) Rescale(ctx context.Context, stages map[string]uint8) error {
-	cmm.epoch += 1
+func (cmm *ControlChannelManager) Rescale(ctx context.Context, config map[string]uint8) error {
+	cmm.currentEpoch += 1
 	cm := ControlMetadata{
-		Stages: stages,
-		Epoch:  cmm.epoch,
+		Config: config,
+		Epoch:  cmm.currentEpoch,
 	}
 	err := cmm.appendToControlLog(ctx, &cm)
 	return err
@@ -74,9 +75,9 @@ func (cmm *ControlChannelManager) AppendKeyMapping(
 		return err
 	}
 	cm := ControlMetadata{
-		Key:        kBytes,
-		InstanceId: instanceId,
-		Epoch:      cmm.epoch,
+		Key:         kBytes,
+		SubstreamId: instanceId,
+		Epoch:       cmm.currentEpoch,
 	}
 	err = cmm.appendToControlLog(ctx, &cm)
 	return err

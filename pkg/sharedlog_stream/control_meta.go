@@ -5,10 +5,16 @@ package sharedlog_stream
 import "encoding/json"
 
 type ControlMetadata struct {
-	Stages     map[string]uint8 `json:"sg,omitempty" msgp:"sg,omitempty"`
-	Key        []byte           `json:"k,omitempty" msgp:"k,omitempty"`
-	Epoch      uint32           `json:"ep" msgp:"ep"`
-	InstanceId uint8            `json:"iid,omitempty" msgp:"iid,omitempty"`
+	// number of instances for each stage
+	Config map[string]uint8 `json:"sg,omitempty" msgp:"sg,omitempty"`
+
+	// topic of the stream
+	Topic string `json:"tp,omitempty" msgp:"tp,omitempty"`
+	// key of msg
+	Key   []byte `json:"k,omitempty" msgp:"k,omitempty"`
+	Epoch uint64 `json:"ep" msgp:"ep"`
+	// substream id that the key stores to
+	SubstreamId uint8 `json:"sid,omitempty" msgp:"sid,omitempty"`
 }
 
 type ControlMetadataJSONSerde struct{}

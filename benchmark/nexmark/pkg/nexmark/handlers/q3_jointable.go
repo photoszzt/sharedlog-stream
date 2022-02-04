@@ -378,6 +378,17 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		srcs := make(map[string]processor.Source)
 		srcs[sp.InputTopicNames[0]] = auctionsSrc
 		srcs[sp.InputTopicNames[1]] = personsSrc
+		msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("get msg serde err: %v", err),
+			}
+		}
+		kvchangelogs := []*sharedlog_stream.KVStoreChangelog{
+			sharedlog_stream.NewKVStoreChangelog(auctionsStore, auctionsStream, sp.ParNum),
+			sharedlog_stream.NewKVStoreChangelog(personsStore, personsStream, sp.ParNum),
+		}
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
 			ProcArgs:     procArgs,
 			Env:          h.env,
@@ -386,7 +397,11 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			QueryInput:   sp,
 			TransactionalId: fmt.Sprintf("q3JoinTable-%s-%d-%s",
 				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
+			MsgSerde:              msgSerde,
+			KVChangelogs:          kvchangelogs,
+			WindowStoreChangelogs: nil,
 		}
+
 		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
 		if ret != nil && ret.Success {
 			ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()

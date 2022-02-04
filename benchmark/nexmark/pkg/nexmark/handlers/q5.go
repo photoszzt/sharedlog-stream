@@ -12,6 +12,7 @@ import (
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/treemap"
 	"time"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -138,7 +139,11 @@ func Query5(ctx context.Context, env types.Environment, input *common.QueryInput
 					return v.Count
 				}
 				return agg
-			}))
+			}), func(a, b treemap.Key) int {
+				ka := a.(*ntypes.StartEndTime)
+				kb := b.(*ntypes.StartEndTime)
+				return ntypes.CompareStartEndTime(ka, kb)
+			})
 
 	auctionBids.
 		StreamTableJoin("join-auctionbids-maxbids",

@@ -84,6 +84,10 @@ func NewSharedLogStream(env types.Environment, topicName string) *SharedLogStrea
 	}
 }
 
+func (s *SharedLogStream) NumPartition() uint8 {
+	return 1
+}
+
 func (s *SharedLogStream) SetAppendMsgSeqNum(val uint32) {
 	s.curAppendMsgSeqNum = val
 }

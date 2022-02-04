@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -17,7 +18,26 @@ type StreamTask struct {
 	ProcessFunc func(ctx context.Context, args interface{}, trackParFunc func([]uint8) error) (map[string]uint64, *common.FnOutput)
 }
 
-func SetupTransactionManager(ctx context.Context, args *StreamTaskArgsTransaction) (*TransactionManager, error) {
+func createOffsetTopicAndGetOffset(ctx context.Context, tm *TransactionManager,
+	topic string, numPartition uint8, parNum uint8,
+) (uint64, error) {
+	err := tm.CreateOffsetTopic(topic, numPartition)
+	if err != nil {
+		return 0, fmt.Errorf("create offset topic failed: %v", err)
+	}
+	offset, err := tm.FindLastConsumedSeqNum(ctx, topic, parNum)
+	if err != nil {
+		if !errors.IsStreamEmptyError(err) {
+			return 0, err
+		}
+	}
+	return offset, nil
+}
+
+func SetupTransactionManager(
+	ctx context.Context,
+	args *StreamTaskArgsTransaction,
+) (*TransactionManager, error) {
 	tm, err := NewTransactionManager(ctx, args.Env, args.TransactionalId, commtypes.SerdeFormat(args.QueryInput.SerdeFormat))
 	if err != nil {
 		return nil, fmt.Errorf("NewTransactionManager failed: %v", err)
@@ -26,24 +46,81 @@ func SetupTransactionManager(ctx context.Context, args *StreamTaskArgsTransactio
 	if err != nil {
 		return nil, fmt.Errorf("InitTransaction failed: %v", err)
 	}
-
+	offsetMap := make(map[string]uint64)
 	for _, inputTopicName := range args.QueryInput.InputTopicNames {
-		err = tm.CreateOffsetTopic(inputTopicName, uint8(args.QueryInput.NumInPartition))
+		offset, err := createOffsetTopicAndGetOffset(ctx, tm, inputTopicName,
+			uint8(args.QueryInput.NumInPartition), args.QueryInput.ParNum)
 		if err != nil {
-			return nil, fmt.Errorf("create offset topic failed: %v", err)
+			return nil, err
 		}
-		offset, err := tm.FindLastConsumedSeqNum(ctx, inputTopicName, args.QueryInput.ParNum)
-		if err != nil {
-			if !errors.IsStreamEmptyError(err) {
-				return nil, err
+		offsetMap[inputTopicName] = offset
+	}
+	if args.KVChangelogs != nil {
+		for _, kvchangelog := range args.KVChangelogs {
+			topic := kvchangelog.changelog.TopicName()
+			if offset, ok := offsetMap[topic]; ok {
+				err = store.RestoreKVStateStore(ctx, kvchangelog.kvStore, kvchangelog.changelog, kvchangelog.parNum,
+					args.MsgSerde, offset)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				offset, err := createOffsetTopicAndGetOffset(ctx, tm, topic,
+					kvchangelog.changelog.NumPartition(), kvchangelog.parNum)
+				if err != nil {
+					return nil, err
+				}
+				err = store.RestoreKVStateStore(ctx, kvchangelog.kvStore, kvchangelog.changelog, kvchangelog.parNum,
+					args.MsgSerde, offset)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
-		if offset != 0 {
-			args.Srcs[inputTopicName].SetCursor(offset+1, args.QueryInput.ParNum)
+	}
+	if args.WindowStoreChangelogs != nil {
+		for _, wschangelog := range args.WindowStoreChangelogs {
+			topic := wschangelog.changelog.TopicName()
+			if offset, ok := offsetMap[topic]; ok {
+				err = store.RestoreWindowStateStore(ctx, wschangelog.windowStore,
+					wschangelog.changelog, wschangelog.parNum,
+					args.MsgSerde, wschangelog.keyWindowTsSerde,
+					wschangelog.keySerde, wschangelog.valSerde, offset)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				offset, err := createOffsetTopicAndGetOffset(ctx, tm, topic,
+					wschangelog.changelog.NumPartition(), wschangelog.parNum)
+				if err != nil {
+					return nil, err
+				}
+				err = store.RestoreWindowStateStore(ctx, wschangelog.windowStore,
+					wschangelog.changelog, wschangelog.parNum,
+					args.MsgSerde, wschangelog.keyWindowTsSerde,
+					wschangelog.keySerde, wschangelog.valSerde, offset)
+				if err != nil {
+					return nil, err
+				}
+			}
 		}
 	}
 
+	for _, inputTopicName := range args.QueryInput.InputTopicNames {
+		offset := offsetMap[inputTopicName]
+		args.Srcs[inputTopicName].SetCursor(offset+1, args.QueryInput.ParNum)
+	}
 	return tm, nil
+}
+
+func UpdateInputStreamCursor(
+	args *StreamTaskArgsTransaction,
+	offsetMap map[string]uint64,
+) {
+	for _, inputTopicName := range args.QueryInput.InputTopicNames {
+		offset := offsetMap[inputTopicName]
+		args.Srcs[inputTopicName].SetCursor(offset+1, args.QueryInput.ParNum)
+	}
 }
 
 func TrackOffsetAndCommit(ctx context.Context,
@@ -74,15 +151,59 @@ type StreamTaskArgs struct {
 	Duration time.Duration
 }
 
+type KVStoreChangelog struct {
+	kvStore   store.KeyValueStore
+	changelog store.Stream
+	parNum    uint8
+}
+
+func NewKVStoreChangelog(kvStore store.KeyValueStore, changelog store.Stream, parNum uint8) *KVStoreChangelog {
+	return &KVStoreChangelog{
+		kvStore:   kvStore,
+		changelog: changelog,
+		parNum:    parNum,
+	}
+}
+
+type WindowStoreChangelog struct {
+	windowStore      store.WindowStore
+	changelog        store.Stream
+	keyWindowTsSerde commtypes.Serde
+	keySerde         commtypes.Serde
+	valSerde         commtypes.Serde
+	parNum           uint8
+}
+
+func NewWindowStoreChangelog(
+	wsStore store.WindowStore,
+	changelog store.Stream,
+	keyWindowTsSerde commtypes.Serde,
+	keySerde commtypes.Serde,
+	valSerde commtypes.Serde,
+	parNum uint8,
+) *WindowStoreChangelog {
+	return &WindowStoreChangelog{
+		windowStore:      wsStore,
+		changelog:        changelog,
+		keyWindowTsSerde: keyWindowTsSerde,
+		keySerde:         keySerde,
+		valSerde:         valSerde,
+		parNum:           parNum,
+	}
+}
+
 type StreamTaskArgsTransaction struct {
-	ProcArgs        interface{}
-	Env             types.Environment
-	Srcs            map[string]processor.Source
-	OutputStream    *ShardedSharedLogStream
-	QueryInput      *common.QueryInput
-	TestParams      map[string]bool
-	TransactionalId string
-	FixedOutParNum  uint8
+	ProcArgs              interface{}
+	Env                   types.Environment
+	MsgSerde              commtypes.MsgSerde
+	Srcs                  map[string]processor.Source
+	OutputStream          *ShardedSharedLogStream
+	QueryInput            *common.QueryInput
+	TestParams            map[string]bool
+	TransactionalId       string
+	KVChangelogs          []*KVStoreChangelog
+	WindowStoreChangelogs []*WindowStoreChangelog
+	FixedOutParNum        uint8
 }
 
 func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.FnOutput {
@@ -117,12 +238,15 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 	}
 }
 
-func (t *StreamTask) ProcessWithTransaction(ctx context.Context, args *StreamTaskArgsTransaction) *common.FnOutput {
+func (t *StreamTask) ProcessWithTransaction(
+	ctx context.Context,
+	args *StreamTaskArgsTransaction,
+) *common.FnOutput {
 	tm, err := SetupTransactionManager(ctx, args)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
-			Message: err.Error(),
+			Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
 		}
 	}
 	tm.RecordTopicStreams(args.QueryInput.OutputTopicName, args.OutputStream)

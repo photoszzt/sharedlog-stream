@@ -134,7 +134,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			Message: fmt.Sprintf("getSrcSink err: %v\n", err),
 		}
 	}
-	joinWindows := processor.NewJoinWindowsNoGrace(time.Duration(10) * time.Second)
+	joinWindows := processor.NewJoinWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
 
 	compare := concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
 		l, ok := lhs.(uint64)
@@ -242,6 +242,20 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		srcs := make(map[string]processor.Source)
 		srcs[sp.InputTopicNames[0]] = auctionsSrc
 		srcs[sp.InputTopicNames[1]] = personsSrc
+		msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("get msg serde err: %v", err),
+			}
+		}
+		eventSerde, err := getEventSerde(sp.SerdeFormat)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("get event serde err: %v\n", err),
+			}
+		}
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
 			ProcArgs:     procArgs,
 			Env:          h.env,
@@ -250,6 +264,25 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			QueryInput:   sp,
 			TransactionalId: fmt.Sprintf("q8JoinStream-%s-%d-%s",
 				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
+			MsgSerde: msgSerde,
+			WindowStoreChangelogs: []*sharedlog_stream.WindowStoreChangelog{
+				sharedlog_stream.NewWindowStoreChangelog(
+					auctionsWinStore,
+					auctionsStream,
+					nil,
+					commtypes.Uint64Serde{},
+					eventSerde,
+					sp.ParNum,
+				),
+				sharedlog_stream.NewWindowStoreChangelog(
+					personsWinTab,
+					personsStream,
+					nil,
+					commtypes.Uint64Serde{},
+					eventSerde,
+					sp.ParNum,
+				),
+			},
 		}
 		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
 		if ret != nil && ret.Success {

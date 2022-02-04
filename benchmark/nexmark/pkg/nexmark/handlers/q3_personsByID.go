@@ -198,7 +198,6 @@ func (h *query3PersonsByIDHandler) Query3PersonsByID(ctx context.Context, sp *co
 			QueryInput:      sp,
 			TransactionalId: fmt.Sprintf("q3PersonsByID-%s-%d-%s", sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
 		}
-
 		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
