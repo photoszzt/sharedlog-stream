@@ -64,7 +64,7 @@ func NewTimeWindowsNoGrace(size time.Duration) *TimeWindows {
 	}
 }
 
-func NewTimeWindowWithGrace(size time.Duration, afterWindowEnd time.Duration) *TimeWindows {
+func NewTimeWindowsWithGrace(size time.Duration, afterWindowEnd time.Duration) *TimeWindows {
 	sizeMs := size.Milliseconds()
 	if sizeMs <= 0 {
 		log.Fatal().Err(DurationLeqZero)

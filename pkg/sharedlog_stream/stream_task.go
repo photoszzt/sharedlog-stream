@@ -38,7 +38,8 @@ func SetupTransactionManager(
 	ctx context.Context,
 	args *StreamTaskArgsTransaction,
 ) (*TransactionManager, error) {
-	tm, err := NewTransactionManager(ctx, args.Env, args.TransactionalId, commtypes.SerdeFormat(args.QueryInput.SerdeFormat))
+	tm, err := NewTransactionManager(ctx, args.Env, args.TransactionalId,
+		commtypes.SerdeFormat(args.QueryInput.SerdeFormat))
 	if err != nil {
 		return nil, fmt.Errorf("NewTransactionManager failed: %v", err)
 	}

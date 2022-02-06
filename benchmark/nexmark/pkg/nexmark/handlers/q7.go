@@ -208,7 +208,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		}
 	}
 
-	tw := processor.NewTimeWindowsNoGrace(time.Duration(10) * time.Second)
+	tw := processor.NewTimeWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
 	maxPriceBidStoreName := "max-price-bid-tab"
 	mp := &store.MaterializeParam{
 		KeySerde:   commtypes.Uint64Serde{},

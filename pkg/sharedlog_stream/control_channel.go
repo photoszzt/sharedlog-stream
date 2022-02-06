@@ -54,7 +54,9 @@ func (cmm *ControlChannelManager) appendToControlLog(ctx context.Context, cm *Co
 	return err
 }
 
-func (cmm *ControlChannelManager) Rescale(ctx context.Context, config map[string]uint8) error {
+func (cmm *ControlChannelManager) AppendRescaleConfig(ctx context.Context,
+	config map[string]uint8,
+) error {
 	cmm.currentEpoch += 1
 	cm := ControlMetadata{
 		Config: config,
@@ -68,7 +70,8 @@ func (cmm *ControlChannelManager) AppendKeyMapping(
 	ctx context.Context,
 	key interface{},
 	keySerde commtypes.Serde,
-	instanceId uint8,
+	substreamId uint8,
+	topic string,
 ) error {
 	kBytes, err := keySerde.Encode(key)
 	if err != nil {
@@ -76,7 +79,8 @@ func (cmm *ControlChannelManager) AppendKeyMapping(
 	}
 	cm := ControlMetadata{
 		Key:         kBytes,
-		SubstreamId: instanceId,
+		SubstreamId: substreamId,
+		Topic:       topic,
 		Epoch:       cmm.currentEpoch,
 	}
 	err = cmm.appendToControlLog(ctx, &cm)
