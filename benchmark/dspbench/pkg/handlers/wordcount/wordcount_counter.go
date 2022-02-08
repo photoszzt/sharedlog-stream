@@ -90,8 +90,8 @@ type wordcountCounterAggProcessArg struct {
 	src           *processor.MeteredSource
 	output_stream *store.MeteredStream
 	counter       *processor.MeteredProcessor
-	parNum        uint8
 	trackParFunc  func([]uint8) error
+	parNum        uint8
 }
 
 func (h *wordcountCounterAgg) process(ctx context.Context,

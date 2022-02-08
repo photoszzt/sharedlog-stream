@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
@@ -104,9 +103,9 @@ L:
 				return h.currentOffset, personOutput
 			}
 			completed += 1
-			fmt.Fprintf(os.Stderr, "completed person: %d\n", completed)
+			// fmt.Fprintf(os.Stderr, "completed person: %d\n", completed)
 			if completed == 2 {
-				fmt.Fprint(os.Stderr, "break for loop per\n")
+				// fmt.Fprint(os.Stderr, "break for loop per\n")
 				break L
 			}
 		case auctionOutput := <-auctionsOutChan:
@@ -114,16 +113,14 @@ L:
 				return h.currentOffset, auctionOutput
 			}
 			completed += 1
-			fmt.Fprintf(os.Stderr, "completed auc: %d\n", completed)
+			// fmt.Fprintf(os.Stderr, "completed auc: %d\n", completed)
 			if completed == 2 {
-				fmt.Fprint(os.Stderr, "break for loop auc\n")
+				// fmt.Fprint(os.Stderr, "break for loop auc\n")
 				break L
 			}
 		}
 	}
-	fmt.Fprintf(os.Stderr, "before wait\n")
 	wg.Wait()
-	fmt.Fprintf(os.Stderr, "after wait\n")
 	return h.currentOffset, nil
 }
 

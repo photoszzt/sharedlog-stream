@@ -77,10 +77,10 @@ type wordcountSplitterProcessArg struct {
 	sink            *processor.MeteredSink
 	output_stream   *sharedlog_stream.ShardedSharedLogStream
 	splitter        processor.FlatMapperFunc
+	trackParFunc    func([]uint8) error
 	splitLatencies  []int
 	parNum          uint8
 	numOutPartition uint8
-	trackParFunc    func([]uint8) error
 }
 
 func (h *wordcountSplitFlatMap) process(ctx context.Context,

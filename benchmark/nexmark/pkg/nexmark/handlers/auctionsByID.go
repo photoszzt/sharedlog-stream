@@ -33,14 +33,12 @@ func NewAuctionsByIDHandler(env types.Environment) types.FuncHandler {
 }
 
 type auctionsByIDProcessArgs struct {
-	src  *processor.MeteredSource
-	sink *processor.MeteredSink
-
+	src             *processor.MeteredSource
+	sink            *processor.MeteredSink
 	filterAuctions  *processor.MeteredProcessor
 	auctionsByIDMap *processor.MeteredProcessor
-
-	parNum       uint8
-	trackParFunc func([]uint8) error
+	trackParFunc    func([]uint8) error
+	parNum          uint8
 }
 
 func (h *auctionsByIDHandler) process(

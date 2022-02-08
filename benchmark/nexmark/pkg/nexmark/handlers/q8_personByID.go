@@ -123,14 +123,13 @@ func (h *q8PersonsByIDHandler) process(
 }
 
 type q8PersonsByIDProcessArgs struct {
-	src           *processor.MeteredSource
-	sink          *processor.MeteredSink
-	output_stream *sharedlog_stream.ShardedSharedLogStream
-
+	src            *processor.MeteredSource
+	sink           *processor.MeteredSink
+	output_stream  *sharedlog_stream.ShardedSharedLogStream
 	filterPerson   *processor.MeteredProcessor
 	personsByIDMap *processor.MeteredProcessor
-	parNum         uint8
 	trackParFunc   func([]uint8) error
+	parNum         uint8
 }
 
 func (h *q8PersonsByIDHandler) Q8PersonsByID(ctx context.Context, sp *common.QueryInput) *common.FnOutput {

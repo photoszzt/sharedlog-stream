@@ -123,14 +123,12 @@ func (h *bidByAuctionIDHandler) Call(ctx context.Context, input []byte) ([]byte,
 }
 
 type bidsByAuctionIDProcessArgs struct {
-	src  *processor.MeteredSource
-	sink *processor.MeteredSink
-
+	src             *processor.MeteredSource
+	sink            *processor.MeteredSink
 	filterBids      *processor.MeteredProcessor
 	bidsByAuctionID *processor.MeteredProcessor
-
-	parNum       uint8
-	trackParFunc func([]uint8) error
+	trackParFunc    func([]uint8) error
+	parNum          uint8
 }
 
 func (h *bidByAuctionIDHandler) bidByAuctionID(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
