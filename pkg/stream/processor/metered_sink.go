@@ -4,11 +4,14 @@ import (
 	"context"
 	"os"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sync"
 	"time"
 )
 
 type MeteredSink struct {
-	sink      Sink
+	sink Sink
+
+	latMu     sync.Mutex
 	latencies []int
 }
 
@@ -27,7 +30,9 @@ func (s *MeteredSink) Sink(ctx context.Context, msg commtypes.Message, parNum ui
 		procStart := time.Now()
 		err := s.sink.Sink(ctx, msg, parNum, isControl)
 		elapsed := time.Since(procStart)
+		s.latMu.Lock()
 		s.latencies = append(s.latencies, int(elapsed.Microseconds()))
+		s.latMu.Unlock()
 		return err
 	} else {
 		return s.sink.Sink(ctx, msg, parNum, isControl)

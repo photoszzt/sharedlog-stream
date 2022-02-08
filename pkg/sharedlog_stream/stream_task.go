@@ -15,7 +15,11 @@ import (
 )
 
 type StreamTask struct {
-	ProcessFunc func(ctx context.Context, args interface{}, trackParFunc func([]uint8) error) (map[string]uint64, *common.FnOutput)
+	ProcessFunc func(ctx context.Context, args interface{}) (map[string]uint64, *common.FnOutput)
+}
+
+func DefaultTrackParFunc(u []uint8) error {
+	return nil
 }
 
 func createOffsetTopicAndGetOffset(ctx context.Context, tm *TransactionManager,
@@ -37,22 +41,22 @@ func createOffsetTopicAndGetOffset(ctx context.Context, tm *TransactionManager,
 func SetupTransactionManager(
 	ctx context.Context,
 	args *StreamTaskArgsTransaction,
-) (*TransactionManager, error) {
+) (*TransactionManager, func([]uint8) error, error) {
 	tm, err := NewTransactionManager(ctx, args.Env, args.TransactionalId,
 		commtypes.SerdeFormat(args.QueryInput.SerdeFormat))
 	if err != nil {
-		return nil, fmt.Errorf("NewTransactionManager failed: %v", err)
+		return nil, nil, fmt.Errorf("NewTransactionManager failed: %v", err)
 	}
 	err = tm.InitTransaction(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("InitTransaction failed: %v", err)
+		return nil, nil, fmt.Errorf("InitTransaction failed: %v", err)
 	}
 	offsetMap := make(map[string]uint64)
 	for _, inputTopicName := range args.QueryInput.InputTopicNames {
 		offset, err := createOffsetTopicAndGetOffset(ctx, tm, inputTopicName,
 			uint8(args.QueryInput.NumInPartition), args.QueryInput.ParNum)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		offsetMap[inputTopicName] = offset
 	}
@@ -63,18 +67,18 @@ func SetupTransactionManager(
 				err = store.RestoreKVStateStore(ctx, kvchangelog.kvStore, kvchangelog.changelog, kvchangelog.parNum,
 					args.MsgSerde, offset)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 			} else {
 				offset, err := createOffsetTopicAndGetOffset(ctx, tm, topic,
 					kvchangelog.changelog.NumPartition(), kvchangelog.parNum)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				err = store.RestoreKVStateStore(ctx, kvchangelog.kvStore, kvchangelog.changelog, kvchangelog.parNum,
 					args.MsgSerde, offset)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 			}
 		}
@@ -88,20 +92,20 @@ func SetupTransactionManager(
 					args.MsgSerde, wschangelog.keyWindowTsSerde,
 					wschangelog.keySerde, wschangelog.valSerde, offset)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 			} else {
 				offset, err := createOffsetTopicAndGetOffset(ctx, tm, topic,
 					wschangelog.changelog.NumPartition(), wschangelog.parNum)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				err = store.RestoreWindowStateStore(ctx, wschangelog.windowStore,
 					wschangelog.changelog, wschangelog.parNum,
 					args.MsgSerde, wschangelog.keyWindowTsSerde,
 					wschangelog.keySerde, wschangelog.valSerde, offset)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 			}
 		}
@@ -111,7 +115,11 @@ func SetupTransactionManager(
 		offset := offsetMap[inputTopicName]
 		args.Srcs[inputTopicName].SetCursor(offset+1, args.QueryInput.ParNum)
 	}
-	return tm, nil
+
+	trackFunc := func(u []uint8) error {
+		return tm.AddTopicPartition(ctx, args.QueryInput.OutputTopicName, u)
+	}
+	return tm, trackFunc, nil
 }
 
 func UpdateInputStreamCursor(
@@ -215,7 +223,7 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 			break
 		}
 		procStart := time.Now()
-		_, ret := t.ProcessFunc(ctx, args.ProcArgs, func(u []uint8) error { return nil })
+		_, ret := t.ProcessFunc(ctx, args.ProcArgs)
 		if ret != nil {
 			if ret.Success {
 				elapsed := time.Since(procStart)
@@ -241,15 +249,9 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 
 func (t *StreamTask) ProcessWithTransaction(
 	ctx context.Context,
+	tm *TransactionManager,
 	args *StreamTaskArgsTransaction,
 ) *common.FnOutput {
-	tm, err := SetupTransactionManager(ctx, args)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
-		}
-	}
 	tm.RecordTopicStreams(args.QueryInput.OutputTopicName, args.OutputStream)
 
 	monitorQuit := make(chan struct{})
@@ -387,9 +389,7 @@ L:
 		}
 
 		procStart := time.Now()
-		off, ret := t.ProcessFunc(ctx, args.ProcArgs, func(u []uint8) error {
-			return tm.AddTopicPartition(ctx, args.QueryInput.OutputTopicName, u)
-		})
+		off, ret := t.ProcessFunc(ctx, args.ProcArgs)
 		if ret != nil {
 			if ret.Success {
 				if hasLiveTransaction {

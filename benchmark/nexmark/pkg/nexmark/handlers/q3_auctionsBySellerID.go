@@ -36,7 +36,6 @@ func NewQuery3AuctionsBySellerID(env types.Environment) types.FuncHandler {
 func (h *query3AuctionsBySellerIDHandler) process(
 	ctx context.Context,
 	argsTmp interface{},
-	trackParFunc func([]uint8) error,
 ) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*AuctionsBySellerIDProcessArgs)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
@@ -91,7 +90,7 @@ func (h *query3AuctionsBySellerIDHandler) process(
 				}
 			}
 			par := parTmp.(uint8)
-			err = trackParFunc([]uint8{par})
+			err = args.trackParFunc([]uint8{par})
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{
 					Success: false,
@@ -112,11 +111,11 @@ func (h *query3AuctionsBySellerIDHandler) process(
 }
 
 type AuctionsBySellerIDProcessArgs struct {
-	src  *processor.MeteredSource
-	sink *processor.MeteredSink
-
+	src                   *processor.MeteredSource
+	sink                  *processor.MeteredSink
 	filterAuctions        *processor.MeteredProcessor
 	auctionsBySellerIDMap *processor.MeteredProcessor
+	trackParFunc          func([]uint8) error
 	parNum                uint8
 }
 
@@ -198,6 +197,7 @@ func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(ctx context.C
 		filterAuctions:        filterAuctions,
 		auctionsBySellerIDMap: auctionsBySellerIDMap,
 		parNum:                sp.ParNum,
+		trackParFunc:          sharedlog_stream.DefaultTrackParFunc,
 	}
 
 	task := sharedlog_stream.StreamTask{
@@ -219,7 +219,15 @@ func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(ctx context.C
 			QueryInput:      sp,
 			TransactionalId: fmt.Sprintf("q3AuctionBySellerID-%s-%d-%s", sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
 		}
-		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
+		tm, trackParFunc, err := sharedlog_stream.SetupTransactionManager(ctx, &streamTaskArgs)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
+			}
+		}
+		procArgs.trackParFunc = trackParFunc
+		ret := task.ProcessWithTransaction(ctx, tm, &streamTaskArgs)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()

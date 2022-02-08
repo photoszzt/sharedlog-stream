@@ -91,11 +91,11 @@ type wordcountCounterAggProcessArg struct {
 	output_stream *store.MeteredStream
 	counter       *processor.MeteredProcessor
 	parNum        uint8
+	trackParFunc  func([]uint8) error
 }
 
 func (h *wordcountCounterAgg) process(ctx context.Context,
 	argsTmp interface{},
-	trackParFunc func([]uint8) error,
 ) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*wordcountCounterAggProcessArg)
 	msgs, err := args.src.Consume(ctx, args.parNum)
@@ -181,7 +181,15 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 			FixedOutParNum:  sp.ParNum,
 			TestParams:      sp.TestParams,
 		}
-		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
+		tm, trackParFunc, err := sharedlog_stream.SetupTransactionManager(ctx, &streamTaskArgs)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
+			}
+		}
+		procArgs.trackParFunc = trackParFunc
+		ret := task.ProcessWithTransaction(ctx, tm, &streamTaskArgs)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["count"] = count.GetLatency()

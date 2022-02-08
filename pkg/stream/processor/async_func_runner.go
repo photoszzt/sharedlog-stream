@@ -40,7 +40,9 @@ func (p *AsyncFuncRunner) run(ctx context.Context) error {
 			return err
 		}
 		if len(msgs) != 0 {
+			fmt.Fprint(os.Stderr, "before async runner output\n")
 			p.output <- msgs
+			fmt.Fprint(os.Stderr, "after async runner output\n")
 		}
 	}
 	return nil

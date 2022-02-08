@@ -147,14 +147,12 @@ type q5AuctionBidsProcessArg struct {
 	src             *processor.MeteredSource
 	sink            *processor.MeteredSink
 	output_stream   *sharedlog_stream.ShardedSharedLogStream
+	trackParFunc    func([]uint8) error
 	parNum          uint8
 	numOutPartition uint8
 }
 
-func (h *q5AuctionBids) process(ctx context.Context,
-	argsTmp interface{},
-	trackParFunc func([]uint8) error,
-) (map[string]uint64, *common.FnOutput) {
+func (h *q5AuctionBids) process(ctx context.Context, argsTmp interface{}) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*q5AuctionBidsProcessArg)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {
@@ -212,7 +210,7 @@ func (h *q5AuctionBids) process(ctx context.Context,
 			}
 			par := parTmp.(uint8)
 			// fmt.Fprintf(os.Stderr, "key is %s, output to substream %d\n", k.String(), par)
-			err = trackParFunc([]uint8{par})
+			err = args.trackParFunc([]uint8{par})
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{
 					Success: false,
@@ -283,6 +281,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		output_stream:   output_stream,
 		parNum:          sp.ParNum,
 		numOutPartition: sp.NumOutPartition,
+		trackParFunc:    sharedlog_stream.DefaultTrackParFunc,
 	}
 
 	task := sharedlog_stream.StreamTask{
@@ -315,7 +314,15 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			},
 			MsgSerde: msgSerde,
 		}
-		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
+		tm, trackParFunc, err := sharedlog_stream.SetupTransactionManager(ctx, &streamTaskArgs)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
+			}
+		}
+		procArgs.trackParFunc = trackParFunc
+		ret := task.ProcessWithTransaction(ctx, tm, &streamTaskArgs)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()

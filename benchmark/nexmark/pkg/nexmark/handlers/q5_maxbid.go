@@ -75,11 +75,11 @@ type q5MaxBidProcessArgs struct {
 	src           *processor.MeteredSource
 	sink          *processor.MeteredSink
 	output_stream *sharedlog_stream.ShardedSharedLogStream
+	trackParFunc  func([]uint8) error
 	parNum        uint8
 }
 
-func (h *q5MaxBid) process(ctx context.Context,
-	argsTmp interface{}, trackParFunc func([]uint8) error,
+func (h *q5MaxBid) process(ctx context.Context, argsTmp interface{},
 ) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*q5MaxBidProcessArgs)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
@@ -243,6 +243,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		sink:          sink,
 		output_stream: output_stream,
 		parNum:        sp.ParNum,
+		trackParFunc:  sharedlog_stream.DefaultTrackParFunc,
 	}
 
 	task := sharedlog_stream.StreamTask{
@@ -266,7 +267,15 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			},
 			MsgSerde: msgSerde,
 		}
-		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
+		tm, trackParFunc, err := sharedlog_stream.SetupTransactionManager(ctx, &streamTaskArgs)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
+			}
+		}
+		procArgs.trackParFunc = trackParFunc
+		ret := task.ProcessWithTransaction(ctx, tm, &streamTaskArgs)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()

@@ -35,7 +35,6 @@ func NewQ8AuctionsBySellerIDHandler(env types.Environment) types.FuncHandler {
 func (h *q8AuctionsBySellerIDHandler) process(
 	ctx context.Context,
 	argsTmp interface{},
-	trackParFunc func([]uint8) error,
 ) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*AuctionsBySellerIDProcessArgs)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
@@ -90,7 +89,7 @@ func (h *q8AuctionsBySellerIDHandler) process(
 				}
 			}
 			par := parTmp.(uint8)
-			err = trackParFunc([]uint8{par})
+			err = args.trackParFunc([]uint8{par})
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{
 					Success: false,
@@ -157,6 +156,7 @@ func (h *q8AuctionsBySellerIDHandler) q8AuctionsBySellerID(ctx context.Context, 
 		filterAuctions:        filterAuctions,
 		auctionsBySellerIDMap: auctionsBySellerIDMap,
 		parNum:                sp.ParNum,
+		trackParFunc:          sharedlog_stream.DefaultTrackParFunc,
 	}
 
 	task := sharedlog_stream.StreamTask{
@@ -179,7 +179,15 @@ func (h *q8AuctionsBySellerIDHandler) q8AuctionsBySellerID(ctx context.Context, 
 			TransactionalId: fmt.Sprintf("q8AuctionBySellerID-%s-%d-%s",
 				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
 		}
-		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
+		tm, trackParFunc, err := sharedlog_stream.SetupTransactionManager(ctx, &streamTaskArgs)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
+			}
+		}
+		procArgs.trackParFunc = trackParFunc
+		ret := task.ProcessWithTransaction(ctx, tm, &streamTaskArgs)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()

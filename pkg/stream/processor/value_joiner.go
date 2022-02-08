@@ -19,3 +19,17 @@ type ValueJoinerWithKeyFunc func(readOnlyKey interface{}, value1 interface{}, va
 func (fn ValueJoinerWithKeyFunc) Apply(readOnlyKey interface{}, value1 interface{}, value2 interface{}) interface{} {
 	return fn(readOnlyKey, value1, value2)
 }
+
+type ValueJoinerWithKeyTs interface {
+	Apply(readOnlyKey interface{}, value1 interface{}, value2 interface{},
+		leftTs int64, otherTs int64) interface{}
+}
+
+type ValueJoinerWithKeyTsFunc func(readOnlyKey interface{}, value1 interface{}, value2 interface{},
+	leftTs int64, otherTs int64) interface{}
+
+func (fn ValueJoinerWithKeyTsFunc) Apply(readOnlyKey interface{}, value1 interface{}, value2 interface{},
+	leftTs int64, otherTs int64,
+) interface{} {
+	return fn(readOnlyKey, value1, value2, leftTs, otherTs)
+}

@@ -35,7 +35,6 @@ func NewBidByAuctionIDHandler(env types.Environment) types.FuncHandler {
 func (h *bidByAuctionIDHandler) process(
 	ctx context.Context,
 	argsTmp interface{},
-	trackParFunc func([]uint8) error,
 ) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*bidsByAuctionIDProcessArgs)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
@@ -90,7 +89,7 @@ func (h *bidByAuctionIDHandler) process(
 				}
 			}
 			par := parTmp.(uint8)
-			err = trackParFunc([]uint8{par})
+			err = args.trackParFunc([]uint8{par})
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{
 					Success: false,
@@ -130,7 +129,8 @@ type bidsByAuctionIDProcessArgs struct {
 	filterBids      *processor.MeteredProcessor
 	bidsByAuctionID *processor.MeteredProcessor
 
-	parNum uint8
+	parNum       uint8
+	trackParFunc func([]uint8) error
 }
 
 func (h *bidByAuctionIDHandler) bidByAuctionID(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -188,7 +188,15 @@ func (h *bidByAuctionIDHandler) bidByAuctionID(ctx context.Context, sp *common.Q
 			TransactionalId: fmt.Sprintf("q8AuctionBySellerID-%s-%d-%s",
 				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
 		}
-		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
+		tm, trackParFunc, err := sharedlog_stream.SetupTransactionManager(ctx, &streamTaskArgs)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
+			}
+		}
+		procArgs.trackParFunc = trackParFunc
+		ret := task.ProcessWithTransaction(ctx, tm, &streamTaskArgs)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()

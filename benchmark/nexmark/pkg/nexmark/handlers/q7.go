@@ -89,13 +89,13 @@ type processQ7ProcessArgs struct {
 	maxPriceBid        *processor.MeteredProcessor
 	transformWithStore *processor.MeteredProcessor
 	filterTime         *processor.MeteredProcessor
+	trackParFunc       func([]uint8) error
 	parNum             uint8
 }
 
 func (h *query7Handler) process(
 	ctx context.Context,
 	argsTmp interface{},
-	trackParFunc func([]uint8) error,
 ) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*processQ7ProcessArgs)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
@@ -273,6 +273,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		maxPriceBid:        maxPriceBid,
 		transformWithStore: transformWithStore,
 		filterTime:         filterTime,
+		trackParFunc:       sharedlog_stream.DefaultTrackParFunc,
 	}
 	task := sharedlog_stream.StreamTask{
 		ProcessFunc: h.process,
@@ -299,7 +300,15 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 					store.MaterializeParam().ParNum),
 			},
 		}
-		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
+		tm, trackParFunc, err := sharedlog_stream.SetupTransactionManager(ctx, &streamTaskArgs)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
+			}
+		}
+		procArgs.trackParFunc = trackParFunc
+		ret := task.ProcessWithTransaction(ctx, tm, &streamTaskArgs)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()

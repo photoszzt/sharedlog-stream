@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
@@ -51,18 +52,18 @@ func (h *q8JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, e
 }
 
 type q8JoinStreamProcessArgs struct {
-	personSrc  *processor.MeteredSource
-	auctionSrc *processor.MeteredSource
-	sink       *processor.MeteredSink
-	pJoinA     *processor.AsyncFuncRunner
-	aJoinP     *processor.AsyncFuncRunner
-	parNum     uint8
+	personSrc    *processor.MeteredSource
+	auctionSrc   *processor.MeteredSource
+	sink         *processor.MeteredSink
+	pJoinA       JoinWorkerFunc
+	aJoinP       JoinWorkerFunc
+	trackParFunc func([]uint8) error
+	parNum       uint8
 }
 
 func (h *q8JoinStreamHandler) process(
 	ctx context.Context,
 	argsTmp interface{},
-	trackParFunc func([]uint8) error,
 ) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*q8JoinStreamProcessArgs)
 	var wg sync.WaitGroup
@@ -71,11 +72,29 @@ func (h *q8JoinStreamHandler) process(
 	auctionsOutChan := make(chan *common.FnOutput)
 	completed := uint32(0)
 	wg.Add(1)
-	go proc(ctx, personsOutChan, args.personSrc, &wg,
-		args.parNum, args.pJoinA, &h.offMu, h.currentOffset)
+	joinProcArgsPerson := &joinProcArgs{
+		src:           args.personSrc,
+		sink:          args.sink,
+		wg:            &wg,
+		parNum:        args.parNum,
+		runner:        args.pJoinA,
+		offMu:         &h.offMu,
+		currentOffset: h.currentOffset,
+		trackParFunc:  args.trackParFunc,
+	}
+	go joinProc(ctx, personsOutChan, joinProcArgsPerson)
 	wg.Add(1)
-	go proc(ctx, auctionsOutChan, args.auctionSrc, &wg,
-		args.parNum, args.aJoinP, &h.offMu, h.currentOffset)
+	joinProgArgsAuction := &joinProcArgs{
+		src:           args.auctionSrc,
+		sink:          args.sink,
+		wg:            &wg,
+		parNum:        args.parNum,
+		runner:        args.aJoinP,
+		offMu:         &h.offMu,
+		currentOffset: h.currentOffset,
+		trackParFunc:  args.trackParFunc,
+	}
+	go joinProc(ctx, auctionsOutChan, joinProgArgsAuction)
 
 L:
 	for {
@@ -85,7 +104,9 @@ L:
 				return h.currentOffset, personOutput
 			}
 			completed += 1
+			fmt.Fprintf(os.Stderr, "completed person: %d\n", completed)
 			if completed == 2 {
+				fmt.Fprint(os.Stderr, "break for loop per\n")
 				break L
 			}
 		case auctionOutput := <-auctionsOutChan:
@@ -93,29 +114,64 @@ L:
 				return h.currentOffset, auctionOutput
 			}
 			completed += 1
+			fmt.Fprintf(os.Stderr, "completed auc: %d\n", completed)
 			if completed == 2 {
+				fmt.Fprint(os.Stderr, "break for loop auc\n")
 				break L
-			}
-		case aJoinPMsgs := <-args.aJoinP.OutChan():
-			err := pushMsgsToSink(ctx, args.sink, h.cHash, aJoinPMsgs, trackParFunc)
-			if err != nil {
-				return h.currentOffset, &common.FnOutput{
-					Success: false,
-					Message: err.Error(),
-				}
-			}
-		case pJoinAMsgs := <-args.pJoinA.OutChan():
-			err := pushMsgsToSink(ctx, args.sink, h.cHash, pJoinAMsgs, trackParFunc)
-			if err != nil {
-				return h.currentOffset, &common.FnOutput{
-					Success: false,
-					Message: err.Error(),
-				}
 			}
 		}
 	}
+	fmt.Fprintf(os.Stderr, "before wait\n")
 	wg.Wait()
+	fmt.Fprintf(os.Stderr, "after wait\n")
 	return h.currentOffset, nil
+}
+
+func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
+	stream1 *sharedlog_stream.ShardedSharedLogStream,
+	stream2 *sharedlog_stream.ShardedSharedLogStream,
+	outputStream *sharedlog_stream.ShardedSharedLogStream,
+) (*processor.MeteredSource, /* src1 */
+	*processor.MeteredSource, /* src2 */
+	*processor.MeteredSink, error,
+) {
+	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("get msg serde err: %v", err)
+	}
+
+	eventSerde, err := getEventSerde(sp.SerdeFormat)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("get event serde err: %v", err)
+	}
+	auctionsConfig := &sharedlog_stream.SharedLogStreamConfig{
+		Timeout:      common.SrcConsumeTimeout,
+		KeyDecoder:   commtypes.Uint64Decoder{},
+		ValueDecoder: eventSerde,
+		MsgDecoder:   msgSerde,
+	}
+	personsConfig := &sharedlog_stream.SharedLogStreamConfig{
+		Timeout:      common.SrcConsumeTimeout,
+		KeyDecoder:   commtypes.Uint64Decoder{},
+		ValueDecoder: eventSerde,
+		MsgDecoder:   msgSerde,
+	}
+	var ptSerde commtypes.Serde
+	if sp.SerdeFormat == uint8(commtypes.JSON) {
+		ptSerde = &ntypes.PersonTimeJSONSerde{}
+	} else {
+		ptSerde = &ntypes.PersonTimeMsgpSerde{}
+	}
+	outConfig := &sharedlog_stream.StreamSinkConfig{
+		KeyEncoder:   commtypes.Uint64Encoder{},
+		ValueEncoder: ptSerde,
+		MsgEncoder:   msgSerde,
+	}
+
+	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, auctionsConfig))
+	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, personsConfig))
+	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
+	return src1, src2, sink, nil
 }
 
 func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -126,7 +182,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			Message: fmt.Sprintf("get input output err: %v", err),
 		}
 	}
-	auctionsSrc, personsSrc, sink, err := getSrcSink(ctx, sp, auctionsStream,
+	auctionsSrc, personsSrc, sink, err := h.getSrcSink(ctx, sp, auctionsStream,
 		personsStream, outputStream)
 	if err != nil {
 		return &common.FnOutput{
@@ -187,12 +243,26 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		}
 	}
 
-	joiner := processor.ValueJoinerWithKeyFunc(func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
+	joiner := processor.ValueJoinerWithKeyTsFunc(func(readOnlyKey interface{},
+		leftValue interface{}, rightValue interface{}, leftTs int64, rightTs int64) interface{} {
+		lv := leftValue.(*ntypes.Event)
 		rv := rightValue.(*ntypes.Event)
-		return &ntypes.PersonTime{
-			ID:        rv.NewPerson.ID,
-			Name:      rv.NewPerson.Name,
-			StartTime: 0,
+		st := leftTs
+		if st > rightTs {
+			st = rightTs
+		}
+		if lv.Etype == ntypes.PERSON {
+			return &ntypes.PersonTime{
+				ID:        lv.NewPerson.ID,
+				Name:      lv.NewPerson.Name,
+				StartTime: st,
+			}
+		} else {
+			return &ntypes.PersonTime{
+				ID:        rv.NewPerson.ID,
+				Name:      rv.NewPerson.Name,
+				StartTime: st,
+			}
 		}
 	})
 
@@ -204,35 +274,50 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		processor.NewStreamStreamJoinProcessor(personsWinTab, joinWindows, joiner, false, false, sharedTimeTracker),
 	)
 
-	pJoinA := processor.NewAsyncFuncRunner(ctx, func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
+	pJoinA := func(c context.Context,
+		m commtypes.Message,
+		sink *processor.MeteredSink,
+		trackParFunc func([]uint8) error,
+	) error {
 		_, err := toPersonsWinTab.ProcessAndReturn(ctx, m)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		joinedMsgs, err := personsJoinsAuctions.ProcessAndReturn(ctx, m)
-		return joinedMsgs, err
-	})
+		if err != nil {
+			return err
+		}
+		return pushMsgsToSink(ctx, sink, h.cHash, joinedMsgs, trackParFunc)
+	}
 
-	aJoinP := processor.NewAsyncFuncRunner(ctx, func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
+	aJoinP := func(c context.Context,
+		m commtypes.Message,
+		sink *processor.MeteredSink,
+		trackParFunc func([]uint8) error,
+	) error {
 		_, err := toAuctionsWindowTab.ProcessAndReturn(ctx, m)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		joinedMsgs, err := auctionsJoinsPersons.ProcessAndReturn(ctx, m)
-		return joinedMsgs, err
-	})
+		if err != nil {
+			return err
+		}
+		return pushMsgsToSink(ctx, sink, h.cHash, joinedMsgs, trackParFunc)
+	}
 
 	for i := uint8(0); i < sp.NumOutPartition; i++ {
 		h.cHash.Add(i)
 	}
 
 	procArgs := &q8JoinStreamProcessArgs{
-		personSrc:  personsSrc,
-		auctionSrc: auctionsSrc,
-		sink:       sink,
-		pJoinA:     pJoinA,
-		aJoinP:     aJoinP,
-		parNum:     sp.ParNum,
+		personSrc:    personsSrc,
+		auctionSrc:   auctionsSrc,
+		sink:         sink,
+		pJoinA:       pJoinA,
+		aJoinP:       aJoinP,
+		parNum:       sp.ParNum,
+		trackParFunc: sharedlog_stream.DefaultTrackParFunc,
 	}
 
 	task := sharedlog_stream.StreamTask{
@@ -284,7 +369,15 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 				),
 			},
 		}
-		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
+		tm, trackParFunc, err := sharedlog_stream.SetupTransactionManager(ctx, &streamTaskArgs)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
+			}
+		}
+		procArgs.trackParFunc = trackParFunc
+		ret := task.ProcessWithTransaction(ctx, tm, &streamTaskArgs)
 		if ret != nil && ret.Success {
 			ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()
 			ret.Latencies["personsSrc"] = personsSrc.GetLatency()

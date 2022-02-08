@@ -96,6 +96,10 @@ func (s *SharedLogStream) SetTaskId(appId uint64) {
 	s.taskId = appId
 }
 
+func (s *SharedLogStream) SetInTransaction(inTransaction bool) {
+	s.inTransaction = inTransaction
+}
+
 func (s *SharedLogStream) SetTaskEpoch(epoch uint16) {
 	s.taskEpoch = epoch
 }

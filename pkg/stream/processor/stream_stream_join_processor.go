@@ -2,7 +2,9 @@ package processor
 
 import (
 	"context"
+	"fmt"
 	"math"
+	"os"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"time"
@@ -49,7 +51,7 @@ type StreamStreamJoinProcessor struct {
 	pipe              Pipe
 	pctx              store.StoreContext
 	otherWindowStore  store.WindowStore
-	joiner            ValueJoinerWithKey
+	joiner            ValueJoinerWithKeyTs
 	sharedTimeTracker *TimeTracker
 	joinAfterMs       int64
 	joinGraceMs       int64
@@ -63,7 +65,7 @@ var _ = Processor(&StreamStreamJoinProcessor{})
 func NewStreamStreamJoinProcessor(
 	otherWindowStore store.WindowStore,
 	jw *JoinWindows,
-	joiner ValueJoinerWithKey,
+	joiner ValueJoinerWithKeyTs,
 	outer bool,
 	isLeftSide bool,
 	stk *TimeTracker,
@@ -116,6 +118,7 @@ func (p *StreamStreamJoinProcessor) ProcessAndReturn(ctx context.Context, msg co
 
 	// needOuterJoin := p.outer
 	inputTs := msg.Timestamp
+	fmt.Fprintf(os.Stderr, "input ts: %v\n", inputTs)
 	var timeFrom uint64
 	var timeTo uint64
 	timeFromTmp := int64(inputTs) - int64(p.joinBeforeMs)
@@ -144,7 +147,7 @@ func (p *StreamStreamJoinProcessor) ProcessAndReturn(ctx context.Context, msg co
 		time.Unix(int64(timeToSec), int64(timeToNs)), func(otherRecordTs int64, kt store.KeyT, vt store.ValueT) error {
 			var newTs int64
 			// needOuterJoin = false
-			newVal := p.joiner.Apply(msg.Key, msg.Value, vt)
+			newVal := p.joiner.Apply(kt, msg.Value, vt, msg.Timestamp, otherRecordTs)
 			if inputTs > otherRecordTs {
 				newTs = inputTs
 			} else {

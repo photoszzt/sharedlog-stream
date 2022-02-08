@@ -23,10 +23,9 @@ type SharedLogStreamSink struct {
 var _ = processor.Sink(&SharedLogStreamSink{})
 
 type StreamSinkConfig struct {
-	KeyEncoder    commtypes.Encoder
-	ValueEncoder  commtypes.Encoder
-	MsgEncoder    commtypes.MsgEncoder
-	InTransaction bool
+	KeyEncoder   commtypes.Encoder
+	ValueEncoder commtypes.Encoder
+	MsgEncoder   commtypes.MsgEncoder
 }
 
 func NewSharedLogStreamSink(stream *SharedLogStream, config *StreamSinkConfig) *SharedLogStreamSink {
@@ -36,7 +35,6 @@ func NewSharedLogStreamSink(stream *SharedLogStream, config *StreamSinkConfig) *
 		valueEncoder: config.ValueEncoder,
 		msgEncoder:   config.MsgEncoder,
 		hasher:       fnv.New64(),
-		inTran:       config.InTransaction,
 	}
 }
 

@@ -85,6 +85,7 @@ type query2ProcessArgs struct {
 	sink          *processor.MeteredSink
 	q2Filter      *processor.MeteredProcessor
 	output_stream *sharedlog_stream.ShardedSharedLogStream
+	trackParFunc  func([]uint8) error
 	parNum        uint8
 }
 
@@ -111,6 +112,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		q2Filter:      q2Filter,
 		output_stream: output_stream,
 		parNum:        sp.ParNum,
+		trackParFunc:  sharedlog_stream.DefaultTrackParFunc,
 	}
 	task := sharedlog_stream.StreamTask{
 		ProcessFunc: h.process,
@@ -127,7 +129,15 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 			TransactionalId: fmt.Sprintf("q2Query-%s-%d-%s", sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
 			FixedOutParNum:  sp.ParNum,
 		}
-		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
+		tm, trackParFunc, err := sharedlog_stream.SetupTransactionManager(ctx, &streamTaskArgs)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
+			}
+		}
+		procArgs.trackParFunc = trackParFunc
+		ret := task.ProcessWithTransaction(ctx, tm, &streamTaskArgs)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()
@@ -148,9 +158,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 	return ret
 }
 
-func (h *query2Handler) process(ctx context.Context, argsTmp interface{},
-	trackParFunc func([]uint8) error,
-) (map[string]uint64, *common.FnOutput) {
+func (h *query2Handler) process(ctx context.Context, argsTmp interface{}) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*query2ProcessArgs)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {

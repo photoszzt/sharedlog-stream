@@ -36,6 +36,13 @@ func GetShardedInputOutputStreams(ctx context.Context, env types.Environment, in
 	if err != nil {
 		return nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
 	}
+	if input.EnableTransaction {
+		inputStream.SetInTransaction(true)
+		outputStream.SetInTransaction(true)
+	} else {
+		inputStream.SetInTransaction(false)
+		outputStream.SetInTransaction(false)
+	}
 	return inputStream, outputStream, nil
 }
 

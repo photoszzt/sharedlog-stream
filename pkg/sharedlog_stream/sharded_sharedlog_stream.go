@@ -63,6 +63,12 @@ func (s *ShardedSharedLogStream) NumPartition() uint8 {
 	return s.numPartitions
 }
 
+func (s *ShardedSharedLogStream) SetInTransaction(inTransaction bool) {
+	for i := uint8(0); i < s.numPartitions; i++ {
+		s.subSharedLogStreams[i].SetInTransaction(inTransaction)
+	}
+}
+
 func (s *ShardedSharedLogStream) Push(ctx context.Context, payload []byte, parNumber uint8, isControl bool) (uint64, error) {
 	return s.subSharedLogStreams[parNumber].Push(ctx, payload, parNumber, isControl)
 }

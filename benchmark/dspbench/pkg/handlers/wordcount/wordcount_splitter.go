@@ -80,11 +80,11 @@ type wordcountSplitterProcessArg struct {
 	splitLatencies  []int
 	parNum          uint8
 	numOutPartition uint8
+	trackParFunc    func([]uint8) error
 }
 
 func (h *wordcountSplitFlatMap) process(ctx context.Context,
 	argsTmp interface{},
-	trackParFunc func([]uint8) error,
 ) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*wordcountSplitterProcessArg)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
@@ -118,7 +118,7 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context,
 		for _, m := range msgs {
 			hashed := hashKey(m.Key.(string))
 			par := uint8(hashed % uint32(args.numOutPartition))
-			err = trackParFunc([]uint8{par})
+			err = args.trackParFunc([]uint8{par})
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{
 					Success: false,
@@ -185,7 +185,7 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 		// fmt.Fprintf(os.Stderr, "word count counter function enables exactly once semantics\n")
 		srcs := make(map[string]processor.Source)
 		srcs[sp.InputTopicNames[0]] = src
-		streamTaskArgs := &sharedlog_stream.StreamTaskArgsTransaction{
+		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
 			ProcArgs:        procArgs,
 			Env:             h.env,
 			Srcs:            srcs,
@@ -195,7 +195,15 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 			FixedOutParNum:  0,
 			TestParams:      sp.TestParams,
 		}
-		ret := task.ProcessWithTransaction(ctx, streamTaskArgs)
+		tm, trackParFunc, err := sharedlog_stream.SetupTransactionManager(ctx, &streamTaskArgs)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
+			}
+		}
+		procArgs.trackParFunc = trackParFunc
+		ret := task.ProcessWithTransaction(ctx, tm, &streamTaskArgs)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()

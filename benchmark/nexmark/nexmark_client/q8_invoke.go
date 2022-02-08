@@ -96,7 +96,7 @@ func query8() {
 		Transport: &http.Transport{
 			IdleConnTimeout: 30 * time.Second,
 		},
-		Timeout: time.Duration(FLAGS_duration*3) * time.Second,
+		Timeout: time.Duration(FLAGS_duration*2) * time.Second,
 	}
 
 	var wg sync.WaitGroup

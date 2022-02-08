@@ -52,13 +52,13 @@ type q7BidKeyedByPriceProcessArgs struct {
 	bid             *processor.MeteredProcessor
 	bidKeyedByPrice *processor.MeteredProcessor
 	output_stream   *sharedlog_stream.ShardedSharedLogStream
+	trackParFunc    func([]uint8) error
 	parNum          uint8
 	numOutPartition uint8
 }
 
 func (h *q7BidKeyedByPrice) process(ctx context.Context,
 	argsTmp interface{},
-	trackParFunc func([]uint8) error,
 ) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*q7BidKeyedByPriceProcessArgs)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
@@ -111,7 +111,7 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context,
 			}
 			par := parTmp.(uint8)
 			// par := uint8(key % uint64(args.numOutPartition))
-			err = trackParFunc([]uint8{par})
+			err = args.trackParFunc([]uint8{par})
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{
 					Success: false,
@@ -193,6 +193,7 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 		output_stream:   output_stream,
 		parNum:          input.ParNum,
 		numOutPartition: input.NumOutPartition,
+		trackParFunc:    sharedlog_stream.DefaultTrackParFunc,
 	}
 
 	task := sharedlog_stream.StreamTask{
@@ -215,7 +216,15 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 			TransactionalId: fmt.Sprintf("q7BidKeyedByPrice-%s-%d-%s", input.InputTopicNames[0], input.ParNum, input.OutputTopicName),
 			FixedOutParNum:  0,
 		}
-		ret := task.ProcessWithTransaction(ctx, &streamTaskArgs)
+		tm, trackParFunc, err := sharedlog_stream.SetupTransactionManager(ctx, &streamTaskArgs)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
+			}
+		}
+		procArgs.trackParFunc = trackParFunc
+		ret := task.ProcessWithTransaction(ctx, tm, &streamTaskArgs)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()
