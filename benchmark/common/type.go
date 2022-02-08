@@ -20,6 +20,12 @@ type QueryInput struct {
 	SerdeFormat       uint8           `json:"serdeFormat,omitempty"`
 }
 
+type ConfigScaleInput struct {
+	Config      map[string]uint8 `json:"sg"`
+	AppId       string           `json:"aid"`
+	SerdeFormat uint8            `json:"serdeFormat"`
+}
+
 type DumpInput struct {
 	DumpDir       string `json:"dumpDir"`
 	TopicName     string `json:"tp"`

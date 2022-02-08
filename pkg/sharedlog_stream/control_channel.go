@@ -3,6 +3,7 @@ package sharedlog_stream
 import (
 	"context"
 	"fmt"
+	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -13,11 +14,15 @@ const (
 )
 
 type ControlChannelManager struct {
-	controlLog       *SharedLogStream
+	env              types.Environment
 	controlMetaSerde commtypes.Serde
 	msgSerde         commtypes.MsgSerde
-	keyMappings      map[string]map[interface{}][]uint8 // topic -> (key -> list of substreams)
+	controlLog       *SharedLogStream
+	keyMappings      map[string]map[interface{}]map[uint8]struct{}
+	topicStreams     map[string]*ShardedSharedLogStream
+	funcName         string
 	currentEpoch     uint64
+	instanceId       uint8
 }
 
 func NewControlChannelManager(env types.Environment,
@@ -26,6 +31,7 @@ func NewControlChannelManager(env types.Environment,
 ) (*ControlChannelManager, error) {
 	log := NewSharedLogStream(env, app_id+"_"+CONTROL_LOG_TOPIC_NAME)
 	cm := &ControlChannelManager{
+		env:          env,
 		controlLog:   log,
 		currentEpoch: 0,
 	}
@@ -39,6 +45,10 @@ func NewControlChannelManager(env types.Environment,
 		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
 	}
 	return cm, nil
+}
+
+func (cmm *ControlChannelManager) TrackStream(topicName string, stream *ShardedSharedLogStream) {
+	cmm.topicStreams[topicName] = stream
 }
 
 func (cmm *ControlChannelManager) appendToControlLog(ctx context.Context, cm *ControlMetadata) error {
@@ -91,6 +101,7 @@ func (cmm *ControlChannelManager) MonitorControlChannel(
 	ctx context.Context,
 	quit chan struct{},
 	errc chan error,
+	dcancel context.CancelFunc,
 ) {
 	for {
 		select {
@@ -99,5 +110,51 @@ func (cmm *ControlChannelManager) MonitorControlChannel(
 		default:
 		}
 
+		_, rawMsgs, err := cmm.controlLog.ReadNext(ctx, 0)
+		if err != nil {
+			if errors.IsStreamEmptyError(err) {
+				continue
+			}
+			errc <- err
+		} else {
+			for _, rawMsg := range rawMsgs {
+				_, valBytes, err := cmm.msgSerde.Decode(rawMsg.Payload)
+				if err != nil {
+					errc <- err
+					break
+				}
+				ctrlMetaTmp, err := cmm.controlMetaSerde.Decode(valBytes)
+				if err != nil {
+					errc <- err
+					break
+				}
+				ctrlMeta := ctrlMetaTmp.(ControlMetadata)
+				if ctrlMeta.Config != nil {
+					// update to new epoch
+					cmm.currentEpoch = ctrlMeta.Epoch
+					numInstance := ctrlMeta.Config[cmm.funcName]
+					if cmm.instanceId >= numInstance {
+						// new config scales down. we need to exit
+						dcancel()
+						errc <- nil
+						break
+					}
+					for topic, stream := range cmm.topicStreams {
+						numSubstreams, ok := ctrlMeta.Config[topic]
+						if ok {
+							err = stream.ScaleSubstreams(cmm.env, numSubstreams)
+							if err != nil {
+								errc <- err
+								break
+							}
+						}
+					}
+				} else {
+					keySubs := cmm.keyMappings[ctrlMeta.Topic]
+					subs := keySubs[ctrlMeta.Key]
+					subs[ctrlMeta.SubstreamId] = struct{}{}
+				}
+			}
+		}
 	}
 }

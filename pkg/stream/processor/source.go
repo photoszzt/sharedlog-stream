@@ -3,6 +3,7 @@ package processor
 import (
 	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 )
 
 type Source interface {
@@ -10,4 +11,5 @@ type Source interface {
 	Consume(ctx context.Context, parNum uint8) ([]commtypes.MsgAndSeq, error)
 	SetCursor(cursor uint64, parNum uint8)
 	TopicName() string
+	Stream() store.Stream
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 	"time"
 )
 
@@ -44,4 +45,8 @@ func (s *MeteredSource) SetCursor(cursor uint64, parNum uint8) {
 
 func (s *MeteredSource) TopicName() string {
 	return s.src.TopicName()
+}
+
+func (s *MeteredSource) Stream() store.Stream {
+	return s.src.Stream()
 }

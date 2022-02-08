@@ -28,7 +28,9 @@ var (
 	FLAGS_commit_every    uint64
 )
 
-func invokeSourceFunc(client *http.Client, numOutPartition uint8, response *common.FnOutput, wg *sync.WaitGroup) {
+func invokeSourceFunc(client *http.Client, numOutPartition uint8,
+	response *common.FnOutput, wg *sync.WaitGroup,
+) {
 	defer wg.Done()
 	var serdeFormat commtypes.SerdeFormat
 	if FLAGS_serdeFormat == "json" {

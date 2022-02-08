@@ -6,6 +6,7 @@ import (
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 	"time"
 )
 
@@ -27,6 +28,10 @@ func NewShardedSharedLogStreamSource(stream *ShardedSharedLogStream, config *Sha
 		valueDecoder: config.ValueDecoder,
 		msgDecoder:   config.MsgDecoder,
 	}
+}
+
+func (s *ShardedSharedLogStreamSource) Stream() store.Stream {
+	return s.stream
 }
 
 func (s *ShardedSharedLogStreamSource) TopicName() string {

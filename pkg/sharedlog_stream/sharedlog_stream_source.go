@@ -6,6 +6,7 @@ import (
 
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 
 	"golang.org/x/xerrors"
 )
@@ -22,6 +23,8 @@ type SharedLogStreamSource struct {
 	timeout      time.Duration
 }
 
+var _ = store.Stream(&SharedLogStream{})
+
 type SharedLogStreamConfig struct {
 	KeyDecoder   commtypes.Decoder
 	ValueDecoder commtypes.Decoder
@@ -37,6 +40,10 @@ func NewSharedLogStreamSource(stream *SharedLogStream, config *SharedLogStreamCo
 		valueDecoder: config.ValueDecoder,
 		msgDecoder:   config.MsgDecoder,
 	}
+}
+
+func (s *SharedLogStreamSource) Stream() store.Stream {
+	return s.stream
 }
 
 func (s *SharedLogStreamSource) TopicName() string {

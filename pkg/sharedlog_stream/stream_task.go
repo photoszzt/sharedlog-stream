@@ -210,6 +210,7 @@ type StreamTaskArgsTransaction struct {
 	QueryInput            *common.QueryInput
 	TestParams            map[string]bool
 	TransactionalId       string
+	AppId                 string
 	KVChangelogs          []*KVStoreChangelog
 	WindowStoreChangelogs []*WindowStoreChangelog
 	FixedOutParNum        uint8
@@ -256,23 +257,49 @@ func (t *StreamTask) ProcessWithTransaction(
 
 	monitorQuit := make(chan struct{})
 	monitorErrc := make(chan error)
+	controlErrc := make(chan error)
+	controlQuit := make(chan struct{})
+
+	cmm, err := NewControlChannelManager(args.Env, args.AppId, commtypes.SerdeFormat(args.QueryInput.SerdeFormat))
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+	cmm.TrackStream(args.OutputStream.TopicName(), args.OutputStream)
+	for topic, src := range args.Srcs {
+		cmm.TrackStream(topic, src.Stream().(*ShardedSharedLogStream))
+	}
 
 	dctx, dcancel := context.WithCancel(ctx)
 	go tm.MonitorTransactionLog(ctx, monitorQuit, monitorErrc, dcancel)
+	go cmm.MonitorControlChannel(ctx, controlQuit, controlErrc, dcancel)
 
 	retc := make(chan *common.FnOutput)
 	go t.processWithTranLoop(dctx, tm, args, retc)
 	for {
 		select {
 		case ret := <-retc:
-			close(monitorQuit)
+			monitorQuit <- struct{}{}
+			controlQuit <- struct{}{}
 			return ret
 		case merr := <-monitorErrc:
-			close(monitorQuit)
+			monitorQuit <- struct{}{}
+			controlQuit <- struct{}{}
 			if merr != nil {
 				return &common.FnOutput{
 					Success: false,
 					Message: fmt.Sprintf("monitor failed: %v", merr),
+				}
+			}
+		case cerr := <-controlErrc:
+			monitorQuit <- struct{}{}
+			controlQuit <- struct{}{}
+			if cerr != nil {
+				return &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("control channel manager failed: %v", cerr),
 				}
 			}
 		}

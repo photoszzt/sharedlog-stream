@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sync"
 
 	"cs.utexas.edu/zjia/faas/types"
 	"golang.org/x/xerrors"
@@ -13,7 +14,9 @@ import (
 type PartitionFunc func(interface{}) uint32
 
 type ShardedSharedLogStream struct {
-	topicName           string
+	topicName string
+
+	sMu                 sync.RWMutex // guards
 	subSharedLogStreams []*SharedLogStream
 	numPartitions       uint8
 }
@@ -40,44 +43,52 @@ func NewShardedSharedLogStream(env types.Environment, topicName string, numParti
 	}, nil
 }
 
-// assume single thread
-func (s *ShardedSharedLogStream) AddSubStreams(env types.Environment, numAdd uint8) {
-	for i := uint8(0); i < numAdd; i++ {
-		subs := NewSharedLogStream(env, s.topicName)
-		s.subSharedLogStreams = append(s.subSharedLogStreams, subs)
+func (s *ShardedSharedLogStream) ScaleSubstreams(env types.Environment, scaleTo uint8) error {
+	s.sMu.Lock()
+	defer s.sMu.Unlock()
+	if scaleTo == 0 {
+		return fmt.Errorf("updated number of substreams should be larger and equal to one")
 	}
-	s.numPartitions += numAdd
-}
-
-// assume single thread
-func (s *ShardedSharedLogStream) RemoveSubStreams(env types.Environment, numRemove uint8) error {
-	if numRemove >= s.numPartitions {
-		return fmt.Errorf("number of substream(%d) to remove is too large; this stream has %d substreams", numRemove, s.numPartitions)
+	if scaleTo > s.numPartitions {
+		numAdd := scaleTo - s.numPartitions
+		for i := uint8(0); i < numAdd; i++ {
+			subs := NewSharedLogStream(env, s.topicName)
+			s.subSharedLogStreams = append(s.subSharedLogStreams, subs)
+		}
 	}
-	s.subSharedLogStreams = s.subSharedLogStreams[0 : s.numPartitions-numRemove]
-	s.numPartitions = s.numPartitions - numRemove
+	s.numPartitions = scaleTo
 	return nil
 }
 
 func (s *ShardedSharedLogStream) NumPartition() uint8 {
+	s.sMu.RLock()
+	defer s.sMu.RUnlock()
 	return s.numPartitions
 }
 
 func (s *ShardedSharedLogStream) SetInTransaction(inTransaction bool) {
+	s.sMu.RLock()
+	defer s.sMu.RUnlock()
 	for i := uint8(0); i < s.numPartitions; i++ {
 		s.subSharedLogStreams[i].SetInTransaction(inTransaction)
 	}
 }
 
 func (s *ShardedSharedLogStream) Push(ctx context.Context, payload []byte, parNumber uint8, isControl bool) (uint64, error) {
+	s.sMu.RLock()
+	defer s.sMu.RUnlock()
 	return s.subSharedLogStreams[parNumber].Push(ctx, payload, parNumber, isControl)
 }
 
 func (s *ShardedSharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNumber uint8, tags []uint64, isControl bool) (uint64, error) {
+	s.sMu.RLock()
+	defer s.sMu.RUnlock()
 	return s.subSharedLogStreams[parNumber].PushWithTag(ctx, payload, parNumber, tags, isControl)
 }
 
 func (s *ShardedSharedLogStream) ReadNext(ctx context.Context, parNumber uint8) (commtypes.TaskIDGen, []commtypes.RawMsg, error) {
+	s.sMu.RLock()
+	defer s.sMu.RUnlock()
 	if parNumber < s.numPartitions {
 		par := parNumber
 		shard := s.subSharedLogStreams[par]
@@ -87,7 +98,11 @@ func (s *ShardedSharedLogStream) ReadNext(ctx context.Context, parNumber uint8) 
 	}
 }
 
-func (s *ShardedSharedLogStream) ReadNextWithTag(ctx context.Context, parNumber uint8, tag uint64) (commtypes.TaskIDGen, []commtypes.RawMsg, error) {
+func (s *ShardedSharedLogStream) ReadNextWithTag(
+	ctx context.Context, parNumber uint8, tag uint64,
+) (commtypes.TaskIDGen, []commtypes.RawMsg, error) {
+	s.sMu.RLock()
+	defer s.sMu.RUnlock()
 	if parNumber < s.numPartitions {
 		par := parNumber
 		shard := s.subSharedLogStreams[par]
@@ -98,6 +113,8 @@ func (s *ShardedSharedLogStream) ReadNextWithTag(ctx context.Context, parNumber 
 }
 
 func (s *ShardedSharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum uint64, parNum uint8, tag uint64) (*commtypes.TaskIDGen, *commtypes.RawMsg, error) {
+	s.sMu.RLock()
+	defer s.sMu.RUnlock()
 	if parNum < s.numPartitions {
 		par := parNum
 		shard := s.subSharedLogStreams[par]
@@ -116,5 +133,7 @@ func (s *ShardedSharedLogStream) TopicNameHash() uint64 {
 }
 
 func (s *ShardedSharedLogStream) SetCursor(cursor uint64, parNum uint8) {
+	s.sMu.RLock()
+	defer s.sMu.RUnlock()
 	s.subSharedLogStreams[parNum].cursor = cursor
 }
