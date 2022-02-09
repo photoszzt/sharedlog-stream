@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	configscale "sharedlog-stream/benchmark/common/config_scale"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/handlers"
 
 	"cs.utexas.edu/zjia/faas"
@@ -75,6 +76,8 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewWindowAvgGroupByHandler(env), nil
 	case "windowavgagg":
 		return handlers.NewWindowedAvg(env), nil
+	case "scale":
+		return configscale.NewConfigScaleHandler(env), nil
 	default:
 		return nil, fmt.Errorf("unknown function name %v", funcName)
 	}

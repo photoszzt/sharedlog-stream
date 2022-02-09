@@ -26,6 +26,7 @@ var (
 	FLAGS_workload_config string
 	FLAGS_tran            bool
 	FLAGS_commit_every    uint64
+	FLAGS_scale_config    string
 )
 
 func invokeSourceFunc(client *http.Client, numOutPartition uint8,
@@ -132,6 +133,8 @@ func main() {
 		query7()
 	case "q8":
 		query8()
+	case "scale":
+		scale()
 	default:
 		panic("unrecognized app")
 	}

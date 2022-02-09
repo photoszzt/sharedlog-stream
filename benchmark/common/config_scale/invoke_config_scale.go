@@ -14,7 +14,7 @@ func InvokeConfigScale(client *http.Client, config map[string]uint8,
 	serdeFormat uint8, response *common.FnOutput, wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
-	url := utils.BuildFunctionUrl(faas_gateway, "source")
+	url := utils.BuildFunctionUrl(faas_gateway, "scale")
 	csi := &common.ConfigScaleInput{
 		Config:      config,
 		AppId:       appId,

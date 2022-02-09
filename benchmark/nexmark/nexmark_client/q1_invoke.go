@@ -31,7 +31,7 @@ func query1() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Fprintf(os.Stderr, "q1 config is %v\n", q1conf)
+	// fmt.Fprintf(os.Stderr, "q1 config is %v\n", q1conf)
 
 	q1NodeConfig := &processor.ClientNodeConfig{
 		FuncName:    "query1",

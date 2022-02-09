@@ -54,3 +54,8 @@ type WindowedAvgConfig struct {
 	NumInstance     uint8  `json:"numInstance"`
 	NumSrcInstance  uint8  `json:"numSrcInstance"`
 }
+
+type ScaleConfig struct {
+	Config map[string]uint8 `json:"cfg"`
+	AppId  string
+}
