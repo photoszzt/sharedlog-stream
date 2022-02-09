@@ -11,6 +11,7 @@ import (
 type NexMarkConfigInput struct {
 	TopicName              string        `json:"topic_name"`
 	RateShape              string        `json:"rate_shape"`
+	AppId                  string        `json:"aid"`
 	EventsNum              uint64        `json:"events_num"`
 	RatePeriod             time.Duration `json:"rate_period"`
 	BidAvgSize             uint32        `json:"bid_avg_size"`

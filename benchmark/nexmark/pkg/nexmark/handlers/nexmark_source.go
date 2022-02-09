@@ -36,7 +36,7 @@ func (h *nexmarkSourceHandler) Call(ctx context.Context, input []byte) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
-	output := eventGeneration(ctx, h.env, inputConfig)
+	output := h.eventGeneration(ctx, inputConfig)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
 		panic(err)
@@ -49,14 +49,111 @@ type sinkMsg struct {
 	parNum  uint8
 }
 
-func closeAllChan(inChans []chan sinkMsg) {
+func closeAllChanAndWait(inChans []chan sinkMsg, g *errgroup.Group, err error) *common.FnOutput {
 	for _, inChan := range inChans {
 		close(inChan)
 	}
+	gerr := g.Wait()
+	if gerr != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("next event failed : %v and wait failed: %v\n", err, gerr),
+		}
+	}
+	return nil
 }
 
-func eventGeneration(ctx context.Context, env types.Environment, inputConfig *ntypes.NexMarkConfigInput) *common.FnOutput {
-	stream, err := sharedlog_stream.NewShardedSharedLogStream(env, inputConfig.TopicName, inputConfig.NumOutPartition)
+func encodeEvent(event *ntypes.Event,
+	eventSerde commtypes.Serde,
+	msgSerde commtypes.MsgSerde,
+) ([]byte, error) {
+	encoded, err := eventSerde.Encode(event)
+	if err != nil {
+		return nil, err
+	}
+	msgEncoded, err := msgSerde.Encode(nil, encoded)
+	if err != nil {
+		return nil, err
+	}
+	return msgEncoded, nil
+}
+
+func (h *nexmarkSourceHandler) getSerde(serdeFormat uint8) (commtypes.Serde, commtypes.MsgSerde, error) {
+	var eventSerde commtypes.Serde
+	var msgSerde commtypes.MsgSerde
+	if serdeFormat == uint8(commtypes.JSON) {
+		eventSerde = ntypes.EventJSONSerde{}
+		msgSerde = commtypes.MessageSerializedJSONSerde{}
+	} else if serdeFormat == uint8(commtypes.MSGP) {
+		eventSerde = ntypes.EventMsgpSerde{}
+		msgSerde = commtypes.MessageSerializedMsgpSerde{}
+	} else {
+		return nil, nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
+	}
+	return eventSerde, msgSerde, nil
+}
+
+type nexmarkSrcProcArgs struct {
+	eventSerde        commtypes.Serde
+	msgSerde          commtypes.MsgSerde
+	channel_url_cache map[uint32]*generator.ChannelUrl
+	eventGenerator    *generator.NexmarkGenerator
+	errg              *errgroup.Group
+	stream            *sharedlog_stream.ShardedSharedLogStream
+	inChans           []chan sinkMsg
+	latencies         []int
+	idx               int
+}
+
+func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProcArgs) *common.FnOutput {
+	now := time.Now().Unix()
+	nextEvent, err := args.eventGenerator.NextEvent(ctx, args.channel_url_cache)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("next event failed: %v\n", err),
+		}
+	}
+	wtsSec := nextEvent.WallclockTimestamp / 1000.0
+	if wtsSec > uint64(now) {
+		fmt.Fprintf(os.Stderr, "sleep %v second to generate event\n", wtsSec-uint64(now))
+		time.Sleep(time.Duration(wtsSec-uint64(now)) * time.Second)
+	}
+	// fmt.Fprintf(os.Stderr, "gen event with ts: %v\n", nextEvent.EventTimestamp)
+	msgEncoded, err := encodeEvent(nextEvent.Event, args.eventSerde, args.msgSerde)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("msg serialization failed: %v", err),
+		}
+	}
+	// fmt.Fprintf(os.Stderr, "msg: %v\n", string(msgEncoded))
+	args.idx += 1
+	args.idx = args.idx % int(args.stream.NumPartition())
+	pushStart := time.Now()
+	/*
+		_, err = stream.Push(ctx, msgEncoded, uint8(idx), false)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("stream push failed: %v", err),
+			}, nil
+		}
+		// fmt.Fprintf(os.Stderr, "inserted to pos: 0x%x\n", pos)
+	*/
+	inChan := args.inChans[args.idx]
+	sinkMsg := sinkMsg{
+		encoded: msgEncoded,
+		parNum:  uint8(args.idx),
+	}
+	inChan <- sinkMsg
+	elapsed := time.Since(pushStart)
+	args.latencies = append(args.latencies, int(elapsed.Microseconds()))
+	return nil
+}
+
+func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig *ntypes.NexMarkConfigInput) *common.FnOutput {
+	stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, inputConfig.TopicName, inputConfig.NumOutPartition)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -72,26 +169,15 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 	}
 	generatorConfig := generator.NewGeneratorConfig(nexmarkConfig, uint64(time.Now().UnixMilli()), 1, uint64(nexmarkConfig.NumEvents), 1)
 	eventGenerator := generator.NewSimpleNexmarkGenerator(generatorConfig)
-	latencies := make([]int, 0, 128)
-	channel_url_cache := make(map[uint32]*generator.ChannelUrl)
 	duration := time.Duration(inputConfig.Duration) * time.Second
 	startTime := time.Now()
-	var eventEncoder commtypes.Encoder
-	var msgEncoder commtypes.MsgEncoder
-	if inputConfig.SerdeFormat == uint8(commtypes.JSON) {
-		eventEncoder = ntypes.EventJSONSerde{}
-		msgEncoder = commtypes.MessageSerializedJSONSerde{}
-	} else if inputConfig.SerdeFormat == uint8(commtypes.MSGP) {
-		eventEncoder = ntypes.EventMsgpSerde{}
-		msgEncoder = commtypes.MessageSerializedMsgpSerde{}
-	} else {
+	eventSerde, msgSerde, err := h.getSerde(inputConfig.SerdeFormat)
+	if err != nil {
 		return &common.FnOutput{
 			Success: false,
-			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", inputConfig.SerdeFormat),
+			Message: err.Error(),
 		}
 	}
-
-	idx := 0
 
 	inChans := make([]chan sinkMsg, 0)
 	g, ectx := errgroup.WithContext(ctx)
@@ -109,100 +195,68 @@ func eventGeneration(ctx context.Context, env types.Environment, inputConfig *nt
 		})
 	}
 
+	procArgs := nexmarkSrcProcArgs{
+		channel_url_cache: make(map[uint32]*generator.ChannelUrl),
+		eventSerde:        eventSerde,
+		msgSerde:          msgSerde,
+		eventGenerator:    eventGenerator,
+		inChans:           inChans,
+		idx:               0,
+		errg:              g,
+		latencies:         make([]int, 0, 128),
+		stream:            stream,
+	}
+
+	cmm, err := sharedlog_stream.NewControlChannelManager(h.env, inputConfig.AppId,
+		commtypes.SerdeFormat(inputConfig.SerdeFormat))
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+	controlErrc := make(chan error)
+	controlQuit := make(chan struct{})
+	dctx, dcancel := context.WithCancel(ctx)
+	go cmm.MonitorControlChannel(ctx, controlQuit, controlErrc, dcancel)
+
 	for {
+		select {
+		case cerr := <-controlErrc:
+			controlQuit <- struct{}{}
+			if cerr != nil {
+				if out := closeAllChanAndWait(inChans, g, cerr); out != nil {
+					return out
+				}
+				return &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("control channel manager failed: %v", cerr),
+				}
+			}
+		default:
+		}
 		if !eventGenerator.HasNext() {
 			break
 		}
 		if duration != 0 && time.Since(startTime) >= duration {
 			break
 		}
-		now := time.Now().Unix()
-		nextEvent, err := eventGenerator.NextEvent(ctx, channel_url_cache)
-		if err != nil {
-			closeAllChan(inChans)
-			gerr := g.Wait()
-			if gerr != nil {
-				return &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("next event failed : %v and wait failed: %v\n", err, gerr),
-				}
+		fnout := h.process(dctx, &procArgs)
+		if !fnout.Success {
+			if out := closeAllChanAndWait(inChans, g, err); out != nil {
+				return out
 			}
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("next event failed: %v\n", err),
-			}
+			return fnout
 		}
-		wtsSec := nextEvent.WallclockTimestamp / 1000.0
-		if wtsSec > uint64(now) {
-			fmt.Fprintf(os.Stderr, "sleep %v second to generate event\n", wtsSec-uint64(now))
-			time.Sleep(time.Duration(wtsSec-uint64(now)) * time.Second)
-		}
-		// fmt.Fprintf(os.Stderr, "gen event with ts: %v\n", nextEvent.EventTimestamp)
-		encoded, err := eventEncoder.Encode(nextEvent.Event)
-		if err != nil {
-			closeAllChan(inChans)
-			gerr := g.Wait()
-			if gerr != nil {
-				return &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("next event failed : %v and wait failed: %v\n", err, gerr),
-				}
-			}
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("event serialization failed: %v", err),
-			}
-		}
-		msgEncoded, err := msgEncoder.Encode(nil, encoded)
-		if err != nil {
-			closeAllChan(inChans)
-			gerr := g.Wait()
-			if gerr != nil {
-				return &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("next event failed : %v and wait failed: %v\n", err, gerr),
-				}
-			}
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("msg serialization failed: %v", err),
-			}
-		}
-		// fmt.Fprintf(os.Stderr, "msg: %v\n", string(msgEncoded))
-		idx += 1
-		idx = idx % int(inputConfig.NumOutPartition)
-		pushStart := time.Now()
-		/*
-			_, err = stream.Push(ctx, msgEncoded, uint8(idx), false)
-			if err != nil {
-				return &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("stream push failed: %v", err),
-				}, nil
-			}
-			// fmt.Fprintf(os.Stderr, "inserted to pos: 0x%x\n", pos)
-		*/
-		inChan := inChans[idx]
-		sinkMsg := sinkMsg{
-			encoded: msgEncoded,
-			parNum:  uint8(idx),
-		}
-		inChan <- sinkMsg
-		elapsed := time.Since(pushStart)
-		latencies = append(latencies, int(elapsed.Microseconds()))
 	}
-	closeAllChan(inChans)
-	if err := g.Wait(); err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("fail to wait for goroutine: %v", err),
-		}
+	if out := closeAllChanAndWait(inChans, g, err); out != nil {
+		return out
 	}
 	return &common.FnOutput{
 		Success:  true,
 		Duration: time.Since(startTime).Seconds(),
 		Latencies: map[string][]int{
-			"e2e": latencies,
+			"e2e": procArgs.latencies,
 		},
 	}
 }
