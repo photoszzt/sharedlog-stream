@@ -21,7 +21,8 @@ import (
 type q4JoinTableHandler struct {
 	env types.Environment
 
-	cHash *hash.ConsistentHash
+	cHashMu sync.RWMutex
+	cHash   *hash.ConsistentHash
 
 	offMu         sync.Mutex
 	currentOffset map[string]uint64
@@ -127,16 +128,18 @@ func (h *q4JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	outputStream *sharedlog_stream.ShardedSharedLogStream,
 ) (*processor.MeteredSource, /* src1 */
 	*processor.MeteredSource, /* src2 */
-	*processor.MeteredSink, error,
+	*processor.MeteredSink,
+	commtypes.MsgSerde,
+	error,
 ) {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("get msg serde err: %v", err)
+		return nil, nil, nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
 
 	eventSerde, err := getEventSerde(sp.SerdeFormat)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("get event serde err: %v", err)
+		return nil, nil, nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}
 	auctionsConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      common.SrcConsumeTimeout,
@@ -165,7 +168,7 @@ func (h *q4JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, auctionsConfig))
 	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, personsConfig))
 	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
-	return src1, src2, sink, nil
+	return src1, src2, sink, msgSerde, nil
 }
 
 func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -176,7 +179,7 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 			Message: fmt.Sprintf("get input output err: %v", err),
 		}
 	}
-	auctionsSrc, bidsSrc, sink, err := h.getSrcSink(ctx, sp, auctionsStream,
+	auctionsSrc, bidsSrc, sink, msgSerde, err := h.getSrcSink(ctx, sp, auctionsStream,
 		bidsStream, outputStream)
 	if err != nil {
 		return &common.FnOutput{
@@ -241,7 +244,7 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		if err != nil {
 			return err
 		}
-		return pushMsgsToSink(ctx, sink, h.cHash, joinedMsgs, trackParFunc)
+		return pushMsgsToSink(ctx, sink, h.cHash, &h.cHashMu, joinedMsgs, trackParFunc)
 	})
 
 	bJoinA := JoinWorkerFunc(func(c context.Context, m commtypes.Message,
@@ -255,12 +258,10 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		if err != nil {
 			return err
 		}
-		return pushMsgsToSink(ctx, sink, h.cHash, joinedMsgs, trackParFunc)
+		return pushMsgsToSink(ctx, sink, h.cHash, &h.cHashMu, joinedMsgs, trackParFunc)
 	})
 
-	for i := uint8(0); i < sp.NumOutPartition; i++ {
-		h.cHash.Add(i)
-	}
+	sharedlog_stream.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
 
 	procArgs := &q4JoinTableProcessArgs{
 		auctionsSrc:  auctionsSrc,
@@ -283,21 +284,22 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
 			ProcArgs:     procArgs,
 			Env:          h.env,
+			MsgSerde:     msgSerde,
 			Srcs:         srcs,
 			OutputStream: outputStream,
 			QueryInput:   sp,
 			TransactionalId: fmt.Sprintf("q3JoinTable-%s-%d-%s",
 				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
+			KVChangelogs:          nil,
+			WindowStoreChangelogs: nil,
+			FixedOutParNum:        0,
+			CHash:                 h.cHash,
+			CHashMu:               &h.cHashMu,
 		}
-		tm, trackParFunc, err := sharedlog_stream.SetupTransactionManager(ctx, &streamTaskArgs)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
-			}
-		}
-		procArgs.trackParFunc = trackParFunc
-		ret := task.ProcessWithTransaction(ctx, tm, &streamTaskArgs)
+		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+				procArgs.(*q4JoinTableProcessArgs).trackParFunc = trackParFunc
+			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()
 			ret.Latencies["bidsSrc"] = bidsSrc.GetLatency()

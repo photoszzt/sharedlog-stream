@@ -51,10 +51,17 @@ func hashKey(key string) uint32 {
 	return h.Sum32()
 }
 
-func getSrcSink(ctx context.Context, sp *common.QueryInput, input_stream *sharedlog_stream.ShardedSharedLogStream, output_stream *sharedlog_stream.ShardedSharedLogStream) (*processor.MeteredSource, *processor.MeteredSink, error) {
+func getSrcSink(ctx context.Context,
+	sp *common.QueryInput,
+	input_stream *sharedlog_stream.ShardedSharedLogStream,
+	output_stream *sharedlog_stream.ShardedSharedLogStream,
+) (*processor.MeteredSource,
+	*processor.MeteredSink,
+	commtypes.MsgSerde,
+	error) {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
-		return nil, nil, fmt.Errorf("get msg serde failed: %v", err)
+		return nil, nil, nil, fmt.Errorf("get msg serde failed: %v", err)
 	}
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      common.SrcConsumeTimeout,
@@ -69,7 +76,7 @@ func getSrcSink(ctx context.Context, sp *common.QueryInput, input_stream *shared
 	}
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
 	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
-	return src, sink, nil
+	return src, sink, msgSerde, nil
 }
 
 type wordcountSplitterProcessArg struct {
@@ -145,7 +152,7 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 			Message: err.Error(),
 		}
 	}
-	src, sink, err := getSrcSink(ctx, sp, input_stream, output_stream)
+	src, sink, msgSerde, err := getSrcSink(ctx, sp, input_stream, output_stream)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -188,22 +195,17 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
 			ProcArgs:        procArgs,
 			Env:             h.env,
+			MsgSerde:        msgSerde,
 			Srcs:            srcs,
 			OutputStream:    output_stream,
 			QueryInput:      sp,
 			TransactionalId: fmt.Sprintf("wordcount-splitter-%s-%d", sp.InputTopicNames[0], sp.ParNum),
 			FixedOutParNum:  0,
-			TestParams:      sp.TestParams,
 		}
-		tm, trackParFunc, err := sharedlog_stream.SetupTransactionManager(ctx, &streamTaskArgs)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
-			}
-		}
-		procArgs.trackParFunc = trackParFunc
-		ret := task.ProcessWithTransaction(ctx, tm, &streamTaskArgs)
+		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+				procArgs.(*wordcountSplitterProcessArg).trackParFunc = trackParFunc
+			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()

@@ -299,16 +299,13 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 					store.MaterializeParam().ValueSerde,
 					store.MaterializeParam().ParNum),
 			},
+			CHash:   nil,
+			CHashMu: nil,
 		}
-		tm, trackParFunc, err := sharedlog_stream.SetupTransactionManager(ctx, &streamTaskArgs)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
-			}
-		}
-		procArgs.trackParFunc = trackParFunc
-		ret := task.ProcessWithTransaction(ctx, tm, &streamTaskArgs)
+		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+				procArgs.(*processQ7ProcessArgs).trackParFunc = trackParFunc
+			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()

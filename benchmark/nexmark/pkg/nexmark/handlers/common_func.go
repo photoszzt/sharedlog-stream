@@ -109,12 +109,15 @@ func pushMsgsToSink(
 	ctx context.Context,
 	sink *processor.MeteredSink,
 	cHash *hash.ConsistentHash,
+	cHashMu *sync.RWMutex,
 	msgs []commtypes.Message,
 	trackParFunc func([]uint8) error,
 ) error {
 	for _, msg := range msgs {
 		key := msg.Key.(uint64)
+		cHashMu.RLock()
 		parTmp, ok := cHash.Get(key)
+		cHashMu.RUnlock()
 		if !ok {
 			return fmt.Errorf("fail to calculate partition")
 		}
@@ -129,4 +132,68 @@ func pushMsgsToSink(
 		}
 	}
 	return nil
+}
+
+func getSrcSink(ctx context.Context, sp *common.QueryInput,
+	input_stream *sharedlog_stream.ShardedSharedLogStream,
+	output_stream *sharedlog_stream.ShardedSharedLogStream,
+) (*processor.MeteredSource,
+	*processor.MeteredSink,
+	commtypes.MsgSerde,
+	error) {
+	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("get msg serde failed: %v", err)
+	}
+	eventSerde, err := getEventSerde(sp.SerdeFormat)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	inConfig := &sharedlog_stream.SharedLogStreamConfig{
+		Timeout:      common.SrcConsumeTimeout,
+		KeyDecoder:   commtypes.StringDecoder{},
+		ValueDecoder: eventSerde,
+		MsgDecoder:   msgSerde,
+	}
+	outConfig := &sharedlog_stream.StreamSinkConfig{
+		KeyEncoder:   commtypes.StringEncoder{},
+		ValueEncoder: eventSerde,
+		MsgEncoder:   msgSerde,
+	}
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
+	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
+	return src, sink, msgSerde, nil
+}
+
+func getSrcSinkUint64Key(
+	sp *common.QueryInput,
+	input_stream *sharedlog_stream.ShardedSharedLogStream,
+	output_stream *sharedlog_stream.ShardedSharedLogStream,
+) (*processor.MeteredSource,
+	*processor.MeteredSink,
+	commtypes.MsgSerde,
+	error) {
+	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	eventSerde, err := getEventSerde(sp.SerdeFormat)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	inConfig := &sharedlog_stream.SharedLogStreamConfig{
+		Timeout:      common.SrcConsumeTimeout,
+		MsgDecoder:   msgSerde,
+		KeyDecoder:   commtypes.StringDecoder{},
+		ValueDecoder: eventSerde,
+	}
+	outConfig := &sharedlog_stream.StreamSinkConfig{
+		MsgEncoder:   msgSerde,
+		ValueEncoder: eventSerde,
+		KeyEncoder:   commtypes.Uint64Encoder{},
+	}
+
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
+	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
+	return src, sink, msgSerde, nil
 }

@@ -12,6 +12,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sync"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -20,6 +21,7 @@ import (
 
 type bidByAuctionIDHandler struct {
 	env           types.Environment
+	cHashMu       sync.RWMutex
 	cHash         *hash.ConsistentHash
 	currentOffset map[string]uint64
 }
@@ -81,7 +83,9 @@ func (h *bidByAuctionIDHandler) process(
 			}
 
 			k := changeKeyedMsg[0].Key.(uint64)
+			h.cHashMu.RLock()
 			parTmp, ok := h.cHash.Get(k)
+			h.cHashMu.RUnlock()
 			if !ok {
 				return h.currentOffset, &common.FnOutput{
 					Success: false,
@@ -139,7 +143,7 @@ func (h *bidByAuctionIDHandler) bidByAuctionID(ctx context.Context, sp *common.Q
 			Message: fmt.Sprintf("get input output stream failed: %v", err),
 		}
 	}
-	src, sink, err := CommonGetSrcSink(ctx, sp, input_stream, output_stream)
+	src, sink, msgSerde, err := CommonGetSrcSink(ctx, sp, input_stream, output_stream)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -170,9 +174,7 @@ func (h *bidByAuctionIDHandler) bidByAuctionID(ctx context.Context, sp *common.Q
 		ProcessFunc: h.process,
 	}
 
-	for i := uint8(0); i < sp.NumOutPartition; i++ {
-		h.cHash.Add(i)
-	}
+	sharedlog_stream.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
 
 	if sp.EnableTransaction {
 		srcs := make(map[string]processor.Source)
@@ -180,21 +182,22 @@ func (h *bidByAuctionIDHandler) bidByAuctionID(ctx context.Context, sp *common.Q
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
 			ProcArgs:     procArgs,
 			Env:          h.env,
+			MsgSerde:     msgSerde,
 			Srcs:         srcs,
 			OutputStream: output_stream,
 			QueryInput:   sp,
 			TransactionalId: fmt.Sprintf("q8AuctionBySellerID-%s-%d-%s",
 				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
+			KVChangelogs:          nil,
+			WindowStoreChangelogs: nil,
+			FixedOutParNum:        0,
+			CHash:                 h.cHash,
+			CHashMu:               &h.cHashMu,
 		}
-		tm, trackParFunc, err := sharedlog_stream.SetupTransactionManager(ctx, &streamTaskArgs)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
-			}
-		}
-		procArgs.trackParFunc = trackParFunc
-		ret := task.ProcessWithTransaction(ctx, tm, &streamTaskArgs)
+		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+				procArgs.(*bidsByAuctionIDProcessArgs).trackParFunc = trackParFunc
+			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()

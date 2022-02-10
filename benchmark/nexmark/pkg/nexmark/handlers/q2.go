@@ -50,36 +50,6 @@ func filterFunc(msg *commtypes.Message) (bool, error) {
 	return event.Etype == ntypes.BID && event.Bid.Auction%123 == 0, nil
 }
 
-func (h *query2Handler) getSrcSink(ctx context.Context, sp *common.QueryInput,
-	input_stream *sharedlog_stream.ShardedSharedLogStream,
-	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*processor.MeteredSource, *processor.MeteredSink, error) {
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
-	if err != nil {
-		return nil, nil, err
-	}
-	eventSerde, err := getEventSerde(sp.SerdeFormat)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	inConfig := &sharedlog_stream.SharedLogStreamConfig{
-		Timeout:      common.SrcConsumeTimeout,
-		KeyDecoder:   commtypes.StringDecoder{},
-		ValueDecoder: eventSerde,
-		MsgDecoder:   msgSerde,
-	}
-
-	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeyEncoder:   commtypes.StringEncoder{},
-		ValueEncoder: eventSerde,
-		MsgEncoder:   msgSerde,
-	}
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
-	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
-	return src, sink, nil
-}
-
 type query2ProcessArgs struct {
 	src           *processor.MeteredSource
 	sink          *processor.MeteredSink
@@ -97,7 +67,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 			Message: fmt.Sprintf("get input output stream failed: %v", err),
 		}
 	}
-	src, sink, err := h.getSrcSink(ctx, sp, input_stream, output_stream)
+	src, sink, msgSerde, err := getSrcSink(ctx, sp, input_stream, output_stream)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -121,23 +91,23 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		srcs := make(map[string]processor.Source)
 		srcs[sp.InputTopicNames[0]] = src
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
-			ProcArgs:        procArgs,
-			Env:             h.env,
-			Srcs:            srcs,
-			OutputStream:    output_stream,
-			QueryInput:      sp,
-			TransactionalId: fmt.Sprintf("q2Query-%s-%d-%s", sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
-			FixedOutParNum:  sp.ParNum,
+			ProcArgs:              procArgs,
+			Env:                   h.env,
+			MsgSerde:              msgSerde,
+			Srcs:                  srcs,
+			OutputStream:          output_stream,
+			QueryInput:            sp,
+			TransactionalId:       fmt.Sprintf("q2Query-%s-%d-%s", sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
+			KVChangelogs:          nil,
+			WindowStoreChangelogs: nil,
+			FixedOutParNum:        sp.ParNum,
+			CHash:                 nil,
+			CHashMu:               nil,
 		}
-		tm, trackParFunc, err := sharedlog_stream.SetupTransactionManager(ctx, &streamTaskArgs)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
-			}
-		}
-		procArgs.trackParFunc = trackParFunc
-		ret := task.ProcessWithTransaction(ctx, tm, &streamTaskArgs)
+		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+				procArgs.(*query2ProcessArgs).trackParFunc = trackParFunc
+			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()

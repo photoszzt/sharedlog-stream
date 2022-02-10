@@ -20,8 +20,10 @@ import (
 )
 
 type q8JoinStreamHandler struct {
-	env   types.Environment
-	cHash *hash.ConsistentHash
+	env types.Environment
+
+	cHashMu sync.RWMutex
+	cHash   *hash.ConsistentHash
 
 	offMu         sync.Mutex
 	currentOffset map[string]uint64
@@ -284,7 +286,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		if err != nil {
 			return err
 		}
-		return pushMsgsToSink(ctx, sink, h.cHash, joinedMsgs, trackParFunc)
+		return pushMsgsToSink(ctx, sink, h.cHash, &h.cHashMu, joinedMsgs, trackParFunc)
 	}
 
 	aJoinP := func(c context.Context,
@@ -300,12 +302,10 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		if err != nil {
 			return err
 		}
-		return pushMsgsToSink(ctx, sink, h.cHash, joinedMsgs, trackParFunc)
+		return pushMsgsToSink(ctx, sink, h.cHash, &h.cHashMu, joinedMsgs, trackParFunc)
 	}
 
-	for i := uint8(0); i < sp.NumOutPartition; i++ {
-		h.cHash.Add(i)
-	}
+	sharedlog_stream.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
 
 	procArgs := &q8JoinStreamProcessArgs{
 		personSrc:    personsSrc,
@@ -365,16 +365,13 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 					sp.ParNum,
 				),
 			},
+			CHash:   h.cHash,
+			CHashMu: &h.cHashMu,
 		}
-		tm, trackParFunc, err := sharedlog_stream.SetupTransactionManager(ctx, &streamTaskArgs)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
-			}
-		}
-		procArgs.trackParFunc = trackParFunc
-		ret := task.ProcessWithTransaction(ctx, tm, &streamTaskArgs)
+		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+				procArgs.(*q8JoinStreamProcessArgs).trackParFunc = trackParFunc
+			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()
 			ret.Latencies["personsSrc"] = personsSrc.GetLatency()

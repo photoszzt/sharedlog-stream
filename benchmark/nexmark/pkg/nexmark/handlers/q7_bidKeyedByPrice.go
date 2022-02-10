@@ -13,6 +13,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sync"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -20,6 +21,7 @@ import (
 
 type q7BidKeyedByPrice struct {
 	env           types.Environment
+	cHashMu       sync.RWMutex
 	cHash         *hash.ConsistentHash
 	currentOffset map[string]uint64
 }
@@ -102,7 +104,9 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context,
 				}
 			}
 			key := mappedKey[0].Key.(uint64)
+			h.cHashMu.RLock()
 			parTmp, ok := h.cHash.Get(key)
+			h.cHashMu.RUnlock()
 			if !ok {
 				return h.currentOffset, &common.FnOutput{
 					Success: false,
@@ -130,35 +134,6 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context,
 	return h.currentOffset, nil
 }
 
-func (h *q7BidKeyedByPrice) getSrcSink(
-	sp *common.QueryInput,
-	input_stream *sharedlog_stream.ShardedSharedLogStream,
-	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*processor.MeteredSource, *processor.MeteredSink, error) {
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
-	if err != nil {
-		return nil, nil, err
-	}
-	eventSerde, err := getEventSerde(sp.SerdeFormat)
-	if err != nil {
-		return nil, nil, err
-	}
-	inConfig := &sharedlog_stream.SharedLogStreamConfig{
-		Timeout:      common.SrcConsumeTimeout,
-		KeyDecoder:   commtypes.StringDecoder{},
-		ValueDecoder: eventSerde,
-		MsgDecoder:   msgSerde,
-	}
-	outConfig := &sharedlog_stream.StreamSinkConfig{
-		MsgEncoder:   msgSerde,
-		KeyEncoder:   commtypes.Uint64Encoder{},
-		ValueEncoder: eventSerde,
-	}
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
-	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
-	return src, sink, nil
-}
-
 func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input *common.QueryInput) *common.FnOutput {
 	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, input)
 	if err != nil {
@@ -168,7 +143,7 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 		}
 	}
 
-	src, sink, err := h.getSrcSink(input, input_stream, output_stream)
+	src, sink, msgSerde, err := getSrcSinkUint64Key(input, input_stream, output_stream)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -200,31 +175,29 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 		ProcessFunc: h.process,
 	}
 
-	for i := uint8(0); i < input.NumOutPartition; i++ {
-		h.cHash.Add(i)
-	}
+	sharedlog_stream.SetupConsistentHash(&h.cHashMu, h.cHash, input.NumOutPartition)
 
 	if input.EnableTransaction {
 		srcs := make(map[string]processor.Source)
 		srcs[input.InputTopicNames[0]] = src
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
-			ProcArgs:        procArgs,
-			Env:             h.env,
-			Srcs:            srcs,
-			OutputStream:    output_stream,
-			QueryInput:      input,
-			TransactionalId: fmt.Sprintf("q7BidKeyedByPrice-%s-%d-%s", input.InputTopicNames[0], input.ParNum, input.OutputTopicName),
-			FixedOutParNum:  0,
+			ProcArgs:              procArgs,
+			Env:                   h.env,
+			MsgSerde:              msgSerde,
+			Srcs:                  srcs,
+			OutputStream:          output_stream,
+			QueryInput:            input,
+			TransactionalId:       fmt.Sprintf("q7BidKeyedByPrice-%s-%d-%s", input.InputTopicNames[0], input.ParNum, input.OutputTopicName),
+			FixedOutParNum:        0,
+			KVChangelogs:          nil,
+			WindowStoreChangelogs: nil,
+			CHash:                 h.cHash,
+			CHashMu:               &h.cHashMu,
 		}
-		tm, trackParFunc, err := sharedlog_stream.SetupTransactionManager(ctx, &streamTaskArgs)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
-			}
-		}
-		procArgs.trackParFunc = trackParFunc
-		ret := task.ProcessWithTransaction(ctx, tm, &streamTaskArgs)
+		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+				procArgs.(*q7BidKeyedByPriceProcessArgs).trackParFunc = trackParFunc
+			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()

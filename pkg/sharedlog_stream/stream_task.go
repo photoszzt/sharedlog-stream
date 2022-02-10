@@ -6,9 +6,11 @@ import (
 	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/errors"
+	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sync"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -16,6 +18,11 @@ import (
 
 type StreamTask struct {
 	ProcessFunc func(ctx context.Context, args interface{}) (map[string]uint64, *common.FnOutput)
+}
+
+type BaseProcArgs struct {
+	Sink         *processor.MeteredSink
+	TrackParFunc func([]uint8) error
 }
 
 func DefaultTrackParFunc(u []uint8) error {
@@ -36,6 +43,33 @@ func createOffsetTopicAndGetOffset(ctx context.Context, tm *TransactionManager,
 		}
 	}
 	return offset, nil
+}
+
+func SetupManagersAndProcessTransactional(ctx context.Context,
+	env types.Environment,
+	streamTaskArgs *StreamTaskArgsTransaction,
+	updateProcArgs func(procArgs interface{}, trackParFunc func([]uint8) error),
+	task *StreamTask,
+) *common.FnOutput {
+	tm, trackParFunc, err := SetupTransactionManager(ctx, streamTaskArgs)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("setup transaction manager failed: %v", err),
+		}
+	}
+	cmm, err := NewControlChannelManager(env, streamTaskArgs.QueryInput.AppId,
+		commtypes.SerdeFormat(streamTaskArgs.QueryInput.SerdeFormat))
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+	updateProcArgs(streamTaskArgs.ProcArgs, trackParFunc)
+	cmm.TrackConsistentHash(streamTaskArgs.CHashMu, streamTaskArgs.CHash)
+	ret := task.ProcessWithTransaction(ctx, tm, cmm, streamTaskArgs)
+	return ret
 }
 
 func SetupTransactionManager(
@@ -208,9 +242,9 @@ type StreamTaskArgsTransaction struct {
 	Srcs                  map[string]processor.Source
 	OutputStream          *ShardedSharedLogStream
 	QueryInput            *common.QueryInput
-	TestParams            map[string]bool
+	CHash                 *hash.ConsistentHash
+	CHashMu               *sync.RWMutex
 	TransactionalId       string
-	AppId                 string
 	KVChangelogs          []*KVStoreChangelog
 	WindowStoreChangelogs []*WindowStoreChangelog
 	FixedOutParNum        uint8
@@ -251,6 +285,7 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 func (t *StreamTask) ProcessWithTransaction(
 	ctx context.Context,
 	tm *TransactionManager,
+	cmm *ControlChannelManager,
 	args *StreamTaskArgsTransaction,
 ) *common.FnOutput {
 	tm.RecordTopicStreams(args.QueryInput.OutputTopicName, args.OutputStream)
@@ -260,14 +295,8 @@ func (t *StreamTask) ProcessWithTransaction(
 	controlErrc := make(chan error)
 	controlQuit := make(chan struct{})
 
-	cmm, err := NewControlChannelManager(args.Env, args.AppId, commtypes.SerdeFormat(args.QueryInput.SerdeFormat))
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
-	}
 	cmm.TrackStream(args.OutputStream.TopicName(), args.OutputStream)
+	cmm.TrackOutputTopic(args.OutputStream.TopicName())
 	for topic, src := range args.Srcs {
 		cmm.TrackStream(topic, src.Stream().(*ShardedSharedLogStream))
 	}
@@ -330,7 +359,7 @@ L:
 		timeSinceTranStart := time.Since(commitTimer)
 		timeout := duration != 0 && time.Since(startTime) >= duration
 		if (commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout || idx == 10 {
-			if val, ok := args.TestParams["FailBeforeCommit"]; ok && val {
+			if val, ok := args.QueryInput.TestParams["FailBeforeCommit"]; ok && val {
 				fmt.Fprintf(os.Stderr, "about to fail before commit")
 				retc <- &common.FnOutput{
 					Success: false,
@@ -349,7 +378,7 @@ L:
 				})
 			}
 			TrackOffsetAndCommit(ctx, consumedSeqNumConfigs, tm, &hasLiveTransaction, &trackConsumePar, retc)
-			if val, ok := args.TestParams["FailAfterCommit"]; ok && val {
+			if val, ok := args.QueryInput.TestParams["FailAfterCommit"]; ok && val {
 				fmt.Fprintf(os.Stderr, "about to fail after commit")
 				retc <- &common.FnOutput{
 					Success: false,
@@ -379,7 +408,7 @@ L:
 				return
 			}
 			if idx == 5 {
-				if val, ok := args.TestParams["FailAfterBegin"]; ok && val {
+				if val, ok := args.QueryInput.TestParams["FailAfterBegin"]; ok && val {
 					fmt.Fprintf(os.Stderr, "about to fail after begin")
 					retc <- &common.FnOutput{
 						Success: false,
@@ -454,7 +483,7 @@ L:
 			return
 		}
 		if idx == 5 {
-			if val, ok := args.TestParams["FailAfterProcess"]; ok && val {
+			if val, ok := args.QueryInput.TestParams["FailAfterProcess"]; ok && val {
 				fmt.Fprintf(os.Stderr, "about to fail after process\n")
 				retc <- &common.FnOutput{
 					Success: false,

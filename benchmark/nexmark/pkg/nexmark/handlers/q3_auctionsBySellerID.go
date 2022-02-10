@@ -13,6 +13,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sync"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -21,6 +22,7 @@ import (
 
 type query3AuctionsBySellerIDHandler struct {
 	env           types.Environment
+	cHashMu       sync.RWMutex
 	cHash         *hash.ConsistentHash
 	currentOffset map[string]uint64
 }
@@ -82,7 +84,9 @@ func (h *query3AuctionsBySellerIDHandler) process(
 			}
 
 			k := changeKeyedMsg[0].Key.(uint64)
+			h.cHashMu.RLock()
 			parTmp, ok := h.cHash.Get(k)
+			h.cHashMu.RUnlock()
 			if !ok {
 				return h.currentOffset, &common.FnOutput{
 					Success: false,
@@ -122,14 +126,14 @@ type AuctionsBySellerIDProcessArgs struct {
 func CommonGetSrcSink(ctx context.Context, sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*processor.MeteredSource, *processor.MeteredSink, error) {
+) (*processor.MeteredSource, *processor.MeteredSink, commtypes.MsgSerde, error) {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
-		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
+		return nil, nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
 	eventSerde, err := getEventSerde(sp.SerdeFormat)
 	if err != nil {
-		return nil, nil, fmt.Errorf("get event serde err: %v", err)
+		return nil, nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      common.SrcConsumeTimeout,
@@ -145,7 +149,7 @@ func CommonGetSrcSink(ctx context.Context, sp *common.QueryInput,
 	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
 	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
-	return src, sink, nil
+	return src, sink, msgSerde, nil
 }
 
 func (h *query3AuctionsBySellerIDHandler) Call(ctx context.Context, input []byte) ([]byte, error) {
@@ -162,7 +166,9 @@ func (h *query3AuctionsBySellerIDHandler) Call(ctx context.Context, input []byte
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(
+	ctx context.Context,
+	sp *common.QueryInput) *common.FnOutput {
 	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{
@@ -171,7 +177,7 @@ func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(ctx context.C
 		}
 	}
 
-	src, sink, err := CommonGetSrcSink(ctx, sp, input_stream, output_stream)
+	src, sink, msgSerde, err := CommonGetSrcSink(ctx, sp, input_stream, output_stream)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -204,30 +210,30 @@ func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(ctx context.C
 		ProcessFunc: h.process,
 	}
 
-	for i := uint8(0); i < sp.NumOutPartition; i++ {
-		h.cHash.Add(i)
-	}
+	sharedlog_stream.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
 
 	if sp.EnableTransaction {
 		srcs := make(map[string]processor.Source)
 		srcs[sp.InputTopicNames[0]] = src
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
-			ProcArgs:        procArgs,
-			Env:             h.env,
-			Srcs:            srcs,
-			OutputStream:    output_stream,
-			QueryInput:      sp,
-			TransactionalId: fmt.Sprintf("q3AuctionBySellerID-%s-%d-%s", sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
+			ProcArgs:     procArgs,
+			Env:          h.env,
+			MsgSerde:     msgSerde,
+			Srcs:         srcs,
+			OutputStream: output_stream,
+			QueryInput:   sp,
+			TransactionalId: fmt.Sprintf("q3AuctionBySellerID-%s-%d-%s",
+				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
+			KVChangelogs:          nil,
+			WindowStoreChangelogs: nil,
+			FixedOutParNum:        0,
+			CHash:                 h.cHash,
+			CHashMu:               &h.cHashMu,
 		}
-		tm, trackParFunc, err := sharedlog_stream.SetupTransactionManager(ctx, &streamTaskArgs)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
-			}
-		}
-		procArgs.trackParFunc = trackParFunc
-		ret := task.ProcessWithTransaction(ctx, tm, &streamTaskArgs)
+		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+				procArgs.(*AuctionsBySellerIDProcessArgs).trackParFunc = trackParFunc
+			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()

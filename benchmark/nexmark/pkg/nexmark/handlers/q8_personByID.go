@@ -12,6 +12,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sync"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -20,6 +21,7 @@ import (
 
 type q8PersonsByIDHandler struct {
 	env           types.Environment
+	cHashMu       sync.RWMutex
 	cHash         *hash.ConsistentHash
 	currentOffset map[string]uint64
 }
@@ -95,7 +97,9 @@ func (h *q8PersonsByIDHandler) process(
 			}
 
 			k := changeKeyedMsg[0].Key.(uint64)
+			h.cHashMu.RLock()
 			parTmp, ok := h.cHash.Get(k)
+			h.cHashMu.RUnlock()
 			if !ok {
 				return h.currentOffset, &common.FnOutput{
 					Success: false,
@@ -140,7 +144,7 @@ func (h *q8PersonsByIDHandler) Q8PersonsByID(ctx context.Context, sp *common.Que
 			Message: fmt.Sprintf("get input output stream failed: %v", err),
 		}
 	}
-	src, sink, err := CommonGetSrcSink(ctx, sp, input_stream, output_stream)
+	src, sink, msgSerde, err := CommonGetSrcSink(ctx, sp, input_stream, output_stream)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -177,9 +181,7 @@ func (h *q8PersonsByIDHandler) Q8PersonsByID(ctx context.Context, sp *common.Que
 		ProcessFunc: h.process,
 	}
 
-	for i := 0; i < int(sp.NumOutPartition); i++ {
-		h.cHash.Add(uint8(i))
-	}
+	sharedlog_stream.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
 
 	if sp.EnableTransaction {
 		srcs := make(map[string]processor.Source)
@@ -187,24 +189,27 @@ func (h *q8PersonsByIDHandler) Q8PersonsByID(ctx context.Context, sp *common.Que
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
 			ProcArgs:     procArgs,
 			Env:          h.env,
+			MsgSerde:     msgSerde,
 			Srcs:         srcs,
 			OutputStream: output_stream,
 			QueryInput:   sp,
 			TransactionalId: fmt.Sprintf("q3PersonsByID-%s-%d-%s",
 				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
+			KVChangelogs:          nil,
+			WindowStoreChangelogs: nil,
+			FixedOutParNum:        0,
+			CHash:                 h.cHash,
+			CHashMu:               &h.cHashMu,
 		}
-		tm, trackParFunc, err := sharedlog_stream.SetupTransactionManager(ctx, &streamTaskArgs)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
-			}
-		}
-		procArgs.trackParFunc = trackParFunc
-		ret := task.ProcessWithTransaction(ctx, tm, &streamTaskArgs)
+		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+				procArgs.(*q8PersonsByIDProcessArgs).trackParFunc = trackParFunc
+			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()
+			ret.Latencies["filterPerson"] = filterPerson.GetLatency()
+			ret.Latencies["personsByIDMap"] = personsByIDMap.GetLatency()
 		}
 		return ret
 	}
@@ -216,6 +221,8 @@ func (h *q8PersonsByIDHandler) Q8PersonsByID(ctx context.Context, sp *common.Que
 	if ret != nil && ret.Success {
 		ret.Latencies["src"] = src.GetLatency()
 		ret.Latencies["sink"] = sink.GetLatency()
+		ret.Latencies["filterPerson"] = filterPerson.GetLatency()
+		ret.Latencies["personsByIDMap"] = personsByIDMap.GetLatency()
 	}
 	return ret
 }

@@ -1,6 +1,8 @@
 package common
 
-import "time"
+import (
+	"time"
+)
 
 const (
 	SrcConsumeTimeout = 5 * time.Second
@@ -10,6 +12,7 @@ const (
 type QueryInput struct {
 	TestParams        map[string]bool `json:"testParams,omitempty"`
 	OutputTopicName   string          `json:"outputTopicName,omitempty"`
+	AppId             string          `json:"aid"`
 	InputTopicNames   []string        `json:"inputTopicName,omitempty"`
 	CommitEveryMs     uint64          `json:"commEvery,omitempty"`
 	Duration          uint32          `json:"duration,omitempty"`

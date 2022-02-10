@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"sharedlog-stream/pkg/errors"
+	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sync"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -13,6 +15,23 @@ const (
 	CONTROL_LOG_TOPIC_NAME = "__control_log"
 )
 
+func UpdateConsistentHash(cHashMu *sync.RWMutex, cHash *hash.ConsistentHash, numPartition uint8) {
+	cHashMu.Lock()
+	defer cHashMu.Unlock()
+	*cHash = *hash.NewConsistentHash()
+	for i := uint8(0); i < numPartition; i++ {
+		(*cHash).Add(i)
+	}
+}
+
+func SetupConsistentHash(cHashMu *sync.RWMutex, cHash *hash.ConsistentHash, numPartition uint8) {
+	cHashMu.Lock()
+	defer cHashMu.Unlock()
+	for i := uint8(0); i < numPartition; i++ {
+		(*cHash).Add(i)
+	}
+}
+
 type ControlChannelManager struct {
 	env              types.Environment
 	controlMetaSerde commtypes.Serde
@@ -20,6 +39,9 @@ type ControlChannelManager struct {
 	controlLog       *SharedLogStream
 	keyMappings      map[string]map[interface{}]map[uint8]struct{}
 	topicStreams     map[string]*ShardedSharedLogStream
+	output_topic     string
+	cHashMu          *sync.RWMutex
+	cHash            *hash.ConsistentHash
 	funcName         string
 	currentEpoch     uint64
 	instanceId       uint8
@@ -49,6 +71,15 @@ func NewControlChannelManager(env types.Environment,
 
 func (cmm *ControlChannelManager) TrackStream(topicName string, stream *ShardedSharedLogStream) {
 	cmm.topicStreams[topicName] = stream
+}
+
+func (cmm *ControlChannelManager) TrackConsistentHash(cHashMu *sync.RWMutex, cHash *hash.ConsistentHash) {
+	cmm.cHash = cHash
+	cmm.cHashMu = cHashMu
+}
+
+func (cmm *ControlChannelManager) TrackOutputTopic(output_topic string) {
+	cmm.output_topic = output_topic
 }
 
 func (cmm *ControlChannelManager) appendToControlLog(ctx context.Context, cm *ControlMetadata) error {
@@ -138,6 +169,10 @@ func (cmm *ControlChannelManager) MonitorControlChannel(
 						dcancel()
 						errc <- nil
 						break
+					}
+					numSubstreams := ctrlMeta.Config[cmm.output_topic]
+					if cmm.cHashMu != nil && cmm.cHash != nil {
+						UpdateConsistentHash(cmm.cHashMu, cmm.cHash, numSubstreams)
 					}
 					for topic, stream := range cmm.topicStreams {
 						numSubstreams, ok := ctrlMeta.Config[topic]

@@ -174,22 +174,17 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
 			ProcArgs:        procArgs,
 			Env:             h.env,
+			MsgSerde:        msgSerde,
 			Srcs:            srcs,
 			OutputStream:    output_stream,
 			QueryInput:      sp,
 			TransactionalId: fmt.Sprintf("wordcount-counter-%s-%s-%d", sp.InputTopicNames[0], sp.OutputTopicName, sp.ParNum),
 			FixedOutParNum:  sp.ParNum,
-			TestParams:      sp.TestParams,
 		}
-		tm, trackParFunc, err := sharedlog_stream.SetupTransactionManager(ctx, &streamTaskArgs)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("setup transaction manager failed: %v\n", err),
-			}
-		}
-		procArgs.trackParFunc = trackParFunc
-		ret := task.ProcessWithTransaction(ctx, tm, &streamTaskArgs)
+		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+				procArgs.(*wordcountCounterAggProcessArg).trackParFunc = trackParFunc
+			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["count"] = count.GetLatency()
