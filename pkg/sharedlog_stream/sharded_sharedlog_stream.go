@@ -137,3 +137,19 @@ func (s *ShardedSharedLogStream) SetCursor(cursor uint64, parNum uint8) {
 	defer s.sMu.RUnlock()
 	s.subSharedLogStreams[parNum].cursor = cursor
 }
+
+func (s *ShardedSharedLogStream) SetTaskEpoch(epoch uint16) {
+	s.sMu.RLock()
+	defer s.sMu.RUnlock()
+	for i := uint8(0); i < s.numPartitions; i++ {
+		s.subSharedLogStreams[i].SetTaskEpoch(epoch)
+	}
+}
+
+func (s *ShardedSharedLogStream) SetTaskId(id uint64) {
+	s.sMu.RLock()
+	defer s.sMu.RUnlock()
+	for i := uint8(0); i < s.numPartitions; i++ {
+		s.subSharedLogStreams[i].SetTaskId(id)
+	}
+}

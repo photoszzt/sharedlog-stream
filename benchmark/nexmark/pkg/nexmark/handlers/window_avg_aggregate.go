@@ -70,7 +70,7 @@ func (h *windowedAvg) getSrcSink(ctx context.Context, sp *common.QueryInput, msg
 		return nil, nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat)
 	}
 
-	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, true)
 	if err != nil {
 		return nil, nil, err
 	}

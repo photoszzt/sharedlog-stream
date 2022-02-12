@@ -242,7 +242,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 			break
 		}
 		fnout := h.process(dctx, &procArgs)
-		if !fnout.Success {
+		if fnout != nil && !fnout.Success {
 			if out := closeAllChanAndWait(inChans, g, err); out != nil {
 				return out
 			}

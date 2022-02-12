@@ -137,7 +137,7 @@ type q8PersonsByIDProcessArgs struct {
 }
 
 func (h *q8PersonsByIDHandler) Q8PersonsByID(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

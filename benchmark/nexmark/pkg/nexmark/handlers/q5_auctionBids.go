@@ -241,7 +241,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			Message: err.Error(),
 		}
 	}
-	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, true)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

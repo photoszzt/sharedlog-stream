@@ -113,18 +113,19 @@ func getInOutStreams(
 	ctx context.Context,
 	env types.Environment,
 	input *common.QueryInput,
+	input_in_tran bool,
 ) (*sharedlog_stream.ShardedSharedLogStream, /* auction */
 	*sharedlog_stream.ShardedSharedLogStream, /* person */
 	*sharedlog_stream.ShardedSharedLogStream, /* output */
 	error,
 ) {
-	inputStreamAuction, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[0], uint8(input.NumInPartition))
+	inputStream1, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[0], uint8(input.NumInPartition))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
 
 	}
 
-	inputStreamPerson, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[1], uint8(input.NumInPartition))
+	inputStream2, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[1], uint8(input.NumInPartition))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
 	}
@@ -133,15 +134,15 @@ func getInOutStreams(
 		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
 	}
 	if input.EnableTransaction {
-		inputStreamAuction.SetInTransaction(true)
-		inputStreamPerson.SetInTransaction(true)
+		inputStream1.SetInTransaction(input_in_tran)
+		inputStream2.SetInTransaction(input_in_tran)
 		outputStream.SetInTransaction(true)
 	} else {
-		inputStreamAuction.SetInTransaction(false)
-		inputStreamPerson.SetInTransaction(false)
+		inputStream1.SetInTransaction(false)
+		inputStream2.SetInTransaction(false)
 		outputStream.SetInTransaction(false)
 	}
-	return inputStreamAuction, inputStreamPerson, outputStream, nil
+	return inputStream1, inputStream2, outputStream, nil
 }
 
 func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
@@ -205,7 +206,7 @@ type q3JoinTableProcessArgs struct {
 }
 
 func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	auctionsStream, personsStream, outputStream, err := getInOutStreams(ctx, h.env, sp)
+	auctionsStream, personsStream, outputStream, err := getInOutStreams(ctx, h.env, sp, true)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

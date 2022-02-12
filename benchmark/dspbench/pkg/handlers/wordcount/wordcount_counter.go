@@ -126,7 +126,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 }
 
 func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, true)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

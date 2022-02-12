@@ -174,7 +174,7 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 }
 
 func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	auctionsStream, personsStream, outputStream, err := getInOutStreams(ctx, h.env, sp)
+	auctionsStream, personsStream, outputStream, err := getInOutStreams(ctx, h.env, sp, true)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

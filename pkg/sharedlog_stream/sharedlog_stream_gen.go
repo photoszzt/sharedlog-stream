@@ -43,7 +43,7 @@ func (z *StreamLogEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 		case "mseq":
-			z.MsgSeqNum, err = dc.ReadUint32()
+			z.MsgSeqNum, err = dc.ReadUint64()
 			if err != nil {
 				err = msgp.WrapError(err, "MsgSeqNum")
 				return
@@ -140,7 +140,7 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 		if err != nil {
 			return
 		}
-		err = en.WriteUint32(z.MsgSeqNum)
+		err = en.WriteUint64(z.MsgSeqNum)
 		if err != nil {
 			err = msgp.WrapError(err, "MsgSeqNum")
 			return
@@ -214,7 +214,7 @@ func (z *StreamLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// string "mseq"
 		o = append(o, 0xa4, 0x6d, 0x73, 0x65, 0x71)
-		o = msgp.AppendUint32(o, z.MsgSeqNum)
+		o = msgp.AppendUint64(o, z.MsgSeqNum)
 	}
 	if (zb0001Mask & 0x10) == 0 { // if not empty
 		// string "te"
@@ -264,7 +264,7 @@ func (z *StreamLogEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "mseq":
-			z.MsgSeqNum, bts, err = msgp.ReadUint32Bytes(bts)
+			z.MsgSeqNum, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "MsgSeqNum")
 				return
@@ -295,6 +295,6 @@ func (z *StreamLogEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *StreamLogEntry) Msgsize() (s int) {
-	s = 1 + 10 + msgp.StringPrefixSize + len(z.TopicName) + 8 + msgp.BytesPrefixSize + len(z.Payload) + 4 + msgp.Uint64Size + 5 + msgp.Uint32Size + 3 + msgp.Uint16Size + 7 + msgp.BoolSize
+	s = 1 + 10 + msgp.StringPrefixSize + len(z.TopicName) + 8 + msgp.BytesPrefixSize + len(z.Payload) + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size + 3 + msgp.Uint16Size + 7 + msgp.BoolSize
 	return
 }

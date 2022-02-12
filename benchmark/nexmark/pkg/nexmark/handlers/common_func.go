@@ -62,7 +62,6 @@ func joinProc(
 	defer procArgs.wg.Done()
 	gotMsgs, err := procArgs.src.Consume(ctx, procArgs.parNum)
 	if err != nil {
-		fmt.Fprint(os.Stderr, "got error\n")
 		if xerrors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 			fmt.Fprint(os.Stderr, "timeout, gen output\n")
 			out <- &common.FnOutput{

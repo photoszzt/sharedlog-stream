@@ -18,18 +18,18 @@ var EmptyRawMsg = RawMsg{Payload: nil, MsgSeqNum: 0, LogSeqNum: 0}
 
 type ReadMsgAndProgress struct {
 	MsgBuff          []RawMsg
-	CurReadMsgSeqNum uint32
+	CurReadMsgSeqNum uint64
 }
 
 type RawMsg struct {
 	Payload   []byte
 	IsControl bool
-	MsgSeqNum uint32
+	MsgSeqNum uint64
 	LogSeqNum uint64
 }
 
 type MsgAndSeq struct {
 	Msg       Message
-	MsgSeqNum uint32
+	MsgSeqNum uint64
 	LogSeqNum uint64
 }

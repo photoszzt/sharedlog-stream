@@ -136,7 +136,7 @@ func (h *auctionsByIDHandler) Call(ctx context.Context, input []byte) ([]byte, e
 }
 
 func (h *auctionsByIDHandler) auctionsByID(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

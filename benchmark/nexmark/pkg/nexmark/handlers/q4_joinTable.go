@@ -172,7 +172,7 @@ func (h *q4JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 }
 
 func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	auctionsStream, bidsStream, outputStream, err := getInOutStreams(ctx, h.env, sp)
+	auctionsStream, bidsStream, outputStream, err := getInOutStreams(ctx, h.env, sp, true)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

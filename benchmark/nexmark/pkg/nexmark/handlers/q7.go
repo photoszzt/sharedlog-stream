@@ -163,7 +163,7 @@ func (h *query7Handler) process(
 }
 
 func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput) *common.FnOutput {
-	inputStream, outputStream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, input)
+	inputStream, outputStream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, input, true)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

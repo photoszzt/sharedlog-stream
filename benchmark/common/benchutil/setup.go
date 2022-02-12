@@ -26,7 +26,11 @@ type DumpOutputStreamConfig struct {
 	NumPartitions uint8
 }
 
-func GetShardedInputOutputStreams(ctx context.Context, env types.Environment, input *common.QueryInput) (*sharedlog_stream.ShardedSharedLogStream, *sharedlog_stream.ShardedSharedLogStream, error) {
+func GetShardedInputOutputStreams(ctx context.Context,
+	env types.Environment,
+	input *common.QueryInput,
+	input_in_tran bool,
+) (*sharedlog_stream.ShardedSharedLogStream, *sharedlog_stream.ShardedSharedLogStream, error) {
 	inputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[0], uint8(input.NumInPartition))
 	if err != nil {
 		return nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
@@ -37,7 +41,7 @@ func GetShardedInputOutputStreams(ctx context.Context, env types.Environment, in
 		return nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
 	}
 	if input.EnableTransaction {
-		inputStream.SetInTransaction(true)
+		inputStream.SetInTransaction(input_in_tran)
 		outputStream.SetInTransaction(true)
 	} else {
 		inputStream.SetInTransaction(false)

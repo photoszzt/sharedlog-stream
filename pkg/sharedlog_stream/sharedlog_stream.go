@@ -4,7 +4,10 @@ package sharedlog_stream
 
 import (
 	"context"
+	"fmt"
 	"math"
+	"os"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
@@ -33,7 +36,7 @@ type SharedLogStream struct {
 	cursor             uint64
 	tail               uint64
 	taskId             uint64
-	curAppendMsgSeqNum uint32
+	curAppendMsgSeqNum uint64
 	taskEpoch          uint16
 	inTransaction      bool
 }
@@ -54,7 +57,7 @@ type StreamLogEntry struct {
 	TopicName string `msg:"topicName"`
 	Payload   []byte `msg:"payload,omitempty"`
 	TaskId    uint64 `msg:"tid,omitempty"`
-	MsgSeqNum uint32 `msg:"mseq,omitempty"`
+	MsgSeqNum uint64 `msg:"mseq,omitempty"`
 	TaskEpoch uint16 `msg:"te,omitempty"`
 	IsControl bool   `msg:"isCtrl"`
 	seqNum    uint64 `msg:"-"`
@@ -81,6 +84,7 @@ func NewSharedLogStream(env types.Environment, topicName string) *SharedLogStrea
 		taskId:             0,
 		taskEpoch:          0,
 		curAppendMsgSeqNum: 0,
+		curReadMap:         make(map[commtypes.TaskIDGen]commtypes.ReadMsgAndProgress),
 	}
 }
 
@@ -88,7 +92,7 @@ func (s *SharedLogStream) NumPartition() uint8 {
 	return 1
 }
 
-func (s *SharedLogStream) SetAppendMsgSeqNum(val uint32) {
+func (s *SharedLogStream) SetAppendMsgSeqNum(val uint64) {
 	s.curAppendMsgSeqNum = val
 }
 
@@ -128,13 +132,13 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNu
 		Payload:   payload,
 		IsControl: isControl,
 	}
-	if s.inTransaction {
-		// TODO: need to deal with sequence number overflow
-		atomic.AddUint32(&s.curAppendMsgSeqNum, 1)
-		logEntry.MsgSeqNum = s.curAppendMsgSeqNum
-		logEntry.TaskEpoch = s.taskEpoch
-		logEntry.TaskId = s.taskId
-	}
+	// if s.inTransaction {
+	// TODO: need to deal with sequence number overflow
+	atomic.AddUint64(&s.curAppendMsgSeqNum, 1)
+	logEntry.MsgSeqNum = s.curAppendMsgSeqNum
+	logEntry.TaskEpoch = s.taskEpoch
+	logEntry.TaskId = s.taskId
+	// }
 	encoded, err := logEntry.MarshalMsg(nil)
 	if err != nil {
 		return 0, err
@@ -146,10 +150,11 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNu
 	s.mux.Unlock()
 
 	// verify that push is successful
+
+	if err != nil {
+		return 0, err
+	}
 	/*
-		if err != nil {
-			return 0, err
-		}
 		// fmt.Fprintf(os.Stderr, "append val %s with tag: %x to topic %s par %d, seqNum: %x\n",
 		// 	string(payload), tags[0], s.topicName, parNum, seqNum)
 		logEntryRead, err := s.env.SharedLogReadNext(ctx, tags[0], seqNum)
@@ -176,7 +181,7 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNu
 		}
 	*/
 
-	return seqNum, err
+	return seqNum, nil
 }
 
 func (s *SharedLogStream) Push(ctx context.Context, payload []byte, parNum uint8, isControl bool) (uint64, error) {
@@ -234,6 +239,7 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 		}
 	}
 	seqNumInSharedLog := s.cursor
+	fmt.Fprintf(os.Stderr, "cursor: %d, tail: %d\n", s.cursor, s.tail)
 	for seqNumInSharedLog < s.tail {
 		// fmt.Fprintf(os.Stderr, "read tag: 0x%x, seqNum: 0x%x\n", tag, seqNumInSharedLog)
 		newCtx, cancel := context.WithTimeout(ctx, kBlockingReadTimeout)
@@ -249,14 +255,8 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 		streamLogEntry := decodeStreamLogEntry(logEntry)
 		if streamLogEntry.TopicName == s.topicName {
 			if s.inTransaction {
-				// debug.Assert(streamLogEntry.TaskId != 0, "stream log entry's task id should not be zero")
-				// debug.Assert(streamLogEntry.TaskEpoch != 0, "stream log entry's epoch should not be zero")
-				if streamLogEntry.TaskId == 0 {
-					panic("stream log entry's task id should not be zero")
-				}
-				if streamLogEntry.TaskEpoch == 0 {
-					panic("stream log entry's epoch should not be zero")
-				}
+				debug.Assert(streamLogEntry.TaskId != 0, "stream log entry's task id should not be zero")
+				debug.Assert(streamLogEntry.TaskEpoch != 0, "stream log entry's epoch should not be zero")
 				appKey := commtypes.TaskIDGen{
 					TaskId:    streamLogEntry.TaskId,
 					TaskEpoch: streamLogEntry.TaskEpoch,
@@ -294,7 +294,7 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 					seqNumInSharedLog = logEntry.SeqNum + 1
 					continue
 				}
-				readMsgProc.CurReadMsgSeqNum = uint32(streamLogEntry.seqNum)
+				readMsgProc.CurReadMsgSeqNum = streamLogEntry.seqNum
 				readMsgProc.MsgBuff = append(readMsgProc.MsgBuff, commtypes.RawMsg{})
 				s.curReadMap[appKey] = readMsgProc
 				seqNumInSharedLog = logEntry.SeqNum + 1

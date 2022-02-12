@@ -169,7 +169,7 @@ func (h *query3AuctionsBySellerIDHandler) Call(ctx context.Context, input []byte
 func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(
 	ctx context.Context,
 	sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

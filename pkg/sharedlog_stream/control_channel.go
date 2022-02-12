@@ -56,6 +56,8 @@ func NewControlChannelManager(env types.Environment,
 		env:          env,
 		controlLog:   log,
 		currentEpoch: 0,
+		topicStreams: make(map[string]*ShardedSharedLogStream),
+		keyMappings:  map[string]map[interface{}]map[uint8]struct{}{},
 	}
 	if serdeFormat == commtypes.JSON {
 		cm.controlMetaSerde = ControlMetadataJSONSerde{}

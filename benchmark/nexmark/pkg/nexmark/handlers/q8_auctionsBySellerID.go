@@ -127,7 +127,7 @@ func (h *q8AuctionsBySellerIDHandler) Call(ctx context.Context, input []byte) ([
 }
 
 func (h *q8AuctionsBySellerIDHandler) q8AuctionsBySellerID(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

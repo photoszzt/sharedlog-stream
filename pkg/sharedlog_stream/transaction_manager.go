@@ -455,6 +455,8 @@ func (tc *TransactionManager) RecordTopicStreams(topicToTrack string, stream sto
 		return
 	}
 	tc.topicStreams[topicToTrack] = stream
+	stream.SetTaskId(tc.CurrentTaskId)
+	stream.SetTaskEpoch(tc.CurrentEpoch)
 }
 
 func (tc *TransactionManager) AddTopicTrackConsumedSeqs(ctx context.Context, topicToTrack string, partitions []uint8) error {

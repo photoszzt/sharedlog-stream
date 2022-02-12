@@ -17,6 +17,8 @@ type Stream interface {
 	TopicName() string
 	TopicNameHash() uint64
 	SetCursor(cursor uint64, parNum uint8)
+	SetTaskId(tid uint64)
+	SetTaskEpoch(epoch uint16)
 	NumPartition() uint8
 }
 
@@ -145,6 +147,14 @@ func (ms *MeteredStream) TopicNameHash() uint64 {
 
 func (ms *MeteredStream) SetCursor(cursor uint64, parNum uint8) {
 	ms.stream.SetCursor(cursor, parNum)
+}
+
+func (ms *MeteredStream) SetTaskId(tid uint64) {
+	ms.stream.SetTaskId(tid)
+}
+
+func (ms *MeteredStream) SetTaskEpoch(epoch uint16) {
+	ms.stream.SetTaskEpoch(epoch)
 }
 
 func (ms *MeteredStream) GetPushLatencies() []int {
