@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 )
@@ -24,49 +25,52 @@ func RestoreWindowStateStore(
 		if errors.IsStreamEmptyError(err) {
 			return nil
 		} else if err != nil {
-			return err
+			return fmt.Errorf("ReadNext failed: %v", err)
 		}
 		for _, msg := range msgs {
 			currentOffset = msg.LogSeqNum
+			if len(msg.Payload) == 0 {
+				continue
+			}
 			keyWinBytes, valBytes, err := msgSerde.Decode(msg.Payload)
 			if err != nil {
-				return err
+				return fmt.Errorf("msg serde decode failed: %v", err)
 			}
 			if keyWindowTsSerde != nil {
 				keyWinTmp, err := keyWindowTsSerde.Decode(keyWinBytes)
 				if err != nil {
-					return err
+					return fmt.Errorf("keyWindowTsSerde decode failed: %v", err)
 				}
 				keyWin := keyWinTmp.(commtypes.KeyAndWindowStartTs)
 				key, err := keySerde.Decode(keyWin.Key)
 				if err != nil {
-					return err
+					return fmt.Errorf("keySerde decode failed: %v", err)
 				}
 				val, err := valSerde.Decode(valBytes)
 				if err != nil {
-					return err
+					return fmt.Errorf("valSerde decode failed: %v", err)
 				}
 				err = windowStore.Put(ctx, key, val, keyWin.WindowStartTs)
 				if err != nil {
-					return err
+					return fmt.Errorf("windowStore put failed: %v", err)
 				}
 			} else {
 				key, err := keySerde.Decode(keyWinBytes)
 				if err != nil {
-					return err
+					return fmt.Errorf("key serde2 failed: %v", err)
 				}
 				valTmp, err := valSerde.Decode(valBytes)
 				if err != nil {
-					return err
+					return fmt.Errorf("val serde decode failed: %v", err)
 				}
 				val := valTmp.(commtypes.StreamTimeExtractor)
 				ts, err := val.ExtractStreamTime()
 				if err != nil {
-					return err
+					return fmt.Errorf("extract stream time failed: %v", err)
 				}
 				err = windowStore.Put(ctx, key, val, ts)
 				if err != nil {
-					return err
+					return fmt.Errorf("window store put failed: %v", err)
 				}
 			}
 		}

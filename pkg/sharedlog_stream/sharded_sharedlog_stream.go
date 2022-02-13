@@ -19,6 +19,7 @@ type ShardedSharedLogStream struct {
 	sMu                 sync.RWMutex // guards
 	subSharedLogStreams []*SharedLogStream
 	numPartitions       uint8
+	serdeFormat         commtypes.SerdeFormat
 }
 
 var _ = store.Stream(&ShardedSharedLogStream{})
@@ -27,19 +28,23 @@ var (
 	ErrZeroParNum = xerrors.New("Shards must be positive")
 )
 
-func NewShardedSharedLogStream(env types.Environment, topicName string, numPartitions uint8) (*ShardedSharedLogStream, error) {
+func NewShardedSharedLogStream(env types.Environment, topicName string, numPartitions uint8, serdeFormat commtypes.SerdeFormat) (*ShardedSharedLogStream, error) {
 	if numPartitions == 0 {
 		return nil, ErrZeroParNum
 	}
 	streams := make([]*SharedLogStream, 0, 16)
 	for i := uint8(0); i < numPartitions; i++ {
-		s := NewSharedLogStream(env, topicName)
+		s, err := NewSharedLogStream(env, topicName, serdeFormat)
+		if err != nil {
+			return nil, err
+		}
 		streams = append(streams, s)
 	}
 	return &ShardedSharedLogStream{
 		subSharedLogStreams: streams,
 		numPartitions:       numPartitions,
 		topicName:           topicName,
+		serdeFormat:         serdeFormat,
 	}, nil
 }
 
@@ -52,7 +57,10 @@ func (s *ShardedSharedLogStream) ScaleSubstreams(env types.Environment, scaleTo 
 	if scaleTo > s.numPartitions {
 		numAdd := scaleTo - s.numPartitions
 		for i := uint8(0); i < numAdd; i++ {
-			subs := NewSharedLogStream(env, s.topicName)
+			subs, err := NewSharedLogStream(env, s.topicName, s.serdeFormat)
+			if err != nil {
+				return err
+			}
 			s.subSharedLogStreams = append(s.subSharedLogStreams, subs)
 		}
 	}

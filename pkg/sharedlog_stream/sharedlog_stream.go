@@ -73,7 +73,15 @@ func decodeStreamLogEntry(logEntry *types.LogEntry) *StreamLogEntry {
 	return streamLogEntry
 }
 
-func NewSharedLogStream(env types.Environment, topicName string) *SharedLogStream {
+func NewSharedLogStream(env types.Environment, topicName string, serdeFormat commtypes.SerdeFormat) (*SharedLogStream, error) {
+	var txnMarkerSerde commtypes.Serde
+	if serdeFormat == commtypes.JSON {
+		txnMarkerSerde = TxnMarkerJSONSerde{}
+	} else if serdeFormat == commtypes.MSGP {
+		txnMarkerSerde = TxnMarkerMsgpSerde{}
+	} else {
+		return nil, fmt.Errorf("unrecognized format: %d", serdeFormat)
+	}
 	return &SharedLogStream{
 		env:           env,
 		topicName:     topicName,
@@ -81,11 +89,12 @@ func NewSharedLogStream(env types.Environment, topicName string) *SharedLogStrea
 		cursor:        0,
 		tail:          0,
 
+		txnMarkerSerde:     txnMarkerSerde,
 		taskId:             0,
 		taskEpoch:          0,
 		curAppendMsgSeqNum: 0,
 		curReadMap:         make(map[commtypes.TaskIDGen]commtypes.ReadMsgAndProgress),
-	}
+	}, nil
 }
 
 func (s *SharedLogStream) NumPartition() uint8 {

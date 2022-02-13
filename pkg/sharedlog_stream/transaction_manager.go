@@ -24,6 +24,7 @@ const (
 // each transaction manager manages one topic partition;
 // assume each transactional_id correspond to one output partition
 type TransactionManager struct {
+	serdeFormat           commtypes.SerdeFormat
 	msgSerde              commtypes.MsgSerde
 	txnMdSerde            commtypes.Serde
 	topicPartitionSerde   commtypes.Serde
@@ -55,7 +56,10 @@ func NewTransactionManager(ctx context.Context,
 	transactional_id string,
 	serdeFormat commtypes.SerdeFormat,
 ) (*TransactionManager, error) {
-	log := NewSharedLogStream(env, TRANSACTION_LOG_TOPIC_NAME+"_"+transactional_id)
+	log, err := NewSharedLogStream(env, TRANSACTION_LOG_TOPIC_NAME+"_"+transactional_id, serdeFormat)
+	if err != nil {
+		return nil, err
+	}
 	errg, gctx := errgroup.WithContext(ctx)
 	tm := &TransactionManager{
 		transactionLog:        log,
@@ -67,8 +71,9 @@ func NewTransactionManager(ctx context.Context,
 		backgroundJobCtx:      gctx,
 		CurrentEpoch:          0,
 		CurrentTaskId:         0,
+		serdeFormat:           serdeFormat,
 	}
-	err := tm.setupSerde(serdeFormat)
+	err = tm.setupSerde(serdeFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +446,7 @@ func (tc *TransactionManager) CreateOffsetTopic(topicToTrack string, numPartitio
 		// already exists
 		return nil
 	}
-	off, err := NewShardedSharedLogStream(tc.transactionLog.env, offsetTopic, numPartition)
+	off, err := NewShardedSharedLogStream(tc.transactionLog.env, offsetTopic, numPartition, tc.serdeFormat)
 	if err != nil {
 		return err
 	}

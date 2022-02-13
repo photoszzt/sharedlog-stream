@@ -92,7 +92,8 @@ func (h *q5AuctionBids) getCountAggProc(sp *common.QueryInput, msgSerde commtype
 	hopWindow := processor.NewTimeWindowsNoGrace(time.Duration(10) * time.Second).AdvanceBy(time.Duration(2) * time.Second)
 	countStoreName := "auctionBidsCountStore"
 	changelogName := countStoreName + "-changelog"
-	changelog, err := sharedlog_stream.NewShardedSharedLogStream(h.env, changelogName, sp.NumOutPartition)
+	changelog, err := sharedlog_stream.NewShardedSharedLogStream(h.env, changelogName, sp.NumOutPartition,
+		commtypes.SerdeFormat(sp.SerdeFormat))
 	if err != nil {
 		return nil, nil, fmt.Errorf("NewShardedSharedLogStream failed: %v", err)
 	}

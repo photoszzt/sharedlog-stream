@@ -119,17 +119,20 @@ func getInOutStreams(
 	*sharedlog_stream.ShardedSharedLogStream, /* output */
 	error,
 ) {
-	inputStream1, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[0], uint8(input.NumInPartition))
+	inputStream1, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[0], input.NumInPartition,
+		commtypes.SerdeFormat(input.SerdeFormat))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
 
 	}
 
-	inputStream2, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[1], uint8(input.NumInPartition))
+	inputStream2, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[1], input.NumInPartition,
+		commtypes.SerdeFormat(input.SerdeFormat))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
 	}
-	outputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.OutputTopicName, uint8(input.NumOutPartition))
+	outputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.OutputTopicName, input.NumOutPartition,
+		commtypes.SerdeFormat(input.SerdeFormat))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
 	}

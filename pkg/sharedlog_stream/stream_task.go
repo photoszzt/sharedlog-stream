@@ -90,7 +90,7 @@ func SetupTransactionManager(
 		offset, err := createOffsetTopicAndGetOffset(ctx, tm, inputTopicName,
 			uint8(args.QueryInput.NumInPartition), args.QueryInput.ParNum)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("createOffsetTopicAndGetOffset failed: %v", err)
 		}
 		offsetMap[inputTopicName] = offset
 	}
@@ -101,18 +101,18 @@ func SetupTransactionManager(
 				err = store.RestoreKVStateStore(ctx, kvchangelog.kvStore, kvchangelog.changelog, kvchangelog.parNum,
 					args.MsgSerde, offset)
 				if err != nil {
-					return nil, nil, err
+					return nil, nil, fmt.Errorf("RestoreKVStateStore failed: %v", err)
 				}
 			} else {
 				offset, err := createOffsetTopicAndGetOffset(ctx, tm, topic,
 					kvchangelog.changelog.NumPartition(), kvchangelog.parNum)
 				if err != nil {
-					return nil, nil, err
+					return nil, nil, fmt.Errorf("createOffsetTopicAndGetOffset kv failed: %v", err)
 				}
 				err = store.RestoreKVStateStore(ctx, kvchangelog.kvStore, kvchangelog.changelog, kvchangelog.parNum,
 					args.MsgSerde, offset)
 				if err != nil {
-					return nil, nil, err
+					return nil, nil, fmt.Errorf("RestoreKVStateStore2 failed: %v", err)
 				}
 			}
 		}
@@ -126,20 +126,20 @@ func SetupTransactionManager(
 					args.MsgSerde, wschangelog.keyWindowTsSerde,
 					wschangelog.keySerde, wschangelog.valSerde, offset)
 				if err != nil {
-					return nil, nil, err
+					return nil, nil, fmt.Errorf("RestoreWindowStateStore failed: %v", err)
 				}
 			} else {
 				offset, err := createOffsetTopicAndGetOffset(ctx, tm, topic,
 					wschangelog.changelog.NumPartition(), wschangelog.parNum)
 				if err != nil {
-					return nil, nil, err
+					return nil, nil, fmt.Errorf("createOffsetTopicAndGetOffset win failed: %v", err)
 				}
 				err = store.RestoreWindowStateStore(ctx, wschangelog.windowStore,
 					wschangelog.changelog, wschangelog.parNum,
 					args.MsgSerde, wschangelog.keyWindowTsSerde,
 					wschangelog.keySerde, wschangelog.valSerde, offset)
 				if err != nil {
-					return nil, nil, err
+					return nil, nil, fmt.Errorf("RestoreWindowStateStore2 failed: %v", err)
 				}
 			}
 		}

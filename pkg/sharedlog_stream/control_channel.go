@@ -51,7 +51,10 @@ func NewControlChannelManager(env types.Environment,
 	app_id string,
 	serdeFormat commtypes.SerdeFormat,
 ) (*ControlChannelManager, error) {
-	log := NewSharedLogStream(env, app_id+"_"+CONTROL_LOG_TOPIC_NAME)
+	log, err := NewSharedLogStream(env, app_id+"_"+CONTROL_LOG_TOPIC_NAME, serdeFormat)
+	if err != nil {
+		return nil, err
+	}
 	cm := &ControlChannelManager{
 		env:          env,
 		controlLog:   log,

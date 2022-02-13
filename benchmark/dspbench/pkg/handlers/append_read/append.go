@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -32,17 +33,13 @@ func (h *AppendHandler) Call(ctx context.Context, input []byte) ([]byte, error) 
 }
 
 func (h *AppendHandler) process(ctx context.Context) *common.FnOutput {
-	s1 := sharedlog_stream.NewSharedLogStream(h.env, "t1")
-	/*
-		err := s1.InitStream(ctx, 0, false)
-		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
-			}
+	s1, err := sharedlog_stream.NewSharedLogStream(h.env, "t1", commtypes.JSON)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
 		}
-	*/
-
+	}
 	var pushSeqNum []uint64
 	for i := 0; i < 10; i++ {
 		seqNum, err := s1.Push(ctx, []byte(fmt.Sprintf("test %d\n", i)), 0, false)

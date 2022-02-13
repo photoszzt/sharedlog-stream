@@ -63,6 +63,9 @@ func (s *ShardedSharedLogStreamSource) Consume(ctx context.Context, parNum uint8
 			}
 		}
 		for _, rawMsg := range rawMsgs {
+			if len(rawMsg.Payload) == 0 {
+				continue
+			}
 			keyEncoded, valueEncoded, err := s.msgDecoder.Decode(rawMsg.Payload)
 			if err != nil {
 				return nil, fmt.Errorf("fail to decode msg: %v", err)

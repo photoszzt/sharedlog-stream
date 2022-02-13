@@ -153,7 +153,8 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 }
 
 func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig *ntypes.NexMarkConfigInput) *common.FnOutput {
-	stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, inputConfig.TopicName, inputConfig.NumOutPartition)
+	stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, inputConfig.TopicName, inputConfig.NumOutPartition,
+		commtypes.SerdeFormat(inputConfig.SerdeFormat))
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

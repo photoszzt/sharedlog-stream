@@ -46,8 +46,22 @@ func (h *query8Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 }
 
 func Query8(ctx context.Context, env types.Environment, input *common.QueryInput) *common.FnOutput {
-	inputStream := sharedlog_stream.NewSharedLogStream(env, input.InputTopicNames[0])
-	outputStream := sharedlog_stream.NewSharedLogStream(env, input.OutputTopicName)
+	inputStream, err := sharedlog_stream.NewSharedLogStream(env, input.InputTopicNames[0],
+		commtypes.SerdeFormat(input.SerdeFormat))
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+	outputStream, err := sharedlog_stream.NewSharedLogStream(env, input.OutputTopicName,
+		commtypes.SerdeFormat(input.SerdeFormat))
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
 	msgSerde, err := commtypes.GetMsgSerde(input.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{

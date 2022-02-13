@@ -58,7 +58,13 @@ func encode_sentence_event(valSerde commtypes.Serde, msgSerde commtypes.MsgSerde
 }
 
 func (h *wordCountSource) eventGeneration(ctx context.Context, env types.Environment, sp *common.SourceParam) *common.FnOutput {
-	stream := sharedlog_stream.NewSharedLogStream(env, sp.TopicName)
+	stream, err := sharedlog_stream.NewSharedLogStream(env, sp.TopicName, commtypes.SerdeFormat(sp.SerdeFormat))
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{

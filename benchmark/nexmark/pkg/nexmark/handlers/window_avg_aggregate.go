@@ -95,7 +95,7 @@ func (h *windowedAvg) getSrcSink(ctx context.Context, sp *common.QueryInput, msg
 func (h *windowedAvg) getAggProcessor(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde) (*processor.MeteredProcessor, error) {
 	var scSerde commtypes.Serde
 	var vtSerde commtypes.Serde
-	changelog_stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "windowedAvgAgg_changelog", uint8(sp.NumOutPartition))
+	changelog_stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "windowedAvgAgg_changelog", uint8(sp.NumOutPartition), commtypes.SerdeFormat(sp.SerdeFormat))
 	if err != nil {
 		return nil, fmt.Errorf("create changelog stream failed: %v", err)
 	}

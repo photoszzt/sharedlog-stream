@@ -23,6 +23,7 @@ type DumpOutputStreamConfig struct {
 	ValSerde      commtypes.Serde
 	OutputDir     string
 	TopicName     string
+	SerdeFormat   commtypes.SerdeFormat
 	NumPartitions uint8
 }
 
@@ -31,12 +32,14 @@ func GetShardedInputOutputStreams(ctx context.Context,
 	input *common.QueryInput,
 	input_in_tran bool,
 ) (*sharedlog_stream.ShardedSharedLogStream, *sharedlog_stream.ShardedSharedLogStream, error) {
-	inputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[0], uint8(input.NumInPartition))
+	inputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[0], input.NumInPartition,
+		commtypes.SerdeFormat(input.SerdeFormat))
 	if err != nil {
 		return nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
 
 	}
-	outputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.OutputTopicName, uint8(input.NumOutPartition))
+	outputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.OutputTopicName, input.NumOutPartition,
+		commtypes.SerdeFormat(input.SerdeFormat))
 	if err != nil {
 		return nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
 	}
@@ -51,7 +54,7 @@ func GetShardedInputOutputStreams(ctx context.Context,
 }
 
 func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutputStreamConfig) error {
-	log, err := sharedlog_stream.NewShardedSharedLogStream(env, args.TopicName, args.NumPartitions)
+	log, err := sharedlog_stream.NewShardedSharedLogStream(env, args.TopicName, args.NumPartitions, args.SerdeFormat)
 	if err != nil {
 		return err
 	}
