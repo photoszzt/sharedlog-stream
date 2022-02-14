@@ -120,8 +120,8 @@ func SetupTransactionManager(
 		}
 		offsetMap[inputTopicName] = offset
 	}
+	debug.Assert(args.MsgSerde != nil, "args's msg serde should not be nil")
 	if args.KVChangelogs != nil {
-		debug.Assert(args.MsgSerde != nil, "args's msg serde should not be nil")
 		for _, kvchangelog := range args.KVChangelogs {
 			topic := kvchangelog.changelog.TopicName()
 			if offset, ok := offsetMap[topic]; ok {
@@ -148,7 +148,6 @@ func SetupTransactionManager(
 		}
 	}
 	if args.WindowStoreChangelogs != nil {
-		debug.Assert(args.MsgSerde != nil, "args's msg serde should not be nil")
 		for _, wschangelog := range args.WindowStoreChangelogs {
 			topic := wschangelog.changelog.TopicName()
 			debug.Assert(wschangelog.valSerde != nil, "val serde should not be nil")

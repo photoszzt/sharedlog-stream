@@ -37,7 +37,6 @@ func NewAuctionsByIDHandler(env types.Environment) types.FuncHandler {
 type auctionsByIDProcessArgs struct {
 	src             *processor.MeteredSource
 	sink            *processor.MeteredSink
-	sinkKeySerde    commtypes.Serde
 	filterAuctions  *processor.MeteredProcessor
 	auctionsByIDMap *processor.MeteredProcessor
 	trackParFunc    sharedlog_stream.TrackKeySubStreamFunc

@@ -20,7 +20,7 @@ func (s NameCityStateIdJSONSerde) Encode(value interface{}) ([]byte, error) {
 }
 
 func (s NameCityStateIdJSONSerde) Decode(value []byte) (interface{}, error) {
-	ncsi := NameCityStateId{}
+	ncsi := &NameCityStateId{}
 	if err := json.Unmarshal(value, ncsi); err != nil {
 		return nil, err
 	}
