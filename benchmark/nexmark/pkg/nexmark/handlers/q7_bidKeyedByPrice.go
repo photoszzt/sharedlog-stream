@@ -54,7 +54,7 @@ type q7BidKeyedByPriceProcessArgs struct {
 	bid             *processor.MeteredProcessor
 	bidKeyedByPrice *processor.MeteredProcessor
 	output_stream   *sharedlog_stream.ShardedSharedLogStream
-	trackParFunc    func([]uint8) error
+	trackParFunc    sharedlog_stream.TrackKeySubStreamFunc
 	parNum          uint8
 	numOutPartition uint8
 }
@@ -115,7 +115,7 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context,
 			}
 			par := parTmp.(uint8)
 			// par := uint8(key % uint64(args.numOutPartition))
-			err = args.trackParFunc([]uint8{par})
+			err = args.trackParFunc(ctx, key, args.sink.KeySerde(), args.sink.TopicName(), par)
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{
 					Success: false,
@@ -168,7 +168,7 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 		output_stream:   output_stream,
 		parNum:          input.ParNum,
 		numOutPartition: input.NumOutPartition,
-		trackParFunc:    sharedlog_stream.DefaultTrackParFunc,
+		trackParFunc:    sharedlog_stream.DefaultTrackSubstreamFunc,
 	}
 
 	task := sharedlog_stream.StreamTask{
@@ -195,7 +195,7 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 			CHashMu:               &h.cHashMu,
 		}
 		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
 				procArgs.(*q7BidKeyedByPriceProcessArgs).trackParFunc = trackParFunc
 			}, &task)
 		if ret != nil && ret.Success {

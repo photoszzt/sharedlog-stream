@@ -179,17 +179,16 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
 	}
+	var ncsiSerde commtypes.Serde
+	if sp.SerdeFormat == uint8(commtypes.JSON) {
+		ncsiSerde = ntypes.NameCityStateIdJSONSerde{}
+	} else {
+		ncsiSerde = ntypes.NameCityStateIdMsgpSerde{}
+	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeyEncoder: commtypes.Uint64Encoder{},
-		ValueEncoder: commtypes.EncoderFunc(func(val interface{}) ([]byte, error) {
-			ret := val.(*ntypes.NameCityStateId)
-			if sp.SerdeFormat == uint8(commtypes.JSON) {
-				return json.Marshal(ret)
-			} else {
-				return ret.MarshalMsg(nil)
-			}
-		}),
-		MsgEncoder: msgSerde,
+		KeySerde:   commtypes.Uint64Serde{},
+		ValueSerde: ncsiSerde,
+		MsgSerde:   msgSerde,
 	}
 
 	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, auctionsConfig))
@@ -204,7 +203,7 @@ type q3JoinTableProcessArgs struct {
 	sink         *processor.MeteredSink
 	pJoinA       JoinWorkerFunc
 	aJoinP       JoinWorkerFunc
-	trackParFunc func([]uint8) error
+	trackParFunc sharedlog_stream.TrackKeySubStreamFunc
 	parNum       uint8
 }
 
@@ -270,7 +269,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		processor.NewTableTableJoinProcessor(personsStore.Name(), personsStore, joiner))
 
 	pJoinA := JoinWorkerFunc(func(c context.Context, m commtypes.Message,
-		sink *processor.MeteredSink, trackParFunc func([]uint8) error,
+		sink *processor.MeteredSink, trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
 	) error {
 		// msg is person
 		_, err := toPersonsTable.ProcessAndReturn(ctx, m)
@@ -285,7 +284,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	})
 
 	aJoinP := JoinWorkerFunc(func(c context.Context, m commtypes.Message,
-		sink *processor.MeteredSink, trackParFunc func([]uint8) error,
+		sink *processor.MeteredSink, trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
 	) error {
 		// msg is auction
 		_, err := toAuctionsTable.ProcessAndReturn(ctx, m)
@@ -308,7 +307,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		aJoinP:       aJoinP,
 		pJoinA:       pJoinA,
 		parNum:       sp.ParNum,
-		trackParFunc: sharedlog_stream.DefaultTrackParFunc,
+		trackParFunc: sharedlog_stream.DefaultTrackSubstreamFunc,
 	}
 
 	task := sharedlog_stream.StreamTask{
@@ -338,7 +337,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			CHashMu:               &h.cHashMu,
 		}
 		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
 				procArgs.(*q3JoinTableProcessArgs).trackParFunc = trackParFunc
 			}, &task)
 		if ret != nil && ret.Success {

@@ -81,17 +81,16 @@ func (h *query3Handler) Query3(ctx context.Context, input *common.QueryInput) *c
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
 	}
+	var ncsiSerde commtypes.Serde
+	if input.SerdeFormat == uint8(commtypes.JSON) {
+		ncsiSerde = ntypes.NameCityStateIdJSONSerde{}
+	} else {
+		ncsiSerde = ntypes.NameCityStateIdMsgpSerde{}
+	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeyEncoder: commtypes.Uint64Encoder{},
-		ValueEncoder: commtypes.EncoderFunc(func(val interface{}) ([]byte, error) {
-			ret := val.(*ntypes.NameCityStateId)
-			if input.SerdeFormat == uint8(commtypes.JSON) {
-				return json.Marshal(ret)
-			} else {
-				return ret.MarshalMsg(nil)
-			}
-		}),
-		MsgEncoder: msgSerde,
+		KeySerde:   commtypes.Uint64Serde{},
+		ValueSerde: ncsiSerde,
+		MsgSerde:   msgSerde,
 	}
 	builder := stream.NewStreamBuilder()
 	inputs := builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream, inConfig))

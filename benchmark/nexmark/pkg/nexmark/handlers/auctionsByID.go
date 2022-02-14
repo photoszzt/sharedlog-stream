@@ -37,9 +37,10 @@ func NewAuctionsByIDHandler(env types.Environment) types.FuncHandler {
 type auctionsByIDProcessArgs struct {
 	src             *processor.MeteredSource
 	sink            *processor.MeteredSink
+	sinkKeySerde    commtypes.Serde
 	filterAuctions  *processor.MeteredProcessor
 	auctionsByIDMap *processor.MeteredProcessor
-	trackParFunc    func([]uint8) error
+	trackParFunc    sharedlog_stream.TrackKeySubStreamFunc
 	parNum          uint8
 }
 
@@ -102,7 +103,7 @@ func (h *auctionsByIDHandler) process(
 				}
 			}
 			par := parTmp.(uint8)
-			err = args.trackParFunc([]uint8{par})
+			err = args.trackParFunc(ctx, k, args.sink.KeySerde(), args.sink.TopicName(), par)
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{
 					Success: false,
@@ -196,7 +197,7 @@ func (h *auctionsByIDHandler) auctionsByID(ctx context.Context, sp *common.Query
 			CHashMu:               &h.cHashMu,
 		}
 		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
 				procArgs.(*auctionsByIDProcessArgs).trackParFunc = trackParFunc
 			}, &task)
 		if ret != nil && ret.Success {

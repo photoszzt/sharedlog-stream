@@ -90,7 +90,7 @@ type wordcountCounterAggProcessArg struct {
 	src           *processor.MeteredSource
 	output_stream *store.MeteredStream
 	counter       *processor.MeteredProcessor
-	trackParFunc  func([]uint8) error
+	trackParFunc  sharedlog_stream.TrackKeySubStreamFunc
 	parNum        uint8
 }
 
@@ -182,7 +182,7 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 			FixedOutParNum:  sp.ParNum,
 		}
 		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
 				procArgs.(*wordcountCounterAggProcessArg).trackParFunc = trackParFunc
 			}, &task)
 		if ret != nil && ret.Success {

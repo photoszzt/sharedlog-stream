@@ -54,7 +54,7 @@ type bidKeyedByAuctionProcessArgs struct {
 	filterBid       *processor.MeteredProcessor
 	selectKey       *processor.MeteredProcessor
 	output_stream   *sharedlog_stream.ShardedSharedLogStream
-	trackParFunc    func([]uint8) error
+	trackParFunc    sharedlog_stream.TrackKeySubStreamFunc
 	parNum          uint8
 	numOutPartition uint8
 }
@@ -118,7 +118,7 @@ func (h *bidKeyedByAuction) process(ctx context.Context,
 			}
 			par := parTmp.(uint8)
 			// par := uint8(key % uint64(args.numOutPartition))
-			err = args.trackParFunc([]uint8{par})
+			err = args.trackParFunc(ctx, key, args.sink.KeySerde(), args.sink.TopicName(), par)
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{
 					Success: false,
@@ -175,7 +175,7 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 		output_stream:   output_stream,
 		parNum:          sp.ParNum,
 		numOutPartition: sp.NumOutPartition,
-		trackParFunc:    sharedlog_stream.DefaultTrackParFunc,
+		trackParFunc:    sharedlog_stream.DefaultTrackSubstreamFunc,
 	}
 
 	task := sharedlog_stream.StreamTask{
@@ -203,7 +203,7 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 			CHashMu:               &h.cHashMu,
 		}
 		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
 				procArgs.(*bidKeyedByAuctionProcessArgs).trackParFunc = trackParFunc
 			}, &task)
 		if ret != nil && ret.Success {

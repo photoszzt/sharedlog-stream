@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -93,13 +94,14 @@ func (h *q8AuctionsBySellerIDHandler) process(
 				}
 			}
 			par := parTmp.(uint8)
-			err = args.trackParFunc([]uint8{par})
+			err = args.trackParFunc(ctx, k, args.sink.KeySerde(), args.sink.TopicName(), par)
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{
 					Success: false,
 					Message: fmt.Sprintf("add topic partition failed: %v\n", err),
 				}
 			}
+			fmt.Fprintf(os.Stderr, "append to %d with msg %v\n", par, changeKeyedMsg[0])
 			err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{
@@ -160,7 +162,7 @@ func (h *q8AuctionsBySellerIDHandler) q8AuctionsBySellerID(ctx context.Context, 
 		filterAuctions:        filterAuctions,
 		auctionsBySellerIDMap: auctionsBySellerIDMap,
 		parNum:                sp.ParNum,
-		trackParFunc:          sharedlog_stream.DefaultTrackParFunc,
+		trackParFunc:          sharedlog_stream.DefaultTrackSubstreamFunc,
 	}
 
 	task := sharedlog_stream.StreamTask{
@@ -187,7 +189,7 @@ func (h *q8AuctionsBySellerIDHandler) q8AuctionsBySellerID(ctx context.Context, 
 			CHashMu:               &h.cHashMu,
 		}
 		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
 				procArgs.(*AuctionsBySellerIDProcessArgs).trackParFunc = trackParFunc
 			}, &task)
 		if ret != nil && ret.Success {

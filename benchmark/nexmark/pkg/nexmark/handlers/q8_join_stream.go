@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
@@ -58,7 +59,7 @@ type q8JoinStreamProcessArgs struct {
 	sink         *processor.MeteredSink
 	pJoinA       JoinWorkerFunc
 	aJoinP       JoinWorkerFunc
-	trackParFunc func([]uint8) error
+	trackParFunc sharedlog_stream.TrackKeySubStreamFunc
 	parNum       uint8
 }
 
@@ -162,9 +163,9 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 		ptSerde = &ntypes.PersonTimeMsgpSerde{}
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeyEncoder:   commtypes.Uint64Encoder{},
-		ValueEncoder: ptSerde,
-		MsgEncoder:   msgSerde,
+		KeySerde:   commtypes.Uint64Serde{},
+		ValueSerde: ptSerde,
+		MsgSerde:   msgSerde,
 	}
 
 	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, auctionsConfig))
@@ -244,6 +245,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 
 	joiner := processor.ValueJoinerWithKeyTsFunc(func(readOnlyKey interface{},
 		leftValue interface{}, rightValue interface{}, leftTs int64, rightTs int64) interface{} {
+		fmt.Fprint(os.Stderr, "get into joiner\n")
 		lv := leftValue.(*ntypes.Event)
 		rv := rightValue.(*ntypes.Event)
 		st := leftTs
@@ -276,7 +278,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	pJoinA := func(c context.Context,
 		m commtypes.Message,
 		sink *processor.MeteredSink,
-		trackParFunc func([]uint8) error,
+		trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
 	) error {
 		_, err := toPersonsWinTab.ProcessAndReturn(ctx, m)
 		if err != nil {
@@ -292,7 +294,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	aJoinP := func(c context.Context,
 		m commtypes.Message,
 		sink *processor.MeteredSink,
-		trackParFunc func([]uint8) error,
+		trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
 	) error {
 		_, err := toAuctionsWindowTab.ProcessAndReturn(ctx, m)
 		if err != nil {
@@ -314,7 +316,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		pJoinA:       pJoinA,
 		aJoinP:       aJoinP,
 		parNum:       sp.ParNum,
-		trackParFunc: sharedlog_stream.DefaultTrackParFunc,
+		trackParFunc: sharedlog_stream.DefaultTrackSubstreamFunc,
 	}
 
 	task := sharedlog_stream.StreamTask{
@@ -369,7 +371,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			CHashMu: &h.cHashMu,
 		}
 		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
 				procArgs.(*q8JoinStreamProcessArgs).trackParFunc = trackParFunc
 			}, &task)
 		if ret != nil && ret.Success {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
@@ -24,20 +25,20 @@ const (
 // each transaction manager manages one topic partition;
 // assume each transactional_id correspond to one output partition
 type TransactionManager struct {
-	serdeFormat           commtypes.SerdeFormat
+	backgroundJobCtx      context.Context
 	msgSerde              commtypes.MsgSerde
 	txnMdSerde            commtypes.Serde
 	topicPartitionSerde   commtypes.Serde
 	txnMarkerSerde        commtypes.Serde
 	offsetRecordSerde     commtypes.Serde
-	backgroundJobCtx      context.Context
 	topicStreams          map[string]store.Stream
 	transactionLog        *SharedLogStream
 	currentTopicPartition map[string]map[uint8]struct{}
 	backgroundJobErrg     *errgroup.Group
 	TransactionalId       string
-	CurrentTaskId         uint64 // 0 is NONE
-	CurrentEpoch          uint16 // 0 is NONE
+	CurrentTaskId         uint64
+	CurrentEpoch          uint16
+	serdeFormat           commtypes.SerdeFormat
 	currentStatus         TransactionState
 }
 
@@ -409,10 +410,16 @@ func (tc *TransactionManager) registerTopicPartitions(ctx context.Context) error
 	return err
 }
 
+func (tc *TransactionManager) checkTopicExistsInTopicStream(topic string) bool {
+	_, ok := tc.topicStreams[topic]
+	return ok
+}
+
 func (tc *TransactionManager) AddTopicPartition(ctx context.Context, topic string, partitions []uint8) error {
 	if tc.currentStatus != BEGIN {
 		return xerrors.Errorf("should begin transaction first")
 	}
+	debug.Assert(tc.checkTopicExistsInTopicStream(topic), fmt.Sprintf("topic %s's stream should be tracked", topic))
 	needToAppendToLog := false
 	parSet, ok := tc.currentTopicPartition[topic]
 	if !ok {
@@ -451,6 +458,8 @@ func (tc *TransactionManager) CreateOffsetTopic(topicToTrack string, numPartitio
 		return err
 	}
 	tc.topicStreams[offsetTopic] = off
+	off.SetTaskId(tc.CurrentTaskId)
+	off.SetTaskEpoch(tc.CurrentEpoch)
 	return nil
 }
 

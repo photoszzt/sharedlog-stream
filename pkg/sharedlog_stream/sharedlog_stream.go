@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"os"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -248,7 +247,7 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 		}
 	}
 	seqNumInSharedLog := s.cursor
-	fmt.Fprintf(os.Stderr, "cursor: %d, tail: %d\n", s.cursor, s.tail)
+	// fmt.Fprintf(os.Stderr, "cursor: %d, tail: %d\n", s.cursor, s.tail)
 	for seqNumInSharedLog < s.tail {
 		// fmt.Fprintf(os.Stderr, "read tag: 0x%x, seqNum: 0x%x\n", tag, seqNumInSharedLog)
 		newCtx, cancel := context.WithTimeout(ctx, kBlockingReadTimeout)

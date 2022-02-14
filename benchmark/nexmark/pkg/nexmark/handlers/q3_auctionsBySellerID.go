@@ -94,7 +94,7 @@ func (h *query3AuctionsBySellerIDHandler) process(
 				}
 			}
 			par := parTmp.(uint8)
-			err = args.trackParFunc([]uint8{par})
+			err = args.trackParFunc(ctx, k, args.sink.KeySerde(), args.sink.TopicName(), par)
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{
 					Success: false,
@@ -119,7 +119,7 @@ type AuctionsBySellerIDProcessArgs struct {
 	sink                  *processor.MeteredSink
 	filterAuctions        *processor.MeteredProcessor
 	auctionsBySellerIDMap *processor.MeteredProcessor
-	trackParFunc          func([]uint8) error
+	trackParFunc          sharedlog_stream.TrackKeySubStreamFunc
 	parNum                uint8
 }
 
@@ -142,9 +142,9 @@ func CommonGetSrcSink(ctx context.Context, sp *common.QueryInput,
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeyEncoder:   commtypes.Uint64Encoder{},
-		ValueEncoder: eventSerde,
-		MsgEncoder:   msgSerde,
+		KeySerde:   commtypes.Uint64Serde{},
+		ValueSerde: eventSerde,
+		MsgSerde:   msgSerde,
 	}
 	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
@@ -203,7 +203,7 @@ func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(
 		filterAuctions:        filterAuctions,
 		auctionsBySellerIDMap: auctionsBySellerIDMap,
 		parNum:                sp.ParNum,
-		trackParFunc:          sharedlog_stream.DefaultTrackParFunc,
+		trackParFunc:          sharedlog_stream.DefaultTrackSubstreamFunc,
 	}
 
 	task := sharedlog_stream.StreamTask{
@@ -231,7 +231,7 @@ func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(
 			CHashMu:               &h.cHashMu,
 		}
 		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
 				procArgs.(*AuctionsBySellerIDProcessArgs).trackParFunc = trackParFunc
 			}, &task)
 		if ret != nil && ret.Success {

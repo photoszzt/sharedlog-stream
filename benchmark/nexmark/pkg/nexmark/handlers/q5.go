@@ -110,9 +110,9 @@ func Query5(ctx context.Context, env types.Environment, input *common.QueryInput
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeyEncoder:   seSerde,
-		ValueEncoder: aucIdCntMaxSerde,
-		MsgEncoder:   msgSerde,
+		KeySerde:   seSerde,
+		ValueSerde: aucIdCntMaxSerde,
+		MsgSerde:   msgSerde,
 	}
 	builder := stream.NewStreamBuilder()
 	inputs := builder.Source("nexmark-src", sharedlog_stream.NewSharedLogStreamSource(inputStream, inConfig))

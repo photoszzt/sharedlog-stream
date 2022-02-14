@@ -72,9 +72,9 @@ func (h *query7Handler) getSrcSink(
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		MsgEncoder:   msgSerde,
-		KeyEncoder:   commtypes.Uint64Encoder{},
-		ValueEncoder: bmSerde,
+		MsgSerde:   msgSerde,
+		KeySerde:   commtypes.Uint64Serde{},
+		ValueSerde: bmSerde,
 	}
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
 	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
@@ -89,7 +89,7 @@ type processQ7ProcessArgs struct {
 	maxPriceBid        *processor.MeteredProcessor
 	transformWithStore *processor.MeteredProcessor
 	filterTime         *processor.MeteredProcessor
-	trackParFunc       func([]uint8) error
+	trackParFunc       sharedlog_stream.TrackKeySubStreamFunc
 	parNum             uint8
 }
 
@@ -273,7 +273,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		maxPriceBid:        maxPriceBid,
 		transformWithStore: transformWithStore,
 		filterTime:         filterTime,
-		trackParFunc:       sharedlog_stream.DefaultTrackParFunc,
+		trackParFunc:       sharedlog_stream.DefaultTrackSubstreamFunc,
 	}
 	task := sharedlog_stream.StreamTask{
 		ProcessFunc: h.process,
@@ -303,7 +303,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 			CHashMu: nil,
 		}
 		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
 				procArgs.(*processQ7ProcessArgs).trackParFunc = trackParFunc
 			}, &task)
 		if ret != nil && ret.Success {

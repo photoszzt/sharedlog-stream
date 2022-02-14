@@ -3,8 +3,6 @@ package sharedlog_stream
 import (
 	"context"
 	"fmt"
-	"hash"
-	"hash/fnv"
 	"os"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -13,23 +11,25 @@ import (
 type ShardedSharedLogStreamSink struct {
 	// pipe         processor.Pipe
 	// pctx         processor.ProcessorContext
-	stream       *ShardedSharedLogStream
-	keyEncoder   commtypes.Encoder
-	valueEncoder commtypes.Encoder
-	msgEncoder   commtypes.MsgEncoder
-	hasher       hash.Hash64
+	stream     *ShardedSharedLogStream
+	keySerde   commtypes.Serde
+	valueSerde commtypes.Serde
+	msgSerde   commtypes.MsgSerde
 }
 
 var _ = processor.Sink(&ShardedSharedLogStreamSink{})
 
 func NewShardedSharedLogStreamSink(stream *ShardedSharedLogStream, config *StreamSinkConfig) *ShardedSharedLogStreamSink {
 	return &ShardedSharedLogStreamSink{
-		stream:       stream,
-		keyEncoder:   config.KeyEncoder,
-		valueEncoder: config.ValueEncoder,
-		msgEncoder:   config.MsgEncoder,
-		hasher:       fnv.New64(),
+		stream:     stream,
+		keySerde:   config.KeySerde,
+		valueSerde: config.ValueSerde,
+		msgSerde:   config.MsgSerde,
 	}
+}
+
+func (sls *ShardedSharedLogStreamSink) TopicName() string {
+	return sls.stream.TopicName()
 }
 
 func (sls *ShardedSharedLogStreamSink) Sink(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
@@ -38,18 +38,18 @@ func (sls *ShardedSharedLogStreamSink) Sink(ctx context.Context, msg commtypes.M
 	}
 	var keyEncoded []byte
 	if msg.Key != nil {
-		fmt.Fprintf(os.Stderr, "sls: %v, key encoder: %v\n", sls, sls.keyEncoder)
-		keyEncodedTmp, err := sls.keyEncoder.Encode(msg.Key)
+		fmt.Fprintf(os.Stderr, "sls: %v, key encoder: %v\n", sls, sls.keySerde)
+		keyEncodedTmp, err := sls.keySerde.Encode(msg.Key)
 		if err != nil {
 			return err
 		}
 		keyEncoded = keyEncodedTmp
 	}
-	valEncoded, err := sls.valueEncoder.Encode(msg.Value)
+	valEncoded, err := sls.valueSerde.Encode(msg.Value)
 	if err != nil {
 		return err
 	}
-	bytes, err := sls.msgEncoder.Encode(keyEncoded, valEncoded)
+	bytes, err := sls.msgSerde.Encode(keyEncoded, valEncoded)
 	if bytes != nil && err == nil {
 		_, err = sls.stream.Push(ctx, bytes, parNum, isControl)
 		if err != nil {
@@ -57,4 +57,8 @@ func (sls *ShardedSharedLogStreamSink) Sink(ctx context.Context, msg commtypes.M
 		}
 	}
 	return err
+}
+
+func (sls *ShardedSharedLogStreamSink) KeySerde() commtypes.Serde {
+	return sls.keySerde
 }

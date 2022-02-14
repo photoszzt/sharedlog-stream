@@ -59,9 +59,9 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		MsgEncoder:   msgSerde,
-		KeyEncoder:   seSerde,
-		ValueEncoder: aucIdCountMaxSerde,
+		MsgSerde:   msgSerde,
+		KeySerde:   seSerde,
+		ValueSerde: aucIdCountMaxSerde,
 	}
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
 	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
@@ -75,7 +75,7 @@ type q5MaxBidProcessArgs struct {
 	src           *processor.MeteredSource
 	sink          *processor.MeteredSink
 	output_stream *sharedlog_stream.ShardedSharedLogStream
-	trackParFunc  func([]uint8) error
+	trackParFunc  sharedlog_stream.TrackKeySubStreamFunc
 	parNum        uint8
 }
 
@@ -243,7 +243,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		sink:          sink,
 		output_stream: output_stream,
 		parNum:        sp.ParNum,
-		trackParFunc:  sharedlog_stream.DefaultTrackParFunc,
+		trackParFunc:  sharedlog_stream.DefaultTrackSubstreamFunc,
 	}
 
 	task := sharedlog_stream.StreamTask{
@@ -271,7 +271,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			CHashMu:               nil,
 		}
 		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
 				procArgs.(*q5MaxBidProcessArgs).trackParFunc = trackParFunc
 			}, &task)
 		if ret != nil && ret.Success {

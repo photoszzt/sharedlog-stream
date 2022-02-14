@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/stream/processor"
@@ -25,7 +26,12 @@ type BaseProcArgs struct {
 	TrackParFunc func([]uint8) error
 }
 
-func DefaultTrackParFunc(u []uint8) error {
+func DefaultTrackSubstreamFunc(ctx context.Context,
+	key interface{},
+	keySerde commtypes.Serde,
+	topicName string,
+	substreamId uint8,
+) error {
 	return nil
 }
 
@@ -45,13 +51,20 @@ func createOffsetTopicAndGetOffset(ctx context.Context, tm *TransactionManager,
 	return offset, nil
 }
 
+type TrackKeySubStreamFunc func(ctx context.Context,
+	key interface{},
+	keySerde commtypes.Serde,
+	topicName string,
+	substreamId uint8,
+) error
+
 func SetupManagersAndProcessTransactional(ctx context.Context,
 	env types.Environment,
 	streamTaskArgs *StreamTaskArgsTransaction,
-	updateProcArgs func(procArgs interface{}, trackParFunc func([]uint8) error),
+	updateProcArgs func(procArgs interface{}, trackParFunc TrackKeySubStreamFunc),
 	task *StreamTask,
 ) *common.FnOutput {
-	tm, trackParFunc, err := SetupTransactionManager(ctx, streamTaskArgs)
+	tm, err := SetupTransactionManager(ctx, streamTaskArgs)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -66,6 +79,19 @@ func SetupManagersAndProcessTransactional(ctx context.Context,
 			Message: err.Error(),
 		}
 	}
+	trackParFunc := func(ctx context.Context,
+		key interface{},
+		keySerde commtypes.Serde,
+		topicName string,
+		substreamId uint8,
+	) error {
+		err := tm.AddTopicPartition(ctx, topicName, []uint8{substreamId})
+		if err != nil {
+			return err
+		}
+		err = cmm.TrackAndAppendKeyMapping(ctx, key, keySerde, substreamId, topicName)
+		return err
+	}
 	updateProcArgs(streamTaskArgs.ProcArgs, trackParFunc)
 	cmm.TrackConsistentHash(streamTaskArgs.CHashMu, streamTaskArgs.CHash)
 	ret := task.ProcessWithTransaction(ctx, tm, cmm, streamTaskArgs)
@@ -75,71 +101,78 @@ func SetupManagersAndProcessTransactional(ctx context.Context,
 func SetupTransactionManager(
 	ctx context.Context,
 	args *StreamTaskArgsTransaction,
-) (*TransactionManager, func([]uint8) error, error) {
+) (*TransactionManager, error) {
 	tm, err := NewTransactionManager(ctx, args.Env, args.TransactionalId,
 		commtypes.SerdeFormat(args.QueryInput.SerdeFormat))
 	if err != nil {
-		return nil, nil, fmt.Errorf("NewTransactionManager failed: %v", err)
+		return nil, fmt.Errorf("NewTransactionManager failed: %v", err)
 	}
 	err = tm.InitTransaction(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("InitTransaction failed: %v", err)
+		return nil, fmt.Errorf("InitTransaction failed: %v", err)
 	}
 	offsetMap := make(map[string]uint64)
 	for _, inputTopicName := range args.QueryInput.InputTopicNames {
 		offset, err := createOffsetTopicAndGetOffset(ctx, tm, inputTopicName,
 			uint8(args.QueryInput.NumInPartition), args.QueryInput.ParNum)
 		if err != nil {
-			return nil, nil, fmt.Errorf("createOffsetTopicAndGetOffset failed: %v", err)
+			return nil, fmt.Errorf("createOffsetTopicAndGetOffset failed: %v", err)
 		}
 		offsetMap[inputTopicName] = offset
 	}
 	if args.KVChangelogs != nil {
+		debug.Assert(args.MsgSerde != nil, "args's msg serde should not be nil")
 		for _, kvchangelog := range args.KVChangelogs {
 			topic := kvchangelog.changelog.TopicName()
 			if offset, ok := offsetMap[topic]; ok {
-				err = store.RestoreKVStateStore(ctx, kvchangelog.kvStore, kvchangelog.changelog, kvchangelog.parNum,
+				err = store.RestoreKVStateStore(ctx,
+					kvchangelog.kvStore,
+					kvchangelog.changelog,
+					kvchangelog.parNum,
 					args.MsgSerde, offset)
 				if err != nil {
-					return nil, nil, fmt.Errorf("RestoreKVStateStore failed: %v", err)
+					return nil, fmt.Errorf("RestoreKVStateStore failed: %v", err)
 				}
 			} else {
 				offset, err := createOffsetTopicAndGetOffset(ctx, tm, topic,
 					kvchangelog.changelog.NumPartition(), kvchangelog.parNum)
 				if err != nil {
-					return nil, nil, fmt.Errorf("createOffsetTopicAndGetOffset kv failed: %v", err)
+					return nil, fmt.Errorf("createOffsetTopicAndGetOffset kv failed: %v", err)
 				}
 				err = store.RestoreKVStateStore(ctx, kvchangelog.kvStore, kvchangelog.changelog, kvchangelog.parNum,
 					args.MsgSerde, offset)
 				if err != nil {
-					return nil, nil, fmt.Errorf("RestoreKVStateStore2 failed: %v", err)
+					return nil, fmt.Errorf("RestoreKVStateStore2 failed: %v", err)
 				}
 			}
 		}
 	}
 	if args.WindowStoreChangelogs != nil {
+		debug.Assert(args.MsgSerde != nil, "args's msg serde should not be nil")
 		for _, wschangelog := range args.WindowStoreChangelogs {
 			topic := wschangelog.changelog.TopicName()
+			debug.Assert(wschangelog.valSerde != nil, "val serde should not be nil")
+			debug.Assert(wschangelog.keySerde != nil, "key serde should not be nil")
 			if offset, ok := offsetMap[topic]; ok {
 				err = store.RestoreWindowStateStore(ctx, wschangelog.windowStore,
 					wschangelog.changelog, wschangelog.parNum,
 					args.MsgSerde, wschangelog.keyWindowTsSerde,
 					wschangelog.keySerde, wschangelog.valSerde, offset)
 				if err != nil {
-					return nil, nil, fmt.Errorf("RestoreWindowStateStore failed: %v", err)
+					return nil, fmt.Errorf("RestoreWindowStateStore failed: %v", err)
 				}
 			} else {
 				offset, err := createOffsetTopicAndGetOffset(ctx, tm, topic,
 					wschangelog.changelog.NumPartition(), wschangelog.parNum)
 				if err != nil {
-					return nil, nil, fmt.Errorf("createOffsetTopicAndGetOffset win failed: %v", err)
+					return nil, fmt.Errorf("createOffsetTopicAndGetOffset win failed: %v", err)
 				}
 				err = store.RestoreWindowStateStore(ctx, wschangelog.windowStore,
 					wschangelog.changelog, wschangelog.parNum,
 					args.MsgSerde, wschangelog.keyWindowTsSerde,
 					wschangelog.keySerde, wschangelog.valSerde, offset)
 				if err != nil {
-					return nil, nil, fmt.Errorf("RestoreWindowStateStore2 failed: %v", err)
+					return nil, fmt.Errorf("RestoreWindowStateStore2 failed: %v", err)
 				}
 			}
 		}
@@ -150,10 +183,7 @@ func SetupTransactionManager(
 		args.Srcs[inputTopicName].SetCursor(offset+1, args.QueryInput.ParNum)
 	}
 
-	trackFunc := func(u []uint8) error {
-		return tm.AddTopicPartition(ctx, args.QueryInput.OutputTopicName, u)
-	}
-	return tm, trackFunc, nil
+	return tm, nil
 }
 
 func UpdateInputStreamCursor(

@@ -55,7 +55,7 @@ type query2ProcessArgs struct {
 	sink          *processor.MeteredSink
 	q2Filter      *processor.MeteredProcessor
 	output_stream *sharedlog_stream.ShardedSharedLogStream
-	trackParFunc  func([]uint8) error
+	trackParFunc  sharedlog_stream.TrackKeySubStreamFunc
 	parNum        uint8
 }
 
@@ -82,7 +82,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		q2Filter:      q2Filter,
 		output_stream: output_stream,
 		parNum:        sp.ParNum,
-		trackParFunc:  sharedlog_stream.DefaultTrackParFunc,
+		trackParFunc:  sharedlog_stream.DefaultTrackSubstreamFunc,
 	}
 	task := sharedlog_stream.StreamTask{
 		ProcessFunc: h.process,
@@ -105,7 +105,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 			CHashMu:               nil,
 		}
 		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
 				procArgs.(*query2ProcessArgs).trackParFunc = trackParFunc
 			}, &task)
 		if ret != nil && ret.Success {

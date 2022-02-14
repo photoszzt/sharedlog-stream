@@ -57,7 +57,7 @@ type q4JoinTableProcessArgs struct {
 	sink         *processor.MeteredSink
 	aJoinB       JoinWorkerFunc
 	bJoinA       JoinWorkerFunc
-	trackParFunc func([]uint8) error
+	trackParFunc sharedlog_stream.TrackKeySubStreamFunc
 	parNum       uint8
 }
 
@@ -160,9 +160,9 @@ func (h *q4JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 		abSerde = &ntypes.AuctionBidMsgpSerde{}
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeyEncoder:   commtypes.Uint64Encoder{},
-		ValueEncoder: abSerde,
-		MsgEncoder:   msgSerde,
+		KeySerde:   commtypes.Uint64Serde{},
+		ValueSerde: abSerde,
+		MsgSerde:   msgSerde,
 	}
 
 	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, auctionsConfig))
@@ -234,7 +234,7 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		processor.NewTableTableJoinProcessor(auctionsStore.Name(), auctionsStore, joiner))
 
 	aJoinB := JoinWorkerFunc(func(c context.Context, m commtypes.Message,
-		sink *processor.MeteredSink, trackParFunc func([]uint8) error,
+		sink *processor.MeteredSink, trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
 	) error {
 		_, err := toAuctionsTable.ProcessAndReturn(ctx, m)
 		if err != nil {
@@ -248,7 +248,7 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 	})
 
 	bJoinA := JoinWorkerFunc(func(c context.Context, m commtypes.Message,
-		sink *processor.MeteredSink, trackParFunc func([]uint8) error,
+		sink *processor.MeteredSink, trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
 	) error {
 		_, err := toBidsTable.ProcessAndReturn(ctx, m)
 		if err != nil {
@@ -270,7 +270,7 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		aJoinB:       aJoinB,
 		bJoinA:       bJoinA,
 		parNum:       sp.ParNum,
-		trackParFunc: sharedlog_stream.DefaultTrackParFunc,
+		trackParFunc: sharedlog_stream.DefaultTrackSubstreamFunc,
 	}
 
 	task := sharedlog_stream.StreamTask{
@@ -297,7 +297,7 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 			CHashMu:               &h.cHashMu,
 		}
 		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
 				procArgs.(*q4JoinTableProcessArgs).trackParFunc = trackParFunc
 			}, &task)
 		if ret != nil && ret.Success {

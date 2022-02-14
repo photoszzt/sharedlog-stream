@@ -37,14 +37,19 @@ type ControlChannelManager struct {
 	controlMetaSerde commtypes.Serde
 	msgSerde         commtypes.MsgSerde
 	controlLog       *SharedLogStream
-	keyMappings      map[string]map[interface{}]map[uint8]struct{}
-	topicStreams     map[string]*ShardedSharedLogStream
-	output_topic     string
-	cHashMu          *sync.RWMutex
-	cHash            *hash.ConsistentHash
-	funcName         string
-	currentEpoch     uint64
-	instanceId       uint8
+
+	kmMu        sync.Mutex
+	keyMappings map[string]map[interface{}]map[uint8]struct{}
+
+	topicStreams map[string]*ShardedSharedLogStream
+	output_topic string
+
+	cHashMu *sync.RWMutex
+	cHash   *hash.ConsistentHash
+
+	funcName     string
+	currentEpoch uint64
+	instanceId   uint8
 }
 
 func NewControlChannelManager(env types.Environment,
@@ -112,7 +117,7 @@ func (cmm *ControlChannelManager) AppendRescaleConfig(ctx context.Context,
 	return err
 }
 
-func (cmm *ControlChannelManager) AppendKeyMapping(
+func (cmm *ControlChannelManager) TrackAndAppendKeyMapping(
 	ctx context.Context,
 	key interface{},
 	keySerde commtypes.Serde,
@@ -123,13 +128,29 @@ func (cmm *ControlChannelManager) AppendKeyMapping(
 	if err != nil {
 		return err
 	}
-	cm := ControlMetadata{
-		Key:         kBytes,
-		SubstreamId: substreamId,
-		Topic:       topic,
-		Epoch:       cmm.currentEpoch,
+	cmm.kmMu.Lock()
+	defer cmm.kmMu.Unlock()
+	subs, ok := cmm.keyMappings[topic]
+	if !ok {
+		subs = make(map[interface{}]map[uint8]struct{})
+		cmm.keyMappings[topic] = subs
 	}
-	err = cmm.appendToControlLog(ctx, &cm)
+	sub, ok := subs[kBytes]
+	if !ok {
+		sub = make(map[uint8]struct{})
+		subs[kBytes] = sub
+	}
+	_, ok = sub[substreamId]
+	if !ok {
+		sub[substreamId] = struct{}{}
+		cm := ControlMetadata{
+			Key:         kBytes,
+			SubstreamId: substreamId,
+			Topic:       topic,
+			Epoch:       cmm.currentEpoch,
+		}
+		err = cmm.appendToControlLog(ctx, &cm)
+	}
 	return err
 }
 
@@ -190,9 +211,22 @@ func (cmm *ControlChannelManager) MonitorControlChannel(
 						}
 					}
 				} else {
-					keySubs := cmm.keyMappings[ctrlMeta.Topic]
-					subs := keySubs[ctrlMeta.Key]
-					subs[ctrlMeta.SubstreamId] = struct{}{}
+					cmm.kmMu.Lock()
+					subs, ok := cmm.keyMappings[ctrlMeta.Topic]
+					if !ok {
+						subs = make(map[interface{}]map[uint8]struct{})
+						cmm.keyMappings[ctrlMeta.Topic] = subs
+					}
+					sub, ok := subs[ctrlMeta.Key]
+					if !ok {
+						sub = make(map[uint8]struct{})
+						subs[ctrlMeta.Key] = sub
+					}
+					_, ok = sub[ctrlMeta.SubstreamId]
+					if !ok {
+						sub[ctrlMeta.SubstreamId] = struct{}{}
+					}
+					cmm.kmMu.Unlock()
 				}
 			}
 		}

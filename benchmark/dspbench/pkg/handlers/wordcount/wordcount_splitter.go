@@ -70,9 +70,9 @@ func getSrcSink(ctx context.Context,
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeyEncoder:   commtypes.StringEncoder{},
-		ValueEncoder: commtypes.StringEncoder{},
-		MsgEncoder:   msgSerde,
+		KeySerde:   commtypes.StringSerde{},
+		ValueSerde: commtypes.StringSerde{},
+		MsgSerde:   msgSerde,
 	}
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
 	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
@@ -84,7 +84,7 @@ type wordcountSplitterProcessArg struct {
 	sink            *processor.MeteredSink
 	output_stream   *sharedlog_stream.ShardedSharedLogStream
 	splitter        processor.FlatMapperFunc
-	trackParFunc    func([]uint8) error
+	trackParFunc    sharedlog_stream.TrackKeySubStreamFunc
 	splitLatencies  []int
 	parNum          uint8
 	numOutPartition uint8
@@ -125,7 +125,7 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context,
 		for _, m := range msgs {
 			hashed := hashKey(m.Key.(string))
 			par := uint8(hashed % uint32(args.numOutPartition))
-			err = args.trackParFunc([]uint8{par})
+			err = args.trackParFunc(ctx, m.Key, args.sink.KeySerde(), args.sink.TopicName(), par)
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{
 					Success: false,
@@ -203,7 +203,7 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 			FixedOutParNum:  0,
 		}
 		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
 				procArgs.(*wordcountSplitterProcessArg).trackParFunc = trackParFunc
 			}, &task)
 		if ret != nil && ret.Success {

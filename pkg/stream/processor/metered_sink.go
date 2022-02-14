@@ -40,5 +40,15 @@ func (s *MeteredSink) Sink(ctx context.Context, msg commtypes.Message, parNum ui
 }
 
 func (s *MeteredSink) GetLatency() []int {
+	s.latMu.Lock()
+	defer s.latMu.Unlock()
 	return s.latencies
+}
+
+func (s *MeteredSink) TopicName() string {
+	return s.sink.TopicName()
+}
+
+func (s *MeteredSink) KeySerde() commtypes.Serde {
+	return s.sink.KeySerde()
 }

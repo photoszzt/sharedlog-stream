@@ -65,9 +65,9 @@ func (h *windowAvgGroupBy) getSrcSink(sp *common.QueryInput,
 	}
 
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		MsgEncoder:   msgSerde,
-		KeyEncoder:   commtypes.Uint64Encoder{},
-		ValueEncoder: eventSerde,
+		MsgSerde:   msgSerde,
+		KeySerde:   commtypes.Uint64Serde{},
+		ValueSerde: eventSerde,
 	}
 
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))

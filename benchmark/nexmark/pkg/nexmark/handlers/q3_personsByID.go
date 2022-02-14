@@ -94,7 +94,7 @@ func (h *query3PersonsByIDHandler) process(
 				}
 			}
 			par := parTmp.(uint8)
-			err = args.trackParFunc([]uint8{par})
+			err = args.trackParFunc(ctx, k, args.sink.KeySerde(), args.sink.TopicName(), par)
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{
 					Success: false,
@@ -134,7 +134,7 @@ type query3PersonsByIDProcessArgs struct {
 	output_stream  *sharedlog_stream.ShardedSharedLogStream
 	filterPerson   *processor.MeteredProcessor
 	personsByIDMap *processor.MeteredProcessor
-	trackParFunc   func([]uint8) error
+	trackParFunc   sharedlog_stream.TrackKeySubStreamFunc
 	parNum         uint8
 }
 
@@ -180,7 +180,7 @@ func (h *query3PersonsByIDHandler) Query3PersonsByID(ctx context.Context, sp *co
 		output_stream:  output_stream,
 		filterPerson:   filterPerson,
 		personsByIDMap: personsByIDMap,
-		trackParFunc:   sharedlog_stream.DefaultTrackParFunc,
+		trackParFunc:   sharedlog_stream.DefaultTrackSubstreamFunc,
 	}
 
 	task := sharedlog_stream.StreamTask{
@@ -207,7 +207,7 @@ func (h *query3PersonsByIDHandler) Query3PersonsByID(ctx context.Context, sp *co
 			CHashMu:               &h.cHashMu,
 		}
 		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
 				procArgs.(*query3PersonsByIDProcessArgs).trackParFunc = trackParFunc
 			}, &task)
 		if ret != nil && ret.Success {

@@ -82,9 +82,9 @@ func (h *windowedAvg) getSrcSink(ctx context.Context, sp *common.QueryInput, msg
 	}
 
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		MsgEncoder:   msgSerde,
-		KeyEncoder:   wkSerde,
-		ValueEncoder: commtypes.Float64Serde{},
+		MsgSerde:   msgSerde,
+		KeySerde:   wkSerde,
+		ValueSerde: commtypes.Float64Serde{},
 	}
 
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))

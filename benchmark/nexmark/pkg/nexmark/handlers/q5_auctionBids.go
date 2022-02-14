@@ -78,9 +78,9 @@ func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		MsgEncoder:   msgSerde,
-		KeyEncoder:   seSerde,
-		ValueEncoder: aucIdCountSerde,
+		MsgSerde:   msgSerde,
+		KeySerde:   seSerde,
+		ValueSerde: aucIdCountSerde,
 	}
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
 	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
@@ -150,7 +150,7 @@ type q5AuctionBidsProcessArg struct {
 	src             *processor.MeteredSource
 	sink            *processor.MeteredSink
 	output_stream   *sharedlog_stream.ShardedSharedLogStream
-	trackParFunc    func([]uint8) error
+	trackParFunc    sharedlog_stream.TrackKeySubStreamFunc
 	parNum          uint8
 	numOutPartition uint8
 }
@@ -215,7 +215,7 @@ func (h *q5AuctionBids) process(ctx context.Context, argsTmp interface{}) (map[s
 			}
 			par := parTmp.(uint8)
 			// fmt.Fprintf(os.Stderr, "key is %s, output to substream %d\n", k.String(), par)
-			err = args.trackParFunc([]uint8{par})
+			err = args.trackParFunc(ctx, k, args.sink.KeySerde(), args.sink.TopicName(), par)
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{
 					Success: false,
@@ -286,7 +286,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		output_stream:   output_stream,
 		parNum:          sp.ParNum,
 		numOutPartition: sp.NumOutPartition,
-		trackParFunc:    sharedlog_stream.DefaultTrackParFunc,
+		trackParFunc:    sharedlog_stream.DefaultTrackSubstreamFunc,
 	}
 
 	task := sharedlog_stream.StreamTask{
@@ -321,7 +321,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			CHashMu:      &h.cHashMu,
 		}
 		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
 				procArgs.(*q5AuctionBidsProcessArg).trackParFunc = trackParFunc
 			}, &task)
 		if ret != nil && ret.Success {

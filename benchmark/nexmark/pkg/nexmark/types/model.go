@@ -11,13 +11,6 @@ import (
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 )
 
-type NameCityStateId struct {
-	Name  string `msg:"name" json:"name"`
-	City  string `msg:"city" json:"city"`
-	State string `msg:"state" json:"state"`
-	ID    uint64 `msg:"id" json:"id"`
-}
-
 type Auction struct {
 	ItemName    string `msg:"itemName" json:"itemName"`
 	Description string `msg:"description" json:"description"`

@@ -73,7 +73,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 
 	procArgs := &query1ProcessArgs{
 		sink:          sink,
-		trackParFunc:  sharedlog_stream.DefaultTrackParFunc,
+		trackParFunc:  sharedlog_stream.DefaultTrackSubstreamFunc,
 		src:           src,
 		filterBid:     filterBid,
 		q1Map:         q1Map,
@@ -101,7 +101,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 			CHashMu:               nil,
 		}
 		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
 				procArgs.(*query1ProcessArgs).trackParFunc = trackParFunc
 			}, &task)
 		if ret != nil && ret.Success {
@@ -132,7 +132,7 @@ type query1ProcessArgs struct {
 	filterBid     *processor.MeteredProcessor
 	q1Map         *processor.MeteredProcessor
 	output_stream *sharedlog_stream.ShardedSharedLogStream
-	trackParFunc  func([]uint8) error
+	trackParFunc  sharedlog_stream.TrackKeySubStreamFunc
 	parNum        uint8
 }
 

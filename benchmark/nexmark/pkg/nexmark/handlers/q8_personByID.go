@@ -107,7 +107,7 @@ func (h *q8PersonsByIDHandler) process(
 				}
 			}
 			par := parTmp.(uint8)
-			err = args.trackParFunc([]uint8{par})
+			err = args.trackParFunc(ctx, k, args.sink.KeySerde(), args.sink.TopicName(), par)
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{
 					Success: false,
@@ -132,7 +132,7 @@ type q8PersonsByIDProcessArgs struct {
 	output_stream  *sharedlog_stream.ShardedSharedLogStream
 	filterPerson   *processor.MeteredProcessor
 	personsByIDMap *processor.MeteredProcessor
-	trackParFunc   func([]uint8) error
+	trackParFunc   sharedlog_stream.TrackKeySubStreamFunc
 	parNum         uint8
 }
 
@@ -174,7 +174,7 @@ func (h *q8PersonsByIDHandler) Q8PersonsByID(ctx context.Context, sp *common.Que
 		filterPerson:   filterPerson,
 		personsByIDMap: personsByIDMap,
 		parNum:         sp.ParNum,
-		trackParFunc:   sharedlog_stream.DefaultTrackParFunc,
+		trackParFunc:   sharedlog_stream.DefaultTrackSubstreamFunc,
 	}
 
 	task := sharedlog_stream.StreamTask{
@@ -202,7 +202,7 @@ func (h *q8PersonsByIDHandler) Q8PersonsByID(ctx context.Context, sp *common.Que
 			CHashMu:               &h.cHashMu,
 		}
 		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc func([]uint8) error) {
+			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
 				procArgs.(*q8PersonsByIDProcessArgs).trackParFunc = trackParFunc
 			}, &task)
 		if ret != nil && ret.Success {

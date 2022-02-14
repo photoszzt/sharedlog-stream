@@ -41,7 +41,8 @@ func getPersonTimeSerde(serdeFormat uint8) (commtypes.Serde, error) {
 	}
 }
 
-type JoinWorkerFunc func(c context.Context, m commtypes.Message, sink *processor.MeteredSink, trackParFunc func([]uint8) error) error
+type JoinWorkerFunc func(c context.Context, m commtypes.Message, sink *processor.MeteredSink,
+	trackParFunc sharedlog_stream.TrackKeySubStreamFunc) error
 
 type joinProcArgs struct {
 	src           *processor.MeteredSource
@@ -50,7 +51,7 @@ type joinProcArgs struct {
 	runner        JoinWorkerFunc
 	offMu         *sync.Mutex
 	currentOffset map[string]uint64
-	trackParFunc  func([]uint8) error
+	trackParFunc  sharedlog_stream.TrackKeySubStreamFunc
 	parNum        uint8
 }
 
@@ -110,7 +111,7 @@ func pushMsgsToSink(
 	cHash *hash.ConsistentHash,
 	cHashMu *sync.RWMutex,
 	msgs []commtypes.Message,
-	trackParFunc func([]uint8) error,
+	trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
 ) error {
 	for _, msg := range msgs {
 		key := msg.Key.(uint64)
@@ -121,7 +122,7 @@ func pushMsgsToSink(
 			return fmt.Errorf("fail to calculate partition")
 		}
 		par := parTmp.(uint8)
-		err := trackParFunc([]uint8{par})
+		err := trackParFunc(ctx, key, sink.KeySerde(), sink.TopicName(), par)
 		if err != nil {
 			return fmt.Errorf("add topic partition failed: %v", err)
 		}
@@ -155,9 +156,9 @@ func getSrcSink(ctx context.Context, sp *common.QueryInput,
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeyEncoder:   commtypes.StringEncoder{},
-		ValueEncoder: eventSerde,
-		MsgEncoder:   msgSerde,
+		KeySerde:   commtypes.StringSerde{},
+		ValueSerde: eventSerde,
+		MsgSerde:   msgSerde,
 	}
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
 	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
@@ -187,9 +188,9 @@ func getSrcSinkUint64Key(
 		ValueDecoder: eventSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		MsgEncoder:   msgSerde,
-		ValueEncoder: eventSerde,
-		KeyEncoder:   commtypes.Uint64Encoder{},
+		MsgSerde:   msgSerde,
+		ValueSerde: eventSerde,
+		KeySerde:   commtypes.Uint64Serde{},
 	}
 
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
