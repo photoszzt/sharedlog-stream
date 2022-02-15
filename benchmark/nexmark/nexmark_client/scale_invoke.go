@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"sync"
 	"time"
 
 	"sharedlog-stream/benchmark/common"
@@ -36,12 +35,8 @@ func scale() {
 		},
 		Timeout: time.Duration(FLAGS_duration*2) * time.Second,
 	}
-
-	var wg sync.WaitGroup
-
 	var response common.FnOutput
-	go configscale.InvokeConfigScale(client, scaleConfig.Config,
+	configscale.InvokeConfigScale(client, scaleConfig.Config,
 		scaleConfig.AppId, FLAGS_faas_gateway, uint8(serdeFormat),
-		&response, &wg)
-	wg.Wait()
+		&response)
 }

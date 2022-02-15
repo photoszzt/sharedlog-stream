@@ -4,16 +4,14 @@ import (
 	"net/http"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sync"
 
 	"github.com/rs/zerolog/log"
 )
 
 func InvokeConfigScale(client *http.Client, config map[string]uint8,
 	appId string, faas_gateway string,
-	serdeFormat uint8, response *common.FnOutput, wg *sync.WaitGroup,
+	serdeFormat uint8, response *common.FnOutput,
 ) {
-	defer wg.Done()
 	url := utils.BuildFunctionUrl(faas_gateway, "scale")
 	csi := &common.ConfigScaleInput{
 		Config:      config,
