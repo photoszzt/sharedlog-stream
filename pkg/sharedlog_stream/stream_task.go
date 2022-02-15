@@ -79,6 +79,28 @@ func SetupManagersAndProcessTransactional(ctx context.Context,
 			Message: err.Error(),
 		}
 	}
+	err = cmm.RestoreMapping(ctx)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+	offsetMap, err := getOffsetMap(ctx, tm, streamTaskArgs)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+	err = restoreStateStore(ctx, tm, streamTaskArgs, offsetMap)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+	setOffsetOnStream(offsetMap, streamTaskArgs)
 	trackParFunc := func(ctx context.Context,
 		key interface{},
 		keySerde commtypes.Serde,
@@ -98,6 +120,87 @@ func SetupManagersAndProcessTransactional(ctx context.Context,
 	return ret
 }
 
+func getOffsetMap(ctx context.Context, tm *TransactionManager, args *StreamTaskArgsTransaction) (map[string]uint64, error) {
+	offsetMap := make(map[string]uint64)
+	for _, inputTopicName := range args.QueryInput.InputTopicNames {
+		offset, err := createOffsetTopicAndGetOffset(ctx, tm, inputTopicName,
+			uint8(args.QueryInput.NumInPartition), args.QueryInput.ParNum)
+		if err != nil {
+			return nil, fmt.Errorf("createOffsetTopicAndGetOffset failed: %v", err)
+		}
+		offsetMap[inputTopicName] = offset
+	}
+	return offsetMap, nil
+}
+
+func setOffsetOnStream(offsetMap map[string]uint64, args *StreamTaskArgsTransaction) {
+	for _, inputTopicName := range args.QueryInput.InputTopicNames {
+		offset := offsetMap[inputTopicName]
+		args.Srcs[inputTopicName].SetCursor(offset+1, args.QueryInput.ParNum)
+	}
+}
+
+func restoreStateStore(ctx context.Context, tm *TransactionManager, args *StreamTaskArgsTransaction, offsetMap map[string]uint64) error {
+	debug.Assert(args.MsgSerde != nil, "args's msg serde should not be nil")
+	if args.KVChangelogs != nil {
+		for _, kvchangelog := range args.KVChangelogs {
+			topic := kvchangelog.changelog.TopicName()
+			if offset, ok := offsetMap[topic]; ok {
+				err := store.RestoreKVStateStore(ctx,
+					kvchangelog.kvStore,
+					kvchangelog.changelog,
+					kvchangelog.parNum,
+					args.MsgSerde, offset)
+				if err != nil {
+					return fmt.Errorf("RestoreKVStateStore failed: %v", err)
+				}
+			} else {
+				offset, err := createOffsetTopicAndGetOffset(ctx, tm, topic,
+					kvchangelog.changelog.NumPartition(), kvchangelog.parNum)
+				if err != nil {
+					return fmt.Errorf("createOffsetTopicAndGetOffset kv failed: %v", err)
+				}
+				err = store.RestoreKVStateStore(ctx, kvchangelog.kvStore, kvchangelog.changelog, kvchangelog.parNum,
+					args.MsgSerde, offset)
+				if err != nil {
+					return fmt.Errorf("RestoreKVStateStore2 failed: %v", err)
+				}
+			}
+		}
+	}
+	if args.WindowStoreChangelogs != nil {
+		for _, wschangelog := range args.WindowStoreChangelogs {
+			topic := wschangelog.changelog.TopicName()
+			debug.Assert(wschangelog.valSerde != nil, "val serde should not be nil")
+			debug.Assert(wschangelog.keySerde != nil, "key serde should not be nil")
+			if offset, ok := offsetMap[topic]; ok {
+				err := store.RestoreWindowStateStore(ctx, wschangelog.windowStore,
+					wschangelog.changelog, wschangelog.parNum,
+					args.MsgSerde, wschangelog.keyWindowTsSerde,
+					wschangelog.keySerde, wschangelog.valSerde, offset)
+				if err != nil {
+					return fmt.Errorf("RestoreWindowStateStore failed: %v", err)
+				}
+			} else {
+				offset, err := createOffsetTopicAndGetOffset(ctx, tm, topic,
+					wschangelog.changelog.NumPartition(), wschangelog.parNum)
+				if err != nil {
+					return fmt.Errorf("createOffsetTopicAndGetOffset win failed: %v", err)
+				}
+				err = store.RestoreWindowStateStore(ctx, wschangelog.windowStore,
+					wschangelog.changelog, wschangelog.parNum,
+					args.MsgSerde, wschangelog.keyWindowTsSerde,
+					wschangelog.keySerde, wschangelog.valSerde, offset)
+				if err != nil {
+					return fmt.Errorf("RestoreWindowStateStore2 failed: %v", err)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 func SetupTransactionManager(
 	ctx context.Context,
 	args *StreamTaskArgsTransaction,
@@ -110,76 +213,6 @@ func SetupTransactionManager(
 	err = tm.InitTransaction(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("InitTransaction failed: %v", err)
-	}
-	offsetMap := make(map[string]uint64)
-	for _, inputTopicName := range args.QueryInput.InputTopicNames {
-		offset, err := createOffsetTopicAndGetOffset(ctx, tm, inputTopicName,
-			uint8(args.QueryInput.NumInPartition), args.QueryInput.ParNum)
-		if err != nil {
-			return nil, fmt.Errorf("createOffsetTopicAndGetOffset failed: %v", err)
-		}
-		offsetMap[inputTopicName] = offset
-	}
-	debug.Assert(args.MsgSerde != nil, "args's msg serde should not be nil")
-	if args.KVChangelogs != nil {
-		for _, kvchangelog := range args.KVChangelogs {
-			topic := kvchangelog.changelog.TopicName()
-			if offset, ok := offsetMap[topic]; ok {
-				err = store.RestoreKVStateStore(ctx,
-					kvchangelog.kvStore,
-					kvchangelog.changelog,
-					kvchangelog.parNum,
-					args.MsgSerde, offset)
-				if err != nil {
-					return nil, fmt.Errorf("RestoreKVStateStore failed: %v", err)
-				}
-			} else {
-				offset, err := createOffsetTopicAndGetOffset(ctx, tm, topic,
-					kvchangelog.changelog.NumPartition(), kvchangelog.parNum)
-				if err != nil {
-					return nil, fmt.Errorf("createOffsetTopicAndGetOffset kv failed: %v", err)
-				}
-				err = store.RestoreKVStateStore(ctx, kvchangelog.kvStore, kvchangelog.changelog, kvchangelog.parNum,
-					args.MsgSerde, offset)
-				if err != nil {
-					return nil, fmt.Errorf("RestoreKVStateStore2 failed: %v", err)
-				}
-			}
-		}
-	}
-	if args.WindowStoreChangelogs != nil {
-		for _, wschangelog := range args.WindowStoreChangelogs {
-			topic := wschangelog.changelog.TopicName()
-			debug.Assert(wschangelog.valSerde != nil, "val serde should not be nil")
-			debug.Assert(wschangelog.keySerde != nil, "key serde should not be nil")
-			if offset, ok := offsetMap[topic]; ok {
-				err = store.RestoreWindowStateStore(ctx, wschangelog.windowStore,
-					wschangelog.changelog, wschangelog.parNum,
-					args.MsgSerde, wschangelog.keyWindowTsSerde,
-					wschangelog.keySerde, wschangelog.valSerde, offset)
-				if err != nil {
-					return nil, fmt.Errorf("RestoreWindowStateStore failed: %v", err)
-				}
-			} else {
-				offset, err := createOffsetTopicAndGetOffset(ctx, tm, topic,
-					wschangelog.changelog.NumPartition(), wschangelog.parNum)
-				if err != nil {
-					return nil, fmt.Errorf("createOffsetTopicAndGetOffset win failed: %v", err)
-				}
-				err = store.RestoreWindowStateStore(ctx, wschangelog.windowStore,
-					wschangelog.changelog, wschangelog.parNum,
-					args.MsgSerde, wschangelog.keyWindowTsSerde,
-					wschangelog.keySerde, wschangelog.valSerde, offset)
-				if err != nil {
-					return nil, fmt.Errorf("RestoreWindowStateStore2 failed: %v", err)
-				}
-			}
-		}
-	}
-
-	for _, inputTopicName := range args.QueryInput.InputTopicNames {
-		offset := offsetMap[inputTopicName]
-		args.Srcs[inputTopicName].SetCursor(offset+1, args.QueryInput.ParNum)
 	}
 
 	return tm, nil
