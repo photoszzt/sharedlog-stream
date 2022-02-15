@@ -15,7 +15,7 @@ const (
 	CONTROL_LOG_TOPIC_NAME = "__control_log"
 )
 
-func UpdateConsistentHash(cHashMu *sync.RWMutex, cHash *hash.ConsistentHash, curNumPar uint8, newNumPar uint8) {
+func updateConsistentHash(cHashMu *sync.RWMutex, cHash *hash.ConsistentHash, curNumPar uint8, newNumPar uint8) {
 	cHashMu.Lock()
 	defer cHashMu.Unlock()
 	if curNumPar > newNumPar {
@@ -250,7 +250,7 @@ func (cmm *ControlChannelManager) MonitorControlChannel(
 					if cmm.cHashMu != nil && cmm.cHash != nil {
 						output_stream := cmm.topicStreams[cmm.output_topic]
 						cur_subs := output_stream.numPartitions
-						UpdateConsistentHash(cmm.cHashMu, cmm.cHash, cur_subs, numSubstreams)
+						updateConsistentHash(cmm.cHashMu, cmm.cHash, cur_subs, numSubstreams)
 					}
 					for topic, stream := range cmm.topicStreams {
 						numSubstreams, ok := ctrlMeta.Config[topic]

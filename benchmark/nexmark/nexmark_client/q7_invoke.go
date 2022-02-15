@@ -39,16 +39,11 @@ func query7() {
 	}
 	q7BidKeyedByPriceInputParams := make([]*common.QueryInput, q7BidKeyedByPriceNodeConfig.NumInstance)
 	for i := uint8(0); i < q7BidKeyedByPriceNodeConfig.NumInstance; i++ {
-		q7BidKeyedByPriceInputParams[i] = &common.QueryInput{
-			Duration:          uint32(FLAGS_duration),
-			InputTopicNames:   []string{q7conf.SrcOutTopic},
-			OutputTopicName:   q7conf.BidKeyedByPriceOutTopic,
-			SerdeFormat:       uint8(serdeFormat),
-			NumInPartition:    q7conf.NumSrcPartition,
-			NumOutPartition:   q7conf.NumInstance,
-			EnableTransaction: FLAGS_tran,
-			CommitEveryMs:     FLAGS_commit_every,
-		}
+		q7BidKeyedByPriceInputParams[i] = NewQueryInput(uint8(serdeFormat))
+		q7BidKeyedByPriceInputParams[i].InputTopicNames = []string{q7conf.SrcOutTopic}
+		q7BidKeyedByPriceInputParams[i].OutputTopicName = q7conf.BidKeyedByPriceOutTopic
+		q7BidKeyedByPriceInputParams[i].NumInPartition = q7conf.NumSrcPartition
+		q7BidKeyedByPriceInputParams[i].NumOutPartition = q7conf.NumInstance
 	}
 	q7BidKeyedByPrice := processor.NewClientNode(q7BidKeyedByPriceNodeConfig)
 
@@ -59,16 +54,12 @@ func query7() {
 	}
 	q7TransInputParams := make([]*common.QueryInput, q7TransNodeConfig.NumInstance)
 	for i := 0; i < int(q7TransNodeConfig.NumInstance); i++ {
-		q7TransInputParams[i] = &common.QueryInput{
-			Duration:          uint32(FLAGS_duration),
-			InputTopicNames:   []string{q7conf.BidKeyedByPriceOutTopic},
-			OutputTopicName:   q7conf.Q7TransOutTopic,
-			SerdeFormat:       uint8(serdeFormat),
-			NumInPartition:    q7conf.NumInstance,
-			NumOutPartition:   q7conf.NumInstance,
-			EnableTransaction: FLAGS_tran,
-			CommitEveryMs:     FLAGS_commit_every,
-		}
+		q7TransInputParams[i] = NewQueryInput(uint8(serdeFormat))
+		q7TransInputParams[i].InputTopicNames = []string{q7conf.BidKeyedByPriceOutTopic}
+		q7TransInputParams[i].OutputTopicName = q7conf.Q7TransOutTopic
+		q7TransInputParams[i].NumInPartition = q7conf.NumInstance
+		q7TransInputParams[i].NumOutPartition = q7conf.NumInstance
+
 	}
 	q7Trans := processor.NewClientNode(q7TransNodeConfig)
 

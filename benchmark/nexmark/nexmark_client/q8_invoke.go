@@ -39,16 +39,11 @@ func query8() {
 	}
 	aucsBySellerIDInputParams := make([]*common.QueryInput, aucsBySellerIDNodeConfig.NumInstance)
 	for i := uint8(0); i < aucsBySellerIDNodeConfig.NumInstance; i++ {
-		aucsBySellerIDInputParams[i] = &common.QueryInput{
-			Duration:          uint32(FLAGS_duration),
-			InputTopicNames:   []string{q8conf.SrcOutTopic},
-			OutputTopicName:   q8conf.AucsBySellerIDOutTopic,
-			SerdeFormat:       uint8(serdeFormat),
-			NumInPartition:    q8conf.NumSrcPartition,
-			NumOutPartition:   q8conf.NumInstance,
-			EnableTransaction: FLAGS_tran,
-			CommitEveryMs:     FLAGS_commit_every,
-		}
+		aucsBySellerIDInputParams[i] = NewQueryInput(uint8(serdeFormat))
+		aucsBySellerIDInputParams[i].InputTopicNames = []string{q8conf.SrcOutTopic}
+		aucsBySellerIDInputParams[i].OutputTopicName = q8conf.AucsBySellerIDOutTopic
+		aucsBySellerIDInputParams[i].NumInPartition = q8conf.NumSrcPartition
+		aucsBySellerIDInputParams[i].NumOutPartition = q8conf.NumInstance
 	}
 	aucsBySellerID := processor.NewClientNode(aucsBySellerIDNodeConfig)
 
@@ -59,16 +54,11 @@ func query8() {
 	}
 	personsByIDInputParams := make([]*common.QueryInput, personsByIDNodeConfig.NumInstance)
 	for i := uint8(0); i < personsByIDNodeConfig.NumInstance; i++ {
-		personsByIDInputParams[i] = &common.QueryInput{
-			Duration:          uint32(FLAGS_duration),
-			InputTopicNames:   []string{q8conf.SrcOutTopic},
-			OutputTopicName:   q8conf.PersonsByIDOutTopic,
-			SerdeFormat:       uint8(serdeFormat),
-			NumInPartition:    q8conf.NumSrcPartition,
-			NumOutPartition:   q8conf.NumInstance,
-			EnableTransaction: FLAGS_tran,
-			CommitEveryMs:     FLAGS_commit_every,
-		}
+		personsByIDInputParams[i] = NewQueryInput(uint8(serdeFormat))
+		personsByIDInputParams[i].InputTopicNames = []string{q8conf.SrcOutTopic}
+		personsByIDInputParams[i].OutputTopicName = q8conf.PersonsByIDOutTopic
+		personsByIDInputParams[i].NumInPartition = q8conf.NumSrcPartition
+		personsByIDInputParams[i].NumOutPartition = q8conf.NumInstance
 	}
 	personsByID := processor.NewClientNode(personsByIDNodeConfig)
 
@@ -79,16 +69,11 @@ func query8() {
 	}
 	joinStreamInputParams := make([]*common.QueryInput, joinStreamNodeConfig.NumInstance)
 	for i := uint8(0); i < joinStreamNodeConfig.NumInstance; i++ {
-		joinStreamInputParams[i] = &common.QueryInput{
-			Duration:          uint32(FLAGS_duration),
-			InputTopicNames:   []string{q8conf.AucsBySellerIDOutTopic, q8conf.PersonsByIDOutTopic},
-			OutputTopicName:   q8conf.JoinStreamOutTopic,
-			SerdeFormat:       uint8(serdeFormat),
-			NumInPartition:    q8conf.NumInstance,
-			NumOutPartition:   q8conf.NumInstance,
-			EnableTransaction: FLAGS_tran,
-			CommitEveryMs:     FLAGS_commit_every,
-		}
+		joinStreamInputParams[i] = NewQueryInput(uint8(serdeFormat))
+		joinStreamInputParams[i].InputTopicNames = []string{q8conf.AucsBySellerIDOutTopic, q8conf.PersonsByIDOutTopic}
+		joinStreamInputParams[i].OutputTopicName = q8conf.JoinStreamOutTopic
+		joinStreamInputParams[i].NumInPartition = q8conf.NumInstance
+		joinStreamInputParams[i].NumOutPartition = q8conf.NumInstance
 	}
 	joinStream := processor.NewClientNode(joinStreamNodeConfig)
 

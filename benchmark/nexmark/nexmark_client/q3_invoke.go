@@ -39,16 +39,11 @@ func query3() {
 	}
 	auctionsBySellerIDInputParams := make([]*common.QueryInput, auctionsBySellerIDNodeConfig.NumInstance)
 	for i := uint8(0); i < auctionsBySellerIDNodeConfig.NumInstance; i++ {
-		auctionsBySellerIDInputParams[i] = &common.QueryInput{
-			Duration:          uint32(FLAGS_duration),
-			InputTopicNames:   []string{q3conf.SrcOutTopic},
-			OutputTopicName:   q3conf.AucsBySellerIDOutTopic,
-			SerdeFormat:       uint8(serdeFormat),
-			NumInPartition:    q3conf.NumSrcPartition,
-			NumOutPartition:   q3conf.NumInstance,
-			EnableTransaction: FLAGS_tran,
-			CommitEveryMs:     FLAGS_commit_every,
-		}
+		auctionsBySellerIDInputParams[i] = NewQueryInput(uint8(serdeFormat))
+		auctionsBySellerIDInputParams[i].InputTopicNames = []string{q3conf.SrcOutTopic}
+		auctionsBySellerIDInputParams[i].OutputTopicName = q3conf.AucsBySellerIDOutTopic
+		auctionsBySellerIDInputParams[i].NumInPartition = q3conf.NumSrcPartition
+		auctionsBySellerIDInputParams[i].NumOutPartition = q3conf.NumInstance
 	}
 	auctionsBySellerID := processor.NewClientNode(auctionsBySellerIDNodeConfig)
 
@@ -59,16 +54,11 @@ func query3() {
 	}
 	personsByIDInputParams := make([]*common.QueryInput, personsByIDNodeConfig.NumInstance)
 	for i := uint8(0); i < personsByIDNodeConfig.NumInstance; i++ {
-		personsByIDInputParams[i] = &common.QueryInput{
-			Duration:          uint32(FLAGS_duration),
-			InputTopicNames:   []string{q3conf.SrcOutTopic},
-			OutputTopicName:   q3conf.PersonsByIDOutTopic,
-			SerdeFormat:       uint8(serdeFormat),
-			NumInPartition:    q3conf.NumSrcPartition,
-			NumOutPartition:   q3conf.NumInstance,
-			EnableTransaction: FLAGS_tran,
-			CommitEveryMs:     FLAGS_commit_every,
-		}
+		personsByIDInputParams[i] = NewQueryInput(uint8(serdeFormat))
+		personsByIDInputParams[i].InputTopicNames = []string{q3conf.SrcOutTopic}
+		personsByIDInputParams[i].OutputTopicName = q3conf.PersonsByIDOutTopic
+		personsByIDInputParams[i].NumInPartition = q3conf.NumSrcPartition
+		personsByIDInputParams[i].NumOutPartition = q3conf.NumInstance
 	}
 	personsByID := processor.NewClientNode(personsByIDNodeConfig)
 
@@ -79,16 +69,12 @@ func query3() {
 	}
 	joinTableInputParams := make([]*common.QueryInput, joinTableNodeConfig.NumInstance)
 	for i := uint8(0); i < joinTableNodeConfig.NumInstance; i++ {
-		joinTableInputParams[i] = &common.QueryInput{
-			Duration:          uint32(FLAGS_duration),
-			InputTopicNames:   []string{q3conf.AucsBySellerIDOutTopic, q3conf.PersonsByIDOutTopic},
-			OutputTopicName:   q3conf.JoinTableOutTopic,
-			SerdeFormat:       uint8(serdeFormat),
-			NumInPartition:    q3conf.NumInstance,
-			NumOutPartition:   q3conf.NumInstance,
-			EnableTransaction: FLAGS_tran,
-			CommitEveryMs:     FLAGS_commit_every,
-		}
+		joinTableInputParams[i] = NewQueryInput(uint8(serdeFormat))
+		joinTableInputParams[i].InputTopicNames = []string{q3conf.AucsBySellerIDOutTopic, q3conf.PersonsByIDOutTopic}
+		joinTableInputParams[i].OutputTopicName = q3conf.JoinTableOutTopic
+		joinTableInputParams[i].NumInPartition = q3conf.NumInstance
+		joinTableInputParams[i].NumOutPartition = q3conf.NumInstance
+
 	}
 	joinTable := processor.NewClientNode(joinTableNodeConfig)
 

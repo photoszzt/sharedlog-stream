@@ -40,16 +40,11 @@ func query1() {
 	}
 	q1InputParams := make([]*common.QueryInput, q1NodeConfig.NumInstance)
 	for i := 0; i < int(q1NodeConfig.NumInstance); i++ {
-		q1InputParams[i] = &common.QueryInput{
-			Duration:          uint32(FLAGS_duration),
-			InputTopicNames:   []string{q1conf.SrcOutTopic},
-			OutputTopicName:   q1conf.SinkOutTopic,
-			SerdeFormat:       uint8(serdeFormat),
-			NumInPartition:    q1conf.NumSrcPartition,
-			NumOutPartition:   q1conf.NumSrcPartition,
-			EnableTransaction: FLAGS_tran,
-			CommitEveryMs:     FLAGS_commit_every,
-		}
+		q1InputParams[i] = NewQueryInput(uint8(serdeFormat))
+		q1InputParams[i].InputTopicNames = []string{q1conf.SrcOutTopic}
+		q1InputParams[i].OutputTopicName = q1conf.SinkOutTopic
+		q1InputParams[i].NumInPartition = q1conf.NumSrcPartition
+		q1InputParams[i].NumOutPartition = q1conf.NumSrcPartition
 	}
 	q1Node := processor.NewClientNode(q1NodeConfig)
 
