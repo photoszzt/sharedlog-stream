@@ -15,12 +15,18 @@ const (
 	CONTROL_LOG_TOPIC_NAME = "__control_log"
 )
 
-func UpdateConsistentHash(cHashMu *sync.RWMutex, cHash *hash.ConsistentHash, numPartition uint8) {
+func UpdateConsistentHash(cHashMu *sync.RWMutex, cHash *hash.ConsistentHash, curNumPar uint8, newNumPar uint8) {
 	cHashMu.Lock()
 	defer cHashMu.Unlock()
-	*cHash = *hash.NewConsistentHash()
-	for i := uint8(0); i < numPartition; i++ {
-		(*cHash).Add(i)
+	if curNumPar > newNumPar {
+		for i := newNumPar; i < curNumPar; i++ {
+			cHash.Remove(i)
+		}
+	}
+	if curNumPar < newNumPar {
+		for i := curNumPar; i < newNumPar; i++ {
+			cHash.Add(i)
+		}
 	}
 }
 
@@ -28,7 +34,7 @@ func SetupConsistentHash(cHashMu *sync.RWMutex, cHash *hash.ConsistentHash, numP
 	cHashMu.Lock()
 	defer cHashMu.Unlock()
 	for i := uint8(0); i < numPartition; i++ {
-		(*cHash).Add(i)
+		cHash.Add(i)
 	}
 }
 
@@ -242,7 +248,9 @@ func (cmm *ControlChannelManager) MonitorControlChannel(
 					}
 					numSubstreams := ctrlMeta.Config[cmm.output_topic]
 					if cmm.cHashMu != nil && cmm.cHash != nil {
-						UpdateConsistentHash(cmm.cHashMu, cmm.cHash, numSubstreams)
+						output_stream := cmm.topicStreams[cmm.output_topic]
+						cur_subs := output_stream.numPartitions
+						UpdateConsistentHash(cmm.cHashMu, cmm.cHash, cur_subs, numSubstreams)
 					}
 					for topic, stream := range cmm.topicStreams {
 						numSubstreams, ok := ctrlMeta.Config[topic]
