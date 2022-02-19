@@ -29,7 +29,7 @@ var (
 	FLAGS_scale_config    string
 )
 
-func invokeSourceFunc(client *http.Client, numOutPartition uint8,
+func invokeSourceFunc(client *http.Client, numOutPartition uint8, topicName string,
 	response *common.FnOutput, wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
@@ -42,7 +42,7 @@ func invokeSourceFunc(client *http.Client, numOutPartition uint8,
 		log.Error().Msgf("serde format is not recognized; default back to JSON")
 		serdeFormat = commtypes.JSON
 	}
-	nexmarkConfig := ntypes.NewNexMarkConfigInput(FLAGS_stream_prefix+"_src", serdeFormat)
+	nexmarkConfig := ntypes.NewNexMarkConfigInput(topicName, serdeFormat)
 	nexmarkConfig.Duration = uint32(FLAGS_duration)
 	nexmarkConfig.FirstEventRate = uint32(FLAGS_tps)
 	nexmarkConfig.NextEventRate = uint32(FLAGS_tps)
@@ -56,41 +56,6 @@ func invokeSourceFunc(client *http.Client, numOutPartition uint8,
 		log.Error().Msgf("source request failed: %s", response.Message)
 	}
 }
-
-/*
-func invokeQuery(client *http.Client, response *common.FnOutput, wg *sync.WaitGroup) {
-	defer wg.Done()
-	queryInput := &common.QueryInput{
-		Duration:        uint32(FLAGS_duration),
-		InputTopicName:  FLAGS_stream_prefix + "_src",
-		OutputTopicName: FLAGS_stream_prefix + "_" + FLAGS_app_name + "_output",
-	}
-	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, FLAGS_app_name)
-	fmt.Printf("func url is %v\n", url)
-	if err := utils.JsonPostRequest(client, url, queryInput, response); err != nil {
-		log.Error().Msgf("%v request failed with json post request returned err: %v", FLAGS_app_name, err)
-	} else if !response.Success {
-		log.Error().Msgf("%v request failed with unsuccess error: %v", FLAGS_app_name, response.Message)
-	}
-	fmt.Fprintf(os.Stderr, "response is %v\n", response)
-}
-
-func generalQuery() {
-	client := &http.Client{
-		Transport: &http.Transport{
-			IdleConnTimeout: 30 * time.Second,
-		},
-		Timeout: time.Duration(FLAGS_duration*2) * time.Second,
-	}
-	var wg sync.WaitGroup
-	var sourceOutput, queryOutput common.FnOutput
-	wg.Add(1)
-	go invokeSourceFunc(client, 0, &sourceOutput, &wg)
-	wg.Add(1)
-	go invokeQuery(client, &queryOutput, &wg)
-	wg.Wait()
-}
-*/
 
 func getSerdeFormat() commtypes.SerdeFormat {
 	var serdeFormat commtypes.SerdeFormat
@@ -119,20 +84,12 @@ func main() {
 	flag.Parse()
 
 	switch FLAGS_app_name {
-	case "windowedAvg":
-		windowedAvg()
-	case "q1":
-		query1()
-	case "q2":
-		query2()
-	case "q3":
-		query3()
-	case "q5":
-		query5()
-	case "q7":
-		query7()
-	case "q8":
-		query8()
+	case "q1", "q2", "q3", "q5", "q7", "q8", "windowedAvg":
+		err := common.Invoke(FLAGS_workload_config, FLAGS_faas_gateway,
+			NewQueryInput(uint8(getSerdeFormat())), invokeSourceFunc)
+		if err != nil {
+			panic(err)
+		}
 	case "scale":
 		scale()
 	default:

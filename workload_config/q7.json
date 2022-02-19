@@ -1,8 +1,26 @@
 {
-    "srcOutTopic": "nexmark_src",
-    "bidKeyedByPriceOutTopic": "bids",
-    "q7TransOutTopic": "nexmark-q7-out",
-    "numSrcPartition": 4,
-    "numSrcInstance": 1,
-    "numInstance": 4
+    "FuncParam": [
+        {
+            "funcName": "nexmark_src",
+            "NumInstance": 1,
+            "OutputTopicName": "nexmark_src"
+        },
+        {
+            "funcName": "q7bidskeyedbyprice",
+            "NumInstance": 4,
+            "InputTopicNames": ["nexmark_src"],
+            "OutputTopicName": "bids"
+        },
+        {
+            "funcName": "query7",
+            "NumInstance": 4,
+            "InputTopicNames": ["bids"],
+            "OutputTopicName": "nexmark-q7-out"
+        }
+    ],
+    "StreamParam": {
+        "nexmark_src": 4,
+        "bids": 4,
+        "nexmark-q7-out": 4
+    }
 }

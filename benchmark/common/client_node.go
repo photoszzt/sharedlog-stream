@@ -1,10 +1,9 @@
-package processor
+package common
 
 import (
 	"fmt"
 	"net/http"
 	"os"
-	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sync"
 	"time"
@@ -49,7 +48,7 @@ func (n *ClientNode) AddChild(node *ClientNode) {
 	n.children = append(n.children, node)
 }
 
-func (n *ClientNode) Invoke(client *http.Client, response *common.FnOutput, wg *sync.WaitGroup, queryInput *common.QueryInput) {
+func (n *ClientNode) Invoke(client *http.Client, response *FnOutput, wg *sync.WaitGroup, queryInput *QueryInput) {
 	defer wg.Done()
 
 	fmt.Fprintf(os.Stderr, "func name is %v\n", n.config.FuncName)

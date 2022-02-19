@@ -1,7 +1,25 @@
 {
-    "srcOutTopic": "nexmark_src",
-    "groupByOutTopic": "grouped_bids",
-    "avgOutTopic": "avg-sink",
-    "numSrcPartition": 5,
-    "numInstance": 5
+    "FuncParam": [
+        {
+            "funcName": "nexmark_src",
+            "NumInstance": 1,
+            "OutputTopicName": "nexmark_src"
+        },
+        {
+            "funcName": "windowavggroupby",
+            "NumInstance": 4,
+            "InputTopicNames": ["nexmark_src"],
+            "OutputTopicName": "grouped_bids"
+        },
+        {
+            "funcName": "windowavgagg",
+            "NumInstance": 4,
+            "InputTopicNames": ["grouped_bids"],
+            "OutputTopicName": "avg-sink"
+        }
+    ],
+    "StreamParam": {
+        "nexmark_src": 4,
+        "nexmark_q1_sink": 4
+    }
 }

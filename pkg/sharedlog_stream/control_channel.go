@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"cs.utexas.edu/zjia/faas/types"
+	"github.com/huandu/skiplist"
 )
 
 const (
@@ -45,7 +46,7 @@ type ControlChannelManager struct {
 	controlLog       *SharedLogStream
 
 	kmMu        sync.Mutex
-	keyMappings map[string]map[interface{}]map[uint8]struct{}
+	keyMappings map[string]*skiplist.SkipList
 
 	topicStreams map[string]*ShardedSharedLogStream
 	output_topic string
@@ -71,7 +72,7 @@ func NewControlChannelManager(env types.Environment,
 		controlLog:   log,
 		currentEpoch: 0,
 		topicStreams: make(map[string]*ShardedSharedLogStream),
-		keyMappings:  map[string]map[interface{}]map[uint8]struct{}{},
+		keyMappings:  make(map[string]*skiplist.SkipList),
 	}
 	if serdeFormat == commtypes.JSON {
 		cm.controlMetaSerde = ControlMetadataJSONSerde{}
@@ -162,13 +163,16 @@ func (cmm *ControlChannelManager) TrackAndAppendKeyMapping(
 	defer cmm.kmMu.Unlock()
 	subs, ok := cmm.keyMappings[topic]
 	if !ok {
-		subs = make(map[interface{}]map[uint8]struct{})
+		subs = skiplist.New(skiplist.Bytes)
 		cmm.keyMappings[topic] = subs
 	}
-	sub, ok := subs[kBytes]
+	subTmp, ok := subs.GetValue(kBytes)
+	var sub map[uint8]struct{}
 	if !ok {
 		sub = make(map[uint8]struct{})
-		subs[kBytes] = sub
+		subs.Set(kBytes, sub)
+	} else {
+		sub = subTmp.(map[uint8]struct{})
 	}
 	_, ok = sub[substreamId]
 	if !ok {
@@ -188,13 +192,16 @@ func (cmm *ControlChannelManager) updateKeyMapping(ctrlMeta *ControlMetadata) {
 	cmm.kmMu.Lock()
 	subs, ok := cmm.keyMappings[ctrlMeta.Topic]
 	if !ok {
-		subs = make(map[interface{}]map[uint8]struct{})
+		subs = skiplist.New(skiplist.Bytes)
 		cmm.keyMappings[ctrlMeta.Topic] = subs
 	}
-	sub, ok := subs[ctrlMeta.Key]
+	subTmp, ok := subs.GetValue(ctrlMeta.Key)
+	var sub map[uint8]struct{}
 	if !ok {
 		sub = make(map[uint8]struct{})
-		subs[ctrlMeta.Key] = sub
+		subs.Set(ctrlMeta.Key, sub)
+	} else {
+		sub = subTmp.(map[uint8]struct{})
 	}
 	_, ok = sub[ctrlMeta.SubstreamId]
 	if !ok {

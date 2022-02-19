@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"os"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 )
@@ -95,17 +96,21 @@ func RestoreKVStateStore(
 		if errors.IsStreamEmptyError(err) {
 			return nil
 		} else if err != nil {
-			return err
+			return fmt.Errorf("ReadNext failed: %v", err)
 		}
 		for _, msg := range msgs {
 			currentOffset = msg.LogSeqNum
+			if msg.Payload == nil {
+				continue
+			}
 			keyBytes, valBytes, err := msgSerde.Decode(msg.Payload)
 			if err != nil {
-				return err
+				fmt.Fprintf(os.Stderr, "msg payload is %v", string(msg.Payload))
+				return fmt.Errorf("MsgSerde decode failed: %v", err)
 			}
 			err = kvstore.Put(ctx, keyBytes, valBytes)
 			if err != nil {
-				return err
+				return fmt.Errorf("kvstore put failed: %v", err)
 			}
 		}
 		if currentOffset == offset {

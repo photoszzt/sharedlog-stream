@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"strings"
 	"sync"
@@ -72,7 +71,7 @@ func main() {
 	splitOutputTopic := "split_out"
 	countOutputTopic := "wc_out"
 
-	splitNodeConfig := &processor.ClientNodeConfig{
+	splitNodeConfig := &common.ClientNodeConfig{
 		FuncName:    "wordcountsplit",
 		GatewayUrl:  FLAGS_faas_gateway,
 		NumInstance: 1,
@@ -91,9 +90,9 @@ func main() {
 			CommitEveryMs:     FLAGS_commit_every,
 		}
 	}
-	split := processor.NewClientNode(splitNodeConfig)
+	split := common.NewClientNode(splitNodeConfig)
 
-	countNodeConfig := &processor.ClientNodeConfig{
+	countNodeConfig := &common.ClientNodeConfig{
 		FuncName:    "wordcountcounter",
 		GatewayUrl:  FLAGS_faas_gateway,
 		NumInstance: numCountInstance,
@@ -124,7 +123,7 @@ func main() {
 			TestParams:        testParams,
 		}
 	}
-	count := processor.NewClientNode(countNodeConfig)
+	count := common.NewClientNode(countNodeConfig)
 
 	client := &http.Client{
 		Transport: &http.Transport{

@@ -1,9 +1,33 @@
 {
-    "numSrcPartition": 4,
-    "numSrcInstance": 1,
-    "numInstance": 4,
-    "srcOutTopic": "nexmark_src",
-    "bidKeyedByAucOutTopic": "bids",
-    "aucBidsOutTopic": "aucBids",
-    "maxBidsOutTopic": "nexmark_q5_sink"
+    "FuncParam": [
+        {
+            "funcName": "nexmark_src",
+            "NumInstance": 1,
+            "OutputTopicName": "nexmark_src"
+        },
+        {
+            "funcName": "q5bidkeyedbyauction",
+            "NumInstance": 4,
+            "InputTopicNames": ["nexmark_src"],
+            "OutputTopicName": "bids"
+        },
+        {
+            "funcName": "q5aucbids",
+            "NumInstance": 4,
+            "InputTopicNames": ["bids"],
+            "OutputTopicName": "aucBids"
+        },
+        {
+            "funcName": "q5maxbid",
+            "NumInstance": 4,
+            "InputTopicNames": ["aucBids"],
+            "OutputTopicName": "nexmark_q5_sink"
+        }
+    ],
+    "StreamParam": {
+        "nexmark_src": 4,
+        "bids": 4,
+        "aucBids": 4,
+        "nexmark_q5_sink": 4
+    }
 }
