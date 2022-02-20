@@ -129,10 +129,19 @@ func (ejd EventJSONSerde) Decode(value []byte) (interface{}, error) {
 func (e *Event) ExtractStreamTime() (int64, error) {
 	switch e.Etype {
 	case PERSON:
+		if e.NewPerson == nil {
+			return 0, fmt.Errorf("new person should not be nil")
+		}
 		return e.NewPerson.DateTime, nil
 	case BID:
+		if e.Bid == nil {
+			return 0, fmt.Errorf("bid should not be nil")
+		}
 		return e.Bid.DateTime, nil
 	case AUCTION:
+		if e.NewAuction == nil {
+			return 0, fmt.Errorf("new auction should not be nil")
+		}
 		return e.NewAuction.DateTime, nil
 	default:
 		return 0, fmt.Errorf("failed to recognize event type")
