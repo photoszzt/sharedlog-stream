@@ -16,4 +16,5 @@ type WindowStore interface {
 	BackwardFetchWithKeyRange(keyFrom KeyT, keyTo KeyT, timeFrom time.Time, timeTo time.Time, iterFunc func(int64, KeyT, ValueT) error) error
 	FetchAll(timeFrom time.Time, timeTo time.Time, iterFunc func(int64, KeyT, ValueT) error) error
 	BackwardFetchAll(timeFrom time.Time, timeTo time.Time, iterFunc func(int64, KeyT, ValueT) error) error
+	IterAll(iterFunc func(int64, KeyT, ValueT) error) error
 }

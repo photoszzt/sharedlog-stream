@@ -229,7 +229,8 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 			}
 		}),
 	}
-	store, err := store.NewInMemoryWindowStoreWithChangelog(tw.MaxSize()+tw.GracePeriodMs(), tw.MaxSize(), mp)
+	store, err := store.NewInMemoryWindowStoreWithChangelog(tw.MaxSize()+tw.GracePeriodMs(),
+		tw.MaxSize(), false, mp)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

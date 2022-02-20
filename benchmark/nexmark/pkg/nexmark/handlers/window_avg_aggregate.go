@@ -130,7 +130,7 @@ func (h *windowedAvg) getAggProcessor(ctx context.Context, sp *common.QueryInput
 	}
 
 	store, err := store.NewInMemoryWindowStoreWithChangelog(
-		timeWindows.MaxSize()+timeWindows.GracePeriodMs(), timeWindows.MaxSize(), winStoreMp)
+		timeWindows.MaxSize()+timeWindows.GracePeriodMs(), timeWindows.MaxSize(), false, winStoreMp)
 	if err != nil {
 		return nil, err
 	}

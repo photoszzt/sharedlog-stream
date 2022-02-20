@@ -15,7 +15,7 @@ type InMemoryWindowStoreWithChangelog struct {
 
 var _ = WindowStore(&InMemoryWindowStoreWithChangelog{})
 
-func NewInMemoryWindowStoreWithChangelog(retensionPeriod int64, windowSize int64, mp *MaterializeParam) (*InMemoryWindowStoreWithChangelog, error) {
+func NewInMemoryWindowStoreWithChangelog(retensionPeriod int64, windowSize int64, retainDuplicates bool, mp *MaterializeParam) (*InMemoryWindowStoreWithChangelog, error) {
 	var ktsSerde commtypes.Serde
 	if mp.SerdeFormat == commtypes.JSON {
 		ktsSerde = commtypes.KeyAndWindowStartTsJSONSerde{}
@@ -25,7 +25,8 @@ func NewInMemoryWindowStoreWithChangelog(retensionPeriod int64, windowSize int64
 		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", mp.SerdeFormat)
 	}
 	return &InMemoryWindowStoreWithChangelog{
-		windowStore:      NewInMemoryWindowStore(mp.StoreName, retensionPeriod, windowSize, false, mp.Comparable),
+		windowStore: NewInMemoryWindowStore(mp.StoreName,
+			retensionPeriod, windowSize, retainDuplicates, mp.Comparable),
 		mp:               mp,
 		keyWindowTsSerde: ktsSerde,
 	}, nil

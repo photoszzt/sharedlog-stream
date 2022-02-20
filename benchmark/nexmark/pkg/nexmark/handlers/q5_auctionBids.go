@@ -130,7 +130,7 @@ func (h *q5AuctionBids) getCountAggProc(sp *common.QueryInput, msgSerde commtype
 	}
 	countWindowStore, err := store.NewInMemoryWindowStoreWithChangelog(
 		hopWindow.MaxSize()+hopWindow.GracePeriodMs(),
-		hopWindow.MaxSize(), countMp,
+		hopWindow.MaxSize(), false, countMp,
 	)
 	if err != nil {
 		return nil, nil, err
