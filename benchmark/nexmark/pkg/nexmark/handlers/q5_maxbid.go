@@ -280,6 +280,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			ret.Latencies["maxBid"] = maxBid.GetLatency()
 			ret.Latencies["stJoin"] = stJoin.GetLatency()
 			ret.Latencies["chooseMaxCnt"] = chooseMaxCnt.GetLatency()
+			ret.Consumed["src"] = src.GetCount()
 		}
 		return ret
 	}
@@ -294,6 +295,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		ret.Latencies["maxBid"] = maxBid.GetLatency()
 		ret.Latencies["stJoin"] = stJoin.GetLatency()
 		ret.Latencies["chooseMaxCnt"] = chooseMaxCnt.GetLatency()
+		ret.Consumed["src"] = src.GetCount()
 	}
 	return ret
 }

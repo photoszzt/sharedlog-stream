@@ -210,6 +210,7 @@ func (h *q8PersonsByIDHandler) Q8PersonsByID(ctx context.Context, sp *common.Que
 			ret.Latencies["sink"] = sink.GetLatency()
 			ret.Latencies["filterPerson"] = filterPerson.GetLatency()
 			ret.Latencies["personsByIDMap"] = personsByIDMap.GetLatency()
+			ret.Consumed["src"] = src.GetCount()
 		}
 		return ret
 	}
@@ -223,6 +224,7 @@ func (h *q8PersonsByIDHandler) Q8PersonsByID(ctx context.Context, sp *common.Que
 		ret.Latencies["sink"] = sink.GetLatency()
 		ret.Latencies["filterPerson"] = filterPerson.GetLatency()
 		ret.Latencies["personsByIDMap"] = personsByIDMap.GetLatency()
+		ret.Consumed["src"] = src.GetCount()
 	}
 	return ret
 }

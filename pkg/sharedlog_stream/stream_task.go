@@ -329,6 +329,7 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 					"e2e": latencies,
 				}
 				ret.Duration = time.Since(startTime).Seconds()
+				ret.Consumed = make(map[string]uint64)
 			}
 			return ret
 		}
@@ -341,6 +342,7 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 		Latencies: map[string][]int{
 			"e2e": latencies,
 		},
+		Consumed: make(map[string]uint64),
 	}
 }
 
@@ -528,6 +530,7 @@ L:
 				ret.Latencies = map[string][]int{
 					"e2e": latencies,
 				}
+				ret.Consumed = make(map[string]uint64)
 				ret.Duration = time.Since(startTime).Seconds()
 			} else {
 				if hasLiveTransaction {
@@ -565,5 +568,6 @@ L:
 		Latencies: map[string][]int{
 			"e2e": latencies,
 		},
+		Consumed: make(map[string]uint64),
 	}
 }

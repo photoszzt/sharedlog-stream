@@ -37,10 +37,11 @@ type DumpInput struct {
 }
 
 type FnOutput struct {
-	Latencies map[string][]int `json:"latencies,omitempty"`
-	Message   string           `json:"message,omitempty"`
-	Duration  float64          `json:"duration,omitempty"`
-	Success   bool             `json:"success"`
+	Latencies map[string][]int  `json:"latencies,omitempty"`
+	Consumed  map[string]uint64 `json:"consumed,omitempty"`
+	Message   string            `json:"message,omitempty"`
+	Duration  float64           `json:"duration,omitempty"`
+	Success   bool              `json:"success"`
 }
 
 type SourceParam struct {

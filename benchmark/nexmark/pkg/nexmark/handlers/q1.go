@@ -109,6 +109,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 			ret.Latencies["sink"] = sink.GetLatency()
 			ret.Latencies["filterBids"] = filterBid.GetLatency()
 			ret.Latencies["q1Map"] = q1Map.GetLatency()
+			ret.Consumed["src"] = src.GetCount()
 		}
 		return ret
 	}
@@ -122,6 +123,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 		ret.Latencies["sink"] = sink.GetLatency()
 		ret.Latencies["filterBids"] = filterBid.GetLatency()
 		ret.Latencies["q1Map"] = q1Map.GetLatency()
+		ret.Consumed["src"] = src.GetCount()
 	}
 	return ret
 }

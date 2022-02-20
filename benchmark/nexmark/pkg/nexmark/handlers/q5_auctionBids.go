@@ -329,6 +329,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			ret.Latencies["sink"] = sink.GetLatency()
 			ret.Latencies["count"] = countProc.GetLatency()
 			ret.Latencies["changeKey"] = groupByAuction.GetLatency()
+			ret.Consumed["src"] = src.GetCount()
 		}
 		return ret
 	}
@@ -343,6 +344,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		ret.Latencies["sink"] = sink.GetLatency()
 		ret.Latencies["count"] = countProc.GetLatency()
 		ret.Latencies["changeKey"] = groupByAuction.GetLatency()
+		ret.Consumed["src"] = src.GetCount()
 	}
 	return ret
 }

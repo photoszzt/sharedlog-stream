@@ -312,6 +312,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 			ret.Latencies["maxPriceBid"] = maxPriceBid.GetLatency()
 			ret.Latencies["transformWithStore"] = transformWithStore.GetLatency()
 			ret.Latencies["filterTime"] = filterTime.GetLatency()
+			ret.Consumed["src"] = src.GetCount()
 		}
 		return ret
 	}
@@ -326,6 +327,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		ret.Latencies["maxPriceBid"] = maxPriceBid.GetLatency()
 		ret.Latencies["transformWithStore"] = transformWithStore.GetLatency()
 		ret.Latencies["filterTime"] = filterTime.GetLatency()
+		ret.Consumed["src"] = src.GetCount()
 	}
 	return ret
 }

@@ -11,6 +11,7 @@ import (
 type MeteredSource struct {
 	src       Source
 	latencies []int
+	count     uint64
 }
 
 var _ = Source(&MeteredSource{})
@@ -29,6 +30,7 @@ func (s *MeteredSource) Consume(ctx context.Context, parNum uint8) ([]commtypes.
 		msgs, err := s.src.Consume(ctx, parNum)
 		elapsed := time.Since(procStart)
 		s.latencies = append(s.latencies, int(elapsed.Microseconds()))
+		s.count += uint64(len(msgs))
 		return msgs, err
 	} else {
 		return s.src.Consume(ctx, parNum)
@@ -37,6 +39,10 @@ func (s *MeteredSource) Consume(ctx context.Context, parNum uint8) ([]commtypes.
 
 func (s *MeteredSource) GetLatency() []int {
 	return s.latencies
+}
+
+func (s *MeteredSource) GetCount() uint64 {
+	return s.count
 }
 
 func (s *MeteredSource) SetCursor(cursor uint64, parNum uint8) {

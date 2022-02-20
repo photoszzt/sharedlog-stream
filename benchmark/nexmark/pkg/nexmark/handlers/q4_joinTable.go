@@ -308,6 +308,8 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 			ret.Latencies["bidsJoinAuctions"] = bidsJoinAuctions.GetLatency()
 			ret.Latencies["auctionsJoinBids"] = auctionsJoinBids.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()
+			ret.Consumed["auctionsSrc"] = auctionsSrc.GetCount()
+			ret.Consumed["bidsSrc"] = bidsSrc.GetCount()
 		}
 		return ret
 	}
@@ -324,6 +326,8 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		ret.Latencies["bidsJoinAuctions"] = bidsJoinAuctions.GetLatency()
 		ret.Latencies["auctionsJoinBids"] = auctionsJoinBids.GetLatency()
 		ret.Latencies["sink"] = sink.GetLatency()
+		ret.Consumed["auctionsSrc"] = auctionsSrc.GetCount()
+		ret.Consumed["bidsSrc"] = bidsSrc.GetCount()
 	}
 	return ret
 }

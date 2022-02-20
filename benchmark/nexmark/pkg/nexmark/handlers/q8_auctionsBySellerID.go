@@ -196,6 +196,7 @@ func (h *q8AuctionsBySellerIDHandler) q8AuctionsBySellerID(ctx context.Context, 
 			ret.Latencies["sink"] = sink.GetLatency()
 			ret.Latencies["filterAuctions"] = filterAuctions.GetLatency()
 			ret.Latencies["auctionsBySellerIDMap"] = auctionsBySellerIDMap.GetLatency()
+			ret.Consumed["src"] = src.GetCount()
 		}
 		return ret
 	}
@@ -209,6 +210,7 @@ func (h *q8AuctionsBySellerIDHandler) q8AuctionsBySellerID(ctx context.Context, 
 		ret.Latencies["sink"] = sink.GetLatency()
 		ret.Latencies["filterAuctions"] = filterAuctions.GetLatency()
 		ret.Latencies["auctionsBySellerIDMap"] = auctionsBySellerIDMap.GetLatency()
+		ret.Consumed["src"] = src.GetCount()
 	}
 	return ret
 }

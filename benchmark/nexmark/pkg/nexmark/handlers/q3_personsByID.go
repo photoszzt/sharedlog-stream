@@ -216,6 +216,7 @@ func (h *query3PersonsByIDHandler) Query3PersonsByID(ctx context.Context, sp *co
 			ret.Latencies["sink"] = sink.GetLatency()
 			ret.Latencies["filterPerson"] = filterPerson.GetLatency()
 			ret.Latencies["personsByIDMap"] = personsByIDMap.GetLatency()
+			ret.Consumed["src"] = src.GetCount()
 		}
 		return ret
 	}
@@ -229,6 +230,7 @@ func (h *query3PersonsByIDHandler) Query3PersonsByID(ctx context.Context, sp *co
 		ret.Latencies["sink"] = sink.GetLatency()
 		ret.Latencies["filterPerson"] = filterPerson.GetLatency()
 		ret.Latencies["personsByIDMap"] = personsByIDMap.GetLatency()
+		ret.Consumed["src"] = src.GetCount()
 	}
 	return ret
 }

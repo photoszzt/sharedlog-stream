@@ -239,6 +239,7 @@ func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(
 			ret.Latencies["sink"] = sink.GetLatency()
 			ret.Latencies["filterAuctions"] = filterAuctions.GetLatency()
 			ret.Latencies["auctionsBySellerIDMap"] = auctionsBySellerIDMap.GetLatency()
+			ret.Consumed["src"] = src.GetCount()
 		}
 		return ret
 	}
@@ -252,6 +253,7 @@ func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(
 		ret.Latencies["sink"] = sink.GetLatency()
 		ret.Latencies["filterAuctions"] = filterAuctions.GetLatency()
 		ret.Latencies["auctionsBySellerIDMap"] = auctionsBySellerIDMap.GetLatency()
+		ret.Consumed["src"] = src.GetCount()
 	}
 	return ret
 }

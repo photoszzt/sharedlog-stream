@@ -155,16 +155,18 @@ func main() {
 
 	wg.Wait()
 	if sourceOutput.Success {
-		common.ProcessThroughputLat("source", sourceOutput.Latencies, sourceOutput.Duration)
+		common.ProcessThroughputLat("source", sourceOutput.Latencies, sourceOutput.Consumed, sourceOutput.Duration)
 	}
 	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
 		if splitOutput[i].Success {
-			common.ProcessThroughputLat(fmt.Sprintf("split %v", i), splitOutput[i].Latencies, splitOutput[i].Duration)
+			common.ProcessThroughputLat(fmt.Sprintf("split %v", i), splitOutput[i].Latencies,
+				splitOutput[i].Consumed, splitOutput[i].Duration)
 		}
 	}
 	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
 		if countOutput[i].Success {
-			common.ProcessThroughputLat(fmt.Sprintf("count %d", i), countOutput[i].Latencies, countOutput[i].Duration)
+			common.ProcessThroughputLat(fmt.Sprintf("count %d", i), countOutput[i].Latencies,
+				countOutput[i].Consumed, countOutput[i].Duration)
 		}
 	}
 

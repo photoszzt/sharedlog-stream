@@ -203,6 +203,7 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 			ret.Latencies["sink"] = sink.GetLatency()
 			ret.Latencies["bid"] = bid.GetLatency()
 			ret.Latencies["bidKeyedByPrice"] = bidKeyedByPrice.GetLatency()
+			ret.Consumed["src"] = src.GetCount()
 		}
 		return ret
 	}
@@ -216,6 +217,7 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 		ret.Latencies["sink"] = sink.GetLatency()
 		ret.Latencies["bid"] = bid.GetLatency()
 		ret.Latencies["bidKeyedByPrice"] = bidKeyedByPrice.GetLatency()
+		ret.Consumed["src"] = src.GetCount()
 	}
 	return ret
 }

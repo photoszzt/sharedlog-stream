@@ -211,6 +211,7 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 			ret.Latencies["sink"] = sink.GetLatency()
 			ret.Latencies["filterBid"] = filterBid.GetLatency()
 			ret.Latencies["selectKey"] = selectKey.GetLatency()
+			ret.Consumed["src"] = src.GetCount()
 		}
 		return ret
 	}
@@ -225,6 +226,7 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 		ret.Latencies["sink"] = sink.GetLatency()
 		ret.Latencies["filterBid"] = filterBid.GetLatency()
 		ret.Latencies["selectKey"] = selectKey.GetLatency()
+		ret.Consumed["src"] = src.GetCount()
 	}
 	return ret
 }
