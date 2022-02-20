@@ -70,7 +70,7 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 			return err
 		}
 		for {
-			fmt.Fprintf(os.Stderr, "before read next\n")
+			// fmt.Fprintf(os.Stderr, "before read next\n")
 			_, rawMsgs, err := log.ReadNext(ctx, i)
 			if errors.IsStreamEmptyError(err) {
 				break

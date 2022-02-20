@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"fmt"
-	"os"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 )
@@ -105,7 +104,7 @@ func RestoreKVStateStore(
 			}
 			keyBytes, valBytes, err := msgSerde.Decode(msg.Payload)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "msg payload is %v", string(msg.Payload))
+				// fmt.Fprintf(os.Stderr, "msg payload is %v", string(msg.Payload))
 				return fmt.Errorf("MsgSerde decode failed: %v", err)
 			}
 			err = kvstore.Put(ctx, keyBytes, valBytes)

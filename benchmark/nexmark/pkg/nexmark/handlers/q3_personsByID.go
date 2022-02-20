@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -101,7 +100,7 @@ func (h *query3PersonsByIDHandler) process(
 					Message: fmt.Sprintf("add topic partition failed: %v\n", err),
 				}
 			}
-			fmt.Fprintf(os.Stderr, "append %v to substream %v\n", changeKeyedMsg[0], par)
+			// fmt.Fprintf(os.Stderr, "append %v to substream %v\n", changeKeyedMsg[0], par)
 			err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{
@@ -157,10 +156,12 @@ func (h *query3PersonsByIDHandler) Query3PersonsByID(ctx context.Context, sp *co
 	filterPerson := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
 		func(msg *commtypes.Message) (bool, error) {
 			event := msg.Value.(*ntypes.Event)
-			fmt.Fprintf(os.Stderr, "input event is %v\n", event)
-			if event.Etype == ntypes.PERSON {
-				fmt.Fprintf(os.Stderr, "person state is %v\n", event.NewPerson.State)
-			}
+			/*
+				fmt.Fprintf(os.Stderr, "input event is %v\n", event)
+				if event.Etype == ntypes.PERSON {
+					fmt.Fprintf(os.Stderr, "person state is %v\n", event.NewPerson.State)
+				}
+			*/
 			return event.Etype == ntypes.PERSON && ((event.NewPerson.State == "OR") ||
 				event.NewPerson.State == "ID" || event.NewPerson.State == "CA"), nil
 		})))

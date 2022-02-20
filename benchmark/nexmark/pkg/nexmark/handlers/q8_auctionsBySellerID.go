@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -101,7 +100,7 @@ func (h *q8AuctionsBySellerIDHandler) process(
 					Message: fmt.Sprintf("add topic partition failed: %v\n", err),
 				}
 			}
-			fmt.Fprintf(os.Stderr, "append to %d with msg %v\n", par, changeKeyedMsg[0])
+			// fmt.Fprintf(os.Stderr, "append to %d with msg %v\n", par, changeKeyedMsg[0])
 			err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
 			if err != nil {
 				return h.currentOffset, &common.FnOutput{

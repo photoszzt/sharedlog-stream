@@ -2,8 +2,6 @@ package sharedlog_stream
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 )
@@ -38,7 +36,7 @@ func (sls *ShardedSharedLogStreamSink) Sink(ctx context.Context, msg commtypes.M
 	}
 	var keyEncoded []byte
 	if msg.Key != nil {
-		fmt.Fprintf(os.Stderr, "sls: %v, key encoder: %v\n", sls, sls.keySerde)
+		// fmt.Fprintf(os.Stderr, "sls: %v, key encoder: %v\n", sls, sls.keySerde)
 		keyEncodedTmp, err := sls.keySerde.Encode(msg.Key)
 		if err != nil {
 			return err

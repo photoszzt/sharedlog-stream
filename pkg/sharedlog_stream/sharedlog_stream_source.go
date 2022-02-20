@@ -2,8 +2,6 @@ package sharedlog_stream
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"time"
 
 	"sharedlog-stream/pkg/errors"
@@ -88,7 +86,7 @@ func (s *SharedLogStreamSource) Consume(ctx context.Context, parNum uint8) ([]co
 					return nil, err
 				}
 			}
-			fmt.Fprintf(os.Stderr, "val encoded is %v\n", valueEncoded)
+			// fmt.Fprintf(os.Stderr, "val encoded is %v\n", valueEncoded)
 			value, err := s.valueDecoder.Decode(valueEncoded)
 			if err != nil {
 				return nil, err
