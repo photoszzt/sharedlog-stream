@@ -82,12 +82,14 @@ func (st *InMemoryKeyValueStore) ApproximateNumEntries() uint64 {
 }
 
 func (st *InMemoryKeyValueStore) Range(from KeyT, to KeyT) KeyValueIterator {
+	if from == nil || to == nil {
+		return NewInMemoryKeyValueForwardIterator(st.store, from, to)
+	}
 	if st.compare(from, to) > 0 {
 		log.Warn().Msgf("Returning empty iterator for invalid key range from > to")
 		return EMPTY_KEY_VALUE_ITER
 	}
 	return NewInMemoryKeyValueForwardIterator(st.store, from, to)
-
 }
 
 func (st *InMemoryKeyValueStore) ReverseRange(from KeyT, to KeyT) KeyValueIterator {
@@ -103,7 +105,7 @@ func (st *InMemoryKeyValueStore) PrefixScan(prefix interface{}, prefixKeyEncoder
 }
 
 type InMemoryKeyValueForwardIterator struct {
-	fromIter treemap.ForwardIterator
+	fromIter *treemap.ForwardIterator
 	toIter   *treemap.ForwardIterator
 }
 
@@ -111,25 +113,25 @@ func NewInMemoryKeyValueForwardIterator(store *treemap.TreeMap, from KeyT, to Ke
 	if from == nil && to == nil {
 		iter := store.Iterator()
 		return InMemoryKeyValueForwardIterator{
-			fromIter: iter,
+			fromIter: &iter,
 			toIter:   nil,
 		}
 	} else if from == nil {
 		iter := store.UpperBound(to)
 		return InMemoryKeyValueForwardIterator{
-			fromIter: iter,
+			fromIter: &iter,
 			toIter:   nil,
 		}
 	} else if to == nil {
 		iter := store.LowerBound(from)
 		return InMemoryKeyValueForwardIterator{
-			fromIter: iter,
+			fromIter: &iter,
 			toIter:   nil,
 		}
 	} else {
 		fromIter, toIter := store.Range(from, to)
 		return InMemoryKeyValueForwardIterator{
-			fromIter: fromIter,
+			fromIter: &fromIter,
 			toIter:   &toIter,
 		}
 	}
