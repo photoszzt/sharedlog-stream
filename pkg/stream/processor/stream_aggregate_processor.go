@@ -47,7 +47,7 @@ func (p *StreamAggregateProcessor) ProcessAndReturn(ctx context.Context, msg com
 		log.Warn().Msgf("skipping record due to null key or value. key=%v, val=%v", msg.Key, msg.Value)
 		return nil, nil
 	}
-	val, ok, err := p.store.Get(msg.Key)
+	val, ok, err := p.store.Get(ctx, msg.Key)
 	if err != nil {
 		return nil, err
 	}

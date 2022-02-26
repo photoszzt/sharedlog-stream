@@ -68,11 +68,12 @@ func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes
 		Changelog:  output_stream,
 		ParNum:     sp.ParNum,
 	}
-	store := store.NewInMemoryKeyValueStoreWithChangelog(mp, func(a, b treemap.Key) int {
+	inMemStore := store.NewInMemoryKeyValueStore(mp.StoreName, func(a, b treemap.Key) int {
 		ka := a.(string)
 		kb := b.(string)
 		return strings.Compare(ka, kb)
 	})
+	store := store.NewKeyValueStoreWithChangelog(mp, inMemStore)
 	// fmt.Fprintf(os.Stderr, "before restore\n")
 	p := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor(store,
 		processor.InitializerFunc(func() interface{} {

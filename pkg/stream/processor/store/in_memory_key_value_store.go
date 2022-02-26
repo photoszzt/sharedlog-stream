@@ -2,12 +2,9 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/treemap"
-
-	"github.com/rs/zerolog/log"
-
-	"golang.org/x/xerrors"
 )
 
 type InMemoryKeyValueStore struct {
@@ -43,7 +40,7 @@ func (st *InMemoryKeyValueStore) IsOpen() bool {
 	return st.open
 }
 
-func (st *InMemoryKeyValueStore) Get(key KeyT) (ValueT, bool, error) {
+func (st *InMemoryKeyValueStore) Get(ctx context.Context, key KeyT) (ValueT, bool, error) {
 	val, ok := st.store.Get(key)
 	return val, ok, nil
 }
@@ -77,135 +74,92 @@ func (st *InMemoryKeyValueStore) Delete(ctx context.Context, key KeyT) error {
 	return nil
 }
 
-func (st *InMemoryKeyValueStore) ApproximateNumEntries() uint64 {
-	return uint64(st.store.Len())
+func (st *InMemoryKeyValueStore) ApproximateNumEntries(ctx context.Context) (uint64, error) {
+	return uint64(st.store.Len()), nil
 }
 
-func (st *InMemoryKeyValueStore) Range(from KeyT, to KeyT) KeyValueIterator {
-	if from == nil || to == nil {
-		return NewInMemoryKeyValueForwardIterator(st.store, from, to)
-	}
+func (st *InMemoryKeyValueStore) Range(from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error {
 	if st.compare(from, to) > 0 {
-		log.Warn().Msgf("Returning empty iterator for invalid key range from > to")
-		return EMPTY_KEY_VALUE_ITER
+		return fmt.Errorf("from should be smaller or equal to to")
 	}
-	return NewInMemoryKeyValueForwardIterator(st.store, from, to)
+	if from == nil && to == nil {
+		it := st.store.Iterator()
+		for ; it.Valid(); it.Next() {
+			err := iterFunc(it.Key(), it.Value())
+			if err != nil {
+				return err
+			}
+		}
+	} else if from == nil && to != nil {
+		it := st.store.UpperBound(to)
+		for ; it.Valid(); it.Next() {
+			err := iterFunc(it.Key(), it.Value())
+			if err != nil {
+				return err
+			}
+		}
+	} else if from != nil && to == nil {
+		it := st.store.LowerBound(from)
+		for ; it.Valid(); it.Next() {
+			err := iterFunc(it.Key(), it.Value())
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		it, end := st.store.Range(from, to)
+		for ; it != end; it.Next() {
+			err := iterFunc(it.Key(), it.Value())
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
-func (st *InMemoryKeyValueStore) ReverseRange(from KeyT, to KeyT) KeyValueIterator {
+func (st *InMemoryKeyValueStore) ReverseRange(from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error {
 	if st.compare(from, to) < 0 {
-		log.Warn().Msgf("Returning empty iterator for invalid key range from > to")
-		return EMPTY_KEY_VALUE_ITER
+		return fmt.Errorf("from > to")
 	}
-	return NewInMemoryKeyValueReverseIterator(st.store, from, to)
+	if from == nil && to == nil {
+		it := st.store.Reverse()
+		for ; it.Valid(); it.Next() {
+			err := iterFunc(it.Key(), it.Value())
+			if err != nil {
+				return err
+			}
+		}
+	} else if from == nil && to != nil {
+		it := st.store.ReverseUpperBound(to)
+		for ; it.Valid(); it.Next() {
+			err := iterFunc(it.Key(), it.Value())
+			if err != nil {
+				return err
+			}
+		}
+	} else if from != nil && to == nil {
+		it := st.store.ReverseLowerBound(from)
+		for ; it.Valid(); it.Next() {
+			err := iterFunc(it.Key(), it.Value())
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		it, end := st.store.ReverseRange(from, to)
+		for ; it != end; it.Next() {
+			err := iterFunc(it.Key(), it.Value())
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
-func (st *InMemoryKeyValueStore) PrefixScan(prefix interface{}, prefixKeyEncoder commtypes.Encoder) KeyValueIterator {
+func (st *InMemoryKeyValueStore) PrefixScan(prefix interface{}, prefixKeyEncoder commtypes.Encoder,
+	iterFunc func(KeyT, ValueT) error,
+) error {
 	panic("not implemented")
-}
-
-type InMemoryKeyValueForwardIterator struct {
-	fromIter *treemap.ForwardIterator
-	toIter   *treemap.ForwardIterator
-}
-
-func NewInMemoryKeyValueForwardIterator(store *treemap.TreeMap, from KeyT, to KeyT) InMemoryKeyValueForwardIterator {
-	if from == nil && to == nil {
-		iter := store.Iterator()
-		return InMemoryKeyValueForwardIterator{
-			fromIter: &iter,
-			toIter:   nil,
-		}
-	} else if from == nil {
-		iter := store.UpperBound(to)
-		return InMemoryKeyValueForwardIterator{
-			fromIter: &iter,
-			toIter:   nil,
-		}
-	} else if to == nil {
-		iter := store.LowerBound(from)
-		return InMemoryKeyValueForwardIterator{
-			fromIter: &iter,
-			toIter:   nil,
-		}
-	} else {
-		fromIter, toIter := store.Range(from, to)
-		return InMemoryKeyValueForwardIterator{
-			fromIter: &fromIter,
-			toIter:   &toIter,
-		}
-	}
-}
-
-func (fi InMemoryKeyValueForwardIterator) HasNext() bool {
-	return fi.fromIter.Valid()
-}
-
-func (fi InMemoryKeyValueForwardIterator) Next() KeyValue {
-	fi.fromIter.Next()
-	return KeyValue{
-		Key:   fi.fromIter.Key(),
-		Value: fi.fromIter.Value(),
-	}
-}
-
-func (fi InMemoryKeyValueForwardIterator) Close() {
-}
-
-func (fi InMemoryKeyValueForwardIterator) PeekNextKey() KeyT {
-	log.Fatal().Err(xerrors.New("PeekNextKey is not supported"))
-	return nil
-}
-
-type InMemoryKeyValueReverseIterator struct {
-	fromIter treemap.ReverseIterator
-	toIter   *treemap.ReverseIterator
-}
-
-func NewInMemoryKeyValueReverseIterator(store *treemap.TreeMap, from KeyT, to KeyT) InMemoryKeyValueReverseIterator {
-	if from == nil && to == nil {
-		iter := store.Reverse()
-		return InMemoryKeyValueReverseIterator{
-			fromIter: iter,
-			toIter:   nil,
-		}
-	} else if from == nil {
-		iter := store.ReverseUpperBound(to)
-		return InMemoryKeyValueReverseIterator{
-			fromIter: iter,
-			toIter:   nil,
-		}
-	} else if to == nil {
-		iter := store.ReverseLowerBound(from)
-		return InMemoryKeyValueReverseIterator{
-			fromIter: iter,
-			toIter:   nil,
-		}
-	} else {
-		fromIter, toIter := store.ReverseRange(from, to)
-		return InMemoryKeyValueReverseIterator{
-			fromIter: fromIter,
-			toIter:   &toIter,
-		}
-	}
-}
-
-func (fi InMemoryKeyValueReverseIterator) HasNext() bool {
-	return fi.fromIter.Valid()
-}
-
-func (fi InMemoryKeyValueReverseIterator) Next() KeyValue {
-	fi.fromIter.Next()
-	return KeyValue{
-		Key:   fi.fromIter.Key(),
-		Value: fi.fromIter.Value(),
-	}
-}
-
-func (fi InMemoryKeyValueReverseIterator) Close() {
-}
-
-func (fi InMemoryKeyValueReverseIterator) PeekNextKey() KeyT {
-	log.Fatal().Err(xerrors.New("PeekNextKey is not supported"))
-	return nil
 }

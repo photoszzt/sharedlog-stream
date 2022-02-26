@@ -60,6 +60,10 @@ func NewInMemoryWindowStore(name string, retentionPeriod int64, windowSize int64
 	}
 }
 
+func (st *InMemoryWindowStore) IsOpen() bool {
+	return true
+}
+
 func (st *InMemoryWindowStore) updateSeqnumForDups() {
 	if st.retainDuplicates {
 		st.seqNumMu.Lock()

@@ -7,6 +7,7 @@ import (
 
 type StateStore interface {
 	Name() string
+	IsOpen() bool
 }
 
 type MaterializeParam struct {

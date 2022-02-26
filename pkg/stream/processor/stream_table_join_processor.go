@@ -56,7 +56,7 @@ func (p *StreamTableJoinProcessor) ProcessAndReturn(ctx context.Context, msg com
 		log.Warn().Msgf("Skipping record due to null join key or value. key=%v, val=%v", msg.Key, msg.Value)
 		return nil, nil
 	}
-	val2, ok, err := p.store.Get(msg.Key)
+	val2, ok, err := p.store.Get(ctx, msg.Key)
 	if err != nil {
 		return nil, err
 	}

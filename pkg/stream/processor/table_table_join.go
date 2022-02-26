@@ -56,7 +56,7 @@ func (p *TableTableJoinProcessor) ProcessAndReturn(ctx context.Context, msg comm
 		log.Warn().Msgf("Skipping record due to null join key. key=%v", msg.Key)
 		return nil, nil
 	}
-	val2, ok, err := p.store.Get(msg.Key)
+	val2, ok, err := p.store.Get(ctx, msg.Key)
 	if err != nil {
 		return nil, err
 	}

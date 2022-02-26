@@ -37,6 +37,10 @@ func (st *InMemoryWindowStoreWithChangelog) Init(ctx StoreContext) {
 	ctx.RegisterWindowStore(st)
 }
 
+func (st *InMemoryWindowStoreWithChangelog) IsOpen() bool {
+	return true
+}
+
 func (st *InMemoryWindowStoreWithChangelog) MaterializeParam() *MaterializeParam {
 	return st.mp
 }

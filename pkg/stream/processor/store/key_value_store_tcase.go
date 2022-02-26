@@ -58,7 +58,7 @@ func ShouldNotIncludeDeletedFromRangeResult(ctx context.Context, store KeyValueS
 	expected := make(map[int]string)
 	expected[2] = "two"
 
-	val2, ok, err := store.Get(2)
+	val2, ok, err := store.Get(ctx, 2)
 	if err != nil {
 		t.Fatalf("fail to get 2: %v", err)
 	}
@@ -85,7 +85,7 @@ func ShouldDeleteIfSerializedValueIsNull(ctx context.Context, store KeyValueStor
 	expected := make(map[int]string)
 	expected[2] = "two"
 
-	val2, ok, err := store.Get(2)
+	val2, ok, err := store.Get(ctx, 2)
 	if err != nil {
 		t.Fatalf("fail to get 2: %v", err)
 	}

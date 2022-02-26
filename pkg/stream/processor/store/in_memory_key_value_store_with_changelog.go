@@ -3,39 +3,38 @@ package store
 import (
 	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/treemap"
 )
 
-type InMemoryKeyValueStoreWithChangelog struct {
-	kvstore *InMemoryKeyValueStore
+type KeyValueStoreWithChangelog struct {
+	kvstore KeyValueStore
 	mp      *MaterializeParam
 }
 
-func NewInMemoryKeyValueStoreWithChangelog(mp *MaterializeParam, compare func(a, b treemap.Key) int) *InMemoryKeyValueStoreWithChangelog {
-	return &InMemoryKeyValueStoreWithChangelog{
-		kvstore: NewInMemoryKeyValueStore(mp.StoreName, compare),
+func NewKeyValueStoreWithChangelog(mp *MaterializeParam, store KeyValueStore) *KeyValueStoreWithChangelog {
+	return &KeyValueStoreWithChangelog{
+		kvstore: store,
 		mp:      mp,
 	}
 }
 
-func (st *InMemoryKeyValueStoreWithChangelog) Init(sctx StoreContext) {
+func (st *KeyValueStoreWithChangelog) Init(sctx StoreContext) {
 	st.kvstore.Init(sctx)
 	sctx.RegisterKeyValueStore(st)
 }
 
-func (st *InMemoryKeyValueStoreWithChangelog) Name() string {
+func (st *KeyValueStoreWithChangelog) Name() string {
 	return st.mp.StoreName
 }
 
-func (st *InMemoryKeyValueStoreWithChangelog) IsOpen() bool {
+func (st *KeyValueStoreWithChangelog) IsOpen() bool {
 	return st.kvstore.IsOpen()
 }
 
-func (st *InMemoryKeyValueStoreWithChangelog) Get(key KeyT) (ValueT, bool, error) {
-	return st.kvstore.Get(key)
+func (st *KeyValueStoreWithChangelog) Get(ctx context.Context, key KeyT) (ValueT, bool, error) {
+	return st.kvstore.Get(ctx, key)
 }
 
-func (st *InMemoryKeyValueStoreWithChangelog) Put(ctx context.Context, key KeyT, value ValueT) error {
+func (st *KeyValueStoreWithChangelog) Put(ctx context.Context, key KeyT, value ValueT) error {
 	keyBytes, err := st.mp.KeySerde.Encode(key)
 	if err != nil {
 		return err
@@ -56,8 +55,8 @@ func (st *InMemoryKeyValueStoreWithChangelog) Put(ctx context.Context, key KeyT,
 	return err
 }
 
-func (st *InMemoryKeyValueStoreWithChangelog) PutIfAbsent(ctx context.Context, key KeyT, value ValueT) (ValueT, error) {
-	origVal, exists, err := st.kvstore.Get(key)
+func (st *KeyValueStoreWithChangelog) PutIfAbsent(ctx context.Context, key KeyT, value ValueT) (ValueT, error) {
+	origVal, exists, err := st.kvstore.Get(ctx, key)
 	if err != nil {
 		return nil, err
 	}
@@ -78,13 +77,16 @@ func (st *InMemoryKeyValueStoreWithChangelog) PutIfAbsent(ctx context.Context, k
 		if err != nil {
 			return nil, err
 		}
-		st.kvstore.store.Set(key, value)
+		err = st.kvstore.Put(ctx, key, value)
+		if err != nil {
+			return nil, err
+		}
 		return nil, nil
 	}
 	return origVal, nil
 }
 
-func (st *InMemoryKeyValueStoreWithChangelog) PutAll(ctx context.Context, entries []*commtypes.Message) error {
+func (st *KeyValueStoreWithChangelog) PutAll(ctx context.Context, entries []*commtypes.Message) error {
 	for _, msg := range entries {
 		err := st.Put(ctx, msg.Key, msg.Value)
 		if err != nil {
@@ -94,7 +96,7 @@ func (st *InMemoryKeyValueStoreWithChangelog) PutAll(ctx context.Context, entrie
 	return nil
 }
 
-func (st *InMemoryKeyValueStoreWithChangelog) Delete(ctx context.Context, key KeyT) error {
+func (st *KeyValueStoreWithChangelog) Delete(ctx context.Context, key KeyT) error {
 	keyBytes, err := st.mp.KeySerde.Encode(key)
 	if err != nil {
 		return err
@@ -110,18 +112,21 @@ func (st *InMemoryKeyValueStoreWithChangelog) Delete(ctx context.Context, key Ke
 	return st.kvstore.Delete(ctx, key)
 }
 
-func (st *InMemoryKeyValueStoreWithChangelog) ApproximateNumEntries() uint64 {
-	return st.kvstore.ApproximateNumEntries()
+func (st *KeyValueStoreWithChangelog) ApproximateNumEntries(ctx context.Context) (uint64, error) {
+	return st.kvstore.ApproximateNumEntries(ctx)
 }
 
-func (st *InMemoryKeyValueStoreWithChangelog) Range(from KeyT, to KeyT) KeyValueIterator {
-	return st.kvstore.Range(from, to)
+func (st *KeyValueStoreWithChangelog) Range(from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error {
+	return st.kvstore.Range(from, to, iterFunc)
 }
 
-func (st *InMemoryKeyValueStoreWithChangelog) ReverseRange(from KeyT, to KeyT) KeyValueIterator {
-	return st.kvstore.ReverseRange(from, to)
+func (st *KeyValueStoreWithChangelog) ReverseRange(from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error {
+	return st.kvstore.ReverseRange(from, to, iterFunc)
 }
 
-func (st *InMemoryKeyValueStoreWithChangelog) PrefixScan(prefix interface{}, prefixKeyEncoder commtypes.Encoder) KeyValueIterator {
+func (st *KeyValueStoreWithChangelog) PrefixScan(prefix interface{},
+	prefixKeyEncoder commtypes.Encoder,
+	iterFunc func(KeyT, ValueT) error,
+) error {
 	panic("not implemented")
 }
