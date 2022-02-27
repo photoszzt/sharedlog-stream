@@ -6,14 +6,16 @@ import (
 )
 
 type KeyValueStoreWithChangelog struct {
-	kvstore KeyValueStore
-	mp      *MaterializeParam
+	kvstore   KeyValueStore
+	mp        *MaterializeParam
+	use_bytes bool
 }
 
-func NewKeyValueStoreWithChangelog(mp *MaterializeParam, store KeyValueStore) *KeyValueStoreWithChangelog {
+func NewKeyValueStoreWithChangelog(mp *MaterializeParam, store KeyValueStore, use_bytes bool) *KeyValueStoreWithChangelog {
 	return &KeyValueStoreWithChangelog{
-		kvstore: store,
-		mp:      mp,
+		kvstore:   store,
+		mp:        mp,
+		use_bytes: use_bytes,
 	}
 }
 
@@ -31,6 +33,18 @@ func (st *KeyValueStoreWithChangelog) IsOpen() bool {
 }
 
 func (st *KeyValueStoreWithChangelog) Get(ctx context.Context, key KeyT) (ValueT, bool, error) {
+	if st.use_bytes {
+		keyBytes, err := st.mp.KeySerde.Encode(key)
+		if err != nil {
+			return nil, false, err
+		}
+		valBytes, ok, err := st.kvstore.Get(ctx, keyBytes)
+		if err != nil {
+			return nil, ok, err
+		}
+		val, err := st.mp.ValueSerde.Decode(valBytes.([]byte))
+		return val, ok, err
+	}
 	return st.kvstore.Get(ctx, key)
 }
 
@@ -51,7 +65,11 @@ func (st *KeyValueStoreWithChangelog) Put(ctx context.Context, key KeyT, value V
 	if err != nil {
 		return err
 	}
-	err = st.kvstore.Put(ctx, key, value)
+	if st.use_bytes {
+		err = st.kvstore.Put(ctx, keyBytes, valBytes)
+	} else {
+		err = st.kvstore.Put(ctx, key, value)
+	}
 	return err
 }
 

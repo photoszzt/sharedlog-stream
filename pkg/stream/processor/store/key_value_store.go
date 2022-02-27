@@ -21,6 +21,6 @@ type KeyValueStore interface {
 
 type Segment interface {
 	KeyValueStore
-	destroy()
-	deleteRange(keyFrom interface{}, keyTo interface{})
+	Destroy(ctx context.Context) error
+	DeleteRange(ctx context.Context, keyFrom interface{}, keyTo interface{}) error
 }

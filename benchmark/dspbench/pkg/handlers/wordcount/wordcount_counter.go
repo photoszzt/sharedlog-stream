@@ -73,7 +73,7 @@ func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes
 		kb := b.(string)
 		return strings.Compare(ka, kb)
 	})
-	store := store.NewKeyValueStoreWithChangelog(mp, inMemStore)
+	store := store.NewKeyValueStoreWithChangelog(mp, inMemStore, false)
 	// fmt.Fprintf(os.Stderr, "before restore\n")
 	p := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor(store,
 		processor.InitializerFunc(func() interface{} {

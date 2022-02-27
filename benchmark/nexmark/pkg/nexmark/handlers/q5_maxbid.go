@@ -207,7 +207,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		kb := b.(*ntypes.StartEndTime)
 		return ntypes.CompareStartEndTime(ka, kb)
 	})
-	store := store.NewKeyValueStoreWithChangelog(mp, inMemStore)
+	store := store.NewKeyValueStoreWithChangelog(mp, inMemStore, false)
 	maxBid := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor(store, processor.InitializerFunc(func() interface{} {
 		return uint64(0)
 	}), processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {

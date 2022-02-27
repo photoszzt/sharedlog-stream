@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/google/btree"
@@ -12,6 +13,8 @@ type BaseSegments struct {
 	retentionPeriod int64
 	segmentInterval int64
 }
+
+var _ = Segments(&BaseSegments{})
 
 type Int64 int64
 
@@ -45,11 +48,12 @@ func (s *BaseSegments) SegmentName(segmentId int64) string {
 	return fmt.Sprintf("%s.%d%d", s.name, segmentId, s.segmentInterval)
 }
 
-func (s *BaseSegments) GetSegmentForTimestamp(ts int64) *KeySegment {
-	return s.segments.Get(Int64(s.SegmentId(ts))).(*KeySegment)
+func (s *BaseSegments) GetSegmentForTimestamp(ts int64) Segment {
+	ks := s.segments.Get(Int64(s.SegmentId(ts))).(*KeySegment)
+	return ks.Value
 }
 
-func (s *BaseSegments) GetOrCreateSegmentIfLive(segmentId int64,
+func (s *BaseSegments) GetOrCreateSegmentIfLive(ctx context.Context, segmentId int64,
 	streamTime int64, getOrCreateSegment func(segmentId int64) Segment,
 ) Segment {
 	minLiveTimestamp := streamTime - s.retentionPeriod
@@ -60,11 +64,15 @@ func (s *BaseSegments) GetOrCreateSegmentIfLive(segmentId int64,
 	} else {
 		toReturn = nil
 	}
-	s.cleanupEarlierThan(minLiveSegment)
+	s.cleanupEarlierThan(ctx, minLiveSegment)
 	return toReturn
 }
 
-func (s *BaseSegments) cleanupEarlierThan(minLiveSegment int64) {
+func (s *BaseSegments) GetOrCreateSegment(segmentId int64) Segment {
+	panic("Should not call this method")
+}
+
+func (s *BaseSegments) cleanupEarlierThan(ctx context.Context, minLiveSegment int64) error {
 	var got []btree.Item
 	s.segments.AscendLessThan(Int64(minLiveSegment), func(i btree.Item) bool {
 		got = append(got, i)
@@ -73,6 +81,10 @@ func (s *BaseSegments) cleanupEarlierThan(minLiveSegment int64) {
 	for _, item := range got {
 		kv := item.(*KeySegment)
 		ret := s.segments.Delete(kv.Key)
-		ret.(*KeySegment).Value.destroy()
+		err := ret.(*KeySegment).Value.Destroy(ctx)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
