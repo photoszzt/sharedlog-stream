@@ -41,7 +41,7 @@ func (wks *WindowKeySchema) ToStoreBinaryKeyPrefix(key []byte, ts int64) ([]byte
 }
 
 func (wks *WindowKeySchema) UpperRangeFixedSize(key []byte, to int64) []byte {
-	return wks.toStoreKeyBinary(key, to, math.MaxInt32)
+	return wks.ToStoreKeyBinary(key, to, math.MaxInt32)
 }
 
 func (wks *WindowKeySchema) LowerRangeFixedSize(key []byte, from int64) []byte {
@@ -49,18 +49,26 @@ func (wks *WindowKeySchema) LowerRangeFixedSize(key []byte, from int64) []byte {
 	if from < 0 {
 		ts = 0
 	}
-	return wks.toStoreKeyBinary(key, ts, 0)
+	return wks.ToStoreKeyBinary(key, ts, 0)
 }
 
 func (wks *WindowKeySchema) SegmentTimestamp(key []byte) int64 {
-	return wks.extractStoreTs(key)
+	return wks.ExtractStoreTs(key)
 }
 
-func (wks *WindowKeySchema) HasNextCondition(binaryKeyFrom []byte, binaryKeyTo []byte, from int64, to int64) {
-
+func (wks *WindowKeySchema) HasNextCondition(curKey []byte, binaryKeyFrom []byte, binaryKeyTo []byte, from int64, to int64) (bool, int64) {
+	keyBytes := wks.ExtractStoreKeyBytes(curKey)
+	time := wks.ExtractStoreTs(curKey)
+	if (binaryKeyFrom == nil || bytes.Compare(keyBytes, binaryKeyFrom) >= 0) &&
+		(binaryKeyTo == nil || bytes.Compare(keyBytes, binaryKeyTo) <= 0) &&
+		time >= from && time <= to {
+		return true, time
+	} else {
+		return false, 0
+	}
 }
 
-func (wks *WindowKeySchema) toStoreKeyBinary(key []byte, ts int64, seqnum uint32) []byte {
+func (wks *WindowKeySchema) ToStoreKeyBinary(key []byte, ts int64, seqnum uint32) []byte {
 	buf := make([]byte, 0, ts_size+len(key)+seqnum_size)
 	ts_buf := make([]byte, 0, ts_size)
 	binary.LittleEndian.PutUint64(ts_buf, uint64(ts))
@@ -73,6 +81,13 @@ func (wks *WindowKeySchema) toStoreKeyBinary(key []byte, ts int64, seqnum uint32
 	return buffer.Bytes()
 }
 
-func (wks *WindowKeySchema) extractStoreTs(key []byte) int64 {
+func (wks *WindowKeySchema) ExtractStoreTs(key []byte) int64 {
 	return int64(binary.LittleEndian.Uint64(key[len(key)-ts_size-seqnum_size:]))
+}
+
+func (wks *WindowKeySchema) ExtractStoreKeyBytes(key []byte) []byte {
+	buf := make([]byte, 0, len(key)-ts_size-seqnum_size)
+	buffer := bytes.NewBuffer(buf)
+	buffer.Write(key[0:len(buf)])
+	return buffer.Bytes()
 }

@@ -47,8 +47,11 @@ func CompareWithDup(lhs, rhs interface{}) int {
 	}
 }
 
-func assertGet(store WindowStore, k uint32, expected_val string, startTime int64) error {
-	val, ok := store.Get(k, startTime)
+func assertGet(ctx context.Context, store WindowStore, k uint32, expected_val string, startTime int64) error {
+	val, ok, err := store.Get(ctx, k, startTime)
+	if err != nil {
+		return err
+	}
 	if !ok {
 		return fmt.Errorf("key %d should exists", 0)
 	}
@@ -127,7 +130,10 @@ func GetAndRangeTest(store WindowStore, t testing.TB) {
 
 	k := uint32(0)
 	expected_val := "zero"
-	val, ok := store.Get(k, startTime)
+	val, ok, err := store.Get(ctx, k, startTime)
+	if err != nil {
+		t.Fatalf("get err: %v", err)
+	}
 	if !ok {
 		t.Fatalf("key %d should exists\n", 0)
 	}
@@ -137,7 +143,10 @@ func GetAndRangeTest(store WindowStore, t testing.TB) {
 
 	k = uint32(1)
 	expected_val = "one"
-	val, ok = store.Get(k, startTime+1)
+	val, ok, err = store.Get(ctx, k, startTime+1)
+	if err != nil {
+		t.Fatalf("get err: %v", err)
+	}
 	if !ok {
 		t.Fatalf("key %d should exists\n", 0)
 	}
@@ -147,7 +156,10 @@ func GetAndRangeTest(store WindowStore, t testing.TB) {
 
 	k = uint32(2)
 	expected_val = "two"
-	val, ok = store.Get(k, startTime+2)
+	val, ok, err = store.Get(ctx, k, startTime+2)
+	if err != nil {
+		t.Fatalf("get err: %v", err)
+	}
 	if !ok {
 		t.Fatalf("key %d should exists\n", 0)
 	}
@@ -157,7 +169,10 @@ func GetAndRangeTest(store WindowStore, t testing.TB) {
 
 	k = uint32(4)
 	expected_val = "four"
-	val, ok = store.Get(k, startTime+4)
+	val, ok, err = store.Get(ctx, k, startTime+4)
+	if err != nil {
+		t.Fatalf("get err: %v", err)
+	}
 	if !ok {
 		t.Fatalf("key %d should exists\n", 0)
 	}
@@ -167,7 +182,10 @@ func GetAndRangeTest(store WindowStore, t testing.TB) {
 
 	k = uint32(5)
 	expected_val = "five"
-	val, ok = store.Get(k, startTime+5)
+	val, ok, err = store.Get(ctx, k, startTime+5)
+	if err != nil {
+		t.Fatalf("get err: %v", err)
+	}
 	if !ok {
 		t.Fatalf("key %d should exists\n", 0)
 	}
@@ -191,7 +209,10 @@ func GetAndRangeTest(store WindowStore, t testing.TB) {
 
 	k = uint32(2)
 	expected_val = "two+1"
-	val, ok = store.Get(k, startTime+3)
+	val, ok, err = store.Get(ctx, k, startTime+3)
+	if err != nil {
+		t.Fatalf("get err: %v", err)
+	}
 	if !ok {
 		t.Fatalf("key %d should exists\n", 0)
 	}
@@ -199,27 +220,27 @@ func GetAndRangeTest(store WindowStore, t testing.TB) {
 		t.Fatalf("should be %s, but got %s", expected_val, val)
 	}
 
-	err = assertGet(store, 2, "two+2", startTime+4)
+	err = assertGet(ctx, store, 2, "two+2", startTime+4)
 	if err != nil {
 		t.Fatalf("assertGet err: %v", err)
 	}
 
-	err = assertGet(store, 2, "two+3", startTime+5)
+	err = assertGet(ctx, store, 2, "two+3", startTime+5)
 	if err != nil {
 		t.Fatalf("assertGet err: %v", err)
 	}
 
-	err = assertGet(store, 2, "two+4", startTime+6)
+	err = assertGet(ctx, store, 2, "two+4", startTime+6)
 	if err != nil {
 		t.Fatalf("assertGet err: %v", err)
 	}
 
-	err = assertGet(store, 2, "two+5", startTime+7)
+	err = assertGet(ctx, store, 2, "two+5", startTime+7)
 	if err != nil {
 		t.Fatalf("assertGet err: %v", err)
 	}
 
-	err = assertGet(store, 2, "two+6", startTime+8)
+	err = assertGet(ctx, store, 2, "two+6", startTime+8)
 	if err != nil {
 		t.Fatalf("assertGet err: %v", err)
 	}
@@ -543,27 +564,7 @@ func ShouldGetAllNonDeletedMsgsTest(store WindowStore, t testing.TB) {
 
 	k := uint32(0)
 	expected := "zero"
-	val, ok := store.Get(k, startTime)
-	if !ok {
-		t.Fatalf("expected key %d exists", 0)
-	}
-	if val != expected {
-		t.Fatalf("got unexpected val: %s, expected %s", val, expected)
-	}
-
-	k = 2
-	expected = "two"
-	val, ok = store.Get(k, startTime+2)
-	if !ok {
-		t.Fatalf("expected key %d exists", 0)
-	}
-	if val != expected {
-		t.Fatalf("got unexpected val: %s, expected %s", val, expected)
-	}
-
-	k = 4
-	expected = "four"
-	val, ok = store.Get(k, startTime+4)
+	val, ok, err := store.Get(ctx, k, startTime)
 	if err != nil {
 		t.Fatalf("get err: %v", err)
 	}
@@ -574,12 +575,44 @@ func ShouldGetAllNonDeletedMsgsTest(store WindowStore, t testing.TB) {
 		t.Fatalf("got unexpected val: %s, expected %s", val, expected)
 	}
 
-	val, _ = store.Get(uint32(1), startTime+1)
+	k = 2
+	expected = "two"
+	val, ok, err = store.Get(ctx, k, startTime+2)
+	if err != nil {
+		t.Fatalf("get err: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected key %d exists", 0)
+	}
+	if val != expected {
+		t.Fatalf("got unexpected val: %s, expected %s", val, expected)
+	}
+
+	k = 4
+	expected = "four"
+	val, ok, err = store.Get(ctx, k, startTime+4)
+	if err != nil {
+		t.Fatalf("get err: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected key %d exists", 0)
+	}
+	if val != expected {
+		t.Fatalf("got unexpected val: %s, expected %s", val, expected)
+	}
+
+	val, _, err = store.Get(ctx, uint32(1), startTime+1)
+	if err != nil {
+		t.Fatalf("get err: %v", err)
+	}
 	if val != nil {
 		t.Error("expected key 1 doesn't exist")
 	}
 
-	val, _ = store.Get(uint32(3), startTime+3)
+	val, _, err = store.Get(ctx, uint32(3), startTime+3)
+	if err != nil {
+		t.Fatalf("get err: %v", err)
+	}
 	if val != nil {
 		t.Error("expected key 3 doesn't exist")
 	}
@@ -619,7 +652,10 @@ func ExpirationTest(store WindowStore, t testing.TB) {
 
 	k := uint32(1)
 	expected := "two"
-	val, ok := store.Get(k, TEST_RETENTION_PERIOD/4)
+	val, ok, err := store.Get(ctx, k, TEST_RETENTION_PERIOD/4)
+	if err != nil {
+		t.Fatalf("get err: %v", err)
+	}
 	if !ok {
 		t.Fatalf("expected key %d exists", 0)
 	}
@@ -628,7 +664,10 @@ func ExpirationTest(store WindowStore, t testing.TB) {
 	}
 
 	expected = "three"
-	val, ok = store.Get(k, TEST_RETENTION_PERIOD/2)
+	val, ok, err = store.Get(ctx, k, TEST_RETENTION_PERIOD/2)
+	if err != nil {
+		t.Fatalf("get err: %v", err)
+	}
 	if !ok {
 		t.Fatalf("expected key %d exists", 0)
 	}
@@ -637,7 +676,10 @@ func ExpirationTest(store WindowStore, t testing.TB) {
 	}
 
 	expected = "four"
-	val, ok = store.Get(k, 3*TEST_RETENTION_PERIOD/4)
+	val, ok, err = store.Get(ctx, k, 3*TEST_RETENTION_PERIOD/4)
+	if err != nil {
+		t.Fatalf("get err: %v", err)
+	}
 	if !ok {
 		t.Fatalf("expected key %d exists", 0)
 	}
@@ -646,7 +688,10 @@ func ExpirationTest(store WindowStore, t testing.TB) {
 	}
 
 	expected = "five"
-	val, ok = store.Get(k, TEST_RETENTION_PERIOD)
+	val, ok, err = store.Get(ctx, k, TEST_RETENTION_PERIOD)
+	if err != nil {
+		t.Fatalf("get err: %v", err)
+	}
 	if !ok {
 		t.Fatalf("expected key %d exists", 0)
 	}
@@ -661,7 +706,10 @@ func ExpirationTest(store WindowStore, t testing.TB) {
 	}
 
 	expected = "three"
-	val, ok = store.Get(k, TEST_RETENTION_PERIOD/2)
+	val, ok, err = store.Get(ctx, k, TEST_RETENTION_PERIOD/2)
+	if err != nil {
+		t.Fatalf("get err: %v", err)
+	}
 	if !ok {
 		t.Fatalf("expected key %d exists", 0)
 	}
@@ -670,7 +718,10 @@ func ExpirationTest(store WindowStore, t testing.TB) {
 	}
 
 	expected = "four"
-	val, ok = store.Get(k, 3*TEST_RETENTION_PERIOD/4)
+	val, ok, err = store.Get(ctx, k, 3*TEST_RETENTION_PERIOD/4)
+	if err != nil {
+		t.Fatalf("get err: %v", err)
+	}
 	if !ok {
 		t.Fatalf("expected key %d exists", 0)
 	}
@@ -679,7 +730,10 @@ func ExpirationTest(store WindowStore, t testing.TB) {
 	}
 
 	expected = "five"
-	val, ok = store.Get(k, TEST_RETENTION_PERIOD)
+	val, ok, err = store.Get(ctx, k, TEST_RETENTION_PERIOD)
+	if err != nil {
+		t.Fatalf("get err: %v", err)
+	}
 	if !ok {
 		t.Fatalf("expected key %d exists", 0)
 	}
@@ -688,7 +742,10 @@ func ExpirationTest(store WindowStore, t testing.TB) {
 	}
 
 	expected = "six"
-	val, ok = store.Get(k, 5*TEST_RETENTION_PERIOD/4)
+	val, ok, err = store.Get(ctx, k, 5*TEST_RETENTION_PERIOD/4)
+	if err != nil {
+		t.Fatalf("get err: %v", err)
+	}
 	if !ok {
 		t.Fatalf("expected key %d exists", 0)
 	}

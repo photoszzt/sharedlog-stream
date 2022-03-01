@@ -73,7 +73,10 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(ctx context.Context, m
 			var oldAgg interface{}
 			var newAgg interface{}
 			var newTs int64
-			val, exists := p.store.Get(msg.Key, windowStart)
+			val, exists, err := p.store.Get(ctx, msg.Key, windowStart)
+			if err != nil {
+				return nil, err
+			}
 			if exists {
 				oldAggTs := val.(*commtypes.ValueTimestamp)
 				oldAgg = oldAggTs.Value

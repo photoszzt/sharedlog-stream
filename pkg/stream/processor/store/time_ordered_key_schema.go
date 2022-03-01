@@ -38,7 +38,10 @@ func (ks *TimeOrderedKeySchema) SegmentTimestamp(key []byte) int64 {
 	return ks.extractStoreTs(key)
 }
 
-func (ks *TimeOrderedKeySchema) HasNextCondition(binaryKeyFrom []byte, binaryKeyTo []byte, from int64, to int64) {
+func (ks *TimeOrderedKeySchema) HasNextCondition(curKey []byte,
+	binaryKeyFrom []byte, binaryKeyTo []byte,
+	from int64, to int64,
+) (bool, int64) {
 	panic("not implemented")
 }
 
@@ -67,4 +70,8 @@ func (ks *TimeOrderedKeySchema) toStoreKeyBinary(key []byte, ts int64, seqnum in
 
 func (ks *TimeOrderedKeySchema) extractStoreTs(key []byte) int64 {
 	return int64(binary.LittleEndian.Uint64(key))
+}
+
+func (ks *TimeOrderedKeySchema) ExtractStoreKeyBytes(key []byte) []byte {
+	panic("not implemented")
 }

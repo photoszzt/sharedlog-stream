@@ -114,22 +114,22 @@ func (s *InMemoryWindowStore) Put(ctx context.Context, key KeyT, value ValueT, w
 	return nil
 }
 
-func (s *InMemoryWindowStore) Get(key KeyT, windowStartTimestamp int64) (ValueT, bool) {
+func (s *InMemoryWindowStore) Get(ctx context.Context, key KeyT, windowStartTimestamp int64) (ValueT, bool, error) {
 	s.removeExpiredSegments()
 	if windowStartTimestamp <= s.observedStreamTime-s.retentionPeriod {
-		return nil, false
+		return nil, false, nil
 	}
 
 	e := s.store.Get(windowStartTimestamp)
 	if e == nil {
-		return nil, false
+		return nil, false, nil
 	} else {
 		kvmap := e.Value().(*concurrent_skiplist.SkipList)
 		v := kvmap.Get(key)
 		if v == nil {
-			return nil, false
+			return nil, false, nil
 		} else {
-			return v.Value(), true
+			return v.Value(), true, nil
 		}
 	}
 }

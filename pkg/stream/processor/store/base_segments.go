@@ -54,21 +54,25 @@ func (s *BaseSegments) GetSegmentForTimestamp(ts int64) Segment {
 }
 
 func (s *BaseSegments) GetOrCreateSegmentIfLive(ctx context.Context, segmentId int64,
-	streamTime int64, getOrCreateSegment func(segmentId int64) Segment,
-) Segment {
+	streamTime int64, getOrCreateSegment func(ctx context.Context, segmentId int64) (Segment, error),
+) (Segment, error) {
 	minLiveTimestamp := streamTime - s.retentionPeriod
 	minLiveSegment := s.SegmentId(minLiveTimestamp)
 	var toReturn Segment
+	var err error
 	if segmentId >= minLiveSegment {
-		toReturn = getOrCreateSegment(segmentId)
+		toReturn, err = getOrCreateSegment(ctx, segmentId)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		toReturn = nil
 	}
 	s.cleanupEarlierThan(ctx, minLiveSegment)
-	return toReturn
+	return toReturn, nil
 }
 
-func (s *BaseSegments) GetOrCreateSegment(segmentId int64) Segment {
+func (s *BaseSegments) GetOrCreateSegment(ctx context.Context, segmentId int64) (Segment, error) {
 	panic("Should not call this method")
 }
 
@@ -87,4 +91,14 @@ func (s *BaseSegments) cleanupEarlierThan(ctx context.Context, minLiveSegment in
 		}
 	}
 	return nil
+}
+
+func (s *BaseSegments) Segments(timeFrom int64, timeTo int64) []Segment {
+	var got []Segment
+	s.segments.AscendRange(Int64(timeFrom), Int64(timeTo), func(i btree.Item) bool {
+		ks := i.(*KeySegment)
+		got = append(got, ks.Value)
+		return true
+	})
+	return got
 }

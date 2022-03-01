@@ -83,12 +83,15 @@ func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context, key KeyT, v
 	return err
 }
 
-func (st *InMemoryWindowStoreWithChangelog) Get(key KeyT, windowStartTimestamp int64) (ValueT, bool) {
-	val, ok := st.windowStore.Get(key, windowStartTimestamp)
-	if !ok {
-		return nil, false
+func (st *InMemoryWindowStoreWithChangelog) Get(ctx context.Context, key KeyT, windowStartTimestamp int64) (ValueT, bool, error) {
+	val, ok, err := st.windowStore.Get(ctx, key, windowStartTimestamp)
+	if err != nil {
+		return nil, false, err
 	}
-	return val, ok
+	if !ok {
+		return nil, false, err
+	}
+	return val, ok, nil
 }
 
 func (st *InMemoryWindowStoreWithChangelog) Fetch(
