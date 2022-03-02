@@ -18,28 +18,33 @@ func getWindowStore(retainDuplicates bool) *InMemoryWindowStore {
 }
 
 func TestGetAndRange(t *testing.T) {
+	ctx := context.Background()
 	store := getWindowStore(false)
-	GetAndRangeTest(store, t)
+	GetAndRangeTest(ctx, store, t)
 }
 
 func TestShouldGetAllNonDeletedMsgs(t *testing.T) {
+	ctx := context.Background()
 	store := getWindowStore(false)
-	ShouldGetAllNonDeletedMsgsTest(store, t)
+	ShouldGetAllNonDeletedMsgsTest(ctx, store, t)
 }
 
 func TestExpiration(t *testing.T) {
+	ctx := context.Background()
 	store := getWindowStore(false)
-	ExpirationTest(store, t)
+	ExpirationTest(ctx, store, t)
 }
 
 func TestShouldGetAll(t *testing.T) {
+	ctx := context.Background()
 	store := getWindowStore(false)
-	ShouldGetAllTest(store, t)
+	ShouldGetAllTest(ctx, store, t)
 }
 
 func TestShouldGetAllReturnTimestampOrdered(t *testing.T) {
+	ctx := context.Background()
 	store := getWindowStore(false)
-	ShouldGetAllReturnTimestampOrderedTest(store, t)
+	ShouldGetAllReturnTimestampOrderedTest(ctx, store, t)
 }
 
 func TestFetchRange(t *testing.T) {

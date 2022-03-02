@@ -19,11 +19,14 @@ var _ = SegmentedBytesStore(&RedisSegmentedBytesStore{})
 
 func NewRedisSegmentedBytesStore(windowName string,
 	app_name string,
-	retention int64,
-	segmentInterval int64,
+	retention int64, // ms
 	keySchema KeySchema,
 	rkvs *RedisKeyValueStore,
 ) *RedisSegmentedBytesStore {
+	segmentInterval := retention / 2
+	if segmentInterval < 60_000 {
+		segmentInterval = 60_000
+	}
 	return &RedisSegmentedBytesStore{
 		name:               windowName,
 		keySchema:          keySchema,
@@ -38,7 +41,7 @@ func (s *RedisSegmentedBytesStore) Name() string { return s.name }
 // Fetch all records from the segmented store with the provided key and time range
 // from all existing segments
 func (s *RedisSegmentedBytesStore) Fetch(key []byte, from int64, to int64,
-	iterFunc func(int64 /* ts */, []byte, ValueT) error,
+	iterFunc func(int64 /* ts */, KeyT, ValueT) error,
 ) error {
 	binaryFrom := s.keySchema.LowerRangeFixedSize(key, from)
 	binaryTo := s.keySchema.UpperRangeFixedSize(key, to)
@@ -62,14 +65,14 @@ func (s *RedisSegmentedBytesStore) Fetch(key []byte, from int64, to int64,
 // Fetch all records from the segmented store with the provided key and time range
 // from all existing segments in backward order (from latest to earliest)
 func (s *RedisSegmentedBytesStore) BackwardFetch(key []byte, from int64, to int64,
-	iterFunc func(int64 /* ts */, []byte, ValueT) error,
+	iterFunc func(int64 /* ts */, KeyT, ValueT) error,
 ) error {
 	panic("not implemented")
 }
 
 func (s *RedisSegmentedBytesStore) FetchWithKeyRange(keyFrom []byte, keyTo []byte,
 	from int64, to int64,
-	iterFunc func(int64 /* ts */, []byte, ValueT) error,
+	iterFunc func(int64 /* ts */, KeyT, ValueT) error,
 ) error {
 	if bytes.Compare(keyFrom, keyTo) > 0 {
 		return fmt.Errorf("key from should be smaller than key to")
@@ -98,16 +101,20 @@ func (s *RedisSegmentedBytesStore) BackwardFetchWithKeyRange(
 	keyTo []byte,
 	from int64,
 	to int64,
-	iterFunc func(int64 /* ts */, []byte, ValueT) error,
+	iterFunc func(int64 /* ts */, KeyT, ValueT) error,
 ) error {
 	panic("not implemented")
 }
 
-func (s *RedisSegmentedBytesStore) FetchAll(iterFunc func(int64 /* ts */, []byte, ValueT) error) error {
+func (s *RedisSegmentedBytesStore) FetchAll(
+	iterFunc func(int64 /* ts */, KeyT, ValueT) error,
+) error {
 	panic("not implemented")
 }
 
-func (s *RedisSegmentedBytesStore) BackwardFetchAll(iterFunc func(int64 /* ts */, []byte, ValueT) error) error {
+func (s *RedisSegmentedBytesStore) BackwardFetchAll(
+	iterFunc func(int64 /* ts */, KeyT, ValueT) error,
+) error {
 	panic("not implemented")
 }
 

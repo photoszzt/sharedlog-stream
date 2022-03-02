@@ -8,38 +8,38 @@ import (
 	"time"
 )
 
-type RedisWindowStore struct {
+type SegmentedWindowStore struct {
+	seqNumMu         sync.Mutex
 	bytesStore       SegmentedBytesStore
-	retainDuplicates bool
+	valSerde         commtypes.Serde
+	keySerde         commtypes.Serde
+	windowKeySchema  *WindowKeySchema
 	windowSize       int64
-
-	seqNumMu sync.Mutex
-	seqNum   uint32
-
-	windowKeySchema *WindowKeySchema
-	keySerde        commtypes.Serde
-	valSerde        commtypes.Serde
+	seqNum           uint32
+	retainDuplicates bool
 }
 
-var _ = WindowStore(&RedisWindowStore{})
+var _ = WindowStore(&SegmentedWindowStore{})
 
-func NewRedisWindowStore(
+func NewSegmentedWindowStore(
 	bytesStore SegmentedBytesStore,
 	retainDuplicates bool,
 	windowSize int64,
 	keySerde commtypes.Serde,
 	valSerde commtypes.Serde,
-) *RedisWindowStore {
-	return &RedisWindowStore{
+) *SegmentedWindowStore {
+	return &SegmentedWindowStore{
 		bytesStore:       bytesStore,
 		retainDuplicates: retainDuplicates,
 		windowSize:       windowSize,
 		seqNum:           0,
 		windowKeySchema:  &WindowKeySchema{},
+		keySerde:         keySerde,
+		valSerde:         valSerde,
 	}
 }
 
-func (rws *RedisWindowStore) updateSeqnumForDups() {
+func (rws *SegmentedWindowStore) updateSeqnumForDups() {
 	if rws.retainDuplicates {
 		rws.seqNumMu.Lock()
 		defer rws.seqNumMu.Unlock()
@@ -50,12 +50,12 @@ func (rws *RedisWindowStore) updateSeqnumForDups() {
 	}
 }
 
-func (rws *RedisWindowStore) IsOpen() bool { return true }
-func (rws *RedisWindowStore) Name() string { return rws.bytesStore.Name() }
+func (rws *SegmentedWindowStore) IsOpen() bool { return true }
+func (rws *SegmentedWindowStore) Name() string { return rws.bytesStore.Name() }
 
-func (rws *RedisWindowStore) Init(ctx StoreContext) {}
+func (rws *SegmentedWindowStore) Init(ctx StoreContext) {}
 
-func (rws *RedisWindowStore) Put(ctx context.Context, key KeyT, value ValueT, windowStartTimestamp int64) error {
+func (rws *SegmentedWindowStore) Put(ctx context.Context, key KeyT, value ValueT, windowStartTimestamp int64) error {
 	if !(value == nil && rws.retainDuplicates) {
 		rws.updateSeqnumForDups()
 		var err error
@@ -70,12 +70,18 @@ func (rws *RedisWindowStore) Put(ctx context.Context, key KeyT, value ValueT, wi
 		defer rws.seqNumMu.Unlock()
 		k := rws.windowKeySchema.ToStoreKeyBinary(kBytes, windowStartTimestamp, rws.seqNum)
 		vBytes, ok := value.([]byte)
+		if !ok {
+			vBytes, err = rws.valSerde.Encode(value)
+			if err != nil {
+				return err
+			}
+		}
 		rws.bytesStore.Put(ctx, k, vBytes)
 	}
 	return nil
 }
 
-func (rws *RedisWindowStore) Get(ctx context.Context, key KeyT, windowStartTimestamp int64) (ValueT, bool, error) {
+func (rws *SegmentedWindowStore) Get(ctx context.Context, key KeyT, windowStartTimestamp int64) (ValueT, bool, error) {
 	var err error
 	kBytes, ok := key.([]byte)
 	if !ok {
@@ -90,40 +96,68 @@ func (rws *RedisWindowStore) Get(ctx context.Context, key KeyT, windowStartTimes
 	return rws.bytesStore.Get(ctx, k)
 }
 
-func (rws *RedisWindowStore) Fetch(key KeyT, timeFrom time.Time, timeTo time.Time,
+func (rws *SegmentedWindowStore) Fetch(key KeyT, timeFrom time.Time, timeTo time.Time,
 	iterFunc func(int64 /* ts */, KeyT, ValueT) error,
 ) error {
+	tsFrom := timeFrom.UnixMilli()
+	tsTo := timeTo.UnixMilli()
+	var err error
+	kBytes, ok := key.([]byte)
+	if !ok {
+		kBytes, err = rws.keySerde.Encode(key)
+		if err != nil {
+			return err
+		}
+	}
+	rws.bytesStore.Fetch(kBytes, tsFrom, tsTo, iterFunc)
 	return nil
 }
 
-func (rws *RedisWindowStore) BackwardFetch(key KeyT, timeFrom time.Time, timeTo time.Time,
+func (rws *SegmentedWindowStore) BackwardFetch(key KeyT, timeFrom time.Time, timeTo time.Time,
 	iterFunc func(int64, KeyT, ValueT) error,
 ) error {
 	panic("not implemented")
 }
 
-func (rws *RedisWindowStore) FetchWithKeyRange(keyFrom KeyT, keyTo KeyT, timeFrom time.Time, timeTo time.Time,
+func (rws *SegmentedWindowStore) FetchWithKeyRange(keyFrom KeyT, keyTo KeyT, timeFrom time.Time, timeTo time.Time,
 	iterFunc func(int64, KeyT, ValueT) error,
 ) error {
-	return nil
+	tsFrom := timeFrom.UnixMilli()
+	tsTo := timeTo.UnixMilli()
+	var err error
+	kFromBytes, ok := keyFrom.([]byte)
+	if !ok {
+		kFromBytes, err = rws.keySerde.Encode(keyFrom)
+		if err != nil {
+			return err
+		}
+	}
+	kToBytes, ok := keyTo.([]byte)
+	if !ok {
+		kToBytes, err = rws.keySerde.Encode(keyTo)
+		if err != nil {
+			return err
+		}
+	}
+	return rws.bytesStore.FetchWithKeyRange(kFromBytes, kToBytes, tsFrom, tsTo, iterFunc)
 }
 
-func (rws *RedisWindowStore) BackwardFetchWithKeyRange(keyFrom KeyT, keyTo KeyT, timeFrom time.Time, timeTo time.Time, iterFunc func(int64, KeyT, ValueT) error) error {
+func (rws *SegmentedWindowStore) BackwardFetchWithKeyRange(keyFrom KeyT, keyTo KeyT, timeFrom time.Time, timeTo time.Time, iterFunc func(int64, KeyT, ValueT) error) error {
 	panic("not implemented")
 }
 
-func (rws *RedisWindowStore) FetchAll(timeFrom time.Time, timeTo time.Time,
+func (rws *SegmentedWindowStore) FetchAll(timeFrom time.Time, timeTo time.Time,
 	iterFunc func(int64, KeyT, ValueT) error,
 ) error {
-	return nil
+	panic("not implemented")
 }
 
-func (rws *RedisWindowStore) BackwardFetchAll(timeFrom time.Time, timeTo time.Time,
+func (rws *SegmentedWindowStore) BackwardFetchAll(timeFrom time.Time, timeTo time.Time,
 	iterFunc func(int64, KeyT, ValueT) error,
 ) error {
-	return nil
+	panic("not implemented")
 }
 
-func (rws *RedisWindowStore) IterAll(iterFunc func(int64, KeyT, ValueT) error) error {
-	return nil
+func (rws *SegmentedWindowStore) IterAll(iterFunc func(int64, KeyT, ValueT) error) error {
+	panic("not implemented")
 }

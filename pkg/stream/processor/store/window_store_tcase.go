@@ -120,9 +120,8 @@ func putSecondBatch(ctx context.Context, store WindowStore, startTime int64) err
 	return err
 }
 
-func GetAndRangeTest(store WindowStore, t testing.TB) {
+func GetAndRangeTest(ctx context.Context, store WindowStore, t testing.TB) {
 	startTime := TEST_SEGMENT_INTERVAL - 4
-	ctx := context.Background()
 	err := putFirstBatch(ctx, store, startTime)
 	if err != nil {
 		t.Fatalf("fail to set up window store: %v\n", err)
@@ -523,10 +522,8 @@ func GetAndRangeTest(store WindowStore, t testing.TB) {
 	}
 }
 
-func ShouldGetAllNonDeletedMsgsTest(store WindowStore, t testing.TB) {
+func ShouldGetAllNonDeletedMsgsTest(ctx context.Context, store WindowStore, t testing.TB) {
 	startTime := TEST_SEGMENT_INTERVAL - 4
-	ctx := context.Background()
-
 	err := store.Put(ctx, uint32(0), "zero", startTime)
 	if err != nil {
 		t.Fatalf("put err: %v", err)
@@ -618,9 +615,8 @@ func ShouldGetAllNonDeletedMsgsTest(store WindowStore, t testing.TB) {
 	}
 }
 
-func ExpirationTest(store WindowStore, t testing.TB) {
+func ExpirationTest(ctx context.Context, store WindowStore, t testing.TB) {
 	currentTime := int64(0)
-	ctx := context.Background()
 	err := store.Put(ctx, uint32(1), "one", int64(currentTime))
 	if err != nil {
 		t.Fatalf("put err: %v", err)
@@ -754,9 +750,8 @@ func ExpirationTest(store WindowStore, t testing.TB) {
 	}
 }
 
-func ShouldGetAllTest(store WindowStore, t testing.TB) {
+func ShouldGetAllTest(ctx context.Context, store WindowStore, t testing.TB) {
 	startTime := TEST_SEGMENT_INTERVAL - 4
-	ctx := context.Background()
 	err := putFirstBatch(ctx, store, startTime)
 	if err != nil {
 		t.Fatalf("fail to set up window store: %v\n", err)
@@ -851,9 +846,8 @@ func outOfOrderPut(ctx context.Context, store WindowStore, startTime int64) erro
 	return nil
 }
 
-func ShouldGetAllReturnTimestampOrderedTest(store WindowStore, t testing.TB) {
+func ShouldGetAllReturnTimestampOrderedTest(ctx context.Context, store WindowStore, t testing.TB) {
 	startTime := TEST_SEGMENT_INTERVAL - 4
-	ctx := context.Background()
 	err := outOfOrderPut(ctx, store, startTime)
 	if err != nil {
 		t.Fatalf("fail to setup entries in store: %v", err)

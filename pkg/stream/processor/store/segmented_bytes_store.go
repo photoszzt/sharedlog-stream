@@ -7,17 +7,17 @@ type SegmentedBytesStore interface {
 
 	// Fetch all records from the segmented store with the provided key and time range
 	// from all existing segments
-	Fetch(key []byte, from int64, to int64, iterFunc func(int64 /* ts */, []byte, ValueT) error) error
+	Fetch(key []byte, from int64, to int64, iterFunc func(int64 /* ts */, KeyT, ValueT) error) error
 
 	// Fetch all records from the segmented store with the provided key and time range
 	// from all existing segments in backward order (from latest to earliest)
-	BackwardFetch(key []byte, from int64, to int64, iterFunc func(int64 /* ts */, []byte, ValueT) error) error
+	BackwardFetch(key []byte, from int64, to int64, iterFunc func(int64 /* ts */, KeyT, ValueT) error) error
 	FetchWithKeyRange(keyFrom []byte, keyTo []byte, from int64, to int64,
-		iterFunc func(int64 /* ts */, []byte, ValueT) error) error
+		iterFunc func(int64 /* ts */, KeyT, ValueT) error) error
 	BackwardFetchWithKeyRange(keyFrom []byte, keyTo []byte, from int64, to int64,
-		iterFunc func(int64 /* ts */, []byte, ValueT) error) error
-	FetchAll(iterFunc func(int64 /* ts */, []byte, ValueT) error) error
-	BackwardFetchAll(iterFunc func(int64 /* ts */, []byte, ValueT) error) error
+		iterFunc func(int64 /* ts */, KeyT, ValueT) error) error
+	FetchAll(iterFunc func(int64 /* ts */, KeyT, ValueT) error) error
+	BackwardFetchAll(iterFunc func(int64 /* ts */, KeyT, ValueT) error) error
 	Remove(ctx context.Context, key []byte) error
 	RemoveWithTs(key []byte, timestamp uint64)
 	Put(ctx context.Context, key []byte, value []byte) error

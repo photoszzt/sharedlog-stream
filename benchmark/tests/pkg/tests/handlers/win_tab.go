@@ -80,19 +80,19 @@ func (wt *winTabTestsHandler) WinTests(ctx context.Context, sp *test_types.TestI
 	switch sp.TestName {
 	case "TestGetAndRange":
 		winstore := getWindowStoreWithChangelog(false, stream)
-		store.GetAndRangeTest(winstore, t)
+		store.GetAndRangeTest(ctx, winstore, t)
 	case "TestShouldGetAllNonDeletedMsgs":
 		winstore := getWindowStoreWithChangelog(false, stream)
-		store.ShouldGetAllNonDeletedMsgsTest(winstore, t)
+		store.ShouldGetAllNonDeletedMsgsTest(ctx, winstore, t)
 	case "TestExpiration":
 		winstore := getWindowStoreWithChangelog(false, stream)
-		store.ExpirationTest(winstore, t)
+		store.ExpirationTest(ctx, winstore, t)
 	case "TestShouldGetAll":
 		winstore := getWindowStoreWithChangelog(false, stream)
-		store.ShouldGetAllTest(winstore, t)
+		store.ShouldGetAllTest(ctx, winstore, t)
 	case "TestShouldGetAllReturnTimestampOrdered":
 		winstore := getWindowStoreWithChangelog(false, stream)
-		store.ShouldGetAllReturnTimestampOrderedTest(winstore, t)
+		store.ShouldGetAllReturnTimestampOrderedTest(ctx, winstore, t)
 	case "TestFetchRange":
 		winstore := getWindowStoreWithChangelog(false, stream)
 		store.FetchRangeTest(ctx, winstore, t)
