@@ -3,10 +3,7 @@ package store
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"math"
-	"os"
-	"sharedlog-stream/pkg/debug"
 )
 
 type WindowKeySchema struct{}
@@ -16,18 +13,19 @@ const (
 )
 
 var (
-	min_suffix = make([]byte, 0, suffix_size)
+	min_suffix = make([]byte, suffix_size)
 )
 
 var _ = KeySchema(&WindowKeySchema{})
 
 func (wks *WindowKeySchema) UpperRange(key []byte, to int64) []byte {
-	buffer := new(bytes.Buffer)
+	buf := make([]byte, 0, ts_size+seqnum_size)
+	buffer := bytes.NewBuffer(buf)
 	binary.Write(buffer, binary.BigEndian, to)
 	binary.Write(buffer, binary.BigEndian, int32(math.MaxInt32))
-	fmt.Fprint(os.Stderr, "max suffix is\n")
+	// fmt.Fprint(os.Stderr, "max suffix is\n")
 	maxSuffix := buffer.Bytes()
-	debug.PrintByteSlice(maxSuffix)
+	// debug.PrintByteSlice(maxSuffix)
 	return UpperRange(key, maxSuffix)
 }
 
@@ -68,7 +66,8 @@ func (wks *WindowKeySchema) HasNextCondition(curKey []byte, binaryKeyFrom []byte
 }
 
 func (wks *WindowKeySchema) ToStoreKeyBinary(key []byte, ts int64, seqnum uint32) []byte {
-	buffer := new(bytes.Buffer)
+	buf := make([]byte, 0, ts_size+seqnum_size+len(key))
+	buffer := bytes.NewBuffer(buf)
 	binary.Write(buffer, binary.BigEndian, key)
 	binary.Write(buffer, binary.BigEndian, ts)
 	binary.Write(buffer, binary.BigEndian, seqnum)

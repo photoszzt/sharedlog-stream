@@ -11,7 +11,8 @@ const (
 // Returns the upper byte range for a key with a given fixed size maximum suffix
 // Assumes the minimum key length is one byte
 func UpperRange(key []byte, maxSuffix []byte) []byte {
-	var buffer bytes.Buffer
+	buf := make([]byte, 0, len(key)+len(maxSuffix))
+	buffer := bytes.NewBuffer(buf)
 
 	i := 0
 	for i < len(key) && (i < min_key_length || // assumes keys are at least one byte long
@@ -33,15 +34,14 @@ func UpperRange(key []byte, maxSuffix []byte) []byte {
 }
 
 func LowerRange(key []byte, minSuffix []byte) []byte {
-	buf := make([]byte, len(key)+len(minSuffix))
-	buffer := bytes.NewBuffer(buf)
+	buf := make([]byte, len(key), len(key)+len(minSuffix))
 	// any key in the range would start at least with the given prefix to be
 	// in the range, and have at least SUFFIX_SIZE number of trailing zero bytes.
 
 	// unless there is a maximum key length, you can keep appending more zero bytes
 	// to keyFrom to create a key that will match the range, yet that would precede
 	// KeySchema.toBinaryKey(keyFrom, from, 0) in byte order
-	buffer.Write(key)
-	buffer.Write(minSuffix)
-	return buffer.Bytes()
+	_ = copy(buf, key)
+	buf = append(buf, minSuffix...)
+	return buf
 }
