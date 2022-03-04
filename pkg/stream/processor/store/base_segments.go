@@ -19,7 +19,13 @@ var _ = Segments(&BaseSegments{})
 type Int64 int64
 
 func (x Int64) Less(than btree.Item) bool {
-	return x < than.(Int64)
+	t, ok := than.(Int64)
+	if !ok {
+		ks := than.(*KeySegment)
+		t = ks.Key.(Int64)
+
+	}
+	return x < t
 }
 
 type KeySegment struct {

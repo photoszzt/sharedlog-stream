@@ -8,26 +8,26 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type RedisSegmentedBytesStore struct {
+type BaseSegmentedBytesStore struct {
 	keySchema          KeySchema
 	segments           Segments
 	name               string
 	observedStreamTime int64
 }
 
-var _ = SegmentedBytesStore(&RedisSegmentedBytesStore{})
+var _ = SegmentedBytesStore(&BaseSegmentedBytesStore{})
 
-func NewRedisSegmentedBytesStore(windowName string,
+func NewBaseSegmentedBytesStore(windowName string,
 	app_name string,
 	retention int64, // ms
 	keySchema KeySchema,
 	rkvs *RedisKeyValueStore,
-) *RedisSegmentedBytesStore {
+) *BaseSegmentedBytesStore {
 	segmentInterval := retention / 2
 	if segmentInterval < 60_000 {
 		segmentInterval = 60_000
 	}
-	return &RedisSegmentedBytesStore{
+	return &BaseSegmentedBytesStore{
 		name:               windowName,
 		keySchema:          keySchema,
 		segments:           NewRedisKeyValueSegments(windowName, app_name, retention, segmentInterval, rkvs),
@@ -35,12 +35,12 @@ func NewRedisSegmentedBytesStore(windowName string,
 	}
 }
 
-func (s *RedisSegmentedBytesStore) IsOpen() bool { return true }
-func (s *RedisSegmentedBytesStore) Name() string { return s.name }
+func (s *BaseSegmentedBytesStore) IsOpen() bool { return true }
+func (s *BaseSegmentedBytesStore) Name() string { return s.name }
 
 // Fetch all records from the segmented store with the provided key and time range
 // from all existing segments
-func (s *RedisSegmentedBytesStore) Fetch(key []byte, from int64, to int64,
+func (s *BaseSegmentedBytesStore) Fetch(key []byte, from int64, to int64,
 	iterFunc func(int64 /* ts */, KeyT, ValueT) error,
 ) error {
 	binaryFrom := s.keySchema.LowerRangeFixedSize(key, from)
@@ -64,13 +64,13 @@ func (s *RedisSegmentedBytesStore) Fetch(key []byte, from int64, to int64,
 
 // Fetch all records from the segmented store with the provided key and time range
 // from all existing segments in backward order (from latest to earliest)
-func (s *RedisSegmentedBytesStore) BackwardFetch(key []byte, from int64, to int64,
+func (s *BaseSegmentedBytesStore) BackwardFetch(key []byte, from int64, to int64,
 	iterFunc func(int64 /* ts */, KeyT, ValueT) error,
 ) error {
 	panic("not implemented")
 }
 
-func (s *RedisSegmentedBytesStore) FetchWithKeyRange(keyFrom []byte, keyTo []byte,
+func (s *BaseSegmentedBytesStore) FetchWithKeyRange(keyFrom []byte, keyTo []byte,
 	from int64, to int64,
 	iterFunc func(int64 /* ts */, KeyT, ValueT) error,
 ) error {
@@ -96,7 +96,7 @@ func (s *RedisSegmentedBytesStore) FetchWithKeyRange(keyFrom []byte, keyTo []byt
 	return nil
 }
 
-func (s *RedisSegmentedBytesStore) BackwardFetchWithKeyRange(
+func (s *BaseSegmentedBytesStore) BackwardFetchWithKeyRange(
 	keyFrom []byte,
 	keyTo []byte,
 	from int64,
@@ -106,19 +106,19 @@ func (s *RedisSegmentedBytesStore) BackwardFetchWithKeyRange(
 	panic("not implemented")
 }
 
-func (s *RedisSegmentedBytesStore) FetchAll(
+func (s *BaseSegmentedBytesStore) FetchAll(
 	iterFunc func(int64 /* ts */, KeyT, ValueT) error,
 ) error {
 	panic("not implemented")
 }
 
-func (s *RedisSegmentedBytesStore) BackwardFetchAll(
+func (s *BaseSegmentedBytesStore) BackwardFetchAll(
 	iterFunc func(int64 /* ts */, KeyT, ValueT) error,
 ) error {
 	panic("not implemented")
 }
 
-func (s *RedisSegmentedBytesStore) Remove(ctx context.Context, key []byte) error {
+func (s *BaseSegmentedBytesStore) Remove(ctx context.Context, key []byte) error {
 	ts := s.keySchema.SegmentTimestamp(key)
 	if ts > s.observedStreamTime {
 		s.observedStreamTime = ts
@@ -131,11 +131,11 @@ func (s *RedisSegmentedBytesStore) Remove(ctx context.Context, key []byte) error
 	return err
 }
 
-func (s *RedisSegmentedBytesStore) RemoveWithTs(key []byte, timestamp uint64) {
-
+func (s *BaseSegmentedBytesStore) RemoveWithTs(key []byte, timestamp uint64) {
+	panic("not implemented")
 }
 
-func (s *RedisSegmentedBytesStore) Put(ctx context.Context, key []byte, value []byte) error {
+func (s *BaseSegmentedBytesStore) Put(ctx context.Context, key []byte, value []byte) error {
 	ts := s.keySchema.SegmentTimestamp(key)
 	if ts > s.observedStreamTime {
 		s.observedStreamTime = ts
@@ -153,11 +153,10 @@ func (s *RedisSegmentedBytesStore) Put(ctx context.Context, key []byte, value []
 	return nil
 }
 
-func (s *RedisSegmentedBytesStore) Get(ctx context.Context, key []byte) ([]byte, bool, error) {
+func (s *BaseSegmentedBytesStore) Get(ctx context.Context, key []byte) (ValueT, bool, error) {
 	segment := s.segments.GetSegmentForTimestamp(s.keySchema.SegmentTimestamp(key))
 	if segment == nil {
 		return nil, false, nil
 	}
-	v, ok, err := segment.Get(ctx, key)
-	return v.([]byte), ok, err
+	return segment.Get(ctx, key)
 }

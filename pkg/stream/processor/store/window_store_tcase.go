@@ -120,6 +120,23 @@ func putSecondBatch(ctx context.Context, store WindowStore, startTime int64) err
 	return err
 }
 
+func check_get(ctx context.Context, k uint32, expected_val string, time int64, store WindowStore, t testing.TB) {
+	val, ok, err := store.Get(ctx, k, time)
+	if err != nil {
+		t.Fatalf("get err: %v", err)
+	}
+	if !ok {
+		t.Fatalf("key %d should exists\n", 0)
+	}
+	val_str, ok := val.(string)
+	if !ok {
+		val_str = string(val.([]byte))
+	}
+	if val_str != expected_val {
+		t.Fatalf("should be %s, but got %s", expected_val, val)
+	}
+}
+
 func GetAndRangeTest(ctx context.Context, store WindowStore, t testing.TB) {
 	startTime := TEST_SEGMENT_INTERVAL - 4
 	err := putFirstBatch(ctx, store, startTime)
@@ -129,68 +146,23 @@ func GetAndRangeTest(ctx context.Context, store WindowStore, t testing.TB) {
 
 	k := uint32(0)
 	expected_val := "zero"
-	val, ok, err := store.Get(ctx, k, startTime)
-	if err != nil {
-		t.Fatalf("get err: %v", err)
-	}
-	if !ok {
-		t.Fatalf("key %d should exists\n", 0)
-	}
-	if val != expected_val {
-		t.Fatalf("should be %s, but got %s", expected_val, val)
-	}
+	check_get(ctx, k, expected_val, startTime, store, t)
 
 	k = uint32(1)
 	expected_val = "one"
-	val, ok, err = store.Get(ctx, k, startTime+1)
-	if err != nil {
-		t.Fatalf("get err: %v", err)
-	}
-	if !ok {
-		t.Fatalf("key %d should exists\n", 0)
-	}
-	if val != expected_val {
-		t.Fatalf("should be %s, but got %s", expected_val, val)
-	}
+	check_get(ctx, k, expected_val, startTime+1, store, t)
 
 	k = uint32(2)
 	expected_val = "two"
-	val, ok, err = store.Get(ctx, k, startTime+2)
-	if err != nil {
-		t.Fatalf("get err: %v", err)
-	}
-	if !ok {
-		t.Fatalf("key %d should exists\n", 0)
-	}
-	if val != expected_val {
-		t.Fatalf("should be %s, but got %s", expected_val, val)
-	}
+	check_get(ctx, k, expected_val, startTime+2, store, t)
 
 	k = uint32(4)
 	expected_val = "four"
-	val, ok, err = store.Get(ctx, k, startTime+4)
-	if err != nil {
-		t.Fatalf("get err: %v", err)
-	}
-	if !ok {
-		t.Fatalf("key %d should exists\n", 0)
-	}
-	if val != expected_val {
-		t.Fatalf("should be %s, but got %s", expected_val, val)
-	}
+	check_get(ctx, k, expected_val, startTime+4, store, t)
 
 	k = uint32(5)
 	expected_val = "five"
-	val, ok, err = store.Get(ctx, k, startTime+5)
-	if err != nil {
-		t.Fatalf("get err: %v", err)
-	}
-	if !ok {
-		t.Fatalf("key %d should exists\n", 0)
-	}
-	if val != expected_val {
-		t.Fatalf("should be %s, but got %s", expected_val, val)
-	}
+	check_get(ctx, k, expected_val, startTime+5, store, t)
 
 	resM, err := assertFetch(store, 0, startTime-TEST_WINDOW_SIZE, startTime+TEST_WINDOW_SIZE)
 	if err != nil {
@@ -208,17 +180,7 @@ func GetAndRangeTest(ctx context.Context, store WindowStore, t testing.TB) {
 
 	k = uint32(2)
 	expected_val = "two+1"
-	val, ok, err = store.Get(ctx, k, startTime+3)
-	if err != nil {
-		t.Fatalf("get err: %v", err)
-	}
-	if !ok {
-		t.Fatalf("key %d should exists\n", 0)
-	}
-	if val != expected_val {
-		t.Fatalf("should be %s, but got %s", expected_val, val)
-	}
-
+	check_get(ctx, k, expected_val, startTime+3, store, t)
 	err = assertGet(ctx, store, 2, "two+2", startTime+4)
 	if err != nil {
 		t.Fatalf("assertGet err: %v", err)
@@ -561,49 +523,22 @@ func ShouldGetAllNonDeletedMsgsTest(ctx context.Context, store WindowStore, t te
 
 	k := uint32(0)
 	expected := "zero"
-	val, ok, err := store.Get(ctx, k, startTime)
-	if err != nil {
-		t.Fatalf("get err: %v", err)
-	}
-	if !ok {
-		t.Fatalf("expected key %d exists", 0)
-	}
-	if val != expected {
-		t.Fatalf("got unexpected val: %s, expected %s", val, expected)
-	}
+	check_get(ctx, k, expected, startTime, store, t)
 
 	k = 2
 	expected = "two"
-	val, ok, err = store.Get(ctx, k, startTime+2)
-	if err != nil {
-		t.Fatalf("get err: %v", err)
-	}
-	if !ok {
-		t.Fatalf("expected key %d exists", 0)
-	}
-	if val != expected {
-		t.Fatalf("got unexpected val: %s, expected %s", val, expected)
-	}
+	check_get(ctx, k, expected, startTime+2, store, t)
 
 	k = 4
 	expected = "four"
-	val, ok, err = store.Get(ctx, k, startTime+4)
-	if err != nil {
-		t.Fatalf("get err: %v", err)
-	}
-	if !ok {
-		t.Fatalf("expected key %d exists", 0)
-	}
-	if val != expected {
-		t.Fatalf("got unexpected val: %s, expected %s", val, expected)
-	}
+	check_get(ctx, k, expected, startTime+4, store, t)
 
-	val, _, err = store.Get(ctx, uint32(1), startTime+1)
+	val, _, err := store.Get(ctx, uint32(1), startTime+1)
 	if err != nil {
 		t.Fatalf("get err: %v", err)
 	}
 	if val != nil {
-		t.Error("expected key 1 doesn't exist")
+		t.Errorf("expected key 1 doesn't exist but got %v", val)
 	}
 
 	val, _, err = store.Get(ctx, uint32(3), startTime+3)
@@ -611,7 +546,7 @@ func ShouldGetAllNonDeletedMsgsTest(ctx context.Context, store WindowStore, t te
 		t.Fatalf("get err: %v", err)
 	}
 	if val != nil {
-		t.Error("expected key 3 doesn't exist")
+		t.Errorf("expected key 3 doesn't exist but got %v", val)
 	}
 }
 

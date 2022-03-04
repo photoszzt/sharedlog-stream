@@ -21,7 +21,7 @@ type SegmentedBytesStore interface {
 	Remove(ctx context.Context, key []byte) error
 	RemoveWithTs(key []byte, timestamp uint64)
 	Put(ctx context.Context, key []byte, value []byte) error
-	Get(ctx context.Context, key []byte) ([]byte, bool, error)
+	Get(ctx context.Context, key []byte) (ValueT, bool, error)
 }
 
 type KeySchema interface {

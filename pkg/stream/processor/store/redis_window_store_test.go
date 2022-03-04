@@ -1,6 +1,11 @@
 package store
 
-/*
+import (
+	"context"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"testing"
+)
+
 func getRedisWindowStore(retainDuplicates bool) (*SegmentedWindowStore, *RedisKeyValueStore) {
 	rkvs := NewRedisKeyValueStore(&RedisConfig{
 		Addr:           "127.0.0.1",
@@ -11,7 +16,7 @@ func getRedisWindowStore(retainDuplicates bool) (*SegmentedWindowStore, *RedisKe
 		KeySerde:       commtypes.Uint32Serde{},
 		ValueSerde:     commtypes.StringSerde{},
 	})
-	byteStore := NewRedisSegmentedBytesStore("test1", "test1",
+	byteStore := NewBaseSegmentedBytesStore("test1", "test1",
 		TEST_RETENTION_PERIOD, &WindowKeySchema{}, rkvs)
 	store := NewSegmentedWindowStore(byteStore, retainDuplicates, TEST_WINDOW_SIZE, commtypes.Uint32Serde{}, commtypes.StringSerde{})
 	return store, rkvs
@@ -79,4 +84,3 @@ func TestRedisPutSameKeyTs(t *testing.T) {
 	PutSameKeyTsTest(ctx, store, t)
 	rkvs.rdb.FlushAll(ctx)
 }
-*/

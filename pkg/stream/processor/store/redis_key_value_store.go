@@ -16,13 +16,13 @@ type RedisKeyValueStore struct {
 }
 
 type RedisConfig struct {
-	StoreName      string
-	Addr           string
-	Port           uint32
-	Userid         int
-	CollectionName string
-	KeySerde       commtypes.Serde
 	ValueSerde     commtypes.Serde
+	KeySerde       commtypes.Serde
+	Addr           string
+	CollectionName string
+	StoreName      string
+	Userid         int
+	Port           uint32
 }
 
 func NewRedisKeyValueStore(config *RedisConfig) *RedisKeyValueStore {
@@ -55,9 +55,13 @@ func (s *RedisKeyValueStore) Get(ctx context.Context, key KeyT) (ValueT, bool, e
 }
 
 func (s *RedisKeyValueStore) GetWithCollection(ctx context.Context, key KeyT, collection string) (ValueT, bool, error) {
-	kBytes, err := s.config.KeySerde.Encode(key)
-	if err != nil {
-		return nil, false, err
+	var err error
+	kBytes, ok := key.([]byte)
+	if !ok {
+		kBytes, err = s.config.KeySerde.Encode(key)
+		if err != nil {
+			return nil, false, err
+		}
 	}
 	vBytes, err := s.rdb.HGet(ctx, collection, string(kBytes)).Result()
 	if err == redis.Nil {
@@ -111,13 +115,20 @@ func (s *RedisKeyValueStore) PutWithCollection(ctx context.Context, key KeyT,
 		return s.Delete(ctx, key)
 	} else {
 		// assume key and value to be bytes
-		kBytes, err := s.config.KeySerde.Encode(key)
-		if err != nil {
-			return err
+		kBytes, ok := key.([]byte)
+		var err error
+		if !ok {
+			kBytes, err = s.config.KeySerde.Encode(key)
+			if err != nil {
+				return err
+			}
 		}
-		vBytes, err := s.config.ValueSerde.Encode(value)
-		if err != nil {
-			return err
+		vBytes, ok := value.([]byte)
+		if !ok {
+			vBytes, err = s.config.ValueSerde.Encode(value)
+			if err != nil {
+				return err
+			}
 		}
 		key_str := string(kBytes)
 		err = s.rdb.HSet(ctx, collection,

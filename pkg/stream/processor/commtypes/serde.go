@@ -267,6 +267,29 @@ type Int32Serde struct {
 	Int32Decoder
 }
 
+type IntSerde struct{}
+
+func (s IntSerde) Encode(value interface{}) ([]byte, error) {
+	if value == nil {
+		return nil, nil
+	}
+	v := value.(int)
+	bs := make([]byte, 4)
+	binary.LittleEndian.PutUint32(bs, uint32(v))
+	return bs, nil
+}
+
+func (s IntSerde) Decode(value []byte) (interface{}, error) {
+	if value == nil {
+		return nil, nil
+	}
+	if len(value) != 4 {
+		return nil, sizeNot4
+	}
+	bits := binary.LittleEndian.Uint32(value)
+	return int(bits), nil
+}
+
 type Uint16Encoder struct{}
 
 var _ = Encoder(Uint16Encoder{})

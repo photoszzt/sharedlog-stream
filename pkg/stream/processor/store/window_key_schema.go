@@ -53,7 +53,9 @@ func (wks *WindowKeySchema) SegmentTimestamp(key []byte) int64 {
 	return wks.ExtractStoreTs(key)
 }
 
-func (wks *WindowKeySchema) HasNextCondition(curKey []byte, binaryKeyFrom []byte, binaryKeyTo []byte, from int64, to int64) (bool, int64) {
+func (wks *WindowKeySchema) HasNextCondition(curKey []byte, binaryKeyFrom []byte,
+	binaryKeyTo []byte, from int64, to int64,
+) (bool, int64) {
 	keyBytes := wks.ExtractStoreKeyBytes(curKey)
 	time := wks.ExtractStoreTs(curKey)
 	if (binaryKeyFrom == nil || bytes.Compare(keyBytes, binaryKeyFrom) >= 0) &&
