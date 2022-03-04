@@ -1,11 +1,6 @@
 package store
 
-import (
-	"context"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"testing"
-)
-
+/*
 func getRedisWindowStore(retainDuplicates bool) (*SegmentedWindowStore, *RedisKeyValueStore) {
 	rkvs := NewRedisKeyValueStore(&RedisConfig{
 		Addr:           "127.0.0.1",
@@ -84,3 +79,4 @@ func TestRedisPutSameKeyTs(t *testing.T) {
 	PutSameKeyTsTest(ctx, store, t)
 	rkvs.rdb.FlushAll(ctx)
 }
+*/

@@ -3,7 +3,10 @@ package store
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"math"
+	"os"
+	"sharedlog-stream/pkg/debug"
 )
 
 type WindowKeySchema struct{}
@@ -19,16 +22,12 @@ var (
 var _ = KeySchema(&WindowKeySchema{})
 
 func (wks *WindowKeySchema) UpperRange(key []byte, to int64) []byte {
-	ts_buf := make([]byte, 0, ts_size)
-	binary.LittleEndian.PutUint64(ts_buf, uint64(to))
-	seq_buf := make([]byte, 0, seqnum_size)
-	binary.LittleEndian.PutUint32(seq_buf, math.MaxInt32)
-
-	buf := make([]byte, 0, suffix_size)
-	buffer := bytes.NewBuffer(buf)
-	buffer.Write(ts_buf)
-	buffer.Write(seq_buf)
+	buffer := new(bytes.Buffer)
+	binary.Write(buffer, binary.BigEndian, to)
+	binary.Write(buffer, binary.BigEndian, int32(math.MaxInt32))
+	fmt.Fprint(os.Stderr, "max suffix is\n")
 	maxSuffix := buffer.Bytes()
+	debug.PrintByteSlice(maxSuffix)
 	return UpperRange(key, maxSuffix)
 }
 
@@ -69,25 +68,19 @@ func (wks *WindowKeySchema) HasNextCondition(curKey []byte, binaryKeyFrom []byte
 }
 
 func (wks *WindowKeySchema) ToStoreKeyBinary(key []byte, ts int64, seqnum uint32) []byte {
-	buf := make([]byte, 0, ts_size+len(key)+seqnum_size)
-	ts_buf := make([]byte, 0, ts_size)
-	binary.LittleEndian.PutUint64(ts_buf, uint64(ts))
-	seqnum_buf := make([]byte, 0, seqnum_size)
-	binary.LittleEndian.PutUint32(seqnum_buf, uint32(seqnum))
-	buffer := bytes.NewBuffer(buf)
-	buffer.Write(key)
-	buffer.Write(ts_buf)
-	buffer.Write(seqnum_buf)
+	buffer := new(bytes.Buffer)
+	binary.Write(buffer, binary.BigEndian, key)
+	binary.Write(buffer, binary.BigEndian, ts)
+	binary.Write(buffer, binary.BigEndian, seqnum)
 	return buffer.Bytes()
 }
 
 func (wks *WindowKeySchema) ExtractStoreTs(key []byte) int64 {
-	return int64(binary.LittleEndian.Uint64(key[len(key)-ts_size-seqnum_size:]))
+	return int64(binary.BigEndian.Uint64(key[len(key)-ts_size-seqnum_size:]))
 }
 
 func (wks *WindowKeySchema) ExtractStoreKeyBytes(key []byte) []byte {
-	buf := make([]byte, 0, len(key)-ts_size-seqnum_size)
-	buffer := bytes.NewBuffer(buf)
-	buffer.Write(key[0:len(buf)])
+	var buffer bytes.Buffer
+	buffer.Write(key[0 : len(key)-ts_size-seqnum_size])
 	return buffer.Bytes()
 }
