@@ -48,7 +48,7 @@ func (ks *TimeOrderedKeySchema) HasNextCondition(curKey []byte,
 func (ks *TimeOrderedKeySchema) toStoreKeyBinaryPrefix(key []byte, ts int64) ([]byte, error) {
 	buf := make([]byte, 0, len(key)+ts_size)
 	ts_buf := make([]byte, 0, ts_size)
-	binary.LittleEndian.PutUint64(ts_buf, uint64(ts))
+	binary.BigEndian.PutUint64(ts_buf, uint64(ts))
 	buffer := bytes.NewBuffer(buf)
 	buffer.Write(ts_buf)
 	buffer.Write(key)
@@ -58,9 +58,9 @@ func (ks *TimeOrderedKeySchema) toStoreKeyBinaryPrefix(key []byte, ts int64) ([]
 func (ks *TimeOrderedKeySchema) toStoreKeyBinary(key []byte, ts int64, seqnum int) ([]byte, error) {
 	buf := make([]byte, 0, ts_size+len(key)+seqnum_size)
 	ts_buf := make([]byte, 0, ts_size)
-	binary.LittleEndian.PutUint64(ts_buf, uint64(ts))
+	binary.BigEndian.PutUint64(ts_buf, uint64(ts))
 	seqnum_buf := make([]byte, 0, seqnum_size)
-	binary.LittleEndian.PutUint32(seqnum_buf, uint32(seqnum))
+	binary.BigEndian.PutUint32(seqnum_buf, uint32(seqnum))
 	buffer := bytes.NewBuffer(buf)
 	buffer.Write(ts_buf)
 	buffer.Write(key)
@@ -69,7 +69,7 @@ func (ks *TimeOrderedKeySchema) toStoreKeyBinary(key []byte, ts int64, seqnum in
 }
 
 func (ks *TimeOrderedKeySchema) extractStoreTs(key []byte) int64 {
-	return int64(binary.LittleEndian.Uint64(key))
+	return int64(binary.BigEndian.Uint64(key))
 }
 
 func (ks *TimeOrderedKeySchema) ExtractStoreKeyBytes(key []byte) []byte {

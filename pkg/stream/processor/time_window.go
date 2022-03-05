@@ -4,8 +4,10 @@ package processor
 
 import (
 	"encoding/json"
+	"math"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 
+	"github.com/rs/zerolog/log"
 	"golang.org/x/xerrors"
 )
 
@@ -65,4 +67,13 @@ func (s TimeWindowMsgpSerde) Decode(value []byte) (interface{}, error) {
 		return nil, err
 	}
 	return tw, nil
+}
+
+func TimeWindowForSize(startMs int64, windowSize int64) (*TimeWindow, error) {
+	endMs := startMs + windowSize
+	if endMs < 0 {
+		log.Warn().Msg("window end time was truncated to int64 max")
+		endMs = math.MaxInt64
+	}
+	return NewTimeWindow(startMs, endMs)
 }

@@ -70,7 +70,7 @@ func (e Float64Encoder) Encode(value interface{}) ([]byte, error) {
 	v := value.(float64)
 	bits := math.Float64bits(v)
 	bs := make([]byte, 8)
-	binary.LittleEndian.PutUint64(bs, bits)
+	binary.BigEndian.PutUint64(bs, bits)
 	return bs, nil
 }
 
@@ -85,7 +85,7 @@ func (e Float64Decoder) Decode(value []byte) (interface{}, error) {
 	if len(value) != 8 {
 		return nil, sizeNot8
 	}
-	bits := binary.LittleEndian.Uint64(value)
+	bits := binary.BigEndian.Uint64(value)
 	return math.Float64frombits(bits), nil
 }
 
@@ -107,7 +107,7 @@ func (e Float32Encoder) Encode(value interface{}) ([]byte, error) {
 	v := value.(float32)
 	bits := math.Float32bits(v)
 	bs := make([]byte, 4)
-	binary.LittleEndian.PutUint32(bs, bits)
+	binary.BigEndian.PutUint32(bs, bits)
 	return bs, nil
 }
 
@@ -122,7 +122,7 @@ func (e Float32Decoder) Decode(value []byte) (interface{}, error) {
 	if len(value) != 4 {
 		return nil, sizeNot4
 	}
-	bits := binary.LittleEndian.Uint32(value)
+	bits := binary.BigEndian.Uint32(value)
 	return math.Float32frombits(bits), nil
 }
 
@@ -141,7 +141,7 @@ func (e Uint64Encoder) Encode(value interface{}) ([]byte, error) {
 	}
 	v := value.(uint64)
 	bs := make([]byte, 8)
-	binary.LittleEndian.PutUint64(bs, v)
+	binary.BigEndian.PutUint64(bs, v)
 	return bs, nil
 }
 
@@ -156,7 +156,7 @@ func (d Uint64Decoder) Decode(value []byte) (interface{}, error) {
 	if len(value) != 8 {
 		return nil, sizeNot8
 	}
-	bits := binary.LittleEndian.Uint64(value)
+	bits := binary.BigEndian.Uint64(value)
 	return bits, nil
 }
 
@@ -175,7 +175,7 @@ func (e Int64Encoder) Encode(value interface{}) ([]byte, error) {
 	}
 	v := value.(int64)
 	bs := make([]byte, 8)
-	binary.LittleEndian.PutUint64(bs, uint64(v))
+	binary.BigEndian.PutUint64(bs, uint64(v))
 	return bs, nil
 }
 
@@ -190,7 +190,7 @@ func (d Int64Decoder) Decode(value []byte) (interface{}, error) {
 	if len(value) != 8 {
 		return nil, sizeNot8
 	}
-	bits := binary.LittleEndian.Uint64(value)
+	bits := binary.BigEndian.Uint64(value)
 	return int64(bits), nil
 }
 
@@ -209,7 +209,7 @@ func (e Uint32Encoder) Encode(value interface{}) ([]byte, error) {
 	}
 	v := value.(uint32)
 	bs := make([]byte, 4)
-	binary.LittleEndian.PutUint32(bs, v)
+	binary.BigEndian.PutUint32(bs, v)
 	return bs, nil
 }
 
@@ -224,7 +224,7 @@ func (e Uint32Decoder) Decode(value []byte) (interface{}, error) {
 	if len(value) != 4 {
 		return nil, sizeNot4
 	}
-	bits := binary.LittleEndian.Uint32(value)
+	bits := binary.BigEndian.Uint32(value)
 	return uint32(bits), nil
 }
 
@@ -243,7 +243,7 @@ func (e Int32Encoder) Encode(value interface{}) ([]byte, error) {
 	}
 	v := value.(int32)
 	bs := make([]byte, 4)
-	binary.LittleEndian.PutUint32(bs, uint32(v))
+	binary.BigEndian.PutUint32(bs, uint32(v))
 	return bs, nil
 }
 
@@ -258,7 +258,7 @@ func (e Int32Decoder) Decode(value []byte) (interface{}, error) {
 	if len(value) != 4 {
 		return nil, sizeNot4
 	}
-	bits := binary.LittleEndian.Uint32(value)
+	bits := binary.BigEndian.Uint32(value)
 	return int32(bits), nil
 }
 
@@ -275,7 +275,7 @@ func (s IntSerde) Encode(value interface{}) ([]byte, error) {
 	}
 	v := value.(int)
 	bs := make([]byte, 4)
-	binary.LittleEndian.PutUint32(bs, uint32(v))
+	binary.BigEndian.PutUint32(bs, uint32(v))
 	return bs, nil
 }
 
@@ -286,7 +286,7 @@ func (s IntSerde) Decode(value []byte) (interface{}, error) {
 	if len(value) != 4 {
 		return nil, sizeNot4
 	}
-	bits := binary.LittleEndian.Uint32(value)
+	bits := binary.BigEndian.Uint32(value)
 	return int(bits), nil
 }
 
@@ -300,7 +300,7 @@ func (e Uint16Encoder) Encode(value interface{}) ([]byte, error) {
 	}
 	v := value.(uint16)
 	bs := make([]byte, 2)
-	binary.LittleEndian.PutUint16(bs, v)
+	binary.BigEndian.PutUint16(bs, v)
 	return bs, nil
 }
 
@@ -315,7 +315,7 @@ func (e Uint16Decoder) Decode(value []byte) (interface{}, error) {
 	if len(value) != 2 {
 		return nil, sizeNot2
 	}
-	bits := binary.LittleEndian.Uint16(value)
+	bits := binary.BigEndian.Uint16(value)
 	return bits, nil
 }
 
@@ -335,7 +335,7 @@ func (e Int16Encoder) Encode(value interface{}) ([]byte, error) {
 	}
 	v := value.(int16)
 	bs := make([]byte, 2)
-	binary.LittleEndian.PutUint16(bs, uint16(v))
+	binary.BigEndian.PutUint16(bs, uint16(v))
 	return bs, nil
 }
 
@@ -350,7 +350,7 @@ func (e Int16Decoder) Decode(value []byte) (interface{}, error) {
 	if len(value) != 2 {
 		return nil, sizeNot2
 	}
-	bits := binary.LittleEndian.Uint16(value)
+	bits := binary.BigEndian.Uint16(value)
 	return bits, nil
 }
 

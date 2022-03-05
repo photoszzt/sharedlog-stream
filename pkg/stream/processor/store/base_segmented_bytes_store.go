@@ -17,8 +17,7 @@ type BaseSegmentedBytesStore struct {
 
 var _ = SegmentedBytesStore(&BaseSegmentedBytesStore{})
 
-func NewBaseSegmentedBytesStore(windowName string,
-	app_name string,
+func NewRedisSegmentedBytesStore(name string,
 	retention int64, // ms
 	keySchema KeySchema,
 	rkvs *RedisKeyValueStore,
@@ -28,9 +27,9 @@ func NewBaseSegmentedBytesStore(windowName string,
 		segmentInterval = 60_000
 	}
 	return &BaseSegmentedBytesStore{
-		name:               windowName,
+		name:               name,
 		keySchema:          keySchema,
-		segments:           NewRedisKeyValueSegments(windowName, app_name, retention, segmentInterval, rkvs),
+		segments:           NewRedisKeyValueSegments(name, retention, segmentInterval, rkvs),
 		observedStreamTime: -1,
 	}
 }

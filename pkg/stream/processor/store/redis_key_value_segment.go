@@ -18,23 +18,18 @@ type RedisKeyValueSegment struct {
 
 var _ = Segment(&RedisKeyValueSegment{})
 
-func NewRedisKeyValueSegment(ctx context.Context, rkvs *RedisKeyValueStore, segmentName string, windowName string,
-	state_name string,
+func NewRedisKeyValueSegment(ctx context.Context, rkvs *RedisKeyValueStore, segmentName string, name string,
 ) (*RedisKeyValueSegment, error) {
-	err := rkvs.rdb.ZAdd(ctx, windowName, &redis.Z{Score: 0, Member: segmentName}).Err()
-	if err != nil {
-		return nil, err
-	}
-	err = rkvs.rdb.ZAdd(ctx, state_name, &redis.Z{Score: 0, Member: windowName}).Err()
+	err := rkvs.rdb.ZAdd(ctx, name, &redis.Z{Score: 0, Member: segmentName}).Err()
 	if err != nil {
 		return nil, err
 	}
 	return &RedisKeyValueSegment{
 		rkvs:        rkvs,
-		seg:         fmt.Sprintf("%s##%s", segmentName, windowName),
-		seg_key:     fmt.Sprintf("%s##%s-keys", segmentName, windowName),
+		seg:         fmt.Sprintf("%s##%s", segmentName, name),
+		seg_key:     fmt.Sprintf("%s##%s-keys", segmentName, name),
 		segmentName: segmentName,
-		windowName:  windowName,
+		windowName:  name,
 	}, nil
 }
 
