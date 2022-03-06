@@ -45,6 +45,7 @@ func (s *BaseSegmentedBytesStore) Fetch(key []byte, from int64, to int64,
 ) error {
 	binaryFrom := s.keySchema.LowerRangeFixedSize(key, from)
 	binaryTo := s.keySchema.UpperRangeFixedSize(key, to)
+	fmt.Fprintf(os.Stderr, "fetch from: %d, to: %d\n", from, to)
 	segment_slice := s.segments.Segments(from, to)
 	fmt.Fprintf(os.Stderr, "segment slice: %v\n", segment_slice)
 	for _, seg := range segment_slice {

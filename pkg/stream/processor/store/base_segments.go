@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/google/btree"
 )
@@ -51,7 +52,7 @@ func (s *BaseSegments) SegmentId(ts int64) int64 {
 }
 
 func (s *BaseSegments) SegmentName(segmentId int64) string {
-	return fmt.Sprintf("%s.%d%d", s.name, segmentId, s.segmentInterval)
+	return fmt.Sprintf("%s.%d", s.name, segmentId*s.segmentInterval)
 }
 
 func (s *BaseSegments) GetSegmentForTimestamp(ts int64) Segment {
@@ -101,10 +102,14 @@ func (s *BaseSegments) cleanupEarlierThan(ctx context.Context, minLiveSegment in
 
 func (s *BaseSegments) Segments(timeFrom int64, timeTo int64) []Segment {
 	var got []Segment
-	s.segments.AscendRange(Int64(timeFrom), Int64(timeTo), func(i btree.Item) bool {
-		ks := i.(*KeySegment)
-		got = append(got, ks.Value)
-		return true
-	})
+	fromId := Int64(s.SegmentId(timeFrom))
+	toId := Int64(s.SegmentId(timeTo))
+	fmt.Fprintf(os.Stderr, "fromId: %v, toId: %v\n", fromId, toId)
+	s.segments.AscendRange(fromId, toId,
+		func(i btree.Item) bool {
+			ks := i.(*KeySegment)
+			got = append(got, ks.Value)
+			return true
+		})
 	return got
 }
