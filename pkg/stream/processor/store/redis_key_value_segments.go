@@ -1,6 +1,10 @@
 package store
 
-import "context"
+import (
+	"context"
+	"fmt"
+	"os"
+)
 
 type RedisKeyValueSegments struct {
 	rkvs *RedisKeyValueStore
@@ -17,6 +21,7 @@ func NewRedisKeyValueSegments(name string, retentionPeriod int64,
 }
 
 func (kvs *RedisKeyValueSegments) GetOrCreateSegment(ctx context.Context, segmentId int64) (Segment, error) {
+	fmt.Fprint(os.Stderr, "calling GetOrCreateSegment from RedisKeyValueSegments\n")
 	if kvs.segments.Has(Int64(segmentId)) {
 		kv := kvs.segments.Get(Int64(segmentId)).(*KeySegment)
 		return kv.Value, nil

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/rs/zerolog/log"
 )
@@ -45,7 +46,9 @@ func (s *BaseSegmentedBytesStore) Fetch(key []byte, from int64, to int64,
 	binaryFrom := s.keySchema.LowerRangeFixedSize(key, from)
 	binaryTo := s.keySchema.UpperRangeFixedSize(key, to)
 	segment_slice := s.segments.Segments(from, to)
+	fmt.Fprintf(os.Stderr, "segment slice: %v\n", segment_slice)
 	for _, seg := range segment_slice {
+		fmt.Fprintf(os.Stderr, "seg: %s\n", seg.Name())
 		seg.Range(binaryFrom, binaryTo, func(kt KeyT, vt ValueT) error {
 			bytes := kt.([]byte)
 			has, ts := s.keySchema.HasNextCondition(bytes, key, key, from, to)
@@ -140,7 +143,8 @@ func (s *BaseSegmentedBytesStore) Put(ctx context.Context, key []byte, value []b
 		s.observedStreamTime = ts
 	}
 	segmentId := s.segments.SegmentId(ts)
-	segment, err := s.segments.GetOrCreateSegmentIfLive(ctx, segmentId, s.observedStreamTime, s.segments.GetOrCreateSegment)
+	segment, err := s.segments.GetOrCreateSegmentIfLive(ctx, segmentId, s.observedStreamTime,
+		s.segments.GetOrCreateSegment)
 	if err != nil {
 		return err
 	}

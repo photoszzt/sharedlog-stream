@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"reflect"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"testing"
 )
 
@@ -118,5 +120,35 @@ func TestLowerBoundMatchesTrailingZeros(t *testing.T) {
 	eq := wks.ToStoreKeyBinary([]byte{0xA, 0xB, 0xC}, 0, 0)
 	if ret := bytes.Compare(lower, eq); ret != 0 {
 		t.Fatal("should be equal")
+	}
+}
+
+func TestShouldExtractKeyBytesFromBinary(t *testing.T) {
+	wks := &WindowKeySchema{}
+	key := "a"
+	s := commtypes.StringSerde{}
+	kBytes, err := s.Encode(key)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	serialized := wks.ToStoreKeyBinary(kBytes, 50, 3)
+	extract := wks.ExtractStoreKeyBytes(serialized)
+	if !reflect.DeepEqual(kBytes, extract) {
+		t.Fatal("should equal")
+	}
+}
+
+func TestShouldExtractStartTimeFromBinary(t *testing.T) {
+	wks := &WindowKeySchema{}
+	key := "a"
+	s := commtypes.StringSerde{}
+	kBytes, err := s.Encode(key)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	serialized := wks.ToStoreKeyBinary(kBytes, 50, 3)
+	extractTs := wks.ExtractStoreTs(serialized)
+	if extractTs != 50 {
+		t.Fatal("should equal")
 	}
 }
