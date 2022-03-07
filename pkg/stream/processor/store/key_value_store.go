@@ -9,7 +9,7 @@ type KeyValueStore interface {
 	StateStore
 	Init(ctx StoreContext)
 	Get(ctx context.Context, key KeyT) (ValueT, bool, error)
-	Range(from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error
+	Range(ctx context.Context, from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error
 	ReverseRange(from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error
 	PrefixScan(prefix interface{}, prefixKeyEncoder commtypes.Encoder, iterFunc func(KeyT, ValueT) error) error
 	ApproximateNumEntries(ctx context.Context) (uint64, error)

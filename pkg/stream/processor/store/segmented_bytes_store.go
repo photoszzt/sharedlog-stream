@@ -7,12 +7,13 @@ type SegmentedBytesStore interface {
 
 	// Fetch all records from the segmented store with the provided key and time range
 	// from all existing segments
-	Fetch(key []byte, from int64, to int64, iterFunc func(int64 /* ts */, KeyT, ValueT) error) error
+	Fetch(ctx context.Context, key []byte, from int64, to int64,
+		iterFunc func(int64 /* ts */, KeyT, ValueT) error) error
 
 	// Fetch all records from the segmented store with the provided key and time range
 	// from all existing segments in backward order (from latest to earliest)
 	BackwardFetch(key []byte, from int64, to int64, iterFunc func(int64 /* ts */, KeyT, ValueT) error) error
-	FetchWithKeyRange(keyFrom []byte, keyTo []byte, from int64, to int64,
+	FetchWithKeyRange(ctx context.Context, keyFrom []byte, keyTo []byte, from int64, to int64,
 		iterFunc func(int64 /* ts */, KeyT, ValueT) error) error
 	BackwardFetchWithKeyRange(keyFrom []byte, keyTo []byte, from int64, to int64,
 		iterFunc func(int64 /* ts */, KeyT, ValueT) error) error

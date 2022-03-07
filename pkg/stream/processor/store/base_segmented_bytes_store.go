@@ -40,7 +40,7 @@ func (s *BaseSegmentedBytesStore) Name() string { return s.name }
 
 // Fetch all records from the segmented store with the provided key and time range
 // from all existing segments
-func (s *BaseSegmentedBytesStore) Fetch(key []byte, from int64, to int64,
+func (s *BaseSegmentedBytesStore) Fetch(ctx context.Context, key []byte, from int64, to int64,
 	iterFunc func(int64 /* ts */, KeyT, ValueT) error,
 ) error {
 	binaryFrom := s.keySchema.LowerRangeFixedSize(key, from)
@@ -50,7 +50,7 @@ func (s *BaseSegmentedBytesStore) Fetch(key []byte, from int64, to int64,
 	fmt.Fprintf(os.Stderr, "segment slice: %v\n", segment_slice)
 	for _, seg := range segment_slice {
 		fmt.Fprintf(os.Stderr, "seg: %s\n", seg.Name())
-		seg.Range(binaryFrom, binaryTo, func(kt KeyT, vt ValueT) error {
+		seg.Range(ctx, binaryFrom, binaryTo, func(kt KeyT, vt ValueT) error {
 			bytes := kt.([]byte)
 			has, ts := s.keySchema.HasNextCondition(bytes, key, key, from, to)
 			if has {
@@ -73,7 +73,7 @@ func (s *BaseSegmentedBytesStore) BackwardFetch(key []byte, from int64, to int64
 	panic("not implemented")
 }
 
-func (s *BaseSegmentedBytesStore) FetchWithKeyRange(keyFrom []byte, keyTo []byte,
+func (s *BaseSegmentedBytesStore) FetchWithKeyRange(ctx context.Context, keyFrom []byte, keyTo []byte,
 	from int64, to int64,
 	iterFunc func(int64 /* ts */, KeyT, ValueT) error,
 ) error {
@@ -84,7 +84,7 @@ func (s *BaseSegmentedBytesStore) FetchWithKeyRange(keyFrom []byte, keyTo []byte
 	binaryTo := s.keySchema.UpperRangeFixedSize(keyTo, to)
 	segment_slice := s.segments.Segments(from, to)
 	for _, seg := range segment_slice {
-		seg.Range(binaryFrom, binaryTo, func(kt KeyT, vt ValueT) error {
+		seg.Range(ctx, binaryFrom, binaryTo, func(kt KeyT, vt ValueT) error {
 			bytes := kt.([]byte)
 			has, ts := s.keySchema.HasNextCondition(bytes, keyFrom, keyTo, from, to)
 			if has {

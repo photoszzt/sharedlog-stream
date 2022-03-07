@@ -134,8 +134,8 @@ func (st *KeyValueStoreWithChangelog) ApproximateNumEntries(ctx context.Context)
 	return st.kvstore.ApproximateNumEntries(ctx)
 }
 
-func (st *KeyValueStoreWithChangelog) Range(from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error {
-	return st.kvstore.Range(from, to, iterFunc)
+func (st *KeyValueStoreWithChangelog) Range(ctx context.Context, from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error {
+	return st.kvstore.Range(ctx, from, to, iterFunc)
 }
 
 func (st *KeyValueStoreWithChangelog) ReverseRange(from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error {

@@ -135,6 +135,7 @@ func (s *InMemoryWindowStore) Get(ctx context.Context, key KeyT, windowStartTime
 }
 
 func (s *InMemoryWindowStore) Fetch(
+	ctx context.Context,
 	key KeyT,
 	timeFrom time.Time,
 	timeTo time.Time,
@@ -199,6 +200,7 @@ func (s *InMemoryWindowStore) BackwardFetch(
 }
 
 func (s *InMemoryWindowStore) FetchWithKeyRange(
+	ctx context.Context,
 	keyFrom KeyT,
 	keyTo KeyT,
 	timeFrom time.Time,

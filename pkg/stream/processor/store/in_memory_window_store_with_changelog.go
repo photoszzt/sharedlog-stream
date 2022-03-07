@@ -95,12 +95,13 @@ func (st *InMemoryWindowStoreWithChangelog) Get(ctx context.Context, key KeyT, w
 }
 
 func (st *InMemoryWindowStoreWithChangelog) Fetch(
+	ctx context.Context,
 	key KeyT,
 	timeFrom time.Time,
 	timeTo time.Time,
 	iterFunc func(int64, KeyT, ValueT) error,
 ) error {
-	return st.windowStore.Fetch(key, timeFrom, timeTo, iterFunc)
+	return st.windowStore.Fetch(ctx, key, timeFrom, timeTo, iterFunc)
 }
 
 func (st *InMemoryWindowStoreWithChangelog) IterAll(iterFunc func(int64, KeyT, ValueT) error) error {
@@ -117,13 +118,14 @@ func (st *InMemoryWindowStoreWithChangelog) BackwardFetch(
 }
 
 func (st *InMemoryWindowStoreWithChangelog) FetchWithKeyRange(
+	ctx context.Context,
 	keyFrom KeyT,
 	keyTo KeyT,
 	timeFrom time.Time,
 	timeTo time.Time,
 	iterFunc func(int64, KeyT, ValueT) error,
 ) error {
-	return st.windowStore.FetchWithKeyRange(keyFrom, keyTo, timeFrom, timeTo, iterFunc)
+	return st.windowStore.FetchWithKeyRange(ctx, keyFrom, keyTo, timeFrom, timeTo, iterFunc)
 }
 
 func (st *InMemoryWindowStoreWithChangelog) BackwardFetchWithKeyRange(

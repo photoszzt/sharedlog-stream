@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/utils"
 
 	"github.com/go-redis/redis/v8"
 )
@@ -76,8 +77,46 @@ func (s *RedisKeyValueStore) GetWithCollection(ctx context.Context, key KeyT, co
 	return val, true, nil
 }
 
-func (s *RedisKeyValueStore) Range(from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error {
-	panic("not implemented")
+func (s *RedisKeyValueStore) Range(ctx context.Context, from KeyT, to KeyT,
+	iterFunc func(KeyT, ValueT) error,
+) error {
+	fromBytes, err := utils.ConvertToBytes(from, s.config.KeySerde)
+	if err != nil {
+		return err
+	}
+	toBytes, err := utils.ConvertToBytes(to, s.config.KeySerde)
+	if err != nil {
+		return err
+	}
+	fBytes := make([]byte, 0)
+	fBytes = append(fBytes, byte('['))
+	fBytes = append(fBytes, fromBytes...)
+	tBytes := make([]byte, 0)
+	tBytes = append(tBytes, byte('['))
+	tBytes = append(tBytes, toBytes...)
+	kRange, err := s.rdb.ZRangeArgs(ctx, redis.ZRangeArgs{
+		Key:   s.key_collection_name,
+		ByLex: true,
+		Start: fBytes,
+		Stop:  tBytes,
+	}).Result()
+	if err != nil {
+		return err
+	}
+
+	ret, err := s.rdb.HMGet(ctx, s.collection_name, kRange...).Result()
+	if err != nil {
+		return err
+	}
+	for idx, k := range kRange {
+		val := ret[idx]
+
+		err := iterFunc(k, val)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *RedisKeyValueStore) ReverseRange(from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error {

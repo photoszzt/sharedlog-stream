@@ -42,7 +42,7 @@ func (rkvs *RedisKeyValueSegment) Get(ctx context.Context, key KeyT) (ValueT, bo
 	return rkvs.rkvs.GetWithCollection(ctx, key, rkvs.seg)
 }
 
-func (rkvs *RedisKeyValueSegment) Range(from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error {
+func (rkvs *RedisKeyValueSegment) Range(ctx context.Context, from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error {
 	panic("not implemented")
 }
 

@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"reflect"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"strconv"
 )
 
@@ -101,4 +102,16 @@ func reprOfValue(val reflect.Value) string {
 	default:
 		return fmt.Sprint(val.Interface())
 	}
+}
+
+func ConvertToBytes(a interface{}, serde commtypes.Serde) ([]byte, error) {
+	var err error
+	aBytes, ok := a.([]byte)
+	if !ok {
+		aBytes, err = serde.Encode(a)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return aBytes, nil
 }

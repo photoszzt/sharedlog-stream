@@ -96,7 +96,7 @@ func (rws *SegmentedWindowStore) Get(ctx context.Context, key KeyT, windowStartT
 	return rws.bytesStore.Get(ctx, k)
 }
 
-func (rws *SegmentedWindowStore) Fetch(key KeyT, timeFrom time.Time, timeTo time.Time,
+func (rws *SegmentedWindowStore) Fetch(ctx context.Context, key KeyT, timeFrom time.Time, timeTo time.Time,
 	iterFunc func(int64 /* ts */, KeyT, ValueT) error,
 ) error {
 	tsFrom := timeFrom.UnixMilli()
@@ -109,7 +109,7 @@ func (rws *SegmentedWindowStore) Fetch(key KeyT, timeFrom time.Time, timeTo time
 			return err
 		}
 	}
-	rws.bytesStore.Fetch(kBytes, tsFrom, tsTo, iterFunc)
+	rws.bytesStore.Fetch(ctx, kBytes, tsFrom, tsTo, iterFunc)
 	return nil
 }
 
@@ -119,7 +119,7 @@ func (rws *SegmentedWindowStore) BackwardFetch(key KeyT, timeFrom time.Time, tim
 	panic("not implemented")
 }
 
-func (rws *SegmentedWindowStore) FetchWithKeyRange(keyFrom KeyT, keyTo KeyT, timeFrom time.Time, timeTo time.Time,
+func (rws *SegmentedWindowStore) FetchWithKeyRange(ctx context.Context, keyFrom KeyT, keyTo KeyT, timeFrom time.Time, timeTo time.Time,
 	iterFunc func(int64, KeyT, ValueT) error,
 ) error {
 	tsFrom := timeFrom.UnixMilli()
@@ -139,7 +139,7 @@ func (rws *SegmentedWindowStore) FetchWithKeyRange(keyFrom KeyT, keyTo KeyT, tim
 			return err
 		}
 	}
-	return rws.bytesStore.FetchWithKeyRange(kFromBytes, kToBytes, tsFrom, tsTo, iterFunc)
+	return rws.bytesStore.FetchWithKeyRange(ctx, kFromBytes, kToBytes, tsFrom, tsTo, iterFunc)
 }
 
 func (rws *SegmentedWindowStore) BackwardFetchWithKeyRange(keyFrom KeyT, keyTo KeyT, timeFrom time.Time, timeTo time.Time, iterFunc func(int64, KeyT, ValueT) error) error {

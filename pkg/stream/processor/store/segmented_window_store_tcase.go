@@ -61,7 +61,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 	}
 	checkPut(ctx, store, segments, t, names)
 
-	resM, err := assertFetch(store, 0, startTime-TEST_WINDOW_SIZE, startTime+TEST_WINDOW_SIZE)
+	resM, err := assertFetch(ctx, store, 0, startTime-TEST_WINDOW_SIZE, startTime+TEST_WINDOW_SIZE)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -70,7 +70,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatalf("should equal. expected: %v, got: %v", expected, resM)
 	}
 
-	resM, err = assertFetch(store, 1, startTime-TEST_WINDOW_SIZE+increment, startTime+TEST_WINDOW_SIZE+increment)
+	resM, err = assertFetch(ctx, store, 1, startTime-TEST_WINDOW_SIZE+increment, startTime+TEST_WINDOW_SIZE+increment)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -79,7 +79,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 2, startTime-TEST_WINDOW_SIZE+increment*2, startTime+TEST_WINDOW_SIZE+increment*2)
+	resM, err = assertFetch(ctx, store, 2, startTime-TEST_WINDOW_SIZE+increment*2, startTime+TEST_WINDOW_SIZE+increment*2)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -88,7 +88,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 3, startTime-TEST_WINDOW_SIZE+increment*3, startTime+TEST_WINDOW_SIZE+increment*3)
+	resM, err = assertFetch(ctx, store, 3, startTime-TEST_WINDOW_SIZE+increment*3, startTime+TEST_WINDOW_SIZE+increment*3)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -97,7 +97,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 4, startTime-TEST_WINDOW_SIZE+increment*4, startTime+TEST_WINDOW_SIZE+increment*4)
+	resM, err = assertFetch(ctx, store, 4, startTime-TEST_WINDOW_SIZE+increment*4, startTime+TEST_WINDOW_SIZE+increment*4)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -106,7 +106,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 5, startTime-TEST_WINDOW_SIZE+increment*5, startTime+TEST_WINDOW_SIZE+increment*5)
+	resM, err = assertFetch(ctx, store, 5, startTime-TEST_WINDOW_SIZE+increment*5, startTime+TEST_WINDOW_SIZE+increment*5)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -123,7 +123,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 	}
 	checkPut(ctx, store, segments, t, names)
 
-	resM, err = assertFetch(store, 0, startTime-TEST_WINDOW_SIZE, startTime+TEST_WINDOW_SIZE)
+	resM, err = assertFetch(ctx, store, 0, startTime-TEST_WINDOW_SIZE, startTime+TEST_WINDOW_SIZE)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -132,7 +132,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 1, startTime-TEST_WINDOW_SIZE+increment, startTime+TEST_WINDOW_SIZE+increment)
+	resM, err = assertFetch(ctx, store, 1, startTime-TEST_WINDOW_SIZE+increment, startTime+TEST_WINDOW_SIZE+increment)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -141,7 +141,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 2, startTime-TEST_WINDOW_SIZE+increment*2, startTime+TEST_WINDOW_SIZE+increment*2)
+	resM, err = assertFetch(ctx, store, 2, startTime-TEST_WINDOW_SIZE+increment*2, startTime+TEST_WINDOW_SIZE+increment*2)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -150,7 +150,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 3, startTime-TEST_WINDOW_SIZE+increment*3, startTime+TEST_WINDOW_SIZE+increment*3)
+	resM, err = assertFetch(ctx, store, 3, startTime-TEST_WINDOW_SIZE+increment*3, startTime+TEST_WINDOW_SIZE+increment*3)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -159,7 +159,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 4, startTime-TEST_WINDOW_SIZE+increment*4, startTime+TEST_WINDOW_SIZE+increment*4)
+	resM, err = assertFetch(ctx, store, 4, startTime-TEST_WINDOW_SIZE+increment*4, startTime+TEST_WINDOW_SIZE+increment*4)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -168,7 +168,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 5, startTime-TEST_WINDOW_SIZE+increment*5, startTime+TEST_WINDOW_SIZE+increment*5)
+	resM, err = assertFetch(ctx, store, 5, startTime-TEST_WINDOW_SIZE+increment*5, startTime+TEST_WINDOW_SIZE+increment*5)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -177,7 +177,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 6, startTime-TEST_WINDOW_SIZE+increment*6, startTime+TEST_WINDOW_SIZE+increment*6)
+	resM, err = assertFetch(ctx, store, 6, startTime-TEST_WINDOW_SIZE+increment*6, startTime+TEST_WINDOW_SIZE+increment*6)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -194,7 +194,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 	}
 	checkPut(ctx, store, segments, t, names)
 
-	resM, err = assertFetch(store, 0, startTime-TEST_WINDOW_SIZE, startTime+TEST_WINDOW_SIZE)
+	resM, err = assertFetch(ctx, store, 0, startTime-TEST_WINDOW_SIZE, startTime+TEST_WINDOW_SIZE)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -203,7 +203,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 1, startTime-TEST_WINDOW_SIZE+increment, startTime+TEST_WINDOW_SIZE+increment)
+	resM, err = assertFetch(ctx, store, 1, startTime-TEST_WINDOW_SIZE+increment, startTime+TEST_WINDOW_SIZE+increment)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -212,7 +212,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 2, startTime-TEST_WINDOW_SIZE+increment*2, startTime+TEST_WINDOW_SIZE+increment*2)
+	resM, err = assertFetch(ctx, store, 2, startTime-TEST_WINDOW_SIZE+increment*2, startTime+TEST_WINDOW_SIZE+increment*2)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -221,7 +221,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 3, startTime-TEST_WINDOW_SIZE+increment*3, startTime+TEST_WINDOW_SIZE+increment*3)
+	resM, err = assertFetch(ctx, store, 3, startTime-TEST_WINDOW_SIZE+increment*3, startTime+TEST_WINDOW_SIZE+increment*3)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -230,7 +230,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 4, startTime-TEST_WINDOW_SIZE+increment*4, startTime+TEST_WINDOW_SIZE+increment*4)
+	resM, err = assertFetch(ctx, store, 4, startTime-TEST_WINDOW_SIZE+increment*4, startTime+TEST_WINDOW_SIZE+increment*4)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -239,7 +239,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 5, startTime-TEST_WINDOW_SIZE+increment*5, startTime+TEST_WINDOW_SIZE+increment*5)
+	resM, err = assertFetch(ctx, store, 5, startTime-TEST_WINDOW_SIZE+increment*5, startTime+TEST_WINDOW_SIZE+increment*5)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -248,7 +248,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 6, startTime-TEST_WINDOW_SIZE+increment*6, startTime+TEST_WINDOW_SIZE+increment*6)
+	resM, err = assertFetch(ctx, store, 6, startTime-TEST_WINDOW_SIZE+increment*6, startTime+TEST_WINDOW_SIZE+increment*6)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -257,7 +257,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 7, startTime-TEST_WINDOW_SIZE+increment*7, startTime+TEST_WINDOW_SIZE+increment*7)
+	resM, err = assertFetch(ctx, store, 7, startTime-TEST_WINDOW_SIZE+increment*7, startTime+TEST_WINDOW_SIZE+increment*7)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -274,7 +274,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 	}
 	checkPut(ctx, store, segments, t, names)
 
-	resM, err = assertFetch(store, 0, startTime-TEST_WINDOW_SIZE, startTime+TEST_WINDOW_SIZE)
+	resM, err = assertFetch(ctx, store, 0, startTime-TEST_WINDOW_SIZE, startTime+TEST_WINDOW_SIZE)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -283,7 +283,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 1, startTime-TEST_WINDOW_SIZE+increment, startTime+TEST_WINDOW_SIZE+increment)
+	resM, err = assertFetch(ctx, store, 1, startTime-TEST_WINDOW_SIZE+increment, startTime+TEST_WINDOW_SIZE+increment)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -292,7 +292,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 2, startTime-TEST_WINDOW_SIZE+increment*2, startTime+TEST_WINDOW_SIZE+increment*2)
+	resM, err = assertFetch(ctx, store, 2, startTime-TEST_WINDOW_SIZE+increment*2, startTime+TEST_WINDOW_SIZE+increment*2)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -301,7 +301,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 3, startTime-TEST_WINDOW_SIZE+increment*3, startTime+TEST_WINDOW_SIZE+increment*3)
+	resM, err = assertFetch(ctx, store, 3, startTime-TEST_WINDOW_SIZE+increment*3, startTime+TEST_WINDOW_SIZE+increment*3)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -310,7 +310,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 4, startTime-TEST_WINDOW_SIZE+increment*4, startTime+TEST_WINDOW_SIZE+increment*4)
+	resM, err = assertFetch(ctx, store, 4, startTime-TEST_WINDOW_SIZE+increment*4, startTime+TEST_WINDOW_SIZE+increment*4)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -319,7 +319,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 5, startTime-TEST_WINDOW_SIZE+increment*5, startTime+TEST_WINDOW_SIZE+increment*5)
+	resM, err = assertFetch(ctx, store, 5, startTime-TEST_WINDOW_SIZE+increment*5, startTime+TEST_WINDOW_SIZE+increment*5)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -328,7 +328,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 6, startTime-TEST_WINDOW_SIZE+increment*6, startTime+TEST_WINDOW_SIZE+increment*6)
+	resM, err = assertFetch(ctx, store, 6, startTime-TEST_WINDOW_SIZE+increment*6, startTime+TEST_WINDOW_SIZE+increment*6)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -337,7 +337,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 7, startTime-TEST_WINDOW_SIZE+increment*7, startTime+TEST_WINDOW_SIZE+increment*7)
+	resM, err = assertFetch(ctx, store, 7, startTime-TEST_WINDOW_SIZE+increment*7, startTime+TEST_WINDOW_SIZE+increment*7)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}
@@ -346,7 +346,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *Red
 		t.Fatal("should equal")
 	}
 
-	resM, err = assertFetch(store, 8, startTime-TEST_WINDOW_SIZE+increment*8, startTime+TEST_WINDOW_SIZE+increment*8)
+	resM, err = assertFetch(ctx, store, 8, startTime-TEST_WINDOW_SIZE+increment*8, startTime+TEST_WINDOW_SIZE+increment*8)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
 	}

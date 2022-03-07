@@ -78,7 +78,7 @@ func (st *InMemoryKeyValueStore) ApproximateNumEntries(ctx context.Context) (uin
 	return uint64(st.store.Len()), nil
 }
 
-func (st *InMemoryKeyValueStore) Range(from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error {
+func (st *InMemoryKeyValueStore) Range(ctx context.Context, from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error {
 	if st.compare(from, to) > 0 {
 		return fmt.Errorf("from should be smaller or equal to to")
 	}
