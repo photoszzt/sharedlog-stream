@@ -1,9 +1,7 @@
 package store
 
 import (
-	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"testing"
 )
 
 func getRedisWindowStore(retainDuplicates bool) (*SegmentedWindowStore, *RedisKeyValueStore) {
@@ -22,6 +20,7 @@ func getRedisWindowStore(retainDuplicates bool) (*SegmentedWindowStore, *RedisKe
 	return store, rkvs
 }
 
+/*
 func TestRedisGetAndRange(t *testing.T) {
 	store, rkvs := getRedisWindowStore(false)
 	ctx := context.Background()
@@ -30,7 +29,7 @@ func TestRedisGetAndRange(t *testing.T) {
 	rkvs.rdb.FlushAll(ctx)
 }
 
-/*
+
 func TestRedisShouldGetAllNonDeletedMsgs(t *testing.T) {
 	ctx := context.Background()
 	store, rkvs := getRedisWindowStore(false)

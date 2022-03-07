@@ -140,7 +140,7 @@ func (p *StreamStreamJoinProcessor) ProcessAndReturn(ctx context.Context, msg co
 	timeToSec := timeTo / 1000
 	timeToNs := (timeTo - timeToSec*1000) * 1000000
 	msgs := make([]commtypes.Message, 0)
-	err := p.otherWindowStore.Fetch(msg.Key,
+	err := p.otherWindowStore.Fetch(ctx, msg.Key,
 		time.Unix(int64(timeFromSec), int64(timeFromNs)),
 		time.Unix(int64(timeToSec), int64(timeToNs)), func(otherRecordTs int64, kt store.KeyT, vt store.ValueT) error {
 			var newTs int64

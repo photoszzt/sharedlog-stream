@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"os"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/utils"
 
@@ -94,6 +95,7 @@ func (s *RedisKeyValueStore) Range(ctx context.Context, from KeyT, to KeyT,
 	tBytes := make([]byte, 0)
 	tBytes = append(tBytes, byte('['))
 	tBytes = append(tBytes, toBytes...)
+	fmt.Fprintf(os.Stderr, "range from %v to %v\n", fBytes, tBytes)
 	kRange, err := s.rdb.ZRangeArgs(ctx, redis.ZRangeArgs{
 		Key:   s.key_collection_name,
 		ByLex: true,
@@ -103,6 +105,7 @@ func (s *RedisKeyValueStore) Range(ctx context.Context, from KeyT, to KeyT,
 	if err != nil {
 		return err
 	}
+	fmt.Fprintf(os.Stderr, "return kRange: %v\n", kRange)
 
 	ret, err := s.rdb.HMGet(ctx, s.collection_name, kRange...).Result()
 	if err != nil {

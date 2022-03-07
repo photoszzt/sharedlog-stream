@@ -22,6 +22,7 @@ func getRedisKeyValueStore() *RedisKeyValueStore {
 func TestRedisShouldNotIncludeDeletedFromRangeResult(t *testing.T) {
 	ctx := context.Background()
 	store := getRedisKeyValueStore()
+	store.rdb.FlushAll(ctx)
 	ShouldNotIncludeDeletedFromRangeResult(ctx, store, t)
 	store.rdb.FlushAll(ctx)
 }

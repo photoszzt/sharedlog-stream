@@ -94,7 +94,7 @@ func ShouldPutAndFetch(ctx context.Context, byteStore store.SegmentedBytesStore,
 		t.Fatal(err.Error())
 	}
 	kv := make([]*KeyValue, 0)
-	byteStore.Fetch(kBytes, 1, 999, func(i int64, kt store.KeyT, vt store.ValueT) error {
+	byteStore.Fetch(ctx, kBytes, 1, 999, func(i int64, kt store.KeyT, vt store.ValueT) error {
 		w, err := processor.NewTimeWindow(i, i+windowSizeForTimeWindow)
 		if err != nil {
 			return err

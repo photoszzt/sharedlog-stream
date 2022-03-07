@@ -40,3 +40,12 @@ func (kvs *RedisKeyValueSegments) GetOrCreateSegment(ctx context.Context, segmen
 func (kvs *RedisKeyValueSegments) getSegments(ctx context.Context) ([]string, error) {
 	return kvs.rkvs.rdb.ZRange(ctx, kvs.BaseSegments.name, 0, -1).Result()
 }
+
+func (kvs *RedisKeyValueSegments) CleanupExpiredMeta(ctx context.Context, expired []*KeySegment) error {
+	segNames := make([]string, 0, len(expired))
+	for _, s := range expired {
+		segNames = append(segNames, s.Value.Name())
+	}
+	err := kvs.rkvs.rdb.ZRem(ctx, kvs.BaseSegments.name, segNames).Err()
+	return err
+}

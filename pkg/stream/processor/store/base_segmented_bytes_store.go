@@ -52,6 +52,7 @@ func (s *BaseSegmentedBytesStore) Fetch(ctx context.Context, key []byte, from in
 		fmt.Fprintf(os.Stderr, "seg: %s\n", seg.Name())
 		seg.Range(ctx, binaryFrom, binaryTo, func(kt KeyT, vt ValueT) error {
 			bytes := kt.([]byte)
+			fmt.Fprintf(os.Stderr, "got k: %v, v: %v\n", kt, vt)
 			has, ts := s.keySchema.HasNextCondition(bytes, key, key, from, to)
 			if has {
 				err := iterFunc(ts, bytes, vt)
@@ -145,7 +146,7 @@ func (s *BaseSegmentedBytesStore) Put(ctx context.Context, key []byte, value []b
 	}
 	segmentId := s.segments.SegmentId(ts)
 	segment, err := s.segments.GetOrCreateSegmentIfLive(ctx, segmentId, s.observedStreamTime,
-		s.segments.GetOrCreateSegment)
+		s.segments.GetOrCreateSegment, s.segments.CleanupExpiredMeta)
 	if err != nil {
 		return err
 	}

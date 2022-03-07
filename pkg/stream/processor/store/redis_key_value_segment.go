@@ -43,7 +43,7 @@ func (rkvs *RedisKeyValueSegment) Get(ctx context.Context, key KeyT) (ValueT, bo
 }
 
 func (rkvs *RedisKeyValueSegment) Range(ctx context.Context, from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error {
-	panic("not implemented")
+	return rkvs.rkvs.Range(ctx, from, to, iterFunc)
 }
 
 func (rkvs *RedisKeyValueSegment) ReverseRange(from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error {

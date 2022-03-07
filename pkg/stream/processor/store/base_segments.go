@@ -60,8 +60,11 @@ func (s *BaseSegments) GetSegmentForTimestamp(ts int64) Segment {
 	return ks.Value
 }
 
-func (s *BaseSegments) GetOrCreateSegmentIfLive(ctx context.Context, segmentId int64,
-	streamTime int64, getOrCreateSegment func(ctx context.Context, segmentId int64) (Segment, error),
+func (s *BaseSegments) GetOrCreateSegmentIfLive(ctx context.Context,
+	segmentId int64,
+	streamTime int64,
+	getOrCreateSegment func(ctx context.Context, segmentId int64) (Segment, error),
+	cleanupExpiredMeta func(ctx context.Context, expired []*KeySegment) error,
 ) (Segment, error) {
 	minLiveTimestamp := streamTime - s.retentionPeriod
 	minLiveSegment := s.SegmentId(minLiveTimestamp)
@@ -75,7 +78,7 @@ func (s *BaseSegments) GetOrCreateSegmentIfLive(ctx context.Context, segmentId i
 	} else {
 		toReturn = nil
 	}
-	s.cleanupEarlierThan(ctx, minLiveSegment)
+	s.cleanupEarlierThan(ctx, minLiveSegment, cleanupExpiredMeta)
 	return toReturn, nil
 }
 
@@ -83,21 +86,27 @@ func (s *BaseSegments) GetOrCreateSegment(ctx context.Context, segmentId int64) 
 	panic("Should not call this method")
 }
 
-func (s *BaseSegments) cleanupEarlierThan(ctx context.Context, minLiveSegment int64) error {
-	var got []btree.Item
+func (s *BaseSegments) CleanupExpiredMeta(ctx context.Context, expired []*KeySegment) error {
+	panic("Should not call this method")
+}
+
+func (s *BaseSegments) cleanupEarlierThan(ctx context.Context,
+	minLiveSegment int64,
+	cleanupExpired func(ctx context.Context, expired []*KeySegment) error,
+) error {
+	var got []*KeySegment
 	s.segments.AscendLessThan(Int64(minLiveSegment), func(i btree.Item) bool {
-		got = append(got, i)
+		got = append(got, i.(*KeySegment))
 		return true
 	})
 	for _, item := range got {
-		kv := item.(*KeySegment)
-		ret := s.segments.Delete(kv.Key)
+		ret := s.segments.Delete(item.Key)
 		err := ret.(*KeySegment).Value.Destroy(ctx)
 		if err != nil {
 			return err
 		}
 	}
-	return nil
+	return cleanupExpired(ctx, got)
 }
 
 func (s *BaseSegments) Segments(timeFrom int64, timeTo int64) []Segment {
