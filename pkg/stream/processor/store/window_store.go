@@ -2,19 +2,20 @@ package store
 
 import (
 	"context"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
 )
 
 type WindowStore interface {
 	StateStore
 	Init(ctx StoreContext)
-	Put(ctx context.Context, key KeyT, value ValueT, windowStartTimestamp int64) error
-	Get(ctx context.Context, key KeyT, windowStartTimestamp int64) (ValueT, bool, error)
-	Fetch(ctx context.Context, key KeyT, timeFrom time.Time, timeTo time.Time, iterFunc func(int64 /* ts */, KeyT, ValueT) error) error
-	BackwardFetch(key KeyT, timeFrom time.Time, timeTo time.Time, iterFunc func(int64, KeyT, ValueT) error) error
-	FetchWithKeyRange(ctx context.Context, keyFrom KeyT, keyTo KeyT, timeFrom time.Time, timeTo time.Time, iterFunc func(int64, KeyT, ValueT) error) error
-	BackwardFetchWithKeyRange(keyFrom KeyT, keyTo KeyT, timeFrom time.Time, timeTo time.Time, iterFunc func(int64, KeyT, ValueT) error) error
-	FetchAll(timeFrom time.Time, timeTo time.Time, iterFunc func(int64, KeyT, ValueT) error) error
-	BackwardFetchAll(timeFrom time.Time, timeTo time.Time, iterFunc func(int64, KeyT, ValueT) error) error
-	IterAll(iterFunc func(int64, KeyT, ValueT) error) error
+	Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error
+	Get(ctx context.Context, key commtypes.KeyT, windowStartTimestamp int64) (commtypes.ValueT, bool, error)
+	Fetch(ctx context.Context, key commtypes.KeyT, timeFrom time.Time, timeTo time.Time, iterFunc func(int64 /* ts */, commtypes.KeyT, commtypes.ValueT) error) error
+	BackwardFetch(key commtypes.KeyT, timeFrom time.Time, timeTo time.Time, iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error
+	FetchWithKeyRange(ctx context.Context, keyFrom commtypes.KeyT, keyTo commtypes.KeyT, timeFrom time.Time, timeTo time.Time, iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error
+	BackwardFetchWithKeyRange(keyFrom commtypes.KeyT, keyTo commtypes.KeyT, timeFrom time.Time, timeTo time.Time, iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error
+	FetchAll(timeFrom time.Time, timeTo time.Time, iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error
+	BackwardFetchAll(timeFrom time.Time, timeTo time.Time, iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error
+	IterAll(iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error
 }

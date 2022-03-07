@@ -38,19 +38,19 @@ func (rkvs *RedisKeyValueSegment) IsOpen() bool          { return true }
 func (rkvs *RedisKeyValueSegment) Name() string {
 	return rkvs.rkvs.Name()
 }
-func (rkvs *RedisKeyValueSegment) Get(ctx context.Context, key KeyT) (ValueT, bool, error) {
+func (rkvs *RedisKeyValueSegment) Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error) {
 	return rkvs.rkvs.GetWithCollection(ctx, key, rkvs.seg)
 }
 
-func (rkvs *RedisKeyValueSegment) Range(ctx context.Context, from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error {
+func (rkvs *RedisKeyValueSegment) Range(ctx context.Context, from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
 	return rkvs.rkvs.Range(ctx, from, to, iterFunc)
 }
 
-func (rkvs *RedisKeyValueSegment) ReverseRange(from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error {
+func (rkvs *RedisKeyValueSegment) ReverseRange(from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
 	panic("not implemented")
 }
 
-func (rkvs *RedisKeyValueSegment) PrefixScan(prefix interface{}, prefixKeyEncoder commtypes.Encoder, iterFunc func(KeyT, ValueT) error) error {
+func (rkvs *RedisKeyValueSegment) PrefixScan(prefix interface{}, prefixKeyEncoder commtypes.Encoder, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
 	panic("not implemented")
 }
 
@@ -58,11 +58,11 @@ func (rkvs *RedisKeyValueSegment) ApproximateNumEntries(ctx context.Context) (ui
 	return rkvs.rkvs.ApproximateNumEntriesWithCollection(ctx, rkvs.seg)
 }
 
-func (rkvs *RedisKeyValueSegment) Put(ctx context.Context, key KeyT, value ValueT) error {
+func (rkvs *RedisKeyValueSegment) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
 	return rkvs.rkvs.PutWithCollection(ctx, key, value, rkvs.seg, rkvs.seg_key)
 }
 
-func (rkvs *RedisKeyValueSegment) PutIfAbsent(ctx context.Context, key KeyT, value ValueT) (ValueT, error) {
+func (rkvs *RedisKeyValueSegment) PutIfAbsent(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) (commtypes.ValueT, error) {
 	panic("not implemented")
 }
 
@@ -70,7 +70,7 @@ func (rkvs *RedisKeyValueSegment) PutAll(context.Context, []*commtypes.Message) 
 	panic("not implemented")
 }
 
-func (rkvs *RedisKeyValueSegment) Delete(ctx context.Context, key KeyT) error {
+func (rkvs *RedisKeyValueSegment) Delete(ctx context.Context, key commtypes.KeyT) error {
 	return rkvs.rkvs.DeleteWithCollection(ctx, key, rkvs.seg, rkvs.rkvs.key_collection_name)
 }
 

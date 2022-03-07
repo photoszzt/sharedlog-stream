@@ -40,12 +40,12 @@ func (st *InMemoryKeyValueStore) IsOpen() bool {
 	return st.open
 }
 
-func (st *InMemoryKeyValueStore) Get(ctx context.Context, key KeyT) (ValueT, bool, error) {
+func (st *InMemoryKeyValueStore) Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error) {
 	val, ok := st.store.Get(key)
 	return val, ok, nil
 }
 
-func (st *InMemoryKeyValueStore) Put(ctx context.Context, key KeyT, value ValueT) error {
+func (st *InMemoryKeyValueStore) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
 	if value == nil {
 		st.store.Del(key)
 	} else {
@@ -54,7 +54,7 @@ func (st *InMemoryKeyValueStore) Put(ctx context.Context, key KeyT, value ValueT
 	return nil
 }
 
-func (st *InMemoryKeyValueStore) PutIfAbsent(ctx context.Context, key KeyT, value ValueT) (ValueT, error) {
+func (st *InMemoryKeyValueStore) PutIfAbsent(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) (commtypes.ValueT, error) {
 	originalVal, exists := st.store.Get(key)
 	if !exists {
 		st.store.Set(key, value)
@@ -69,7 +69,7 @@ func (st *InMemoryKeyValueStore) PutAll(ctx context.Context, entries []*commtype
 	return nil
 }
 
-func (st *InMemoryKeyValueStore) Delete(ctx context.Context, key KeyT) error {
+func (st *InMemoryKeyValueStore) Delete(ctx context.Context, key commtypes.KeyT) error {
 	st.store.Del(key)
 	return nil
 }
@@ -78,7 +78,7 @@ func (st *InMemoryKeyValueStore) ApproximateNumEntries(ctx context.Context) (uin
 	return uint64(st.store.Len()), nil
 }
 
-func (st *InMemoryKeyValueStore) Range(ctx context.Context, from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error {
+func (st *InMemoryKeyValueStore) Range(ctx context.Context, from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
 	if st.compare(from, to) > 0 {
 		return fmt.Errorf("from should be smaller or equal to to")
 	}
@@ -118,7 +118,7 @@ func (st *InMemoryKeyValueStore) Range(ctx context.Context, from KeyT, to KeyT, 
 	return nil
 }
 
-func (st *InMemoryKeyValueStore) ReverseRange(from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error {
+func (st *InMemoryKeyValueStore) ReverseRange(from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
 	if st.compare(from, to) < 0 {
 		return fmt.Errorf("from > to")
 	}
@@ -159,7 +159,7 @@ func (st *InMemoryKeyValueStore) ReverseRange(from KeyT, to KeyT, iterFunc func(
 }
 
 func (st *InMemoryKeyValueStore) PrefixScan(prefix interface{}, prefixKeyEncoder commtypes.Encoder,
-	iterFunc func(KeyT, ValueT) error,
+	iterFunc func(commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	panic("not implemented")
 }

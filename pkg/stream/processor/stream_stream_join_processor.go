@@ -142,7 +142,7 @@ func (p *StreamStreamJoinProcessor) ProcessAndReturn(ctx context.Context, msg co
 	msgs := make([]commtypes.Message, 0)
 	err := p.otherWindowStore.Fetch(ctx, msg.Key,
 		time.Unix(int64(timeFromSec), int64(timeFromNs)),
-		time.Unix(int64(timeToSec), int64(timeToNs)), func(otherRecordTs int64, kt store.KeyT, vt store.ValueT) error {
+		time.Unix(int64(timeToSec), int64(timeToNs)), func(otherRecordTs int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 			var newTs int64
 			// needOuterJoin = false
 			newVal := p.joiner.Apply(kt, msg.Value, vt, msg.Timestamp, otherRecordTs)

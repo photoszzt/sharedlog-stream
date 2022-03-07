@@ -55,7 +55,7 @@ func (rws *SegmentedWindowStore) Name() string { return rws.bytesStore.Name() }
 
 func (rws *SegmentedWindowStore) Init(ctx StoreContext) {}
 
-func (rws *SegmentedWindowStore) Put(ctx context.Context, key KeyT, value ValueT, windowStartTimestamp int64) error {
+func (rws *SegmentedWindowStore) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error {
 	if !(value == nil && rws.retainDuplicates) {
 		rws.updateSeqnumForDups()
 		var err error
@@ -81,7 +81,7 @@ func (rws *SegmentedWindowStore) Put(ctx context.Context, key KeyT, value ValueT
 	return nil
 }
 
-func (rws *SegmentedWindowStore) Get(ctx context.Context, key KeyT, windowStartTimestamp int64) (ValueT, bool, error) {
+func (rws *SegmentedWindowStore) Get(ctx context.Context, key commtypes.KeyT, windowStartTimestamp int64) (commtypes.ValueT, bool, error) {
 	var err error
 	kBytes, ok := key.([]byte)
 	if !ok {
@@ -96,8 +96,8 @@ func (rws *SegmentedWindowStore) Get(ctx context.Context, key KeyT, windowStartT
 	return rws.bytesStore.Get(ctx, k)
 }
 
-func (rws *SegmentedWindowStore) Fetch(ctx context.Context, key KeyT, timeFrom time.Time, timeTo time.Time,
-	iterFunc func(int64 /* ts */, KeyT, ValueT) error,
+func (rws *SegmentedWindowStore) Fetch(ctx context.Context, key commtypes.KeyT, timeFrom time.Time, timeTo time.Time,
+	iterFunc func(int64 /* ts */, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	tsFrom := timeFrom.UnixMilli()
 	tsTo := timeTo.UnixMilli()
@@ -113,14 +113,14 @@ func (rws *SegmentedWindowStore) Fetch(ctx context.Context, key KeyT, timeFrom t
 	return nil
 }
 
-func (rws *SegmentedWindowStore) BackwardFetch(key KeyT, timeFrom time.Time, timeTo time.Time,
-	iterFunc func(int64, KeyT, ValueT) error,
+func (rws *SegmentedWindowStore) BackwardFetch(key commtypes.KeyT, timeFrom time.Time, timeTo time.Time,
+	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	panic("not implemented")
 }
 
-func (rws *SegmentedWindowStore) FetchWithKeyRange(ctx context.Context, keyFrom KeyT, keyTo KeyT, timeFrom time.Time, timeTo time.Time,
-	iterFunc func(int64, KeyT, ValueT) error,
+func (rws *SegmentedWindowStore) FetchWithKeyRange(ctx context.Context, keyFrom commtypes.KeyT, keyTo commtypes.KeyT, timeFrom time.Time, timeTo time.Time,
+	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	tsFrom := timeFrom.UnixMilli()
 	tsTo := timeTo.UnixMilli()
@@ -142,22 +142,22 @@ func (rws *SegmentedWindowStore) FetchWithKeyRange(ctx context.Context, keyFrom 
 	return rws.bytesStore.FetchWithKeyRange(ctx, kFromBytes, kToBytes, tsFrom, tsTo, iterFunc)
 }
 
-func (rws *SegmentedWindowStore) BackwardFetchWithKeyRange(keyFrom KeyT, keyTo KeyT, timeFrom time.Time, timeTo time.Time, iterFunc func(int64, KeyT, ValueT) error) error {
+func (rws *SegmentedWindowStore) BackwardFetchWithKeyRange(keyFrom commtypes.KeyT, keyTo commtypes.KeyT, timeFrom time.Time, timeTo time.Time, iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error {
 	panic("not implemented")
 }
 
 func (rws *SegmentedWindowStore) FetchAll(timeFrom time.Time, timeTo time.Time,
-	iterFunc func(int64, KeyT, ValueT) error,
+	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	panic("not implemented")
 }
 
 func (rws *SegmentedWindowStore) BackwardFetchAll(timeFrom time.Time, timeTo time.Time,
-	iterFunc func(int64, KeyT, ValueT) error,
+	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	panic("not implemented")
 }
 
-func (rws *SegmentedWindowStore) IterAll(iterFunc func(int64, KeyT, ValueT) error) error {
+func (rws *SegmentedWindowStore) IterAll(iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error {
 	panic("not implemented")
 }

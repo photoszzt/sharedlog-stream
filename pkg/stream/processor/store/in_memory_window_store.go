@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sharedlog-stream/pkg/concurrent_skiplist"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sync"
 	"time"
 
@@ -84,7 +85,7 @@ func (s *InMemoryWindowStore) Name() string {
 	return s.name
 }
 
-func (s *InMemoryWindowStore) Put(ctx context.Context, key KeyT, value ValueT, windowStartTimestamp int64) error {
+func (s *InMemoryWindowStore) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error {
 	s.removeExpiredSegments()
 	if windowStartTimestamp > s.observedStreamTime {
 		s.observedStreamTime = windowStartTimestamp
@@ -114,7 +115,7 @@ func (s *InMemoryWindowStore) Put(ctx context.Context, key KeyT, value ValueT, w
 	return nil
 }
 
-func (s *InMemoryWindowStore) Get(ctx context.Context, key KeyT, windowStartTimestamp int64) (ValueT, bool, error) {
+func (s *InMemoryWindowStore) Get(ctx context.Context, key commtypes.KeyT, windowStartTimestamp int64) (commtypes.ValueT, bool, error) {
 	s.removeExpiredSegments()
 	if windowStartTimestamp <= s.observedStreamTime-s.retentionPeriod {
 		return nil, false, nil
@@ -136,10 +137,10 @@ func (s *InMemoryWindowStore) Get(ctx context.Context, key KeyT, windowStartTime
 
 func (s *InMemoryWindowStore) Fetch(
 	ctx context.Context,
-	key KeyT,
+	key commtypes.KeyT,
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, KeyT, ValueT) error,
+	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	s.removeExpiredSegments()
 
@@ -191,21 +192,21 @@ func (s *InMemoryWindowStore) Fetch(
 }
 
 func (s *InMemoryWindowStore) BackwardFetch(
-	key KeyT,
+	key commtypes.KeyT,
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, KeyT, ValueT) error,
+	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	panic("not implemented")
 }
 
 func (s *InMemoryWindowStore) FetchWithKeyRange(
 	ctx context.Context,
-	keyFrom KeyT,
-	keyTo KeyT,
+	keyFrom commtypes.KeyT,
+	keyTo commtypes.KeyT,
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, KeyT, ValueT) error,
+	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	s.removeExpiredSegments()
 
@@ -233,7 +234,7 @@ func (s *InMemoryWindowStore) fetchWithKeyRange(
 	keyTo interface{},
 	tsFrom int64,
 	tsTo int64,
-	iterFunc func(int64, KeyT, ValueT) error,
+	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	err := s.store.IterateRange(tsFrom, tsTo, func(ts concurrent_skiplist.KeyT, val concurrent_skiplist.ValueT) error {
 		curT := ts.(int64)
@@ -261,7 +262,7 @@ func (s *InMemoryWindowStore) fetchWithKeyRange(
 	return err
 }
 
-func (s *InMemoryWindowStore) IterAll(iterFunc func(int64, KeyT, ValueT) error) error {
+func (s *InMemoryWindowStore) IterAll(iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error {
 	s.removeExpiredSegments()
 	minTime := s.observedStreamTime - s.retentionPeriod
 
@@ -306,11 +307,11 @@ func (s *InMemoryWindowStore) removeExpiredSegments() {
 }
 
 func (s *InMemoryWindowStore) BackwardFetchWithKeyRange(
-	keyFrom KeyT,
-	keyTo KeyT,
+	keyFrom commtypes.KeyT,
+	keyTo commtypes.KeyT,
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, KeyT, ValueT) error,
+	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	panic("not implemented")
 }
@@ -318,7 +319,7 @@ func (s *InMemoryWindowStore) BackwardFetchWithKeyRange(
 func (s *InMemoryWindowStore) FetchAll(
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, KeyT, ValueT) error,
+	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	panic("not implemented")
 }
@@ -326,7 +327,7 @@ func (s *InMemoryWindowStore) FetchAll(
 func (s *InMemoryWindowStore) BackwardFetchAll(
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, KeyT, ValueT) error,
+	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	panic("not implemented")
 }

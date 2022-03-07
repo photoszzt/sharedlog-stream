@@ -53,7 +53,7 @@ func (st *InMemoryWindowStoreWithChangelog) Name() string {
 	return st.windowStore.name
 }
 
-func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context, key KeyT, value ValueT, windowStartTimestamp int64) error {
+func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error {
 	keyBytes, err := st.mp.KeySerde.Encode(key)
 	if err != nil {
 		return err
@@ -83,7 +83,7 @@ func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context, key KeyT, v
 	return err
 }
 
-func (st *InMemoryWindowStoreWithChangelog) Get(ctx context.Context, key KeyT, windowStartTimestamp int64) (ValueT, bool, error) {
+func (st *InMemoryWindowStoreWithChangelog) Get(ctx context.Context, key commtypes.KeyT, windowStartTimestamp int64) (commtypes.ValueT, bool, error) {
 	val, ok, err := st.windowStore.Get(ctx, key, windowStartTimestamp)
 	if err != nil {
 		return nil, false, err
@@ -96,44 +96,44 @@ func (st *InMemoryWindowStoreWithChangelog) Get(ctx context.Context, key KeyT, w
 
 func (st *InMemoryWindowStoreWithChangelog) Fetch(
 	ctx context.Context,
-	key KeyT,
+	key commtypes.KeyT,
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, KeyT, ValueT) error,
+	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	return st.windowStore.Fetch(ctx, key, timeFrom, timeTo, iterFunc)
 }
 
-func (st *InMemoryWindowStoreWithChangelog) IterAll(iterFunc func(int64, KeyT, ValueT) error) error {
+func (st *InMemoryWindowStoreWithChangelog) IterAll(iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error {
 	return st.windowStore.IterAll(iterFunc)
 }
 
 func (st *InMemoryWindowStoreWithChangelog) BackwardFetch(
-	key KeyT,
+	key commtypes.KeyT,
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, KeyT, ValueT) error,
+	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	return st.windowStore.BackwardFetch(key, timeFrom, timeTo, iterFunc)
 }
 
 func (st *InMemoryWindowStoreWithChangelog) FetchWithKeyRange(
 	ctx context.Context,
-	keyFrom KeyT,
-	keyTo KeyT,
+	keyFrom commtypes.KeyT,
+	keyTo commtypes.KeyT,
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, KeyT, ValueT) error,
+	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	return st.windowStore.FetchWithKeyRange(ctx, keyFrom, keyTo, timeFrom, timeTo, iterFunc)
 }
 
 func (st *InMemoryWindowStoreWithChangelog) BackwardFetchWithKeyRange(
-	keyFrom KeyT,
-	keyTo KeyT,
+	keyFrom commtypes.KeyT,
+	keyTo commtypes.KeyT,
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, KeyT, ValueT) error,
+	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	return st.windowStore.BackwardFetchWithKeyRange(keyFrom, keyTo, timeFrom, timeTo, iterFunc)
 }
@@ -141,7 +141,7 @@ func (st *InMemoryWindowStoreWithChangelog) BackwardFetchWithKeyRange(
 func (st *InMemoryWindowStoreWithChangelog) FetchAll(
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, KeyT, ValueT) error,
+	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	return st.windowStore.FetchAll(timeFrom, timeTo, iterFunc)
 }
@@ -149,7 +149,7 @@ func (st *InMemoryWindowStoreWithChangelog) FetchAll(
 func (st *InMemoryWindowStoreWithChangelog) BackwardFetchAll(
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, KeyT, ValueT) error,
+	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	return st.windowStore.BackwardFetchAll(timeFrom, timeTo, iterFunc)
 }

@@ -1,10 +1,4 @@
-//go:generate msgp
-//msgp:ignore ValueTimestamp Change ValueTimestampJSONSerde ValueTimestampMsgpSerde
 package store
-
-type KeyT interface{}
-
-type ValueT interface{}
 
 type VersionedKey struct {
 	Key     interface{}

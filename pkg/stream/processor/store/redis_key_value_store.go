@@ -52,11 +52,11 @@ func (s *RedisKeyValueStore) Name() string {
 	return s.config.StoreName
 }
 
-func (s *RedisKeyValueStore) Get(ctx context.Context, key KeyT) (ValueT, bool, error) {
+func (s *RedisKeyValueStore) Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error) {
 	return s.GetWithCollection(ctx, key, s.collection_name)
 }
 
-func (s *RedisKeyValueStore) GetWithCollection(ctx context.Context, key KeyT, collection string) (ValueT, bool, error) {
+func (s *RedisKeyValueStore) GetWithCollection(ctx context.Context, key commtypes.KeyT, collection string) (commtypes.ValueT, bool, error) {
 	var err error
 	kBytes, ok := key.([]byte)
 	if !ok {
@@ -78,8 +78,8 @@ func (s *RedisKeyValueStore) GetWithCollection(ctx context.Context, key KeyT, co
 	return val, true, nil
 }
 
-func (s *RedisKeyValueStore) Range(ctx context.Context, from KeyT, to KeyT,
-	iterFunc func(KeyT, ValueT) error,
+func (s *RedisKeyValueStore) Range(ctx context.Context, from commtypes.KeyT, to commtypes.KeyT,
+	iterFunc func(commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	fromBytes, err := utils.ConvertToBytes(from, s.config.KeySerde)
 	if err != nil {
@@ -122,12 +122,12 @@ func (s *RedisKeyValueStore) Range(ctx context.Context, from KeyT, to KeyT,
 	return nil
 }
 
-func (s *RedisKeyValueStore) ReverseRange(from KeyT, to KeyT, iterFunc func(KeyT, ValueT) error) error {
+func (s *RedisKeyValueStore) ReverseRange(from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
 	panic("not implemented")
 }
 
 func (s *RedisKeyValueStore) PrefixScan(prefix interface{}, prefixKeyEncoder commtypes.Encoder,
-	iterFunc func(KeyT, ValueT) error,
+	iterFunc func(commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	panic("not implemented")
 }
@@ -146,12 +146,12 @@ func (s *RedisKeyValueStore) ApproximateNumEntriesWithCollection(
 	return uint64(ret), nil
 }
 
-func (s *RedisKeyValueStore) Put(ctx context.Context, key KeyT, value ValueT) error {
+func (s *RedisKeyValueStore) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
 	return s.PutWithCollection(ctx, key, value, s.collection_name, s.key_collection_name)
 }
 
-func (s *RedisKeyValueStore) PutWithCollection(ctx context.Context, key KeyT,
-	value ValueT, collection string, key_collection string,
+func (s *RedisKeyValueStore) PutWithCollection(ctx context.Context, key commtypes.KeyT,
+	value commtypes.ValueT, collection string, key_collection string,
 ) error {
 	if value == nil {
 		return s.Delete(ctx, key)
@@ -184,7 +184,7 @@ func (s *RedisKeyValueStore) PutWithCollection(ctx context.Context, key KeyT,
 	}
 }
 
-func (s *RedisKeyValueStore) PutIfAbsent(ctx context.Context, key KeyT, value ValueT) (ValueT, error) {
+func (s *RedisKeyValueStore) PutIfAbsent(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) (commtypes.ValueT, error) {
 	// assume key and value to be bytes
 	panic("not implemented")
 }
@@ -199,12 +199,12 @@ func (s *RedisKeyValueStore) PutAll(ctx context.Context, entries []*commtypes.Me
 	return nil
 }
 
-func (s *RedisKeyValueStore) Delete(ctx context.Context, key KeyT) error {
+func (s *RedisKeyValueStore) Delete(ctx context.Context, key commtypes.KeyT) error {
 	return s.DeleteWithCollection(ctx, key, s.collection_name, s.key_collection_name)
 }
 
 func (s *RedisKeyValueStore) DeleteWithCollection(ctx context.Context,
-	key KeyT, collection string, key_collection string,
+	key commtypes.KeyT, collection string, key_collection string,
 ) error {
 	kBytes, err := s.config.KeySerde.Encode(key)
 	if err != nil {

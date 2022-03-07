@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	"github.com/rs/zerolog/log"
 )
@@ -41,7 +42,7 @@ func (s *BaseSegmentedBytesStore) Name() string { return s.name }
 // Fetch all records from the segmented store with the provided key and time range
 // from all existing segments
 func (s *BaseSegmentedBytesStore) Fetch(ctx context.Context, key []byte, from int64, to int64,
-	iterFunc func(int64 /* ts */, KeyT, ValueT) error,
+	iterFunc func(int64 /* ts */, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	binaryFrom := s.keySchema.LowerRangeFixedSize(key, from)
 	binaryTo := s.keySchema.UpperRangeFixedSize(key, to)
@@ -50,7 +51,7 @@ func (s *BaseSegmentedBytesStore) Fetch(ctx context.Context, key []byte, from in
 	fmt.Fprintf(os.Stderr, "segment slice: %v\n", segment_slice)
 	for _, seg := range segment_slice {
 		fmt.Fprintf(os.Stderr, "seg: %s\n", seg.Name())
-		seg.Range(ctx, binaryFrom, binaryTo, func(kt KeyT, vt ValueT) error {
+		seg.Range(ctx, binaryFrom, binaryTo, func(kt commtypes.KeyT, vt commtypes.ValueT) error {
 			bytes := kt.([]byte)
 			fmt.Fprintf(os.Stderr, "got k: %v, v: %v\n", kt, vt)
 			has, ts := s.keySchema.HasNextCondition(bytes, key, key, from, to)
@@ -69,14 +70,14 @@ func (s *BaseSegmentedBytesStore) Fetch(ctx context.Context, key []byte, from in
 // Fetch all records from the segmented store with the provided key and time range
 // from all existing segments in backward order (from latest to earliest)
 func (s *BaseSegmentedBytesStore) BackwardFetch(key []byte, from int64, to int64,
-	iterFunc func(int64 /* ts */, KeyT, ValueT) error,
+	iterFunc func(int64 /* ts */, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	panic("not implemented")
 }
 
 func (s *BaseSegmentedBytesStore) FetchWithKeyRange(ctx context.Context, keyFrom []byte, keyTo []byte,
 	from int64, to int64,
-	iterFunc func(int64 /* ts */, KeyT, ValueT) error,
+	iterFunc func(int64 /* ts */, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	if bytes.Compare(keyFrom, keyTo) > 0 {
 		return fmt.Errorf("key from should be smaller than key to")
@@ -85,7 +86,7 @@ func (s *BaseSegmentedBytesStore) FetchWithKeyRange(ctx context.Context, keyFrom
 	binaryTo := s.keySchema.UpperRangeFixedSize(keyTo, to)
 	segment_slice := s.segments.Segments(from, to)
 	for _, seg := range segment_slice {
-		seg.Range(ctx, binaryFrom, binaryTo, func(kt KeyT, vt ValueT) error {
+		seg.Range(ctx, binaryFrom, binaryTo, func(kt commtypes.KeyT, vt commtypes.ValueT) error {
 			bytes := kt.([]byte)
 			has, ts := s.keySchema.HasNextCondition(bytes, keyFrom, keyTo, from, to)
 			if has {
@@ -105,19 +106,19 @@ func (s *BaseSegmentedBytesStore) BackwardFetchWithKeyRange(
 	keyTo []byte,
 	from int64,
 	to int64,
-	iterFunc func(int64 /* ts */, KeyT, ValueT) error,
+	iterFunc func(int64 /* ts */, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	panic("not implemented")
 }
 
 func (s *BaseSegmentedBytesStore) FetchAll(
-	iterFunc func(int64 /* ts */, KeyT, ValueT) error,
+	iterFunc func(int64 /* ts */, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	panic("not implemented")
 }
 
 func (s *BaseSegmentedBytesStore) BackwardFetchAll(
-	iterFunc func(int64 /* ts */, KeyT, ValueT) error,
+	iterFunc func(int64 /* ts */, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	panic("not implemented")
 }
@@ -158,7 +159,7 @@ func (s *BaseSegmentedBytesStore) Put(ctx context.Context, key []byte, value []b
 	return nil
 }
 
-func (s *BaseSegmentedBytesStore) Get(ctx context.Context, key []byte) (ValueT, bool, error) {
+func (s *BaseSegmentedBytesStore) Get(ctx context.Context, key []byte) (commtypes.ValueT, bool, error) {
 	segment := s.segments.GetSegmentForTimestamp(s.keySchema.SegmentTimestamp(key))
 	if segment == nil {
 		return nil, false, nil
