@@ -33,3 +33,7 @@ func (kvs *MongoDBKeyValueSegments) GetOrCreateSegment(ctx context.Context, segm
 		return kv, nil
 	}
 }
+
+func (kvs *MongoDBKeyValueSegments) CleanupExpiredMeta(ctx context.Context, expired []*KeySegment) error {
+	return nil
+}
