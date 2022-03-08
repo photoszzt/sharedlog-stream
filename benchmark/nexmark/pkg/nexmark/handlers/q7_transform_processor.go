@@ -49,24 +49,26 @@ func (p *Q7TransformProcessor) ProcessAndReturn(ctx context.Context, msg commtyp
 	key := msg.Key.(uint64)
 	event := msg.Value.(*ntypes.Event)
 	result := make([]commtypes.Message, 0, 128)
-	err := p.windowStore.Fetch(ctx, key, time.UnixMilli((event.Bid.DateTime - 10*1000)), time.UnixMilli(event.Bid.DateTime), func(u int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
-		val := vt.(*commtypes.ValueTimestamp).Value.(*ntypes.PriceTime)
-		if event.Bid.Price == val.Price {
-			result = append(result, commtypes.Message{
-				Key: key,
-				Value: &ntypes.BidAndMax{
-					Price:       event.Bid.Price,
-					Auction:     event.Bid.Auction,
-					Bidder:      event.Bid.Bidder,
-					DateTime:    event.Bid.DateTime,
-					Extra:       event.Bid.Extra,
-					MaxDateTime: val.DateTime,
-				},
-				Timestamp: event.Bid.DateTime,
-			})
-		}
-		return nil
-	})
+	err := p.windowStore.Fetch(ctx, key, time.UnixMilli((event.Bid.DateTime - 10*1000)),
+		time.UnixMilli(event.Bid.DateTime),
+		func(u int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
+			val := vt.(*commtypes.ValueTimestamp).Value.(*ntypes.PriceTime)
+			if event.Bid.Price == val.Price {
+				result = append(result, commtypes.Message{
+					Key: key,
+					Value: &ntypes.BidAndMax{
+						Price:       event.Bid.Price,
+						Auction:     event.Bid.Auction,
+						Bidder:      event.Bid.Bidder,
+						DateTime:    event.Bid.DateTime,
+						Extra:       event.Bid.Extra,
+						MaxDateTime: val.DateTime,
+					},
+					Timestamp: event.Bid.DateTime,
+				})
+			}
+			return nil
+		})
 	if err != nil {
 		return nil, err
 	}
