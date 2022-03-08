@@ -10,7 +10,6 @@ import (
 
 type RedisKeyValueSegment struct {
 	rkvs        *RedisKeyValueStore
-	seg         string
 	seg_key     string
 	segmentName string
 	windowName  string
@@ -18,7 +17,10 @@ type RedisKeyValueSegment struct {
 
 var _ = Segment(&RedisKeyValueSegment{})
 
-func NewRedisKeyValueSegment(ctx context.Context, rkvs *RedisKeyValueStore, segmentName string, name string,
+func NewRedisKeyValueSegment(ctx context.Context,
+	rkvs *RedisKeyValueStore,
+	segmentName string,
+	name string,
 ) (*RedisKeyValueSegment, error) {
 	err := rkvs.rdb.ZAdd(ctx, name, &redis.Z{Score: 0, Member: segmentName}).Err()
 	if err != nil {
@@ -26,8 +28,7 @@ func NewRedisKeyValueSegment(ctx context.Context, rkvs *RedisKeyValueStore, segm
 	}
 	return &RedisKeyValueSegment{
 		rkvs:        rkvs,
-		seg:         fmt.Sprintf("%s##%s", segmentName, name),
-		seg_key:     fmt.Sprintf("%s##%s-keys", segmentName, name),
+		seg_key:     fmt.Sprintf("%s-keys", segmentName),
 		segmentName: segmentName,
 		windowName:  name,
 	}, nil
@@ -39,7 +40,7 @@ func (rkvs *RedisKeyValueSegment) Name() string {
 	return rkvs.rkvs.Name()
 }
 func (rkvs *RedisKeyValueSegment) Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error) {
-	return rkvs.rkvs.GetWithCollection(ctx, key, rkvs.seg)
+	return rkvs.rkvs.GetWithCollection(ctx, key, rkvs.segmentName)
 }
 
 func (rkvs *RedisKeyValueSegment) Range(ctx context.Context, from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
@@ -55,11 +56,11 @@ func (rkvs *RedisKeyValueSegment) PrefixScan(prefix interface{}, prefixKeyEncode
 }
 
 func (rkvs *RedisKeyValueSegment) ApproximateNumEntries(ctx context.Context) (uint64, error) {
-	return rkvs.rkvs.ApproximateNumEntriesWithCollection(ctx, rkvs.seg)
+	return rkvs.rkvs.ApproximateNumEntriesWithCollection(ctx, rkvs.segmentName)
 }
 
 func (rkvs *RedisKeyValueSegment) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
-	return rkvs.rkvs.PutWithCollection(ctx, key, value, rkvs.seg, rkvs.seg_key)
+	return rkvs.rkvs.PutWithCollection(ctx, key, value, rkvs.segmentName, rkvs.seg_key)
 }
 
 func (rkvs *RedisKeyValueSegment) PutIfAbsent(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) (commtypes.ValueT, error) {
@@ -71,7 +72,7 @@ func (rkvs *RedisKeyValueSegment) PutAll(context.Context, []*commtypes.Message) 
 }
 
 func (rkvs *RedisKeyValueSegment) Delete(ctx context.Context, key commtypes.KeyT) error {
-	return rkvs.rkvs.DeleteWithCollection(ctx, key, rkvs.seg, rkvs.rkvs.key_collection_name)
+	return rkvs.rkvs.DeleteWithCollection(ctx, key, rkvs.segmentName, rkvs.rkvs.key_collection_name)
 }
 
 func (rkvs *RedisKeyValueSegment) Destroy(ctx context.Context) error {
@@ -79,7 +80,7 @@ func (rkvs *RedisKeyValueSegment) Destroy(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	err = rkvs.rkvs.rdb.HDel(ctx, rkvs.seg, keys...).Err()
+	err = rkvs.rkvs.rdb.HDel(ctx, rkvs.segmentName, keys...).Err()
 	if err != nil {
 		return err
 	}
@@ -99,7 +100,7 @@ func (rkvs *RedisKeyValueSegment) DeleteRange(ctx context.Context, keyFrom inter
 	if err != nil {
 		return err
 	}
-	err = rkvs.rkvs.rdb.HDel(ctx, rkvs.seg, keys...).Err()
+	err = rkvs.rkvs.rdb.HDel(ctx, rkvs.segmentName, keys...).Err()
 	if err != nil {
 		return err
 	}

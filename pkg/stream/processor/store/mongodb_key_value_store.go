@@ -146,6 +146,10 @@ func (s *MongoDBKeyValueStore) ApproximateNumEntriesWithCollection(
 	panic("not implemented")
 }
 
+func (s *MongoDBKeyValueStore) ApproximateNumEntries(ctx context.Context) (uint64, error) {
+	panic("not implemented")
+}
+
 func (s *MongoDBKeyValueStore) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
 	return s.PutWithCollection(ctx, key, value, s.config.CollectionName)
 }
@@ -195,6 +199,10 @@ func (s *MongoDBKeyValueStore) PutIfAbsent(ctx context.Context, key commtypes.Ke
 	panic("not implemented")
 }
 
+func (s *MongoDBKeyValueStore) PutAll(ctx context.Context, entries []*commtypes.Message) error {
+	panic("not implemented")
+}
+
 func (s *MongoDBKeyValueStore) Delete(ctx context.Context, key commtypes.KeyT) error {
 	return s.DeleteWithCollection(ctx, key, s.config.CollectionName)
 }
@@ -208,4 +216,10 @@ func (s *MongoDBKeyValueStore) DeleteWithCollection(ctx context.Context,
 	}
 	_ = kBytes
 	return nil
+}
+
+func (s *MongoDBKeyValueStore) PrefixScan(prefix interface{}, prefixKeyEncoder commtypes.Encoder,
+	iterFunc func(commtypes.KeyT, commtypes.ValueT) error,
+) error {
+	panic("not implemented")
 }

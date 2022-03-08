@@ -36,6 +36,23 @@ func NewRedisSegmentedBytesStore(name string,
 	}
 }
 
+func NewMongoDBSegmentedBytesStore(name string,
+	retention int64, // ms
+	keySchema KeySchema,
+	mkvs *MongoDBKeyValueStore,
+) *BaseSegmentedBytesStore {
+	segmentInterval := retention / 2
+	if segmentInterval < 60_000 {
+		segmentInterval = 60_000
+	}
+	return &BaseSegmentedBytesStore{
+		name:               name,
+		keySchema:          keySchema,
+		observedStreamTime: -1,
+		segments:           NewMongoDBKeyValueSegments(name, retention, segmentInterval, mkvs),
+	}
+}
+
 func (s *BaseSegmentedBytesStore) IsOpen() bool { return true }
 func (s *BaseSegmentedBytesStore) Name() string { return s.name }
 

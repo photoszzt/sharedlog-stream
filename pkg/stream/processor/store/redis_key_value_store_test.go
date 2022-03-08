@@ -1,11 +1,6 @@
 package store
 
-import (
-	"context"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"testing"
-)
-
+/*
 func getRedisKeyValueStore() *RedisKeyValueStore {
 	store := NewRedisKeyValueStore(&RedisConfig{
 		Addr:           "127.0.0.1",
@@ -33,3 +28,4 @@ func TestRedisShouldDeleteIfSerializedValueIsNull(t *testing.T) {
 	ShouldDeleteIfSerializedValueIsNull(ctx, store, t)
 	store.rdb.FlushAll(ctx)
 }
+*/
