@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -27,6 +29,11 @@ type MongoDBConfig struct {
 	CollectionName string
 
 	DBName string
+}
+
+type kvBytes struct {
+	key   []byte `bson:"key"`
+	value []byte `bson:"value"`
 }
 
 func NewMongoDBKeyValueStore(ctx context.Context, config *MongoDBConfig) (*MongoDBKeyValueStore, error) {
@@ -103,27 +110,29 @@ func (s *MongoDBKeyValueStore) GetWithCollection(ctx context.Context, key commty
 		}
 	}
 	col := s.client.Database(s.config.DBName).Collection(collection)
-	var result []byte
+	var result bson.M
 	if s.inTransaction {
 		err = col.FindOne(s.sessCtx, bson.D{{"key", kBytes}}).Decode(&result)
 		if err != nil {
 			if err == mongo.ErrNoDocuments {
+				fmt.Fprint(os.Stderr, "can't find the document\n")
 				return nil, false, nil
 			}
 			_ = s.sessCtx.AbortTransaction(context.Background())
 			return nil, false, err
 		}
-
 	} else {
 		err = col.FindOne(ctx, bson.D{{"key", kBytes}}).Decode(&result)
 		if err != nil {
 			if err == mongo.ErrNoDocuments {
+				fmt.Fprint(os.Stderr, "can't find the document\n")
 				return nil, false, nil
 			}
 			return nil, false, err
 		}
 	}
-	val, err := s.config.ValueSerde.Decode(result)
+	valBytes := result["value"]
+	val, err := s.config.ValueSerde.Decode(valBytes.([]byte))
 	if err != nil {
 		return nil, false, err
 	}
@@ -179,16 +188,31 @@ func (s *MongoDBKeyValueStore) PutWithCollection(ctx context.Context, key commty
 		col := s.client.Database(s.config.DBName).Collection(collection)
 		opts := options.Update().SetUpsert(true)
 		if s.inTransaction {
-			_, err = col.UpdateOne(s.sessCtx, bson.D{{"key", kBytes}}, bson.D{{"$set", bson.D{{"value", vBytes}}}}, opts)
+			ret, err := col.UpdateOne(s.sessCtx, bson.D{{"key", kBytes}}, bson.D{{"$set", bson.D{{"value", vBytes}}}}, opts)
 			if err != nil {
 				s.sessCtx.AbortTransaction(context.Background())
 				return err
 			}
+			fmt.Fprintf(os.Stderr, "result of update: %v\n", ret)
 		} else {
-			_, err = col.UpdateOne(ctx, bson.D{{"key", kBytes}}, bson.D{{"$set", bson.D{{"value", vBytes}}}}, opts)
+			ret, err := col.UpdateOne(ctx, bson.D{{"key", kBytes}}, bson.D{{"$set", bson.D{{"value", vBytes}}}}, opts)
 			if err != nil {
 				return err
 			}
+			// TODO: remove tests
+			fmt.Fprintf(os.Stderr, "result of update: %v\n", ret)
+			cur, err := col.Find(ctx, bson.D{{}})
+			if err != nil {
+				return err
+			}
+			var results []bson.M
+			if err = cur.All(context.TODO(), &results); err != nil {
+				return err
+			}
+			for _, result := range results {
+				fmt.Println(result)
+			}
+
 		}
 		return err
 	}
