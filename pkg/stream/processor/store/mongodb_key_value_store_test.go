@@ -36,3 +36,11 @@ func TestMongoDBShouldDeleteIfSerializedValueIsNull(t *testing.T) {
 	ShouldDeleteIfSerializedValueIsNull(ctx, store, t)
 	store.client.Database("test").Drop(ctx)
 }
+
+func TestMongoDBPutGetRange(t *testing.T) {
+	ctx := context.Background()
+	store := getMongoDBKeyValueStore(ctx, t)
+	store.client.Database("test").Drop(ctx)
+	PutGetRange(ctx, store, t)
+	store.client.Database("test").Drop(ctx)
+}

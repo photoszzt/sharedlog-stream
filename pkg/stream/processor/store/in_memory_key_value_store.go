@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"fmt"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/treemap"
 )
@@ -79,9 +78,6 @@ func (st *InMemoryKeyValueStore) ApproximateNumEntries(ctx context.Context) (uin
 }
 
 func (st *InMemoryKeyValueStore) Range(ctx context.Context, from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
-	if st.compare(from, to) > 0 {
-		return fmt.Errorf("from should be smaller or equal to to")
-	}
 	if from == nil && to == nil {
 		it := st.store.Iterator()
 		for ; it.Valid(); it.Next() {
@@ -119,9 +115,6 @@ func (st *InMemoryKeyValueStore) Range(ctx context.Context, from commtypes.KeyT,
 }
 
 func (st *InMemoryKeyValueStore) ReverseRange(from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
-	if st.compare(from, to) < 0 {
-		return fmt.Errorf("from > to")
-	}
 	if from == nil && to == nil {
 		it := st.store.Reverse()
 		for ; it.Valid(); it.Next() {

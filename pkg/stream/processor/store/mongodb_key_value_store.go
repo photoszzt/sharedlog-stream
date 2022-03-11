@@ -162,12 +162,6 @@ func (s *MongoDBKeyValueStore) Range(ctx context.Context, from commtypes.KeyT, t
 	if err != nil {
 		return err
 	}
-	fBytes := make([]byte, 0)
-	fBytes = append(fBytes, byte('['))
-	fBytes = append(fBytes, fromBytes...)
-	tBytes := make([]byte, 0)
-	tBytes = append(tBytes, byte('['))
-	tBytes = append(tBytes, toBytes...)
 	col := s.client.Database(s.config.DBName).Collection(s.config.CollectionName)
 	opts := options.Find().SetSort(bson.D{{"key", 1}})
 	var cur *mongo.Cursor
@@ -175,7 +169,8 @@ func (s *MongoDBKeyValueStore) Range(ctx context.Context, from commtypes.KeyT, t
 	if s.inTransaction {
 		ctx_tmp = s.sessCtx
 	}
-	cur, err = col.Find(ctx_tmp, bson.D{{"key", bson.D{{"$gte", fBytes}, {"$lte", tBytes}}}}, opts)
+	fmt.Fprintf(os.Stderr, "from %v to %v", fromBytes, toBytes)
+	cur, err = col.Find(ctx_tmp, bson.D{{"key", bson.D{{"$gte", fromBytes}, {"$lte", toBytes}}}}, opts)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			fmt.Fprint(os.Stderr, "can't find the document\n")
@@ -194,7 +189,15 @@ func (s *MongoDBKeyValueStore) Range(ctx context.Context, from commtypes.KeyT, t
 		}
 		kBytes := res["key"].(primitive.Binary).Data
 		vBytes := res["value"].(primitive.Binary).Data
-		err = iterFunc(kBytes, vBytes)
+		k, err := s.config.KeySerde.Decode(kBytes)
+		if err != nil {
+			return err
+		}
+		v, err := s.config.ValueSerde.Decode(vBytes)
+		if err != nil {
+			return err
+		}
+		err = iterFunc(k, v)
 		if err != nil {
 			return err
 		}
@@ -255,6 +258,7 @@ func (s *MongoDBKeyValueStore) PutWithCollection(ctx context.Context, key commty
 				return err
 			}
 		}
+		fmt.Fprintf(os.Stderr, "put k: %v, val: %v\n", kBytes, vBytes)
 		opts := options.Update().SetUpsert(true)
 		if s.inTransaction {
 			_, err := col.UpdateOne(s.sessCtx, bson.D{{"key", kBytes}}, bson.D{{"$set", bson.D{{"value", vBytes}}}}, opts)
