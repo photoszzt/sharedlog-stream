@@ -34,6 +34,8 @@ type MongoDBConfig struct {
 	DBName string
 }
 
+var _ = KeyValueStore(&MongoDBKeyValueStore{})
+
 func NewMongoDBKeyValueStore(ctx context.Context, config *MongoDBConfig) (*MongoDBKeyValueStore, error) {
 	clientOpts := options.Client().ApplyURI(config.Addr)
 	client, err := mongo.Connect(ctx, clientOpts)
@@ -43,7 +45,7 @@ func NewMongoDBKeyValueStore(ctx context.Context, config *MongoDBConfig) (*Mongo
 	col := client.Database(config.DBName).Collection(config.CollectionName)
 	idxView := col.Indexes()
 	_, err = idxView.CreateOne(ctx, mongo.IndexModel{
-		Keys:    bson.D{{"key", 1}},
+		Keys:    bson.D{{Key: "key", Value: 1}},
 		Options: options.Index().SetName("kv"),
 	})
 	if err != nil {
@@ -121,7 +123,7 @@ func (s *MongoDBKeyValueStore) GetWithCollection(ctx context.Context, key commty
 	col := s.client.Database(s.config.DBName).Collection(collection)
 	var result bson.M
 	if s.inTransaction {
-		err = col.FindOne(s.sessCtx, bson.D{{"key", kBytes}}).Decode(&result)
+		err = col.FindOne(s.sessCtx, bson.D{{Key: "key", Value: kBytes}}).Decode(&result)
 		if err != nil {
 			if err == mongo.ErrNoDocuments {
 				fmt.Fprint(os.Stderr, "can't find the document\n")
@@ -131,7 +133,7 @@ func (s *MongoDBKeyValueStore) GetWithCollection(ctx context.Context, key commty
 			return nil, false, err
 		}
 	} else {
-		err = col.FindOne(ctx, bson.D{{"key", kBytes}}).Decode(&result)
+		err = col.FindOne(ctx, bson.D{{Key: "key", Value: kBytes}}).Decode(&result)
 		if err != nil {
 			if err == mongo.ErrNoDocuments {
 				fmt.Fprint(os.Stderr, "can't find the document\n")
@@ -163,14 +165,29 @@ func (s *MongoDBKeyValueStore) Range(ctx context.Context, from commtypes.KeyT, t
 		return err
 	}
 	col := s.client.Database(s.config.DBName).Collection(s.config.CollectionName)
-	opts := options.Find().SetSort(bson.D{{"key", 1}})
+	opts := options.Find().SetSort(bson.D{{Key: "key", Value: 1}})
 	var cur *mongo.Cursor
 	ctx_tmp := ctx
 	if s.inTransaction {
 		ctx_tmp = s.sessCtx
 	}
-	fmt.Fprintf(os.Stderr, "from %v to %v", fromBytes, toBytes)
-	cur, err = col.Find(ctx_tmp, bson.D{{"key", bson.D{{"$gte", fromBytes}, {"$lte", toBytes}}}}, opts)
+	var condition bson.D
+	if from == nil && to == nil {
+		condition = bson.D{}
+	} else if from == nil && to != nil {
+		condition = bson.D{{Key: "key", Value: bson.D{{Key: "$lte", Value: toBytes}}}}
+	} else if from != nil && to == nil {
+		condition = bson.D{{
+			Key:   "key",
+			Value: bson.D{{Key: "$gte", Value: fromBytes}}}}
+	} else {
+		condition = bson.D{{Key: "key",
+			Value: bson.D{
+				{Key: "$gte", Value: fromBytes},
+				{Key: "$lte", Value: toBytes}}}}
+	}
+	fmt.Fprintf(os.Stderr, "condition: %v\n", condition)
+	cur, err = col.Find(ctx_tmp, condition, opts)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			fmt.Fprint(os.Stderr, "can't find the document\n")
@@ -234,7 +251,7 @@ func (s *MongoDBKeyValueStore) PutWithCollection(ctx context.Context, key commty
 		if !ok {
 			idxView := col.Indexes()
 			_, err := idxView.CreateOne(ctx, mongo.IndexModel{
-				Keys:    bson.D{{"key", 1}},
+				Keys:    bson.D{{Key: "key", Value: 1}},
 				Options: options.Index().SetName("kv"),
 			})
 			if err != nil {
@@ -243,50 +260,27 @@ func (s *MongoDBKeyValueStore) PutWithCollection(ctx context.Context, key commty
 			s.indexCreation[collection] = struct{}{}
 		}
 		// assume key and value to be bytes
-		kBytes, ok := key.([]byte)
-		var err error
-		if !ok {
-			kBytes, err = s.config.KeySerde.Encode(key)
-			if err != nil {
-				return err
-			}
+		kBytes, err := utils.ConvertToBytes(key, s.config.KeySerde)
+		if err != nil {
+			return err
 		}
-		vBytes, ok := value.([]byte)
-		if !ok {
-			vBytes, err = s.config.ValueSerde.Encode(value)
-			if err != nil {
-				return err
-			}
+		vBytes, err := utils.ConvertToBytes(value, s.config.ValueSerde)
+		if err != nil {
+			return err
 		}
 		fmt.Fprintf(os.Stderr, "put k: %v, val: %v\n", kBytes, vBytes)
 		opts := options.Update().SetUpsert(true)
+		ctx_tmp := ctx
 		if s.inTransaction {
-			_, err := col.UpdateOne(s.sessCtx, bson.D{{"key", kBytes}}, bson.D{{"$set", bson.D{{"value", vBytes}}}}, opts)
-			if err != nil {
+			ctx_tmp = s.sessCtx
+		}
+		_, err = col.UpdateOne(ctx_tmp, bson.D{{Key: "key", Value: kBytes}},
+			bson.D{{Key: "$set", Value: bson.D{{Key: "value", Value: vBytes}}}}, opts)
+		if err != nil {
+			if s.inTransaction {
 				s.sessCtx.AbortTransaction(context.Background())
-				return err
 			}
-			// fmt.Fprintf(os.Stderr, "result of update: %v\n", ret)
-		} else {
-			_, err := col.UpdateOne(ctx, bson.D{{"key", kBytes}}, bson.D{{"$set", bson.D{{"value", vBytes}}}}, opts)
-			if err != nil {
-				return err
-			}
-			// TODO: remove tests
-			/*
-				fmt.Fprintf(os.Stderr, "result of update: %v\n", ret)
-				cur, err := col.Find(ctx, bson.D{{}})
-				if err != nil {
-					return err
-				}
-				var results []bson.M
-				if err = cur.All(context.TODO(), &results); err != nil {
-					return err
-				}
-				for _, result := range results {
-					fmt.Println(result)
-				}
-			*/
+			return err
 		}
 		return err
 	}
@@ -312,7 +306,18 @@ func (s *MongoDBKeyValueStore) DeleteWithCollection(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	_ = kBytes
+	col := s.client.Database(s.config.DBName).Collection(collection)
+	ctx_tmp := ctx
+	if s.inTransaction {
+		ctx_tmp = s.sessCtx
+	}
+	_, err = col.DeleteOne(ctx_tmp, bson.D{{Key: "key", Value: kBytes}})
+	if err != nil {
+		if s.inTransaction {
+			_ = s.sessCtx.AbortTransaction(context.Background())
+		}
+		return err
+	}
 	return nil
 }
 

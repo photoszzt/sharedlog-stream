@@ -7,11 +7,10 @@ import (
 )
 
 type InMemoryKeyValueStore struct {
-	sctx    StoreContext
-	store   *treemap.TreeMap
-	compare func(a treemap.Key, b treemap.Value) int
-	name    string
-	open    bool
+	sctx  StoreContext
+	store *treemap.TreeMap
+	name  string
+	open  bool
 }
 
 var _ = KeyValueStore(NewInMemoryKeyValueStore("a", nil))
