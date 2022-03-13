@@ -17,8 +17,8 @@ func toStrSet(data []string) map[string]struct{} {
 }
 
 func checkPut(ctx context.Context, store *SegmentedWindowStore,
-	segments *RedisKeyValueSegments, t testing.TB, expected map[string]struct{}) {
-	segs, err := segments.getSegments(ctx)
+	segments Segments, t testing.TB, expected map[string]struct{}) {
+	segs, err := segments.GetSegmentNamesFromRemote(ctx)
 	if err != nil {
 		t.Fatalf("get segs failed: %v", err)
 	}
@@ -28,7 +28,7 @@ func checkPut(ctx context.Context, store *SegmentedWindowStore,
 	}
 }
 
-func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments *RedisKeyValueSegments, t testing.TB) {
+func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segments, t testing.TB) {
 	startTime := TEST_SEGMENT_INTERVAL * 2
 	increment := TEST_SEGMENT_INTERVAL / 2
 

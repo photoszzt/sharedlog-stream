@@ -15,8 +15,6 @@ type RedisKeyValueSegment struct {
 	windowName  string
 }
 
-var _ = Segment(&RedisKeyValueSegment{})
-
 func NewRedisKeyValueSegment(ctx context.Context,
 	rkvs *RedisKeyValueStore,
 	segmentName string,
@@ -43,8 +41,17 @@ func (rkvs *RedisKeyValueSegment) Get(ctx context.Context, key commtypes.KeyT) (
 	return rkvs.rkvs.GetWithCollection(ctx, key, rkvs.segmentName)
 }
 
-func (rkvs *RedisKeyValueSegment) Range(ctx context.Context, from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
+func (rkvs *RedisKeyValueSegment) Range(ctx context.Context, from commtypes.KeyT, to commtypes.KeyT,
+	iterFunc func(commtypes.KeyT, commtypes.ValueT) error,
+) error {
 	return rkvs.rkvs.Range(ctx, from, to, iterFunc)
+}
+
+func (rkvs *RedisKeyValueSegment) RangeWithCollection(ctx context.Context, from commtypes.KeyT, to commtypes.KeyT,
+	collection string, key_collection string,
+	iterFunc func(commtypes.KeyT, commtypes.ValueT) error,
+) error {
+	return rkvs.rkvs.RangeWithCollection(ctx, from, to, collection, key_collection, iterFunc)
 }
 
 func (rkvs *RedisKeyValueSegment) ReverseRange(from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {

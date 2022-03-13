@@ -93,7 +93,15 @@ func (rws *SegmentedWindowStore) Get(ctx context.Context, key commtypes.KeyT, wi
 	rws.seqNumMu.Lock()
 	defer rws.seqNumMu.Unlock()
 	k := rws.windowKeySchema.ToStoreKeyBinary(kBytes, windowStartTimestamp, rws.seqNum)
-	return rws.bytesStore.Get(ctx, k)
+	valBytes, ok, err := rws.bytesStore.Get(ctx, k)
+	if err != nil {
+		return nil, false, err
+	}
+	val, err := rws.valSerde.Decode(valBytes)
+	if err != nil {
+		return nil, false, err
+	}
+	return val, ok, err
 }
 
 func (rws *SegmentedWindowStore) Fetch(ctx context.Context, key commtypes.KeyT, timeFrom time.Time, timeTo time.Time,
@@ -109,7 +117,17 @@ func (rws *SegmentedWindowStore) Fetch(ctx context.Context, key commtypes.KeyT, 
 			return err
 		}
 	}
-	rws.bytesStore.Fetch(ctx, kBytes, tsFrom, tsTo, iterFunc)
+	rws.bytesStore.Fetch(ctx, kBytes, tsFrom, tsTo, func(ts int64, kBytes, vBytes []byte) error {
+		k, err := rws.keySerde.Decode(kBytes)
+		if err != nil {
+			return err
+		}
+		v, err := rws.valSerde.Decode(vBytes)
+		if err != nil {
+			return err
+		}
+		return iterFunc(ts, k, v)
+	})
 	return nil
 }
 
@@ -139,7 +157,18 @@ func (rws *SegmentedWindowStore) FetchWithKeyRange(ctx context.Context, keyFrom 
 			return err
 		}
 	}
-	return rws.bytesStore.FetchWithKeyRange(ctx, kFromBytes, kToBytes, tsFrom, tsTo, iterFunc)
+	return rws.bytesStore.FetchWithKeyRange(ctx, kFromBytes, kToBytes, tsFrom, tsTo,
+		func(ts int64, kBytes, vBytes []byte) error {
+			k, err := rws.keySerde.Decode(kBytes)
+			if err != nil {
+				return err
+			}
+			v, err := rws.valSerde.Decode(vBytes)
+			if err != nil {
+				return err
+			}
+			return iterFunc(ts, k, v)
+		})
 }
 
 func (rws *SegmentedWindowStore) BackwardFetchWithKeyRange(keyFrom commtypes.KeyT, keyTo commtypes.KeyT, timeFrom time.Time, timeTo time.Time, iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error {

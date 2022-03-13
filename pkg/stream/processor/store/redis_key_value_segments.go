@@ -1,11 +1,5 @@
 package store
 
-import (
-	"context"
-	"fmt"
-	"os"
-)
-
 type RedisKeyValueSegments struct {
 	rkvs *RedisKeyValueStore
 	BaseSegments
@@ -20,6 +14,7 @@ func NewRedisKeyValueSegments(name string, retentionPeriod int64,
 	}
 }
 
+/*
 func (kvs *RedisKeyValueSegments) GetOrCreateSegment(ctx context.Context, segmentId int64) (Segment, error) {
 	if kvs.segments.Has(Int64(segmentId)) {
 		fmt.Fprintf(os.Stderr, "found %v\n", segmentId)
@@ -49,3 +44,4 @@ func (kvs *RedisKeyValueSegments) CleanupExpiredMeta(ctx context.Context, expire
 	err := kvs.rkvs.rdb.ZRem(ctx, kvs.BaseSegments.name, segNames).Err()
 	return err
 }
+*/

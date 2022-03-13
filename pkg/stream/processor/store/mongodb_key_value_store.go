@@ -108,10 +108,6 @@ func (s *MongoDBKeyValueStore) Name() string {
 }
 
 func (s *MongoDBKeyValueStore) Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error) {
-	return s.GetWithCollection(ctx, key, s.config.CollectionName)
-}
-
-func (s *MongoDBKeyValueStore) GetWithCollection(ctx context.Context, key commtypes.KeyT, collection string) (commtypes.ValueT, bool, error) {
 	var err error
 	kBytes, ok := key.([]byte)
 	if !ok {
@@ -120,37 +116,94 @@ func (s *MongoDBKeyValueStore) GetWithCollection(ctx context.Context, key commty
 			return nil, false, err
 		}
 	}
+	valBytes, ok, err := s.GetWithCollection(ctx, kBytes, s.config.CollectionName)
+	if err != nil {
+		return nil, false, err
+	}
+	val, err := s.config.ValueSerde.Decode(valBytes)
+	if err != nil {
+		return nil, false, err
+	}
+	return val, ok, nil
+}
+
+func (s *MongoDBKeyValueStore) GetWithCollection(ctx context.Context, kBytes []byte, collection string) ([]byte, bool, error) {
+	var err error
 	col := s.client.Database(s.config.DBName).Collection(collection)
 	var result bson.M
+	ctx_tmp := ctx
 	if s.inTransaction {
-		err = col.FindOne(s.sessCtx, bson.D{{Key: "key", Value: kBytes}}).Decode(&result)
-		if err != nil {
-			if err == mongo.ErrNoDocuments {
-				fmt.Fprint(os.Stderr, "can't find the document\n")
-				return nil, false, nil
-			}
+		ctx_tmp = s.sessCtx
+	}
+	err = col.FindOne(ctx_tmp, bson.D{{Key: "key", Value: kBytes}}).Decode(&result)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, false, nil
+		}
+		if s.inTransaction {
 			_ = s.sessCtx.AbortTransaction(context.Background())
-			return nil, false, err
 		}
-	} else {
-		err = col.FindOne(ctx, bson.D{{Key: "key", Value: kBytes}}).Decode(&result)
-		if err != nil {
-			if err == mongo.ErrNoDocuments {
-				fmt.Fprint(os.Stderr, "can't find the document\n")
-				return nil, false, nil
-			}
-			return nil, false, err
-		}
+		return nil, false, err
 	}
 	valBytes := result["value"]
 	if valBytes == nil {
 		return nil, true, nil
 	}
-	val, err := s.config.ValueSerde.Decode(valBytes.(primitive.Binary).Data)
-	if err != nil {
-		return nil, false, err
+	return valBytes.(primitive.Binary).Data, true, nil
+}
+
+func (s *MongoDBKeyValueStore) RangeWithCollection(ctx context.Context,
+	fromBytes []byte, toBytes []byte, collection string,
+	iterFunc func([]byte, []byte) error,
+) error {
+	var err error
+	col := s.client.Database(s.config.DBName).Collection(collection)
+	opts := options.Find().SetSort(bson.D{{Key: "key", Value: 1}})
+	var cur *mongo.Cursor
+	ctx_tmp := ctx
+	if s.inTransaction {
+		ctx_tmp = s.sessCtx
 	}
-	return val, true, nil
+	var condition bson.D
+	if fromBytes == nil && toBytes == nil {
+		condition = bson.D{}
+	} else if fromBytes == nil && toBytes != nil {
+		condition = bson.D{{Key: "key", Value: bson.D{{Key: "$lte", Value: toBytes}}}}
+	} else if fromBytes != nil && toBytes == nil {
+		condition = bson.D{{
+			Key:   "key",
+			Value: bson.D{{Key: "$gte", Value: fromBytes}}}}
+	} else {
+		condition = bson.D{{Key: "key",
+			Value: bson.D{
+				{Key: "$gte", Value: fromBytes},
+				{Key: "$lte", Value: toBytes}}}}
+	}
+	cur, err = col.Find(ctx_tmp, condition, opts)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			fmt.Fprint(os.Stderr, "can't find the document\n")
+			return nil
+		}
+		if s.inTransaction {
+			_ = s.sessCtx.AbortTransaction(context.Background())
+		}
+		return err
+	}
+	var res []bson.M
+	err = cur.All(ctx, &res)
+	if err != nil {
+		return err
+	}
+	for _, r := range res {
+		kBytes := r["key"].(primitive.Binary).Data
+		vBytes := r["value"].(primitive.Binary).Data
+		err = iterFunc(kBytes, vBytes)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *MongoDBKeyValueStore) Range(ctx context.Context, from commtypes.KeyT, to commtypes.KeyT,
@@ -164,62 +217,17 @@ func (s *MongoDBKeyValueStore) Range(ctx context.Context, from commtypes.KeyT, t
 	if err != nil {
 		return err
 	}
-	col := s.client.Database(s.config.DBName).Collection(s.config.CollectionName)
-	opts := options.Find().SetSort(bson.D{{Key: "key", Value: 1}})
-	var cur *mongo.Cursor
-	ctx_tmp := ctx
-	if s.inTransaction {
-		ctx_tmp = s.sessCtx
-	}
-	var condition bson.D
-	if from == nil && to == nil {
-		condition = bson.D{}
-	} else if from == nil && to != nil {
-		condition = bson.D{{Key: "key", Value: bson.D{{Key: "$lte", Value: toBytes}}}}
-	} else if from != nil && to == nil {
-		condition = bson.D{{
-			Key:   "key",
-			Value: bson.D{{Key: "$gte", Value: fromBytes}}}}
-	} else {
-		condition = bson.D{{Key: "key",
-			Value: bson.D{
-				{Key: "$gte", Value: fromBytes},
-				{Key: "$lte", Value: toBytes}}}}
-	}
-	fmt.Fprintf(os.Stderr, "condition: %v\n", condition)
-	cur, err = col.Find(ctx_tmp, condition, opts)
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			fmt.Fprint(os.Stderr, "can't find the document\n")
-			return nil
-		}
-		if s.inTransaction {
-			_ = s.sessCtx.AbortTransaction(context.Background())
-		}
-		return err
-	}
-	for cur.Next(ctx) {
-		var res bson.M
-		err = cur.Decode(&res)
+	return s.RangeWithCollection(ctx, fromBytes, toBytes, s.config.CollectionName, func(kBytes, vBytes []byte) error {
+		key, err := s.config.KeySerde.Decode(kBytes)
 		if err != nil {
 			return err
 		}
-		kBytes := res["key"].(primitive.Binary).Data
-		vBytes := res["value"].(primitive.Binary).Data
-		k, err := s.config.KeySerde.Decode(kBytes)
+		val, err := s.config.ValueSerde.Decode(vBytes)
 		if err != nil {
 			return err
 		}
-		v, err := s.config.ValueSerde.Decode(vBytes)
-		if err != nil {
-			return err
-		}
-		err = iterFunc(k, v)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+		return iterFunc(key, val)
+	})
 }
 
 func (s *MongoDBKeyValueStore) ReverseRange(from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {

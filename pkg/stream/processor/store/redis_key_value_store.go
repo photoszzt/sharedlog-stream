@@ -78,8 +78,8 @@ func (s *RedisKeyValueStore) GetWithCollection(ctx context.Context, key commtype
 	return val, true, nil
 }
 
-func (s *RedisKeyValueStore) Range(ctx context.Context, from commtypes.KeyT, to commtypes.KeyT,
-	iterFunc func(commtypes.KeyT, commtypes.ValueT) error,
+func (s *RedisKeyValueStore) RangeWithCollection(ctx context.Context, from commtypes.KeyT, to commtypes.KeyT,
+	collection string, key_collection string, iterFunc func(commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	fromBytes, err := utils.ConvertToBytes(from, s.config.KeySerde)
 	if err != nil {
@@ -97,7 +97,7 @@ func (s *RedisKeyValueStore) Range(ctx context.Context, from commtypes.KeyT, to 
 	tBytes = append(tBytes, toBytes...)
 	fmt.Fprintf(os.Stderr, "range from %v to %v\n", fBytes, tBytes)
 	kRange, err := s.rdb.ZRangeArgs(ctx, redis.ZRangeArgs{
-		Key:   s.key_collection_name,
+		Key:   key_collection,
 		ByLex: true,
 		Start: fBytes,
 		Stop:  tBytes,
@@ -107,7 +107,7 @@ func (s *RedisKeyValueStore) Range(ctx context.Context, from commtypes.KeyT, to 
 	}
 	fmt.Fprintf(os.Stderr, "return kRange: %v\n", kRange)
 
-	ret, err := s.rdb.HMGet(ctx, s.collection_name, kRange...).Result()
+	ret, err := s.rdb.HMGet(ctx, collection, kRange...).Result()
 	if err != nil {
 		return err
 	}
@@ -120,6 +120,12 @@ func (s *RedisKeyValueStore) Range(ctx context.Context, from commtypes.KeyT, to 
 		}
 	}
 	return nil
+}
+
+func (s *RedisKeyValueStore) Range(ctx context.Context, from commtypes.KeyT, to commtypes.KeyT,
+	iterFunc func(commtypes.KeyT, commtypes.ValueT) error,
+) error {
+	return s.RangeWithCollection(ctx, from, to, s.collection_name, s.key_collection_name, iterFunc)
 }
 
 func (s *RedisKeyValueStore) ReverseRange(from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
