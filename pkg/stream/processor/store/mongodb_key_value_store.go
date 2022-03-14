@@ -15,6 +15,11 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 )
 
+const (
+	KEY_NAME   = "k"
+	VALUE_NAME = "v"
+)
+
 type MongoDBKeyValueStore struct {
 	session       mongo.Session
 	sessCtx       mongo.SessionContext
@@ -45,7 +50,7 @@ func NewMongoDBKeyValueStore(ctx context.Context, config *MongoDBConfig) (*Mongo
 	col := client.Database(config.DBName).Collection(config.CollectionName)
 	idxView := col.Indexes()
 	_, err = idxView.CreateOne(ctx, mongo.IndexModel{
-		Keys:    bson.D{{Key: "key", Value: 1}},
+		Keys:    bson.D{{Key: KEY_NAME, Value: 1}},
 		Options: options.Index().SetName("kv"),
 	})
 	if err != nil {
@@ -135,7 +140,7 @@ func (s *MongoDBKeyValueStore) GetWithCollection(ctx context.Context, kBytes []b
 	if s.inTransaction {
 		ctx_tmp = s.sessCtx
 	}
-	err = col.FindOne(ctx_tmp, bson.D{{Key: "key", Value: kBytes}}).Decode(&result)
+	err = col.FindOne(ctx_tmp, bson.D{{Key: KEY_NAME, Value: kBytes}}).Decode(&result)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, false, nil
@@ -145,7 +150,7 @@ func (s *MongoDBKeyValueStore) GetWithCollection(ctx context.Context, kBytes []b
 		}
 		return nil, false, err
 	}
-	valBytes := result["value"]
+	valBytes := result[VALUE_NAME]
 	if valBytes == nil {
 		return nil, true, nil
 	}
@@ -158,7 +163,7 @@ func (s *MongoDBKeyValueStore) RangeWithCollection(ctx context.Context,
 ) error {
 	var err error
 	col := s.client.Database(s.config.DBName).Collection(collection)
-	opts := options.Find().SetSort(bson.D{{Key: "key", Value: 1}})
+	opts := options.Find().SetSort(bson.D{{Key: KEY_NAME, Value: 1}})
 	var cur *mongo.Cursor
 	ctx_tmp := ctx
 	if s.inTransaction {
@@ -168,13 +173,13 @@ func (s *MongoDBKeyValueStore) RangeWithCollection(ctx context.Context,
 	if fromBytes == nil && toBytes == nil {
 		condition = bson.D{}
 	} else if fromBytes == nil && toBytes != nil {
-		condition = bson.D{{Key: "key", Value: bson.D{{Key: "$lte", Value: toBytes}}}}
+		condition = bson.D{{Key: KEY_NAME, Value: bson.D{{Key: "$lte", Value: toBytes}}}}
 	} else if fromBytes != nil && toBytes == nil {
 		condition = bson.D{{
-			Key:   "key",
+			Key:   KEY_NAME,
 			Value: bson.D{{Key: "$gte", Value: fromBytes}}}}
 	} else {
-		condition = bson.D{{Key: "key",
+		condition = bson.D{{Key: KEY_NAME,
 			Value: bson.D{
 				{Key: "$gte", Value: fromBytes},
 				{Key: "$lte", Value: toBytes}}}}
@@ -196,8 +201,8 @@ func (s *MongoDBKeyValueStore) RangeWithCollection(ctx context.Context,
 		return err
 	}
 	for _, r := range res {
-		kBytes := r["key"].(primitive.Binary).Data
-		vBytes := r["value"].(primitive.Binary).Data
+		kBytes := r[KEY_NAME].(primitive.Binary).Data
+		vBytes := r[VALUE_NAME].(primitive.Binary).Data
 		err = iterFunc(kBytes, vBytes)
 		if err != nil {
 			return err
@@ -259,7 +264,7 @@ func (s *MongoDBKeyValueStore) PutWithCollection(ctx context.Context, key commty
 		if !ok {
 			idxView := col.Indexes()
 			_, err := idxView.CreateOne(ctx, mongo.IndexModel{
-				Keys:    bson.D{{Key: "key", Value: 1}},
+				Keys:    bson.D{{Key: KEY_NAME, Value: 1}},
 				Options: options.Index().SetName("kv"),
 			})
 			if err != nil {
@@ -282,8 +287,8 @@ func (s *MongoDBKeyValueStore) PutWithCollection(ctx context.Context, key commty
 		if s.inTransaction {
 			ctx_tmp = s.sessCtx
 		}
-		_, err = col.UpdateOne(ctx_tmp, bson.D{{Key: "key", Value: kBytes}},
-			bson.D{{Key: "$set", Value: bson.D{{Key: "value", Value: vBytes}}}}, opts)
+		_, err = col.UpdateOne(ctx_tmp, bson.D{{Key: KEY_NAME, Value: kBytes}},
+			bson.D{{Key: "$set", Value: bson.D{{Key: VALUE_NAME, Value: vBytes}}}}, opts)
 		if err != nil {
 			if s.inTransaction {
 				s.sessCtx.AbortTransaction(context.Background())
@@ -319,7 +324,7 @@ func (s *MongoDBKeyValueStore) DeleteWithCollection(ctx context.Context,
 	if s.inTransaction {
 		ctx_tmp = s.sessCtx
 	}
-	_, err = col.DeleteOne(ctx_tmp, bson.D{{Key: "key", Value: kBytes}})
+	_, err = col.DeleteOne(ctx_tmp, bson.D{{Key: KEY_NAME, Value: kBytes}})
 	if err != nil {
 		if s.inTransaction {
 			_ = s.sessCtx.AbortTransaction(context.Background())
