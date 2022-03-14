@@ -99,7 +99,6 @@ func TestMongoDBPutSameKeyTs(t *testing.T) {
 	mkvs.client.Database("test").Drop(ctx)
 }
 
-/*
 func TestRolling(t *testing.T) {
 	ctx := context.Background()
 	store, mkvs := getMongoDBWindowStore(ctx, false, t)
@@ -112,4 +111,3 @@ func TestRolling(t *testing.T) {
 	RollingTest(ctx, store, segments, t)
 	mkvs.client.Database("test").Drop(ctx)
 }
-*/

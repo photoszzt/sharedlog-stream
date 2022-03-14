@@ -253,14 +253,22 @@ func (s *MongoDBKeyValueStore) ApproximateNumEntries(ctx context.Context) (uint6
 }
 
 func (s *MongoDBKeyValueStore) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
-	return s.PutWithCollection(ctx, key, value, s.config.CollectionName)
+	kBytes, err := utils.ConvertToBytes(key, s.config.KeySerde)
+	if err != nil {
+		return err
+	}
+	vBytes, err := utils.ConvertToBytes(value, s.config.ValueSerde)
+	if err != nil {
+		return err
+	}
+	return s.PutWithCollection(ctx, kBytes, vBytes, s.config.CollectionName)
 }
 
-func (s *MongoDBKeyValueStore) PutWithCollection(ctx context.Context, key commtypes.KeyT,
-	value commtypes.ValueT, collection string,
+func (s *MongoDBKeyValueStore) PutWithCollection(ctx context.Context, kBytes []byte,
+	vBytes []byte, collection string,
 ) error {
-	if value == nil {
-		return s.Delete(ctx, key)
+	if vBytes == nil {
+		return s.DeleteWithCollection(ctx, kBytes, collection)
 	} else {
 		col := s.client.Database(s.config.DBName).Collection(collection)
 		/*
@@ -277,22 +285,13 @@ func (s *MongoDBKeyValueStore) PutWithCollection(ctx context.Context, key commty
 				s.indexCreation[collection] = struct{}{}
 			}
 		*/
-		// assume key and value to be bytes
-		kBytes, err := utils.ConvertToBytes(key, s.config.KeySerde)
-		if err != nil {
-			return err
-		}
-		vBytes, err := utils.ConvertToBytes(value, s.config.ValueSerde)
-		if err != nil {
-			return err
-		}
 		// fmt.Fprintf(os.Stderr, "put k: %v, val: %v\n", kBytes, vBytes)
 		opts := options.Update().SetUpsert(true)
 		ctx_tmp := ctx
 		if s.inTransaction {
 			ctx_tmp = s.sessCtx
 		}
-		_, err = col.UpdateOne(ctx_tmp, bson.D{{Key: KEY_NAME, Value: kBytes}},
+		_, err := col.UpdateOne(ctx_tmp, bson.D{{Key: KEY_NAME, Value: kBytes}},
 			bson.D{{Key: "$set", Value: bson.D{{Key: VALUE_NAME, Value: vBytes}}}}, opts)
 		if err != nil {
 			if s.inTransaction {
@@ -314,22 +313,22 @@ func (s *MongoDBKeyValueStore) PutAll(ctx context.Context, entries []*commtypes.
 }
 
 func (s *MongoDBKeyValueStore) Delete(ctx context.Context, key commtypes.KeyT) error {
-	return s.DeleteWithCollection(ctx, key, s.config.CollectionName)
-}
-
-func (s *MongoDBKeyValueStore) DeleteWithCollection(ctx context.Context,
-	key commtypes.KeyT, collection string,
-) error {
 	kBytes, err := s.config.KeySerde.Encode(key)
 	if err != nil {
 		return err
 	}
+	return s.DeleteWithCollection(ctx, kBytes, s.config.CollectionName)
+}
+
+func (s *MongoDBKeyValueStore) DeleteWithCollection(ctx context.Context,
+	kBytes []byte, collection string,
+) error {
 	col := s.client.Database(s.config.DBName).Collection(collection)
 	ctx_tmp := ctx
 	if s.inTransaction {
 		ctx_tmp = s.sessCtx
 	}
-	_, err = col.DeleteOne(ctx_tmp, bson.D{{Key: KEY_NAME, Value: kBytes}})
+	_, err := col.DeleteOne(ctx_tmp, bson.D{{Key: KEY_NAME, Value: kBytes}})
 	if err != nil {
 		if s.inTransaction {
 			_ = s.sessCtx.AbortTransaction(context.Background())

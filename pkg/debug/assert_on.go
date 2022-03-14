@@ -6,7 +6,6 @@ package debug
 import (
 	"fmt"
 	"io"
-	"os"
 )
 
 // Assert will panic with msg if cond is false.

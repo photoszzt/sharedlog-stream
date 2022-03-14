@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"sharedlog-stream/pkg/debug"
 	"testing"
 )
 
@@ -34,14 +35,17 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 
 	store.Put(ctx, uint32(0), "zero", startTime)
 	names := map[string]struct{}{segments.SegmentName(2): {}}
+	debug.Fprint(os.Stderr, "1\n")
 	checkPut(ctx, store, segments, t, names)
 
 	store.Put(ctx, uint32(1), "one", startTime+increment)
 	names = map[string]struct{}{segments.SegmentName(2): {}}
+	debug.Fprint(os.Stderr, "2\n")
 	checkPut(ctx, store, segments, t, names)
 
 	store.Put(ctx, uint32(2), "two", startTime+increment*2)
 	names = map[string]struct{}{segments.SegmentName(2): {}, segments.SegmentName(3): {}}
+	debug.Fprint(os.Stderr, "3\n")
 	checkPut(ctx, store, segments, t, names)
 
 	store.Put(ctx, uint32(4), "four", startTime+increment*4)
@@ -50,6 +54,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 		segments.SegmentName(3): {},
 		segments.SegmentName(4): {},
 	}
+	debug.Fprint(os.Stderr, "4\n")
 	checkPut(ctx, store, segments, t, names)
 
 	fmt.Fprint(os.Stderr, "4\n")

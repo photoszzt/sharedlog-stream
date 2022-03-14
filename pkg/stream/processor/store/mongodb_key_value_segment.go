@@ -3,6 +3,12 @@ package store
 import (
 	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+
+	"go.mongodb.org/mongo-driver/bson"
+)
+
+const (
+	ALL_SEGS = "keys"
 )
 
 type MongoDBKeyValueSegment struct {
@@ -15,12 +21,20 @@ func NewMongoDBKeyValueSegment(ctx context.Context,
 	mkvs *MongoDBKeyValueStore,
 	segmentName string,
 	name string,
-) *MongoDBKeyValueSegment {
+) (*MongoDBKeyValueSegment, error) {
+	col := mkvs.client.Database(mkvs.config.DBName).Collection(name)
+	_, err := col.UpdateOne(ctx, bson.D{{Key: "_id", Value: 1}},
+		bson.D{{
+			Key:   "$addToSet",
+			Value: bson.D{{Key: ALL_SEGS, Value: segmentName}}}})
+	if err != nil {
+		return nil, err
+	}
 	return &MongoDBKeyValueSegment{
 		mkvs:        mkvs,
 		segmentName: segmentName,
 		winName:     name,
-	}
+	}, nil
 }
 
 var _ = Segment(&MongoDBKeyValueSegment{})
