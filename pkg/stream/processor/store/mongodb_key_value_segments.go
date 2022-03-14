@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -52,6 +53,10 @@ func (kvs *MongoDBKeyValueSegments) GetSegmentNamesFromRemote(ctx context.Contex
 		}
 		return nil, err
 	}
-	res := result[ALL_SEGS].([]string)
-	return res, nil
+	res := result[ALL_SEGS].(primitive.A)
+	s := make([]string, len(res))
+	for i, v := range res {
+		s[i] = v.(string)
+	}
+	return s, nil
 }

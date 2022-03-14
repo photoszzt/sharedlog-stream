@@ -2,9 +2,12 @@ package store
 
 import (
 	"context"
+	"os"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 const (
@@ -23,13 +26,15 @@ func NewMongoDBKeyValueSegment(ctx context.Context,
 	name string,
 ) (*MongoDBKeyValueSegment, error) {
 	col := mkvs.client.Database(mkvs.config.DBName).Collection(name)
-	_, err := col.UpdateOne(ctx, bson.D{{Key: "_id", Value: 1}},
+	opts := options.Update().SetUpsert(true)
+	ret, err := col.UpdateOne(ctx, bson.D{{Key: "_id", Value: 1}},
 		bson.D{{
 			Key:   "$addToSet",
-			Value: bson.D{{Key: ALL_SEGS, Value: segmentName}}}})
+			Value: bson.D{{Key: ALL_SEGS, Value: segmentName}}}}, opts)
 	if err != nil {
 		return nil, err
 	}
+	debug.Fprintf(os.Stderr, "insert return: %v\n", *ret)
 	return &MongoDBKeyValueSegment{
 		mkvs:        mkvs,
 		segmentName: segmentName,
@@ -48,13 +53,6 @@ func (mkvs *MongoDBKeyValueSegment) Get(ctx context.Context, key []byte) ([]byte
 }
 func (mkvs *MongoDBKeyValueSegment) Range(ctx context.Context, from []byte, to []byte, iterFunc func([]byte, []byte) error) error {
 	return mkvs.mkvs.RangeWithCollection(ctx, from, to, mkvs.segmentName, iterFunc)
-}
-
-func (mkvs *MongoDBKeyValueSegment) RangeWithCollection(ctx context.Context,
-	from []byte, to []byte, collection string, key_collection string,
-	iterFunc func([]byte, []byte) error,
-) error {
-	return mkvs.mkvs.RangeWithCollection(ctx, from, to, collection, iterFunc)
 }
 
 func (mkvs *MongoDBKeyValueSegment) ReverseRange(from []byte, to []byte, iterFunc func([]byte, []byte) error) error {
@@ -81,7 +79,9 @@ func (mkvs *MongoDBKeyValueSegment) Delete(ctx context.Context, key []byte) erro
 }
 
 func (mkvs *MongoDBKeyValueSegment) Destroy(ctx context.Context) error {
-	panic("not implemented")
+
+	col_keys := mkvs.mkvs.client.Database(mkvs.mkvs.config.DBName).Collection(mkvs.winName)
+	return col_keys.Drop(ctx)
 }
 
 func (mkvs *MongoDBKeyValueSegment) DeleteRange(ctx context.Context, keyFrom interface{}, keyTo interface{}) error {

@@ -66,7 +66,7 @@ func (s *BaseSegmentedBytesStore) Fetch(ctx context.Context, key []byte, from in
 	// debug.Fprintf(os.Stderr, "segment slice: %v\n", segment_slice)
 	for _, seg := range segment_slice {
 		// debug.Fprintf(os.Stderr, "seg: %s\n", seg.Name())
-		err := seg.RangeWithCollection(ctx, binaryFrom, binaryTo, seg.Name(), "",
+		err := seg.Range(ctx, binaryFrom, binaryTo,
 			func(kt []byte, vt []byte) error {
 				// debug.Fprintf(os.Stderr, "got k: %v, v: %v\n", kt, vt)
 				has, ts := s.keySchema.HasNextCondition(kt, key, key, from, to)

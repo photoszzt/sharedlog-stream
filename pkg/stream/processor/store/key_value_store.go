@@ -34,8 +34,6 @@ type Segment interface {
 	PutAll(context.Context, []*commtypes.Message) error
 	Delete(ctx context.Context, key []byte) error
 
-	RangeWithCollection(ctx context.Context, from []byte, to []byte,
-		collection string, key_collection string, iterFunc func([]byte, []byte) error) error
 	Destroy(ctx context.Context) error
 	DeleteRange(ctx context.Context, keyFrom interface{}, keyTo interface{}) error
 }
