@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"testing"
 	"time"
@@ -65,7 +66,7 @@ func assertFetch(ctx context.Context, store WindowStore, k uint32, timeFrom int6
 	res := make(map[string]struct{})
 	err := store.Fetch(ctx, k, time.UnixMilli(timeFrom), time.UnixMilli(timeTo),
 		func(i int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
-			fmt.Fprintf(os.Stderr, "ts: %d, kt %v, vt %v", i, kt, vt)
+			debug.Fprintf(os.Stderr, "ts: %d, kt %v, vt %v", i, kt, vt)
 			val := vt.(string)
 			res[val] = struct{}{}
 			return nil
@@ -840,7 +841,7 @@ func FetchRangeTest(ctx context.Context, store WindowStore, t testing.TB) {
 		t.Fatalf("fail to set up window store: %v\n", err)
 	}
 
-	fmt.Fprint(os.Stderr, "1\n")
+	debug.Fprint(os.Stderr, "1\n")
 	msgs := make([]commtypes.Message, 0)
 	err = store.FetchWithKeyRange(ctx, uint32(0), uint32(1),
 		time.UnixMilli(startTime-TEST_WINDOW_SIZE),
@@ -871,7 +872,7 @@ func FetchRangeTest(ctx context.Context, store WindowStore, t testing.TB) {
 	}
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "2\n")
+	debug.Fprint(os.Stderr, "2\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.FetchWithKeyRange(ctx, uint32(1), uint32(1),
 		time.UnixMilli(startTime-TEST_WINDOW_SIZE),
@@ -897,7 +898,7 @@ func FetchRangeTest(ctx context.Context, store WindowStore, t testing.TB) {
 	}
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "3\n")
+	debug.Fprint(os.Stderr, "3\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.FetchWithKeyRange(ctx, uint32(1), uint32(3),
 		time.UnixMilli(startTime-TEST_WINDOW_SIZE),
@@ -928,7 +929,7 @@ func FetchRangeTest(ctx context.Context, store WindowStore, t testing.TB) {
 	}
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "4\n")
+	debug.Fprint(os.Stderr, "4\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.FetchWithKeyRange(ctx, uint32(0), uint32(5),
 		time.UnixMilli(startTime-TEST_WINDOW_SIZE),
@@ -964,7 +965,7 @@ func FetchRangeTest(ctx context.Context, store WindowStore, t testing.TB) {
 	}
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "5\n")
+	debug.Fprint(os.Stderr, "5\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.FetchWithKeyRange(ctx, uint32(0), uint32(5),
 		time.UnixMilli(startTime-TEST_WINDOW_SIZE),
@@ -1010,7 +1011,7 @@ func FetchRangeTest(ctx context.Context, store WindowStore, t testing.TB) {
 	}
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "6\n")
+	debug.Fprint(os.Stderr, "6\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.FetchWithKeyRange(ctx, uint32(0), uint32(5),
 		time.UnixMilli(startTime+2),
@@ -1046,7 +1047,7 @@ func FetchRangeTest(ctx context.Context, store WindowStore, t testing.TB) {
 	}
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "7\n")
+	debug.Fprint(os.Stderr, "7\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.FetchWithKeyRange(ctx, uint32(4), uint32(5),
 		time.UnixMilli(startTime+2),
@@ -1066,7 +1067,7 @@ func FetchRangeTest(ctx context.Context, store WindowStore, t testing.TB) {
 	ref_msgs = make([]commtypes.Message, 0)
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "8\n")
+	debug.Fprint(os.Stderr, "8\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.FetchWithKeyRange(ctx, uint32(0), uint32(3),
 		time.UnixMilli(startTime+3),
@@ -1632,7 +1633,7 @@ func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) 
 		t.Fatalf("fail to set up window store: %v\n", err)
 	}
 
-	fmt.Fprint(os.Stderr, "11\n")
+	debug.Fprint(os.Stderr, "11\n")
 	msgs := make([]commtypes.Message, 0)
 	err = store.Fetch(ctx, uint32(0), time.UnixMilli(startTime), time.UnixMilli(startTime+TEST_WINDOW_SIZE), func(ts int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 		msg := commtypes.Message{
@@ -1655,7 +1656,7 @@ func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) 
 	}
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "12\n")
+	debug.Fprint(os.Stderr, "12\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.Fetch(ctx, uint32(1), time.UnixMilli(startTime+1), time.UnixMilli(startTime+1+TEST_WINDOW_SIZE), func(ts int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 		msg := commtypes.Message{
@@ -1678,7 +1679,7 @@ func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) 
 	}
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "13\n")
+	debug.Fprint(os.Stderr, "13\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.Fetch(ctx, uint32(2), time.UnixMilli(startTime+2), time.UnixMilli(startTime+2+TEST_WINDOW_SIZE), func(ts int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 		msg := commtypes.Message{
@@ -1701,7 +1702,7 @@ func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) 
 	}
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "14\n")
+	debug.Fprint(os.Stderr, "14\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.Fetch(ctx, uint32(3), time.UnixMilli(startTime+3), time.UnixMilli(startTime+3+TEST_WINDOW_SIZE), func(ts int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 		msg := commtypes.Message{
@@ -1718,7 +1719,7 @@ func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) 
 	ref_msgs = make([]commtypes.Message, 0)
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "15\n")
+	debug.Fprint(os.Stderr, "15\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.Fetch(ctx, uint32(4), time.UnixMilli(startTime+4), time.UnixMilli(startTime+4+TEST_WINDOW_SIZE), func(ts int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 		msg := commtypes.Message{
@@ -1741,7 +1742,7 @@ func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) 
 	}
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "16\n")
+	debug.Fprint(os.Stderr, "16\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.Fetch(ctx, uint32(5), time.UnixMilli(startTime+5), time.UnixMilli(startTime+5+TEST_WINDOW_SIZE), func(ts int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 		msg := commtypes.Message{
@@ -1769,7 +1770,7 @@ func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) 
 		t.Fatal(err.Error())
 	}
 
-	fmt.Fprint(os.Stderr, "21\n")
+	debug.Fprint(os.Stderr, "21\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.Fetch(ctx, uint32(2), time.UnixMilli(startTime-2), time.UnixMilli(startTime-2+TEST_WINDOW_SIZE), func(ts int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 		msg := commtypes.Message{
@@ -1786,7 +1787,7 @@ func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) 
 	ref_msgs = make([]commtypes.Message, 0)
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "22\n")
+	debug.Fprint(os.Stderr, "22\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.Fetch(ctx, uint32(2), time.UnixMilli(startTime-1), time.UnixMilli(startTime-1+TEST_WINDOW_SIZE), func(ts int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 		msg := commtypes.Message{
@@ -1809,7 +1810,7 @@ func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) 
 	}
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "23\n")
+	debug.Fprint(os.Stderr, "23\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.Fetch(ctx, uint32(2), time.UnixMilli(startTime), time.UnixMilli(startTime+TEST_WINDOW_SIZE), func(ts int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 		msg := commtypes.Message{
@@ -1837,7 +1838,7 @@ func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) 
 	}
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "24\n")
+	debug.Fprint(os.Stderr, "24\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.Fetch(ctx, uint32(2), time.UnixMilli(startTime+1), time.UnixMilli(startTime+1+TEST_WINDOW_SIZE), func(ts int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 		msg := commtypes.Message{
@@ -1870,7 +1871,7 @@ func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) 
 	}
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "25\n")
+	debug.Fprint(os.Stderr, "25\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.Fetch(ctx, uint32(2), time.UnixMilli(startTime+2), time.UnixMilli(startTime+2+TEST_WINDOW_SIZE), func(ts int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 		msg := commtypes.Message{
@@ -1908,7 +1909,7 @@ func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) 
 	}
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "26\n")
+	debug.Fprint(os.Stderr, "26\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.Fetch(ctx, uint32(2), time.UnixMilli(startTime+3), time.UnixMilli(startTime+3+TEST_WINDOW_SIZE), func(ts int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 		msg := commtypes.Message{
@@ -1946,7 +1947,7 @@ func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) 
 	}
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "27\n")
+	debug.Fprint(os.Stderr, "27\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.Fetch(ctx, uint32(2), time.UnixMilli(startTime+4), time.UnixMilli(startTime+4+TEST_WINDOW_SIZE), func(ts int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 		msg := commtypes.Message{
@@ -1984,7 +1985,7 @@ func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) 
 	}
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "28\n")
+	debug.Fprint(os.Stderr, "28\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.Fetch(ctx, uint32(2), time.UnixMilli(startTime+5), time.UnixMilli(startTime+5+TEST_WINDOW_SIZE), func(ts int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 		msg := commtypes.Message{
@@ -2022,7 +2023,7 @@ func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) 
 	}
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "29\n")
+	debug.Fprint(os.Stderr, "29\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.Fetch(ctx, uint32(2), time.UnixMilli(startTime+6), time.UnixMilli(startTime+6+TEST_WINDOW_SIZE), func(ts int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 		msg := commtypes.Message{
@@ -2055,7 +2056,7 @@ func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) 
 	}
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "30\n")
+	debug.Fprint(os.Stderr, "30\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.Fetch(ctx, uint32(2), time.UnixMilli(startTime+7), time.UnixMilli(startTime+7+TEST_WINDOW_SIZE), func(ts int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 		msg := commtypes.Message{
@@ -2083,7 +2084,7 @@ func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) 
 	}
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "31\n")
+	debug.Fprint(os.Stderr, "31\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.Fetch(ctx, uint32(2), time.UnixMilli(startTime+8), time.UnixMilli(startTime+8+TEST_WINDOW_SIZE), func(ts int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 		msg := commtypes.Message{
@@ -2106,7 +2107,7 @@ func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) 
 	}
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "32\n")
+	debug.Fprint(os.Stderr, "32\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.Fetch(ctx, uint32(2), time.UnixMilli(startTime+9), time.UnixMilli(startTime+9+TEST_WINDOW_SIZE), func(ts int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 		msg := commtypes.Message{
@@ -2123,7 +2124,7 @@ func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) 
 	ref_msgs = make([]commtypes.Message, 0)
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "33\n")
+	debug.Fprint(os.Stderr, "33\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.Fetch(ctx, uint32(2), time.UnixMilli(startTime+10), time.UnixMilli(startTime+10+TEST_WINDOW_SIZE), func(ts int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 		msg := commtypes.Message{
@@ -2140,7 +2141,7 @@ func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) 
 	ref_msgs = make([]commtypes.Message, 0)
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "34\n")
+	debug.Fprint(os.Stderr, "34\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.Fetch(ctx, uint32(2), time.UnixMilli(startTime+11), time.UnixMilli(startTime+11+TEST_WINDOW_SIZE), func(ts int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 		msg := commtypes.Message{
@@ -2157,7 +2158,7 @@ func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) 
 	ref_msgs = make([]commtypes.Message, 0)
 	checkSlice(ref_msgs, msgs, t)
 
-	fmt.Fprint(os.Stderr, "35\n")
+	debug.Fprint(os.Stderr, "35\n")
 	msgs = make([]commtypes.Message, 0)
 	err = store.Fetch(ctx, uint32(2), time.UnixMilli(startTime+12), time.UnixMilli(startTime+12+TEST_WINDOW_SIZE), func(ts int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 		msg := commtypes.Message{

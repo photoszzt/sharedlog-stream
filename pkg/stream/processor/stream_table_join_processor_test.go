@@ -3,7 +3,6 @@ package processor
 import (
 	"context"
 	"fmt"
-	"os"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/treemap"
@@ -57,7 +56,7 @@ func TestJoinOnlyIfMatchFound(t *testing.T) {
 			}
 		}
 		if i == 3 || i == 4 {
-			fmt.Fprintf(os.Stderr, "msgs: %v", msgs)
+			// debug.Fprintf(os.Stderr, "msgs: %v", msgs)
 			if len(msgs) != 0 {
 				t.Error("should return no value")
 			}

@@ -163,7 +163,7 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNu
 		return 0, err
 	}
 	/*
-		// fmt.Fprintf(os.Stderr, "append val %s with tag: %x to topic %s par %d, seqNum: %x\n",
+		// debug.Fprintf(os.Stderr, "append val %s with tag: %x to topic %s par %d, seqNum: %x\n",
 		// 	string(payload), tags[0], s.topicName, parNum, seqNum)
 		logEntryRead, err := s.env.SharedLogReadNext(ctx, tags[0], seqNum)
 		if err != nil {
@@ -237,7 +237,7 @@ func (s *SharedLogStream) ReadNext(ctx context.Context, parNum uint8) (commtypes
 }
 
 func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag uint64) (commtypes.TaskIDGen, []commtypes.RawMsg, error) {
-	// fmt.Fprintf(os.Stderr, "read topic %s with parNum %d tag %x\n", s.topicName, parNum, tag)
+	// debug.Fprintf(os.Stderr, "read topic %s with parNum %d tag %x\n", s.topicName, parNum, tag)
 	if s.isEmpty() {
 		if err := s.findLastEntryBackward(ctx, protocol.MaxLogSeqnum, parNum); err != nil {
 			return commtypes.EmptyAppIDGen, nil, err
@@ -247,13 +247,13 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 		}
 	}
 	seqNumInSharedLog := s.cursor
-	// fmt.Fprintf(os.Stderr, "cursor: %d, tail: %d\n", s.cursor, s.tail)
+	// debug.Fprintf(os.Stderr, "cursor: %d, tail: %d\n", s.cursor, s.tail)
 	for seqNumInSharedLog < s.tail {
-		// fmt.Fprintf(os.Stderr, "read tag: 0x%x, seqNum: 0x%x\n", tag, seqNumInSharedLog)
+		// debug.Fprintf(os.Stderr, "read tag: 0x%x, seqNum: 0x%x\n", tag, seqNumInSharedLog)
 		newCtx, cancel := context.WithTimeout(ctx, kBlockingReadTimeout)
 		defer cancel()
 		logEntry, err := s.env.SharedLogReadNextBlock(newCtx, tag, seqNumInSharedLog)
-		// fmt.Fprintf(os.Stderr, "after read next block\n")
+		// debug.Fprintf(os.Stderr, "after read next block\n")
 		if err != nil {
 			return commtypes.EmptyAppIDGen, nil, err
 		}
@@ -353,9 +353,9 @@ func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum 
 	tag := NameHashWithPartition(s.topicNameHash, parNum)
 
 	seqNum := tailSeqNum
-	// fmt.Fprintf(os.Stderr, "find tail for topic: %s, par: %d\n", s.topicName, parNum)
+	// debug.Fprintf(os.Stderr, "find tail for topic: %s, par: %d\n", s.topicName, parNum)
 	for seqNum >= s.cursor+1 {
-		// fmt.Fprintf(os.Stderr, "current sequence number: 0x%x, tail: 0x%x, tag: %x\n", seqNum, s.tail, tag)
+		// debug.Fprintf(os.Stderr, "current sequence number: 0x%x, tail: 0x%x, tag: %x\n", seqNum, s.tail, tag)
 		logEntry, err := s.readPrevWithTimeout(ctx, tag, seqNum)
 		if err != nil {
 			return err
@@ -372,7 +372,7 @@ func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum 
 			continue
 		}
 		s.tail = logEntry.SeqNum + 1
-		// fmt.Fprintf(os.Stderr, "current tail is %d\n", s.tail)
+		// debug.Fprintf(os.Stderr, "current tail is %d\n", s.tail)
 		break
 	}
 	return nil

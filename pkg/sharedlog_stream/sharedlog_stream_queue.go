@@ -134,7 +134,7 @@ func (s *SharedLogStreamQueue) isEmpty() bool {
 func (s *SharedLogStreamQueue) findNext(minSeqNum, maxSeqNum uint64) (*StreamQueueLogEntry, error) {
 	tag := streamPushLogTag(s.topicNameHash)
 	seqNum := minSeqNum
-	// fmt.Fprintf(os.Stderr, "findNext: minSeqNum 0x%x, maxSeqNum 0x%x\n", minSeqNum, maxSeqNum)
+	// debug.Fprintf(os.Stderr, "findNext: minSeqNum 0x%x, maxSeqNum 0x%x\n", minSeqNum, maxSeqNum)
 	for seqNum < maxSeqNum {
 		logEntry, err := s.env.SharedLogReadNextBlock(s.ctx, tag, seqNum)
 		if err != nil {
@@ -145,7 +145,7 @@ func (s *SharedLogStreamQueue) findNext(minSeqNum, maxSeqNum uint64) (*StreamQue
 		}
 		streamLogEntry := decodeStreamQueueLogEntry(logEntry)
 		if streamLogEntry.IsPush && streamLogEntry.TopicName == s.topicName {
-			// fmt.Fprintf(os.Stderr, "findNext: found entry with seqNum: 0x%x\n", logEntry.SeqNum)
+			// debug.Fprintf(os.Stderr, "findNext: found entry with seqNum: 0x%x\n", logEntry.SeqNum)
 			return streamLogEntry, nil
 		}
 		seqNum = logEntry.SeqNum + 1
@@ -174,7 +174,7 @@ func (s *SharedLogStreamQueue) applyLog(streamLogEntry *StreamQueueLogEntry) err
 		}
 	}
 	s.nextSeqNum = streamLogEntry.seqNum + 1
-	// fmt.Fprintf(os.Stderr, "update stream next seq num to %x\n", s.nextSeqNum)
+	// debug.Fprintf(os.Stderr, "update stream next seq num to %x\n", s.nextSeqNum)
 	return nil
 }
 
@@ -212,9 +212,9 @@ func (s *SharedLogStreamQueue) syncToBackward(tailSeqNum uint64) error {
 		}
 		/*
 			if logEntry != nil {
-				fmt.Fprintf(os.Stderr, "cur entry seqnum: 0x%x, next seq num: 0x%x\n", logEntry.SeqNum, s.nextSeqNum)
+				debug.Fprintf(os.Stderr, "cur entry seqnum: 0x%x, next seq num: 0x%x\n", logEntry.SeqNum, s.nextSeqNum)
 			} else {
-				fmt.Fprintf(os.Stderr, "found nil entry\n")
+				debug.Fprintf(os.Stderr, "found nil entry\n")
 			}
 		*/
 		if logEntry == nil || logEntry.SeqNum < s.nextSeqNum {
@@ -223,7 +223,7 @@ func (s *SharedLogStreamQueue) syncToBackward(tailSeqNum uint64) error {
 
 		seqNum = logEntry.SeqNum
 		streamLogEntry := decodeStreamQueueLogEntry(logEntry)
-		// fmt.Fprintf(os.Stderr, "found tp: %v, need tp: %v\n", streamLogEntry.TopicName, s.topicName)
+		// debug.Fprintf(os.Stderr, "found tp: %v, need tp: %v\n", streamLogEntry.TopicName, s.topicName)
 		if streamLogEntry.TopicName != s.topicName {
 			continue
 		}
@@ -231,7 +231,7 @@ func (s *SharedLogStreamQueue) syncToBackward(tailSeqNum uint64) error {
 			s.nextSeqNum = streamLogEntry.seqNum + 1
 			s.consumed = streamLogEntry.auxData.Consumed
 			s.tail = streamLogEntry.auxData.Tail
-			// fmt.Fprintf(os.Stderr, "Update nextSeqNum to 0x%x, consumed to 0x%x, tail to 0x%x with auxData\n", s.nextSeqNum, s.consumed, s.tail)
+			// debug.Fprintf(os.Stderr, "Update nextSeqNum to 0x%x, consumed to 0x%x, tail to 0x%x with auxData\n", s.nextSeqNum, s.consumed, s.tail)
 			break
 		} else {
 			streamLogs = append(streamLogs, streamLogEntry)

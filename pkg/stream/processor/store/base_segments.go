@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/google/btree"
 )
@@ -113,7 +112,7 @@ func (s *BaseSegments) Segments(timeFrom int64, timeTo int64) []Segment {
 	var got []Segment
 	fromId := Int64(s.SegmentId(timeFrom))
 	toId := Int64(s.SegmentId(timeTo)) + 1 // plus 1 for inclusive of timeTo
-	fmt.Fprintf(os.Stderr, "fromId: %v, toId: %v\n", fromId, toId)
+	// debug.Fprintf(os.Stderr, "fromId: %v, toId: %v\n", fromId, toId)
 	s.segments.AscendRange(fromId, toId,
 		func(i btree.Item) bool {
 			ks := i.(*KeySegment)

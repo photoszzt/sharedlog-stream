@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/rs/zerolog/log"
 )
@@ -62,14 +61,14 @@ func (s *BaseSegmentedBytesStore) Fetch(ctx context.Context, key []byte, from in
 ) error {
 	binaryFrom := s.keySchema.LowerRangeFixedSize(key, from)
 	binaryTo := s.keySchema.UpperRangeFixedSize(key, to)
-	fmt.Fprintf(os.Stderr, "fetch from: %d, to: %d, binaryFrom: %v, binaryTo: %v\n", from, to, binaryFrom, binaryTo)
+	// debug.Fprintf(os.Stderr, "fetch from: %d, to: %d, binaryFrom: %v, binaryTo: %v\n", from, to, binaryFrom, binaryTo)
 	segment_slice := s.segments.Segments(from, to)
-	fmt.Fprintf(os.Stderr, "segment slice: %v\n", segment_slice)
+	// debug.Fprintf(os.Stderr, "segment slice: %v\n", segment_slice)
 	for _, seg := range segment_slice {
-		fmt.Fprintf(os.Stderr, "seg: %s\n", seg.Name())
+		// debug.Fprintf(os.Stderr, "seg: %s\n", seg.Name())
 		err := seg.RangeWithCollection(ctx, binaryFrom, binaryTo, seg.Name(), "",
 			func(kt []byte, vt []byte) error {
-				fmt.Fprintf(os.Stderr, "got k: %v, v: %v\n", kt, vt)
+				// debug.Fprintf(os.Stderr, "got k: %v, v: %v\n", kt, vt)
 				has, ts := s.keySchema.HasNextCondition(kt, key, key, from, to)
 				if has {
 					k := s.keySchema.ExtractStoreKeyBytes(kt)

@@ -64,11 +64,11 @@ func (s *SharedLogStreamSource) Consume(ctx context.Context, parNum uint8) ([]co
 		_, rawMsgs, err := s.stream.ReadNext(ctx, 0)
 		if err != nil {
 			if errors.IsStreamEmptyError(err) {
-				// fmt.Fprintf(os.Stderr, "stream is empty\n")
+				// debug.Fprintf(os.Stderr, "stream is empty\n")
 				time.Sleep(time.Duration(100) * time.Microsecond)
 				continue
 			} else if errors.IsStreamTimeoutError(err) {
-				// fmt.Fprintf(os.Stderr, "stream time out\n")
+				// debug.Fprintf(os.Stderr, "stream time out\n")
 				break
 			} else {
 				return nil, err
@@ -86,7 +86,7 @@ func (s *SharedLogStreamSource) Consume(ctx context.Context, parNum uint8) ([]co
 					return nil, err
 				}
 			}
-			// fmt.Fprintf(os.Stderr, "val encoded is %v\n", valueEncoded)
+			// debug.Fprintf(os.Stderr, "val encoded is %v\n", valueEncoded)
 			value, err := s.valueDecoder.Decode(valueEncoded)
 			if err != nil {
 				return nil, err

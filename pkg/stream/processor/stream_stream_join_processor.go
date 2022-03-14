@@ -116,7 +116,7 @@ func (p *StreamStreamJoinProcessor) ProcessAndReturn(ctx context.Context, msg co
 
 	// needOuterJoin := p.outer
 	inputTs := msg.Timestamp
-	// fmt.Fprintf(os.Stderr, "input ts: %v\n", inputTs)
+	// debug.Fprintf(os.Stderr, "input ts: %v\n", inputTs)
 	var timeFrom uint64
 	var timeTo uint64
 	timeFromTmp := int64(inputTs) - int64(p.joinBeforeMs)

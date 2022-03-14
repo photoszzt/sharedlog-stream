@@ -119,7 +119,7 @@ func (tc *TransactionManager) loadCurrentTopicPartitions(lastTopicPartitions []T
 }
 
 func (tc *TransactionManager) getMostRecentTransactionState(ctx context.Context) (*TxnMetadata, error) {
-	// fmt.Fprintf(os.Stderr, "load transaction log\n")
+	// debug.Fprintf(os.Stderr, "load transaction log\n")
 	mostRecentTxnMetadata := &TxnMetadata{
 		TopicPartitions: make([]TopicPartition, 0),
 		TaskId:          0,
@@ -201,26 +201,26 @@ func (tc *TransactionManager) loadAndFixTransaction(ctx context.Context, mostRec
 
 		// use the previous app id to finish the previous transaction
 		tc.currentStatus = mostRecentTxnMetadata.State
-		// fmt.Fprintf(os.Stderr, "In repair: Transition to %s to restore\n", tc.currentStatus)
+		// debug.Fprintf(os.Stderr, "In repair: Transition to %s to restore\n", tc.currentStatus)
 
-		// fmt.Fprintf(os.Stderr, "before load current topic partitions\n")
+		// debug.Fprintf(os.Stderr, "before load current topic partitions\n")
 		tc.loadCurrentTopicPartitions(mostRecentTxnMetadata.TopicPartitions)
-		// fmt.Fprintf(os.Stderr, "after load current topic partitions\n")
+		// debug.Fprintf(os.Stderr, "after load current topic partitions\n")
 		err := tc.AbortTransaction(ctx)
-		// fmt.Fprintf(os.Stderr, "after abort transactions\n")
+		// debug.Fprintf(os.Stderr, "after abort transactions\n")
 		if err != nil {
 			return err
 		}
 		// swap back
 		tc.currentStatus = currentStatus
-		// fmt.Fprintf(os.Stderr, "In repair: Transition back to %s\n", tc.currentStatus)
+		// debug.Fprintf(os.Stderr, "In repair: Transition back to %s\n", tc.currentStatus)
 	case PREPARE_ABORT:
 		// need to abort
 		currentStatus := tc.currentStatus
 
 		// use the previous app id to finish the previous transaction
 		tc.currentStatus = mostRecentTxnMetadata.State
-		// fmt.Fprintf(os.Stderr, "In repair: Transition to %s to restore\n", tc.currentStatus)
+		// debug.Fprintf(os.Stderr, "In repair: Transition to %s to restore\n", tc.currentStatus)
 
 		// the transaction is aborted but the marker might not pushed to the relevant partitions yet
 		tc.loadCurrentTopicPartitions(mostRecentTxnMetadata.TopicPartitions)
@@ -231,7 +231,7 @@ func (tc *TransactionManager) loadAndFixTransaction(ctx context.Context, mostRec
 		tc.cleanupState()
 		// swap back
 		tc.currentStatus = currentStatus
-		// fmt.Fprintf(os.Stderr, "In repair: Transition back to %s\n", tc.currentStatus)
+		// debug.Fprintf(os.Stderr, "In repair: Transition back to %s\n", tc.currentStatus)
 	case PREPARE_COMMIT:
 		// the transaction is commited but the marker might not pushed to the relevant partitions yet
 		// need to abort
@@ -239,7 +239,7 @@ func (tc *TransactionManager) loadAndFixTransaction(ctx context.Context, mostRec
 
 		// use the previous app id to finish the previous transaction
 		tc.currentStatus = mostRecentTxnMetadata.State
-		// fmt.Fprintf(os.Stderr, "In repair: Transition to %s to restore\n", tc.currentStatus)
+		// debug.Fprintf(os.Stderr, "In repair: Transition to %s to restore\n", tc.currentStatus)
 
 		tc.loadCurrentTopicPartitions(mostRecentTxnMetadata.TopicPartitions)
 		err := tc.completeTransaction(ctx, COMMIT, COMPLETE_COMMIT)
@@ -250,7 +250,7 @@ func (tc *TransactionManager) loadAndFixTransaction(ctx context.Context, mostRec
 
 		// swap back
 		tc.currentStatus = currentStatus
-		// fmt.Fprintf(os.Stderr, "In repair: Transition back to %s\n", tc.currentStatus)
+		// debug.Fprintf(os.Stderr, "In repair: Transition back to %s\n", tc.currentStatus)
 	case FENCE:
 		// it's in a view change.
 		log.Info().Msgf("Last operation in the log is fence to update the epoch. We are updating the epoch again.")
@@ -267,7 +267,7 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("getMostRecentTransactionState failed: %v", err)
 	}
-	// fmt.Fprintf(os.Stderr, "Init transaction: Transition to %s\n", tc.currentStatus)
+	// debug.Fprintf(os.Stderr, "Init transaction: Transition to %s\n", tc.currentStatus)
 	if recentTxnMeta == nil {
 		tc.genAppId()
 		tc.CurrentEpoch = 0
@@ -544,11 +544,11 @@ func (tc *TransactionManager) FindLastConsumedSeqNum(ctx context.Context, topicT
 
 func (tc *TransactionManager) BeginTransaction(ctx context.Context) error {
 	if !BEGIN.IsValidPreviousState(tc.currentStatus) {
-		// fmt.Fprintf(os.Stderr, "current state is %d\n", tc.currentStatus)
+		// debug.Fprintf(os.Stderr, "current state is %d\n", tc.currentStatus)
 		return errors.ErrInvalidStateTransition
 	}
 	tc.currentStatus = BEGIN
-	// fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
+	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 
 	txnState := TxnMetadata{
 		State:     tc.currentStatus,
@@ -568,7 +568,7 @@ func (tc *TransactionManager) completeTransaction(ctx context.Context, trMark Tx
 	}
 	// async append complete_commit
 	tc.currentStatus = trState
-	// fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
+	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 	txnMd := TxnMetadata{
 		State: tc.currentStatus,
 	}
@@ -580,13 +580,13 @@ func (tc *TransactionManager) completeTransaction(ctx context.Context, trMark Tx
 
 func (tc *TransactionManager) CommitTransaction(ctx context.Context) error {
 	if !PREPARE_COMMIT.IsValidPreviousState(tc.currentStatus) {
-		// fmt.Fprintf(os.Stderr, "Fail to transition from %s to PREPARE_COMMIT\n", tc.currentStatus.String())
+		// debug.Fprintf(os.Stderr, "Fail to transition from %s to PREPARE_COMMIT\n", tc.currentStatus.String())
 		return errors.ErrInvalidStateTransition
 	}
 
 	// first phase of the commit
 	tc.currentStatus = PREPARE_COMMIT
-	// fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
+	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 	err := tc.registerTopicPartitions(ctx)
 	if err != nil {
 		return err
@@ -606,7 +606,7 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context) error {
 		return errors.ErrInvalidStateTransition
 	}
 	tc.currentStatus = PREPARE_ABORT
-	// fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
+	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 	err := tc.registerTopicPartitions(ctx)
 	if err != nil {
 		return err
@@ -622,7 +622,7 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context) error {
 
 func (tc *TransactionManager) cleanupState() {
 	tc.currentStatus = EMPTY
-	// fmt.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
+	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 	tc.currentTopicPartition = make(map[string]map[uint8]struct{})
 }
 

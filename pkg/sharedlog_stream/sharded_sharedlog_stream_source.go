@@ -52,11 +52,11 @@ func (s *ShardedSharedLogStreamSource) Consume(ctx context.Context, parNum uint8
 		_, rawMsgs, err := s.stream.ReadNext(ctx, parNum)
 		if err != nil {
 			if errors.IsStreamEmptyError(err) {
-				// fmt.Fprintf(os.Stderr, "stream is empty\n")
+				// debug.Fprintf(os.Stderr, "stream is empty\n")
 				time.Sleep(time.Duration(100) * time.Microsecond)
 				continue
 			} else if errors.IsStreamTimeoutError(err) {
-				// fmt.Fprintf(os.Stderr, "stream time out\n")
+				// debug.Fprintf(os.Stderr, "stream time out\n")
 				continue
 			} else {
 				return nil, err

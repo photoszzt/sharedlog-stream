@@ -25,7 +25,7 @@ func UpperRange(key []byte, maxSuffix []byte) []byte {
 	// fmt.Fprint(os.Stderr, "UpperRange: rangeEnd\n")
 	// debug.PrintByteSlice(rangeEnd)
 	remain := len(key) + len(maxSuffix) - buffer.Len()
-	// fmt.Fprintf(os.Stderr, "remain len: %d\n", remain)
+	// debug.Fprintf(os.Stderr, "remain len: %d\n", remain)
 
 	res := make([]byte, 0, remain)
 	buf_res := bytes.NewBuffer(res)

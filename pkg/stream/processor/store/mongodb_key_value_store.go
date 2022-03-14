@@ -47,15 +47,18 @@ func NewMongoDBKeyValueStore(ctx context.Context, config *MongoDBConfig) (*Mongo
 	if err != nil {
 		return nil, err
 	}
-	col := client.Database(config.DBName).Collection(config.CollectionName)
-	idxView := col.Indexes()
-	_, err = idxView.CreateOne(ctx, mongo.IndexModel{
-		Keys:    bson.D{{Key: KEY_NAME, Value: 1}},
-		Options: options.Index().SetName("kv"),
-	})
-	if err != nil {
-		return nil, err
-	}
+	/*
+		col := client.Database(config.DBName).Collection(config.CollectionName)
+
+			idxView := col.Indexes()
+			_, err = idxView.CreateOne(ctx, mongo.IndexModel{
+				Keys:    bson.D{{Key: KEY_NAME, Value: 1}},
+				Options: options.Index().SetName("kv"),
+			})
+			if err != nil {
+				return nil, err
+			}
+	*/
 	return &MongoDBKeyValueStore{
 		config:        config,
 		client:        client,
@@ -260,18 +263,20 @@ func (s *MongoDBKeyValueStore) PutWithCollection(ctx context.Context, key commty
 		return s.Delete(ctx, key)
 	} else {
 		col := s.client.Database(s.config.DBName).Collection(collection)
-		_, ok := s.indexCreation[collection]
-		if !ok {
-			idxView := col.Indexes()
-			_, err := idxView.CreateOne(ctx, mongo.IndexModel{
-				Keys:    bson.D{{Key: KEY_NAME, Value: 1}},
-				Options: options.Index().SetName("kv"),
-			})
-			if err != nil {
-				return err
+		/*
+			_, ok := s.indexCreation[collection]
+			if !ok {
+				idxView := col.Indexes()
+				_, err := idxView.CreateOne(ctx, mongo.IndexModel{
+					Keys:    bson.D{{Key: KEY_NAME, Value: 1}},
+					Options: options.Index().SetName("kv"),
+				})
+				if err != nil {
+					return err
+				}
+				s.indexCreation[collection] = struct{}{}
 			}
-			s.indexCreation[collection] = struct{}{}
-		}
+		*/
 		// assume key and value to be bytes
 		kBytes, err := utils.ConvertToBytes(key, s.config.KeySerde)
 		if err != nil {
@@ -281,7 +286,7 @@ func (s *MongoDBKeyValueStore) PutWithCollection(ctx context.Context, key commty
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "put k: %v, val: %v\n", kBytes, vBytes)
+		// fmt.Fprintf(os.Stderr, "put k: %v, val: %v\n", kBytes, vBytes)
 		opts := options.Update().SetUpsert(true)
 		ctx_tmp := ctx
 		if s.inTransaction {

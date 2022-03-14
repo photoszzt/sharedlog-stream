@@ -17,7 +17,7 @@ func NewRedisKeyValueSegments(name string, retentionPeriod int64,
 /*
 func (kvs *RedisKeyValueSegments) GetOrCreateSegment(ctx context.Context, segmentId int64) (Segment, error) {
 	if kvs.segments.Has(Int64(segmentId)) {
-		fmt.Fprintf(os.Stderr, "found %v\n", segmentId)
+		debug.Fprintf(os.Stderr, "found %v\n", segmentId)
 		kv := kvs.segments.Get(Int64(segmentId)).(*KeySegment)
 		return kv.Value, nil
 	} else {
@@ -26,7 +26,7 @@ func (kvs *RedisKeyValueSegments) GetOrCreateSegment(ctx context.Context, segmen
 		if err != nil {
 			return nil, err
 		}
-		fmt.Fprintf(os.Stderr, "inserting k: %v, v: %v\n", segmentId, kv.segmentName)
+		debug.Fprintf(os.Stderr, "inserting k: %v, v: %v\n", segmentId, kv.segmentName)
 		_ = kvs.segments.ReplaceOrInsert(&KeySegment{Key: Int64(segmentId), Value: kv})
 		return kv, nil
 	}
