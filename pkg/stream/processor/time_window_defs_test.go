@@ -90,3 +90,51 @@ func TestShouldComputeWindowsForHoppingWindows(t *testing.T) {
 		utils.FatalMsg(expected, w, t)
 	}
 }
+
+func TestShouldComputeWindowsForBarelyOverlappingHoppingWindows(t *testing.T) {
+	tws, err := NewTimeWindowsNoGrace(time.Duration(6) * time.Millisecond)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	tws, err = tws.AdvanceBy(time.Duration(5) * time.Millisecond)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	matched, err := tws.WindowsFor(7)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if len(matched) != 1 {
+		t.Fatalf("expected 1, got %d\n", len(matched))
+	}
+	expected, err := NewTimeWindow(5, 11)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	w := matched[5]
+	if expected.StartTs != w.Start() && expected.EndTs != w.End() {
+		utils.FatalMsg(expected, w, t)
+	}
+}
+
+func TestShouldComputeWindowsForTumblingWindows(t *testing.T) {
+	tws, err := NewTimeWindowsNoGrace(time.Duration(12) * time.Millisecond)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	matched, err := tws.WindowsFor(21)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if len(matched) != 1 {
+		t.Fatalf("expected 1, got %d\n", len(matched))
+	}
+	expected, err := NewTimeWindow(12, 24)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	w := matched[12]
+	if expected.StartTs != w.Start() && expected.EndTs != w.End() {
+		utils.FatalMsg(expected, w, t)
+	}
+}
