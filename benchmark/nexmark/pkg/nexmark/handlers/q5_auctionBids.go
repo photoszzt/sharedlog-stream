@@ -89,7 +89,14 @@ func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput,
 
 func (h *q5AuctionBids) getCountAggProc(sp *common.QueryInput, msgSerde commtypes.MsgSerde,
 ) (*processor.MeteredProcessor, *store.InMemoryWindowStoreWithChangelog, error) {
-	hopWindow := processor.NewTimeWindowsNoGrace(time.Duration(10) * time.Second).AdvanceBy(time.Duration(2) * time.Second)
+	hopWindow, err := processor.NewTimeWindowsNoGrace(time.Duration(10) * time.Second)
+	if err != nil {
+		return nil, nil, err
+	}
+	hopWindow, err = hopWindow.AdvanceBy(time.Duration(2) * time.Second)
+	if err != nil {
+		return nil, nil, err
+	}
 	countStoreName := "auctionBidsCountStore"
 	changelogName := countStoreName + "-changelog"
 	changelog, err := sharedlog_stream.NewShardedSharedLogStream(h.env, changelogName, sp.NumOutPartition,

@@ -123,9 +123,23 @@ func Query5(ctx context.Context, env types.Environment, input *common.QueryInput
 		event := msg.Value.(*ntypes.Event)
 		return commtypes.Message{Key: event.Bid.Auction, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 	}))
+	w, err := processor.NewTimeWindowsNoGrace(time.Duration(10) * time.Second)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+	w, err = w.AdvanceBy(time.Duration(2) * time.Second)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
 	auctionBids := bid.
 		GroupByKey(&stream.Grouped{KeySerde: commtypes.Uint64Serde{}, Name: "group-by-auction-id"}).
-		WindowedBy(processor.NewTimeWindowsNoGrace(time.Duration(10)*time.Second).AdvanceBy(time.Duration(2)*time.Second)).
+		WindowedBy(w).
 		Count("count", &store.MaterializeParam{
 			KeySerde:   commtypes.Uint64Serde{},
 			ValueSerde: commtypes.Uint64Serde{},

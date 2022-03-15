@@ -208,7 +208,13 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		}
 	}
 
-	tw := processor.NewTimeWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
+	tw, err := processor.NewTimeWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
 	maxPriceBidStoreName := "max-price-bid-tab"
 	mp := &store.MaterializeParam{
 		KeySerde:   commtypes.Uint64Serde{},

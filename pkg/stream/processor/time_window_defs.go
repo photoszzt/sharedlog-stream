@@ -3,8 +3,6 @@ package processor
 import (
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
-
-	"github.com/rs/zerolog/log"
 )
 
 //
@@ -35,10 +33,7 @@ type TimeWindows struct {
 	graceMs   int64
 }
 
-var (
-	tws = NewTimeWindowsNoGrace(time.Duration(5) * time.Millisecond)
-	_   = EnumerableWindowDefinition(tws)
-)
+var _ = EnumerableWindowDefinition(&TimeWindows{})
 
 //
 // Return a window definition with the given window size, and with the advance interval being equal to the window
@@ -52,32 +47,32 @@ var (
 // @return a new window definition with default maintain duration of 1 day
 // @return error if the specified window size is zero or negative
 //
-func NewTimeWindowsNoGrace(size time.Duration) *TimeWindows {
+func NewTimeWindowsNoGrace(size time.Duration) (*TimeWindows, error) {
 	sizeMs := size.Milliseconds()
 	if sizeMs <= 0 {
-		log.Fatal().Err(DurationLeqZero)
+		return nil, DurationLeqZero
 	}
 	return &TimeWindows{
 		SizeMs:    sizeMs,
 		AdvanceMs: sizeMs,
 		graceMs:   0,
-	}
+	}, nil
 }
 
-func NewTimeWindowsWithGrace(size time.Duration, afterWindowEnd time.Duration) *TimeWindows {
+func NewTimeWindowsWithGrace(size time.Duration, afterWindowEnd time.Duration) (*TimeWindows, error) {
 	sizeMs := size.Milliseconds()
 	if sizeMs <= 0 {
-		log.Fatal().Err(DurationLeqZero)
+		return nil, DurationLeqZero
 	}
 	afterWindowEndMs := afterWindowEnd.Milliseconds()
 	if afterWindowEndMs <= 0 {
-		log.Fatal().Err(DurationLeqZero)
+		return nil, DurationLeqZero
 	}
 	return &TimeWindows{
 		SizeMs:    sizeMs,
 		AdvanceMs: sizeMs,
 		graceMs:   afterWindowEndMs,
-	}
+	}, nil
 }
 
 //
@@ -90,20 +85,19 @@ func NewTimeWindowsWithGrace(size time.Duration, afterWindowEnd time.Duration) *
 // @param advance The advance interval ("hop") of the window, with the requirement that {@code 0 < advance.toMillis() <= sizeMs}.
 // @return error if the advance interval is negative, zero, or larger than the window size
 //
-func (w *TimeWindows) AdvanceBy(advance time.Duration) *TimeWindows {
+func (w *TimeWindows) AdvanceBy(advance time.Duration) (*TimeWindows, error) {
 	advanceMs := advance.Milliseconds()
 	if advanceMs <= 0 {
-		log.Fatal().Err(WindowAdvanceSmallerThanZero)
+		return nil, WindowAdvanceSmallerThanZero
 	}
 	if advanceMs > int64(w.SizeMs) {
-		log.Fatal().Err(WindowAdvanceLargerThanSize)
+		return nil, WindowAdvanceLargerThanSize
 	}
 	return &TimeWindows{
 		SizeMs:    w.SizeMs,
 		AdvanceMs: advanceMs,
 		graceMs:   w.graceMs,
-	}
-
+	}, nil
 }
 
 func MaxInt64(a, b int64) int64 {

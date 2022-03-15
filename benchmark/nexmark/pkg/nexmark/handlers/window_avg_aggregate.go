@@ -119,7 +119,10 @@ func (h *windowedAvg) getAggProcessor(ctx context.Context, sp *common.QueryInput
 		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat)
 	}
 
-	timeWindows := processor.NewTimeWindowsNoGrace(time.Duration(10) * time.Second)
+	timeWindows, err := processor.NewTimeWindowsNoGrace(time.Duration(10) * time.Second)
+	if err != nil {
+		return nil, err
+	}
 	winStoreMp := &store.MaterializeParam{
 		StoreName:  "windowed-avg-store",
 		MsgSerde:   msgSerde,

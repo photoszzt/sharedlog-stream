@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"strconv"
+	"testing"
 )
 
 func MaxUint64(a, b uint64) uint64 {
@@ -114,4 +115,8 @@ func ConvertToBytes(a interface{}, serde commtypes.Serde) ([]byte, error) {
 		}
 	}
 	return aBytes, nil
+}
+
+func FatalMsg(expected interface{}, got interface{}, t testing.TB) {
+	t.Fatalf("expected %v, got %v", expected, got)
 }
