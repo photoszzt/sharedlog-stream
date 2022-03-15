@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"os"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -24,13 +26,21 @@ func NewMongoDBKeyValueSegment(ctx context.Context,
 	name string,
 ) (*MongoDBKeyValueSegment, error) {
 	col := mkvs.client.Database(mkvs.config.DBName).Collection(name)
+	debug.Fprintf(os.Stderr, "NewMongoDBKeyValueSegment: using col %s from db %s\n", name, mkvs.config.DBName)
 	opts := options.Update().SetUpsert(true)
 	_, err := col.UpdateOne(ctx, bson.M{"_id": 1},
 		bson.M{"$addToSet": bson.M{ALL_SEGS: segmentName}}, opts)
 	if err != nil {
 		return nil, err
 	}
-	// debug.Fprintf(os.Stderr, "insert return: %v\n", *ret)
+	/*
+		var result bson.M
+		err = col.FindOne(ctx, bson.D{}).Decode(&result)
+		if err != nil {
+			return nil, err
+		}
+		debug.Fprintf(os.Stderr, "checking inserted metadata: %v\n", result)
+	*/
 	return &MongoDBKeyValueSegment{
 		mkvs:        mkvs,
 		segmentName: segmentName,
@@ -75,9 +85,16 @@ func (mkvs *MongoDBKeyValueSegment) Delete(ctx context.Context, key []byte) erro
 }
 
 func (mkvs *MongoDBKeyValueSegment) Destroy(ctx context.Context) error {
-
+	col := mkvs.mkvs.client.Database(mkvs.mkvs.config.DBName).Collection(mkvs.segmentName)
+	debug.Fprintf(os.Stderr, "deleting collection %s from db %s\n", mkvs.segmentName, mkvs.mkvs.config.DBName)
+	err := col.Drop(ctx)
+	if err != nil {
+		return err
+	}
 	col_keys := mkvs.mkvs.client.Database(mkvs.mkvs.config.DBName).Collection(mkvs.winName)
-	return col_keys.Drop(ctx)
+	_, err = col_keys.UpdateOne(ctx, bson.M{"_id": 1},
+		bson.M{"$pull": bson.M{ALL_SEGS: mkvs.segmentName}})
+	return err
 }
 
 func (mkvs *MongoDBKeyValueSegment) DeleteRange(ctx context.Context, keyFrom interface{}, keyTo interface{}) error {

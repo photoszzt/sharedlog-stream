@@ -24,7 +24,7 @@ func invokeTest(client *http.Client, testName string, topicName string, response
 	if err := utils.JsonPostRequest(client, url, ti, response); err != nil {
 		log.Error().Msgf("%s request failed: %v", testName, err)
 	} else if !response.Success {
-		log.Error().Msgf("%s request failed: %s", response.Message)
+		log.Error().Msgf("%s request failed: %s", testName, response.Message)
 	}
 }
 

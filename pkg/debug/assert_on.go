@@ -18,7 +18,7 @@ func Assert(cond bool, msg interface{}) {
 }
 
 func Fprintf(w io.Writer, format string, a ...interface{}) {
-	fmt.Fprintf(w, format, a)
+	fmt.Fprintf(w, format, a...)
 }
 
 func Fprint(w io.Writer, s string) {
