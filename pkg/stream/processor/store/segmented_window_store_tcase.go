@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"reflect"
 	"sharedlog-stream/pkg/debug"
@@ -57,15 +56,16 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 	debug.Fprint(os.Stderr, "4\n")
 	checkPut(ctx, store, segments, t, names)
 
-	fmt.Fprint(os.Stderr, "4\n")
 	store.Put(ctx, uint32(5), "five", startTime+increment*5)
 	names = map[string]struct{}{
 		segments.SegmentName(2): {},
 		segments.SegmentName(3): {},
 		segments.SegmentName(4): {},
 	}
+	debug.Fprint(os.Stderr, "5\n")
 	checkPut(ctx, store, segments, t, names)
 
+	debug.Fprint(os.Stderr, "6\n")
 	resM, err := assertFetch(ctx, store, 0, startTime-TEST_WINDOW_SIZE, startTime+TEST_WINDOW_SIZE)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
@@ -74,6 +74,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 	if !reflect.DeepEqual(expected, resM) {
 		t.Fatalf("should equal. expected: %v, got: %v", expected, resM)
 	}
+	debug.Fprint(os.Stderr, "7\n")
 
 	resM, err = assertFetch(ctx, store, 1, startTime-TEST_WINDOW_SIZE+increment, startTime+TEST_WINDOW_SIZE+increment)
 	if err != nil {
@@ -84,6 +85,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 		t.Fatal("should equal")
 	}
 
+	debug.Fprint(os.Stderr, "8\n")
 	resM, err = assertFetch(ctx, store, 2, startTime-TEST_WINDOW_SIZE+increment*2, startTime+TEST_WINDOW_SIZE+increment*2)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
@@ -93,6 +95,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 		t.Fatal("should equal")
 	}
 
+	debug.Fprint(os.Stderr, "9\n")
 	resM, err = assertFetch(ctx, store, 3, startTime-TEST_WINDOW_SIZE+increment*3, startTime+TEST_WINDOW_SIZE+increment*3)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
@@ -102,6 +105,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 		t.Fatal("should equal")
 	}
 
+	debug.Fprint(os.Stderr, "10\n")
 	resM, err = assertFetch(ctx, store, 4, startTime-TEST_WINDOW_SIZE+increment*4, startTime+TEST_WINDOW_SIZE+increment*4)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
@@ -111,6 +115,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 		t.Fatal("should equal")
 	}
 
+	debug.Fprint(os.Stderr, "11\n")
 	resM, err = assertFetch(ctx, store, 5, startTime-TEST_WINDOW_SIZE+increment*5, startTime+TEST_WINDOW_SIZE+increment*5)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
@@ -120,6 +125,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 		t.Fatal("should equal")
 	}
 
+	debug.Fprint(os.Stderr, "12\n")
 	store.Put(ctx, uint32(6), "six", startTime+increment*6)
 	names = map[string]struct{}{
 		segments.SegmentName(3): {},
@@ -128,6 +134,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 	}
 	checkPut(ctx, store, segments, t, names)
 
+	debug.Fprint(os.Stderr, "13\n")
 	resM, err = assertFetch(ctx, store, 0, startTime-TEST_WINDOW_SIZE, startTime+TEST_WINDOW_SIZE)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
@@ -137,6 +144,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 		t.Fatal("should equal")
 	}
 
+	debug.Fprint(os.Stderr, "14\n")
 	resM, err = assertFetch(ctx, store, 1, startTime-TEST_WINDOW_SIZE+increment, startTime+TEST_WINDOW_SIZE+increment)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
@@ -146,6 +154,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 		t.Fatal("should equal")
 	}
 
+	debug.Fprint(os.Stderr, "15\n")
 	resM, err = assertFetch(ctx, store, 2, startTime-TEST_WINDOW_SIZE+increment*2, startTime+TEST_WINDOW_SIZE+increment*2)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
@@ -155,6 +164,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 		t.Fatal("should equal")
 	}
 
+	debug.Fprint(os.Stderr, "16\n")
 	resM, err = assertFetch(ctx, store, 3, startTime-TEST_WINDOW_SIZE+increment*3, startTime+TEST_WINDOW_SIZE+increment*3)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
@@ -164,6 +174,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 		t.Fatal("should equal")
 	}
 
+	debug.Fprint(os.Stderr, "17\n")
 	resM, err = assertFetch(ctx, store, 4, startTime-TEST_WINDOW_SIZE+increment*4, startTime+TEST_WINDOW_SIZE+increment*4)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
@@ -173,6 +184,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 		t.Fatal("should equal")
 	}
 
+	debug.Fprint(os.Stderr, "18\n")
 	resM, err = assertFetch(ctx, store, 5, startTime-TEST_WINDOW_SIZE+increment*5, startTime+TEST_WINDOW_SIZE+increment*5)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
@@ -182,6 +194,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 		t.Fatal("should equal")
 	}
 
+	debug.Fprint(os.Stderr, "19\n")
 	resM, err = assertFetch(ctx, store, 6, startTime-TEST_WINDOW_SIZE+increment*6, startTime+TEST_WINDOW_SIZE+increment*6)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
@@ -191,6 +204,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 		t.Fatal("should equal")
 	}
 
+	debug.Fprint(os.Stderr, "20\n")
 	store.Put(ctx, uint32(7), "seven", startTime+increment*7)
 	names = map[string]struct{}{
 		segments.SegmentName(3): {},
@@ -199,6 +213,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 	}
 	checkPut(ctx, store, segments, t, names)
 
+	debug.Fprint(os.Stderr, "21\n")
 	resM, err = assertFetch(ctx, store, 0, startTime-TEST_WINDOW_SIZE, startTime+TEST_WINDOW_SIZE)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)
@@ -208,6 +223,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 		t.Fatal("should equal")
 	}
 
+	debug.Fprint(os.Stderr, "22\n")
 	resM, err = assertFetch(ctx, store, 1, startTime-TEST_WINDOW_SIZE+increment, startTime+TEST_WINDOW_SIZE+increment)
 	if err != nil {
 		t.Fatalf("fail to fetch: %v", err)

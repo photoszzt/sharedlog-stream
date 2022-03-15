@@ -66,7 +66,7 @@ func assertFetch(ctx context.Context, store WindowStore, k uint32, timeFrom int6
 	res := make(map[string]struct{})
 	err := store.Fetch(ctx, k, time.UnixMilli(timeFrom), time.UnixMilli(timeTo),
 		func(i int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
-			debug.Fprintf(os.Stderr, "ts: %d, kt %v, vt %v", i, kt, vt)
+			// debug.Fprintf(os.Stderr, "ts: %d, kt %v, vt %v\n", i, kt, vt)
 			val := vt.(string)
 			res[val] = struct{}{}
 			return nil

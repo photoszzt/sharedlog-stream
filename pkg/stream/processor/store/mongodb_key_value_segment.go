@@ -2,8 +2,6 @@ package store
 
 import (
 	"context"
-	"os"
-	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -27,14 +25,12 @@ func NewMongoDBKeyValueSegment(ctx context.Context,
 ) (*MongoDBKeyValueSegment, error) {
 	col := mkvs.client.Database(mkvs.config.DBName).Collection(name)
 	opts := options.Update().SetUpsert(true)
-	ret, err := col.UpdateOne(ctx, bson.D{{Key: "_id", Value: 1}},
-		bson.D{{
-			Key:   "$addToSet",
-			Value: bson.D{{Key: ALL_SEGS, Value: segmentName}}}}, opts)
+	_, err := col.UpdateOne(ctx, bson.M{"_id": 1},
+		bson.M{"$addToSet": bson.M{ALL_SEGS: segmentName}}, opts)
 	if err != nil {
 		return nil, err
 	}
-	debug.Fprintf(os.Stderr, "insert return: %v\n", *ret)
+	// debug.Fprintf(os.Stderr, "insert return: %v\n", *ret)
 	return &MongoDBKeyValueSegment{
 		mkvs:        mkvs,
 		segmentName: segmentName,

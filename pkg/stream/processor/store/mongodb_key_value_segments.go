@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"os"
+	"sharedlog-stream/pkg/debug"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -33,20 +35,29 @@ func (kvs *MongoDBKeyValueSegments) GetOrCreateSegment(ctx context.Context, segm
 		if err != nil {
 			return nil, err
 		}
-		// debug.Fprintf(os.Stderr, "inserting k: %v, v: %v\n", segmentId, kv.segmentName)
+		debug.Fprintf(os.Stderr, "inserting k: %v, v: %v\n", segmentId, kv.segmentName)
 		_ = kvs.segments.ReplaceOrInsert(&KeySegment{Key: Int64(segmentId), Value: kv})
 		return kv, nil
 	}
 }
 
 func (kvs *MongoDBKeyValueSegments) CleanupExpiredMeta(ctx context.Context, expired []*KeySegment) error {
+	segNames := make([]string, 0, len(expired))
+	for _, s := range expired {
+		segNames = append(segNames, s.Value.Name())
+	}
+	col := kvs.mkvs.client.Database(kvs.mkvs.config.DBName).Collection(kvs.BaseSegments.name)
+	_, err := col.UpdateOne(ctx, bson.M{"_id": 1}, bson.M{"$pull": bson.M{ALL_SEGS: segNames}})
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 func (kvs *MongoDBKeyValueSegments) GetSegmentNamesFromRemote(ctx context.Context) ([]string, error) {
 	col := kvs.mkvs.client.Database(kvs.mkvs.config.DBName).Collection(kvs.BaseSegments.name)
 	var result bson.M
-	err := col.FindOne(ctx, bson.D{{Key: "_id", Value: 1}}).Decode(&result)
+	err := col.FindOne(ctx, bson.M{"_id": 1}).Decode(&result)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, nil

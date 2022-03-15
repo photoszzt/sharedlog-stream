@@ -52,7 +52,7 @@ func NewMongoDBKeyValueStore(ctx context.Context, config *MongoDBConfig) (*Mongo
 
 			idxView := col.Indexes()
 			_, err = idxView.CreateOne(ctx, mongo.IndexModel{
-				Keys:    bson.D{{Key: KEY_NAME, Value: 1}},
+				Keys:    bson.M{KEY_NAME: 1},
 				Options: options.Index().SetName("kv"),
 			})
 			if err != nil {
@@ -143,7 +143,7 @@ func (s *MongoDBKeyValueStore) GetWithCollection(ctx context.Context, kBytes []b
 	if s.inTransaction {
 		ctx_tmp = s.sessCtx
 	}
-	err = col.FindOne(ctx_tmp, bson.D{{Key: KEY_NAME, Value: kBytes}}).Decode(&result)
+	err = col.FindOne(ctx_tmp, bson.M{KEY_NAME: kBytes}).Decode(&result)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, false, nil
@@ -166,26 +166,22 @@ func (s *MongoDBKeyValueStore) RangeWithCollection(ctx context.Context,
 ) error {
 	var err error
 	col := s.client.Database(s.config.DBName).Collection(collection)
-	opts := options.Find().SetSort(bson.D{{Key: KEY_NAME, Value: 1}})
+	opts := options.Find().SetSort(bson.M{KEY_NAME: 1})
 	var cur *mongo.Cursor
 	ctx_tmp := ctx
 	if s.inTransaction {
 		ctx_tmp = s.sessCtx
 	}
-	var condition bson.D
+	var condition bson.M
 	if fromBytes == nil && toBytes == nil {
-		condition = bson.D{}
+		condition = bson.M{}
 	} else if fromBytes == nil && toBytes != nil {
-		condition = bson.D{{Key: KEY_NAME, Value: bson.D{{Key: "$lte", Value: toBytes}}}}
+		condition = bson.M{KEY_NAME: bson.M{"$lte": toBytes}}
 	} else if fromBytes != nil && toBytes == nil {
-		condition = bson.D{{
-			Key:   KEY_NAME,
-			Value: bson.D{{Key: "$gte", Value: fromBytes}}}}
+		condition = bson.M{
+			KEY_NAME: bson.M{"$gte": fromBytes}}
 	} else {
-		condition = bson.D{{Key: KEY_NAME,
-			Value: bson.D{
-				{Key: "$gte", Value: fromBytes},
-				{Key: "$lte", Value: toBytes}}}}
+		condition = bson.M{KEY_NAME: bson.M{"$gte": fromBytes, "$lte": toBytes}}
 	}
 	cur, err = col.Find(ctx_tmp, condition, opts)
 	if err != nil {
@@ -276,7 +272,7 @@ func (s *MongoDBKeyValueStore) PutWithCollection(ctx context.Context, kBytes []b
 			if !ok {
 				idxView := col.Indexes()
 				_, err := idxView.CreateOne(ctx, mongo.IndexModel{
-					Keys:    bson.D{{Key: KEY_NAME, Value: 1}},
+					Keys:    bson.M{KEY_NAME: 1},
 					Options: options.Index().SetName("kv"),
 				})
 				if err != nil {
@@ -291,8 +287,8 @@ func (s *MongoDBKeyValueStore) PutWithCollection(ctx context.Context, kBytes []b
 		if s.inTransaction {
 			ctx_tmp = s.sessCtx
 		}
-		_, err := col.UpdateOne(ctx_tmp, bson.D{{Key: KEY_NAME, Value: kBytes}},
-			bson.D{{Key: "$set", Value: bson.D{{Key: VALUE_NAME, Value: vBytes}}}}, opts)
+		_, err := col.UpdateOne(ctx_tmp, bson.M{KEY_NAME: kBytes},
+			bson.M{"$set": bson.M{VALUE_NAME: vBytes}}, opts)
 		if err != nil {
 			if s.inTransaction {
 				s.sessCtx.AbortTransaction(context.Background())
@@ -328,7 +324,7 @@ func (s *MongoDBKeyValueStore) DeleteWithCollection(ctx context.Context,
 	if s.inTransaction {
 		ctx_tmp = s.sessCtx
 	}
-	_, err := col.DeleteOne(ctx_tmp, bson.D{{Key: KEY_NAME, Value: kBytes}})
+	_, err := col.DeleteOne(ctx_tmp, bson.M{KEY_NAME: kBytes})
 	if err != nil {
 		if s.inTransaction {
 			_ = s.sessCtx.AbortTransaction(context.Background())
