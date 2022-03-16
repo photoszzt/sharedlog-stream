@@ -98,8 +98,8 @@ func (w *JoinWindows) After(timeDifference time.Duration) (*JoinWindows, error) 
 	return getJoinWindows(w.beforeMs, timeDifferenceMs, w.graceMs), nil
 }
 
-func (w *JoinWindows) WindowsFor(timestamp int64) (map[int64]commtypes.Window, error) {
-	return nil, xerrors.New("WindowsFor is not supported by JoinWindows")
+func (w *JoinWindows) WindowsFor(timestamp int64) (map[int64]commtypes.Window, []int64, error) {
+	return nil, nil, xerrors.New("WindowsFor is not supported by JoinWindows")
 }
 
 func (w *JoinWindows) MaxSize() int64 {

@@ -108,18 +108,20 @@ func MaxInt64(a, b int64) int64 {
 	}
 }
 
-func (w *TimeWindows) WindowsFor(timestamp int64) (map[int64]commtypes.Window, error) {
+func (w *TimeWindows) WindowsFor(timestamp int64) (map[int64]commtypes.Window, []int64, error) {
 	windowStart := MaxInt64(0, timestamp-w.SizeMs+w.AdvanceMs) / w.AdvanceMs * w.AdvanceMs
 	windows := make(map[int64]commtypes.Window)
+	keys := make([]int64, 0)
 	for windowStart <= timestamp {
 		window, err := NewTimeWindow(windowStart, windowStart+w.SizeMs)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		windows[windowStart] = window
+		keys = append(keys, windowStart)
 		windowStart += w.AdvanceMs
 	}
-	return windows, nil
+	return windows, keys, nil
 }
 
 func (w *TimeWindows) MaxSize() int64 {

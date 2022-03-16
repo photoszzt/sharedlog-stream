@@ -62,12 +62,13 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(ctx context.Context, m
 		p.observedStreamTime = ts
 	}
 	closeTime := p.observedStreamTime - p.windows.GracePeriodMs()
-	matchedWindows, err := p.windows.WindowsFor(ts)
+	matchedWindows, keys, err := p.windows.WindowsFor(ts)
 	if err != nil {
 		return nil, err
 	}
 	newMsgs := make([]commtypes.Message, 0)
-	for windowStart, window := range matchedWindows {
+	for _, windowStart := range keys {
+		window := matchedWindows[windowStart]
 		windowEnd := window.End()
 		if windowEnd > closeTime {
 			var oldAgg interface{}

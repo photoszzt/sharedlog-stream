@@ -23,7 +23,7 @@ type EnumerableWindowDefinition interface {
 	 * @param timestamp the timestamp window should get created for
 	 * @return a map of windowStartTimestamp -> Window entries
 	 */
-	WindowsFor(timestamp int64) (map[int64]commtypes.Window, error)
+	WindowsFor(timestamp int64) (map[int64]commtypes.Window, []int64, error)
 	/**
 	 * Return an upper bound on the size of windows in milliseconds.
 	 * Used to determine the lower bound on store retention time.

@@ -53,7 +53,7 @@ func TestShouldComputeWindowsForHoppingWindows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	matched, err := tws.WindowsFor(21)
+	matched, _, err := tws.WindowsFor(21)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -100,7 +100,7 @@ func TestShouldComputeWindowsForBarelyOverlappingHoppingWindows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	matched, err := tws.WindowsFor(7)
+	matched, _, err := tws.WindowsFor(7)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -122,7 +122,7 @@ func TestShouldComputeWindowsForTumblingWindows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	matched, err := tws.WindowsFor(21)
+	matched, _, err := tws.WindowsFor(21)
 	if err != nil {
 		t.Fatal(err.Error())
 	}

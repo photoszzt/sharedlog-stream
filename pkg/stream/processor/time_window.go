@@ -16,8 +16,7 @@ type TimeWindow struct {
 }
 
 var (
-	tw, _          = NewTimeWindow(0, 1)
-	_              = commtypes.Window(tw)
+	_              = commtypes.Window(&TimeWindow{})
 	notATimeWindow = xerrors.New("The window is not a TimeWindow")
 )
 
