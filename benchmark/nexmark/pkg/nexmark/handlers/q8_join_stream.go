@@ -190,8 +190,13 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			Message: fmt.Sprintf("getSrcSink err: %v\n", err),
 		}
 	}
-	joinWindows := processor.NewJoinWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
-
+	joinWindows, err := processor.NewJoinWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
 	compare := concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
 		l, ok := lhs.(uint64)
 		if ok {

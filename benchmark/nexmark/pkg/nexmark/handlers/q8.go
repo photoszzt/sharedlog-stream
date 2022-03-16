@@ -118,6 +118,13 @@ func Query8(ctx context.Context, env types.Environment, input *common.QueryInput
 				event := msg.Value.(*ntypes.Event)
 				return commtypes.Message{Key: event.NewAuction.Seller, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 			}))
+	joinW, err := processor.NewJoinWindowsNoGrace(time.Duration(10) * time.Second)
+	if err != nil {
+		return &common.FnOutput{
+			Success: false,
+			Message: err.Error(),
+		}
+	}
 	auction.StreamStreamJoin("join-auction-person", person,
 		processor.ValueJoinerWithKeyFunc(func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
 			rv := rightValue.(*ntypes.Event)
@@ -126,7 +133,7 @@ func Query8(ctx context.Context, env types.Environment, input *common.QueryInput
 				Name:      rv.NewPerson.Name,
 				StartTime: 0,
 			}
-		}), processor.NewJoinWindowsNoGrace(time.Duration(10)*time.Second),
+		}), joinW,
 		&store.JoinParam{
 			LeftWindowStoreName:  "auction-window-store",
 			RightWindowStoreName: "person-window-store",

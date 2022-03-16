@@ -4,8 +4,6 @@ import (
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
 
-	"github.com/rs/zerolog/log"
-
 	"golang.org/x/xerrors"
 )
 
@@ -44,10 +42,7 @@ type JoinWindows struct {
 	graceMs  int64
 }
 
-var (
-	jw = NewJoinWindowsNoGrace(time.Duration(5) * time.Millisecond)
-	_  = EnumerableWindowDefinition(jw)
-)
+var _ = EnumerableWindowDefinition(&JoinWindows{})
 
 func getJoinWindows(beforeMs int64, afterMs int64, graceMs int64) *JoinWindows {
 	return &JoinWindows{
@@ -57,24 +52,24 @@ func getJoinWindows(beforeMs int64, afterMs int64, graceMs int64) *JoinWindows {
 	}
 }
 
-func NewJoinWindowsNoGrace(timeDifference time.Duration) *JoinWindows {
+func NewJoinWindowsNoGrace(timeDifference time.Duration) (*JoinWindows, error) {
 	timeDifferenceMs := timeDifference.Milliseconds()
 	if timeDifferenceMs <= 0 {
-		log.Fatal().Err(DurationLeqZero)
+		return nil, DurationLeqZero
 	}
-	return getJoinWindows(timeDifferenceMs, timeDifferenceMs, 0)
+	return getJoinWindows(timeDifferenceMs, timeDifferenceMs, 0), nil
 }
 
-func NewJoinWindowsWithGrace(timeDifference time.Duration, afterWindowEnd time.Duration) *JoinWindows {
+func NewJoinWindowsWithGrace(timeDifference time.Duration, afterWindowEnd time.Duration) (*JoinWindows, error) {
 	timeDifferenceMs := timeDifference.Milliseconds()
 	if timeDifferenceMs <= 0 {
-		log.Fatal().Err(DurationLeqZero)
+		return nil, DurationLeqZero
 	}
 	afterWindowEndMs := afterWindowEnd.Milliseconds()
 	if afterWindowEndMs <= 0 {
-		log.Fatal().Err(DurationLeqZero)
+		return nil, DurationLeqZero
 	}
-	return getJoinWindows(timeDifferenceMs, timeDifferenceMs, afterWindowEndMs)
+	return getJoinWindows(timeDifferenceMs, timeDifferenceMs, afterWindowEndMs), nil
 }
 
 /**
@@ -87,20 +82,20 @@ func NewJoinWindowsWithGrace(timeDifference time.Duration, afterWindowEnd time.D
  * @param timeDifference relative window start time
  * @panic if the resulting window size is negative or {@code timeDifference} can't be represented as {@code uint64 milliseconds}
  */
-func (w *JoinWindows) Before(timeDifference time.Duration) *JoinWindows {
+func (w *JoinWindows) Before(timeDifference time.Duration) (*JoinWindows, error) {
 	timeDifferenceMs := timeDifference.Milliseconds()
 	if timeDifferenceMs <= 0 {
-		log.Fatal().Err(DurationLeqZero)
+		return nil, DurationLeqZero
 	}
-	return getJoinWindows(timeDifferenceMs, w.afterMs, w.graceMs)
+	return getJoinWindows(timeDifferenceMs, w.afterMs, w.graceMs), nil
 }
 
-func (w *JoinWindows) After(timeDifference time.Duration) *JoinWindows {
+func (w *JoinWindows) After(timeDifference time.Duration) (*JoinWindows, error) {
 	timeDifferenceMs := timeDifference.Milliseconds()
 	if timeDifferenceMs <= 0 {
-		log.Fatal().Err(DurationLeqZero)
+		return nil, DurationLeqZero
 	}
-	return getJoinWindows(w.beforeMs, timeDifferenceMs, w.graceMs)
+	return getJoinWindows(w.beforeMs, timeDifferenceMs, w.graceMs), nil
 }
 
 func (w *JoinWindows) WindowsFor(timestamp int64) (map[int64]commtypes.Window, error) {
