@@ -56,7 +56,7 @@ func (kvs *MongoDBKeyValueSegments) CleanupExpiredMeta(ctx context.Context, expi
 
 func (kvs *MongoDBKeyValueSegments) GetSegmentNamesFromRemote(ctx context.Context) ([]string, error) {
 	col := kvs.mkvs.client.Database(kvs.mkvs.config.DBName).Collection(kvs.BaseSegments.name)
-	debug.Fprintf(os.Stderr, "using col %s from db %s\n", kvs.BaseSegments.name, kvs.mkvs.config.DBName)
+	debug.Fprintf(os.Stderr, "GetSegmentNamesFromRemote: using col %s from db %s\n", kvs.BaseSegments.name, kvs.mkvs.config.DBName)
 	var result bson.M
 	err := col.FindOne(ctx, bson.M{"_id": 1}).Decode(&result)
 	if err != nil {

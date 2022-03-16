@@ -2318,3 +2318,73 @@ func PutSameKeyTsTest(ctx context.Context, store WindowStore, t testing.TB) {
 	ref_msgs = make([]commtypes.Message, 0)
 	checkSlice(ref_msgs, msgs, t)
 }
+
+func FetchDuplicates(ctx context.Context, store WindowStore, t testing.TB) {
+	currentTime := 0
+	err := store.Put(ctx, uint32(1), "one", int64(currentTime))
+	if err != nil {
+		t.Fatalf("fail to put err: %v", err)
+	}
+	err = store.Put(ctx, uint32(1), "one-2", int64(currentTime))
+	if err != nil {
+		t.Fatalf("fail to put err: %v", err)
+	}
+
+	currentTime += int(TEST_WINDOW_SIZE) * 10
+	err = store.Put(ctx, uint32(1), "two", int64(currentTime))
+	if err != nil {
+		t.Fatalf("fail to put err: %v", err)
+	}
+	err = store.Put(ctx, uint32(1), "two-2", int64(currentTime))
+	if err != nil {
+		t.Fatalf("fail to put err: %v", err)
+	}
+
+	currentTime += int(TEST_WINDOW_SIZE) * 10
+	err = store.Put(ctx, uint32(1), "three", int64(currentTime))
+	if err != nil {
+		t.Fatalf("fail to put err: %v", err)
+	}
+	err = store.Put(ctx, uint32(1), "three-2", int64(currentTime))
+	if err != nil {
+		t.Fatalf("fail to put err: %v", err)
+	}
+
+	msgs := make([]commtypes.Message, 0)
+	err = store.Fetch(ctx, uint32(1), time.UnixMilli(0), time.UnixMilli(TEST_WINDOW_SIZE*10), func(ts int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
+		msg := commtypes.Message{
+			Key:       kt,
+			Value:     vt,
+			Timestamp: ts,
+		}
+		msgs = append(msgs, msg)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	ref_msgs := []commtypes.Message{
+		{
+			Key:       uint32(1),
+			Value:     "one",
+			Timestamp: 0,
+		},
+		{
+			Key:       uint32(1),
+			Value:     "one-2",
+			Timestamp: 0,
+		},
+		{
+			Key:       uint32(1),
+			Value:     "two",
+			Timestamp: TEST_WINDOW_SIZE * 10,
+		},
+		{
+			Key:       uint32(1),
+			Value:     "two-2",
+			Timestamp: TEST_WINDOW_SIZE * 10,
+		},
+	}
+	checkSlice(ref_msgs, msgs, t)
+}

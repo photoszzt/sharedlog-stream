@@ -111,3 +111,11 @@ func TestRolling(t *testing.T) {
 	RollingTest(ctx, store, segments, t)
 	mkvs.client.Database("test").Drop(ctx)
 }
+
+func TestFetchDuplicates(t *testing.T) {
+	ctx := context.Background()
+	store, mkvs := getMongoDBWindowStore(ctx, true, t)
+	mkvs.client.Database("test").Drop(ctx)
+	FetchDuplicates(ctx, store, t)
+	mkvs.client.Database("test").Drop(ctx)
+}
