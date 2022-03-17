@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"os"
 	"sharedlog-stream/pkg/concurrent_skiplist"
-	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sync"
 	"time"
@@ -92,7 +90,7 @@ func (s *InMemoryWindowStore) Put(ctx context.Context, key commtypes.KeyT, value
 	if windowStartTimestamp > s.observedStreamTime {
 		s.observedStreamTime = windowStartTimestamp
 	}
-	debug.Fprintf(os.Stderr, "start ts: %d, observed: %d\n", windowStartTimestamp, s.observedStreamTime-s.retentionPeriod)
+	// debug.Fprintf(os.Stderr, "start ts: %d, observed: %d\n", windowStartTimestamp, s.observedStreamTime-s.retentionPeriod)
 	if windowStartTimestamp <= s.observedStreamTime-s.retentionPeriod {
 		log.Warn().Msgf("Skipping record for expired segment.")
 	} else {
