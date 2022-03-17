@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
+	"sharedlog-stream/pkg/debug"
 
 	"github.com/rs/zerolog/log"
 )
@@ -168,6 +170,7 @@ func (s *BaseSegmentedBytesStore) Put(ctx context.Context, key []byte, value []b
 	if ts > s.observedStreamTime {
 		s.observedStreamTime = ts
 	}
+	debug.Fprintf(os.Stderr, "current observed time is %d\n", s.observedStreamTime)
 	segmentId := s.segments.SegmentId(ts)
 	segment, err := s.segments.GetOrCreateSegmentIfLive(ctx, segmentId, s.observedStreamTime,
 		s.segments.GetOrCreateSegment, s.segments.CleanupExpiredMeta)

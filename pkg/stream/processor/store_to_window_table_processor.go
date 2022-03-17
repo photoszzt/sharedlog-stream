@@ -65,7 +65,7 @@ func ToInMemWindowTable(
 ) (*MeteredProcessor, store.WindowStore, error) {
 	store := store.NewInMemoryWindowStore(
 		storeName,
-		joinWindow.GracePeriodMs(),
+		joinWindow.MaxSize()+joinWindow.GracePeriodMs(),
 		joinWindow.MaxSize(),
 		true, compare)
 	toTableProc := NewMeteredProcessor(NewStoreToWindowTableProcessor(store))

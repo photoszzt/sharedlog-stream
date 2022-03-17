@@ -881,6 +881,8 @@ func TestAsymmetricWindowingAfter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
+	debug.Fprintf(os.Stderr, "join windows: before %d, after %d, grace %d\n", joinWindows.beforeMs,
+		joinWindows.afterMs, joinWindows.graceMs)
 	oneJoinTwo, twoJoinOne := getStreamJoin(joinWindows, t)
 	expected_keys := []int{0, 1, 2, 3}
 	time := int64(1000)
