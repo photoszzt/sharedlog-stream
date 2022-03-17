@@ -44,32 +44,29 @@ type JoinWindows struct {
 
 var _ = EnumerableWindowDefinition(&JoinWindows{})
 
-func getJoinWindows(beforeMs int64, afterMs int64, graceMs int64) *JoinWindows {
+func getJoinWindows(beforeMs int64, afterMs int64, graceMs int64) (*JoinWindows, error) {
+	if beforeMs+afterMs < 0 {
+		return nil, DurationLeqZero
+	}
+	if graceMs < 0 {
+		return nil, DurationLeqZero
+	}
 	return &JoinWindows{
 		beforeMs: beforeMs,
 		afterMs:  afterMs,
 		graceMs:  graceMs,
-	}
+	}, nil
 }
 
 func NewJoinWindowsNoGrace(timeDifference time.Duration) (*JoinWindows, error) {
 	timeDifferenceMs := timeDifference.Milliseconds()
-	if timeDifferenceMs <= 0 {
-		return nil, DurationLeqZero
-	}
-	return getJoinWindows(timeDifferenceMs, timeDifferenceMs, 0), nil
+	return getJoinWindows(timeDifferenceMs, timeDifferenceMs, 0)
 }
 
 func NewJoinWindowsWithGrace(timeDifference time.Duration, afterWindowEnd time.Duration) (*JoinWindows, error) {
 	timeDifferenceMs := timeDifference.Milliseconds()
-	if timeDifferenceMs <= 0 {
-		return nil, DurationLeqZero
-	}
 	afterWindowEndMs := afterWindowEnd.Milliseconds()
-	if afterWindowEndMs <= 0 {
-		return nil, DurationLeqZero
-	}
-	return getJoinWindows(timeDifferenceMs, timeDifferenceMs, afterWindowEndMs), nil
+	return getJoinWindows(timeDifferenceMs, timeDifferenceMs, afterWindowEndMs)
 }
 
 /**
@@ -84,18 +81,12 @@ func NewJoinWindowsWithGrace(timeDifference time.Duration, afterWindowEnd time.D
  */
 func (w *JoinWindows) Before(timeDifference time.Duration) (*JoinWindows, error) {
 	timeDifferenceMs := timeDifference.Milliseconds()
-	if timeDifferenceMs <= 0 {
-		return nil, DurationLeqZero
-	}
-	return getJoinWindows(timeDifferenceMs, w.afterMs, w.graceMs), nil
+	return getJoinWindows(timeDifferenceMs, w.afterMs, w.graceMs)
 }
 
 func (w *JoinWindows) After(timeDifference time.Duration) (*JoinWindows, error) {
 	timeDifferenceMs := timeDifference.Milliseconds()
-	if timeDifferenceMs <= 0 {
-		return nil, DurationLeqZero
-	}
-	return getJoinWindows(w.beforeMs, timeDifferenceMs, w.graceMs), nil
+	return getJoinWindows(w.beforeMs, timeDifferenceMs, w.graceMs)
 }
 
 func (w *JoinWindows) WindowsFor(timestamp int64) (map[int64]commtypes.Window, []int64, error) {

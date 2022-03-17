@@ -870,3 +870,75 @@ func TestWindowing(t *testing.T) {
 		t.Fatalf("should equal. expected: %v, got: %v", expected_join, got)
 	}
 }
+
+func TestAsymmetricWindowingAfter(t *testing.T) {
+	ctx := context.Background()
+	joinWindows, err := NewJoinWindowsNoGrace(time.Duration(0) * time.Millisecond)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	joinWindows, err = joinWindows.After(time.Duration(100) * time.Millisecond)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	oneJoinTwo, twoJoinOne := getStreamJoin(joinWindows, t)
+	expected_keys := []int{0, 1, 2, 3}
+	time := int64(1000)
+
+	// push four items with increasing timestamps to the primary stream; the other window is empty; this should produce no items
+	// w1 = {}
+	// w2 = {}
+	// --> w1 = { 0:A0 (ts: 1000), 1:A1 (ts: 1001), 2:A2 (ts: 1002), 3:A3 (ts: 1003) }
+	//     w2 = {}
+	got := make([]commtypes.Message, 0)
+	for idx, k := range expected_keys {
+		ret := oneJoinTwo(ctx, commtypes.Message{Key: k,
+			Value:     fmt.Sprintf("A%d", k),
+			Timestamp: time + int64(idx),
+		})
+		got = append(got, ret...)
+	}
+	if len(got) != 0 {
+		t.Fatal("should be empty")
+	}
+
+	// push four items smaller timestamps (out of window) to the secondary stream; this should produce no items
+	// w1 = { 0:A0 (ts: 1000), 1:A1 (ts: 1001), 2:A2 (ts: 1002), 3:A3 (ts: 1003) }
+	// w2 = {}
+	// --> w1 = { 0:A0 (ts: 1000), 1:A1 (ts: 1001), 2:A2 (ts: 1002), 3:A3 (ts: 1003) }
+	//     w2 = { 0:a0 (ts: 999), 1:a1 (ts: 999), 2:a2 (ts: 999), 3:a3 (ts: 999) }
+	time = int64(1000 - 1)
+	got = make([]commtypes.Message, 0)
+	for _, k := range expected_keys {
+		ret := twoJoinOne(ctx, commtypes.Message{Key: k,
+			Value:     fmt.Sprintf("a%d", k),
+			Timestamp: time,
+		})
+		got = append(got, ret...)
+	}
+	if len(got) != 0 {
+		t.Fatal("should be empty")
+	}
+
+	// push four items with increased timestamps to the secondary stream; this should produce one item
+	// w1 = { 0:A0 (ts: 1000), 1:A1 (ts: 1001), 2:A2 (ts: 1002), 3:A3 (ts: 1003) }
+	// w2 = { 0:a0 (ts: 999), 1:a1 (ts: 999), 2:a2 (ts: 999), 3:a3 (ts: 999) }
+	// --> w1 = { 0:A0 (ts: 1000), 1:A1 (ts: 1001), 2:A2 (ts: 1002), 3:A3 (ts: 1003) }
+	//     w2 = { 0:a0 (ts: 999), 1:a1 (ts: 999), 2:a2 (ts: 999), 3:a3 (ts: 999),
+	//            0:b0 (ts: 1000), 1:b1 (ts: 1000), 2:b2 (ts: 1000), 3:b3 (ts: 1000) }
+	time += 1
+	got = make([]commtypes.Message, 0)
+	for _, k := range expected_keys {
+		ret := twoJoinOne(ctx, commtypes.Message{Key: k,
+			Value:     fmt.Sprintf("b%d", k),
+			Timestamp: time,
+		})
+		got = append(got, ret...)
+	}
+	expected_join := []commtypes.Message{
+		{Key: 0, Value: "A0+b0", Timestamp: 1000},
+	}
+	if !reflect.DeepEqual(expected_join, got) {
+		t.Fatalf("should equal. expected: %v, got: %v", expected_join, got)
+	}
+}
