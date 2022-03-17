@@ -274,13 +274,15 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 
 	sharedTimeTracker := processor.NewTimeTracker()
 	personsJoinsAuctions := processor.NewMeteredProcessor(
-		processor.NewStreamStreamJoinProcessor(auctionsWinStore, joinWindows, joiner, false, true, sharedTimeTracker))
+		processor.NewStreamStreamJoinProcessor(auctionsWinStore, joinWindows,
+			joiner, false, true, sharedTimeTracker))
 
 	auctionsJoinsPersons := processor.NewMeteredProcessor(
-		processor.NewStreamStreamJoinProcessor(personsWinTab, joinWindows, joiner, false, false, sharedTimeTracker),
+		processor.NewStreamStreamJoinProcessor(personsWinTab, joinWindows,
+			processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker),
 	)
 
-	pJoinA := func(c context.Context,
+	pJoinA := func(ctx context.Context,
 		m commtypes.Message,
 		sink *processor.MeteredSink,
 		trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
@@ -296,7 +298,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		return pushMsgsToSink(ctx, sink, h.cHash, &h.cHashMu, joinedMsgs, trackParFunc)
 	}
 
-	aJoinP := func(c context.Context,
+	aJoinP := func(ctx context.Context,
 		m commtypes.Message,
 		sink *processor.MeteredSink,
 		trackParFunc sharedlog_stream.TrackKeySubStreamFunc,

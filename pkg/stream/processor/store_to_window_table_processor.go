@@ -45,13 +45,8 @@ func (p *StoreToWindowTableProcessor) Process(ctx context.Context, msg commtypes
 }
 
 func (p *StoreToWindowTableProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	val := msg.Value.(commtypes.StreamTimeExtractor)
-	ts, err := val.ExtractStreamTime()
-	if err != nil {
-		return nil, err
-	}
-	if ts > p.observedTs {
-		p.observedTs = ts
+	if msg.Timestamp > p.observedTs {
+		p.observedTs = msg.Timestamp
 	}
 	if msg.Key != nil {
 		err := p.store.Put(ctx, msg.Key, msg.Value, p.observedTs)

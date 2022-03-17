@@ -33,3 +33,9 @@ func (fn ValueJoinerWithKeyTsFunc) Apply(readOnlyKey interface{}, value1 interfa
 ) interface{} {
 	return fn(readOnlyKey, value1, value2, leftTs, otherTs)
 }
+
+func ReverseValueJoinerWithKeyTs(f ValueJoinerWithKeyTsFunc) ValueJoinerWithKeyTsFunc {
+	return func(readOnlyKey, value1, value2 interface{}, leftTs, otherTs int64) interface{} {
+		return f(readOnlyKey, value2, value1, otherTs, leftTs)
+	}
+}
