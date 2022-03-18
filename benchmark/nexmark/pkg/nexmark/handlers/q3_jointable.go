@@ -252,23 +252,25 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		}
 	}
 
-	joiner := processor.ValueJoinerWithKeyFunc(func(readOnlyKey interface{}, leftVal interface{}, rightVal interface{}) interface{} {
-		event := rightVal.(*ntypes.Event)
-		return &ntypes.NameCityStateId{
-			Name:  event.NewPerson.Name,
-			City:  event.NewPerson.City,
-			State: event.NewPerson.State,
-			ID:    event.NewPerson.ID,
-		}
-	})
+	joiner := processor.ValueJoinerWithKeyFunc(
+		func(readOnlyKey interface{}, leftVal interface{}, rightVal interface{}) interface{} {
+			event := rightVal.(*ntypes.Event)
+			return &ntypes.NameCityStateId{
+				Name:  event.NewPerson.Name,
+				City:  event.NewPerson.City,
+				State: event.NewPerson.State,
+				ID:    event.NewPerson.ID,
+			}
+		})
 
 	personJoinsAuctions := processor.NewMeteredProcessor(
 		processor.NewTableTableJoinProcessor(auctionsStore.Name(), auctionsStore, joiner))
 
 	auctionJoinsPersons := processor.NewMeteredProcessor(
-		processor.NewTableTableJoinProcessor(personsStore.Name(), personsStore, joiner))
+		processor.NewTableTableJoinProcessor(personsStore.Name(), personsStore,
+			processor.ReverseValueJoinerWithKey(joiner)))
 
-	pJoinA := JoinWorkerFunc(func(c context.Context, m commtypes.Message,
+	pJoinA := JoinWorkerFunc(func(ctx context.Context, m commtypes.Message,
 		sink *processor.MeteredSink, trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
 	) error {
 		// msg is person

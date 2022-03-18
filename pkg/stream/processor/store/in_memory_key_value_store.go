@@ -47,7 +47,15 @@ func (st *InMemoryKeyValueStore) Put(ctx context.Context, key commtypes.KeyT, va
 	if value == nil {
 		st.store.Del(key)
 	} else {
-		st.store.Set(key, value)
+		vts, ok := value.(commtypes.ValueTimestamp)
+		if ok {
+			if vts.Value == nil {
+				st.store.Del(key)
+			}
+		}
+		if key != nil {
+			st.store.Set(key, value)
+		}
 	}
 	return nil
 }

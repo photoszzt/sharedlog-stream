@@ -12,7 +12,7 @@ type StreamTimeTracker interface {
 }
 
 type streamTimeTracker struct {
-	lock      sync.RWMutex
+	lock      sync.Mutex
 	timeStamp int64
 }
 
@@ -32,7 +32,7 @@ func (s *streamTimeTracker) UpdateStreamTime(m *Message) {
 }
 
 func (s *streamTimeTracker) GetStreamTime() int64 {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
+	s.lock.Lock()
+	defer s.lock.Unlock()
 	return s.timeStamp
 }

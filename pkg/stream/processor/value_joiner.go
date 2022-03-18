@@ -20,6 +20,12 @@ func (fn ValueJoinerWithKeyFunc) Apply(readOnlyKey interface{}, value1 interface
 	return fn(readOnlyKey, value1, value2)
 }
 
+func ReverseValueJoinerWithKey(f ValueJoinerWithKeyFunc) ValueJoinerWithKeyFunc {
+	return func(readOnlyKey, value1, value2 interface{}) interface{} {
+		return f(readOnlyKey, value2, value1)
+	}
+}
+
 type ValueJoinerWithKeyTs interface {
 	Apply(readOnlyKey interface{}, value1 interface{}, value2 interface{},
 		leftTs int64, otherTs int64) interface{}

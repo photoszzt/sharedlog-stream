@@ -2,6 +2,8 @@ package processor
 
 import (
 	"context"
+	"os"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 
@@ -67,12 +69,17 @@ func (p *TableTableJoinProcessor) ProcessAndReturn(ctx context.Context, msg comm
 		}
 		p.streamTimeTracker.UpdateStreamTime(&msg)
 		ts := p.streamTimeTracker.GetStreamTime()
+		debug.Fprintf(os.Stderr, "stream time: %d\n", ts)
 		if ts < rv.Timestamp {
 			ts = rv.Timestamp
 		}
-		joined := p.joiner.Apply(msg.Key, msg.Value, val2)
-		newMsg := commtypes.Message{Key: msg.Key, Value: joined, Timestamp: ts}
-		return []commtypes.Message{newMsg}, nil
+		if msg.Value != nil {
+			joined := p.joiner.Apply(msg.Key, msg.Value, val2)
+			newMsg := commtypes.Message{Key: msg.Key, Value: joined, Timestamp: ts}
+			return []commtypes.Message{newMsg}, nil
+		} else {
+			return []commtypes.Message{{Key: msg.Key, Value: nil, Timestamp: ts}}, nil
+		}
 	}
 	return nil, nil
 }
