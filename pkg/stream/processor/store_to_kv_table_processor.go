@@ -59,3 +59,7 @@ func ToInMemKVTable(storeName string, compare func(a, b treemap.Key) int) (*Mete
 	toTableProc := NewMeteredProcessor(NewStoreToKVTableProcessor(store))
 	return toTableProc, store, nil
 }
+
+func ToMongoDBKVTable(mkvs *store.MongoDBKeyValueStore) *MeteredProcessor {
+	return NewMeteredProcessor(NewStoreToKVTableProcessor(mkvs))
+}

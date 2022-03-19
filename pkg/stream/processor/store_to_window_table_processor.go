@@ -71,3 +71,17 @@ func ToInMemWindowTable(
 	toTableProc := NewMeteredProcessor(NewStoreToWindowTableProcessor(store))
 	return toTableProc, store, nil
 }
+
+func ToMongoDBWindowTable(
+	storeName string,
+	mkvs *store.MongoDBKeyValueStore,
+	joinWindow *JoinWindows,
+	keySerde commtypes.Serde,
+	valSerde commtypes.Serde,
+) (*MeteredProcessor, store.WindowStore, error) {
+	byteStore := store.NewMongoDBSegmentedBytesStore(storeName,
+		joinWindow.MaxSize()+joinWindow.GracePeriodMs(), &store.WindowKeySchema{}, mkvs)
+	wstore := store.NewSegmentedWindowStore(byteStore, true, joinWindow.MaxSize(), keySerde, valSerde)
+	toTableProc := NewMeteredProcessor(NewStoreToWindowTableProcessor(wstore))
+	return toTableProc, wstore, nil
+}
