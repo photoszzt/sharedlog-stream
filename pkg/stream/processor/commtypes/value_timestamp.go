@@ -14,6 +14,12 @@ type ValueTimestampSerialized struct {
 	Timestamp       int64  `json:"ts" msg:"ts"`
 }
 
+func (s ValueTimestamp) ExtractStreamTime() (int64, error) {
+	return s.Timestamp, nil
+}
+
+var _ = StreamTimeExtractor(&ValueTimestamp{})
+
 type ValueTimestampJSONSerde struct {
 	ValJSONSerde Serde
 }

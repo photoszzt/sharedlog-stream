@@ -26,7 +26,7 @@ func NewTableRestoreHandler(env types.Environment) types.FuncHandler {
 	return &tableRestoreHandler{
 		env:      env,
 		kSerde:   commtypes.IntSerde{},
-		vSerde:   commtypes.StringSerde{},
+		vSerde:   strTsJSONSerde{},
 		msgSerde: commtypes.MessageSerializedJSONSerde{},
 	}
 }
@@ -61,12 +61,38 @@ func (h *tableRestoreHandler) tests(ctx context.Context, sp *test_types.TestInpu
 	}
 }
 
-func (h *tableRestoreHandler) pushToLog(ctx context.Context, key int, val string, log *sharedlog_stream.ShardedSharedLogStream) (uint64, error) {
+type strTs struct {
+	Val string
+	Ts  int64
+}
+
+var _ = commtypes.StreamTimeExtractor(&strTs{})
+
+func (s strTs) ExtractStreamTime() (int64, error) {
+	return s.Ts, nil
+}
+
+type strTsJSONSerde struct{}
+
+func (s strTsJSONSerde) Encode(value interface{}) ([]byte, error) {
+	val := value.(*strTs)
+	return json.Marshal(val)
+}
+
+func (s strTsJSONSerde) Decode(value []byte) (interface{}, error) {
+	val := strTs{}
+	if err := json.Unmarshal(value, &val); err != nil {
+		return nil, err
+	}
+	return val, nil
+}
+
+func (h *tableRestoreHandler) pushToLog(ctx context.Context, key int, val string, ts int64, log *sharedlog_stream.ShardedSharedLogStream) (uint64, error) {
 	keyBytes, err := h.kSerde.Encode(key)
 	if err != nil {
 		return 0, err
 	}
-	valBytes, err := h.vSerde.Encode(val)
+	valBytes, err := h.vSerde.Encode(&strTs{Val: val, Ts: ts})
 	if err != nil {
 		return 0, err
 	}
@@ -95,16 +121,16 @@ func (h *tableRestoreHandler) testRestoreKVTable(ctx context.Context) {
 		panic(err)
 	}
 	offset := uint64(0)
-	if _, err = h.pushToLog(ctx, 0, "zero", changelog); err != nil {
+	if _, err = h.pushToLog(ctx, 0, "zero", 0, changelog); err != nil {
 		panic(err)
 	}
-	if _, err = h.pushToLog(ctx, 1, "one", changelog); err != nil {
+	if _, err = h.pushToLog(ctx, 1, "one", 0, changelog); err != nil {
 		panic(err)
 	}
-	if _, err = h.pushToLog(ctx, 2, "two", changelog); err != nil {
+	if _, err = h.pushToLog(ctx, 2, "two", 0, changelog); err != nil {
 		panic(err)
 	}
-	if offset, err = h.pushToLog(ctx, 3, "three", changelog); err != nil {
+	if offset, err = h.pushToLog(ctx, 3, "three", 0, changelog); err != nil {
 		panic(err)
 	}
 	kvstore := store.NewInMemoryKeyValueStore("test1", func(a, b treemap.Key) int {
@@ -119,14 +145,15 @@ func (h *tableRestoreHandler) testRestoreKVTable(ctx context.Context) {
 		}
 	})
 	err = store.RestoreKVStateStore(ctx,
-		store.NewKVStoreChangelog(kvstore, changelog, commtypes.IntSerde{}, commtypes.IntSerde{}, 0),
+		store.NewKVStoreChangelog(kvstore, changelog, commtypes.IntSerde{}, strTsJSONSerde{}, 0),
 		h.msgSerde, offset)
 	if err != nil {
 		panic(err)
 	}
 	ret := make(map[int]string)
 	err = kvstore.Range(ctx, nil, nil, func(kt commtypes.KeyT, vt commtypes.ValueT) error {
-		ret[kt.(int)] = vt.(string)
+		vts := vt.(commtypes.ValueTimestamp)
+		ret[kt.(int)] = vts.Value.(strTs).Val
 		return nil
 	})
 	if err != nil {
