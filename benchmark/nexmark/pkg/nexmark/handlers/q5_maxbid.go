@@ -207,8 +207,8 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		kb := b.(*ntypes.StartEndTime)
 		return ntypes.CompareStartEndTime(ka, kb)
 	})
-	store := store.NewKeyValueStoreWithChangelog(mp, inMemStore, false)
-	maxBid := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor(store, processor.InitializerFunc(func() interface{} {
+	kvstore := store.NewKeyValueStoreWithChangelog(mp, inMemStore, false)
+	maxBid := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor(kvstore, processor.InitializerFunc(func() interface{} {
 		return uint64(0)
 	}), processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
 		v := value.(*ntypes.AuctionIdCount)
@@ -218,7 +218,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		}
 		return agg
 	})))
-	stJoin := processor.NewMeteredProcessor(processor.NewStreamTableJoinProcessor(maxBidStoreName, store,
+	stJoin := processor.NewMeteredProcessor(processor.NewStreamTableJoinProcessor(maxBidStoreName, kvstore,
 		processor.ValueJoinerWithKeyFunc(
 			func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
 				lv := leftValue.(*ntypes.AuctionIdCount)
@@ -263,8 +263,9 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			TransactionalId: fmt.Sprintf("q5MaxBid-%s-%d-%s",
 				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
 			FixedOutParNum: sp.ParNum,
-			KVChangelogs: []*sharedlog_stream.KVStoreChangelog{
-				sharedlog_stream.NewKVStoreChangelog(store, mp.Changelog, sp.ParNum),
+			KVChangelogs: []*store.KVStoreChangelog{
+				store.NewKVStoreChangelog(kvstore, mp.Changelog,
+					mp.KeySerde, mp.ValueSerde, sp.ParNum),
 			},
 			WindowStoreChangelogs: nil,
 			MsgSerde:              msgSerde,

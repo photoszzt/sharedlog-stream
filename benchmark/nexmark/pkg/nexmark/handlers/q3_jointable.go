@@ -11,6 +11,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/treemap"
 	"sync"
 	"time"
@@ -148,34 +149,42 @@ func getInOutStreams(
 	return inputStream1, inputStream2, outputStream, nil
 }
 
+type srcSinkSerde struct {
+	src1         *processor.MeteredSource
+	src2         *processor.MeteredSource
+	sink         *processor.MeteredSink
+	msgSerde     commtypes.MsgSerde
+	src1KeySerde commtypes.Serde
+	src1ValSerde commtypes.Serde
+	src2KeySerde commtypes.Serde
+	src2ValSerde commtypes.Serde
+}
+
 func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	stream1 *sharedlog_stream.ShardedSharedLogStream,
 	stream2 *sharedlog_stream.ShardedSharedLogStream,
 	outputStream *sharedlog_stream.ShardedSharedLogStream,
-) (*processor.MeteredSource, /* src1 */
-	*processor.MeteredSource, /* src2 */
-	*processor.MeteredSink,
-	commtypes.MsgSerde,
+) (*srcSinkSerde,
 	error,
 ) {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("get msg serde err: %v", err)
+		return nil, fmt.Errorf("get msg serde err: %v", err)
 	}
 
 	eventSerde, err := getEventSerde(sp.SerdeFormat)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("get event serde err: %v", err)
+		return nil, fmt.Errorf("get event serde err: %v", err)
 	}
 	auctionsConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      common.SrcConsumeTimeout,
-		KeyDecoder:   commtypes.Uint64Decoder{},
+		KeyDecoder:   commtypes.Uint64Serde{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
 	}
 	personsConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      common.SrcConsumeTimeout,
-		KeyDecoder:   commtypes.Uint64Decoder{},
+		KeyDecoder:   commtypes.Uint64Serde{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
 	}
@@ -194,7 +203,17 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, auctionsConfig))
 	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, personsConfig))
 	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
-	return src1, src2, sink, msgSerde, nil
+	sss := &srcSinkSerde{
+		src1:         src1,
+		src2:         src2,
+		sink:         sink,
+		src1KeySerde: commtypes.Uint64Serde{},
+		src1ValSerde: eventSerde,
+		src2KeySerde: commtypes.Uint64Serde{},
+		src2ValSerde: eventSerde,
+		msgSerde:     msgSerde,
+	}
+	return sss, nil
 }
 
 type q3JoinTableProcessArgs struct {
@@ -215,7 +234,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			Message: fmt.Sprintf("get input output err: %v", err),
 		}
 	}
-	auctionsSrc, personsSrc, sink, msgSerde, err := h.getSrcSink(ctx, sp, auctionsStream,
+	sss, err := h.getSrcSink(ctx, sp, auctionsStream,
 		personsStream, outputStream)
 	if err != nil {
 		return &common.FnOutput{
@@ -303,9 +322,9 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	sharedlog_stream.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
 
 	procArgs := &q3JoinTableProcessArgs{
-		auctionSrc:   auctionsSrc,
-		personSrc:    personsSrc,
-		sink:         sink,
+		auctionSrc:   sss.src1,
+		personSrc:    sss.src2,
+		sink:         sss.sink,
 		aJoinP:       aJoinP,
 		pJoinA:       pJoinA,
 		parNum:       sp.ParNum,
@@ -317,16 +336,16 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	}
 	if sp.EnableTransaction {
 		srcs := make(map[string]processor.Source)
-		srcs[sp.InputTopicNames[0]] = auctionsSrc
-		srcs[sp.InputTopicNames[1]] = personsSrc
-		kvchangelogs := []*sharedlog_stream.KVStoreChangelog{
-			sharedlog_stream.NewKVStoreChangelog(auctionsStore, auctionsStream, sp.ParNum),
-			sharedlog_stream.NewKVStoreChangelog(personsStore, personsStream, sp.ParNum),
+		srcs[sp.InputTopicNames[0]] = sss.src1
+		srcs[sp.InputTopicNames[1]] = sss.src2
+		kvchangelogs := []*store.KVStoreChangelog{
+			store.NewKVStoreChangelog(auctionsStore, auctionsStream, sss.src1KeySerde, sss.src1ValSerde, sp.ParNum),
+			store.NewKVStoreChangelog(personsStore, personsStream, sss.src2KeySerde, sss.src2ValSerde, sp.ParNum),
 		}
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
 			ProcArgs:     procArgs,
 			Env:          h.env,
-			MsgSerde:     msgSerde,
+			MsgSerde:     sss.msgSerde,
 			Srcs:         srcs,
 			OutputStream: outputStream,
 			QueryInput:   sp,
@@ -343,15 +362,15 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 				procArgs.(*q3JoinTableProcessArgs).trackParFunc = trackParFunc
 			}, &task)
 		if ret != nil && ret.Success {
-			ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()
-			ret.Latencies["personsSrc"] = personsSrc.GetLatency()
+			ret.Latencies["auctionsSrc"] = sss.src1.GetLatency()
+			ret.Latencies["personsSrc"] = sss.src2.GetLatency()
 			ret.Latencies["toAuctionsTable"] = toAuctionsTable.GetLatency()
 			ret.Latencies["toPersonsTable"] = toPersonsTable.GetLatency()
 			ret.Latencies["personJoinsAuctions"] = personJoinsAuctions.GetLatency()
 			ret.Latencies["auctionJoinsPersons"] = auctionJoinsPersons.GetLatency()
-			ret.Latencies["sink"] = sink.GetLatency()
-			ret.Consumed["auctionSrc"] = auctionsSrc.GetCount()
-			ret.Consumed["personsSrc"] = personsSrc.GetCount()
+			ret.Latencies["sink"] = sss.sink.GetLatency()
+			ret.Consumed["auctionSrc"] = sss.src1.GetCount()
+			ret.Consumed["personsSrc"] = sss.src2.GetCount()
 		}
 		return ret
 	}
@@ -361,15 +380,15 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {
-		ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()
-		ret.Latencies["personsSrc"] = personsSrc.GetLatency()
+		ret.Latencies["auctionsSrc"] = sss.src1.GetLatency()
+		ret.Latencies["personsSrc"] = sss.src2.GetLatency()
 		ret.Latencies["toAuctionsTable"] = toAuctionsTable.GetLatency()
 		ret.Latencies["toPersonsTable"] = toPersonsTable.GetLatency()
 		ret.Latencies["personJoinsAuctions"] = personJoinsAuctions.GetLatency()
 		ret.Latencies["auctionJoinsPersons"] = auctionJoinsPersons.GetLatency()
-		ret.Latencies["sink"] = sink.GetLatency()
-		ret.Consumed["auctionSrc"] = auctionsSrc.GetCount()
-		ret.Consumed["personsSrc"] = personsSrc.GetCount()
+		ret.Latencies["sink"] = sss.sink.GetLatency()
+		ret.Consumed["auctionSrc"] = sss.src1.GetCount()
+		ret.Consumed["personsSrc"] = sss.src2.GetCount()
 	}
 	return ret
 }

@@ -235,7 +235,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 			}
 		}),
 	}
-	store, err := store.NewInMemoryWindowStoreWithChangelog(tw.MaxSize()+tw.GracePeriodMs(),
+	wstore, err := store.NewInMemoryWindowStoreWithChangelog(tw.MaxSize()+tw.GracePeriodMs(),
 		tw.MaxSize(), false, mp)
 	if err != nil {
 		return &common.FnOutput{
@@ -244,7 +244,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		}
 	}
 
-	maxPriceBid := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(store,
+	maxPriceBid := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(wstore,
 		processor.InitializerFunc(func() interface{} {
 			return &ntypes.PriceTime{
 				Price:    0,
@@ -264,7 +264,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 			}
 
 		}), tw))
-	transformWithStore := processor.NewMeteredProcessor(NewQ7TransformProcessor(store))
+	transformWithStore := processor.NewMeteredProcessor(NewQ7TransformProcessor(wstore))
 	filterTime := processor.NewMeteredProcessor(
 		processor.NewStreamFilterProcessor(processor.PredicateFunc(func(m *commtypes.Message) (bool, error) {
 			bm := m.Value.(*ntypes.BidAndMax)
@@ -298,13 +298,13 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 				input.InputTopicNames[0], input.NumInPartition, input.OutputTopicName),
 			FixedOutParNum: input.ParNum,
 			MsgSerde:       msgSerde,
-			WindowStoreChangelogs: []*sharedlog_stream.WindowStoreChangelog{
-				sharedlog_stream.NewWindowStoreChangelog(store,
-					store.MaterializeParam().Changelog,
-					store.KeyWindowTsSerde(),
-					store.MaterializeParam().KeySerde,
-					store.MaterializeParam().ValueSerde,
-					store.MaterializeParam().ParNum),
+			WindowStoreChangelogs: []*store.WindowStoreChangelog{
+				store.NewWindowStoreChangelog(wstore,
+					wstore.MaterializeParam().Changelog,
+					wstore.KeyWindowTsSerde(),
+					wstore.MaterializeParam().KeySerde,
+					wstore.MaterializeParam().ValueSerde,
+					wstore.MaterializeParam().ParNum),
 			},
 			CHash:   nil,
 			CHashMu: nil,

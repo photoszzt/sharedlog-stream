@@ -314,8 +314,8 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			TransactionalId: fmt.Sprintf("q5AuctionBids-%s-%d-%s", sp.InputTopicNames[0],
 				sp.ParNum, sp.OutputTopicName),
 			FixedOutParNum: 0,
-			WindowStoreChangelogs: []*sharedlog_stream.WindowStoreChangelog{
-				sharedlog_stream.NewWindowStoreChangelog(
+			WindowStoreChangelogs: []*store.WindowStoreChangelog{
+				store.NewWindowStoreChangelog(
 					countStore,
 					countStore.MaterializeParam().Changelog,
 					countStore.KeyWindowTsSerde(),

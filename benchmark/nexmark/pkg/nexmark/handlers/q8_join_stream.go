@@ -356,8 +356,8 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			TransactionalId: fmt.Sprintf("q8JoinStream-%s-%d-%s",
 				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
 			MsgSerde: msgSerde,
-			WindowStoreChangelogs: []*sharedlog_stream.WindowStoreChangelog{
-				sharedlog_stream.NewWindowStoreChangelog(
+			WindowStoreChangelogs: []*store.WindowStoreChangelog{
+				store.NewWindowStoreChangelog(
 					auctionsWinStore,
 					auctionsStream,
 					nil,
@@ -365,7 +365,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 					eventSerde,
 					sp.ParNum,
 				),
-				sharedlog_stream.NewWindowStoreChangelog(
+				store.NewWindowStoreChangelog(
 					personsWinTab,
 					personsStream,
 					nil,

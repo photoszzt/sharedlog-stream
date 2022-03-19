@@ -35,6 +35,7 @@ func DefaultTrackSubstreamFunc(ctx context.Context,
 	return nil
 }
 
+// finding the last commited marker and gets the marker's seq number
 func createOffsetTopicAndGetOffset(ctx context.Context, tm *TransactionManager,
 	topic string, numPartition uint8, parNum uint8,
 ) (uint64, error) {
@@ -140,64 +141,74 @@ func setOffsetOnStream(offsetMap map[string]uint64, args *StreamTaskArgsTransact
 	}
 }
 
+func restoreChangelogBackedKVStore(ctx context.Context, tm *TransactionManager,
+	args *StreamTaskArgsTransaction, offsetMap map[string]uint64,
+) error {
+	for _, kvchangelog := range args.KVChangelogs {
+		topic := kvchangelog.Changelog.TopicName()
+		// offset stream is input stream
+		if offset, ok := offsetMap[topic]; ok {
+			err := store.RestoreKVStateStore(ctx,
+				kvchangelog,
+				args.MsgSerde, offset)
+			if err != nil {
+				return fmt.Errorf("RestoreKVStateStore failed: %v", err)
+			}
+		} else {
+			offset, err := createOffsetTopicAndGetOffset(ctx, tm, topic,
+				kvchangelog.Changelog.NumPartition(), kvchangelog.ParNum)
+			if err != nil {
+				return fmt.Errorf("createOffsetTopicAndGetOffset kv failed: %v", err)
+			}
+			err = store.RestoreKVStateStore(ctx, kvchangelog, args.MsgSerde, offset)
+			if err != nil {
+				return fmt.Errorf("RestoreKVStateStore2 failed: %v", err)
+			}
+		}
+	}
+	return nil
+}
+
+func restoreChangelogBackedWindowStore(ctx context.Context, tm *TransactionManager, args *StreamTaskArgsTransaction, offsetMap map[string]uint64) error {
+	for _, wschangelog := range args.WindowStoreChangelogs {
+		topic := wschangelog.Changelog.TopicName()
+		// offset stream is input stream
+		if offset, ok := offsetMap[topic]; ok {
+			err := store.RestoreWindowStateStore(ctx, wschangelog,
+				args.MsgSerde, offset)
+			if err != nil {
+				return fmt.Errorf("RestoreWindowStateStore failed: %v", err)
+			}
+		} else {
+			offset, err := createOffsetTopicAndGetOffset(ctx, tm, topic,
+				wschangelog.Changelog.NumPartition(), wschangelog.ParNum)
+			if err != nil {
+				return fmt.Errorf("createOffsetTopicAndGetOffset win failed: %v", err)
+			}
+			err = store.RestoreWindowStateStore(ctx, wschangelog,
+				args.MsgSerde, offset)
+			if err != nil {
+				return fmt.Errorf("RestoreWindowStateStore2 failed: %v", err)
+			}
+		}
+	}
+	return nil
+}
+
 func restoreStateStore(ctx context.Context, tm *TransactionManager, args *StreamTaskArgsTransaction, offsetMap map[string]uint64) error {
 	debug.Assert(args.MsgSerde != nil, "args's msg serde should not be nil")
 	if args.KVChangelogs != nil {
-		for _, kvchangelog := range args.KVChangelogs {
-			topic := kvchangelog.changelog.TopicName()
-			if offset, ok := offsetMap[topic]; ok {
-				err := store.RestoreKVStateStore(ctx,
-					kvchangelog.kvStore,
-					kvchangelog.changelog,
-					kvchangelog.parNum,
-					args.MsgSerde, offset)
-				if err != nil {
-					return fmt.Errorf("RestoreKVStateStore failed: %v", err)
-				}
-			} else {
-				offset, err := createOffsetTopicAndGetOffset(ctx, tm, topic,
-					kvchangelog.changelog.NumPartition(), kvchangelog.parNum)
-				if err != nil {
-					return fmt.Errorf("createOffsetTopicAndGetOffset kv failed: %v", err)
-				}
-				err = store.RestoreKVStateStore(ctx, kvchangelog.kvStore, kvchangelog.changelog, kvchangelog.parNum,
-					args.MsgSerde, offset)
-				if err != nil {
-					return fmt.Errorf("RestoreKVStateStore2 failed: %v", err)
-				}
-			}
+		err := restoreChangelogBackedKVStore(ctx, tm, args, offsetMap)
+		if err != nil {
+			return err
 		}
 	}
 	if args.WindowStoreChangelogs != nil {
-		for _, wschangelog := range args.WindowStoreChangelogs {
-			topic := wschangelog.changelog.TopicName()
-			debug.Assert(wschangelog.valSerde != nil, "val serde should not be nil")
-			debug.Assert(wschangelog.keySerde != nil, "key serde should not be nil")
-			if offset, ok := offsetMap[topic]; ok {
-				err := store.RestoreWindowStateStore(ctx, wschangelog.windowStore,
-					wschangelog.changelog, wschangelog.parNum,
-					args.MsgSerde, wschangelog.keyWindowTsSerde,
-					wschangelog.keySerde, wschangelog.valSerde, offset)
-				if err != nil {
-					return fmt.Errorf("RestoreWindowStateStore failed: %v", err)
-				}
-			} else {
-				offset, err := createOffsetTopicAndGetOffset(ctx, tm, topic,
-					wschangelog.changelog.NumPartition(), wschangelog.parNum)
-				if err != nil {
-					return fmt.Errorf("createOffsetTopicAndGetOffset win failed: %v", err)
-				}
-				err = store.RestoreWindowStateStore(ctx, wschangelog.windowStore,
-					wschangelog.changelog, wschangelog.parNum,
-					args.MsgSerde, wschangelog.keyWindowTsSerde,
-					wschangelog.keySerde, wschangelog.valSerde, offset)
-				if err != nil {
-					return fmt.Errorf("RestoreWindowStateStore2 failed: %v", err)
-				}
-			}
+		err := restoreChangelogBackedWindowStore(ctx, tm, args, offsetMap)
+		if err != nil {
+			return err
 		}
 	}
-
 	return nil
 }
 
@@ -256,47 +267,6 @@ type StreamTaskArgs struct {
 	Duration time.Duration
 }
 
-type KVStoreChangelog struct {
-	kvStore   store.KeyValueStore
-	changelog store.Stream
-	parNum    uint8
-}
-
-func NewKVStoreChangelog(kvStore store.KeyValueStore, changelog store.Stream, parNum uint8) *KVStoreChangelog {
-	return &KVStoreChangelog{
-		kvStore:   kvStore,
-		changelog: changelog,
-		parNum:    parNum,
-	}
-}
-
-type WindowStoreChangelog struct {
-	windowStore      store.WindowStore
-	changelog        store.Stream
-	keyWindowTsSerde commtypes.Serde
-	keySerde         commtypes.Serde
-	valSerde         commtypes.Serde
-	parNum           uint8
-}
-
-func NewWindowStoreChangelog(
-	wsStore store.WindowStore,
-	changelog store.Stream,
-	keyWindowTsSerde commtypes.Serde,
-	keySerde commtypes.Serde,
-	valSerde commtypes.Serde,
-	parNum uint8,
-) *WindowStoreChangelog {
-	return &WindowStoreChangelog{
-		windowStore:      wsStore,
-		changelog:        changelog,
-		keyWindowTsSerde: keyWindowTsSerde,
-		keySerde:         keySerde,
-		valSerde:         valSerde,
-		parNum:           parNum,
-	}
-}
-
 type StreamTaskArgsTransaction struct {
 	ProcArgs              interface{}
 	Env                   types.Environment
@@ -307,8 +277,8 @@ type StreamTaskArgsTransaction struct {
 	CHash                 *hash.ConsistentHash
 	CHashMu               *sync.RWMutex
 	TransactionalId       string
-	KVChangelogs          []*KVStoreChangelog
-	WindowStoreChangelogs []*WindowStoreChangelog
+	KVChangelogs          []*store.KVStoreChangelog
+	WindowStoreChangelogs []*store.WindowStoreChangelog
 	FixedOutParNum        uint8
 }
 
