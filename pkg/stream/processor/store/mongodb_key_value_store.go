@@ -67,6 +67,10 @@ func NewMongoDBKeyValueStore(ctx context.Context, config *MongoDBConfig) (*Mongo
 	}, nil
 }
 
+func (s *MongoDBKeyValueStore) DropDatabase(ctx context.Context) error {
+	return s.client.Database(s.config.DBName).Drop(ctx)
+}
+
 func (s *MongoDBKeyValueStore) StartTransaction(ctx context.Context) error {
 	sessionOpts := options.Session().SetDefaultWriteConcern(writeconcern.New(writeconcern.WMajority())).
 		SetDefaultReadConcern(readconcern.Linearizable())

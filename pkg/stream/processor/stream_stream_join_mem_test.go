@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func getStreamJoin(joinWindows *JoinWindows, t *testing.T) (
+func getStreamJoinMem(joinWindows *JoinWindows, t *testing.T) (
 	func(ctx context.Context, m commtypes.Message) []commtypes.Message,
 	func(ctx context.Context, m commtypes.Message) []commtypes.Message,
 ) {
@@ -97,7 +97,7 @@ func TestStreamStreamJoinMem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	oneJoinTwo, twoJoinOne := getStreamJoin(joinWindows, t)
+	oneJoinTwo, twoJoinOne := getStreamJoinMem(joinWindows, t)
 	StreamStreamJoin(ctx, oneJoinTwo, twoJoinOne, t)
 }
 
@@ -107,7 +107,7 @@ func TestWindowingMem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	oneJoinTwo, twoJoinOne := getStreamJoin(joinWindows, t)
+	oneJoinTwo, twoJoinOne := getStreamJoinMem(joinWindows, t)
 	Windowing(ctx, oneJoinTwo, twoJoinOne, t)
 }
 
@@ -123,7 +123,7 @@ func TestAsymmetricWindowingAfterMem(t *testing.T) {
 	}
 	debug.Fprintf(os.Stderr, "join windows: before %d, after %d, grace %d\n", joinWindows.beforeMs,
 		joinWindows.afterMs, joinWindows.graceMs)
-	oneJoinTwo, twoJoinOne := getStreamJoin(joinWindows, t)
+	oneJoinTwo, twoJoinOne := getStreamJoinMem(joinWindows, t)
 	AsymmetricWindowingAfter(ctx, oneJoinTwo, twoJoinOne, t)
 }
 
@@ -140,6 +140,6 @@ func TestAsymmetricWindowingBeforeMem(t *testing.T) {
 	}
 	debug.Fprintf(os.Stderr, "join windows: before %d, after %d, grace %d\n", joinWindows.beforeMs,
 		joinWindows.afterMs, joinWindows.graceMs)
-	oneJoinTwo, twoJoinOne := getStreamJoin(joinWindows, t)
+	oneJoinTwo, twoJoinOne := getStreamJoinMem(joinWindows, t)
 	AsymmetricWindowingBefore(ctx, oneJoinTwo, twoJoinOne, t)
 }
