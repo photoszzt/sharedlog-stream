@@ -19,7 +19,7 @@ type SegmentedBytesStore interface {
 		iterFunc func(ts int64 /* ts */, k []byte, v []byte) error) error
 	BackwardFetchWithKeyRange(keyFrom []byte, keyTo []byte, from int64, to int64,
 		iterFunc func(ts int64 /* ts */, k []byte, v []byte) error) error
-	FetchAll(iterFunc func(ts int64 /* ts */, k []byte, v []byte) error) error
+	FetchAll(ctx context.Context, from int64, to int64, iterFunc func(ts int64 /* ts */, k []byte, v []byte) error) error
 	BackwardFetchAll(iterFunc func(ts int64 /* ts */, k []byte, v []byte) error) error
 	Remove(ctx context.Context, key []byte) error
 	RemoveWithTs(key []byte, timestamp uint64)

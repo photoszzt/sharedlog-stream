@@ -318,6 +318,7 @@ func (s *InMemoryWindowStore) BackwardFetchWithKeyRange(
 }
 
 func (s *InMemoryWindowStore) FetchAll(
+	ctx context.Context,
 	timeFrom time.Time,
 	timeTo time.Time,
 	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,

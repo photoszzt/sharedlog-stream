@@ -27,11 +27,11 @@ func getStreamJoinMongoDB(ctx context.Context, joinWindows *JoinWindows, dbName 
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	toWinTab1, winTab1, err := ToMongoDBWindowTable("tab1", mkvs, joinWindows, commtypes.IntSerde{}, commtypes.StringSerde{})
+	toWinTab1, winTab1, err := ToMongoDBWindowTable(ctx, "tab1", mkvs, joinWindows, commtypes.IntSerde{}, commtypes.StringSerde{})
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	toWinTab2, winTab2, err := ToMongoDBWindowTable("tab2", mkvs, joinWindows, commtypes.IntSerde{}, commtypes.StringSerde{})
+	toWinTab2, winTab2, err := ToMongoDBWindowTable(ctx, "tab2", mkvs, joinWindows, commtypes.IntSerde{}, commtypes.StringSerde{})
 	if err != nil {
 		t.Fatal(err.Error())
 	}

@@ -139,11 +139,12 @@ func (st *InMemoryWindowStoreWithChangelog) BackwardFetchWithKeyRange(
 }
 
 func (st *InMemoryWindowStoreWithChangelog) FetchAll(
+	ctx context.Context,
 	timeFrom time.Time,
 	timeTo time.Time,
 	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
-	return st.windowStore.FetchAll(timeFrom, timeTo, iterFunc)
+	return st.windowStore.FetchAll(ctx, timeFrom, timeTo, iterFunc)
 }
 
 func (st *InMemoryWindowStoreWithChangelog) BackwardFetchAll(

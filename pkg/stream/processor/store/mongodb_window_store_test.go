@@ -4,6 +4,7 @@ import (
 	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"testing"
+	"time"
 )
 
 func getMongoDBWindowStore(ctx context.Context, retainDuplicates bool, t *testing.T) (*SegmentedWindowStore, *MongoDBKeyValueStore) {
@@ -18,8 +19,11 @@ func getMongoDBWindowStore(ctx context.Context, retainDuplicates bool, t *testin
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	byteStore := NewMongoDBSegmentedBytesStore("test1",
+	byteStore, err := NewMongoDBSegmentedBytesStore(ctx, "test1",
 		TEST_RETENTION_PERIOD, &WindowKeySchema{}, mkvs)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	wstore := NewSegmentedWindowStore(byteStore, retainDuplicates, TEST_WINDOW_SIZE, commtypes.Uint32Serde{}, commtypes.StringSerde{})
 	return wstore, mkvs
 }
@@ -107,7 +111,11 @@ func TestRolling(t *testing.T) {
 	if segmentInterval < 60_000 {
 		segmentInterval = 60_000
 	}
-	segments := NewMongoDBKeyValueSegments("test1", TEST_RETENTION_PERIOD, segmentInterval, mkvs)
+	segments, err := NewMongoDBKeyValueSegments(ctx, "test1", TEST_RETENTION_PERIOD,
+		segmentInterval, mkvs)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	RollingTest(ctx, store, segments, t)
 	mkvs.client.Database("test").Drop(ctx)
 }
@@ -118,4 +126,48 @@ func TestFetchDuplicates(t *testing.T) {
 	mkvs.client.Database("test").Drop(ctx)
 	FetchDuplicates(ctx, store, t)
 	mkvs.client.Database("test").Drop(ctx)
+}
+
+func TestMongoDBWindowStoreRestore(t *testing.T) {
+	ctx := context.Background()
+	store, mkvs := getMongoDBWindowStore(ctx, false, t)
+	mkvs.client.Database("test").Drop(ctx)
+	if err := store.Put(ctx, uint32(1), "one", 0); err != nil {
+		t.Fatal(err.Error())
+	}
+	if err := store.Put(ctx, uint32(2), "two", TEST_WINDOW_SIZE); err != nil {
+		t.Fatal(err.Error())
+	}
+	if err := store.Put(ctx, uint32(3), "three", TEST_WINDOW_SIZE*2); err != nil {
+		t.Fatal(err.Error())
+	}
+	store2, _ := getMongoDBWindowStore(ctx, false, t)
+	ret := make(map[uint32]commtypes.ValueTimestamp)
+	err := store2.FetchAll(ctx, time.UnixMilli(0), time.UnixMilli(TEST_WINDOW_SIZE*2),
+		func(i int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
+			ret[kt.(uint32)] = commtypes.ValueTimestamp{Value: vt, Timestamp: i}
+			return nil
+		})
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	expected := map[uint32]commtypes.ValueTimestamp{
+		1: {Value: "one", Timestamp: 0},
+		2: {Value: "two", Timestamp: TEST_WINDOW_SIZE},
+		3: {Value: "three", Timestamp: TEST_WINDOW_SIZE * 2},
+	}
+	checkKVTsMapEqual(t, expected, ret)
+	mkvs.client.Database("test").Drop(ctx)
+}
+
+func checkKVTsMapEqual(t testing.TB, expected map[uint32]commtypes.ValueTimestamp, got map[uint32]commtypes.ValueTimestamp) {
+	if len(expected) != len(got) {
+		t.Fatalf("expected and got have different length. expected: %v, got: %v", expected, got)
+	}
+	for k, v := range expected {
+		vgot := got[k]
+		if vgot != v {
+			t.Fatalf("k: %d, expected: %v, got: %v", k, v, vgot)
+		}
+	}
 }

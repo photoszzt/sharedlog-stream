@@ -36,21 +36,25 @@ func NewRedisSegmentedBytesStore(name string,
 	}
 }
 
-func NewMongoDBSegmentedBytesStore(name string,
+func NewMongoDBSegmentedBytesStore(ctx context.Context, name string,
 	retention int64, // ms
 	keySchema KeySchema,
 	mkvs *MongoDBKeyValueStore,
-) *BaseSegmentedBytesStore {
+) (*BaseSegmentedBytesStore, error) {
 	segmentInterval := retention / 2
 	if segmentInterval < 60_000 {
 		segmentInterval = 60_000
+	}
+	segs, err := NewMongoDBKeyValueSegments(ctx, name, retention, segmentInterval, mkvs)
+	if err != nil {
+		return nil, err
 	}
 	return &BaseSegmentedBytesStore{
 		name:               name,
 		keySchema:          keySchema,
 		observedStreamTime: -1,
-		segments:           NewMongoDBKeyValueSegments(name, retention, segmentInterval, mkvs),
-	}
+		segments:           segs,
+	}, nil
 }
 
 func (s *BaseSegmentedBytesStore) IsOpen() bool { return true }
@@ -137,9 +141,29 @@ func (s *BaseSegmentedBytesStore) BackwardFetchWithKeyRange(
 }
 
 func (s *BaseSegmentedBytesStore) FetchAll(
+	ctx context.Context,
+	from int64, to int64,
 	iterFunc func(int64 /* ts */, []byte, []byte) error,
 ) error {
-	panic("not implemented")
+	segment_slice := s.segments.Segments(from, to)
+	for _, seg := range segment_slice {
+		err := seg.Range(ctx, nil, nil, func(kt []byte, vt []byte) error {
+			bytes := kt
+			has, ts := s.keySchema.HasNextCondition(bytes, nil, nil, from, to)
+			if has {
+				k := s.keySchema.ExtractStoreKeyBytes(bytes)
+				err := iterFunc(ts, k, vt)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *BaseSegmentedBytesStore) BackwardFetchAll(

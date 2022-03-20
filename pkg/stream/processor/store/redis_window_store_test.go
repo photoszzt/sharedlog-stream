@@ -1,9 +1,6 @@
 package store
 
-import (
-	"sharedlog-stream/pkg/stream/processor/commtypes"
-)
-
+/*
 func getRedisWindowStore(retainDuplicates bool) (*SegmentedWindowStore, *RedisKeyValueStore) {
 	rkvs := NewRedisKeyValueStore(&RedisConfig{
 		Addr:           "127.0.0.1",
@@ -20,7 +17,7 @@ func getRedisWindowStore(retainDuplicates bool) (*SegmentedWindowStore, *RedisKe
 	return store, rkvs
 }
 
-/*
+
 func TestRedisGetAndRange(t *testing.T) {
 	store, rkvs := getRedisWindowStore(false)
 	ctx := context.Background()

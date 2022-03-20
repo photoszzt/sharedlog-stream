@@ -175,10 +175,22 @@ func (rws *SegmentedWindowStore) BackwardFetchWithKeyRange(keyFrom commtypes.Key
 	panic("not implemented")
 }
 
-func (rws *SegmentedWindowStore) FetchAll(timeFrom time.Time, timeTo time.Time,
+func (rws *SegmentedWindowStore) FetchAll(ctx context.Context, timeFrom time.Time, timeTo time.Time,
 	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
-	panic("not implemented")
+	tsFrom := timeFrom.UnixMilli()
+	tsTo := timeTo.UnixMilli()
+	return rws.bytesStore.FetchAll(ctx, tsFrom, tsTo, func(ts int64, k, v []byte) error {
+		key, err := rws.keySerde.Decode(k)
+		if err != nil {
+			return err
+		}
+		val, err := rws.valSerde.Decode(v)
+		if err != nil {
+			return err
+		}
+		return iterFunc(ts, key, val)
+	})
 }
 
 func (rws *SegmentedWindowStore) BackwardFetchAll(timeFrom time.Time, timeTo time.Time,
