@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"reflect"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"testing"
 	"time"
@@ -170,4 +171,129 @@ func checkKVTsMapEqual(t testing.TB, expected map[uint32]commtypes.ValueTimestam
 			t.Fatalf("k: %d, expected: %v, got: %v", k, v, vgot)
 		}
 	}
+}
+
+func TestMongoDBWindowStoreRestore2(t *testing.T) {
+	ctx := context.Background()
+	startTime := TEST_SEGMENT_INTERVAL * 2
+	increment := TEST_SEGMENT_INTERVAL / 2
+	wstore, mkvs := getMongoDBWindowStore(ctx, false, t)
+	mkvs.client.Database("test").Drop(ctx)
+	if err := wstore.Put(ctx, uint32(0), "zero", startTime); err != nil {
+		t.Fatal(err.Error())
+	}
+	if err := wstore.Put(ctx, uint32(1), "one", startTime+increment); err != nil {
+		t.Fatal(err.Error())
+	}
+	if err := wstore.Put(ctx, uint32(2), "two", startTime+increment*2); err != nil {
+		t.Fatal(err.Error())
+	}
+	if err := wstore.Put(ctx, uint32(3), "three", startTime+increment*3); err != nil {
+		t.Fatal(err.Error())
+	}
+	if err := wstore.Put(ctx, uint32(4), "four", startTime+increment*4); err != nil {
+		t.Fatal(err.Error())
+	}
+	if err := wstore.Put(ctx, uint32(5), "five", startTime+increment*5); err != nil {
+		t.Fatal(err.Error())
+	}
+	if err := wstore.Put(ctx, uint32(6), "six", startTime+increment*6); err != nil {
+		t.Fatal(err.Error())
+	}
+	if err := wstore.Put(ctx, uint32(7), "seven", startTime+increment*7); err != nil {
+		t.Fatal(err.Error())
+	}
+	if err := wstore.Put(ctx, uint32(8), "eight", startTime+increment*8); err != nil {
+		t.Fatal(err.Error())
+	}
+	store2, _ := getMongoDBWindowStore(ctx, false, t)
+	ret, err := assertFetch(ctx, store2, 0, startTime-TEST_WINDOW_SIZE,
+		startTime+TEST_WINDOW_SIZE)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	expected := map[string]struct{}{}
+	if !reflect.DeepEqual(expected, ret) {
+		t.Fatal("should equal")
+	}
+	ret, err = assertFetch(ctx, store2, 1, startTime-TEST_WINDOW_SIZE+increment,
+		startTime+TEST_WINDOW_SIZE+increment)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	expected = map[string]struct{}{}
+	if !reflect.DeepEqual(expected, ret) {
+		t.Fatal("should equal")
+	}
+
+	ret, err = assertFetch(ctx, store2, 2, startTime-TEST_WINDOW_SIZE+increment*2,
+		startTime+TEST_WINDOW_SIZE+increment*2)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	expected = map[string]struct{}{}
+	if !reflect.DeepEqual(expected, ret) {
+		t.Fatal("should equal")
+	}
+
+	ret, err = assertFetch(ctx, store2, 3, startTime-TEST_WINDOW_SIZE+increment*3,
+		startTime+TEST_WINDOW_SIZE+increment*3)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	expected = map[string]struct{}{}
+	if !reflect.DeepEqual(expected, ret) {
+		t.Fatal("should equal")
+	}
+
+	ret, err = assertFetch(ctx, store2, 4, startTime-TEST_WINDOW_SIZE+increment*4,
+		startTime+TEST_WINDOW_SIZE+increment*4)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	expected = map[string]struct{}{"four": {}}
+	if !reflect.DeepEqual(expected, ret) {
+		t.Fatal("should equal")
+	}
+
+	ret, err = assertFetch(ctx, store2, 5, startTime-TEST_WINDOW_SIZE+increment*5,
+		startTime+TEST_WINDOW_SIZE+increment*5)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	expected = map[string]struct{}{"five": {}}
+	if !reflect.DeepEqual(expected, ret) {
+		t.Fatal("should equal")
+	}
+
+	ret, err = assertFetch(ctx, store2, 6, startTime-TEST_WINDOW_SIZE+increment*6,
+		startTime+TEST_WINDOW_SIZE+increment*6)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	expected = map[string]struct{}{"six": {}}
+	if !reflect.DeepEqual(expected, ret) {
+		t.Fatal("should equal")
+	}
+
+	ret, err = assertFetch(ctx, store2, 7, startTime-TEST_WINDOW_SIZE+increment*7,
+		startTime+TEST_WINDOW_SIZE+increment*7)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	expected = map[string]struct{}{"seven": {}}
+	if !reflect.DeepEqual(expected, ret) {
+		t.Fatal("should equal")
+	}
+
+	ret, err = assertFetch(ctx, store2, 8, startTime-TEST_WINDOW_SIZE+increment*8,
+		startTime+TEST_WINDOW_SIZE+increment*8)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	expected = map[string]struct{}{"eight": {}}
+	if !reflect.DeepEqual(expected, ret) {
+		t.Fatal("should equal")
+	}
+	mkvs.client.Database("test").Drop(ctx)
 }
