@@ -65,16 +65,10 @@ func joinProc(
 	if err != nil {
 		if xerrors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
 			fmt.Fprint(os.Stderr, "timeout, gen output\n")
-			out <- &common.FnOutput{
-				Success: true,
-				Message: err.Error(),
-			}
+			out <- &common.FnOutput{Success: true, Message: err.Error()}
 			return
 		}
-		out <- &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		out <- &common.FnOutput{Success: false, Message: err.Error()}
 		return
 	}
 	for _, msg := range gotMsgs {
@@ -82,27 +76,19 @@ func joinProc(
 		procArgs.currentOffset[procArgs.src.TopicName()] = msg.LogSeqNum
 		procArgs.offMu.Unlock()
 
-		event := msg.Msg.Value.(*ntypes.Event)
-		ts, err := event.ExtractStreamTime()
+		st := msg.Msg.Value.(commtypes.StreamTimeExtractor)
+		ts, err := st.ExtractStreamTime()
 		if err != nil {
-			out <- &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("fail to extract timestamp: %v", err),
-			}
+			out <- &common.FnOutput{Success: false, Message: fmt.Sprintf("fail to extract timestamp: %v", err)}
 			return
 		}
 		msg.Msg.Timestamp = ts
 		err = procArgs.runner(ctx, msg.Msg, procArgs.sink, procArgs.trackParFunc)
 		if err != nil {
-			out <- &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
-			}
+			out <- &common.FnOutput{Success: false, Message: err.Error()}
 		}
 	}
-	fmt.Fprint(os.Stderr, "output nil\n")
 	out <- nil
-	fmt.Fprint(os.Stderr, "done output nil\n")
 }
 
 func pushMsgsToSink(

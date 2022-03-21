@@ -3,7 +3,6 @@ package sharedlog_stream
 import (
 	"context"
 	"fmt"
-	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
@@ -295,9 +294,7 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 			if ret.Success {
 				elapsed := time.Since(procStart)
 				latencies = append(latencies, int(elapsed.Microseconds()))
-				ret.Latencies = map[string][]int{
-					"e2e": latencies,
-				}
+				ret.Latencies = map[string][]int{"e2e": latencies}
 				ret.Duration = time.Since(startTime).Seconds()
 				ret.Consumed = make(map[string]uint64)
 			}
@@ -307,12 +304,10 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 		latencies = append(latencies, int(elapsed.Microseconds()))
 	}
 	return &common.FnOutput{
-		Success:  true,
-		Duration: time.Since(startTime).Seconds(),
-		Latencies: map[string][]int{
-			"e2e": latencies,
-		},
-		Consumed: make(map[string]uint64),
+		Success:   true,
+		Duration:  time.Since(startTime).Seconds(),
+		Latencies: map[string][]int{"e2e": latencies},
+		Consumed:  make(map[string]uint64),
 	}
 }
 
@@ -351,10 +346,7 @@ func (t *StreamTask) ProcessWithTransaction(
 			monitorQuit <- struct{}{}
 			controlQuit <- struct{}{}
 			if merr != nil {
-				return &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("monitor failed: %v", merr),
-				}
+				return &common.FnOutput{Success: false, Message: fmt.Sprintf("monitor failed: %v", merr)}
 			}
 		case cerr := <-controlErrc:
 			monitorQuit <- struct{}{}
@@ -393,14 +385,13 @@ L:
 		timeSinceTranStart := time.Since(commitTimer)
 		timeout := duration != 0 && time.Since(startTime) >= duration
 		if (commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout || idx == 10 {
-			if val, ok := args.QueryInput.TestParams["FailBeforeCommit"]; ok && val {
-				fmt.Fprintf(os.Stderr, "about to fail before commit")
-				retc <- &common.FnOutput{
-					Success: false,
-					Message: "fail before commit",
+			/*
+				if val, ok := args.QueryInput.TestParams["FailBeforeCommit"]; ok && val {
+					fmt.Fprintf(os.Stderr, "about to fail before commit")
+					retc <- &common.FnOutput{Success: false, Message: "fail before commit"}
+					return
 				}
-				return
-			}
+			*/
 			consumedSeqNumConfigs := make([]ConsumedSeqNumConfig, 0)
 			for topic, offset := range currentOffset {
 				consumedSeqNumConfigs = append(consumedSeqNumConfigs, ConsumedSeqNumConfig{
@@ -412,66 +403,51 @@ L:
 				})
 			}
 			TrackOffsetAndCommit(ctx, consumedSeqNumConfigs, tm, &hasLiveTransaction, &trackConsumePar, retc)
-			if val, ok := args.QueryInput.TestParams["FailAfterCommit"]; ok && val {
-				fmt.Fprintf(os.Stderr, "about to fail after commit")
-				retc <- &common.FnOutput{
-					Success: false,
-					Message: "fail after commit",
+			/*
+				if val, ok := args.QueryInput.TestParams["FailAfterCommit"]; ok && val {
+					fmt.Fprintf(os.Stderr, "about to fail after commit")
+					retc <- &common.FnOutput{
+						Success: false,
+						Message: "fail after commit",
+					}
+					return
 				}
-				return
-			}
+			*/
 		}
 		if timeout {
-			err := tm.Close()
-			if err != nil {
-				retc <- &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("close transaction manager: %v\n", err),
-				}
+			if err := tm.Close(); err != nil {
+				retc <- &common.FnOutput{Success: false, Message: fmt.Sprintf("close transaction manager: %v\n", err)}
 				return
 			}
 			break
 		}
 		if !hasLiveTransaction {
-			err := tm.BeginTransaction(ctx)
-			if err != nil {
-				retc <- &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("transaction begin failed: %v\n", err),
-				}
+			if err := tm.BeginTransaction(ctx); err != nil {
+				retc <- &common.FnOutput{Success: false, Message: fmt.Sprintf("transaction begin failed: %v\n", err)}
 				return
 			}
-			if idx == 5 {
-				if val, ok := args.QueryInput.TestParams["FailAfterBegin"]; ok && val {
-					fmt.Fprintf(os.Stderr, "about to fail after begin")
-					retc <- &common.FnOutput{
-						Success: false,
-						Message: "fail after begin",
+			/*
+				if idx == 5 {
+					if val, ok := args.QueryInput.TestParams["FailAfterBegin"]; ok && val {
+						fmt.Fprintf(os.Stderr, "about to fail after begin")
+						retc <- &common.FnOutput{Success: false, Message: "fail after begin"}
+						return
 					}
-					return
 				}
-			}
+			*/
 			hasLiveTransaction = true
 			commitTimer = time.Now()
 			if args.FixedOutParNum != 0 {
-				err = tm.AddTopicPartition(ctx, args.QueryInput.OutputTopicName, []uint8{args.FixedOutParNum})
-				if err != nil {
-					retc <- &common.FnOutput{
-						Success: false,
-						Message: fmt.Sprintf("track topic partition failed: %v\n", err),
-					}
+				if err := tm.AddTopicPartition(ctx, args.QueryInput.OutputTopicName, []uint8{args.FixedOutParNum}); err != nil {
+					retc <- &common.FnOutput{Success: false, Message: fmt.Sprintf("track topic partition failed: %v\n", err)}
 					return
 				}
 			}
 		}
 		if !trackConsumePar {
 			for _, inputTopicName := range args.QueryInput.InputTopicNames {
-				err := tm.AddTopicTrackConsumedSeqs(ctx, inputTopicName, []uint8{args.QueryInput.ParNum})
-				if err != nil {
-					retc <- &common.FnOutput{
-						Success: false,
-						Message: fmt.Sprintf("add offsets failed: %v\n", err),
-					}
+				if err := tm.AddTopicTrackConsumedSeqs(ctx, inputTopicName, []uint8{args.QueryInput.ParNum}); err != nil {
+					retc <- &common.FnOutput{Success: false, Message: fmt.Sprintf("add offsets failed: %v\n", err)}
 					return
 				}
 			}
@@ -497,19 +473,13 @@ L:
 				}
 				elapsed := time.Since(procStart)
 				latencies = append(latencies, int(elapsed.Microseconds()))
-				ret.Latencies = map[string][]int{
-					"e2e": latencies,
-				}
+				ret.Latencies = map[string][]int{"e2e": latencies}
 				ret.Consumed = make(map[string]uint64)
 				ret.Duration = time.Since(startTime).Seconds()
 			} else {
 				if hasLiveTransaction {
-					err := tm.AbortTransaction(ctx)
-					if err != nil {
-						retc <- &common.FnOutput{
-							Success: false,
-							Message: fmt.Sprintf("abort failed: %v\n", err),
-						}
+					if err := tm.AbortTransaction(ctx); err != nil {
+						retc <- &common.FnOutput{Success: false, Message: fmt.Sprintf("abort failed: %v\n", err)}
 						return
 					}
 				}
@@ -517,27 +487,27 @@ L:
 			retc <- ret
 			return
 		}
-		if idx == 5 {
-			if val, ok := args.QueryInput.TestParams["FailAfterProcess"]; ok && val {
-				fmt.Fprintf(os.Stderr, "about to fail after process\n")
-				retc <- &common.FnOutput{
-					Success: false,
-					Message: "fail after begin",
+		/*
+			if idx == 5 {
+				if val, ok := args.QueryInput.TestParams["FailAfterProcess"]; ok && val {
+					fmt.Fprintf(os.Stderr, "about to fail after process\n")
+					retc <- &common.FnOutput{
+						Success: false,
+						Message: "fail after begin",
+					}
+					return
 				}
-				return
 			}
-		}
+		*/
 		currentOffset = off
 		elapsed := time.Since(procStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
 		idx += 1
 	}
 	retc <- &common.FnOutput{
-		Success:  true,
-		Duration: time.Since(startTime).Seconds(),
-		Latencies: map[string][]int{
-			"e2e": latencies,
-		},
-		Consumed: make(map[string]uint64),
+		Success:   true,
+		Duration:  time.Since(startTime).Seconds(),
+		Latencies: map[string][]int{"e2e": latencies},
+		Consumed:  make(map[string]uint64),
 	}
 }

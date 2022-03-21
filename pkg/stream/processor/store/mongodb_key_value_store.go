@@ -33,7 +33,6 @@ type MongoDBConfig struct {
 	ValueSerde     commtypes.Serde
 	KeySerde       commtypes.Serde
 	Addr           string
-	StoreName      string
 	CollectionName string
 
 	DBName string
@@ -116,7 +115,7 @@ func (s *MongoDBKeyValueStore) Init(ctx StoreContext) {
 }
 
 func (s *MongoDBKeyValueStore) Name() string {
-	return s.config.StoreName
+	return s.config.DBName
 }
 
 func (s *MongoDBKeyValueStore) Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error) {

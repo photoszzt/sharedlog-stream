@@ -60,6 +60,21 @@ func ToInMemKVTable(storeName string, compare func(a, b treemap.Key) int) (*Mete
 	return toTableProc, store, nil
 }
 
-func ToMongoDBKVTable(mkvs *store.MongoDBKeyValueStore) *MeteredProcessor {
-	return NewMeteredProcessor(NewStoreToKVTableProcessor(mkvs))
+func ToMongoDBKVTable(ctx context.Context,
+	dbName string,
+	mongoAddr string,
+	keySerde commtypes.Serde,
+	valSerde commtypes.Serde,
+) (*MeteredProcessor, store.KeyValueStore, error) {
+	mkvs, err := store.NewMongoDBKeyValueStore(ctx, &store.MongoDBConfig{
+		Addr:           mongoAddr,
+		CollectionName: dbName,
+		DBName:         dbName,
+		KeySerde:       keySerde,
+		ValueSerde:     valSerde,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return NewMeteredProcessor(NewStoreToKVTableProcessor(mkvs)), mkvs, nil
 }

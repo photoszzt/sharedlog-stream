@@ -150,14 +150,11 @@ func getInOutStreams(
 }
 
 type srcSinkSerde struct {
-	src1         *processor.MeteredSource
-	src2         *processor.MeteredSource
-	sink         *processor.MeteredSink
-	msgSerde     commtypes.MsgSerde
-	src1KeySerde commtypes.Serde
-	src1ValSerde commtypes.Serde
-	src2KeySerde commtypes.Serde
-	src2ValSerde commtypes.Serde
+	srcs      map[string]processor.Source
+	sink      *processor.MeteredSink
+	msgSerde  commtypes.MsgSerde
+	keySerdes []commtypes.Serde
+	valSerdes []commtypes.Serde
 }
 
 func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
@@ -204,16 +201,68 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, personsConfig))
 	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
 	sss := &srcSinkSerde{
-		src1:         src1,
-		src2:         src2,
-		sink:         sink,
-		src1KeySerde: commtypes.Uint64Serde{},
-		src1ValSerde: eventSerde,
-		src2KeySerde: commtypes.Uint64Serde{},
-		src2ValSerde: eventSerde,
-		msgSerde:     msgSerde,
+		srcs:      map[string]processor.Source{stream1.TopicName(): src1, stream2.TopicName(): src2},
+		sink:      sink,
+		keySerdes: []commtypes.Serde{commtypes.Uint64Serde{}, commtypes.Uint64Serde{}},
+		valSerdes: []commtypes.Serde{eventSerde, eventSerde},
+		msgSerde:  msgSerde,
 	}
 	return sss, nil
+}
+
+type kvtables struct {
+	toTab1 *processor.MeteredProcessor
+	tab1   store.KeyValueStore
+	toTab2 *processor.MeteredProcessor
+	tab2   store.KeyValueStore
+}
+
+func (h *q3JoinTableHandler) setupTables(ctx context.Context,
+	tabType store.TABLE_TYPE,
+	sss *srcSinkSerde,
+	mongoAddr string,
+) (
+	*kvtables,
+	error,
+) {
+	if tabType == store.IN_MEM {
+		compare := func(a, b treemap.Key) int {
+			valA := a.(uint64)
+			valB := b.(uint64)
+			if valA < valB {
+				return -1
+			} else if valA == valB {
+				return 0
+			} else {
+				return 1
+			}
+		}
+
+		toAuctionsTable, auctionsStore, err := processor.ToInMemKVTable("auctionsBySellerIDStore", compare)
+		if err != nil {
+			return nil, fmt.Errorf("toAucTab err: %v\n", err)
+		}
+
+		toPersonsTable, personsStore, err := processor.ToInMemKVTable("personsByIDStore", compare)
+		if err != nil {
+			return nil, fmt.Errorf("toPersonsTab err: %v\n", err)
+		}
+		return &kvtables{toAuctionsTable, auctionsStore, toPersonsTable, personsStore}, nil
+	} else if tabType == store.MONGODB {
+		toAuctionsTable, auctionsStore, err := processor.ToMongoDBKVTable(ctx, "auctionsBySellerIDStore",
+			mongoAddr, sss.keySerdes[0], sss.valSerdes[0])
+		if err != nil {
+			return nil, err
+		}
+		toPersonsTable, personsStore, err := processor.ToMongoDBKVTable(ctx, "personsByIDStore",
+			mongoAddr, sss.keySerdes[1], sss.valSerdes[1])
+		if err != nil {
+			return nil, err
+		}
+		return &kvtables{toAuctionsTable, auctionsStore, toPersonsTable, personsStore}, nil
+	} else {
+		return nil, fmt.Errorf("unrecognized table type")
+	}
 }
 
 type q3JoinTableProcessArgs struct {
@@ -237,40 +286,13 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	sss, err := h.getSrcSink(ctx, sp, auctionsStream,
 		personsStream, outputStream)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("getSrcSink err: %v\n", err),
-		}
+		return &common.FnOutput{Success: false, Message: fmt.Sprintf("getSrcSink err: %v\n", err)}
 	}
 
-	compare := func(a, b treemap.Key) int {
-		valA := a.(uint64)
-		valB := b.(uint64)
-		if valA < valB {
-			return -1
-		} else if valA == valB {
-			return 0
-		} else {
-			return 1
-		}
-	}
-
-	toAuctionsTable, auctionsStore, err := processor.ToInMemKVTable("auctionsBySellerIDStore", compare)
+	kvtabs, err := h.setupTables(ctx, store.TABLE_TYPE(sp.TableType), sss, sp.MongoAddr)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("toAucTab err: %v\n", err),
-		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-
-	toPersonsTable, personsStore, err := processor.ToInMemKVTable("personsByIDStore", compare)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("toPersonsTab err: %v\n", err),
-		}
-	}
-
 	joiner := processor.ValueJoinerWithKeyFunc(
 		func(readOnlyKey interface{}, leftVal interface{}, rightVal interface{}) interface{} {
 			event := rightVal.(*ntypes.Event)
@@ -282,18 +304,18 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			}
 		})
 
-	personJoinsAuctions := processor.NewMeteredProcessor(
-		processor.NewTableTableJoinProcessor(auctionsStore.Name(), auctionsStore, joiner))
-
 	auctionJoinsPersons := processor.NewMeteredProcessor(
-		processor.NewTableTableJoinProcessor(personsStore.Name(), personsStore,
+		processor.NewTableTableJoinProcessor(kvtabs.tab2.Name(), kvtabs.tab2, joiner))
+
+	personJoinsAuctions := processor.NewMeteredProcessor(
+		processor.NewTableTableJoinProcessor(kvtabs.tab1.Name(), kvtabs.tab1,
 			processor.ReverseValueJoinerWithKey(joiner)))
 
 	pJoinA := JoinWorkerFunc(func(ctx context.Context, m commtypes.Message,
 		sink *processor.MeteredSink, trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
 	) error {
 		// msg is person
-		_, err := toPersonsTable.ProcessAndReturn(ctx, m)
+		_, err := kvtabs.toTab2.ProcessAndReturn(ctx, m)
 		if err != nil {
 			return err
 		}
@@ -308,7 +330,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		sink *processor.MeteredSink, trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
 	) error {
 		// msg is auction
-		_, err := toAuctionsTable.ProcessAndReturn(ctx, m)
+		_, err := kvtabs.toTab2.ProcessAndReturn(ctx, m)
 		if err != nil {
 			return err
 		}
@@ -322,8 +344,8 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	sharedlog_stream.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
 
 	procArgs := &q3JoinTableProcessArgs{
-		auctionSrc:   sss.src1,
-		personSrc:    sss.src2,
+		auctionSrc:   sss.srcs[sp.InputTopicNames[0]].(*processor.MeteredSource),
+		personSrc:    sss.srcs[sp.InputTopicNames[1]].(*processor.MeteredSource),
 		sink:         sss.sink,
 		aJoinP:       aJoinP,
 		pJoinA:       pJoinA,
@@ -335,18 +357,15 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		ProcessFunc: h.process,
 	}
 	if sp.EnableTransaction {
-		srcs := make(map[string]processor.Source)
-		srcs[sp.InputTopicNames[0]] = sss.src1
-		srcs[sp.InputTopicNames[1]] = sss.src2
 		kvchangelogs := []*store.KVStoreChangelog{
-			store.NewKVStoreChangelog(auctionsStore, auctionsStream, sss.src1KeySerde, sss.src1ValSerde, sp.ParNum),
-			store.NewKVStoreChangelog(personsStore, personsStream, sss.src2KeySerde, sss.src2ValSerde, sp.ParNum),
+			store.NewKVStoreChangelog(kvtabs.tab1, auctionsStream, sss.keySerdes[0], sss.valSerdes[0], sp.ParNum),
+			store.NewKVStoreChangelog(kvtabs.tab2, personsStream, sss.keySerdes[1], sss.valSerdes[1], sp.ParNum),
 		}
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
 			ProcArgs:     procArgs,
 			Env:          h.env,
 			MsgSerde:     sss.msgSerde,
-			Srcs:         srcs,
+			Srcs:         sss.srcs,
 			OutputStream: outputStream,
 			QueryInput:   sp,
 			TransactionalId: fmt.Sprintf("q3JoinTable-%s-%d-%s",
@@ -362,15 +381,15 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 				procArgs.(*q3JoinTableProcessArgs).trackParFunc = trackParFunc
 			}, &task)
 		if ret != nil && ret.Success {
-			ret.Latencies["auctionsSrc"] = sss.src1.GetLatency()
-			ret.Latencies["personsSrc"] = sss.src2.GetLatency()
-			ret.Latencies["toAuctionsTable"] = toAuctionsTable.GetLatency()
-			ret.Latencies["toPersonsTable"] = toPersonsTable.GetLatency()
+			ret.Latencies["auctionsSrc"] = procArgs.auctionSrc.GetLatency()
+			ret.Latencies["personsSrc"] = procArgs.personSrc.GetLatency()
+			ret.Latencies["toAuctionsTable"] = kvtabs.toTab1.GetLatency()
+			ret.Latencies["toPersonsTable"] = kvtabs.toTab2.GetLatency()
 			ret.Latencies["personJoinsAuctions"] = personJoinsAuctions.GetLatency()
 			ret.Latencies["auctionJoinsPersons"] = auctionJoinsPersons.GetLatency()
 			ret.Latencies["sink"] = sss.sink.GetLatency()
-			ret.Consumed["auctionSrc"] = sss.src1.GetCount()
-			ret.Consumed["personsSrc"] = sss.src2.GetCount()
+			ret.Consumed["auctionSrc"] = procArgs.auctionSrc.GetCount()
+			ret.Consumed["personsSrc"] = procArgs.personSrc.GetCount()
 		}
 		return ret
 	}
@@ -380,15 +399,15 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {
-		ret.Latencies["auctionsSrc"] = sss.src1.GetLatency()
-		ret.Latencies["personsSrc"] = sss.src2.GetLatency()
-		ret.Latencies["toAuctionsTable"] = toAuctionsTable.GetLatency()
-		ret.Latencies["toPersonsTable"] = toPersonsTable.GetLatency()
+		ret.Latencies["auctionsSrc"] = procArgs.auctionSrc.GetLatency()
+		ret.Latencies["personsSrc"] = procArgs.personSrc.GetLatency()
+		ret.Latencies["toAuctionsTable"] = kvtabs.toTab1.GetLatency()
+		ret.Latencies["toPersonsTable"] = kvtabs.toTab2.GetLatency()
 		ret.Latencies["personJoinsAuctions"] = personJoinsAuctions.GetLatency()
 		ret.Latencies["auctionJoinsPersons"] = auctionJoinsPersons.GetLatency()
 		ret.Latencies["sink"] = sss.sink.GetLatency()
-		ret.Consumed["auctionSrc"] = sss.src1.GetCount()
-		ret.Consumed["personsSrc"] = sss.src2.GetCount()
+		ret.Consumed["auctionSrc"] = procArgs.auctionSrc.GetCount()
+		ret.Consumed["personsSrc"] = procArgs.personSrc.GetCount()
 	}
 	return ret
 }

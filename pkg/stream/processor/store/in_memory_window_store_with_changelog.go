@@ -154,3 +154,7 @@ func (st *InMemoryWindowStoreWithChangelog) BackwardFetchAll(
 ) error {
 	return st.windowStore.BackwardFetchAll(timeFrom, timeTo, iterFunc)
 }
+
+func (s *InMemoryWindowStoreWithChangelog) DropDatabase(ctx context.Context) {
+	panic("not implemented")
+}

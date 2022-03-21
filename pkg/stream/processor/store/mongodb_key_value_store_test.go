@@ -13,7 +13,6 @@ func getMongoDBKeyValueStore(ctx context.Context, t *testing.T) *MongoDBKeyValue
 		KeySerde:       commtypes.IntSerde{},
 		ValueSerde:     commtypes.StringSerde{},
 		DBName:         "test",
-		StoreName:      "test1",
 	})
 	if err != nil {
 		t.Fatal(err.Error())

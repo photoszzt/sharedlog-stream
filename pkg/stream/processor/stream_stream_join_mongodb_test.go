@@ -11,27 +11,18 @@ import (
 	"time"
 )
 
-func getStreamJoinMongoDB(ctx context.Context, joinWindows *JoinWindows, dbName string, t *testing.T) (
+func getStreamJoinMongoDB(ctx context.Context, joinWindows *JoinWindows, dbName1 string, dbName2 string, t *testing.T) (
 	func(ctx context.Context, m commtypes.Message) []commtypes.Message,
 	func(ctx context.Context, m commtypes.Message) []commtypes.Message,
-	*store.MongoDBKeyValueStore,
+	store.WindowStore,
+	store.WindowStore,
 ) {
-	mkvs, err := store.NewMongoDBKeyValueStore(ctx, &store.MongoDBConfig{
-		Addr:           "mongodb://localhost:27017",
-		CollectionName: "a",
-		KeySerde:       commtypes.IntSerde{},
-		ValueSerde:     commtypes.StringSerde{},
-		DBName:         dbName,
-		StoreName:      "test1",
-	})
+	mongoAddr := "mongodb://localhost:27017"
+	toWinTab1, winTab1, err := ToMongoDBWindowTable(ctx, dbName1, mongoAddr, joinWindows, commtypes.IntSerde{}, commtypes.StringSerde{})
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	toWinTab1, winTab1, err := ToMongoDBWindowTable(ctx, "tab1", mkvs, joinWindows, commtypes.IntSerde{}, commtypes.StringSerde{})
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	toWinTab2, winTab2, err := ToMongoDBWindowTable(ctx, "tab2", mkvs, joinWindows, commtypes.IntSerde{}, commtypes.StringSerde{})
+	toWinTab2, winTab2, err := ToMongoDBWindowTable(ctx, dbName2, mongoAddr, joinWindows, commtypes.IntSerde{}, commtypes.StringSerde{})
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -67,11 +58,9 @@ func getStreamJoinMongoDB(ctx context.Context, joinWindows *JoinWindows, dbName 
 		}
 		return joinedMsgs
 	}
-	err = mkvs.DropDatabase(ctx)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	return oneJoinTwo, twoJoinOne, mkvs
+	winTab1.DropDatabase(ctx)
+	winTab2.DropDatabase(ctx)
+	return oneJoinTwo, twoJoinOne, winTab1, winTab2
 }
 
 func TestStreamStreamJoinMongoDB(t *testing.T) {
@@ -81,12 +70,10 @@ func TestStreamStreamJoinMongoDB(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	oneJoinTwo, twoJoinOne, mkvs := getStreamJoinMongoDB(ctx, joinWindows, "db1", t)
+	oneJoinTwo, twoJoinOne, winTab1, winTab2 := getStreamJoinMongoDB(ctx, joinWindows, "db11", "db12", t)
 	StreamStreamJoin(ctx, oneJoinTwo, twoJoinOne, t)
-	err = mkvs.DropDatabase(ctx)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
+	winTab1.DropDatabase(ctx)
+	winTab2.DropDatabase(ctx)
 }
 
 func TestWindowingMongoDB(t *testing.T) {
@@ -95,12 +82,10 @@ func TestWindowingMongoDB(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	oneJoinTwo, twoJoinOne, mkvs := getStreamJoinMongoDB(ctx, joinWindows, "db2", t)
+	oneJoinTwo, twoJoinOne, winTab1, winTab2 := getStreamJoinMongoDB(ctx, joinWindows, "db21", "db22", t)
 	Windowing(ctx, oneJoinTwo, twoJoinOne, t)
-	err = mkvs.DropDatabase(ctx)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
+	winTab1.DropDatabase(ctx)
+	winTab2.DropDatabase(ctx)
 }
 
 func TestAsymmetricWindowingAfterMongoDB(t *testing.T) {
@@ -115,12 +100,10 @@ func TestAsymmetricWindowingAfterMongoDB(t *testing.T) {
 	}
 	debug.Fprintf(os.Stderr, "join windows: before %d, after %d, grace %d\n", joinWindows.beforeMs,
 		joinWindows.afterMs, joinWindows.graceMs)
-	oneJoinTwo, twoJoinOne, mkvs := getStreamJoinMongoDB(ctx, joinWindows, "db3", t)
+	oneJoinTwo, twoJoinOne, winTab1, winTab2 := getStreamJoinMongoDB(ctx, joinWindows, "db31", "dn32", t)
 	AsymmetricWindowingAfter(ctx, oneJoinTwo, twoJoinOne, t)
-	err = mkvs.DropDatabase(ctx)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
+	winTab1.DropDatabase(ctx)
+	winTab2.DropDatabase(ctx)
 }
 
 func TestAsymmetricWindowingBeforeMongoDB(t *testing.T) {
@@ -136,10 +119,8 @@ func TestAsymmetricWindowingBeforeMongoDB(t *testing.T) {
 	}
 	debug.Fprintf(os.Stderr, "join windows: before %d, after %d, grace %d\n", joinWindows.beforeMs,
 		joinWindows.afterMs, joinWindows.graceMs)
-	oneJoinTwo, twoJoinOne, mkvs := getStreamJoinMongoDB(ctx, joinWindows, "db4", t)
+	oneJoinTwo, twoJoinOne, winTab1, winTab2 := getStreamJoinMongoDB(ctx, joinWindows, "db41", "db42", t)
 	AsymmetricWindowingBefore(ctx, oneJoinTwo, twoJoinOne, t)
-	err = mkvs.DropDatabase(ctx)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
+	winTab1.DropDatabase(ctx)
+	winTab2.DropDatabase(ctx)
 }

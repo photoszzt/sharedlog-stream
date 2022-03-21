@@ -13,6 +13,7 @@ type QueryInput struct {
 	TestParams        map[string]bool `json:"testParams,omitempty"`
 	OutputTopicName   string          `json:"outputTopicName,omitempty"`
 	AppId             string          `json:"aid"`
+	MongoAddr         string          `json:"mongoAddr,omitempty"`
 	InputTopicNames   []string        `json:"inputTopicName,omitempty"`
 	CommitEveryMs     uint64          `json:"commEvery,omitempty"`
 	Duration          uint32          `json:"duration,omitempty"`
@@ -21,6 +22,7 @@ type QueryInput struct {
 	ParNum            uint8           `json:"ParNum,omitempty"`
 	EnableTransaction bool            `json:"enTran,omitempty"`
 	SerdeFormat       uint8           `json:"serdeFormat,omitempty"`
+	TableType         uint8           `json:"tabT,omitempty"`
 }
 
 type ConfigScaleInput struct {

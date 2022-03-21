@@ -15,7 +15,6 @@ func getMongoDBWindowStore(ctx context.Context, retainDuplicates bool, t *testin
 		KeySerde:       commtypes.IntSerde{},
 		ValueSerde:     commtypes.StringSerde{},
 		DBName:         "test",
-		StoreName:      "test1",
 	})
 	if err != nil {
 		t.Fatal(err.Error())

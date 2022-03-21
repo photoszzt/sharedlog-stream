@@ -216,3 +216,7 @@ func (s *BaseSegmentedBytesStore) Get(ctx context.Context, key []byte) ([]byte, 
 	}
 	return segment.Get(ctx, key)
 }
+
+func (s *BaseSegmentedBytesStore) DropDatabase(ctx context.Context) {
+	s.segments.Destroy(ctx)
+}

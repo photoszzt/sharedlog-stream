@@ -202,3 +202,7 @@ func (rws *SegmentedWindowStore) BackwardFetchAll(timeFrom time.Time, timeTo tim
 func (rws *SegmentedWindowStore) IterAll(iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error {
 	panic("not implemented")
 }
+
+func (rws *SegmentedWindowStore) DropDatabase(ctx context.Context) {
+	rws.bytesStore.DropDatabase(ctx)
+}

@@ -130,3 +130,7 @@ func (s *BaseSegments) Segments(timeFrom int64, timeTo int64) []Segment {
 func (s *BaseSegments) GetSegmentNamesFromRemote(ctx context.Context) ([]string, error) {
 	panic("should not call base version")
 }
+
+func (s *BaseSegments) Destroy(ctx context.Context) {
+	panic("should not call base version")
+}
