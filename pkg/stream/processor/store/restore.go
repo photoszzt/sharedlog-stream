@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"os"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -102,6 +103,13 @@ func RestoreWindowStateStore(
 				return fmt.Errorf("msg serde decode failed: %v", err)
 			}
 			if wschangelog.keyWindowTsSerde != nil {
+				debug.Fprintf(os.Stderr, "offset: %x\n", currentOffset)
+				debug.Fprint(os.Stderr, "RestoreWindowStateStore encoded\n")
+				debug.PrintByteSlice(msg.Payload)
+				debug.Fprint(os.Stderr, "RestoreWindowStateStore kts: \n")
+				debug.PrintByteSlice(keyWinBytes)
+				debug.Fprint(os.Stderr, "RestoreWindowStateStore val: \n")
+				debug.PrintByteSlice(valBytes)
 				keyWinTmp, err := wschangelog.keyWindowTsSerde.Decode(keyWinBytes)
 				if err != nil {
 					return fmt.Errorf("keyWindowTsSerde decode failed: %v", err)

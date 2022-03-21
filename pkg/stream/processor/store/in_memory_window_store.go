@@ -323,7 +323,46 @@ func (s *InMemoryWindowStore) FetchAll(
 	timeTo time.Time,
 	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
-	panic("not implemented")
+	s.removeExpiredSegments()
+
+	tsFrom := timeFrom.UnixMilli()
+	tsTo := timeTo.UnixMilli()
+
+	if tsFrom > tsTo {
+		return nil
+	}
+
+	minTime := s.observedStreamTime - s.retentionPeriod + 1
+	if minTime < tsFrom {
+		minTime = tsFrom
+	}
+
+	if tsTo < minTime {
+		return nil
+	}
+	err := s.store.IterateRange(tsFrom, tsTo, func(ts concurrent_skiplist.KeyT, val concurrent_skiplist.ValueT) error {
+		curT := ts.(int64)
+		v := val.(*concurrent_skiplist.SkipList)
+		s.otrMu.Lock()
+		s.openedTimeRange[curT] = struct{}{}
+		s.otrMu.Unlock()
+		for i := v.Front(); i != nil; i = i.Next() {
+			k := i.Key()
+			if s.retainDuplicates {
+				ktTmp := i.Key().(VersionedKey)
+				k = ktTmp.Key
+			}
+			err := iterFunc(curT, k, i.Value())
+			if err != nil {
+				return err
+			}
+		}
+		s.otrMu.Lock()
+		delete(s.openedTimeRange, curT)
+		s.otrMu.Unlock()
+		return nil
+	})
+	return err
 }
 
 func (s *InMemoryWindowStore) BackwardFetchAll(

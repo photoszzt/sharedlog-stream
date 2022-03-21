@@ -67,5 +67,7 @@ func main() {
 	case "restore":
 		response := common.FnOutput{}
 		invokeTest(client, "restoreKV", "restoreKV", &response)
+		response = common.FnOutput{}
+		invokeTest(client, "restoreWin", "restoreWin", &response)
 	}
 }
