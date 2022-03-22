@@ -18,6 +18,7 @@ type KeyValueStore interface {
 	PutIfAbsent(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) (commtypes.ValueT, error)
 	PutAll(context.Context, []*commtypes.Message) error
 	Delete(ctx context.Context, key commtypes.KeyT) error
+	TableType() TABLE_TYPE
 }
 
 type Segment interface {

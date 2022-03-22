@@ -206,3 +206,7 @@ func (rws *SegmentedWindowStore) IterAll(iterFunc func(int64, commtypes.KeyT, co
 func (rws *SegmentedWindowStore) DropDatabase(ctx context.Context) {
 	rws.bytesStore.DropDatabase(ctx)
 }
+
+func (rws *SegmentedWindowStore) TableType() TABLE_TYPE {
+	return rws.bytesStore.TableType()
+}

@@ -87,8 +87,8 @@ func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	return src, sink, nil
 }
 
-func (h *q5AuctionBids) getCountAggProc(sp *common.QueryInput, msgSerde commtypes.MsgSerde,
-) (*processor.MeteredProcessor, *store.InMemoryWindowStoreWithChangelog, error) {
+func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde,
+) (*processor.MeteredProcessor, store.WindowStore, error) {
 	hopWindow, err := processor.NewTimeWindowsNoGrace(time.Duration(10) * time.Second)
 	if err != nil {
 		return nil, nil, err
@@ -97,13 +97,7 @@ func (h *q5AuctionBids) getCountAggProc(sp *common.QueryInput, msgSerde commtype
 	if err != nil {
 		return nil, nil, err
 	}
-	countStoreName := "auctionBidsCountStore"
-	changelogName := countStoreName + "-changelog"
-	changelog, err := sharedlog_stream.NewShardedSharedLogStream(h.env, changelogName, sp.NumOutPartition,
-		commtypes.SerdeFormat(sp.SerdeFormat))
-	if err != nil {
-		return nil, nil, fmt.Errorf("NewShardedSharedLogStream failed: %v", err)
-	}
+
 	var vtSerde commtypes.Serde
 	if sp.SerdeFormat == uint8(commtypes.JSON) {
 		vtSerde = commtypes.ValueTimestampJSONSerde{
@@ -116,31 +110,60 @@ func (h *q5AuctionBids) getCountAggProc(sp *common.QueryInput, msgSerde commtype
 	} else {
 		return nil, nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat)
 	}
-	countMp := &store.MaterializeParam{
-		KeySerde:   commtypes.Uint64Serde{},
-		ValueSerde: vtSerde,
-		MsgSerde:   msgSerde,
-		StoreName:  countStoreName,
-		Changelog:  changelog,
-		Comparable: concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
-			l := lhs.(uint64)
-			r := rhs.(uint64)
-			if l < r {
-				return -1
-			} else if l == r {
-				return 0
-			} else {
-				return 1
-			}
-		}),
-		ParNum: sp.ParNum,
-	}
-	countWindowStore, err := store.NewInMemoryWindowStoreWithChangelog(
-		hopWindow.MaxSize()+hopWindow.GracePeriodMs(),
-		hopWindow.MaxSize(), false, countMp,
-	)
-	if err != nil {
-		return nil, nil, err
+	var countWindowStore store.WindowStore
+	countStoreName := "auctionBidsCountStore"
+	if sp.TableType == uint8(store.IN_MEM) {
+		changelogName := countStoreName + "-changelog"
+		changelog, err := sharedlog_stream.NewShardedSharedLogStream(h.env, changelogName, sp.NumOutPartition,
+			commtypes.SerdeFormat(sp.SerdeFormat))
+		if err != nil {
+			return nil, nil, fmt.Errorf("NewShardedSharedLogStream failed: %v", err)
+		}
+		countMp := &store.MaterializeParam{
+			KeySerde:   commtypes.Uint64Serde{},
+			ValueSerde: vtSerde,
+			MsgSerde:   msgSerde,
+			StoreName:  countStoreName,
+			Changelog:  changelog,
+			Comparable: concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
+				l := lhs.(uint64)
+				r := rhs.(uint64)
+				if l < r {
+					return -1
+				} else if l == r {
+					return 0
+				} else {
+					return 1
+				}
+			}),
+			ParNum: sp.ParNum,
+		}
+		countWindowStore, err = store.NewInMemoryWindowStoreWithChangelog(
+			hopWindow.MaxSize()+hopWindow.GracePeriodMs(),
+			hopWindow.MaxSize(), false, countMp,
+		)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else if sp.TableType == uint8(store.MONGODB) {
+		mkvs, err := store.NewMongoDBKeyValueStore(ctx, &store.MongoDBConfig{
+			Addr:           sp.MongoAddr,
+			CollectionName: countStoreName,
+			DBName:         countStoreName,
+			KeySerde:       nil,
+			ValueSerde:     nil,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		byteStore, err := store.NewMongoDBSegmentedBytesStore(ctx, countStoreName,
+			hopWindow.MaxSize()+hopWindow.GracePeriodMs(),
+			&store.WindowKeySchema{}, mkvs)
+		if err != nil {
+			return nil, nil, err
+		}
+		countWindowStore = store.NewSegmentedWindowStore(byteStore, false, hopWindow.MaxSize(),
+			commtypes.Uint64Serde{}, vtSerde)
 	}
 	countProc := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(countWindowStore,
 		processor.InitializerFunc(func() interface{} { return uint64(0) }),
@@ -263,7 +286,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			Message: err.Error(),
 		}
 	}
-	countProc, countStore, err := h.getCountAggProc(sp, msgSerde)
+	countProc, countStore, err := h.getCountAggProc(ctx, sp, msgSerde)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -305,6 +328,23 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	if sp.EnableTransaction {
 		srcs := make(map[string]processor.Source)
 		srcs[sp.InputTopicNames[0]] = src
+		var wsc []*store.WindowStoreChangelog
+		if countStore.TableType() == store.IN_MEM {
+			cstore := countStore.(*store.InMemoryWindowStoreWithChangelog)
+			wsc = []*store.WindowStoreChangelog{
+				store.NewWindowStoreChangelog(
+					cstore,
+					cstore.MaterializeParam().Changelog,
+					cstore.KeyWindowTsSerde(),
+					cstore.MaterializeParam().KeySerde,
+					cstore.MaterializeParam().ValueSerde, 0),
+			}
+		} else if countStore.TableType() == store.MONGODB {
+			//TODO: MONGO DB
+			wsc = nil
+		} else {
+			panic("unrecognized table type")
+		}
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
 			ProcArgs:     procArgs,
 			Env:          h.env,
@@ -313,19 +353,12 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			QueryInput:   sp,
 			TransactionalId: fmt.Sprintf("q5AuctionBids-%s-%d-%s", sp.InputTopicNames[0],
 				sp.ParNum, sp.OutputTopicName),
-			FixedOutParNum: 0,
-			WindowStoreChangelogs: []*store.WindowStoreChangelog{
-				store.NewWindowStoreChangelog(
-					countStore,
-					countStore.MaterializeParam().Changelog,
-					countStore.KeyWindowTsSerde(),
-					countStore.MaterializeParam().KeySerde,
-					countStore.MaterializeParam().ValueSerde, 0),
-			},
-			KVChangelogs: nil,
-			MsgSerde:     msgSerde,
-			CHash:        h.cHash,
-			CHashMu:      &h.cHashMu,
+			FixedOutParNum:        0,
+			WindowStoreChangelogs: wsc,
+			KVChangelogs:          nil,
+			MsgSerde:              msgSerde,
+			CHash:                 h.cHash,
+			CHashMu:               &h.cHashMu,
 		}
 		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {

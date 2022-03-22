@@ -99,3 +99,31 @@ func ToMongoDBWindowTable(
 	toTableProc := NewMeteredProcessor(NewStoreToWindowTableProcessor(wstore))
 	return toTableProc, wstore, nil
 }
+
+func CreateMongoDBWindoeTable(
+	ctx context.Context,
+	storeName string,
+	mongoAddr string,
+	retention int64,
+	windowSize int64,
+	keySerde commtypes.Serde,
+	valSerde commtypes.Serde,
+) (store.WindowStore, error) {
+	mkvs, err := store.NewMongoDBKeyValueStore(ctx, &store.MongoDBConfig{
+		Addr:           mongoAddr,
+		CollectionName: storeName,
+		DBName:         storeName,
+		KeySerde:       nil,
+		ValueSerde:     nil,
+	})
+	if err != nil {
+		return nil, err
+	}
+	byteStore, err := store.NewMongoDBSegmentedBytesStore(ctx, storeName,
+		retention, &store.WindowKeySchema{}, mkvs)
+	if err != nil {
+		return nil, err
+	}
+	wstore := store.NewSegmentedWindowStore(byteStore, true, windowSize, keySerde, valSerde)
+	return wstore, nil
+}

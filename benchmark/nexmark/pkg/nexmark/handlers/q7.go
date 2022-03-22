@@ -216,32 +216,47 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		}
 	}
 	maxPriceBidStoreName := "max-price-bid-tab"
-	mp := &store.MaterializeParam{
-		KeySerde:   commtypes.Uint64Serde{},
-		ValueSerde: vtSerde,
-		StoreName:  maxPriceBidStoreName,
-		ParNum:     input.ParNum,
-		Changelog:  outputStream,
-		MsgSerde:   msgSerde,
-		Comparable: concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
-			l := lhs.(uint64)
-			r := rhs.(uint64)
-			if l < r {
-				return -1
-			} else if l == r {
-				return 0
-			} else {
-				return 1
-			}
-		}),
-	}
-	wstore, err := store.NewInMemoryWindowStoreWithChangelog(tw.MaxSize()+tw.GracePeriodMs(),
-		tw.MaxSize(), false, mp)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
+	var wstore store.WindowStore
+	if input.TableType == uint8(store.IN_MEM) {
+		mp := &store.MaterializeParam{
+			KeySerde:   commtypes.Uint64Serde{},
+			ValueSerde: vtSerde,
+			StoreName:  maxPriceBidStoreName,
+			ParNum:     input.ParNum,
+			Changelog:  outputStream,
+			MsgSerde:   msgSerde,
+			Comparable: concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
+				l := lhs.(uint64)
+				r := rhs.(uint64)
+				if l < r {
+					return -1
+				} else if l == r {
+					return 0
+				} else {
+					return 1
+				}
+			}),
 		}
+		wstore, err = store.NewInMemoryWindowStoreWithChangelog(tw.MaxSize()+tw.GracePeriodMs(),
+			tw.MaxSize(), false, mp)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: err.Error(),
+			}
+		}
+	} else if input.TableType == uint8(store.MONGODB) {
+		wstore, err = processor.CreateMongoDBWindoeTable(ctx, maxPriceBidStoreName,
+			input.MongoAddr, tw.MaxSize()+tw.GracePeriodMs(), tw.MaxSize(),
+			commtypes.Uint64Serde{}, vtSerde)
+		if err != nil {
+			return &common.FnOutput{
+				Success: false,
+				Message: err.Error(),
+			}
+		}
+	} else {
+		panic("unrecognized table type")
 	}
 
 	maxPriceBid := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(wstore,
@@ -288,6 +303,23 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 	if input.EnableTransaction {
 		srcs := make(map[string]processor.Source)
 		srcs[input.InputTopicNames[0]] = src
+		var wsc []*store.WindowStoreChangelog
+		if input.TableType == uint8(store.IN_MEM) {
+			wstore_mem := wstore.(*store.InMemoryWindowStoreWithChangelog)
+			wsc = []*store.WindowStoreChangelog{
+				store.NewWindowStoreChangelog(wstore,
+					wstore_mem.MaterializeParam().Changelog,
+					wstore_mem.KeyWindowTsSerde(),
+					wstore_mem.MaterializeParam().KeySerde,
+					wstore_mem.MaterializeParam().ValueSerde,
+					wstore_mem.MaterializeParam().ParNum),
+			}
+		} else if input.TableType == uint8(store.MONGODB) {
+			// TODO: MONGODB
+			wsc = nil
+		} else {
+			panic("unrecognized table type")
+		}
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
 			ProcArgs:     procArgs,
 			Env:          h.env,
@@ -296,18 +328,11 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 			QueryInput:   input,
 			TransactionalId: fmt.Sprintf("processQ7ProcessArgs-%s-%d-%s",
 				input.InputTopicNames[0], input.NumInPartition, input.OutputTopicName),
-			FixedOutParNum: input.ParNum,
-			MsgSerde:       msgSerde,
-			WindowStoreChangelogs: []*store.WindowStoreChangelog{
-				store.NewWindowStoreChangelog(wstore,
-					wstore.MaterializeParam().Changelog,
-					wstore.KeyWindowTsSerde(),
-					wstore.MaterializeParam().KeySerde,
-					wstore.MaterializeParam().ValueSerde,
-					wstore.MaterializeParam().ParNum),
-			},
-			CHash:   nil,
-			CHashMu: nil,
+			FixedOutParNum:        input.ParNum,
+			MsgSerde:              msgSerde,
+			WindowStoreChangelogs: wsc,
+			CHash:                 nil,
+			CHashMu:               nil,
 		}
 		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {

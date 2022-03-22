@@ -376,3 +376,7 @@ func (s *InMemoryWindowStore) BackwardFetchAll(
 func (s *InMemoryWindowStore) DropDatabase(ctx context.Context) {
 	panic("not implemented")
 }
+
+func (s *InMemoryWindowStore) TableType() TABLE_TYPE {
+	return IN_MEM
+}

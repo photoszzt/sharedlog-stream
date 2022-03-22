@@ -24,6 +24,10 @@ func (st *KeyValueStoreWithChangelog) Init(sctx StoreContext) {
 	sctx.RegisterKeyValueStore(st)
 }
 
+func (st *KeyValueStoreWithChangelog) MaterializeParam() *MaterializeParam {
+	return st.mp
+}
+
 func (st *KeyValueStoreWithChangelog) Name() string {
 	return st.mp.StoreName
 }
@@ -147,4 +151,8 @@ func (st *KeyValueStoreWithChangelog) PrefixScan(prefix interface{},
 	iterFunc func(commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	panic("not implemented")
+}
+
+func (st *KeyValueStoreWithChangelog) TableType() TABLE_TYPE {
+	return st.kvstore.TableType()
 }

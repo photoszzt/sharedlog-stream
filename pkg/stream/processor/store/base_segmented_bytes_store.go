@@ -15,6 +15,7 @@ type BaseSegmentedBytesStore struct {
 	segments           Segments
 	name               string
 	observedStreamTime int64
+	tableType          TABLE_TYPE
 }
 
 var _ = SegmentedBytesStore(&BaseSegmentedBytesStore{})
@@ -54,6 +55,7 @@ func NewMongoDBSegmentedBytesStore(ctx context.Context, name string,
 		keySchema:          keySchema,
 		observedStreamTime: -1,
 		segments:           segs,
+		tableType:          MONGODB,
 	}, nil
 }
 
@@ -219,4 +221,8 @@ func (s *BaseSegmentedBytesStore) Get(ctx context.Context, key []byte) ([]byte, 
 
 func (s *BaseSegmentedBytesStore) DropDatabase(ctx context.Context) {
 	s.segments.Destroy(ctx)
+}
+
+func (s *BaseSegmentedBytesStore) TableType() TABLE_TYPE {
+	return s.tableType
 }

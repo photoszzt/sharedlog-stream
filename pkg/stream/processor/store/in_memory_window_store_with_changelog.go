@@ -158,3 +158,7 @@ func (st *InMemoryWindowStoreWithChangelog) BackwardFetchAll(
 func (s *InMemoryWindowStoreWithChangelog) DropDatabase(ctx context.Context) {
 	panic("not implemented")
 }
+
+func (s *InMemoryWindowStoreWithChangelog) TableType() TABLE_TYPE {
+	return IN_MEM
+}

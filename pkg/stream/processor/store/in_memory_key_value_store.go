@@ -163,3 +163,7 @@ func (st *InMemoryKeyValueStore) PrefixScan(prefix interface{}, prefixKeyEncoder
 ) error {
 	panic("not implemented")
 }
+
+func (st *InMemoryKeyValueStore) TableType() TABLE_TYPE {
+	return IN_MEM
+}

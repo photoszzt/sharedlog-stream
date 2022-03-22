@@ -8,6 +8,7 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sync"
 
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
@@ -91,6 +92,37 @@ func joinProc(
 		}
 	}
 	out <- nil
+}
+
+func joinProcSerial(
+	ctx context.Context,
+	procArgs *joinProcArgs,
+) *common.FnOutput {
+	gotMsgs, err := procArgs.src.Consume(ctx, procArgs.parNum)
+	if err != nil {
+		if xerrors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+			debug.Fprint(os.Stderr, "timeout, gen output\n")
+			return &common.FnOutput{Success: true, Message: err.Error()}
+		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
+	}
+	for _, msg := range gotMsgs {
+		procArgs.offMu.Lock()
+		procArgs.currentOffset[procArgs.src.TopicName()] = msg.LogSeqNum
+		procArgs.offMu.Unlock()
+
+		st := msg.Msg.Value.(commtypes.StreamTimeExtractor)
+		ts, err := st.ExtractStreamTime()
+		if err != nil {
+			return &common.FnOutput{Success: false, Message: fmt.Sprintf("fail to extract timestamp: %v", err)}
+		}
+		msg.Msg.Timestamp = ts
+		err = procArgs.runner(ctx, msg.Msg, procArgs.sink, procArgs.trackParFunc)
+		if err != nil {
+			return &common.FnOutput{Success: false, Message: err.Error()}
+		}
+	}
+	return nil
 }
 
 func pushMsgsToSink(

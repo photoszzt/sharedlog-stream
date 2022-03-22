@@ -194,20 +194,33 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		}
 	}
 	maxBidStoreName := "maxBidsKVStore"
-	mp := &store.MaterializeParam{
-		KeySerde:   seSerde,
-		ValueSerde: vtSerde,
-		MsgSerde:   msgSerde,
-		StoreName:  maxBidStoreName,
-		Changelog:  output_stream,
-		ParNum:     sp.ParNum,
+	var kvstore store.KeyValueStore
+	if sp.TableType == uint8(store.IN_MEM) {
+		mp := &store.MaterializeParam{
+			KeySerde:   seSerde,
+			ValueSerde: vtSerde,
+			MsgSerde:   msgSerde,
+			StoreName:  maxBidStoreName,
+			Changelog:  output_stream,
+			ParNum:     sp.ParNum,
+		}
+		inMemStore := store.NewInMemoryKeyValueStore(mp.StoreName, func(a, b treemap.Key) int {
+			ka := a.(*ntypes.StartEndTime)
+			kb := b.(*ntypes.StartEndTime)
+			return ntypes.CompareStartEndTime(ka, kb)
+		})
+		kvstore = store.NewKeyValueStoreWithChangelog(mp, inMemStore, false)
+	} else if sp.TableType == uint8(store.MONGODB) {
+		kvstore, err = store.NewMongoDBKeyValueStore(ctx, &store.MongoDBConfig{
+			Addr:           sp.MongoAddr,
+			CollectionName: maxBidStoreName,
+			DBName:         maxBidStoreName,
+			KeySerde:       seSerde,
+			ValueSerde:     vtSerde,
+		})
+	} else {
+		panic("unrecognized table type")
 	}
-	inMemStore := store.NewInMemoryKeyValueStore(mp.StoreName, func(a, b treemap.Key) int {
-		ka := a.(*ntypes.StartEndTime)
-		kb := b.(*ntypes.StartEndTime)
-		return ntypes.CompareStartEndTime(ka, kb)
-	})
-	kvstore := store.NewKeyValueStoreWithChangelog(mp, inMemStore, false)
 	maxBid := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor(kvstore, processor.InitializerFunc(func() interface{} {
 		return uint64(0)
 	}), processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
@@ -254,6 +267,20 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	if sp.EnableTransaction {
 		srcs := make(map[string]processor.Source)
 		srcs[sp.InputTopicNames[0]] = src
+		var kvc []*store.KVStoreChangelog
+		if sp.TableType == uint8(store.IN_MEM) {
+			kvstore_mem := kvstore.(*store.KeyValueStoreWithChangelog)
+			mp := kvstore_mem.MaterializeParam()
+			kvc = []*store.KVStoreChangelog{
+				store.NewKVStoreChangelog(kvstore, mp.Changelog,
+					mp.KeySerde, mp.ValueSerde, sp.ParNum),
+			}
+		} else if sp.TableType == uint8(store.MONGODB) {
+			// TODO: MONGODB
+			kvc = nil
+		} else {
+			panic("unrecognized table type")
+		}
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
 			ProcArgs:     procArgs,
 			Env:          h.env,
@@ -262,11 +289,8 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			QueryInput:   sp,
 			TransactionalId: fmt.Sprintf("q5MaxBid-%s-%d-%s",
 				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
-			FixedOutParNum: sp.ParNum,
-			KVChangelogs: []*store.KVStoreChangelog{
-				store.NewKVStoreChangelog(kvstore, mp.Changelog,
-					mp.KeySerde, mp.ValueSerde, sp.ParNum),
-			},
+			FixedOutParNum:        sp.ParNum,
+			KVChangelogs:          kvc,
 			WindowStoreChangelogs: nil,
 			MsgSerde:              msgSerde,
 			CHash:                 nil,

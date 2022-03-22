@@ -26,4 +26,5 @@ type WindowStore interface {
 		iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error
 	IterAll(iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error
 	DropDatabase(ctx context.Context)
+	TableType() TABLE_TYPE
 }

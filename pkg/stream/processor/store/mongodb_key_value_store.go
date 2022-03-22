@@ -342,3 +342,7 @@ func (s *MongoDBKeyValueStore) PrefixScan(prefix interface{}, prefixKeyEncoder c
 ) error {
 	panic("not implemented")
 }
+
+func (s *MongoDBKeyValueStore) TableType() TABLE_TYPE {
+	return MONGODB
+}

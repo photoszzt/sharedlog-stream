@@ -150,7 +150,8 @@ func getInOutStreams(
 }
 
 type srcSinkSerde struct {
-	srcs      map[string]processor.Source
+	src1      *processor.MeteredSource
+	src2      *processor.MeteredSource
 	sink      *processor.MeteredSink
 	msgSerde  commtypes.MsgSerde
 	keySerdes []commtypes.Serde
@@ -201,7 +202,8 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, personsConfig))
 	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
 	sss := &srcSinkSerde{
-		srcs:      map[string]processor.Source{stream1.TopicName(): src1, stream2.TopicName(): src2},
+		src1:      src1,
+		src2:      src2,
 		sink:      sink,
 		keySerdes: []commtypes.Serde{commtypes.Uint64Serde{}, commtypes.Uint64Serde{}},
 		valSerdes: []commtypes.Serde{eventSerde, eventSerde},
@@ -344,8 +346,8 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	sharedlog_stream.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
 
 	procArgs := &q3JoinTableProcessArgs{
-		auctionSrc:   sss.srcs[sp.InputTopicNames[0]].(*processor.MeteredSource),
-		personSrc:    sss.srcs[sp.InputTopicNames[1]].(*processor.MeteredSource),
+		auctionSrc:   sss.src1,
+		personSrc:    sss.src2,
 		sink:         sss.sink,
 		aJoinP:       aJoinP,
 		pJoinA:       pJoinA,
@@ -365,7 +367,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			ProcArgs:     procArgs,
 			Env:          h.env,
 			MsgSerde:     sss.msgSerde,
-			Srcs:         sss.srcs,
+			Srcs:         map[string]processor.Source{auctionsStream.TopicName(): sss.src1, personsStream.TopicName(): sss.src2},
 			OutputStream: outputStream,
 			QueryInput:   sp,
 			TransactionalId: fmt.Sprintf("q3JoinTable-%s-%d-%s",

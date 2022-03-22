@@ -26,6 +26,7 @@ type SegmentedBytesStore interface {
 	Put(ctx context.Context, key []byte, value []byte) error
 	Get(ctx context.Context, key []byte) ([]byte, bool, error)
 	DropDatabase(ctx context.Context)
+	TableType() TABLE_TYPE
 }
 
 type KeySchema interface {
