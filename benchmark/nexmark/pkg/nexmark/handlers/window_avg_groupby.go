@@ -3,18 +3,19 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
+	"golang.org/x/xerrors"
 )
 
 // groupBy(bid.Auction).
@@ -86,12 +87,11 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput, s
 		procStart := time.Now()
 		msgs, err := src.Consume(ctx, sp.ParNum)
 		if err != nil {
-			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+			if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
 					Success: true,
 					Message: err.Error(),
-					Latencies: map[string][]int{
-						"e2e":  latencies,
+					Latencies: map[string][]int{"e2e": latencies,
 						"sink": sink.GetLatency(),
 						"src":  src.GetLatency(),
 					},

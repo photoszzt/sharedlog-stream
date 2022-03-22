@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/concurrent_skiplist"
+	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -19,6 +19,7 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 
 	"cs.utexas.edu/zjia/faas/types"
+	"golang.org/x/xerrors"
 )
 
 type query7Handler struct {
@@ -100,7 +101,7 @@ func (h *query7Handler) process(
 	args := argsTmp.(*processQ7ProcessArgs)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {
-		if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
 			return h.currentOffset, &common.FnOutput{
 				Success: true,
 				Message: err.Error(),

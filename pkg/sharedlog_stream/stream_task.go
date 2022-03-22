@@ -384,7 +384,7 @@ L:
 		}
 		timeSinceTranStart := time.Since(commitTimer)
 		timeout := duration != 0 && time.Since(startTime) >= duration
-		if (commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout || idx == 10 {
+		if (commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout {
 			/*
 				if val, ok := args.QueryInput.TestParams["FailBeforeCommit"]; ok && val {
 					fmt.Fprintf(os.Stderr, "about to fail before commit")
@@ -471,8 +471,8 @@ L:
 					}
 					TrackOffsetAndCommit(ctx, consumedSeqNumConfigs, tm, &hasLiveTransaction, &trackConsumePar, retc)
 				}
-				elapsed := time.Since(procStart)
-				latencies = append(latencies, int(elapsed.Microseconds()))
+				// elapsed := time.Since(procStart)
+				// latencies = append(latencies, int(elapsed.Microseconds()))
 				ret.Latencies = map[string][]int{"e2e": latencies}
 				ret.Consumed = make(map[string]uint64)
 				ret.Duration = time.Since(startTime).Seconds()

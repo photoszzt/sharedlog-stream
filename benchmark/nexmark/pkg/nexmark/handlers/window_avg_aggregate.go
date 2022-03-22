@@ -3,12 +3,12 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -18,6 +18,7 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 
 	"cs.utexas.edu/zjia/faas/types"
+	"golang.org/x/xerrors"
 )
 
 // groupBy(bid.Auction).
@@ -169,7 +170,7 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput,
 		procStart := time.Now()
 		msgs, err := src.Consume(ctx, sp.ParNum)
 		if err != nil {
-			if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+			if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
 					Success: true,
 					Message: err.Error(),

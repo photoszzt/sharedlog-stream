@@ -7,13 +7,9 @@ import (
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
-
-	"golang.org/x/xerrors"
 )
 
-var (
-	ErrStreamSourceTimeout = xerrors.New("SharedLogStreamSource consume timeout")
-)
+var ()
 
 type SharedLogStreamSource struct {
 	keyDecoder   commtypes.Decoder
@@ -102,5 +98,5 @@ func (s *SharedLogStreamSource) Consume(ctx context.Context, parNum uint8) ([]co
 		}
 		return msgs, nil
 	}
-	return nil, ErrStreamSourceTimeout
+	return nil, errors.ErrStreamSourceTimeout
 }

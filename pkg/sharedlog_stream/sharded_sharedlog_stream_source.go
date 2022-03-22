@@ -89,5 +89,5 @@ func (s *ShardedSharedLogStreamSource) Consume(ctx context.Context, parNum uint8
 		}
 		return msgs, nil
 	}
-	return nil, ErrStreamSourceTimeout
+	return nil, errors.ErrStreamSourceTimeout
 }

@@ -422,6 +422,7 @@ func (tc *TransactionManager) AddTopicPartition(ctx context.Context, topic strin
 		return xerrors.Errorf("should begin transaction first")
 	}
 	debug.Assert(tc.checkTopicExistsInTopicStream(topic), fmt.Sprintf("topic %s's stream should be tracked", topic))
+	debug.Fprintf(os.Stderr, "tracking topic %s par %v\n", topic, partitions)
 	needToAppendToLog := false
 	parSet, ok := tc.currentTopicPartition[topic]
 	if !ok {

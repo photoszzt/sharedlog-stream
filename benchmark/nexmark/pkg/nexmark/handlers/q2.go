@@ -3,13 +3,13 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -17,6 +17,7 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 
 	"cs.utexas.edu/zjia/faas/types"
+	"golang.org/x/xerrors"
 )
 
 type query2Handler struct {
@@ -134,7 +135,7 @@ func (h *query2Handler) process(ctx context.Context, argsTmp interface{}) (map[s
 	args := argsTmp.(*query2ProcessArgs)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {
-		if errors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
 			return h.currentOffset, &common.FnOutput{
 				Success: true,
 				Message: err.Error(),

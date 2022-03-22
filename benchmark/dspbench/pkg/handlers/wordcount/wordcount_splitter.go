@@ -9,6 +9,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -96,7 +97,7 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context,
 	args := argsTmp.(*wordcountSplitterProcessArg)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {
-		if xerrors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
 			return h.currentOffset, &common.FnOutput{
 				Success: true,
 				Message: err.Error(),

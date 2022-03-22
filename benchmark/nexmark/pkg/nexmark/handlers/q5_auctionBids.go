@@ -9,6 +9,7 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/concurrent_skiplist"
+	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
@@ -189,7 +190,7 @@ func (h *q5AuctionBids) process(ctx context.Context, argsTmp interface{}) (map[s
 	args := argsTmp.(*q5AuctionBidsProcessArg)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {
-		if xerrors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
 			return h.currentOffset, &common.FnOutput{
 				Success: true,
 				Message: err.Error(),

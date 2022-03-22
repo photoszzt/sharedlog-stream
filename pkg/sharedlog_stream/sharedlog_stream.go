@@ -309,6 +309,7 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 				readMsgProc.CurReadMsgSeqNum = streamLogEntry.seqNum
 				readMsgProc.MsgBuff = append(readMsgProc.MsgBuff, commtypes.RawMsg{Payload: streamLogEntry.Payload,
 					LogSeqNum: streamLogEntry.seqNum, MsgSeqNum: streamLogEntry.MsgSeqNum})
+				debug.Fprintf(os.Stderr, "current buffer length: %d\n", len(readMsgProc.MsgBuff))
 				s.curReadMap[appKey] = readMsgProc
 				seqNumInSharedLog = logEntry.SeqNum + 1
 				continue

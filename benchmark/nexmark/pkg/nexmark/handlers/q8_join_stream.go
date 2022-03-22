@@ -163,8 +163,7 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	stream1 *sharedlog_stream.ShardedSharedLogStream,
 	stream2 *sharedlog_stream.ShardedSharedLogStream,
 	outputStream *sharedlog_stream.ShardedSharedLogStream,
-) (*srcSinkSerde, error,
-) {
+) (*srcSinkSerde, error) {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return nil, fmt.Errorf("get msg serde err: %v", err)
@@ -175,13 +174,13 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 		return nil, fmt.Errorf("get event serde err: %v", err)
 	}
 	auctionsConfig := &sharedlog_stream.SharedLogStreamConfig{
-		Timeout:      common.SrcConsumeTimeout,
+		Timeout:      time.Duration(sp.Duration) * time.Second,
 		KeyDecoder:   commtypes.Uint64Decoder{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
 	}
 	personsConfig := &sharedlog_stream.SharedLogStreamConfig{
-		Timeout:      common.SrcConsumeTimeout,
+		Timeout:      time.Duration(sp.Duration) * time.Second,
 		KeyDecoder:   commtypes.Uint64Decoder{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
@@ -281,6 +280,8 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: fmt.Sprintf("to table err: %v", err)}
 		}
+	} else {
+		panic("unrecognized table type")
 	}
 
 	joiner := processor.ValueJoinerWithKeyTsFunc(func(readOnlyKey interface{},

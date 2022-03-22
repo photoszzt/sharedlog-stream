@@ -7,8 +7,10 @@ import (
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sync"
+	"time"
 
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
@@ -66,7 +68,7 @@ func joinProc(
 	defer procArgs.wg.Done()
 	gotMsgs, err := procArgs.src.Consume(ctx, procArgs.parNum)
 	if err != nil {
-		if xerrors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
 			fmt.Fprint(os.Stderr, "timeout, gen output\n")
 			out <- &common.FnOutput{Success: true, Message: err.Error()}
 			return
@@ -100,7 +102,7 @@ func joinProcSerial(
 ) *common.FnOutput {
 	gotMsgs, err := procArgs.src.Consume(ctx, procArgs.parNum)
 	if err != nil {
-		if xerrors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
 			debug.Fprint(os.Stderr, "timeout, gen output\n")
 			return &common.FnOutput{Success: true, Message: err.Error()}
 		}
@@ -170,7 +172,7 @@ func getSrcSink(ctx context.Context, sp *common.QueryInput,
 		return nil, nil, nil, err
 	}
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
-		Timeout:      common.SrcConsumeTimeout,
+		Timeout:      time.Duration(sp.Duration) * time.Second,
 		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
@@ -202,7 +204,7 @@ func getSrcSinkUint64Key(
 		return nil, nil, nil, err
 	}
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
-		Timeout:      common.SrcConsumeTimeout,
+		Timeout:      time.Duration(sp.Duration) * time.Second,
 		MsgDecoder:   msgSerde,
 		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: eventSerde,

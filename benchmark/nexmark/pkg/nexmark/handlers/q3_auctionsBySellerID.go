@@ -9,6 +9,7 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
@@ -42,7 +43,7 @@ func (h *query3AuctionsBySellerIDHandler) process(
 	args := argsTmp.(*AuctionsBySellerIDProcessArgs)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {
-		if xerrors.Is(err, sharedlog_stream.ErrStreamSourceTimeout) {
+		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
 			return h.currentOffset, &common.FnOutput{
 				Success: true,
 				Message: err.Error(),
@@ -136,7 +137,7 @@ func CommonGetSrcSink(ctx context.Context, sp *common.QueryInput,
 		return nil, nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
-		Timeout:      common.SrcConsumeTimeout,
+		Timeout:      time.Duration(sp.Duration) * time.Second,
 		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,

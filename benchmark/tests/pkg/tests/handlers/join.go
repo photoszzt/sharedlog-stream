@@ -334,8 +334,7 @@ func joinProc(ctx context.Context,
 ) {
 	gotMsgs, err := src.Consume(ctx, 0)
 	if err != nil {
-		if errors.IsStreamEmptyError(err) || errors.IsStreamTimeoutError(err) ||
-			err == sharedlog_stream.ErrStreamSourceTimeout {
+		if errors.IsStreamEmptyError(err) || errors.IsStreamTimeoutError(err) || err == errors.ErrStreamSourceTimeout {
 			return
 		}
 		panic(err)
