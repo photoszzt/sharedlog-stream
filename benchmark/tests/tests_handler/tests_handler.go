@@ -16,6 +16,8 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewWinTabTestsHandler(env), nil
 	case "restore":
 		return handlers.NewTableRestoreHandler(env), nil
+	case "join":
+		return handlers.NewJoinHandler(env), nil
 	default:
 		return nil, fmt.Errorf("unknown function name %v", funcName)
 	}

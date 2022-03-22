@@ -45,14 +45,16 @@ type JoinWorkerFunc func(c context.Context, m commtypes.Message, sink *processor
 	trackParFunc sharedlog_stream.TrackKeySubStreamFunc) error
 
 type joinProcArgs struct {
-	src           *processor.MeteredSource
-	sink          *processor.MeteredSink
-	wg            *sync.WaitGroup
-	runner        JoinWorkerFunc
+	src    *processor.MeteredSource
+	sink   *processor.MeteredSink
+	wg     *sync.WaitGroup
+	runner JoinWorkerFunc
+
 	offMu         *sync.Mutex
 	currentOffset map[string]uint64
-	trackParFunc  sharedlog_stream.TrackKeySubStreamFunc
-	parNum        uint8
+
+	trackParFunc sharedlog_stream.TrackKeySubStreamFunc
+	parNum       uint8
 }
 
 func joinProc(

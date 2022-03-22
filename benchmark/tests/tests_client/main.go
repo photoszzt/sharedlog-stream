@@ -69,5 +69,8 @@ func main() {
 		invokeTest(client, "restoreKV", "restoreKV", &response)
 		response = common.FnOutput{}
 		invokeTest(client, "restoreWin", "restoreWin", &response)
+	case "join":
+		response := common.FnOutput{}
+		invokeTest(client, "streamStreamJoin", "streamStreamJoin", &response)
 	}
 }

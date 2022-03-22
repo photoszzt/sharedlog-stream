@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -271,12 +272,14 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 				}
 				readMsgProc, ok := s.curReadMap[appKey]
 				if streamLogEntry.IsControl {
+					debug.Fprintf(os.Stderr, "got control entry\n")
 					txnMarkTmp, err := s.txnMarkerSerde.Decode(streamLogEntry.Payload)
 					if err != nil {
 						return commtypes.EmptyAppIDGen, nil, err
 					}
 					txnMark := txnMarkTmp.(TxnMarker)
 					if txnMark.Mark == uint8(COMMIT) {
+						debug.Fprint(os.Stderr, "entry is commit\n")
 						if !ok {
 							log.Warn().Msgf("Hit commit marker but got no messages")
 						}
@@ -285,6 +288,7 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 						s.cursor = streamLogEntry.seqNum + 1
 						return appKey, msgBuf, nil
 					} else if txnMark.Mark == uint8(ABORT) {
+						debug.Fprint(os.Stderr, "entry is abort; continue\n")
 						// abort, drop the current buffered msgs
 						delete(s.curReadMap, appKey)
 						seqNumInSharedLog = logEntry.SeqNum + 1
@@ -303,7 +307,8 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 					continue
 				}
 				readMsgProc.CurReadMsgSeqNum = streamLogEntry.seqNum
-				readMsgProc.MsgBuff = append(readMsgProc.MsgBuff, commtypes.RawMsg{})
+				readMsgProc.MsgBuff = append(readMsgProc.MsgBuff, commtypes.RawMsg{Payload: streamLogEntry.Payload,
+					LogSeqNum: streamLogEntry.seqNum, MsgSeqNum: streamLogEntry.MsgSeqNum})
 				s.curReadMap[appKey] = readMsgProc
 				seqNumInSharedLog = logEntry.SeqNum + 1
 				continue

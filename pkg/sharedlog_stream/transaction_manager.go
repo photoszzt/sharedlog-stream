@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
 
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
@@ -379,6 +380,7 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 		for par := range partitions {
 			parNum := par
 			g.Go(func() error {
+				debug.Fprintf(os.Stderr, "append marker %d to stream %s\n", marker, stream.TopicName())
 				_, err = stream.Push(ectx, msg_encoded, parNum, true)
 				return err
 			})
@@ -469,6 +471,7 @@ func (tc *TransactionManager) RecordTopicStreams(topicToTrack string, stream sto
 		return
 	}
 	tc.topicStreams[topicToTrack] = stream
+	debug.Fprintf(os.Stderr, "tracking stream %s\n", topicToTrack)
 	stream.SetTaskId(tc.CurrentTaskId)
 	stream.SetTaskEpoch(tc.CurrentEpoch)
 }
