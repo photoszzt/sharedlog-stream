@@ -25,6 +25,6 @@ type WindowStore interface {
 	BackwardFetchAll(timeFrom time.Time, timeTo time.Time,
 		iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error
 	IterAll(iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error
-	DropDatabase(ctx context.Context)
+	DropDatabase(ctx context.Context) error
 	TableType() TABLE_TYPE
 }

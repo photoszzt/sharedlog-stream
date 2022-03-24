@@ -381,7 +381,7 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 			parNum := par
 			g.Go(func() error {
 				off, err := stream.Push(ectx, msg_encoded, parNum, true)
-				debug.Fprintf(os.Stderr, "append marker %d to stream %s offset %x\n", marker, stream.TopicName(), off)
+				debug.Fprintf(os.Stderr, "append marker %d to stream %s off %x\n", marker, stream.TopicName(), off)
 				return err
 			})
 		}

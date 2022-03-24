@@ -80,7 +80,9 @@ func (s *BaseSegments) GetOrCreateSegmentIfLive(ctx context.Context,
 	} else {
 		toReturn = nil
 	}
-	s.cleanupEarlierThan(ctx, minLiveSegment, cleanupExpiredMeta)
+	if err = s.cleanupEarlierThan(ctx, minLiveSegment, cleanupExpiredMeta); err != nil {
+		return nil, err
+	}
 	return toReturn, nil
 }
 
@@ -131,6 +133,6 @@ func (s *BaseSegments) GetSegmentNamesFromRemote(ctx context.Context) ([]string,
 	panic("should not call base version")
 }
 
-func (s *BaseSegments) Destroy(ctx context.Context) {
+func (s *BaseSegments) Destroy(ctx context.Context) error {
 	panic("should not call base version")
 }

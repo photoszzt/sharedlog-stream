@@ -234,7 +234,9 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	if err = tm.BeginTransaction(ctx); err != nil {
 		panic(err)
 	}
-	tm.AddTopicPartition(ctx, srcStream1.TopicName(), []uint8{0})
+	if err = tm.AddTopicPartition(ctx, srcStream1.TopicName(), []uint8{0}); err != nil {
+		panic(err)
+	}
 	for i := 0; i < 2; i++ {
 		_, err := pushMsgToStream(ctx, expected_keys[i],
 			&strTs{Val: fmt.Sprintf("A%d", expected_keys[i]), Ts: 0},
@@ -266,7 +268,9 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	if err = tm.BeginTransaction(ctx); err != nil {
 		panic(err)
 	}
-	tm.AddTopicPartition(ctx, srcStream2.TopicName(), []uint8{0})
+	if err = tm.AddTopicPartition(ctx, srcStream2.TopicName(), []uint8{0}); err != nil {
+		panic(err)
+	}
 	for i := 0; i < 2; i++ {
 		_, err := pushMsgToStream(ctx, expected_keys[i],
 			&strTs{Val: fmt.Sprintf("a%d", expected_keys[i]), Ts: 0},
@@ -298,9 +302,15 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	if err = tm.BeginTransaction(ctx); err != nil {
 		panic(err)
 	}
-	tm.AddTopicPartition(ctx, sinkStream.TopicName(), []uint8{0})
-	tm.AddTopicPartition(ctx, srcStream1.TopicName(), []uint8{0})
-	tm.AddTopicPartition(ctx, srcStream2.TopicName(), []uint8{0})
+	if err = tm.AddTopicPartition(ctx, sinkStream.TopicName(), []uint8{0}); err != nil {
+		panic(err)
+	}
+	if err = tm.AddTopicPartition(ctx, srcStream1.TopicName(), []uint8{0}); err != nil {
+		panic(err)
+	}
+	if err = tm.AddTopicPartition(ctx, srcStream2.TopicName(), []uint8{0}); err != nil {
+		panic(err)
+	}
 	joinProc(ctx, src1, sink, trackParFunc, oneJoinTwo)
 	joinProc(ctx, src2, sink, trackParFunc, twoJoinOne)
 	if err = tm.CommitTransaction(ctx); err != nil {

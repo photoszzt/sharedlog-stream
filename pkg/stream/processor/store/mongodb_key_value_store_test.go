@@ -23,31 +23,31 @@ func getMongoDBKeyValueStore(ctx context.Context, t *testing.T) *MongoDBKeyValue
 func TestMongoDBShouldNotIncludeDeletedFromRangeResult(t *testing.T) {
 	ctx := context.Background()
 	store := getMongoDBKeyValueStore(ctx, t)
-	store.client.Database("test").Drop(ctx)
+	checkErr(store.client.Database("test").Drop(ctx), t)
 	ShouldNotIncludeDeletedFromRangeResult(ctx, store, t)
-	store.client.Database("test").Drop(ctx)
+	checkErr(store.client.Database("test").Drop(ctx), t)
 }
 
 func TestMongoDBShouldDeleteIfSerializedValueIsNull(t *testing.T) {
 	ctx := context.Background()
 	store := getMongoDBKeyValueStore(ctx, t)
-	store.client.Database("test").Drop(ctx)
+	checkErr(store.client.Database("test").Drop(ctx), t)
 	ShouldDeleteIfSerializedValueIsNull(ctx, store, t)
-	store.client.Database("test").Drop(ctx)
+	checkErr(store.client.Database("test").Drop(ctx), t)
 }
 
 func TestMongoDBPutGetRange(t *testing.T) {
 	ctx := context.Background()
 	store := getMongoDBKeyValueStore(ctx, t)
-	store.client.Database("test").Drop(ctx)
+	checkErr(store.client.Database("test").Drop(ctx), t)
 	PutGetRange(ctx, store, t)
-	store.client.Database("test").Drop(ctx)
+	checkErr(store.client.Database("test").Drop(ctx), t)
 }
 
 func TestMongoDBRestore(t *testing.T) {
 	ctx := context.Background()
 	store := getMongoDBKeyValueStore(ctx, t)
-	store.client.Database("test").Drop(ctx)
+	checkErr(store.client.Database("test").Drop(ctx), t)
 	if err := store.Put(ctx, 0, "zero"); err != nil {
 		t.Fatal(err.Error())
 	}
@@ -62,13 +62,13 @@ func TestMongoDBRestore(t *testing.T) {
 	}
 	store2 := getMongoDBKeyValueStore(ctx, t)
 	ret := make(map[int]string)
-	store2.Range(ctx, nil, nil, func(kt commtypes.KeyT, vt commtypes.ValueT) error {
+	checkErr(store2.Range(ctx, nil, nil, func(kt commtypes.KeyT, vt commtypes.ValueT) error {
 		ret[kt.(int)] = vt.(string)
 		return nil
-	})
+	}), t)
 	expected := map[int]string{
 		0: "zero", 1: "one", 2: "two", 3: "three",
 	}
 	checkMapEqual(t, expected, ret)
-	store.client.Database("test").Drop(ctx)
+	checkErr(store.client.Database("test").Drop(ctx), t)
 }

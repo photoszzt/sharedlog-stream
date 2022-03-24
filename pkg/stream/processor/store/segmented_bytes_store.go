@@ -25,18 +25,18 @@ type SegmentedBytesStore interface {
 	RemoveWithTs(key []byte, timestamp uint64)
 	Put(ctx context.Context, key []byte, value []byte) error
 	Get(ctx context.Context, key []byte) ([]byte, bool, error)
-	DropDatabase(ctx context.Context)
+	DropDatabase(ctx context.Context) error
 	TableType() TABLE_TYPE
 }
 
 type KeySchema interface {
 	// Given a range of record keys and a time, construct a Segmented key that represents
 	// the upper range of keys to search when performing range queries.
-	UpperRange(key []byte, to int64) []byte
+	UpperRange(key []byte, to int64) ([]byte, error)
 	LowerRange(key []byte, from int64) []byte
 	ToStoreBinaryKeyPrefix(key []byte, ts int64) ([]byte, error)
-	UpperRangeFixedSize(key []byte, to int64) []byte
-	LowerRangeFixedSize(key []byte, from int64) []byte
+	UpperRangeFixedSize(key []byte, to int64) ([]byte, error)
+	LowerRangeFixedSize(key []byte, from int64) ([]byte, error)
 	SegmentTimestamp(key []byte) int64
 	HasNextCondition(curKey []byte, binaryKeyFrom []byte, binaryKeyTo []byte,
 		from int64, to int64) (bool, int64)

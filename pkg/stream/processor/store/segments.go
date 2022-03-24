@@ -15,5 +15,5 @@ type Segments interface {
 	Segments(timeFrom int64, timeTo int64) []Segment
 	CleanupExpiredMeta(ctx context.Context, expired []*KeySegment) error
 	GetSegmentNamesFromRemote(ctx context.Context) ([]string, error)
-	Destroy(ctx context.Context)
+	Destroy(ctx context.Context) error
 }

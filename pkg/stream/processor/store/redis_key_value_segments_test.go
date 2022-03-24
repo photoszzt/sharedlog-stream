@@ -1,10 +1,5 @@
 package store
 
-import (
-	"context"
-	"testing"
-)
-
 /*
 func TestShouldCreateSegments(t *testing.T) {
 	rkvs := getRedisKeyValueStore()
@@ -100,7 +95,7 @@ func TestShouldCleanupSegmentsThatHaveExpired(t *testing.T) {
 	}
 	rkvs.rdb.FlushAll(ctx)
 }
-*/
+
 func updateStreamTimeAndCreateSegment(ctx context.Context, segment int64, segments Segments, t *testing.T) int64 {
 	streamTime := bstest_segment_interval * segment
 	_, err := segments.GetOrCreateSegmentIfLive(ctx, segment,
@@ -110,3 +105,4 @@ func updateStreamTimeAndCreateSegment(ctx context.Context, segment int64, segmen
 	}
 	return streamTime
 }
+*/

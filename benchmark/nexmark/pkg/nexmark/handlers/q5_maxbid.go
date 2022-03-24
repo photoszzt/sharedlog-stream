@@ -181,18 +181,12 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	}
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	src, sink, err := h.getSrcSink(ctx, sp,
 		input_stream, output_stream, seSerde, aucIdCountSerde, aucIdCountMaxSerde, msgSerde)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	maxBidStoreName := "maxBidsKVStore"
 	var kvstore store.KeyValueStore
@@ -219,6 +213,9 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			KeySerde:       seSerde,
 			ValueSerde:     vtSerde,
 		})
+		if err != nil {
+			return &common.FnOutput{Success: false, Message: err.Error()}
+		}
 	} else {
 		panic("unrecognized table type")
 	}

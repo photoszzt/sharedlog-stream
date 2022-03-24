@@ -118,6 +118,6 @@ func (kvs *MongoDBKeyValueSegments) segmentIDFromSegmentName(segName string) (in
 	return t / kvs.segmentInterval, nil
 }
 
-func (kvs *MongoDBKeyValueSegments) Destroy(ctx context.Context) {
-	kvs.mkvs.DropDatabase(ctx)
+func (kvs *MongoDBKeyValueSegments) Destroy(ctx context.Context) error {
+	return kvs.mkvs.DropDatabase(ctx)
 }

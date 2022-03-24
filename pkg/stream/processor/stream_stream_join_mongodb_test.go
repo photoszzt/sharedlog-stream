@@ -58,8 +58,12 @@ func getStreamJoinMongoDB(ctx context.Context, joinWindows *JoinWindows, dbName1
 		}
 		return joinedMsgs
 	}
-	winTab1.DropDatabase(ctx)
-	winTab2.DropDatabase(ctx)
+	if err = winTab1.DropDatabase(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err = winTab2.DropDatabase(ctx); err != nil {
+		t.Fatal(err)
+	}
 	return oneJoinTwo, twoJoinOne, winTab1, winTab2
 }
 
@@ -72,8 +76,12 @@ func TestStreamStreamJoinMongoDB(t *testing.T) {
 	}
 	oneJoinTwo, twoJoinOne, winTab1, winTab2 := getStreamJoinMongoDB(ctx, joinWindows, "db11", "db12", t)
 	StreamStreamJoin(ctx, oneJoinTwo, twoJoinOne, t)
-	winTab1.DropDatabase(ctx)
-	winTab2.DropDatabase(ctx)
+	if err = winTab1.DropDatabase(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err = winTab2.DropDatabase(ctx); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestWindowingMongoDB(t *testing.T) {
@@ -84,8 +92,12 @@ func TestWindowingMongoDB(t *testing.T) {
 	}
 	oneJoinTwo, twoJoinOne, winTab1, winTab2 := getStreamJoinMongoDB(ctx, joinWindows, "db21", "db22", t)
 	Windowing(ctx, oneJoinTwo, twoJoinOne, t)
-	winTab1.DropDatabase(ctx)
-	winTab2.DropDatabase(ctx)
+	if err = winTab1.DropDatabase(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err = winTab2.DropDatabase(ctx); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestAsymmetricWindowingAfterMongoDB(t *testing.T) {
@@ -102,8 +114,12 @@ func TestAsymmetricWindowingAfterMongoDB(t *testing.T) {
 		joinWindows.afterMs, joinWindows.graceMs)
 	oneJoinTwo, twoJoinOne, winTab1, winTab2 := getStreamJoinMongoDB(ctx, joinWindows, "db31", "dn32", t)
 	AsymmetricWindowingAfter(ctx, oneJoinTwo, twoJoinOne, t)
-	winTab1.DropDatabase(ctx)
-	winTab2.DropDatabase(ctx)
+	if err = winTab1.DropDatabase(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err = winTab2.DropDatabase(ctx); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestAsymmetricWindowingBeforeMongoDB(t *testing.T) {
@@ -121,6 +137,10 @@ func TestAsymmetricWindowingBeforeMongoDB(t *testing.T) {
 		joinWindows.afterMs, joinWindows.graceMs)
 	oneJoinTwo, twoJoinOne, winTab1, winTab2 := getStreamJoinMongoDB(ctx, joinWindows, "db41", "db42", t)
 	AsymmetricWindowingBefore(ctx, oneJoinTwo, twoJoinOne, t)
-	winTab1.DropDatabase(ctx)
-	winTab2.DropDatabase(ctx)
+	if err = winTab1.DropDatabase(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err = winTab2.DropDatabase(ctx); err != nil {
+		t.Fatal(err)
+	}
 }

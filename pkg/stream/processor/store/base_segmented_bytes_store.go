@@ -67,8 +67,14 @@ func (s *BaseSegmentedBytesStore) Name() string { return s.name }
 func (s *BaseSegmentedBytesStore) Fetch(ctx context.Context, key []byte, from int64, to int64,
 	iterFunc func(int64 /* ts */, []byte, []byte) error,
 ) error {
-	binaryFrom := s.keySchema.LowerRangeFixedSize(key, from)
-	binaryTo := s.keySchema.UpperRangeFixedSize(key, to)
+	binaryFrom, err := s.keySchema.LowerRangeFixedSize(key, from)
+	if err != nil {
+		return err
+	}
+	binaryTo, err := s.keySchema.UpperRangeFixedSize(key, to)
+	if err != nil {
+		return err
+	}
 	// debug.Fprintf(os.Stderr, "fetch from: %d, to: %d, binaryFrom: %v, binaryTo: %v\n", from, to, binaryFrom, binaryTo)
 	segment_slice := s.segments.Segments(from, to)
 	// debug.Fprintf(os.Stderr, "segment slice: %v\n", segment_slice)
@@ -109,8 +115,14 @@ func (s *BaseSegmentedBytesStore) FetchWithKeyRange(ctx context.Context, keyFrom
 	if bytes.Compare(keyFrom, keyTo) > 0 {
 		return fmt.Errorf("key from should be smaller than key to")
 	}
-	binaryFrom := s.keySchema.LowerRangeFixedSize(keyFrom, from)
-	binaryTo := s.keySchema.UpperRangeFixedSize(keyTo, to)
+	binaryFrom, err := s.keySchema.LowerRangeFixedSize(keyFrom, from)
+	if err != nil {
+		return err
+	}
+	binaryTo, err := s.keySchema.UpperRangeFixedSize(keyTo, to)
+	if err != nil {
+		return err
+	}
 	segment_slice := s.segments.Segments(from, to)
 	for _, seg := range segment_slice {
 		err := seg.Range(ctx, binaryFrom, binaryTo, func(kt []byte, vt []byte) error {
@@ -206,7 +218,7 @@ func (s *BaseSegmentedBytesStore) Put(ctx context.Context, key []byte, value []b
 	if segment == nil {
 		log.Warn().Msg("Skipping record for expired segment")
 	} else {
-		segment.Put(ctx, key, value)
+		return segment.Put(ctx, key, value)
 	}
 	return nil
 }
@@ -219,8 +231,8 @@ func (s *BaseSegmentedBytesStore) Get(ctx context.Context, key []byte) ([]byte, 
 	return segment.Get(ctx, key)
 }
 
-func (s *BaseSegmentedBytesStore) DropDatabase(ctx context.Context) {
-	s.segments.Destroy(ctx)
+func (s *BaseSegmentedBytesStore) DropDatabase(ctx context.Context) error {
+	return s.segments.Destroy(ctx)
 }
 
 func (s *BaseSegmentedBytesStore) TableType() TABLE_TYPE {

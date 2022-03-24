@@ -15,7 +15,7 @@ type TimeOrderedKeySchema struct {
 
 var _ = KeySchema(&TimeOrderedKeySchema{})
 
-func (ks *TimeOrderedKeySchema) UpperRange(key []byte, to int64) []byte {
+func (ks *TimeOrderedKeySchema) UpperRange(key []byte, to int64) ([]byte, error) {
 	panic("not supported")
 }
 func (ks *TimeOrderedKeySchema) LowerRange(key []byte, from int64) []byte {
@@ -26,11 +26,11 @@ func (ks *TimeOrderedKeySchema) ToStoreBinaryKeyPrefix(key []byte, ts int64) ([]
 	return ks.toStoreKeyBinaryPrefix(key, ts)
 }
 
-func (ks *TimeOrderedKeySchema) UpperRangeFixedSize(key []byte, to int64) []byte {
+func (ks *TimeOrderedKeySchema) UpperRangeFixedSize(key []byte, to int64) ([]byte, error) {
 	panic("not supported")
 }
 
-func (ks *TimeOrderedKeySchema) LowerRangeFixedSize(key []byte, from int64) []byte {
+func (ks *TimeOrderedKeySchema) LowerRangeFixedSize(key []byte, from int64) ([]byte, error) {
 	panic("not supported")
 }
 

@@ -6,7 +6,6 @@ import (
 )
 
 const (
-	bstest_num_segments     = 5
 	bstest_segment_interval = 100
 	bstest_retention_period = 4 * bstest_segment_interval
 )

@@ -10,8 +10,8 @@ import (
 
 const (
 	windowSizeForTimeWindow = 500
-	retention               = 1000
-	segmentInterval         = 60_000
+	// retention               = 1000
+	// segmentInterval = 60_000
 )
 
 func getSerde() (commtypes.Serde, commtypes.Serde) {
@@ -48,6 +48,7 @@ func getWindows(t testing.TB) []*processor.TimeWindow {
 	return windows
 }
 
+/*
 func getNextSegmentWindow(t testing.TB) *processor.TimeWindow {
 	w, err := processor.TimeWindowForSize(segmentInterval+retention, windowSizeForTimeWindow)
 	if err != nil {
@@ -55,6 +56,7 @@ func getNextSegmentWindow(t testing.TB) *processor.TimeWindow {
 	}
 	return w
 }
+*/
 
 func putKV(ctx context.Context, key string, window *processor.TimeWindow, value int, kSerde commtypes.Serde,
 	vSerde commtypes.Serde, byteStore store.SegmentedBytesStore, t testing.TB,
@@ -68,6 +70,9 @@ func putKV(ctx context.Context, key string, window *processor.TimeWindow, value 
 		t.Fatal(err.Error())
 	}
 	vBytes, err := vSerde.Encode(value)
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = byteStore.Put(ctx, wkBytes, vBytes)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -94,7 +99,7 @@ func ShouldPutAndFetch(ctx context.Context, byteStore store.SegmentedBytesStore,
 		t.Fatal(err.Error())
 	}
 	kv := make([]*KeyValue, 0)
-	byteStore.Fetch(ctx, kBytes, 1, 999, func(i int64, kt []byte, vt []byte) error {
+	err = byteStore.Fetch(ctx, kBytes, 1, 999, func(i int64, kt []byte, vt []byte) error {
 		w, err := processor.NewTimeWindow(i, i+windowSizeForTimeWindow)
 		if err != nil {
 			return err
@@ -109,5 +114,7 @@ func ShouldPutAndFetch(ctx context.Context, byteStore store.SegmentedBytesStore,
 		})
 		return nil
 	})
-
+	if err != nil {
+		t.Fatal(err)
+	}
 }

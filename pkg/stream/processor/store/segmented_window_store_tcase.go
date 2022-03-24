@@ -33,22 +33,22 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 	startTime := TEST_SEGMENT_INTERVAL * 2
 	increment := TEST_SEGMENT_INTERVAL / 2
 
-	store.Put(ctx, uint32(0), "zero", startTime)
+	checkErr(store.Put(ctx, uint32(0), "zero", startTime), t)
 	names := map[string]struct{}{segments.SegmentName(2): {}}
 	debug.Fprint(os.Stderr, "1\n")
 	checkPut(ctx, store, segments, t, names)
 
-	store.Put(ctx, uint32(1), "one", startTime+increment)
+	checkErr(store.Put(ctx, uint32(1), "one", startTime+increment), t)
 	names = map[string]struct{}{segments.SegmentName(2): {}}
 	debug.Fprint(os.Stderr, "2\n")
 	checkPut(ctx, store, segments, t, names)
 
-	store.Put(ctx, uint32(2), "two", startTime+increment*2)
+	checkErr(store.Put(ctx, uint32(2), "two", startTime+increment*2), t)
 	names = map[string]struct{}{segments.SegmentName(2): {}, segments.SegmentName(3): {}}
 	debug.Fprint(os.Stderr, "3\n")
 	checkPut(ctx, store, segments, t, names)
 
-	store.Put(ctx, uint32(4), "four", startTime+increment*4)
+	checkErr(store.Put(ctx, uint32(4), "four", startTime+increment*4), t)
 	names = map[string]struct{}{
 		segments.SegmentName(2): {},
 		segments.SegmentName(3): {},
@@ -57,7 +57,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 	debug.Fprint(os.Stderr, "4\n")
 	checkPut(ctx, store, segments, t, names)
 
-	store.Put(ctx, uint32(5), "five", startTime+increment*5)
+	checkErr(store.Put(ctx, uint32(5), "five", startTime+increment*5), t)
 	names = map[string]struct{}{
 		segments.SegmentName(2): {},
 		segments.SegmentName(3): {},
@@ -127,7 +127,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 	}
 
 	debug.Fprint(os.Stderr, "12\n")
-	store.Put(ctx, uint32(6), "six", startTime+increment*6)
+	checkErr(store.Put(ctx, uint32(6), "six", startTime+increment*6), t)
 	names = map[string]struct{}{
 		segments.SegmentName(3): {},
 		segments.SegmentName(4): {},
@@ -206,7 +206,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 	}
 
 	debug.Fprint(os.Stderr, "20\n")
-	store.Put(ctx, uint32(7), "seven", startTime+increment*7)
+	checkErr(store.Put(ctx, uint32(7), "seven", startTime+increment*7), t)
 	names = map[string]struct{}{
 		segments.SegmentName(3): {},
 		segments.SegmentName(4): {},
@@ -288,7 +288,7 @@ func RollingTest(ctx context.Context, store *SegmentedWindowStore, segments Segm
 		t.Fatal("should equal")
 	}
 
-	store.Put(ctx, uint32(8), "eight", startTime+increment*8)
+	checkErr(store.Put(ctx, uint32(8), "eight", startTime+increment*8), t)
 	names = map[string]struct{}{
 		segments.SegmentName(4): {},
 		segments.SegmentName(5): {},

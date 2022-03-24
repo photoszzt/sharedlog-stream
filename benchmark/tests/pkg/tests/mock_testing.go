@@ -52,7 +52,7 @@ func (t *MockTesting) Fatalf(format string, args ...interface{}) {
 	t.FailNow()
 }
 func (t *MockTesting) Helper() {
-	log.Info().Msg(fmt.Sprintf("%s", t.testName))
+	log.Info().Msg(t.testName)
 }
 func (t *MockTesting) Log(args ...interface{}) {
 	log.Info().Msg(fmt.Sprintln(args...))
@@ -80,9 +80,5 @@ func (t *MockTesting) Skipped() bool {
 	panic("not implemented")
 }
 func (t *MockTesting) TempDir() string {
-	panic("not implemented")
-}
-
-func (t *MockTesting) private() {
 	panic("not implemented")
 }

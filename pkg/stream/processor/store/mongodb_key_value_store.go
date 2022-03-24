@@ -294,7 +294,10 @@ func (s *MongoDBKeyValueStore) PutWithCollection(ctx context.Context, kBytes []b
 			bson.M{"$set": bson.M{VALUE_NAME: vBytes}}, opts)
 		if err != nil {
 			if s.inTransaction {
-				s.sessCtx.AbortTransaction(context.Background())
+				err2 := s.sessCtx.AbortTransaction(context.Background())
+				if err != nil {
+					return fmt.Errorf("try to abort transaction while handling err (%v) and abort failed: %v", err, err2)
+				}
 			}
 			return err
 		}

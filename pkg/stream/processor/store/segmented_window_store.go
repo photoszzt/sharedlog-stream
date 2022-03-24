@@ -68,7 +68,10 @@ func (rws *SegmentedWindowStore) Put(ctx context.Context, key commtypes.KeyT, va
 		}
 		rws.seqNumMu.Lock()
 		defer rws.seqNumMu.Unlock()
-		k := rws.windowKeySchema.ToStoreKeyBinary(kBytes, windowStartTimestamp, rws.seqNum)
+		k, err := rws.windowKeySchema.ToStoreKeyBinary(kBytes, windowStartTimestamp, rws.seqNum)
+		if err != nil {
+			return err
+		}
 		vBytes, ok := value.([]byte)
 		if !ok {
 			vBytes, err = rws.valSerde.Encode(value)
@@ -76,7 +79,7 @@ func (rws *SegmentedWindowStore) Put(ctx context.Context, key commtypes.KeyT, va
 				return err
 			}
 		}
-		rws.bytesStore.Put(ctx, k, vBytes)
+		return rws.bytesStore.Put(ctx, k, vBytes)
 	}
 	return nil
 }
@@ -92,7 +95,10 @@ func (rws *SegmentedWindowStore) Get(ctx context.Context, key commtypes.KeyT, wi
 	}
 	rws.seqNumMu.Lock()
 	defer rws.seqNumMu.Unlock()
-	k := rws.windowKeySchema.ToStoreKeyBinary(kBytes, windowStartTimestamp, rws.seqNum)
+	k, err := rws.windowKeySchema.ToStoreKeyBinary(kBytes, windowStartTimestamp, rws.seqNum)
+	if err != nil {
+		return nil, false, err
+	}
 	valBytes, ok, err := rws.bytesStore.Get(ctx, k)
 	if err != nil {
 		return nil, false, err
@@ -117,7 +123,7 @@ func (rws *SegmentedWindowStore) Fetch(ctx context.Context, key commtypes.KeyT, 
 			return err
 		}
 	}
-	rws.bytesStore.Fetch(ctx, kBytes, tsFrom, tsTo, func(ts int64, kBytes, vBytes []byte) error {
+	return rws.bytesStore.Fetch(ctx, kBytes, tsFrom, tsTo, func(ts int64, kBytes, vBytes []byte) error {
 		k, err := rws.keySerde.Decode(kBytes)
 		if err != nil {
 			return err
@@ -128,7 +134,6 @@ func (rws *SegmentedWindowStore) Fetch(ctx context.Context, key commtypes.KeyT, 
 		}
 		return iterFunc(ts, k, v)
 	})
-	return nil
 }
 
 func (rws *SegmentedWindowStore) BackwardFetch(key commtypes.KeyT, timeFrom time.Time, timeTo time.Time,
@@ -203,8 +208,8 @@ func (rws *SegmentedWindowStore) IterAll(iterFunc func(int64, commtypes.KeyT, co
 	panic("not implemented")
 }
 
-func (rws *SegmentedWindowStore) DropDatabase(ctx context.Context) {
-	rws.bytesStore.DropDatabase(ctx)
+func (rws *SegmentedWindowStore) DropDatabase(ctx context.Context) error {
+	return rws.bytesStore.DropDatabase(ctx)
 }
 
 func (rws *SegmentedWindowStore) TableType() TABLE_TYPE {

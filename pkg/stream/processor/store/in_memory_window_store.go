@@ -373,7 +373,7 @@ func (s *InMemoryWindowStore) BackwardFetchAll(
 	panic("not implemented")
 }
 
-func (s *InMemoryWindowStore) DropDatabase(ctx context.Context) {
+func (s *InMemoryWindowStore) DropDatabase(ctx context.Context) error {
 	panic("not implemented")
 }
 

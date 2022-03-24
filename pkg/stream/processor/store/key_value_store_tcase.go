@@ -25,11 +25,11 @@ func checkErr(err error, t testing.TB) {
 }
 
 func ShouldNotIncludeDeletedFromRangeResult(ctx context.Context, store KeyValueStore, t testing.TB) {
-	store.Put(ctx, 0, "zero")
-	store.Put(ctx, 1, "one")
-	store.Put(ctx, 2, "two")
-	store.Delete(ctx, 0)
-	store.Delete(ctx, 1)
+	checkErr(store.Put(ctx, 0, "zero"), t)
+	checkErr(store.Put(ctx, 1, "one"), t)
+	checkErr(store.Put(ctx, 2, "two"), t)
+	checkErr(store.Delete(ctx, 0), t)
+	checkErr(store.Delete(ctx, 1), t)
 
 	expected := make(map[int]string)
 	expected[2] = "two"
