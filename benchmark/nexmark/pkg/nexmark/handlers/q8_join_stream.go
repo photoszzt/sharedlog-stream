@@ -363,7 +363,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	}
 
 	task := sharedlog_stream.StreamTask{
-		ProcessFunc: h.processSerial,
+		ProcessFunc: h.process,
 	}
 	if sp.EnableTransaction {
 		var wsc []*store.WindowStoreChangelog
@@ -417,7 +417,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			ret.Latencies["personsJoinsAuctions"] = personsJoinsAuctions.GetLatency()
 			ret.Latencies["auctionsJoinsPersons"] = auctionsJoinsPersons.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()
-			ret.Consumed["auctionSrc"] = auctionsSrc.GetCount()
+			ret.Consumed["auctionsSrc"] = auctionsSrc.GetCount()
 			ret.Consumed["personsSrc"] = personsSrc.GetCount()
 		}
 		return ret
@@ -435,7 +435,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		ret.Latencies["toPersonsWinTab"] = toPersonsWinTab.GetLatency()
 		ret.Latencies["personsJoinsAuctions"] = personsJoinsAuctions.GetLatency()
 		ret.Latencies["auctionsJoinsPersons"] = auctionsJoinsPersons.GetLatency()
-		ret.Consumed["auctionSrc"] = auctionsSrc.GetCount()
+		ret.Consumed["auctionsSrc"] = auctionsSrc.GetCount()
 		ret.Consumed["personsSrc"] = personsSrc.GetCount()
 	}
 	return ret

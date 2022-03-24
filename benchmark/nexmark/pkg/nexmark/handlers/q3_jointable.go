@@ -390,7 +390,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			ret.Latencies["personJoinsAuctions"] = personJoinsAuctions.GetLatency()
 			ret.Latencies["auctionJoinsPersons"] = auctionJoinsPersons.GetLatency()
 			ret.Latencies["sink"] = sss.sink.GetLatency()
-			ret.Consumed["auctionSrc"] = procArgs.auctionSrc.GetCount()
+			ret.Consumed["auctionsSrc"] = procArgs.auctionSrc.GetCount()
 			ret.Consumed["personsSrc"] = procArgs.personSrc.GetCount()
 		}
 		return ret
@@ -408,7 +408,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		ret.Latencies["personJoinsAuctions"] = personJoinsAuctions.GetLatency()
 		ret.Latencies["auctionJoinsPersons"] = auctionJoinsPersons.GetLatency()
 		ret.Latencies["sink"] = sss.sink.GetLatency()
-		ret.Consumed["auctionSrc"] = procArgs.auctionSrc.GetCount()
+		ret.Consumed["auctionsSrc"] = procArgs.auctionSrc.GetCount()
 		ret.Consumed["personsSrc"] = procArgs.personSrc.GetCount()
 	}
 	return ret

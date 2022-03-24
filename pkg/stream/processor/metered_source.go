@@ -3,6 +3,7 @@ package processor
 import (
 	"context"
 	"os"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
@@ -35,6 +36,7 @@ func (s *MeteredSource) Consume(ctx context.Context, parNum uint8) ([]commtypes.
 		}
 		s.latencies = append(s.latencies, int(elapsed.Microseconds()))
 		s.count += uint64(len(msgs))
+		debug.Fprintf(os.Stderr, "%s consumed %d\n", s.src.TopicName(), s.count)
 		return msgs, err
 	} else {
 		return s.src.Consume(ctx, parNum)

@@ -3,6 +3,7 @@ package common
 import (
 	"fmt"
 	"os"
+	"sharedlog-stream/pkg/debug"
 	"sort"
 )
 
@@ -39,8 +40,11 @@ func ProcessThroughputLat(name string, latencies map[string][]int, consumed map[
 			if consumed != nil {
 				processed, ok = consumed[n]
 				if !ok {
+					debug.Fprintf(os.Stderr, "does not find %s in consumed\n", n)
 					processed = uint64(len(lat_arr))
 				}
+			} else {
+				debug.Fprint(os.Stderr, "consumed is empty")
 			}
 			tput := float64(processed) / sumTime
 			fmt.Fprintf(os.Stdout, "sum of %s time: %v ", n, sumTime)
