@@ -130,15 +130,13 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 	}
 	// fmt.Fprintf(os.Stderr, "msg: %v\n", string(msgEncoded))
 	args.idx += 1
-	args.idx = args.idx % int(args.stream.NumPartition())
+	parNum := args.idx
+	parNum = parNum % int(args.stream.NumPartition())
 	pushStart := time.Now()
 
-	_, err = args.stream.Push(ctx, msgEncoded, uint8(args.idx), false)
+	_, err = args.stream.Push(ctx, msgEncoded, uint8(parNum), false)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("stream push failed: %v", err),
-		}
+		return &common.FnOutput{Success: false, Message: fmt.Sprintf("stream push failed: %v", err)}
 	}
 	// fmt.Fprintf(os.Stderr, "inserted to pos: 0x%x\n", pos)
 
@@ -236,17 +234,15 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 						return out
 					}
 				*/
-				return &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("control channel manager failed: %v", cerr),
-				}
+				return &common.FnOutput{Success: false, Message: fmt.Sprintf("control channel manager failed: %v", cerr)}
 			}
 		default:
 		}
 		if !eventGenerator.HasNext() {
 			break
 		}
-		if duration != 0 && time.Since(startTime) >= duration {
+		if (duration != 0 && time.Since(startTime) >= duration) ||
+			(inputConfig.EventsNum != 0 && procArgs.idx == int(inputConfig.EventsNum)) {
 			break
 		}
 		fnout := h.process(dctx, &procArgs)
@@ -265,10 +261,8 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 		}
 	*/
 	return &common.FnOutput{
-		Success:  true,
-		Duration: time.Since(startTime).Seconds(),
-		Latencies: map[string][]int{
-			"e2e": procArgs.latencies,
-		},
+		Success:   true,
+		Duration:  time.Since(startTime).Seconds(),
+		Latencies: map[string][]int{"e2e": procArgs.latencies},
 	}
 }

@@ -69,7 +69,7 @@ func joinProc(
 	gotMsgs, err := procArgs.src.Consume(ctx, procArgs.parNum)
 	if err != nil {
 		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
-			fmt.Fprint(os.Stderr, "timeout, gen output\n")
+			debug.Fprintf(os.Stderr, "%s timeout, gen output\n", procArgs.src.TopicName())
 			out <- &common.FnOutput{Success: true, Message: err.Error()}
 			return
 		}
@@ -103,7 +103,7 @@ func joinProcSerial(
 	gotMsgs, err := procArgs.src.Consume(ctx, procArgs.parNum)
 	if err != nil {
 		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
-			debug.Fprint(os.Stderr, "timeout, gen output\n")
+			debug.Fprintf(os.Stderr, "%s timeout, gen output\n", procArgs.src.TopicName())
 			return &common.FnOutput{Success: true, Message: err.Error()}
 		}
 		return &common.FnOutput{Success: false, Message: err.Error()}

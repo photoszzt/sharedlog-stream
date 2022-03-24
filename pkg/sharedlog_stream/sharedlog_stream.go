@@ -270,16 +270,17 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 					TaskId:    streamLogEntry.TaskId,
 					TaskEpoch: streamLogEntry.TaskEpoch,
 				}
+				// debug.Fprintf(os.Stderr, "task idgen: %v\n", appKey)
 				readMsgProc, ok := s.curReadMap[appKey]
 				if streamLogEntry.IsControl {
-					debug.Fprintf(os.Stderr, "ReadNextWithTag: got control entry\n")
+					// debug.Fprintf(os.Stderr, "ReadNextWithTag: got control entry\n")
 					txnMarkTmp, err := s.txnMarkerSerde.Decode(streamLogEntry.Payload)
 					if err != nil {
 						return commtypes.EmptyAppIDGen, nil, err
 					}
 					txnMark := txnMarkTmp.(TxnMarker)
 					if txnMark.Mark == uint8(COMMIT) {
-						debug.Fprint(os.Stderr, "ReadNextWithTag: entry is commit\n")
+						debug.Fprintf(os.Stderr, "ReadNextWithTag: %s entry is commit off %x\n", s.topicName, streamLogEntry.seqNum)
 						if !ok {
 							log.Warn().Msgf("Hit commit marker but got no messages")
 						}
@@ -306,10 +307,10 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 					seqNumInSharedLog = logEntry.SeqNum + 1
 					continue
 				}
-				readMsgProc.CurReadMsgSeqNum = streamLogEntry.seqNum
+				readMsgProc.CurReadMsgSeqNum = streamLogEntry.MsgSeqNum
 				readMsgProc.MsgBuff = append(readMsgProc.MsgBuff, commtypes.RawMsg{Payload: streamLogEntry.Payload,
 					LogSeqNum: streamLogEntry.seqNum, MsgSeqNum: streamLogEntry.MsgSeqNum})
-				debug.Fprintf(os.Stderr, "current buffer length: %d\n", len(readMsgProc.MsgBuff))
+				debug.Fprintf(os.Stderr, "tp %s current buffer length: %d\n", s.topicName, len(readMsgProc.MsgBuff))
 				s.curReadMap[appKey] = readMsgProc
 				seqNumInSharedLog = logEntry.SeqNum + 1
 				continue

@@ -363,7 +363,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	}
 
 	task := sharedlog_stream.StreamTask{
-		ProcessFunc: h.process,
+		ProcessFunc: h.processSerial,
 	}
 	if sp.EnableTransaction {
 		var wsc []*store.WindowStoreChangelog

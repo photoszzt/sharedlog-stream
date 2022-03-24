@@ -16,17 +16,19 @@ import (
 )
 
 var (
-	FLAGS_faas_gateway    string
-	FLAGS_app_name        string
-	FLAGS_stream_prefix   string
-	FLAGS_duration        int
-	FLAGS_events_num      int
-	FLAGS_tps             int
-	FLAGS_serdeFormat     string
-	FLAGS_workload_config string
-	FLAGS_tran            bool
-	FLAGS_commit_every    uint64
-	FLAGS_scale_config    string
+	FLAGS_faas_gateway       string
+	FLAGS_app_name           string
+	FLAGS_stream_prefix      string
+	FLAGS_duration           int
+	FLAGS_events_num         int
+	FLAGS_tps                int
+	FLAGS_serdeFormat        string
+	FLAGS_workload_config    string
+	FLAGS_tran               bool
+	FLAGS_commit_everyMs     uint64
+	FLAGS_commit_every_niter uint
+	FLAGS_exit_after_ncomm   uint
+	FLAGS_scale_config       string
 )
 
 func invokeSourceFunc(client *http.Client, numOutPartition uint8, topicName string,
@@ -80,7 +82,9 @@ func main() {
 	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
 	flag.StringVar(&FLAGS_workload_config, "wconfig", "./wconfig.json", "path to a json file that stores workload config")
 	flag.BoolVar(&FLAGS_tran, "tran", false, "enable transaction or not")
-	flag.Uint64Var(&FLAGS_commit_every, "comm_every", 0, "commit a transaction every (ms)")
+	flag.Uint64Var(&FLAGS_commit_everyMs, "comm_everyMS", 10, "commit a transaction every (ms)")
+	flag.UintVar(&FLAGS_commit_every_niter, "comm_every_niter", 0, "commit a transaction every iter(for test)")
+	flag.UintVar(&FLAGS_exit_after_ncomm, "exit_after_ncomm", 5, "exit after n commits(for test)")
 	flag.Parse()
 
 	switch FLAGS_app_name {

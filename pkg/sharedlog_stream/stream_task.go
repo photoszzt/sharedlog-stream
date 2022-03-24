@@ -3,6 +3,7 @@ package sharedlog_stream
 import (
 	"context"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
@@ -64,6 +65,7 @@ func SetupManagersAndProcessTransactional(ctx context.Context,
 	updateProcArgs func(procArgs interface{}, trackParFunc TrackKeySubStreamFunc),
 	task *StreamTask,
 ) *common.FnOutput {
+	debug.Fprint(os.Stderr, "setup transaction and control manager\n")
 	tm, err := SetupTransactionManager(ctx, streamTaskArgs)
 	if err != nil {
 		return &common.FnOutput{
@@ -79,28 +81,21 @@ func SetupManagersAndProcessTransactional(ctx context.Context,
 			Message: err.Error(),
 		}
 	}
+	debug.Fprint(os.Stderr, "start restore\n")
 	err = cmm.RestoreMapping(ctx)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	offsetMap, err := getOffsetMap(ctx, tm, streamTaskArgs)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	err = restoreStateStore(ctx, tm, streamTaskArgs, offsetMap)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	setOffsetOnStream(offsetMap, streamTaskArgs)
+	debug.Fprintf(os.Stderr, "down restore\n")
 	trackParFunc := func(ctx context.Context,
 		key interface{},
 		keySerde commtypes.Serde,
@@ -116,6 +111,7 @@ func SetupManagersAndProcessTransactional(ctx context.Context,
 	}
 	updateProcArgs(streamTaskArgs.ProcArgs, trackParFunc)
 	cmm.TrackConsistentHash(streamTaskArgs.CHashMu, streamTaskArgs.CHash)
+	debug.Fprint(os.Stderr, "begin transaction processing\n")
 	ret := task.ProcessWithTransaction(ctx, tm, cmm, streamTaskArgs)
 	return ret
 }
@@ -129,6 +125,7 @@ func getOffsetMap(ctx context.Context, tm *TransactionManager, args *StreamTaskA
 			return nil, fmt.Errorf("createOffsetTopicAndGetOffset failed: %v", err)
 		}
 		offsetMap[inputTopicName] = offset
+		debug.Fprintf(os.Stderr, "tp %s offset %d\n", inputTopicName, offset)
 	}
 	return offsetMap, nil
 }
@@ -146,7 +143,7 @@ func restoreChangelogBackedKVStore(ctx context.Context, tm *TransactionManager,
 	for _, kvchangelog := range args.KVChangelogs {
 		topic := kvchangelog.Changelog.TopicName()
 		// offset stream is input stream
-		if offset, ok := offsetMap[topic]; ok {
+		if offset, ok := offsetMap[topic]; ok && offset != 0 {
 			err := store.RestoreKVStateStore(ctx,
 				kvchangelog,
 				args.MsgSerde, offset)
@@ -159,9 +156,11 @@ func restoreChangelogBackedKVStore(ctx context.Context, tm *TransactionManager,
 			if err != nil {
 				return fmt.Errorf("createOffsetTopicAndGetOffset kv failed: %v", err)
 			}
-			err = store.RestoreKVStateStore(ctx, kvchangelog, args.MsgSerde, offset)
-			if err != nil {
-				return fmt.Errorf("RestoreKVStateStore2 failed: %v", err)
+			if offset != 0 {
+				err = store.RestoreKVStateStore(ctx, kvchangelog, args.MsgSerde, offset)
+				if err != nil {
+					return fmt.Errorf("RestoreKVStateStore2 failed: %v", err)
+				}
 			}
 		}
 	}
@@ -172,7 +171,7 @@ func restoreChangelogBackedWindowStore(ctx context.Context, tm *TransactionManag
 	for _, wschangelog := range args.WindowStoreChangelogs {
 		topic := wschangelog.Changelog.TopicName()
 		// offset stream is input stream
-		if offset, ok := offsetMap[topic]; ok {
+		if offset, ok := offsetMap[topic]; ok && offset != 0 {
 			err := store.RestoreWindowStateStore(ctx, wschangelog,
 				args.MsgSerde, offset)
 			if err != nil {
@@ -184,10 +183,12 @@ func restoreChangelogBackedWindowStore(ctx context.Context, tm *TransactionManag
 			if err != nil {
 				return fmt.Errorf("createOffsetTopicAndGetOffset win failed: %v", err)
 			}
-			err = store.RestoreWindowStateStore(ctx, wschangelog,
-				args.MsgSerde, offset)
-			if err != nil {
-				return fmt.Errorf("RestoreWindowStateStore2 failed: %v", err)
+			if offset != 0 {
+				err = store.RestoreWindowStateStore(ctx, wschangelog,
+					args.MsgSerde, offset)
+				if err != nil {
+					return fmt.Errorf("RestoreWindowStateStore2 failed: %v", err)
+				}
 			}
 		}
 	}
@@ -375,6 +376,9 @@ func (t *StreamTask) processWithTranLoop(ctx context.Context,
 
 	startTime := time.Now()
 	idx := 0
+	numCommit := 0
+	debug.Fprintf(os.Stderr, "commit every(ms): %d, commit everyIter: %d, exitAfterNComm: %d\n",
+		commitEvery, args.QueryInput.CommitEveryNIter, args.QueryInput.ExitAfterNCommit)
 L:
 	for {
 		select {
@@ -384,7 +388,10 @@ L:
 		}
 		timeSinceTranStart := time.Since(commitTimer)
 		timeout := duration != 0 && time.Since(startTime) >= duration
-		if (commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout {
+		shouldCommitByIter := args.QueryInput.CommitEveryNIter != 0 &&
+			uint32(idx)%args.QueryInput.CommitEveryNIter == 0 && idx != 0
+		debug.Fprintf(os.Stderr, "iter: %d, shouldCommitByIter: %v\n", idx, shouldCommitByIter)
+		if (commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout || shouldCommitByIter {
 			/*
 				if val, ok := args.QueryInput.TestParams["FailBeforeCommit"]; ok && val {
 					fmt.Fprintf(os.Stderr, "about to fail before commit")
@@ -413,8 +420,9 @@ L:
 					return
 				}
 			*/
+			numCommit += 1
 		}
-		if timeout {
+		if timeout || (args.QueryInput.ExitAfterNCommit != 0 && numCommit == int(args.QueryInput.ExitAfterNCommit)) {
 			if err := tm.Close(); err != nil {
 				retc <- &common.FnOutput{Success: false, Message: fmt.Sprintf("close transaction manager: %v\n", err)}
 				return

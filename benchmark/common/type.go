@@ -15,7 +15,9 @@ type QueryInput struct {
 	AppId             string          `json:"aid"`
 	MongoAddr         string          `json:"mongoAddr,omitempty"`
 	InputTopicNames   []string        `json:"inputTopicName,omitempty"`
-	CommitEveryMs     uint64          `json:"commEvery,omitempty"`
+	CommitEveryMs     uint64          `json:"commEveryMs,omitempty"`
+	CommitEveryNIter  uint32          `json:"commEveryNIter,omitempty"`
+	ExitAfterNCommit  uint32          `json:"exitAfterNCommit,omitempty"`
 	Duration          uint32          `json:"duration,omitempty"`
 	NumInPartition    uint8           `json:"numInPartition,omitempty"`
 	NumOutPartition   uint8           `json:"numOutPartition,omitempty"`

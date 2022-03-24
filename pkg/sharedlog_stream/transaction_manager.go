@@ -380,8 +380,8 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 		for par := range partitions {
 			parNum := par
 			g.Go(func() error {
-				debug.Fprintf(os.Stderr, "append marker %d to stream %s\n", marker, stream.TopicName())
-				_, err = stream.Push(ectx, msg_encoded, parNum, true)
+				off, err := stream.Push(ectx, msg_encoded, parNum, true)
+				debug.Fprintf(os.Stderr, "append marker %d to stream %s offset %x\n", marker, stream.TopicName(), off)
 				return err
 			})
 		}
@@ -422,7 +422,7 @@ func (tc *TransactionManager) AddTopicPartition(ctx context.Context, topic strin
 		return xerrors.Errorf("should begin transaction first")
 	}
 	debug.Assert(tc.checkTopicExistsInTopicStream(topic), fmt.Sprintf("topic %s's stream should be tracked", topic))
-	debug.Fprintf(os.Stderr, "tracking topic %s par %v\n", topic, partitions)
+	// debug.Fprintf(os.Stderr, "tracking topic %s par %v\n", topic, partitions)
 	needToAppendToLog := false
 	parSet, ok := tc.currentTopicPartition[topic]
 	if !ok {
@@ -519,7 +519,11 @@ func (tc *TransactionManager) AppendConsumedSeqNum(ctx context.Context, consumed
 func (tc *TransactionManager) FindLastConsumedSeqNum(ctx context.Context, topicToTrack string, parNum uint8) (uint64, error) {
 	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + topicToTrack
 	offsetLog := tc.topicStreams[offsetTopic]
+	debug.Assert(offsetTopic == offsetLog.TopicName(), fmt.Sprintf("expected offset log tp: %s, got %s",
+		offsetTopic, offsetLog.TopicName()))
+	// debug.Fprintf(os.Stderr, "looking at offsetlog %s, offsetLog tp: %s\n", offsetTopic, offsetLog.TopicName())
 
+	// find the most recent transaction marker
 	txnMarkerTag := TxnMarkerTag(offsetLog.TopicNameHash(), parNum)
 	var txnMkRawMsg *commtypes.RawMsg = nil
 	for {
@@ -539,6 +543,7 @@ func (tc *TransactionManager) FindLastConsumedSeqNum(ctx context.Context, topicT
 
 	tag := NameHashWithPartition(offsetLog.TopicNameHash(), parNum)
 
+	// read the previous item which should record the offset number
 	_, rawMsg, err := offsetLog.ReadBackwardWithTag(ctx, txnMkRawMsg.LogSeqNum, parNum, tag)
 	if err != nil {
 		return 0, err
