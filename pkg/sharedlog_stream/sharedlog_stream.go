@@ -28,11 +28,12 @@ const (
 type SharedLogStream struct {
 	mux sync.Mutex
 
-	env                types.Environment
-	txnMarkerSerde     commtypes.Serde
-	curReadMap         map[commtypes.TaskIDGen]commtypes.ReadMsgAndProgress
-	topicName          string
-	topicNameHash      uint64
+	env            types.Environment
+	txnMarkerSerde commtypes.Serde
+	curReadMap     map[commtypes.TaskIDGen]commtypes.ReadMsgAndProgress
+	topicName      string
+	topicNameHash  uint64
+	// current read position in forward direction
 	cursor             uint64
 	tail               uint64
 	taskId             uint64
@@ -310,16 +311,18 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 				readMsgProc.CurReadMsgSeqNum = streamLogEntry.MsgSeqNum
 				readMsgProc.MsgBuff = append(readMsgProc.MsgBuff, commtypes.RawMsg{Payload: streamLogEntry.Payload,
 					LogSeqNum: streamLogEntry.seqNum, MsgSeqNum: streamLogEntry.MsgSeqNum})
-				debug.Fprintf(os.Stderr, "%s cur buf len %d, last off %x\n", s.topicName,
-					len(readMsgProc.MsgBuff), streamLogEntry.seqNum)
+				debug.Fprintf(os.Stderr, "%s cur buf len %d, last off %x, cursor %x, tail %x\n", s.topicName,
+					len(readMsgProc.MsgBuff), streamLogEntry.seqNum, seqNumInSharedLog, s.tail)
 				s.curReadMap[appKey] = readMsgProc
 				seqNumInSharedLog = logEntry.SeqNum + 1
+				s.cursor = seqNumInSharedLog
 				continue
 			}
 			s.cursor = streamLogEntry.seqNum + 1
 			return commtypes.EmptyAppIDGen, []commtypes.RawMsg{{Payload: streamLogEntry.Payload, MsgSeqNum: 0, LogSeqNum: streamLogEntry.seqNum}}, nil
 		}
 		seqNumInSharedLog = logEntry.SeqNum + 1
+		s.cursor = seqNumInSharedLog
 	}
 	return commtypes.EmptyAppIDGen, nil, errors.ErrStreamEmpty
 }
