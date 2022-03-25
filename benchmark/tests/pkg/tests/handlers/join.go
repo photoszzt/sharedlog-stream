@@ -231,7 +231,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 
 	tm.RecordTopicStreams(src1.TopicName(), srcStream1)
 
-	if err = tm.BeginTransaction(ctx); err != nil {
+	if err = tm.BeginTransaction(ctx, nil, nil); err != nil {
 		panic(err)
 	}
 	if err = tm.AddTopicPartition(ctx, srcStream1.TopicName(), []uint8{0}); err != nil {
@@ -246,7 +246,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		}
 	}
 
-	if err = tm.CommitTransaction(ctx); err != nil {
+	if err = tm.CommitTransaction(ctx, nil, nil); err != nil {
 		panic(err)
 	}
 
@@ -265,7 +265,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	*/
 
 	tm.RecordTopicStreams(src2.TopicName(), srcStream2)
-	if err = tm.BeginTransaction(ctx); err != nil {
+	if err = tm.BeginTransaction(ctx, nil, nil); err != nil {
 		panic(err)
 	}
 	if err = tm.AddTopicPartition(ctx, srcStream2.TopicName(), []uint8{0}); err != nil {
@@ -279,7 +279,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 			panic(err)
 		}
 	}
-	if err = tm.CommitTransaction(ctx); err != nil {
+	if err = tm.CommitTransaction(ctx, nil, nil); err != nil {
 		panic(err)
 	}
 
@@ -299,7 +299,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	tm.RecordTopicStreams(src1.TopicName(), srcStream1)
 	tm.RecordTopicStreams(src2.TopicName(), srcStream2)
 	tm.RecordTopicStreams(sinkStream.TopicName(), sinkStream)
-	if err = tm.BeginTransaction(ctx); err != nil {
+	if err = tm.BeginTransaction(ctx, nil, nil); err != nil {
 		panic(err)
 	}
 	if err = tm.AddTopicPartition(ctx, sinkStream.TopicName(), []uint8{0}); err != nil {
@@ -313,7 +313,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	}
 	joinProc(ctx, src1, sink, trackParFunc, oneJoinTwo)
 	joinProc(ctx, src2, sink, trackParFunc, twoJoinOne)
-	if err = tm.CommitTransaction(ctx); err != nil {
+	if err = tm.CommitTransaction(ctx, nil, nil); err != nil {
 		panic(err)
 	}
 	got, err := readMsgs(ctx, kSerde, commtypes.StringSerde{}, msgSerde, sinkStream)

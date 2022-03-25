@@ -380,3 +380,9 @@ func (s *InMemoryWindowStore) DropDatabase(ctx context.Context) error {
 func (s *InMemoryWindowStore) TableType() TABLE_TYPE {
 	return IN_MEM
 }
+
+func (s *InMemoryWindowStore) StartTransaction(ctx context.Context) error { return nil }
+func (s *InMemoryWindowStore) CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error {
+	return nil
+}
+func (s *InMemoryWindowStore) AbortTransaction(ctx context.Context) error { return nil }

@@ -241,7 +241,10 @@ func UpdateInputStreamCursor(
 
 func TrackOffsetAndCommit(ctx context.Context,
 	consumedSeqNumConfigs []ConsumedSeqNumConfig,
-	tm *TransactionManager, hasLiveTransaction *bool, trackConsumePar *bool,
+	tm *TransactionManager,
+	kvchangelogs []*store.KVStoreChangelog, winchangelogs []*store.WindowStoreChangelog,
+	hasLiveTransaction *bool,
+	trackConsumePar *bool,
 	retc chan *common.FnOutput,
 ) {
 	err := tm.AppendConsumedSeqNum(ctx, consumedSeqNumConfigs)
@@ -251,7 +254,7 @@ func TrackOffsetAndCommit(ctx context.Context,
 			Message: fmt.Sprintf("append offset failed: %v\n", err),
 		}
 	}
-	err = tm.CommitTransaction(ctx)
+	err = tm.CommitTransaction(ctx, kvchangelogs, winchangelogs)
 	if err != nil {
 		retc <- &common.FnOutput{
 			Success: false,
@@ -409,7 +412,8 @@ L:
 					ConsumedSeqNum: uint64(offset),
 				})
 			}
-			TrackOffsetAndCommit(ctx, consumedSeqNumConfigs, tm, &hasLiveTransaction, &trackConsumePar, retc)
+			TrackOffsetAndCommit(ctx, consumedSeqNumConfigs, tm, args.KVChangelogs, args.WindowStoreChangelogs,
+				&hasLiveTransaction, &trackConsumePar, retc)
 			/*
 				if val, ok := args.QueryInput.TestParams["FailAfterCommit"]; ok && val {
 					fmt.Fprintf(os.Stderr, "about to fail after commit")
@@ -430,7 +434,7 @@ L:
 			break
 		}
 		if !hasLiveTransaction {
-			if err := tm.BeginTransaction(ctx); err != nil {
+			if err := tm.BeginTransaction(ctx, args.KVChangelogs, args.WindowStoreChangelogs); err != nil {
 				retc <- &common.FnOutput{Success: false, Message: fmt.Sprintf("transaction begin failed: %v\n", err)}
 				return
 			}
@@ -477,7 +481,8 @@ L:
 							ConsumedSeqNum: uint64(offset),
 						})
 					}
-					TrackOffsetAndCommit(ctx, consumedSeqNumConfigs, tm, &hasLiveTransaction, &trackConsumePar, retc)
+					TrackOffsetAndCommit(ctx, consumedSeqNumConfigs, tm, args.KVChangelogs, args.WindowStoreChangelogs,
+						&hasLiveTransaction, &trackConsumePar, retc)
 				}
 				// elapsed := time.Since(procStart)
 				// latencies = append(latencies, int(elapsed.Microseconds()))
@@ -486,7 +491,7 @@ L:
 				ret.Duration = time.Since(startTime).Seconds()
 			} else {
 				if hasLiveTransaction {
-					if err := tm.AbortTransaction(ctx); err != nil {
+					if err := tm.AbortTransaction(ctx, false, args.KVChangelogs, args.WindowStoreChangelogs); err != nil {
 						retc <- &common.FnOutput{Success: false, Message: fmt.Sprintf("abort failed: %v\n", err)}
 						return
 					}

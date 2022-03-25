@@ -27,4 +27,7 @@ type WindowStore interface {
 	IterAll(iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error
 	DropDatabase(ctx context.Context) error
 	TableType() TABLE_TYPE
+	StartTransaction(ctx context.Context) error
+	CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error
+	AbortTransaction(ctx context.Context) error
 }

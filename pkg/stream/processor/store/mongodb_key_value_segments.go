@@ -121,3 +121,10 @@ func (kvs *MongoDBKeyValueSegments) segmentIDFromSegmentName(segName string) (in
 func (kvs *MongoDBKeyValueSegments) Destroy(ctx context.Context) error {
 	return kvs.mkvs.DropDatabase(ctx)
 }
+
+func (kvs *MongoDBKeyValueSegments) StartTransaction(ctx context.Context) error {
+	return kvs.mkvs.StartTransaction(ctx)
+}
+func (kvs *MongoDBKeyValueSegments) CommitTransaction(ctx context.Context, taskRepr string, transactionalID uint64) error {
+	return kvs.mkvs.CommitTransaction(ctx, taskRepr, transactionalID)
+}

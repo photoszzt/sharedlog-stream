@@ -136,3 +136,13 @@ func (s *BaseSegments) GetSegmentNamesFromRemote(ctx context.Context) ([]string,
 func (s *BaseSegments) Destroy(ctx context.Context) error {
 	panic("should not call base version")
 }
+
+func (s *BaseSegments) StartTransaction(ctx context.Context) error {
+	panic("should not call base version")
+}
+func (s *BaseSegments) CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error {
+	panic("should not call base version")
+}
+func (s *BaseSegments) AbortTransaction(ctx context.Context) error {
+	panic("should not call base version")
+}

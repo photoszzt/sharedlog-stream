@@ -238,3 +238,13 @@ func (s *BaseSegmentedBytesStore) DropDatabase(ctx context.Context) error {
 func (s *BaseSegmentedBytesStore) TableType() TABLE_TYPE {
 	return s.tableType
 }
+
+func (s *BaseSegmentedBytesStore) StartTransaction(ctx context.Context) error {
+	return s.segments.StartTransaction(ctx)
+}
+func (s *BaseSegmentedBytesStore) CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error {
+	return s.segments.CommitTransaction(ctx, taskRepr, transactionID)
+}
+func (s *BaseSegmentedBytesStore) AbortTransaction(ctx context.Context) error {
+	return s.segments.AbortTransaction(ctx)
+}

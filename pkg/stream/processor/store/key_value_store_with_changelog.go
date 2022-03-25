@@ -156,3 +156,10 @@ func (st *KeyValueStoreWithChangelog) PrefixScan(prefix interface{},
 func (st *KeyValueStoreWithChangelog) TableType() TABLE_TYPE {
 	return st.kvstore.TableType()
 }
+
+func (st *KeyValueStoreWithChangelog) StartTransaction(ctx context.Context) error { return nil }
+func (st *KeyValueStoreWithChangelog) CommitTransaction(ctx context.Context,
+	taskRepr string, transactionID uint64) error {
+	return nil
+}
+func (st *KeyValueStoreWithChangelog) AbortTransaction(ctx context.Context) error { return nil }

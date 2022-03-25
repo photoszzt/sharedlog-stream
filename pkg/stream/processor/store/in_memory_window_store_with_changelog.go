@@ -162,3 +162,9 @@ func (s *InMemoryWindowStoreWithChangelog) DropDatabase(ctx context.Context) err
 func (s *InMemoryWindowStoreWithChangelog) TableType() TABLE_TYPE {
 	return IN_MEM
 }
+
+func (s *InMemoryWindowStoreWithChangelog) StartTransaction(ctx context.Context) error { return nil }
+func (s *InMemoryWindowStoreWithChangelog) CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error {
+	return nil
+}
+func (s *InMemoryWindowStoreWithChangelog) AbortTransaction(ctx context.Context) error { return nil }

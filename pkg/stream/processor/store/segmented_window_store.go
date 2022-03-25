@@ -215,3 +215,15 @@ func (rws *SegmentedWindowStore) DropDatabase(ctx context.Context) error {
 func (rws *SegmentedWindowStore) TableType() TABLE_TYPE {
 	return rws.bytesStore.TableType()
 }
+
+func (rws *SegmentedWindowStore) StartTransaction(ctx context.Context) error {
+	return rws.bytesStore.StartTransaction(ctx)
+}
+func (rws *SegmentedWindowStore) CommitTransaction(ctx context.Context, taskRepr string,
+	transactionID uint64,
+) error {
+	return rws.bytesStore.CommitTransaction(ctx, taskRepr, transactionID)
+}
+func (rws *SegmentedWindowStore) AbortTransaction(ctx context.Context) error {
+	return rws.bytesStore.AbortTransaction(ctx)
+}

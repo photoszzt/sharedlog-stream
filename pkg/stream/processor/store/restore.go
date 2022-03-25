@@ -25,57 +25,6 @@ func storeToWindowStore(ctx context.Context, keyBytes []byte, ts int64,
 	return err
 }
 
-type KVStoreChangelog struct {
-	kvStore   KeyValueStore
-	Changelog Stream
-	keySerde  commtypes.Serde
-	valSerde  commtypes.Serde
-	ParNum    uint8
-}
-
-func NewKVStoreChangelog(
-	kvStore KeyValueStore,
-	changelog Stream,
-	keySerde commtypes.Serde,
-	valSerde commtypes.Serde,
-	parNum uint8,
-) *KVStoreChangelog {
-	return &KVStoreChangelog{
-		kvStore:   kvStore,
-		Changelog: changelog,
-		keySerde:  keySerde,
-		valSerde:  valSerde,
-		ParNum:    parNum,
-	}
-}
-
-type WindowStoreChangelog struct {
-	windowStore      WindowStore
-	Changelog        Stream
-	keyWindowTsSerde commtypes.Serde
-	keySerde         commtypes.Serde
-	valSerde         commtypes.Serde
-	ParNum           uint8
-}
-
-func NewWindowStoreChangelog(
-	wsStore WindowStore,
-	changelog Stream,
-	keyWindowTsSerde commtypes.Serde,
-	keySerde commtypes.Serde,
-	valSerde commtypes.Serde,
-	parNum uint8,
-) *WindowStoreChangelog {
-	return &WindowStoreChangelog{
-		windowStore:      wsStore,
-		Changelog:        changelog,
-		keyWindowTsSerde: keyWindowTsSerde,
-		keySerde:         keySerde,
-		valSerde:         valSerde,
-		ParNum:           parNum,
-	}
-}
-
 func RestoreWindowStateStore(
 	ctx context.Context,
 	wschangelog *WindowStoreChangelog,

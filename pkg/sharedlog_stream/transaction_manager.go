@@ -25,6 +25,8 @@ const (
 
 // each transaction manager manages one topic partition;
 // assume each transactional_id correspond to one output partition
+// transaction manager is not goroutine safe, it's assumed to be used by only one stream task and only
+// one goroutine could update it
 type TransactionManager struct {
 	backgroundJobCtx      context.Context
 	msgSerde              commtypes.MsgSerde
@@ -41,6 +43,7 @@ type TransactionManager struct {
 	CurrentEpoch          uint16
 	serdeFormat           commtypes.SerdeFormat
 	currentStatus         TransactionState
+	TransactionID         uint64
 }
 
 func BeginTag(nameHash uint64, parNum uint8) uint64 {
@@ -74,6 +77,7 @@ func NewTransactionManager(ctx context.Context,
 		CurrentEpoch:          0,
 		CurrentTaskId:         0,
 		serdeFormat:           serdeFormat,
+		TransactionID:         0,
 	}
 	err = tm.setupSerde(serdeFormat)
 	if err != nil {
@@ -207,7 +211,7 @@ func (tc *TransactionManager) loadAndFixTransaction(ctx context.Context, mostRec
 		// debug.Fprintf(os.Stderr, "before load current topic partitions\n")
 		tc.loadCurrentTopicPartitions(mostRecentTxnMetadata.TopicPartitions)
 		// debug.Fprintf(os.Stderr, "after load current topic partitions\n")
-		err := tc.AbortTransaction(ctx)
+		err := tc.AbortTransaction(ctx, true, nil, nil)
 		// debug.Fprintf(os.Stderr, "after abort transactions\n")
 		if err != nil {
 			return err
@@ -551,7 +555,9 @@ func (tc *TransactionManager) FindLastConsumedSeqNum(ctx context.Context, topicT
 	return rawMsg.LogSeqNum, nil
 }
 
-func (tc *TransactionManager) BeginTransaction(ctx context.Context) error {
+func (tc *TransactionManager) BeginTransaction(ctx context.Context, kvstores []*store.KVStoreChangelog,
+	winstores []*store.WindowStoreChangelog,
+) error {
 	if !BEGIN.IsValidPreviousState(tc.currentStatus) {
 		// debug.Fprintf(os.Stderr, "current state is %d\n", tc.currentStatus)
 		return errors.ErrInvalidStateTransition
@@ -559,13 +565,21 @@ func (tc *TransactionManager) BeginTransaction(ctx context.Context) error {
 	tc.currentStatus = BEGIN
 	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 
+	tc.TransactionID += 1
 	txnState := TxnMetadata{
-		State:     tc.currentStatus,
-		TaskId:    tc.CurrentTaskId,
-		TaskEpoch: tc.CurrentEpoch,
+		State:         tc.currentStatus,
+		TaskId:        tc.CurrentTaskId,
+		TaskEpoch:     tc.CurrentEpoch,
+		TransactionID: tc.TransactionID,
 	}
 	tags := []uint64{NameHashWithPartition(tc.transactionLog.topicNameHash, 0), BeginTag(tc.transactionLog.topicNameHash, 0)}
-	return tc.appendToTransactionLog(ctx, &txnState, tags)
+	if err := tc.appendToTransactionLog(ctx, &txnState, tags); err != nil {
+		return err
+	}
+	if err := store.BeginKVStoreTransaction(ctx, kvstores); err != nil {
+		return err
+	}
+	return store.BeginWindowStoreTransaction(ctx, winstores)
 }
 
 // second phase of the 2-phase commit protocol
@@ -587,7 +601,9 @@ func (tc *TransactionManager) completeTransaction(ctx context.Context, trMark Tx
 	return nil
 }
 
-func (tc *TransactionManager) CommitTransaction(ctx context.Context) error {
+func (tc *TransactionManager) CommitTransaction(ctx context.Context, kvstores []*store.KVStoreChangelog,
+	winstores []*store.WindowStoreChangelog,
+) error {
 	if !PREPARE_COMMIT.IsValidPreviousState(tc.currentStatus) {
 		// debug.Fprintf(os.Stderr, "Fail to transition from %s to PREPARE_COMMIT\n", tc.currentStatus.String())
 		return errors.ErrInvalidStateTransition
@@ -600,7 +616,12 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
+	if err := store.CommitKVStoreTransaction(ctx, kvstores, tc.TransactionalId, tc.TransactionID); err != nil {
+		return err
+	}
+	if err := store.CommitWindowStoreTransaction(ctx, winstores, tc.TransactionalId, tc.TransactionID); err != nil {
+		return err
+	}
 	// second phase of the commit
 	err = tc.completeTransaction(ctx, COMMIT, COMPLETE_COMMIT)
 	if err != nil {
@@ -610,7 +631,10 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context) error {
 	return nil
 }
 
-func (tc *TransactionManager) AbortTransaction(ctx context.Context) error {
+func (tc *TransactionManager) AbortTransaction(ctx context.Context, inRestore bool,
+	kvstores []*store.KVStoreChangelog,
+	winstores []*store.WindowStoreChangelog,
+) error {
 	if !PREPARE_ABORT.IsValidPreviousState(tc.currentStatus) {
 		return errors.ErrInvalidStateTransition
 	}
@@ -619,6 +643,15 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context) error {
 	err := tc.registerTopicPartitions(ctx)
 	if err != nil {
 		return err
+	}
+
+	if !inRestore {
+		if err := store.AbortKVStoreTransaction(ctx, kvstores); err != nil {
+			return err
+		}
+		if err := store.AbortWindowStoreTransaction(ctx, winstores); err != nil {
+			return err
+		}
 	}
 
 	err = tc.completeTransaction(ctx, ABORT, COMPLETE_ABORT)

@@ -87,7 +87,18 @@ func (s *MongoDBKeyValueStore) StartTransaction(ctx context.Context) error {
 	return nil
 }
 
-func (s *MongoDBKeyValueStore) CommitTransaction(ctx context.Context) error {
+func (s *MongoDBKeyValueStore) CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error {
+	col := s.client.Database(s.config.DBName).Collection(taskRepr)
+	opts := options.Update().SetUpsert(true)
+	_, err := col.UpdateOne(s.sessCtx, bson.M{KEY_NAME: "tranID"},
+		bson.M{"$set": bson.M{VALUE_NAME: transactionID}}, opts)
+	if err != nil {
+		err2 := s.sessCtx.AbortTransaction(context.Background())
+		if err2 != nil {
+			return fmt.Errorf("try to abort transaction while handling err (%v) and abort failed: %v",
+				err, err2)
+		}
+	}
 	if err := s.session.CommitTransaction(ctx); err != nil {
 		return err
 	}
@@ -295,7 +306,7 @@ func (s *MongoDBKeyValueStore) PutWithCollection(ctx context.Context, kBytes []b
 		if err != nil {
 			if s.inTransaction {
 				err2 := s.sessCtx.AbortTransaction(context.Background())
-				if err != nil {
+				if err2 != nil {
 					return fmt.Errorf("try to abort transaction while handling err (%v) and abort failed: %v", err, err2)
 				}
 			}

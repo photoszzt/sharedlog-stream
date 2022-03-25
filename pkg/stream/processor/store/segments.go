@@ -16,4 +16,7 @@ type Segments interface {
 	CleanupExpiredMeta(ctx context.Context, expired []*KeySegment) error
 	GetSegmentNamesFromRemote(ctx context.Context) ([]string, error)
 	Destroy(ctx context.Context) error
+	StartTransaction(ctx context.Context) error
+	CommitTransaction(ctx context.Context, taskRepr string, transactionalID uint64) error
+	AbortTransaction(ctx context.Context) error
 }

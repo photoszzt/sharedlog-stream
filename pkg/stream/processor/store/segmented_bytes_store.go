@@ -27,6 +27,9 @@ type SegmentedBytesStore interface {
 	Get(ctx context.Context, key []byte) ([]byte, bool, error)
 	DropDatabase(ctx context.Context) error
 	TableType() TABLE_TYPE
+	StartTransaction(ctx context.Context) error
+	CommitTransaction(ctx context.Context, taskRepr string, transactionalID uint64) error
+	AbortTransaction(ctx context.Context) error
 }
 
 type KeySchema interface {

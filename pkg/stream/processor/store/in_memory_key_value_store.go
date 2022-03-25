@@ -167,3 +167,13 @@ func (st *InMemoryKeyValueStore) PrefixScan(prefix interface{}, prefixKeyEncoder
 func (st *InMemoryKeyValueStore) TableType() TABLE_TYPE {
 	return IN_MEM
 }
+
+func (st *InMemoryKeyValueStore) StartTransaction(ctx context.Context) error {
+	return nil
+}
+
+func (st *InMemoryKeyValueStore) CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error {
+	return nil
+}
+
+func (st *InMemoryKeyValueStore) AbortTransaction(ctx context.Context) error { return nil }

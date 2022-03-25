@@ -19,6 +19,9 @@ type KeyValueStore interface {
 	PutAll(context.Context, []*commtypes.Message) error
 	Delete(ctx context.Context, key commtypes.KeyT) error
 	TableType() TABLE_TYPE
+	StartTransaction(ctx context.Context) error
+	CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error
+	AbortTransaction(ctx context.Context) error
 }
 
 type Segment interface {
