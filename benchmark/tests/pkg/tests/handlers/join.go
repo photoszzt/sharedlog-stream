@@ -100,15 +100,15 @@ func (h *joinHandler) getSrcSink(
 
 func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	debug.Fprint(os.Stderr, "############## stream stream join mongodb\n")
-	srcStream1, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "src1", 1, commtypes.JSON)
+	srcStream1, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "src1Mongo", 1, commtypes.JSON)
 	if err != nil {
 		panic(err)
 	}
-	srcStream2, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "src2", 1, commtypes.JSON)
+	srcStream2, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "src2Mongo", 1, commtypes.JSON)
 	if err != nil {
 		panic(err)
 	}
-	sinkStream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "sink", 1, commtypes.JSON)
+	sinkStream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "sinkMongo", 1, commtypes.JSON)
 	if err != nil {
 		panic(err)
 	}
@@ -128,11 +128,11 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	msgSerde := commtypes.MessageSerializedJSONSerde{}
 	kSerde := commtypes.IntSerde{}
 	vSerde := strTsJSONSerde{}
-	toWinTab1, winTab1, err := processor.ToMongoDBWindowTable(ctx, "tab1", mongoAddr, joinWindows, kSerde, vSerde)
+	toWinTab1, winTab1, err := processor.ToMongoDBWindowTable(ctx, "tab1Mongo", mongoAddr, joinWindows, kSerde, vSerde)
 	if err != nil {
 		panic(err)
 	}
-	toWinTab2, winTab2, err := processor.ToMongoDBWindowTable(ctx, "tab2", mongoAddr, joinWindows, kSerde, vSerde)
+	toWinTab2, winTab2, err := processor.ToMongoDBWindowTable(ctx, "tab2Mongo", mongoAddr, joinWindows, kSerde, vSerde)
 	if err != nil {
 		panic(err)
 	}
