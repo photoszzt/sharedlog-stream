@@ -47,8 +47,10 @@ func (h *joinHandler) Call(ctx context.Context, input []byte) ([]byte, error) {
 
 func (h *joinHandler) tests(ctx context.Context, sp *test_types.TestInput) *common.FnOutput {
 	switch sp.TestName {
-	case "streamStreamJoin":
+	case "streamStreamJoinMem":
 		h.testStreamStreamJoinMem(ctx)
+	case "streamStreamJoinMongo":
+		h.testStreamStreamJoinMongoDB(ctx)
 	default:
 		return &common.FnOutput{
 			Success: false,
@@ -94,6 +96,212 @@ func (h *joinHandler) getSrcSink(
 	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, src2Config))
 	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
 	return src1, src2, sink, nil
+}
+
+func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
+	debug.Fprint(os.Stderr, "############## stream stream join mongodb\n")
+	srcStream1, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "src1", 1, commtypes.JSON)
+	if err != nil {
+		panic(err)
+	}
+	srcStream2, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "src2", 1, commtypes.JSON)
+	if err != nil {
+		panic(err)
+	}
+	sinkStream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "sink", 1, commtypes.JSON)
+	if err != nil {
+		panic(err)
+	}
+	srcStream1.SetInTransaction(true)
+	srcStream2.SetInTransaction(true)
+	sinkStream.SetInTransaction(true)
+	src1, src2, sink, err := h.getSrcSink(srcStream1, srcStream2, sinkStream)
+	if err != nil {
+		panic(err)
+	}
+	joinWindows, err := processor.NewJoinWindowsWithGrace(time.Duration(50)*time.Millisecond,
+		time.Duration(50)*time.Millisecond)
+	if err != nil {
+		panic(err)
+	}
+	mongoAddr := "mongodb://localhost:27017"
+	msgSerde := commtypes.MessageSerializedJSONSerde{}
+	kSerde := commtypes.IntSerde{}
+	vSerde := strTsJSONSerde{}
+	toWinTab1, winTab1, err := processor.ToMongoDBWindowTable(ctx, "tab1", mongoAddr, joinWindows, kSerde, vSerde)
+	if err != nil {
+		panic(err)
+	}
+	toWinTab2, winTab2, err := processor.ToMongoDBWindowTable(ctx, "tab2", mongoAddr, joinWindows, kSerde, vSerde)
+	if err != nil {
+		panic(err)
+	}
+	joiner := processor.ValueJoinerWithKeyTsFunc(
+		func(readOnlyKey interface{},
+			leftValue interface{}, rightValue interface{}, leftTs int64, rightTs int64,
+		) interface{} {
+			debug.Fprintf(os.Stderr, "left val: %v, ts: %d, right val: %v, ts: %d\n", leftValue, leftTs, rightValue, rightTs)
+			return fmt.Sprintf("%s+%s", leftValue.(strTs).Val, rightValue.(strTs).Val)
+		})
+	sharedTimeTracker := processor.NewTimeTracker()
+	oneJoinTwoProc := processor.NewStreamStreamJoinProcessor(winTab2, joinWindows, joiner, false, true, sharedTimeTracker)
+	twoJoinOneProc := processor.NewStreamStreamJoinProcessor(winTab1, joinWindows, processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker)
+	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *processor.MeteredSink,
+		trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
+	) error {
+		_, err := toWinTab1.ProcessAndReturn(ctx, m)
+		if err != nil {
+			return err
+		}
+		joinedMsgs, err := oneJoinTwoProc.ProcessAndReturn(ctx, m)
+		if err != nil {
+			return err
+		}
+		return pushMsgsToSink(ctx, sink, joinedMsgs, trackParFunc)
+	}
+	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *processor.MeteredSink,
+		trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
+	) error {
+		_, err := toWinTab2.ProcessAndReturn(ctx, m)
+		if err != nil {
+			return err
+		}
+		joinedMsgs, err := twoJoinOneProc.ProcessAndReturn(ctx, m)
+		if err != nil {
+			return err
+		}
+		return pushMsgsToSink(ctx, sink, joinedMsgs, trackParFunc)
+	}
+
+	sp := &common.QueryInput{
+		SerdeFormat: uint8(commtypes.JSON),
+	}
+	streamTaskArgs := &sharedlog_stream.StreamTaskArgsTransaction{
+		Env:             h.env,
+		QueryInput:      sp,
+		MsgSerde:        msgSerde,
+		OutputStream:    sinkStream,
+		TransactionalId: "joinTestMongo",
+	}
+	tm, err := sharedlog_stream.SetupTransactionManager(ctx, streamTaskArgs)
+	if err != nil {
+		panic(err)
+	}
+	debug.Fprintf(os.Stderr, "task id: %x, task epoch: %d\n", tm.CurrentTaskId, tm.CurrentEpoch)
+	trackParFunc := func(ctx context.Context,
+		key interface{},
+		keySerde commtypes.Serde,
+		topicName string,
+		substreamId uint8,
+	) error {
+		err := tm.AddTopicPartition(ctx, topicName, []uint8{substreamId})
+		if err != nil {
+			return err
+		}
+		return err
+	}
+	expected_keys := []int{0, 1, 2, 3}
+
+	tm.RecordTopicStreams(src1.TopicName(), srcStream1)
+
+	if err = tm.BeginTransaction(ctx, nil, nil); err != nil {
+		panic(err)
+	}
+	if err = tm.AddTopicPartition(ctx, srcStream1.TopicName(), []uint8{0}); err != nil {
+		panic(err)
+	}
+	for i := 0; i < 2; i++ {
+		_, err := pushMsgToStream(ctx, expected_keys[i],
+			&strTs{Val: fmt.Sprintf("A%d", expected_keys[i]), Ts: 0},
+			kSerde, vSerde, msgSerde, srcStream1)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	if err = tm.CommitTransaction(ctx, nil, nil); err != nil {
+		panic(err)
+	}
+
+	/*
+		got, err := readMsgs(ctx, kSerde, vSerde, msgSerde, srcStream1)
+		if err != nil {
+			panic(err)
+		}
+		expected := []commtypes.Message{
+			{Key: 0, Value: strTs{Val: "A0", Ts: 0}, Timestamp: 0},
+			{Key: 1, Value: strTs{Val: "A1", Ts: 0}, Timestamp: 0},
+		}
+		if !reflect.DeepEqual(expected, got) {
+			panic(fmt.Sprintf("should equal. expected: %v, got: %v", expected, got))
+		}
+	*/
+
+	tm.RecordTopicStreams(src2.TopicName(), srcStream2)
+	if err = tm.BeginTransaction(ctx, nil, nil); err != nil {
+		panic(err)
+	}
+	if err = tm.AddTopicPartition(ctx, srcStream2.TopicName(), []uint8{0}); err != nil {
+		panic(err)
+	}
+	for i := 0; i < 2; i++ {
+		_, err := pushMsgToStream(ctx, expected_keys[i],
+			&strTs{Val: fmt.Sprintf("a%d", expected_keys[i]), Ts: 0},
+			kSerde, vSerde, msgSerde, srcStream2)
+		if err != nil {
+			panic(err)
+		}
+	}
+	if err = tm.CommitTransaction(ctx, nil, nil); err != nil {
+		panic(err)
+	}
+
+	/*
+		got, err = readMsgs(ctx, kSerde, vSerde, msgSerde, srcStream2)
+		if err != nil {
+			panic(err)
+		}
+		expected = []commtypes.Message{
+			{Key: 0, Value: strTs{Val: "a0", Ts: 0}, Timestamp: 0},
+			{Key: 1, Value: strTs{Val: "a1", Ts: 0}, Timestamp: 0},
+		}
+		if !reflect.DeepEqual(expected, got) {
+			panic(fmt.Sprintf("should equal. expected: %v, got: %v", expected, got))
+		}
+	*/
+	tm.RecordTopicStreams(src1.TopicName(), srcStream1)
+	tm.RecordTopicStreams(src2.TopicName(), srcStream2)
+	tm.RecordTopicStreams(sinkStream.TopicName(), sinkStream)
+	if err = tm.BeginTransaction(ctx, nil, nil); err != nil {
+		panic(err)
+	}
+	if err = tm.AddTopicPartition(ctx, sinkStream.TopicName(), []uint8{0}); err != nil {
+		panic(err)
+	}
+	if err = tm.AddTopicPartition(ctx, srcStream1.TopicName(), []uint8{0}); err != nil {
+		panic(err)
+	}
+	if err = tm.AddTopicPartition(ctx, srcStream2.TopicName(), []uint8{0}); err != nil {
+		panic(err)
+	}
+	joinProc(ctx, src1, sink, trackParFunc, oneJoinTwo)
+	joinProc(ctx, src2, sink, trackParFunc, twoJoinOne)
+	if err = tm.CommitTransaction(ctx, nil, nil); err != nil {
+		panic(err)
+	}
+	tm.RecordTopicStreams(sinkStream.TopicName(), sinkStream)
+	got, err := readMsgs(ctx, kSerde, commtypes.StringSerde{}, msgSerde, sinkStream)
+	if err != nil {
+		panic(err)
+	}
+	expected_join := []commtypes.Message{
+		{Key: 0, Value: "A0+a0", Timestamp: 0},
+		{Key: 1, Value: "A1+a1", Timestamp: 0},
+	}
+	if !reflect.DeepEqual(expected_join, got) {
+		panic(fmt.Sprintf("should equal. expected: %v, got: %v", expected_join, got))
+	}
+
 }
 
 func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
@@ -206,10 +414,11 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		SerdeFormat: uint8(commtypes.JSON),
 	}
 	streamTaskArgs := &sharedlog_stream.StreamTaskArgsTransaction{
-		Env:          h.env,
-		QueryInput:   sp,
-		MsgSerde:     msgSerde,
-		OutputStream: sinkStream,
+		Env:             h.env,
+		QueryInput:      sp,
+		MsgSerde:        msgSerde,
+		OutputStream:    sinkStream,
+		TransactionalId: "joinTestsMem",
 	}
 	tm, err := sharedlog_stream.SetupTransactionManager(ctx, streamTaskArgs)
 	if err != nil {

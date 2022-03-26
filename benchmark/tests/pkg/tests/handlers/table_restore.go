@@ -83,7 +83,11 @@ func (s strTs) ExtractStreamTime() (int64, error) {
 type strTsJSONSerde struct{}
 
 func (s strTsJSONSerde) Encode(value interface{}) ([]byte, error) {
-	val := value.(*strTs)
+	val, ok := value.(*strTs)
+	if !ok {
+		valTmp := value.(strTs)
+		val = &valTmp
+	}
 	return json.Marshal(val)
 }
 

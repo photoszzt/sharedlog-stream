@@ -71,6 +71,8 @@ func main() {
 		invokeTest(client, "restoreWin", "restoreWin", &response)
 	case "join":
 		response := common.FnOutput{}
-		invokeTest(client, "streamStreamJoin", "streamStreamJoin", &response)
+		invokeTest(client, "streamStreamJoinMem", "streamStreamJoinMem", &response)
+		response = common.FnOutput{}
+		invokeTest(client, "streamStreamJoinMongo", "streamStreamJoinMongo", &response)
 	}
 }
