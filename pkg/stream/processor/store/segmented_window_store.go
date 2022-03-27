@@ -227,3 +227,7 @@ func (rws *SegmentedWindowStore) CommitTransaction(ctx context.Context, taskRepr
 func (rws *SegmentedWindowStore) AbortTransaction(ctx context.Context) error {
 	return rws.bytesStore.AbortTransaction(ctx)
 }
+
+func (rws *SegmentedWindowStore) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
+	return rws.bytesStore.GetTransactionID(ctx, taskRepr)
+}

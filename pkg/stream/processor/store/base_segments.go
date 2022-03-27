@@ -146,3 +146,7 @@ func (s *BaseSegments) CommitTransaction(ctx context.Context, taskRepr string, t
 func (s *BaseSegments) AbortTransaction(ctx context.Context) error {
 	panic("should not call base version")
 }
+
+func (s *BaseSegments) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
+	panic("should not call base version")
+}

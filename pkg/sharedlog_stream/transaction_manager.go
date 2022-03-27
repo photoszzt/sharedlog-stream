@@ -130,6 +130,7 @@ func (tc *TransactionManager) getMostRecentTransactionState(ctx context.Context)
 		TaskId:          0,
 		TaskEpoch:       0,
 		State:           EMPTY,
+		TransactionID:   0,
 	}
 
 	// find the begin of the last transaction
@@ -185,6 +186,7 @@ func (tc *TransactionManager) getMostRecentTransactionState(ctx context.Context)
 			mostRecentTxnMetadata.State = txnMeta.State
 			mostRecentTxnMetadata.TaskId = txnMeta.TaskId
 			mostRecentTxnMetadata.TaskEpoch = txnMeta.TaskEpoch
+			mostRecentTxnMetadata.TransactionID = txnMeta.TransactionID
 
 			if txnMeta.TopicPartitions != nil {
 				mostRecentTxnMetadata.TopicPartitions = append(mostRecentTxnMetadata.TopicPartitions, txnMeta.TopicPartitions...)
@@ -223,7 +225,6 @@ func (tc *TransactionManager) loadAndFixTransaction(ctx context.Context, mostRec
 		// need to abort
 		currentStatus := tc.currentStatus
 
-		// use the previous app id to finish the previous transaction
 		tc.currentStatus = mostRecentTxnMetadata.State
 		// debug.Fprintf(os.Stderr, "In repair: Transition to %s to restore\n", tc.currentStatus)
 
@@ -239,10 +240,9 @@ func (tc *TransactionManager) loadAndFixTransaction(ctx context.Context, mostRec
 		// debug.Fprintf(os.Stderr, "In repair: Transition back to %s\n", tc.currentStatus)
 	case PREPARE_COMMIT:
 		// the transaction is commited but the marker might not pushed to the relevant partitions yet
-		// need to abort
+		// need to commit
 		currentStatus := tc.currentStatus
 
-		// use the previous app id to finish the previous transaction
 		tc.currentStatus = mostRecentTxnMetadata.State
 		// debug.Fprintf(os.Stderr, "In repair: Transition to %s to restore\n", tc.currentStatus)
 
@@ -368,7 +368,8 @@ func (tc *TransactionManager) appendToTransactionLog(ctx context.Context, tm *Tx
 
 func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, marker TxnMark) error {
 	tm := TxnMarker{
-		Mark: uint8(marker),
+		Mark:          uint8(marker),
+		TransactionID: tc.TransactionID,
 	}
 	encoded, err := tc.txnMarkerSerde.Encode(&tm)
 	if err != nil {
@@ -409,8 +410,8 @@ func (tc *TransactionManager) registerTopicPartitions(ctx context.Context) error
 	txnMd := TxnMetadata{
 		TopicPartitions: tps,
 		State:           tc.currentStatus,
-		TaskId:          tc.CurrentTaskId,
-		TaskEpoch:       tc.CurrentEpoch,
+		// TaskId:          tc.CurrentTaskId,
+		// TaskEpoch:       tc.CurrentEpoch,
 	}
 	err := tc.appendToTransactionLog(ctx, &txnMd, nil)
 	return err
@@ -445,8 +446,8 @@ func (tc *TransactionManager) AddTopicPartition(ctx context.Context, topic strin
 		txnMd := TxnMetadata{
 			TopicPartitions: []TopicPartition{{Topic: topic, ParNum: partitions}},
 			State:           tc.currentStatus,
-			TaskId:          tc.CurrentTaskId,
-			TaskEpoch:       tc.CurrentEpoch,
+			// TaskId:          tc.CurrentTaskId,
+			// TaskEpoch:       tc.CurrentEpoch,
 		}
 		return tc.appendToTransactionLog(ctx, &txnMd, nil)
 	}

@@ -248,3 +248,7 @@ func (s *BaseSegmentedBytesStore) CommitTransaction(ctx context.Context, taskRep
 func (s *BaseSegmentedBytesStore) AbortTransaction(ctx context.Context) error {
 	return s.segments.AbortTransaction(ctx)
 }
+
+func (s *BaseSegmentedBytesStore) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
+	return s.segments.GetTransactionID(ctx, taskRepr)
+}

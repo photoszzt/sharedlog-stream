@@ -386,3 +386,6 @@ func (s *InMemoryWindowStore) CommitTransaction(ctx context.Context, taskRepr st
 	return nil
 }
 func (s *InMemoryWindowStore) AbortTransaction(ctx context.Context) error { return nil }
+func (s *InMemoryWindowStore) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
+	panic("not supported")
+}

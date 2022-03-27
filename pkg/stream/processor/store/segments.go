@@ -19,4 +19,5 @@ type Segments interface {
 	StartTransaction(ctx context.Context) error
 	CommitTransaction(ctx context.Context, taskRepr string, transactionalID uint64) error
 	AbortTransaction(ctx context.Context) error
+	GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error)
 }

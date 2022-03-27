@@ -169,11 +169,14 @@ func (st *InMemoryKeyValueStore) TableType() TABLE_TYPE {
 }
 
 func (st *InMemoryKeyValueStore) StartTransaction(ctx context.Context) error {
-	return nil
+	panic("not supported")
 }
 
 func (st *InMemoryKeyValueStore) CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error {
-	return nil
+	panic("not supported")
 }
 
-func (st *InMemoryKeyValueStore) AbortTransaction(ctx context.Context) error { return nil }
+func (st *InMemoryKeyValueStore) AbortTransaction(ctx context.Context) error { panic("not supported") }
+func (st *InMemoryKeyValueStore) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
+	panic("not supported")
+}

@@ -17,6 +17,8 @@ type MongoDBKeyValueSegments struct {
 	BaseSegments
 }
 
+var _ = Segments(&MongoDBKeyValueSegments{})
+
 func NewMongoDBKeyValueSegments(ctx context.Context, name string, retentionPeriod int64,
 	segmentInterval int64, mkvs *MongoDBKeyValueStore,
 ) (*MongoDBKeyValueSegments, error) {
@@ -127,4 +129,7 @@ func (kvs *MongoDBKeyValueSegments) StartTransaction(ctx context.Context) error 
 }
 func (kvs *MongoDBKeyValueSegments) CommitTransaction(ctx context.Context, taskRepr string, transactionalID uint64) error {
 	return kvs.mkvs.CommitTransaction(ctx, taskRepr, transactionalID)
+}
+func (kvs *MongoDBKeyValueSegments) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
+	return kvs.mkvs.GetTransactionID(ctx, taskRepr)
 }

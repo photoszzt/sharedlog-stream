@@ -163,3 +163,6 @@ func (st *KeyValueStoreWithChangelog) CommitTransaction(ctx context.Context,
 	return nil
 }
 func (st *KeyValueStoreWithChangelog) AbortTransaction(ctx context.Context) error { return nil }
+func (st *KeyValueStoreWithChangelog) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
+	panic("not supported")
+}

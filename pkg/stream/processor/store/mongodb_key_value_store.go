@@ -87,7 +87,9 @@ func (s *MongoDBKeyValueStore) StartTransaction(ctx context.Context) error {
 	return nil
 }
 
-func (s *MongoDBKeyValueStore) CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error {
+func (s *MongoDBKeyValueStore) CommitTransaction(ctx context.Context,
+	taskRepr string, transactionID uint64,
+) error {
 	col := s.client.Database(s.config.DBName).Collection(taskRepr)
 	opts := options.Update().SetUpsert(true)
 	_, err := col.UpdateOne(s.sessCtx, bson.M{KEY_NAME: "tranID"},
@@ -359,4 +361,18 @@ func (s *MongoDBKeyValueStore) PrefixScan(prefix interface{}, prefixKeyEncoder c
 
 func (s *MongoDBKeyValueStore) TableType() TABLE_TYPE {
 	return MONGODB
+}
+
+func (s *MongoDBKeyValueStore) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
+	col := s.client.Database(s.config.DBName).Collection(taskRepr)
+	var result bson.M
+	err := col.FindOne(ctx, bson.M{KEY_NAME: "tranID"}).Decode(&result)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return 0, false, nil
+		}
+		return 0, false, err
+	}
+	val := result[VALUE_NAME]
+	return val.(uint64), true, nil
 }

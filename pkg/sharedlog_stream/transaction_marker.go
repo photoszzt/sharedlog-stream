@@ -12,7 +12,8 @@ const (
 )
 
 type TxnMarker struct {
-	Mark uint8 `json:"mk" msg:"mk"`
+	TransactionID uint64 `json:"tid" msg:"tid"`
+	Mark          uint8  `json:"mk" msg:"mk"`
 }
 
 type TxnMarkerJSONSerde struct{}
