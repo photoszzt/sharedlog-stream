@@ -70,6 +70,8 @@ func (h *q3JoinTableHandler) process(ctx context.Context,
 		offMu:         &h.offMu,
 		currentOffset: h.currentOffset,
 		trackParFunc:  args.trackParFunc,
+		cHashMu:       &h.cHashMu,
+		cHash:         h.cHash,
 	}
 	go joinProc(ctx, personsOutChan, joinProcPerson)
 	wg.Add(1)
@@ -82,6 +84,8 @@ func (h *q3JoinTableHandler) process(ctx context.Context,
 		offMu:         &h.offMu,
 		currentOffset: h.currentOffset,
 		trackParFunc:  args.trackParFunc,
+		cHashMu:       &h.cHashMu,
+		cHash:         h.cHash,
 	}
 	go joinProc(ctx, auctionsOutChan, joinProgArgsAuction)
 
@@ -313,34 +317,22 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		processor.NewTableTableJoinProcessor(kvtabs.tab1.Name(), kvtabs.tab1,
 			processor.ReverseValueJoinerWithKey(joiner)))
 
-	pJoinA := JoinWorkerFunc(func(ctx context.Context, m commtypes.Message,
-		sink *processor.MeteredSink, trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
-	) error {
+	pJoinA := JoinWorkerFunc(func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		// msg is person
 		_, err := kvtabs.toTab2.ProcessAndReturn(ctx, m)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		joinedMsgs, err := personJoinsAuctions.ProcessAndReturn(ctx, m)
-		if err != nil {
-			return err
-		}
-		return pushMsgsToSink(ctx, sink, h.cHash, &h.cHashMu, joinedMsgs, trackParFunc)
+		return personJoinsAuctions.ProcessAndReturn(ctx, m)
 	})
 
-	aJoinP := JoinWorkerFunc(func(c context.Context, m commtypes.Message,
-		sink *processor.MeteredSink, trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
-	) error {
+	aJoinP := JoinWorkerFunc(func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		// msg is auction
 		_, err := kvtabs.toTab2.ProcessAndReturn(ctx, m)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		joinedMsgs, err := auctionJoinsPersons.ProcessAndReturn(ctx, m)
-		if err != nil {
-			return err
-		}
-		return pushMsgsToSink(ctx, sink, h.cHash, &h.cHashMu, joinedMsgs, trackParFunc)
+		return auctionJoinsPersons.ProcessAndReturn(ctx, m)
 	})
 
 	sharedlog_stream.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)

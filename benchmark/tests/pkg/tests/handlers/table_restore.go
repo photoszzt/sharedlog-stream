@@ -156,7 +156,7 @@ func (h *tableRestoreHandler) testRestoreKVTable(ctx context.Context) {
 			return 1
 		}
 	})
-	err = store.RestoreKVStateStore(ctx,
+	err = store.RestoreChangelogKVStateStore(ctx,
 		store.NewKVStoreChangelog(kvstore, changelog, commtypes.IntSerde{}, strTsJSONSerde{}, 0),
 		h.msgSerde, offset)
 	if err != nil {
@@ -239,7 +239,7 @@ func (h *tableRestoreHandler) testRestoreWindowTable(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	err = store.RestoreWindowStateStore(ctx, store.NewWindowStoreChangelog(wstore, changelog,
+	err = store.RestoreChangelogWindowStateStore(ctx, store.NewWindowStoreChangelog(wstore, changelog,
 		commtypes.KeyAndWindowStartTsJSONSerde{}, commtypes.IntSerde{}, commtypes.StringSerde{}, 0), h.msgSerde, uint64(offset))
 	if err != nil {
 		panic(err)

@@ -6,7 +6,7 @@ import (
 )
 
 type KVStoreChangelog struct {
-	kvStore   KeyValueStore
+	KVStore   KeyValueStore
 	Changelog Stream
 	keySerde  commtypes.Serde
 	valSerde  commtypes.Serde
@@ -21,7 +21,7 @@ func NewKVStoreChangelog(
 	parNum uint8,
 ) *KVStoreChangelog {
 	return &KVStoreChangelog{
-		kvStore:   kvStore,
+		KVStore:   kvStore,
 		Changelog: changelog,
 		keySerde:  keySerde,
 		valSerde:  valSerde,
@@ -31,8 +31,8 @@ func NewKVStoreChangelog(
 
 func BeginKVStoreTransaction(ctx context.Context, kvstores []*KVStoreChangelog) error {
 	for _, kvstorelog := range kvstores {
-		if kvstorelog.kvStore.TableType() == MONGODB {
-			if err := kvstorelog.kvStore.StartTransaction(ctx); err != nil {
+		if kvstorelog.KVStore.TableType() == MONGODB {
+			if err := kvstorelog.KVStore.StartTransaction(ctx); err != nil {
 				return err
 			}
 		}
@@ -44,8 +44,8 @@ func CommitKVStoreTransaction(ctx context.Context, kvstores []*KVStoreChangelog,
 	taskRepr string, transactionID uint64,
 ) error {
 	for _, kvstorelog := range kvstores {
-		if kvstorelog.kvStore.TableType() == MONGODB {
-			if err := kvstorelog.kvStore.CommitTransaction(ctx, taskRepr, transactionID); err != nil {
+		if kvstorelog.KVStore.TableType() == MONGODB {
+			if err := kvstorelog.KVStore.CommitTransaction(ctx, taskRepr, transactionID); err != nil {
 				return err
 			}
 		}
@@ -55,8 +55,8 @@ func CommitKVStoreTransaction(ctx context.Context, kvstores []*KVStoreChangelog,
 
 func AbortKVStoreTransaction(ctx context.Context, kvstores []*KVStoreChangelog) error {
 	for _, kvstorelog := range kvstores {
-		if kvstorelog.kvStore.TableType() == MONGODB {
-			if err := kvstorelog.kvStore.AbortTransaction(ctx); err != nil {
+		if kvstorelog.KVStore.TableType() == MONGODB {
+			if err := kvstorelog.KVStore.AbortTransaction(ctx); err != nil {
 				return err
 			}
 		}

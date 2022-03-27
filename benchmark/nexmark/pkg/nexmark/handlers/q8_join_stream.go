@@ -83,6 +83,8 @@ func (h *q8JoinStreamHandler) process(
 		offMu:         &h.offMu,
 		currentOffset: h.currentOffset,
 		trackParFunc:  args.trackParFunc,
+		cHashMu:       &h.cHashMu,
+		cHash:         h.cHash,
 	}
 	go joinProc(ctx, personsOutChan, joinProcArgsPerson)
 	wg.Add(1)
@@ -95,6 +97,8 @@ func (h *q8JoinStreamHandler) process(
 		offMu:         &h.offMu,
 		currentOffset: h.currentOffset,
 		trackParFunc:  args.trackParFunc,
+		cHashMu:       &h.cHashMu,
+		cHash:         h.cHash,
 	}
 	go joinProc(ctx, auctionsOutChan, joinProgArgsAuction)
 
@@ -141,6 +145,8 @@ func (h *q8JoinStreamHandler) processSerial(
 		offMu:         &h.offMu,
 		currentOffset: h.currentOffset,
 		trackParFunc:  args.trackParFunc,
+		cHashMu:       &h.cHashMu,
+		cHash:         h.cHash,
 	}
 	ret := joinProcSerial(ctx, joinProgArgsAuction)
 	if ret != nil {
@@ -154,6 +160,8 @@ func (h *q8JoinStreamHandler) processSerial(
 		offMu:         &h.offMu,
 		currentOffset: h.currentOffset,
 		trackParFunc:  args.trackParFunc,
+		cHashMu:       &h.cHashMu,
+		cHash:         h.cHash,
 	}
 	ret = joinProcSerial(ctx, joinProcArgsPerson)
 	return h.currentOffset, ret
@@ -318,36 +326,20 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker),
 	)
 
-	pJoinA := func(ctx context.Context,
-		m commtypes.Message,
-		sink *processor.MeteredSink,
-		trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
-	) error {
+	pJoinA := func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		_, err := toPersonsWinTab.ProcessAndReturn(ctx, m)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		joinedMsgs, err := personsJoinsAuctions.ProcessAndReturn(ctx, m)
-		if err != nil {
-			return err
-		}
-		return pushMsgsToSink(ctx, sink, h.cHash, &h.cHashMu, joinedMsgs, trackParFunc)
+		return personsJoinsAuctions.ProcessAndReturn(ctx, m)
 	}
 
-	aJoinP := func(ctx context.Context,
-		m commtypes.Message,
-		sink *processor.MeteredSink,
-		trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
-	) error {
+	aJoinP := func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		_, err := toAuctionsWindowTab.ProcessAndReturn(ctx, m)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		joinedMsgs, err := auctionsJoinsPersons.ProcessAndReturn(ctx, m)
-		if err != nil {
-			return err
-		}
-		return pushMsgsToSink(ctx, sink, h.cHash, &h.cHashMu, joinedMsgs, trackParFunc)
+		return auctionsJoinsPersons.ProcessAndReturn(ctx, m)
 	}
 
 	sharedlog_stream.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)

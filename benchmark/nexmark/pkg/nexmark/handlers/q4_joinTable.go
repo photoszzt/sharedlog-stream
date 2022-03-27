@@ -80,6 +80,8 @@ func (h *q4JoinTableHandler) process(ctx context.Context,
 		offMu:         &h.offMu,
 		currentOffset: h.currentOffset,
 		trackParFunc:  args.trackParFunc,
+		cHashMu:       &h.cHashMu,
+		cHash:         h.cHash,
 	}
 	wg.Add(1)
 	go joinProc(ctx, bidsOutChan, joinProgArgsBids)
@@ -93,6 +95,8 @@ func (h *q4JoinTableHandler) process(ctx context.Context,
 		offMu:         &h.offMu,
 		currentOffset: h.currentOffset,
 		trackParFunc:  args.trackParFunc,
+		cHashMu:       &h.cHashMu,
+		cHash:         h.cHash,
 	}
 	wg.Add(1)
 	go joinProc(ctx, auctionsOutChan, joinProgArgsAuction)
@@ -233,32 +237,20 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 	bidsJoinAuctions := processor.NewMeteredProcessor(
 		processor.NewTableTableJoinProcessor(auctionsStore.Name(), auctionsStore, joiner))
 
-	aJoinB := JoinWorkerFunc(func(c context.Context, m commtypes.Message,
-		sink *processor.MeteredSink, trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
-	) error {
+	aJoinB := JoinWorkerFunc(func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		_, err := toAuctionsTable.ProcessAndReturn(ctx, m)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		joinedMsgs, err := auctionsJoinBids.ProcessAndReturn(ctx, m)
-		if err != nil {
-			return err
-		}
-		return pushMsgsToSink(ctx, sink, h.cHash, &h.cHashMu, joinedMsgs, trackParFunc)
+		return auctionsJoinBids.ProcessAndReturn(ctx, m)
 	})
 
-	bJoinA := JoinWorkerFunc(func(c context.Context, m commtypes.Message,
-		sink *processor.MeteredSink, trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
-	) error {
+	bJoinA := JoinWorkerFunc(func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		_, err := toBidsTable.ProcessAndReturn(ctx, m)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		joinedMsgs, err := bidsJoinAuctions.ProcessAndReturn(ctx, m)
-		if err != nil {
-			return err
-		}
-		return pushMsgsToSink(ctx, sink, h.cHash, &h.cHashMu, joinedMsgs, trackParFunc)
+		return bidsJoinAuctions.ProcessAndReturn(ctx, m)
 	})
 
 	sharedlog_stream.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)

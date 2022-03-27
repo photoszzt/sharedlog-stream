@@ -25,7 +25,7 @@ func storeToWindowStore(ctx context.Context, keyBytes []byte, ts int64,
 	return err
 }
 
-func RestoreWindowStateStore(
+func RestoreChangelogWindowStateStore(
 	ctx context.Context,
 	wschangelog *WindowStoreChangelog,
 	msgSerde commtypes.MsgSerde,
@@ -65,7 +65,7 @@ func RestoreWindowStateStore(
 				}
 				keyWin := keyWinTmp.(commtypes.KeyAndWindowStartTs)
 				err = storeToWindowStore(ctx, keyWin.Key, keyWin.WindowStartTs,
-					valBytes, wschangelog.keySerde, wschangelog.valSerde, wschangelog.windowStore)
+					valBytes, wschangelog.keySerde, wschangelog.valSerde, wschangelog.WindowStore)
 				if err != nil {
 					return err
 				}
@@ -83,7 +83,7 @@ func RestoreWindowStateStore(
 				if err != nil {
 					return fmt.Errorf("extract stream time failed: %v", err)
 				}
-				err = wschangelog.windowStore.Put(ctx, key, val, ts)
+				err = wschangelog.WindowStore.Put(ctx, key, val, ts)
 				if err != nil {
 					return fmt.Errorf("window store put failed: %v", err)
 				}
@@ -95,7 +95,7 @@ func RestoreWindowStateStore(
 	}
 }
 
-func RestoreKVStateStore(
+func RestoreChangelogKVStateStore(
 	ctx context.Context,
 	kvchangelog *KVStoreChangelog,
 	msgSerde commtypes.MsgSerde,
@@ -135,7 +135,7 @@ func RestoreKVStateStore(
 			if err != nil {
 				return fmt.Errorf("extract stream time failed: %v", err)
 			}
-			err = kvchangelog.kvStore.Put(ctx, key, commtypes.ValueTimestamp{Value: val, Timestamp: ts})
+			err = kvchangelog.KVStore.Put(ctx, key, commtypes.ValueTimestamp{Value: val, Timestamp: ts})
 			if err != nil {
 				return fmt.Errorf("kvstore put failed: %v", err)
 			}
@@ -144,4 +144,21 @@ func RestoreKVStateStore(
 			return nil
 		}
 	}
+}
+
+func RestoreMongoDBKVStore(
+	ctx context.Context,
+	kvchangelog *KVStoreChangelog,
+	taskRepr string,
+	currentTransactionID uint64,
+) error {
+	storeTranID, found, err := kvchangelog.KVStore.GetTransactionID(ctx, taskRepr)
+	if err != nil {
+		return err
+	}
+	if !found || currentTransactionID == storeTranID {
+		return nil
+	}
+
+	return nil
 }

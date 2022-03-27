@@ -279,6 +279,7 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) error {
 	} else {
 		tc.CurrentEpoch = recentTxnMeta.TaskEpoch
 		tc.CurrentTaskId = recentTxnMeta.TaskId
+		tc.TransactionID = recentTxnMeta.TransactionID
 	}
 	if recentTxnMeta != nil && recentTxnMeta.TaskEpoch == math.MaxUint16 {
 		tc.genAppId()

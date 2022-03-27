@@ -44,8 +44,7 @@ func getPersonTimeSerde(serdeFormat uint8) (commtypes.Serde, error) {
 	}
 }
 
-type JoinWorkerFunc func(c context.Context, m commtypes.Message, sink *processor.MeteredSink,
-	trackParFunc sharedlog_stream.TrackKeySubStreamFunc) error
+type JoinWorkerFunc func(c context.Context, m commtypes.Message) ([]commtypes.Message, error)
 
 type joinProcArgs struct {
 	src    *processor.MeteredSource
@@ -58,6 +57,9 @@ type joinProcArgs struct {
 
 	trackParFunc sharedlog_stream.TrackKeySubStreamFunc
 	parNum       uint8
+
+	cHashMu *sync.RWMutex
+	cHash   *hash.ConsistentHash
 }
 
 func joinProc(
@@ -88,7 +90,11 @@ func joinProc(
 			return
 		}
 		msg.Msg.Timestamp = ts
-		err = procArgs.runner(ctx, msg.Msg, procArgs.sink, procArgs.trackParFunc)
+		msgs, err := procArgs.runner(ctx, msg.Msg)
+		if err != nil {
+			out <- &common.FnOutput{Success: false, Message: err.Error()}
+		}
+		err = pushMsgsToSink(ctx, procArgs.sink, procArgs.cHash, procArgs.cHashMu, msgs, procArgs.trackParFunc)
 		if err != nil {
 			out <- &common.FnOutput{Success: false, Message: err.Error()}
 		}
@@ -119,7 +125,11 @@ func joinProcSerial(
 			return &common.FnOutput{Success: false, Message: fmt.Sprintf("fail to extract timestamp: %v", err)}
 		}
 		msg.Msg.Timestamp = ts
-		err = procArgs.runner(ctx, msg.Msg, procArgs.sink, procArgs.trackParFunc)
+		msgs, err := procArgs.runner(ctx, msg.Msg)
+		if err != nil {
+			return &common.FnOutput{Success: false, Message: err.Error()}
+		}
+		err = pushMsgsToSink(ctx, procArgs.sink, procArgs.cHash, procArgs.cHashMu, msgs, procArgs.trackParFunc)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}

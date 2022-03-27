@@ -137,31 +137,35 @@ func setOffsetOnStream(offsetMap map[string]uint64, args *StreamTaskArgsTransact
 	}
 }
 
-func restoreChangelogBackedKVStore(ctx context.Context, tm *TransactionManager,
+func restoreKVStore(ctx context.Context, tm *TransactionManager,
 	args *StreamTaskArgsTransaction, offsetMap map[string]uint64,
 ) error {
 	for _, kvchangelog := range args.KVChangelogs {
-		topic := kvchangelog.Changelog.TopicName()
-		// offset stream is input stream
-		if offset, ok := offsetMap[topic]; ok && offset != 0 {
-			err := store.RestoreKVStateStore(ctx,
-				kvchangelog,
-				args.MsgSerde, offset)
-			if err != nil {
-				return fmt.Errorf("RestoreKVStateStore failed: %v", err)
-			}
-		} else {
-			offset, err := createOffsetTopicAndGetOffset(ctx, tm, topic,
-				kvchangelog.Changelog.NumPartition(), kvchangelog.ParNum)
-			if err != nil {
-				return fmt.Errorf("createOffsetTopicAndGetOffset kv failed: %v", err)
-			}
-			if offset != 0 {
-				err = store.RestoreKVStateStore(ctx, kvchangelog, args.MsgSerde, offset)
+		if kvchangelog.KVStore.TableType() == store.IN_MEM {
+			topic := kvchangelog.Changelog.TopicName()
+			// offset stream is input stream
+			if offset, ok := offsetMap[topic]; ok && offset != 0 {
+				err := store.RestoreChangelogKVStateStore(ctx,
+					kvchangelog,
+					args.MsgSerde, offset)
 				if err != nil {
-					return fmt.Errorf("RestoreKVStateStore2 failed: %v", err)
+					return fmt.Errorf("RestoreKVStateStore failed: %v", err)
+				}
+			} else {
+				offset, err := createOffsetTopicAndGetOffset(ctx, tm, topic,
+					kvchangelog.Changelog.NumPartition(), kvchangelog.ParNum)
+				if err != nil {
+					return fmt.Errorf("createOffsetTopicAndGetOffset kv failed: %v", err)
+				}
+				if offset != 0 {
+					err = store.RestoreChangelogKVStateStore(ctx, kvchangelog, args.MsgSerde, offset)
+					if err != nil {
+						return fmt.Errorf("RestoreKVStateStore2 failed: %v", err)
+					}
 				}
 			}
+		} else if kvchangelog.KVStore.TableType() == store.MONGODB {
+
 		}
 	}
 	return nil
@@ -169,27 +173,31 @@ func restoreChangelogBackedKVStore(ctx context.Context, tm *TransactionManager,
 
 func restoreChangelogBackedWindowStore(ctx context.Context, tm *TransactionManager, args *StreamTaskArgsTransaction, offsetMap map[string]uint64) error {
 	for _, wschangelog := range args.WindowStoreChangelogs {
-		topic := wschangelog.Changelog.TopicName()
-		// offset stream is input stream
-		if offset, ok := offsetMap[topic]; ok && offset != 0 {
-			err := store.RestoreWindowStateStore(ctx, wschangelog,
-				args.MsgSerde, offset)
-			if err != nil {
-				return fmt.Errorf("RestoreWindowStateStore failed: %v", err)
-			}
-		} else {
-			offset, err := createOffsetTopicAndGetOffset(ctx, tm, topic,
-				wschangelog.Changelog.NumPartition(), wschangelog.ParNum)
-			if err != nil {
-				return fmt.Errorf("createOffsetTopicAndGetOffset win failed: %v", err)
-			}
-			if offset != 0 {
-				err = store.RestoreWindowStateStore(ctx, wschangelog,
+		if wschangelog.WindowStore.TableType() == store.IN_MEM {
+			topic := wschangelog.Changelog.TopicName()
+			// offset stream is input stream
+			if offset, ok := offsetMap[topic]; ok && offset != 0 {
+				err := store.RestoreChangelogWindowStateStore(ctx, wschangelog,
 					args.MsgSerde, offset)
 				if err != nil {
-					return fmt.Errorf("RestoreWindowStateStore2 failed: %v", err)
+					return fmt.Errorf("RestoreWindowStateStore failed: %v", err)
+				}
+			} else {
+				offset, err := createOffsetTopicAndGetOffset(ctx, tm, topic,
+					wschangelog.Changelog.NumPartition(), wschangelog.ParNum)
+				if err != nil {
+					return fmt.Errorf("createOffsetTopicAndGetOffset win failed: %v", err)
+				}
+				if offset != 0 {
+					err = store.RestoreChangelogWindowStateStore(ctx, wschangelog,
+						args.MsgSerde, offset)
+					if err != nil {
+						return fmt.Errorf("RestoreWindowStateStore2 failed: %v", err)
+					}
 				}
 			}
+		} else if wschangelog.WindowStore.TableType() == store.MONGODB {
+
 		}
 	}
 	return nil
@@ -198,7 +206,7 @@ func restoreChangelogBackedWindowStore(ctx context.Context, tm *TransactionManag
 func restoreStateStore(ctx context.Context, tm *TransactionManager, args *StreamTaskArgsTransaction, offsetMap map[string]uint64) error {
 	debug.Assert(args.MsgSerde != nil, "args's msg serde should not be nil")
 	if args.KVChangelogs != nil {
-		err := restoreChangelogBackedKVStore(ctx, tm, args, offsetMap)
+		err := restoreKVStore(ctx, tm, args, offsetMap)
 		if err != nil {
 			return err
 		}
