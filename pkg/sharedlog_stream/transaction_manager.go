@@ -532,8 +532,9 @@ func (tc *TransactionManager) FindLastConsumedSeqNum(ctx context.Context, topicT
 	// find the most recent transaction marker
 	txnMarkerTag := TxnMarkerTag(offsetLog.TopicNameHash(), parNum)
 	var txnMkRawMsg *commtypes.RawMsg = nil
+	var err error
 	for {
-		_, txnMkRawMsg, err := offsetLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, parNum, txnMarkerTag)
+		_, txnMkRawMsg, err = offsetLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, parNum, txnMarkerTag)
 		if err != nil {
 			return 0, err
 		}
@@ -547,6 +548,52 @@ func (tc *TransactionManager) FindLastConsumedSeqNum(ctx context.Context, topicT
 		return 0, errors.ErrStreamEmpty
 	}
 
+	tag := NameHashWithPartition(offsetLog.TopicNameHash(), parNum)
+
+	// read the previous item which should record the offset number
+	_, rawMsg, err := offsetLog.ReadBackwardWithTag(ctx, txnMkRawMsg.LogSeqNum, parNum, tag)
+	if err != nil {
+		return 0, err
+	}
+	return rawMsg.LogSeqNum, nil
+}
+
+func (tc *TransactionManager) FindConsumedSeqNumMatchesTransactionID(ctx context.Context, topicToTrack string, parNum uint8,
+	transactionID uint64,
+) (uint64, error) {
+	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + topicToTrack
+	offsetLog := tc.topicStreams[offsetTopic]
+	debug.Assert(offsetTopic == offsetLog.TopicName(), fmt.Sprintf("expected offset log tp: %s, got %s",
+		offsetTopic, offsetLog.TopicName()))
+	txnMarkerTag := TxnMarkerTag(offsetLog.TopicNameHash(), parNum)
+	var txnMkRawMsg *commtypes.RawMsg = nil
+	tailSeqNum := protocol.MaxLogSeqnum
+	var err error
+	for {
+		_, txnMkRawMsg, err = offsetLog.ReadBackwardWithTag(ctx, tailSeqNum, parNum, txnMarkerTag)
+		if err != nil {
+			return 0, err
+		}
+		if !txnMkRawMsg.IsControl {
+			continue
+		} else {
+			_, vBytes, err := tc.msgSerde.Decode(txnMkRawMsg.Payload)
+			if err != nil {
+				return 0, err
+			}
+			txnMarkerTmp, err := tc.txnMarkerSerde.Decode(vBytes)
+			if err != nil {
+				return 0, err
+			}
+			txnMarker := txnMarkerTmp.(TxnMarker)
+			if txnMarker.TransactionID == transactionID {
+				break
+			}
+		}
+	}
+	if txnMkRawMsg == nil {
+		return 0, errors.ErrStreamEmpty
+	}
 	tag := NameHashWithPartition(offsetLog.TopicNameHash(), parNum)
 
 	// read the previous item which should record the offset number

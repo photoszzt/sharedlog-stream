@@ -6,11 +6,14 @@ import (
 )
 
 type WindowStoreChangelog struct {
-	WindowStore      WindowStore
+	WinStore         WindowStore
 	Changelog        Stream
 	keyWindowTsSerde commtypes.Serde
 	keySerde         commtypes.Serde
 	valSerde         commtypes.Serde
+	InputStream      Stream
+	RestoreFunc      func(ctx context.Context, args interface{}) error
+	RestoreArg       interface{}
 	ParNum           uint8
 }
 
@@ -23,7 +26,7 @@ func NewWindowStoreChangelog(
 	parNum uint8,
 ) *WindowStoreChangelog {
 	return &WindowStoreChangelog{
-		WindowStore:      wStore,
+		WinStore:         wStore,
 		Changelog:        changelog,
 		keyWindowTsSerde: keyWindowTsSerde,
 		keySerde:         keySerde,
@@ -32,10 +35,26 @@ func NewWindowStoreChangelog(
 	}
 }
 
+func NewWindowStoreChangelogForExternalStore(
+	wStore WindowStore,
+	inputStream Stream,
+	restoreFunc func(ctx context.Context, args interface{}) error,
+	restoreArg interface{},
+	parNum uint8,
+) *WindowStoreChangelog {
+	return &WindowStoreChangelog{
+		WinStore:    wStore,
+		InputStream: inputStream,
+		RestoreFunc: restoreFunc,
+		RestoreArg:  restoreArg,
+		ParNum:      parNum,
+	}
+}
+
 func BeginWindowStoreTransaction(ctx context.Context, winstores []*WindowStoreChangelog) error {
 	for _, winstorelog := range winstores {
-		if winstorelog.WindowStore.TableType() == MONGODB {
-			if err := winstorelog.WindowStore.StartTransaction(ctx); err != nil {
+		if winstorelog.WinStore.TableType() == MONGODB {
+			if err := winstorelog.WinStore.StartTransaction(ctx); err != nil {
 				return err
 			}
 		}
@@ -45,8 +64,8 @@ func BeginWindowStoreTransaction(ctx context.Context, winstores []*WindowStoreCh
 
 func CommitWindowStoreTransaction(ctx context.Context, winstores []*WindowStoreChangelog, taskRepr string, transactionID uint64) error {
 	for _, winstorelog := range winstores {
-		if winstorelog.WindowStore.TableType() == MONGODB {
-			if err := winstorelog.WindowStore.CommitTransaction(ctx, taskRepr, transactionID); err != nil {
+		if winstorelog.WinStore.TableType() == MONGODB {
+			if err := winstorelog.WinStore.CommitTransaction(ctx, taskRepr, transactionID); err != nil {
 				return err
 			}
 		}
@@ -56,8 +75,8 @@ func CommitWindowStoreTransaction(ctx context.Context, winstores []*WindowStoreC
 
 func AbortWindowStoreTransaction(ctx context.Context, winstores []*WindowStoreChangelog) error {
 	for _, winstorelog := range winstores {
-		if winstorelog.WindowStore.TableType() == MONGODB {
-			if err := winstorelog.WindowStore.AbortTransaction(ctx); err != nil {
+		if winstorelog.WinStore.TableType() == MONGODB {
+			if err := winstorelog.WinStore.AbortTransaction(ctx); err != nil {
 				return err
 			}
 		}

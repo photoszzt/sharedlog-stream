@@ -165,7 +165,9 @@ func restoreKVStore(ctx context.Context, tm *TransactionManager,
 				}
 			}
 		} else if kvchangelog.KVStore.TableType() == store.MONGODB {
-
+			if err := restoreMongoDBKVStore(ctx, tm, kvchangelog); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -173,7 +175,7 @@ func restoreKVStore(ctx context.Context, tm *TransactionManager,
 
 func restoreChangelogBackedWindowStore(ctx context.Context, tm *TransactionManager, args *StreamTaskArgsTransaction, offsetMap map[string]uint64) error {
 	for _, wschangelog := range args.WindowStoreChangelogs {
-		if wschangelog.WindowStore.TableType() == store.IN_MEM {
+		if wschangelog.WinStore.TableType() == store.IN_MEM {
 			topic := wschangelog.Changelog.TopicName()
 			// offset stream is input stream
 			if offset, ok := offsetMap[topic]; ok && offset != 0 {
@@ -196,8 +198,10 @@ func restoreChangelogBackedWindowStore(ctx context.Context, tm *TransactionManag
 					}
 				}
 			}
-		} else if wschangelog.WindowStore.TableType() == store.MONGODB {
-
+		} else if wschangelog.WinStore.TableType() == store.MONGODB {
+			if err := restoreMongoDBWinStore(ctx, tm, wschangelog); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -218,6 +222,60 @@ func restoreStateStore(ctx context.Context, tm *TransactionManager, args *Stream
 		}
 	}
 	return nil
+}
+
+func restoreMongoDBKVStore(
+	ctx context.Context,
+	tm *TransactionManager,
+	kvchangelog *store.KVStoreChangelog,
+) error {
+	storeTranID, found, err := kvchangelog.KVStore.GetTransactionID(ctx, tm.TransactionalId)
+	if err != nil {
+		return err
+	}
+	if !found || tm.TransactionID == storeTranID {
+		return nil
+	}
+
+	seqNum, err := tm.FindConsumedSeqNumMatchesTransactionID(ctx, kvchangelog.InputStream.TopicName(), kvchangelog.ParNum, storeTranID)
+	if err != nil {
+		return err
+	}
+	kvchangelog.InputStream.SetCursor(seqNum, kvchangelog.ParNum)
+	if err = kvchangelog.KVStore.StartTransaction(ctx); err != nil {
+		return err
+	}
+	if err = kvchangelog.RestoreFunc(ctx, kvchangelog.RestoreArg); err != nil {
+		return err
+	}
+	return kvchangelog.KVStore.CommitTransaction(ctx, tm.TransactionalId, tm.TransactionID)
+}
+
+func restoreMongoDBWinStore(
+	ctx context.Context,
+	tm *TransactionManager,
+	kvchangelog *store.WindowStoreChangelog,
+) error {
+	storeTranID, found, err := kvchangelog.WinStore.GetTransactionID(ctx, tm.TransactionalId)
+	if err != nil {
+		return err
+	}
+	if !found || tm.TransactionID == storeTranID {
+		return nil
+	}
+
+	seqNum, err := tm.FindConsumedSeqNumMatchesTransactionID(ctx, kvchangelog.InputStream.TopicName(), kvchangelog.ParNum, storeTranID)
+	if err != nil {
+		return err
+	}
+	kvchangelog.InputStream.SetCursor(seqNum, kvchangelog.ParNum)
+	if err = kvchangelog.WinStore.StartTransaction(ctx); err != nil {
+		return err
+	}
+	if err = kvchangelog.RestoreFunc(ctx, kvchangelog.RestoreArg); err != nil {
+		return err
+	}
+	return kvchangelog.WinStore.CommitTransaction(ctx, tm.TransactionalId, tm.TransactionID)
 }
 
 func SetupTransactionManager(

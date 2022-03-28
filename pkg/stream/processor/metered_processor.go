@@ -34,3 +34,7 @@ func (p *MeteredProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.M
 func (p *MeteredProcessor) GetLatency() []int {
 	return p.latencies
 }
+
+func (p *MeteredProcessor) InnerProcessor() Processor {
+	return p.proc
+}

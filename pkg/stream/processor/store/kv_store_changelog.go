@@ -6,11 +6,16 @@ import (
 )
 
 type KVStoreChangelog struct {
-	KVStore   KeyValueStore
-	Changelog Stream
-	keySerde  commtypes.Serde
-	valSerde  commtypes.Serde
-	ParNum    uint8
+	KVStore     KeyValueStore
+	Changelog   Stream
+	keySerde    commtypes.Serde
+	valSerde    commtypes.Serde
+	InputStream Stream
+	RestoreFunc func(ctx context.Context, args interface{}) error
+	RestoreArg  interface{}
+	// when used by changelog backed kv store, parnum is the parnum of changelog
+	// when used by mongodb, parnum is the parnum of the input streams
+	ParNum uint8
 }
 
 func NewKVStoreChangelog(
@@ -26,6 +31,22 @@ func NewKVStoreChangelog(
 		keySerde:  keySerde,
 		valSerde:  valSerde,
 		ParNum:    parNum,
+	}
+}
+
+func NewKVStoreChangelogForExternalStore(
+	kvStore KeyValueStore,
+	inputStream Stream,
+	restoreFunc func(ctx context.Context, args interface{}) error,
+	restoreArg interface{},
+	parNum uint8,
+) *KVStoreChangelog {
+	return &KVStoreChangelog{
+		KVStore:     kvStore,
+		InputStream: inputStream,
+		RestoreFunc: restoreFunc,
+		RestoreArg:  restoreArg,
+		ParNum:      parNum,
 	}
 }
 

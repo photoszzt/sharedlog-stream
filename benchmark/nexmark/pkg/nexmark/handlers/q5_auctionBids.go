@@ -186,20 +186,21 @@ type q5AuctionBidsProcessArg struct {
 	numOutPartition uint8
 }
 
+type q5AuctionBidsRestoreArg struct {
+	countProc      processor.Processor
+	groupByAuction processor.Processor
+	src            processor.Source
+	parNum         uint8
+}
+
 func (h *q5AuctionBids) process(ctx context.Context, argsTmp interface{}) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*q5AuctionBidsProcessArg)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {
 		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
-			return h.currentOffset, &common.FnOutput{
-				Success: true,
-				Message: err.Error(),
-			}
+			return h.currentOffset, &common.FnOutput{Success: true, Message: err.Error()}
 		}
-		return h.currentOffset, &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return h.currentOffset, &common.FnOutput{Success: false, Message: err.Error()}
 	}
 
 	for _, msg := range gotMsgs {
@@ -210,27 +211,18 @@ func (h *q5AuctionBids) process(ctx context.Context, argsTmp interface{}) (map[s
 		event := msg.Msg.Value.(*ntypes.Event)
 		ts, err := event.ExtractStreamTime()
 		if err != nil {
-			return h.currentOffset, &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("fail to extract timestamp: %v", err),
-			}
+			return h.currentOffset, &common.FnOutput{Success: false, Message: fmt.Sprintf("fail to extract timestamp: %v", err)}
 		}
 		msg.Msg.Timestamp = ts
 		countMsgs, err := args.countProc.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
-			return h.currentOffset, &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
-			}
+			return h.currentOffset, &common.FnOutput{Success: false, Message: err.Error()}
 		}
 		for _, countMsg := range countMsgs {
 			// fmt.Fprintf(os.Stderr, "count msg ts: %v, ", countMsg.Timestamp)
 			changeKeyedMsg, err := args.groupByAuction.ProcessAndReturn(ctx, countMsg)
 			if err != nil {
-				return h.currentOffset, &common.FnOutput{
-					Success: false,
-					Message: err.Error(),
-				}
+				return h.currentOffset, &common.FnOutput{Success: false, Message: err.Error()}
 			}
 			// fmt.Fprintf(os.Stderr, "changeKeyedMsg ts: %v\n", changeKeyedMsg[0].Timestamp)
 			// par := uint8(hashSe(changeKeyedMsg[0].Key.(*ntypes.StartEndTime)) % uint32(args.numOutPartition))
@@ -239,60 +231,75 @@ func (h *q5AuctionBids) process(ctx context.Context, argsTmp interface{}) (map[s
 			parTmp, ok := h.cHash.Get(k)
 			h.cHashMu.RUnlock()
 			if !ok {
-				return h.currentOffset, &common.FnOutput{
-					Success: false,
-					Message: "fail to get output partition",
-				}
+				return h.currentOffset, &common.FnOutput{Success: false, Message: "fail to get output partition"}
 			}
 			par := parTmp.(uint8)
 			// fmt.Fprintf(os.Stderr, "key is %s, output to substream %d\n", k.String(), par)
 			err = args.trackParFunc(ctx, k, args.sink.KeySerde(), args.sink.TopicName(), par)
 			if err != nil {
-				return h.currentOffset, &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("add topic partition failed: %v\n", err),
-				}
+				return h.currentOffset, &common.FnOutput{Success: false, Message: fmt.Sprintf("add topic partition failed: %v\n", err)}
 			}
 			err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
 			if err != nil {
-				return h.currentOffset, &common.FnOutput{
-					Success: false,
-					Message: err.Error(),
-				}
+				return h.currentOffset, &common.FnOutput{Success: false, Message: err.Error()}
 			}
 		}
 	}
 	return h.currentOffset, nil
 }
 
+func (h *q5AuctionBids) processWithoutSink(ctx context.Context, argsTmp interface{}) error {
+	args := argsTmp.(*q5AuctionBidsRestoreArg)
+	gotMsgs, err := args.src.Consume(ctx, args.parNum)
+	if err != nil {
+		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
+			return nil
+		}
+		return err
+	}
+
+	for _, msg := range gotMsgs {
+		if msg.Msg.Value == nil {
+			continue
+		}
+		h.currentOffset[args.src.TopicName()] = msg.LogSeqNum
+		event := msg.Msg.Value.(*ntypes.Event)
+		ts, err := event.ExtractStreamTime()
+		if err != nil {
+			return fmt.Errorf("fail to extract timestamp: %v", err)
+		}
+		msg.Msg.Timestamp = ts
+		countMsgs, err := args.countProc.ProcessAndReturn(ctx, msg.Msg)
+		if err != nil {
+			return err
+		}
+		for _, countMsg := range countMsgs {
+			// fmt.Fprintf(os.Stderr, "count msg ts: %v, ", countMsg.Timestamp)
+			_, err := args.groupByAuction.ProcessAndReturn(ctx, countMsg)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, true)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	src, sink, err := h.getSrcSink(ctx, sp, msgSerde, input_stream, output_stream)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	countProc, countStore, err := h.getCountAggProc(ctx, sp, msgSerde)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	groupByAuction := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(processor.MapperFunc(
 		func(msg commtypes.Message) (commtypes.Message, error) {
@@ -341,8 +348,15 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 					cstore.MaterializeParam().ValueSerde, 0),
 			}
 		} else if countStore.TableType() == store.MONGODB {
-			//TODO: MONGO DB
-			wsc = nil
+			wsc = []*store.WindowStoreChangelog{
+				store.NewWindowStoreChangelogForExternalStore(countStore, input_stream,
+					h.processWithoutSink, &q5AuctionBidsRestoreArg{
+						countProc:      countProc.InnerProcessor(),
+						groupByAuction: groupByAuction.InnerProcessor(),
+						src:            src.InnerSource(),
+						parNum:         sp.ParNum,
+					}, sp.ParNum),
+			}
 		} else {
 			panic("unrecognized table type")
 		}

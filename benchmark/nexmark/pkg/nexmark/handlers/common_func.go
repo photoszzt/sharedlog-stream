@@ -102,6 +102,42 @@ func joinProc(
 	out <- nil
 }
 
+func joinProcWithoutSink(
+	ctx context.Context,
+	out chan *common.FnOutput,
+	procArgs *joinProcArgs,
+) {
+	defer procArgs.wg.Done()
+	gotMsgs, err := procArgs.src.Consume(ctx, procArgs.parNum)
+	if err != nil {
+		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
+			debug.Fprintf(os.Stderr, "%s timeout, gen output\n", procArgs.src.TopicName())
+			out <- &common.FnOutput{Success: true, Message: err.Error()}
+			return
+		}
+		out <- &common.FnOutput{Success: false, Message: err.Error()}
+		return
+	}
+	for _, msg := range gotMsgs {
+		procArgs.offMu.Lock()
+		procArgs.currentOffset[procArgs.src.TopicName()] = msg.LogSeqNum
+		procArgs.offMu.Unlock()
+
+		st := msg.Msg.Value.(commtypes.StreamTimeExtractor)
+		ts, err := st.ExtractStreamTime()
+		if err != nil {
+			out <- &common.FnOutput{Success: false, Message: fmt.Sprintf("fail to extract timestamp: %v", err)}
+			return
+		}
+		msg.Msg.Timestamp = ts
+		_, err = procArgs.runner(ctx, msg.Msg)
+		if err != nil {
+			out <- &common.FnOutput{Success: false, Message: err.Error()}
+		}
+	}
+	out <- nil
+}
+
 func joinProcSerial(
 	ctx context.Context,
 	procArgs *joinProcArgs,
@@ -132,6 +168,40 @@ func joinProcSerial(
 		err = pushMsgsToSink(ctx, procArgs.sink, procArgs.cHash, procArgs.cHashMu, msgs, procArgs.trackParFunc)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
+		}
+	}
+	return nil
+}
+
+type joinProcWithoutSinkArgs struct {
+	src    processor.Source
+	parNum uint8
+	runner JoinWorkerFunc
+}
+
+func joinProcSerialWithoutSink(
+	ctx context.Context,
+	procArgsTmp interface{},
+) error {
+	procArgs := procArgsTmp.(*joinProcWithoutSinkArgs)
+	gotMsgs, err := procArgs.src.Consume(ctx, procArgs.parNum)
+	if err != nil {
+		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
+			debug.Fprintf(os.Stderr, "%s timeout, gen output\n", procArgs.src.TopicName())
+			return err
+		}
+		return err
+	}
+	for _, msg := range gotMsgs {
+		st := msg.Msg.Value.(commtypes.StreamTimeExtractor)
+		ts, err := st.ExtractStreamTime()
+		if err != nil {
+			return fmt.Errorf("fail to extract timestamp: %v", err)
+		}
+		msg.Msg.Timestamp = ts
+		_, err = procArgs.runner(ctx, msg.Msg)
+		if err != nil {
+			return err
 		}
 	}
 	return nil

@@ -80,21 +80,22 @@ type q5MaxBidProcessArgs struct {
 	parNum        uint8
 }
 
-func (h *q5MaxBid) process(ctx context.Context, argsTmp interface{},
-) (map[string]uint64, *common.FnOutput) {
+type q5MaxBidRestoreArgs struct {
+	maxBid       processor.Processor
+	stJoin       processor.Processor
+	chooseMaxCnt processor.Processor
+	src          processor.Source
+	parNum       uint8
+}
+
+func (h *q5MaxBid) process(ctx context.Context, argsTmp interface{}) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*q5MaxBidProcessArgs)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {
 		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
-			return h.currentOffset, &common.FnOutput{
-				Success: true,
-				Message: err.Error(),
-			}
+			return h.currentOffset, &common.FnOutput{Success: true, Message: err.Error()}
 		}
-		return h.currentOffset, &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("consume err: %v", err),
-		}
+		return h.currentOffset, &common.FnOutput{Success: false, Message: fmt.Sprintf("consume err: %v", err)}
 	}
 
 	for _, msg := range gotMsgs {
@@ -104,10 +105,7 @@ func (h *q5MaxBid) process(ctx context.Context, argsTmp interface{},
 		aic := msg.Msg.Value.(*ntypes.AuctionIdCount)
 		ts, err := aic.ExtractStreamTime()
 		if err != nil {
-			return h.currentOffset, &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("fail to extract timestamp: %v", err),
-			}
+			return h.currentOffset, &common.FnOutput{Success: false, Message: fmt.Sprintf("fail to extract timestamp: %v", err)}
 		}
 		msg.Msg.Timestamp = ts
 		// fmt.Fprintf(os.Stderr, "got msg with key: %v, val: %v, ts: %v\n", msg.Msg.Key, msg.Msg.Value, msg.Msg.Timestamp)
@@ -144,6 +142,44 @@ func (h *q5MaxBid) process(ctx context.Context, argsTmp interface{},
 		}
 	}
 	return h.currentOffset, nil
+}
+
+func (h *q5MaxBid) processWithoutSink(ctx context.Context, argsTmp interface{}) error {
+	args := argsTmp.(*q5MaxBidRestoreArgs)
+	gotMsgs, err := args.src.Consume(ctx, args.parNum)
+	if err != nil {
+		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
+			return nil
+		}
+		return fmt.Errorf("consume err: %v", err)
+	}
+
+	for _, msg := range gotMsgs {
+		if msg.Msg.Value == nil {
+			continue
+		}
+		aic := msg.Msg.Value.(*ntypes.AuctionIdCount)
+		ts, err := aic.ExtractStreamTime()
+		if err != nil {
+			return fmt.Errorf("fail to extract timestamp: %v", err)
+		}
+		msg.Msg.Timestamp = ts
+		// fmt.Fprintf(os.Stderr, "got msg with key: %v, val: %v, ts: %v\n", msg.Msg.Key, msg.Msg.Value, msg.Msg.Timestamp)
+		h.currentOffset[args.src.TopicName()] = msg.LogSeqNum
+		_, err = args.maxBid.ProcessAndReturn(ctx, msg.Msg)
+		if err != nil {
+			return fmt.Errorf("maxBid err: %v", err)
+		}
+		joinedOutput, err := args.stJoin.ProcessAndReturn(ctx, msg.Msg)
+		if err != nil {
+			return fmt.Errorf("joined err: %v", err)
+		}
+		_, err = args.chooseMaxCnt.ProcessAndReturn(ctx, joinedOutput[0])
+		if err != nil {
+			return fmt.Errorf("filteredMx err: %v", err)
+		}
+	}
+	return nil
 }
 
 func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -275,7 +311,15 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			}
 		} else if sp.TableType == uint8(store.MONGODB) {
 			// TODO: MONGODB
-			kvc = nil
+			kvc = []*store.KVStoreChangelog{
+				store.NewKVStoreChangelogForExternalStore(kvstore, input_stream, h.processWithoutSink, &q5MaxBidRestoreArgs{
+					maxBid:       maxBid.InnerProcessor(),
+					stJoin:       stJoin.InnerProcessor(),
+					chooseMaxCnt: chooseMaxCnt.InnerProcessor(),
+					src:          src.InnerSource(),
+					parNum:       sp.ParNum,
+				}, sp.ParNum),
+			}
 		} else {
 			panic("unrecognized table type")
 		}

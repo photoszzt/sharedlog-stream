@@ -65,7 +65,7 @@ func RestoreChangelogWindowStateStore(
 				}
 				keyWin := keyWinTmp.(commtypes.KeyAndWindowStartTs)
 				err = storeToWindowStore(ctx, keyWin.Key, keyWin.WindowStartTs,
-					valBytes, wschangelog.keySerde, wschangelog.valSerde, wschangelog.WindowStore)
+					valBytes, wschangelog.keySerde, wschangelog.valSerde, wschangelog.WinStore)
 				if err != nil {
 					return err
 				}
@@ -83,7 +83,7 @@ func RestoreChangelogWindowStateStore(
 				if err != nil {
 					return fmt.Errorf("extract stream time failed: %v", err)
 				}
-				err = wschangelog.WindowStore.Put(ctx, key, val, ts)
+				err = wschangelog.WinStore.Put(ctx, key, val, ts)
 				if err != nil {
 					return fmt.Errorf("window store put failed: %v", err)
 				}
@@ -144,21 +144,4 @@ func RestoreChangelogKVStateStore(
 			return nil
 		}
 	}
-}
-
-func RestoreMongoDBKVStore(
-	ctx context.Context,
-	kvchangelog *KVStoreChangelog,
-	taskRepr string,
-	currentTransactionID uint64,
-) error {
-	storeTranID, found, err := kvchangelog.KVStore.GetTransactionID(ctx, taskRepr)
-	if err != nil {
-		return err
-	}
-	if !found || currentTransactionID == storeTranID {
-		return nil
-	}
-
-	return nil
 }

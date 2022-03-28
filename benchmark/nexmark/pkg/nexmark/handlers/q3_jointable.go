@@ -246,12 +246,12 @@ func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 
 		toAuctionsTable, auctionsStore, err := processor.ToInMemKVTable("auctionsBySellerIDStore", compare)
 		if err != nil {
-			return nil, fmt.Errorf("toAucTab err: %v\n", err)
+			return nil, fmt.Errorf("toAucTab err: %v", err)
 		}
 
 		toPersonsTable, personsStore, err := processor.ToInMemKVTable("personsByIDStore", compare)
 		if err != nil {
-			return nil, fmt.Errorf("toPersonsTab err: %v\n", err)
+			return nil, fmt.Errorf("toPersonsTab err: %v", err)
 		}
 		return &kvtables{toAuctionsTable, auctionsStore, toPersonsTable, personsStore}, nil
 	} else if tabType == store.MONGODB {
@@ -317,6 +317,14 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		processor.NewTableTableJoinProcessor(kvtabs.tab1.Name(), kvtabs.tab1,
 			processor.ReverseValueJoinerWithKey(joiner)))
 
+	aJoinP := JoinWorkerFunc(func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
+		// msg is auction
+		_, err := kvtabs.toTab1.ProcessAndReturn(ctx, m)
+		if err != nil {
+			return nil, err
+		}
+		return auctionJoinsPersons.ProcessAndReturn(ctx, m)
+	})
 	pJoinA := JoinWorkerFunc(func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		// msg is person
 		_, err := kvtabs.toTab2.ProcessAndReturn(ctx, m)
@@ -324,15 +332,6 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			return nil, err
 		}
 		return personJoinsAuctions.ProcessAndReturn(ctx, m)
-	})
-
-	aJoinP := JoinWorkerFunc(func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
-		// msg is auction
-		_, err := kvtabs.toTab2.ProcessAndReturn(ctx, m)
-		if err != nil {
-			return nil, err
-		}
-		return auctionJoinsPersons.ProcessAndReturn(ctx, m)
 	})
 
 	sharedlog_stream.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
@@ -351,9 +350,28 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		ProcessFunc: h.process,
 	}
 	if sp.EnableTransaction {
-		kvchangelogs := []*store.KVStoreChangelog{
-			store.NewKVStoreChangelog(kvtabs.tab1, auctionsStream, sss.keySerdes[0], sss.valSerdes[0], sp.ParNum),
-			store.NewKVStoreChangelog(kvtabs.tab2, personsStream, sss.keySerdes[1], sss.valSerdes[1], sp.ParNum),
+		var kvchangelogs []*store.KVStoreChangelog
+		if sp.TableType == uint8(store.IN_MEM) {
+			kvchangelogs = []*store.KVStoreChangelog{
+				store.NewKVStoreChangelog(kvtabs.tab1, auctionsStream, sss.keySerdes[0], sss.valSerdes[0], sp.ParNum),
+				store.NewKVStoreChangelog(kvtabs.tab2, personsStream, sss.keySerdes[1], sss.valSerdes[1], sp.ParNum),
+			}
+		} else if sp.TableType == uint8(store.MONGODB) {
+			kvchangelogs = []*store.KVStoreChangelog{
+				store.NewKVStoreChangelogForExternalStore(kvtabs.tab1, auctionsStream, joinProcSerialWithoutSink,
+					&joinProcWithoutSinkArgs{
+						src:    sss.src1.InnerSource(),
+						parNum: sp.ParNum,
+						runner: aJoinP,
+					}, sp.ParNum),
+				store.NewKVStoreChangelogForExternalStore(kvtabs.tab2, personsStream, joinProcSerialWithoutSink,
+					&joinProcWithoutSinkArgs{
+						src:    sss.src2.InnerSource(),
+						parNum: sp.ParNum,
+						runner: pJoinA,
+					}, sp.ParNum,
+				),
+			}
 		}
 		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
 			ProcArgs:     procArgs,

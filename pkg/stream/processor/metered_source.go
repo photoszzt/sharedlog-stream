@@ -62,3 +62,7 @@ func (s *MeteredSource) TopicName() string {
 func (s *MeteredSource) Stream() store.Stream {
 	return s.src.Stream()
 }
+
+func (s *MeteredSource) InnerSource() Source {
+	return s.src
+}

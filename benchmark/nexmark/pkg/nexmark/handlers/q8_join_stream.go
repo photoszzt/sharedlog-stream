@@ -326,20 +326,20 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker),
 	)
 
-	pJoinA := func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
-		_, err := toPersonsWinTab.ProcessAndReturn(ctx, m)
-		if err != nil {
-			return nil, err
-		}
-		return personsJoinsAuctions.ProcessAndReturn(ctx, m)
-	}
-
 	aJoinP := func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		_, err := toAuctionsWindowTab.ProcessAndReturn(ctx, m)
 		if err != nil {
 			return nil, err
 		}
 		return auctionsJoinsPersons.ProcessAndReturn(ctx, m)
+	}
+
+	pJoinA := func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
+		_, err := toPersonsWinTab.ProcessAndReturn(ctx, m)
+		if err != nil {
+			return nil, err
+		}
+		return personsJoinsAuctions.ProcessAndReturn(ctx, m)
 	}
 
 	sharedlog_stream.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
@@ -380,7 +380,22 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			}
 		} else if sp.TableType == uint8(store.MONGODB) {
 			// TODO: MONGODB
-			wsc = nil
+			wsc = []*store.WindowStoreChangelog{
+				store.NewWindowStoreChangelogForExternalStore(
+					auctionsWinStore, auctionsStream, joinProcSerialWithoutSink,
+					&joinProcWithoutSinkArgs{
+						src:    sss.src1.InnerSource(),
+						parNum: sp.ParNum,
+						runner: aJoinP,
+					}, sp.ParNum),
+				store.NewWindowStoreChangelogForExternalStore(
+					personsWinTab, personsStream, joinProcSerialWithoutSink,
+					&joinProcWithoutSinkArgs{
+						src:    sss.src2.InnerSource(),
+						parNum: sp.ParNum,
+						runner: pJoinA,
+					}, sp.ParNum),
+			}
 		} else {
 			panic("unrecognized table type")
 		}

@@ -94,6 +94,14 @@ type processQ7ProcessArgs struct {
 	parNum             uint8
 }
 
+type processQ7RestoreArgs struct {
+	src                processor.Source
+	maxPriceBid        processor.Processor
+	transformWithStore processor.Processor
+	filterTime         processor.Processor
+	parNum             uint8
+}
+
 func (h *query7Handler) process(
 	ctx context.Context,
 	argsTmp interface{},
@@ -161,6 +169,48 @@ func (h *query7Handler) process(
 		}
 	}
 	return h.currentOffset, nil
+}
+
+func (h *query7Handler) processWithoutSink(
+	ctx context.Context,
+	argsTmp interface{},
+) error {
+	args := argsTmp.(*processQ7RestoreArgs)
+	gotMsgs, err := args.src.Consume(ctx, args.parNum)
+	if err != nil {
+		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
+			return nil
+		}
+		return err
+	}
+
+	for _, msg := range gotMsgs {
+		if msg.Msg.Value == nil {
+			continue
+		}
+		h.currentOffset[args.src.TopicName()] = msg.LogSeqNum
+		event := msg.Msg.Value.(*ntypes.Event)
+		ts, err := event.ExtractStreamTime()
+		if err != nil {
+			return fmt.Errorf("fail to extract timestamp: %v", err)
+		}
+		msg.Msg.Timestamp = ts
+		_, err = args.maxPriceBid.ProcessAndReturn(ctx, msg.Msg)
+		if err != nil {
+			return err
+		}
+		transformedMsgs, err := args.transformWithStore.ProcessAndReturn(ctx, msg.Msg)
+		if err != nil {
+			return err
+		}
+		for _, tmsg := range transformedMsgs {
+			_, err := args.filterTime.ProcessAndReturn(ctx, tmsg)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput) *common.FnOutput {
@@ -316,8 +366,16 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 					wstore_mem.MaterializeParam().ParNum),
 			}
 		} else if input.TableType == uint8(store.MONGODB) {
-			// TODO: MONGODB
-			wsc = nil
+			wsc = []*store.WindowStoreChangelog{
+				store.NewWindowStoreChangelogForExternalStore(wstore, inputStream, h.processWithoutSink,
+					&processQ7RestoreArgs{
+						src:                src.InnerSource(),
+						parNum:             input.ParNum,
+						maxPriceBid:        maxPriceBid.InnerProcessor(),
+						transformWithStore: transformWithStore.InnerProcessor(),
+						filterTime:         filterTime.InnerProcessor(),
+					}, input.ParNum),
+			}
 		} else {
 			panic("unrecognized table type")
 		}
