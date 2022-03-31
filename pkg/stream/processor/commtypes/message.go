@@ -1,5 +1,9 @@
 package commtypes
 
+const (
+	SCALE_FENCE_KEY = "__scale_fence"
+)
+
 type Message struct {
 	Key       interface{}
 	Value     interface{}
@@ -22,14 +26,16 @@ type ReadMsgAndProgress struct {
 }
 
 type RawMsg struct {
-	Payload   []byte
-	IsControl bool
-	MsgSeqNum uint64
-	LogSeqNum uint64
+	Payload    []byte
+	IsControl  bool
+	MsgSeqNum  uint64
+	LogSeqNum  uint64
+	ScaleEpoch uint64
 }
 
 type MsgAndSeq struct {
 	Msg       Message
 	MsgSeqNum uint64
 	LogSeqNum uint64
+	IsControl bool
 }

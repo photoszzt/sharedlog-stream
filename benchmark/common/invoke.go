@@ -36,7 +36,9 @@ func Invoke(config_file string, gateway_url string,
 	var cliNodes []*ClientNode
 	var numSrcInstance uint8
 	var srcTopicName string
+	scaleConfig := make(map[string]uint8)
 	inParamsMap := make(map[string][]*QueryInput)
+	funcNames := make([]string, 0)
 	for _, child := range funcParam {
 		config := child.ChildrenMap()
 		fmt.Fprintf(os.Stderr, "config: %v\n", config)
@@ -44,6 +46,9 @@ func Invoke(config_file string, gateway_url string,
 		funcName := config["funcName"].Data().(string)
 		outputTopicName := config["OutputTopicName"].Data().(string)
 		inputTopicNamesTmp, ok := config["InputTopicNames"]
+		scaleConfig[funcName] = ninstance
+		funcNames = append(funcNames, funcName)
+
 		if !ok {
 			// this is source config
 			numSrcInstance = ninstance
@@ -70,16 +75,23 @@ func Invoke(config_file string, gateway_url string,
 					CommitEveryNIter:  baseQueryInput.CommitEveryNIter,
 					ExitAfterNCommit:  baseQueryInput.ExitAfterNCommit,
 					SerdeFormat:       baseQueryInput.SerdeFormat,
+					AppId:             baseQueryInput.AppId,
+					TableType:         baseQueryInput.TableType,
+					MongoAddr:         baseQueryInput.MongoAddr,
 					InputTopicNames:   inputTopicNames,
 					OutputTopicName:   outputTopicName,
 					NumInPartition:    numInSubs,
 					NumOutPartition:   numOutSubs,
+					ScaleEpoch:        1,
 				}
 			}
 			node := NewClientNode(nconfig)
 			cliNodes = append(cliNodes, node)
 			inParamsMap[funcName] = inParams
 		}
+	}
+	for tp, subs := range streamParam {
+		scaleConfig[tp] = uint8(subs.Data().(float64))
 	}
 
 	client := &http.Client{
@@ -88,6 +100,17 @@ func Invoke(config_file string, gateway_url string,
 		},
 		Timeout: time.Duration(baseQueryInput.Duration*3) * time.Second,
 	}
+
+	scaleConfigInput := ConfigScaleInput{
+		Config:      scaleConfig,
+		FuncNames:   funcNames,
+		AppId:       baseQueryInput.AppId,
+		ScaleEpoch:  1,
+		SerdeFormat: baseQueryInput.SerdeFormat,
+		Bootstrap:   true,
+	}
+	var scaleResponse FnOutput
+	InvokeConfigScale(client, &scaleConfigInput, gateway_url, &scaleResponse, "scale")
 
 	var wg sync.WaitGroup
 	sourceOutput := make([]FnOutput, numSrcInstance)

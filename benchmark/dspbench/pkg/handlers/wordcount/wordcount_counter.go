@@ -13,6 +13,7 @@ import (
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/treemap"
 	"strings"
 	"time"
@@ -22,14 +23,12 @@ import (
 )
 
 type wordcountCounterAgg struct {
-	env           types.Environment
-	currentOffset map[string]uint64
+	env types.Environment
 }
 
 func NewWordCountCounterAgg(env types.Environment) *wordcountCounterAgg {
 	return &wordcountCounterAgg{
-		env:           env,
-		currentOffset: make(map[string]uint64),
+		env: env,
 	}
 }
 
@@ -89,42 +88,75 @@ func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes
 }
 
 type wordcountCounterAggProcessArg struct {
-	src           *processor.MeteredSource
-	output_stream *store.MeteredStream
-	counter       *processor.MeteredProcessor
-	trackParFunc  sharedlog_stream.TrackKeySubStreamFunc
-	parNum        uint8
+	src              *processor.MeteredSource
+	output_stream    *store.MeteredStream
+	counter          *processor.MeteredProcessor
+	trackParFunc     transaction.TrackKeySubStreamFunc
+	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
+	funcName         string
+	curEpoch         uint64
+	parNum           uint8
+}
+
+func (a *wordcountCounterAggProcessArg) ParNum() uint8    { return a.parNum }
+func (a *wordcountCounterAggProcessArg) CurEpoch() uint64 { return a.curEpoch }
+func (a *wordcountCounterAggProcessArg) FuncName() string { return a.funcName }
+func (a *wordcountCounterAggProcessArg) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
+	return a.recordFinishFunc
 }
 
 func (h *wordcountCounterAgg) process(ctx context.Context,
+	t *transaction.StreamTask,
 	argsTmp interface{},
 ) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*wordcountCounterAggProcessArg)
 	msgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {
 		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
-			return h.currentOffset, &common.FnOutput{
+			return t.CurrentOffset, &common.FnOutput{
 				Success: true,
 				Message: err.Error(),
 			}
 		}
-		return h.currentOffset, &common.FnOutput{
+		return t.CurrentOffset, &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("consume failed: %v", err),
 		}
 	}
 
 	for _, msg := range msgs {
-		h.currentOffset[args.src.TopicName()] = msg.LogSeqNum
+		if msg.Msg.Value == nil {
+			continue
+		}
+		if msg.IsControl {
+			v := msg.Msg.Value.(sharedlog_stream.ScaleEpochAndBytes)
+			_, err = args.output_stream.Push(ctx, v.Payload, args.parNum, true)
+			if err != nil {
+				return t.CurrentOffset, &common.FnOutput{Success: false, Message: err.Error()}
+			}
+			if args.curEpoch < v.ScaleEpoch {
+				err = args.recordFinishFunc(ctx, args.funcName, args.parNum)
+				if err != nil {
+					return t.CurrentOffset, &common.FnOutput{Success: false, Message: err.Error()}
+				}
+				return t.CurrentOffset, &common.FnOutput{
+					Success: true,
+					Message: fmt.Sprintf("%s-%d epoch %d exit", args.funcName, args.parNum, args.curEpoch),
+					Err:     errors.ErrShouldExitForScale,
+				}
+			}
+			continue
+		}
+		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
 		_, err = args.counter.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
-			return h.currentOffset, &common.FnOutput{
+			return t.CurrentOffset, &common.FnOutput{
 				Success: false,
 				Message: fmt.Sprintf("counter failed: %v", err),
 			}
 		}
 	}
-	return h.currentOffset, nil
+	return t.CurrentOffset, nil
 }
 
 func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -159,33 +191,40 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 		}
 	}
 
+	funcName := "wccounter"
 	procArgs := &wordcountCounterAggProcessArg{
-		src:           src,
-		output_stream: meteredOutputStream,
-		counter:       count,
-		parNum:        sp.ParNum,
+		src:              src,
+		output_stream:    meteredOutputStream,
+		counter:          count,
+		parNum:           sp.ParNum,
+		funcName:         funcName,
+		curEpoch:         sp.ScaleEpoch,
+		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
+		trackParFunc:     transaction.DefaultTrackSubstreamFunc,
 	}
 
-	task := sharedlog_stream.StreamTask{
-		ProcessFunc: h.process,
+	task := transaction.StreamTask{
+		ProcessFunc:   h.process,
+		CurrentOffset: make(map[string]uint64),
 	}
 
 	if sp.EnableTransaction {
 		srcs := make(map[string]processor.Source)
 		srcs[sp.InputTopicNames[0]] = src
-		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
+		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:        procArgs,
 			Env:             h.env,
 			MsgSerde:        msgSerde,
 			Srcs:            srcs,
 			OutputStream:    output_stream,
 			QueryInput:      sp,
-			TransactionalId: fmt.Sprintf("wordcount-counter-%s-%s-%d", sp.InputTopicNames[0], sp.OutputTopicName, sp.ParNum),
+			TransactionalId: fmt.Sprintf("%s-%s-%s-%d", funcName, sp.InputTopicNames[0], sp.OutputTopicName, sp.ParNum),
 			FixedOutParNum:  sp.ParNum,
 		}
-		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*wordcountCounterAggProcessArg).trackParFunc = trackParFunc
+				procArgs.(*wordcountCounterAggProcessArg).recordFinishFunc = recordFinishFunc
 			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
@@ -196,7 +235,7 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 		return ret
 	}
 	// return h.process(ctx, sp, args)
-	streamTaskArgs := sharedlog_stream.StreamTaskArgs{
+	streamTaskArgs := transaction.StreamTaskArgs{
 		ProcArgs: procArgs,
 		Duration: time.Duration(sp.Duration) * time.Second,
 	}

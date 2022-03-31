@@ -7,11 +7,13 @@ import (
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/treemap"
 	"sync"
 	"time"
@@ -24,15 +26,15 @@ type q3JoinTableHandler struct {
 	cHashMu sync.RWMutex
 	cHash   *hash.ConsistentHash
 
-	offMu         sync.Mutex
-	currentOffset map[string]uint64
+	offMu    sync.Mutex
+	funcName string
 }
 
-func NewQ3JoinTableHandler(env types.Environment) types.FuncHandler {
+func NewQ3JoinTableHandler(env types.Environment, funcName string) types.FuncHandler {
 	return &q3JoinTableHandler{
-		env:           env,
-		cHash:         hash.NewConsistentHash(),
-		currentOffset: make(map[string]uint64),
+		env:      env,
+		cHash:    hash.NewConsistentHash(),
+		funcName: funcName,
 	}
 }
 
@@ -52,6 +54,7 @@ func (h *q3JoinTableHandler) Call(ctx context.Context, input []byte) ([]byte, er
 }
 
 func (h *q3JoinTableHandler) process(ctx context.Context,
+	t *transaction.StreamTask,
 	argsTmp interface{},
 ) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*q3JoinTableProcessArgs)
@@ -68,7 +71,7 @@ func (h *q3JoinTableHandler) process(ctx context.Context,
 		parNum:        args.parNum,
 		runner:        args.pJoinA,
 		offMu:         &h.offMu,
-		currentOffset: h.currentOffset,
+		currentOffset: t.CurrentOffset,
 		trackParFunc:  args.trackParFunc,
 		cHashMu:       &h.cHashMu,
 		cHash:         h.cHash,
@@ -82,28 +85,25 @@ func (h *q3JoinTableHandler) process(ctx context.Context,
 		parNum:        args.parNum,
 		runner:        args.aJoinP,
 		offMu:         &h.offMu,
-		currentOffset: h.currentOffset,
+		currentOffset: t.CurrentOffset,
 		trackParFunc:  args.trackParFunc,
 		cHashMu:       &h.cHashMu,
 		cHash:         h.cHash,
 	}
 	go joinProc(ctx, auctionsOutChan, joinProgArgsAuction)
-
+	var pOut *common.FnOutput = nil
+	var aOut *common.FnOutput = nil
 L:
 	for {
 		select {
 		case personOutput := <-personsOutChan:
-			if personOutput != nil {
-				return h.currentOffset, personOutput
-			}
+			pOut = personOutput
 			completed += 1
 			if completed == 2 {
 				break L
 			}
 		case auctionOutput := <-auctionsOutChan:
-			if auctionOutput != nil {
-				return h.currentOffset, auctionOutput
-			}
+			aOut = auctionOutput
 			completed += 1
 			if completed == 2 {
 				break L
@@ -111,7 +111,22 @@ L:
 		}
 	}
 	wg.Wait()
-	return h.currentOffset, nil
+	if pOut != nil {
+		if aOut != nil {
+			succ := pOut.Success && aOut.Success
+			return t.CurrentOffset, &common.FnOutput{Success: succ, Message: pOut.Message + "," + aOut.Message}
+		}
+		if pOut.Success {
+			return t.CurrentOffset, nil
+		}
+		return t.CurrentOffset, pOut
+	} else if aOut != nil {
+		if aOut.Success {
+			return t.CurrentOffset, nil
+		}
+		return t.CurrentOffset, aOut
+	}
+	return t.CurrentOffset, nil
 }
 
 func getInOutStreams(
@@ -272,13 +287,23 @@ func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 }
 
 type q3JoinTableProcessArgs struct {
-	personSrc    *processor.MeteredSource
-	auctionSrc   *processor.MeteredSource
-	sink         *processor.MeteredSink
-	pJoinA       JoinWorkerFunc
-	aJoinP       JoinWorkerFunc
-	trackParFunc sharedlog_stream.TrackKeySubStreamFunc
-	parNum       uint8
+	personSrc        *processor.MeteredSource
+	auctionSrc       *processor.MeteredSource
+	sink             *processor.MeteredSink
+	pJoinA           JoinWorkerFunc
+	aJoinP           JoinWorkerFunc
+	trackParFunc     transaction.TrackKeySubStreamFunc
+	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
+	funcName         string
+	curEpoch         uint64
+	parNum           uint8
+}
+
+func (a *q3JoinTableProcessArgs) ParNum() uint8    { return a.parNum }
+func (a *q3JoinTableProcessArgs) CurEpoch() uint64 { return a.curEpoch }
+func (a *q3JoinTableProcessArgs) FuncName() string { return a.funcName }
+func (a *q3JoinTableProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
+	return a.recordFinishFunc
 }
 
 func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -334,53 +359,57 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		return personJoinsAuctions.ProcessAndReturn(ctx, m)
 	})
 
-	sharedlog_stream.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
+	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
 
+	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
 	procArgs := &q3JoinTableProcessArgs{
-		auctionSrc:   sss.src1,
-		personSrc:    sss.src2,
-		sink:         sss.sink,
-		aJoinP:       aJoinP,
-		pJoinA:       pJoinA,
-		parNum:       sp.ParNum,
-		trackParFunc: sharedlog_stream.DefaultTrackSubstreamFunc,
+		auctionSrc:       sss.src1,
+		personSrc:        sss.src2,
+		sink:             sss.sink,
+		aJoinP:           aJoinP,
+		pJoinA:           pJoinA,
+		parNum:           sp.ParNum,
+		trackParFunc:     transaction.DefaultTrackSubstreamFunc,
+		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
+		curEpoch:         sp.ScaleEpoch,
+		funcName:         h.funcName,
 	}
 
-	task := sharedlog_stream.StreamTask{
-		ProcessFunc: h.process,
+	task := transaction.StreamTask{
+		ProcessFunc:   h.process,
+		CurrentOffset: make(map[string]uint64),
 	}
 	if sp.EnableTransaction {
-		var kvchangelogs []*store.KVStoreChangelog
+		var kvchangelogs []*transaction.KVStoreChangelog
 		if sp.TableType == uint8(store.IN_MEM) {
-			kvchangelogs = []*store.KVStoreChangelog{
-				store.NewKVStoreChangelog(kvtabs.tab1, auctionsStream, sss.keySerdes[0], sss.valSerdes[0], sp.ParNum),
-				store.NewKVStoreChangelog(kvtabs.tab2, personsStream, sss.keySerdes[1], sss.valSerdes[1], sp.ParNum),
+			kvchangelogs = []*transaction.KVStoreChangelog{
+				transaction.NewKVStoreChangelog(kvtabs.tab1, auctionsStream, sss.keySerdes[0], sss.valSerdes[0], sp.ParNum),
+				transaction.NewKVStoreChangelog(kvtabs.tab2, personsStream, sss.keySerdes[1], sss.valSerdes[1], sp.ParNum),
 			}
 		} else if sp.TableType == uint8(store.MONGODB) {
-			kvchangelogs = []*store.KVStoreChangelog{
-				store.NewKVStoreChangelogForExternalStore(kvtabs.tab1, auctionsStream, joinProcSerialWithoutSink,
+			kvchangelogs = []*transaction.KVStoreChangelog{
+				transaction.NewKVStoreChangelogForExternalStore(kvtabs.tab1, auctionsStream, joinProcSerialWithoutSink,
 					&joinProcWithoutSinkArgs{
 						src:    sss.src1.InnerSource(),
 						parNum: sp.ParNum,
 						runner: aJoinP,
 					}, sp.ParNum),
-				store.NewKVStoreChangelogForExternalStore(kvtabs.tab2, personsStream, joinProcSerialWithoutSink,
+				transaction.NewKVStoreChangelogForExternalStore(kvtabs.tab2, personsStream, joinProcSerialWithoutSink,
 					&joinProcWithoutSinkArgs{
 						src:    sss.src2.InnerSource(),
 						parNum: sp.ParNum,
 						runner: pJoinA,
-					}, sp.ParNum,
-				),
+					}, sp.ParNum),
 			}
 		}
-		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
+		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:     procArgs,
 			Env:          h.env,
 			MsgSerde:     sss.msgSerde,
 			Srcs:         map[string]processor.Source{auctionsStream.TopicName(): sss.src1, personsStream.TopicName(): sss.src2},
 			OutputStream: outputStream,
 			QueryInput:   sp,
-			TransactionalId: fmt.Sprintf("q3JoinTable-%s-%d-%s",
+			TransactionalId: fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
 			KVChangelogs:          kvchangelogs,
 			WindowStoreChangelogs: nil,
@@ -388,9 +417,10 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			CHash:                 h.cHash,
 			CHashMu:               &h.cHashMu,
 		}
-		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*q3JoinTableProcessArgs).trackParFunc = trackParFunc
+				procArgs.(*q3JoinTableProcessArgs).recordFinishFunc = recordFinishFunc
 			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["auctionsSrc"] = procArgs.auctionSrc.GetLatency()
@@ -405,7 +435,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		}
 		return ret
 	}
-	streamTaskArgs := sharedlog_stream.StreamTaskArgs{
+	streamTaskArgs := transaction.StreamTaskArgs{
 		ProcArgs: procArgs,
 		Duration: time.Duration(sp.Duration) * time.Second,
 	}

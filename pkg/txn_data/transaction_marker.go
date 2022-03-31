@@ -1,6 +1,6 @@
 //go:generate msgp
 //msgp:ignore TxnMarkerJSONSerde TxnMarkerMsgpSerde
-package sharedlog_stream
+package txn_data
 
 import "encoding/json"
 
@@ -9,11 +9,13 @@ type TxnMark uint8
 const (
 	COMMIT TxnMark = 0
 	ABORT  TxnMark = 1
+	// scale config piggyback on transaction marker
+	SCALE_FENCE TxnMark = 2
 )
 
 type TxnMarker struct {
-	TransactionID uint64 `json:"tid" msg:"tid"`
-	Mark          uint8  `json:"mk" msg:"mk"`
+	TranIDOrScaleEpoch uint64 `json:"tid,omitempty" msg:"tid,omitempty"`
+	Mark               uint8  `json:"mk" msg:"mk"`
 }
 
 type TxnMarkerJSONSerde struct{}

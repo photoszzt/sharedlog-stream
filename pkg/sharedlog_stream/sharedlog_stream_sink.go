@@ -67,13 +67,16 @@ func (sls *SharedLogStreamSink) Sink(ctx context.Context, msg commtypes.Message,
 	}
 	// debug.Fprintf(os.Stderr, "Sink: output key: %v, val: %v\n", string(keyEncoded), string(valEncoded))
 	bytes, err := sls.msgSerde.Encode(keyEncoded, valEncoded)
-	if bytes != nil && err == nil {
+	if err != nil {
+		return err
+	}
+	if bytes != nil {
 		_, err = sls.stream.Push(ctx, bytes, 0, isControl)
 		if err != nil {
 			return err
 		}
 	}
-	return err
+	return nil
 }
 
 func (sls *SharedLogStreamSink) Process(ctx context.Context, msg commtypes.Message) error {

@@ -15,6 +15,7 @@ import (
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/transaction"
 	"sync"
 	"time"
 
@@ -23,17 +24,17 @@ import (
 )
 
 type q5AuctionBids struct {
-	env           types.Environment
-	cHashMu       sync.RWMutex
-	cHash         *hash.ConsistentHash
-	currentOffset map[string]uint64
+	env      types.Environment
+	cHashMu  sync.RWMutex
+	cHash    *hash.ConsistentHash
+	funcName string
 }
 
-func NewQ5AuctionBids(env types.Environment) *q5AuctionBids {
+func NewQ5AuctionBids(env types.Environment, funcName string) *q5AuctionBids {
 	return &q5AuctionBids{
-		env:           env,
-		cHash:         hash.NewConsistentHash(),
-		currentOffset: make(map[string]uint64),
+		env:      env,
+		cHash:    hash.NewConsistentHash(),
+		funcName: funcName,
 	}
 }
 
@@ -176,14 +177,26 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 }
 
 type q5AuctionBidsProcessArg struct {
-	countProc       *processor.MeteredProcessor
-	groupByAuction  *processor.MeteredProcessor
-	src             *processor.MeteredSource
-	sink            *processor.MeteredSink
-	output_stream   *sharedlog_stream.ShardedSharedLogStream
-	trackParFunc    sharedlog_stream.TrackKeySubStreamFunc
-	parNum          uint8
-	numOutPartition uint8
+	countProc        *processor.MeteredProcessor
+	groupByAuction   *processor.MeteredProcessor
+	src              *processor.MeteredSource
+	sink             *processor.MeteredSink
+	output_stream    *sharedlog_stream.ShardedSharedLogStream
+	trackParFunc     transaction.TrackKeySubStreamFunc
+	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
+	funcName         string
+	curEpoch         uint64
+	parNum           uint8
+	numOutPartition  uint8
+}
+
+func (a *q5AuctionBidsProcessArg) Source() processor.Source { return a.src }
+func (a *q5AuctionBidsProcessArg) Sink() processor.Sink     { return a.sink }
+func (a *q5AuctionBidsProcessArg) ParNum() uint8            { return a.parNum }
+func (a *q5AuctionBidsProcessArg) CurEpoch() uint64         { return a.curEpoch }
+func (a *q5AuctionBidsProcessArg) FuncName() string         { return a.funcName }
+func (a *q5AuctionBidsProcessArg) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
+	return a.recordFinishFunc
 }
 
 type q5AuctionBidsRestoreArg struct {
@@ -193,36 +206,25 @@ type q5AuctionBidsRestoreArg struct {
 	parNum         uint8
 }
 
-func (h *q5AuctionBids) process(ctx context.Context, argsTmp interface{}) (map[string]uint64, *common.FnOutput) {
+func (h *q5AuctionBids) process(ctx context.Context, t *transaction.StreamTask, argsTmp interface{}) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*q5AuctionBidsProcessArg)
-	gotMsgs, err := args.src.Consume(ctx, args.parNum)
-	if err != nil {
-		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
-			return h.currentOffset, &common.FnOutput{Success: true, Message: err.Error()}
-		}
-		return h.currentOffset, &common.FnOutput{Success: false, Message: err.Error()}
-	}
-
-	for _, msg := range gotMsgs {
-		if msg.Msg.Value == nil {
-			continue
-		}
-		h.currentOffset[args.src.TopicName()] = msg.LogSeqNum
+	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
+		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
 		event := msg.Msg.Value.(*ntypes.Event)
 		ts, err := event.ExtractStreamTime()
 		if err != nil {
-			return h.currentOffset, &common.FnOutput{Success: false, Message: fmt.Sprintf("fail to extract timestamp: %v", err)}
+			return fmt.Errorf("fail to extract timestamp: %v", err)
 		}
 		msg.Msg.Timestamp = ts
 		countMsgs, err := args.countProc.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
-			return h.currentOffset, &common.FnOutput{Success: false, Message: err.Error()}
+			return err
 		}
 		for _, countMsg := range countMsgs {
 			// fmt.Fprintf(os.Stderr, "count msg ts: %v, ", countMsg.Timestamp)
 			changeKeyedMsg, err := args.groupByAuction.ProcessAndReturn(ctx, countMsg)
 			if err != nil {
-				return h.currentOffset, &common.FnOutput{Success: false, Message: err.Error()}
+				return err
 			}
 			// fmt.Fprintf(os.Stderr, "changeKeyedMsg ts: %v\n", changeKeyedMsg[0].Timestamp)
 			// par := uint8(hashSe(changeKeyedMsg[0].Key.(*ntypes.StartEndTime)) % uint32(args.numOutPartition))
@@ -231,21 +233,21 @@ func (h *q5AuctionBids) process(ctx context.Context, argsTmp interface{}) (map[s
 			parTmp, ok := h.cHash.Get(k)
 			h.cHashMu.RUnlock()
 			if !ok {
-				return h.currentOffset, &common.FnOutput{Success: false, Message: "fail to get output partition"}
+				return xerrors.New("fail to get output partition")
 			}
 			par := parTmp.(uint8)
 			// fmt.Fprintf(os.Stderr, "key is %s, output to substream %d\n", k.String(), par)
 			err = args.trackParFunc(ctx, k, args.sink.KeySerde(), args.sink.TopicName(), par)
 			if err != nil {
-				return h.currentOffset, &common.FnOutput{Success: false, Message: fmt.Sprintf("add topic partition failed: %v\n", err)}
+				return fmt.Errorf("add topic partition failed: %v", err)
 			}
 			err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
 			if err != nil {
-				return h.currentOffset, &common.FnOutput{Success: false, Message: err.Error()}
+				return err
 			}
 		}
-	}
-	return h.currentOffset, nil
+		return nil
+	})
 }
 
 func (h *q5AuctionBids) processWithoutSink(ctx context.Context, argsTmp interface{}) error {
@@ -262,7 +264,6 @@ func (h *q5AuctionBids) processWithoutSink(ctx context.Context, argsTmp interfac
 		if msg.Msg.Value == nil {
 			continue
 		}
-		h.currentOffset[args.src.TopicName()] = msg.LogSeqNum
 		event := msg.Msg.Value.(*ntypes.Event)
 		ts, err := event.ExtractStreamTime()
 		if err != nil {
@@ -317,30 +318,34 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			return commtypes.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
 		})))
 	procArgs := &q5AuctionBidsProcessArg{
-		countProc:       countProc,
-		groupByAuction:  groupByAuction,
-		src:             src,
-		sink:            sink,
-		output_stream:   output_stream,
-		parNum:          sp.ParNum,
-		numOutPartition: sp.NumOutPartition,
-		trackParFunc:    sharedlog_stream.DefaultTrackSubstreamFunc,
+		countProc:        countProc,
+		groupByAuction:   groupByAuction,
+		src:              src,
+		sink:             sink,
+		output_stream:    output_stream,
+		parNum:           sp.ParNum,
+		numOutPartition:  sp.NumOutPartition,
+		trackParFunc:     transaction.DefaultTrackSubstreamFunc,
+		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
+		curEpoch:         sp.ScaleEpoch,
+		funcName:         h.funcName,
 	}
 
-	task := sharedlog_stream.StreamTask{
-		ProcessFunc: h.process,
+	task := transaction.StreamTask{
+		ProcessFunc:   h.process,
+		CurrentOffset: make(map[string]uint64),
 	}
 
-	sharedlog_stream.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
+	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
 
 	if sp.EnableTransaction {
 		srcs := make(map[string]processor.Source)
 		srcs[sp.InputTopicNames[0]] = src
-		var wsc []*store.WindowStoreChangelog
+		var wsc []*transaction.WindowStoreChangelog
 		if countStore.TableType() == store.IN_MEM {
 			cstore := countStore.(*store.InMemoryWindowStoreWithChangelog)
-			wsc = []*store.WindowStoreChangelog{
-				store.NewWindowStoreChangelog(
+			wsc = []*transaction.WindowStoreChangelog{
+				transaction.NewWindowStoreChangelog(
 					cstore,
 					cstore.MaterializeParam().Changelog,
 					cstore.KeyWindowTsSerde(),
@@ -348,8 +353,8 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 					cstore.MaterializeParam().ValueSerde, 0),
 			}
 		} else if countStore.TableType() == store.MONGODB {
-			wsc = []*store.WindowStoreChangelog{
-				store.NewWindowStoreChangelogForExternalStore(countStore, input_stream,
+			wsc = []*transaction.WindowStoreChangelog{
+				transaction.NewWindowStoreChangelogForExternalStore(countStore, input_stream,
 					h.processWithoutSink, &q5AuctionBidsRestoreArg{
 						countProc:      countProc.InnerProcessor(),
 						groupByAuction: groupByAuction.InnerProcessor(),
@@ -360,13 +365,13 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		} else {
 			panic("unrecognized table type")
 		}
-		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
+		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:     procArgs,
 			Env:          h.env,
 			Srcs:         srcs,
 			OutputStream: output_stream,
 			QueryInput:   sp,
-			TransactionalId: fmt.Sprintf("q5AuctionBids-%s-%d-%s", sp.InputTopicNames[0],
+			TransactionalId: fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 				sp.ParNum, sp.OutputTopicName),
 			FixedOutParNum:        0,
 			WindowStoreChangelogs: wsc,
@@ -375,9 +380,10 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			CHash:                 h.cHash,
 			CHashMu:               &h.cHashMu,
 		}
-		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*q5AuctionBidsProcessArg).trackParFunc = trackParFunc
+				procArgs.(*q5AuctionBidsProcessArg).recordFinishFunc = recordFinishFunc
 			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
@@ -389,7 +395,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		return ret
 	}
 	// return h.process(ctx, sp, args)
-	streamTaskArgs := sharedlog_stream.StreamTaskArgs{
+	streamTaskArgs := transaction.StreamTaskArgs{
 		ProcArgs: procArgs,
 		Duration: time.Duration(sp.Duration) * time.Second,
 	}

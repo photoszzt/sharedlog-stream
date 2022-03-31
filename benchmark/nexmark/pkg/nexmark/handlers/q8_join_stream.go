@@ -14,6 +14,7 @@ import (
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/transaction"
 	"sync"
 	"time"
 
@@ -26,15 +27,16 @@ type q8JoinStreamHandler struct {
 	cHashMu sync.RWMutex
 	cHash   *hash.ConsistentHash
 
-	offMu         sync.Mutex
-	currentOffset map[string]uint64
+	offMu sync.Mutex
+
+	funcName string
 }
 
-func NewQ8JoinStreamHandler(env types.Environment) types.FuncHandler {
+func NewQ8JoinStreamHandler(env types.Environment, funcName string) types.FuncHandler {
 	return &q8JoinStreamHandler{
-		env:           env,
-		cHash:         hash.NewConsistentHash(),
-		currentOffset: make(map[string]uint64),
+		env:      env,
+		cHash:    hash.NewConsistentHash(),
+		funcName: funcName,
 	}
 }
 
@@ -54,17 +56,28 @@ func (h *q8JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, e
 }
 
 type q8JoinStreamProcessArgs struct {
-	personSrc    *processor.MeteredSource
-	auctionSrc   *processor.MeteredSource
-	sink         *processor.MeteredSink
-	pJoinA       JoinWorkerFunc
-	aJoinP       JoinWorkerFunc
-	trackParFunc sharedlog_stream.TrackKeySubStreamFunc
-	parNum       uint8
+	personSrc        *processor.MeteredSource
+	auctionSrc       *processor.MeteredSource
+	sink             *processor.MeteredSink
+	pJoinA           JoinWorkerFunc
+	aJoinP           JoinWorkerFunc
+	trackParFunc     transaction.TrackKeySubStreamFunc
+	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
+	funcName         string
+	curEpoch         uint64
+	parNum           uint8
+}
+
+func (a *q8JoinStreamProcessArgs) ParNum() uint8    { return a.parNum }
+func (a *q8JoinStreamProcessArgs) CurEpoch() uint64 { return a.curEpoch }
+func (a *q8JoinStreamProcessArgs) FuncName() string { return a.funcName }
+func (a *q8JoinStreamProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
+	return a.recordFinishFunc
 }
 
 func (h *q8JoinStreamHandler) process(
 	ctx context.Context,
+	t *transaction.StreamTask,
 	argsTmp interface{},
 ) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*q8JoinStreamProcessArgs)
@@ -81,7 +94,7 @@ func (h *q8JoinStreamHandler) process(
 		parNum:        args.parNum,
 		runner:        args.pJoinA,
 		offMu:         &h.offMu,
-		currentOffset: h.currentOffset,
+		currentOffset: t.CurrentOffset,
 		trackParFunc:  args.trackParFunc,
 		cHashMu:       &h.cHashMu,
 		cHash:         h.cHash,
@@ -95,20 +108,19 @@ func (h *q8JoinStreamHandler) process(
 		parNum:        args.parNum,
 		runner:        args.aJoinP,
 		offMu:         &h.offMu,
-		currentOffset: h.currentOffset,
+		currentOffset: t.CurrentOffset,
 		trackParFunc:  args.trackParFunc,
 		cHashMu:       &h.cHashMu,
 		cHash:         h.cHash,
 	}
 	go joinProc(ctx, auctionsOutChan, joinProgArgsAuction)
-
+	var pOut *common.FnOutput = nil
+	var aOut *common.FnOutput = nil
 L:
 	for {
 		select {
 		case personOutput := <-personsOutChan:
-			if personOutput != nil {
-				return h.currentOffset, personOutput
-			}
+			pOut = personOutput
 			completed += 1
 			// fmt.Fprintf(os.Stderr, "completed person: %d\n", completed)
 			if completed == 2 {
@@ -116,9 +128,7 @@ L:
 				break L
 			}
 		case auctionOutput := <-auctionsOutChan:
-			if auctionOutput != nil {
-				return h.currentOffset, auctionOutput
-			}
+			aOut = auctionOutput
 			completed += 1
 			// fmt.Fprintf(os.Stderr, "completed auc: %d\n", completed)
 			if completed == 2 {
@@ -128,11 +138,22 @@ L:
 		}
 	}
 	wg.Wait()
-	return h.currentOffset, nil
+	if pOut != nil {
+		if aOut != nil {
+			succ := pOut.Success && aOut.Success
+			return t.CurrentOffset, &common.FnOutput{Success: succ, Message: pOut.Message + "," + aOut.Message}
+		}
+		return t.CurrentOffset, pOut
+	} else if aOut != nil {
+		return t.CurrentOffset, aOut
+	}
+	return t.CurrentOffset, nil
 }
 
+/*
 func (h *q8JoinStreamHandler) processSerial(
 	ctx context.Context,
+	t *transaction.StreamTask,
 	argsTmp interface{},
 ) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*q8JoinStreamProcessArgs)
@@ -143,30 +164,36 @@ func (h *q8JoinStreamHandler) processSerial(
 		parNum:        args.parNum,
 		runner:        args.aJoinP,
 		offMu:         &h.offMu,
-		currentOffset: h.currentOffset,
+		currentOffset: t.CurrentOffset,
 		trackParFunc:  args.trackParFunc,
 		cHashMu:       &h.cHashMu,
 		cHash:         h.cHash,
 	}
-	ret := joinProcSerial(ctx, joinProgArgsAuction)
-	if ret != nil {
-		return h.currentOffset, ret
-	}
+	aOut := joinProcSerial(ctx, joinProgArgsAuction)
 	joinProcArgsPerson := &joinProcArgs{
 		src:           args.personSrc,
 		sink:          args.sink,
 		parNum:        args.parNum,
 		runner:        args.pJoinA,
 		offMu:         &h.offMu,
-		currentOffset: h.currentOffset,
+		currentOffset: t.CurrentOffset,
 		trackParFunc:  args.trackParFunc,
 		cHashMu:       &h.cHashMu,
 		cHash:         h.cHash,
 	}
-	ret = joinProcSerial(ctx, joinProcArgsPerson)
-	return h.currentOffset, ret
+	pOut := joinProcSerial(ctx, joinProcArgsPerson)
+	if pOut != nil {
+		if aOut != nil {
+			succ := pOut.Success && aOut.Success
+			return t.CurrentOffset, &common.FnOutput{Success: succ, Message: pOut.Message + "," + aOut.Message}
+		}
+		return t.CurrentOffset, pOut
+	} else if aOut != nil {
+		return t.CurrentOffset, aOut
+	}
+	return t.CurrentOffset, nil
 }
-
+*/
 func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	stream1 *sharedlog_stream.ShardedSharedLogStream,
 	stream2 *sharedlog_stream.ShardedSharedLogStream,
@@ -342,26 +369,30 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		return personsJoinsAuctions.ProcessAndReturn(ctx, m)
 	}
 
-	sharedlog_stream.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
+	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
 
 	procArgs := &q8JoinStreamProcessArgs{
-		personSrc:    personsSrc,
-		auctionSrc:   auctionsSrc,
-		sink:         sink,
-		pJoinA:       pJoinA,
-		aJoinP:       aJoinP,
-		parNum:       sp.ParNum,
-		trackParFunc: sharedlog_stream.DefaultTrackSubstreamFunc,
+		personSrc:        personsSrc,
+		auctionSrc:       auctionsSrc,
+		sink:             sink,
+		pJoinA:           pJoinA,
+		aJoinP:           aJoinP,
+		parNum:           sp.ParNum,
+		trackParFunc:     transaction.DefaultTrackSubstreamFunc,
+		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
+		curEpoch:         sp.ScaleEpoch,
+		funcName:         h.funcName,
 	}
 
-	task := sharedlog_stream.StreamTask{
-		ProcessFunc: h.process,
+	task := transaction.StreamTask{
+		ProcessFunc:   h.process,
+		CurrentOffset: make(map[string]uint64),
 	}
 	if sp.EnableTransaction {
-		var wsc []*store.WindowStoreChangelog
+		var wsc []*transaction.WindowStoreChangelog
 		if sp.TableType == uint8(store.IN_MEM) {
-			wsc = []*store.WindowStoreChangelog{
-				store.NewWindowStoreChangelog(
+			wsc = []*transaction.WindowStoreChangelog{
+				transaction.NewWindowStoreChangelog(
 					auctionsWinStore,
 					auctionsStream,
 					nil,
@@ -369,7 +400,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 					sss.valSerdes[0],
 					sp.ParNum,
 				),
-				store.NewWindowStoreChangelog(
+				transaction.NewWindowStoreChangelog(
 					personsWinTab,
 					personsStream,
 					nil,
@@ -380,15 +411,15 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			}
 		} else if sp.TableType == uint8(store.MONGODB) {
 			// TODO: MONGODB
-			wsc = []*store.WindowStoreChangelog{
-				store.NewWindowStoreChangelogForExternalStore(
+			wsc = []*transaction.WindowStoreChangelog{
+				transaction.NewWindowStoreChangelogForExternalStore(
 					auctionsWinStore, auctionsStream, joinProcSerialWithoutSink,
 					&joinProcWithoutSinkArgs{
 						src:    sss.src1.InnerSource(),
 						parNum: sp.ParNum,
 						runner: aJoinP,
 					}, sp.ParNum),
-				store.NewWindowStoreChangelogForExternalStore(
+				transaction.NewWindowStoreChangelogForExternalStore(
 					personsWinTab, personsStream, joinProcSerialWithoutSink,
 					&joinProcWithoutSinkArgs{
 						src:    sss.src2.InnerSource(),
@@ -399,22 +430,23 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		} else {
 			panic("unrecognized table type")
 		}
-		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
+		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:     procArgs,
 			Env:          h.env,
 			Srcs:         map[string]processor.Source{sp.InputTopicNames[0]: auctionsSrc, sp.InputTopicNames[1]: personsSrc},
 			OutputStream: outputStream,
 			QueryInput:   sp,
-			TransactionalId: fmt.Sprintf("q8JoinStream-%s-%d-%s",
+			TransactionalId: fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
 			MsgSerde:              sss.msgSerde,
 			WindowStoreChangelogs: wsc,
 			CHash:                 h.cHash,
 			CHashMu:               &h.cHashMu,
 		}
-		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*q8JoinStreamProcessArgs).trackParFunc = trackParFunc
+				procArgs.(*q8JoinStreamProcessArgs).recordFinishFunc = recordFinishFunc
 			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()
@@ -429,7 +461,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		}
 		return ret
 	}
-	streamTaskArgs := sharedlog_stream.StreamTaskArgs{
+	streamTaskArgs := transaction.StreamTaskArgs{
 		ProcArgs: procArgs,
 		Duration: time.Duration(sp.Duration) * time.Second,
 	}

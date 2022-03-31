@@ -9,26 +9,23 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/transaction"
 	"strings"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
-	"golang.org/x/xerrors"
 )
 
 type wordcountSplitFlatMap struct {
-	env           types.Environment
-	currentOffset map[string]uint64
+	env types.Environment
 }
 
 func NewWordCountSplitter(env types.Environment) *wordcountSplitFlatMap {
 	return &wordcountSplitFlatMap{
-		env:           env,
-		currentOffset: make(map[string]uint64),
+		env: env,
 	}
 }
 
@@ -81,45 +78,39 @@ func getSrcSink(ctx context.Context,
 }
 
 type wordcountSplitterProcessArg struct {
-	src             *processor.MeteredSource
-	sink            *processor.MeteredSink
-	output_stream   *sharedlog_stream.ShardedSharedLogStream
-	splitter        processor.FlatMapperFunc
-	trackParFunc    sharedlog_stream.TrackKeySubStreamFunc
-	splitLatencies  []int
-	parNum          uint8
-	numOutPartition uint8
+	src              *processor.MeteredSource
+	sink             *processor.MeteredSink
+	output_stream    *sharedlog_stream.ShardedSharedLogStream
+	splitter         processor.FlatMapperFunc
+	trackParFunc     transaction.TrackKeySubStreamFunc
+	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
+	funcName         string
+	splitLatencies   []int
+	curEpoch         uint64
+	parNum           uint8
+	numOutPartition  uint8
+}
+
+func (a *wordcountSplitterProcessArg) Source() processor.Source { return a.src }
+func (a *wordcountSplitterProcessArg) Sink() processor.Sink     { return a.sink }
+func (a *wordcountSplitterProcessArg) ParNum() uint8            { return a.parNum }
+func (a *wordcountSplitterProcessArg) CurEpoch() uint64         { return a.curEpoch }
+func (a *wordcountSplitterProcessArg) FuncName() string         { return a.funcName }
+func (a *wordcountSplitterProcessArg) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
+	return a.recordFinishFunc
 }
 
 func (h *wordcountSplitFlatMap) process(ctx context.Context,
+	t *transaction.StreamTask,
 	argsTmp interface{},
 ) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*wordcountSplitterProcessArg)
-	gotMsgs, err := args.src.Consume(ctx, args.parNum)
-	if err != nil {
-		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
-			return h.currentOffset, &common.FnOutput{
-				Success: true,
-				Message: err.Error(),
-			}
-		}
-		return h.currentOffset, &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("consumed failed: %v\n", err),
-		}
-	}
-	for _, msg := range gotMsgs {
-		if msg.Msg.Value == nil {
-			continue
-		}
-		h.currentOffset[args.src.TopicName()] = msg.LogSeqNum
+	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
+		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
 		splitStart := time.Now()
 		msgs, err := args.splitter(msg.Msg)
 		if err != nil {
-			return h.currentOffset, &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("splitter failed: %v\n", err),
-			}
+			return fmt.Errorf("splitter failed: %v\n", err)
 		}
 		splitLat := time.Since(splitStart)
 		args.splitLatencies = append(args.splitLatencies, int(splitLat.Microseconds()))
@@ -128,21 +119,15 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context,
 			par := uint8(hashed % uint32(args.numOutPartition))
 			err = args.trackParFunc(ctx, m.Key, args.sink.KeySerde(), args.sink.TopicName(), par)
 			if err != nil {
-				return h.currentOffset, &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("add topic partition failed: %v\n", err),
-				}
+				return fmt.Errorf("add topic partition failed: %v\n", err)
 			}
 			err = args.sink.Sink(ctx, m, par, false)
 			if err != nil {
-				return h.currentOffset, &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("sink failed: %v\n", err),
-				}
+				return fmt.Errorf("sink failed: %v\n", err)
 			}
 		}
-	}
-	return h.currentOffset, nil
+		return nil
+	})
 }
 
 func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -175,37 +160,44 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 		return splitMsgs, nil
 	})
 
+	funcName := "wcsplitter"
 	procArgs := &wordcountSplitterProcessArg{
-		src:             src,
-		sink:            sink,
-		output_stream:   output_stream,
-		splitter:        splitter,
-		splitLatencies:  make([]int, 0),
-		parNum:          sp.ParNum,
-		numOutPartition: sp.NumOutPartition,
+		src:              src,
+		sink:             sink,
+		output_stream:    output_stream,
+		splitter:         splitter,
+		splitLatencies:   make([]int, 0),
+		parNum:           sp.ParNum,
+		numOutPartition:  sp.NumOutPartition,
+		funcName:         funcName,
+		curEpoch:         sp.ScaleEpoch,
+		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
+		trackParFunc:     transaction.DefaultTrackSubstreamFunc,
 	}
 
-	task := sharedlog_stream.StreamTask{
-		ProcessFunc: h.process,
+	task := transaction.StreamTask{
+		ProcessFunc:   h.process,
+		CurrentOffset: make(map[string]uint64),
 	}
 
 	if sp.EnableTransaction {
 		// fmt.Fprintf(os.Stderr, "word count counter function enables exactly once semantics\n")
 		srcs := make(map[string]processor.Source)
 		srcs[sp.InputTopicNames[0]] = src
-		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
+		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:        procArgs,
 			Env:             h.env,
 			MsgSerde:        msgSerde,
 			Srcs:            srcs,
 			OutputStream:    output_stream,
 			QueryInput:      sp,
-			TransactionalId: fmt.Sprintf("wordcount-splitter-%s-%d", sp.InputTopicNames[0], sp.ParNum),
+			TransactionalId: fmt.Sprintf("%s-%s-%d", funcName, sp.InputTopicNames[0], sp.ParNum),
 			FixedOutParNum:  0,
 		}
-		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*wordcountSplitterProcessArg).trackParFunc = trackParFunc
+				procArgs.(*wordcountSplitterProcessArg).recordFinishFunc = recordFinishFunc
 			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
@@ -214,7 +206,7 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 		}
 		return ret
 	}
-	streamTaskArgs := sharedlog_stream.StreamTaskArgs{
+	streamTaskArgs := transaction.StreamTaskArgs{
 		ProcArgs: procArgs,
 		Duration: time.Duration(sp.Duration) * time.Second,
 	}

@@ -13,6 +13,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/treemap"
 	"time"
 
@@ -156,8 +157,8 @@ func (h *tableRestoreHandler) testRestoreKVTable(ctx context.Context) {
 			return 1
 		}
 	})
-	err = store.RestoreChangelogKVStateStore(ctx,
-		store.NewKVStoreChangelog(kvstore, changelog, commtypes.IntSerde{}, strTsJSONSerde{}, 0),
+	err = transaction.RestoreChangelogKVStateStore(ctx,
+		transaction.NewKVStoreChangelog(kvstore, changelog, commtypes.IntSerde{}, strTsJSONSerde{}, 0),
 		h.msgSerde, offset)
 	if err != nil {
 		panic(err)
@@ -239,7 +240,7 @@ func (h *tableRestoreHandler) testRestoreWindowTable(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	err = store.RestoreChangelogWindowStateStore(ctx, store.NewWindowStoreChangelog(wstore, changelog,
+	err = transaction.RestoreChangelogWindowStateStore(ctx, transaction.NewWindowStoreChangelog(wstore, changelog,
 		commtypes.KeyAndWindowStartTsJSONSerde{}, commtypes.IntSerde{}, commtypes.StringSerde{}, 0), h.msgSerde, uint64(offset))
 	if err != nil {
 		panic(err)

@@ -29,6 +29,8 @@ var (
 	FLAGS_commit_every_niter uint
 	FLAGS_exit_after_ncomm   uint
 	FLAGS_scale_config       string
+	FLAGS_table_type         string
+	FLAGS_mongo_addr         string
 )
 
 func invokeSourceFunc(client *http.Client, numOutPartition uint8, topicName string,
@@ -85,6 +87,8 @@ func main() {
 	flag.Uint64Var(&FLAGS_commit_everyMs, "comm_everyMS", 10, "commit a transaction every (ms)")
 	flag.UintVar(&FLAGS_commit_every_niter, "comm_every_niter", 0, "commit a transaction every iter(for test)")
 	flag.UintVar(&FLAGS_exit_after_ncomm, "exit_after_ncomm", 0, "exit after n commits(for test)")
+	flag.StringVar(&FLAGS_table_type, "tab_type", "mem", "either \"mem\" or \"mongodb\"")
+	flag.StringVar(&FLAGS_mongo_addr, "mongo_addr", "", "mongodb address")
 	flag.Parse()
 
 	switch FLAGS_app_name {

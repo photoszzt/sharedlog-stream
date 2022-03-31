@@ -1,4 +1,4 @@
-package store
+package transaction
 
 import (
 	"context"
@@ -7,11 +7,91 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 )
+
+type WindowStoreChangelog struct {
+	WinStore         store.WindowStore
+	Changelog        store.Stream
+	keyWindowTsSerde commtypes.Serde
+	keySerde         commtypes.Serde
+	valSerde         commtypes.Serde
+	InputStream      store.Stream
+	RestoreFunc      func(ctx context.Context, args interface{}) error
+	RestoreArg       interface{}
+	ParNum           uint8
+}
+
+func NewWindowStoreChangelog(
+	wStore store.WindowStore,
+	changelog store.Stream,
+	keyWindowTsSerde commtypes.Serde,
+	keySerde commtypes.Serde,
+	valSerde commtypes.Serde,
+	parNum uint8,
+) *WindowStoreChangelog {
+	return &WindowStoreChangelog{
+		WinStore:         wStore,
+		Changelog:        changelog,
+		keyWindowTsSerde: keyWindowTsSerde,
+		keySerde:         keySerde,
+		valSerde:         valSerde,
+		ParNum:           parNum,
+	}
+}
+
+func NewWindowStoreChangelogForExternalStore(
+	wStore store.WindowStore,
+	inputStream store.Stream,
+	restoreFunc func(ctx context.Context, args interface{}) error,
+	restoreArg interface{},
+	parNum uint8,
+) *WindowStoreChangelog {
+	return &WindowStoreChangelog{
+		WinStore:    wStore,
+		InputStream: inputStream,
+		RestoreFunc: restoreFunc,
+		RestoreArg:  restoreArg,
+		ParNum:      parNum,
+	}
+}
+
+func BeginWindowStoreTransaction(ctx context.Context, winstores []*WindowStoreChangelog) error {
+	for _, winstorelog := range winstores {
+		if winstorelog.WinStore.TableType() == store.MONGODB {
+			if err := winstorelog.WinStore.StartTransaction(ctx); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func CommitWindowStoreTransaction(ctx context.Context, winstores []*WindowStoreChangelog, taskRepr string, transactionID uint64) error {
+	for _, winstorelog := range winstores {
+		if winstorelog.WinStore.TableType() == store.MONGODB {
+			if err := winstorelog.WinStore.CommitTransaction(ctx, taskRepr, transactionID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func AbortWindowStoreTransaction(ctx context.Context, winstores []*WindowStoreChangelog) error {
+	for _, winstorelog := range winstores {
+		if winstorelog.WinStore.TableType() == store.MONGODB {
+			if err := winstorelog.WinStore.AbortTransaction(ctx); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
 
 func storeToWindowStore(ctx context.Context, keyBytes []byte, ts int64,
 	valBytes []byte, keySerde commtypes.Serde,
-	valSerde commtypes.Serde, winTab WindowStore,
+	valSerde commtypes.Serde, winTab store.WindowStore,
 ) error {
 	key, err := keySerde.Decode(keyBytes)
 	if err != nil {
@@ -87,57 +167,6 @@ func RestoreChangelogWindowStateStore(
 				if err != nil {
 					return fmt.Errorf("window store put failed: %v", err)
 				}
-			}
-		}
-		if currentOffset == offset {
-			return nil
-		}
-	}
-}
-
-func RestoreChangelogKVStateStore(
-	ctx context.Context,
-	kvchangelog *KVStoreChangelog,
-	msgSerde commtypes.MsgSerde,
-	offset uint64,
-) error {
-	currentOffset := uint64(0)
-	debug.Assert(kvchangelog.valSerde != nil, "val serde should not be nil")
-	debug.Assert(kvchangelog.keySerde != nil, "key serde should not be nil")
-	for {
-		_, msgs, err := kvchangelog.Changelog.ReadNext(ctx, kvchangelog.ParNum)
-		// nothing to restore
-		if errors.IsStreamEmptyError(err) {
-			return nil
-		} else if err != nil {
-			return fmt.Errorf("ReadNext failed: %v", err)
-		}
-		for _, msg := range msgs {
-			currentOffset = msg.LogSeqNum
-			if msg.Payload == nil {
-				continue
-			}
-			keyBytes, valBytes, err := msgSerde.Decode(msg.Payload)
-			if err != nil {
-				// fmt.Fprintf(os.Stderr, "msg payload is %v", string(msg.Payload))
-				return fmt.Errorf("MsgSerde decode failed: %v", err)
-			}
-			key, err := kvchangelog.keySerde.Decode(keyBytes)
-			if err != nil {
-				return fmt.Errorf("key serde3 failed: %v", err)
-			}
-			valTmp, err := kvchangelog.valSerde.Decode(valBytes)
-			if err != nil {
-				return fmt.Errorf("val serde decode failed: %v", err)
-			}
-			val := valTmp.(commtypes.StreamTimeExtractor)
-			ts, err := val.ExtractStreamTime()
-			if err != nil {
-				return fmt.Errorf("extract stream time failed: %v", err)
-			}
-			err = kvchangelog.KVStore.Put(ctx, key, commtypes.ValueTimestamp{Value: val, Timestamp: ts})
-			if err != nil {
-				return fmt.Errorf("kvstore put failed: %v", err)
 			}
 		}
 		if currentOffset == offset {

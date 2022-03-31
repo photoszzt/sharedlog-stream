@@ -1,6 +1,6 @@
 //go:generate msgp
 //msgp:ignore TxnMetadataJSONSerde TxnMetadataMsgpSerde
-package sharedlog_stream
+package txn_data
 
 import (
 	"encoding/json"

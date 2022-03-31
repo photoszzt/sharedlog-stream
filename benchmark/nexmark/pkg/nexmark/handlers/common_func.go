@@ -15,6 +15,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/transaction"
 
 	"golang.org/x/xerrors"
 )
@@ -55,7 +56,7 @@ type joinProcArgs struct {
 	offMu         *sync.Mutex
 	currentOffset map[string]uint64
 
-	trackParFunc sharedlog_stream.TrackKeySubStreamFunc
+	trackParFunc transaction.TrackKeySubStreamFunc
 	parNum       uint8
 
 	cHashMu *sync.RWMutex
@@ -102,6 +103,7 @@ func joinProc(
 	out <- nil
 }
 
+/*
 func joinProcWithoutSink(
 	ctx context.Context,
 	out chan *common.FnOutput,
@@ -172,11 +174,12 @@ func joinProcSerial(
 	}
 	return nil
 }
+*/
 
 type joinProcWithoutSinkArgs struct {
 	src    processor.Source
-	parNum uint8
 	runner JoinWorkerFunc
+	parNum uint8
 }
 
 func joinProcSerialWithoutSink(
@@ -213,7 +216,7 @@ func pushMsgsToSink(
 	cHash *hash.ConsistentHash,
 	cHashMu *sync.RWMutex,
 	msgs []commtypes.Message,
-	trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
+	trackParFunc transaction.TrackKeySubStreamFunc,
 ) error {
 	for _, msg := range msgs {
 		key := msg.Key.(uint64)

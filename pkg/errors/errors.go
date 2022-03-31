@@ -10,6 +10,7 @@ var (
 	ErrStreamTimeout          = xerrors.New("blocking pop timeout")
 	ErrInvalidStateTransition = xerrors.New("invalid state transition")
 	ErrStreamSourceTimeout    = xerrors.New("SharedLogStreamSource consume timeout")
+	ErrShouldExitForScale     = xerrors.New("should exit")
 )
 
 func IsStreamEmptyError(err error) bool {

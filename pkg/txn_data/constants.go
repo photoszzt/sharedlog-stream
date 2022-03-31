@@ -1,10 +1,10 @@
-package sharedlog_stream
+package txn_data
 
 const (
 	LogTagReserveBits = 3
 
 	StreamLogTagLowBits     = 1
-	streamPushLogTagLowBits = 2
+	StreamPushLogTagLowBits = 2
 
 	PartitionBits = 8
 

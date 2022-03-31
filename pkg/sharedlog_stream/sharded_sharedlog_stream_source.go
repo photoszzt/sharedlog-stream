@@ -10,6 +10,11 @@ import (
 	"time"
 )
 
+type ScaleEpochAndBytes struct {
+	Payload    []uint8
+	ScaleEpoch uint64
+}
+
 type ShardedSharedLogStreamSource struct {
 	keyDecoder   commtypes.Decoder
 	valueDecoder commtypes.Decoder
@@ -63,7 +68,22 @@ func (s *ShardedSharedLogStreamSource) Consume(ctx context.Context, parNum uint8
 			}
 		}
 		for _, rawMsg := range rawMsgs {
-			if len(rawMsg.Payload) == 0 {
+			if !rawMsg.IsControl && len(rawMsg.Payload) == 0 {
+				continue
+			}
+			if rawMsg.IsControl {
+				msgs = append(msgs, commtypes.MsgAndSeq{
+					Msg: commtypes.Message{
+						Key: commtypes.SCALE_FENCE_KEY,
+						Value: ScaleEpochAndBytes{
+							ScaleEpoch: rawMsg.ScaleEpoch,
+							Payload:    rawMsg.Payload,
+						},
+					},
+					MsgSeqNum: rawMsg.MsgSeqNum,
+					LogSeqNum: rawMsg.LogSeqNum,
+					IsControl: true,
+				})
 				continue
 			}
 			keyEncoded, valueEncoded, err := s.msgDecoder.Decode(rawMsg.Payload)
@@ -85,6 +105,7 @@ func (s *ShardedSharedLogStreamSource) Consume(ctx context.Context, parNum uint8
 				},
 				MsgSeqNum: rawMsg.MsgSeqNum,
 				LogSeqNum: rawMsg.LogSeqNum,
+				IsControl: false,
 			})
 		}
 		return msgs, nil

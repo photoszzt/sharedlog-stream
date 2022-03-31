@@ -11,6 +11,7 @@ import (
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/txn_data"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -45,13 +46,13 @@ type SharedLogStream struct {
 var _ = store.Stream(&SharedLogStream{})
 
 func NameHashWithPartition(nameHash uint64, par uint8) uint64 {
-	mask := uint64(math.MaxUint64) - (1<<PartitionBits - 1)
+	mask := uint64(math.MaxUint64) - (1<<txn_data.PartitionBits - 1)
 	return (nameHash & mask) + uint64(par)
 }
 
 func TxnMarkerTag(nameHash uint64, par uint8) uint64 {
-	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
-	return nameHash&mask + uint64(par)<<LogTagReserveBits + TxnMarkLowBits
+	mask := uint64(math.MaxUint64) - (1<<(txn_data.PartitionBits+txn_data.LogTagReserveBits) - 1)
+	return nameHash&mask + uint64(par)<<txn_data.LogTagReserveBits + txn_data.TxnMarkLowBits
 }
 
 type StreamLogEntry struct {
@@ -77,9 +78,9 @@ func decodeStreamLogEntry(logEntry *types.LogEntry) *StreamLogEntry {
 func NewSharedLogStream(env types.Environment, topicName string, serdeFormat commtypes.SerdeFormat) (*SharedLogStream, error) {
 	var txnMarkerSerde commtypes.Serde
 	if serdeFormat == commtypes.JSON {
-		txnMarkerSerde = TxnMarkerJSONSerde{}
+		txnMarkerSerde = txn_data.TxnMarkerJSONSerde{}
 	} else if serdeFormat == commtypes.MSGP {
-		txnMarkerSerde = TxnMarkerMsgpSerde{}
+		txnMarkerSerde = txn_data.TxnMarkerMsgpSerde{}
 	} else {
 		return nil, fmt.Errorf("unrecognized format: %d", serdeFormat)
 	}
@@ -273,30 +274,6 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 				}
 				// debug.Fprintf(os.Stderr, "task idgen: %v\n", appKey)
 				readMsgProc, ok := s.curReadMap[appKey]
-				if streamLogEntry.IsControl {
-					// debug.Fprintf(os.Stderr, "ReadNextWithTag: got control entry\n")
-					txnMarkTmp, err := s.txnMarkerSerde.Decode(streamLogEntry.Payload)
-					if err != nil {
-						return commtypes.EmptyAppIDGen, nil, err
-					}
-					txnMark := txnMarkTmp.(TxnMarker)
-					if txnMark.Mark == uint8(COMMIT) {
-						debug.Fprintf(os.Stderr, "ReadNextWithTag: %s entry is commit off %x\n", s.topicName, streamLogEntry.seqNum)
-						if !ok {
-							log.Warn().Msgf("Hit commit marker but got no messages")
-						}
-						msgBuf := readMsgProc.MsgBuff
-						delete(s.curReadMap, appKey)
-						s.cursor = streamLogEntry.seqNum + 1
-						return appKey, msgBuf, nil
-					} else if txnMark.Mark == uint8(ABORT) {
-						debug.Fprint(os.Stderr, "ReadNextWithTag: entry is abort; continue\n")
-						// abort, drop the current buffered msgs
-						delete(s.curReadMap, appKey)
-						seqNumInSharedLog = logEntry.SeqNum + 1
-						continue
-					}
-				}
 				if !ok {
 					readMsgProc = commtypes.ReadMsgAndProgress{
 						CurReadMsgSeqNum: 0,
@@ -308,9 +285,39 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 					seqNumInSharedLog = logEntry.SeqNum + 1
 					continue
 				}
+				isControl := false
+				scaleEpoch := uint64(0)
+				if streamLogEntry.IsControl {
+					// debug.Fprintf(os.Stderr, "ReadNextWithTag: got control entry\n")
+					txnMarkTmp, err := s.txnMarkerSerde.Decode(streamLogEntry.Payload)
+					if err != nil {
+						return commtypes.EmptyAppIDGen, nil, err
+					}
+					txnMark := txnMarkTmp.(txn_data.TxnMarker)
+					if txnMark.Mark == uint8(txn_data.COMMIT) {
+						debug.Fprintf(os.Stderr, "ReadNextWithTag: %s entry is commit off %x\n", s.topicName, streamLogEntry.seqNum)
+						if !ok {
+							log.Warn().Msgf("Hit commit marker but got no messages")
+						}
+						msgBuf := readMsgProc.MsgBuff
+						delete(s.curReadMap, appKey)
+						s.cursor = streamLogEntry.seqNum + 1
+						return appKey, msgBuf, nil
+					} else if txnMark.Mark == uint8(txn_data.ABORT) {
+						debug.Fprint(os.Stderr, "ReadNextWithTag: entry is abort; continue\n")
+						// abort, drop the current buffered msgs
+						delete(s.curReadMap, appKey)
+						seqNumInSharedLog = logEntry.SeqNum + 1
+						continue
+					} else if txnMark.Mark == uint8(txn_data.SCALE_FENCE) {
+						isControl = true
+						scaleEpoch = txnMark.TranIDOrScaleEpoch
+					}
+				}
 				readMsgProc.CurReadMsgSeqNum = streamLogEntry.MsgSeqNum
 				readMsgProc.MsgBuff = append(readMsgProc.MsgBuff, commtypes.RawMsg{Payload: streamLogEntry.Payload,
-					LogSeqNum: streamLogEntry.seqNum, MsgSeqNum: streamLogEntry.MsgSeqNum})
+					LogSeqNum: streamLogEntry.seqNum, MsgSeqNum: streamLogEntry.MsgSeqNum, IsControl: isControl,
+					ScaleEpoch: scaleEpoch})
 				debug.Fprintf(os.Stderr, "%s cur buf len %d, last off %x, cursor %x, tail %x\n", s.topicName,
 					len(readMsgProc.MsgBuff), streamLogEntry.seqNum, seqNumInSharedLog, s.tail)
 				s.curReadMap[appKey] = readMsgProc

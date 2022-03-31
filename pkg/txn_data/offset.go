@@ -1,6 +1,6 @@
 //go:generate msgp
 //msgp:ignore OffsetRecordJSONSerde OffsetRecordMsgpSerde
-package sharedlog_stream
+package txn_data
 
 import "encoding/json"
 

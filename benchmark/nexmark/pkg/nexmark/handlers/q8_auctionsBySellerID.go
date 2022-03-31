@@ -8,11 +8,10 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/hash"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/transaction"
 	"sync"
 	"time"
 
@@ -21,66 +20,42 @@ import (
 )
 
 type q8AuctionsBySellerIDHandler struct {
-	env           types.Environment
-	cHashMu       sync.RWMutex
-	cHash         *hash.ConsistentHash
-	currentOffset map[string]uint64
+	env      types.Environment
+	cHashMu  sync.RWMutex
+	cHash    *hash.ConsistentHash
+	funcName string
 }
 
-func NewQ8AuctionsBySellerIDHandler(env types.Environment) types.FuncHandler {
+func NewQ8AuctionsBySellerIDHandler(env types.Environment, funcName string) types.FuncHandler {
 	return &q8AuctionsBySellerIDHandler{
-		env:           env,
-		cHash:         hash.NewConsistentHash(),
-		currentOffset: make(map[string]uint64),
+		env:      env,
+		cHash:    hash.NewConsistentHash(),
+		funcName: funcName,
 	}
 }
 
 func (h *q8AuctionsBySellerIDHandler) process(
 	ctx context.Context,
+	t *transaction.StreamTask,
 	argsTmp interface{},
 ) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*AuctionsBySellerIDProcessArgs)
-	gotMsgs, err := args.src.Consume(ctx, args.parNum)
-	if err != nil {
-		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
-			return h.currentOffset, &common.FnOutput{
-				Success: true,
-				Message: err.Error(),
-			}
-		}
-		return h.currentOffset, &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
-	}
-	for _, msg := range gotMsgs {
-		if msg.Msg.Value == nil {
-			continue
-		}
-		h.currentOffset[args.src.TopicName()] = msg.LogSeqNum
+	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
+		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
 		event := msg.Msg.Value.(*ntypes.Event)
 		ts, err := event.ExtractStreamTime()
 		if err != nil {
-			return h.currentOffset, &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("fail to extract timestamp: %v", err),
-			}
+			return fmt.Errorf("fail to extract timestamp: %v", err)
 		}
 		msg.Msg.Timestamp = ts
 		filteredMsgs, err := args.filterAuctions.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
-			return h.currentOffset, &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("filterAuctions err: %v", err),
-			}
+			return fmt.Errorf("filterAuctions err: %v", err)
 		}
 		for _, filteredMsg := range filteredMsgs {
 			changeKeyedMsg, err := args.auctionsBySellerIDMap.ProcessAndReturn(ctx, filteredMsg)
 			if err != nil {
-				return h.currentOffset, &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("auctionsBySellerIDMap err: %v", err),
-				}
+				return fmt.Errorf("auctionsBySellerIDMap err: %v", err)
 			}
 
 			k := changeKeyedMsg[0].Key.(uint64)
@@ -88,30 +63,21 @@ func (h *q8AuctionsBySellerIDHandler) process(
 			parTmp, ok := h.cHash.Get(k)
 			h.cHashMu.RUnlock()
 			if !ok {
-				return h.currentOffset, &common.FnOutput{
-					Success: false,
-					Message: "fail to get output partition",
-				}
+				return xerrors.New("fail to get output partition")
 			}
 			par := parTmp.(uint8)
 			err = args.trackParFunc(ctx, k, args.sink.KeySerde(), args.sink.TopicName(), par)
 			if err != nil {
-				return h.currentOffset, &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("add topic partition failed: %v\n", err),
-				}
+				return fmt.Errorf("add topic partition failed: %v", err)
 			}
 			// fmt.Fprintf(os.Stderr, "append to %d with msg %v\n", par, changeKeyedMsg[0])
 			err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
 			if err != nil {
-				return h.currentOffset, &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("sink err: %v", err),
-				}
+				return fmt.Errorf("sink err: %v", err)
 			}
 		}
-	}
-	return h.currentOffset, nil
+		return nil
+	})
 }
 
 func (h *q8AuctionsBySellerIDHandler) Call(ctx context.Context, input []byte) ([]byte, error) {
@@ -162,35 +128,40 @@ func (h *q8AuctionsBySellerIDHandler) q8AuctionsBySellerID(ctx context.Context, 
 		filterAuctions:        filterAuctions,
 		auctionsBySellerIDMap: auctionsBySellerIDMap,
 		parNum:                sp.ParNum,
-		trackParFunc:          sharedlog_stream.DefaultTrackSubstreamFunc,
+		trackParFunc:          transaction.DefaultTrackSubstreamFunc,
+		recordFinishFunc:      transaction.DefaultRecordPrevInstanceFinishFunc,
+		curEpoch:              sp.ScaleEpoch,
+		funcName:              h.funcName,
 	}
 
-	task := sharedlog_stream.StreamTask{
-		ProcessFunc: h.process,
+	task := transaction.StreamTask{
+		ProcessFunc:   h.process,
+		CurrentOffset: make(map[string]uint64),
 	}
 
-	sharedlog_stream.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
+	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
 
 	if sp.EnableTransaction {
 		srcs := make(map[string]processor.Source)
 		srcs[sp.InputTopicNames[0]] = src
-		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
+		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:     procArgs,
 			Env:          h.env,
 			MsgSerde:     msgSerde,
 			Srcs:         srcs,
 			OutputStream: output_stream,
 			QueryInput:   sp,
-			TransactionalId: fmt.Sprintf("q8AuctionBySellerID-%s-%d-%s",
+			TransactionalId: fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
 			KVChangelogs:          nil,
 			WindowStoreChangelogs: nil,
 			CHash:                 h.cHash,
 			CHashMu:               &h.cHashMu,
 		}
-		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*AuctionsBySellerIDProcessArgs).trackParFunc = trackParFunc
+				procArgs.(*AuctionsBySellerIDProcessArgs).recordFinishFunc = recordFinishFunc
 			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
@@ -201,7 +172,7 @@ func (h *q8AuctionsBySellerIDHandler) q8AuctionsBySellerID(ctx context.Context, 
 		}
 		return ret
 	}
-	streamTaskArgs := sharedlog_stream.StreamTaskArgs{
+	streamTaskArgs := transaction.StreamTaskArgs{
 		ProcArgs: procArgs,
 		Duration: time.Duration(sp.Duration) * time.Second,
 	}

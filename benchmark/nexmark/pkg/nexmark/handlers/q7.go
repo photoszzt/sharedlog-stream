@@ -15,6 +15,7 @@ import (
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/transaction"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 
@@ -23,14 +24,14 @@ import (
 )
 
 type query7Handler struct {
-	env           types.Environment
-	currentOffset map[string]uint64
+	env      types.Environment
+	funcName string
 }
 
-func NewQuery7(env types.Environment) types.FuncHandler {
+func NewQuery7(env types.Environment, funcName string) types.FuncHandler {
 	return &query7Handler{
-		env:           env,
-		currentOffset: make(map[string]uint64),
+		env:      env,
+		funcName: funcName,
 	}
 }
 
@@ -90,8 +91,20 @@ type processQ7ProcessArgs struct {
 	maxPriceBid        *processor.MeteredProcessor
 	transformWithStore *processor.MeteredProcessor
 	filterTime         *processor.MeteredProcessor
-	trackParFunc       sharedlog_stream.TrackKeySubStreamFunc
+	trackParFunc       transaction.TrackKeySubStreamFunc
+	recordFinishFunc   transaction.RecordPrevInstanceFinishFunc
+	funcName           string
+	curEpoch           uint64
 	parNum             uint8
+}
+
+func (a *processQ7ProcessArgs) Source() processor.Source { return a.src }
+func (a *processQ7ProcessArgs) Sink() processor.Sink     { return a.sink }
+func (a *processQ7ProcessArgs) ParNum() uint8            { return a.parNum }
+func (a *processQ7ProcessArgs) CurEpoch() uint64         { return a.curEpoch }
+func (a *processQ7ProcessArgs) FuncName() string         { return a.funcName }
+func (a *processQ7ProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
+	return a.recordFinishFunc
 }
 
 type processQ7RestoreArgs struct {
@@ -104,71 +117,40 @@ type processQ7RestoreArgs struct {
 
 func (h *query7Handler) process(
 	ctx context.Context,
+	t *transaction.StreamTask,
 	argsTmp interface{},
 ) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*processQ7ProcessArgs)
-	gotMsgs, err := args.src.Consume(ctx, args.parNum)
-	if err != nil {
-		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
-			return h.currentOffset, &common.FnOutput{
-				Success: true,
-				Message: err.Error(),
-			}
-		}
-		return h.currentOffset, &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
-	}
-
-	for _, msg := range gotMsgs {
-		if msg.Msg.Value == nil {
-			continue
-		}
-		h.currentOffset[args.src.TopicName()] = msg.LogSeqNum
+	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
+		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
 		event := msg.Msg.Value.(*ntypes.Event)
 		ts, err := event.ExtractStreamTime()
 		if err != nil {
-			return h.currentOffset, &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("fail to extract timestamp: %v", err),
-			}
+			return fmt.Errorf("fail to extract timestamp: %v", err)
 		}
 		msg.Msg.Timestamp = ts
 		_, err = args.maxPriceBid.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
-			return h.currentOffset, &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
-			}
+			return err
 		}
 		transformedMsgs, err := args.transformWithStore.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
-			return h.currentOffset, &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
-			}
+			return err
 		}
 		for _, tmsg := range transformedMsgs {
 			filtered, err := args.filterTime.ProcessAndReturn(ctx, tmsg)
 			if err != nil {
-				return h.currentOffset, &common.FnOutput{
-					Success: false,
-					Message: err.Error(),
-				}
+				return err
 			}
 			for _, fmsg := range filtered {
 				err = args.sink.Sink(ctx, fmsg, args.parNum, false)
 				if err != nil {
-					return h.currentOffset, &common.FnOutput{
-						Success: false,
-						Message: err.Error(),
-					}
+					return err
 				}
 			}
 		}
-	}
-	return h.currentOffset, nil
+		return nil
+	})
 }
 
 func (h *query7Handler) processWithoutSink(
@@ -188,7 +170,6 @@ func (h *query7Handler) processWithoutSink(
 		if msg.Msg.Value == nil {
 			continue
 		}
-		h.currentOffset[args.src.TopicName()] = msg.LogSeqNum
 		event := msg.Msg.Value.(*ntypes.Event)
 		ts, err := event.ExtractStreamTime()
 		if err != nil {
@@ -346,19 +327,23 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		maxPriceBid:        maxPriceBid,
 		transformWithStore: transformWithStore,
 		filterTime:         filterTime,
-		trackParFunc:       sharedlog_stream.DefaultTrackSubstreamFunc,
+		trackParFunc:       transaction.DefaultTrackSubstreamFunc,
+		recordFinishFunc:   transaction.DefaultRecordPrevInstanceFinishFunc,
+		curEpoch:           input.ScaleEpoch,
+		funcName:           h.funcName,
 	}
-	task := sharedlog_stream.StreamTask{
-		ProcessFunc: h.process,
+	task := transaction.StreamTask{
+		ProcessFunc:   h.process,
+		CurrentOffset: make(map[string]uint64),
 	}
 	if input.EnableTransaction {
 		srcs := make(map[string]processor.Source)
 		srcs[input.InputTopicNames[0]] = src
-		var wsc []*store.WindowStoreChangelog
+		var wsc []*transaction.WindowStoreChangelog
 		if input.TableType == uint8(store.IN_MEM) {
 			wstore_mem := wstore.(*store.InMemoryWindowStoreWithChangelog)
-			wsc = []*store.WindowStoreChangelog{
-				store.NewWindowStoreChangelog(wstore,
+			wsc = []*transaction.WindowStoreChangelog{
+				transaction.NewWindowStoreChangelog(wstore,
 					wstore_mem.MaterializeParam().Changelog,
 					wstore_mem.KeyWindowTsSerde(),
 					wstore_mem.MaterializeParam().KeySerde,
@@ -366,8 +351,8 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 					wstore_mem.MaterializeParam().ParNum),
 			}
 		} else if input.TableType == uint8(store.MONGODB) {
-			wsc = []*store.WindowStoreChangelog{
-				store.NewWindowStoreChangelogForExternalStore(wstore, inputStream, h.processWithoutSink,
+			wsc = []*transaction.WindowStoreChangelog{
+				transaction.NewWindowStoreChangelogForExternalStore(wstore, inputStream, h.processWithoutSink,
 					&processQ7RestoreArgs{
 						src:                src.InnerSource(),
 						parNum:             input.ParNum,
@@ -379,13 +364,13 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		} else {
 			panic("unrecognized table type")
 		}
-		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
+		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:     procArgs,
 			Env:          h.env,
 			Srcs:         srcs,
 			OutputStream: outputStream,
 			QueryInput:   input,
-			TransactionalId: fmt.Sprintf("processQ7ProcessArgs-%s-%d-%s",
+			TransactionalId: fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 				input.InputTopicNames[0], input.NumInPartition, input.OutputTopicName),
 			FixedOutParNum:        input.ParNum,
 			MsgSerde:              msgSerde,
@@ -393,9 +378,10 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 			CHash:                 nil,
 			CHashMu:               nil,
 		}
-		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*processQ7ProcessArgs).trackParFunc = trackParFunc
+				procArgs.(*processQ7ProcessArgs).recordFinishFunc = recordFinishFunc
 			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
@@ -407,7 +393,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		}
 		return ret
 	}
-	streamTaskArgs := sharedlog_stream.StreamTaskArgs{
+	streamTaskArgs := transaction.StreamTaskArgs{
 		ProcArgs: procArgs,
 		Duration: time.Duration(input.Duration) * time.Second,
 	}

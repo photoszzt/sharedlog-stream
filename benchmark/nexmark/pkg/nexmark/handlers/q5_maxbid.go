@@ -13,6 +13,7 @@ import (
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/treemap"
 	"time"
 
@@ -21,14 +22,14 @@ import (
 )
 
 type q5MaxBid struct {
-	env           types.Environment
-	currentOffset map[string]uint64
+	env      types.Environment
+	funcName string
 }
 
-func NewQ5MaxBid(env types.Environment) types.FuncHandler {
+func NewQ5MaxBid(env types.Environment, funcName string) types.FuncHandler {
 	return &q5MaxBid{
-		env:           env,
-		currentOffset: make(map[string]uint64),
+		env:      env,
+		funcName: funcName,
 	}
 }
 
@@ -70,14 +71,26 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 }
 
 type q5MaxBidProcessArgs struct {
-	maxBid        *processor.MeteredProcessor
-	stJoin        *processor.MeteredProcessor
-	chooseMaxCnt  *processor.MeteredProcessor
-	src           *processor.MeteredSource
-	sink          *processor.MeteredSink
-	output_stream *sharedlog_stream.ShardedSharedLogStream
-	trackParFunc  sharedlog_stream.TrackKeySubStreamFunc
-	parNum        uint8
+	maxBid           *processor.MeteredProcessor
+	stJoin           *processor.MeteredProcessor
+	chooseMaxCnt     *processor.MeteredProcessor
+	src              *processor.MeteredSource
+	sink             *processor.MeteredSink
+	output_stream    *sharedlog_stream.ShardedSharedLogStream
+	trackParFunc     transaction.TrackKeySubStreamFunc
+	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
+	funcName         string
+	curEpoch         uint64
+	parNum           uint8
+}
+
+func (a *q5MaxBidProcessArgs) Source() processor.Source { return a.src }
+func (a *q5MaxBidProcessArgs) Sink() processor.Sink     { return a.sink }
+func (a *q5MaxBidProcessArgs) ParNum() uint8            { return a.parNum }
+func (a *q5MaxBidProcessArgs) CurEpoch() uint64         { return a.curEpoch }
+func (a *q5MaxBidProcessArgs) FuncName() string         { return a.funcName }
+func (a *q5MaxBidProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
+	return a.recordFinishFunc
 }
 
 type q5MaxBidRestoreArgs struct {
@@ -88,60 +101,37 @@ type q5MaxBidRestoreArgs struct {
 	parNum       uint8
 }
 
-func (h *q5MaxBid) process(ctx context.Context, argsTmp interface{}) (map[string]uint64, *common.FnOutput) {
+func (h *q5MaxBid) process(ctx context.Context, t *transaction.StreamTask, argsTmp interface{}) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*q5MaxBidProcessArgs)
-	gotMsgs, err := args.src.Consume(ctx, args.parNum)
-	if err != nil {
-		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
-			return h.currentOffset, &common.FnOutput{Success: true, Message: err.Error()}
-		}
-		return h.currentOffset, &common.FnOutput{Success: false, Message: fmt.Sprintf("consume err: %v", err)}
-	}
-
-	for _, msg := range gotMsgs {
-		if msg.Msg.Value == nil {
-			continue
-		}
+	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		aic := msg.Msg.Value.(*ntypes.AuctionIdCount)
 		ts, err := aic.ExtractStreamTime()
 		if err != nil {
-			return h.currentOffset, &common.FnOutput{Success: false, Message: fmt.Sprintf("fail to extract timestamp: %v", err)}
+			return fmt.Errorf("fail to extract timestamp: %v", err)
 		}
 		msg.Msg.Timestamp = ts
 		// fmt.Fprintf(os.Stderr, "got msg with key: %v, val: %v, ts: %v\n", msg.Msg.Key, msg.Msg.Value, msg.Msg.Timestamp)
-		h.currentOffset[args.src.TopicName()] = msg.LogSeqNum
+		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
 		_, err = args.maxBid.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
-			return h.currentOffset, &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("maxBid err: %v", err),
-			}
+			return fmt.Errorf("maxBid err: %v", err)
 		}
 		joinedOutput, err := args.stJoin.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
-			return h.currentOffset, &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("joined err: %v", err),
-			}
+			return fmt.Errorf("joined err: %v", err)
 		}
 		filteredMx, err := args.chooseMaxCnt.ProcessAndReturn(ctx, joinedOutput[0])
 		if err != nil {
-			return h.currentOffset, &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("filteredMx err: %v", err),
-			}
+			return fmt.Errorf("filteredMx err: %v", err)
 		}
 		for _, filtered := range filteredMx {
 			err = args.sink.Sink(ctx, filtered, args.parNum, false)
 			if err != nil {
-				return h.currentOffset, &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("sink err: %v", err),
-				}
+				return fmt.Errorf("sink err: %v", err)
 			}
 		}
-	}
-	return h.currentOffset, nil
+		return nil
+	})
 }
 
 func (h *q5MaxBid) processWithoutSink(ctx context.Context, argsTmp interface{}) error {
@@ -165,7 +155,6 @@ func (h *q5MaxBid) processWithoutSink(ctx context.Context, argsTmp interface{}) 
 		}
 		msg.Msg.Timestamp = ts
 		// fmt.Fprintf(os.Stderr, "got msg with key: %v, val: %v, ts: %v\n", msg.Msg.Key, msg.Msg.Value, msg.Msg.Timestamp)
-		h.currentOffset[args.src.TopicName()] = msg.LogSeqNum
 		_, err = args.maxBid.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
 			return fmt.Errorf("maxBid err: %v", err)
@@ -284,35 +273,39 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			})))
 
 	procArgs := &q5MaxBidProcessArgs{
-		maxBid:        maxBid,
-		stJoin:        stJoin,
-		chooseMaxCnt:  chooseMaxCnt,
-		src:           src,
-		sink:          sink,
-		output_stream: output_stream,
-		parNum:        sp.ParNum,
-		trackParFunc:  sharedlog_stream.DefaultTrackSubstreamFunc,
+		maxBid:           maxBid,
+		stJoin:           stJoin,
+		chooseMaxCnt:     chooseMaxCnt,
+		src:              src,
+		sink:             sink,
+		output_stream:    output_stream,
+		parNum:           sp.ParNum,
+		trackParFunc:     transaction.DefaultTrackSubstreamFunc,
+		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
+		curEpoch:         sp.ScaleEpoch,
+		funcName:         h.funcName,
 	}
 
-	task := sharedlog_stream.StreamTask{
-		ProcessFunc: h.process,
+	task := transaction.StreamTask{
+		ProcessFunc:   h.process,
+		CurrentOffset: make(map[string]uint64),
 	}
 
 	if sp.EnableTransaction {
 		srcs := make(map[string]processor.Source)
 		srcs[sp.InputTopicNames[0]] = src
-		var kvc []*store.KVStoreChangelog
+		var kvc []*transaction.KVStoreChangelog
 		if sp.TableType == uint8(store.IN_MEM) {
 			kvstore_mem := kvstore.(*store.KeyValueStoreWithChangelog)
 			mp := kvstore_mem.MaterializeParam()
-			kvc = []*store.KVStoreChangelog{
-				store.NewKVStoreChangelog(kvstore, mp.Changelog,
+			kvc = []*transaction.KVStoreChangelog{
+				transaction.NewKVStoreChangelog(kvstore, mp.Changelog,
 					mp.KeySerde, mp.ValueSerde, sp.ParNum),
 			}
 		} else if sp.TableType == uint8(store.MONGODB) {
 			// TODO: MONGODB
-			kvc = []*store.KVStoreChangelog{
-				store.NewKVStoreChangelogForExternalStore(kvstore, input_stream, h.processWithoutSink, &q5MaxBidRestoreArgs{
+			kvc = []*transaction.KVStoreChangelog{
+				transaction.NewKVStoreChangelogForExternalStore(kvstore, input_stream, h.processWithoutSink, &q5MaxBidRestoreArgs{
 					maxBid:       maxBid.InnerProcessor(),
 					stJoin:       stJoin.InnerProcessor(),
 					chooseMaxCnt: chooseMaxCnt.InnerProcessor(),
@@ -323,13 +316,13 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		} else {
 			panic("unrecognized table type")
 		}
-		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
+		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:     procArgs,
 			Env:          h.env,
 			Srcs:         srcs,
 			OutputStream: output_stream,
 			QueryInput:   sp,
-			TransactionalId: fmt.Sprintf("q5MaxBid-%s-%d-%s",
+			TransactionalId: fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
 			FixedOutParNum:        sp.ParNum,
 			KVChangelogs:          kvc,
@@ -338,9 +331,10 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			CHash:                 nil,
 			CHashMu:               nil,
 		}
-		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinshFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*q5MaxBidProcessArgs).trackParFunc = trackParFunc
+				procArgs.(*q5MaxBidProcessArgs).recordFinishFunc = recordFinshFunc
 			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
@@ -352,7 +346,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		}
 		return ret
 	}
-	streamTaskArgs := sharedlog_stream.StreamTaskArgs{
+	streamTaskArgs := transaction.StreamTaskArgs{
 		ProcArgs: procArgs,
 		Duration: time.Duration(sp.Duration) * time.Second,
 	}

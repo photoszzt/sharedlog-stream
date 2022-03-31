@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/transaction"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -36,13 +36,15 @@ func (h *ConfigScaleHandler) Call(ctx context.Context, input []byte) ([]byte, er
 }
 
 func (h *ConfigScaleHandler) ConfigScale(ctx context.Context, input *common.ConfigScaleInput) *common.FnOutput {
-	cmm, err := sharedlog_stream.NewControlChannelManager(h.env, input.AppId, commtypes.SerdeFormat(input.SerdeFormat))
+	cmm, err := transaction.NewControlChannelManager(h.env, input.AppId, commtypes.SerdeFormat(input.SerdeFormat),
+		input.ScaleEpoch-1)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
 	}
+	// append rescale config will add one to epoch; so subtract one when set up the cmm
 	err = cmm.AppendRescaleConfig(ctx, input.Config)
 	if err != nil {
 		return &common.FnOutput{
@@ -50,7 +52,16 @@ func (h *ConfigScaleHandler) ConfigScale(ctx context.Context, input *common.Conf
 			Message: err.Error(),
 		}
 	}
-	return &common.FnOutput{
-		Success: true,
+	if input.Bootstrap {
+		for _, fn := range input.FuncNames {
+			ins := input.Config[fn]
+			for i := uint8(0); i < ins; i++ {
+				err = cmm.RecordPrevInstanceFinish(ctx, fn, i, 0)
+				if err != nil {
+					return &common.FnOutput{Success: false, Message: err.Error()}
+				}
+			}
+		}
 	}
+	return &common.FnOutput{Success: true}
 }

@@ -10,6 +10,8 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/txn_data"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -20,12 +22,14 @@ import (
 )
 
 type nexmarkSourceHandler struct {
-	env types.Environment
+	env      types.Environment
+	funcName string
 }
 
-func NewNexmarkSource(env types.Environment) types.FuncHandler {
+func NewNexmarkSource(env types.Environment, funcName string) types.FuncHandler {
 	return &nexmarkSourceHandler{
-		env: env,
+		env:      env,
+		funcName: funcName,
 	}
 }
 
@@ -79,19 +83,22 @@ func encodeEvent(event *ntypes.Event,
 	return msgEncoded, nil
 }
 
-func (h *nexmarkSourceHandler) getSerde(serdeFormat uint8) (commtypes.Serde, commtypes.MsgSerde, error) {
+func (h *nexmarkSourceHandler) getSerde(serdeFormat uint8) (commtypes.Serde, commtypes.Serde, commtypes.MsgSerde, error) {
 	var eventSerde commtypes.Serde
 	var msgSerde commtypes.MsgSerde
+	var txnMarkerSerde commtypes.Serde
 	if serdeFormat == uint8(commtypes.JSON) {
 		eventSerde = ntypes.EventJSONSerde{}
 		msgSerde = commtypes.MessageSerializedJSONSerde{}
+		txnMarkerSerde = txn_data.TxnMarkerJSONSerde{}
 	} else if serdeFormat == uint8(commtypes.MSGP) {
 		eventSerde = ntypes.EventMsgpSerde{}
 		msgSerde = commtypes.MessageSerializedMsgpSerde{}
+		txnMarkerSerde = txn_data.TxnMarkerMsgpSerde{}
 	} else {
-		return nil, nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
+		return nil, nil, nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
 	}
-	return eventSerde, msgSerde, nil
+	return eventSerde, txnMarkerSerde, msgSerde, nil
 }
 
 type nexmarkSrcProcArgs struct {
@@ -173,12 +180,9 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	eventGenerator := generator.NewSimpleNexmarkGenerator(generatorConfig)
 	duration := time.Duration(inputConfig.Duration) * time.Second
 	startTime := time.Now()
-	eventSerde, msgSerde, err := h.getSerde(inputConfig.SerdeFormat)
+	eventSerde, txnMarkerSerde, msgSerde, err := h.getSerde(inputConfig.SerdeFormat)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 
 	/*
@@ -211,8 +215,8 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 		stream:    stream,
 	}
 
-	cmm, err := sharedlog_stream.NewControlChannelManager(h.env, inputConfig.AppId,
-		commtypes.SerdeFormat(inputConfig.SerdeFormat))
+	cmm, err := transaction.NewControlChannelManager(h.env, inputConfig.AppId,
+		commtypes.SerdeFormat(inputConfig.SerdeFormat), 0)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -221,8 +225,9 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	}
 	controlErrc := make(chan error)
 	controlQuit := make(chan struct{})
+	meta := make(chan txn_data.ControlMetadata)
 	dctx, dcancel := context.WithCancel(ctx)
-	go cmm.MonitorControlChannel(ctx, controlQuit, controlErrc, dcancel)
+	go cmm.MonitorControlChannel(ctx, controlQuit, controlErrc, meta)
 
 	for {
 		select {
@@ -234,7 +239,42 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 						return out
 					}
 				*/
+				dcancel()
 				return &common.FnOutput{Success: false, Message: fmt.Sprintf("control channel manager failed: %v", cerr)}
+			}
+		case m := <-meta:
+			numInstance := m.Config[h.funcName]
+			if inputConfig.ParNum >= numInstance {
+				controlQuit <- struct{}{}
+				dcancel()
+			}
+			numSubstreams := m.Config[stream.TopicName()]
+			err = stream.ScaleSubstreams(h.env, numSubstreams)
+			if err != nil {
+				dcancel()
+				return &common.FnOutput{Success: false, Message: err.Error()}
+			}
+			// piggy back scale fence in txn marker
+			txnMarker := txn_data.TxnMarker{
+				Mark:               uint8(txn_data.SCALE_FENCE),
+				TranIDOrScaleEpoch: m.Epoch,
+			}
+			vBytes, err := txnMarkerSerde.Encode(txnMarker)
+			if err != nil {
+				dcancel()
+				return &common.FnOutput{Success: false, Message: err.Error()}
+			}
+			encoded, err := msgSerde.Encode(nil, vBytes)
+			if err != nil {
+				dcancel()
+				return &common.FnOutput{Success: false, Message: err.Error()}
+			}
+			for i := uint8(0); i < numSubstreams; i++ {
+				_, err = stream.Push(ctx, encoded, i, true)
+				if err != nil {
+					dcancel()
+					return &common.FnOutput{Success: false, Message: err.Error()}
+				}
 			}
 		default:
 		}
@@ -252,6 +292,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 					return out
 				}
 			*/
+			dcancel()
 			return fnout
 		}
 	}
@@ -260,6 +301,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 			return out
 		}
 	*/
+	dcancel()
 	return &common.FnOutput{
 		Success:   true,
 		Duration:  time.Since(startTime).Seconds(),

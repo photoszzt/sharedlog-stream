@@ -5,6 +5,7 @@ package sharedlog_stream
 import (
 	"context"
 	"sharedlog-stream/pkg/errors"
+	"sharedlog-stream/pkg/txn_data"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/protocol"
@@ -42,11 +43,11 @@ type StreamQueueLogEntry struct {
 }
 
 func streamLogTag(topicNameHash uint64) uint64 {
-	return (topicNameHash << LogTagReserveBits) + StreamLogTagLowBits
+	return (topicNameHash << txn_data.LogTagReserveBits) + txn_data.StreamLogTagLowBits
 }
 
 func streamPushLogTag(topicNameHash uint64) uint64 {
-	return (topicNameHash << LogTagReserveBits) + streamPushLogTagLowBits
+	return (topicNameHash << txn_data.LogTagReserveBits) + txn_data.StreamPushLogTagLowBits
 }
 
 func decodeStreamQueueLogEntry(logEntry *types.LogEntry) *StreamQueueLogEntry {

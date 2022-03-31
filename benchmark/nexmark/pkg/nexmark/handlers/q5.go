@@ -21,12 +21,14 @@ import (
 )
 
 type query5Handler struct {
-	env types.Environment
+	env      types.Environment
+	funcName string
 }
 
-func NewQuery5(env types.Environment) types.FuncHandler {
+func NewQuery5(env types.Environment, funcName string) types.FuncHandler {
 	return &query5Handler{
-		env: env,
+		env:      env,
+		funcName: funcName,
 	}
 }
 

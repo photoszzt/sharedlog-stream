@@ -8,11 +8,11 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/transaction"
 	"sync"
 	"time"
 
@@ -21,17 +21,17 @@ import (
 )
 
 type q7BidKeyedByPrice struct {
-	env           types.Environment
-	cHashMu       sync.RWMutex
-	cHash         *hash.ConsistentHash
-	currentOffset map[string]uint64
+	env      types.Environment
+	cHashMu  sync.RWMutex
+	cHash    *hash.ConsistentHash
+	funcName string
 }
 
-func NewQ7BidKeyedByPriceHandler(env types.Environment) types.FuncHandler {
+func NewQ7BidKeyedByPriceHandler(env types.Environment, funcName string) types.FuncHandler {
 	return &q7BidKeyedByPrice{
-		env:           env,
-		cHash:         hash.NewConsistentHash(),
-		currentOffset: make(map[string]uint64),
+		env:      env,
+		cHash:    hash.NewConsistentHash(),
+		funcName: funcName,
 	}
 }
 
@@ -50,89 +50,69 @@ func (h *q7BidKeyedByPrice) Call(ctx context.Context, input []byte) ([]byte, err
 }
 
 type q7BidKeyedByPriceProcessArgs struct {
-	src             *processor.MeteredSource
-	sink            *processor.MeteredSink
-	bid             *processor.MeteredProcessor
-	bidKeyedByPrice *processor.MeteredProcessor
-	output_stream   *sharedlog_stream.ShardedSharedLogStream
-	trackParFunc    sharedlog_stream.TrackKeySubStreamFunc
-	parNum          uint8
-	numOutPartition uint8
+	src              *processor.MeteredSource
+	sink             *processor.MeteredSink
+	bid              *processor.MeteredProcessor
+	bidKeyedByPrice  *processor.MeteredProcessor
+	output_stream    *sharedlog_stream.ShardedSharedLogStream
+	trackParFunc     transaction.TrackKeySubStreamFunc
+	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
+	funcName         string
+	curEpoch         uint64
+	parNum           uint8
+}
+
+func (a *q7BidKeyedByPriceProcessArgs) Source() processor.Source { return a.src }
+func (a *q7BidKeyedByPriceProcessArgs) Sink() processor.Sink     { return a.sink }
+func (a *q7BidKeyedByPriceProcessArgs) ParNum() uint8            { return a.parNum }
+func (a *q7BidKeyedByPriceProcessArgs) CurEpoch() uint64         { return a.curEpoch }
+func (a *q7BidKeyedByPriceProcessArgs) FuncName() string         { return a.funcName }
+func (a *q7BidKeyedByPriceProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
+	return a.recordFinishFunc
 }
 
 func (h *q7BidKeyedByPrice) process(ctx context.Context,
+	t *transaction.StreamTask,
 	argsTmp interface{},
 ) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*q7BidKeyedByPriceProcessArgs)
-	gotMsgs, err := args.src.Consume(ctx, args.parNum)
-	if err != nil {
-		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
-			return h.currentOffset, &common.FnOutput{
-				Success: true,
-				Message: err.Error(),
-			}
-		}
-		return h.currentOffset, &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
-	}
-
-	for _, msg := range gotMsgs {
-		h.currentOffset[args.src.TopicName()] = msg.LogSeqNum
+	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
+		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
 		event := msg.Msg.Value.(*ntypes.Event)
 		ts, err := event.ExtractStreamTime()
 		if err != nil {
-			return h.currentOffset, &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("fail to extract timestamp: %v", err),
-			}
+			return fmt.Errorf("fail to extract timestamp: %v", err)
 		}
 		msg.Msg.Timestamp = ts
 		bidMsg, err := args.bid.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
-			return h.currentOffset, &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("filter bid err: %v", err),
-			}
+			return fmt.Errorf("filter bid err: %v", err)
 		}
 		if bidMsg != nil {
 			mappedKey, err := args.bidKeyedByPrice.ProcessAndReturn(ctx, bidMsg[0])
 			if err != nil {
-				return h.currentOffset, &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("bid keyed by price error: %v\n", err),
-				}
+				return fmt.Errorf("bid keyed by price error: %v", err)
 			}
 			key := mappedKey[0].Key.(uint64)
 			h.cHashMu.RLock()
 			parTmp, ok := h.cHash.Get(key)
 			h.cHashMu.RUnlock()
 			if !ok {
-				return h.currentOffset, &common.FnOutput{
-					Success: false,
-					Message: "fail to get output substream number",
-				}
+				return xerrors.New("fail to get output substream number")
 			}
 			par := parTmp.(uint8)
 			// par := uint8(key % uint64(args.numOutPartition))
 			err = args.trackParFunc(ctx, key, args.sink.KeySerde(), args.sink.TopicName(), par)
 			if err != nil {
-				return h.currentOffset, &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("track par err: %v\n", err),
-				}
+				return fmt.Errorf("track par err: %v", err)
 			}
 			err = args.sink.Sink(ctx, mappedKey[0], par, false)
 			if err != nil {
-				return h.currentOffset, &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("sink err: %v\n", err),
-				}
+				return fmt.Errorf("sink err: %v", err)
 			}
 		}
-	}
-	return h.currentOffset, nil
+		return nil
+	})
 }
 
 func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input *common.QueryInput) *common.FnOutput {
@@ -162,42 +142,46 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 	})))
 
 	procArgs := &q7BidKeyedByPriceProcessArgs{
-		src:             src,
-		sink:            sink,
-		bid:             bid,
-		bidKeyedByPrice: bidKeyedByPrice,
-		output_stream:   output_stream,
-		parNum:          input.ParNum,
-		numOutPartition: input.NumOutPartition,
-		trackParFunc:    sharedlog_stream.DefaultTrackSubstreamFunc,
+		src:              src,
+		sink:             sink,
+		bid:              bid,
+		bidKeyedByPrice:  bidKeyedByPrice,
+		output_stream:    output_stream,
+		parNum:           input.ParNum,
+		trackParFunc:     transaction.DefaultTrackSubstreamFunc,
+		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
+		curEpoch:         input.ScaleEpoch,
+		funcName:         h.funcName,
 	}
 
-	task := sharedlog_stream.StreamTask{
-		ProcessFunc: h.process,
+	task := transaction.StreamTask{
+		ProcessFunc:   h.process,
+		CurrentOffset: make(map[string]uint64),
 	}
 
-	sharedlog_stream.SetupConsistentHash(&h.cHashMu, h.cHash, input.NumOutPartition)
+	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, input.NumOutPartition)
 
 	if input.EnableTransaction {
 		srcs := make(map[string]processor.Source)
 		srcs[input.InputTopicNames[0]] = src
-		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
+		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:              procArgs,
 			Env:                   h.env,
 			MsgSerde:              msgSerde,
 			Srcs:                  srcs,
 			OutputStream:          output_stream,
 			QueryInput:            input,
-			TransactionalId:       fmt.Sprintf("q7BidKeyedByPrice-%s-%d-%s", input.InputTopicNames[0], input.ParNum, input.OutputTopicName),
+			TransactionalId:       fmt.Sprintf("%s-%s-%d-%s", h.funcName, input.InputTopicNames[0], input.ParNum, input.OutputTopicName),
 			FixedOutParNum:        0,
 			KVChangelogs:          nil,
 			WindowStoreChangelogs: nil,
 			CHash:                 h.cHash,
 			CHashMu:               &h.cHashMu,
 		}
-		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*q7BidKeyedByPriceProcessArgs).trackParFunc = trackParFunc
+				procArgs.(*q7BidKeyedByPriceProcessArgs).recordFinishFunc = recordFinishFunc
 			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
@@ -208,7 +192,7 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 		}
 		return ret
 	}
-	streamTaskArgs := sharedlog_stream.StreamTaskArgs{
+	streamTaskArgs := transaction.StreamTaskArgs{
 		ProcArgs: procArgs,
 		Duration: time.Duration(input.Duration) * time.Second,
 	}

@@ -31,47 +31,47 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 	fmt.Fprintf(os.Stderr, "Enter nexmark: funcName: %v\n", funcName)
 	switch funcName {
 	case "source":
-		return handlers.NewNexmarkSource(env), nil
+		return handlers.NewNexmarkSource(env, funcName), nil
 	case "query1":
-		return handlers.NewQuery1(env), nil
+		return handlers.NewQuery1(env, funcName), nil
 	case "query2":
-		return handlers.NewQuery2(env), nil
+		return handlers.NewQuery2(env, funcName), nil
 	case "query3":
-		return handlers.NewQuery3(env), nil
+		return handlers.NewQuery3(env, funcName), nil
 	case "q3PersonsByID":
-		return handlers.NewQuery3PersonsByID(env), nil
+		return handlers.NewQuery3PersonsByID(env, funcName), nil
 	case "q3AuctionsBySellerID":
-		return handlers.NewQuery3AuctionsBySellerID(env), nil
+		return handlers.NewQuery3AuctionsBySellerID(env, funcName), nil
 	case "q3JoinTable":
-		return handlers.NewQ3JoinTableHandler(env), nil
+		return handlers.NewQ3JoinTableHandler(env, funcName), nil
 	case "auctionsByID":
-		return handlers.NewAuctionsByIDHandler(env), nil
+		return handlers.NewAuctionsByIDHandler(env, funcName), nil
 	case "bidsByAuctionID":
-		return handlers.NewBidByAuctionIDHandler(env), nil
+		return handlers.NewBidByAuctionIDHandler(env, funcName), nil
 	case "q4JoinTable":
-		return handlers.NewQ4JoinTableHandler(env), nil
+		return handlers.NewQ4JoinTableHandler(env, funcName), nil
 	case "query5":
-		return handlers.NewQuery5(env), nil
+		return handlers.NewQuery5(env, funcName), nil
 	case "q5bidkeyedbyauction":
-		return handlers.NewBidKeyedByAuctionHandler(env), nil
+		return handlers.NewBidKeyedByAuctionHandler(env, funcName), nil
 	case "q5aucbids":
-		return handlers.NewQ5AuctionBids(env), nil
+		return handlers.NewQ5AuctionBids(env, funcName), nil
 	case "q5maxbid":
-		return handlers.NewQ5MaxBid(env), nil
+		return handlers.NewQ5MaxBid(env, funcName), nil
 	case "query6":
 		return handlers.NewQuery6(env), nil
 	case "query7":
-		return handlers.NewQuery7(env), nil
+		return handlers.NewQuery7(env, funcName), nil
 	case "q7bidskeyedbyprice":
-		return handlers.NewQ7BidKeyedByPriceHandler(env), nil
+		return handlers.NewQ7BidKeyedByPriceHandler(env, funcName), nil
 	case "query8":
 		return handlers.NewQuery8(env), nil
 	case "q8PersonsByID":
-		return handlers.NewQ8PersonsByID(env), nil
+		return handlers.NewQ8PersonsByID(env, funcName), nil
 	case "q8AucsBySellerID":
-		return handlers.NewQ8AuctionsBySellerIDHandler(env), nil
+		return handlers.NewQ8AuctionsBySellerIDHandler(env, funcName), nil
 	case "q8JoinStream":
-		return handlers.NewQ8JoinStreamHandler(env), nil
+		return handlers.NewQ8JoinStreamHandler(env, funcName), nil
 	case "windowavggroupby":
 		return handlers.NewWindowAvgGroupByHandler(env), nil
 	case "windowavgagg":

@@ -16,6 +16,7 @@ import (
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/transaction"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -147,7 +148,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	oneJoinTwoProc := processor.NewStreamStreamJoinProcessor(winTab2, joinWindows, joiner, false, true, sharedTimeTracker)
 	twoJoinOneProc := processor.NewStreamStreamJoinProcessor(winTab1, joinWindows, processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker)
 	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *processor.MeteredSink,
-		trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
+		trackParFunc transaction.TrackKeySubStreamFunc,
 	) error {
 		_, err := toWinTab1.ProcessAndReturn(ctx, m)
 		if err != nil {
@@ -160,7 +161,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 		return pushMsgsToSink(ctx, sink, joinedMsgs, trackParFunc)
 	}
 	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *processor.MeteredSink,
-		trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
+		trackParFunc transaction.TrackKeySubStreamFunc,
 	) error {
 		_, err := toWinTab2.ProcessAndReturn(ctx, m)
 		if err != nil {
@@ -176,14 +177,14 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	sp := &common.QueryInput{
 		SerdeFormat: uint8(commtypes.JSON),
 	}
-	streamTaskArgs := &sharedlog_stream.StreamTaskArgsTransaction{
+	streamTaskArgs := &transaction.StreamTaskArgsTransaction{
 		Env:             h.env,
 		QueryInput:      sp,
 		MsgSerde:        msgSerde,
 		OutputStream:    sinkStream,
 		TransactionalId: "joinTestMongo",
 	}
-	tm, err := sharedlog_stream.SetupTransactionManager(ctx, streamTaskArgs)
+	tm, err := transaction.SetupTransactionManager(ctx, streamTaskArgs)
 	if err != nil {
 		panic(err)
 	}
@@ -380,7 +381,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	oneJoinTwoProc := processor.NewStreamStreamJoinProcessor(winTab2, joinWindows, joiner, false, true, sharedTimeTracker)
 	twoJoinOneProc := processor.NewStreamStreamJoinProcessor(winTab1, joinWindows, processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker)
 	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *processor.MeteredSink,
-		trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
+		trackParFunc transaction.TrackKeySubStreamFunc,
 	) error {
 		_, err := toWinTab1.ProcessAndReturn(ctx, m)
 		if err != nil {
@@ -393,7 +394,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		return pushMsgsToSink(ctx, sink, joinedMsgs, trackParFunc)
 	}
 	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *processor.MeteredSink,
-		trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
+		trackParFunc transaction.TrackKeySubStreamFunc,
 	) error {
 		_, err := toWinTab2.ProcessAndReturn(ctx, m)
 		if err != nil {
@@ -413,14 +414,14 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	sp := &common.QueryInput{
 		SerdeFormat: uint8(commtypes.JSON),
 	}
-	streamTaskArgs := &sharedlog_stream.StreamTaskArgsTransaction{
+	streamTaskArgs := &transaction.StreamTaskArgsTransaction{
 		Env:             h.env,
 		QueryInput:      sp,
 		MsgSerde:        msgSerde,
 		OutputStream:    sinkStream,
 		TransactionalId: "joinTestsMem",
 	}
-	tm, err := sharedlog_stream.SetupTransactionManager(ctx, streamTaskArgs)
+	tm, err := transaction.SetupTransactionManager(ctx, streamTaskArgs)
 	if err != nil {
 		panic(err)
 	}
@@ -548,7 +549,7 @@ func joinProc(ctx context.Context,
 		substreamId uint8,
 	) error,
 	runner func(ctx context.Context, m commtypes.Message, sink *processor.MeteredSink,
-		trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
+		trackParFunc transaction.TrackKeySubStreamFunc,
 	) error,
 ) {
 	gotMsgs, err := src.Consume(ctx, 0)
@@ -626,7 +627,7 @@ func pushMsgToStream(ctx context.Context, key int, val *strTs, kSerde commtypes.
 }
 
 func pushMsgsToSink(ctx context.Context, sink *processor.MeteredSink,
-	msgs []commtypes.Message, trackParFunc sharedlog_stream.TrackKeySubStreamFunc,
+	msgs []commtypes.Message, trackParFunc transaction.TrackKeySubStreamFunc,
 ) error {
 	for _, msg := range msgs {
 		key := msg.Key.(int)

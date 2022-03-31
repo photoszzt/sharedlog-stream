@@ -34,6 +34,11 @@ func (sls *ShardedSharedLogStreamSink) Sink(ctx context.Context, msg commtypes.M
 	if msg.Key == nil && msg.Value == nil {
 		return nil
 	}
+	ctrl, ok := msg.Key.(string)
+	if ok && ctrl == commtypes.SCALE_FENCE_KEY {
+		_, err := sls.stream.Push(ctx, msg.Value.([]byte), parNum, isControl)
+		return err
+	}
 	var keyEncoded []byte
 	if msg.Key != nil {
 		// debug.Fprintf(os.Stderr, "sls: %v, key encoder: %v\n", sls, sls.keySerde)
@@ -48,13 +53,16 @@ func (sls *ShardedSharedLogStreamSink) Sink(ctx context.Context, msg commtypes.M
 		return err
 	}
 	bytes, err := sls.msgSerde.Encode(keyEncoded, valEncoded)
-	if bytes != nil && err == nil {
+	if err != nil {
+		return err
+	}
+	if bytes != nil {
 		_, err = sls.stream.Push(ctx, bytes, parNum, isControl)
 		if err != nil {
 			return err
 		}
 	}
-	return err
+	return nil
 }
 
 func (sls *ShardedSharedLogStreamSink) KeySerde() commtypes.Serde {

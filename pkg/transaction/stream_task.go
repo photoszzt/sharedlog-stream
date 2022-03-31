@@ -1,4 +1,4 @@
-package sharedlog_stream
+package transaction
 
 import (
 	"context"
@@ -8,22 +8,22 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/hash"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/txn_data"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
+	"golang.org/x/xerrors"
 )
 
 type StreamTask struct {
-	ProcessFunc func(ctx context.Context, args interface{}) (map[string]uint64, *common.FnOutput)
-}
-
-type BaseProcArgs struct {
-	Sink         *processor.MeteredSink
-	TrackParFunc func([]uint8) error
+	ProcessFunc   func(ctx context.Context, task *StreamTask, args interface{}) (map[string]uint64, *common.FnOutput)
+	CurrentOffset map[string]uint64
 }
 
 func DefaultTrackSubstreamFunc(ctx context.Context,
@@ -31,6 +31,12 @@ func DefaultTrackSubstreamFunc(ctx context.Context,
 	keySerde commtypes.Serde,
 	topicName string,
 	substreamId uint8,
+) error {
+	return nil
+}
+
+func DefaultRecordPrevInstanceFinishFunc(ctx context.Context,
+	appId string, instanceId uint8,
 ) error {
 	return nil
 }
@@ -59,10 +65,13 @@ type TrackKeySubStreamFunc func(ctx context.Context,
 	substreamId uint8,
 ) error
 
+type RecordPrevInstanceFinishFunc func(ctx context.Context, appId string, instanceID uint8) error
+
 func SetupManagersAndProcessTransactional(ctx context.Context,
 	env types.Environment,
 	streamTaskArgs *StreamTaskArgsTransaction,
-	updateProcArgs func(procArgs interface{}, trackParFunc TrackKeySubStreamFunc),
+	updateProcArgs func(procArgs interface{}, trackParFunc TrackKeySubStreamFunc,
+		recordFinish RecordPrevInstanceFinishFunc),
 	task *StreamTask,
 ) *common.FnOutput {
 	debug.Fprint(os.Stderr, "setup transaction and control manager\n")
@@ -74,7 +83,7 @@ func SetupManagersAndProcessTransactional(ctx context.Context,
 		}
 	}
 	cmm, err := NewControlChannelManager(env, streamTaskArgs.QueryInput.AppId,
-		commtypes.SerdeFormat(streamTaskArgs.QueryInput.SerdeFormat))
+		commtypes.SerdeFormat(streamTaskArgs.QueryInput.SerdeFormat), streamTaskArgs.QueryInput.ScaleEpoch)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -82,15 +91,17 @@ func SetupManagersAndProcessTransactional(ctx context.Context,
 		}
 	}
 	debug.Fprint(os.Stderr, "start restore\n")
-	err = cmm.RestoreMapping(ctx)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
+	/*
+		err = cmm.RestoreMapping(ctx)
+		if err != nil {
+			return &common.FnOutput{Success: false, Message: err.Error()}
+		}
+	*/
 	offsetMap, err := getOffsetMap(ctx, tm, streamTaskArgs)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	err = restoreStateStore(ctx, tm, streamTaskArgs, offsetMap)
+	err = restoreStateStore(ctx, tm, task, streamTaskArgs, offsetMap)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -109,7 +120,10 @@ func SetupManagersAndProcessTransactional(ctx context.Context,
 		err = cmm.TrackAndAppendKeyMapping(ctx, key, keySerde, substreamId, topicName)
 		return err
 	}
-	updateProcArgs(streamTaskArgs.ProcArgs, trackParFunc)
+	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
+		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, cmm.currentEpoch)
+	}
+	updateProcArgs(streamTaskArgs.ProcArgs, trackParFunc, recordFinish)
 	cmm.TrackConsistentHash(streamTaskArgs.CHashMu, streamTaskArgs.CHash)
 	debug.Fprint(os.Stderr, "begin transaction processing\n")
 	ret := task.ProcessWithTransaction(ctx, tm, cmm, streamTaskArgs)
@@ -138,6 +152,7 @@ func setOffsetOnStream(offsetMap map[string]uint64, args *StreamTaskArgsTransact
 }
 
 func restoreKVStore(ctx context.Context, tm *TransactionManager,
+	t *StreamTask,
 	args *StreamTaskArgsTransaction, offsetMap map[string]uint64,
 ) error {
 	for _, kvchangelog := range args.KVChangelogs {
@@ -145,7 +160,7 @@ func restoreKVStore(ctx context.Context, tm *TransactionManager,
 			topic := kvchangelog.Changelog.TopicName()
 			// offset stream is input stream
 			if offset, ok := offsetMap[topic]; ok && offset != 0 {
-				err := store.RestoreChangelogKVStateStore(ctx,
+				err := RestoreChangelogKVStateStore(ctx,
 					kvchangelog,
 					args.MsgSerde, offset)
 				if err != nil {
@@ -158,14 +173,14 @@ func restoreKVStore(ctx context.Context, tm *TransactionManager,
 					return fmt.Errorf("createOffsetTopicAndGetOffset kv failed: %v", err)
 				}
 				if offset != 0 {
-					err = store.RestoreChangelogKVStateStore(ctx, kvchangelog, args.MsgSerde, offset)
+					err = RestoreChangelogKVStateStore(ctx, kvchangelog, args.MsgSerde, offset)
 					if err != nil {
 						return fmt.Errorf("RestoreKVStateStore2 failed: %v", err)
 					}
 				}
 			}
 		} else if kvchangelog.KVStore.TableType() == store.MONGODB {
-			if err := restoreMongoDBKVStore(ctx, tm, kvchangelog); err != nil {
+			if err := restoreMongoDBKVStore(ctx, tm, t, kvchangelog); err != nil {
 				return err
 			}
 		}
@@ -173,13 +188,13 @@ func restoreKVStore(ctx context.Context, tm *TransactionManager,
 	return nil
 }
 
-func restoreChangelogBackedWindowStore(ctx context.Context, tm *TransactionManager, args *StreamTaskArgsTransaction, offsetMap map[string]uint64) error {
+func restoreChangelogBackedWindowStore(ctx context.Context, tm *TransactionManager, t *StreamTask, args *StreamTaskArgsTransaction, offsetMap map[string]uint64) error {
 	for _, wschangelog := range args.WindowStoreChangelogs {
 		if wschangelog.WinStore.TableType() == store.IN_MEM {
 			topic := wschangelog.Changelog.TopicName()
 			// offset stream is input stream
 			if offset, ok := offsetMap[topic]; ok && offset != 0 {
-				err := store.RestoreChangelogWindowStateStore(ctx, wschangelog,
+				err := RestoreChangelogWindowStateStore(ctx, wschangelog,
 					args.MsgSerde, offset)
 				if err != nil {
 					return fmt.Errorf("RestoreWindowStateStore failed: %v", err)
@@ -191,7 +206,7 @@ func restoreChangelogBackedWindowStore(ctx context.Context, tm *TransactionManag
 					return fmt.Errorf("createOffsetTopicAndGetOffset win failed: %v", err)
 				}
 				if offset != 0 {
-					err = store.RestoreChangelogWindowStateStore(ctx, wschangelog,
+					err = RestoreChangelogWindowStateStore(ctx, wschangelog,
 						args.MsgSerde, offset)
 					if err != nil {
 						return fmt.Errorf("RestoreWindowStateStore2 failed: %v", err)
@@ -199,7 +214,7 @@ func restoreChangelogBackedWindowStore(ctx context.Context, tm *TransactionManag
 				}
 			}
 		} else if wschangelog.WinStore.TableType() == store.MONGODB {
-			if err := restoreMongoDBWinStore(ctx, tm, wschangelog); err != nil {
+			if err := restoreMongoDBWinStore(ctx, tm, t, wschangelog); err != nil {
 				return err
 			}
 		}
@@ -207,16 +222,16 @@ func restoreChangelogBackedWindowStore(ctx context.Context, tm *TransactionManag
 	return nil
 }
 
-func restoreStateStore(ctx context.Context, tm *TransactionManager, args *StreamTaskArgsTransaction, offsetMap map[string]uint64) error {
+func restoreStateStore(ctx context.Context, tm *TransactionManager, t *StreamTask, args *StreamTaskArgsTransaction, offsetMap map[string]uint64) error {
 	debug.Assert(args.MsgSerde != nil, "args's msg serde should not be nil")
 	if args.KVChangelogs != nil {
-		err := restoreKVStore(ctx, tm, args, offsetMap)
+		err := restoreKVStore(ctx, tm, t, args, offsetMap)
 		if err != nil {
 			return err
 		}
 	}
 	if args.WindowStoreChangelogs != nil {
-		err := restoreChangelogBackedWindowStore(ctx, tm, args, offsetMap)
+		err := restoreChangelogBackedWindowStore(ctx, tm, t, args, offsetMap)
 		if err != nil {
 			return err
 		}
@@ -227,7 +242,8 @@ func restoreStateStore(ctx context.Context, tm *TransactionManager, args *Stream
 func restoreMongoDBKVStore(
 	ctx context.Context,
 	tm *TransactionManager,
-	kvchangelog *store.KVStoreChangelog,
+	t *StreamTask,
+	kvchangelog *KVStoreChangelog,
 ) error {
 	storeTranID, found, err := kvchangelog.KVStore.GetTransactionID(ctx, tm.TransactionalId)
 	if err != nil {
@@ -254,7 +270,8 @@ func restoreMongoDBKVStore(
 func restoreMongoDBWinStore(
 	ctx context.Context,
 	tm *TransactionManager,
-	kvchangelog *store.WindowStoreChangelog,
+	t *StreamTask,
+	kvchangelog *WindowStoreChangelog,
 ) error {
 	storeTranID, found, err := kvchangelog.WinStore.GetTransactionID(ctx, tm.TransactionalId)
 	if err != nil {
@@ -308,7 +325,7 @@ func UpdateInputStreamCursor(
 func TrackOffsetAndCommit(ctx context.Context,
 	consumedSeqNumConfigs []ConsumedSeqNumConfig,
 	tm *TransactionManager,
-	kvchangelogs []*store.KVStoreChangelog, winchangelogs []*store.WindowStoreChangelog,
+	kvchangelogs []*KVStoreChangelog, winchangelogs []*WindowStoreChangelog,
 	hasLiveTransaction *bool,
 	trackConsumePar *bool,
 	retc chan *common.FnOutput,
@@ -337,17 +354,17 @@ type StreamTaskArgs struct {
 }
 
 type StreamTaskArgsTransaction struct {
-	ProcArgs              interface{}
+	ProcArgs              processor.ProcArgs
 	Env                   types.Environment
 	MsgSerde              commtypes.MsgSerde
 	Srcs                  map[string]processor.Source
-	OutputStream          *ShardedSharedLogStream
+	OutputStream          *sharedlog_stream.ShardedSharedLogStream
 	QueryInput            *common.QueryInput
 	CHash                 *hash.ConsistentHash
 	CHashMu               *sync.RWMutex
 	TransactionalId       string
-	KVChangelogs          []*store.KVStoreChangelog
-	WindowStoreChangelogs []*store.WindowStoreChangelog
+	KVChangelogs          []*KVStoreChangelog
+	WindowStoreChangelogs []*WindowStoreChangelog
 	FixedOutParNum        uint8
 }
 
@@ -359,7 +376,7 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 			break
 		}
 		procStart := time.Now()
-		_, ret := t.ProcessFunc(ctx, args.ProcArgs)
+		_, ret := t.ProcessFunc(ctx, t, args.ProcArgs)
 		if ret != nil {
 			if ret.Success {
 				elapsed := time.Since(procStart)
@@ -393,21 +410,30 @@ func (t *StreamTask) ProcessWithTransaction(
 	monitorErrc := make(chan error)
 	controlErrc := make(chan error)
 	controlQuit := make(chan struct{})
+	meta := make(chan txn_data.ControlMetadata)
 
 	cmm.TrackStream(args.OutputStream.TopicName(), args.OutputStream)
 	cmm.TrackOutputTopic(args.OutputStream.TopicName())
 	for topic, src := range args.Srcs {
-		cmm.TrackStream(topic, src.Stream().(*ShardedSharedLogStream))
+		cmm.TrackStream(topic, src.Stream().(*sharedlog_stream.ShardedSharedLogStream))
 	}
 
 	dctx, dcancel := context.WithCancel(ctx)
 	go tm.MonitorTransactionLog(ctx, monitorQuit, monitorErrc, dcancel)
-	go cmm.MonitorControlChannel(ctx, controlQuit, controlErrc, dcancel)
+	go cmm.MonitorControlChannel(ctx, controlQuit, controlErrc, meta)
 
 	retc := make(chan *common.FnOutput)
-	go t.processWithTranLoop(dctx, tm, args, retc)
+	run := uint32(0)
+	go t.processWithTranLoop(dctx, tm, args, &run, retc)
 	for {
 		select {
+		case m := <-meta:
+			debug.Fprintf(os.Stderr, "finished prev task %s, funcName %s, meta epoch %d, input epoch %d\n",
+				m.FinishedPrevTask, args.ProcArgs.FuncName(), m.Epoch, args.QueryInput.ScaleEpoch)
+			if m.FinishedPrevTask == args.ProcArgs.FuncName() && m.Epoch+1 == args.QueryInput.ScaleEpoch {
+				atomic.CompareAndSwapUint32(&run, 0, 1)
+			}
+			continue
 		case ret := <-retc:
 			monitorQuit <- struct{}{}
 			controlQuit <- struct{}{}
@@ -433,6 +459,7 @@ func (t *StreamTask) ProcessWithTransaction(
 
 func (t *StreamTask) processWithTranLoop(ctx context.Context,
 	tm *TransactionManager, args *StreamTaskArgsTransaction,
+	run *uint32,
 	retc chan *common.FnOutput,
 ) {
 	latencies := make([]int, 0, 128)
@@ -448,6 +475,9 @@ func (t *StreamTask) processWithTranLoop(ctx context.Context,
 	numCommit := 0
 	debug.Fprintf(os.Stderr, "commit every(ms): %d, commit everyIter: %d, exitAfterNComm: %d\n",
 		commitEvery, args.QueryInput.CommitEveryNIter, args.QueryInput.ExitAfterNCommit)
+	for atomic.LoadUint32(run) != 1 {
+		time.Sleep(time.Duration(1) * time.Second)
+	}
 L:
 	for {
 		select {
@@ -533,7 +563,7 @@ L:
 		}
 
 		procStart := time.Now()
-		off, ret := t.ProcessFunc(ctx, args.ProcArgs)
+		off, ret := t.ProcessFunc(ctx, t, args.ProcArgs)
 		if ret != nil {
 			if ret.Success {
 				if hasLiveTransaction {
@@ -589,4 +619,46 @@ L:
 		Latencies: map[string][]int{"e2e": latencies},
 		Consumed:  make(map[string]uint64),
 	}
+}
+
+func CommonProcess(ctx context.Context, t *StreamTask, args processor.ProcArgsWithSrcSink,
+	proc func(t *StreamTask, msg commtypes.MsgAndSeq) error,
+) (map[string]uint64, *common.FnOutput) {
+	gotMsgs, err := args.Source().Consume(ctx, args.ParNum())
+	if err != nil {
+		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
+			return t.CurrentOffset, &common.FnOutput{Success: true, Message: err.Error()}
+		}
+		return t.CurrentOffset, &common.FnOutput{Success: false, Message: err.Error()}
+	}
+	for _, msg := range gotMsgs {
+		if msg.Msg.Value == nil {
+			continue
+		}
+		if msg.IsControl {
+			v := msg.Msg.Value.(sharedlog_stream.ScaleEpochAndBytes)
+			err = args.Sink().Sink(ctx, commtypes.Message{Key: commtypes.SCALE_FENCE_KEY,
+				Value: v.Payload}, args.ParNum(), true)
+			if err != nil {
+				return t.CurrentOffset, &common.FnOutput{Success: false, Message: err.Error()}
+			}
+			if args.CurEpoch() < v.ScaleEpoch {
+				err = args.RecordFinishFunc()(ctx, args.FuncName(), args.ParNum())
+				if err != nil {
+					return t.CurrentOffset, &common.FnOutput{Success: false, Message: err.Error()}
+				}
+				return t.CurrentOffset, &common.FnOutput{
+					Success: true,
+					Message: fmt.Sprintf("%s-%d epoch %d exit", args.FuncName(), args.ParNum(), args.CurEpoch()),
+					Err:     errors.ErrShouldExitForScale,
+				}
+			}
+			continue
+		}
+		err = proc(t, msg)
+		if err != nil {
+			return t.CurrentOffset, &common.FnOutput{Success: false, Message: err.Error()}
+		}
+	}
+	return t.CurrentOffset, nil
 }

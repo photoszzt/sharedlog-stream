@@ -12,24 +12,22 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/transaction"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 
-	"sharedlog-stream/pkg/errors"
-
 	"cs.utexas.edu/zjia/faas/types"
-	"golang.org/x/xerrors"
 )
 
 type query1Handler struct {
-	env           types.Environment
-	currentOffset map[string]uint64
+	env      types.Environment
+	funcName string
 }
 
-func NewQuery1(env types.Environment) types.FuncHandler {
+func NewQuery1(env types.Environment, funcName string) types.FuncHandler {
 	return &query1Handler{
-		env:           env,
-		currentOffset: make(map[string]uint64),
+		env:      env,
+		funcName: funcName,
 	}
 }
 
@@ -72,39 +70,44 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 	filterBid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
 		only_bid)))
 	q1Map := processor.NewMeteredProcessor(processor.NewStreamMapValuesWithKeyProcessor(processor.MapperFunc(q1mapFunc)))
-
 	procArgs := &query1ProcessArgs{
 		sink:          sink,
-		trackParFunc:  sharedlog_stream.DefaultTrackSubstreamFunc,
+		trackParFunc:  transaction.DefaultTrackSubstreamFunc,
 		src:           src,
 		filterBid:     filterBid,
 		q1Map:         q1Map,
 		output_stream: output_stream,
 		parNum:        sp.ParNum,
+		funcName:      h.funcName,
+		curEpoch:      sp.ScaleEpoch,
 	}
-	task := sharedlog_stream.StreamTask{
-		ProcessFunc: h.process,
+	task := transaction.StreamTask{
+		ProcessFunc:   h.process,
+		CurrentOffset: make(map[string]uint64),
 	}
 	if sp.EnableTransaction {
 		srcs := make(map[string]processor.Source)
 		srcs[sp.InputTopicNames[0]] = src
-		streamTaskArgs := sharedlog_stream.StreamTaskArgsTransaction{
-			ProcArgs:              procArgs,
-			Env:                   h.env,
-			MsgSerde:              msgSerde,
-			Srcs:                  srcs,
-			OutputStream:          output_stream,
-			QueryInput:            sp,
-			TransactionalId:       fmt.Sprintf("q1Query-%s-%d-%s", sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
+		streamTaskArgs := transaction.StreamTaskArgsTransaction{
+			ProcArgs:     procArgs,
+			Env:          h.env,
+			MsgSerde:     msgSerde,
+			Srcs:         srcs,
+			OutputStream: output_stream,
+			QueryInput:   sp,
+			TransactionalId: fmt.Sprintf("%s-%s-%d-%s",
+				h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
 			KVChangelogs:          nil,
 			WindowStoreChangelogs: nil,
 			FixedOutParNum:        sp.ParNum,
 			CHash:                 nil,
 			CHashMu:               nil,
 		}
-		ret := sharedlog_stream.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc sharedlog_stream.TrackKeySubStreamFunc) {
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc,
+				recordFinish transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*query1ProcessArgs).trackParFunc = trackParFunc
+				procArgs.(*query1ProcessArgs).recordFinishFunc = recordFinish
 			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
@@ -115,7 +118,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 		}
 		return ret
 	}
-	streamTaskArgs := sharedlog_stream.StreamTaskArgs{
+	streamTaskArgs := transaction.StreamTaskArgs{
 		ProcArgs: procArgs,
 		Duration: time.Duration(sp.Duration) * time.Second,
 	}
@@ -131,61 +134,47 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 }
 
 type query1ProcessArgs struct {
-	src           *processor.MeteredSource
-	sink          *processor.MeteredSink
-	filterBid     *processor.MeteredProcessor
-	q1Map         *processor.MeteredProcessor
-	output_stream *sharedlog_stream.ShardedSharedLogStream
-	trackParFunc  sharedlog_stream.TrackKeySubStreamFunc
-	parNum        uint8
+	src              *processor.MeteredSource
+	sink             *processor.MeteredSink
+	filterBid        *processor.MeteredProcessor
+	q1Map            *processor.MeteredProcessor
+	output_stream    *sharedlog_stream.ShardedSharedLogStream
+	trackParFunc     transaction.TrackKeySubStreamFunc
+	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
+	funcName         string
+	curEpoch         uint64
+	parNum           uint8
 }
 
-func (h *query1Handler) process(ctx context.Context, argsTmp interface{}) (map[string]uint64, *common.FnOutput) {
-	args := argsTmp.(*query1ProcessArgs)
-	gotMsgs, err := args.src.Consume(ctx, args.parNum)
-	if err != nil {
-		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
-			return h.currentOffset, &common.FnOutput{
-				Success: true,
-				Message: err.Error(),
-			}
-		}
-		return h.currentOffset, &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
-	}
+func (a *query1ProcessArgs) Source() processor.Source { return a.src }
+func (a *query1ProcessArgs) Sink() processor.Sink     { return a.sink }
+func (a *query1ProcessArgs) ParNum() uint8            { return a.parNum }
+func (a *query1ProcessArgs) CurEpoch() uint64         { return a.curEpoch }
+func (a *query1ProcessArgs) FuncName() string         { return a.funcName }
+func (a *query1ProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
+	return a.recordFinishFunc
+}
 
-	for _, msg := range gotMsgs {
-		if msg.Msg.Value == nil {
-			continue
-		}
-		h.currentOffset[args.src.TopicName()] = msg.LogSeqNum
+func (h *query1Handler) process(ctx context.Context, t *transaction.StreamTask, argsTmp interface{}) (map[string]uint64, *common.FnOutput) {
+	args := argsTmp.(*query1ProcessArgs)
+	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
+		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
 		bidMsg, err := args.filterBid.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
-			return h.currentOffset, &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
-			}
+			return err
 		}
 		if bidMsg != nil {
 			filtered, err := args.q1Map.ProcessAndReturn(ctx, bidMsg[0])
 			if err != nil {
-				return h.currentOffset, &common.FnOutput{
-					Success: false,
-					Message: err.Error(),
-				}
+				return err
 			}
 			err = args.sink.Sink(ctx, filtered[0], args.parNum, false)
 			if err != nil {
-				return h.currentOffset, &common.FnOutput{
-					Success: false,
-					Message: err.Error(),
-				}
+				return err
 			}
 		}
-	}
-	return h.currentOffset, nil
+		return nil
+	})
 }
 
 /*

@@ -55,6 +55,7 @@ func (ks *TimeOrderedKeySchema) toStoreKeyBinaryPrefix(key []byte, ts int64) ([]
 	return buffer.Bytes(), nil
 }
 
+/*
 func (ks *TimeOrderedKeySchema) toStoreKeyBinary(key []byte, ts int64, seqnum int) ([]byte, error) {
 	buf := make([]byte, 0, ts_size+len(key)+seqnum_size)
 	ts_buf := make([]byte, 0, ts_size)
@@ -67,6 +68,7 @@ func (ks *TimeOrderedKeySchema) toStoreKeyBinary(key []byte, ts int64, seqnum in
 	buffer.Write(seqnum_buf)
 	return buffer.Bytes(), nil
 }
+*/
 
 func (ks *TimeOrderedKeySchema) extractStoreTs(key []byte) int64 {
 	return int64(binary.BigEndian.Uint64(key))
