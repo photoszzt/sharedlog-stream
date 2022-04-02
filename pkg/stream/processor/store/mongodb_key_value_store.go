@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/utils"
 
@@ -12,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readconcern"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 )
 
@@ -41,7 +43,9 @@ type MongoDBConfig struct {
 var _ = KeyValueStore(&MongoDBKeyValueStore{})
 
 func NewMongoDBKeyValueStore(ctx context.Context, config *MongoDBConfig) (*MongoDBKeyValueStore, error) {
-	clientOpts := options.Client().ApplyURI(config.Addr)
+	clientOpts := options.Client().ApplyURI(config.Addr).
+		SetReadConcern(readconcern.Linearizable()).
+		SetWriteConcern(writeconcern.New(writeconcern.WMajority()))
 	client, err := mongo.Connect(ctx, clientOpts)
 	if err != nil {
 		return nil, err
@@ -71,16 +75,19 @@ func (s *MongoDBKeyValueStore) DropDatabase(ctx context.Context) error {
 }
 
 func (s *MongoDBKeyValueStore) StartTransaction(ctx context.Context) error {
-	sessionOpts := options.Session().SetDefaultWriteConcern(writeconcern.New(writeconcern.WMajority())).
-		SetDefaultReadConcern(readconcern.Linearizable())
-	session, err := s.client.StartSession(sessionOpts)
+	debug.Fprint(os.Stderr, "start mongo transaction\n")
+	session, err := s.client.StartSession()
 	if err != nil {
 		return err
 	}
 	s.session = session
 	sessCtx := mongo.NewSessionContext(ctx, session)
 	s.sessCtx = sessCtx
-	if err = session.StartTransaction(); err != nil {
+	tranOpts := options.Transaction().
+		SetReadPreference(readpref.Primary()).
+		SetReadConcern(readconcern.Snapshot()).
+		SetWriteConcern(writeconcern.New(writeconcern.WMajority()))
+	if err = session.StartTransaction(tranOpts); err != nil {
 		return err
 	}
 	s.inTransaction = true

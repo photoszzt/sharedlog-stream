@@ -99,7 +99,8 @@ func (h *q8JoinStreamHandler) process(
 		cHashMu:       &h.cHashMu,
 		cHash:         h.cHash,
 	}
-	go joinProc(ctx, personsOutChan, joinProcArgsPerson)
+	pctx := context.WithValue(ctx, "id", "person")
+	go joinProc(pctx, personsOutChan, joinProcArgsPerson)
 	wg.Add(1)
 	joinProgArgsAuction := &joinProcArgs{
 		src:           args.auctionSrc,
@@ -113,7 +114,8 @@ func (h *q8JoinStreamHandler) process(
 		cHashMu:       &h.cHashMu,
 		cHash:         h.cHash,
 	}
-	go joinProc(ctx, auctionsOutChan, joinProgArgsAuction)
+	actx := context.WithValue(ctx, "id", "auction")
+	go joinProc(actx, auctionsOutChan, joinProgArgsAuction)
 	var pOut *common.FnOutput = nil
 	var aOut *common.FnOutput = nil
 L:
@@ -410,7 +412,6 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 				),
 			}
 		} else if sp.TableType == uint8(store.MONGODB) {
-			// TODO: MONGODB
 			wsc = []*transaction.WindowStoreChangelog{
 				transaction.NewWindowStoreChangelogForExternalStore(
 					auctionsWinStore, auctionsStream, joinProcSerialWithoutSink,

@@ -26,7 +26,7 @@ func NewMongoDBKeyValueSegment(ctx context.Context,
 	name string,
 ) (*MongoDBKeyValueSegment, error) {
 	col := mkvs.client.Database(mkvs.config.DBName).Collection(name)
-	debug.Fprintf(os.Stderr, "NewMongoDBKeyValueSegment: using col %s from db %s\n", name, mkvs.config.DBName)
+	// debug.Fprintf(os.Stderr, "NewMongoDBKeyValueSegment: using col %s from db %s\n", name, mkvs.config.DBName)
 	opts := options.Update().SetUpsert(true)
 	_, err := col.UpdateOne(ctx, bson.M{"_id": 1},
 		bson.M{"$addToSet": bson.M{ALL_SEGS: segmentName}}, opts)

@@ -73,7 +73,7 @@ func (s *BaseSegments) GetOrCreateSegmentIfLive(ctx context.Context,
 	var err error
 	if segmentId >= minLiveSegment {
 		toReturn, err = getOrCreateSegment(ctx, segmentId)
-		debug.Fprintf(os.Stderr, "GetOrCreateSegmentIfLive: inserting segment with id %d\n", segmentId)
+		// debug.Fprintf(os.Stderr, "GetOrCreateSegmentIfLive: inserting segment with id %d\n", segmentId)
 		if err != nil {
 			return nil, err
 		}
@@ -103,7 +103,7 @@ func (s *BaseSegments) cleanupEarlierThan(ctx context.Context,
 		got = append(got, i.(*KeySegment))
 		return true
 	})
-	debug.Fprintf(os.Stderr, "cleanupEarlierThan: minimum live segment %d\n", minLiveSegment)
+	// debug.Fprintf(os.Stderr, "cleanupEarlierThan: minimum live segment %d\n", minLiveSegment)
 	for _, item := range got {
 		ret := s.segments.Delete(item.Key)
 		debug.Fprintf(os.Stderr, "deleting segment with id %d\n", item.Key)

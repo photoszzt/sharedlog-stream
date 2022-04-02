@@ -57,10 +57,11 @@ type joinProcArgs struct {
 	currentOffset map[string]uint64
 
 	trackParFunc transaction.TrackKeySubStreamFunc
-	parNum       uint8
 
 	cHashMu *sync.RWMutex
 	cHash   *hash.ConsistentHash
+
+	parNum uint8
 }
 
 func joinProc(
@@ -87,16 +88,19 @@ func joinProc(
 		st := msg.Msg.Value.(commtypes.StreamTimeExtractor)
 		ts, err := st.ExtractStreamTime()
 		if err != nil {
+			debug.Fprintf(os.Stderr, "%s return extract ts err: %v\n", ctx.Value("id"), err)
 			out <- &common.FnOutput{Success: false, Message: fmt.Sprintf("fail to extract timestamp: %v", err)}
 			return
 		}
 		msg.Msg.Timestamp = ts
 		msgs, err := procArgs.runner(ctx, msg.Msg)
 		if err != nil {
+			debug.Fprintf(os.Stderr, "%s return runner err: %v\n", ctx.Value("id"), err)
 			out <- &common.FnOutput{Success: false, Message: err.Error()}
 		}
 		err = pushMsgsToSink(ctx, procArgs.sink, procArgs.cHash, procArgs.cHashMu, msgs, procArgs.trackParFunc)
 		if err != nil {
+			debug.Fprintf(os.Stderr, "%s return push to sink err: %v\n", ctx.Value("id"), err)
 			out <- &common.FnOutput{Success: false, Message: err.Error()}
 		}
 	}
