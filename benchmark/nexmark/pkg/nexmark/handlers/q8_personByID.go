@@ -83,7 +83,7 @@ func (h *q8PersonsByIDHandler) process(
 			par := parTmp.(uint8)
 			err = args.trackParFunc(ctx, k, args.sink.KeySerde(), args.sink.TopicName(), par)
 			if err != nil {
-				return fmt.Errorf("add topic partition failed: %v\n", err)
+				return fmt.Errorf("add topic partition failed: %v", err)
 			}
 			err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
 			if err != nil {
@@ -119,17 +119,11 @@ func (a *q8PersonsByIDProcessArgs) RecordFinishFunc() func(ctx context.Context, 
 func (h *q8PersonsByIDHandler) Q8PersonsByID(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("get input output stream failed: %v", err),
-		}
+		return &common.FnOutput{Success: false, Message: fmt.Sprintf("get input output stream failed: %v", err)}
 	}
 	src, sink, msgSerde, err := CommonGetSrcSink(ctx, sp, input_stream, output_stream)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 
 	filterPerson := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(

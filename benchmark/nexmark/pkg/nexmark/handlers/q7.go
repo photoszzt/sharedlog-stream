@@ -197,18 +197,12 @@ func (h *query7Handler) processWithoutSink(
 func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput) *common.FnOutput {
 	inputStream, outputStream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, input, true)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 
 	msgSerde, err := commtypes.GetMsgSerde(input.SerdeFormat)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 
 	var vtSerde commtypes.Serde
@@ -234,18 +228,12 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 
 	src, sink, err := h.getSrcSink(input, inputStream, outputStream, msgSerde)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 
 	tw, err := processor.NewTimeWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	maxPriceBidStoreName := "max-price-bid-tab"
 	var wstore store.WindowStore
@@ -272,10 +260,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		wstore, err = store.NewInMemoryWindowStoreWithChangelog(tw.MaxSize()+tw.GracePeriodMs(),
 			tw.MaxSize(), false, mp)
 		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
-			}
+			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
 	} else if input.TableType == uint8(store.MONGODB) {
 		client, err := store.InitMongoDBClient(ctx, input.MongoAddr)
@@ -286,10 +271,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 			client, tw.MaxSize()+tw.GracePeriodMs(), tw.MaxSize(),
 			commtypes.Uint64Serde{}, vtSerde)
 		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
-			}
+			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
 	} else {
 		panic("unrecognized table type")
@@ -304,7 +286,11 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		}),
 		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
 			val := value.(*ntypes.Event)
-			agg := aggregate.(*ntypes.PriceTime)
+			agg, ok := aggregate.(*ntypes.PriceTime)
+			if !ok {
+				aggTmp := aggregate.(ntypes.PriceTime)
+				agg = &aggTmp
+			}
 			if val.Bid.Price > agg.Price {
 				return &ntypes.PriceTime{
 					Price:    val.Bid.Price,
@@ -375,7 +361,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 			OutputStream: outputStream,
 			QueryInput:   input,
 			TransactionalId: fmt.Sprintf("%s-%s-%d-%s", h.funcName,
-				input.InputTopicNames[0], input.NumInPartition, input.OutputTopicName),
+				input.InputTopicNames[0], input.ParNum, input.OutputTopicName),
 			FixedOutParNum:        input.ParNum,
 			MsgSerde:              msgSerde,
 			WindowStoreChangelogs: wsc,

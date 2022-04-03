@@ -41,13 +41,6 @@ type MongoDBConfig struct {
 
 var _ = KeyValueStore(&MongoDBKeyValueStore{})
 
-func InitMongoDBClient(ctx context.Context, addr string) (*mongo.Client, error) {
-	clientOpts := options.Client().ApplyURI(addr).
-		SetReadConcern(readconcern.Linearizable()).
-		SetWriteConcern(writeconcern.New(writeconcern.WMajority()))
-	return mongo.Connect(ctx, clientOpts)
-}
-
 func NewMongoDBKeyValueStore(ctx context.Context, config *MongoDBConfig) (*MongoDBKeyValueStore, error) {
 	debug.Assert(config.Client != nil, "mongo db connection should be created first")
 	/*
@@ -93,25 +86,27 @@ func (s *MongoDBKeyValueStore) StartTransaction(ctx context.Context) error {
 	return nil
 }
 
-func (s *MongoDBKeyValueStore) CommitTransaction(ctx context.Context,
-	taskRepr string, transactionID uint64,
-) error {
-	col := s.config.Client.Database(s.config.DBName).Collection(taskRepr)
-	debug.Fprintf(os.Stderr, "update tranID to %d for db %s task %s\n", transactionID, s.config.DBName, taskRepr)
-	opts := options.Update().SetUpsert(true)
-	_, err := col.UpdateOne(s.sessCtx, bson.M{KEY_NAME: "tranID"},
-		bson.M{"$set": bson.M{VALUE_NAME: transactionID}}, opts)
-	if err != nil {
-		err2 := s.sessCtx.AbortTransaction(context.Background())
-		if err2 != nil {
-			return fmt.Errorf("try to abort transaction while handling err (%v) and abort failed: %v",
-				err, err2)
+func (s *MongoDBKeyValueStore) CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error {
+	err := RunTranFuncWithRetry(s.sessCtx, func(sc mongo.SessionContext) error {
+		col := s.config.Client.Database(taskRepr).Collection(taskRepr)
+		debug.Fprintf(os.Stderr, "update tranID to %d for db %s task %s\n", transactionID, s.config.DBName, taskRepr)
+		opts := options.Update().SetUpsert(true)
+		_, err := col.UpdateOne(sc, bson.M{KEY_NAME: "tranID"},
+			bson.M{"$set": bson.M{VALUE_NAME: transactionID}}, opts)
+		if err != nil {
+			debug.Fprintf(os.Stderr, "abort transaction due to err of UpdateOne: %v\n", err)
+			_ = sc.AbortTransaction(context.Background())
 		}
-	}
-	if err := s.session.CommitTransaction(ctx); err != nil {
+		return err
+	})
+	if err != nil {
 		return err
 	}
-	s.session.EndSession(ctx)
+
+	if err := CommitWithRetry(s.sessCtx); err != nil {
+		return err
+	}
+	s.session.EndSession(s.sessCtx)
 	s.inTransaction = false
 	s.sessCtx = nil
 	return nil
@@ -164,19 +159,29 @@ func (s *MongoDBKeyValueStore) Get(ctx context.Context, key commtypes.KeyT) (com
 
 func (s *MongoDBKeyValueStore) GetWithCollection(ctx context.Context, kBytes []byte, collection string) ([]byte, bool, error) {
 	var err error
-	col := s.config.Client.Database(s.config.DBName).Collection(collection)
 	var result bson.M
-	ctx_tmp := ctx
-	if s.inTransaction {
-		ctx_tmp = s.sessCtx
+
+	if !s.inTransaction {
+		col := s.config.Client.Database(s.config.DBName).Collection(collection)
+		err = col.FindOne(ctx, bson.M{KEY_NAME: kBytes}).Decode(&result)
+	} else {
+		err = RunTranFuncWithRetry(s.sessCtx, func(sc mongo.SessionContext) error {
+			col := s.config.Client.Database(s.config.DBName).Collection(collection)
+			err = col.FindOne(sc, bson.M{KEY_NAME: kBytes}).Decode(&result)
+			if err != nil {
+				if err != mongo.ErrNoDocuments {
+					if cmdErr, ok := err.(mongo.CommandError); ok && !cmdErr.HasErrorLabel("TransientTransactionError") {
+						debug.Fprintf(os.Stderr, "abort transaction due to err of FindOne: %v\n", err)
+						_ = s.sessCtx.AbortTransaction(context.Background())
+					}
+				}
+			}
+			return err
+		})
 	}
-	err = col.FindOne(ctx_tmp, bson.M{KEY_NAME: kBytes}).Decode(&result)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, false, nil
-		}
-		if s.inTransaction {
-			_ = s.sessCtx.AbortTransaction(context.Background())
 		}
 		return nil, false, err
 	}
@@ -192,13 +197,8 @@ func (s *MongoDBKeyValueStore) RangeWithCollection(ctx context.Context,
 	iterFunc func([]byte, []byte) error,
 ) error {
 	var err error
-	col := s.config.Client.Database(s.config.DBName).Collection(collection)
-	opts := options.Find().SetSort(bson.M{KEY_NAME: 1})
 	var cur *mongo.Cursor
-	ctx_tmp := ctx
-	if s.inTransaction {
-		ctx_tmp = s.sessCtx
-	}
+
 	var condition bson.M
 	if fromBytes == nil && toBytes == nil {
 		condition = bson.M{}
@@ -210,17 +210,34 @@ func (s *MongoDBKeyValueStore) RangeWithCollection(ctx context.Context,
 	} else {
 		condition = bson.M{KEY_NAME: bson.M{"$gte": fromBytes, "$lte": toBytes}}
 	}
-	cur, err = col.Find(ctx_tmp, condition, opts)
+	if !s.inTransaction {
+		opts := options.Find().SetSort(bson.M{KEY_NAME: 1})
+		col := s.config.Client.Database(s.config.DBName).Collection(collection)
+		cur, err = col.Find(ctx, condition, opts)
+	} else {
+		err = RunTranFuncWithRetry(s.sessCtx, func(sc mongo.SessionContext) error {
+			opts := options.Find().SetSort(bson.M{KEY_NAME: 1})
+			col := s.config.Client.Database(s.config.DBName).Collection(collection)
+			cur, err = col.Find(sc, condition, opts)
+			if err != nil {
+				if err != mongo.ErrNoDocuments {
+					if cmdErr, ok := err.(mongo.CommandError); ok && !cmdErr.HasErrorLabel("TransientTransactionError") {
+						debug.Fprintf(os.Stderr, "abort transaction due to err of Find: %v\n", err)
+						_ = s.sessCtx.AbortTransaction(context.Background())
+					}
+				}
+			}
+			return err
+		})
+	}
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			fmt.Fprint(os.Stderr, "can't find the document\n")
 			return nil
 		}
-		if s.inTransaction {
-			_ = s.sessCtx.AbortTransaction(context.Background())
-		}
 		return err
 	}
+
 	var res []bson.M
 	err = cur.All(ctx, &res)
 	if err != nil {
@@ -293,7 +310,7 @@ func (s *MongoDBKeyValueStore) PutWithCollection(ctx context.Context, kBytes []b
 	if vBytes == nil {
 		return s.DeleteWithCollection(ctx, kBytes, collection)
 	} else {
-		col := s.config.Client.Database(s.config.DBName).Collection(collection)
+		var err error
 		/*
 			_, ok := s.indexCreation[collection]
 			if !ok {
@@ -309,21 +326,28 @@ func (s *MongoDBKeyValueStore) PutWithCollection(ctx context.Context, kBytes []b
 			}
 		*/
 		// fmt.Fprintf(os.Stderr, "put k: %v, val: %v\n", kBytes, vBytes)
-		opts := options.Update().SetUpsert(true)
 		ctx_tmp := ctx
 		if s.inTransaction {
 			ctx_tmp = s.sessCtx
 		}
-		_, err := col.UpdateOne(ctx_tmp, bson.M{KEY_NAME: kBytes},
-			bson.M{"$set": bson.M{VALUE_NAME: vBytes}}, opts)
-		if err != nil {
-			if s.inTransaction {
-				err2 := s.sessCtx.AbortTransaction(context.Background())
-				if err2 != nil {
-					return fmt.Errorf("try to abort transaction while handling err (%v) and abort failed: %v", err, err2)
+		opts := options.Update().SetUpsert(true)
+		if !s.inTransaction {
+			col := s.config.Client.Database(s.config.DBName).Collection(collection)
+			_, err = col.UpdateOne(ctx_tmp, bson.M{KEY_NAME: kBytes},
+				bson.M{"$set": bson.M{VALUE_NAME: vBytes}}, opts)
+		} else {
+			err = RunTranFuncWithRetry(s.sessCtx, func(sc mongo.SessionContext) error {
+				col := s.config.Client.Database(s.config.DBName).Collection(collection)
+				_, err = col.UpdateOne(sc, bson.M{KEY_NAME: kBytes},
+					bson.M{"$set": bson.M{VALUE_NAME: vBytes}}, opts)
+				if err != nil {
+					if cmdErr, ok := err.(mongo.CommandError); ok && !cmdErr.HasErrorLabel("TransientTransactionError") {
+						debug.Fprintf(os.Stderr, "abort transaction due to err of UpdateOne in Put: %v\n", err)
+						_ = s.sessCtx.AbortTransaction(context.Background())
+					}
 				}
-			}
-			return err
+				return err
+			})
 		}
 		return err
 	}
@@ -354,9 +378,11 @@ func (s *MongoDBKeyValueStore) DeleteWithCollection(ctx context.Context,
 	if s.inTransaction {
 		ctx_tmp = s.sessCtx
 	}
+	debug.Fprintf(os.Stderr, "delete %v in col %s", kBytes, collection)
 	_, err := col.DeleteOne(ctx_tmp, bson.M{KEY_NAME: kBytes})
 	if err != nil {
 		if s.inTransaction {
+			debug.Fprintf(os.Stderr, "abort transaction due to err of DeleteOne: %v\n", err)
 			_ = s.sessCtx.AbortTransaction(context.Background())
 		}
 		return err
@@ -375,7 +401,7 @@ func (s *MongoDBKeyValueStore) TableType() TABLE_TYPE {
 }
 
 func (s *MongoDBKeyValueStore) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
-	col := s.config.Client.Database(s.config.DBName).Collection(taskRepr)
+	col := s.config.Client.Database(taskRepr).Collection(taskRepr)
 	var result bson.M
 	err := col.FindOne(ctx, bson.M{KEY_NAME: "tranID"}).Decode(&result)
 	if err != nil {

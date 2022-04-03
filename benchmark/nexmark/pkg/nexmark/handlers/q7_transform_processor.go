@@ -52,7 +52,17 @@ func (p *Q7TransformProcessor) ProcessAndReturn(ctx context.Context, msg commtyp
 	err := p.windowStore.Fetch(ctx, key, time.UnixMilli((event.Bid.DateTime - 10*1000)),
 		time.UnixMilli(event.Bid.DateTime),
 		func(u int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
-			val := vt.(*commtypes.ValueTimestamp).Value.(*ntypes.PriceTime)
+			var val *ntypes.PriceTime
+			vts, ok := vt.(*commtypes.ValueTimestamp)
+			if !ok {
+				vtsTmp := vt.(commtypes.ValueTimestamp)
+				vts = &vtsTmp
+			}
+			val, ok = vts.Value.(*ntypes.PriceTime)
+			if !ok {
+				valTmp := vts.Value.(ntypes.PriceTime)
+				val = &valTmp
+			}
 			if event.Bid.Price == val.Price {
 				result = append(result, commtypes.Message{
 					Key: key,
