@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
@@ -323,7 +322,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 
 	joiner := processor.ValueJoinerWithKeyTsFunc(func(readOnlyKey interface{},
 		leftValue interface{}, rightValue interface{}, leftTs int64, rightTs int64) interface{} {
-		fmt.Fprint(os.Stderr, "get into joiner\n")
+		// fmt.Fprint(os.Stderr, "get into joiner\n")
 		lv := leftValue.(*ntypes.Event)
 		rv := rightValue.(*ntypes.Event)
 		st := leftTs

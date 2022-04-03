@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -60,7 +61,7 @@ func (p *TableTableJoinProcessor) ProcessAndReturn(ctx context.Context, msg comm
 	}
 	val2, ok, err := p.store.Get(ctx, msg.Key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get err: %v", err)
 	}
 	if ok {
 		rv := val2.(commtypes.ValueTimestamp)

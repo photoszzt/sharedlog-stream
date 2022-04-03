@@ -144,18 +144,22 @@ func (s *MongoDBKeyValueStore) Get(ctx context.Context, key commtypes.KeyT) (com
 	if !ok {
 		kBytes, err = s.config.KeySerde.Encode(key)
 		if err != nil {
-			return nil, false, err
+			return nil, false, fmt.Errorf("Get: key encode err %v", err)
 		}
 	}
 	valBytes, ok, err := s.GetWithCollection(ctx, kBytes, s.config.CollectionName)
 	if err != nil {
-		return nil, false, err
+		return nil, false, fmt.Errorf("Get: get with collection err %v", err)
 	}
-	val, err := s.config.ValueSerde.Decode(valBytes)
-	if err != nil {
-		return nil, false, err
+	if ok {
+		val, err := s.config.ValueSerde.Decode(valBytes)
+		if err != nil {
+			debug.Fprintf(os.Stderr, "Get val bytes: %v", valBytes)
+			return nil, false, fmt.Errorf("Get: decode err %v", err)
+		}
+		return val, ok, nil
 	}
-	return val, ok, nil
+	return valBytes, ok, nil
 }
 
 func (s *MongoDBKeyValueStore) GetWithCollection(ctx context.Context, kBytes []byte, collection string) ([]byte, bool, error) {

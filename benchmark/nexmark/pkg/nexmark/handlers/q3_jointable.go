@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
@@ -76,7 +77,8 @@ func (h *q3JoinTableHandler) process(ctx context.Context,
 		cHashMu:       &h.cHashMu,
 		cHash:         h.cHash,
 	}
-	go joinProc(ctx, personsOutChan, joinProcPerson)
+	pctx := context.WithValue(ctx, "id", "person")
+	go joinProc(pctx, personsOutChan, joinProcPerson)
 	wg.Add(1)
 	joinProgArgsAuction := &joinProcArgs{
 		src:           args.auctionSrc,
@@ -90,7 +92,8 @@ func (h *q3JoinTableHandler) process(ctx context.Context,
 		cHashMu:       &h.cHashMu,
 		cHash:         h.cHash,
 	}
-	go joinProc(ctx, auctionsOutChan, joinProgArgsAuction)
+	actx := context.WithValue(ctx, "id", "auction")
+	go joinProc(actx, auctionsOutChan, joinProgArgsAuction)
 	var pOut *common.FnOutput = nil
 	var aOut *common.FnOutput = nil
 L:
@@ -112,7 +115,9 @@ L:
 	}
 	wg.Wait()
 	if pOut != nil {
+		debug.Fprintf(os.Stderr, "pOut %v\n", pOut)
 		if aOut != nil {
+			debug.Fprintf(os.Stderr, "aOut %v\n", aOut)
 			succ := pOut.Success && aOut.Success
 			return t.CurrentOffset, &common.FnOutput{Success: succ, Message: pOut.Message + "," + aOut.Message}
 		}
@@ -121,6 +126,7 @@ L:
 		}
 		return t.CurrentOffset, pOut
 	} else if aOut != nil {
+		debug.Fprintf(os.Stderr, "aOut %v\n", aOut)
 		if aOut.Success {
 			return t.CurrentOffset, nil
 		}
@@ -241,6 +247,7 @@ type kvtables struct {
 func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 	tabType store.TABLE_TYPE,
 	sss *srcSinkSerde,
+	serdeFormat commtypes.SerdeFormat,
 	mongoAddr string,
 ) (
 	*kvtables,
@@ -270,13 +277,32 @@ func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 		}
 		return &kvtables{toAuctionsTable, auctionsStore, toPersonsTable, personsStore}, nil
 	} else if tabType == store.MONGODB {
+		var vtSerde0 commtypes.Serde
+		var vtSerde1 commtypes.Serde
+		if serdeFormat == commtypes.JSON {
+			vtSerde0 = commtypes.ValueTimestampJSONSerde{
+				ValJSONSerde: sss.valSerdes[0],
+			}
+			vtSerde1 = commtypes.ValueTimestampJSONSerde{
+				ValJSONSerde: sss.valSerdes[1],
+			}
+		} else if serdeFormat == commtypes.MSGP {
+			vtSerde0 = commtypes.ValueTimestampMsgpSerde{
+				ValMsgpSerde: sss.valSerdes[0],
+			}
+			vtSerde1 = commtypes.ValueTimestampMsgpSerde{
+				ValMsgpSerde: sss.valSerdes[1],
+			}
+		} else {
+			panic("unrecognized serde format")
+		}
 		toAuctionsTable, auctionsStore, err := processor.ToMongoDBKVTable(ctx, "auctionsBySellerIDStore",
-			mongoAddr, sss.keySerdes[0], sss.valSerdes[0])
+			mongoAddr, sss.keySerdes[0], vtSerde0)
 		if err != nil {
 			return nil, err
 		}
 		toPersonsTable, personsStore, err := processor.ToMongoDBKVTable(ctx, "personsByIDStore",
-			mongoAddr, sss.keySerdes[1], sss.valSerdes[1])
+			mongoAddr, sss.keySerdes[1], vtSerde1)
 		if err != nil {
 			return nil, err
 		}
@@ -320,13 +346,19 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		return &common.FnOutput{Success: false, Message: fmt.Sprintf("getSrcSink err: %v\n", err)}
 	}
 
-	kvtabs, err := h.setupTables(ctx, store.TABLE_TYPE(sp.TableType), sss, sp.MongoAddr)
+	kvtabs, err := h.setupTables(ctx, store.TABLE_TYPE(sp.TableType), sss, commtypes.SerdeFormat(sp.SerdeFormat), sp.MongoAddr)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	joiner := processor.ValueJoinerWithKeyFunc(
 		func(readOnlyKey interface{}, leftVal interface{}, rightVal interface{}) interface{} {
-			event := rightVal.(*ntypes.Event)
+			var event *ntypes.Event
+			vt, ok := rightVal.(commtypes.ValueTimestamp)
+			if ok {
+				event = vt.Value.(*ntypes.Event)
+			} else {
+				event = rightVal.(*ntypes.Event)
+			}
 			return &ntypes.NameCityStateId{
 				Name:  event.NewPerson.Name,
 				City:  event.NewPerson.City,
@@ -346,17 +378,25 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		// msg is auction
 		_, err := kvtabs.toTab1.ProcessAndReturn(ctx, m)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("ToTabA err: %v", err)
 		}
-		return auctionJoinsPersons.ProcessAndReturn(ctx, m)
+		msgs, err := auctionJoinsPersons.ProcessAndReturn(ctx, m)
+		if err != nil {
+			err = fmt.Errorf("aJoinP err: %v", err)
+		}
+		return msgs, err
 	})
 	pJoinA := JoinWorkerFunc(func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		// msg is person
 		_, err := kvtabs.toTab2.ProcessAndReturn(ctx, m)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("ToTabP err: %v", err)
 		}
-		return personJoinsAuctions.ProcessAndReturn(ctx, m)
+		msgs, err := personJoinsAuctions.ProcessAndReturn(ctx, m)
+		if err != nil {
+			err = fmt.Errorf("pJoinA err: %v", err)
+		}
+		return msgs, err
 	})
 
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
