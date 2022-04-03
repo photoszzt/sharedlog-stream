@@ -103,11 +103,14 @@ func (rws *SegmentedWindowStore) Get(ctx context.Context, key commtypes.KeyT, wi
 	if err != nil {
 		return nil, false, err
 	}
-	val, err := rws.valSerde.Decode(valBytes)
-	if err != nil {
-		return nil, false, err
+	if ok {
+		val, err := rws.valSerde.Decode(valBytes)
+		if err != nil {
+			return nil, false, err
+		}
+		return val, ok, err
 	}
-	return val, ok, err
+	return nil, false, nil
 }
 
 func (rws *SegmentedWindowStore) Fetch(ctx context.Context, key commtypes.KeyT, timeFrom time.Time, timeTo time.Time,

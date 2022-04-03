@@ -218,13 +218,13 @@ func (h *q5AuctionBids) process(ctx context.Context, t *transaction.StreamTask, 
 		msg.Msg.Timestamp = ts
 		countMsgs, err := args.countProc.ProcessAndReturn(ctx, msg.Msg)
 		if err != nil {
-			return err
+			return fmt.Errorf("countProc err %v", err)
 		}
 		for _, countMsg := range countMsgs {
 			// fmt.Fprintf(os.Stderr, "count msg ts: %v, ", countMsg.Timestamp)
 			changeKeyedMsg, err := args.groupByAuction.ProcessAndReturn(ctx, countMsg)
 			if err != nil {
-				return err
+				return fmt.Errorf("groupByAuction err %v", err)
 			}
 			// fmt.Fprintf(os.Stderr, "changeKeyedMsg ts: %v\n", changeKeyedMsg[0].Timestamp)
 			// par := uint8(hashSe(changeKeyedMsg[0].Key.(*ntypes.StartEndTime)) % uint32(args.numOutPartition))
@@ -243,7 +243,7 @@ func (h *q5AuctionBids) process(ctx context.Context, t *transaction.StreamTask, 
 			}
 			err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
 			if err != nil {
-				return err
+				return fmt.Errorf("sink err %v", err)
 			}
 		}
 		return nil

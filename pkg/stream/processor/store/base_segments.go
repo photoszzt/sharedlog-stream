@@ -57,8 +57,12 @@ func (s *BaseSegments) SegmentName(segmentId int64) string {
 }
 
 func (s *BaseSegments) GetSegmentForTimestamp(ts int64) Segment {
-	ks := s.segments.Get(Int64(s.SegmentId(ts))).(*KeySegment)
-	return ks.Value
+	v := s.segments.Get(Int64(s.SegmentId(ts)))
+	if v != nil {
+		ks := v.(*KeySegment)
+		return ks.Value
+	}
+	return nil
 }
 
 func (s *BaseSegments) GetOrCreateSegmentIfLive(ctx context.Context,

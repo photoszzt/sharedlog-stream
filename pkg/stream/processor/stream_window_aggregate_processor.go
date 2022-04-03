@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"fmt"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 
@@ -64,7 +65,7 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(ctx context.Context, m
 	closeTime := p.observedStreamTime - p.windows.GracePeriodMs()
 	matchedWindows, keys, err := p.windows.WindowsFor(ts)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("windows for err %v", err)
 	}
 	newMsgs := make([]commtypes.Message, 0)
 	for _, windowStart := range keys {
@@ -76,10 +77,10 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(ctx context.Context, m
 			var newTs int64
 			val, exists, err := p.store.Get(ctx, msg.Key, windowStart)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("win agg get err %v", err)
 			}
 			if exists {
-				oldAggTs := val.(*commtypes.ValueTimestamp)
+				oldAggTs := val.(commtypes.ValueTimestamp)
 				oldAgg = oldAggTs.Value
 				if msg.Timestamp > oldAggTs.Timestamp {
 					newTs = msg.Timestamp
@@ -93,7 +94,7 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(ctx context.Context, m
 			newAgg = p.aggregator.Apply(msg.Key, msg.Value, oldAgg)
 			err = p.store.Put(ctx, msg.Key, &commtypes.ValueTimestamp{Value: newAgg, Timestamp: newTs}, windowStart)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("win agg put err %v", err)
 			}
 			newMsgs = append(newMsgs, commtypes.Message{Key: &commtypes.WindowedKey{Key: msg.Key, Window: window}, Value: newAgg, Timestamp: newTs})
 		} else {
