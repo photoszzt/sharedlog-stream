@@ -169,7 +169,8 @@ func (h *query3PersonsByIDHandler) Query3PersonsByID(ctx context.Context, sp *co
 	}
 
 	task := transaction.StreamTask{
-		ProcessFunc: h.process,
+		ProcessFunc:   h.process,
+		CurrentOffset: make(map[string]uint64),
 	}
 
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
