@@ -148,8 +148,12 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 			return nil, nil, err
 		}
 	} else if sp.TableType == uint8(store.MONGODB) {
+		client, err := store.InitMongoDBClient(ctx, sp.MongoAddr)
+		if err != nil {
+			return nil, nil, err
+		}
 		mkvs, err := store.NewMongoDBKeyValueStore(ctx, &store.MongoDBConfig{
-			Addr:           sp.MongoAddr,
+			Client:         client,
 			CollectionName: countStoreName,
 			DBName:         countStoreName,
 			KeySerde:       nil,

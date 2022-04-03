@@ -5,6 +5,8 @@ import (
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type StoreToWindowTableProcessor struct {
@@ -75,13 +77,13 @@ func ToInMemWindowTable(
 func ToMongoDBWindowTable(
 	ctx context.Context,
 	storeName string,
-	mongoAddr string,
+	client *mongo.Client,
 	joinWindow *JoinWindows,
 	keySerde commtypes.Serde,
 	valSerde commtypes.Serde,
 ) (*MeteredProcessor, store.WindowStore, error) {
 	mkvs, err := store.NewMongoDBKeyValueStore(ctx, &store.MongoDBConfig{
-		Addr:           mongoAddr,
+		Client:         client,
 		CollectionName: storeName,
 		DBName:         storeName,
 		KeySerde:       nil,
@@ -103,14 +105,14 @@ func ToMongoDBWindowTable(
 func CreateMongoDBWindoeTable(
 	ctx context.Context,
 	storeName string,
-	mongoAddr string,
+	client *mongo.Client,
 	retention int64,
 	windowSize int64,
 	keySerde commtypes.Serde,
 	valSerde commtypes.Serde,
 ) (store.WindowStore, error) {
 	mkvs, err := store.NewMongoDBKeyValueStore(ctx, &store.MongoDBConfig{
-		Addr:           mongoAddr,
+		Client:         client,
 		CollectionName: storeName,
 		DBName:         storeName,
 		KeySerde:       nil,

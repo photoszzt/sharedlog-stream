@@ -26,7 +26,6 @@ type MongoDBKeyValueStore struct {
 	session       mongo.Session
 	sessCtx       mongo.SessionContext
 	config        *MongoDBConfig
-	client        *mongo.Client
 	indexCreation map[string]struct{}
 	inTransaction bool
 }
@@ -34,7 +33,7 @@ type MongoDBKeyValueStore struct {
 type MongoDBConfig struct {
 	ValueSerde     commtypes.Serde
 	KeySerde       commtypes.Serde
-	Addr           string
+	Client         *mongo.Client
 	CollectionName string
 
 	DBName string
@@ -42,14 +41,15 @@ type MongoDBConfig struct {
 
 var _ = KeyValueStore(&MongoDBKeyValueStore{})
 
-func NewMongoDBKeyValueStore(ctx context.Context, config *MongoDBConfig) (*MongoDBKeyValueStore, error) {
-	clientOpts := options.Client().ApplyURI(config.Addr).
+func InitMongoDBClient(ctx context.Context, addr string) (*mongo.Client, error) {
+	clientOpts := options.Client().ApplyURI(addr).
 		SetReadConcern(readconcern.Linearizable()).
 		SetWriteConcern(writeconcern.New(writeconcern.WMajority()))
-	client, err := mongo.Connect(ctx, clientOpts)
-	if err != nil {
-		return nil, err
-	}
+	return mongo.Connect(ctx, clientOpts)
+}
+
+func NewMongoDBKeyValueStore(ctx context.Context, config *MongoDBConfig) (*MongoDBKeyValueStore, error) {
+	debug.Assert(config.Client != nil, "mongo db connection should be created first")
 	/*
 		col := client.Database(config.DBName).Collection(config.CollectionName)
 
@@ -64,19 +64,18 @@ func NewMongoDBKeyValueStore(ctx context.Context, config *MongoDBConfig) (*Mongo
 	*/
 	return &MongoDBKeyValueStore{
 		config:        config,
-		client:        client,
 		indexCreation: make(map[string]struct{}),
 		inTransaction: false,
 	}, nil
 }
 
 func (s *MongoDBKeyValueStore) DropDatabase(ctx context.Context) error {
-	return s.client.Database(s.config.DBName).Drop(ctx)
+	return s.config.Client.Database(s.config.DBName).Drop(ctx)
 }
 
 func (s *MongoDBKeyValueStore) StartTransaction(ctx context.Context) error {
 	debug.Fprint(os.Stderr, "start mongo transaction\n")
-	session, err := s.client.StartSession()
+	session, err := s.config.Client.StartSession()
 	if err != nil {
 		return err
 	}
@@ -97,7 +96,8 @@ func (s *MongoDBKeyValueStore) StartTransaction(ctx context.Context) error {
 func (s *MongoDBKeyValueStore) CommitTransaction(ctx context.Context,
 	taskRepr string, transactionID uint64,
 ) error {
-	col := s.client.Database(s.config.DBName).Collection(taskRepr)
+	col := s.config.Client.Database(s.config.DBName).Collection(taskRepr)
+	debug.Fprintf(os.Stderr, "update tranID to %d for db %s task %s\n", transactionID, s.config.DBName, taskRepr)
 	opts := options.Update().SetUpsert(true)
 	_, err := col.UpdateOne(s.sessCtx, bson.M{KEY_NAME: "tranID"},
 		bson.M{"$set": bson.M{VALUE_NAME: transactionID}}, opts)
@@ -164,7 +164,7 @@ func (s *MongoDBKeyValueStore) Get(ctx context.Context, key commtypes.KeyT) (com
 
 func (s *MongoDBKeyValueStore) GetWithCollection(ctx context.Context, kBytes []byte, collection string) ([]byte, bool, error) {
 	var err error
-	col := s.client.Database(s.config.DBName).Collection(collection)
+	col := s.config.Client.Database(s.config.DBName).Collection(collection)
 	var result bson.M
 	ctx_tmp := ctx
 	if s.inTransaction {
@@ -192,7 +192,7 @@ func (s *MongoDBKeyValueStore) RangeWithCollection(ctx context.Context,
 	iterFunc func([]byte, []byte) error,
 ) error {
 	var err error
-	col := s.client.Database(s.config.DBName).Collection(collection)
+	col := s.config.Client.Database(s.config.DBName).Collection(collection)
 	opts := options.Find().SetSort(bson.M{KEY_NAME: 1})
 	var cur *mongo.Cursor
 	ctx_tmp := ctx
@@ -293,7 +293,7 @@ func (s *MongoDBKeyValueStore) PutWithCollection(ctx context.Context, kBytes []b
 	if vBytes == nil {
 		return s.DeleteWithCollection(ctx, kBytes, collection)
 	} else {
-		col := s.client.Database(s.config.DBName).Collection(collection)
+		col := s.config.Client.Database(s.config.DBName).Collection(collection)
 		/*
 			_, ok := s.indexCreation[collection]
 			if !ok {
@@ -349,7 +349,7 @@ func (s *MongoDBKeyValueStore) Delete(ctx context.Context, key commtypes.KeyT) e
 func (s *MongoDBKeyValueStore) DeleteWithCollection(ctx context.Context,
 	kBytes []byte, collection string,
 ) error {
-	col := s.client.Database(s.config.DBName).Collection(collection)
+	col := s.config.Client.Database(s.config.DBName).Collection(collection)
 	ctx_tmp := ctx
 	if s.inTransaction {
 		ctx_tmp = s.sessCtx
@@ -375,7 +375,7 @@ func (s *MongoDBKeyValueStore) TableType() TABLE_TYPE {
 }
 
 func (s *MongoDBKeyValueStore) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
-	col := s.client.Database(s.config.DBName).Collection(taskRepr)
+	col := s.config.Client.Database(s.config.DBName).Collection(taskRepr)
 	var result bson.M
 	err := col.FindOne(ctx, bson.M{KEY_NAME: "tranID"}).Decode(&result)
 	if err != nil {
@@ -385,5 +385,5 @@ func (s *MongoDBKeyValueStore) GetTransactionID(ctx context.Context, taskRepr st
 		return 0, false, err
 	}
 	val := result[VALUE_NAME]
-	return val.(uint64), true, nil
+	return uint64(val.(int64)), true, nil
 }

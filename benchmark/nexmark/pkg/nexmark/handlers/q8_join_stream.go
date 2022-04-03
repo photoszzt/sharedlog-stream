@@ -306,13 +306,17 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			return &common.FnOutput{Success: false, Message: fmt.Sprintf("to table err: %v", err)}
 		}
 	} else if sp.TableType == uint8(store.MONGODB) {
+		client, err := store.InitMongoDBClient(ctx, sp.MongoAddr)
+		if err != nil {
+			return &common.FnOutput{Success: false, Message: err.Error()}
+		}
 		toAuctionsWindowTab, auctionsWinStore, err = processor.ToMongoDBWindowTable(ctx,
-			"auctionsBySellerIDWinTab", sp.MongoAddr, joinWindows, sss.keySerdes[0], sss.valSerdes[0])
+			"auctionsBySellerIDWinTab", client, joinWindows, sss.keySerdes[0], sss.valSerdes[0])
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: fmt.Sprintf("to table err: %v", err)}
 		}
 		toPersonsWinTab, personsWinTab, err = processor.ToMongoDBWindowTable(ctx,
-			"personsByIDWinTab", sp.MongoAddr, joinWindows, sss.keySerdes[1], sss.valSerdes[1])
+			"personsByIDWinTab", client, joinWindows, sss.keySerdes[1], sss.valSerdes[1])
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: fmt.Sprintf("to table err: %v", err)}
 		}

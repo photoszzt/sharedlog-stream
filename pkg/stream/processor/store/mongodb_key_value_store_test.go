@@ -7,8 +7,12 @@ import (
 )
 
 func getMongoDBKeyValueStore(ctx context.Context, t *testing.T) *MongoDBKeyValueStore {
+	client, err := InitMongoDBClient(ctx, "mongodb://localhost:27017")
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	store, err := NewMongoDBKeyValueStore(ctx, &MongoDBConfig{
-		Addr:           "mongodb://localhost:27017",
+		Client:         client,
 		CollectionName: "a",
 		KeySerde:       commtypes.IntSerde{},
 		ValueSerde:     commtypes.StringSerde{},
@@ -23,31 +27,31 @@ func getMongoDBKeyValueStore(ctx context.Context, t *testing.T) *MongoDBKeyValue
 func TestMongoDBShouldNotIncludeDeletedFromRangeResult(t *testing.T) {
 	ctx := context.Background()
 	store := getMongoDBKeyValueStore(ctx, t)
-	checkErr(store.client.Database("test").Drop(ctx), t)
+	checkErr(store.config.Client.Database("test").Drop(ctx), t)
 	ShouldNotIncludeDeletedFromRangeResult(ctx, store, t)
-	checkErr(store.client.Database("test").Drop(ctx), t)
+	checkErr(store.config.Client.Database("test").Drop(ctx), t)
 }
 
 func TestMongoDBShouldDeleteIfSerializedValueIsNull(t *testing.T) {
 	ctx := context.Background()
 	store := getMongoDBKeyValueStore(ctx, t)
-	checkErr(store.client.Database("test").Drop(ctx), t)
+	checkErr(store.config.Client.Database("test").Drop(ctx), t)
 	ShouldDeleteIfSerializedValueIsNull(ctx, store, t)
-	checkErr(store.client.Database("test").Drop(ctx), t)
+	checkErr(store.config.Client.Database("test").Drop(ctx), t)
 }
 
 func TestMongoDBPutGetRange(t *testing.T) {
 	ctx := context.Background()
 	store := getMongoDBKeyValueStore(ctx, t)
-	checkErr(store.client.Database("test").Drop(ctx), t)
+	checkErr(store.config.Client.Database("test").Drop(ctx), t)
 	PutGetRange(ctx, store, t)
-	checkErr(store.client.Database("test").Drop(ctx), t)
+	checkErr(store.config.Client.Database("test").Drop(ctx), t)
 }
 
 func TestMongoDBRestore(t *testing.T) {
 	ctx := context.Background()
 	store := getMongoDBKeyValueStore(ctx, t)
-	checkErr(store.client.Database("test").Drop(ctx), t)
+	checkErr(store.config.Client.Database("test").Drop(ctx), t)
 	if err := store.Put(ctx, 0, "zero"); err != nil {
 		t.Fatal(err.Error())
 	}
@@ -70,5 +74,5 @@ func TestMongoDBRestore(t *testing.T) {
 		0: "zero", 1: "one", 2: "two", 3: "three",
 	}
 	checkMapEqual(t, expected, ret)
-	checkErr(store.client.Database("test").Drop(ctx), t)
+	checkErr(store.config.Client.Database("test").Drop(ctx), t)
 }

@@ -9,8 +9,12 @@ import (
 )
 
 func getMongoDBWindowStore(ctx context.Context, retainDuplicates bool, t *testing.T) (*SegmentedWindowStore, *MongoDBKeyValueStore) {
+	client, err := InitMongoDBClient(ctx, "mongodb://localhost:27017")
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	mkvs, err := NewMongoDBKeyValueStore(ctx, &MongoDBConfig{
-		Addr:           "mongodb://localhost:27017",
+		Client:         client,
 		CollectionName: "a",
 		KeySerde:       commtypes.IntSerde{},
 		ValueSerde:     commtypes.StringSerde{},
@@ -31,25 +35,25 @@ func getMongoDBWindowStore(ctx context.Context, retainDuplicates bool, t *testin
 func TestMongoDBGetAndRange(t *testing.T) {
 	ctx := context.Background()
 	store, mkvs := getMongoDBWindowStore(ctx, false, t)
-	checkErr(mkvs.client.Database("test").Drop(ctx), t)
+	checkErr(mkvs.config.Client.Database("test").Drop(ctx), t)
 	GetAndRangeTest(ctx, store, t)
-	checkErr(mkvs.client.Database("test").Drop(ctx), t)
+	checkErr(mkvs.config.Client.Database("test").Drop(ctx), t)
 }
 
 func TestMongoDBShouldGetAllNonDeletedMsgs(t *testing.T) {
 	ctx := context.Background()
 	store, mkvs := getMongoDBWindowStore(ctx, false, t)
-	checkErr(mkvs.client.Database("test").Drop(ctx), t)
+	checkErr(mkvs.config.Client.Database("test").Drop(ctx), t)
 	ShouldGetAllNonDeletedMsgsTest(ctx, store, t)
-	checkErr(mkvs.client.Database("test").Drop(ctx), t)
+	checkErr(mkvs.config.Client.Database("test").Drop(ctx), t)
 }
 
 func TestMongoDBExpiration(t *testing.T) {
 	ctx := context.Background()
 	store, mkvs := getMongoDBWindowStore(ctx, false, t)
-	checkErr(mkvs.client.Database("test").Drop(ctx), t)
+	checkErr(mkvs.config.Client.Database("test").Drop(ctx), t)
 	ExpirationTest(ctx, store, t)
-	checkErr(mkvs.client.Database("test").Drop(ctx), t)
+	checkErr(mkvs.config.Client.Database("test").Drop(ctx), t)
 }
 
 /*
@@ -74,39 +78,39 @@ func TestMongoDBShouldGetAllReturnTimestampOrdered(t *testing.T) {
 func TestMongoDBFetchRange(t *testing.T) {
 	ctx := context.Background()
 	store, mkvs := getMongoDBWindowStore(ctx, false, t)
-	checkErr(mkvs.client.Database("test").Drop(ctx), t)
+	checkErr(mkvs.config.Client.Database("test").Drop(ctx), t)
 	FetchRangeTest(ctx, store, t)
-	checkErr(mkvs.client.Database("test").Drop(ctx), t)
+	checkErr(mkvs.config.Client.Database("test").Drop(ctx), t)
 }
 
 func TestMongoDBPutAndFetchBefore(t *testing.T) {
 	ctx := context.Background()
 	store, mkvs := getMongoDBWindowStore(ctx, false, t)
-	checkErr(mkvs.client.Database("test").Drop(ctx), t)
+	checkErr(mkvs.config.Client.Database("test").Drop(ctx), t)
 	PutAndFetchBeforeTest(ctx, store, t)
-	checkErr(mkvs.client.Database("test").Drop(ctx), t)
+	checkErr(mkvs.config.Client.Database("test").Drop(ctx), t)
 }
 
 func TestMongoDBPutAndFetchAfter(t *testing.T) {
 	ctx := context.Background()
 	store, mkvs := getMongoDBWindowStore(ctx, false, t)
-	checkErr(mkvs.client.Database("test").Drop(ctx), t)
+	checkErr(mkvs.config.Client.Database("test").Drop(ctx), t)
 	PutAndFetchAfterTest(ctx, store, t)
-	checkErr(mkvs.client.Database("test").Drop(ctx), t)
+	checkErr(mkvs.config.Client.Database("test").Drop(ctx), t)
 }
 
 func TestMongoDBPutSameKeyTs(t *testing.T) {
 	ctx := context.Background()
 	store, mkvs := getMongoDBWindowStore(ctx, true, t)
-	checkErr(mkvs.client.Database("test").Drop(ctx), t)
+	checkErr(mkvs.config.Client.Database("test").Drop(ctx), t)
 	PutSameKeyTsTest(ctx, store, t)
-	checkErr(mkvs.client.Database("test").Drop(ctx), t)
+	checkErr(mkvs.config.Client.Database("test").Drop(ctx), t)
 }
 
 func TestRolling(t *testing.T) {
 	ctx := context.Background()
 	store, mkvs := getMongoDBWindowStore(ctx, false, t)
-	checkErr(mkvs.client.Database("test").Drop(ctx), t)
+	checkErr(mkvs.config.Client.Database("test").Drop(ctx), t)
 	segmentInterval := TEST_RETENTION_PERIOD / 2
 	if segmentInterval < 60_000 {
 		segmentInterval = 60_000
@@ -117,21 +121,21 @@ func TestRolling(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 	RollingTest(ctx, store, segments, t)
-	checkErr(mkvs.client.Database("test").Drop(ctx), t)
+	checkErr(mkvs.config.Client.Database("test").Drop(ctx), t)
 }
 
 func TestFetchDuplicates(t *testing.T) {
 	ctx := context.Background()
 	store, mkvs := getMongoDBWindowStore(ctx, true, t)
-	checkErr(mkvs.client.Database("test").Drop(ctx), t)
+	checkErr(mkvs.config.Client.Database("test").Drop(ctx), t)
 	FetchDuplicates(ctx, store, t)
-	checkErr(mkvs.client.Database("test").Drop(ctx), t)
+	checkErr(mkvs.config.Client.Database("test").Drop(ctx), t)
 }
 
 func TestMongoDBWindowStoreRestore(t *testing.T) {
 	ctx := context.Background()
 	store, mkvs := getMongoDBWindowStore(ctx, false, t)
-	checkErr(mkvs.client.Database("test").Drop(ctx), t)
+	checkErr(mkvs.config.Client.Database("test").Drop(ctx), t)
 	if err := store.Put(ctx, uint32(1), "one", 0); err != nil {
 		t.Fatal(err.Error())
 	}
@@ -157,7 +161,7 @@ func TestMongoDBWindowStoreRestore(t *testing.T) {
 		3: {Value: "three", Timestamp: TEST_WINDOW_SIZE * 2},
 	}
 	checkKVTsMapEqual(t, expected, ret)
-	checkErr(mkvs.client.Database("test").Drop(ctx), t)
+	checkErr(mkvs.config.Client.Database("test").Drop(ctx), t)
 }
 
 func checkKVTsMapEqual(t testing.TB, expected map[uint32]commtypes.ValueTimestamp, got map[uint32]commtypes.ValueTimestamp) {
@@ -177,7 +181,7 @@ func TestMongoDBWindowStoreRestore2(t *testing.T) {
 	startTime := TEST_SEGMENT_INTERVAL * 2
 	increment := TEST_SEGMENT_INTERVAL / 2
 	wstore, mkvs := getMongoDBWindowStore(ctx, false, t)
-	checkErr(mkvs.client.Database("test").Drop(ctx), t)
+	checkErr(mkvs.config.Client.Database("test").Drop(ctx), t)
 	if err := wstore.Put(ctx, uint32(0), "zero", startTime); err != nil {
 		t.Fatal(err.Error())
 	}
@@ -294,5 +298,5 @@ func TestMongoDBWindowStoreRestore2(t *testing.T) {
 	if !reflect.DeepEqual(expected, ret) {
 		t.Fatal("should equal")
 	}
-	checkErr(mkvs.client.Database("test").Drop(ctx), t)
+	checkErr(mkvs.config.Client.Database("test").Drop(ctx), t)
 }

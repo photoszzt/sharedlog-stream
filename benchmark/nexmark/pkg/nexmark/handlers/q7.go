@@ -278,8 +278,12 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 			}
 		}
 	} else if input.TableType == uint8(store.MONGODB) {
+		client, err := store.InitMongoDBClient(ctx, input.MongoAddr)
+		if err != nil {
+			return &common.FnOutput{Success: false, Message: err.Error()}
+		}
 		wstore, err = processor.CreateMongoDBWindoeTable(ctx, maxPriceBidStoreName,
-			input.MongoAddr, tw.MaxSize()+tw.GracePeriodMs(), tw.MaxSize(),
+			client, tw.MaxSize()+tw.GracePeriodMs(), tw.MaxSize(),
 			commtypes.Uint64Serde{}, vtSerde)
 		if err != nil {
 			return &common.FnOutput{

@@ -7,6 +7,8 @@ import (
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/treemap"
+
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type StoreToKVTableProcessor struct {
@@ -62,12 +64,12 @@ func ToInMemKVTable(storeName string, compare func(a, b treemap.Key) int) (*Mete
 
 func ToMongoDBKVTable(ctx context.Context,
 	dbName string,
-	mongoAddr string,
+	client *mongo.Client,
 	keySerde commtypes.Serde,
 	valSerde commtypes.Serde,
 ) (*MeteredProcessor, store.KeyValueStore, error) {
 	mkvs, err := store.NewMongoDBKeyValueStore(ctx, &store.MongoDBConfig{
-		Addr:           mongoAddr,
+		Client:         client,
 		CollectionName: dbName,
 		DBName:         dbName,
 		KeySerde:       keySerde,

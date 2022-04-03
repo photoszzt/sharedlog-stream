@@ -231,8 +231,12 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		})
 		kvstore = store.NewKeyValueStoreWithChangelog(mp, inMemStore, false)
 	} else if sp.TableType == uint8(store.MONGODB) {
+		client, err := store.InitMongoDBClient(ctx, sp.MongoAddr)
+		if err != nil {
+			return &common.FnOutput{Success: false, Message: err.Error()}
+		}
 		kvstore, err = store.NewMongoDBKeyValueStore(ctx, &store.MongoDBConfig{
-			Addr:           sp.MongoAddr,
+			Client:         client,
 			CollectionName: maxBidStoreName,
 			DBName:         maxBidStoreName,
 			KeySerde:       seSerde,

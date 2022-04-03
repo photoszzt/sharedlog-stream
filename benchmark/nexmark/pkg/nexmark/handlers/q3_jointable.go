@@ -296,13 +296,17 @@ func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 		} else {
 			panic("unrecognized serde format")
 		}
+		client, err := store.InitMongoDBClient(ctx, mongoAddr)
+		if err != nil {
+			return nil, err
+		}
 		toAuctionsTable, auctionsStore, err := processor.ToMongoDBKVTable(ctx, "auctionsBySellerIDStore",
-			mongoAddr, sss.keySerdes[0], vtSerde0)
+			client, sss.keySerdes[0], vtSerde0)
 		if err != nil {
 			return nil, err
 		}
 		toPersonsTable, personsStore, err := processor.ToMongoDBKVTable(ctx, "personsByIDStore",
-			mongoAddr, sss.keySerdes[1], vtSerde1)
+			client, sss.keySerdes[1], vtSerde1)
 		if err != nil {
 			return nil, err
 		}

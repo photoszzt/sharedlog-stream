@@ -17,12 +17,15 @@ func getStreamJoinMongoDB(ctx context.Context, joinWindows *JoinWindows, dbName1
 	store.WindowStore,
 	store.WindowStore,
 ) {
-	mongoAddr := "mongodb://localhost:27017"
-	toWinTab1, winTab1, err := ToMongoDBWindowTable(ctx, dbName1, mongoAddr, joinWindows, commtypes.IntSerde{}, commtypes.StringSerde{})
+	client, err := store.InitMongoDBClient(ctx, "mongodb://localhost:27017")
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	toWinTab2, winTab2, err := ToMongoDBWindowTable(ctx, dbName2, mongoAddr, joinWindows, commtypes.IntSerde{}, commtypes.StringSerde{})
+	toWinTab1, winTab1, err := ToMongoDBWindowTable(ctx, dbName1, client, joinWindows, commtypes.IntSerde{}, commtypes.StringSerde{})
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	toWinTab2, winTab2, err := ToMongoDBWindowTable(ctx, dbName2, client, joinWindows, commtypes.IntSerde{}, commtypes.StringSerde{})
 	if err != nil {
 		t.Fatal(err.Error())
 	}

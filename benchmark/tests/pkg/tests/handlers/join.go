@@ -129,11 +129,15 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	msgSerde := commtypes.MessageSerializedJSONSerde{}
 	kSerde := commtypes.IntSerde{}
 	vSerde := strTsJSONSerde{}
-	toWinTab1, winTab1, err := processor.ToMongoDBWindowTable(ctx, "tab1Mongo", mongoAddr, joinWindows, kSerde, vSerde)
+	client, err := store.InitMongoDBClient(ctx, mongoAddr)
 	if err != nil {
 		panic(err)
 	}
-	toWinTab2, winTab2, err := processor.ToMongoDBWindowTable(ctx, "tab2Mongo", mongoAddr, joinWindows, kSerde, vSerde)
+	toWinTab1, winTab1, err := processor.ToMongoDBWindowTable(ctx, "tab1Mongo", client, joinWindows, kSerde, vSerde)
+	if err != nil {
+		panic(err)
+	}
+	toWinTab2, winTab2, err := processor.ToMongoDBWindowTable(ctx, "tab2Mongo", client, joinWindows, kSerde, vSerde)
 	if err != nil {
 		panic(err)
 	}
