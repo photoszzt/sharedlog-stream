@@ -315,7 +315,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 					chooseMaxCnt: chooseMaxCnt.InnerProcessor(),
 					src:          src.InnerSource(),
 					parNum:       sp.ParNum,
-				}, sp.ParNum),
+				}, fmt.Sprintf("%s-%s-%d", h.funcName, kvstore.Name(), sp.ParNum), sp.ParNum),
 			}
 		} else {
 			panic("unrecognized table type")

@@ -665,7 +665,7 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context, kvstores []
 	if err != nil {
 		return err
 	}
-	if err := CommitKVStoreTransaction(ctx, kvstores, tc.TransactionalId, tc.TransactionID); err != nil {
+	if err := CommitKVStoreTransaction(ctx, kvstores, tc.TransactionID); err != nil {
 		return err
 	}
 	if err := CommitWindowStoreTransaction(ctx, winstores, tc.TransactionalId, tc.TransactionID); err != nil {

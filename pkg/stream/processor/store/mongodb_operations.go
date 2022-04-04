@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"sharedlog-stream/pkg/debug"
+	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -25,6 +26,7 @@ func RunTranFuncWithRetry(sctx mongo.SessionContext, txnFn func(mongo.SessionCon
 			return nil
 		}
 		if cmdErr, ok := err.(mongo.CommandError); ok && cmdErr.HasErrorLabel("TransientTransactionError") {
+			time.Sleep(time.Duration(10) * time.Millisecond)
 			continue
 		}
 		return err
@@ -39,7 +41,11 @@ func CommitWithRetry(sctx mongo.SessionContext) error {
 			return nil
 		case mongo.CommandError:
 			if e.HasErrorLabel("UnknownTransactionCommitResult") {
+				time.Sleep(time.Duration(10) * time.Millisecond)
 				continue
+			}
+			if e.HasErrorLabel("TransientTransactionError") {
+				_ = sctx.AbortTransaction(context.Background())
 			}
 			debug.Fprintf(os.Stderr, "commit error is %v, code %d, labels %v\n", e, e.Code, e.Labels)
 			return e

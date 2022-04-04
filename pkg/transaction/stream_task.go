@@ -245,7 +245,7 @@ func restoreMongoDBKVStore(
 	t *StreamTask,
 	kvchangelog *KVStoreChangelog,
 ) error {
-	storeTranID, found, err := kvchangelog.KVStore.GetTransactionID(ctx, tm.TransactionalId)
+	storeTranID, found, err := kvchangelog.KVStore.GetTransactionID(ctx, kvchangelog.TabTranRepr)
 	if err != nil {
 		return err
 	}

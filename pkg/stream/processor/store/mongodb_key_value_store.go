@@ -27,6 +27,7 @@ type MongoDBKeyValueStore struct {
 	sessCtx       mongo.SessionContext
 	config        *MongoDBConfig
 	indexCreation map[string]struct{}
+	op_log        []kv_op
 	inTransaction bool
 }
 
@@ -39,10 +40,26 @@ type MongoDBConfig struct {
 	DBName string
 }
 
+type KV_OP uint8
+
+const (
+	PUT    KV_OP = 0
+	DELETE KV_OP = 1
+)
+
+type kv_op struct {
+	op         KV_OP
+	key        []byte
+	val        []byte
+	collection string
+}
+
 var _ = KeyValueStore(&MongoDBKeyValueStore{})
 
 func NewMongoDBKeyValueStore(ctx context.Context, config *MongoDBConfig) (*MongoDBKeyValueStore, error) {
 	debug.Assert(config.Client != nil, "mongo db connection should be created first")
+	debug.Assert(config.CollectionName != "", "collection name should not be empty")
+	debug.Assert(config.DBName != "", "db name should not be empty")
 	/*
 		col := client.Database(config.DBName).Collection(config.CollectionName)
 
@@ -67,9 +84,9 @@ func (s *MongoDBKeyValueStore) DropDatabase(ctx context.Context) error {
 }
 
 func (s *MongoDBKeyValueStore) StartTransaction(ctx context.Context) error {
-	debug.Fprint(os.Stderr, "start mongo transaction\n")
 	session, err := s.config.Client.StartSession()
 	if err != nil {
+		debug.Fprintf(os.Stderr, "fail to start session\n")
 		return err
 	}
 	s.session = session
@@ -80,22 +97,27 @@ func (s *MongoDBKeyValueStore) StartTransaction(ctx context.Context) error {
 		SetReadConcern(readconcern.Snapshot()).
 		SetWriteConcern(writeconcern.New(writeconcern.WMajority()))
 	if err = session.StartTransaction(tranOpts); err != nil {
+		debug.Fprintf(os.Stderr, "fail to start transaction\n")
 		return err
 	}
 	s.inTransaction = true
+	s.op_log = make([]kv_op, 0, 100)
 	return nil
 }
 
-func (s *MongoDBKeyValueStore) CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error {
+func (s *MongoDBKeyValueStore) CommitTransaction(ctx context.Context,
+	taskRepr string, transactionID uint64) error {
 	err := RunTranFuncWithRetry(s.sessCtx, func(sc mongo.SessionContext) error {
 		col := s.config.Client.Database(taskRepr).Collection(taskRepr)
-		debug.Fprintf(os.Stderr, "update tranID to %d for db %s task %s\n", transactionID, s.config.DBName, taskRepr)
+		debug.Fprintf(os.Stderr, "update tranID to %d for db %s task %s\n", transactionID, taskRepr, taskRepr)
 		opts := options.Update().SetUpsert(true)
 		_, err := col.UpdateOne(sc, bson.M{KEY_NAME: "tranID"},
 			bson.M{"$set": bson.M{VALUE_NAME: transactionID}}, opts)
 		if err != nil {
-			debug.Fprintf(os.Stderr, "abort transaction due to err of UpdateOne: %v\n", err)
-			_ = sc.AbortTransaction(context.Background())
+			if cmdErr, ok := err.(mongo.CommandError); ok && !cmdErr.HasErrorLabel("TransientTransactionError") {
+				debug.Fprintf(os.Stderr, "abort transaction due to err of UpdateOne: %v\n", err)
+				_ = sc.AbortTransaction(context.Background())
+			}
 		}
 		return err
 	})
@@ -104,12 +126,39 @@ func (s *MongoDBKeyValueStore) CommitTransaction(ctx context.Context, taskRepr s
 	}
 
 	if err := CommitWithRetry(s.sessCtx); err != nil {
+		if cmdErr, ok := err.(mongo.CommandError); ok && cmdErr.HasErrorLabel("TransientTransactionError") {
+			return s.redoTransaction(ctx)
+		}
 		return err
 	}
 	s.session.EndSession(s.sessCtx)
 	s.inTransaction = false
 	s.sessCtx = nil
+	debug.Fprintf(os.Stderr, "%s transaction committed\n", s.Name())
 	return nil
+}
+
+func (s *MongoDBKeyValueStore) redoTransaction(ctx context.Context) error {
+	for {
+		err := s.StartTransaction(ctx)
+		if err != nil {
+			return err
+		}
+		err = s.replayOpLog(ctx)
+		if err != nil {
+			return err
+		}
+		err = CommitWithRetry(s.sessCtx)
+		if err == nil {
+			return nil
+		}
+		if cmdErr, ok := err.(mongo.CommandError); ok && cmdErr.HasErrorLabel("TransientTransactionError") {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+	}
 }
 
 func (s *MongoDBKeyValueStore) AbortTransaction(ctx context.Context) error {
@@ -119,6 +168,7 @@ func (s *MongoDBKeyValueStore) AbortTransaction(ctx context.Context) error {
 	s.session.EndSession(ctx)
 	s.inTransaction = false
 	s.sessCtx = nil
+	debug.Fprintf(os.Stderr, "%s transaction aborted", s.Name())
 	return nil
 }
 
@@ -165,6 +215,8 @@ func (s *MongoDBKeyValueStore) GetWithCollection(ctx context.Context, kBytes []b
 		col := s.config.Client.Database(s.config.DBName).Collection(collection)
 		err = col.FindOne(ctx, bson.M{KEY_NAME: kBytes}).Decode(&result)
 	} else {
+		debug.Assert(s.sessCtx != nil, "session ctx should not be nil")
+		debug.Assert(s.session != nil, "session should not be nil")
 		err = RunTranFuncWithRetry(s.sessCtx, func(sc mongo.SessionContext) error {
 			col := s.config.Client.Database(s.config.DBName).Collection(collection)
 			err = col.FindOne(sc, bson.M{KEY_NAME: kBytes}).Decode(&result)
@@ -215,6 +267,8 @@ func (s *MongoDBKeyValueStore) RangeWithCollection(ctx context.Context,
 		col := s.config.Client.Database(s.config.DBName).Collection(collection)
 		cur, err = col.Find(ctx, condition, opts)
 	} else {
+		debug.Assert(s.sessCtx != nil, "session ctx should not be nil")
+		debug.Assert(s.session != nil, "session should not be nil")
 		err = RunTranFuncWithRetry(s.sessCtx, func(sc mongo.SessionContext) error {
 			opts := options.Find().SetSort(bson.M{KEY_NAME: 1})
 			col := s.config.Client.Database(s.config.DBName).Collection(collection)
@@ -223,7 +277,7 @@ func (s *MongoDBKeyValueStore) RangeWithCollection(ctx context.Context,
 				if err != mongo.ErrNoDocuments {
 					if cmdErr, ok := err.(mongo.CommandError); ok && !cmdErr.HasErrorLabel("TransientTransactionError") {
 						debug.Fprintf(os.Stderr, "abort transaction due to err of Find: %v\n", err)
-						_ = s.sessCtx.AbortTransaction(context.Background())
+						_ = sc.AbortTransaction(context.Background())
 					}
 				}
 			}
@@ -326,14 +380,10 @@ func (s *MongoDBKeyValueStore) PutWithCollection(ctx context.Context, kBytes []b
 			}
 		*/
 		// fmt.Fprintf(os.Stderr, "put k: %v, val: %v\n", kBytes, vBytes)
-		ctx_tmp := ctx
-		if s.inTransaction {
-			ctx_tmp = s.sessCtx
-		}
 		opts := options.Update().SetUpsert(true)
 		if !s.inTransaction {
 			col := s.config.Client.Database(s.config.DBName).Collection(collection)
-			_, err = col.UpdateOne(ctx_tmp, bson.M{KEY_NAME: kBytes},
+			_, err = col.UpdateOne(ctx, bson.M{KEY_NAME: kBytes},
 				bson.M{"$set": bson.M{VALUE_NAME: vBytes}}, opts)
 		} else {
 			err = RunTranFuncWithRetry(s.sessCtx, func(sc mongo.SessionContext) error {
@@ -343,11 +393,12 @@ func (s *MongoDBKeyValueStore) PutWithCollection(ctx context.Context, kBytes []b
 				if err != nil {
 					if cmdErr, ok := err.(mongo.CommandError); ok && !cmdErr.HasErrorLabel("TransientTransactionError") {
 						debug.Fprintf(os.Stderr, "abort transaction due to err of UpdateOne in Put: %v\n", err)
-						_ = s.sessCtx.AbortTransaction(context.Background())
+						_ = sc.AbortTransaction(context.Background())
 					}
 				}
 				return err
 			})
+			s.op_log = append(s.op_log, kv_op{op: PUT, key: kBytes, val: vBytes, collection: collection})
 		}
 		return err
 	}
@@ -376,7 +427,10 @@ func (s *MongoDBKeyValueStore) DeleteWithCollection(ctx context.Context,
 	col := s.config.Client.Database(s.config.DBName).Collection(collection)
 	ctx_tmp := ctx
 	if s.inTransaction {
+		debug.Assert(s.sessCtx != nil, "session ctx should not be nil")
+		debug.Assert(s.session != nil, "session should not be nil")
 		ctx_tmp = s.sessCtx
+		s.op_log = append(s.op_log, kv_op{op: DELETE, key: kBytes, val: nil, collection: collection})
 	}
 	debug.Fprintf(os.Stderr, "delete %v in col %s", kBytes, collection)
 	_, err := col.DeleteOne(ctx_tmp, bson.M{KEY_NAME: kBytes})
@@ -386,6 +440,23 @@ func (s *MongoDBKeyValueStore) DeleteWithCollection(ctx context.Context,
 			_ = s.sessCtx.AbortTransaction(context.Background())
 		}
 		return err
+	}
+	return nil
+}
+
+func (s *MongoDBKeyValueStore) replayOpLog(ctx context.Context) error {
+	for _, log_entry := range s.op_log {
+		if log_entry.op == PUT {
+			err := s.PutWithCollection(ctx, log_entry.key, log_entry.val, log_entry.collection)
+			if err != nil {
+				return err
+			}
+		} else if log_entry.op == DELETE {
+			err := s.DeleteWithCollection(ctx, log_entry.key, log_entry.collection)
+			if err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

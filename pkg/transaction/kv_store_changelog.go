@@ -3,6 +3,7 @@ package transaction
 import (
 	"context"
 	"fmt"
+	"os"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -17,6 +18,8 @@ type KVStoreChangelog struct {
 	InputStream store.Stream
 	RestoreFunc func(ctx context.Context, args interface{}) error
 	RestoreArg  interface{}
+	// this is used to identify the db and collection to store the transaction id
+	TabTranRepr string
 	// when used by changelog backed kv store, parnum is the parnum of changelog
 	// when used by mongodb, parnum is the parnum of the input streams
 	ParNum uint8
@@ -43,6 +46,7 @@ func NewKVStoreChangelogForExternalStore(
 	inputStream store.Stream,
 	restoreFunc func(ctx context.Context, args interface{}) error,
 	restoreArg interface{},
+	tabTranRepr string,
 	parNum uint8,
 ) *KVStoreChangelog {
 	return &KVStoreChangelog{
@@ -51,12 +55,15 @@ func NewKVStoreChangelogForExternalStore(
 		RestoreFunc: restoreFunc,
 		RestoreArg:  restoreArg,
 		ParNum:      parNum,
+		TabTranRepr: tabTranRepr,
 	}
 }
 
 func BeginKVStoreTransaction(ctx context.Context, kvstores []*KVStoreChangelog) error {
 	for _, kvstorelog := range kvstores {
 		if kvstorelog.KVStore.TableType() == store.MONGODB {
+			debug.Fprintf(os.Stderr, "id %s %d start mongo transaction for db %s\n",
+				ctx.Value("id"), kvstorelog.ParNum, kvstorelog.KVStore.Name())
 			if err := kvstorelog.KVStore.StartTransaction(ctx); err != nil {
 				return err
 			}
@@ -65,12 +72,12 @@ func BeginKVStoreTransaction(ctx context.Context, kvstores []*KVStoreChangelog) 
 	return nil
 }
 
-func CommitKVStoreTransaction(ctx context.Context, kvstores []*KVStoreChangelog,
-	taskRepr string, transactionID uint64,
-) error {
+func CommitKVStoreTransaction(ctx context.Context, kvstores []*KVStoreChangelog, transactionID uint64) error {
 	for _, kvstorelog := range kvstores {
 		if kvstorelog.KVStore.TableType() == store.MONGODB {
-			if err := kvstorelog.KVStore.CommitTransaction(ctx, taskRepr, transactionID); err != nil {
+			debug.Fprintf(os.Stderr, "id %s %d commit mongo transaction for db %s\n",
+				ctx.Value("id"), kvstorelog.ParNum, kvstorelog.KVStore.Name())
+			if err := kvstorelog.KVStore.CommitTransaction(ctx, kvstorelog.TabTranRepr, transactionID); err != nil {
 				return err
 			}
 		}
