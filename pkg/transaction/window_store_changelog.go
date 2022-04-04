@@ -19,7 +19,9 @@ type WindowStoreChangelog struct {
 	InputStream      store.Stream
 	RestoreFunc      func(ctx context.Context, args interface{}) error
 	RestoreArg       interface{}
-	ParNum           uint8
+	// this is used to identify the db and collection to store the transaction id
+	TabTranRepr string
+	ParNum      uint8
 }
 
 func NewWindowStoreChangelog(
@@ -45,6 +47,7 @@ func NewWindowStoreChangelogForExternalStore(
 	inputStream store.Stream,
 	restoreFunc func(ctx context.Context, args interface{}) error,
 	restoreArg interface{},
+	tabTranRepr string,
 	parNum uint8,
 ) *WindowStoreChangelog {
 	return &WindowStoreChangelog{
@@ -53,6 +56,7 @@ func NewWindowStoreChangelogForExternalStore(
 		RestoreFunc: restoreFunc,
 		RestoreArg:  restoreArg,
 		ParNum:      parNum,
+		TabTranRepr: tabTranRepr,
 	}
 }
 
@@ -67,10 +71,10 @@ func BeginWindowStoreTransaction(ctx context.Context, winstores []*WindowStoreCh
 	return nil
 }
 
-func CommitWindowStoreTransaction(ctx context.Context, winstores []*WindowStoreChangelog, taskRepr string, transactionID uint64) error {
+func CommitWindowStoreTransaction(ctx context.Context, winstores []*WindowStoreChangelog, transactionID uint64) error {
 	for _, winstorelog := range winstores {
 		if winstorelog.WinStore.TableType() == store.MONGODB {
-			if err := winstorelog.WinStore.CommitTransaction(ctx, taskRepr, transactionID); err != nil {
+			if err := winstorelog.WinStore.CommitTransaction(ctx, winstorelog.TabTranRepr, transactionID); err != nil {
 				return err
 			}
 		}

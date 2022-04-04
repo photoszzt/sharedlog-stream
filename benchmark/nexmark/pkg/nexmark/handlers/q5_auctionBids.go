@@ -364,7 +364,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 						groupByAuction: groupByAuction.InnerProcessor(),
 						src:            src.InnerSource(),
 						parNum:         sp.ParNum,
-					}, sp.ParNum),
+					}, fmt.Sprintf("%s-%s-%d", h.funcName, countStore.Name(), sp.ParNum), sp.ParNum),
 			}
 		} else {
 			panic("unrecognized table type")

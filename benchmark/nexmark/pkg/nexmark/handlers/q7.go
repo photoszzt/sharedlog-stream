@@ -349,7 +349,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 						maxPriceBid:        maxPriceBid.InnerProcessor(),
 						transformWithStore: transformWithStore.InnerProcessor(),
 						filterTime:         filterTime.InnerProcessor(),
-					}, input.ParNum),
+					}, fmt.Sprintf("%s-%s-%d", h.funcName, wstore.Name(), input.ParNum), input.ParNum),
 			}
 		} else {
 			panic("unrecognized table type")

@@ -422,14 +422,14 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 						src:    sss.src1.InnerSource(),
 						parNum: sp.ParNum,
 						runner: aJoinP,
-					}, sp.ParNum),
+					}, fmt.Sprintf("%s-%s-%d", h.funcName, auctionsWinStore.Name(), sp.ParNum), sp.ParNum),
 				transaction.NewWindowStoreChangelogForExternalStore(
 					personsWinTab, personsStream, joinProcSerialWithoutSink,
 					&joinProcWithoutSinkArgs{
 						src:    sss.src2.InnerSource(),
 						parNum: sp.ParNum,
 						runner: pJoinA,
-					}, sp.ParNum),
+					}, fmt.Sprintf("%s-%s-%d", h.funcName, personsWinTab.Name(), sp.ParNum), sp.ParNum),
 			}
 		} else {
 			panic("unrecognized table type")
