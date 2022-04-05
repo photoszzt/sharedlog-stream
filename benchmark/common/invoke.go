@@ -145,6 +145,8 @@ func Invoke(config_file string, gateway_url string,
 		if sourceOutput[idx].Success {
 			ProcessThroughputLat(fmt.Sprintf("source-%d", idx),
 				sourceOutput[idx].Latencies, sourceOutput[idx].Consumed, sourceOutput[idx].Duration)
+		} else {
+			fmt.Fprintf(os.Stderr, "source-%d failed\n", idx)
 		}
 	}
 
@@ -155,6 +157,8 @@ func Invoke(config_file string, gateway_url string,
 			if output[j].Success {
 				ProcessThroughputLat(fmt.Sprintf("%s-%d", funcName, j),
 					output[j].Latencies, output[j].Consumed, output[j].Duration)
+			} else {
+				fmt.Fprintf(os.Stderr, "%s-%d failed\n", funcName, j)
 			}
 		}
 	}

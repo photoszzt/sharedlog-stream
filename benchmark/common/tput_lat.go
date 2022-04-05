@@ -47,10 +47,10 @@ func ProcessThroughputLat(name string, latencies map[string][]int, consumed map[
 				debug.Fprint(os.Stderr, "consumed is empty")
 			}
 			tput := float64(processed) / sumTime
-			fmt.Fprintf(os.Stdout, "sum of %s time: %v ", n, sumTime)
-			fmt.Fprintf(os.Stdout, "processed: %v, throughput: (event/s) %v, p50: %d us, p90: %d us, p99: %d us\n",
+			fmt.Fprintf(os.Stderr, "sum of %s time: %v ", n, sumTime)
+			fmt.Fprintf(os.Stderr, "processed: %v, throughput: (event/s) %v, p50: %d us, p90: %d us, p99: %d us\n",
 				processed, tput, ts.p(0.5), ts.p(0.9), ts.p(0.99))
 		}
 	}
-	fmt.Fprintf(os.Stdout, "%s duration: %v\n\n", name, duration)
+	fmt.Fprintf(os.Stderr, "%s duration: %v\n\n", name, duration)
 }
