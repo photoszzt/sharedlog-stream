@@ -60,6 +60,12 @@ func (z *ControlMetadata) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Topic")
 				return
 			}
+		case "FinishedPrevTask":
+			z.FinishedPrevTask, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "FinishedPrevTask")
+				return
+			}
 		case "Key":
 			z.Key, err = dc.ReadBytes(z.Key)
 			if err != nil {
@@ -72,22 +78,16 @@ func (z *ControlMetadata) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Epoch")
 				return
 			}
-		case "SubstreamId":
-			z.SubstreamId, err = dc.ReadUint8()
-			if err != nil {
-				err = msgp.WrapError(err, "SubstreamId")
-				return
-			}
-		case "FinishedPrevTask":
-			z.FinishedPrevTask, err = dc.ReadString()
-			if err != nil {
-				err = msgp.WrapError(err, "FinishedPrevTask")
-				return
-			}
 		case "InstanceId":
 			z.InstanceId, err = dc.ReadUint8()
 			if err != nil {
 				err = msgp.WrapError(err, "InstanceId")
+				return
+			}
+		case "SubstreamId":
+			z.SubstreamId, err = dc.ReadUint8()
+			if err != nil {
+				err = msgp.WrapError(err, "SubstreamId")
 				return
 			}
 		default:
@@ -136,6 +136,16 @@ func (z *ControlMetadata) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Topic")
 		return
 	}
+	// write "FinishedPrevTask"
+	err = en.Append(0xb0, 0x46, 0x69, 0x6e, 0x69, 0x73, 0x68, 0x65, 0x64, 0x50, 0x72, 0x65, 0x76, 0x54, 0x61, 0x73, 0x6b)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.FinishedPrevTask)
+	if err != nil {
+		err = msgp.WrapError(err, "FinishedPrevTask")
+		return
+	}
 	// write "Key"
 	err = en.Append(0xa3, 0x4b, 0x65, 0x79)
 	if err != nil {
@@ -156,26 +166,6 @@ func (z *ControlMetadata) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Epoch")
 		return
 	}
-	// write "SubstreamId"
-	err = en.Append(0xab, 0x53, 0x75, 0x62, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x49, 0x64)
-	if err != nil {
-		return
-	}
-	err = en.WriteUint8(z.SubstreamId)
-	if err != nil {
-		err = msgp.WrapError(err, "SubstreamId")
-		return
-	}
-	// write "FinishedPrevTask"
-	err = en.Append(0xb0, 0x46, 0x69, 0x6e, 0x69, 0x73, 0x68, 0x65, 0x64, 0x50, 0x72, 0x65, 0x76, 0x54, 0x61, 0x73, 0x6b)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.FinishedPrevTask)
-	if err != nil {
-		err = msgp.WrapError(err, "FinishedPrevTask")
-		return
-	}
 	// write "InstanceId"
 	err = en.Append(0xaa, 0x49, 0x6e, 0x73, 0x74, 0x61, 0x6e, 0x63, 0x65, 0x49, 0x64)
 	if err != nil {
@@ -184,6 +174,16 @@ func (z *ControlMetadata) EncodeMsg(en *msgp.Writer) (err error) {
 	err = en.WriteUint8(z.InstanceId)
 	if err != nil {
 		err = msgp.WrapError(err, "InstanceId")
+		return
+	}
+	// write "SubstreamId"
+	err = en.Append(0xab, 0x53, 0x75, 0x62, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x49, 0x64)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint8(z.SubstreamId)
+	if err != nil {
+		err = msgp.WrapError(err, "SubstreamId")
 		return
 	}
 	return
@@ -203,21 +203,21 @@ func (z *ControlMetadata) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "Topic"
 	o = append(o, 0xa5, 0x54, 0x6f, 0x70, 0x69, 0x63)
 	o = msgp.AppendString(o, z.Topic)
+	// string "FinishedPrevTask"
+	o = append(o, 0xb0, 0x46, 0x69, 0x6e, 0x69, 0x73, 0x68, 0x65, 0x64, 0x50, 0x72, 0x65, 0x76, 0x54, 0x61, 0x73, 0x6b)
+	o = msgp.AppendString(o, z.FinishedPrevTask)
 	// string "Key"
 	o = append(o, 0xa3, 0x4b, 0x65, 0x79)
 	o = msgp.AppendBytes(o, z.Key)
 	// string "Epoch"
 	o = append(o, 0xa5, 0x45, 0x70, 0x6f, 0x63, 0x68)
 	o = msgp.AppendUint64(o, z.Epoch)
-	// string "SubstreamId"
-	o = append(o, 0xab, 0x53, 0x75, 0x62, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x49, 0x64)
-	o = msgp.AppendUint8(o, z.SubstreamId)
-	// string "FinishedPrevTask"
-	o = append(o, 0xb0, 0x46, 0x69, 0x6e, 0x69, 0x73, 0x68, 0x65, 0x64, 0x50, 0x72, 0x65, 0x76, 0x54, 0x61, 0x73, 0x6b)
-	o = msgp.AppendString(o, z.FinishedPrevTask)
 	// string "InstanceId"
 	o = append(o, 0xaa, 0x49, 0x6e, 0x73, 0x74, 0x61, 0x6e, 0x63, 0x65, 0x49, 0x64)
 	o = msgp.AppendUint8(o, z.InstanceId)
+	// string "SubstreamId"
+	o = append(o, 0xab, 0x53, 0x75, 0x62, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x49, 0x64)
+	o = msgp.AppendUint8(o, z.SubstreamId)
 	return
 }
 
@@ -275,6 +275,12 @@ func (z *ControlMetadata) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Topic")
 				return
 			}
+		case "FinishedPrevTask":
+			z.FinishedPrevTask, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "FinishedPrevTask")
+				return
+			}
 		case "Key":
 			z.Key, bts, err = msgp.ReadBytesBytes(bts, z.Key)
 			if err != nil {
@@ -287,22 +293,16 @@ func (z *ControlMetadata) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Epoch")
 				return
 			}
-		case "SubstreamId":
-			z.SubstreamId, bts, err = msgp.ReadUint8Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "SubstreamId")
-				return
-			}
-		case "FinishedPrevTask":
-			z.FinishedPrevTask, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "FinishedPrevTask")
-				return
-			}
 		case "InstanceId":
 			z.InstanceId, bts, err = msgp.ReadUint8Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "InstanceId")
+				return
+			}
+		case "SubstreamId":
+			z.SubstreamId, bts, err = msgp.ReadUint8Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "SubstreamId")
 				return
 			}
 		default:
@@ -326,6 +326,6 @@ func (z *ControlMetadata) Msgsize() (s int) {
 			s += msgp.StringPrefixSize + len(za0001) + msgp.Uint8Size
 		}
 	}
-	s += 6 + msgp.StringPrefixSize + len(z.Topic) + 4 + msgp.BytesPrefixSize + len(z.Key) + 6 + msgp.Uint64Size + 12 + msgp.Uint8Size + 17 + msgp.StringPrefixSize + len(z.FinishedPrevTask) + 11 + msgp.Uint8Size
+	s += 6 + msgp.StringPrefixSize + len(z.Topic) + 17 + msgp.StringPrefixSize + len(z.FinishedPrevTask) + 4 + msgp.BytesPrefixSize + len(z.Key) + 6 + msgp.Uint64Size + 11 + msgp.Uint8Size + 12 + msgp.Uint8Size
 	return
 }

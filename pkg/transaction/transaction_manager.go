@@ -31,22 +31,21 @@ const (
 // one goroutine could update it
 type TransactionManager struct {
 	backgroundJobCtx      context.Context
-	msgSerde              commtypes.MsgSerde
 	txnMdSerde            commtypes.Serde
 	topicPartitionSerde   commtypes.Serde
 	txnMarkerSerde        commtypes.Serde
 	offsetRecordSerde     commtypes.Serde
-	topicStreams          map[string]store.Stream
+	env                   types.Environment
 	transactionLog        *sharedlog_stream.SharedLogStream
-	currentTopicPartition map[string]map[uint8]struct{}
+	topicStreams          map[string]store.Stream
 	backgroundJobErrg     *errgroup.Group
+	currentTopicPartition map[string]map[uint8]struct{}
 	TransactionalId       string
 	CurrentTaskId         uint64
+	TransactionID         uint64
 	CurrentEpoch          uint16
 	serdeFormat           commtypes.SerdeFormat
 	currentStatus         txn_data.TransactionState
-	TransactionID         uint64
-	env                   types.Environment
 }
 
 func BeginTag(nameHash uint64, parNum uint8) uint64 {
@@ -92,13 +91,11 @@ func NewTransactionManager(ctx context.Context,
 
 func (tc *TransactionManager) setupSerde(serdeFormat commtypes.SerdeFormat) error {
 	if serdeFormat == commtypes.JSON {
-		tc.msgSerde = commtypes.MessageSerializedJSONSerde{}
 		tc.txnMdSerde = txn_data.TxnMetadataJSONSerde{}
 		tc.topicPartitionSerde = txn_data.TopicPartitionJSONSerde{}
 		tc.txnMarkerSerde = txn_data.TxnMarkerJSONSerde{}
 		tc.offsetRecordSerde = txn_data.OffsetRecordJSONSerde{}
 	} else if serdeFormat == commtypes.MSGP {
-		tc.msgSerde = commtypes.MessageSerializedMsgpSerde{}
 		tc.txnMdSerde = txn_data.TxnMetadataMsgpSerde{}
 		tc.topicPartitionSerde = txn_data.TopicPartitionMsgpSerde{}
 		tc.txnMarkerSerde = txn_data.TxnMarkerMsgpSerde{}
@@ -151,11 +148,7 @@ func (tc *TransactionManager) getMostRecentTransactionState(ctx context.Context)
 		if rawMsg == nil {
 			return nil, nil
 		}
-		_, valEncoded, err := tc.msgSerde.Decode(rawMsg.Payload)
-		if err != nil {
-			return nil, err
-		}
-		val, err := tc.txnMdSerde.Decode(valEncoded)
+		val, err := tc.txnMdSerde.Decode(rawMsg.Payload)
 		if err != nil {
 			return nil, err
 		}
@@ -177,11 +170,7 @@ func (tc *TransactionManager) getMostRecentTransactionState(ctx context.Context)
 			return nil, err
 		}
 		for _, msg := range msgs {
-			_, valEncoded, err := tc.msgSerde.Decode(msg.Payload)
-			if err != nil {
-				return nil, err
-			}
-			val, err := tc.txnMdSerde.Decode(valEncoded)
+			val, err := tc.txnMdSerde.Decode(msg.Payload)
 			if err != nil {
 				return nil, err
 			}
@@ -329,12 +318,7 @@ func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, quit ch
 			errc <- err
 		} else {
 			for _, rawMsg := range rawMsgs {
-				_, valBytes, err := tc.msgSerde.Decode(rawMsg.Payload)
-				if err != nil {
-					errc <- err
-					break
-				}
-				txnMetaTmp, err := tc.txnMdSerde.Decode(valBytes)
+				txnMetaTmp, err := tc.txnMdSerde.Decode(rawMsg.Payload)
 				if err != nil {
 					errc <- err
 					break
@@ -357,16 +341,12 @@ func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, quit ch
 func (tc *TransactionManager) appendToTransactionLog(ctx context.Context, tm *txn_data.TxnMetadata, tags []uint64) error {
 	encoded, err := tc.txnMdSerde.Encode(tm)
 	if err != nil {
-		return err
-	}
-	msg_encoded, err := tc.msgSerde.Encode(nil, encoded)
-	if err != nil {
-		return err
+		return fmt.Errorf("txnMdSerde enc err: %v", tm)
 	}
 	if tags != nil {
-		_, err = tc.transactionLog.PushWithTag(ctx, msg_encoded, 0, tags, false)
+		_, err = tc.transactionLog.PushWithTag(ctx, encoded, 0, tags, false)
 	} else {
-		_, err = tc.transactionLog.Push(ctx, msg_encoded, 0, false)
+		_, err = tc.transactionLog.Push(ctx, encoded, 0, false)
 	}
 	return err
 }
@@ -577,11 +557,7 @@ func (tc *TransactionManager) FindConsumedSeqNumMatchesTransactionID(ctx context
 		if !txnMkRawMsg.IsControl {
 			continue
 		} else {
-			_, vBytes, err := tc.msgSerde.Decode(txnMkRawMsg.Payload)
-			if err != nil {
-				return 0, err
-			}
-			txnMarkerTmp, err := tc.txnMarkerSerde.Decode(vBytes)
+			txnMarkerTmp, err := tc.txnMarkerSerde.Decode(txnMkRawMsg.Payload)
 			if err != nil {
 				return 0, err
 			}

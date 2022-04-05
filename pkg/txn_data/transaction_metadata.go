@@ -72,7 +72,7 @@ type TxnMetadataMsgpSerde struct{}
 
 func (s TxnMetadataMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	tm := value.(*TxnMetadata)
-	return tm.UnmarshalMsg(nil)
+	return tm.MarshalMsg(nil)
 }
 
 func (s TxnMetadataMsgpSerde) Decode(value []byte) (interface{}, error) {
