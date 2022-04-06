@@ -5,6 +5,7 @@ import (
 	"os"
 	"sharedlog-stream/pkg/debug"
 	"sort"
+	"strings"
 )
 
 type timeSlice []int
@@ -26,6 +27,8 @@ func (t timeSlice) p(percent float64) int {
 }
 
 func ProcessThroughputLat(name string, latencies map[string][]int, consumed map[string]uint64, duration float64) {
+	srcEndToEnd := float64(0)
+	srcNum := uint64(0)
 	for n, lat_arr := range latencies {
 		if len(lat_arr) != 0 {
 			sumTime := float64(0)
@@ -46,11 +49,20 @@ func ProcessThroughputLat(name string, latencies map[string][]int, consumed map[
 			} else {
 				debug.Fprint(os.Stderr, "consumed is empty")
 			}
+			if strings.Contains(n, "src") {
+				srcNum += processed
+				if sumTime > srcEndToEnd {
+					srcEndToEnd = sumTime
+				}
+			}
 			tput := float64(processed) / sumTime
 			fmt.Fprintf(os.Stderr, "sum of %s time: %v ", n, sumTime)
 			fmt.Fprintf(os.Stderr, "processed: %v, throughput: (event/s) %v, p50: %d us, p90: %d us, p99: %d us\n",
 				processed, tput, ts.p(0.5), ts.p(0.9), ts.p(0.99))
 		}
+	}
+	if srcNum != 0 {
+		fmt.Fprintf(os.Stderr, "%s throughput %v (event/s)\n", name, float64(srcNum)/srcEndToEnd)
 	}
 	fmt.Fprintf(os.Stderr, "%s duration: %v\n\n", name, duration)
 }
