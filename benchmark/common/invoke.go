@@ -140,26 +140,38 @@ func Invoke(config_file string, gateway_url string,
 	}
 	wg.Wait()
 
+	srcNum := uint64(0)
+	srcEndToEnd := float64(0)
 	for i := uint8(0); i < numSrcInstance; i++ {
 		idx := i
 		if sourceOutput[idx].Success {
 			ProcessThroughputLat(fmt.Sprintf("source-%d", idx),
-				sourceOutput[idx].Latencies, sourceOutput[idx].Consumed, sourceOutput[idx].Duration)
+				sourceOutput[idx].Latencies, sourceOutput[idx].Consumed,
+				sourceOutput[idx].Duration, &srcNum, &srcEndToEnd)
 		} else {
 			fmt.Fprintf(os.Stderr, "source-%d failed\n", idx)
 		}
+	}
+	if srcNum != 0 {
+		fmt.Fprintf(os.Stderr, "source throughput %v (event/s)\n", float64(srcNum)/srcEndToEnd)
 	}
 
 	for _, node := range cliNodes {
 		funcName := node.Name()
 		output := outputMap[funcName]
+		num := uint64(0)
+		endToEnd := float64(0)
 		for j := uint8(0); j < uint8(len(output)); j++ {
 			if output[j].Success {
 				ProcessThroughputLat(fmt.Sprintf("%s-%d", funcName, j),
-					output[j].Latencies, output[j].Consumed, output[j].Duration)
+					output[j].Latencies, output[j].Consumed, output[j].Duration,
+					&num, &endToEnd)
 			} else {
 				fmt.Fprintf(os.Stderr, "%s-%d failed\n", funcName, j)
 			}
+		}
+		if num != 0 {
+			fmt.Fprintf(os.Stderr, "%s throughput %v (event/s)\n", funcName, float64(num)/endToEnd)
 		}
 	}
 	return nil

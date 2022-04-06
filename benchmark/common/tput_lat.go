@@ -26,9 +26,10 @@ func (t timeSlice) p(percent float64) int {
 	return t[int(float64(t.Len())*percent+0.5)-1]
 }
 
-func ProcessThroughputLat(name string, latencies map[string][]int, consumed map[string]uint64, duration float64) {
-	srcEndToEnd := float64(0)
-	srcNum := uint64(0)
+func ProcessThroughputLat(name string, latencies map[string][]int,
+	consumed map[string]uint64, duration float64,
+	num *uint64, endToEnd *float64,
+) {
 	for n, lat_arr := range latencies {
 		if len(lat_arr) != 0 {
 			sumTime := float64(0)
@@ -50,9 +51,9 @@ func ProcessThroughputLat(name string, latencies map[string][]int, consumed map[
 				debug.Fprint(os.Stderr, "consumed is empty")
 			}
 			if strings.Contains(n, "src") {
-				srcNum += processed
-				if sumTime > srcEndToEnd {
-					srcEndToEnd = sumTime
+				*num += processed
+				if sumTime > *endToEnd {
+					*endToEnd = sumTime
 				}
 			}
 			tput := float64(processed) / sumTime
@@ -60,9 +61,6 @@ func ProcessThroughputLat(name string, latencies map[string][]int, consumed map[
 			fmt.Fprintf(os.Stderr, "processed: %v, throughput: (event/s) %v, p50: %d us, p90: %d us, p99: %d us\n",
 				processed, tput, ts.p(0.5), ts.p(0.9), ts.p(0.99))
 		}
-	}
-	if srcNum != 0 {
-		fmt.Fprintf(os.Stderr, "%s throughput %v (event/s)\n", name, float64(srcNum)/srcEndToEnd)
 	}
 	fmt.Fprintf(os.Stderr, "%s duration: %v\n\n", name, duration)
 }
