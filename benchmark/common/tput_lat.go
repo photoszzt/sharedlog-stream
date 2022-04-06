@@ -30,6 +30,7 @@ func ProcessThroughputLat(name string, latencies map[string][]int,
 	consumed map[string]uint64, duration float64,
 	num *uint64, endToEnd *float64,
 ) {
+	fmt.Fprintf(os.Stderr, "process %s\n", name)
 	for n, lat_arr := range latencies {
 		if len(lat_arr) != 0 {
 			sumTime := float64(0)
@@ -50,7 +51,8 @@ func ProcessThroughputLat(name string, latencies map[string][]int,
 			} else {
 				debug.Fprint(os.Stderr, "consumed is empty")
 			}
-			if strings.Contains(n, "src") || n == "source" {
+			if strings.Contains(n, "src") || (strings.Contains(name, "source") && n == "e2e") {
+				fmt.Fprintf(os.Stderr, "collect %s for %s\n", n, name)
 				*num += processed
 				if sumTime > *endToEnd {
 					*endToEnd = sumTime

@@ -144,8 +144,14 @@ L:
 			succ := pOut.Success && aOut.Success
 			return t.CurrentOffset, &common.FnOutput{Success: succ, Message: pOut.Message + "," + aOut.Message}
 		}
+		if pOut.Success && pOut.Err == nil {
+			return t.CurrentOffset, nil
+		}
 		return t.CurrentOffset, pOut
 	} else if aOut != nil {
+		if aOut.Success && aOut.Err == nil {
+			return t.CurrentOffset, nil
+		}
 		return t.CurrentOffset, aOut
 	}
 	return t.CurrentOffset, nil

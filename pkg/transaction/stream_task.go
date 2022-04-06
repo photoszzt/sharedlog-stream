@@ -379,8 +379,8 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 		_, ret := t.ProcessFunc(ctx, t, args.ProcArgs)
 		if ret != nil {
 			if ret.Success {
-				elapsed := time.Since(procStart)
-				latencies = append(latencies, int(elapsed.Microseconds()))
+				// elapsed := time.Since(procStart)
+				// latencies = append(latencies, int(elapsed.Microseconds()))
 				ret.Latencies = map[string][]int{"e2e": latencies}
 				ret.Duration = time.Since(startTime).Seconds()
 				ret.Consumed = make(map[string]uint64)
