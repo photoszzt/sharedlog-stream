@@ -50,7 +50,7 @@ func ProcessThroughputLat(name string, latencies map[string][]int,
 			} else {
 				debug.Fprint(os.Stderr, "consumed is empty")
 			}
-			if strings.Contains(n, "src") {
+			if strings.Contains(n, "src") || n == "source" {
 				*num += processed
 				if sumTime > *endToEnd {
 					*endToEnd = sumTime

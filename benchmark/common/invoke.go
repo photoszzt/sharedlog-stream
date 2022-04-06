@@ -153,7 +153,7 @@ func Invoke(config_file string, gateway_url string,
 		}
 	}
 	if srcNum != 0 {
-		fmt.Fprintf(os.Stderr, "source throughput %v (event/s)\n", float64(srcNum)/srcEndToEnd)
+		fmt.Fprintf(os.Stderr, "source throughput %v (event/s)\n\n", float64(srcNum)/srcEndToEnd)
 	}
 
 	for _, node := range cliNodes {
@@ -171,7 +171,7 @@ func Invoke(config_file string, gateway_url string,
 			}
 		}
 		if num != 0 {
-			fmt.Fprintf(os.Stderr, "%s throughput %v (event/s)\n", funcName, float64(num)/endToEnd)
+			fmt.Fprintf(os.Stderr, "%s throughput %v (event/s)\n\n", funcName, float64(num)/endToEnd)
 		}
 	}
 	return nil
