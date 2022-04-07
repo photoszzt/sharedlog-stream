@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"sharedlog-stream/benchmark/common"
@@ -15,6 +16,7 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -28,6 +30,15 @@ var (
 	FLAGS_tps           int
 )
 
+func init() {
+	logLevel := os.Getenv("LOG_LEVEL")
+	if level, err := zerolog.ParseLevel(logLevel); err == nil {
+		zerolog.SetGlobalLevel(level)
+	} else {
+		zerolog.SetGlobalLevel(zerolog.WarnLevel)
+	}
+}
+
 func main() {
 	flag.IntVar(&FLAGS_events_num, "events_num", 100000000, "events.num param for nexmark")
 	flag.IntVar(&FLAGS_duration, "duration", 60, "")
@@ -37,6 +48,9 @@ func main() {
 	flag.IntVar(&FLAGS_numPartition, "npar", 1, "number of partition")
 	flag.IntVar(&FLAGS_tps, "tps", 10000000, "tps param for nexmark")
 	flag.Parse()
+
+	fmt.Fprintf(os.Stderr, "duration: %d, events_num: %d, serde: %s, nPar: %d\n",
+		FLAGS_duration, FLAGS_events_num, FLAGS_serdeFormat, FLAGS_numPartition)
 
 	var serdeFormat commtypes.SerdeFormat
 	var valueEncoder commtypes.Encoder
@@ -77,20 +91,35 @@ func main() {
 	eventGenerator := generator.NewSimpleNexmarkGenerator(generatorConfig)
 	channel_url_cache := make(map[uint32]*generator.ChannelUrl)
 
-	p, err := kafka.NewProducer(&kafka.ConfigMap{"bootstrap.servers": FLAGS_broker})
+	p, err := kafka.NewProducer(&kafka.ConfigMap{
+		"bootstrap.servers": FLAGS_broker, "go.produce.channel.size": 100000, "go.events.channel.size": 100000})
 	if err != nil {
 		log.Fatal().Msgf("Failed to create producer: %s\n", err)
 	}
 	defer p.Close()
 
-	deliveryChan := make(chan kafka.Event)
-
-	idx := 0
+	idx := int32(0)
 	duration := time.Duration(FLAGS_duration) * time.Second
+	replies := int32(0)
+	go func() {
+		for e := range p.Events() {
+			switch ev := e.(type) {
+			case *kafka.Message:
+				if ev.TopicPartition.Error != nil {
+					log.Error().Msgf("Delivery failed: %v\n", ev.TopicPartition)
+				} else {
+					log.Debug().Msgf("Delivered message to %v\n", ev.TopicPartition)
+				}
+			}
+			atomic.AddInt32(&replies, 1)
+		}
+	}()
 	start := time.Now()
+	events_num := int32(FLAGS_events_num)
+	num_par := int32(FLAGS_numPartition)
 	for {
 		if (duration != 0 && time.Since(start) >= duration) ||
-			(FLAGS_events_num != 0 && idx > FLAGS_events_num) {
+			(FLAGS_events_num != 0 && idx > events_num) {
 			break
 		}
 		now := time.Now().Unix()
@@ -107,34 +136,21 @@ func main() {
 			log.Fatal().Msgf("event serialization failed: %s", err)
 		}
 		idx += 1
-		parNum := idx % FLAGS_numPartition
-		err = p.Produce(&kafka.Message{
+		parNum := idx % num_par
+		p.ProduceChannel() <- &kafka.Message{
 			TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: int32(parNum)},
 			Value:          encoded,
-		}, deliveryChan)
+		}
 		if err != nil {
 			log.Fatal().Err(err)
 		}
 	}
-	replies := 0
-	for e := range deliveryChan {
-		switch ev := e.(type) {
-		case *kafka.Message:
-			if ev.TopicPartition.Error != nil {
-				log.Error().Msgf("Delivery failed: %v\n", ev.TopicPartition)
-			} else {
-				log.Debug().Msgf("Delivered message to %v\n", ev.TopicPartition)
-			}
-		}
-		replies += 1
-		if replies == idx {
-			break
-		}
-	}
-	remaining := p.Flush(30)
+	fmt.Fprintf(os.Stderr, "out of the produce loop; now looking at the delivery channel, produced: %d\n", idx)
+	remaining := p.Flush(30 * 1000)
 	log.Info().Msgf("producer: %d messages remaining in queue.", remaining)
-	p.Close()
-	close(deliveryChan)
+	for remaining != 0 {
+		remaining = p.Flush(30 * 1000)
+	}
 	totalTime := time.Since(start).Seconds()
-	fmt.Fprintf(os.Stderr, "source processed %d events, throughput %v\n", idx, float64(idx)/totalTime)
+	fmt.Fprintf(os.Stderr, "source processed %d events, time %v, throughput %v\n", idx, totalTime, float64(idx)/totalTime)
 }
