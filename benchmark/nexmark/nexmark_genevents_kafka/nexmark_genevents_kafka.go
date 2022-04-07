@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
+	"os"
 	"time"
 
 	"sharedlog-stream/benchmark/common"
@@ -133,4 +135,6 @@ func main() {
 	log.Info().Msgf("producer: %d messages remaining in queue.", remaining)
 	p.Close()
 	close(deliveryChan)
+	totalTime := time.Since(start).Seconds()
+	fmt.Fprintf(os.Stderr, "source processed %d events, throughput %v\n", idx, float64(idx)/totalTime)
 }
