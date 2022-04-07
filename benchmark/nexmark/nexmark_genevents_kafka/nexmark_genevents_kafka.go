@@ -17,19 +17,23 @@ import (
 )
 
 var (
-	FLAGS_num_events    int
+	FLAGS_events_num    int
 	FLAGS_duration      int
 	FLAGS_broker        string
 	FLAGS_stream_prefix string
 	FLAGS_serdeFormat   string
+	FLAGS_numPartition  int
+	FLAGS_tps           int
 )
 
 func main() {
-	flag.IntVar(&FLAGS_num_events, "num_events", 0, "")
+	flag.IntVar(&FLAGS_events_num, "events_num", 100000000, "events.num param for nexmark")
 	flag.IntVar(&FLAGS_duration, "duration", 60, "")
 	flag.StringVar(&FLAGS_broker, "broker", "127.0.0.1", "")
 	flag.StringVar(&FLAGS_stream_prefix, "stream_prefix", "nexmark", "")
 	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
+	flag.IntVar(&FLAGS_numPartition, "npar", 1, "number of partition")
+	flag.IntVar(&FLAGS_tps, "tps", 10000000, "tps param for nexmark")
 	flag.Parse()
 
 	var serdeFormat commtypes.SerdeFormat
@@ -49,8 +53,8 @@ func main() {
 	topic := FLAGS_stream_prefix + "_src"
 	newTopic := []kafka.TopicSpecification{
 		{Topic: topic,
-			NumPartitions:     1,
-			ReplicationFactor: 1},
+			NumPartitions:     FLAGS_numPartition,
+			ReplicationFactor: 3},
 	}
 	ctx := context.Background()
 	err := common.CreateTopic(ctx, newTopic, FLAGS_broker)
@@ -58,6 +62,11 @@ func main() {
 		log.Fatal().Msgf("Failed to create topic: %s", err)
 	}
 	nexmarkConfigInput := ntypes.NewNexMarkConfigInput(topic, serdeFormat)
+	nexmarkConfigInput.Duration = uint32(FLAGS_duration)
+	nexmarkConfigInput.FirstEventRate = uint32(FLAGS_tps)
+	nexmarkConfigInput.NextEventRate = uint32(FLAGS_tps)
+	nexmarkConfigInput.EventsNum = uint64(FLAGS_events_num)
+	nexmarkConfigInput.NumOutPartition = uint8(FLAGS_numPartition)
 	nexmarkConfig, err := ntypes.ConvertToNexmarkConfiguration(nexmarkConfigInput)
 	if err != nil {
 		log.Fatal().Msgf("Failed to convert to nexmark configuration: %s", err)
@@ -78,10 +87,8 @@ func main() {
 	duration := time.Duration(FLAGS_duration) * time.Second
 	start := time.Now()
 	for {
-		if time.Since(start) >= duration {
-			break
-		}
-		if FLAGS_num_events != 0 && idx > FLAGS_num_events {
+		if (duration != 0 && time.Since(start) >= duration) ||
+			(FLAGS_events_num != 0 && idx > FLAGS_events_num) {
 			break
 		}
 		now := time.Now().Unix()
@@ -97,14 +104,15 @@ func main() {
 		if err != nil {
 			log.Fatal().Msgf("event serialization failed: %s", err)
 		}
+		idx += 1
+		parNum := idx % FLAGS_numPartition
 		err = p.Produce(&kafka.Message{
-			TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
+			TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: int32(parNum)},
 			Value:          encoded,
 		}, deliveryChan)
 		if err != nil {
 			log.Fatal().Err(err)
 		}
-		idx += 1
 	}
 	replies := 0
 	for e := range deliveryChan {

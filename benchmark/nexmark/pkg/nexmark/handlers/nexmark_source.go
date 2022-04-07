@@ -114,7 +114,8 @@ type nexmarkSrcProcArgs struct {
 }
 
 func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProcArgs) *common.FnOutput {
-	now := time.Now().Unix()
+	nowT := time.Now()
+	now := nowT.Unix()
 	nextEvent, err := args.eventGenerator.NextEvent(ctx, args.channel_url_cache)
 	if err != nil {
 		return &common.FnOutput{
@@ -139,7 +140,6 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 	args.idx += 1
 	parNum := args.idx
 	parNum = parNum % int(args.stream.NumPartition())
-	pushStart := time.Now()
 
 	_, err = args.stream.Push(ctx, msgEncoded, uint8(parNum), false)
 	if err != nil {
@@ -155,7 +155,7 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 		}
 		inChan <- sinkMsg
 	*/
-	elapsed := time.Since(pushStart)
+	elapsed := time.Since(nowT)
 	args.latencies = append(args.latencies, int(elapsed.Microseconds()))
 	return nil
 }
