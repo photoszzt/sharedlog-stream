@@ -203,8 +203,9 @@ func (s *MongoDBKeyValueStore) Get(ctx context.Context, key commtypes.KeyT) (com
 			return nil, false, fmt.Errorf("Get: decode err %v", err)
 		}
 		return val, ok, nil
+	} else {
+		return nil, ok, nil
 	}
-	return valBytes, ok, nil
 }
 
 func (s *MongoDBKeyValueStore) GetWithCollection(ctx context.Context, kBytes []byte, collection string) ([]byte, bool, error) {
