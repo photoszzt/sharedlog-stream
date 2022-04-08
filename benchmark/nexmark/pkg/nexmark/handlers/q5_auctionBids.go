@@ -55,7 +55,7 @@ func (h *q5AuctionBids) Call(ctx context.Context, input []byte) ([]byte, error) 
 func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	msgSerde commtypes.MsgSerde, input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*processor.MeteredSource, *processor.MeteredSink, error) {
+) (*processor.MeteredSource, *processor.ConcurrentMeteredSink, error) {
 	var seSerde commtypes.Serde
 	var aucIdCountSerde commtypes.Serde
 	if sp.SerdeFormat == uint8(commtypes.JSON) {
@@ -85,7 +85,7 @@ func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		ValueSerde: aucIdCountSerde,
 	}
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
-	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
+	sink := processor.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
 	return src, sink, nil
 }
 
@@ -184,7 +184,7 @@ type q5AuctionBidsProcessArg struct {
 	countProc        *processor.MeteredProcessor
 	groupByAuction   *processor.MeteredProcessor
 	src              *processor.MeteredSource
-	sink             *processor.MeteredSink
+	sink             *processor.ConcurrentMeteredSink
 	output_stream    *sharedlog_stream.ShardedSharedLogStream
 	trackParFunc     transaction.TrackKeySubStreamFunc
 	recordFinishFunc transaction.RecordPrevInstanceFinishFunc

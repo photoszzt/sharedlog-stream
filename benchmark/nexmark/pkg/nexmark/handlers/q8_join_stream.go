@@ -57,7 +57,7 @@ func (h *q8JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, e
 type q8JoinStreamProcessArgs struct {
 	personSrc        *processor.MeteredSource
 	auctionSrc       *processor.MeteredSource
-	sink             *processor.MeteredSink
+	sink             *processor.ConcurrentMeteredSink
 	pJoinA           JoinWorkerFunc
 	aJoinP           JoinWorkerFunc
 	trackParFunc     transaction.TrackKeySubStreamFunc
@@ -241,7 +241,7 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 
 	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, auctionsConfig))
 	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, personsConfig))
-	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
+	sink := processor.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
 	return &srcSinkSerde{src1: src1, src2: src2, sink: sink,
 		keySerdes: []commtypes.Serde{commtypes.Uint64Serde{}, commtypes.Uint64Serde{}},
 		valSerdes: []commtypes.Serde{eventSerde, eventSerde}, msgSerde: msgSerde}, nil

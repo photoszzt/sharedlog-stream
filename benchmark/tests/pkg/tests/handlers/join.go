@@ -70,7 +70,7 @@ func (h *joinHandler) getSrcSink(
 	outputStream *sharedlog_stream.ShardedSharedLogStream,
 ) (*processor.MeteredSource, /* src1 */
 	*processor.MeteredSource, /* src2 */
-	*processor.MeteredSink, error,
+	*processor.ConcurrentMeteredSink, error,
 ) {
 	msgSerde, err := commtypes.GetMsgSerde(uint8(commtypes.JSON))
 	if err != nil {
@@ -95,7 +95,7 @@ func (h *joinHandler) getSrcSink(
 	}
 	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, src1Config))
 	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, src2Config))
-	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
+	sink := processor.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
 	return src1, src2, sink, nil
 }
 
@@ -151,7 +151,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	sharedTimeTracker := processor.NewTimeTracker()
 	oneJoinTwoProc := processor.NewStreamStreamJoinProcessor(winTab2, joinWindows, joiner, false, true, sharedTimeTracker)
 	twoJoinOneProc := processor.NewStreamStreamJoinProcessor(winTab1, joinWindows, processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker)
-	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *processor.MeteredSink,
+	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *processor.ConcurrentMeteredSink,
 		trackParFunc transaction.TrackKeySubStreamFunc,
 	) error {
 		_, err := toWinTab1.ProcessAndReturn(ctx, m)
@@ -164,7 +164,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 		}
 		return pushMsgsToSink(ctx, sink, joinedMsgs, trackParFunc)
 	}
-	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *processor.MeteredSink,
+	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *processor.ConcurrentMeteredSink,
 		trackParFunc transaction.TrackKeySubStreamFunc,
 	) error {
 		_, err := toWinTab2.ProcessAndReturn(ctx, m)
@@ -384,7 +384,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	sharedTimeTracker := processor.NewTimeTracker()
 	oneJoinTwoProc := processor.NewStreamStreamJoinProcessor(winTab2, joinWindows, joiner, false, true, sharedTimeTracker)
 	twoJoinOneProc := processor.NewStreamStreamJoinProcessor(winTab1, joinWindows, processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker)
-	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *processor.MeteredSink,
+	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *processor.ConcurrentMeteredSink,
 		trackParFunc transaction.TrackKeySubStreamFunc,
 	) error {
 		_, err := toWinTab1.ProcessAndReturn(ctx, m)
@@ -397,7 +397,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		}
 		return pushMsgsToSink(ctx, sink, joinedMsgs, trackParFunc)
 	}
-	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *processor.MeteredSink,
+	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *processor.ConcurrentMeteredSink,
 		trackParFunc transaction.TrackKeySubStreamFunc,
 	) error {
 		_, err := toWinTab2.ProcessAndReturn(ctx, m)
@@ -545,14 +545,14 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 
 func joinProc(ctx context.Context,
 	src *processor.MeteredSource,
-	sink *processor.MeteredSink,
+	sink *processor.ConcurrentMeteredSink,
 	trackParFunc func(ctx context.Context,
 		key interface{},
 		keySerde commtypes.Serde,
 		topicName string,
 		substreamId uint8,
 	) error,
-	runner func(ctx context.Context, m commtypes.Message, sink *processor.MeteredSink,
+	runner func(ctx context.Context, m commtypes.Message, sink *processor.ConcurrentMeteredSink,
 		trackParFunc transaction.TrackKeySubStreamFunc,
 	) error,
 ) {
@@ -630,7 +630,7 @@ func pushMsgToStream(ctx context.Context, key int, val *strTs, kSerde commtypes.
 	return log.Push(ctx, encoded, 0, false)
 }
 
-func pushMsgsToSink(ctx context.Context, sink *processor.MeteredSink,
+func pushMsgsToSink(ctx context.Context, sink *processor.ConcurrentMeteredSink,
 	msgs []commtypes.Message, trackParFunc transaction.TrackKeySubStreamFunc,
 ) error {
 	for _, msg := range msgs {

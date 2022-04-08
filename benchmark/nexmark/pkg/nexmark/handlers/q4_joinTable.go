@@ -55,7 +55,7 @@ func (h *q4JoinTableHandler) Call(ctx context.Context, input []byte) ([]byte, er
 type q4JoinTableProcessArgs struct {
 	auctionsSrc      *processor.MeteredSource
 	bidsSrc          *processor.MeteredSource
-	sink             *processor.MeteredSink
+	sink             *processor.ConcurrentMeteredSink
 	aJoinB           JoinWorkerFunc
 	bJoinA           JoinWorkerFunc
 	trackParFunc     transaction.TrackKeySubStreamFunc
@@ -150,7 +150,7 @@ func (h *q4JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	outputStream *sharedlog_stream.ShardedSharedLogStream,
 ) (*processor.MeteredSource, /* src1 */
 	*processor.MeteredSource, /* src2 */
-	*processor.MeteredSink,
+	*processor.ConcurrentMeteredSink,
 	commtypes.MsgSerde,
 	error,
 ) {
@@ -189,7 +189,7 @@ func (h *q4JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 
 	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, auctionsConfig))
 	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, personsConfig))
-	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
+	sink := processor.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
 	return src1, src2, sink, msgSerde, nil
 }
 

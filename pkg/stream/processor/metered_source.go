@@ -3,7 +3,6 @@ package processor
 import (
 	"context"
 	"os"
-	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
@@ -14,20 +13,26 @@ type MeteredSource struct {
 	src       Source
 	latencies []int
 	count     uint64
+	measure   bool
 }
 
 var _ = Source(&MeteredSource{})
 
 func NewMeteredSource(src Source) *MeteredSource {
+	measure_str := os.Getenv("MEASURE_PROC")
+	measure := false
+	if measure_str == "true" || measure_str == "1" {
+		measure = true
+	}
 	return &MeteredSource{
 		src:       src,
 		latencies: make([]int, 0, 128),
+		measure:   measure,
 	}
 }
 
 func (s *MeteredSource) Consume(ctx context.Context, parNum uint8) ([]commtypes.MsgAndSeq, error) {
-	measure_proc := os.Getenv("MEASURE_PROC")
-	if measure_proc == "true" || measure_proc == "1" {
+	if s.measure {
 		procStart := time.Now()
 		msgs, err := s.src.Consume(ctx, parNum)
 		elapsed := time.Since(procStart)
@@ -36,11 +41,10 @@ func (s *MeteredSource) Consume(ctx context.Context, parNum uint8) ([]commtypes.
 		}
 		s.latencies = append(s.latencies, int(elapsed.Microseconds()))
 		s.count += uint64(len(msgs))
-		debug.Fprintf(os.Stderr, "%s consumed %d\n", s.src.TopicName(), s.count)
+		// debug.Fprintf(os.Stderr, "%s consumed %d\n", s.src.TopicName(), s.count)
 		return msgs, err
-	} else {
-		return s.src.Consume(ctx, parNum)
 	}
+	return s.src.Consume(ctx, parNum)
 }
 
 func (s *MeteredSource) GetLatency() []int {

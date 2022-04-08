@@ -54,7 +54,7 @@ func (h *query7Handler) getSrcSink(
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
 	msgSerde commtypes.MsgSerde,
-) (*processor.MeteredSource, *processor.MeteredSink, error) {
+) (*processor.MeteredSource, *processor.ConcurrentMeteredSink, error) {
 	eventSerde, err := getEventSerde(input.SerdeFormat)
 	if err != nil {
 		return nil, nil, err
@@ -79,14 +79,14 @@ func (h *query7Handler) getSrcSink(
 		ValueSerde: bmSerde,
 	}
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
-	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
+	sink := processor.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
 
 	return src, sink, nil
 }
 
 type processQ7ProcessArgs struct {
 	src                *processor.MeteredSource
-	sink               *processor.MeteredSink
+	sink               *processor.ConcurrentMeteredSink
 	output_stream      *sharedlog_stream.ShardedSharedLogStream
 	maxPriceBid        *processor.MeteredProcessor
 	transformWithStore *processor.MeteredProcessor

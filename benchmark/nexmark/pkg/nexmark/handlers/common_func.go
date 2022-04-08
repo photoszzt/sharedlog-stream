@@ -49,7 +49,7 @@ type JoinWorkerFunc func(c context.Context, m commtypes.Message) ([]commtypes.Me
 
 type joinProcArgs struct {
 	src    *processor.MeteredSource
-	sink   *processor.MeteredSink
+	sink   *processor.ConcurrentMeteredSink
 	wg     *sync.WaitGroup
 	runner JoinWorkerFunc
 
@@ -216,7 +216,7 @@ func joinProcSerialWithoutSink(
 
 func pushMsgsToSink(
 	ctx context.Context,
-	sink *processor.MeteredSink,
+	sink *processor.ConcurrentMeteredSink,
 	cHash *hash.ConsistentHash,
 	cHashMu *sync.RWMutex,
 	msgs []commtypes.Message,

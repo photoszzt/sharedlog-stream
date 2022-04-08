@@ -177,7 +177,7 @@ func getInOutStreams(
 type srcSinkSerde struct {
 	src1      *processor.MeteredSource
 	src2      *processor.MeteredSource
-	sink      *processor.MeteredSink
+	sink      *processor.ConcurrentMeteredSink
 	msgSerde  commtypes.MsgSerde
 	keySerdes []commtypes.Serde
 	valSerdes []commtypes.Serde
@@ -225,7 +225,7 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 
 	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, auctionsConfig))
 	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, personsConfig))
-	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
+	sink := processor.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
 	sss := &srcSinkSerde{
 		src1:      src1,
 		src2:      src2,
@@ -319,7 +319,7 @@ func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 type q3JoinTableProcessArgs struct {
 	personSrc        *processor.MeteredSource
 	auctionSrc       *processor.MeteredSource
-	sink             *processor.MeteredSink
+	sink             *processor.ConcurrentMeteredSink
 	pJoinA           JoinWorkerFunc
 	aJoinP           JoinWorkerFunc
 	trackParFunc     transaction.TrackKeySubStreamFunc

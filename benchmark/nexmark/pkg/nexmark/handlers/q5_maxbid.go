@@ -53,7 +53,7 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	seSerde commtypes.Serde, aucIdCountSerde commtypes.Serde,
 	aucIdCountMaxSerde commtypes.Serde,
 	msgSerde commtypes.MsgSerde,
-) (*processor.MeteredSource, *processor.MeteredSink, error) {
+) (*processor.MeteredSource, *processor.ConcurrentMeteredSink, error) {
 	inConfig := &sharedlog_stream.SharedLogStreamConfig{
 		Timeout:      common.SrcConsumeTimeout,
 		KeyDecoder:   seSerde,
@@ -66,7 +66,7 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		ValueSerde: aucIdCountMaxSerde,
 	}
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
-	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
+	sink := processor.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
 	return src, sink, nil
 }
 
@@ -75,7 +75,7 @@ type q5MaxBidProcessArgs struct {
 	stJoin           *processor.MeteredProcessor
 	chooseMaxCnt     *processor.MeteredProcessor
 	src              *processor.MeteredSource
-	sink             *processor.MeteredSink
+	sink             *processor.ConcurrentMeteredSink
 	output_stream    *sharedlog_stream.ShardedSharedLogStream
 	trackParFunc     transaction.TrackKeySubStreamFunc
 	recordFinishFunc transaction.RecordPrevInstanceFinishFunc

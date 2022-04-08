@@ -51,7 +51,7 @@ func (h *windowedAvg) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *windowedAvg) getSrcSink(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde) (*processor.MeteredSource, *processor.MeteredSink, error) {
+func (h *windowedAvg) getSrcSink(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde) (*processor.MeteredSource, *processor.ConcurrentMeteredSink, error) {
 	eventSerde, err := getEventSerde(sp.SerdeFormat)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get evnet serde error: %v", err)
@@ -89,7 +89,7 @@ func (h *windowedAvg) getSrcSink(ctx context.Context, sp *common.QueryInput, msg
 	}
 
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
-	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
+	sink := processor.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
 	return src, sink, nil
 }
 
@@ -157,7 +157,7 @@ func (h *windowedAvg) getAggProcessor(ctx context.Context, sp *common.QueryInput
 }
 
 func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput,
-	src *processor.MeteredSource, sink *processor.MeteredSink,
+	src *processor.MeteredSource, sink *processor.ConcurrentMeteredSink,
 	aggProc *processor.MeteredProcessor, calcAvg *processor.MeteredProcessor,
 ) *common.FnOutput {
 	duration := time.Duration(sp.Duration) * time.Second
