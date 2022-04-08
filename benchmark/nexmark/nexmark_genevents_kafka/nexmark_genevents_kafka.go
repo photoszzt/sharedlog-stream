@@ -68,9 +68,15 @@ func main() {
 
 	topic := FLAGS_stream_prefix + "_src"
 	newTopic := []kafka.TopicSpecification{
-		{Topic: topic,
+		{
+			Topic:             topic,
 			NumPartitions:     FLAGS_numPartition,
-			ReplicationFactor: 3},
+			ReplicationFactor: 3,
+			Config: map[string]string{
+				"acks":                "all",
+				"min.insync.replicas": "2",
+			},
+		},
 	}
 	ctx := context.Background()
 	err := common.CreateTopic(ctx, newTopic, FLAGS_broker)
@@ -92,7 +98,12 @@ func main() {
 	channel_url_cache := make(map[uint32]*generator.ChannelUrl)
 
 	p, err := kafka.NewProducer(&kafka.ConfigMap{
-		"bootstrap.servers": FLAGS_broker, "go.produce.channel.size": 100000, "go.events.channel.size": 100000})
+		"bootstrap.servers":                     FLAGS_broker,
+		"go.produce.channel.size":               100000,
+		"go.events.channel.size":                100000,
+		"acks":                                  "all",
+		"max.in.flight.requests.per.connection": 5,
+	})
 	if err != nil {
 		log.Fatal().Msgf("Failed to create producer: %s\n", err)
 	}
@@ -147,10 +158,12 @@ func main() {
 	}
 	fmt.Fprintf(os.Stderr, "out of the produce loop; now looking at the delivery channel, produced: %d\n", idx)
 	remaining := p.Flush(30 * 1000)
-	log.Info().Msgf("producer: %d messages remaining in queue.", remaining)
+	fmt.Fprintf(os.Stderr, "producer: %d messages remaining in queue.", remaining)
 	for remaining != 0 {
 		remaining = p.Flush(30 * 1000)
 	}
+	ret := atomic.LoadInt32(&replies)
+	fmt.Fprintf(os.Stderr, "%d event acked\n", ret)
 	totalTime := time.Since(start).Seconds()
 	fmt.Fprintf(os.Stderr, "source processed %d events, time %v, throughput %v\n", idx, totalTime, float64(idx)/totalTime)
 }
