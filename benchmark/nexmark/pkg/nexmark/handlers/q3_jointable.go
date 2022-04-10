@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
@@ -115,9 +114,9 @@ L:
 	}
 	wg.Wait()
 	if pOut != nil {
-		debug.Fprintf(os.Stderr, "pOut %v\n", pOut)
+		// debug.Fprintf(os.Stderr, "pOut %v\n", pOut)
 		if aOut != nil {
-			debug.Fprintf(os.Stderr, "aOut %v\n", aOut)
+			// debug.Fprintf(os.Stderr, "aOut %v\n", aOut)
 			succ := pOut.Success && aOut.Success
 			return t.CurrentOffset, &common.FnOutput{Success: succ, Message: pOut.Message + "," + aOut.Message}
 		}
@@ -126,7 +125,7 @@ L:
 		}
 		return t.CurrentOffset, pOut
 	} else if aOut != nil {
-		debug.Fprintf(os.Stderr, "aOut %v\n", aOut)
+		// debug.Fprintf(os.Stderr, "aOut %v\n", aOut)
 		if aOut.Success {
 			return t.CurrentOffset, nil
 		}
@@ -149,9 +148,7 @@ func getInOutStreams(
 		commtypes.SerdeFormat(input.SerdeFormat))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
-
 	}
-
 	inputStream2, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[1], input.NumInPartition,
 		commtypes.SerdeFormat(input.SerdeFormat))
 	if err != nil {
@@ -199,13 +196,13 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	if err != nil {
 		return nil, fmt.Errorf("get event serde err: %v", err)
 	}
-	auctionsConfig := &sharedlog_stream.SharedLogStreamConfig{
+	auctionsConfig := &sharedlog_stream.StreamSourceConfig{
 		Timeout:      common.SrcConsumeTimeout,
 		KeyDecoder:   commtypes.Uint64Serde{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
 	}
-	personsConfig := &sharedlog_stream.SharedLogStreamConfig{
+	personsConfig := &sharedlog_stream.StreamSourceConfig{
 		Timeout:      common.SrcConsumeTimeout,
 		KeyDecoder:   commtypes.Uint64Serde{},
 		ValueDecoder: eventSerde,

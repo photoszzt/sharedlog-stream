@@ -133,7 +133,7 @@ func (p *sourcePump) run() {
 				return
 			}
 
-			for _, msg := range msgs {
+			for _, msg := range msgs.Msgs {
 				if msg.Msg.Value == nil {
 					continue
 				}

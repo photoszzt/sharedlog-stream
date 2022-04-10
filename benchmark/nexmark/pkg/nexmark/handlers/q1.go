@@ -159,18 +159,37 @@ func (h *query1Handler) process(ctx context.Context, t *transaction.StreamTask, 
 	args := argsTmp.(*query1ProcessArgs)
 	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
-		bidMsg, err := args.filterBid.ProcessAndReturn(ctx, msg.Msg)
-		if err != nil {
-			return err
-		}
-		if bidMsg != nil {
-			filtered, err := args.q1Map.ProcessAndReturn(ctx, bidMsg[0])
+		if msg.MsgArr != nil {
+			for _, subMsg := range msg.MsgArr {
+				bidMsg, err := args.filterBid.ProcessAndReturn(ctx, subMsg)
+				if err != nil {
+					return err
+				}
+				if bidMsg != nil {
+					filtered, err := args.q1Map.ProcessAndReturn(ctx, bidMsg[0])
+					if err != nil {
+						return err
+					}
+					err = args.sink.Sink(ctx, filtered[0], args.parNum, false)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		} else {
+			bidMsg, err := args.filterBid.ProcessAndReturn(ctx, msg.Msg)
 			if err != nil {
 				return err
 			}
-			err = args.sink.Sink(ctx, filtered[0], args.parNum, false)
-			if err != nil {
-				return err
+			if bidMsg != nil {
+				filtered, err := args.q1Map.ProcessAndReturn(ctx, bidMsg[0])
+				if err != nil {
+					return err
+				}
+				err = args.sink.Sink(ctx, filtered[0], args.parNum, false)
+				if err != nil {
+					return err
+				}
 			}
 		}
 		return nil

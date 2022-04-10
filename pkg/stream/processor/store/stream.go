@@ -9,8 +9,8 @@ import (
 )
 
 type Stream interface {
-	Push(ctx context.Context, payload []byte, parNum uint8, isControl bool) (uint64, error)
-	PushWithTag(ctx context.Context, payload []byte, parNumber uint8, tags []uint64, isControl bool) (uint64, error)
+	Push(ctx context.Context, payload []byte, parNum uint8, isControl bool, payloadIsArr bool) (uint64, error)
+	PushWithTag(ctx context.Context, payload []byte, parNumber uint8, tags []uint64, isControl bool, payloadIsArr bool) (uint64, error)
 	ReadNext(ctx context.Context, parNum uint8) (commtypes.TaskIDGen, []commtypes.RawMsg /* payload */, error)
 	ReadNextWithTag(ctx context.Context, parNumber uint8, tag uint64) (commtypes.TaskIDGen, []commtypes.RawMsg, error)
 	ReadBackwardWithTag(ctx context.Context, tailSeqNum uint64, parNum uint8, tag uint64) (*commtypes.TaskIDGen, *commtypes.RawMsg, error)
@@ -23,7 +23,8 @@ type Stream interface {
 }
 
 type MeteredStream struct {
-	stream Stream
+	stream  Stream
+	measure bool
 
 	pLMu          sync.Mutex
 	pushLatencies []int
@@ -44,20 +45,25 @@ type MeteredStream struct {
 var _ = Stream(&MeteredStream{})
 
 func NewMeteredStream(stream Stream) *MeteredStream {
+	measure_str := os.Getenv("MEASURE_PROC")
+	measure := false
+	if measure_str == "true" || measure_str == "1" {
+		measure = true
+	}
 	return &MeteredStream{
 		stream:                   stream,
 		pushLatencies:            make([]int, 0, 128),
 		pushWithTagLatencies:     make([]int, 0, 128),
 		readNextLatencies:        make([]int, 0, 128),
 		readNextWithTagLatencies: make([]int, 0, 128),
+		measure:                  measure,
 	}
 }
 
-func (ms *MeteredStream) Push(ctx context.Context, payload []byte, parNum uint8, isControl bool) (uint64, error) {
-	measure_proc := os.Getenv("MEASURE_PROC")
-	if measure_proc == "true" || measure_proc == "1" {
+func (ms *MeteredStream) Push(ctx context.Context, payload []byte, parNum uint8, isControl bool, payloadIsArr bool) (uint64, error) {
+	if ms.measure {
 		procStart := time.Now()
-		seq, err := ms.stream.Push(ctx, payload, parNum, isControl)
+		seq, err := ms.stream.Push(ctx, payload, parNum, isControl, payloadIsArr)
 		elapsed := time.Since(procStart)
 
 		ms.pLMu.Lock()
@@ -66,14 +72,13 @@ func (ms *MeteredStream) Push(ctx context.Context, payload []byte, parNum uint8,
 
 		return seq, err
 	}
-	return ms.stream.Push(ctx, payload, parNum, isControl)
+	return ms.stream.Push(ctx, payload, parNum, isControl, payloadIsArr)
 }
 
-func (ms *MeteredStream) PushWithTag(ctx context.Context, payload []byte, parNumber uint8, tags []uint64, isControl bool) (uint64, error) {
-	measure_proc := os.Getenv("MEASURE_PROC")
-	if measure_proc == "true" || measure_proc == "1" {
+func (ms *MeteredStream) PushWithTag(ctx context.Context, payload []byte, parNumber uint8, tags []uint64, isControl bool, payloadIsArr bool) (uint64, error) {
+	if ms.measure {
 		procStart := time.Now()
-		seq, err := ms.stream.PushWithTag(ctx, payload, parNumber, tags, isControl)
+		seq, err := ms.stream.PushWithTag(ctx, payload, parNumber, tags, isControl, payloadIsArr)
 		elapsed := time.Since(procStart)
 
 		ms.pWTLMu.Lock()
@@ -82,12 +87,11 @@ func (ms *MeteredStream) PushWithTag(ctx context.Context, payload []byte, parNum
 
 		return seq, err
 	}
-	return ms.stream.PushWithTag(ctx, payload, parNumber, tags, isControl)
+	return ms.stream.PushWithTag(ctx, payload, parNumber, tags, isControl, payloadIsArr)
 }
 
 func (ms *MeteredStream) ReadNext(ctx context.Context, parNum uint8) (commtypes.TaskIDGen, []commtypes.RawMsg /* payload */, error) {
-	measure_proc := os.Getenv("MEASURE_PROC")
-	if measure_proc == "true" || measure_proc == "1" {
+	if ms.measure {
 		procStart := time.Now()
 		appIdGen, rawMsgs, err := ms.stream.ReadNext(ctx, parNum)
 		elapsed := time.Since(procStart)
@@ -102,8 +106,7 @@ func (ms *MeteredStream) ReadNext(ctx context.Context, parNum uint8) (commtypes.
 }
 
 func (ms *MeteredStream) ReadNextWithTag(ctx context.Context, parNumber uint8, tag uint64) (commtypes.TaskIDGen, []commtypes.RawMsg, error) {
-	measure_proc := os.Getenv("MEASURE_PROC")
-	if measure_proc == "true" || measure_proc == "1" {
+	if ms.measure {
 		procStart := time.Now()
 		appIdGen, rawMsgs, err := ms.stream.ReadNextWithTag(ctx, parNumber, tag)
 		elapsed := time.Since(procStart)
@@ -118,8 +121,7 @@ func (ms *MeteredStream) ReadNextWithTag(ctx context.Context, parNumber uint8, t
 }
 
 func (ms *MeteredStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum uint64, parNum uint8, tag uint64) (*commtypes.TaskIDGen, *commtypes.RawMsg, error) {
-	measure_proc := os.Getenv("MEASURE_PROC")
-	if measure_proc == "true" || measure_proc == "1" {
+	if ms.measure {
 		procStart := time.Now()
 		appIdGen, rawMsg, err := ms.stream.ReadBackwardWithTag(ctx, tailSeqNum, parNum, tag)
 		elapsed := time.Since(procStart)

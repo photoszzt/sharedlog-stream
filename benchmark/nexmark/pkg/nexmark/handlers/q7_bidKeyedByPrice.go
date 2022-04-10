@@ -78,41 +78,54 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context,
 	args := argsTmp.(*q7BidKeyedByPriceProcessArgs)
 	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
-		event := msg.Msg.Value.(*ntypes.Event)
-		ts, err := event.ExtractStreamTime()
-		if err != nil {
-			return fmt.Errorf("fail to extract timestamp: %v", err)
+		if msg.MsgArr != nil {
+			for _, subMsg := range msg.MsgArr {
+				err := h.procMsg(ctx, subMsg, args)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
 		}
-		msg.Msg.Timestamp = ts
-		bidMsg, err := args.bid.ProcessAndReturn(ctx, msg.Msg)
-		if err != nil {
-			return fmt.Errorf("filter bid err: %v", err)
-		}
-		if bidMsg != nil {
-			mappedKey, err := args.bidKeyedByPrice.ProcessAndReturn(ctx, bidMsg[0])
-			if err != nil {
-				return fmt.Errorf("bid keyed by price error: %v", err)
-			}
-			key := mappedKey[0].Key.(uint64)
-			h.cHashMu.RLock()
-			parTmp, ok := h.cHash.Get(key)
-			h.cHashMu.RUnlock()
-			if !ok {
-				return xerrors.New("fail to get output substream number")
-			}
-			par := parTmp.(uint8)
-			// par := uint8(key % uint64(args.numOutPartition))
-			err = args.trackParFunc(ctx, key, args.sink.KeySerde(), args.sink.TopicName(), par)
-			if err != nil {
-				return fmt.Errorf("track par err: %v", err)
-			}
-			err = args.sink.Sink(ctx, mappedKey[0], par, false)
-			if err != nil {
-				return fmt.Errorf("sink err: %v", err)
-			}
-		}
-		return nil
+		return h.procMsg(ctx, msg.Msg, args)
 	})
+}
+
+func (h *q7BidKeyedByPrice) procMsg(ctx context.Context, msg commtypes.Message, args *q7BidKeyedByPriceProcessArgs) error {
+	event := msg.Value.(*ntypes.Event)
+	ts, err := event.ExtractStreamTime()
+	if err != nil {
+		return fmt.Errorf("fail to extract timestamp: %v", err)
+	}
+	msg.Timestamp = ts
+	bidMsg, err := args.bid.ProcessAndReturn(ctx, msg)
+	if err != nil {
+		return fmt.Errorf("filter bid err: %v", err)
+	}
+	if bidMsg != nil {
+		mappedKey, err := args.bidKeyedByPrice.ProcessAndReturn(ctx, bidMsg[0])
+		if err != nil {
+			return fmt.Errorf("bid keyed by price error: %v", err)
+		}
+		key := mappedKey[0].Key.(uint64)
+		h.cHashMu.RLock()
+		parTmp, ok := h.cHash.Get(key)
+		h.cHashMu.RUnlock()
+		if !ok {
+			return xerrors.New("fail to get output substream number")
+		}
+		par := parTmp.(uint8)
+		// par := uint8(key % uint64(args.numOutPartition))
+		err = args.trackParFunc(ctx, key, args.sink.KeySerde(), args.sink.TopicName(), par)
+		if err != nil {
+			return fmt.Errorf("track par err: %v", err)
+		}
+		err = args.sink.Sink(ctx, mappedKey[0], par, false)
+		if err != nil {
+			return fmt.Errorf("sink err: %v", err)
+		}
+	}
+	return nil
 }
 
 func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input *common.QueryInput) *common.FnOutput {

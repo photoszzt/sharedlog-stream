@@ -65,7 +65,7 @@ func (st *KeyValueStoreWithChangelog) Put(ctx context.Context, key commtypes.Key
 	if err != nil {
 		return err
 	}
-	_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, false)
+	_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, false, false)
 	if err != nil {
 		return err
 	}
@@ -95,7 +95,7 @@ func (st *KeyValueStoreWithChangelog) PutIfAbsent(ctx context.Context, key commt
 		if err != nil {
 			return nil, err
 		}
-		_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, false)
+		_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, false, false)
 		if err != nil {
 			return nil, err
 		}
@@ -127,7 +127,7 @@ func (st *KeyValueStoreWithChangelog) Delete(ctx context.Context, key commtypes.
 	if err != nil {
 		return err
 	}
-	_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, false)
+	_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, false, false)
 	if err != nil {
 		return err
 	}

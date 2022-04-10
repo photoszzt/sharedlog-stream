@@ -124,13 +124,13 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 		}
 	}
 
-	for _, msg := range msgs {
+	for _, msg := range msgs.Msgs {
 		if msg.Msg.Value == nil {
 			continue
 		}
 		if msg.IsControl {
 			v := msg.Msg.Value.(sharedlog_stream.ScaleEpochAndBytes)
-			_, err = args.output_stream.Push(ctx, v.Payload, args.parNum, true)
+			_, err = args.output_stream.Push(ctx, v.Payload, args.parNum, true, false)
 			if err != nil {
 				return t.CurrentOffset, &common.FnOutput{Success: false, Message: err.Error()}
 			}
@@ -148,11 +148,23 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 			continue
 		}
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
-		_, err = args.counter.ProcessAndReturn(ctx, msg.Msg)
-		if err != nil {
-			return t.CurrentOffset, &common.FnOutput{
-				Success: false,
-				Message: fmt.Sprintf("counter failed: %v", err),
+		if msg.MsgArr != nil {
+			for _, subMsg := range msg.MsgArr {
+				_, err = args.counter.ProcessAndReturn(ctx, subMsg)
+				if err != nil {
+					return t.CurrentOffset, &common.FnOutput{
+						Success: false,
+						Message: fmt.Sprintf("counter failed: %v", err),
+					}
+				}
+			}
+		} else {
+			_, err = args.counter.ProcessAndReturn(ctx, msg.Msg)
+			if err != nil {
+				return t.CurrentOffset, &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("counter failed: %v", err),
+				}
 			}
 		}
 	}
@@ -176,7 +188,7 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 			Message: fmt.Sprintf("get msg serde failed: %v", err),
 		}
 	}
-	inConfig := &sharedlog_stream.SharedLogStreamConfig{
+	inConfig := &sharedlog_stream.StreamSourceConfig{
 		Timeout:      common.SrcConsumeTimeout,
 		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: commtypes.StringDecoder{},

@@ -24,12 +24,26 @@ import (
 type nexmarkSourceHandler struct {
 	env      types.Environment
 	funcName string
+	bufPush  bool
 }
 
 func NewNexmarkSource(env types.Environment, funcName string) types.FuncHandler {
+	bufPush_str := os.Getenv("BUFPUSH")
+	bufPush := false
+	if bufPush_str == "true" || bufPush_str == "1" {
+		bufPush = true
+	}
+	if bufPush {
+		return &nexmarkSourceHandler{
+			env:      env,
+			funcName: funcName,
+			bufPush:  bufPush,
+		}
+	}
 	return &nexmarkSourceHandler{
 		env:      env,
 		funcName: funcName,
+		bufPush:  bufPush,
 	}
 }
 
@@ -141,7 +155,11 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 	parNum := args.idx
 	parNum = parNum % int(args.stream.NumPartition())
 
-	_, err = args.stream.Push(ctx, msgEncoded, uint8(parNum), false)
+	if h.bufPush {
+		err = args.stream.BufPush(ctx, msgEncoded, uint8(parNum))
+	} else {
+		_, err = args.stream.Push(ctx, msgEncoded, uint8(parNum), false, false)
+	}
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: fmt.Sprintf("stream push failed: %v", err)}
 	}
@@ -239,6 +257,12 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 						return out
 					}
 				*/
+				if h.bufPush {
+					err = stream.Flush(ctx)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "[Error] Flush failed: %v\n", err)
+					}
+				}
 				dcancel()
 				return &common.FnOutput{Success: false, Message: fmt.Sprintf("control channel manager failed: %v", cerr)}
 			}
@@ -269,8 +293,15 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 				dcancel()
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
+			if h.bufPush {
+				err = stream.Flush(ctx)
+				if err != nil {
+					dcancel()
+					return &common.FnOutput{Success: false, Message: err.Error()}
+				}
+			}
 			for i := uint8(0); i < numSubstreams; i++ {
-				_, err = stream.Push(ctx, encoded, i, true)
+				_, err = stream.Push(ctx, encoded, i, true, false)
 				if err != nil {
 					dcancel()
 					return &common.FnOutput{Success: false, Message: err.Error()}
@@ -292,6 +323,12 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 					return out
 				}
 			*/
+			if h.bufPush {
+				err = stream.Flush(ctx)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "[Error] Flush failed: %v\n", err)
+				}
+			}
 			dcancel()
 			return fnout
 		}
@@ -301,6 +338,12 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 			return out
 		}
 	*/
+	if h.bufPush {
+		err = stream.Flush(ctx)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[Error] Flush failed: %v\n", err)
+		}
+	}
 	dcancel()
 	return &common.FnOutput{
 		Success:   true,

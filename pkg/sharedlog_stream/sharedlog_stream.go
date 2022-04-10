@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"sharedlog-stream/pkg/bits"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -24,6 +25,11 @@ import (
 
 const (
 	kBlockingReadTimeout = 1 * time.Second
+)
+
+const (
+	Control bits.Bits = 1 << iota
+	PayloadArr
 )
 
 type SharedLogStream struct {
@@ -61,7 +67,7 @@ type StreamLogEntry struct {
 	TaskId    uint64 `msg:"tid,omitempty"`
 	MsgSeqNum uint64 `msg:"mseq,omitempty"`
 	TaskEpoch uint16 `msg:"te,omitempty"`
-	IsControl bool   `msg:"isCtrl"`
+	Meta      uint8  `msg:"meta,omitempty"`
 	seqNum    uint64 `msg:"-"`
 }
 
@@ -134,14 +140,23 @@ func (s *SharedLogStream) SetCursor(cursor uint64, parNum uint8) {
 }
 
 // multiple thread could push to the same stream but only one reader
-func (s *SharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNum uint8, tags []uint64, isControl bool) (uint64, error) {
+func (s *SharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNum uint8, tags []uint64,
+	isControl bool, payloadIsArr bool,
+) (uint64, error) {
 	if len(payload) == 0 {
 		return 0, errors.ErrEmptyPayload
+	}
+	var meta bits.Bits
+	if isControl {
+		meta = bits.Set(meta, Control)
+	}
+	if payloadIsArr {
+		meta = bits.Set(meta, PayloadArr)
 	}
 	logEntry := &StreamLogEntry{
 		TopicName: s.topicName,
 		Payload:   payload,
-		IsControl: isControl,
+		Meta:      uint8(meta),
 	}
 	// if s.inTransaction {
 	// TODO: need to deal with sequence number overflow
@@ -195,9 +210,9 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNu
 	return seqNum, nil
 }
 
-func (s *SharedLogStream) Push(ctx context.Context, payload []byte, parNum uint8, isControl bool) (uint64, error) {
+func (s *SharedLogStream) Push(ctx context.Context, payload []byte, parNum uint8, isControl bool, payloadIsArr bool) (uint64, error) {
 	tags := []uint64{NameHashWithPartition(s.topicNameHash, parNum)}
-	return s.PushWithTag(ctx, payload, parNum, tags, isControl)
+	return s.PushWithTag(ctx, payload, parNum, tags, isControl, payloadIsArr)
 }
 
 func (s *SharedLogStream) isEmpty() bool {
@@ -287,7 +302,7 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 				}
 				isControl := false
 				scaleEpoch := uint64(0)
-				if streamLogEntry.IsControl {
+				if bits.Has(bits.Bits(streamLogEntry.Meta), Control) {
 					// debug.Fprintf(os.Stderr, "ReadNextWithTag: got control entry\n")
 					txnMarkTmp, err := s.txnMarkerSerde.Decode(streamLogEntry.Payload)
 					if err != nil {
@@ -317,7 +332,7 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 				readMsgProc.CurReadMsgSeqNum = streamLogEntry.MsgSeqNum
 				readMsgProc.MsgBuff = append(readMsgProc.MsgBuff, commtypes.RawMsg{Payload: streamLogEntry.Payload,
 					LogSeqNum: streamLogEntry.seqNum, MsgSeqNum: streamLogEntry.MsgSeqNum, IsControl: isControl,
-					ScaleEpoch: scaleEpoch})
+					ScaleEpoch: scaleEpoch, IsPayloadArr: bits.Has(bits.Bits(streamLogEntry.Meta), PayloadArr)})
 				debug.Fprintf(os.Stderr, "%s cur buf len %d, last off %x, cursor %x, tail %x\n", s.topicName,
 					len(readMsgProc.MsgBuff), streamLogEntry.seqNum, seqNumInSharedLog, s.tail)
 				s.curReadMap[appKey] = readMsgProc
@@ -326,7 +341,9 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 				continue
 			}
 			s.cursor = streamLogEntry.seqNum + 1
-			return commtypes.EmptyAppIDGen, []commtypes.RawMsg{{Payload: streamLogEntry.Payload, MsgSeqNum: 0, LogSeqNum: streamLogEntry.seqNum}}, nil
+			return commtypes.EmptyAppIDGen, []commtypes.RawMsg{{Payload: streamLogEntry.Payload, MsgSeqNum: 0,
+				LogSeqNum: streamLogEntry.seqNum, IsControl: false,
+				IsPayloadArr: bits.Has(bits.Bits(streamLogEntry.Meta), PayloadArr)}}, nil
 		}
 		seqNumInSharedLog = logEntry.SeqNum + 1
 		s.cursor = seqNumInSharedLog

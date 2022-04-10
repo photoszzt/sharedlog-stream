@@ -73,7 +73,7 @@ func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		return nil, nil, err
 	}
 
-	inConfig := &sharedlog_stream.SharedLogStreamConfig{
+	inConfig := &sharedlog_stream.StreamSourceConfig{
 		Timeout:      common.SrcConsumeTimeout,
 		KeyDecoder:   commtypes.Uint64Serde{},
 		ValueDecoder: eventSerde,
@@ -214,44 +214,57 @@ func (h *q5AuctionBids) process(ctx context.Context, t *transaction.StreamTask, 
 	args := argsTmp.(*q5AuctionBidsProcessArg)
 	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
-		event := msg.Msg.Value.(*ntypes.Event)
-		ts, err := event.ExtractStreamTime()
-		if err != nil {
-			return fmt.Errorf("fail to extract timestamp: %v", err)
+		if msg.MsgArr != nil {
+			for _, subMsg := range msg.MsgArr {
+				err := h.procMsg(ctx, subMsg, args)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
 		}
-		msg.Msg.Timestamp = ts
-		countMsgs, err := args.countProc.ProcessAndReturn(ctx, msg.Msg)
-		if err != nil {
-			return fmt.Errorf("countProc err %v", err)
-		}
-		for _, countMsg := range countMsgs {
-			// fmt.Fprintf(os.Stderr, "count msg ts: %v, ", countMsg.Timestamp)
-			changeKeyedMsg, err := args.groupByAuction.ProcessAndReturn(ctx, countMsg)
-			if err != nil {
-				return fmt.Errorf("groupByAuction err %v", err)
-			}
-			// fmt.Fprintf(os.Stderr, "changeKeyedMsg ts: %v\n", changeKeyedMsg[0].Timestamp)
-			// par := uint8(hashSe(changeKeyedMsg[0].Key.(*ntypes.StartEndTime)) % uint32(args.numOutPartition))
-			k := changeKeyedMsg[0].Key.(*ntypes.StartEndTime)
-			h.cHashMu.RLock()
-			parTmp, ok := h.cHash.Get(k)
-			h.cHashMu.RUnlock()
-			if !ok {
-				return xerrors.New("fail to get output partition")
-			}
-			par := parTmp.(uint8)
-			// fmt.Fprintf(os.Stderr, "key is %s, output to substream %d\n", k.String(), par)
-			err = args.trackParFunc(ctx, k, args.sink.KeySerde(), args.sink.TopicName(), par)
-			if err != nil {
-				return fmt.Errorf("add topic partition failed: %v", err)
-			}
-			err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
-			if err != nil {
-				return fmt.Errorf("sink err %v", err)
-			}
-		}
-		return nil
+		return h.procMsg(ctx, msg.Msg, args)
 	})
+}
+
+func (h *q5AuctionBids) procMsg(ctx context.Context, msg commtypes.Message, args *q5AuctionBidsProcessArg) error {
+	event := msg.Value.(*ntypes.Event)
+	ts, err := event.ExtractStreamTime()
+	if err != nil {
+		return fmt.Errorf("fail to extract timestamp: %v", err)
+	}
+	msg.Timestamp = ts
+	countMsgs, err := args.countProc.ProcessAndReturn(ctx, msg)
+	if err != nil {
+		return fmt.Errorf("countProc err %v", err)
+	}
+	for _, countMsg := range countMsgs {
+		// fmt.Fprintf(os.Stderr, "count msg ts: %v, ", countMsg.Timestamp)
+		changeKeyedMsg, err := args.groupByAuction.ProcessAndReturn(ctx, countMsg)
+		if err != nil {
+			return fmt.Errorf("groupByAuction err %v", err)
+		}
+		// fmt.Fprintf(os.Stderr, "changeKeyedMsg ts: %v\n", changeKeyedMsg[0].Timestamp)
+		// par := uint8(hashSe(changeKeyedMsg[0].Key.(*ntypes.StartEndTime)) % uint32(args.numOutPartition))
+		k := changeKeyedMsg[0].Key.(*ntypes.StartEndTime)
+		h.cHashMu.RLock()
+		parTmp, ok := h.cHash.Get(k)
+		h.cHashMu.RUnlock()
+		if !ok {
+			return xerrors.New("fail to get output partition")
+		}
+		par := parTmp.(uint8)
+		// fmt.Fprintf(os.Stderr, "key is %s, output to substream %d\n", k.String(), par)
+		err = args.trackParFunc(ctx, k, args.sink.KeySerde(), args.sink.TopicName(), par)
+		if err != nil {
+			return fmt.Errorf("add topic partition failed: %v", err)
+		}
+		err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
+		if err != nil {
+			return fmt.Errorf("sink err %v", err)
+		}
+	}
+	return nil
 }
 
 func (h *q5AuctionBids) processWithoutSink(ctx context.Context, argsTmp interface{}) error {
@@ -264,26 +277,43 @@ func (h *q5AuctionBids) processWithoutSink(ctx context.Context, argsTmp interfac
 		return err
 	}
 
-	for _, msg := range gotMsgs {
+	for _, msg := range gotMsgs.Msgs {
 		if msg.Msg.Value == nil {
 			continue
 		}
-		event := msg.Msg.Value.(*ntypes.Event)
-		ts, err := event.ExtractStreamTime()
-		if err != nil {
-			return fmt.Errorf("fail to extract timestamp: %v", err)
-		}
-		msg.Msg.Timestamp = ts
-		countMsgs, err := args.countProc.ProcessAndReturn(ctx, msg.Msg)
-		if err != nil {
-			return err
-		}
-		for _, countMsg := range countMsgs {
-			// fmt.Fprintf(os.Stderr, "count msg ts: %v, ", countMsg.Timestamp)
-			_, err := args.groupByAuction.ProcessAndReturn(ctx, countMsg)
+		if msg.MsgArr != nil {
+			for _, subMsg := range msg.MsgArr {
+				err := h.procMsgWithoutSink(ctx, subMsg, args)
+				if err != nil {
+					return err
+				}
+			}
+		} else {
+			err := h.procMsgWithoutSink(ctx, msg.Msg, args)
 			if err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+func (h *q5AuctionBids) procMsgWithoutSink(ctx context.Context, msg commtypes.Message, args *q5AuctionBidsRestoreArg) error {
+	event := msg.Value.(*ntypes.Event)
+	ts, err := event.ExtractStreamTime()
+	if err != nil {
+		return fmt.Errorf("fail to extract timestamp: %v", err)
+	}
+	msg.Timestamp = ts
+	countMsgs, err := args.countProc.ProcessAndReturn(ctx, msg)
+	if err != nil {
+		return err
+	}
+	for _, countMsg := range countMsgs {
+		// fmt.Fprintf(os.Stderr, "count msg ts: %v, ", countMsg.Timestamp)
+		_, err := args.groupByAuction.ProcessAndReturn(ctx, countMsg)
+		if err != nil {
+			return err
 		}
 	}
 	return nil

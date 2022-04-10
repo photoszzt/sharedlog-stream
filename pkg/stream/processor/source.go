@@ -8,7 +8,7 @@ import (
 
 type Source interface {
 	// Consume gets the next commtypes.Message from the source
-	Consume(ctx context.Context, parNum uint8) ([]commtypes.MsgAndSeq, error)
+	Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error)
 	SetCursor(cursor uint64, parNum uint8)
 	TopicName() string
 	Stream() store.Stream

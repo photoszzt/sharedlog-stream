@@ -31,7 +31,7 @@ func NewMeteredSource(src Source) *MeteredSource {
 	}
 }
 
-func (s *MeteredSource) Consume(ctx context.Context, parNum uint8) ([]commtypes.MsgAndSeq, error) {
+func (s *MeteredSource) Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
 	if s.measure {
 		procStart := time.Now()
 		msgs, err := s.src.Consume(ctx, parNum)
@@ -40,7 +40,7 @@ func (s *MeteredSource) Consume(ctx context.Context, parNum uint8) ([]commtypes.
 			return msgs, err
 		}
 		s.latencies = append(s.latencies, int(elapsed.Microseconds()))
-		s.count += uint64(len(msgs))
+		s.count += uint64(msgs.TotalLen)
 		// debug.Fprintf(os.Stderr, "%s consumed %d\n", s.src.TopicName(), s.count)
 		return msgs, err
 	}

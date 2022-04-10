@@ -67,7 +67,7 @@ func (h *query7Handler) getSrcSink(
 	} else {
 		return nil, nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", input.SerdeFormat)
 	}
-	inConfig := &sharedlog_stream.SharedLogStreamConfig{
+	inConfig := &sharedlog_stream.StreamSourceConfig{
 		Timeout:      time.Duration(input.Duration) * time.Second,
 		KeyDecoder:   commtypes.Uint64Serde{},
 		ValueDecoder: eventSerde,
@@ -123,34 +123,47 @@ func (h *query7Handler) process(
 	args := argsTmp.(*processQ7ProcessArgs)
 	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
-		event := msg.Msg.Value.(*ntypes.Event)
-		ts, err := event.ExtractStreamTime()
-		if err != nil {
-			return fmt.Errorf("fail to extract timestamp: %v", err)
-		}
-		msg.Msg.Timestamp = ts
-		_, err = args.maxPriceBid.ProcessAndReturn(ctx, msg.Msg)
-		if err != nil {
-			return err
-		}
-		transformedMsgs, err := args.transformWithStore.ProcessAndReturn(ctx, msg.Msg)
-		if err != nil {
-			return err
-		}
-		for _, tmsg := range transformedMsgs {
-			filtered, err := args.filterTime.ProcessAndReturn(ctx, tmsg)
-			if err != nil {
-				return err
-			}
-			for _, fmsg := range filtered {
-				err = args.sink.Sink(ctx, fmsg, args.parNum, false)
+		if msg.MsgArr != nil {
+			for _, subMsg := range msg.MsgArr {
+				err := h.procMsg(ctx, subMsg, args)
 				if err != nil {
 					return err
 				}
 			}
+			return nil
 		}
-		return nil
+		return h.procMsg(ctx, msg.Msg, args)
 	})
+}
+
+func (h *query7Handler) procMsg(ctx context.Context, msg commtypes.Message, args *processQ7ProcessArgs) error {
+	event := msg.Value.(*ntypes.Event)
+	ts, err := event.ExtractStreamTime()
+	if err != nil {
+		return fmt.Errorf("fail to extract timestamp: %v", err)
+	}
+	msg.Timestamp = ts
+	_, err = args.maxPriceBid.ProcessAndReturn(ctx, msg)
+	if err != nil {
+		return err
+	}
+	transformedMsgs, err := args.transformWithStore.ProcessAndReturn(ctx, msg)
+	if err != nil {
+		return err
+	}
+	for _, tmsg := range transformedMsgs {
+		filtered, err := args.filterTime.ProcessAndReturn(ctx, tmsg)
+		if err != nil {
+			return err
+		}
+		for _, fmsg := range filtered {
+			err = args.sink.Sink(ctx, fmsg, args.parNum, false)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (h *query7Handler) processWithoutSink(
@@ -166,29 +179,46 @@ func (h *query7Handler) processWithoutSink(
 		return err
 	}
 
-	for _, msg := range gotMsgs {
+	for _, msg := range gotMsgs.Msgs {
 		if msg.Msg.Value == nil {
 			continue
 		}
-		event := msg.Msg.Value.(*ntypes.Event)
-		ts, err := event.ExtractStreamTime()
-		if err != nil {
-			return fmt.Errorf("fail to extract timestamp: %v", err)
-		}
-		msg.Msg.Timestamp = ts
-		_, err = args.maxPriceBid.ProcessAndReturn(ctx, msg.Msg)
-		if err != nil {
-			return err
-		}
-		transformedMsgs, err := args.transformWithStore.ProcessAndReturn(ctx, msg.Msg)
-		if err != nil {
-			return err
-		}
-		for _, tmsg := range transformedMsgs {
-			_, err := args.filterTime.ProcessAndReturn(ctx, tmsg)
+		if msg.MsgArr != nil {
+			for _, subMsg := range msg.MsgArr {
+				err := h.procMsgWithoutSink(ctx, subMsg, args)
+				if err != nil {
+					return err
+				}
+			}
+		} else {
+			err := h.procMsgWithoutSink(ctx, msg.Msg, args)
 			if err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+func (h *query7Handler) procMsgWithoutSink(ctx context.Context, msg commtypes.Message, args *processQ7RestoreArgs) error {
+	event := msg.Value.(*ntypes.Event)
+	ts, err := event.ExtractStreamTime()
+	if err != nil {
+		return fmt.Errorf("fail to extract timestamp: %v", err)
+	}
+	msg.Timestamp = ts
+	_, err = args.maxPriceBid.ProcessAndReturn(ctx, msg)
+	if err != nil {
+		return err
+	}
+	transformedMsgs, err := args.transformWithStore.ProcessAndReturn(ctx, msg)
+	if err != nil {
+		return err
+	}
+	for _, tmsg := range transformedMsgs {
+		_, err := args.filterTime.ProcessAndReturn(ctx, tmsg)
+		if err != nil {
+			return err
 		}
 	}
 	return nil

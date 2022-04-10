@@ -127,6 +127,8 @@ func Invoke(config_file string, gateway_url string,
 		go invokeSourceFunc(client, numSrcPartition, srcTopicName, &sourceOutput[idx], &wg)
 	}
 
+	time.Sleep(time.Duration(60) * time.Second)
+
 	for _, node := range cliNodes {
 		funcName := node.Name()
 		param := inParamsMap[funcName]

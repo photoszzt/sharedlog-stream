@@ -26,16 +26,23 @@ type ReadMsgAndProgress struct {
 }
 
 type RawMsg struct {
-	Payload    []byte
-	IsControl  bool
-	MsgSeqNum  uint64
-	LogSeqNum  uint64
-	ScaleEpoch uint64
+	Payload      []byte
+	IsControl    bool
+	IsPayloadArr bool
+	MsgSeqNum    uint64
+	LogSeqNum    uint64
+	ScaleEpoch   uint64
 }
 
 type MsgAndSeq struct {
 	Msg       Message
+	MsgArr    []Message
 	MsgSeqNum uint64
 	LogSeqNum uint64
 	IsControl bool
+}
+
+type MsgAndSeqs struct {
+	Msgs     []MsgAndSeq
+	TotalLen uint32
 }

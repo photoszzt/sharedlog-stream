@@ -98,7 +98,7 @@ func (h *wordCountSource) eventGeneration(ctx context.Context, env types.Environ
 				Message: err.Error(),
 			}
 		}
-		_, err = stream.Push(ctx, msgEncoded, 0, false)
+		_, err = stream.Push(ctx, msgEncoded, 0, false, false)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,

@@ -76,13 +76,13 @@ func (h *joinHandler) getSrcSink(
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
-	src1Config := &sharedlog_stream.SharedLogStreamConfig{
+	src1Config := &sharedlog_stream.StreamSourceConfig{
 		Timeout:      common.SrcConsumeTimeout,
 		KeyDecoder:   commtypes.IntSerde{},
 		ValueDecoder: strTsJSONSerde{},
 		MsgDecoder:   msgSerde,
 	}
-	src2Config := &sharedlog_stream.SharedLogStreamConfig{
+	src2Config := &sharedlog_stream.StreamSourceConfig{
 		Timeout:      common.SrcConsumeTimeout,
 		KeyDecoder:   commtypes.IntSerde{},
 		ValueDecoder: strTsJSONSerde{},
@@ -216,7 +216,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 		panic(err)
 	}
 	for i := 0; i < 2; i++ {
-		_, err := pushMsgToStream(ctx, expected_keys[i],
+		err := pushMsgToStream(ctx, expected_keys[i],
 			&strTs{Val: fmt.Sprintf("A%d", expected_keys[i]), Ts: 0},
 			kSerde, vSerde, msgSerde, srcStream1)
 		if err != nil {
@@ -250,7 +250,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 		panic(err)
 	}
 	for i := 0; i < 2; i++ {
-		_, err := pushMsgToStream(ctx, expected_keys[i],
+		err := pushMsgToStream(ctx, expected_keys[i],
 			&strTs{Val: fmt.Sprintf("a%d", expected_keys[i]), Ts: 0},
 			kSerde, vSerde, msgSerde, srcStream2)
 		if err != nil {
@@ -452,7 +452,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		panic(err)
 	}
 	for i := 0; i < 2; i++ {
-		_, err := pushMsgToStream(ctx, expected_keys[i],
+		err := pushMsgToStream(ctx, expected_keys[i],
 			&strTs{Val: fmt.Sprintf("A%d", expected_keys[i]), Ts: 0},
 			kSerde, vSerde, msgSerde, srcStream1)
 		if err != nil {
@@ -486,7 +486,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		panic(err)
 	}
 	for i := 0; i < 2; i++ {
-		_, err := pushMsgToStream(ctx, expected_keys[i],
+		err := pushMsgToStream(ctx, expected_keys[i],
 			&strTs{Val: fmt.Sprintf("a%d", expected_keys[i]), Ts: 0},
 			kSerde, vSerde, msgSerde, srcStream2)
 		if err != nil {
@@ -564,10 +564,19 @@ func joinProc(ctx context.Context,
 		panic(err)
 	}
 	debug.Fprintf(os.Stderr, "%s got %v\n", src.TopicName(), gotMsgs)
-	for _, msg := range gotMsgs {
-		err = runner(ctx, msg.Msg, sink, trackParFunc)
-		if err != nil {
-			panic(err)
+	for _, msg := range gotMsgs.Msgs {
+		if msg.MsgArr != nil {
+			for _, subMsg := range msg.MsgArr {
+				err = runner(ctx, subMsg, sink, trackParFunc)
+				if err != nil {
+					panic(err)
+				}
+			}
+		} else {
+			err = runner(ctx, msg.Msg, sink, trackParFunc)
+			if err != nil {
+				panic(err)
+			}
 		}
 	}
 }
@@ -612,22 +621,23 @@ func readMsgs(ctx context.Context,
 
 func pushMsgToStream(ctx context.Context, key int, val *strTs, kSerde commtypes.Serde, vSerde commtypes.Serde, msgSerde commtypes.MsgSerde,
 	log *sharedlog_stream.ShardedSharedLogStream,
-) (uint64, error) {
+) error {
 	keyBytes, err := kSerde.Encode(key)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	valBytes, err := vSerde.Encode(val)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	encoded, err := msgSerde.Encode(keyBytes, valBytes)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	debug.Fprintf(os.Stderr, "%s encoded: \n", log.TopicName())
 	debug.PrintByteSlice(encoded)
-	return log.Push(ctx, encoded, 0, false)
+	_, err = log.Push(ctx, encoded, 0, false, false)
+	return err
 }
 
 func pushMsgsToSink(ctx context.Context, sink *processor.ConcurrentMeteredSink,

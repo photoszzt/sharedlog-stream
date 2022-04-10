@@ -54,10 +54,10 @@ func (z *StreamLogEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "TaskEpoch")
 				return
 			}
-		case "isCtrl":
-			z.IsControl, err = dc.ReadBool()
+		case "meta":
+			z.Meta, err = dc.ReadUint8()
 			if err != nil {
-				err = msgp.WrapError(err, "IsControl")
+				err = msgp.WrapError(err, "Meta")
 				return
 			}
 		default:
@@ -91,6 +91,10 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 	if z.TaskEpoch == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x10
+	}
+	if z.Meta == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x20
 	}
 	// variable map header, size zb0001Len
 	err = en.Append(0x80 | uint8(zb0001Len))
@@ -158,15 +162,17 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
-	// write "isCtrl"
-	err = en.Append(0xa6, 0x69, 0x73, 0x43, 0x74, 0x72, 0x6c)
-	if err != nil {
-		return
-	}
-	err = en.WriteBool(z.IsControl)
-	if err != nil {
-		err = msgp.WrapError(err, "IsControl")
-		return
+	if (zb0001Mask & 0x20) == 0 { // if not empty
+		// write "meta"
+		err = en.Append(0xa4, 0x6d, 0x65, 0x74, 0x61)
+		if err != nil {
+			return
+		}
+		err = en.WriteUint8(z.Meta)
+		if err != nil {
+			err = msgp.WrapError(err, "Meta")
+			return
+		}
 	}
 	return
 }
@@ -192,6 +198,10 @@ func (z *StreamLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	if z.TaskEpoch == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x10
+	}
+	if z.Meta == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x20
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -221,9 +231,11 @@ func (z *StreamLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 		o = append(o, 0xa2, 0x74, 0x65)
 		o = msgp.AppendUint16(o, z.TaskEpoch)
 	}
-	// string "isCtrl"
-	o = append(o, 0xa6, 0x69, 0x73, 0x43, 0x74, 0x72, 0x6c)
-	o = msgp.AppendBool(o, z.IsControl)
+	if (zb0001Mask & 0x20) == 0 { // if not empty
+		// string "meta"
+		o = append(o, 0xa4, 0x6d, 0x65, 0x74, 0x61)
+		o = msgp.AppendUint8(o, z.Meta)
+	}
 	return
 }
 
@@ -275,10 +287,10 @@ func (z *StreamLogEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "TaskEpoch")
 				return
 			}
-		case "isCtrl":
-			z.IsControl, bts, err = msgp.ReadBoolBytes(bts)
+		case "meta":
+			z.Meta, bts, err = msgp.ReadUint8Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "IsControl")
+				err = msgp.WrapError(err, "Meta")
 				return
 			}
 		default:
@@ -295,6 +307,6 @@ func (z *StreamLogEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *StreamLogEntry) Msgsize() (s int) {
-	s = 1 + 10 + msgp.StringPrefixSize + len(z.TopicName) + 8 + msgp.BytesPrefixSize + len(z.Payload) + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size + 3 + msgp.Uint16Size + 7 + msgp.BoolSize
+	s = 1 + 10 + msgp.StringPrefixSize + len(z.TopicName) + 8 + msgp.BytesPrefixSize + len(z.Payload) + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size + 3 + msgp.Uint16Size + 5 + msgp.Uint8Size
 	return
 }

@@ -77,7 +77,7 @@ func (h *query3Handler) Query3(ctx context.Context, input *common.QueryInput) *c
 		}
 	}
 
-	inConfig := &sharedlog_stream.SharedLogStreamConfig{
+	inConfig := &sharedlog_stream.StreamSourceConfig{
 		Timeout:      time.Duration(input.Duration) * time.Second,
 		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: eventSerde,

@@ -2,27 +2,38 @@ package sharedlog_stream
 
 import (
 	"context"
+	"os"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 )
 
+const (
+	SINK_BUFFER_SIZE = 10
+)
+
 type ShardedSharedLogStreamSink struct {
-	// pipe         processor.Pipe
-	// pctx         processor.ProcessorContext
-	stream     *ShardedSharedLogStream
 	keySerde   commtypes.Serde
 	valueSerde commtypes.Serde
 	msgSerde   commtypes.MsgSerde
+	stream     *ShardedSharedLogStream
+
+	bufPush bool
 }
 
 var _ = processor.Sink(&ShardedSharedLogStreamSink{})
 
 func NewShardedSharedLogStreamSink(stream *ShardedSharedLogStream, config *StreamSinkConfig) *ShardedSharedLogStreamSink {
+	bufPush_str := os.Getenv("BUFPUSH")
+	bufPush := false
+	if bufPush_str == "true" || bufPush_str == "1" {
+		bufPush = true
+	}
 	return &ShardedSharedLogStreamSink{
 		stream:     stream,
 		keySerde:   config.KeySerde,
 		valueSerde: config.ValueSerde,
 		msgSerde:   config.MsgSerde,
+		bufPush:    bufPush,
 	}
 }
 
@@ -36,7 +47,7 @@ func (sls *ShardedSharedLogStreamSink) Sink(ctx context.Context, msg commtypes.M
 	}
 	ctrl, ok := msg.Key.(string)
 	if ok && ctrl == commtypes.SCALE_FENCE_KEY {
-		_, err := sls.stream.Push(ctx, msg.Value.([]byte), parNum, isControl)
+		_, err := sls.stream.Push(ctx, msg.Value.([]byte), parNum, isControl, false)
 		return err
 	}
 	var keyEncoded []byte
@@ -57,9 +68,23 @@ func (sls *ShardedSharedLogStreamSink) Sink(ctx context.Context, msg commtypes.M
 		return err
 	}
 	if bytes != nil {
-		_, err = sls.stream.Push(ctx, bytes, parNum, isControl)
-		if err != nil {
-			return err
+		if sls.bufPush {
+			if !isControl {
+				return sls.stream.BufPush(ctx, bytes, parNum)
+			}
+			err = sls.stream.Flush(ctx)
+			if err != nil {
+				return err
+			}
+			_, err = sls.stream.Push(ctx, bytes, parNum, isControl, false)
+			if err != nil {
+				return err
+			}
+		} else {
+			_, err = sls.stream.Push(ctx, bytes, parNum, isControl, false)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -67,4 +92,11 @@ func (sls *ShardedSharedLogStreamSink) Sink(ctx context.Context, msg commtypes.M
 
 func (sls *ShardedSharedLogStreamSink) KeySerde() commtypes.Serde {
 	return sls.keySerde
+}
+
+func (sls *ShardedSharedLogStreamSink) Flush(ctx context.Context) error {
+	if sls.bufPush {
+		return sls.stream.Flush(ctx)
+	}
+	return nil
 }

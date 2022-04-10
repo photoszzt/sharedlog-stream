@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -47,7 +48,7 @@ func invokeSourceFunc(client *http.Client, numOutPartition uint8, topicName stri
 		serdeFormat = commtypes.JSON
 	}
 	nexmarkConfig := ntypes.NewNexMarkConfigInput(topicName, serdeFormat)
-	nexmarkConfig.Duration = uint32(FLAGS_duration)
+	nexmarkConfig.Duration = uint32(FLAGS_duration) + uint32((time.Duration(60) * time.Second).Seconds())
 	nexmarkConfig.FirstEventRate = uint32(FLAGS_tps)
 	nexmarkConfig.NextEventRate = uint32(FLAGS_tps)
 	nexmarkConfig.EventsNum = uint64(FLAGS_events_num)

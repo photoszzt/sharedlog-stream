@@ -10,8 +10,8 @@ type ValueTimestamp struct {
 }
 
 type ValueTimestampSerialized struct {
-	ValueSerialized []byte `json:"vs" msg:"vs"`
-	Timestamp       int64  `json:"ts" msg:"ts"`
+	ValueSerialized []byte `json:"vs,omitempty" msg:"vs,omitempty"`
+	Timestamp       int64  `json:"ts,omitempty" msg:"ts,omitempty"`
 }
 
 func (s ValueTimestamp) ExtractStreamTime() (int64, error) {

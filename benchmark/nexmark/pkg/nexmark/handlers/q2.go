@@ -151,14 +151,29 @@ func (h *query2Handler) process(ctx context.Context, t *transaction.StreamTask, 
 	args := argsTmp.(*query2ProcessArgs)
 	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
-		outMsg, err := args.q2Filter.ProcessAndReturn(ctx, msg.Msg)
-		if err != nil {
-			return err
-		}
-		if outMsg != nil {
-			err = args.sink.Sink(ctx, outMsg[0], args.parNum, false)
+		if msg.MsgArr != nil {
+			for _, subMsg := range msg.MsgArr {
+				outMsg, err := args.q2Filter.ProcessAndReturn(ctx, subMsg)
+				if err != nil {
+					return err
+				}
+				if outMsg != nil {
+					err = args.sink.Sink(ctx, outMsg[0], args.parNum, false)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		} else {
+			outMsg, err := args.q2Filter.ProcessAndReturn(ctx, msg.Msg)
 			if err != nil {
 				return err
+			}
+			if outMsg != nil {
+				err = args.sink.Sink(ctx, outMsg[0], args.parNum, false)
+				if err != nil {
+					return err
+				}
 			}
 		}
 		return nil

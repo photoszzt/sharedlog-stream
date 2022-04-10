@@ -75,7 +75,7 @@ func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context, key commtyp
 	if err != nil {
 		return err
 	}
-	_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, false)
+	_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, false, false)
 	if err != nil {
 		return err
 	}

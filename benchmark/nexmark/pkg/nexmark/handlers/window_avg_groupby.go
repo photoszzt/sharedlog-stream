@@ -58,7 +58,7 @@ func (h *windowAvgGroupBy) getSrcSink(sp *common.QueryInput,
 	if err != nil {
 		return nil, nil, err
 	}
-	inConfig := &sharedlog_stream.SharedLogStreamConfig{
+	inConfig := &sharedlog_stream.StreamSourceConfig{
 		Timeout:      common.SrcConsumeTimeout,
 		MsgDecoder:   msgSerde,
 		KeyDecoder:   commtypes.StringDecoder{},
@@ -104,16 +104,33 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput, s
 			}
 		}
 
-		for _, msg := range msgs {
-			val := msg.Msg.Value.(*ntypes.Event)
-			if val.Etype == ntypes.BID {
-				par := uint8(val.Bid.Auction % uint64(sp.NumOutPartition))
-				newMsg := commtypes.Message{Key: val.Bid.Auction, Value: msg.Msg.Value}
-				err = sink.Sink(ctx, newMsg, par, false)
-				if err != nil {
-					return &common.FnOutput{
-						Success: false,
-						Message: fmt.Sprintf("sink failed: %v\n", err),
+		for _, msg := range msgs.Msgs {
+			if msg.MsgArr != nil {
+				for _, subMsg := range msg.MsgArr {
+					val := subMsg.Value.(*ntypes.Event)
+					if val.Etype == ntypes.BID {
+						par := uint8(val.Bid.Auction % uint64(sp.NumOutPartition))
+						newMsg := commtypes.Message{Key: val.Bid.Auction, Value: msg.Msg.Value}
+						err = sink.Sink(ctx, newMsg, par, false)
+						if err != nil {
+							return &common.FnOutput{
+								Success: false,
+								Message: fmt.Sprintf("sink failed: %v\n", err),
+							}
+						}
+					}
+				}
+			} else {
+				val := msg.Msg.Value.(*ntypes.Event)
+				if val.Etype == ntypes.BID {
+					par := uint8(val.Bid.Auction % uint64(sp.NumOutPartition))
+					newMsg := commtypes.Message{Key: val.Bid.Auction, Value: msg.Msg.Value}
+					err = sink.Sink(ctx, newMsg, par, false)
+					if err != nil {
+						return &common.FnOutput{
+							Success: false,
+							Message: fmt.Sprintf("sink failed: %v\n", err),
+						}
 					}
 				}
 			}

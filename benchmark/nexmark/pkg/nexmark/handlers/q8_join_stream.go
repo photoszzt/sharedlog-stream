@@ -215,13 +215,13 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	if err != nil {
 		return nil, fmt.Errorf("get event serde err: %v", err)
 	}
-	auctionsConfig := &sharedlog_stream.SharedLogStreamConfig{
+	auctionsConfig := &sharedlog_stream.StreamSourceConfig{
 		Timeout:      time.Duration(sp.Duration) * time.Second,
 		KeyDecoder:   commtypes.Uint64Decoder{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
 	}
-	personsConfig := &sharedlog_stream.SharedLogStreamConfig{
+	personsConfig := &sharedlog_stream.StreamSourceConfig{
 		Timeout:      time.Duration(sp.Duration) * time.Second,
 		KeyDecoder:   commtypes.Uint64Decoder{},
 		ValueDecoder: eventSerde,

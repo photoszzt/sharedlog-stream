@@ -57,41 +57,54 @@ func (h *q8PersonsByIDHandler) process(
 	args := argsTmp.(*q8PersonsByIDProcessArgs)
 	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
-		event := msg.Msg.Value.(*ntypes.Event)
-		ts, err := event.ExtractStreamTime()
-		if err != nil {
-			return fmt.Errorf("fail to extract timestamp: %v", err)
+		if msg.MsgArr != nil {
+			for _, subMsg := range msg.MsgArr {
+				err := h.procMsg(ctx, subMsg, args)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
 		}
-		msg.Msg.Timestamp = ts
-		filteredMsgs, err := args.filterPerson.ProcessAndReturn(ctx, msg.Msg)
-		if err != nil {
-			return fmt.Errorf("filterPerson err: %v", err)
-		}
-		for _, filteredMsg := range filteredMsgs {
-			changeKeyedMsg, err := args.personsByIDMap.ProcessAndReturn(ctx, filteredMsg)
-			if err != nil {
-				return fmt.Errorf("personsByIDMap err: %v", err)
-			}
-
-			k := changeKeyedMsg[0].Key.(uint64)
-			h.cHashMu.RLock()
-			parTmp, ok := h.cHash.Get(k)
-			h.cHashMu.RUnlock()
-			if !ok {
-				return xerrors.New("fail to get output partition")
-			}
-			par := parTmp.(uint8)
-			err = args.trackParFunc(ctx, k, args.sink.KeySerde(), args.sink.TopicName(), par)
-			if err != nil {
-				return fmt.Errorf("add topic partition failed: %v", err)
-			}
-			err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
-			if err != nil {
-				return fmt.Errorf("sink err: %v", err)
-			}
-		}
-		return nil
+		return h.procMsg(ctx, msg.Msg, args)
 	})
+}
+
+func (h *q8PersonsByIDHandler) procMsg(ctx context.Context, msg commtypes.Message, args *q8PersonsByIDProcessArgs) error {
+	event := msg.Value.(*ntypes.Event)
+	ts, err := event.ExtractStreamTime()
+	if err != nil {
+		return fmt.Errorf("fail to extract timestamp: %v", err)
+	}
+	msg.Timestamp = ts
+	filteredMsgs, err := args.filterPerson.ProcessAndReturn(ctx, msg)
+	if err != nil {
+		return fmt.Errorf("filterPerson err: %v", err)
+	}
+	for _, filteredMsg := range filteredMsgs {
+		changeKeyedMsg, err := args.personsByIDMap.ProcessAndReturn(ctx, filteredMsg)
+		if err != nil {
+			return fmt.Errorf("personsByIDMap err: %v", err)
+		}
+
+		k := changeKeyedMsg[0].Key.(uint64)
+		h.cHashMu.RLock()
+		parTmp, ok := h.cHash.Get(k)
+		h.cHashMu.RUnlock()
+		if !ok {
+			return xerrors.New("fail to get output partition")
+		}
+		par := parTmp.(uint8)
+		err = args.trackParFunc(ctx, k, args.sink.KeySerde(), args.sink.TopicName(), par)
+		if err != nil {
+			return fmt.Errorf("add topic partition failed: %v", err)
+		}
+		err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
+		if err != nil {
+			return fmt.Errorf("sink err: %v", err)
+		}
+	}
+	return nil
 }
 
 type q8PersonsByIDProcessArgs struct {

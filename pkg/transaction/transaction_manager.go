@@ -344,9 +344,9 @@ func (tc *TransactionManager) appendToTransactionLog(ctx context.Context, tm *tx
 		return fmt.Errorf("txnMdSerde enc err: %v", tm)
 	}
 	if tags != nil {
-		_, err = tc.transactionLog.PushWithTag(ctx, encoded, 0, tags, false)
+		_, err = tc.transactionLog.PushWithTag(ctx, encoded, 0, tags, false, false)
 	} else {
-		_, err = tc.transactionLog.Push(ctx, encoded, 0, false)
+		_, err = tc.transactionLog.Push(ctx, encoded, 0, false, false)
 	}
 	return err
 }
@@ -366,7 +366,7 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 		for par := range partitions {
 			parNum := par
 			g.Go(func() error {
-				off, err := stream.Push(ectx, encoded, parNum, true)
+				off, err := stream.Push(ectx, encoded, parNum, true, false)
 				debug.Fprintf(os.Stderr, "append marker %d to stream %s off %x\n", marker, stream.TopicName(), off)
 				return err
 			})
@@ -494,7 +494,7 @@ func (tc *TransactionManager) AppendConsumedSeqNum(ctx context.Context, consumed
 			return err
 		}
 
-		_, err = offsetLog.Push(ctx, encoded, consumedSeqNumConfig.Partition, false)
+		_, err = offsetLog.Push(ctx, encoded, consumedSeqNumConfig.Partition, false, false)
 		if err != nil {
 			return err
 		}

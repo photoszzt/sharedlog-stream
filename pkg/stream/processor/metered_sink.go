@@ -45,6 +45,19 @@ func (s *ConcurrentMeteredSink) Sink(ctx context.Context, msg commtypes.Message,
 	return s.sink.Sink(ctx, msg, parNum, isControl)
 }
 
+func (s *ConcurrentMeteredSink) Flush(ctx context.Context) error {
+	if s.measure {
+		procStart := time.Now()
+		err := s.sink.Flush(ctx)
+		elapsed := time.Since(procStart)
+		s.latMu.Lock()
+		s.latencies = append(s.latencies, int(elapsed.Microseconds()))
+		s.latMu.Unlock()
+		return err
+	}
+	return s.sink.Flush(ctx)
+}
+
 func (s *ConcurrentMeteredSink) GetLatency() []int {
 	s.latMu.Lock()
 	defer s.latMu.Unlock()
@@ -103,4 +116,15 @@ func (s *MeteredSink) TopicName() string {
 
 func (s *MeteredSink) KeySerde() commtypes.Serde {
 	return s.sink.KeySerde()
+}
+
+func (s *MeteredSink) Flush(ctx context.Context) error {
+	if s.measure {
+		procStart := time.Now()
+		err := s.sink.Flush(ctx)
+		elapsed := time.Since(procStart)
+		s.latencies = append(s.latencies, int(elapsed.Microseconds()))
+		return err
+	}
+	return s.sink.Flush(ctx)
 }

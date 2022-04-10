@@ -163,13 +163,13 @@ func (h *q4JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}
-	auctionsConfig := &sharedlog_stream.SharedLogStreamConfig{
+	auctionsConfig := &sharedlog_stream.StreamSourceConfig{
 		Timeout:      common.SrcConsumeTimeout,
 		KeyDecoder:   commtypes.Uint64Decoder{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
 	}
-	personsConfig := &sharedlog_stream.SharedLogStreamConfig{
+	personsConfig := &sharedlog_stream.StreamSourceConfig{
 		Timeout:      common.SrcConsumeTimeout,
 		KeyDecoder:   commtypes.Uint64Decoder{},
 		ValueDecoder: eventSerde,

@@ -75,7 +75,7 @@ func (h *windowedAvg) getSrcSink(ctx context.Context, sp *common.QueryInput, msg
 	if err != nil {
 		return nil, nil, err
 	}
-	inConfig := &sharedlog_stream.SharedLogStreamConfig{
+	inConfig := &sharedlog_stream.StreamSourceConfig{
 		Timeout:      common.SrcConsumeTimeout,
 		MsgDecoder:   msgSerde,
 		KeyDecoder:   commtypes.Uint64Decoder{},
@@ -190,28 +190,18 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput,
 			}
 		}
 
-		for _, msg := range msgs {
-			newMsgs, err := aggProc.ProcessAndReturn(ctx, msg.Msg)
-			if err != nil {
-				return &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("aggregate failed: %v\n", err),
-				}
-			}
-			for _, newMsg := range newMsgs {
-				avg, err := calcAvg.ProcessAndReturn(ctx, newMsg)
-				if err != nil {
-					return &common.FnOutput{
-						Success: false,
-						Message: fmt.Sprintf("calculate avg failed: %v\n", err),
+		for _, msg := range msgs.Msgs {
+			if msg.MsgArr != nil {
+				for _, subMsg := range msg.MsgArr {
+					err = h.procMsg(ctx, subMsg, aggProc, calcAvg, sink, sp.ParNum)
+					if err != nil {
+						return &common.FnOutput{Success: false, Message: err.Error()}
 					}
 				}
-				err = sink.Sink(ctx, avg[0], sp.ParNum, false)
+			} else {
+				err = h.procMsg(ctx, msg.Msg, aggProc, calcAvg, sink, sp.ParNum)
 				if err != nil {
-					return &common.FnOutput{
-						Success: false,
-						Message: fmt.Sprintf("sink failed: %v", err),
-					}
+					return &common.FnOutput{Success: false, Message: err.Error()}
 				}
 			}
 		}
@@ -229,6 +219,31 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput,
 			"sink":    sink.GetLatency(),
 		},
 	}
+}
+
+func (h *windowedAvg) procMsg(ctx context.Context,
+	msg commtypes.Message,
+	aggProc *processor.MeteredProcessor,
+	calcAvg *processor.MeteredProcessor,
+	sink *processor.ConcurrentMeteredSink,
+	parNum uint8,
+) error {
+	newMsgs, err := aggProc.ProcessAndReturn(ctx, msg)
+	if err != nil {
+		return fmt.Errorf("aggregate failed: %v\n", err)
+	}
+	for _, newMsg := range newMsgs {
+		avg, err := calcAvg.ProcessAndReturn(ctx, newMsg)
+		if err != nil {
+			return fmt.Errorf("calculate avg failed: %v\n", err)
+
+		}
+		err = sink.Sink(ctx, avg[0], parNum, false)
+		if err != nil {
+			return fmt.Errorf("sink failed: %v", err)
+		}
+	}
+	return nil
 }
 
 func (h *windowedAvg) windowavg_aggregate(ctx context.Context, sp *common.QueryInput) *common.FnOutput {

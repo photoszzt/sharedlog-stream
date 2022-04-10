@@ -79,43 +79,55 @@ func (h *bidKeyedByAuction) process(ctx context.Context,
 	args := argsTmp.(*bidKeyedByAuctionProcessArgs)
 	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
-		event := msg.Msg.Value.(*ntypes.Event)
-		ts, err := event.ExtractStreamTime()
-		if err != nil {
-			return fmt.Errorf("fail to extract timestamp: %v", err)
+		if msg.MsgArr != nil {
+			for _, subMsg := range msg.MsgArr {
+				err := h.procMsg(ctx, subMsg, args)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
 		}
-		msg.Msg.Timestamp = ts
-		bidMsg, err := args.filterBid.ProcessAndReturn(ctx, msg.Msg)
+		return h.procMsg(ctx, msg.Msg, args)
+	})
+}
+
+func (h *bidKeyedByAuction) procMsg(ctx context.Context, msg commtypes.Message, args *bidKeyedByAuctionProcessArgs) error {
+	event := msg.Value.(*ntypes.Event)
+	ts, err := event.ExtractStreamTime()
+	if err != nil {
+		return fmt.Errorf("fail to extract timestamp: %v", err)
+	}
+	msg.Timestamp = ts
+	bidMsg, err := args.filterBid.ProcessAndReturn(ctx, msg)
+	if err != nil {
+		return err
+	}
+	if bidMsg != nil {
+		mappedKey, err := args.selectKey.ProcessAndReturn(ctx, bidMsg[0])
 		if err != nil {
 			return err
 		}
-		if bidMsg != nil {
-			mappedKey, err := args.selectKey.ProcessAndReturn(ctx, bidMsg[0])
-			if err != nil {
-				return err
-			}
-			key := mappedKey[0].Key.(uint64)
-			h.cHashMu.RLock()
-			parTmp, ok := h.cHash.Get(key)
-			h.cHashMu.RUnlock()
-			if !ok {
-				return xerrors.New("fail to calculate partition")
-			}
-			par := parTmp.(uint8)
-			// par := uint8(key % uint64(args.numOutPartition))
-			err = args.trackParFunc(ctx, key, args.sink.KeySerde(), args.sink.TopicName(), par)
-			if err != nil {
-				return fmt.Errorf("add topic partition failed: %v", err)
-			}
-			// fmt.Fprintf(os.Stderr, "out msg ts: %v\n", mappedKey[0].Timestamp)
-			err = args.sink.Sink(ctx, mappedKey[0], par, false)
-			if err != nil {
-				return err
-			}
+		key := mappedKey[0].Key.(uint64)
+		h.cHashMu.RLock()
+		parTmp, ok := h.cHash.Get(key)
+		h.cHashMu.RUnlock()
+		if !ok {
+			return xerrors.New("fail to calculate partition")
 		}
-		return nil
-	})
-
+		par := parTmp.(uint8)
+		// par := uint8(key % uint64(args.numOutPartition))
+		err = args.trackParFunc(ctx, key, args.sink.KeySerde(), args.sink.TopicName(), par)
+		if err != nil {
+			return fmt.Errorf("add topic partition failed: %v", err)
+		}
+		// fmt.Fprintf(os.Stderr, "out msg ts: %v\n", mappedKey[0].Timestamp)
+		err = args.sink.Sink(ctx, mappedKey[0], par, false)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,

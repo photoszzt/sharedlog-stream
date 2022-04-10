@@ -80,31 +80,41 @@ func joinProc(
 		out <- &common.FnOutput{Success: false, Message: err.Error()}
 		return
 	}
-	for _, msg := range gotMsgs {
+	for _, msg := range gotMsgs.Msgs {
 		procArgs.offMu.Lock()
 		procArgs.currentOffset[procArgs.src.TopicName()] = msg.LogSeqNum
 		procArgs.offMu.Unlock()
 
-		st := msg.Msg.Value.(commtypes.StreamTimeExtractor)
-		ts, err := st.ExtractStreamTime()
-		if err != nil {
-			debug.Fprintf(os.Stderr, "%s return extract ts err: %v\n", ctx.Value("id"), err)
-			out <- &common.FnOutput{Success: false, Message: fmt.Sprintf("fail to extract timestamp: %v", err)}
-			return
-		}
-		msg.Msg.Timestamp = ts
-		msgs, err := procArgs.runner(ctx, msg.Msg)
-		if err != nil {
-			debug.Fprintf(os.Stderr, "%s return runner err: %v\n", ctx.Value("id"), err)
-			out <- &common.FnOutput{Success: false, Message: err.Error()}
-		}
-		err = pushMsgsToSink(ctx, procArgs.sink, procArgs.cHash, procArgs.cHashMu, msgs, procArgs.trackParFunc)
-		if err != nil {
-			debug.Fprintf(os.Stderr, "%s return push to sink err: %v\n", ctx.Value("id"), err)
-			out <- &common.FnOutput{Success: false, Message: err.Error()}
+		if msg.MsgArr != nil {
+			for _, subMsg := range msg.MsgArr {
+				procMsgWithSink(ctx, subMsg, out, procArgs)
+			}
+		} else {
+			procMsgWithSink(ctx, msg.Msg, out, procArgs)
 		}
 	}
 	out <- nil
+}
+
+func procMsgWithSink(ctx context.Context, msg commtypes.Message, out chan *common.FnOutput, procArgs *joinProcArgs) {
+	st := msg.Value.(commtypes.StreamTimeExtractor)
+	ts, err := st.ExtractStreamTime()
+	if err != nil {
+		debug.Fprintf(os.Stderr, "%s return extract ts err: %v\n", ctx.Value("id"), err)
+		out <- &common.FnOutput{Success: false, Message: fmt.Sprintf("fail to extract timestamp: %v", err)}
+		return
+	}
+	msg.Timestamp = ts
+	msgs, err := procArgs.runner(ctx, msg)
+	if err != nil {
+		debug.Fprintf(os.Stderr, "%s return runner err: %v\n", ctx.Value("id"), err)
+		out <- &common.FnOutput{Success: false, Message: err.Error()}
+	}
+	err = pushMsgsToSink(ctx, procArgs.sink, procArgs.cHash, procArgs.cHashMu, msgs, procArgs.trackParFunc)
+	if err != nil {
+		debug.Fprintf(os.Stderr, "%s return push to sink err: %v\n", ctx.Value("id"), err)
+		out <- &common.FnOutput{Success: false, Message: err.Error()}
+	}
 }
 
 /*
@@ -199,17 +209,34 @@ func joinProcSerialWithoutSink(
 		}
 		return err
 	}
-	for _, msg := range gotMsgs {
-		st := msg.Msg.Value.(commtypes.StreamTimeExtractor)
-		ts, err := st.ExtractStreamTime()
-		if err != nil {
-			return fmt.Errorf("fail to extract timestamp: %v", err)
+	for _, msg := range gotMsgs.Msgs {
+		if msg.MsgArr != nil {
+			for _, subMsg := range msg.MsgArr {
+				err = procMsg(ctx, subMsg, procArgs)
+				if err != nil {
+					return err
+				}
+			}
+		} else {
+			err = procMsg(ctx, msg.Msg, procArgs)
+			if err != nil {
+				return err
+			}
 		}
-		msg.Msg.Timestamp = ts
-		_, err = procArgs.runner(ctx, msg.Msg)
-		if err != nil {
-			return err
-		}
+	}
+	return nil
+}
+
+func procMsg(ctx context.Context, msg commtypes.Message, procArgs *joinProcWithoutSinkArgs) error {
+	st := msg.Value.(commtypes.StreamTimeExtractor)
+	ts, err := st.ExtractStreamTime()
+	if err != nil {
+		return fmt.Errorf("fail to extract timestamp: %v", err)
+	}
+	msg.Timestamp = ts
+	_, err = procArgs.runner(ctx, msg)
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -258,7 +285,7 @@ func getSrcSink(ctx context.Context, sp *common.QueryInput,
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	inConfig := &sharedlog_stream.SharedLogStreamConfig{
+	inConfig := &sharedlog_stream.StreamSourceConfig{
 		Timeout:      time.Duration(sp.Duration) * time.Second,
 		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: eventSerde,
@@ -290,7 +317,7 @@ func getSrcSinkUint64Key(
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	inConfig := &sharedlog_stream.SharedLogStreamConfig{
+	inConfig := &sharedlog_stream.StreamSourceConfig{
 		Timeout:      time.Duration(sp.Duration) * time.Second,
 		MsgDecoder:   msgSerde,
 		KeyDecoder:   commtypes.StringDecoder{},

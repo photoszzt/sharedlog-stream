@@ -2,6 +2,7 @@ package sharedlog_stream
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"sharedlog-stream/pkg/errors"
@@ -12,29 +13,31 @@ import (
 var ()
 
 type SharedLogStreamSource struct {
-	keyDecoder   commtypes.Decoder
-	valueDecoder commtypes.Decoder
-	msgDecoder   commtypes.MsgDecoder
-	stream       *SharedLogStream
-	timeout      time.Duration
+	keyDecoder      commtypes.Decoder
+	valueDecoder    commtypes.Decoder
+	msgDecoder      commtypes.MsgDecoder
+	payloadArrSerde commtypes.Serde
+	stream          *SharedLogStream
+	timeout         time.Duration
 }
 
 var _ = store.Stream(&SharedLogStream{})
 
-type SharedLogStreamConfig struct {
+type StreamSourceConfig struct {
 	KeyDecoder   commtypes.Decoder
 	ValueDecoder commtypes.Decoder
 	MsgDecoder   commtypes.MsgDecoder
 	Timeout      time.Duration
 }
 
-func NewSharedLogStreamSource(stream *SharedLogStream, config *SharedLogStreamConfig) *SharedLogStreamSource {
+func NewSharedLogStreamSource(stream *SharedLogStream, config *StreamSourceConfig) *SharedLogStreamSource {
 	return &SharedLogStreamSource{
-		stream:       stream,
-		timeout:      config.Timeout,
-		keyDecoder:   config.KeyDecoder,
-		valueDecoder: config.ValueDecoder,
-		msgDecoder:   config.MsgDecoder,
+		stream:          stream,
+		timeout:         config.Timeout,
+		keyDecoder:      config.KeyDecoder,
+		valueDecoder:    config.ValueDecoder,
+		msgDecoder:      config.MsgDecoder,
+		payloadArrSerde: commtypes.PayloadArrMsgpSerde{},
 	}
 }
 
@@ -50,9 +53,10 @@ func (s *SharedLogStreamSource) SetCursor(cursor uint64, parNum uint8) {
 	s.stream.SetCursor(cursor, parNum)
 }
 
-func (s *SharedLogStreamSource) Consume(ctx context.Context, parNum uint8) ([]commtypes.MsgAndSeq, error) {
+func (s *SharedLogStreamSource) Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
 	startTime := time.Now()
 	var msgs []commtypes.MsgAndSeq
+	totalLen := uint32(0)
 	for {
 		if s.timeout != 0 && time.Since(startTime) >= s.timeout {
 			break
@@ -71,32 +75,58 @@ func (s *SharedLogStreamSource) Consume(ctx context.Context, parNum uint8) ([]co
 			}
 		}
 		for _, rawMsg := range rawMsgs {
-			keyEncoded, valueEncoded, err := s.msgDecoder.Decode(rawMsg.Payload)
-			if err != nil {
-				return nil, err
-			}
-			var key interface{}
-			if keyEncoded != nil {
-				key, err = s.keyDecoder.Decode(keyEncoded)
+			if rawMsg.IsPayloadArr {
+				payloadArrTmp, err := s.payloadArrSerde.Decode(rawMsg.Payload)
 				if err != nil {
 					return nil, err
 				}
+				payloadArr := payloadArrTmp.(commtypes.PayloadArr)
+				var msgArr []commtypes.Message
+				for _, payload := range payloadArr.Payloads {
+					key, value, err := decodePayload(payload, s.msgDecoder, s.keyDecoder, s.valueDecoder)
+					if err != nil {
+						return nil, err
+					}
+					msgArr = append(msgArr, commtypes.Message{Key: key, Value: value})
+				}
+				totalLen += uint32(len(msgArr))
+				msgs = append(msgs, commtypes.MsgAndSeq{MsgArr: msgArr, Msg: commtypes.EmptyMessage,
+					MsgSeqNum: rawMsg.MsgSeqNum, LogSeqNum: rawMsg.LogSeqNum})
+			} else {
+				key, value, err := decodePayload(rawMsg.Payload, s.msgDecoder, s.keyDecoder, s.valueDecoder)
+				if err != nil {
+					return nil, err
+				}
+				msgs = append(msgs, commtypes.MsgAndSeq{
+					Msg:       commtypes.Message{Key: key, Value: value},
+					MsgArr:    nil,
+					MsgSeqNum: rawMsg.MsgSeqNum,
+					LogSeqNum: rawMsg.LogSeqNum,
+				})
+				totalLen += 1
 			}
-			// debug.Fprintf(os.Stderr, "val encoded is %v\n", valueEncoded)
-			value, err := s.valueDecoder.Decode(valueEncoded)
-			if err != nil {
-				return nil, err
-			}
-			msgs = append(msgs, commtypes.MsgAndSeq{
-				Msg: commtypes.Message{
-					Key:   key,
-					Value: value,
-				},
-				MsgSeqNum: rawMsg.MsgSeqNum,
-				LogSeqNum: rawMsg.LogSeqNum,
-			})
 		}
-		return msgs, nil
+		return &commtypes.MsgAndSeqs{Msgs: msgs, TotalLen: totalLen}, nil
 	}
 	return nil, errors.ErrStreamSourceTimeout
+}
+
+func decodePayload(payload []byte,
+	msgDecoder commtypes.MsgDecoder,
+	keyDecoder commtypes.Decoder,
+	valueDecoder commtypes.Decoder,
+) (interface{}, interface{}, error) {
+	keyEncoded, valueEncoded, err := msgDecoder.Decode(payload)
+	if err != nil {
+		return nil, nil, fmt.Errorf("fail to decode msg: %v", err)
+	}
+	key, err := keyDecoder.Decode(keyEncoded)
+	if err != nil {
+		return nil, nil, fmt.Errorf("fail to decode key: %v", err)
+	}
+	value, err := valueDecoder.Decode(valueEncoded)
+	if err != nil {
+		return nil, nil, fmt.Errorf("fail to decode value: %v", err)
+	}
+	return key, value, nil
 }

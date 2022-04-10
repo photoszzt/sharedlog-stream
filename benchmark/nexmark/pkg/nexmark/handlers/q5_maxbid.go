@@ -54,7 +54,7 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	aucIdCountMaxSerde commtypes.Serde,
 	msgSerde commtypes.MsgSerde,
 ) (*processor.MeteredSource, *processor.ConcurrentMeteredSink, error) {
-	inConfig := &sharedlog_stream.SharedLogStreamConfig{
+	inConfig := &sharedlog_stream.StreamSourceConfig{
 		Timeout:      common.SrcConsumeTimeout,
 		KeyDecoder:   seSerde,
 		ValueDecoder: aucIdCountSerde,
@@ -104,34 +104,47 @@ type q5MaxBidRestoreArgs struct {
 func (h *q5MaxBid) process(ctx context.Context, t *transaction.StreamTask, argsTmp interface{}) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*q5MaxBidProcessArgs)
 	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
-		aic := msg.Msg.Value.(*ntypes.AuctionIdCount)
-		ts, err := aic.ExtractStreamTime()
-		if err != nil {
-			return fmt.Errorf("fail to extract timestamp: %v", err)
-		}
-		msg.Msg.Timestamp = ts
-		// fmt.Fprintf(os.Stderr, "got msg with key: %v, val: %v, ts: %v\n", msg.Msg.Key, msg.Msg.Value, msg.Msg.Timestamp)
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
-		_, err = args.maxBid.ProcessAndReturn(ctx, msg.Msg)
-		if err != nil {
-			return fmt.Errorf("maxBid err: %v", err)
-		}
-		joinedOutput, err := args.stJoin.ProcessAndReturn(ctx, msg.Msg)
-		if err != nil {
-			return fmt.Errorf("joined err: %v", err)
-		}
-		filteredMx, err := args.chooseMaxCnt.ProcessAndReturn(ctx, joinedOutput[0])
-		if err != nil {
-			return fmt.Errorf("filteredMx err: %v", err)
-		}
-		for _, filtered := range filteredMx {
-			err = args.sink.Sink(ctx, filtered, args.parNum, false)
-			if err != nil {
-				return fmt.Errorf("sink err: %v", err)
+		if msg.MsgArr != nil {
+			for _, subMsg := range msg.MsgArr {
+				err := h.procMsg(ctx, subMsg, args)
+				if err != nil {
+					return err
+				}
 			}
+			return nil
 		}
-		return nil
+		return h.procMsg(ctx, msg.Msg, args)
 	})
+}
+
+func (h *q5MaxBid) procMsg(ctx context.Context, msg commtypes.Message, args *q5MaxBidProcessArgs) error {
+	aic := msg.Value.(*ntypes.AuctionIdCount)
+	ts, err := aic.ExtractStreamTime()
+	if err != nil {
+		return fmt.Errorf("fail to extract timestamp: %v", err)
+	}
+	msg.Timestamp = ts
+	// fmt.Fprintf(os.Stderr, "got msg with key: %v, val: %v, ts: %v\n", msg.Msg.Key, msg.Msg.Value, msg.Msg.Timestamp)
+	_, err = args.maxBid.ProcessAndReturn(ctx, msg)
+	if err != nil {
+		return fmt.Errorf("maxBid err: %v", err)
+	}
+	joinedOutput, err := args.stJoin.ProcessAndReturn(ctx, msg)
+	if err != nil {
+		return fmt.Errorf("joined err: %v", err)
+	}
+	filteredMx, err := args.chooseMaxCnt.ProcessAndReturn(ctx, joinedOutput[0])
+	if err != nil {
+		return fmt.Errorf("filteredMx err: %v", err)
+	}
+	for _, filtered := range filteredMx {
+		err = args.sink.Sink(ctx, filtered, args.parNum, false)
+		if err != nil {
+			return fmt.Errorf("sink err: %v", err)
+		}
+	}
+	return nil
 }
 
 func (h *q5MaxBid) processWithoutSink(ctx context.Context, argsTmp interface{}) error {
@@ -144,29 +157,46 @@ func (h *q5MaxBid) processWithoutSink(ctx context.Context, argsTmp interface{}) 
 		return fmt.Errorf("consume err: %v", err)
 	}
 
-	for _, msg := range gotMsgs {
+	for _, msg := range gotMsgs.Msgs {
 		if msg.Msg.Value == nil {
 			continue
 		}
-		aic := msg.Msg.Value.(*ntypes.AuctionIdCount)
-		ts, err := aic.ExtractStreamTime()
-		if err != nil {
-			return fmt.Errorf("fail to extract timestamp: %v", err)
+		if msg.MsgArr != nil {
+			for _, subMsg := range msg.MsgArr {
+				err := h.procMsgWithoutSink(ctx, subMsg, args)
+				if err != nil {
+					return err
+				}
+			}
+		} else {
+			err := h.procMsgWithoutSink(ctx, msg.Msg, args)
+			if err != nil {
+				return err
+			}
 		}
-		msg.Msg.Timestamp = ts
-		// fmt.Fprintf(os.Stderr, "got msg with key: %v, val: %v, ts: %v\n", msg.Msg.Key, msg.Msg.Value, msg.Msg.Timestamp)
-		_, err = args.maxBid.ProcessAndReturn(ctx, msg.Msg)
-		if err != nil {
-			return fmt.Errorf("maxBid err: %v", err)
-		}
-		joinedOutput, err := args.stJoin.ProcessAndReturn(ctx, msg.Msg)
-		if err != nil {
-			return fmt.Errorf("joined err: %v", err)
-		}
-		_, err = args.chooseMaxCnt.ProcessAndReturn(ctx, joinedOutput[0])
-		if err != nil {
-			return fmt.Errorf("filteredMx err: %v", err)
-		}
+	}
+	return nil
+}
+
+func (h *q5MaxBid) procMsgWithoutSink(ctx context.Context, msg commtypes.Message, args *q5MaxBidRestoreArgs) error {
+	aic := msg.Value.(*ntypes.AuctionIdCount)
+	ts, err := aic.ExtractStreamTime()
+	if err != nil {
+		return fmt.Errorf("fail to extract timestamp: %v", err)
+	}
+	msg.Timestamp = ts
+	// fmt.Fprintf(os.Stderr, "got msg with key: %v, val: %v, ts: %v\n", msg.Msg.Key, msg.Msg.Value, msg.Msg.Timestamp)
+	_, err = args.maxBid.ProcessAndReturn(ctx, msg)
+	if err != nil {
+		return fmt.Errorf("maxBid err: %v", err)
+	}
+	joinedOutput, err := args.stJoin.ProcessAndReturn(ctx, msg)
+	if err != nil {
+		return fmt.Errorf("joined err: %v", err)
+	}
+	_, err = args.chooseMaxCnt.ProcessAndReturn(ctx, joinedOutput[0])
+	if err != nil {
+		return fmt.Errorf("filteredMx err: %v", err)
 	}
 	return nil
 }

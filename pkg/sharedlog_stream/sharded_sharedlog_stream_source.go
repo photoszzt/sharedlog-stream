@@ -2,7 +2,6 @@ package sharedlog_stream
 
 import (
 	"context"
-	"fmt"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -16,22 +15,24 @@ type ScaleEpochAndBytes struct {
 }
 
 type ShardedSharedLogStreamSource struct {
-	keyDecoder   commtypes.Decoder
-	valueDecoder commtypes.Decoder
-	msgDecoder   commtypes.MsgDecoder
-	stream       *ShardedSharedLogStream
-	timeout      time.Duration
+	keyDecoder      commtypes.Decoder
+	valueDecoder    commtypes.Decoder
+	msgDecoder      commtypes.MsgDecoder
+	payloadArrSerde commtypes.Serde
+	stream          *ShardedSharedLogStream
+	timeout         time.Duration
 }
 
 var _ = processor.Source(&ShardedSharedLogStreamSource{})
 
-func NewShardedSharedLogStreamSource(stream *ShardedSharedLogStream, config *SharedLogStreamConfig) *ShardedSharedLogStreamSource {
+func NewShardedSharedLogStreamSource(stream *ShardedSharedLogStream, config *StreamSourceConfig) *ShardedSharedLogStreamSource {
 	return &ShardedSharedLogStreamSource{
-		stream:       stream,
-		timeout:      config.Timeout,
-		keyDecoder:   config.KeyDecoder,
-		valueDecoder: config.ValueDecoder,
-		msgDecoder:   config.MsgDecoder,
+		stream:          stream,
+		timeout:         config.Timeout,
+		keyDecoder:      config.KeyDecoder,
+		valueDecoder:    config.ValueDecoder,
+		msgDecoder:      config.MsgDecoder,
+		payloadArrSerde: commtypes.PayloadArrMsgpSerde{},
 	}
 }
 
@@ -47,9 +48,10 @@ func (s *ShardedSharedLogStreamSource) SetCursor(cursor uint64, parNum uint8) {
 	s.stream.SetCursor(cursor, parNum)
 }
 
-func (s *ShardedSharedLogStreamSource) Consume(ctx context.Context, parNum uint8) ([]commtypes.MsgAndSeq, error) {
+func (s *ShardedSharedLogStreamSource) Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
 	startTime := time.Now()
 	var msgs []commtypes.MsgAndSeq
+	totalLen := uint32(0)
 	for {
 		if s.timeout != 0 && time.Since(startTime) >= s.timeout {
 			break
@@ -80,35 +82,47 @@ func (s *ShardedSharedLogStreamSource) Consume(ctx context.Context, parNum uint8
 							Payload:    rawMsg.Payload,
 						},
 					},
+					MsgArr:    nil,
 					MsgSeqNum: rawMsg.MsgSeqNum,
 					LogSeqNum: rawMsg.LogSeqNum,
 					IsControl: true,
 				})
+				totalLen += 1
 				continue
 			}
-			keyEncoded, valueEncoded, err := s.msgDecoder.Decode(rawMsg.Payload)
-			if err != nil {
-				return nil, fmt.Errorf("fail to decode msg: %v", err)
+			if rawMsg.IsPayloadArr {
+				payloadArrTmp, err := s.payloadArrSerde.Decode(rawMsg.Payload)
+				if err != nil {
+					return nil, err
+				}
+				payloadArr := payloadArrTmp.(commtypes.PayloadArr)
+				var msgArr []commtypes.Message
+				for _, payload := range payloadArr.Payloads {
+					key, val, err := decodePayload(payload, s.msgDecoder, s.keyDecoder, s.valueDecoder)
+					if err != nil {
+						return nil, err
+					}
+					msgArr = append(msgArr, commtypes.Message{Key: key, Value: val})
+				}
+				totalLen += uint32(len(msgArr))
+				msgs = append(msgs, commtypes.MsgAndSeq{MsgArr: msgArr, Msg: commtypes.EmptyMessage,
+					MsgSeqNum: rawMsg.MsgSeqNum, LogSeqNum: rawMsg.LogSeqNum})
+			} else {
+				key, value, err := decodePayload(rawMsg.Payload, s.msgDecoder, s.keyDecoder, s.valueDecoder)
+				if err != nil {
+					return nil, err
+				}
+				msgs = append(msgs, commtypes.MsgAndSeq{
+					Msg:       commtypes.Message{Key: key, Value: value},
+					MsgArr:    nil,
+					MsgSeqNum: rawMsg.MsgSeqNum,
+					LogSeqNum: rawMsg.LogSeqNum,
+					IsControl: false,
+				})
+				totalLen += 1
 			}
-			key, err := s.keyDecoder.Decode(keyEncoded)
-			if err != nil {
-				return nil, fmt.Errorf("fail to decode key: %v", err)
-			}
-			value, err := s.valueDecoder.Decode(valueEncoded)
-			if err != nil {
-				return nil, fmt.Errorf("fail to decode value: %v", err)
-			}
-			msgs = append(msgs, commtypes.MsgAndSeq{
-				Msg: commtypes.Message{
-					Key:   key,
-					Value: value,
-				},
-				MsgSeqNum: rawMsg.MsgSeqNum,
-				LogSeqNum: rawMsg.LogSeqNum,
-				IsControl: false,
-			})
 		}
-		return msgs, nil
+		return &commtypes.MsgAndSeqs{Msgs: msgs, TotalLen: totalLen}, nil
 	}
 	return nil, errors.ErrStreamSourceTimeout
 }

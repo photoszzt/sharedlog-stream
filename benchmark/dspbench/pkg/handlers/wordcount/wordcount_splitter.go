@@ -61,7 +61,7 @@ func getSrcSink(ctx context.Context,
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("get msg serde failed: %v", err)
 	}
-	inConfig := &sharedlog_stream.SharedLogStreamConfig{
+	inConfig := &sharedlog_stream.StreamSourceConfig{
 		Timeout:      common.SrcConsumeTimeout,
 		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: commtypes.StringDecoder{},
