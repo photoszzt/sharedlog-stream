@@ -73,8 +73,7 @@ func main() {
 			NumPartitions:     FLAGS_numPartition,
 			ReplicationFactor: 3,
 			Config: map[string]string{
-				"acks":                "all",
-				"min.insync.replicas": "2",
+				"min.insync.replicas": "3",
 			},
 		},
 	}
