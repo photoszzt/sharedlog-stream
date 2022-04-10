@@ -8,12 +8,12 @@ import (
 
 // not goroutine safe
 type BufferedSinkStream struct {
-	payloadArrSerde commtypes.Serde
-
 	sinkMu     sync.Mutex
 	sinkBuffer [][]byte
-	Stream     *SharedLogStream
-	parNum     uint8
+
+	Stream          *SharedLogStream
+	payloadArrSerde commtypes.Serde
+	parNum          uint8
 }
 
 func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8) *BufferedSinkStream {

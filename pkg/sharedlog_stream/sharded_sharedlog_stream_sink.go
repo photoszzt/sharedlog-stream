@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	SINK_BUFFER_SIZE = 10
+	SINK_BUFFER_SIZE = 50
 )
 
 type ShardedSharedLogStreamSink struct {
