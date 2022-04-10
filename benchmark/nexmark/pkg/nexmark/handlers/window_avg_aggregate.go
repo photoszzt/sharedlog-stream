@@ -193,12 +193,18 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput,
 		for _, msg := range msgs.Msgs {
 			if msg.MsgArr != nil {
 				for _, subMsg := range msg.MsgArr {
+					if subMsg.Value == nil {
+						continue
+					}
 					err = h.procMsg(ctx, subMsg, aggProc, calcAvg, sink, sp.ParNum)
 					if err != nil {
 						return &common.FnOutput{Success: false, Message: err.Error()}
 					}
 				}
 			} else {
+				if msg.Msg.Value == nil {
+					continue
+				}
 				err = h.procMsg(ctx, msg.Msg, aggProc, calcAvg, sink, sp.ParNum)
 				if err != nil {
 					return &common.FnOutput{Success: false, Message: err.Error()}

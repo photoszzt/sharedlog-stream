@@ -107,6 +107,9 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput, s
 		for _, msg := range msgs.Msgs {
 			if msg.MsgArr != nil {
 				for _, subMsg := range msg.MsgArr {
+					if subMsg.Value == nil {
+						continue
+					}
 					val := subMsg.Value.(*ntypes.Event)
 					if val.Etype == ntypes.BID {
 						par := uint8(val.Bid.Auction % uint64(sp.NumOutPartition))
@@ -121,6 +124,9 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput, s
 					}
 				}
 			} else {
+				if msg.Msg.Value == nil {
+					continue
+				}
 				val := msg.Msg.Value.(*ntypes.Event)
 				if val.Etype == ntypes.BID {
 					par := uint8(val.Bid.Auction % uint64(sp.NumOutPartition))

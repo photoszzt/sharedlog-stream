@@ -125,6 +125,9 @@ func (h *query7Handler) process(
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
 		if msg.MsgArr != nil {
 			for _, subMsg := range msg.MsgArr {
+				if subMsg.Value == nil {
+					continue
+				}
 				err := h.procMsg(ctx, subMsg, args)
 				if err != nil {
 					return err
@@ -180,17 +183,20 @@ func (h *query7Handler) processWithoutSink(
 	}
 
 	for _, msg := range gotMsgs.Msgs {
-		if msg.Msg.Value == nil {
-			continue
-		}
 		if msg.MsgArr != nil {
 			for _, subMsg := range msg.MsgArr {
+				if subMsg.Value == nil {
+					continue
+				}
 				err := h.procMsgWithoutSink(ctx, subMsg, args)
 				if err != nil {
 					return err
 				}
 			}
 		} else {
+			if msg.Msg.Value == nil {
+				continue
+			}
 			err := h.procMsgWithoutSink(ctx, msg.Msg, args)
 			if err != nil {
 				return err

@@ -107,6 +107,9 @@ func (h *q5MaxBid) process(ctx context.Context, t *transaction.StreamTask, argsT
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
 		if msg.MsgArr != nil {
 			for _, subMsg := range msg.MsgArr {
+				if subMsg.Value == nil {
+					continue
+				}
 				err := h.procMsg(ctx, subMsg, args)
 				if err != nil {
 					return err
@@ -158,17 +161,20 @@ func (h *q5MaxBid) processWithoutSink(ctx context.Context, argsTmp interface{}) 
 	}
 
 	for _, msg := range gotMsgs.Msgs {
-		if msg.Msg.Value == nil {
-			continue
-		}
 		if msg.MsgArr != nil {
 			for _, subMsg := range msg.MsgArr {
+				if subMsg.Value == nil {
+					continue
+				}
 				err := h.procMsgWithoutSink(ctx, subMsg, args)
 				if err != nil {
 					return err
 				}
 			}
 		} else {
+			if msg.Msg.Value == nil {
+				continue
+			}
 			err := h.procMsgWithoutSink(ctx, msg.Msg, args)
 			if err != nil {
 				return err

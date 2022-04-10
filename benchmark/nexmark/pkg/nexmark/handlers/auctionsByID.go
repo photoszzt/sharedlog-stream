@@ -65,6 +65,9 @@ func (h *auctionsByIDHandler) process(
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
 		if msg.MsgArr != nil {
 			for _, subMsg := range msg.MsgArr {
+				if subMsg.Value == nil {
+					continue
+				}
 				err := h.procMsg(ctx, subMsg, args)
 				if err != nil {
 					return err

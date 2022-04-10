@@ -153,6 +153,9 @@ func (h *query2Handler) process(ctx context.Context, t *transaction.StreamTask, 
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
 		if msg.MsgArr != nil {
 			for _, subMsg := range msg.MsgArr {
+				if subMsg.Value == nil {
+					continue
+				}
 				outMsg, err := args.q2Filter.ProcessAndReturn(ctx, subMsg)
 				if err != nil {
 					return err

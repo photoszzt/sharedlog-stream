@@ -632,7 +632,7 @@ func CommonProcess(ctx context.Context, t *StreamTask, args processor.ProcArgsWi
 		return t.CurrentOffset, &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	for _, msg := range gotMsgs.Msgs {
-		if msg.Msg.Value == nil {
+		if msg.MsgArr == nil && msg.Msg.Value == nil {
 			continue
 		}
 		if msg.IsControl {
