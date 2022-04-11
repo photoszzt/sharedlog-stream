@@ -134,7 +134,7 @@ func CommonGetSrcSink(ctx context.Context, sp *common.QueryInput,
 		return nil, nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}
 	inConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      time.Duration(sp.Duration) * time.Second,
+		Timeout:      common.SrcConsumeTimeout,
 		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,

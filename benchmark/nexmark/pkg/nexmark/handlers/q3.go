@@ -76,9 +76,12 @@ func (h *query3Handler) Query3(ctx context.Context, input *common.QueryInput) *c
 			Message: err.Error(),
 		}
 	}
-
+	timeout := time.Duration(input.Duration) * time.Second
+	if timeout == 0 {
+		timeout = common.SrcConsumeTimeout
+	}
 	inConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      time.Duration(input.Duration) * time.Second,
+		Timeout:      timeout,
 		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,

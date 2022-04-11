@@ -104,9 +104,12 @@ func Query5(ctx context.Context, env types.Environment, input *common.QueryInput
 			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", input.SerdeFormat),
 		}
 	}
-
+	timeout := time.Duration(input.Duration) * time.Second
+	if timeout == 0 {
+		timeout = common.SrcConsumeTimeout
+	}
 	inConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      time.Duration(input.Duration) * time.Second,
+		Timeout:      timeout,
 		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,

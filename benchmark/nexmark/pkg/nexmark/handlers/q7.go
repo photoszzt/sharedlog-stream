@@ -68,7 +68,7 @@ func (h *query7Handler) getSrcSink(
 		return nil, nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", input.SerdeFormat)
 	}
 	inConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      time.Duration(input.Duration) * time.Second,
+		Timeout:      common.SrcConsumeTimeout,
 		KeyDecoder:   commtypes.Uint64Serde{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,

@@ -86,7 +86,7 @@ func Query8(ctx context.Context, env types.Environment, input *common.QueryInput
 	}
 
 	inConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      time.Duration(input.Duration) * time.Second,
+		Timeout:      common.SrcConsumeTimeout,
 		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,

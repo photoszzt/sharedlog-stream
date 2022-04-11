@@ -7,7 +7,6 @@ import (
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sync"
-	"time"
 
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
@@ -286,7 +285,7 @@ func getSrcSink(ctx context.Context, sp *common.QueryInput,
 		return nil, nil, nil, err
 	}
 	inConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      time.Duration(sp.Duration) * time.Second,
+		Timeout:      common.SrcConsumeTimeout,
 		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
@@ -318,7 +317,7 @@ func getSrcSinkUint64Key(
 		return nil, nil, nil, err
 	}
 	inConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      time.Duration(sp.Duration) * time.Second,
+		Timeout:      common.SrcConsumeTimeout,
 		MsgDecoder:   msgSerde,
 		KeyDecoder:   commtypes.StringDecoder{},
 		ValueDecoder: eventSerde,
