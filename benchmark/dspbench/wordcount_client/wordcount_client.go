@@ -154,38 +154,38 @@ func main() {
 	}
 
 	wg.Wait()
-	srcNum := uint64(0)
+	srcNum := make(map[string]uint64)
 	srcEndToEnd := float64(0)
 	if sourceOutput.Success {
 		common.ProcessThroughputLat("source", sourceOutput.Latencies, sourceOutput.Consumed,
-			sourceOutput.Duration, &srcNum, &srcEndToEnd)
+			sourceOutput.Duration, srcNum, &srcEndToEnd)
 	}
-	if srcNum != 0 {
-		fmt.Fprintf(os.Stderr, "source throughput %v (event/s)\n", float64(srcNum)/srcEndToEnd)
+	if len(srcNum) != 0 {
+		fmt.Fprintf(os.Stderr, "source throughput %v (event/s)\n", float64(srcNum["e2e"])/srcEndToEnd)
 	}
 
-	splitNum := uint64(0)
+	splitNum := make(map[string]uint64)
 	splitEndToEnd := float64(0)
 	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
 		if splitOutput[i].Success {
 			common.ProcessThroughputLat(fmt.Sprintf("split %v", i), splitOutput[i].Latencies,
-				splitOutput[i].Consumed, splitOutput[i].Duration, &splitNum, &splitEndToEnd)
+				splitOutput[i].Consumed, splitOutput[i].Duration, splitNum, &splitEndToEnd)
 		}
 	}
-	if splitNum != 0 {
-		fmt.Fprintf(os.Stderr, "split throughput %v (event/s)\n", float64(splitNum)/splitEndToEnd)
+	if len(splitNum) != 0 {
+		fmt.Fprintf(os.Stderr, "split throughput %v (event/s)\n", float64(splitNum["src"])/splitEndToEnd)
 	}
 
-	countNum := uint64(0)
+	countNum := make(map[string]uint64)
 	countEndToEnd := float64(0)
 	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
 		if countOutput[i].Success {
 			common.ProcessThroughputLat(fmt.Sprintf("count %d", i), countOutput[i].Latencies,
-				countOutput[i].Consumed, countOutput[i].Duration, &countNum, &countEndToEnd)
+				countOutput[i].Consumed, countOutput[i].Duration, countNum, &countEndToEnd)
 		}
 	}
-	if countNum != 0 {
-		fmt.Fprintf(os.Stderr, "count throughput %v (event/s)\n", float64(countNum)/countEndToEnd)
+	if len(countNum) != 0 {
+		fmt.Fprintf(os.Stderr, "count throughput %v (event/s)\n", float64(countNum["src"])/countEndToEnd)
 	}
 
 	if FLAGS_dump_file_folder != "" {

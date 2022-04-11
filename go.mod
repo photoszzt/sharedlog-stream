@@ -16,7 +16,6 @@ require (
 	github.com/tinylib/msgp v1.1.6
 	go.mongodb.org/mongo-driver v1.8.4
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/time v0.0.0-20220224211638-0e9765cccd65
 	golang.org/x/tools v0.1.10
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
 )

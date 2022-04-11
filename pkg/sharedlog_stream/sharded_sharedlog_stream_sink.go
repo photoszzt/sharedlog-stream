@@ -7,10 +7,6 @@ import (
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 )
 
-const (
-	SINK_BUFFER_SIZE = 50
-)
-
 type ShardedSharedLogStreamSink struct {
 	keySerde   commtypes.Serde
 	valueSerde commtypes.Serde

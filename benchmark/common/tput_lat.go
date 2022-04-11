@@ -28,9 +28,8 @@ func (t timeSlice) p(percent float64) int {
 
 func ProcessThroughputLat(name string, latencies map[string][]int,
 	consumed map[string]uint64, duration float64,
-	num *uint64, endToEnd *float64,
+	num map[string]uint64, endToEnd *float64,
 ) {
-	fmt.Fprintf(os.Stderr, "process %s\n", name)
 	for n, lat_arr := range latencies {
 		if len(lat_arr) != 0 {
 			sumTime := float64(0)
@@ -51,8 +50,8 @@ func ProcessThroughputLat(name string, latencies map[string][]int,
 			} else {
 				debug.Fprint(os.Stderr, "consumed is empty")
 			}
-			if n == "src" || strings.Contains(name, "source") {
-				*num += processed
+			if n == "src" || strings.Contains(name, "source") || strings.Contains(n, "Src") || n == "sink" {
+				num[n] += processed
 			}
 			if n == "e2e" {
 				if *endToEnd < sumTime {

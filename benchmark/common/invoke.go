@@ -127,7 +127,7 @@ func Invoke(config_file string, gateway_url string,
 		go invokeSourceFunc(client, numSrcPartition, srcTopicName, &sourceOutput[idx], &wg)
 	}
 
-	time.Sleep(time.Duration(60) * time.Second)
+	time.Sleep(time.Duration(20) * time.Second)
 
 	for _, node := range cliNodes {
 		funcName := node.Name()
@@ -142,40 +142,49 @@ func Invoke(config_file string, gateway_url string,
 	}
 	wg.Wait()
 
-	srcNum := uint64(0)
+	srcNum := make(map[string]uint64)
 	srcEndToEnd := float64(0)
 	for i := uint8(0); i < numSrcInstance; i++ {
 		idx := i
 		if sourceOutput[idx].Success {
 			ProcessThroughputLat(fmt.Sprintf("source-%d", idx),
 				sourceOutput[idx].Latencies, sourceOutput[idx].Consumed,
-				sourceOutput[idx].Duration, &srcNum, &srcEndToEnd)
+				sourceOutput[idx].Duration, srcNum, &srcEndToEnd)
 		} else {
 			fmt.Fprintf(os.Stderr, "source-%d failed\n", idx)
 		}
 	}
-	if srcNum != 0 {
-		fmt.Fprintf(os.Stderr, "source processed %v events, time %v s, throughput %v (event/s)\n\n",
-			srcNum, srcEndToEnd, float64(srcNum)/srcEndToEnd)
+	if len(srcNum) != 0 {
+		fmt.Fprintf(os.Stderr, "source outputs %v events, time %v s, throughput %v (event/s)\n\n",
+			srcNum, srcEndToEnd, float64(srcNum["e2e"])/srcEndToEnd)
 	}
 
 	for _, node := range cliNodes {
 		funcName := node.Name()
 		output := outputMap[funcName]
-		num := uint64(0)
+		num := make(map[string]uint64)
 		endToEnd := float64(0)
 		for j := uint8(0); j < uint8(len(output)); j++ {
 			if output[j].Success {
 				ProcessThroughputLat(fmt.Sprintf("%s-%d", funcName, j),
 					output[j].Latencies, output[j].Consumed, output[j].Duration,
-					&num, &endToEnd)
+					num, &endToEnd)
 			} else {
 				fmt.Fprintf(os.Stderr, "%s-%d failed\n", funcName, j)
 			}
 		}
-		if num != 0 {
-			fmt.Fprintf(os.Stderr, "%s processed %v events, time %v s, throughput %v (event/s)\n\n",
-				funcName, num, endToEnd, float64(num)/endToEnd)
+		if len(num) != 0 {
+			if len(num) == 1 {
+				fmt.Fprintf(os.Stderr, "%s processed %v events, outputs %v events, time %v s, throughput %v (event/s)\n\n",
+					funcName, num["src"], num["sink"], endToEnd, float64(num["src"])/endToEnd)
+			} else {
+				for k, v := range num {
+					fmt.Fprintf(os.Stderr, "%s processed %v events, time %v s, throughput %v (event/s)\n",
+						k, v, endToEnd, float64(v)/endToEnd)
+				}
+				fmt.Fprintf(os.Stderr, "%s outputs %v events\n", funcName, num["sink"])
+				fmt.Fprintf(os.Stderr, "\n")
+			}
 		}
 	}
 	return nil

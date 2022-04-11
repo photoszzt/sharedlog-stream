@@ -4,6 +4,14 @@ import (
 	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sync"
+
+	"cs.utexas.edu/zjia/faas/protocol"
+)
+
+const (
+	SINK_BUFFER_SIZE = 50
+	// besides payload there're extra overhead
+	SINK_BUFFER_MAX_SIZE = protocol.MessageInlineDataSize - 512
 )
 
 // not goroutine safe
@@ -14,6 +22,7 @@ type BufferedSinkStream struct {
 	Stream          *SharedLogStream
 	payloadArrSerde commtypes.Serde
 	parNum          uint8
+	currentSize     int
 }
 
 func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8) *BufferedSinkStream {
@@ -23,16 +32,18 @@ func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8) *BufferedSinkS
 		payloadArrSerde: payloadArrSerde,
 		parNum:          parNum,
 		Stream:          stream,
+		currentSize:     0,
 	}
 }
 
 func (s *BufferedSinkStream) BufPush(ctx context.Context, payload []byte) error {
 	s.sinkMu.Lock()
 	defer s.sinkMu.Unlock()
-	if len(s.sinkBuffer) < SINK_BUFFER_SIZE {
+	payload_size := len(payload)
+	if len(s.sinkBuffer) < SINK_BUFFER_SIZE && s.currentSize+payload_size < SINK_BUFFER_MAX_SIZE {
 		s.sinkBuffer = append(s.sinkBuffer, payload)
-	}
-	if len(s.sinkBuffer) == SINK_BUFFER_SIZE {
+		s.currentSize += payload_size
+	} else {
 		payloadArr := &commtypes.PayloadArr{
 			Payloads: s.sinkBuffer,
 		}
@@ -45,6 +56,8 @@ func (s *BufferedSinkStream) BufPush(ctx context.Context, payload []byte) error 
 			return err
 		}
 		s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_SIZE)
+		s.sinkBuffer = append(s.sinkBuffer, payload)
+		s.currentSize = payload_size
 	}
 	return nil
 }

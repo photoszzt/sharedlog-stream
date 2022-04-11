@@ -23,8 +23,7 @@ type Stream interface {
 }
 
 type MeteredStream struct {
-	stream  Stream
-	measure bool
+	stream Stream
 
 	pLMu          sync.Mutex
 	pushLatencies []int
@@ -40,6 +39,8 @@ type MeteredStream struct {
 
 	rBWTLMu                      sync.Mutex
 	readBackwardWithTagLatencies []int
+
+	measure bool
 }
 
 var _ = Stream(&MeteredStream{})
