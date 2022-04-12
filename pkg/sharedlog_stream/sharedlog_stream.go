@@ -11,7 +11,6 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/txn_data"
 	"sync"
 	"sync/atomic"
@@ -48,8 +47,6 @@ type SharedLogStream struct {
 	taskEpoch          uint16
 	inTransaction      bool
 }
-
-var _ = store.Stream(&SharedLogStream{})
 
 func NameHashWithPartition(nameHash uint64, par uint8) uint64 {
 	mask := uint64(math.MaxUint64) - (1<<txn_data.PartitionBits - 1)

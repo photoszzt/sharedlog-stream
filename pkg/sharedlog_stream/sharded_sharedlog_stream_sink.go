@@ -3,6 +3,7 @@ package sharedlog_stream
 import (
 	"context"
 	"os"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 )
@@ -14,6 +15,12 @@ type ShardedSharedLogStreamSink struct {
 	stream     *ShardedSharedLogStream
 
 	bufPush bool
+}
+
+type StreamSinkConfig struct {
+	KeySerde   commtypes.Serde
+	ValueSerde commtypes.Serde
+	MsgSerde   commtypes.MsgSerde
 }
 
 var _ = processor.Sink(&ShardedSharedLogStreamSink{})
@@ -43,6 +50,13 @@ func (sls *ShardedSharedLogStreamSink) Sink(ctx context.Context, msg commtypes.M
 	}
 	ctrl, ok := msg.Key.(string)
 	if ok && ctrl == commtypes.SCALE_FENCE_KEY {
+		debug.Assert(isControl, "scale fence msg should be a control msg")
+		if sls.bufPush && isControl {
+			err := sls.stream.Flush(ctx)
+			if err != nil {
+				return err
+			}
+		}
 		_, err := sls.stream.Push(ctx, msg.Value.([]byte), parNum, isControl, false)
 		return err
 	}

@@ -1,24 +1,6 @@
 package handlers
 
-import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"log"
-	"time"
-
-	"sharedlog-stream/benchmark/common"
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/stream"
-	"sharedlog-stream/pkg/stream/processor"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
-
-	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
-
-	"cs.utexas.edu/zjia/faas/types"
-)
-
+/*
 type query3Handler struct {
 	env      types.Environment
 	funcName string
@@ -185,3 +167,4 @@ func (h *query3Handler) Query3(ctx context.Context, input *common.QueryInput) *c
 		Latencies: map[string][]int{"e2e": latencies},
 	}
 }
+*/

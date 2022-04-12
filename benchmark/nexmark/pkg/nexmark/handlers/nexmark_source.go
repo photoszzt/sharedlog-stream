@@ -271,6 +271,11 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 			if inputConfig.ParNum >= numInstance {
 				controlQuit <- struct{}{}
 				dcancel()
+				return &common.FnOutput{
+					Success:   true,
+					Duration:  time.Since(startTime).Seconds(),
+					Latencies: map[string][]int{"e2e": procArgs.latencies},
+				}
 			}
 			numSubstreams := m.Config[stream.TopicName()]
 			err = stream.ScaleSubstreams(h.env, numSubstreams)

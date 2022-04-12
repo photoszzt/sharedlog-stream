@@ -10,7 +10,6 @@ import (
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/txn_data"
 
 	"cs.utexas.edu/zjia/faas/protocol"
@@ -37,7 +36,7 @@ type TransactionManager struct {
 	offsetRecordSerde     commtypes.Serde
 	env                   types.Environment
 	transactionLog        *sharedlog_stream.SharedLogStream
-	topicStreams          map[string]store.Stream
+	topicStreams          map[string]*sharedlog_stream.ShardedSharedLogStream
 	backgroundJobErrg     *errgroup.Group
 	currentTopicPartition map[string]map[uint8]struct{}
 	TransactionalId       string
@@ -73,7 +72,7 @@ func NewTransactionManager(ctx context.Context,
 		TransactionalId:       transactional_id,
 		currentStatus:         txn_data.EMPTY,
 		currentTopicPartition: make(map[string]map[uint8]struct{}),
-		topicStreams:          make(map[string]store.Stream),
+		topicStreams:          make(map[string]*sharedlog_stream.ShardedSharedLogStream),
 		backgroundJobErrg:     errg,
 		backgroundJobCtx:      gctx,
 		CurrentEpoch:          0,
@@ -366,6 +365,10 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 		for par := range partitions {
 			parNum := par
 			g.Go(func() error {
+				err := stream.Flush(ctx)
+				if err != nil {
+					return err
+				}
 				off, err := stream.Push(ectx, encoded, parNum, true, false)
 				debug.Fprintf(os.Stderr, "append marker %d to stream %s off %x\n", marker, stream.TopicName(), off)
 				return err
@@ -452,7 +455,7 @@ func (tc *TransactionManager) CreateOffsetTopic(topicToTrack string, numPartitio
 	return nil
 }
 
-func (tc *TransactionManager) RecordTopicStreams(topicToTrack string, stream store.Stream) {
+func (tc *TransactionManager) RecordTopicStreams(topicToTrack string, stream *sharedlog_stream.ShardedSharedLogStream) {
 	_, ok := tc.topicStreams[topicToTrack]
 	if ok {
 		return

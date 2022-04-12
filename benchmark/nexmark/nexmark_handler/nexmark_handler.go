@@ -36,8 +36,6 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewQuery1(env, funcName), nil
 	case "query2":
 		return handlers.NewQuery2(env, funcName), nil
-	case "query3":
-		return handlers.NewQuery3(env, funcName), nil
 	case "q3PersonsByID":
 		return handlers.NewQuery3PersonsByID(env, funcName), nil
 	case "q3AuctionsBySellerID":
@@ -50,8 +48,6 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewBidByAuctionIDHandler(env, funcName), nil
 	case "q4JoinTable":
 		return handlers.NewQ4JoinTableHandler(env, funcName), nil
-	case "query5":
-		return handlers.NewQuery5(env, funcName), nil
 	case "q5bidkeyedbyauction":
 		return handlers.NewBidKeyedByAuctionHandler(env, funcName), nil
 	case "q5aucbids":
@@ -64,8 +60,6 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewQuery7(env, funcName), nil
 	case "q7bidskeyedbyprice":
 		return handlers.NewQ7BidKeyedByPriceHandler(env, funcName), nil
-	case "query8":
-		return handlers.NewQuery8(env), nil
 	case "q8PersonsByID":
 		return handlers.NewQ8PersonsByID(env, funcName), nil
 	case "q8AucsBySellerID":

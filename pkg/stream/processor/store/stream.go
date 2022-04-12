@@ -20,6 +20,8 @@ type Stream interface {
 	SetTaskId(tid uint64)
 	SetTaskEpoch(epoch uint16)
 	NumPartition() uint8
+	Flush(ctx context.Context) error
+	BufPush(ctx context.Context, payload []byte, parNum uint8) error
 }
 
 type MeteredStream struct {
@@ -59,6 +61,14 @@ func NewMeteredStream(stream Stream) *MeteredStream {
 		readNextWithTagLatencies: make([]int, 0, 128),
 		measure:                  measure,
 	}
+}
+
+func (ms *MeteredStream) Flush(ctx context.Context) error {
+	return ms.stream.Flush(ctx)
+}
+
+func (ms *MeteredStream) BufPush(ctx context.Context, payload []byte, parNum uint8) error {
+	return ms.stream.BufPush(ctx, payload, parNum)
 }
 
 func (ms *MeteredStream) Push(ctx context.Context, payload []byte, parNum uint8, isControl bool, payloadIsArr bool) (uint64, error) {

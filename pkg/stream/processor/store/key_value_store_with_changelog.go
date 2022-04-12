@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"os"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 )
 
@@ -9,13 +10,20 @@ type KeyValueStoreWithChangelog struct {
 	kvstore   KeyValueStore
 	mp        *MaterializeParam
 	use_bytes bool
+	bufPush   bool
 }
 
 func NewKeyValueStoreWithChangelog(mp *MaterializeParam, store KeyValueStore, use_bytes bool) *KeyValueStoreWithChangelog {
+	bufPush_str := os.Getenv("BUFPUSH")
+	bufPush := false
+	if bufPush_str == "true" || bufPush_str == "1" {
+		bufPush = true
+	}
 	return &KeyValueStoreWithChangelog{
 		kvstore:   store,
 		mp:        mp,
 		use_bytes: use_bytes,
+		bufPush:   bufPush,
 	}
 }
 
@@ -65,7 +73,11 @@ func (st *KeyValueStoreWithChangelog) Put(ctx context.Context, key commtypes.Key
 	if err != nil {
 		return err
 	}
-	_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, false, false)
+	if st.bufPush {
+		err = st.mp.Changelog.BufPush(ctx, encoded, st.mp.ParNum)
+	} else {
+		_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, false, false)
+	}
 	if err != nil {
 		return err
 	}
@@ -95,7 +107,11 @@ func (st *KeyValueStoreWithChangelog) PutIfAbsent(ctx context.Context, key commt
 		if err != nil {
 			return nil, err
 		}
-		_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, false, false)
+		if st.bufPush {
+			err = st.mp.Changelog.BufPush(ctx, encoded, st.mp.ParNum)
+		} else {
+			_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, false, false)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -127,7 +143,11 @@ func (st *KeyValueStoreWithChangelog) Delete(ctx context.Context, key commtypes.
 	if err != nil {
 		return err
 	}
-	_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, false, false)
+	if st.bufPush {
+		err = st.mp.Changelog.BufPush(ctx, encoded, st.mp.ParNum)
+	} else {
+		_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, false, false)
+	}
 	if err != nil {
 		return err
 	}

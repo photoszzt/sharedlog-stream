@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"os"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
 )
@@ -11,11 +12,18 @@ type InMemoryWindowStoreWithChangelog struct {
 	windowStore      *InMemoryWindowStore
 	mp               *MaterializeParam
 	keyWindowTsSerde commtypes.Serde
+
+	bufPush bool
 }
 
 var _ = WindowStore(&InMemoryWindowStoreWithChangelog{})
 
 func NewInMemoryWindowStoreWithChangelog(retensionPeriod int64, windowSize int64, retainDuplicates bool, mp *MaterializeParam) (*InMemoryWindowStoreWithChangelog, error) {
+	bufPush_str := os.Getenv("BUFPUSH")
+	bufPush := false
+	if bufPush_str == "true" || bufPush_str == "1" {
+		bufPush = true
+	}
 	var ktsSerde commtypes.Serde
 	if mp.SerdeFormat == commtypes.JSON {
 		ktsSerde = commtypes.KeyAndWindowStartTsJSONSerde{}
@@ -29,6 +37,7 @@ func NewInMemoryWindowStoreWithChangelog(retensionPeriod int64, windowSize int64
 			retensionPeriod, windowSize, retainDuplicates, mp.Comparable),
 		mp:               mp,
 		keyWindowTsSerde: ktsSerde,
+		bufPush:          bufPush,
 	}, nil
 }
 
@@ -75,7 +84,11 @@ func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context, key commtyp
 	if err != nil {
 		return err
 	}
-	_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, false, false)
+	if st.bufPush {
+		err = st.mp.Changelog.BufPush(ctx, encoded, st.mp.ParNum)
+	} else {
+		_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, false, false)
+	}
 	if err != nil {
 		return err
 	}
@@ -163,11 +176,15 @@ func (s *InMemoryWindowStoreWithChangelog) TableType() TABLE_TYPE {
 	return IN_MEM
 }
 
-func (s *InMemoryWindowStoreWithChangelog) StartTransaction(ctx context.Context) error { return nil }
-func (s *InMemoryWindowStoreWithChangelog) CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error {
-	return nil
+func (s *InMemoryWindowStoreWithChangelog) StartTransaction(ctx context.Context) error {
+	panic("not supported")
 }
-func (s *InMemoryWindowStoreWithChangelog) AbortTransaction(ctx context.Context) error { return nil }
+func (s *InMemoryWindowStoreWithChangelog) CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error {
+	panic("not supported")
+}
+func (s *InMemoryWindowStoreWithChangelog) AbortTransaction(ctx context.Context) error {
+	panic("not supported")
+}
 func (s *InMemoryWindowStoreWithChangelog) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
 	panic("not supported")
 }

@@ -2,6 +2,7 @@ package sharedlog_stream
 
 import (
 	"context"
+	"fmt"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -12,6 +13,13 @@ import (
 type ScaleEpochAndBytes struct {
 	Payload    []uint8
 	ScaleEpoch uint64
+}
+
+type StreamSourceConfig struct {
+	KeyDecoder   commtypes.Decoder
+	ValueDecoder commtypes.Decoder
+	MsgDecoder   commtypes.MsgDecoder
+	Timeout      time.Duration
 }
 
 type ShardedSharedLogStreamSource struct {
@@ -131,4 +139,24 @@ L:
 		return &commtypes.MsgAndSeqs{Msgs: msgs, TotalLen: totalLen}, nil
 	}
 	return nil, errors.ErrStreamSourceTimeout
+}
+
+func decodePayload(payload []byte,
+	msgDecoder commtypes.MsgDecoder,
+	keyDecoder commtypes.Decoder,
+	valueDecoder commtypes.Decoder,
+) (interface{}, interface{}, error) {
+	keyEncoded, valueEncoded, err := msgDecoder.Decode(payload)
+	if err != nil {
+		return nil, nil, fmt.Errorf("fail to decode msg: %v", err)
+	}
+	key, err := keyDecoder.Decode(keyEncoded)
+	if err != nil {
+		return nil, nil, fmt.Errorf("fail to decode key: %v", err)
+	}
+	value, err := valueDecoder.Decode(valueEncoded)
+	if err != nil {
+		return nil, nil, fmt.Errorf("fail to decode value: %v", err)
+	}
+	return key, value, nil
 }

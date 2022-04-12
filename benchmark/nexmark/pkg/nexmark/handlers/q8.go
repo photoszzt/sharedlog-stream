@@ -1,25 +1,6 @@
 package handlers
 
-import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"log"
-	"time"
-
-	"sharedlog-stream/benchmark/common"
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/stream"
-	"sharedlog-stream/pkg/stream/processor"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/store"
-
-	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
-
-	"cs.utexas.edu/zjia/faas/types"
-)
-
+/*
 type query8Handler struct {
 	env types.Environment
 }
@@ -182,3 +163,4 @@ func Query8(ctx context.Context, env types.Environment, input *common.QueryInput
 	}
 
 }
+*/
