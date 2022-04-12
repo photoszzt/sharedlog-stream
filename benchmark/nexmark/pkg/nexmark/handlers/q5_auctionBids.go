@@ -91,7 +91,7 @@ func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput,
 
 func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde,
 ) (*processor.MeteredProcessor, store.WindowStore, error) {
-	hopWindow, err := processor.NewTimeWindowsNoGrace(time.Duration(10) * time.Second)
+	hopWindow, err := processor.NewTimeWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
 	if err != nil {
 		return nil, nil, err
 	}

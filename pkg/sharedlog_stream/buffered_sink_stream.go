@@ -11,7 +11,7 @@ import (
 const (
 	SINK_BUFFER_SIZE = 50
 	// besides payload there're extra overhead
-	SINK_BUFFER_MAX_SIZE = protocol.MessageInlineDataSize - 512
+	SINK_BUFFER_MAX_SIZE = protocol.MessageInlineDataSize - 256
 )
 
 // not goroutine safe
