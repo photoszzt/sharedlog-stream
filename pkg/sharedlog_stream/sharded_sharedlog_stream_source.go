@@ -52,7 +52,13 @@ func (s *ShardedSharedLogStreamSource) Consume(ctx context.Context, parNum uint8
 	startTime := time.Now()
 	var msgs []commtypes.MsgAndSeq
 	totalLen := uint32(0)
+L:
 	for {
+		select {
+		case <-ctx.Done():
+			break L
+		default:
+		}
 		if s.timeout != 0 && time.Since(startTime) >= s.timeout {
 			break
 		}

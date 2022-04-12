@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	SrcConsumeTimeout = 5 * time.Second
+	SrcConsumeTimeout = 1 * time.Second
 	ClientRetryTimes  = 100
 )
 
