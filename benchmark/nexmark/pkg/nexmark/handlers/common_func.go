@@ -34,6 +34,7 @@ func getEventSerde(serdeFormat uint8) (commtypes.Serde, error) {
 	}
 }
 
+/*
 func getPersonTimeSerde(serdeFormat uint8) (commtypes.Serde, error) {
 	if serdeFormat == uint8(commtypes.JSON) {
 		return ntypes.PersonTimeJSONSerde{}, nil
@@ -43,6 +44,7 @@ func getPersonTimeSerde(serdeFormat uint8) (commtypes.Serde, error) {
 		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
 	}
 }
+*/
 
 type JoinWorkerFunc func(c context.Context, m commtypes.Message) ([]commtypes.Message, error)
 
@@ -86,9 +88,15 @@ func joinProc(
 
 		if msg.MsgArr != nil {
 			for _, subMsg := range msg.MsgArr {
+				if subMsg.Value == nil {
+					continue
+				}
 				procMsgWithSink(ctx, subMsg, out, procArgs)
 			}
 		} else {
+			if msg.Msg.Value == nil {
+				continue
+			}
 			procMsgWithSink(ctx, msg.Msg, out, procArgs)
 		}
 	}
