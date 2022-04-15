@@ -6,6 +6,7 @@ import (
 	"os"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog/log"
 )
@@ -53,35 +54,36 @@ func (n *ClientNode) Invoke(client *http.Client, response *FnOutput, wg *sync.Wa
 	fmt.Fprintf(os.Stderr, "func name is %v\n", n.config.FuncName)
 	url := utils.BuildFunctionUrl(n.config.GatewayUrl, n.config.FuncName)
 	fmt.Fprintf(os.Stderr, "func url is %s\n", url)
-	if err := utils.JsonPostRequest(client, url, queryInput, response); err != nil {
-		log.Error().Msgf("%v request failed: %v", n.config.FuncName, err)
-	} else if !response.Success {
-		log.Error().Msgf("%v request failed with failed message: %v", n.config.FuncName, response.Message)
-	}
+
 	/*
-		i := 0
-		startTime := time.Now()
-		for {
-			if i != 0 {
-				// remove the test error on retry
-				if queryInput.TestParams != nil {
-					queryInput.TestParams = nil
-				}
-			}
-			if err := utils.JsonPostRequest(client, url, queryInput, response); err != nil {
-				log.Error().Msgf("%v request failed: %v", n.config.FuncName, err)
-			} else if !response.Success {
-				log.Error().Msgf("%v request failed with failed message: %v", n.config.FuncName, response.Message)
-			} else {
-				if response.Success && response.Message != "" {
-					if time.Since(startTime) >= time.Duration(queryInput.Duration)*time.Second {
-						break
-					}
-					continue
-				}
-				break
-			}
-			i += 1
+		if err := utils.JsonPostRequest(client, url, queryInput, response); err != nil {
+			log.Error().Msgf("%v request failed: %v", n.config.FuncName, err)
+		} else if !response.Success {
+			log.Error().Msgf("%v request failed with failed message: %v", n.config.FuncName, response.Message)
 		}
 	*/
+	i := 0
+	startTime := time.Now()
+	for {
+		if i != 0 {
+			// remove the test error on retry
+			if queryInput.TestParams != nil {
+				queryInput.TestParams = nil
+			}
+		}
+		if err := utils.JsonPostRequest(client, url, queryInput, response); err != nil {
+			log.Error().Msgf("%v request failed: %v", n.config.FuncName, err)
+		} else if !response.Success {
+			log.Error().Msgf("%v request failed with failed message: %v", n.config.FuncName, response.Message)
+		} else {
+			if response.Success && response.Message != "" {
+				if time.Since(startTime) >= time.Duration(queryInput.Duration)*time.Second {
+					break
+				}
+				continue
+			}
+			break
+		}
+		i += 1
+	}
 }
