@@ -3,7 +3,6 @@ package processor
 import (
 	"context"
 	"os"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"time"
@@ -36,7 +35,7 @@ func (s *MeteredSource) Consume(ctx context.Context, parNum uint8) (*commtypes.M
 		procStart := time.Now()
 		msgs, err := s.src.Consume(ctx, parNum)
 		elapsed := time.Since(procStart)
-		if err == errors.ErrStreamSourceTimeout {
+		if err != nil {
 			return msgs, err
 		}
 		s.latencies = append(s.latencies, int(elapsed.Microseconds()))
