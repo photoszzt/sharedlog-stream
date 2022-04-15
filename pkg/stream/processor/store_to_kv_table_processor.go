@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -48,7 +49,18 @@ func (p *StoreToKVTableProcessor) Process(ctx context.Context, msg commtypes.Mes
 }
 
 func (p *StoreToKVTableProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	err := p.store.Put(ctx, msg.Key, commtypes.ValueTimestamp{Value: msg.Value, Timestamp: msg.Timestamp})
+	valTmp, ok, err := p.store.Get(ctx, msg.Key)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		oldAggTs := valTmp.(commtypes.ValueTimestamp)
+		if msg.Timestamp < oldAggTs.Timestamp {
+			fmt.Fprintf(os.Stderr, "Detected out-of-order table update for %s, old ts=[%d] new ts=[%d]\n",
+				p.store.Name(), oldAggTs.Timestamp, msg.Timestamp)
+		}
+	}
+	err = p.store.Put(ctx, msg.Key, commtypes.ValueTimestamp{Value: msg.Value, Timestamp: msg.Timestamp})
 	debug.Fprintf(os.Stderr, "store to kv store, k: %v, v: %v, ts: %v\n", msg.Key, msg.Value, msg.Timestamp)
 	if err != nil {
 		return nil, err
