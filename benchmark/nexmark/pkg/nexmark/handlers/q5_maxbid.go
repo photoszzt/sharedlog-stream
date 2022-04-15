@@ -55,7 +55,7 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	msgSerde commtypes.MsgSerde,
 ) (*processor.MeteredSource, *processor.ConcurrentMeteredSink, error) {
 	inConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      common.SrcConsumeTimeout,
+		Timeout:      time.Duration(20) * time.Second,
 		KeyDecoder:   seSerde,
 		ValueDecoder: aucIdCountSerde,
 		MsgDecoder:   msgSerde,
