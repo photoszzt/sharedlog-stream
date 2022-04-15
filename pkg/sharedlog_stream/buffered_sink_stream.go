@@ -4,14 +4,11 @@ import (
 	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sync"
-
-	"cs.utexas.edu/zjia/faas/protocol"
 )
 
 const (
-	SINK_BUFFER_SIZE = 50
-	// besides payload there're extra overhead
-	SINK_BUFFER_MAX_SIZE = protocol.MessageInlineDataSize - 256
+	SINK_BUFFER_SIZE     = 50
+	SINK_BUFFER_MAX_SIZE = 16384
 )
 
 // not goroutine safe
