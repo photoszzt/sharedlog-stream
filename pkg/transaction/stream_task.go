@@ -489,8 +489,8 @@ L:
 		timeout := duration != 0 && time.Since(startTime) >= duration
 		shouldCommitByIter := args.QueryInput.CommitEveryNIter != 0 &&
 			uint32(idx)%args.QueryInput.CommitEveryNIter == 0 && idx != 0
-		debug.Fprintf(os.Stderr, "iter: %d, shouldCommitByIter: %v\n", idx, shouldCommitByIter)
-		if (commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout || shouldCommitByIter {
+		debug.Fprintf(os.Stderr, "iter: %d, shouldCommitByIter: %v, timeSinceTranStart: %v\n", idx, shouldCommitByIter, timeSinceTranStart)
+		if ((commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout || shouldCommitByIter) && hasLiveTransaction {
 			/*
 				if val, ok := args.QueryInput.TestParams["FailBeforeCommit"]; ok && val {
 					fmt.Fprintf(os.Stderr, "about to fail before commit")

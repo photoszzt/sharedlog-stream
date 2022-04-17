@@ -587,7 +587,7 @@ func (tc *TransactionManager) BeginTransaction(ctx context.Context, kvstores []*
 	winstores []*WindowStoreChangelog,
 ) error {
 	if !txn_data.BEGIN.IsValidPreviousState(tc.currentStatus) {
-		// debug.Fprintf(os.Stderr, "current state is %d\n", tc.currentStatus)
+		debug.Fprintf(os.Stderr, "fail to transition from %v to BEGIN\n", tc.currentStatus)
 		return errors.ErrInvalidStateTransition
 	}
 	tc.currentStatus = txn_data.BEGIN
@@ -633,7 +633,7 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context, kvstores []
 	winstores []*WindowStoreChangelog,
 ) error {
 	if !txn_data.PREPARE_COMMIT.IsValidPreviousState(tc.currentStatus) {
-		// debug.Fprintf(os.Stderr, "Fail to transition from %s to PREPARE_COMMIT\n", tc.currentStatus.String())
+		debug.Fprintf(os.Stderr, "Fail to transition from %s to PREPARE_COMMIT\n", tc.currentStatus.String())
 		return errors.ErrInvalidStateTransition
 	}
 
@@ -664,6 +664,7 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context, inRestore bo
 	winstores []*WindowStoreChangelog,
 ) error {
 	if !txn_data.PREPARE_ABORT.IsValidPreviousState(tc.currentStatus) {
+		debug.Fprintf(os.Stderr, "fail to transition state from %d to PRE_ABORT", tc.currentStatus)
 		return errors.ErrInvalidStateTransition
 	}
 	tc.currentStatus = txn_data.PREPARE_ABORT
