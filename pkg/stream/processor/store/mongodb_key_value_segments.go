@@ -130,6 +130,9 @@ func (kvs *MongoDBKeyValueSegments) StartTransaction(ctx context.Context) error 
 func (kvs *MongoDBKeyValueSegments) CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error {
 	return kvs.mkvs.CommitTransaction(ctx, taskRepr, transactionID)
 }
+func (kvs *MongoDBKeyValueSegments) AbortTransaction(ctx context.Context) error {
+	return kvs.mkvs.AbortTransaction(ctx)
+}
 func (kvs *MongoDBKeyValueSegments) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
 	return kvs.mkvs.GetTransactionID(ctx, taskRepr)
 }
