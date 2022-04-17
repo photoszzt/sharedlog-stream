@@ -8,6 +8,8 @@ import (
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+
+	"go.mongodb.org/mongo-driver/x/mongo/driver/session"
 )
 
 type KVStoreChangelog struct {
@@ -89,7 +91,12 @@ func AbortKVStoreTransaction(ctx context.Context, kvstores []*KVStoreChangelog) 
 	for _, kvstorelog := range kvstores {
 		if kvstorelog.KVStore.TableType() == store.MONGODB {
 			if err := kvstorelog.KVStore.AbortTransaction(ctx); err != nil {
-				return err
+				if err == session.ErrAbortTwice {
+					fmt.Fprint(os.Stderr, "transaction already aborted\n")
+					return nil
+				} else {
+					return err
+				}
 			}
 		}
 	}

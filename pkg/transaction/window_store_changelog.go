@@ -8,6 +8,8 @@ import (
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+
+	"go.mongodb.org/mongo-driver/x/mongo/driver/session"
 )
 
 type WindowStoreChangelog struct {
@@ -86,7 +88,12 @@ func AbortWindowStoreTransaction(ctx context.Context, winstores []*WindowStoreCh
 	for _, winstorelog := range winstores {
 		if winstorelog.WinStore.TableType() == store.MONGODB {
 			if err := winstorelog.WinStore.AbortTransaction(ctx); err != nil {
-				return err
+				if err == session.ErrAbortTwice {
+					fmt.Fprint(os.Stderr, "transaction already aborted\n")
+					return nil
+				} else {
+					return err
+				}
 			}
 		}
 	}
