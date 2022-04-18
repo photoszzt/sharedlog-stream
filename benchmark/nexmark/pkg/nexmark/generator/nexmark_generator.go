@@ -6,7 +6,10 @@ import (
 	"time"
 
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
+	"sharedlog-stream/pkg/debug"
 )
+
+var seedArr = []int64{3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47}
 
 type NexmarkGenerator struct {
 	Random            *rand.Rand
@@ -31,12 +34,13 @@ func NewNextEvent(wallclockTimestamp, eventTimestamp uint64, event *types.Event,
 	}
 }
 
-func NewNexmarkGenerator(config *GeneratorConfig, eventsCountSoFar uint64, wallclockBaseTime int64) *NexmarkGenerator {
+func NewNexmarkGenerator(config *GeneratorConfig, eventsCountSoFar uint64, wallclockBaseTime int64, instanceId int) *NexmarkGenerator {
+	debug.Assert(instanceId < len(seedArr), "seed array is not long enough")
 	return &NexmarkGenerator{
 		Config:            config,
 		EventsCountSoFar:  eventsCountSoFar,
 		WallclockBaseTime: wallclockBaseTime,
-		Random:            rand.New(rand.NewSource(3)),
+		Random:            rand.New(rand.NewSource(seedArr[instanceId])),
 	}
 }
 
@@ -46,8 +50,8 @@ func (ng *NexmarkGenerator) copy() *NexmarkGenerator {
 }
 */
 
-func NewSimpleNexmarkGenerator(config *GeneratorConfig) *NexmarkGenerator {
-	return NewNexmarkGenerator(config, 0, -1)
+func NewSimpleNexmarkGenerator(config *GeneratorConfig, instanceId int) *NexmarkGenerator {
+	return NewNexmarkGenerator(config, 0, -1, instanceId)
 }
 
 func (ng *NexmarkGenerator) SplitAtEventId(eventId uint64) *GeneratorConfig {

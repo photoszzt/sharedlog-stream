@@ -14,6 +14,7 @@ import (
 func Invoke(config_file string, gateway_url string,
 	baseQueryInput *QueryInput,
 	invokeSourceFunc func(client *http.Client, numOutPartition uint8, topicName string,
+		instanceId uint8,
 		response *FnOutput, wg *sync.WaitGroup),
 ) error {
 	jsonFile, err := os.Open(config_file)
@@ -96,7 +97,7 @@ func Invoke(config_file string, gateway_url string,
 
 	timeout := time.Duration(baseQueryInput.Duration*4) * time.Second
 	if baseQueryInput.Duration == 0 {
-		timeout = time.Duration(300) * time.Second
+		timeout = time.Duration(900) * time.Second
 	}
 	client := &http.Client{
 		Transport: &http.Transport{
@@ -128,7 +129,7 @@ func Invoke(config_file string, gateway_url string,
 	for i := uint8(0); i < numSrcInstance; i++ {
 		wg.Add(1)
 		idx := i
-		go invokeSourceFunc(client, numSrcPartition, srcTopicName, &sourceOutput[idx], &wg)
+		go invokeSourceFunc(client, numSrcPartition, srcTopicName, idx, &sourceOutput[idx], &wg)
 	}
 
 	time.Sleep(time.Duration(10) * time.Second)

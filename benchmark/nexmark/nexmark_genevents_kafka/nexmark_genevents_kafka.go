@@ -28,6 +28,7 @@ var (
 	FLAGS_serdeFormat   string
 	FLAGS_numPartition  int
 	FLAGS_tps           int
+	FLAGS_instanceId    int
 )
 
 func init() {
@@ -47,6 +48,7 @@ func main() {
 	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
 	flag.IntVar(&FLAGS_numPartition, "npar", 1, "number of partition")
 	flag.IntVar(&FLAGS_tps, "tps", 10000000, "tps param for nexmark")
+	flag.IntVar(&FLAGS_instanceId, "iid", 1, "instance id")
 	flag.Parse()
 
 	fmt.Fprintf(os.Stderr, "duration: %d, events_num: %d, serde: %s, nPar: %d\n",
@@ -93,7 +95,7 @@ func main() {
 		log.Fatal().Msgf("Failed to convert to nexmark configuration: %s", err)
 	}
 	generatorConfig := generator.NewGeneratorConfig(nexmarkConfig, uint64(time.Now().UnixMilli()), 1, uint64(nexmarkConfig.NumEvents), 1)
-	eventGenerator := generator.NewSimpleNexmarkGenerator(generatorConfig)
+	eventGenerator := generator.NewSimpleNexmarkGenerator(generatorConfig, FLAGS_instanceId)
 	channel_url_cache := make(map[uint32]*generator.ChannelUrl)
 
 	p, err := kafka.NewProducer(&kafka.ConfigMap{

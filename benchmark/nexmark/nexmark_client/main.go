@@ -34,7 +34,7 @@ var (
 	FLAGS_mongo_addr         string
 )
 
-func invokeSourceFunc(client *http.Client, numOutPartition uint8, topicName string,
+func invokeSourceFunc(client *http.Client, numOutPartition uint8, topicName string, instanceId uint8,
 	response *common.FnOutput, wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
@@ -57,6 +57,7 @@ func invokeSourceFunc(client *http.Client, numOutPartition uint8, topicName stri
 	nexmarkConfig.NextEventRate = uint32(FLAGS_tps)
 	nexmarkConfig.EventsNum = uint64(FLAGS_events_num)
 	nexmarkConfig.NumOutPartition = numOutPartition
+	nexmarkConfig.ParNum = instanceId
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "source")
 	fmt.Printf("func source url is %v\n", url)
 	if err := utils.JsonPostRequest(client, url, nexmarkConfig, response); err != nil {

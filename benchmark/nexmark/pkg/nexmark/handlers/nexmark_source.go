@@ -235,7 +235,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	fmt.Fprintf(os.Stderr, "\tOccasionalDelaySec   : %v\n", generatorConfig.Configuration.OccasionalDelaySec)
 	fmt.Fprintf(os.Stderr, "\tProbDelayedEvent     : %v\n", generatorConfig.Configuration.ProbDelayedEvent)
 	fmt.Fprintf(os.Stderr, "\tOutOfOrderGroupSize  : %v\n", generatorConfig.Configuration.OutOfOrderGroupSize)
-	eventGenerator := generator.NewSimpleNexmarkGenerator(generatorConfig)
+	eventGenerator := generator.NewSimpleNexmarkGenerator(generatorConfig, int(inputConfig.ParNum))
 	duration := time.Duration(inputConfig.Duration) * time.Second
 	startTime := time.Now()
 	eventSerde, txnMarkerSerde, msgSerde, err := h.getSerde(inputConfig.SerdeFormat)
