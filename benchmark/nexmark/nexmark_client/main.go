@@ -48,7 +48,11 @@ func invokeSourceFunc(client *http.Client, numOutPartition uint8, topicName stri
 		serdeFormat = commtypes.JSON
 	}
 	nexmarkConfig := ntypes.NewNexMarkConfigInput(topicName, serdeFormat)
-	nexmarkConfig.Duration = uint32(FLAGS_duration) + uint32((time.Duration(10) * time.Second).Seconds())
+	if FLAGS_duration != 0 {
+		nexmarkConfig.Duration = uint32(FLAGS_duration) + uint32((time.Duration(10) * time.Second).Seconds())
+	} else {
+		nexmarkConfig.Duration = uint32(FLAGS_duration)
+	}
 	nexmarkConfig.FirstEventRate = uint32(FLAGS_tps)
 	nexmarkConfig.NextEventRate = uint32(FLAGS_tps)
 	nexmarkConfig.EventsNum = uint64(FLAGS_events_num)
