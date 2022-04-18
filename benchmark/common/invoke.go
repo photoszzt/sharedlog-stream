@@ -94,11 +94,15 @@ func Invoke(config_file string, gateway_url string,
 		scaleConfig[tp] = uint8(subs.Data().(float64))
 	}
 
+	timeout := time.Duration(baseQueryInput.Duration*4) * time.Second
+	if baseQueryInput.Duration == 0 {
+		timeout = time.Duration(300) * time.Second
+	}
 	client := &http.Client{
 		Transport: &http.Transport{
 			IdleConnTimeout: 30 * time.Second,
 		},
-		Timeout: time.Duration(baseQueryInput.Duration*3) * time.Second,
+		Timeout: timeout,
 	}
 
 	scaleConfigInput := ConfigScaleInput{
