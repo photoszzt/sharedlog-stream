@@ -485,11 +485,14 @@ L:
 			break L
 		default:
 		}
+		procStart := time.Now()
 		timeSinceTranStart := time.Since(commitTimer)
-		timeout := duration != 0 && time.Since(startTime) >= duration
+		cur_elapsed := time.Since(startTime)
+		timeout := duration != 0 && cur_elapsed >= duration
 		shouldCommitByIter := args.QueryInput.CommitEveryNIter != 0 &&
 			uint32(idx)%args.QueryInput.CommitEveryNIter == 0 && idx != 0
-		debug.Fprintf(os.Stderr, "iter: %d, shouldCommitByIter: %v, timeSinceTranStart: %v\n", idx, shouldCommitByIter, timeSinceTranStart)
+		debug.Fprintf(os.Stderr, "iter: %d, shouldCommitByIter: %v, timeSinceTranStart: %v, cur_elapsed: %v, duration: %v\n",
+			idx, shouldCommitByIter, timeSinceTranStart, cur_elapsed, duration)
 		if ((commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout || shouldCommitByIter) && hasLiveTransaction {
 			/*
 				if val, ok := args.QueryInput.TestParams["FailBeforeCommit"]; ok && val {
@@ -562,7 +565,6 @@ L:
 			trackConsumePar = true
 		}
 
-		procStart := time.Now()
 		off, ret := t.ProcessFunc(ctx, t, args.ProcArgs)
 		if ret != nil {
 			if ret.Success {
