@@ -86,6 +86,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 			Message: err.Error(),
 		}
 	}
+	sink.MarkFinalOutput()
 	q2Filter := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(filterFunc)))
 	procArgs := &query2ProcessArgs{
 		src:              src,
@@ -129,6 +130,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()
 			ret.Latencies["q2Filter"] = q2Filter.GetLatency()
+			ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
 			ret.Consumed["src"] = src.GetCount()
 		}
 		return ret
@@ -142,6 +144,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		ret.Latencies["src"] = src.GetLatency()
 		ret.Latencies["sink"] = sink.GetLatency()
 		ret.Latencies["q2Filter"] = q2Filter.GetLatency()
+		ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
 		ret.Consumed["src"] = src.GetCount()
 	}
 	return ret

@@ -525,6 +525,8 @@ L:
 			*/
 			numCommit += 1
 		}
+		cur_elapsed = time.Since(startTime)
+		timeout = duration != 0 && cur_elapsed >= duration
 		if timeout || (args.QueryInput.ExitAfterNCommit != 0 && numCommit == int(args.QueryInput.ExitAfterNCommit)) {
 			if err := tm.Close(); err != nil {
 				retc <- &common.FnOutput{Success: false, Message: fmt.Sprintf("close transaction manager: %v\n", err)}

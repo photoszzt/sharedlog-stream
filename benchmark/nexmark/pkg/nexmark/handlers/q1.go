@@ -66,6 +66,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 			Message: err.Error(),
 		}
 	}
+	sink.MarkFinalOutput()
 
 	filterBid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
 		only_bid)))
@@ -114,6 +115,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 			ret.Latencies["sink"] = sink.GetLatency()
 			ret.Latencies["filterBids"] = filterBid.GetLatency()
 			ret.Latencies["q1Map"] = q1Map.GetLatency()
+			ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
 			ret.Consumed["src"] = src.GetCount()
 		}
 		return ret
@@ -128,6 +130,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 		ret.Latencies["sink"] = sink.GetLatency()
 		ret.Latencies["filterBids"] = filterBid.GetLatency()
 		ret.Latencies["q1Map"] = q1Map.GetLatency()
+		ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
 		ret.Consumed["src"] = src.GetCount()
 	}
 	return ret

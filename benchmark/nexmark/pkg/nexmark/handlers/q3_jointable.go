@@ -223,6 +223,7 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, auctionsConfig))
 	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, personsConfig))
 	sink := processor.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
+	sink.MarkFinalOutput()
 	sss := &srcSinkSerde{
 		src1:      src1,
 		src2:      src2,
@@ -470,6 +471,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			ret.Latencies["personJoinsAuctions"] = personJoinsAuctions.GetLatency()
 			ret.Latencies["auctionJoinsPersons"] = auctionJoinsPersons.GetLatency()
 			ret.Latencies["sink"] = sss.sink.GetLatency()
+			ret.Latencies["eventTimeLatency"] = sss.sink.GetEventTimeLatency()
 			ret.Consumed["auctionsSrc"] = procArgs.auctionSrc.GetCount()
 			ret.Consumed["personsSrc"] = procArgs.personSrc.GetCount()
 		}
@@ -488,6 +490,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		ret.Latencies["personJoinsAuctions"] = personJoinsAuctions.GetLatency()
 		ret.Latencies["auctionJoinsPersons"] = auctionJoinsPersons.GetLatency()
 		ret.Latencies["sink"] = sss.sink.GetLatency()
+		ret.Latencies["eventTimeLatency"] = sss.sink.GetEventTimeLatency()
 		ret.Consumed["auctionsSrc"] = procArgs.auctionSrc.GetCount()
 		ret.Consumed["personsSrc"] = procArgs.personSrc.GetCount()
 	}

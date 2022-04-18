@@ -243,6 +243,7 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, auctionsConfig))
 	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, personsConfig))
 	sink := processor.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
+	sink.MarkFinalOutput()
 	return &srcSinkSerde{src1: src1, src2: src2, sink: sink,
 		keySerdes: []commtypes.Serde{commtypes.Uint64Serde{}, commtypes.Uint64Serde{}},
 		valSerdes: []commtypes.Serde{eventSerde, eventSerde}, msgSerde: msgSerde}, nil
@@ -467,6 +468,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			ret.Latencies["personsJoinsAuctions"] = personsJoinsAuctions.GetLatency()
 			ret.Latencies["auctionsJoinsPersons"] = auctionsJoinsPersons.GetLatency()
 			ret.Latencies["sink"] = sink.GetLatency()
+			ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
 			ret.Consumed["auctionsSrc"] = auctionsSrc.GetCount()
 			ret.Consumed["personsSrc"] = personsSrc.GetCount()
 		}
@@ -485,6 +487,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		ret.Latencies["toPersonsWinTab"] = toPersonsWinTab.GetLatency()
 		ret.Latencies["personsJoinsAuctions"] = personsJoinsAuctions.GetLatency()
 		ret.Latencies["auctionsJoinsPersons"] = auctionsJoinsPersons.GetLatency()
+		ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
 		ret.Consumed["auctionsSrc"] = auctionsSrc.GetCount()
 		ret.Consumed["personsSrc"] = personsSrc.GetCount()
 	}

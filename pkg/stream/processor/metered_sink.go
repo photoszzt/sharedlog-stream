@@ -3,6 +3,7 @@ package processor
 import (
 	"context"
 	"os"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sync"
 	"time"
@@ -14,7 +15,10 @@ type ConcurrentMeteredSink struct {
 	latMu     sync.Mutex
 	latencies []int
 
-	measure bool
+	eventTimeLatencies []int
+
+	measure       bool
+	isFinalOutput bool
 }
 
 var _ = Sink(&ConcurrentMeteredSink{})
@@ -26,15 +30,27 @@ func NewConcurrentMeteredSink(sink Sink) *ConcurrentMeteredSink {
 		measure = true
 	}
 	return &ConcurrentMeteredSink{
-		sink:      sink,
-		latencies: make([]int, 0, 128),
-		measure:   measure,
+		sink:          sink,
+		latencies:     make([]int, 0, 128),
+		measure:       measure,
+		isFinalOutput: false,
 	}
+}
+
+func (s *ConcurrentMeteredSink) MarkFinalOutput() {
+	s.isFinalOutput = true
 }
 
 func (s *ConcurrentMeteredSink) Sink(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
 	if s.measure {
 		procStart := time.Now()
+		if s.isFinalOutput {
+			s.latMu.Lock()
+			debug.Assert(msg.Timestamp != 0, "sink event ts should be set")
+			els := int(procStart.UnixMilli() - msg.Timestamp)
+			s.eventTimeLatencies = append(s.eventTimeLatencies, els)
+			s.latMu.Unlock()
+		}
 		err := s.sink.Sink(ctx, msg, parNum, isControl)
 		elapsed := time.Since(procStart)
 		s.latMu.Lock()
@@ -64,6 +80,12 @@ func (s *ConcurrentMeteredSink) GetLatency() []int {
 	return s.latencies
 }
 
+func (s *ConcurrentMeteredSink) GetEventTimeLatency() []int {
+	s.latMu.Lock()
+	defer s.latMu.Unlock()
+	return s.eventTimeLatencies
+}
+
 func (s *ConcurrentMeteredSink) TopicName() string {
 	return s.sink.TopicName()
 }
@@ -75,9 +97,11 @@ func (s *ConcurrentMeteredSink) KeySerde() commtypes.Serde {
 type MeteredSink struct {
 	sink Sink
 
-	latencies []int
+	latencies          []int
+	eventTimeLatencies []int
 
-	measure bool
+	measure       bool
+	isFinalOutput bool
 }
 
 var _ = Sink(&MeteredSink{})
@@ -89,15 +113,25 @@ func NewMeteredSink(sink Sink) *MeteredSink {
 		measure = true
 	}
 	return &MeteredSink{
-		sink:      sink,
-		latencies: make([]int, 0, 128),
-		measure:   measure,
+		sink:          sink,
+		latencies:     make([]int, 0, 128),
+		measure:       measure,
+		isFinalOutput: false,
 	}
+}
+
+func (s *MeteredSink) MarkFinalOutput() {
+	s.isFinalOutput = true
 }
 
 func (s *MeteredSink) Sink(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
 	if s.measure {
 		procStart := time.Now()
+		if s.isFinalOutput {
+			debug.Assert(msg.Timestamp != 0, "sink event ts should be set")
+			els := int(procStart.UnixMilli() - msg.Timestamp)
+			s.eventTimeLatencies = append(s.eventTimeLatencies, els)
+		}
 		err := s.sink.Sink(ctx, msg, parNum, isControl)
 		elapsed := time.Since(procStart)
 		s.latencies = append(s.latencies, int(elapsed.Microseconds()))
@@ -127,4 +161,8 @@ func (s *MeteredSink) Flush(ctx context.Context) error {
 		return err
 	}
 	return s.sink.Flush(ctx)
+}
+
+func (s *MeteredSink) GetEventTimeLatency() []int {
+	return s.eventTimeLatencies
 }

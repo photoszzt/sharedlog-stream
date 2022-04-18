@@ -67,6 +67,7 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	}
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
 	sink := processor.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
+	sink.MarkFinalOutput()
 	return src, sink, nil
 }
 
@@ -382,6 +383,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			ret.Latencies["maxBid"] = maxBid.GetLatency()
 			ret.Latencies["stJoin"] = stJoin.GetLatency()
 			ret.Latencies["chooseMaxCnt"] = chooseMaxCnt.GetLatency()
+			ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
 			ret.Consumed["src"] = src.GetCount()
 		}
 		return ret
@@ -397,6 +399,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		ret.Latencies["maxBid"] = maxBid.GetLatency()
 		ret.Latencies["stJoin"] = stJoin.GetLatency()
 		ret.Latencies["chooseMaxCnt"] = chooseMaxCnt.GetLatency()
+		ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
 		ret.Consumed["src"] = src.GetCount()
 	}
 	return ret
