@@ -84,12 +84,25 @@ func (s *ShardedSharedLogStream) Push(ctx context.Context, payload []byte, parNu
 }
 
 func (s *ShardedSharedLogStream) BufPush(ctx context.Context, payload []byte, parNum uint8) error {
-	return s.subSharedLogStreams[parNum].BufPush(ctx, payload)
+	return s.subSharedLogStreams[parNum].BufPushGoroutineSafe(ctx, payload)
 }
 
 func (s *ShardedSharedLogStream) Flush(ctx context.Context) error {
 	for i := uint8(0); i < s.numPartitions; i++ {
-		if err := s.subSharedLogStreams[i].Flush(ctx); err != nil {
+		if err := s.subSharedLogStreams[i].FlushGoroutineSafe(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *ShardedSharedLogStream) BufPushNoLock(ctx context.Context, payload []byte, parNum uint8) error {
+	return s.subSharedLogStreams[parNum].BufPushNoLock(ctx, payload)
+}
+
+func (s *ShardedSharedLogStream) FlushNoLock(ctx context.Context) error {
+	for i := uint8(0); i < s.numPartitions; i++ {
+		if err := s.subSharedLogStreams[i].FlushNoLock(ctx); err != nil {
 			return err
 		}
 	}

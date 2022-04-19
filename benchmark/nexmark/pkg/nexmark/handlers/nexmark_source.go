@@ -156,7 +156,7 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 	parNum = parNum % int(args.stream.NumPartition())
 
 	if h.bufPush {
-		err = args.stream.BufPush(ctx, msgEncoded, uint8(parNum))
+		err = args.stream.BufPushNoLock(ctx, msgEncoded, uint8(parNum))
 	} else {
 		_, err = args.stream.Push(ctx, msgEncoded, uint8(parNum), false, false)
 	}
