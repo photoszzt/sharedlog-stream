@@ -29,6 +29,7 @@ var (
 	FLAGS_numPartition  int
 	FLAGS_tps           int
 	FLAGS_instanceId    int
+	FLAGS_srcInstance   int
 )
 
 func init() {
@@ -49,6 +50,7 @@ func main() {
 	flag.IntVar(&FLAGS_numPartition, "npar", 1, "number of partition")
 	flag.IntVar(&FLAGS_tps, "tps", 10000000, "tps param for nexmark")
 	flag.IntVar(&FLAGS_instanceId, "iid", 1, "instance id")
+	flag.IntVar(&FLAGS_srcInstance, "srcIns", 1, "number of source instance")
 	flag.Parse()
 
 	fmt.Fprintf(os.Stderr, "duration: %d, events_num: %d, serde: %s, nPar: %d\n",
@@ -90,6 +92,7 @@ func main() {
 	nexmarkConfigInput.NextEventRate = uint32(FLAGS_tps)
 	nexmarkConfigInput.EventsNum = uint64(FLAGS_events_num)
 	nexmarkConfigInput.NumOutPartition = uint8(FLAGS_numPartition)
+	nexmarkConfigInput.NumSrcInstance = uint8(FLAGS_srcInstance)
 	nexmarkConfig, err := ntypes.ConvertToNexmarkConfiguration(nexmarkConfigInput)
 	if err != nil {
 		log.Fatal().Msgf("Failed to convert to nexmark configuration: %s", err)

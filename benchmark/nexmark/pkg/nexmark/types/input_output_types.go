@@ -30,6 +30,7 @@ type NexMarkConfigInput struct {
 	SerdeFormat            uint8         `json:"serde_format"`
 	NumOutPartition        uint8         `json:"numOutPar,omitempty"`
 	ParNum                 uint8         `json:"parNum,omitempty"`
+	NumSrcInstance         uint8         `json:"nSrcIns,omitempty"`
 }
 
 func NewNexMarkConfigInput(topicName string, serdeFormat commtypes.SerdeFormat) *NexMarkConfigInput {
@@ -76,5 +77,6 @@ func ConvertToNexmarkConfiguration(config *NexMarkConfigInput) (*nexmark.NexMark
 	nexmarkConfig.HotBiddersRatio = config.BidHotRatioBidders
 	nexmarkConfig.HotSellersRatio = config.AuctionHotRatioSellers
 	nexmarkConfig.NumEvents = uint32(config.EventsNum)
+	nexmarkConfig.NumEventGenerators = uint32(config.NumSrcInstance)
 	return nexmarkConfig, nil
 }

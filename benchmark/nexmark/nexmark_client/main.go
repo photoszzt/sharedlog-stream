@@ -35,6 +35,7 @@ var (
 )
 
 func invokeSourceFunc(client *http.Client, numOutPartition uint8, topicName string, instanceId uint8,
+	numSrcInstance uint8,
 	response *common.FnOutput, wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
@@ -58,6 +59,7 @@ func invokeSourceFunc(client *http.Client, numOutPartition uint8, topicName stri
 	nexmarkConfig.EventsNum = uint64(FLAGS_events_num)
 	nexmarkConfig.NumOutPartition = numOutPartition
 	nexmarkConfig.ParNum = instanceId
+	nexmarkConfig.NumSrcInstance = numSrcInstance
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "source")
 	fmt.Printf("func source url is %v\n", url)
 	if err := utils.JsonPostRequest(client, url, nexmarkConfig, response); err != nil {

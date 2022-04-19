@@ -14,7 +14,7 @@ import (
 func Invoke(config_file string, gateway_url string,
 	baseQueryInput *QueryInput,
 	invokeSourceFunc func(client *http.Client, numOutPartition uint8, topicName string,
-		instanceId uint8,
+		instanceId uint8, numSrcInstance uint8,
 		response *FnOutput, wg *sync.WaitGroup),
 ) error {
 	jsonFile, err := os.Open(config_file)
@@ -129,7 +129,7 @@ func Invoke(config_file string, gateway_url string,
 	for i := uint8(0); i < numSrcInstance; i++ {
 		wg.Add(1)
 		idx := i
-		go invokeSourceFunc(client, numSrcPartition, srcTopicName, idx, &sourceOutput[idx], &wg)
+		go invokeSourceFunc(client, numSrcPartition, srcTopicName, idx, numSrcInstance, &sourceOutput[idx], &wg)
 	}
 
 	time.Sleep(time.Duration(10) * time.Second)
@@ -161,7 +161,7 @@ func Invoke(config_file string, gateway_url string,
 	}
 	if len(srcNum) != 0 {
 		fmt.Fprintf(os.Stderr, "source outputs %v events, time %v s, throughput %v (event/s)\n\n",
-			srcNum, srcEndToEnd, float64(srcNum["e2e"])/srcEndToEnd)
+			srcNum["e2e"], srcEndToEnd, float64(srcNum["e2e"])/srcEndToEnd)
 	}
 
 	for _, node := range cliNodes {
