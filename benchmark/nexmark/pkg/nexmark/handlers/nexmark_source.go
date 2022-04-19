@@ -25,6 +25,7 @@ type nexmarkSourceHandler struct {
 	env      types.Environment
 	funcName string
 	bufPush  bool
+	tStart   time.Time
 }
 
 func NewNexmarkSource(env types.Environment, funcName string) types.FuncHandler {
@@ -97,6 +98,10 @@ func encodeEvent(event *ntypes.Event,
 	return msgEncoded, nil
 }
 
+const (
+	FLUSH_DURATION = time.Duration(100) * time.Millisecond
+)
+
 func (h *nexmarkSourceHandler) getSerde(serdeFormat uint8) (commtypes.Serde, commtypes.Serde, commtypes.MsgSerde, error) {
 	var eventSerde commtypes.Serde
 	var msgSerde commtypes.MsgSerde
@@ -157,6 +162,10 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 
 	if h.bufPush {
 		err = args.stream.BufPushNoLock(ctx, msgEncoded, uint8(parNum))
+		if time.Since(h.tStart) >= FLUSH_DURATION {
+			args.stream.FlushNoLock(ctx)
+			h.tStart = time.Now()
+		}
 	} else {
 		_, err = args.stream.Push(ctx, msgEncoded, uint8(parNum), false, false)
 	}
@@ -286,7 +295,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	meta := make(chan txn_data.ControlMetadata)
 	dctx, dcancel := context.WithCancel(ctx)
 	go cmm.MonitorControlChannel(ctx, controlQuit, controlErrc, meta)
-
+	h.tStart = time.Now()
 	for {
 		select {
 		case cerr := <-controlErrc:
