@@ -24,6 +24,7 @@ import (
 type StreamTask struct {
 	ProcessFunc   func(ctx context.Context, task *StreamTask, args interface{}) (map[string]uint64, *common.FnOutput)
 	CurrentOffset map[string]uint64
+	CloseFunc     func()
 }
 
 func DefaultTrackSubstreamFunc(ctx context.Context,
@@ -390,6 +391,9 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 		elapsed := time.Since(procStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
 	}
+	if t.CloseFunc != nil {
+		t.CloseFunc()
+	}
 	return &common.FnOutput{
 		Success:   true,
 		Duration:  time.Since(startTime).Seconds(),
@@ -437,6 +441,9 @@ func (t *StreamTask) ProcessWithTransaction(
 		case ret := <-retc:
 			monitorQuit <- struct{}{}
 			controlQuit <- struct{}{}
+			if t.CloseFunc != nil {
+				t.CloseFunc()
+			}
 			return ret
 		case merr := <-monitorErrc:
 			monitorQuit <- struct{}{}

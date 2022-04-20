@@ -132,11 +132,19 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 		parNum:           sp.ParNum,
 	}
 
-	go personsByIDFunc(ctx, procArgs, personMsgChan, errChan)
-	go auctionsBySellerIDFunc(ctx, procArgs, aucMsgChan, errChan)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go personsByIDFunc(ctx, procArgs, &wg, personMsgChan, errChan)
+	wg.Add(1)
+	go auctionsBySellerIDFunc(ctx, procArgs, &wg, aucMsgChan, errChan)
 
 	task := transaction.StreamTask{
-		ProcessFunc:   h.process,
+		ProcessFunc: h.process,
+		CloseFunc: func() {
+			close(aucMsgChan)
+			close(personMsgChan)
+			wg.Wait()
+		},
 		CurrentOffset: make(map[string]uint64),
 	}
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
@@ -193,7 +201,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 }
 
 func (h *q3GroupByHandler) getPersonsByID() (*processor.MeteredProcessor, *processor.MeteredProcessor,
-	func(ctx context.Context, args *q3GroupByProcessArgs, msgChan chan commtypes.Message, errChan chan error)) {
+	func(ctx context.Context, args *q3GroupByProcessArgs, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error)) {
 	filterPerson := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
 		func(msg *commtypes.Message) (bool, error) {
 			event := msg.Value.(*ntypes.Event)
@@ -215,7 +223,8 @@ func (h *q3GroupByHandler) getPersonsByID() (*processor.MeteredProcessor, *proce
 				Timestamp: msg.Timestamp,
 			}, nil
 		})))
-	return filterPerson, personsByIDMap, func(ctx context.Context, args *q3GroupByProcessArgs, msgChan chan commtypes.Message, errChan chan error) {
+	return filterPerson, personsByIDMap, func(ctx context.Context, args *q3GroupByProcessArgs, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error) {
+		defer wg.Done()
 		for msg := range msgChan {
 			event := msg.Value.(*ntypes.Event)
 			ts, err := event.ExtractStreamTime()
@@ -262,7 +271,7 @@ func (h *q3GroupByHandler) getPersonsByID() (*processor.MeteredProcessor, *proce
 }
 
 func (h *q3GroupByHandler) getAucBySellerID() (*processor.MeteredProcessor, *processor.MeteredProcessor,
-	func(ctx context.Context, args *q3GroupByProcessArgs, msgChan chan commtypes.Message, errChan chan error),
+	func(ctx context.Context, args *q3GroupByProcessArgs, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error),
 ) {
 	filterAuctions := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
 		func(m *commtypes.Message) (bool, error) {
@@ -276,7 +285,8 @@ func (h *q3GroupByHandler) getAucBySellerID() (*processor.MeteredProcessor, *pro
 			return commtypes.Message{Key: event.NewAuction.Seller, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 		})))
 
-	return filterAuctions, auctionsBySellerIDMap, func(ctx context.Context, args *q3GroupByProcessArgs, msgChan chan commtypes.Message, errChan chan error) {
+	return filterAuctions, auctionsBySellerIDMap, func(ctx context.Context, args *q3GroupByProcessArgs, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error) {
+		defer wg.Done()
 		for msg := range msgChan {
 			event := msg.Value.(*ntypes.Event)
 			ts, err := event.ExtractStreamTime()
