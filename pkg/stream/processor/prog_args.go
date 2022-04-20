@@ -6,6 +6,7 @@ type ProcArgsWithSrcSink interface {
 	ProcArgs
 	Source() Source
 	Sink() Sink
+	ErrChan() chan error
 }
 
 type ProcArgs interface {

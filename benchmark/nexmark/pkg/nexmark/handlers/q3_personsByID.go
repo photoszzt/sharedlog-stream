@@ -132,6 +132,9 @@ func (a *query3PersonsByIDProcessArgs) FuncName() string         { return a.func
 func (a *query3PersonsByIDProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
 	return a.recordFinishFunc
 }
+func (a *query3PersonsByIDProcessArgs) ErrChan() chan error {
+	return nil
+}
 
 func (h *query3PersonsByIDHandler) Query3PersonsByID(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)

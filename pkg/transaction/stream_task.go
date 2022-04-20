@@ -628,6 +628,11 @@ L:
 func CommonProcess(ctx context.Context, t *StreamTask, args processor.ProcArgsWithSrcSink,
 	proc func(t *StreamTask, msg commtypes.MsgAndSeq) error,
 ) (map[string]uint64, *common.FnOutput) {
+	select {
+	case err := <-args.ErrChan():
+		return t.CurrentOffset, &common.FnOutput{Success: false, Message: err.Error()}
+	default:
+	}
 	gotMsgs, err := args.Source().Consume(ctx, args.ParNum())
 	if err != nil {
 		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {

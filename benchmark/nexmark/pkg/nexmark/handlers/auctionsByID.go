@@ -54,6 +54,9 @@ func (a *auctionsByIDProcessArgs) FuncName() string         { return a.funcName 
 func (a *auctionsByIDProcessArgs) RecordFinishFunc() func(ctx context.Context, appId string, instanceId uint8) error {
 	return a.recordFinishFunc
 }
+func (a *auctionsByIDProcessArgs) ErrChan() chan error {
+	return nil
+}
 
 func (h *auctionsByIDHandler) process(
 	ctx context.Context,

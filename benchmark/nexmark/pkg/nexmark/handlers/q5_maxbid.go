@@ -93,6 +93,9 @@ func (a *q5MaxBidProcessArgs) FuncName() string         { return a.funcName }
 func (a *q5MaxBidProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
 	return a.recordFinishFunc
 }
+func (a *q5MaxBidProcessArgs) ErrChan() chan error {
+	return nil
+}
 
 type q5MaxBidRestoreArgs struct {
 	maxBid       processor.Processor

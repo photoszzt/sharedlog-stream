@@ -202,6 +202,9 @@ func (a *q5AuctionBidsProcessArg) FuncName() string         { return a.funcName 
 func (a *q5AuctionBidsProcessArg) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
 	return a.recordFinishFunc
 }
+func (a *q5AuctionBidsProcessArg) ErrChan() chan error {
+	return nil
+}
 
 type q5AuctionBidsRestoreArg struct {
 	countProc      processor.Processor

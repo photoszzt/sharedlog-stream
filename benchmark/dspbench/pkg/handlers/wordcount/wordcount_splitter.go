@@ -99,6 +99,9 @@ func (a *wordcountSplitterProcessArg) FuncName() string         { return a.funcN
 func (a *wordcountSplitterProcessArg) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
 	return a.recordFinishFunc
 }
+func (a *wordcountSplitterProcessArg) ErrChan() chan error {
+	return nil
+}
 
 func (h *wordcountSplitFlatMap) process(ctx context.Context,
 	t *transaction.StreamTask,
@@ -110,7 +113,7 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context,
 		splitStart := time.Now()
 		msgs, err := args.splitter(msg.Msg)
 		if err != nil {
-			return fmt.Errorf("splitter failed: %v\n", err)
+			return fmt.Errorf("splitter failed: %v", err)
 		}
 		splitLat := time.Since(splitStart)
 		args.splitLatencies = append(args.splitLatencies, int(splitLat.Microseconds()))
@@ -119,11 +122,11 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context,
 			par := uint8(hashed % uint32(args.numOutPartition))
 			err = args.trackParFunc(ctx, m.Key, args.sink.KeySerde(), args.sink.TopicName(), par)
 			if err != nil {
-				return fmt.Errorf("add topic partition failed: %v\n", err)
+				return fmt.Errorf("add topic partition failed: %v", err)
 			}
 			err = args.sink.Sink(ctx, m, par, false)
 			if err != nil {
-				return fmt.Errorf("sink failed: %v\n", err)
+				return fmt.Errorf("sink failed: %v", err)
 			}
 		}
 		return nil

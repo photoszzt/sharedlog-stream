@@ -106,6 +106,9 @@ func (a *processQ7ProcessArgs) FuncName() string         { return a.funcName }
 func (a *processQ7ProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
 	return a.recordFinishFunc
 }
+func (a *processQ7ProcessArgs) ErrChan() chan error {
+	return nil
+}
 
 type processQ7RestoreArgs struct {
 	src                processor.Source

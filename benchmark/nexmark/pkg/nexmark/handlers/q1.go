@@ -157,6 +157,9 @@ func (a *query1ProcessArgs) FuncName() string         { return a.funcName }
 func (a *query1ProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
 	return a.recordFinishFunc
 }
+func (a *query1ProcessArgs) ErrChan() chan error {
+	return nil
+}
 
 func (h *query1Handler) process(ctx context.Context, t *transaction.StreamTask, argsTmp interface{}) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*query1ProcessArgs)

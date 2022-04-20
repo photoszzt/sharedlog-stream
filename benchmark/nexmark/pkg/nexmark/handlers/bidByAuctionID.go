@@ -129,6 +129,9 @@ func (a *bidsByAuctionIDProcessArgs) FuncName() string         { return a.funcNa
 func (a *bidsByAuctionIDProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
 	return a.recordFinishFunc
 }
+func (a *bidsByAuctionIDProcessArgs) ErrChan() chan error {
+	return nil
+}
 
 func (h *bidByAuctionIDHandler) bidByAuctionID(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)

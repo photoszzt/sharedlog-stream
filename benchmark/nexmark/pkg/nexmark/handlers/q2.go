@@ -70,6 +70,9 @@ func (a *query2ProcessArgs) FuncName() string         { return a.funcName }
 func (a *query2ProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
 	return a.recordFinishFunc
 }
+func (a *query2ProcessArgs) ErrChan() chan error {
+	return nil
+}
 
 func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)

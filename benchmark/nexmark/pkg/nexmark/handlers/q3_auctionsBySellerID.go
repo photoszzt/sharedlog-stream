@@ -120,6 +120,9 @@ func (a *AuctionsBySellerIDProcessArgs) FuncName() string         { return a.fun
 func (a *AuctionsBySellerIDProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
 	return a.recordFinishFunc
 }
+func (a *AuctionsBySellerIDProcessArgs) ErrChan() chan error {
+	return nil
+}
 
 func CommonGetSrcSink(ctx context.Context, sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,

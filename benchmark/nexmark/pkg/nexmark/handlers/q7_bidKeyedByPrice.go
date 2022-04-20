@@ -70,6 +70,9 @@ func (a *q7BidKeyedByPriceProcessArgs) FuncName() string         { return a.func
 func (a *q7BidKeyedByPriceProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
 	return a.recordFinishFunc
 }
+func (a *q7BidKeyedByPriceProcessArgs) ErrChan() chan error {
+	return nil
+}
 
 func (h *q7BidKeyedByPrice) process(ctx context.Context,
 	t *transaction.StreamTask,
