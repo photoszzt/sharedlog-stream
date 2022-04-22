@@ -165,8 +165,8 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	filterAuctions, auctionsBySellerIDMap, auctionsBySellerIDFunc := h.getAucBySellerID()
 
 	errChan := make(chan error)
-	aucMsgChan := make(chan commtypes.Message)
-	personMsgChan := make(chan commtypes.Message)
+	aucMsgChan := make(chan commtypes.Message, 100000)
+	personMsgChan := make(chan commtypes.Message, 10000)
 	procArgs := &q3GroupByProcessArgs{
 		src:              src,
 		sinks:            sinks,
@@ -188,9 +188,24 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	task := transaction.StreamTask{
 		ProcessFunc: h.process,
 		CloseFunc: func() {
+			fmt.Fprintf(os.Stderr, "auction channel has %d msg left\n", len(aucMsgChan))
+			fmt.Fprintf(os.Stderr, "person channel has %d msg left\n", len(personMsgChan))
 			close(aucMsgChan)
 			close(personMsgChan)
 			wg.Wait()
+		},
+		FlushFunc: func() {
+			fmt.Fprintf(os.Stderr, "wait for all entries are consumed\n")
+			fmt.Fprintf(os.Stderr, "current auction channel len: %v\n", len(aucMsgChan))
+			fmt.Fprintf(os.Stderr, "current person channel len: %v\n", len(personMsgChan))
+			for len(aucMsgChan) != 0 {
+				time.Sleep(time.Duration(10) * time.Millisecond)
+				fmt.Fprintf(os.Stderr, "current auction channel len: %v\n", len(aucMsgChan))
+			}
+			for len(personMsgChan) != 0 {
+				time.Sleep(time.Duration(10) * time.Millisecond)
+				fmt.Fprintf(os.Stderr, "current person channel len: %v\n", len(personMsgChan))
+			}
 		},
 		CurrentOffset: make(map[string]uint64),
 	}

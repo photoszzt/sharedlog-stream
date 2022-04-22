@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"sync"
 
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
@@ -29,22 +30,26 @@ const (
 // transaction manager is not goroutine safe, it's assumed to be used by only one stream task and only
 // one goroutine could update it
 type TransactionManager struct {
-	backgroundJobCtx      context.Context
-	txnMdSerde            commtypes.Serde
-	topicPartitionSerde   commtypes.Serde
-	txnMarkerSerde        commtypes.Serde
-	offsetRecordSerde     commtypes.Serde
-	env                   types.Environment
-	transactionLog        *sharedlog_stream.SharedLogStream
-	topicStreams          map[string]*sharedlog_stream.ShardedSharedLogStream
-	backgroundJobErrg     *errgroup.Group
+	backgroundJobCtx    context.Context
+	txnMdSerde          commtypes.Serde
+	topicPartitionSerde commtypes.Serde
+	txnMarkerSerde      commtypes.Serde
+	offsetRecordSerde   commtypes.Serde
+	env                 types.Environment
+	transactionLog      *sharedlog_stream.SharedLogStream
+	topicStreams        map[string]*sharedlog_stream.ShardedSharedLogStream
+	backgroundJobErrg   *errgroup.Group
+
+	tpMapMu               sync.Mutex
 	currentTopicPartition map[string]map[uint8]struct{}
-	TransactionalId       string
-	CurrentTaskId         uint64
-	TransactionID         uint64
-	CurrentEpoch          uint16
-	serdeFormat           commtypes.SerdeFormat
-	currentStatus         txn_data.TransactionState
+
+	TransactionalId string
+	CurrentTaskId   uint64
+	TransactionID   uint64
+	CurrentEpoch    uint16
+	serdeFormat     commtypes.SerdeFormat
+
+	currentStatus txn_data.TransactionState
 }
 
 func BeginTag(nameHash uint64, parNum uint8) uint64 {
@@ -255,6 +260,7 @@ func (tc *TransactionManager) loadAndFixTransaction(ctx context.Context, mostRec
 	return nil
 }
 
+// call at the beginning of function. Expected to execute in a single thread
 func (tc *TransactionManager) InitTransaction(ctx context.Context) error {
 	// Steps:
 	// fence first, to stop the zoombie instance from writing to the transaction log
@@ -299,6 +305,7 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) error {
 	return nil
 }
 
+// monitoring entry with fence tag
 func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, quit chan struct{},
 	errc chan error, dcancel context.CancelFunc,
 ) {
@@ -325,7 +332,7 @@ func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, quit ch
 				}
 				txnMeta := txnMetaTmp.(txn_data.TxnMetadata)
 				if txnMeta.State != txn_data.FENCE {
-					panic("fence state should be fence")
+					panic("state should be fence")
 				}
 				if txnMeta.TaskId == tc.CurrentTaskId && txnMeta.TaskEpoch > tc.CurrentEpoch {
 					// I'm the zoombie
@@ -407,6 +414,7 @@ func (tc *TransactionManager) checkTopicExistsInTopicStream(topic string) bool {
 	return ok
 }
 
+// this function could be called by multiple goroutine.
 func (tc *TransactionManager) AddTopicPartition(ctx context.Context, topic string, partitions []uint8) error {
 	if tc.currentStatus != txn_data.BEGIN {
 		return xerrors.Errorf("should begin transaction first")
@@ -414,6 +422,8 @@ func (tc *TransactionManager) AddTopicPartition(ctx context.Context, topic strin
 	debug.Assert(tc.checkTopicExistsInTopicStream(topic), fmt.Sprintf("topic %s's stream should be tracked", topic))
 	// debug.Fprintf(os.Stderr, "tracking topic %s par %v\n", topic, partitions)
 	needToAppendToLog := false
+	tc.tpMapMu.Lock()
+	defer tc.tpMapMu.Unlock()
 	parSet, ok := tc.currentTopicPartition[topic]
 	if !ok {
 		parSet = make(map[uint8]struct{})
@@ -439,7 +449,7 @@ func (tc *TransactionManager) AddTopicPartition(ctx context.Context, topic strin
 	return nil
 }
 
-func (tc *TransactionManager) CreateOffsetTopic(topicToTrack string, numPartition uint8) error {
+func (tc *TransactionManager) createOffsetTopic(topicToTrack string, numPartition uint8) error {
 	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + topicToTrack
 	_, ok := tc.topicStreams[offsetTopic]
 	if ok {
@@ -618,6 +628,7 @@ func (tc *TransactionManager) completeTransaction(ctx context.Context, trMark tx
 	if err != nil {
 		return err
 	}
+	fmt.Fprintf(os.Stderr, "done append txn marker to streams\n")
 	// async append complete_commit
 	tc.currentStatus = trState
 	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
@@ -627,6 +638,7 @@ func (tc *TransactionManager) completeTransaction(ctx context.Context, trMark tx
 	tc.backgroundJobErrg.Go(func() error {
 		return tc.appendToTransactionLog(tc.backgroundJobCtx, &txnMd, nil)
 	})
+	fmt.Fprintf(os.Stderr, "done backgroup append to transaction log\n")
 	return nil
 }
 
@@ -652,10 +664,12 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context, kvstores []
 		return err
 	}
 	// second phase of the commit
+	fmt.Fprintf(os.Stderr, "second phase of commit\n")
 	err = tc.completeTransaction(ctx, txn_data.COMMIT, txn_data.COMPLETE_COMMIT)
 	if err != nil {
 		return err
 	}
+
 	tc.cleanupState()
 	return nil
 }
@@ -693,9 +707,11 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context, inRestore bo
 }
 
 func (tc *TransactionManager) cleanupState() {
+	debug.Fprintf(os.Stderr, "cleaning up state")
 	tc.currentStatus = txn_data.EMPTY
 	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 	tc.currentTopicPartition = make(map[string]map[uint8]struct{})
+	debug.Fprintf(os.Stderr, "done cleanup state")
 }
 
 func (tc *TransactionManager) Close() error {

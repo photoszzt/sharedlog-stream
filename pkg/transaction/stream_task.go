@@ -23,6 +23,7 @@ type StreamTask struct {
 	ProcessFunc   func(ctx context.Context, task *StreamTask, args interface{}) (map[string]uint64, *common.FnOutput)
 	CurrentOffset map[string]uint64
 	CloseFunc     func()
+	FlushFunc     func()
 }
 
 func DefaultTrackSubstreamFunc(ctx context.Context,
@@ -41,10 +42,11 @@ func DefaultRecordPrevInstanceFinishFunc(ctx context.Context,
 }
 
 // finding the last commited marker and gets the marker's seq number
+// used in restore and in one thread
 func createOffsetTopicAndGetOffset(ctx context.Context, tm *TransactionManager,
 	topic string, numPartition uint8, parNum uint8,
 ) (uint64, error) {
-	err := tm.CreateOffsetTopic(topic, numPartition)
+	err := tm.createOffsetTopic(topic, numPartition)
 	if err != nil {
 		return 0, fmt.Errorf("create offset topic failed: %v", err)
 	}
@@ -324,6 +326,7 @@ func TrackOffsetAndCommit(ctx context.Context,
 ) {
 	err := tm.AppendConsumedSeqNum(ctx, consumedSeqNumConfigs)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] append offset failed: %v\n", err)
 		retc <- &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("append offset failed: %v\n", err),
@@ -332,6 +335,7 @@ func TrackOffsetAndCommit(ctx context.Context,
 	}
 	err = tm.CommitTransaction(ctx, kvchangelogs, winchangelogs)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] commit failed: %v\n", err)
 		retc <- &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("commit failed: %v\n", err),
@@ -504,6 +508,10 @@ L:
 					return
 				}
 			*/
+			if t.FlushFunc != nil {
+				t.FlushFunc()
+			}
+			debug.Fprintf(os.Stderr, "after flush\n")
 			consumedSeqNumConfigs := make([]ConsumedSeqNumConfig, 0)
 			for topic, offset := range currentOffset {
 				consumedSeqNumConfigs = append(consumedSeqNumConfigs, ConsumedSeqNumConfig{
@@ -514,6 +522,7 @@ L:
 					ConsumedSeqNum: uint64(offset),
 				})
 			}
+			debug.Fprintf(os.Stderr, "about to commit transaction\n")
 			TrackOffsetAndCommit(ctx, consumedSeqNumConfigs, tm, args.KVChangelogs, args.WindowStoreChangelogs,
 				&hasLiveTransaction, &trackConsumePar, retc)
 			/*
@@ -526,11 +535,14 @@ L:
 					return
 				}
 			*/
+			debug.Fprintf(os.Stderr, "committed transaction\n")
+			debug.Assert(!hasLiveTransaction, "after commit. there should be no live transaction\n")
 			numCommit += 1
 		}
 		cur_elapsed = time.Since(startTime)
 		timeout = duration != 0 && cur_elapsed >= duration
 		if timeout || (args.QueryInput.ExitAfterNCommit != 0 && numCommit == int(args.QueryInput.ExitAfterNCommit)) {
+			fmt.Fprintf(os.Stderr, "should close transaction\n")
 			if err := tm.Close(); err != nil {
 				retc <- &common.FnOutput{Success: false, Message: fmt.Sprintf("close transaction manager: %v\n", err)}
 				return
@@ -542,6 +554,7 @@ L:
 				retc <- &common.FnOutput{Success: false, Message: fmt.Sprintf("transaction begin failed: %v\n", err)}
 				return
 			}
+			fmt.Fprintf(os.Stderr, "begin transaction\n")
 			/*
 				if idx == 5 {
 					if val, ok := args.QueryInput.TestParams["FailAfterBegin"]; ok && val {
