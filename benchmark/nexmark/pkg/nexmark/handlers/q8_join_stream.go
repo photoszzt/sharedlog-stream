@@ -382,7 +382,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		return personsJoinsAuctions.ProcessAndReturn(ctx, m)
 	}
 
-	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
+	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 
 	procArgs := &q8JoinStreamProcessArgs{
 		personSrc:        personsSrc,
@@ -443,17 +443,15 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			panic("unrecognized table type")
 		}
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
-			ProcArgs:     procArgs,
-			Env:          h.env,
-			Srcs:         map[string]processor.Source{sp.InputTopicNames[0]: auctionsSrc, sp.InputTopicNames[1]: personsSrc},
-			OutputStream: outputStream,
-			QueryInput:   sp,
+			ProcArgs:      procArgs,
+			Env:           h.env,
+			Srcs:          map[string]processor.Source{sp.InputTopicNames[0]: auctionsSrc, sp.InputTopicNames[1]: personsSrc},
+			OutputStreams: []*sharedlog_stream.ShardedSharedLogStream{outputStream},
+			QueryInput:    sp,
 			TransactionalId: fmt.Sprintf("%s-%s-%d-%s", h.funcName,
-				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
+				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0]),
 			MsgSerde:              sss.msgSerde,
 			WindowStoreChangelogs: wsc,
-			CHash:                 h.cHash,
-			CHashMu:               &h.cHashMu,
 		}
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {

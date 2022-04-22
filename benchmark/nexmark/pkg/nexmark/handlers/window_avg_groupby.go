@@ -112,7 +112,7 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput, s
 					}
 					val := subMsg.Value.(*ntypes.Event)
 					if val.Etype == ntypes.BID {
-						par := uint8(val.Bid.Auction % uint64(sp.NumOutPartition))
+						par := uint8(val.Bid.Auction % uint64(sp.NumOutPartitions[0]))
 						newMsg := commtypes.Message{Key: val.Bid.Auction, Value: msg.Msg.Value}
 						err = sink.Sink(ctx, newMsg, par, false)
 						if err != nil {
@@ -129,7 +129,7 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput, s
 				}
 				val := msg.Msg.Value.(*ntypes.Event)
 				if val.Etype == ntypes.BID {
-					par := uint8(val.Bid.Auction % uint64(sp.NumOutPartition))
+					par := uint8(val.Bid.Auction % uint64(sp.NumOutPartitions[0]))
 					newMsg := commtypes.Message{Key: val.Bid.Auction, Value: msg.Msg.Value}
 					err = sink.Sink(ctx, newMsg, par, false)
 					if err != nil {
@@ -156,14 +156,14 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput, s
 }
 
 func (h *windowAvgGroupBy) windowavg_groupby(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
 	}
-	src, sink, err := h.getSrcSink(sp, input_stream, output_stream)
+	src, sink, err := h.getSrcSink(sp, input_stream, output_streams[0])
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

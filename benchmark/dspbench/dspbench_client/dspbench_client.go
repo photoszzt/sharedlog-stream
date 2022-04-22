@@ -62,10 +62,10 @@ func invokeQuery(client *http.Client, response *common.FnOutput, wg *sync.WaitGr
 		serdeFormat = commtypes.JSON
 	}
 	queryInput := &common.QueryInput{
-		Duration:        uint32(FLAGS_duration),
-		InputTopicNames: []string{FLAGS_stream_prefix + "_src"},
-		OutputTopicName: FLAGS_stream_prefix + "_" + FLAGS_fn_name + "_output",
-		SerdeFormat:     uint8(serdeFormat),
+		Duration:         uint32(FLAGS_duration),
+		InputTopicNames:  []string{FLAGS_stream_prefix + "_src"},
+		OutputTopicNames: []string{FLAGS_stream_prefix + "_" + FLAGS_fn_name + "_output"},
+		SerdeFormat:      uint8(serdeFormat),
 	}
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, FLAGS_fn_name)
 	fmt.Printf("func url is %v\n", url)

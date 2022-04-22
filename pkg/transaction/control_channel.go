@@ -56,10 +56,11 @@ type ControlChannelManager struct {
 	keyMappings map[string]*skiplist.SkipList
 
 	topicStreams map[string]*sharedlog_stream.ShardedSharedLogStream
-	output_topic string
 
-	cHashMu *sync.RWMutex
-	cHash   *hash.ConsistentHash
+	/*
+		cHashMu *sync.RWMutex
+		cHash   *hash.ConsistentHash
+	*/
 
 	funcName     string
 	currentEpoch uint64
@@ -123,14 +124,12 @@ func (cmm *ControlChannelManager) TrackStream(topicName string, stream *sharedlo
 	cmm.topicStreams[topicName] = stream
 }
 
+/*
 func (cmm *ControlChannelManager) TrackConsistentHash(cHashMu *sync.RWMutex, cHash *hash.ConsistentHash) {
 	cmm.cHash = cHash
 	cmm.cHashMu = cHashMu
 }
-
-func (cmm *ControlChannelManager) TrackOutputTopic(output_topic string) {
-	cmm.output_topic = output_topic
-}
+*/
 
 func (cmm *ControlChannelManager) appendToControlLog(ctx context.Context, cm *txn_data.ControlMetadata) error {
 	encoded, err := cmm.controlMetaSerde.Encode(cm)

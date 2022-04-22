@@ -82,10 +82,10 @@ func main() {
 		splitInputParams[i] = &common.QueryInput{
 			Duration:          uint32(FLAGS_duration),
 			InputTopicNames:   []string{"wc_src"},
-			OutputTopicName:   splitOutputTopic,
+			OutputTopicNames:  []string{splitOutputTopic},
 			SerdeFormat:       uint8(serdeFormat),
 			NumInPartition:    1,
-			NumOutPartition:   numCountInstance,
+			NumOutPartitions:  []uint8{numCountInstance},
 			EnableTransaction: FLAGS_tran,
 			CommitEveryMs:     FLAGS_commit_every,
 		}
@@ -114,10 +114,10 @@ func main() {
 		countInputParams[i] = &common.QueryInput{
 			Duration:          uint32(FLAGS_duration),
 			InputTopicNames:   []string{splitOutputTopic},
-			OutputTopicName:   countOutputTopic,
+			OutputTopicNames:  []string{countOutputTopic},
 			SerdeFormat:       uint8(serdeFormat),
 			NumInPartition:    numCountInstance,
-			NumOutPartition:   numCountInstance,
+			NumOutPartitions:  []uint8{numCountInstance},
 			EnableTransaction: FLAGS_tran,
 			CommitEveryMs:     FLAGS_commit_every,
 			TestParams:        testParams,

@@ -9,7 +9,9 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hash"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/transaction"
@@ -21,17 +23,23 @@ import (
 )
 
 type q3GroupByHandler struct {
-	env      types.Environment
-	cHashMu  sync.RWMutex
-	cHash    *hash.ConsistentHash
+	env types.Environment
+
+	aucHashMu sync.RWMutex
+	aucHash   *hash.ConsistentHash
+
+	personHashMu sync.RWMutex
+	personHash   *hash.ConsistentHash
+
 	funcName string
 }
 
 func NewQ3GroupByHandler(env types.Environment, funcName string) types.FuncHandler {
 	return &q3GroupByHandler{
-		env:      env,
-		cHash:    hash.NewConsistentHash(),
-		funcName: funcName,
+		env:        env,
+		aucHash:    hash.NewConsistentHash(),
+		personHash: hash.NewConsistentHash(),
+		funcName:   funcName,
 	}
 }
 
@@ -75,7 +83,7 @@ func (h *q3GroupByHandler) Call(ctx context.Context, input []byte) ([]byte, erro
 
 type q3GroupByProcessArgs struct {
 	src              *processor.MeteredSource
-	sink             *processor.MeteredSink
+	sinks            []*processor.MeteredSink
 	aucMsgChan       chan commtypes.Message
 	personMsgChan    chan commtypes.Message
 	errChan          chan error
@@ -87,10 +95,18 @@ type q3GroupByProcessArgs struct {
 }
 
 func (a *q3GroupByProcessArgs) Source() processor.Source { return a.src }
-func (a *q3GroupByProcessArgs) Sink() processor.Sink     { return a.sink }
-func (a *q3GroupByProcessArgs) ParNum() uint8            { return a.parNum }
-func (a *q3GroupByProcessArgs) CurEpoch() uint64         { return a.curEpoch }
-func (a *q3GroupByProcessArgs) FuncName() string         { return a.funcName }
+func (a *q3GroupByProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
+	for _, sink := range a.sinks {
+		err := sink.Sink(ctx, msg, parNum, isControl)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (a *q3GroupByProcessArgs) ParNum() uint8    { return a.parNum }
+func (a *q3GroupByProcessArgs) CurEpoch() uint64 { return a.curEpoch }
+func (a *q3GroupByProcessArgs) FuncName() string { return a.funcName }
 func (a *q3GroupByProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
 	return a.recordFinishFunc
 }
@@ -98,20 +114,51 @@ func (a *q3GroupByProcessArgs) ErrChan() chan error {
 	return a.errChan
 }
 
+func (h *q3GroupByHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
+	input_stream *sharedlog_stream.ShardedSharedLogStream,
+	output_streams []*sharedlog_stream.ShardedSharedLogStream,
+) (*processor.MeteredSource, []*processor.MeteredSink, commtypes.MsgSerde, error) {
+	var sinks []*processor.MeteredSink
+	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("get msg serde err: %v", err)
+	}
+	eventSerde, err := getEventSerde(sp.SerdeFormat)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("get event serde err: %v", err)
+	}
+	inConfig := &sharedlog_stream.StreamSourceConfig{
+		Timeout:      common.SrcConsumeTimeout,
+		KeyDecoder:   commtypes.StringDecoder{},
+		ValueDecoder: eventSerde,
+		MsgDecoder:   msgSerde,
+	}
+	outConfig := &sharedlog_stream.StreamSinkConfig{
+		KeySerde:   commtypes.Uint64Serde{},
+		ValueSerde: eventSerde,
+		MsgSerde:   msgSerde,
+	}
+	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
+	for _, output_stream := range output_streams {
+		sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
+		sinks = append(sinks, sink)
+	}
+	return src, sinks, msgSerde, nil
+}
+
 func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("get input output stream failed: %v", err),
 		}
 	}
-	src, sink, msgSerde, err := CommonGetSrcSink(ctx, sp, input_stream, output_stream)
+	debug.Assert(len(output_streams) == 2, "expected 2 output streams")
+	src, sinks, msgSerde, err := h.getSrcSink(ctx, sp, input_stream, output_streams)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 
 	filterPerson, personsByIDMap, personsByIDFunc := h.getPersonsByID()
@@ -122,7 +169,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	personMsgChan := make(chan commtypes.Message)
 	procArgs := &q3GroupByProcessArgs{
 		src:              src,
-		sink:             sink,
+		sinks:            sinks,
 		aucMsgChan:       aucMsgChan,
 		personMsgChan:    personMsgChan,
 		trackParFunc:     transaction.DefaultTrackSubstreamFunc,
@@ -147,41 +194,42 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 		},
 		CurrentOffset: make(map[string]uint64),
 	}
-	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
+	transaction.SetupConsistentHash(&h.aucHashMu, h.aucHash, sp.NumOutPartitions[0])
+	transaction.SetupConsistentHash(&h.personHashMu, h.personHash, sp.NumOutPartitions[1])
 
 	if sp.EnableTransaction {
 		srcs := make(map[string]processor.Source)
 		srcs[sp.InputTopicNames[0]] = src
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
-			ProcArgs:     procArgs,
-			Env:          h.env,
-			MsgSerde:     msgSerde,
-			Srcs:         srcs,
-			OutputStream: output_stream,
-			QueryInput:   sp,
-			TransactionalId: fmt.Sprintf("%s-%s-%d-%s",
-				h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
+			ProcArgs:      procArgs,
+			Env:           h.env,
+			MsgSerde:      msgSerde,
+			Srcs:          srcs,
+			OutputStreams: output_streams,
+			QueryInput:    sp,
+			TransactionalId: fmt.Sprintf("%s-%s-%d",
+				h.funcName, sp.InputTopicNames[0], sp.ParNum),
 			KVChangelogs:          nil,
 			WindowStoreChangelogs: nil,
 			FixedOutParNum:        0,
-			CHash:                 h.cHash,
-			CHashMu:               &h.cHashMu,
 		}
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc,
 				recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
-				procArgs.(*query3PersonsByIDProcessArgs).trackParFunc = trackParFunc
-				procArgs.(*query3PersonsByIDProcessArgs).recordFinishFunc = recordFinishFunc
+				procArgs.(*q3GroupByProcessArgs).trackParFunc = trackParFunc
+				procArgs.(*q3GroupByProcessArgs).recordFinishFunc = recordFinishFunc
 			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
-			ret.Latencies["sink"] = sink.GetLatency()
+			ret.Latencies["aucSink"] = sinks[0].GetLatency()
+			ret.Latencies["personSink"] = sinks[1].GetLatency()
 			ret.Latencies["filterPerson"] = filterPerson.GetLatency()
 			ret.Latencies["personsByIDMap"] = personsByIDMap.GetLatency()
 			ret.Latencies["filterAuctions"] = filterAuctions.GetLatency()
 			ret.Latencies["auctionsBySellerIDMap"] = auctionsBySellerIDMap.GetLatency()
 			ret.Consumed["src"] = src.GetCount()
 		}
+		return ret
 	}
 	streamTaskArgs := transaction.StreamTaskArgs{
 		ProcArgs: procArgs,
@@ -190,7 +238,8 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {
 		ret.Latencies["src"] = src.GetLatency()
-		ret.Latencies["sink"] = sink.GetLatency()
+		ret.Latencies["aucSink"] = sinks[0].GetLatency()
+		ret.Latencies["personSink"] = sinks[1].GetLatency()
 		ret.Latencies["filterPerson"] = filterPerson.GetLatency()
 		ret.Latencies["personsByIDMap"] = personsByIDMap.GetLatency()
 		ret.Latencies["filterAuctions"] = filterAuctions.GetLatency()
@@ -229,39 +278,45 @@ func (h *q3GroupByHandler) getPersonsByID() (*processor.MeteredProcessor, *proce
 			event := msg.Value.(*ntypes.Event)
 			ts, err := event.ExtractStreamTime()
 			if err != nil {
+				fmt.Fprintf(os.Stderr, "[ERROR] fail to extract timestamp: %v\n", err)
 				errChan <- fmt.Errorf("fail to extract timestamp: %v", err)
 				return
 			}
 			msg.Timestamp = ts
 			filteredMsgs, err := filterPerson.ProcessAndReturn(ctx, msg)
 			if err != nil {
+				fmt.Fprintf(os.Stderr, "[ERROR] filterPerson err: %v\n", err)
 				errChan <- fmt.Errorf("filterPerson err: %v", err)
 				return
 			}
 			for _, filteredMsg := range filteredMsgs {
 				changeKeyedMsg, err := personsByIDMap.ProcessAndReturn(ctx, filteredMsg)
 				if err != nil {
+					fmt.Fprintf(os.Stderr, "[ERROR] personsByIDMap err: %v\n", err)
 					errChan <- fmt.Errorf("personsByIDMap err: %v", err)
 					return
 				}
 
 				k := changeKeyedMsg[0].Key.(uint64)
-				h.cHashMu.RLock()
-				parTmp, ok := h.cHash.Get(k)
-				h.cHashMu.RUnlock()
+				h.personHashMu.RLock()
+				parTmp, ok := h.personHash.Get(k)
+				h.personHashMu.RUnlock()
 				if !ok {
+					fmt.Fprintf(os.Stderr, "[ERROR] fail to get output partition\n")
 					errChan <- xerrors.New("fail to get output partition")
 					return
 				}
 				par := parTmp.(uint8)
-				err = args.trackParFunc(ctx, k, args.sink.KeySerde(), args.sink.TopicName(), par)
+				err = args.trackParFunc(ctx, k, args.sinks[1].KeySerde(), args.sinks[1].TopicName(), par)
 				if err != nil {
+					fmt.Fprintf(os.Stderr, "[ERROR] add topic partition failed: %v\n", err)
 					errChan <- fmt.Errorf("add topic partition failed: %v", err)
 					return
 				}
 				// fmt.Fprintf(os.Stderr, "append %v to substream %v\n", changeKeyedMsg[0], par)
-				err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
+				err = args.sinks[1].Sink(ctx, changeKeyedMsg[0], par, false)
 				if err != nil {
+					fmt.Fprintf(os.Stderr, "[ERROR] sink err: %v\n", err)
 					errChan <- fmt.Errorf("sink err: %v", err)
 					return
 				}
@@ -291,38 +346,47 @@ func (h *q3GroupByHandler) getAucBySellerID() (*processor.MeteredProcessor, *pro
 			event := msg.Value.(*ntypes.Event)
 			ts, err := event.ExtractStreamTime()
 			if err != nil {
+				fmt.Fprintf(os.Stderr, "[ERROR] fail to extract timestamp: %v\n", err)
 				errChan <- fmt.Errorf("fail to extract timestamp: %v", err)
 				return
 			}
 			msg.Timestamp = ts
 			filteredMsgs, err := filterAuctions.ProcessAndReturn(ctx, msg)
 			if err != nil {
+				fmt.Fprintf(os.Stderr, "filterAuctions err: %v\n", err)
 				errChan <- fmt.Errorf("filterAuctions err: %v", err)
 				return
 			}
 			for _, filteredMsg := range filteredMsgs {
 				changeKeyedMsg, err := auctionsBySellerIDMap.ProcessAndReturn(ctx, filteredMsg)
 				if err != nil {
+					fmt.Fprintf(os.Stderr, "auctionsBySellerIDMap err: %v\n", err)
 					errChan <- fmt.Errorf("auctionsBySellerIDMap err: %v", err)
+					return
 				}
 
 				k := changeKeyedMsg[0].Key.(uint64)
-				h.cHashMu.RLock()
-				parTmp, ok := h.cHash.Get(k)
-				h.cHashMu.RUnlock()
+				h.aucHashMu.RLock()
+				parTmp, ok := h.aucHash.Get(k)
+				h.aucHashMu.RUnlock()
 				if !ok {
+					fmt.Fprintf(os.Stderr, "[ERROR] fail to get output partition\n")
 					errChan <- xerrors.New("fail to get output partition")
+					return
 				}
 				par := parTmp.(uint8)
-				err = args.trackParFunc(ctx, k, args.sink.KeySerde(), args.sink.TopicName(), par)
+				err = args.trackParFunc(ctx, k, args.sinks[0].KeySerde(), args.sinks[0].TopicName(), par)
 				if err != nil {
+					fmt.Fprintf(os.Stderr, "add topic partition failed: %v", err)
 					errChan <- fmt.Errorf("add topic partition failed: %v", err)
 					return
 				}
-				fmt.Fprintf(os.Stderr, "append %v to substream %v\n", changeKeyedMsg[0], par)
-				err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
+				// fmt.Fprintf(os.Stderr, "append %v to substream %v\n", changeKeyedMsg[0], par)
+				err = args.sinks[0].Sink(ctx, changeKeyedMsg[0], par, false)
 				if err != nil {
+					fmt.Fprintf(os.Stderr, "sink err: %v\n", err)
 					errChan <- fmt.Errorf("sink err: %v", err)
+					return
 				}
 			}
 		}

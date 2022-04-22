@@ -154,7 +154,7 @@ func getInOutStreams(
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
 	}
-	outputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.OutputTopicName, input.NumOutPartition,
+	outputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.OutputTopicNames[0], input.NumOutPartitions[0],
 		commtypes.SerdeFormat(input.SerdeFormat))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
@@ -401,7 +401,9 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		return msgs, err
 	})
 
-	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
+	debug.Assert(len(sp.NumOutPartitions) == 1 && len(sp.OutputTopicNames) == 1,
+		"expected only one output stream")
+	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
 	procArgs := &q3JoinTableProcessArgs{
@@ -449,14 +451,12 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			Env:                   h.env,
 			MsgSerde:              sss.msgSerde,
 			Srcs:                  map[string]processor.Source{auctionsStream.TopicName(): sss.src1, personsStream.TopicName(): sss.src2},
-			OutputStream:          outputStream,
+			OutputStreams:         []*sharedlog_stream.ShardedSharedLogStream{outputStream},
 			QueryInput:            sp,
-			TransactionalId:       fmt.Sprintf("%s-%d-%s", h.funcName, sp.ParNum, sp.OutputTopicName),
+			TransactionalId:       fmt.Sprintf("%s-%d-%s", h.funcName, sp.ParNum, sp.OutputTopicNames[0]),
 			KVChangelogs:          kvchangelogs,
 			WindowStoreChangelogs: nil,
 			FixedOutParNum:        0,
-			CHash:                 h.cHash,
-			CHashMu:               &h.cHashMu,
 		}
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {

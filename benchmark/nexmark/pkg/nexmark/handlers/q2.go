@@ -63,10 +63,12 @@ type query2ProcessArgs struct {
 }
 
 func (a *query2ProcessArgs) Source() processor.Source { return a.src }
-func (a *query2ProcessArgs) Sink() processor.Sink     { return a.sink }
-func (a *query2ProcessArgs) ParNum() uint8            { return a.parNum }
-func (a *query2ProcessArgs) CurEpoch() uint64         { return a.curEpoch }
-func (a *query2ProcessArgs) FuncName() string         { return a.funcName }
+func (a *query2ProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
+	return a.sink.Sink(ctx, msg, parNum, isControl)
+}
+func (a *query2ProcessArgs) ParNum() uint8    { return a.parNum }
+func (a *query2ProcessArgs) CurEpoch() uint64 { return a.curEpoch }
+func (a *query2ProcessArgs) FuncName() string { return a.funcName }
 func (a *query2ProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
 	return a.recordFinishFunc
 }
@@ -75,14 +77,14 @@ func (a *query2ProcessArgs) ErrChan() chan error {
 }
 
 func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("get input output stream failed: %v", err),
 		}
 	}
-	src, sink, msgSerde, err := getSrcSink(ctx, sp, input_stream, output_stream)
+	src, sink, msgSerde, err := getSrcSink(ctx, sp, input_stream, output_streams[0])
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -95,7 +97,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		src:              src,
 		sink:             sink,
 		q2Filter:         q2Filter,
-		output_stream:    output_stream,
+		output_stream:    output_streams[0],
 		parNum:           sp.ParNum,
 		trackParFunc:     transaction.DefaultTrackSubstreamFunc,
 		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
@@ -114,14 +116,12 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 			Env:                   h.env,
 			MsgSerde:              msgSerde,
 			Srcs:                  srcs,
-			OutputStream:          output_stream,
+			OutputStreams:         output_streams,
 			QueryInput:            sp,
-			TransactionalId:       fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
+			TransactionalId:       fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0]),
 			KVChangelogs:          nil,
 			WindowStoreChangelogs: nil,
 			FixedOutParNum:        sp.ParNum,
-			CHash:                 nil,
-			CHashMu:               nil,
 		}
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc,

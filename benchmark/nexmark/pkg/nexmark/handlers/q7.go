@@ -10,6 +10,7 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/concurrent_skiplist"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
@@ -99,10 +100,12 @@ type processQ7ProcessArgs struct {
 }
 
 func (a *processQ7ProcessArgs) Source() processor.Source { return a.src }
-func (a *processQ7ProcessArgs) Sink() processor.Sink     { return a.sink }
-func (a *processQ7ProcessArgs) ParNum() uint8            { return a.parNum }
-func (a *processQ7ProcessArgs) CurEpoch() uint64         { return a.curEpoch }
-func (a *processQ7ProcessArgs) FuncName() string         { return a.funcName }
+func (a *processQ7ProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
+	return a.sink.Sink(ctx, msg, parNum, isControl)
+}
+func (a *processQ7ProcessArgs) ParNum() uint8    { return a.parNum }
+func (a *processQ7ProcessArgs) CurEpoch() uint64 { return a.curEpoch }
+func (a *processQ7ProcessArgs) FuncName() string { return a.funcName }
 func (a *processQ7ProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
 	return a.recordFinishFunc
 }
@@ -234,11 +237,11 @@ func (h *query7Handler) procMsgWithoutSink(ctx context.Context, msg commtypes.Me
 }
 
 func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput) *common.FnOutput {
-	inputStream, outputStream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, input, true)
+	inputStream, outputStreams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, input, true)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-
+	debug.Assert(len(outputStreams) == 1, "expected only one output stream")
 	msgSerde, err := commtypes.GetMsgSerde(input.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
@@ -265,7 +268,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		}
 	}
 
-	src, sink, err := h.getSrcSink(input, inputStream, outputStream, msgSerde)
+	src, sink, err := h.getSrcSink(input, inputStream, outputStreams[0], msgSerde)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -282,7 +285,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 			ValueSerde: vtSerde,
 			StoreName:  maxPriceBidStoreName,
 			ParNum:     input.ParNum,
-			Changelog:  outputStream,
+			Changelog:  outputStreams[0],
 			MsgSerde:   msgSerde,
 			Comparable: concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
 				l := lhs.(uint64)
@@ -351,7 +354,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 	procArgs := &processQ7ProcessArgs{
 		src:                src,
 		sink:               sink,
-		output_stream:      outputStream,
+		output_stream:      outputStreams[0],
 		parNum:             input.ParNum,
 		maxPriceBid:        maxPriceBid,
 		transformWithStore: transformWithStore,
@@ -394,18 +397,16 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 			panic("unrecognized table type")
 		}
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
-			ProcArgs:     procArgs,
-			Env:          h.env,
-			Srcs:         srcs,
-			OutputStream: outputStream,
-			QueryInput:   input,
+			ProcArgs:      procArgs,
+			Env:           h.env,
+			Srcs:          srcs,
+			OutputStreams: outputStreams,
+			QueryInput:    input,
 			TransactionalId: fmt.Sprintf("%s-%s-%d-%s", h.funcName,
-				input.InputTopicNames[0], input.ParNum, input.OutputTopicName),
+				input.InputTopicNames[0], input.ParNum, input.OutputTopicNames[0]),
 			FixedOutParNum:        input.ParNum,
 			MsgSerde:              msgSerde,
 			WindowStoreChangelogs: wsc,
-			CHash:                 nil,
-			CHashMu:               nil,
 		}
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {

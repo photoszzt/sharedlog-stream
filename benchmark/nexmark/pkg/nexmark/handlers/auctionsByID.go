@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -47,10 +48,12 @@ type auctionsByIDProcessArgs struct {
 }
 
 func (a *auctionsByIDProcessArgs) Source() processor.Source { return a.src }
-func (a *auctionsByIDProcessArgs) Sink() processor.Sink     { return a.sink }
-func (a *auctionsByIDProcessArgs) ParNum() uint8            { return a.parNum }
-func (a *auctionsByIDProcessArgs) CurEpoch() uint64         { return a.curEpoch }
-func (a *auctionsByIDProcessArgs) FuncName() string         { return a.funcName }
+func (a *auctionsByIDProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
+	return a.sink.Sink(ctx, msg, parNum, isControl)
+}
+func (a *auctionsByIDProcessArgs) ParNum() uint8    { return a.parNum }
+func (a *auctionsByIDProcessArgs) CurEpoch() uint64 { return a.curEpoch }
+func (a *auctionsByIDProcessArgs) FuncName() string { return a.funcName }
 func (a *auctionsByIDProcessArgs) RecordFinishFunc() func(ctx context.Context, appId string, instanceId uint8) error {
 	return a.recordFinishFunc
 }
@@ -134,14 +137,15 @@ func (h *auctionsByIDHandler) Call(ctx context.Context, input []byte) ([]byte, e
 }
 
 func (h *auctionsByIDHandler) auctionsByID(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("get input output stream failed: %v", err),
 		}
 	}
-	src, sink, msgSerde, err := CommonGetSrcSink(ctx, sp, input_stream, output_stream)
+	debug.Assert(len(output_streams) == 1, "expected only one output stream")
+	src, sink, msgSerde, err := CommonGetSrcSink(ctx, sp, input_stream, output_streams[0])
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -178,25 +182,23 @@ func (h *auctionsByIDHandler) auctionsByID(ctx context.Context, sp *common.Query
 		CurrentOffset: make(map[string]uint64),
 	}
 
-	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
+	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 
 	if sp.EnableTransaction {
 		srcs := make(map[string]processor.Source)
 		srcs[sp.InputTopicNames[0]] = src
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
-			ProcArgs:     procArgs,
-			Env:          h.env,
-			MsgSerde:     msgSerde,
-			Srcs:         srcs,
-			OutputStream: output_stream,
-			QueryInput:   sp,
+			ProcArgs:      procArgs,
+			Env:           h.env,
+			MsgSerde:      msgSerde,
+			Srcs:          srcs,
+			OutputStreams: output_streams,
+			QueryInput:    sp,
 			TransactionalId: fmt.Sprintf("%s-%s-%d-%s", h.funcName,
-				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
+				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0]),
 			KVChangelogs:          nil,
 			WindowStoreChangelogs: nil,
 			FixedOutParNum:        0,
-			CHash:                 h.cHash,
-			CHashMu:               &h.cHashMu,
 		}
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {

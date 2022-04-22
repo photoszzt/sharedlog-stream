@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
@@ -64,7 +65,7 @@ func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes
 		KeySerde:   commtypes.StringSerde{},
 		ValueSerde: vtSerde,
 		MsgSerde:   msgSerde,
-		StoreName:  sp.OutputTopicName,
+		StoreName:  sp.OutputTopicNames[0],
 		Changelog:  output_stream,
 		ParNum:     sp.ParNum,
 	}
@@ -172,14 +173,15 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 }
 
 func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, true)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, true)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("get input output stream failed: %v", err),
 		}
 	}
-	meteredOutputStream := store.NewMeteredStream(output_stream)
+	debug.Assert(len(output_streams) == 1, "expected only one output stream")
+	meteredOutputStream := store.NewMeteredStream(output_streams[0])
 
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
@@ -228,9 +230,9 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 			Env:             h.env,
 			MsgSerde:        msgSerde,
 			Srcs:            srcs,
-			OutputStream:    output_stream,
+			OutputStreams:   output_streams,
 			QueryInput:      sp,
-			TransactionalId: fmt.Sprintf("%s-%s-%s-%d", funcName, sp.InputTopicNames[0], sp.OutputTopicName, sp.ParNum),
+			TransactionalId: fmt.Sprintf("%s-%s-%s-%d", funcName, sp.InputTopicNames[0], sp.OutputTopicNames[0], sp.ParNum),
 			FixedOutParNum:  sp.ParNum,
 		}
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,

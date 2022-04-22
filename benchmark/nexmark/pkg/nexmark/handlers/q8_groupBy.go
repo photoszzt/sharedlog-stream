@@ -10,6 +10,7 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/hash"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/transaction"
@@ -75,7 +76,7 @@ func (h *q8GroupByHandler) Call(ctx context.Context, input []byte) ([]byte, erro
 
 type q8GroupByProcessArgs struct {
 	src              *processor.MeteredSource
-	sink             *processor.MeteredSink
+	sinks            []*processor.MeteredSink
 	aucMsgChan       chan commtypes.Message
 	personMsgChan    chan commtypes.Message
 	errChan          chan error
@@ -87,10 +88,18 @@ type q8GroupByProcessArgs struct {
 }
 
 func (a *q8GroupByProcessArgs) Source() processor.Source { return a.src }
-func (a *q8GroupByProcessArgs) Sink() processor.Sink     { return a.sink }
-func (a *q8GroupByProcessArgs) ParNum() uint8            { return a.parNum }
-func (a *q8GroupByProcessArgs) CurEpoch() uint64         { return a.curEpoch }
-func (a *q8GroupByProcessArgs) FuncName() string         { return a.funcName }
+func (a *q8GroupByProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
+	for _, sink := range a.sinks {
+		err := sink.Sink(ctx, msg, parNum, isControl)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (a *q8GroupByProcessArgs) ParNum() uint8    { return a.parNum }
+func (a *q8GroupByProcessArgs) CurEpoch() uint64 { return a.curEpoch }
+func (a *q8GroupByProcessArgs) FuncName() string { return a.funcName }
 func (a *q8GroupByProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
 	return a.recordFinishFunc
 }
@@ -98,15 +107,48 @@ func (a *q8GroupByProcessArgs) ErrChan() chan error {
 	return a.errChan
 }
 
+func (h *q8GroupByHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
+	input_stream *sharedlog_stream.ShardedSharedLogStream,
+	output_streams []*sharedlog_stream.ShardedSharedLogStream,
+) (*processor.MeteredSource, []*processor.MeteredSink, commtypes.MsgSerde, error) {
+	var sinks []*processor.MeteredSink
+	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("get msg serde err: %v", err)
+	}
+	eventSerde, err := getEventSerde(sp.SerdeFormat)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("get event serde err: %v", err)
+	}
+	inConfig := &sharedlog_stream.StreamSourceConfig{
+		Timeout:      common.SrcConsumeTimeout,
+		KeyDecoder:   commtypes.StringDecoder{},
+		ValueDecoder: eventSerde,
+		MsgDecoder:   msgSerde,
+	}
+	outConfig := &sharedlog_stream.StreamSinkConfig{
+		KeySerde:   commtypes.Uint64Serde{},
+		ValueSerde: eventSerde,
+		MsgSerde:   msgSerde,
+	}
+	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
+	for _, output_stream := range output_streams {
+		sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
+		sinks = append(sinks, sink)
+	}
+	return src, sinks, msgSerde, nil
+}
+
 func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("get input output stream failed: %v", err),
 		}
 	}
-	src, sink, msgSerde, err := CommonGetSrcSink(ctx, sp, input_stream, output_stream)
+	src, sinks, msgSerde, err := h.getSrcSink(ctx, sp, input_stream, output_streams)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -122,7 +164,7 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 	personMsgChan := make(chan commtypes.Message)
 	procArgs := &q8GroupByProcessArgs{
 		src:              src,
-		sink:             sink,
+		sinks:            sinks,
 		aucMsgChan:       aucMsgChan,
 		personMsgChan:    personMsgChan,
 		trackParFunc:     transaction.DefaultTrackSubstreamFunc,
@@ -147,41 +189,41 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 			wg.Wait()
 		},
 	}
-	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
+	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 
 	if sp.EnableTransaction {
 		srcs := make(map[string]processor.Source)
 		srcs[sp.InputTopicNames[0]] = src
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
-			ProcArgs:     procArgs,
-			Env:          h.env,
-			MsgSerde:     msgSerde,
-			Srcs:         srcs,
-			OutputStream: output_stream,
-			QueryInput:   sp,
+			ProcArgs:      procArgs,
+			Env:           h.env,
+			MsgSerde:      msgSerde,
+			Srcs:          srcs,
+			OutputStreams: output_streams,
+			QueryInput:    sp,
 			TransactionalId: fmt.Sprintf("%s-%s-%d-%s",
-				h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
+				h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0]),
 			KVChangelogs:          nil,
 			WindowStoreChangelogs: nil,
 			FixedOutParNum:        0,
-			CHash:                 h.cHash,
-			CHashMu:               &h.cHashMu,
 		}
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc,
 				recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
-				procArgs.(*query3PersonsByIDProcessArgs).trackParFunc = trackParFunc
-				procArgs.(*query3PersonsByIDProcessArgs).recordFinishFunc = recordFinishFunc
+				procArgs.(*q8GroupByProcessArgs).trackParFunc = trackParFunc
+				procArgs.(*q8GroupByProcessArgs).recordFinishFunc = recordFinishFunc
 			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
-			ret.Latencies["sink"] = sink.GetLatency()
+			ret.Latencies["aucSink"] = sinks[0].GetLatency()
+			ret.Latencies["personSink"] = sinks[1].GetLatency()
 			ret.Latencies["filterPerson"] = filterPerson.GetLatency()
 			ret.Latencies["personsByIDMap"] = personsByIDMap.GetLatency()
 			ret.Latencies["filterAuctions"] = filterAuctions.GetLatency()
 			ret.Latencies["auctionsBySellerIDMap"] = auctionsBySellerIDMap.GetLatency()
 			ret.Consumed["src"] = src.GetCount()
 		}
+		return ret
 	}
 	streamTaskArgs := transaction.StreamTaskArgs{
 		ProcArgs: procArgs,
@@ -190,7 +232,8 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {
 		ret.Latencies["src"] = src.GetLatency()
-		ret.Latencies["sink"] = sink.GetLatency()
+		ret.Latencies["aucSink"] = sinks[0].GetLatency()
+		ret.Latencies["personSink"] = sinks[1].GetLatency()
 		ret.Latencies["filterPerson"] = filterPerson.GetLatency()
 		ret.Latencies["personsByIDMap"] = personsByIDMap.GetLatency()
 		ret.Latencies["filterAuctions"] = filterAuctions.GetLatency()
@@ -248,13 +291,13 @@ func (h *q8GroupByHandler) getPersonsByID() (*processor.MeteredProcessor, *proce
 					return
 				}
 				par := parTmp.(uint8)
-				err = args.trackParFunc(ctx, k, args.sink.KeySerde(), args.sink.TopicName(), par)
+				err = args.trackParFunc(ctx, k, args.sinks[1].KeySerde(), args.sinks[1].TopicName(), par)
 				if err != nil {
 					errChan <- fmt.Errorf("add topic partition failed: %v", err)
 					return
 				}
 				// fmt.Fprintf(os.Stderr, "append %v to substream %v\n", changeKeyedMsg[0], par)
-				err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
+				err = args.sinks[1].Sink(ctx, changeKeyedMsg[0], par, false)
 				if err != nil {
 					errChan <- fmt.Errorf("sink err: %v", err)
 					return
@@ -308,13 +351,13 @@ func (h *q8GroupByHandler) getAucBySellerID() (*processor.MeteredProcessor, *pro
 					errChan <- xerrors.New("fail to get output partition")
 				}
 				par := parTmp.(uint8)
-				err = args.trackParFunc(ctx, k, args.sink.KeySerde(), args.sink.TopicName(), par)
+				err = args.trackParFunc(ctx, k, args.sinks[0].KeySerde(), args.sinks[0].TopicName(), par)
 				if err != nil {
 					errChan <- fmt.Errorf("add topic partition failed: %v", err)
 					return
 				}
 				fmt.Fprintf(os.Stderr, "append %v to substream %v\n", changeKeyedMsg[0], par)
-				err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
+				err = args.sinks[0].Sink(ctx, changeKeyedMsg[0], par, false)
 				if err != nil {
 					errChan <- fmt.Errorf("sink err: %v", err)
 				}

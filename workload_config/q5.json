@@ -3,25 +3,25 @@
         {
             "funcName": "nexmark_src",
             "NumInstance": 4,
-            "OutputTopicName": "nexmark_src"
+            "OutputTopicName": ["nexmark_src"]
         },
         {
             "funcName": "q5bidkeyedbyauction",
             "NumInstance": 4,
             "InputTopicNames": ["nexmark_src"],
-            "OutputTopicName": "bids"
+            "OutputTopicName": ["bids"]
         },
         {
             "funcName": "q5aucbids",
             "NumInstance": 4,
             "InputTopicNames": ["bids"],
-            "OutputTopicName": "aucBids"
+            "OutputTopicName": ["aucBids"]
         },
         {
             "funcName": "q5maxbid",
             "NumInstance": 4,
             "InputTopicNames": ["aucBids"],
-            "OutputTopicName": "nexmark_q5_sink"
+            "OutputTopicName": ["nexmark_q5_sink"]
         }
     ],
     "StreamParam": {

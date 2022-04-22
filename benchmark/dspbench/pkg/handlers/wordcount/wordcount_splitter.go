@@ -9,6 +9,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -92,10 +93,12 @@ type wordcountSplitterProcessArg struct {
 }
 
 func (a *wordcountSplitterProcessArg) Source() processor.Source { return a.src }
-func (a *wordcountSplitterProcessArg) Sink() processor.Sink     { return a.sink }
-func (a *wordcountSplitterProcessArg) ParNum() uint8            { return a.parNum }
-func (a *wordcountSplitterProcessArg) CurEpoch() uint64         { return a.curEpoch }
-func (a *wordcountSplitterProcessArg) FuncName() string         { return a.funcName }
+func (a *wordcountSplitterProcessArg) PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
+	return a.sink.Sink(ctx, msg, parNum, isControl)
+}
+func (a *wordcountSplitterProcessArg) ParNum() uint8    { return a.parNum }
+func (a *wordcountSplitterProcessArg) CurEpoch() uint64 { return a.curEpoch }
+func (a *wordcountSplitterProcessArg) FuncName() string { return a.funcName }
 func (a *wordcountSplitterProcessArg) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
 	return a.recordFinishFunc
 }
@@ -134,14 +137,15 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context,
 }
 
 func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
 	}
-	src, sink, msgSerde, err := getSrcSink(ctx, sp, input_stream, output_stream)
+	debug.Assert(len(output_streams) == 1, "expected only one output stream")
+	src, sink, msgSerde, err := getSrcSink(ctx, sp, input_stream, output_streams[0])
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -167,11 +171,11 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 	procArgs := &wordcountSplitterProcessArg{
 		src:              src,
 		sink:             sink,
-		output_stream:    output_stream,
+		output_stream:    output_streams[0],
 		splitter:         splitter,
 		splitLatencies:   make([]int, 0),
 		parNum:           sp.ParNum,
-		numOutPartition:  sp.NumOutPartition,
+		numOutPartition:  sp.NumOutPartitions[0],
 		funcName:         funcName,
 		curEpoch:         sp.ScaleEpoch,
 		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
@@ -192,7 +196,7 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 			Env:             h.env,
 			MsgSerde:        msgSerde,
 			Srcs:            srcs,
-			OutputStream:    output_stream,
+			OutputStreams:   output_streams,
 			QueryInput:      sp,
 			TransactionalId: fmt.Sprintf("%s-%s-%d", funcName, sp.InputTopicNames[0], sp.ParNum),
 			FixedOutParNum:  0,

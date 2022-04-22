@@ -1,11 +1,14 @@
 package processor
 
-import "context"
+import (
+	"context"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
+)
 
 type ProcArgsWithSrcSink interface {
 	ProcArgs
 	Source() Source
-	Sink() Sink
+	PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error
 	ErrChan() chan error
 }
 

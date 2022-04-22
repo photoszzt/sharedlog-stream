@@ -7,13 +7,11 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
-	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/txn_data"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -92,12 +90,6 @@ func SetupManagersAndProcessTransactional(ctx context.Context,
 		}
 	}
 	debug.Fprint(os.Stderr, "start restore\n")
-	/*
-		err = cmm.RestoreMapping(ctx)
-		if err != nil {
-			return &common.FnOutput{Success: false, Message: err.Error()}
-		}
-	*/
 	offsetMap, err := getOffsetMap(ctx, tm, streamTaskArgs)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
@@ -125,7 +117,6 @@ func SetupManagersAndProcessTransactional(ctx context.Context,
 		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, cmm.currentEpoch)
 	}
 	updateProcArgs(streamTaskArgs.ProcArgs, trackParFunc, recordFinish)
-	cmm.TrackConsistentHash(streamTaskArgs.CHashMu, streamTaskArgs.CHash)
 	debug.Fprint(os.Stderr, "begin transaction processing\n")
 	ret := task.ProcessWithTransaction(ctx, tm, cmm, streamTaskArgs)
 	return ret
@@ -337,6 +328,7 @@ func TrackOffsetAndCommit(ctx context.Context,
 			Success: false,
 			Message: fmt.Sprintf("append offset failed: %v\n", err),
 		}
+		return
 	}
 	err = tm.CommitTransaction(ctx, kvchangelogs, winchangelogs)
 	if err != nil {
@@ -344,6 +336,7 @@ func TrackOffsetAndCommit(ctx context.Context,
 			Success: false,
 			Message: fmt.Sprintf("commit failed: %v\n", err),
 		}
+		return
 	}
 	*hasLiveTransaction = false
 	*trackConsumePar = false
@@ -359,10 +352,8 @@ type StreamTaskArgsTransaction struct {
 	Env                   types.Environment
 	MsgSerde              commtypes.MsgSerde
 	Srcs                  map[string]processor.Source
-	OutputStream          *sharedlog_stream.ShardedSharedLogStream
+	OutputStreams         []*sharedlog_stream.ShardedSharedLogStream
 	QueryInput            *common.QueryInput
-	CHash                 *hash.ConsistentHash
-	CHashMu               *sync.RWMutex
 	TransactionalId       string
 	KVChangelogs          []*KVStoreChangelog
 	WindowStoreChangelogs []*WindowStoreChangelog
@@ -408,7 +399,11 @@ func (t *StreamTask) ProcessWithTransaction(
 	cmm *ControlChannelManager,
 	args *StreamTaskArgsTransaction,
 ) *common.FnOutput {
-	tm.RecordTopicStreams(args.QueryInput.OutputTopicName, args.OutputStream)
+	debug.Assert(len(args.OutputStreams) >= 1, "OutputStreams should be filled")
+	for _, ostream := range args.OutputStreams {
+		tm.RecordTopicStreams(ostream.TopicName(), ostream)
+		cmm.TrackStream(ostream.TopicName(), ostream)
+	}
 
 	monitorQuit := make(chan struct{})
 	monitorErrc := make(chan error)
@@ -416,8 +411,6 @@ func (t *StreamTask) ProcessWithTransaction(
 	controlQuit := make(chan struct{})
 	meta := make(chan txn_data.ControlMetadata)
 
-	cmm.TrackStream(args.OutputStream.TopicName(), args.OutputStream)
-	cmm.TrackOutputTopic(args.OutputStream.TopicName())
 	for topic, src := range args.Srcs {
 		cmm.TrackStream(topic, src.Stream().(*sharedlog_stream.ShardedSharedLogStream))
 	}
@@ -442,6 +435,7 @@ func (t *StreamTask) ProcessWithTransaction(
 			monitorQuit <- struct{}{}
 			controlQuit <- struct{}{}
 			if t.CloseFunc != nil {
+				debug.Fprintf(os.Stderr, "waiting for goroutines to close\n")
 				t.CloseFunc()
 			}
 			return ret
@@ -449,12 +443,14 @@ func (t *StreamTask) ProcessWithTransaction(
 			monitorQuit <- struct{}{}
 			controlQuit <- struct{}{}
 			if merr != nil {
+				dcancel()
 				return &common.FnOutput{Success: false, Message: fmt.Sprintf("monitor failed: %v", merr)}
 			}
 		case cerr := <-controlErrc:
 			monitorQuit <- struct{}{}
 			controlQuit <- struct{}{}
 			if cerr != nil {
+				dcancel()
 				return &common.FnOutput{
 					Success: false,
 					Message: fmt.Sprintf("control channel manager failed: %v", cerr),
@@ -539,7 +535,7 @@ L:
 				retc <- &common.FnOutput{Success: false, Message: fmt.Sprintf("close transaction manager: %v\n", err)}
 				return
 			}
-			break
+			break L
 		}
 		if !hasLiveTransaction {
 			if err := tm.BeginTransaction(ctx, args.KVChangelogs, args.WindowStoreChangelogs); err != nil {
@@ -558,7 +554,8 @@ L:
 			hasLiveTransaction = true
 			commitTimer = time.Now()
 			if args.FixedOutParNum != 0 {
-				if err := tm.AddTopicPartition(ctx, args.QueryInput.OutputTopicName, []uint8{args.FixedOutParNum}); err != nil {
+				debug.Assert(len(args.QueryInput.OutputTopicNames) == 1, "fixed out param is only usable when there's only one output stream")
+				if err := tm.AddTopicPartition(ctx, args.QueryInput.OutputTopicNames[0], []uint8{args.FixedOutParNum}); err != nil {
 					retc <- &common.FnOutput{Success: false, Message: fmt.Sprintf("track topic partition failed: %v\n", err)}
 					return
 				}
@@ -653,7 +650,7 @@ func CommonProcess(ctx context.Context, t *StreamTask, args processor.ProcArgsWi
 		}
 		if msg.IsControl {
 			v := msg.Msg.Value.(sharedlog_stream.ScaleEpochAndBytes)
-			err = args.Sink().Sink(ctx, commtypes.Message{Key: commtypes.SCALE_FENCE_KEY,
+			err := args.PushToAllSinks(ctx, commtypes.Message{Key: commtypes.SCALE_FENCE_KEY,
 				Value: v.Payload}, args.ParNum(), true)
 			if err != nil {
 				return t.CurrentOffset, &common.FnOutput{Success: false, Message: err.Error()}

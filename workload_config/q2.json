@@ -3,13 +3,13 @@
         {
             "funcName": "nexmark_src",
             "NumInstance": 4,
-            "OutputTopicName": "nexmark_src"
+            "OutputTopicName": ["nexmark_src"]
         },
         {
             "funcName": "query2",
             "NumInstance": 4,
             "InputTopicNames": ["nexmark_src"],
-            "OutputTopicName": "nexmark_q2_sink"
+            "OutputTopicName": ["nexmark_q2_sink"]
         }
     ],
     "StreamParam": {

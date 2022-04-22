@@ -11,7 +11,7 @@ const (
 
 type QueryInput struct {
 	TestParams        map[string]bool `json:"testParams,omitempty"`
-	OutputTopicName   string          `json:"outputTopicName,omitempty"`
+	OutputTopicNames  []string        `json:"outputTopicName,omitempty"`
 	MongoAddr         string          `json:"mongoAddr,omitempty"`
 	AppId             string          `json:"aid"`
 	InputTopicNames   []string        `json:"inputTopicName,omitempty"`
@@ -21,7 +21,7 @@ type QueryInput struct {
 	CommitEveryNIter  uint32          `json:"commEveryNIter,omitempty"`
 	ExitAfterNCommit  uint32          `json:"exitAfterNCommit,omitempty"`
 	NumInPartition    uint8           `json:"numInPartition,omitempty"`
-	NumOutPartition   uint8           `json:"numOutPartition,omitempty"`
+	NumOutPartitions  []uint8         `json:"numOutPartition,omitempty"`
 	ParNum            uint8           `json:"ParNum,omitempty"`
 	EnableTransaction bool            `json:"enTran,omitempty"`
 	SerdeFormat       uint8           `json:"serdeFormat,omitempty"`

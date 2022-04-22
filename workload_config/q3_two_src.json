@@ -6,10 +6,16 @@
             "OutputTopicName": ["nexmark_src"]
         },
         {
-            "funcName": "q3GroupBy",
+            "funcName": "q3AuctionsBySellerID",
             "NumInstance": 4,
             "InputTopicNames": ["nexmark_src"],
-            "OutputTopicName": ["q3_aucsBySellerID_out", "q3_personsByID_out"]
+            "OutputTopicName": ["q3_aucsBySellerID_out"]
+        },
+        {
+            "funcName": "q3PersonsByID",
+            "NumInstance": 4,
+            "InputTopicNames": ["nexmark_src"],
+            "OutputTopicName": ["q3_personsByID_out"]
         },
         {
             "funcName": "q3JoinTable",

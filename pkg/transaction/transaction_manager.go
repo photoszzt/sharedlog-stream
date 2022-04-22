@@ -315,12 +315,13 @@ func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, quit ch
 				continue
 			}
 			errc <- err
+			return
 		} else {
 			for _, rawMsg := range rawMsgs {
 				txnMetaTmp, err := tc.txnMdSerde.Decode(rawMsg.Payload)
 				if err != nil {
 					errc <- err
-					break
+					return
 				}
 				txnMeta := txnMetaTmp.(txn_data.TxnMetadata)
 				if txnMeta.State != txn_data.FENCE {
@@ -330,7 +331,7 @@ func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, quit ch
 					// I'm the zoombie
 					dcancel()
 					errc <- nil
-					break
+					return
 				}
 			}
 		}

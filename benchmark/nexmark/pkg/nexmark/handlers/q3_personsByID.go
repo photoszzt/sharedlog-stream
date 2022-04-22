@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
@@ -125,10 +126,12 @@ type query3PersonsByIDProcessArgs struct {
 }
 
 func (a *query3PersonsByIDProcessArgs) Source() processor.Source { return a.src }
-func (a *query3PersonsByIDProcessArgs) Sink() processor.Sink     { return a.sink }
-func (a *query3PersonsByIDProcessArgs) ParNum() uint8            { return a.parNum }
-func (a *query3PersonsByIDProcessArgs) CurEpoch() uint64         { return a.curEpoch }
-func (a *query3PersonsByIDProcessArgs) FuncName() string         { return a.funcName }
+func (a *query3PersonsByIDProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
+	return a.sink.Sink(ctx, msg, parNum, isControl)
+}
+func (a *query3PersonsByIDProcessArgs) ParNum() uint8    { return a.parNum }
+func (a *query3PersonsByIDProcessArgs) CurEpoch() uint64 { return a.curEpoch }
+func (a *query3PersonsByIDProcessArgs) FuncName() string { return a.funcName }
 func (a *query3PersonsByIDProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
 	return a.recordFinishFunc
 }
@@ -137,19 +140,17 @@ func (a *query3PersonsByIDProcessArgs) ErrChan() chan error {
 }
 
 func (h *query3PersonsByIDHandler) Query3PersonsByID(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("get input output stream failed: %v", err),
 		}
 	}
-	src, sink, msgSerde, err := CommonGetSrcSink(ctx, sp, input_stream, output_stream)
+	debug.Assert(len(output_streams) == 1, "expected only one output stream")
+	src, sink, msgSerde, err := CommonGetSrcSink(ctx, sp, input_stream, output_streams[0])
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 
 	filterPerson := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
@@ -177,7 +178,7 @@ func (h *query3PersonsByIDHandler) Query3PersonsByID(ctx context.Context, sp *co
 	procArgs := &query3PersonsByIDProcessArgs{
 		src:              src,
 		sink:             sink,
-		output_stream:    output_stream,
+		output_stream:    output_streams[0],
 		filterPerson:     filterPerson,
 		personsByIDMap:   personsByIDMap,
 		trackParFunc:     transaction.DefaultTrackSubstreamFunc,
@@ -192,25 +193,25 @@ func (h *query3PersonsByIDHandler) Query3PersonsByID(ctx context.Context, sp *co
 		CurrentOffset: make(map[string]uint64),
 	}
 
-	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
+	debug.Assert(len(sp.NumOutPartitions) == 1, "expected only one output stream")
+	debug.Assert(len(sp.OutputTopicNames) == 1, "OutputTopicNames should only have one topic")
+	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 
 	if sp.EnableTransaction {
 		srcs := make(map[string]processor.Source)
 		srcs[sp.InputTopicNames[0]] = src
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
-			ProcArgs:     procArgs,
-			Env:          h.env,
-			MsgSerde:     msgSerde,
-			Srcs:         srcs,
-			OutputStream: output_stream,
-			QueryInput:   sp,
+			ProcArgs:      procArgs,
+			Env:           h.env,
+			MsgSerde:      msgSerde,
+			Srcs:          srcs,
+			OutputStreams: output_streams,
+			QueryInput:    sp,
 			TransactionalId: fmt.Sprintf("%s-%s-%d-%s",
-				h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
+				h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0]),
 			KVChangelogs:          nil,
 			WindowStoreChangelogs: nil,
 			FixedOutParNum:        0,
-			CHash:                 h.cHash,
-			CHashMu:               &h.cHashMu,
 		}
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc,

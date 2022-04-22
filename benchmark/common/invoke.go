@@ -45,7 +45,7 @@ func Invoke(config_file string, gateway_url string,
 		fmt.Fprintf(os.Stderr, "config: %v\n", config)
 		ninstance := uint8(config["NumInstance"].Data().(float64))
 		funcName := config["funcName"].Data().(string)
-		outputTopicName := config["OutputTopicName"].Data().(string)
+		outputTopicNamesTmp := config["OutputTopicName"].Data().([]interface{})
 		inputTopicNamesTmp, ok := config["InputTopicNames"]
 		scaleConfig[funcName] = ninstance
 		funcNames = append(funcNames, funcName)
@@ -53,12 +53,18 @@ func Invoke(config_file string, gateway_url string,
 		if !ok {
 			// this is source config
 			numSrcInstance = ninstance
-			srcTopicName = outputTopicName
+			srcTopicName = outputTopicNamesTmp[0].(string)
 		} else {
 			inputTopicNamesIntf := inputTopicNamesTmp.Data().([]interface{})
 			inputTopicNames := make([]string, len(inputTopicNamesIntf))
+			outputTopicNames := make([]string, len(outputTopicNamesTmp))
+			numOutPartitions := make([]uint8, len(outputTopicNamesTmp))
 			for i, v := range inputTopicNamesIntf {
-				inputTopicNames[i] = fmt.Sprint(v)
+				inputTopicNames[i] = v.(string)
+			}
+			for i, v := range outputTopicNamesTmp {
+				outputTopicNames[i] = v.(string)
+				numOutPartitions[i] = uint8(streamParam[outputTopicNames[i]].Data().(float64))
 			}
 			nconfig := &ClientNodeConfig{
 				FuncName:    funcName,
@@ -68,7 +74,6 @@ func Invoke(config_file string, gateway_url string,
 			inParams := make([]*QueryInput, ninstance)
 			for i := uint8(0); i < ninstance; i++ {
 				numInSubs := uint8(streamParam[inputTopicNames[0]].Data().(float64))
-				numOutSubs := uint8(streamParam[outputTopicName].Data().(float64))
 				inParams[i] = &QueryInput{
 					Duration:          baseQueryInput.Duration,
 					EnableTransaction: baseQueryInput.EnableTransaction,
@@ -80,9 +85,9 @@ func Invoke(config_file string, gateway_url string,
 					TableType:         baseQueryInput.TableType,
 					MongoAddr:         baseQueryInput.MongoAddr,
 					InputTopicNames:   inputTopicNames,
-					OutputTopicName:   outputTopicName,
+					OutputTopicNames:  outputTopicNames,
 					NumInPartition:    numInSubs,
-					NumOutPartition:   numOutSubs,
+					NumOutPartitions:  numOutPartitions,
 					ScaleEpoch:        1,
 				}
 			}

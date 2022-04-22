@@ -185,7 +185,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 		Env:             h.env,
 		QueryInput:      sp,
 		MsgSerde:        msgSerde,
-		OutputStream:    sinkStream,
+		OutputStreams:   []*sharedlog_stream.ShardedSharedLogStream{sinkStream},
 		TransactionalId: "joinTestMongo",
 	}
 	tm, err := transaction.SetupTransactionManager(ctx, streamTaskArgs)
@@ -422,7 +422,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		Env:             h.env,
 		QueryInput:      sp,
 		MsgSerde:        msgSerde,
-		OutputStream:    sinkStream,
+		OutputStreams:   []*sharedlog_stream.ShardedSharedLogStream{sinkStream},
 		TransactionalId: "joinTestsMem",
 	}
 	tm, err := transaction.SetupTransactionManager(ctx, streamTaskArgs)

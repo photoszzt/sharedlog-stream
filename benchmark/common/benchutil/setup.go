@@ -31,26 +31,33 @@ func GetShardedInputOutputStreams(ctx context.Context,
 	env types.Environment,
 	input *common.QueryInput,
 	input_in_tran bool,
-) (*sharedlog_stream.ShardedSharedLogStream, *sharedlog_stream.ShardedSharedLogStream, error) {
+) (*sharedlog_stream.ShardedSharedLogStream, []*sharedlog_stream.ShardedSharedLogStream, error) {
 	inputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[0], input.NumInPartition,
 		commtypes.SerdeFormat(input.SerdeFormat))
 	if err != nil {
 		return nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
 
 	}
-	outputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.OutputTopicName, input.NumOutPartition,
-		commtypes.SerdeFormat(input.SerdeFormat))
-	if err != nil {
-		return nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
+	var output_streams []*sharedlog_stream.ShardedSharedLogStream
+	for idx, name := range input.OutputTopicNames {
+		outputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, name, input.NumOutPartitions[idx],
+			commtypes.SerdeFormat(input.SerdeFormat))
+		if err != nil {
+			return nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
+		}
+		output_streams = append(output_streams, outputStream)
+		if input.EnableTransaction {
+			outputStream.SetInTransaction(true)
+		} else {
+			outputStream.SetInTransaction(false)
+		}
 	}
 	if input.EnableTransaction {
 		inputStream.SetInTransaction(input_in_tran)
-		outputStream.SetInTransaction(true)
 	} else {
 		inputStream.SetInTransaction(false)
-		outputStream.SetInTransaction(false)
 	}
-	return inputStream, outputStream, nil
+	return inputStream, output_streams, nil
 }
 
 func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutputStreamConfig) error {

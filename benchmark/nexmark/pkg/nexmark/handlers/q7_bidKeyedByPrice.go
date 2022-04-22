@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
@@ -63,10 +64,12 @@ type q7BidKeyedByPriceProcessArgs struct {
 }
 
 func (a *q7BidKeyedByPriceProcessArgs) Source() processor.Source { return a.src }
-func (a *q7BidKeyedByPriceProcessArgs) Sink() processor.Sink     { return a.sink }
-func (a *q7BidKeyedByPriceProcessArgs) ParNum() uint8            { return a.parNum }
-func (a *q7BidKeyedByPriceProcessArgs) CurEpoch() uint64         { return a.curEpoch }
-func (a *q7BidKeyedByPriceProcessArgs) FuncName() string         { return a.funcName }
+func (a *q7BidKeyedByPriceProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
+	return a.sink.Sink(ctx, msg, parNum, isControl)
+}
+func (a *q7BidKeyedByPriceProcessArgs) ParNum() uint8    { return a.parNum }
+func (a *q7BidKeyedByPriceProcessArgs) CurEpoch() uint64 { return a.curEpoch }
+func (a *q7BidKeyedByPriceProcessArgs) FuncName() string { return a.funcName }
 func (a *q7BidKeyedByPriceProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
 	return a.recordFinishFunc
 }
@@ -135,12 +138,12 @@ func (h *q7BidKeyedByPrice) procMsg(ctx context.Context, msg commtypes.Message, 
 }
 
 func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input *common.QueryInput) *common.FnOutput {
-	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, input, false)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, input, false)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-
-	src, sink, msgSerde, err := getSrcSinkUint64Key(input, input_stream, output_stream)
+	debug.Assert(len(output_streams) == 1, "expected only one output stream")
+	src, sink, msgSerde, err := getSrcSinkUint64Key(input, input_stream, output_streams[0])
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -159,7 +162,7 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 		sink:             sink,
 		bid:              bid,
 		bidKeyedByPrice:  bidKeyedByPrice,
-		output_stream:    output_stream,
+		output_stream:    output_streams[0],
 		parNum:           input.ParNum,
 		trackParFunc:     transaction.DefaultTrackSubstreamFunc,
 		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
@@ -172,7 +175,7 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 		CurrentOffset: make(map[string]uint64),
 	}
 
-	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, input.NumOutPartition)
+	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, input.NumOutPartitions[0])
 
 	if input.EnableTransaction {
 		srcs := make(map[string]processor.Source)
@@ -182,14 +185,12 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 			Env:                   h.env,
 			MsgSerde:              msgSerde,
 			Srcs:                  srcs,
-			OutputStream:          output_stream,
+			OutputStreams:         output_streams,
 			QueryInput:            input,
-			TransactionalId:       fmt.Sprintf("%s-%s-%d-%s", h.funcName, input.InputTopicNames[0], input.ParNum, input.OutputTopicName),
+			TransactionalId:       fmt.Sprintf("%s-%s-%d-%s", h.funcName, input.InputTopicNames[0], input.ParNum, input.OutputTopicNames[0]),
 			FixedOutParNum:        0,
 			KVChangelogs:          nil,
 			WindowStoreChangelogs: nil,
-			CHash:                 h.cHash,
-			CHashMu:               &h.cHashMu,
 		}
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {

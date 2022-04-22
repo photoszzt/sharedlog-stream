@@ -271,7 +271,7 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		return bidsJoinAuctions.ProcessAndReturn(ctx, m)
 	})
 
-	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
+	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 
 	procArgs := &q4JoinTableProcessArgs{
 		auctionsSrc:      auctionsSrc,
@@ -296,19 +296,17 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		srcs[sp.InputTopicNames[0]] = auctionsSrc
 		srcs[sp.InputTopicNames[1]] = bidsSrc
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
-			ProcArgs:     procArgs,
-			Env:          h.env,
-			MsgSerde:     msgSerde,
-			Srcs:         srcs,
-			OutputStream: outputStream,
-			QueryInput:   sp,
+			ProcArgs:      procArgs,
+			Env:           h.env,
+			MsgSerde:      msgSerde,
+			Srcs:          srcs,
+			OutputStreams: []*sharedlog_stream.ShardedSharedLogStream{outputStream},
+			QueryInput:    sp,
 			TransactionalId: fmt.Sprintf("%s-%s-%d-%s", h.funcName,
-				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicName),
+				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0]),
 			KVChangelogs:          nil,
 			WindowStoreChangelogs: nil,
 			FixedOutParNum:        0,
-			CHash:                 h.cHash,
-			CHashMu:               &h.cHashMu,
 		}
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {

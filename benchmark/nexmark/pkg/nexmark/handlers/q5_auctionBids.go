@@ -9,6 +9,7 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/concurrent_skiplist"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -116,7 +117,7 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 	countStoreName := "auctionBidsCountStore"
 	if sp.TableType == uint8(store.IN_MEM) {
 		changelogName := countStoreName + "-changelog"
-		changelog, err := sharedlog_stream.NewShardedSharedLogStream(h.env, changelogName, sp.NumOutPartition,
+		changelog, err := sharedlog_stream.NewShardedSharedLogStream(h.env, changelogName, sp.NumOutPartitions[0],
 			commtypes.SerdeFormat(sp.SerdeFormat))
 		if err != nil {
 			return nil, nil, fmt.Errorf("NewShardedSharedLogStream failed: %v", err)
@@ -195,10 +196,12 @@ type q5AuctionBidsProcessArg struct {
 }
 
 func (a *q5AuctionBidsProcessArg) Source() processor.Source { return a.src }
-func (a *q5AuctionBidsProcessArg) Sink() processor.Sink     { return a.sink }
-func (a *q5AuctionBidsProcessArg) ParNum() uint8            { return a.parNum }
-func (a *q5AuctionBidsProcessArg) CurEpoch() uint64         { return a.curEpoch }
-func (a *q5AuctionBidsProcessArg) FuncName() string         { return a.funcName }
+func (a *q5AuctionBidsProcessArg) PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
+	return a.sink.Sink(ctx, msg, parNum, isControl)
+}
+func (a *q5AuctionBidsProcessArg) ParNum() uint8    { return a.parNum }
+func (a *q5AuctionBidsProcessArg) CurEpoch() uint64 { return a.curEpoch }
+func (a *q5AuctionBidsProcessArg) FuncName() string { return a.funcName }
 func (a *q5AuctionBidsProcessArg) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
 	return a.recordFinishFunc
 }
@@ -333,11 +336,12 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	input_stream, output_stream, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, true)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, true)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	src, sink, err := h.getSrcSink(ctx, sp, msgSerde, input_stream, output_stream)
+	debug.Assert(len(output_streams) == 1, "expected only one output stream")
+	src, sink, err := h.getSrcSink(ctx, sp, msgSerde, input_stream, output_streams[0])
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -365,9 +369,9 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		groupByAuction:   groupByAuction,
 		src:              src,
 		sink:             sink,
-		output_stream:    output_stream,
+		output_stream:    output_streams[0],
 		parNum:           sp.ParNum,
-		numOutPartition:  sp.NumOutPartition,
+		numOutPartition:  sp.NumOutPartitions[0],
 		trackParFunc:     transaction.DefaultTrackSubstreamFunc,
 		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
 		curEpoch:         sp.ScaleEpoch,
@@ -379,7 +383,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		CurrentOffset: make(map[string]uint64),
 	}
 
-	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartition)
+	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 
 	if sp.EnableTransaction {
 		srcs := make(map[string]processor.Source)
@@ -409,19 +413,17 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			panic("unrecognized table type")
 		}
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
-			ProcArgs:     procArgs,
-			Env:          h.env,
-			Srcs:         srcs,
-			OutputStream: output_stream,
-			QueryInput:   sp,
+			ProcArgs:      procArgs,
+			Env:           h.env,
+			Srcs:          srcs,
+			OutputStreams: output_streams,
+			QueryInput:    sp,
 			TransactionalId: fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
-				sp.ParNum, sp.OutputTopicName),
+				sp.ParNum, sp.OutputTopicNames[0]),
 			FixedOutParNum:        0,
 			WindowStoreChangelogs: wsc,
 			KVChangelogs:          nil,
 			MsgSerde:              msgSerde,
-			CHash:                 h.cHash,
-			CHashMu:               &h.cHashMu,
 		}
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
