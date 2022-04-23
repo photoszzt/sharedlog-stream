@@ -41,7 +41,7 @@ func (h *q8GroupByHandler) process(
 	t *transaction.StreamTask,
 	argsTmp interface{},
 ) (map[string]uint64, *common.FnOutput) {
-	args := argsTmp.(*q3GroupByProcessArgs)
+	args := argsTmp.(*q8GroupByProcessArgs)
 	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
 		if msg.MsgArr != nil {
