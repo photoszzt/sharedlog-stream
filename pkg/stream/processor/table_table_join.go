@@ -3,8 +3,6 @@ package processor
 import (
 	"context"
 	"fmt"
-	"os"
-	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 
@@ -70,7 +68,7 @@ func (p *TableTableJoinProcessor) ProcessAndReturn(ctx context.Context, msg comm
 		}
 		p.streamTimeTracker.UpdateStreamTime(&msg)
 		ts := p.streamTimeTracker.GetStreamTime()
-		debug.Fprintf(os.Stderr, "stream time: %d\n", ts)
+		// debug.Fprintf(os.Stderr, "stream time: %d\n", ts)
 		if ts < rv.Timestamp {
 			ts = rv.Timestamp
 		}

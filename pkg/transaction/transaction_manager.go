@@ -628,7 +628,6 @@ func (tc *TransactionManager) completeTransaction(ctx context.Context, trMark tx
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "done append txn marker to streams\n")
 	// async append complete_commit
 	tc.currentStatus = trState
 	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
@@ -638,7 +637,6 @@ func (tc *TransactionManager) completeTransaction(ctx context.Context, trMark tx
 	tc.backgroundJobErrg.Go(func() error {
 		return tc.appendToTransactionLog(tc.backgroundJobCtx, &txnMd, nil)
 	})
-	fmt.Fprintf(os.Stderr, "done backgroup append to transaction log\n")
 	return nil
 }
 
@@ -664,7 +662,6 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context, kvstores []
 		return err
 	}
 	// second phase of the commit
-	fmt.Fprintf(os.Stderr, "second phase of commit\n")
 	err = tc.completeTransaction(ctx, txn_data.COMMIT, txn_data.COMPLETE_COMMIT)
 	if err != nil {
 		return err
@@ -707,11 +704,9 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context, inRestore bo
 }
 
 func (tc *TransactionManager) cleanupState() {
-	debug.Fprintf(os.Stderr, "cleaning up state")
 	tc.currentStatus = txn_data.EMPTY
 	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 	tc.currentTopicPartition = make(map[string]map[uint8]struct{})
-	debug.Fprintf(os.Stderr, "done cleanup state")
 }
 
 func (tc *TransactionManager) Close() error {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
@@ -113,10 +114,10 @@ L:
 		}
 	}
 	wg.Wait()
+	debug.Fprintf(os.Stderr, "pOut %v\n", pOut)
+	debug.Fprintf(os.Stderr, "aOut %v\n", aOut)
 	if pOut != nil {
-		// debug.Fprintf(os.Stderr, "pOut %v\n", pOut)
 		if aOut != nil {
-			// debug.Fprintf(os.Stderr, "aOut %v\n", aOut)
 			succ := pOut.Success && aOut.Success
 			return t.CurrentOffset, &common.FnOutput{Success: succ, Message: pOut.Message + "," + aOut.Message}
 		}

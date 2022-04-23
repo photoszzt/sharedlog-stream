@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"os"
 	"sharedlog-stream/pkg/bits"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
@@ -307,7 +306,7 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 					}
 					txnMark := txnMarkTmp.(txn_data.TxnMarker)
 					if txnMark.Mark == uint8(txn_data.COMMIT) {
-						debug.Fprintf(os.Stderr, "ReadNextWithTag: %s entry is commit off %x\n", s.topicName, streamLogEntry.seqNum)
+						// debug.Fprintf(os.Stderr, "ReadNextWithTag: %s entry is commit off %x\n", s.topicName, streamLogEntry.seqNum)
 						if !ok {
 							log.Warn().Msgf("Hit commit marker but got no messages")
 						}
@@ -316,7 +315,7 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 						s.cursor = streamLogEntry.seqNum + 1
 						return appKey, msgBuf, nil
 					} else if txnMark.Mark == uint8(txn_data.ABORT) {
-						debug.Fprint(os.Stderr, "ReadNextWithTag: entry is abort; continue\n")
+						// debug.Fprint(os.Stderr, "ReadNextWithTag: entry is abort; continue\n")
 						// abort, drop the current buffered msgs
 						delete(s.curReadMap, appKey)
 						seqNumInSharedLog = logEntry.SeqNum + 1
@@ -330,8 +329,8 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 				readMsgProc.MsgBuff = append(readMsgProc.MsgBuff, commtypes.RawMsg{Payload: streamLogEntry.Payload,
 					LogSeqNum: streamLogEntry.seqNum, MsgSeqNum: streamLogEntry.MsgSeqNum, IsControl: isControl,
 					ScaleEpoch: scaleEpoch, IsPayloadArr: bits.Has(bits.Bits(streamLogEntry.Meta), PayloadArr)})
-				debug.Fprintf(os.Stderr, "%s cur buf len %d, last off %x, cursor %x, tail %x\n", s.topicName,
-					len(readMsgProc.MsgBuff), streamLogEntry.seqNum, seqNumInSharedLog, s.tail)
+				// debug.Fprintf(os.Stderr, "%s cur buf len %d, last off %x, cursor %x, tail %x\n", s.topicName,
+				// 	len(readMsgProc.MsgBuff), streamLogEntry.seqNum, seqNumInSharedLog, s.tail)
 				s.curReadMap[appKey] = readMsgProc
 				seqNumInSharedLog = logEntry.SeqNum + 1
 				s.cursor = seqNumInSharedLog

@@ -188,6 +188,19 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 			close(personMsgChan)
 			wg.Wait()
 		},
+		FlushFunc: func() {
+			// fmt.Fprintf(os.Stderr, "wait for all entries are consumed\n")
+			// fmt.Fprintf(os.Stderr, "current auction channel len: %v\n", len(aucMsgChan))
+			// fmt.Fprintf(os.Stderr, "current person channel len: %v\n", len(personMsgChan))
+			for len(aucMsgChan) != 0 {
+				time.Sleep(time.Duration(10) * time.Millisecond)
+				// fmt.Fprintf(os.Stderr, "current auction channel len: %v\n", len(aucMsgChan))
+			}
+			for len(personMsgChan) != 0 {
+				time.Sleep(time.Duration(10) * time.Millisecond)
+				// fmt.Fprintf(os.Stderr, "current person channel len: %v\n", len(personMsgChan))
+			}
+		},
 	}
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/treemap"
@@ -61,7 +60,7 @@ func (p *StoreToKVTableProcessor) ProcessAndReturn(ctx context.Context, msg comm
 		}
 	}
 	err = p.store.Put(ctx, msg.Key, commtypes.ValueTimestamp{Value: msg.Value, Timestamp: msg.Timestamp})
-	debug.Fprintf(os.Stderr, "store to kv store, k: %v, v: %v, ts: %v\n", msg.Key, msg.Value, msg.Timestamp)
+	// debug.Fprintf(os.Stderr, "store to kv store, k: %v, v: %v, ts: %v\n", msg.Key, msg.Value, msg.Timestamp)
 	if err != nil {
 		return nil, err
 	}

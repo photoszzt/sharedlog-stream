@@ -535,14 +535,12 @@ L:
 					return
 				}
 			*/
-			debug.Fprintf(os.Stderr, "committed transaction\n")
 			debug.Assert(!hasLiveTransaction, "after commit. there should be no live transaction\n")
 			numCommit += 1
 		}
 		cur_elapsed = time.Since(startTime)
 		timeout = duration != 0 && cur_elapsed >= duration
 		if timeout || (args.QueryInput.ExitAfterNCommit != 0 && numCommit == int(args.QueryInput.ExitAfterNCommit)) {
-			fmt.Fprintf(os.Stderr, "should close transaction\n")
 			if err := tm.Close(); err != nil {
 				retc <- &common.FnOutput{Success: false, Message: fmt.Sprintf("close transaction manager: %v\n", err)}
 				return
@@ -554,7 +552,6 @@ L:
 				retc <- &common.FnOutput{Success: false, Message: fmt.Sprintf("transaction begin failed: %v\n", err)}
 				return
 			}
-			fmt.Fprintf(os.Stderr, "begin transaction\n")
 			/*
 				if idx == 5 {
 					if val, ok := args.QueryInput.TestParams["FailAfterBegin"]; ok && val {
