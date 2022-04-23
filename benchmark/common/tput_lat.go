@@ -50,7 +50,7 @@ func ProcessThroughputLat(name string, latencies map[string][]int,
 			} else {
 				debug.Fprint(os.Stderr, "consumed is empty")
 			}
-			if n == "src" || strings.Contains(name, "source") || strings.Contains(n, "Src") || n == "sink" {
+			if n == "src" || strings.Contains(name, "source") || strings.Contains(n, "Src") || n == "sink" || strings.Contains(n, "Sink") {
 				num[n] += processed
 			}
 			if n == "e2e" {

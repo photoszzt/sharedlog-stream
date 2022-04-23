@@ -370,13 +370,13 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 	g, ectx := errgroup.WithContext(ctx)
 	for topic, partitions := range tc.currentTopicPartition {
 		stream := tc.topicStreams[topic]
+		err := stream.Flush(ctx)
+		if err != nil {
+			return err
+		}
 		for par := range partitions {
 			parNum := par
 			g.Go(func() error {
-				err := stream.Flush(ctx)
-				if err != nil {
-					return err
-				}
 				off, err := stream.Push(ectx, encoded, parNum, true, false)
 				debug.Fprintf(os.Stderr, "append marker %d to stream %s off %x\n", marker, stream.TopicName(), off)
 				return err
