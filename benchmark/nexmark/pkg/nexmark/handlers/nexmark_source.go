@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"sharedlog-stream/benchmark/common"
@@ -126,7 +127,9 @@ type nexmarkSrcProcArgs struct {
 	channel_url_cache map[uint32]*generator.ChannelUrl
 	eventGenerator    *generator.NexmarkGenerator
 	// errg              *errgroup.Group
-	stream *sharedlog_stream.ShardedSharedLogStream
+	// stream *sharedlog_stream.ShardedSharedLogStream
+	msgChan      chan payloadToPush
+	numPartition uint8
 	// inChans   []chan sinkMsg
 	latencies []int
 	idx       int
@@ -158,20 +161,23 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 	// fmt.Fprintf(os.Stderr, "msg: %v\n", string(msgEncoded))
 	args.idx += 1
 	parNum := args.idx
-	parNum = parNum % int(args.stream.NumPartition())
+	parNum = parNum % int(args.numPartition)
 
-	if h.bufPush {
-		err = args.stream.BufPushNoLock(ctx, msgEncoded, uint8(parNum))
-		if time.Since(h.tStart) >= FLUSH_DURATION {
-			args.stream.FlushNoLock(ctx)
-			h.tStart = time.Now()
+	args.msgChan <- payloadToPush{payload: msgEncoded, partitions: []uint8{uint8(parNum)}, isControl: false}
+	/*
+		if h.bufPush {
+			err = args.stream.BufPushNoLock(ctx, msgEncoded, uint8(parNum))
+			if time.Since(h.tStart) >= FLUSH_DURATION {
+				args.stream.FlushNoLock(ctx)
+				h.tStart = time.Now()
+			}
+		} else {
+			_, err = args.stream.Push(ctx, msgEncoded, uint8(parNum), false, false)
 		}
-	} else {
-		_, err = args.stream.Push(ctx, msgEncoded, uint8(parNum), false, false)
-	}
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: fmt.Sprintf("stream push failed: %v", err)}
-	}
+		if err != nil {
+			return &common.FnOutput{Success: false, Message: fmt.Sprintf("stream push failed: %v", err)}
+		}
+	*/
 	// fmt.Fprintf(os.Stderr, "inserted to pos: 0x%x\n", pos)
 
 	/*
@@ -185,6 +191,12 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 	elapsed := time.Since(nowT)
 	args.latencies = append(args.latencies, int(elapsed.Microseconds()))
 	return nil
+}
+
+type payloadToPush struct {
+	payload    []byte
+	isControl  bool
+	partitions []uint8
 }
 
 func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig *ntypes.NexMarkConfigInput) *common.FnOutput {
@@ -270,18 +282,6 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 		}
 	*/
 
-	procArgs := nexmarkSrcProcArgs{
-		channel_url_cache: make(map[uint32]*generator.ChannelUrl),
-		eventSerde:        eventSerde,
-		msgSerde:          msgSerde,
-		eventGenerator:    eventGenerator,
-		// inChans:           inChans,
-		idx: 0,
-		// errg:      g,
-		latencies: make([]int, 0, 128),
-		stream:    stream,
-	}
-
 	cmm, err := transaction.NewControlChannelManager(h.env, inputConfig.AppId,
 		commtypes.SerdeFormat(inputConfig.SerdeFormat), 0)
 	if err != nil {
@@ -295,9 +295,70 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	meta := make(chan txn_data.ControlMetadata)
 	dctx, dcancel := context.WithCancel(ctx)
 	go cmm.MonitorControlChannel(ctx, controlQuit, controlErrc, meta)
+
+	msgChan := make(chan payloadToPush, 100000)
+	msgErrChan := make(chan error)
+	var wg sync.WaitGroup
+	flushMsgChan := func() {
+		for len(msgChan) > 0 {
+			time.Sleep(time.Duration(10) * time.Millisecond)
+		}
+	}
+	procArgs := &nexmarkSrcProcArgs{
+		channel_url_cache: make(map[uint32]*generator.ChannelUrl),
+		eventSerde:        eventSerde,
+		msgSerde:          msgSerde,
+		eventGenerator:    eventGenerator,
+		// inChans:           inChans,
+		idx: 0,
+		// errg:      g,
+		latencies:    make([]int, 0, 128),
+		msgChan:      msgChan,
+		numPartition: stream.NumPartition(),
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for msg := range msgChan {
+			if msg.isControl {
+				if h.bufPush {
+					err = stream.Flush(ctx)
+					if err != nil {
+						msgErrChan <- err
+						return
+					}
+				}
+				for _, i := range msg.partitions {
+					_, err = stream.Push(ctx, msg.payload, i, true, false)
+					if err != nil {
+						msgErrChan <- err
+						return
+					}
+				}
+			} else {
+				if h.bufPush {
+					err = stream.BufPushNoLock(ctx, msg.payload, uint8(msg.partitions[0]))
+					if time.Since(h.tStart) >= FLUSH_DURATION {
+						stream.FlushNoLock(ctx)
+						h.tStart = time.Now()
+					}
+				} else {
+					_, err = stream.Push(ctx, msg.payload, uint8(msg.partitions[0]), false, false)
+				}
+				if err != nil {
+					msgErrChan <- err
+					return
+				}
+			}
+		}
+	}()
 	h.tStart = time.Now()
 	for {
 		select {
+		case merr := <-msgErrChan:
+			controlQuit <- struct{}{}
+			dcancel()
+			return &common.FnOutput{Success: false, Message: fmt.Sprintf("failed to push to src stream: %v", merr)}
 		case cerr := <-controlErrc:
 			controlQuit <- struct{}{}
 			if cerr != nil {
@@ -306,6 +367,8 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 						return out
 					}
 				*/
+				close(msgChan)
+				wg.Wait()
 				if h.bufPush {
 					err = stream.Flush(ctx)
 					if err != nil {
@@ -319,6 +382,8 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 			numInstance := m.Config[h.funcName]
 			if inputConfig.ParNum >= numInstance {
 				controlQuit <- struct{}{}
+				close(msgChan)
+				wg.Wait()
 				dcancel()
 				return &common.FnOutput{
 					Success:   true,
@@ -327,6 +392,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 				}
 			}
 			numSubstreams := m.Config[stream.TopicName()]
+			flushMsgChan()
 			err = stream.ScaleSubstreams(h.env, numSubstreams)
 			if err != nil {
 				dcancel()
@@ -347,20 +413,28 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 				dcancel()
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
-			if h.bufPush {
-				err = stream.Flush(ctx)
-				if err != nil {
-					dcancel()
-					return &common.FnOutput{Success: false, Message: err.Error()}
-				}
-			}
+			var partitions []uint8
 			for i := uint8(0); i < numSubstreams; i++ {
-				_, err = stream.Push(ctx, encoded, i, true, false)
-				if err != nil {
-					dcancel()
-					return &common.FnOutput{Success: false, Message: err.Error()}
-				}
+				partitions = append(partitions, i)
 			}
+			procArgs.numPartition = stream.NumPartition()
+			msgChan <- payloadToPush{payload: encoded, isControl: true, partitions: partitions}
+			/*
+				if h.bufPush {
+					err = stream.Flush(ctx)
+					if err != nil {
+						dcancel()
+						return &common.FnOutput{Success: false, Message: err.Error()}
+					}
+				}
+				for i := uint8(0); i < numSubstreams; i++ {
+					_, err = stream.Push(ctx, encoded, i, true, false)
+					if err != nil {
+						dcancel()
+						return &common.FnOutput{Success: false, Message: err.Error()}
+					}
+				}
+			*/
 		default:
 		}
 		if !eventGenerator.HasNext() {
@@ -370,7 +444,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 			(inputConfig.EventsNum != 0 && procArgs.idx == int(inputConfig.EventsNum)) {
 			break
 		}
-		fnout := h.process(dctx, &procArgs)
+		fnout := h.process(dctx, procArgs)
 		if fnout != nil && !fnout.Success {
 			/*
 				if out := closeAllChanAndWait(inChans, g, err); out != nil {
@@ -392,6 +466,8 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 			return out
 		}
 	*/
+	close(msgChan)
+	wg.Wait()
 	if h.bufPush {
 		err = stream.Flush(ctx)
 		if err != nil {
