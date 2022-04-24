@@ -32,6 +32,7 @@ var (
 	FLAGS_scale_config       string
 	FLAGS_table_type         string
 	FLAGS_mongo_addr         string
+	FLAGS_stat_dir           string
 )
 
 func invokeSourceFunc(client *http.Client, numOutPartition uint8, topicName string, instanceId uint8,
@@ -97,11 +98,15 @@ func main() {
 	flag.UintVar(&FLAGS_exit_after_ncomm, "exit_after_ncomm", 0, "exit after n commits(for test)")
 	flag.StringVar(&FLAGS_table_type, "tab_type", "mem", "either \"mem\" or \"mongodb\"")
 	flag.StringVar(&FLAGS_mongo_addr, "mongo_addr", "", "mongodb address")
+	flag.StringVar(&FLAGS_stat_dir, "stat_dir", "", "stats dir to dump")
 	flag.Parse()
 
+	if FLAGS_stat_dir == "" {
+		panic("should specify non empty stats dir")
+	}
 	switch FLAGS_app_name {
 	case "q1", "q2", "q3", "q5", "q7", "q8", "windowedAvg":
-		err := common.Invoke(FLAGS_workload_config, FLAGS_faas_gateway,
+		err := common.Invoke(FLAGS_workload_config, FLAGS_stat_dir, FLAGS_faas_gateway,
 			NewQueryInput(uint8(getSerdeFormat())), invokeSourceFunc)
 		if err != nil {
 			panic(err)

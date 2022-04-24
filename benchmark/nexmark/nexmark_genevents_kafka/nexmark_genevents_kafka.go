@@ -123,7 +123,7 @@ func main() {
 				if ev.TopicPartition.Error != nil {
 					log.Error().Msgf("Delivery failed: %v\n", ev.TopicPartition)
 				} else {
-					log.Debug().Msgf("Delivered message to %v\n", ev.TopicPartition)
+					log.Debug().Msgf("Delivered message to %v, ts %v\n", ev.TopicPartition, ev.Timestamp)
 				}
 			}
 			atomic.AddInt32(&replies, 1)

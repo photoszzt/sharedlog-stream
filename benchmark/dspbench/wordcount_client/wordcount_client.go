@@ -25,6 +25,7 @@ var (
 	FLAGS_tran             bool
 	FLAGS_commit_every     uint64
 	FLAGS_dump_file_folder string
+	FLAGS_stat_dir         string
 )
 
 func invokeSourceFunc(client *http.Client, response *common.FnOutput, wg *sync.WaitGroup, serdeFormat commtypes.SerdeFormat) {
@@ -54,7 +55,12 @@ func main() {
 	flag.BoolVar(&FLAGS_tran, "tran", false, "enable transaction or not")
 	flag.Uint64Var(&FLAGS_commit_every, "comm_every", 0, "commit a transaction every (ms)")
 	flag.StringVar(&FLAGS_dump_file_folder, "dump_dir", "", "folder to dump the final output")
+	flag.StringVar(&FLAGS_stat_dir, "stats_dir", "", "folder to store stats")
 	flag.Parse()
+
+	if FLAGS_stat_dir == "" {
+		panic("should specify stats dir")
+	}
 
 	var serdeFormat commtypes.SerdeFormat
 
@@ -157,7 +163,7 @@ func main() {
 	srcNum := make(map[string]uint64)
 	srcEndToEnd := float64(0)
 	if sourceOutput.Success {
-		common.ProcessThroughputLat("source", sourceOutput.Latencies, sourceOutput.Consumed,
+		common.ProcessThroughputLat("source", FLAGS_stat_dir, sourceOutput.Latencies, sourceOutput.Consumed,
 			sourceOutput.Duration, srcNum, &srcEndToEnd)
 	}
 	if len(srcNum) != 0 {
@@ -168,7 +174,7 @@ func main() {
 	splitEndToEnd := float64(0)
 	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
 		if splitOutput[i].Success {
-			common.ProcessThroughputLat(fmt.Sprintf("split %v", i), splitOutput[i].Latencies,
+			common.ProcessThroughputLat(fmt.Sprintf("split %v", i), FLAGS_stat_dir, splitOutput[i].Latencies,
 				splitOutput[i].Consumed, splitOutput[i].Duration, splitNum, &splitEndToEnd)
 		}
 	}
@@ -180,7 +186,7 @@ func main() {
 	countEndToEnd := float64(0)
 	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
 		if countOutput[i].Success {
-			common.ProcessThroughputLat(fmt.Sprintf("count %d", i), countOutput[i].Latencies,
+			common.ProcessThroughputLat(fmt.Sprintf("count %d", i), FLAGS_stat_dir, countOutput[i].Latencies,
 				countOutput[i].Consumed, countOutput[i].Duration, countNum, &countEndToEnd)
 		}
 	}
