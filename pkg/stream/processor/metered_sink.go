@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -128,8 +129,15 @@ func (s *MeteredSink) Sink(ctx context.Context, msg commtypes.Message, parNum ui
 	if s.measure {
 		procStart := time.Now()
 		if s.isFinalOutput {
-			debug.Assert(msg.Timestamp != 0, "sink event ts should be set")
-			els := int(procStart.UnixMilli() - msg.Timestamp)
+			ts := msg.Timestamp
+			if ts == 0 {
+				extractTs, err := msg.Value.(commtypes.StreamTimeExtractor).ExtractStreamTime()
+				if err != nil || extractTs == 0 {
+					return fmt.Errorf("time stampt should not be zero")
+				}
+				ts = extractTs
+			}
+			els := int(procStart.UnixMilli() - ts)
 			s.eventTimeLatencies = append(s.eventTimeLatencies, els)
 		}
 		err := s.sink.Sink(ctx, msg, parNum, isControl)
