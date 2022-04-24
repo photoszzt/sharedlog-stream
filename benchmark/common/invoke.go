@@ -12,7 +12,7 @@ import (
 	"github.com/Jeffail/gabs/v2"
 )
 
-func Invoke(config_file string, gateway_url string,
+func Invoke(config_file string, stat_dir string, gateway_url string,
 	baseQueryInput *QueryInput,
 	invokeSourceFunc func(client *http.Client, numOutPartition uint8, topicName string,
 		instanceId uint8, numSrcInstance uint8,
@@ -159,6 +159,7 @@ func Invoke(config_file string, gateway_url string,
 		idx := i
 		if sourceOutput[idx].Success {
 			ProcessThroughputLat(fmt.Sprintf("source-%d", idx),
+				stat_dir,
 				sourceOutput[idx].Latencies, sourceOutput[idx].Consumed,
 				sourceOutput[idx].Duration, srcNum, &srcEndToEnd)
 		} else {
@@ -178,6 +179,7 @@ func Invoke(config_file string, gateway_url string,
 		for j := uint8(0); j < uint8(len(output)); j++ {
 			if output[j].Success {
 				ProcessThroughputLat(fmt.Sprintf("%s-%d", funcName, j),
+					stat_dir,
 					output[j].Latencies, output[j].Consumed, output[j].Duration,
 					num, &endToEnd)
 			} else {
