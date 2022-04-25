@@ -30,6 +30,7 @@ var (
 	FLAGS_tps           int
 	FLAGS_instanceId    int
 	FLAGS_srcInstance   int
+	FLAGS_statsFile     string
 )
 
 func init() {
@@ -51,10 +52,16 @@ func main() {
 	flag.IntVar(&FLAGS_tps, "tps", 10000000, "tps param for nexmark")
 	flag.IntVar(&FLAGS_instanceId, "iid", 1, "instance id")
 	flag.IntVar(&FLAGS_srcInstance, "srcIns", 1, "number of source instance")
+	flag.StringVar(&FLAGS_statsFile, "statsFile", "", "path to store stats")
 	flag.Parse()
 
-	fmt.Fprintf(os.Stderr, "duration: %d, events_num: %d, serde: %s, nPar: %d\n",
-		FLAGS_duration, FLAGS_events_num, FLAGS_serdeFormat, FLAGS_numPartition)
+	fmt.Fprintf(os.Stderr, "duration: %d, events_num: %d, serde: %s, nPar: %d, instanceId: %d, sourceInstances: %d, statsFile: %s\n",
+		FLAGS_duration, FLAGS_events_num, FLAGS_serdeFormat, FLAGS_numPartition, FLAGS_instanceId,
+		FLAGS_srcInstance, FLAGS_statsFile)
+	if FLAGS_statsFile == "" {
+		fmt.Fprintf(os.Stderr, "stats filename cannot be empty\n")
+		return
+	}
 
 	var serdeFormat commtypes.SerdeFormat
 	var valueEncoder commtypes.Encoder
@@ -109,6 +116,7 @@ func main() {
 		"batch.size":                            16384,
 		"linger.ms":                             100,
 		"max.in.flight.requests.per.connection": 5,
+		"statistics.interval.ms":                5000,
 	})
 	if err != nil {
 		log.Fatal().Msgf("Failed to create producer: %s\n", err)
@@ -118,6 +126,7 @@ func main() {
 	idx := int32(0)
 	duration := time.Duration(FLAGS_duration) * time.Second
 	replies := int32(0)
+	stats_arr := make([]string, 0, 128)
 	go func() {
 		for e := range p.Events() {
 			switch ev := e.(type) {
@@ -127,6 +136,9 @@ func main() {
 				} else {
 					log.Debug().Msgf("Delivered message to %v, ts %v\n", ev.TopicPartition, ev.Timestamp)
 				}
+			case *kafka.Stats:
+				stats_arr = append(stats_arr, ev.String())
+			default:
 			}
 			atomic.AddInt32(&replies, 1)
 		}
@@ -173,4 +185,12 @@ func main() {
 	totalTime := time.Since(start).Seconds()
 	fmt.Fprintf(os.Stderr, "source processed %d events, time %v, throughput %v\n",
 		idx, totalTime, float64(idx)/totalTime)
+	file, err := os.Create(FLAGS_statsFile)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+	for _, s := range stats_arr {
+		file.WriteString(s + "\n")
+	}
 }
