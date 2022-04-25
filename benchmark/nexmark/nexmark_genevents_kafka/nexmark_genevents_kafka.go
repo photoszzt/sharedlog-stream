@@ -169,5 +169,6 @@ func main() {
 	ret := atomic.LoadInt32(&replies)
 	fmt.Fprintf(os.Stderr, "%d event acked\n", ret)
 	totalTime := time.Since(start).Seconds()
-	fmt.Fprintf(os.Stderr, "source processed %d events, time %v, throughput %v\n", idx, totalTime, float64(idx)/totalTime)
+	fmt.Fprintf(os.Stderr, "source processed %d events, time %v, throughput %v\n",
+		idx, totalTime, float64(idx)/totalTime)
 }

@@ -60,17 +60,11 @@ func encode_sentence_event(valSerde commtypes.Serde, msgSerde commtypes.MsgSerde
 func (h *wordCountSource) eventGeneration(ctx context.Context, env types.Environment, sp *common.SourceParam) *common.FnOutput {
 	stream, err := sharedlog_stream.NewSharedLogStream(env, sp.TopicName, commtypes.SerdeFormat(sp.SerdeFormat))
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 
 	latencies := make([]int, 0, 128)
@@ -93,10 +87,7 @@ func (h *wordCountSource) eventGeneration(ctx context.Context, env types.Environ
 		fmt.Fprintf(os.Stderr, "append %s\n", sentence)
 		msgEncoded, err := encode_sentence_event(commtypes.StringSerde{}, msgSerde, sentence)
 		if err != nil {
-			return &common.FnOutput{
-				Success: false,
-				Message: err.Error(),
-			}
+			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
 		_, err = stream.Push(ctx, msgEncoded, 0, false, false)
 		if err != nil {
