@@ -1,6 +1,6 @@
 GO_FILES?=$$(find . -name '*.go' |grep -v deps)
 
-default: nexmark nexmark_debug nexmark_client nexmark_genevents_kafka tests_debug tests_client dspbench dspbench_debug dspbench_client wordcount_client wordcount_genevents_kafka append_read_client
+default: kafka_produce_bench nexmark nexmark_debug nexmark_client nexmark_genevents_kafka tests_debug tests_client dspbench dspbench_debug dspbench_client wordcount_client wordcount_genevents_kafka append_read_client
 
 .PHONY: golangci-lint
 golangci-lint:
@@ -65,6 +65,11 @@ wordcount_client:
 append_read_client:
 	mkdir -p ./bin
 	GO111MODULE=on go build -o bin/append_read_client ./benchmark/dspbench/append_read_client
+
+.PHONY: kafka_produce_bench
+kafka_produce_bench:
+	mkdir -p ./bin
+	GO111MODULE=on go build -o bin/kafka_produce_bench ./benchmark/lat_tp/kafka_produce
 
 .PHONY: download-book
 download-book:

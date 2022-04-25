@@ -106,6 +106,8 @@ func main() {
 		"go.produce.channel.size":               100000,
 		"go.events.channel.size":                100000,
 		"acks":                                  "all",
+		"batch.size":                            16384,
+		"linger.ms":                             100,
 		"max.in.flight.requests.per.connection": 5,
 	})
 	if err != nil {
