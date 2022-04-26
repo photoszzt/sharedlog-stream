@@ -10,8 +10,8 @@ import (
 	"sharedlog-stream/benchmark/common"
 )
 
-func scale() {
-	serdeFormat := getSerdeFormat()
+func scale(format string) {
+	serdeFormat := common.StringToSerdeFormat(format)
 
 	jsonFile, err := os.Open(FLAGS_scale_config)
 	if err != nil {

@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"fmt"
+	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/rs/zerolog/log"
@@ -29,4 +30,17 @@ func CreateTopic(ctx context.Context, topics []kafka.TopicSpecification, bootstr
 		}
 	}
 	return nil
+}
+
+func StringToSerdeFormat(format string) commtypes.SerdeFormat {
+	var serdeFormat commtypes.SerdeFormat
+	if format == "json" {
+		serdeFormat = commtypes.JSON
+	} else if format == "msgp" {
+		serdeFormat = commtypes.MSGP
+	} else {
+		log.Error().Msgf("serde format is not recognized; default back to JSON")
+		serdeFormat = commtypes.JSON
+	}
+	return serdeFormat
 }

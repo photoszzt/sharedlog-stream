@@ -70,19 +70,6 @@ func invokeSourceFunc(client *http.Client, numOutPartition uint8, topicName stri
 	}
 }
 
-func getSerdeFormat() commtypes.SerdeFormat {
-	var serdeFormat commtypes.SerdeFormat
-	if FLAGS_serdeFormat == "json" {
-		serdeFormat = commtypes.JSON
-	} else if FLAGS_serdeFormat == "msgp" {
-		serdeFormat = commtypes.MSGP
-	} else {
-		log.Error().Msgf("serde format is not recognized; default back to JSON")
-		serdeFormat = commtypes.JSON
-	}
-	return serdeFormat
-}
-
 func main() {
 	flag.StringVar(&FLAGS_faas_gateway, "faas_gateway", "127.0.0.1:8081", "")
 	flag.StringVar(&FLAGS_app_name, "app_name", "q1", "")
@@ -107,12 +94,12 @@ func main() {
 	switch FLAGS_app_name {
 	case "q1", "q2", "q3", "q5", "q7", "q8", "windowedAvg":
 		err := common.Invoke(FLAGS_workload_config, FLAGS_stat_dir, FLAGS_faas_gateway,
-			NewQueryInput(uint8(getSerdeFormat())), invokeSourceFunc)
+			NewQueryInput(uint8(common.StringToSerdeFormat(FLAGS_serdeFormat))), invokeSourceFunc)
 		if err != nil {
 			panic(err)
 		}
 	case "scale":
-		scale()
+		scale(FLAGS_serdeFormat)
 	default:
 		panic("unrecognized app")
 	}

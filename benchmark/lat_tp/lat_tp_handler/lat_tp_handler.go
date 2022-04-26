@@ -28,7 +28,7 @@ func init() {
 
 func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.FuncHandler, error) {
 	switch funcName {
-	case "sharedlog":
+	case "slproduce":
 		return handlers.NewSharedlogProduceBenchHandler(env), nil
 	default:
 		return nil, fmt.Errorf("unknown function name %v", funcName)
