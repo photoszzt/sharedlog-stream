@@ -62,7 +62,7 @@ func main() {
 	} else if !response.Success {
 		log.Error().Msgf("slproduce request failed: %s", response.Message)
 	}
-	path := path.Join(FLAGS_stat_dir, fmt.Sprintf("%dprod-1t-%dpar-%s.json", FLAGS_nprod, FLAGS_npar, FLAGS_payload))
+	path := path.Join(FLAGS_stat_dir, "stats.json")
 	if err := os.MkdirAll(FLAGS_stat_dir, 0750); err != nil {
 		panic(fmt.Sprintf("Fail to create stat dir: %v", err))
 	}
