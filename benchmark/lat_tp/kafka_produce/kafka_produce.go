@@ -21,7 +21,6 @@ var (
 	FLAGS_events_num   int
 	FLAGS_duration     int
 	FLAGS_payloadFile  string
-	FLAGS_statsFile    string
 )
 
 func init() {
@@ -40,18 +39,13 @@ func main() {
 	flag.StringVar(&FLAGS_topicName, "topicName", "src", "topic name")
 	flag.IntVar(&FLAGS_numPartition, "npar", 1, "number of partition")
 	flag.StringVar(&FLAGS_payloadFile, "payload", "", "payload file name")
-	flag.StringVar(&FLAGS_statsFile, "statsFile", "", "path to store stats")
 	flag.Parse()
 
-	fmt.Fprintf(os.Stderr, "duration: %d, events_num: %d, broker: %s, topicName: %s, nPar: %d, payload: %s, statsFile: %s\n",
+	fmt.Fprintf(os.Stderr, "duration: %d, events_num: %d, broker: %s, topicName: %s, nPar: %d, payload: %s\n",
 		FLAGS_duration, FLAGS_events_num, FLAGS_broker, FLAGS_topicName, FLAGS_numPartition,
-		FLAGS_payloadFile, FLAGS_statsFile)
+		FLAGS_payloadFile)
 	if FLAGS_payloadFile == "" {
 		fmt.Fprintf(os.Stderr, "payload filename cannot be empty\n")
-		return
-	}
-	if FLAGS_statsFile == "" {
-		fmt.Fprintf(os.Stderr, "stats filename cannot be empty\n")
 		return
 	}
 	content, err := os.ReadFile(FLAGS_payloadFile)
@@ -134,12 +128,7 @@ func main() {
 	totalTime := time.Since(start).Seconds()
 	fmt.Fprintf(os.Stderr, "produce %d events, time: %v, throughput: %v\n",
 		idx, totalTime, float64(idx)/totalTime)
-	file, err := os.Create(FLAGS_statsFile)
-	if err != nil {
-		panic(err)
-	}
-	defer file.Close()
 	for _, s := range stats_arr {
-		file.WriteString(s + "\n")
+		fmt.Fprintf(os.Stderr, s+"\n")
 	}
 }
