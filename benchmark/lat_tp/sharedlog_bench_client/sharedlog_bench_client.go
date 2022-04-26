@@ -33,6 +33,7 @@ func main() {
 	flag.StringVar(&FLAGS_payload, "payload", "", "payload path")
 	flag.IntVar(&FLAGS_npar, "npar", 1, "number of partition")
 	flag.IntVar(&FLAGS_nprod, "nprod", 1, "number of producer")
+	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
 	flag.Parse()
 
 	if FLAGS_stat_dir == "" {
