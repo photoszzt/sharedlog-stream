@@ -118,7 +118,7 @@ func main() {
 			Payload: content,
 			Ts:      time.Now().UnixMicro(),
 		}
-		encoded, err := ptSerde.Encode(payloadTs)
+		encoded, err := ptSerde.Encode(&payloadTs)
 		if err != nil {
 			panic(err)
 		}

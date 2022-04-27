@@ -77,5 +77,7 @@ func main() {
 			idx += 1
 		}
 	}
+	totalTime := time.Since(start).Seconds()
 	fmt.Fprintf(os.Stderr, "%v\n", prod_to_con_lat)
+	fmt.Fprintf(os.Stderr, "consumed %d events, time: %v, throughput: %v\n", idx, totalTime, float64(idx)/float64(totalTime))
 }
