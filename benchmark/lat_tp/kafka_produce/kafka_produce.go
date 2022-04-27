@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
+	datatype "sharedlog-stream/benchmark/lat_tp/pkg/data_type"
 	"sync/atomic"
 	"time"
 
@@ -33,7 +34,7 @@ func init() {
 }
 
 func main() {
-	flag.IntVar(&FLAGS_events_num, "events_num", 100000000, "events.num param for nexmark")
+	flag.IntVar(&FLAGS_events_num, "events_num", 100000000, "number of events")
 	flag.IntVar(&FLAGS_duration, "duration", 60, "")
 	flag.StringVar(&FLAGS_broker, "broker", "127.0.0.1", "")
 	flag.StringVar(&FLAGS_topicName, "topicName", "src", "topic name")
@@ -73,14 +74,16 @@ func main() {
 		"go.events.channel.size":                100000,
 		"acks":                                  "all",
 		"batch.size":                            16384,
+		"batch.num.messages":                    1,
 		"linger.ms":                             0,
 		"max.in.flight.requests.per.connection": 5,
-		"statistics.interval.ms":                5000,
+		"statistics.interval.ms":                120000,
 	})
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create producer: %s\n", err))
 	}
 	defer p.Close()
+	var ptSerde datatype.PayloadTsMsgpSerde
 	idx := int32(0)
 	duration := time.Duration(FLAGS_duration) * time.Second
 	replies := int32(0)
@@ -111,9 +114,17 @@ func main() {
 		}
 		idx += 1
 		parNum := idx % num_par
+		payloadTs := datatype.PayloadTs{
+			Payload: content,
+			Ts:      time.Now().UnixMicro(),
+		}
+		encoded, err := ptSerde.Encode(payloadTs)
+		if err != nil {
+			panic(err)
+		}
 		p.ProduceChannel() <- &kafka.Message{
 			TopicPartition: kafka.TopicPartition{Topic: &FLAGS_topicName, Partition: int32(parNum)},
-			Value:          content,
+			Value:          encoded,
 		}
 		if err != nil {
 			panic(err)

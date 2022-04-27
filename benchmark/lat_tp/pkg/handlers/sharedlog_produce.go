@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"sharedlog-stream/benchmark/common"
+	datatype "sharedlog-stream/benchmark/lat_tp/pkg/data_type"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -13,17 +14,17 @@ import (
 	"cs.utexas.edu/zjia/faas/types"
 )
 
-type sharedlogBenchHandler struct {
+type sharedlogProduceBenchHandler struct {
 	env types.Environment
 }
 
 func NewSharedlogProduceBenchHandler(env types.Environment) types.FuncHandler {
-	return &sharedlogBenchHandler{
+	return &sharedlogProduceBenchHandler{
 		env: env,
 	}
 }
 
-func (h *sharedlogBenchHandler) Call(ctx context.Context, input []byte) ([]byte, error) {
+func (h *sharedlogProduceBenchHandler) Call(ctx context.Context, input []byte) ([]byte, error) {
 	parsedInput := &common.SourceParam{}
 	err := json.Unmarshal(input, parsedInput)
 	if err != nil {
@@ -37,7 +38,7 @@ func (h *sharedlogBenchHandler) Call(ctx context.Context, input []byte) ([]byte,
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *sharedlogBenchHandler) sharedlogProduceBench(ctx context.Context, sp *common.SourceParam) *common.FnOutput {
+func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context, sp *common.SourceParam) *common.FnOutput {
 	content, err := os.ReadFile(sp.FileName)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
@@ -51,13 +52,22 @@ func (h *sharedlogBenchHandler) sharedlogProduceBench(ctx context.Context, sp *c
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
+	var ptSerde datatype.PayloadTsMsgpSerde
 	for {
 		if (duration != 0 && time.Since(startTime) >= duration) || (numEvents != 0 && nEmitEvent == numEvents) {
 			break
 		}
 		procStart := time.Now()
 		parNum := nEmitEvent % uint32(sp.NumOutPartition)
-		_, err = stream.Push(ctx, content, uint8(parNum), false, false)
+		pt := datatype.PayloadTs{
+			Payload: content,
+			Ts:      time.Now().UnixMicro(),
+		}
+		encoded, err := ptSerde.Encode(&pt)
+		if err != nil {
+			return &common.FnOutput{Success: false, Message: err.Error()}
+		}
+		_, err = stream.Push(ctx, encoded, uint8(parNum), false, false)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
