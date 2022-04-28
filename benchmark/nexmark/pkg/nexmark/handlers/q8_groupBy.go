@@ -369,7 +369,7 @@ func (h *q8GroupByHandler) getAucBySellerID() (*processor.MeteredProcessor, *pro
 					errChan <- fmt.Errorf("add topic partition failed: %v", err)
 					return
 				}
-				fmt.Fprintf(os.Stderr, "append %v to substream %v\n", changeKeyedMsg[0], par)
+				// fmt.Fprintf(os.Stderr, "append %v to substream %v\n", changeKeyedMsg[0], par)
 				err = args.sinks[0].Sink(ctx, changeKeyedMsg[0], par, false)
 				if err != nil {
 					errChan <- fmt.Errorf("sink err: %v", err)

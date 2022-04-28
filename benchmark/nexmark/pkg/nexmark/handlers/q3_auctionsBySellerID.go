@@ -92,7 +92,7 @@ func (h *query3AuctionsBySellerIDHandler) procMsg(ctx context.Context, msg commt
 		if err != nil {
 			return fmt.Errorf("add topic partition failed: %v", err)
 		}
-		fmt.Fprintf(os.Stderr, "append %v to substream %v\n", changeKeyedMsg[0], par)
+		// fmt.Fprintf(os.Stderr, "append %v to substream %v\n", changeKeyedMsg[0], par)
 		err = args.sink.Sink(ctx, changeKeyedMsg[0], par, false)
 		if err != nil {
 			return fmt.Errorf("sink err: %v", err)
