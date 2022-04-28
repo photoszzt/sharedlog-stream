@@ -108,9 +108,9 @@ func main() {
 		"go.events.channel.size":                100000,
 		"acks":                                  "all",
 		"batch.size":                            16384,
-		"linger.ms":                             100,
+		"linger.ms":                             5000,
 		"max.in.flight.requests.per.connection": 5,
-		"statistics.interval.ms":                5000,
+		// "statistics.interval.ms":                5000,
 	})
 	if err != nil {
 		log.Fatal().Msgf("Failed to create producer: %s\n", err)
