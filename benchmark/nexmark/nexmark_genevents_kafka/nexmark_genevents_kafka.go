@@ -108,9 +108,9 @@ func main() {
 		"go.events.channel.size":                100000,
 		"acks":                                  "all",
 		"batch.size":                            16384,
-		"linger.ms":                             100,
+		"linger.ms":                             1000,
 		"max.in.flight.requests.per.connection": 5,
-		"statistics.interval.ms":                5000,
+		// "statistics.interval.ms":                5000,
 	})
 	if err != nil {
 		log.Fatal().Msgf("Failed to create producer: %s\n", err)
@@ -142,7 +142,7 @@ func main() {
 	num_par := int32(FLAGS_numPartition)
 	for {
 		if (duration != 0 && time.Since(start) >= duration) ||
-			(FLAGS_events_num != 0 && idx > events_num) {
+			(FLAGS_events_num != 0 && idx >= events_num) {
 			break
 		}
 		now := time.Now().Unix()
