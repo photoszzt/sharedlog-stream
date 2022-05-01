@@ -374,7 +374,8 @@ func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum 
 		log.Fatal().
 			Uint64("Current seq", s.cursor).
 			Uint64("Request seq", tailSeqNum).
-			Msg("Cannot sync to request ")
+			Msg("Cannot sync to request")
+		return fmt.Errorf("cannot sync to request")
 	}
 
 	if tailSeqNum == s.cursor+1 {
