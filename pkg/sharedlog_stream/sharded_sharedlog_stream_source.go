@@ -3,6 +3,8 @@ package sharedlog_stream
 import (
 	"context"
 	"fmt"
+	"os"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -34,6 +36,7 @@ type ShardedSharedLogStreamSource struct {
 var _ = processor.Source(&ShardedSharedLogStreamSource{})
 
 func NewShardedSharedLogStreamSource(stream *ShardedSharedLogStream, config *StreamSourceConfig) *ShardedSharedLogStreamSource {
+	debug.Fprintf(os.Stderr, "%s timeout: %v\n", stream.TopicName(), config.Timeout)
 	return &ShardedSharedLogStreamSource{
 		stream:          stream,
 		timeout:         config.Timeout,
@@ -67,7 +70,9 @@ L:
 			break L
 		default:
 		}
-		if s.timeout != 0 && time.Since(startTime) >= s.timeout {
+		duration := time.Since(startTime)
+		debug.Fprintf(os.Stderr, "consume dur: %v\n", duration)
+		if s.timeout != 0 && duration >= s.timeout {
 			break
 		}
 		_, rawMsgs, err := s.stream.ReadNext(ctx, parNum)

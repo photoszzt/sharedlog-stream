@@ -9,6 +9,7 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
@@ -17,6 +18,7 @@ import (
 	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/treemap"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -59,78 +61,35 @@ func (h *q3JoinTableHandler) process(ctx context.Context,
 	argsTmp interface{},
 ) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*q3JoinTableProcessArgs)
-	var wg sync.WaitGroup
-
-	personsOutChan := make(chan *common.FnOutput)
-	auctionsOutChan := make(chan *common.FnOutput)
-	completed := uint32(0)
-	wg.Add(1)
-	joinProcPerson := &joinProcArgs{
-		src:           args.personSrc,
-		sink:          args.sink,
-		wg:            &wg,
-		parNum:        args.parNum,
-		runner:        args.pJoinA,
-		offMu:         &h.offMu,
-		currentOffset: t.CurrentOffset,
-		trackParFunc:  args.trackParFunc,
-		cHashMu:       &h.cHashMu,
-		cHash:         h.cHash,
-	}
-	pctx := context.WithValue(ctx, "id", "person")
-	go joinProc(pctx, personsOutChan, joinProcPerson)
-	wg.Add(1)
-	joinProgArgsAuction := &joinProcArgs{
-		src:           args.auctionSrc,
-		sink:          args.sink,
-		wg:            &wg,
-		parNum:        args.parNum,
-		runner:        args.aJoinP,
-		offMu:         &h.offMu,
-		currentOffset: t.CurrentOffset,
-		trackParFunc:  args.trackParFunc,
-		cHashMu:       &h.cHashMu,
-		cHash:         h.cHash,
-	}
-	actx := context.WithValue(ctx, "id", "auction")
-	go joinProc(actx, auctionsOutChan, joinProgArgsAuction)
-	var pOut *common.FnOutput = nil
-	var aOut *common.FnOutput = nil
-L:
-	for {
-		select {
-		case personOutput := <-personsOutChan:
-			pOut = personOutput
-			completed += 1
-			if completed == 2 {
-				break L
-			}
-		case auctionOutput := <-auctionsOutChan:
-			aOut = auctionOutput
-			completed += 1
-			if completed == 2 {
-				break L
-			}
-		}
-	}
-	wg.Wait()
-	debug.Fprintf(os.Stderr, "pOut %v\n", pOut)
-	debug.Fprintf(os.Stderr, "aOut %v\n", aOut)
-	if pOut != nil {
-		if aOut != nil {
-			succ := pOut.Success && aOut.Success
-			return t.CurrentOffset, &common.FnOutput{Success: succ, Message: pOut.Message + "," + aOut.Message}
-		}
+	var aOut *common.FnOutput
+	var pOut *common.FnOutput
+	select {
+	case personOutput := <-args.personsOutChan:
+		pOut = personOutput
+		debug.Fprintf(os.Stderr, "Got persons out: %v\n", pOut)
 		if pOut.Success {
-			return t.CurrentOffset, nil
+			args.completed += 1
+			args.personDone = true
 		}
-		return t.CurrentOffset, pOut
-	} else if aOut != nil {
-		// debug.Fprintf(os.Stderr, "aOut %v\n", aOut)
+	case auctionOutput := <-args.auctionsOutChan:
+		aOut = auctionOutput
+		debug.Fprintf(os.Stderr, "Got auctions out: %v\n", aOut)
 		if aOut.Success {
-			return t.CurrentOffset, nil
+			args.completed += 1
+			args.auctionDone = true
 		}
+	default:
+	}
+	debug.Fprintf(os.Stderr, "aOut: %v\n", aOut)
+	debug.Fprintf(os.Stderr, "pOut: %v\n", pOut)
+	if pOut != nil && !pOut.Success {
+		return t.CurrentOffset, pOut
+	}
+	if aOut != nil && !aOut.Success {
 		return t.CurrentOffset, aOut
+	}
+	if args.completed == 2 {
+		return t.CurrentOffset, &common.FnOutput{Success: true, Message: errors.ErrStreamSourceTimeout.Error()}
 	}
 	return t.CurrentOffset, nil
 }
@@ -204,7 +163,7 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 		MsgDecoder:   msgSerde,
 	}
 	personsConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      common.SrcConsumeTimeout,
+		Timeout:      time.Duration(10) * time.Second,
 		KeyDecoder:   commtypes.Uint64Serde{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
@@ -316,16 +275,15 @@ func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 }
 
 type q3JoinTableProcessArgs struct {
-	personSrc        *processor.MeteredSource
-	auctionSrc       *processor.MeteredSource
-	sink             *processor.ConcurrentMeteredSink
-	pJoinA           JoinWorkerFunc
-	aJoinP           JoinWorkerFunc
-	trackParFunc     transaction.TrackKeySubStreamFunc
+	personsOutChan   chan *common.FnOutput
+	auctionsOutChan  chan *common.FnOutput
 	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
 	funcName         string
 	curEpoch         uint64
+	personDone       bool
+	auctionDone      bool
 	parNum           uint8
+	completed        uint8
 }
 
 func (a *q3JoinTableProcessArgs) ParNum() uint8    { return a.parNum }
@@ -407,23 +365,87 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
+	personsOutChan := make(chan *common.FnOutput, 1)
+	auctionsOutChan := make(chan *common.FnOutput, 1)
+	pauseChanPerson := make(chan struct{})
+	pauseChanAuction := make(chan struct{})
+	resumeChanPerson := make(chan ResumeAction)
+	resumeChanAuction := make(chan ResumeAction)
 	procArgs := &q3JoinTableProcessArgs{
-		auctionSrc:       sss.src1,
-		personSrc:        sss.src2,
-		sink:             sss.sink,
-		aJoinP:           aJoinP,
-		pJoinA:           pJoinA,
+		personsOutChan:   personsOutChan,
+		auctionsOutChan:  auctionsOutChan,
 		parNum:           sp.ParNum,
-		trackParFunc:     transaction.DefaultTrackSubstreamFunc,
 		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
 		curEpoch:         sp.ScaleEpoch,
 		funcName:         h.funcName,
+		completed:        0,
 	}
 
+	joinProcPerson := &joinProcArgs{
+		src:          sss.src2,
+		sink:         sss.sink,
+		parNum:       sp.ParNum,
+		runner:       pJoinA,
+		offMu:        &h.offMu,
+		trackParFunc: transaction.DefaultTrackSubstreamFunc,
+		cHashMu:      &h.cHashMu,
+		cHash:        h.cHash,
+		pauseChan:    pauseChanPerson,
+		resumeChan:   resumeChanPerson,
+		start:        0,
+	}
+	joinProcAuction := &joinProcArgs{
+		src:          sss.src1,
+		sink:         sss.sink,
+		parNum:       sp.ParNum,
+		runner:       aJoinP,
+		offMu:        &h.offMu,
+		trackParFunc: transaction.DefaultTrackSubstreamFunc,
+		cHashMu:      &h.cHashMu,
+		cHash:        h.cHash,
+		pauseChan:    pauseChanAuction,
+		resumeChan:   resumeChanAuction,
+		start:        0,
+	}
 	task := transaction.StreamTask{
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
+		FlushOrPauseFunc: func() {
+			if !procArgs.auctionDone {
+				pauseChanAuction <- struct{}{}
+			}
+			if !procArgs.personDone {
+				pauseChanPerson <- struct{}{}
+			}
+		},
+		ResumeFunc: func() {
+			if !procArgs.auctionDone {
+				resumeChanAuction <- Resume
+			}
+			if !procArgs.personDone {
+				resumeChanPerson <- Resume
+			}
+		},
+		CloseFunc: func() {
+			if !procArgs.auctionDone {
+				resumeChanAuction <- Exit
+			}
+			if !procArgs.personDone {
+				resumeChanPerson <- Exit
+			}
+		},
+		InitFunc: func() {
+			atomic.CompareAndSwapUint32(&joinProcPerson.start, 0, 1)
+			atomic.CompareAndSwapUint32(&joinProcAuction.start, 0, 1)
+		},
 	}
+	joinProcPerson.currentOffset = task.CurrentOffset
+	joinProcAuction.currentOffset = task.CurrentOffset
+
+	pctx := context.WithValue(ctx, "id", "person")
+	actx := context.WithValue(ctx, "id", "auction")
+	go joinProcLoop(pctx, personsOutChan, joinProcPerson)
+	go joinProcLoop(actx, auctionsOutChan, joinProcAuction)
 	if sp.EnableTransaction {
 		var kvchangelogs []*transaction.KVStoreChangelog
 		if sp.TableType == uint8(store.IN_MEM) {
@@ -454,27 +476,32 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			Srcs:                  map[string]processor.Source{auctionsStream.TopicName(): sss.src1, personsStream.TopicName(): sss.src2},
 			OutputStreams:         []*sharedlog_stream.ShardedSharedLogStream{outputStream},
 			QueryInput:            sp,
-			TransactionalId:       fmt.Sprintf("%s-%d-%s", h.funcName, sp.ParNum, sp.OutputTopicNames[0]),
+			TransactionalId:       fmt.Sprintf("%s-%d", h.funcName, sp.ParNum),
 			KVChangelogs:          kvchangelogs,
 			WindowStoreChangelogs: nil,
 			FixedOutParNum:        0,
 		}
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+		tm, cmm, err := transaction.SetupManagers(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
-				procArgs.(*q3JoinTableProcessArgs).trackParFunc = trackParFunc
+				joinProcPerson.trackParFunc = trackParFunc
+				joinProcAuction.trackParFunc = trackParFunc
 				procArgs.(*q3JoinTableProcessArgs).recordFinishFunc = recordFinishFunc
 			}, &task)
+		if err != nil {
+			return &common.FnOutput{Success: false, Message: err.Error()}
+		}
+		ret := task.ProcessWithTransaction(ctx, tm, cmm, &streamTaskArgs)
 		if ret != nil && ret.Success {
-			ret.Latencies["auctionsSrc"] = procArgs.auctionSrc.GetLatency()
-			ret.Latencies["personsSrc"] = procArgs.personSrc.GetLatency()
+			ret.Latencies["auctionsSrc"] = sss.src1.GetLatency()
+			ret.Latencies["personsSrc"] = sss.src2.GetLatency()
 			ret.Latencies["toAuctionsTable"] = kvtabs.toTab1.GetLatency()
 			ret.Latencies["toPersonsTable"] = kvtabs.toTab2.GetLatency()
 			ret.Latencies["personJoinsAuctions"] = personJoinsAuctions.GetLatency()
 			ret.Latencies["auctionJoinsPersons"] = auctionJoinsPersons.GetLatency()
 			ret.Latencies["sink"] = sss.sink.GetLatency()
 			ret.Latencies["eventTimeLatency"] = sss.sink.GetEventTimeLatency()
-			ret.Consumed["auctionsSrc"] = procArgs.auctionSrc.GetCount()
-			ret.Consumed["personsSrc"] = procArgs.personSrc.GetCount()
+			ret.Consumed["auctionsSrc"] = sss.src1.GetCount()
+			ret.Consumed["personsSrc"] = sss.src2.GetCount()
 		}
 		return ret
 	}
@@ -482,18 +509,20 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		ProcArgs: procArgs,
 		Duration: time.Duration(sp.Duration) * time.Second,
 	}
+	atomic.CompareAndSwapUint32(&joinProcPerson.start, 0, 1)
+	atomic.CompareAndSwapUint32(&joinProcAuction.start, 0, 1)
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {
-		ret.Latencies["auctionsSrc"] = procArgs.auctionSrc.GetLatency()
-		ret.Latencies["personsSrc"] = procArgs.personSrc.GetLatency()
+		ret.Latencies["auctionsSrc"] = sss.src1.GetLatency()
+		ret.Latencies["personsSrc"] = sss.src2.GetLatency()
 		ret.Latencies["toAuctionsTable"] = kvtabs.toTab1.GetLatency()
 		ret.Latencies["toPersonsTable"] = kvtabs.toTab2.GetLatency()
 		ret.Latencies["personJoinsAuctions"] = personJoinsAuctions.GetLatency()
 		ret.Latencies["auctionJoinsPersons"] = auctionJoinsPersons.GetLatency()
 		ret.Latencies["sink"] = sss.sink.GetLatency()
 		ret.Latencies["eventTimeLatency"] = sss.sink.GetEventTimeLatency()
-		ret.Consumed["auctionsSrc"] = procArgs.auctionSrc.GetCount()
-		ret.Consumed["personsSrc"] = procArgs.personSrc.GetCount()
+		ret.Consumed["auctionsSrc"] = sss.src1.GetCount()
+		ret.Consumed["personsSrc"] = sss.src2.GetCount()
 	}
 	return ret
 }

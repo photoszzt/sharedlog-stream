@@ -183,7 +183,7 @@ func Invoke(config_file string, stat_dir string, gateway_url string,
 					output[j].Latencies, output[j].Consumed, output[j].Duration,
 					num, &endToEnd)
 			} else {
-				fmt.Fprintf(os.Stderr, "%s-%d failed\n", funcName, j)
+				fmt.Fprintf(os.Stderr, "%s-%d failed, msg %s\n", funcName, j, output[j].Message)
 			}
 		}
 		if len(num) != 0 {

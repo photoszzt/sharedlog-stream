@@ -83,13 +83,13 @@ func (h *q3GroupByHandler) Call(ctx context.Context, input []byte) ([]byte, erro
 
 type q3GroupByProcessArgs struct {
 	src              *processor.MeteredSource
-	sinks            []*processor.MeteredSink
 	aucMsgChan       chan commtypes.Message
 	personMsgChan    chan commtypes.Message
 	errChan          chan error
 	trackParFunc     transaction.TrackKeySubStreamFunc
 	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
 	funcName         string
+	sinks            []*processor.MeteredSink
 	curEpoch         uint64
 	parNum           uint8
 }
@@ -194,7 +194,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 			close(personMsgChan)
 			wg.Wait()
 		},
-		FlushFunc: func() {
+		FlushOrPauseFunc: func() {
 			// fmt.Fprintf(os.Stderr, "wait for all entries are consumed\n")
 			// fmt.Fprintf(os.Stderr, "current auction channel len: %v\n", len(aucMsgChan))
 			// fmt.Fprintf(os.Stderr, "current person channel len: %v\n", len(personMsgChan))

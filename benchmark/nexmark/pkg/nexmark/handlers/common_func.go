@@ -7,6 +7,8 @@ import (
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
@@ -48,21 +50,27 @@ func getPersonTimeSerde(serdeFormat uint8) (commtypes.Serde, error) {
 
 type JoinWorkerFunc func(c context.Context, m commtypes.Message) ([]commtypes.Message, error)
 
-type joinProcArgs struct {
-	src    *processor.MeteredSource
-	sink   *processor.ConcurrentMeteredSink
-	wg     *sync.WaitGroup
-	runner JoinWorkerFunc
+type ResumeAction uint8
 
+const (
+	Resume ResumeAction = 1
+	Exit   ResumeAction = 2
+)
+
+type joinProcArgs struct {
+	src           *processor.MeteredSource
+	sink          *processor.ConcurrentMeteredSink
+	pauseChan     chan struct{}
+	resumeChan    chan ResumeAction
+	wg            *sync.WaitGroup
+	cHash         *hash.ConsistentHash
+	runner        JoinWorkerFunc
 	offMu         *sync.Mutex
 	currentOffset map[string]uint64
-
-	trackParFunc transaction.TrackKeySubStreamFunc
-
-	cHashMu *sync.RWMutex
-	cHash   *hash.ConsistentHash
-
-	parNum uint8
+	trackParFunc  transaction.TrackKeySubStreamFunc
+	cHashMu       *sync.RWMutex
+	start         uint32
+	parNum        uint8
 }
 
 func joinProc(
@@ -101,6 +109,59 @@ func joinProc(
 		}
 	}
 	out <- nil
+}
+
+func joinProcLoop(
+	ctx context.Context,
+	out chan *common.FnOutput,
+	procArgs *joinProcArgs,
+) {
+	for atomic.LoadUint32(&procArgs.start) != 1 {
+		time.Sleep(time.Duration(10) * time.Millisecond)
+	}
+L:
+	for {
+		select {
+		case <-ctx.Done():
+			break L
+		case <-procArgs.pauseChan:
+			action := <-procArgs.resumeChan
+			if action == Exit {
+				break L
+			}
+		default:
+		}
+		gotMsgs, err := procArgs.src.Consume(ctx, procArgs.parNum)
+		if err != nil {
+			if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
+				debug.Fprintf(os.Stderr, "%s timeout, gen output\n", procArgs.src.TopicName())
+				out <- &common.FnOutput{Success: true, Message: err.Error()}
+				debug.Fprintf(os.Stderr, "Done sending result\n")
+				return
+			}
+			out <- &common.FnOutput{Success: false, Message: err.Error()}
+			return
+		}
+		for _, msg := range gotMsgs.Msgs {
+			procArgs.offMu.Lock()
+			procArgs.currentOffset[procArgs.src.TopicName()] = msg.LogSeqNum
+			procArgs.offMu.Unlock()
+
+			if msg.MsgArr != nil {
+				for _, subMsg := range msg.MsgArr {
+					if subMsg.Value == nil {
+						continue
+					}
+					procMsgWithSink(ctx, subMsg, out, procArgs)
+				}
+			} else {
+				if msg.Msg.Value == nil {
+					continue
+				}
+				procMsgWithSink(ctx, msg.Msg, out, procArgs)
+			}
+		}
+	}
 }
 
 func procMsgWithSink(ctx context.Context, msg commtypes.Message, out chan *common.FnOutput, procArgs *joinProcArgs) {

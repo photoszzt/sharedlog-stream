@@ -8,6 +8,8 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/concurrent_skiplist"
+	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
@@ -15,6 +17,7 @@ import (
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/transaction"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -55,16 +58,13 @@ func (h *q8JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, e
 }
 
 type q8JoinStreamProcessArgs struct {
-	personSrc        *processor.MeteredSource
-	auctionSrc       *processor.MeteredSource
-	sink             *processor.ConcurrentMeteredSink
-	pJoinA           JoinWorkerFunc
-	aJoinP           JoinWorkerFunc
-	trackParFunc     transaction.TrackKeySubStreamFunc
+	personsOutChan   chan *common.FnOutput
+	auctionsOutChan  chan *common.FnOutput
 	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
 	funcName         string
 	curEpoch         uint64
 	parNum           uint8
+	completed        uint8
 }
 
 func (a *q8JoinStreamProcessArgs) ParNum() uint8    { return a.parNum }
@@ -80,79 +80,29 @@ func (h *q8JoinStreamHandler) process(
 	argsTmp interface{},
 ) (map[string]uint64, *common.FnOutput) {
 	args := argsTmp.(*q8JoinStreamProcessArgs)
-	var wg sync.WaitGroup
-
-	personsOutChan := make(chan *common.FnOutput)
-	auctionsOutChan := make(chan *common.FnOutput)
-	completed := uint32(0)
-	wg.Add(1)
-	joinProcArgsPerson := &joinProcArgs{
-		src:           args.personSrc,
-		sink:          args.sink,
-		wg:            &wg,
-		parNum:        args.parNum,
-		runner:        args.pJoinA,
-		offMu:         &h.offMu,
-		currentOffset: t.CurrentOffset,
-		trackParFunc:  args.trackParFunc,
-		cHashMu:       &h.cHashMu,
-		cHash:         h.cHash,
-	}
-	pctx := context.WithValue(ctx, "id", "person")
-	go joinProc(pctx, personsOutChan, joinProcArgsPerson)
-	wg.Add(1)
-	joinProgArgsAuction := &joinProcArgs{
-		src:           args.auctionSrc,
-		sink:          args.sink,
-		wg:            &wg,
-		parNum:        args.parNum,
-		runner:        args.aJoinP,
-		offMu:         &h.offMu,
-		currentOffset: t.CurrentOffset,
-		trackParFunc:  args.trackParFunc,
-		cHashMu:       &h.cHashMu,
-		cHash:         h.cHash,
-	}
-	actx := context.WithValue(ctx, "id", "auction")
-	go joinProc(actx, auctionsOutChan, joinProgArgsAuction)
 	var pOut *common.FnOutput = nil
 	var aOut *common.FnOutput = nil
-L:
-	for {
-		select {
-		case personOutput := <-personsOutChan:
-			pOut = personOutput
-			completed += 1
-			// fmt.Fprintf(os.Stderr, "completed person: %d\n", completed)
-			if completed == 2 {
-				// fmt.Fprint(os.Stderr, "break for loop per\n")
-				break L
-			}
-		case auctionOutput := <-auctionsOutChan:
-			aOut = auctionOutput
-			completed += 1
-			// fmt.Fprintf(os.Stderr, "completed auc: %d\n", completed)
-			if completed == 2 {
-				// fmt.Fprint(os.Stderr, "break for loop auc\n")
-				break L
-			}
+	select {
+	case personOutput := <-args.personsOutChan:
+		pOut = personOutput
+		if pOut.Success {
+			args.completed += 1
 		}
+	case auctionOutput := <-args.auctionsOutChan:
+		aOut = auctionOutput
+		if aOut.Success {
+			args.completed += 1
+		}
+	default:
 	}
-	wg.Wait()
-	if pOut != nil {
-		if aOut != nil {
-			succ := pOut.Success && aOut.Success
-			return t.CurrentOffset, &common.FnOutput{Success: succ, Message: pOut.Message + "," + aOut.Message}
-		}
-		if pOut.Success && pOut.Err == nil {
-			return t.CurrentOffset, nil
-		}
+	if pOut != nil && !pOut.Success {
 		return t.CurrentOffset, pOut
-	} else if aOut != nil {
-		if aOut.Success && aOut.Err == nil {
-			return t.CurrentOffset, nil
-		}
+	}
+	if aOut != nil && !aOut.Success {
 		return t.CurrentOffset, aOut
+	}
+	if args.completed == 2 {
+		return t.CurrentOffset, &common.FnOutput{Success: true, Message: errors.ErrStreamSourceTimeout.Error()}
 	}
 	return t.CurrentOffset, nil
 }
@@ -201,6 +151,7 @@ func (h *q8JoinStreamHandler) processSerial(
 	return t.CurrentOffset, nil
 }
 */
+
 func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	stream1 *sharedlog_stream.ShardedSharedLogStream,
 	stream2 *sharedlog_stream.ShardedSharedLogStream,
@@ -383,24 +334,80 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	}
 
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
+	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
+	personsOutChan := make(chan *common.FnOutput)
+	auctionsOutChan := make(chan *common.FnOutput)
+	pauseChanPerson := make(chan struct{})
+	pauseChanAuction := make(chan struct{})
+	resumeChanPerson := make(chan ResumeAction)
+	resumeChanAuction := make(chan ResumeAction)
 
 	procArgs := &q8JoinStreamProcessArgs{
-		personSrc:        personsSrc,
-		auctionSrc:       auctionsSrc,
-		sink:             sink,
-		pJoinA:           pJoinA,
-		aJoinP:           aJoinP,
+		personsOutChan:   personsOutChan,
+		auctionsOutChan:  auctionsOutChan,
 		parNum:           sp.ParNum,
-		trackParFunc:     transaction.DefaultTrackSubstreamFunc,
 		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
 		curEpoch:         sp.ScaleEpoch,
 		funcName:         h.funcName,
+		completed:        0,
+	}
+
+	joinProcPerson := &joinProcArgs{
+		src:          sss.src2,
+		sink:         sss.sink,
+		parNum:       sp.ParNum,
+		runner:       pJoinA,
+		offMu:        &h.offMu,
+		trackParFunc: transaction.DefaultTrackSubstreamFunc,
+		cHashMu:      &h.cHashMu,
+		cHash:        h.cHash,
+		pauseChan:    pauseChanPerson,
+		resumeChan:   resumeChanPerson,
+		start:        0,
+	}
+
+	joinProcAuction := &joinProcArgs{
+		src:          sss.src1,
+		sink:         sss.sink,
+		parNum:       sp.ParNum,
+		runner:       aJoinP,
+		offMu:        &h.offMu,
+		trackParFunc: transaction.DefaultTrackSubstreamFunc,
+		cHashMu:      &h.cHashMu,
+		cHash:        h.cHash,
+		pauseChan:    pauseChanAuction,
+		resumeChan:   resumeChanAuction,
+		start:        0,
 	}
 
 	task := transaction.StreamTask{
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
+		FlushOrPauseFunc: func() {
+			pauseChanAuction <- struct{}{}
+			pauseChanPerson <- struct{}{}
+		},
+		ResumeFunc: func() {
+			resumeChanAuction <- Resume
+			resumeChanPerson <- Resume
+		},
+		CloseFunc: func() {
+			resumeChanAuction <- Exit
+			resumeChanPerson <- Exit
+		},
+		InitFunc: func() {
+			atomic.CompareAndSwapUint32(&joinProcPerson.start, 0, 1)
+			atomic.CompareAndSwapUint32(&joinProcAuction.start, 0, 1)
+		},
 	}
+	joinProcPerson.currentOffset = task.CurrentOffset
+	joinProcAuction.currentOffset = task.CurrentOffset
+
+	pctx := context.WithValue(ctx, "id", "person")
+	actx := context.WithValue(ctx, "id", "auction")
+	go joinProcLoop(pctx, personsOutChan, joinProcPerson)
+	go joinProcLoop(actx, auctionsOutChan, joinProcAuction)
+
 	if sp.EnableTransaction {
 		var wsc []*transaction.WindowStoreChangelog
 		if sp.TableType == uint8(store.IN_MEM) {
@@ -453,11 +460,16 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			MsgSerde:              sss.msgSerde,
 			WindowStoreChangelogs: wsc,
 		}
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+		tm, cmm, err := transaction.SetupManagers(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
-				procArgs.(*q8JoinStreamProcessArgs).trackParFunc = trackParFunc
+				joinProcAuction.trackParFunc = trackParFunc
+				joinProcPerson.trackParFunc = trackParFunc
 				procArgs.(*q8JoinStreamProcessArgs).recordFinishFunc = recordFinishFunc
 			}, &task)
+		if err != nil {
+			return &common.FnOutput{Success: false, Message: err.Error()}
+		}
+		ret := task.ProcessWithTransaction(ctx, tm, cmm, &streamTaskArgs)
 		if ret != nil && ret.Success {
 			ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()
 			ret.Latencies["personsSrc"] = personsSrc.GetLatency()
@@ -476,6 +488,8 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		ProcArgs: procArgs,
 		Duration: time.Duration(sp.Duration) * time.Second,
 	}
+	atomic.CompareAndSwapUint32(&joinProcPerson.start, 0, 1)
+	atomic.CompareAndSwapUint32(&joinProcAuction.start, 0, 1)
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {
 		ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()
