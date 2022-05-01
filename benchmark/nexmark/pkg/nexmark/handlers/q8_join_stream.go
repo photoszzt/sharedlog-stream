@@ -215,7 +215,7 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	if err != nil {
 		return nil, fmt.Errorf("get event serde err: %v", err)
 	}
-	timeout := common.SrcConsumeTimeout
+	timeout := time.Duration(1) * time.Second
 	auctionsConfig := &sharedlog_stream.StreamSourceConfig{
 		Timeout:      timeout,
 		KeyDecoder:   commtypes.Uint64Decoder{},
