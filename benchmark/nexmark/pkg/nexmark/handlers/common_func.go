@@ -48,21 +48,26 @@ func getPersonTimeSerde(serdeFormat uint8) (commtypes.Serde, error) {
 
 type JoinWorkerFunc func(c context.Context, m commtypes.Message) ([]commtypes.Message, error)
 
-type joinProcArgs struct {
-	src    *processor.MeteredSource
-	sink   *processor.ConcurrentMeteredSink
-	wg     *sync.WaitGroup
-	runner JoinWorkerFunc
+type RunningState uint8
 
+const (
+	Running RunningState = 0
+	Stopped RunningState = 1
+	Paused  RunningState = 2
+)
+
+type joinProcArgs struct {
+	src           *processor.MeteredSource
+	sink          *processor.ConcurrentMeteredSink
+	controlChan   chan RunningState
+	wg            *sync.WaitGroup
+	cHash         *hash.ConsistentHash
+	runner        JoinWorkerFunc
 	offMu         *sync.Mutex
 	currentOffset map[string]uint64
-
-	trackParFunc transaction.TrackKeySubStreamFunc
-
-	cHashMu *sync.RWMutex
-	cHash   *hash.ConsistentHash
-
-	parNum uint8
+	trackParFunc  transaction.TrackKeySubStreamFunc
+	cHashMu       *sync.RWMutex
+	parNum        uint8
 }
 
 func joinProc(
@@ -101,6 +106,63 @@ func joinProc(
 		}
 	}
 	out <- nil
+}
+
+func joinProcLoop(
+	ctx context.Context,
+	out chan *common.FnOutput,
+	procArgs *joinProcArgs,
+) {
+	status := Paused
+L:
+	for {
+		select {
+		case <-ctx.Done():
+			break L
+		case state := <-procArgs.controlChan:
+			switch state {
+			case Paused:
+				status = Paused
+			case Running:
+				status = Running
+			case Stopped:
+				break L
+			}
+		default:
+		}
+		if status == Running {
+			gotMsgs, err := procArgs.src.Consume(ctx, procArgs.parNum)
+			if err != nil {
+				if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
+					debug.Fprintf(os.Stderr, "%s timeout, gen output\n", procArgs.src.TopicName())
+					out <- &common.FnOutput{Success: true, Message: err.Error()}
+					debug.Fprintf(os.Stderr, "Done sending result\n")
+					continue
+				}
+				out <- &common.FnOutput{Success: false, Message: err.Error()}
+				return
+			}
+			for _, msg := range gotMsgs.Msgs {
+				procArgs.offMu.Lock()
+				procArgs.currentOffset[procArgs.src.TopicName()] = msg.LogSeqNum
+				procArgs.offMu.Unlock()
+
+				if msg.MsgArr != nil {
+					for _, subMsg := range msg.MsgArr {
+						if subMsg.Value == nil {
+							continue
+						}
+						procMsgWithSink(ctx, subMsg, out, procArgs)
+					}
+				} else {
+					if msg.Msg.Value == nil {
+						continue
+					}
+					procMsgWithSink(ctx, msg.Msg, out, procArgs)
+				}
+			}
+		}
+	}
 }
 
 func procMsgWithSink(ctx context.Context, msg commtypes.Message, out chan *common.FnOutput, procArgs *joinProcArgs) {

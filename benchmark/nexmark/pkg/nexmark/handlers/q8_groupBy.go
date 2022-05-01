@@ -187,7 +187,7 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 			close(personMsgChan)
 			wg.Wait()
 		},
-		FlushFunc: func() {
+		FlushOrPauseFunc: func() {
 			// fmt.Fprintf(os.Stderr, "wait for all entries are consumed\n")
 			// fmt.Fprintf(os.Stderr, "current auction channel len: %v\n", len(aucMsgChan))
 			// fmt.Fprintf(os.Stderr, "current person channel len: %v\n", len(personMsgChan))

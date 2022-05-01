@@ -20,10 +20,12 @@ import (
 )
 
 type StreamTask struct {
-	ProcessFunc   func(ctx context.Context, task *StreamTask, args interface{}) (map[string]uint64, *common.FnOutput)
-	CurrentOffset map[string]uint64
-	CloseFunc     func()
-	FlushFunc     func()
+	ProcessFunc      func(ctx context.Context, task *StreamTask, args interface{}) (map[string]uint64, *common.FnOutput)
+	CurrentOffset    map[string]uint64
+	CloseFunc        func()
+	FlushOrPauseFunc func()
+	ResumeFunc       func()
+	InitFunc         func()
 }
 
 func DefaultTrackSubstreamFunc(ctx context.Context,
@@ -75,30 +77,39 @@ func SetupManagersAndProcessTransactional(ctx context.Context,
 		recordFinish RecordPrevInstanceFinishFunc),
 	task *StreamTask,
 ) *common.FnOutput {
+	tm, cmm, err := SetupManagers(ctx, env, streamTaskArgs, updateProcArgs, task)
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: err.Error()}
+	}
+	debug.Fprint(os.Stderr, "begin transaction processing\n")
+	ret := task.ProcessWithTransaction(ctx, tm, cmm, streamTaskArgs)
+	return ret
+}
+
+func SetupManagers(ctx context.Context, env types.Environment,
+	streamTaskArgs *StreamTaskArgsTransaction,
+	updateProcArgs func(procArgs interface{}, trackParFunc TrackKeySubStreamFunc,
+		recordFinish RecordPrevInstanceFinishFunc),
+	task *StreamTask,
+) (*TransactionManager, *ControlChannelManager, error) {
 	debug.Fprint(os.Stderr, "setup transaction and control manager\n")
 	tm, err := SetupTransactionManager(ctx, streamTaskArgs)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("setup transaction manager failed: %v", err),
-		}
+		return nil, nil, err
 	}
 	cmm, err := NewControlChannelManager(env, streamTaskArgs.QueryInput.AppId,
 		commtypes.SerdeFormat(streamTaskArgs.QueryInput.SerdeFormat), streamTaskArgs.QueryInput.ScaleEpoch)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return nil, nil, err
 	}
 	debug.Fprint(os.Stderr, "start restore\n")
 	offsetMap, err := getOffsetMap(ctx, tm, streamTaskArgs)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return nil, nil, err
 	}
 	err = restoreStateStore(ctx, tm, task, streamTaskArgs, offsetMap)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return nil, nil, err
 	}
 	setOffsetOnStream(offsetMap, streamTaskArgs)
 	debug.Fprintf(os.Stderr, "down restore\n")
@@ -119,9 +130,7 @@ func SetupManagersAndProcessTransactional(ctx context.Context,
 		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, cmm.currentEpoch)
 	}
 	updateProcArgs(streamTaskArgs.ProcArgs, trackParFunc, recordFinish)
-	debug.Fprint(os.Stderr, "begin transaction processing\n")
-	ret := task.ProcessWithTransaction(ctx, tm, cmm, streamTaskArgs)
-	return ret
+	return tm, cmm, nil
 }
 
 func getOffsetMap(ctx context.Context, tm *TransactionManager, args *StreamTaskArgsTransaction) (map[string]uint64, error) {
@@ -366,9 +375,15 @@ type StreamTaskArgsTransaction struct {
 
 func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.FnOutput {
 	latencies := make([]int, 0, 128)
+	if t.InitFunc != nil {
+		t.InitFunc()
+	}
 	startTime := time.Now()
 	for {
 		if args.Duration != 0 && time.Since(startTime) >= args.Duration {
+			if t.FlushOrPauseFunc != nil {
+				t.FlushOrPauseFunc()
+			}
 			break
 		}
 		procStart := time.Now()
@@ -377,9 +392,15 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 			if ret.Success {
 				// elapsed := time.Since(procStart)
 				// latencies = append(latencies, int(elapsed.Microseconds()))
+				if t.FlushOrPauseFunc != nil {
+					t.FlushOrPauseFunc()
+				}
 				ret.Latencies = map[string][]int{"e2e": latencies}
 				ret.Duration = time.Since(startTime).Seconds()
 				ret.Consumed = make(map[string]uint64)
+				if t.CloseFunc != nil {
+					t.CloseFunc()
+				}
 			}
 			return ret
 		}
@@ -483,8 +504,9 @@ func (t *StreamTask) processWithTranLoop(ctx context.Context,
 	debug.Fprintf(os.Stderr, "commit every(ms): %d, commit everyIter: %d, exitAfterNComm: %d\n",
 		commitEvery, args.QueryInput.CommitEveryNIter, args.QueryInput.ExitAfterNCommit)
 	for atomic.LoadUint32(run) != 1 {
-		time.Sleep(time.Duration(1) * time.Second)
+		time.Sleep(time.Duration(5) * time.Millisecond)
 	}
+	init := false
 L:
 	for {
 		select {
@@ -508,10 +530,11 @@ L:
 					return
 				}
 			*/
-			if t.FlushFunc != nil {
-				t.FlushFunc()
+			debug.Fprintf(os.Stderr, "about to flush\n")
+			if t.FlushOrPauseFunc != nil {
+				t.FlushOrPauseFunc()
 			}
-			debug.Fprintf(os.Stderr, "after flush\n")
+			// debug.Fprintf(os.Stderr, "after flush\n")
 			consumedSeqNumConfigs := make([]ConsumedSeqNumConfig, 0)
 			for topic, offset := range currentOffset {
 				consumedSeqNumConfigs = append(consumedSeqNumConfigs, ConsumedSeqNumConfig{
@@ -522,7 +545,7 @@ L:
 					ConsumedSeqNum: uint64(offset),
 				})
 			}
-			debug.Fprintf(os.Stderr, "about to commit transaction\n")
+			// debug.Fprintf(os.Stderr, "about to commit transaction\n")
 			TrackOffsetAndCommit(ctx, consumedSeqNumConfigs, tm, args.KVChangelogs, args.WindowStoreChangelogs,
 				&hasLiveTransaction, &trackConsumePar, retc)
 			/*
@@ -569,6 +592,13 @@ L:
 					retc <- &common.FnOutput{Success: false, Message: fmt.Sprintf("track topic partition failed: %v\n", err)}
 					return
 				}
+			}
+			if init && t.ResumeFunc != nil {
+				t.ResumeFunc()
+			}
+			if !init && t.InitFunc != nil {
+				t.InitFunc()
+				init = true
 			}
 		}
 		if !trackConsumePar {
