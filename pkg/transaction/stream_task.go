@@ -375,6 +375,9 @@ type StreamTaskArgsTransaction struct {
 
 func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.FnOutput {
 	latencies := make([]int, 0, 128)
+	if t.InitFunc != nil {
+		t.InitFunc()
+	}
 	startTime := time.Now()
 	for {
 		if args.Duration != 0 && time.Since(startTime) >= args.Duration {
@@ -501,7 +504,7 @@ func (t *StreamTask) processWithTranLoop(ctx context.Context,
 	debug.Fprintf(os.Stderr, "commit every(ms): %d, commit everyIter: %d, exitAfterNComm: %d\n",
 		commitEvery, args.QueryInput.CommitEveryNIter, args.QueryInput.ExitAfterNCommit)
 	for atomic.LoadUint32(run) != 1 {
-		time.Sleep(time.Duration(1) * time.Second)
+		time.Sleep(time.Duration(5) * time.Millisecond)
 	}
 	init := false
 L:

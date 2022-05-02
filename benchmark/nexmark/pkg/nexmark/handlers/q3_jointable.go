@@ -18,7 +18,6 @@ import (
 	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/treemap"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -68,14 +67,12 @@ func (h *q3JoinTableHandler) process(ctx context.Context,
 		pOut = personOutput
 		debug.Fprintf(os.Stderr, "Got persons out: %v\n", pOut)
 		if pOut.Success {
-			args.completed += 1
 			args.personDone = true
 		}
 	case auctionOutput := <-args.auctionsOutChan:
 		aOut = auctionOutput
 		debug.Fprintf(os.Stderr, "Got auctions out: %v\n", aOut)
 		if aOut.Success {
-			args.completed += 1
 			args.auctionDone = true
 		}
 	default:
@@ -88,10 +85,25 @@ func (h *q3JoinTableHandler) process(ctx context.Context,
 	if aOut != nil && !aOut.Success {
 		return t.CurrentOffset, aOut
 	}
-	if args.completed == 2 {
+	if args.personDone && args.auctionDone {
 		return t.CurrentOffset, &common.FnOutput{Success: true, Message: errors.ErrStreamSourceTimeout.Error()}
 	}
 	return t.CurrentOffset, nil
+}
+
+func (h *q3JoinTableHandler) processOut(aOut *common.FnOutput, pOut *common.FnOutput, args *q3JoinTableProcessArgs) *common.FnOutput {
+	debug.Fprintf(os.Stderr, "aOut: %v\n", aOut)
+	debug.Fprintf(os.Stderr, "pOut: %v\n", pOut)
+	if pOut != nil && !pOut.Success {
+		return pOut
+	}
+	if aOut != nil && !aOut.Success {
+		return aOut
+	}
+	if args.personDone && args.auctionDone {
+		return &common.FnOutput{Success: true, Message: errors.ErrStreamSourceTimeout.Error()}
+	}
+	return nil
 }
 
 func getInOutStreams(
@@ -156,14 +168,15 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	if err != nil {
 		return nil, fmt.Errorf("get event serde err: %v", err)
 	}
+	timeout := time.Duration(1) * time.Second
 	auctionsConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      common.SrcConsumeTimeout,
+		Timeout:      timeout,
 		KeyDecoder:   commtypes.Uint64Serde{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
 	}
 	personsConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      time.Duration(10) * time.Second,
+		Timeout:      timeout,
 		KeyDecoder:   commtypes.Uint64Serde{},
 		ValueDecoder: eventSerde,
 		MsgDecoder:   msgSerde,
@@ -283,7 +296,6 @@ type q3JoinTableProcessArgs struct {
 	personDone       bool
 	auctionDone      bool
 	parNum           uint8
-	completed        uint8
 }
 
 func (a *q3JoinTableProcessArgs) ParNum() uint8    { return a.parNum }
@@ -367,10 +379,6 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
 	personsOutChan := make(chan *common.FnOutput, 1)
 	auctionsOutChan := make(chan *common.FnOutput, 1)
-	pauseChanPerson := make(chan struct{})
-	pauseChanAuction := make(chan struct{})
-	resumeChanPerson := make(chan ResumeAction)
-	resumeChanAuction := make(chan ResumeAction)
 	procArgs := &q3JoinTableProcessArgs{
 		personsOutChan:   personsOutChan,
 		auctionsOutChan:  auctionsOutChan,
@@ -378,7 +386,6 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
 		curEpoch:         sp.ScaleEpoch,
 		funcName:         h.funcName,
-		completed:        0,
 	}
 
 	joinProcPerson := &joinProcArgs{
@@ -390,9 +397,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		trackParFunc: transaction.DefaultTrackSubstreamFunc,
 		cHashMu:      &h.cHashMu,
 		cHash:        h.cHash,
-		pauseChan:    pauseChanPerson,
-		resumeChan:   resumeChanPerson,
-		start:        0,
+		controlChan:  make(chan RunningState),
 	}
 	joinProcAuction := &joinProcArgs{
 		src:          sss.src1,
@@ -403,40 +408,26 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		trackParFunc: transaction.DefaultTrackSubstreamFunc,
 		cHashMu:      &h.cHashMu,
 		cHash:        h.cHash,
-		pauseChan:    pauseChanAuction,
-		resumeChan:   resumeChanAuction,
-		start:        0,
+		controlChan:  make(chan RunningState),
 	}
 	task := transaction.StreamTask{
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
 		FlushOrPauseFunc: func() {
-			if !procArgs.auctionDone {
-				pauseChanAuction <- struct{}{}
-			}
-			if !procArgs.personDone {
-				pauseChanPerson <- struct{}{}
-			}
+			joinProcAuction.controlChan <- Paused
+			joinProcPerson.controlChan <- Paused
 		},
 		ResumeFunc: func() {
-			if !procArgs.auctionDone {
-				resumeChanAuction <- Resume
-			}
-			if !procArgs.personDone {
-				resumeChanPerson <- Resume
-			}
+			joinProcAuction.controlChan <- Running
+			joinProcPerson.controlChan <- Running
 		},
 		CloseFunc: func() {
-			if !procArgs.auctionDone {
-				resumeChanAuction <- Exit
-			}
-			if !procArgs.personDone {
-				resumeChanPerson <- Exit
-			}
+			joinProcAuction.controlChan <- Stopped
+			joinProcPerson.controlChan <- Stopped
 		},
 		InitFunc: func() {
-			atomic.CompareAndSwapUint32(&joinProcPerson.start, 0, 1)
-			atomic.CompareAndSwapUint32(&joinProcAuction.start, 0, 1)
+			joinProcAuction.controlChan <- Running
+			joinProcPerson.controlChan <- Running
 		},
 	}
 	joinProcPerson.currentOffset = task.CurrentOffset
@@ -481,16 +472,12 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			WindowStoreChangelogs: nil,
 			FixedOutParNum:        0,
 		}
-		tm, cmm, err := transaction.SetupManagers(ctx, h.env, &streamTaskArgs,
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				joinProcPerson.trackParFunc = trackParFunc
 				joinProcAuction.trackParFunc = trackParFunc
 				procArgs.(*q3JoinTableProcessArgs).recordFinishFunc = recordFinishFunc
 			}, &task)
-		if err != nil {
-			return &common.FnOutput{Success: false, Message: err.Error()}
-		}
-		ret := task.ProcessWithTransaction(ctx, tm, cmm, &streamTaskArgs)
 		if ret != nil && ret.Success {
 			ret.Latencies["auctionsSrc"] = sss.src1.GetLatency()
 			ret.Latencies["personsSrc"] = sss.src2.GetLatency()
@@ -509,8 +496,6 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		ProcArgs: procArgs,
 		Duration: time.Duration(sp.Duration) * time.Second,
 	}
-	atomic.CompareAndSwapUint32(&joinProcPerson.start, 0, 1)
-	atomic.CompareAndSwapUint32(&joinProcAuction.start, 0, 1)
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {
 		ret.Latencies["auctionsSrc"] = sss.src1.GetLatency()
