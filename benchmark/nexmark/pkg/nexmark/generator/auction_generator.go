@@ -14,7 +14,7 @@ const (
 )
 
 func NextAuction(eventsCountSoFar uint64,
-	eventId uint64, random *rand.Rand, timestamp uint64,
+	eventId uint64, random *rand.Rand, timestamp int64,
 	config *GeneratorConfig) *types.Auction {
 	id := LastBase0AuctionId(config, eventId) + FIRST_AUCTION_ID
 	seller := uint64(0)
@@ -66,10 +66,10 @@ func NextBase0AuctionId(nextEventId uint64, random *rand.Rand, config *Generator
 	return minAuction + NextUint64(random, maxAuction-minAuction+1+uint64(AUCTION_ID_LEAD))
 }
 
-func nextAuctionLenghMs(eventsCountSoFar uint64, random *rand.Rand, timestamp uint64, config *GeneratorConfig) uint64 {
+func nextAuctionLenghMs(eventsCountSoFar uint64, random *rand.Rand, timestamp int64, config *GeneratorConfig) int64 {
 	currentEventNumber := config.NextAdjustedEventNumber(eventsCountSoFar)
 	numEventsForAuctions := uint64(config.Configuration.NumInFlightAuctions) * uint64(config.TotalProportion) / uint64(config.AuctionProportion)
 	futureAuction := config.TimestampForEvent(currentEventNumber + numEventsForAuctions)
 	horizonMs := futureAuction - timestamp
-	return 1 + NextUint64(random, utils.MaxUint64(horizonMs*2, 1))
+	return 1 + NextInt64(random, utils.MaxInt64(horizonMs*2, 1))
 }

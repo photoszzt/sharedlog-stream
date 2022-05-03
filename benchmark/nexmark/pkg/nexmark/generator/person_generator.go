@@ -20,7 +20,7 @@ var (
 	LAST_NAMES  = [9]string{"Shultz", "Abrams", "Spencer", "White", "Bartels", "Walton", "Smith", "Jones", "Noris"}
 )
 
-func NextPerson(nextEventId uint64, random *rand.Rand, timestamp uint64, config *GeneratorConfig) *types.Person {
+func NextPerson(nextEventId uint64, random *rand.Rand, timestamp int64, config *GeneratorConfig) *types.Person {
 	id := LastBase0PersonId(config, nextEventId) + FIRST_PERSON_ID
 	name := nextPersonName(random)
 	email := nextEmail(random)
@@ -36,7 +36,7 @@ func NextPerson(nextEventId uint64, random *rand.Rand, timestamp uint64, config 
 		CreditCard:   creditCard,
 		City:         city,
 		State:        state,
-		DateTime:     int64(timestamp),
+		DateTime:     timestamp,
 		Extra:        extra,
 	}
 }

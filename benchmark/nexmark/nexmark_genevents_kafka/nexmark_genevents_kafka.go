@@ -98,7 +98,7 @@ func main() {
 	if err != nil {
 		log.Fatal().Msgf("Failed to convert to nexmark configuration: %s", err)
 	}
-	generatorConfig := generator.NewGeneratorConfig(nexmarkConfig, uint64(time.Now().UnixMilli()), 1, uint64(nexmarkConfig.NumEvents), 1)
+	generatorConfig := generator.NewGeneratorConfig(nexmarkConfig, time.Now().UnixMilli(), 1, uint64(nexmarkConfig.NumEvents), 1)
 	eventGenerator := generator.NewSimpleNexmarkGenerator(generatorConfig, FLAGS_instanceId)
 	channel_url_cache := make(map[uint32]*generator.ChannelUrl)
 
@@ -108,7 +108,7 @@ func main() {
 		"go.events.channel.size":                100000,
 		"acks":                                  "all",
 		"batch.size":                            16384,
-		"linger.ms":                             5000,
+		"linger.ms":                             100,
 		"max.in.flight.requests.per.connection": 5,
 		// "statistics.interval.ms":                5000,
 	})
@@ -145,14 +145,13 @@ func main() {
 			(FLAGS_events_num != 0 && idx >= events_num) {
 			break
 		}
-		now := time.Now().Unix()
+		nowMs := time.Now().UnixMilli()
 		nextEvent, err := eventGenerator.NextEvent(ctx, channel_url_cache)
 		if err != nil {
 			log.Fatal().Msgf("next event failed: %s", err)
 		}
-		wtsSec := nextEvent.WallclockTimestamp / 1000.0
-		if wtsSec > uint64(now) {
-			time.Sleep(time.Duration(wtsSec-uint64(now)) * time.Second)
+		if nextEvent.WallclockTimestamp > nowMs {
+			time.Sleep(time.Duration(nextEvent.WallclockTimestamp-nowMs) * time.Millisecond)
 		}
 		encoded, err := valueEncoder.Encode(nextEvent.Event)
 		if err != nil {

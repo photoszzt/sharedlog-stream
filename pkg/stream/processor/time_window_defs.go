@@ -2,6 +2,7 @@ package processor
 
 import (
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/utils"
 	"time"
 )
 
@@ -100,16 +101,8 @@ func (w *TimeWindows) AdvanceBy(advance time.Duration) (*TimeWindows, error) {
 	}, nil
 }
 
-func MaxInt64(a, b int64) int64 {
-	if a > b {
-		return a
-	} else {
-		return b
-	}
-}
-
 func (w *TimeWindows) WindowsFor(timestamp int64) (map[int64]commtypes.Window, []int64, error) {
-	windowStart := MaxInt64(0, timestamp-w.SizeMs+w.AdvanceMs) / w.AdvanceMs * w.AdvanceMs
+	windowStart := utils.MaxInt64(0, timestamp-w.SizeMs+w.AdvanceMs) / w.AdvanceMs * w.AdvanceMs
 	windows := make(map[int64]commtypes.Window)
 	keys := make([]int64, 0)
 	for windowStart <= timestamp {

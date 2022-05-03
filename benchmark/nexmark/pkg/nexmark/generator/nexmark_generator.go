@@ -20,12 +20,12 @@ type NexmarkGenerator struct {
 
 type NextEvent struct {
 	Event              *types.Event
-	WallclockTimestamp uint64
-	EventTimestamp     uint64
-	Watermark          uint64
+	WallclockTimestamp int64
+	EventTimestamp     int64
+	Watermark          int64
 }
 
-func NewNextEvent(wallclockTimestamp, eventTimestamp uint64, event *types.Event, watermark uint64) *NextEvent {
+func NewNextEvent(wallclockTimestamp, eventTimestamp int64, event *types.Event, watermark int64) *NextEvent {
 	return &NextEvent{
 		WallclockTimestamp: wallclockTimestamp,
 		EventTimestamp:     eventTimestamp,
@@ -95,5 +95,5 @@ func (ng *NexmarkGenerator) NextEvent(ctx context.Context, bidUrlCache map[uint3
 		event = types.NewBidEvent(bidEvent)
 	}
 	ng.EventsCountSoFar += 1
-	return NewNextEvent(uint64(wallclockTimestamp), adjustedEventTimestamp, event, watermark), nil
+	return NewNextEvent(wallclockTimestamp, adjustedEventTimestamp, event, watermark), nil
 }

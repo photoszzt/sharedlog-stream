@@ -21,7 +21,7 @@ type GeneratorConfig struct {
 	FirstEventNumber  uint64
 	EpochPeriodMs     uint64
 	StepLengthSec     uint64
-	BaseTime          uint64
+	BaseTime          int64
 	FirstEventId      uint64
 	TotalProportion   uint32
 	BidProportion     uint32
@@ -29,7 +29,7 @@ type GeneratorConfig struct {
 	PersonProportion  uint32
 }
 
-func NewGeneratorConfig(configuration *nexmark.NexMarkConfig, baseTime uint64 /* millisecond */, firstEventId uint64,
+func NewGeneratorConfig(configuration *nexmark.NexMarkConfig, baseTime int64 /* millisecond */, firstEventId uint64,
 	maxEventsOrZero uint64, firstEventNumber uint64) *GeneratorConfig {
 	g := new(GeneratorConfig)
 	g.AuctionProportion = configuration.AuctionProportion
@@ -114,6 +114,6 @@ func (gc *GeneratorConfig) NextEventNumberForWatermark(numEvents uint64) uint64 
 	return (eventNumber / n) * n
 }
 
-func (gc *GeneratorConfig) TimestampForEvent(eventNumber uint64) uint64 {
-	return gc.BaseTime + uint64(float64(eventNumber)*gc.InterEventDelayUs[0])/uint64(1000)
+func (gc *GeneratorConfig) TimestampForEvent(eventNumber uint64) int64 {
+	return gc.BaseTime + int64(float64(eventNumber)*gc.InterEventDelayUs[0])/int64(1000)
 }

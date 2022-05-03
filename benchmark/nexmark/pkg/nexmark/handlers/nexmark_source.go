@@ -134,7 +134,7 @@ type nexmarkSrcProcArgs struct {
 
 func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProcArgs) *common.FnOutput {
 	nowT := time.Now()
-	now := nowT.Unix()
+	nowMs := nowT.UnixMilli()
 	nextEvent, err := args.eventGenerator.NextEvent(ctx, args.channel_url_cache)
 	if err != nil {
 		return &common.FnOutput{
@@ -142,18 +142,15 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 			Message: fmt.Sprintf("next event failed: %v\n", err),
 		}
 	}
-	wtsSec := nextEvent.WallclockTimestamp / 1000.0
-	if wtsSec > uint64(now) {
-		fmt.Fprintf(os.Stderr, "sleep %v second to generate event\n", wtsSec-uint64(now))
-		time.Sleep(time.Duration(wtsSec-uint64(now)) * time.Second)
+	wtsMs := nextEvent.WallclockTimestamp
+	if wtsMs > nowMs {
+		// fmt.Fprintf(os.Stderr, "sleep %v ms to generate event\n", wtsSec-now)
+		time.Sleep(time.Duration(wtsMs-nowMs) * time.Millisecond)
 	}
 	// fmt.Fprintf(os.Stderr, "gen event with ts: %v\n", nextEvent.EventTimestamp)
 	msgEncoded, err := encodeEvent(nextEvent.Event, args.eventSerde, args.msgSerde)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("msg serialization failed: %v", err),
-		}
+		return &common.FnOutput{Success: false, Message: fmt.Sprintf("msg serialization failed: %v", err)}
 	}
 	// fmt.Fprintf(os.Stderr, "msg: %v\n", string(msgEncoded))
 	args.idx += 1
@@ -212,7 +209,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 			Message: fmt.Sprintf("fail to convert to nexmark configuration: %v", err),
 		}
 	}
-	generatorConfig := generator.NewGeneratorConfig(nexmarkConfig, uint64(time.Now().UnixMilli()), 1, uint64(nexmarkConfig.NumEvents), 1)
+	generatorConfig := generator.NewGeneratorConfig(nexmarkConfig, time.Now().UnixMilli(), 1, uint64(nexmarkConfig.NumEvents), 1)
 	fmt.Fprint(os.Stderr, "Generator config: \n")
 	fmt.Fprintf(os.Stderr, "\tInterEventDelayUs: %v\n", generatorConfig.InterEventDelayUs)
 	fmt.Fprintf(os.Stderr, "\tEventPerEpoch    : %v\n", generatorConfig.EventPerEpoch)
