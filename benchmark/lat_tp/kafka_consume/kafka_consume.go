@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"time"
 
@@ -36,9 +37,12 @@ func main() {
 	flag.Parse()
 
 	c, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers": FLAGS_broker,
-		"group.id":          "bench",
-		"auto.offset.reset": "earliest"})
+		"bootstrap.servers":      FLAGS_broker,
+		"group.id":               "bench",
+		"auto.offset.reset":      "earliest",
+		"fetch.wait.max.ms":      10,
+		"fetch.error.backoff.ms": 10,
+	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create consumer: %s\n", err)
 		os.Exit(1)
@@ -49,35 +53,39 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Fail to subscribe to topic: %s\n", err)
 		os.Exit(1)
 	}
-	var ptSerde datatype.PayloadTsMsgpSerde
-	prod_to_con_lat := make([]int64, 0, 4096)
-	duration := time.Duration(FLAGS_duration) * time.Second
-	start := time.Now()
-	idx := 0
-	for {
-		if (duration != 0 && time.Since(start) > duration) ||
-			(FLAGS_events_num != 0 && idx >= FLAGS_events_num) {
-			break
-		}
-		ev := c.Poll(100)
-		if ev == nil {
-			continue
-		}
-
-		switch e := ev.(type) {
-		case *kafka.Message:
-			ptTmp, err := ptSerde.Decode(e.Value)
-			if err != nil {
-				panic(err)
+	handleConsume := func(w http.ResponseWriter, req *http.Request) {
+		var ptSerde datatype.PayloadTsMsgpSerde
+		prod_to_con_lat := make([]int64, 0, 4096)
+		duration := time.Duration(FLAGS_duration) * time.Second
+		start := time.Now()
+		idx := 0
+		for {
+			if (duration != 0 && time.Since(start) > duration) ||
+				(FLAGS_events_num != 0 && idx >= FLAGS_events_num) {
+				break
 			}
-			pt := ptTmp.(datatype.PayloadTs)
-			nowTs := time.Now().UnixMicro()
-			lat := nowTs - pt.Ts
-			prod_to_con_lat = append(prod_to_con_lat, lat)
-			idx += 1
+			ev := c.Poll(100)
+			if ev == nil {
+				continue
+			}
+
+			switch e := ev.(type) {
+			case *kafka.Message:
+				ptTmp, err := ptSerde.Decode(e.Value)
+				if err != nil {
+					panic(err)
+				}
+				pt := ptTmp.(datatype.PayloadTs)
+				nowTs := time.Now().UnixMicro()
+				lat := nowTs - pt.Ts
+				prod_to_con_lat = append(prod_to_con_lat, lat)
+				idx += 1
+			}
 		}
+		totalTime := time.Since(start).Seconds()
+		fmt.Fprintf(os.Stderr, "\n%v\n", prod_to_con_lat)
+		fmt.Fprintf(os.Stderr, "consumed %d events, time: %v, throughput: %v\n", idx, totalTime, float64(idx)/float64(totalTime))
 	}
-	totalTime := time.Since(start).Seconds()
-	fmt.Fprintf(os.Stderr, "%v\n", prod_to_con_lat)
-	fmt.Fprintf(os.Stderr, "consumed %d events, time: %v, throughput: %v\n", idx, totalTime, float64(idx)/float64(totalTime))
+	http.HandleFunc("/consume", handleConsume)
+	http.ListenAndServe(":8090", nil)
 }

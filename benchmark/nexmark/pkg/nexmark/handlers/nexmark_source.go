@@ -126,13 +126,10 @@ type nexmarkSrcProcArgs struct {
 	msgSerde          commtypes.MsgSerde
 	channel_url_cache map[uint32]*generator.ChannelUrl
 	eventGenerator    *generator.NexmarkGenerator
-	// errg              *errgroup.Group
-	// stream *sharedlog_stream.ShardedSharedLogStream
-	msgChan      chan payloadToPush
-	numPartition uint8
-	// inChans   []chan sinkMsg
-	latencies []int
-	idx       int
+	msgChan           chan payloadToPush
+	latencies         []int
+	idx               int
+	numPartition      uint8
 }
 
 func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProcArgs) *common.FnOutput {
