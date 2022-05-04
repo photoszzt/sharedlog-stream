@@ -494,6 +494,140 @@ func OffsetTopic(topicToTrack string) string {
 	return CONSUMER_OFFSET_LOG_TOPIC_NAME + topicToTrack
 }
 
+type ConsumeSeqManager struct {
+	offsetRecordSerde commtypes.Serde
+	txnMarkerSerde    commtypes.Serde
+	mapMu             sync.Mutex
+	curConsumePar     map[string]map[uint8]struct{}
+	offsetLogs        map[string]*sharedlog_stream.ShardedSharedLogStream
+}
+
+func (cm *ConsumeSeqManager) TrackTopicPartition(topic string, partitions []uint8) {
+	cm.mapMu.Lock()
+	defer cm.mapMu.Unlock()
+	parSet, ok := cm.curConsumePar[topic]
+	if !ok {
+		parSet = make(map[uint8]struct{})
+	}
+	for _, parNum := range partitions {
+		_, ok = parSet[parNum]
+		if !ok {
+			parSet[parNum] = struct{}{}
+		}
+	}
+	cm.curConsumePar[topic] = parSet
+}
+
+func NewConsumeSeqManager(serdeFormat commtypes.SerdeFormat) (*ConsumeSeqManager, error) {
+	var offsetRecordSerde commtypes.Serde
+	var txnMarkerSerde commtypes.Serde
+	if serdeFormat == commtypes.JSON {
+		offsetRecordSerde = txn_data.OffsetRecordJSONSerde{}
+		txnMarkerSerde = txn_data.TxnMarkerJSONSerde{}
+	} else if serdeFormat == commtypes.MSGP {
+		offsetRecordSerde = txn_data.OffsetRecordMsgpSerde{}
+		txnMarkerSerde = txn_data.TxnMarkerMsgpSerde{}
+	} else {
+		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
+	}
+	return &ConsumeSeqManager{
+		txnMarkerSerde:    txnMarkerSerde,
+		offsetRecordSerde: offsetRecordSerde,
+		offsetLogs:        make(map[string]*sharedlog_stream.ShardedSharedLogStream),
+		curConsumePar:     make(map[string]map[uint8]struct{}),
+	}, nil
+}
+
+func (cm *ConsumeSeqManager) AppendConsumedSeqNum(ctx context.Context, consumedSeqNumConfigs []ConsumedSeqNumConfig) error {
+	for _, consumedSeqNumConfig := range consumedSeqNumConfigs {
+		offsetTopic := OffsetTopic(consumedSeqNumConfig.TopicToTrack)
+		offsetLog := cm.offsetLogs[offsetTopic]
+		offsetRecord := txn_data.OffsetRecord{
+			Offset:    consumedSeqNumConfig.ConsumedSeqNum,
+			TaskId:    consumedSeqNumConfig.TaskId,
+			TaskEpoch: consumedSeqNumConfig.TaskEpoch,
+		}
+		encoded, err := cm.offsetRecordSerde.Encode(&offsetRecord)
+		if err != nil {
+			return err
+		}
+
+		_, err = offsetLog.Push(ctx, encoded, consumedSeqNumConfig.Partition, false, false)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (cm *ConsumeSeqManager) FindLastConsumedSeqNum(ctx context.Context, topicToTrack string, parNum uint8) (uint64, error) {
+	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + topicToTrack
+	offsetLog := cm.offsetLogs[offsetTopic]
+	debug.Assert(offsetTopic == offsetLog.TopicName(), fmt.Sprintf("expected offset log tp: %s, got %s",
+		offsetTopic, offsetLog.TopicName()))
+	// debug.Fprintf(os.Stderr, "looking at offsetlog %s, offsetLog tp: %s\n", offsetTopic, offsetLog.TopicName())
+
+	// find the most recent transaction marker
+	txnMarkerTag := sharedlog_stream.TxnMarkerTag(offsetLog.TopicNameHash(), parNum)
+	var txnMkRawMsg *commtypes.RawMsg = nil
+	var err error
+	for {
+		_, txnMkRawMsg, err = offsetLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, parNum, txnMarkerTag)
+		if err != nil {
+			return 0, err
+		}
+		if !txnMkRawMsg.IsControl {
+			continue
+		} else {
+			break
+		}
+	}
+	if txnMkRawMsg == nil {
+		return 0, errors.ErrStreamEmpty
+	}
+
+	tag := sharedlog_stream.NameHashWithPartition(offsetLog.TopicNameHash(), parNum)
+
+	// read the previous item which should record the offset number
+	_, rawMsg, err := offsetLog.ReadBackwardWithTag(ctx, txnMkRawMsg.LogSeqNum, parNum, tag)
+	if err != nil {
+		return 0, err
+	}
+	return rawMsg.LogSeqNum, nil
+}
+
+func (cm *ConsumeSeqManager) Commit(ctx context.Context) error {
+	tm := txn_data.TxnMarker{
+		Mark: uint8(txn_data.COMMIT),
+	}
+	encoded, err := cm.txnMarkerSerde.Encode(&tm)
+	if err != nil {
+		return err
+	}
+	g, ectx := errgroup.WithContext(ctx)
+	for topic, partitions := range cm.curConsumePar {
+		stream := cm.offsetLogs[topic]
+		err := stream.Flush(ctx)
+		if err != nil {
+			return err
+		}
+		for par := range partitions {
+			parNum := par
+			g.Go(func() error {
+				off, err := stream.Push(ectx, encoded, parNum, true, false)
+				debug.Fprintf(os.Stderr, "append marker %d to stream %s off %x\n", txn_data.COMMIT, stream.TopicName(), off)
+				return err
+			})
+		}
+	}
+	err = g.Wait()
+	if err != nil {
+		return err
+	}
+	cm.curConsumePar = make(map[string]map[uint8]struct{})
+	return nil
+}
+
 func (tc *TransactionManager) AppendConsumedSeqNum(ctx context.Context, consumedSeqNumConfigs []ConsumedSeqNumConfig) error {
 	for _, consumedSeqNumConfig := range consumedSeqNumConfigs {
 		offsetTopic := OffsetTopic(consumedSeqNumConfig.TopicToTrack)
