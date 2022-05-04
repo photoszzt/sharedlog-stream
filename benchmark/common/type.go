@@ -61,3 +61,15 @@ type SourceParam struct {
 	NumEvents       uint32 `json:"numEvents,omitempty"`
 	NumOutPartition uint8  `json:"numOutPar,omitempty"`
 }
+
+type BenchSourceParam struct {
+	TopicName       string `json:"topicName"`
+	FileName        string `json:"fname,omitempty"`
+	Duration        uint32 `json:"duration,omitempty"`
+	NumEvents       uint32 `json:"numEvents,omitempty"`
+	Tps             uint32 `json:"tps"`
+	WarmUpTime      uint32 `json:wt`
+	WarmUpEvents    uint32 `json:we`
+	SerdeFormat     uint8  `json:"serdeFormat"`
+	NumOutPartition uint8  `json:"numOutPar,omitempty"`
+}

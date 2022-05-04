@@ -22,6 +22,7 @@ var (
 	FLAGS_numPartition int
 	FLAGS_events_num   int
 	FLAGS_duration     int
+	FLAGS_tps          int
 	FLAGS_payloadFile  string
 )
 
@@ -41,6 +42,7 @@ func main() {
 	flag.StringVar(&FLAGS_topicName, "topicName", "src", "topic name")
 	flag.IntVar(&FLAGS_numPartition, "npar", 1, "number of partition")
 	flag.StringVar(&FLAGS_payloadFile, "payload", "", "payload file name")
+	flag.IntVar(&FLAGS_tps, "tps", 1000, "events per second")
 	flag.Parse()
 
 	fmt.Fprintf(os.Stderr, "duration: %d, events_num: %d, broker: %s, topicName: %s, nPar: %d, payload: %s\n",
@@ -74,7 +76,7 @@ func main() {
 		"go.produce.channel.size": 100000,
 		"go.events.channel.size":  100000,
 		"acks":                    "all",
-		"batch.size":              16384,
+		"batch.size":              2097152,
 		// "batch.num.messages":                    1,
 		"linger.ms":                             5,
 		"max.in.flight.requests.per.connection": 5,
@@ -86,6 +88,7 @@ func main() {
 	defer p.Close()
 	var ptSerde datatype.PayloadTsMsgpSerde
 	duration := time.Duration(FLAGS_duration) * time.Second
+	timeGapUs := int32(1000000 / FLAGS_tps)
 
 	produceHandler := func(w http.ResponseWriter, req *http.Request) {
 		idx := int32(0)
@@ -108,6 +111,7 @@ func main() {
 			}
 		}()
 		start := time.Now()
+		next := start.UnixMicro()
 		events_num := int32(FLAGS_events_num)
 		num_par := int32(FLAGS_numPartition)
 		for {
@@ -124,6 +128,11 @@ func main() {
 			encoded, err := ptSerde.Encode(&payloadTs)
 			if err != nil {
 				panic(err)
+			}
+			nowUs := time.Now().UnixMicro()
+			next += int64(timeGapUs)
+			if next > nowUs {
+				time.Sleep(time.Duration(next-nowUs) * time.Microsecond)
 			}
 			p.ProduceChannel() <- &kafka.Message{
 				TopicPartition: kafka.TopicPartition{Topic: &FLAGS_topicName, Partition: int32(parNum)},

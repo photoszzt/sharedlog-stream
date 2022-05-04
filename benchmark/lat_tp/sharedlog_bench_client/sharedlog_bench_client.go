@@ -15,13 +15,16 @@ import (
 )
 
 var (
-	FLAGS_faas_gateway string
-	FLAGS_duration     int
-	FLAGS_events_num   int
-	FLAGS_serdeFormat  string
-	FLAGS_payload      string
-	FLAGS_npar         int
-	FLAGS_nprod        int
+	FLAGS_faas_gateway  string
+	FLAGS_duration      int
+	FLAGS_tps           int
+	FLAGS_warmup_time   int
+	FLAGS_warmup_events int
+	FLAGS_events_num    int
+	FLAGS_serdeFormat   string
+	FLAGS_payload       string
+	FLAGS_npar          int
+	FLAGS_nprod         int
 )
 
 type prodConsumeLatencies struct {
@@ -37,16 +40,21 @@ func main() {
 	flag.IntVar(&FLAGS_npar, "npar", 1, "number of partition")
 	flag.IntVar(&FLAGS_nprod, "nprod", 1, "number of producer")
 	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
+	flag.IntVar(&FLAGS_warmup_time, "warmup_time", 0, "warm up time in sec")
+	flag.IntVar(&FLAGS_warmup_events, "warmup_events", 0, "number of events consumed for warmup")
 	flag.Parse()
 
 	serdeFormat := common.StringToSerdeFormat(FLAGS_serdeFormat)
-	sp := &common.SourceParam{
+	sp := &common.BenchSourceParam{
 		TopicName:       "src",
 		Duration:        uint32(FLAGS_duration),
 		SerdeFormat:     uint8(serdeFormat),
 		NumEvents:       uint32(FLAGS_events_num),
 		FileName:        FLAGS_payload,
 		NumOutPartition: uint8(FLAGS_npar),
+		WarmUpTime:      uint32(FLAGS_warmup_time),
+		WarmUpEvents:    uint32(FLAGS_warmup_events),
+		Tps:             uint32(FLAGS_tps),
 	}
 	client := &http.Client{
 		Transport: &http.Transport{
