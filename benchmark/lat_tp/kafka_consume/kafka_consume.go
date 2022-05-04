@@ -80,7 +80,7 @@ func main() {
 		commitTimer := time.Now()
 		for {
 			if (duration > 0 && time.Since(start) > duration) ||
-				(FLAGS_events_num > 0 && idx >= rest) {
+				(rest > 0 && idx >= rest) {
 				break
 			}
 			ev := c.Poll(5)

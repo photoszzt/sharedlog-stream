@@ -68,8 +68,9 @@ type BenchSourceParam struct {
 	Duration        uint32 `json:"duration,omitempty"`
 	NumEvents       uint32 `json:"numEvents,omitempty"`
 	Tps             uint32 `json:"tps"`
-	WarmUpTime      uint32 `json:wt`
-	WarmUpEvents    uint32 `json:we`
+	WarmUpTime      uint32 `json:"wt"`
+	WarmUpEvents    uint32 `json:"we"`
+	FlushMs         uint32 `json:"flushMs"`
 	SerdeFormat     uint8  `json:"serdeFormat"`
 	NumOutPartition uint8  `json:"numOutPar,omitempty"`
 }

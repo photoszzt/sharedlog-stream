@@ -3,7 +3,11 @@ package common
 import (
 	"context"
 	"fmt"
+	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sync"
+	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/rs/zerolog/log"
@@ -43,4 +47,62 @@ func StringToSerdeFormat(format string) commtypes.SerdeFormat {
 		serdeFormat = commtypes.JSON
 	}
 	return serdeFormat
+}
+
+type PayloadToPush struct {
+	Payload    []byte
+	Partitions []uint8
+	IsControl  bool
+}
+
+type StreamPush struct {
+	FlushTimer    time.Time
+	MsgChan       chan PayloadToPush
+	MsgErrChan    chan error
+	Stream        *sharedlog_stream.ShardedSharedLogStream
+	FlushDuration time.Duration
+	BufPush       bool
+}
+
+func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
+) {
+	defer wg.Done()
+	for msg := range h.MsgChan {
+		if msg.IsControl {
+			if h.BufPush {
+				err := h.Stream.Flush(ctx)
+				if err != nil {
+					h.MsgErrChan <- err
+					return
+				}
+			}
+			for _, i := range msg.Partitions {
+				_, err := h.Stream.Push(ctx, msg.Payload, i, true, false)
+				if err != nil {
+					h.MsgErrChan <- err
+					return
+				}
+			}
+		} else {
+			if h.BufPush {
+				err := h.Stream.BufPushNoLock(ctx, msg.Payload, uint8(msg.Partitions[0]))
+				if err != nil {
+					h.MsgErrChan <- err
+					return
+				}
+				if time.Since(h.FlushTimer) >= h.FlushDuration {
+					h.Stream.FlushNoLock(ctx)
+					h.FlushTimer = time.Now()
+				}
+			} else {
+				debug.Assert(len(msg.Partitions) == 1, "should only have one partition")
+				_, err := h.Stream.Push(ctx, msg.Payload, uint8(msg.Partitions[0]), false, false)
+				if err != nil {
+					h.MsgErrChan <- err
+					return
+				}
+			}
+
+		}
+	}
 }

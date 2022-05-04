@@ -26,7 +26,7 @@ type nexmarkSourceHandler struct {
 	env      types.Environment
 	funcName string
 	bufPush  bool
-	tStart   time.Time
+	// tStart   time.Time
 }
 
 func NewNexmarkSource(env types.Environment, funcName string) types.FuncHandler {
@@ -126,7 +126,7 @@ type nexmarkSrcProcArgs struct {
 	msgSerde          commtypes.MsgSerde
 	channel_url_cache map[uint32]*generator.ChannelUrl
 	eventGenerator    *generator.NexmarkGenerator
-	msgChan           chan payloadToPush
+	msgChan           chan common.PayloadToPush
 	latencies         []int
 	idx               int
 	numPartition      uint8
@@ -157,7 +157,7 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 	parNum := args.idx
 	parNum = parNum % int(args.numPartition)
 
-	args.msgChan <- payloadToPush{payload: msgEncoded, partitions: []uint8{uint8(parNum)}, isControl: false}
+	args.msgChan <- common.PayloadToPush{Payload: msgEncoded, Partitions: []uint8{uint8(parNum)}, IsControl: false}
 	/*
 		if h.bufPush {
 			err = args.stream.BufPushNoLock(ctx, msgEncoded, uint8(parNum))
@@ -185,12 +185,6 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 	elapsed := time.Since(nowT)
 	args.latencies = append(args.latencies, int(elapsed.Microseconds()))
 	return nil
-}
-
-type payloadToPush struct {
-	payload    []byte
-	isControl  bool
-	partitions []uint8
 }
 
 func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig *ntypes.NexMarkConfigInput) *common.FnOutput {
@@ -252,7 +246,6 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	fmt.Fprintf(os.Stderr, "\tOutOfOrderGroupSize  : %v\n", generatorConfig.Configuration.OutOfOrderGroupSize)
 	eventGenerator := generator.NewSimpleNexmarkGenerator(generatorConfig, int(inputConfig.ParNum))
 	duration := time.Duration(inputConfig.Duration) * time.Second
-	startTime := time.Now()
 	eventSerde, txnMarkerSerde, msgSerde, err := h.getSerde(inputConfig.SerdeFormat)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
@@ -290,12 +283,12 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	dctx, dcancel := context.WithCancel(ctx)
 	go cmm.MonitorControlChannel(ctx, controlQuit, controlErrc, meta)
 
-	msgChan := make(chan payloadToPush, 100000)
+	msgChan := make(chan common.PayloadToPush, 100000)
 	msgErrChan := make(chan error)
 	var wg sync.WaitGroup
 	flushMsgChan := func() {
 		for len(msgChan) > 0 {
-			time.Sleep(time.Duration(10) * time.Millisecond)
+			time.Sleep(time.Duration(1) * time.Millisecond)
 		}
 	}
 	procArgs := &nexmarkSrcProcArgs{
@@ -310,43 +303,17 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 		msgChan:      msgChan,
 		numPartition: stream.NumPartition(),
 	}
+	streamPusher := common.StreamPush{
+		MsgChan:       msgChan,
+		MsgErrChan:    msgErrChan,
+		Stream:        stream,
+		FlushDuration: FLUSH_DURATION,
+		BufPush:       h.bufPush,
+	}
 	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for msg := range msgChan {
-			if msg.isControl {
-				if h.bufPush {
-					err = stream.Flush(ctx)
-					if err != nil {
-						msgErrChan <- err
-						return
-					}
-				}
-				for _, i := range msg.partitions {
-					_, err = stream.Push(ctx, msg.payload, i, true, false)
-					if err != nil {
-						msgErrChan <- err
-						return
-					}
-				}
-			} else {
-				if h.bufPush {
-					err = stream.BufPushNoLock(ctx, msg.payload, uint8(msg.partitions[0]))
-					if time.Since(h.tStart) >= FLUSH_DURATION {
-						stream.FlushNoLock(ctx)
-						h.tStart = time.Now()
-					}
-				} else {
-					_, err = stream.Push(ctx, msg.payload, uint8(msg.partitions[0]), false, false)
-				}
-				if err != nil {
-					msgErrChan <- err
-					return
-				}
-			}
-		}
-	}()
-	h.tStart = time.Now()
+	go streamPusher.AsyncStreamPush(ctx, &wg)
+	streamPusher.FlushTimer = time.Now()
+	startTime := time.Now()
 	for {
 		select {
 		case merr := <-msgErrChan:
@@ -412,7 +379,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 				partitions = append(partitions, i)
 			}
 			procArgs.numPartition = stream.NumPartition()
-			msgChan <- payloadToPush{payload: encoded, isControl: true, partitions: partitions}
+			msgChan <- common.PayloadToPush{Payload: encoded, IsControl: true, Partitions: partitions}
 			/*
 				if h.bufPush {
 					err = stream.Flush(ctx)

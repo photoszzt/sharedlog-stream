@@ -88,7 +88,7 @@ func main() {
 	defer p.Close()
 	var ptSerde datatype.PayloadTsMsgpSerde
 	duration := time.Duration(FLAGS_duration) * time.Second
-	timeGapUs := int32(1000000 / FLAGS_tps)
+	timeGapUs := time.Duration(1000000/FLAGS_tps) * time.Microsecond
 
 	produceHandler := func(w http.ResponseWriter, req *http.Request) {
 		idx := int32(0)
@@ -111,7 +111,7 @@ func main() {
 			}
 		}()
 		start := time.Now()
-		next := start.UnixMicro()
+		next := time.Now()
 		events_num := int32(FLAGS_events_num)
 		num_par := int32(FLAGS_numPartition)
 		for {
@@ -120,19 +120,19 @@ func main() {
 				break
 			}
 			idx += 1
+			next = next.Add(timeGapUs)
 			parNum := idx % num_par
 			payloadTs := datatype.PayloadTs{
 				Payload: content,
-				Ts:      time.Now().UnixMicro(),
+				Ts:      next.UnixMicro(),
 			}
 			encoded, err := ptSerde.Encode(&payloadTs)
 			if err != nil {
 				panic(err)
 			}
-			nowUs := time.Now().UnixMicro()
-			next += int64(timeGapUs)
-			if next > nowUs {
-				time.Sleep(time.Duration(next-nowUs) * time.Microsecond)
+			now := time.Now()
+			if next.After(now) {
+				time.Sleep(next.Sub(now))
 			}
 			p.ProduceChannel() <- &kafka.Message{
 				TopicPartition: kafka.TopicPartition{Topic: &FLAGS_topicName, Partition: int32(parNum)},
