@@ -28,6 +28,24 @@ func (t TimeSlice) P(percent float64) int {
 	return t[int(float64(t.Len())*percent+0.5)-1]
 }
 
+type TimeSlice64 []int64
+
+func (t TimeSlice64) Len() int {
+	return len(t)
+}
+
+func (t TimeSlice64) Less(i, j int) bool {
+	return t[i] < t[j]
+}
+
+func (t TimeSlice64) Swap(i, j int) {
+	t[i], t[j] = t[j], t[i]
+}
+
+func (t TimeSlice64) P(percent float64) int64 {
+	return t[int(float64(t.Len())*percent+0.5)-1]
+}
+
 type benchStats struct {
 	Latencies map[string][]int
 	Consumed  map[string]uint64

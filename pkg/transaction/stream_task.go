@@ -396,9 +396,20 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 	if t.InitFunc != nil {
 		t.InitFunc()
 	}
+	hasUncommitted := false
+	var off map[string]uint64 = nil
+	var ret *common.FnOutput = nil
 	startTime := time.Now()
-	t.commitTimer = time.Now()
+	commitTimer := time.NewTicker(t.CommitEvery)
 	for {
+		select {
+		case <-commitTimer.C:
+			if off != nil {
+				commitOffset(ctx, cm, off, args.ParNum)
+			}
+			hasUncommitted = false
+		default:
+		}
 		if args.Duration != 0 && time.Since(startTime) >= args.Duration {
 			if t.FlushOrPauseFunc != nil {
 				t.FlushOrPauseFunc()
@@ -406,7 +417,7 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 			break
 		}
 		procStart := time.Now()
-		off, ret := t.ProcessFunc(ctx, t, args.ProcArgs)
+		off, ret = t.ProcessFunc(ctx, t, args.ProcArgs)
 		if ret != nil {
 			if ret.Success {
 				// elapsed := time.Since(procStart)
@@ -423,27 +434,14 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 			}
 			return ret
 		}
-		if time.Since(t.commitTimer) >= t.CommitEvery {
-			consumedSeqNumConfigs := make([]ConsumedSeqNumConfig, 0)
-			for topic, offset := range off {
-				consumedSeqNumConfigs = append(consumedSeqNumConfigs, ConsumedSeqNumConfig{
-					TopicToTrack:   topic,
-					Partition:      args.ParNum,
-					ConsumedSeqNum: uint64(offset),
-				})
-			}
-			err = cm.AppendConsumedSeqNum(ctx, consumedSeqNumConfigs)
-			if err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
-			}
-			err = cm.Commit(ctx)
-			if err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
-			}
-			t.commitTimer = time.Now()
+		if !hasUncommitted {
+			hasUncommitted = true
 		}
 		elapsed := time.Since(procStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
+	}
+	if hasUncommitted {
+		commitOffset(ctx, cm, off, args.ParNum)
 	}
 	if t.CloseFunc != nil {
 		t.CloseFunc()
@@ -454,6 +452,23 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 		Latencies: map[string][]int{"e2e": latencies},
 		Consumed:  make(map[string]uint64),
 	}
+}
+
+func commitOffset(ctx context.Context, cm *ConsumeSeqManager, off map[string]uint64, parNum uint8) error {
+	consumedSeqNumConfigs := make([]ConsumedSeqNumConfig, 0)
+	for topic, offset := range off {
+		consumedSeqNumConfigs = append(consumedSeqNumConfigs, ConsumedSeqNumConfig{
+			TopicToTrack:   topic,
+			Partition:      parNum,
+			ConsumedSeqNum: uint64(offset),
+		})
+	}
+	err := cm.AppendConsumedSeqNum(ctx, consumedSeqNumConfigs)
+	if err != nil {
+		return err
+	}
+	err = cm.Commit(ctx)
+	return err
 }
 
 func (t *StreamTask) ProcessWithTransaction(

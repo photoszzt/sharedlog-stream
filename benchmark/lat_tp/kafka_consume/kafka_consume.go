@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sort"
 	"time"
 
+	"sharedlog-stream/benchmark/common"
 	datatype "sharedlog-stream/benchmark/lat_tp/pkg/data_type"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
@@ -76,11 +78,20 @@ func main() {
 			fmt.Fprintf(os.Stdout, "down warmup")
 		}
 		idx := 0
+		commitTimer := time.NewTicker(commitEvery)
 		start := time.Now()
-		commitTimer := time.Now()
+
+		hasUncommitted := false
 		for {
+			select {
+			case <-commitTimer.C:
+				c.Commit()
+				hasUncommitted = false
+			default:
+			}
 			if (duration > 0 && time.Since(start) > duration) ||
 				(rest > 0 && idx >= rest) {
+				commitTimer.Stop()
 				break
 			}
 			ev := c.Poll(5)
@@ -90,10 +101,6 @@ func main() {
 
 			switch e := ev.(type) {
 			case *kafka.Message:
-				if time.Since(commitTimer) >= commitEvery {
-					c.Commit()
-					commitTimer = time.Now()
-				}
 				ptTmp, err := ptSerde.Decode(e.Value)
 				if err != nil {
 					panic(err)
@@ -105,10 +112,15 @@ func main() {
 				idx += 1
 			}
 		}
+		if hasUncommitted {
+			c.Commit()
+		}
 		totalTime := time.Since(start).Seconds()
 		fmt.Fprintf(os.Stderr, "\n%v\n", prod_to_con_lat)
-		fmt.Fprintf(os.Stdout, "consumed %d events, time: %v, throughput: %v\n", idx, totalTime, float64(idx)/float64(totalTime))
-		c.Commit()
+		ts := common.TimeSlice64(prod_to_con_lat)
+		sort.Sort(ts)
+		fmt.Fprintf(os.Stdout, "consumed %d events, time: %v, throughput: %v, p50: %d, p99: %d\n",
+			idx, totalTime, float64(idx)/float64(totalTime), ts.P(0.5), ts.P(0.99))
 	}
 	http.HandleFunc("/consume", handleConsume)
 	http.ListenAndServe(":8090", nil)
