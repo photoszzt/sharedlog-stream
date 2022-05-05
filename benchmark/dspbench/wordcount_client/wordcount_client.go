@@ -39,7 +39,7 @@ func invokeSourceFunc(client *http.Client, response *common.FnOutput, wg *sync.W
 		FileName:    FLAGS_file_name,
 	}
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "wcsource")
-	if err := utils.JsonPostRequest(client, url, sp, response); err != nil {
+	if err := utils.JsonPostRequest(client, url, "", sp, response); err != nil {
 		log.Error().Msgf("wcsource request failed: %v", err)
 	} else if !response.Success {
 		log.Error().Msgf("wcsource request failed: %s", response.Message)

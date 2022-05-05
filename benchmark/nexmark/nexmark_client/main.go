@@ -35,7 +35,7 @@ var (
 	FLAGS_stat_dir           string
 )
 
-func invokeSourceFunc(client *http.Client, numOutPartition uint8, topicName string, instanceId uint8,
+func invokeSourceFunc(client *http.Client, numOutPartition uint8, topicName string, nodeConstraint string, instanceId uint8,
 	numSrcInstance uint8,
 	response *common.FnOutput, wg *sync.WaitGroup,
 ) {
@@ -63,7 +63,7 @@ func invokeSourceFunc(client *http.Client, numOutPartition uint8, topicName stri
 	nexmarkConfig.NumSrcInstance = numSrcInstance
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "source")
 	fmt.Printf("func source url is %v\n", url)
-	if err := utils.JsonPostRequest(client, url, nexmarkConfig, response); err != nil {
+	if err := utils.JsonPostRequest(client, url, nodeConstraint, nexmarkConfig, response); err != nil {
 		log.Error().Msgf("source request failed: %v", err)
 	} else if !response.Success {
 		log.Error().Msgf("source request failed: %s", response.Message)

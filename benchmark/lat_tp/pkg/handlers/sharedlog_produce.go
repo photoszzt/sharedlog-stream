@@ -62,10 +62,10 @@ func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context
 	}
 	var ptSerde datatype.PayloadTsMsgpSerde
 	timeGapUs := time.Duration(1000000/sp.Tps) * time.Microsecond
-	msgChan := make(chan common.PayloadToPush, 100000)
+	msgChan := make(chan sharedlog_stream.PayloadToPush, 100000)
 	msgErrChan := make(chan error)
 	var wg sync.WaitGroup
-	streamPusher := common.StreamPush{
+	streamPusher := sharedlog_stream.StreamPush{
 		MsgChan:    msgChan,
 		MsgErrChan: msgErrChan,
 		Stream:     stream,
@@ -107,7 +107,7 @@ func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
 		*/
-		streamPusher.MsgChan <- common.PayloadToPush{Payload: encoded, Partitions: []uint8{uint8(parNum)}, IsControl: false}
+		streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{Payload: encoded, Partitions: []uint8{uint8(parNum)}, IsControl: false}
 		elapsed := time.Since(procStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))
 		nEmitEvent += 1

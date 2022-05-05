@@ -18,9 +18,10 @@ type ClientNode struct {
 }
 
 type ClientNodeConfig struct {
-	GatewayUrl  string
-	FuncName    string
-	NumInstance uint8
+	GatewayUrl     string
+	FuncName       string
+	NodeConstraint string
+	NumInstance    uint8
 }
 
 type InvokeParam struct {
@@ -47,14 +48,16 @@ func (n *ClientNode) AddChild(node *ClientNode) {
 	n.children = append(n.children, node)
 }
 
-func (n *ClientNode) Invoke(client *http.Client, response *FnOutput, wg *sync.WaitGroup, queryInput *QueryInput) {
+func (n *ClientNode) Invoke(client *http.Client, response *FnOutput, wg *sync.WaitGroup,
+	queryInput *QueryInput,
+) {
 	defer wg.Done()
 
 	fmt.Fprintf(os.Stderr, "func name is %v\n", n.config.FuncName)
 	url := utils.BuildFunctionUrl(n.config.GatewayUrl, n.config.FuncName)
 	fmt.Fprintf(os.Stderr, "func url is %s\n", url)
 
-	if err := utils.JsonPostRequest(client, url, queryInput, response); err != nil {
+	if err := utils.JsonPostRequest(client, url, n.config.NodeConstraint, queryInput, response); err != nil {
 		log.Error().Msgf("%v request failed: %v", n.config.FuncName, err)
 	} else if !response.Success {
 		log.Error().Msgf("%v request failed with failed message: %v", n.config.FuncName, response.Message)

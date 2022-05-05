@@ -118,7 +118,7 @@ func InvokeFunc(client *http.Client, response *common.FnOutput,
 ) {
 	defer wg.Done()
 	url := utils.BuildFunctionUrl(gateway, funcName)
-	if err := utils.JsonPostRequest(client, url, request, response); err != nil {
+	if err := utils.JsonPostRequest(client, url, "", request, response); err != nil {
 		log.Error().Msgf("%s request failed: %v", funcName, err)
 	} else if !response.Success {
 		log.Error().Msgf("%s request failed: %s", funcName, response.Message)

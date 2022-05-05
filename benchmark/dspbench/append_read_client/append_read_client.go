@@ -21,7 +21,7 @@ func invokeFunc(client *http.Client, response *common.FnOutput, wg *sync.WaitGro
 
 	inp := &common.QueryInput{}
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, funcName)
-	if err := utils.JsonPostRequest(client, url, inp, response); err != nil {
+	if err := utils.JsonPostRequest(client, url, "", inp, response); err != nil {
 		log.Error().Msgf("%s request failed: %v", funcName, err)
 	} else if !response.Success {
 		log.Error().Msgf("%s request failed: %v", funcName, response.Message)

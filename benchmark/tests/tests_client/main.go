@@ -26,7 +26,7 @@ func invokeTest(client *http.Client,
 		TopicName: topicName,
 	}
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, FLAGS_test_app)
-	if err := utils.JsonPostRequest(client, url, ti, response); err != nil {
+	if err := utils.JsonPostRequest(client, url, "", ti, response); err != nil {
 		log.Error().Msgf("%s request failed: %v", testName, err)
 	} else if !response.Success {
 		log.Error().Msgf("%s request failed: %s", testName, response.Message)

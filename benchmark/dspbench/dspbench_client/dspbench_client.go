@@ -43,7 +43,7 @@ func invokeSourceFunc(client *http.Client, response *common.FnOutput, wg *sync.W
 	}
 	fmt.Printf("input file name is %v\n", FLAGS_file_name)
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "sdsource")
-	if err := utils.JsonPostRequest(client, url, sp, response); err != nil {
+	if err := utils.JsonPostRequest(client, url, "", sp, response); err != nil {
 		log.Error().Msgf("sdsource request failed: %v", err)
 	} else if !response.Success {
 		log.Error().Msgf("sdsource request failed: %s", response.Message)
@@ -69,7 +69,7 @@ func invokeQuery(client *http.Client, response *common.FnOutput, wg *sync.WaitGr
 	}
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, FLAGS_fn_name)
 	fmt.Printf("func url is %v\n", url)
-	if err := utils.JsonPostRequest(client, url, queryInput, response); err != nil {
+	if err := utils.JsonPostRequest(client, url, "", queryInput, response); err != nil {
 		log.Error().Msgf("%v request failed: %v", FLAGS_fn_name, err)
 	} else if !response.Success {
 		log.Error().Msgf("%v request failed: %v", FLAGS_fn_name, err)

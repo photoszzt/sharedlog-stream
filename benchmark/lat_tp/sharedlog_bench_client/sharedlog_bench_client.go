@@ -82,19 +82,19 @@ func main() {
 	var prodResponse common.FnOutput
 	var consumeResponse common.FnOutput
 	var wg sync.WaitGroup
-	invoke := func(name string, response *common.FnOutput, sp *common.BenchSourceParam) {
+	invoke := func(name string, response *common.FnOutput, sp *common.BenchSourceParam, nodeConstraint string) {
 		defer wg.Done()
 		url := utils.BuildFunctionUrl(FLAGS_faas_gateway, name)
-		if err := utils.JsonPostRequest(client, url, sp, response); err != nil {
+		if err := utils.JsonPostRequest(client, url, nodeConstraint, sp, response); err != nil {
 			log.Error().Msgf("%s request failed: %v", name, err)
 		} else if !response.Success {
 			log.Error().Msgf("%s request failed: %s", name, response.Message)
 		}
 	}
 	wg.Add(1)
-	go invoke("produce", &prodResponse, spProd)
+	go invoke("produce", &prodResponse, spProd, "0")
 	wg.Add(1)
-	go invoke("consume", &consumeResponse, spConsume)
+	go invoke("consume", &consumeResponse, spConsume, "1")
 	wg.Wait()
 	if !prodResponse.Success {
 		fmt.Fprintf(os.Stderr, "produce failed\n")

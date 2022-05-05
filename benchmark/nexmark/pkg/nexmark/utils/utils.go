@@ -92,13 +92,20 @@ func (rs RateShape) StepLengthSec(ratePerSec uint32) uint32 {
 	return (ratePerSec + n - 1) / n
 }
 
-func JsonPostRequest(client *http.Client, url string, request interface{}, response interface{}) error {
+func JsonPostRequest(client *http.Client, url string, nodeConstraint string, request interface{}, response interface{}) error {
 	encoded, err := json.Marshal(request)
 	if err != nil {
 		log.Fatal().Msgf("failed to encode JSON request: %v", err)
 	}
 	fmt.Printf("encoded json is %v\n", string(encoded))
-	resp, err := client.Post(url, "application/json", bytes.NewReader(encoded))
+	req, err := http.NewRequest("POST", url, bytes.NewReader(encoded))
+	if err != nil {
+		return err
+	}
+	if nodeConstraint != "" {
+		req.Header.Add("X-Faas-Node-Constraint", nodeConstraint)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}

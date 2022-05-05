@@ -15,6 +15,7 @@ import (
 func Invoke(config_file string, stat_dir string, gateway_url string,
 	baseQueryInput *QueryInput,
 	invokeSourceFunc func(client *http.Client, numOutPartition uint8, topicName string,
+		nodeConstraint string,
 		instanceId uint8, numSrcInstance uint8,
 		response *FnOutput, wg *sync.WaitGroup),
 ) error {
@@ -38,6 +39,7 @@ func Invoke(config_file string, stat_dir string, gateway_url string,
 	var cliNodes []*ClientNode
 	var numSrcInstance uint8
 	var srcTopicName string
+	var srcNodeConstraint string
 	scaleConfig := make(map[string]uint8)
 	inParamsMap := make(map[string][]*QueryInput)
 	funcNames := make([]string, 0)
@@ -50,11 +52,13 @@ func Invoke(config_file string, stat_dir string, gateway_url string,
 		inputTopicNamesTmp, ok := config["InputTopicNames"]
 		scaleConfig[funcName] = ninstance
 		funcNames = append(funcNames, funcName)
+		nodeConstraint := config["NodeConstraint"].Data().(string)
 
 		if !ok {
 			// this is source config
 			numSrcInstance = ninstance
 			srcTopicName = outputTopicNamesTmp[0].(string)
+			srcNodeConstraint = nodeConstraint
 		} else {
 			inputTopicNamesIntf := inputTopicNamesTmp.Data().([]interface{})
 			inputTopicNames := make([]string, len(inputTopicNamesIntf))
@@ -68,9 +72,10 @@ func Invoke(config_file string, stat_dir string, gateway_url string,
 				numOutPartitions[i] = uint8(streamParam[outputTopicNames[i]].Data().(float64))
 			}
 			nconfig := &ClientNodeConfig{
-				FuncName:    funcName,
-				GatewayUrl:  gateway_url,
-				NumInstance: ninstance,
+				FuncName:       funcName,
+				GatewayUrl:     gateway_url,
+				NumInstance:    ninstance,
+				NodeConstraint: nodeConstraint,
 			}
 			inParams := make([]*QueryInput, ninstance)
 			for i := uint8(0); i < ninstance; i++ {
@@ -135,7 +140,8 @@ func Invoke(config_file string, stat_dir string, gateway_url string,
 	for i := uint8(0); i < numSrcInstance; i++ {
 		wg.Add(1)
 		idx := i
-		go invokeSourceFunc(client, numSrcPartition, srcTopicName, idx, numSrcInstance, &sourceOutput[idx], &wg)
+		go invokeSourceFunc(client, numSrcPartition, srcTopicName, srcNodeConstraint, idx, numSrcInstance,
+			&sourceOutput[idx], &wg)
 	}
 
 	time.Sleep(time.Duration(10) * time.Second)

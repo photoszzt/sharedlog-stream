@@ -126,7 +126,7 @@ type nexmarkSrcProcArgs struct {
 	msgSerde          commtypes.MsgSerde
 	channel_url_cache map[uint32]*generator.ChannelUrl
 	eventGenerator    *generator.NexmarkGenerator
-	msgChan           chan common.PayloadToPush
+	msgChan           chan sharedlog_stream.PayloadToPush
 	latencies         []int
 	idx               int
 	numPartition      uint8
@@ -157,7 +157,7 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 	parNum := args.idx
 	parNum = parNum % int(args.numPartition)
 
-	args.msgChan <- common.PayloadToPush{Payload: msgEncoded, Partitions: []uint8{uint8(parNum)}, IsControl: false}
+	args.msgChan <- sharedlog_stream.PayloadToPush{Payload: msgEncoded, Partitions: []uint8{uint8(parNum)}, IsControl: false}
 	/*
 		if h.bufPush {
 			err = args.stream.BufPushNoLock(ctx, msgEncoded, uint8(parNum))
@@ -283,7 +283,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	dctx, dcancel := context.WithCancel(ctx)
 	go cmm.MonitorControlChannel(ctx, controlQuit, controlErrc, meta)
 
-	msgChan := make(chan common.PayloadToPush, 100000)
+	msgChan := make(chan sharedlog_stream.PayloadToPush, 100000)
 	msgErrChan := make(chan error)
 	var wg sync.WaitGroup
 	flushMsgChan := func() {
@@ -303,7 +303,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 		msgChan:      msgChan,
 		numPartition: stream.NumPartition(),
 	}
-	streamPusher := common.StreamPush{
+	streamPusher := sharedlog_stream.StreamPush{
 		MsgChan:    msgChan,
 		MsgErrChan: msgErrChan,
 		Stream:     stream,
@@ -378,7 +378,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 				partitions = append(partitions, i)
 			}
 			procArgs.numPartition = stream.NumPartition()
-			msgChan <- common.PayloadToPush{Payload: encoded, IsControl: true, Partitions: partitions}
+			msgChan <- sharedlog_stream.PayloadToPush{Payload: encoded, IsControl: true, Partitions: partitions}
 			/*
 				if h.bufPush {
 					err = stream.Flush(ctx)

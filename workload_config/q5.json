@@ -3,25 +3,29 @@
         {
             "funcName": "nexmark_src",
             "NumInstance": 4,
-            "OutputTopicName": ["nexmark_src"]
+            "OutputTopicName": ["nexmark_src"],
+            "NodeConstraint": "0,1,2,3"
         },
         {
             "funcName": "q5bidkeyedbyauction",
             "NumInstance": 4,
             "InputTopicNames": ["nexmark_src"],
-            "OutputTopicName": ["bids"]
+            "OutputTopicName": ["bids"],
+            "NodeConstraint": "4,5,6,7"
         },
         {
             "funcName": "q5aucbids",
             "NumInstance": 4,
             "InputTopicNames": ["bids"],
-            "OutputTopicName": ["aucBids"]
+            "OutputTopicName": ["aucBids"],
+            "NodeConstraint": "4,5,6,7"
         },
         {
             "funcName": "q5maxbid",
             "NumInstance": 4,
             "InputTopicNames": ["aucBids"],
-            "OutputTopicName": ["nexmark_q5_sink"]
+            "OutputTopicName": ["nexmark_q5_sink"],
+            "NodeConstraint": "4,5,6,7"
         }
     ],
     "StreamParam": {

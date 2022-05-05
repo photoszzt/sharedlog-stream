@@ -18,9 +18,10 @@ type ShardedSharedLogStreamSink struct {
 }
 
 type StreamSinkConfig struct {
-	KeySerde   commtypes.Serde
-	ValueSerde commtypes.Serde
-	MsgSerde   commtypes.MsgSerde
+	KeySerde     commtypes.Serde
+	ValueSerde   commtypes.Serde
+	MsgSerde     commtypes.MsgSerde
+	streamPusher *StreamPush
 }
 
 var _ = processor.Sink(&ShardedSharedLogStreamSink{})
