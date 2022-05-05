@@ -26,6 +26,7 @@ var (
 	FLAGS_payload       string
 	FLAGS_npar          int
 	FLAGS_nprod         int
+	FLAGS_flushms       int
 )
 
 type prodConsumeLatencies struct {
@@ -44,6 +45,7 @@ func main() {
 	flag.IntVar(&FLAGS_warmup_time, "warmup_time", 0, "warm up time in sec")
 	flag.IntVar(&FLAGS_warmup_events, "warmup_events", 0, "number of events consumed for warmup")
 	flag.IntVar(&FLAGS_tps, "tps", 1000, "events per second")
+	flag.IntVar(&FLAGS_flushms, "flushms", 5, "flush every <n> ms")
 	flag.Parse()
 
 	serdeFormat := common.StringToSerdeFormat(FLAGS_serdeFormat)
@@ -57,7 +59,7 @@ func main() {
 		WarmUpTime:      uint32(FLAGS_warmup_time),
 		WarmUpEvents:    uint32(FLAGS_warmup_events),
 		Tps:             uint32(FLAGS_tps),
-		FlushMs:         5,
+		FlushMs:         uint32(FLAGS_flushms),
 	}
 	spConsume := &common.BenchSourceParam{
 		TopicName:       "src",
@@ -69,7 +71,7 @@ func main() {
 		WarmUpTime:      uint32(FLAGS_warmup_time),
 		WarmUpEvents:    uint32(FLAGS_warmup_events),
 		Tps:             uint32(FLAGS_tps),
-		FlushMs:         5,
+		FlushMs:         spProd.FlushMs,
 	}
 	client := &http.Client{
 		Transport: &http.Transport{
