@@ -66,15 +66,14 @@ func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context
 	msgErrChan := make(chan error)
 	var wg sync.WaitGroup
 	streamPusher := common.StreamPush{
-		MsgChan:       msgChan,
-		MsgErrChan:    msgErrChan,
-		Stream:        stream,
-		BufPush:       h.bufPush,
-		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+		MsgChan:    msgChan,
+		MsgErrChan: msgErrChan,
+		Stream:     stream,
+		BufPush:    h.bufPush,
 	}
 	wg.Add(1)
 	go streamPusher.AsyncStreamPush(ctx, &wg)
-	streamPusher.FlushTimer = time.Now()
+	streamPusher.FlushTimer = time.NewTicker(time.Duration(sp.FlushMs) * time.Millisecond)
 	startTime := time.Now()
 	next := time.Now()
 

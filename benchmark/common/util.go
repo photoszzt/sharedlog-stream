@@ -56,12 +56,11 @@ type PayloadToPush struct {
 }
 
 type StreamPush struct {
-	FlushTimer    time.Time
-	MsgChan       chan PayloadToPush
-	MsgErrChan    chan error
-	Stream        *sharedlog_stream.ShardedSharedLogStream
-	FlushDuration time.Duration
-	BufPush       bool
+	FlushTimer *time.Ticker
+	MsgChan    chan PayloadToPush
+	MsgErrChan chan error
+	Stream     *sharedlog_stream.ShardedSharedLogStream
+	BufPush    bool
 }
 
 func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
@@ -85,14 +84,15 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
 			}
 		} else {
 			if h.BufPush {
+				select {
+				case <-h.FlushTimer.C:
+					h.Stream.FlushNoLock(ctx)
+				default:
+				}
 				err := h.Stream.BufPushNoLock(ctx, msg.Payload, uint8(msg.Partitions[0]))
 				if err != nil {
 					h.MsgErrChan <- err
 					return
-				}
-				if time.Since(h.FlushTimer) >= h.FlushDuration {
-					h.Stream.FlushNoLock(ctx)
-					h.FlushTimer = time.Now()
 				}
 			} else {
 				debug.Assert(len(msg.Partitions) == 1, "should only have one partition")

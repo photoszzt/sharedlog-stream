@@ -26,7 +26,6 @@ type StreamTask struct {
 	FlushOrPauseFunc func()
 	ResumeFunc       func()
 	InitFunc         func()
-	commitTimer      time.Time
 	CommitEvery      time.Duration
 }
 

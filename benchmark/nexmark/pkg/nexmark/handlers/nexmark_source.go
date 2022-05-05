@@ -304,15 +304,14 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 		numPartition: stream.NumPartition(),
 	}
 	streamPusher := common.StreamPush{
-		MsgChan:       msgChan,
-		MsgErrChan:    msgErrChan,
-		Stream:        stream,
-		FlushDuration: FLUSH_DURATION,
-		BufPush:       h.bufPush,
+		MsgChan:    msgChan,
+		MsgErrChan: msgErrChan,
+		Stream:     stream,
+		BufPush:    h.bufPush,
 	}
 	wg.Add(1)
 	go streamPusher.AsyncStreamPush(ctx, &wg)
-	streamPusher.FlushTimer = time.Now()
+	streamPusher.FlushTimer = time.NewTicker(FLUSH_DURATION)
 	startTime := time.Now()
 	for {
 		select {
