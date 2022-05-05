@@ -212,6 +212,7 @@ func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(
 	task := transaction.StreamTask{
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
+		CommitEvery:   common.CommitDuration,
 	}
 
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])

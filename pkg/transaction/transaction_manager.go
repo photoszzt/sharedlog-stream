@@ -502,6 +502,11 @@ type ConsumeSeqManager struct {
 	offsetLogs        map[string]*sharedlog_stream.ShardedSharedLogStream
 }
 
+func (cm *ConsumeSeqManager) AddTopicTrackConsumedSeqs(ctx context.Context, topicToTrack string, partitions []uint8) {
+	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + topicToTrack
+	cm.TrackTopicPartition(offsetTopic, partitions)
+}
+
 func (cm *ConsumeSeqManager) TrackTopicPartition(topic string, partitions []uint8) {
 	cm.mapMu.Lock()
 	defer cm.mapMu.Unlock()
@@ -516,6 +521,23 @@ func (cm *ConsumeSeqManager) TrackTopicPartition(topic string, partitions []uint
 		}
 	}
 	cm.curConsumePar[topic] = parSet
+}
+
+func (cm *ConsumeSeqManager) CreateOffsetTopic(env types.Environment, topicToTrack string,
+	numPartition uint8, serdeFormat commtypes.SerdeFormat,
+) error {
+	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + topicToTrack
+	_, ok := cm.offsetLogs[offsetTopic]
+	if ok {
+		// already exists
+		return nil
+	}
+	off, err := sharedlog_stream.NewShardedSharedLogStream(env, offsetTopic, numPartition, serdeFormat)
+	if err != nil {
+		return err
+	}
+	cm.offsetLogs[offsetTopic] = off
+	return nil
 }
 
 func NewConsumeSeqManager(serdeFormat commtypes.SerdeFormat) (*ConsumeSeqManager, error) {
@@ -543,9 +565,7 @@ func (cm *ConsumeSeqManager) AppendConsumedSeqNum(ctx context.Context, consumedS
 		offsetTopic := OffsetTopic(consumedSeqNumConfig.TopicToTrack)
 		offsetLog := cm.offsetLogs[offsetTopic]
 		offsetRecord := txn_data.OffsetRecord{
-			Offset:    consumedSeqNumConfig.ConsumedSeqNum,
-			TaskId:    consumedSeqNumConfig.TaskId,
-			TaskEpoch: consumedSeqNumConfig.TaskEpoch,
+			Offset: consumedSeqNumConfig.ConsumedSeqNum,
 		}
 		encoded, err := cm.offsetRecordSerde.Encode(&offsetRecord)
 		if err != nil {

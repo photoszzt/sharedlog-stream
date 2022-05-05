@@ -180,6 +180,7 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 	task := transaction.StreamTask{
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
+		CommitEvery:   common.CommitDuration,
 	}
 
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
@@ -216,8 +217,11 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 	}
 	// return h.process(ctx, sp, args)
 	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs: procArgs,
-		Duration: time.Duration(sp.Duration) * time.Second,
+		ProcArgs:        procArgs,
+		Duration:        time.Duration(sp.Duration) * time.Second,
+		InputTopicNames: sp.InputTopicNames,
+		SerdeFormat:     commtypes.SerdeFormat(sp.SerdeFormat),
+		ParNum:          sp.ParNum,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

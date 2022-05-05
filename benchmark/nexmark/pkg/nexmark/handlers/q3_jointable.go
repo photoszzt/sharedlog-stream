@@ -91,6 +91,7 @@ func (h *q3JoinTableHandler) process(ctx context.Context,
 	return t.CurrentOffset, nil
 }
 
+/*
 func (h *q3JoinTableHandler) processOut(aOut *common.FnOutput, pOut *common.FnOutput, args *q3JoinTableProcessArgs) *common.FnOutput {
 	debug.Fprintf(os.Stderr, "aOut: %v\n", aOut)
 	debug.Fprintf(os.Stderr, "pOut: %v\n", pOut)
@@ -105,6 +106,7 @@ func (h *q3JoinTableHandler) processOut(aOut *common.FnOutput, pOut *common.FnOu
 	}
 	return nil
 }
+*/
 
 func getInOutStreams(
 	ctx context.Context,
@@ -429,6 +431,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			joinProcAuction.controlChan <- Running
 			joinProcPerson.controlChan <- Running
 		},
+		CommitEvery: common.CommitDuration,
 	}
 	joinProcPerson.currentOffset = task.CurrentOffset
 	joinProcAuction.currentOffset = task.CurrentOffset
@@ -493,8 +496,11 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		return ret
 	}
 	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs: procArgs,
-		Duration: time.Duration(sp.Duration) * time.Second,
+		ProcArgs:        procArgs,
+		Duration:        time.Duration(sp.Duration) * time.Second,
+		InputTopicNames: sp.InputTopicNames,
+		ParNum:          sp.ParNum,
+		SerdeFormat:     commtypes.SerdeFormat(sp.SerdeFormat),
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

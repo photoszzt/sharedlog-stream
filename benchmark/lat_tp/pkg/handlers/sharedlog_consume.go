@@ -10,6 +10,7 @@ import (
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/transaction"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -44,12 +45,24 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
+	cm, err := transaction.NewConsumeSeqManager(commtypes.MSGP)
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: err.Error()}
+	}
+	err = cm.CreateOffsetTopic(h.env, sp.TopicName, sp.NumOutPartition, commtypes.SerdeFormat(sp.SerdeFormat))
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: err.Error()}
+	}
+	cm.AddTopicTrackConsumedSeqs(ctx, sp.TopicName, []uint8{0})
+
 	// warmup
 	rest := sp.NumEvents
 	warmup_dur := time.Duration(0)
+	hasUncommitted := false
 	if sp.WarmUpEvents > 0 && sp.WarmUpTime > 0 {
 		warm_start := time.Now()
-		idx_consumed, err := h.runLoop(ctx, stream, time.Duration(sp.WarmUpTime)*time.Second, int(sp.WarmUpEvents))
+		idx_consumed, err := h.runLoop(ctx, stream,
+			time.Duration(sp.WarmUpTime)*time.Second, int(sp.WarmUpEvents), cm)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
@@ -61,6 +74,8 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 	var ptSerde datatype.PayloadTsMsgpSerde
 	prod_consume_lat := make([]int, 0, 128)
 	duration := time.Duration(sp.Duration)*time.Second - warmup_dur
+	off := uint64(0)
+	commitTimer := time.Now()
 	startTime := time.Now()
 	for {
 		if (duration != 0 && time.Since(startTime) >= duration) || (rest > 0 && idx >= rest) {
@@ -83,6 +98,10 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 			idx += 1
 			if !rawMsg.IsControl && len(rawMsg.Payload) == 0 {
 				continue
+			}
+			off = rawMsg.LogSeqNum
+			if !hasUncommitted {
+				hasUncommitted = true
 			}
 			if rawMsg.IsPayloadArr {
 				payloadArrTmp, err := paSerde.Decode(rawMsg.Payload)
@@ -113,6 +132,19 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 				prod_consume_lat = append(prod_consume_lat, lat)
 			}
 		}
+		if time.Since(commitTimer) >= common.CommitDuration {
+			err = commitConsumeSeq(ctx, cm, sp.TopicName, off, &commitTimer)
+			if err != nil {
+				return &common.FnOutput{Success: false, Message: err.Error()}
+			}
+			hasUncommitted = false
+		}
+	}
+	if hasUncommitted {
+		err := commitConsumeSeq(ctx, cm, stream.TopicName(), off, &commitTimer)
+		if err != nil {
+			return &common.FnOutput{Success: false, Message: err.Error()}
+		}
 	}
 	return &common.FnOutput{
 		Success:   true,
@@ -121,14 +153,39 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 	}
 }
 
+func commitConsumeSeq(ctx context.Context,
+	cm *transaction.ConsumeSeqManager,
+	topicName string, off uint64, commitTimer *time.Time) error {
+	consumedSeqNumConfig := []transaction.ConsumedSeqNumConfig{
+		{
+			TopicToTrack:   topicName,
+			Partition:      0,
+			ConsumedSeqNum: off,
+		},
+	}
+	err := cm.AppendConsumedSeqNum(ctx, consumedSeqNumConfig)
+	if err != nil {
+		return err
+	}
+	err = cm.Commit(ctx)
+	if err != nil {
+		return err
+	}
+	*commitTimer = time.Now()
+	return nil
+}
+
 func (h *sharedlogConsumeBenchHandler) runLoop(ctx context.Context,
 	stream *sharedlog_stream.ShardedSharedLogStream, duration time.Duration,
-	numEvents int,
+	numEvents int, cm *transaction.ConsumeSeqManager,
 ) (int, error) {
 	startTime := time.Now()
 	idx := 0
 	var ptSerde datatype.PayloadTsMsgpSerde
 	var paSerde commtypes.PayloadArrMsgpSerde
+	off := uint64(0)
+	hasUncommitted := false
+	commitTimer := time.Now()
 	for {
 		if (duration != 0 && time.Since(startTime) >= duration) || (numEvents != 0 && idx >= numEvents) {
 			break
@@ -148,6 +205,10 @@ func (h *sharedlogConsumeBenchHandler) runLoop(ctx context.Context,
 		}
 		for _, rawMsg := range rawMsgs {
 			idx += 1
+			off = rawMsg.LogSeqNum
+			if !hasUncommitted {
+				hasUncommitted = true
+			}
 			if !rawMsg.IsControl && len(rawMsg.Payload) == 0 {
 				continue
 			}
@@ -168,6 +229,20 @@ func (h *sharedlogConsumeBenchHandler) runLoop(ctx context.Context,
 				_ = ptTmp
 			}
 		}
+		if time.Since(commitTimer) >= common.CommitDuration {
+			err = commitConsumeSeq(ctx, cm, stream.TopicName(), off, &commitTimer)
+			if err != nil {
+				return 0, err
+			}
+			hasUncommitted = false
+		}
+	}
+	if hasUncommitted {
+		err := commitConsumeSeq(ctx, cm, stream.TopicName(), off, &commitTimer)
+		if err != nil {
+			return 0, err
+		}
+		hasUncommitted = false
 	}
 	return idx, nil
 }

@@ -10,21 +10,21 @@ import (
 	"strings"
 )
 
-type timeSlice []int
+type TimeSlice []int
 
-func (t timeSlice) Len() int {
+func (t TimeSlice) Len() int {
 	return len(t)
 }
 
-func (t timeSlice) Less(i, j int) bool {
+func (t TimeSlice) Less(i, j int) bool {
 	return t[i] < t[j]
 }
 
-func (t timeSlice) Swap(i, j int) {
+func (t TimeSlice) Swap(i, j int) {
 	t[i], t[j] = t[j], t[i]
 }
 
-func (t timeSlice) p(percent float64) int {
+func (t TimeSlice) P(percent float64) int {
 	return t[int(float64(t.Len())*percent+0.5)-1]
 }
 
@@ -57,7 +57,7 @@ func ProcessThroughputLat(name string, stat_dir string, latencies map[string][]i
 	}
 	for n, lat_arr := range latencies {
 		if len(lat_arr) != 0 {
-			ts := timeSlice(lat_arr)
+			ts := TimeSlice(lat_arr)
 			sort.Sort(ts)
 			if n != "eventTimeLatency" {
 				sumTime := float64(0)
@@ -86,9 +86,9 @@ func ProcessThroughputLat(name string, stat_dir string, latencies map[string][]i
 				tput := float64(processed) / sumTime
 				fmt.Fprintf(os.Stderr, "sum of %s time: %v ", n, sumTime)
 				fmt.Fprintf(os.Stderr, "processed: %v, throughput: (event/s) %v, p50: %d us, p90: %d us, p99: %d us\n",
-					processed, tput, ts.p(0.5), ts.p(0.9), ts.p(0.99))
+					processed, tput, ts.P(0.5), ts.P(0.9), ts.P(0.99))
 			} else {
-				fmt.Fprintf(os.Stderr, "%s, p50: %d us, p90: %d us, p99: %d\n", n, ts.p(0.5), ts.p(0.9), ts.p(0.99))
+				fmt.Fprintf(os.Stderr, "%s, p50: %d us, p90: %d us, p99: %d\n", n, ts.P(0.5), ts.P(0.9), ts.P(0.99))
 			}
 		}
 	}

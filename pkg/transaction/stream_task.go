@@ -26,6 +26,8 @@ type StreamTask struct {
 	FlushOrPauseFunc func()
 	ResumeFunc       func()
 	InitFunc         func()
+	commitTimer      time.Time
+	CommitEvery      time.Duration
 }
 
 func DefaultTrackSubstreamFunc(ctx context.Context,
@@ -356,8 +358,13 @@ func TrackOffsetAndCommit(ctx context.Context,
 }
 
 type StreamTaskArgs struct {
-	ProcArgs interface{}
-	Duration time.Duration
+	ProcArgs        interface{}
+	Env             types.Environment
+	InputTopicNames []string
+	Duration        time.Duration
+	SerdeFormat     commtypes.SerdeFormat
+	ParNum          uint8
+	NumInPartition  uint8
 }
 
 type StreamTaskArgsTransaction struct {
@@ -375,10 +382,22 @@ type StreamTaskArgsTransaction struct {
 
 func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.FnOutput {
 	latencies := make([]int, 0, 128)
+	cm, err := NewConsumeSeqManager(args.SerdeFormat)
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: err.Error()}
+	}
+	for _, inputTopicName := range args.InputTopicNames {
+		err = cm.CreateOffsetTopic(args.Env, inputTopicName, args.NumInPartition, args.SerdeFormat)
+		if err != nil {
+			return &common.FnOutput{Success: false, Message: err.Error()}
+		}
+		cm.AddTopicTrackConsumedSeqs(ctx, inputTopicName, []uint8{args.ParNum})
+	}
 	if t.InitFunc != nil {
 		t.InitFunc()
 	}
 	startTime := time.Now()
+	t.commitTimer = time.Now()
 	for {
 		if args.Duration != 0 && time.Since(startTime) >= args.Duration {
 			if t.FlushOrPauseFunc != nil {
@@ -387,7 +406,7 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 			break
 		}
 		procStart := time.Now()
-		_, ret := t.ProcessFunc(ctx, t, args.ProcArgs)
+		off, ret := t.ProcessFunc(ctx, t, args.ProcArgs)
 		if ret != nil {
 			if ret.Success {
 				// elapsed := time.Since(procStart)
@@ -403,6 +422,25 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 				}
 			}
 			return ret
+		}
+		if time.Since(t.commitTimer) >= t.CommitEvery {
+			consumedSeqNumConfigs := make([]ConsumedSeqNumConfig, 0)
+			for topic, offset := range off {
+				consumedSeqNumConfigs = append(consumedSeqNumConfigs, ConsumedSeqNumConfig{
+					TopicToTrack:   topic,
+					Partition:      args.ParNum,
+					ConsumedSeqNum: uint64(offset),
+				})
+			}
+			err = cm.AppendConsumedSeqNum(ctx, consumedSeqNumConfigs)
+			if err != nil {
+				return &common.FnOutput{Success: false, Message: err.Error()}
+			}
+			err = cm.Commit(ctx)
+			if err != nil {
+				return &common.FnOutput{Success: false, Message: err.Error()}
+			}
+			t.commitTimer = time.Now()
 		}
 		elapsed := time.Since(procStart)
 		latencies = append(latencies, int(elapsed.Microseconds()))

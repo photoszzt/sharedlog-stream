@@ -191,6 +191,7 @@ func (h *query3PersonsByIDHandler) Query3PersonsByID(ctx context.Context, sp *co
 	task := transaction.StreamTask{
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
+		CommitEvery:   common.CommitDuration,
 	}
 
 	debug.Assert(len(sp.NumOutPartitions) == 1, "expected only one output stream")
@@ -229,8 +230,11 @@ func (h *query3PersonsByIDHandler) Query3PersonsByID(ctx context.Context, sp *co
 		return ret
 	}
 	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs: procArgs,
-		Duration: time.Duration(sp.Duration) * time.Second,
+		ProcArgs:        procArgs,
+		Duration:        time.Duration(sp.Duration) * time.Second,
+		InputTopicNames: sp.InputTopicNames,
+		ParNum:          sp.ParNum,
+		SerdeFormat:     commtypes.SerdeFormat(sp.SerdeFormat),
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

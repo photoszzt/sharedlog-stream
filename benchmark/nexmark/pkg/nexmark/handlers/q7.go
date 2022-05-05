@@ -367,6 +367,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 	task := transaction.StreamTask{
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
+		CommitEvery:   common.CommitDuration,
 	}
 	if input.EnableTransaction {
 		srcs := make(map[string]processor.Source)
@@ -424,8 +425,11 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		return ret
 	}
 	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs: procArgs,
-		Duration: time.Duration(input.Duration) * time.Second,
+		ProcArgs:        procArgs,
+		Duration:        time.Duration(input.Duration) * time.Second,
+		InputTopicNames: input.InputTopicNames,
+		ParNum:          input.ParNum,
+		SerdeFormat:     commtypes.SerdeFormat(input.SerdeFormat),
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

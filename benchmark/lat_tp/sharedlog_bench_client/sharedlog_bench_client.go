@@ -8,6 +8,7 @@ import (
 	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sort"
 	"sync"
 	"time"
 
@@ -42,10 +43,11 @@ func main() {
 	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
 	flag.IntVar(&FLAGS_warmup_time, "warmup_time", 0, "warm up time in sec")
 	flag.IntVar(&FLAGS_warmup_events, "warmup_events", 0, "number of events consumed for warmup")
+	flag.IntVar(&FLAGS_tps, "tps", 1000, "events per second")
 	flag.Parse()
 
 	serdeFormat := common.StringToSerdeFormat(FLAGS_serdeFormat)
-	sp := &common.BenchSourceParam{
+	spProd := &common.BenchSourceParam{
 		TopicName:       "src",
 		Duration:        uint32(FLAGS_duration),
 		SerdeFormat:     uint8(serdeFormat),
@@ -55,6 +57,19 @@ func main() {
 		WarmUpTime:      uint32(FLAGS_warmup_time),
 		WarmUpEvents:    uint32(FLAGS_warmup_events),
 		Tps:             uint32(FLAGS_tps),
+		FlushMs:         5,
+	}
+	spConsume := &common.BenchSourceParam{
+		TopicName:       "src",
+		Duration:        uint32(FLAGS_duration) + 5,
+		SerdeFormat:     uint8(serdeFormat),
+		NumEvents:       uint32(FLAGS_events_num),
+		FileName:        FLAGS_payload,
+		NumOutPartition: uint8(FLAGS_npar),
+		WarmUpTime:      uint32(FLAGS_warmup_time),
+		WarmUpEvents:    uint32(FLAGS_warmup_events),
+		Tps:             uint32(FLAGS_tps),
+		FlushMs:         5,
 	}
 	client := &http.Client{
 		Transport: &http.Transport{
@@ -65,7 +80,7 @@ func main() {
 	var prodResponse common.FnOutput
 	var consumeResponse common.FnOutput
 	var wg sync.WaitGroup
-	invoke := func(name string, response *common.FnOutput) {
+	invoke := func(name string, response *common.FnOutput, sp *common.BenchSourceParam) {
 		defer wg.Done()
 		url := utils.BuildFunctionUrl(FLAGS_faas_gateway, name)
 		if err := utils.JsonPostRequest(client, url, sp, response); err != nil {
@@ -75,17 +90,33 @@ func main() {
 		}
 	}
 	wg.Add(1)
-	go invoke("produce", &prodResponse)
+	go invoke("produce", &prodResponse, spProd)
 	wg.Add(1)
-	go invoke("consume", &consumeResponse)
+	go invoke("consume", &consumeResponse, spConsume)
 	wg.Wait()
-	lat := prodConsumeLatencies{
-		ProdLatencies:        prodResponse.Latencies["e2e"],
-		ProdConsumeLatencies: consumeResponse.Latencies["e2e"],
+	if !prodResponse.Success {
+		fmt.Fprintf(os.Stderr, "produce failed\n")
+	} else if !consumeResponse.Success {
+		fmt.Fprintf(os.Stderr, "consume failed\n")
+	} else {
+		lat := prodConsumeLatencies{
+			ProdLatencies:        prodResponse.Latencies["e2e"],
+			ProdConsumeLatencies: consumeResponse.Latencies["e2e"],
+		}
+		produced := len(lat.ProdLatencies)
+		prodTime := prodResponse.Duration
+		consumed := len(lat.ProdConsumeLatencies)
+		consumeTime := consumeResponse.Duration
+		stats, err := json.Marshal(&lat)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Fprintf(os.Stderr, "%s\n", stats)
+		ts := common.TimeSlice(lat.ProdConsumeLatencies)
+		sort.Sort(ts)
+		fmt.Fprintf(os.Stderr, "produced %d events in %f s, tp: %f\n",
+			produced, prodTime, float64(produced)/prodTime)
+		fmt.Fprintf(os.Stderr, "consumed %d events in %f s, tp: %f, p50: %d, p99: %d\n",
+			consumed, consumeTime, float64(consumed)/consumeTime, ts.P(0.5), ts.P(0.99))
 	}
-	stats, err := json.Marshal(&lat)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Fprintf(os.Stderr, "%s\n", stats)
 }

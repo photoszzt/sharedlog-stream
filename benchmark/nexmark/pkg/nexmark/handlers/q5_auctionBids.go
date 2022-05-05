@@ -381,6 +381,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	task := transaction.StreamTask{
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
+		CommitEvery:   common.CommitDuration,
 	}
 
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
@@ -441,8 +442,11 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	}
 	// return h.process(ctx, sp, args)
 	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs: procArgs,
-		Duration: time.Duration(sp.Duration) * time.Second,
+		ProcArgs:        procArgs,
+		Duration:        time.Duration(sp.Duration) * time.Second,
+		InputTopicNames: sp.InputTopicNames,
+		ParNum:          sp.ParNum,
+		SerdeFormat:     commtypes.SerdeFormat(sp.SerdeFormat),
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

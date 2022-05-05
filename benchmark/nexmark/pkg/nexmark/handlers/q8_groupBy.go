@@ -75,13 +75,13 @@ func (h *q8GroupByHandler) Call(ctx context.Context, input []byte) ([]byte, erro
 
 type q8GroupByProcessArgs struct {
 	src              *processor.MeteredSource
-	sinks            []*processor.MeteredSink
 	aucMsgChan       chan commtypes.Message
 	personMsgChan    chan commtypes.Message
 	errChan          chan error
 	trackParFunc     transaction.TrackKeySubStreamFunc
 	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
 	funcName         string
+	sinks            []*processor.MeteredSink
 	curEpoch         uint64
 	parNum           uint8
 }
@@ -238,8 +238,11 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 		return ret
 	}
 	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs: procArgs,
-		Duration: time.Duration(sp.Duration) * time.Second,
+		ProcArgs:        procArgs,
+		Duration:        time.Duration(sp.Duration) * time.Second,
+		InputTopicNames: sp.InputTopicNames,
+		ParNum:          sp.ParNum,
+		SerdeFormat:     commtypes.SerdeFormat(sp.SerdeFormat),
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {
