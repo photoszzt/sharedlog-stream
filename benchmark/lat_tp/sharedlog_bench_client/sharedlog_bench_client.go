@@ -27,6 +27,7 @@ var (
 	FLAGS_npar          int
 	FLAGS_nprod         int
 	FLAGS_flushms       int
+	FLAGS_local         bool
 )
 
 type prodConsumeLatencies struct {
@@ -46,6 +47,7 @@ func main() {
 	flag.IntVar(&FLAGS_warmup_events, "warmup_events", 0, "number of events consumed for warmup")
 	flag.IntVar(&FLAGS_tps, "tps", 1000, "events per second")
 	flag.IntVar(&FLAGS_flushms, "flushms", 5, "flush every <n> ms")
+	flag.BoolVar(&FLAGS_local, "local", false, "whether it's run locally")
 	flag.Parse()
 
 	serdeFormat := common.StringToSerdeFormat(FLAGS_serdeFormat)
@@ -91,10 +93,18 @@ func main() {
 			log.Error().Msgf("%s request failed: %s", name, response.Message)
 		}
 	}
+	prodCons := "0"
+	if FLAGS_local {
+		prodCons = ""
+	}
+	consumeCons := "1"
+	if FLAGS_local {
+		consumeCons = ""
+	}
 	wg.Add(1)
-	go invoke("produce", &prodResponse, spProd, "0")
+	go invoke("produce", &prodResponse, spProd, prodCons)
 	wg.Add(1)
-	go invoke("consume", &consumeResponse, spConsume, "1")
+	go invoke("consume", &consumeResponse, spConsume, consumeCons)
 	wg.Wait()
 	if !prodResponse.Success {
 		fmt.Fprintf(os.Stderr, "produce failed\n")
