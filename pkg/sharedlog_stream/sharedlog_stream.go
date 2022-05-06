@@ -229,6 +229,8 @@ func (s *SharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum ui
 		}
 		seqNum = logEntry.SeqNum
 		streamLogEntry := decodeStreamLogEntry(logEntry)
+		isControl := bits.Has(bits.Bits(streamLogEntry.Meta), Control)
+		isPayloadArr := bits.Has(bits.Bits(streamLogEntry.Meta), PayloadArr)
 		if streamLogEntry.TopicName != s.topicName {
 			continue
 		} else {
@@ -236,9 +238,11 @@ func (s *SharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum ui
 					TaskId:    streamLogEntry.TaskId,
 					TaskEpoch: streamLogEntry.TaskEpoch,
 				}, &commtypes.RawMsg{
-					Payload:   streamLogEntry.Payload,
-					MsgSeqNum: streamLogEntry.MsgSeqNum,
-					LogSeqNum: streamLogEntry.seqNum,
+					Payload:      streamLogEntry.Payload,
+					MsgSeqNum:    streamLogEntry.MsgSeqNum,
+					LogSeqNum:    streamLogEntry.seqNum,
+					IsControl:    isControl,
+					IsPayloadArr: isPayloadArr,
 				}, nil
 		}
 	}
@@ -296,9 +300,9 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 					seqNumInSharedLog = logEntry.SeqNum + 1
 					continue
 				}
-				isControl := false
+				isControl := bits.Has(bits.Bits(streamLogEntry.Meta), Control)
 				scaleEpoch := uint64(0)
-				if bits.Has(bits.Bits(streamLogEntry.Meta), Control) {
+				if isControl {
 					// debug.Fprintf(os.Stderr, "ReadNextWithTag: got control entry\n")
 					txnMarkTmp, err := s.txnMarkerSerde.Decode(streamLogEntry.Payload)
 					if err != nil {
@@ -321,7 +325,6 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 						seqNumInSharedLog = logEntry.SeqNum + 1
 						continue
 					} else if txnMark.Mark == uint8(txn_data.SCALE_FENCE) {
-						isControl = true
 						scaleEpoch = txnMark.TranIDOrScaleEpoch
 					}
 				}

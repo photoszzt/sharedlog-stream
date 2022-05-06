@@ -178,9 +178,8 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, input.NumOutPartitions[0])
 
+	srcs := map[string]processor.Source{input.InputTopicNames[0]: src}
 	if input.EnableTransaction {
-		srcs := make(map[string]processor.Source)
-		srcs[input.InputTopicNames[0]] = src
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:              procArgs,
 			Env:                   h.env,
@@ -208,11 +207,13 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 		return ret
 	}
 	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs:        procArgs,
-		Duration:        time.Duration(input.Duration) * time.Second,
-		InputTopicNames: input.InputTopicNames,
-		ParNum:          input.ParNum,
-		SerdeFormat:     commtypes.SerdeFormat(input.SerdeFormat),
+		ProcArgs:       procArgs,
+		Duration:       time.Duration(input.Duration) * time.Second,
+		Srcs:           srcs,
+		ParNum:         input.ParNum,
+		SerdeFormat:    commtypes.SerdeFormat(input.SerdeFormat),
+		Env:            h.env,
+		NumInPartition: input.NumInPartition,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

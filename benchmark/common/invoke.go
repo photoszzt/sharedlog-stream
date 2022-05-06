@@ -13,11 +13,11 @@ import (
 )
 
 func Invoke(config_file string, stat_dir string, gateway_url string,
-	baseQueryInput *QueryInput,
+	baseQueryInput *QueryInput, warmup_time int, local bool,
 	invokeSourceFunc func(client *http.Client, numOutPartition uint8, topicName string,
 		nodeConstraint string,
 		instanceId uint8, numSrcInstance uint8,
-		response *FnOutput, wg *sync.WaitGroup),
+		response *FnOutput, wg *sync.WaitGroup, warmup bool),
 ) error {
 	jsonFile, err := os.Open(config_file)
 	if err != nil {
@@ -53,6 +53,9 @@ func Invoke(config_file string, stat_dir string, gateway_url string,
 		scaleConfig[funcName] = ninstance
 		funcNames = append(funcNames, funcName)
 		nodeConstraint := config["NodeConstraint"].Data().(string)
+		if local {
+			nodeConstraint = ""
+		}
 
 		if !ok {
 			// this is source config
@@ -126,25 +129,70 @@ func Invoke(config_file string, stat_dir string, gateway_url string,
 		Bootstrap:   true,
 	}
 	var scaleResponse FnOutput
-	InvokeConfigScale(client, &scaleConfigInput, gateway_url, &scaleResponse, "scale")
+	InvokeConfigScale(client, &scaleConfigInput, gateway_url, &scaleResponse, "scale", local)
+
+	numSrcPartition := uint8(streamParam[srcTopicName].Data().(float64))
 
 	var wg sync.WaitGroup
+	warmupSourceOutput := make([]FnOutput, numSrcInstance)
+	warmupOutputMap := make(map[string][]FnOutput)
+	for _, node := range cliNodes {
+		warmupOutputMap[node.Name()] = make([]FnOutput, len(inParamsMap[node.Name()]))
+	}
+
+	fmt.Fprintf(os.Stderr, "src instance: %d\n", numSrcInstance)
+	if warmup_time != 0 {
+		ws := time.Now()
+		fmt.Fprintf(os.Stderr, "begin warmup\n")
+		for i := uint8(0); i < numSrcInstance; i++ {
+			wg.Add(1)
+			idx := i
+			go invokeSourceFunc(client, numSrcPartition, srcTopicName, srcNodeConstraint, idx, numSrcInstance,
+				&warmupSourceOutput[idx], &wg, true)
+		}
+
+		time.Sleep(time.Duration(5) * time.Second)
+
+		for _, node := range cliNodes {
+			funcName := node.Name()
+			param := inParamsMap[funcName]
+			output := warmupOutputMap[funcName]
+			for j := uint8(0); j < uint8(len(param)); j++ {
+				wg.Add(1)
+				idx := j
+				param[idx].ParNum = idx
+				param[idx].Duration = uint32(warmup_time)
+				go node.Invoke(client, &output[idx], &wg, param[idx])
+			}
+		}
+		wg.Wait()
+		fmt.Fprintf(os.Stderr, "done warmup with %v\n", time.Since(ws))
+		for i := uint8(0); i < numSrcInstance; i++ {
+			fmt.Fprintf(os.Stderr, "src-%d generates: %d events\n", i, len(warmupSourceOutput[i].Latencies["e2e"]))
+		}
+		for _, node := range cliNodes {
+			funcName := node.Name()
+			output := warmupOutputMap[funcName]
+			for j := 0; j < len(output); j++ {
+				fmt.Fprintf(os.Stderr, "%s-%d consumed: %v\n", funcName, j, output[j].Consumed)
+			}
+		}
+	}
+
 	sourceOutput := make([]FnOutput, numSrcInstance)
-	numSrcPartition := uint8(streamParam[srcTopicName].Data().(float64))
 	outputMap := make(map[string][]FnOutput)
 	for _, node := range cliNodes {
 		outputMap[node.Name()] = make([]FnOutput, len(inParamsMap[node.Name()]))
 	}
 
-	fmt.Fprintf(os.Stderr, "src instance: %d\n", numSrcInstance)
 	for i := uint8(0); i < numSrcInstance; i++ {
 		wg.Add(1)
 		idx := i
 		go invokeSourceFunc(client, numSrcPartition, srcTopicName, srcNodeConstraint, idx, numSrcInstance,
-			&sourceOutput[idx], &wg)
+			&sourceOutput[idx], &wg, false)
 	}
 
-	time.Sleep(time.Duration(10) * time.Second)
+	time.Sleep(time.Duration(1) * time.Second)
 
 	for _, node := range cliNodes {
 		funcName := node.Name()
@@ -154,6 +202,7 @@ func Invoke(config_file string, stat_dir string, gateway_url string,
 			wg.Add(1)
 			idx := j
 			param[idx].ParNum = idx
+			param[idx].Duration = baseQueryInput.Duration
 			go node.Invoke(client, &output[idx], &wg, param[idx])
 		}
 	}

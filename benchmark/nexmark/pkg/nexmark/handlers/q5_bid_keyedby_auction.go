@@ -184,9 +184,8 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 	}
 
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
+	srcs := map[string]processor.Source{sp.InputTopicNames[0]: src}
 	if sp.EnableTransaction {
-		srcs := make(map[string]processor.Source)
-		srcs[sp.InputTopicNames[0]] = src
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:      procArgs,
 			Env:           h.env,
@@ -217,11 +216,13 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 	}
 	// return h.process(ctx, sp, args)
 	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs:        procArgs,
-		Duration:        time.Duration(sp.Duration) * time.Second,
-		InputTopicNames: sp.InputTopicNames,
-		SerdeFormat:     commtypes.SerdeFormat(sp.SerdeFormat),
-		ParNum:          sp.ParNum,
+		ProcArgs:       procArgs,
+		Duration:       time.Duration(sp.Duration) * time.Second,
+		Srcs:           srcs,
+		SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
+		ParNum:         sp.ParNum,
+		Env:            h.env,
+		NumInPartition: sp.NumInPartition,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

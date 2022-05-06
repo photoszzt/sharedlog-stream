@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
-	"time"
 
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -33,11 +32,14 @@ var (
 	FLAGS_table_type         string
 	FLAGS_mongo_addr         string
 	FLAGS_stat_dir           string
+	FLAGS_warmup_time        int
+	FLAGS_warmup_events      int
+	FLAGS_local              bool
 )
 
 func invokeSourceFunc(client *http.Client, numOutPartition uint8, topicName string, nodeConstraint string, instanceId uint8,
 	numSrcInstance uint8,
-	response *common.FnOutput, wg *sync.WaitGroup,
+	response *common.FnOutput, wg *sync.WaitGroup, warmup bool,
 ) {
 	defer wg.Done()
 	var serdeFormat commtypes.SerdeFormat
@@ -50,14 +52,15 @@ func invokeSourceFunc(client *http.Client, numOutPartition uint8, topicName stri
 		serdeFormat = commtypes.JSON
 	}
 	nexmarkConfig := ntypes.NewNexMarkConfigInput(topicName, serdeFormat)
-	if FLAGS_duration != 0 {
-		nexmarkConfig.Duration = uint32(FLAGS_duration) + uint32((time.Duration(10) * time.Second).Seconds())
+	if warmup && FLAGS_warmup_events != 0 && FLAGS_warmup_time != 0 {
+		nexmarkConfig.Duration = uint32(FLAGS_warmup_time)
+		nexmarkConfig.EventsNum = uint64(FLAGS_warmup_events)
 	} else {
 		nexmarkConfig.Duration = uint32(FLAGS_duration)
+		nexmarkConfig.EventsNum = uint64(FLAGS_events_num)
 	}
 	nexmarkConfig.FirstEventRate = uint32(FLAGS_tps)
 	nexmarkConfig.NextEventRate = uint32(FLAGS_tps)
-	nexmarkConfig.EventsNum = uint64(FLAGS_events_num)
 	nexmarkConfig.NumOutPartition = numOutPartition
 	nexmarkConfig.ParNum = instanceId
 	nexmarkConfig.NumSrcInstance = numSrcInstance
@@ -86,6 +89,9 @@ func main() {
 	flag.StringVar(&FLAGS_table_type, "tab_type", "mem", "either \"mem\" or \"mongodb\"")
 	flag.StringVar(&FLAGS_mongo_addr, "mongo_addr", "", "mongodb address")
 	flag.StringVar(&FLAGS_stat_dir, "stat_dir", "", "stats dir to dump")
+	flag.IntVar(&FLAGS_warmup_events, "warmup_events", 0, "number of warmup events")
+	flag.IntVar(&FLAGS_warmup_time, "warmup_time", 0, "warmup time")
+	flag.BoolVar(&FLAGS_local, "local", false, "local mode without setting node constraint")
 	flag.Parse()
 
 	if FLAGS_stat_dir == "" {
@@ -94,12 +100,13 @@ func main() {
 	switch FLAGS_app_name {
 	case "q1", "q2", "q3", "q5", "q7", "q8", "windowedAvg":
 		err := common.Invoke(FLAGS_workload_config, FLAGS_stat_dir, FLAGS_faas_gateway,
-			NewQueryInput(uint8(common.StringToSerdeFormat(FLAGS_serdeFormat))), invokeSourceFunc)
+			NewQueryInput(uint8(common.StringToSerdeFormat(FLAGS_serdeFormat))),
+			FLAGS_warmup_time, FLAGS_local, invokeSourceFunc)
 		if err != nil {
 			panic(err)
 		}
 	case "scale":
-		scale(FLAGS_serdeFormat)
+		scale(FLAGS_serdeFormat, FLAGS_local)
 	default:
 		panic("unrecognized app")
 	}

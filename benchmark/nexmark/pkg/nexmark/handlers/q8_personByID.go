@@ -184,9 +184,8 @@ func (h *q8PersonsByIDHandler) Q8PersonsByID(ctx context.Context, sp *common.Que
 
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 
+	srcs := map[string]processor.Source{sp.InputTopicNames[0]: src}
 	if sp.EnableTransaction {
-		srcs := make(map[string]processor.Source)
-		srcs[sp.InputTopicNames[0]] = src
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:      procArgs,
 			Env:           h.env,
@@ -215,8 +214,13 @@ func (h *q8PersonsByIDHandler) Q8PersonsByID(ctx context.Context, sp *common.Que
 		return ret
 	}
 	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs: procArgs,
-		Duration: time.Duration(sp.Duration) * time.Second,
+		ProcArgs:       procArgs,
+		Duration:       time.Duration(sp.Duration) * time.Second,
+		Env:            h.env,
+		NumInPartition: sp.NumInPartition,
+		Srcs:           srcs,
+		SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
+		ParNum:         sp.ParNum,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

@@ -29,7 +29,7 @@ var (
 
 func NewShardedSharedLogStream(env types.Environment, topicName string, numPartitions uint8, serdeFormat commtypes.SerdeFormat) (*ShardedSharedLogStream, error) {
 	if numPartitions == 0 {
-		return nil, ErrZeroParNum
+		panic(ErrZeroParNum)
 	}
 	streams := make([]*BufferedSinkStream, 0, numPartitions)
 	for i := uint8(0); i < numPartitions; i++ {

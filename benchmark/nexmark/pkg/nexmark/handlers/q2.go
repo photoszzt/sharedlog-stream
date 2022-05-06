@@ -109,9 +109,8 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		CurrentOffset: make(map[string]uint64),
 		CommitEvery:   common.CommitDuration,
 	}
+	srcs := map[string]processor.Source{sp.InputTopicNames[0]: src}
 	if sp.EnableTransaction {
-		srcs := make(map[string]processor.Source)
-		srcs[sp.InputTopicNames[0]] = src
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:              procArgs,
 			Env:                   h.env,
@@ -140,11 +139,13 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		return ret
 	}
 	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs:        procArgs,
-		Duration:        time.Duration(sp.Duration) * time.Second,
-		InputTopicNames: sp.InputTopicNames,
-		ParNum:          sp.ParNum,
-		SerdeFormat:     commtypes.SerdeFormat(sp.SerdeFormat),
+		ProcArgs:       procArgs,
+		Duration:       time.Duration(sp.Duration) * time.Second,
+		Srcs:           srcs,
+		ParNum:         sp.ParNum,
+		SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
+		Env:            h.env,
+		NumInPartition: sp.NumInPartition,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

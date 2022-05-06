@@ -60,11 +60,11 @@ func (h *q8JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, e
 type q8JoinStreamProcessArgs struct {
 	personsOutChan   chan *common.FnOutput
 	auctionsOutChan  chan *common.FnOutput
-	personDone       bool
-	auctionDone      bool
 	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
 	funcName         string
 	curEpoch         uint64
+	personDone       bool
+	auctionDone      bool
 	parNum           uint8
 }
 
@@ -419,6 +419,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	go joinProcLoop(pctx, personsOutChan, joinProcPerson)
 	go joinProcLoop(actx, auctionsOutChan, joinProcAuction)
 
+	srcs := map[string]processor.Source{sp.InputTopicNames[0]: auctionsSrc, sp.InputTopicNames[1]: personsSrc}
 	if sp.EnableTransaction {
 		var wsc []*transaction.WindowStoreChangelog
 		if sp.TableType == uint8(store.IN_MEM) {
@@ -463,7 +464,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:      procArgs,
 			Env:           h.env,
-			Srcs:          map[string]processor.Source{sp.InputTopicNames[0]: auctionsSrc, sp.InputTopicNames[1]: personsSrc},
+			Srcs:          srcs,
 			OutputStreams: []*sharedlog_stream.ShardedSharedLogStream{outputStream},
 			QueryInput:    sp,
 			TransactionalId: fmt.Sprintf("%s-%s-%d-%s", h.funcName,
@@ -492,11 +493,13 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		return ret
 	}
 	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs:        procArgs,
-		Duration:        time.Duration(sp.Duration) * time.Second,
-		InputTopicNames: sp.InputTopicNames,
-		ParNum:          sp.ParNum,
-		SerdeFormat:     commtypes.SerdeFormat(sp.SerdeFormat),
+		ProcArgs:       procArgs,
+		Duration:       time.Duration(sp.Duration) * time.Second,
+		Srcs:           srcs,
+		ParNum:         sp.ParNum,
+		SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
+		Env:            h.env,
+		NumInPartition: sp.NumInPartition,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

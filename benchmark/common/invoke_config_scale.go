@@ -8,10 +8,14 @@ import (
 )
 
 func InvokeConfigScale(client *http.Client, csi *ConfigScaleInput,
-	faas_gateway string, response *FnOutput, appName string,
+	faas_gateway string, response *FnOutput, appName string, local bool,
 ) {
 	url := utils.BuildFunctionUrl(faas_gateway, appName)
-	if err := utils.JsonPostRequest(client, url, "0", csi, response); err != nil {
+	constraint := "0"
+	if local {
+		constraint = ""
+	}
+	if err := utils.JsonPostRequest(client, url, constraint, csi, response); err != nil {
 		log.Error().Msgf("%s request failed: %v", appName, err)
 	} else if !response.Success {
 		log.Error().Msgf("%s request failed: %s", appName, response.Message)

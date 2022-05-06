@@ -216,10 +216,8 @@ func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(
 	}
 
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
-
+	srcs := map[string]processor.Source{sp.InputTopicNames[0]: src}
 	if sp.EnableTransaction {
-		srcs := make(map[string]processor.Source)
-		srcs[sp.InputTopicNames[0]] = src
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:      procArgs,
 			Env:           h.env,
@@ -249,8 +247,13 @@ func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(
 		return ret
 	}
 	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs: procArgs,
-		Duration: time.Duration(sp.Duration) * time.Second,
+		ProcArgs:       procArgs,
+		Duration:       time.Duration(sp.Duration) * time.Second,
+		Env:            h.env,
+		Srcs:           srcs,
+		NumInPartition: sp.NumInPartition,
+		ParNum:         sp.ParNum,
+		SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

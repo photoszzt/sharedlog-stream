@@ -385,10 +385,8 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	}
 
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
-
+	srcs := map[string]processor.Source{sp.InputTopicNames[0]: src}
 	if sp.EnableTransaction {
-		srcs := make(map[string]processor.Source)
-		srcs[sp.InputTopicNames[0]] = src
 		var wsc []*transaction.WindowStoreChangelog
 		if countStore.TableType() == store.IN_MEM {
 			cstore := countStore.(*store.InMemoryWindowStoreWithChangelog)
@@ -442,11 +440,13 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	}
 	// return h.process(ctx, sp, args)
 	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs:        procArgs,
-		Duration:        time.Duration(sp.Duration) * time.Second,
-		InputTopicNames: sp.InputTopicNames,
-		ParNum:          sp.ParNum,
-		SerdeFormat:     commtypes.SerdeFormat(sp.SerdeFormat),
+		ProcArgs:       procArgs,
+		Duration:       time.Duration(sp.Duration) * time.Second,
+		Srcs:           srcs,
+		ParNum:         sp.ParNum,
+		SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
+		Env:            h.env,
+		NumInPartition: sp.NumInPartition,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

@@ -10,7 +10,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 )
 
-func scale(format string) {
+func scale(format string, local bool) {
 	serdeFormat := common.StringToSerdeFormat(format)
 
 	jsonFile, err := os.Open(FLAGS_scale_config)
@@ -37,5 +37,5 @@ func scale(format string) {
 	}
 	var response common.FnOutput
 	scaleConfig.SerdeFormat = uint8(serdeFormat)
-	common.InvokeConfigScale(client, &scaleConfig, FLAGS_faas_gateway, &response, "scale")
+	common.InvokeConfigScale(client, &scaleConfig, FLAGS_faas_gateway, &response, "scale", local)
 }

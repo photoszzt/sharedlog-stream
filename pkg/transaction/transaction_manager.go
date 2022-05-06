@@ -377,8 +377,10 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 		for par := range partitions {
 			parNum := par
 			g.Go(func() error {
-				off, err := stream.Push(ectx, encoded, parNum, true, false)
-				debug.Fprintf(os.Stderr, "append marker %d to stream %s off %x\n", marker, stream.TopicName(), off)
+				tag := sharedlog_stream.TxnMarkerTag(stream.TopicNameHash(), parNum)
+				off, err := stream.PushWithTag(ectx, encoded, parNum, []uint64{tag}, true, false)
+				debug.Fprintf(os.Stderr, "append marker %d to stream %s off %x tag %x\n",
+					marker, stream.TopicName(), off, tag)
 				return err
 			})
 		}
@@ -451,6 +453,7 @@ func (tc *TransactionManager) AddTopicPartition(ctx context.Context, topic strin
 
 func (tc *TransactionManager) createOffsetTopic(topicToTrack string, numPartition uint8) error {
 	offsetTopic := CONSUMER_OFFSET_LOG_TOPIC_NAME + topicToTrack
+	debug.Assert(tc.topicStreams != nil, "topic streams should be initialized")
 	_, ok := tc.topicStreams[offsetTopic]
 	if ok {
 		// already exists
@@ -576,6 +579,8 @@ func (cm *ConsumeSeqManager) AppendConsumedSeqNum(ctx context.Context, consumedS
 		if err != nil {
 			return err
 		}
+		debug.Fprintf(os.Stderr, "consumed offset 0x%x for %s\n",
+			consumedSeqNumConfig.ConsumedSeqNum, consumedSeqNumConfig.TopicToTrack)
 	}
 	return nil
 }
@@ -591,21 +596,13 @@ func (cm *ConsumeSeqManager) FindLastConsumedSeqNum(ctx context.Context, topicTo
 	txnMarkerTag := sharedlog_stream.TxnMarkerTag(offsetLog.TopicNameHash(), parNum)
 	var txnMkRawMsg *commtypes.RawMsg = nil
 	var err error
-	for {
-		_, txnMkRawMsg, err = offsetLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, parNum, txnMarkerTag)
-		if err != nil {
-			return 0, err
-		}
-		if !txnMkRawMsg.IsControl {
-			continue
-		} else {
-			break
-		}
-	}
-	if txnMkRawMsg == nil {
-		return 0, errors.ErrStreamEmpty
-	}
 
+	_, txnMkRawMsg, err = offsetLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, parNum, txnMarkerTag)
+	if err != nil {
+		return 0, err
+	}
+	debug.Fprintf(os.Stderr, "CM: offlog got entry off %x, control %v\n",
+		txnMkRawMsg.LogSeqNum, txnMkRawMsg.IsControl)
 	tag := sharedlog_stream.NameHashWithPartition(offsetLog.TopicNameHash(), parNum)
 
 	// read the previous item which should record the offset number
@@ -634,7 +631,8 @@ func (cm *ConsumeSeqManager) Commit(ctx context.Context) error {
 		for par := range partitions {
 			parNum := par
 			g.Go(func() error {
-				off, err := stream.Push(ectx, encoded, parNum, true, false)
+				tag := sharedlog_stream.TxnMarkerTag(stream.TopicNameHash(), parNum)
+				off, err := stream.PushWithTag(ectx, encoded, parNum, []uint64{tag}, true, false)
 				debug.Fprintf(os.Stderr, "append marker %d to stream %s off %x\n", txn_data.COMMIT, stream.TopicName(), off)
 				return err
 			})
@@ -644,7 +642,6 @@ func (cm *ConsumeSeqManager) Commit(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	cm.curConsumePar = make(map[string]map[uint8]struct{})
 	return nil
 }
 
@@ -666,6 +663,7 @@ func (tc *TransactionManager) AppendConsumedSeqNum(ctx context.Context, consumed
 		if err != nil {
 			return err
 		}
+		debug.Fprintf(os.Stderr, "consumed offset 0x%x for %s\n", consumedSeqNumConfig.ConsumedSeqNum, consumedSeqNumConfig.TopicToTrack)
 	}
 	return nil
 }
@@ -681,22 +679,14 @@ func (tc *TransactionManager) FindLastConsumedSeqNum(ctx context.Context, topicT
 	txnMarkerTag := sharedlog_stream.TxnMarkerTag(offsetLog.TopicNameHash(), parNum)
 	var txnMkRawMsg *commtypes.RawMsg = nil
 	var err error
-	for {
-		_, txnMkRawMsg, err = offsetLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, parNum, txnMarkerTag)
-		if err != nil {
-			return 0, err
-		}
-		if !txnMkRawMsg.IsControl {
-			continue
-		} else {
-			break
-		}
+	_, txnMkRawMsg, err = offsetLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, parNum, txnMarkerTag)
+	if err != nil {
+		return 0, err
 	}
-	if txnMkRawMsg == nil {
-		return 0, errors.ErrStreamEmpty
-	}
-
+	debug.Fprintf(os.Stderr, "offlog got entry off %x, control %v\n",
+		txnMkRawMsg.LogSeqNum, txnMkRawMsg.IsControl)
 	tag := sharedlog_stream.NameHashWithPartition(offsetLog.TopicNameHash(), parNum)
+	debug.Fprintf(os.Stderr, "most recent commit seqNumber 0x%x\n", txnMkRawMsg.LogSeqNum)
 
 	// read the previous item which should record the offset number
 	_, rawMsg, err := offsetLog.ReadBackwardWithTag(ctx, txnMkRawMsg.LogSeqNum, parNum, tag)

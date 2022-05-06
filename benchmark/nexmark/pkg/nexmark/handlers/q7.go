@@ -369,9 +369,8 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		CurrentOffset: make(map[string]uint64),
 		CommitEvery:   common.CommitDuration,
 	}
+	srcs := map[string]processor.Source{input.InputTopicNames[0]: src}
 	if input.EnableTransaction {
-		srcs := make(map[string]processor.Source)
-		srcs[input.InputTopicNames[0]] = src
 		var wsc []*transaction.WindowStoreChangelog
 		if input.TableType == uint8(store.IN_MEM) {
 			wstore_mem := wstore.(*store.InMemoryWindowStoreWithChangelog)
@@ -425,11 +424,13 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		return ret
 	}
 	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs:        procArgs,
-		Duration:        time.Duration(input.Duration) * time.Second,
-		InputTopicNames: input.InputTopicNames,
-		ParNum:          input.ParNum,
-		SerdeFormat:     commtypes.SerdeFormat(input.SerdeFormat),
+		ProcArgs:       procArgs,
+		Duration:       time.Duration(input.Duration) * time.Second,
+		Srcs:           srcs,
+		ParNum:         input.ParNum,
+		SerdeFormat:    commtypes.SerdeFormat(input.SerdeFormat),
+		Env:            h.env,
+		NumInPartition: input.NumInPartition,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

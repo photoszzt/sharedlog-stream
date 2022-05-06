@@ -71,7 +71,7 @@ L:
 		default:
 		}
 		duration := time.Since(startTime)
-		debug.Fprintf(os.Stderr, "consume dur: %v\n", duration)
+		// debug.Fprintf(os.Stderr, "consume dur: %v\n", duration)
 		if s.timeout != 0 && duration >= s.timeout {
 			break
 		}

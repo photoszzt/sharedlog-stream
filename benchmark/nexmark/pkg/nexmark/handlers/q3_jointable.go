@@ -440,6 +440,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	actx := context.WithValue(ctx, "id", "auction")
 	go joinProcLoop(pctx, personsOutChan, joinProcPerson)
 	go joinProcLoop(actx, auctionsOutChan, joinProcAuction)
+	srcs := map[string]processor.Source{auctionsStream.TopicName(): sss.src1, personsStream.TopicName(): sss.src2}
 	if sp.EnableTransaction {
 		var kvchangelogs []*transaction.KVStoreChangelog
 		if sp.TableType == uint8(store.IN_MEM) {
@@ -467,7 +468,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			ProcArgs:              procArgs,
 			Env:                   h.env,
 			MsgSerde:              sss.msgSerde,
-			Srcs:                  map[string]processor.Source{auctionsStream.TopicName(): sss.src1, personsStream.TopicName(): sss.src2},
+			Srcs:                  srcs,
 			OutputStreams:         []*sharedlog_stream.ShardedSharedLogStream{outputStream},
 			QueryInput:            sp,
 			TransactionalId:       fmt.Sprintf("%s-%d", h.funcName, sp.ParNum),
@@ -496,11 +497,13 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		return ret
 	}
 	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs:        procArgs,
-		Duration:        time.Duration(sp.Duration) * time.Second,
-		InputTopicNames: sp.InputTopicNames,
-		ParNum:          sp.ParNum,
-		SerdeFormat:     commtypes.SerdeFormat(sp.SerdeFormat),
+		ProcArgs:       procArgs,
+		Duration:       time.Duration(sp.Duration) * time.Second,
+		Srcs:           srcs,
+		ParNum:         sp.ParNum,
+		SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
+		Env:            h.env,
+		NumInPartition: sp.NumInPartition,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

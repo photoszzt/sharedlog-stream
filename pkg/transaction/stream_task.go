@@ -53,6 +53,7 @@ func createOffsetTopicAndGetOffset(ctx context.Context, tm *TransactionManager,
 	if err != nil {
 		return 0, fmt.Errorf("create offset topic failed: %v", err)
 	}
+	debug.Fprintf(os.Stderr, "created offset topic\n")
 	offset, err := tm.FindLastConsumedSeqNum(ctx, topic, parNum)
 	if err != nil {
 		if !errors.IsStreamEmptyError(err) {
@@ -108,6 +109,7 @@ func SetupManagers(ctx context.Context, env types.Environment,
 	if err != nil {
 		return nil, nil, err
 	}
+	debug.Fprintf(os.Stderr, "got offset map: %v\n", offsetMap)
 	err = restoreStateStore(ctx, tm, task, streamTaskArgs, offsetMap)
 	if err != nil {
 		return nil, nil, err
@@ -357,13 +359,13 @@ func TrackOffsetAndCommit(ctx context.Context,
 }
 
 type StreamTaskArgs struct {
-	ProcArgs        interface{}
-	Env             types.Environment
-	InputTopicNames []string
-	Duration        time.Duration
-	SerdeFormat     commtypes.SerdeFormat
-	ParNum          uint8
-	NumInPartition  uint8
+	ProcArgs       interface{}
+	Env            types.Environment
+	Srcs           map[string]processor.Source
+	Duration       time.Duration
+	SerdeFormat    commtypes.SerdeFormat
+	ParNum         uint8
+	NumInPartition uint8
 }
 
 type StreamTaskArgsTransaction struct {
@@ -385,13 +387,25 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	for _, inputTopicName := range args.InputTopicNames {
+	debug.Fprint(os.Stderr, "start restore\n")
+	for inputTopicName, srcStream := range args.Srcs {
 		err = cm.CreateOffsetTopic(args.Env, inputTopicName, args.NumInPartition, args.SerdeFormat)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
+		offset, err := cm.FindLastConsumedSeqNum(ctx, inputTopicName, args.ParNum)
+		if err != nil {
+			if !errors.IsStreamEmptyError(err) {
+				return &common.FnOutput{Success: false, Message: err.Error()}
+			}
+		}
+		debug.Fprintf(os.Stderr, "offset restores to %x\n", offset)
+		if offset != 0 {
+			srcStream.SetCursor(offset+1, args.ParNum)
+		}
 		cm.AddTopicTrackConsumedSeqs(ctx, inputTopicName, []uint8{args.ParNum})
 	}
+	debug.Fprint(os.Stderr, "done restore\n")
 	if t.InitFunc != nil {
 		t.InitFunc()
 	}
@@ -404,7 +418,10 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 		select {
 		case <-commitTimer.C:
 			if off != nil {
-				commitOffset(ctx, cm, off, args.ParNum)
+				err = commitOffset(ctx, cm, off, args.ParNum)
+				if err != nil {
+					panic(err)
+				}
 			}
 			hasUncommitted = false
 		default:
@@ -427,6 +444,12 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 				ret.Latencies = map[string][]int{"e2e": latencies}
 				ret.Duration = time.Since(startTime).Seconds()
 				ret.Consumed = make(map[string]uint64)
+				if hasUncommitted {
+					err = commitOffset(ctx, cm, off, args.ParNum)
+					if err != nil {
+						panic(err)
+					}
+				}
 				if t.CloseFunc != nil {
 					t.CloseFunc()
 				}
@@ -440,7 +463,10 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 		latencies = append(latencies, int(elapsed.Microseconds()))
 	}
 	if hasUncommitted {
-		commitOffset(ctx, cm, off, args.ParNum)
+		err = commitOffset(ctx, cm, off, args.ParNum)
+		if err != nil {
+			panic(err)
+		}
 	}
 	if t.CloseFunc != nil {
 		t.CloseFunc()
