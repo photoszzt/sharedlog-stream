@@ -119,7 +119,6 @@ func main() {
 				(FLAGS_events_num != 0 && idx >= events_num) {
 				break
 			}
-			idx += 1
 			parNum := idx % num_par
 			next = next.Add(timeGapUs)
 			payloadTs := datatype.PayloadTs{
@@ -141,6 +140,7 @@ func main() {
 			if err != nil {
 				panic(err)
 			}
+			idx += 1
 		}
 		remaining := p.Flush(30 * 1000)
 		for remaining != 0 {

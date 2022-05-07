@@ -112,10 +112,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "consume failed\n")
 	} else {
 		lat := prodConsumeLatencies{
-			ProdLatencies:        prodResponse.Latencies["e2e"],
+			// ProdLatencies:        prodResponse.Latencies["e2e"],
 			ProdConsumeLatencies: consumeResponse.Latencies["e2e"],
 		}
-		produced := len(lat.ProdLatencies)
+		produced := prodResponse.Consumed["prod"]
 		prodTime := prodResponse.Duration
 		consumed := len(lat.ProdConsumeLatencies)
 		consumeTime := consumeResponse.Duration

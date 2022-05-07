@@ -52,7 +52,7 @@ func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	latencies := make([]int, 0, 128)
+	// latencies := make([]int, 0, 128)
 	numEvents := sp.NumEvents
 	duration := time.Duration(sp.Duration) * time.Second
 	nEmitEvent := uint32(0)
@@ -86,7 +86,7 @@ func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context
 		if (duration != 0 && time.Since(startTime) >= duration) || (numEvents != 0 && nEmitEvent == numEvents) {
 			break
 		}
-		procStart := time.Now()
+		// procStart := time.Now()
 		parNum := nEmitEvent % uint32(sp.NumOutPartition)
 		next = next.Add(timeGapUs)
 		pt := datatype.PayloadTs{
@@ -108,8 +108,8 @@ func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context
 			}
 		*/
 		streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{Payload: encoded, Partitions: []uint8{uint8(parNum)}, IsControl: false}
-		elapsed := time.Since(procStart)
-		latencies = append(latencies, int(elapsed.Microseconds()))
+		// elapsed := time.Since(procStart)
+		// latencies = append(latencies, int(elapsed.Microseconds()))
 		nEmitEvent += 1
 	}
 	close(msgChan)
@@ -121,8 +121,9 @@ func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context
 		}
 	}
 	return &common.FnOutput{
-		Success:   true,
-		Duration:  time.Since(startTime).Seconds(),
-		Latencies: map[string][]int{"e2e": latencies},
+		Success:  true,
+		Duration: time.Since(startTime).Seconds(),
+		Consumed: map[string]uint64{"prod": uint64(nEmitEvent)},
+		// Latencies: map[string][]int{"e2e": latencies},
 	}
 }
