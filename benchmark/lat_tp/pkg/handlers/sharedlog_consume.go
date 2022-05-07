@@ -197,13 +197,14 @@ func (h *sharedlogConsumeBenchHandler) runLoop(ctx context.Context,
 		default:
 		}
 		if (duration != 0 && time.Since(startTime) >= duration) || (numEvents != 0 && idx >= numEvents) {
+			commitTimer.Stop()
 			break
 		}
 		_, rawMsgs, err := stream.ReadNext(ctx, 0)
 		if err != nil {
 			if errors.IsStreamEmptyError(err) {
 				// debug.Fprintf(os.Stderr, "stream is empty\n")
-				time.Sleep(time.Duration(100) * time.Microsecond)
+				time.Sleep(time.Duration(5) * time.Millisecond)
 				continue
 			} else if errors.IsStreamTimeoutError(err) {
 				// debug.Fprintf(os.Stderr, "stream time out\n")

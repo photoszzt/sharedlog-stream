@@ -120,8 +120,8 @@ func main() {
 				break
 			}
 			idx += 1
-			next = next.Add(timeGapUs)
 			parNum := idx % num_par
+			next = next.Add(timeGapUs)
 			payloadTs := datatype.PayloadTs{
 				Payload: content,
 				Ts:      next.UnixMicro(),
