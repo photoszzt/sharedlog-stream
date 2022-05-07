@@ -18,7 +18,7 @@ type MeteredSource struct {
 var _ = Source(&MeteredSource{})
 
 func NewMeteredSource(src Source) *MeteredSource {
-	measure_str := os.Getenv("MEASURE_PROC")
+	measure_str := os.Getenv("MEASURE_SRC")
 	measure := false
 	if measure_str == "true" || measure_str == "1" {
 		measure = true

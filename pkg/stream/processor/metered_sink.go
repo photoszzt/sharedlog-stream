@@ -25,7 +25,7 @@ type ConcurrentMeteredSink struct {
 var _ = Sink(&ConcurrentMeteredSink{})
 
 func NewConcurrentMeteredSink(sink Sink) *ConcurrentMeteredSink {
-	measure_str := os.Getenv("MEASURE_PROC")
+	measure_str := os.Getenv("MEASURE_SINK")
 	measure := false
 	if measure_str == "true" || measure_str == "1" {
 		measure = true
@@ -108,7 +108,7 @@ type MeteredSink struct {
 var _ = Sink(&MeteredSink{})
 
 func NewMeteredSink(sink Sink) *MeteredSink {
-	measure_str := os.Getenv("MEASURE_PROC")
+	measure_str := os.Getenv("MEASURE_SINK")
 	measure := false
 	if measure_str == "true" || measure_str == "1" {
 		measure = true
