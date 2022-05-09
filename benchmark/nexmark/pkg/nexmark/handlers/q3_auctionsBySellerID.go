@@ -102,7 +102,7 @@ func (h *query3AuctionsBySellerIDHandler) procMsg(ctx context.Context, msg commt
 
 type AuctionsBySellerIDProcessArgs struct {
 	src                   *processor.MeteredSource
-	sink                  *processor.MeteredSink
+	sink                  *sharedlog_stream.MeteredSink
 	filterAuctions        *processor.MeteredProcessor
 	auctionsBySellerIDMap *processor.MeteredProcessor
 	trackParFunc          transaction.TrackKeySubStreamFunc
@@ -129,7 +129,7 @@ func (a *AuctionsBySellerIDProcessArgs) ErrChan() chan error {
 func CommonGetSrcSink(ctx context.Context, sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*processor.MeteredSource, *processor.MeteredSink, commtypes.MsgSerde, error) {
+) (*processor.MeteredSource, *sharedlog_stream.MeteredSink, commtypes.MsgSerde, error) {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("get msg serde err: %v", err)
@@ -145,13 +145,16 @@ func CommonGetSrcSink(ctx context.Context, sp *common.QueryInput,
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeySerde:   commtypes.Uint64Serde{},
-		ValueSerde: eventSerde,
-		MsgSerde:   msgSerde,
+		KeySerde:      commtypes.Uint64Serde{},
+		ValueSerde:    eventSerde,
+		MsgSerde:      msgSerde,
+		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
-	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig),
+		time.Duration(sp.WarmupS)*time.Second)
+	sink := sharedlog_stream.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig),
+		time.Duration(sp.WarmupS)*time.Second)
 	return src, sink, msgSerde, nil
 }
 
@@ -190,13 +193,13 @@ func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(
 		func(m *commtypes.Message) (bool, error) {
 			event := m.Value.(*ntypes.Event)
 			return event.Etype == ntypes.AUCTION && event.NewAuction.Category == 10, nil
-		})))
+		})), time.Duration(sp.WarmupS)*time.Second)
 
 	auctionsBySellerIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
 		processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 			event := msg.Value.(*ntypes.Event)
 			return commtypes.Message{Key: event.NewAuction.Seller, Value: msg.Value, Timestamp: msg.Timestamp}, nil
-		})))
+		})), time.Duration(sp.WarmupS)*time.Second)
 	procArgs := &AuctionsBySellerIDProcessArgs{
 		src:                   src,
 		sink:                  sink,
@@ -213,6 +216,27 @@ func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
 		CommitEvery:   common.CommitDuration,
+		FlushOrPauseFunc: func() {
+			err := sink.Flush(ctx)
+			if err != nil {
+				panic(err)
+			}
+		},
+		InitFunc: func(progArgs interface{}) {
+			if sp.EnableTransaction {
+				sink.InnerSink().StartAsyncPushNoTick(ctx)
+			} else {
+				sink.InnerSink().StartAsyncPushWithTick(ctx)
+				sink.InitFlushTimer()
+			}
+			src.StartWarmup()
+			sink.StartWarmup()
+			filterAuctions.StartWarmup()
+			auctionsBySellerIDMap.StartWarmup()
+		},
+		CloseFunc: func() {
+			sink.CloseAsyncPush()
+		},
 	}
 
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
@@ -254,6 +278,7 @@ func (h *query3AuctionsBySellerIDHandler) Query3AuctionsBySellerID(
 		NumInPartition: sp.NumInPartition,
 		ParNum:         sp.ParNum,
 		SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
+		WarmupTime:     time.Duration(sp.WarmupS) * time.Second,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

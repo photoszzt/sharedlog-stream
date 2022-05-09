@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/stream/processor/store"
 )
@@ -18,6 +19,7 @@ func NewQueryInput(serdeFormat uint8) *common.QueryInput {
 	} else {
 		panic(fmt.Sprintf("unrecognized table type: %s", FLAGS_app_name))
 	}
+	fmt.Fprintf(os.Stderr, "warmup: %d\n", FLAGS_warmup_time)
 	return &common.QueryInput{
 		Duration:          uint32(FLAGS_duration),
 		EnableTransaction: FLAGS_tran,
@@ -28,5 +30,7 @@ func NewQueryInput(serdeFormat uint8) *common.QueryInput {
 		AppId:             FLAGS_app_name,
 		TableType:         uint8(table_type),
 		MongoAddr:         FLAGS_mongo_addr,
+		FlushMs:           uint32(FLAGS_flush_ms),
+		WarmupS:           uint32(FLAGS_warmup_time),
 	}
 }

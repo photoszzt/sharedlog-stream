@@ -10,4 +10,5 @@ type Sink interface {
 	TopicName() string
 	KeySerde() commtypes.Serde
 	Flush(ctx context.Context) error
+	InitFlushTimer()
 }

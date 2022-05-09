@@ -65,12 +65,14 @@ func (h *joinHandler) tests(ctx context.Context, sp *test_types.TestInput) *comm
 }
 
 func (h *joinHandler) getSrcSink(
+	ctx context.Context,
+	flush time.Duration,
 	stream1 *sharedlog_stream.ShardedSharedLogStream,
 	stream2 *sharedlog_stream.ShardedSharedLogStream,
 	outputStream *sharedlog_stream.ShardedSharedLogStream,
 ) (*processor.MeteredSource, /* src1 */
 	*processor.MeteredSource, /* src2 */
-	*processor.ConcurrentMeteredSink, error,
+	*sharedlog_stream.ConcurrentMeteredSink, error,
 ) {
 	msgSerde, err := commtypes.GetMsgSerde(uint8(commtypes.JSON))
 	if err != nil {
@@ -89,13 +91,14 @@ func (h *joinHandler) getSrcSink(
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeySerde:   commtypes.IntSerde{},
-		ValueSerde: commtypes.StringSerde{},
-		MsgSerde:   msgSerde,
+		KeySerde:      commtypes.IntSerde{},
+		ValueSerde:    commtypes.StringSerde{},
+		MsgSerde:      msgSerde,
+		FlushDuration: flush,
 	}
-	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, src1Config))
-	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, src2Config))
-	sink := processor.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
+	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, src1Config), 0)
+	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, src2Config), 0)
+	sink := sharedlog_stream.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig), 0)
 	return src1, src2, sink, nil
 }
 
@@ -116,7 +119,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	srcStream1.SetInTransaction(true)
 	srcStream2.SetInTransaction(true)
 	sinkStream.SetInTransaction(true)
-	src1, src2, sink, err := h.getSrcSink(srcStream1, srcStream2, sinkStream)
+	src1, src2, sink, err := h.getSrcSink(ctx, common.FlushDuration, srcStream1, srcStream2, sinkStream)
 	if err != nil {
 		panic(err)
 	}
@@ -133,11 +136,11 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	toWinTab1, winTab1, err := processor.ToMongoDBWindowTable(ctx, "tab1Mongo", client, joinWindows, kSerde, vSerde)
+	toWinTab1, winTab1, err := processor.ToMongoDBWindowTable(ctx, "tab1Mongo", client, joinWindows, kSerde, vSerde, 0)
 	if err != nil {
 		panic(err)
 	}
-	toWinTab2, winTab2, err := processor.ToMongoDBWindowTable(ctx, "tab2Mongo", client, joinWindows, kSerde, vSerde)
+	toWinTab2, winTab2, err := processor.ToMongoDBWindowTable(ctx, "tab2Mongo", client, joinWindows, kSerde, vSerde, 0)
 	if err != nil {
 		panic(err)
 	}
@@ -151,7 +154,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	sharedTimeTracker := processor.NewTimeTracker()
 	oneJoinTwoProc := processor.NewStreamStreamJoinProcessor(winTab2, joinWindows, joiner, false, true, sharedTimeTracker)
 	twoJoinOneProc := processor.NewStreamStreamJoinProcessor(winTab1, joinWindows, processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker)
-	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *processor.ConcurrentMeteredSink,
+	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *sharedlog_stream.ConcurrentMeteredSink,
 		trackParFunc transaction.TrackKeySubStreamFunc,
 	) error {
 		_, err := toWinTab1.ProcessAndReturn(ctx, m)
@@ -164,7 +167,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 		}
 		return pushMsgsToSink(ctx, sink, joinedMsgs, trackParFunc)
 	}
-	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *processor.ConcurrentMeteredSink,
+	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *sharedlog_stream.ConcurrentMeteredSink,
 		trackParFunc transaction.TrackKeySubStreamFunc,
 	) error {
 		_, err := toWinTab2.ProcessAndReturn(ctx, m)
@@ -325,7 +328,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	srcStream1.SetInTransaction(true)
 	srcStream2.SetInTransaction(true)
 	sinkStream.SetInTransaction(true)
-	src1, src2, sink, err := h.getSrcSink(srcStream1, srcStream2, sinkStream)
+	src1, src2, sink, err := h.getSrcSink(ctx, common.FlushDuration, srcStream1, srcStream2, sinkStream)
 	if err != nil {
 		panic(err)
 	}
@@ -366,11 +369,11 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	toWinTab1, winTab1, err := processor.ToInMemWindowTable("tab1", joinWindows, compare)
+	toWinTab1, winTab1, err := processor.ToInMemWindowTable("tab1", joinWindows, compare, 0)
 	if err != nil {
 		panic(err)
 	}
-	toWinTab2, winTab2, err := processor.ToInMemWindowTable("tab2", joinWindows, compare)
+	toWinTab2, winTab2, err := processor.ToInMemWindowTable("tab2", joinWindows, compare, 0)
 	if err != nil {
 		panic(err)
 	}
@@ -384,7 +387,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	sharedTimeTracker := processor.NewTimeTracker()
 	oneJoinTwoProc := processor.NewStreamStreamJoinProcessor(winTab2, joinWindows, joiner, false, true, sharedTimeTracker)
 	twoJoinOneProc := processor.NewStreamStreamJoinProcessor(winTab1, joinWindows, processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker)
-	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *processor.ConcurrentMeteredSink,
+	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *sharedlog_stream.ConcurrentMeteredSink,
 		trackParFunc transaction.TrackKeySubStreamFunc,
 	) error {
 		_, err := toWinTab1.ProcessAndReturn(ctx, m)
@@ -397,7 +400,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		}
 		return pushMsgsToSink(ctx, sink, joinedMsgs, trackParFunc)
 	}
-	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *processor.ConcurrentMeteredSink,
+	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *sharedlog_stream.ConcurrentMeteredSink,
 		trackParFunc transaction.TrackKeySubStreamFunc,
 	) error {
 		_, err := toWinTab2.ProcessAndReturn(ctx, m)
@@ -545,14 +548,14 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 
 func joinProc(ctx context.Context,
 	src *processor.MeteredSource,
-	sink *processor.ConcurrentMeteredSink,
+	sink *sharedlog_stream.ConcurrentMeteredSink,
 	trackParFunc func(ctx context.Context,
 		key interface{},
 		keySerde commtypes.Serde,
 		topicName string,
 		substreamId uint8,
 	) error,
-	runner func(ctx context.Context, m commtypes.Message, sink *processor.ConcurrentMeteredSink,
+	runner func(ctx context.Context, m commtypes.Message, sink *sharedlog_stream.ConcurrentMeteredSink,
 		trackParFunc transaction.TrackKeySubStreamFunc,
 	) error,
 ) {
@@ -640,7 +643,7 @@ func pushMsgToStream(ctx context.Context, key int, val *strTs, kSerde commtypes.
 	return err
 }
 
-func pushMsgsToSink(ctx context.Context, sink *processor.ConcurrentMeteredSink,
+func pushMsgsToSink(ctx context.Context, sink *sharedlog_stream.ConcurrentMeteredSink,
 	msgs []commtypes.Message, trackParFunc transaction.TrackKeySubStreamFunc,
 ) error {
 	for _, msg := range msgs {

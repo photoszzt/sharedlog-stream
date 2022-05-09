@@ -54,7 +54,7 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	seSerde commtypes.Serde, aucIdCountSerde commtypes.Serde,
 	aucIdCountMaxSerde commtypes.Serde,
 	msgSerde commtypes.MsgSerde,
-) (*processor.MeteredSource, *processor.ConcurrentMeteredSink, error) {
+) (*processor.MeteredSource, *sharedlog_stream.ConcurrentMeteredSink, error) {
 	inConfig := &sharedlog_stream.StreamSourceConfig{
 		Timeout:      time.Duration(20) * time.Second,
 		KeyDecoder:   seSerde,
@@ -62,12 +62,15 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		MsgSerde:   msgSerde,
-		KeySerde:   seSerde,
-		ValueSerde: aucIdCountMaxSerde,
+		MsgSerde:      msgSerde,
+		KeySerde:      seSerde,
+		ValueSerde:    aucIdCountMaxSerde,
+		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
-	sink := processor.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig),
+		time.Duration(sp.WarmupS)*time.Second)
+	sink := sharedlog_stream.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig),
+		time.Duration(sp.WarmupS)*time.Second)
 	sink.MarkFinalOutput()
 	return src, sink, nil
 }
@@ -77,7 +80,7 @@ type q5MaxBidProcessArgs struct {
 	stJoin           *processor.MeteredProcessor
 	chooseMaxCnt     *processor.MeteredProcessor
 	src              *processor.MeteredSource
-	sink             *processor.ConcurrentMeteredSink
+	sink             *sharedlog_stream.ConcurrentMeteredSink
 	output_stream    *sharedlog_stream.ShardedSharedLogStream
 	trackParFunc     transaction.TrackKeySubStreamFunc
 	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
@@ -300,7 +303,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			return v.Count
 		}
 		return agg
-	})))
+	})), time.Duration(sp.WarmupS)*time.Second)
 	stJoin := processor.NewMeteredProcessor(processor.NewStreamTableJoinProcessor(maxBidStoreName, kvstore,
 		processor.ValueJoinerWithKeyFunc(
 			func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
@@ -311,13 +314,13 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 					Count:  lv.Count,
 					MaxCnt: rv.Value.(uint64),
 				}
-			})))
+			})), time.Duration(sp.WarmupS)*time.Second)
 	chooseMaxCnt := processor.NewMeteredProcessor(
 		processor.NewStreamFilterProcessor(
 			processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
 				v := msg.Value.(*ntypes.AuctionIdCntMax)
 				return v.Count >= v.MaxCnt, nil
-			})))
+			})), time.Duration(sp.WarmupS)*time.Second)
 
 	procArgs := &q5MaxBidProcessArgs{
 		maxBid:           maxBid,
@@ -337,6 +340,28 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
 		CommitEvery:   common.CommitDuration,
+		FlushOrPauseFunc: func() {
+			err := sink.Flush(ctx)
+			if err != nil {
+				panic(err)
+			}
+		},
+		InitFunc: func(progArgs interface{}) {
+			if sp.EnableTransaction {
+				sink.InnerSink().StartAsyncPushNoTick(ctx)
+			} else {
+				sink.InnerSink().StartAsyncPushWithTick(ctx)
+				sink.InitFlushTimer()
+			}
+			src.StartWarmup()
+			sink.StartWarmup()
+			maxBid.StartWarmup()
+			stJoin.StartWarmup()
+			chooseMaxCnt.StartWarmup()
+		},
+		CloseFunc: func() {
+			sink.CloseAsyncPush()
+		},
 	}
 
 	srcs := map[string]processor.Source{sp.InputTopicNames[0]: src}
@@ -400,6 +425,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
 		Env:            h.env,
 		NumInPartition: sp.NumInPartition,
+		WarmupTime:     time.Duration(sp.WarmupS) * time.Second,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

@@ -52,7 +52,7 @@ func filterFunc(msg *commtypes.Message) (bool, error) {
 
 type query2ProcessArgs struct {
 	src              *processor.MeteredSource
-	sink             *processor.MeteredSink
+	sink             *sharedlog_stream.MeteredSink
 	q2Filter         *processor.MeteredProcessor
 	output_stream    *sharedlog_stream.ShardedSharedLogStream
 	trackParFunc     transaction.TrackKeySubStreamFunc
@@ -92,7 +92,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		}
 	}
 	sink.MarkFinalOutput()
-	q2Filter := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(filterFunc)))
+	q2Filter := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(filterFunc)), time.Duration(sp.WarmupS)*time.Second)
 	procArgs := &query2ProcessArgs{
 		src:              src,
 		sink:             sink,
@@ -108,6 +108,26 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
 		CommitEvery:   common.CommitDuration,
+		FlushOrPauseFunc: func() {
+			err := sink.Flush(ctx)
+			if err != nil {
+				panic(err)
+			}
+		},
+		InitFunc: func(progArgs interface{}) {
+			if sp.EnableTransaction {
+				sink.InnerSink().StartAsyncPushNoTick(ctx)
+			} else {
+				sink.InnerSink().StartAsyncPushWithTick(ctx)
+				sink.InitFlushTimer()
+			}
+			src.StartWarmup()
+			sink.StartWarmup()
+			q2Filter.StartWarmup()
+		},
+		CloseFunc: func() {
+			sink.CloseAsyncPush()
+		},
 	}
 	srcs := map[string]processor.Source{sp.InputTopicNames[0]: src}
 	if sp.EnableTransaction {
@@ -146,6 +166,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
 		Env:            h.env,
 		NumInPartition: sp.NumInPartition,
+		WarmupTime:     time.Duration(sp.WarmupS) * time.Second,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

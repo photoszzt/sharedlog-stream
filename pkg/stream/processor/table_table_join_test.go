@@ -26,11 +26,11 @@ func getJoinTable(t *testing.T) (
 			return 1
 		}
 	}
-	toTab1, tab1, err := ToInMemKVTable("tab1", compare)
+	toTab1, tab1, err := ToInMemKVTable("tab1", compare, 0)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	toTab2, tab2, err := ToInMemKVTable("tab2", compare)
+	toTab2, tab2, err := ToInMemKVTable("tab2", compare, 0)
 	if err != nil {
 		t.Fatal(err.Error())
 	}

@@ -7,6 +7,8 @@ import (
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
@@ -58,8 +60,9 @@ const (
 
 type joinProcArgs struct {
 	src           *processor.MeteredSource
-	sink          *processor.ConcurrentMeteredSink
-	controlChan   chan RunningState
+	sink          *sharedlog_stream.ConcurrentMeteredSink
+	controlVar    uint32
+	ack           int32
 	wg            *sync.WaitGroup
 	cHash         *hash.ConsistentHash
 	runner        JoinWorkerFunc
@@ -119,16 +122,21 @@ L:
 		select {
 		case <-ctx.Done():
 			break L
-		case state := <-procArgs.controlChan:
-			switch state {
-			case Paused:
-				status = Paused
-			case Running:
-				status = Running
-			case Stopped:
-				break L
-			}
 		default:
+		}
+		ctrl := atomic.LoadUint32(&procArgs.controlVar)
+		state := RunningState(uint8(ctrl))
+		switch state {
+		case Paused:
+			status = Paused
+			procArgs.sink.Flush(ctx)
+			atomic.AddInt32(&procArgs.ack, -1)
+		case Running:
+			status = Running
+			atomic.AddInt32(&procArgs.ack, -1)
+		case Stopped:
+			atomic.AddInt32(&procArgs.ack, -1)
+			break L
 		}
 		if status == Running {
 			gotMsgs, err := procArgs.src.Consume(ctx, procArgs.parNum)
@@ -312,7 +320,7 @@ func procMsg(ctx context.Context, msg commtypes.Message, procArgs *joinProcWitho
 
 func pushMsgsToSink(
 	ctx context.Context,
-	sink *processor.ConcurrentMeteredSink,
+	sink *sharedlog_stream.ConcurrentMeteredSink,
 	cHash *hash.ConsistentHash,
 	cHashMu *sync.RWMutex,
 	msgs []commtypes.Message,
@@ -343,7 +351,7 @@ func getSrcSink(ctx context.Context, sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
 ) (*processor.MeteredSource,
-	*processor.MeteredSink,
+	*sharedlog_stream.MeteredSink,
 	commtypes.MsgSerde,
 	error) {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
@@ -361,23 +369,26 @@ func getSrcSink(ctx context.Context, sp *common.QueryInput,
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeySerde:   commtypes.StringSerde{},
-		ValueSerde: eventSerde,
-		MsgSerde:   msgSerde,
+		KeySerde:      commtypes.StringSerde{},
+		ValueSerde:    eventSerde,
+		MsgSerde:      msgSerde,
+		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
-	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig), time.Duration(sp.WarmupS)*time.Second)
+	sink := sharedlog_stream.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig), time.Duration(sp.WarmupS)*time.Second)
 	return src, sink, msgSerde, nil
 }
 
 func getSrcSinkUint64Key(
+	ctx context.Context,
 	sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
 ) (*processor.MeteredSource,
-	*processor.MeteredSink,
+	*sharedlog_stream.MeteredSink,
 	commtypes.MsgSerde,
-	error) {
+	error,
+) {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return nil, nil, nil, err
@@ -393,12 +404,15 @@ func getSrcSinkUint64Key(
 		ValueDecoder: eventSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		MsgSerde:   msgSerde,
-		ValueSerde: eventSerde,
-		KeySerde:   commtypes.Uint64Serde{},
+		MsgSerde:      msgSerde,
+		ValueSerde:    eventSerde,
+		KeySerde:      commtypes.Uint64Serde{},
+		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
-	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig),
+		time.Duration(sp.WarmupS)*time.Second)
+	sink := sharedlog_stream.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig),
+		time.Duration(sp.WarmupS)*time.Second)
 	return src, sink, msgSerde, nil
 }

@@ -10,6 +10,7 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hash"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/transaction"
@@ -37,7 +38,7 @@ func NewAuctionsByIDHandler(env types.Environment, funcName string) types.FuncHa
 
 type auctionsByIDProcessArgs struct {
 	src              *processor.MeteredSource
-	sink             *processor.MeteredSink
+	sink             *sharedlog_stream.MeteredSink
 	filterAuctions   *processor.MeteredProcessor
 	auctionsByIDMap  *processor.MeteredProcessor
 	trackParFunc     transaction.TrackKeySubStreamFunc
@@ -157,13 +158,13 @@ func (h *auctionsByIDHandler) auctionsByID(ctx context.Context, sp *common.Query
 		func(m *commtypes.Message) (bool, error) {
 			event := m.Value.(*ntypes.Event)
 			return event.Etype == ntypes.AUCTION, nil
-		})))
+		})), time.Duration(sp.WarmupS)*time.Second)
 
 	auctionsByIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
 		processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 			event := msg.Value.(*ntypes.Event)
 			return commtypes.Message{Key: event.NewAuction.ID, Value: msg.Value, Timestamp: msg.Timestamp}, nil
-		})))
+		})), time.Duration(sp.WarmupS)*time.Second)
 
 	procArgs := &auctionsByIDProcessArgs{
 		src:              src,
@@ -214,8 +215,9 @@ func (h *auctionsByIDHandler) auctionsByID(ctx context.Context, sp *common.Query
 		return ret
 	}
 	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs: procArgs,
-		Duration: time.Duration(sp.Duration) * time.Second,
+		ProcArgs:   procArgs,
+		Duration:   time.Duration(sp.Duration) * time.Second,
+		WarmupTime: time.Duration(sp.WarmupS) * time.Second,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

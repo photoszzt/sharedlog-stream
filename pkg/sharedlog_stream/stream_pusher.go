@@ -2,6 +2,7 @@ package sharedlog_stream
 
 import (
 	"context"
+	"os"
 	"sharedlog-stream/pkg/debug"
 	"sync"
 	"time"
@@ -19,6 +20,58 @@ type StreamPush struct {
 	MsgErrChan chan error
 	Stream     *ShardedSharedLogStream
 	BufPush    bool
+}
+
+func NewStreamPush(stream *ShardedSharedLogStream) *StreamPush {
+	bufPush_str := os.Getenv("BUFPUSH")
+	bufPush := false
+	if bufPush_str == "true" || bufPush_str == "1" {
+		bufPush = true
+	}
+	return &StreamPush{
+		MsgChan:    make(chan PayloadToPush),
+		MsgErrChan: make(chan error),
+		BufPush:    bufPush,
+		Stream:     stream,
+	}
+}
+
+func (h *StreamPush) InitFlushTimer(duration time.Duration) {
+	if h.BufPush {
+		h.FlushTimer = time.NewTicker(duration)
+	}
+}
+
+func (h *StreamPush) Flush(ctx context.Context) error {
+	if h.BufPush {
+		if h.FlushTimer != nil {
+			h.FlushTimer.Stop()
+		}
+		for len(h.MsgChan) > 0 {
+			time.Sleep(time.Duration(100) * time.Microsecond)
+		}
+		err := h.Stream.Flush(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h *StreamPush) FlushNoLock(ctx context.Context) error {
+	if h.BufPush {
+		if h.FlushTimer != nil {
+			h.FlushTimer.Stop()
+		}
+		for len(h.MsgChan) > 0 {
+			time.Sleep(time.Duration(100) * time.Microsecond)
+		}
+		err := h.Stream.FlushNoLock(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
@@ -47,6 +100,44 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
 					h.Stream.FlushNoLock(ctx)
 				default:
 				}
+				err := h.Stream.BufPushNoLock(ctx, msg.Payload, uint8(msg.Partitions[0]))
+				if err != nil {
+					h.MsgErrChan <- err
+					return
+				}
+			} else {
+				debug.Assert(len(msg.Partitions) == 1, "should only have one partition")
+				_, err := h.Stream.Push(ctx, msg.Payload, uint8(msg.Partitions[0]), false, false)
+				if err != nil {
+					h.MsgErrChan <- err
+					return
+				}
+			}
+
+		}
+	}
+}
+
+func (h *StreamPush) AsyncStreamPushNoTick(ctx context.Context, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for msg := range h.MsgChan {
+		if msg.IsControl {
+			if h.BufPush {
+				err := h.Stream.Flush(ctx)
+				if err != nil {
+					h.MsgErrChan <- err
+					return
+				}
+			}
+			for _, i := range msg.Partitions {
+				_, err := h.Stream.Push(ctx, msg.Payload, i, true, false)
+				if err != nil {
+					h.MsgErrChan <- err
+					return
+				}
+			}
+		} else {
+			if h.BufPush {
 				err := h.Stream.BufPushNoLock(ctx, msg.Payload, uint8(msg.Partitions[0]))
 				if err != nil {
 					h.MsgErrChan <- err

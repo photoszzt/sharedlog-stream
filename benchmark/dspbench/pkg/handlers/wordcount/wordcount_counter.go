@@ -84,7 +84,7 @@ func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes
 			aggVal := agg.(uint64)
 			fmt.Fprintf(os.Stderr, "update %v count to %d\n", key, aggVal+1)
 			return aggVal + 1
-		})))
+		})), time.Duration(0))
 	return p, nil
 }
 
@@ -196,7 +196,8 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 		ValueDecoder: commtypes.StringDecoder{},
 		MsgDecoder:   msgSerde,
 	}
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig),
+		time.Duration(sp.WarmupS)*time.Second)
 	count, err := setupCounter(ctx, sp, msgSerde, meteredOutputStream)
 	if err != nil {
 		return &common.FnOutput{
@@ -250,8 +251,9 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 	}
 	// return h.process(ctx, sp, args)
 	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs: procArgs,
-		Duration: time.Duration(sp.Duration) * time.Second,
+		ProcArgs:   procArgs,
+		Duration:   time.Duration(sp.Duration) * time.Second,
+		WarmupTime: time.Duration(sp.WarmupS) * time.Second,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

@@ -51,11 +51,12 @@ func (h *query7Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 }
 
 func (h *query7Handler) getSrcSink(
+	ctx context.Context,
 	input *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
 	msgSerde commtypes.MsgSerde,
-) (*processor.MeteredSource, *processor.ConcurrentMeteredSink, error) {
+) (*processor.MeteredSource, *sharedlog_stream.ConcurrentMeteredSink, error) {
 	eventSerde, err := getEventSerde(input.SerdeFormat)
 	if err != nil {
 		return nil, nil, err
@@ -75,19 +76,22 @@ func (h *query7Handler) getSrcSink(
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		MsgSerde:   msgSerde,
-		KeySerde:   commtypes.Uint64Serde{},
-		ValueSerde: bmSerde,
+		MsgSerde:      msgSerde,
+		KeySerde:      commtypes.Uint64Serde{},
+		ValueSerde:    bmSerde,
+		FlushDuration: time.Duration(input.FlushMs) * time.Millisecond,
 	}
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
-	sink := processor.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig),
+		time.Duration(input.WarmupS)*time.Second)
+	sink := sharedlog_stream.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig),
+		time.Duration(input.WarmupS)*time.Second)
 
 	return src, sink, nil
 }
 
 type processQ7ProcessArgs struct {
 	src                *processor.MeteredSource
-	sink               *processor.ConcurrentMeteredSink
+	sink               *sharedlog_stream.ConcurrentMeteredSink
 	output_stream      *sharedlog_stream.ShardedSharedLogStream
 	maxPriceBid        *processor.MeteredProcessor
 	transformWithStore *processor.MeteredProcessor
@@ -268,7 +272,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		}
 	}
 
-	src, sink, err := h.getSrcSink(input, inputStream, outputStreams[0], msgSerde)
+	src, sink, err := h.getSrcSink(ctx, input, inputStream, outputStreams[0], msgSerde)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -342,14 +346,14 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 				return agg
 			}
 
-		}), tw))
-	transformWithStore := processor.NewMeteredProcessor(NewQ7TransformProcessor(wstore))
+		}), tw), time.Duration(input.WarmupS)*time.Second)
+	transformWithStore := processor.NewMeteredProcessor(NewQ7TransformProcessor(wstore), time.Duration(input.WarmupS)*time.Second)
 	filterTime := processor.NewMeteredProcessor(
 		processor.NewStreamFilterProcessor(processor.PredicateFunc(func(m *commtypes.Message) (bool, error) {
 			bm := m.Value.(*ntypes.BidAndMax)
 			lb := bm.MaxDateTime - 10*1000
 			return bm.DateTime >= lb && bm.DateTime <= bm.MaxDateTime, nil
-		})))
+		})), time.Duration(input.WarmupS)*time.Second)
 
 	procArgs := &processQ7ProcessArgs{
 		src:                src,
@@ -431,6 +435,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		SerdeFormat:    commtypes.SerdeFormat(input.SerdeFormat),
 		Env:            h.env,
 		NumInPartition: input.NumInPartition,
+		WarmupTime:     time.Duration(input.WarmupS) * time.Second,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

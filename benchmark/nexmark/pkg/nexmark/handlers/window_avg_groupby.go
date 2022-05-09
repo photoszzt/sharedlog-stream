@@ -46,10 +46,10 @@ func (h *windowAvgGroupBy) Call(ctx context.Context, input []byte) ([]byte, erro
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *windowAvgGroupBy) getSrcSink(sp *common.QueryInput,
+func (h *windowAvgGroupBy) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*processor.MeteredSource, *processor.ConcurrentMeteredSink, error) {
+) (*processor.MeteredSource, *sharedlog_stream.ConcurrentMeteredSink, error) {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return nil, nil, err
@@ -66,17 +66,20 @@ func (h *windowAvgGroupBy) getSrcSink(sp *common.QueryInput,
 	}
 
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		MsgSerde:   msgSerde,
-		KeySerde:   commtypes.Uint64Serde{},
-		ValueSerde: eventSerde,
+		MsgSerde:      msgSerde,
+		KeySerde:      commtypes.Uint64Serde{},
+		ValueSerde:    eventSerde,
+		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
-	sink := processor.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig),
+		time.Duration(sp.WarmupS)*time.Second)
+	sink := sharedlog_stream.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig),
+		time.Duration(sp.WarmupS)*time.Second)
 	return src, sink, nil
 }
 
-func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput, src *processor.MeteredSource, sink *processor.ConcurrentMeteredSink) *common.FnOutput {
+func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput, src *processor.MeteredSource, sink *sharedlog_stream.ConcurrentMeteredSink) *common.FnOutput {
 	duration := time.Duration(sp.Duration) * time.Second
 	latencies := make([]int, 0, 128)
 	startTime := time.Now()
@@ -163,7 +166,7 @@ func (h *windowAvgGroupBy) windowavg_groupby(ctx context.Context, sp *common.Que
 			Message: err.Error(),
 		}
 	}
-	src, sink, err := h.getSrcSink(sp, input_stream, output_streams[0])
+	src, sink, err := h.getSrcSink(ctx, sp, input_stream, output_streams[0])
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

@@ -129,13 +129,13 @@ func (h *q8AuctionsBySellerIDHandler) q8AuctionsBySellerID(ctx context.Context, 
 		func(m *commtypes.Message) (bool, error) {
 			event := m.Value.(*ntypes.Event)
 			return event.Etype == ntypes.AUCTION, nil
-		})))
+		})), time.Duration(sp.WarmupS)*time.Second)
 
 	auctionsBySellerIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
 		processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 			event := msg.Value.(*ntypes.Event)
 			return commtypes.Message{Key: event.NewAuction.Seller, Value: msg.Value, Timestamp: msg.Timestamp}, nil
-		})))
+		})), time.Duration(sp.WarmupS)*time.Second)
 
 	procArgs := &AuctionsBySellerIDProcessArgs{
 		src:                   src,
@@ -191,6 +191,7 @@ func (h *q8AuctionsBySellerIDHandler) q8AuctionsBySellerID(ctx context.Context, 
 		Srcs:        srcs,
 		ParNum:      sp.ParNum,
 		SerdeFormat: commtypes.SerdeFormat(sp.SerdeFormat),
+		WarmupTime:  time.Duration(sp.WarmupS) * time.Second,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

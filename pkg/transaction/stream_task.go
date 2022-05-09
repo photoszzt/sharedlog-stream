@@ -25,7 +25,7 @@ type StreamTask struct {
 	CloseFunc        func()
 	FlushOrPauseFunc func()
 	ResumeFunc       func()
-	InitFunc         func()
+	InitFunc         func(progArgs interface{})
 	CommitEvery      time.Duration
 }
 
@@ -363,6 +363,7 @@ type StreamTaskArgs struct {
 	Env            types.Environment
 	Srcs           map[string]processor.Source
 	Duration       time.Duration
+	WarmupTime     time.Duration
 	SerdeFormat    commtypes.SerdeFormat
 	ParNum         uint8
 	NumInPartition uint8
@@ -407,16 +408,20 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 	}
 	debug.Fprint(os.Stderr, "done restore\n")
 	if t.InitFunc != nil {
-		t.InitFunc()
+		t.InitFunc(args.ProcArgs)
 	}
 	hasUncommitted := false
 	var off map[string]uint64 = nil
 	var ret *common.FnOutput = nil
+
+	var afterWarmupStart time.Time
+	afterWarmup := false
+	commitTicker := time.NewTicker(t.CommitEvery)
+	debug.Fprintf(os.Stderr, "warmup time: %v\n", args.WarmupTime)
 	startTime := time.Now()
-	commitTimer := time.NewTicker(t.CommitEvery)
 	for {
 		select {
-		case <-commitTimer.C:
+		case <-commitTicker.C:
 			if off != nil {
 				err = commitOffset(ctx, cm, off, args.ParNum)
 				if err != nil {
@@ -425,6 +430,10 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 			}
 			hasUncommitted = false
 		default:
+		}
+		if !afterWarmup && args.WarmupTime != 0 && time.Since(startTime) >= args.WarmupTime {
+			afterWarmup = true
+			afterWarmupStart = time.Now()
 		}
 		if args.Duration != 0 && time.Since(startTime) >= args.Duration {
 			if t.FlushOrPauseFunc != nil {
@@ -442,7 +451,11 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 					t.FlushOrPauseFunc()
 				}
 				ret.Latencies = map[string][]int{"e2e": latencies}
-				ret.Duration = time.Since(startTime).Seconds()
+				if args.WarmupTime != 0 && afterWarmup {
+					ret.Duration = time.Since(afterWarmupStart).Seconds()
+				} else {
+					ret.Duration = time.Since(startTime).Seconds()
+				}
 				ret.Consumed = make(map[string]uint64)
 				if hasUncommitted {
 					err = commitOffset(ctx, cm, off, args.ParNum)
@@ -459,8 +472,10 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 		if !hasUncommitted {
 			hasUncommitted = true
 		}
-		elapsed := time.Since(procStart)
-		latencies = append(latencies, int(elapsed.Microseconds()))
+		if args.WarmupTime == 0 || afterWarmup {
+			elapsed := time.Since(procStart)
+			latencies = append(latencies, int(elapsed.Microseconds()))
+		}
 	}
 	if hasUncommitted {
 		err = commitOffset(ctx, cm, off, args.ParNum)
@@ -471,9 +486,13 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 	if t.CloseFunc != nil {
 		t.CloseFunc()
 	}
+	duration := time.Since(startTime).Seconds()
+	if args.WarmupTime != 0 && afterWarmup {
+		duration = time.Since(afterWarmupStart).Seconds()
+	}
 	return &common.FnOutput{
 		Success:   true,
-		Duration:  time.Since(startTime).Seconds(),
+		Duration:  duration,
 		Latencies: map[string][]int{"e2e": latencies},
 		Consumed:  make(map[string]uint64),
 	}
@@ -576,21 +595,31 @@ func (t *StreamTask) processWithTranLoop(ctx context.Context,
 	commitEvery := time.Duration(args.QueryInput.CommitEveryMs) * time.Millisecond
 	duration := time.Duration(args.QueryInput.Duration) * time.Second
 
-	startTime := time.Now()
 	idx := 0
 	numCommit := 0
 	debug.Fprintf(os.Stderr, "commit every(ms): %d, commit everyIter: %d, exitAfterNComm: %d\n",
 		commitEvery, args.QueryInput.CommitEveryNIter, args.QueryInput.ExitAfterNCommit)
 	for atomic.LoadUint32(run) != 1 {
-		time.Sleep(time.Duration(5) * time.Millisecond)
+		time.Sleep(time.Duration(100) * time.Microsecond)
 	}
 	init := false
+	var afterWarmupStart time.Time
+	afterWarmup := false
+	warmupDuration := time.Duration(args.QueryInput.WarmupS) * time.Second
+	debug.Fprintf(os.Stderr, "warmup time: %v\n", warmupDuration)
+	startTime := time.Now()
 L:
 	for {
 		select {
 		case <-ctx.Done():
 			break L
+
 		default:
+		}
+		if !afterWarmup && warmupDuration != 0 && time.Since(startTime) >= warmupDuration {
+			debug.Fprintf(os.Stderr, "after warmup\n")
+			afterWarmup = true
+			afterWarmupStart = time.Now()
 		}
 		procStart := time.Now()
 		timeSinceTranStart := time.Since(commitTimer)
@@ -675,7 +704,7 @@ L:
 				t.ResumeFunc()
 			}
 			if !init && t.InitFunc != nil {
-				t.InitFunc()
+				t.InitFunc(args.ProcArgs)
 				init = true
 			}
 		}
@@ -710,7 +739,11 @@ L:
 				// latencies = append(latencies, int(elapsed.Microseconds()))
 				ret.Latencies = map[string][]int{"e2e": latencies}
 				ret.Consumed = make(map[string]uint64)
-				ret.Duration = time.Since(startTime).Seconds()
+				e2eTime := time.Since(startTime).Seconds()
+				if warmupDuration != 0 && afterWarmup {
+					e2eTime = time.Since(afterWarmupStart).Seconds()
+				}
+				ret.Duration = e2eTime
 			} else {
 				if hasLiveTransaction {
 					if err := tm.AbortTransaction(ctx, false, args.KVChangelogs, args.WindowStoreChangelogs); err != nil {
@@ -735,13 +768,19 @@ L:
 			}
 		*/
 		currentOffset = off
-		elapsed := time.Since(procStart)
-		latencies = append(latencies, int(elapsed.Microseconds()))
+		if warmupDuration == 0 || afterWarmup {
+			elapsed := time.Since(procStart)
+			latencies = append(latencies, int(elapsed.Microseconds()))
+		}
 		idx += 1
+	}
+	e2eTime := time.Since(startTime).Seconds()
+	if warmupDuration != 0 && afterWarmup {
+		e2eTime = time.Since(afterWarmupStart).Seconds()
 	}
 	retc <- &common.FnOutput{
 		Success:   true,
-		Duration:  time.Since(startTime).Seconds(),
+		Duration:  e2eTime,
 		Latencies: map[string][]int{"e2e": latencies},
 		Consumed:  make(map[string]uint64),
 	}

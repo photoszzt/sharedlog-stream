@@ -10,6 +10,7 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hash"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/transaction"
@@ -112,7 +113,7 @@ func (h *bidByAuctionIDHandler) Call(ctx context.Context, input []byte) ([]byte,
 
 type bidsByAuctionIDProcessArgs struct {
 	src              *processor.MeteredSource
-	sink             *processor.MeteredSink
+	sink             *sharedlog_stream.MeteredSink
 	filterBids       *processor.MeteredProcessor
 	bidsByAuctionID  *processor.MeteredProcessor
 	trackParFunc     transaction.TrackKeySubStreamFunc
@@ -157,13 +158,13 @@ func (h *bidByAuctionIDHandler) bidByAuctionID(ctx context.Context, sp *common.Q
 		func(m *commtypes.Message) (bool, error) {
 			event := m.Value.(*ntypes.Event)
 			return event.Etype == ntypes.BID, nil
-		})))
+		})), time.Duration(sp.WarmupS)*time.Second)
 
 	bidsByAuctionIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
 		processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 			event := msg.Value.(*ntypes.Event)
 			return commtypes.Message{Key: event.Bid.Auction, Value: msg.Value, Timestamp: msg.Timestamp}, nil
-		})))
+		})), time.Duration(sp.WarmupS)*time.Second)
 	procArgs := &bidsByAuctionIDProcessArgs{
 		src:              src,
 		sink:             sink,
@@ -213,8 +214,9 @@ func (h *bidByAuctionIDHandler) bidByAuctionID(ctx context.Context, sp *common.Q
 		return ret
 	}
 	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs: procArgs,
-		Duration: time.Duration(sp.Duration) * time.Second,
+		ProcArgs:   procArgs,
+		Duration:   time.Duration(sp.Duration) * time.Second,
+		WarmupTime: time.Duration(sp.WarmupS) * time.Second,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

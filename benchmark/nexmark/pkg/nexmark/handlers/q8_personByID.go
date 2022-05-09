@@ -113,7 +113,7 @@ func (h *q8PersonsByIDHandler) procMsg(ctx context.Context, msg commtypes.Messag
 
 type q8PersonsByIDProcessArgs struct {
 	src              *processor.MeteredSource
-	sink             *processor.MeteredSink
+	sink             *sharedlog_stream.MeteredSink
 	output_stream    *sharedlog_stream.ShardedSharedLogStream
 	filterPerson     *processor.MeteredProcessor
 	personsByIDMap   *processor.MeteredProcessor
@@ -153,7 +153,7 @@ func (h *q8PersonsByIDHandler) Q8PersonsByID(ctx context.Context, sp *common.Que
 		func(msg *commtypes.Message) (bool, error) {
 			event := msg.Value.(*ntypes.Event)
 			return event.Etype == ntypes.PERSON, nil
-		})))
+		})), time.Duration(sp.WarmupS)*time.Second)
 	personsByIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
 		processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 			event := msg.Value.(*ntypes.Event)
@@ -162,7 +162,7 @@ func (h *q8PersonsByIDHandler) Q8PersonsByID(ctx context.Context, sp *common.Que
 				Value:     msg.Value,
 				Timestamp: msg.Timestamp,
 			}, nil
-		})))
+		})), time.Duration(sp.WarmupS)*time.Second)
 
 	procArgs := &q8PersonsByIDProcessArgs{
 		src:              src,
@@ -221,6 +221,7 @@ func (h *q8PersonsByIDHandler) Q8PersonsByID(ctx context.Context, sp *common.Que
 		Srcs:           srcs,
 		SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
 		ParNum:         sp.ParNum,
+		WarmupTime:     time.Duration(sp.WarmupS) * time.Second,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

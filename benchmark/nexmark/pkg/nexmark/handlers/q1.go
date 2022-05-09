@@ -71,8 +71,9 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 	sink.MarkFinalOutput()
 
 	filterBid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
-		only_bid)))
-	q1Map := processor.NewMeteredProcessor(processor.NewStreamMapValuesWithKeyProcessor(processor.MapperFunc(q1mapFunc)))
+		only_bid)), time.Duration(sp.WarmupS)*time.Second)
+	q1Map := processor.NewMeteredProcessor(processor.NewStreamMapValuesWithKeyProcessor(processor.MapperFunc(q1mapFunc)),
+		time.Duration(sp.WarmupS)*time.Second)
 	procArgs := &query1ProcessArgs{
 		sink:          sink,
 		trackParFunc:  transaction.DefaultTrackSubstreamFunc,
@@ -88,6 +89,27 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
 		CommitEvery:   common.CommitDuration,
+		FlushOrPauseFunc: func() {
+			err := sink.Flush(ctx)
+			if err != nil {
+				panic(err)
+			}
+		},
+		InitFunc: func(progArgs interface{}) {
+			if sp.EnableTransaction {
+				sink.InnerSink().StartAsyncPushNoTick(ctx)
+			} else {
+				sink.InnerSink().StartAsyncPushWithTick(ctx)
+				sink.InitFlushTimer()
+			}
+			filterBid.StartWarmup()
+			q1Map.StartWarmup()
+			src.StartWarmup()
+			sink.StartWarmup()
+		},
+		CloseFunc: func() {
+			sink.CloseAsyncPush()
+		},
 	}
 	srcs := map[string]processor.Source{sp.InputTopicNames[0]: src}
 	if sp.EnableTransaction {
@@ -128,6 +150,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 		Srcs:           srcs,
 		ParNum:         sp.ParNum,
 		SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
+		WarmupTime:     time.Duration(sp.WarmupS) * time.Second,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {
@@ -143,7 +166,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 
 type query1ProcessArgs struct {
 	src              *processor.MeteredSource
-	sink             *processor.MeteredSink
+	sink             *sharedlog_stream.MeteredSink
 	filterBid        *processor.MeteredProcessor
 	q1Map            *processor.MeteredProcessor
 	output_stream    *sharedlog_stream.ShardedSharedLogStream

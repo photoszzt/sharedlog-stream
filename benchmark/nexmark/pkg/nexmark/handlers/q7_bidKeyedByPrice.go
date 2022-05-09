@@ -52,7 +52,7 @@ func (h *q7BidKeyedByPrice) Call(ctx context.Context, input []byte) ([]byte, err
 
 type q7BidKeyedByPriceProcessArgs struct {
 	src              *processor.MeteredSource
-	sink             *processor.MeteredSink
+	sink             *sharedlog_stream.MeteredSink
 	bid              *processor.MeteredProcessor
 	bidKeyedByPrice  *processor.MeteredProcessor
 	output_stream    *sharedlog_stream.ShardedSharedLogStream
@@ -143,7 +143,7 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	debug.Assert(len(output_streams) == 1, "expected only one output stream")
-	src, sink, msgSerde, err := getSrcSinkUint64Key(input, input_stream, output_streams[0])
+	src, sink, msgSerde, err := getSrcSinkUint64Key(ctx, input, input_stream, output_streams[0])
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -151,11 +151,11 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 	bid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
 		event := msg.Value.(*ntypes.Event)
 		return event.Etype == ntypes.BID, nil
-	})))
+	})), time.Duration(input.WarmupS)*time.Second)
 	bidKeyedByPrice := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 		event := msg.Value.(*ntypes.Event)
 		return commtypes.Message{Key: event.Bid.Price, Value: msg.Value, Timestamp: msg.Timestamp}, nil
-	})))
+	})), time.Duration(input.WarmupS)*time.Second)
 
 	procArgs := &q7BidKeyedByPriceProcessArgs{
 		src:              src,
@@ -214,6 +214,7 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 		SerdeFormat:    commtypes.SerdeFormat(input.SerdeFormat),
 		Env:            h.env,
 		NumInPartition: input.NumInPartition,
+		WarmupTime:     time.Duration(input.WarmupS) * time.Second,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

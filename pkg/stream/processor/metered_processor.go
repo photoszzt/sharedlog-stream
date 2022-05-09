@@ -3,6 +3,7 @@ package processor
 import (
 	"context"
 	"os"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
 )
@@ -10,10 +11,12 @@ import (
 type MeteredProcessor struct {
 	proc      Processor
 	latencies []int
+	warmup    time.Duration
+	initial   time.Time
 	measure   bool
 }
 
-func NewMeteredProcessor(proc Processor) *MeteredProcessor {
+func NewMeteredProcessor(proc Processor, warmup time.Duration) *MeteredProcessor {
 	measure_str := os.Getenv("MEASURE_PROC")
 	measure := false
 	if measure_str == "true" || measure_str == "1" {
@@ -23,11 +26,19 @@ func NewMeteredProcessor(proc Processor) *MeteredProcessor {
 		proc:      proc,
 		latencies: make([]int, 0, 128),
 		measure:   measure,
+		warmup:    warmup,
+	}
+}
+
+func (p *MeteredProcessor) StartWarmup() {
+	if p.measure {
+		p.initial = time.Now()
 	}
 }
 
 func (p *MeteredProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	if p.measure {
+	debug.Assert(!p.measure || (p.warmup == 0 || (p.warmup > 0 && !p.initial.IsZero())), "warmup should initialize initial")
+	if p.measure && (p.warmup == 0 || (p.warmup > 0 && time.Since(p.initial) >= p.warmup)) {
 		procStart := time.Now()
 		newMsg, err := p.proc.ProcessAndReturn(ctx, msg)
 		elapsed := time.Since(procStart)

@@ -55,7 +55,7 @@ func getSrcSink(ctx context.Context,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
 ) (*processor.MeteredSource,
-	*processor.MeteredSink,
+	*sharedlog_stream.MeteredSink,
 	commtypes.MsgSerde,
 	error) {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
@@ -69,18 +69,21 @@ func getSrcSink(ctx context.Context,
 		MsgDecoder:   msgSerde,
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeySerde:   commtypes.StringSerde{},
-		ValueSerde: commtypes.StringSerde{},
-		MsgSerde:   msgSerde,
+		KeySerde:      commtypes.StringSerde{},
+		ValueSerde:    commtypes.StringSerde{},
+		MsgSerde:      msgSerde,
+		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig))
-	sink := processor.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig))
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig),
+		time.Duration(sp.WarmupS)*time.Second)
+	sink := sharedlog_stream.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig),
+		time.Duration(sp.WarmupS)*time.Second)
 	return src, sink, msgSerde, nil
 }
 
 type wordcountSplitterProcessArg struct {
 	src              *processor.MeteredSource
-	sink             *processor.MeteredSink
+	sink             *sharedlog_stream.MeteredSink
 	output_stream    *sharedlog_stream.ShardedSharedLogStream
 	splitter         processor.FlatMapperFunc
 	trackParFunc     transaction.TrackKeySubStreamFunc
@@ -214,8 +217,9 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 		return ret
 	}
 	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs: procArgs,
-		Duration: time.Duration(sp.Duration) * time.Second,
+		ProcArgs:   procArgs,
+		Duration:   time.Duration(sp.Duration) * time.Second,
+		WarmupTime: time.Duration(sp.WarmupS) * time.Second,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

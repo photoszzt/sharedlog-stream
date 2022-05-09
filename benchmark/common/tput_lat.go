@@ -106,7 +106,7 @@ func ProcessThroughputLat(name string, stat_dir string, latencies map[string][]i
 				fmt.Fprintf(os.Stderr, "processed: %v, throughput: (event/s) %v, p50: %d us, p90: %d us, p99: %d us\n",
 					processed, tput, ts.P(0.5), ts.P(0.9), ts.P(0.99))
 			} else {
-				fmt.Fprintf(os.Stderr, "%s, p50: %d us, p90: %d us, p99: %d\n", n, ts.P(0.5), ts.P(0.9), ts.P(0.99))
+				fmt.Fprintf(os.Stderr, "%s, p50: %d ms, p90: %d ms, p99: %d ms\n", n, ts.P(0.5), ts.P(0.9), ts.P(0.99))
 			}
 		}
 	}

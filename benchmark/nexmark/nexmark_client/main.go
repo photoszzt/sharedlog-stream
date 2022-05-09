@@ -35,6 +35,7 @@ var (
 	FLAGS_warmup_time        int
 	FLAGS_warmup_events      int
 	FLAGS_local              bool
+	FLAGS_flush_ms           int
 )
 
 func invokeSourceFunc(client *http.Client, numOutPartition uint8, topicName string, nodeConstraint string, instanceId uint8,
@@ -64,6 +65,7 @@ func invokeSourceFunc(client *http.Client, numOutPartition uint8, topicName stri
 	nexmarkConfig.NumOutPartition = numOutPartition
 	nexmarkConfig.ParNum = instanceId
 	nexmarkConfig.NumSrcInstance = numSrcInstance
+	nexmarkConfig.FlushMs = uint32(FLAGS_flush_ms)
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "source")
 	fmt.Printf("func source url is %v\n", url)
 	if err := utils.JsonPostRequest(client, url, nodeConstraint, nexmarkConfig, response); err != nil {
@@ -92,6 +94,7 @@ func main() {
 	flag.IntVar(&FLAGS_warmup_events, "warmup_events", 0, "number of warmup events")
 	flag.IntVar(&FLAGS_warmup_time, "warmup_time", 0, "warmup time")
 	flag.BoolVar(&FLAGS_local, "local", false, "local mode without setting node constraint")
+	flag.IntVar(&FLAGS_flush_ms, "flushms", 10, "flush the buffer every ms; for exactly once, please see commit_everyMs and commit_niter. They determine the flush interval. ")
 	flag.Parse()
 
 	if FLAGS_stat_dir == "" {

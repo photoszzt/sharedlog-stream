@@ -99,10 +99,6 @@ func encodeEvent(event *ntypes.Event,
 	return msgEncoded, nil
 }
 
-const (
-	FLUSH_DURATION = time.Duration(100) * time.Millisecond
-)
-
 func (h *nexmarkSourceHandler) getSerde(serdeFormat uint8) (commtypes.Serde, commtypes.Serde, commtypes.MsgSerde, error) {
 	var eventSerde commtypes.Serde
 	var msgSerde commtypes.MsgSerde
@@ -133,8 +129,6 @@ type nexmarkSrcProcArgs struct {
 }
 
 func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProcArgs) *common.FnOutput {
-	nowT := time.Now()
-	nowMs := nowT.UnixMilli()
 	nextEvent, err := args.eventGenerator.NextEvent(ctx, args.channel_url_cache)
 	if err != nil {
 		return &common.FnOutput{
@@ -142,11 +136,7 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 			Message: fmt.Sprintf("next event failed: %v\n", err),
 		}
 	}
-	wtsMs := nextEvent.WallclockTimestamp
-	if wtsMs > nowMs {
-		// fmt.Fprintf(os.Stderr, "sleep %v ms to generate event\n", wtsSec-now)
-		time.Sleep(time.Duration(wtsMs-nowMs) * time.Millisecond)
-	}
+
 	// fmt.Fprintf(os.Stderr, "gen event with ts: %v\n", nextEvent.EventTimestamp)
 	msgEncoded, err := encodeEvent(nextEvent.Event, args.eventSerde, args.msgSerde)
 	if err != nil {
@@ -157,6 +147,13 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 	parNum := args.idx
 	parNum = parNum % int(args.numPartition)
 
+	nowT := time.Now()
+	nowMs := nowT.UnixMilli()
+	wtsMs := nextEvent.WallclockTimestamp
+	if wtsMs > nowMs {
+		// fmt.Fprintf(os.Stderr, "sleep %v ms to generate event\n", wtsSec-now)
+		time.Sleep(time.Duration(wtsMs-nowMs) * time.Millisecond)
+	}
 	args.msgChan <- sharedlog_stream.PayloadToPush{Payload: msgEncoded, Partitions: []uint8{uint8(parNum)}, IsControl: false}
 	/*
 		if h.bufPush {
@@ -288,7 +285,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	var wg sync.WaitGroup
 	flushMsgChan := func() {
 		for len(msgChan) > 0 {
-			time.Sleep(time.Duration(1) * time.Millisecond)
+			time.Sleep(time.Duration(100) * time.Microsecond)
 		}
 	}
 	procArgs := &nexmarkSrcProcArgs{
@@ -311,7 +308,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	}
 	wg.Add(1)
 	go streamPusher.AsyncStreamPush(ctx, &wg)
-	streamPusher.FlushTimer = time.NewTicker(FLUSH_DURATION)
+	streamPusher.FlushTimer = time.NewTicker(time.Duration(inputConfig.FlushMs) * time.Millisecond)
 	startTime := time.Now()
 	for {
 		select {

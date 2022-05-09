@@ -47,11 +47,11 @@ func getStreamJoinMem(joinWindows *JoinWindows, t *testing.T) (
 			}
 		}
 	})
-	toWinTab1, winTab1, err := ToInMemWindowTable("tab1", joinWindows, compare)
+	toWinTab1, winTab1, err := ToInMemWindowTable("tab1", joinWindows, compare, time.Duration(0))
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	toWinTab2, winTab2, err := ToInMemWindowTable("tab2", joinWindows, compare)
+	toWinTab2, winTab2, err := ToInMemWindowTable("tab2", joinWindows, compare, time.Duration(0))
 	if err != nil {
 		t.Fatal(err.Error())
 	}

@@ -114,7 +114,7 @@ func (h *query3PersonsByIDHandler) Call(ctx context.Context, input []byte) ([]by
 
 type query3PersonsByIDProcessArgs struct {
 	src              *processor.MeteredSource
-	sink             *processor.MeteredSink
+	sink             *sharedlog_stream.MeteredSink
 	output_stream    *sharedlog_stream.ShardedSharedLogStream
 	filterPerson     *processor.MeteredProcessor
 	personsByIDMap   *processor.MeteredProcessor
@@ -164,7 +164,7 @@ func (h *query3PersonsByIDHandler) Query3PersonsByID(ctx context.Context, sp *co
 			*/
 			return event.Etype == ntypes.PERSON && ((event.NewPerson.State == "OR") ||
 				event.NewPerson.State == "ID" || event.NewPerson.State == "CA"), nil
-		})))
+		})), time.Duration(sp.WarmupS)*time.Second)
 	personsByIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
 		processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 			event := msg.Value.(*ntypes.Event)
@@ -173,7 +173,7 @@ func (h *query3PersonsByIDHandler) Query3PersonsByID(ctx context.Context, sp *co
 				Value:     msg.Value,
 				Timestamp: msg.Timestamp,
 			}, nil
-		})))
+		})), time.Duration(sp.WarmupS)*time.Second)
 
 	procArgs := &query3PersonsByIDProcessArgs{
 		src:              src,
@@ -236,6 +236,7 @@ func (h *query3PersonsByIDHandler) Query3PersonsByID(ctx context.Context, sp *co
 		SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
 		Env:            h.env,
 		NumInPartition: sp.NumInPartition,
+		WarmupTime:     time.Duration(sp.WarmupS) * time.Second,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

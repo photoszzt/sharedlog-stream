@@ -26,6 +26,7 @@ type NexMarkConfigInput struct {
 	BidHotRatioAuctions    uint32        `json:"bid_hot_ratio_auctions"`
 	BidHotRatioBidders     uint32        `json:"bid_hot_ratio_bidders"`
 	AuctionHotRatioSellers uint32        `json:"auction_hot_ratio_sellers"`
+	FlushMs                uint32        `json:"flushms"`
 	RateLimited            bool          `json:"rate_limited"`
 	SerdeFormat            uint8         `json:"serde_format"`
 	NumOutPartition        uint8         `json:"numOutPar,omitempty"`

@@ -52,7 +52,7 @@ func (h *bidKeyedByAuction) Call(ctx context.Context, input []byte) ([]byte, err
 
 type bidKeyedByAuctionProcessArgs struct {
 	src              *processor.MeteredSource
-	sink             *processor.MeteredSink
+	sink             *sharedlog_stream.MeteredSink
 	filterBid        *processor.MeteredProcessor
 	selectKey        *processor.MeteredProcessor
 	output_stream    *sharedlog_stream.ShardedSharedLogStream
@@ -148,7 +148,7 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 	}
 	debug.Assert(len(output_streams) == 1, "expected only one output stream")
 
-	src, sink, msgSerde, err := getSrcSinkUint64Key(sp, input_stream, output_streams[0])
+	src, sink, msgSerde, err := getSrcSinkUint64Key(ctx, sp, input_stream, output_streams[0])
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -156,12 +156,12 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 		func(m *commtypes.Message) (bool, error) {
 			event := m.Value.(*ntypes.Event)
 			return event.Etype == ntypes.BID, nil
-		})))
+		})), time.Duration(sp.WarmupS)*time.Second)
 	selectKey := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(processor.MapperFunc(
 		func(m commtypes.Message) (commtypes.Message, error) {
 			event := m.Value.(*ntypes.Event)
 			return commtypes.Message{Key: event.Bid.Auction, Value: m.Value, Timestamp: m.Timestamp}, nil
-		})))
+		})), time.Duration(sp.WarmupS)*time.Second)
 
 	procArgs := &bidKeyedByAuctionProcessArgs{
 		src:              src,
@@ -181,6 +181,27 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
 		CommitEvery:   common.CommitDuration,
+		FlushOrPauseFunc: func() {
+			err := sink.Flush(ctx)
+			if err != nil {
+				panic(err)
+			}
+		},
+		InitFunc: func(progArgs interface{}) {
+			if sp.EnableTransaction {
+				sink.InnerSink().StartAsyncPushNoTick(ctx)
+			} else {
+				sink.InnerSink().StartAsyncPushWithTick(ctx)
+				sink.InitFlushTimer()
+			}
+			src.StartWarmup()
+			sink.StartWarmup()
+			filterBid.StartWarmup()
+			selectKey.StartWarmup()
+		},
+		CloseFunc: func() {
+			sink.CloseAsyncPush()
+		},
 	}
 
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
@@ -223,6 +244,7 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 		ParNum:         sp.ParNum,
 		Env:            h.env,
 		NumInPartition: sp.NumInPartition,
+		WarmupTime:     time.Duration(sp.WarmupS) * time.Second,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

@@ -55,7 +55,7 @@ func (h *q4JoinTableHandler) Call(ctx context.Context, input []byte) ([]byte, er
 type q4JoinTableProcessArgs struct {
 	auctionsSrc      *processor.MeteredSource
 	bidsSrc          *processor.MeteredSource
-	sink             *processor.ConcurrentMeteredSink
+	sink             *sharedlog_stream.ConcurrentMeteredSink
 	aJoinB           JoinWorkerFunc
 	bJoinA           JoinWorkerFunc
 	trackParFunc     transaction.TrackKeySubStreamFunc
@@ -150,7 +150,7 @@ func (h *q4JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	outputStream *sharedlog_stream.ShardedSharedLogStream,
 ) (*processor.MeteredSource, /* src1 */
 	*processor.MeteredSource, /* src2 */
-	*processor.ConcurrentMeteredSink,
+	*sharedlog_stream.ConcurrentMeteredSink,
 	commtypes.MsgSerde,
 	error,
 ) {
@@ -182,14 +182,18 @@ func (h *q4JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 		abSerde = &ntypes.AuctionBidMsgpSerde{}
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeySerde:   commtypes.Uint64Serde{},
-		ValueSerde: abSerde,
-		MsgSerde:   msgSerde,
+		KeySerde:      commtypes.Uint64Serde{},
+		ValueSerde:    abSerde,
+		MsgSerde:      msgSerde,
+		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 
-	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, auctionsConfig))
-	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, personsConfig))
-	sink := processor.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
+	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, auctionsConfig),
+		time.Duration(sp.WarmupS)*time.Second)
+	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, personsConfig),
+		time.Duration(sp.WarmupS)*time.Second)
+	sink := sharedlog_stream.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig),
+		time.Duration(sp.WarmupS)*time.Second)
 	return src1, src2, sink, msgSerde, nil
 }
 
@@ -221,7 +225,8 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		}
 	}
 
-	toAuctionsTable, auctionsStore, err := processor.ToInMemKVTable("auctionsByIDStore", compare)
+	toAuctionsTable, auctionsStore, err := processor.ToInMemKVTable("auctionsByIDStore", compare,
+		time.Duration(sp.WarmupS)*time.Second)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -229,7 +234,8 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		}
 	}
 
-	toBidsTable, bidsStore, err := processor.ToInMemKVTable("bidsByAuctionIDStore", compare)
+	toBidsTable, bidsStore, err := processor.ToInMemKVTable("bidsByAuctionIDStore", compare,
+		time.Duration(sp.WarmupS)*time.Second)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -251,9 +257,11 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 	})
 
 	auctionsJoinBids := processor.NewMeteredProcessor(
-		processor.NewTableTableJoinProcessor(bidsStore.Name(), bidsStore, joiner))
+		processor.NewTableTableJoinProcessor(bidsStore.Name(), bidsStore, joiner),
+		time.Duration(sp.WarmupS)*time.Second)
 	bidsJoinAuctions := processor.NewMeteredProcessor(
-		processor.NewTableTableJoinProcessor(auctionsStore.Name(), auctionsStore, joiner))
+		processor.NewTableTableJoinProcessor(auctionsStore.Name(), auctionsStore, joiner),
+		time.Duration(sp.WarmupS)*time.Second)
 
 	aJoinB := JoinWorkerFunc(func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		_, err := toAuctionsTable.ProcessAndReturn(ctx, m)
@@ -327,8 +335,9 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		return ret
 	}
 	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs: procArgs,
-		Duration: time.Duration(sp.Duration) * time.Second,
+		ProcArgs:   procArgs,
+		Duration:   time.Duration(sp.Duration) * time.Second,
+		WarmupTime: time.Duration(sp.WarmupS) * time.Second,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

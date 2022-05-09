@@ -18,6 +18,7 @@ import (
 	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/treemap"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -148,7 +149,7 @@ func getInOutStreams(
 type srcSinkSerde struct {
 	src1      *processor.MeteredSource
 	src2      *processor.MeteredSource
-	sink      *processor.ConcurrentMeteredSink
+	sink      *sharedlog_stream.ConcurrentMeteredSink
 	msgSerde  commtypes.MsgSerde
 	keySerdes []commtypes.Serde
 	valSerdes []commtypes.Serde
@@ -190,14 +191,18 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 		ncsiSerde = ntypes.NameCityStateIdMsgpSerde{}
 	}
 	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeySerde:   commtypes.Uint64Serde{},
-		ValueSerde: ncsiSerde,
-		MsgSerde:   msgSerde,
+		KeySerde:      commtypes.Uint64Serde{},
+		ValueSerde:    ncsiSerde,
+		MsgSerde:      msgSerde,
+		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 
-	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, auctionsConfig))
-	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, personsConfig))
-	sink := processor.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig))
+	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, auctionsConfig),
+		time.Duration(sp.WarmupS)*time.Second)
+	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, personsConfig),
+		time.Duration(sp.WarmupS)*time.Second)
+	sink := sharedlog_stream.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig),
+		time.Duration(sp.WarmupS)*time.Second)
 	sink.MarkFinalOutput()
 	sss := &srcSinkSerde{
 		src1:      src1,
@@ -222,6 +227,7 @@ func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 	sss *srcSinkSerde,
 	serdeFormat commtypes.SerdeFormat,
 	mongoAddr string,
+	warmup time.Duration,
 ) (
 	*kvtables,
 	error,
@@ -239,12 +245,14 @@ func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 			}
 		}
 
-		toAuctionsTable, auctionsStore, err := processor.ToInMemKVTable("auctionsBySellerIDStore", compare)
+		toAuctionsTable, auctionsStore, err := processor.ToInMemKVTable(
+			"auctionsBySellerIDStore", compare, warmup)
 		if err != nil {
 			return nil, fmt.Errorf("toAucTab err: %v", err)
 		}
 
-		toPersonsTable, personsStore, err := processor.ToInMemKVTable("personsByIDStore", compare)
+		toPersonsTable, personsStore, err := processor.ToInMemKVTable(
+			"personsByIDStore", compare, warmup)
 		if err != nil {
 			return nil, fmt.Errorf("toPersonsTab err: %v", err)
 		}
@@ -274,12 +282,12 @@ func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 			return nil, err
 		}
 		toAuctionsTable, auctionsStore, err := processor.ToMongoDBKVTable(ctx, "auctionsBySellerIDStore",
-			client, sss.keySerdes[0], vtSerde0)
+			client, sss.keySerdes[0], vtSerde0, warmup)
 		if err != nil {
 			return nil, err
 		}
 		toPersonsTable, personsStore, err := processor.ToMongoDBKVTable(ctx, "personsByIDStore",
-			client, sss.keySerdes[1], vtSerde1)
+			client, sss.keySerdes[1], vtSerde1, warmup)
 		if err != nil {
 			return nil, err
 		}
@@ -321,7 +329,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		return &common.FnOutput{Success: false, Message: fmt.Sprintf("getSrcSink err: %v\n", err)}
 	}
 
-	kvtabs, err := h.setupTables(ctx, store.TABLE_TYPE(sp.TableType), sss, commtypes.SerdeFormat(sp.SerdeFormat), sp.MongoAddr)
+	kvtabs, err := h.setupTables(ctx, store.TABLE_TYPE(sp.TableType), sss, commtypes.SerdeFormat(sp.SerdeFormat), sp.MongoAddr, time.Duration(sp.WarmupS)*time.Second)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -343,11 +351,13 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		})
 
 	auctionJoinsPersons := processor.NewMeteredProcessor(
-		processor.NewTableTableJoinProcessor(kvtabs.tab2.Name(), kvtabs.tab2, joiner))
+		processor.NewTableTableJoinProcessor(kvtabs.tab2.Name(), kvtabs.tab2, joiner),
+		time.Duration(sp.WarmupS)*time.Second)
 
 	personJoinsAuctions := processor.NewMeteredProcessor(
 		processor.NewTableTableJoinProcessor(kvtabs.tab1.Name(), kvtabs.tab1,
-			processor.ReverseValueJoinerWithKey(joiner)))
+			processor.ReverseValueJoinerWithKey(joiner)),
+		time.Duration(sp.WarmupS)*time.Second)
 
 	aJoinP := JoinWorkerFunc(func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		// msg is auction
@@ -388,6 +398,8 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
 		curEpoch:         sp.ScaleEpoch,
 		funcName:         h.funcName,
+		personDone:       false,
+		auctionDone:      false,
 	}
 
 	joinProcPerson := &joinProcArgs{
@@ -399,7 +411,8 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		trackParFunc: transaction.DefaultTrackSubstreamFunc,
 		cHashMu:      &h.cHashMu,
 		cHash:        h.cHash,
-		controlChan:  make(chan RunningState),
+		controlVar:   uint32(Paused),
+		ack:          0,
 	}
 	joinProcAuction := &joinProcArgs{
 		src:          sss.src1,
@@ -410,26 +423,75 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		trackParFunc: transaction.DefaultTrackSubstreamFunc,
 		cHashMu:      &h.cHashMu,
 		cHash:        h.cHash,
-		controlChan:  make(chan RunningState),
+		controlVar:   uint32(Paused),
+		ack:          0,
 	}
 	task := transaction.StreamTask{
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
 		FlushOrPauseFunc: func() {
-			joinProcAuction.controlChan <- Paused
-			joinProcPerson.controlChan <- Paused
+			if !procArgs.auctionDone {
+				atomic.AddInt32(&joinProcAuction.ack, 1)
+				atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Paused))
+			}
+			if !procArgs.personDone {
+				atomic.AddInt32(&joinProcPerson.ack, 1)
+				atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Paused))
+			}
+			for atomic.LoadInt32(&joinProcAuction.ack) != 0 &&
+				atomic.LoadInt32(&joinProcPerson.ack) != 0 {
+				time.Sleep(time.Duration(100) * time.Microsecond)
+			}
 		},
 		ResumeFunc: func() {
-			joinProcAuction.controlChan <- Running
-			joinProcPerson.controlChan <- Running
+			if !procArgs.auctionDone {
+				atomic.AddInt32(&joinProcAuction.ack, 1)
+				atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Running))
+			}
+			if !procArgs.personDone {
+				atomic.AddInt32(&joinProcPerson.ack, 1)
+				atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Running))
+			}
+			for atomic.LoadInt32(&joinProcAuction.ack) != 0 &&
+				atomic.LoadInt32(&joinProcPerson.ack) != 0 {
+				time.Sleep(time.Duration(100) * time.Microsecond)
+			}
 		},
 		CloseFunc: func() {
-			joinProcAuction.controlChan <- Stopped
-			joinProcPerson.controlChan <- Stopped
+			atomic.AddInt32(&joinProcAuction.ack, 1)
+			atomic.AddInt32(&joinProcPerson.ack, 1)
+			atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Stopped))
+			atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Stopped))
+			for atomic.LoadInt32(&joinProcAuction.ack) != 0 &&
+				atomic.LoadInt32(&joinProcPerson.ack) != 0 {
+				time.Sleep(time.Duration(100) * time.Microsecond)
+			}
+			sss.sink.CloseAsyncPush()
 		},
-		InitFunc: func() {
-			joinProcAuction.controlChan <- Running
-			joinProcPerson.controlChan <- Running
+		InitFunc: func(progArgs interface{}) {
+			if sp.EnableTransaction {
+				sss.sink.InnerSink().StartAsyncPushNoTick(ctx)
+			} else {
+				sss.sink.InnerSink().StartAsyncPushWithTick(ctx)
+				sss.sink.InitFlushTimer()
+			}
+
+			sss.src1.StartWarmup()
+			sss.src2.StartWarmup()
+			sss.sink.StartWarmup()
+			kvtabs.toTab1.StartWarmup()
+			kvtabs.toTab2.StartWarmup()
+			auctionJoinsPersons.StartWarmup()
+			personJoinsAuctions.StartWarmup()
+
+			atomic.AddInt32(&joinProcAuction.ack, 1)
+			atomic.AddInt32(&joinProcPerson.ack, 1)
+			atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Running))
+			atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Running))
+			for atomic.LoadInt32(&joinProcAuction.ack) != 0 &&
+				atomic.LoadInt32(&joinProcPerson.ack) != 0 {
+				time.Sleep(time.Duration(100) * time.Microsecond)
+			}
 		},
 		CommitEvery: common.CommitDuration,
 	}
@@ -504,6 +566,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
 		Env:            h.env,
 		NumInPartition: sp.NumInPartition,
+		WarmupTime:     time.Duration(sp.WarmupS) * time.Second,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

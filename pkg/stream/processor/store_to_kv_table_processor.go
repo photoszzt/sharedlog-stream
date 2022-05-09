@@ -7,6 +7,7 @@ import (
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/treemap"
+	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -67,10 +68,17 @@ func (p *StoreToKVTableProcessor) ProcessAndReturn(ctx context.Context, msg comm
 	return []commtypes.Message{msg}, nil
 }
 
-func ToInMemKVTable(storeName string, compare func(a, b treemap.Key) int) (*MeteredProcessor, store.KeyValueStore, error) {
-	store := store.NewInMemoryKeyValueStore(storeName, compare)
-	toTableProc := NewMeteredProcessor(NewStoreToKVTableProcessor(store))
-	return toTableProc, store, nil
+func ToInMemKVTableWithChangelog(storeName string, mp *store.MaterializeParam, compare func(a, b treemap.Key) int, warmup time.Duration) (*MeteredProcessor, store.KeyValueStore, error) {
+	s := store.NewInMemoryKeyValueStore(storeName, compare)
+	tabWithLog := store.NewKeyValueStoreWithChangelog(mp, s, false)
+	toTableProc := NewMeteredProcessor(NewStoreToKVTableProcessor(tabWithLog), warmup)
+	return toTableProc, tabWithLog, nil
+}
+
+func ToInMemKVTable(storeName string, compare func(a, b treemap.Key) int, warmup time.Duration) (*MeteredProcessor, store.KeyValueStore, error) {
+	s := store.NewInMemoryKeyValueStore(storeName, compare)
+	toTableProc := NewMeteredProcessor(NewStoreToKVTableProcessor(s), warmup)
+	return toTableProc, s, nil
 }
 
 func ToMongoDBKVTable(ctx context.Context,
@@ -78,6 +86,7 @@ func ToMongoDBKVTable(ctx context.Context,
 	client *mongo.Client,
 	keySerde commtypes.Serde,
 	valSerde commtypes.Serde,
+	warmup time.Duration,
 ) (*MeteredProcessor, store.KeyValueStore, error) {
 	mkvs, err := store.NewMongoDBKeyValueStore(ctx, &store.MongoDBConfig{
 		Client:         client,
@@ -89,5 +98,5 @@ func ToMongoDBKVTable(ctx context.Context,
 	if err != nil {
 		return nil, nil, err
 	}
-	return NewMeteredProcessor(NewStoreToKVTableProcessor(mkvs)), mkvs, nil
+	return NewMeteredProcessor(NewStoreToKVTableProcessor(mkvs), warmup), mkvs, nil
 }
