@@ -109,6 +109,10 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 		},
 		CloseFunc: func() {
 			sink.CloseAsyncPush()
+			err := sink.Flush(ctx)
+			if err != nil {
+				panic(err)
+			}
 		},
 	}
 	srcs := map[string]processor.Source{sp.InputTopicNames[0]: src}

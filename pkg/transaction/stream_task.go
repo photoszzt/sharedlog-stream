@@ -436,9 +436,6 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 			afterWarmupStart = time.Now()
 		}
 		if args.Duration != 0 && time.Since(startTime) >= args.Duration {
-			if t.FlushOrPauseFunc != nil {
-				t.FlushOrPauseFunc()
-			}
 			break
 		}
 		procStart := time.Now()
@@ -447,16 +444,6 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 			if ret.Success {
 				// elapsed := time.Since(procStart)
 				// latencies = append(latencies, int(elapsed.Microseconds()))
-				if t.FlushOrPauseFunc != nil {
-					t.FlushOrPauseFunc()
-				}
-				ret.Latencies = map[string][]int{"e2e": latencies}
-				if args.WarmupTime != 0 && afterWarmup {
-					ret.Duration = time.Since(afterWarmupStart).Seconds()
-				} else {
-					ret.Duration = time.Since(startTime).Seconds()
-				}
-				ret.Consumed = make(map[string]uint64)
 				if hasUncommitted {
 					err = commitOffset(ctx, cm, off, args.ParNum)
 					if err != nil {
@@ -466,6 +453,13 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 				if t.CloseFunc != nil {
 					t.CloseFunc()
 				}
+				ret.Latencies = map[string][]int{"e2e": latencies}
+				if args.WarmupTime != 0 && afterWarmup {
+					ret.Duration = time.Since(afterWarmupStart).Seconds()
+				} else {
+					ret.Duration = time.Since(startTime).Seconds()
+				}
+				ret.Consumed = make(map[string]uint64)
 			}
 			return ret
 		}
@@ -478,12 +472,14 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 		}
 	}
 	if hasUncommitted {
+		debug.Fprintf(os.Stderr, "commit left\n")
 		err = commitOffset(ctx, cm, off, args.ParNum)
 		if err != nil {
 			panic(err)
 		}
 	}
 	if t.CloseFunc != nil {
+		debug.Fprintf(os.Stderr, "closing\n")
 		t.CloseFunc()
 	}
 	duration := time.Since(startTime).Seconds()
@@ -556,10 +552,6 @@ func (t *StreamTask) ProcessWithTransaction(
 		case ret := <-retc:
 			monitorQuit <- struct{}{}
 			controlQuit <- struct{}{}
-			if t.CloseFunc != nil {
-				debug.Fprintf(os.Stderr, "waiting for goroutines to close\n")
-				t.CloseFunc()
-			}
 			return ret
 		case merr := <-monitorErrc:
 			monitorQuit <- struct{}{}
@@ -641,7 +633,7 @@ L:
 			if t.FlushOrPauseFunc != nil {
 				t.FlushOrPauseFunc()
 			}
-			// debug.Fprintf(os.Stderr, "after flush\n")
+			debug.Fprintf(os.Stderr, "after flush\n")
 			consumedSeqNumConfigs := make([]ConsumedSeqNumConfig, 0)
 			for topic, offset := range currentOffset {
 				consumedSeqNumConfigs = append(consumedSeqNumConfigs, ConsumedSeqNumConfig{
@@ -652,7 +644,7 @@ L:
 					ConsumedSeqNum: uint64(offset),
 				})
 			}
-			// debug.Fprintf(os.Stderr, "about to commit transaction\n")
+			debug.Fprintf(os.Stderr, "about to commit transaction\n")
 			TrackOffsetAndCommit(ctx, consumedSeqNumConfigs, tm, args.KVChangelogs, args.WindowStoreChangelogs,
 				&hasLiveTransaction, &trackConsumePar, retc)
 			/*
@@ -667,6 +659,7 @@ L:
 			*/
 			debug.Assert(!hasLiveTransaction, "after commit. there should be no live transaction\n")
 			numCommit += 1
+			debug.Fprintf(os.Stderr, "transaction committed\n")
 		}
 		cur_elapsed = time.Since(startTime)
 		timeout = duration != 0 && cur_elapsed >= duration
@@ -735,6 +728,10 @@ L:
 					TrackOffsetAndCommit(ctx, consumedSeqNumConfigs, tm, args.KVChangelogs, args.WindowStoreChangelogs,
 						&hasLiveTransaction, &trackConsumePar, retc)
 				}
+				if t.CloseFunc != nil {
+					debug.Fprintf(os.Stderr, "waiting for goroutines to close 1\n")
+					t.CloseFunc()
+				}
 				// elapsed := time.Since(procStart)
 				// latencies = append(latencies, int(elapsed.Microseconds()))
 				ret.Latencies = map[string][]int{"e2e": latencies}
@@ -773,6 +770,10 @@ L:
 			latencies = append(latencies, int(elapsed.Microseconds()))
 		}
 		idx += 1
+	}
+	if t.CloseFunc != nil {
+		debug.Fprintf(os.Stderr, "waiting for goroutines to close 2\n")
+		t.CloseFunc()
 	}
 	e2eTime := time.Since(startTime).Seconds()
 	if warmupDuration != 0 && afterWarmup {

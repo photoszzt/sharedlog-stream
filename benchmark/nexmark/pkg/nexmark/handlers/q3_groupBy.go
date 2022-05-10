@@ -83,22 +83,24 @@ func (h *q3GroupByHandler) Call(ctx context.Context, input []byte) ([]byte, erro
 }
 
 type q3GroupByProcessArgs struct {
-	errChan          chan error
 	aucMsgChan       chan commtypes.Message
 	personMsgChan    chan commtypes.Message
+	errChan          chan error
 	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
 	trackParFunc     transaction.TrackKeySubStreamFunc
 	src              *processor.MeteredSource
-	funcName         string
-	sinks            []*sharedlog_stream.MeteredSink
-	curEpoch         uint64
-	personAck        int32
-	aucAck           int32
-	personCtrl       uint32
-	aucCtrl          uint32
-	personDone       uint32
-	aucDone          uint32
-	parNum           uint8
+
+	personAck sync.WaitGroup
+	aucAck    sync.WaitGroup
+
+	personCtrl chan RunningState
+	aucCtrl    chan RunningState
+	funcName   string
+	sinks      []*sharedlog_stream.MeteredSink
+	curEpoch   uint64
+	personDone uint32
+	aucDone    uint32
+	parNum     uint8
 }
 
 func (a *q3GroupByProcessArgs) Source() processor.Source { return a.src }
@@ -171,26 +173,26 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 
-	filterPerson, personsByIDMap, personsByIDFunc := h.getPersonsByID(time.Duration(sp.WarmupS) * time.Second)
-	filterAuctions, auctionsBySellerIDMap, auctionsBySellerIDFunc := h.getAucBySellerID(time.Duration(sp.WarmupS) * time.Second)
+	filterPerson, personsByIDMap, personsByIDFunc := h.getPersonsByID(time.Duration(sp.WarmupS)*time.Second,
+		time.Duration(sp.FlushMs)*time.Millisecond)
+	filterAuctions, auctionsBySellerIDMap, auctionsBySellerIDFunc := h.getAucBySellerID(time.Duration(sp.WarmupS)*time.Second,
+		time.Duration(sp.FlushMs)*time.Millisecond)
 
 	errChan := make(chan error, 1)
-	aucMsgChan := make(chan commtypes.Message, 100000)
+	aucMsgChan := make(chan commtypes.Message, 10000)
 	personMsgChan := make(chan commtypes.Message, 10000)
 	procArgs := &q3GroupByProcessArgs{
 		src:              src,
 		sinks:            sinks,
 		aucMsgChan:       aucMsgChan,
 		personMsgChan:    personMsgChan,
-		aucCtrl:          uint32(Paused),
-		personCtrl:       uint32(Paused),
+		aucCtrl:          make(chan RunningState),
+		personCtrl:       make(chan RunningState),
 		trackParFunc:     transaction.DefaultTrackSubstreamFunc,
 		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
 		funcName:         h.funcName,
 		curEpoch:         sp.ScaleEpoch,
 		parNum:           sp.ParNum,
-		aucAck:           0,
-		personAck:        0,
 		aucDone:          0,
 		personDone:       0,
 	}
@@ -204,51 +206,55 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	task := transaction.StreamTask{
 		ProcessFunc: h.process,
 		CloseFunc: func() {
-			// fmt.Fprintf(os.Stderr, "auction channel has %d msg left\n", len(aucMsgChan))
-			// fmt.Fprintf(os.Stderr, "person channel has %d msg left\n", len(personMsgChan))
+			// debug.Fprintf(os.Stderr, "auction channel has %d msg left\n", len(aucMsgChan))
+			// debug.Fprintf(os.Stderr, "person channel has %d msg left\n", len(personMsgChan))
 			close(aucMsgChan)
 			close(personMsgChan)
+
+			// debug.Fprintf(os.Stderr, "waiting two goroutine to exit\n")
 			wg.Wait()
+			// debug.Fprintf(os.Stderr, "auc and persons exited; now flusing the sink buffer\n")
 			sinks[0].CloseAsyncPush()
 			sinks[1].CloseAsyncPush()
-			sinks[0].Flush(ctx)
-			sinks[1].Flush(ctx)
+			if err = sinks[0].Flush(ctx); err != nil {
+				panic(err)
+			}
+			if err = sinks[1].Flush(ctx); err != nil {
+				panic(err)
+			}
+			// debug.Fprintf(os.Stderr, "done close\n")
 		},
 		FlushOrPauseFunc: func() {
-			atomic.AddInt32(&procArgs.aucAck, 1)
-			atomic.AddInt32(&procArgs.personAck, 1)
-			atomic.StoreUint32(&procArgs.aucCtrl, uint32(Paused))
-			atomic.StoreUint32(&procArgs.personCtrl, uint32(Paused))
-			for atomic.LoadInt32(&procArgs.aucAck) != 0 &&
-				atomic.LoadInt32(&procArgs.personAck) != 0 {
-				if atomic.LoadUint32(&procArgs.personDone) == 1 ||
-					atomic.LoadUint32(&procArgs.aucDone) == 1 {
-					sinks[0].Flush(ctx)
-					sinks[1].Flush(ctx)
-					break
-				}
-				time.Sleep(time.Duration(100) * time.Microsecond)
+			// debug.Fprintf(os.Stderr, "begin flush\n")
+			for len(procArgs.aucMsgChan) > 0 {
+				time.Sleep(time.Duration(1) * time.Millisecond)
 			}
+			for len(procArgs.personMsgChan) > 0 {
+				time.Sleep(time.Duration(1) * time.Millisecond)
+			}
+			if atomic.LoadUint32(&procArgs.personDone) == 0 {
+				procArgs.personAck.Add(1)
+				procArgs.personCtrl <- Paused
+			}
+			if atomic.LoadUint32(&procArgs.aucDone) == 0 {
+				procArgs.aucAck.Add(1)
+				procArgs.aucCtrl <- Paused
+			}
+			procArgs.aucAck.Wait()
+			procArgs.personAck.Wait()
+			// debug.Fprintf(os.Stderr, "done flush\n")
 		},
 		ResumeFunc: func() {
-			atomic.AddInt32(&procArgs.aucAck, 1)
-			atomic.AddInt32(&procArgs.personAck, 1)
-			atomic.StoreUint32(&procArgs.aucCtrl, uint32(Running))
-			atomic.StoreUint32(&procArgs.personCtrl, uint32(Running))
-			for atomic.LoadInt32(&procArgs.aucAck) != 0 &&
-				atomic.LoadInt32(&procArgs.personAck) != 0 {
-				if atomic.LoadUint32(&procArgs.personDone) == 1 ||
-					atomic.LoadUint32(&procArgs.aucDone) == 1 {
-					sinks[0].Flush(ctx)
-					sinks[1].Flush(ctx)
-					break
-				}
-				time.Sleep(time.Duration(100) * time.Microsecond)
+			if atomic.LoadUint32(&procArgs.personDone) == 0 {
+				procArgs.personCtrl <- Running
+			}
+			if atomic.LoadUint32(&procArgs.aucDone) == 0 {
+				procArgs.aucCtrl <- Running
 			}
 		},
 		InitFunc: func(progArgsTmp interface{}) {
 			procArgs := progArgsTmp.(*q3GroupByProcessArgs)
-			debug.Fprintf(os.Stderr, "start async pusher\n")
+			// debug.Fprintf(os.Stderr, "start async pusher\n")
 			if sp.EnableTransaction {
 				sinks[0].InnerSink().StartAsyncPushNoTick(ctx)
 				sinks[1].InnerSink().StartAsyncPushNoTick(ctx)
@@ -258,7 +264,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 				sinks[0].InitFlushTimer()
 				sinks[1].InitFlushTimer()
 			}
-			debug.Fprintf(os.Stderr, "done start async pusher\n")
+			// debug.Fprintf(os.Stderr, "done start async pusher\n")
 
 			src.StartWarmup()
 			sinks[0].StartWarmup()
@@ -269,25 +275,9 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 			auctionsBySellerIDMap.StartWarmup()
 			debug.Fprintf(os.Stderr, "done warmup start\n")
 
-			debug.Fprintf(os.Stderr, "current auc ack is %x\n", procArgs.aucAck)
-			debug.Fprintf(os.Stderr, "current person ack is %x\n", procArgs.personAck)
-			curAuc := atomic.AddInt32(&procArgs.aucAck, 1)
-			curPer := atomic.AddInt32(&procArgs.personAck, 1)
-			debug.Fprintf(os.Stderr, "current auc ack is %x\n", curAuc)
-			debug.Fprintf(os.Stderr, "current person ack is %x\n", curPer)
-			atomic.StoreUint32(&procArgs.aucCtrl, uint32(Running))
-			atomic.StoreUint32(&procArgs.personCtrl, uint32(Running))
-			debug.Fprintf(os.Stderr, "waiting for ack\n")
-			for {
-				pPer := atomic.LoadInt32(&procArgs.personAck)
-				pAuc := atomic.LoadInt32(&procArgs.aucAck)
-				debug.Fprintf(os.Stderr, "per ack: %x, auc ack: %x\n", pPer, pAuc)
-				if pPer == 0 && pAuc == 0 {
-					break
-				}
-				time.Sleep(time.Duration(100) * time.Microsecond)
-			}
-			debug.Fprintf(os.Stderr, "down waiting for ack\n")
+			procArgs.personCtrl <- Running
+			procArgs.aucCtrl <- Running
+
 		},
 		CurrentOffset: make(map[string]uint64),
 		CommitEvery:   common.CommitDuration,
@@ -351,7 +341,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	return ret
 }
 
-func (h *q3GroupByHandler) getPersonsByID(warmup time.Duration) (*processor.MeteredProcessor, *processor.MeteredProcessor,
+func (h *q3GroupByHandler) getPersonsByID(warmup time.Duration, pollTimeout time.Duration) (*processor.MeteredProcessor, *processor.MeteredProcessor,
 	func(ctx context.Context, args *q3GroupByProcessArgs, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error)) {
 	filterPerson := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
 		func(msg *commtypes.Message) (bool, error) {
@@ -382,86 +372,93 @@ func (h *q3GroupByHandler) getPersonsByID(warmup time.Duration) (*processor.Mete
 			select {
 			case <-ctx.Done():
 				break L
-			default:
-			}
-			ctrl := atomic.LoadUint32(&args.personCtrl)
-			state := RunningState(uint8(ctrl))
-			switch state {
-			case Paused:
-				status = Paused
-				args.sinks[1].Flush(ctx)
-				atomic.AddInt32(&args.personAck, -1)
-			case Running:
-				status = Running
-				atomic.AddInt32(&args.personAck, -1)
-			case Stopped:
-				atomic.StoreUint32(&args.personDone, 1)
-				atomic.AddInt32(&args.personAck, -1)
-				break L
-			}
-			if status == Running {
-				msg, ok := <-msgChan
-				if !ok {
+			case state := <-args.personCtrl:
+				switch state {
+				case Paused:
+					// debug.Fprintf(os.Stderr, "got person flush\n")
+					status = Paused
+					err := args.sinks[1].Flush(ctx)
+					if err != nil {
+						panic(err)
+					}
+					// debug.Fprintf(os.Stderr, "done person flush\n")
+					args.personAck.Done()
+				case Running:
+					// debug.Fprintf(os.Stderr, "got person running\n")
+					status = Running
+				case Stopped:
+					atomic.StoreUint32(&args.personDone, 1)
 					break L
 				}
-				event := msg.Value.(*ntypes.Event)
-				ts, err := event.ExtractStreamTime()
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "[ERROR] fail to extract timestamp: %v\n", err)
-					atomic.StoreUint32(&args.personDone, 1)
-					errChan <- fmt.Errorf("fail to extract timestamp: %v", err)
-					return
-				}
-				msg.Timestamp = ts
-				filteredMsgs, err := filterPerson.ProcessAndReturn(ctx, msg)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "[ERROR] filterPerson err: %v\n", err)
-					atomic.StoreUint32(&args.personDone, 1)
-					errChan <- fmt.Errorf("filterPerson err: %v", err)
-					return
-				}
-				for _, filteredMsg := range filteredMsgs {
-					changeKeyedMsg, err := personsByIDMap.ProcessAndReturn(ctx, filteredMsg)
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "[ERROR] personsByIDMap err: %v\n", err)
-						atomic.StoreUint32(&args.personDone, 1)
-						errChan <- fmt.Errorf("personsByIDMap err: %v", err)
-						return
-					}
-
-					k := changeKeyedMsg[0].Key.(uint64)
-					h.personHashMu.RLock()
-					parTmp, ok := h.personHash.Get(k)
-					h.personHashMu.RUnlock()
+			default:
+			}
+			if status == Running {
+				select {
+				case msg, ok := <-msgChan:
 					if !ok {
-						fmt.Fprintf(os.Stderr, "[ERROR] fail to get output partition\n")
 						atomic.StoreUint32(&args.personDone, 1)
-						errChan <- xerrors.New("fail to get output partition")
-						return
+						break L
 					}
-					par := parTmp.(uint8)
-					err = args.trackParFunc(ctx, k, args.sinks[1].KeySerde(), args.sinks[1].TopicName(), par)
+					event := msg.Value.(*ntypes.Event)
+					ts, err := event.ExtractStreamTime()
 					if err != nil {
-						fmt.Fprintf(os.Stderr, "[ERROR] add topic partition failed: %v\n", err)
+						fmt.Fprintf(os.Stderr, "[ERROR] fail to extract timestamp: %v\n", err)
 						atomic.StoreUint32(&args.personDone, 1)
-						errChan <- fmt.Errorf("add topic partition failed: %v", err)
+						errChan <- fmt.Errorf("fail to extract timestamp: %v", err)
 						return
 					}
-					// fmt.Fprintf(os.Stderr, "append %v to substream %v\n", changeKeyedMsg[0], par)
-					err = args.sinks[1].Sink(ctx, changeKeyedMsg[0], par, false)
+					msg.Timestamp = ts
+					filteredMsgs, err := filterPerson.ProcessAndReturn(ctx, msg)
 					if err != nil {
-						fmt.Fprintf(os.Stderr, "[ERROR] sink err: %v\n", err)
+						fmt.Fprintf(os.Stderr, "[ERROR] filterPerson err: %v\n", err)
 						atomic.StoreUint32(&args.personDone, 1)
-						errChan <- fmt.Errorf("sink err: %v", err)
+						errChan <- fmt.Errorf("filterPerson err: %v", err)
 						return
 					}
+					for _, filteredMsg := range filteredMsgs {
+						changeKeyedMsg, err := personsByIDMap.ProcessAndReturn(ctx, filteredMsg)
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "[ERROR] personsByIDMap err: %v\n", err)
+							atomic.StoreUint32(&args.personDone, 1)
+							errChan <- fmt.Errorf("personsByIDMap err: %v", err)
+							return
+						}
+
+						k := changeKeyedMsg[0].Key.(uint64)
+						h.personHashMu.RLock()
+						parTmp, ok := h.personHash.Get(k)
+						h.personHashMu.RUnlock()
+						if !ok {
+							fmt.Fprintf(os.Stderr, "[ERROR] fail to get output partition\n")
+							atomic.StoreUint32(&args.personDone, 1)
+							errChan <- xerrors.New("fail to get output partition")
+							return
+						}
+						par := parTmp.(uint8)
+						err = args.trackParFunc(ctx, k, args.sinks[1].KeySerde(), args.sinks[1].TopicName(), par)
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "[ERROR] add topic partition failed: %v\n", err)
+							atomic.StoreUint32(&args.personDone, 1)
+							errChan <- fmt.Errorf("add topic partition failed: %v", err)
+							return
+						}
+						// fmt.Fprintf(os.Stderr, "append %v to substream %v\n", changeKeyedMsg[0], par)
+						err = args.sinks[1].Sink(ctx, changeKeyedMsg[0], par, false)
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "[ERROR] sink err: %v\n", err)
+							atomic.StoreUint32(&args.personDone, 1)
+							errChan <- fmt.Errorf("sink err: %v", err)
+							return
+						}
+					}
+				case <-time.After(pollTimeout):
 				}
 			}
 		}
 	}
 }
 
-func (h *q3GroupByHandler) getAucBySellerID(warmup time.Duration) (*processor.MeteredProcessor, *processor.MeteredProcessor,
+func (h *q3GroupByHandler) getAucBySellerID(warmup time.Duration, pollTimeout time.Duration) (*processor.MeteredProcessor, *processor.MeteredProcessor,
 	func(ctx context.Context, args *q3GroupByProcessArgs, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error),
 ) {
 	filterAuctions := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
@@ -484,80 +481,87 @@ func (h *q3GroupByHandler) getAucBySellerID(warmup time.Duration) (*processor.Me
 			select {
 			case <-ctx.Done():
 				break L
-			default:
-			}
-			ctrl := atomic.LoadUint32(&args.aucCtrl)
-			state := RunningState(uint8(ctrl))
-			switch state {
-			case Paused:
-				status = Paused
-				args.sinks[0].Flush(ctx)
-				atomic.AddInt32(&args.aucAck, -1)
-			case Running:
-				status = Running
-				atomic.AddInt32(&args.aucAck, -1)
-			case Stopped:
-				atomic.StoreUint32(&args.aucDone, 1)
-				atomic.AddInt32(&args.aucAck, -1)
-				break L
-			}
-			if status == Running {
-				msg, ok := <-msgChan
-				if !ok {
+			case state := <-args.aucCtrl:
+				switch state {
+				case Paused:
+					// debug.Fprintf(os.Stderr, "got auc flush\n")
+					status = Paused
+					err := args.sinks[0].Flush(ctx)
+					if err != nil {
+						panic(err)
+					}
+					// debug.Fprintf(os.Stderr, "done auc flush\n")
+					args.aucAck.Done()
+				case Running:
+					// debug.Fprintf(os.Stderr, "got auc running\n")
+					status = Running
+				case Stopped:
+					atomic.StoreUint32(&args.aucDone, 1)
 					break L
 				}
-
-				event := msg.Value.(*ntypes.Event)
-				ts, err := event.ExtractStreamTime()
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "[ERROR] fail to extract timestamp: %v\n", err)
-					atomic.StoreUint32(&args.aucDone, 1)
-					errChan <- fmt.Errorf("fail to extract timestamp: %v", err)
-					return
-				}
-				msg.Timestamp = ts
-				filteredMsgs, err := filterAuctions.ProcessAndReturn(ctx, msg)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "filterAuctions err: %v\n", err)
-					atomic.StoreUint32(&args.aucDone, 1)
-					errChan <- fmt.Errorf("filterAuctions err: %v", err)
-					return
-				}
-				for _, filteredMsg := range filteredMsgs {
-					changeKeyedMsg, err := auctionsBySellerIDMap.ProcessAndReturn(ctx, filteredMsg)
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "[ERROR] auctionsBySellerIDMap err: %v\n", err)
-						atomic.StoreUint32(&args.aucDone, 1)
-						errChan <- fmt.Errorf("auctionsBySellerIDMap err: %v", err)
-						return
-					}
-
-					k := changeKeyedMsg[0].Key.(uint64)
-					h.aucHashMu.RLock()
-					parTmp, ok := h.aucHash.Get(k)
-					h.aucHashMu.RUnlock()
+			default:
+			}
+			if status == Running {
+				select {
+				case msg, ok := <-msgChan:
 					if !ok {
-						fmt.Fprintf(os.Stderr, "[ERROR] fail to get output partition\n")
 						atomic.StoreUint32(&args.aucDone, 1)
-						errChan <- xerrors.New("fail to get output partition")
-						return
+						break L
 					}
-					par := parTmp.(uint8)
-					err = args.trackParFunc(ctx, k, args.sinks[0].KeySerde(), args.sinks[0].TopicName(), par)
+
+					event := msg.Value.(*ntypes.Event)
+					ts, err := event.ExtractStreamTime()
 					if err != nil {
-						fmt.Fprintf(os.Stderr, "[ERROR] add topic partition failed: %v", err)
+						fmt.Fprintf(os.Stderr, "[ERROR] fail to extract timestamp: %v\n", err)
 						atomic.StoreUint32(&args.aucDone, 1)
-						errChan <- fmt.Errorf("add topic partition failed: %v", err)
+						errChan <- fmt.Errorf("fail to extract timestamp: %v", err)
 						return
 					}
-					// fmt.Fprintf(os.Stderr, "append %v to substream %v\n", changeKeyedMsg[0], par)
-					err = args.sinks[0].Sink(ctx, changeKeyedMsg[0], par, false)
+					msg.Timestamp = ts
+					filteredMsgs, err := filterAuctions.ProcessAndReturn(ctx, msg)
 					if err != nil {
-						fmt.Fprintf(os.Stderr, "[ERROR] sink err: %v\n", err)
+						fmt.Fprintf(os.Stderr, "filterAuctions err: %v\n", err)
 						atomic.StoreUint32(&args.aucDone, 1)
-						errChan <- fmt.Errorf("sink err: %v", err)
+						errChan <- fmt.Errorf("filterAuctions err: %v", err)
 						return
 					}
+					for _, filteredMsg := range filteredMsgs {
+						changeKeyedMsg, err := auctionsBySellerIDMap.ProcessAndReturn(ctx, filteredMsg)
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "[ERROR] auctionsBySellerIDMap err: %v\n", err)
+							atomic.StoreUint32(&args.aucDone, 1)
+							errChan <- fmt.Errorf("auctionsBySellerIDMap err: %v", err)
+							return
+						}
+
+						k := changeKeyedMsg[0].Key.(uint64)
+						h.aucHashMu.RLock()
+						parTmp, ok := h.aucHash.Get(k)
+						h.aucHashMu.RUnlock()
+						if !ok {
+							fmt.Fprintf(os.Stderr, "[ERROR] fail to get output partition\n")
+							atomic.StoreUint32(&args.aucDone, 1)
+							errChan <- xerrors.New("fail to get output partition")
+							return
+						}
+						par := parTmp.(uint8)
+						err = args.trackParFunc(ctx, k, args.sinks[0].KeySerde(), args.sinks[0].TopicName(), par)
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "[ERROR] add topic partition failed: %v", err)
+							atomic.StoreUint32(&args.aucDone, 1)
+							errChan <- fmt.Errorf("add topic partition failed: %v", err)
+							return
+						}
+						// fmt.Fprintf(os.Stderr, "append %v to substream %v\n", changeKeyedMsg[0], par)
+						err = args.sinks[0].Sink(ctx, changeKeyedMsg[0], par, false)
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "[ERROR] sink err: %v\n", err)
+							atomic.StoreUint32(&args.aucDone, 1)
+							errChan <- fmt.Errorf("sink err: %v", err)
+							return
+						}
+					}
+				case <-time.After(pollTimeout):
 				}
 			}
 		}

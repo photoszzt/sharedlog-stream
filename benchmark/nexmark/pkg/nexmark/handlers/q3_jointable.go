@@ -9,7 +9,6 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
@@ -67,15 +66,9 @@ func (h *q3JoinTableHandler) process(ctx context.Context,
 	case personOutput := <-args.personsOutChan:
 		pOut = personOutput
 		debug.Fprintf(os.Stderr, "Got persons out: %v\n", pOut)
-		if pOut.Success {
-			args.personDone = true
-		}
 	case auctionOutput := <-args.auctionsOutChan:
 		aOut = auctionOutput
 		debug.Fprintf(os.Stderr, "Got auctions out: %v\n", aOut)
-		if aOut.Success {
-			args.auctionDone = true
-		}
 	default:
 	}
 	debug.Fprintf(os.Stderr, "aOut: %v\n", aOut)
@@ -86,9 +79,11 @@ func (h *q3JoinTableHandler) process(ctx context.Context,
 	if aOut != nil && !aOut.Success {
 		return t.CurrentOffset, aOut
 	}
-	if args.personDone && args.auctionDone {
-		return t.CurrentOffset, &common.FnOutput{Success: true, Message: errors.ErrStreamSourceTimeout.Error()}
-	}
+	/*
+		if atomic.LoadUint32(&args.personDone) == 1 && atomic.LoadUint32(&args.auctionDone) == 1 {
+			return t.CurrentOffset, &common.FnOutput{Success: true, Message: errors.ErrStreamSourceTimeout.Error()}
+		}
+	*/
 	return t.CurrentOffset, nil
 }
 
@@ -171,7 +166,7 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	if err != nil {
 		return nil, fmt.Errorf("get event serde err: %v", err)
 	}
-	timeout := time.Duration(1) * time.Second
+	timeout := common.SrcConsumeTimeout
 	auctionsConfig := &sharedlog_stream.StreamSourceConfig{
 		Timeout:      timeout,
 		KeyDecoder:   commtypes.Uint64Serde{},
@@ -303,8 +298,8 @@ type q3JoinTableProcessArgs struct {
 	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
 	funcName         string
 	curEpoch         uint64
-	personDone       bool
-	auctionDone      bool
+	personDone       uint32
+	auctionDone      uint32
 	parNum           uint8
 }
 
@@ -398,8 +393,8 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
 		curEpoch:         sp.ScaleEpoch,
 		funcName:         h.funcName,
-		personDone:       false,
-		auctionDone:      false,
+		personDone:       0,
+		auctionDone:      0,
 	}
 
 	joinProcPerson := &joinProcArgs{
@@ -430,43 +425,59 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
 		FlushOrPauseFunc: func() {
-			if !procArgs.auctionDone {
+			// debug.Fprintf(os.Stderr, "in flush func\n")
+			if atomic.LoadUint32(&procArgs.auctionDone) == 0 {
+				// debug.Fprintf(os.Stderr, "try to pause auction\n")
 				atomic.AddInt32(&joinProcAuction.ack, 1)
+				// debug.Fprintf(os.Stderr, "auction to ack: %d\n", toAck)
 				atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Paused))
 			}
-			if !procArgs.personDone {
+			if atomic.LoadUint32(&procArgs.personDone) == 0 {
+				// debug.Fprintf(os.Stderr, "try to pause person\n")
 				atomic.AddInt32(&joinProcPerson.ack, 1)
+				// debug.Fprintf(os.Stderr, "person to ack: %d\n", toAck)
 				atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Paused))
 			}
-			for atomic.LoadInt32(&joinProcAuction.ack) != 0 &&
-				atomic.LoadInt32(&joinProcPerson.ack) != 0 {
+			// debug.Fprintf(os.Stderr, "waiting auction and person to update state")
+			for {
+				aack := atomic.LoadInt32(&joinProcAuction.ack)
+				pack := atomic.LoadInt32(&joinProcPerson.ack)
+				if aack == 0 && pack == 0 {
+					break
+				}
 				time.Sleep(time.Duration(100) * time.Microsecond)
 			}
+			// debug.Fprintf(os.Stderr, "done flushing\n")
 		},
 		ResumeFunc: func() {
-			if !procArgs.auctionDone {
+			// debug.Fprintf(os.Stderr, "begin resume\n")
+			if atomic.LoadUint32(&procArgs.auctionDone) == 0 {
 				atomic.AddInt32(&joinProcAuction.ack, 1)
 				atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Running))
 			}
-			if !procArgs.personDone {
+			if atomic.LoadUint32(&procArgs.personDone) == 0 {
 				atomic.AddInt32(&joinProcPerson.ack, 1)
 				atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Running))
 			}
-			for atomic.LoadInt32(&joinProcAuction.ack) != 0 &&
+			for atomic.LoadInt32(&joinProcAuction.ack) != 0 ||
 				atomic.LoadInt32(&joinProcPerson.ack) != 0 {
 				time.Sleep(time.Duration(100) * time.Microsecond)
 			}
+			// debug.Fprintf(os.Stderr, "done resume\n")
 		},
 		CloseFunc: func() {
 			atomic.AddInt32(&joinProcAuction.ack, 1)
 			atomic.AddInt32(&joinProcPerson.ack, 1)
 			atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Stopped))
 			atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Stopped))
-			for atomic.LoadInt32(&joinProcAuction.ack) != 0 &&
+			for atomic.LoadInt32(&joinProcAuction.ack) != 0 ||
 				atomic.LoadInt32(&joinProcPerson.ack) != 0 {
 				time.Sleep(time.Duration(100) * time.Microsecond)
 			}
 			sss.sink.CloseAsyncPush()
+			if err = sss.sink.Flush(ctx); err != nil {
+				panic(err)
+			}
 		},
 		InitFunc: func(progArgs interface{}) {
 			if sp.EnableTransaction {
@@ -488,7 +499,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			atomic.AddInt32(&joinProcPerson.ack, 1)
 			atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Running))
 			atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Running))
-			for atomic.LoadInt32(&joinProcAuction.ack) != 0 &&
+			for atomic.LoadInt32(&joinProcAuction.ack) != 0 ||
 				atomic.LoadInt32(&joinProcPerson.ack) != 0 {
 				time.Sleep(time.Duration(100) * time.Microsecond)
 			}
@@ -500,8 +511,8 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 
 	pctx := context.WithValue(ctx, "id", "person")
 	actx := context.WithValue(ctx, "id", "auction")
-	go joinProcLoop(pctx, personsOutChan, joinProcPerson)
-	go joinProcLoop(actx, auctionsOutChan, joinProcAuction)
+	go joinProcLoop(pctx, personsOutChan, joinProcPerson, &procArgs.personDone)
+	go joinProcLoop(actx, auctionsOutChan, joinProcAuction, &procArgs.auctionDone)
 	srcs := map[string]processor.Source{auctionsStream.TopicName(): sss.src1, personsStream.TopicName(): sss.src2}
 	if sp.EnableTransaction {
 		var kvchangelogs []*transaction.KVStoreChangelog

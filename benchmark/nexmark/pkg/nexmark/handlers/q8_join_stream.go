@@ -10,7 +10,6 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
@@ -64,8 +63,8 @@ type q8JoinStreamProcessArgs struct {
 	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
 	funcName         string
 	curEpoch         uint64
-	personDone       bool
-	auctionDone      bool
+	personDone       uint32
+	auctionDone      uint32
 	parNum           uint8
 }
 
@@ -88,15 +87,9 @@ func (h *q8JoinStreamHandler) process(
 	case personOutput := <-args.personsOutChan:
 		pOut = personOutput
 		debug.Fprintf(os.Stderr, "Got persons out: %v\n", pOut)
-		if pOut.Success {
-			args.personDone = true
-		}
 	case auctionOutput := <-args.auctionsOutChan:
 		aOut = auctionOutput
 		debug.Fprintf(os.Stderr, "Got auctions out: %v\n", aOut)
-		if aOut.Success {
-			args.auctionDone = true
-		}
 	default:
 	}
 	debug.Fprintf(os.Stderr, "aOut: %v\n", aOut)
@@ -107,9 +100,11 @@ func (h *q8JoinStreamHandler) process(
 	if aOut != nil && !aOut.Success {
 		return t.CurrentOffset, aOut
 	}
-	if args.personDone && args.auctionDone {
-		return t.CurrentOffset, &common.FnOutput{Success: true, Message: errors.ErrStreamSourceTimeout.Error()}
-	}
+	/*
+		if atomic.LoadUint32(&args.personDone) == 1 && atomic.LoadUint32(&args.auctionDone) == 1 {
+			return t.CurrentOffset, &common.FnOutput{Success: true, Message: errors.ErrStreamSourceTimeout.Error()}
+		}
+	*/
 	return t.CurrentOffset, nil
 }
 
@@ -172,7 +167,7 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	if err != nil {
 		return nil, fmt.Errorf("get event serde err: %v", err)
 	}
-	timeout := time.Duration(1) * time.Second
+	timeout := common.SrcConsumeTimeout
 	auctionsConfig := &sharedlog_stream.StreamSourceConfig{
 		Timeout:      timeout,
 		KeyDecoder:   commtypes.Uint64Decoder{},
@@ -358,8 +353,8 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
 		curEpoch:         sp.ScaleEpoch,
 		funcName:         h.funcName,
-		auctionDone:      false,
-		personDone:       false,
+		auctionDone:      0,
+		personDone:       0,
 	}
 
 	joinProcPerson := &joinProcArgs{
@@ -372,6 +367,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		cHashMu:      &h.cHashMu,
 		cHash:        h.cHash,
 		controlVar:   uint32(Paused),
+		ack:          0,
 	}
 
 	joinProcAuction := &joinProcArgs{
@@ -384,36 +380,53 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		cHashMu:      &h.cHashMu,
 		cHash:        h.cHash,
 		controlVar:   uint32(Paused),
+		ack:          0,
 	}
 
 	task := transaction.StreamTask{
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
 		FlushOrPauseFunc: func() {
-			if !procArgs.auctionDone {
-				atomic.AddInt32(&joinProcAuction.ack, 1)
+			debug.Fprintf(os.Stderr, "in flush func\n")
+			if atomic.LoadUint32(&procArgs.auctionDone) == 0 {
+				debug.Fprintf(os.Stderr, "try to pause auction\n")
+				toAck := atomic.AddInt32(&joinProcAuction.ack, 1)
+				debug.Fprintf(os.Stderr, "auction to ack: %d\n", toAck)
 				atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Paused))
 			}
-			if !procArgs.personDone {
-				atomic.AddInt32(&joinProcPerson.ack, 1)
+			if atomic.LoadUint32(&procArgs.personDone) == 0 {
+				debug.Fprintf(os.Stderr, "try to pause person\n")
+				toAck := atomic.AddInt32(&joinProcPerson.ack, 1)
+				debug.Fprintf(os.Stderr, "person to ack: %d\n", toAck)
 				atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Paused))
 			}
-			for atomic.LoadInt32(&joinProcAuction.ack) != 0 &&
-				atomic.LoadInt32(&joinProcPerson.ack) != 0 {
+			debug.Fprintf(os.Stderr, "waiting auction and person to update state")
+			for {
+				aack := atomic.LoadInt32(&joinProcAuction.ack)
+				pack := atomic.LoadInt32(&joinProcPerson.ack)
+				debug.Fprintf(os.Stderr, "aack: %d, pack: %d\n", aack, pack)
+				if aack == 0 && pack == 0 {
+					break
+				}
 				time.Sleep(time.Duration(100) * time.Microsecond)
 			}
+			debug.Fprintf(os.Stderr, "done flushing\n")
 		},
 		ResumeFunc: func() {
-			if !procArgs.auctionDone {
+			if atomic.LoadUint32(&procArgs.auctionDone) == 0 {
 				atomic.AddInt32(&joinProcAuction.ack, 1)
 				atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Running))
 			}
-			if !procArgs.personDone {
+			if atomic.LoadUint32(&procArgs.personDone) == 0 {
 				atomic.AddInt32(&joinProcPerson.ack, 1)
 				atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Running))
 			}
-			for atomic.LoadInt32(&joinProcAuction.ack) != 0 &&
-				atomic.LoadInt32(&joinProcPerson.ack) != 0 {
+			for {
+				aack := atomic.LoadInt32(&joinProcAuction.ack)
+				pack := atomic.LoadInt32(&joinProcPerson.ack)
+				if aack == 0 && pack == 0 {
+					break
+				}
 				time.Sleep(time.Duration(100) * time.Microsecond)
 			}
 		},
@@ -422,11 +435,18 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			atomic.AddInt32(&joinProcPerson.ack, 1)
 			atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Stopped))
 			atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Stopped))
-			for atomic.LoadInt32(&joinProcAuction.ack) != 0 &&
-				atomic.LoadInt32(&joinProcPerson.ack) != 0 {
+			for {
+				aack := atomic.LoadInt32(&joinProcAuction.ack)
+				pack := atomic.LoadInt32(&joinProcPerson.ack)
+				if aack == 0 && pack == 0 {
+					break
+				}
 				time.Sleep(time.Duration(100) * time.Microsecond)
 			}
 			sss.sink.CloseAsyncPush()
+			if err = sss.sink.Flush(ctx); err != nil {
+				panic(err)
+			}
 		},
 		InitFunc: func(progArgs interface{}) {
 			if sp.EnableTransaction {
@@ -447,8 +467,12 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			atomic.AddInt32(&joinProcPerson.ack, 1)
 			atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Running))
 			atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Running))
-			for atomic.LoadInt32(&joinProcAuction.ack) != 0 &&
-				atomic.LoadInt32(&joinProcPerson.ack) != 0 {
+			for {
+				aack := atomic.LoadInt32(&joinProcAuction.ack)
+				pack := atomic.LoadInt32(&joinProcPerson.ack)
+				if aack == 0 && pack == 0 {
+					break
+				}
 				time.Sleep(time.Duration(100) * time.Microsecond)
 			}
 		},
@@ -459,8 +483,8 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 
 	pctx := context.WithValue(ctx, "id", "person")
 	actx := context.WithValue(ctx, "id", "auction")
-	go joinProcLoop(pctx, personsOutChan, joinProcPerson)
-	go joinProcLoop(actx, auctionsOutChan, joinProcAuction)
+	go joinProcLoop(pctx, personsOutChan, joinProcPerson, &procArgs.personDone)
+	go joinProcLoop(actx, auctionsOutChan, joinProcAuction, &procArgs.auctionDone)
 
 	srcs := map[string]processor.Source{sp.InputTopicNames[0]: auctionsSrc, sp.InputTopicNames[1]: personsSrc}
 	if sp.EnableTransaction {
@@ -505,15 +529,16 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			panic("unrecognized table type")
 		}
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
-			ProcArgs:      procArgs,
-			Env:           h.env,
-			Srcs:          srcs,
-			OutputStreams: []*sharedlog_stream.ShardedSharedLogStream{outputStream},
-			QueryInput:    sp,
-			TransactionalId: fmt.Sprintf("%s-%s-%d-%s", h.funcName,
-				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0]),
+			ProcArgs:              procArgs,
+			Env:                   h.env,
+			Srcs:                  srcs,
+			OutputStreams:         []*sharedlog_stream.ShardedSharedLogStream{outputStream},
+			QueryInput:            sp,
+			TransactionalId:       fmt.Sprintf("%s-%d", h.funcName, sp.ParNum),
 			MsgSerde:              sss.msgSerde,
 			WindowStoreChangelogs: wsc,
+			KVChangelogs:          nil,
+			FixedOutParNum:        0,
 		}
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {

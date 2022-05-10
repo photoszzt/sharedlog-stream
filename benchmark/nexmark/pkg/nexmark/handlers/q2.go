@@ -127,6 +127,9 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		},
 		CloseFunc: func() {
 			sink.CloseAsyncPush()
+			if err = sink.Flush(ctx); err != nil {
+				panic(err)
+			}
 		},
 	}
 	srcs := map[string]processor.Source{sp.InputTopicNames[0]: src}

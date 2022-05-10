@@ -61,15 +61,15 @@ const (
 type joinProcArgs struct {
 	src           *processor.MeteredSource
 	sink          *sharedlog_stream.ConcurrentMeteredSink
-	controlVar    uint32
-	ack           int32
+	currentOffset map[string]uint64
+	trackParFunc  transaction.TrackKeySubStreamFunc
 	wg            *sync.WaitGroup
 	cHash         *hash.ConsistentHash
 	runner        JoinWorkerFunc
 	offMu         *sync.Mutex
-	currentOffset map[string]uint64
-	trackParFunc  transaction.TrackKeySubStreamFunc
 	cHashMu       *sync.RWMutex
+	controlVar    uint32
+	ack           int32
 	parNum        uint8
 }
 
@@ -115,6 +115,7 @@ func joinProcLoop(
 	ctx context.Context,
 	out chan *common.FnOutput,
 	procArgs *joinProcArgs,
+	done *uint32,
 ) {
 	status := Paused
 L:
@@ -126,30 +127,48 @@ L:
 		}
 		ctrl := atomic.LoadUint32(&procArgs.controlVar)
 		state := RunningState(uint8(ctrl))
-		switch state {
-		case Paused:
-			status = Paused
-			procArgs.sink.Flush(ctx)
-			atomic.AddInt32(&procArgs.ack, -1)
-		case Running:
-			status = Running
-			atomic.AddInt32(&procArgs.ack, -1)
-		case Stopped:
-			atomic.AddInt32(&procArgs.ack, -1)
-			break L
+		if status != state {
+			switch state {
+			case Paused:
+				status = Paused
+				debug.Fprintf(os.Stderr, "%s change status to Paused\n", ctx.Value("id").(string))
+				err := procArgs.sink.Flush(ctx)
+				if err != nil {
+					panic(err)
+				}
+				acked := atomic.AddInt32(&procArgs.ack, -1)
+				if acked < 0 {
+					panic("ack should always >= 0")
+				}
+			case Running:
+				status = Running
+				debug.Fprintf(os.Stderr, "change status to Running\n")
+				acked := atomic.AddInt32(&procArgs.ack, -1)
+				if acked < 0 {
+					panic("ack should always >= 0")
+				}
+			case Stopped:
+				acked := atomic.AddInt32(&procArgs.ack, -1)
+				if acked < 0 {
+					panic("ack should always >= 0")
+				}
+				break L
+			}
 		}
 		if status == Running {
 			gotMsgs, err := procArgs.src.Consume(ctx, procArgs.parNum)
 			if err != nil {
 				if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
-					debug.Fprintf(os.Stderr, "%s timeout, gen output\n", procArgs.src.TopicName())
-					out <- &common.FnOutput{Success: true, Message: err.Error()}
-					debug.Fprintf(os.Stderr, "Done sending result\n")
+					debug.Fprintf(os.Stderr, "%s timeout\n", procArgs.src.TopicName())
+					// out <- &common.FnOutput{Success: true, Message: err.Error()}
+					// debug.Fprintf(os.Stderr, "Done sending result\n")
 					continue
 				}
+				atomic.StoreUint32(done, 1)
 				out <- &common.FnOutput{Success: false, Message: err.Error()}
 				return
 			}
+			atomic.CompareAndSwapUint32(done, 1, 0)
 			for _, msg := range gotMsgs.Msgs {
 				procArgs.offMu.Lock()
 				procArgs.currentOffset[procArgs.src.TopicName()] = msg.LogSeqNum
@@ -186,11 +205,13 @@ func procMsgWithSink(ctx context.Context, msg commtypes.Message, out chan *commo
 	if err != nil {
 		debug.Fprintf(os.Stderr, "%s return runner err: %v\n", ctx.Value("id"), err)
 		out <- &common.FnOutput{Success: false, Message: err.Error()}
+		return
 	}
 	err = pushMsgsToSink(ctx, procArgs.sink, procArgs.cHash, procArgs.cHashMu, msgs, procArgs.trackParFunc)
 	if err != nil {
 		debug.Fprintf(os.Stderr, "%s return push to sink err: %v\n", ctx.Value("id"), err)
 		out <- &common.FnOutput{Success: false, Message: err.Error()}
+		return
 	}
 }
 

@@ -45,15 +45,19 @@ func (h *StreamPush) InitFlushTimer(duration time.Duration) {
 func (h *StreamPush) Flush(ctx context.Context) error {
 	if h.BufPush {
 		if h.FlushTimer != nil {
+			debug.Fprintf(os.Stderr, "F: stopping flush timer\n")
 			h.FlushTimer.Stop()
 		}
+		debug.Fprintf(os.Stderr, "F: waiting msg chan to cleanup\n")
 		for len(h.MsgChan) > 0 {
 			time.Sleep(time.Duration(100) * time.Microsecond)
 		}
+		debug.Fprintf(os.Stderr, "F: msgchan is clean\n")
 		err := h.Stream.Flush(ctx)
 		if err != nil {
 			return err
 		}
+		debug.Fprintf(os.Stderr, "F: stream flushed\n")
 	}
 	return nil
 }
@@ -61,15 +65,19 @@ func (h *StreamPush) Flush(ctx context.Context) error {
 func (h *StreamPush) FlushNoLock(ctx context.Context) error {
 	if h.BufPush {
 		if h.FlushTimer != nil {
+			debug.Fprintf(os.Stderr, "FOL: stopping flush timer\n")
 			h.FlushTimer.Stop()
 		}
+		debug.Fprintf(os.Stderr, "FOL: waiting msg chan to cleanup\n")
 		for len(h.MsgChan) > 0 {
 			time.Sleep(time.Duration(100) * time.Microsecond)
 		}
+		debug.Fprintf(os.Stderr, "FOL: msgchan is clean\n")
 		err := h.Stream.FlushNoLock(ctx)
 		if err != nil {
 			return err
 		}
+		debug.Fprintf(os.Stderr, "FOL: stream flushed\n")
 	}
 	return nil
 }

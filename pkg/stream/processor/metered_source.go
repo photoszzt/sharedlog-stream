@@ -10,10 +10,10 @@ import (
 )
 
 type MeteredSource struct {
-	src         Source
-	warmup      time.Duration
 	initial     time.Time
+	src         Source
 	latencies   []int
+	warmup      time.Duration
 	count       uint64
 	measure     bool
 	afterWarmup bool
@@ -46,6 +46,7 @@ func (s *MeteredSource) Consume(ctx context.Context, parNum uint8) (*commtypes.M
 	debug.Assert(!s.measure || (s.warmup == 0 || (s.warmup > 0 && !s.initial.IsZero())), "warmup should initialize initial")
 	if s.measure {
 		if !s.afterWarmup && (s.warmup == 0 || (s.warmup > 0 && time.Since(s.initial) >= s.warmup)) {
+			debug.Fprintf(os.Stderr, "source %s after warmup\n", s.src.TopicName())
 			s.afterWarmup = true
 		}
 		if s.afterWarmup {
@@ -53,11 +54,12 @@ func (s *MeteredSource) Consume(ctx context.Context, parNum uint8) (*commtypes.M
 			msgs, err := s.src.Consume(ctx, parNum)
 			elapsed := time.Since(procStart)
 			if err != nil {
+				debug.Fprintf(os.Stderr, "src out err: %v\n", err)
 				return msgs, err
 			}
 			s.latencies = append(s.latencies, int(elapsed.Microseconds()))
 			s.count += uint64(msgs.TotalLen)
-			// debug.Fprintf(os.Stderr, "%s consumed %d\n", s.src.TopicName(), s.count)
+			debug.Fprintf(os.Stderr, "%s consumed %d\n", s.src.TopicName(), s.count)
 			return msgs, err
 		}
 	}

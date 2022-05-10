@@ -126,6 +126,7 @@ type nexmarkSrcProcArgs struct {
 	latencies         []int
 	idx               int
 	numPartition      uint8
+	parNum            uint8
 }
 
 func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProcArgs) *common.FnOutput {
@@ -144,8 +145,7 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 	}
 	// fmt.Fprintf(os.Stderr, "msg: %v\n", string(msgEncoded))
 	args.idx += 1
-	parNum := args.idx
-	parNum = parNum % int(args.numPartition)
+	// parNum := args.idx
 
 	nowT := time.Now()
 	nowMs := nowT.UnixMilli()
@@ -154,7 +154,7 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 		// fmt.Fprintf(os.Stderr, "sleep %v ms to generate event\n", wtsSec-now)
 		time.Sleep(time.Duration(wtsMs-nowMs) * time.Millisecond)
 	}
-	args.msgChan <- sharedlog_stream.PayloadToPush{Payload: msgEncoded, Partitions: []uint8{uint8(parNum)}, IsControl: false}
+	args.msgChan <- sharedlog_stream.PayloadToPush{Payload: msgEncoded, Partitions: []uint8{uint8(args.parNum)}, IsControl: false}
 	/*
 		if h.bufPush {
 			err = args.stream.BufPushNoLock(ctx, msgEncoded, uint8(parNum))
@@ -299,6 +299,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 		latencies:    make([]int, 0, 128),
 		msgChan:      msgChan,
 		numPartition: stream.NumPartition(),
+		parNum:       inputConfig.ParNum % stream.NumPartition(),
 	}
 	streamPusher := sharedlog_stream.StreamPush{
 		MsgChan:    msgChan,

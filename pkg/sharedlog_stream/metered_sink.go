@@ -211,7 +211,7 @@ func (s *MeteredSink) KeySerde() commtypes.Serde {
 func (s *MeteredSink) Flush(ctx context.Context) error {
 	if s.measure {
 		procStart := time.Now()
-		err := s.sink.Flush(ctx)
+		err := s.sink.FlushNoLock(ctx)
 		elapsed := time.Since(procStart)
 		s.latencies = append(s.latencies, int(elapsed.Microseconds()))
 		return err

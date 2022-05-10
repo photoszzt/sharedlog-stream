@@ -17,7 +17,6 @@ import (
 	"cs.utexas.edu/zjia/faas/types"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
-	"golang.org/x/xerrors"
 )
 
 const (
@@ -378,7 +377,8 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 			parNum := par
 			g.Go(func() error {
 				tag := sharedlog_stream.TxnMarkerTag(stream.TopicNameHash(), parNum)
-				off, err := stream.PushWithTag(ectx, encoded, parNum, []uint64{tag}, true, false)
+				tag2 := sharedlog_stream.NameHashWithPartition(stream.TopicNameHash(), parNum)
+				off, err := stream.PushWithTag(ectx, encoded, parNum, []uint64{tag, tag2}, true, false)
 				debug.Fprintf(os.Stderr, "append marker %d to stream %s off %x tag %x\n",
 					marker, stream.TopicName(), off, tag)
 				return err
@@ -419,7 +419,7 @@ func (tc *TransactionManager) checkTopicExistsInTopicStream(topic string) bool {
 // this function could be called by multiple goroutine.
 func (tc *TransactionManager) AddTopicPartition(ctx context.Context, topic string, partitions []uint8) error {
 	if tc.currentStatus != txn_data.BEGIN {
-		return xerrors.Errorf("should begin transaction first")
+		panic("should begin transaction first")
 	}
 	debug.Assert(tc.checkTopicExistsInTopicStream(topic), fmt.Sprintf("topic %s's stream should be tracked", topic))
 	// debug.Fprintf(os.Stderr, "tracking topic %s par %v\n", topic, partitions)

@@ -405,6 +405,10 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		},
 		CloseFunc: func() {
 			sink.CloseAsyncPush()
+			err := sink.Flush(ctx)
+			if err != nil {
+				panic(err)
+			}
 		},
 	}
 
