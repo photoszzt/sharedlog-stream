@@ -367,6 +367,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		cHashMu:      &h.cHashMu,
 		cHash:        h.cHash,
 		controlVar:   uint32(Paused),
+		ctrl:         make(chan RunningState),
 		ack:          0,
 	}
 
@@ -380,6 +381,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		cHashMu:      &h.cHashMu,
 		cHash:        h.cHash,
 		controlVar:   uint32(Paused),
+		ctrl:         make(chan RunningState),
 		ack:          0,
 	}
 
@@ -389,64 +391,92 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		FlushOrPauseFunc: func() {
 			debug.Fprintf(os.Stderr, "in flush func\n")
 			if atomic.LoadUint32(&procArgs.auctionDone) == 0 {
+				joinProcAuction.ackWg.Add(1)
 				debug.Fprintf(os.Stderr, "try to pause auction\n")
-				toAck := atomic.AddInt32(&joinProcAuction.ack, 1)
-				debug.Fprintf(os.Stderr, "auction to ack: %d\n", toAck)
-				atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Paused))
+				joinProcAuction.ctrl <- Paused
 			}
 			if atomic.LoadUint32(&procArgs.personDone) == 0 {
+				joinProcPerson.ackWg.Add(1)
 				debug.Fprintf(os.Stderr, "try to pause person\n")
-				toAck := atomic.AddInt32(&joinProcPerson.ack, 1)
-				debug.Fprintf(os.Stderr, "person to ack: %d\n", toAck)
-				atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Paused))
+				joinProcPerson.ctrl <- Paused
 			}
-			debug.Fprintf(os.Stderr, "waiting auction and person to update state")
-			for {
-				aack := atomic.LoadInt32(&joinProcAuction.ack)
-				pack := atomic.LoadInt32(&joinProcPerson.ack)
-				debug.Fprintf(os.Stderr, "aack: %d, pack: %d\n", aack, pack)
-				if aack == 0 && pack == 0 {
-					break
+			/*
+				if atomic.LoadUint32(&procArgs.auctionDone) == 0 {
+					debug.Fprintf(os.Stderr, "try to pause auction\n")
+					toAck := atomic.AddInt32(&joinProcAuction.ack, 1)
+					debug.Fprintf(os.Stderr, "auction to ack: %d\n", toAck)
+					atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Paused))
 				}
-				time.Sleep(time.Duration(100) * time.Microsecond)
-			}
+				if atomic.LoadUint32(&procArgs.personDone) == 0 {
+					debug.Fprintf(os.Stderr, "try to pause person\n")
+					toAck := atomic.AddInt32(&joinProcPerson.ack, 1)
+					debug.Fprintf(os.Stderr, "person to ack: %d\n", toAck)
+					atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Paused))
+				}
+				debug.Fprintf(os.Stderr, "waiting auction and person to update state\n")
+				for {
+					aack := atomic.LoadInt32(&joinProcAuction.ack)
+					pack := atomic.LoadInt32(&joinProcPerson.ack)
+					debug.Fprintf(os.Stderr, "aack: %d, pack: %d\n", aack, pack)
+					if aack == 0 && pack == 0 {
+						break
+					}
+					time.Sleep(time.Duration(100) * time.Microsecond)
+				}
+			*/
+			debug.Fprintf(os.Stderr, "waiting auction and person to update state\n")
+			joinProcAuction.ackWg.Wait()
+			joinProcPerson.ackWg.Wait()
 			debug.Fprintf(os.Stderr, "done flushing\n")
 		},
 		ResumeFunc: func() {
 			if atomic.LoadUint32(&procArgs.auctionDone) == 0 {
-				atomic.AddInt32(&joinProcAuction.ack, 1)
-				atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Running))
+				joinProcAuction.ctrl <- Running
 			}
 			if atomic.LoadUint32(&procArgs.personDone) == 0 {
-				atomic.AddInt32(&joinProcPerson.ack, 1)
-				atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Running))
+				joinProcPerson.ctrl <- Running
 			}
-			for {
-				aack := atomic.LoadInt32(&joinProcAuction.ack)
-				pack := atomic.LoadInt32(&joinProcPerson.ack)
-				if aack == 0 && pack == 0 {
-					break
+			/*
+				if atomic.LoadUint32(&procArgs.auctionDone) == 0 {
+					atomic.AddInt32(&joinProcAuction.ack, 1)
+					atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Running))
 				}
-				time.Sleep(time.Duration(100) * time.Microsecond)
-			}
+				if atomic.LoadUint32(&procArgs.personDone) == 0 {
+					atomic.AddInt32(&joinProcPerson.ack, 1)
+					atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Running))
+				}
+				for {
+					aack := atomic.LoadInt32(&joinProcAuction.ack)
+					pack := atomic.LoadInt32(&joinProcPerson.ack)
+					if aack == 0 && pack == 0 {
+						break
+					}
+					time.Sleep(time.Duration(100) * time.Microsecond)
+				}
+			*/
 		},
 		CloseFunc: func() {
-			atomic.AddInt32(&joinProcAuction.ack, 1)
-			atomic.AddInt32(&joinProcPerson.ack, 1)
-			atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Stopped))
-			atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Stopped))
-			for {
-				aack := atomic.LoadInt32(&joinProcAuction.ack)
-				pack := atomic.LoadInt32(&joinProcPerson.ack)
-				if aack == 0 && pack == 0 {
-					break
+			/*
+				atomic.AddInt32(&joinProcAuction.ack, 1)
+				atomic.AddInt32(&joinProcPerson.ack, 1)
+				atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Stopped))
+				atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Stopped))
+				for {
+					aack := atomic.LoadInt32(&joinProcAuction.ack)
+					pack := atomic.LoadInt32(&joinProcPerson.ack)
+					if aack == 0 && pack == 0 {
+						break
+					}
+					time.Sleep(time.Duration(100) * time.Microsecond)
 				}
-				time.Sleep(time.Duration(100) * time.Microsecond)
-			}
+			*/
+			joinProcAuction.ctrl <- Stopped
+			joinProcPerson.ctrl <- Stopped
 			sss.sink.CloseAsyncPush()
 			if err = sss.sink.Flush(ctx); err != nil {
 				panic(err)
 			}
+			debug.Fprintf(os.Stderr, "done close\n")
 		},
 		InitFunc: func(progArgs interface{}) {
 			if sp.EnableTransaction {
@@ -463,18 +493,23 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			auctionsJoinsPersons.StartWarmup()
 			personsJoinsAuctions.StartWarmup()
 
-			atomic.AddInt32(&joinProcAuction.ack, 1)
-			atomic.AddInt32(&joinProcPerson.ack, 1)
-			atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Running))
-			atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Running))
-			for {
-				aack := atomic.LoadInt32(&joinProcAuction.ack)
-				pack := atomic.LoadInt32(&joinProcPerson.ack)
-				if aack == 0 && pack == 0 {
-					break
+			/*
+				atomic.AddInt32(&joinProcAuction.ack, 1)
+				atomic.AddInt32(&joinProcPerson.ack, 1)
+				atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Running))
+				atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Running))
+				for {
+					aack := atomic.LoadInt32(&joinProcAuction.ack)
+					pack := atomic.LoadInt32(&joinProcPerson.ack)
+					if aack == 0 && pack == 0 {
+						break
+					}
+					time.Sleep(time.Duration(100) * time.Microsecond)
 				}
-				time.Sleep(time.Duration(100) * time.Microsecond)
-			}
+			*/
+			joinProcAuction.ctrl <- Running
+			joinProcPerson.ctrl <- Running
+
 		},
 		CommitEvery: common.CommitDuration,
 	}

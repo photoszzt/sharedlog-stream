@@ -95,8 +95,10 @@ func (h *q4JoinTableHandler) process(ctx context.Context,
 		cHashMu:       &h.cHashMu,
 		cHash:         h.cHash,
 	}
+	bidsDone := uint32(0)
+	aucDone := uint32(0)
 	wg.Add(1)
-	go joinProc(ctx, bidsOutChan, joinProgArgsBids)
+	go joinProc(ctx, bidsOutChan, joinProgArgsBids, &bidsDone)
 
 	joinProgArgsAuction := &joinProcArgs{
 		src:           args.auctionsSrc,
@@ -111,7 +113,7 @@ func (h *q4JoinTableHandler) process(ctx context.Context,
 		cHash:         h.cHash,
 	}
 	wg.Add(1)
-	go joinProc(ctx, auctionsOutChan, joinProgArgsAuction)
+	go joinProc(ctx, auctionsOutChan, joinProgArgsAuction, &aucDone)
 	var pOut *common.FnOutput = nil
 	var aOut *common.FnOutput = nil
 L:

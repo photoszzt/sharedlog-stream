@@ -68,8 +68,10 @@ type joinProcArgs struct {
 	runner        JoinWorkerFunc
 	offMu         *sync.Mutex
 	cHashMu       *sync.RWMutex
+	ctrl          chan RunningState
 	controlVar    uint32
 	ack           int32
+	ackWg         sync.WaitGroup
 	parNum        uint8
 }
 
@@ -77,6 +79,7 @@ func joinProc(
 	ctx context.Context,
 	out chan *common.FnOutput,
 	procArgs *joinProcArgs,
+	done *uint32,
 ) {
 	defer procArgs.wg.Done()
 	gotMsgs, err := procArgs.src.Consume(ctx, procArgs.parNum)
@@ -99,13 +102,21 @@ func joinProc(
 				if subMsg.Value == nil {
 					continue
 				}
-				procMsgWithSink(ctx, subMsg, out, procArgs)
+				err = procMsgWithSink(ctx, subMsg, procArgs)
+				if err != nil {
+					atomic.StoreUint32(done, 1)
+					out <- &common.FnOutput{Success: false, Message: err.Error()}
+				}
 			}
 		} else {
 			if msg.Msg.Value == nil {
 				continue
 			}
-			procMsgWithSink(ctx, msg.Msg, out, procArgs)
+			err = procMsgWithSink(ctx, msg.Msg, procArgs)
+			if err != nil {
+				atomic.StoreUint32(done, 1)
+				out <- &common.FnOutput{Success: false, Message: err.Error()}
+			}
 		}
 	}
 	out <- nil
@@ -123,11 +134,8 @@ L:
 		select {
 		case <-ctx.Done():
 			break L
-		default:
-		}
-		ctrl := atomic.LoadUint32(&procArgs.controlVar)
-		state := RunningState(uint8(ctrl))
-		if status != state {
+		case state := <-procArgs.ctrl:
+			debug.Fprintf(os.Stderr, "ctrl state: %d\n", state)
 			switch state {
 			case Paused:
 				status = Paused
@@ -136,26 +144,49 @@ L:
 				if err != nil {
 					panic(err)
 				}
-				acked := atomic.AddInt32(&procArgs.ack, -1)
-				if acked < 0 {
-					panic("ack should always >= 0")
-				}
+				procArgs.ackWg.Done()
 			case Running:
 				status = Running
 				debug.Fprintf(os.Stderr, "change status to Running\n")
-				acked := atomic.AddInt32(&procArgs.ack, -1)
-				if acked < 0 {
-					panic("ack should always >= 0")
-				}
 			case Stopped:
-				acked := atomic.AddInt32(&procArgs.ack, -1)
-				if acked < 0 {
-					panic("ack should always >= 0")
-				}
 				break L
 			}
+		default:
 		}
+		/*
+			ctrl := atomic.LoadUint32(&procArgs.controlVar)
+			state := RunningState(uint8(ctrl))
+			if status != state {
+				switch state {
+				case Paused:
+					status = Paused
+					debug.Fprintf(os.Stderr, "%s change status to Paused\n", ctx.Value("id").(string))
+					err := procArgs.sink.Flush(ctx)
+					if err != nil {
+						panic(err)
+					}
+					acked := atomic.AddInt32(&procArgs.ack, -1)
+					if acked < 0 {
+						panic("ack should always >= 0")
+					}
+				case Running:
+					status = Running
+					debug.Fprintf(os.Stderr, "change status to Running\n")
+					acked := atomic.AddInt32(&procArgs.ack, -1)
+					if acked < 0 {
+						panic("ack should always >= 0")
+					}
+				case Stopped:
+					acked := atomic.AddInt32(&procArgs.ack, -1)
+					if acked < 0 {
+						panic("ack should always >= 0")
+					}
+					break L
+				}
+			}
+		*/
 		if status == Running {
+			debug.Fprintf(os.Stderr, "before consume\n")
 			gotMsgs, err := procArgs.src.Consume(ctx, procArgs.parNum)
 			if err != nil {
 				if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
@@ -165,10 +196,11 @@ L:
 					continue
 				}
 				atomic.StoreUint32(done, 1)
+				debug.Fprintf(os.Stderr, "[ERROR] consume: %v\n", err)
 				out <- &common.FnOutput{Success: false, Message: err.Error()}
 				return
 			}
-			atomic.CompareAndSwapUint32(done, 1, 0)
+			debug.Fprintf(os.Stderr, "after consume\n")
 			for _, msg := range gotMsgs.Msgs {
 				procArgs.offMu.Lock()
 				procArgs.currentOffset[procArgs.src.TopicName()] = msg.LogSeqNum
@@ -179,40 +211,53 @@ L:
 						if subMsg.Value == nil {
 							continue
 						}
-						procMsgWithSink(ctx, subMsg, out, procArgs)
+						err = procMsgWithSink(ctx, subMsg, procArgs)
+						if err != nil {
+							atomic.StoreUint32(done, 1)
+							debug.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink: %v\n", ctx.Value("id").(string), err)
+							out <- &common.FnOutput{Success: false, Message: err.Error()}
+							debug.Fprintf(os.Stderr, "done send msg\n", err)
+							return
+						}
 					}
 				} else {
 					if msg.Msg.Value == nil {
 						continue
 					}
-					procMsgWithSink(ctx, msg.Msg, out, procArgs)
+					err = procMsgWithSink(ctx, msg.Msg, procArgs)
+					if err != nil {
+						atomic.StoreUint32(done, 1)
+						debug.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink: %v\n", ctx.Value("id").(string), err)
+						out <- &common.FnOutput{Success: false, Message: err.Error()}
+						return
+					}
 				}
 			}
+			debug.Fprintf(os.Stderr, "after for loop\n")
 		}
 	}
 }
 
-func procMsgWithSink(ctx context.Context, msg commtypes.Message, out chan *common.FnOutput, procArgs *joinProcArgs) {
+func procMsgWithSink(ctx context.Context, msg commtypes.Message, procArgs *joinProcArgs,
+) error {
 	st := msg.Value.(commtypes.StreamTimeExtractor)
 	ts, err := st.ExtractStreamTime()
 	if err != nil {
-		debug.Fprintf(os.Stderr, "%s return extract ts err: %v\n", ctx.Value("id"), err)
-		out <- &common.FnOutput{Success: false, Message: fmt.Sprintf("fail to extract timestamp: %v", err)}
-		return
+		debug.Fprintf(os.Stderr, "[ERROR] %s return extract ts: %v\n", ctx.Value("id"), err)
+		return fmt.Errorf("fail to extract timestamp: %v", err)
 	}
 	msg.Timestamp = ts
 	msgs, err := procArgs.runner(ctx, msg)
 	if err != nil {
-		debug.Fprintf(os.Stderr, "%s return runner err: %v\n", ctx.Value("id"), err)
-		out <- &common.FnOutput{Success: false, Message: err.Error()}
-		return
+		debug.Fprintf(os.Stderr, "[ERROR] %s return runner: %v\n", ctx.Value("id"), err)
+		return err
 	}
 	err = pushMsgsToSink(ctx, procArgs.sink, procArgs.cHash, procArgs.cHashMu, msgs, procArgs.trackParFunc)
 	if err != nil {
-		debug.Fprintf(os.Stderr, "%s return push to sink err: %v\n", ctx.Value("id"), err)
-		out <- &common.FnOutput{Success: false, Message: err.Error()}
-		return
+		debug.Fprintf(os.Stderr, "[ERROR] %s return push to sink: %v\n", ctx.Value("id"), err)
+		return err
 	}
+	return nil
 }
 
 /*

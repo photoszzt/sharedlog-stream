@@ -471,13 +471,13 @@ func (h *q8GroupByHandler) getAucBySellerID(warmup time.Duration, pollTimeout ti
 			case state := <-args.aucCtrl:
 				switch state {
 				case Paused:
-					// debug.Fprintf(os.Stderr, "got auc flush\n")
+					debug.Fprintf(os.Stderr, "got auc flush\n")
 					status = Paused
 					err := args.sinks[0].Flush(ctx)
 					if err != nil {
 						panic(err)
 					}
-					// debug.Fprintf(os.Stderr, "done auc flush\n")
+					debug.Fprintf(os.Stderr, "done auc flush\n")
 					args.aucAck.Done()
 				case Running:
 					status = Running
