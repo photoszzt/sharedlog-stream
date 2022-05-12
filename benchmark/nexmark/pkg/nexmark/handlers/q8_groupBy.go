@@ -9,7 +9,6 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
@@ -204,17 +203,17 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 			if err = sinks[1].Flush(ctx); err != nil {
 				panic(err)
 			}
-			debug.Fprintf(os.Stderr, "done close\n")
+			// debug.Fprintf(os.Stderr, "done close\n")
 		},
 		PauseFunc: func() {
-			debug.Fprintf(os.Stderr, "begin flush\n")
+			// debug.Fprintf(os.Stderr, "begin flush\n")
 			close(aucMsgChan)
 			close(personMsgChan)
 			wg.Wait()
-			debug.Fprintf(os.Stderr, "done flush\n")
+			// debug.Fprintf(os.Stderr, "done flush\n")
 		},
 		ResumeFunc: func() {
-			debug.Fprintf(os.Stderr, "begin resume\n")
+			// debug.Fprintf(os.Stderr, "begin resume\n")
 			aucMsgChan = make(chan commtypes.Message, 1)
 			personMsgChan = make(chan commtypes.Message, 1)
 			procArgs.aucMsgChan = aucMsgChan
@@ -223,7 +222,7 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 			go personsByIDFunc(ctx, procArgs, &wg, personMsgChan, errChan)
 			wg.Add(1)
 			go auctionsBySellerIDFunc(ctx, procArgs, &wg, aucMsgChan, errChan)
-			debug.Fprintf(os.Stderr, "done resume\n")
+			// debug.Fprintf(os.Stderr, "done resume\n")
 		},
 		InitFunc: func(progArgs interface{}) {
 			if sp.EnableTransaction {

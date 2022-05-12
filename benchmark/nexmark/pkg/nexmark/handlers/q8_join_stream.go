@@ -391,15 +391,15 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		ProcessFunc:   h.process,
 		CurrentOffset: currentOffset,
 		PauseFunc: func() {
-			debug.Fprintf(os.Stderr, "in flush func\n")
+			// debug.Fprintf(os.Stderr, "in flush func\n")
 			personDone <- struct{}{}
 			aucDone <- struct{}{}
 			debug.Fprintf(os.Stderr, "waiting join proc to exit\n")
 			wg.Wait()
-			debug.Fprintf(os.Stderr, "join procs exited\n")
+			// debug.Fprintf(os.Stderr, "join procs exited\n")
 		},
 		ResumeFunc: func() {
-			debug.Fprintf(os.Stderr, "resume join porc\n")
+			// debug.Fprintf(os.Stderr, "resume join porc\n")
 			personDone = make(chan struct{}, 1)
 			aucDone = make(chan struct{}, 1)
 			wg.Add(1)
@@ -408,14 +408,14 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			go joinProcLoop(actx, auctionsOutChan, joinProcAuction, &wg, aucRun, aucDone)
 			perRun <- struct{}{}
 			aucRun <- struct{}{}
-			debug.Fprintf(os.Stderr, "done resume join proc\n")
+			// debug.Fprintf(os.Stderr, "done resume join proc\n")
 		},
 		CloseFunc: func() {
 			sss.sink.CloseAsyncPush()
 			if err = sss.sink.Flush(ctx); err != nil {
 				panic(err)
 			}
-			debug.Fprintf(os.Stderr, "done close\n")
+			// debug.Fprintf(os.Stderr, "done close\n")
 		},
 		InitFunc: func(progArgs interface{}) {
 			if sp.EnableTransaction {

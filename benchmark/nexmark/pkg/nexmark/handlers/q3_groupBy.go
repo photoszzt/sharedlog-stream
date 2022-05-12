@@ -194,13 +194,6 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	task := transaction.StreamTask{
 		ProcessFunc: h.process,
 		CloseFunc: func() {
-			// debug.Fprintf(os.Stderr, "auction channel has %d msg left\n", len(aucMsgChan))
-			// debug.Fprintf(os.Stderr, "person channel has %d msg left\n", len(personMsgChan))
-			close(aucMsgChan)
-			close(personMsgChan)
-
-			// debug.Fprintf(os.Stderr, "waiting two goroutine to exit\n")
-			wg.Wait()
 			// debug.Fprintf(os.Stderr, "auc and persons exited; now flusing the sink buffer\n")
 			sinks[0].CloseAsyncPush()
 			sinks[1].CloseAsyncPush()
@@ -250,7 +243,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 			personsByIDMap.StartWarmup()
 			filterAuctions.StartWarmup()
 			auctionsBySellerIDMap.StartWarmup()
-			debug.Fprintf(os.Stderr, "done warmup start\n")
+			// debug.Fprintf(os.Stderr, "done warmup start\n")
 		},
 		CurrentOffset: make(map[string]uint64),
 		CommitEvery:   common.CommitDuration,
