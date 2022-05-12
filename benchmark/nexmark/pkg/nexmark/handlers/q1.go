@@ -89,7 +89,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
 		CommitEvery:   common.CommitDuration,
-		FlushOrPauseFunc: func() {
+		PauseFunc: func() {
 			err := sink.Flush(ctx)
 			if err != nil {
 				panic(err)

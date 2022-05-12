@@ -50,28 +50,16 @@ func getPersonTimeSerde(serdeFormat uint8) (commtypes.Serde, error) {
 
 type JoinWorkerFunc func(c context.Context, m commtypes.Message) ([]commtypes.Message, error)
 
-type RunningState uint8
-
-const (
-	Running RunningState = 0
-	Stopped RunningState = 1
-	Paused  RunningState = 2
-)
-
 type joinProcArgs struct {
 	src           *processor.MeteredSource
 	sink          *sharedlog_stream.ConcurrentMeteredSink
 	currentOffset map[string]uint64
 	trackParFunc  transaction.TrackKeySubStreamFunc
-	wg            *sync.WaitGroup
 	cHash         *hash.ConsistentHash
 	runner        JoinWorkerFunc
+	wg            sync.WaitGroup
 	offMu         *sync.Mutex
 	cHashMu       *sync.RWMutex
-	ctrl          chan RunningState
-	controlVar    uint32
-	ack           int32
-	ackWg         sync.WaitGroup
 	parNum        uint8
 }
 
@@ -126,115 +114,67 @@ func joinProcLoop(
 	ctx context.Context,
 	out chan *common.FnOutput,
 	procArgs *joinProcArgs,
-	done *uint32,
+	wg *sync.WaitGroup,
+	run chan struct{},
+	done chan struct{},
 ) {
-	status := Paused
-L:
+	<-run
+	debug.Fprintf(os.Stderr, "joinProc start running\n")
+	defer wg.Done()
 	for {
 		select {
 		case <-ctx.Done():
-			break L
-		case state := <-procArgs.ctrl:
-			debug.Fprintf(os.Stderr, "ctrl state: %d\n", state)
-			switch state {
-			case Paused:
-				status = Paused
-				debug.Fprintf(os.Stderr, "%s change status to Paused\n", ctx.Value("id").(string))
-				err := procArgs.sink.Flush(ctx)
-				if err != nil {
-					panic(err)
-				}
-				procArgs.ackWg.Done()
-			case Running:
-				status = Running
-				debug.Fprintf(os.Stderr, "change status to Running\n")
-			case Stopped:
-				break L
-			}
+			return
+		case <-done:
+			debug.Fprintf(os.Stderr, "got done msg\n")
+			return
 		default:
 		}
-		/*
-			ctrl := atomic.LoadUint32(&procArgs.controlVar)
-			state := RunningState(uint8(ctrl))
-			if status != state {
-				switch state {
-				case Paused:
-					status = Paused
-					debug.Fprintf(os.Stderr, "%s change status to Paused\n", ctx.Value("id").(string))
-					err := procArgs.sink.Flush(ctx)
-					if err != nil {
-						panic(err)
-					}
-					acked := atomic.AddInt32(&procArgs.ack, -1)
-					if acked < 0 {
-						panic("ack should always >= 0")
-					}
-				case Running:
-					status = Running
-					debug.Fprintf(os.Stderr, "change status to Running\n")
-					acked := atomic.AddInt32(&procArgs.ack, -1)
-					if acked < 0 {
-						panic("ack should always >= 0")
-					}
-				case Stopped:
-					acked := atomic.AddInt32(&procArgs.ack, -1)
-					if acked < 0 {
-						panic("ack should always >= 0")
-					}
-					break L
-				}
-			}
-		*/
-		if status == Running {
-			debug.Fprintf(os.Stderr, "before consume\n")
-			gotMsgs, err := procArgs.src.Consume(ctx, procArgs.parNum)
-			if err != nil {
-				if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
-					debug.Fprintf(os.Stderr, "%s timeout\n", procArgs.src.TopicName())
-					// out <- &common.FnOutput{Success: true, Message: err.Error()}
-					// debug.Fprintf(os.Stderr, "Done sending result\n")
-					continue
-				}
-				atomic.StoreUint32(done, 1)
-				debug.Fprintf(os.Stderr, "[ERROR] consume: %v\n", err)
-				out <- &common.FnOutput{Success: false, Message: err.Error()}
+		// debug.Fprintf(os.Stderr, "before consume\n")
+		gotMsgs, err := procArgs.src.Consume(ctx, procArgs.parNum)
+		if err != nil {
+			if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
+				debug.Fprintf(os.Stderr, "%s timeout\n", procArgs.src.TopicName())
+				out <- &common.FnOutput{Success: true, Message: err.Error()}
+				// debug.Fprintf(os.Stderr, "Done sending result\n")
 				return
 			}
-			debug.Fprintf(os.Stderr, "after consume\n")
-			for _, msg := range gotMsgs.Msgs {
-				procArgs.offMu.Lock()
-				procArgs.currentOffset[procArgs.src.TopicName()] = msg.LogSeqNum
-				procArgs.offMu.Unlock()
+			debug.Fprintf(os.Stderr, "[ERROR] consume: %v\n", err)
+			out <- &common.FnOutput{Success: false, Message: err.Error()}
+			return
+		}
+		// debug.Fprintf(os.Stderr, "after consume\n")
+		for _, msg := range gotMsgs.Msgs {
+			procArgs.offMu.Lock()
+			procArgs.currentOffset[procArgs.src.TopicName()] = msg.LogSeqNum
+			procArgs.offMu.Unlock()
 
-				if msg.MsgArr != nil {
-					for _, subMsg := range msg.MsgArr {
-						if subMsg.Value == nil {
-							continue
-						}
-						err = procMsgWithSink(ctx, subMsg, procArgs)
-						if err != nil {
-							atomic.StoreUint32(done, 1)
-							debug.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink: %v\n", ctx.Value("id").(string), err)
-							out <- &common.FnOutput{Success: false, Message: err.Error()}
-							debug.Fprintf(os.Stderr, "done send msg\n", err)
-							return
-						}
-					}
-				} else {
-					if msg.Msg.Value == nil {
+			if msg.MsgArr != nil {
+				for _, subMsg := range msg.MsgArr {
+					if subMsg.Value == nil {
 						continue
 					}
-					err = procMsgWithSink(ctx, msg.Msg, procArgs)
+					err = procMsgWithSink(ctx, subMsg, procArgs)
 					if err != nil {
-						atomic.StoreUint32(done, 1)
 						debug.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink: %v\n", ctx.Value("id").(string), err)
 						out <- &common.FnOutput{Success: false, Message: err.Error()}
+						debug.Fprintf(os.Stderr, "done send msg\n", err)
 						return
 					}
 				}
+			} else {
+				if msg.Msg.Value == nil {
+					continue
+				}
+				err = procMsgWithSink(ctx, msg.Msg, procArgs)
+				if err != nil {
+					debug.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink: %v\n", ctx.Value("id").(string), err)
+					out <- &common.FnOutput{Success: false, Message: err.Error()}
+					return
+				}
 			}
-			debug.Fprintf(os.Stderr, "after for loop\n")
 		}
+		// debug.Fprintf(os.Stderr, "after for loop\n")
 	}
 }
 
@@ -476,6 +416,38 @@ func getSrcSinkUint64Key(
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 
+	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig),
+		time.Duration(sp.WarmupS)*time.Second)
+	sink := sharedlog_stream.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig),
+		time.Duration(sp.WarmupS)*time.Second)
+	return src, sink, msgSerde, nil
+}
+
+func CommonGetSrcSink(ctx context.Context, sp *common.QueryInput,
+	input_stream *sharedlog_stream.ShardedSharedLogStream,
+	output_stream *sharedlog_stream.ShardedSharedLogStream,
+) (*processor.MeteredSource, *sharedlog_stream.MeteredSink, commtypes.MsgSerde, error) {
+	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("get msg serde err: %v", err)
+	}
+	eventSerde, err := getEventSerde(sp.SerdeFormat)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("get event serde err: %v", err)
+	}
+	inConfig := &sharedlog_stream.StreamSourceConfig{
+		Timeout:      common.SrcConsumeTimeout,
+		KeyDecoder:   commtypes.StringDecoder{},
+		ValueDecoder: eventSerde,
+		MsgDecoder:   msgSerde,
+	}
+	outConfig := &sharedlog_stream.StreamSinkConfig{
+		KeySerde:      commtypes.Uint64Serde{},
+		ValueSerde:    eventSerde,
+		MsgSerde:      msgSerde,
+		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+	}
+	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig),
 		time.Duration(sp.WarmupS)*time.Second)
 	sink := sharedlog_stream.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig),

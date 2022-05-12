@@ -17,7 +17,6 @@ import (
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/transaction"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -92,8 +91,8 @@ func (h *q8JoinStreamHandler) process(
 		debug.Fprintf(os.Stderr, "Got auctions out: %v\n", aOut)
 	default:
 	}
-	debug.Fprintf(os.Stderr, "aOut: %v\n", aOut)
-	debug.Fprintf(os.Stderr, "pOut: %v\n", pOut)
+	// debug.Fprintf(os.Stderr, "aOut: %v\n", aOut)
+	// debug.Fprintf(os.Stderr, "pOut: %v\n", pOut)
 	if pOut != nil && !pOut.Success {
 		return t.CurrentOffset, pOut
 	}
@@ -357,121 +356,61 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		personDone:       0,
 	}
 
+	currentOffset := make(map[string]uint64)
 	joinProcPerson := &joinProcArgs{
-		src:          sss.src2,
-		sink:         sss.sink,
-		parNum:       sp.ParNum,
-		runner:       pJoinA,
-		offMu:        &h.offMu,
-		trackParFunc: transaction.DefaultTrackSubstreamFunc,
-		cHashMu:      &h.cHashMu,
-		cHash:        h.cHash,
-		controlVar:   uint32(Paused),
-		ctrl:         make(chan RunningState),
-		ack:          0,
+		src:           sss.src2,
+		sink:          sss.sink,
+		parNum:        sp.ParNum,
+		runner:        pJoinA,
+		offMu:         &h.offMu,
+		trackParFunc:  transaction.DefaultTrackSubstreamFunc,
+		cHashMu:       &h.cHashMu,
+		cHash:         h.cHash,
+		currentOffset: currentOffset,
 	}
-
 	joinProcAuction := &joinProcArgs{
-		src:          sss.src1,
-		sink:         sss.sink,
-		parNum:       sp.ParNum,
-		runner:       aJoinP,
-		offMu:        &h.offMu,
-		trackParFunc: transaction.DefaultTrackSubstreamFunc,
-		cHashMu:      &h.cHashMu,
-		cHash:        h.cHash,
-		controlVar:   uint32(Paused),
-		ctrl:         make(chan RunningState),
-		ack:          0,
+		src:           sss.src1,
+		sink:          sss.sink,
+		parNum:        sp.ParNum,
+		runner:        aJoinP,
+		offMu:         &h.offMu,
+		trackParFunc:  transaction.DefaultTrackSubstreamFunc,
+		cHashMu:       &h.cHashMu,
+		cHash:         h.cHash,
+		currentOffset: currentOffset,
 	}
+	var wg sync.WaitGroup
+	personDone := make(chan struct{}, 1)
+	aucDone := make(chan struct{}, 1)
+	pctx := context.WithValue(ctx, "id", "person")
+	actx := context.WithValue(ctx, "id", "auction")
 
+	aucRun := make(chan struct{})
+	perRun := make(chan struct{})
 	task := transaction.StreamTask{
 		ProcessFunc:   h.process,
-		CurrentOffset: make(map[string]uint64),
-		FlushOrPauseFunc: func() {
+		CurrentOffset: currentOffset,
+		PauseFunc: func() {
 			debug.Fprintf(os.Stderr, "in flush func\n")
-			if atomic.LoadUint32(&procArgs.auctionDone) == 0 {
-				joinProcAuction.ackWg.Add(1)
-				debug.Fprintf(os.Stderr, "try to pause auction\n")
-				joinProcAuction.ctrl <- Paused
-			}
-			if atomic.LoadUint32(&procArgs.personDone) == 0 {
-				joinProcPerson.ackWg.Add(1)
-				debug.Fprintf(os.Stderr, "try to pause person\n")
-				joinProcPerson.ctrl <- Paused
-			}
-			/*
-				if atomic.LoadUint32(&procArgs.auctionDone) == 0 {
-					debug.Fprintf(os.Stderr, "try to pause auction\n")
-					toAck := atomic.AddInt32(&joinProcAuction.ack, 1)
-					debug.Fprintf(os.Stderr, "auction to ack: %d\n", toAck)
-					atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Paused))
-				}
-				if atomic.LoadUint32(&procArgs.personDone) == 0 {
-					debug.Fprintf(os.Stderr, "try to pause person\n")
-					toAck := atomic.AddInt32(&joinProcPerson.ack, 1)
-					debug.Fprintf(os.Stderr, "person to ack: %d\n", toAck)
-					atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Paused))
-				}
-				debug.Fprintf(os.Stderr, "waiting auction and person to update state\n")
-				for {
-					aack := atomic.LoadInt32(&joinProcAuction.ack)
-					pack := atomic.LoadInt32(&joinProcPerson.ack)
-					debug.Fprintf(os.Stderr, "aack: %d, pack: %d\n", aack, pack)
-					if aack == 0 && pack == 0 {
-						break
-					}
-					time.Sleep(time.Duration(100) * time.Microsecond)
-				}
-			*/
-			debug.Fprintf(os.Stderr, "waiting auction and person to update state\n")
-			joinProcAuction.ackWg.Wait()
-			joinProcPerson.ackWg.Wait()
-			debug.Fprintf(os.Stderr, "done flushing\n")
+			personDone <- struct{}{}
+			aucDone <- struct{}{}
+			debug.Fprintf(os.Stderr, "waiting join proc to exit\n")
+			wg.Wait()
+			debug.Fprintf(os.Stderr, "join procs exited\n")
 		},
 		ResumeFunc: func() {
-			if atomic.LoadUint32(&procArgs.auctionDone) == 0 {
-				joinProcAuction.ctrl <- Running
-			}
-			if atomic.LoadUint32(&procArgs.personDone) == 0 {
-				joinProcPerson.ctrl <- Running
-			}
-			/*
-				if atomic.LoadUint32(&procArgs.auctionDone) == 0 {
-					atomic.AddInt32(&joinProcAuction.ack, 1)
-					atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Running))
-				}
-				if atomic.LoadUint32(&procArgs.personDone) == 0 {
-					atomic.AddInt32(&joinProcPerson.ack, 1)
-					atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Running))
-				}
-				for {
-					aack := atomic.LoadInt32(&joinProcAuction.ack)
-					pack := atomic.LoadInt32(&joinProcPerson.ack)
-					if aack == 0 && pack == 0 {
-						break
-					}
-					time.Sleep(time.Duration(100) * time.Microsecond)
-				}
-			*/
+			debug.Fprintf(os.Stderr, "resume join porc\n")
+			personDone = make(chan struct{}, 1)
+			aucDone = make(chan struct{}, 1)
+			wg.Add(1)
+			go joinProcLoop(pctx, personsOutChan, joinProcPerson, &wg, perRun, personDone)
+			wg.Add(1)
+			go joinProcLoop(actx, auctionsOutChan, joinProcAuction, &wg, aucRun, aucDone)
+			perRun <- struct{}{}
+			aucRun <- struct{}{}
+			debug.Fprintf(os.Stderr, "done resume join proc\n")
 		},
 		CloseFunc: func() {
-			/*
-				atomic.AddInt32(&joinProcAuction.ack, 1)
-				atomic.AddInt32(&joinProcPerson.ack, 1)
-				atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Stopped))
-				atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Stopped))
-				for {
-					aack := atomic.LoadInt32(&joinProcAuction.ack)
-					pack := atomic.LoadInt32(&joinProcPerson.ack)
-					if aack == 0 && pack == 0 {
-						break
-					}
-					time.Sleep(time.Duration(100) * time.Microsecond)
-				}
-			*/
-			joinProcAuction.ctrl <- Stopped
-			joinProcPerson.ctrl <- Stopped
 			sss.sink.CloseAsyncPush()
 			if err = sss.sink.Flush(ctx); err != nil {
 				panic(err)
@@ -493,33 +432,16 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			auctionsJoinsPersons.StartWarmup()
 			personsJoinsAuctions.StartWarmup()
 
-			/*
-				atomic.AddInt32(&joinProcAuction.ack, 1)
-				atomic.AddInt32(&joinProcPerson.ack, 1)
-				atomic.StoreUint32(&joinProcAuction.controlVar, uint32(Running))
-				atomic.StoreUint32(&joinProcPerson.controlVar, uint32(Running))
-				for {
-					aack := atomic.LoadInt32(&joinProcAuction.ack)
-					pack := atomic.LoadInt32(&joinProcPerson.ack)
-					if aack == 0 && pack == 0 {
-						break
-					}
-					time.Sleep(time.Duration(100) * time.Microsecond)
-				}
-			*/
-			joinProcAuction.ctrl <- Running
-			joinProcPerson.ctrl <- Running
-
+			perRun <- struct{}{}
+			aucRun <- struct{}{}
 		},
 		CommitEvery: common.CommitDuration,
 	}
-	joinProcPerson.currentOffset = task.CurrentOffset
-	joinProcAuction.currentOffset = task.CurrentOffset
 
-	pctx := context.WithValue(ctx, "id", "person")
-	actx := context.WithValue(ctx, "id", "auction")
-	go joinProcLoop(pctx, personsOutChan, joinProcPerson, &procArgs.personDone)
-	go joinProcLoop(actx, auctionsOutChan, joinProcAuction, &procArgs.auctionDone)
+	wg.Add(1)
+	go joinProcLoop(pctx, personsOutChan, joinProcPerson, &wg, perRun, personDone)
+	wg.Add(1)
+	go joinProcLoop(actx, auctionsOutChan, joinProcAuction, &wg, aucRun, aucDone)
 
 	srcs := map[string]processor.Source{sp.InputTopicNames[0]: auctionsSrc, sp.InputTopicNames[1]: personsSrc}
 	if sp.EnableTransaction {

@@ -12,7 +12,6 @@ import (
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/txn_data"
-	"sync/atomic"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -20,14 +19,38 @@ import (
 )
 
 type StreamTask struct {
-	ProcessFunc      func(ctx context.Context, task *StreamTask, args interface{}) (map[string]uint64, *common.FnOutput)
-	CurrentOffset    map[string]uint64
-	CloseFunc        func()
-	FlushOrPauseFunc func()
-	ResumeFunc       func()
-	InitFunc         func(progArgs interface{})
-	CommitEvery      time.Duration
+	ProcessFunc   func(ctx context.Context, task *StreamTask, args interface{}) (map[string]uint64, *common.FnOutput)
+	CurrentOffset map[string]uint64
+	CloseFunc     func()
+	PauseFunc     func()
+	ResumeFunc    func()
+	InitFunc      func(progArgs interface{})
+	CommitEvery   time.Duration
 }
+
+/*
+func NewStreamTask(
+	processFunc func(ctx context.Context, task *StreamTask, args interface{}) (map[string]uint64, *common.FnOutput),
+	currentOffset map[string]uint64,
+	commitEvery time.Duration,
+	closeFunc func(),
+	pauseFunc func(),
+	resumeFunc func(),
+	initFunc func(progArgs interface{}),
+) *StreamTask {
+	t := &StreamTask{
+		ProcessFunc:   processFunc,
+		CurrentOffset: currentOffset,
+		CommitEvery:   commitEvery,
+		CloseFunc:     closeFunc,
+		PauseFunc:     pauseFunc,
+		ResumeFunc:    resumeFunc,
+		InitFunc:      initFunc,
+	}
+	t.runCond = sync.NewCond(t)
+	return t
+}
+*/
 
 func DefaultTrackSubstreamFunc(ctx context.Context,
 	key interface{},
@@ -423,9 +446,15 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 		select {
 		case <-commitTicker.C:
 			if off != nil {
+				if t.PauseFunc != nil {
+					t.PauseFunc()
+				}
 				err = commitOffset(ctx, cm, off, args.ParNum)
 				if err != nil {
 					panic(err)
+				}
+				if t.ResumeFunc != nil {
+					t.ResumeFunc()
 				}
 			}
 			hasUncommitted = false
@@ -449,6 +478,9 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 					if err != nil {
 						panic(err)
 					}
+				}
+				if t.PauseFunc != nil {
+					t.PauseFunc()
 				}
 				if t.CloseFunc != nil {
 					t.CloseFunc()
@@ -477,6 +509,9 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 		if err != nil {
 			panic(err)
 		}
+	}
+	if t.PauseFunc != nil {
+		t.PauseFunc()
 	}
 	if t.CloseFunc != nil {
 		debug.Fprintf(os.Stderr, "closing\n")
@@ -511,6 +546,7 @@ func commitOffset(ctx context.Context, cm *ConsumeSeqManager, off map[string]uin
 	return err
 }
 
+/*
 func (t *StreamTask) ProcessWithTransaction(
 	ctx context.Context,
 	tm *TransactionManager,
@@ -538,46 +574,268 @@ func (t *StreamTask) ProcessWithTransaction(
 	go cmm.MonitorControlChannel(ctx, controlQuit, controlErrc, meta)
 
 	retc := make(chan *common.FnOutput)
-	run := uint32(0)
-	go t.processWithTranLoop(dctx, tm, args, &run, retc)
+	runChan := make(chan struct{})
+	go t.processWithTranLoop(dctx, tm, args, retc, runChan)
 	for {
+		debug.Fprintf(os.Stderr, "begin of loop\n")
 		select {
 		case m := <-meta:
 			debug.Fprintf(os.Stderr, "finished prev task %s, funcName %s, meta epoch %d, input epoch %d\n",
 				m.FinishedPrevTask, args.ProcArgs.FuncName(), m.Epoch, args.QueryInput.ScaleEpoch)
 			if m.FinishedPrevTask == args.ProcArgs.FuncName() && m.Epoch+1 == args.QueryInput.ScaleEpoch {
-				atomic.CompareAndSwapUint32(&run, 0, 1)
+				runChan <- struct{}{}
 			}
-			continue
 		case ret := <-retc:
+			debug.Fprintf(os.Stderr, "got tran func reply\n")
 			monitorQuit <- struct{}{}
+			debug.Fprintf(os.Stderr, "appended to monitor quit\n")
 			controlQuit <- struct{}{}
+			debug.Fprintf(os.Stderr, "appended to control quit\n")
 			return ret
 		case merr := <-monitorErrc:
+			debug.Fprintf(os.Stderr, "got monitor error chan\n")
 			monitorQuit <- struct{}{}
 			controlQuit <- struct{}{}
 			if merr != nil {
+				debug.Fprintf(os.Stderr, "[ERROR] control channel manager: %v", merr)
 				dcancel()
 				return &common.FnOutput{Success: false, Message: fmt.Sprintf("monitor failed: %v", merr)}
 			}
 		case cerr := <-controlErrc:
+			debug.Fprintf(os.Stderr, "got control error chan\n")
 			monitorQuit <- struct{}{}
 			controlQuit <- struct{}{}
 			if cerr != nil {
+				debug.Fprintf(os.Stderr, "[ERROR] control channel manager: %v", cerr)
 				dcancel()
 				return &common.FnOutput{
 					Success: false,
 					Message: fmt.Sprintf("control channel manager failed: %v", cerr),
 				}
 			}
+		case <-time.After(time.Duration(1) * time.Millisecond):
+		}
+		debug.Fprintf(os.Stderr, "end of loop\n")
+	}
+}
+*/
+
+func (t *StreamTask) ProcessWithTransaction(
+	ctx context.Context,
+	tm *TransactionManager,
+	cmm *ControlChannelManager,
+	args *StreamTaskArgsTransaction,
+) *common.FnOutput {
+	debug.Assert(len(args.OutputStreams) >= 1, "OutputStreams should be filled")
+	for _, ostream := range args.OutputStreams {
+		tm.RecordTopicStreams(ostream.TopicName(), ostream)
+		cmm.TrackStream(ostream.TopicName(), ostream)
+	}
+
+	monitorQuit := make(chan struct{})
+	monitorErrc := make(chan error)
+	controlErrc := make(chan error)
+	controlQuit := make(chan struct{})
+	meta := make(chan txn_data.ControlMetadata)
+
+	for topic, src := range args.Srcs {
+		cmm.TrackStream(topic, src.Stream().(*sharedlog_stream.ShardedSharedLogStream))
+	}
+
+	dctx, dcancel := context.WithCancel(ctx)
+	go tm.MonitorTransactionLog(dctx, monitorQuit, monitorErrc, dcancel)
+	go cmm.MonitorControlChannel(dctx, controlQuit, controlErrc, meta)
+
+	run := false
+	// retc := make(chan *common.FnOutput)
+	// runChan := make(chan struct{})
+	// go t.processWithTranLoop(dctx, tm, args, retc, runChan)
+
+	latencies := make([]int, 0, 128)
+	hasLiveTransaction := false
+	trackConsumePar := false
+	var currentOffset map[string]uint64
+	commitTimer := time.Now()
+	commitEvery := time.Duration(args.QueryInput.CommitEveryMs) * time.Millisecond
+	duration := time.Duration(args.QueryInput.Duration) * time.Second
+
+	idx := 0
+	numCommit := 0
+	debug.Fprintf(os.Stderr, "commit every(ms): %d, commit everyIter: %d, exitAfterNComm: %d\n",
+		commitEvery, args.QueryInput.CommitEveryNIter, args.QueryInput.ExitAfterNCommit)
+	init := false
+	startTimeInit := false
+	var afterWarmupStart time.Time
+	afterWarmup := false
+	warmupDuration := time.Duration(args.QueryInput.WarmupS) * time.Second
+	var startTime time.Time
+	for {
+		select {
+		case <-dctx.Done():
+			return &common.FnOutput{Success: true, Message: "exit due to ctx cancel"}
+		case m := <-meta:
+			debug.Fprintf(os.Stderr, "finished prev task %s, funcName %s, meta epoch %d, input epoch %d\n",
+				m.FinishedPrevTask, args.ProcArgs.FuncName(), m.Epoch, args.QueryInput.ScaleEpoch)
+			if m.FinishedPrevTask == args.ProcArgs.FuncName() && m.Epoch+1 == args.QueryInput.ScaleEpoch {
+				run = true
+			}
+		case merr := <-monitorErrc:
+			debug.Fprintf(os.Stderr, "got monitor error chan\n")
+			monitorQuit <- struct{}{}
+			controlQuit <- struct{}{}
+			if merr != nil {
+				debug.Fprintf(os.Stderr, "[ERROR] control channel manager: %v", merr)
+				dcancel()
+				return &common.FnOutput{Success: false, Message: fmt.Sprintf("monitor failed: %v", merr)}
+			}
+		case cerr := <-controlErrc:
+			debug.Fprintf(os.Stderr, "got control error chan\n")
+			monitorQuit <- struct{}{}
+			controlQuit <- struct{}{}
+			if cerr != nil {
+				debug.Fprintf(os.Stderr, "[ERROR] control channel manager: %v", cerr)
+				dcancel()
+				return &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("control channel manager failed: %v", cerr),
+				}
+			}
+		default:
+		}
+		if run {
+			if !startTimeInit {
+				startTime = time.Now()
+				startTimeInit = true
+			}
+			if !afterWarmup && warmupDuration != 0 && time.Since(startTime) >= warmupDuration {
+				debug.Fprintf(os.Stderr, "after warmup\n")
+				afterWarmup = true
+				afterWarmupStart = time.Now()
+			}
+			procStart := time.Now()
+			timeSinceTranStart := time.Since(commitTimer)
+			cur_elapsed := time.Since(startTime)
+			timeout := duration != 0 && cur_elapsed >= duration
+			shouldCommitByIter := args.QueryInput.CommitEveryNIter != 0 &&
+				uint32(idx)%args.QueryInput.CommitEveryNIter == 0 && idx != 0
+			// debug.Fprintf(os.Stderr, "iter: %d, shouldCommitByIter: %v, timeSinceTranStart: %v, cur_elapsed: %v, duration: %v\n",
+			// 	idx, shouldCommitByIter, timeSinceTranStart, cur_elapsed, duration)
+			if ((commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout || shouldCommitByIter) && hasLiveTransaction {
+				err := t.commitTransaction(ctx, currentOffset, tm, args, &hasLiveTransaction, &trackConsumePar)
+				if err != nil {
+					return &common.FnOutput{Success: false, Message: err.Error()}
+				}
+				debug.Assert(!hasLiveTransaction, "after commit. there should be no live transaction\n")
+				numCommit += 1
+				debug.Fprintf(os.Stderr, "transaction committed\n")
+			}
+			cur_elapsed = time.Since(startTime)
+			timeout = duration != 0 && cur_elapsed >= duration
+			if timeout || (args.QueryInput.ExitAfterNCommit != 0 && numCommit == int(args.QueryInput.ExitAfterNCommit)) {
+				if err := tm.Close(); err != nil {
+					debug.Fprintf(os.Stderr, "[ERROR] close transaction manager: %v\n", err)
+					return &common.FnOutput{Success: false, Message: fmt.Sprintf("close transaction manager: %v\n", err)}
+				}
+				if hasLiveTransaction {
+					err := t.commitTransaction(ctx, currentOffset, tm, args, &hasLiveTransaction, &trackConsumePar)
+					if err != nil {
+						return &common.FnOutput{Success: false, Message: err.Error()}
+					}
+				}
+				if t.CloseFunc != nil {
+					debug.Fprintf(os.Stderr, "waiting for goroutines to close 2\n")
+					t.CloseFunc()
+				}
+				elapsed := time.Since(procStart)
+				latencies = append(latencies, int(elapsed.Microseconds()))
+				e2eTime := time.Since(startTime).Seconds()
+				if warmupDuration != 0 && afterWarmup {
+					e2eTime = time.Since(afterWarmupStart).Seconds()
+				}
+				debug.Fprintf(os.Stderr, "return final out to chan 2\n")
+				return &common.FnOutput{
+					Success:   true,
+					Duration:  e2eTime,
+					Latencies: map[string][]int{"e2e": latencies},
+					Consumed:  make(map[string]uint64),
+				}
+			}
+			if !hasLiveTransaction {
+				if err := tm.BeginTransaction(ctx, args.KVChangelogs, args.WindowStoreChangelogs); err != nil {
+					debug.Fprintf(os.Stderr, "[ERROR] transaction begin failed: %v", err)
+					return &common.FnOutput{Success: false, Message: fmt.Sprintf("transaction begin failed: %v\n", err)}
+				}
+				hasLiveTransaction = true
+				commitTimer = time.Now()
+				if args.FixedOutParNum != 0 {
+					debug.Assert(len(args.QueryInput.OutputTopicNames) == 1, "fixed out param is only usable when there's only one output stream")
+					if err := tm.AddTopicPartition(ctx, args.QueryInput.OutputTopicNames[0], []uint8{args.FixedOutParNum}); err != nil {
+						debug.Fprintf(os.Stderr, "[ERROR] track topic partition failed: %v\n", err)
+						return &common.FnOutput{Success: false, Message: fmt.Sprintf("track topic partition failed: %v\n", err)}
+					}
+				}
+				if init && t.ResumeFunc != nil {
+					t.ResumeFunc()
+				}
+				if !init && t.InitFunc != nil {
+					t.InitFunc(args.ProcArgs)
+					init = true
+				}
+			}
+			if !trackConsumePar {
+				for _, inputTopicName := range args.QueryInput.InputTopicNames {
+					if err := tm.AddTopicTrackConsumedSeqs(ctx, inputTopicName, []uint8{args.QueryInput.ParNum}); err != nil {
+						return &common.FnOutput{Success: false, Message: fmt.Sprintf("add offsets failed: %v\n", err)}
+					}
+				}
+				trackConsumePar = true
+			}
+
+			off, ret := t.ProcessFunc(ctx, t, args.ProcArgs)
+			if ret != nil {
+				if ret.Success {
+					if hasLiveTransaction {
+						err := t.commitTransaction(ctx, currentOffset, tm, args, &hasLiveTransaction, &trackConsumePar)
+						if err != nil {
+							return &common.FnOutput{Success: false, Message: err.Error()}
+						}
+					}
+					if t.CloseFunc != nil {
+						debug.Fprintf(os.Stderr, "waiting for goroutines to close 1\n")
+						t.CloseFunc()
+					}
+					// elapsed := time.Since(procStart)
+					// latencies = append(latencies, int(elapsed.Microseconds()))
+					ret.Latencies = map[string][]int{"e2e": latencies}
+					ret.Consumed = make(map[string]uint64)
+					e2eTime := time.Since(startTime).Seconds()
+					if warmupDuration != 0 && afterWarmup {
+						e2eTime = time.Since(afterWarmupStart).Seconds()
+					}
+					ret.Duration = e2eTime
+				} else {
+					if hasLiveTransaction {
+						if err := tm.AbortTransaction(ctx, false, args.KVChangelogs, args.WindowStoreChangelogs); err != nil {
+							return &common.FnOutput{Success: false, Message: fmt.Sprintf("abort failed: %v\n", err)}
+						}
+					}
+				}
+				return ret
+			}
+			currentOffset = off
+			if warmupDuration == 0 || afterWarmup {
+				elapsed := time.Since(procStart)
+				latencies = append(latencies, int(elapsed.Microseconds()))
+			}
+			idx += 1
 		}
 	}
 }
 
+/*
 func (t *StreamTask) processWithTranLoop(ctx context.Context,
 	tm *TransactionManager, args *StreamTaskArgsTransaction,
-	run *uint32,
-	retc chan *common.FnOutput,
+	retc chan *common.FnOutput, runChan chan struct{},
 ) {
 	latencies := make([]int, 0, 128)
 	hasLiveTransaction := false
@@ -591,9 +849,9 @@ func (t *StreamTask) processWithTranLoop(ctx context.Context,
 	numCommit := 0
 	debug.Fprintf(os.Stderr, "commit every(ms): %d, commit everyIter: %d, exitAfterNComm: %d\n",
 		commitEvery, args.QueryInput.CommitEveryNIter, args.QueryInput.ExitAfterNCommit)
-	for atomic.LoadUint32(run) != 1 {
-		time.Sleep(time.Duration(100) * time.Microsecond)
-	}
+
+	<-runChan
+
 	init := false
 	var afterWarmupStart time.Time
 	afterWarmup := false
@@ -604,6 +862,7 @@ L:
 	for {
 		select {
 		case <-ctx.Done():
+			debug.Fprintf(os.Stderr, "out of loop because of ctx")
 			break L
 
 		default:
@@ -619,44 +878,11 @@ L:
 		timeout := duration != 0 && cur_elapsed >= duration
 		shouldCommitByIter := args.QueryInput.CommitEveryNIter != 0 &&
 			uint32(idx)%args.QueryInput.CommitEveryNIter == 0 && idx != 0
-		debug.Fprintf(os.Stderr, "iter: %d, shouldCommitByIter: %v, timeSinceTranStart: %v, cur_elapsed: %v, duration: %v\n",
-			idx, shouldCommitByIter, timeSinceTranStart, cur_elapsed, duration)
+		// debug.Fprintf(os.Stderr, "iter: %d, shouldCommitByIter: %v, timeSinceTranStart: %v, cur_elapsed: %v, duration: %v\n",
+		// 	idx, shouldCommitByIter, timeSinceTranStart, cur_elapsed, duration)
 		if ((commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout || shouldCommitByIter) && hasLiveTransaction {
-			/*
-				if val, ok := args.QueryInput.TestParams["FailBeforeCommit"]; ok && val {
-					fmt.Fprintf(os.Stderr, "about to fail before commit")
-					retc <- &common.FnOutput{Success: false, Message: "fail before commit"}
-					return
-				}
-			*/
-			debug.Fprintf(os.Stderr, "about to flush\n")
-			if t.FlushOrPauseFunc != nil {
-				t.FlushOrPauseFunc()
-			}
-			debug.Fprintf(os.Stderr, "after flush\n")
-			consumedSeqNumConfigs := make([]ConsumedSeqNumConfig, 0)
-			for topic, offset := range currentOffset {
-				consumedSeqNumConfigs = append(consumedSeqNumConfigs, ConsumedSeqNumConfig{
-					TopicToTrack:   topic,
-					TaskId:         tm.CurrentTaskId,
-					TaskEpoch:      tm.CurrentEpoch,
-					Partition:      args.QueryInput.ParNum,
-					ConsumedSeqNum: uint64(offset),
-				})
-			}
-			debug.Fprintf(os.Stderr, "about to commit transaction\n")
-			TrackOffsetAndCommit(ctx, consumedSeqNumConfigs, tm, args.KVChangelogs, args.WindowStoreChangelogs,
-				&hasLiveTransaction, &trackConsumePar, retc)
-			/*
-				if val, ok := args.QueryInput.TestParams["FailAfterCommit"]; ok && val {
-					fmt.Fprintf(os.Stderr, "about to fail after commit")
-					retc <- &common.FnOutput{
-						Success: false,
-						Message: "fail after commit",
-					}
-					return
-				}
-			*/
+			t.commitTransaction(ctx, currentOffset, tm, args, retc, &hasLiveTransaction, &trackConsumePar)
+
 			debug.Assert(!hasLiveTransaction, "after commit. there should be no live transaction\n")
 			numCommit += 1
 			debug.Fprintf(os.Stderr, "transaction committed\n")
@@ -665,6 +891,7 @@ L:
 		timeout = duration != 0 && cur_elapsed >= duration
 		if timeout || (args.QueryInput.ExitAfterNCommit != 0 && numCommit == int(args.QueryInput.ExitAfterNCommit)) {
 			if err := tm.Close(); err != nil {
+				debug.Fprintf(os.Stderr, "[ERROR] close transaction manager: %v\n", err)
 				retc <- &common.FnOutput{Success: false, Message: fmt.Sprintf("close transaction manager: %v\n", err)}
 				return
 			}
@@ -672,23 +899,16 @@ L:
 		}
 		if !hasLiveTransaction {
 			if err := tm.BeginTransaction(ctx, args.KVChangelogs, args.WindowStoreChangelogs); err != nil {
+				debug.Fprintf(os.Stderr, "[ERROR] transaction begin failed: %v", err)
 				retc <- &common.FnOutput{Success: false, Message: fmt.Sprintf("transaction begin failed: %v\n", err)}
 				return
 			}
-			/*
-				if idx == 5 {
-					if val, ok := args.QueryInput.TestParams["FailAfterBegin"]; ok && val {
-						fmt.Fprintf(os.Stderr, "about to fail after begin")
-						retc <- &common.FnOutput{Success: false, Message: "fail after begin"}
-						return
-					}
-				}
-			*/
 			hasLiveTransaction = true
 			commitTimer = time.Now()
 			if args.FixedOutParNum != 0 {
 				debug.Assert(len(args.QueryInput.OutputTopicNames) == 1, "fixed out param is only usable when there's only one output stream")
 				if err := tm.AddTopicPartition(ctx, args.QueryInput.OutputTopicNames[0], []uint8{args.FixedOutParNum}); err != nil {
+					debug.Fprintf(os.Stderr, "[ERROR] track topic partition failed: %v\n", err)
 					retc <- &common.FnOutput{Success: false, Message: fmt.Sprintf("track topic partition failed: %v\n", err)}
 					return
 				}
@@ -715,18 +935,7 @@ L:
 		if ret != nil {
 			if ret.Success {
 				if hasLiveTransaction {
-					consumedSeqNumConfigs := make([]ConsumedSeqNumConfig, 0)
-					for topic, offset := range currentOffset {
-						consumedSeqNumConfigs = append(consumedSeqNumConfigs, ConsumedSeqNumConfig{
-							TopicToTrack:   topic,
-							TaskId:         tm.CurrentTaskId,
-							TaskEpoch:      tm.CurrentEpoch,
-							Partition:      args.QueryInput.ParNum,
-							ConsumedSeqNum: uint64(offset),
-						})
-					}
-					TrackOffsetAndCommit(ctx, consumedSeqNumConfigs, tm, args.KVChangelogs, args.WindowStoreChangelogs,
-						&hasLiveTransaction, &trackConsumePar, retc)
+					t.commitTransaction(ctx, currentOffset, tm, args, retc, &hasLiveTransaction, &trackConsumePar)
 				}
 				if t.CloseFunc != nil {
 					debug.Fprintf(os.Stderr, "waiting for goroutines to close 1\n")
@@ -749,27 +958,20 @@ L:
 					}
 				}
 			}
+			debug.Fprintf(os.Stderr, "return final out to chan 1\n")
 			retc <- ret
+			debug.Fprintf(os.Stderr, "return done\n")
 			return
 		}
-		/*
-			if idx == 5 {
-				if val, ok := args.QueryInput.TestParams["FailAfterProcess"]; ok && val {
-					fmt.Fprintf(os.Stderr, "about to fail after process\n")
-					retc <- &common.FnOutput{
-						Success: false,
-						Message: "fail after begin",
-					}
-					return
-				}
-			}
-		*/
 		currentOffset = off
 		if warmupDuration == 0 || afterWarmup {
 			elapsed := time.Since(procStart)
 			latencies = append(latencies, int(elapsed.Microseconds()))
 		}
 		idx += 1
+	}
+	if hasLiveTransaction {
+		t.commitTransaction(ctx, currentOffset, tm, args, retc, &hasLiveTransaction, &trackConsumePar)
 	}
 	if t.CloseFunc != nil {
 		debug.Fprintf(os.Stderr, "waiting for goroutines to close 2\n")
@@ -779,12 +981,101 @@ L:
 	if warmupDuration != 0 && afterWarmup {
 		e2eTime = time.Since(afterWarmupStart).Seconds()
 	}
+	debug.Fprintf(os.Stderr, "return final out to chan 2\n")
 	retc <- &common.FnOutput{
 		Success:   true,
 		Duration:  e2eTime,
 		Latencies: map[string][]int{"e2e": latencies},
 		Consumed:  make(map[string]uint64),
 	}
+	debug.Fprintf(os.Stderr, "return done\n")
+}
+*/
+
+/*
+func (t *StreamTask) commitTransaction(ctx context.Context,
+	currentOffset map[string]uint64,
+	tm *TransactionManager,
+	args *StreamTaskArgsTransaction,
+	retc chan *common.FnOutput,
+	hasLiveTransaction *bool,
+	trackConsumePar *bool,
+) {
+	debug.Fprintf(os.Stderr, "about to flush\n")
+	if t.PauseFunc != nil {
+		t.PauseFunc()
+	}
+	debug.Fprintf(os.Stderr, "after flush\n")
+	consumedSeqNumConfigs := make([]ConsumedSeqNumConfig, 0)
+	for topic, offset := range currentOffset {
+		consumedSeqNumConfigs = append(consumedSeqNumConfigs, ConsumedSeqNumConfig{
+			TopicToTrack:   topic,
+			TaskId:         tm.CurrentTaskId,
+			TaskEpoch:      tm.CurrentEpoch,
+			Partition:      args.QueryInput.ParNum,
+			ConsumedSeqNum: uint64(offset),
+		})
+	}
+	debug.Fprintf(os.Stderr, "about to commit transaction\n")
+	err := tm.AppendConsumedSeqNum(ctx, consumedSeqNumConfigs)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] append offset failed: %v\n", err)
+		retc <- &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("append offset failed: %v\n", err),
+		}
+		return
+	}
+	err = tm.CommitTransaction(ctx, args.KVChangelogs, args.WindowStoreChangelogs)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] commit failed: %v\n", err)
+		retc <- &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("commit failed: %v\n", err),
+		}
+		return
+	}
+	*hasLiveTransaction = false
+	*trackConsumePar = false
+}
+*/
+
+func (t *StreamTask) commitTransaction(ctx context.Context,
+	currentOffset map[string]uint64,
+	tm *TransactionManager,
+	args *StreamTaskArgsTransaction,
+	hasLiveTransaction *bool,
+	trackConsumePar *bool,
+) error {
+	debug.Fprintf(os.Stderr, "about to flush\n")
+	if t.PauseFunc != nil {
+		t.PauseFunc()
+	}
+	debug.Fprintf(os.Stderr, "after flush\n")
+	consumedSeqNumConfigs := make([]ConsumedSeqNumConfig, 0)
+	for topic, offset := range currentOffset {
+		consumedSeqNumConfigs = append(consumedSeqNumConfigs, ConsumedSeqNumConfig{
+			TopicToTrack:   topic,
+			TaskId:         tm.CurrentTaskId,
+			TaskEpoch:      tm.CurrentEpoch,
+			Partition:      args.QueryInput.ParNum,
+			ConsumedSeqNum: uint64(offset),
+		})
+	}
+	debug.Fprintf(os.Stderr, "about to commit transaction\n")
+	err := tm.AppendConsumedSeqNum(ctx, consumedSeqNumConfigs)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] append offset failed: %v\n", err)
+		return fmt.Errorf("append offset failed: %v\n", err)
+	}
+	err = tm.CommitTransaction(ctx, args.KVChangelogs, args.WindowStoreChangelogs)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] commit failed: %v\n", err)
+		return fmt.Errorf("commit failed: %v\n", err)
+	}
+	*hasLiveTransaction = false
+	*trackConsumePar = false
+	return nil
 }
 
 func CommonProcess(ctx context.Context, t *StreamTask, args processor.ProcArgsWithSrcSink,

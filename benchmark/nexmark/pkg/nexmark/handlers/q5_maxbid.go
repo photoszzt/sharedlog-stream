@@ -340,7 +340,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
 		CommitEvery:   common.CommitDuration,
-		FlushOrPauseFunc: func() {
+		PauseFunc: func() {
 			err := sink.Flush(ctx)
 			if err != nil {
 				panic(err)

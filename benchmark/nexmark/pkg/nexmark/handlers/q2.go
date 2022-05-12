@@ -108,7 +108,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
 		CommitEvery:   common.CommitDuration,
-		FlushOrPauseFunc: func() {
+		PauseFunc: func() {
 			err := sink.Flush(ctx)
 			if err != nil {
 				panic(err)

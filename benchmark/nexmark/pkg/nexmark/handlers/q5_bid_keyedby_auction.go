@@ -181,7 +181,7 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
 		CommitEvery:   common.CommitDuration,
-		FlushOrPauseFunc: func() {
+		PauseFunc: func() {
 			err := sink.Flush(ctx)
 			if err != nil {
 				panic(err)

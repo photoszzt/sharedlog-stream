@@ -373,6 +373,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		CurrentOffset: make(map[string]uint64),
 		CommitEvery:   common.CommitDuration,
 	}
+
 	srcs := map[string]processor.Source{input.InputTopicNames[0]: src}
 	if input.EnableTransaction {
 		var wsc []*transaction.WindowStoreChangelog

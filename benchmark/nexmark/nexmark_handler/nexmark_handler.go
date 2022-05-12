@@ -36,10 +36,6 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewQuery1(env, funcName), nil
 	case "query2":
 		return handlers.NewQuery2(env, funcName), nil
-	case "q3PersonsByID":
-		return handlers.NewQuery3PersonsByID(env, funcName), nil
-	case "q3AuctionsBySellerID":
-		return handlers.NewQuery3AuctionsBySellerID(env, funcName), nil
 	case "q3JoinTable":
 		return handlers.NewQ3JoinTableHandler(env, funcName), nil
 	case "q3GroupBy":
@@ -62,10 +58,6 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewQuery7(env, funcName), nil
 	case "q7bidskeyedbyprice":
 		return handlers.NewQ7BidKeyedByPriceHandler(env, funcName), nil
-	case "q8PersonsByID":
-		return handlers.NewQ8PersonsByID(env, funcName), nil
-	case "q8AucsBySellerID":
-		return handlers.NewQ8AuctionsBySellerIDHandler(env, funcName), nil
 	case "q8JoinStream":
 		return handlers.NewQ8JoinStreamHandler(env, funcName), nil
 	case "q8GroupBy":
