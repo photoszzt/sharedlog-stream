@@ -68,11 +68,6 @@ func (h *StreamPush) FlushNoLock(ctx context.Context) error {
 			debug.Fprintf(os.Stderr, "FOL: stopping flush timer\n")
 			h.FlushTimer.Stop()
 		}
-		debug.Fprintf(os.Stderr, "FOL: waiting msg chan to cleanup\n")
-		for len(h.MsgChan) > 0 {
-			time.Sleep(time.Duration(100) * time.Microsecond)
-		}
-		debug.Fprintf(os.Stderr, "FOL: msgchan is clean\n")
 		err := h.Stream.FlushNoLock(ctx)
 		if err != nil {
 			return err
