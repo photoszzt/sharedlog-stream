@@ -144,8 +144,10 @@ func main() {
 		num_par := int32(FLAGS_numPartition)
 		parNum := FLAGS_instanceId % int(num_par)
 		for {
-			if (duration != 0 && time.Since(start) >= duration) ||
-				(FLAGS_events_num != 0 && idx >= events_num) {
+			elapsed := time.Since(start)
+			// fmt.Fprintf(os.Stderr, "elapsed: %v, idx: %v\n", elapsed, idx)
+			if (duration != 0 && elapsed >= duration) ||
+				(events_num != 0 && idx >= events_num) {
 				break
 			}
 			nextEvent, err := eventGenerator.NextEvent(ctx, channel_url_cache)
@@ -182,6 +184,7 @@ func main() {
 		for _, s := range stats_arr {
 			fmt.Fprintf(os.Stderr, s+"\n")
 		}
+		fmt.Fprintf(w, "done")
 	}
 	http.HandleFunc("/kproduce", handler)
 	_ = http.ListenAndServe(":8080", nil)
