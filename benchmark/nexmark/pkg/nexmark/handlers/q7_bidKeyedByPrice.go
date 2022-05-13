@@ -171,9 +171,9 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 	}
 
 	task := transaction.StreamTask{
-		ProcessFunc:   h.process,
-		CurrentOffset: make(map[string]uint64),
-		CommitEvery:   common.CommitDuration,
+		ProcessFunc:               h.process,
+		CurrentOffset:             make(map[string]uint64),
+		CommitEveryForAtLeastOnce: common.CommitDuration,
 	}
 
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, input.NumOutPartitions[0])

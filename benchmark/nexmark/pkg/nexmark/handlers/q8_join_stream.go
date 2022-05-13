@@ -435,7 +435,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			perRun <- struct{}{}
 			aucRun <- struct{}{}
 		},
-		CommitEvery: common.CommitDuration,
+		CommitEveryForAtLeastOnce: common.CommitDuration,
 	}
 
 	wg.Add(1)

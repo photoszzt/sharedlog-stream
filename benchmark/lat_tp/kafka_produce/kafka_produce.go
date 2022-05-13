@@ -156,5 +156,5 @@ func main() {
 		}
 	}
 	http.HandleFunc("/produce", produceHandler)
-	http.ListenAndServe(":8080", nil)
+	_ = http.ListenAndServe(":8080", nil)
 }

@@ -191,9 +191,9 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 	go auctionsBySellerIDFunc(ctx, procArgs, &wg, aucMsgChan, errChan)
 
 	task := transaction.StreamTask{
-		ProcessFunc:   h.process,
-		CurrentOffset: make(map[string]uint64),
-		CommitEvery:   common.CommitDuration,
+		ProcessFunc:               h.process,
+		CurrentOffset:             make(map[string]uint64),
+		CommitEveryForAtLeastOnce: common.CommitDuration,
 		CloseFunc: func() {
 			sinks[0].CloseAsyncPush()
 			sinks[1].CloseAsyncPush()

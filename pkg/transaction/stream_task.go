@@ -19,13 +19,13 @@ import (
 )
 
 type StreamTask struct {
-	ProcessFunc   func(ctx context.Context, task *StreamTask, args interface{}) (map[string]uint64, *common.FnOutput)
-	CurrentOffset map[string]uint64
-	CloseFunc     func()
-	PauseFunc     func()
-	ResumeFunc    func()
-	InitFunc      func(progArgs interface{})
-	CommitEvery   time.Duration
+	ProcessFunc               func(ctx context.Context, task *StreamTask, args interface{}) (map[string]uint64, *common.FnOutput)
+	CurrentOffset             map[string]uint64
+	CloseFunc                 func()
+	PauseFunc                 func()
+	ResumeFunc                func()
+	InitFunc                  func(progArgs interface{})
+	CommitEveryForAtLeastOnce time.Duration
 }
 
 /*
@@ -439,7 +439,7 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 
 	var afterWarmupStart time.Time
 	afterWarmup := false
-	commitTicker := time.NewTicker(t.CommitEvery)
+	commitTicker := time.NewTicker(t.CommitEveryForAtLeastOnce)
 	debug.Fprintf(os.Stderr, "warmup time: %v\n", args.WarmupTime)
 	startTime := time.Now()
 	for {

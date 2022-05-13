@@ -382,9 +382,9 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	}
 
 	task := transaction.StreamTask{
-		ProcessFunc:   h.process,
-		CurrentOffset: make(map[string]uint64),
-		CommitEvery:   common.CommitDuration,
+		ProcessFunc:               h.process,
+		CurrentOffset:             make(map[string]uint64),
+		CommitEveryForAtLeastOnce: common.CommitDuration,
 		PauseFunc: func() {
 			err := sink.Flush(ctx)
 			if err != nil {

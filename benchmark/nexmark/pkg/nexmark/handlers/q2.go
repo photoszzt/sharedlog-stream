@@ -105,9 +105,9 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		curEpoch:         sp.ScaleEpoch,
 	}
 	task := transaction.StreamTask{
-		ProcessFunc:   h.process,
-		CurrentOffset: make(map[string]uint64),
-		CommitEvery:   common.CommitDuration,
+		ProcessFunc:               h.process,
+		CurrentOffset:             make(map[string]uint64),
+		CommitEveryForAtLeastOnce: common.CommitDuration,
 		PauseFunc: func() {
 			err := sink.Flush(ctx)
 			if err != nil {

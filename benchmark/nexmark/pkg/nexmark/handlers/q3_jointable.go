@@ -470,7 +470,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			aucRun <- struct{}{}
 			perRun <- struct{}{}
 		},
-		CommitEvery: common.CommitDuration,
+		CommitEveryForAtLeastOnce: common.CommitDuration,
 	}
 
 	wg.Add(1)

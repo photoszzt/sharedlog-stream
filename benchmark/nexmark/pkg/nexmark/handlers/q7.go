@@ -369,9 +369,9 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		funcName:           h.funcName,
 	}
 	task := transaction.StreamTask{
-		ProcessFunc:   h.process,
-		CurrentOffset: make(map[string]uint64),
-		CommitEvery:   common.CommitDuration,
+		ProcessFunc:               h.process,
+		CurrentOffset:             make(map[string]uint64),
+		CommitEveryForAtLeastOnce: common.CommitDuration,
 	}
 
 	srcs := map[string]processor.Source{input.InputTopicNames[0]: src}

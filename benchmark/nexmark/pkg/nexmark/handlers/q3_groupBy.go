@@ -245,8 +245,8 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 			auctionsBySellerIDMap.StartWarmup()
 			// debug.Fprintf(os.Stderr, "done warmup start\n")
 		},
-		CurrentOffset: make(map[string]uint64),
-		CommitEvery:   common.CommitDuration,
+		CurrentOffset:             make(map[string]uint64),
+		CommitEveryForAtLeastOnce: common.CommitDuration,
 	}
 	transaction.SetupConsistentHash(&h.aucHashMu, h.aucHash, sp.NumOutPartitions[0])
 	transaction.SetupConsistentHash(&h.personHashMu, h.personHash, sp.NumOutPartitions[1])
