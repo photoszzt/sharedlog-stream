@@ -184,7 +184,7 @@ func main() {
 		for _, s := range stats_arr {
 			fmt.Fprintf(os.Stderr, s+"\n")
 		}
-		fmt.Fprintf(w, "done")
+		fmt.Fprintf(w, "done kproduce")
 	}
 	http.HandleFunc("/kproduce", handler)
 	_ = http.ListenAndServe(":8080", nil)

@@ -121,6 +121,7 @@ func main() {
 		sort.Sort(ts)
 		fmt.Fprintf(os.Stdout, "consumed %d events, time: %v, throughput: %v, p50: %d, p99: %d\n",
 			idx, totalTime, float64(idx)/float64(totalTime), ts.P(0.5), ts.P(0.99))
+		fmt.Fprint(w, "done consume")
 	}
 	http.HandleFunc("/consume", handleConsume)
 	http.ListenAndServe(":8090", nil)
