@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"sync/atomic"
 	"time"
@@ -107,7 +108,7 @@ func main() {
 		"go.produce.channel.size":               100000,
 		"go.events.channel.size":                100000,
 		"acks":                                  "all",
-		"batch.size":                            16384,
+		"batch.size":                            131072,
 		"linger.ms":                             100,
 		"max.in.flight.requests.per.connection": 5,
 		// "statistics.interval.ms":                5000,
@@ -116,69 +117,72 @@ func main() {
 		log.Fatal().Msgf("Failed to create producer: %s\n", err)
 	}
 	defer p.Close()
-
-	idx := int32(0)
 	duration := time.Duration(FLAGS_duration) * time.Second
-	replies := int32(0)
-	stats_arr := make([]string, 0, 128)
-	go func() {
-		for e := range p.Events() {
-			switch ev := e.(type) {
-			case *kafka.Message:
-				if ev.TopicPartition.Error != nil {
-					log.Error().Msgf("Delivery failed: %v\n", ev.TopicPartition)
-				} else {
-					log.Debug().Msgf("Delivered message to %v, ts %v\n", ev.TopicPartition, ev.Timestamp)
+
+	handler := func(w http.ResponseWriter, req *http.Request) {
+		idx := int32(0)
+		replies := int32(0)
+		stats_arr := make([]string, 0, 128)
+		go func() {
+			for e := range p.Events() {
+				switch ev := e.(type) {
+				case *kafka.Message:
+					if ev.TopicPartition.Error != nil {
+						log.Error().Msgf("Delivery failed: %v\n", ev.TopicPartition)
+					} else {
+						log.Debug().Msgf("Delivered message to %v, ts %v\n", ev.TopicPartition, ev.Timestamp)
+					}
+				case *kafka.Stats:
+					stats_arr = append(stats_arr, ev.String())
+				default:
 				}
-			case *kafka.Stats:
-				stats_arr = append(stats_arr, ev.String())
-			default:
+				atomic.AddInt32(&replies, 1)
 			}
-			atomic.AddInt32(&replies, 1)
+		}()
+		start := time.Now()
+		events_num := int32(FLAGS_events_num)
+		num_par := int32(FLAGS_numPartition)
+		parNum := FLAGS_instanceId % int(num_par)
+		for {
+			if (duration != 0 && time.Since(start) >= duration) ||
+				(FLAGS_events_num != 0 && idx >= events_num) {
+				break
+			}
+			nextEvent, err := eventGenerator.NextEvent(ctx, channel_url_cache)
+			if err != nil {
+				log.Fatal().Msgf("next event failed: %s", err)
+			}
+			encoded, err := valueEncoder.Encode(nextEvent.Event)
+			if err != nil {
+				log.Fatal().Msgf("event serialization failed: %s", err)
+			}
+			nowMs := time.Now().UnixMilli()
+			if nextEvent.WallclockTimestamp > nowMs {
+				time.Sleep(time.Duration(nextEvent.WallclockTimestamp-nowMs) * time.Millisecond)
+			}
+
+			idx += 1
+			p.ProduceChannel() <- &kafka.Message{
+				TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: int32(parNum)},
+				Value:          encoded,
+			}
+			if err != nil {
+				log.Fatal().Err(err)
+			}
 		}
-	}()
-	start := time.Now()
-	events_num := int32(FLAGS_events_num)
-	num_par := int32(FLAGS_numPartition)
-	for {
-		if (duration != 0 && time.Since(start) >= duration) ||
-			(FLAGS_events_num != 0 && idx >= events_num) {
-			break
+		remaining := p.Flush(30 * 1000)
+		for remaining != 0 {
+			remaining = p.Flush(30 * 1000)
 		}
-		nowMs := time.Now().UnixMilli()
-		nextEvent, err := eventGenerator.NextEvent(ctx, channel_url_cache)
-		if err != nil {
-			log.Fatal().Msgf("next event failed: %s", err)
-		}
-		if nextEvent.WallclockTimestamp > nowMs {
-			time.Sleep(time.Duration(nextEvent.WallclockTimestamp-nowMs) * time.Millisecond)
-		}
-		encoded, err := valueEncoder.Encode(nextEvent.Event)
-		if err != nil {
-			log.Fatal().Msgf("event serialization failed: %s", err)
-		}
-		idx += 1
-		parNum := idx % num_par
-		p.ProduceChannel() <- &kafka.Message{
-			TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: int32(parNum)},
-			Value:          encoded,
-		}
-		if err != nil {
-			log.Fatal().Err(err)
+		ret := atomic.LoadInt32(&replies)
+		fmt.Fprintf(os.Stderr, "%d event acked\n", ret)
+		totalTime := time.Since(start).Seconds()
+		fmt.Fprintf(os.Stderr, "source produced %d events, time %v, throughput %v\n",
+			idx, totalTime, float64(idx)/totalTime)
+		for _, s := range stats_arr {
+			fmt.Fprintf(os.Stderr, s+"\n")
 		}
 	}
-	fmt.Fprintf(os.Stderr, "out of the produce loop; now looking at the delivery channel, produced: %d\n", idx)
-	remaining := p.Flush(30 * 1000)
-	fmt.Fprintf(os.Stderr, "producer: %d messages remaining in queue.", remaining)
-	for remaining != 0 {
-		remaining = p.Flush(30 * 1000)
-	}
-	ret := atomic.LoadInt32(&replies)
-	fmt.Fprintf(os.Stderr, "%d event acked\n", ret)
-	totalTime := time.Since(start).Seconds()
-	fmt.Fprintf(os.Stderr, "source processed %d events, time %v, throughput %v\n",
-		idx, totalTime, float64(idx)/totalTime)
-	for _, s := range stats_arr {
-		fmt.Fprintf(os.Stderr, "%s\n", s)
-	}
+	http.HandleFunc("/kproduce", handler)
+	_ = http.ListenAndServe(":8080", nil)
 }
