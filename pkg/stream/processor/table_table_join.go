@@ -67,8 +67,7 @@ func (p *TableTableJoinProcessor) ProcessAndReturn(ctx context.Context, msg comm
 			return nil, nil
 		}
 		p.streamTimeTracker.UpdateStreamTime(&msg)
-		ts := p.streamTimeTracker.GetStreamTime()
-		// debug.Fprintf(os.Stderr, "stream time: %d\n", ts)
+		ts := msg.Timestamp
 		if ts < rv.Timestamp {
 			ts = rv.Timestamp
 		}
