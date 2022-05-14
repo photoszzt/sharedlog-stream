@@ -193,8 +193,12 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 
 	task := transaction.StreamTask{
 		ProcessFunc: h.process,
-		CloseFunc: func() {
-			// debug.Fprintf(os.Stderr, "auc and persons exited; now flusing the sink buffer\n")
+		CloseFunc:   nil,
+		PauseFunc: func() {
+			// debug.Fprintf(os.Stderr, "begin flush\n")
+			close(aucMsgChan)
+			close(personMsgChan)
+			wg.Wait()
 			sinks[0].CloseAsyncPush()
 			sinks[1].CloseAsyncPush()
 			if err = sinks[0].Flush(ctx); err != nil {
@@ -203,16 +207,21 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 			if err = sinks[1].Flush(ctx); err != nil {
 				panic(err)
 			}
-			// debug.Fprintf(os.Stderr, "done close\n")
-		},
-		PauseFunc: func() {
-			// debug.Fprintf(os.Stderr, "begin flush\n")
-			close(aucMsgChan)
-			close(personMsgChan)
-			wg.Wait()
 			// debug.Fprintf(os.Stderr, "done flush\n")
 		},
 		ResumeFunc: func() {
+			debug.Fprintf(os.Stderr, "start resume\n")
+			procArgs.sinks[0].InnerSink().RebuildMsgChan()
+			procArgs.sinks[1].InnerSink().RebuildMsgChan()
+			if sp.EnableTransaction {
+				procArgs.sinks[0].InnerSink().StartAsyncPushNoTick(ctx)
+				procArgs.sinks[1].InnerSink().StartAsyncPushNoTick(ctx)
+			} else {
+				procArgs.sinks[0].InnerSink().StartAsyncPushWithTick(ctx)
+				procArgs.sinks[1].InnerSink().StartAsyncPushWithTick(ctx)
+				procArgs.sinks[0].InitFlushTimer()
+				procArgs.sinks[1].InitFlushTimer()
+			}
 			aucMsgChan = make(chan commtypes.Message, 1)
 			personMsgChan = make(chan commtypes.Message, 1)
 			procArgs.aucMsgChan = aucMsgChan
@@ -221,6 +230,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 			go personsByIDFunc(ctx, procArgs, &wg, personMsgChan, errChan)
 			wg.Add(1)
 			go auctionsBySellerIDFunc(ctx, procArgs, &wg, aucMsgChan, errChan)
+			debug.Fprintf(os.Stderr, "done resume\n")
 		},
 		InitFunc: func(progArgsTmp interface{}) {
 			progArgs := progArgsTmp.(*q3GroupByProcessArgs)

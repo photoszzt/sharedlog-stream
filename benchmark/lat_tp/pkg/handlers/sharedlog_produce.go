@@ -73,7 +73,7 @@ func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context
 	}
 	wg.Add(1)
 	go streamPusher.AsyncStreamPush(ctx, &wg)
-	streamPusher.FlushTimer = time.NewTicker(time.Duration(sp.FlushMs) * time.Millisecond)
+	streamPusher.InitFlushTimer(time.Duration(sp.FlushMs) * time.Millisecond)
 	startTime := time.Now()
 	next := time.Now()
 

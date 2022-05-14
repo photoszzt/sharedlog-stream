@@ -15,11 +15,12 @@ type PayloadToPush struct {
 }
 
 type StreamPush struct {
-	FlushTimer *time.Ticker
-	MsgChan    chan PayloadToPush
-	MsgErrChan chan error
-	Stream     *ShardedSharedLogStream
-	BufPush    bool
+	FlushTimer    time.Time
+	FlushDuration time.Duration
+	MsgChan       chan PayloadToPush
+	MsgErrChan    chan error
+	Stream        *ShardedSharedLogStream
+	BufPush       bool
 }
 
 func NewStreamPush(stream *ShardedSharedLogStream) *StreamPush {
@@ -29,7 +30,7 @@ func NewStreamPush(stream *ShardedSharedLogStream) *StreamPush {
 		bufPush = true
 	}
 	return &StreamPush{
-		MsgChan:    make(chan PayloadToPush),
+		MsgChan:    make(chan PayloadToPush, MSG_CHAN_SIZE),
 		MsgErrChan: make(chan error),
 		BufPush:    bufPush,
 		Stream:     stream,
@@ -38,40 +39,33 @@ func NewStreamPush(stream *ShardedSharedLogStream) *StreamPush {
 
 func (h *StreamPush) InitFlushTimer(duration time.Duration) {
 	if h.BufPush {
-		h.FlushTimer = time.NewTicker(duration)
+		h.FlushTimer = time.Now()
+		h.FlushDuration = duration
+		debug.Fprintf(os.Stderr, "InitFlushTimer: Flush duration %v\n", h.FlushDuration)
 	}
 }
 
+// msgchan has to close and async pusher has to stop first before calling this function
 func (h *StreamPush) Flush(ctx context.Context) error {
 	if h.BufPush {
-		if h.FlushTimer != nil {
-			debug.Fprintf(os.Stderr, "F: stopping flush timer\n")
-			h.FlushTimer.Stop()
-		}
-		debug.Fprintf(os.Stderr, "F: waiting msg chan to cleanup\n")
-		for len(h.MsgChan) > 0 {
-			time.Sleep(time.Duration(100) * time.Microsecond)
-		}
-		debug.Fprintf(os.Stderr, "F: msgchan is clean\n")
 		err := h.Stream.Flush(ctx)
 		if err != nil {
 			return err
 		}
+		h.FlushTimer = time.Now()
 		debug.Fprintf(os.Stderr, "F: stream flushed\n")
 	}
 	return nil
 }
 
+// msgchan has to close and async pusher has to stop first before calling this function
 func (h *StreamPush) FlushNoLock(ctx context.Context) error {
 	if h.BufPush {
-		if h.FlushTimer != nil {
-			debug.Fprintf(os.Stderr, "FOL: stopping flush timer\n")
-			h.FlushTimer.Stop()
-		}
 		err := h.Stream.FlushNoLock(ctx)
 		if err != nil {
 			return err
 		}
+		h.FlushTimer = time.Now()
 		debug.Fprintf(os.Stderr, "FOL: stream flushed\n")
 	}
 	return nil
@@ -88,6 +82,7 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
 					h.MsgErrChan <- err
 					return
 				}
+				h.FlushTimer = time.Now()
 			}
 			for _, i := range msg.Partitions {
 				_, err := h.Stream.Push(ctx, msg.Payload, i, true, false)
@@ -98,10 +93,15 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
 			}
 		} else {
 			if h.BufPush {
-				select {
-				case <-h.FlushTimer.C:
-					h.Stream.FlushNoLock(ctx)
-				default:
+				timeSinceLastFlush := time.Since(h.FlushTimer)
+				if timeSinceLastFlush >= h.FlushDuration {
+					debug.Fprintf(os.Stderr, "flush timer: %v\n", timeSinceLastFlush)
+					err := h.Stream.FlushNoLock(ctx)
+					if err != nil {
+						h.MsgErrChan <- err
+						return
+					}
+					h.FlushTimer = time.Now()
 				}
 				err := h.Stream.BufPushNoLock(ctx, msg.Payload, uint8(msg.Partitions[0]))
 				if err != nil {

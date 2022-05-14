@@ -109,9 +109,19 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		CurrentOffset:             make(map[string]uint64),
 		CommitEveryForAtLeastOnce: common.CommitDuration,
 		PauseFunc: func() {
+			sink.CloseAsyncPush()
 			err := sink.Flush(ctx)
 			if err != nil {
 				panic(err)
+			}
+		},
+		ResumeFunc: func() {
+			sink.InnerSink().RebuildMsgChan()
+			if sp.EnableTransaction {
+				sink.InnerSink().StartAsyncPushNoTick(ctx)
+			} else {
+				sink.InnerSink().StartAsyncPushWithTick(ctx)
+				sink.InitFlushTimer()
 			}
 		},
 		InitFunc: func(progArgs interface{}) {
@@ -125,12 +135,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 			sink.StartWarmup()
 			q2Filter.StartWarmup()
 		},
-		CloseFunc: func() {
-			sink.CloseAsyncPush()
-			if err = sink.Flush(ctx); err != nil {
-				panic(err)
-			}
-		},
+		CloseFunc: nil,
 	}
 	srcs := map[string]processor.Source{sp.InputTopicNames[0]: src}
 	if sp.EnableTransaction {

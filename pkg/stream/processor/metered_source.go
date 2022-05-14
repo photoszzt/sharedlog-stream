@@ -59,7 +59,7 @@ func (s *MeteredSource) Consume(ctx context.Context, parNum uint8) (*commtypes.M
 			}
 			s.latencies = append(s.latencies, int(elapsed.Microseconds()))
 			s.count += uint64(msgs.TotalLen)
-			debug.Fprintf(os.Stderr, "%s consumed %d\n", s.src.TopicName(), s.count)
+			// debug.Fprintf(os.Stderr, "%s consumed %d\n", s.src.TopicName(), s.count)
 			return msgs, err
 		}
 	}

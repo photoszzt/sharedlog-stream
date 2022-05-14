@@ -434,8 +434,19 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			close(personDone)
 			close(aucDone)
 			wg.Wait()
+			sss.sink.CloseAsyncPush()
+			if err = sss.sink.Flush(ctx); err != nil {
+				panic(err)
+			}
 		},
 		ResumeFunc: func() {
+			sss.sink.InnerSink().RebuildMsgChan()
+			if sp.EnableTransaction {
+				sss.sink.InnerSink().StartAsyncPushNoTick(ctx)
+			} else {
+				sss.sink.InnerSink().StartAsyncPushWithTick(ctx)
+				sss.sink.InitFlushTimer()
+			}
 			personDone = make(chan struct{})
 			aucDone = make(chan struct{})
 			wg.Add(1)
@@ -445,12 +456,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			perRun <- struct{}{}
 			aucRun <- struct{}{}
 		},
-		CloseFunc: func() {
-			sss.sink.CloseAsyncPush()
-			if err = sss.sink.Flush(ctx); err != nil {
-				panic(err)
-			}
-		},
+		CloseFunc: nil,
 		InitFunc: func(progArgs interface{}) {
 			if sp.EnableTransaction {
 				sss.sink.InnerSink().StartAsyncPushNoTick(ctx)

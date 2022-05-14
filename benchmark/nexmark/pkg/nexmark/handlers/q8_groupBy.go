@@ -194,7 +194,12 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 		ProcessFunc:               h.process,
 		CurrentOffset:             make(map[string]uint64),
 		CommitEveryForAtLeastOnce: common.CommitDuration,
-		CloseFunc: func() {
+		CloseFunc:                 nil,
+		PauseFunc: func() {
+			// debug.Fprintf(os.Stderr, "begin flush\n")
+			close(aucMsgChan)
+			close(personMsgChan)
+			wg.Wait()
 			sinks[0].CloseAsyncPush()
 			sinks[1].CloseAsyncPush()
 			if err = sinks[0].Flush(ctx); err != nil {
@@ -203,17 +208,21 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 			if err = sinks[1].Flush(ctx); err != nil {
 				panic(err)
 			}
-			// debug.Fprintf(os.Stderr, "done close\n")
-		},
-		PauseFunc: func() {
-			// debug.Fprintf(os.Stderr, "begin flush\n")
-			close(aucMsgChan)
-			close(personMsgChan)
-			wg.Wait()
 			// debug.Fprintf(os.Stderr, "done flush\n")
 		},
 		ResumeFunc: func() {
 			// debug.Fprintf(os.Stderr, "begin resume\n")
+			sinks[0].InnerSink().RebuildMsgChan()
+			sinks[1].InnerSink().RebuildMsgChan()
+			if sp.EnableTransaction {
+				sinks[0].InnerSink().StartAsyncPushNoTick(ctx)
+				sinks[1].InnerSink().StartAsyncPushNoTick(ctx)
+			} else {
+				sinks[0].InnerSink().StartAsyncPushWithTick(ctx)
+				sinks[1].InnerSink().StartAsyncPushWithTick(ctx)
+				sinks[0].InitFlushTimer()
+				sinks[1].InitFlushTimer()
+			}
 			aucMsgChan = make(chan commtypes.Message, 1)
 			personMsgChan = make(chan commtypes.Message, 1)
 			procArgs.aucMsgChan = aucMsgChan

@@ -9,6 +9,7 @@ import (
 const (
 	SINK_BUFFER_MAX_ENTRY = 10000
 	SINK_BUFFER_MAX_SIZE  = 131072
+	MSG_CHAN_SIZE         = 10000
 )
 
 type BufferedSinkStream struct {

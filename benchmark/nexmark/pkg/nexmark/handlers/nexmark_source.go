@@ -280,7 +280,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	dctx, dcancel := context.WithCancel(ctx)
 	go cmm.MonitorControlChannel(ctx, controlQuit, controlErrc, meta)
 
-	msgChan := make(chan sharedlog_stream.PayloadToPush, 100000)
+	msgChan := make(chan sharedlog_stream.PayloadToPush, 10000)
 	msgErrChan := make(chan error)
 	var wg sync.WaitGroup
 	flushMsgChan := func() {
@@ -309,7 +309,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	}
 	wg.Add(1)
 	go streamPusher.AsyncStreamPush(ctx, &wg)
-	streamPusher.FlushTimer = time.NewTicker(time.Duration(inputConfig.FlushMs) * time.Millisecond)
+	streamPusher.InitFlushTimer(time.Duration(inputConfig.FlushMs) * time.Millisecond)
 	startTime := time.Now()
 	for {
 		select {

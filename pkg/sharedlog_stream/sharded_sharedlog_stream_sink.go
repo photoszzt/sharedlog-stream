@@ -57,13 +57,12 @@ func (sls *ShardedSharedLogStreamSink) StartAsyncPushNoTick(ctx context.Context)
 	go sls.streamPusher.AsyncStreamPushNoTick(ctx, &sls.wg)
 }
 
+func (sls *ShardedSharedLogStreamSink) RebuildMsgChan() {
+	sls.streamPusher.MsgChan = make(chan PayloadToPush, MSG_CHAN_SIZE)
+}
+
 func (sls *ShardedSharedLogStreamSink) CloseAsyncPush() {
 	close(sls.streamPusher.MsgChan)
-	if sls.streamPusher.BufPush {
-		if sls.streamPusher.FlushTimer != nil {
-			sls.streamPusher.FlushTimer.Stop()
-		}
-	}
 	sls.wg.Wait()
 }
 

@@ -392,13 +392,23 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		CurrentOffset: currentOffset,
 		PauseFunc: func() {
 			// debug.Fprintf(os.Stderr, "in flush func\n")
-			personDone <- struct{}{}
-			aucDone <- struct{}{}
+			close(personDone)
+			close(aucDone)
 			debug.Fprintf(os.Stderr, "waiting join proc to exit\n")
 			wg.Wait()
+			sss.sink.CloseAsyncPush()
+			if err = sss.sink.Flush(ctx); err != nil {
+				panic(err)
+			}
 			// debug.Fprintf(os.Stderr, "join procs exited\n")
 		},
 		ResumeFunc: func() {
+			if sp.EnableTransaction {
+				sss.sink.InnerSink().StartAsyncPushNoTick(ctx)
+			} else {
+				sss.sink.InnerSink().StartAsyncPushWithTick(ctx)
+				sss.sink.InitFlushTimer()
+			}
 			// debug.Fprintf(os.Stderr, "resume join porc\n")
 			personDone = make(chan struct{}, 1)
 			aucDone = make(chan struct{}, 1)
@@ -410,14 +420,9 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			aucRun <- struct{}{}
 			// debug.Fprintf(os.Stderr, "done resume join proc\n")
 		},
-		CloseFunc: func() {
-			sss.sink.CloseAsyncPush()
-			if err = sss.sink.Flush(ctx); err != nil {
-				panic(err)
-			}
-			// debug.Fprintf(os.Stderr, "done close\n")
-		},
+		CloseFunc: nil,
 		InitFunc: func(progArgs interface{}) {
+			sss.sink.InnerSink().RebuildMsgChan()
 			if sp.EnableTransaction {
 				sss.sink.InnerSink().StartAsyncPushNoTick(ctx)
 			} else {

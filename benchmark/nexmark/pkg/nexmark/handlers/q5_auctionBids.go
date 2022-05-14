@@ -386,9 +386,19 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		CurrentOffset:             make(map[string]uint64),
 		CommitEveryForAtLeastOnce: common.CommitDuration,
 		PauseFunc: func() {
+			sink.CloseAsyncPush()
 			err := sink.Flush(ctx)
 			if err != nil {
 				panic(err)
+			}
+		},
+		ResumeFunc: func() {
+			sink.InnerSink().RebuildMsgChan()
+			if sp.EnableTransaction {
+				sink.InnerSink().StartAsyncPushNoTick(ctx)
+			} else {
+				sink.InnerSink().StartAsyncPushWithTick(ctx)
+				sink.InitFlushTimer()
 			}
 		},
 		InitFunc: func(progArgs interface{}) {
@@ -403,13 +413,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			groupByAuction.StartWarmup()
 			countProc.StartWarmup()
 		},
-		CloseFunc: func() {
-			sink.CloseAsyncPush()
-			err := sink.Flush(ctx)
-			if err != nil {
-				panic(err)
-			}
-		},
+		CloseFunc: nil,
 	}
 
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
