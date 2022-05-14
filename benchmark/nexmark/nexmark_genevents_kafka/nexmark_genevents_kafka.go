@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -29,7 +30,6 @@ var (
 	FLAGS_serdeFormat   string
 	FLAGS_numPartition  int
 	FLAGS_tps           int
-	FLAGS_instanceId    int
 	FLAGS_srcInstance   int
 )
 
@@ -50,13 +50,11 @@ func main() {
 	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
 	flag.IntVar(&FLAGS_numPartition, "npar", 1, "number of partition")
 	flag.IntVar(&FLAGS_tps, "tps", 10000000, "tps param for nexmark")
-	flag.IntVar(&FLAGS_instanceId, "iid", 1, "instance id")
 	flag.IntVar(&FLAGS_srcInstance, "srcIns", 1, "number of source instance")
 	flag.Parse()
 
-	fmt.Fprintf(os.Stderr, "duration: %d, events_num: %d, serde: %s, nPar: %d, instanceId: %d, sourceInstances: %d\n",
-		FLAGS_duration, FLAGS_events_num, FLAGS_serdeFormat, FLAGS_numPartition, FLAGS_instanceId,
-		FLAGS_srcInstance)
+	fmt.Fprintf(os.Stderr, "duration: %d, events_num: %d, serde: %s, nPar: %d, sourceInstances: %d\n",
+		FLAGS_duration, FLAGS_events_num, FLAGS_serdeFormat, FLAGS_numPartition, FLAGS_srcInstance)
 
 	var serdeFormat commtypes.SerdeFormat
 	var valueEncoder commtypes.Encoder
@@ -72,6 +70,16 @@ func main() {
 		valueEncoder = ntypes.EventJSONSerde{}
 	}
 
+	iid_str := os.Getenv("IID")
+	instanceId := 0
+	var err error
+	if iid_str != "" {
+		instanceId, err = strconv.Atoi(iid_str)
+		if err != nil {
+			panic(err)
+		}
+	}
+
 	topic := FLAGS_stream_prefix + "_src"
 	newTopic := []kafka.TopicSpecification{
 		{
@@ -84,7 +92,7 @@ func main() {
 		},
 	}
 	ctx := context.Background()
-	err := common.CreateTopic(ctx, newTopic, FLAGS_broker)
+	err = common.CreateTopic(ctx, newTopic, FLAGS_broker)
 	if err != nil {
 		log.Fatal().Msgf("Failed to create topic: %s", err)
 	}
@@ -100,7 +108,7 @@ func main() {
 		log.Fatal().Msgf("Failed to convert to nexmark configuration: %s", err)
 	}
 	generatorConfig := generator.NewGeneratorConfig(nexmarkConfig, time.Now().UnixMilli(), 1, uint64(nexmarkConfig.NumEvents), 1)
-	eventGenerator := generator.NewSimpleNexmarkGenerator(generatorConfig, FLAGS_instanceId)
+	eventGenerator := generator.NewSimpleNexmarkGenerator(generatorConfig, instanceId)
 	channel_url_cache := make(map[uint32]*generator.ChannelUrl)
 
 	p, err := kafka.NewProducer(&kafka.ConfigMap{
@@ -118,6 +126,9 @@ func main() {
 	}
 	defer p.Close()
 	duration := time.Duration(FLAGS_duration) * time.Second
+	events_num := int32(FLAGS_events_num)
+	num_par := int32(FLAGS_numPartition)
+	parNum := instanceId % int(num_par)
 
 	handler := func(w http.ResponseWriter, req *http.Request) {
 		idx := int32(0)
@@ -140,9 +151,6 @@ func main() {
 			}
 		}()
 		start := time.Now()
-		events_num := int32(FLAGS_events_num)
-		num_par := int32(FLAGS_numPartition)
-		parNum := FLAGS_instanceId % int(num_par)
 		for {
 			elapsed := time.Since(start)
 			// fmt.Fprintf(os.Stderr, "elapsed: %v, idx: %v\n", elapsed, idx)
