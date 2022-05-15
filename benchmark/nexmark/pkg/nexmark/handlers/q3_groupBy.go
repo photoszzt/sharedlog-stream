@@ -115,7 +115,7 @@ func (a *q3GroupByProcessArgs) ErrChan() chan error {
 	return a.errChan
 }
 
-func (h *q3GroupByHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
+func getSrcSinks(ctx context.Context, sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_streams []*sharedlog_stream.ShardedSharedLogStream,
 ) (*processor.MeteredSource, []*sharedlog_stream.MeteredSink, commtypes.MsgSerde, error) {
@@ -160,15 +160,13 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 		}
 	}
 	debug.Assert(len(output_streams) == 2, "expected 2 output streams")
-	src, sinks, msgSerde, err := h.getSrcSink(ctx, sp, input_stream, output_streams)
+	src, sinks, msgSerde, err := getSrcSinks(ctx, sp, input_stream, output_streams)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 
-	filterPerson, personsByIDMap, personsByIDFunc := h.getPersonsByID(time.Duration(sp.WarmupS)*time.Second,
-		time.Duration(sp.FlushMs)*time.Millisecond)
-	filterAuctions, auctionsBySellerIDMap, auctionsBySellerIDFunc := h.getAucBySellerID(time.Duration(sp.WarmupS)*time.Second,
-		time.Duration(sp.FlushMs)*time.Millisecond)
+	filterPerson, personsByIDMap, personsByIDFunc := h.getPersonsByID(time.Duration(sp.WarmupS) * time.Second)
+	filterAuctions, auctionsBySellerIDMap, auctionsBySellerIDFunc := h.getAucBySellerID(time.Duration(sp.WarmupS) * time.Second)
 
 	errChan := make(chan error, 2)
 	aucMsgChan := make(chan commtypes.Message, 1)
@@ -317,7 +315,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	return ret
 }
 
-func (h *q3GroupByHandler) getPersonsByID(warmup time.Duration, pollTimeout time.Duration) (*processor.MeteredProcessor, *processor.MeteredProcessor,
+func (h *q3GroupByHandler) getPersonsByID(warmup time.Duration) (*processor.MeteredProcessor, *processor.MeteredProcessor,
 	func(ctx context.Context, args *q3GroupByProcessArgs, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error)) {
 	filterPerson := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
 		func(msg *commtypes.Message) (bool, error) {
@@ -402,7 +400,7 @@ func (h *q3GroupByHandler) getPersonsByID(warmup time.Duration, pollTimeout time
 	}
 }
 
-func (h *q3GroupByHandler) getAucBySellerID(warmup time.Duration, pollTimeout time.Duration) (*processor.MeteredProcessor, *processor.MeteredProcessor,
+func (h *q3GroupByHandler) getAucBySellerID(warmup time.Duration) (*processor.MeteredProcessor, *processor.MeteredProcessor,
 	func(ctx context.Context, args *q3GroupByProcessArgs, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error),
 ) {
 	filterAuctions := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
