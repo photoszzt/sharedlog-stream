@@ -32,6 +32,7 @@ var (
 	FLAGS_tps           int
 	FLAGS_srcInstance   int
 	FLAGS_port          int
+	FLAGS_flushms       int
 )
 
 func init() {
@@ -53,10 +54,12 @@ func main() {
 	flag.IntVar(&FLAGS_tps, "tps", 10000000, "tps param for nexmark")
 	flag.IntVar(&FLAGS_srcInstance, "srcIns", 1, "number of source instance")
 	flag.IntVar(&FLAGS_port, "port", 8080, "port to listen")
+	flag.IntVar(&FLAGS_flushms, "flushms", 100, "flush inverval in ms")
 	flag.Parse()
 
-	fmt.Fprintf(os.Stderr, "duration: %d, events_num: %d, serde: %s, nPar: %d, sourceInstances: %d\n",
-		FLAGS_duration, FLAGS_events_num, FLAGS_serdeFormat, FLAGS_numPartition, FLAGS_srcInstance)
+	fmt.Fprintf(os.Stderr, "duration: %d, events_nm: %d, serde: %s, nPar: %d, sourceInstances: %d, tps: %d, port: %d, flushMs: %d\n",
+		FLAGS_duration, FLAGS_events_num, FLAGS_serdeFormat, FLAGS_numPartition,
+		FLAGS_srcInstance, FLAGS_tps, FLAGS_port, FLAGS_flushms)
 
 	var serdeFormat commtypes.SerdeFormat
 	var valueEncoder commtypes.Encoder
@@ -119,7 +122,7 @@ func main() {
 		"go.events.channel.size":                100000,
 		"acks":                                  "all",
 		"batch.size":                            131072,
-		"linger.ms":                             100,
+		"linger.ms":                             FLAGS_flushms,
 		"max.in.flight.requests.per.connection": 5,
 		// "statistics.interval.ms":                5000,
 	})
