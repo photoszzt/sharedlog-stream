@@ -31,6 +31,7 @@ var (
 	FLAGS_numPartition  int
 	FLAGS_tps           int
 	FLAGS_srcInstance   int
+	FLAGS_port          int
 )
 
 func init() {
@@ -51,6 +52,7 @@ func main() {
 	flag.IntVar(&FLAGS_numPartition, "npar", 1, "number of partition")
 	flag.IntVar(&FLAGS_tps, "tps", 10000000, "tps param for nexmark")
 	flag.IntVar(&FLAGS_srcInstance, "srcIns", 1, "number of source instance")
+	flag.IntVar(&FLAGS_port, "port", 8080, "port to listen")
 	flag.Parse()
 
 	fmt.Fprintf(os.Stderr, "duration: %d, events_num: %d, serde: %s, nPar: %d, sourceInstances: %d\n",
@@ -195,5 +197,6 @@ func main() {
 		fmt.Fprintf(w, "done kproduce")
 	}
 	http.HandleFunc("/kproduce", handler)
-	_ = http.ListenAndServe(":8080", nil)
+	fmt.Fprintf(os.Stderr, "kproduce listening %d\n", FLAGS_port)
+	_ = http.ListenAndServe(fmt.Sprintf(":%d", FLAGS_port), nil)
 }
