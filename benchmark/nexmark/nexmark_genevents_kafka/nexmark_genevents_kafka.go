@@ -112,9 +112,6 @@ func main() {
 	if err != nil {
 		log.Fatal().Msgf("Failed to convert to nexmark configuration: %s", err)
 	}
-	generatorConfig := generator.NewGeneratorConfig(nexmarkConfig, time.Now().UnixMilli(), 1, uint64(nexmarkConfig.NumEvents), 1)
-	eventGenerator := generator.NewSimpleNexmarkGenerator(generatorConfig, instanceId)
-	channel_url_cache := make(map[uint32]*generator.ChannelUrl)
 
 	p, err := kafka.NewProducer(&kafka.ConfigMap{
 		"bootstrap.servers":                     FLAGS_broker,
@@ -136,6 +133,10 @@ func main() {
 	parNum := instanceId % int(num_par)
 
 	handler := func(w http.ResponseWriter, req *http.Request) {
+		generatorConfig := generator.NewGeneratorConfig(nexmarkConfig, time.Now().UnixMilli(), 1, uint64(nexmarkConfig.NumEvents), 1)
+		eventGenerator := generator.NewSimpleNexmarkGenerator(generatorConfig, instanceId)
+		channel_url_cache := make(map[uint32]*generator.ChannelUrl)
+
 		idx := int32(0)
 		replies := int32(0)
 		stats_arr := make([]string, 0, 128)
