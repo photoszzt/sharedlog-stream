@@ -11,7 +11,7 @@ func InvokeConfigScale(client *http.Client, csi *ConfigScaleInput,
 	faas_gateway string, response *FnOutput, appName string, local bool,
 ) {
 	url := utils.BuildFunctionUrl(faas_gateway, appName)
-	constraint := "0"
+	constraint := "1"
 	if local {
 		constraint = ""
 	}
