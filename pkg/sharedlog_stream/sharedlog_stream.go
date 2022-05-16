@@ -382,22 +382,24 @@ func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum 
 		return fmt.Errorf("cannot sync to request")
 	}
 
-	if tailSeqNum == s.cursor+1 {
-		return nil
-	}
+	/*
+		if tailSeqNum == s.cursor+1 {
+			return nil
+		}
+	*/
 
 	tag := NameHashWithPartition(s.topicNameHash, parNum)
 
 	seqNum := tailSeqNum
 	// debug.Fprintf(os.Stderr, "find tail for topic: %s, par: %d\n", s.topicName, parNum)
-	for seqNum >= s.cursor+1 {
+	for seqNum >= s.cursor {
 		// debug.Fprintf(os.Stderr, "current sequence number: 0x%x, tail: 0x%x, tag: %x\n", seqNum, s.tail, tag)
 		logEntry, err := s.readPrevWithTimeout(ctx, tag, seqNum)
 		if err != nil {
 			return err
 		}
 
-		if logEntry == nil || logEntry.SeqNum < s.cursor+1 {
+		if logEntry == nil || logEntry.SeqNum < s.cursor {
 			// we are already at the tail
 			break
 		}
