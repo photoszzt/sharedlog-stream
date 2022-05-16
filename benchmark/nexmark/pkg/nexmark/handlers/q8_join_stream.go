@@ -403,6 +403,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			// debug.Fprintf(os.Stderr, "join procs exited\n")
 		},
 		ResumeFunc: func() {
+			sss.sink.InnerSink().RebuildMsgChan()
 			if sp.EnableTransaction {
 				sss.sink.InnerSink().StartAsyncPushNoTick(ctx)
 			} else {
@@ -422,7 +423,6 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		},
 		CloseFunc: nil,
 		InitFunc: func(progArgs interface{}) {
-			sss.sink.InnerSink().RebuildMsgChan()
 			if sp.EnableTransaction {
 				sss.sink.InnerSink().StartAsyncPushNoTick(ctx)
 			} else {
