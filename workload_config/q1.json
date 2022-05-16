@@ -4,14 +4,14 @@
             "funcName": "nexmark_src",
             "NumInstance": 4,
             "OutputTopicName": ["nexmark_src"],
-            "NodeConstraint": "0,1,2,3"
+            "NodeConstraint": 1,2,3,4"
         },
         {
             "funcName": "query1",
             "NumInstance": 4,
             "InputTopicNames": ["nexmark_src"],
             "OutputTopicName": ["nexmark_q1_sink"],
-            "NodeConstraint": "4,5,6,7"
+            "NodeConstraint": "5,6,7,8"
         }
     ],
     "StreamParam": {
