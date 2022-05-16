@@ -93,11 +93,11 @@ func main() {
 			log.Error().Msgf("%s request failed: %s", name, response.Message)
 		}
 	}
-	prodCons := "0"
+	prodCons := "1"
 	if FLAGS_local {
 		prodCons = ""
 	}
-	consumeCons := "1"
+	consumeCons := "2"
 	if FLAGS_local {
 		consumeCons = ""
 	}
