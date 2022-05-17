@@ -4,7 +4,7 @@
             "funcName": "nexmark_src",
             "NumInstance": 4,
             "OutputTopicName": ["nexmark_src"],
-            "NodeConstraint": 1,2,3,4"
+            "NodeConstraint": "1,2,3,4"
         },
         {
             "funcName": "query2",
