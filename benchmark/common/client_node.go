@@ -62,6 +62,7 @@ func (n *ClientNode) Invoke(client *http.Client, response *FnOutput, wg *sync.Wa
 	} else if !response.Success {
 		log.Error().Msgf("%v request failed with failed message: %v", n.config.FuncName, response.Message)
 	}
+	fmt.Fprintf(os.Stderr, "%s-%d call done\n", n.config.FuncName, queryInput.ParNum)
 	/*
 		i := 0
 		startTime := time.Now()

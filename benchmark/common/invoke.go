@@ -197,7 +197,7 @@ func Invoke(config_file string, stat_dir string, gateway_url string,
 			&sourceOutput[idx], &wg, false)
 	}
 
-	time.Sleep(time.Duration(1) * time.Second)
+	time.Sleep(time.Duration(1) * time.Millisecond)
 
 	for _, node := range cliNodes {
 		funcName := node.Name()
@@ -211,6 +211,7 @@ func Invoke(config_file string, stat_dir string, gateway_url string,
 			go node.Invoke(client, &output[idx], &wg, param[idx])
 		}
 	}
+	fmt.Fprintf(os.Stderr, "Waiting for all client to return\n")
 	wg.Wait()
 
 	srcNum := make(map[string]uint64)

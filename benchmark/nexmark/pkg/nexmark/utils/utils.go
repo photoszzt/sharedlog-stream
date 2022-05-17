@@ -96,6 +96,7 @@ func JsonPostRequest(client *http.Client, url string, nodeConstraint string, req
 	encoded, err := json.Marshal(request)
 	if err != nil {
 		log.Fatal().Msgf("failed to encode JSON request: %v", err)
+		return fmt.Errorf("failed to encode JSON request: %v", err)
 	}
 	fmt.Printf("encoded json is %v, node constraint is %s\n", string(encoded), nodeConstraint)
 	req, err := http.NewRequest("POST", url, bytes.NewReader(encoded))
@@ -119,6 +120,7 @@ func JsonPostRequest(client *http.Client, url string, nodeConstraint string, req
 	}
 	if err := json.NewDecoder(reader).Decode(response); err != nil {
 		log.Fatal().Msgf("failed to decode JSON response: %v", err)
+		return fmt.Errorf("failed to decode JSON response: %v", err)
 	}
 	return nil
 }

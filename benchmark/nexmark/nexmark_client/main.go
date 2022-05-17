@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 
 	"sharedlog-stream/benchmark/common"
@@ -73,6 +74,7 @@ func invokeSourceFunc(client *http.Client, numOutPartition uint8, topicName stri
 	} else if !response.Success {
 		log.Error().Msgf("source request failed: %s", response.Message)
 	}
+	fmt.Fprintf(os.Stderr, "source-%d invoke done\n", instanceId)
 }
 
 func main() {
