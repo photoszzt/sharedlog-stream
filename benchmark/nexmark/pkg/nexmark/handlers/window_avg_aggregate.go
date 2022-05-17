@@ -12,7 +12,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 	"time"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -129,7 +129,7 @@ func (h *windowedAvg) getAggProcessor(ctx context.Context, sp *common.QueryInput
 	if err != nil {
 		return nil, err
 	}
-	winStoreMp := &store.MaterializeParam{
+	winStoreMp := &store_with_changelog.MaterializeParam{
 		StoreName:  "windowed-avg-store",
 		MsgSerde:   msgSerde,
 		KeySerde:   commtypes.Uint64Serde{},
@@ -138,7 +138,7 @@ func (h *windowedAvg) getAggProcessor(ctx context.Context, sp *common.QueryInput
 		ParNum:     sp.ParNum,
 	}
 
-	store, err := store.NewInMemoryWindowStoreWithChangelog(
+	store, err := store_with_changelog.NewInMemoryWindowStoreWithChangelog(
 		timeWindows.MaxSize()+timeWindows.GracePeriodMs(), timeWindows.MaxSize(), false, winStoreMp)
 	if err != nil {
 		return nil, err

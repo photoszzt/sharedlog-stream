@@ -1,19 +1,23 @@
-package store
+package store_with_changelog
 
 import (
 	"context"
 	"os"
+	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/treemap"
+	"time"
 )
 
 type KeyValueStoreWithChangelog struct {
-	kvstore   KeyValueStore
+	kvstore   store.KeyValueStore
 	mp        *MaterializeParam
 	use_bytes bool
 	bufPush   bool
 }
 
-func NewKeyValueStoreWithChangelog(mp *MaterializeParam, store KeyValueStore, use_bytes bool) *KeyValueStoreWithChangelog {
+func NewKeyValueStoreWithChangelog(mp *MaterializeParam, store store.KeyValueStore, use_bytes bool) *KeyValueStoreWithChangelog {
 	bufPush_str := os.Getenv("BUFPUSH")
 	bufPush := false
 	if bufPush_str == "true" || bufPush_str == "1" {
@@ -27,7 +31,7 @@ func NewKeyValueStoreWithChangelog(mp *MaterializeParam, store KeyValueStore, us
 	}
 }
 
-func (st *KeyValueStoreWithChangelog) Init(sctx StoreContext) {
+func (st *KeyValueStoreWithChangelog) Init(sctx store.StoreContext) {
 	st.kvstore.Init(sctx)
 	sctx.RegisterKeyValueStore(st)
 }
@@ -60,6 +64,10 @@ func (st *KeyValueStoreWithChangelog) Get(ctx context.Context, key commtypes.Key
 	return st.kvstore.Get(ctx, key)
 }
 
+func (st *KeyValueStoreWithChangelog) FlushChangelog(ctx context.Context) error {
+	return st.mp.Changelog.Flush(ctx)
+}
+
 func (st *KeyValueStoreWithChangelog) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
 	keyBytes, err := st.mp.KeySerde.Encode(key)
 	if err != nil {
@@ -78,6 +86,10 @@ func (st *KeyValueStoreWithChangelog) Put(ctx context.Context, key commtypes.Key
 	} else {
 		_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, false, false)
 	}
+	if err != nil {
+		return err
+	}
+	err = st.mp.TrackFunc(ctx, key, st.mp.KeySerde, st.mp.Changelog.TopicName(), st.mp.ParNum)
 	if err != nil {
 		return err
 	}
@@ -173,7 +185,7 @@ func (st *KeyValueStoreWithChangelog) PrefixScan(prefix interface{},
 	panic("not implemented")
 }
 
-func (st *KeyValueStoreWithChangelog) TableType() TABLE_TYPE {
+func (st *KeyValueStoreWithChangelog) TableType() store.TABLE_TYPE {
 	return st.kvstore.TableType()
 }
 
@@ -185,4 +197,11 @@ func (st *KeyValueStoreWithChangelog) CommitTransaction(ctx context.Context,
 func (st *KeyValueStoreWithChangelog) AbortTransaction(ctx context.Context) error { return nil }
 func (st *KeyValueStoreWithChangelog) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
 	panic("not supported")
+}
+
+func ToInMemKVTableWithChangelog(storeName string, mp *MaterializeParam, compare func(a, b treemap.Key) int, warmup time.Duration) (*processor.MeteredProcessor, store.KeyValueStore, error) {
+	s := store.NewInMemoryKeyValueStore(storeName, compare)
+	tabWithLog := NewKeyValueStoreWithChangelog(mp, s, false)
+	toTableProc := processor.NewMeteredProcessor(processor.NewStoreToKVTableProcessor(tabWithLog), warmup)
+	return toTableProc, tabWithLog, nil
 }

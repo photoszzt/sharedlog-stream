@@ -3,13 +3,14 @@ package stream
 import (
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 	"sharedlog-stream/pkg/treemap"
 )
 
 type GroupedStream interface {
-	Count(name string, mp *store.MaterializeParam, compare func(a, b treemap.Key) int) Table
+	Count(name string, mp *store_with_changelog.MaterializeParam, compare func(a, b treemap.Key) int) Table
 	Reduce(name string, reducer processor.Reducer) Table
-	Aggregate(name string, mp *store.MaterializeParam, initializer processor.Initializer,
+	Aggregate(name string, mp *store_with_changelog.MaterializeParam, initializer processor.Initializer,
 		aggregator processor.Aggregator, compare func(a, b treemap.Key) int) Table
 	WindowedBy(windows processor.EnumerableWindowDefinition) TimeWindowedStream
 }
@@ -28,9 +29,9 @@ func newGroupedStream(tp *processor.TopologyBuilder, parents []processor.Node, g
 	}
 }
 
-func (s *GroupedStreamImpl) Count(name string, mp *store.MaterializeParam, compare func(a, b treemap.Key) int) Table {
+func (s *GroupedStreamImpl) Count(name string, mp *store_with_changelog.MaterializeParam, compare func(a, b treemap.Key) int) Table {
 	inMemStore := store.NewInMemoryKeyValueStore(mp.StoreName, compare)
-	store := store.NewKeyValueStoreWithChangelog(mp, inMemStore, false)
+	store := store_with_changelog.NewKeyValueStoreWithChangelog(mp, inMemStore, false)
 	p := processor.NewStreamAggregateProcessor(store,
 		processor.InitializerFunc(func() interface{} {
 			return 0
@@ -55,13 +56,13 @@ func (s *GroupedStreamImpl) Reduce(name string, reducer processor.Reducer) Table
 }
 
 func (s *GroupedStreamImpl) Aggregate(name string,
-	mp *store.MaterializeParam,
+	mp *store_with_changelog.MaterializeParam,
 	initializer processor.Initializer,
 	aggregator processor.Aggregator,
 	compare func(a, b treemap.Key) int,
 ) Table {
 	inMemStore := store.NewInMemoryKeyValueStore(mp.StoreName, compare)
-	store := store.NewKeyValueStoreWithChangelog(mp, inMemStore, false)
+	store := store_with_changelog.NewKeyValueStoreWithChangelog(mp, inMemStore, false)
 	p := processor.NewStreamAggregateProcessor(store, initializer, aggregator)
 	n := s.tp.AddProcessor(name, p, s.parents)
 	_ = s.tp.AddKeyValueStore(store.Name())

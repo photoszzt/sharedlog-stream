@@ -6,6 +6,7 @@ import (
 	"os"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 
@@ -14,7 +15,7 @@ import (
 
 type KVStoreChangelog struct {
 	KVStore     store.KeyValueStore
-	Changelog   store.Stream
+	Changelog   *sharedlog_stream.ShardedSharedLogStream
 	keySerde    commtypes.Serde
 	valSerde    commtypes.Serde
 	InputStream store.Stream
@@ -29,7 +30,7 @@ type KVStoreChangelog struct {
 
 func NewKVStoreChangelog(
 	kvStore store.KeyValueStore,
-	changelog store.Stream,
+	changelog *sharedlog_stream.ShardedSharedLogStream,
 	keySerde commtypes.Serde,
 	valSerde commtypes.Serde,
 	parNum uint8,

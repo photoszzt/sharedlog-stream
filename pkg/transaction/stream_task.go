@@ -439,26 +439,28 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 
 	var afterWarmupStart time.Time
 	afterWarmup := false
-	commitTicker := time.NewTicker(t.CommitEveryForAtLeastOnce)
+	commitTimer := time.Now()
 	debug.Fprintf(os.Stderr, "warmup time: %v\n", args.WarmupTime)
 	startTime := time.Now()
 	for {
-		select {
-		case <-commitTicker.C:
-			if off != nil {
-				if t.PauseFunc != nil {
-					t.PauseFunc()
-				}
-				err = commitOffset(ctx, cm, off, args.ParNum)
-				if err != nil {
-					panic(err)
-				}
-				if t.ResumeFunc != nil {
-					t.ResumeFunc()
-				}
+		timeSinceLastCommit := time.Since(commitTimer)
+		if timeSinceLastCommit >= t.CommitEveryForAtLeastOnce && off != nil {
+			debug.Fprintf(os.Stderr, "before pause 1\n")
+			if t.PauseFunc != nil {
+				t.PauseFunc()
 			}
+			debug.Fprintf(os.Stderr, "after pause 1\n")
+			err = commitOffset(ctx, cm, off, args.ParNum)
+			if err != nil {
+				panic(err)
+			}
+			debug.Fprintf(os.Stderr, "after commit 1\n")
+			if t.ResumeFunc != nil {
+				t.ResumeFunc()
+			}
+			debug.Fprintf(os.Stderr, "after resume 1\n")
 			hasUncommitted = false
-		default:
+			commitTimer = time.Now()
 		}
 		if !afterWarmup && args.WarmupTime != 0 && time.Since(startTime) >= args.WarmupTime {
 			afterWarmup = true
@@ -473,13 +475,22 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 			if ret.Success {
 				// elapsed := time.Since(procStart)
 				// latencies = append(latencies, int(elapsed.Microseconds()))
+				debug.Fprintf(os.Stderr, "consume timeout\n")
+				alreadyPaused := false
 				if hasUncommitted {
+					debug.Fprintf(os.Stderr, "before pause 2\n")
+					if t.PauseFunc != nil {
+						t.PauseFunc()
+					}
+					debug.Fprintf(os.Stderr, "after pause 2\n")
 					err = commitOffset(ctx, cm, off, args.ParNum)
 					if err != nil {
 						panic(err)
 					}
+					debug.Fprintf(os.Stderr, "after commit 2\n")
+					alreadyPaused = true
 				}
-				if t.PauseFunc != nil {
+				if !alreadyPaused && t.PauseFunc != nil {
 					t.PauseFunc()
 				}
 				if t.CloseFunc != nil {
@@ -503,15 +514,24 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 			latencies = append(latencies, int(elapsed.Microseconds()))
 		}
 	}
+	alreadyPaused := false
 	if hasUncommitted {
+		debug.Fprintf(os.Stderr, "before pause 3\n")
+		if t.PauseFunc != nil {
+			t.PauseFunc()
+		}
 		debug.Fprintf(os.Stderr, "commit left\n")
 		err = commitOffset(ctx, cm, off, args.ParNum)
 		if err != nil {
 			panic(err)
 		}
+		debug.Fprintf(os.Stderr, "after commit 3\n")
+		alreadyPaused = true
 	}
-	if t.PauseFunc != nil {
+	if !alreadyPaused && t.PauseFunc != nil {
+		debug.Fprintf(os.Stderr, "before pause 4\n")
 		t.PauseFunc()
+		debug.Fprintf(os.Stderr, "after pause 4\n")
 	}
 	if t.CloseFunc != nil {
 		debug.Fprintf(os.Stderr, "closing\n")
@@ -630,6 +650,15 @@ func (t *StreamTask) ProcessWithTransaction(
 	for _, ostream := range args.OutputStreams {
 		tm.RecordTopicStreams(ostream.TopicName(), ostream)
 		cmm.TrackStream(ostream.TopicName(), ostream)
+	}
+
+	for _, kvchangelog := range args.KVChangelogs {
+		tm.RecordTopicStreams(kvchangelog.Changelog.TopicName(), kvchangelog.Changelog)
+		cmm.TrackStream(kvchangelog.Changelog.TopicName(), kvchangelog.Changelog)
+	}
+	for _, winchangelog := range args.WindowStoreChangelogs {
+		tm.RecordTopicStreams(winchangelog.Changelog.TopicName(), winchangelog.Changelog)
+		cmm.TrackStream(winchangelog.Changelog.TopicName(), winchangelog.Changelog)
 	}
 
 	monitorQuit := make(chan struct{})

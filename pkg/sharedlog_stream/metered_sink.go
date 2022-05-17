@@ -127,6 +127,105 @@ func (s *ConcurrentMeteredSink) InnerSink() *ShardedSharedLogStreamSink {
 	return s.sink
 }
 
+type ConcurrentMeteredSyncSink struct {
+	sink *ShardedSharedLogStreamSyncSink
+
+	latMu     sync.Mutex
+	latencies []int
+
+	eventTimeLatencies []int
+
+	warmup  time.Duration
+	initial time.Time
+
+	measure       bool
+	isFinalOutput bool
+	afterWarmup   uint32
+}
+
+var _ = processor.Sink(&ConcurrentMeteredSink{})
+
+func NewConcurrentMeteredSyncSink(sink *ShardedSharedLogStreamSyncSink, warmup time.Duration) *ConcurrentMeteredSyncSink {
+	measure_str := os.Getenv("MEASURE_SINK")
+	measure := false
+	if measure_str == "true" || measure_str == "1" {
+		measure = true
+	}
+	return &ConcurrentMeteredSyncSink{
+		sink:          sink,
+		latencies:     make([]int, 0, 128),
+		measure:       measure,
+		isFinalOutput: false,
+		warmup:        warmup,
+		afterWarmup:   0,
+	}
+}
+
+func (s *ConcurrentMeteredSyncSink) MarkFinalOutput() {
+	s.isFinalOutput = true
+}
+
+func (s *ConcurrentMeteredSyncSink) StartWarmup() {
+	if s.measure {
+		s.initial = time.Now()
+	}
+}
+
+func (s *ConcurrentMeteredSyncSink) Flush(ctx context.Context) error {
+	if s.measure {
+		procStart := time.Now()
+		err := s.sink.Flush(ctx)
+		elapsed := time.Since(procStart)
+		s.latMu.Lock()
+		s.latencies = append(s.latencies, int(elapsed.Microseconds()))
+		s.latMu.Unlock()
+		return err
+	}
+	return s.sink.Flush(ctx)
+}
+
+func (s *ConcurrentMeteredSyncSink) KeySerde() commtypes.Serde {
+	return s.sink.KeySerde()
+}
+
+func (s *ConcurrentMeteredSyncSink) TopicName() string {
+	return s.sink.TopicName()
+}
+
+func (s *ConcurrentMeteredSyncSink) GetLatency() []int {
+	return s.latencies
+}
+
+func (s *ConcurrentMeteredSyncSink) GetEventTimeLatency() []int {
+	return s.eventTimeLatencies
+}
+
+func (s *ConcurrentMeteredSyncSink) Sink(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
+	debug.Assert(!s.measure || (s.warmup == 0 || (s.warmup > 0 && !s.initial.IsZero())), "warmup should initialize initial")
+	if s.measure {
+		if atomic.LoadUint32(&s.afterWarmup) == 0 && (s.warmup == 0 || (s.warmup > 0 && time.Since(s.initial) >= s.warmup)) {
+			atomic.StoreUint32(&s.afterWarmup, 1)
+		}
+		if atomic.LoadUint32(&s.afterWarmup) == 1 {
+			procStart := time.Now()
+			if s.isFinalOutput {
+				debug.Assert(msg.Timestamp != 0, "sink event ts should be set")
+				els := int(procStart.UnixMilli() - msg.Timestamp)
+				s.latMu.Lock()
+				s.eventTimeLatencies = append(s.eventTimeLatencies, els)
+				s.latMu.Unlock()
+			}
+			err := s.sink.Sink(ctx, msg, parNum, isControl)
+			elapsed := time.Since(procStart)
+			s.latMu.Lock()
+			s.latencies = append(s.latencies, int(elapsed.Microseconds()))
+			s.latMu.Unlock()
+			return err
+		}
+	}
+	return s.sink.Sink(ctx, msg, parNum, isControl)
+}
+
 type MeteredSink struct {
 	sink *ShardedSharedLogStreamSink
 

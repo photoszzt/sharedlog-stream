@@ -6,6 +6,7 @@ import (
 	"os"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 
@@ -14,7 +15,7 @@ import (
 
 type WindowStoreChangelog struct {
 	WinStore         store.WindowStore
-	Changelog        store.Stream
+	Changelog        *sharedlog_stream.ShardedSharedLogStream
 	keyWindowTsSerde commtypes.Serde
 	keySerde         commtypes.Serde
 	valSerde         commtypes.Serde
@@ -28,7 +29,7 @@ type WindowStoreChangelog struct {
 
 func NewWindowStoreChangelog(
 	wStore store.WindowStore,
-	changelog store.Stream,
+	changelog *sharedlog_stream.ShardedSharedLogStream,
 	keyWindowTsSerde commtypes.Serde,
 	keySerde commtypes.Serde,
 	valSerde commtypes.Serde,

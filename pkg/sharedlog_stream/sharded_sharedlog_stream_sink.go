@@ -2,6 +2,7 @@ package sharedlog_stream
 
 import (
 	"context"
+	"os"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -62,6 +63,11 @@ func (sls *ShardedSharedLogStreamSink) RebuildMsgChan() {
 }
 
 func (sls *ShardedSharedLogStreamSink) CloseAsyncPush() {
+	debug.Fprintf(os.Stderr, "stream pusher msg chan len: %d\n", len(sls.streamPusher.MsgChan))
+	// for len(sls.streamPusher.MsgChan) > 0 {
+	// 	debug.Fprintf(os.Stderr, "stream pusher msg chan len: %d\n", len(sls.streamPusher.MsgChan))
+	// 	time.Sleep(time.Duration(1) * time.Millisecond)
+	// }
 	close(sls.streamPusher.MsgChan)
 	sls.wg.Wait()
 }

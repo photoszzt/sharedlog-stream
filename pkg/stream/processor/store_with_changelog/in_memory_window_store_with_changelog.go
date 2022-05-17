@@ -1,22 +1,23 @@
-package store
+package store_with_changelog
 
 import (
 	"context"
 	"fmt"
 	"os"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
 	"time"
 )
 
 type InMemoryWindowStoreWithChangelog struct {
-	windowStore      *InMemoryWindowStore
+	windowStore      *store.InMemoryWindowStore
 	mp               *MaterializeParam
 	keyWindowTsSerde commtypes.Serde
 
 	bufPush bool
 }
 
-var _ = WindowStore(&InMemoryWindowStoreWithChangelog{})
+var _ = store.WindowStore(&InMemoryWindowStoreWithChangelog{})
 
 func NewInMemoryWindowStoreWithChangelog(retensionPeriod int64, windowSize int64, retainDuplicates bool, mp *MaterializeParam) (*InMemoryWindowStoreWithChangelog, error) {
 	bufPush_str := os.Getenv("BUFPUSH")
@@ -33,7 +34,7 @@ func NewInMemoryWindowStoreWithChangelog(retensionPeriod int64, windowSize int64
 		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", mp.SerdeFormat)
 	}
 	return &InMemoryWindowStoreWithChangelog{
-		windowStore: NewInMemoryWindowStore(mp.StoreName,
+		windowStore: store.NewInMemoryWindowStore(mp.StoreName,
 			retensionPeriod, windowSize, retainDuplicates, mp.Comparable),
 		mp:               mp,
 		keyWindowTsSerde: ktsSerde,
@@ -41,7 +42,7 @@ func NewInMemoryWindowStoreWithChangelog(retensionPeriod int64, windowSize int64
 	}, nil
 }
 
-func (st *InMemoryWindowStoreWithChangelog) Init(ctx StoreContext) {
+func (st *InMemoryWindowStoreWithChangelog) Init(ctx store.StoreContext) {
 	st.windowStore.Init(ctx)
 	ctx.RegisterWindowStore(st)
 }
@@ -59,7 +60,11 @@ func (st *InMemoryWindowStoreWithChangelog) KeyWindowTsSerde() commtypes.Serde {
 }
 
 func (st *InMemoryWindowStoreWithChangelog) Name() string {
-	return st.windowStore.name
+	return st.windowStore.Name()
+}
+
+func (st *InMemoryWindowStoreWithChangelog) FlushChangelog(ctx context.Context) error {
+	return st.mp.Changelog.Flush(ctx)
 }
 
 func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error {
@@ -89,6 +94,10 @@ func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context, key commtyp
 	} else {
 		_, err = st.mp.Changelog.Push(ctx, encoded, st.mp.ParNum, false, false)
 	}
+	if err != nil {
+		return err
+	}
+	err = st.mp.TrackFunc(ctx, key, st.mp.KeySerde, st.mp.Changelog.TopicName(), st.mp.ParNum)
 	if err != nil {
 		return err
 	}
@@ -172,8 +181,8 @@ func (s *InMemoryWindowStoreWithChangelog) DropDatabase(ctx context.Context) err
 	panic("not implemented")
 }
 
-func (s *InMemoryWindowStoreWithChangelog) TableType() TABLE_TYPE {
-	return IN_MEM
+func (s *InMemoryWindowStoreWithChangelog) TableType() store.TABLE_TYPE {
+	return store.IN_MEM
 }
 
 func (s *InMemoryWindowStoreWithChangelog) StartTransaction(ctx context.Context) error {

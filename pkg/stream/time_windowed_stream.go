@@ -2,12 +2,12 @@ package stream
 
 import (
 	"sharedlog-stream/pkg/stream/processor"
-	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 )
 
 type TimeWindowedStream interface {
-	Count(name string, mp *store.MaterializeParam) Table
-	Aggregate(name string, initializer processor.Initializer, aggregator processor.Aggregator, mp *store.MaterializeParam) Table
+	Count(name string, mp *store_with_changelog.MaterializeParam) Table
+	Aggregate(name string, initializer processor.Initializer, aggregator processor.Aggregator, mp *store_with_changelog.MaterializeParam) Table
 	Reduce(name string, reducer processor.Reducer) Table
 }
 
@@ -25,8 +25,8 @@ func newTimeWindowedStream(tp *processor.TopologyBuilder, parents []processor.No
 	}
 }
 
-func (s *TimeWindowedStreamImpl) Count(name string, mp *store.MaterializeParam) Table {
-	store, err := store.NewInMemoryWindowStoreWithChangelog(
+func (s *TimeWindowedStreamImpl) Count(name string, mp *store_with_changelog.MaterializeParam) Table {
+	store, err := store_with_changelog.NewInMemoryWindowStoreWithChangelog(
 		s.windowDefs.MaxSize()+s.windowDefs.GracePeriodMs(),
 		s.windowDefs.MaxSize(), false, mp)
 	if err != nil {
@@ -45,8 +45,8 @@ func (s *TimeWindowedStreamImpl) Count(name string, mp *store.MaterializeParam) 
 	return newTable(s.tp, []processor.Node{n}, mp.StoreName)
 }
 
-func (s *TimeWindowedStreamImpl) Aggregate(name string, initializer processor.Initializer, aggregator processor.Aggregator, mp *store.MaterializeParam) Table {
-	store, err := store.NewInMemoryWindowStoreWithChangelog(
+func (s *TimeWindowedStreamImpl) Aggregate(name string, initializer processor.Initializer, aggregator processor.Aggregator, mp *store_with_changelog.MaterializeParam) Table {
+	store, err := store_with_changelog.NewInMemoryWindowStoreWithChangelog(
 		s.windowDefs.MaxSize()+s.windowDefs.GracePeriodMs(),
 		s.windowDefs.MaxSize(), false, mp)
 	if err != nil {

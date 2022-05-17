@@ -16,6 +16,7 @@ import (
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -284,7 +285,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 	maxPriceBidStoreName := "max-price-bid-tab"
 	var wstore store.WindowStore
 	if input.TableType == uint8(store.IN_MEM) {
-		mp := &store.MaterializeParam{
+		mp := &store_with_changelog.MaterializeParam{
 			KeySerde:   commtypes.Uint64Serde{},
 			ValueSerde: vtSerde,
 			StoreName:  maxPriceBidStoreName,
@@ -303,7 +304,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 				}
 			}),
 		}
-		wstore, err = store.NewInMemoryWindowStoreWithChangelog(tw.MaxSize()+tw.GracePeriodMs(),
+		wstore, err = store_with_changelog.NewInMemoryWindowStoreWithChangelog(tw.MaxSize()+tw.GracePeriodMs(),
 			tw.MaxSize(), false, mp)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
@@ -378,7 +379,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 	if input.EnableTransaction {
 		var wsc []*transaction.WindowStoreChangelog
 		if input.TableType == uint8(store.IN_MEM) {
-			wstore_mem := wstore.(*store.InMemoryWindowStoreWithChangelog)
+			wstore_mem := wstore.(*store_with_changelog.InMemoryWindowStoreWithChangelog)
 			wsc = []*transaction.WindowStoreChangelog{
 				transaction.NewWindowStoreChangelog(wstore,
 					wstore_mem.MaterializeParam().Changelog,

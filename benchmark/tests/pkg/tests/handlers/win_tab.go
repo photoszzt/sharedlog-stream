@@ -12,6 +12,8 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
+	"sharedlog-stream/pkg/transaction"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -26,8 +28,8 @@ func NewWinTabTestsHandler(env types.Environment) types.FuncHandler {
 	}
 }
 
-func getWindowStoreWithChangelog(retainDuplicates bool, changelog store.Stream) *store.InMemoryWindowStoreWithChangelog {
-	mp := &store.MaterializeParam{
+func getWindowStoreWithChangelog(retainDuplicates bool, changelog *sharedlog_stream.ShardedSharedLogStream) *store_with_changelog.InMemoryWindowStoreWithChangelog {
+	mp := &store_with_changelog.MaterializeParam{
 		KeySerde:    commtypes.Uint32Serde{},
 		ValueSerde:  commtypes.StringSerde{},
 		MsgSerde:    commtypes.MessageSerializedJSONSerde{},
@@ -35,10 +37,11 @@ func getWindowStoreWithChangelog(retainDuplicates bool, changelog store.Stream) 
 		SerdeFormat: commtypes.JSON,
 		ParNum:      0,
 		Changelog:   changelog,
+		TrackFunc:   transaction.DefaultTrackSubstreamFunc,
 	}
 	if !retainDuplicates {
 		mp.Comparable = concurrent_skiplist.CompareFunc(store.CompareNoDup)
-		store, err := store.NewInMemoryWindowStoreWithChangelog(store.TEST_RETENTION_PERIOD, store.TEST_WINDOW_SIZE,
+		store, err := store_with_changelog.NewInMemoryWindowStoreWithChangelog(store.TEST_RETENTION_PERIOD, store.TEST_WINDOW_SIZE,
 			retainDuplicates, mp)
 		if err != nil {
 			panic(err)
@@ -46,7 +49,7 @@ func getWindowStoreWithChangelog(retainDuplicates bool, changelog store.Stream) 
 		return store
 	}
 	mp.Comparable = concurrent_skiplist.CompareFunc(store.CompareWithDup)
-	store, err := store.NewInMemoryWindowStoreWithChangelog(store.TEST_RETENTION_PERIOD, store.TEST_WINDOW_SIZE,
+	store, err := store_with_changelog.NewInMemoryWindowStoreWithChangelog(store.TEST_RETENTION_PERIOD, store.TEST_WINDOW_SIZE,
 		retainDuplicates, mp)
 	if err != nil {
 		panic(err)

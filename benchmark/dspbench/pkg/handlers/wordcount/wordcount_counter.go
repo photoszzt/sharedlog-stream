@@ -14,6 +14,7 @@ import (
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/treemap"
 	"strings"
@@ -48,7 +49,7 @@ func (h *wordcountCounterAgg) Call(ctx context.Context, input []byte) ([]byte, e
 }
 
 func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde,
-	output_stream store.Stream) (*processor.MeteredProcessor, error) {
+	output_stream *sharedlog_stream.ShardedSharedLogStream) (*processor.MeteredProcessor, error) {
 	var vtSerde commtypes.Serde
 	if sp.SerdeFormat == uint8(commtypes.JSON) {
 		vtSerde = commtypes.ValueTimestampJSONSerde{
@@ -61,7 +62,7 @@ func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes
 	} else {
 		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat)
 	}
-	mp := &store.MaterializeParam{
+	mp := &store_with_changelog.MaterializeParam{
 		KeySerde:   commtypes.StringSerde{},
 		ValueSerde: vtSerde,
 		MsgSerde:   msgSerde,
@@ -74,7 +75,7 @@ func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes
 		kb := b.(string)
 		return strings.Compare(ka, kb)
 	})
-	store := store.NewKeyValueStoreWithChangelog(mp, inMemStore, false)
+	store := store_with_changelog.NewKeyValueStoreWithChangelog(mp, inMemStore, false)
 	// fmt.Fprintf(os.Stderr, "before restore\n")
 	p := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor(store,
 		processor.InitializerFunc(func() interface{} {
@@ -198,7 +199,7 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 	}
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig),
 		time.Duration(sp.WarmupS)*time.Second)
-	count, err := setupCounter(ctx, sp, msgSerde, meteredOutputStream)
+	count, err := setupCounter(ctx, sp, msgSerde, output_streams[0])
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

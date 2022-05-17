@@ -68,13 +68,6 @@ func (p *StoreToKVTableProcessor) ProcessAndReturn(ctx context.Context, msg comm
 	return []commtypes.Message{msg}, nil
 }
 
-func ToInMemKVTableWithChangelog(storeName string, mp *store.MaterializeParam, compare func(a, b treemap.Key) int, warmup time.Duration) (*MeteredProcessor, store.KeyValueStore, error) {
-	s := store.NewInMemoryKeyValueStore(storeName, compare)
-	tabWithLog := store.NewKeyValueStoreWithChangelog(mp, s, false)
-	toTableProc := NewMeteredProcessor(NewStoreToKVTableProcessor(tabWithLog), warmup)
-	return toTableProc, tabWithLog, nil
-}
-
 func ToInMemKVTable(storeName string, compare func(a, b treemap.Key) int, warmup time.Duration) (*MeteredProcessor, store.KeyValueStore, error) {
 	s := store.NewInMemoryKeyValueStore(storeName, compare)
 	toTableProc := NewMeteredProcessor(NewStoreToKVTableProcessor(s), warmup)

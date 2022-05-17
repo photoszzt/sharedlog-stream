@@ -2,6 +2,7 @@ package sharedlog_stream
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sharedlog-stream/pkg/debug"
 	"sync"
@@ -16,10 +17,10 @@ type PayloadToPush struct {
 
 type StreamPush struct {
 	FlushTimer    time.Time
-	FlushDuration time.Duration
 	MsgChan       chan PayloadToPush
 	MsgErrChan    chan error
 	Stream        *ShardedSharedLogStream
+	FlushDuration time.Duration
 	BufPush       bool
 }
 
@@ -31,7 +32,7 @@ func NewStreamPush(stream *ShardedSharedLogStream) *StreamPush {
 	}
 	return &StreamPush{
 		MsgChan:    make(chan PayloadToPush, MSG_CHAN_SIZE),
-		MsgErrChan: make(chan error),
+		MsgErrChan: make(chan error, 1),
 		BufPush:    bufPush,
 		Stream:     stream,
 	}
@@ -79,6 +80,7 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
 			if h.BufPush {
 				err := h.Stream.Flush(ctx)
 				if err != nil {
+					fmt.Fprintf(os.Stderr, "[ERROR] flush err: %v\n", err)
 					h.MsgErrChan <- err
 					return
 				}
@@ -87,6 +89,7 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
 			for _, i := range msg.Partitions {
 				_, err := h.Stream.Push(ctx, msg.Payload, i, true, false)
 				if err != nil {
+					fmt.Fprintf(os.Stderr, "[ERROR] push err: %v\n", err)
 					h.MsgErrChan <- err
 					return
 				}
@@ -95,9 +98,10 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
 			if h.BufPush {
 				timeSinceLastFlush := time.Since(h.FlushTimer)
 				if timeSinceLastFlush >= h.FlushDuration {
-					debug.Fprintf(os.Stderr, "flush timer: %v\n", timeSinceLastFlush)
+					// debug.Fprintf(os.Stderr, "flush timer: %v\n", timeSinceLastFlush)
 					err := h.Stream.FlushNoLock(ctx)
 					if err != nil {
+						fmt.Fprintf(os.Stderr, "[ERROR] flush no lock err: %v\n", err)
 						h.MsgErrChan <- err
 						return
 					}
@@ -105,6 +109,7 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
 				}
 				err := h.Stream.BufPushNoLock(ctx, msg.Payload, uint8(msg.Partitions[0]))
 				if err != nil {
+					fmt.Fprintf(os.Stderr, "[ERROR] buf push nolock err: %v\n", err)
 					h.MsgErrChan <- err
 					return
 				}
@@ -112,6 +117,7 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
 				debug.Assert(len(msg.Partitions) == 1, "should only have one partition")
 				_, err := h.Stream.Push(ctx, msg.Payload, uint8(msg.Partitions[0]), false, false)
 				if err != nil {
+					fmt.Fprintf(os.Stderr, "[ERROR] push err: %v\n", err)
 					h.MsgErrChan <- err
 					return
 				}
@@ -128,6 +134,7 @@ func (h *StreamPush) AsyncStreamPushNoTick(ctx context.Context, wg *sync.WaitGro
 			if h.BufPush {
 				err := h.Stream.Flush(ctx)
 				if err != nil {
+					fmt.Fprintf(os.Stderr, "[ERROR] flush err: %v\n", err)
 					h.MsgErrChan <- err
 					return
 				}
@@ -135,6 +142,7 @@ func (h *StreamPush) AsyncStreamPushNoTick(ctx context.Context, wg *sync.WaitGro
 			for _, i := range msg.Partitions {
 				_, err := h.Stream.Push(ctx, msg.Payload, i, true, false)
 				if err != nil {
+					fmt.Fprintf(os.Stderr, "[ERROR] push err: %v\n", err)
 					h.MsgErrChan <- err
 					return
 				}
@@ -143,6 +151,7 @@ func (h *StreamPush) AsyncStreamPushNoTick(ctx context.Context, wg *sync.WaitGro
 			if h.BufPush {
 				err := h.Stream.BufPushNoLock(ctx, msg.Payload, uint8(msg.Partitions[0]))
 				if err != nil {
+					fmt.Fprintf(os.Stderr, "[ERROR] buf flush err: %v\n", err)
 					h.MsgErrChan <- err
 					return
 				}
@@ -150,6 +159,7 @@ func (h *StreamPush) AsyncStreamPushNoTick(ctx context.Context, wg *sync.WaitGro
 				debug.Assert(len(msg.Partitions) == 1, "should only have one partition")
 				_, err := h.Stream.Push(ctx, msg.Payload, uint8(msg.Partitions[0]), false, false)
 				if err != nil {
+					fmt.Fprintf(os.Stderr, "[ERROR] push err: %v\n", err)
 					h.MsgErrChan <- err
 					return
 				}
