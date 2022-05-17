@@ -93,5 +93,22 @@ func (s *ShardedSharedLogStreamSyncSink) TopicName() string { return s.stream.To
 func (s *ShardedSharedLogStreamSyncSink) KeySerde() commtypes.Serde {
 	return s.keySerde
 }
-func (s *ShardedSharedLogStreamSyncSink) Flush(ctx context.Context) error { return nil }
-func (s *ShardedSharedLogStreamSyncSink) InitFlushTimer()                 {}
+func (s *ShardedSharedLogStreamSyncSink) Flush(ctx context.Context) error {
+	if s.bufPush {
+		err := s.stream.Flush(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (s *ShardedSharedLogStreamSyncSink) FlushNoLock(ctx context.Context) error {
+	if s.bufPush {
+		err := s.stream.FlushNoLock(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (s *ShardedSharedLogStreamSyncSink) InitFlushTimer() {}

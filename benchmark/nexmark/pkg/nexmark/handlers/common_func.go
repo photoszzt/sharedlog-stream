@@ -52,7 +52,7 @@ type JoinWorkerFunc func(c context.Context, m commtypes.Message) ([]commtypes.Me
 
 type joinProcArgs struct {
 	src           *processor.MeteredSource
-	sink          *sharedlog_stream.ConcurrentMeteredSink
+	sink          *sharedlog_stream.ConcurrentMeteredSyncSink
 	currentOffset map[string]uint64
 	trackParFunc  transaction.TrackKeySubStreamFunc
 	cHash         *hash.ConsistentHash
@@ -326,7 +326,7 @@ func procMsg(ctx context.Context, msg commtypes.Message, procArgs *joinProcWitho
 
 func pushMsgsToSink(
 	ctx context.Context,
-	sink *sharedlog_stream.ConcurrentMeteredSink,
+	sink *sharedlog_stream.ConcurrentMeteredSyncSink,
 	cHash *hash.ConsistentHash,
 	cHashMu *sync.RWMutex,
 	msgs []commtypes.Message,

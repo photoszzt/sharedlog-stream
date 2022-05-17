@@ -143,7 +143,7 @@ func getInOutStreams(
 type srcSinkSerde struct {
 	src1      *processor.MeteredSource
 	src2      *processor.MeteredSource
-	sink      *sharedlog_stream.ConcurrentMeteredSink
+	sink      *sharedlog_stream.ConcurrentMeteredSyncSink
 	msgSerde  commtypes.MsgSerde
 	keySerdes []commtypes.Serde
 	valSerdes []commtypes.Serde
@@ -195,7 +195,7 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 		time.Duration(sp.WarmupS)*time.Second)
 	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, personsConfig),
 		time.Duration(sp.WarmupS)*time.Second)
-	sink := sharedlog_stream.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig),
+	sink := sharedlog_stream.NewConcurrentMeteredSyncSink(sharedlog_stream.NewShardedSharedLogStreamSyncSink(outputStream, outConfig),
 		time.Duration(sp.WarmupS)*time.Second)
 	sink.MarkFinalOutput()
 	sss := &srcSinkSerde{
@@ -297,8 +297,6 @@ type q3JoinTableProcessArgs struct {
 	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
 	funcName         string
 	curEpoch         uint64
-	personDone       uint32
-	auctionDone      uint32
 	parNum           uint8
 }
 
@@ -392,8 +390,6 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
 		curEpoch:         sp.ScaleEpoch,
 		funcName:         h.funcName,
-		personDone:       0,
-		auctionDone:      0,
 	}
 
 	currentOffset := make(map[string]uint64)
@@ -434,19 +430,27 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			close(personDone)
 			close(aucDone)
 			wg.Wait()
-			sss.sink.CloseAsyncPush()
-			if err = sss.sink.Flush(ctx); err != nil {
+			/*
+				sss.sink.CloseAsyncPush()
+				if err = sss.sink.Flush(ctx); err != nil {
+					panic(err)
+				}
+			*/
+			err := sss.sink.Flush(ctx)
+			if err != nil {
 				panic(err)
 			}
 		},
 		ResumeFunc: func() {
-			sss.sink.InnerSink().RebuildMsgChan()
-			if sp.EnableTransaction {
-				sss.sink.InnerSink().StartAsyncPushNoTick(ctx)
-			} else {
-				sss.sink.InnerSink().StartAsyncPushWithTick(ctx)
-				sss.sink.InitFlushTimer()
-			}
+			/*
+				sss.sink.InnerSink().RebuildMsgChan()
+				if sp.EnableTransaction {
+					sss.sink.InnerSink().StartAsyncPushNoTick(ctx)
+				} else {
+					sss.sink.InnerSink().StartAsyncPushWithTick(ctx)
+					sss.sink.InitFlushTimer()
+				}
+			*/
 			personDone = make(chan struct{})
 			aucDone = make(chan struct{})
 			wg.Add(1)
@@ -458,12 +462,14 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		},
 		CloseFunc: nil,
 		InitFunc: func(progArgs interface{}) {
-			if sp.EnableTransaction {
-				sss.sink.InnerSink().StartAsyncPushNoTick(ctx)
-			} else {
-				sss.sink.InnerSink().StartAsyncPushWithTick(ctx)
-				sss.sink.InitFlushTimer()
-			}
+			/*
+				if sp.EnableTransaction {
+					sss.sink.InnerSink().StartAsyncPushNoTick(ctx)
+				} else {
+					sss.sink.InnerSink().StartAsyncPushWithTick(ctx)
+					sss.sink.InitFlushTimer()
+				}
+			*/
 
 			sss.src1.StartWarmup()
 			sss.src2.StartWarmup()

@@ -196,7 +196,7 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 		time.Duration(sp.WarmupS)*time.Second)
 	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, personsConfig),
 		time.Duration(sp.WarmupS)*time.Second)
-	sink := sharedlog_stream.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig),
+	sink := sharedlog_stream.NewConcurrentMeteredSyncSink(sharedlog_stream.NewShardedSharedLogStreamSyncSink(outputStream, outConfig),
 		time.Duration(sp.WarmupS)*time.Second)
 	sink.MarkFinalOutput()
 	return &srcSinkSerde{src1: src1, src2: src2, sink: sink,
@@ -396,20 +396,28 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			close(aucDone)
 			debug.Fprintf(os.Stderr, "waiting join proc to exit\n")
 			wg.Wait()
-			sss.sink.CloseAsyncPush()
-			if err = sss.sink.Flush(ctx); err != nil {
+			/*
+				sss.sink.CloseAsyncPush()
+				if err = sss.sink.Flush(ctx); err != nil {
+					panic(err)
+				}
+			*/
+			err := sss.sink.Flush(ctx)
+			if err != nil {
 				panic(err)
 			}
 			// debug.Fprintf(os.Stderr, "join procs exited\n")
 		},
 		ResumeFunc: func() {
-			sss.sink.InnerSink().RebuildMsgChan()
-			if sp.EnableTransaction {
-				sss.sink.InnerSink().StartAsyncPushNoTick(ctx)
-			} else {
-				sss.sink.InnerSink().StartAsyncPushWithTick(ctx)
-				sss.sink.InitFlushTimer()
-			}
+			/*
+				sss.sink.InnerSink().RebuildMsgChan()
+				if sp.EnableTransaction {
+					sss.sink.InnerSink().StartAsyncPushNoTick(ctx)
+				} else {
+					sss.sink.InnerSink().StartAsyncPushWithTick(ctx)
+					sss.sink.InitFlushTimer()
+				}
+			*/
 			// debug.Fprintf(os.Stderr, "resume join porc\n")
 			personDone = make(chan struct{}, 1)
 			aucDone = make(chan struct{}, 1)
@@ -423,12 +431,14 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		},
 		CloseFunc: nil,
 		InitFunc: func(progArgs interface{}) {
-			if sp.EnableTransaction {
-				sss.sink.InnerSink().StartAsyncPushNoTick(ctx)
-			} else {
-				sss.sink.InnerSink().StartAsyncPushWithTick(ctx)
-				sss.sink.InitFlushTimer()
-			}
+			/*
+				if sp.EnableTransaction {
+					sss.sink.InnerSink().StartAsyncPushNoTick(ctx)
+				} else {
+					sss.sink.InnerSink().StartAsyncPushWithTick(ctx)
+					sss.sink.InitFlushTimer()
+				}
+			*/
 			sss.src1.StartWarmup()
 			sss.src2.StartWarmup()
 			sss.sink.StartWarmup()

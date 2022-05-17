@@ -333,3 +333,99 @@ func (s *MeteredSink) CloseAsyncPush() {
 func (s *MeteredSink) InnerSink() *ShardedSharedLogStreamSink {
 	return s.sink
 }
+
+type MeteredSyncSink struct {
+	sink *ShardedSharedLogStreamSyncSink
+
+	latencies          []int
+	eventTimeLatencies []int
+
+	warmup  time.Duration
+	initial time.Time
+
+	measure       bool
+	isFinalOutput bool
+	afterWarmup   bool
+}
+
+func NewMeteredSyncSink(sink *ShardedSharedLogStreamSyncSink, warmup time.Duration) *MeteredSyncSink {
+	measure_str := os.Getenv("MEASURE_SINK")
+	measure := false
+	if measure_str == "true" || measure_str == "1" {
+		measure = true
+	}
+	return &MeteredSyncSink{
+		sink:          sink,
+		latencies:     make([]int, 0, 128),
+		measure:       measure,
+		isFinalOutput: false,
+		warmup:        warmup,
+		afterWarmup:   false,
+	}
+}
+
+func (s *MeteredSyncSink) MarkFinalOutput() {
+	s.isFinalOutput = true
+}
+
+func (s *MeteredSyncSink) StartWarmup() {
+	if s.measure {
+		s.initial = time.Now()
+	}
+}
+
+func (s *MeteredSyncSink) Flush(ctx context.Context) error {
+	if s.measure {
+		procStart := time.Now()
+		err := s.sink.FlushNoLock(ctx)
+		elapsed := time.Since(procStart)
+		s.latencies = append(s.latencies, int(elapsed.Microseconds()))
+		return err
+	}
+	return s.sink.Flush(ctx)
+}
+
+func (s *MeteredSyncSink) Sink(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
+	debug.Assert(s.warmup == 0 || (s.warmup > 0 && !s.initial.IsZero()), "warmup should initialize initial")
+	if s.measure {
+		if !s.afterWarmup && (s.warmup == 0 || (s.warmup > 0 && time.Since(s.initial) >= s.warmup)) {
+			s.afterWarmup = true
+		}
+		if s.afterWarmup {
+			procStart := time.Now()
+			if s.isFinalOutput {
+				ts := msg.Timestamp
+				if ts == 0 {
+					extractTs, err := msg.Value.(commtypes.StreamTimeExtractor).ExtractStreamTime()
+					if err != nil || extractTs == 0 {
+						return fmt.Errorf("time stampt should not be zero")
+					}
+					ts = extractTs
+				}
+				els := int(procStart.UnixMilli() - ts)
+				s.eventTimeLatencies = append(s.eventTimeLatencies, els)
+			}
+			err := s.sink.Sink(ctx, msg, parNum, isControl)
+			elapsed := time.Since(procStart)
+			s.latencies = append(s.latencies, int(elapsed.Microseconds()))
+			return err
+		}
+	}
+	return s.sink.Sink(ctx, msg, parNum, isControl)
+}
+
+func (s *MeteredSyncSink) GetLatency() []int {
+	return s.latencies
+}
+
+func (s *MeteredSyncSink) TopicName() string {
+	return s.sink.TopicName()
+}
+
+func (s *MeteredSyncSink) KeySerde() commtypes.Serde {
+	return s.sink.KeySerde()
+}
+
+func (s *MeteredSyncSink) GetEventTimeLatency() []int {
+	return s.eventTimeLatencies
+}

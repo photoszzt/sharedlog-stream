@@ -89,7 +89,7 @@ type q8GroupByProcessArgs struct {
 	src              *processor.MeteredSource
 
 	funcName string
-	sinks    []*sharedlog_stream.MeteredSink
+	sinks    []*sharedlog_stream.MeteredSyncSink
 	curEpoch uint64
 	parNum   uint8
 }
@@ -117,8 +117,8 @@ func (a *q8GroupByProcessArgs) ErrChan() chan error {
 func (h *q8GroupByHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_streams []*sharedlog_stream.ShardedSharedLogStream,
-) (*processor.MeteredSource, []*sharedlog_stream.MeteredSink, commtypes.MsgSerde, error) {
-	var sinks []*sharedlog_stream.MeteredSink
+) (*processor.MeteredSource, []*sharedlog_stream.MeteredSyncSink, commtypes.MsgSerde, error) {
+	var sinks []*sharedlog_stream.MeteredSyncSink
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("get msg serde err: %v", err)
@@ -142,7 +142,7 @@ func (h *q8GroupByHandler) getSrcSink(ctx context.Context, sp *common.QueryInput
 	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
 	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig), time.Duration(sp.WarmupS)*time.Second)
 	for _, output_stream := range output_streams {
-		sink := sharedlog_stream.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig), time.Duration(sp.WarmupS)*time.Second)
+		sink := sharedlog_stream.NewMeteredSyncSink(sharedlog_stream.NewShardedSharedLogStreamSyncSink(output_stream, outConfig), time.Duration(sp.WarmupS)*time.Second)
 		sinks = append(sinks, sink)
 	}
 	return src, sinks, msgSerde, nil
@@ -200,29 +200,32 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 			close(aucMsgChan)
 			close(personMsgChan)
 			wg.Wait()
-			sinks[0].CloseAsyncPush()
-			sinks[1].CloseAsyncPush()
+			// sinks[0].CloseAsyncPush()
+			// sinks[1].CloseAsyncPush()
 			if err = sinks[0].Flush(ctx); err != nil {
 				panic(err)
 			}
 			if err = sinks[1].Flush(ctx); err != nil {
 				panic(err)
 			}
+
 			// debug.Fprintf(os.Stderr, "done flush\n")
 		},
 		ResumeFunc: func() {
 			// debug.Fprintf(os.Stderr, "begin resume\n")
-			sinks[0].InnerSink().RebuildMsgChan()
-			sinks[1].InnerSink().RebuildMsgChan()
-			if sp.EnableTransaction {
-				sinks[0].InnerSink().StartAsyncPushNoTick(ctx)
-				sinks[1].InnerSink().StartAsyncPushNoTick(ctx)
-			} else {
-				sinks[0].InnerSink().StartAsyncPushWithTick(ctx)
-				sinks[1].InnerSink().StartAsyncPushWithTick(ctx)
-				sinks[0].InitFlushTimer()
-				sinks[1].InitFlushTimer()
-			}
+			/*
+				sinks[0].InnerSink().RebuildMsgChan()
+				sinks[1].InnerSink().RebuildMsgChan()
+				if sp.EnableTransaction {
+					sinks[0].InnerSink().StartAsyncPushNoTick(ctx)
+					sinks[1].InnerSink().StartAsyncPushNoTick(ctx)
+				} else {
+					sinks[0].InnerSink().StartAsyncPushWithTick(ctx)
+					sinks[1].InnerSink().StartAsyncPushWithTick(ctx)
+					sinks[0].InitFlushTimer()
+					sinks[1].InitFlushTimer()
+				}
+			*/
 			aucMsgChan = make(chan commtypes.Message, 1)
 			personMsgChan = make(chan commtypes.Message, 1)
 			procArgs.aucMsgChan = aucMsgChan
@@ -234,16 +237,17 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 			// debug.Fprintf(os.Stderr, "done resume\n")
 		},
 		InitFunc: func(progArgs interface{}) {
-			if sp.EnableTransaction {
-				sinks[0].InnerSink().StartAsyncPushNoTick(ctx)
-				sinks[1].InnerSink().StartAsyncPushNoTick(ctx)
-			} else {
-				sinks[0].InnerSink().StartAsyncPushWithTick(ctx)
-				sinks[1].InnerSink().StartAsyncPushWithTick(ctx)
-				sinks[0].InitFlushTimer()
-				sinks[1].InitFlushTimer()
-			}
-
+			/*
+				if sp.EnableTransaction {
+					sinks[0].InnerSink().StartAsyncPushNoTick(ctx)
+					sinks[1].InnerSink().StartAsyncPushNoTick(ctx)
+				} else {
+					sinks[0].InnerSink().StartAsyncPushWithTick(ctx)
+					sinks[1].InnerSink().StartAsyncPushWithTick(ctx)
+					sinks[0].InitFlushTimer()
+					sinks[1].InitFlushTimer()
+				}
+			*/
 			sinks[0].StartWarmup()
 			sinks[1].StartWarmup()
 			src.StartWarmup()
