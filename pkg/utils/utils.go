@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"strconv"
@@ -127,4 +128,13 @@ func ConvertToBytes(a interface{}, serde commtypes.Serde) ([]byte, error) {
 
 func FatalMsg(expected interface{}, got interface{}, t testing.TB) {
 	t.Fatalf("expected %v, got %v", expected, got)
+}
+
+func CheckBufPush() bool {
+	bufPush_str := os.Getenv("BUFPUSH")
+	bufPush := false
+	if bufPush_str == "true" || bufPush_str == "1" {
+		bufPush = true
+	}
+	return bufPush
 }

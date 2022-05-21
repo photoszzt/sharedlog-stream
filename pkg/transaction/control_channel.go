@@ -94,13 +94,14 @@ func NewControlChannelManager(env types.Environment,
 }
 
 func (cmm *ControlChannelManager) RestoreMapping(ctx context.Context) error {
-	_, rawMsgs, err := cmm.controlLog.ReadNext(ctx, 0)
-	if err != nil {
-		if errors.IsStreamEmptyError(err) {
-			return nil
+	for {
+		rawMsg, err := cmm.controlLog.ReadNext(ctx, 0)
+		if err != nil {
+			if errors.IsStreamEmptyError(err) {
+				return nil
+			}
+			return err
 		}
-	}
-	for _, rawMsg := range rawMsgs {
 		_, valBytes, err := cmm.msgSerde.Decode(rawMsg.Payload)
 		if err != nil {
 			return err
@@ -138,7 +139,7 @@ func (cmm *ControlChannelManager) appendToControlLog(ctx context.Context, cm *tx
 	if err != nil {
 		return err
 	}
-	_, err = cmm.controlLog.Push(ctx, msg_encoded, 0, false, false)
+	_, err = cmm.controlLog.Push(ctx, msg_encoded, 0, false, false, 0, 0, 0)
 	// debug.Fprintf(os.Stderr, "appendToControlLog: tp %s %v, off %x\n",
 	// 	cmm.controlLog.TopicName(), cm, off)
 	return err
@@ -246,7 +247,7 @@ func (cmm *ControlChannelManager) MonitorControlChannel(
 		default:
 		}
 
-		_, rawMsgs, err := cmm.controlLog.ReadNext(ctx, 0)
+		rawMsg, err := cmm.controlLog.ReadNext(ctx, 0)
 		if err != nil {
 			if errors.IsStreamEmptyError(err) {
 				continue
@@ -254,25 +255,23 @@ func (cmm *ControlChannelManager) MonitorControlChannel(
 			errc <- err
 			break
 		} else {
-			for _, rawMsg := range rawMsgs {
-				_, valBytes, err := cmm.msgSerde.Decode(rawMsg.Payload)
-				if err != nil {
-					errc <- err
-					break
-				}
-				ctrlMetaTmp, err := cmm.controlMetaSerde.Decode(valBytes)
-				if err != nil {
-					errc <- err
-					break
-				}
-				ctrlMeta := ctrlMetaTmp.(txn_data.ControlMetadata)
-				// debug.Fprintf(os.Stderr, "MonitorControlChannel: tp %s got %v, off: %x\n",
-				// 	cmm.controlLog.TopicName(), ctrlMeta, rawMsg.LogSeqNum)
-				if ctrlMeta.Key != nil && ctrlMeta.Topic != "" {
-					cmm.updateKeyMapping(&ctrlMeta)
-				} else {
-					meta <- ctrlMeta
-				}
+			_, valBytes, err := cmm.msgSerde.Decode(rawMsg.Payload)
+			if err != nil {
+				errc <- err
+				break
+			}
+			ctrlMetaTmp, err := cmm.controlMetaSerde.Decode(valBytes)
+			if err != nil {
+				errc <- err
+				break
+			}
+			ctrlMeta := ctrlMetaTmp.(txn_data.ControlMetadata)
+			// debug.Fprintf(os.Stderr, "MonitorControlChannel: tp %s got %v, off: %x\n",
+			// 	cmm.controlLog.TopicName(), ctrlMeta, rawMsg.LogSeqNum)
+			if ctrlMeta.Key != nil && ctrlMeta.Topic != "" {
+				cmm.updateKeyMapping(&ctrlMeta)
+			} else {
+				meta <- ctrlMeta
 			}
 		}
 	}

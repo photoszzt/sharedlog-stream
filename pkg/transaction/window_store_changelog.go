@@ -9,16 +9,16 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 
 	"go.mongodb.org/mongo-driver/x/mongo/driver/session"
 )
 
 type WindowStoreChangelog struct {
 	WinStore         store.WindowStore
-	Changelog        *sharedlog_stream.ShardedSharedLogStream
+	ChangelogManager *store_with_changelog.ChangelogManager
 	keyWindowTsSerde commtypes.Serde
-	keySerde         commtypes.Serde
-	valSerde         commtypes.Serde
+	kvmsgSerdes      commtypes.KVMsgSerdes
 	InputStream      store.Stream
 	RestoreFunc      func(ctx context.Context, args interface{}) error
 	RestoreArg       interface{}
@@ -29,18 +29,16 @@ type WindowStoreChangelog struct {
 
 func NewWindowStoreChangelog(
 	wStore store.WindowStore,
-	changelog *sharedlog_stream.ShardedSharedLogStream,
+	changelogManager *store_with_changelog.ChangelogManager,
 	keyWindowTsSerde commtypes.Serde,
-	keySerde commtypes.Serde,
-	valSerde commtypes.Serde,
+	kvmsgSerdes commtypes.KVMsgSerdes,
 	parNum uint8,
 ) *WindowStoreChangelog {
 	return &WindowStoreChangelog{
 		WinStore:         wStore,
-		Changelog:        changelog,
+		ChangelogManager: changelogManager,
 		keyWindowTsSerde: keyWindowTsSerde,
-		keySerde:         keySerde,
-		valSerde:         valSerde,
+		kvmsgSerdes:      kvmsgSerdes,
 		ParNum:           parNum,
 	}
 }
@@ -101,88 +99,113 @@ func AbortWindowStoreTransaction(ctx context.Context, winstores []*WindowStoreCh
 	return nil
 }
 
-func storeToWindowStore(ctx context.Context, keyBytes []byte, ts int64,
-	valBytes []byte, keySerde commtypes.Serde,
-	valSerde commtypes.Serde, winTab store.WindowStore,
-) error {
-	key, err := keySerde.Decode(keyBytes)
+func decodeKV(keyBytes []byte, valBytes []byte, serdes winstoreSerdes) (commtypes.Message, error) {
+	key, err := serdes.kvmsgSerdes.KeySerde.Decode(keyBytes)
 	if err != nil {
-		return fmt.Errorf("keySerde decode failed: %v", err)
+		return commtypes.EmptyMessage, fmt.Errorf("keySerde decode failed: %v", err)
 	}
-	val, err := valSerde.Decode(valBytes)
+	val, err := serdes.kvmsgSerdes.ValSerde.Decode(valBytes)
 	if err != nil {
-		return fmt.Errorf("valSerde decode failed: %v", err)
+		return commtypes.EmptyMessage, fmt.Errorf("valSerde decode failed: %v", err)
 	}
-	err = winTab.Put(ctx, key, val, ts)
-	return err
+	return commtypes.Message{Key: key, Value: val}, nil
+}
+
+type winstoreSerdes struct {
+	kvmsgSerdes      commtypes.KVMsgSerdes
+	keyWindowTsSerde commtypes.Serde
 }
 
 func RestoreChangelogWindowStateStore(
 	ctx context.Context,
 	wschangelog *WindowStoreChangelog,
-	msgSerde commtypes.MsgSerde,
 	offset uint64,
 ) error {
-	debug.Assert(wschangelog.valSerde != nil, "val serde should not be nil")
-	debug.Assert(wschangelog.keySerde != nil, "key serde should not be nil")
+	debug.Assert(wschangelog.kvmsgSerdes.ValSerde != nil, "val serde should not be nil")
+	debug.Assert(wschangelog.kvmsgSerdes.KeySerde != nil, "key serde should not be nil")
 	currentOffset := uint64(0)
+	serdes := winstoreSerdes{
+		kvmsgSerdes:      wschangelog.kvmsgSerdes,
+		keyWindowTsSerde: wschangelog.keyWindowTsSerde,
+	}
 	for {
-		_, msgs, err := wschangelog.Changelog.ReadNext(ctx, wschangelog.ParNum)
+		msg, err := wschangelog.ChangelogManager.ReadNext(ctx, wschangelog.ParNum)
 		// nothing to restore
 		if errors.IsStreamEmptyError(err) {
 			return nil
 		} else if err != nil {
 			return fmt.Errorf("ReadNext failed: %v", err)
 		}
-		for _, msg := range msgs {
-			currentOffset = msg.LogSeqNum
-			if len(msg.Payload) == 0 {
-				continue
-			}
-			keyWinBytes, valBytes, err := msgSerde.Decode(msg.Payload)
-			if err != nil {
-				return fmt.Errorf("msg serde decode failed: %v", err)
-			}
-			if wschangelog.keyWindowTsSerde != nil {
-				debug.Fprintf(os.Stderr, "offset: %x\n", currentOffset)
-				debug.Fprint(os.Stderr, "RestoreWindowStateStore encoded\n")
-				debug.PrintByteSlice(msg.Payload)
-				debug.Fprint(os.Stderr, "RestoreWindowStateStore kts: \n")
-				debug.PrintByteSlice(keyWinBytes)
-				debug.Fprint(os.Stderr, "RestoreWindowStateStore val: \n")
-				debug.PrintByteSlice(valBytes)
-				keyWinTmp, err := wschangelog.keyWindowTsSerde.Decode(keyWinBytes)
-				if err != nil {
-					return fmt.Errorf("keyWindowTsSerde decode failed: %v", err)
+
+		currentOffset = msg.LogSeqNum
+		if len(msg.Payload) == 0 {
+			continue
+		}
+		msgAndSeqs, err := commtypes.DecodeRawMsg(msg, serdes, sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDE, decodeMsgWinstore)
+		if err != nil {
+			return err
+		}
+		if msgAndSeqs.MsgArr != nil {
+			for _, msg := range msgAndSeqs.MsgArr {
+				if msg.Key == nil && msg.Value == nil {
+					continue
 				}
-				keyWin := keyWinTmp.(commtypes.KeyAndWindowStartTs)
-				err = storeToWindowStore(ctx, keyWin.Key, keyWin.WindowStartTs,
-					valBytes, wschangelog.keySerde, wschangelog.valSerde, wschangelog.WinStore)
-				if err != nil {
-					return err
-				}
-			} else {
-				key, err := wschangelog.keySerde.Decode(keyWinBytes)
-				if err != nil {
-					return fmt.Errorf("key serde2 failed: %v", err)
-				}
-				valTmp, err := wschangelog.valSerde.Decode(valBytes)
-				if err != nil {
-					return fmt.Errorf("val serde decode failed: %v", err)
-				}
-				val := valTmp.(commtypes.StreamTimeExtractor)
-				ts, err := val.ExtractStreamTime()
-				if err != nil {
-					return fmt.Errorf("extract stream time failed: %v", err)
-				}
-				err = wschangelog.WinStore.Put(ctx, key, val, ts)
+				err = wschangelog.WinStore.Put(ctx, msg.Key, msg.Value, msg.Timestamp)
 				if err != nil {
 					return fmt.Errorf("window store put failed: %v", err)
 				}
+			}
+		} else {
+			msg := msgAndSeqs.Msg
+			if msg.Key == nil && msg.Value == nil {
+				continue
+			}
+			err = wschangelog.WinStore.Put(ctx, msg.Key, msg.Value, msg.Timestamp)
+			if err != nil {
+				return fmt.Errorf("window store put failed: %v", err)
 			}
 		}
 		if currentOffset == offset {
 			return nil
 		}
+	}
+}
+
+func decodeMsgWinstore(payload []byte, serdesTmp interface{}) (commtypes.Message, error) {
+	serdes := serdesTmp.(winstoreSerdes)
+	keyWinBytes, valBytes, err := serdes.kvmsgSerdes.MsgSerde.Decode(payload)
+	if err != nil {
+		return commtypes.EmptyMessage, fmt.Errorf("msg serde decode failed: %v", err)
+	}
+	if serdes.keyWindowTsSerde != nil {
+		debug.Fprint(os.Stderr, "RestoreWindowStateStore encoded\n")
+		debug.PrintByteSlice(payload)
+		debug.Fprint(os.Stderr, "RestoreWindowStateStore kts: \n")
+		debug.PrintByteSlice(keyWinBytes)
+		debug.Fprint(os.Stderr, "RestoreWindowStateStore val: \n")
+		debug.PrintByteSlice(valBytes)
+		keyWinTmp, err := serdes.keyWindowTsSerde.Decode(keyWinBytes)
+		if err != nil {
+			return commtypes.EmptyMessage, fmt.Errorf("keyWindowTsSerde decode failed: %v", err)
+		}
+		keyWin := keyWinTmp.(commtypes.KeyAndWindowStartTs)
+		msg, err := decodeKV(keyWin.Key, valBytes, serdes)
+		if err != nil {
+			return commtypes.EmptyMessage, err
+		}
+		msg.Timestamp = keyWin.WindowStartTs
+		return msg, nil
+	} else {
+		msg, err := decodeKV(keyWinBytes, valBytes, serdes)
+		if err != nil {
+			return commtypes.EmptyMessage, err
+		}
+		val := msg.Value.(commtypes.StreamTimeExtractor)
+		ts, err := val.ExtractStreamTime()
+		if err != nil {
+			return commtypes.EmptyMessage, fmt.Errorf("extract stream time failed: %v", err)
+		}
+		msg.Timestamp = ts
+		return msg, nil
 	}
 }

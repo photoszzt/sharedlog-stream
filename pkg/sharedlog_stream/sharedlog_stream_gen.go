@@ -48,6 +48,12 @@ func (z *StreamLogEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "MsgSeqNum")
 				return
 			}
+		case "trid":
+			z.TransactionID, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "TransactionID")
+				return
+			}
 		case "te":
 			z.TaskEpoch, err = dc.ReadUint16()
 			if err != nil {
@@ -74,8 +80,8 @@ func (z *StreamLogEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
-	zb0001Len := uint32(6)
-	var zb0001Mask uint8 /* 6 bits */
+	zb0001Len := uint32(7)
+	var zb0001Mask uint8 /* 7 bits */
 	if z.Payload == nil {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -88,13 +94,17 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if z.TaskEpoch == 0 {
+	if z.TransactionID == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
-	if z.Meta == 0 {
+	if z.TaskEpoch == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x20
+	}
+	if z.Meta == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x40
 	}
 	// variable map header, size zb0001Len
 	err = en.Append(0x80 | uint8(zb0001Len))
@@ -151,6 +161,18 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 		}
 	}
 	if (zb0001Mask & 0x10) == 0 { // if not empty
+		// write "trid"
+		err = en.Append(0xa4, 0x74, 0x72, 0x69, 0x64)
+		if err != nil {
+			return
+		}
+		err = en.WriteUint64(z.TransactionID)
+		if err != nil {
+			err = msgp.WrapError(err, "TransactionID")
+			return
+		}
+	}
+	if (zb0001Mask & 0x20) == 0 { // if not empty
 		// write "te"
 		err = en.Append(0xa2, 0x74, 0x65)
 		if err != nil {
@@ -162,7 +184,7 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
-	if (zb0001Mask & 0x20) == 0 { // if not empty
+	if (zb0001Mask & 0x40) == 0 { // if not empty
 		// write "meta"
 		err = en.Append(0xa4, 0x6d, 0x65, 0x74, 0x61)
 		if err != nil {
@@ -181,8 +203,8 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *StreamLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(6)
-	var zb0001Mask uint8 /* 6 bits */
+	zb0001Len := uint32(7)
+	var zb0001Mask uint8 /* 7 bits */
 	if z.Payload == nil {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -195,13 +217,17 @@ func (z *StreamLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if z.TaskEpoch == 0 {
+	if z.TransactionID == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
-	if z.Meta == 0 {
+	if z.TaskEpoch == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x20
+	}
+	if z.Meta == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x40
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -227,11 +253,16 @@ func (z *StreamLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 		o = msgp.AppendUint64(o, z.MsgSeqNum)
 	}
 	if (zb0001Mask & 0x10) == 0 { // if not empty
+		// string "trid"
+		o = append(o, 0xa4, 0x74, 0x72, 0x69, 0x64)
+		o = msgp.AppendUint64(o, z.TransactionID)
+	}
+	if (zb0001Mask & 0x20) == 0 { // if not empty
 		// string "te"
 		o = append(o, 0xa2, 0x74, 0x65)
 		o = msgp.AppendUint16(o, z.TaskEpoch)
 	}
-	if (zb0001Mask & 0x20) == 0 { // if not empty
+	if (zb0001Mask & 0x40) == 0 { // if not empty
 		// string "meta"
 		o = append(o, 0xa4, 0x6d, 0x65, 0x74, 0x61)
 		o = msgp.AppendUint8(o, z.Meta)
@@ -281,6 +312,12 @@ func (z *StreamLogEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "MsgSeqNum")
 				return
 			}
+		case "trid":
+			z.TransactionID, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "TransactionID")
+				return
+			}
 		case "te":
 			z.TaskEpoch, bts, err = msgp.ReadUint16Bytes(bts)
 			if err != nil {
@@ -307,6 +344,6 @@ func (z *StreamLogEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *StreamLogEntry) Msgsize() (s int) {
-	s = 1 + 10 + msgp.StringPrefixSize + len(z.TopicName) + 8 + msgp.BytesPrefixSize + len(z.Payload) + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size + 3 + msgp.Uint16Size + 5 + msgp.Uint8Size
+	s = 1 + 10 + msgp.StringPrefixSize + len(z.TopicName) + 8 + msgp.BytesPrefixSize + len(z.Payload) + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 3 + msgp.Uint16Size + 5 + msgp.Uint8Size
 	return
 }

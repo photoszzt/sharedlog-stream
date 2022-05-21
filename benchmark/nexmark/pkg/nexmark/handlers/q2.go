@@ -10,9 +10,11 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 
@@ -51,20 +53,20 @@ func filterFunc(msg *commtypes.Message) (bool, error) {
 }
 
 type query2ProcessArgs struct {
-	src              *processor.MeteredSource
-	sink             *sharedlog_stream.MeteredSink
+	src              *source_sink.MeteredSource
+	sink             *source_sink.MeteredSink
 	q2Filter         *processor.MeteredProcessor
 	output_stream    *sharedlog_stream.ShardedSharedLogStream
-	trackParFunc     transaction.TrackKeySubStreamFunc
+	trackParFunc     tran_interface.TrackKeySubStreamFunc
 	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
 	funcName         string
 	curEpoch         uint64
 	parNum           uint8
 }
 
-func (a *query2ProcessArgs) Source() processor.Source { return a.src }
+func (a *query2ProcessArgs) Source() source_sink.Source { return a.src }
 func (a *query2ProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
-	return a.sink.Sink(ctx, msg, parNum, isControl)
+	return a.sink.Produce(ctx, msg, parNum, isControl)
 }
 func (a *query2ProcessArgs) ParNum() uint8    { return a.parNum }
 func (a *query2ProcessArgs) CurEpoch() uint64 { return a.curEpoch }
@@ -77,20 +79,21 @@ func (a *query2ProcessArgs) ErrChan() chan error {
 }
 
 func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("get input output stream failed: %v", err),
 		}
 	}
-	src, sink, msgSerde, err := getSrcSink(ctx, sp, input_stream, output_streams[0])
+	src, sink, err := getSrcSink(ctx, sp, input_stream, output_streams[0])
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
 	}
+	src.SetInitialSource(true)
 	sink.MarkFinalOutput()
 	q2Filter := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(filterFunc)), time.Duration(sp.WarmupS)*time.Second)
 	procArgs := &query2ProcessArgs{
@@ -99,7 +102,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		q2Filter:         q2Filter,
 		output_stream:    output_streams[0],
 		parNum:           sp.ParNum,
-		trackParFunc:     transaction.DefaultTrackSubstreamFunc,
+		trackParFunc:     tran_interface.DefaultTrackSubstreamFunc,
 		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
 		funcName:         h.funcName,
 		curEpoch:         sp.ScaleEpoch,
@@ -137,22 +140,22 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		},
 		CloseFunc: nil,
 	}
-	srcs := map[string]processor.Source{sp.InputTopicNames[0]: src}
+	srcs := []source_sink.Source{src}
 	if sp.EnableTransaction {
+		sinks := []source_sink.Sink{sink}
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:              procArgs,
 			Env:                   h.env,
-			MsgSerde:              msgSerde,
 			Srcs:                  srcs,
-			OutputStreams:         output_streams,
-			QueryInput:            sp,
+			Sinks:                 sinks,
 			TransactionalId:       fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0]),
 			KVChangelogs:          nil,
 			WindowStoreChangelogs: nil,
 			FixedOutParNum:        sp.ParNum,
 		}
+		UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc,
+			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
 				recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*query2ProcessArgs).trackParFunc = trackParFunc
 				procArgs.(*query2ProcessArgs).recordFinishFunc = recordFinishFunc
@@ -201,7 +204,7 @@ func (h *query2Handler) process(ctx context.Context, t *transaction.StreamTask, 
 					return err
 				}
 				if outMsg != nil {
-					err = args.sink.Sink(ctx, outMsg[0], args.parNum, false)
+					err = args.sink.Produce(ctx, outMsg[0], args.parNum, false)
 					if err != nil {
 						return err
 					}
@@ -213,7 +216,7 @@ func (h *query2Handler) process(ctx context.Context, t *transaction.StreamTask, 
 				return err
 			}
 			if outMsg != nil {
-				err = args.sink.Sink(ctx, outMsg[0], args.parNum, false)
+				err = args.sink.Produce(ctx, outMsg[0], args.parNum, false)
 				if err != nil {
 					return err
 				}

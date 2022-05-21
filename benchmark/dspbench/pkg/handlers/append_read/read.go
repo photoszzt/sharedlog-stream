@@ -92,21 +92,19 @@ func (h *ReadHandler) process(ctx context.Context) *common.FnOutput {
 	*/
 	// read forward
 	for i := 0; i < 10; i++ {
-		_, rawMsgs, err := s1.ReadNext(ctx, 0)
+		rawMsg, err := s1.ReadNext(ctx, 0)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
 			}
 		}
-		for _, rawMsg := range rawMsgs {
-			expected_str := fmt.Sprintf("test %d\n", i)
-			fmt.Fprintf(os.Stderr, "read msg is %s", string(rawMsg.Payload))
-			if !bytes.Equal(rawMsg.Payload, []byte(expected_str)) {
-				return &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("expected str is \"%s\", got \"%s\"", expected_str, rawMsg.Payload),
-				}
+		expected_str := fmt.Sprintf("test %d\n", i)
+		fmt.Fprintf(os.Stderr, "read msg is %s", string(rawMsg.Payload))
+		if !bytes.Equal(rawMsg.Payload, []byte(expected_str)) {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("expected str is \"%s\", got \"%s\"", expected_str, rawMsg.Payload),
 			}
 		}
 	}

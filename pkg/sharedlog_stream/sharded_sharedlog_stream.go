@@ -71,38 +71,33 @@ func (s *ShardedSharedLogStream) NumPartition() uint8 {
 	return s.numPartitions
 }
 
-func (s *ShardedSharedLogStream) SetInTransaction(inTransaction bool) {
-	for i := uint8(0); i < s.numPartitions; i++ {
-		s.subSharedLogStreams[i].Stream.SetInTransaction(inTransaction)
-	}
-}
-
 func (s *ShardedSharedLogStream) Push(ctx context.Context, payload []byte, parNumber uint8,
-	isControl bool, payloadIsArr bool,
+	isControl bool, payloadIsArr bool, taskId uint64, taskEpoch uint16, transactionID uint64,
 ) (uint64, error) {
-	return s.subSharedLogStreams[parNumber].Stream.Push(ctx, payload, parNumber, isControl, payloadIsArr)
+	return s.subSharedLogStreams[parNumber].Stream.Push(ctx, payload, parNumber, isControl, payloadIsArr,
+		taskId, taskEpoch, transactionID)
 }
 
-func (s *ShardedSharedLogStream) BufPush(ctx context.Context, payload []byte, parNum uint8) error {
-	return s.subSharedLogStreams[parNum].BufPushGoroutineSafe(ctx, payload)
+func (s *ShardedSharedLogStream) BufPush(ctx context.Context, payload []byte, parNum uint8, taskId uint64, taskEpoch uint16, transactionID uint64) error {
+	return s.subSharedLogStreams[parNum].BufPushGoroutineSafe(ctx, payload, taskId, taskEpoch, transactionID)
 }
 
-func (s *ShardedSharedLogStream) Flush(ctx context.Context) error {
+func (s *ShardedSharedLogStream) Flush(ctx context.Context, taskId uint64, taskEpoch uint16, transactionID uint64) error {
 	for i := uint8(0); i < s.numPartitions; i++ {
-		if err := s.subSharedLogStreams[i].FlushGoroutineSafe(ctx); err != nil {
+		if err := s.subSharedLogStreams[i].FlushGoroutineSafe(ctx, taskId, taskEpoch, transactionID); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *ShardedSharedLogStream) BufPushNoLock(ctx context.Context, payload []byte, parNum uint8) error {
-	return s.subSharedLogStreams[parNum].BufPushNoLock(ctx, payload)
+func (s *ShardedSharedLogStream) BufPushNoLock(ctx context.Context, payload []byte, parNum uint8, taskId uint64, taskEpoch uint16, transactionID uint64) error {
+	return s.subSharedLogStreams[parNum].BufPushNoLock(ctx, payload, taskId, taskEpoch, transactionID)
 }
 
-func (s *ShardedSharedLogStream) FlushNoLock(ctx context.Context) error {
+func (s *ShardedSharedLogStream) FlushNoLock(ctx context.Context, taskId uint64, taskEpoch uint16, transactionID uint64) error {
 	for i := uint8(0); i < s.numPartitions; i++ {
-		if err := s.subSharedLogStreams[i].FlushNoLock(ctx); err != nil {
+		if err := s.subSharedLogStreams[i].FlushNoLock(ctx, taskId, taskEpoch, transactionID); err != nil {
 			return err
 		}
 	}
@@ -110,40 +105,41 @@ func (s *ShardedSharedLogStream) FlushNoLock(ctx context.Context) error {
 }
 
 func (s *ShardedSharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNumber uint8, tags []uint64,
-	isControl bool, payloadIsArr bool,
+	isControl bool, payloadIsArr bool, taskId uint64, taskEpoch uint16, transactionID uint64,
 ) (uint64, error) {
-	return s.subSharedLogStreams[parNumber].Stream.PushWithTag(ctx, payload, parNumber, tags, isControl, payloadIsArr)
+	return s.subSharedLogStreams[parNumber].Stream.PushWithTag(ctx, payload, parNumber, tags, isControl,
+		payloadIsArr, taskId, taskEpoch, transactionID)
 }
 
-func (s *ShardedSharedLogStream) ReadNext(ctx context.Context, parNumber uint8) (commtypes.TaskIDGen, []commtypes.RawMsg, error) {
+func (s *ShardedSharedLogStream) ReadNext(ctx context.Context, parNumber uint8) (*commtypes.RawMsg, error) {
 	if parNumber < s.numPartitions {
 		par := parNumber
 		shard := s.subSharedLogStreams[par]
 		return shard.Stream.ReadNext(ctx, parNumber)
 	} else {
-		return commtypes.EmptyAppIDGen, nil, xerrors.Errorf("Invalid partition number: %d", parNumber)
+		return nil, xerrors.Errorf("Invalid partition number: %d", parNumber)
 	}
 }
 
 func (s *ShardedSharedLogStream) ReadNextWithTag(
 	ctx context.Context, parNumber uint8, tag uint64,
-) (commtypes.TaskIDGen, []commtypes.RawMsg, error) {
+) (*commtypes.RawMsg, error) {
 	if parNumber < s.numPartitions {
 		par := parNumber
 		shard := s.subSharedLogStreams[par]
 		return shard.Stream.ReadNextWithTag(ctx, parNumber, tag)
 	} else {
-		return commtypes.EmptyAppIDGen, nil, xerrors.Errorf("Invalid partition number: %d", parNumber)
+		return nil, xerrors.Errorf("Invalid partition number: %d", parNumber)
 	}
 }
 
-func (s *ShardedSharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum uint64, parNum uint8, tag uint64) (*commtypes.TaskIDGen, *commtypes.RawMsg, error) {
+func (s *ShardedSharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum uint64, parNum uint8, tag uint64) (*commtypes.RawMsg, error) {
 	if parNum < s.numPartitions {
 		par := parNum
 		shard := s.subSharedLogStreams[par]
 		return shard.Stream.ReadBackwardWithTag(ctx, tailSeqNum, parNum, tag)
 	} else {
-		return nil, nil, xerrors.Errorf("Invalid partition number: %d", parNum)
+		return nil, xerrors.Errorf("Invalid partition number: %d", parNum)
 	}
 }
 
@@ -157,16 +153,4 @@ func (s *ShardedSharedLogStream) TopicNameHash() uint64 {
 
 func (s *ShardedSharedLogStream) SetCursor(cursor uint64, parNum uint8) {
 	s.subSharedLogStreams[parNum].Stream.cursor = cursor
-}
-
-func (s *ShardedSharedLogStream) SetTaskEpoch(epoch uint16) {
-	for i := uint8(0); i < s.numPartitions; i++ {
-		s.subSharedLogStreams[i].Stream.SetTaskEpoch(epoch)
-	}
-}
-
-func (s *ShardedSharedLogStream) SetTaskId(id uint64) {
-	for i := uint8(0); i < s.numPartitions; i++ {
-		s.subSharedLogStreams[i].Stream.SetTaskId(id)
-	}
 }

@@ -13,11 +13,13 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 
@@ -57,7 +59,7 @@ func (h *query7Handler) getSrcSink(
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
 	msgSerde commtypes.MsgSerde,
-) (*processor.MeteredSource, *sharedlog_stream.ConcurrentMeteredSink, error) {
+) (*source_sink.MeteredSource, *source_sink.ConcurrentMeteredSink, error) {
 	eventSerde, err := getEventSerde(input.SerdeFormat)
 	if err != nil {
 		return nil, nil, err
@@ -70,43 +72,48 @@ func (h *query7Handler) getSrcSink(
 	} else {
 		return nil, nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", input.SerdeFormat)
 	}
-	inConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      common.SrcConsumeTimeout,
-		KeyDecoder:   commtypes.Uint64Serde{},
-		ValueDecoder: eventSerde,
-		MsgDecoder:   msgSerde,
+	kvmsgSerdes := commtypes.KVMsgSerdes{
+		KeySerde: commtypes.Uint64Serde{},
+		ValSerde: eventSerde,
+		MsgSerde: msgSerde,
 	}
-	outConfig := &sharedlog_stream.StreamSinkConfig{
-		MsgSerde:      msgSerde,
-		KeySerde:      commtypes.Uint64Serde{},
-		ValueSerde:    bmSerde,
+	inConfig := &source_sink.StreamSourceConfig{
+		Timeout:     common.SrcConsumeTimeout,
+		KVMsgSerdes: kvmsgSerdes,
+	}
+	outConfig := &source_sink.StreamSinkConfig{
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			MsgSerde: msgSerde,
+			KeySerde: commtypes.Uint64Serde{},
+			ValSerde: bmSerde,
+		},
 		FlushDuration: time.Duration(input.FlushMs) * time.Millisecond,
 	}
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig),
+	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
 		time.Duration(input.WarmupS)*time.Second)
-	sink := sharedlog_stream.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig),
+	sink := source_sink.NewConcurrentMeteredSink(source_sink.NewShardedSharedLogStreamSink(output_stream, outConfig),
 		time.Duration(input.WarmupS)*time.Second)
 
 	return src, sink, nil
 }
 
 type processQ7ProcessArgs struct {
-	src                *processor.MeteredSource
-	sink               *sharedlog_stream.ConcurrentMeteredSink
+	src                *source_sink.MeteredSource
+	sink               *source_sink.ConcurrentMeteredSink
 	output_stream      *sharedlog_stream.ShardedSharedLogStream
 	maxPriceBid        *processor.MeteredProcessor
 	transformWithStore *processor.MeteredProcessor
 	filterTime         *processor.MeteredProcessor
-	trackParFunc       transaction.TrackKeySubStreamFunc
+	trackParFunc       tran_interface.TrackKeySubStreamFunc
 	recordFinishFunc   transaction.RecordPrevInstanceFinishFunc
 	funcName           string
 	curEpoch           uint64
 	parNum             uint8
 }
 
-func (a *processQ7ProcessArgs) Source() processor.Source { return a.src }
+func (a *processQ7ProcessArgs) Source() source_sink.Source { return a.src }
 func (a *processQ7ProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
-	return a.sink.Sink(ctx, msg, parNum, isControl)
+	return a.sink.Produce(ctx, msg, parNum, isControl)
 }
 func (a *processQ7ProcessArgs) ParNum() uint8    { return a.parNum }
 func (a *processQ7ProcessArgs) CurEpoch() uint64 { return a.curEpoch }
@@ -119,7 +126,7 @@ func (a *processQ7ProcessArgs) ErrChan() chan error {
 }
 
 type processQ7RestoreArgs struct {
-	src                processor.Source
+	src                source_sink.Source
 	maxPriceBid        processor.Processor
 	transformWithStore processor.Processor
 	filterTime         processor.Processor
@@ -171,7 +178,7 @@ func (h *query7Handler) procMsg(ctx context.Context, msg commtypes.Message, args
 			return err
 		}
 		for _, fmsg := range filtered {
-			err = args.sink.Sink(ctx, fmsg, args.parNum, false)
+			err = args.sink.Produce(ctx, fmsg, args.parNum, false)
 			if err != nil {
 				return err
 			}
@@ -242,7 +249,7 @@ func (h *query7Handler) procMsgWithoutSink(ctx context.Context, msg commtypes.Me
 }
 
 func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput) *common.FnOutput {
-	inputStream, outputStreams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, input, true)
+	inputStream, outputStreams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, input)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -277,6 +284,8 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
+	src.SetInitialSource(false)
+	sink.MarkFinalOutput()
 
 	tw, err := processor.NewTimeWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
 	if err != nil {
@@ -286,12 +295,15 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 	var wstore store.WindowStore
 	if input.TableType == uint8(store.IN_MEM) {
 		mp := &store_with_changelog.MaterializeParam{
-			KeySerde:   commtypes.Uint64Serde{},
-			ValueSerde: vtSerde,
-			StoreName:  maxPriceBidStoreName,
-			ParNum:     input.ParNum,
-			Changelog:  outputStreams[0],
-			MsgSerde:   msgSerde,
+			KVMsgSerdes: commtypes.KVMsgSerdes{
+				KeySerde: commtypes.Uint64Serde{},
+				ValSerde: vtSerde,
+				MsgSerde: msgSerde,
+			},
+			StoreName:        maxPriceBidStoreName,
+			ParNum:           input.ParNum,
+			ChangelogManager: store_with_changelog.NewChangelogManager(outputStreams[0], commtypes.SerdeFormat(input.SerdeFormat)),
+
 			Comparable: concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
 				l := lhs.(uint64)
 				r := rhs.(uint64)
@@ -364,7 +376,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		maxPriceBid:        maxPriceBid,
 		transformWithStore: transformWithStore,
 		filterTime:         filterTime,
-		trackParFunc:       transaction.DefaultTrackSubstreamFunc,
+		trackParFunc:       tran_interface.DefaultTrackSubstreamFunc,
 		recordFinishFunc:   transaction.DefaultRecordPrevInstanceFinishFunc,
 		curEpoch:           input.ScaleEpoch,
 		funcName:           h.funcName,
@@ -375,17 +387,17 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		CommitEveryForAtLeastOnce: common.CommitDuration,
 	}
 
-	srcs := map[string]processor.Source{input.InputTopicNames[0]: src}
+	srcs := []source_sink.Source{src}
 	if input.EnableTransaction {
+		sinks_arr := []source_sink.Sink{sink}
 		var wsc []*transaction.WindowStoreChangelog
 		if input.TableType == uint8(store.IN_MEM) {
 			wstore_mem := wstore.(*store_with_changelog.InMemoryWindowStoreWithChangelog)
 			wsc = []*transaction.WindowStoreChangelog{
 				transaction.NewWindowStoreChangelog(wstore,
-					wstore_mem.MaterializeParam().Changelog,
+					wstore_mem.MaterializeParam().ChangelogManager,
 					wstore_mem.KeyWindowTsSerde(),
-					wstore_mem.MaterializeParam().KeySerde,
-					wstore_mem.MaterializeParam().ValueSerde,
+					wstore_mem.MaterializeParam().KVMsgSerdes,
 					wstore_mem.MaterializeParam().ParNum),
 			}
 		} else if input.TableType == uint8(store.MONGODB) {
@@ -403,19 +415,18 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 			panic("unrecognized table type")
 		}
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
-			ProcArgs:      procArgs,
-			Env:           h.env,
-			Srcs:          srcs,
-			OutputStreams: outputStreams,
-			QueryInput:    input,
+			ProcArgs: procArgs,
+			Env:      h.env,
+			Srcs:     srcs,
+			Sinks:    sinks_arr,
 			TransactionalId: fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 				input.InputTopicNames[0], input.ParNum, input.OutputTopicNames[0]),
 			FixedOutParNum:        input.ParNum,
-			MsgSerde:              msgSerde,
 			WindowStoreChangelogs: wsc,
 		}
+		UpdateStreamTaskArgsTransaction(input, &streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
+			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*processQ7ProcessArgs).trackParFunc = trackParFunc
 				procArgs.(*processQ7ProcessArgs).recordFinishFunc = recordFinishFunc
 			}, &task)

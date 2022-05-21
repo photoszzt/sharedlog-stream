@@ -10,7 +10,7 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
 
@@ -49,7 +49,7 @@ func (h *windowAvgGroupBy) Call(ctx context.Context, input []byte) ([]byte, erro
 func (h *windowAvgGroupBy) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*processor.MeteredSource, *sharedlog_stream.ConcurrentMeteredSink, error) {
+) (*source_sink.MeteredSource, *source_sink.ConcurrentMeteredSink, error) {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return nil, nil, err
@@ -58,28 +58,36 @@ func (h *windowAvgGroupBy) getSrcSink(ctx context.Context, sp *common.QueryInput
 	if err != nil {
 		return nil, nil, err
 	}
-	inConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      common.SrcConsumeTimeout,
-		MsgDecoder:   msgSerde,
-		KeyDecoder:   commtypes.StringDecoder{},
-		ValueDecoder: eventSerde,
+	kvmsgSerdes := commtypes.KVMsgSerdes{
+		KeySerde: commtypes.StringSerde{},
+		ValSerde: eventSerde,
+		MsgSerde: msgSerde,
+	}
+	inConfig := &source_sink.StreamSourceConfig{
+		Timeout:     common.SrcConsumeTimeout,
+		KVMsgSerdes: kvmsgSerdes,
 	}
 
-	outConfig := &sharedlog_stream.StreamSinkConfig{
-		MsgSerde:      msgSerde,
-		KeySerde:      commtypes.Uint64Serde{},
-		ValueSerde:    eventSerde,
+	outConfig := &source_sink.StreamSinkConfig{
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			MsgSerde: msgSerde,
+			KeySerde: commtypes.Uint64Serde{},
+			ValSerde: eventSerde,
+		},
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig),
+	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
 		time.Duration(sp.WarmupS)*time.Second)
-	sink := sharedlog_stream.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig),
+	src.SetInitialSource(true)
+	sink := source_sink.NewConcurrentMeteredSink(source_sink.NewShardedSharedLogStreamSink(output_stream, outConfig),
 		time.Duration(sp.WarmupS)*time.Second)
 	return src, sink, nil
 }
 
-func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput, src *processor.MeteredSource, sink *sharedlog_stream.ConcurrentMeteredSink) *common.FnOutput {
+func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput,
+	src *source_sink.MeteredSource, sink *source_sink.ConcurrentMeteredSink,
+) *common.FnOutput {
 	duration := time.Duration(sp.Duration) * time.Second
 	latencies := make([]int, 0, 128)
 	startTime := time.Now()
@@ -117,7 +125,7 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput, s
 					if val.Etype == ntypes.BID {
 						par := uint8(val.Bid.Auction % uint64(sp.NumOutPartitions[0]))
 						newMsg := commtypes.Message{Key: val.Bid.Auction, Value: msg.Msg.Value}
-						err = sink.Sink(ctx, newMsg, par, false)
+						err = sink.Produce(ctx, newMsg, par, false)
 						if err != nil {
 							return &common.FnOutput{
 								Success: false,
@@ -134,7 +142,7 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput, s
 				if val.Etype == ntypes.BID {
 					par := uint8(val.Bid.Auction % uint64(sp.NumOutPartitions[0]))
 					newMsg := commtypes.Message{Key: val.Bid.Auction, Value: msg.Msg.Value}
-					err = sink.Sink(ctx, newMsg, par, false)
+					err = sink.Produce(ctx, newMsg, par, false)
 					if err != nil {
 						return &common.FnOutput{
 							Success: false,
@@ -159,7 +167,7 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput, s
 }
 
 func (h *windowAvgGroupBy) windowavg_groupby(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

@@ -101,12 +101,6 @@ func (z *TxnMetadata) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "TaskId")
 				return
 			}
-		case "tranId":
-			z.TransactionID, err = dc.ReadUint64()
-			if err != nil {
-				err = msgp.WrapError(err, "TransactionID")
-				return
-			}
 		case "te":
 			z.TaskEpoch, err = dc.ReadUint16()
 			if err != nil {
@@ -137,8 +131,8 @@ func (z *TxnMetadata) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *TxnMetadata) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
-	zb0001Len := uint32(5)
-	var zb0001Mask uint8 /* 5 bits */
+	zb0001Len := uint32(4)
+	var zb0001Mask uint8 /* 4 bits */
 	if z.TopicPartitions == nil {
 		zb0001Len--
 		zb0001Mask |= 0x1
@@ -147,17 +141,13 @@ func (z *TxnMetadata) EncodeMsg(en *msgp.Writer) (err error) {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if z.TransactionID == 0 {
+	if z.TaskEpoch == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if z.TaskEpoch == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x8
-	}
 	if z.State == 0 {
 		zb0001Len--
-		zb0001Mask |= 0x10
+		zb0001Mask |= 0x8
 	}
 	// variable map header, size zb0001Len
 	err = en.Append(0x80 | uint8(zb0001Len))
@@ -199,18 +189,6 @@ func (z *TxnMetadata) EncodeMsg(en *msgp.Writer) (err error) {
 		}
 	}
 	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// write "tranId"
-		err = en.Append(0xa6, 0x74, 0x72, 0x61, 0x6e, 0x49, 0x64)
-		if err != nil {
-			return
-		}
-		err = en.WriteUint64(z.TransactionID)
-		if err != nil {
-			err = msgp.WrapError(err, "TransactionID")
-			return
-		}
-	}
-	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// write "te"
 		err = en.Append(0xa2, 0x74, 0x65)
 		if err != nil {
@@ -222,7 +200,7 @@ func (z *TxnMetadata) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
-	if (zb0001Mask & 0x10) == 0 { // if not empty
+	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// write "st"
 		err = en.Append(0xa2, 0x73, 0x74)
 		if err != nil {
@@ -241,8 +219,8 @@ func (z *TxnMetadata) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *TxnMetadata) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(5)
-	var zb0001Mask uint8 /* 5 bits */
+	zb0001Len := uint32(4)
+	var zb0001Mask uint8 /* 4 bits */
 	if z.TopicPartitions == nil {
 		zb0001Len--
 		zb0001Mask |= 0x1
@@ -251,17 +229,13 @@ func (z *TxnMetadata) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if z.TransactionID == 0 {
+	if z.TaskEpoch == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if z.TaskEpoch == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x8
-	}
 	if z.State == 0 {
 		zb0001Len--
-		zb0001Mask |= 0x10
+		zb0001Mask |= 0x8
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -286,16 +260,11 @@ func (z *TxnMetadata) MarshalMsg(b []byte) (o []byte, err error) {
 		o = msgp.AppendUint64(o, z.TaskId)
 	}
 	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// string "tranId"
-		o = append(o, 0xa6, 0x74, 0x72, 0x61, 0x6e, 0x49, 0x64)
-		o = msgp.AppendUint64(o, z.TransactionID)
-	}
-	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// string "te"
 		o = append(o, 0xa2, 0x74, 0x65)
 		o = msgp.AppendUint16(o, z.TaskEpoch)
 	}
-	if (zb0001Mask & 0x10) == 0 { // if not empty
+	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// string "st"
 		o = append(o, 0xa2, 0x73, 0x74)
 		o = msgp.AppendUint8(o, uint8(z.State))
@@ -346,12 +315,6 @@ func (z *TxnMetadata) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "TaskId")
 				return
 			}
-		case "tranId":
-			z.TransactionID, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "TransactionID")
-				return
-			}
 		case "te":
 			z.TaskEpoch, bts, err = msgp.ReadUint16Bytes(bts)
 			if err != nil {
@@ -386,6 +349,6 @@ func (z *TxnMetadata) Msgsize() (s int) {
 	for za0001 := range z.TopicPartitions {
 		s += z.TopicPartitions[za0001].Msgsize()
 	}
-	s += 4 + msgp.Uint64Size + 7 + msgp.Uint64Size + 3 + msgp.Uint16Size + 3 + msgp.Uint8Size
+	s += 4 + msgp.Uint64Size + 3 + msgp.Uint16Size + 3 + msgp.Uint8Size
 	return
 }

@@ -85,7 +85,7 @@ func (p *asyncPump) run() {
 		p.Unlock()
 	}
 }
-*/
+
 
 type SourcePump interface {
 	Stop()
@@ -160,3 +160,4 @@ func (p *sourcePump) Close() error {
 	close(p.quit)
 	return nil
 }
+*/

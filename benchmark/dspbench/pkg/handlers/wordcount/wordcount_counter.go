@@ -11,11 +11,13 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sharedlog-stream/pkg/treemap"
 	"strings"
 	"time"
@@ -63,12 +65,14 @@ func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes
 		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat)
 	}
 	mp := &store_with_changelog.MaterializeParam{
-		KeySerde:   commtypes.StringSerde{},
-		ValueSerde: vtSerde,
-		MsgSerde:   msgSerde,
-		StoreName:  sp.OutputTopicNames[0],
-		Changelog:  output_stream,
-		ParNum:     sp.ParNum,
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			KeySerde: commtypes.StringSerde{},
+			ValSerde: vtSerde,
+			MsgSerde: msgSerde,
+		},
+		StoreName:        sp.OutputTopicNames[0],
+		ChangelogManager: store_with_changelog.NewChangelogManager(output_stream, commtypes.SerdeFormat(sp.SerdeFormat)),
+		ParNum:           sp.ParNum,
 	}
 	inMemStore := store.NewInMemoryKeyValueStore(mp.StoreName, func(a, b treemap.Key) int {
 		ka := a.(string)
@@ -90,10 +94,10 @@ func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes
 }
 
 type wordcountCounterAggProcessArg struct {
-	src              *processor.MeteredSource
+	src              *source_sink.MeteredSource
 	output_stream    *store.MeteredStream
 	counter          *processor.MeteredProcessor
-	trackParFunc     transaction.TrackKeySubStreamFunc
+	trackParFunc     tran_interface.TrackKeySubStreamFunc
 	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
 	funcName         string
 	curEpoch         uint64
@@ -131,8 +135,9 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 			continue
 		}
 		if msg.IsControl {
-			v := msg.Msg.Value.(sharedlog_stream.ScaleEpochAndBytes)
-			_, err = args.output_stream.Push(ctx, v.Payload, args.parNum, true, false)
+			v := msg.Msg.Value.(source_sink.ScaleEpochAndBytes)
+			// TODO: below is not correct
+			_, err = args.output_stream.Push(ctx, v.Payload, args.parNum, true, false, 0, 0, 0)
 			if err != nil {
 				return t.CurrentOffset, &common.FnOutput{Success: false, Message: err.Error()}
 			}
@@ -154,19 +159,13 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 			for _, subMsg := range msg.MsgArr {
 				_, err = args.counter.ProcessAndReturn(ctx, subMsg)
 				if err != nil {
-					return t.CurrentOffset, &common.FnOutput{
-						Success: false,
-						Message: fmt.Sprintf("counter failed: %v", err),
-					}
+					return t.CurrentOffset, &common.FnOutput{Success: false, Message: fmt.Sprintf("counter failed: %v", err)}
 				}
 			}
 		} else {
 			_, err = args.counter.ProcessAndReturn(ctx, msg.Msg)
 			if err != nil {
-				return t.CurrentOffset, &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("counter failed: %v", err),
-				}
+				return t.CurrentOffset, &common.FnOutput{Success: false, Message: fmt.Sprintf("counter failed: %v", err)}
 			}
 		}
 	}
@@ -174,7 +173,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 }
 
 func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, true)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -191,14 +190,17 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 			Message: fmt.Sprintf("get msg serde failed: %v", err),
 		}
 	}
-	inConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      common.SrcConsumeTimeout,
-		KeyDecoder:   commtypes.StringDecoder{},
-		ValueDecoder: commtypes.StringDecoder{},
-		MsgDecoder:   msgSerde,
+	inConfig := &source_sink.StreamSourceConfig{
+		Timeout: common.SrcConsumeTimeout,
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			KeySerde: commtypes.StringSerde{},
+			ValSerde: commtypes.StringSerde{},
+			MsgSerde: msgSerde,
+		},
 	}
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig),
+	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
 		time.Duration(sp.WarmupS)*time.Second)
+	src.SetInitialSource(false)
 	count, err := setupCounter(ctx, sp, msgSerde, output_streams[0])
 	if err != nil {
 		return &common.FnOutput{
@@ -216,7 +218,7 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 		funcName:         funcName,
 		curEpoch:         sp.ScaleEpoch,
 		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
-		trackParFunc:     transaction.DefaultTrackSubstreamFunc,
+		trackParFunc:     tran_interface.DefaultTrackSubstreamFunc,
 	}
 
 	task := transaction.StreamTask{
@@ -225,20 +227,16 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 	}
 
 	if sp.EnableTransaction {
-		srcs := make(map[string]processor.Source)
-		srcs[sp.InputTopicNames[0]] = src
+		srcs := []source_sink.Source{src}
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:        procArgs,
 			Env:             h.env,
-			MsgSerde:        msgSerde,
 			Srcs:            srcs,
-			OutputStreams:   output_streams,
-			QueryInput:      sp,
 			TransactionalId: fmt.Sprintf("%s-%s-%s-%d", funcName, sp.InputTopicNames[0], sp.OutputTopicNames[0], sp.ParNum),
 			FixedOutParNum:  sp.ParNum,
 		}
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
+			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*wordcountCounterAggProcessArg).trackParFunc = trackParFunc
 				procArgs.(*wordcountCounterAggProcessArg).recordFinishFunc = recordFinishFunc
 			}, &task)

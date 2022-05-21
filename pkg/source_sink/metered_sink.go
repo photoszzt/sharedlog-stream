@@ -1,12 +1,13 @@
-package sharedlog_stream
+package source_sink
 
 import (
 	"context"
 	"fmt"
 	"os"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -28,22 +29,35 @@ type ConcurrentMeteredSink struct {
 	afterWarmup   uint32
 }
 
-var _ = processor.Sink(&ConcurrentMeteredSink{})
+var _ = Sink(&ConcurrentMeteredSink{})
 
-func NewConcurrentMeteredSink(sink *ShardedSharedLogStreamSink, warmup time.Duration) *ConcurrentMeteredSink {
+func checkMeasureSink() bool {
 	measure_str := os.Getenv("MEASURE_SINK")
 	measure := false
 	if measure_str == "true" || measure_str == "1" {
 		measure = true
 	}
+	return measure
+}
+
+func NewConcurrentMeteredSink(sink *ShardedSharedLogStreamSink, warmup time.Duration) *ConcurrentMeteredSink {
+
 	return &ConcurrentMeteredSink{
 		sink:          sink,
 		latencies:     make([]int, 0, 128),
-		measure:       measure,
+		measure:       checkMeasureSink(),
 		isFinalOutput: false,
 		warmup:        warmup,
 		afterWarmup:   0,
 	}
+}
+
+func (s *ConcurrentMeteredSink) InTransaction(tm tran_interface.ReadOnlyTransactionManager) {
+	s.sink.InTransaction(tm)
+}
+
+func (s *ConcurrentMeteredSink) Stream() *sharedlog_stream.ShardedSharedLogStream {
+	return s.sink.Stream()
 }
 
 func (s *ConcurrentMeteredSink) MarkFinalOutput() {
@@ -56,7 +70,7 @@ func (s *ConcurrentMeteredSink) StartWarmup() {
 	}
 }
 
-func (s *ConcurrentMeteredSink) Sink(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
+func (s *ConcurrentMeteredSink) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
 	debug.Assert(!s.measure || (s.warmup == 0 || (s.warmup > 0 && !s.initial.IsZero())), "warmup should initialize initial")
 	if s.measure {
 		if atomic.LoadUint32(&s.afterWarmup) == 0 && (s.warmup == 0 || (s.warmup > 0 && time.Since(s.initial) >= s.warmup)) {
@@ -71,7 +85,7 @@ func (s *ConcurrentMeteredSink) Sink(ctx context.Context, msg commtypes.Message,
 				s.eventTimeLatencies = append(s.eventTimeLatencies, els)
 				s.latMu.Unlock()
 			}
-			err := s.sink.Sink(ctx, msg, parNum, isControl)
+			err := s.sink.Produce(ctx, msg, parNum, isControl)
 			elapsed := time.Since(procStart)
 			s.latMu.Lock()
 			s.latencies = append(s.latencies, int(elapsed.Microseconds()))
@@ -79,7 +93,7 @@ func (s *ConcurrentMeteredSink) Sink(ctx context.Context, msg commtypes.Message,
 			return err
 		}
 	}
-	return s.sink.Sink(ctx, msg, parNum, isControl)
+	return s.sink.Produce(ctx, msg, parNum, isControl)
 }
 
 func (s *ConcurrentMeteredSink) Flush(ctx context.Context) error {
@@ -143,22 +157,25 @@ type ConcurrentMeteredSyncSink struct {
 	afterWarmup   uint32
 }
 
-var _ = processor.Sink(&ConcurrentMeteredSink{})
+var _ = Sink(&ConcurrentMeteredSink{})
 
 func NewConcurrentMeteredSyncSink(sink *ShardedSharedLogStreamSyncSink, warmup time.Duration) *ConcurrentMeteredSyncSink {
-	measure_str := os.Getenv("MEASURE_SINK")
-	measure := false
-	if measure_str == "true" || measure_str == "1" {
-		measure = true
-	}
 	return &ConcurrentMeteredSyncSink{
 		sink:          sink,
 		latencies:     make([]int, 0, 128),
-		measure:       measure,
+		measure:       checkMeasureSink(),
 		isFinalOutput: false,
 		warmup:        warmup,
 		afterWarmup:   0,
 	}
+}
+
+func (s *ConcurrentMeteredSyncSink) Stream() *sharedlog_stream.ShardedSharedLogStream {
+	return s.sink.Stream()
+}
+
+func (s *ConcurrentMeteredSyncSink) InTransaction(tm tran_interface.ReadOnlyTransactionManager) {
+	s.sink.InTransaction(tm)
 }
 
 func (s *ConcurrentMeteredSyncSink) MarkFinalOutput() {
@@ -200,7 +217,9 @@ func (s *ConcurrentMeteredSyncSink) GetEventTimeLatency() []int {
 	return s.eventTimeLatencies
 }
 
-func (s *ConcurrentMeteredSyncSink) Sink(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
+func (s *ConcurrentMeteredSyncSink) InitFlushTimer() {}
+
+func (s *ConcurrentMeteredSyncSink) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
 	debug.Assert(!s.measure || (s.warmup == 0 || (s.warmup > 0 && !s.initial.IsZero())), "warmup should initialize initial")
 	if s.measure {
 		if atomic.LoadUint32(&s.afterWarmup) == 0 && (s.warmup == 0 || (s.warmup > 0 && time.Since(s.initial) >= s.warmup)) {
@@ -215,7 +234,7 @@ func (s *ConcurrentMeteredSyncSink) Sink(ctx context.Context, msg commtypes.Mess
 				s.eventTimeLatencies = append(s.eventTimeLatencies, els)
 				s.latMu.Unlock()
 			}
-			err := s.sink.Sink(ctx, msg, parNum, isControl)
+			err := s.sink.Produce(ctx, msg, parNum, isControl)
 			elapsed := time.Since(procStart)
 			s.latMu.Lock()
 			s.latencies = append(s.latencies, int(elapsed.Microseconds()))
@@ -223,7 +242,7 @@ func (s *ConcurrentMeteredSyncSink) Sink(ctx context.Context, msg commtypes.Mess
 			return err
 		}
 	}
-	return s.sink.Sink(ctx, msg, parNum, isControl)
+	return s.sink.Produce(ctx, msg, parNum, isControl)
 }
 
 type MeteredSink struct {
@@ -241,19 +260,22 @@ type MeteredSink struct {
 }
 
 func NewMeteredSink(sink *ShardedSharedLogStreamSink, warmup time.Duration) *MeteredSink {
-	measure_str := os.Getenv("MEASURE_SINK")
-	measure := false
-	if measure_str == "true" || measure_str == "1" {
-		measure = true
-	}
 	return &MeteredSink{
 		sink:          sink,
 		latencies:     make([]int, 0, 128),
-		measure:       measure,
+		measure:       checkMeasureSink(),
 		isFinalOutput: false,
 		warmup:        warmup,
 		afterWarmup:   false,
 	}
+}
+
+func (s *MeteredSink) InTransaction(tm tran_interface.ReadOnlyTransactionManager) {
+	s.sink.InTransaction(tm)
+}
+
+func (s *MeteredSink) Stream() *sharedlog_stream.ShardedSharedLogStream {
+	return s.sink.Stream()
 }
 
 func (s *MeteredSink) MarkFinalOutput() {
@@ -266,7 +288,7 @@ func (s *MeteredSink) StartWarmup() {
 	}
 }
 
-func (s *MeteredSink) Sink(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
+func (s *MeteredSink) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
 	debug.Assert(s.warmup == 0 || (s.warmup > 0 && !s.initial.IsZero()), "warmup should initialize initial")
 	if s.measure {
 		if !s.afterWarmup && (s.warmup == 0 || (s.warmup > 0 && time.Since(s.initial) >= s.warmup)) {
@@ -286,13 +308,13 @@ func (s *MeteredSink) Sink(ctx context.Context, msg commtypes.Message, parNum ui
 				els := int(procStart.UnixMilli() - ts)
 				s.eventTimeLatencies = append(s.eventTimeLatencies, els)
 			}
-			err := s.sink.Sink(ctx, msg, parNum, isControl)
+			err := s.sink.Produce(ctx, msg, parNum, isControl)
 			elapsed := time.Since(procStart)
 			s.latencies = append(s.latencies, int(elapsed.Microseconds()))
 			return err
 		}
 	}
-	return s.sink.Sink(ctx, msg, parNum, isControl)
+	return s.sink.Produce(ctx, msg, parNum, isControl)
 }
 
 func (s *MeteredSink) GetLatency() []int {
@@ -349,19 +371,24 @@ type MeteredSyncSink struct {
 }
 
 func NewMeteredSyncSink(sink *ShardedSharedLogStreamSyncSink, warmup time.Duration) *MeteredSyncSink {
-	measure_str := os.Getenv("MEASURE_SINK")
-	measure := false
-	if measure_str == "true" || measure_str == "1" {
-		measure = true
-	}
 	return &MeteredSyncSink{
 		sink:          sink,
 		latencies:     make([]int, 0, 128),
-		measure:       measure,
+		measure:       checkMeasureSink(),
 		isFinalOutput: false,
 		warmup:        warmup,
 		afterWarmup:   false,
 	}
+}
+
+func (s *MeteredSyncSink) InitFlushTimer() {}
+
+func (s *MeteredSyncSink) InTransaction(tm tran_interface.ReadOnlyTransactionManager) {
+	s.sink.InTransaction(tm)
+}
+
+func (s *MeteredSyncSink) Stream() *sharedlog_stream.ShardedSharedLogStream {
+	return s.sink.Stream()
 }
 
 func (s *MeteredSyncSink) MarkFinalOutput() {
@@ -385,7 +412,7 @@ func (s *MeteredSyncSink) Flush(ctx context.Context) error {
 	return s.sink.Flush(ctx)
 }
 
-func (s *MeteredSyncSink) Sink(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
+func (s *MeteredSyncSink) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
 	debug.Assert(s.warmup == 0 || (s.warmup > 0 && !s.initial.IsZero()), "warmup should initialize initial")
 	if s.measure {
 		if !s.afterWarmup && (s.warmup == 0 || (s.warmup > 0 && time.Since(s.initial) >= s.warmup)) {
@@ -405,13 +432,13 @@ func (s *MeteredSyncSink) Sink(ctx context.Context, msg commtypes.Message, parNu
 				els := int(procStart.UnixMilli() - ts)
 				s.eventTimeLatencies = append(s.eventTimeLatencies, els)
 			}
-			err := s.sink.Sink(ctx, msg, parNum, isControl)
+			err := s.sink.Produce(ctx, msg, parNum, isControl)
 			elapsed := time.Since(procStart)
 			s.latencies = append(s.latencies, int(elapsed.Microseconds()))
 			return err
 		}
 	}
-	return s.sink.Sink(ctx, msg, parNum, isControl)
+	return s.sink.Produce(ctx, msg, parNum, isControl)
 }
 
 func (s *MeteredSyncSink) GetLatency() []int {

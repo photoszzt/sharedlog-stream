@@ -13,7 +13,7 @@ import (
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
-	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -30,14 +30,16 @@ func NewWinTabTestsHandler(env types.Environment) types.FuncHandler {
 
 func getWindowStoreWithChangelog(retainDuplicates bool, changelog *sharedlog_stream.ShardedSharedLogStream) *store_with_changelog.InMemoryWindowStoreWithChangelog {
 	mp := &store_with_changelog.MaterializeParam{
-		KeySerde:    commtypes.Uint32Serde{},
-		ValueSerde:  commtypes.StringSerde{},
-		MsgSerde:    commtypes.MessageSerializedJSONSerde{},
-		StoreName:   "test1",
-		SerdeFormat: commtypes.JSON,
-		ParNum:      0,
-		Changelog:   changelog,
-		TrackFunc:   transaction.DefaultTrackSubstreamFunc,
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			KeySerde: commtypes.Uint32Serde{},
+			ValSerde: commtypes.StringSerde{},
+			MsgSerde: commtypes.MessageSerializedJSONSerde{},
+		},
+		StoreName:        "test1",
+		SerdeFormat:      commtypes.JSON,
+		ParNum:           0,
+		ChangelogManager: store_with_changelog.NewChangelogManager(changelog, commtypes.JSON),
+		TrackFunc:        tran_interface.DefaultTrackSubstreamFunc,
 	}
 	if !retainDuplicates {
 		mp.Comparable = concurrent_skiplist.CompareFunc(store.CompareNoDup)

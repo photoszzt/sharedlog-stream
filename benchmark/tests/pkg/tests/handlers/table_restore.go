@@ -13,6 +13,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/treemap"
 	"time"
@@ -113,7 +114,7 @@ func (h *tableRestoreHandler) pushToLog(ctx context.Context, key int, val string
 	if err != nil {
 		return 0, err
 	}
-	return log.Push(ctx, encoded, 0, false, false)
+	return log.Push(ctx, encoded, 0, false, false, 0, 0, 0)
 }
 
 func checkMapEqual(expected map[int]string, got map[int]string) {
@@ -158,8 +159,13 @@ func (h *tableRestoreHandler) testRestoreKVTable(ctx context.Context) {
 		}
 	})
 	err = transaction.RestoreChangelogKVStateStore(ctx,
-		transaction.NewKVStoreChangelog(kvstore, changelog, commtypes.IntSerde{}, strTsJSONSerde{}, 0),
-		h.msgSerde, offset)
+		transaction.NewKVStoreChangelog(kvstore,
+			store_with_changelog.NewChangelogManager(changelog, commtypes.JSON),
+			commtypes.KVMsgSerdes{
+				KeySerde: commtypes.IntSerde{},
+				ValSerde: strTsJSONSerde{},
+				MsgSerde: h.msgSerde,
+			}, 0), offset)
 	if err != nil {
 		panic(err)
 	}
@@ -211,7 +217,7 @@ func (h *tableRestoreHandler) pushToWindowLog(ctx context.Context, key int, val 
 	debug.PrintByteSlice(valBytes)
 	debug.Fprint(os.Stderr, "pushToWindowLog: encoded\n")
 	debug.PrintByteSlice(encoded)
-	off, err := log.Push(ctx, encoded, 0, false, false)
+	off, err := log.Push(ctx, encoded, 0, false, false, 0, 0, 0)
 	debug.Fprintf(os.Stderr, "offset: %x\n", off)
 	return off, err
 }
@@ -240,8 +246,15 @@ func (h *tableRestoreHandler) testRestoreWindowTable(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	err = transaction.RestoreChangelogWindowStateStore(ctx, transaction.NewWindowStoreChangelog(wstore, changelog,
-		commtypes.KeyAndWindowStartTsJSONSerde{}, commtypes.IntSerde{}, commtypes.StringSerde{}, 0), h.msgSerde, uint64(offset))
+	err = transaction.RestoreChangelogWindowStateStore(ctx,
+		transaction.NewWindowStoreChangelog(wstore,
+			store_with_changelog.NewChangelogManager(changelog, commtypes.JSON),
+			commtypes.KeyAndWindowStartTsJSONSerde{},
+			commtypes.KVMsgSerdes{
+				KeySerde: commtypes.IntSerde{},
+				ValSerde: commtypes.StringSerde{},
+				MsgSerde: h.msgSerde,
+			}, 0), uint64(offset))
 	if err != nil {
 		panic(err)
 	}

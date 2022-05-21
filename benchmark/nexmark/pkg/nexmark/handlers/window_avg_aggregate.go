@@ -10,6 +10,7 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
@@ -52,7 +53,7 @@ func (h *windowedAvg) Call(ctx context.Context, input []byte) ([]byte, error) {
 }
 
 func (h *windowedAvg) getSrcSink(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde) (
-	*processor.MeteredSource, *sharedlog_stream.ConcurrentMeteredSink, error,
+	*source_sink.MeteredSource, *source_sink.ConcurrentMeteredSink, error,
 ) {
 	eventSerde, err := getEventSerde(sp.SerdeFormat)
 	if err != nil {
@@ -73,28 +74,35 @@ func (h *windowedAvg) getSrcSink(ctx context.Context, sp *common.QueryInput, msg
 		return nil, nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat)
 	}
 
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, true)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return nil, nil, err
 	}
-	inConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      common.SrcConsumeTimeout,
-		MsgDecoder:   msgSerde,
-		KeyDecoder:   commtypes.Uint64Decoder{},
-		ValueDecoder: eventSerde,
+	kvmsgSerdes := commtypes.KVMsgSerdes{
+		KeySerde: commtypes.Uint64Serde{},
+		ValSerde: eventSerde,
+		MsgSerde: msgSerde,
+	}
+	inConfig := &source_sink.StreamSourceConfig{
+		Timeout:     common.SrcConsumeTimeout,
+		KVMsgSerdes: kvmsgSerdes,
 	}
 
-	outConfig := &sharedlog_stream.StreamSinkConfig{
-		MsgSerde:      msgSerde,
-		KeySerde:      wkSerde,
-		ValueSerde:    commtypes.Float64Serde{},
+	outConfig := &source_sink.StreamSinkConfig{
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			MsgSerde: msgSerde,
+			KeySerde: wkSerde,
+			ValSerde: commtypes.Float64Serde{},
+		},
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig),
+	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
 		time.Duration(sp.WarmupS)*time.Second)
-	sink := sharedlog_stream.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_streams[0], outConfig),
+	src.SetInitialSource(false)
+	sink := source_sink.NewConcurrentMeteredSink(source_sink.NewShardedSharedLogStreamSink(output_streams[0], outConfig),
 		time.Duration(sp.WarmupS)*time.Second)
+	sink.MarkFinalOutput()
 	return src, sink, nil
 }
 
@@ -130,12 +138,14 @@ func (h *windowedAvg) getAggProcessor(ctx context.Context, sp *common.QueryInput
 		return nil, err
 	}
 	winStoreMp := &store_with_changelog.MaterializeParam{
-		StoreName:  "windowed-avg-store",
-		MsgSerde:   msgSerde,
-		KeySerde:   commtypes.Uint64Serde{},
-		ValueSerde: vtSerde,
-		Changelog:  changelog_stream,
-		ParNum:     sp.ParNum,
+		StoreName: "windowed-avg-store",
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			MsgSerde: msgSerde,
+			KeySerde: commtypes.Uint64Serde{},
+			ValSerde: vtSerde,
+		},
+		ChangelogManager: store_with_changelog.NewChangelogManager(changelog_stream, commtypes.SerdeFormat(sp.SerdeFormat)),
+		ParNum:           sp.ParNum,
 	}
 
 	store, err := store_with_changelog.NewInMemoryWindowStoreWithChangelog(
@@ -162,7 +172,7 @@ func (h *windowedAvg) getAggProcessor(ctx context.Context, sp *common.QueryInput
 }
 
 func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput,
-	src *processor.MeteredSource, sink *sharedlog_stream.ConcurrentMeteredSink,
+	src *source_sink.MeteredSource, sink *source_sink.ConcurrentMeteredSink,
 	aggProc *processor.MeteredProcessor, calcAvg *processor.MeteredProcessor,
 ) *common.FnOutput {
 	duration := time.Duration(sp.Duration) * time.Second
@@ -236,7 +246,7 @@ func (h *windowedAvg) procMsg(ctx context.Context,
 	msg commtypes.Message,
 	aggProc *processor.MeteredProcessor,
 	calcAvg *processor.MeteredProcessor,
-	sink *sharedlog_stream.ConcurrentMeteredSink,
+	sink *source_sink.ConcurrentMeteredSink,
 	parNum uint8,
 ) error {
 	newMsgs, err := aggProc.ProcessAndReturn(ctx, msg)
@@ -249,7 +259,7 @@ func (h *windowedAvg) procMsg(ctx context.Context,
 			return fmt.Errorf("calculate avg failed: %v\n", err)
 
 		}
-		err = sink.Sink(ctx, avg[0], parNum, false)
+		err = sink.Produce(ctx, avg[0], parNum, false)
 		if err != nil {
 			return fmt.Errorf("sink failed: %v", err)
 		}

@@ -1,13 +1,14 @@
-package processor
+package proc_interface
 
 import (
 	"context"
+	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 )
 
 type ProcArgsWithSrcSink interface {
 	ProcArgs
-	Source() Source
+	Source() source_sink.Source
 	PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error
 	ErrChan() chan error
 }

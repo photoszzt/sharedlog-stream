@@ -2,37 +2,58 @@ package store_with_changelog
 
 import (
 	"sharedlog-stream/pkg/concurrent_skiplist"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/transaction/tran_interface"
+
+	"cs.utexas.edu/zjia/faas/types"
 )
 
 type MaterializeParam struct {
-	KeySerde    commtypes.Serde
-	ValueSerde  commtypes.Serde
-	MsgSerde    commtypes.MsgSerde
-	Comparable  concurrent_skiplist.Comparable
-	Changelog   *sharedlog_stream.ShardedSharedLogStream
-	TrackFunc   transaction.TrackKeySubStreamFunc
-	StoreName   string
-	ParNum      uint8
-	SerdeFormat commtypes.SerdeFormat
+	KVMsgSerdes      commtypes.KVMsgSerdes
+	Comparable       concurrent_skiplist.Comparable
+	ChangelogManager *ChangelogManager
+	TrackFunc        tran_interface.TrackKeySubStreamFunc
+	StoreName        string
+	ParNum           uint8
+	SerdeFormat      commtypes.SerdeFormat
 }
 
 func NewMaterializeParamForWindowStore(
-	keySerde commtypes.Serde, valueSerde commtypes.Serde,
-	msgSerde commtypes.MsgSerde, changelog *sharedlog_stream.ShardedSharedLogStream,
-	trackFunc transaction.TrackKeySubStreamFunc, StoreName string,
-	parNum uint8, serdeFormat commtypes.SerdeFormat,
-) *MaterializeParam {
-	return &MaterializeParam{
-		KeySerde:    keySerde,
-		ValueSerde:  valueSerde,
-		MsgSerde:    msgSerde,
-		Changelog:   changelog,
-		TrackFunc:   trackFunc,
-		StoreName:   StoreName,
-		ParNum:      parNum,
-		SerdeFormat: serdeFormat,
+	env types.Environment,
+	kvmsgSerdes commtypes.KVMsgSerdes,
+	storeName string, streamParam commtypes.CreateStreamParam, parNum uint8,
+	comparable concurrent_skiplist.Comparable,
+) (*MaterializeParam, error) {
+	changelog, err := CreateChangelog(env, storeName, streamParam.NumPartition, streamParam.Format)
+	if err != nil {
+		return nil, err
 	}
+	return &MaterializeParam{
+		KVMsgSerdes:      kvmsgSerdes,
+		ChangelogManager: NewChangelogManager(changelog, streamParam.Format),
+		TrackFunc:        tran_interface.DefaultTrackSubstreamFunc,
+		StoreName:        storeName,
+		ParNum:           parNum,
+		SerdeFormat:      streamParam.Format,
+		Comparable:       comparable,
+	}, nil
+}
+
+func NewMaterializeParamForKeyValueStore(
+	env types.Environment,
+	kvmsgSerdes commtypes.KVMsgSerdes,
+	storeName string, streamParam commtypes.CreateStreamParam, parNum uint8,
+) (*MaterializeParam, error) {
+	changelog, err := CreateChangelog(env, storeName, streamParam.NumPartition, streamParam.Format)
+	if err != nil {
+		return nil, err
+	}
+	return &MaterializeParam{
+		KVMsgSerdes:      kvmsgSerdes,
+		StoreName:        storeName,
+		TrackFunc:        tran_interface.DefaultTrackSubstreamFunc,
+		ChangelogManager: NewChangelogManager(changelog, streamParam.Format),
+		ParNum:           parNum,
+		SerdeFormat:      streamParam.Format,
+	}, nil
 }

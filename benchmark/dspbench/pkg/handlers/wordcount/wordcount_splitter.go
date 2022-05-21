@@ -11,9 +11,11 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"strings"
 	"time"
 
@@ -54,39 +56,42 @@ func getSrcSink(ctx context.Context,
 	sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*processor.MeteredSource,
-	*sharedlog_stream.MeteredSink,
-	commtypes.MsgSerde,
+) (*source_sink.MeteredSource,
+	*source_sink.MeteredSink,
 	error) {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("get msg serde failed: %v", err)
+		return nil, nil, fmt.Errorf("get msg serde failed: %v", err)
 	}
-	inConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      common.SrcConsumeTimeout,
-		KeyDecoder:   commtypes.StringDecoder{},
-		ValueDecoder: commtypes.StringDecoder{},
-		MsgDecoder:   msgSerde,
+	inConfig := &source_sink.StreamSourceConfig{
+		Timeout: common.SrcConsumeTimeout,
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			KeySerde: commtypes.StringSerde{},
+			ValSerde: commtypes.StringSerde{},
+			MsgSerde: msgSerde,
+		},
 	}
-	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeySerde:      commtypes.StringSerde{},
-		ValueSerde:    commtypes.StringSerde{},
-		MsgSerde:      msgSerde,
+	outConfig := &source_sink.StreamSinkConfig{
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			KeySerde: commtypes.StringSerde{},
+			ValSerde: commtypes.StringSerde{},
+			MsgSerde: msgSerde,
+		},
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig),
+	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
 		time.Duration(sp.WarmupS)*time.Second)
-	sink := sharedlog_stream.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig),
+	sink := source_sink.NewMeteredSink(source_sink.NewShardedSharedLogStreamSink(output_stream, outConfig),
 		time.Duration(sp.WarmupS)*time.Second)
-	return src, sink, msgSerde, nil
+	return src, sink, nil
 }
 
 type wordcountSplitterProcessArg struct {
-	src              *processor.MeteredSource
-	sink             *sharedlog_stream.MeteredSink
+	src              *source_sink.MeteredSource
+	sink             *source_sink.MeteredSink
 	output_stream    *sharedlog_stream.ShardedSharedLogStream
 	splitter         processor.FlatMapperFunc
-	trackParFunc     transaction.TrackKeySubStreamFunc
+	trackParFunc     tran_interface.TrackKeySubStreamFunc
 	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
 	funcName         string
 	splitLatencies   []int
@@ -95,9 +100,9 @@ type wordcountSplitterProcessArg struct {
 	numOutPartition  uint8
 }
 
-func (a *wordcountSplitterProcessArg) Source() processor.Source { return a.src }
+func (a *wordcountSplitterProcessArg) Source() source_sink.Source { return a.src }
 func (a *wordcountSplitterProcessArg) PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
-	return a.sink.Sink(ctx, msg, parNum, isControl)
+	return a.sink.Produce(ctx, msg, parNum, isControl)
 }
 func (a *wordcountSplitterProcessArg) ParNum() uint8    { return a.parNum }
 func (a *wordcountSplitterProcessArg) CurEpoch() uint64 { return a.curEpoch }
@@ -130,7 +135,7 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context,
 			if err != nil {
 				return fmt.Errorf("add topic partition failed: %v", err)
 			}
-			err = args.sink.Sink(ctx, m, par, false)
+			err = args.sink.Produce(ctx, m, par, false)
 			if err != nil {
 				return fmt.Errorf("sink failed: %v", err)
 			}
@@ -140,7 +145,7 @@ func (h *wordcountSplitFlatMap) process(ctx context.Context,
 }
 
 func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -148,13 +153,14 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 		}
 	}
 	debug.Assert(len(output_streams) == 1, "expected only one output stream")
-	src, sink, msgSerde, err := getSrcSink(ctx, sp, input_stream, output_streams[0])
+	src, sink, err := getSrcSink(ctx, sp, input_stream, output_streams[0])
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
 	}
+	src.SetInitialSource(true)
 
 	var matchStr = regexp.MustCompile(`\w+`)
 	splitter := processor.FlatMapperFunc(func(m commtypes.Message) ([]commtypes.Message, error) {
@@ -182,7 +188,7 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 		funcName:         funcName,
 		curEpoch:         sp.ScaleEpoch,
 		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
-		trackParFunc:     transaction.DefaultTrackSubstreamFunc,
+		trackParFunc:     tran_interface.DefaultTrackSubstreamFunc,
 	}
 
 	task := transaction.StreamTask{
@@ -192,20 +198,16 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 
 	if sp.EnableTransaction {
 		// fmt.Fprintf(os.Stderr, "word count counter function enables exactly once semantics\n")
-		srcs := make(map[string]processor.Source)
-		srcs[sp.InputTopicNames[0]] = src
+		srcs := []source_sink.Source{src}
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:        procArgs,
 			Env:             h.env,
-			MsgSerde:        msgSerde,
 			Srcs:            srcs,
-			OutputStreams:   output_streams,
-			QueryInput:      sp,
 			TransactionalId: fmt.Sprintf("%s-%s-%d", funcName, sp.InputTopicNames[0], sp.ParNum),
 			FixedOutParNum:  0,
 		}
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
+			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*wordcountSplitterProcessArg).trackParFunc = trackParFunc
 				procArgs.(*wordcountSplitterProcessArg).recordFinishFunc = recordFinishFunc
 			}, &task)

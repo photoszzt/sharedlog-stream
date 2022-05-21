@@ -11,11 +11,13 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sharedlog-stream/pkg/treemap"
 	"time"
 
@@ -55,23 +57,29 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	seSerde commtypes.Serde, aucIdCountSerde commtypes.Serde,
 	aucIdCountMaxSerde commtypes.Serde,
 	msgSerde commtypes.MsgSerde,
-) (*processor.MeteredSource, *sharedlog_stream.ConcurrentMeteredSyncSink, error) {
-	inConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      time.Duration(20) * time.Second,
-		KeyDecoder:   seSerde,
-		ValueDecoder: aucIdCountSerde,
-		MsgDecoder:   msgSerde,
+) (*source_sink.MeteredSource, *source_sink.ConcurrentMeteredSyncSink, error) {
+	kvmsgSerdes := commtypes.KVMsgSerdes{
+		KeySerde: seSerde,
+		ValSerde: aucIdCountSerde,
+		MsgSerde: msgSerde,
 	}
-	outConfig := &sharedlog_stream.StreamSinkConfig{
-		MsgSerde:      msgSerde,
-		KeySerde:      seSerde,
-		ValueSerde:    aucIdCountMaxSerde,
+	inConfig := &source_sink.StreamSourceConfig{
+		Timeout:     time.Duration(20) * time.Second,
+		KVMsgSerdes: kvmsgSerdes,
+	}
+	outConfig := &source_sink.StreamSinkConfig{
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			MsgSerde: msgSerde,
+			KeySerde: seSerde,
+			ValSerde: aucIdCountMaxSerde,
+		},
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig),
+	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
 		time.Duration(sp.WarmupS)*time.Second)
-	sink := sharedlog_stream.NewConcurrentMeteredSyncSink(sharedlog_stream.NewShardedSharedLogStreamSyncSink(output_stream, outConfig),
+	sink := source_sink.NewConcurrentMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_stream, outConfig),
 		time.Duration(sp.WarmupS)*time.Second)
+	src.SetInitialSource(false)
 	sink.MarkFinalOutput()
 	return src, sink, nil
 }
@@ -80,19 +88,18 @@ type q5MaxBidProcessArgs struct {
 	maxBid           *processor.MeteredProcessor
 	stJoin           *processor.MeteredProcessor
 	chooseMaxCnt     *processor.MeteredProcessor
-	src              *processor.MeteredSource
-	sink             *sharedlog_stream.ConcurrentMeteredSyncSink
-	output_stream    *sharedlog_stream.ShardedSharedLogStream
-	trackParFunc     transaction.TrackKeySubStreamFunc
+	src              *source_sink.MeteredSource
+	sink             *source_sink.ConcurrentMeteredSyncSink
+	trackParFunc     tran_interface.TrackKeySubStreamFunc
 	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
 	funcName         string
 	curEpoch         uint64
 	parNum           uint8
 }
 
-func (a *q5MaxBidProcessArgs) Source() processor.Source { return a.src }
+func (a *q5MaxBidProcessArgs) Source() source_sink.Source { return a.src }
 func (a *q5MaxBidProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
-	return a.sink.Sink(ctx, msg, parNum, isControl)
+	return a.sink.Produce(ctx, msg, parNum, isControl)
 }
 func (a *q5MaxBidProcessArgs) ParNum() uint8    { return a.parNum }
 func (a *q5MaxBidProcessArgs) CurEpoch() uint64 { return a.curEpoch }
@@ -108,7 +115,7 @@ type q5MaxBidRestoreArgs struct {
 	maxBid       processor.Processor
 	stJoin       processor.Processor
 	chooseMaxCnt processor.Processor
-	src          processor.Source
+	src          source_sink.Source
 	parNum       uint8
 }
 
@@ -153,7 +160,7 @@ func (h *q5MaxBid) procMsg(ctx context.Context, msg commtypes.Message, args *q5M
 		return fmt.Errorf("filteredMx err: %v", err)
 	}
 	for _, filtered := range filteredMx {
-		err = args.sink.Sink(ctx, filtered, args.parNum, false)
+		err = args.sink.Produce(ctx, filtered, args.parNum, false)
 		if err != nil {
 			return fmt.Errorf("sink err: %v", err)
 		}
@@ -219,7 +226,7 @@ func (h *q5MaxBid) procMsgWithoutSink(ctx context.Context, msg commtypes.Message
 }
 
 func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, true)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -263,21 +270,15 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	maxBidStoreName := "maxBidsKVStore"
 	var kvstore store.KeyValueStore
 	if sp.TableType == uint8(store.IN_MEM) {
-		changelogName := maxBidStoreName + "-changelog"
-		changelog, err := sharedlog_stream.NewShardedSharedLogStream(h.env, changelogName, sp.NumOutPartitions[0],
-			commtypes.SerdeFormat(sp.SerdeFormat))
+		mp, err := store_with_changelog.NewMaterializeParamForKeyValueStore(h.env,
+			commtypes.KVMsgSerdes{KeySerde: seSerde, ValSerde: vtSerde, MsgSerde: msgSerde},
+			maxBidStoreName,
+			commtypes.CreateStreamParam{
+				Format:       commtypes.SerdeFormat(sp.SerdeFormat),
+				NumPartition: sp.NumInPartition,
+			}, sp.ParNum)
 		if err != nil {
-			return &common.FnOutput{Success: false, Message: fmt.Sprintf("NewShardedSharedLogStream failed: %v", err)}
-		}
-		changelog.SetInTransaction(sp.EnableTransaction)
-		mp := &store_with_changelog.MaterializeParam{
-			KeySerde:   seSerde,
-			ValueSerde: vtSerde,
-			MsgSerde:   msgSerde,
-			StoreName:  maxBidStoreName,
-			Changelog:  changelog,
-			ParNum:     sp.ParNum,
-			TrackFunc:  transaction.DefaultTrackSubstreamFunc,
+			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
 		inMemStore := store.NewInMemoryKeyValueStore(mp.StoreName, func(a, b treemap.Key) int {
 			ka := a.(*ntypes.StartEndTime)
@@ -337,9 +338,8 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		chooseMaxCnt:     chooseMaxCnt,
 		src:              src,
 		sink:             sink,
-		output_stream:    output_streams[0],
 		parNum:           sp.ParNum,
-		trackParFunc:     transaction.DefaultTrackSubstreamFunc,
+		trackParFunc:     tran_interface.DefaultTrackSubstreamFunc,
 		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
 		curEpoch:         sp.ScaleEpoch,
 		funcName:         h.funcName,
@@ -373,15 +373,15 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		CloseFunc: nil,
 	}
 
-	srcs := map[string]processor.Source{sp.InputTopicNames[0]: src}
+	srcs := []source_sink.Source{src}
 	if sp.EnableTransaction {
 		var kvc []*transaction.KVStoreChangelog
 		if sp.TableType == uint8(store.IN_MEM) {
 			kvstore_mem := kvstore.(*store_with_changelog.KeyValueStoreWithChangelog)
 			mp := kvstore_mem.MaterializeParam()
 			kvc = []*transaction.KVStoreChangelog{
-				transaction.NewKVStoreChangelog(kvstore, mp.Changelog,
-					mp.KeySerde, mp.ValueSerde, sp.ParNum),
+				transaction.NewKVStoreChangelog(kvstore, mp.ChangelogManager,
+					mp.KVMsgSerdes, sp.ParNum),
 			}
 		} else if sp.TableType == uint8(store.MONGODB) {
 			// TODO: MONGODB
@@ -397,21 +397,21 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		} else {
 			panic("unrecognized table type")
 		}
+		sinks_arr := []source_sink.Sink{sink}
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
-			ProcArgs:      procArgs,
-			Env:           h.env,
-			Srcs:          srcs,
-			OutputStreams: output_streams,
-			QueryInput:    sp,
+			ProcArgs: procArgs,
+			Env:      h.env,
+			Srcs:     srcs,
+			Sinks:    sinks_arr,
 			TransactionalId: fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0]),
 			FixedOutParNum:        sp.ParNum,
 			KVChangelogs:          kvc,
 			WindowStoreChangelogs: nil,
-			MsgSerde:              msgSerde,
 		}
+		UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinshFunc transaction.RecordPrevInstanceFinishFunc) {
+			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinshFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*q5MaxBidProcessArgs).trackParFunc = trackParFunc
 				procArgs.(*q5MaxBidProcessArgs).recordFinishFunc = recordFinshFunc
 				if sp.TableType == uint8(store.IN_MEM) {

@@ -12,9 +12,11 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sync"
 	"time"
 
@@ -86,19 +88,19 @@ type q3GroupByProcessArgs struct {
 	personMsgChan    chan commtypes.Message
 	errChan          chan error
 	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
-	trackParFunc     transaction.TrackKeySubStreamFunc
-	src              *processor.MeteredSource
+	trackParFunc     tran_interface.TrackKeySubStreamFunc
+	src              *source_sink.MeteredSource
 
 	funcName string
-	sinks    []*sharedlog_stream.MeteredSink
+	sinks    []*source_sink.MeteredSink
 	curEpoch uint64
 	parNum   uint8
 }
 
-func (a *q3GroupByProcessArgs) Source() processor.Source { return a.src }
+func (a *q3GroupByProcessArgs) Source() source_sink.Source { return a.src }
 func (a *q3GroupByProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
 	for _, sink := range a.sinks {
-		err := sink.Sink(ctx, msg, parNum, isControl)
+		err := sink.Produce(ctx, msg, parNum, isControl)
 		if err != nil {
 			return err
 		}
@@ -118,41 +120,45 @@ func (a *q3GroupByProcessArgs) ErrChan() chan error {
 func getSrcSinks(ctx context.Context, sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_streams []*sharedlog_stream.ShardedSharedLogStream,
-) (*processor.MeteredSource, []*sharedlog_stream.MeteredSink, commtypes.MsgSerde, error) {
-	var sinks []*sharedlog_stream.MeteredSink
+) (*source_sink.MeteredSource, []*source_sink.MeteredSink, error) {
+	var sinks []*source_sink.MeteredSink
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("get msg serde err: %v", err)
+		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
 	eventSerde, err := getEventSerde(sp.SerdeFormat)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("get event serde err: %v", err)
+		return nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}
-	inConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      common.SrcConsumeTimeout,
-		KeyDecoder:   commtypes.StringDecoder{},
-		ValueDecoder: eventSerde,
-		MsgDecoder:   msgSerde,
+	inConfig := &source_sink.StreamSourceConfig{
+		Timeout: common.SrcConsumeTimeout,
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			KeySerde: commtypes.StringSerde{},
+			ValSerde: eventSerde,
+			MsgSerde: msgSerde,
+		},
 	}
-	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeySerde:      commtypes.Uint64Serde{},
-		ValueSerde:    eventSerde,
-		MsgSerde:      msgSerde,
+	outConfig := &source_sink.StreamSinkConfig{
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			KeySerde: commtypes.Uint64Serde{},
+			ValSerde: eventSerde,
+			MsgSerde: msgSerde,
+		},
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig),
+	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
 		time.Duration(sp.WarmupS)*time.Second)
 	for _, output_stream := range output_streams {
-		sink := sharedlog_stream.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig),
+		sink := source_sink.NewMeteredSink(source_sink.NewShardedSharedLogStreamSink(output_stream, outConfig),
 			time.Duration(sp.WarmupS)*time.Second)
 		sinks = append(sinks, sink)
 	}
-	return src, sinks, msgSerde, nil
+	return src, sinks, nil
 }
 
 func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -160,10 +166,11 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 		}
 	}
 	debug.Assert(len(output_streams) == 2, "expected 2 output streams")
-	src, sinks, msgSerde, err := getSrcSinks(ctx, sp, input_stream, output_streams)
+	src, sinks, err := getSrcSinks(ctx, sp, input_stream, output_streams)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
+	src.SetInitialSource(true)
 
 	filterPerson, personsByIDMap, personsByIDFunc := h.getPersonsByID(time.Duration(sp.WarmupS) * time.Second)
 	filterAuctions, auctionsBySellerIDMap, auctionsBySellerIDFunc := h.getAucBySellerID(time.Duration(sp.WarmupS) * time.Second)
@@ -176,7 +183,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 		sinks:            sinks,
 		aucMsgChan:       aucMsgChan,
 		personMsgChan:    personMsgChan,
-		trackParFunc:     transaction.DefaultTrackSubstreamFunc,
+		trackParFunc:     tran_interface.DefaultTrackSubstreamFunc,
 		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
 		funcName:         h.funcName,
 		curEpoch:         sp.ScaleEpoch,
@@ -258,23 +265,23 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	}
 	transaction.SetupConsistentHash(&h.aucHashMu, h.aucHash, sp.NumOutPartitions[0])
 	transaction.SetupConsistentHash(&h.personHashMu, h.personHash, sp.NumOutPartitions[1])
-	srcs := map[string]processor.Source{sp.InputTopicNames[0]: src}
+	srcs := []source_sink.Source{src}
 	if sp.EnableTransaction {
+		sinks_arr := []source_sink.Sink{sinks[0], sinks[1]}
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
-			ProcArgs:      procArgs,
-			Env:           h.env,
-			MsgSerde:      msgSerde,
-			Srcs:          srcs,
-			OutputStreams: output_streams,
-			QueryInput:    sp,
+			ProcArgs: procArgs,
+			Env:      h.env,
+			Srcs:     srcs,
+			Sinks:    sinks_arr,
 			TransactionalId: fmt.Sprintf("%s-%s-%d",
 				h.funcName, sp.InputTopicNames[0], sp.ParNum),
 			KVChangelogs:          nil,
 			WindowStoreChangelogs: nil,
 			FixedOutParNum:        0,
 		}
+		UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc,
+			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
 				recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*q3GroupByProcessArgs).trackParFunc = trackParFunc
 				procArgs.(*q3GroupByProcessArgs).recordFinishFunc = recordFinishFunc
@@ -388,7 +395,7 @@ func (h *q3GroupByHandler) getPersonsByID(warmup time.Duration) (*processor.Mete
 						return
 					}
 					// fmt.Fprintf(os.Stderr, "append %v to substream %v\n", changeKeyedMsg[0], par)
-					err = args.sinks[1].Sink(ctx, changeKeyedMsg[0], par, false)
+					err = args.sinks[1].Produce(ctx, changeKeyedMsg[0], par, false)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "[ERROR] sink err: %v\n", err)
 						errChan <- fmt.Errorf("sink err: %v", err)
@@ -465,7 +472,7 @@ func (h *q3GroupByHandler) getAucBySellerID(warmup time.Duration) (*processor.Me
 						return
 					}
 					// fmt.Fprintf(os.Stderr, "append %v to substream %v\n", changeKeyedMsg[0], par)
-					err = args.sinks[0].Sink(ctx, changeKeyedMsg[0], par, false)
+					err = args.sinks[0].Produce(ctx, changeKeyedMsg[0], par, false)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "[ERROR] sink err: %v\n", err)
 						errChan <- fmt.Errorf("sink err: %v", err)

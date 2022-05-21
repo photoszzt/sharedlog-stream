@@ -12,10 +12,13 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sync"
 	"time"
 
@@ -152,6 +155,38 @@ func (h *q8JoinStreamHandler) processSerial(
 }
 */
 
+func q8CompareFunc(lhs, rhs interface{}) int {
+	l, ok := lhs.(uint64)
+	if ok {
+		r := rhs.(uint64)
+		if l < r {
+			return -1
+		} else if l == r {
+			return 0
+		} else {
+			return 1
+		}
+	} else {
+		lv := lhs.(store.VersionedKey)
+		rv := rhs.(store.VersionedKey)
+		lvk := lv.Key.(uint64)
+		rvk := rv.Key.(uint64)
+		if lvk < rvk {
+			return -1
+		} else if lvk == rvk {
+			if lv.Version < rv.Version {
+				return -1
+			} else if lv.Version == rv.Version {
+				return 0
+			} else {
+				return 1
+			}
+		} else {
+			return 1
+		}
+	}
+}
+
 func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	stream1 *sharedlog_stream.ShardedSharedLogStream,
 	stream2 *sharedlog_stream.ShardedSharedLogStream,
@@ -167,17 +202,18 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 		return nil, fmt.Errorf("get event serde err: %v", err)
 	}
 	timeout := common.SrcConsumeTimeout
-	auctionsConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      timeout,
-		KeyDecoder:   commtypes.Uint64Decoder{},
-		ValueDecoder: eventSerde,
-		MsgDecoder:   msgSerde,
+	kvmsgSerdes := commtypes.KVMsgSerdes{
+		KeySerde: commtypes.Uint64Serde{},
+		ValSerde: eventSerde,
+		MsgSerde: msgSerde,
 	}
-	personsConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      timeout,
-		KeyDecoder:   commtypes.Uint64Decoder{},
-		ValueDecoder: eventSerde,
-		MsgDecoder:   msgSerde,
+	auctionsConfig := &source_sink.StreamSourceConfig{
+		Timeout:     timeout,
+		KVMsgSerdes: kvmsgSerdes,
+	}
+	personsConfig := &source_sink.StreamSourceConfig{
+		Timeout:     timeout,
+		KVMsgSerdes: kvmsgSerdes,
 	}
 	var ptSerde commtypes.Serde
 	if sp.SerdeFormat == uint8(commtypes.JSON) {
@@ -185,27 +221,30 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	} else {
 		ptSerde = &ntypes.PersonTimeMsgpSerde{}
 	}
-	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeySerde:      commtypes.Uint64Serde{},
-		ValueSerde:    ptSerde,
-		MsgSerde:      msgSerde,
+	outConfig := &source_sink.StreamSinkConfig{
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			KeySerde: commtypes.Uint64Serde{},
+			ValSerde: ptSerde,
+			MsgSerde: msgSerde,
+		},
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 
-	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, auctionsConfig),
+	src1 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream1, auctionsConfig),
 		time.Duration(sp.WarmupS)*time.Second)
-	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, personsConfig),
+	src2 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream2, personsConfig),
 		time.Duration(sp.WarmupS)*time.Second)
-	sink := sharedlog_stream.NewConcurrentMeteredSyncSink(sharedlog_stream.NewShardedSharedLogStreamSyncSink(outputStream, outConfig),
+	sink := source_sink.NewConcurrentMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(outputStream, outConfig),
 		time.Duration(sp.WarmupS)*time.Second)
+	src1.SetInitialSource(false)
+	src2.SetInitialSource(false)
 	sink.MarkFinalOutput()
 	return &srcSinkSerde{src1: src1, src2: src2, sink: sink,
-		keySerdes: []commtypes.Serde{commtypes.Uint64Serde{}, commtypes.Uint64Serde{}},
-		valSerdes: []commtypes.Serde{eventSerde, eventSerde}, msgSerde: msgSerde}, nil
+		srcKVMsgSerdes: kvmsgSerdes}, nil
 }
 
 func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	auctionsStream, personsStream, outputStream, err := getInOutStreams(ctx, h.env, sp, true)
+	auctionsStream, personsStream, outputStream, err := getInOutStreams(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: fmt.Sprintf("get input output err: %v", err)}
 	}
@@ -223,47 +262,33 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	var auctionsWinStore store.WindowStore
 	var toPersonsWinTab *processor.MeteredProcessor
 	var personsWinTab store.WindowStore
+	aucTabName := "auctionsBySellerIDWinTab"
+	perTabName := "personsByIDWinTab"
 	if sp.TableType == uint8(store.IN_MEM) {
-		compare := concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
-			l, ok := lhs.(uint64)
-			if ok {
-				r := rhs.(uint64)
-				if l < r {
-					return -1
-				} else if l == r {
-					return 0
-				} else {
-					return 1
-				}
-			} else {
-				lv := lhs.(store.VersionedKey)
-				rv := rhs.(store.VersionedKey)
-				lvk := lv.Key.(uint64)
-				rvk := rv.Key.(uint64)
-				if lvk < rvk {
-					return -1
-				} else if lvk == rvk {
-					if lv.Version < rv.Version {
-						return -1
-					} else if lv.Version == rv.Version {
-						return 0
-					} else {
-						return 1
-					}
-				} else {
-					return 1
-				}
-			}
-		})
-
-		toAuctionsWindowTab, auctionsWinStore, err = processor.ToInMemWindowTable(
-			"auctionsBySellerIDWinTab", joinWindows, compare, time.Duration(sp.WarmupS)*time.Second)
+		compare := concurrent_skiplist.CompareFunc(q8CompareFunc)
+		format := commtypes.SerdeFormat(sp.SerdeFormat)
+		mpAuc, err := store_with_changelog.NewMaterializeParamForWindowStore(h.env,
+			sss.srcKVMsgSerdes, aucTabName, commtypes.CreateStreamParam{
+				Format:       format,
+				NumPartition: sp.NumInPartition,
+			}, sp.ParNum, compare)
+		if err != nil {
+			return &common.FnOutput{Success: false, Message: err.Error()}
+		}
+		toAuctionsWindowTab, auctionsWinStore, err = store_with_changelog.ToInMemWindowTableWithChangelog(
+			aucTabName, mpAuc, joinWindows, time.Duration(sp.WarmupS)*time.Second)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: fmt.Sprintf("to table err: %v", err)}
 		}
 
-		toPersonsWinTab, personsWinTab, err = processor.ToInMemWindowTable(
-			"personsByIDWinTab", joinWindows, compare, time.Duration(sp.WarmupS)*time.Second,
+		mpPer, err := store_with_changelog.NewMaterializeParamForWindowStore(h.env,
+			sss.srcKVMsgSerdes, perTabName, commtypes.CreateStreamParam{
+				Format:       format,
+				NumPartition: sp.NumInPartition,
+			}, sp.ParNum, compare)
+
+		toPersonsWinTab, personsWinTab, err = store_with_changelog.ToInMemWindowTableWithChangelog(
+			perTabName, mpPer, joinWindows, time.Duration(sp.WarmupS)*time.Second,
 		)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: fmt.Sprintf("to table err: %v", err)}
@@ -274,13 +299,13 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
 		toAuctionsWindowTab, auctionsWinStore, err = processor.ToMongoDBWindowTable(ctx,
-			"auctionsBySellerIDWinTab", client, joinWindows, sss.keySerdes[0], sss.valSerdes[0],
+			aucTabName, client, joinWindows, sss.srcKVMsgSerdes.KeySerde, sss.srcKVMsgSerdes.ValSerde,
 			time.Duration(sp.WarmupS)*time.Second)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: fmt.Sprintf("to table err: %v", err)}
 		}
 		toPersonsWinTab, personsWinTab, err = processor.ToMongoDBWindowTable(ctx,
-			"personsByIDWinTab", client, joinWindows, sss.keySerdes[1], sss.valSerdes[1],
+			perTabName, client, joinWindows, sss.srcKVMsgSerdes.KeySerde, sss.srcKVMsgSerdes.ValSerde,
 			time.Duration(sp.WarmupS)*time.Second)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: fmt.Sprintf("to table err: %v", err)}
@@ -363,7 +388,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		parNum:        sp.ParNum,
 		runner:        pJoinA,
 		offMu:         &h.offMu,
-		trackParFunc:  transaction.DefaultTrackSubstreamFunc,
+		trackParFunc:  tran_interface.DefaultTrackSubstreamFunc,
 		cHashMu:       &h.cHashMu,
 		cHash:         h.cHash,
 		currentOffset: currentOffset,
@@ -374,7 +399,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		parNum:        sp.ParNum,
 		runner:        aJoinP,
 		offMu:         &h.offMu,
-		trackParFunc:  transaction.DefaultTrackSubstreamFunc,
+		trackParFunc:  tran_interface.DefaultTrackSubstreamFunc,
 		cHashMu:       &h.cHashMu,
 		cHash:         h.cHash,
 		currentOffset: currentOffset,
@@ -396,12 +421,6 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			close(aucDone)
 			debug.Fprintf(os.Stderr, "waiting join proc to exit\n")
 			wg.Wait()
-			/*
-				sss.sink.CloseAsyncPush()
-				if err = sss.sink.Flush(ctx); err != nil {
-					panic(err)
-				}
-			*/
 			err := sss.sink.Flush(ctx)
 			if err != nil {
 				panic(err)
@@ -409,15 +428,6 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			// debug.Fprintf(os.Stderr, "join procs exited\n")
 		},
 		ResumeFunc: func() {
-			/*
-				sss.sink.InnerSink().RebuildMsgChan()
-				if sp.EnableTransaction {
-					sss.sink.InnerSink().StartAsyncPushNoTick(ctx)
-				} else {
-					sss.sink.InnerSink().StartAsyncPushWithTick(ctx)
-					sss.sink.InitFlushTimer()
-				}
-			*/
 			// debug.Fprintf(os.Stderr, "resume join porc\n")
 			personDone = make(chan struct{}, 1)
 			aucDone = make(chan struct{}, 1)
@@ -431,14 +441,6 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		},
 		CloseFunc: nil,
 		InitFunc: func(progArgs interface{}) {
-			/*
-				if sp.EnableTransaction {
-					sss.sink.InnerSink().StartAsyncPushNoTick(ctx)
-				} else {
-					sss.sink.InnerSink().StartAsyncPushWithTick(ctx)
-					sss.sink.InitFlushTimer()
-				}
-			*/
 			sss.src1.StartWarmup()
 			sss.src2.StartWarmup()
 			sss.sink.StartWarmup()
@@ -458,25 +460,28 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	wg.Add(1)
 	go joinProcLoop(actx, auctionsOutChan, joinProcAuction, &wg, aucRun, aucDone)
 
-	srcs := map[string]processor.Source{sp.InputTopicNames[0]: auctionsSrc, sp.InputTopicNames[1]: personsSrc}
+	srcs := []source_sink.Source{auctionsSrc, personsSrc}
 	if sp.EnableTransaction {
+		sinks_arr := []source_sink.Sink{sink}
 		var wsc []*transaction.WindowStoreChangelog
 		if sp.TableType == uint8(store.IN_MEM) {
+			auctionsWinStore_mem := auctionsWinStore.(*store_with_changelog.InMemoryWindowStoreWithChangelog)
+			mpAuc := auctionsWinStore_mem.MaterializeParam()
+			personsWinTab_mem := personsWinTab.(*store_with_changelog.InMemoryWindowStoreWithChangelog)
+			mpPer := personsWinTab_mem.MaterializeParam()
 			wsc = []*transaction.WindowStoreChangelog{
 				transaction.NewWindowStoreChangelog(
 					auctionsWinStore,
-					auctionsStream,
+					mpAuc.ChangelogManager,
 					nil,
-					sss.keySerdes[0],
-					sss.valSerdes[0],
+					sss.srcKVMsgSerdes,
 					sp.ParNum,
 				),
 				transaction.NewWindowStoreChangelog(
 					personsWinTab,
-					personsStream,
+					mpPer.ChangelogManager,
 					nil,
-					sss.keySerdes[1],
-					sss.valSerdes[1],
+					sss.srcKVMsgSerdes,
 					sp.ParNum,
 				),
 			}
@@ -504,16 +509,15 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			ProcArgs:              procArgs,
 			Env:                   h.env,
 			Srcs:                  srcs,
-			OutputStreams:         []*sharedlog_stream.ShardedSharedLogStream{outputStream},
-			QueryInput:            sp,
+			Sinks:                 sinks_arr,
 			TransactionalId:       fmt.Sprintf("%s-%d", h.funcName, sp.ParNum),
-			MsgSerde:              sss.msgSerde,
 			WindowStoreChangelogs: wsc,
 			KVChangelogs:          nil,
 			FixedOutParNum:        0,
 		}
+		UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
+			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				joinProcAuction.trackParFunc = trackParFunc
 				joinProcPerson.trackParFunc = trackParFunc
 				procArgs.(*q8JoinStreamProcessArgs).recordFinishFunc = recordFinishFunc

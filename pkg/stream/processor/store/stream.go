@@ -9,19 +9,19 @@ import (
 )
 
 type Stream interface {
-	Push(ctx context.Context, payload []byte, parNum uint8, isControl bool, payloadIsArr bool) (uint64, error)
-	PushWithTag(ctx context.Context, payload []byte, parNumber uint8, tags []uint64, isControl bool, payloadIsArr bool) (uint64, error)
-	ReadNext(ctx context.Context, parNum uint8) (commtypes.TaskIDGen, []commtypes.RawMsg /* payload */, error)
-	ReadNextWithTag(ctx context.Context, parNumber uint8, tag uint64) (commtypes.TaskIDGen, []commtypes.RawMsg, error)
-	ReadBackwardWithTag(ctx context.Context, tailSeqNum uint64, parNum uint8, tag uint64) (*commtypes.TaskIDGen, *commtypes.RawMsg, error)
+	Push(ctx context.Context, payload []byte, parNum uint8, isControl bool, payloadIsArr bool,
+		taskId uint64, taskEpoch uint16, transactionID uint64) (uint64, error)
+	PushWithTag(ctx context.Context, payload []byte, parNumber uint8, tags []uint64, isControl bool, payloadIsArr bool,
+		taskId uint64, taskEpoch uint16, transactionID uint64) (uint64, error)
+	ReadNext(ctx context.Context, parNum uint8) (*commtypes.RawMsg /* payload */, error)
+	ReadNextWithTag(ctx context.Context, parNumber uint8, tag uint64) (*commtypes.RawMsg, error)
+	ReadBackwardWithTag(ctx context.Context, tailSeqNum uint64, parNum uint8, tag uint64) (*commtypes.RawMsg, error)
 	TopicName() string
 	TopicNameHash() uint64
 	SetCursor(cursor uint64, parNum uint8)
-	SetTaskId(tid uint64)
-	SetTaskEpoch(epoch uint16)
 	NumPartition() uint8
-	Flush(ctx context.Context) error
-	BufPush(ctx context.Context, payload []byte, parNum uint8) error
+	Flush(ctx context.Context, taskId uint64, taskEpoch uint16, transactionID uint64) error
+	BufPush(ctx context.Context, payload []byte, parNum uint8, taskId uint64, taskEpoch uint16, transactionID uint64) error
 }
 
 type MeteredStream struct {
@@ -63,18 +63,20 @@ func NewMeteredStream(stream Stream) *MeteredStream {
 	}
 }
 
-func (ms *MeteredStream) Flush(ctx context.Context) error {
-	return ms.stream.Flush(ctx)
+func (ms *MeteredStream) Flush(ctx context.Context, taskId uint64, taskEpoch uint16, transactionID uint64) error {
+	return ms.stream.Flush(ctx, taskId, taskEpoch, transactionID)
 }
 
-func (ms *MeteredStream) BufPush(ctx context.Context, payload []byte, parNum uint8) error {
-	return ms.stream.BufPush(ctx, payload, parNum)
+func (ms *MeteredStream) BufPush(ctx context.Context, payload []byte, parNum uint8, taskId uint64, taskEpoch uint16, transactionID uint64) error {
+	return ms.stream.BufPush(ctx, payload, parNum, taskId, taskEpoch, transactionID)
 }
 
-func (ms *MeteredStream) Push(ctx context.Context, payload []byte, parNum uint8, isControl bool, payloadIsArr bool) (uint64, error) {
+func (ms *MeteredStream) Push(ctx context.Context, payload []byte, parNum uint8, isControl bool, payloadIsArr bool,
+	taskId uint64, taskEpoch uint16, transactionID uint64,
+) (uint64, error) {
 	if ms.measure {
 		procStart := time.Now()
-		seq, err := ms.stream.Push(ctx, payload, parNum, isControl, payloadIsArr)
+		seq, err := ms.stream.Push(ctx, payload, parNum, isControl, payloadIsArr, taskId, taskEpoch, transactionID)
 		elapsed := time.Since(procStart)
 
 		ms.pLMu.Lock()
@@ -83,13 +85,15 @@ func (ms *MeteredStream) Push(ctx context.Context, payload []byte, parNum uint8,
 
 		return seq, err
 	}
-	return ms.stream.Push(ctx, payload, parNum, isControl, payloadIsArr)
+	return ms.stream.Push(ctx, payload, parNum, isControl, payloadIsArr, taskId, taskEpoch, transactionID)
 }
 
-func (ms *MeteredStream) PushWithTag(ctx context.Context, payload []byte, parNumber uint8, tags []uint64, isControl bool, payloadIsArr bool) (uint64, error) {
+func (ms *MeteredStream) PushWithTag(ctx context.Context, payload []byte, parNumber uint8, tags []uint64, isControl bool, payloadIsArr bool,
+	taskId uint64, taskEpoch uint16, transactionID uint64,
+) (uint64, error) {
 	if ms.measure {
 		procStart := time.Now()
-		seq, err := ms.stream.PushWithTag(ctx, payload, parNumber, tags, isControl, payloadIsArr)
+		seq, err := ms.stream.PushWithTag(ctx, payload, parNumber, tags, isControl, payloadIsArr, taskId, taskEpoch, transactionID)
 		elapsed := time.Since(procStart)
 
 		ms.pWTLMu.Lock()
@@ -98,50 +102,50 @@ func (ms *MeteredStream) PushWithTag(ctx context.Context, payload []byte, parNum
 
 		return seq, err
 	}
-	return ms.stream.PushWithTag(ctx, payload, parNumber, tags, isControl, payloadIsArr)
+	return ms.stream.PushWithTag(ctx, payload, parNumber, tags, isControl, payloadIsArr, taskId, taskEpoch, transactionID)
 }
 
-func (ms *MeteredStream) ReadNext(ctx context.Context, parNum uint8) (commtypes.TaskIDGen, []commtypes.RawMsg /* payload */, error) {
+func (ms *MeteredStream) ReadNext(ctx context.Context, parNum uint8) (*commtypes.RawMsg /* payload */, error) {
 	if ms.measure {
 		procStart := time.Now()
-		appIdGen, rawMsgs, err := ms.stream.ReadNext(ctx, parNum)
+		rawMsg, err := ms.stream.ReadNext(ctx, parNum)
 		elapsed := time.Since(procStart)
 
 		ms.rNLMu.Lock()
 		ms.readNextLatencies = append(ms.readNextLatencies, int(elapsed.Microseconds()))
 		ms.rNLMu.Unlock()
 
-		return appIdGen, rawMsgs, err
+		return rawMsg, err
 	}
 	return ms.stream.ReadNext(ctx, parNum)
 }
 
-func (ms *MeteredStream) ReadNextWithTag(ctx context.Context, parNumber uint8, tag uint64) (commtypes.TaskIDGen, []commtypes.RawMsg, error) {
+func (ms *MeteredStream) ReadNextWithTag(ctx context.Context, parNumber uint8, tag uint64) (*commtypes.RawMsg, error) {
 	if ms.measure {
 		procStart := time.Now()
-		appIdGen, rawMsgs, err := ms.stream.ReadNextWithTag(ctx, parNumber, tag)
+		rawMsg, err := ms.stream.ReadNextWithTag(ctx, parNumber, tag)
 		elapsed := time.Since(procStart)
 
 		ms.rNWTLMu.Lock()
 		ms.readNextWithTagLatencies = append(ms.readNextWithTagLatencies, int(elapsed.Microseconds()))
 		ms.rNWTLMu.Unlock()
 
-		return appIdGen, rawMsgs, err
+		return rawMsg, err
 	}
 	return ms.stream.ReadNextWithTag(ctx, parNumber, tag)
 }
 
-func (ms *MeteredStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum uint64, parNum uint8, tag uint64) (*commtypes.TaskIDGen, *commtypes.RawMsg, error) {
+func (ms *MeteredStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum uint64, parNum uint8, tag uint64) (*commtypes.RawMsg, error) {
 	if ms.measure {
 		procStart := time.Now()
-		appIdGen, rawMsg, err := ms.stream.ReadBackwardWithTag(ctx, tailSeqNum, parNum, tag)
+		rawMsg, err := ms.stream.ReadBackwardWithTag(ctx, tailSeqNum, parNum, tag)
 		elapsed := time.Since(procStart)
 
 		ms.rBWTLMu.Lock()
 		ms.readBackwardWithTagLatencies = append(ms.readBackwardWithTagLatencies, int(elapsed.Microseconds()))
 		ms.rBWTLMu.Unlock()
 
-		return appIdGen, rawMsg, err
+		return rawMsg, err
 	}
 	return ms.stream.ReadBackwardWithTag(ctx, tailSeqNum, parNum, tag)
 }
@@ -160,14 +164,6 @@ func (ms *MeteredStream) TopicNameHash() uint64 {
 
 func (ms *MeteredStream) SetCursor(cursor uint64, parNum uint8) {
 	ms.stream.SetCursor(cursor, parNum)
-}
-
-func (ms *MeteredStream) SetTaskId(tid uint64) {
-	ms.stream.SetTaskId(tid)
-}
-
-func (ms *MeteredStream) SetTaskEpoch(epoch uint16) {
-	ms.stream.SetTaskEpoch(epoch)
 }
 
 func (ms *MeteredStream) GetPushLatencies() []int {

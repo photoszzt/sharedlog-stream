@@ -1,4 +1,4 @@
-package processor
+package source_sink
 
 import (
 	"context"
@@ -19,27 +19,42 @@ type MeteredSource struct {
 	afterWarmup bool
 }
 
-var _ = Source(&MeteredSource{})
-
-func NewMeteredSource(src Source, warmup time.Duration) *MeteredSource {
+func checkMeasureSource() bool {
 	measure_str := os.Getenv("MEASURE_SRC")
 	measure := false
 	if measure_str == "true" || measure_str == "1" {
 		measure = true
 	}
+	return measure
+}
+
+func NewMeteredSource(src Source, warmup time.Duration) *MeteredSource {
+
 	return &MeteredSource{
 		src:         src,
 		latencies:   make([]int, 0, 128),
-		measure:     measure,
+		measure:     checkMeasureSource(),
 		warmup:      warmup,
 		afterWarmup: false,
 	}
+}
+
+func (s *MeteredSource) InTransaction(serdeFormat commtypes.SerdeFormat) error {
+	return s.src.InTransaction(serdeFormat)
 }
 
 func (s *MeteredSource) StartWarmup() {
 	if s.measure {
 		s.initial = time.Now()
 	}
+}
+
+func (s *MeteredSource) IsInitialSource() bool {
+	return s.src.IsInitialSource()
+}
+
+func (s *MeteredSource) SetInitialSource(initial bool) {
+	s.src.SetInitialSource(initial)
 }
 
 func (s *MeteredSource) Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {

@@ -11,9 +11,11 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sharedlog-stream/pkg/treemap"
 	"sync"
 	"time"
@@ -103,32 +105,32 @@ func (h *q4JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	stream1 *sharedlog_stream.ShardedSharedLogStream,
 	stream2 *sharedlog_stream.ShardedSharedLogStream,
 	outputStream *sharedlog_stream.ShardedSharedLogStream,
-) (*processor.MeteredSource, /* src1 */
-	*processor.MeteredSource, /* src2 */
-	*sharedlog_stream.ConcurrentMeteredSyncSink,
-	commtypes.MsgSerde,
+) (*source_sink.MeteredSource, /* src1 */
+	*source_sink.MeteredSource, /* src2 */
+	*source_sink.ConcurrentMeteredSyncSink,
 	error,
 ) {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("get msg serde err: %v", err)
+		return nil, nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
 
 	eventSerde, err := getEventSerde(sp.SerdeFormat)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("get event serde err: %v", err)
+		return nil, nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}
-	auctionsConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      common.SrcConsumeTimeout,
-		KeyDecoder:   commtypes.Uint64Decoder{},
-		ValueDecoder: eventSerde,
-		MsgDecoder:   msgSerde,
+	kvmsgSerdes := commtypes.KVMsgSerdes{
+		KeySerde: commtypes.Uint64Serde{},
+		ValSerde: eventSerde,
+		MsgSerde: msgSerde,
 	}
-	personsConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      common.SrcConsumeTimeout,
-		KeyDecoder:   commtypes.Uint64Decoder{},
-		ValueDecoder: eventSerde,
-		MsgDecoder:   msgSerde,
+	auctionsConfig := &source_sink.StreamSourceConfig{
+		Timeout:     common.SrcConsumeTimeout,
+		KVMsgSerdes: kvmsgSerdes,
+	}
+	personsConfig := &source_sink.StreamSourceConfig{
+		Timeout:     common.SrcConsumeTimeout,
+		KVMsgSerdes: kvmsgSerdes,
 	}
 	var abSerde commtypes.Serde
 	if sp.SerdeFormat == uint8(commtypes.JSON) {
@@ -136,31 +138,35 @@ func (h *q4JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	} else {
 		abSerde = &ntypes.AuctionBidMsgpSerde{}
 	}
-	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeySerde:      commtypes.Uint64Serde{},
-		ValueSerde:    abSerde,
-		MsgSerde:      msgSerde,
+	outConfig := &source_sink.StreamSinkConfig{
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			KeySerde: commtypes.Uint64Serde{},
+			ValSerde: abSerde,
+			MsgSerde: msgSerde,
+		},
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 
-	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, auctionsConfig),
+	src1 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream1, auctionsConfig),
 		time.Duration(sp.WarmupS)*time.Second)
-	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, personsConfig),
+	src2 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream2, personsConfig),
 		time.Duration(sp.WarmupS)*time.Second)
-	sink := sharedlog_stream.NewConcurrentMeteredSyncSink(sharedlog_stream.NewShardedSharedLogStreamSyncSink(outputStream, outConfig),
+	sink := source_sink.NewConcurrentMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(outputStream, outConfig),
 		time.Duration(sp.WarmupS)*time.Second)
-	return src1, src2, sink, msgSerde, nil
+	src1.SetInitialSource(false)
+	src2.SetInitialSource(false)
+	return src1, src2, sink, nil
 }
 
 func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	auctionsStream, bidsStream, outputStream, err := getInOutStreams(ctx, h.env, sp, true)
+	auctionsStream, bidsStream, outputStream, err := getInOutStreams(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("get input output err: %v", err),
 		}
 	}
-	auctionsSrc, bidsSrc, sink, msgSerde, err := h.getSrcSink(ctx, sp, auctionsStream,
+	auctionsSrc, bidsSrc, sink, err := h.getSrcSink(ctx, sp, auctionsStream,
 		bidsStream, outputStream)
 	if err != nil {
 		return &common.FnOutput{
@@ -288,7 +294,7 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		parNum:        sp.ParNum,
 		runner:        bJoinA,
 		offMu:         &h.offMu,
-		trackParFunc:  transaction.DefaultTrackSubstreamFunc,
+		trackParFunc:  tran_interface.DefaultTrackSubstreamFunc,
 		cHashMu:       &h.cHashMu,
 		cHash:         h.cHash,
 		currentOffset: currentOffset,
@@ -299,7 +305,7 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		parNum:        sp.ParNum,
 		runner:        aJoinB,
 		offMu:         &h.offMu,
-		trackParFunc:  transaction.DefaultTrackSubstreamFunc,
+		trackParFunc:  tran_interface.DefaultTrackSubstreamFunc,
 		cHashMu:       &h.cHashMu,
 		cHash:         h.cHash,
 		currentOffset: currentOffset,
@@ -319,27 +325,12 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 			close(bidsDone)
 			close(aucDone)
 			wg.Wait()
-			/*
-				sink.CloseAsyncPush()
-				if err = sink.Flush(ctx); err != nil {
-					panic(err)
-				}
-			*/
 			err := sink.Flush(ctx)
 			if err != nil {
 				panic(err)
 			}
 		},
 		ResumeFunc: func() {
-			/*
-				sink.InnerSink().RebuildMsgChan()
-				if sp.EnableTransaction {
-					sink.InnerSink().StartAsyncPushNoTick(ctx)
-				} else {
-					sink.InnerSink().StartAsyncPushWithTick(ctx)
-					sink.InitFlushTimer()
-				}
-			*/
 			bidsDone = make(chan struct{})
 			aucDone = make(chan struct{})
 			wg.Add(1)
@@ -351,43 +342,31 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		},
 		CloseFunc: nil,
 		InitFunc: func(progArgs interface{}) {
-			/*
-				if sp.EnableTransaction {
-					sink.InnerSink().StartAsyncPushNoTick(ctx)
-				} else {
-					sink.InnerSink().StartAsyncPushWithTick(ctx)
-					sink.InitFlushTimer()
-				}
-			*/
-
 			auctionsSrc.StartWarmup()
 			bidsSrc.StartWarmup()
 			sink.StartWarmup()
 			toAuctionsTable.StartWarmup()
 			toBidsTable.StartWarmup()
-
 		},
 	}
 
 	if sp.EnableTransaction {
-		srcs := make(map[string]processor.Source)
-		srcs[sp.InputTopicNames[0]] = auctionsSrc
-		srcs[sp.InputTopicNames[1]] = bidsSrc
+		srcs := []source_sink.Source{auctionsSrc, bidsSrc}
+		sinks_arr := []source_sink.Sink{sink}
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
-			ProcArgs:      procArgs,
-			Env:           h.env,
-			MsgSerde:      msgSerde,
-			Srcs:          srcs,
-			OutputStreams: []*sharedlog_stream.ShardedSharedLogStream{outputStream},
-			QueryInput:    sp,
+			ProcArgs: procArgs,
+			Env:      h.env,
+			Srcs:     srcs,
+			Sinks:    sinks_arr,
 			TransactionalId: fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0]),
 			KVChangelogs:          nil,
 			WindowStoreChangelogs: nil,
 			FixedOutParNum:        0,
 		}
+		UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
+			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				joinProcAuction.trackParFunc = trackParFunc
 				joinProcBid.trackParFunc = trackParFunc
 				procArgs.(*q4JoinTableProcessArgs).recordFinishFunc = recordFinishFunc

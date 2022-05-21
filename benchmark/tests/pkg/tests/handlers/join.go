@@ -13,10 +13,12 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -67,38 +69,31 @@ func (h *joinHandler) tests(ctx context.Context, sp *test_types.TestInput) *comm
 func (h *joinHandler) getSrcSink(
 	ctx context.Context,
 	flush time.Duration,
+	inKVMsgSerdes commtypes.KVMsgSerdes,
+	outKVMsgSerdes commtypes.KVMsgSerdes,
 	stream1 *sharedlog_stream.ShardedSharedLogStream,
 	stream2 *sharedlog_stream.ShardedSharedLogStream,
 	outputStream *sharedlog_stream.ShardedSharedLogStream,
-) (*processor.MeteredSource, /* src1 */
-	*processor.MeteredSource, /* src2 */
-	*sharedlog_stream.ConcurrentMeteredSink, error,
+) (*source_sink.ShardedSharedLogStreamSource, /* src1 */
+	*source_sink.ShardedSharedLogStreamSource, /* src2 */
+	*source_sink.ShardedSharedLogStreamSyncSink,
+	error,
 ) {
-	msgSerde, err := commtypes.GetMsgSerde(uint8(commtypes.JSON))
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("get msg serde err: %v", err)
+	src1Config := &source_sink.StreamSourceConfig{
+		Timeout:     common.SrcConsumeTimeout,
+		KVMsgSerdes: inKVMsgSerdes,
 	}
-	src1Config := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      common.SrcConsumeTimeout,
-		KeyDecoder:   commtypes.IntSerde{},
-		ValueDecoder: strTsJSONSerde{},
-		MsgDecoder:   msgSerde,
+	src2Config := &source_sink.StreamSourceConfig{
+		Timeout:     common.SrcConsumeTimeout,
+		KVMsgSerdes: inKVMsgSerdes,
 	}
-	src2Config := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      common.SrcConsumeTimeout,
-		KeyDecoder:   commtypes.IntSerde{},
-		ValueDecoder: strTsJSONSerde{},
-		MsgDecoder:   msgSerde,
-	}
-	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeySerde:      commtypes.IntSerde{},
-		ValueSerde:    commtypes.StringSerde{},
-		MsgSerde:      msgSerde,
+	outConfig := &source_sink.StreamSinkConfig{
+		KVMsgSerdes:   outKVMsgSerdes,
 		FlushDuration: flush,
 	}
-	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, src1Config), 0)
-	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, src2Config), 0)
-	sink := sharedlog_stream.NewConcurrentMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(outputStream, outConfig), 0)
+	src1 := source_sink.NewShardedSharedLogStreamSource(stream1, src1Config)
+	src2 := source_sink.NewShardedSharedLogStreamSource(stream2, src2Config)
+	sink := source_sink.NewShardedSharedLogStreamSyncSink(outputStream, outConfig)
 	return src1, src2, sink, nil
 }
 
@@ -116,10 +111,21 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	srcStream1.SetInTransaction(true)
-	srcStream2.SetInTransaction(true)
-	sinkStream.SetInTransaction(true)
-	src1, src2, sink, err := h.getSrcSink(ctx, common.FlushDuration, srcStream1, srcStream2, sinkStream)
+	msgSerde := commtypes.MessageSerializedJSONSerde{}
+	kSerde := commtypes.IntSerde{}
+	vSerde := strTsJSONSerde{}
+	inKVMsgSerdes := commtypes.KVMsgSerdes{
+		KeySerde: kSerde,
+		ValSerde: vSerde,
+		MsgSerde: msgSerde,
+	}
+	outKVMsgSerdes := commtypes.KVMsgSerdes{
+		KeySerde: kSerde,
+		ValSerde: commtypes.StringSerde{},
+		MsgSerde: msgSerde,
+	}
+	src1, src2, sink, err := h.getSrcSink(ctx, common.FlushDuration, inKVMsgSerdes,
+		outKVMsgSerdes, srcStream1, srcStream2, sinkStream)
 	if err != nil {
 		panic(err)
 	}
@@ -129,9 +135,8 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 		panic(err)
 	}
 	mongoAddr := "mongodb://localhost:27017"
-	msgSerde := commtypes.MessageSerializedJSONSerde{}
-	kSerde := commtypes.IntSerde{}
-	vSerde := strTsJSONSerde{}
+
+	payloadArrSerde := sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDE
 	client, err := store.InitMongoDBClient(ctx, mongoAddr)
 	if err != nil {
 		panic(err)
@@ -154,8 +159,8 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	sharedTimeTracker := processor.NewTimeTracker()
 	oneJoinTwoProc := processor.NewStreamStreamJoinProcessor(winTab2, joinWindows, joiner, false, true, sharedTimeTracker)
 	twoJoinOneProc := processor.NewStreamStreamJoinProcessor(winTab1, joinWindows, processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker)
-	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *sharedlog_stream.ConcurrentMeteredSink,
-		trackParFunc transaction.TrackKeySubStreamFunc,
+	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *source_sink.ShardedSharedLogStreamSyncSink,
+		trackParFunc tran_interface.TrackKeySubStreamFunc,
 	) error {
 		_, err := toWinTab1.ProcessAndReturn(ctx, m)
 		if err != nil {
@@ -167,8 +172,8 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 		}
 		return pushMsgsToSink(ctx, sink, joinedMsgs, trackParFunc)
 	}
-	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *sharedlog_stream.ConcurrentMeteredSink,
-		trackParFunc transaction.TrackKeySubStreamFunc,
+	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *source_sink.ShardedSharedLogStreamSyncSink,
+		trackParFunc tran_interface.TrackKeySubStreamFunc,
 	) error {
 		_, err := toWinTab2.ProcessAndReturn(ctx, m)
 		if err != nil {
@@ -181,21 +186,15 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 		return pushMsgsToSink(ctx, sink, joinedMsgs, trackParFunc)
 	}
 
-	sp := &common.QueryInput{
-		SerdeFormat: uint8(commtypes.JSON),
-	}
 	streamTaskArgs := &transaction.StreamTaskArgsTransaction{
 		Env:             h.env,
-		QueryInput:      sp,
-		MsgSerde:        msgSerde,
-		OutputStreams:   []*sharedlog_stream.ShardedSharedLogStream{sinkStream},
 		TransactionalId: "joinTestMongo",
 	}
 	tm, err := transaction.SetupTransactionManager(ctx, streamTaskArgs)
 	if err != nil {
 		panic(err)
 	}
-	debug.Fprintf(os.Stderr, "task id: %x, task epoch: %d\n", tm.CurrentTaskId, tm.CurrentEpoch)
+	debug.Fprintf(os.Stderr, "task id: %x, task epoch: %d\n", tm.GetCurrentTaskId(), tm.GetCurrentEpoch())
 	trackParFunc := func(ctx context.Context,
 		key interface{},
 		keySerde commtypes.Serde,
@@ -221,7 +220,8 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	for i := 0; i < 2; i++ {
 		err := pushMsgToStream(ctx, expected_keys[i],
 			&strTs{Val: fmt.Sprintf("A%d", expected_keys[i]), Ts: 0},
-			kSerde, vSerde, msgSerde, srcStream1)
+			inKVMsgSerdes, srcStream1,
+			tm.GetCurrentTaskId(), tm.GetCurrentEpoch(), tm.GetTransactionID())
 		if err != nil {
 			panic(err)
 		}
@@ -255,7 +255,8 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	for i := 0; i < 2; i++ {
 		err := pushMsgToStream(ctx, expected_keys[i],
 			&strTs{Val: fmt.Sprintf("a%d", expected_keys[i]), Ts: 0},
-			kSerde, vSerde, msgSerde, srcStream2)
+			inKVMsgSerdes, srcStream2,
+			tm.GetCurrentTaskId(), tm.GetCurrentEpoch(), tm.GetTransactionID())
 		if err != nil {
 			panic(err)
 		}
@@ -298,7 +299,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 		panic(err)
 	}
 	tm.RecordTopicStreams(sinkStream.TopicName(), sinkStream)
-	got, err := readMsgs(ctx, kSerde, commtypes.StringSerde{}, msgSerde, sinkStream)
+	got, err := readMsgs(ctx, outKVMsgSerdes, payloadArrSerde, commtypes.JSON, sinkStream)
 	if err != nil {
 		panic(err)
 	}
@@ -325,10 +326,21 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	srcStream1.SetInTransaction(true)
-	srcStream2.SetInTransaction(true)
-	sinkStream.SetInTransaction(true)
-	src1, src2, sink, err := h.getSrcSink(ctx, common.FlushDuration, srcStream1, srcStream2, sinkStream)
+	msgSerde := commtypes.MessageSerializedJSONSerde{}
+	kSerde := commtypes.IntSerde{}
+	vSerde := strTsJSONSerde{}
+	inKVMsgSerdes := commtypes.KVMsgSerdes{
+		KeySerde: kSerde,
+		ValSerde: vSerde,
+		MsgSerde: msgSerde,
+	}
+	outKVMsgSerdes := commtypes.KVMsgSerdes{
+		KeySerde: kSerde,
+		ValSerde: commtypes.StringSerde{},
+		MsgSerde: msgSerde,
+	}
+	src1, src2, sink, err := h.getSrcSink(ctx, common.FlushDuration, inKVMsgSerdes,
+		outKVMsgSerdes, srcStream1, srcStream2, sinkStream)
 	if err != nil {
 		panic(err)
 	}
@@ -387,8 +399,8 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	sharedTimeTracker := processor.NewTimeTracker()
 	oneJoinTwoProc := processor.NewStreamStreamJoinProcessor(winTab2, joinWindows, joiner, false, true, sharedTimeTracker)
 	twoJoinOneProc := processor.NewStreamStreamJoinProcessor(winTab1, joinWindows, processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker)
-	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *sharedlog_stream.ConcurrentMeteredSink,
-		trackParFunc transaction.TrackKeySubStreamFunc,
+	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *source_sink.ShardedSharedLogStreamSyncSink,
+		trackParFunc tran_interface.TrackKeySubStreamFunc,
 	) error {
 		_, err := toWinTab1.ProcessAndReturn(ctx, m)
 		if err != nil {
@@ -400,8 +412,8 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		}
 		return pushMsgsToSink(ctx, sink, joinedMsgs, trackParFunc)
 	}
-	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *sharedlog_stream.ConcurrentMeteredSink,
-		trackParFunc transaction.TrackKeySubStreamFunc,
+	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *source_sink.ShardedSharedLogStreamSyncSink,
+		trackParFunc tran_interface.TrackKeySubStreamFunc,
 	) error {
 		_, err := toWinTab2.ProcessAndReturn(ctx, m)
 		if err != nil {
@@ -414,18 +426,10 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		return pushMsgsToSink(ctx, sink, joinedMsgs, trackParFunc)
 	}
 
-	msgSerde := commtypes.MessageSerializedJSONSerde{}
-	kSerde := commtypes.IntSerde{}
-	vSerde := strTsJSONSerde{}
+	payloadArrSerde := sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDE
 
-	sp := &common.QueryInput{
-		SerdeFormat: uint8(commtypes.JSON),
-	}
 	streamTaskArgs := &transaction.StreamTaskArgsTransaction{
 		Env:             h.env,
-		QueryInput:      sp,
-		MsgSerde:        msgSerde,
-		OutputStreams:   []*sharedlog_stream.ShardedSharedLogStream{sinkStream},
 		TransactionalId: "joinTestsMem",
 	}
 	tm, err := transaction.SetupTransactionManager(ctx, streamTaskArgs)
@@ -457,7 +461,8 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	for i := 0; i < 2; i++ {
 		err := pushMsgToStream(ctx, expected_keys[i],
 			&strTs{Val: fmt.Sprintf("A%d", expected_keys[i]), Ts: 0},
-			kSerde, vSerde, msgSerde, srcStream1)
+			inKVMsgSerdes, srcStream1,
+			tm.GetCurrentTaskId(), tm.GetCurrentEpoch(), tm.GetTransactionID())
 		if err != nil {
 			panic(err)
 		}
@@ -467,19 +472,18 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		panic(err)
 	}
 
-	/*
-		got, err := readMsgs(ctx, kSerde, vSerde, msgSerde, srcStream1)
-		if err != nil {
-			panic(err)
-		}
-		expected := []commtypes.Message{
-			{Key: 0, Value: strTs{Val: "A0", Ts: 0}, Timestamp: 0},
-			{Key: 1, Value: strTs{Val: "A1", Ts: 0}, Timestamp: 0},
-		}
-		if !reflect.DeepEqual(expected, got) {
-			panic(fmt.Sprintf("should equal. expected: %v, got: %v", expected, got))
-		}
-	*/
+	got, err := readMsgs(ctx, inKVMsgSerdes, payloadArrSerde, commtypes.JSON, srcStream1)
+	if err != nil {
+		panic(err)
+	}
+	expected := []commtypes.Message{
+		{Key: 0, Value: strTs{Val: "A0", Ts: 0}, Timestamp: 0},
+		{Key: 1, Value: strTs{Val: "A1", Ts: 0}, Timestamp: 0},
+	}
+	if !reflect.DeepEqual(expected, got) {
+		panic(fmt.Sprintf("should equal. expected: %v, got: %v", expected, got))
+	}
+	srcStream1.SetCursor(0, 0)
 
 	tm.RecordTopicStreams(src2.TopicName(), srcStream2)
 	if err = tm.BeginTransaction(ctx, nil, nil); err != nil {
@@ -491,7 +495,8 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	for i := 0; i < 2; i++ {
 		err := pushMsgToStream(ctx, expected_keys[i],
 			&strTs{Val: fmt.Sprintf("a%d", expected_keys[i]), Ts: 0},
-			kSerde, vSerde, msgSerde, srcStream2)
+			inKVMsgSerdes, srcStream2,
+			tm.GetCurrentTaskId(), tm.GetCurrentEpoch(), tm.GetTransactionID())
 		if err != nil {
 			panic(err)
 		}
@@ -500,19 +505,19 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		panic(err)
 	}
 
-	/*
-		got, err = readMsgs(ctx, kSerde, vSerde, msgSerde, srcStream2)
-		if err != nil {
-			panic(err)
-		}
-		expected = []commtypes.Message{
-			{Key: 0, Value: strTs{Val: "a0", Ts: 0}, Timestamp: 0},
-			{Key: 1, Value: strTs{Val: "a1", Ts: 0}, Timestamp: 0},
-		}
-		if !reflect.DeepEqual(expected, got) {
-			panic(fmt.Sprintf("should equal. expected: %v, got: %v", expected, got))
-		}
-	*/
+	got, err = readMsgs(ctx, inKVMsgSerdes, payloadArrSerde, commtypes.JSON, srcStream2)
+	if err != nil {
+		panic(err)
+	}
+	expected = []commtypes.Message{
+		{Key: 0, Value: strTs{Val: "a0", Ts: 0}, Timestamp: 0},
+		{Key: 1, Value: strTs{Val: "a1", Ts: 0}, Timestamp: 0},
+	}
+	if !reflect.DeepEqual(expected, got) {
+		panic(fmt.Sprintf("should equal. expected: %v, got: %v", expected, got))
+	}
+	srcStream2.SetCursor(0, 0)
+
 	tm.RecordTopicStreams(src1.TopicName(), srcStream1)
 	tm.RecordTopicStreams(src2.TopicName(), srcStream2)
 	tm.RecordTopicStreams(sinkStream.TopicName(), sinkStream)
@@ -533,7 +538,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	if err = tm.CommitTransaction(ctx, nil, nil); err != nil {
 		panic(err)
 	}
-	got, err := readMsgs(ctx, kSerde, commtypes.StringSerde{}, msgSerde, sinkStream)
+	got, err = readMsgs(ctx, outKVMsgSerdes, payloadArrSerde, commtypes.JSON, sinkStream)
 	if err != nil {
 		panic(err)
 	}
@@ -547,104 +552,104 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 }
 
 func joinProc(ctx context.Context,
-	src *processor.MeteredSource,
-	sink *sharedlog_stream.ConcurrentMeteredSink,
+	src *source_sink.ShardedSharedLogStreamSource,
+	sink *source_sink.ShardedSharedLogStreamSyncSink,
 	trackParFunc func(ctx context.Context,
 		key interface{},
 		keySerde commtypes.Serde,
 		topicName string,
 		substreamId uint8,
 	) error,
-	runner func(ctx context.Context, m commtypes.Message, sink *sharedlog_stream.ConcurrentMeteredSink,
-		trackParFunc transaction.TrackKeySubStreamFunc,
+	runner func(ctx context.Context, m commtypes.Message, sink *source_sink.ShardedSharedLogStreamSyncSink,
+		trackParFunc tran_interface.TrackKeySubStreamFunc,
 	) error,
 ) {
-	gotMsgs, err := src.Consume(ctx, 0)
-	if err != nil {
-		if errors.IsStreamEmptyError(err) || errors.IsStreamTimeoutError(err) || err == errors.ErrStreamSourceTimeout {
-			return
+	for {
+		gotMsgs, err := src.Consume(ctx, 0)
+		if err != nil {
+			if errors.IsStreamEmptyError(err) || errors.IsStreamTimeoutError(err) || err == errors.ErrStreamSourceTimeout {
+				return
+			}
+			panic(err)
 		}
-		panic(err)
-	}
-	debug.Fprintf(os.Stderr, "%s got %v\n", src.TopicName(), gotMsgs)
-	for _, msg := range gotMsgs.Msgs {
-		if msg.MsgArr != nil {
-			for _, subMsg := range msg.MsgArr {
-				err = runner(ctx, subMsg, sink, trackParFunc)
+		debug.Fprintf(os.Stderr, "joinProc: %s got %v\n", src.TopicName(), gotMsgs)
+		for _, msg := range gotMsgs.Msgs {
+			if msg.MsgArr != nil {
+				for _, subMsg := range msg.MsgArr {
+					err = runner(ctx, subMsg, sink, trackParFunc)
+					if err != nil {
+						panic(err)
+					}
+				}
+			} else {
+				err = runner(ctx, msg.Msg, sink, trackParFunc)
 				if err != nil {
 					panic(err)
 				}
-			}
-		} else {
-			err = runner(ctx, msg.Msg, sink, trackParFunc)
-			if err != nil {
-				panic(err)
 			}
 		}
 	}
 }
 
 func readMsgs(ctx context.Context,
-	kSerde commtypes.Serde, vSerde commtypes.Serde,
-	msgSerde commtypes.MsgSerde, log *sharedlog_stream.ShardedSharedLogStream,
+	kvmsgSerdes commtypes.KVMsgSerdes,
+	payloadArrSerde commtypes.Serde,
+	serdeFormat commtypes.SerdeFormat,
+	log *sharedlog_stream.ShardedSharedLogStream,
 ) ([]commtypes.Message, error) {
 	ret := make([]commtypes.Message, 0)
+	tac, err := source_sink.NewTransactionAwareConsumer(log, serdeFormat)
+	if err != nil {
+		return nil, err
+	}
 	for {
-		_, msgs, err := log.ReadNext(ctx, 0)
-		debug.Fprintf(os.Stderr, "%s got %v\n", log.TopicName(), msgs)
+		msg, err := tac.ReadNext(ctx, 0)
 		if errors.IsStreamEmptyError(err) {
 			return ret, nil
 		} else if err != nil {
 			return ret, err
 		}
-		for _, msg := range msgs {
-			kBytes, valBytes, err := msgSerde.Decode(msg.Payload)
+		debug.Fprintf(os.Stderr, "readMsgs: %s got %v\n", log.TopicName(), msg)
+		debug.Fprintf(os.Stderr, "readMsgs: payload: %v\n", string(msg.Payload))
+		msgAndSeq, err := commtypes.DecodeRawMsg(
+			msg, kvmsgSerdes, payloadArrSerde, commtypes.DecodeMsg)
+		if err != nil {
+			return nil, fmt.Errorf("DecodeRawMsg err: %v", err)
+		}
+		/*
+			sx := val.(commtypes.StreamTimeExtractor)
+			ts, err := sx.ExtractStreamTime()
 			if err != nil {
-				return nil, fmt.Errorf("msgSerde err: %v", err)
+				return nil, err
 			}
-			key, err := kSerde.Decode(kBytes)
-			if err != nil {
-				return nil, fmt.Errorf("kSerde err: %v", err)
-			}
-			val, err := vSerde.Decode(valBytes)
-			if err != nil {
-				return nil, fmt.Errorf("vSerde err: %v", err)
-			}
-			/*
-				sx := val.(commtypes.StreamTimeExtractor)
-				ts, err := sx.ExtractStreamTime()
-				if err != nil {
-					return nil, err
-				}
-			*/
-			ret = append(ret, commtypes.Message{Key: key, Value: val, Timestamp: 0})
+		*/
+		if msgAndSeq.MsgArr != nil {
+			ret = append(ret, msgAndSeq.MsgArr...)
+		} else {
+			ret = append(ret, msgAndSeq.Msg)
 		}
 	}
 }
 
-func pushMsgToStream(ctx context.Context, key int, val *strTs, kSerde commtypes.Serde, vSerde commtypes.Serde, msgSerde commtypes.MsgSerde,
-	log *sharedlog_stream.ShardedSharedLogStream,
+func pushMsgToStream(ctx context.Context, key int, val *strTs, kvmsgSerdes commtypes.KVMsgSerdes,
+	log *sharedlog_stream.ShardedSharedLogStream, taskId uint64, taskEpoch uint16, transactionID uint64,
 ) error {
-	keyBytes, err := kSerde.Encode(key)
+	encoded, err := commtypes.EncodeMsg(commtypes.Message{Key: key, Value: val}, kvmsgSerdes)
 	if err != nil {
 		return err
 	}
-	valBytes, err := vSerde.Encode(val)
-	if err != nil {
+	if encoded != nil {
+		debug.Fprintf(os.Stderr, "%s encoded: \n", log.TopicName())
+		debug.Fprintf(os.Stderr, "%s\n", string(encoded))
+		debug.PrintByteSlice(encoded)
+		_, err = log.Push(ctx, encoded, 0, false, false, taskId, taskEpoch, transactionID)
 		return err
 	}
-	encoded, err := msgSerde.Encode(keyBytes, valBytes)
-	if err != nil {
-		return err
-	}
-	debug.Fprintf(os.Stderr, "%s encoded: \n", log.TopicName())
-	debug.PrintByteSlice(encoded)
-	_, err = log.Push(ctx, encoded, 0, false, false)
-	return err
+	return nil
 }
 
-func pushMsgsToSink(ctx context.Context, sink *sharedlog_stream.ConcurrentMeteredSink,
-	msgs []commtypes.Message, trackParFunc transaction.TrackKeySubStreamFunc,
+func pushMsgsToSink(ctx context.Context, sink *source_sink.ShardedSharedLogStreamSyncSink,
+	msgs []commtypes.Message, trackParFunc tran_interface.TrackKeySubStreamFunc,
 ) error {
 	for _, msg := range msgs {
 		key := msg.Key.(int)
@@ -652,7 +657,7 @@ func pushMsgsToSink(ctx context.Context, sink *sharedlog_stream.ConcurrentMetere
 		if err != nil {
 			return fmt.Errorf("add topic partition failed: %v", err)
 		}
-		err = sink.Sink(ctx, msg, 0, false)
+		err = sink.Produce(ctx, msg, 0, false)
 		if err != nil {
 			return err
 		}

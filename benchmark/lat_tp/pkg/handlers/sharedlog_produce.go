@@ -7,9 +7,10 @@ import (
 	"os"
 	"sharedlog-stream/benchmark/common"
 	datatype "sharedlog-stream/benchmark/lat_tp/pkg/data_type"
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	nexmarkutils "sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/utils"
 	"sync"
 	"time"
 
@@ -22,14 +23,9 @@ type sharedlogProduceBenchHandler struct {
 }
 
 func NewSharedlogProduceBenchHandler(env types.Environment) types.FuncHandler {
-	bufPush_str := os.Getenv("BUFPUSH")
-	bufPush := false
-	if bufPush_str == "true" || bufPush_str == "1" {
-		bufPush = true
-	}
 	return &sharedlogProduceBenchHandler{
 		env:     env,
-		bufPush: bufPush,
+		bufPush: utils.CheckBufPush(),
 	}
 }
 
@@ -44,7 +40,7 @@ func (h *sharedlogProduceBenchHandler) Call(ctx context.Context, input []byte) (
 	if err != nil {
 		panic(err)
 	}
-	return utils.CompressData(encodedOutput), nil
+	return nexmarkutils.CompressData(encodedOutput), nil
 }
 
 func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context, sp *common.BenchSourceParam) *common.FnOutput {
@@ -72,7 +68,7 @@ func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context
 		BufPush:    h.bufPush,
 	}
 	wg.Add(1)
-	go streamPusher.AsyncStreamPush(ctx, &wg)
+	go streamPusher.AsyncStreamPush(ctx, &wg, 0, 0, 0)
 	streamPusher.InitFlushTimer(time.Duration(sp.FlushMs) * time.Millisecond)
 	startTime := time.Now()
 	next := time.Now()
@@ -115,7 +111,7 @@ func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context
 	close(msgChan)
 	wg.Wait()
 	if h.bufPush {
-		err = stream.Flush(ctx)
+		err = stream.Flush(ctx, 0, 0, 0)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[Error] Flush failed: %v\n", err)
 		}

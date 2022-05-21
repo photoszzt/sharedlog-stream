@@ -30,7 +30,6 @@ type DumpOutputStreamConfig struct {
 func GetShardedInputOutputStreams(ctx context.Context,
 	env types.Environment,
 	input *common.QueryInput,
-	input_in_tran bool,
 ) (*sharedlog_stream.ShardedSharedLogStream, []*sharedlog_stream.ShardedSharedLogStream, error) {
 	inputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[0], input.NumInPartition,
 		commtypes.SerdeFormat(input.SerdeFormat))
@@ -46,16 +45,6 @@ func GetShardedInputOutputStreams(ctx context.Context,
 			return nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
 		}
 		output_streams = append(output_streams, outputStream)
-		if input.EnableTransaction {
-			outputStream.SetInTransaction(true)
-		} else {
-			outputStream.SetInTransaction(false)
-		}
-	}
-	if input.EnableTransaction {
-		inputStream.SetInTransaction(input_in_tran)
-	} else {
-		inputStream.SetInTransaction(false)
 	}
 	return inputStream, output_streams, nil
 }
@@ -78,35 +67,33 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 		}
 		for {
 			// fmt.Fprintf(os.Stderr, "before read next\n")
-			_, rawMsgs, err := log.ReadNext(ctx, i)
+			rawMsg, err := log.ReadNext(ctx, i)
 			if errors.IsStreamEmptyError(err) {
 				break
 			}
 			if err != nil {
 				return err
 			}
-			for _, rawMsg := range rawMsgs {
-				keyBytes, valBytes, err := args.MsgSerde.Decode(rawMsg.Payload)
-				if err != nil {
-					return err
-				}
-				key, err := args.KeySerde.Decode(keyBytes)
-				if err != nil {
-					return err
-				}
-				val, err := args.ValSerde.Decode(valBytes)
-				if err != nil {
-					return err
-				}
-				outStr := fmt.Sprintf("%v, %v\n", key, val)
-				fmt.Fprint(os.Stderr, outStr)
-				writted, err := outFile.WriteString(outStr)
-				if err != nil {
-					return err
-				}
-				if writted != len(outStr) {
-					panic("written is smaller than expected")
-				}
+			keyBytes, valBytes, err := args.MsgSerde.Decode(rawMsg.Payload)
+			if err != nil {
+				return err
+			}
+			key, err := args.KeySerde.Decode(keyBytes)
+			if err != nil {
+				return err
+			}
+			val, err := args.ValSerde.Decode(valBytes)
+			if err != nil {
+				return err
+			}
+			outStr := fmt.Sprintf("%v, %v\n", key, val)
+			fmt.Fprint(os.Stderr, outStr)
+			writted, err := outFile.WriteString(outStr)
+			if err != nil {
+				return err
+			}
+			if writted != len(outStr) {
+				panic("written is smaller than expected")
 			}
 		}
 	}

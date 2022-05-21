@@ -1,6 +1,9 @@
 package stream
 
-import "sharedlog-stream/pkg/stream/processor"
+import (
+	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/stream/processor"
+)
 
 type StreamBuilder struct {
 	tp *processor.TopologyBuilder
@@ -12,7 +15,7 @@ func NewStreamBuilder() *StreamBuilder {
 	}
 }
 
-func (sb *StreamBuilder) Source(name string, source processor.Source) Stream {
+func (sb *StreamBuilder) Source(name string, source source_sink.Source) Stream {
 	n := sb.tp.AddSource(name, source)
 	return newStream(sb.tp, []processor.Node{n})
 }

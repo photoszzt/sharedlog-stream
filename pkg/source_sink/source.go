@@ -1,4 +1,4 @@
-package processor
+package source_sink
 
 import (
 	"context"
@@ -12,4 +12,7 @@ type Source interface {
 	SetCursor(cursor uint64, parNum uint8)
 	TopicName() string
 	Stream() store.Stream
+	InTransaction(serdeFormat commtypes.SerdeFormat) error
+	SetInitialSource(initial bool)
+	IsInitialSource() bool
 }

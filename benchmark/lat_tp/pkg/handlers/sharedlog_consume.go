@@ -90,7 +90,7 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 		if (duration != 0 && time.Since(startTime) >= duration) || (rest > 0 && idx >= rest) {
 			break
 		}
-		_, rawMsgs, err := stream.ReadNext(ctx, 0)
+		rawMsg, err := stream.ReadNext(ctx, 0)
 		if err != nil {
 			if errors.IsStreamEmptyError(err) {
 				// debug.Fprintf(os.Stderr, "stream is empty\n")
@@ -103,34 +103,23 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
 		}
-		for _, rawMsg := range rawMsgs {
-			idx += 1
-			if !rawMsg.IsControl && len(rawMsg.Payload) == 0 {
-				continue
+
+		idx += 1
+		if !rawMsg.IsControl && len(rawMsg.Payload) == 0 {
+			continue
+		}
+		off = rawMsg.LogSeqNum
+		if !hasUncommitted {
+			hasUncommitted = true
+		}
+		if rawMsg.IsPayloadArr {
+			payloadArrTmp, err := paSerde.Decode(rawMsg.Payload)
+			if err != nil {
+				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
-			off = rawMsg.LogSeqNum
-			if !hasUncommitted {
-				hasUncommitted = true
-			}
-			if rawMsg.IsPayloadArr {
-				payloadArrTmp, err := paSerde.Decode(rawMsg.Payload)
-				if err != nil {
-					return &common.FnOutput{Success: false, Message: err.Error()}
-				}
-				payloadArr := payloadArrTmp.(commtypes.PayloadArr)
-				for _, pBytes := range payloadArr.Payloads {
-					ptTmp, err := ptSerde.Decode(pBytes)
-					if err != nil {
-						return &common.FnOutput{Success: false, Message: err.Error()}
-					}
-					pt := ptTmp.(datatype.PayloadTs)
-					now := time.Now().UnixMicro()
-					lat := int(now - pt.Ts)
-					debug.Assert(lat > 0, "latency should not be negative")
-					prod_consume_lat = append(prod_consume_lat, lat)
-				}
-			} else {
-				ptTmp, err := ptSerde.Decode(rawMsg.Payload)
+			payloadArr := payloadArrTmp.(commtypes.PayloadArr)
+			for _, pBytes := range payloadArr.Payloads {
+				ptTmp, err := ptSerde.Decode(pBytes)
 				if err != nil {
 					return &common.FnOutput{Success: false, Message: err.Error()}
 				}
@@ -140,6 +129,16 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 				debug.Assert(lat > 0, "latency should not be negative")
 				prod_consume_lat = append(prod_consume_lat, lat)
 			}
+		} else {
+			ptTmp, err := ptSerde.Decode(rawMsg.Payload)
+			if err != nil {
+				return &common.FnOutput{Success: false, Message: err.Error()}
+			}
+			pt := ptTmp.(datatype.PayloadTs)
+			now := time.Now().UnixMicro()
+			lat := int(now - pt.Ts)
+			debug.Assert(lat > 0, "latency should not be negative")
+			prod_consume_lat = append(prod_consume_lat, lat)
 		}
 	}
 	if hasUncommitted {
@@ -200,7 +199,7 @@ func (h *sharedlogConsumeBenchHandler) runLoop(ctx context.Context,
 			commitTimer.Stop()
 			break
 		}
-		_, rawMsgs, err := stream.ReadNext(ctx, 0)
+		rawMsg, err := stream.ReadNext(ctx, 0)
 		if err != nil {
 			if errors.IsStreamEmptyError(err) {
 				// debug.Fprintf(os.Stderr, "stream is empty\n")
@@ -213,31 +212,29 @@ func (h *sharedlogConsumeBenchHandler) runLoop(ctx context.Context,
 				return 0, err
 			}
 		}
-		for _, rawMsg := range rawMsgs {
-			idx += 1
-			off = rawMsg.LogSeqNum
-			if !hasUncommitted {
-				hasUncommitted = true
+		idx += 1
+		off = rawMsg.LogSeqNum
+		if !hasUncommitted {
+			hasUncommitted = true
+		}
+		if !rawMsg.IsControl && len(rawMsg.Payload) == 0 {
+			continue
+		}
+		if rawMsg.IsPayloadArr {
+			payloadArrTmp, err := paSerde.Decode(rawMsg.Payload)
+			if err != nil {
+				return 0, err
 			}
-			if !rawMsg.IsControl && len(rawMsg.Payload) == 0 {
-				continue
+			payloadArr := payloadArrTmp.(commtypes.PayloadArr)
+			for _, pBytes := range payloadArr.Payloads {
+				_ = pBytes
 			}
-			if rawMsg.IsPayloadArr {
-				payloadArrTmp, err := paSerde.Decode(rawMsg.Payload)
-				if err != nil {
-					return 0, err
-				}
-				payloadArr := payloadArrTmp.(commtypes.PayloadArr)
-				for _, pBytes := range payloadArr.Payloads {
-					_ = pBytes
-				}
-			} else {
-				ptTmp, err := ptSerde.Decode(rawMsg.Payload)
-				if err != nil {
-					return 0, err
-				}
-				_ = ptTmp
+		} else {
+			ptTmp, err := ptSerde.Decode(rawMsg.Payload)
+			if err != nil {
+				return 0, err
 			}
+			_ = ptTmp
 		}
 	}
 	if hasUncommitted {

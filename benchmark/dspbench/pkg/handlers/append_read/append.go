@@ -42,7 +42,7 @@ func (h *AppendHandler) process(ctx context.Context) *common.FnOutput {
 	}
 	var pushSeqNum []uint64
 	for i := 0; i < 10; i++ {
-		seqNum, err := s1.Push(ctx, []byte(fmt.Sprintf("test %d\n", i)), 0, false, false)
+		seqNum, err := s1.Push(ctx, []byte(fmt.Sprintf("test %d\n", i)), 0, false, false, 0, 0, 0)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
@@ -53,27 +53,25 @@ func (h *AppendHandler) process(ctx context.Context) *common.FnOutput {
 	}
 
 	for i := 0; i < 10; i++ {
-		_, rawMsgs, err := s1.ReadNext(ctx, 0)
+		rawMsg, err := s1.ReadNext(ctx, 0)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,
 				Message: err.Error(),
 			}
 		}
-		for _, rawMsg := range rawMsgs {
-			if rawMsg.LogSeqNum != pushSeqNum[i] {
-				return &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("seq num returned 0x%x, expected to be 0x%x\n", rawMsg.LogSeqNum, pushSeqNum[i]),
-				}
+		if rawMsg.LogSeqNum != pushSeqNum[i] {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("seq num returned 0x%x, expected to be 0x%x\n", rawMsg.LogSeqNum, pushSeqNum[i]),
 			}
+		}
 
-			expected_str := fmt.Sprintf("test %d\n", i)
-			if !bytes.Equal(rawMsg.Payload, []byte(expected_str)) {
-				return &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("expected str is \"%s\", got \"%s\"", expected_str, rawMsg.Payload),
-				}
+		expected_str := fmt.Sprintf("test %d\n", i)
+		if !bytes.Equal(rawMsg.Payload, []byte(expected_str)) {
+			return &common.FnOutput{
+				Success: false,
+				Message: fmt.Sprintf("expected str is \"%s\", got \"%s\"", expected_str, rawMsg.Payload),
 			}
 		}
 	}

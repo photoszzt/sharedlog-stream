@@ -11,10 +11,13 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sharedlog-stream/pkg/treemap"
 	"sync"
 	"time"
@@ -107,7 +110,6 @@ func getInOutStreams(
 	ctx context.Context,
 	env types.Environment,
 	input *common.QueryInput,
-	input_in_tran bool,
 ) (*sharedlog_stream.ShardedSharedLogStream, /* auction */
 	*sharedlog_stream.ShardedSharedLogStream, /* person */
 	*sharedlog_stream.ShardedSharedLogStream, /* output */
@@ -128,25 +130,14 @@ func getInOutStreams(
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
 	}
-	if input.EnableTransaction {
-		inputStream1.SetInTransaction(input_in_tran)
-		inputStream2.SetInTransaction(input_in_tran)
-		outputStream.SetInTransaction(true)
-	} else {
-		inputStream1.SetInTransaction(false)
-		inputStream2.SetInTransaction(false)
-		outputStream.SetInTransaction(false)
-	}
 	return inputStream1, inputStream2, outputStream, nil
 }
 
 type srcSinkSerde struct {
-	src1      *processor.MeteredSource
-	src2      *processor.MeteredSource
-	sink      *sharedlog_stream.ConcurrentMeteredSyncSink
-	msgSerde  commtypes.MsgSerde
-	keySerdes []commtypes.Serde
-	valSerdes []commtypes.Serde
+	src1           *source_sink.MeteredSource
+	src2           *source_sink.MeteredSource
+	sink           *source_sink.ConcurrentMeteredSyncSink
+	srcKVMsgSerdes commtypes.KVMsgSerdes
 }
 
 func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
@@ -166,17 +157,18 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 		return nil, fmt.Errorf("get event serde err: %v", err)
 	}
 	timeout := common.SrcConsumeTimeout
-	auctionsConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      timeout,
-		KeyDecoder:   commtypes.Uint64Serde{},
-		ValueDecoder: eventSerde,
-		MsgDecoder:   msgSerde,
+	kvmsgSerdes := commtypes.KVMsgSerdes{
+		KeySerde: commtypes.Uint64Serde{},
+		ValSerde: eventSerde,
+		MsgSerde: msgSerde,
 	}
-	personsConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      timeout,
-		KeyDecoder:   commtypes.Uint64Serde{},
-		ValueDecoder: eventSerde,
-		MsgDecoder:   msgSerde,
+	auctionsConfig := &source_sink.StreamSourceConfig{
+		Timeout:     timeout,
+		KVMsgSerdes: kvmsgSerdes,
+	}
+	personsConfig := &source_sink.StreamSourceConfig{
+		Timeout:     timeout,
+		KVMsgSerdes: kvmsgSerdes,
 	}
 	var ncsiSerde commtypes.Serde
 	if sp.SerdeFormat == uint8(commtypes.JSON) {
@@ -184,27 +176,29 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	} else {
 		ncsiSerde = ntypes.NameCityStateIdMsgpSerde{}
 	}
-	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeySerde:      commtypes.Uint64Serde{},
-		ValueSerde:    ncsiSerde,
-		MsgSerde:      msgSerde,
+	outConfig := &source_sink.StreamSinkConfig{
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			KeySerde: commtypes.Uint64Serde{},
+			ValSerde: ncsiSerde,
+			MsgSerde: msgSerde,
+		},
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 
-	src1 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream1, auctionsConfig),
+	src1 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream1, auctionsConfig),
 		time.Duration(sp.WarmupS)*time.Second)
-	src2 := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(stream2, personsConfig),
+	src2 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream2, personsConfig),
 		time.Duration(sp.WarmupS)*time.Second)
-	sink := sharedlog_stream.NewConcurrentMeteredSyncSink(sharedlog_stream.NewShardedSharedLogStreamSyncSink(outputStream, outConfig),
+	src1.SetInitialSource(false)
+	src2.SetInitialSource(false)
+	sink := source_sink.NewConcurrentMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(outputStream, outConfig),
 		time.Duration(sp.WarmupS)*time.Second)
 	sink.MarkFinalOutput()
 	sss := &srcSinkSerde{
-		src1:      src1,
-		src2:      src2,
-		sink:      sink,
-		keySerdes: []commtypes.Serde{commtypes.Uint64Serde{}, commtypes.Uint64Serde{}},
-		valSerdes: []commtypes.Serde{eventSerde, eventSerde},
-		msgSerde:  msgSerde,
+		src1:           src1,
+		src2:           src2,
+		sink:           sink,
+		srcKVMsgSerdes: kvmsgSerdes,
 	}
 	return sss, nil
 }
@@ -256,17 +250,17 @@ func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 		var vtSerde1 commtypes.Serde
 		if serdeFormat == commtypes.JSON {
 			vtSerde0 = commtypes.ValueTimestampJSONSerde{
-				ValJSONSerde: sss.valSerdes[0],
+				ValJSONSerde: sss.srcKVMsgSerdes.ValSerde,
 			}
 			vtSerde1 = commtypes.ValueTimestampJSONSerde{
-				ValJSONSerde: sss.valSerdes[1],
+				ValJSONSerde: sss.srcKVMsgSerdes.ValSerde,
 			}
 		} else if serdeFormat == commtypes.MSGP {
 			vtSerde0 = commtypes.ValueTimestampMsgpSerde{
-				ValMsgpSerde: sss.valSerdes[0],
+				ValMsgpSerde: sss.srcKVMsgSerdes.ValSerde,
 			}
 			vtSerde1 = commtypes.ValueTimestampMsgpSerde{
-				ValMsgpSerde: sss.valSerdes[1],
+				ValMsgpSerde: sss.srcKVMsgSerdes.ValSerde,
 			}
 		} else {
 			panic("unrecognized serde format")
@@ -276,12 +270,12 @@ func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 			return nil, err
 		}
 		toAuctionsTable, auctionsStore, err := processor.ToMongoDBKVTable(ctx, "auctionsBySellerIDStore",
-			client, sss.keySerdes[0], vtSerde0, warmup)
+			client, sss.srcKVMsgSerdes.KeySerde, vtSerde0, warmup)
 		if err != nil {
 			return nil, err
 		}
 		toPersonsTable, personsStore, err := processor.ToMongoDBKVTable(ctx, "personsByIDStore",
-			client, sss.keySerdes[1], vtSerde1, warmup)
+			client, sss.srcKVMsgSerdes.KeySerde, vtSerde1, warmup)
 		if err != nil {
 			return nil, err
 		}
@@ -308,7 +302,7 @@ func (a *q3JoinTableProcessArgs) RecordFinishFunc() func(ctx context.Context, fu
 }
 
 func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	auctionsStream, personsStream, outputStream, err := getInOutStreams(ctx, h.env, sp, true)
+	auctionsStream, personsStream, outputStream, err := getInOutStreams(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -399,7 +393,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		parNum:        sp.ParNum,
 		runner:        pJoinA,
 		offMu:         &h.offMu,
-		trackParFunc:  transaction.DefaultTrackSubstreamFunc,
+		trackParFunc:  tran_interface.DefaultTrackSubstreamFunc,
 		cHashMu:       &h.cHashMu,
 		cHash:         h.cHash,
 		currentOffset: currentOffset,
@@ -410,14 +404,14 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		parNum:        sp.ParNum,
 		runner:        aJoinP,
 		offMu:         &h.offMu,
-		trackParFunc:  transaction.DefaultTrackSubstreamFunc,
+		trackParFunc:  tran_interface.DefaultTrackSubstreamFunc,
 		cHashMu:       &h.cHashMu,
 		cHash:         h.cHash,
 		currentOffset: currentOffset,
 	}
 	var wg sync.WaitGroup
-	personDone := make(chan struct{})
-	aucDone := make(chan struct{})
+	personDone := make(chan struct{}, 1)
+	aucDone := make(chan struct{}, 1)
 	pctx := context.WithValue(ctx, "id", "person")
 	actx := context.WithValue(ctx, "id", "auction")
 
@@ -429,48 +423,28 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		PauseFunc: func() {
 			close(personDone)
 			close(aucDone)
+			debug.Fprintf(os.Stderr, "q3 waiting for join proc to exit\n")
 			wg.Wait()
-			/*
-				sss.sink.CloseAsyncPush()
-				if err = sss.sink.Flush(ctx); err != nil {
-					panic(err)
-				}
-			*/
+			debug.Fprintf(os.Stderr, "down pause\n")
 			err := sss.sink.Flush(ctx)
 			if err != nil {
 				panic(err)
 			}
 		},
 		ResumeFunc: func() {
-			/*
-				sss.sink.InnerSink().RebuildMsgChan()
-				if sp.EnableTransaction {
-					sss.sink.InnerSink().StartAsyncPushNoTick(ctx)
-				} else {
-					sss.sink.InnerSink().StartAsyncPushWithTick(ctx)
-					sss.sink.InitFlushTimer()
-				}
-			*/
-			personDone = make(chan struct{})
-			aucDone = make(chan struct{})
+			debug.Fprintf(os.Stderr, "resume begin\n")
+			personDone = make(chan struct{}, 1)
+			aucDone = make(chan struct{}, 1)
 			wg.Add(1)
 			go joinProcLoop(pctx, personsOutChan, joinProcPerson, &wg, perRun, personDone)
 			wg.Add(1)
 			go joinProcLoop(actx, auctionsOutChan, joinProcAuction, &wg, aucRun, aucDone)
 			perRun <- struct{}{}
 			aucRun <- struct{}{}
+			debug.Fprintf(os.Stderr, "resume done\n")
 		},
 		CloseFunc: nil,
 		InitFunc: func(progArgs interface{}) {
-			/*
-				if sp.EnableTransaction {
-					sss.sink.InnerSink().StartAsyncPushNoTick(ctx)
-				} else {
-					sss.sink.InnerSink().StartAsyncPushWithTick(ctx)
-					sss.sink.InitFlushTimer()
-				}
-			*/
-
 			sss.src1.StartWarmup()
 			sss.src2.StartWarmup()
 			sss.sink.StartWarmup()
@@ -490,13 +464,19 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	wg.Add(1)
 	go joinProcLoop(actx, auctionsOutChan, joinProcAuction, &wg, aucRun, aucDone)
 
-	srcs := map[string]processor.Source{auctionsStream.TopicName(): sss.src1, personsStream.TopicName(): sss.src2}
+	srcs := []source_sink.Source{sss.src1, sss.src2}
 	if sp.EnableTransaction {
+		sinks_arr := []source_sink.Sink{sss.sink}
 		var kvchangelogs []*transaction.KVStoreChangelog
 		if sp.TableType == uint8(store.IN_MEM) {
+			serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 			kvchangelogs = []*transaction.KVStoreChangelog{
-				transaction.NewKVStoreChangelog(kvtabs.tab1, auctionsStream, sss.keySerdes[0], sss.valSerdes[0], sp.ParNum),
-				transaction.NewKVStoreChangelog(kvtabs.tab2, personsStream, sss.keySerdes[1], sss.valSerdes[1], sp.ParNum),
+				transaction.NewKVStoreChangelog(kvtabs.tab1,
+					store_with_changelog.NewChangelogManager(auctionsStream, serdeFormat),
+					sss.srcKVMsgSerdes, sp.ParNum),
+				transaction.NewKVStoreChangelog(kvtabs.tab2,
+					store_with_changelog.NewChangelogManager(personsStream, serdeFormat),
+					sss.srcKVMsgSerdes, sp.ParNum),
 			}
 		} else if sp.TableType == uint8(store.MONGODB) {
 			kvchangelogs = []*transaction.KVStoreChangelog{
@@ -517,17 +497,16 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:              procArgs,
 			Env:                   h.env,
-			MsgSerde:              sss.msgSerde,
 			Srcs:                  srcs,
-			OutputStreams:         []*sharedlog_stream.ShardedSharedLogStream{outputStream},
-			QueryInput:            sp,
+			Sinks:                 sinks_arr,
 			TransactionalId:       fmt.Sprintf("%s-%d", h.funcName, sp.ParNum),
 			KVChangelogs:          kvchangelogs,
 			WindowStoreChangelogs: nil,
 			FixedOutParNum:        0,
 		}
+		UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
+			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				joinProcPerson.trackParFunc = trackParFunc
 				joinProcAuction.trackParFunc = trackParFunc
 				procArgs.(*q3JoinTableProcessArgs).recordFinishFunc = recordFinishFunc

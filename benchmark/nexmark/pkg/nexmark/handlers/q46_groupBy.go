@@ -11,10 +11,11 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hash"
-	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sync"
 	"time"
 
@@ -87,19 +88,19 @@ type q46GroupByProcessArgs struct {
 	errChan    chan error
 
 	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
-	trackParFunc     transaction.TrackKeySubStreamFunc
-	src              *processor.MeteredSource
+	trackParFunc     tran_interface.TrackKeySubStreamFunc
+	src              *source_sink.MeteredSource
 
 	funcName string
-	sinks    []*sharedlog_stream.MeteredSink
+	sinks    []*source_sink.MeteredSink
 	curEpoch uint64
 	parNum   uint8
 }
 
-func (a *q46GroupByProcessArgs) Source() processor.Source { return a.src }
+func (a *q46GroupByProcessArgs) Source() source_sink.Source { return a.src }
 func (a *q46GroupByProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
 	for _, sink := range a.sinks {
-		err := sink.Sink(ctx, msg, parNum, isControl)
+		err := sink.Produce(ctx, msg, parNum, isControl)
 		if err != nil {
 			return err
 		}
@@ -117,7 +118,7 @@ func (a *q46GroupByProcessArgs) ErrChan() chan error {
 }
 
 func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp, false)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -125,10 +126,11 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 		}
 	}
 	debug.Assert(len(output_streams) == 2, "expected 2 output streams")
-	src, sinks, msgSerde, err := getSrcSinks(ctx, sp, input_stream, output_streams)
+	src, sinks, err := getSrcSinks(ctx, sp, input_stream, output_streams)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
+	src.SetInitialSource(true)
 	filterAuctions, auctionsByIDMap, auctionsByIDFunc := h.getAucsByID(time.Duration(sp.WarmupS) * time.Second)
 	filterBids, bidsByAuctionIDMap, bidsByAuctionIDFunc := h.getBidsByAuctionID(time.Duration(sp.WarmupS) * time.Second)
 
@@ -140,7 +142,7 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 		sinks:            sinks,
 		aucMsgChan:       aucMsgChan,
 		bidMsgChan:       bidMsgChan,
-		trackParFunc:     transaction.DefaultTrackSubstreamFunc,
+		trackParFunc:     tran_interface.DefaultTrackSubstreamFunc,
 		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
 		funcName:         h.funcName,
 		curEpoch:         sp.ScaleEpoch,
@@ -222,22 +224,22 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 	}
 	transaction.SetupConsistentHash(&h.aucHashMu, h.aucHash, sp.NumOutPartitions[0])
 	transaction.SetupConsistentHash(&h.bidHashMu, h.bidHash, sp.NumOutPartitions[1])
-	srcs := map[string]processor.Source{sp.InputTopicNames[0]: src}
+	srcs := []source_sink.Source{src}
 	if sp.EnableTransaction {
+		sinks_arr := []source_sink.Sink{sinks[0], sinks[1]}
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:              procArgs,
 			Env:                   h.env,
-			MsgSerde:              msgSerde,
 			Srcs:                  srcs,
-			OutputStreams:         output_streams,
-			QueryInput:            sp,
+			Sinks:                 sinks_arr,
 			TransactionalId:       fmt.Sprintf("%s-%s-%d", h.funcName, sp.InputTopicNames[0], sp.ParNum),
 			KVChangelogs:          nil,
 			WindowStoreChangelogs: nil,
 			FixedOutParNum:        0,
 		}
+		UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
-			func(procArgs interface{}, trackParFunc transaction.TrackKeySubStreamFunc,
+			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
 				recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*q46GroupByProcessArgs).trackParFunc = trackParFunc
 				procArgs.(*q46GroupByProcessArgs).recordFinishFunc = recordFinishFunc
@@ -343,7 +345,7 @@ func (h *q46GroupByHandler) getAucsByID(warmup time.Duration) (*processor.Metere
 						errChan <- fmt.Errorf("add topic partition failed: %v", err)
 						return
 					}
-					err = args.sinks[0].Sink(ctx, changeKeyedMsg[0], par, false)
+					err = args.sinks[0].Produce(ctx, changeKeyedMsg[0], par, false)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "[ERROR] sink err: %v\n", err)
 						errChan <- fmt.Errorf("sink err: %v", err)
@@ -418,7 +420,7 @@ func (h *q46GroupByHandler) getBidsByAuctionID(warmup time.Duration) (*processor
 						errChan <- fmt.Errorf("add topic partition failed: %v", err)
 						return
 					}
-					err = args.sinks[1].Sink(ctx, changeKeyedMsg[0], par, false)
+					err = args.sinks[1].Produce(ctx, changeKeyedMsg[0], par, false)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "[ERROR] sink err: %v", err)
 						errChan <- fmt.Errorf("sink err: %v", err)

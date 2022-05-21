@@ -1,11 +1,13 @@
 package processor
 
+import "sharedlog-stream/pkg/source_sink"
+
 type Topology struct {
-	sources    map[Source]Node
+	sources    map[source_sink.Source]Node
 	processors []Node
 }
 
-func (t Topology) Sources() map[Source]Node {
+func (t Topology) Sources() map[source_sink.Source]Node {
 	return t.sources
 }
 
@@ -14,7 +16,7 @@ func (t Topology) Processors() []Node {
 }
 
 type TopologyBuilder struct {
-	sources        map[Source]Node
+	sources        map[source_sink.Source]Node
 	processors     []Node
 	keyValueStores []Node
 	windowStores   []Node
@@ -22,14 +24,14 @@ type TopologyBuilder struct {
 
 func NewTopologyBuilder() *TopologyBuilder {
 	return &TopologyBuilder{
-		sources:        map[Source]Node{},
+		sources:        map[source_sink.Source]Node{},
 		processors:     []Node{},
 		keyValueStores: []Node{},
 		windowStores:   []Node{},
 	}
 }
 
-func (tb *TopologyBuilder) AddSource(name string, source Source) Node {
+func (tb *TopologyBuilder) AddSource(name string, source source_sink.Source) Node {
 	n := NewSourceNode(name)
 	tb.sources[source] = n
 	return n
@@ -96,7 +98,7 @@ func nodesConnected(roots []Node) bool {
 }
 */
 
-func FlattenNodeTree(roots map[Source]Node) []Node {
+func FlattenNodeTree(roots map[source_sink.Source]Node) []Node {
 	var nodes []Node
 	var visit []Node
 

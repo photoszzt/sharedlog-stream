@@ -14,9 +14,10 @@ import (
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 
 	"golang.org/x/xerrors"
 )
@@ -51,10 +52,10 @@ func getPersonTimeSerde(serdeFormat uint8) (commtypes.Serde, error) {
 type JoinWorkerFunc func(c context.Context, m commtypes.Message) ([]commtypes.Message, error)
 
 type joinProcArgs struct {
-	src           *processor.MeteredSource
-	sink          *sharedlog_stream.ConcurrentMeteredSyncSink
+	src           *source_sink.MeteredSource
+	sink          *source_sink.ConcurrentMeteredSyncSink
 	currentOffset map[string]uint64
-	trackParFunc  transaction.TrackKeySubStreamFunc
+	trackParFunc  tran_interface.TrackKeySubStreamFunc
 	cHash         *hash.ConsistentHash
 	runner        JoinWorkerFunc
 	wg            sync.WaitGroup
@@ -73,10 +74,11 @@ func joinProc(
 	gotMsgs, err := procArgs.src.Consume(ctx, procArgs.parNum)
 	if err != nil {
 		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
-			debug.Fprintf(os.Stderr, "%s timeout, gen output\n", procArgs.src.TopicName())
+			fmt.Fprintf(os.Stderr, "%s timeout, gen output\n", procArgs.src.TopicName())
 			out <- &common.FnOutput{Success: true, Message: err.Error()}
 			return
 		}
+		fmt.Fprintf(os.Stderr, "[ERROR] consume err: %v\n", err)
 		out <- &common.FnOutput{Success: false, Message: err.Error()}
 		return
 	}
@@ -120,61 +122,72 @@ func joinProcLoop(
 ) {
 	<-run
 	debug.Fprintf(os.Stderr, "joinProc start running\n")
-	defer wg.Done()
+	id := ctx.Value("id").(string)
 	for {
 		select {
 		case <-ctx.Done():
+			wg.Done()
 			return
 		case <-done:
 			debug.Fprintf(os.Stderr, "got done msg\n")
+			wg.Done()
 			return
 		default:
 		}
-		// debug.Fprintf(os.Stderr, "before consume\n")
+		debug.Fprintf(os.Stderr, "before consume\n")
 		gotMsgs, err := procArgs.src.Consume(ctx, procArgs.parNum)
 		if err != nil {
 			if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
 				debug.Fprintf(os.Stderr, "%s timeout\n", procArgs.src.TopicName())
 				out <- &common.FnOutput{Success: true, Message: err.Error()}
-				// debug.Fprintf(os.Stderr, "Done sending result\n")
+				debug.Fprintf(os.Stderr, "%s done sending msg\n", id)
+				wg.Done()
 				return
 			}
 			debug.Fprintf(os.Stderr, "[ERROR] consume: %v\n", err)
 			out <- &common.FnOutput{Success: false, Message: err.Error()}
+			debug.Fprintf(os.Stderr, "%s done sending msg2\n", id)
+			wg.Done()
 			return
 		}
-		// debug.Fprintf(os.Stderr, "after consume\n")
+		debug.Fprintf(os.Stderr, "after consume\n")
 		for _, msg := range gotMsgs.Msgs {
 			procArgs.offMu.Lock()
 			procArgs.currentOffset[procArgs.src.TopicName()] = msg.LogSeqNum
 			procArgs.offMu.Unlock()
 
 			if msg.MsgArr != nil {
+				debug.Fprintf(os.Stderr, "got msgarr\n")
 				for _, subMsg := range msg.MsgArr {
 					if subMsg.Value == nil {
 						continue
 					}
+					debug.Fprintf(os.Stderr, "before proc msg with sink1\n")
 					err = procMsgWithSink(ctx, subMsg, procArgs)
 					if err != nil {
-						debug.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink: %v\n", ctx.Value("id").(string), err)
+						debug.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink: %v\n", id, err)
 						out <- &common.FnOutput{Success: false, Message: err.Error()}
-						debug.Fprintf(os.Stderr, "done send msg\n", err)
+						debug.Fprintf(os.Stderr, "%s done send msg3\n", id)
+						wg.Done()
 						return
 					}
 				}
 			} else {
+				debug.Fprintf(os.Stderr, "got single msg\n")
 				if msg.Msg.Value == nil {
 					continue
 				}
 				err = procMsgWithSink(ctx, msg.Msg, procArgs)
 				if err != nil {
-					debug.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink: %v\n", ctx.Value("id").(string), err)
+					debug.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink2: %v\n", id, err)
 					out <- &common.FnOutput{Success: false, Message: err.Error()}
+					debug.Fprintf(os.Stderr, "%s done send msg4\n", id)
+					wg.Done()
 					return
 				}
 			}
 		}
-		// debug.Fprintf(os.Stderr, "after for loop\n")
+		debug.Fprintf(os.Stderr, "after for loop\n")
 	}
 }
 
@@ -274,7 +287,7 @@ func joinProcSerial(
 */
 
 type joinProcWithoutSinkArgs struct {
-	src    processor.Source
+	src    source_sink.Source
 	runner JoinWorkerFunc
 	parNum uint8
 }
@@ -326,11 +339,11 @@ func procMsg(ctx context.Context, msg commtypes.Message, procArgs *joinProcWitho
 
 func pushMsgsToSink(
 	ctx context.Context,
-	sink *sharedlog_stream.ConcurrentMeteredSyncSink,
+	sink *source_sink.ConcurrentMeteredSyncSink,
 	cHash *hash.ConsistentHash,
 	cHashMu *sync.RWMutex,
 	msgs []commtypes.Message,
-	trackParFunc transaction.TrackKeySubStreamFunc,
+	trackParFunc tran_interface.TrackKeySubStreamFunc,
 ) error {
 	for _, msg := range msgs {
 		key := msg.Key.(uint64)
@@ -345,7 +358,7 @@ func pushMsgsToSink(
 		if err != nil {
 			return fmt.Errorf("add topic partition failed: %v", err)
 		}
-		err = sink.Sink(ctx, msg, par, false)
+		err = sink.Produce(ctx, msg, par, false)
 		if err != nil {
 			return err
 		}
@@ -356,33 +369,36 @@ func pushMsgsToSink(
 func getSrcSink(ctx context.Context, sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*processor.MeteredSource,
-	*sharedlog_stream.MeteredSink,
-	commtypes.MsgSerde,
+) (*source_sink.MeteredSource,
+	*source_sink.MeteredSink,
 	error) {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("get msg serde failed: %v", err)
+		return nil, nil, fmt.Errorf("get msg serde failed: %v", err)
 	}
 	eventSerde, err := getEventSerde(sp.SerdeFormat)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
-	inConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      common.SrcConsumeTimeout,
-		KeyDecoder:   commtypes.StringDecoder{},
-		ValueDecoder: eventSerde,
-		MsgDecoder:   msgSerde,
+	inConfig := &source_sink.StreamSourceConfig{
+		Timeout: common.SrcConsumeTimeout,
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			KeySerde: commtypes.StringSerde{},
+			ValSerde: eventSerde,
+			MsgSerde: msgSerde,
+		},
 	}
-	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeySerde:      commtypes.StringSerde{},
-		ValueSerde:    eventSerde,
-		MsgSerde:      msgSerde,
+	outConfig := &source_sink.StreamSinkConfig{
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			KeySerde: commtypes.StringSerde{},
+			ValSerde: eventSerde,
+			MsgSerde: msgSerde,
+		},
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig), time.Duration(sp.WarmupS)*time.Second)
-	sink := sharedlog_stream.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig), time.Duration(sp.WarmupS)*time.Second)
-	return src, sink, msgSerde, nil
+	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig), time.Duration(sp.WarmupS)*time.Second)
+	sink := source_sink.NewMeteredSink(source_sink.NewShardedSharedLogStreamSink(output_stream, outConfig), time.Duration(sp.WarmupS)*time.Second)
+	return src, sink, nil
 }
 
 func getSrcSinkUint64Key(
@@ -390,67 +406,86 @@ func getSrcSinkUint64Key(
 	sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*processor.MeteredSource,
-	*sharedlog_stream.MeteredSink,
-	commtypes.MsgSerde,
+) (*source_sink.MeteredSource,
+	*source_sink.MeteredSink,
 	error,
 ) {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	eventSerde, err := getEventSerde(sp.SerdeFormat)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
-	inConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      common.SrcConsumeTimeout,
-		MsgDecoder:   msgSerde,
-		KeyDecoder:   commtypes.StringDecoder{},
-		ValueDecoder: eventSerde,
+	inConfig := &source_sink.StreamSourceConfig{
+		Timeout: common.SrcConsumeTimeout,
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			KeySerde: commtypes.StringSerde{},
+			ValSerde: eventSerde,
+			MsgSerde: msgSerde,
+		},
 	}
-	outConfig := &sharedlog_stream.StreamSinkConfig{
-		MsgSerde:      msgSerde,
-		ValueSerde:    eventSerde,
-		KeySerde:      commtypes.Uint64Serde{},
+	outConfig := &source_sink.StreamSinkConfig{
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			MsgSerde: msgSerde,
+			ValSerde: eventSerde,
+			KeySerde: commtypes.Uint64Serde{},
+		},
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig),
+	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
 		time.Duration(sp.WarmupS)*time.Second)
-	sink := sharedlog_stream.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig),
+	sink := source_sink.NewMeteredSink(source_sink.NewShardedSharedLogStreamSink(output_stream, outConfig),
 		time.Duration(sp.WarmupS)*time.Second)
-	return src, sink, msgSerde, nil
+	return src, sink, nil
 }
 
 func CommonGetSrcSink(ctx context.Context, sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*processor.MeteredSource, *sharedlog_stream.MeteredSink, commtypes.MsgSerde, error) {
+) (*source_sink.MeteredSource, *source_sink.MeteredSink, error) {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("get msg serde err: %v", err)
+		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
 	eventSerde, err := getEventSerde(sp.SerdeFormat)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("get event serde err: %v", err)
+		return nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}
-	inConfig := &sharedlog_stream.StreamSourceConfig{
-		Timeout:      common.SrcConsumeTimeout,
-		KeyDecoder:   commtypes.StringDecoder{},
-		ValueDecoder: eventSerde,
-		MsgDecoder:   msgSerde,
+	inConfig := &source_sink.StreamSourceConfig{
+		Timeout: common.SrcConsumeTimeout,
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			KeySerde: commtypes.StringSerde{},
+			ValSerde: eventSerde,
+			MsgSerde: msgSerde,
+		},
 	}
-	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeySerde:      commtypes.Uint64Serde{},
-		ValueSerde:    eventSerde,
-		MsgSerde:      msgSerde,
+	outConfig := &source_sink.StreamSinkConfig{
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			KeySerde: commtypes.Uint64Serde{},
+			ValSerde: eventSerde,
+			MsgSerde: msgSerde,
+		},
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
-	src := processor.NewMeteredSource(sharedlog_stream.NewShardedSharedLogStreamSource(input_stream, inConfig),
+	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
 		time.Duration(sp.WarmupS)*time.Second)
-	sink := sharedlog_stream.NewMeteredSink(sharedlog_stream.NewShardedSharedLogStreamSink(output_stream, outConfig),
+	sink := source_sink.NewMeteredSink(source_sink.NewShardedSharedLogStreamSink(output_stream, outConfig),
 		time.Duration(sp.WarmupS)*time.Second)
-	return src, sink, msgSerde, nil
+	return src, sink, nil
+}
+
+func UpdateStreamTaskArgsTransaction(sp *common.QueryInput, args *transaction.StreamTaskArgsTransaction) {
+	args.AppId = sp.AppId
+	args.Warmup = time.Duration(sp.WarmupS) * time.Second
+	args.ScaleEpoch = sp.ScaleEpoch
+	args.CommitEveryMs = sp.CommitEveryMs
+	args.CommitEveryNIter = sp.CommitEveryNIter
+	args.ExitAfterNCommit = sp.ExitAfterNCommit
+	args.Duration = sp.Duration
+	args.SerdeFormat = commtypes.SerdeFormat(sp.SerdeFormat)
+	args.InParNum = sp.ParNum
 }
