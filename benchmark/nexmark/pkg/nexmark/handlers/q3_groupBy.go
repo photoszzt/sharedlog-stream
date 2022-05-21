@@ -49,7 +49,7 @@ func (h *q3GroupByHandler) process(
 	ctx context.Context,
 	t *transaction.StreamTask,
 	argsTmp interface{},
-) (map[string]uint64, *common.FnOutput) {
+) *common.FnOutput {
 	args := argsTmp.(*q3GroupByProcessArgs)
 	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
@@ -198,7 +198,6 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 
 	task := transaction.StreamTask{
 		ProcessFunc: h.process,
-		CloseFunc:   nil,
 		PauseFunc: func() {
 			// debug.Fprintf(os.Stderr, "begin flush\n")
 			close(aucMsgChan)
@@ -214,7 +213,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 			}
 			// debug.Fprintf(os.Stderr, "done flush\n")
 		},
-		ResumeFunc: func() {
+		ResumeFunc: func(task *transaction.StreamTask) {
 			debug.Fprintf(os.Stderr, "start resume\n")
 			procArgs.sinks[0].InnerSink().RebuildMsgChan()
 			procArgs.sinks[1].InnerSink().RebuildMsgChan()

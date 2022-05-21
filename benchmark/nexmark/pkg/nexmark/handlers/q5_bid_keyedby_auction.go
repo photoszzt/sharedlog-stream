@@ -83,7 +83,7 @@ func (a *bidKeyedByAuctionProcessArgs) ErrChan() chan error {
 func (h *bidKeyedByAuction) process(ctx context.Context,
 	t *transaction.StreamTask,
 	argsTmp interface{},
-) (map[string]uint64, *common.FnOutput) {
+) *common.FnOutput {
 	args := argsTmp.(*bidKeyedByAuctionProcessArgs)
 	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
@@ -191,7 +191,7 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 				panic(err)
 			}
 		},
-		ResumeFunc: func() {
+		ResumeFunc: func(task *transaction.StreamTask) {
 			sink.InnerSink().RebuildMsgChan()
 			if sp.EnableTransaction {
 				sink.InnerSink().StartAsyncPushNoTick(ctx)
@@ -212,7 +212,6 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 			filterBid.StartWarmup()
 			selectKey.StartWarmup()
 		},
-		CloseFunc: nil,
 	}
 
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])

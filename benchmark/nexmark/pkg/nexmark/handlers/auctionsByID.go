@@ -67,10 +67,12 @@ func (h *auctionsByIDHandler) process(
 	ctx context.Context,
 	t *transaction.StreamTask,
 	argsTmp interface{},
-) (map[string]uint64, *common.FnOutput) {
+) *common.FnOutput {
 	args := argsTmp.(*auctionsByIDProcessArgs)
 	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
+		t.OffMu.Lock()
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
+		t.OffMu.Unlock()
 		if msg.MsgArr != nil {
 			for _, subMsg := range msg.MsgArr {
 				if subMsg.Value == nil {

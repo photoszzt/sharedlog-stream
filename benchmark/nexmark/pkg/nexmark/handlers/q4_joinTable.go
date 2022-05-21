@@ -75,7 +75,7 @@ func (a *q4JoinTableProcessArgs) RecordFinishFunc() func(ctx context.Context, fu
 func (h *q4JoinTableHandler) process(ctx context.Context,
 	t *transaction.StreamTask,
 	argsTmp interface{},
-) (map[string]uint64, *common.FnOutput) {
+) *common.FnOutput {
 	args := argsTmp.(*q4JoinTableProcessArgs)
 
 	var bOut *common.FnOutput = nil
@@ -93,12 +93,12 @@ func (h *q4JoinTableHandler) process(ctx context.Context,
 	debug.Fprintf(os.Stderr, "aOut: %v\n", aOut)
 	debug.Fprintf(os.Stderr, "bOut: %v\n", bOut)
 	if bOut != nil && !bOut.Success {
-		return t.CurrentOffset, bOut
+		return bOut
 	}
 	if aOut != nil && !aOut.Success {
-		return t.CurrentOffset, aOut
+		return aOut
 	}
-	return t.CurrentOffset, nil
+	return nil
 }
 
 func (h *q4JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
@@ -293,7 +293,6 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		sink:          sink,
 		parNum:        sp.ParNum,
 		runner:        bJoinA,
-		offMu:         &h.offMu,
 		trackParFunc:  tran_interface.DefaultTrackSubstreamFunc,
 		cHashMu:       &h.cHashMu,
 		cHash:         h.cHash,
@@ -304,7 +303,6 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		sink:          sink,
 		parNum:        sp.ParNum,
 		runner:        aJoinB,
-		offMu:         &h.offMu,
 		trackParFunc:  tran_interface.DefaultTrackSubstreamFunc,
 		cHashMu:       &h.cHashMu,
 		cHash:         h.cHash,
@@ -330,17 +328,16 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 				panic(err)
 			}
 		},
-		ResumeFunc: func() {
+		ResumeFunc: func(task *transaction.StreamTask) {
 			bidsDone = make(chan struct{})
 			aucDone = make(chan struct{})
 			wg.Add(1)
-			go joinProcLoop(bctx, bidsOutChan, joinProcBid, &wg, bidRun, bidsDone)
+			go joinProcLoop(bctx, bidsOutChan, task, joinProcBid, &wg, bidRun, bidsDone)
 			wg.Add(1)
-			go joinProcLoop(actx, auctionsOutChan, joinProcAuction, &wg, aucRun, aucDone)
+			go joinProcLoop(actx, auctionsOutChan, task, joinProcAuction, &wg, aucRun, aucDone)
 			aucRun <- struct{}{}
 			bidRun <- struct{}{}
 		},
-		CloseFunc: nil,
 		InitFunc: func(progArgs interface{}) {
 			auctionsSrc.StartWarmup()
 			bidsSrc.StartWarmup()

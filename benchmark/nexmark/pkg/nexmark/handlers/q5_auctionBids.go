@@ -228,7 +228,7 @@ type q5AuctionBidsRestoreArg struct {
 	parNum         uint8
 }
 
-func (h *q5AuctionBids) process(ctx context.Context, t *transaction.StreamTask, argsTmp interface{}) (map[string]uint64, *common.FnOutput) {
+func (h *q5AuctionBids) process(ctx context.Context, t *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
 	args := argsTmp.(*q5AuctionBidsProcessArg)
 	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
@@ -417,7 +417,6 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			groupByAuction.StartWarmup()
 			countProc.StartWarmup()
 		},
-		CloseFunc: nil,
 	}
 
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])

@@ -48,7 +48,7 @@ func (h *q8GroupByHandler) process(
 	ctx context.Context,
 	t *transaction.StreamTask,
 	argsTmp interface{},
-) (map[string]uint64, *common.FnOutput) {
+) *common.FnOutput {
 	args := argsTmp.(*q8GroupByProcessArgs)
 	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
@@ -202,7 +202,6 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 		ProcessFunc:               h.process,
 		CurrentOffset:             make(map[string]uint64),
 		CommitEveryForAtLeastOnce: common.CommitDuration,
-		CloseFunc:                 nil,
 		PauseFunc: func() {
 			// debug.Fprintf(os.Stderr, "begin flush\n")
 			close(aucMsgChan)
@@ -219,21 +218,8 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 
 			// debug.Fprintf(os.Stderr, "done flush\n")
 		},
-		ResumeFunc: func() {
+		ResumeFunc: func(task *transaction.StreamTask) {
 			// debug.Fprintf(os.Stderr, "begin resume\n")
-			/*
-				sinks[0].InnerSink().RebuildMsgChan()
-				sinks[1].InnerSink().RebuildMsgChan()
-				if sp.EnableTransaction {
-					sinks[0].InnerSink().StartAsyncPushNoTick(ctx)
-					sinks[1].InnerSink().StartAsyncPushNoTick(ctx)
-				} else {
-					sinks[0].InnerSink().StartAsyncPushWithTick(ctx)
-					sinks[1].InnerSink().StartAsyncPushWithTick(ctx)
-					sinks[0].InitFlushTimer()
-					sinks[1].InitFlushTimer()
-				}
-			*/
 			aucMsgChan = make(chan commtypes.Message, 1)
 			personMsgChan = make(chan commtypes.Message, 1)
 			procArgs.aucMsgChan = aucMsgChan
@@ -245,17 +231,6 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 			// debug.Fprintf(os.Stderr, "done resume\n")
 		},
 		InitFunc: func(progArgs interface{}) {
-			/*
-				if sp.EnableTransaction {
-					sinks[0].InnerSink().StartAsyncPushNoTick(ctx)
-					sinks[1].InnerSink().StartAsyncPushNoTick(ctx)
-				} else {
-					sinks[0].InnerSink().StartAsyncPushWithTick(ctx)
-					sinks[1].InnerSink().StartAsyncPushWithTick(ctx)
-					sinks[0].InitFlushTimer()
-					sinks[1].InitFlushTimer()
-				}
-			*/
 			sinks[0].StartWarmup()
 			sinks[1].StartWarmup()
 			src.StartWarmup()

@@ -7,7 +7,6 @@ import (
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"sharedlog-stream/pkg/debug"
@@ -56,81 +55,32 @@ type joinProcArgs struct {
 	sink          *source_sink.ConcurrentMeteredSyncSink
 	currentOffset map[string]uint64
 	trackParFunc  tran_interface.TrackKeySubStreamFunc
-	cHash         *hash.ConsistentHash
-	runner        JoinWorkerFunc
-	wg            sync.WaitGroup
-	offMu         *sync.Mutex
-	cHashMu       *sync.RWMutex
-	parNum        uint8
-}
 
-func joinProc(
-	ctx context.Context,
-	out chan *common.FnOutput,
-	procArgs *joinProcArgs,
-	done *uint32,
-) {
-	defer procArgs.wg.Done()
-	gotMsgs, err := procArgs.src.Consume(ctx, procArgs.parNum)
-	if err != nil {
-		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
-			fmt.Fprintf(os.Stderr, "%s timeout, gen output\n", procArgs.src.TopicName())
-			out <- &common.FnOutput{Success: true, Message: err.Error()}
-			return
-		}
-		fmt.Fprintf(os.Stderr, "[ERROR] consume err: %v\n", err)
-		out <- &common.FnOutput{Success: false, Message: err.Error()}
-		return
-	}
-	for _, msg := range gotMsgs.Msgs {
-		procArgs.offMu.Lock()
-		procArgs.currentOffset[procArgs.src.TopicName()] = msg.LogSeqNum
-		procArgs.offMu.Unlock()
-
-		if msg.MsgArr != nil {
-			for _, subMsg := range msg.MsgArr {
-				if subMsg.Value == nil {
-					continue
-				}
-				err = procMsgWithSink(ctx, subMsg, procArgs)
-				if err != nil {
-					atomic.StoreUint32(done, 1)
-					out <- &common.FnOutput{Success: false, Message: err.Error()}
-				}
-			}
-		} else {
-			if msg.Msg.Value == nil {
-				continue
-			}
-			err = procMsgWithSink(ctx, msg.Msg, procArgs)
-			if err != nil {
-				atomic.StoreUint32(done, 1)
-				out <- &common.FnOutput{Success: false, Message: err.Error()}
-			}
-		}
-	}
-	out <- nil
+	runner  JoinWorkerFunc
+	cHashMu *sync.RWMutex
+	cHash   *hash.ConsistentHash
+	parNum  uint8
 }
 
 func joinProcLoop(
 	ctx context.Context,
 	out chan *common.FnOutput,
+	task *transaction.StreamTask,
 	procArgs *joinProcArgs,
 	wg *sync.WaitGroup,
 	run chan struct{},
 	done chan struct{},
 ) {
+	defer wg.Done()
 	<-run
 	debug.Fprintf(os.Stderr, "joinProc start running\n")
 	id := ctx.Value("id").(string)
 	for {
 		select {
 		case <-ctx.Done():
-			wg.Done()
 			return
 		case <-done:
 			debug.Fprintf(os.Stderr, "got done msg\n")
-			wg.Done()
 			return
 		default:
 		}
@@ -141,20 +91,18 @@ func joinProcLoop(
 				debug.Fprintf(os.Stderr, "%s timeout\n", procArgs.src.TopicName())
 				out <- &common.FnOutput{Success: true, Message: err.Error()}
 				debug.Fprintf(os.Stderr, "%s done sending msg\n", id)
-				wg.Done()
 				return
 			}
 			debug.Fprintf(os.Stderr, "[ERROR] consume: %v\n", err)
 			out <- &common.FnOutput{Success: false, Message: err.Error()}
 			debug.Fprintf(os.Stderr, "%s done sending msg2\n", id)
-			wg.Done()
 			return
 		}
 		debug.Fprintf(os.Stderr, "after consume\n")
 		for _, msg := range gotMsgs.Msgs {
-			procArgs.offMu.Lock()
-			procArgs.currentOffset[procArgs.src.TopicName()] = msg.LogSeqNum
-			procArgs.offMu.Unlock()
+			task.OffMu.Lock()
+			task.CurrentOffset[procArgs.src.TopicName()] = msg.LogSeqNum
+			task.OffMu.Unlock()
 
 			if msg.MsgArr != nil {
 				debug.Fprintf(os.Stderr, "got msgarr\n")
@@ -168,7 +116,6 @@ func joinProcLoop(
 						debug.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink: %v\n", id, err)
 						out <- &common.FnOutput{Success: false, Message: err.Error()}
 						debug.Fprintf(os.Stderr, "%s done send msg3\n", id)
-						wg.Done()
 						return
 					}
 				}
@@ -182,7 +129,6 @@ func joinProcLoop(
 					debug.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink2: %v\n", id, err)
 					out <- &common.FnOutput{Success: false, Message: err.Error()}
 					debug.Fprintf(os.Stderr, "%s done send msg4\n", id)
-					wg.Done()
 					return
 				}
 			}

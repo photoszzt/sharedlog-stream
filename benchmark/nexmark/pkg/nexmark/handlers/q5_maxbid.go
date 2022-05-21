@@ -119,7 +119,7 @@ type q5MaxBidRestoreArgs struct {
 	parNum       uint8
 }
 
-func (h *q5MaxBid) process(ctx context.Context, t *transaction.StreamTask, argsTmp interface{}) (map[string]uint64, *common.FnOutput) {
+func (h *q5MaxBid) process(ctx context.Context, t *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
 	args := argsTmp.(*q5MaxBidProcessArgs)
 	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
@@ -370,7 +370,6 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			stJoin.StartWarmup()
 			chooseMaxCnt.StartWarmup()
 		},
-		CloseFunc: nil,
 	}
 
 	srcs := []source_sink.Source{src}

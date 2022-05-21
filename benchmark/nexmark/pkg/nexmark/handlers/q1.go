@@ -99,7 +99,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 				panic(err)
 			}
 		},
-		ResumeFunc: func() {
+		ResumeFunc: func(task *transaction.StreamTask) {
 			sink.InnerSink().RebuildMsgChan()
 			if sp.EnableTransaction {
 				sink.InnerSink().StartAsyncPushNoTick(ctx)
@@ -120,7 +120,6 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 			src.StartWarmup()
 			sink.StartWarmup()
 		},
-		CloseFunc: nil,
 	}
 	srcs := []source_sink.Source{src}
 	if sp.EnableTransaction {
@@ -202,7 +201,7 @@ func (a *query1ProcessArgs) ErrChan() chan error {
 	return nil
 }
 
-func (h *query1Handler) process(ctx context.Context, t *transaction.StreamTask, argsTmp interface{}) (map[string]uint64, *common.FnOutput) {
+func (h *query1Handler) process(ctx context.Context, t *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
 	args := argsTmp.(*query1ProcessArgs)
 	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum

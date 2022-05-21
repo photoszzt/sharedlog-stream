@@ -31,8 +31,6 @@ type q8JoinStreamHandler struct {
 	cHashMu sync.RWMutex
 	cHash   *hash.ConsistentHash
 
-	offMu sync.Mutex
-
 	funcName string
 }
 
@@ -81,7 +79,7 @@ func (h *q8JoinStreamHandler) process(
 	ctx context.Context,
 	t *transaction.StreamTask,
 	argsTmp interface{},
-) (map[string]uint64, *common.FnOutput) {
+) *common.FnOutput {
 	args := argsTmp.(*q8JoinStreamProcessArgs)
 	var aOut *common.FnOutput
 	var pOut *common.FnOutput
@@ -97,17 +95,17 @@ func (h *q8JoinStreamHandler) process(
 	// debug.Fprintf(os.Stderr, "aOut: %v\n", aOut)
 	// debug.Fprintf(os.Stderr, "pOut: %v\n", pOut)
 	if pOut != nil && !pOut.Success {
-		return t.CurrentOffset, pOut
+		return pOut
 	}
 	if aOut != nil && !aOut.Success {
-		return t.CurrentOffset, aOut
+		return aOut
 	}
 	/*
 		if atomic.LoadUint32(&args.personDone) == 1 && atomic.LoadUint32(&args.auctionDone) == 1 {
 			return t.CurrentOffset, &common.FnOutput{Success: true, Message: errors.ErrStreamSourceTimeout.Error()}
 		}
 	*/
-	return t.CurrentOffset, nil
+	return nil
 }
 
 /*
@@ -387,7 +385,6 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		sink:          sss.sink,
 		parNum:        sp.ParNum,
 		runner:        pJoinA,
-		offMu:         &h.offMu,
 		trackParFunc:  tran_interface.DefaultTrackSubstreamFunc,
 		cHashMu:       &h.cHashMu,
 		cHash:         h.cHash,
@@ -398,7 +395,6 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		sink:          sss.sink,
 		parNum:        sp.ParNum,
 		runner:        aJoinP,
-		offMu:         &h.offMu,
 		trackParFunc:  tran_interface.DefaultTrackSubstreamFunc,
 		cHashMu:       &h.cHashMu,
 		cHash:         h.cHash,
@@ -427,19 +423,18 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			}
 			// debug.Fprintf(os.Stderr, "join procs exited\n")
 		},
-		ResumeFunc: func() {
+		ResumeFunc: func(task *transaction.StreamTask) {
 			// debug.Fprintf(os.Stderr, "resume join porc\n")
 			personDone = make(chan struct{}, 1)
 			aucDone = make(chan struct{}, 1)
 			wg.Add(1)
-			go joinProcLoop(pctx, personsOutChan, joinProcPerson, &wg, perRun, personDone)
+			go joinProcLoop(pctx, personsOutChan, task, joinProcPerson, &wg, perRun, personDone)
 			wg.Add(1)
-			go joinProcLoop(actx, auctionsOutChan, joinProcAuction, &wg, aucRun, aucDone)
+			go joinProcLoop(actx, auctionsOutChan, task, joinProcAuction, &wg, aucRun, aucDone)
 			perRun <- struct{}{}
 			aucRun <- struct{}{}
 			// debug.Fprintf(os.Stderr, "done resume join proc\n")
 		},
-		CloseFunc: nil,
 		InitFunc: func(progArgs interface{}) {
 			sss.src1.StartWarmup()
 			sss.src2.StartWarmup()
@@ -456,9 +451,9 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	}
 
 	wg.Add(1)
-	go joinProcLoop(pctx, personsOutChan, joinProcPerson, &wg, perRun, personDone)
+	go joinProcLoop(pctx, personsOutChan, &task, joinProcPerson, &wg, perRun, personDone)
 	wg.Add(1)
-	go joinProcLoop(actx, auctionsOutChan, joinProcAuction, &wg, aucRun, aucDone)
+	go joinProcLoop(actx, auctionsOutChan, &task, joinProcAuction, &wg, aucRun, aucDone)
 
 	srcs := []source_sink.Source{auctionsSrc, personsSrc}
 	if sp.EnableTransaction {

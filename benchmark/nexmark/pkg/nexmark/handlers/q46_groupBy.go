@@ -48,7 +48,7 @@ func (h *q46GroupByHandler) process(
 	ctx context.Context,
 	t *transaction.StreamTask,
 	argsTmp interface{},
-) (map[string]uint64, *common.FnOutput) {
+) *common.FnOutput {
 	args := argsTmp.(*q46GroupByProcessArgs)
 	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
@@ -157,7 +157,6 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 
 	task := transaction.StreamTask{
 		ProcessFunc: h.process,
-		CloseFunc:   nil,
 		PauseFunc: func() {
 			// debug.Fprintf(os.Stderr, "begin flush\n")
 			close(aucMsgChan)
@@ -173,7 +172,7 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 			}
 			// debug.Fprintf(os.Stderr, "done flush\n")
 		},
-		ResumeFunc: func() {
+		ResumeFunc: func(task *transaction.StreamTask) {
 			debug.Fprintf(os.Stderr, "start resume\n")
 			procArgs.sinks[0].InnerSink().RebuildMsgChan()
 			procArgs.sinks[1].InnerSink().RebuildMsgChan()

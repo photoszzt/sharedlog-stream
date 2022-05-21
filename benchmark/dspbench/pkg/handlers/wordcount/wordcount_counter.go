@@ -114,17 +114,17 @@ func (a *wordcountCounterAggProcessArg) RecordFinishFunc() func(ctx context.Cont
 func (h *wordcountCounterAgg) process(ctx context.Context,
 	t *transaction.StreamTask,
 	argsTmp interface{},
-) (map[string]uint64, *common.FnOutput) {
+) *common.FnOutput {
 	args := argsTmp.(*wordcountCounterAggProcessArg)
 	msgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {
 		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
-			return t.CurrentOffset, &common.FnOutput{
+			return &common.FnOutput{
 				Success: true,
 				Message: err.Error(),
 			}
 		}
-		return t.CurrentOffset, &common.FnOutput{
+		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("consume failed: %v", err),
 		}
@@ -139,14 +139,14 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 			// TODO: below is not correct
 			_, err = args.output_stream.Push(ctx, v.Payload, args.parNum, true, false, 0, 0, 0)
 			if err != nil {
-				return t.CurrentOffset, &common.FnOutput{Success: false, Message: err.Error()}
+				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
 			if args.curEpoch < v.ScaleEpoch {
 				err = args.recordFinishFunc(ctx, args.funcName, args.parNum)
 				if err != nil {
-					return t.CurrentOffset, &common.FnOutput{Success: false, Message: err.Error()}
+					return &common.FnOutput{Success: false, Message: err.Error()}
 				}
-				return t.CurrentOffset, &common.FnOutput{
+				return &common.FnOutput{
 					Success: true,
 					Message: fmt.Sprintf("%s-%d epoch %d exit", args.funcName, args.parNum, args.curEpoch),
 					Err:     errors.ErrShouldExitForScale,
@@ -159,17 +159,17 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 			for _, subMsg := range msg.MsgArr {
 				_, err = args.counter.ProcessAndReturn(ctx, subMsg)
 				if err != nil {
-					return t.CurrentOffset, &common.FnOutput{Success: false, Message: fmt.Sprintf("counter failed: %v", err)}
+					return &common.FnOutput{Success: false, Message: fmt.Sprintf("counter failed: %v", err)}
 				}
 			}
 		} else {
 			_, err = args.counter.ProcessAndReturn(ctx, msg.Msg)
 			if err != nil {
-				return t.CurrentOffset, &common.FnOutput{Success: false, Message: fmt.Sprintf("counter failed: %v", err)}
+				return &common.FnOutput{Success: false, Message: fmt.Sprintf("counter failed: %v", err)}
 			}
 		}
 	}
-	return t.CurrentOffset, nil
+	return nil
 }
 
 func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.QueryInput) *common.FnOutput {

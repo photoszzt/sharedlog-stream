@@ -14,6 +14,7 @@ import (
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sharedlog-stream/pkg/txn_data"
+	"sync"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -21,11 +22,11 @@ import (
 )
 
 type StreamTask struct {
-	ProcessFunc               func(ctx context.Context, task *StreamTask, args interface{}) (map[string]uint64, *common.FnOutput)
+	ProcessFunc               func(ctx context.Context, task *StreamTask, args interface{}) *common.FnOutput
+	OffMu                     sync.Mutex
 	CurrentOffset             map[string]uint64
-	CloseFunc                 func()
 	PauseFunc                 func()
-	ResumeFunc                func()
+	ResumeFunc                func(task *StreamTask)
 	InitFunc                  func(progArgs interface{})
 	CommitEveryForAtLeastOnce time.Duration
 }
@@ -429,7 +430,6 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 		t.InitFunc(args.ProcArgs)
 	}
 	hasUncommitted := false
-	var off map[string]uint64 = nil
 	var ret *common.FnOutput = nil
 
 	var afterWarmupStart time.Time
@@ -439,19 +439,19 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 	startTime := time.Now()
 	for {
 		timeSinceLastCommit := time.Since(commitTimer)
-		if timeSinceLastCommit >= t.CommitEveryForAtLeastOnce && off != nil {
+		if timeSinceLastCommit >= t.CommitEveryForAtLeastOnce && t.CurrentOffset != nil {
 			debug.Fprintf(os.Stderr, "before pause 1\n")
 			if t.PauseFunc != nil {
 				t.PauseFunc()
 			}
 			debug.Fprintf(os.Stderr, "after pause 1\n")
-			err = commitOffset(ctx, cm, off, args.ParNum)
+			err = t.commitOffset(ctx, cm, args.ParNum)
 			if err != nil {
 				panic(err)
 			}
 			debug.Fprintf(os.Stderr, "after commit 1\n")
 			if t.ResumeFunc != nil {
-				t.ResumeFunc()
+				t.ResumeFunc(t)
 			}
 			debug.Fprintf(os.Stderr, "after resume 1\n")
 			hasUncommitted = false
@@ -465,32 +465,13 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 			break
 		}
 		procStart := time.Now()
-		off, ret = t.ProcessFunc(ctx, t, args.ProcArgs)
+		ret = t.ProcessFunc(ctx, t, args.ProcArgs)
 		if ret != nil {
 			if ret.Success {
 				// elapsed := time.Since(procStart)
 				// latencies = append(latencies, int(elapsed.Microseconds()))
 				debug.Fprintf(os.Stderr, "consume timeout\n")
-				alreadyPaused := false
-				if hasUncommitted {
-					debug.Fprintf(os.Stderr, "before pause 2\n")
-					if t.PauseFunc != nil {
-						t.PauseFunc()
-					}
-					debug.Fprintf(os.Stderr, "after pause 2\n")
-					err = commitOffset(ctx, cm, off, args.ParNum)
-					if err != nil {
-						panic(err)
-					}
-					debug.Fprintf(os.Stderr, "after commit 2\n")
-					alreadyPaused = true
-				}
-				if !alreadyPaused && t.PauseFunc != nil {
-					t.PauseFunc()
-				}
-				if t.CloseFunc != nil {
-					t.CloseFunc()
-				}
+				t.pauseAndCommit(ctx, hasUncommitted, cm, args.ParNum)
 				ret.Latencies = map[string][]int{"e2e": latencies}
 				if args.WarmupTime != 0 && afterWarmup {
 					ret.Duration = time.Since(afterWarmupStart).Seconds()
@@ -509,29 +490,7 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 			latencies = append(latencies, int(elapsed.Microseconds()))
 		}
 	}
-	alreadyPaused := false
-	if hasUncommitted {
-		debug.Fprintf(os.Stderr, "before pause 3\n")
-		if t.PauseFunc != nil {
-			t.PauseFunc()
-		}
-		debug.Fprintf(os.Stderr, "commit left\n")
-		err = commitOffset(ctx, cm, off, args.ParNum)
-		if err != nil {
-			panic(err)
-		}
-		debug.Fprintf(os.Stderr, "after commit 3\n")
-		alreadyPaused = true
-	}
-	if !alreadyPaused && t.PauseFunc != nil {
-		debug.Fprintf(os.Stderr, "before pause 4\n")
-		t.PauseFunc()
-		debug.Fprintf(os.Stderr, "after pause 4\n")
-	}
-	if t.CloseFunc != nil {
-		debug.Fprintf(os.Stderr, "closing\n")
-		t.CloseFunc()
-	}
+	t.pauseAndCommit(ctx, hasUncommitted, cm, args.ParNum)
 	duration := time.Since(startTime).Seconds()
 	if args.WarmupTime != 0 && afterWarmup {
 		duration = time.Since(afterWarmupStart).Seconds()
@@ -544,15 +503,34 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 	}
 }
 
-func commitOffset(ctx context.Context, cm *ConsumeSeqManager, off map[string]uint64, parNum uint8) error {
+func (t *StreamTask) pauseAndCommit(ctx context.Context, hasUncommitted bool, cm *ConsumeSeqManager, parNum uint8) {
+	alreadyPaused := false
+	if hasUncommitted {
+		if t.PauseFunc != nil {
+			t.PauseFunc()
+		}
+		err := t.commitOffset(ctx, cm, parNum)
+		if err != nil {
+			panic(err)
+		}
+		alreadyPaused = true
+	}
+	if !alreadyPaused && t.PauseFunc != nil {
+		t.PauseFunc()
+	}
+}
+
+func (t *StreamTask) commitOffset(ctx context.Context, cm *ConsumeSeqManager, parNum uint8) error {
 	consumedSeqNumConfigs := make([]ConsumedSeqNumConfig, 0)
-	for topic, offset := range off {
+	t.OffMu.Lock()
+	for topic, offset := range t.CurrentOffset {
 		consumedSeqNumConfigs = append(consumedSeqNumConfigs, ConsumedSeqNumConfig{
 			TopicToTrack:   topic,
 			Partition:      parNum,
 			ConsumedSeqNum: uint64(offset),
 		})
 	}
+	t.OffMu.Unlock()
 	err := cm.AppendConsumedSeqNum(ctx, consumedSeqNumConfigs)
 	if err != nil {
 		return err
@@ -686,7 +664,6 @@ func (t *StreamTask) ProcessWithTransaction(
 	latencies := make([]int, 0, 128)
 	hasLiveTransaction := false
 	trackConsumePar := false
-	var currentOffset map[string]uint64
 	commitTimer := time.Now()
 	commitEvery := time.Duration(args.CommitEveryMs) * time.Millisecond
 	duration := time.Duration(args.Duration) * time.Second
@@ -753,7 +730,7 @@ func (t *StreamTask) ProcessWithTransaction(
 			// debug.Fprintf(os.Stderr, "iter: %d, shouldCommitByIter: %v, timeSinceTranStart: %v, cur_elapsed: %v, duration: %v\n",
 			// 	idx, shouldCommitByIter, timeSinceTranStart, cur_elapsed, duration)
 			if ((commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout || shouldCommitByIter) && hasLiveTransaction {
-				err := t.commitTransaction(ctx, currentOffset, tm, args, &hasLiveTransaction, &trackConsumePar)
+				err := t.commitTransaction(ctx, tm, args, &hasLiveTransaction, &trackConsumePar)
 				if err != nil {
 					return &common.FnOutput{Success: false, Message: err.Error()}
 				}
@@ -769,28 +746,18 @@ func (t *StreamTask) ProcessWithTransaction(
 					return &common.FnOutput{Success: false, Message: fmt.Sprintf("close transaction manager: %v\n", err)}
 				}
 				if hasLiveTransaction {
-					err := t.commitTransaction(ctx, currentOffset, tm, args, &hasLiveTransaction, &trackConsumePar)
+					err := t.commitTransaction(ctx, tm, args, &hasLiveTransaction, &trackConsumePar)
 					if err != nil {
 						return &common.FnOutput{Success: false, Message: err.Error()}
 					}
 				}
-				if t.CloseFunc != nil {
-					debug.Fprintf(os.Stderr, "waiting for goroutines to close 2\n")
-					t.CloseFunc()
-				}
 				elapsed := time.Since(procStart)
 				latencies = append(latencies, int(elapsed.Microseconds()))
-				e2eTime := time.Since(startTime).Seconds()
-				if warmupDuration != 0 && afterWarmup {
-					e2eTime = time.Since(afterWarmupStart).Seconds()
+				ret := &common.FnOutput{
+					Success: true,
 				}
-				debug.Fprintf(os.Stderr, "return final out to chan 2\n")
-				return &common.FnOutput{
-					Success:   true,
-					Duration:  e2eTime,
-					Latencies: map[string][]int{"e2e": latencies},
-					Consumed:  make(map[string]uint64),
-				}
+				updateReturnMetric(ret, startTime, afterWarmupStart, warmupDuration, afterWarmup, latencies)
+				return ret
 			}
 			if !hasLiveTransaction {
 				if err := tm.BeginTransaction(ctx, args.KVChangelogs, args.WindowStoreChangelogs); err != nil {
@@ -807,7 +774,7 @@ func (t *StreamTask) ProcessWithTransaction(
 					}
 				}
 				if init && t.ResumeFunc != nil {
-					t.ResumeFunc()
+					t.ResumeFunc(t)
 				}
 				if !init && t.InitFunc != nil {
 					t.InitFunc(args.ProcArgs)
@@ -823,28 +790,18 @@ func (t *StreamTask) ProcessWithTransaction(
 				trackConsumePar = true
 			}
 
-			off, ret := t.ProcessFunc(ctx, t, args.ProcArgs)
+			ret := t.ProcessFunc(ctx, t, args.ProcArgs)
 			if ret != nil {
 				if ret.Success {
 					if hasLiveTransaction {
-						err := t.commitTransaction(ctx, currentOffset, tm, args, &hasLiveTransaction, &trackConsumePar)
+						err := t.commitTransaction(ctx, tm, args, &hasLiveTransaction, &trackConsumePar)
 						if err != nil {
 							return &common.FnOutput{Success: false, Message: err.Error()}
 						}
 					}
-					if t.CloseFunc != nil {
-						debug.Fprintf(os.Stderr, "waiting for goroutines to close 1\n")
-						t.CloseFunc()
-					}
 					// elapsed := time.Since(procStart)
 					// latencies = append(latencies, int(elapsed.Microseconds()))
-					ret.Latencies = map[string][]int{"e2e": latencies}
-					ret.Consumed = make(map[string]uint64)
-					e2eTime := time.Since(startTime).Seconds()
-					if warmupDuration != 0 && afterWarmup {
-						e2eTime = time.Since(afterWarmupStart).Seconds()
-					}
-					ret.Duration = e2eTime
+					updateReturnMetric(ret, startTime, afterWarmupStart, warmupDuration, afterWarmup, latencies)
 				} else {
 					if hasLiveTransaction {
 						if err := tm.AbortTransaction(ctx, false, args.KVChangelogs, args.WindowStoreChangelogs); err != nil {
@@ -854,7 +811,6 @@ func (t *StreamTask) ProcessWithTransaction(
 				}
 				return ret
 			}
-			currentOffset = off
 			if warmupDuration == 0 || afterWarmup {
 				elapsed := time.Since(procStart)
 				latencies = append(latencies, int(elapsed.Microseconds()))
@@ -862,6 +818,19 @@ func (t *StreamTask) ProcessWithTransaction(
 			idx += 1
 		}
 	}
+}
+
+func updateReturnMetric(ret *common.FnOutput,
+	startTime time.Time, afterWarmupStart time.Time, warmupDuration time.Duration, afterWarmup bool,
+	latencies []int,
+) {
+	ret.Latencies = map[string][]int{"e2e": latencies}
+	ret.Consumed = make(map[string]uint64)
+	e2eTime := time.Since(startTime).Seconds()
+	if warmupDuration != 0 && afterWarmup {
+		e2eTime = time.Since(afterWarmupStart).Seconds()
+	}
+	ret.Duration = e2eTime
 }
 
 /*
@@ -1073,7 +1042,6 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 */
 
 func (t *StreamTask) commitTransaction(ctx context.Context,
-	currentOffset map[string]uint64,
 	tm *TransactionManager,
 	args *StreamTaskArgsTransaction,
 	hasLiveTransaction *bool,
@@ -1085,7 +1053,8 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 	}
 	debug.Fprintf(os.Stderr, "after flush\n")
 	consumedSeqNumConfigs := make([]ConsumedSeqNumConfig, 0)
-	for topic, offset := range currentOffset {
+	t.OffMu.Lock()
+	for topic, offset := range t.CurrentOffset {
 		consumedSeqNumConfigs = append(consumedSeqNumConfigs, ConsumedSeqNumConfig{
 			TopicToTrack:   topic,
 			TaskId:         tm.GetCurrentTaskId(),
@@ -1094,6 +1063,7 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 			ConsumedSeqNum: uint64(offset),
 		})
 	}
+	t.OffMu.Unlock()
 	debug.Fprintf(os.Stderr, "about to commit transaction\n")
 	err := tm.AppendConsumedSeqNum(ctx, consumedSeqNumConfigs)
 	if err != nil {
@@ -1112,18 +1082,18 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 
 func CommonProcess(ctx context.Context, t *StreamTask, args proc_interface.ProcArgsWithSrcSink,
 	proc func(t *StreamTask, msg commtypes.MsgAndSeq) error,
-) (map[string]uint64, *common.FnOutput) {
+) *common.FnOutput {
 	select {
 	case err := <-args.ErrChan():
-		return t.CurrentOffset, &common.FnOutput{Success: false, Message: err.Error()}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	default:
 	}
 	gotMsgs, err := args.Source().Consume(ctx, args.ParNum())
 	if err != nil {
 		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
-			return t.CurrentOffset, &common.FnOutput{Success: true, Message: err.Error()}
+			return &common.FnOutput{Success: true, Message: err.Error()}
 		}
-		return t.CurrentOffset, &common.FnOutput{Success: false, Message: err.Error()}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	for _, msg := range gotMsgs.Msgs {
 		if msg.MsgArr == nil && msg.Msg.Value == nil {
@@ -1134,14 +1104,14 @@ func CommonProcess(ctx context.Context, t *StreamTask, args proc_interface.ProcA
 			err := args.PushToAllSinks(ctx, commtypes.Message{Key: commtypes.SCALE_FENCE_KEY,
 				Value: v.Payload}, args.ParNum(), true)
 			if err != nil {
-				return t.CurrentOffset, &common.FnOutput{Success: false, Message: err.Error()}
+				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
 			if args.CurEpoch() < v.ScaleEpoch {
 				err = args.RecordFinishFunc()(ctx, args.FuncName(), args.ParNum())
 				if err != nil {
-					return t.CurrentOffset, &common.FnOutput{Success: false, Message: err.Error()}
+					return &common.FnOutput{Success: false, Message: err.Error()}
 				}
-				return t.CurrentOffset, &common.FnOutput{
+				return &common.FnOutput{
 					Success: true,
 					Message: fmt.Sprintf("%s-%d epoch %d exit", args.FuncName(), args.ParNum(), args.CurEpoch()),
 					Err:     errors.ErrShouldExitForScale,
@@ -1151,8 +1121,8 @@ func CommonProcess(ctx context.Context, t *StreamTask, args proc_interface.ProcA
 		}
 		err = proc(t, msg)
 		if err != nil {
-			return t.CurrentOffset, &common.FnOutput{Success: false, Message: err.Error()}
+			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
 	}
-	return t.CurrentOffset, nil
+	return nil
 }
