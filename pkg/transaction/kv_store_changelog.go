@@ -110,6 +110,7 @@ func RestoreChangelogKVStateStore(
 	currentOffset := uint64(0)
 	debug.Assert(kvchangelog.kvmsgSerdes.ValSerde != nil, "val serde should not be nil")
 	debug.Assert(kvchangelog.kvmsgSerdes.KeySerde != nil, "key serde should not be nil")
+	debug.Assert(kvchangelog.kvmsgSerdes.MsgSerde != nil, "msg serde should not be nil")
 	for {
 		msg, err := kvchangelog.ChangelogManager.ReadNext(ctx, kvchangelog.ParNum)
 		// nothing to restore

@@ -123,6 +123,7 @@ func RestoreChangelogWindowStateStore(
 ) error {
 	debug.Assert(wschangelog.kvmsgSerdes.ValSerde != nil, "val serde should not be nil")
 	debug.Assert(wschangelog.kvmsgSerdes.KeySerde != nil, "key serde should not be nil")
+	debug.Assert(wschangelog.kvmsgSerdes.MsgSerde != nil, "msg serde should not be nil")
 	currentOffset := uint64(0)
 	serdes := winstoreSerdes{
 		kvmsgSerdes:      wschangelog.kvmsgSerdes,
