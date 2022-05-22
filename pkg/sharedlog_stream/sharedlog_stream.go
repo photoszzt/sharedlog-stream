@@ -6,9 +6,7 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"os"
 	"sharedlog-stream/pkg/bits"
-	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/txn_data"
@@ -160,11 +158,11 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNu
 	if err != nil {
 		return 0, err
 	}
-	debug.Fprintf(os.Stderr, "push to %s tag: ", s.topicName)
-	for _, t := range tags {
-		debug.Fprintf(os.Stderr, "0x%x ", t)
-	}
-	debug.Fprintf(os.Stderr, "seqNum 0x%x, tail 0x%x\n", seqNum, s.tail)
+	// debug.Fprintf(os.Stderr, "push to %s tag: ", s.topicName)
+	// for _, t := range tags {
+	// 	debug.Fprintf(os.Stderr, "0x%x ", t)
+	// }
+	// debug.Fprintf(os.Stderr, "seqNum 0x%x, tail 0x%x\n", seqNum, s.tail)
 	/*
 		// debug.Fprintf(os.Stderr, "append val %s with tag: %x to topic %s par %d, seqNum: %x\n",
 		// 	string(payload), tags[0], s.topicName, parNum, seqNum)
