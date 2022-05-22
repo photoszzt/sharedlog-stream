@@ -40,10 +40,6 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewQ3JoinTableHandler(env, funcName), nil
 	case "q3GroupBy":
 		return handlers.NewQ3GroupByHandler(env, funcName), nil
-	case "auctionsByID":
-		return handlers.NewAuctionsByIDHandler(env, funcName), nil
-	case "bidsByAuctionID":
-		return handlers.NewBidByAuctionIDHandler(env, funcName), nil
 	case "q4JoinTable":
 		return handlers.NewQ4JoinTableHandler(env, funcName), nil
 	case "q5bidkeyedbyauction":
