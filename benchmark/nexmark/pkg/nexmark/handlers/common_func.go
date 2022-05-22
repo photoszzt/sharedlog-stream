@@ -463,15 +463,3 @@ func CommonGetSrcSink(ctx context.Context, sp *common.QueryInput,
 		time.Duration(sp.WarmupS)*time.Second)
 	return src, sink, nil
 }
-
-func UpdateStreamTaskArgsTransaction(sp *common.QueryInput, args *transaction.StreamTaskArgsTransaction) {
-	args.AppId = sp.AppId
-	args.Warmup = time.Duration(sp.WarmupS) * time.Second
-	args.ScaleEpoch = sp.ScaleEpoch
-	args.CommitEveryMs = sp.CommitEveryMs
-	args.CommitEveryNIter = sp.CommitEveryNIter
-	args.ExitAfterNCommit = sp.ExitAfterNCommit
-	args.Duration = sp.Duration
-	args.SerdeFormat = commtypes.SerdeFormat(sp.SerdeFormat)
-	args.InParNum = sp.ParNum
-}

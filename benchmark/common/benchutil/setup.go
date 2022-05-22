@@ -11,7 +11,9 @@ import (
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/transaction"
 	"sync"
+	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
 	"github.com/rs/zerolog/log"
@@ -110,4 +112,25 @@ func InvokeFunc(client *http.Client, response *common.FnOutput,
 	} else if !response.Success {
 		log.Error().Msgf("%s request failed: %s", funcName, response.Message)
 	}
+}
+
+func UpdateStreamTaskArgsTransaction(sp *common.QueryInput, args *transaction.StreamTaskArgsTransaction) {
+	args.AppId = sp.AppId
+	args.Warmup = time.Duration(sp.WarmupS) * time.Second
+	args.ScaleEpoch = sp.ScaleEpoch
+	args.CommitEveryMs = sp.CommitEveryMs
+	args.CommitEveryNIter = sp.CommitEveryNIter
+	args.ExitAfterNCommit = sp.ExitAfterNCommit
+	args.Duration = sp.Duration
+	args.SerdeFormat = commtypes.SerdeFormat(sp.SerdeFormat)
+	args.InParNum = sp.ParNum
+}
+
+func UpdateStreamTaskArgs(sp *common.QueryInput, args *transaction.StreamTaskArgs) {
+	args.Duration = time.Duration(sp.Duration) * time.Second
+	args.NumInPartition = sp.NumInPartition
+	args.ParNum = sp.ParNum
+	args.SerdeFormat = commtypes.SerdeFormat(sp.SerdeFormat)
+	args.Warmup = time.Duration(sp.WarmupS) * time.Second
+	args.FlushEvery = time.Duration(sp.FlushMs) * time.Millisecond
 }
