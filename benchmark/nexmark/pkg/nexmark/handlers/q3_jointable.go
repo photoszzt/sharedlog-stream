@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/debug"
@@ -60,10 +61,10 @@ func (h *q3JoinTableHandler) process(ctx context.Context,
 	t *transaction.StreamTask,
 	argsTmp interface{},
 ) *common.FnOutput {
-	return handleErrReturn(argsTmp)
+	return handleQ3ErrReturn(argsTmp)
 }
 
-func handleErrReturn(argsTmp interface{}) *common.FnOutput {
+func handleQ3ErrReturn(argsTmp interface{}) *common.FnOutput {
 	args := argsTmp.(*q3JoinTableProcessArgs)
 	var aOut *common.FnOutput
 	var pOut *common.FnOutput
@@ -419,13 +420,9 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			wg.Wait()
 			debug.Fprintf(os.Stderr, "down pause\n")
 			// check the goroutine's return in case any of them returns output
-			ret := handleErrReturn(procArgs)
+			ret := handleQ3ErrReturn(procArgs)
 			if ret != nil {
 				return ret
-			}
-			err := sss.sink.Flush(ctx)
-			if err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
 			return nil
 		},
@@ -457,35 +454,35 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	perManager.LaunchJoinProcLoop(pctx, &task, joinProcPerson, &wg)
 
 	srcs := []source_sink.Source{sss.src1, sss.src2}
-	if sp.EnableTransaction {
-		sinks_arr := []source_sink.Sink{sss.sink}
-		var kvchangelogs []*transaction.KVStoreChangelog
-		if sp.TableType == uint8(store.IN_MEM) {
-			serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-			kvchangelogs = []*transaction.KVStoreChangelog{
-				transaction.NewKVStoreChangelog(kvtabs.tab1,
-					store_with_changelog.NewChangelogManager(auctionsStream, serdeFormat),
-					sss.srcKVMsgSerdes, sp.ParNum),
-				transaction.NewKVStoreChangelog(kvtabs.tab2,
-					store_with_changelog.NewChangelogManager(personsStream, serdeFormat),
-					sss.srcKVMsgSerdes, sp.ParNum),
-			}
-		} else if sp.TableType == uint8(store.MONGODB) {
-			kvchangelogs = []*transaction.KVStoreChangelog{
-				transaction.NewKVStoreChangelogForExternalStore(kvtabs.tab1, auctionsStream, joinProcSerialWithoutSink,
-					&joinProcWithoutSinkArgs{
-						src:    sss.src1.InnerSource(),
-						parNum: sp.ParNum,
-						runner: aJoinP,
-					}, fmt.Sprintf("%s-%s-%d", h.funcName, kvtabs.tab1.Name(), sp.ParNum), sp.ParNum),
-				transaction.NewKVStoreChangelogForExternalStore(kvtabs.tab2, personsStream, joinProcSerialWithoutSink,
-					&joinProcWithoutSinkArgs{
-						src:    sss.src2.InnerSource(),
-						parNum: sp.ParNum,
-						runner: pJoinA,
-					}, fmt.Sprintf("%s-%s-%d", h.funcName, kvtabs.tab2.Name(), sp.ParNum), sp.ParNum),
-			}
+	sinks_arr := []source_sink.Sink{sss.sink}
+	var kvchangelogs []*transaction.KVStoreChangelog
+	if sp.TableType == uint8(store.IN_MEM) {
+		serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+		kvchangelogs = []*transaction.KVStoreChangelog{
+			transaction.NewKVStoreChangelog(kvtabs.tab1,
+				store_with_changelog.NewChangelogManager(auctionsStream, serdeFormat),
+				sss.srcKVMsgSerdes, sp.ParNum),
+			transaction.NewKVStoreChangelog(kvtabs.tab2,
+				store_with_changelog.NewChangelogManager(personsStream, serdeFormat),
+				sss.srcKVMsgSerdes, sp.ParNum),
 		}
+	} else if sp.TableType == uint8(store.MONGODB) {
+		kvchangelogs = []*transaction.KVStoreChangelog{
+			transaction.NewKVStoreChangelogForExternalStore(kvtabs.tab1, auctionsStream, joinProcSerialWithoutSink,
+				&joinProcWithoutSinkArgs{
+					src:    sss.src1.InnerSource(),
+					parNum: sp.ParNum,
+					runner: aJoinP,
+				}, fmt.Sprintf("%s-%s-%d", h.funcName, kvtabs.tab1.Name(), sp.ParNum), sp.ParNum),
+			transaction.NewKVStoreChangelogForExternalStore(kvtabs.tab2, personsStream, joinProcSerialWithoutSink,
+				&joinProcWithoutSinkArgs{
+					src:    sss.src2.InnerSource(),
+					parNum: sp.ParNum,
+					runner: pJoinA,
+				}, fmt.Sprintf("%s-%s-%d", h.funcName, kvtabs.tab2.Name(), sp.ParNum), sp.ParNum),
+		}
+	}
+	if sp.EnableTransaction {
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:              procArgs,
 			Env:                   h.env,
@@ -496,7 +493,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			WindowStoreChangelogs: nil,
 			FixedOutParNum:        0,
 		}
-		UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
+		benchutil.UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				joinProcPerson.trackParFunc = trackParFunc
@@ -517,17 +514,10 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		}
 		return ret
 	}
-	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs:       procArgs,
-		Duration:       time.Duration(sp.Duration) * time.Second,
-		Srcs:           srcs,
-		ParNum:         sp.ParNum,
-		SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
-		Env:            h.env,
-		NumInPartition: sp.NumInPartition,
-		WarmupTime:     time.Duration(sp.WarmupS) * time.Second,
-	}
-	ret := task.Process(ctx, &streamTaskArgs)
+	streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr)
+	streamTaskArgs.WithKVChangelogs(kvchangelogs)
+	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
+	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
 		ret.Latencies["auctionsSrc"] = sss.src1.GetLatency()
 		ret.Latencies["personsSrc"] = sss.src2.GetLatency()

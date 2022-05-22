@@ -349,21 +349,8 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		ProcessFunc:               h.process,
 		CurrentOffset:             make(map[string]uint64),
 		CommitEveryForAtLeastOnce: common.CommitDuration,
-		PauseFunc: func() *common.FnOutput {
-			err := sink.Flush(ctx)
-			if err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
-			}
-			if sp.TableType == uint8(store.IN_MEM) {
-				kvstore_mem := kvstore.(*store_with_changelog.KeyValueStoreWithChangelog)
-				err = kvstore_mem.FlushChangelog(ctx)
-				if err != nil {
-					return &common.FnOutput{Success: false, Message: err.Error()}
-				}
-			}
-			return nil
-		},
-		ResumeFunc: nil,
+		PauseFunc:                 nil,
+		ResumeFunc:                nil,
 		InitFunc: func(progArgs interface{}) {
 			src.StartWarmup()
 			sink.StartWarmup()
@@ -374,30 +361,30 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	}
 
 	srcs := []source_sink.Source{src}
-	if sp.EnableTransaction {
-		var kvc []*transaction.KVStoreChangelog
-		if sp.TableType == uint8(store.IN_MEM) {
-			kvstore_mem := kvstore.(*store_with_changelog.KeyValueStoreWithChangelog)
-			mp := kvstore_mem.MaterializeParam()
-			kvc = []*transaction.KVStoreChangelog{
-				transaction.NewKVStoreChangelog(kvstore, mp.ChangelogManager,
-					mp.KVMsgSerdes, sp.ParNum),
-			}
-		} else if sp.TableType == uint8(store.MONGODB) {
-			// TODO: MONGODB
-			kvc = []*transaction.KVStoreChangelog{
-				transaction.NewKVStoreChangelogForExternalStore(kvstore, input_stream, h.processWithoutSink, &q5MaxBidRestoreArgs{
-					maxBid:       maxBid.InnerProcessor(),
-					stJoin:       stJoin.InnerProcessor(),
-					chooseMaxCnt: chooseMaxCnt.InnerProcessor(),
-					src:          src.InnerSource(),
-					parNum:       sp.ParNum,
-				}, fmt.Sprintf("%s-%s-%d", h.funcName, kvstore.Name(), sp.ParNum), sp.ParNum),
-			}
-		} else {
-			panic("unrecognized table type")
+	sinks_arr := []source_sink.Sink{sink}
+	var kvc []*transaction.KVStoreChangelog
+	if sp.TableType == uint8(store.IN_MEM) {
+		kvstore_mem := kvstore.(*store_with_changelog.KeyValueStoreWithChangelog)
+		mp := kvstore_mem.MaterializeParam()
+		kvc = []*transaction.KVStoreChangelog{
+			transaction.NewKVStoreChangelog(kvstore, mp.ChangelogManager,
+				mp.KVMsgSerdes, sp.ParNum),
 		}
-		sinks_arr := []source_sink.Sink{sink}
+	} else if sp.TableType == uint8(store.MONGODB) {
+		// TODO: MONGODB
+		kvc = []*transaction.KVStoreChangelog{
+			transaction.NewKVStoreChangelogForExternalStore(kvstore, input_stream, h.processWithoutSink, &q5MaxBidRestoreArgs{
+				maxBid:       maxBid.InnerProcessor(),
+				stJoin:       stJoin.InnerProcessor(),
+				chooseMaxCnt: chooseMaxCnt.InnerProcessor(),
+				src:          src.InnerSource(),
+				parNum:       sp.ParNum,
+			}, fmt.Sprintf("%s-%s-%d", h.funcName, kvstore.Name(), sp.ParNum), sp.ParNum),
+		}
+	} else {
+		panic("unrecognized table type")
+	}
+	if sp.EnableTransaction {
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs: procArgs,
 			Env:      h.env,
@@ -409,7 +396,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			KVChangelogs:          kvc,
 			WindowStoreChangelogs: nil,
 		}
-		UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
+		benchutil.UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinshFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*q5MaxBidProcessArgs).trackParFunc = trackParFunc
@@ -430,17 +417,10 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		}
 		return ret
 	}
-	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs:       procArgs,
-		Duration:       time.Duration(sp.Duration) * time.Second,
-		Srcs:           srcs,
-		ParNum:         sp.ParNum,
-		SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
-		Env:            h.env,
-		NumInPartition: sp.NumInPartition,
-		WarmupTime:     time.Duration(sp.WarmupS) * time.Second,
-	}
-	ret := task.Process(ctx, &streamTaskArgs)
+	streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr).
+		WithKVChangelogs(kvc)
+	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
+	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
 		ret.Latencies["src"] = src.GetLatency()
 		ret.Latencies["sink"] = sink.GetLatency()

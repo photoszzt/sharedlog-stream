@@ -92,7 +92,7 @@ type q3GroupByProcessArgs struct {
 	src              *source_sink.MeteredSource
 
 	funcName string
-	sinks    []*source_sink.MeteredSink
+	sinks    []*source_sink.MeteredSyncSink
 	curEpoch uint64
 	parNum   uint8
 }
@@ -120,8 +120,8 @@ func (a *q3GroupByProcessArgs) ErrChan() chan error {
 func getSrcSinks(ctx context.Context, sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_streams []*sharedlog_stream.ShardedSharedLogStream,
-) (*source_sink.MeteredSource, []*source_sink.MeteredSink, error) {
-	var sinks []*source_sink.MeteredSink
+) (*source_sink.MeteredSource, []*source_sink.MeteredSyncSink, error) {
+	var sinks []*source_sink.MeteredSyncSink
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
@@ -150,7 +150,7 @@ func getSrcSinks(ctx context.Context, sp *common.QueryInput,
 	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
 		time.Duration(sp.WarmupS)*time.Second)
 	for _, output_stream := range output_streams {
-		sink := source_sink.NewMeteredSink(source_sink.NewShardedSharedLogStreamSink(output_stream, outConfig),
+		sink := source_sink.NewMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_stream, outConfig),
 			time.Duration(sp.WarmupS)*time.Second)
 		sinks = append(sinks, sink)
 	}
@@ -203,30 +203,11 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 			close(aucMsgChan)
 			close(personMsgChan)
 			wg.Wait()
-			sinks[0].CloseAsyncPush()
-			sinks[1].CloseAsyncPush()
-			if err = sinks[0].Flush(ctx); err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
-			}
-			if err = sinks[1].Flush(ctx); err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
-			}
 			// debug.Fprintf(os.Stderr, "done flush\n")
 			return nil
 		},
 		ResumeFunc: func(task *transaction.StreamTask) {
 			debug.Fprintf(os.Stderr, "start resume\n")
-			procArgs.sinks[0].InnerSink().RebuildMsgChan()
-			procArgs.sinks[1].InnerSink().RebuildMsgChan()
-			if sp.EnableTransaction {
-				procArgs.sinks[0].InnerSink().StartAsyncPushNoTick(ctx)
-				procArgs.sinks[1].InnerSink().StartAsyncPushNoTick(ctx)
-			} else {
-				procArgs.sinks[0].InnerSink().StartAsyncPushWithTick(ctx)
-				procArgs.sinks[1].InnerSink().StartAsyncPushWithTick(ctx)
-				procArgs.sinks[0].InitFlushTimer()
-				procArgs.sinks[1].InitFlushTimer()
-			}
 			aucMsgChan = make(chan commtypes.Message, 1)
 			personMsgChan = make(chan commtypes.Message, 1)
 			procArgs.aucMsgChan = aucMsgChan
@@ -239,18 +220,6 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 		},
 		InitFunc: func(progArgsTmp interface{}) {
 			progArgs := progArgsTmp.(*q3GroupByProcessArgs)
-			// debug.Fprintf(os.Stderr, "start async pusher\n")
-			if sp.EnableTransaction {
-				progArgs.sinks[0].InnerSink().StartAsyncPushNoTick(ctx)
-				progArgs.sinks[1].InnerSink().StartAsyncPushNoTick(ctx)
-			} else {
-				progArgs.sinks[0].InnerSink().StartAsyncPushWithTick(ctx)
-				progArgs.sinks[1].InnerSink().StartAsyncPushWithTick(ctx)
-				progArgs.sinks[0].InitFlushTimer()
-				progArgs.sinks[1].InitFlushTimer()
-			}
-			// debug.Fprintf(os.Stderr, "done start async pusher\n")
-
 			progArgs.src.StartWarmup()
 			progArgs.sinks[0].StartWarmup()
 			progArgs.sinks[1].StartWarmup()
@@ -266,8 +235,8 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	transaction.SetupConsistentHash(&h.aucHashMu, h.aucHash, sp.NumOutPartitions[0])
 	transaction.SetupConsistentHash(&h.personHashMu, h.personHash, sp.NumOutPartitions[1])
 	srcs := []source_sink.Source{src}
+	sinks_arr := []source_sink.Sink{sinks[0], sinks[1]}
 	if sp.EnableTransaction {
-		sinks_arr := []source_sink.Sink{sinks[0], sinks[1]}
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs: procArgs,
 			Env:      h.env,
@@ -279,7 +248,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 			WindowStoreChangelogs: nil,
 			FixedOutParNum:        0,
 		}
-		UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
+		benchutil.UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
 				recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
@@ -298,17 +267,9 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 		}
 		return ret
 	}
-	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs:       procArgs,
-		Duration:       time.Duration(sp.Duration) * time.Second,
-		Srcs:           srcs,
-		ParNum:         sp.ParNum,
-		SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
-		Env:            h.env,
-		NumInPartition: sp.NumInPartition,
-		WarmupTime:     time.Duration(sp.WarmupS) * time.Second,
-	}
-	ret := task.Process(ctx, &streamTaskArgs)
+	streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr)
+	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
+	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
 		ret.Latencies["src"] = src.GetLatency()
 		ret.Latencies["aucSink"] = sinks[0].GetLatency()
@@ -327,12 +288,6 @@ func (h *q3GroupByHandler) getPersonsByID(warmup time.Duration) (*processor.Mete
 	filterPerson := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
 		func(msg *commtypes.Message) (bool, error) {
 			event := msg.Value.(*ntypes.Event)
-			/*
-				fmt.Fprintf(os.Stderr, "input event is %v\n", event)
-				if event.Etype == ntypes.PERSON {
-					fmt.Fprintf(os.Stderr, "person state is %v\n", event.NewPerson.State)
-				}
-			*/
 			return event.Etype == ntypes.PERSON && ((event.NewPerson.State == "OR") ||
 				event.NewPerson.State == "ID" || event.NewPerson.State == "CA"), nil
 		})), warmup)

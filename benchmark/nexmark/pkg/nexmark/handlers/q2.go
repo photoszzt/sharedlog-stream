@@ -54,7 +54,7 @@ func filterFunc(msg *commtypes.Message) (bool, error) {
 
 type query2ProcessArgs struct {
 	src              *source_sink.MeteredSource
-	sink             *source_sink.MeteredSink
+	sink             *source_sink.MeteredSyncSink
 	q2Filter         *processor.MeteredProcessor
 	output_stream    *sharedlog_stream.ShardedSharedLogStream
 	trackParFunc     tran_interface.TrackKeySubStreamFunc
@@ -111,38 +111,17 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		ProcessFunc:               h.process,
 		CurrentOffset:             make(map[string]uint64),
 		CommitEveryForAtLeastOnce: common.CommitDuration,
-		PauseFunc: func() *common.FnOutput {
-			sink.CloseAsyncPush()
-			err := sink.Flush(ctx)
-			if err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
-			}
-			return nil
-		},
-		ResumeFunc: func(task *transaction.StreamTask) {
-			sink.InnerSink().RebuildMsgChan()
-			if sp.EnableTransaction {
-				sink.InnerSink().StartAsyncPushNoTick(ctx)
-			} else {
-				sink.InnerSink().StartAsyncPushWithTick(ctx)
-				sink.InitFlushTimer()
-			}
-		},
+		PauseFunc:                 nil,
+		ResumeFunc:                nil,
 		InitFunc: func(progArgs interface{}) {
-			if sp.EnableTransaction {
-				sink.InnerSink().StartAsyncPushNoTick(ctx)
-			} else {
-				sink.InnerSink().StartAsyncPushWithTick(ctx)
-				sink.InitFlushTimer()
-			}
 			src.StartWarmup()
 			sink.StartWarmup()
 			q2Filter.StartWarmup()
 		},
 	}
 	srcs := []source_sink.Source{src}
+	sinks := []source_sink.Sink{sink}
 	if sp.EnableTransaction {
-		sinks := []source_sink.Sink{sink}
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:              procArgs,
 			Env:                   h.env,
@@ -153,7 +132,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 			WindowStoreChangelogs: nil,
 			FixedOutParNum:        sp.ParNum,
 		}
-		UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
+		benchutil.UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
 				recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
@@ -169,17 +148,9 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		}
 		return ret
 	}
-	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs:       procArgs,
-		Duration:       time.Duration(sp.Duration) * time.Second,
-		Srcs:           srcs,
-		ParNum:         sp.ParNum,
-		SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
-		Env:            h.env,
-		NumInPartition: sp.NumInPartition,
-		WarmupTime:     time.Duration(sp.WarmupS) * time.Second,
-	}
-	ret := task.Process(ctx, &streamTaskArgs)
+	streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks)
+	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
+	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
 		ret.Latencies["src"] = src.GetLatency()
 		ret.Latencies["sink"] = sink.GetLatency()

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/debug"
@@ -287,26 +288,23 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		curEpoch:         sp.ScaleEpoch,
 		funcName:         h.funcName,
 	}
-	currentOffset := make(map[string]uint64)
 	joinProcBid := &joinProcArgs{
-		src:           bidsSrc,
-		sink:          sink,
-		parNum:        sp.ParNum,
-		runner:        bJoinA,
-		trackParFunc:  tran_interface.DefaultTrackSubstreamFunc,
-		cHashMu:       &h.cHashMu,
-		cHash:         h.cHash,
-		currentOffset: currentOffset,
+		src:          bidsSrc,
+		sink:         sink,
+		parNum:       sp.ParNum,
+		runner:       bJoinA,
+		trackParFunc: tran_interface.DefaultTrackSubstreamFunc,
+		cHashMu:      &h.cHashMu,
+		cHash:        h.cHash,
 	}
 	joinProcAuction := &joinProcArgs{
-		src:           auctionsSrc,
-		sink:          sink,
-		parNum:        sp.ParNum,
-		runner:        aJoinB,
-		trackParFunc:  tran_interface.DefaultTrackSubstreamFunc,
-		cHashMu:       &h.cHashMu,
-		cHash:         h.cHash,
-		currentOffset: currentOffset,
+		src:          auctionsSrc,
+		sink:         sink,
+		parNum:       sp.ParNum,
+		runner:       aJoinB,
+		trackParFunc: tran_interface.DefaultTrackSubstreamFunc,
+		cHashMu:      &h.cHashMu,
+		cHash:        h.cHash,
 	}
 	var wg sync.WaitGroup
 	bidsDone := make(chan struct{})
@@ -323,10 +321,6 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 			close(bidsDone)
 			close(aucDone)
 			wg.Wait()
-			err := sink.Flush(ctx)
-			if err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
-			}
 			return nil
 		},
 		ResumeFunc: func(task *transaction.StreamTask) {
@@ -347,10 +341,9 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 			toBidsTable.StartWarmup()
 		},
 	}
-
+	srcs := []source_sink.Source{auctionsSrc, bidsSrc}
+	sinks_arr := []source_sink.Sink{sink}
 	if sp.EnableTransaction {
-		srcs := []source_sink.Source{auctionsSrc, bidsSrc}
-		sinks_arr := []source_sink.Sink{sink}
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs: procArgs,
 			Env:      h.env,
@@ -362,7 +355,7 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 			WindowStoreChangelogs: nil,
 			FixedOutParNum:        0,
 		}
-		UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
+		benchutil.UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				joinProcAuction.trackParFunc = trackParFunc
@@ -382,12 +375,9 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		}
 		return ret
 	}
-	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs:   procArgs,
-		Duration:   time.Duration(sp.Duration) * time.Second,
-		WarmupTime: time.Duration(sp.WarmupS) * time.Second,
-	}
-	ret := task.Process(ctx, &streamTaskArgs)
+	streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr)
+	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
+	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
 		ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()
 		ret.Latencies["bidsSrc"] = bidsSrc.GetLatency()

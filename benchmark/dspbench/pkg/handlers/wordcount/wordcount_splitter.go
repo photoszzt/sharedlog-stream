@@ -219,9 +219,9 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 		return ret
 	}
 	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs:   procArgs,
-		Duration:   time.Duration(sp.Duration) * time.Second,
-		WarmupTime: time.Duration(sp.WarmupS) * time.Second,
+		ProcArgs: procArgs,
+		Duration: time.Duration(sp.Duration) * time.Second,
+		Warmup:   time.Duration(sp.WarmupS) * time.Second,
 	}
 	ret := task.Process(ctx, &streamTaskArgs)
 	if ret != nil && ret.Success {

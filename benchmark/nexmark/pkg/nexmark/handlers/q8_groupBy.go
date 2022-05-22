@@ -207,14 +207,6 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 			close(aucMsgChan)
 			close(personMsgChan)
 			wg.Wait()
-			// sinks[0].CloseAsyncPush()
-			// sinks[1].CloseAsyncPush()
-			if err = sinks[0].Flush(ctx); err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
-			}
-			if err = sinks[1].Flush(ctx); err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
-			}
 
 			// debug.Fprintf(os.Stderr, "done flush\n")
 			return nil
@@ -245,8 +237,8 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 	transaction.SetupConsistentHash(&h.personHashMu, h.personHash, sp.NumOutPartitions[1])
 
 	srcs := []source_sink.Source{src}
+	sinks_arr := []source_sink.Sink{sinks[0], sinks[1]}
 	if sp.EnableTransaction {
-		sinks_arr := []source_sink.Sink{sinks[0], sinks[1]}
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs: procArgs,
 			Env:      h.env,
@@ -258,7 +250,7 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 			WindowStoreChangelogs: nil,
 			FixedOutParNum:        0,
 		}
-		UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
+		benchutil.UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
 				recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
@@ -277,17 +269,9 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 		}
 		return ret
 	}
-	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs:       procArgs,
-		Duration:       time.Duration(sp.Duration) * time.Second,
-		Srcs:           srcs,
-		ParNum:         sp.ParNum,
-		SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
-		Env:            h.env,
-		NumInPartition: sp.NumInPartition,
-		WarmupTime:     time.Duration(sp.WarmupS) * time.Second,
-	}
-	ret := task.Process(ctx, &streamTaskArgs)
+	streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr)
+	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
+	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
 		ret.Latencies["src"] = src.GetLatency()
 		ret.Latencies["aucSink"] = sinks[0].GetLatency()

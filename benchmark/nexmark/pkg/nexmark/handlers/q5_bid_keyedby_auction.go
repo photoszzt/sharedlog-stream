@@ -54,7 +54,7 @@ func (h *bidKeyedByAuction) Call(ctx context.Context, input []byte) ([]byte, err
 
 type bidKeyedByAuctionProcessArgs struct {
 	src              *source_sink.MeteredSource
-	sink             *source_sink.MeteredSink
+	sink             *source_sink.MeteredSyncSink
 	filterBid        *processor.MeteredProcessor
 	selectKey        *processor.MeteredProcessor
 	output_stream    *sharedlog_stream.ShardedSharedLogStream
@@ -184,30 +184,9 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 		ProcessFunc:               h.process,
 		CurrentOffset:             make(map[string]uint64),
 		CommitEveryForAtLeastOnce: common.CommitDuration,
-		PauseFunc: func() *common.FnOutput {
-			sink.CloseAsyncPush()
-			err := sink.Flush(ctx)
-			if err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
-			}
-			return nil
-		},
-		ResumeFunc: func(task *transaction.StreamTask) {
-			sink.InnerSink().RebuildMsgChan()
-			if sp.EnableTransaction {
-				sink.InnerSink().StartAsyncPushNoTick(ctx)
-			} else {
-				sink.InnerSink().StartAsyncPushWithTick(ctx)
-				sink.InitFlushTimer()
-			}
-		},
+		PauseFunc:                 nil,
+		ResumeFunc:                nil,
 		InitFunc: func(progArgs interface{}) {
-			if sp.EnableTransaction {
-				sink.InnerSink().StartAsyncPushNoTick(ctx)
-			} else {
-				sink.InnerSink().StartAsyncPushWithTick(ctx)
-				sink.InitFlushTimer()
-			}
 			src.StartWarmup()
 			sink.StartWarmup()
 			filterBid.StartWarmup()
@@ -217,8 +196,8 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 	srcs := []source_sink.Source{src}
+	sinks := []source_sink.Sink{sink}
 	if sp.EnableTransaction {
-		sinks := []source_sink.Sink{sink}
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs: procArgs,
 			Env:      h.env,
@@ -246,17 +225,9 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 		return ret
 	}
 	// return h.process(ctx, sp, args)
-	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs:       procArgs,
-		Duration:       time.Duration(sp.Duration) * time.Second,
-		Srcs:           srcs,
-		SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
-		ParNum:         sp.ParNum,
-		Env:            h.env,
-		NumInPartition: sp.NumInPartition,
-		WarmupTime:     time.Duration(sp.WarmupS) * time.Second,
-	}
-	ret := task.Process(ctx, &streamTaskArgs)
+	streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks)
+	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
+	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
 		ret.Latencies["src"] = src.GetLatency()
 		ret.Latencies["sink"] = sink.GetLatency()

@@ -225,9 +225,8 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
 	}
-
+	srcs := []source_sink.Source{src}
 	if sp.EnableTransaction {
-		srcs := []source_sink.Source{src}
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:        procArgs,
 			Env:             h.env,
@@ -249,12 +248,8 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 		return ret
 	}
 	// return h.process(ctx, sp, args)
-	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs:   procArgs,
-		Duration:   time.Duration(sp.Duration) * time.Second,
-		WarmupTime: time.Duration(sp.WarmupS) * time.Second,
-	}
-	ret := task.Process(ctx, &streamTaskArgs)
+	streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, nil)
+	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
 		ret.Latencies["src"] = src.GetLatency()
 		ret.Latencies["count"] = count.GetLatency()

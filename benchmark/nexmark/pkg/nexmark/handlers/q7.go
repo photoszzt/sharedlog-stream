@@ -388,32 +388,32 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 	}
 
 	srcs := []source_sink.Source{src}
-	if input.EnableTransaction {
-		sinks_arr := []source_sink.Sink{sink}
-		var wsc []*transaction.WindowStoreChangelog
-		if input.TableType == uint8(store.IN_MEM) {
-			wstore_mem := wstore.(*store_with_changelog.InMemoryWindowStoreWithChangelog)
-			wsc = []*transaction.WindowStoreChangelog{
-				transaction.NewWindowStoreChangelog(wstore,
-					wstore_mem.MaterializeParam().ChangelogManager,
-					wstore_mem.KeyWindowTsSerde(),
-					wstore_mem.MaterializeParam().KVMsgSerdes,
-					wstore_mem.MaterializeParam().ParNum),
-			}
-		} else if input.TableType == uint8(store.MONGODB) {
-			wsc = []*transaction.WindowStoreChangelog{
-				transaction.NewWindowStoreChangelogForExternalStore(wstore, inputStream, h.processWithoutSink,
-					&processQ7RestoreArgs{
-						src:                src.InnerSource(),
-						parNum:             input.ParNum,
-						maxPriceBid:        maxPriceBid.InnerProcessor(),
-						transformWithStore: transformWithStore.InnerProcessor(),
-						filterTime:         filterTime.InnerProcessor(),
-					}, fmt.Sprintf("%s-%s-%d", h.funcName, wstore.Name(), input.ParNum), input.ParNum),
-			}
-		} else {
-			panic("unrecognized table type")
+	sinks_arr := []source_sink.Sink{sink}
+	var wsc []*transaction.WindowStoreChangelog
+	if input.TableType == uint8(store.IN_MEM) {
+		wstore_mem := wstore.(*store_with_changelog.InMemoryWindowStoreWithChangelog)
+		wsc = []*transaction.WindowStoreChangelog{
+			transaction.NewWindowStoreChangelog(wstore,
+				wstore_mem.MaterializeParam().ChangelogManager,
+				wstore_mem.KeyWindowTsSerde(),
+				wstore_mem.MaterializeParam().KVMsgSerdes,
+				wstore_mem.MaterializeParam().ParNum),
 		}
+	} else if input.TableType == uint8(store.MONGODB) {
+		wsc = []*transaction.WindowStoreChangelog{
+			transaction.NewWindowStoreChangelogForExternalStore(wstore, inputStream, h.processWithoutSink,
+				&processQ7RestoreArgs{
+					src:                src.InnerSource(),
+					parNum:             input.ParNum,
+					maxPriceBid:        maxPriceBid.InnerProcessor(),
+					transformWithStore: transformWithStore.InnerProcessor(),
+					filterTime:         filterTime.InnerProcessor(),
+				}, fmt.Sprintf("%s-%s-%d", h.funcName, wstore.Name(), input.ParNum), input.ParNum),
+		}
+	} else {
+		panic("unrecognized table type")
+	}
+	if input.EnableTransaction {
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs: procArgs,
 			Env:      h.env,
@@ -424,7 +424,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 			FixedOutParNum:        input.ParNum,
 			WindowStoreChangelogs: wsc,
 		}
-		UpdateStreamTaskArgsTransaction(input, &streamTaskArgs)
+		benchutil.UpdateStreamTaskArgsTransaction(input, &streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*processQ7ProcessArgs).trackParFunc = trackParFunc
@@ -440,17 +440,9 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		}
 		return ret
 	}
-	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs:       procArgs,
-		Duration:       time.Duration(input.Duration) * time.Second,
-		Srcs:           srcs,
-		ParNum:         input.ParNum,
-		SerdeFormat:    commtypes.SerdeFormat(input.SerdeFormat),
-		Env:            h.env,
-		NumInPartition: input.NumInPartition,
-		WarmupTime:     time.Duration(input.WarmupS) * time.Second,
-	}
-	ret := task.Process(ctx, &streamTaskArgs)
+	streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr)
+	benchutil.UpdateStreamTaskArgs(input, streamTaskArgs)
+	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
 		ret.Latencies["src"] = src.GetLatency()
 		ret.Latencies["sink"] = sink.GetLatency()

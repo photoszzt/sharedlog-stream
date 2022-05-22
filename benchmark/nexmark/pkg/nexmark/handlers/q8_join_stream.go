@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/concurrent_skiplist"
@@ -58,13 +59,11 @@ func (h *q8JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, e
 }
 
 type q8JoinStreamProcessArgs struct {
-	personsOutChan   chan *common.FnOutput
-	auctionsOutChan  chan *common.FnOutput
+	personsOutChan   <-chan *common.FnOutput
+	auctionsOutChan  <-chan *common.FnOutput
 	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
 	funcName         string
 	curEpoch         uint64
-	personDone       uint32
-	auctionDone      uint32
 	parNum           uint8
 }
 
@@ -80,6 +79,10 @@ func (h *q8JoinStreamHandler) process(
 	t *transaction.StreamTask,
 	argsTmp interface{},
 ) *common.FnOutput {
+	return handleQ8ErrReturn(argsTmp)
+}
+
+func handleQ8ErrReturn(argsTmp interface{}) *common.FnOutput {
 	args := argsTmp.(*q8JoinStreamProcessArgs)
 	var aOut *common.FnOutput
 	var pOut *common.FnOutput
@@ -92,19 +95,12 @@ func (h *q8JoinStreamHandler) process(
 		debug.Fprintf(os.Stderr, "Got auctions out: %v\n", aOut)
 	default:
 	}
-	// debug.Fprintf(os.Stderr, "aOut: %v\n", aOut)
-	// debug.Fprintf(os.Stderr, "pOut: %v\n", pOut)
 	if pOut != nil && !pOut.Success {
 		return pOut
 	}
 	if aOut != nil && !aOut.Success {
 		return aOut
 	}
-	/*
-		if atomic.LoadUint32(&args.personDone) == 1 && atomic.LoadUint32(&args.auctionDone) == 1 {
-			return t.CurrentOffset, &common.FnOutput{Success: true, Message: errors.ErrStreamSourceTimeout.Error()}
-		}
-	*/
 	return nil
 }
 
@@ -241,6 +237,30 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 		srcKVMsgSerdes: kvmsgSerdes}, nil
 }
 
+func getTabAndToTab(env types.Environment,
+	sp *common.QueryInput,
+	tabName string,
+	compare concurrent_skiplist.CompareFunc,
+	kvmegSerdes commtypes.KVMsgSerdes,
+	joinWindows *processor.JoinWindows,
+) (*processor.MeteredProcessor, store.WindowStore, *store_with_changelog.MaterializeParam, error) {
+	format := commtypes.SerdeFormat(sp.SerdeFormat)
+	mp, err := store_with_changelog.NewMaterializeParamForWindowStore(env,
+		kvmegSerdes, tabName, commtypes.CreateStreamParam{
+			Format:       format,
+			NumPartition: sp.NumInPartition,
+		}, sp.ParNum, compare)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	toTab, winTab, err := store_with_changelog.ToInMemWindowTableWithChangelog(
+		tabName, mp, joinWindows, time.Duration(sp.WarmupS)*time.Second)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return toTab, winTab, mp, nil
+}
+
 func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	auctionsStream, personsStream, outputStream, err := getInOutStreams(ctx, h.env, sp)
 	if err != nil {
@@ -262,34 +282,17 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	var personsWinTab store.WindowStore
 	aucTabName := "auctionsBySellerIDWinTab"
 	perTabName := "personsByIDWinTab"
+	var aucMp *store_with_changelog.MaterializeParam = nil
+	var perMp *store_with_changelog.MaterializeParam = nil
 	if sp.TableType == uint8(store.IN_MEM) {
 		compare := concurrent_skiplist.CompareFunc(q8CompareFunc)
-		format := commtypes.SerdeFormat(sp.SerdeFormat)
-		mpAuc, err := store_with_changelog.NewMaterializeParamForWindowStore(h.env,
-			sss.srcKVMsgSerdes, aucTabName, commtypes.CreateStreamParam{
-				Format:       format,
-				NumPartition: sp.NumInPartition,
-			}, sp.ParNum, compare)
+		toAuctionsWindowTab, auctionsWinStore, aucMp, err = getTabAndToTab(h.env, sp, aucTabName, compare, sss.srcKVMsgSerdes, joinWindows)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
-		toAuctionsWindowTab, auctionsWinStore, err = store_with_changelog.ToInMemWindowTableWithChangelog(
-			aucTabName, mpAuc, joinWindows, time.Duration(sp.WarmupS)*time.Second)
+		toPersonsWinTab, personsWinTab, perMp, err = getTabAndToTab(h.env, sp, perTabName, compare, sss.srcKVMsgSerdes, joinWindows)
 		if err != nil {
-			return &common.FnOutput{Success: false, Message: fmt.Sprintf("to table err: %v", err)}
-		}
-
-		mpPer, err := store_with_changelog.NewMaterializeParamForWindowStore(h.env,
-			sss.srcKVMsgSerdes, perTabName, commtypes.CreateStreamParam{
-				Format:       format,
-				NumPartition: sp.NumInPartition,
-			}, sp.ParNum, compare)
-
-		toPersonsWinTab, personsWinTab, err = store_with_changelog.ToInMemWindowTableWithChangelog(
-			perTabName, mpPer, joinWindows, time.Duration(sp.WarmupS)*time.Second,
-		)
-		if err != nil {
-			return &common.FnOutput{Success: false, Message: fmt.Sprintf("to table err: %v", err)}
+			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
 	} else if sp.TableType == uint8(store.MONGODB) {
 		client, err := store.InitMongoDBClient(ctx, sp.MongoAddr)
@@ -365,75 +368,63 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
-	personsOutChan := make(chan *common.FnOutput, 1)
-	auctionsOutChan := make(chan *common.FnOutput, 1)
+
+	currentOffset := make(map[string]uint64)
+	joinProcPerson := &joinProcArgs{
+		src:          sss.src2,
+		sink:         sss.sink,
+		parNum:       sp.ParNum,
+		runner:       pJoinA,
+		trackParFunc: tran_interface.DefaultTrackSubstreamFunc,
+		cHashMu:      &h.cHashMu,
+		cHash:        h.cHash,
+	}
+	joinProcAuction := &joinProcArgs{
+		src:          sss.src1,
+		sink:         sss.sink,
+		parNum:       sp.ParNum,
+		runner:       aJoinP,
+		trackParFunc: tran_interface.DefaultTrackSubstreamFunc,
+		cHashMu:      &h.cHashMu,
+		cHash:        h.cHash,
+	}
+	var wg sync.WaitGroup
+	aucManager := NewJoinProcManager()
+	perManager := NewJoinProcManager()
 
 	procArgs := &q8JoinStreamProcessArgs{
-		personsOutChan:   personsOutChan,
-		auctionsOutChan:  auctionsOutChan,
+		personsOutChan:   perManager.Out(),
+		auctionsOutChan:  aucManager.Out(),
 		parNum:           sp.ParNum,
 		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
 		curEpoch:         sp.ScaleEpoch,
 		funcName:         h.funcName,
-		auctionDone:      0,
-		personDone:       0,
 	}
-
-	currentOffset := make(map[string]uint64)
-	joinProcPerson := &joinProcArgs{
-		src:           sss.src2,
-		sink:          sss.sink,
-		parNum:        sp.ParNum,
-		runner:        pJoinA,
-		trackParFunc:  tran_interface.DefaultTrackSubstreamFunc,
-		cHashMu:       &h.cHashMu,
-		cHash:         h.cHash,
-		currentOffset: currentOffset,
-	}
-	joinProcAuction := &joinProcArgs{
-		src:           sss.src1,
-		sink:          sss.sink,
-		parNum:        sp.ParNum,
-		runner:        aJoinP,
-		trackParFunc:  tran_interface.DefaultTrackSubstreamFunc,
-		cHashMu:       &h.cHashMu,
-		cHash:         h.cHash,
-		currentOffset: currentOffset,
-	}
-	var wg sync.WaitGroup
-	personDone := make(chan struct{}, 1)
-	aucDone := make(chan struct{}, 1)
 	pctx := context.WithValue(ctx, "id", "person")
 	actx := context.WithValue(ctx, "id", "auction")
 
-	aucRun := make(chan struct{})
-	perRun := make(chan struct{})
 	task := transaction.StreamTask{
 		ProcessFunc:   h.process,
 		CurrentOffset: currentOffset,
 		PauseFunc: func() *common.FnOutput {
 			// debug.Fprintf(os.Stderr, "in flush func\n")
-			close(personDone)
-			close(aucDone)
+			aucManager.RequestToTerminate()
+			perManager.RequestToTerminate()
 			debug.Fprintf(os.Stderr, "waiting join proc to exit\n")
 			wg.Wait()
-			err := sss.sink.Flush(ctx)
-			if err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
+			if ret := handleQ8ErrReturn(procArgs); ret != nil {
+				return ret
 			}
 			// debug.Fprintf(os.Stderr, "join procs exited\n")
 			return nil
 		},
 		ResumeFunc: func(task *transaction.StreamTask) {
 			// debug.Fprintf(os.Stderr, "resume join porc\n")
-			personDone = make(chan struct{}, 1)
-			aucDone = make(chan struct{}, 1)
-			wg.Add(1)
-			go joinProcLoop(pctx, personsOutChan, task, joinProcPerson, &wg, perRun, personDone)
-			wg.Add(1)
-			go joinProcLoop(actx, auctionsOutChan, task, joinProcAuction, &wg, aucRun, aucDone)
-			perRun <- struct{}{}
-			aucRun <- struct{}{}
+			aucManager.LaunchJoinProcLoop(actx, task, joinProcAuction, &wg)
+			perManager.LaunchJoinProcLoop(pctx, task, joinProcPerson, &wg)
+
+			aucManager.Run()
+			perManager.Run()
 			// debug.Fprintf(os.Stderr, "done resume join proc\n")
 		},
 		InitFunc: func(progArgs interface{}) {
@@ -445,62 +436,56 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			auctionsJoinsPersons.StartWarmup()
 			personsJoinsAuctions.StartWarmup()
 
-			perRun <- struct{}{}
-			aucRun <- struct{}{}
+			aucManager.Run()
+			perManager.Run()
 		},
 		CommitEveryForAtLeastOnce: common.CommitDuration,
 	}
 
-	wg.Add(1)
-	go joinProcLoop(pctx, personsOutChan, &task, joinProcPerson, &wg, perRun, personDone)
-	wg.Add(1)
-	go joinProcLoop(actx, auctionsOutChan, &task, joinProcAuction, &wg, aucRun, aucDone)
+	aucManager.LaunchJoinProcLoop(actx, &task, joinProcAuction, &wg)
+	perManager.LaunchJoinProcLoop(pctx, &task, joinProcPerson, &wg)
 
 	srcs := []source_sink.Source{auctionsSrc, personsSrc}
-	if sp.EnableTransaction {
-		sinks_arr := []source_sink.Sink{sink}
-		var wsc []*transaction.WindowStoreChangelog
-		if sp.TableType == uint8(store.IN_MEM) {
-			auctionsWinStore_mem := auctionsWinStore.(*store_with_changelog.InMemoryWindowStoreWithChangelog)
-			mpAuc := auctionsWinStore_mem.MaterializeParam()
-			personsWinTab_mem := personsWinTab.(*store_with_changelog.InMemoryWindowStoreWithChangelog)
-			mpPer := personsWinTab_mem.MaterializeParam()
-			wsc = []*transaction.WindowStoreChangelog{
-				transaction.NewWindowStoreChangelog(
-					auctionsWinStore,
-					mpAuc.ChangelogManager,
-					nil,
-					sss.srcKVMsgSerdes,
-					sp.ParNum,
-				),
-				transaction.NewWindowStoreChangelog(
-					personsWinTab,
-					mpPer.ChangelogManager,
-					nil,
-					sss.srcKVMsgSerdes,
-					sp.ParNum,
-				),
-			}
-		} else if sp.TableType == uint8(store.MONGODB) {
-			wsc = []*transaction.WindowStoreChangelog{
-				transaction.NewWindowStoreChangelogForExternalStore(
-					auctionsWinStore, auctionsStream, joinProcSerialWithoutSink,
-					&joinProcWithoutSinkArgs{
-						src:    sss.src1.InnerSource(),
-						parNum: sp.ParNum,
-						runner: aJoinP,
-					}, fmt.Sprintf("%s-%s-%d", h.funcName, auctionsWinStore.Name(), sp.ParNum), sp.ParNum),
-				transaction.NewWindowStoreChangelogForExternalStore(
-					personsWinTab, personsStream, joinProcSerialWithoutSink,
-					&joinProcWithoutSinkArgs{
-						src:    sss.src2.InnerSource(),
-						parNum: sp.ParNum,
-						runner: pJoinA,
-					}, fmt.Sprintf("%s-%s-%d", h.funcName, personsWinTab.Name(), sp.ParNum), sp.ParNum),
-			}
-		} else {
-			panic("unrecognized table type")
+	sinks_arr := []source_sink.Sink{sink}
+	var wsc []*transaction.WindowStoreChangelog
+	if sp.TableType == uint8(store.IN_MEM) {
+		wsc = []*transaction.WindowStoreChangelog{
+			transaction.NewWindowStoreChangelog(
+				auctionsWinStore,
+				aucMp.ChangelogManager,
+				nil,
+				sss.srcKVMsgSerdes,
+				sp.ParNum,
+			),
+			transaction.NewWindowStoreChangelog(
+				personsWinTab,
+				perMp.ChangelogManager,
+				nil,
+				sss.srcKVMsgSerdes,
+				sp.ParNum,
+			),
 		}
+	} else if sp.TableType == uint8(store.MONGODB) {
+		wsc = []*transaction.WindowStoreChangelog{
+			transaction.NewWindowStoreChangelogForExternalStore(
+				auctionsWinStore, auctionsStream, joinProcSerialWithoutSink,
+				&joinProcWithoutSinkArgs{
+					src:    sss.src1.InnerSource(),
+					parNum: sp.ParNum,
+					runner: aJoinP,
+				}, fmt.Sprintf("%s-%s-%d", h.funcName, auctionsWinStore.Name(), sp.ParNum), sp.ParNum),
+			transaction.NewWindowStoreChangelogForExternalStore(
+				personsWinTab, personsStream, joinProcSerialWithoutSink,
+				&joinProcWithoutSinkArgs{
+					src:    sss.src2.InnerSource(),
+					parNum: sp.ParNum,
+					runner: pJoinA,
+				}, fmt.Sprintf("%s-%s-%d", h.funcName, personsWinTab.Name(), sp.ParNum), sp.ParNum),
+		}
+	} else {
+		panic("unrecognized table type")
+	}
+	if sp.EnableTransaction {
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:              procArgs,
 			Env:                   h.env,
@@ -511,7 +496,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			KVChangelogs:          nil,
 			FixedOutParNum:        0,
 		}
-		UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
+		benchutil.UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				joinProcAuction.trackParFunc = trackParFunc
@@ -532,17 +517,10 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		}
 		return ret
 	}
-	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs:       procArgs,
-		Duration:       time.Duration(sp.Duration) * time.Second,
-		Srcs:           srcs,
-		ParNum:         sp.ParNum,
-		SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
-		Env:            h.env,
-		NumInPartition: sp.NumInPartition,
-		WarmupTime:     time.Duration(sp.WarmupS) * time.Second,
-	}
-	ret := task.Process(ctx, &streamTaskArgs)
+	streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr).
+		WithWindowStoreChangelogs(wsc)
+	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
+	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
 		ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()
 		ret.Latencies["personsSrc"] = personsSrc.GetLatency()

@@ -92,7 +92,7 @@ type q46GroupByProcessArgs struct {
 	src              *source_sink.MeteredSource
 
 	funcName string
-	sinks    []*source_sink.MeteredSink
+	sinks    []*source_sink.MeteredSyncSink
 	curEpoch uint64
 	parNum   uint8
 }
@@ -162,30 +162,11 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 			close(aucMsgChan)
 			close(bidMsgChan)
 			wg.Wait()
-			sinks[0].CloseAsyncPush()
-			sinks[1].CloseAsyncPush()
-			if err = sinks[0].Flush(ctx); err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
-			}
-			if err = sinks[1].Flush(ctx); err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
-			}
 			// debug.Fprintf(os.Stderr, "done flush\n")
 			return nil
 		},
 		ResumeFunc: func(task *transaction.StreamTask) {
 			debug.Fprintf(os.Stderr, "start resume\n")
-			procArgs.sinks[0].InnerSink().RebuildMsgChan()
-			procArgs.sinks[1].InnerSink().RebuildMsgChan()
-			if sp.EnableTransaction {
-				procArgs.sinks[0].InnerSink().StartAsyncPushNoTick(ctx)
-				procArgs.sinks[1].InnerSink().StartAsyncPushNoTick(ctx)
-			} else {
-				procArgs.sinks[0].InnerSink().StartAsyncPushWithTick(ctx)
-				procArgs.sinks[1].InnerSink().StartAsyncPushWithTick(ctx)
-				procArgs.sinks[0].InitFlushTimer()
-				procArgs.sinks[1].InitFlushTimer()
-			}
 			aucMsgChan = make(chan commtypes.Message, 1)
 			bidMsgChan = make(chan commtypes.Message, 1)
 			procArgs.aucMsgChan = aucMsgChan
@@ -198,18 +179,6 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 		},
 		InitFunc: func(progArgsTmp interface{}) {
 			progArgs := progArgsTmp.(*q3GroupByProcessArgs)
-			// debug.Fprintf(os.Stderr, "start async pusher\n")
-			if sp.EnableTransaction {
-				progArgs.sinks[0].InnerSink().StartAsyncPushNoTick(ctx)
-				progArgs.sinks[1].InnerSink().StartAsyncPushNoTick(ctx)
-			} else {
-				progArgs.sinks[0].InnerSink().StartAsyncPushWithTick(ctx)
-				progArgs.sinks[1].InnerSink().StartAsyncPushWithTick(ctx)
-				progArgs.sinks[0].InitFlushTimer()
-				progArgs.sinks[1].InitFlushTimer()
-			}
-			// debug.Fprintf(os.Stderr, "done start async pusher\n")
-
 			progArgs.src.StartWarmup()
 			progArgs.sinks[0].StartWarmup()
 			progArgs.sinks[1].StartWarmup()
@@ -225,8 +194,8 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 	transaction.SetupConsistentHash(&h.aucHashMu, h.aucHash, sp.NumOutPartitions[0])
 	transaction.SetupConsistentHash(&h.bidHashMu, h.bidHash, sp.NumOutPartitions[1])
 	srcs := []source_sink.Source{src}
+	sinks_arr := []source_sink.Sink{sinks[0], sinks[1]}
 	if sp.EnableTransaction {
-		sinks_arr := []source_sink.Sink{sinks[0], sinks[1]}
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:              procArgs,
 			Env:                   h.env,
@@ -237,7 +206,7 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 			WindowStoreChangelogs: nil,
 			FixedOutParNum:        0,
 		}
-		UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
+		benchutil.UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
 				recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
@@ -256,17 +225,9 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 		}
 		return ret
 	} else {
-		streamTaskArgs := transaction.StreamTaskArgs{
-			ProcArgs:       procArgs,
-			Duration:       time.Duration(sp.Duration) * time.Second,
-			Srcs:           srcs,
-			ParNum:         sp.ParNum,
-			SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
-			Env:            h.env,
-			NumInPartition: sp.NumInPartition,
-			WarmupTime:     time.Duration(sp.WarmupS) * time.Second,
-		}
-		ret := task.Process(ctx, &streamTaskArgs)
+		streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr)
+		benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
+		ret := task.Process(ctx, streamTaskArgs)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
 			ret.Latencies["aucSink"] = sinks[0].GetLatency()

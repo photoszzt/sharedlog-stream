@@ -54,7 +54,7 @@ func (h *q7BidKeyedByPrice) Call(ctx context.Context, input []byte) ([]byte, err
 
 type q7BidKeyedByPriceProcessArgs struct {
 	src              *source_sink.MeteredSource
-	sink             *source_sink.MeteredSink
+	sink             *source_sink.MeteredSyncSink
 	bid              *processor.MeteredProcessor
 	bidKeyedByPrice  *processor.MeteredProcessor
 	output_stream    *sharedlog_stream.ShardedSharedLogStream
@@ -182,8 +182,8 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, input.NumOutPartitions[0])
 
 	srcs := []source_sink.Source{src}
+	sinks_arr := []source_sink.Sink{sink}
 	if input.EnableTransaction {
-		sinks_arr := []source_sink.Sink{sink}
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:              procArgs,
 			Env:                   h.env,
@@ -194,7 +194,7 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 			KVChangelogs:          nil,
 			WindowStoreChangelogs: nil,
 		}
-		UpdateStreamTaskArgsTransaction(input, &streamTaskArgs)
+		benchutil.UpdateStreamTaskArgsTransaction(input, &streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*q7BidKeyedByPriceProcessArgs).trackParFunc = trackParFunc
@@ -209,17 +209,9 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 		}
 		return ret
 	}
-	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs:       procArgs,
-		Duration:       time.Duration(input.Duration) * time.Second,
-		Srcs:           srcs,
-		ParNum:         input.ParNum,
-		SerdeFormat:    commtypes.SerdeFormat(input.SerdeFormat),
-		Env:            h.env,
-		NumInPartition: input.NumInPartition,
-		WarmupTime:     time.Duration(input.WarmupS) * time.Second,
-	}
-	ret := task.Process(ctx, &streamTaskArgs)
+	streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr)
+	benchutil.UpdateStreamTaskArgs(input, streamTaskArgs)
+	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
 		ret.Latencies["src"] = src.GetLatency()
 		ret.Latencies["sink"] = sink.GetLatency()

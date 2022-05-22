@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -394,24 +393,8 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		ProcessFunc:               h.process,
 		CurrentOffset:             make(map[string]uint64),
 		CommitEveryForAtLeastOnce: common.CommitDuration,
-		PauseFunc: func() *common.FnOutput {
-			err := sink.Flush(ctx)
-			if err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
-			}
-			debug.Fprintf(os.Stderr, "after flush sink\n")
-			if countStore.TableType() == store.IN_MEM {
-				debug.Fprintf(os.Stderr, "before flush changelog\n")
-				cstore := countStore.(*store_with_changelog.InMemoryWindowStoreWithChangelog)
-				err = cstore.FlushChangelog(ctx)
-				if err != nil {
-					return &common.FnOutput{Success: false, Message: err.Error()}
-				}
-				debug.Fprintf(os.Stderr, "after flush changelog\n")
-			}
-			return nil
-		},
-		ResumeFunc: nil,
+		PauseFunc:                 nil,
+		ResumeFunc:                nil,
 		InitFunc: func(progArgs interface{}) {
 			src.StartWarmup()
 			sink.StartWarmup()
@@ -422,31 +405,31 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 	srcs := []source_sink.Source{src}
-	if sp.EnableTransaction {
-		sinks := []source_sink.Sink{sink}
-		var wsc []*transaction.WindowStoreChangelog
-		if countStore.TableType() == store.IN_MEM {
-			cstore := countStore.(*store_with_changelog.InMemoryWindowStoreWithChangelog)
-			wsc = []*transaction.WindowStoreChangelog{
-				transaction.NewWindowStoreChangelog(
-					cstore,
-					cstore.MaterializeParam().ChangelogManager,
-					cstore.KeyWindowTsSerde(),
-					cstore.MaterializeParam().KVMsgSerdes, 0),
-			}
-		} else if countStore.TableType() == store.MONGODB {
-			wsc = []*transaction.WindowStoreChangelog{
-				transaction.NewWindowStoreChangelogForExternalStore(countStore, input_stream,
-					h.processWithoutSink, &q5AuctionBidsRestoreArg{
-						countProc:      countProc.InnerProcessor(),
-						groupByAuction: groupByAuction.InnerProcessor(),
-						src:            src.InnerSource(),
-						parNum:         sp.ParNum,
-					}, fmt.Sprintf("%s-%s-%d", h.funcName, countStore.Name(), sp.ParNum), sp.ParNum),
-			}
-		} else {
-			panic("unrecognized table type")
+	sinks := []source_sink.Sink{sink}
+	var wsc []*transaction.WindowStoreChangelog
+	if countStore.TableType() == store.IN_MEM {
+		cstore := countStore.(*store_with_changelog.InMemoryWindowStoreWithChangelog)
+		wsc = []*transaction.WindowStoreChangelog{
+			transaction.NewWindowStoreChangelog(
+				cstore,
+				cstore.MaterializeParam().ChangelogManager,
+				cstore.KeyWindowTsSerde(),
+				cstore.MaterializeParam().KVMsgSerdes, 0),
 		}
+	} else if countStore.TableType() == store.MONGODB {
+		wsc = []*transaction.WindowStoreChangelog{
+			transaction.NewWindowStoreChangelogForExternalStore(countStore, input_stream,
+				h.processWithoutSink, &q5AuctionBidsRestoreArg{
+					countProc:      countProc.InnerProcessor(),
+					groupByAuction: groupByAuction.InnerProcessor(),
+					src:            src.InnerSource(),
+					parNum:         sp.ParNum,
+				}, fmt.Sprintf("%s-%s-%d", h.funcName, countStore.Name(), sp.ParNum), sp.ParNum),
+		}
+	} else {
+		panic("unrecognized table type")
+	}
+	if sp.EnableTransaction {
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs: procArgs,
 			Env:      h.env,
@@ -458,7 +441,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			WindowStoreChangelogs: wsc,
 			KVChangelogs:          nil,
 		}
-		UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
+		benchutil.UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*q5AuctionBidsProcessArg).trackParFunc = trackParFunc
@@ -477,17 +460,10 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		return ret
 	}
 	// return h.process(ctx, sp, args)
-	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs:       procArgs,
-		Duration:       time.Duration(sp.Duration) * time.Second,
-		Srcs:           srcs,
-		ParNum:         sp.ParNum,
-		SerdeFormat:    commtypes.SerdeFormat(sp.SerdeFormat),
-		Env:            h.env,
-		NumInPartition: sp.NumInPartition,
-		WarmupTime:     time.Duration(sp.WarmupS) * time.Second,
-	}
-	ret := task.Process(ctx, &streamTaskArgs)
+	streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks).
+		WithWindowStoreChangelogs(wsc)
+	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
+	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
 		ret.Latencies["src"] = src.GetLatency()
 		ret.Latencies["sink"] = sink.GetLatency()
