@@ -186,10 +186,9 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 		return pushMsgsToSink(ctx, sink, joinedMsgs, trackParFunc)
 	}
 
-	streamTaskArgs := &transaction.StreamTaskArgsTransaction{
-		Env:             h.env,
-		TransactionalId: "joinTestMongo",
-	}
+	streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, "joinTestMongo", nil,
+		[]source_sink.Source{src1, src2}, []source_sink.Sink{sink})
+
 	tm, err := transaction.SetupTransactionManager(ctx, streamTaskArgs)
 	if err != nil {
 		panic(err)
@@ -428,10 +427,8 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 
 	payloadArrSerde := sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDE
 
-	streamTaskArgs := &transaction.StreamTaskArgsTransaction{
-		Env:             h.env,
-		TransactionalId: "joinTestsMem",
-	}
+	streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, "joinTestMem", nil,
+		[]source_sink.Source{src1, src2}, []source_sink.Sink{sink})
 	tm, err := transaction.SetupTransactionManager(ctx, streamTaskArgs)
 	if err != nil {
 		panic(err)

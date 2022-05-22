@@ -109,8 +109,8 @@ func SetupManagers(ctx context.Context, env types.Environment,
 	if err != nil {
 		return nil, nil, err
 	}
-	cmm, err := NewControlChannelManager(env, streamTaskArgs.AppId,
-		commtypes.SerdeFormat(streamTaskArgs.SerdeFormat), streamTaskArgs.ScaleEpoch)
+	cmm, err := NewControlChannelManager(env, streamTaskArgs.appId,
+		commtypes.SerdeFormat(streamTaskArgs.serdeFormat), streamTaskArgs.scaleEpoch)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -142,16 +142,16 @@ func SetupManagers(ctx context.Context, env types.Environment,
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
 		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, cmm.currentEpoch)
 	}
-	updateProcArgs(streamTaskArgs.ProcArgs, trackParFunc, recordFinish)
+	updateProcArgs(streamTaskArgs.procArgs, trackParFunc, recordFinish)
 	return tm, cmm, nil
 }
 
 func getOffsetMap(ctx context.Context, tm *TransactionManager, args *StreamTaskArgsTransaction) (map[string]uint64, error) {
 	offsetMap := make(map[string]uint64)
-	for _, src := range args.Srcs {
+	for _, src := range args.srcs {
 		inputTopicName := src.TopicName()
 		offset, err := createOffsetTopicAndGetOffset(ctx, tm, inputTopicName,
-			uint8(src.Stream().NumPartition()), args.InParNum)
+			uint8(src.Stream().NumPartition()), args.inParNum)
 		if err != nil {
 			return nil, fmt.Errorf("createOffsetTopicAndGetOffset failed: %v", err)
 		}
@@ -162,10 +162,10 @@ func getOffsetMap(ctx context.Context, tm *TransactionManager, args *StreamTaskA
 }
 
 func setOffsetOnStream(offsetMap map[string]uint64, args *StreamTaskArgsTransaction) {
-	for _, src := range args.Srcs {
+	for _, src := range args.srcs {
 		inputTopicName := src.TopicName()
 		offset := offsetMap[inputTopicName]
-		src.SetCursor(offset+1, args.InParNum)
+		src.SetCursor(offset+1, args.inParNum)
 	}
 }
 
@@ -173,7 +173,7 @@ func restoreKVStore(ctx context.Context, tm *TransactionManager,
 	t *StreamTask,
 	args *StreamTaskArgsTransaction, offsetMap map[string]uint64,
 ) error {
-	for _, kvchangelog := range args.KVChangelogs {
+	for _, kvchangelog := range args.kvChangelogs {
 		if kvchangelog.KVStore.TableType() == store.IN_MEM {
 			topic := kvchangelog.ChangelogManager.TopicName()
 			// offset stream is input stream
@@ -206,7 +206,7 @@ func restoreKVStore(ctx context.Context, tm *TransactionManager,
 }
 
 func restoreChangelogBackedWindowStore(ctx context.Context, tm *TransactionManager, t *StreamTask, args *StreamTaskArgsTransaction, offsetMap map[string]uint64) error {
-	for _, wschangelog := range args.WindowStoreChangelogs {
+	for _, wschangelog := range args.windowStoreChangelogs {
 		if wschangelog.WinStore.TableType() == store.IN_MEM {
 			topic := wschangelog.ChangelogManager.TopicName()
 			// offset stream is input stream
@@ -238,13 +238,13 @@ func restoreChangelogBackedWindowStore(ctx context.Context, tm *TransactionManag
 }
 
 func restoreStateStore(ctx context.Context, tm *TransactionManager, t *StreamTask, args *StreamTaskArgsTransaction, offsetMap map[string]uint64) error {
-	if args.KVChangelogs != nil {
+	if args.kvChangelogs != nil {
 		err := restoreKVStore(ctx, tm, t, args, offsetMap)
 		if err != nil {
 			return err
 		}
 	}
-	if args.WindowStoreChangelogs != nil {
+	if args.windowStoreChangelogs != nil {
 		err := restoreChangelogBackedWindowStore(ctx, tm, t, args, offsetMap)
 		if err != nil {
 			return err
@@ -313,8 +313,8 @@ func SetupTransactionManager(
 	ctx context.Context,
 	args *StreamTaskArgsTransaction,
 ) (*TransactionManager, error) {
-	tm, err := NewTransactionManager(ctx, args.Env, args.TransactionalId,
-		commtypes.SerdeFormat(args.SerdeFormat))
+	tm, err := NewTransactionManager(ctx, args.env, args.transactionalId,
+		commtypes.SerdeFormat(args.serdeFormat))
 	if err != nil {
 		return nil, fmt.Errorf("NewTransactionManager failed: %v", err)
 	}
@@ -330,9 +330,9 @@ func UpdateInputStreamCursor(
 	args *StreamTaskArgsTransaction,
 	offsetMap map[string]uint64,
 ) {
-	for _, src := range args.Srcs {
+	for _, src := range args.srcs {
 		offset := offsetMap[src.TopicName()]
-		src.SetCursor(offset+1, args.InParNum)
+		src.SetCursor(offset+1, args.inParNum)
 	}
 }
 
@@ -366,83 +366,24 @@ func TrackOffsetAndCommit(ctx context.Context,
 	*trackConsumePar = false
 }
 
-type StreamTaskArgs struct {
-	procArgs interface{}
-	env      types.Environment
-
-	srcs                  []source_sink.Source
-	sinks                 []source_sink.Sink
-	windowStoreChangelogs []*WindowStoreChangelog
-	kvChangelogs          []*KVStoreChangelog
-
-	Duration       time.Duration
-	Warmup         time.Duration
-	FlushEvery     time.Duration
-	SerdeFormat    commtypes.SerdeFormat
-	ParNum         uint8
-	NumInPartition uint8
-}
-
-func NewStreamTaskArgs(env types.Environment, procArgs interface{}, srcs []source_sink.Source, sinks []source_sink.Sink) *StreamTaskArgs {
-	return &StreamTaskArgs{
-		env:      env,
-		procArgs: procArgs,
-		srcs:     srcs,
-		sinks:    sinks,
-	}
-}
-
-func (args *StreamTaskArgs) WithWindowStoreChangelogs(wschangelogs []*WindowStoreChangelog) *StreamTaskArgs {
-	args.windowStoreChangelogs = wschangelogs
-	return args
-}
-
-func (args *StreamTaskArgs) WithKVChangelogs(kvchangelogs []*KVStoreChangelog) *StreamTaskArgs {
-	args.kvChangelogs = kvchangelogs
-	return args
-}
-
-type StreamTaskArgsTransaction struct {
-	ProcArgs        proc_interface.ProcArgs
-	Env             types.Environment
-	Srcs            []source_sink.Source
-	Sinks           []source_sink.Sink
-	AppId           string
-	TransactionalId string
-
-	WindowStoreChangelogs []*WindowStoreChangelog
-	KVChangelogs          []*KVStoreChangelog
-
-	Warmup           time.Duration
-	ScaleEpoch       uint64
-	CommitEveryMs    uint64
-	CommitEveryNIter uint32
-	ExitAfterNCommit uint32
-	Duration         uint32
-	SerdeFormat      commtypes.SerdeFormat
-	InParNum         uint8
-
-	FixedOutParNum uint8
-}
-
 func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.FnOutput {
 	debug.Assert(len(args.srcs) >= 1, "Srcs should be filled")
 	debug.Assert(args.env != nil, "env should be filled")
 	debug.Assert(args.procArgs != nil, "program args should be filled")
-	debug.Assert(args.NumInPartition != 0, "number of input partition should not be zero")
+	debug.Assert(args.numInPartition != 0, "number of input partition should not be zero")
 	latencies := make([]int, 0, 128)
-	cm, err := NewConsumeSeqManager(args.SerdeFormat)
+	cm, err := NewConsumeSeqManager(args.serdeFormat)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	debug.Fprint(os.Stderr, "start restore\n")
 	for _, srcStream := range args.srcs {
 		inputTopicName := srcStream.TopicName()
-		err = cm.CreateOffsetTopic(args.env, inputTopicName, args.NumInPartition, args.SerdeFormat)
+		err = cm.CreateOffsetTopic(args.env, inputTopicName, args.numInPartition, args.serdeFormat)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
-		offset, err := cm.FindLastConsumedSeqNum(ctx, inputTopicName, args.ParNum)
+		offset, err := cm.FindLastConsumedSeqNum(ctx, inputTopicName, args.parNum)
 		if err != nil {
 			if !errors.IsStreamEmptyError(err) {
 				return &common.FnOutput{Success: false, Message: err.Error()}
@@ -450,9 +391,9 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 		}
 		debug.Fprintf(os.Stderr, "offset restores to %x\n", offset)
 		if offset != 0 {
-			srcStream.SetCursor(offset+1, args.ParNum)
+			srcStream.SetCursor(offset+1, args.parNum)
 		}
-		cm.AddTopicTrackConsumedSeqs(ctx, inputTopicName, []uint8{args.ParNum})
+		cm.AddTopicTrackConsumedSeqs(ctx, inputTopicName, []uint8{args.parNum})
 	}
 	debug.Fprint(os.Stderr, "done restore\n")
 	if t.InitFunc != nil {
@@ -464,26 +405,26 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 	afterWarmup := false
 	commitTimer := time.Now()
 	flushTimer := time.Now()
-	debug.Fprintf(os.Stderr, "warmup time: %v\n", args.Warmup)
+	debug.Fprintf(os.Stderr, "warmup time: %v\n", args.warmup)
 	startTime := time.Now()
 	for {
 		timeSinceLastCommit := time.Since(commitTimer)
 		if timeSinceLastCommit >= t.CommitEveryForAtLeastOnce && t.CurrentOffset != nil {
-			if ret_err := t.pauseCommitResume(ctx, cm, args.ParNum, &hasUncommitted, &commitTimer); ret_err != nil {
+			if ret_err := t.pauseCommitResume(ctx, cm, args.parNum, &hasUncommitted, &commitTimer); ret_err != nil {
 				return ret_err
 			}
 		}
 		timeSinceLastFlush := time.Since(flushTimer)
-		if timeSinceLastFlush >= args.FlushEvery {
+		if timeSinceLastFlush >= args.flushEvery {
 			if err := t.flushStreams(ctx, args); err != nil {
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
 		}
-		if !afterWarmup && args.Warmup != 0 && time.Since(startTime) >= args.Warmup {
+		if !afterWarmup && args.warmup != 0 && time.Since(startTime) >= args.warmup {
 			afterWarmup = true
 			afterWarmupStart = time.Now()
 		}
-		if args.Duration != 0 && time.Since(startTime) >= args.Duration {
+		if args.duration != 0 && time.Since(startTime) >= args.duration {
 			break
 		}
 		procStart := time.Now()
@@ -493,24 +434,24 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 				// elapsed := time.Since(procStart)
 				// latencies = append(latencies, int(elapsed.Microseconds()))
 				debug.Fprintf(os.Stderr, "consume timeout\n")
-				if ret_err := t.pauseAndCommit(ctx, cm, args.ParNum, hasUncommitted); ret_err != nil {
+				if ret_err := t.pauseAndCommit(ctx, cm, args.parNum, hasUncommitted); ret_err != nil {
 					return ret_err
 				}
-				updateReturnMetric(ret, startTime, afterWarmupStart, args.Warmup, afterWarmup, latencies)
+				updateReturnMetric(ret, startTime, afterWarmupStart, args.warmup, afterWarmup, latencies)
 			}
 			return ret
 		}
 		if !hasUncommitted {
 			hasUncommitted = true
 		}
-		if args.Warmup == 0 || afterWarmup {
+		if args.warmup == 0 || afterWarmup {
 			elapsed := time.Since(procStart)
 			latencies = append(latencies, int(elapsed.Microseconds()))
 		}
 	}
-	t.pauseAndCommit(ctx, cm, args.ParNum, hasUncommitted)
+	t.pauseAndCommit(ctx, cm, args.parNum, hasUncommitted)
 	ret := &common.FnOutput{Success: true}
-	updateReturnMetric(ret, startTime, afterWarmupStart, args.Warmup, afterWarmup, latencies)
+	updateReturnMetric(ret, startTime, afterWarmupStart, args.warmup, afterWarmup, latencies)
 	return ret
 }
 
@@ -678,21 +619,21 @@ func (t *StreamTask) ProcessWithTransaction(
 	cmm *ControlChannelManager,
 	args *StreamTaskArgsTransaction,
 ) *common.FnOutput {
-	debug.Assert(len(args.Srcs) >= 1, "Srcs should be filled")
-	debug.Assert(args.Env != nil, "env should be filled")
-	debug.Assert(args.ProcArgs != nil, "program args should be filled")
-	for _, src := range args.Srcs {
+	debug.Assert(len(args.srcs) >= 1, "Srcs should be filled")
+	debug.Assert(args.env != nil, "env should be filled")
+	debug.Assert(args.procArgs != nil, "program args should be filled")
+	for _, src := range args.srcs {
 		if !src.IsInitialSource() {
-			src.InTransaction(commtypes.SerdeFormat(args.SerdeFormat))
+			src.InTransaction(commtypes.SerdeFormat(args.serdeFormat))
 		}
 		cmm.TrackStream(src.TopicName(), src.Stream().(*sharedlog_stream.ShardedSharedLogStream))
 	}
-	for _, sink := range args.Sinks {
+	for _, sink := range args.sinks {
 		tm.RecordTopicStreams(sink.TopicName(), sink.Stream())
 		cmm.TrackStream(sink.TopicName(), sink.Stream())
 	}
 
-	for _, kvchangelog := range args.KVChangelogs {
+	for _, kvchangelog := range args.kvChangelogs {
 		if kvchangelog.ChangelogManager != nil {
 			err := kvchangelog.ChangelogManager.InTransaction(tm)
 			if err != nil {
@@ -702,7 +643,7 @@ func (t *StreamTask) ProcessWithTransaction(
 			cmm.TrackStream(kvchangelog.ChangelogManager.TopicName(), kvchangelog.ChangelogManager.Stream())
 		}
 	}
-	for _, winchangelog := range args.WindowStoreChangelogs {
+	for _, winchangelog := range args.windowStoreChangelogs {
 		if winchangelog.ChangelogManager != nil {
 			err := winchangelog.ChangelogManager.InTransaction(tm)
 			if err != nil {
@@ -732,18 +673,16 @@ func (t *StreamTask) ProcessWithTransaction(
 	hasLiveTransaction := false
 	trackConsumePar := false
 	commitTimer := time.Now()
-	commitEvery := time.Duration(args.CommitEveryMs) * time.Millisecond
-	duration := time.Duration(args.Duration) * time.Second
 
 	idx := 0
 	numCommit := 0
 	debug.Fprintf(os.Stderr, "commit every(ms): %d, commit everyIter: %d, exitAfterNComm: %d\n",
-		commitEvery, args.CommitEveryNIter, args.ExitAfterNCommit)
+		args.commitEvery, args.commitEveryNIter, args.exitAfterNCommit)
 	init := false
 	startTimeInit := false
 	var afterWarmupStart time.Time
 	afterWarmup := false
-	warmupDuration := args.Warmup
+	warmupDuration := args.warmup
 	var startTime time.Time
 	for {
 		select {
@@ -751,8 +690,8 @@ func (t *StreamTask) ProcessWithTransaction(
 			return &common.FnOutput{Success: true, Message: "exit due to ctx cancel"}
 		case m := <-meta:
 			debug.Fprintf(os.Stderr, "finished prev task %s, funcName %s, meta epoch %d, input epoch %d\n",
-				m.FinishedPrevTask, args.ProcArgs.FuncName(), m.Epoch, args.ScaleEpoch)
-			if m.FinishedPrevTask == args.ProcArgs.FuncName() && m.Epoch+1 == args.ScaleEpoch {
+				m.FinishedPrevTask, args.procArgs.FuncName(), m.Epoch, args.scaleEpoch)
+			if m.FinishedPrevTask == args.procArgs.FuncName() && m.Epoch+1 == args.scaleEpoch {
 				run = true
 			}
 		case merr := <-monitorErrc:
@@ -791,14 +730,14 @@ func (t *StreamTask) ProcessWithTransaction(
 			}
 			timeSinceTranStart := time.Since(commitTimer)
 			cur_elapsed := time.Since(startTime)
-			timeout := duration != 0 && cur_elapsed >= duration
-			shouldCommitByIter := args.CommitEveryNIter != 0 &&
-				uint32(idx)%args.CommitEveryNIter == 0 && idx != 0
+			timeout := args.duration != 0 && cur_elapsed >= args.duration
+			shouldCommitByIter := args.commitEveryNIter != 0 &&
+				uint32(idx)%args.commitEveryNIter == 0 && idx != 0
 			// debug.Fprintf(os.Stderr, "iter: %d, shouldCommitByIter: %v, timeSinceTranStart: %v, cur_elapsed: %v, duration: %v\n",
 			// 	idx, shouldCommitByIter, timeSinceTranStart, cur_elapsed, duration)
 
 			// should commit
-			if ((commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout || shouldCommitByIter) && hasLiveTransaction {
+			if ((args.commitEvery != 0 && timeSinceTranStart > args.commitEvery) || timeout || shouldCommitByIter) && hasLiveTransaction {
 				err_out := t.commitTransaction(ctx, tm, args, &hasLiveTransaction, &trackConsumePar)
 				if err_out != nil {
 					return err_out
@@ -810,8 +749,8 @@ func (t *StreamTask) ProcessWithTransaction(
 
 			// Exit routine
 			cur_elapsed = time.Since(startTime)
-			timeout = duration != 0 && cur_elapsed >= duration
-			if timeout || (args.ExitAfterNCommit != 0 && numCommit == int(args.ExitAfterNCommit)) {
+			timeout = args.duration != 0 && cur_elapsed >= args.duration
+			if timeout || (args.exitAfterNCommit != 0 && numCommit == int(args.exitAfterNCommit)) {
 				if err := tm.Close(); err != nil {
 					debug.Fprintf(os.Stderr, "[ERROR] close transaction manager: %v\n", err)
 					return &common.FnOutput{Success: false, Message: fmt.Sprintf("close transaction manager: %v\n", err)}
@@ -837,7 +776,7 @@ func (t *StreamTask) ProcessWithTransaction(
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
 
-			ret := t.ProcessFunc(ctx, t, args.ProcArgs)
+			ret := t.ProcessFunc(ctx, t, args.procArgs)
 			if ret != nil {
 				if ret.Success {
 					if hasLiveTransaction {
@@ -851,7 +790,7 @@ func (t *StreamTask) ProcessWithTransaction(
 					updateReturnMetric(ret, startTime, afterWarmupStart, warmupDuration, afterWarmup, latencies)
 				} else {
 					if hasLiveTransaction {
-						if err := tm.AbortTransaction(ctx, false, args.KVChangelogs, args.WindowStoreChangelogs); err != nil {
+						if err := tm.AbortTransaction(ctx, false, args.kvChangelogs, args.windowStoreChangelogs); err != nil {
 							return &common.FnOutput{Success: false, Message: fmt.Sprintf("abort failed: %v\n", err)}
 						}
 					}
@@ -871,15 +810,15 @@ func (t *StreamTask) startNewTransaction(ctx context.Context, args *StreamTaskAr
 	hasLiveTransaction *bool, trackConsumePar *bool, init *bool, commitTimer *time.Time,
 ) error {
 	if !*hasLiveTransaction {
-		if err := tm.BeginTransaction(ctx, args.KVChangelogs, args.WindowStoreChangelogs); err != nil {
+		if err := tm.BeginTransaction(ctx, args.kvChangelogs, args.windowStoreChangelogs); err != nil {
 			debug.Fprintf(os.Stderr, "[ERROR] transaction begin failed: %v", err)
 			return fmt.Errorf("transaction begin failed: %v\n", err)
 		}
 		*hasLiveTransaction = true
 		*commitTimer = time.Now()
-		if args.FixedOutParNum != 0 {
-			debug.Assert(len(args.Sinks) == 1, "fixed out param is only usable when there's only one output stream")
-			if err := tm.AddTopicPartition(ctx, args.Sinks[0].TopicName(), []uint8{args.FixedOutParNum}); err != nil {
+		if args.fixedOutParNum != 0 {
+			debug.Assert(len(args.sinks) == 1, "fixed out param is only usable when there's only one output stream")
+			if err := tm.AddTopicPartition(ctx, args.sinks[0].TopicName(), []uint8{args.fixedOutParNum}); err != nil {
 				debug.Fprintf(os.Stderr, "[ERROR] track topic partition failed: %v\n", err)
 				return fmt.Errorf("track topic partition failed: %v\n", err)
 			}
@@ -888,13 +827,13 @@ func (t *StreamTask) startNewTransaction(ctx context.Context, args *StreamTaskAr
 			t.ResumeFunc(t)
 		}
 		if !*init && t.InitFunc != nil {
-			t.InitFunc(args.ProcArgs)
+			t.InitFunc(args.procArgs)
 			*init = true
 		}
 	}
 	if !*trackConsumePar {
-		for _, src := range args.Srcs {
-			if err := tm.AddTopicTrackConsumedSeqs(ctx, src.TopicName(), []uint8{args.InParNum}); err != nil {
+		for _, src := range args.srcs {
+			if err := tm.AddTopicTrackConsumedSeqs(ctx, src.TopicName(), []uint8{args.inParNum}); err != nil {
 				return fmt.Errorf("add offsets failed: %v\n", err)
 			}
 		}
@@ -1144,7 +1083,7 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 			TopicToTrack:   topic,
 			TaskId:         tm.GetCurrentTaskId(),
 			TaskEpoch:      tm.GetCurrentEpoch(),
-			Partition:      args.InParNum,
+			Partition:      args.inParNum,
 			ConsumedSeqNum: uint64(offset),
 		})
 	}
@@ -1155,7 +1094,7 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 		fmt.Fprintf(os.Stderr, "[ERROR] append offset failed: %v\n", err)
 		return &common.FnOutput{Success: false, Message: fmt.Sprintf("append offset failed: %v\n", err)}
 	}
-	err = tm.CommitTransaction(ctx, args.KVChangelogs, args.WindowStoreChangelogs)
+	err = tm.CommitTransaction(ctx, args.kvChangelogs, args.windowStoreChangelogs)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] commit failed: %v\n", err)
 		return &common.FnOutput{Success: false, Message: fmt.Sprintf("commit failed: %v\n", err)}

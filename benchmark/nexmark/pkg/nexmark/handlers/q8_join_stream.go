@@ -486,18 +486,11 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		panic("unrecognized table type")
 	}
 	if sp.EnableTransaction {
-		streamTaskArgs := transaction.StreamTaskArgsTransaction{
-			ProcArgs:              procArgs,
-			Env:                   h.env,
-			Srcs:                  srcs,
-			Sinks:                 sinks_arr,
-			TransactionalId:       fmt.Sprintf("%s-%d", h.funcName, sp.ParNum),
-			WindowStoreChangelogs: wsc,
-			KVChangelogs:          nil,
-			FixedOutParNum:        0,
-		}
-		benchutil.UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+		transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
+		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr).
+			WithWindowStoreChangelogs(wsc)
+		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				joinProcAuction.trackParFunc = trackParFunc
 				joinProcPerson.trackParFunc = trackParFunc

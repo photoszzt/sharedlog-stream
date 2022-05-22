@@ -8,6 +8,7 @@ import (
 	"path"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
@@ -115,22 +116,23 @@ func InvokeFunc(client *http.Client, response *common.FnOutput,
 }
 
 func UpdateStreamTaskArgsTransaction(sp *common.QueryInput, args *transaction.StreamTaskArgsTransaction) {
-	args.AppId = sp.AppId
-	args.Warmup = time.Duration(sp.WarmupS) * time.Second
-	args.ScaleEpoch = sp.ScaleEpoch
-	args.CommitEveryMs = sp.CommitEveryMs
-	args.CommitEveryNIter = sp.CommitEveryNIter
-	args.ExitAfterNCommit = sp.ExitAfterNCommit
-	args.Duration = sp.Duration
-	args.SerdeFormat = commtypes.SerdeFormat(sp.SerdeFormat)
-	args.InParNum = sp.ParNum
+	debug.Assert(sp.AppId != "", "app id should not be empty")
+	args.WithAppID(sp.AppId).
+		WithWarmup(time.Duration(sp.WarmupS) * time.Second).
+		WithScaleEpoch(sp.ScaleEpoch).
+		WithCommitEveryMs(sp.CommitEveryMs).
+		WithCommitEveryNIter(sp.CommitEveryNIter).
+		WithExitAfterNCommit(sp.ExitAfterNCommit).
+		WithDuration(sp.Duration).
+		WithSerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
+		WithInParNum(sp.ParNum)
 }
 
 func UpdateStreamTaskArgs(sp *common.QueryInput, args *transaction.StreamTaskArgs) {
-	args.Duration = time.Duration(sp.Duration) * time.Second
-	args.NumInPartition = sp.NumInPartition
-	args.ParNum = sp.ParNum
-	args.SerdeFormat = commtypes.SerdeFormat(sp.SerdeFormat)
-	args.Warmup = time.Duration(sp.WarmupS) * time.Second
-	args.FlushEvery = time.Duration(sp.FlushMs) * time.Millisecond
+	args.WithDuration(time.Duration(sp.Duration) * time.Second).
+		WithNumInPartition(sp.NumInPartition).
+		WithParNum(sp.ParNum).
+		WithSerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
+		WithWarmup(time.Duration(sp.WarmupS) * time.Second).
+		WithFlushEvery(time.Duration(sp.FlushMs) * time.Millisecond)
 }

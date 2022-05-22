@@ -385,19 +385,12 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		panic("unrecognized table type")
 	}
 	if sp.EnableTransaction {
-		streamTaskArgs := transaction.StreamTaskArgsTransaction{
-			ProcArgs: procArgs,
-			Env:      h.env,
-			Srcs:     srcs,
-			Sinks:    sinks_arr,
-			TransactionalId: fmt.Sprintf("%s-%s-%d-%s", h.funcName,
-				sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0]),
-			FixedOutParNum:        sp.ParNum,
-			KVChangelogs:          kvc,
-			WindowStoreChangelogs: nil,
-		}
-		benchutil.UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
+			sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
+		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr).
+			WithKVChangelogs(kvc)
+		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinshFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*q5MaxBidProcessArgs).trackParFunc = trackParFunc
 				procArgs.(*q5MaxBidProcessArgs).recordFinishFunc = recordFinshFunc

@@ -239,19 +239,11 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 	srcs := []source_sink.Source{src}
 	sinks_arr := []source_sink.Sink{sinks[0], sinks[1]}
 	if sp.EnableTransaction {
-		streamTaskArgs := transaction.StreamTaskArgsTransaction{
-			ProcArgs: procArgs,
-			Env:      h.env,
-			Srcs:     srcs,
-			Sinks:    sinks_arr,
-			TransactionalId: fmt.Sprintf("%s-%s-%d",
-				h.funcName, sp.InputTopicNames[0], sp.ParNum),
-			KVChangelogs:          nil,
-			WindowStoreChangelogs: nil,
-			FixedOutParNum:        0,
-		}
-		benchutil.UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+		transactionalID := fmt.Sprintf("%s-%s-%d",
+			h.funcName, sp.InputTopicNames[0], sp.ParNum)
+		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr)
+		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
 				recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*q8GroupByProcessArgs).trackParFunc = trackParFunc

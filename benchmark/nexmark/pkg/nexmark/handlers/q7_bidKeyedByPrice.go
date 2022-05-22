@@ -184,18 +184,10 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 	srcs := []source_sink.Source{src}
 	sinks_arr := []source_sink.Sink{sink}
 	if input.EnableTransaction {
-		streamTaskArgs := transaction.StreamTaskArgsTransaction{
-			ProcArgs:              procArgs,
-			Env:                   h.env,
-			Srcs:                  srcs,
-			Sinks:                 sinks_arr,
-			TransactionalId:       fmt.Sprintf("%s-%s-%d-%s", h.funcName, input.InputTopicNames[0], input.ParNum, input.OutputTopicNames[0]),
-			FixedOutParNum:        0,
-			KVChangelogs:          nil,
-			WindowStoreChangelogs: nil,
-		}
-		benchutil.UpdateStreamTaskArgsTransaction(input, &streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, input.InputTopicNames[0], input.ParNum, input.OutputTopicNames[0])
+		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr)
+		benchutil.UpdateStreamTaskArgsTransaction(input, streamTaskArgs)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*q7BidKeyedByPriceProcessArgs).trackParFunc = trackParFunc
 				procArgs.(*q7BidKeyedByPriceProcessArgs).recordFinishFunc = recordFinishFunc

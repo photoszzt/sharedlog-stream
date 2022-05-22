@@ -227,14 +227,10 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 	}
 	srcs := []source_sink.Source{src}
 	if sp.EnableTransaction {
-		streamTaskArgs := transaction.StreamTaskArgsTransaction{
-			ProcArgs:        procArgs,
-			Env:             h.env,
-			Srcs:            srcs,
-			TransactionalId: fmt.Sprintf("%s-%s-%s-%d", funcName, sp.InputTopicNames[0], sp.OutputTopicNames[0], sp.ParNum),
-			FixedOutParNum:  sp.ParNum,
-		}
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+		transactionalID := fmt.Sprintf("%s-%s-%s-%d", funcName, sp.InputTopicNames[0], sp.OutputTopicNames[0], sp.ParNum)
+		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, nil)
+		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*wordcountCounterAggProcessArg).trackParFunc = trackParFunc
 				procArgs.(*wordcountCounterAggProcessArg).recordFinishFunc = recordFinishFunc

@@ -122,18 +122,11 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 	srcs := []source_sink.Source{src}
 	sinks := []source_sink.Sink{sink}
 	if sp.EnableTransaction {
-		streamTaskArgs := transaction.StreamTaskArgsTransaction{
-			ProcArgs:              procArgs,
-			Env:                   h.env,
-			Srcs:                  srcs,
-			Sinks:                 sinks,
-			TransactionalId:       fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0]),
-			KVChangelogs:          nil,
-			WindowStoreChangelogs: nil,
-			FixedOutParNum:        sp.ParNum,
-		}
-		benchutil.UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
+		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks).
+			WithFixedOutParNum(sp.ParNum)
+		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
 				recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*query2ProcessArgs).trackParFunc = trackParFunc

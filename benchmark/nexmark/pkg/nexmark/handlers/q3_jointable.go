@@ -483,18 +483,11 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		}
 	}
 	if sp.EnableTransaction {
-		streamTaskArgs := transaction.StreamTaskArgsTransaction{
-			ProcArgs:              procArgs,
-			Env:                   h.env,
-			Srcs:                  srcs,
-			Sinks:                 sinks_arr,
-			TransactionalId:       fmt.Sprintf("%s-%d", h.funcName, sp.ParNum),
-			KVChangelogs:          kvchangelogs,
-			WindowStoreChangelogs: nil,
-			FixedOutParNum:        0,
-		}
-		benchutil.UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+		transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
+		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr).
+			WithKVChangelogs(kvchangelogs)
+		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				joinProcPerson.trackParFunc = trackParFunc
 				joinProcAuction.trackParFunc = trackParFunc

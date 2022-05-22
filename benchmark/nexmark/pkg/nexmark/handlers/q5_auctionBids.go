@@ -430,19 +430,12 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		panic("unrecognized table type")
 	}
 	if sp.EnableTransaction {
-		streamTaskArgs := transaction.StreamTaskArgsTransaction{
-			ProcArgs: procArgs,
-			Env:      h.env,
-			Srcs:     srcs,
-			Sinks:    sinks,
-			TransactionalId: fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
-				sp.ParNum, sp.OutputTopicNames[0]),
-			FixedOutParNum:        0,
-			WindowStoreChangelogs: wsc,
-			KVChangelogs:          nil,
-		}
-		benchutil.UpdateStreamTaskArgsTransaction(sp, &streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
+			sp.ParNum, sp.OutputTopicNames[0])
+		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks).
+			WithWindowStoreChangelogs(wsc)
+		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*q5AuctionBidsProcessArg).trackParFunc = trackParFunc
 				procArgs.(*q5AuctionBidsProcessArg).recordFinishFunc = recordFinishFunc

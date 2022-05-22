@@ -414,18 +414,13 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		panic("unrecognized table type")
 	}
 	if input.EnableTransaction {
-		streamTaskArgs := transaction.StreamTaskArgsTransaction{
-			ProcArgs: procArgs,
-			Env:      h.env,
-			Srcs:     srcs,
-			Sinks:    sinks_arr,
-			TransactionalId: fmt.Sprintf("%s-%s-%d-%s", h.funcName,
-				input.InputTopicNames[0], input.ParNum, input.OutputTopicNames[0]),
-			FixedOutParNum:        input.ParNum,
-			WindowStoreChangelogs: wsc,
-		}
-		benchutil.UpdateStreamTaskArgsTransaction(input, &streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, &streamTaskArgs,
+		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
+			input.InputTopicNames[0], input.ParNum, input.OutputTopicNames[0])
+		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr).
+			WithWindowStoreChangelogs(wsc).
+			WithFixedOutParNum(input.ParNum)
+		benchutil.UpdateStreamTaskArgsTransaction(input, streamTaskArgs)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
 				procArgs.(*processQ7ProcessArgs).trackParFunc = trackParFunc
 				procArgs.(*processQ7ProcessArgs).recordFinishFunc = recordFinishFunc
