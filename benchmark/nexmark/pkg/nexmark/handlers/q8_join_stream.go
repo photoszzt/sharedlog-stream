@@ -11,6 +11,7 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
@@ -58,50 +59,12 @@ func (h *q8JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, e
 	return utils.CompressData(encodedOutput), nil
 }
 
-type q8JoinStreamProcessArgs struct {
-	personsOutChan   <-chan *common.FnOutput
-	auctionsOutChan  <-chan *common.FnOutput
-	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
-	funcName         string
-	curEpoch         uint64
-	parNum           uint8
-}
-
-func (a *q8JoinStreamProcessArgs) ParNum() uint8    { return a.parNum }
-func (a *q8JoinStreamProcessArgs) CurEpoch() uint64 { return a.curEpoch }
-func (a *q8JoinStreamProcessArgs) FuncName() string { return a.funcName }
-func (a *q8JoinStreamProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
-	return a.recordFinishFunc
-}
-
 func (h *q8JoinStreamHandler) process(
 	ctx context.Context,
 	t *transaction.StreamTask,
 	argsTmp interface{},
 ) *common.FnOutput {
-	return handleQ8ErrReturn(argsTmp)
-}
-
-func handleQ8ErrReturn(argsTmp interface{}) *common.FnOutput {
-	args := argsTmp.(*q8JoinStreamProcessArgs)
-	var aOut *common.FnOutput
-	var pOut *common.FnOutput
-	select {
-	case personOutput := <-args.personsOutChan:
-		pOut = personOutput
-		debug.Fprintf(os.Stderr, "Got persons out: %v\n", pOut)
-	case auctionOutput := <-args.auctionsOutChan:
-		aOut = auctionOutput
-		debug.Fprintf(os.Stderr, "Got auctions out: %v\n", aOut)
-	default:
-	}
-	if pOut != nil && !pOut.Success {
-		return pOut
-	}
-	if aOut != nil && !aOut.Success {
-		return aOut
-	}
-	return nil
+	return execution.HandleJoinErrReturn(argsTmp)
 }
 
 /*
@@ -370,36 +333,14 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
 
 	currentOffset := make(map[string]uint64)
-	joinProcPerson := &joinProcArgs{
-		src:          sss.src2,
-		sink:         sss.sink,
-		parNum:       sp.ParNum,
-		runner:       pJoinA,
-		trackParFunc: tran_interface.DefaultTrackSubstreamFunc,
-		cHashMu:      &h.cHashMu,
-		cHash:        h.cHash,
-	}
-	joinProcAuction := &joinProcArgs{
-		src:          sss.src1,
-		sink:         sss.sink,
-		parNum:       sp.ParNum,
-		runner:       aJoinP,
-		trackParFunc: tran_interface.DefaultTrackSubstreamFunc,
-		cHashMu:      &h.cHashMu,
-		cHash:        h.cHash,
-	}
+	joinProcPerson := execution.NewJoinProcArgs(sss.src2, sss.sink, pJoinA, &h.cHashMu, h.cHash, sp.ParNum)
+	joinProcAuction := execution.NewJoinProcArgs(sss.src1, sss.sink, aJoinP, &h.cHashMu, h.cHash, sp.ParNum)
 	var wg sync.WaitGroup
-	aucManager := NewJoinProcManager()
-	perManager := NewJoinProcManager()
+	aucManager := execution.NewJoinProcManager()
+	perManager := execution.NewJoinProcManager()
 
-	procArgs := &q8JoinStreamProcessArgs{
-		personsOutChan:   perManager.Out(),
-		auctionsOutChan:  aucManager.Out(),
-		parNum:           sp.ParNum,
-		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
-		curEpoch:         sp.ScaleEpoch,
-		funcName:         h.funcName,
-	}
+	procArgs := execution.NewCommonJoinProcArgs(aucManager.Out(),
+		perManager.Out(), h.funcName, sp.ScaleEpoch, sp.ParNum)
 	pctx := context.WithValue(ctx, "id", "person")
 	actx := context.WithValue(ctx, "id", "auction")
 
@@ -412,7 +353,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			perManager.RequestToTerminate()
 			debug.Fprintf(os.Stderr, "waiting join proc to exit\n")
 			wg.Wait()
-			if ret := handleQ8ErrReturn(procArgs); ret != nil {
+			if ret := execution.HandleJoinErrReturn(procArgs); ret != nil {
 				return ret
 			}
 			// debug.Fprintf(os.Stderr, "join procs exited\n")
@@ -468,19 +409,13 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	} else if sp.TableType == uint8(store.MONGODB) {
 		wsc = []*transaction.WindowStoreChangelog{
 			transaction.NewWindowStoreChangelogForExternalStore(
-				auctionsWinStore, auctionsStream, joinProcSerialWithoutSink,
-				&joinProcWithoutSinkArgs{
-					src:    sss.src1.InnerSource(),
-					parNum: sp.ParNum,
-					runner: aJoinP,
-				}, fmt.Sprintf("%s-%s-%d", h.funcName, auctionsWinStore.Name(), sp.ParNum), sp.ParNum),
+				auctionsWinStore, auctionsStream, execution.JoinProcSerialWithoutSink,
+				execution.NewJoinProcWithoutSinkArgs(sss.src1.InnerSource(), aJoinP, sp.ParNum),
+				fmt.Sprintf("%s-%s-%d", h.funcName, auctionsWinStore.Name(), sp.ParNum), sp.ParNum),
 			transaction.NewWindowStoreChangelogForExternalStore(
-				personsWinTab, personsStream, joinProcSerialWithoutSink,
-				&joinProcWithoutSinkArgs{
-					src:    sss.src2.InnerSource(),
-					parNum: sp.ParNum,
-					runner: pJoinA,
-				}, fmt.Sprintf("%s-%s-%d", h.funcName, personsWinTab.Name(), sp.ParNum), sp.ParNum),
+				personsWinTab, personsStream, execution.JoinProcSerialWithoutSink,
+				execution.NewJoinProcWithoutSinkArgs(sss.src2.InnerSource(), pJoinA, sp.ParNum),
+				fmt.Sprintf("%s-%s-%d", h.funcName, personsWinTab.Name(), sp.ParNum), sp.ParNum),
 		}
 	} else {
 		panic("unrecognized table type")
@@ -491,10 +426,10 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			WithWindowStoreChangelogs(wsc)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
-			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
-				joinProcAuction.trackParFunc = trackParFunc
-				joinProcPerson.trackParFunc = trackParFunc
-				procArgs.(*q8JoinStreamProcessArgs).recordFinishFunc = recordFinishFunc
+			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
+				joinProcAuction.SetTrackParFunc(trackParFunc)
+				joinProcPerson.SetTrackParFunc(trackParFunc)
+				procArgs.(*execution.CommonJoinProcArgs).SetRecordFinishFunc(recordFinishFunc)
 			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()

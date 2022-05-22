@@ -92,7 +92,7 @@ type wordcountSplitterProcessArg struct {
 	output_stream    *sharedlog_stream.ShardedSharedLogStream
 	splitter         processor.FlatMapperFunc
 	trackParFunc     tran_interface.TrackKeySubStreamFunc
-	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
+	recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc
 	funcName         string
 	splitLatencies   []int
 	curEpoch         uint64
@@ -107,7 +107,7 @@ func (a *wordcountSplitterProcessArg) PushToAllSinks(ctx context.Context, msg co
 func (a *wordcountSplitterProcessArg) ParNum() uint8    { return a.parNum }
 func (a *wordcountSplitterProcessArg) CurEpoch() uint64 { return a.curEpoch }
 func (a *wordcountSplitterProcessArg) FuncName() string { return a.funcName }
-func (a *wordcountSplitterProcessArg) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
+func (a *wordcountSplitterProcessArg) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
 	return a.recordFinishFunc
 }
 func (a *wordcountSplitterProcessArg) ErrChan() chan error {
@@ -204,7 +204,7 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
-			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
+			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
 				procArgs.(*wordcountSplitterProcessArg).trackParFunc = trackParFunc
 				procArgs.(*wordcountSplitterProcessArg).recordFinishFunc = recordFinishFunc
 			}, &task)

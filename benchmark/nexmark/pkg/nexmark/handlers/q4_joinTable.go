@@ -4,17 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sharedlog-stream/pkg/treemap"
@@ -57,49 +58,11 @@ func (h *q4JoinTableHandler) Call(ctx context.Context, input []byte) ([]byte, er
 	return utils.CompressData(encodedOutput), nil
 }
 
-type q4JoinTableProcessArgs struct {
-	bidsOutChan      chan *common.FnOutput
-	auctionsOutChan  chan *common.FnOutput
-	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
-	funcName         string
-	curEpoch         uint64
-	parNum           uint8
-}
-
-func (a *q4JoinTableProcessArgs) ParNum() uint8    { return a.parNum }
-func (a *q4JoinTableProcessArgs) CurEpoch() uint64 { return a.curEpoch }
-func (a *q4JoinTableProcessArgs) FuncName() string { return a.funcName }
-func (a *q4JoinTableProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
-	return a.recordFinishFunc
-}
-
 func (h *q4JoinTableHandler) process(ctx context.Context,
 	t *transaction.StreamTask,
 	argsTmp interface{},
 ) *common.FnOutput {
-	args := argsTmp.(*q4JoinTableProcessArgs)
-
-	var bOut *common.FnOutput = nil
-	var aOut *common.FnOutput = nil
-
-	select {
-	case bidsOutput := <-args.bidsOutChan:
-		bOut = bidsOutput
-		debug.Fprintf(os.Stderr, "Got bids out: %v\n", bOut)
-	case auctionOutput := <-args.auctionsOutChan:
-		aOut = auctionOutput
-		debug.Fprintf(os.Stderr, "Got auctions out: %v\n", aOut)
-	default:
-	}
-	debug.Fprintf(os.Stderr, "aOut: %v\n", aOut)
-	debug.Fprintf(os.Stderr, "bOut: %v\n", bOut)
-	if bOut != nil && !bOut.Success {
-		return bOut
-	}
-	if aOut != nil && !aOut.Success {
-		return aOut
-	}
-	return nil
+	return execution.HandleJoinErrReturn(argsTmp)
 }
 
 func (h *q4JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
@@ -109,16 +72,17 @@ func (h *q4JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 ) (*source_sink.MeteredSource, /* src1 */
 	*source_sink.MeteredSource, /* src2 */
 	*source_sink.ConcurrentMeteredSyncSink,
+	commtypes.KVMsgSerdes,
 	error,
 ) {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("get msg serde err: %v", err)
+		return nil, nil, nil, commtypes.KVMsgSerdes{}, fmt.Errorf("get msg serde err: %v", err)
 	}
 
 	eventSerde, err := getEventSerde(sp.SerdeFormat)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("get event serde err: %v", err)
+		return nil, nil, nil, commtypes.KVMsgSerdes{}, fmt.Errorf("get event serde err: %v", err)
 	}
 	kvmsgSerdes := commtypes.KVMsgSerdes{
 		KeySerde: commtypes.Uint64Serde{},
@@ -156,7 +120,7 @@ func (h *q4JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 		time.Duration(sp.WarmupS)*time.Second)
 	src1.SetInitialSource(false)
 	src2.SetInitialSource(false)
-	return src1, src2, sink, nil
+	return src1, src2, sink, kvmsgSerdes, nil
 }
 
 func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -167,7 +131,7 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 			Message: fmt.Sprintf("get input output err: %v", err),
 		}
 	}
-	auctionsSrc, bidsSrc, sink, err := h.getSrcSink(ctx, sp, auctionsStream,
+	auctionsSrc, bidsSrc, sink, inKVMsgSerdes, err := h.getSrcSink(ctx, sp, auctionsStream,
 		bidsStream, outputStream)
 	if err != nil {
 		return &common.FnOutput{
@@ -253,7 +217,7 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		return newMsgs, nil
 	}
 
-	aJoinB := JoinWorkerFunc(func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
+	aJoinB := execution.JoinWorkerFunc(func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		_, err := toAuctionsTable.ProcessAndReturn(ctx, m)
 		if err != nil {
 			return nil, err
@@ -265,7 +229,7 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		return filterAndGroupMsg(ctx, msgs)
 	})
 
-	bJoinA := JoinWorkerFunc(func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
+	bJoinA := execution.JoinWorkerFunc(func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		_, err := toBidsTable.ProcessAndReturn(ctx, m)
 		if err != nil {
 			return nil, err
@@ -278,60 +242,37 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 	})
 
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
-	bidsOutChan := make(chan *common.FnOutput, 1)
-	auctionsOutChan := make(chan *common.FnOutput, 1)
-	procArgs := &q4JoinTableProcessArgs{
-		bidsOutChan:      bidsOutChan,
-		auctionsOutChan:  auctionsOutChan,
-		parNum:           sp.ParNum,
-		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
-		curEpoch:         sp.ScaleEpoch,
-		funcName:         h.funcName,
-	}
-	joinProcBid := &joinProcArgs{
-		src:          bidsSrc,
-		sink:         sink,
-		parNum:       sp.ParNum,
-		runner:       bJoinA,
-		trackParFunc: tran_interface.DefaultTrackSubstreamFunc,
-		cHashMu:      &h.cHashMu,
-		cHash:        h.cHash,
-	}
-	joinProcAuction := &joinProcArgs{
-		src:          auctionsSrc,
-		sink:         sink,
-		parNum:       sp.ParNum,
-		runner:       aJoinB,
-		trackParFunc: tran_interface.DefaultTrackSubstreamFunc,
-		cHashMu:      &h.cHashMu,
-		cHash:        h.cHash,
-	}
+	joinProcBid := execution.NewJoinProcArgs(bidsSrc, sink, bJoinA, &h.cHashMu, h.cHash, sp.ParNum)
+	joinProcAuction := execution.NewJoinProcArgs(auctionsSrc, sink, aJoinB, &h.cHashMu, h.cHash, sp.ParNum)
+
 	var wg sync.WaitGroup
-	bidsDone := make(chan struct{})
-	aucDone := make(chan struct{})
+	aucManager := execution.NewJoinProcManager()
+	bidManager := execution.NewJoinProcManager()
+	procArgs := execution.NewCommonJoinProcArgs(aucManager.Out(), bidManager.Out(),
+		h.funcName, sp.ScaleEpoch, sp.ParNum)
+
 	bctx := context.WithValue(ctx, "id", "bid")
 	actx := context.WithValue(ctx, "id", "auction")
 
-	bidRun := make(chan struct{})
-	aucRun := make(chan struct{})
 	task := transaction.StreamTask{
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
 		PauseFunc: func() *common.FnOutput {
-			close(bidsDone)
-			close(aucDone)
+			aucManager.RequestToTerminate()
+			bidManager.RequestToTerminate()
 			wg.Wait()
+			ret := execution.HandleJoinErrReturn(procArgs)
+			if ret != nil {
+				return ret
+			}
 			return nil
 		},
 		ResumeFunc: func(task *transaction.StreamTask) {
-			bidsDone = make(chan struct{})
-			aucDone = make(chan struct{})
-			wg.Add(1)
-			go joinProcLoop(bctx, bidsOutChan, task, joinProcBid, &wg, bidRun, bidsDone)
-			wg.Add(1)
-			go joinProcLoop(actx, auctionsOutChan, task, joinProcAuction, &wg, aucRun, aucDone)
-			aucRun <- struct{}{}
-			bidRun <- struct{}{}
+			aucManager.LaunchJoinProcLoop(actx, task, joinProcAuction, &wg)
+			bidManager.LaunchJoinProcLoop(bctx, task, joinProcBid, &wg)
+
+			aucManager.Run()
+			bidManager.Run()
 		},
 		InitFunc: func(progArgs interface{}) {
 			auctionsSrc.StartWarmup()
@@ -339,20 +280,50 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 			sink.StartWarmup()
 			toAuctionsTable.StartWarmup()
 			toBidsTable.StartWarmup()
+
+			aucManager.Run()
+			bidManager.Run()
 		},
+		CommitEveryForAtLeastOnce: common.CommitDuration,
 	}
+	aucManager.LaunchJoinProcLoop(actx, &task, joinProcAuction, &wg)
+	bidManager.LaunchJoinProcLoop(bctx, &task, joinProcBid, &wg)
+
 	srcs := []source_sink.Source{auctionsSrc, bidsSrc}
 	sinks_arr := []source_sink.Sink{sink}
+	var kvchangelogs []*transaction.KVStoreChangelog
+	if sp.TableType == uint8(store.IN_MEM) {
+		serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+		kvchangelogs = []*transaction.KVStoreChangelog{
+			transaction.NewKVStoreChangelog(auctionsStore,
+				store_with_changelog.NewChangelogManager(auctionsStream, serdeFormat),
+				inKVMsgSerdes, sp.ParNum,
+			),
+			transaction.NewKVStoreChangelog(bidsStore,
+				store_with_changelog.NewChangelogManager(bidsStream, serdeFormat),
+				inKVMsgSerdes, sp.ParNum,
+			),
+		}
+	} else if sp.TableType == uint8(store.MONGODB) {
+		kvchangelogs = []*transaction.KVStoreChangelog{
+			transaction.NewKVStoreChangelogForExternalStore(auctionsStore, auctionsStream, execution.JoinProcSerialWithoutSink,
+				execution.NewJoinProcWithoutSinkArgs(auctionsSrc.InnerSource(), aJoinB, sp.ParNum),
+				fmt.Sprintf("%s-%s-%d", h.funcName, auctionsStore.Name(), sp.ParNum), sp.ParNum),
+			transaction.NewKVStoreChangelogForExternalStore(bidsStore, bidsStream, execution.JoinProcSerialWithoutSink,
+				execution.NewJoinProcWithoutSinkArgs(bidsSrc.InnerSource(), bJoinA, sp.ParNum),
+				fmt.Sprintf("%s-%s-%d", h.funcName, bidsStore.Name(), sp.ParNum), sp.ParNum),
+		}
+	}
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName,
 			sp.InputTopicNames[0], sp.ParNum)
-		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr)
+		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr).WithKVChangelogs(kvchangelogs)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
-			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
-				joinProcAuction.trackParFunc = trackParFunc
-				joinProcBid.trackParFunc = trackParFunc
-				procArgs.(*q4JoinTableProcessArgs).recordFinishFunc = recordFinishFunc
+			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
+				joinProcAuction.SetTrackParFunc(trackParFunc)
+				joinProcBid.SetTrackParFunc(trackParFunc)
+				procArgs.(*execution.CommonJoinProcArgs).SetRecordFinishFunc(recordFinishFunc)
 			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()

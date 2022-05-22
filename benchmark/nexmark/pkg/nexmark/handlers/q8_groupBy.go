@@ -86,7 +86,7 @@ type q8GroupByProcessArgs struct {
 	errChan          chan error
 	aucMsgChan       chan commtypes.Message
 	personMsgChan    chan commtypes.Message
-	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
+	recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc
 	trackParFunc     tran_interface.TrackKeySubStreamFunc
 	src              *source_sink.MeteredSource
 
@@ -109,7 +109,7 @@ func (a *q8GroupByProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes
 func (a *q8GroupByProcessArgs) ParNum() uint8    { return a.parNum }
 func (a *q8GroupByProcessArgs) CurEpoch() uint64 { return a.curEpoch }
 func (a *q8GroupByProcessArgs) FuncName() string { return a.funcName }
-func (a *q8GroupByProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
+func (a *q8GroupByProcessArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
 	return a.recordFinishFunc
 }
 func (a *q8GroupByProcessArgs) ErrChan() chan error {
@@ -245,7 +245,8 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
-				recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
+				recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc,
+			) {
 				procArgs.(*q8GroupByProcessArgs).trackParFunc = trackParFunc
 				procArgs.(*q8GroupByProcessArgs).recordFinishFunc = recordFinishFunc
 			}, &task)

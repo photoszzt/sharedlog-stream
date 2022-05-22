@@ -199,7 +199,7 @@ type q5AuctionBidsProcessArg struct {
 	sink             *source_sink.ConcurrentMeteredSyncSink
 	output_stream    *sharedlog_stream.ShardedSharedLogStream
 	trackParFunc     tran_interface.TrackKeySubStreamFunc
-	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
+	recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc
 	funcName         string
 	curEpoch         uint64
 	parNum           uint8
@@ -213,7 +213,7 @@ func (a *q5AuctionBidsProcessArg) PushToAllSinks(ctx context.Context, msg commty
 func (a *q5AuctionBidsProcessArg) ParNum() uint8    { return a.parNum }
 func (a *q5AuctionBidsProcessArg) CurEpoch() uint64 { return a.curEpoch }
 func (a *q5AuctionBidsProcessArg) FuncName() string { return a.funcName }
-func (a *q5AuctionBidsProcessArg) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
+func (a *q5AuctionBidsProcessArg) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
 	return a.recordFinishFunc
 }
 func (a *q5AuctionBidsProcessArg) ErrChan() chan error {
@@ -436,7 +436,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			WithWindowStoreChangelogs(wsc)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
-			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
+			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
 				procArgs.(*q5AuctionBidsProcessArg).trackParFunc = trackParFunc
 				procArgs.(*q5AuctionBidsProcessArg).recordFinishFunc = recordFinishFunc
 				if sp.TableType == uint8(store.IN_MEM) {

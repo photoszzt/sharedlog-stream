@@ -58,7 +58,7 @@ type query2ProcessArgs struct {
 	q2Filter         *processor.MeteredProcessor
 	output_stream    *sharedlog_stream.ShardedSharedLogStream
 	trackParFunc     tran_interface.TrackKeySubStreamFunc
-	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
+	recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc
 	funcName         string
 	curEpoch         uint64
 	parNum           uint8
@@ -71,7 +71,7 @@ func (a *query2ProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes.Me
 func (a *query2ProcessArgs) ParNum() uint8    { return a.parNum }
 func (a *query2ProcessArgs) CurEpoch() uint64 { return a.curEpoch }
 func (a *query2ProcessArgs) FuncName() string { return a.funcName }
-func (a *query2ProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
+func (a *query2ProcessArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
 	return a.recordFinishFunc
 }
 func (a *query2ProcessArgs) ErrChan() chan error {
@@ -128,7 +128,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
-				recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
+				recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
 				procArgs.(*query2ProcessArgs).trackParFunc = trackParFunc
 				procArgs.(*query2ProcessArgs).recordFinishFunc = recordFinishFunc
 			}, &task)

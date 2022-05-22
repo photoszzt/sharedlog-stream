@@ -4,6 +4,7 @@ import (
 	"context"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 )
 
 type ProcArgsWithSrcSink interface {
@@ -17,5 +18,5 @@ type ProcArgs interface {
 	ParNum() uint8
 	CurEpoch() uint64
 	FuncName() string
-	RecordFinishFunc() func(ctx context.Context, appId string, instanceId uint8) error
+	RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc
 }

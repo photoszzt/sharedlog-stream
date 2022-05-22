@@ -105,7 +105,7 @@ type processQ7ProcessArgs struct {
 	transformWithStore *processor.MeteredProcessor
 	filterTime         *processor.MeteredProcessor
 	trackParFunc       tran_interface.TrackKeySubStreamFunc
-	recordFinishFunc   transaction.RecordPrevInstanceFinishFunc
+	recordFinishFunc   tran_interface.RecordPrevInstanceFinishFunc
 	funcName           string
 	curEpoch           uint64
 	parNum             uint8
@@ -118,7 +118,7 @@ func (a *processQ7ProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes
 func (a *processQ7ProcessArgs) ParNum() uint8    { return a.parNum }
 func (a *processQ7ProcessArgs) CurEpoch() uint64 { return a.curEpoch }
 func (a *processQ7ProcessArgs) FuncName() string { return a.funcName }
-func (a *processQ7ProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
+func (a *processQ7ProcessArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
 	return a.recordFinishFunc
 }
 func (a *processQ7ProcessArgs) ErrChan() chan error {
@@ -421,7 +421,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 			WithFixedOutParNum(input.ParNum)
 		benchutil.UpdateStreamTaskArgsTransaction(input, streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
-			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
+			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
 				procArgs.(*processQ7ProcessArgs).trackParFunc = trackParFunc
 				procArgs.(*processQ7ProcessArgs).recordFinishFunc = recordFinishFunc
 			}, &task)

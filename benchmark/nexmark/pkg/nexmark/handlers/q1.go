@@ -111,7 +111,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
-				recordFinish transaction.RecordPrevInstanceFinishFunc) {
+				recordFinish tran_interface.RecordPrevInstanceFinishFunc) {
 				procArgs.(*query1ProcessArgs).trackParFunc = trackParFunc
 				procArgs.(*query1ProcessArgs).recordFinishFunc = recordFinish
 			}, &task)
@@ -146,7 +146,7 @@ type query1ProcessArgs struct {
 	q1Map            *processor.MeteredProcessor
 	output_stream    *sharedlog_stream.ShardedSharedLogStream
 	trackParFunc     tran_interface.TrackKeySubStreamFunc
-	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
+	recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc
 	funcName         string
 	curEpoch         uint64
 	parNum           uint8
@@ -159,7 +159,7 @@ func (a *query1ProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes.Me
 func (a *query1ProcessArgs) ParNum() uint8    { return a.parNum }
 func (a *query1ProcessArgs) CurEpoch() uint64 { return a.curEpoch }
 func (a *query1ProcessArgs) FuncName() string { return a.funcName }
-func (a *query1ProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
+func (a *query1ProcessArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
 	return a.recordFinishFunc
 }
 func (a *query1ProcessArgs) ErrChan() chan error {

@@ -91,7 +91,7 @@ type q5MaxBidProcessArgs struct {
 	src              *source_sink.MeteredSource
 	sink             *source_sink.ConcurrentMeteredSyncSink
 	trackParFunc     tran_interface.TrackKeySubStreamFunc
-	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
+	recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc
 	funcName         string
 	curEpoch         uint64
 	parNum           uint8
@@ -104,7 +104,7 @@ func (a *q5MaxBidProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes.
 func (a *q5MaxBidProcessArgs) ParNum() uint8    { return a.parNum }
 func (a *q5MaxBidProcessArgs) CurEpoch() uint64 { return a.curEpoch }
 func (a *q5MaxBidProcessArgs) FuncName() string { return a.funcName }
-func (a *q5MaxBidProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
+func (a *q5MaxBidProcessArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
 	return a.recordFinishFunc
 }
 func (a *q5MaxBidProcessArgs) ErrChan() chan error {
@@ -391,7 +391,9 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			WithKVChangelogs(kvc)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
-			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinshFunc transaction.RecordPrevInstanceFinishFunc) {
+			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
+				recordFinshFunc tran_interface.RecordPrevInstanceFinishFunc,
+			) {
 				procArgs.(*q5MaxBidProcessArgs).trackParFunc = trackParFunc
 				procArgs.(*q5MaxBidProcessArgs).recordFinishFunc = recordFinshFunc
 				if sp.TableType == uint8(store.IN_MEM) {

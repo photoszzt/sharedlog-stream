@@ -80,13 +80,11 @@ func createOffsetTopicAndGetOffset(ctx context.Context, tm *TransactionManager,
 	return offset, nil
 }
 
-type RecordPrevInstanceFinishFunc func(ctx context.Context, appId string, instanceID uint8) error
-
 func SetupManagersAndProcessTransactional(ctx context.Context,
 	env types.Environment,
 	streamTaskArgs *StreamTaskArgsTransaction,
 	updateProcArgs func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
-		recordFinish RecordPrevInstanceFinishFunc),
+		recordFinish tran_interface.RecordPrevInstanceFinishFunc),
 	task *StreamTask,
 ) *common.FnOutput {
 	tm, cmm, err := SetupManagers(ctx, env, streamTaskArgs, updateProcArgs, task)
@@ -101,7 +99,7 @@ func SetupManagersAndProcessTransactional(ctx context.Context,
 func SetupManagers(ctx context.Context, env types.Environment,
 	streamTaskArgs *StreamTaskArgsTransaction,
 	updateProcArgs func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
-		recordFinish RecordPrevInstanceFinishFunc),
+		recordFinish tran_interface.RecordPrevInstanceFinishFunc),
 	task *StreamTask,
 ) (*TransactionManager, *ControlChannelManager, error) {
 	debug.Fprint(os.Stderr, "setup transaction and control manager\n")

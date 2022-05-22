@@ -98,7 +98,7 @@ type wordcountCounterAggProcessArg struct {
 	output_stream    *store.MeteredStream
 	counter          *processor.MeteredProcessor
 	trackParFunc     tran_interface.TrackKeySubStreamFunc
-	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
+	recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc
 	funcName         string
 	curEpoch         uint64
 	parNum           uint8
@@ -107,7 +107,7 @@ type wordcountCounterAggProcessArg struct {
 func (a *wordcountCounterAggProcessArg) ParNum() uint8    { return a.parNum }
 func (a *wordcountCounterAggProcessArg) CurEpoch() uint64 { return a.curEpoch }
 func (a *wordcountCounterAggProcessArg) FuncName() string { return a.funcName }
-func (a *wordcountCounterAggProcessArg) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
+func (a *wordcountCounterAggProcessArg) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
 	return a.recordFinishFunc
 }
 
@@ -231,7 +231,7 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, nil)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
-			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
+			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
 				procArgs.(*wordcountCounterAggProcessArg).trackParFunc = trackParFunc
 				procArgs.(*wordcountCounterAggProcessArg).recordFinishFunc = recordFinishFunc
 			}, &task)

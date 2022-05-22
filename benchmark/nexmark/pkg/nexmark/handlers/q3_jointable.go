@@ -10,6 +10,7 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
@@ -61,33 +62,7 @@ func (h *q3JoinTableHandler) process(ctx context.Context,
 	t *transaction.StreamTask,
 	argsTmp interface{},
 ) *common.FnOutput {
-	return handleQ3ErrReturn(argsTmp)
-}
-
-func handleQ3ErrReturn(argsTmp interface{}) *common.FnOutput {
-	args := argsTmp.(*q3JoinTableProcessArgs)
-	var aOut *common.FnOutput
-	var pOut *common.FnOutput
-	select {
-	case personOutput := <-args.personsOutChan:
-		pOut = personOutput
-		debug.Fprintf(os.Stderr, "Got per out: %v, per out channel len: %d\n", pOut, len(args.personsOutChan))
-	case auctionOutput := <-args.auctionsOutChan:
-		aOut = auctionOutput
-		debug.Fprintf(os.Stderr, "Got auc out: %v, auc out channel len: %d\n", aOut, len(args.auctionsOutChan))
-	default:
-	}
-	if aOut != nil || pOut != nil {
-		debug.Fprintf(os.Stderr, "aOut: %v\n", aOut)
-		debug.Fprintf(os.Stderr, "pOut: %v\n", pOut)
-	}
-	if pOut != nil && !pOut.Success {
-		return pOut
-	}
-	if aOut != nil && !aOut.Success {
-		return aOut
-	}
-	return nil
+	return execution.HandleJoinErrReturn(argsTmp)
 }
 
 /*
@@ -286,22 +261,6 @@ func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 	}
 }
 
-type q3JoinTableProcessArgs struct {
-	personsOutChan   <-chan *common.FnOutput
-	auctionsOutChan  <-chan *common.FnOutput
-	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
-	funcName         string
-	curEpoch         uint64
-	parNum           uint8
-}
-
-func (a *q3JoinTableProcessArgs) ParNum() uint8    { return a.parNum }
-func (a *q3JoinTableProcessArgs) CurEpoch() uint64 { return a.curEpoch }
-func (a *q3JoinTableProcessArgs) FuncName() string { return a.funcName }
-func (a *q3JoinTableProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
-	return a.recordFinishFunc
-}
-
 func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	auctionsStream, personsStream, outputStream, err := getInOutStreams(ctx, h.env, sp)
 	if err != nil {
@@ -346,7 +305,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			processor.ReverseValueJoinerWithKey(joiner)),
 		time.Duration(sp.WarmupS)*time.Second)
 
-	aJoinP := JoinWorkerFunc(func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
+	aJoinP := execution.JoinWorkerFunc(func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		// msg is auction
 		_, err := kvtabs.toTab1.ProcessAndReturn(ctx, m)
 		if err != nil {
@@ -358,7 +317,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		}
 		return msgs, err
 	})
-	pJoinA := JoinWorkerFunc(func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
+	pJoinA := execution.JoinWorkerFunc(func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		// msg is person
 		_, err := kvtabs.toTab2.ProcessAndReturn(ctx, m)
 		if err != nil {
@@ -377,35 +336,15 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
 
-	joinProcPerson := &joinProcArgs{
-		src:          sss.src2,
-		sink:         sss.sink,
-		parNum:       sp.ParNum,
-		runner:       pJoinA,
-		trackParFunc: tran_interface.DefaultTrackSubstreamFunc,
-		cHashMu:      &h.cHashMu,
-		cHash:        h.cHash,
-	}
-	joinProcAuction := &joinProcArgs{
-		src:          sss.src1,
-		sink:         sss.sink,
-		parNum:       sp.ParNum,
-		runner:       aJoinP,
-		trackParFunc: tran_interface.DefaultTrackSubstreamFunc,
-		cHashMu:      &h.cHashMu,
-		cHash:        h.cHash,
-	}
+	joinProcPerson := execution.NewJoinProcArgs(sss.src2, sss.sink, pJoinA,
+		&h.cHashMu, h.cHash, sp.ParNum)
+	joinProcAuction := execution.NewJoinProcArgs(sss.src1, sss.sink, aJoinP,
+		&h.cHashMu, h.cHash, sp.ParNum)
 	var wg sync.WaitGroup
-	aucManager := NewJoinProcManager()
-	perManager := NewJoinProcManager()
-	procArgs := &q3JoinTableProcessArgs{
-		personsOutChan:   perManager.Out(),
-		auctionsOutChan:  aucManager.Out(),
-		parNum:           sp.ParNum,
-		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
-		curEpoch:         sp.ScaleEpoch,
-		funcName:         h.funcName,
-	}
+	aucManager := execution.NewJoinProcManager()
+	perManager := execution.NewJoinProcManager()
+	procArgs := execution.NewCommonJoinProcArgs(
+		aucManager.Out(), perManager.Out(), h.funcName, sp.ScaleEpoch, sp.ParNum)
 
 	pctx := context.WithValue(ctx, "id", "person")
 	actx := context.WithValue(ctx, "id", "auction")
@@ -420,7 +359,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			wg.Wait()
 			debug.Fprintf(os.Stderr, "down pause\n")
 			// check the goroutine's return in case any of them returns output
-			ret := handleQ3ErrReturn(procArgs)
+			ret := execution.HandleJoinErrReturn(procArgs)
 			if ret != nil {
 				return ret
 			}
@@ -468,18 +407,12 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		}
 	} else if sp.TableType == uint8(store.MONGODB) {
 		kvchangelogs = []*transaction.KVStoreChangelog{
-			transaction.NewKVStoreChangelogForExternalStore(kvtabs.tab1, auctionsStream, joinProcSerialWithoutSink,
-				&joinProcWithoutSinkArgs{
-					src:    sss.src1.InnerSource(),
-					parNum: sp.ParNum,
-					runner: aJoinP,
-				}, fmt.Sprintf("%s-%s-%d", h.funcName, kvtabs.tab1.Name(), sp.ParNum), sp.ParNum),
-			transaction.NewKVStoreChangelogForExternalStore(kvtabs.tab2, personsStream, joinProcSerialWithoutSink,
-				&joinProcWithoutSinkArgs{
-					src:    sss.src2.InnerSource(),
-					parNum: sp.ParNum,
-					runner: pJoinA,
-				}, fmt.Sprintf("%s-%s-%d", h.funcName, kvtabs.tab2.Name(), sp.ParNum), sp.ParNum),
+			transaction.NewKVStoreChangelogForExternalStore(kvtabs.tab1, auctionsStream, execution.JoinProcSerialWithoutSink,
+				execution.NewJoinProcWithoutSinkArgs(sss.src1.InnerSource(), aJoinP, sp.ParNum),
+				fmt.Sprintf("%s-%s-%d", h.funcName, kvtabs.tab1.Name(), sp.ParNum), sp.ParNum),
+			transaction.NewKVStoreChangelogForExternalStore(kvtabs.tab2, personsStream, execution.JoinProcSerialWithoutSink,
+				execution.NewJoinProcWithoutSinkArgs(sss.src2.InnerSource(), pJoinA, sp.ParNum),
+				fmt.Sprintf("%s-%s-%d", h.funcName, kvtabs.tab2.Name(), sp.ParNum), sp.ParNum),
 		}
 	}
 	if sp.EnableTransaction {
@@ -488,10 +421,10 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			WithKVChangelogs(kvchangelogs)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
-			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
-				joinProcPerson.trackParFunc = trackParFunc
-				joinProcAuction.trackParFunc = trackParFunc
-				procArgs.(*q3JoinTableProcessArgs).recordFinishFunc = recordFinishFunc
+			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
+				joinProcPerson.SetTrackParFunc(trackParFunc)
+				joinProcAuction.SetTrackParFunc(trackParFunc)
+				procArgs.(*execution.CommonJoinProcArgs).SetRecordFinishFunc(recordFinishFunc)
 			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["auctionsSrc"] = sss.src1.GetLatency()

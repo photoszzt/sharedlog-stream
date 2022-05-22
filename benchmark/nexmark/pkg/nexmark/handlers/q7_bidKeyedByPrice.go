@@ -59,7 +59,7 @@ type q7BidKeyedByPriceProcessArgs struct {
 	bidKeyedByPrice  *processor.MeteredProcessor
 	output_stream    *sharedlog_stream.ShardedSharedLogStream
 	trackParFunc     tran_interface.TrackKeySubStreamFunc
-	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
+	recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc
 	funcName         string
 	curEpoch         uint64
 	parNum           uint8
@@ -72,7 +72,7 @@ func (a *q7BidKeyedByPriceProcessArgs) PushToAllSinks(ctx context.Context, msg c
 func (a *q7BidKeyedByPriceProcessArgs) ParNum() uint8    { return a.parNum }
 func (a *q7BidKeyedByPriceProcessArgs) CurEpoch() uint64 { return a.curEpoch }
 func (a *q7BidKeyedByPriceProcessArgs) FuncName() string { return a.funcName }
-func (a *q7BidKeyedByPriceProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
+func (a *q7BidKeyedByPriceProcessArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
 	return a.recordFinishFunc
 }
 func (a *q7BidKeyedByPriceProcessArgs) ErrChan() chan error {
@@ -188,7 +188,7 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr)
 		benchutil.UpdateStreamTaskArgsTransaction(input, streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
-			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc transaction.RecordPrevInstanceFinishFunc) {
+			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
 				procArgs.(*q7BidKeyedByPriceProcessArgs).trackParFunc = trackParFunc
 				procArgs.(*q7BidKeyedByPriceProcessArgs).recordFinishFunc = recordFinishFunc
 			}, &task)

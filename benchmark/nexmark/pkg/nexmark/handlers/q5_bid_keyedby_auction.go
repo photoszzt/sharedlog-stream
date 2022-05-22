@@ -59,7 +59,7 @@ type bidKeyedByAuctionProcessArgs struct {
 	selectKey        *processor.MeteredProcessor
 	output_stream    *sharedlog_stream.ShardedSharedLogStream
 	trackParFunc     tran_interface.TrackKeySubStreamFunc
-	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
+	recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc
 	funcName         string
 	curEpoch         uint64
 	parNum           uint8
@@ -73,7 +73,7 @@ func (a *bidKeyedByAuctionProcessArgs) PushToAllSinks(ctx context.Context, msg c
 func (a *bidKeyedByAuctionProcessArgs) ParNum() uint8    { return a.parNum }
 func (a *bidKeyedByAuctionProcessArgs) CurEpoch() uint64 { return a.curEpoch }
 func (a *bidKeyedByAuctionProcessArgs) FuncName() string { return a.funcName }
-func (a *bidKeyedByAuctionProcessArgs) RecordFinishFunc() func(ctx context.Context, funcName string, instanceId uint8) error {
+func (a *bidKeyedByAuctionProcessArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
 	return a.recordFinishFunc
 }
 func (a *bidKeyedByAuctionProcessArgs) ErrChan() chan error {
@@ -203,7 +203,7 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 			sp.ParNum, sp.OutputTopicNames[0])
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
-			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinish transaction.RecordPrevInstanceFinishFunc) {
+			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinish tran_interface.RecordPrevInstanceFinishFunc) {
 				procArgs.(*bidKeyedByAuctionProcessArgs).trackParFunc = trackParFunc
 				procArgs.(*bidKeyedByAuctionProcessArgs).recordFinishFunc = recordFinish
 			}, &task)
