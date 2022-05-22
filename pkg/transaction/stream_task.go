@@ -367,13 +367,13 @@ func TrackOffsetAndCommit(ctx context.Context,
 }
 
 type StreamTaskArgs struct {
-	ProcArgs interface{}
-	Env      types.Environment
+	procArgs interface{}
+	env      types.Environment
 
-	Srcs                  []source_sink.Source
-	Sinks                 []source_sink.Sink
-	WindowStoreChangelogs []*WindowStoreChangelog
-	KVChangelogs          []*KVStoreChangelog
+	srcs                  []source_sink.Source
+	sinks                 []source_sink.Sink
+	windowStoreChangelogs []*WindowStoreChangelog
+	kvChangelogs          []*KVStoreChangelog
 
 	Duration       time.Duration
 	Warmup         time.Duration
@@ -385,20 +385,20 @@ type StreamTaskArgs struct {
 
 func NewStreamTaskArgs(env types.Environment, procArgs interface{}, srcs []source_sink.Source, sinks []source_sink.Sink) *StreamTaskArgs {
 	return &StreamTaskArgs{
-		Env:      env,
-		ProcArgs: procArgs,
-		Srcs:     srcs,
-		Sinks:    sinks,
+		env:      env,
+		procArgs: procArgs,
+		srcs:     srcs,
+		sinks:    sinks,
 	}
 }
 
 func (args *StreamTaskArgs) WithWindowStoreChangelogs(wschangelogs []*WindowStoreChangelog) *StreamTaskArgs {
-	args.WindowStoreChangelogs = wschangelogs
+	args.windowStoreChangelogs = wschangelogs
 	return args
 }
 
 func (args *StreamTaskArgs) WithKVChangelogs(kvchangelogs []*KVStoreChangelog) *StreamTaskArgs {
-	args.KVChangelogs = kvchangelogs
+	args.kvChangelogs = kvchangelogs
 	return args
 }
 
@@ -426,10 +426,9 @@ type StreamTaskArgsTransaction struct {
 }
 
 func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.FnOutput {
-	debug.Assert(len(args.Sinks) >= 1, "Sinks should be filled")
-	debug.Assert(len(args.Srcs) >= 1, "Srcs should be filled")
-	debug.Assert(args.Env != nil, "env should be filled")
-	debug.Assert(args.ProcArgs != nil, "program args should be filled")
+	debug.Assert(len(args.srcs) >= 1, "Srcs should be filled")
+	debug.Assert(args.env != nil, "env should be filled")
+	debug.Assert(args.procArgs != nil, "program args should be filled")
 	debug.Assert(args.NumInPartition != 0, "number of input partition should not be zero")
 	latencies := make([]int, 0, 128)
 	cm, err := NewConsumeSeqManager(args.SerdeFormat)
@@ -437,9 +436,9 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	debug.Fprint(os.Stderr, "start restore\n")
-	for _, srcStream := range args.Srcs {
+	for _, srcStream := range args.srcs {
 		inputTopicName := srcStream.TopicName()
-		err = cm.CreateOffsetTopic(args.Env, inputTopicName, args.NumInPartition, args.SerdeFormat)
+		err = cm.CreateOffsetTopic(args.env, inputTopicName, args.NumInPartition, args.SerdeFormat)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
@@ -457,7 +456,7 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 	}
 	debug.Fprint(os.Stderr, "done restore\n")
 	if t.InitFunc != nil {
-		t.InitFunc(args.ProcArgs)
+		t.InitFunc(args.procArgs)
 	}
 	hasUncommitted := false
 
@@ -488,7 +487,7 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 			break
 		}
 		procStart := time.Now()
-		ret := t.ProcessFunc(ctx, t, args.ProcArgs)
+		ret := t.ProcessFunc(ctx, t, args.procArgs)
 		if ret != nil {
 			if ret.Success {
 				// elapsed := time.Since(procStart)
@@ -516,19 +515,19 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 }
 
 func (t *StreamTask) flushStreams(ctx context.Context, args *StreamTaskArgs) error {
-	for _, sink := range args.Sinks {
+	for _, sink := range args.sinks {
 		if err := sink.Flush(ctx); err != nil {
 			return err
 		}
 	}
-	for _, kvchangelog := range args.KVChangelogs {
+	for _, kvchangelog := range args.kvChangelogs {
 		if kvchangelog.ChangelogManager != nil {
 			if err := kvchangelog.ChangelogManager.Flush(ctx); err != nil {
 				return err
 			}
 		}
 	}
-	for _, wschangelog := range args.WindowStoreChangelogs {
+	for _, wschangelog := range args.windowStoreChangelogs {
 		if wschangelog.ChangelogManager != nil {
 			if err := wschangelog.ChangelogManager.Flush(ctx); err != nil {
 				return err
@@ -679,7 +678,6 @@ func (t *StreamTask) ProcessWithTransaction(
 	cmm *ControlChannelManager,
 	args *StreamTaskArgsTransaction,
 ) *common.FnOutput {
-	debug.Assert(len(args.Sinks) >= 1, "Sinks should be filled")
 	debug.Assert(len(args.Srcs) >= 1, "Srcs should be filled")
 	debug.Assert(args.Env != nil, "env should be filled")
 	debug.Assert(args.ProcArgs != nil, "program args should be filled")
