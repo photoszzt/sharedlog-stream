@@ -396,7 +396,7 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 	return g.Wait()
 }
 
-func (tc *TransactionManager) registerTopicPartitions(ctx context.Context) error {
+func (tc *TransactionManager) append_pre_state(ctx context.Context) error {
 	var tps []txn_data.TopicPartition
 	for topic, pars := range tc.currentTopicPartition {
 		pars_arr := make([]uint8, 0, len(pars))
@@ -803,7 +803,7 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context, kvstores []
 	// first phase of the commit
 	tc.currentStatus = txn_data.PREPARE_COMMIT
 	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
-	err := tc.registerTopicPartitions(ctx)
+	err := tc.append_pre_state(ctx)
 	if err != nil {
 		return err
 	}
@@ -833,7 +833,7 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context, inRestore bo
 	}
 	tc.currentStatus = txn_data.PREPARE_ABORT
 	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
-	err := tc.registerTopicPartitions(ctx)
+	err := tc.append_pre_state(ctx)
 	if err != nil {
 		return err
 	}
