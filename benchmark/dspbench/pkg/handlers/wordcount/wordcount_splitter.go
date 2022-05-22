@@ -196,9 +196,10 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 		CurrentOffset: make(map[string]uint64),
 	}
 
+	srcs := []source_sink.Source{src}
+	sinks := []source_sink.Sink{sink}
 	if sp.EnableTransaction {
 		// fmt.Fprintf(os.Stderr, "word count counter function enables exactly once semantics\n")
-		srcs := []source_sink.Source{src}
 		streamTaskArgs := transaction.StreamTaskArgsTransaction{
 			ProcArgs:        procArgs,
 			Env:             h.env,
@@ -218,12 +219,9 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 		}
 		return ret
 	}
-	streamTaskArgs := transaction.StreamTaskArgs{
-		ProcArgs: procArgs,
-		Duration: time.Duration(sp.Duration) * time.Second,
-		Warmup:   time.Duration(sp.WarmupS) * time.Second,
-	}
-	ret := task.Process(ctx, &streamTaskArgs)
+	streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks)
+	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
+	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
 		ret.Latencies["src"] = src.GetLatency()
 		ret.Latencies["sink"] = sink.GetLatency()
