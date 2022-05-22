@@ -411,7 +411,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	task := transaction.StreamTask{
 		ProcessFunc:   h.process,
 		CurrentOffset: currentOffset,
-		PauseFunc: func() {
+		PauseFunc: func() *common.FnOutput {
 			// debug.Fprintf(os.Stderr, "in flush func\n")
 			close(personDone)
 			close(aucDone)
@@ -419,9 +419,10 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			wg.Wait()
 			err := sss.sink.Flush(ctx)
 			if err != nil {
-				panic(err)
+				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
 			// debug.Fprintf(os.Stderr, "join procs exited\n")
+			return nil
 		},
 		ResumeFunc: func(task *transaction.StreamTask) {
 			// debug.Fprintf(os.Stderr, "resume join porc\n")

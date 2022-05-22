@@ -62,6 +62,45 @@ type joinProcArgs struct {
 	parNum  uint8
 }
 
+type JoinProcManager struct {
+	out  chan *common.FnOutput
+	run  chan struct{}
+	done chan struct{}
+}
+
+func NewJoinProcManager() *JoinProcManager {
+	out := make(chan *common.FnOutput, 1)
+	run := make(chan struct{})
+	return &JoinProcManager{
+		out: out,
+		run: run,
+	}
+}
+
+func (jm *JoinProcManager) Out() <-chan *common.FnOutput {
+	return jm.out
+}
+
+func (jm *JoinProcManager) LaunchJoinProcLoop(
+	ctx context.Context,
+	task *transaction.StreamTask,
+	procArgs *joinProcArgs,
+	wg *sync.WaitGroup,
+) {
+	done := make(chan struct{})
+	jm.done = done
+	wg.Add(1)
+	go joinProcLoop(ctx, jm.out, task, procArgs, wg, jm.run, done)
+}
+
+func (jm *JoinProcManager) Run() {
+	jm.run <- struct{}{}
+}
+
+func (jm *JoinProcManager) RequestToTerminate() {
+	close(jm.done)
+}
+
 func joinProcLoop(
 	ctx context.Context,
 	out chan *common.FnOutput,
@@ -88,12 +127,13 @@ func joinProcLoop(
 		gotMsgs, err := procArgs.src.Consume(ctx, procArgs.parNum)
 		if err != nil {
 			if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
-				debug.Fprintf(os.Stderr, "%s timeout\n", procArgs.src.TopicName())
+				debug.Fprintf(os.Stderr, "[TIMEOUT]%s %s timeout, out chan len: %d\n",
+					id, procArgs.src.TopicName(), len(out))
 				out <- &common.FnOutput{Success: true, Message: err.Error()}
 				debug.Fprintf(os.Stderr, "%s done sending msg\n", id)
 				return
 			}
-			debug.Fprintf(os.Stderr, "[ERROR] consume: %v\n", err)
+			debug.Fprintf(os.Stderr, "[ERROR] consume: %v, out chan len: %d\n", err, len(out))
 			out <- &common.FnOutput{Success: false, Message: err.Error()}
 			debug.Fprintf(os.Stderr, "%s done sending msg2\n", id)
 			return
@@ -113,7 +153,7 @@ func joinProcLoop(
 					debug.Fprintf(os.Stderr, "before proc msg with sink1\n")
 					err = procMsgWithSink(ctx, subMsg, procArgs)
 					if err != nil {
-						debug.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink: %v\n", id, err)
+						debug.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink: %v, out chan len: %d\n", id, err, len(out))
 						out <- &common.FnOutput{Success: false, Message: err.Error()}
 						debug.Fprintf(os.Stderr, "%s done send msg3\n", id)
 						return
@@ -126,7 +166,7 @@ func joinProcLoop(
 				}
 				err = procMsgWithSink(ctx, msg.Msg, procArgs)
 				if err != nil {
-					debug.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink2: %v\n", id, err)
+					debug.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink2: %v, out chan len: %d\n", id, err, len(out))
 					out <- &common.FnOutput{Success: false, Message: err.Error()}
 					debug.Fprintf(os.Stderr, "%s done send msg4\n", id)
 					return

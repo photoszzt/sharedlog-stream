@@ -198,7 +198,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 
 	task := transaction.StreamTask{
 		ProcessFunc: h.process,
-		PauseFunc: func() {
+		PauseFunc: func() *common.FnOutput {
 			// debug.Fprintf(os.Stderr, "begin flush\n")
 			close(aucMsgChan)
 			close(personMsgChan)
@@ -206,12 +206,13 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 			sinks[0].CloseAsyncPush()
 			sinks[1].CloseAsyncPush()
 			if err = sinks[0].Flush(ctx); err != nil {
-				panic(err)
+				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
 			if err = sinks[1].Flush(ctx); err != nil {
-				panic(err)
+				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
 			// debug.Fprintf(os.Stderr, "done flush\n")
+			return nil
 		},
 		ResumeFunc: func(task *transaction.StreamTask) {
 			debug.Fprintf(os.Stderr, "start resume\n")

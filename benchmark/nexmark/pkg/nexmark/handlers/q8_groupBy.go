@@ -202,7 +202,7 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 		ProcessFunc:               h.process,
 		CurrentOffset:             make(map[string]uint64),
 		CommitEveryForAtLeastOnce: common.CommitDuration,
-		PauseFunc: func() {
+		PauseFunc: func() *common.FnOutput {
 			// debug.Fprintf(os.Stderr, "begin flush\n")
 			close(aucMsgChan)
 			close(personMsgChan)
@@ -210,13 +210,14 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 			// sinks[0].CloseAsyncPush()
 			// sinks[1].CloseAsyncPush()
 			if err = sinks[0].Flush(ctx); err != nil {
-				panic(err)
+				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
 			if err = sinks[1].Flush(ctx); err != nil {
-				panic(err)
+				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
 
 			// debug.Fprintf(os.Stderr, "done flush\n")
+			return nil
 		},
 		ResumeFunc: func(task *transaction.StreamTask) {
 			// debug.Fprintf(os.Stderr, "begin resume\n")

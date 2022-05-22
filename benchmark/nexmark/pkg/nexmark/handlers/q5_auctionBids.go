@@ -394,10 +394,10 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		ProcessFunc:               h.process,
 		CurrentOffset:             make(map[string]uint64),
 		CommitEveryForAtLeastOnce: common.CommitDuration,
-		PauseFunc: func() {
+		PauseFunc: func() *common.FnOutput {
 			err := sink.Flush(ctx)
 			if err != nil {
-				panic(err)
+				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
 			debug.Fprintf(os.Stderr, "after flush sink\n")
 			if countStore.TableType() == store.IN_MEM {
@@ -405,10 +405,11 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 				cstore := countStore.(*store_with_changelog.InMemoryWindowStoreWithChangelog)
 				err = cstore.FlushChangelog(ctx)
 				if err != nil {
-					panic(err)
+					return &common.FnOutput{Success: false, Message: err.Error()}
 				}
 				debug.Fprintf(os.Stderr, "after flush changelog\n")
 			}
+			return nil
 		},
 		ResumeFunc: nil,
 		InitFunc: func(progArgs interface{}) {

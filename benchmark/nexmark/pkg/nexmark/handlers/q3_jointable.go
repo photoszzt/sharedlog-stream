@@ -60,31 +60,32 @@ func (h *q3JoinTableHandler) process(ctx context.Context,
 	t *transaction.StreamTask,
 	argsTmp interface{},
 ) *common.FnOutput {
+	return handleErrReturn(argsTmp)
+}
+
+func handleErrReturn(argsTmp interface{}) *common.FnOutput {
 	args := argsTmp.(*q3JoinTableProcessArgs)
 	var aOut *common.FnOutput
 	var pOut *common.FnOutput
 	select {
 	case personOutput := <-args.personsOutChan:
 		pOut = personOutput
-		debug.Fprintf(os.Stderr, "Got persons out: %v\n", pOut)
+		debug.Fprintf(os.Stderr, "Got per out: %v, per out channel len: %d\n", pOut, len(args.personsOutChan))
 	case auctionOutput := <-args.auctionsOutChan:
 		aOut = auctionOutput
-		debug.Fprintf(os.Stderr, "Got auctions out: %v\n", aOut)
+		debug.Fprintf(os.Stderr, "Got auc out: %v, auc out channel len: %d\n", aOut, len(args.auctionsOutChan))
 	default:
 	}
-	debug.Fprintf(os.Stderr, "aOut: %v\n", aOut)
-	debug.Fprintf(os.Stderr, "pOut: %v\n", pOut)
+	if aOut != nil || pOut != nil {
+		debug.Fprintf(os.Stderr, "aOut: %v\n", aOut)
+		debug.Fprintf(os.Stderr, "pOut: %v\n", pOut)
+	}
 	if pOut != nil && !pOut.Success {
 		return pOut
 	}
 	if aOut != nil && !aOut.Success {
 		return aOut
 	}
-	/*
-		if atomic.LoadUint32(&args.personDone) == 1 && atomic.LoadUint32(&args.auctionDone) == 1 {
-			return t.CurrentOffset, &common.FnOutput{Success: true, Message: errors.ErrStreamSourceTimeout.Error()}
-		}
-	*/
 	return nil
 }
 
@@ -285,8 +286,8 @@ func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 }
 
 type q3JoinTableProcessArgs struct {
-	personsOutChan   chan *common.FnOutput
-	auctionsOutChan  chan *common.FnOutput
+	personsOutChan   <-chan *common.FnOutput
+	auctionsOutChan  <-chan *common.FnOutput
 	recordFinishFunc transaction.RecordPrevInstanceFinishFunc
 	funcName         string
 	curEpoch         uint64
@@ -374,18 +375,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
-	personsOutChan := make(chan *common.FnOutput, 1)
-	auctionsOutChan := make(chan *common.FnOutput, 1)
-	procArgs := &q3JoinTableProcessArgs{
-		personsOutChan:   personsOutChan,
-		auctionsOutChan:  auctionsOutChan,
-		parNum:           sp.ParNum,
-		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
-		curEpoch:         sp.ScaleEpoch,
-		funcName:         h.funcName,
-	}
 
-	currentOffset := make(map[string]uint64)
 	joinProcPerson := &joinProcArgs{
 		src:          sss.src2,
 		sink:         sss.sink,
@@ -405,40 +395,50 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		cHash:        h.cHash,
 	}
 	var wg sync.WaitGroup
-	personDone := make(chan struct{}, 1)
-	aucDone := make(chan struct{}, 1)
+	aucManager := NewJoinProcManager()
+	perManager := NewJoinProcManager()
+	procArgs := &q3JoinTableProcessArgs{
+		personsOutChan:   perManager.Out(),
+		auctionsOutChan:  aucManager.Out(),
+		parNum:           sp.ParNum,
+		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
+		curEpoch:         sp.ScaleEpoch,
+		funcName:         h.funcName,
+	}
+
 	pctx := context.WithValue(ctx, "id", "person")
 	actx := context.WithValue(ctx, "id", "auction")
 
-	aucRun := make(chan struct{})
-	perRun := make(chan struct{})
 	task := transaction.StreamTask{
 		ProcessFunc:   h.process,
-		CurrentOffset: currentOffset,
-		PauseFunc: func() {
-			close(personDone)
-			close(aucDone)
+		CurrentOffset: make(map[string]uint64),
+		PauseFunc: func() *common.FnOutput {
+			aucManager.RequestToTerminate()
+			perManager.RequestToTerminate()
 			debug.Fprintf(os.Stderr, "q3 waiting for join proc to exit\n")
 			wg.Wait()
 			debug.Fprintf(os.Stderr, "down pause\n")
+			// check the goroutine's return in case any of them returns output
+			ret := handleErrReturn(procArgs)
+			if ret != nil {
+				return ret
+			}
 			err := sss.sink.Flush(ctx)
 			if err != nil {
-				panic(err)
+				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
+			return nil
 		},
 		ResumeFunc: func(task *transaction.StreamTask) {
 			debug.Fprintf(os.Stderr, "resume begin\n")
-			personDone = make(chan struct{}, 1)
-			aucDone = make(chan struct{}, 1)
-			wg.Add(1)
-			go joinProcLoop(pctx, personsOutChan, task, joinProcPerson, &wg, perRun, personDone)
-			wg.Add(1)
-			go joinProcLoop(actx, auctionsOutChan, task, joinProcAuction, &wg, aucRun, aucDone)
-			perRun <- struct{}{}
-			aucRun <- struct{}{}
+			aucManager.LaunchJoinProcLoop(actx, task, joinProcAuction, &wg)
+			perManager.LaunchJoinProcLoop(pctx, task, joinProcPerson, &wg)
+
+			aucManager.Run()
+			perManager.Run()
 			debug.Fprintf(os.Stderr, "resume done\n")
 		},
-		InitFunc: func(progArgs interface{}) {
+		InitFunc: func(procArgsTmp interface{}) {
 			sss.src1.StartWarmup()
 			sss.src2.StartWarmup()
 			sss.sink.StartWarmup()
@@ -447,16 +447,14 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			auctionJoinsPersons.StartWarmup()
 			personJoinsAuctions.StartWarmup()
 
-			aucRun <- struct{}{}
-			perRun <- struct{}{}
+			aucManager.Run()
+			perManager.Run()
 		},
 		CommitEveryForAtLeastOnce: common.CommitDuration,
 	}
 
-	wg.Add(1)
-	go joinProcLoop(pctx, personsOutChan, &task, joinProcPerson, &wg, perRun, personDone)
-	wg.Add(1)
-	go joinProcLoop(actx, auctionsOutChan, &task, joinProcAuction, &wg, aucRun, aucDone)
+	aucManager.LaunchJoinProcLoop(actx, &task, joinProcAuction, &wg)
+	perManager.LaunchJoinProcLoop(pctx, &task, joinProcPerson, &wg)
 
 	srcs := []source_sink.Source{sss.src1, sss.src2}
 	if sp.EnableTransaction {

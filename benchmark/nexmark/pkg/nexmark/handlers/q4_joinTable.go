@@ -319,14 +319,15 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 	task := transaction.StreamTask{
 		ProcessFunc:   h.process,
 		CurrentOffset: make(map[string]uint64),
-		PauseFunc: func() {
+		PauseFunc: func() *common.FnOutput {
 			close(bidsDone)
 			close(aucDone)
 			wg.Wait()
 			err := sink.Flush(ctx)
 			if err != nil {
-				panic(err)
+				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
+			return nil
 		},
 		ResumeFunc: func(task *transaction.StreamTask) {
 			bidsDone = make(chan struct{})

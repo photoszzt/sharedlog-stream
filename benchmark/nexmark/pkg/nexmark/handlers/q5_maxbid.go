@@ -349,18 +349,19 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		ProcessFunc:               h.process,
 		CurrentOffset:             make(map[string]uint64),
 		CommitEveryForAtLeastOnce: common.CommitDuration,
-		PauseFunc: func() {
+		PauseFunc: func() *common.FnOutput {
 			err := sink.Flush(ctx)
 			if err != nil {
-				panic(err)
+				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
 			if sp.TableType == uint8(store.IN_MEM) {
 				kvstore_mem := kvstore.(*store_with_changelog.KeyValueStoreWithChangelog)
 				err = kvstore_mem.FlushChangelog(ctx)
 				if err != nil {
-					panic(err)
+					return &common.FnOutput{Success: false, Message: err.Error()}
 				}
 			}
+			return nil
 		},
 		ResumeFunc: nil,
 		InitFunc: func(progArgs interface{}) {

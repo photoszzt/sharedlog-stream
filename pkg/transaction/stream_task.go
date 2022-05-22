@@ -25,7 +25,7 @@ type StreamTask struct {
 	ProcessFunc               func(ctx context.Context, task *StreamTask, args interface{}) *common.FnOutput
 	OffMu                     sync.Mutex
 	CurrentOffset             map[string]uint64
-	PauseFunc                 func()
+	PauseFunc                 func() *common.FnOutput
 	ResumeFunc                func(task *StreamTask)
 	InitFunc                  func(progArgs interface{})
 	CommitEveryForAtLeastOnce time.Duration
@@ -442,7 +442,9 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 		if timeSinceLastCommit >= t.CommitEveryForAtLeastOnce && t.CurrentOffset != nil {
 			debug.Fprintf(os.Stderr, "before pause 1\n")
 			if t.PauseFunc != nil {
-				t.PauseFunc()
+				if ret := t.PauseFunc(); ret != nil {
+					return ret
+				}
 			}
 			debug.Fprintf(os.Stderr, "after pause 1\n")
 			err = t.commitOffset(ctx, cm, args.ParNum)
@@ -503,21 +505,26 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 	}
 }
 
-func (t *StreamTask) pauseAndCommit(ctx context.Context, hasUncommitted bool, cm *ConsumeSeqManager, parNum uint8) {
+func (t *StreamTask) pauseAndCommit(ctx context.Context, hasUncommitted bool, cm *ConsumeSeqManager, parNum uint8) *common.FnOutput {
 	alreadyPaused := false
 	if hasUncommitted {
 		if t.PauseFunc != nil {
-			t.PauseFunc()
+			if ret := t.PauseFunc(); ret != nil {
+				return ret
+			}
 		}
 		err := t.commitOffset(ctx, cm, parNum)
 		if err != nil {
-			panic(err)
+			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
 		alreadyPaused = true
 	}
 	if !alreadyPaused && t.PauseFunc != nil {
-		t.PauseFunc()
+		if ret := t.PauseFunc(); ret != nil {
+			return ret
+		}
 	}
+	return nil
 }
 
 func (t *StreamTask) commitOffset(ctx context.Context, cm *ConsumeSeqManager, parNum uint8) error {
@@ -730,9 +737,9 @@ func (t *StreamTask) ProcessWithTransaction(
 			// debug.Fprintf(os.Stderr, "iter: %d, shouldCommitByIter: %v, timeSinceTranStart: %v, cur_elapsed: %v, duration: %v\n",
 			// 	idx, shouldCommitByIter, timeSinceTranStart, cur_elapsed, duration)
 			if ((commitEvery != 0 && timeSinceTranStart > commitEvery) || timeout || shouldCommitByIter) && hasLiveTransaction {
-				err := t.commitTransaction(ctx, tm, args, &hasLiveTransaction, &trackConsumePar)
-				if err != nil {
-					return &common.FnOutput{Success: false, Message: err.Error()}
+				err_out := t.commitTransaction(ctx, tm, args, &hasLiveTransaction, &trackConsumePar)
+				if err_out != nil {
+					return err_out
 				}
 				debug.Assert(!hasLiveTransaction, "after commit. there should be no live transaction\n")
 				numCommit += 1
@@ -746,9 +753,9 @@ func (t *StreamTask) ProcessWithTransaction(
 					return &common.FnOutput{Success: false, Message: fmt.Sprintf("close transaction manager: %v\n", err)}
 				}
 				if hasLiveTransaction {
-					err := t.commitTransaction(ctx, tm, args, &hasLiveTransaction, &trackConsumePar)
-					if err != nil {
-						return &common.FnOutput{Success: false, Message: err.Error()}
+					err_out := t.commitTransaction(ctx, tm, args, &hasLiveTransaction, &trackConsumePar)
+					if err_out != nil {
+						return err_out
 					}
 				}
 				elapsed := time.Since(procStart)
@@ -794,9 +801,9 @@ func (t *StreamTask) ProcessWithTransaction(
 			if ret != nil {
 				if ret.Success {
 					if hasLiveTransaction {
-						err := t.commitTransaction(ctx, tm, args, &hasLiveTransaction, &trackConsumePar)
-						if err != nil {
-							return &common.FnOutput{Success: false, Message: err.Error()}
+						err_out := t.commitTransaction(ctx, tm, args, &hasLiveTransaction, &trackConsumePar)
+						if err_out != nil {
+							return err_out
 						}
 					}
 					// elapsed := time.Since(procStart)
@@ -1046,10 +1053,12 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 	args *StreamTaskArgsTransaction,
 	hasLiveTransaction *bool,
 	trackConsumePar *bool,
-) error {
+) *common.FnOutput {
 	debug.Fprintf(os.Stderr, "about to flush\n")
 	if t.PauseFunc != nil {
-		t.PauseFunc()
+		if ret := t.PauseFunc(); ret != nil {
+			return ret
+		}
 	}
 	debug.Fprintf(os.Stderr, "after flush\n")
 	consumedSeqNumConfigs := make([]ConsumedSeqNumConfig, 0)
@@ -1068,12 +1077,12 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 	err := tm.AppendConsumedSeqNum(ctx, consumedSeqNumConfigs)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] append offset failed: %v\n", err)
-		return fmt.Errorf("append offset failed: %v\n", err)
+		return &common.FnOutput{Success: false, Message: fmt.Sprintf("append offset failed: %v\n", err)}
 	}
 	err = tm.CommitTransaction(ctx, args.KVChangelogs, args.WindowStoreChangelogs)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] commit failed: %v\n", err)
-		return fmt.Errorf("commit failed: %v\n", err)
+		return &common.FnOutput{Success: false, Message: fmt.Sprintf("commit failed: %v\n", err)}
 	}
 	*hasLiveTransaction = false
 	*trackConsumePar = false

@@ -184,12 +184,13 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 		ProcessFunc:               h.process,
 		CurrentOffset:             make(map[string]uint64),
 		CommitEveryForAtLeastOnce: common.CommitDuration,
-		PauseFunc: func() {
+		PauseFunc: func() *common.FnOutput {
 			sink.CloseAsyncPush()
 			err := sink.Flush(ctx)
 			if err != nil {
-				panic(err)
+				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
+			return nil
 		},
 		ResumeFunc: func(task *transaction.StreamTask) {
 			sink.InnerSink().RebuildMsgChan()
