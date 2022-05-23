@@ -169,12 +169,9 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	}
 	src.SetInitialSource(true)
 
-	debug.Fprintf(os.Stderr, "get 1\n")
-
 	filterPerson, personsByIDMap, personsByIDFunc := h.getPersonsByID(time.Duration(sp.WarmupS) * time.Second)
 	filterAuctions, auctionsBySellerIDMap, auctionsBySellerIDFunc := h.getAucBySellerID(time.Duration(sp.WarmupS) * time.Second)
 
-	debug.Fprintf(os.Stderr, "get 2\n")
 	var wg sync.WaitGroup
 	personsByIDManager := execution.NewGeneralProcManager(personsByIDFunc)
 	auctionsBySellerIDManager := execution.NewGeneralProcManager(auctionsBySellerIDFunc)
@@ -190,8 +187,6 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 		parNum:           sp.ParNum,
 	}
 
-	debug.Fprintf(os.Stderr, "get 3\n")
-
 	personsByIDManager.LaunchProc(ctx, procArgs, &wg)
 	auctionsBySellerIDManager.LaunchProc(ctx, procArgs, &wg)
 
@@ -205,8 +200,6 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 		}
 		return nil
 	}
-
-	debug.Fprintf(os.Stderr, "get 4\n")
 
 	task := transaction.StreamTask{
 		ProcessFunc:   h.process,
@@ -244,12 +237,10 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 		CurrentOffset:             make(map[string]uint64),
 		CommitEveryForAtLeastOnce: common.CommitDuration,
 	}
-	debug.Fprintf(os.Stderr, "get 5\n")
 	transaction.SetupConsistentHash(&h.aucHashMu, h.aucHash, sp.NumOutPartitions[0])
 	transaction.SetupConsistentHash(&h.personHashMu, h.personHash, sp.NumOutPartitions[1])
 	srcs := []source_sink.Source{src}
 	sinks_arr := []source_sink.Sink{sinks[0], sinks[1]}
-	debug.Fprintf(os.Stderr, "before execution\n")
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%d",
 			h.funcName, sp.InputTopicNames[0], sp.ParNum)
