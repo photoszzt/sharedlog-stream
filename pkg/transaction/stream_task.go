@@ -408,14 +408,14 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 	for {
 		timeSinceLastCommit := time.Since(commitTimer)
 		if timeSinceLastCommit >= t.CommitEveryForAtLeastOnce && t.CurrentOffset != nil {
-			if ret_err := t.pauseCommitResume(ctx, cm, args.parNum, &hasUncommitted, &commitTimer); ret_err != nil {
+			if ret_err := t.pauseCommitFlushResume(ctx, args, cm, &hasUncommitted, &commitTimer, &flushTimer); ret_err != nil {
 				return ret_err
 			}
 		}
 		timeSinceLastFlush := time.Since(flushTimer)
 		if timeSinceLastFlush >= args.flushEvery {
-			if err := t.flushStreams(ctx, args); err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
+			if ret_err := t.pauseFlushResume(ctx, args, &flushTimer); err != nil {
+				return ret_err
 			}
 		}
 		if !afterWarmup && args.warmup != 0 && time.Since(startTime) >= args.warmup {
@@ -432,7 +432,7 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 				// elapsed := time.Since(procStart)
 				// latencies = append(latencies, int(elapsed.Microseconds()))
 				debug.Fprintf(os.Stderr, "consume timeout\n")
-				if ret_err := t.pauseAndCommit(ctx, cm, args.parNum, hasUncommitted); ret_err != nil {
+				if ret_err := t.pauseCommitFlush(ctx, args, cm, hasUncommitted); ret_err != nil {
 					return ret_err
 				}
 				updateReturnMetric(ret, startTime, afterWarmupStart, args.warmup, afterWarmup, latencies)
@@ -447,7 +447,7 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 			latencies = append(latencies, int(elapsed.Microseconds()))
 		}
 	}
-	t.pauseAndCommit(ctx, cm, args.parNum, hasUncommitted)
+	t.pauseCommitFlush(ctx, args, cm, hasUncommitted)
 	ret := &common.FnOutput{Success: true}
 	updateReturnMetric(ret, startTime, afterWarmupStart, args.warmup, afterWarmup, latencies)
 	return ret
@@ -476,15 +476,36 @@ func (t *StreamTask) flushStreams(ctx context.Context, args *StreamTaskArgs) err
 	return nil
 }
 
-func (t *StreamTask) pauseCommitResume(ctx context.Context, cm *ConsumeSeqManager,
-	parNum uint8, hasUncommitted *bool, commitTimer *time.Time,
+func (t *StreamTask) pauseFlushResume(ctx context.Context, args *StreamTaskArgs, flushTimer *time.Time) *common.FnOutput {
+	if t.PauseFunc != nil {
+		if ret := t.PauseFunc(); ret != nil {
+			return ret
+		}
+	}
+	err := t.flushStreams(ctx, args)
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: err.Error()}
+	}
+	if t.ResumeFunc != nil {
+		t.ResumeFunc(t)
+	}
+	*flushTimer = time.Now()
+	return nil
+}
+
+func (t *StreamTask) pauseCommitFlushResume(ctx context.Context, args *StreamTaskArgs, cm *ConsumeSeqManager,
+	hasUncommitted *bool, commitTimer *time.Time, flushTimer *time.Time,
 ) *common.FnOutput {
 	if t.PauseFunc != nil {
 		if ret := t.PauseFunc(); ret != nil {
 			return ret
 		}
 	}
-	err := t.commitOffset(ctx, cm, parNum)
+	err := t.commitOffset(ctx, cm, args.parNum)
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: err.Error()}
+	}
+	err = t.flushStreams(ctx, args)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -493,10 +514,11 @@ func (t *StreamTask) pauseCommitResume(ctx context.Context, cm *ConsumeSeqManage
 	}
 	*hasUncommitted = false
 	*commitTimer = time.Now()
+	*flushTimer = time.Now()
 	return nil
 }
 
-func (t *StreamTask) pauseAndCommit(ctx context.Context, cm *ConsumeSeqManager, parNum uint8, hasUncommitted bool) *common.FnOutput {
+func (t *StreamTask) pauseCommitFlush(ctx context.Context, args *StreamTaskArgs, cm *ConsumeSeqManager, hasUncommitted bool) *common.FnOutput {
 	alreadyPaused := false
 	if hasUncommitted {
 		if t.PauseFunc != nil {
@@ -504,7 +526,7 @@ func (t *StreamTask) pauseAndCommit(ctx context.Context, cm *ConsumeSeqManager, 
 				return ret
 			}
 		}
-		err := t.commitOffset(ctx, cm, parNum)
+		err := t.commitOffset(ctx, cm, args.parNum)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
@@ -514,6 +536,10 @@ func (t *StreamTask) pauseAndCommit(ctx context.Context, cm *ConsumeSeqManager, 
 		if ret := t.PauseFunc(); ret != nil {
 			return ret
 		}
+	}
+	err := t.flushStreams(ctx, args)
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	return nil
 }
