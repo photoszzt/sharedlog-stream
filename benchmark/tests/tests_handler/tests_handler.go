@@ -18,6 +18,8 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewTableRestoreHandler(env), nil
 	case "join":
 		return handlers.NewJoinHandler(env), nil
+	case "multiprod":
+		return handlers.NewMultiProducerHandler(env), nil
 	default:
 		return nil, fmt.Errorf("unknown function name %v", funcName)
 	}

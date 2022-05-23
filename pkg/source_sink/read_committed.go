@@ -3,6 +3,8 @@ package source_sink
 import (
 	"context"
 	"fmt"
+	"os"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/txn_data"
@@ -15,8 +17,8 @@ type TransactionAwareConsumer struct {
 	stream           *sharedlog_stream.ShardedSharedLogStream
 	committed        map[commtypes.TranIdentifier]struct{}
 	aborted          map[commtypes.TranIdentifier]struct{}
+	curReadMsgSeqNum map[commtypes.TranIdentifier]uint64
 	msgBuffer        []*deque.Deque
-	curReadMsgSeqNum uint64
 }
 
 func NewTransactionAwareConsumer(stream *sharedlog_stream.ShardedSharedLogStream, serdeFormat commtypes.SerdeFormat) (*TransactionAwareConsumer, error) {
@@ -29,11 +31,12 @@ func NewTransactionAwareConsumer(stream *sharedlog_stream.ShardedSharedLogStream
 		return nil, fmt.Errorf("unrecognized format: %d", serdeFormat)
 	}
 	return &TransactionAwareConsumer{
-		msgBuffer:      make([]*deque.Deque, stream.NumPartition()),
-		stream:         stream,
-		txnMarkerSerde: txnMarkerSerde,
-		committed:      make(map[commtypes.TranIdentifier]struct{}),
-		aborted:        make(map[commtypes.TranIdentifier]struct{}),
+		msgBuffer:        make([]*deque.Deque, stream.NumPartition()),
+		stream:           stream,
+		txnMarkerSerde:   txnMarkerSerde,
+		committed:        make(map[commtypes.TranIdentifier]struct{}),
+		aborted:          make(map[commtypes.TranIdentifier]struct{}),
+		curReadMsgSeqNum: make(map[commtypes.TranIdentifier]uint64),
 	}, nil
 }
 
@@ -81,24 +84,32 @@ func (tac *TransactionAwareConsumer) ReadNext(ctx context.Context, parNum uint8)
 	}
 	msgQueue := tac.msgBuffer[parNum]
 	if msgQueue.Len() != 0 && len(tac.committed) != 0 {
+		tac.checkControlMsg(msgQueue)
 		ret := tac.checkCommitted(msgQueue)
 		if ret != nil {
+			debug.Fprintf(os.Stderr, "return output1 %v\n", string(ret.Payload))
 			return ret, nil
 		}
+		tac.dropAborted(msgQueue)
 	}
 	for {
 		rawMsg, err := tac.stream.ReadNext(ctx, parNum)
 		if err != nil {
 			return nil, err
 		}
-		if tac.curReadMsgSeqNum == rawMsg.MsgSeqNum {
-			continue
-		}
 		// debug.Fprintf(os.Stderr, "RawMsg\n")
 		// debug.Fprintf(os.Stderr, "\tPayload %v\n", string(rawMsg.Payload))
+		// debug.Fprintf(os.Stderr, "\tLogSeq 0x%x\n", rawMsg.LogSeqNum)
 		// debug.Fprintf(os.Stderr, "\tIsControl: %v\n", rawMsg.IsControl)
 		// debug.Fprintf(os.Stderr, "\tIsPayloadArr: %v\n", rawMsg.IsPayloadArr)
-		tac.curReadMsgSeqNum = rawMsg.MsgSeqNum
+		tranId := rawMsg.TranId
+		msgSeqNum, ok := tac.curReadMsgSeqNum[tranId]
+		if ok && msgSeqNum == rawMsg.MsgSeqNum {
+			debug.Fprintf(os.Stderr, "got a duplicate entry; continue\n")
+			continue
+		}
+
+		tac.curReadMsgSeqNum[tranId] = rawMsg.MsgSeqNum
 		if rawMsg.IsControl {
 			txnMarkTmp, err := tac.txnMarkerSerde.Decode(rawMsg.Payload)
 			if err != nil {
@@ -106,7 +117,7 @@ func (tac *TransactionAwareConsumer) ReadNext(ctx context.Context, parNum uint8)
 			}
 			txnMark := txnMarkTmp.(txn_data.TxnMarker)
 			if txnMark.Mark == uint8(txn_data.COMMIT) {
-				// debug.Fprintf(os.Stderr, "Got commit msg with tranid: %v\n", rawMsg.TranId)
+				debug.Fprintf(os.Stderr, "Got commit msg with tranid: %v\n", rawMsg.TranId)
 				tac.committed[rawMsg.TranId] = struct{}{}
 				rawMsg.Mark = txn_data.COMMIT
 			} else if txnMark.Mark == uint8(txn_data.ABORT) {
@@ -115,11 +126,9 @@ func (tac *TransactionAwareConsumer) ReadNext(ctx context.Context, parNum uint8)
 				rawMsg.Mark = txn_data.ABORT
 			} else if txnMark.Mark == uint8(txn_data.SCALE_FENCE) {
 				rawMsg.ScaleEpoch = txnMark.TranIDOrScaleEpoch
-				msgQueue.PushBack(rawMsg)
 			}
-		} else {
-			msgQueue.PushBack(rawMsg)
 		}
+		msgQueue.PushBack(rawMsg)
 		tac.checkControlMsg(msgQueue)
 		ret := tac.checkCommitted(msgQueue)
 		if ret != nil {
