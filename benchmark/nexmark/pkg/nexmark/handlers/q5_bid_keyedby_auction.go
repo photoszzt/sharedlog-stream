@@ -76,9 +76,6 @@ func (a *bidKeyedByAuctionProcessArgs) FuncName() string { return a.funcName }
 func (a *bidKeyedByAuctionProcessArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
 	return a.recordFinishFunc
 }
-func (a *bidKeyedByAuctionProcessArgs) ErrChan() chan error {
-	return nil
-}
 
 func (h *bidKeyedByAuction) process(ctx context.Context,
 	t *transaction.StreamTask,

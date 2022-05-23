@@ -10,6 +10,7 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor"
@@ -49,7 +50,7 @@ func (h *q46GroupByHandler) process(
 	t *transaction.StreamTask,
 	argsTmp interface{},
 ) *common.FnOutput {
-	args := argsTmp.(*q46GroupByProcessArgs)
+	args := argsTmp.(*TwoMsgChanProcArgs)
 	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
 		if msg.MsgArr != nil {
@@ -57,14 +58,15 @@ func (h *q46GroupByHandler) process(
 				if subMsg.Value == nil {
 					continue
 				}
-				args.aucMsgChan <- subMsg
-				args.bidMsgChan <- subMsg
+				args.msgChan1 <- subMsg
+				args.msgChan2 <- subMsg
 			}
 			return nil
+		} else {
+			args.msgChan1 <- msg.Msg
+			args.msgChan2 <- msg.Msg
+			return nil
 		}
-		args.aucMsgChan <- msg.Msg
-		args.bidMsgChan <- msg.Msg
-		return nil
 	})
 }
 
@@ -80,41 +82,6 @@ func (h *q46GroupByHandler) Call(ctx context.Context, input []byte) ([]byte, err
 		panic(err)
 	}
 	return utils.CompressData(encodedOutput), nil
-}
-
-type q46GroupByProcessArgs struct {
-	aucMsgChan chan commtypes.Message
-	bidMsgChan chan commtypes.Message
-	errChan    chan error
-
-	recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc
-	trackParFunc     tran_interface.TrackKeySubStreamFunc
-	src              *source_sink.MeteredSource
-
-	funcName string
-	sinks    []*source_sink.MeteredSyncSink
-	curEpoch uint64
-	parNum   uint8
-}
-
-func (a *q46GroupByProcessArgs) Source() source_sink.Source { return a.src }
-func (a *q46GroupByProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
-	for _, sink := range a.sinks {
-		err := sink.Produce(ctx, msg, parNum, isControl)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-func (a *q46GroupByProcessArgs) ParNum() uint8    { return a.parNum }
-func (a *q46GroupByProcessArgs) CurEpoch() uint64 { return a.curEpoch }
-func (a *q46GroupByProcessArgs) FuncName() string { return a.funcName }
-func (a *q46GroupByProcessArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
-	return a.recordFinishFunc
-}
-func (a *q46GroupByProcessArgs) ErrChan() chan error {
-	return a.errChan
 }
 
 func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -134,51 +101,58 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 	filterAuctions, auctionsByIDMap, auctionsByIDFunc := h.getAucsByID(time.Duration(sp.WarmupS) * time.Second)
 	filterBids, bidsByAuctionIDMap, bidsByAuctionIDFunc := h.getBidsByAuctionID(time.Duration(sp.WarmupS) * time.Second)
 
-	errChan := make(chan error, 2)
-	aucMsgChan := make(chan commtypes.Message, 1)
-	bidMsgChan := make(chan commtypes.Message, 1)
-	procArgs := &q46GroupByProcessArgs{
+	var wg sync.WaitGroup
+	auctionsByIDManager := execution.NewGeneralProcManager(auctionsByIDFunc)
+	bidsByAuctionIDManager := execution.NewGeneralProcManager(bidsByAuctionIDFunc)
+	procArgs := &TwoMsgChanProcArgs{
 		src:              src,
 		sinks:            sinks,
-		aucMsgChan:       aucMsgChan,
-		bidMsgChan:       bidMsgChan,
+		msgChan1:         auctionsByIDManager.MsgChan(),
+		msgChan2:         bidsByAuctionIDManager.MsgChan(),
 		trackParFunc:     tran_interface.DefaultTrackSubstreamFunc,
 		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
 		funcName:         h.funcName,
 		curEpoch:         sp.ScaleEpoch,
 		parNum:           sp.ParNum,
 	}
+	auctionsByIDManager.LaunchProc(ctx, procArgs, &wg)
+	bidsByAuctionIDManager.LaunchProc(ctx, procArgs, &wg)
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go auctionsByIDFunc(ctx, procArgs, &wg, aucMsgChan, errChan)
-	wg.Add(1)
-	go bidsByAuctionIDFunc(ctx, procArgs, &wg, bidMsgChan, errChan)
+	handleErrFunc := func() error {
+		select {
+		case aucErr := <-auctionsByIDManager.ErrChan():
+			return aucErr
+		case bidErr := <-bidsByAuctionIDManager.ErrChan():
+			return bidErr
+		default:
+		}
+		return nil
+	}
 
 	task := transaction.StreamTask{
-		ProcessFunc: h.process,
+		ProcessFunc:   h.process,
+		HandleErrFunc: handleErrFunc,
 		PauseFunc: func() *common.FnOutput {
 			// debug.Fprintf(os.Stderr, "begin flush\n")
-			close(aucMsgChan)
-			close(bidMsgChan)
+			auctionsByIDManager.RequestToTerminate()
+			bidsByAuctionIDManager.RequestToTerminate()
 			wg.Wait()
+			if err := handleErrFunc(); err != nil {
+				return &common.FnOutput{Success: false, Message: err.Error()}
+			}
 			// debug.Fprintf(os.Stderr, "done flush\n")
 			return nil
 		},
 		ResumeFunc: func(task *transaction.StreamTask) {
 			debug.Fprintf(os.Stderr, "start resume\n")
-			aucMsgChan = make(chan commtypes.Message, 1)
-			bidMsgChan = make(chan commtypes.Message, 1)
-			procArgs.aucMsgChan = aucMsgChan
-			procArgs.bidMsgChan = bidMsgChan
-			wg.Add(1)
-			go auctionsByIDFunc(ctx, procArgs, &wg, aucMsgChan, errChan)
-			wg.Add(1)
-			go bidsByAuctionIDFunc(ctx, procArgs, &wg, bidMsgChan, errChan)
+			auctionsByIDManager.RecreateMsgChan(&procArgs.msgChan1)
+			bidsByAuctionIDManager.RecreateMsgChan(&procArgs.msgChan2)
+			auctionsByIDManager.LaunchProc(ctx, procArgs, &wg)
+			bidsByAuctionIDManager.LaunchProc(ctx, procArgs, &wg)
 			debug.Fprintf(os.Stderr, "done resume\n")
 		},
 		InitFunc: func(progArgsTmp interface{}) {
-			progArgs := progArgsTmp.(*q3GroupByProcessArgs)
+			progArgs := progArgsTmp.(*TwoMsgChanProcArgs)
 			progArgs.src.StartWarmup()
 			progArgs.sinks[0].StartWarmup()
 			progArgs.sinks[1].StartWarmup()
@@ -202,8 +176,8 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
 				recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
-				procArgs.(*q46GroupByProcessArgs).trackParFunc = trackParFunc
-				procArgs.(*q46GroupByProcessArgs).recordFinishFunc = recordFinishFunc
+				procArgs.(*TwoMsgChanProcArgs).trackParFunc = trackParFunc
+				procArgs.(*TwoMsgChanProcArgs).recordFinishFunc = recordFinishFunc
 			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
@@ -234,8 +208,10 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 	}
 }
 
-func (h *q46GroupByHandler) getAucsByID(warmup time.Duration) (*processor.MeteredProcessor, *processor.MeteredProcessor,
-	func(ctx context.Context, args *q46GroupByProcessArgs, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error),
+func (h *q46GroupByHandler) getAucsByID(warmup time.Duration) (
+	*processor.MeteredProcessor,
+	*processor.MeteredProcessor,
+	execution.GeneralProcFunc,
 ) {
 	filterAuctions := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
 		func(m *commtypes.Message) (bool, error) {
@@ -249,7 +225,10 @@ func (h *q46GroupByHandler) getAucsByID(warmup time.Duration) (*processor.Metere
 			return commtypes.Message{Key: event.NewAuction.ID, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 		})), time.Duration(warmup)*time.Second)
 
-	return filterAuctions, auctionsByIDMap, func(ctx context.Context, args *q46GroupByProcessArgs, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error) {
+	return filterAuctions, auctionsByIDMap, func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup,
+		msgChan chan commtypes.Message, errChan chan error,
+	) {
+		args := argsTmp.(*TwoMsgChanProcArgs)
 		defer wg.Done()
 	L:
 		for {
@@ -310,8 +289,10 @@ func (h *q46GroupByHandler) getAucsByID(warmup time.Duration) (*processor.Metere
 	}
 }
 
-func (h *q46GroupByHandler) getBidsByAuctionID(warmup time.Duration) (*processor.MeteredProcessor, *processor.MeteredProcessor,
-	func(ctx context.Context, args *q46GroupByProcessArgs, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error),
+func (h *q46GroupByHandler) getBidsByAuctionID(warmup time.Duration) (
+	*processor.MeteredProcessor,
+	*processor.MeteredProcessor,
+	execution.GeneralProcFunc,
 ) {
 	filterBids := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
 		func(m *commtypes.Message) (bool, error) {
@@ -324,7 +305,10 @@ func (h *q46GroupByHandler) getBidsByAuctionID(warmup time.Duration) (*processor
 			event := msg.Value.(*ntypes.Event)
 			return commtypes.Message{Key: event.Bid.Auction, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 		})), time.Duration(warmup)*time.Second)
-	return filterBids, bidsByAuctionIDMap, func(ctx context.Context, args *q46GroupByProcessArgs, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error) {
+	return filterBids, bidsByAuctionIDMap, func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup,
+		msgChan chan commtypes.Message, errChan chan error,
+	) {
+		args := argsTmp.(*TwoMsgChanProcArgs)
 		defer wg.Done()
 	L:
 		for {

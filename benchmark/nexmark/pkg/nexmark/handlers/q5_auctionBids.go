@@ -216,9 +216,6 @@ func (a *q5AuctionBidsProcessArg) FuncName() string { return a.funcName }
 func (a *q5AuctionBidsProcessArg) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
 	return a.recordFinishFunc
 }
-func (a *q5AuctionBidsProcessArg) ErrChan() chan error {
-	return nil
-}
 
 type q5AuctionBidsRestoreArg struct {
 	countProc      processor.Processor

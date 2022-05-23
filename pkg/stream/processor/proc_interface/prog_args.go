@@ -11,7 +11,6 @@ type ProcArgsWithSrcSink interface {
 	ProcArgs
 	Source() source_sink.Source
 	PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error
-	ErrChan() chan error
 }
 
 type ProcArgs interface {

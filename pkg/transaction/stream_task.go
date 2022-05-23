@@ -28,6 +28,7 @@ type StreamTask struct {
 	PauseFunc                 func() *common.FnOutput
 	ResumeFunc                func(task *StreamTask)
 	InitFunc                  func(progArgs interface{})
+	HandleErrFunc             func() error
 	CommitEveryForAtLeastOnce time.Duration
 }
 
@@ -653,6 +654,7 @@ func (t *StreamTask) ProcessWithTransaction(
 		cmm.TrackStream(src.TopicName(), src.Stream().(*sharedlog_stream.ShardedSharedLogStream))
 	}
 	for _, sink := range args.sinks {
+		sink.InTransaction(tm)
 		tm.RecordTopicStreams(sink.TopicName(), sink.Stream())
 		cmm.TrackStream(sink.TopicName(), sink.Stream())
 	}
@@ -689,9 +691,6 @@ func (t *StreamTask) ProcessWithTransaction(
 	go cmm.MonitorControlChannel(dctx, controlQuit, controlErrc, meta)
 
 	run := false
-	// retc := make(chan *common.FnOutput)
-	// runChan := make(chan struct{})
-	// go t.processWithTranLoop(dctx, tm, args, retc, runChan)
 
 	latencies := make([]int, 0, 128)
 	hasLiveTransaction := false
@@ -1131,10 +1130,10 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 func CommonProcess(ctx context.Context, t *StreamTask, args proc_interface.ProcArgsWithSrcSink,
 	proc func(t *StreamTask, msg commtypes.MsgAndSeq) error,
 ) *common.FnOutput {
-	select {
-	case err := <-args.ErrChan():
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	default:
+	if t.HandleErrFunc != nil {
+		if err := t.HandleErrFunc(); err != nil {
+			return &common.FnOutput{Success: true, Message: err.Error()}
+		}
 	}
 	gotMsgs, err := args.Source().Consume(ctx, args.ParNum())
 	if err != nil {

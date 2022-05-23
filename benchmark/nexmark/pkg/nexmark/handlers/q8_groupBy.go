@@ -9,6 +9,7 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
@@ -49,7 +50,7 @@ func (h *q8GroupByHandler) process(
 	t *transaction.StreamTask,
 	argsTmp interface{},
 ) *common.FnOutput {
-	args := argsTmp.(*q8GroupByProcessArgs)
+	args := argsTmp.(*TwoMsgChanProcArgs)
 	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
 		if msg.MsgArr != nil {
@@ -57,14 +58,15 @@ func (h *q8GroupByHandler) process(
 				if subMsg.Value == nil {
 					continue
 				}
-				args.aucMsgChan <- subMsg
-				args.personMsgChan <- subMsg
+				args.msgChan1 <- subMsg
+				args.msgChan2 <- subMsg
 			}
 			return nil
+		} else {
+			args.msgChan1 <- msg.Msg
+			args.msgChan2 <- msg.Msg
+			return nil
 		}
-		args.aucMsgChan <- msg.Msg
-		args.personMsgChan <- msg.Msg
-		return nil
 	})
 }
 
@@ -80,40 +82,6 @@ func (h *q8GroupByHandler) Call(ctx context.Context, input []byte) ([]byte, erro
 		panic(err)
 	}
 	return utils.CompressData(encodedOutput), nil
-}
-
-type q8GroupByProcessArgs struct {
-	errChan          chan error
-	aucMsgChan       chan commtypes.Message
-	personMsgChan    chan commtypes.Message
-	recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc
-	trackParFunc     tran_interface.TrackKeySubStreamFunc
-	src              *source_sink.MeteredSource
-
-	funcName string
-	sinks    []*source_sink.MeteredSyncSink
-	curEpoch uint64
-	parNum   uint8
-}
-
-func (a *q8GroupByProcessArgs) Source() source_sink.Source { return a.src }
-func (a *q8GroupByProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
-	for _, sink := range a.sinks {
-		err := sink.Produce(ctx, msg, parNum, isControl)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-func (a *q8GroupByProcessArgs) ParNum() uint8    { return a.parNum }
-func (a *q8GroupByProcessArgs) CurEpoch() uint64 { return a.curEpoch }
-func (a *q8GroupByProcessArgs) FuncName() string { return a.funcName }
-func (a *q8GroupByProcessArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
-	return a.recordFinishFunc
-}
-func (a *q8GroupByProcessArgs) ErrChan() chan error {
-	return a.errChan
 }
 
 func (h *q8GroupByHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
@@ -177,14 +145,14 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 	filterAuctions, auctionsBySellerIDMap, auctionsBySellerIDFunc := h.getAucBySellerID(time.Duration(sp.WarmupS)*time.Second,
 		time.Duration(sp.FlushMs)*time.Millisecond)
 
-	errChan := make(chan error, 2)
-	aucMsgChan := make(chan commtypes.Message, 1)
-	personMsgChan := make(chan commtypes.Message, 1)
-	procArgs := &q8GroupByProcessArgs{
+	var wg sync.WaitGroup
+	personsByIDManager := execution.NewGeneralProcManager(personsByIDFunc)
+	auctionsBySellerIDManager := execution.NewGeneralProcManager(auctionsBySellerIDFunc)
+	procArgs := &TwoMsgChanProcArgs{
 		src:              src,
 		sinks:            sinks,
-		aucMsgChan:       aucMsgChan,
-		personMsgChan:    personMsgChan,
+		msgChan1:         auctionsBySellerIDManager.MsgChan(),
+		msgChan2:         personsByIDManager.MsgChan(),
 		trackParFunc:     tran_interface.DefaultTrackSubstreamFunc,
 		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
 		funcName:         h.funcName,
@@ -192,35 +160,42 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 		parNum:           sp.ParNum,
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go personsByIDFunc(ctx, procArgs, &wg, personMsgChan, errChan)
-	wg.Add(1)
-	go auctionsBySellerIDFunc(ctx, procArgs, &wg, aucMsgChan, errChan)
+	personsByIDManager.LaunchProc(ctx, procArgs, &wg)
+	auctionsBySellerIDManager.LaunchProc(ctx, procArgs, &wg)
+
+	handleErrFunc := func() error {
+		select {
+		case perErr := <-personsByIDManager.ErrChan():
+			return perErr
+		case aucErr := <-auctionsBySellerIDManager.ErrChan():
+			return aucErr
+		default:
+		}
+		return nil
+	}
 
 	task := transaction.StreamTask{
 		ProcessFunc:               h.process,
+		HandleErrFunc:             handleErrFunc,
 		CurrentOffset:             make(map[string]uint64),
 		CommitEveryForAtLeastOnce: common.CommitDuration,
 		PauseFunc: func() *common.FnOutput {
 			// debug.Fprintf(os.Stderr, "begin flush\n")
-			close(aucMsgChan)
-			close(personMsgChan)
+			personsByIDManager.RequestToTerminate()
+			auctionsBySellerIDManager.RequestToTerminate()
 			wg.Wait()
-
+			if err := handleErrFunc(); err != nil {
+				return &common.FnOutput{Success: false, Message: err.Error()}
+			}
 			// debug.Fprintf(os.Stderr, "done flush\n")
 			return nil
 		},
 		ResumeFunc: func(task *transaction.StreamTask) {
 			// debug.Fprintf(os.Stderr, "begin resume\n")
-			aucMsgChan = make(chan commtypes.Message, 1)
-			personMsgChan = make(chan commtypes.Message, 1)
-			procArgs.aucMsgChan = aucMsgChan
-			procArgs.personMsgChan = personMsgChan
-			wg.Add(1)
-			go personsByIDFunc(ctx, procArgs, &wg, personMsgChan, errChan)
-			wg.Add(1)
-			go auctionsBySellerIDFunc(ctx, procArgs, &wg, aucMsgChan, errChan)
+			personsByIDManager.RecreateMsgChan(&procArgs.msgChan2)
+			auctionsBySellerIDManager.RecreateMsgChan(&procArgs.msgChan1)
+			personsByIDManager.LaunchProc(ctx, procArgs, &wg)
+			auctionsBySellerIDManager.LaunchProc(ctx, procArgs, &wg)
 			// debug.Fprintf(os.Stderr, "done resume\n")
 		},
 		InitFunc: func(progArgs interface{}) {
@@ -247,8 +222,8 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
 				recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc,
 			) {
-				procArgs.(*q8GroupByProcessArgs).trackParFunc = trackParFunc
-				procArgs.(*q8GroupByProcessArgs).recordFinishFunc = recordFinishFunc
+				procArgs.(*TwoMsgChanProcArgs).trackParFunc = trackParFunc
+				procArgs.(*TwoMsgChanProcArgs).recordFinishFunc = recordFinishFunc
 			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
@@ -278,8 +253,11 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 	return ret
 }
 
-func (h *q8GroupByHandler) getPersonsByID(warmup time.Duration, pollTimeout time.Duration) (*processor.MeteredProcessor, *processor.MeteredProcessor,
-	func(ctx context.Context, args *q8GroupByProcessArgs, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error)) {
+func (h *q8GroupByHandler) getPersonsByID(warmup time.Duration, pollTimeout time.Duration) (
+	*processor.MeteredProcessor,
+	*processor.MeteredProcessor,
+	execution.GeneralProcFunc,
+) {
 	filterPerson := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
 		func(msg *commtypes.Message) (bool, error) {
 			event := msg.Value.(*ntypes.Event)
@@ -295,69 +273,73 @@ func (h *q8GroupByHandler) getPersonsByID(warmup time.Duration, pollTimeout time
 			}, nil
 		})), warmup)
 
-	return filterPerson, personsByIDMap, func(ctx context.Context, args *q8GroupByProcessArgs, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error) {
-		defer wg.Done()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case msg, ok := <-msgChan:
-				if !ok {
+	return filterPerson, personsByIDMap,
+		func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup,
+			msgChan chan commtypes.Message, errChan chan error,
+		) {
+			args := argsTmp.(*TwoMsgChanProcArgs)
+			defer wg.Done()
+			for {
+				select {
+				case <-ctx.Done():
 					return
-				}
-				event := msg.Value.(*ntypes.Event)
-				ts, err := event.ExtractStreamTime()
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "[ERROR] fail to extract timestamp: %v\n", err)
-					errChan <- fmt.Errorf("fail to extract timestamp: %v", err)
-					return
-				}
-				msg.Timestamp = ts
-				filteredMsgs, err := filterPerson.ProcessAndReturn(ctx, msg)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "[ERROR] filterPerson err: %v\n", err)
-					errChan <- fmt.Errorf("filterPerson err: %v", err)
-					return
-				}
-				for _, filteredMsg := range filteredMsgs {
-					changeKeyedMsg, err := personsByIDMap.ProcessAndReturn(ctx, filteredMsg)
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "[ERROR] personsByIDMap err: %v\n", err)
-						errChan <- fmt.Errorf("personsByIDMap err: %v", err)
-						return
-					}
-
-					k := changeKeyedMsg[0].Key.(uint64)
-					h.personHashMu.RLock()
-					parTmp, ok := h.personHash.Get(k)
-					h.personHashMu.RUnlock()
+				case msg, ok := <-msgChan:
 					if !ok {
-						fmt.Fprintf(os.Stderr, "[ERROR] fail to get output partition\n")
-						errChan <- xerrors.New("fail to get output partition")
 						return
 					}
-					par := parTmp.(uint8)
-					err = args.trackParFunc(ctx, k, args.sinks[1].KeySerde(), args.sinks[1].TopicName(), par)
+					event := msg.Value.(*ntypes.Event)
+					ts, err := event.ExtractStreamTime()
 					if err != nil {
-						fmt.Fprintf(os.Stderr, "[ERROR] add topic partition failed: %v\n", err)
-						errChan <- fmt.Errorf("add topic partition failed: %v", err)
+						fmt.Fprintf(os.Stderr, "[ERROR] fail to extract timestamp: %v\n", err)
+						errChan <- fmt.Errorf("fail to extract timestamp: %v", err)
 						return
 					}
-					// fmt.Fprintf(os.Stderr, "append %v to substream %v\n", changeKeyedMsg[0], par)
-					err = args.sinks[1].Produce(ctx, changeKeyedMsg[0], par, false)
+					msg.Timestamp = ts
+					filteredMsgs, err := filterPerson.ProcessAndReturn(ctx, msg)
 					if err != nil {
-						fmt.Fprintf(os.Stderr, "[ERROR] sink err: %v\n", err)
-						errChan <- fmt.Errorf("sink err: %v", err)
+						fmt.Fprintf(os.Stderr, "[ERROR] filterPerson err: %v\n", err)
+						errChan <- fmt.Errorf("filterPerson err: %v", err)
 						return
+					}
+					for _, filteredMsg := range filteredMsgs {
+						changeKeyedMsg, err := personsByIDMap.ProcessAndReturn(ctx, filteredMsg)
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "[ERROR] personsByIDMap err: %v\n", err)
+							errChan <- fmt.Errorf("personsByIDMap err: %v", err)
+							return
+						}
+
+						k := changeKeyedMsg[0].Key.(uint64)
+						h.personHashMu.RLock()
+						parTmp, ok := h.personHash.Get(k)
+						h.personHashMu.RUnlock()
+						if !ok {
+							fmt.Fprintf(os.Stderr, "[ERROR] fail to get output partition\n")
+							errChan <- xerrors.New("fail to get output partition")
+							return
+						}
+						par := parTmp.(uint8)
+						err = args.trackParFunc(ctx, k, args.sinks[1].KeySerde(), args.sinks[1].TopicName(), par)
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "[ERROR] add topic partition failed: %v\n", err)
+							errChan <- fmt.Errorf("add topic partition failed: %v", err)
+							return
+						}
+						// fmt.Fprintf(os.Stderr, "append %v to substream %v\n", changeKeyedMsg[0], par)
+						err = args.sinks[1].Produce(ctx, changeKeyedMsg[0], par, false)
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "[ERROR] sink err: %v\n", err)
+							errChan <- fmt.Errorf("sink err: %v", err)
+							return
+						}
 					}
 				}
 			}
 		}
-	}
 }
 
 func (h *q8GroupByHandler) getAucBySellerID(warmup time.Duration, pollTimeout time.Duration) (*processor.MeteredProcessor, *processor.MeteredProcessor,
-	func(ctx context.Context, args *q8GroupByProcessArgs, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error),
+	execution.GeneralProcFunc,
 ) {
 	filterAuctions := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
 		func(m *commtypes.Message) (bool, error) {
@@ -371,7 +353,8 @@ func (h *q8GroupByHandler) getAucBySellerID(warmup time.Duration, pollTimeout ti
 			return commtypes.Message{Key: event.NewAuction.Seller, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 		})), warmup)
 
-	return filterAuctions, auctionsBySellerIDMap, func(ctx context.Context, args *q8GroupByProcessArgs, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error) {
+	return filterAuctions, auctionsBySellerIDMap, func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error) {
+		args := argsTmp.(*TwoMsgChanProcArgs)
 		defer wg.Done()
 		for {
 			select {

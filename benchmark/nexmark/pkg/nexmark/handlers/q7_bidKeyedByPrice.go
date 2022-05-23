@@ -75,9 +75,6 @@ func (a *q7BidKeyedByPriceProcessArgs) FuncName() string { return a.funcName }
 func (a *q7BidKeyedByPriceProcessArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
 	return a.recordFinishFunc
 }
-func (a *q7BidKeyedByPriceProcessArgs) ErrChan() chan error {
-	return nil
-}
 
 func (h *q7BidKeyedByPrice) process(ctx context.Context,
 	t *transaction.StreamTask,

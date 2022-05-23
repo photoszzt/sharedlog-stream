@@ -121,9 +121,6 @@ func (a *processQ7ProcessArgs) FuncName() string { return a.funcName }
 func (a *processQ7ProcessArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
 	return a.recordFinishFunc
 }
-func (a *processQ7ProcessArgs) ErrChan() chan error {
-	return nil
-}
 
 type processQ7RestoreArgs struct {
 	src                source_sink.Source

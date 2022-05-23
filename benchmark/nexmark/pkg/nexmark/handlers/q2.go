@@ -74,9 +74,6 @@ func (a *query2ProcessArgs) FuncName() string { return a.funcName }
 func (a *query2ProcessArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
 	return a.recordFinishFunc
 }
-func (a *query2ProcessArgs) ErrChan() chan error {
-	return nil
-}
 
 func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)

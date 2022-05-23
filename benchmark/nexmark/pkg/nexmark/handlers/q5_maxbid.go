@@ -107,9 +107,6 @@ func (a *q5MaxBidProcessArgs) FuncName() string { return a.funcName }
 func (a *q5MaxBidProcessArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
 	return a.recordFinishFunc
 }
-func (a *q5MaxBidProcessArgs) ErrChan() chan error {
-	return nil
-}
 
 type q5MaxBidRestoreArgs struct {
 	maxBid       processor.Processor
