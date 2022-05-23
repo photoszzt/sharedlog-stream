@@ -9,6 +9,7 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/hash"
@@ -332,14 +333,14 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 
 	debug.Assert(len(sp.NumOutPartitions) == 1 && len(sp.OutputTopicNames) == 1,
 		"expected only one output stream")
-	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
+	control_channel.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
 
 	joinProcPerson := execution.NewJoinProcArgs(sss.src2, sss.sink, pJoinA,
-		&h.cHashMu, h.cHash, sp.ParNum)
+		&h.cHashMu, h.cHash, h.funcName, sp.ScaleEpoch, sp.ParNum)
 	joinProcAuction := execution.NewJoinProcArgs(sss.src1, sss.sink, aJoinP,
-		&h.cHashMu, h.cHash, sp.ParNum)
+		&h.cHashMu, h.cHash, h.funcName, sp.ScaleEpoch, sp.ParNum)
 	var wg sync.WaitGroup
 	aucManager := execution.NewJoinProcManager()
 	perManager := execution.NewJoinProcManager()

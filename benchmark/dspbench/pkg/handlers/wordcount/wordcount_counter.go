@@ -14,6 +14,7 @@ import (
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/proc_interface"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
@@ -94,21 +95,11 @@ func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes
 }
 
 type wordcountCounterAggProcessArg struct {
-	src              *source_sink.MeteredSource
-	output_stream    *store.MeteredStream
-	counter          *processor.MeteredProcessor
-	trackParFunc     tran_interface.TrackKeySubStreamFunc
-	recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc
-	funcName         string
-	curEpoch         uint64
-	parNum           uint8
-}
-
-func (a *wordcountCounterAggProcessArg) ParNum() uint8    { return a.parNum }
-func (a *wordcountCounterAggProcessArg) CurEpoch() uint64 { return a.curEpoch }
-func (a *wordcountCounterAggProcessArg) FuncName() string { return a.funcName }
-func (a *wordcountCounterAggProcessArg) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
-	return a.recordFinishFunc
+	src           *source_sink.MeteredSource
+	output_stream *store.MeteredStream
+	counter       *processor.MeteredProcessor
+	trackParFunc  tran_interface.TrackKeySubStreamFunc
+	proc_interface.BaseProcArgs
 }
 
 func (h *wordcountCounterAgg) process(ctx context.Context,
@@ -116,7 +107,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 	argsTmp interface{},
 ) *common.FnOutput {
 	args := argsTmp.(*wordcountCounterAggProcessArg)
-	msgs, err := args.src.Consume(ctx, args.parNum)
+	msgs, err := args.src.Consume(ctx, args.ParNum())
 	if err != nil {
 		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
 			return &common.FnOutput{
@@ -137,18 +128,18 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 		if msg.IsControl {
 			v := msg.Msg.Value.(source_sink.ScaleEpochAndBytes)
 			// TODO: below is not correct
-			_, err = args.output_stream.Push(ctx, v.Payload, args.parNum, true, false, 0, 0, 0)
+			_, err = args.output_stream.Push(ctx, v.Payload, args.ParNum(), true, false, 0, 0, 0)
 			if err != nil {
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
-			if args.curEpoch < v.ScaleEpoch {
-				err = args.recordFinishFunc(ctx, args.funcName, args.parNum)
+			if args.CurEpoch() < v.ScaleEpoch {
+				err = args.RecordFinishFunc()(ctx, args.FuncName(), args.ParNum())
 				if err != nil {
 					return &common.FnOutput{Success: false, Message: err.Error()}
 				}
 				return &common.FnOutput{
 					Success: true,
-					Message: fmt.Sprintf("%s-%d epoch %d exit", args.funcName, args.parNum, args.curEpoch),
+					Message: fmt.Sprintf("%s-%d epoch %d exit", args.FuncName(), args.ParNum(), args.CurEpoch()),
 					Err:     errors.ErrShouldExitForScale,
 				}
 			}
@@ -211,14 +202,11 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 
 	funcName := "wccounter"
 	procArgs := &wordcountCounterAggProcessArg{
-		src:              src,
-		output_stream:    meteredOutputStream,
-		counter:          count,
-		parNum:           sp.ParNum,
-		funcName:         funcName,
-		curEpoch:         sp.ScaleEpoch,
-		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
-		trackParFunc:     tran_interface.DefaultTrackSubstreamFunc,
+		src:           src,
+		output_stream: meteredOutputStream,
+		counter:       count,
+		trackParFunc:  tran_interface.DefaultTrackSubstreamFunc,
+		BaseProcArgs:  proc_interface.NewBaseProcArgs(funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 
 	task := transaction.StreamTask{
@@ -233,7 +221,7 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
 				procArgs.(*wordcountCounterAggProcessArg).trackParFunc = trackParFunc
-				procArgs.(*wordcountCounterAggProcessArg).recordFinishFunc = recordFinishFunc
+				procArgs.(*wordcountCounterAggProcessArg).SetRecordFinishFunc(recordFinishFunc)
 			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()

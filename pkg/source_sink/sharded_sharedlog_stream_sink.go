@@ -7,6 +7,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
 	"sync"
 	"time"
@@ -91,7 +92,7 @@ func (sls *ShardedSharedLogStreamSink) Produce(ctx context.Context, msg commtype
 		return nil
 	}
 	ctrl, ok := msg.Key.(string)
-	if ok && ctrl == commtypes.SCALE_FENCE_KEY {
+	if ok && ctrl == txn_data.SCALE_FENCE_KEY {
 		debug.Assert(isControl, "scale fence msg should be a control msg")
 		sls.streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{Payload: msg.Value.([]byte),
 			Partitions: []uint8{parNum}, IsControl: isControl}

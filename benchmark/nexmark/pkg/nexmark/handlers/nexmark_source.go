@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
 
@@ -190,7 +190,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	cmm, err := transaction.NewControlChannelManager(h.env, inputConfig.AppId,
+	cmm, err := control_channel.NewControlChannelManager(h.env, inputConfig.AppId,
 		commtypes.SerdeFormat(inputConfig.SerdeFormat), 0)
 	if err != nil {
 		return &common.FnOutput{

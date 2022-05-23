@@ -50,16 +50,6 @@ type TransactionManager struct {
 	currentStatus txn_data.TransactionState
 }
 
-func BeginTag(nameHash uint64, parNum uint8) uint64 {
-	mask := uint64(math.MaxUint64) - (1<<(txn_data.PartitionBits+txn_data.LogTagReserveBits) - 1)
-	return nameHash&mask + uint64(parNum)<<txn_data.LogTagReserveBits + txn_data.TransactionLogBegin
-}
-
-func FenceTag(nameHash uint64, parNum uint8) uint64 {
-	mask := uint64(math.MaxUint64) - (1<<(txn_data.PartitionBits+txn_data.LogTagReserveBits) - 1)
-	return nameHash&mask + uint64(parNum)<<txn_data.LogTagReserveBits + txn_data.TransactionLogFence
-}
-
 func NewTransactionManager(ctx context.Context,
 	env types.Environment,
 	transactional_id string,
@@ -150,7 +140,7 @@ func (tc *TransactionManager) getMostRecentTransactionState(ctx context.Context)
 
 	// find the begin of the last transaction
 	for {
-		rawMsg, err := tc.transactionLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, 0, BeginTag(tc.transactionLog.TopicNameHash(), 0))
+		rawMsg, err := tc.transactionLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, 0, txn_data.BeginTag(tc.transactionLog.TopicNameHash(), 0))
 		if err != nil {
 			// empty log
 			if errors.IsStreamEmptyError(err) {
@@ -298,7 +288,8 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) error {
 		TaskEpoch: tc.currentEpoch,
 		State:     tc.currentStatus,
 	}
-	tags := []uint64{sharedlog_stream.NameHashWithPartition(tc.transactionLog.TopicNameHash(), 0), FenceTag(tc.transactionLog.TopicNameHash(), 0)}
+	tags := []uint64{sharedlog_stream.NameHashWithPartition(tc.transactionLog.TopicNameHash(), 0),
+		txn_data.FenceTag(tc.transactionLog.TopicNameHash(), 0)}
 	_, err = tc.appendToTransactionLog(ctx, &txnMeta, tags)
 	if err != nil {
 		return fmt.Errorf("appendToTransactionLog failed: %v", err)
@@ -318,7 +309,7 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) error {
 func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, quit chan struct{},
 	errc chan error, dcancel context.CancelFunc,
 ) {
-	fenceTag := FenceTag(tc.transactionLog.TopicNameHash(), 0)
+	fenceTag := txn_data.FenceTag(tc.transactionLog.TopicNameHash(), 0)
 	for {
 		select {
 		case <-quit:
@@ -760,7 +751,7 @@ func (tc *TransactionManager) BeginTransaction(ctx context.Context, kvstores []*
 		TaskId:    tc.currentTaskId,
 		TaskEpoch: tc.currentEpoch,
 	}
-	tags := []uint64{sharedlog_stream.NameHashWithPartition(tc.transactionLog.TopicNameHash(), 0), BeginTag(tc.transactionLog.TopicNameHash(), 0)}
+	tags := []uint64{sharedlog_stream.NameHashWithPartition(tc.transactionLog.TopicNameHash(), 0), txn_data.BeginTag(tc.transactionLog.TopicNameHash(), 0)}
 	off, err := tc.appendToTransactionLog(ctx, &txnState, tags)
 	tc.transactionID = off
 	if err != nil {

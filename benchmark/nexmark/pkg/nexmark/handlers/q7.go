@@ -12,10 +12,12 @@ import (
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
+	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/proc_interface"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
@@ -59,7 +61,7 @@ func (h *query7Handler) getSrcSink(
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
 	msgSerde commtypes.MsgSerde,
-) (*source_sink.MeteredSource, *source_sink.ConcurrentMeteredSink, error) {
+) (*source_sink.MeteredSource, *source_sink.ConcurrentMeteredSyncSink, error) {
 	eventSerde, err := getEventSerde(input.SerdeFormat)
 	if err != nil {
 		return nil, nil, err
@@ -91,7 +93,7 @@ func (h *query7Handler) getSrcSink(
 	}
 	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
 		time.Duration(input.WarmupS)*time.Second)
-	sink := source_sink.NewConcurrentMeteredSink(source_sink.NewShardedSharedLogStreamSink(output_stream, outConfig),
+	sink := source_sink.NewConcurrentMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_stream, outConfig),
 		time.Duration(input.WarmupS)*time.Second)
 
 	return src, sink, nil
@@ -99,28 +101,15 @@ func (h *query7Handler) getSrcSink(
 
 type processQ7ProcessArgs struct {
 	src                *source_sink.MeteredSource
-	sink               *source_sink.ConcurrentMeteredSink
 	output_stream      *sharedlog_stream.ShardedSharedLogStream
 	maxPriceBid        *processor.MeteredProcessor
 	transformWithStore *processor.MeteredProcessor
 	filterTime         *processor.MeteredProcessor
 	trackParFunc       tran_interface.TrackKeySubStreamFunc
-	recordFinishFunc   tran_interface.RecordPrevInstanceFinishFunc
-	funcName           string
-	curEpoch           uint64
-	parNum             uint8
+	proc_interface.BaseProcArgsWithSink
 }
 
 func (a *processQ7ProcessArgs) Source() source_sink.Source { return a.src }
-func (a *processQ7ProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
-	return a.sink.Produce(ctx, msg, parNum, isControl)
-}
-func (a *processQ7ProcessArgs) ParNum() uint8    { return a.parNum }
-func (a *processQ7ProcessArgs) CurEpoch() uint64 { return a.curEpoch }
-func (a *processQ7ProcessArgs) FuncName() string { return a.funcName }
-func (a *processQ7ProcessArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
-	return a.recordFinishFunc
-}
 
 type processQ7RestoreArgs struct {
 	src                source_sink.Source
@@ -136,7 +125,7 @@ func (h *query7Handler) process(
 	argsTmp interface{},
 ) *common.FnOutput {
 	args := argsTmp.(*processQ7ProcessArgs)
-	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
+	return execution.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
 		if msg.MsgArr != nil {
 			for _, subMsg := range msg.MsgArr {
@@ -175,7 +164,7 @@ func (h *query7Handler) procMsg(ctx context.Context, msg commtypes.Message, args
 			return err
 		}
 		for _, fmsg := range filtered {
-			err = args.sink.Produce(ctx, fmsg, args.parNum, false)
+			err = args.Sinks()[0].Produce(ctx, fmsg, args.ParNum(), false)
 			if err != nil {
 				return err
 			}
@@ -366,17 +355,15 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		})), time.Duration(input.WarmupS)*time.Second)
 
 	procArgs := &processQ7ProcessArgs{
-		src:                src,
-		sink:               sink,
-		output_stream:      outputStreams[0],
-		parNum:             input.ParNum,
+		src:           src,
+		output_stream: outputStreams[0],
+
 		maxPriceBid:        maxPriceBid,
 		transformWithStore: transformWithStore,
 		filterTime:         filterTime,
 		trackParFunc:       tran_interface.DefaultTrackSubstreamFunc,
-		recordFinishFunc:   transaction.DefaultRecordPrevInstanceFinishFunc,
-		curEpoch:           input.ScaleEpoch,
-		funcName:           h.funcName,
+		BaseProcArgsWithSink: proc_interface.NewBaseProcArgsWithSink([]source_sink.Sink{sink}, h.funcName,
+			input.ScaleEpoch, input.ParNum),
 	}
 	task := transaction.StreamTask{
 		ProcessFunc:               h.process,
@@ -420,7 +407,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
 				procArgs.(*processQ7ProcessArgs).trackParFunc = trackParFunc
-				procArgs.(*processQ7ProcessArgs).recordFinishFunc = recordFinishFunc
+				procArgs.(*processQ7ProcessArgs).SetRecordFinishFunc(recordFinishFunc)
 			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()

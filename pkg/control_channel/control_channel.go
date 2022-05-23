@@ -1,4 +1,4 @@
-package transaction
+package control_channel
 
 import (
 	"context"
@@ -17,23 +17,6 @@ import (
 const (
 	CONTROL_LOG_TOPIC_NAME = "__control_log"
 )
-
-/*
-func updateConsistentHash(cHashMu *sync.RWMutex, cHash *hash.ConsistentHash, curNumPar uint8, newNumPar uint8) {
-	cHashMu.Lock()
-	defer cHashMu.Unlock()
-	if curNumPar > newNumPar {
-		for i := newNumPar; i < curNumPar; i++ {
-			cHash.Remove(i)
-		}
-	}
-	if curNumPar < newNumPar {
-		for i := curNumPar; i < newNumPar; i++ {
-			cHash.Add(i)
-		}
-	}
-}
-*/
 
 func SetupConsistentHash(cHashMu *sync.RWMutex, cHash *hash.ConsistentHash, numPartition uint8) {
 	cHashMu.Lock()
@@ -62,6 +45,10 @@ type ControlChannelManager struct {
 
 	funcName     string
 	currentEpoch uint64
+}
+
+func (cm *ControlChannelManager) CurrentEpoch() uint64 {
+	return cm.currentEpoch
 }
 
 func NewControlChannelManager(env types.Environment,
@@ -116,19 +103,11 @@ func (cmm *ControlChannelManager) RestoreMapping(ctx context.Context) error {
 			cmm.updateKeyMapping(&ctrlMeta)
 		}
 	}
-	return nil
 }
 
 func (cmm *ControlChannelManager) TrackStream(topicName string, stream *sharedlog_stream.ShardedSharedLogStream) {
 	cmm.topicStreams[topicName] = stream
 }
-
-/*
-func (cmm *ControlChannelManager) TrackConsistentHash(cHashMu *sync.RWMutex, cHash *hash.ConsistentHash) {
-	cmm.cHash = cHash
-	cmm.cHashMu = cHashMu
-}
-*/
 
 func (cmm *ControlChannelManager) appendToControlLog(ctx context.Context, cm *txn_data.ControlMetadata) error {
 	encoded, err := cmm.controlMetaSerde.Encode(cm)

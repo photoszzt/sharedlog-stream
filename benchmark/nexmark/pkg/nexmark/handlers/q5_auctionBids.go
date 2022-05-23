@@ -9,13 +9,16 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/concurrent_skiplist"
+	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
+	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/proc_interface"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
@@ -193,29 +196,16 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 }
 
 type q5AuctionBidsProcessArg struct {
-	countProc        *processor.MeteredProcessor
-	groupByAuction   *processor.MeteredProcessor
-	src              *source_sink.MeteredSource
-	sink             *source_sink.ConcurrentMeteredSyncSink
-	output_stream    *sharedlog_stream.ShardedSharedLogStream
-	trackParFunc     tran_interface.TrackKeySubStreamFunc
-	recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc
-	funcName         string
-	curEpoch         uint64
-	parNum           uint8
-	numOutPartition  uint8
+	countProc      *processor.MeteredProcessor
+	groupByAuction *processor.MeteredProcessor
+	src            *source_sink.MeteredSource
+	output_stream  *sharedlog_stream.ShardedSharedLogStream
+	trackParFunc   tran_interface.TrackKeySubStreamFunc
+	proc_interface.BaseProcArgsWithSink
+	numOutPartition uint8
 }
 
 func (a *q5AuctionBidsProcessArg) Source() source_sink.Source { return a.src }
-func (a *q5AuctionBidsProcessArg) PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
-	return a.sink.Produce(ctx, msg, parNum, isControl)
-}
-func (a *q5AuctionBidsProcessArg) ParNum() uint8    { return a.parNum }
-func (a *q5AuctionBidsProcessArg) CurEpoch() uint64 { return a.curEpoch }
-func (a *q5AuctionBidsProcessArg) FuncName() string { return a.funcName }
-func (a *q5AuctionBidsProcessArg) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
-	return a.recordFinishFunc
-}
 
 type q5AuctionBidsRestoreArg struct {
 	countProc      processor.Processor
@@ -226,7 +216,7 @@ type q5AuctionBidsRestoreArg struct {
 
 func (h *q5AuctionBids) process(ctx context.Context, t *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
 	args := argsTmp.(*q5AuctionBidsProcessArg)
-	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
+	return execution.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
 		if msg.MsgArr != nil {
 			for _, subMsg := range msg.MsgArr {
@@ -272,11 +262,11 @@ func (h *q5AuctionBids) procMsg(ctx context.Context, msg commtypes.Message, args
 		}
 		par := parTmp.(uint8)
 		// fmt.Fprintf(os.Stderr, "key is %s, output to substream %d\n", k.String(), par)
-		err = args.trackParFunc(ctx, k, args.sink.KeySerde(), args.sink.TopicName(), par)
+		err = args.trackParFunc(ctx, k, args.Sinks()[0].KeySerde(), args.Sinks()[0].TopicName(), par)
 		if err != nil {
 			return fmt.Errorf("add topic partition failed: %v", err)
 		}
-		err = args.sink.Produce(ctx, changeKeyedMsg[0], par, false)
+		err = args.Sinks()[0].Produce(ctx, changeKeyedMsg[0], par, false)
 		if err != nil {
 			return fmt.Errorf("sink err %v", err)
 		}
@@ -373,17 +363,14 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			return commtypes.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
 		})), time.Duration(sp.WarmupS)*time.Second)
 	procArgs := &q5AuctionBidsProcessArg{
-		countProc:        countProc,
-		groupByAuction:   groupByAuction,
-		src:              src,
-		sink:             sink,
-		output_stream:    output_streams[0],
-		parNum:           sp.ParNum,
-		numOutPartition:  sp.NumOutPartitions[0],
-		trackParFunc:     tran_interface.DefaultTrackSubstreamFunc,
-		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
-		curEpoch:         sp.ScaleEpoch,
-		funcName:         h.funcName,
+		countProc:       countProc,
+		groupByAuction:  groupByAuction,
+		src:             src,
+		output_stream:   output_streams[0],
+		numOutPartition: sp.NumOutPartitions[0],
+		trackParFunc:    tran_interface.DefaultTrackSubstreamFunc,
+		BaseProcArgsWithSink: proc_interface.NewBaseProcArgsWithSink([]source_sink.Sink{sink}, h.funcName,
+			sp.ScaleEpoch, sp.ParNum),
 	}
 
 	task := transaction.StreamTask{
@@ -400,7 +387,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		},
 	}
 
-	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
+	control_channel.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 	srcs := []source_sink.Source{src}
 	sinks := []source_sink.Sink{sink}
 	var wsc []*transaction.WindowStoreChangelog
@@ -435,7 +422,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
 				procArgs.(*q5AuctionBidsProcessArg).trackParFunc = trackParFunc
-				procArgs.(*q5AuctionBidsProcessArg).recordFinishFunc = recordFinishFunc
+				procArgs.(*q5AuctionBidsProcessArg).SetRecordFinishFunc(recordFinishFunc)
 				if sp.TableType == uint8(store.IN_MEM) {
 					countMp.TrackFunc = trackParFunc
 				}

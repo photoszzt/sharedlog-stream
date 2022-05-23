@@ -3,35 +3,40 @@ package execution
 import (
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/stream/processor/proc_interface"
 	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sync"
 )
 
 type JoinProcArgs struct {
 	src          source_sink.Source
-	sink         source_sink.Sink
 	trackParFunc tran_interface.TrackKeySubStreamFunc
 
 	runner  JoinWorkerFunc
 	cHashMu *sync.RWMutex
 	cHash   *hash.ConsistentHash
-	parNum  uint8
+	proc_interface.BaseProcArgsWithSink
 }
 
-func NewJoinProcArgs(src source_sink.Source,
+// var _ = proc_interface.ProcArgsWithSink(&JoinProcArgs{})
+
+func NewJoinProcArgs(
+	src source_sink.Source,
 	sink source_sink.Sink,
-	runner JoinWorkerFunc, cHashMu *sync.RWMutex,
+	runner JoinWorkerFunc,
+	cHashMu *sync.RWMutex,
 	cHash *hash.ConsistentHash,
+	funcName string,
+	curEpoch uint64,
 	parNum uint8,
 ) *JoinProcArgs {
 	return &JoinProcArgs{
-		src:          src,
-		sink:         sink,
-		trackParFunc: tran_interface.DefaultTrackSubstreamFunc,
-		runner:       runner,
-		cHashMu:      cHashMu,
-		cHash:        cHash,
-		parNum:       parNum,
+		src:                  src,
+		trackParFunc:         tran_interface.DefaultTrackSubstreamFunc,
+		runner:               runner,
+		cHashMu:              cHashMu,
+		cHash:                cHash,
+		BaseProcArgsWithSink: proc_interface.NewBaseProcArgsWithSink([]source_sink.Sink{sink}, funcName, curEpoch, parNum),
 	}
 }
 

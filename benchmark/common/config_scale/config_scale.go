@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/transaction"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -36,7 +36,7 @@ func (h *ConfigScaleHandler) Call(ctx context.Context, input []byte) ([]byte, er
 }
 
 func (h *ConfigScaleHandler) ConfigScale(ctx context.Context, input *common.ConfigScaleInput) *common.FnOutput {
-	cmm, err := transaction.NewControlChannelManager(h.env, input.AppId, commtypes.SerdeFormat(input.SerdeFormat),
+	cmm, err := control_channel.NewControlChannelManager(h.env, input.AppId, commtypes.SerdeFormat(input.SerdeFormat),
 		input.ScaleEpoch-1)
 	if err != nil {
 		return &common.FnOutput{

@@ -5,10 +5,6 @@ import (
 	"sharedlog-stream/pkg/txn_data"
 )
 
-const (
-	SCALE_FENCE_KEY = "__scale_fence"
-)
-
 type Message struct {
 	Key       interface{}
 	Value     interface{}

@@ -103,6 +103,7 @@ func getSrcSinkUint64Key(
 	return src, sink, nil
 }
 
+/*
 func CommonGetSrcSink(ctx context.Context, sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
@@ -138,3 +139,4 @@ func CommonGetSrcSink(ctx context.Context, sp *common.QueryInput,
 		time.Duration(sp.WarmupS)*time.Second)
 	return src, sink, nil
 }
+*/

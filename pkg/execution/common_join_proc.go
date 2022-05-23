@@ -4,41 +4,23 @@ import (
 	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/transaction"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/stream/processor/proc_interface"
 )
 
 type CommonJoinProcArgs struct {
-	outChan2         <-chan *common.FnOutput
-	outChan1         <-chan *common.FnOutput
-	recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc
-	funcName         string
-	curEpoch         uint64
-	parNum           uint8
+	outChan2 <-chan *common.FnOutput
+	outChan1 <-chan *common.FnOutput
+	proc_interface.BaseProcArgs
 }
 
 func NewCommonJoinProcArgs(outChan1 <-chan *common.FnOutput,
 	outChan2 <-chan *common.FnOutput, funcName string, curEpoch uint64, parNum uint8,
 ) *CommonJoinProcArgs {
 	return &CommonJoinProcArgs{
-		outChan2:         outChan2,
-		outChan1:         outChan1,
-		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
-		funcName:         funcName,
-		curEpoch:         curEpoch,
-		parNum:           parNum,
+		outChan2:     outChan2,
+		outChan1:     outChan1,
+		BaseProcArgs: proc_interface.NewBaseProcArgs(funcName, curEpoch, parNum),
 	}
-}
-
-func (a *CommonJoinProcArgs) ParNum() uint8    { return a.parNum }
-func (a *CommonJoinProcArgs) CurEpoch() uint64 { return a.curEpoch }
-func (a *CommonJoinProcArgs) FuncName() string { return a.funcName }
-func (a *CommonJoinProcArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
-	return a.recordFinishFunc
-}
-
-func (a *CommonJoinProcArgs) SetRecordFinishFunc(recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
-	a.recordFinishFunc = recordFinishFunc
 }
 
 func HandleJoinErrReturn(argsTmp interface{}) *common.FnOutput {

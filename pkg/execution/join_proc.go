@@ -40,10 +40,10 @@ func joinProcLoop(
 		default:
 		}
 		debug.Fprintf(os.Stderr, "before consume\n")
-		gotMsgs, err := procArgs.src.Consume(ctx, procArgs.parNum)
+		gotMsgs, err := procArgs.src.Consume(ctx, procArgs.ParNum())
 		if err != nil {
 			if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
-				debug.Fprintf(os.Stderr, "[TIMEOUT]%s %s timeout, out chan len: %d\n",
+				debug.Fprintf(os.Stderr, "[TIMEOUT] %s %s timeout, out chan len: %d\n",
 					id, procArgs.src.TopicName(), len(out))
 				out <- &common.FnOutput{Success: true, Message: err.Error()}
 				debug.Fprintf(os.Stderr, "%s done sending msg\n", id)
@@ -56,6 +56,17 @@ func joinProcLoop(
 		}
 		debug.Fprintf(os.Stderr, "after consume\n")
 		for _, msg := range gotMsgs.Msgs {
+			if msg.MsgArr == nil && msg.Msg.Value == nil {
+				continue
+			}
+			if msg.IsControl {
+				ret_err := HandleScaleEpochAndBytes(ctx, msg, procArgs)
+				if ret_err != nil {
+					debug.Fprintf(os.Stderr, "[SCALE_EPOCH] out: %v, out chan len: %d\n", ret_err, len(out))
+					out <- ret_err
+				}
+				continue
+			}
 			task.OffMu.Lock()
 			task.CurrentOffset[procArgs.src.TopicName()] = msg.LogSeqNum
 			task.OffMu.Unlock()
@@ -107,7 +118,7 @@ func procMsgWithSink(ctx context.Context, msg commtypes.Message, procArgs *JoinP
 		debug.Fprintf(os.Stderr, "[ERROR] %s return runner: %v\n", ctx.Value("id"), err)
 		return err
 	}
-	err = pushMsgsToSink(ctx, procArgs.sink, procArgs.cHash, procArgs.cHashMu, msgs, procArgs.trackParFunc)
+	err = pushMsgsToSink(ctx, procArgs.Sinks()[0], procArgs.cHash, procArgs.cHashMu, msgs, procArgs.trackParFunc)
 	if err != nil {
 		debug.Fprintf(os.Stderr, "[ERROR] %s return push to sink: %v\n", ctx.Value("id"), err)
 		return err

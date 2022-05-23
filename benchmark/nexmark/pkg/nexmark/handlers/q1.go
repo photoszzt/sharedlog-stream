@@ -10,10 +10,12 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/proc_interface"
 	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/transaction/tran_interface"
 
@@ -78,15 +80,12 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 	q1Map := processor.NewMeteredProcessor(processor.NewStreamMapValuesWithKeyProcessor(processor.MapperFunc(q1mapFunc)),
 		time.Duration(sp.WarmupS)*time.Second)
 	procArgs := &query1ProcessArgs{
-		sink:          sink,
-		trackParFunc:  tran_interface.DefaultTrackSubstreamFunc,
-		src:           src,
-		filterBid:     filterBid,
-		q1Map:         q1Map,
-		output_stream: output_streams[0],
-		parNum:        sp.ParNum,
-		funcName:      h.funcName,
-		curEpoch:      sp.ScaleEpoch,
+		trackParFunc:         tran_interface.DefaultTrackSubstreamFunc,
+		src:                  src,
+		filterBid:            filterBid,
+		q1Map:                q1Map,
+		output_stream:        output_streams[0],
+		BaseProcArgsWithSink: proc_interface.NewBaseProcArgsWithSink([]source_sink.Sink{sink}, h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 	task := transaction.StreamTask{
 		ProcessFunc:               h.process,
@@ -113,7 +112,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
 				recordFinish tran_interface.RecordPrevInstanceFinishFunc) {
 				procArgs.(*query1ProcessArgs).trackParFunc = trackParFunc
-				procArgs.(*query1ProcessArgs).recordFinishFunc = recordFinish
+				procArgs.(*query1ProcessArgs).SetRecordFinishFunc(recordFinish)
 			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
@@ -140,32 +139,19 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 }
 
 type query1ProcessArgs struct {
-	src              *source_sink.MeteredSource
-	sink             *source_sink.MeteredSyncSink
-	filterBid        *processor.MeteredProcessor
-	q1Map            *processor.MeteredProcessor
-	output_stream    *sharedlog_stream.ShardedSharedLogStream
-	trackParFunc     tran_interface.TrackKeySubStreamFunc
-	recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc
-	funcName         string
-	curEpoch         uint64
-	parNum           uint8
+	src           *source_sink.MeteredSource
+	filterBid     *processor.MeteredProcessor
+	q1Map         *processor.MeteredProcessor
+	output_stream *sharedlog_stream.ShardedSharedLogStream
+	trackParFunc  tran_interface.TrackKeySubStreamFunc
+	proc_interface.BaseProcArgsWithSink
 }
 
 func (a *query1ProcessArgs) Source() source_sink.Source { return a.src }
-func (a *query1ProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
-	return a.sink.Produce(ctx, msg, parNum, isControl)
-}
-func (a *query1ProcessArgs) ParNum() uint8    { return a.parNum }
-func (a *query1ProcessArgs) CurEpoch() uint64 { return a.curEpoch }
-func (a *query1ProcessArgs) FuncName() string { return a.funcName }
-func (a *query1ProcessArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
-	return a.recordFinishFunc
-}
 
 func (h *query1Handler) process(ctx context.Context, t *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
 	args := argsTmp.(*query1ProcessArgs)
-	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
+	return execution.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
 		if msg.MsgArr != nil {
 			for _, subMsg := range msg.MsgArr {
@@ -181,7 +167,7 @@ func (h *query1Handler) process(ctx context.Context, t *transaction.StreamTask, 
 					if err != nil {
 						return err
 					}
-					err = args.sink.Produce(ctx, filtered[0], args.parNum, false)
+					err = args.Sinks()[0].Produce(ctx, filtered[0], args.ParNum(), false)
 					if err != nil {
 						return err
 					}
@@ -197,7 +183,7 @@ func (h *query1Handler) process(ctx context.Context, t *transaction.StreamTask, 
 				if err != nil {
 					return err
 				}
-				err = args.sink.Produce(ctx, filtered[0], args.parNum, false)
+				err = args.Sinks()[0].Produce(ctx, filtered[0], args.ParNum(), false)
 				if err != nil {
 					return err
 				}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
 	"sync"
 	"time"
@@ -84,7 +85,9 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
 				h.FlushTimer = time.Now()
 			}
 			for _, i := range msg.Partitions {
-				_, err := h.Stream.Push(ctx, msg.Payload, i, true, false, taskId, taskEpoch, transactionID)
+				scale_fence_tag := txn_data.ScaleFenceTag(h.Stream.TopicNameHash(), i)
+				_, err := h.Stream.PushWithTag(ctx, msg.Payload, i, []uint64{scale_fence_tag},
+					true, false, taskId, taskEpoch, transactionID)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] push err: %v\n", err)
 					h.MsgErrChan <- err
@@ -139,7 +142,9 @@ func (h *StreamPush) AsyncStreamPushNoTick(ctx context.Context, wg *sync.WaitGro
 				}
 			}
 			for _, i := range msg.Partitions {
-				_, err := h.Stream.Push(ctx, msg.Payload, i, true, false, taskId, taskEpoch, transactionID)
+				scale_fence_tag := txn_data.ScaleFenceTag(h.Stream.TopicNameHash(), i)
+				_, err := h.Stream.PushWithTag(ctx, msg.Payload, i, []uint64{scale_fence_tag},
+					true, false, taskId, taskEpoch, transactionID)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] push err: %v\n", err)
 					h.MsgErrChan <- err

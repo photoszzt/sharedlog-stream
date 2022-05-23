@@ -49,7 +49,7 @@ func (h *windowAvgGroupBy) Call(ctx context.Context, input []byte) ([]byte, erro
 func (h *windowAvgGroupBy) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*source_sink.MeteredSource, *source_sink.ConcurrentMeteredSink, error) {
+) (*source_sink.MeteredSource, *source_sink.ConcurrentMeteredSyncSink, error) {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return nil, nil, err
@@ -80,13 +80,13 @@ func (h *windowAvgGroupBy) getSrcSink(ctx context.Context, sp *common.QueryInput
 	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
 		time.Duration(sp.WarmupS)*time.Second)
 	src.SetInitialSource(true)
-	sink := source_sink.NewConcurrentMeteredSink(source_sink.NewShardedSharedLogStreamSink(output_stream, outConfig),
+	sink := source_sink.NewConcurrentMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_stream, outConfig),
 		time.Duration(sp.WarmupS)*time.Second)
 	return src, sink, nil
 }
 
 func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput,
-	src *source_sink.MeteredSource, sink *source_sink.ConcurrentMeteredSink,
+	src *source_sink.MeteredSource, sink *source_sink.ConcurrentMeteredSyncSink,
 ) *common.FnOutput {
 	duration := time.Duration(sp.Duration) * time.Second
 	latencies := make([]int, 0, 128)

@@ -8,12 +8,15 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/proc_interface"
 	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sync"
@@ -53,36 +56,23 @@ func (h *bidKeyedByAuction) Call(ctx context.Context, input []byte) ([]byte, err
 }
 
 type bidKeyedByAuctionProcessArgs struct {
-	src              *source_sink.MeteredSource
-	sink             *source_sink.MeteredSyncSink
-	filterBid        *processor.MeteredProcessor
-	selectKey        *processor.MeteredProcessor
-	output_stream    *sharedlog_stream.ShardedSharedLogStream
-	trackParFunc     tran_interface.TrackKeySubStreamFunc
-	recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc
-	funcName         string
-	curEpoch         uint64
-	parNum           uint8
-	numOutPartition  uint8
+	src           *source_sink.MeteredSource
+	filterBid     *processor.MeteredProcessor
+	selectKey     *processor.MeteredProcessor
+	output_stream *sharedlog_stream.ShardedSharedLogStream
+	trackParFunc  tran_interface.TrackKeySubStreamFunc
+	proc_interface.BaseProcArgsWithSink
+	numOutPartition uint8
 }
 
 func (a *bidKeyedByAuctionProcessArgs) Source() source_sink.Source { return a.src }
-func (a *bidKeyedByAuctionProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
-	return a.sink.Produce(ctx, msg, parNum, isControl)
-}
-func (a *bidKeyedByAuctionProcessArgs) ParNum() uint8    { return a.parNum }
-func (a *bidKeyedByAuctionProcessArgs) CurEpoch() uint64 { return a.curEpoch }
-func (a *bidKeyedByAuctionProcessArgs) FuncName() string { return a.funcName }
-func (a *bidKeyedByAuctionProcessArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
-	return a.recordFinishFunc
-}
 
 func (h *bidKeyedByAuction) process(ctx context.Context,
 	t *transaction.StreamTask,
 	argsTmp interface{},
 ) *common.FnOutput {
 	args := argsTmp.(*bidKeyedByAuctionProcessArgs)
-	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
+	return execution.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
 		if msg.MsgArr != nil {
 			for _, subMsg := range msg.MsgArr {
@@ -125,12 +115,12 @@ func (h *bidKeyedByAuction) procMsg(ctx context.Context, msg commtypes.Message, 
 		}
 		par := parTmp.(uint8)
 		// par := uint8(key % uint64(args.numOutPartition))
-		err = args.trackParFunc(ctx, key, args.sink.KeySerde(), args.sink.TopicName(), par)
+		err = args.trackParFunc(ctx, key, args.Sinks()[0].KeySerde(), args.Sinks()[0].TopicName(), par)
 		if err != nil {
 			return fmt.Errorf("add topic partition failed: %v", err)
 		}
 		// fmt.Fprintf(os.Stderr, "out msg ts: %v\n", mappedKey[0].Timestamp)
-		err = args.sink.Produce(ctx, mappedKey[0], par, false)
+		err = args.Sinks()[0].Produce(ctx, mappedKey[0], par, false)
 		if err != nil {
 			return err
 		}
@@ -164,17 +154,14 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 		})), time.Duration(sp.WarmupS)*time.Second)
 
 	procArgs := &bidKeyedByAuctionProcessArgs{
-		src:              src,
-		sink:             sink,
-		filterBid:        filterBid,
-		selectKey:        selectKey,
-		output_stream:    output_streams[0],
-		parNum:           sp.ParNum,
-		numOutPartition:  sp.NumOutPartitions[0],
-		trackParFunc:     tran_interface.DefaultTrackSubstreamFunc,
-		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
-		curEpoch:         sp.ScaleEpoch,
-		funcName:         h.funcName,
+		src:             src,
+		filterBid:       filterBid,
+		selectKey:       selectKey,
+		output_stream:   output_streams[0],
+		numOutPartition: sp.NumOutPartitions[0],
+		trackParFunc:    tran_interface.DefaultTrackSubstreamFunc,
+		BaseProcArgsWithSink: proc_interface.NewBaseProcArgsWithSink([]source_sink.Sink{sink}, h.funcName,
+			sp.ScaleEpoch, sp.ParNum),
 	}
 
 	task := transaction.StreamTask{
@@ -191,7 +178,7 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 		},
 	}
 
-	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
+	control_channel.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 	srcs := []source_sink.Source{src}
 	sinks := []source_sink.Sink{sink}
 	if sp.EnableTransaction {
@@ -202,7 +189,7 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinish tran_interface.RecordPrevInstanceFinishFunc) {
 				procArgs.(*bidKeyedByAuctionProcessArgs).trackParFunc = trackParFunc
-				procArgs.(*bidKeyedByAuctionProcessArgs).recordFinishFunc = recordFinish
+				procArgs.(*bidKeyedByAuctionProcessArgs).SetRecordFinishFunc(recordFinish)
 			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()

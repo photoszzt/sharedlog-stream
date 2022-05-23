@@ -13,6 +13,16 @@ import (
 	"time"
 )
 
+func checkMeasureSink() bool {
+	measure_str := os.Getenv("MEASURE_SINK")
+	measure := false
+	if measure_str == "true" || measure_str == "1" {
+		measure = true
+	}
+	return measure
+}
+
+/*
 type ConcurrentMeteredSink struct {
 	sink *ShardedSharedLogStreamSink
 
@@ -30,15 +40,6 @@ type ConcurrentMeteredSink struct {
 }
 
 var _ = Sink(&ConcurrentMeteredSink{})
-
-func checkMeasureSink() bool {
-	measure_str := os.Getenv("MEASURE_SINK")
-	measure := false
-	if measure_str == "true" || measure_str == "1" {
-		measure = true
-	}
-	return measure
-}
 
 func NewConcurrentMeteredSink(sink *ShardedSharedLogStreamSink, warmup time.Duration) *ConcurrentMeteredSink {
 
@@ -140,6 +141,7 @@ func (s *ConcurrentMeteredSink) CloseAsyncPush() {
 func (s *ConcurrentMeteredSink) InnerSink() *ShardedSharedLogStreamSink {
 	return s.sink
 }
+*/
 
 type ConcurrentMeteredSyncSink struct {
 	sink *ShardedSharedLogStreamSyncSink
@@ -157,7 +159,7 @@ type ConcurrentMeteredSyncSink struct {
 	afterWarmup   uint32
 }
 
-var _ = Sink(&ConcurrentMeteredSink{})
+var _ = Sink(&ConcurrentMeteredSyncSink{})
 
 func NewConcurrentMeteredSyncSink(sink *ShardedSharedLogStreamSyncSink, warmup time.Duration) *ConcurrentMeteredSyncSink {
 	return &ConcurrentMeteredSyncSink{
@@ -227,8 +229,7 @@ func (s *ConcurrentMeteredSyncSink) Produce(ctx context.Context, msg commtypes.M
 		}
 		if atomic.LoadUint32(&s.afterWarmup) == 1 {
 			procStart := time.Now()
-			if s.isFinalOutput {
-				debug.Assert(msg.Timestamp != 0, "sink event ts should be set")
+			if s.isFinalOutput && msg.Timestamp != 0 {
 				els := int(procStart.UnixMilli() - msg.Timestamp)
 				s.latMu.Lock()
 				s.eventTimeLatencies = append(s.eventTimeLatencies, els)
@@ -245,6 +246,7 @@ func (s *ConcurrentMeteredSyncSink) Produce(ctx context.Context, msg commtypes.M
 	return s.sink.Produce(ctx, msg, parNum, isControl)
 }
 
+/*
 type MeteredSink struct {
 	sink *ShardedSharedLogStreamSink
 
@@ -355,6 +357,7 @@ func (s *MeteredSink) CloseAsyncPush() {
 func (s *MeteredSink) InnerSink() *ShardedSharedLogStreamSink {
 	return s.sink
 }
+*/
 
 type MeteredSyncSink struct {
 	sink *ShardedSharedLogStreamSyncSink

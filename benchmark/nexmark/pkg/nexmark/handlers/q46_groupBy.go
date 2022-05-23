@@ -9,12 +9,14 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/proc_interface"
 	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sync"
@@ -51,7 +53,7 @@ func (h *q46GroupByHandler) process(
 	argsTmp interface{},
 ) *common.FnOutput {
 	args := argsTmp.(*TwoMsgChanProcArgs)
-	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
+	return execution.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
 		if msg.MsgArr != nil {
 			for _, subMsg := range msg.MsgArr {
@@ -104,16 +106,13 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 	var wg sync.WaitGroup
 	auctionsByIDManager := execution.NewGeneralProcManager(auctionsByIDFunc)
 	bidsByAuctionIDManager := execution.NewGeneralProcManager(bidsByAuctionIDFunc)
+	sinks_arr := []source_sink.Sink{sinks[0], sinks[1]}
 	procArgs := &TwoMsgChanProcArgs{
-		src:              src,
-		sinks:            sinks,
-		msgChan1:         auctionsByIDManager.MsgChan(),
-		msgChan2:         bidsByAuctionIDManager.MsgChan(),
-		trackParFunc:     tran_interface.DefaultTrackSubstreamFunc,
-		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
-		funcName:         h.funcName,
-		curEpoch:         sp.ScaleEpoch,
-		parNum:           sp.ParNum,
+		src:                  src,
+		msgChan1:             auctionsByIDManager.MsgChan(),
+		msgChan2:             bidsByAuctionIDManager.MsgChan(),
+		trackParFunc:         tran_interface.DefaultTrackSubstreamFunc,
+		BaseProcArgsWithSink: proc_interface.NewBaseProcArgsWithSink(sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 	auctionsByIDManager.LaunchProc(ctx, procArgs, &wg)
 	bidsByAuctionIDManager.LaunchProc(ctx, procArgs, &wg)
@@ -154,8 +153,8 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 		InitFunc: func(progArgsTmp interface{}) {
 			progArgs := progArgsTmp.(*TwoMsgChanProcArgs)
 			progArgs.src.StartWarmup()
-			progArgs.sinks[0].StartWarmup()
-			progArgs.sinks[1].StartWarmup()
+			sinks[0].StartWarmup()
+			sinks[1].StartWarmup()
 			filterAuctions.StartWarmup()
 			auctionsByIDMap.StartWarmup()
 			filterBids.StartWarmup()
@@ -165,10 +164,10 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 		CurrentOffset:             make(map[string]uint64),
 		CommitEveryForAtLeastOnce: common.CommitDuration,
 	}
-	transaction.SetupConsistentHash(&h.aucHashMu, h.aucHash, sp.NumOutPartitions[0])
-	transaction.SetupConsistentHash(&h.bidHashMu, h.bidHash, sp.NumOutPartitions[1])
+	control_channel.SetupConsistentHash(&h.aucHashMu, h.aucHash, sp.NumOutPartitions[0])
+	control_channel.SetupConsistentHash(&h.bidHashMu, h.bidHash, sp.NumOutPartitions[1])
 	srcs := []source_sink.Source{src}
-	sinks_arr := []source_sink.Sink{sinks[0], sinks[1]}
+
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName, sp.InputTopicNames[0], sp.ParNum)
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr)
@@ -177,7 +176,7 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
 				recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
 				procArgs.(*TwoMsgChanProcArgs).trackParFunc = trackParFunc
-				procArgs.(*TwoMsgChanProcArgs).recordFinishFunc = recordFinishFunc
+				procArgs.(*TwoMsgChanProcArgs).SetRecordFinishFunc(recordFinishFunc)
 			}, &task)
 		if ret != nil && ret.Success {
 			ret.Latencies["src"] = src.GetLatency()
@@ -271,13 +270,13 @@ func (h *q46GroupByHandler) getAucsByID(warmup time.Duration) (
 						return
 					}
 					par := parTmp.(uint8)
-					err = args.trackParFunc(ctx, k, args.sinks[0].KeySerde(), args.sinks[0].TopicName(), par)
+					err = args.trackParFunc(ctx, k, args.Sinks()[0].KeySerde(), args.Sinks()[0].TopicName(), par)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "[ERROR] add topic partition failed: %v\n", err)
 						errChan <- fmt.Errorf("add topic partition failed: %v", err)
 						return
 					}
-					err = args.sinks[0].Produce(ctx, changeKeyedMsg[0], par, false)
+					err = args.Sinks()[0].Produce(ctx, changeKeyedMsg[0], par, false)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "[ERROR] sink err: %v\n", err)
 						errChan <- fmt.Errorf("sink err: %v", err)
@@ -351,13 +350,13 @@ func (h *q46GroupByHandler) getBidsByAuctionID(warmup time.Duration) (
 						return
 					}
 					par := parTmp.(uint8)
-					err = args.trackParFunc(ctx, k, args.sinks[1].KeySerde(), args.sinks[1].TopicName(), par)
+					err = args.trackParFunc(ctx, k, args.Sinks()[1].KeySerde(), args.Sinks()[1].TopicName(), par)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "[ERROR] add topic partition failed: %v", err)
 						errChan <- fmt.Errorf("add topic partition failed: %v", err)
 						return
 					}
-					err = args.sinks[1].Produce(ctx, changeKeyedMsg[0], par, false)
+					err = args.Sinks()[1].Produce(ctx, changeKeyedMsg[0], par, false)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "[ERROR] sink err: %v", err)
 						errChan <- fmt.Errorf("sink err: %v", err)

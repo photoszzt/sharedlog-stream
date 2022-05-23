@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/txn_data"
 	"time"
 )
 
@@ -113,7 +114,7 @@ L:
 		if rawMsg.IsControl {
 			msgs = append(msgs, commtypes.MsgAndSeq{
 				Msg: commtypes.Message{
-					Key: commtypes.SCALE_FENCE_KEY,
+					Key: txn_data.SCALE_FENCE_KEY,
 					Value: ScaleEpochAndBytes{
 						ScaleEpoch: rawMsg.ScaleEpoch,
 						Payload:    rawMsg.Payload,

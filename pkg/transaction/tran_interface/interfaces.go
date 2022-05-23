@@ -28,3 +28,9 @@ func DefaultTrackSubstreamFunc(ctx context.Context,
 }
 
 type RecordPrevInstanceFinishFunc func(ctx context.Context, appId string, instanceID uint8) error
+
+func DefaultRecordPrevInstanceFinishFunc(ctx context.Context,
+	appId string, instanceId uint8,
+) error {
+	return nil
+}

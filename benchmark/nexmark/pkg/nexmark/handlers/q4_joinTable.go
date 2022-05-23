@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -241,9 +242,11 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		return filterAndGroupMsg(ctx, msgs)
 	})
 
-	transaction.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
-	joinProcBid := execution.NewJoinProcArgs(bidsSrc, sink, bJoinA, &h.cHashMu, h.cHash, sp.ParNum)
-	joinProcAuction := execution.NewJoinProcArgs(auctionsSrc, sink, aJoinB, &h.cHashMu, h.cHash, sp.ParNum)
+	control_channel.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
+	joinProcBid := execution.NewJoinProcArgs(bidsSrc, sink, bJoinA, &h.cHashMu, h.cHash,
+		h.funcName, sp.ScaleEpoch, sp.ParNum)
+	joinProcAuction := execution.NewJoinProcArgs(auctionsSrc, sink, aJoinB, &h.cHashMu, h.cHash,
+		h.funcName, sp.ScaleEpoch, sp.ParNum)
 
 	var wg sync.WaitGroup
 	aucManager := execution.NewJoinProcManager()

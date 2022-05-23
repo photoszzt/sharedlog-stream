@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/proc_interface"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sharedlog-stream/pkg/txn_data"
@@ -18,7 +17,6 @@ import (
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
-	"golang.org/x/xerrors"
 )
 
 type StreamTask struct {
@@ -55,12 +53,6 @@ func NewStreamTask(
 	return t
 }
 */
-
-func DefaultRecordPrevInstanceFinishFunc(ctx context.Context,
-	appId string, instanceId uint8,
-) error {
-	return nil
-}
 
 // finding the last commited marker and gets the marker's seq number
 // used in restore and in one thread
@@ -102,13 +94,13 @@ func SetupManagers(ctx context.Context, env types.Environment,
 	updateProcArgs func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
 		recordFinish tran_interface.RecordPrevInstanceFinishFunc),
 	task *StreamTask,
-) (*TransactionManager, *ControlChannelManager, error) {
+) (*TransactionManager, *control_channel.ControlChannelManager, error) {
 	debug.Fprint(os.Stderr, "setup transaction and control manager\n")
 	tm, err := SetupTransactionManager(ctx, streamTaskArgs)
 	if err != nil {
 		return nil, nil, err
 	}
-	cmm, err := NewControlChannelManager(env, streamTaskArgs.appId,
+	cmm, err := control_channel.NewControlChannelManager(env, streamTaskArgs.appId,
 		commtypes.SerdeFormat(streamTaskArgs.serdeFormat), streamTaskArgs.scaleEpoch)
 	if err != nil {
 		return nil, nil, err
@@ -139,7 +131,7 @@ func SetupManagers(ctx context.Context, env types.Environment,
 		return err
 	}
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
-		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, cmm.currentEpoch)
+		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, cmm.CurrentEpoch())
 	}
 	updateProcArgs(streamTaskArgs.procArgs, trackParFunc, recordFinish)
 	return tm, cmm, nil
@@ -641,7 +633,7 @@ func (t *StreamTask) ProcessWithTransaction(
 func (t *StreamTask) ProcessWithTransaction(
 	ctx context.Context,
 	tm *TransactionManager,
-	cmm *ControlChannelManager,
+	cmm *control_channel.ControlChannelManager,
 	args *StreamTaskArgsTransaction,
 ) *common.FnOutput {
 	debug.Assert(len(args.srcs) >= 1, "Srcs should be filled")
@@ -1124,52 +1116,5 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 	}
 	*hasLiveTransaction = false
 	*trackConsumePar = false
-	return nil
-}
-
-func CommonProcess(ctx context.Context, t *StreamTask, args proc_interface.ProcArgsWithSrcSink,
-	proc func(t *StreamTask, msg commtypes.MsgAndSeq) error,
-) *common.FnOutput {
-	if t.HandleErrFunc != nil {
-		if err := t.HandleErrFunc(); err != nil {
-			return &common.FnOutput{Success: true, Message: err.Error()}
-		}
-	}
-	gotMsgs, err := args.Source().Consume(ctx, args.ParNum())
-	if err != nil {
-		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
-			return &common.FnOutput{Success: true, Message: err.Error()}
-		}
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	for _, msg := range gotMsgs.Msgs {
-		if msg.MsgArr == nil && msg.Msg.Value == nil {
-			continue
-		}
-		if msg.IsControl {
-			v := msg.Msg.Value.(source_sink.ScaleEpochAndBytes)
-			err := args.PushToAllSinks(ctx, commtypes.Message{Key: commtypes.SCALE_FENCE_KEY,
-				Value: v.Payload}, args.ParNum(), true)
-			if err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
-			}
-			if args.CurEpoch() < v.ScaleEpoch {
-				err = args.RecordFinishFunc()(ctx, args.FuncName(), args.ParNum())
-				if err != nil {
-					return &common.FnOutput{Success: false, Message: err.Error()}
-				}
-				return &common.FnOutput{
-					Success: true,
-					Message: fmt.Sprintf("%s-%d epoch %d exit", args.FuncName(), args.ParNum(), args.CurEpoch()),
-					Err:     errors.ErrShouldExitForScale,
-				}
-			}
-			continue
-		}
-		err = proc(t, msg)
-		if err != nil {
-			return &common.FnOutput{Success: false, Message: err.Error()}
-		}
-	}
 	return nil
 }

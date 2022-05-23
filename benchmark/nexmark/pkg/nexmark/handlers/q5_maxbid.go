@@ -10,10 +10,12 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
+	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/stream/processor/proc_interface"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
@@ -85,28 +87,15 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 }
 
 type q5MaxBidProcessArgs struct {
-	maxBid           *processor.MeteredProcessor
-	stJoin           *processor.MeteredProcessor
-	chooseMaxCnt     *processor.MeteredProcessor
-	src              *source_sink.MeteredSource
-	sink             *source_sink.ConcurrentMeteredSyncSink
-	trackParFunc     tran_interface.TrackKeySubStreamFunc
-	recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc
-	funcName         string
-	curEpoch         uint64
-	parNum           uint8
+	maxBid       *processor.MeteredProcessor
+	stJoin       *processor.MeteredProcessor
+	chooseMaxCnt *processor.MeteredProcessor
+	src          *source_sink.MeteredSource
+	trackParFunc tran_interface.TrackKeySubStreamFunc
+	proc_interface.BaseProcArgsWithSink
 }
 
 func (a *q5MaxBidProcessArgs) Source() source_sink.Source { return a.src }
-func (a *q5MaxBidProcessArgs) PushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
-	return a.sink.Produce(ctx, msg, parNum, isControl)
-}
-func (a *q5MaxBidProcessArgs) ParNum() uint8    { return a.parNum }
-func (a *q5MaxBidProcessArgs) CurEpoch() uint64 { return a.curEpoch }
-func (a *q5MaxBidProcessArgs) FuncName() string { return a.funcName }
-func (a *q5MaxBidProcessArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
-	return a.recordFinishFunc
-}
 
 type q5MaxBidRestoreArgs struct {
 	maxBid       processor.Processor
@@ -118,7 +107,7 @@ type q5MaxBidRestoreArgs struct {
 
 func (h *q5MaxBid) process(ctx context.Context, t *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
 	args := argsTmp.(*q5MaxBidProcessArgs)
-	return transaction.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
+	return execution.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
 		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
 		if msg.MsgArr != nil {
 			for _, subMsg := range msg.MsgArr {
@@ -157,7 +146,7 @@ func (h *q5MaxBid) procMsg(ctx context.Context, msg commtypes.Message, args *q5M
 		return fmt.Errorf("filteredMx err: %v", err)
 	}
 	for _, filtered := range filteredMx {
-		err = args.sink.Produce(ctx, filtered, args.parNum, false)
+		err = args.Sinks()[0].Produce(ctx, filtered, args.ParNum(), false)
 		if err != nil {
 			return fmt.Errorf("sink err: %v", err)
 		}
@@ -330,16 +319,13 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			})), time.Duration(sp.WarmupS)*time.Second)
 
 	procArgs := &q5MaxBidProcessArgs{
-		maxBid:           maxBid,
-		stJoin:           stJoin,
-		chooseMaxCnt:     chooseMaxCnt,
-		src:              src,
-		sink:             sink,
-		parNum:           sp.ParNum,
-		trackParFunc:     tran_interface.DefaultTrackSubstreamFunc,
-		recordFinishFunc: transaction.DefaultRecordPrevInstanceFinishFunc,
-		curEpoch:         sp.ScaleEpoch,
-		funcName:         h.funcName,
+		maxBid:       maxBid,
+		stJoin:       stJoin,
+		chooseMaxCnt: chooseMaxCnt,
+		src:          src,
+		trackParFunc: tran_interface.DefaultTrackSubstreamFunc,
+		BaseProcArgsWithSink: proc_interface.NewBaseProcArgsWithSink([]source_sink.Sink{sink}, h.funcName,
+			sp.ScaleEpoch, sp.ParNum),
 	}
 
 	task := transaction.StreamTask{
@@ -392,7 +378,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 				recordFinshFunc tran_interface.RecordPrevInstanceFinishFunc,
 			) {
 				procArgs.(*q5MaxBidProcessArgs).trackParFunc = trackParFunc
-				procArgs.(*q5MaxBidProcessArgs).recordFinishFunc = recordFinshFunc
+				procArgs.(*q5MaxBidProcessArgs).SetRecordFinishFunc(recordFinshFunc)
 				if sp.TableType == uint8(store.IN_MEM) {
 					kvstore_mem := kvstore.(*store_with_changelog.KeyValueStoreWithChangelog)
 					kvstore_mem.MaterializeParam().TrackFunc = trackParFunc

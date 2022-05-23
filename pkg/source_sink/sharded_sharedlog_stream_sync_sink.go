@@ -6,6 +6,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
 )
 
@@ -41,7 +42,7 @@ func (sls *ShardedSharedLogStreamSyncSink) Produce(ctx context.Context, msg comm
 		return nil
 	}
 	ctrl, ok := msg.Key.(string)
-	if ok && ctrl == commtypes.SCALE_FENCE_KEY {
+	if ok && ctrl == txn_data.SCALE_FENCE_KEY {
 		debug.Assert(isControl, "scale fence msg should be a control msg")
 		if sls.bufPush && isControl {
 			err := sls.flush(ctx)
@@ -49,7 +50,8 @@ func (sls *ShardedSharedLogStreamSyncSink) Produce(ctx context.Context, msg comm
 				return err
 			}
 		}
-		_, err := sls.push(ctx, msg.Value.([]byte), parNum, isControl, false)
+		scale_fence_tag := txn_data.ScaleFenceTag(sls.Stream().TopicNameHash(), parNum)
+		_, err := sls.pushWithTag(ctx, msg.Value.([]byte), parNum, []uint64{scale_fence_tag}, isControl, false)
 		return err
 	}
 	bytes, err := commtypes.EncodeMsg(msg, sls.kvmsgSerdes)
@@ -125,6 +127,14 @@ func (s *ShardedSharedLogStreamSyncSink) push(ctx context.Context, payload []byt
 		return s.stream.Push(ctx, payload, parNumber, isControl, payloadIsArr, s.tm.GetCurrentTaskId(), s.tm.GetCurrentEpoch(), s.tm.GetTransactionID())
 	} else {
 		return s.stream.Push(ctx, payload, parNumber, isControl, payloadIsArr, 0, 0, 0)
+	}
+}
+
+func (s *ShardedSharedLogStreamSyncSink) pushWithTag(ctx context.Context, payload []byte, parNumber uint8, tag []uint64, isControl bool, payloadIsArr bool) (uint64, error) {
+	if s.transactional {
+		return s.stream.PushWithTag(ctx, payload, parNumber, tag, isControl, payloadIsArr, s.tm.GetCurrentTaskId(), s.tm.GetCurrentEpoch(), s.tm.GetTransactionID())
+	} else {
+		return s.stream.PushWithTag(ctx, payload, parNumber, tag, isControl, payloadIsArr, 0, 0, 0)
 	}
 }
 
