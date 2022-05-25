@@ -613,13 +613,6 @@ func readMsgs(ctx context.Context,
 		if err != nil {
 			return nil, fmt.Errorf("DecodeRawMsg err: %v", err)
 		}
-		/*
-			sx := val.(commtypes.StreamTimeExtractor)
-			ts, err := sx.ExtractStreamTime()
-			if err != nil {
-				return nil, err
-			}
-		*/
 		if msgAndSeq.MsgArr != nil {
 			ret = append(ret, msgAndSeq.MsgArr...)
 		} else {

@@ -244,14 +244,15 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 			update_stats(ret)
 		}
 		return ret
+	} else {
+		streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr)
+		benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
+		ret := task.Process(ctx, streamTaskArgs)
+		if ret != nil && ret.Success {
+			update_stats(ret)
+		}
+		return ret
 	}
-	streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr)
-	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
-	ret := task.Process(ctx, streamTaskArgs)
-	if ret != nil && ret.Success {
-		update_stats(ret)
-	}
-	return ret
 }
 
 func (h *q3GroupByHandler) getPersonsByID(warmup time.Duration) (

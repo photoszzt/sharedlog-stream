@@ -197,6 +197,8 @@ func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 	*kvtables,
 	error,
 ) {
+	aucTabName := "auctionsBySellerIDStore"
+	perTabName := "personsByIDStore"
 	if tabType == store.IN_MEM {
 		compare := func(a, b treemap.Key) int {
 			valA := a.(uint64)
@@ -211,13 +213,13 @@ func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 		}
 
 		toAuctionsTable, auctionsStore, err := processor.ToInMemKVTable(
-			"auctionsBySellerIDStore", compare, warmup)
+			aucTabName, compare, warmup)
 		if err != nil {
 			return nil, fmt.Errorf("toAucTab err: %v", err)
 		}
 
 		toPersonsTable, personsStore, err := processor.ToInMemKVTable(
-			"personsByIDStore", compare, warmup)
+			perTabName, compare, warmup)
 		if err != nil {
 			return nil, fmt.Errorf("toPersonsTab err: %v", err)
 		}
@@ -246,12 +248,13 @@ func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 		if err != nil {
 			return nil, err
 		}
-		toAuctionsTable, auctionsStore, err := processor.ToMongoDBKVTable(ctx, "auctionsBySellerIDStore",
+		toAuctionsTable, auctionsStore, err := processor.ToMongoDBKVTable(
+			ctx, aucTabName,
 			client, sss.srcKVMsgSerdes.KeySerde, vtSerde0, warmup)
 		if err != nil {
 			return nil, err
 		}
-		toPersonsTable, personsStore, err := processor.ToMongoDBKVTable(ctx, "personsByIDStore",
+		toPersonsTable, personsStore, err := processor.ToMongoDBKVTable(ctx, perTabName,
 			client, sss.srcKVMsgSerdes.KeySerde, vtSerde1, warmup)
 		if err != nil {
 			return nil, err
@@ -441,13 +444,14 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			update_stats(ret)
 		}
 		return ret
+	} else {
+		streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr)
+		streamTaskArgs.WithKVChangelogs(kvchangelogs)
+		benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
+		ret := task.Process(ctx, streamTaskArgs)
+		if ret != nil && ret.Success {
+			update_stats(ret)
+		}
+		return ret
 	}
-	streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr)
-	streamTaskArgs.WithKVChangelogs(kvchangelogs)
-	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
-	ret := task.Process(ctx, streamTaskArgs)
-	if ret != nil && ret.Success {
-		update_stats(ret)
-	}
-	return ret
 }

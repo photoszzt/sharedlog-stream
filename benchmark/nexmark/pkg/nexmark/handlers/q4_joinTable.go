@@ -344,12 +344,13 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 			update_stats(ret)
 		}
 		return ret
+	} else {
+		streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr)
+		benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
+		ret := task.Process(ctx, streamTaskArgs)
+		if ret != nil && ret.Success {
+			update_stats(ret)
+		}
+		return ret
 	}
-	streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr)
-	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
-	ret := task.Process(ctx, streamTaskArgs)
-	if ret != nil && ret.Success {
-		update_stats(ret)
-	}
-	return ret
 }

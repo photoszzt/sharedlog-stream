@@ -128,6 +128,9 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 		return nil
 	}
 
+	auctionsByIDManager.LaunchProc(ctx, procArgs, &wg)
+	bidsByAuctionIDManager.LaunchProc(ctx, procArgs, &wg)
+
 	task := transaction.StreamTask{
 		ProcessFunc:   h.process,
 		HandleErrFunc: handleErrFunc,
