@@ -137,3 +137,20 @@ func EncodeMsg(msg Message, kvmsgSerdes KVMsgSerdes) ([]byte, error) {
 	}
 	return bytes, nil
 }
+
+func ApplyFuncToMsgSeqs(msgSeqs *MsgAndSeqs, callback func(msg *Message) error) error {
+	for _, msgSeq := range msgSeqs.Msgs {
+		if msgSeq.MsgArr != nil {
+			for _, msg := range msgSeq.MsgArr {
+				if err := callback(&msg); err != nil {
+					return err
+				}
+			}
+		} else {
+			if err := callback(&msgSeq.Msg); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}

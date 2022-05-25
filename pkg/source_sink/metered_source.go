@@ -13,6 +13,7 @@ import (
 type MeteredSource struct {
 	ShardedSharedLogStreamSource
 	latencies stats.Int64Collector
+	pToCLat   stats.Int64Collector
 	consumeTp stats.ThroughputCounter
 
 	measure bool
@@ -50,6 +51,7 @@ func (s *MeteredSource) Consume(ctx context.Context, parNum uint8) (*commtypes.M
 	}
 	s.latencies.AddSample(elapsed)
 	s.consumeTp.Tick(uint64(msgs.TotalLen))
+	extractProduceToConsumeTime(msgs, s.IsInitialSource(), &s.pToCLat)
 	// debug.Fprintf(os.Stderr, "%s consumed %d\n", s.src.TopicName(), s.count)
 	return msgs, err
 }
