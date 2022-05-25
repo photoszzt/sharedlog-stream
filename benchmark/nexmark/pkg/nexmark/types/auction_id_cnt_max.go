@@ -10,6 +10,8 @@ type AuctionIdCntMax struct {
 	AucId  uint64 `json:"aucId" msg:"aucId"`
 	Count  uint64 `json:"cnt" msg:"cnt"`
 	MaxCnt uint64 `json:"maxCnt" msg:"maxCnt"`
+
+	BaseInjTime `msg:"bInjT"`
 }
 
 type AuctionIdCntMaxJSONSerde struct{}

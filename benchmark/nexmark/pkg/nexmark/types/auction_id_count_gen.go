@@ -36,10 +36,16 @@ func (z *AuctionIdCount) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Count")
 				return
 			}
-		case "ts":
-			z.TimeStamp, err = dc.ReadInt64()
+		case "bTs":
+			err = z.BaseTs.DecodeMsg(dc)
 			if err != nil {
-				err = msgp.WrapError(err, "TimeStamp")
+				err = msgp.WrapError(err, "BaseTs")
+				return
+			}
+		case "bInjT":
+			err = z.BaseInjTime.DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, "BaseInjTime")
 				return
 			}
 		default:
@@ -54,10 +60,10 @@ func (z *AuctionIdCount) DecodeMsg(dc *msgp.Reader) (err error) {
 }
 
 // EncodeMsg implements msgp.Encodable
-func (z AuctionIdCount) EncodeMsg(en *msgp.Writer) (err error) {
+func (z *AuctionIdCount) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
-	zb0001Len := uint32(3)
-	var zb0001Mask uint8 /* 3 bits */
+	zb0001Len := uint32(4)
+	var zb0001Mask uint8 /* 4 bits */
 	if z.AucId == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x1
@@ -65,10 +71,6 @@ func (z AuctionIdCount) EncodeMsg(en *msgp.Writer) (err error) {
 	if z.Count == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x2
-	}
-	if z.TimeStamp == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x4
 	}
 	// variable map header, size zb0001Len
 	err = en.Append(0x80 | uint8(zb0001Len))
@@ -102,27 +104,35 @@ func (z AuctionIdCount) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// write "ts"
-		err = en.Append(0xa2, 0x74, 0x73)
-		if err != nil {
-			return
-		}
-		err = en.WriteInt64(z.TimeStamp)
-		if err != nil {
-			err = msgp.WrapError(err, "TimeStamp")
-			return
-		}
+	// write "bTs"
+	err = en.Append(0xa3, 0x62, 0x54, 0x73)
+	if err != nil {
+		return
+	}
+	err = z.BaseTs.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "BaseTs")
+		return
+	}
+	// write "bInjT"
+	err = en.Append(0xa5, 0x62, 0x49, 0x6e, 0x6a, 0x54)
+	if err != nil {
+		return
+	}
+	err = z.BaseInjTime.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "BaseInjTime")
+		return
 	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z AuctionIdCount) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *AuctionIdCount) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(3)
-	var zb0001Mask uint8 /* 3 bits */
+	zb0001Len := uint32(4)
+	var zb0001Mask uint8 /* 4 bits */
 	if z.AucId == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x1
@@ -130,10 +140,6 @@ func (z AuctionIdCount) MarshalMsg(b []byte) (o []byte, err error) {
 	if z.Count == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x2
-	}
-	if z.TimeStamp == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x4
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -150,10 +156,19 @@ func (z AuctionIdCount) MarshalMsg(b []byte) (o []byte, err error) {
 		o = append(o, 0xa3, 0x63, 0x6e, 0x74)
 		o = msgp.AppendUint64(o, z.Count)
 	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// string "ts"
-		o = append(o, 0xa2, 0x74, 0x73)
-		o = msgp.AppendInt64(o, z.TimeStamp)
+	// string "bTs"
+	o = append(o, 0xa3, 0x62, 0x54, 0x73)
+	o, err = z.BaseTs.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "BaseTs")
+		return
+	}
+	// string "bInjT"
+	o = append(o, 0xa5, 0x62, 0x49, 0x6e, 0x6a, 0x54)
+	o, err = z.BaseInjTime.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "BaseInjTime")
+		return
 	}
 	return
 }
@@ -188,10 +203,16 @@ func (z *AuctionIdCount) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Count")
 				return
 			}
-		case "ts":
-			z.TimeStamp, bts, err = msgp.ReadInt64Bytes(bts)
+		case "bTs":
+			bts, err = z.BaseTs.UnmarshalMsg(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "TimeStamp")
+				err = msgp.WrapError(err, "BaseTs")
+				return
+			}
+		case "bInjT":
+			bts, err = z.BaseInjTime.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "BaseInjTime")
 				return
 			}
 		default:
@@ -207,7 +228,7 @@ func (z *AuctionIdCount) UnmarshalMsg(bts []byte) (o []byte, err error) {
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z AuctionIdCount) Msgsize() (s int) {
-	s = 1 + 6 + msgp.Uint64Size + 4 + msgp.Uint64Size + 3 + msgp.Int64Size
+func (z *AuctionIdCount) Msgsize() (s int) {
+	s = 1 + 6 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + z.BaseTs.Msgsize() + 6 + z.BaseInjTime.Msgsize()
 	return
 }

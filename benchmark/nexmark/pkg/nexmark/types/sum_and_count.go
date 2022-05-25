@@ -8,7 +8,7 @@ type SumAndCount struct {
 	Sum   uint64 `json:"sum" msg:"sum"`
 	Count uint64 `json:"count" msg:"count"`
 
-	BaseInjTime `msg:",flatten"`
+	BaseInjTime `msg:"bInjT"`
 }
 
 type SumAndCountJSONSerde struct{}

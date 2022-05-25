@@ -127,7 +127,7 @@ func (h *q5MaxBid) process(ctx context.Context, t *transaction.StreamTask, argsT
 
 func (h *q5MaxBid) procMsg(ctx context.Context, msg commtypes.Message, args *q5MaxBidProcessArgs) error {
 	aic := msg.Value.(*ntypes.AuctionIdCount)
-	ts, err := aic.ExtractStreamTime()
+	ts, err := aic.ExtractEventTime()
 	if err != nil {
 		return fmt.Errorf("fail to extract timestamp: %v", err)
 	}
@@ -190,7 +190,7 @@ func (h *q5MaxBid) processWithoutSink(ctx context.Context, argsTmp interface{}) 
 
 func (h *q5MaxBid) procMsgWithoutSink(ctx context.Context, msg commtypes.Message, args *q5MaxBidRestoreArgs) error {
 	aic := msg.Value.(*ntypes.AuctionIdCount)
-	ts, err := aic.ExtractStreamTime()
+	ts, err := aic.ExtractEventTime()
 	if err != nil {
 		return fmt.Errorf("fail to extract timestamp: %v", err)
 	}

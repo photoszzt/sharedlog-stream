@@ -14,7 +14,7 @@ type StartEndTime struct {
 	StartTime int64 `json:"startTime" msg:"startTime"`
 	EndTime   int64 `json:"endTime" msg:"endTime"`
 
-	BaseInjTime `msg:",flatten"`
+	BaseInjTime `msg:"bInjT"`
 }
 
 func CompareStartEndTime(a, b *StartEndTime) int {

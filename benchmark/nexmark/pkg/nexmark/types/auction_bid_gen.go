@@ -54,6 +54,12 @@ func (z *AuctionBid) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "AucCategory")
 				return
 			}
+		case "bInjT":
+			err = z.BaseInjTime.DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, "BaseInjTime")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -67,9 +73,9 @@ func (z *AuctionBid) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *AuctionBid) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 5
+	// map header, size 6
 	// write "bidDateTime"
-	err = en.Append(0x85, 0xab, 0x62, 0x69, 0x64, 0x44, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65)
+	err = en.Append(0x86, 0xab, 0x62, 0x69, 0x64, 0x44, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65)
 	if err != nil {
 		return
 	}
@@ -118,15 +124,25 @@ func (z *AuctionBid) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "AucCategory")
 		return
 	}
+	// write "bInjT"
+	err = en.Append(0xa5, 0x62, 0x49, 0x6e, 0x6a, 0x54)
+	if err != nil {
+		return
+	}
+	err = z.BaseInjTime.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "BaseInjTime")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *AuctionBid) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 5
+	// map header, size 6
 	// string "bidDateTime"
-	o = append(o, 0x85, 0xab, 0x62, 0x69, 0x64, 0x44, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65)
+	o = append(o, 0x86, 0xab, 0x62, 0x69, 0x64, 0x44, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65)
 	o = msgp.AppendInt64(o, z.BidDateTime)
 	// string "aucDateTime"
 	o = append(o, 0xab, 0x61, 0x75, 0x63, 0x44, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65)
@@ -140,6 +156,13 @@ func (z *AuctionBid) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "aucCategory"
 	o = append(o, 0xab, 0x61, 0x75, 0x63, 0x43, 0x61, 0x74, 0x65, 0x67, 0x6f, 0x72, 0x79)
 	o = msgp.AppendUint64(o, z.AucCategory)
+	// string "bInjT"
+	o = append(o, 0xa5, 0x62, 0x49, 0x6e, 0x6a, 0x54)
+	o, err = z.BaseInjTime.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "BaseInjTime")
+		return
+	}
 	return
 }
 
@@ -191,6 +214,12 @@ func (z *AuctionBid) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "AucCategory")
 				return
 			}
+		case "bInjT":
+			bts, err = z.BaseInjTime.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "BaseInjTime")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -205,6 +234,6 @@ func (z *AuctionBid) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *AuctionBid) Msgsize() (s int) {
-	s = 1 + 12 + msgp.Int64Size + 12 + msgp.Int64Size + 11 + msgp.Int64Size + 9 + msgp.Uint64Size + 12 + msgp.Uint64Size
+	s = 1 + 12 + msgp.Int64Size + 12 + msgp.Int64Size + 11 + msgp.Int64Size + 9 + msgp.Uint64Size + 12 + msgp.Uint64Size + 6 + z.BaseInjTime.Msgsize()
 	return
 }

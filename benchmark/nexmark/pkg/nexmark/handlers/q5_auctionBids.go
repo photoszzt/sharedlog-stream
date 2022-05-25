@@ -356,9 +356,9 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 				EndTime:   key.Window.End(),
 			}
 			newVal := &ntypes.AuctionIdCount{
-				AucId:     key.Key.(uint64),
-				Count:     value,
-				TimeStamp: msg.Timestamp,
+				AucId:  key.Key.(uint64),
+				Count:  value,
+				BaseTs: ntypes.BaseTs{msg.Timestamp},
 			}
 			return commtypes.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
 		})), time.Duration(sp.WarmupS)*time.Second)

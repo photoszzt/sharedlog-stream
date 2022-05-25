@@ -11,7 +11,7 @@ type PriceTime struct {
 	Price    uint64 `json:"price" msg:"price"`
 	DateTime int64  `json:"dateTime" msg:"dateTime"` // unix timestamp in ms
 
-	BaseInjTime `msg:",flatten"`
+	BaseInjTime `msg:"bInjT"`
 }
 
 type PriceTimeJSONSerde struct{}

@@ -24,6 +24,14 @@ func (ij *BaseInjTime) ExtractInjectTimeMs() (int64, error) {
 	return ij.InjT, nil
 }
 
+type BaseTs struct {
+	Timestamp int64 `msg:"ts,omitempty" json:"ts,omitempty"`
+}
+
+func (ts *BaseTs) ExtractEventTime() (int64, error) {
+	return ts.Timestamp, nil
+}
+
 type Auction struct {
 	ItemName    string `msg:"itemName" json:"itemName"`
 	Description string `msg:"description" json:"description"`

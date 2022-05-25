@@ -11,6 +11,8 @@ type BidAndMax struct {
 	Bidder      uint64 `json:"bidder" msg:"bidder"`
 	DateTime    int64  `json:"dateTime" msg:"dateTime"`
 	MaxDateTime int64  `json:"maxDateTime" msg:"maxDateTime"`
+
+	BaseInjTime `msg:"bInjT"`
 }
 
 type BidAndMaxJSONSerde struct{}

@@ -7,6 +7,8 @@ import "encoding/json"
 type AuctionIdCategory struct {
 	AucId    uint64 `json:"aucId,omitempty" msg:"aucId,omitempty"`
 	Category uint64 `json:"cat,omitempty" msg:"cat,omitempty"`
+
+	BaseInjTime `msg:"bInjT"`
 }
 
 type AuctionIdCategoryJSONSerde struct{}
