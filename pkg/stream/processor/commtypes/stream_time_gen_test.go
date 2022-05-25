@@ -9,8 +9,8 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
-func TestMarshalUnmarshalValueTimestampSerialized(t *testing.T) {
-	v := ValueTimestampSerialized{}
+func TestMarshalUnmarshalBaseInjTime(t *testing.T) {
+	v := BaseInjTime{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -32,8 +32,8 @@ func TestMarshalUnmarshalValueTimestampSerialized(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgValueTimestampSerialized(b *testing.B) {
-	v := ValueTimestampSerialized{}
+func BenchmarkMarshalMsgBaseInjTime(b *testing.B) {
+	v := BaseInjTime{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -41,8 +41,8 @@ func BenchmarkMarshalMsgValueTimestampSerialized(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgValueTimestampSerialized(b *testing.B) {
-	v := ValueTimestampSerialized{}
+func BenchmarkAppendMsgBaseInjTime(b *testing.B) {
+	v := BaseInjTime{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -53,8 +53,8 @@ func BenchmarkAppendMsgValueTimestampSerialized(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalValueTimestampSerialized(b *testing.B) {
-	v := ValueTimestampSerialized{}
+func BenchmarkUnmarshalBaseInjTime(b *testing.B) {
+	v := BaseInjTime{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -67,17 +67,17 @@ func BenchmarkUnmarshalValueTimestampSerialized(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodeValueTimestampSerialized(t *testing.T) {
-	v := ValueTimestampSerialized{}
+func TestEncodeDecodeBaseInjTime(t *testing.T) {
+	v := BaseInjTime{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodeValueTimestampSerialized Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeBaseInjTime Msgsize() is inaccurate")
 	}
 
-	vn := ValueTimestampSerialized{}
+	vn := BaseInjTime{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -91,8 +91,8 @@ func TestEncodeDecodeValueTimestampSerialized(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodeValueTimestampSerialized(b *testing.B) {
-	v := ValueTimestampSerialized{}
+func BenchmarkEncodeBaseInjTime(b *testing.B) {
+	v := BaseInjTime{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -105,8 +105,8 @@ func BenchmarkEncodeValueTimestampSerialized(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodeValueTimestampSerialized(b *testing.B) {
-	v := ValueTimestampSerialized{}
+func BenchmarkDecodeBaseInjTime(b *testing.B) {
+	v := BaseInjTime{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))

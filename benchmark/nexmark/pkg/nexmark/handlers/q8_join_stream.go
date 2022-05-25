@@ -423,6 +423,17 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	} else {
 		panic("unrecognized table type")
 	}
+
+	update_stats := func(ret *common.FnOutput) {
+		ret.Latencies["toAuctionsWindowTab"] = toAuctionsWindowTab.GetLatency()
+		ret.Latencies["toPersonsWinTab"] = toPersonsWinTab.GetLatency()
+		ret.Latencies["personsJoinsAuctions"] = personsJoinsAuctions.GetLatency()
+		ret.Latencies["auctionsJoinsPersons"] = auctionsJoinsPersons.GetLatency()
+		ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
+		ret.Counts["auctionsSrc"] = auctionsSrc.GetCount()
+		ret.Counts["personsSrc"] = personsSrc.GetCount()
+		ret.Counts["sink"] = sink.GetCount()
+	}
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr).
@@ -435,16 +446,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 				procArgs.(*execution.CommonJoinProcArgs).SetRecordFinishFunc(recordFinishFunc)
 			}, &task)
 		if ret != nil && ret.Success {
-			ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()
-			ret.Latencies["personsSrc"] = personsSrc.GetLatency()
-			ret.Latencies["toAuctionsWindowTab"] = toAuctionsWindowTab.GetLatency()
-			ret.Latencies["toPersonsWinTab"] = toPersonsWinTab.GetLatency()
-			ret.Latencies["personsJoinsAuctions"] = personsJoinsAuctions.GetLatency()
-			ret.Latencies["auctionsJoinsPersons"] = auctionsJoinsPersons.GetLatency()
-			ret.Latencies["sink"] = sink.GetLatency()
-			ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
-			ret.Consumed["auctionsSrc"] = auctionsSrc.GetCount()
-			ret.Consumed["personsSrc"] = personsSrc.GetCount()
+			update_stats(ret)
 		}
 		return ret
 	}
@@ -453,16 +455,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
 	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
-		ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()
-		ret.Latencies["personsSrc"] = personsSrc.GetLatency()
-		ret.Latencies["sink"] = sink.GetLatency()
-		ret.Latencies["toAuctionsWindowTab"] = toAuctionsWindowTab.GetLatency()
-		ret.Latencies["toPersonsWinTab"] = toPersonsWinTab.GetLatency()
-		ret.Latencies["personsJoinsAuctions"] = personsJoinsAuctions.GetLatency()
-		ret.Latencies["auctionsJoinsPersons"] = auctionsJoinsPersons.GetLatency()
-		ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
-		ret.Consumed["auctionsSrc"] = auctionsSrc.GetCount()
-		ret.Consumed["personsSrc"] = personsSrc.GetCount()
+		update_stats(ret)
 	}
 	return ret
 }

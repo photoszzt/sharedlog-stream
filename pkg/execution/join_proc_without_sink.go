@@ -43,8 +43,8 @@ func JoinProcSerialWithoutSink(
 }
 
 func procMsg(ctx context.Context, msg commtypes.Message, procArgs *JoinProcWithoutSinkArgs) error {
-	st := msg.Value.(commtypes.StreamTimeExtractor)
-	ts, err := st.ExtractStreamTime()
+	st := msg.Value.(commtypes.EventTimeExtractor)
+	ts, err := st.ExtractEventTime()
 	if err != nil {
 		return fmt.Errorf("fail to extract timestamp: %v", err)
 	}

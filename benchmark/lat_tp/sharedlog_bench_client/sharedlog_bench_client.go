@@ -8,6 +8,7 @@ import (
 	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/stats"
 	"sort"
 	"sync"
 	"time"
@@ -115,20 +116,20 @@ func main() {
 			// ProdLatencies:        prodResponse.Latencies["e2e"],
 			ProdConsumeLatencies: consumeResponse.Latencies["e2e"],
 		}
-		produced := prodResponse.Consumed["prod"]
+		produced := prodResponse.Counts["prod"]
 		prodTime := prodResponse.Duration
 		consumed := len(lat.ProdConsumeLatencies)
 		consumeTime := consumeResponse.Duration
-		stats, err := json.Marshal(&lat)
+		stats_, err := json.Marshal(&lat)
 		if err != nil {
 			panic(err)
 		}
-		fmt.Fprintf(os.Stderr, "%s\n", stats)
-		ts := common.TimeSlice(lat.ProdConsumeLatencies)
+		fmt.Fprintf(os.Stderr, "%s\n", stats_)
+		ts := stats.IntSlice(lat.ProdConsumeLatencies)
 		sort.Sort(ts)
 		fmt.Fprintf(os.Stderr, "produced %d events in %f s, tp: %f\n",
 			produced, prodTime, float64(produced)/prodTime)
 		fmt.Fprintf(os.Stderr, "consumed %d events in %f s, tp: %f, p50: %d, p99: %d\n",
-			consumed, consumeTime, float64(consumed)/consumeTime, ts.P(0.5), ts.P(0.99))
+			consumed, consumeTime, float64(consumed)/consumeTime, stats.P(ts, 0.5), stats.P(ts, 0.99))
 	}
 }

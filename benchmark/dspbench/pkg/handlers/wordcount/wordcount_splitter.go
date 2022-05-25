@@ -180,6 +180,11 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 
 	srcs := []source_sink.Source{src}
 	sinks := []source_sink.Sink{sink}
+	update_stats := func(ret *common.FnOutput) {
+		ret.Latencies["split"] = procArgs.splitLatencies
+		ret.Counts["sink"] = sink.GetCount()
+		ret.Counts["src"] = src.GetCount()
+	}
 	if sp.EnableTransaction {
 		// fmt.Fprintf(os.Stderr, "word count counter function enables exactly once semantics\n")
 		transactionalID := fmt.Sprintf("%s-%s-%d", funcName, sp.InputTopicNames[0], sp.ParNum)
@@ -191,9 +196,7 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 				procArgs.(*wordcountSplitterProcessArg).SetRecordFinishFunc(recordFinishFunc)
 			}, &task)
 		if ret != nil && ret.Success {
-			ret.Latencies["src"] = src.GetLatency()
-			ret.Latencies["sink"] = sink.GetLatency()
-			ret.Latencies["split"] = procArgs.splitLatencies
+			update_stats(ret)
 		}
 		return ret
 	}
@@ -201,9 +204,7 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
 	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
-		ret.Latencies["src"] = src.GetLatency()
-		ret.Latencies["sink"] = sink.GetLatency()
-		ret.Latencies["split"] = procArgs.splitLatencies
+		update_stats(ret)
 	}
 	return ret
 }

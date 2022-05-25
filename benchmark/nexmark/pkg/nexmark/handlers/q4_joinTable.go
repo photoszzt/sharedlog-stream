@@ -317,6 +317,15 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 				fmt.Sprintf("%s-%s-%d", h.funcName, bidsStore.Name(), sp.ParNum), sp.ParNum),
 		}
 	}
+	update_stats := func(ret *common.FnOutput) {
+		ret.Latencies["toAuctionsTable"] = toAuctionsTable.GetLatency()
+		ret.Latencies["toBidsTable"] = toBidsTable.GetLatency()
+		ret.Latencies["bidsJoinAuctions"] = bidsJoinAuctions.GetLatency()
+		ret.Latencies["auctionsJoinBids"] = auctionsJoinBids.GetLatency()
+		ret.Counts["auctionsSrc"] = auctionsSrc.GetCount()
+		ret.Counts["bidsSrc"] = bidsSrc.GetCount()
+		ret.Counts["sink"] = sink.GetCount()
+	}
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName,
 			sp.InputTopicNames[0], sp.ParNum)
@@ -332,15 +341,7 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 				procArgs.(*execution.CommonJoinProcArgs).SetRecordFinishFunc(recordFinishFunc)
 			}, &task)
 		if ret != nil && ret.Success {
-			ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()
-			ret.Latencies["bidsSrc"] = bidsSrc.GetLatency()
-			ret.Latencies["toAuctionsTable"] = toAuctionsTable.GetLatency()
-			ret.Latencies["toBidsTable"] = toBidsTable.GetLatency()
-			ret.Latencies["bidsJoinAuctions"] = bidsJoinAuctions.GetLatency()
-			ret.Latencies["auctionsJoinBids"] = auctionsJoinBids.GetLatency()
-			ret.Latencies["sink"] = sink.GetLatency()
-			ret.Consumed["auctionsSrc"] = auctionsSrc.GetCount()
-			ret.Consumed["bidsSrc"] = bidsSrc.GetCount()
+			update_stats(ret)
 		}
 		return ret
 	}
@@ -348,15 +349,7 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
 	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
-		ret.Latencies["auctionsSrc"] = auctionsSrc.GetLatency()
-		ret.Latencies["bidsSrc"] = bidsSrc.GetLatency()
-		ret.Latencies["toAuctionsTable"] = toAuctionsTable.GetLatency()
-		ret.Latencies["toBidsTable"] = toBidsTable.GetLatency()
-		ret.Latencies["bidsJoinAuctions"] = bidsJoinAuctions.GetLatency()
-		ret.Latencies["auctionsJoinBids"] = auctionsJoinBids.GetLatency()
-		ret.Latencies["sink"] = sink.GetLatency()
-		ret.Consumed["auctionsSrc"] = auctionsSrc.GetCount()
-		ret.Consumed["bidsSrc"] = bidsSrc.GetCount()
+		update_stats(ret)
 	}
 	return ret
 }

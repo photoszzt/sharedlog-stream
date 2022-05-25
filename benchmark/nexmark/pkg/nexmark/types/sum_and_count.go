@@ -7,6 +7,8 @@ import "encoding/json"
 type SumAndCount struct {
 	Sum   uint64 `json:"sum" msg:"sum"`
 	Count uint64 `json:"count" msg:"count"`
+
+	BaseInjTime `msg:",flatten"`
 }
 
 type SumAndCountJSONSerde struct{}

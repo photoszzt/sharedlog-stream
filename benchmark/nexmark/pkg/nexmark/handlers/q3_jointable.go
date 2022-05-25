@@ -416,6 +416,16 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 				fmt.Sprintf("%s-%s-%d", h.funcName, kvtabs.tab2.Name(), sp.ParNum), sp.ParNum),
 		}
 	}
+	update_stats := func(ret *common.FnOutput) {
+		ret.Latencies["toAuctionsTable"] = kvtabs.toTab1.GetLatency()
+		ret.Latencies["toPersonsTable"] = kvtabs.toTab2.GetLatency()
+		ret.Latencies["personJoinsAuctions"] = personJoinsAuctions.GetLatency()
+		ret.Latencies["auctionJoinsPersons"] = auctionJoinsPersons.GetLatency()
+		ret.Latencies["eventTimeLatency"] = sss.sink.GetEventTimeLatency()
+		ret.Counts["auctionsSrc"] = sss.src1.GetCount()
+		ret.Counts["personsSrc"] = sss.src2.GetCount()
+		ret.Counts["sink"] = uint64(sss.sink.GetCount())
+	}
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr).
@@ -428,16 +438,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 				procArgs.(*execution.CommonJoinProcArgs).SetRecordFinishFunc(recordFinishFunc)
 			}, &task)
 		if ret != nil && ret.Success {
-			ret.Latencies["auctionsSrc"] = sss.src1.GetLatency()
-			ret.Latencies["personsSrc"] = sss.src2.GetLatency()
-			ret.Latencies["toAuctionsTable"] = kvtabs.toTab1.GetLatency()
-			ret.Latencies["toPersonsTable"] = kvtabs.toTab2.GetLatency()
-			ret.Latencies["personJoinsAuctions"] = personJoinsAuctions.GetLatency()
-			ret.Latencies["auctionJoinsPersons"] = auctionJoinsPersons.GetLatency()
-			ret.Latencies["sink"] = sss.sink.GetLatency()
-			ret.Latencies["eventTimeLatency"] = sss.sink.GetEventTimeLatency()
-			ret.Consumed["auctionsSrc"] = sss.src1.GetCount()
-			ret.Consumed["personsSrc"] = sss.src2.GetCount()
+			update_stats(ret)
 		}
 		return ret
 	}
@@ -446,16 +447,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
 	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
-		ret.Latencies["auctionsSrc"] = sss.src1.GetLatency()
-		ret.Latencies["personsSrc"] = sss.src2.GetLatency()
-		ret.Latencies["toAuctionsTable"] = kvtabs.toTab1.GetLatency()
-		ret.Latencies["toPersonsTable"] = kvtabs.toTab2.GetLatency()
-		ret.Latencies["personJoinsAuctions"] = personJoinsAuctions.GetLatency()
-		ret.Latencies["auctionJoinsPersons"] = auctionJoinsPersons.GetLatency()
-		ret.Latencies["sink"] = sss.sink.GetLatency()
-		ret.Latencies["eventTimeLatency"] = sss.sink.GetEventTimeLatency()
-		ret.Consumed["auctionsSrc"] = sss.src1.GetCount()
-		ret.Consumed["personsSrc"] = sss.src2.GetCount()
+		update_stats(ret)
 	}
 	return ret
 }

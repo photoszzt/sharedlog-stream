@@ -92,7 +92,7 @@ func (h *bidKeyedByAuction) process(ctx context.Context,
 
 func (h *bidKeyedByAuction) procMsg(ctx context.Context, msg commtypes.Message, args *bidKeyedByAuctionProcessArgs) error {
 	event := msg.Value.(*ntypes.Event)
-	ts, err := event.ExtractStreamTime()
+	ts, err := event.ExtractEventTime()
 	if err != nil {
 		return fmt.Errorf("fail to extract timestamp: %v", err)
 	}
@@ -181,6 +181,13 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 	control_channel.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 	srcs := []source_sink.Source{src}
 	sinks := []source_sink.Sink{sink}
+
+	update_stats := func(ret *common.FnOutput) {
+		ret.Latencies["filterBid"] = filterBid.GetLatency()
+		ret.Latencies["selectKey"] = selectKey.GetLatency()
+		ret.Counts["src"] = src.GetCount()
+		ret.Counts["sink"] = sink.GetCount()
+	}
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 			sp.InputTopicNames[0],
@@ -192,11 +199,7 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 				procArgs.(*bidKeyedByAuctionProcessArgs).SetRecordFinishFunc(recordFinish)
 			}, &task)
 		if ret != nil && ret.Success {
-			ret.Latencies["src"] = src.GetLatency()
-			ret.Latencies["sink"] = sink.GetLatency()
-			ret.Latencies["filterBid"] = filterBid.GetLatency()
-			ret.Latencies["selectKey"] = selectKey.GetLatency()
-			ret.Consumed["src"] = src.GetCount()
+			update_stats(ret)
 		}
 		return ret
 	}
@@ -205,11 +208,7 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
 	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
-		ret.Latencies["src"] = src.GetLatency()
-		ret.Latencies["sink"] = sink.GetLatency()
-		ret.Latencies["filterBid"] = filterBid.GetLatency()
-		ret.Latencies["selectKey"] = selectKey.GetLatency()
-		ret.Consumed["src"] = src.GetCount()
+		update_stats(ret)
 	}
 	return ret
 }

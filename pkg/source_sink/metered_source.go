@@ -2,21 +2,20 @@ package source_sink
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/store"
 	"time"
 )
 
 type MeteredSource struct {
-	initial     time.Time
-	src         Source
-	latencies   []int
-	warmup      time.Duration
-	count       uint64
-	measure     bool
-	afterWarmup bool
+	ShardedSharedLogStreamSource
+	latencies stats.Int64Collector
+	consumeTp stats.ThroughputCounter
+
+	measure bool
 }
 
 func checkMeasureSource() bool {
@@ -28,79 +27,37 @@ func checkMeasureSource() bool {
 	return measure
 }
 
-func NewMeteredSource(src Source, warmup time.Duration) *MeteredSource {
-
+func NewMeteredSource(src *ShardedSharedLogStreamSource, warmup time.Duration) *MeteredSource {
+	src_name := fmt.Sprintf("%s_src", src.TopicName())
 	return &MeteredSource{
-		src:         src,
-		latencies:   make([]int, 0, 128),
-		measure:     checkMeasureSource(),
-		warmup:      warmup,
-		afterWarmup: false,
+		ShardedSharedLogStreamSource: *src,
+		latencies:                    stats.NewIntCollector(src_name, stats.DEFAULT_COLLECT_DURATION),
+		consumeTp:                    stats.NewThroughputCounter(src_name, stats.DEFAULT_COLLECT_DURATION),
+		measure:                      checkMeasureSource(),
 	}
-}
-
-func (s *MeteredSource) InTransaction(serdeFormat commtypes.SerdeFormat) error {
-	return s.src.InTransaction(serdeFormat)
 }
 
 func (s *MeteredSource) StartWarmup() {
-	if s.measure {
-		s.initial = time.Now()
-	}
-}
-
-func (s *MeteredSource) IsInitialSource() bool {
-	return s.src.IsInitialSource()
-}
-
-func (s *MeteredSource) SetInitialSource(initial bool) {
-	s.src.SetInitialSource(initial)
 }
 
 func (s *MeteredSource) Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
-	debug.Assert(!s.measure || (s.warmup == 0 || (s.warmup > 0 && !s.initial.IsZero())), "warmup should initialize initial")
-	if s.measure {
-		if !s.afterWarmup && (s.warmup == 0 || (s.warmup > 0 && time.Since(s.initial) >= s.warmup)) {
-			debug.Fprintf(os.Stderr, "source %s after warmup\n", s.src.TopicName())
-			s.afterWarmup = true
-		}
-		if s.afterWarmup {
-			procStart := time.Now()
-			msgs, err := s.src.Consume(ctx, parNum)
-			elapsed := time.Since(procStart)
-			if err != nil {
-				debug.Fprintf(os.Stderr, "src out err: %v\n", err)
-				return msgs, err
-			}
-			s.latencies = append(s.latencies, int(elapsed.Microseconds()))
-			s.count += uint64(msgs.TotalLen)
-			// debug.Fprintf(os.Stderr, "%s consumed %d\n", s.src.TopicName(), s.count)
-			return msgs, err
-		}
+	procStart := stats.TimerBegin()
+	msgs, err := s.ShardedSharedLogStreamSource.Consume(ctx, parNum)
+	elapsed := stats.Elapsed(procStart).Microseconds()
+	if err != nil {
+		debug.Fprintf(os.Stderr, "[ERROR] src out err: %v\n", err)
+		return msgs, err
 	}
-	return s.src.Consume(ctx, parNum)
-}
-
-func (s *MeteredSource) GetLatency() []int {
-	return s.latencies
+	s.latencies.AddSample(elapsed)
+	s.consumeTp.Tick(uint64(msgs.TotalLen))
+	// debug.Fprintf(os.Stderr, "%s consumed %d\n", s.src.TopicName(), s.count)
+	return msgs, err
 }
 
 func (s *MeteredSource) GetCount() uint64 {
-	return s.count
-}
-
-func (s *MeteredSource) SetCursor(cursor uint64, parNum uint8) {
-	s.src.SetCursor(cursor, parNum)
-}
-
-func (s *MeteredSource) TopicName() string {
-	return s.src.TopicName()
-}
-
-func (s *MeteredSource) Stream() store.Stream {
-	return s.src.Stream()
+	return s.consumeTp.GetCount()
 }
 
 func (s *MeteredSource) InnerSource() Source {
-	return s.src
+	return &s.ShardedSharedLogStreamSource
 }

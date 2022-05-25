@@ -145,7 +145,7 @@ func (h *query7Handler) process(
 
 func (h *query7Handler) procMsg(ctx context.Context, msg commtypes.Message, args *processQ7ProcessArgs) error {
 	event := msg.Value.(*ntypes.Event)
-	ts, err := event.ExtractStreamTime()
+	ts, err := event.ExtractEventTime()
 	if err != nil {
 		return fmt.Errorf("fail to extract timestamp: %v", err)
 	}
@@ -212,7 +212,7 @@ func (h *query7Handler) processWithoutSink(
 
 func (h *query7Handler) procMsgWithoutSink(ctx context.Context, msg commtypes.Message, args *processQ7RestoreArgs) error {
 	event := msg.Value.(*ntypes.Event)
-	ts, err := event.ExtractStreamTime()
+	ts, err := event.ExtractEventTime()
 	if err != nil {
 		return fmt.Errorf("fail to extract timestamp: %v", err)
 	}
@@ -397,6 +397,14 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 	} else {
 		panic("unrecognized table type")
 	}
+
+	update_stats := func(ret *common.FnOutput) {
+		ret.Latencies["maxPriceBid"] = maxPriceBid.GetLatency()
+		ret.Latencies["transformWithStore"] = transformWithStore.GetLatency()
+		ret.Latencies["filterTime"] = filterTime.GetLatency()
+		ret.Counts["src"] = src.GetCount()
+		ret.Counts["sink"] = sink.GetCount()
+	}
 	if input.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 			input.InputTopicNames[0], input.ParNum, input.OutputTopicNames[0])
@@ -410,12 +418,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 				procArgs.(*processQ7ProcessArgs).SetRecordFinishFunc(recordFinishFunc)
 			}, &task)
 		if ret != nil && ret.Success {
-			ret.Latencies["src"] = src.GetLatency()
-			ret.Latencies["sink"] = sink.GetLatency()
-			ret.Latencies["maxPriceBid"] = maxPriceBid.GetLatency()
-			ret.Latencies["transformWithStore"] = transformWithStore.GetLatency()
-			ret.Latencies["filterTime"] = filterTime.GetLatency()
-			ret.Consumed["src"] = src.GetCount()
+			update_stats(ret)
 		}
 		return ret
 	}
@@ -423,12 +426,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 	benchutil.UpdateStreamTaskArgs(input, streamTaskArgs)
 	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
-		ret.Latencies["src"] = src.GetLatency()
-		ret.Latencies["sink"] = sink.GetLatency()
-		ret.Latencies["maxPriceBid"] = maxPriceBid.GetLatency()
-		ret.Latencies["transformWithStore"] = transformWithStore.GetLatency()
-		ret.Latencies["filterTime"] = filterTime.GetLatency()
-		ret.Consumed["src"] = src.GetCount()
+		update_stats(ret)
 	}
 	return ret
 }

@@ -1,6 +1,6 @@
 GO_FILES?=$$(find . -name '*.go' |grep -v deps)
 
-default: lat_tp_handler_debug lat_tp_handler sharedlog_bench_client kafka_consume_bench kafka_produce_bench nexmark nexmark_debug nexmark_client nexmark_genevents_kafka tests_debug tests_client dspbench dspbench_debug dspbench_client wordcount_client wordcount_genevents_kafka append_read_client
+default: lat_tp_handler_debug lat_tp_handler sharedlog_bench_client kafka_consume_bench kafka_produce_bench nexmark nexmark_stats nexmark_debug nexmark_client nexmark_genevents_kafka tests_debug tests_client dspbench dspbench_debug dspbench_client wordcount_client wordcount_genevents_kafka append_read_client
 
 .PHONY: golangci-lint
 golangci-lint:
@@ -11,10 +11,15 @@ nexmark:
 	mkdir -p ./bin
 	GO111MODULE=on go build -o bin/nexmark_handler ./benchmark/nexmark/nexmark_handler
 
+.PHONY: nexmark_stats
+nexmark_stats:
+	mkdir -p ./bin
+	GO111MODULE=on go build -tags stats -o bin/nexmark_handler_stats ./benchmark/nexmark/nexmark_handler
+
 .PHONY: nexmark_debug
 nexmark_debug:
 	mkdir -p ./bin
-	GO111MODULE=on go build -tags debug -o bin/nexmark_handler_debug ./benchmark/nexmark/nexmark_handler
+	GO111MODULE=on go build -tags "debug,stats" -o bin/nexmark_handler_debug ./benchmark/nexmark/nexmark_handler
 
 .PHONY: nexmark_client
 nexmark_client:

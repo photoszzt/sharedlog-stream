@@ -74,11 +74,12 @@ func (h *tableRestoreHandler) tests(ctx context.Context, sp *test_types.TestInpu
 type strTs struct {
 	Val string
 	Ts  int64
+	commtypes.BaseInjTime
 }
 
-var _ = commtypes.StreamTimeExtractor(&strTs{})
+var _ = commtypes.EventTimeExtractor(&strTs{})
 
-func (s strTs) ExtractStreamTime() (int64, error) {
+func (s *strTs) ExtractEventTime() (int64, error) {
 	return s.Ts, nil
 }
 

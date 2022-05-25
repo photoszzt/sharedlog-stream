@@ -8,8 +8,8 @@ import (
 	"sort"
 	"time"
 
-	"sharedlog-stream/benchmark/common"
 	datatype "sharedlog-stream/benchmark/lat_tp/pkg/data_type"
+	"sharedlog-stream/pkg/stats"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/rs/zerolog"
@@ -117,10 +117,10 @@ func main() {
 		}
 		totalTime := time.Since(start).Seconds()
 		fmt.Fprintf(os.Stderr, "\n%v\n", prod_to_con_lat)
-		ts := common.TimeSlice64(prod_to_con_lat)
+		ts := stats.Int64Slice(prod_to_con_lat)
 		sort.Sort(ts)
 		fmt.Fprintf(os.Stdout, "consumed %d events, time: %v, throughput: %v, p50: %d, p99: %d\n",
-			idx, totalTime, float64(idx)/float64(totalTime), ts.P(0.5), ts.P(0.99))
+			idx, totalTime, float64(idx)/float64(totalTime), stats.P(ts, 0.5), stats.P(ts, 0.99))
 		fmt.Fprint(w, "done consume")
 	}
 	http.HandleFunc("/consume", handleConsume)

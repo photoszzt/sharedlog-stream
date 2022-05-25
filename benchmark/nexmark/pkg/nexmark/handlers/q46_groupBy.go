@@ -168,6 +168,16 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 	control_channel.SetupConsistentHash(&h.bidHashMu, h.bidHash, sp.NumOutPartitions[1])
 	srcs := []source_sink.Source{src}
 
+	update_stats := func(ret *common.FnOutput) {
+		ret.Latencies["filterAuctions"] = filterAuctions.GetLatency()
+		ret.Latencies["auctionsByIDMap"] = auctionsByIDMap.GetLatency()
+		ret.Latencies["filterBids"] = filterBids.GetLatency()
+		ret.Latencies["bidsByAuctionIDMap"] = bidsByAuctionIDMap.GetLatency()
+		ret.Counts["src"] = src.GetCount()
+		ret.Counts["aucSink"] = sinks[0].GetCount()
+		ret.Counts["bidSink"] = sinks[1].GetCount()
+	}
+
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName, sp.InputTopicNames[0], sp.ParNum)
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr)
@@ -179,14 +189,7 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 				procArgs.(*TwoMsgChanProcArgs).SetRecordFinishFunc(recordFinishFunc)
 			}, &task)
 		if ret != nil && ret.Success {
-			ret.Latencies["src"] = src.GetLatency()
-			ret.Latencies["aucSink"] = sinks[0].GetLatency()
-			ret.Latencies["bidSink"] = sinks[1].GetLatency()
-			ret.Latencies["filterAuctions"] = filterAuctions.GetLatency()
-			ret.Latencies["auctionsByIDMap"] = auctionsByIDMap.GetLatency()
-			ret.Latencies["filterBids"] = filterBids.GetLatency()
-			ret.Latencies["bidsByAuctionIDMap"] = bidsByAuctionIDMap.GetLatency()
-			ret.Consumed["src"] = src.GetCount()
+			update_stats(ret)
 		}
 		return ret
 	} else {
@@ -194,14 +197,7 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 		benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
 		ret := task.Process(ctx, streamTaskArgs)
 		if ret != nil && ret.Success {
-			ret.Latencies["src"] = src.GetLatency()
-			ret.Latencies["aucSink"] = sinks[0].GetLatency()
-			ret.Latencies["bidSink"] = sinks[1].GetLatency()
-			ret.Latencies["filterAuctions"] = filterAuctions.GetLatency()
-			ret.Latencies["auctionsByIDMap"] = auctionsByIDMap.GetLatency()
-			ret.Latencies["filterBids"] = filterBids.GetLatency()
-			ret.Latencies["bidsByAuctionIDMap"] = bidsByAuctionIDMap.GetLatency()
-			ret.Consumed["src"] = src.GetCount()
+			update_stats(ret)
 		}
 		return ret
 	}
@@ -239,7 +235,7 @@ func (h *q46GroupByHandler) getAucsByID(warmup time.Duration) (
 					break L
 				}
 				event := msg.Value.(*ntypes.Event)
-				ts, err := event.ExtractStreamTime()
+				ts, err := event.ExtractEventTime()
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] fail to extract timestamp: %v\n", err)
 					errChan <- fmt.Errorf("fail to extract timestamp: %v", err)
@@ -319,7 +315,7 @@ func (h *q46GroupByHandler) getBidsByAuctionID(warmup time.Duration) (
 					break L
 				}
 				event := msg.Value.(*ntypes.Event)
-				ts, err := event.ExtractStreamTime()
+				ts, err := event.ExtractEventTime()
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] fail to extract timestamp: %v\n", err)
 					errChan <- fmt.Errorf("fail to extract timestamp: %v", err)

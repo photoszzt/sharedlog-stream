@@ -119,7 +119,7 @@ func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context
 	return &common.FnOutput{
 		Success:  true,
 		Duration: time.Since(startTime).Seconds(),
-		Consumed: map[string]uint64{"prod": uint64(nEmitEvent)},
+		Counts:   map[string]uint64{"prod": uint64(nEmitEvent)},
 		// Latencies: map[string][]int{"e2e": latencies},
 	}
 }

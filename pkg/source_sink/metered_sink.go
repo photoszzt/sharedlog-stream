@@ -4,12 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -144,40 +141,33 @@ func (s *ConcurrentMeteredSink) InnerSink() *ShardedSharedLogStreamSink {
 */
 
 type ConcurrentMeteredSyncSink struct {
-	sink *ShardedSharedLogStreamSyncSink
-
-	latMu     sync.Mutex
-	latencies []int
-
+	mu                 sync.Mutex
 	eventTimeLatencies []int
 
-	warmup  time.Duration
-	initial time.Time
+	ShardedSharedLogStreamSyncSink
+
+	produceTp stats.ConcurrentThroughputCounter
+	lat       stats.ConcurrentInt64Collector
+	warmup    stats.WarmupGoroutineSafe
 
 	measure       bool
 	isFinalOutput bool
-	afterWarmup   uint32
 }
 
 var _ = Sink(&ConcurrentMeteredSyncSink{})
 
 func NewConcurrentMeteredSyncSink(sink *ShardedSharedLogStreamSyncSink, warmup time.Duration) *ConcurrentMeteredSyncSink {
+	sink_name := fmt.Sprintf("%s_sink", sink.TopicName())
 	return &ConcurrentMeteredSyncSink{
-		sink:          sink,
-		latencies:     make([]int, 0, 128),
-		measure:       checkMeasureSink(),
-		isFinalOutput: false,
-		warmup:        warmup,
-		afterWarmup:   0,
+		ShardedSharedLogStreamSyncSink: *sink,
+		lat: stats.NewConcurrentIntCollector(sink_name,
+			stats.DEFAULT_COLLECT_DURATION),
+		produceTp:          stats.NewConcurrentThroughputCounter(sink_name, stats.DEFAULT_COLLECT_DURATION),
+		measure:            checkMeasureSink(),
+		isFinalOutput:      false,
+		warmup:             stats.NewWarmupGoroutineSafeChecker(warmup),
+		eventTimeLatencies: make([]int, 0),
 	}
-}
-
-func (s *ConcurrentMeteredSyncSink) Stream() *sharedlog_stream.ShardedSharedLogStream {
-	return s.sink.Stream()
-}
-
-func (s *ConcurrentMeteredSyncSink) InTransaction(tm tran_interface.ReadOnlyTransactionManager) {
-	s.sink.InTransaction(tm)
 }
 
 func (s *ConcurrentMeteredSyncSink) MarkFinalOutput() {
@@ -186,64 +176,46 @@ func (s *ConcurrentMeteredSyncSink) MarkFinalOutput() {
 
 func (s *ConcurrentMeteredSyncSink) StartWarmup() {
 	if s.measure {
-		s.initial = time.Now()
+		s.warmup.StartWarmup()
 	}
-}
-
-func (s *ConcurrentMeteredSyncSink) Flush(ctx context.Context) error {
-	if s.measure {
-		procStart := time.Now()
-		err := s.sink.Flush(ctx)
-		elapsed := time.Since(procStart)
-		s.latMu.Lock()
-		s.latencies = append(s.latencies, int(elapsed.Microseconds()))
-		s.latMu.Unlock()
-		return err
-	}
-	return s.sink.Flush(ctx)
-}
-
-func (s *ConcurrentMeteredSyncSink) KeySerde() commtypes.Serde {
-	return s.sink.KeySerde()
-}
-
-func (s *ConcurrentMeteredSyncSink) TopicName() string {
-	return s.sink.TopicName()
-}
-
-func (s *ConcurrentMeteredSyncSink) GetLatency() []int {
-	return s.latencies
 }
 
 func (s *ConcurrentMeteredSyncSink) GetEventTimeLatency() []int {
 	return s.eventTimeLatencies
 }
 
+func (s *ConcurrentMeteredSyncSink) GetCount() uint64 {
+	return s.produceTp.GetCount()
+}
+
 func (s *ConcurrentMeteredSyncSink) InitFlushTimer() {}
 
 func (s *ConcurrentMeteredSyncSink) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
-	debug.Assert(!s.measure || (s.warmup == 0 || (s.warmup > 0 && !s.initial.IsZero())), "warmup should initialize initial")
+	assignInjTime(&msg)
+	s.produceTp.Tick(1)
 	if s.measure {
-		if atomic.LoadUint32(&s.afterWarmup) == 0 && (s.warmup == 0 || (s.warmup > 0 && time.Since(s.initial) >= s.warmup)) {
-			atomic.StoreUint32(&s.afterWarmup, 1)
-		}
-		if atomic.LoadUint32(&s.afterWarmup) == 1 {
+		s.warmup.Check()
+		if s.warmup.AfterWarmup() {
 			procStart := time.Now()
-			if s.isFinalOutput && msg.Timestamp != 0 {
-				els := int(procStart.UnixMilli() - msg.Timestamp)
-				s.latMu.Lock()
-				s.eventTimeLatencies = append(s.eventTimeLatencies, els)
-				s.latMu.Unlock()
+			if s.isFinalOutput {
+				ts, err := extractEventTs(&msg)
+				if err != nil {
+					return err
+				}
+				if ts != 0 {
+					els := int(procStart.UnixMilli() - ts)
+					s.mu.Lock()
+					s.eventTimeLatencies = append(s.eventTimeLatencies, els)
+					s.mu.Unlock()
+				}
 			}
-			err := s.sink.Produce(ctx, msg, parNum, isControl)
-			elapsed := time.Since(procStart)
-			s.latMu.Lock()
-			s.latencies = append(s.latencies, int(elapsed.Microseconds()))
-			s.latMu.Unlock()
-			return err
 		}
 	}
-	return s.sink.Produce(ctx, msg, parNum, isControl)
+	procStart := stats.TimerBegin()
+	err := s.ShardedSharedLogStreamSyncSink.Produce(ctx, msg, parNum, isControl)
+	elapsed := stats.Elapsed(procStart).Microseconds()
+	s.lat.AddSample(elapsed)
+	return err
 }
 
 /*
@@ -360,39 +332,28 @@ func (s *MeteredSink) InnerSink() *ShardedSharedLogStreamSink {
 */
 
 type MeteredSyncSink struct {
-	sink *ShardedSharedLogStreamSyncSink
-
-	latencies          []int
+	ShardedSharedLogStreamSyncSink
 	eventTimeLatencies []int
-
-	warmup  time.Duration
-	initial time.Time
-
-	measure       bool
-	isFinalOutput bool
-	afterWarmup   bool
+	latencies          stats.Int64Collector
+	produceTp          stats.ThroughputCounter
+	warmup             stats.Warmup
+	measure            bool
+	isFinalOutput      bool
 }
 
 func NewMeteredSyncSink(sink *ShardedSharedLogStreamSyncSink, warmup time.Duration) *MeteredSyncSink {
+	sink_name := fmt.Sprintf("%s_sink", sink.TopicName())
 	return &MeteredSyncSink{
-		sink:          sink,
-		latencies:     make([]int, 0, 128),
-		measure:       checkMeasureSink(),
-		isFinalOutput: false,
-		warmup:        warmup,
-		afterWarmup:   false,
+		ShardedSharedLogStreamSyncSink: *sink,
+		latencies:                      stats.NewIntCollector(sink_name, stats.DEFAULT_COLLECT_DURATION),
+		produceTp:                      stats.NewThroughputCounter(sink_name, stats.DEFAULT_COLLECT_DURATION),
+		measure:                        checkMeasureSink(),
+		isFinalOutput:                  false,
+		warmup:                         stats.NewWarmupChecker(warmup),
 	}
 }
 
 func (s *MeteredSyncSink) InitFlushTimer() {}
-
-func (s *MeteredSyncSink) InTransaction(tm tran_interface.ReadOnlyTransactionManager) {
-	s.sink.InTransaction(tm)
-}
-
-func (s *MeteredSyncSink) Stream() *sharedlog_stream.ShardedSharedLogStream {
-	return s.sink.Stream()
-}
 
 func (s *MeteredSyncSink) MarkFinalOutput() {
 	s.isFinalOutput = true
@@ -400,62 +361,55 @@ func (s *MeteredSyncSink) MarkFinalOutput() {
 
 func (s *MeteredSyncSink) StartWarmup() {
 	if s.measure {
-		s.initial = time.Now()
+		s.warmup.StartWarmup()
 	}
-}
-
-func (s *MeteredSyncSink) Flush(ctx context.Context) error {
-	if s.measure {
-		procStart := time.Now()
-		err := s.sink.FlushNoLock(ctx)
-		elapsed := time.Since(procStart)
-		s.latencies = append(s.latencies, int(elapsed.Microseconds()))
-		return err
-	}
-	return s.sink.Flush(ctx)
 }
 
 func (s *MeteredSyncSink) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
-	debug.Assert(s.warmup == 0 || (s.warmup > 0 && !s.initial.IsZero()), "warmup should initialize initial")
+	assignInjTime(&msg)
+	s.produceTp.Tick(1)
 	if s.measure {
-		if !s.afterWarmup && (s.warmup == 0 || (s.warmup > 0 && time.Since(s.initial) >= s.warmup)) {
-			s.afterWarmup = true
-		}
-		if s.afterWarmup {
+		s.warmup.Check()
+		if s.warmup.AfterWarmup() {
 			procStart := time.Now()
 			if s.isFinalOutput {
-				ts := msg.Timestamp
-				if ts == 0 {
-					extractTs, err := msg.Value.(commtypes.StreamTimeExtractor).ExtractStreamTime()
-					if err != nil || extractTs == 0 {
-						return fmt.Errorf("time stampt should not be zero")
-					}
-					ts = extractTs
+				ts, err := extractEventTs(&msg)
+				if err != nil {
+					return err
 				}
-				els := int(procStart.UnixMilli() - ts)
-				s.eventTimeLatencies = append(s.eventTimeLatencies, els)
+				if ts != 0 {
+					els := int(procStart.UnixMilli() - ts)
+					s.eventTimeLatencies = append(s.eventTimeLatencies, els)
+				}
 			}
-			err := s.sink.Produce(ctx, msg, parNum, isControl)
-			elapsed := time.Since(procStart)
-			s.latencies = append(s.latencies, int(elapsed.Microseconds()))
-			return err
 		}
 	}
-	return s.sink.Produce(ctx, msg, parNum, isControl)
+	procStart := stats.TimerBegin()
+	err := s.ShardedSharedLogStreamSyncSink.Produce(ctx, msg, parNum, isControl)
+	elapsed := stats.Elapsed(procStart).Microseconds()
+	s.latencies.AddSample(elapsed)
+	return err
 }
 
-func (s *MeteredSyncSink) GetLatency() []int {
-	return s.latencies
-}
-
-func (s *MeteredSyncSink) TopicName() string {
-	return s.sink.TopicName()
-}
-
-func (s *MeteredSyncSink) KeySerde() commtypes.Serde {
-	return s.sink.KeySerde()
+func extractEventTs(msg *commtypes.Message) (int64, error) {
+	ts := msg.Timestamp
+	if ts == 0 {
+		et, ok := msg.Value.(commtypes.EventTimeExtractor)
+		if ok {
+			extractTs, err := et.ExtractEventTime()
+			if err != nil {
+				return 0, err
+			}
+			ts = extractTs
+		}
+	}
+	return ts, nil
 }
 
 func (s *MeteredSyncSink) GetEventTimeLatency() []int {
 	return s.eventTimeLatencies
+}
+
+func (s *MeteredSyncSink) GetCount() uint64 {
+	return s.produceTp.GetCount()
 }

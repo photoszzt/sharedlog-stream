@@ -50,7 +50,7 @@ type DumpInput struct {
 
 type FnOutput struct {
 	Latencies map[string][]int  `json:"latencies,omitempty"`
-	Consumed  map[string]uint64 `json:"consumed,omitempty"`
+	Counts    map[string]uint64 `json:"counts,omitempty"`
 	Err       error             `json:"-"`
 	Message   string            `json:"message,omitempty"`
 	Duration  float64           `json:"duration,omitempty"`

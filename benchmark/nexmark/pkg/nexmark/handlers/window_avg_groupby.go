@@ -100,13 +100,10 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput,
 		if err != nil {
 			if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
-					Success: true,
-					Message: err.Error(),
-					Latencies: map[string][]int{"e2e": latencies,
-						"sink": sink.GetLatency(),
-						"src":  src.GetLatency(),
-					},
-					Duration: time.Since(startTime).Seconds(),
+					Success:   true,
+					Message:   err.Error(),
+					Latencies: map[string][]int{"e2e": latencies},
+					Duration:  time.Since(startTime).Seconds(),
 				}
 			}
 			return &common.FnOutput{
@@ -159,9 +156,7 @@ func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput,
 		Success:  true,
 		Duration: time.Since(startTime).Seconds(),
 		Latencies: map[string][]int{
-			"e2e":  latencies,
-			"sink": sink.GetLatency(),
-			"src":  src.GetLatency(),
+			"e2e": latencies,
 		},
 	}
 }

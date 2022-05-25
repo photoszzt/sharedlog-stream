@@ -102,6 +102,14 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 	}
 	srcs := []source_sink.Source{src}
 	sinks := []source_sink.Sink{sink}
+
+	update_stats := func(ret *common.FnOutput) {
+		ret.Latencies["filterBids"] = filterBid.GetLatency()
+		ret.Latencies["q1Map"] = q1Map.GetLatency()
+		ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
+		ret.Counts["src"] = src.GetCount()
+		ret.Counts["sink"] = sink.GetCount()
+	}
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%d-%s",
 			h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
@@ -115,12 +123,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 				procArgs.(*query1ProcessArgs).SetRecordFinishFunc(recordFinish)
 			}, &task)
 		if ret != nil && ret.Success {
-			ret.Latencies["src"] = src.GetLatency()
-			ret.Latencies["sink"] = sink.GetLatency()
-			ret.Latencies["filterBids"] = filterBid.GetLatency()
-			ret.Latencies["q1Map"] = q1Map.GetLatency()
-			ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
-			ret.Consumed["src"] = src.GetCount()
+			update_stats(ret)
 		}
 		return ret
 	}
@@ -128,12 +131,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
 	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
-		ret.Latencies["src"] = src.GetLatency()
-		ret.Latencies["sink"] = sink.GetLatency()
-		ret.Latencies["filterBids"] = filterBid.GetLatency()
-		ret.Latencies["q1Map"] = q1Map.GetLatency()
-		ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
-		ret.Consumed["src"] = src.GetCount()
+		update_stats(ret)
 	}
 	return ret
 }

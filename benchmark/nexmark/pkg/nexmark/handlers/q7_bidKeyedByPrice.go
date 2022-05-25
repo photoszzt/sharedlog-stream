@@ -91,7 +91,7 @@ func (h *q7BidKeyedByPrice) process(ctx context.Context,
 
 func (h *q7BidKeyedByPrice) procMsg(ctx context.Context, msg commtypes.Message, args *q7BidKeyedByPriceProcessArgs) error {
 	event := msg.Value.(*ntypes.Event)
-	ts, err := event.ExtractStreamTime()
+	ts, err := event.ExtractEventTime()
 	if err != nil {
 		return fmt.Errorf("fail to extract timestamp: %v", err)
 	}
@@ -167,6 +167,13 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 
 	srcs := []source_sink.Source{src}
 	sinks_arr := []source_sink.Sink{sink}
+
+	update_stats := func(ret *common.FnOutput) {
+		ret.Latencies["bid"] = bid.GetLatency()
+		ret.Latencies["bidKeyedByPrice"] = bidKeyedByPrice.GetLatency()
+		ret.Counts["src"] = src.GetCount()
+		ret.Counts["sink"] = sink.GetCount()
+	}
 	if input.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, input.InputTopicNames[0], input.ParNum, input.OutputTopicNames[0])
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr)
@@ -177,11 +184,7 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 				procArgs.(*q7BidKeyedByPriceProcessArgs).SetRecordFinishFunc(recordFinishFunc)
 			}, &task)
 		if ret != nil && ret.Success {
-			ret.Latencies["src"] = src.GetLatency()
-			ret.Latencies["sink"] = sink.GetLatency()
-			ret.Latencies["bid"] = bid.GetLatency()
-			ret.Latencies["bidKeyedByPrice"] = bidKeyedByPrice.GetLatency()
-			ret.Consumed["src"] = src.GetCount()
+			update_stats(ret)
 		}
 		return ret
 	}
@@ -189,11 +192,7 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 	benchutil.UpdateStreamTaskArgs(input, streamTaskArgs)
 	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
-		ret.Latencies["src"] = src.GetLatency()
-		ret.Latencies["sink"] = sink.GetLatency()
-		ret.Latencies["bid"] = bid.GetLatency()
-		ret.Latencies["bidKeyedByPrice"] = bidKeyedByPrice.GetLatency()
-		ret.Consumed["src"] = src.GetCount()
+		update_stats(ret)
 	}
 	return ret
 }

@@ -201,8 +201,8 @@ func decodeMsgWinstore(payload []byte, serdesTmp interface{}) (commtypes.Message
 		if err != nil {
 			return commtypes.EmptyMessage, err
 		}
-		val := msg.Value.(commtypes.StreamTimeExtractor)
-		ts, err := val.ExtractStreamTime()
+		val := msg.Value.(commtypes.EventTimeExtractor)
+		ts, err := val.ExtractEventTime()
 		if err != nil {
 			return commtypes.EmptyMessage, fmt.Errorf("extract stream time failed: %v", err)
 		}

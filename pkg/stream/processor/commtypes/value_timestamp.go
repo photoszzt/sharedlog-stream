@@ -1,5 +1,5 @@
 //go:generate msgp
-//msgp:ignore ValueTimestampJSONSerde ValueTimestampMsgpSerde
+//msgp:ignore ValueTimestampJSONSerde ValueTimestampMsgpSerde ValueTimestamp
 package commtypes
 
 import "encoding/json"
@@ -7,18 +7,20 @@ import "encoding/json"
 type ValueTimestamp struct {
 	Value     interface{}
 	Timestamp int64
+	BaseInjTime
 }
 
 type ValueTimestampSerialized struct {
 	ValueSerialized []byte `json:"vs,omitempty" msg:"vs,omitempty"`
 	Timestamp       int64  `json:"ts,omitempty" msg:"ts,omitempty"`
+	InjectToStream  int64  `msg:"injT" json:"injT"`
 }
 
-func (s ValueTimestamp) ExtractStreamTime() (int64, error) {
+func (s *ValueTimestamp) ExtractEventTime() (int64, error) {
 	return s.Timestamp, nil
 }
 
-var _ = StreamTimeExtractor(&ValueTimestamp{})
+var _ = EventTimeExtractor(&ValueTimestamp{})
 
 type ValueTimestampJSONSerde struct {
 	ValJSONSerde Serde
@@ -37,6 +39,7 @@ func (s ValueTimestampJSONSerde) Encode(value interface{}) ([]byte, error) {
 	vs := ValueTimestampSerialized{
 		Timestamp:       v.Timestamp,
 		ValueSerialized: enc,
+		InjectToStream:  v.BaseInjTime.InjT,
 	}
 	return json.Marshal(&vs)
 }
@@ -53,6 +56,9 @@ func (s ValueTimestampJSONSerde) Decode(value []byte) (interface{}, error) {
 	return ValueTimestamp{
 		Timestamp: vs.Timestamp,
 		Value:     v,
+		BaseInjTime: BaseInjTime{
+			InjT: vs.InjectToStream,
+		},
 	}, nil
 }
 
@@ -73,6 +79,7 @@ func (s ValueTimestampMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	vs := ValueTimestampSerialized{
 		Timestamp:       v.Timestamp,
 		ValueSerialized: enc,
+		InjectToStream:  v.BaseInjTime.InjT,
 	}
 	return vs.MarshalMsg(nil)
 }
@@ -90,5 +97,8 @@ func (s ValueTimestampMsgpSerde) Decode(value []byte) (interface{}, error) {
 	return ValueTimestamp{
 		Timestamp: vs.Timestamp,
 		Value:     v,
+		BaseInjTime: BaseInjTime{
+			InjT: vs.InjectToStream,
+		},
 	}, nil
 }

@@ -367,6 +367,15 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	} else {
 		panic("unrecognized table type")
 	}
+
+	update_stats := func(ret *common.FnOutput) {
+		ret.Latencies["maxBid"] = maxBid.GetLatency()
+		ret.Latencies["stJoin"] = stJoin.GetLatency()
+		ret.Latencies["chooseMaxCnt"] = chooseMaxCnt.GetLatency()
+		ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
+		ret.Counts["src"] = src.GetCount()
+		ret.Counts["sink"] = sink.GetCount()
+	}
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 			sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
@@ -385,13 +394,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 				}
 			}, &task)
 		if ret != nil && ret.Success {
-			ret.Latencies["src"] = src.GetLatency()
-			ret.Latencies["sink"] = sink.GetLatency()
-			ret.Latencies["maxBid"] = maxBid.GetLatency()
-			ret.Latencies["stJoin"] = stJoin.GetLatency()
-			ret.Latencies["chooseMaxCnt"] = chooseMaxCnt.GetLatency()
-			ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
-			ret.Consumed["src"] = src.GetCount()
+			update_stats(ret)
 		}
 		return ret
 	}
@@ -400,13 +403,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
 	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
-		ret.Latencies["src"] = src.GetLatency()
-		ret.Latencies["sink"] = sink.GetLatency()
-		ret.Latencies["maxBid"] = maxBid.GetLatency()
-		ret.Latencies["stJoin"] = stJoin.GetLatency()
-		ret.Latencies["chooseMaxCnt"] = chooseMaxCnt.GetLatency()
-		ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
-		ret.Consumed["src"] = src.GetCount()
+		update_stats(ret)
 	}
 	return ret
 }

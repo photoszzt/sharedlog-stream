@@ -163,7 +163,7 @@ func main() {
 	srcNum := make(map[string]uint64)
 	srcEndToEnd := float64(0)
 	if sourceOutput.Success {
-		common.ProcessThroughputLat("source", FLAGS_stat_dir, sourceOutput.Latencies, sourceOutput.Consumed,
+		common.ProcessThroughputLat("source", FLAGS_stat_dir, sourceOutput.Latencies, sourceOutput.Counts,
 			sourceOutput.Duration, srcNum, &srcEndToEnd)
 	}
 	if len(srcNum) != 0 {
@@ -175,7 +175,7 @@ func main() {
 	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
 		if splitOutput[i].Success {
 			common.ProcessThroughputLat(fmt.Sprintf("split %v", i), FLAGS_stat_dir, splitOutput[i].Latencies,
-				splitOutput[i].Consumed, splitOutput[i].Duration, splitNum, &splitEndToEnd)
+				splitOutput[i].Counts, splitOutput[i].Duration, splitNum, &splitEndToEnd)
 		}
 	}
 	if len(splitNum) != 0 {
@@ -187,7 +187,7 @@ func main() {
 	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
 		if countOutput[i].Success {
 			common.ProcessThroughputLat(fmt.Sprintf("count %d", i), FLAGS_stat_dir, countOutput[i].Latencies,
-				countOutput[i].Consumed, countOutput[i].Duration, countNum, &countEndToEnd)
+				countOutput[i].Counts, countOutput[i].Duration, countNum, &countEndToEnd)
 		}
 	}
 	if len(countNum) != 0 {

@@ -137,52 +137,6 @@ func Invoke(config_file string, stat_dir string, gateway_url string,
 
 	fmt.Fprintf(os.Stderr, "src instance: %d\n", numSrcInstance)
 	var wg sync.WaitGroup
-	/*
-		warmupSourceOutput := make([]FnOutput, numSrcInstance)
-		warmupOutputMap := make(map[string][]FnOutput)
-		for _, node := range cliNodes {
-			warmupOutputMap[node.Name()] = make([]FnOutput, len(inParamsMap[node.Name()]))
-		}
-
-
-			if warmup_time != 0 {
-				ws := time.Now()
-				fmt.Fprintf(os.Stderr, "begin warmup\n")
-				for i := uint8(0); i < numSrcInstance; i++ {
-					wg.Add(1)
-					idx := i
-					go invokeSourceFunc(client, numSrcPartition, srcTopicName, srcNodeConstraint, idx, numSrcInstance,
-						&warmupSourceOutput[idx], &wg, true)
-				}
-
-				time.Sleep(time.Duration(5) * time.Second)
-
-				for _, node := range cliNodes {
-					funcName := node.Name()
-					param := inParamsMap[funcName]
-					output := warmupOutputMap[funcName]
-					for j := uint8(0); j < uint8(len(param)); j++ {
-						wg.Add(1)
-						idx := j
-						param[idx].ParNum = idx
-						param[idx].Duration = uint32(warmup_time)
-						go node.Invoke(client, &output[idx], &wg, param[idx])
-					}
-				}
-				wg.Wait()
-				fmt.Fprintf(os.Stderr, "done warmup with %v\n", time.Since(ws))
-				for i := uint8(0); i < numSrcInstance; i++ {
-					fmt.Fprintf(os.Stderr, "src-%d generates: %d events\n", i, len(warmupSourceOutput[i].Latencies["e2e"]))
-				}
-				for _, node := range cliNodes {
-					funcName := node.Name()
-					output := warmupOutputMap[funcName]
-					for j := 0; j < len(output); j++ {
-						fmt.Fprintf(os.Stderr, "%s-%d consumed: %v\n", funcName, j, output[j].Consumed)
-					}
-				}
-			}
-	*/
 
 	sourceOutput := make([]FnOutput, numSrcInstance)
 	outputMap := make(map[string][]FnOutput)
@@ -221,7 +175,7 @@ func Invoke(config_file string, stat_dir string, gateway_url string,
 		if sourceOutput[idx].Success {
 			ProcessThroughputLat(fmt.Sprintf("source-%d", idx),
 				stat_dir,
-				sourceOutput[idx].Latencies, sourceOutput[idx].Consumed,
+				sourceOutput[idx].Latencies, sourceOutput[idx].Counts,
 				sourceOutput[idx].Duration, srcNum, &srcEndToEnd)
 		} else {
 			fmt.Fprintf(os.Stderr, "source-%d failed\n", idx)
@@ -241,7 +195,7 @@ func Invoke(config_file string, stat_dir string, gateway_url string,
 			if output[j].Success {
 				ProcessThroughputLat(fmt.Sprintf("%s-%d", funcName, j),
 					stat_dir,
-					output[j].Latencies, output[j].Consumed, output[j].Duration,
+					output[j].Latencies, output[j].Counts, output[j].Duration,
 					num, &endToEnd)
 			} else {
 				fmt.Fprintf(os.Stderr, "%s-%d failed, msg %s\n", funcName, j, output[j].Message)

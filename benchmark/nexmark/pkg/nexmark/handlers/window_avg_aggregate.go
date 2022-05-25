@@ -193,8 +193,6 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput,
 						"e2e":     latencies,
 						"agg":     aggProc.GetLatency(),
 						"calcAvg": calcAvg.GetLatency(),
-						"src":     src.GetLatency(),
-						"sink":    sink.GetLatency(),
 					},
 					Duration: time.Since(startTime).Seconds(),
 				}
@@ -236,8 +234,6 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput,
 			"e2e":     latencies,
 			"agg":     aggProc.GetLatency(),
 			"calcAvg": calcAvg.GetLatency(),
-			"src":     src.GetLatency(),
-			"sink":    sink.GetLatency(),
 		},
 	}
 }

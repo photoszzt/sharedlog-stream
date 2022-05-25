@@ -214,6 +214,11 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 		CurrentOffset: make(map[string]uint64),
 	}
 	srcs := []source_sink.Source{src}
+	update_stats := func(ret *common.FnOutput) {
+		ret.Latencies["count"] = count.GetLatency()
+		ret.Latencies["changelogRead"] = meteredOutputStream.GetReadNextLatencies()
+		ret.Latencies["changelogPush"] = meteredOutputStream.GetPushLatencies()
+	}
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%s-%d", funcName, sp.InputTopicNames[0], sp.OutputTopicNames[0], sp.ParNum)
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, nil)
@@ -224,10 +229,7 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 				procArgs.(*wordcountCounterAggProcessArg).SetRecordFinishFunc(recordFinishFunc)
 			}, &task)
 		if ret != nil && ret.Success {
-			ret.Latencies["src"] = src.GetLatency()
-			ret.Latencies["count"] = count.GetLatency()
-			ret.Latencies["changelogRead"] = meteredOutputStream.GetReadNextLatencies()
-			ret.Latencies["changelogPush"] = meteredOutputStream.GetPushLatencies()
+			update_stats(ret)
 		}
 		return ret
 	}
@@ -235,10 +237,7 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 	streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, nil)
 	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
-		ret.Latencies["src"] = src.GetLatency()
-		ret.Latencies["count"] = count.GetLatency()
-		ret.Latencies["changelogRead"] = meteredOutputStream.GetReadNextLatencies()
-		ret.Latencies["changelogPush"] = meteredOutputStream.GetPushLatencies()
+		update_stats(ret)
 	}
 	return ret
 }

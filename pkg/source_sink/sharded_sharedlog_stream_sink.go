@@ -87,12 +87,16 @@ func (sls *ShardedSharedLogStreamSink) TopicName() string {
 	return sls.streamPusher.Stream.TopicName()
 }
 
+func MsgIsScaleFence(msg *commtypes.Message) bool {
+	ctrl, ok := msg.Key.(string)
+	return ok && ctrl == txn_data.SCALE_FENCE_KEY
+}
+
 func (sls *ShardedSharedLogStreamSink) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
 	if msg.Key == nil && msg.Value == nil {
 		return nil
 	}
-	ctrl, ok := msg.Key.(string)
-	if ok && ctrl == txn_data.SCALE_FENCE_KEY {
+	if MsgIsScaleFence(&msg) {
 		debug.Assert(isControl, "scale fence msg should be a control msg")
 		sls.streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{Payload: msg.Value.([]byte),
 			Partitions: []uint8{parNum}, IsControl: isControl}

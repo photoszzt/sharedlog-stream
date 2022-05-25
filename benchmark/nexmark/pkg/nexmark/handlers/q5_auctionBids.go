@@ -236,7 +236,7 @@ func (h *q5AuctionBids) process(ctx context.Context, t *transaction.StreamTask, 
 
 func (h *q5AuctionBids) procMsg(ctx context.Context, msg commtypes.Message, args *q5AuctionBidsProcessArg) error {
 	event := msg.Value.(*ntypes.Event)
-	ts, err := event.ExtractStreamTime()
+	ts, err := event.ExtractEventTime()
 	if err != nil {
 		return fmt.Errorf("fail to extract timestamp: %v", err)
 	}
@@ -310,7 +310,7 @@ func (h *q5AuctionBids) processWithoutSink(ctx context.Context, argsTmp interfac
 
 func (h *q5AuctionBids) procMsgWithoutSink(ctx context.Context, msg commtypes.Message, args *q5AuctionBidsRestoreArg) error {
 	event := msg.Value.(*ntypes.Event)
-	ts, err := event.ExtractStreamTime()
+	ts, err := event.ExtractEventTime()
 	if err != nil {
 		return fmt.Errorf("fail to extract timestamp: %v", err)
 	}
@@ -413,6 +413,12 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	} else {
 		panic("unrecognized table type")
 	}
+	update_stats := func(ret *common.FnOutput) {
+		ret.Latencies["count"] = countProc.GetLatency()
+		ret.Latencies["changeKey"] = groupByAuction.GetLatency()
+		ret.Counts["src"] = src.GetCount()
+		ret.Counts["sink"] = sink.GetCount()
+	}
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 			sp.ParNum, sp.OutputTopicNames[0])
@@ -428,11 +434,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 				}
 			}, &task)
 		if ret != nil && ret.Success {
-			ret.Latencies["src"] = src.GetLatency()
-			ret.Latencies["sink"] = sink.GetLatency()
-			ret.Latencies["count"] = countProc.GetLatency()
-			ret.Latencies["changeKey"] = groupByAuction.GetLatency()
-			ret.Consumed["src"] = src.GetCount()
+			update_stats(ret)
 		}
 		return ret
 	}
@@ -442,11 +444,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
 	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
-		ret.Latencies["src"] = src.GetLatency()
-		ret.Latencies["sink"] = sink.GetLatency()
-		ret.Latencies["count"] = countProc.GetLatency()
-		ret.Latencies["changeKey"] = groupByAuction.GetLatency()
-		ret.Consumed["src"] = src.GetCount()
+		update_stats(ret)
 	}
 	return ret
 }

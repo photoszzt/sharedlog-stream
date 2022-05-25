@@ -106,8 +106,8 @@ func joinProcLoop(
 
 func procMsgWithSink(ctx context.Context, msg commtypes.Message, procArgs *JoinProcArgs,
 ) error {
-	st := msg.Value.(commtypes.StreamTimeExtractor)
-	ts, err := st.ExtractStreamTime()
+	st := msg.Value.(commtypes.EventTimeExtractor)
+	ts, err := st.ExtractEventTime()
 	if err != nil {
 		debug.Fprintf(os.Stderr, "[ERROR] %s return extract ts: %v\n", ctx.Value("id"), err)
 		return fmt.Errorf("fail to extract timestamp: %v", err)
