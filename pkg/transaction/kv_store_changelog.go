@@ -15,17 +15,17 @@ import (
 )
 
 type KVStoreChangelog struct {
-	KVStore          store.KeyValueStore
-	ChangelogManager *store_with_changelog.ChangelogManager
+	kvStore          store.KeyValueStore
+	changelogManager *store_with_changelog.ChangelogManager
 	kvmsgSerdes      commtypes.KVMsgSerdes
-	InputStream      store.Stream
-	RestoreFunc      func(ctx context.Context, args interface{}) error
-	RestoreArg       interface{}
+	inputStream      store.Stream
+	restoreFunc      func(ctx context.Context, args interface{}) error
+	restoreArg       interface{}
 	// this is used to identify the db and collection to store the transaction id
-	TabTranRepr string
+	tabTranRepr string
 	// when used by changelog backed kv store, parnum is the parnum of changelog
 	// when used by mongodb, parnum is the parnum of the input streams
-	ParNum uint8
+	parNum uint8
 }
 
 func NewKVStoreChangelog(
@@ -35,10 +35,10 @@ func NewKVStoreChangelog(
 	parNum uint8,
 ) *KVStoreChangelog {
 	return &KVStoreChangelog{
-		KVStore:          kvStore,
-		ChangelogManager: changelogManager,
+		kvStore:          kvStore,
+		changelogManager: changelogManager,
 		kvmsgSerdes:      kvmsgSerdes,
-		ParNum:           parNum,
+		parNum:           parNum,
 	}
 }
 
@@ -51,21 +51,21 @@ func NewKVStoreChangelogForExternalStore(
 	parNum uint8,
 ) *KVStoreChangelog {
 	return &KVStoreChangelog{
-		KVStore:     kvStore,
-		InputStream: inputStream,
-		RestoreFunc: restoreFunc,
-		RestoreArg:  restoreArg,
-		ParNum:      parNum,
-		TabTranRepr: tabTranRepr,
+		kvStore:     kvStore,
+		inputStream: inputStream,
+		restoreFunc: restoreFunc,
+		restoreArg:  restoreArg,
+		parNum:      parNum,
+		tabTranRepr: tabTranRepr,
 	}
 }
 
 func BeginKVStoreTransaction(ctx context.Context, kvstores []*KVStoreChangelog) error {
 	for _, kvstorelog := range kvstores {
-		if kvstorelog.KVStore.TableType() == store.MONGODB {
+		if kvstorelog.kvStore.TableType() == store.MONGODB {
 			debug.Fprintf(os.Stderr, "id %s %d start mongo transaction for db %s\n",
-				ctx.Value("id"), kvstorelog.ParNum, kvstorelog.KVStore.Name())
-			if err := kvstorelog.KVStore.StartTransaction(ctx); err != nil {
+				ctx.Value("id"), kvstorelog.parNum, kvstorelog.kvStore.Name())
+			if err := kvstorelog.kvStore.StartTransaction(ctx); err != nil {
 				return err
 			}
 		}
@@ -75,10 +75,10 @@ func BeginKVStoreTransaction(ctx context.Context, kvstores []*KVStoreChangelog) 
 
 func CommitKVStoreTransaction(ctx context.Context, kvstores []*KVStoreChangelog, transactionID uint64) error {
 	for _, kvstorelog := range kvstores {
-		if kvstorelog.KVStore.TableType() == store.MONGODB {
+		if kvstorelog.kvStore.TableType() == store.MONGODB {
 			debug.Fprintf(os.Stderr, "id %s %d commit mongo transaction for db %s\n",
-				ctx.Value("id"), kvstorelog.ParNum, kvstorelog.KVStore.Name())
-			if err := kvstorelog.KVStore.CommitTransaction(ctx, kvstorelog.TabTranRepr, transactionID); err != nil {
+				ctx.Value("id"), kvstorelog.parNum, kvstorelog.kvStore.Name())
+			if err := kvstorelog.kvStore.CommitTransaction(ctx, kvstorelog.tabTranRepr, transactionID); err != nil {
 				return err
 			}
 		}
@@ -88,8 +88,8 @@ func CommitKVStoreTransaction(ctx context.Context, kvstores []*KVStoreChangelog,
 
 func AbortKVStoreTransaction(ctx context.Context, kvstores []*KVStoreChangelog) error {
 	for _, kvstorelog := range kvstores {
-		if kvstorelog.KVStore.TableType() == store.MONGODB {
-			if err := kvstorelog.KVStore.AbortTransaction(ctx); err != nil {
+		if kvstorelog.kvStore.TableType() == store.MONGODB {
+			if err := kvstorelog.kvStore.AbortTransaction(ctx); err != nil {
 				if err == session.ErrAbortTwice {
 					fmt.Fprint(os.Stderr, "transaction already aborted\n")
 					return nil
@@ -112,7 +112,7 @@ func RestoreChangelogKVStateStore(
 	debug.Assert(kvchangelog.kvmsgSerdes.KeySerde != nil, "key serde should not be nil")
 	debug.Assert(kvchangelog.kvmsgSerdes.MsgSerde != nil, "msg serde should not be nil")
 	for {
-		msg, err := kvchangelog.ChangelogManager.ReadNext(ctx, kvchangelog.ParNum)
+		msg, err := kvchangelog.changelogManager.ReadNext(ctx, kvchangelog.parNum)
 		// nothing to restore
 		if errors.IsStreamEmptyError(err) {
 			return nil
@@ -136,7 +136,7 @@ func RestoreChangelogKVStateStore(
 				if msg.Key == nil && msg.Value == nil {
 					continue
 				}
-				err = kvchangelog.KVStore.Put(ctx, msg.Key, msg.Value)
+				err = kvchangelog.kvStore.Put(ctx, msg.Key, msg.Value)
 				if err != nil {
 					return err
 				}
@@ -145,7 +145,7 @@ func RestoreChangelogKVStateStore(
 			if msgAndSeqs.Msg.Key == nil && msgAndSeqs.Msg.Value == nil {
 				continue
 			}
-			err = kvchangelog.KVStore.Put(ctx, msgAndSeqs.Msg.Key, msgAndSeqs.Msg.Value)
+			err = kvchangelog.kvStore.Put(ctx, msgAndSeqs.Msg.Key, msgAndSeqs.Msg.Value)
 			if err != nil {
 				return err
 			}

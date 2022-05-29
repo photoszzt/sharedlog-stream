@@ -18,7 +18,6 @@ import (
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/proc_interface"
 	"sharedlog-stream/pkg/transaction"
-	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sync"
 	"time"
 
@@ -56,40 +55,14 @@ func (h *q7BidKeyedByPrice) Call(ctx context.Context, input []byte) ([]byte, err
 }
 
 type q7BidKeyedByPriceProcessArgs struct {
-	src             *source_sink.MeteredSource
 	bid             *processor.MeteredProcessor
 	bidKeyedByPrice *processor.MeteredProcessor
 	output_stream   *sharedlog_stream.ShardedSharedLogStream
-	trackParFunc    tran_interface.TrackKeySubStreamFunc
-	proc_interface.BaseProcArgsWithSink
+	proc_interface.BaseProcArgsWithSrcSink
 }
 
-func (a *q7BidKeyedByPriceProcessArgs) Source() source_sink.Source { return a.src }
-
-func (h *q7BidKeyedByPrice) process(ctx context.Context,
-	t *transaction.StreamTask,
-	argsTmp interface{},
-) *common.FnOutput {
+func (h *q7BidKeyedByPrice) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
 	args := argsTmp.(*q7BidKeyedByPriceProcessArgs)
-	return execution.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
-		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
-		if msg.MsgArr != nil {
-			for _, subMsg := range msg.MsgArr {
-				if subMsg.Value == nil {
-					continue
-				}
-				err := h.procMsg(ctx, subMsg, args)
-				if err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-		return h.procMsg(ctx, msg.Msg, args)
-	})
-}
-
-func (h *q7BidKeyedByPrice) procMsg(ctx context.Context, msg commtypes.Message, args *q7BidKeyedByPriceProcessArgs) error {
 	event := msg.Value.(*ntypes.Event)
 	ts, err := event.ExtractEventTime()
 	if err != nil {
@@ -114,7 +87,7 @@ func (h *q7BidKeyedByPrice) procMsg(ctx context.Context, msg commtypes.Message, 
 		}
 		par := parTmp.(uint8)
 		// par := uint8(key % uint64(args.numOutPartition))
-		err = args.trackParFunc(ctx, key, args.Sinks()[0].KeySerde(), args.Sinks()[0].TopicName(), par)
+		err = args.TrackParFunc()(ctx, key, args.Sinks()[0].KeySerde(), args.Sinks()[0].TopicName(), par)
 		if err != nil {
 			return fmt.Errorf("track par err: %v", err)
 		}
@@ -148,17 +121,18 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 	})), time.Duration(input.WarmupS)*time.Second)
 
 	procArgs := &q7BidKeyedByPriceProcessArgs{
-		src:             src,
 		bid:             bid,
 		bidKeyedByPrice: bidKeyedByPrice,
 		output_stream:   output_streams[0],
-		trackParFunc:    tran_interface.DefaultTrackSubstreamFunc,
-		BaseProcArgsWithSink: proc_interface.NewBaseProcArgsWithSink([]source_sink.Sink{sink}, h.funcName,
+		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src, []source_sink.Sink{sink}, h.funcName,
 			input.ScaleEpoch, input.ParNum),
 	}
 
 	task := transaction.StreamTask{
-		ProcessFunc:               h.process,
+		ProcessFunc: func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
+			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
+			return execution.CommonProcess(ctx, task, args, h.procMsg)
+		},
 		CurrentOffset:             make(map[string]uint64),
 		CommitEveryForAtLeastOnce: common.CommitDuration,
 	}
@@ -178,11 +152,7 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, input.InputTopicNames[0], input.ParNum, input.OutputTopicNames[0])
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr)
 		benchutil.UpdateStreamTaskArgsTransaction(input, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
-			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
-				procArgs.(*q7BidKeyedByPriceProcessArgs).trackParFunc = trackParFunc
-				procArgs.(*q7BidKeyedByPriceProcessArgs).SetRecordFinishFunc(recordFinishFunc)
-			}, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}

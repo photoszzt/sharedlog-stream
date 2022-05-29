@@ -39,12 +39,12 @@ func joinProcLoop(
 			return
 		default:
 		}
-		debug.Fprintf(os.Stderr, "before consume\n")
-		gotMsgs, err := procArgs.src.Consume(ctx, procArgs.ParNum())
+		// debug.Fprintf(os.Stderr, "before consume\n")
+		gotMsgs, err := procArgs.Source().Consume(ctx, procArgs.ParNum())
 		if err != nil {
 			if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
 				debug.Fprintf(os.Stderr, "[TIMEOUT] %s %s timeout, out chan len: %d\n",
-					id, procArgs.src.TopicName(), len(out))
+					id, procArgs.Source().TopicName(), len(out))
 				out <- &common.FnOutput{Success: true, Message: err.Error()}
 				debug.Fprintf(os.Stderr, "%s done sending msg\n", id)
 				return
@@ -54,7 +54,7 @@ func joinProcLoop(
 			debug.Fprintf(os.Stderr, "%s done sending msg2\n", id)
 			return
 		}
-		debug.Fprintf(os.Stderr, "after consume\n")
+		// debug.Fprintf(os.Stderr, "after consume\n")
 		for _, msg := range gotMsgs.Msgs {
 			if msg.MsgArr == nil && msg.Msg.Value == nil {
 				continue
@@ -68,11 +68,11 @@ func joinProcLoop(
 				continue
 			}
 			task.OffMu.Lock()
-			task.CurrentOffset[procArgs.src.TopicName()] = msg.LogSeqNum
+			task.CurrentOffset[procArgs.Source().TopicName()] = msg.LogSeqNum
 			task.OffMu.Unlock()
 
 			if msg.MsgArr != nil {
-				debug.Fprintf(os.Stderr, "got msgarr\n")
+				// debug.Fprintf(os.Stderr, "got msgarr\n")
 				for _, subMsg := range msg.MsgArr {
 					if subMsg.Value == nil {
 						continue
@@ -87,7 +87,7 @@ func joinProcLoop(
 					}
 				}
 			} else {
-				debug.Fprintf(os.Stderr, "got single msg\n")
+				// debug.Fprintf(os.Stderr, "got single msg\n")
 				if msg.Msg.Value == nil {
 					continue
 				}
@@ -100,7 +100,7 @@ func joinProcLoop(
 				}
 			}
 		}
-		debug.Fprintf(os.Stderr, "after for loop\n")
+		// debug.Fprintf(os.Stderr, "after for loop\n")
 	}
 }
 
@@ -118,7 +118,7 @@ func procMsgWithSink(ctx context.Context, msg commtypes.Message, procArgs *JoinP
 		debug.Fprintf(os.Stderr, "[ERROR] %s return runner: %v\n", ctx.Value("id"), err)
 		return err
 	}
-	err = pushMsgsToSink(ctx, procArgs.Sinks()[0], procArgs.cHash, procArgs.cHashMu, msgs, procArgs.trackParFunc)
+	err = pushMsgsToSink(ctx, procArgs.Sinks()[0], procArgs.cHash, procArgs.cHashMu, msgs, procArgs.TrackParFunc())
 	if err != nil {
 		debug.Fprintf(os.Stderr, "[ERROR] %s return push to sink: %v\n", ctx.Value("id"), err)
 		return err

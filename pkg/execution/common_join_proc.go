@@ -5,22 +5,53 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stream/processor/proc_interface"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 )
 
 type CommonJoinProcArgs struct {
-	outChan2 <-chan *common.FnOutput
+	arg1     *JoinProcArgs
+	arg2     *JoinProcArgs
 	outChan1 <-chan *common.FnOutput
+	outChan2 <-chan *common.FnOutput
 	proc_interface.BaseProcArgs
 }
 
-func NewCommonJoinProcArgs(outChan1 <-chan *common.FnOutput,
-	outChan2 <-chan *common.FnOutput, funcName string, curEpoch uint64, parNum uint8,
+func NewCommonJoinProcArgs(
+	arg1 *JoinProcArgs,
+	arg2 *JoinProcArgs,
+	outChan1 <-chan *common.FnOutput,
+	outChan2 <-chan *common.FnOutput,
+	funcName string,
+	curEpoch uint64,
+	parNum uint8,
 ) *CommonJoinProcArgs {
 	return &CommonJoinProcArgs{
-		outChan2:     outChan2,
+		arg1:         arg1,
+		arg2:         arg2,
 		outChan1:     outChan1,
+		outChan2:     outChan2,
 		BaseProcArgs: proc_interface.NewBaseProcArgs(funcName, curEpoch, parNum),
 	}
+}
+
+func (c *CommonJoinProcArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
+	return c.RecordFinishFunc()
+}
+
+func (c *CommonJoinProcArgs) SetRecordFinishFunc(recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
+	c.SetRecordFinishFunc(recordFinishFunc)
+	c.arg1.SetRecordFinishFunc(recordFinishFunc)
+	c.arg2.SetRecordFinishFunc(recordFinishFunc)
+}
+
+func (c *CommonJoinProcArgs) TrackParFunc() tran_interface.TrackKeySubStreamFunc {
+	return c.TrackParFunc()
+}
+
+func (c *CommonJoinProcArgs) SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc) {
+	c.SetTrackParFunc(trackParFunc)
+	c.arg1.SetTrackParFunc(trackParFunc)
+	c.arg2.SetTrackParFunc(trackParFunc)
 }
 
 func HandleJoinErrReturn(argsTmp interface{}) *common.FnOutput {

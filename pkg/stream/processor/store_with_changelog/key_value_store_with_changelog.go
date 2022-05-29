@@ -5,17 +5,18 @@ import (
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sharedlog-stream/pkg/treemap"
 	"time"
 )
 
 type KeyValueStoreWithChangelog struct {
-	kvstore   store.KeyValueStore
+	kvstore   *store.InMemoryKeyValueStore
 	mp        *MaterializeParam
 	use_bytes bool
 }
 
-func NewKeyValueStoreWithChangelog(mp *MaterializeParam, store store.KeyValueStore, use_bytes bool) *KeyValueStoreWithChangelog {
+func NewKeyValueStoreWithChangelog(mp *MaterializeParam, store *store.InMemoryKeyValueStore, use_bytes bool) *KeyValueStoreWithChangelog {
 	return &KeyValueStoreWithChangelog{
 		kvstore:   store,
 		mp:        mp,
@@ -178,6 +179,10 @@ func (st *KeyValueStoreWithChangelog) CommitTransaction(ctx context.Context,
 func (st *KeyValueStoreWithChangelog) AbortTransaction(ctx context.Context) error { return nil }
 func (st *KeyValueStoreWithChangelog) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
 	panic("not supported")
+}
+
+func (st *KeyValueStoreWithChangelog) SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc) {
+	st.mp.SetTrackParFunc(trackParFunc)
 }
 
 func ToInMemKVTableWithChangelog(storeName string, mp *MaterializeParam,

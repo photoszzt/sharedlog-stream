@@ -15,7 +15,7 @@ import (
 )
 
 func CommonProcess(ctx context.Context, t *transaction.StreamTask, args proc_interface.ProcArgsWithSrcSink,
-	proc func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error,
+	procMsg ProcessMsgFunc,
 ) *common.FnOutput {
 	if t.HandleErrFunc != nil {
 		if err := t.HandleErrFunc(); err != nil {
@@ -40,7 +40,9 @@ func CommonProcess(ctx context.Context, t *transaction.StreamTask, args proc_int
 			}
 			continue
 		}
-		err = proc(t, msg)
+		// err = proc(t, msg)
+		t.CurrentOffset[args.Source().TopicName()] = msg.LogSeqNum
+		err = ProcessMsgAndSeq(ctx, msg, args, procMsg)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
@@ -48,7 +50,7 @@ func CommonProcess(ctx context.Context, t *transaction.StreamTask, args proc_int
 	return nil
 }
 
-type ProcessMsgFunc func(ctx context.Context, msg commtypes.Message, args interface{}) error
+type ProcessMsgFunc func(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error
 
 func ProcessMsgAndSeq(ctx context.Context, msg commtypes.MsgAndSeq, args interface{}, procMsg ProcessMsgFunc) error {
 	if msg.MsgArr != nil {

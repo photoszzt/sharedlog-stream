@@ -67,10 +67,72 @@ type ProcArgs interface {
 	CurEpoch() uint64
 	FuncName() string
 	RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc
+	SetRecordFinishFunc(recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc)
+	TrackParFunc() tran_interface.TrackKeySubStreamFunc
+	SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc)
+}
+
+type BaseProcArgsBuilder struct {
+	bp *BaseProcArgs
+}
+
+type SetFuncName interface {
+	FuncName(string) SetCurEpoch
+}
+
+type SetCurEpoch interface {
+	CurEpoch(uint64) SetParNum
+}
+
+type SetParNum interface {
+	ParNum(uint8) BuildProcArgs
+}
+
+type BuildProcArgs interface {
+	Build() ProcArgs
+	TrackParFunc(tran_interface.TrackKeySubStreamFunc) BuildProcArgs
+	RecordFinishFunc(tran_interface.RecordPrevInstanceFinishFunc) BuildProcArgs
+}
+
+func NewBaseProcArgsBuilder() SetFuncName {
+	return &BaseProcArgsBuilder{
+		bp: &BaseProcArgs{},
+	}
+}
+
+func (b *BaseProcArgsBuilder) FuncName(funcName string) SetCurEpoch {
+	b.bp.funcName = funcName
+	return b
+}
+func (b *BaseProcArgsBuilder) CurEpoch(curEpoch uint64) SetParNum {
+	b.bp.curEpoch = curEpoch
+	return b
+}
+func (b *BaseProcArgsBuilder) ParNum(parNum uint8) BuildProcArgs {
+	b.bp.parNum = parNum
+	return b
+}
+func (b *BaseProcArgsBuilder) Build() ProcArgs {
+	if b.bp.trackParFunc == nil {
+		b.bp.trackParFunc = tran_interface.DefaultTrackSubstreamFunc
+	}
+	if b.bp.recordFinishFunc == nil {
+		b.bp.recordFinishFunc = tran_interface.DefaultRecordPrevInstanceFinishFunc
+	}
+	return b.bp
+}
+func (b *BaseProcArgsBuilder) TrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc) BuildProcArgs {
+	b.bp.trackParFunc = trackParFunc
+	return b
+}
+func (b *BaseProcArgsBuilder) RecordFinishFunc(recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) BuildProcArgs {
+	b.bp.recordFinishFunc = recordFinishFunc
+	return b
 }
 
 type BaseProcArgs struct {
 	recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc
+	trackParFunc     tran_interface.TrackKeySubStreamFunc
 	funcName         string
 	curEpoch         uint64
 	parNum           uint8
@@ -79,6 +141,7 @@ type BaseProcArgs struct {
 func NewBaseProcArgs(funcName string, curEpoch uint64, parNum uint8) BaseProcArgs {
 	return BaseProcArgs{
 		recordFinishFunc: tran_interface.DefaultRecordPrevInstanceFinishFunc,
+		trackParFunc:     tran_interface.DefaultTrackSubstreamFunc,
 		funcName:         funcName,
 		curEpoch:         curEpoch,
 		parNum:           parNum,
@@ -103,4 +166,12 @@ func (pa *BaseProcArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFini
 
 func (pa *BaseProcArgs) SetRecordFinishFunc(recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
 	pa.recordFinishFunc = recordFinishFunc
+}
+
+func (pa *BaseProcArgs) TrackParFunc() tran_interface.TrackKeySubStreamFunc {
+	return pa.trackParFunc
+}
+
+func (pa *BaseProcArgs) SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc) {
+	pa.trackParFunc = trackParFunc
 }

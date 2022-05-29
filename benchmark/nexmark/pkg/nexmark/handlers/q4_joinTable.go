@@ -18,7 +18,6 @@ import (
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
-	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sharedlog-stream/pkg/treemap"
 	"sync"
 	"time"
@@ -153,24 +152,10 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 			return 1
 		}
 	}
-
-	toAuctionsTable, auctionsStore, err := processor.ToInMemKVTable("auctionsByIDStore", compare,
+	toAuctionsTable, auctionsStore := processor.ToInMemKVTable("auctionsByIDStore", compare,
 		time.Duration(sp.WarmupS)*time.Second)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("toAucTab err: %v\n", err),
-		}
-	}
-
-	toBidsTable, bidsStore, err := processor.ToInMemKVTable("bidsByAuctionIDStore", compare,
+	toBidsTable, bidsStore := processor.ToInMemKVTable("bidsByAuctionIDStore", compare,
 		time.Duration(sp.WarmupS)*time.Second)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("toBidsTab err: %v\n", err),
-		}
-	}
 	joiner := processor.ValueJoinerWithKeyFunc(func(readOnlyKey interface{}, leftVal interface{}, rightVal interface{}) interface{} {
 		leftE := leftVal.(*ntypes.Event)
 		auc := leftE.NewAuction
@@ -253,7 +238,8 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 	var wg sync.WaitGroup
 	aucManager := execution.NewJoinProcManager()
 	bidManager := execution.NewJoinProcManager()
-	procArgs := execution.NewCommonJoinProcArgs(aucManager.Out(), bidManager.Out(),
+	procArgs := execution.NewCommonJoinProcArgs(joinProcAuction, joinProcBid,
+		aucManager.Out(), bidManager.Out(),
 		h.funcName, sp.ScaleEpoch, sp.ParNum)
 
 	bctx := context.WithValue(ctx, "id", "bid")
@@ -334,14 +320,7 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr).
 			WithKVChangelogs(kvchangelogs)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
-			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
-				recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc,
-			) {
-				joinProcAuction.SetTrackParFunc(trackParFunc)
-				joinProcBid.SetTrackParFunc(trackParFunc)
-				procArgs.(*execution.CommonJoinProcArgs).SetRecordFinishFunc(recordFinishFunc)
-			}, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}

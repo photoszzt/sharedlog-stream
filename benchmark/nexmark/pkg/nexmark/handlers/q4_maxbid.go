@@ -108,14 +108,6 @@ type q4MaxBidProcessArgs struct {
 	proc_interface.BaseProcArgsWithSrcSink
 }
 
-func (h *q4MaxBid) process(ctx context.Context, t *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
-	args := argsTmp.(*q4MaxBidProcessArgs)
-	return execution.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
-		t.CurrentOffset[args.Source().TopicName()] = msg.LogSeqNum
-		return execution.ProcessMsgAndSeq(ctx, msg, argsTmp, h.procMsg)
-	})
-}
-
 func (h *q4MaxBid) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
 	args := argsTmp.(*q4MaxBidProcessArgs)
 	ab := msg.Value.(commtypes.EventTimeExtractor)
@@ -211,7 +203,10 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	}
 
 	task := transaction.StreamTask{
-		ProcessFunc:               h.process,
+		ProcessFunc: func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
+			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
+			return execution.CommonProcess(ctx, task, args, h.procMsg)
+		},
 		CurrentOffset:             make(map[string]uint64),
 		CommitEveryForAtLeastOnce: common.CommitDuration,
 		PauseFunc:                 nil,
@@ -244,12 +239,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID,
 			procArgs, srcs, sinks_arr).WithKVChangelogs(kvc)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
-			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
-				procArgs.(*q4MaxBidProcessArgs).trackParFunc = trackParFunc
-				procArgs.(*q4MaxBidProcessArgs).SetRecordFinishFunc(recordFinishFunc)
-				kvstore.MaterializeParam().SetTrackParFunc(trackParFunc)
-			}, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}

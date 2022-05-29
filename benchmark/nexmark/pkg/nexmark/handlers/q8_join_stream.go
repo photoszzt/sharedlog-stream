@@ -21,7 +21,6 @@ import (
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
-	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sync"
 	"time"
 
@@ -343,7 +342,10 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	aucManager := execution.NewJoinProcManager()
 	perManager := execution.NewJoinProcManager()
 
-	procArgs := execution.NewCommonJoinProcArgs(aucManager.Out(),
+	procArgs := execution.NewCommonJoinProcArgs(
+		joinProcAuction,
+		joinProcPerson,
+		aucManager.Out(),
 		perManager.Out(), h.funcName, sp.ScaleEpoch, sp.ParNum)
 	pctx := context.WithValue(ctx, "id", "person")
 	actx := context.WithValue(ctx, "id", "auction")
@@ -440,12 +442,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr).
 			WithWindowStoreChangelogs(wsc)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
-			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
-				joinProcAuction.SetTrackParFunc(trackParFunc)
-				joinProcPerson.SetTrackParFunc(trackParFunc)
-				procArgs.(*execution.CommonJoinProcArgs).SetRecordFinishFunc(recordFinishFunc)
-			}, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}

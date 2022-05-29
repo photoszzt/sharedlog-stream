@@ -18,7 +18,6 @@ import (
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/proc_interface"
 	"sharedlog-stream/pkg/transaction"
-	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sync"
 	"time"
 
@@ -47,29 +46,11 @@ func NewQ8GroupByHandler(env types.Environment, funcName string) types.FuncHandl
 	}
 }
 
-func (h *q8GroupByHandler) process(
-	ctx context.Context,
-	t *transaction.StreamTask,
-	argsTmp interface{},
-) *common.FnOutput {
+func (h *q8GroupByHandler) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
 	args := argsTmp.(*TwoMsgChanProcArgs)
-	return execution.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
-		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
-		if msg.MsgArr != nil {
-			for _, subMsg := range msg.MsgArr {
-				if subMsg.Value == nil {
-					continue
-				}
-				args.msgChan1 <- subMsg
-				args.msgChan2 <- subMsg
-			}
-			return nil
-		} else {
-			args.msgChan1 <- msg.Msg
-			args.msgChan2 <- msg.Msg
-			return nil
-		}
-	})
+	args.msgChan1 <- msg
+	args.msgChan2 <- msg
+	return nil
 }
 
 func (h *q8GroupByHandler) Call(ctx context.Context, input []byte) ([]byte, error) {
@@ -152,11 +133,9 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 	auctionsBySellerIDManager := execution.NewGeneralProcManager(auctionsBySellerIDFunc)
 	sinks_arr := []source_sink.Sink{sinks[0], sinks[1]}
 	procArgs := &TwoMsgChanProcArgs{
-		src:                  src,
-		msgChan1:             auctionsBySellerIDManager.MsgChan(),
-		msgChan2:             personsByIDManager.MsgChan(),
-		trackParFunc:         tran_interface.DefaultTrackSubstreamFunc,
-		BaseProcArgsWithSink: proc_interface.NewBaseProcArgsWithSink(sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum),
+		msgChan1:                auctionsBySellerIDManager.MsgChan(),
+		msgChan2:                personsByIDManager.MsgChan(),
+		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src, sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 
 	personsByIDManager.LaunchProc(ctx, procArgs, &wg)
@@ -174,7 +153,10 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 	}
 
 	task := transaction.StreamTask{
-		ProcessFunc:               h.process,
+		ProcessFunc: func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
+			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
+			return execution.CommonProcess(ctx, task, args, h.procMsg)
+		},
 		HandleErrFunc:             handleErrFunc,
 		CurrentOffset:             make(map[string]uint64),
 		CommitEveryForAtLeastOnce: common.CommitDuration,
@@ -226,13 +208,7 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 			h.funcName, sp.InputTopicNames[0], sp.ParNum)
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
-			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
-				recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc,
-			) {
-				procArgs.(*TwoMsgChanProcArgs).trackParFunc = trackParFunc
-				procArgs.(*TwoMsgChanProcArgs).SetRecordFinishFunc(recordFinishFunc)
-			}, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}
@@ -313,7 +289,7 @@ func (h *q8GroupByHandler) getPersonsByID(warmup time.Duration, pollTimeout time
 							return
 						}
 						par := parTmp.(uint8)
-						err = args.trackParFunc(ctx, k, args.Sinks()[1].KeySerde(), args.Sinks()[1].TopicName(), par)
+						err = args.TrackParFunc()(ctx, k, args.Sinks()[1].KeySerde(), args.Sinks()[1].TopicName(), par)
 						if err != nil {
 							fmt.Fprintf(os.Stderr, "[ERROR] add topic partition failed: %v\n", err)
 							errChan <- fmt.Errorf("add topic partition failed: %v", err)
@@ -388,7 +364,7 @@ func (h *q8GroupByHandler) getAucBySellerID(warmup time.Duration, pollTimeout ti
 						errChan <- xerrors.New("fail to get output partition")
 					}
 					par := parTmp.(uint8)
-					err = args.trackParFunc(ctx, k, args.Sinks()[0].KeySerde(), args.Sinks()[0].TopicName(), par)
+					err = args.TrackParFunc()(ctx, k, args.Sinks()[0].KeySerde(), args.Sinks()[0].TopicName(), par)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "[ERROR] add topic partition failed: %v", err)
 						errChan <- fmt.Errorf("add topic partition failed: %v", err)

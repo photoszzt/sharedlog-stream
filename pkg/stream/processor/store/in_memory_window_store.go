@@ -6,6 +6,7 @@ import (
 	"math"
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sync"
 	"time"
 
@@ -388,4 +389,6 @@ func (s *InMemoryWindowStore) CommitTransaction(ctx context.Context, taskRepr st
 func (s *InMemoryWindowStore) AbortTransaction(ctx context.Context) error { return nil }
 func (s *InMemoryWindowStore) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
 	panic("not supported")
+}
+func (s *InMemoryWindowStore) SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc) {
 }

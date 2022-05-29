@@ -19,7 +19,6 @@ import (
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/proc_interface"
 	"sharedlog-stream/pkg/transaction"
-	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sync"
 	"time"
 
@@ -48,28 +47,11 @@ func NewQ3GroupByHandler(env types.Environment, funcName string) types.FuncHandl
 	}
 }
 
-func (h *q3GroupByHandler) process(
-	ctx context.Context,
-	t *transaction.StreamTask,
-	argsTmp interface{},
-) *common.FnOutput {
+func (h *q3GroupByHandler) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
 	args := argsTmp.(*TwoMsgChanProcArgs)
-	return execution.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
-		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
-		if msg.MsgArr != nil {
-			for _, subMsg := range msg.MsgArr {
-				if subMsg.Value == nil {
-					continue
-				}
-				args.msgChan1 <- subMsg
-				args.msgChan2 <- subMsg
-			}
-			return nil
-		}
-		args.msgChan1 <- msg.Msg
-		args.msgChan2 <- msg.Msg
-		return nil
-	})
+	args.msgChan1 <- msg
+	args.msgChan2 <- msg
+	return nil
 }
 
 func (h *q3GroupByHandler) Call(ctx context.Context, input []byte) ([]byte, error) {
@@ -87,14 +69,10 @@ func (h *q3GroupByHandler) Call(ctx context.Context, input []byte) ([]byte, erro
 }
 
 type TwoMsgChanProcArgs struct {
-	msgChan1     chan commtypes.Message
-	msgChan2     chan commtypes.Message
-	trackParFunc tran_interface.TrackKeySubStreamFunc
-	src          *source_sink.MeteredSource
-	proc_interface.BaseProcArgsWithSink
+	msgChan1 chan commtypes.Message
+	msgChan2 chan commtypes.Message
+	proc_interface.BaseProcArgsWithSrcSink
 }
-
-func (a *TwoMsgChanProcArgs) Source() source_sink.Source { return a.src }
 
 func getSrcSinks(ctx context.Context, sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
@@ -159,11 +137,10 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	auctionsBySellerIDManager := execution.NewGeneralProcManager(auctionsBySellerIDFunc)
 	sinks_arr := []source_sink.Sink{sinks[0], sinks[1]}
 	procArgs := &TwoMsgChanProcArgs{
-		src:                  src,
-		msgChan1:             auctionsBySellerIDManager.MsgChan(),
-		msgChan2:             personsByIDManager.MsgChan(),
-		trackParFunc:         tran_interface.DefaultTrackSubstreamFunc,
-		BaseProcArgsWithSink: proc_interface.NewBaseProcArgsWithSink(sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum),
+		msgChan1: auctionsBySellerIDManager.MsgChan(),
+		msgChan2: personsByIDManager.MsgChan(),
+		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src, sinks_arr,
+			h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 
 	personsByIDManager.LaunchProc(ctx, procArgs, &wg)
@@ -181,7 +158,10 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	}
 
 	task := transaction.StreamTask{
-		ProcessFunc:   h.process,
+		ProcessFunc: func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
+			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
+			return execution.CommonProcess(ctx, task, args, h.procMsg)
+		},
 		HandleErrFunc: handleErrFunc,
 		PauseFunc: func() *common.FnOutput {
 			debug.Fprintf(os.Stderr, "begin flush\n")
@@ -203,8 +183,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 			debug.Fprintf(os.Stderr, "done resume\n")
 		},
 		InitFunc: func(progArgsTmp interface{}) {
-			progArgs := progArgsTmp.(*TwoMsgChanProcArgs)
-			progArgs.src.StartWarmup()
+			src.StartWarmup()
 			sinks[0].StartWarmup()
 			sinks[1].StartWarmup()
 			filterPerson.StartWarmup()
@@ -234,12 +213,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 			h.funcName, sp.InputTopicNames[0], sp.ParNum)
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
-			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
-				recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
-				procArgs.(*TwoMsgChanProcArgs).trackParFunc = trackParFunc
-				procArgs.(*TwoMsgChanProcArgs).SetRecordFinishFunc(recordFinishFunc)
-			}, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}
@@ -319,7 +293,7 @@ func (h *q3GroupByHandler) getPersonsByID(warmup time.Duration) (
 						return
 					}
 					par := parTmp.(uint8)
-					err = args.trackParFunc(ctx, k, args.Sinks()[1].KeySerde(), args.Sinks()[1].TopicName(), par)
+					err = args.TrackParFunc()(ctx, k, args.Sinks()[1].KeySerde(), args.Sinks()[1].TopicName(), par)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "[ERROR] add topic partition failed: %v\n", err)
 						errChan <- fmt.Errorf("add topic partition failed: %v", err)
@@ -402,7 +376,7 @@ func (h *q3GroupByHandler) getAucBySellerID(warmup time.Duration) (
 							return
 						}
 						par := parTmp.(uint8)
-						err = args.trackParFunc(ctx, k, args.Sinks()[0].KeySerde(), args.Sinks()[0].TopicName(), par)
+						err = args.TrackParFunc()(ctx, k, args.Sinks()[0].KeySerde(), args.Sinks()[0].TopicName(), par)
 						if err != nil {
 							fmt.Fprintf(os.Stderr, "[ERROR] add topic partition failed: %v", err)
 							errChan <- fmt.Errorf("add topic partition failed: %v", err)

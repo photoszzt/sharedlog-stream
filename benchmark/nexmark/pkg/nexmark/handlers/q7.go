@@ -119,31 +119,8 @@ type processQ7RestoreArgs struct {
 	parNum             uint8
 }
 
-func (h *query7Handler) process(
-	ctx context.Context,
-	t *transaction.StreamTask,
-	argsTmp interface{},
-) *common.FnOutput {
+func (h *query7Handler) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
 	args := argsTmp.(*processQ7ProcessArgs)
-	return execution.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
-		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
-		if msg.MsgArr != nil {
-			for _, subMsg := range msg.MsgArr {
-				if subMsg.Value == nil {
-					continue
-				}
-				err := h.procMsg(ctx, subMsg, args)
-				if err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-		return h.procMsg(ctx, msg.Msg, args)
-	})
-}
-
-func (h *query7Handler) procMsg(ctx context.Context, msg commtypes.Message, args *processQ7ProcessArgs) error {
 	event := msg.Value.(*ntypes.Event)
 	ts, err := event.ExtractEventTime()
 	if err != nil {
@@ -367,7 +344,10 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 			input.ScaleEpoch, input.ParNum),
 	}
 	task := transaction.StreamTask{
-		ProcessFunc:               h.process,
+		ProcessFunc: func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
+			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
+			return execution.CommonProcess(ctx, task, args, h.procMsg)
+		},
 		CurrentOffset:             make(map[string]uint64),
 		CommitEveryForAtLeastOnce: common.CommitDuration,
 	}
@@ -413,11 +393,7 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 			WithWindowStoreChangelogs(wsc).
 			WithFixedOutParNum(input.ParNum)
 		benchutil.UpdateStreamTaskArgsTransaction(input, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
-			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
-				procArgs.(*processQ7ProcessArgs).trackParFunc = trackParFunc
-				procArgs.(*processQ7ProcessArgs).SetRecordFinishFunc(recordFinishFunc)
-			}, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}

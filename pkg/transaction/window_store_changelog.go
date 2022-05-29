@@ -15,16 +15,16 @@ import (
 )
 
 type WindowStoreChangelog struct {
-	WinStore         store.WindowStore
-	ChangelogManager *store_with_changelog.ChangelogManager
+	winStore         store.WindowStore
+	changelogManager *store_with_changelog.ChangelogManager
 	keyWindowTsSerde commtypes.Serde
 	kvmsgSerdes      commtypes.KVMsgSerdes
-	InputStream      store.Stream
-	RestoreFunc      func(ctx context.Context, args interface{}) error
-	RestoreArg       interface{}
+	inputStream      store.Stream
+	restoreFunc      func(ctx context.Context, args interface{}) error
+	restoreArg       interface{}
 	// this is used to identify the db and collection to store the transaction id
-	TabTranRepr string
-	ParNum      uint8
+	tabTranRepr string
+	parNum      uint8
 }
 
 func NewWindowStoreChangelog(
@@ -35,11 +35,11 @@ func NewWindowStoreChangelog(
 	parNum uint8,
 ) *WindowStoreChangelog {
 	return &WindowStoreChangelog{
-		WinStore:         wStore,
-		ChangelogManager: changelogManager,
+		winStore:         wStore,
+		changelogManager: changelogManager,
 		keyWindowTsSerde: keyWindowTsSerde,
 		kvmsgSerdes:      kvmsgSerdes,
-		ParNum:           parNum,
+		parNum:           parNum,
 	}
 }
 
@@ -52,19 +52,19 @@ func NewWindowStoreChangelogForExternalStore(
 	parNum uint8,
 ) *WindowStoreChangelog {
 	return &WindowStoreChangelog{
-		WinStore:    wStore,
-		InputStream: inputStream,
-		RestoreFunc: restoreFunc,
-		RestoreArg:  restoreArg,
-		ParNum:      parNum,
-		TabTranRepr: tabTranRepr,
+		winStore:    wStore,
+		inputStream: inputStream,
+		restoreFunc: restoreFunc,
+		restoreArg:  restoreArg,
+		parNum:      parNum,
+		tabTranRepr: tabTranRepr,
 	}
 }
 
 func BeginWindowStoreTransaction(ctx context.Context, winstores []*WindowStoreChangelog) error {
 	for _, winstorelog := range winstores {
-		if winstorelog.WinStore.TableType() == store.MONGODB {
-			if err := winstorelog.WinStore.StartTransaction(ctx); err != nil {
+		if winstorelog.winStore.TableType() == store.MONGODB {
+			if err := winstorelog.winStore.StartTransaction(ctx); err != nil {
 				return err
 			}
 		}
@@ -74,8 +74,8 @@ func BeginWindowStoreTransaction(ctx context.Context, winstores []*WindowStoreCh
 
 func CommitWindowStoreTransaction(ctx context.Context, winstores []*WindowStoreChangelog, transactionID uint64) error {
 	for _, winstorelog := range winstores {
-		if winstorelog.WinStore.TableType() == store.MONGODB {
-			if err := winstorelog.WinStore.CommitTransaction(ctx, winstorelog.TabTranRepr, transactionID); err != nil {
+		if winstorelog.winStore.TableType() == store.MONGODB {
+			if err := winstorelog.winStore.CommitTransaction(ctx, winstorelog.tabTranRepr, transactionID); err != nil {
 				return err
 			}
 		}
@@ -85,8 +85,8 @@ func CommitWindowStoreTransaction(ctx context.Context, winstores []*WindowStoreC
 
 func AbortWindowStoreTransaction(ctx context.Context, winstores []*WindowStoreChangelog) error {
 	for _, winstorelog := range winstores {
-		if winstorelog.WinStore.TableType() == store.MONGODB {
-			if err := winstorelog.WinStore.AbortTransaction(ctx); err != nil {
+		if winstorelog.winStore.TableType() == store.MONGODB {
+			if err := winstorelog.winStore.AbortTransaction(ctx); err != nil {
 				if err == session.ErrAbortTwice {
 					fmt.Fprint(os.Stderr, "transaction already aborted\n")
 					return nil
@@ -130,7 +130,7 @@ func RestoreChangelogWindowStateStore(
 		keyWindowTsSerde: wschangelog.keyWindowTsSerde,
 	}
 	for {
-		msg, err := wschangelog.ChangelogManager.ReadNext(ctx, wschangelog.ParNum)
+		msg, err := wschangelog.changelogManager.ReadNext(ctx, wschangelog.parNum)
 		// nothing to restore
 		if errors.IsStreamEmptyError(err) {
 			return nil
@@ -151,7 +151,7 @@ func RestoreChangelogWindowStateStore(
 				if msg.Key == nil && msg.Value == nil {
 					continue
 				}
-				err = wschangelog.WinStore.Put(ctx, msg.Key, msg.Value, msg.Timestamp)
+				err = wschangelog.winStore.Put(ctx, msg.Key, msg.Value, msg.Timestamp)
 				if err != nil {
 					return fmt.Errorf("window store put failed: %v", err)
 				}
@@ -161,7 +161,7 @@ func RestoreChangelogWindowStateStore(
 			if msg.Key == nil && msg.Value == nil {
 				continue
 			}
-			err = wschangelog.WinStore.Put(ctx, msg.Key, msg.Value, msg.Timestamp)
+			err = wschangelog.winStore.Put(ctx, msg.Key, msg.Value, msg.Timestamp)
 			if err != nil {
 				return fmt.Errorf("window store put failed: %v", err)
 			}

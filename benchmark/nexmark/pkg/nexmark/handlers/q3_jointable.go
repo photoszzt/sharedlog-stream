@@ -20,7 +20,6 @@ import (
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
-	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sharedlog-stream/pkg/treemap"
 	"sync"
 	"time"
@@ -65,23 +64,6 @@ func (h *q3JoinTableHandler) process(ctx context.Context,
 ) *common.FnOutput {
 	return execution.HandleJoinErrReturn(argsTmp)
 }
-
-/*
-func (h *q3JoinTableHandler) processOut(aOut *common.FnOutput, pOut *common.FnOutput, args *q3JoinTableProcessArgs) *common.FnOutput {
-	debug.Fprintf(os.Stderr, "aOut: %v\n", aOut)
-	debug.Fprintf(os.Stderr, "pOut: %v\n", pOut)
-	if pOut != nil && !pOut.Success {
-		return pOut
-	}
-	if aOut != nil && !aOut.Success {
-		return aOut
-	}
-	if args.personDone && args.auctionDone {
-		return &common.FnOutput{Success: true, Message: errors.ErrStreamSourceTimeout.Error()}
-	}
-	return nil
-}
-*/
 
 func getInOutStreams(
 	ctx context.Context,
@@ -211,18 +193,10 @@ func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 				return 1
 			}
 		}
-
-		toAuctionsTable, auctionsStore, err := processor.ToInMemKVTable(
+		toAuctionsTable, auctionsStore := processor.ToInMemKVTable(
 			aucTabName, compare, warmup)
-		if err != nil {
-			return nil, fmt.Errorf("toAucTab err: %v", err)
-		}
-
-		toPersonsTable, personsStore, err := processor.ToInMemKVTable(
+		toPersonsTable, personsStore := processor.ToInMemKVTable(
 			perTabName, compare, warmup)
-		if err != nil {
-			return nil, fmt.Errorf("toPersonsTab err: %v", err)
-		}
 		return &kvtables{toAuctionsTable, auctionsStore, toPersonsTable, personsStore}, nil
 	} else if tabType == store.MONGODB {
 		var vtSerde0 commtypes.Serde
@@ -347,7 +321,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	var wg sync.WaitGroup
 	aucManager := execution.NewJoinProcManager()
 	perManager := execution.NewJoinProcManager()
-	procArgs := execution.NewCommonJoinProcArgs(
+	procArgs := execution.NewCommonJoinProcArgs(joinProcAuction, joinProcPerson,
 		aucManager.Out(), perManager.Out(), h.funcName, sp.ScaleEpoch, sp.ParNum)
 
 	pctx := context.WithValue(ctx, "id", "person")
@@ -434,12 +408,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr).
 			WithKVChangelogs(kvchangelogs)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
-			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
-				joinProcPerson.SetTrackParFunc(trackParFunc)
-				joinProcAuction.SetTrackParFunc(trackParFunc)
-				procArgs.(*execution.CommonJoinProcArgs).SetRecordFinishFunc(recordFinishFunc)
-			}, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}

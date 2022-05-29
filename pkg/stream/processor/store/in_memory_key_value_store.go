@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sharedlog-stream/pkg/treemap"
 )
 
@@ -193,4 +194,7 @@ func (st *InMemoryKeyValueStore) CommitTransaction(ctx context.Context, taskRepr
 func (st *InMemoryKeyValueStore) AbortTransaction(ctx context.Context) error { panic("not supported") }
 func (st *InMemoryKeyValueStore) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
 	panic("not supported")
+}
+
+func (st *InMemoryKeyValueStore) SetTrackParFunc(tran_interface.TrackKeySubStreamFunc) {
 }

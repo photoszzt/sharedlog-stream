@@ -7,6 +7,7 @@ import (
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"time"
 )
 
@@ -30,7 +31,7 @@ func NewInMemoryWindowStoreWithChangelog(retensionPeriod int64,
 	} else if mp.serdeFormat == commtypes.MSGP {
 		ktsSerde = commtypes.KeyAndWindowStartTsMsgpSerde{}
 	} else {
-		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", mp.SerdeFormat)
+		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", mp.SerdeFormat())
 	}
 	return &InMemoryWindowStoreWithChangelog{
 		windowStore: store.NewInMemoryWindowStore(mp.storeName,
@@ -191,6 +192,9 @@ func (s *InMemoryWindowStoreWithChangelog) AbortTransaction(ctx context.Context)
 }
 func (s *InMemoryWindowStoreWithChangelog) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
 	panic("not supported")
+}
+func (s *InMemoryWindowStoreWithChangelog) SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc) {
+	s.mp.SetTrackParFunc(trackParFunc)
 }
 
 func ToInMemWindowTableWithChangelog(

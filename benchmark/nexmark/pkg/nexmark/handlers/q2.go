@@ -91,7 +91,10 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 			sp.ScaleEpoch, sp.ParNum),
 	}
 	task := transaction.StreamTask{
-		ProcessFunc:               h.process,
+		ProcessFunc: func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
+			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
+			return execution.CommonProcess(ctx, task, args, h.procMsg)
+		},
 		CurrentOffset:             make(map[string]uint64),
 		CommitEveryForAtLeastOnce: common.CommitDuration,
 		PauseFunc:                 nil,
@@ -116,12 +119,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks).
 			WithFixedOutParNum(sp.ParNum)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
-			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
-				recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
-				procArgs.(*query2ProcessArgs).trackParFunc = trackParFunc
-				procArgs.(*query2ProcessArgs).SetRecordFinishFunc(recordFinishFunc)
-			}, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}
@@ -136,40 +134,19 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 	return ret
 }
 
-func (h *query2Handler) process(ctx context.Context, t *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
+func (h *query2Handler) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
 	args := argsTmp.(*query2ProcessArgs)
-	return execution.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
-		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
-		if msg.MsgArr != nil {
-			for _, subMsg := range msg.MsgArr {
-				if subMsg.Value == nil {
-					continue
-				}
-				outMsg, err := args.q2Filter.ProcessAndReturn(ctx, subMsg)
-				if err != nil {
-					return err
-				}
-				if outMsg != nil {
-					err = args.Sinks()[0].Produce(ctx, outMsg[0], args.ParNum(), false)
-					if err != nil {
-						return err
-					}
-				}
-			}
-		} else {
-			outMsg, err := args.q2Filter.ProcessAndReturn(ctx, msg.Msg)
-			if err != nil {
-				return err
-			}
-			if outMsg != nil {
-				err = args.Sinks()[0].Produce(ctx, outMsg[0], args.ParNum(), false)
-				if err != nil {
-					return err
-				}
-			}
+	outMsg, err := args.q2Filter.ProcessAndReturn(ctx, msg)
+	if err != nil {
+		return err
+	}
+	if outMsg != nil {
+		err = args.Sinks()[0].Produce(ctx, outMsg[0], args.ParNum(), false)
+		if err != nil {
+			return err
 		}
-		return nil
-	})
+	}
+	return nil
 }
 
 /*

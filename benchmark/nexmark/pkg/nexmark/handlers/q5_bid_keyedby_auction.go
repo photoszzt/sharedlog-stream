@@ -18,7 +18,6 @@ import (
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/proc_interface"
 	"sharedlog-stream/pkg/transaction"
-	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sync"
 	"time"
 
@@ -56,41 +55,15 @@ func (h *bidKeyedByAuction) Call(ctx context.Context, input []byte) ([]byte, err
 }
 
 type bidKeyedByAuctionProcessArgs struct {
-	src           *source_sink.MeteredSource
 	filterBid     *processor.MeteredProcessor
 	selectKey     *processor.MeteredProcessor
 	output_stream *sharedlog_stream.ShardedSharedLogStream
-	trackParFunc  tran_interface.TrackKeySubStreamFunc
-	proc_interface.BaseProcArgsWithSink
+	proc_interface.BaseProcArgsWithSrcSink
 	numOutPartition uint8
 }
 
-func (a *bidKeyedByAuctionProcessArgs) Source() source_sink.Source { return a.src }
-
-func (h *bidKeyedByAuction) process(ctx context.Context,
-	t *transaction.StreamTask,
-	argsTmp interface{},
-) *common.FnOutput {
+func (h *bidKeyedByAuction) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
 	args := argsTmp.(*bidKeyedByAuctionProcessArgs)
-	return execution.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
-		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
-		if msg.MsgArr != nil {
-			for _, subMsg := range msg.MsgArr {
-				if subMsg.Value == nil {
-					continue
-				}
-				err := h.procMsg(ctx, subMsg, args)
-				if err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-		return h.procMsg(ctx, msg.Msg, args)
-	})
-}
-
-func (h *bidKeyedByAuction) procMsg(ctx context.Context, msg commtypes.Message, args *bidKeyedByAuctionProcessArgs) error {
 	event := msg.Value.(*ntypes.Event)
 	ts, err := event.ExtractEventTime()
 	if err != nil {
@@ -115,7 +88,7 @@ func (h *bidKeyedByAuction) procMsg(ctx context.Context, msg commtypes.Message, 
 		}
 		par := parTmp.(uint8)
 		// par := uint8(key % uint64(args.numOutPartition))
-		err = args.trackParFunc(ctx, key, args.Sinks()[0].KeySerde(), args.Sinks()[0].TopicName(), par)
+		err = args.TrackParFunc()(ctx, key, args.Sinks()[0].KeySerde(), args.Sinks()[0].TopicName(), par)
 		if err != nil {
 			return fmt.Errorf("add topic partition failed: %v", err)
 		}
@@ -154,18 +127,19 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 		})), time.Duration(sp.WarmupS)*time.Second)
 
 	procArgs := &bidKeyedByAuctionProcessArgs{
-		src:             src,
 		filterBid:       filterBid,
 		selectKey:       selectKey,
 		output_stream:   output_streams[0],
 		numOutPartition: sp.NumOutPartitions[0],
-		trackParFunc:    tran_interface.DefaultTrackSubstreamFunc,
-		BaseProcArgsWithSink: proc_interface.NewBaseProcArgsWithSink([]source_sink.Sink{sink}, h.funcName,
-			sp.ScaleEpoch, sp.ParNum),
+		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src,
+			[]source_sink.Sink{sink}, h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 
 	task := transaction.StreamTask{
-		ProcessFunc:               h.process,
+		ProcessFunc: func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
+			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
+			return execution.CommonProcess(ctx, task, args, h.procMsg)
+		},
 		CurrentOffset:             make(map[string]uint64),
 		CommitEveryForAtLeastOnce: common.CommitDuration,
 		PauseFunc:                 nil,
@@ -193,11 +167,7 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 			sp.InputTopicNames[0],
 			sp.ParNum, sp.OutputTopicNames[0])
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
-			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinish tran_interface.RecordPrevInstanceFinishFunc) {
-				procArgs.(*bidKeyedByAuctionProcessArgs).trackParFunc = trackParFunc
-				procArgs.(*bidKeyedByAuctionProcessArgs).SetRecordFinishFunc(recordFinish)
-			}, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}

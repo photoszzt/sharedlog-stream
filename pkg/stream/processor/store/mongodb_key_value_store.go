@@ -6,6 +6,7 @@ import (
 	"os"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sharedlog-stream/pkg/utils"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -485,3 +486,5 @@ func (s *MongoDBKeyValueStore) GetTransactionID(ctx context.Context, taskRepr st
 	val := result[VALUE_NAME]
 	return uint64(val.(int64)), true, nil
 }
+
+func (s *MongoDBKeyValueStore) SetTrackParFunc(tran_interface.TrackKeySubStreamFunc) {}

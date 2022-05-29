@@ -19,7 +19,6 @@ import (
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
-	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sharedlog-stream/pkg/treemap"
 	"time"
 
@@ -109,7 +108,6 @@ type q5MaxBidProcessArgs struct {
 	maxBid       *processor.MeteredProcessor
 	stJoin       *processor.MeteredProcessor
 	chooseMaxCnt *processor.MeteredProcessor
-	trackParFunc tran_interface.TrackKeySubStreamFunc
 	proc_interface.BaseProcArgsWithSrcSink
 }
 
@@ -121,27 +119,8 @@ type q5MaxBidRestoreArgs struct {
 	parNum       uint8
 }
 
-func (h *q5MaxBid) process(ctx context.Context, t *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
+func (h *q5MaxBid) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
 	args := argsTmp.(*q5MaxBidProcessArgs)
-	return execution.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
-		t.CurrentOffset[args.Source().TopicName()] = msg.LogSeqNum
-		if msg.MsgArr != nil {
-			for _, subMsg := range msg.MsgArr {
-				if subMsg.Value == nil {
-					continue
-				}
-				err := h.procMsg(ctx, subMsg, args)
-				if err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-		return h.procMsg(ctx, msg.Msg, args)
-	})
-}
-
-func (h *q5MaxBid) procMsg(ctx context.Context, msg commtypes.Message, args *q5MaxBidProcessArgs) error {
 	aic := msg.Value.(*ntypes.AuctionIdCount)
 	ts, err := aic.ExtractEventTime()
 	if err != nil {
@@ -333,13 +312,15 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		maxBid:       maxBid,
 		stJoin:       stJoin,
 		chooseMaxCnt: chooseMaxCnt,
-		trackParFunc: tran_interface.DefaultTrackSubstreamFunc,
 		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src,
 			sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 
 	task := transaction.StreamTask{
-		ProcessFunc:               h.process,
+		ProcessFunc: func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
+			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
+			return execution.CommonProcess(ctx, task, args, h.procMsg)
+		},
 		CurrentOffset:             make(map[string]uint64),
 		CommitEveryForAtLeastOnce: common.CommitDuration,
 		PauseFunc:                 nil,
@@ -391,17 +372,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr).
 			WithKVChangelogs(kvc)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
-			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc,
-				recordFinshFunc tran_interface.RecordPrevInstanceFinishFunc,
-			) {
-				procArgs.(*q5MaxBidProcessArgs).trackParFunc = trackParFunc
-				procArgs.(*q5MaxBidProcessArgs).SetRecordFinishFunc(recordFinshFunc)
-				if sp.TableType == uint8(store.IN_MEM) {
-					kvstore_mem := kvstore.(*store_with_changelog.KeyValueStoreWithChangelog)
-					kvstore_mem.MaterializeParam().SetTrackParFunc(trackParFunc)
-				}
-			}, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}

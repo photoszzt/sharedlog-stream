@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sync"
 	"time"
 )
@@ -234,3 +235,5 @@ func (rws *SegmentedWindowStore) AbortTransaction(ctx context.Context) error {
 func (rws *SegmentedWindowStore) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
 	return rws.bytesStore.GetTransactionID(ctx, taskRepr)
 }
+
+func (rws *SegmentedWindowStore) SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc) {}

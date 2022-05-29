@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"time"
 )
 
@@ -31,4 +32,5 @@ type WindowStore interface {
 	CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error
 	AbortTransaction(ctx context.Context) error
 	GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error)
+	SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc)
 }

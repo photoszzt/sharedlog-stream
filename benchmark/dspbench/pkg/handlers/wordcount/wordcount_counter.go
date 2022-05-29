@@ -18,7 +18,6 @@ import (
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
-	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sharedlog-stream/pkg/treemap"
 	"strings"
 	"time"
@@ -101,7 +100,6 @@ type wordcountCounterAggProcessArg struct {
 	src           *source_sink.MeteredSource
 	output_stream *store.MeteredStream
 	counter       *processor.MeteredProcessor
-	trackParFunc  tran_interface.TrackKeySubStreamFunc
 	proc_interface.BaseProcArgs
 }
 
@@ -208,7 +206,6 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 		src:           src,
 		output_stream: meteredOutputStream,
 		counter:       count,
-		trackParFunc:  tran_interface.DefaultTrackSubstreamFunc,
 		BaseProcArgs:  proc_interface.NewBaseProcArgs(funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 
@@ -226,11 +223,7 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 		transactionalID := fmt.Sprintf("%s-%s-%s-%d", funcName, sp.InputTopicNames[0], sp.OutputTopicNames[0], sp.ParNum)
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, nil)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs,
-			func(procArgs interface{}, trackParFunc tran_interface.TrackKeySubStreamFunc, recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
-				procArgs.(*wordcountCounterAggProcessArg).trackParFunc = trackParFunc
-				procArgs.(*wordcountCounterAggProcessArg).SetRecordFinishFunc(recordFinishFunc)
-			}, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}
