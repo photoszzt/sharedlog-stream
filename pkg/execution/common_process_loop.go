@@ -48,6 +48,24 @@ func CommonProcess(ctx context.Context, t *transaction.StreamTask, args proc_int
 	return nil
 }
 
+type ProcessMsgFunc func(ctx context.Context, msg commtypes.Message, args interface{}) error
+
+func ProcessMsgAndSeq(ctx context.Context, msg commtypes.MsgAndSeq, args interface{}, procMsg ProcessMsgFunc) error {
+	if msg.MsgArr != nil {
+		for _, subMsg := range msg.MsgArr {
+			if subMsg.Value == nil {
+				continue
+			}
+			err := procMsg(ctx, subMsg, args)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return procMsg(ctx, msg.Msg, args)
+}
+
 func HandleScaleEpochAndBytes(ctx context.Context, msg commtypes.MsgAndSeq, args proc_interface.ProcArgsWithSink) *common.FnOutput {
 	v := msg.Msg.Value.(source_sink.ScaleEpochAndBytes)
 	err := args.FlushAndPushToAllSinks(ctx, commtypes.Message{Key: txn_data.SCALE_FENCE_KEY,

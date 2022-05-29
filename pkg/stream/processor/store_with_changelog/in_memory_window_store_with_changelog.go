@@ -3,6 +3,7 @@ package store_with_changelog
 import (
 	"context"
 	"fmt"
+	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
@@ -17,18 +18,23 @@ type InMemoryWindowStoreWithChangelog struct {
 
 var _ = store.WindowStore(&InMemoryWindowStoreWithChangelog{})
 
-func NewInMemoryWindowStoreWithChangelog(retensionPeriod int64, windowSize int64, retainDuplicates bool, mp *MaterializeParam) (*InMemoryWindowStoreWithChangelog, error) {
+func NewInMemoryWindowStoreWithChangelog(retensionPeriod int64,
+	windowSize int64,
+	retainDuplicates bool,
+	comparable concurrent_skiplist.Comparable,
+	mp *MaterializeParam,
+) (*InMemoryWindowStoreWithChangelog, error) {
 	var ktsSerde commtypes.Serde
-	if mp.SerdeFormat == commtypes.JSON {
+	if mp.serdeFormat == commtypes.JSON {
 		ktsSerde = commtypes.KeyAndWindowStartTsJSONSerde{}
-	} else if mp.SerdeFormat == commtypes.MSGP {
+	} else if mp.serdeFormat == commtypes.MSGP {
 		ktsSerde = commtypes.KeyAndWindowStartTsMsgpSerde{}
 	} else {
 		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", mp.SerdeFormat)
 	}
 	return &InMemoryWindowStoreWithChangelog{
-		windowStore: store.NewInMemoryWindowStore(mp.StoreName,
-			retensionPeriod, windowSize, retainDuplicates, mp.Comparable),
+		windowStore: store.NewInMemoryWindowStore(mp.storeName,
+			retensionPeriod, windowSize, retainDuplicates, comparable),
 		mp:               mp,
 		keyWindowTsSerde: ktsSerde,
 	}, nil
@@ -56,15 +62,15 @@ func (st *InMemoryWindowStoreWithChangelog) Name() string {
 }
 
 func (st *InMemoryWindowStoreWithChangelog) FlushChangelog(ctx context.Context) error {
-	return st.mp.ChangelogManager.Flush(ctx)
+	return st.mp.ChangelogManager().Flush(ctx)
 }
 
 func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error {
-	keyBytes, err := st.mp.KVMsgSerdes.KeySerde.Encode(key)
+	keyBytes, err := st.mp.kvMsgSerdes.KeySerde.Encode(key)
 	if err != nil {
 		return err
 	}
-	valBytes, err := st.mp.KVMsgSerdes.ValSerde.Encode(value)
+	valBytes, err := st.mp.kvMsgSerdes.ValSerde.Encode(value)
 	if err != nil {
 		return err
 	}
@@ -77,15 +83,16 @@ func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context, key commtyp
 	if err != nil {
 		return err
 	}
-	encoded, err := st.mp.KVMsgSerdes.MsgSerde.Encode(ktsBytes, valBytes)
+	encoded, err := st.mp.kvMsgSerdes.MsgSerde.Encode(ktsBytes, valBytes)
 	if err != nil {
 		return err
 	}
-	err = st.mp.ChangelogManager.Push(ctx, encoded, st.mp.ParNum)
+	changelogManager := st.mp.ChangelogManager()
+	err = changelogManager.Push(ctx, encoded, st.mp.parNum)
 	if err != nil {
 		return err
 	}
-	err = st.mp.TrackFunc(ctx, key, st.mp.KVMsgSerdes.KeySerde, st.mp.ChangelogManager.TopicName(), st.mp.ParNum)
+	err = st.mp.trackFunc(ctx, key, st.mp.kvMsgSerdes.KeySerde, changelogManager.TopicName(), st.mp.parNum)
 	if err != nil {
 		return err
 	}
@@ -190,10 +197,12 @@ func ToInMemWindowTableWithChangelog(
 	storeName string,
 	mp *MaterializeParam,
 	joinWindow *processor.JoinWindows,
+	comparable concurrent_skiplist.Comparable,
 	warmup time.Duration,
 ) (*processor.MeteredProcessor, store.WindowStore, error) {
-	tabWithLog, err := NewInMemoryWindowStoreWithChangelog(joinWindow.MaxSize()+joinWindow.GracePeriodMs(),
-		joinWindow.MaxSize(), true, mp)
+	tabWithLog, err := NewInMemoryWindowStoreWithChangelog(
+		joinWindow.MaxSize()+joinWindow.GracePeriodMs(),
+		joinWindow.MaxSize(), true, comparable, mp)
 	if err != nil {
 		return nil, nil, err
 	}

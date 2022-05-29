@@ -84,3 +84,15 @@ type CompareFunc func(lhs, rhs interface{}) int
 func (f CompareFunc) Compare(lhs, rhs interface{}) int {
 	return f(lhs, rhs)
 }
+
+func Uint64KeyCompare(lhs, rhs interface{}) int {
+	l := lhs.(uint64)
+	r := rhs.(uint64)
+	if l < r {
+		return -1
+	} else if l == r {
+		return 0
+	} else {
+		return 1
+	}
+}

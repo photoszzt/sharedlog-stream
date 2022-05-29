@@ -13,20 +13,22 @@ import (
 
 // a changelog substream has only one producer. Each store would only produce to one substream.
 type ChangelogManager struct {
-	tm               tran_interface.ReadOnlyTransactionManager
-	changelog        *sharedlog_stream.ShardedSharedLogStream
-	tac              *source_sink.TransactionAwareConsumer
-	msgBuffer        []commtypes.RawMsg
-	curReadMsgSeqNum uint64
-	bufPush          bool
-	transactional    bool
-	serdeFormat      commtypes.SerdeFormat
+	tm            tran_interface.ReadOnlyTransactionManager
+	changelog     *sharedlog_stream.ShardedSharedLogStream
+	tac           *source_sink.TransactionAwareConsumer
+	bufPush       bool
+	transactional bool
+	serdeFormat   commtypes.SerdeFormat
 }
 
 func NewChangelogManager(stream *sharedlog_stream.ShardedSharedLogStream, serdeFormat commtypes.SerdeFormat) *ChangelogManager {
 	return &ChangelogManager{
-		changelog: stream,
-		bufPush:   utils.CheckBufPush(),
+		tm:            nil,
+		changelog:     stream,
+		tac:           nil,
+		bufPush:       utils.CheckBufPush(),
+		transactional: false,
+		serdeFormat:   serdeFormat,
 	}
 }
 

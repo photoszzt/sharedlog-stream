@@ -33,7 +33,7 @@ func (st *KeyValueStoreWithChangelog) MaterializeParam() *MaterializeParam {
 }
 
 func (st *KeyValueStoreWithChangelog) Name() string {
-	return st.mp.StoreName
+	return st.mp.storeName
 }
 
 func (st *KeyValueStoreWithChangelog) IsOpen() bool {
@@ -42,7 +42,7 @@ func (st *KeyValueStoreWithChangelog) IsOpen() bool {
 
 func (st *KeyValueStoreWithChangelog) Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error) {
 	if st.use_bytes {
-		keyBytes, err := st.mp.KVMsgSerdes.KeySerde.Encode(key)
+		keyBytes, err := st.mp.kvMsgSerdes.KeySerde.Encode(key)
 		if err != nil {
 			return nil, false, err
 		}
@@ -50,34 +50,35 @@ func (st *KeyValueStoreWithChangelog) Get(ctx context.Context, key commtypes.Key
 		if err != nil {
 			return nil, ok, err
 		}
-		val, err := st.mp.KVMsgSerdes.ValSerde.Decode(valBytes.([]byte))
+		val, err := st.mp.kvMsgSerdes.ValSerde.Decode(valBytes.([]byte))
 		return val, ok, err
 	}
 	return st.kvstore.Get(ctx, key)
 }
 
 func (st *KeyValueStoreWithChangelog) FlushChangelog(ctx context.Context) error {
-	return st.mp.ChangelogManager.Flush(ctx)
+	return st.mp.ChangelogManager().Flush(ctx)
 }
 
 func (st *KeyValueStoreWithChangelog) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
-	keyBytes, err := st.mp.KVMsgSerdes.KeySerde.Encode(key)
+	keyBytes, err := st.mp.kvMsgSerdes.KeySerde.Encode(key)
 	if err != nil {
 		return err
 	}
-	valBytes, err := st.mp.KVMsgSerdes.ValSerde.Encode(value)
+	valBytes, err := st.mp.kvMsgSerdes.ValSerde.Encode(value)
 	if err != nil {
 		return err
 	}
-	encoded, err := st.mp.KVMsgSerdes.MsgSerde.Encode(keyBytes, valBytes)
+	encoded, err := st.mp.kvMsgSerdes.MsgSerde.Encode(keyBytes, valBytes)
 	if err != nil {
 		return err
 	}
-	err = st.mp.ChangelogManager.Push(ctx, encoded, st.mp.ParNum)
+	changelogManager := st.mp.ChangelogManager()
+	err = changelogManager.Push(ctx, encoded, st.mp.parNum)
 	if err != nil {
 		return err
 	}
-	err = st.mp.TrackFunc(ctx, key, st.mp.KVMsgSerdes.KeySerde, st.mp.ChangelogManager.TopicName(), st.mp.ParNum)
+	err = st.mp.trackFunc(ctx, key, st.mp.kvMsgSerdes.KeySerde, changelogManager.TopicName(), st.mp.parNum)
 	if err != nil {
 		return err
 	}
@@ -95,19 +96,19 @@ func (st *KeyValueStoreWithChangelog) PutIfAbsent(ctx context.Context, key commt
 		return nil, err
 	}
 	if !exists {
-		keyBytes, err := st.mp.KVMsgSerdes.KeySerde.Encode(key)
+		keyBytes, err := st.mp.kvMsgSerdes.KeySerde.Encode(key)
 		if err != nil {
 			return nil, err
 		}
-		valBytes, err := st.mp.KVMsgSerdes.ValSerde.Encode(value)
+		valBytes, err := st.mp.kvMsgSerdes.ValSerde.Encode(value)
 		if err != nil {
 			return nil, err
 		}
-		encoded, err := st.mp.KVMsgSerdes.MsgSerde.Encode(keyBytes, valBytes)
+		encoded, err := st.mp.kvMsgSerdes.MsgSerde.Encode(keyBytes, valBytes)
 		if err != nil {
 			return nil, err
 		}
-		err = st.mp.ChangelogManager.Push(ctx, encoded, st.mp.ParNum)
+		err = st.mp.ChangelogManager().Push(ctx, encoded, st.mp.parNum)
 		if err != nil {
 			return nil, err
 		}
@@ -131,15 +132,15 @@ func (st *KeyValueStoreWithChangelog) PutAll(ctx context.Context, entries []*com
 }
 
 func (st *KeyValueStoreWithChangelog) Delete(ctx context.Context, key commtypes.KeyT) error {
-	keyBytes, err := st.mp.KVMsgSerdes.KeySerde.Encode(key)
+	keyBytes, err := st.mp.kvMsgSerdes.KeySerde.Encode(key)
 	if err != nil {
 		return err
 	}
-	encoded, err := st.mp.KVMsgSerdes.MsgSerde.Encode(keyBytes, nil)
+	encoded, err := st.mp.kvMsgSerdes.MsgSerde.Encode(keyBytes, nil)
 	if err != nil {
 		return err
 	}
-	err = st.mp.ChangelogManager.Push(ctx, encoded, st.mp.ParNum)
+	err = st.mp.ChangelogManager().Push(ctx, encoded, st.mp.parNum)
 	if err != nil {
 		return err
 	}
@@ -186,4 +187,12 @@ func ToInMemKVTableWithChangelog(storeName string, mp *MaterializeParam,
 	tabWithLog := NewKeyValueStoreWithChangelog(mp, s, false)
 	toTableProc := processor.NewMeteredProcessor(processor.NewStoreToKVTableProcessor(tabWithLog), warmup)
 	return toTableProc, tabWithLog, nil
+}
+
+func CreateInMemKVTableWithChangelog(mp *MaterializeParam,
+	compare func(a, b treemap.Key) int, warmup time.Duration,
+) *KeyValueStoreWithChangelog {
+	s := store.NewInMemoryKeyValueStore(mp.storeName, compare)
+	tabWithLog := NewKeyValueStoreWithChangelog(mp, s, false)
+	return tabWithLog
 }

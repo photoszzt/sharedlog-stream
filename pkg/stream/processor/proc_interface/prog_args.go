@@ -18,6 +18,24 @@ type ProcArgsWithSink interface {
 	FlushAndPushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error
 }
 
+type BaseProcArgsWithSrcSink struct {
+	src source_sink.Source
+	BaseProcArgsWithSink
+}
+
+func NewBaseProcArgsWithSrcSink(src source_sink.Source, sinks []source_sink.Sink, funcName string,
+	curEpoch uint64, parNum uint8,
+) BaseProcArgsWithSrcSink {
+	return BaseProcArgsWithSrcSink{
+		BaseProcArgsWithSink: NewBaseProcArgsWithSink(sinks, funcName, curEpoch, parNum),
+		src:                  src,
+	}
+}
+
+func (pa *BaseProcArgsWithSrcSink) Source() source_sink.Source {
+	return pa.src
+}
+
 type BaseProcArgsWithSink struct {
 	sinks []source_sink.Sink
 	BaseProcArgs

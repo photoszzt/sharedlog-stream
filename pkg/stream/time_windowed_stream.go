@@ -1,13 +1,16 @@
 package stream
 
 import (
+	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 )
 
 type TimeWindowedStream interface {
-	Count(name string, mp *store_with_changelog.MaterializeParam) Table
-	Aggregate(name string, initializer processor.Initializer, aggregator processor.Aggregator, mp *store_with_changelog.MaterializeParam) Table
+	Count(name string, mp *store_with_changelog.MaterializeParam, comparable concurrent_skiplist.Comparable) Table
+	Aggregate(name string, initializer processor.Initializer,
+		aggregator processor.Aggregator,
+		mp *store_with_changelog.MaterializeParam, comparable concurrent_skiplist.Comparable) Table
 	Reduce(name string, reducer processor.Reducer) Table
 }
 
@@ -17,7 +20,9 @@ type TimeWindowedStreamImpl struct {
 	parents    []processor.Node
 }
 
-func newTimeWindowedStream(tp *processor.TopologyBuilder, parents []processor.Node, windowDefs processor.EnumerableWindowDefinition) TimeWindowedStream {
+func newTimeWindowedStream(tp *processor.TopologyBuilder,
+	parents []processor.Node, windowDefs processor.EnumerableWindowDefinition,
+) TimeWindowedStream {
 	return &TimeWindowedStreamImpl{
 		tp:         tp,
 		parents:    parents,
@@ -25,10 +30,12 @@ func newTimeWindowedStream(tp *processor.TopologyBuilder, parents []processor.No
 	}
 }
 
-func (s *TimeWindowedStreamImpl) Count(name string, mp *store_with_changelog.MaterializeParam) Table {
+func (s *TimeWindowedStreamImpl) Count(name string, mp *store_with_changelog.MaterializeParam,
+	comparable concurrent_skiplist.Comparable,
+) Table {
 	store, err := store_with_changelog.NewInMemoryWindowStoreWithChangelog(
 		s.windowDefs.MaxSize()+s.windowDefs.GracePeriodMs(),
-		s.windowDefs.MaxSize(), false, mp)
+		s.windowDefs.MaxSize(), false, comparable, mp)
 	if err != nil {
 		panic(err)
 	}
@@ -41,21 +48,26 @@ func (s *TimeWindowedStreamImpl) Count(name string, mp *store_with_changelog.Mat
 			return val + 1
 		}), s.windowDefs)
 	n := s.tp.AddProcessor(name, p, s.parents)
-	_ = s.tp.AddWindowStore(mp.StoreName)
-	return newTable(s.tp, []processor.Node{n}, mp.StoreName)
+	_ = s.tp.AddWindowStore(mp.StoreName())
+	return newTable(s.tp, []processor.Node{n}, mp.StoreName())
 }
 
-func (s *TimeWindowedStreamImpl) Aggregate(name string, initializer processor.Initializer, aggregator processor.Aggregator, mp *store_with_changelog.MaterializeParam) Table {
+func (s *TimeWindowedStreamImpl) Aggregate(name string,
+	initializer processor.Initializer,
+	aggregator processor.Aggregator,
+	mp *store_with_changelog.MaterializeParam,
+	comparable concurrent_skiplist.Comparable,
+) Table {
 	store, err := store_with_changelog.NewInMemoryWindowStoreWithChangelog(
 		s.windowDefs.MaxSize()+s.windowDefs.GracePeriodMs(),
-		s.windowDefs.MaxSize(), false, mp)
+		s.windowDefs.MaxSize(), false, comparable, mp)
 	if err != nil {
 		panic(err)
 	}
 	p := processor.NewStreamWindowAggregateProcessor(store, initializer, aggregator, s.windowDefs)
 	n := s.tp.AddProcessor(name, p, s.parents)
-	_ = s.tp.AddWindowStore(mp.StoreName)
-	return newTable(s.tp, []processor.Node{n}, mp.StoreName)
+	_ = s.tp.AddWindowStore(mp.StoreName())
+	return newTable(s.tp, []processor.Node{n}, mp.StoreName())
 }
 
 func (s *TimeWindowedStreamImpl) Reduce(name string, reducer processor.Reducer) Table {

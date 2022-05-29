@@ -65,22 +65,25 @@ func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes
 	} else {
 		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat)
 	}
-	mp := &store_with_changelog.MaterializeParam{
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			KeySerde: commtypes.StringSerde{},
-			ValSerde: vtSerde,
-			MsgSerde: msgSerde,
-		},
-		StoreName:        sp.OutputTopicNames[0],
-		ChangelogManager: store_with_changelog.NewChangelogManager(output_stream, commtypes.SerdeFormat(sp.SerdeFormat)),
-		ParNum:           sp.ParNum,
+	kvMsgSerdes := commtypes.KVMsgSerdes{
+		KeySerde: commtypes.StringSerde{},
+		ValSerde: vtSerde,
+		MsgSerde: msgSerde,
 	}
-	inMemStore := store.NewInMemoryKeyValueStore(mp.StoreName, func(a, b treemap.Key) int {
+	mp, err := store_with_changelog.NewMaterializeParamBuilder().KVMsgSerdes(kvMsgSerdes).
+		StoreName(sp.OutputTopicNames[0] + "-tab").ParNum(sp.ParNum).
+		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
+		ChangelogManager(store_with_changelog.NewChangelogManager(output_stream, commtypes.SerdeFormat(sp.SerdeFormat))).Build()
+	if err != nil {
+		return nil, err
+	}
+	compare := func(a, b treemap.Key) int {
 		ka := a.(string)
 		kb := b.(string)
 		return strings.Compare(ka, kb)
-	})
-	store := store_with_changelog.NewKeyValueStoreWithChangelog(mp, inMemStore, false)
+	}
+	warmup := time.Duration(sp.WarmupS) * time.Second
+	store := store_with_changelog.CreateInMemKVTableWithChangelog(mp, compare, warmup)
 	// fmt.Fprintf(os.Stderr, "before restore\n")
 	p := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor(store,
 		processor.InitializerFunc(func() interface{} {
@@ -90,7 +93,7 @@ func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes
 			aggVal := agg.(uint64)
 			fmt.Fprintf(os.Stderr, "update %v count to %d\n", key, aggVal+1)
 			return aggVal + 1
-		})), time.Duration(0))
+		})), warmup)
 	return p, nil
 }
 

@@ -30,7 +30,7 @@ func newGroupedStream(tp *processor.TopologyBuilder, parents []processor.Node, g
 }
 
 func (s *GroupedStreamImpl) Count(name string, mp *store_with_changelog.MaterializeParam, compare func(a, b treemap.Key) int) Table {
-	inMemStore := store.NewInMemoryKeyValueStore(mp.StoreName, compare)
+	inMemStore := store.NewInMemoryKeyValueStore(mp.StoreName(), compare)
 	store := store_with_changelog.NewKeyValueStoreWithChangelog(mp, inMemStore, false)
 	p := processor.NewStreamAggregateProcessor(store,
 		processor.InitializerFunc(func() interface{} {
@@ -42,7 +42,7 @@ func (s *GroupedStreamImpl) Count(name string, mp *store_with_changelog.Material
 		}))
 	n := s.tp.AddProcessor(name, p, s.parents)
 	_ = s.tp.AddKeyValueStore(store.Name())
-	return newTable(s.tp, []processor.Node{n}, mp.StoreName)
+	return newTable(s.tp, []processor.Node{n}, mp.StoreName())
 }
 
 func (s *GroupedStreamImpl) Reduce(name string, reducer processor.Reducer) Table {
@@ -61,12 +61,12 @@ func (s *GroupedStreamImpl) Aggregate(name string,
 	aggregator processor.Aggregator,
 	compare func(a, b treemap.Key) int,
 ) Table {
-	inMemStore := store.NewInMemoryKeyValueStore(mp.StoreName, compare)
+	inMemStore := store.NewInMemoryKeyValueStore(mp.StoreName(), compare)
 	store := store_with_changelog.NewKeyValueStoreWithChangelog(mp, inMemStore, false)
 	p := processor.NewStreamAggregateProcessor(store, initializer, aggregator)
 	n := s.tp.AddProcessor(name, p, s.parents)
 	_ = s.tp.AddKeyValueStore(store.Name())
-	return newTable(s.tp, []processor.Node{n}, mp.StoreName)
+	return newTable(s.tp, []processor.Node{n}, mp.StoreName())
 }
 
 func (s *GroupedStreamImpl) WindowedBy(windows processor.EnumerableWindowDefinition) TimeWindowedStream {

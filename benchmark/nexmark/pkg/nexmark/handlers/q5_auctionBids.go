@@ -131,33 +131,27 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 	countStoreName := "auctionBidsCountStore"
 	var countMp *store_with_changelog.MaterializeParam
 	if sp.TableType == uint8(store.IN_MEM) {
-		countMp, err = store_with_changelog.NewMaterializeParamForWindowStore(
-			h.env, commtypes.KVMsgSerdes{
-				KeySerde: commtypes.Uint64Serde{},
-				ValSerde: vtSerde,
-				MsgSerde: msgSerde,
-			}, countStoreName,
-			commtypes.CreateStreamParam{
+		comparable := concurrent_skiplist.CompareFunc(concurrent_skiplist.Uint64KeyCompare)
+		inKVMsgSerdes := commtypes.KVMsgSerdes{
+			KeySerde: commtypes.Uint64Serde{},
+			ValSerde: vtSerde,
+			MsgSerde: msgSerde,
+		}
+		countMp, err := store_with_changelog.NewMaterializeParamBuilder().
+			KVMsgSerdes(inKVMsgSerdes).
+			StoreName(countStoreName).
+			ParNum(sp.ParNum).
+			SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
+			StreamParam(commtypes.CreateStreamParam{
+				Env:          h.env,
 				NumPartition: sp.NumInPartition,
-				Format:       commtypes.SerdeFormat(sp.SerdeFormat),
-			}, sp.ParNum,
-			concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
-				l := lhs.(uint64)
-				r := rhs.(uint64)
-				if l < r {
-					return -1
-				} else if l == r {
-					return 0
-				} else {
-					return 1
-				}
-			}))
+			}).Build()
 		if err != nil {
 			return nil, nil, nil, err
 		}
 		countWindowStore, err = store_with_changelog.NewInMemoryWindowStoreWithChangelog(
 			hopWindow.MaxSize()+hopWindow.GracePeriodMs(),
-			hopWindow.MaxSize(), false, countMp,
+			hopWindow.MaxSize(), false, comparable, countMp,
 		)
 		if err != nil {
 			return nil, nil, nil, err
@@ -198,14 +192,11 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 type q5AuctionBidsProcessArg struct {
 	countProc      *processor.MeteredProcessor
 	groupByAuction *processor.MeteredProcessor
-	src            *source_sink.MeteredSource
 	output_stream  *sharedlog_stream.ShardedSharedLogStream
 	trackParFunc   tran_interface.TrackKeySubStreamFunc
-	proc_interface.BaseProcArgsWithSink
+	proc_interface.BaseProcArgsWithSrcSink
 	numOutPartition uint8
 }
-
-func (a *q5AuctionBidsProcessArg) Source() source_sink.Source { return a.src }
 
 type q5AuctionBidsRestoreArg struct {
 	countProc      processor.Processor
@@ -217,7 +208,7 @@ type q5AuctionBidsRestoreArg struct {
 func (h *q5AuctionBids) process(ctx context.Context, t *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
 	args := argsTmp.(*q5AuctionBidsProcessArg)
 	return execution.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
-		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
+		t.CurrentOffset[args.Source().TopicName()] = msg.LogSeqNum
 		if msg.MsgArr != nil {
 			for _, subMsg := range msg.MsgArr {
 				if subMsg.Value == nil {
@@ -365,12 +356,11 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	procArgs := &q5AuctionBidsProcessArg{
 		countProc:       countProc,
 		groupByAuction:  groupByAuction,
-		src:             src,
 		output_stream:   output_streams[0],
 		numOutPartition: sp.NumOutPartitions[0],
 		trackParFunc:    tran_interface.DefaultTrackSubstreamFunc,
-		BaseProcArgsWithSink: proc_interface.NewBaseProcArgsWithSink([]source_sink.Sink{sink}, h.funcName,
-			sp.ScaleEpoch, sp.ParNum),
+		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src,
+			[]source_sink.Sink{sink}, h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 
 	task := transaction.StreamTask{
@@ -396,9 +386,9 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		wsc = []*transaction.WindowStoreChangelog{
 			transaction.NewWindowStoreChangelog(
 				cstore,
-				cstore.MaterializeParam().ChangelogManager,
+				cstore.MaterializeParam().ChangelogManager(),
 				cstore.KeyWindowTsSerde(),
-				cstore.MaterializeParam().KVMsgSerdes, 0),
+				cstore.MaterializeParam().KVMsgSerdes(), 0),
 		}
 	} else if countStore.TableType() == store.MONGODB {
 		wsc = []*transaction.WindowStoreChangelog{
@@ -430,7 +420,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 				procArgs.(*q5AuctionBidsProcessArg).trackParFunc = trackParFunc
 				procArgs.(*q5AuctionBidsProcessArg).SetRecordFinishFunc(recordFinishFunc)
 				if sp.TableType == uint8(store.IN_MEM) {
-					countMp.TrackFunc = trackParFunc
+					countMp.SetTrackParFunc(trackParFunc)
 				}
 			}, &task)
 		if ret != nil && ret.Success {

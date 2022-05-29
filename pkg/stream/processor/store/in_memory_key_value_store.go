@@ -15,7 +15,21 @@ type InMemoryKeyValueStore struct {
 
 var _ = KeyValueStore(NewInMemoryKeyValueStore("a", nil))
 
-func NewInMemoryKeyValueStore(name string, compare func(a treemap.Key, b treemap.Key) int) *InMemoryKeyValueStore {
+type KVStoreCompareFunc func(a treemap.Key, b treemap.Key) int
+
+func Uint64KeyKVStoreCompare(a, b treemap.Key) int {
+	ka := a.(uint64)
+	kb := b.(uint64)
+	if ka > kb {
+		return 1
+	} else if ka == kb {
+		return 0
+	} else {
+		return -1
+	}
+}
+
+func NewInMemoryKeyValueStore(name string, compare KVStoreCompareFunc) *InMemoryKeyValueStore {
 	return &InMemoryKeyValueStore{
 		name: name,
 		store: treemap.New(func(a treemap.Key, b treemap.Key) bool {

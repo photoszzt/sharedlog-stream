@@ -209,16 +209,17 @@ func getTabAndToTab(env types.Environment,
 	joinWindows *processor.JoinWindows,
 ) (*processor.MeteredProcessor, store.WindowStore, *store_with_changelog.MaterializeParam, error) {
 	format := commtypes.SerdeFormat(sp.SerdeFormat)
-	mp, err := store_with_changelog.NewMaterializeParamForWindowStore(env,
-		kvmegSerdes, tabName, commtypes.CreateStreamParam{
-			Format:       format,
+	mp, err := store_with_changelog.NewMaterializeParamBuilder().
+		KVMsgSerdes(kvmegSerdes).StoreName(tabName).ParNum(sp.ParNum).SerdeFormat(format).
+		StreamParam(commtypes.CreateStreamParam{
+			Env:          env,
 			NumPartition: sp.NumInPartition,
-		}, sp.ParNum, compare)
+		}).Build()
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	toTab, winTab, err := store_with_changelog.ToInMemWindowTableWithChangelog(
-		tabName, mp, joinWindows, time.Duration(sp.WarmupS)*time.Second)
+		tabName, mp, joinWindows, compare, time.Duration(sp.WarmupS)*time.Second)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -396,14 +397,14 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		wsc = []*transaction.WindowStoreChangelog{
 			transaction.NewWindowStoreChangelog(
 				auctionsWinStore,
-				aucMp.ChangelogManager,
+				aucMp.ChangelogManager(),
 				nil,
 				sss.srcKVMsgSerdes,
 				sp.ParNum,
 			),
 			transaction.NewWindowStoreChangelog(
 				personsWinTab,
-				perMp.ChangelogManager,
+				perMp.ChangelogManager(),
 				nil,
 				sss.srcKVMsgSerdes,
 				sp.ParNum,

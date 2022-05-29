@@ -11,6 +11,24 @@ type AuctionIdCategory struct {
 	BaseInjTime `msg:"bInjT"`
 }
 
+func CompareAuctionIdCategory(a, b *AuctionIdCategory) int {
+	if a.AucId < b.AucId {
+		return -1
+	} else {
+		if a.AucId == b.AucId {
+			if a.Category < b.Category {
+				return -1
+			} else if a.Category == b.Category {
+				return 0
+			} else {
+				return 1
+			}
+		} else {
+			return 1
+		}
+	}
+}
+
 type AuctionIdCategoryJSONSerde struct{}
 
 func (s AuctionIdCategoryJSONSerde) Encode(value interface{}) ([]byte, error) {

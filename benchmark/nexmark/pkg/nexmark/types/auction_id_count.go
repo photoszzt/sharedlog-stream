@@ -70,3 +70,11 @@ type AuctionIdCountMsgpSerde struct {
 	AuctionIdCountMsgpEncoder
 	AuctionIdCountMsgpDecoder
 }
+
+func NewAuctionIdCountSerde(serdeFormat commtypes.SerdeFormat) commtypes.Serde {
+	if serdeFormat == commtypes.JSON {
+		return AuctionIdCountJSONSerde{}
+	} else {
+		return AuctionIdCountMsgpSerde{}
+	}
+}

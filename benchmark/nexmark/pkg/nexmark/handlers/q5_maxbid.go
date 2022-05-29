@@ -53,13 +53,32 @@ func (h *q5MaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
+func (h *q5MaxBid) getSrcSink(ctx context.Context,
+	sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
-	seSerde commtypes.Serde, aucIdCountSerde commtypes.Serde,
-	aucIdCountMaxSerde commtypes.Serde,
-	msgSerde commtypes.MsgSerde,
-) (*source_sink.MeteredSource, *source_sink.ConcurrentMeteredSyncSink, error) {
+) (*source_sink.MeteredSource, *source_sink.ConcurrentMeteredSyncSink, commtypes.KVMsgSerdes, error) {
+	var seSerde commtypes.Serde
+	var aucIdCountSerde commtypes.Serde
+	var aucIdCountMaxSerde commtypes.Serde
+	if sp.SerdeFormat == uint8(commtypes.JSON) {
+		seSerde = ntypes.StartEndTimeJSONSerde{}
+		aucIdCountSerde = ntypes.AuctionIdCountJSONSerde{}
+
+		aucIdCountMaxSerde = ntypes.AuctionIdCntMaxJSONSerde{}
+	} else if sp.SerdeFormat == uint8(commtypes.MSGP) {
+		seSerde = ntypes.StartEndTimeMsgpSerde{}
+		aucIdCountSerde = ntypes.AuctionIdCountMsgpSerde{}
+
+		aucIdCountMaxSerde = ntypes.AuctionIdCntMaxMsgpSerde{}
+	} else {
+		return nil, nil, commtypes.KVMsgSerdes{},
+			fmt.Errorf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat)
+	}
+	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	if err != nil {
+		return nil, nil, commtypes.KVMsgSerdes{}, err
+	}
 	kvmsgSerdes := commtypes.KVMsgSerdes{
 		KeySerde: seSerde,
 		ValSerde: aucIdCountSerde,
@@ -83,19 +102,16 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		time.Duration(sp.WarmupS)*time.Second)
 	src.SetInitialSource(false)
 	sink.MarkFinalOutput()
-	return src, sink, nil
+	return src, sink, kvmsgSerdes, nil
 }
 
 type q5MaxBidProcessArgs struct {
 	maxBid       *processor.MeteredProcessor
 	stJoin       *processor.MeteredProcessor
 	chooseMaxCnt *processor.MeteredProcessor
-	src          *source_sink.MeteredSource
 	trackParFunc tran_interface.TrackKeySubStreamFunc
-	proc_interface.BaseProcArgsWithSink
+	proc_interface.BaseProcArgsWithSrcSink
 }
-
-func (a *q5MaxBidProcessArgs) Source() source_sink.Source { return a.src }
 
 type q5MaxBidRestoreArgs struct {
 	maxBid       processor.Processor
@@ -108,7 +124,7 @@ type q5MaxBidRestoreArgs struct {
 func (h *q5MaxBid) process(ctx context.Context, t *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
 	args := argsTmp.(*q5MaxBidProcessArgs)
 	return execution.CommonProcess(ctx, t, args, func(t *transaction.StreamTask, msg commtypes.MsgAndSeq) error {
-		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
+		t.CurrentOffset[args.Source().TopicName()] = msg.LogSeqNum
 		if msg.MsgArr != nil {
 			for _, subMsg := range msg.MsgArr {
 				if subMsg.Value == nil {
@@ -220,58 +236,52 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		}
 	}
 	debug.Assert(len(output_streams) == 1, "expected only one output stream")
-	var seSerde commtypes.Serde
 	var vtSerde commtypes.Serde
-	var aucIdCountSerde commtypes.Serde
-	var aucIdCountMaxSerde commtypes.Serde
 	if sp.SerdeFormat == uint8(commtypes.JSON) {
-		seSerde = ntypes.StartEndTimeJSONSerde{}
-		aucIdCountSerde = ntypes.AuctionIdCountJSONSerde{}
 		vtSerde = commtypes.ValueTimestampJSONSerde{
 			ValJSONSerde: commtypes.Uint64Serde{},
 		}
-		aucIdCountMaxSerde = ntypes.AuctionIdCntMaxJSONSerde{}
 	} else if sp.SerdeFormat == uint8(commtypes.MSGP) {
-		seSerde = ntypes.StartEndTimeMsgpSerde{}
-		aucIdCountSerde = ntypes.AuctionIdCountMsgpSerde{}
 		vtSerde = commtypes.ValueTimestampMsgpSerde{
 			ValMsgpSerde: commtypes.Uint64Serde{},
 		}
-		aucIdCountMaxSerde = ntypes.AuctionIdCntMaxMsgpSerde{}
 	} else {
 		return &common.FnOutput{
 			Success: false,
 			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat),
 		}
 	}
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	src, sink, err := h.getSrcSink(ctx, sp,
-		input_stream, output_streams[0], seSerde, aucIdCountSerde, aucIdCountMaxSerde, msgSerde)
+	src, sink, srcKVMsgSerdes, err := h.getSrcSink(ctx, sp, input_stream, output_streams[0])
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	maxBidStoreName := "maxBidsKVStore"
 	var kvstore store.KeyValueStore
+	warmup := time.Duration(sp.WarmupS) * time.Second
 	if sp.TableType == uint8(store.IN_MEM) {
-		mp, err := store_with_changelog.NewMaterializeParamForKeyValueStore(h.env,
-			commtypes.KVMsgSerdes{KeySerde: seSerde, ValSerde: vtSerde, MsgSerde: msgSerde},
-			maxBidStoreName,
-			commtypes.CreateStreamParam{
-				Format:       commtypes.SerdeFormat(sp.SerdeFormat),
+		inKVMsgSerdes := commtypes.KVMsgSerdes{
+			KeySerde: srcKVMsgSerdes.KeySerde,
+			ValSerde: vtSerde,
+			MsgSerde: srcKVMsgSerdes.MsgSerde,
+		}
+		mp, err := store_with_changelog.NewMaterializeParamBuilder().
+			KVMsgSerdes(inKVMsgSerdes).
+			StoreName(maxBidStoreName).
+			ParNum(sp.ParNum).
+			SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
+			StreamParam(commtypes.CreateStreamParam{
+				Env:          h.env,
 				NumPartition: sp.NumInPartition,
-			}, sp.ParNum)
+			}).Build()
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
-		inMemStore := store.NewInMemoryKeyValueStore(mp.StoreName, func(a, b treemap.Key) int {
+		compare := func(a, b treemap.Key) int {
 			ka := a.(*ntypes.StartEndTime)
 			kb := b.(*ntypes.StartEndTime)
 			return ntypes.CompareStartEndTime(ka, kb)
-		})
-		kvstore = store_with_changelog.NewKeyValueStoreWithChangelog(mp, inMemStore, false)
+		}
+		kvstore = store_with_changelog.CreateInMemKVTableWithChangelog(mp, compare, warmup)
 	} else if sp.TableType == uint8(store.MONGODB) {
 		client, err := store.InitMongoDBClient(ctx, sp.MongoAddr)
 		if err != nil {
@@ -281,7 +291,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			Client:         client,
 			CollectionName: maxBidStoreName,
 			DBName:         maxBidStoreName,
-			KeySerde:       seSerde,
+			KeySerde:       srcKVMsgSerdes.KeySerde,
 			ValueSerde:     vtSerde,
 		})
 		if err != nil {
@@ -299,7 +309,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			return v.Count
 		}
 		return agg
-	})), time.Duration(sp.WarmupS)*time.Second)
+	})), warmup)
 	stJoin := processor.NewMeteredProcessor(processor.NewStreamTableJoinProcessor(maxBidStoreName, kvstore,
 		processor.ValueJoinerWithKeyFunc(
 			func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
@@ -310,22 +320,22 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 					Count:  lv.Count,
 					MaxCnt: rv.Value.(uint64),
 				}
-			})), time.Duration(sp.WarmupS)*time.Second)
+			})), warmup)
 	chooseMaxCnt := processor.NewMeteredProcessor(
 		processor.NewStreamFilterProcessor(
 			processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
 				v := msg.Value.(*ntypes.AuctionIdCntMax)
 				return v.Count >= v.MaxCnt, nil
-			})), time.Duration(sp.WarmupS)*time.Second)
+			})), warmup)
 
+	sinks_arr := []source_sink.Sink{sink}
 	procArgs := &q5MaxBidProcessArgs{
 		maxBid:       maxBid,
 		stJoin:       stJoin,
 		chooseMaxCnt: chooseMaxCnt,
-		src:          src,
 		trackParFunc: tran_interface.DefaultTrackSubstreamFunc,
-		BaseProcArgsWithSink: proc_interface.NewBaseProcArgsWithSink([]source_sink.Sink{sink}, h.funcName,
-			sp.ScaleEpoch, sp.ParNum),
+		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src,
+			sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 
 	task := transaction.StreamTask{
@@ -344,14 +354,13 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	}
 
 	srcs := []source_sink.Source{src}
-	sinks_arr := []source_sink.Sink{sink}
 	var kvc []*transaction.KVStoreChangelog
 	if sp.TableType == uint8(store.IN_MEM) {
 		kvstore_mem := kvstore.(*store_with_changelog.KeyValueStoreWithChangelog)
 		mp := kvstore_mem.MaterializeParam()
 		kvc = []*transaction.KVStoreChangelog{
-			transaction.NewKVStoreChangelog(kvstore, mp.ChangelogManager,
-				mp.KVMsgSerdes, sp.ParNum),
+			transaction.NewKVStoreChangelog(kvstore, mp.ChangelogManager(),
+				mp.KVMsgSerdes(), sp.ParNum),
 		}
 	} else if sp.TableType == uint8(store.MONGODB) {
 		// TODO: MONGODB
@@ -390,7 +399,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 				procArgs.(*q5MaxBidProcessArgs).SetRecordFinishFunc(recordFinshFunc)
 				if sp.TableType == uint8(store.IN_MEM) {
 					kvstore_mem := kvstore.(*store_with_changelog.KeyValueStoreWithChangelog)
-					kvstore_mem.MaterializeParam().TrackFunc = trackParFunc
+					kvstore_mem.MaterializeParam().SetTrackParFunc(trackParFunc)
 				}
 			}, &task)
 		if ret != nil && ret.Success {

@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
@@ -137,19 +138,27 @@ func (h *windowedAvg) getAggProcessor(ctx context.Context, sp *common.QueryInput
 	if err != nil {
 		return nil, err
 	}
-	winStoreMp := &store_with_changelog.MaterializeParam{
-		StoreName: "windowed-avg-store",
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			MsgSerde: msgSerde,
-			KeySerde: commtypes.Uint64Serde{},
-			ValSerde: vtSerde,
-		},
-		ChangelogManager: store_with_changelog.NewChangelogManager(changelog_stream, commtypes.SerdeFormat(sp.SerdeFormat)),
-		ParNum:           sp.ParNum,
+	kvMsgSerdes := commtypes.KVMsgSerdes{
+		MsgSerde: msgSerde,
+		KeySerde: commtypes.Uint64Serde{},
+		ValSerde: vtSerde,
+	}
+	tabName := "windowed-avg-store"
+	winStoreMp, err := store_with_changelog.NewMaterializeParamBuilder().
+		KVMsgSerdes(kvMsgSerdes).
+		StoreName(tabName).
+		ParNum(sp.ParNum).
+		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
+		ChangelogManager(store_with_changelog.NewChangelogManager(changelog_stream,
+			commtypes.SerdeFormat(sp.SerdeFormat))).
+		Build()
+	if err != nil {
+		return nil, err
 	}
 
 	store, err := store_with_changelog.NewInMemoryWindowStoreWithChangelog(
-		timeWindows.MaxSize()+timeWindows.GracePeriodMs(), timeWindows.MaxSize(), false, winStoreMp)
+		timeWindows.MaxSize()+timeWindows.GracePeriodMs(), timeWindows.MaxSize(), false,
+		concurrent_skiplist.CompareFunc(concurrent_skiplist.Uint64KeyCompare), winStoreMp)
 	if err != nil {
 		return nil, err
 	}

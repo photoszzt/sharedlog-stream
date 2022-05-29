@@ -32,7 +32,6 @@ type q4JoinTableHandler struct {
 	cHashMu sync.RWMutex
 	cHash   *hash.ConsistentHash
 
-	offMu    sync.Mutex
 	funcName string
 }
 
@@ -99,14 +98,17 @@ func (h *q4JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 		KVMsgSerdes: kvmsgSerdes,
 	}
 	var abSerde commtypes.Serde
+	var aicSerde commtypes.Serde
 	if sp.SerdeFormat == uint8(commtypes.JSON) {
-		abSerde = &ntypes.AuctionBidJSONSerde{}
+		abSerde = ntypes.AuctionBidJSONSerde{}
+		aicSerde = ntypes.AuctionIdCategoryJSONSerde{}
 	} else {
-		abSerde = &ntypes.AuctionBidMsgpSerde{}
+		abSerde = ntypes.AuctionBidMsgpSerde{}
+		aicSerde = ntypes.AuctionIdCategoryMsgpSerde{}
 	}
 	outConfig := &source_sink.StreamSinkConfig{
 		KVMsgSerdes: commtypes.KVMsgSerdes{
-			KeySerde: commtypes.Uint64Serde{},
+			KeySerde: aicSerde,
 			ValSerde: abSerde,
 			MsgSerde: msgSerde,
 		},

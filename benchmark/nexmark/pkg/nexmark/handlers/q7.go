@@ -280,30 +280,31 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 	maxPriceBidStoreName := "max-price-bid-tab"
 	var wstore store.WindowStore
 	if input.TableType == uint8(store.IN_MEM) {
-		mp := &store_with_changelog.MaterializeParam{
-			KVMsgSerdes: commtypes.KVMsgSerdes{
-				KeySerde: commtypes.Uint64Serde{},
-				ValSerde: vtSerde,
-				MsgSerde: msgSerde,
-			},
-			StoreName:        maxPriceBidStoreName,
-			ParNum:           input.ParNum,
-			ChangelogManager: store_with_changelog.NewChangelogManager(outputStreams[0], commtypes.SerdeFormat(input.SerdeFormat)),
-
-			Comparable: concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
-				l := lhs.(uint64)
-				r := rhs.(uint64)
-				if l < r {
-					return -1
-				} else if l == r {
-					return 0
-				} else {
-					return 1
-				}
-			}),
+		comparable := concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
+			l := lhs.(uint64)
+			r := rhs.(uint64)
+			if l < r {
+				return -1
+			} else if l == r {
+				return 0
+			} else {
+				return 1
+			}
+		})
+		kvmsgSerdes := commtypes.KVMsgSerdes{
+			KeySerde: commtypes.Uint64Serde{},
+			ValSerde: vtSerde,
+			MsgSerde: msgSerde,
 		}
+		mp, err := store_with_changelog.NewMaterializeParamBuilder().
+			KVMsgSerdes(kvmsgSerdes).StoreName(maxPriceBidStoreName).
+			ParNum(input.ParNum).SerdeFormat(commtypes.SerdeFormat(input.SerdeFormat)).
+			StreamParam(commtypes.CreateStreamParam{
+				Env:          h.env,
+				NumPartition: input.NumInPartition,
+			}).Build()
 		wstore, err = store_with_changelog.NewInMemoryWindowStoreWithChangelog(tw.MaxSize()+tw.GracePeriodMs(),
-			tw.MaxSize(), false, mp)
+			tw.MaxSize(), false, comparable, mp)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
@@ -378,10 +379,10 @@ func (h *query7Handler) processQ7(ctx context.Context, input *common.QueryInput)
 		wstore_mem := wstore.(*store_with_changelog.InMemoryWindowStoreWithChangelog)
 		wsc = []*transaction.WindowStoreChangelog{
 			transaction.NewWindowStoreChangelog(wstore,
-				wstore_mem.MaterializeParam().ChangelogManager,
+				wstore_mem.MaterializeParam().ChangelogManager(),
 				wstore_mem.KeyWindowTsSerde(),
-				wstore_mem.MaterializeParam().KVMsgSerdes,
-				wstore_mem.MaterializeParam().ParNum),
+				wstore_mem.MaterializeParam().KVMsgSerdes(),
+				wstore_mem.MaterializeParam().ParNum()),
 		}
 	} else if input.TableType == uint8(store.MONGODB) {
 		wsc = []*transaction.WindowStoreChangelog{

@@ -9,11 +9,9 @@ import (
 	"sharedlog-stream/benchmark/tests/pkg/tests"
 	"sharedlog-stream/benchmark/tests/pkg/tests/test_types"
 	"sharedlog-stream/pkg/concurrent_skiplist"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
-	"sharedlog-stream/pkg/transaction/tran_interface"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -28,31 +26,35 @@ func NewWinTabTestsHandler(env types.Environment) types.FuncHandler {
 	}
 }
 
-func getWindowStoreWithChangelog(retainDuplicates bool, changelog *sharedlog_stream.ShardedSharedLogStream) *store_with_changelog.InMemoryWindowStoreWithChangelog {
-	mp := &store_with_changelog.MaterializeParam{
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			KeySerde: commtypes.Uint32Serde{},
-			ValSerde: commtypes.StringSerde{},
-			MsgSerde: commtypes.MessageSerializedJSONSerde{},
-		},
-		StoreName:        "test1",
-		SerdeFormat:      commtypes.JSON,
-		ParNum:           0,
-		ChangelogManager: store_with_changelog.NewChangelogManager(changelog, commtypes.JSON),
-		TrackFunc:        tran_interface.DefaultTrackSubstreamFunc,
+func getWindowStoreWithChangelog(env types.Environment, retainDuplicates bool) *store_with_changelog.InMemoryWindowStoreWithChangelog {
+	kvmsgSerdes := commtypes.KVMsgSerdes{
+		KeySerde: commtypes.Uint32Serde{},
+		ValSerde: commtypes.StringSerde{},
+		MsgSerde: commtypes.MessageSerializedJSONSerde{},
 	}
+	storeName := "test1"
+	var compareFunc concurrent_skiplist.CompareFunc
 	if !retainDuplicates {
-		mp.Comparable = concurrent_skiplist.CompareFunc(store.CompareNoDup)
-		store, err := store_with_changelog.NewInMemoryWindowStoreWithChangelog(store.TEST_RETENTION_PERIOD, store.TEST_WINDOW_SIZE,
-			retainDuplicates, mp)
-		if err != nil {
-			panic(err)
-		}
-		return store
+		compareFunc = store.CompareNoDup
+	} else {
+		compareFunc = store.CompareWithDup
 	}
-	mp.Comparable = concurrent_skiplist.CompareFunc(store.CompareWithDup)
-	store, err := store_with_changelog.NewInMemoryWindowStoreWithChangelog(store.TEST_RETENTION_PERIOD, store.TEST_WINDOW_SIZE,
-		retainDuplicates, mp)
+	streamParam := commtypes.CreateStreamParam{
+		Env:          env,
+		NumPartition: 1,
+	}
+	mp, err := store_with_changelog.NewMaterializeParamBuilder().
+		KVMsgSerdes(kvmsgSerdes).
+		StoreName(storeName).
+		ParNum(0).
+		SerdeFormat(commtypes.JSON).
+		StreamParam(streamParam).Build()
+	if err != nil {
+		panic(err)
+	}
+	store, err := store_with_changelog.NewInMemoryWindowStoreWithChangelog(
+		store.TEST_RETENTION_PERIOD, store.TEST_WINDOW_SIZE,
+		retainDuplicates, compareFunc, mp)
 	if err != nil {
 		panic(err)
 	}
@@ -74,41 +76,31 @@ func (wt *winTabTestsHandler) Call(ctx context.Context, input []byte) ([]byte, e
 }
 
 func (wt *winTabTestsHandler) WinTests(ctx context.Context, sp *test_types.TestInput) *common.FnOutput {
-	stream, err := sharedlog_stream.NewShardedSharedLogStream(wt.env, sp.TopicName, 1, commtypes.JSON)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
-	}
 	t := &tests.MockTesting{}
+	var winstore *store_with_changelog.InMemoryWindowStoreWithChangelog
+	if sp.TestName != "TestPutSameKeyTs" {
+		winstore = getWindowStoreWithChangelog(wt.env, false)
+	} else {
+		winstore = getWindowStoreWithChangelog(wt.env, true)
+	}
 	switch sp.TestName {
 	case "TestGetAndRange":
-		winstore := getWindowStoreWithChangelog(false, stream)
 		store.GetAndRangeTest(ctx, winstore, t)
 	case "TestShouldGetAllNonDeletedMsgs":
-		winstore := getWindowStoreWithChangelog(false, stream)
 		store.ShouldGetAllNonDeletedMsgsTest(ctx, winstore, t)
 	case "TestExpiration":
-		winstore := getWindowStoreWithChangelog(false, stream)
 		store.ExpirationTest(ctx, winstore, t)
 	case "TestShouldGetAll":
-		winstore := getWindowStoreWithChangelog(false, stream)
 		store.ShouldGetAllTest(ctx, winstore, t)
 	case "TestShouldGetAllReturnTimestampOrdered":
-		winstore := getWindowStoreWithChangelog(false, stream)
 		store.ShouldGetAllReturnTimestampOrderedTest(ctx, winstore, t)
 	case "TestFetchRange":
-		winstore := getWindowStoreWithChangelog(false, stream)
 		store.FetchRangeTest(ctx, winstore, t)
 	case "TestPutAndFetchBefore":
-		winstore := getWindowStoreWithChangelog(false, stream)
 		store.PutAndFetchBeforeTest(ctx, winstore, t)
 	case "TestPutAndFetchAfter":
-		winstore := getWindowStoreWithChangelog(false, stream)
 		store.PutAndFetchAfterTest(ctx, winstore, t)
 	case "TestPutSameKeyTs":
-		winstore := getWindowStoreWithChangelog(true, stream)
 		store.PutSameKeyTsTest(ctx, winstore, t)
 	default:
 		return &common.FnOutput{

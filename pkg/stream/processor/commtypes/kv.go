@@ -1,5 +1,7 @@
 package commtypes
 
+import "cs.utexas.edu/zjia/faas/types"
+
 type KeyT interface{}
 
 type ValueT interface{}
@@ -11,6 +13,6 @@ type KVMsgSerdes struct {
 }
 
 type CreateStreamParam struct {
-	Format       SerdeFormat
+	Env          types.Environment
 	NumPartition uint8
 }
