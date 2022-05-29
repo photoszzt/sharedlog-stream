@@ -17,7 +17,6 @@ import (
 	"sharedlog-stream/pkg/stream/processor/proc_interface"
 	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
-	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sharedlog-stream/pkg/treemap"
 	"sync"
 	"time"
@@ -102,9 +101,8 @@ func (h *q4MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 }
 
 type q4MaxBidProcessArgs struct {
-	maxBid       *processor.MeteredProcessor
-	groupBy      *processor.MeteredProcessor
-	trackParFunc tran_interface.TrackKeySubStreamFunc
+	maxBid  *processor.MeteredProcessor
+	groupBy *processor.MeteredProcessor
 	proc_interface.BaseProcArgsWithSrcSink
 }
 
@@ -134,7 +132,7 @@ func (h *q4MaxBid) procMsg(ctx context.Context, msg commtypes.Message, argsTmp i
 			return fmt.Errorf("fail to get output partition")
 		}
 		par := parTmp.(uint8)
-		err = args.trackParFunc(ctx, k, sink.KeySerde(), sink.TopicName(), par)
+		err = args.TrackParFunc()(ctx, k, sink.KeySerde(), sink.TopicName(), par)
 		if err != nil {
 			return err
 		}
@@ -195,9 +193,8 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		})), warmup)
 	sinks_arr := []source_sink.Sink{sink}
 	procArgs := &q4MaxBidProcessArgs{
-		maxBid:       maxBid,
-		groupBy:      groupBy,
-		trackParFunc: tran_interface.DefaultTrackSubstreamFunc,
+		maxBid:  maxBid,
+		groupBy: groupBy,
 		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src, sinks_arr, h.funcName,
 			sp.ScaleEpoch, sp.ParNum),
 	}
