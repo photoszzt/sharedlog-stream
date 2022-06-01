@@ -4,6 +4,7 @@ package processor
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"sharedlog-stream/pkg/commtypes"
 
@@ -75,4 +76,17 @@ func TimeWindowForSize(startMs int64, windowSize int64) (*TimeWindow, error) {
 		endMs = math.MaxInt64
 	}
 	return NewTimeWindow(startMs, endMs)
+}
+
+func GetTimeWindowSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
+	var twSerde commtypes.Serde
+	if serdeFormat == commtypes.JSON {
+		twSerde = TimeWindowJSONSerde{}
+		return twSerde, nil
+	} else if serdeFormat == commtypes.MSGP {
+		twSerde = TimeWindowMsgpSerde{}
+		return twSerde, nil
+	} else {
+		return nil, fmt.Errorf("unrecognized serde format: %v", serdeFormat)
+	}
 }
