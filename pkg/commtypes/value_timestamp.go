@@ -2,7 +2,10 @@
 //msgp:ignore ValueTimestampJSONSerde ValueTimestampMsgpSerde ValueTimestamp
 package commtypes
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 type ValueTimestamp struct {
 	Value     interface{}
@@ -101,4 +104,20 @@ func (s ValueTimestampMsgpSerde) Decode(value []byte) (interface{}, error) {
 			InjT: vs.InjectToStream,
 		},
 	}, nil
+}
+
+func GetValueTsSerde(serdeFormat SerdeFormat, valJSONSerde, valMsgpSerde Serde) (Serde, error) {
+	var vtSerde Serde
+	if serdeFormat == JSON {
+		vtSerde = ValueTimestampJSONSerde{
+			ValJSONSerde: valJSONSerde,
+		}
+	} else if serdeFormat == MSGP {
+		vtSerde = ValueTimestampMsgpSerde{
+			ValMsgpSerde: valMsgpSerde,
+		}
+	} else {
+		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
+	}
+	return vtSerde, nil
 }

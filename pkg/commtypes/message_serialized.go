@@ -59,10 +59,10 @@ func (msmd MessageSerializedJSONSerde) Decode(value []byte) ([]byte /* key */, [
 	return msg.Key, msg.Value, nil
 }
 
-func GetMsgSerde(serdeFormat uint8) (MsgSerde, error) {
-	if serdeFormat == uint8(JSON) {
+func GetMsgSerde(serdeFormat SerdeFormat) (MsgSerde, error) {
+	if serdeFormat == JSON {
 		return MessageSerializedJSONSerde{}, nil
-	} else if serdeFormat == uint8(MSGP) {
+	} else if serdeFormat == MSGP {
 		return MessageSerializedMsgpSerde{}, nil
 	} else {
 		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)

@@ -50,11 +50,12 @@ func (h *windowAvgGroupBy) getSrcSink(ctx context.Context, sp *common.QueryInput
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
 ) (*source_sink.MeteredSource, *source_sink.ConcurrentMeteredSyncSink, error) {
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
-	eventSerde, err := getEventSerde(sp.SerdeFormat)
+	eventSerde, err := getEventSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}

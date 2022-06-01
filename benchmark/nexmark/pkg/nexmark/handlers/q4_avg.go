@@ -40,7 +40,7 @@ func (h *q4Avg) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	inputStream *sharedlog_stream.ShardedSharedLogStream,
 	outputStream *sharedlog_stream.ShardedSharedLogStream,
 ) (*source_sink.MeteredSource, *source_sink.MeteredSyncSink, commtypes.KVMsgSerdes, error) {
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(commtypes.SerdeFormat(sp.SerdeFormat))
 	if err != nil {
 		return nil, nil, commtypes.KVMsgSerdes{}, fmt.Errorf("get msg serde err: %v", err)
 	}

@@ -4,12 +4,17 @@ import (
 	"context"
 	"fmt"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"time"
 
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/transaction"
+
+	"cs.utexas.edu/zjia/faas/types"
 )
 
 func only_bid(msg *commtypes.Message) (bool, error) {
@@ -17,10 +22,10 @@ func only_bid(msg *commtypes.Message) (bool, error) {
 	return event.Etype == ntypes.BID, nil
 }
 
-func getEventSerde(serdeFormat uint8) (commtypes.Serde, error) {
-	if serdeFormat == uint8(commtypes.JSON) {
+func getEventSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
+	if serdeFormat == commtypes.JSON {
 		return ntypes.EventJSONSerde{}, nil
-	} else if serdeFormat == uint8(commtypes.MSGP) {
+	} else if serdeFormat == commtypes.MSGP {
 		return ntypes.EventMsgpSerde{}, nil
 	} else {
 		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
@@ -30,14 +35,13 @@ func getEventSerde(serdeFormat uint8) (commtypes.Serde, error) {
 func getSrcSink(ctx context.Context, sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*source_sink.MeteredSource,
-	*source_sink.MeteredSyncSink,
-	error) {
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+) (*source_sink.MeteredSource, *source_sink.MeteredSyncSink, error) {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get msg serde failed: %v", err)
 	}
-	eventSerde, err := getEventSerde(sp.SerdeFormat)
+	eventSerde, err := getEventSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -67,15 +71,13 @@ func getSrcSinkUint64Key(
 	sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*source_sink.MeteredSource,
-	*source_sink.MeteredSyncSink,
-	error,
-) {
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+) (*source_sink.MeteredSource, *source_sink.MeteredSyncSink, error) {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
-	eventSerde, err := getEventSerde(sp.SerdeFormat)
+	eventSerde, err := getEventSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -140,3 +142,52 @@ func CommonGetSrcSink(ctx context.Context, sp *common.QueryInput,
 	return src, sink, nil
 }
 */
+
+func ExecuteApp(
+	ctx context.Context,
+	env types.Environment,
+	transactionalID string,
+	sp *common.QueryInput,
+	task *transaction.StreamTask,
+	srcs []source_sink.Source,
+	sinks_arr []source_sink.Sink,
+	procArgs proc_interface.ProcArgs,
+	update_stats func(ret *common.FnOutput),
+) *common.FnOutput {
+	if sp.EnableTransaction {
+		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(env, transactionalID, procArgs, srcs, sinks_arr)
+		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, env, streamTaskArgs, task)
+		if ret != nil && ret.Success {
+			update_stats(ret)
+		}
+		return ret
+	} else {
+		streamTaskArgs := transaction.NewStreamTaskArgs(env, procArgs, srcs, sinks_arr)
+		benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
+		ret := task.Process(ctx, streamTaskArgs)
+		if ret != nil && ret.Success {
+			update_stats(ret)
+		}
+		return ret
+	}
+}
+
+func ExecuteAppNoTransaction(
+	ctx context.Context,
+	env types.Environment,
+	sp *common.QueryInput,
+	task *transaction.StreamTask,
+	srcs []source_sink.Source,
+	sinks_arr []source_sink.Sink,
+	procArgs proc_interface.ProcArgs,
+	update_stats func(ret *common.FnOutput),
+) *common.FnOutput {
+	streamTaskArgs := transaction.NewStreamTaskArgs(env, procArgs, srcs, sinks_arr)
+	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
+	ret := task.Process(ctx, streamTaskArgs)
+	if ret != nil && ret.Success {
+		update_stats(ret)
+	}
+	return ret
+}

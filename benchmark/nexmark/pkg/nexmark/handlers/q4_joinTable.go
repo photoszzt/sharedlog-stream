@@ -74,12 +74,13 @@ func (h *q4JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	commtypes.KVMsgSerdes,
 	error,
 ) {
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, nil, commtypes.KVMsgSerdes{}, fmt.Errorf("get msg serde err: %v", err)
 	}
 
-	eventSerde, err := getEventSerde(sp.SerdeFormat)
+	eventSerde, err := getEventSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, nil, commtypes.KVMsgSerdes{}, fmt.Errorf("get event serde err: %v", err)
 	}

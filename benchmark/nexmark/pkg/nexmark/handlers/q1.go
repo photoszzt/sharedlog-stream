@@ -117,14 +117,9 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 			update_stats(ret)
 		}
 		return ret
+	} else {
+		return ExecuteAppNoTransaction(ctx, h.env, sp, task, srcs, sinks, procArgs, update_stats)
 	}
-	streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks)
-	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
-	ret := task.Process(ctx, streamTaskArgs)
-	if ret != nil && ret.Success {
-		update_stats(ret)
-	}
-	return ret
 }
 
 type query1ProcessArgs struct {
@@ -152,82 +147,3 @@ func (h *query1Handler) procMsg(ctx context.Context, msg commtypes.Message, args
 	}
 	return nil
 }
-
-/*
-func Query1(ctx context.Context, env types.Environment, input *common.QueryInput, output chan *common.FnOutput) {
-	// fmt.Fprintf(os.Stderr, "input topic name: %v, output topic name: %v\n", input.InputTopicName, input.OutputTopicName)
-	inputStream := sharedlog_stream.NewSharedLogStream(env, input.InputTopicName)
-	outputStream := sharedlog_stream.NewSharedLogStream(env, input.OutputTopicName)
-	msgSerde, err := commtypes.GetMsgSerde(input.SerdeFormat)
-	if err != nil {
-		output <- &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
-	}
-	eventSerde, err := getEventSerde(input.SerdeFormat)
-	if err != nil {
-		output <- &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
-	}
-
-	inConfig := &sharedlog_stream.SharedLogStreamConfig{
-		Timeout:      time.Duration(input.Duration) * time.Second,
-		KeyDecoder:   commtypes.StringDecoder{},
-		ValueDecoder: eventSerde,
-		MsgDecoder:   msgSerde,
-	}
-	outConfig := &sharedlog_stream.StreamSinkConfig{
-		KeyEncoder:   commtypes.StringEncoder{},
-		ValueEncoder: eventSerde,
-		MsgEncoder:   msgSerde,
-	}
-	builder := stream.NewStreamBuilder()
-	builder.Source("nexmark_src", sharedlog_stream.NewSharedLogStreamSource(inputStream, inConfig)).
-		Filter("only_bid", processor.PredicateFunc(only_bid)).
-		Map("q1_map", processor.MapperFunc(q1mapFunc)).
-		Process("sink", sharedlog_stream.NewSharedLogStreamSink(outputStream, outConfig))
-	tp, err_arrs := builder.Build()
-	if err_arrs != nil {
-		output <- &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("build stream failed: %v", err_arrs),
-		}
-	}
-	pumps := make(map[processor.Node]processor.Pump)
-	var srcPumps []processor.SourcePump
-	nodes := processor.FlattenNodeTree(tp.Sources())
-	processor.ReverseNodes(nodes)
-	for _, node := range nodes {
-		pipe := processor.NewPipe(processor.ResolvePumps(pumps, node.Children()))
-		node.Processor().WithPipe(pipe)
-
-		pump := processor.NewSyncPump(node, pipe)
-		pumps[node] = pump
-	}
-	for source, node := range tp.Sources() {
-		srcPump := processor.NewSourcePump(ctx, node.Name(), source, 0, processor.ResolvePumps(pumps, node.Children()), func(err error) {
-			log.Fatal(err.Error())
-		})
-		srcPumps = append(srcPumps, srcPump)
-	}
-
-	duration := time.Duration(input.Duration) * time.Second
-	latencies := make([]int, 0, 128)
-	startTime := time.Now()
-
-	time.After(duration)
-	for _, srcPump := range srcPumps {
-		srcPump.Stop()
-		srcPump.Close()
-	}
-
-	output <- &common.FnOutput{
-		Success:   true,
-		Duration:  time.Since(startTime).Seconds(),
-		Latencies: map[string][]int{"e2e": latencies},
-	}
-}
-*/

@@ -149,12 +149,13 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	stream2 *sharedlog_stream.ShardedSharedLogStream,
 	outputStream *sharedlog_stream.ShardedSharedLogStream,
 ) (*srcSinkSerde, error) {
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
 		return nil, fmt.Errorf("get msg serde err: %v", err)
 	}
 
-	eventSerde, err := getEventSerde(sp.SerdeFormat)
+	eventSerde, err := getEventSerde(serdeFormat)
 	if err != nil {
 		return nil, fmt.Errorf("get event serde err: %v", err)
 	}

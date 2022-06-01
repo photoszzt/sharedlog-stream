@@ -56,17 +56,18 @@ func (h *windowedAvg) Call(ctx context.Context, input []byte) ([]byte, error) {
 func (h *windowedAvg) getSrcSink(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde) (
 	*source_sink.MeteredSource, *source_sink.ConcurrentMeteredSyncSink, error,
 ) {
-	eventSerde, err := getEventSerde(sp.SerdeFormat)
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	eventSerde, err := getEventSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get evnet serde error: %v", err)
 	}
 	var wkSerde commtypes.Serde
-	if sp.SerdeFormat == uint8(commtypes.JSON) {
+	if serdeFormat == commtypes.JSON {
 		wkSerde = commtypes.WindowedKeyJSONSerde{
 			KeyJSONSerde:    commtypes.Uint64Serde{},
 			WindowJSONSerde: processor.TimeWindowJSONSerde{},
 		}
-	} else if sp.SerdeFormat == uint8(commtypes.MSGP) {
+	} else if serdeFormat == commtypes.MSGP {
 		wkSerde = commtypes.WindowedKeyMsgpSerde{
 			KeyMsgpSerde:    commtypes.Uint64Serde{},
 			WindowMsgpSerde: processor.TimeWindowMsgpSerde{},
@@ -273,7 +274,8 @@ func (h *windowedAvg) procMsg(ctx context.Context,
 }
 
 func (h *windowedAvg) windowavg_aggregate(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

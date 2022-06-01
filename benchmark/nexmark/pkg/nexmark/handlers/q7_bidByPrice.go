@@ -147,21 +147,6 @@ func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInpu
 		ret.Counts["src"] = src.GetCount()
 		ret.Counts["sink"] = sink.GetCount()
 	}
-	if input.EnableTransaction {
-		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, input.InputTopicNames[0], input.ParNum, input.OutputTopicNames[0])
-		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr)
-		benchutil.UpdateStreamTaskArgsTransaction(input, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	}
-	streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr)
-	benchutil.UpdateStreamTaskArgs(input, streamTaskArgs)
-	ret := task.Process(ctx, streamTaskArgs)
-	if ret != nil && ret.Success {
-		update_stats(ret)
-	}
-	return ret
+	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, input.InputTopicNames[0], input.ParNum, input.OutputTopicNames[0])
+	return ExecuteApp(ctx, h.env, transactionalID, input, task, srcs, sinks_arr, procArgs, update_stats)
 }

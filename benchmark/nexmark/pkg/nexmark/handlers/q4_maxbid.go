@@ -59,16 +59,19 @@ func (h *q4MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	inputStream *sharedlog_stream.ShardedSharedLogStream,
 	outputStream *sharedlog_stream.ShardedSharedLogStream,
 ) (*source_sink.MeteredSource, *source_sink.MeteredSyncSink, commtypes.KVMsgSerdes, error) {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	var abSerde commtypes.Serde
 	var aicSerde commtypes.Serde
-	if sp.SerdeFormat == uint8(commtypes.JSON) {
+	if serdeFormat == commtypes.JSON {
 		abSerde = ntypes.AuctionBidJSONSerde{}
 		aicSerde = ntypes.AuctionIdCategoryJSONSerde{}
-	} else {
+	} else if serdeFormat == commtypes.MSGP {
 		abSerde = ntypes.AuctionBidMsgpSerde{}
 		aicSerde = ntypes.AuctionIdCategoryMsgpSerde{}
+	} else {
+		return nil, nil, commtypes.KVMsgSerdes{}, fmt.Errorf("unrecognized format: %v", serdeFormat)
 	}
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, commtypes.KVMsgSerdes{}, fmt.Errorf("get msg serde err: %v", err)
 	}

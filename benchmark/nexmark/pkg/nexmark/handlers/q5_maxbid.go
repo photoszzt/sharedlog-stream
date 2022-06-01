@@ -57,15 +57,16 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
 ) (*source_sink.MeteredSource, *source_sink.ConcurrentMeteredSyncSink, commtypes.KVMsgSerdes, error) {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	var seSerde commtypes.Serde
 	var aucIdCountSerde commtypes.Serde
 	var aucIdCountMaxSerde commtypes.Serde
-	if sp.SerdeFormat == uint8(commtypes.JSON) {
+	if serdeFormat == commtypes.JSON {
 		seSerde = ntypes.StartEndTimeJSONSerde{}
 		aucIdCountSerde = ntypes.AuctionIdCountJSONSerde{}
 
 		aucIdCountMaxSerde = ntypes.AuctionIdCntMaxJSONSerde{}
-	} else if sp.SerdeFormat == uint8(commtypes.MSGP) {
+	} else if serdeFormat == commtypes.MSGP {
 		seSerde = ntypes.StartEndTimeMsgpSerde{}
 		aucIdCountSerde = ntypes.AuctionIdCountMsgpSerde{}
 
@@ -74,7 +75,7 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context,
 		return nil, nil, commtypes.KVMsgSerdes{},
 			fmt.Errorf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat)
 	}
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, commtypes.KVMsgSerdes{}, err
 	}
@@ -215,20 +216,11 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		}
 	}
 	debug.Assert(len(output_streams) == 1, "expected only one output stream")
-	var vtSerde commtypes.Serde
-	if sp.SerdeFormat == uint8(commtypes.JSON) {
-		vtSerde = commtypes.ValueTimestampJSONSerde{
-			ValJSONSerde: commtypes.Uint64Serde{},
-		}
-	} else if sp.SerdeFormat == uint8(commtypes.MSGP) {
-		vtSerde = commtypes.ValueTimestampMsgpSerde{
-			ValMsgpSerde: commtypes.Uint64Serde{},
-		}
-	} else {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat),
-		}
+
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	vtSerde, err := commtypes.GetValueTsSerde(serdeFormat, commtypes.Uint64Serde{}, commtypes.Uint64Serde{})
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	src, sink, srcKVMsgSerdes, err := h.getSrcSink(ctx, sp, input_stream, output_streams[0])
 	if err != nil {
@@ -247,7 +239,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			KVMsgSerdes(inKVMsgSerdes).
 			StoreName(maxBidStoreName).
 			ParNum(sp.ParNum).
-			SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
+			SerdeFormat(serdeFormat).
 			StreamParam(commtypes.CreateStreamParam{
 				Env:          h.env,
 				NumPartition: sp.NumInPartition,

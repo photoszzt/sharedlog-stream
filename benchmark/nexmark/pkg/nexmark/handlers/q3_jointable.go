@@ -103,15 +103,14 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	stream1 *sharedlog_stream.ShardedSharedLogStream,
 	stream2 *sharedlog_stream.ShardedSharedLogStream,
 	outputStream *sharedlog_stream.ShardedSharedLogStream,
-) (*srcSinkSerde,
-	error,
-) {
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+) (*srcSinkSerde, error) {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
 		return nil, fmt.Errorf("get msg serde err: %v", err)
 	}
 
-	eventSerde, err := getEventSerde(sp.SerdeFormat)
+	eventSerde, err := getEventSerde(serdeFormat)
 	if err != nil {
 		return nil, fmt.Errorf("get event serde err: %v", err)
 	}

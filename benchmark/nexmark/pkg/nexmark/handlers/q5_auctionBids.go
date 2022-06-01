@@ -62,19 +62,20 @@ func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	msgSerde commtypes.MsgSerde, input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
 ) (*source_sink.MeteredSource, *source_sink.ConcurrentMeteredSyncSink, error) {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	var seSerde commtypes.Serde
 	var aucIdCountSerde commtypes.Serde
-	if sp.SerdeFormat == uint8(commtypes.JSON) {
+	if serdeFormat == commtypes.JSON {
 		seSerde = ntypes.StartEndTimeJSONSerde{}
 		aucIdCountSerde = ntypes.AuctionIdCountJSONSerde{}
-	} else if sp.SerdeFormat == uint8(commtypes.MSGP) {
+	} else if serdeFormat == commtypes.MSGP {
 		seSerde = ntypes.StartEndTimeMsgpSerde{}
 		aucIdCountSerde = ntypes.AuctionIdCountMsgpSerde{}
 	} else {
 		return nil, nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat)
 	}
 
-	eventSerde, err := getEventSerde(sp.SerdeFormat)
+	eventSerde, err := getEventSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -299,7 +300,7 @@ func (h *q5AuctionBids) procMsgWithoutSink(ctx context.Context, msg commtypes.Me
 }
 
 func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(commtypes.SerdeFormat(sp.SerdeFormat))
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -321,8 +322,8 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			key := msg.Key.(*commtypes.WindowedKey)
 			value := msg.Value.(uint64)
 			newKey := &ntypes.StartEndTime{
-				StartTime: key.Window.Start(),
-				EndTime:   key.Window.End(),
+				StartTimeMs: key.Window.Start(),
+				EndTimeMs:   key.Window.End(),
 			}
 			newVal := &ntypes.AuctionIdCount{
 				AucId:  key.Key.(uint64),

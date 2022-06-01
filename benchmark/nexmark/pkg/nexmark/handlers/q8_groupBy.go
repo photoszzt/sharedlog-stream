@@ -72,11 +72,12 @@ func (h *q8GroupByHandler) getSrcSink(ctx context.Context, sp *common.QueryInput
 	output_streams []*sharedlog_stream.ShardedSharedLogStream,
 ) (*source_sink.MeteredSource, []*source_sink.MeteredSyncSink, error) {
 	var sinks []*source_sink.MeteredSyncSink
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
-	eventSerde, err := getEventSerde(sp.SerdeFormat)
+	eventSerde, err := getEventSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}
