@@ -18,15 +18,75 @@ import (
 	"cs.utexas.edu/zjia/faas/types"
 )
 
+type ProcessFunc func(ctx context.Context, task *StreamTask, args interface{}) *common.FnOutput
+
 type StreamTask struct {
-	ProcessFunc               func(ctx context.Context, task *StreamTask, args interface{}) *common.FnOutput
+	appProcessFunc            func(ctx context.Context, task *StreamTask, args interface{}) *common.FnOutput
 	OffMu                     sync.Mutex
 	CurrentOffset             map[string]uint64
-	PauseFunc                 func() *common.FnOutput
-	ResumeFunc                func(task *StreamTask)
-	InitFunc                  func(progArgs interface{})
+	pauseFunc                 func() *common.FnOutput
+	resumeFunc                func(task *StreamTask)
+	initFunc                  func(progArgs interface{})
 	HandleErrFunc             func() error
-	CommitEveryForAtLeastOnce time.Duration
+	commitEveryForAtLeastOnce time.Duration
+}
+
+type StreamTaskBuilder struct {
+	task *StreamTask
+}
+
+type SetAppProcessFunc interface {
+	AppProcessFunc(process ProcessFunc) SetInitFunc
+}
+
+type SetInitFunc interface {
+	InitFunc(i func(progArgs interface{})) BuildStreamTask
+}
+
+type BuildStreamTask interface {
+	Build() *StreamTask
+	PauseFunc(p func() *common.FnOutput) BuildStreamTask
+	ResumeFunc(r func(task *StreamTask)) BuildStreamTask
+	HandleErrFunc(he func() error) BuildStreamTask
+}
+
+func NewStreamTaskBuilder() SetAppProcessFunc {
+	return &StreamTaskBuilder{
+		task: &StreamTask{
+			CurrentOffset:             make(map[string]uint64),
+			commitEveryForAtLeastOnce: common.CommitDuration,
+			pauseFunc:                 nil,
+			resumeFunc:                nil,
+			initFunc:                  nil,
+			HandleErrFunc:             nil,
+			appProcessFunc:            nil,
+		},
+	}
+}
+
+func (b *StreamTaskBuilder) AppProcessFunc(process ProcessFunc) SetInitFunc {
+	b.task.appProcessFunc = process
+	return b
+}
+
+func (b *StreamTaskBuilder) Build() *StreamTask {
+	return b.task
+}
+func (b *StreamTaskBuilder) PauseFunc(p func() *common.FnOutput) BuildStreamTask {
+	b.task.pauseFunc = p
+	return b
+}
+func (b *StreamTaskBuilder) ResumeFunc(r func(task *StreamTask)) BuildStreamTask {
+	b.task.resumeFunc = r
+	return b
+}
+func (b *StreamTaskBuilder) InitFunc(i func(progArgs interface{})) BuildStreamTask {
+	b.task.initFunc = i
+	return b
+}
+func (b *StreamTaskBuilder) HandleErrFunc(he func() error) BuildStreamTask {
+	b.task.HandleErrFunc = he
+	return b
 }
 
 /*
@@ -389,8 +449,8 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 		cm.AddTopicTrackConsumedSeqs(ctx, inputTopicName, []uint8{args.parNum})
 	}
 	debug.Fprint(os.Stderr, "done restore\n")
-	if t.InitFunc != nil {
-		t.InitFunc(args.procArgs)
+	if t.initFunc != nil {
+		t.initFunc(args.procArgs)
 	}
 	hasUncommitted := false
 
@@ -402,7 +462,7 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 	startTime := time.Now()
 	for {
 		timeSinceLastCommit := time.Since(commitTimer)
-		if timeSinceLastCommit >= t.CommitEveryForAtLeastOnce && t.CurrentOffset != nil {
+		if timeSinceLastCommit >= t.commitEveryForAtLeastOnce && t.CurrentOffset != nil {
 			if ret_err := t.pauseCommitFlushResume(ctx, args, cm, &hasUncommitted, &commitTimer, &flushTimer); ret_err != nil {
 				return ret_err
 			}
@@ -421,7 +481,7 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 			break
 		}
 		procStart := time.Now()
-		ret := t.ProcessFunc(ctx, t, args.procArgs)
+		ret := t.appProcessFunc(ctx, t, args.procArgs)
 		if ret != nil {
 			if ret.Success {
 				// elapsed := time.Since(procStart)
@@ -472,8 +532,8 @@ func (t *StreamTask) flushStreams(ctx context.Context, args *StreamTaskArgs) err
 }
 
 func (t *StreamTask) pauseFlushResume(ctx context.Context, args *StreamTaskArgs, flushTimer *time.Time) *common.FnOutput {
-	if t.PauseFunc != nil {
-		if ret := t.PauseFunc(); ret != nil {
+	if t.pauseFunc != nil {
+		if ret := t.pauseFunc(); ret != nil {
 			return ret
 		}
 	}
@@ -481,8 +541,8 @@ func (t *StreamTask) pauseFlushResume(ctx context.Context, args *StreamTaskArgs,
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	if t.ResumeFunc != nil {
-		t.ResumeFunc(t)
+	if t.resumeFunc != nil {
+		t.resumeFunc(t)
 	}
 	*flushTimer = time.Now()
 	return nil
@@ -491,8 +551,8 @@ func (t *StreamTask) pauseFlushResume(ctx context.Context, args *StreamTaskArgs,
 func (t *StreamTask) pauseCommitFlushResume(ctx context.Context, args *StreamTaskArgs, cm *ConsumeSeqManager,
 	hasUncommitted *bool, commitTimer *time.Time, flushTimer *time.Time,
 ) *common.FnOutput {
-	if t.PauseFunc != nil {
-		if ret := t.PauseFunc(); ret != nil {
+	if t.pauseFunc != nil {
+		if ret := t.pauseFunc(); ret != nil {
 			return ret
 		}
 	}
@@ -504,8 +564,8 @@ func (t *StreamTask) pauseCommitFlushResume(ctx context.Context, args *StreamTas
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	if t.ResumeFunc != nil {
-		t.ResumeFunc(t)
+	if t.resumeFunc != nil {
+		t.resumeFunc(t)
 	}
 	*hasUncommitted = false
 	*commitTimer = time.Now()
@@ -516,8 +576,8 @@ func (t *StreamTask) pauseCommitFlushResume(ctx context.Context, args *StreamTas
 func (t *StreamTask) pauseCommitFlush(ctx context.Context, args *StreamTaskArgs, cm *ConsumeSeqManager, hasUncommitted bool) *common.FnOutput {
 	alreadyPaused := false
 	if hasUncommitted {
-		if t.PauseFunc != nil {
-			if ret := t.PauseFunc(); ret != nil {
+		if t.pauseFunc != nil {
+			if ret := t.pauseFunc(); ret != nil {
 				return ret
 			}
 		}
@@ -527,8 +587,8 @@ func (t *StreamTask) pauseCommitFlush(ctx context.Context, args *StreamTaskArgs,
 		}
 		alreadyPaused = true
 	}
-	if !alreadyPaused && t.PauseFunc != nil {
-		if ret := t.PauseFunc(); ret != nil {
+	if !alreadyPaused && t.pauseFunc != nil {
+		if ret := t.pauseFunc(); ret != nil {
 			return ret
 		}
 	}
@@ -719,7 +779,7 @@ func (t *StreamTask) ProcessWithTransaction(
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
 
-			ret := t.ProcessFunc(ctx, t, args.procArgs)
+			ret := t.appProcessFunc(ctx, t, args.procArgs)
 			if ret != nil {
 				if ret.Success {
 					if hasLiveTransaction {
@@ -766,11 +826,11 @@ func (t *StreamTask) startNewTransaction(ctx context.Context, args *StreamTaskAr
 				return fmt.Errorf("track topic partition failed: %v\n", err)
 			}
 		}
-		if *init && t.ResumeFunc != nil {
-			t.ResumeFunc(t)
+		if *init && t.resumeFunc != nil {
+			t.resumeFunc(t)
 		}
-		if !*init && t.InitFunc != nil {
-			t.InitFunc(args.procArgs)
+		if !*init && t.initFunc != nil {
+			t.initFunc(args.procArgs)
 			*init = true
 		}
 	}
@@ -805,8 +865,8 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 	trackConsumePar *bool,
 ) *common.FnOutput {
 	// debug.Fprintf(os.Stderr, "about to pause\n")
-	if t.PauseFunc != nil {
-		if ret := t.PauseFunc(); ret != nil {
+	if t.pauseFunc != nil {
+		if ret := t.pauseFunc(); ret != nil {
 			return ret
 		}
 	}

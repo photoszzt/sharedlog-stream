@@ -167,22 +167,17 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src, sinks_arr,
 			h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
-	task := transaction.StreamTask{
-		ProcessFunc: func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
+	task := transaction.NewStreamTaskBuilder().
+		AppProcessFunc(func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
 			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
-		},
-		CurrentOffset:             make(map[string]uint64),
-		CommitEveryForAtLeastOnce: common.CommitDuration,
-		PauseFunc:                 nil,
-		ResumeFunc:                nil,
-		InitFunc: func(progArgs interface{}) {
+		}).
+		InitFunc(func(progArgs interface{}) {
 			src.StartWarmup()
 			sink.StartWarmup()
 			sumCount.StartWarmup()
 			calcAvg.StartWarmup()
-		},
-	}
+		}).Build()
 	srcs := []source_sink.Source{src}
 	var kvc []*transaction.KVStoreChangelog
 	kvc = []*transaction.KVStoreChangelog{
@@ -202,7 +197,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID,
 			procArgs, srcs, sinks_arr).WithKVChangelogs(kvc).WithFixedOutParNum(sp.ParNum)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}

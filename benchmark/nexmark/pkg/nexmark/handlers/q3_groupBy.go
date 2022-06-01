@@ -157,13 +157,23 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 		return nil
 	}
 
-	task := transaction.StreamTask{
-		ProcessFunc: func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
+	task := transaction.NewStreamTaskBuilder().
+		AppProcessFunc(func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
 			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
-		},
-		HandleErrFunc: handleErrFunc,
-		PauseFunc: func() *common.FnOutput {
+		}).
+		InitFunc(func(progArgsTmp interface{}) {
+			src.StartWarmup()
+			sinks[0].StartWarmup()
+			sinks[1].StartWarmup()
+			filterPerson.StartWarmup()
+			personsByIDMap.StartWarmup()
+			filterAuctions.StartWarmup()
+			auctionsBySellerIDMap.StartWarmup()
+			// debug.Fprintf(os.Stderr, "done warmup start\n")
+		}).
+		HandleErrFunc(handleErrFunc).
+		PauseFunc(func() *common.FnOutput {
 			debug.Fprintf(os.Stderr, "begin flush\n")
 			personsByIDManager.RequestToTerminate()
 			auctionsBySellerIDManager.RequestToTerminate()
@@ -173,28 +183,15 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 			}
 			debug.Fprintf(os.Stderr, "done flush\n")
 			return nil
-		},
-		ResumeFunc: func(task *transaction.StreamTask) {
+		}).
+		ResumeFunc(func(task *transaction.StreamTask) {
 			debug.Fprintf(os.Stderr, "start resume\n")
 			personsByIDManager.RecreateMsgChan(&procArgs.msgChan2)
 			auctionsBySellerIDManager.RecreateMsgChan(&procArgs.msgChan1)
 			personsByIDManager.LaunchProc(ctx, procArgs, &wg)
 			auctionsBySellerIDManager.LaunchProc(ctx, procArgs, &wg)
 			debug.Fprintf(os.Stderr, "done resume\n")
-		},
-		InitFunc: func(progArgsTmp interface{}) {
-			src.StartWarmup()
-			sinks[0].StartWarmup()
-			sinks[1].StartWarmup()
-			filterPerson.StartWarmup()
-			personsByIDMap.StartWarmup()
-			filterAuctions.StartWarmup()
-			auctionsBySellerIDMap.StartWarmup()
-			// debug.Fprintf(os.Stderr, "done warmup start\n")
-		},
-		CurrentOffset:             make(map[string]uint64),
-		CommitEveryForAtLeastOnce: common.CommitDuration,
-	}
+		}).Build()
 	control_channel.SetupConsistentHash(&h.aucHashMu, h.aucHash, sp.NumOutPartitions[0])
 	control_channel.SetupConsistentHash(&h.personHashMu, h.personHash, sp.NumOutPartitions[1])
 	srcs := []source_sink.Source{src}
@@ -213,7 +210,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 			h.funcName, sp.InputTopicNames[0], sp.ParNum)
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}

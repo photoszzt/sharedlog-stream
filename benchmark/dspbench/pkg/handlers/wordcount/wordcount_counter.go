@@ -209,10 +209,13 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 		BaseProcArgs:  proc_interface.NewBaseProcArgs(funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 
-	task := transaction.StreamTask{
-		ProcessFunc:   h.process,
-		CurrentOffset: make(map[string]uint64),
-	}
+	task := transaction.NewStreamTaskBuilder().
+		AppProcessFunc(h.process).
+		InitFunc(func(progArgs interface{}) {
+			src.StartWarmup()
+			count.StartWarmup()
+		}).Build()
+
 	srcs := []source_sink.Source{src}
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["count"] = count.GetLatency()
@@ -223,7 +226,7 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 		transactionalID := fmt.Sprintf("%s-%s-%s-%d", funcName, sp.InputTopicNames[0], sp.OutputTopicNames[0], sp.ParNum)
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, nil)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}

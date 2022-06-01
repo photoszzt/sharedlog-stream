@@ -327,10 +327,21 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	pctx := context.WithValue(ctx, "id", "person")
 	actx := context.WithValue(ctx, "id", "auction")
 
-	task := transaction.StreamTask{
-		ProcessFunc:   h.process,
-		CurrentOffset: make(map[string]uint64),
-		PauseFunc: func() *common.FnOutput {
+	task := transaction.NewStreamTaskBuilder().
+		AppProcessFunc(h.process).
+		InitFunc(func(procArgsTmp interface{}) {
+			sss.src1.StartWarmup()
+			sss.src2.StartWarmup()
+			sss.sink.StartWarmup()
+			kvtabs.toTab1.StartWarmup()
+			kvtabs.toTab2.StartWarmup()
+			auctionJoinsPersons.StartWarmup()
+			personJoinsAuctions.StartWarmup()
+
+			aucManager.Run()
+			perManager.Run()
+		}).
+		PauseFunc(func() *common.FnOutput {
 			aucManager.RequestToTerminate()
 			perManager.RequestToTerminate()
 			debug.Fprintf(os.Stderr, "q3 waiting for join proc to exit\n")
@@ -342,8 +353,8 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 				return ret
 			}
 			return nil
-		},
-		ResumeFunc: func(task *transaction.StreamTask) {
+		}).
+		ResumeFunc(func(task *transaction.StreamTask) {
 			debug.Fprintf(os.Stderr, "resume begin\n")
 			aucManager.LaunchJoinProcLoop(actx, task, joinProcAuction, &wg)
 			perManager.LaunchJoinProcLoop(pctx, task, joinProcPerson, &wg)
@@ -351,24 +362,10 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			aucManager.Run()
 			perManager.Run()
 			debug.Fprintf(os.Stderr, "resume done\n")
-		},
-		InitFunc: func(procArgsTmp interface{}) {
-			sss.src1.StartWarmup()
-			sss.src2.StartWarmup()
-			sss.sink.StartWarmup()
-			kvtabs.toTab1.StartWarmup()
-			kvtabs.toTab2.StartWarmup()
-			auctionJoinsPersons.StartWarmup()
-			personJoinsAuctions.StartWarmup()
+		}).Build()
 
-			aucManager.Run()
-			perManager.Run()
-		},
-		CommitEveryForAtLeastOnce: common.CommitDuration,
-	}
-
-	aucManager.LaunchJoinProcLoop(actx, &task, joinProcAuction, &wg)
-	perManager.LaunchJoinProcLoop(pctx, &task, joinProcPerson, &wg)
+	aucManager.LaunchJoinProcLoop(actx, task, joinProcAuction, &wg)
+	perManager.LaunchJoinProcLoop(pctx, task, joinProcPerson, &wg)
 
 	srcs := []source_sink.Source{sss.src1, sss.src2}
 	sinks_arr := []source_sink.Sink{sss.sink}
@@ -408,7 +405,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr).
 			WithKVChangelogs(kvchangelogs)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}

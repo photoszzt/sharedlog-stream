@@ -124,15 +124,17 @@ func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInpu
 		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src, []source_sink.Sink{sink}, h.funcName,
 			input.ScaleEpoch, input.ParNum),
 	}
-
-	task := transaction.StreamTask{
-		ProcessFunc: func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
+	task := transaction.NewStreamTaskBuilder().
+		AppProcessFunc(func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
 			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
-		},
-		CurrentOffset:             make(map[string]uint64),
-		CommitEveryForAtLeastOnce: common.CommitDuration,
-	}
+		}).
+		InitFunc(func(progArgs interface{}) {
+			src.StartWarmup()
+			sink.StartWarmup()
+			bid.StartWarmup()
+			bidKeyedByPrice.StartWarmup()
+		}).Build()
 
 	control_channel.SetupConsistentHash(&h.cHashMu, h.cHash, input.NumOutPartitions[0])
 
@@ -149,7 +151,7 @@ func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInpu
 		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, input.InputTopicNames[0], input.ParNum, input.OutputTopicNames[0])
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr)
 		benchutil.UpdateStreamTaskArgsTransaction(input, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}

@@ -90,21 +90,16 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		BaseProcArgsWithSink: proc_interface.NewBaseProcArgsWithSink([]source_sink.Sink{sink}, h.funcName,
 			sp.ScaleEpoch, sp.ParNum),
 	}
-	task := transaction.StreamTask{
-		ProcessFunc: func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
+	task := transaction.NewStreamTaskBuilder().
+		AppProcessFunc(func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
 			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
-		},
-		CurrentOffset:             make(map[string]uint64),
-		CommitEveryForAtLeastOnce: common.CommitDuration,
-		PauseFunc:                 nil,
-		ResumeFunc:                nil,
-		InitFunc: func(progArgs interface{}) {
+		}).
+		InitFunc(func(progArgs interface{}) {
 			src.StartWarmup()
 			sink.StartWarmup()
 			q2Filter.StartWarmup()
-		},
-	}
+		}).Build()
 	srcs := []source_sink.Source{src}
 	sinks := []source_sink.Sink{sink}
 
@@ -119,7 +114,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks).
 			WithFixedOutParNum(sp.ParNum)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}

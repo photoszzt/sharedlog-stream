@@ -333,7 +333,6 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	control_channel.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
 
-	currentOffset := make(map[string]uint64)
 	joinProcPerson := execution.NewJoinProcArgs(sss.src2, sss.sink, pJoinA, &h.cHashMu, h.cHash,
 		h.funcName, sp.ScaleEpoch, sp.ParNum)
 	joinProcAuction := execution.NewJoinProcArgs(sss.src1, sss.sink, aJoinP, &h.cHashMu, h.cHash,
@@ -350,31 +349,9 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	pctx := context.WithValue(ctx, "id", "person")
 	actx := context.WithValue(ctx, "id", "auction")
 
-	task := transaction.StreamTask{
-		ProcessFunc:   h.process,
-		CurrentOffset: currentOffset,
-		PauseFunc: func() *common.FnOutput {
-			// debug.Fprintf(os.Stderr, "in flush func\n")
-			aucManager.RequestToTerminate()
-			perManager.RequestToTerminate()
-			debug.Fprintf(os.Stderr, "waiting join proc to exit\n")
-			wg.Wait()
-			if ret := execution.HandleJoinErrReturn(procArgs); ret != nil {
-				return ret
-			}
-			// debug.Fprintf(os.Stderr, "join procs exited\n")
-			return nil
-		},
-		ResumeFunc: func(task *transaction.StreamTask) {
-			// debug.Fprintf(os.Stderr, "resume join porc\n")
-			aucManager.LaunchJoinProcLoop(actx, task, joinProcAuction, &wg)
-			perManager.LaunchJoinProcLoop(pctx, task, joinProcPerson, &wg)
-
-			aucManager.Run()
-			perManager.Run()
-			// debug.Fprintf(os.Stderr, "done resume join proc\n")
-		},
-		InitFunc: func(progArgs interface{}) {
+	task := transaction.NewStreamTaskBuilder().
+		AppProcessFunc(h.process).
+		InitFunc(func(progArgs interface{}) {
 			sss.src1.StartWarmup()
 			sss.src2.StartWarmup()
 			sss.sink.StartWarmup()
@@ -385,12 +362,31 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 
 			aucManager.Run()
 			perManager.Run()
-		},
-		CommitEveryForAtLeastOnce: common.CommitDuration,
-	}
+		}).
+		PauseFunc(func() *common.FnOutput {
+			// debug.Fprintf(os.Stderr, "in flush func\n")
+			aucManager.RequestToTerminate()
+			perManager.RequestToTerminate()
+			debug.Fprintf(os.Stderr, "waiting join proc to exit\n")
+			wg.Wait()
+			if ret := execution.HandleJoinErrReturn(procArgs); ret != nil {
+				return ret
+			}
+			// debug.Fprintf(os.Stderr, "join procs exited\n")
+			return nil
+		}).
+		ResumeFunc(func(task *transaction.StreamTask) {
+			// debug.Fprintf(os.Stderr, "resume join porc\n")
+			aucManager.LaunchJoinProcLoop(actx, task, joinProcAuction, &wg)
+			perManager.LaunchJoinProcLoop(pctx, task, joinProcPerson, &wg)
 
-	aucManager.LaunchJoinProcLoop(actx, &task, joinProcAuction, &wg)
-	perManager.LaunchJoinProcLoop(pctx, &task, joinProcPerson, &wg)
+			aucManager.Run()
+			perManager.Run()
+			// debug.Fprintf(os.Stderr, "done resume join proc\n")
+		}).Build()
+
+	aucManager.LaunchJoinProcLoop(actx, task, joinProcAuction, &wg)
+	perManager.LaunchJoinProcLoop(pctx, task, joinProcPerson, &wg)
 
 	srcs := []source_sink.Source{auctionsSrc, personsSrc}
 	sinks_arr := []source_sink.Sink{sink}
@@ -442,7 +438,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr).
 			WithWindowStoreChangelogs(wsc)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}

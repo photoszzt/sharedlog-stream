@@ -161,13 +161,15 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 		numOutPartition: sp.NumOutPartitions[0],
 	}
 
-	task := transaction.StreamTask{
-		ProcessFunc: func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
+	task := transaction.NewStreamTaskBuilder().
+		AppProcessFunc(func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
 			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
-		},
-		CurrentOffset: make(map[string]uint64),
-	}
+		}).
+		InitFunc(func(progArgs interface{}) {
+			src.StartWarmup()
+			sink.StartWarmup()
+		}).Build()
 
 	srcs := []source_sink.Source{src}
 	sinks := []source_sink.Sink{sink}
@@ -181,7 +183,7 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 		transactionalID := fmt.Sprintf("%s-%s-%d", funcName, sp.InputTopicNames[0], sp.ParNum)
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}

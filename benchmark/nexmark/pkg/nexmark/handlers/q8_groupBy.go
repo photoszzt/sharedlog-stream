@@ -152,15 +152,21 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 		return nil
 	}
 
-	task := transaction.StreamTask{
-		ProcessFunc: func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
+	task := transaction.NewStreamTaskBuilder().
+		AppProcessFunc(func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
 			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
-		},
-		HandleErrFunc:             handleErrFunc,
-		CurrentOffset:             make(map[string]uint64),
-		CommitEveryForAtLeastOnce: common.CommitDuration,
-		PauseFunc: func() *common.FnOutput {
+		}).
+		InitFunc(func(progArgs interface{}) {
+			sinks[0].StartWarmup()
+			sinks[1].StartWarmup()
+			src.StartWarmup()
+			filterPerson.StartWarmup()
+			personsByIDMap.StartWarmup()
+			filterAuctions.StartWarmup()
+			auctionsBySellerIDMap.StartWarmup()
+		}).
+		PauseFunc(func() *common.FnOutput {
 			// debug.Fprintf(os.Stderr, "begin flush\n")
 			personsByIDManager.RequestToTerminate()
 			auctionsBySellerIDManager.RequestToTerminate()
@@ -170,25 +176,17 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 			}
 			// debug.Fprintf(os.Stderr, "done flush\n")
 			return nil
-		},
-		ResumeFunc: func(task *transaction.StreamTask) {
+		}).
+		ResumeFunc(func(task *transaction.StreamTask) {
 			// debug.Fprintf(os.Stderr, "begin resume\n")
 			personsByIDManager.RecreateMsgChan(&procArgs.msgChan2)
 			auctionsBySellerIDManager.RecreateMsgChan(&procArgs.msgChan1)
 			personsByIDManager.LaunchProc(ctx, procArgs, &wg)
 			auctionsBySellerIDManager.LaunchProc(ctx, procArgs, &wg)
 			// debug.Fprintf(os.Stderr, "done resume\n")
-		},
-		InitFunc: func(progArgs interface{}) {
-			sinks[0].StartWarmup()
-			sinks[1].StartWarmup()
-			src.StartWarmup()
-			filterPerson.StartWarmup()
-			personsByIDMap.StartWarmup()
-			filterAuctions.StartWarmup()
-			auctionsBySellerIDMap.StartWarmup()
-		},
-	}
+		}).
+		HandleErrFunc(handleErrFunc).Build()
+
 	control_channel.SetupConsistentHash(&h.aucHashMu, h.aucHash, sp.NumOutPartitions[0])
 	control_channel.SetupConsistentHash(&h.personHashMu, h.personHash, sp.NumOutPartitions[1])
 
@@ -208,7 +206,7 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 			h.funcName, sp.InputTopicNames[0], sp.ParNum)
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}

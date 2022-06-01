@@ -111,13 +111,22 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 	auctionsByIDManager.LaunchProc(ctx, procArgs, &wg)
 	bidsByAuctionIDManager.LaunchProc(ctx, procArgs, &wg)
 
-	task := transaction.StreamTask{
-		ProcessFunc: func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
+	task := transaction.NewStreamTaskBuilder().
+		AppProcessFunc(func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
 			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
-		},
-		HandleErrFunc: handleErrFunc,
-		PauseFunc: func() *common.FnOutput {
+		}).
+		InitFunc(func(progArgsTmp interface{}) {
+			src.StartWarmup()
+			sinks[0].StartWarmup()
+			sinks[1].StartWarmup()
+			filterAuctions.StartWarmup()
+			auctionsByIDMap.StartWarmup()
+			filterBids.StartWarmup()
+			bidsByAuctionIDMap.StartWarmup()
+			// debug.Fprintf(os.Stderr, "done warmup start\n")
+		}).
+		PauseFunc(func() *common.FnOutput {
 			// debug.Fprintf(os.Stderr, "begin flush\n")
 			auctionsByIDManager.RequestToTerminate()
 			bidsByAuctionIDManager.RequestToTerminate()
@@ -127,28 +136,15 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 			}
 			// debug.Fprintf(os.Stderr, "done flush\n")
 			return nil
-		},
-		ResumeFunc: func(task *transaction.StreamTask) {
+		}).
+		ResumeFunc(func(task *transaction.StreamTask) {
 			debug.Fprintf(os.Stderr, "start resume\n")
 			auctionsByIDManager.RecreateMsgChan(&procArgs.msgChan1)
 			bidsByAuctionIDManager.RecreateMsgChan(&procArgs.msgChan2)
 			auctionsByIDManager.LaunchProc(ctx, procArgs, &wg)
 			bidsByAuctionIDManager.LaunchProc(ctx, procArgs, &wg)
 			debug.Fprintf(os.Stderr, "done resume\n")
-		},
-		InitFunc: func(progArgsTmp interface{}) {
-			src.StartWarmup()
-			sinks[0].StartWarmup()
-			sinks[1].StartWarmup()
-			filterAuctions.StartWarmup()
-			auctionsByIDMap.StartWarmup()
-			filterBids.StartWarmup()
-			bidsByAuctionIDMap.StartWarmup()
-			// debug.Fprintf(os.Stderr, "done warmup start\n")
-		},
-		CurrentOffset:             make(map[string]uint64),
-		CommitEveryForAtLeastOnce: common.CommitDuration,
-	}
+		}).HandleErrFunc(handleErrFunc).Build()
 	control_channel.SetupConsistentHash(&h.aucHashMu, h.aucHash, sp.NumOutPartitions[0])
 	control_channel.SetupConsistentHash(&h.bidHashMu, h.bidHash, sp.NumOutPartitions[1])
 	srcs := []source_sink.Source{src}
@@ -167,7 +163,7 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 		transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName, sp.InputTopicNames[0], sp.ParNum)
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}

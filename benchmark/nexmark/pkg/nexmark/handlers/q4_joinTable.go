@@ -245,27 +245,9 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 	bctx := context.WithValue(ctx, "id", "bid")
 	actx := context.WithValue(ctx, "id", "auction")
 
-	task := transaction.StreamTask{
-		ProcessFunc:   h.process,
-		CurrentOffset: make(map[string]uint64),
-		PauseFunc: func() *common.FnOutput {
-			aucManager.RequestToTerminate()
-			bidManager.RequestToTerminate()
-			wg.Wait()
-			ret := execution.HandleJoinErrReturn(procArgs)
-			if ret != nil {
-				return ret
-			}
-			return nil
-		},
-		ResumeFunc: func(task *transaction.StreamTask) {
-			aucManager.LaunchJoinProcLoop(actx, task, joinProcAuction, &wg)
-			bidManager.LaunchJoinProcLoop(bctx, task, joinProcBid, &wg)
-
-			aucManager.Run()
-			bidManager.Run()
-		},
-		InitFunc: func(progArgs interface{}) {
+	task := transaction.NewStreamTaskBuilder().
+		AppProcessFunc(h.process).
+		InitFunc(func(progArgs interface{}) {
 			auctionsSrc.StartWarmup()
 			bidsSrc.StartWarmup()
 			sink.StartWarmup()
@@ -274,11 +256,26 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 
 			aucManager.Run()
 			bidManager.Run()
-		},
-		CommitEveryForAtLeastOnce: common.CommitDuration,
-	}
-	aucManager.LaunchJoinProcLoop(actx, &task, joinProcAuction, &wg)
-	bidManager.LaunchJoinProcLoop(bctx, &task, joinProcBid, &wg)
+		}).
+		PauseFunc(func() *common.FnOutput {
+			aucManager.RequestToTerminate()
+			bidManager.RequestToTerminate()
+			wg.Wait()
+			ret := execution.HandleJoinErrReturn(procArgs)
+			if ret != nil {
+				return ret
+			}
+			return nil
+		}).
+		ResumeFunc(func(task *transaction.StreamTask) {
+			aucManager.LaunchJoinProcLoop(actx, task, joinProcAuction, &wg)
+			bidManager.LaunchJoinProcLoop(bctx, task, joinProcBid, &wg)
+
+			aucManager.Run()
+			bidManager.Run()
+		}).Build()
+	aucManager.LaunchJoinProcLoop(actx, task, joinProcAuction, &wg)
+	bidManager.LaunchJoinProcLoop(bctx, task, joinProcBid, &wg)
 
 	srcs := []source_sink.Source{auctionsSrc, bidsSrc}
 	sinks_arr := []source_sink.Sink{sink}
@@ -320,7 +317,7 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr).
 			WithKVChangelogs(kvchangelogs)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, &task)
+		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}
