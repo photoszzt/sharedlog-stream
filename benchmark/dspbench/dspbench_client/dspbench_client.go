@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/commtypes"
 	"sync"
 	"time"
 

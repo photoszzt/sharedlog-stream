@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 	"os"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/commtypes"
 	"sync"
 	"time"
 )

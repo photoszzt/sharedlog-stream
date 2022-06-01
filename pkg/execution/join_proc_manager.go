@@ -3,7 +3,7 @@ package execution
 import (
 	"context"
 	"sharedlog-stream/benchmark/common"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/transaction"
 	"sync"
 )

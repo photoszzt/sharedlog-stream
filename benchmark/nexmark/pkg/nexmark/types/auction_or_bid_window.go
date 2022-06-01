@@ -1,7 +1,7 @@
 package types
 
 import (
-	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/commtypes"
 )
 
 type AuctionOrBidWindow struct {

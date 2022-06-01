@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"testing"
 	"time"
 )

@@ -5,7 +5,7 @@ import (
 
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/commtypes"
 )
 
 type NexMarkConfigInput struct {

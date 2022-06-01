@@ -6,10 +6,10 @@ import (
 	"sharedlog-stream/benchmark/common"
 	datatype "sharedlog-stream/benchmark/lat_tp/pkg/data_type"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/transaction"
 	"time"
 

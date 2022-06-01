@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/source_sink"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/txn_data"
 

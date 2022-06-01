@@ -9,7 +9,7 @@ import (
 
 	"sharedlog-stream/benchmark/common"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/commtypes"
 
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 

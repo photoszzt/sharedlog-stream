@@ -3,10 +3,10 @@ package control_channel
 import (
 	"context"
 	"fmt"
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/txn_data"
 	"sync"
 

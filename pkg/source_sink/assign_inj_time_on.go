@@ -4,8 +4,8 @@
 package source_sink
 
 import (
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/stats"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
 )
 

@@ -2,7 +2,7 @@ package processor
 
 import (
 	"math"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/commtypes"
 	"time"
 
 	"github.com/rs/zerolog/log"

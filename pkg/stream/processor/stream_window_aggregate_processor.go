@@ -3,8 +3,8 @@ package processor
 import (
 	"context"
 	"fmt"
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	"github.com/rs/zerolog/log"
 )

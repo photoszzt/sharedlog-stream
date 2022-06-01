@@ -3,7 +3,7 @@ package spike_detection
 import (
 	"context"
 	"math"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/commtypes"
 
 	"cs.utexas.edu/zjia/faas/types"
 )

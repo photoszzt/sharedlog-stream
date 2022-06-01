@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/commtypes"
 )
 
 type BaseInjTime struct {

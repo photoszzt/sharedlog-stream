@@ -2,8 +2,8 @@ package proc_interface
 
 import (
 	"context"
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/source_sink"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/transaction/tran_interface"
 )
 

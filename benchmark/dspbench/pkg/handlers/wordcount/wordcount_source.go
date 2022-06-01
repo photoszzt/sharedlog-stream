@@ -8,8 +8,8 @@ import (
 	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"

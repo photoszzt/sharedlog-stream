@@ -2,8 +2,8 @@ package source_sink
 
 import (
 	"context"
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
 )
 
 type Source interface {

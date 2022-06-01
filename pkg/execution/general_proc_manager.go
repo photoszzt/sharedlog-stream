@@ -2,7 +2,7 @@ package execution
 
 import (
 	"context"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/commtypes"
 	"sync"
 )
 

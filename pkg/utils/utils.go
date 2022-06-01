@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/commtypes"
 	"strconv"
 	"testing"
 )

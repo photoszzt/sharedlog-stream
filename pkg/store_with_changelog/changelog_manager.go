@@ -2,9 +2,9 @@ package store_with_changelog
 
 import (
 	"context"
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sharedlog-stream/pkg/utils"
 

@@ -2,9 +2,9 @@ package processor
 
 import (
 	"context"
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"

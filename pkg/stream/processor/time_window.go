@@ -5,7 +5,7 @@ package processor
 import (
 	"encoding/json"
 	"math"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/commtypes"
 
 	"github.com/rs/zerolog/log"
 	"golang.org/x/xerrors"

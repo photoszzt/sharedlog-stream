@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"testing"
 	"time"
 )

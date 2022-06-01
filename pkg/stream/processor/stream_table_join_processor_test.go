@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"sharedlog-stream/pkg/treemap"
 	"testing"
 )

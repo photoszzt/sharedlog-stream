@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
 
 	"go.mongodb.org/mongo-driver/x/mongo/driver/session"
 )

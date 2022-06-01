@@ -2,7 +2,7 @@ package processor
 
 import (
 	"context"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/commtypes"
 
 	"golang.org/x/xerrors"
 )

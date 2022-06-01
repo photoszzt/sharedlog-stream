@@ -1,7 +1,7 @@
 package store
 
 import (
-	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/commtypes"
 )
 
 type StateStore interface {

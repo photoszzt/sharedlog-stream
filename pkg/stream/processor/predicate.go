@@ -1,6 +1,6 @@
 package processor
 
-import "sharedlog-stream/pkg/stream/processor/commtypes"
+import "sharedlog-stream/pkg/commtypes"
 
 var _ = (Predicate)(PredicateFunc(nil))
 

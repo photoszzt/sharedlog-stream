@@ -6,7 +6,7 @@ package types
 import (
 	"encoding/json"
 
-	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/commtypes"
 )
 
 type PersonTime struct {

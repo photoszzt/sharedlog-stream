@@ -1,9 +1,9 @@
 package transaction
 
 import (
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/source_sink"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"

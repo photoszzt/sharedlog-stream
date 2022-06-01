@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/commtypes"
 
 	"github.com/go-redis/redis/v8"
 )

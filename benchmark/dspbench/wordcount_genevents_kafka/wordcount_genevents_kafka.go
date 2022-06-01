@@ -5,7 +5,7 @@ import (
 	"flag"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/dspbench/pkg/handlers/wordcount"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/commtypes"
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"

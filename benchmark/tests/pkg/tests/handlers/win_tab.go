@@ -8,10 +8,10 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/benchmark/tests/pkg/tests"
 	"sharedlog-stream/benchmark/tests/pkg/tests/test_types"
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/store"
-	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
+	"sharedlog-stream/pkg/store"
+	"sharedlog-stream/pkg/store_with_changelog"
 
 	"cs.utexas.edu/zjia/faas/types"
 )

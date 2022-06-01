@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 	"reflect"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/commtypes"
 	"testing"
 	"time"
 )

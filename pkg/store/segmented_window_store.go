@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 	"math"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sync"
 	"time"

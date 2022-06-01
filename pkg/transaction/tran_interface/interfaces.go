@@ -2,7 +2,7 @@ package tran_interface
 
 import (
 	"context"
-	"sharedlog-stream/pkg/stream/processor/commtypes"
+	"sharedlog-stream/pkg/commtypes"
 )
 
 type ReadOnlyTransactionManager interface {
