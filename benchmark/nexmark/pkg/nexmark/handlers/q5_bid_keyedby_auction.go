@@ -64,12 +64,6 @@ type bidKeyedByAuctionProcessArgs struct {
 
 func (h *bidKeyedByAuction) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
 	args := argsTmp.(*bidKeyedByAuctionProcessArgs)
-	event := msg.Value.(*ntypes.Event)
-	ts, err := event.ExtractEventTime()
-	if err != nil {
-		return fmt.Errorf("fail to extract timestamp: %v", err)
-	}
-	msg.Timestamp = ts
 	bidMsg, err := args.filterBid.ProcessAndReturn(ctx, msg)
 	if err != nil {
 		return err

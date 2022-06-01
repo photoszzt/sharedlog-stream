@@ -256,14 +256,6 @@ func (h *q8GroupByHandler) getPersonsByID(warmup time.Duration, pollTimeout time
 					if !ok {
 						return
 					}
-					event := msg.Value.(*ntypes.Event)
-					ts, err := event.ExtractEventTime()
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "[ERROR] fail to extract timestamp: %v\n", err)
-						errChan <- fmt.Errorf("fail to extract timestamp: %v", err)
-						return
-					}
-					msg.Timestamp = ts
 					filteredMsgs, err := filterPerson.ProcessAndReturn(ctx, msg)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "[ERROR] filterPerson err: %v\n", err)
@@ -333,14 +325,6 @@ func (h *q8GroupByHandler) getAucBySellerID(warmup time.Duration, pollTimeout ti
 				if !ok {
 					return
 				}
-				event := msg.Value.(*ntypes.Event)
-				ts, err := event.ExtractEventTime()
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "[ERROR] fail to extract timestamp: %v\n", err)
-					errChan <- fmt.Errorf("fail to extract timestamp: %v", err)
-					return
-				}
-				msg.Timestamp = ts
 				filteredMsgs, err := filterAuctions.ProcessAndReturn(ctx, msg)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] filterAuctions err: %v\n", err)

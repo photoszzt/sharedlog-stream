@@ -205,12 +205,6 @@ type q5AuctionBidsRestoreArg struct {
 
 func (h *q5AuctionBids) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
 	args := argsTmp.(*q5AuctionBidsProcessArg)
-	event := msg.Value.(*ntypes.Event)
-	ts, err := event.ExtractEventTime()
-	if err != nil {
-		return fmt.Errorf("fail to extract timestamp: %v", err)
-	}
-	msg.Timestamp = ts
 	countMsgs, err := args.countProc.ProcessAndReturn(ctx, msg)
 	if err != nil {
 		return fmt.Errorf("countProc err %v", err)

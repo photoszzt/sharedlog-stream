@@ -210,14 +210,6 @@ func (h *q46GroupByHandler) getAucsByID(warmup time.Duration) (
 				if !ok {
 					break L
 				}
-				event := msg.Value.(*ntypes.Event)
-				ts, err := event.ExtractEventTime()
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "[ERROR] fail to extract timestamp: %v\n", err)
-					errChan <- fmt.Errorf("fail to extract timestamp: %v", err)
-					return
-				}
-				msg.Timestamp = ts
 				filteredMsgs, err := filterAuctions.ProcessAndReturn(ctx, msg)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] filterAuctions err: %v", err)
@@ -290,14 +282,6 @@ func (h *q46GroupByHandler) getBidsByAuctionID(warmup time.Duration) (
 				if !ok {
 					break L
 				}
-				event := msg.Value.(*ntypes.Event)
-				ts, err := event.ExtractEventTime()
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "[ERROR] fail to extract timestamp: %v\n", err)
-					errChan <- fmt.Errorf("fail to extract timestamp: %v", err)
-					return
-				}
-				msg.Timestamp = ts
 				filteredMsgs, err := filterBids.ProcessAndReturn(ctx, msg)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] filterAuctions err: %v", err)

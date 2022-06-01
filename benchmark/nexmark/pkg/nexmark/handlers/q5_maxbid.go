@@ -122,14 +122,8 @@ type q5MaxBidRestoreArgs struct {
 
 func (h *q5MaxBid) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
 	args := argsTmp.(*q5MaxBidProcessArgs)
-	aic := msg.Value.(*ntypes.AuctionIdCount)
-	ts, err := aic.ExtractEventTime()
-	if err != nil {
-		return fmt.Errorf("fail to extract timestamp: %v", err)
-	}
-	msg.Timestamp = ts
 	// fmt.Fprintf(os.Stderr, "got msg with key: %v, val: %v, ts: %v\n", msg.Msg.Key, msg.Msg.Value, msg.Msg.Timestamp)
-	_, err = args.maxBid.ProcessAndReturn(ctx, msg)
+	_, err := args.maxBid.ProcessAndReturn(ctx, msg)
 	if err != nil {
 		return fmt.Errorf("maxBid err: %v", err)
 	}

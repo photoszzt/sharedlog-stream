@@ -92,12 +92,6 @@ type Q4AvgProcessArgs struct {
 
 func (h *q4Avg) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
 	args := argsTmp.(*Q4AvgProcessArgs)
-	val := msg.Value.(commtypes.EventTimeExtractor)
-	ts, err := val.ExtractEventTime()
-	if err != nil {
-		return err
-	}
-	msg.Timestamp = ts
 	sumCounts, err := args.sumCount.ProcessAndReturn(ctx, msg)
 	if err != nil {
 		return err

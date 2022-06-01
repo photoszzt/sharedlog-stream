@@ -50,6 +50,16 @@ func CommonProcess(ctx context.Context, t *transaction.StreamTask, args proc_int
 	return nil
 }
 
+func extractEventTs(msg *commtypes.Message) error {
+	event := msg.Value.(commtypes.EventTimeExtractor)
+	ts, err := event.ExtractEventTime()
+	if err != nil {
+		return err
+	}
+	msg.Timestamp = ts
+	return nil
+}
+
 func ProcessMsgAndSeq(ctx context.Context, msg commtypes.MsgAndSeq, args interface{},
 	procMsg proc_interface.ProcessMsgFunc,
 ) error {
@@ -58,12 +68,20 @@ func ProcessMsgAndSeq(ctx context.Context, msg commtypes.MsgAndSeq, args interfa
 			if subMsg.Value == nil {
 				continue
 			}
-			err := procMsg(ctx, subMsg, args)
+			err := extractEventTs(&subMsg)
+			if err != nil {
+				return err
+			}
+			err = procMsg(ctx, subMsg, args)
 			if err != nil {
 				return err
 			}
 		}
 		return nil
+	}
+	err := extractEventTs(&msg.Msg)
+	if err != nil {
+		return err
 	}
 	return procMsg(ctx, msg.Msg, args)
 }

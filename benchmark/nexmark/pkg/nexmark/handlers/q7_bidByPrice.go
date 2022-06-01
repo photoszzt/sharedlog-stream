@@ -61,12 +61,6 @@ type q7BidKeyedByPriceProcessArgs struct {
 
 func (h *q7BidByPrice) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
 	args := argsTmp.(*q7BidKeyedByPriceProcessArgs)
-	event := msg.Value.(*ntypes.Event)
-	ts, err := event.ExtractEventTime()
-	if err != nil {
-		return fmt.Errorf("fail to extract timestamp: %v", err)
-	}
-	msg.Timestamp = ts
 	bidMsg, err := args.bid.ProcessAndReturn(ctx, msg)
 	if err != nil {
 		return fmt.Errorf("filter bid err: %v", err)

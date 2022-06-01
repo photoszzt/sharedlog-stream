@@ -259,14 +259,6 @@ func (h *q3GroupByHandler) getPersonsByID(warmup time.Duration) (
 				if !ok {
 					break L
 				}
-				event := msg.Value.(*ntypes.Event)
-				ts, err := event.ExtractEventTime()
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "[ERROR] fail to extract timestamp: %v\n", err)
-					errChan <- fmt.Errorf("fail to extract timestamp: %v", err)
-					return
-				}
-				msg.Timestamp = ts
 				filteredMsgs, err := filterPerson.ProcessAndReturn(ctx, msg)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] filterPerson err: %v\n", err)
@@ -341,15 +333,6 @@ func (h *q3GroupByHandler) getAucBySellerID(warmup time.Duration) (
 					if !ok {
 						return
 					}
-
-					event := msg.Value.(*ntypes.Event)
-					ts, err := event.ExtractEventTime()
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "[ERROR] fail to extract timestamp: %v\n", err)
-						errChan <- fmt.Errorf("fail to extract timestamp: %v", err)
-						return
-					}
-					msg.Timestamp = ts
 					filteredMsgs, err := filterAuctions.ProcessAndReturn(ctx, msg)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "filterAuctions err: %v\n", err)

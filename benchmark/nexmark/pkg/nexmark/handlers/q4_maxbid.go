@@ -111,12 +111,6 @@ type q4MaxBidProcessArgs struct {
 
 func (h *q4MaxBid) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
 	args := argsTmp.(*q4MaxBidProcessArgs)
-	ab := msg.Value.(commtypes.EventTimeExtractor)
-	ts, err := ab.ExtractEventTime()
-	if err != nil {
-		return err
-	}
-	msg.Timestamp = ts
 	aggs, err := args.maxBid.ProcessAndReturn(ctx, msg)
 	if err != nil {
 		return err
