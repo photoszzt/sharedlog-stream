@@ -2,8 +2,8 @@ package execution
 
 import (
 	"sharedlog-stream/pkg/hash"
+	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/source_sink"
-	"sharedlog-stream/pkg/stream/processor/proc_interface"
 	"sync"
 )
 

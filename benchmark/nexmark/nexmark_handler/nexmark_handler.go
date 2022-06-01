@@ -53,7 +53,7 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 	case "query7":
 		return handlers.NewQuery7(env, funcName), nil
 	case "q7bidskeyedbyprice":
-		return handlers.NewQ7BidKeyedByPriceHandler(env, funcName), nil
+		return handlers.NewQ7BidByPriceHandler(env, funcName), nil
 	case "q8JoinStream":
 		return handlers.NewQ8JoinStreamHandler(env, funcName), nil
 	case "q8GroupBy":

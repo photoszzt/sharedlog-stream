@@ -175,3 +175,5 @@ func (pa *BaseProcArgs) TrackParFunc() tran_interface.TrackKeySubStreamFunc {
 func (pa *BaseProcArgs) SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc) {
 	pa.trackParFunc = trackParFunc
 }
+
+type ProcessMsgFunc func(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error

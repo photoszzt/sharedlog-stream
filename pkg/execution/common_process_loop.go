@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/errors"
+	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/proc_interface"
 	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/txn_data"
 
@@ -15,7 +15,7 @@ import (
 )
 
 func CommonProcess(ctx context.Context, t *transaction.StreamTask, args proc_interface.ProcArgsWithSrcSink,
-	procMsg ProcessMsgFunc,
+	procMsg proc_interface.ProcessMsgFunc,
 ) *common.FnOutput {
 	if t.HandleErrFunc != nil {
 		if err := t.HandleErrFunc(); err != nil {
@@ -50,9 +50,9 @@ func CommonProcess(ctx context.Context, t *transaction.StreamTask, args proc_int
 	return nil
 }
 
-type ProcessMsgFunc func(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error
-
-func ProcessMsgAndSeq(ctx context.Context, msg commtypes.MsgAndSeq, args interface{}, procMsg ProcessMsgFunc) error {
+func ProcessMsgAndSeq(ctx context.Context, msg commtypes.MsgAndSeq, args interface{},
+	procMsg proc_interface.ProcessMsgFunc,
+) error {
 	if msg.MsgArr != nil {
 		for _, subMsg := range msg.MsgArr {
 			if subMsg.Value == nil {
@@ -68,7 +68,9 @@ func ProcessMsgAndSeq(ctx context.Context, msg commtypes.MsgAndSeq, args interfa
 	return procMsg(ctx, msg.Msg, args)
 }
 
-func HandleScaleEpochAndBytes(ctx context.Context, msg commtypes.MsgAndSeq, args proc_interface.ProcArgsWithSink) *common.FnOutput {
+func HandleScaleEpochAndBytes(ctx context.Context, msg commtypes.MsgAndSeq,
+	args proc_interface.ProcArgsWithSink,
+) *common.FnOutput {
 	v := msg.Msg.Value.(source_sink.ScaleEpochAndBytes)
 	err := args.FlushAndPushToAllSinks(ctx, commtypes.Message{Key: txn_data.SCALE_FENCE_KEY,
 		Value: v.Payload}, args.ParNum(), true)

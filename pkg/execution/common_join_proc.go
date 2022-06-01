@@ -4,7 +4,7 @@ import (
 	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/stream/processor/proc_interface"
+	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/transaction/tran_interface"
 )
 

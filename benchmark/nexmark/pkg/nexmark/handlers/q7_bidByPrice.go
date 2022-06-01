@@ -12,11 +12,10 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/hash"
-	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/proc_interface"
 	"sharedlog-stream/pkg/transaction"
 	"sync"
 	"time"
@@ -25,28 +24,28 @@ import (
 	"golang.org/x/xerrors"
 )
 
-type q7BidKeyedByPrice struct {
+type q7BidByPrice struct {
 	env      types.Environment
 	cHashMu  sync.RWMutex
 	cHash    *hash.ConsistentHash
 	funcName string
 }
 
-func NewQ7BidKeyedByPriceHandler(env types.Environment, funcName string) types.FuncHandler {
-	return &q7BidKeyedByPrice{
+func NewQ7BidByPriceHandler(env types.Environment, funcName string) types.FuncHandler {
+	return &q7BidByPrice{
 		env:      env,
 		cHash:    hash.NewConsistentHash(),
 		funcName: funcName,
 	}
 }
 
-func (h *q7BidKeyedByPrice) Call(ctx context.Context, input []byte) ([]byte, error) {
+func (h *q7BidByPrice) Call(ctx context.Context, input []byte) ([]byte, error) {
 	parsedInput := &common.QueryInput{}
 	err := json.Unmarshal(input, parsedInput)
 	if err != nil {
 		return nil, err
 	}
-	output := h.processQ7BidKeyedByPrice(ctx, parsedInput)
+	output := h.q7BidByPrice(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
 		panic(err)
@@ -55,13 +54,12 @@ func (h *q7BidKeyedByPrice) Call(ctx context.Context, input []byte) ([]byte, err
 }
 
 type q7BidKeyedByPriceProcessArgs struct {
-	bid             *processor.MeteredProcessor
-	bidKeyedByPrice *processor.MeteredProcessor
-	output_stream   *sharedlog_stream.ShardedSharedLogStream
+	bid        *processor.MeteredProcessor
+	bidByPrice *processor.MeteredProcessor
 	proc_interface.BaseProcArgsWithSrcSink
 }
 
-func (h *q7BidKeyedByPrice) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
+func (h *q7BidByPrice) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
 	args := argsTmp.(*q7BidKeyedByPriceProcessArgs)
 	event := msg.Value.(*ntypes.Event)
 	ts, err := event.ExtractEventTime()
@@ -74,7 +72,7 @@ func (h *q7BidKeyedByPrice) procMsg(ctx context.Context, msg commtypes.Message, 
 		return fmt.Errorf("filter bid err: %v", err)
 	}
 	if bidMsg != nil {
-		mappedKey, err := args.bidKeyedByPrice.ProcessAndReturn(ctx, bidMsg[0])
+		mappedKey, err := args.bidByPrice.ProcessAndReturn(ctx, bidMsg[0])
 		if err != nil {
 			return fmt.Errorf("bid keyed by price error: %v", err)
 		}
@@ -86,7 +84,6 @@ func (h *q7BidKeyedByPrice) procMsg(ctx context.Context, msg commtypes.Message, 
 			return xerrors.New("fail to get output substream number")
 		}
 		par := parTmp.(uint8)
-		// par := uint8(key % uint64(args.numOutPartition))
 		err = args.TrackParFunc()(ctx, key, args.Sinks()[0].KeySerde(), args.Sinks()[0].TopicName(), par)
 		if err != nil {
 			return fmt.Errorf("track par err: %v", err)
@@ -99,7 +96,7 @@ func (h *q7BidKeyedByPrice) procMsg(ctx context.Context, msg commtypes.Message, 
 	return nil
 }
 
-func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input *common.QueryInput) *common.FnOutput {
+func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInput) *common.FnOutput {
 	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, input)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
@@ -111,19 +108,19 @@ func (h *q7BidKeyedByPrice) processQ7BidKeyedByPrice(ctx context.Context, input 
 	}
 	src.SetInitialSource(true)
 
+	warmup := time.Duration(input.WarmupS) * time.Second
 	bid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
 		event := msg.Value.(*ntypes.Event)
 		return event.Etype == ntypes.BID, nil
-	})), time.Duration(input.WarmupS)*time.Second)
+	})), warmup)
 	bidKeyedByPrice := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 		event := msg.Value.(*ntypes.Event)
 		return commtypes.Message{Key: event.Bid.Price, Value: msg.Value, Timestamp: msg.Timestamp}, nil
-	})), time.Duration(input.WarmupS)*time.Second)
+	})), warmup)
 
 	procArgs := &q7BidKeyedByPriceProcessArgs{
-		bid:             bid,
-		bidKeyedByPrice: bidKeyedByPrice,
-		output_stream:   output_streams[0],
+		bid:        bid,
+		bidByPrice: bidKeyedByPrice,
 		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src, []source_sink.Sink{sink}, h.funcName,
 			input.ScaleEpoch, input.ParNum),
 	}
