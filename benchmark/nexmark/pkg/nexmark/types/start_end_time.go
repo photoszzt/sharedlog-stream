@@ -11,20 +11,20 @@ import (
 )
 
 type StartEndTime struct {
-	StartTime int64 `json:"startTime" msg:"startTime"`
-	EndTime   int64 `json:"endTime" msg:"endTime"`
+	StartTimeMs int64 `json:"sTs" msg:"sTs"`
+	EndTimeMs   int64 `json:"eTs" msg:"eTs"`
 
 	BaseInjTime `msg:"bInjT"`
 }
 
 func CompareStartEndTime(a, b *StartEndTime) int {
-	if a.StartTime < b.StartTime {
+	if a.StartTimeMs < b.StartTimeMs {
 		return -1
 	} else { // a.st >= b.st
-		if a.StartTime == b.StartTime {
-			if a.EndTime < b.EndTime {
+		if a.StartTimeMs == b.StartTimeMs {
+			if a.EndTimeMs < b.EndTimeMs {
 				return -1
-			} else if a.EndTime == b.EndTime {
+			} else if a.EndTimeMs == b.EndTimeMs {
 				return 0
 			} else {
 				return 1
@@ -36,7 +36,7 @@ func CompareStartEndTime(a, b *StartEndTime) int {
 }
 
 func (se StartEndTime) String() string {
-	return fmt.Sprintf("%d %d", se.StartTime, se.EndTime)
+	return fmt.Sprintf("%d %d", se.StartTimeMs, se.EndTimeMs)
 }
 
 type StartEndTimeJSONEncoder struct{}
@@ -91,4 +91,16 @@ func (d StartEndTimeMsgpDecoder) Decode(value []byte) (interface{}, error) {
 type StartEndTimeMsgpSerde struct {
 	StartEndTimeMsgpEncoder
 	StartEndTimeMsgpDecoder
+}
+
+func GetStartEndTimeSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
+	var seSerde commtypes.Serde
+	if serdeFormat == commtypes.JSON {
+		seSerde = StartEndTimeJSONSerde{}
+	} else if serdeFormat == commtypes.MSGP {
+		seSerde = StartEndTimeMsgpSerde{}
+	} else {
+		return nil, fmt.Errorf("unrecognized serde format: %v", serdeFormat)
+	}
+	return seSerde, nil
 }

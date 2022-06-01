@@ -24,16 +24,16 @@ func (z *StartEndTime) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "startTime":
-			z.StartTime, err = dc.ReadInt64()
+		case "sTs":
+			z.StartTimeMs, err = dc.ReadInt64()
 			if err != nil {
-				err = msgp.WrapError(err, "StartTime")
+				err = msgp.WrapError(err, "StartTimeMs")
 				return
 			}
-		case "endTime":
-			z.EndTime, err = dc.ReadInt64()
+		case "eTs":
+			z.EndTimeMs, err = dc.ReadInt64()
 			if err != nil {
-				err = msgp.WrapError(err, "EndTime")
+				err = msgp.WrapError(err, "EndTimeMs")
 				return
 			}
 		case "bInjT":
@@ -56,24 +56,24 @@ func (z *StartEndTime) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *StartEndTime) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 3
-	// write "startTime"
-	err = en.Append(0x83, 0xa9, 0x73, 0x74, 0x61, 0x72, 0x74, 0x54, 0x69, 0x6d, 0x65)
+	// write "sTs"
+	err = en.Append(0x83, 0xa3, 0x73, 0x54, 0x73)
 	if err != nil {
 		return
 	}
-	err = en.WriteInt64(z.StartTime)
+	err = en.WriteInt64(z.StartTimeMs)
 	if err != nil {
-		err = msgp.WrapError(err, "StartTime")
+		err = msgp.WrapError(err, "StartTimeMs")
 		return
 	}
-	// write "endTime"
-	err = en.Append(0xa7, 0x65, 0x6e, 0x64, 0x54, 0x69, 0x6d, 0x65)
+	// write "eTs"
+	err = en.Append(0xa3, 0x65, 0x54, 0x73)
 	if err != nil {
 		return
 	}
-	err = en.WriteInt64(z.EndTime)
+	err = en.WriteInt64(z.EndTimeMs)
 	if err != nil {
-		err = msgp.WrapError(err, "EndTime")
+		err = msgp.WrapError(err, "EndTimeMs")
 		return
 	}
 	// write "bInjT"
@@ -93,12 +93,12 @@ func (z *StartEndTime) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *StartEndTime) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 3
-	// string "startTime"
-	o = append(o, 0x83, 0xa9, 0x73, 0x74, 0x61, 0x72, 0x74, 0x54, 0x69, 0x6d, 0x65)
-	o = msgp.AppendInt64(o, z.StartTime)
-	// string "endTime"
-	o = append(o, 0xa7, 0x65, 0x6e, 0x64, 0x54, 0x69, 0x6d, 0x65)
-	o = msgp.AppendInt64(o, z.EndTime)
+	// string "sTs"
+	o = append(o, 0x83, 0xa3, 0x73, 0x54, 0x73)
+	o = msgp.AppendInt64(o, z.StartTimeMs)
+	// string "eTs"
+	o = append(o, 0xa3, 0x65, 0x54, 0x73)
+	o = msgp.AppendInt64(o, z.EndTimeMs)
 	// string "bInjT"
 	o = append(o, 0xa5, 0x62, 0x49, 0x6e, 0x6a, 0x54)
 	o, err = z.BaseInjTime.MarshalMsg(o)
@@ -127,16 +127,16 @@ func (z *StartEndTime) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "startTime":
-			z.StartTime, bts, err = msgp.ReadInt64Bytes(bts)
+		case "sTs":
+			z.StartTimeMs, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "StartTime")
+				err = msgp.WrapError(err, "StartTimeMs")
 				return
 			}
-		case "endTime":
-			z.EndTime, bts, err = msgp.ReadInt64Bytes(bts)
+		case "eTs":
+			z.EndTimeMs, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "EndTime")
+				err = msgp.WrapError(err, "EndTimeMs")
 				return
 			}
 		case "bInjT":
@@ -159,6 +159,6 @@ func (z *StartEndTime) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *StartEndTime) Msgsize() (s int) {
-	s = 1 + 10 + msgp.Int64Size + 8 + msgp.Int64Size + 6 + z.BaseInjTime.Msgsize()
+	s = 1 + 4 + msgp.Int64Size + 4 + msgp.Int64Size + 6 + z.BaseInjTime.Msgsize()
 	return
 }
