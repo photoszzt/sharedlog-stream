@@ -3,8 +3,8 @@ package processor
 import (
 	"context"
 	"math"
+	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/store"
 	"time"
 
 	"github.com/rs/zerolog/log"

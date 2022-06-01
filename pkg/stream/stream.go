@@ -3,9 +3,9 @@ package stream
 import (
 	"github.com/rs/zerolog/log"
 
+	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/store"
 )
 
 type StreamImpl struct {

@@ -12,9 +12,9 @@ import (
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 	"time"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"

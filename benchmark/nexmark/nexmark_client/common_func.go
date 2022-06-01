@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
-	"sharedlog-stream/pkg/stream/processor/store"
+	"sharedlog-stream/pkg/store"
 )
 
 func NewQueryInput(serdeFormat uint8) *common.QueryInput {

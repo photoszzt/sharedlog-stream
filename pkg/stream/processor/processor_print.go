@@ -3,8 +3,8 @@ package processor
 import (
 	"context"
 	"fmt"
+	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/store"
 )
 
 // PrintProcessor is a processor that prints the stream to stdout.

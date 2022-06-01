@@ -7,9 +7,9 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/store"
+	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/store"
-	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 
 	"go.mongodb.org/mongo-driver/x/mongo/driver/session"
 )

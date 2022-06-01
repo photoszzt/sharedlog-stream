@@ -6,8 +6,8 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/store"
 	"sharedlog-stream/pkg/txn_data"
 	"time"
 )

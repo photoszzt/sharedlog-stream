@@ -2,8 +2,8 @@ package stream
 
 import (
 	"sharedlog-stream/pkg/concurrent_skiplist"
+	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream/processor"
-	"sharedlog-stream/pkg/stream/processor/store_with_changelog"
 )
 
 type TimeWindowedStream interface {

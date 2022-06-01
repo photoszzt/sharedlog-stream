@@ -3,8 +3,8 @@ package sharedlog_stream
 import (
 	"context"
 	"fmt"
+	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/store"
 
 	"cs.utexas.edu/zjia/faas/types"
 	"golang.org/x/xerrors"

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/stream/processor/commtypes"
-	"sharedlog-stream/pkg/stream/processor/store"
 	"testing"
 	"time"
 )
