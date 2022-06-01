@@ -3,8 +3,8 @@ package store_test
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/stream/processor"
 	"testing"
 )
 

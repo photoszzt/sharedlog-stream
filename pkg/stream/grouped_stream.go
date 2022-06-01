@@ -1,9 +1,9 @@
 package stream
 
 import (
+	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
-	"sharedlog-stream/pkg/stream/processor"
 	"sharedlog-stream/pkg/treemap"
 )
 

@@ -1,8 +1,8 @@
 package stream
 
 import (
+	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/source_sink"
-	"sharedlog-stream/pkg/stream/processor"
 )
 
 type StreamBuilder struct {

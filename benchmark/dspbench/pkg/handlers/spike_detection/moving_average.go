@@ -2,7 +2,7 @@ package spike_detection
 
 import (
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/stream/processor"
+	"sharedlog-stream/pkg/processor"
 
 	"github.com/gammazero/deque"
 )

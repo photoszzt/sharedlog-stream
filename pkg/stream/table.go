@@ -1,6 +1,6 @@
 package stream
 
-import "sharedlog-stream/pkg/stream/processor"
+import "sharedlog-stream/pkg/processor"
 
 type Table interface {
 	Filter(name string, pred processor.Predicate, queryableName string) Table
