@@ -92,10 +92,11 @@ func (h *spikeDetectionSource) eventGeneration(ctx context.Context, sp *common.S
 			Message: fmt.Sprintf("NewSharedlogStream failed: %v", err),
 		}
 	}
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	var sdSerde commtypes.Serde
-	if sp.SerdeFormat == uint8(commtypes.JSON) {
+	if serdeFormat == commtypes.JSON {
 		sdSerde = SensorDataJSONSerde{}
-	} else if sp.SerdeFormat == uint8(commtypes.MSGP) {
+	} else if serdeFormat == commtypes.MSGP {
 		sdSerde = SensorDataMsgpSerde{}
 	} else {
 		return &common.FnOutput{
@@ -103,7 +104,7 @@ func (h *spikeDetectionSource) eventGeneration(ctx context.Context, sp *common.S
 			Message: fmt.Sprintf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat),
 		}
 	}
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

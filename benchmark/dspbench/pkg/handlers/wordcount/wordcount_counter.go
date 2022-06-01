@@ -174,8 +174,8 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 	}
 	debug.Assert(len(output_streams) == 1, "expected only one output stream")
 	meteredOutputStream := store.NewMeteredStream(output_streams[0])
-
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

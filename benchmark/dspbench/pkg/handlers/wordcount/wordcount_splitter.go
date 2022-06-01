@@ -57,10 +57,9 @@ func getSrcSink(ctx context.Context,
 	sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*source_sink.MeteredSource,
-	*source_sink.MeteredSyncSink,
-	error) {
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
+) (*source_sink.MeteredSource, *source_sink.MeteredSyncSink, error) {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get msg serde failed: %v", err)
 	}
@@ -88,11 +87,11 @@ func getSrcSink(ctx context.Context,
 }
 
 type wordcountSplitterProcessArg struct {
-	output_stream   *sharedlog_stream.ShardedSharedLogStream
-	splitter        processor.FlatMapperFunc
-	splitLatencies  []int
-	numOutPartition uint8
+	output_stream  *sharedlog_stream.ShardedSharedLogStream
+	splitter       processor.FlatMapperFunc
+	splitLatencies []int
 	proc_interface.BaseProcArgsWithSrcSink
+	numOutPartition uint8
 }
 
 func (h *wordcountSplitFlatMap) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
