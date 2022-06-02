@@ -326,13 +326,14 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			}
 			return commtypes.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
 		})), time.Duration(sp.WarmupS)*time.Second)
+	sinks := []source_sink.Sink{sink}
 	procArgs := &q5AuctionBidsProcessArg{
 		countProc:       countProc,
 		groupByAuction:  groupByAuction,
 		output_stream:   output_streams[0],
 		numOutPartition: sp.NumOutPartitions[0],
 		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src,
-			[]source_sink.Sink{sink}, h.funcName, sp.ScaleEpoch, sp.ParNum),
+			sinks, h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 	task := transaction.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
@@ -348,7 +349,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 
 	control_channel.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 	srcs := []source_sink.Source{src}
-	sinks := []source_sink.Sink{sink}
+
 	var wsc []*transaction.WindowStoreChangelog
 	if countStore.TableType() == store.IN_MEM {
 		cstore := countStore.(*store_with_changelog.InMemoryWindowStoreWithChangelog)
