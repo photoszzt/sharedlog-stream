@@ -2,17 +2,21 @@
 //msgp:ignore BidAndMaxJSONSerde BidAndMaxMsgpSerde
 package types
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"sharedlog-stream/pkg/common_errors"
+	"sharedlog-stream/pkg/commtypes"
+)
 
 type BidAndMax struct {
-	Extra       string `json:"extra" msg:"extra"`
-	Price       uint64 `json:"price" msg:"price"`
-	Auction     uint64 `json:"auction" msg:"auction"`
-	Bidder      uint64 `json:"bidder" msg:"bidder"`
-	DateTime    int64  `json:"dateTime" msg:"dateTime"`
-	MaxDateTime int64  `json:"maxDateTime" msg:"maxDateTime"`
+	Price    uint64 `json:"price" msg:"price"`
+	Auction  uint64 `json:"auction" msg:"auction"`
+	Bidder   uint64 `json:"bidder" msg:"bidder"`
+	WStartMs int64  `json:"wStartMs" msg:"wStartMs"`
+	WEndMs   int64  `json:"wEndMs" msg:"wEndMs"`
 
-	BaseInjTime `msg:"bInjT"`
+	BaseInjTime `msg:"bInjT,omitempty"`
+	BaseTs      `msg:"bTs,omitempty"`
 }
 
 type BidAndMaxJSONSerde struct{}
@@ -43,4 +47,14 @@ func (s BidAndMaxMsgpSerde) Decode(value []byte) (interface{}, error) {
 		return nil, err
 	}
 	return bm, nil
+}
+
+func GetBidAndMaxSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
+	if serdeFormat == commtypes.JSON {
+		return BidAndMaxJSONSerde{}, nil
+	} else if serdeFormat == commtypes.MSGP {
+		return BidAndMaxMsgpSerde{}, nil
+	} else {
+		return nil, common_errors.ErrUnrecognizedSerdeFormat
+	}
 }
