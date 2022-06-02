@@ -15,8 +15,8 @@ type BidAndMax struct {
 	WStartMs int64  `json:"wStartMs" msg:"wStartMs"`
 	WEndMs   int64  `json:"wEndMs" msg:"wEndMs"`
 
-	BaseInjTime `msg:"bInjT,omitempty"`
-	BaseTs      `msg:"bTs,omitempty"`
+	BaseInjTime `msg:"bInjT"`
+	BaseTs      `msg:"bTs"`
 }
 
 type BidAndMaxJSONSerde struct{}

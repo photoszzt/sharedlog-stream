@@ -79,19 +79,9 @@ func (z *BidAndMax) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *BidAndMax) EncodeMsg(en *msgp.Writer) (err error) {
-	// omitempty: check for empty values
-	zb0001Len := uint32(7)
-	var zb0001Mask uint8 /* 7 bits */
-	// variable map header, size zb0001Len
-	err = en.Append(0x80 | uint8(zb0001Len))
-	if err != nil {
-		return
-	}
-	if zb0001Len == 0 {
-		return
-	}
+	// map header, size 7
 	// write "price"
-	err = en.Append(0xa5, 0x70, 0x72, 0x69, 0x63, 0x65)
+	err = en.Append(0x87, 0xa5, 0x70, 0x72, 0x69, 0x63, 0x65)
 	if err != nil {
 		return
 	}
@@ -166,16 +156,9 @@ func (z *BidAndMax) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *BidAndMax) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// omitempty: check for empty values
-	zb0001Len := uint32(7)
-	var zb0001Mask uint8 /* 7 bits */
-	// variable map header, size zb0001Len
-	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
-	}
+	// map header, size 7
 	// string "price"
-	o = append(o, 0xa5, 0x70, 0x72, 0x69, 0x63, 0x65)
+	o = append(o, 0x87, 0xa5, 0x70, 0x72, 0x69, 0x63, 0x65)
 	o = msgp.AppendUint64(o, z.Price)
 	// string "auction"
 	o = append(o, 0xa7, 0x61, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e)
