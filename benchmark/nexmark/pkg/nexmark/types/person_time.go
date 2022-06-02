@@ -6,6 +6,7 @@ package types
 import (
 	"encoding/json"
 
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
 
@@ -69,4 +70,16 @@ func (d PersonTimeMsgpDecoder) Decode(value []byte) (interface{}, error) {
 type PersonTimeMsgpSerde struct {
 	PersonTimeMsgpEncoder
 	PersonTimeMsgpDecoder
+}
+
+func GetPersonTimeSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
+	var ptSerde commtypes.Serde
+	if serdeFormat == commtypes.JSON {
+		ptSerde = PersonTimeJSONSerde{}
+	} else if serdeFormat == commtypes.MSGP {
+		ptSerde = PersonTimeMsgpSerde{}
+	} else {
+		return nil, common_errors.ErrUnrecognizedSerdeFormat
+	}
+	return ptSerde, nil
 }

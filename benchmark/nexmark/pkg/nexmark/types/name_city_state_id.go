@@ -3,7 +3,11 @@
 
 package types
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"sharedlog-stream/pkg/common_errors"
+	"sharedlog-stream/pkg/commtypes"
+)
 
 type NameCityStateId struct {
 	Name  string `msg:"name" json:"name"`
@@ -42,4 +46,16 @@ func (s NameCityStateIdMsgpSerde) Decode(value []byte) (interface{}, error) {
 		return nil, err
 	}
 	return ncsi, nil
+}
+
+func GetNameCityStateIdSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
+	var ncsiSerde commtypes.Serde
+	if serdeFormat == commtypes.JSON {
+		ncsiSerde = NameCityStateIdJSONSerde{}
+	} else if serdeFormat == commtypes.MSGP {
+		ncsiSerde = NameCityStateIdMsgpSerde{}
+	} else {
+		return nil, common_errors.ErrUnrecognizedSerdeFormat
+	}
+	return ncsiSerde, nil
 }
