@@ -3,8 +3,8 @@ package control_channel
 import (
 	"context"
 	"fmt"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
@@ -84,7 +84,7 @@ func (cmm *ControlChannelManager) RestoreMapping(ctx context.Context) error {
 	for {
 		rawMsg, err := cmm.controlLog.ReadNext(ctx, 0)
 		if err != nil {
-			if errors.IsStreamEmptyError(err) {
+			if common_errors.IsStreamEmptyError(err) {
 				return nil
 			}
 			return err
@@ -228,7 +228,7 @@ func (cmm *ControlChannelManager) MonitorControlChannel(
 
 		rawMsg, err := cmm.controlLog.ReadNext(ctx, 0)
 		if err != nil {
-			if errors.IsStreamEmptyError(err) {
+			if common_errors.IsStreamEmptyError(err) {
 				continue
 			}
 			errc <- err

@@ -6,6 +6,7 @@ package types
 import (
 	"encoding/json"
 
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
 
@@ -71,10 +72,12 @@ type AuctionIdCountMsgpSerde struct {
 	AuctionIdCountMsgpDecoder
 }
 
-func NewAuctionIdCountSerde(serdeFormat commtypes.SerdeFormat) commtypes.Serde {
+func NewAuctionIdCountSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
 	if serdeFormat == commtypes.JSON {
-		return AuctionIdCountJSONSerde{}
+		return AuctionIdCountJSONSerde{}, nil
+	} else if serdeFormat == commtypes.MSGP {
+		return AuctionIdCountMsgpSerde{}, nil
 	} else {
-		return AuctionIdCountMsgpSerde{}
+		return nil, common_errors.ErrUnrecognizedSerdeFormat
 	}
 }

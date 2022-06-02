@@ -67,51 +67,6 @@ func (h *q8JoinStreamHandler) process(
 	return execution.HandleJoinErrReturn(argsTmp)
 }
 
-/*
-func (h *q8JoinStreamHandler) processSerial(
-	ctx context.Context,
-	t *transaction.StreamTask,
-	argsTmp interface{},
-) (map[string]uint64, *common.FnOutput) {
-	args := argsTmp.(*q8JoinStreamProcessArgs)
-
-	joinProgArgsAuction := &joinProcArgs{
-		src:           args.auctionSrc,
-		sink:          args.sink,
-		parNum:        args.parNum,
-		runner:        args.aJoinP,
-		offMu:         &h.offMu,
-		currentOffset: t.CurrentOffset,
-		trackParFunc:  args.trackParFunc,
-		cHashMu:       &h.cHashMu,
-		cHash:         h.cHash,
-	}
-	aOut := joinProcSerial(ctx, joinProgArgsAuction)
-	joinProcArgsPerson := &joinProcArgs{
-		src:           args.personSrc,
-		sink:          args.sink,
-		parNum:        args.parNum,
-		runner:        args.pJoinA,
-		offMu:         &h.offMu,
-		currentOffset: t.CurrentOffset,
-		trackParFunc:  args.trackParFunc,
-		cHashMu:       &h.cHashMu,
-		cHash:         h.cHash,
-	}
-	pOut := joinProcSerial(ctx, joinProcArgsPerson)
-	if pOut != nil {
-		if aOut != nil {
-			succ := pOut.Success && aOut.Success
-			return t.CurrentOffset, &common.FnOutput{Success: succ, Message: pOut.Message + "," + aOut.Message}
-		}
-		return t.CurrentOffset, pOut
-	} else if aOut != nil {
-		return t.CurrentOffset, aOut
-	}
-	return t.CurrentOffset, nil
-}
-*/
-
 func q8CompareFunc(lhs, rhs interface{}) int {
 	l, ok := lhs.(uint64)
 	if ok {
@@ -160,45 +115,40 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 		return nil, fmt.Errorf("get event serde err: %v", err)
 	}
 	timeout := common.SrcConsumeTimeout
+	warmup := time.Duration(sp.WarmupS) * time.Second
 	kvmsgSerdes := commtypes.KVMsgSerdes{
 		KeySerde: commtypes.Uint64Serde{},
 		ValSerde: eventSerde,
 		MsgSerde: msgSerde,
 	}
-	auctionsConfig := &source_sink.StreamSourceConfig{
-		Timeout:     timeout,
-		KVMsgSerdes: kvmsgSerdes,
-	}
-	personsConfig := &source_sink.StreamSourceConfig{
-		Timeout:     timeout,
-		KVMsgSerdes: kvmsgSerdes,
-	}
-	var ptSerde commtypes.Serde
-	if sp.SerdeFormat == uint8(commtypes.JSON) {
-		ptSerde = &ntypes.PersonTimeJSONSerde{}
-	} else {
-		ptSerde = &ntypes.PersonTimeMsgpSerde{}
-	}
-	outConfig := &source_sink.StreamSinkConfig{
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			KeySerde: commtypes.Uint64Serde{},
-			ValSerde: ptSerde,
-			MsgSerde: msgSerde,
-		},
-		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+	ptSerde, err := ntypes.GetPersonTimeSerde(serdeFormat)
+	if err != nil {
+		return nil, err
 	}
 
-	src1 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream1, auctionsConfig),
-		time.Duration(sp.WarmupS)*time.Second)
-	src2 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream2, personsConfig),
-		time.Duration(sp.WarmupS)*time.Second)
-	sink := source_sink.NewConcurrentMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(outputStream, outConfig),
-		time.Duration(sp.WarmupS)*time.Second)
+	src1 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream1,
+		&source_sink.StreamSourceConfig{
+			Timeout:     timeout,
+			KVMsgSerdes: kvmsgSerdes,
+		}), warmup)
+	src2 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream2,
+		&source_sink.StreamSourceConfig{
+			Timeout:     timeout,
+			KVMsgSerdes: kvmsgSerdes,
+		}), warmup)
+	sink := source_sink.NewConcurrentMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(outputStream,
+		&source_sink.StreamSinkConfig{
+			KVMsgSerdes: commtypes.KVMsgSerdes{
+				KeySerde: commtypes.Uint64Serde{},
+				ValSerde: ptSerde,
+				MsgSerde: msgSerde,
+			},
+			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+		}), warmup)
 	src1.SetInitialSource(false)
 	src2.SetInitialSource(false)
 	sink.MarkFinalOutput()
-	return &srcSinkSerde{src1: src1, src2: src2, sink: sink,
-		srcKVMsgSerdes: kvmsgSerdes}, nil
+	return &srcSinkSerde{src1: src1, src2: src2, sink: sink}, nil
 }
 
 func getTabAndToTab(env types.Environment,
@@ -249,13 +199,15 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	perTabName := "personsByIDWinTab"
 	var aucMp *store_with_changelog.MaterializeParam = nil
 	var perMp *store_with_changelog.MaterializeParam = nil
+	src1KVMsgSerdes := sss.src1.KVMsgSerdes()
+	src2KVMsgSerdes := sss.src2.KVMsgSerdes()
 	if sp.TableType == uint8(store.IN_MEM) {
 		compare := concurrent_skiplist.CompareFunc(q8CompareFunc)
-		toAuctionsWindowTab, auctionsWinStore, aucMp, err = getTabAndToTab(h.env, sp, aucTabName, compare, sss.srcKVMsgSerdes, joinWindows)
+		toAuctionsWindowTab, auctionsWinStore, aucMp, err = getTabAndToTab(h.env, sp, aucTabName, compare, src1KVMsgSerdes, joinWindows)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
-		toPersonsWinTab, personsWinTab, perMp, err = getTabAndToTab(h.env, sp, perTabName, compare, sss.srcKVMsgSerdes, joinWindows)
+		toPersonsWinTab, personsWinTab, perMp, err = getTabAndToTab(h.env, sp, perTabName, compare, src2KVMsgSerdes, joinWindows)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
@@ -264,14 +216,16 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
+
 		toAuctionsWindowTab, auctionsWinStore, err = processor.ToMongoDBWindowTable(ctx,
-			aucTabName, client, joinWindows, sss.srcKVMsgSerdes.KeySerde, sss.srcKVMsgSerdes.ValSerde,
+			aucTabName, client, joinWindows, src1KVMsgSerdes.KeySerde, src1KVMsgSerdes.ValSerde,
 			time.Duration(sp.WarmupS)*time.Second)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: fmt.Sprintf("to table err: %v", err)}
 		}
+
 		toPersonsWinTab, personsWinTab, err = processor.ToMongoDBWindowTable(ctx,
-			perTabName, client, joinWindows, sss.srcKVMsgSerdes.KeySerde, sss.srcKVMsgSerdes.ValSerde,
+			perTabName, client, joinWindows, src2KVMsgSerdes.KeySerde, src2KVMsgSerdes.ValSerde,
 			time.Duration(sp.WarmupS)*time.Second)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: fmt.Sprintf("to table err: %v", err)}
@@ -398,14 +352,14 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 				auctionsWinStore,
 				aucMp.ChangelogManager(),
 				nil,
-				sss.srcKVMsgSerdes,
+				src1KVMsgSerdes,
 				sp.ParNum,
 			),
 			transaction.NewWindowStoreChangelog(
 				personsWinTab,
 				perMp.ChangelogManager(),
 				nil,
-				sss.srcKVMsgSerdes,
+				src2KVMsgSerdes,
 				sp.ParNum,
 			),
 		}

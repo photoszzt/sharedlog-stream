@@ -8,9 +8,9 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -110,7 +110,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 	args := argsTmp.(*wordcountCounterAggProcessArg)
 	msgs, err := args.src.Consume(ctx, args.ParNum())
 	if err != nil {
-		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
+		if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 			return &common.FnOutput{
 				Success: true,
 				Message: err.Error(),
@@ -141,7 +141,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 				return &common.FnOutput{
 					Success: true,
 					Message: fmt.Sprintf("%s-%d epoch %d exit", args.FuncName(), args.ParNum(), args.CurEpoch()),
-					Err:     errors.ErrShouldExitForScale,
+					Err:     common_errors.ErrShouldExitForScale,
 				}
 			}
 			continue

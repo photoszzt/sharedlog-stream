@@ -3,9 +3,9 @@ package source_sink
 import (
 	"context"
 	"os"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/txn_data"
@@ -62,6 +62,10 @@ func (s *ShardedSharedLogStreamSource) Stream() store.Stream {
 	return s.stream
 }
 
+func (s *ShardedSharedLogStreamSource) KVMsgSerdes() commtypes.KVMsgSerdes {
+	return s.kvmsgSerdes
+}
+
 func (s *ShardedSharedLogStreamSource) TopicName() string {
 	return s.stream.TopicName()
 }
@@ -96,11 +100,11 @@ L:
 		}
 		rawMsg, err := s.readNext(ctx, parNum)
 		if err != nil {
-			if errors.IsStreamEmptyError(err) {
+			if common_errors.IsStreamEmptyError(err) {
 				// debug.Fprintf(os.Stderr, "stream is empty\n")
 				time.Sleep(time.Duration(100) * time.Microsecond)
 				continue
-			} else if errors.IsStreamTimeoutError(err) {
+			} else if common_errors.IsStreamTimeoutError(err) {
 				// debug.Fprintf(os.Stderr, "stream time out\n")
 				continue
 			} else {
@@ -144,5 +148,5 @@ L:
 
 		return &commtypes.MsgAndSeqs{Msgs: msgs, TotalLen: totalLen}, nil
 	}
-	return nil, errors.ErrStreamSourceTimeout
+	return nil, common_errors.ErrStreamSourceTimeout
 }

@@ -6,9 +6,9 @@ import (
 	"sharedlog-stream/benchmark/common"
 	datatype "sharedlog-stream/benchmark/lat_tp/pkg/data_type"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/transaction"
 	"time"
@@ -92,11 +92,11 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 		}
 		rawMsg, err := stream.ReadNext(ctx, 0)
 		if err != nil {
-			if errors.IsStreamEmptyError(err) {
+			if common_errors.IsStreamEmptyError(err) {
 				// debug.Fprintf(os.Stderr, "stream is empty\n")
 				time.Sleep(time.Duration(100) * time.Microsecond)
 				continue
-			} else if errors.IsStreamTimeoutError(err) {
+			} else if common_errors.IsStreamTimeoutError(err) {
 				// debug.Fprintf(os.Stderr, "stream time out\n")
 				continue
 			} else {
@@ -201,11 +201,11 @@ func (h *sharedlogConsumeBenchHandler) runLoop(ctx context.Context,
 		}
 		rawMsg, err := stream.ReadNext(ctx, 0)
 		if err != nil {
-			if errors.IsStreamEmptyError(err) {
+			if common_errors.IsStreamEmptyError(err) {
 				// debug.Fprintf(os.Stderr, "stream is empty\n")
 				time.Sleep(time.Duration(5) * time.Millisecond)
 				continue
-			} else if errors.IsStreamTimeoutError(err) {
+			} else if common_errors.IsStreamTimeoutError(err) {
 				// debug.Fprintf(os.Stderr, "stream time out\n")
 				continue
 			} else {

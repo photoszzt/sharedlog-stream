@@ -8,9 +8,9 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
@@ -195,7 +195,7 @@ func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput,
 		procStart := time.Now()
 		msgs, err := src.Consume(ctx, sp.ParNum)
 		if err != nil {
-			if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
+			if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 				return &common.FnOutput{
 					Success: true,
 					Message: err.Error(),

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
 
@@ -100,7 +101,7 @@ func GetStartEndTimeSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, e
 	} else if serdeFormat == commtypes.MSGP {
 		seSerde = StartEndTimeMsgpSerde{}
 	} else {
-		return nil, fmt.Errorf("unrecognized serde format: %v", serdeFormat)
+		return nil, common_errors.ErrUnrecognizedSerdeFormat
 	}
 	return seSerde, nil
 }

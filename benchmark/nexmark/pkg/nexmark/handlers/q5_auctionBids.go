@@ -8,11 +8,11 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/proc_interface"
@@ -242,7 +242,7 @@ func (h *q5AuctionBids) processWithoutSink(ctx context.Context, argsTmp interfac
 	args := argsTmp.(*q5AuctionBidsRestoreArg)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {
-		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
+		if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 			return nil
 		}
 		return err

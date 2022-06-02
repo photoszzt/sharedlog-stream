@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/transaction"
@@ -24,7 +24,7 @@ func CommonProcess(ctx context.Context, t *transaction.StreamTask, args proc_int
 	}
 	gotMsgs, err := args.Source().Consume(ctx, args.ParNum())
 	if err != nil {
-		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
+		if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 			return &common.FnOutput{Success: true, Message: err.Error()}
 		}
 		return &common.FnOutput{Success: false, Message: err.Error()}
@@ -103,7 +103,7 @@ func HandleScaleEpochAndBytes(ctx context.Context, msg commtypes.MsgAndSeq,
 		return &common.FnOutput{
 			Success: true,
 			Message: fmt.Sprintf("%s-%d epoch %d exit", args.FuncName(), args.ParNum(), args.CurEpoch()),
-			Err:     errors.ErrShouldExitForScale,
+			Err:     common_errors.ErrShouldExitForScale,
 		}
 	}
 	return nil

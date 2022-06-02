@@ -93,10 +93,9 @@ func getInOutStreams(
 }
 
 type srcSinkSerde struct {
-	src1           *source_sink.MeteredSource
-	src2           *source_sink.MeteredSource
-	sink           *source_sink.ConcurrentMeteredSyncSink
-	srcKVMsgSerdes commtypes.KVMsgSerdes
+	src1 *source_sink.MeteredSource
+	src2 *source_sink.MeteredSource
+	sink *source_sink.ConcurrentMeteredSyncSink
 }
 
 func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
@@ -115,18 +114,11 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 		return nil, fmt.Errorf("get event serde err: %v", err)
 	}
 	timeout := common.SrcConsumeTimeout
+	warmup := time.Duration(sp.WarmupS) * time.Second
 	kvmsgSerdes := commtypes.KVMsgSerdes{
 		KeySerde: commtypes.Uint64Serde{},
 		ValSerde: eventSerde,
 		MsgSerde: msgSerde,
-	}
-	auctionsConfig := &source_sink.StreamSourceConfig{
-		Timeout:     timeout,
-		KVMsgSerdes: kvmsgSerdes,
-	}
-	personsConfig := &source_sink.StreamSourceConfig{
-		Timeout:     timeout,
-		KVMsgSerdes: kvmsgSerdes,
 	}
 	var ncsiSerde commtypes.Serde
 	if sp.SerdeFormat == uint8(commtypes.JSON) {
@@ -134,31 +126,27 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	} else {
 		ncsiSerde = ntypes.NameCityStateIdMsgpSerde{}
 	}
-	outConfig := &source_sink.StreamSinkConfig{
+
+	src1 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream1, &source_sink.StreamSourceConfig{
+		Timeout:     timeout,
+		KVMsgSerdes: kvmsgSerdes,
+	}), warmup)
+	src2 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream2, &source_sink.StreamSourceConfig{
+		Timeout:     timeout,
+		KVMsgSerdes: kvmsgSerdes,
+	}), warmup)
+	src1.SetInitialSource(false)
+	src2.SetInitialSource(false)
+	sink := source_sink.NewConcurrentMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(outputStream, &source_sink.StreamSinkConfig{
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			KeySerde: commtypes.Uint64Serde{},
 			ValSerde: ncsiSerde,
 			MsgSerde: msgSerde,
 		},
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
-	}
-
-	src1 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream1, auctionsConfig),
-		time.Duration(sp.WarmupS)*time.Second)
-	src2 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream2, personsConfig),
-		time.Duration(sp.WarmupS)*time.Second)
-	src1.SetInitialSource(false)
-	src2.SetInitialSource(false)
-	sink := source_sink.NewConcurrentMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(outputStream, outConfig),
-		time.Duration(sp.WarmupS)*time.Second)
+	}), warmup)
 	sink.MarkFinalOutput()
-	sss := &srcSinkSerde{
-		src1:           src1,
-		src2:           src2,
-		sink:           sink,
-		srcKVMsgSerdes: kvmsgSerdes,
-	}
-	return sss, nil
+	return &srcSinkSerde{src1: src1, src2: src2, sink: sink}, nil
 }
 
 type kvtables struct {
@@ -198,24 +186,15 @@ func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 			perTabName, compare, warmup)
 		return &kvtables{toAuctionsTable, auctionsStore, toPersonsTable, personsStore}, nil
 	} else if tabType == store.MONGODB {
-		var vtSerde0 commtypes.Serde
-		var vtSerde1 commtypes.Serde
-		if serdeFormat == commtypes.JSON {
-			vtSerde0 = commtypes.ValueTimestampJSONSerde{
-				ValJSONSerde: sss.srcKVMsgSerdes.ValSerde,
-			}
-			vtSerde1 = commtypes.ValueTimestampJSONSerde{
-				ValJSONSerde: sss.srcKVMsgSerdes.ValSerde,
-			}
-		} else if serdeFormat == commtypes.MSGP {
-			vtSerde0 = commtypes.ValueTimestampMsgpSerde{
-				ValMsgpSerde: sss.srcKVMsgSerdes.ValSerde,
-			}
-			vtSerde1 = commtypes.ValueTimestampMsgpSerde{
-				ValMsgpSerde: sss.srcKVMsgSerdes.ValSerde,
-			}
-		} else {
-			panic("unrecognized serde format")
+		vtSerde0, err := commtypes.GetValueTsSerde(serdeFormat,
+			sss.src1.KVMsgSerdes().ValSerde, sss.src1.KVMsgSerdes().ValSerde)
+		if err != nil {
+			return nil, err
+		}
+		vtSerde1, err := commtypes.GetValueTsSerde(serdeFormat,
+			sss.src2.KVMsgSerdes().ValSerde, sss.src2.KVMsgSerdes().ValSerde)
+		if err != nil {
+			return nil, err
 		}
 		client, err := store.InitMongoDBClient(ctx, mongoAddr)
 		if err != nil {
@@ -223,12 +202,12 @@ func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 		}
 		toAuctionsTable, auctionsStore, err := processor.ToMongoDBKVTable(
 			ctx, aucTabName,
-			client, sss.srcKVMsgSerdes.KeySerde, vtSerde0, warmup)
+			client, sss.src1.KVMsgSerdes().KeySerde, vtSerde0, warmup)
 		if err != nil {
 			return nil, err
 		}
 		toPersonsTable, personsStore, err := processor.ToMongoDBKVTable(ctx, perTabName,
-			client, sss.srcKVMsgSerdes.KeySerde, vtSerde1, warmup)
+			client, sss.src2.KVMsgSerdes().KeySerde, vtSerde1, warmup)
 		if err != nil {
 			return nil, err
 		}
@@ -374,10 +353,10 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		kvchangelogs = []*transaction.KVStoreChangelog{
 			transaction.NewKVStoreChangelog(kvtabs.tab1,
 				store_with_changelog.NewChangelogManager(auctionsStream, serdeFormat),
-				sss.srcKVMsgSerdes, sp.ParNum),
+				sss.src1.KVMsgSerdes(), sp.ParNum),
 			transaction.NewKVStoreChangelog(kvtabs.tab2,
 				store_with_changelog.NewChangelogManager(personsStream, serdeFormat),
-				sss.srcKVMsgSerdes, sp.ParNum),
+				sss.src2.KVMsgSerdes(), sp.ParNum),
 		}
 	} else if sp.TableType == uint8(store.MONGODB) {
 		kvchangelogs = []*transaction.KVStoreChangelog{

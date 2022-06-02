@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"math"
 	"sharedlog-stream/pkg/bits"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/txn_data"
 	"sync"
 	"sync/atomic"
@@ -121,7 +121,7 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNu
 	isControl bool, payloadIsArr bool, taskId uint64, taskEpoch uint16, transactionID uint64,
 ) (uint64, error) {
 	if len(payload) == 0 {
-		return 0, errors.ErrEmptyPayload
+		return 0, common_errors.ErrEmptyPayload
 	}
 	var meta bits.Bits
 	if isControl {
@@ -232,7 +232,7 @@ func (s *SharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum ui
 			}, nil
 		}
 	}
-	return nil, errors.ErrStreamEmpty
+	return nil, common_errors.ErrStreamEmpty
 }
 
 func (s *SharedLogStream) ReadNext(ctx context.Context, parNum uint8) (*commtypes.RawMsg, error) {
@@ -247,7 +247,7 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 			return nil, err
 		}
 		if s.isEmpty() {
-			return nil, errors.ErrStreamEmpty
+			return nil, common_errors.ErrStreamEmpty
 		}
 	}
 	seqNumInSharedLog := s.cursor
@@ -263,7 +263,7 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 			return nil, err
 		}
 		if logEntry == nil {
-			return nil, errors.ErrStreamEmpty
+			return nil, common_errors.ErrStreamEmpty
 		}
 		streamLogEntry := decodeStreamLogEntry(logEntry)
 		isControl := bits.Has(bits.Bits(streamLogEntry.Meta), Control)
@@ -286,7 +286,7 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 		seqNumInSharedLog = logEntry.SeqNum + 1
 		s.cursor = seqNumInSharedLog
 	}
-	return nil, errors.ErrStreamEmpty
+	return nil, common_errors.ErrStreamEmpty
 }
 
 func (s *SharedLogStream) readPrevWithTimeout(ctx context.Context, tag uint64, seqNum uint64) (*types.LogEntry, error) {

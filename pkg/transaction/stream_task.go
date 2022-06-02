@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/txn_data"
@@ -125,7 +125,7 @@ func createOffsetTopicAndGetOffset(ctx context.Context, tm *TransactionManager,
 	debug.Fprintf(os.Stderr, "created offset topic\n")
 	offset, err := tm.FindLastConsumedSeqNum(ctx, topic, parNum)
 	if err != nil {
-		if !errors.IsStreamEmptyError(err) {
+		if !common_errors.IsStreamEmptyError(err) {
 			return 0, err
 		}
 	}
@@ -438,7 +438,7 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 		}
 		offset, err := cm.FindLastConsumedSeqNum(ctx, inputTopicName, args.parNum)
 		if err != nil {
-			if !errors.IsStreamEmptyError(err) {
+			if !common_errors.IsStreamEmptyError(err) {
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
 		}

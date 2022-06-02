@@ -8,6 +8,7 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"time"
 
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -28,7 +29,7 @@ func getEventSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
 	} else if serdeFormat == commtypes.MSGP {
 		return ntypes.EventMsgpSerde{}, nil
 	} else {
-		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
+		return nil, common_errors.ErrUnrecognizedSerdeFormat
 	}
 }
 

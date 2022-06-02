@@ -8,9 +8,9 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
@@ -148,7 +148,7 @@ func (h *q5MaxBid) processWithoutSink(ctx context.Context, argsTmp interface{}) 
 	args := argsTmp.(*q5MaxBidRestoreArgs)
 	gotMsgs, err := args.src.Consume(ctx, args.parNum)
 	if err != nil {
-		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
+		if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 			return nil
 		}
 		return fmt.Errorf("consume err: %v", err)

@@ -8,9 +8,9 @@ import (
 	"path"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/transaction"
 	"sync"
@@ -71,7 +71,7 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 		for {
 			// fmt.Fprintf(os.Stderr, "before read next\n")
 			rawMsg, err := log.ReadNext(ctx, i)
-			if errors.IsStreamEmptyError(err) {
+			if common_errors.IsStreamEmptyError(err) {
 				break
 			}
 			if err != nil {

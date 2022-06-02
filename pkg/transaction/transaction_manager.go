@@ -7,9 +7,9 @@ import (
 	"os"
 	"sync"
 
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
 
@@ -143,7 +143,7 @@ func (tc *TransactionManager) getMostRecentTransactionState(ctx context.Context)
 		rawMsg, err := tc.transactionLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, 0, txn_data.BeginTag(tc.transactionLog.TopicNameHash(), 0))
 		if err != nil {
 			// empty log
-			if errors.IsStreamEmptyError(err) {
+			if common_errors.IsStreamEmptyError(err) {
 				return nil, 0, nil
 			}
 			return nil, 0, err
@@ -169,7 +169,7 @@ func (tc *TransactionManager) getMostRecentTransactionState(ctx context.Context)
 
 	for {
 		msg, err := tc.transactionLog.ReadNext(ctx, 0)
-		if errors.IsStreamEmptyError(err) {
+		if common_errors.IsStreamEmptyError(err) {
 			break
 		} else if err != nil {
 			return nil, 0, err
@@ -318,7 +318,7 @@ func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, quit ch
 		}
 		rawMsg, err := tc.transactionLog.ReadNextWithTag(ctx, 0, fenceTag)
 		if err != nil {
-			if errors.IsStreamEmptyError(err) {
+			if common_errors.IsStreamEmptyError(err) {
 				continue
 			}
 			errc <- err
@@ -723,7 +723,7 @@ func (tc *TransactionManager) FindConsumedSeqNumMatchesTransactionID(ctx context
 		}
 	}
 	if txnMkRawMsg == nil {
-		return 0, errors.ErrStreamEmpty
+		return 0, common_errors.ErrStreamEmpty
 	}
 	tag := sharedlog_stream.NameHashWithPartition(offsetLog.TopicNameHash(), parNum)
 
@@ -740,7 +740,7 @@ func (tc *TransactionManager) BeginTransaction(ctx context.Context, kvstores []*
 ) error {
 	if !txn_data.BEGIN.IsValidPreviousState(tc.currentStatus) {
 		debug.Fprintf(os.Stderr, "fail to transition from %v to BEGIN\n", tc.currentStatus)
-		return errors.ErrInvalidStateTransition
+		return common_errors.ErrInvalidStateTransition
 	}
 	tc.currentStatus = txn_data.BEGIN
 	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
@@ -788,7 +788,7 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context, kvstores []
 ) error {
 	if !txn_data.PREPARE_COMMIT.IsValidPreviousState(tc.currentStatus) {
 		debug.Fprintf(os.Stderr, "Fail to transition from %s to PREPARE_COMMIT\n", tc.currentStatus.String())
-		return errors.ErrInvalidStateTransition
+		return common_errors.ErrInvalidStateTransition
 	}
 
 	// first phase of the commit
@@ -820,7 +820,7 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context, inRestore bo
 ) error {
 	if !txn_data.PREPARE_ABORT.IsValidPreviousState(tc.currentStatus) {
 		debug.Fprintf(os.Stderr, "fail to transition state from %d to PRE_ABORT", tc.currentStatus)
-		return errors.ErrInvalidStateTransition
+		return common_errors.ErrInvalidStateTransition
 	}
 	tc.currentStatus = txn_data.PREPARE_ABORT
 	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)

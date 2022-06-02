@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/transaction"
@@ -42,7 +42,7 @@ func joinProcLoop(
 		// debug.Fprintf(os.Stderr, "before consume\n")
 		gotMsgs, err := procArgs.Source().Consume(ctx, procArgs.ParNum())
 		if err != nil {
-			if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
+			if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 				debug.Fprintf(os.Stderr, "[TIMEOUT] %s %s timeout, out chan len: %d\n",
 					id, procArgs.Source().TopicName(), len(out))
 				out <- &common.FnOutput{Success: true, Message: err.Error()}

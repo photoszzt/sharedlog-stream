@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
@@ -132,7 +132,7 @@ func RestoreChangelogWindowStateStore(
 	for {
 		msg, err := wschangelog.changelogManager.ReadNext(ctx, wschangelog.parNum)
 		// nothing to restore
-		if errors.IsStreamEmptyError(err) {
+		if common_errors.IsStreamEmptyError(err) {
 			return nil
 		} else if err != nil {
 			return fmt.Errorf("ReadNext failed: %v", err)

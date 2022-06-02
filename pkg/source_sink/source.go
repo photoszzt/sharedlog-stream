@@ -15,4 +15,5 @@ type Source interface {
 	InTransaction(serdeFormat commtypes.SerdeFormat) error
 	SetInitialSource(initial bool)
 	IsInitialSource() bool
+	KVMsgSerdes() commtypes.KVMsgSerdes
 }

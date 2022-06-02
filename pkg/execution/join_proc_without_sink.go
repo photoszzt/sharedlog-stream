@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/errors"
 
 	"golang.org/x/xerrors"
 )
@@ -18,7 +18,7 @@ func JoinProcSerialWithoutSink(
 	procArgs := procArgsTmp.(*JoinProcWithoutSinkArgs)
 	gotMsgs, err := procArgs.src.Consume(ctx, procArgs.parNum)
 	if err != nil {
-		if xerrors.Is(err, errors.ErrStreamSourceTimeout) {
+		if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 			debug.Fprintf(os.Stderr, "%s timeout, gen output\n", procArgs.src.TopicName())
 			return err
 		}
