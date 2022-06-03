@@ -9,10 +9,10 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/benchmark/tests/pkg/tests/test_types"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/errors"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
@@ -564,7 +564,7 @@ func joinProc(ctx context.Context,
 	for {
 		gotMsgs, err := src.Consume(ctx, 0)
 		if err != nil {
-			if errors.IsStreamEmptyError(err) || errors.IsStreamTimeoutError(err) || err == errors.ErrStreamSourceTimeout {
+			if common_errors.IsStreamEmptyError(err) || common_errors.IsStreamTimeoutError(err) || err == common_errors.ErrStreamSourceTimeout {
 				return
 			}
 			panic(err)
@@ -601,7 +601,7 @@ func readMsgs(ctx context.Context,
 	}
 	for {
 		msg, err := tac.ReadNext(ctx, 0)
-		if errors.IsStreamEmptyError(err) {
+		if common_errors.IsStreamEmptyError(err) {
 			return ret, nil
 		} else if err != nil {
 			return ret, err
