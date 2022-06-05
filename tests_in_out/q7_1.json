@@ -1,0 +1,112 @@
+{
+    "events": [
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 5,
+                "dateTime": 7861,
+                "auction": 0
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 4,
+                "dateTime": 5469,
+                "auction": 0
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 6,
+                "dateTime": 15581,
+                "auction": 0
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 1,
+                "dateTime": 19183,
+                "auction": 0
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 0,
+                "dateTime": 11144,
+                "auction": 0
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 7,
+                "dateTime": 25932,
+                "auction": 0
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 5,
+                "dateTime": 27411,
+                "auction": 0
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 1,
+                "dateTime": 25850,
+                "auction": 0
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 5,
+                "dateTime": 24101,
+                "auction": 0
+            },
+            "etype": 2
+        }
+    ]
+}

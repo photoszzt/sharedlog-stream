@@ -1,0 +1,25 @@
+{
+    "person_spec": [
+        {
+            "start": 0,
+            "end": 10,
+            "per_ts_after_start": [1000, 3000],
+            "auc_by_person": [1, 2],
+            "aucs_after_person": [500, 250, 500]
+        },
+        {
+            "start": 10,
+            "end": 20,
+            "per_ts_after_start": [2000],
+            "auc_by_person": [2],
+            "aucs_after_person": [250, 500]
+        },
+        {
+            "start": 20,
+            "end": 30,
+            "per_ts_after_start": [1000, 2000, 3000, 4000],
+            "auc_by_person": [2, 0, 2, 0],
+            "aucs_after_person": [250, 500, 250, 500]
+        }
+    ]
+}

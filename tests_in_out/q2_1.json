@@ -1,0 +1,40 @@
+{
+    "events": [
+        {
+            "etype": 2,
+            "bid": {
+                "dateTime": 0,
+                "price": 10,
+                "auction": 1,
+                "bidder": 1,
+                "url": "",
+                "channel": "",
+                "extra": ""
+            }
+        },
+        {
+            "etype": 2,
+            "bid": {
+                "dateTime": 2000000,
+                "price": 20,
+                "auction": 123,
+                "bidder": 1,
+                "url": "",
+                "channel": "",
+                "extra": ""
+            }
+        },
+        {
+            "etype": 2,
+            "bid": {
+                "dateTime": 2000000,
+                "price": 20,
+                "auction": 124,
+                "bidder": 1,
+                "url": "",
+                "channel": "",
+                "extra": ""
+            }
+        }
+    ]
+}

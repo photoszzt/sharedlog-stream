@@ -1,0 +1,22 @@
+{
+    "bids_spec": [
+        {
+            "start": 0,
+            "end": 10,
+            "max": 5,
+            "num": 2
+        },
+        {
+            "start": 10,
+            "end": 20,
+            "max": 6,
+            "num": 3
+        },
+        {
+            "start": 20,
+            "end": 30,
+            "max": 7,
+            "num": 4
+        }
+    ]
+}
