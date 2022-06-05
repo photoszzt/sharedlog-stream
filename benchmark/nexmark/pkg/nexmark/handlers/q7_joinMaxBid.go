@@ -66,7 +66,7 @@ func (h *q7JoinMaxBid) getSrcSink(
 	if err != nil {
 		return nil, fmt.Errorf("get msg serde err: %v", err)
 	}
-	eventSerde, err := getEventSerde(serdeFormat)
+	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
 		return nil, fmt.Errorf("get event serde err: %v", err)
 	}

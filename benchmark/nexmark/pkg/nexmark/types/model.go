@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
 
@@ -216,5 +217,15 @@ func (e *Event) ExtractInjectTimeMs() (int64, error) {
 		return e.NewAuction.ExtractInjectTimeMs()
 	default:
 		return 0, fmt.Errorf("failed to recognize event type")
+	}
+}
+
+func GetEventSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
+	if serdeFormat == commtypes.JSON {
+		return EventJSONSerde{}, nil
+	} else if serdeFormat == commtypes.MSGP {
+		return EventMsgpSerde{}, nil
+	} else {
+		return nil, common_errors.ErrUnrecognizedSerdeFormat
 	}
 }

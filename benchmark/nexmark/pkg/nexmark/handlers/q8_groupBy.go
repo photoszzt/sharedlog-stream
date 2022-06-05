@@ -77,7 +77,7 @@ func (h *q8GroupByHandler) getSrcSink(ctx context.Context, sp *common.QueryInput
 	if err != nil {
 		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
-	eventSerde, err := getEventSerde(serdeFormat)
+	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}

@@ -57,7 +57,7 @@ func (h *windowedAvg) getSrcSink(ctx context.Context, sp *common.QueryInput, msg
 	*source_sink.MeteredSource, *source_sink.ConcurrentMeteredSyncSink, error,
 ) {
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	eventSerde, err := getEventSerde(serdeFormat)
+	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get evnet serde error: %v", err)
 	}

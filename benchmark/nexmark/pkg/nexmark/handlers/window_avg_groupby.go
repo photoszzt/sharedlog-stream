@@ -55,7 +55,7 @@ func (h *windowAvgGroupBy) getSrcSink(ctx context.Context, sp *common.QueryInput
 	if err != nil {
 		return nil, nil, err
 	}
-	eventSerde, err := getEventSerde(serdeFormat)
+	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}

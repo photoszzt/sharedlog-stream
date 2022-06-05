@@ -109,7 +109,7 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 		return nil, fmt.Errorf("get msg serde err: %v", err)
 	}
 
-	eventSerde, err := getEventSerde(serdeFormat)
+	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
 		return nil, fmt.Errorf("get event serde err: %v", err)
 	}

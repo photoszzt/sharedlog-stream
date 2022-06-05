@@ -8,7 +8,6 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"time"
 
-	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -23,16 +22,6 @@ func only_bid(msg *commtypes.Message) (bool, error) {
 	return event.Etype == ntypes.BID, nil
 }
 
-func getEventSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
-	if serdeFormat == commtypes.JSON {
-		return ntypes.EventJSONSerde{}, nil
-	} else if serdeFormat == commtypes.MSGP {
-		return ntypes.EventMsgpSerde{}, nil
-	} else {
-		return nil, common_errors.ErrUnrecognizedSerdeFormat
-	}
-}
-
 func getSrcSink(ctx context.Context, sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
@@ -42,7 +31,7 @@ func getSrcSink(ctx context.Context, sp *common.QueryInput,
 	if err != nil {
 		return nil, nil, fmt.Errorf("get msg serde failed: %v", err)
 	}
-	eventSerde, err := getEventSerde(serdeFormat)
+	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -78,7 +67,7 @@ func getSrcSinkUint64Key(
 	if err != nil {
 		return nil, nil, err
 	}
-	eventSerde, err := getEventSerde(serdeFormat)
+	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}

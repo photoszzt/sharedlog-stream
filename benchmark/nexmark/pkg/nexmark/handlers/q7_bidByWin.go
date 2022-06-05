@@ -99,7 +99,7 @@ func (h *q7BidByWin) getSrcSink(
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
 ) (*source_sink.MeteredSource, *source_sink.MeteredSyncSink, error) {
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	eventSerde, err := getEventSerde(serdeFormat)
+	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
