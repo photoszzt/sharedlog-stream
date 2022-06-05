@@ -48,6 +48,10 @@ type DumpInput struct {
 	SerdeFormat   uint8  `json:"serdeFormat"`
 }
 
+type TestSourceInput struct {
+	FileName string `json:"fname"`
+}
+
 type FnOutput struct {
 	Latencies map[string][]int  `json:"latencies,omitempty"`
 	Counts    map[string]uint64 `json:"counts,omitempty"`

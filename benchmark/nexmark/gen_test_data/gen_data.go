@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
+	"sharedlog-stream/pkg/utils"
 )
 
 var (
@@ -15,16 +15,6 @@ var (
 	FLAGS_app_name   string
 	FLAGS_outputFile string
 )
-
-func readJSONSpec(fname string) ([]byte, error) {
-	jsonFile, err := os.Open(fname)
-	if err != nil {
-		return nil, err
-	}
-	defer jsonFile.Close()
-
-	return ioutil.ReadAll(jsonFile)
-}
 
 func outputEvents(events []*ntypes.Event, outputFile string) error {
 	earr := events_arr{
@@ -63,7 +53,7 @@ func main() {
 		return
 	}
 
-	specs, err := readJSONSpec(FLAGS_spec)
+	specs, err := utils.ReadFileContent(FLAGS_spec)
 	if err != nil {
 		panic(err)
 	}

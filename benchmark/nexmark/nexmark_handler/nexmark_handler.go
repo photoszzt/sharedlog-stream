@@ -32,6 +32,8 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 	switch funcName {
 	case "source":
 		return handlers.NewNexmarkSource(env, funcName), nil
+	case "test_src":
+		return handlers.NewTestEventSource(env, funcName), nil
 	case "query1":
 		return handlers.NewQuery1(env, funcName), nil
 	case "query2":

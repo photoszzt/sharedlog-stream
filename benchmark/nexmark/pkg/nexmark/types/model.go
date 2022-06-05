@@ -88,6 +88,10 @@ type Event struct {
 	Etype      EType    `json:"etype" msg:"etype"`
 }
 
+type Events struct {
+	EventsArr []Event `json:"events"`
+}
+
 func NewPersonEvent(newPerson *Person) *Event {
 	return &Event{
 		NewPerson:  newPerson,
