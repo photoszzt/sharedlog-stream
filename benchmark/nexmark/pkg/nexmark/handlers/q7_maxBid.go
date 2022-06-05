@@ -26,22 +26,22 @@ import (
 	"cs.utexas.edu/zjia/faas/types"
 )
 
-type q7MaxBidByPrice struct {
+type q7MaxBid struct {
 	env      types.Environment
 	cHashMu  sync.RWMutex
 	cHash    *hash.ConsistentHash
 	funcName string
 }
 
-func NewQ7MaxBidByPrice(env types.Environment, funcName string) types.FuncHandler {
-	return &q7MaxBidByPrice{
+func NewQ7MaxBid(env types.Environment, funcName string) types.FuncHandler {
+	return &q7MaxBid{
 		env:      env,
 		cHash:    hash.NewConsistentHash(),
 		funcName: funcName,
 	}
 }
 
-func (h *q7MaxBidByPrice) Call(ctx context.Context, input []byte) ([]byte, error) {
+func (h *q7MaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 	parsedInput := &common.QueryInput{}
 	err := json.Unmarshal(input, parsedInput)
 	if err != nil {
@@ -61,11 +61,11 @@ type q7MaxBidByPriceProcessArgs struct {
 	proc_interface.BaseProcArgsWithSrcSink
 }
 
-func (h *q7MaxBidByPrice) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
+func (h *q7MaxBid) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
 	return nil
 }
 
-func (h *q7MaxBidByPrice) getSrcSink(
+func (h *q7MaxBid) getSrcSink(
 	ctx context.Context,
 	sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
@@ -112,7 +112,7 @@ func (h *q7MaxBidByPrice) getSrcSink(
 	return src, sink, nil
 }
 
-func (h *q7MaxBidByPrice) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
