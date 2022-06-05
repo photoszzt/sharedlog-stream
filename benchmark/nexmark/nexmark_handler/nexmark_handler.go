@@ -44,6 +44,12 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewQ3GroupByHandler(env, funcName), nil
 	case "q4JoinTable":
 		return handlers.NewQ4JoinTableHandler(env, funcName), nil
+	case "q46GroupBy":
+		return handlers.NewQ46GroupByHandler(env, funcName), nil
+	case "q4Avg":
+		return handlers.NewQ4Avg(env, funcName), nil
+	case "q4MaxBid":
+		return handlers.NewQ4MaxBid(env, funcName), nil
 	case "q5bidkeyedbyauction":
 		return handlers.NewBidKeyedByAuctionHandler(env, funcName), nil
 	case "q5aucbids":
@@ -52,8 +58,14 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewQ5MaxBid(env, funcName), nil
 	case "query6":
 		return handlers.NewQuery6(env), nil
-	case "q7bidskeyedbyprice":
+	case "q7BidByPrice":
 		return handlers.NewQ7BidByPriceHandler(env, funcName), nil
+	case "q7BidByWin":
+		return handlers.NewQ7BidByWin(env, funcName), nil
+	case "q7MaxBid":
+		return handlers.NewQ7MaxBid(env, funcName), nil
+	case "q7JoinMaxBid":
+		return handlers.NewQ7JoinMaxBid(env, funcName), nil
 	case "q8JoinStream":
 		return handlers.NewQ8JoinStreamHandler(env, funcName), nil
 	case "q8GroupBy":
