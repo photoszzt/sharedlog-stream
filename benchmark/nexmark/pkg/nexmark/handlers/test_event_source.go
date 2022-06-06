@@ -42,7 +42,7 @@ func (h *testEventSource) Call(ctx context.Context, input []byte) ([]byte, error
 }
 
 func (h *testEventSource) eventGeneration(ctx context.Context, sp *common.TestSourceInput) *common.FnOutput {
-	stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "src", 1, commtypes.JSON)
+	stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "nexmark_src", 1, commtypes.JSON)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

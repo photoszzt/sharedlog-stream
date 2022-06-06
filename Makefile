@@ -40,6 +40,11 @@ nexmark_genevents_kafka:
 	mkdir -p ./bin
 	GO111MODULE=on go build -o bin/nexmark_genevents_kafka ./benchmark/nexmark/nexmark_genevents_kafka
 
+.PHONY: nexmark_kafka_test_src
+nexmark_kafka_test_src:
+	mkdir -p ./bin
+	GO111MODULE=on go build -o bin/nexmark_kafka_test_src ./benchmark/nexmark/nexmark_kafka_test_src
+
 .PHONY: tests_debug
 tests_debug:
 	mkdir -p ./bin

@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"flag"
-	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/benchmark/common/kafka_utils"
 	"sharedlog-stream/benchmark/dspbench/pkg/handlers/wordcount"
 	"sharedlog-stream/pkg/commtypes"
 	"time"
@@ -33,7 +33,7 @@ func main() {
 			ReplicationFactor: 1},
 	}
 	ctx := context.Background()
-	err := common.CreateTopic(ctx, newTopic, FLAGS_broker)
+	err := kafka_utils.CreateTopic(ctx, newTopic, FLAGS_broker)
 	if err != nil {
 		panic(err)
 	}
