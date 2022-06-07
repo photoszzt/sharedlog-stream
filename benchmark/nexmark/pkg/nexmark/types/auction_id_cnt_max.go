@@ -1,4 +1,5 @@
 //go:generate msgp
+//msgp:ignore AuctionIdCntMaxJSONSerde AuctionIdCntMaxMsgpSerde
 package types
 
 import (
