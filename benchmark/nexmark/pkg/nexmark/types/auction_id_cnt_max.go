@@ -4,6 +4,7 @@ package types
 
 import (
 	"encoding/json"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
 
@@ -50,4 +51,14 @@ func (s AuctionIdCntMaxMsgpSerde) Decode(value []byte) (interface{}, error) {
 		return nil, err
 	}
 	return ai, nil
+}
+
+func GetAuctionIdCntMaxSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
+	if serdeFormat == commtypes.JSON {
+		return AuctionIdCntMaxJSONSerde{}, nil
+	} else if serdeFormat == commtypes.MSGP {
+		return AuctionIdCntMaxMsgpSerde{}, nil
+	} else {
+		return nil, common_errors.ErrUnrecognizedSerdeFormat
+	}
 }
