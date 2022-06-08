@@ -48,7 +48,9 @@ type MaterializeParamBuilder struct {
 }
 
 func NewMaterializeParamBuilder() SetKVMsgSerdes {
-	mb := &MaterializeParamBuilder{}
+	mb := &MaterializeParamBuilder{
+		mp: &MaterializeParam{},
+	}
 	return mb
 }
 
