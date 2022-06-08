@@ -1,7 +1,7 @@
 GO_FILES?=$$(find . -name '*.go' |grep -v deps)
 
 default: lat_tp_handler_debug lat_tp_handler sharedlog_bench_client \
-	kafka_consume_bench kafka_produce_bench nexmark nexmark_stats nexmark_debug \
+	nexmark_kafka_test_src kafka_consume_bench kafka_produce_bench nexmark nexmark_stats nexmark_debug \
 	nexmark_gen_data_by_spec nexmark_client nexmark_genevents_kafka tests_debug tests_client dspbench \
 	dspbench_debug dspbench_client wordcount_client wordcount_genevents_kafka \
 	append_read_client
