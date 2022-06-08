@@ -214,9 +214,9 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	control_channel.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
 
-	joinProcBid := execution.NewJoinProcArgs(sss.src1, sss.sink, bJoinM, &h.cHashMu, h.cHash,
+	joinProcBid := execution.NewJoinProcArgs(sss.src1, sss.sink, bJoinM,
 		h.funcName, sp.ScaleEpoch, sp.ParNum)
-	joinProcMaxBid := execution.NewJoinProcArgs(sss.src2, sss.sink, mJoinB, &h.cHashMu, h.cHash,
+	joinProcMaxBid := execution.NewJoinProcArgs(sss.src2, sss.sink, mJoinB,
 		h.funcName, sp.ScaleEpoch, sp.ParNum)
 	var wg sync.WaitGroup
 	bidManager := execution.NewJoinProcManager()
@@ -281,7 +281,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr).
-			WithWindowStoreChangelogs(wsc)
+			WithWindowStoreChangelogs(wsc).WithFixedOutParNum(sp.ParNum)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {

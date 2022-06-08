@@ -8,10 +8,7 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/hash"
-	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/transaction"
-	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sync"
 
 	"golang.org/x/xerrors"
@@ -118,37 +115,10 @@ func procMsgWithSink(ctx context.Context, msg commtypes.Message, procArgs *JoinP
 		debug.Fprintf(os.Stderr, "[ERROR] %s return runner: %v\n", ctx.Value("id"), err)
 		return err
 	}
-	err = pushMsgsToSink(ctx, procArgs.Sinks()[0], procArgs.cHash, procArgs.cHashMu, msgs, procArgs.TrackParFunc())
-	if err != nil {
-		debug.Fprintf(os.Stderr, "[ERROR] %s return push to sink: %v\n", ctx.Value("id"), err)
-		return err
-	}
-	return nil
-}
-
-func pushMsgsToSink(
-	ctx context.Context,
-	sink source_sink.Sink,
-	cHash *hash.ConsistentHash,
-	cHashMu *sync.RWMutex,
-	msgs []commtypes.Message,
-	trackParFunc tran_interface.TrackKeySubStreamFunc,
-) error {
 	for _, msg := range msgs {
-		key := msg.Key.(uint64)
-		cHashMu.RLock()
-		parTmp, ok := cHash.Get(key)
-		cHashMu.RUnlock()
-		if !ok {
-			return fmt.Errorf("fail to calculate partition")
-		}
-		par := parTmp.(uint8)
-		err := trackParFunc(ctx, key, sink.KeySerde(), sink.TopicName(), par)
+		err = procArgs.Sinks()[0].Produce(ctx, msg, procArgs.ParNum(), false)
 		if err != nil {
-			return fmt.Errorf("add topic partition failed: %v", err)
-		}
-		err = sink.Produce(ctx, msg, par, false)
-		if err != nil {
+			debug.Fprintf(os.Stderr, "[ERROR] %s return push to sink: %v\n", ctx.Value("id"), err)
 			return err
 		}
 	}

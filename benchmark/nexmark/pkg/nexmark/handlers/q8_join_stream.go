@@ -288,9 +288,9 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	control_channel.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
 
-	joinProcPerson := execution.NewJoinProcArgs(sss.src2, sss.sink, pJoinA, &h.cHashMu, h.cHash,
+	joinProcPerson := execution.NewJoinProcArgs(sss.src2, sss.sink, pJoinA,
 		h.funcName, sp.ScaleEpoch, sp.ParNum)
-	joinProcAuction := execution.NewJoinProcArgs(sss.src1, sss.sink, aJoinP, &h.cHashMu, h.cHash,
+	joinProcAuction := execution.NewJoinProcArgs(sss.src1, sss.sink, aJoinP,
 		h.funcName, sp.ScaleEpoch, sp.ParNum)
 	var wg sync.WaitGroup
 	aucManager := execution.NewJoinProcManager()
@@ -391,7 +391,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr).
-			WithWindowStoreChangelogs(wsc)
+			WithWindowStoreChangelogs(wsc).WithFixedOutParNum(sp.ParNum)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {

@@ -293,9 +293,9 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
 
 	joinProcPerson := execution.NewJoinProcArgs(sss.src2, sss.sink, pJoinA,
-		&h.cHashMu, h.cHash, h.funcName, sp.ScaleEpoch, sp.ParNum)
+		h.funcName, sp.ScaleEpoch, sp.ParNum)
 	joinProcAuction := execution.NewJoinProcArgs(sss.src1, sss.sink, aJoinP,
-		&h.cHashMu, h.cHash, h.funcName, sp.ScaleEpoch, sp.ParNum)
+		h.funcName, sp.ScaleEpoch, sp.ParNum)
 	var wg sync.WaitGroup
 	aucManager := execution.NewJoinProcManager()
 	perManager := execution.NewJoinProcManager()
@@ -381,7 +381,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr).
-			WithKVChangelogs(kvchangelogs)
+			WithKVChangelogs(kvchangelogs).WithFixedOutParNum(sp.ParNum)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {

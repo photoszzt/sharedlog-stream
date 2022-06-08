@@ -231,9 +231,9 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 	})
 
 	control_channel.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
-	joinProcBid := execution.NewJoinProcArgs(bidsSrc, sink, bJoinA, &h.cHashMu, h.cHash,
+	joinProcBid := execution.NewJoinProcArgs(bidsSrc, sink, bJoinA,
 		h.funcName, sp.ScaleEpoch, sp.ParNum)
-	joinProcAuction := execution.NewJoinProcArgs(auctionsSrc, sink, aJoinB, &h.cHashMu, h.cHash,
+	joinProcAuction := execution.NewJoinProcArgs(auctionsSrc, sink, aJoinB,
 		h.funcName, sp.ScaleEpoch, sp.ParNum)
 
 	var wg sync.WaitGroup
@@ -316,7 +316,7 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName,
 			sp.InputTopicNames[0], sp.ParNum)
 		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr).
-			WithKVChangelogs(kvchangelogs)
+			WithKVChangelogs(kvchangelogs).WithFixedOutParNum(sp.ParNum)
 		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {

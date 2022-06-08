@@ -1,16 +1,12 @@
 package execution
 
 import (
-	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/source_sink"
-	"sync"
 )
 
 type JoinProcArgs struct {
-	runner  JoinWorkerFunc
-	cHashMu *sync.RWMutex
-	cHash   *hash.ConsistentHash
+	runner JoinWorkerFunc
 	proc_interface.BaseProcArgsWithSrcSink
 }
 
@@ -20,16 +16,12 @@ func NewJoinProcArgs(
 	src source_sink.Source,
 	sink source_sink.Sink,
 	runner JoinWorkerFunc,
-	cHashMu *sync.RWMutex,
-	cHash *hash.ConsistentHash,
 	funcName string,
 	curEpoch uint64,
 	parNum uint8,
 ) *JoinProcArgs {
 	return &JoinProcArgs{
-		runner:  runner,
-		cHashMu: cHashMu,
-		cHash:   cHash,
+		runner: runner,
 		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(
 			src,
 			[]source_sink.Sink{sink}, funcName, curEpoch, parNum),
