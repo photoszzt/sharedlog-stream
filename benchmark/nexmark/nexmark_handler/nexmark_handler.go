@@ -32,7 +32,7 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 	switch funcName {
 	case "source":
 		return handlers.NewNexmarkSource(env, funcName), nil
-	case "test_src":
+	case "testSrc":
 		return handlers.NewTestEventSource(env, funcName), nil
 	case "query1":
 		return handlers.NewQuery1(env, funcName), nil
@@ -56,6 +56,8 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewQ5AuctionBids(env, funcName), nil
 	case "q5maxbid":
 		return handlers.NewQ5MaxBid(env, funcName), nil
+	case "q5Dump":
+		return handlers.NewQ5Dump(env), nil
 	case "query6":
 		return handlers.NewQuery6(env), nil
 	case "q7BidByPrice":
