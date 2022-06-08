@@ -52,18 +52,6 @@
                 "url": "",
                 "bidder": 1,
                 "price": 100,
-                "dateTime": 500,
-                "auction": 5
-            },
-            "etype": 2
-        },
-        {
-            "bid": {
-                "extra": "",
-                "channel": "",
-                "url": "",
-                "bidder": 1,
-                "price": 100,
                 "dateTime": 4500,
                 "auction": 5
             },
@@ -76,7 +64,7 @@
                 "url": "",
                 "bidder": 1,
                 "price": 100,
-                "dateTime": 10500,
+                "dateTime": 4501,
                 "auction": 5
             },
             "etype": 2
@@ -100,7 +88,19 @@
                 "url": "",
                 "bidder": 1,
                 "price": 100,
-                "dateTime": 10500,
+                "dateTime": 10501,
+                "auction": 5
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 1,
+                "price": 100,
+                "dateTime": 10502,
                 "auction": 5
             },
             "etype": 2
@@ -124,7 +124,7 @@
                 "url": "",
                 "bidder": 1,
                 "price": 100,
-                "dateTime": 12500,
+                "dateTime": 12501,
                 "auction": 5
             },
             "etype": 2
@@ -148,7 +148,7 @@
                 "url": "",
                 "bidder": 1,
                 "price": 100,
-                "dateTime": 4500,
+                "dateTime": 4501,
                 "auction": 7
             },
             "etype": 2
@@ -172,7 +172,7 @@
                 "url": "",
                 "bidder": 1,
                 "price": 100,
-                "dateTime": 10500,
+                "dateTime": 10501,
                 "auction": 7
             },
             "etype": 2
@@ -220,7 +220,7 @@
                 "url": "",
                 "bidder": 1,
                 "price": 100,
-                "dateTime": 12500,
+                "dateTime": 12501,
                 "auction": 8
             },
             "etype": 2
@@ -232,7 +232,7 @@
                 "url": "",
                 "bidder": 1,
                 "price": 100,
-                "dateTime": 12500,
+                "dateTime": 12502,
                 "auction": 8
             },
             "etype": 2
@@ -244,7 +244,7 @@
                 "url": "",
                 "bidder": 1,
                 "price": 100,
-                "dateTime": 12500,
+                "dateTime": 12503,
                 "auction": 8
             },
             "etype": 2
@@ -316,7 +316,7 @@
                 "url": "",
                 "bidder": 1,
                 "price": 100,
-                "dateTime": 4500,
+                "dateTime": 4501,
                 "auction": 8
             },
             "etype": 2
