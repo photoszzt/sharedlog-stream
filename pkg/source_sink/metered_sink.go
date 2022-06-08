@@ -345,7 +345,7 @@ func NewMeteredSyncSink(sink *ShardedSharedLogStreamSyncSink, warmup time.Durati
 	sink_name := fmt.Sprintf("%s_sink", sink.TopicName())
 	return &MeteredSyncSink{
 		ShardedSharedLogStreamSyncSink: *sink,
-		latencies:                      stats.NewIntCollector(sink_name, stats.DEFAULT_COLLECT_DURATION),
+		latencies:                      stats.NewInt64Collector(sink_name, stats.DEFAULT_COLLECT_DURATION),
 		produceTp:                      stats.NewThroughputCounter(sink_name, stats.DEFAULT_COLLECT_DURATION),
 		measure:                        checkMeasureSink(),
 		isFinalOutput:                  false,

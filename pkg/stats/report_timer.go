@@ -10,6 +10,7 @@ type ReportTimer struct {
 func NewReportTimer(duration time.Duration) ReportTimer {
 	return ReportTimer{
 		duration: duration,
+		lastTs:   time.Time{},
 	}
 }
 
