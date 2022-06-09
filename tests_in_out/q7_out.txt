@@ -1,0 +1,4 @@
+{"price":5,"auction":0,"bidder":0,"dateTimeMs":7861,"wStartMs":0,"wEndMs":10000}
+{"price":6,"auction":0,"bidder":0,"dateTimeMs":15581,"wStartMs":10000,"wEndMs":20000}
+{"price":6,"auction":0,"bidder":0,"dateTimeMs":15581,"wStartMs":10000,"wEndMs":20000}
+{"price":7,"auction":0,"bidder":0,"dateTimeMs":25932,"wStartMs":20000,"wEndMs":30000}
