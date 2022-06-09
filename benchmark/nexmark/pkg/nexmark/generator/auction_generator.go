@@ -18,7 +18,8 @@ func NextAuction(eventsCountSoFar uint64,
 	config *GeneratorConfig) *types.Auction {
 	id := LastBase0AuctionId(config, eventId) + FIRST_AUCTION_ID
 	seller := uint64(0)
-	if random.Intn(int(config.Configuration.HotSellersRatio)) > 0 {
+	// Here P(auction will be for a hot seller) = 1 - 1/hotSellersRatio.
+	if random.Int31n(int32(config.Configuration.HotSellersRatio)) > 0 {
 		seller = (LastBase0PersonId(config, eventId) / uint64(HOT_SELLER_RATIO)) * uint64(HOT_SELLER_RATIO)
 	} else {
 		seller = NextBase0PersonId(eventId, random, config)
@@ -38,8 +39,8 @@ func NextAuction(eventsCountSoFar uint64,
 		Description: desc,
 		InitialBid:  initialBid,
 		Reserve:     reserve,
-		DateTime:    int64(timestamp),
-		Expires:     int64(expires),
+		DateTime:    timestamp,
+		Expires:     expires,
 		Seller:      seller,
 		Category:    category,
 		Extra:       extra,
@@ -66,10 +67,15 @@ func NextBase0AuctionId(nextEventId uint64, random *rand.Rand, config *Generator
 	return minAuction + NextUint64(random, maxAuction-minAuction+1+uint64(AUCTION_ID_LEAD))
 }
 
+// Return a random time delay, in milliseconds, for length of auctions.
 func nextAuctionLenghMs(eventsCountSoFar uint64, random *rand.Rand, timestamp int64, config *GeneratorConfig) int64 {
+	// What's our current event number?
 	currentEventNumber := config.NextAdjustedEventNumber(eventsCountSoFar)
+	// How many events till we've generated numInFlightAuctions?
 	numEventsForAuctions := uint64(config.Configuration.NumInFlightAuctions) * uint64(config.TotalProportion) / uint64(config.AuctionProportion)
+	// When will the auction numInFlightAuctions beyond now be generated?
 	futureAuction := config.TimestampForEvent(currentEventNumber + numEventsForAuctions)
+	// Choose a length with average horizonMs.
 	horizonMs := futureAuction - timestamp
 	return 1 + NextInt64(random, utils.MaxInt64(horizonMs*2, 1))
 }

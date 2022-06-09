@@ -11,10 +11,8 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
-	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
-	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -22,7 +20,6 @@ import (
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
-	"sync"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -31,15 +28,12 @@ import (
 
 type q5AuctionBids struct {
 	env      types.Environment
-	cHashMu  sync.RWMutex
-	cHash    *hash.ConsistentHash
 	funcName string
 }
 
 func NewQ5AuctionBids(env types.Environment, funcName string) *q5AuctionBids {
 	return &q5AuctionBids{
 		env:      env,
-		cHash:    hash.NewConsistentHash(),
 		funcName: funcName,
 	}
 }
@@ -191,9 +185,8 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 type q5AuctionBidsProcessArg struct {
 	countProc      *processor.MeteredProcessor
 	groupByAuction *processor.MeteredProcessor
-	output_stream  *sharedlog_stream.ShardedSharedLogStream
+	groupBy        *processor.GroupBy
 	proc_interface.BaseProcArgsWithSrcSink
-	numOutPartition uint8
 }
 
 type q5AuctionBidsRestoreArg struct {
@@ -215,24 +208,9 @@ func (h *q5AuctionBids) procMsg(ctx context.Context, msg commtypes.Message, args
 		if err != nil {
 			return fmt.Errorf("groupByAuction err %v", err)
 		}
-		// fmt.Fprintf(os.Stderr, "changeKeyedMsg ts: %v\n", changeKeyedMsg[0].Timestamp)
-		// par := uint8(hashSe(changeKeyedMsg[0].Key.(*ntypes.StartEndTime)) % uint32(args.numOutPartition))
-		k := changeKeyedMsg[0].Key.(*ntypes.StartEndTime)
-		h.cHashMu.RLock()
-		parTmp, ok := h.cHash.Get(k)
-		h.cHashMu.RUnlock()
-		if !ok {
-			return xerrors.New("fail to get output partition")
-		}
-		par := parTmp.(uint8)
-		// fmt.Fprintf(os.Stderr, "key is %s, output to substream %d\n", k.String(), par)
-		err = args.TrackParFunc()(ctx, k, args.Sinks()[0].KeySerde(), args.Sinks()[0].TopicName(), par)
+		err = args.groupBy.GroupByAndProduce(ctx, changeKeyedMsg[0], args.TrackParFunc())
 		if err != nil {
-			return fmt.Errorf("add topic partition failed: %v", err)
-		}
-		err = args.Sinks()[0].Produce(ctx, changeKeyedMsg[0], par, false)
-		if err != nil {
-			return fmt.Errorf("sink err %v", err)
+			return err
 		}
 	}
 	return nil
@@ -326,12 +304,12 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			}
 			return commtypes.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
 		})), time.Duration(sp.WarmupS)*time.Second)
+	groupBy := processor.NewGroupBy(sink)
 	sinks := []source_sink.Sink{sink}
 	procArgs := &q5AuctionBidsProcessArg{
-		countProc:       countProc,
-		groupByAuction:  groupByAuction,
-		output_stream:   output_streams[0],
-		numOutPartition: sp.NumOutPartitions[0],
+		countProc:      countProc,
+		groupByAuction: groupByAuction,
+		groupBy:        groupBy,
 		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src,
 			sinks, h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
@@ -346,8 +324,6 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			groupByAuction.StartWarmup()
 			countProc.StartWarmup()
 		}).Build()
-
-	control_channel.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 	srcs := []source_sink.Source{src}
 
 	var wsc []*transaction.WindowStoreChangelog

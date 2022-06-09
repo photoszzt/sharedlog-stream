@@ -10,10 +10,8 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
-	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/source_sink"
@@ -22,26 +20,16 @@ import (
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
-	"golang.org/x/xerrors"
 )
 
 type q46GroupByHandler struct {
-	env types.Environment
-
-	aucHashMu sync.RWMutex
-	aucHash   *hash.ConsistentHash
-
-	bidHashMu sync.RWMutex
-	bidHash   *hash.ConsistentHash
-
+	env      types.Environment
 	funcName string
 }
 
 func NewQ46GroupByHandler(env types.Environment, funcName string) types.FuncHandler {
 	return &q46GroupByHandler{
 		env:      env,
-		aucHash:  hash.NewConsistentHash(),
-		bidHash:  hash.NewConsistentHash(),
 		funcName: funcName,
 	}
 }
@@ -145,8 +133,6 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 			bidsByAuctionIDManager.LaunchProc(ctx, procArgs, &wg)
 			debug.Fprintf(os.Stderr, "done resume\n")
 		}).HandleErrFunc(handleErrFunc).Build()
-	control_channel.SetupConsistentHash(&h.aucHashMu, h.aucHash, sp.NumOutPartitions[0])
-	control_channel.SetupConsistentHash(&h.bidHashMu, h.bidHash, sp.NumOutPartitions[1])
 	srcs := []source_sink.Source{src}
 
 	update_stats := func(ret *common.FnOutput) {
@@ -200,6 +186,7 @@ func (h *q46GroupByHandler) getAucsByID(warmup time.Duration) (
 		msgChan chan commtypes.Message, errChan chan error,
 	) {
 		args := argsTmp.(*TwoMsgChanProcArgs)
+		g := processor.NewGroupBy(args.Sinks()[0])
 		defer wg.Done()
 	L:
 		for {
@@ -223,27 +210,10 @@ func (h *q46GroupByHandler) getAucsByID(warmup time.Duration) (
 						errChan <- fmt.Errorf("auctionsBySellerIDMap err: %v", err)
 						return
 					}
-
-					k := changeKeyedMsg[0].Key.(uint64)
-					h.aucHashMu.RLock()
-					parTmp, ok := h.aucHash.Get(k)
-					h.aucHashMu.RUnlock()
-					if !ok {
-						fmt.Fprintf(os.Stderr, "[ERROR] fail to get output partition\n")
-						errChan <- xerrors.New("fail to get output partition")
-						return
-					}
-					par := parTmp.(uint8)
-					err = args.TrackParFunc()(ctx, k, args.Sinks()[0].KeySerde(), args.Sinks()[0].TopicName(), par)
+					err = g.GroupByAndProduce(ctx, changeKeyedMsg[0], args.TrackParFunc())
 					if err != nil {
-						fmt.Fprintf(os.Stderr, "[ERROR] add topic partition failed: %v\n", err)
-						errChan <- fmt.Errorf("add topic partition failed: %v", err)
-						return
-					}
-					err = args.Sinks()[0].Produce(ctx, changeKeyedMsg[0], par, false)
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "[ERROR] sink err: %v\n", err)
-						errChan <- fmt.Errorf("sink err: %v", err)
+						fmt.Fprintf(os.Stderr, "[ERROR] groupby failed: %v", err)
+						errChan <- err
 						return
 					}
 				}
@@ -272,6 +242,7 @@ func (h *q46GroupByHandler) getBidsByAuctionID(warmup time.Duration) (
 		msgChan chan commtypes.Message, errChan chan error,
 	) {
 		args := argsTmp.(*TwoMsgChanProcArgs)
+		g := processor.NewGroupBy(args.Sinks()[1])
 		defer wg.Done()
 	L:
 		for {
@@ -295,27 +266,10 @@ func (h *q46GroupByHandler) getBidsByAuctionID(warmup time.Duration) (
 						errChan <- fmt.Errorf("auctionsBySellerIDMap err: %v", err)
 						return
 					}
-
-					k := changeKeyedMsg[0].Key.(uint64)
-					h.bidHashMu.RLock()
-					parTmp, ok := h.bidHash.Get(k)
-					h.bidHashMu.RUnlock()
-					if !ok {
-						fmt.Fprintf(os.Stderr, "[ERROR] fail to get output partition")
-						errChan <- xerrors.New("fail to get output partition")
-						return
-					}
-					par := parTmp.(uint8)
-					err = args.TrackParFunc()(ctx, k, args.Sinks()[1].KeySerde(), args.Sinks()[1].TopicName(), par)
+					err = g.GroupByAndProduce(ctx, changeKeyedMsg[0], args.TrackParFunc())
 					if err != nil {
-						fmt.Fprintf(os.Stderr, "[ERROR] add topic partition failed: %v", err)
-						errChan <- fmt.Errorf("add topic partition failed: %v", err)
-						return
-					}
-					err = args.Sinks()[1].Produce(ctx, changeKeyedMsg[0], par, false)
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "[ERROR] sink err: %v", err)
-						errChan <- fmt.Errorf("sink err: %v", err)
+						fmt.Fprintf(os.Stderr, "[ERROR] groupBy failed: %v", err)
+						errChan <- err
 						return
 					}
 				}

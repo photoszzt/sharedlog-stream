@@ -10,10 +10,8 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
-	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
-	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
@@ -25,17 +23,13 @@ import (
 )
 
 type q7JoinMaxBid struct {
-	env types.Environment
-
-	cHashMu  sync.RWMutex
-	cHash    *hash.ConsistentHash
+	env      types.Environment
 	funcName string
 }
 
 func NewQ7JoinMaxBid(env types.Environment, funcName string) types.FuncHandler {
 	return &q7JoinMaxBid{
 		env:      env,
-		cHash:    hash.NewConsistentHash(),
 		funcName: funcName,
 	}
 }
@@ -210,8 +204,6 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		return outMsgs, nil
 
 	}
-
-	control_channel.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
 
 	joinProcBid := execution.NewJoinProcArgs(sss.src1, sss.sink, bJoinM,

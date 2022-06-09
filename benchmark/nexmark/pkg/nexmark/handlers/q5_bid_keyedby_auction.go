@@ -9,33 +9,25 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
-	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/transaction"
-	"sync"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
-	"golang.org/x/xerrors"
 )
 
 type bidKeyedByAuction struct {
 	env      types.Environment
-	cHashMu  sync.RWMutex
-	cHash    *hash.ConsistentHash
 	funcName string
 }
 
 func NewBidKeyedByAuctionHandler(env types.Environment, funcName string) types.FuncHandler {
 	return &bidKeyedByAuction{
 		env:      env,
-		cHash:    hash.NewConsistentHash(),
 		funcName: funcName,
 	}
 }
@@ -55,11 +47,10 @@ func (h *bidKeyedByAuction) Call(ctx context.Context, input []byte) ([]byte, err
 }
 
 type bidKeyedByAuctionProcessArgs struct {
-	filterBid     *processor.MeteredProcessor
-	selectKey     *processor.MeteredProcessor
-	output_stream *sharedlog_stream.ShardedSharedLogStream
+	filterBid *processor.MeteredProcessor
+	selectKey *processor.MeteredProcessor
+	groupBy   *processor.GroupBy
 	proc_interface.BaseProcArgsWithSrcSink
-	numOutPartition uint8
 }
 
 func (h *bidKeyedByAuction) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
@@ -73,21 +64,7 @@ func (h *bidKeyedByAuction) procMsg(ctx context.Context, msg commtypes.Message, 
 		if err != nil {
 			return err
 		}
-		key := mappedKey[0].Key.(uint64)
-		h.cHashMu.RLock()
-		parTmp, ok := h.cHash.Get(key)
-		h.cHashMu.RUnlock()
-		if !ok {
-			return xerrors.New("fail to calculate partition")
-		}
-		par := parTmp.(uint8)
-		// par := uint8(key % uint64(args.numOutPartition))
-		err = args.TrackParFunc()(ctx, key, args.Sinks()[0].KeySerde(), args.Sinks()[0].TopicName(), par)
-		if err != nil {
-			return fmt.Errorf("add topic partition failed: %v", err)
-		}
-		// fmt.Fprintf(os.Stderr, "out msg ts: %v\n", mappedKey[0].Timestamp)
-		err = args.Sinks()[0].Produce(ctx, mappedKey[0], par, false)
+		err = args.groupBy.GroupByAndProduce(ctx, mappedKey[0], args.TrackParFunc())
 		if err != nil {
 			return err
 		}
@@ -119,14 +96,14 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 			event := m.Value.(*ntypes.Event)
 			return commtypes.Message{Key: event.Bid.Auction, Value: m.Value, Timestamp: m.Timestamp}, nil
 		})), time.Duration(sp.WarmupS)*time.Second)
-
+	groupBy := processor.NewGroupBy(sink)
+	sinks := []source_sink.Sink{sink}
 	procArgs := &bidKeyedByAuctionProcessArgs{
-		filterBid:       filterBid,
-		selectKey:       selectKey,
-		output_stream:   output_streams[0],
-		numOutPartition: sp.NumOutPartitions[0],
+		filterBid: filterBid,
+		selectKey: selectKey,
+		groupBy:   groupBy,
 		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src,
-			[]source_sink.Sink{sink}, h.funcName, sp.ScaleEpoch, sp.ParNum),
+			sinks, h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 	task := transaction.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
@@ -140,9 +117,7 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 			selectKey.StartWarmup()
 		}).Build()
 
-	control_channel.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 	srcs := []source_sink.Source{src}
-	sinks := []source_sink.Sink{sink}
 
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["filterBid"] = filterBid.GetLatency()

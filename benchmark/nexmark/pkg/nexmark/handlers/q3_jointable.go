@@ -10,10 +10,8 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
-	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
@@ -28,17 +26,13 @@ import (
 )
 
 type q3JoinTableHandler struct {
-	env     types.Environment
-	cHashMu sync.RWMutex
-	cHash   *hash.ConsistentHash
-
+	env      types.Environment
 	funcName string
 }
 
 func NewQ3JoinTableHandler(env types.Environment, funcName string) types.FuncHandler {
 	return &q3JoinTableHandler{
 		env:      env,
-		cHash:    hash.NewConsistentHash(),
 		funcName: funcName,
 	}
 }
@@ -288,7 +282,6 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 
 	debug.Assert(len(sp.NumOutPartitions) == 1 && len(sp.OutputTopicNames) == 1,
 		"expected only one output stream")
-	control_channel.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
 

@@ -10,7 +10,6 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/execution"
-	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -18,18 +17,13 @@ import (
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/treemap"
-	"sync"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
 
 type q4MaxBid struct {
-	env types.Environment
-
-	cHashMu sync.RWMutex
-	cHash   *hash.ConsistentHash
-
+	env      types.Environment
 	funcName string
 }
 
@@ -37,7 +31,6 @@ func NewQ4MaxBid(env types.Environment, funcName string) *q4MaxBid {
 	return &q4MaxBid{
 		env:      env,
 		funcName: funcName,
-		cHash:    hash.NewConsistentHash(),
 	}
 }
 
@@ -104,8 +97,9 @@ func (h *q4MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 }
 
 type q4MaxBidProcessArgs struct {
-	maxBid  *processor.MeteredProcessor
-	groupBy *processor.MeteredProcessor
+	maxBid    *processor.MeteredProcessor
+	changeKey *processor.MeteredProcessor
+	groupBy   *processor.GroupBy
 	proc_interface.BaseProcArgsWithSrcSink
 }
 
@@ -115,28 +109,13 @@ func (h *q4MaxBid) procMsg(ctx context.Context, msg commtypes.Message, argsTmp i
 	if err != nil {
 		return err
 	}
-	remapped, err := args.groupBy.ProcessAndReturn(ctx, aggs[0])
+	remapped, err := args.changeKey.ProcessAndReturn(ctx, aggs[0])
 	if err != nil {
 		return err
 	}
-	sink := args.Sinks()[0]
-	for _, msg := range remapped {
-		k := msg.Key.(uint64)
-		h.cHashMu.RLock()
-		parTmp, ok := h.cHash.Get(k)
-		h.cHashMu.RUnlock()
-		if !ok {
-			return fmt.Errorf("fail to get output partition")
-		}
-		par := parTmp.(uint8)
-		err = args.TrackParFunc()(ctx, k, sink.KeySerde(), sink.TopicName(), par)
-		if err != nil {
-			return err
-		}
-		err = sink.Produce(ctx, msg, par, false)
-		if err != nil {
-			return fmt.Errorf("sink err: %v", err)
-		}
+	err = args.groupBy.GroupByAndProduce(ctx, remapped[0], args.TrackParFunc())
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -181,17 +160,19 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 				return agg
 			}
 		})), warmup)
-	groupBy := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
+	changeKey := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
 		processor.MapperFunc(func(m commtypes.Message) (commtypes.Message, error) {
 			return commtypes.Message{
 				Key:   m.Key.(*ntypes.AuctionIdCategory).Category,
 				Value: m.Value,
 			}, nil
 		})), warmup)
+	groupBy := processor.NewGroupBy(sink)
 	sinks_arr := []source_sink.Sink{sink}
 	procArgs := &q4MaxBidProcessArgs{
-		maxBid:  maxBid,
-		groupBy: groupBy,
+		maxBid:    maxBid,
+		changeKey: changeKey,
+		groupBy:   groupBy,
 		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src, sinks_arr, h.funcName,
 			sp.ScaleEpoch, sp.ParNum),
 	}
@@ -205,7 +186,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 			src.StartWarmup()
 			sink.StartWarmup()
 			maxBid.StartWarmup()
-			groupBy.StartWarmup()
+			changeKey.StartWarmup()
 		}).Build()
 
 	srcs := []source_sink.Source{src}
@@ -216,7 +197,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["maxBid"] = maxBid.GetLatency()
-		ret.Latencies["groupBy"] = groupBy.GetLatency()
+		ret.Latencies["groupBy"] = changeKey.GetLatency()
 		ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
 		ret.Counts["src"] = src.GetCount()
 		ret.Counts["sink"] = sink.GetCount()

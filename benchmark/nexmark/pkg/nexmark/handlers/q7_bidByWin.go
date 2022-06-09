@@ -9,34 +9,27 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	nutils "sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
-	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/utils"
-	"sync"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
-	"golang.org/x/xerrors"
 )
 
 type q7BidByWin struct {
 	env      types.Environment
-	cHashMu  sync.RWMutex
-	cHash    *hash.ConsistentHash
 	funcName string
 }
 
 func NewQ7BidByWin(env types.Environment, funcName string) types.FuncHandler {
 	return &q7BidByWin{
 		env:      env,
-		cHash:    hash.NewConsistentHash(),
 		funcName: funcName,
 	}
 }
@@ -58,6 +51,7 @@ func (h *q7BidByWin) Call(ctx context.Context, input []byte) ([]byte, error) {
 type q7BidByWinProcessArgs struct {
 	bid      *processor.MeteredProcessor
 	bidByWin *processor.MeteredProcessor
+	groupBy  *processor.GroupBy
 	proc_interface.BaseProcArgsWithSrcSink
 }
 
@@ -72,21 +66,9 @@ func (h *q7BidByWin) procMsg(ctx context.Context, msg commtypes.Message, argsTmp
 		if err != nil {
 			return fmt.Errorf("bid keyed by price error: %v", err)
 		}
-		key := mappedKey[0].Key.(uint64)
-		h.cHashMu.RLock()
-		parTmp, ok := h.cHash.Get(key)
-		h.cHashMu.RUnlock()
-		if !ok {
-			return xerrors.New("fail to get output substream number")
-		}
-		par := parTmp.(uint8)
-		err = args.TrackParFunc()(ctx, key, args.Sinks()[0].KeySerde(), args.Sinks()[0].TopicName(), par)
+		err = args.groupBy.GroupByAndProduce(ctx, mappedKey[0], args.TrackParFunc())
 		if err != nil {
-			return fmt.Errorf("track par err: %v", err)
-		}
-		err = args.Sinks()[0].Produce(ctx, mappedKey[0], par, false)
-		if err != nil {
-			return fmt.Errorf("sink err: %v", err)
+			return err
 		}
 	}
 	return nil
@@ -163,10 +145,13 @@ func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *com
 		return commtypes.Message{Key: win, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 	})), warmup)
 
+	groupBy := processor.NewGroupBy(sink)
+	sinks_arr := []source_sink.Sink{sink}
 	procArgs := &q7BidByWinProcessArgs{
 		bid:      bid,
 		bidByWin: bidByWin,
-		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src, []source_sink.Sink{sink},
+		groupBy:  groupBy,
+		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src, sinks_arr,
 			h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 	task := transaction.NewStreamTaskBuilder().
@@ -180,10 +165,8 @@ func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *com
 			src.StartWarmup()
 			sink.StartWarmup()
 		}).Build()
-	control_channel.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 
 	srcs := []source_sink.Source{src}
-	sinks_arr := []source_sink.Sink{sink}
 
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["bid"] = bid.GetLatency()
