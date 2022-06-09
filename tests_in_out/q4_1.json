@@ -3,13 +3,13 @@
         {
             "etype": 1,
             "newAuction": {
-                "dateTime": 1000000,
+                "dateTime": 1000,
                 "itemName": "auc_1",
                 "description": "",
                 "extra": "",
                 "id": 5,
                 "reserve": 0,
-                "expires": 2000000,
+                "expires": 2000,
                 "seller": 2,
                 "category": 10,
                 "initialBid": 1
@@ -18,13 +18,13 @@
         {
             "etype": 1,
             "newAuction": {
-                "dateTime": 1000000,
+                "dateTime": 1001,
                 "itemName": "auc_3",
                 "description": "",
                 "extra": "",
                 "id": 7,
                 "reserve": 0,
-                "expires": 2000000,
+                "expires": 2000,
                 "seller": 1,
                 "category": 11,
                 "initialBid": 1
@@ -33,13 +33,13 @@
         {
             "etype": 1,
             "newAuction": {
-                "dateTime": 1000000,
+                "dateTime": 1002,
                 "itemName": "auc_4",
                 "description": "",
                 "extra": "",
                 "id": 8,
                 "reserve": 0,
-                "expires": 2000000,
+                "expires": 2000,
                 "seller": 3,
                 "category": 10,
                 "initialBid": 1
@@ -48,13 +48,13 @@
         {
             "etype": 1,
             "newAuction": {
-                "dateTime": 1000000,
+                "dateTime": 1003,
                 "itemName": "auc_5",
                 "description": "",
                 "extra": "",
                 "id": 9,
                 "reserve": 0,
-                "expires": 2000000,
+                "expires": 2000,
                 "seller": 3,
                 "category": 11,
                 "initialBid": 1
@@ -63,13 +63,13 @@
         {
             "etype": 1,
             "newAuction": {
-                "dateTime": 1000000,
+                "dateTime": 1004,
                 "itemName": "auc_6",
                 "description": "",
                 "extra": "",
                 "id": 10,
                 "reserve": 0,
-                "expires": 2000000,
+                "expires": 2000,
                 "seller": 2,
                 "category": 11,
                 "initialBid": 1
@@ -78,7 +78,7 @@
         {
             "etype": 2,
             "bid": {
-                "dateTime": 1100000,
+                "dateTime": 1100,
                 "price": 10,
                 "auction": 5,
                 "bidder": 1,
@@ -90,31 +90,7 @@
         {
             "etype": 2,
             "bid": {
-                "dateTime": 1200000,
-                "price": 14,
-                "auction": 5,
-                "bidder": 1,
-                "url": "",
-                "channel": "",
-                "extra": ""
-            }
-        },
-        {
-            "etype": 2,
-            "bid": {
-                "dateTime": 2300000,
-                "price": 15,
-                "auction": 5,
-                "bidder": 1,
-                "url": "",
-                "channel": "",
-                "extra": ""
-            }
-        },
-        {
-            "etype": 2,
-            "bid": {
-                "dateTime": 1100000,
+                "dateTime": 1101,
                 "price": 11,
                 "auction": 7,
                 "bidder": 1,
@@ -126,31 +102,7 @@
         {
             "etype": 2,
             "bid": {
-                "dateTime": 1200000,
-                "price": 15,
-                "auction": 7,
-                "bidder": 1,
-                "url": "",
-                "channel": "",
-                "extra": ""
-            }
-        },
-        {
-            "etype": 2,
-            "bid": {
-                "dateTime": 2100000,
-                "price": 16,
-                "auction": 7,
-                "bidder": 1,
-                "url": "",
-                "channel": "",
-                "extra": ""
-            }
-        },
-        {
-            "etype": 2,
-            "bid": {
-                "dateTime": 1100000,
+                "dateTime": 1102,
                 "price": 12,
                 "auction": 8,
                 "bidder": 1,
@@ -162,31 +114,7 @@
         {
             "etype": 2,
             "bid": {
-                "dateTime": 1200000,
-                "price": 16,
-                "auction": 8,
-                "bidder": 1,
-                "url": "",
-                "channel": "",
-                "extra": ""
-            }
-        },
-        {
-            "etype": 2,
-            "bid": {
-                "dateTime": 2100000,
-                "price": 17,
-                "auction": 8,
-                "bidder": 1,
-                "url": "",
-                "channel": "",
-                "extra": ""
-            }
-        },
-        {
-            "etype": 2,
-            "bid": {
-                "dateTime": 1100000,
+                "dateTime": 1103,
                 "price": 13,
                 "auction": 9,
                 "bidder": 1,
@@ -198,31 +126,7 @@
         {
             "etype": 2,
             "bid": {
-                "dateTime": 1200000,
-                "price": 17,
-                "auction": 9,
-                "bidder": 1,
-                "url": "",
-                "channel": "",
-                "extra": ""
-            }
-        },
-        {
-            "etype": 2,
-            "bid": {
-                "dateTime": 2200000,
-                "price": 18,
-                "auction": 9,
-                "bidder": 1,
-                "url": "",
-                "channel": "",
-                "extra": ""
-            }
-        },
-        {
-            "etype": 2,
-            "bid": {
-                "dateTime": 1100000,
+                "dateTime": 1104,
                 "price": 14,
                 "auction": 10,
                 "bidder": 1,
@@ -234,7 +138,43 @@
         {
             "etype": 2,
             "bid": {
-                "dateTime": 1200000,
+                "dateTime": 1201,
+                "price": 14,
+                "auction": 5,
+                "bidder": 1,
+                "url": "",
+                "channel": "",
+                "extra": ""
+            }
+        },
+        {
+            "etype": 2,
+            "bid": {
+                "dateTime": 1202,
+                "price": 15,
+                "auction": 7,
+                "bidder": 1,
+                "url": "",
+                "channel": "",
+                "extra": ""
+            }
+        },
+        {
+            "etype": 2,
+            "bid": {
+                "dateTime": 1203,
+                "price": 16,
+                "auction": 8,
+                "bidder": 1,
+                "url": "",
+                "channel": "",
+                "extra": ""
+            }
+        },
+        {
+            "etype": 2,
+            "bid": {
+                "dateTime": 1204,
                 "price": 19,
                 "auction": 10,
                 "bidder": 1,
@@ -246,9 +186,69 @@
         {
             "etype": 2,
             "bid": {
-                "dateTime": 2200000,
+                "dateTime": 1205,
+                "price": 17,
+                "auction": 9,
+                "bidder": 1,
+                "url": "",
+                "channel": "",
+                "extra": ""
+            }
+        },
+        {
+            "etype": 2,
+            "bid": {
+                "dateTime": 2101,
+                "price": 16,
+                "auction": 7,
+                "bidder": 1,
+                "url": "",
+                "channel": "",
+                "extra": ""
+            }
+        },
+        {
+            "etype": 2,
+            "bid": {
+                "dateTime": 2102,
+                "price": 17,
+                "auction": 8,
+                "bidder": 1,
+                "url": "",
+                "channel": "",
+                "extra": ""
+            }
+        },
+        {
+            "etype": 2,
+            "bid": {
+                "dateTime": 2203,
+                "price": 18,
+                "auction": 9,
+                "bidder": 1,
+                "url": "",
+                "channel": "",
+                "extra": ""
+            }
+        },
+        {
+            "etype": 2,
+            "bid": {
+                "dateTime": 2204,
                 "price": 20,
                 "auction": 10,
+                "bidder": 1,
+                "url": "",
+                "channel": "",
+                "extra": ""
+            }
+        },
+        {
+            "etype": 2,
+            "bid": {
+                "dateTime": 2305,
+                "price": 15,
+                "auction": 5,
                 "bidder": 1,
                 "url": "",
                 "channel": "",
