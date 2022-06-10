@@ -10,12 +10,12 @@
             "funcName": "query1",
             "NumInstance": 4,
             "InputTopicNames": ["nexmark_src"],
-            "OutputTopicName": ["nexmark_q1_sink"],
+            "OutputTopicName": ["q1_out"],
             "NodeConstraint": "5,6,7,8"
         }
     ],
     "StreamParam": {
         "nexmark_src": 4,
-        "nexmark_q1_sink": 4
+        "q1_out": 4
     }
 }
