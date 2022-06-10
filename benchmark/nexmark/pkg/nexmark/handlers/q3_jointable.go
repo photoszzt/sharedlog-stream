@@ -114,11 +114,9 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 		ValSerde: eventSerde,
 		MsgSerde: msgSerde,
 	}
-	var ncsiSerde commtypes.Serde
-	if sp.SerdeFormat == uint8(commtypes.JSON) {
-		ncsiSerde = ntypes.NameCityStateIdJSONSerde{}
-	} else {
-		ncsiSerde = ntypes.NameCityStateIdMsgpSerde{}
+	ncsiSerde, err := ntypes.GetNameCityStateIdSerde(serdeFormat)
+	if err != nil {
+		return nil, err
 	}
 
 	src1 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream1, &source_sink.StreamSourceConfig{
