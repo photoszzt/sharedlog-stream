@@ -58,11 +58,22 @@ func (h *q7MaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 type q7MaxBidByPriceProcessArgs struct {
 	maxBid  *processor.MeteredProcessor
 	remapKV *processor.MeteredProcessor
+	groupBy *processor.GroupBy
 	proc_interface.BaseProcArgsWithSrcSink
 }
 
 func (h *q7MaxBid) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
-	return nil
+	args := argsTmp.(*q7MaxBidByPriceProcessArgs)
+	maxBids, err := args.maxBid.ProcessAndReturn(ctx, msg)
+	if err != nil {
+		return err
+	}
+	remaped, err := args.remapKV.ProcessAndReturn(ctx, maxBids[0])
+	if err != nil {
+		return err
+	}
+	err = args.groupBy.GroupByAndProduce(ctx, remaped[0], args.TrackParFunc())
+	return err
 }
 
 func (h *q7MaxBid) getSrcSink(
@@ -178,10 +189,12 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 		processor.MapperFunc(func(m commtypes.Message) (commtypes.Message, error) {
 			return commtypes.Message{Key: m.Value, Value: m.Key, Timestamp: m.Timestamp}, nil
 		})), warmup)
+	groupBy := processor.NewGroupBy(sink)
 	sinks_arr := []source_sink.Sink{sink}
 	procArgs := &q7MaxBidByPriceProcessArgs{
 		maxBid:  maxBid,
 		remapKV: remapKV,
+		groupBy: groupBy,
 		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(
 			src, sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum,
 		),
