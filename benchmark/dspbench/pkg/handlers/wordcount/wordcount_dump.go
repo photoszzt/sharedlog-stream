@@ -43,9 +43,11 @@ func (h *wordCountDump) process(ctx context.Context, di *common.DumpInput) *comm
 		OutputDir:     di.DumpDir,
 		TopicName:     di.TopicName,
 		NumPartitions: di.NumPartitions,
-		MsgSerde:      msgSerde,
-		KeySerde:      commtypes.StringSerde{},
-		ValSerde:      vtSerde,
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			KeySerde: commtypes.StringSerde{},
+			MsgSerde: msgSerde,
+			ValSerde: vtSerde,
+		},
 	})
 	if err != nil {
 		return &common.FnOutput{

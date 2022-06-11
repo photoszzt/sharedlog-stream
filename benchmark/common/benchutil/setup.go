@@ -12,18 +12,18 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/transaction"
 	"sync"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/xerrors"
 )
 
 type DumpOutputStreamConfig struct {
-	MsgSerde      commtypes.MsgSerde
-	KeySerde      commtypes.Serde
-	ValSerde      commtypes.Serde
+	KVMsgSerdes   commtypes.KVMsgSerdes
 	OutputDir     string
 	TopicName     string
 	SerdeFormat   commtypes.SerdeFormat
@@ -57,6 +57,10 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 	if err != nil {
 		return err
 	}
+	src := source_sink.NewShardedSharedLogStreamSource(log, &source_sink.StreamSourceConfig{
+		KVMsgSerdes: args.KVMsgSerdes,
+		Timeout:     common.SrcConsumeTimeout,
+	})
 	for i := uint8(0); i < args.NumPartitions; i++ {
 		outFilePath := path.Join(args.OutputDir, fmt.Sprintf("%s-%d.txt", args.TopicName, i))
 		outFile, err := os.Create(outFilePath)
@@ -70,35 +74,39 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 		}
 		for {
 			// fmt.Fprintf(os.Stderr, "before read next\n")
-			rawMsg, err := log.ReadNext(ctx, i)
-			if common_errors.IsStreamEmptyError(err) {
+			msgAndSeqs, err := src.Consume(ctx, i)
+			if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 				break
 			}
 			if err != nil {
 				return err
 			}
-			keyBytes, valBytes, err := args.MsgSerde.Decode(rawMsg.Payload)
-			if err != nil {
-				return err
-			}
-			key, err := args.KeySerde.Decode(keyBytes)
-			if err != nil {
-				return err
-			}
-			val, err := args.ValSerde.Decode(valBytes)
-			if err != nil {
-				return err
-			}
-			outStr := fmt.Sprintf("%v, %v\n", key, val)
-			fmt.Fprint(os.Stderr, outStr)
-			writted, err := outFile.WriteString(outStr)
-			if err != nil {
-				return err
-			}
-			if writted != len(outStr) {
-				panic("written is smaller than expected")
+			for _, msgAndSeq := range msgAndSeqs.Msgs {
+				if msgAndSeq.IsControl {
+					continue
+				}
+				if msgAndSeq.MsgArr != nil {
+					for _, msg := range msgAndSeq.MsgArr {
+						outputMsg(msg, outFile)
+					}
+				} else {
+					outputMsg(msgAndSeq.Msg, outFile)
+				}
 			}
 		}
+	}
+	return nil
+}
+
+func outputMsg(msg commtypes.Message, outFile *os.File) error {
+	outStr := fmt.Sprintf("%v : %v\n", msg.Key, msg.Value)
+	fmt.Fprint(os.Stderr, outStr)
+	writted, err := outFile.WriteString(outStr)
+	if err != nil {
+		return err
+	}
+	if writted != len(outStr) {
+		panic("written is smaller than expected")
 	}
 	return nil
 }

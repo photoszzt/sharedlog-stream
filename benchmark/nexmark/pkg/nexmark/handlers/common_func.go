@@ -181,3 +181,24 @@ func ExecuteAppNoTransaction(
 	}
 	return ret
 }
+
+func GetSerdeFromString(serdeStr string, serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
+	switch serdeStr {
+	case "StartEndTime":
+		return ntypes.GetStartEndTimeSerde(serdeFormat)
+	case "AuctionIdCntMax":
+		return ntypes.GetAuctionIdCntMaxSerde(serdeFormat)
+	case "Event":
+		return ntypes.GetEventSerde(serdeFormat)
+	case "Uint64":
+		return commtypes.Uint64Serde{}, nil
+	case "String":
+		return commtypes.StringSerde{}, nil
+	case "PersonTime":
+		return ntypes.GetPersonTimeSerde(serdeFormat)
+	case "NameCityStateId":
+		return ntypes.GetNameCityStateIdSerde(serdeFormat)
+	default:
+		return nil, fmt.Errorf("Unrecognized serde string %s", serdeStr)
+	}
+}

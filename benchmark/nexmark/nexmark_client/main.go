@@ -110,7 +110,25 @@ func invokeDumpFunc(client *http.Client) {
 		DumpDir:     FLAGS_dump_dir,
 		SerdeFormat: uint8(serdeFormat),
 	}
-	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, FLAGS_app_name+"Dump")
+	dumpInput.TopicName = fmt.Sprintf("%s_out", FLAGS_app_name)
+	switch FLAGS_app_name {
+	case "q1", "q2":
+		dumpInput.KeySerde = "String"
+		dumpInput.ValueSerde = "Event"
+	case "q3":
+		dumpInput.KeySerde = "Uint64"
+		dumpInput.ValueSerde = "NameCityStateId"
+	case "q5":
+		dumpInput.KeySerde = "StartEndTime"
+		dumpInput.ValueSerde = "AuctionIdCntMax"
+	case "q7":
+		dumpInput.KeySerde = "Uint64"
+		dumpInput.ValueSerde = "BidAndMax"
+	case "q8":
+		dumpInput.KeySerde = "Uint64"
+		dumpInput.ValueSerde = "PersonTime"
+	}
+	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "dump")
 	fmt.Printf("func source url is %v\n", url)
 	var response common.FnOutput
 	if err := utils.JsonPostRequest(client, url, "", &dumpInput, &response); err != nil {
@@ -166,11 +184,15 @@ func main() {
 			panic(err)
 		}
 		if FLAGS_dump_dir != "" {
+			err = os.MkdirAll(FLAGS_dump_dir, 0750)
+			if err != nil {
+				panic(err)
+			}
 			client := &http.Client{
 				Transport: &http.Transport{
 					IdleConnTimeout: 30 * time.Second,
 				},
-				Timeout: time.Duration(FLAGS_duration),
+				Timeout: time.Duration(FLAGS_duration) * time.Second,
 			}
 			invokeDumpFunc(client)
 		}

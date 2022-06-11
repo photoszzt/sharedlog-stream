@@ -44,6 +44,8 @@ type ConfigScaleInput struct {
 type DumpInput struct {
 	DumpDir       string `json:"dumpDir"`
 	TopicName     string `json:"tp"`
+	KeySerde      string `json:"keySerde"`
+	ValueSerde    string `json:"valSerde"`
 	NumPartitions uint8  `json:"numPartitions"`
 	SerdeFormat   uint8  `json:"serdeFormat"`
 }
