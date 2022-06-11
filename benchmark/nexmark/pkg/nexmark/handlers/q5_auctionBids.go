@@ -358,9 +358,14 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 			sp.ParNum, sp.OutputTopicNames[0])
-		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks).
-			WithWindowStoreChangelogs(wsc)
-		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
+		builder := transaction.NewStreamTaskArgsTransactionBuilder().
+			ProcArgs(procArgs).
+			Env(h.env).
+			Srcs(srcs).
+			Sinks(sinks).
+			TransactionalID(transactionalID)
+		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp, builder).
+			WindowStoreChangelogs(wsc).Build()
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)

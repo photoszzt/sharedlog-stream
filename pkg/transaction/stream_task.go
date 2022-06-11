@@ -156,7 +156,7 @@ func SetupManagers(ctx context.Context, env types.Environment,
 		return nil, nil, err
 	}
 	cmm, err := control_channel.NewControlChannelManager(env, streamTaskArgs.appId,
-		commtypes.SerdeFormat(streamTaskArgs.serdeFormat), streamTaskArgs.scaleEpoch)
+		commtypes.SerdeFormat(streamTaskArgs.serdeFormat), streamTaskArgs.procArgs.CurEpoch())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -204,7 +204,7 @@ func getOffsetMap(ctx context.Context, tm *TransactionManager, args *StreamTaskA
 	for _, src := range args.srcs {
 		inputTopicName := src.TopicName()
 		offset, err := createOffsetTopicAndGetOffset(ctx, tm, inputTopicName,
-			uint8(src.Stream().NumPartition()), args.inParNum)
+			uint8(src.Stream().NumPartition()), args.procArgs.ParNum())
 		if err != nil {
 			return nil, fmt.Errorf("createOffsetTopicAndGetOffset failed: %v", err)
 		}
@@ -218,7 +218,7 @@ func setOffsetOnStream(offsetMap map[string]uint64, args *StreamTaskArgsTransact
 	for _, src := range args.srcs {
 		inputTopicName := src.TopicName()
 		offset := offsetMap[inputTopicName]
-		src.SetCursor(offset+1, args.inParNum)
+		src.SetCursor(offset+1, args.procArgs.ParNum())
 	}
 }
 
@@ -385,7 +385,7 @@ func UpdateInputStreamCursor(
 ) {
 	for _, src := range args.srcs {
 		offset := offsetMap[src.TopicName()]
-		src.SetCursor(offset+1, args.inParNum)
+		src.SetCursor(offset+1, args.procArgs.ParNum())
 	}
 }
 
@@ -693,8 +693,8 @@ func (t *StreamTask) ProcessWithTransaction(
 			return &common.FnOutput{Success: true, Message: "exit due to ctx cancel"}
 		case m := <-meta:
 			debug.Fprintf(os.Stderr, "finished prev task %s, funcName %s, meta epoch %d, input epoch %d\n",
-				m.FinishedPrevTask, args.procArgs.FuncName(), m.Epoch, args.scaleEpoch)
-			if m.FinishedPrevTask == args.procArgs.FuncName() && m.Epoch+1 == args.scaleEpoch {
+				m.FinishedPrevTask, args.procArgs.FuncName(), m.Epoch, args.procArgs.CurEpoch())
+			if m.FinishedPrevTask == args.procArgs.FuncName() && m.Epoch+1 == args.procArgs.CurEpoch() {
 				run = true
 			}
 		case merr := <-monitorErrc:
@@ -819,9 +819,11 @@ func (t *StreamTask) startNewTransaction(ctx context.Context, args *StreamTaskAr
 		}
 		*hasLiveTransaction = true
 		*commitTimer = time.Now()
-		if args.fixedOutParNum != 0 {
+		debug.Fprintf(os.Stderr, "fixedOutParNum: %d\n", args.fixedOutParNum)
+		if args.fixedOutParNum != -1 {
 			debug.Assert(len(args.sinks) == 1, "fixed out param is only usable when there's only one output stream")
-			if err := tm.AddTopicPartition(ctx, args.sinks[0].TopicName(), []uint8{args.fixedOutParNum}); err != nil {
+			debug.Fprintf(os.Stderr, "%s tracking substream %d\n", args.sinks[0].TopicName(), args.fixedOutParNum)
+			if err := tm.AddTopicPartition(ctx, args.sinks[0].TopicName(), []uint8{uint8(args.fixedOutParNum)}); err != nil {
 				debug.Fprintf(os.Stderr, "[ERROR] track topic partition failed: %v\n", err)
 				return fmt.Errorf("track topic partition failed: %v\n", err)
 			}
@@ -836,7 +838,7 @@ func (t *StreamTask) startNewTransaction(ctx context.Context, args *StreamTaskAr
 	}
 	if !*trackConsumePar {
 		for _, src := range args.srcs {
-			if err := tm.AddTopicTrackConsumedSeqs(ctx, src.TopicName(), []uint8{args.inParNum}); err != nil {
+			if err := tm.AddTopicTrackConsumedSeqs(ctx, src.TopicName(), []uint8{args.procArgs.ParNum()}); err != nil {
 				return fmt.Errorf("add offsets failed: %v\n", err)
 			}
 		}
@@ -878,7 +880,7 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 			TopicToTrack:   topic,
 			TaskId:         tm.GetCurrentTaskId(),
 			TaskEpoch:      tm.GetCurrentEpoch(),
-			Partition:      args.inParNum,
+			Partition:      args.procArgs.ParNum(),
 			ConsumedSeqNum: uint64(offset),
 		})
 	}

@@ -51,7 +51,7 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 	case "q4MaxBid":
 		return handlers.NewQ4MaxBid(env, funcName), nil
 	case "q5bidkeyedbyauction":
-		return handlers.NewBidKeyedByAuctionHandler(env, funcName), nil
+		return handlers.NewBidByAuctionHandler(env, funcName), nil
 	case "q5aucbids":
 		return handlers.NewQ5AuctionBids(env, funcName), nil
 	case "q5maxbid":

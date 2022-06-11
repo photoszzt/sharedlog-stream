@@ -20,19 +20,19 @@ import (
 	"cs.utexas.edu/zjia/faas/types"
 )
 
-type bidKeyedByAuction struct {
+type bidByAuction struct {
 	env      types.Environment
 	funcName string
 }
 
-func NewBidKeyedByAuctionHandler(env types.Environment, funcName string) types.FuncHandler {
-	return &bidKeyedByAuction{
+func NewBidByAuctionHandler(env types.Environment, funcName string) types.FuncHandler {
+	return &bidByAuction{
 		env:      env,
 		funcName: funcName,
 	}
 }
 
-func (h *bidKeyedByAuction) Call(ctx context.Context, input []byte) ([]byte, error) {
+func (h *bidByAuction) Call(ctx context.Context, input []byte) ([]byte, error) {
 	sp := &common.QueryInput{}
 	err := json.Unmarshal(input, sp)
 	if err != nil {
@@ -53,7 +53,7 @@ type bidKeyedByAuctionProcessArgs struct {
 	proc_interface.BaseProcArgsWithSrcSink
 }
 
-func (h *bidKeyedByAuction) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
+func (h *bidByAuction) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
 	args := argsTmp.(*bidKeyedByAuctionProcessArgs)
 	bidMsg, err := args.filterBid.ProcessAndReturn(ctx, msg)
 	if err != nil {
@@ -72,7 +72,7 @@ func (h *bidKeyedByAuction) procMsg(ctx context.Context, msg commtypes.Message, 
 	return nil
 }
 
-func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
+func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 	sp *common.QueryInput,
 ) *common.FnOutput {
 	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
@@ -129,7 +129,13 @@ func (h *bidKeyedByAuction) processBidKeyedByAuction(ctx context.Context,
 		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 			sp.InputTopicNames[0],
 			sp.ParNum, sp.OutputTopicNames[0])
-		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks)
+		builder := transaction.NewStreamTaskArgsTransactionBuilder().
+			ProcArgs(procArgs).
+			Env(h.env).
+			Srcs(srcs).
+			Sinks(sinks).
+			TransactionalID(transactionalID)
+		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp, builder).Build()
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)

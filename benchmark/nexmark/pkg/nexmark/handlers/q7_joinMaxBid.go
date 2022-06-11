@@ -272,9 +272,16 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	}
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
-		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr).
-			WithWindowStoreChangelogs(wsc).WithFixedOutParNum(sp.ParNum)
-		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
+		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp,
+			transaction.NewStreamTaskArgsTransactionBuilder().
+				ProcArgs(procArgs).
+				Env(h.env).
+				Srcs(srcs).
+				Sinks(sinks_arr).
+				TransactionalID(transactionalID)).
+			WindowStoreChangelogs(wsc).
+			FixedOutParNum(sp.ParNum).
+			Build()
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)

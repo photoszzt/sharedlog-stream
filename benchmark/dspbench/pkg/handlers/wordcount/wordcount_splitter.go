@@ -180,8 +180,14 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 	if sp.EnableTransaction {
 		// fmt.Fprintf(os.Stderr, "word count counter function enables exactly once semantics\n")
 		transactionalID := fmt.Sprintf("%s-%s-%d", funcName, sp.InputTopicNames[0], sp.ParNum)
-		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks)
-		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
+		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp,
+			transaction.NewStreamTaskArgsTransactionBuilder().
+				ProcArgs(procArgs).
+				Env(h.env).
+				Srcs(srcs).
+				Sinks(sinks).
+				TransactionalID(transactionalID)).
+			Build()
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)

@@ -145,8 +145,14 @@ func ExecuteApp(
 	update_stats func(ret *common.FnOutput),
 ) *common.FnOutput {
 	if sp.EnableTransaction {
-		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(env, transactionalID, procArgs, srcs, sinks_arr)
-		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
+		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp,
+			transaction.NewStreamTaskArgsTransactionBuilder().
+				ProcArgs(procArgs).
+				Env(env).
+				Srcs(srcs).
+				Sinks(sinks_arr).
+				TransactionalID(transactionalID)).
+			Build()
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)

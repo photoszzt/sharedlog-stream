@@ -315,9 +315,14 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName,
 			sp.InputTopicNames[0], sp.ParNum)
-		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr).
-			WithKVChangelogs(kvchangelogs).WithFixedOutParNum(sp.ParNum)
-		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
+		builder := transaction.NewStreamTaskArgsTransactionBuilder().
+			ProcArgs(procArgs).
+			Env(h.env).
+			Srcs(srcs).
+			Sinks(sinks_arr).
+			TransactionalID(transactionalID)
+		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp, builder).
+			KVStoreChangelogs(kvchangelogs).FixedOutParNum(sp.ParNum).Build()
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)

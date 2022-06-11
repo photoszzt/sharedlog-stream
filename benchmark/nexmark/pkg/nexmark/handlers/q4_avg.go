@@ -188,16 +188,22 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 			sp.ParNum, sp.OutputTopicNames[0])
-		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID,
-			procArgs, srcs, sinks_arr).WithKVChangelogs(kvc).WithFixedOutParNum(sp.ParNum)
-		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
+		builder := transaction.NewStreamTaskArgsTransactionBuilder().
+			ProcArgs(procArgs).
+			Env(h.env).
+			Srcs(srcs).
+			Sinks(sinks_arr).
+			TransactionalID(transactionalID)
+		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp, builder).
+			KVStoreChangelogs(kvc).FixedOutParNum(sp.ParNum).Build()
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}
 		return ret
 	} else {
-		streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr).WithKVChangelogs(kvc)
+		streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr).
+			WithKVChangelogs(kvc)
 		benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
 		ret := task.Process(ctx, streamTaskArgs)
 		if ret != nil && ret.Success {

@@ -206,9 +206,14 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 			sp.ParNum, sp.OutputTopicNames[0])
-		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID,
-			procArgs, srcs, sinks_arr).WithKVChangelogs(kvc)
-		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
+		builder := transaction.NewStreamTaskArgsTransactionBuilder().
+			ProcArgs(procArgs).
+			Env(h.env).
+			Srcs(srcs).
+			Sinks(sinks_arr).
+			TransactionalID(transactionalID)
+		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp, builder).
+			KVStoreChangelogs(kvc).Build()
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)

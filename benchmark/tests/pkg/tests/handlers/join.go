@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/benchmark/tests/pkg/tests/test_types"
 	"sharedlog-stream/pkg/common_errors"
@@ -185,9 +186,13 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 		}
 		return pushMsgsToSink(ctx, sink, joinedMsgs, trackParFunc)
 	}
-
-	streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, "joinTestMongo", nil,
-		[]source_sink.Source{src1, src2}, []source_sink.Sink{sink})
+	builder := transaction.NewStreamTaskArgsTransactionBuilder().
+		ProcArgs(nil).
+		Env(h.env).
+		Srcs([]source_sink.Source{src1, src2}).
+		Sinks([]source_sink.Sink{sink}).
+		TransactionalID("joinTestMongo")
+	streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(&common.QueryInput{}, builder).Build()
 
 	tm, err := transaction.SetupTransactionManager(ctx, streamTaskArgs)
 	if err != nil {
@@ -426,9 +431,13 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	}
 
 	payloadArrSerde := sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDE
-
-	streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, "joinTestMem", nil,
-		[]source_sink.Source{src1, src2}, []source_sink.Sink{sink})
+	streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(&common.QueryInput{},
+		transaction.NewStreamTaskArgsTransactionBuilder().
+			ProcArgs(nil).
+			Env(h.env).
+			Srcs([]source_sink.Source{src1, src2}).
+			Sinks([]source_sink.Sink{sink}).
+			TransactionalID("joinTestMem")).Build()
 	tm, err := transaction.SetupTransactionManager(ctx, streamTaskArgs)
 	if err != nil {
 		panic(err)

@@ -230,9 +230,14 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 			sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
-		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, sinks_arr).
-			WithKVChangelogs(kvc)
-		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
+		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp,
+			transaction.NewStreamTaskArgsTransactionBuilder().
+				ProcArgs(procArgs).
+				Env(h.env).
+				Srcs(srcs).
+				Sinks(sinks_arr).
+				TransactionalID(transactionalID)).
+			KVStoreChangelogs(kvc).Build()
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)

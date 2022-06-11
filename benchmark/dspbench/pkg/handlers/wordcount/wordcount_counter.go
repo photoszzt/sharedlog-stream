@@ -224,8 +224,14 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 	}
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%s-%d", funcName, sp.InputTopicNames[0], sp.OutputTopicNames[0], sp.ParNum)
-		streamTaskArgs := transaction.NewStreamTaskArgsTransaction(h.env, transactionalID, procArgs, srcs, nil)
-		benchutil.UpdateStreamTaskArgsTransaction(sp, streamTaskArgs)
+		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp,
+			transaction.NewStreamTaskArgsTransactionBuilder().
+				ProcArgs(procArgs).
+				Env(h.env).
+				Srcs(srcs).
+				Sinks(nil).
+				TransactionalID(transactionalID)).
+			Build()
 		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
