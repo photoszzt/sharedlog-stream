@@ -42,9 +42,10 @@ func joinProcLoop(
 			if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 				debug.Fprintf(os.Stderr, "[TIMEOUT] %s %s timeout, out chan len: %d\n",
 					id, procArgs.Source().TopicName(), len(out))
-				out <- &common.FnOutput{Success: true, Message: err.Error()}
-				debug.Fprintf(os.Stderr, "%s done sending msg\n", id)
-				return
+				// out <- &common.FnOutput{Success: true, Message: err.Error()}
+				// debug.Fprintf(os.Stderr, "%s done sending msg\n", id)
+				// return
+				continue
 			}
 			debug.Fprintf(os.Stderr, "[ERROR] consume: %v, out chan len: %d\n", err, len(out))
 			out <- &common.FnOutput{Success: false, Message: err.Error()}
