@@ -34,22 +34,14 @@ func NewCommonJoinProcArgs(
 	}
 }
 
-func (c *CommonJoinProcArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
-	return c.RecordFinishFunc()
-}
-
 func (c *CommonJoinProcArgs) SetRecordFinishFunc(recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
-	c.SetRecordFinishFunc(recordFinishFunc)
+	c.BaseProcArgs.SetRecordFinishFunc(recordFinishFunc)
 	c.arg1.SetRecordFinishFunc(recordFinishFunc)
 	c.arg2.SetRecordFinishFunc(recordFinishFunc)
 }
 
-func (c *CommonJoinProcArgs) TrackParFunc() tran_interface.TrackKeySubStreamFunc {
-	return c.TrackParFunc()
-}
-
 func (c *CommonJoinProcArgs) SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc) {
-	c.SetTrackParFunc(trackParFunc)
+	c.BaseProcArgs.SetTrackParFunc(trackParFunc)
 	c.arg1.SetTrackParFunc(trackParFunc)
 	c.arg2.SetTrackParFunc(trackParFunc)
 }
