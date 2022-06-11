@@ -36,6 +36,12 @@ func CompareStartEndTime(a, b *StartEndTime) int {
 	}
 }
 
+var _ = commtypes.EventTimeExtractor(&StartEndTime{})
+
+func (se *StartEndTime) ExtractEventTime() (int64, error) {
+	return se.StartTimeMs, nil
+}
+
 func (se StartEndTime) String() string {
 	return fmt.Sprintf("%d %d", se.StartTimeMs, se.EndTimeMs)
 }
@@ -45,7 +51,11 @@ type StartEndTimeJSONEncoder struct{}
 var _ = commtypes.Encoder(StartEndTimeJSONEncoder{})
 
 func (e StartEndTimeJSONEncoder) Encode(value interface{}) ([]byte, error) {
-	se := value.(*StartEndTime)
+	se, ok := value.(*StartEndTime)
+	if !ok {
+		seTmp := value.(StartEndTime)
+		se = &seTmp
+	}
 	return json.Marshal(se)
 }
 
@@ -72,7 +82,11 @@ type StartEndTimeMsgpEncoder struct{}
 var _ = commtypes.Encoder(StartEndTimeMsgpEncoder{})
 
 func (e StartEndTimeMsgpEncoder) Encode(value interface{}) ([]byte, error) {
-	se := value.(*StartEndTime)
+	se, ok := value.(*StartEndTime)
+	if !ok {
+		seTmp := value.(StartEndTime)
+		se = &seTmp
+	}
 	return se.MarshalMsg(nil)
 }
 

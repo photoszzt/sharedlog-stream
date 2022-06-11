@@ -194,6 +194,8 @@ func GetSerdeFromString(serdeStr string, serdeFormat commtypes.SerdeFormat) (com
 		return ntypes.GetStartEndTimeSerde(serdeFormat)
 	case "AuctionIdCntMax":
 		return ntypes.GetAuctionIdCntMaxSerde(serdeFormat)
+	case "BidAndMax":
+		return ntypes.GetBidAndMaxSerde(serdeFormat)
 	case "Event":
 		return ntypes.GetEventSerde(serdeFormat)
 	case "Uint64":

@@ -3,24 +3,43 @@
         {
             "funcName": "nexmark_src",
             "NumInstance": 1,
-            "OutputTopicName": ["nexmark_src"]
+            "OutputTopicName": ["nexmark_src"],
+            "NodeConstraint": "1,2,3,4"
         },
         {
-            "funcName": "q7bidskeyedbyprice",
+            "funcName": "q7BidByPrice",
             "NumInstance": 1,
             "InputTopicNames": ["nexmark_src"],
-            "OutputTopicName": ["bids"]
+            "OutputTopicName": ["bid_by_price"],
+            "NodeConstraint": "5,6,7,8"
         },
         {
-            "funcName": "query7",
+            "funcName": "q7BidByWin",
             "NumInstance": 1,
-            "InputTopicNames": ["bids"],
-            "OutputTopicName": ["q7_out"]
+            "InputTopicNames": ["nexmark_src"],
+            "OutputTopicName": ["bid_by_win"],
+            "NodeConstraint": "5,6,7,8"
+        },
+        {
+            "funcName": "q7MaxBid",
+            "NumInstance": 1,
+            "InputTopicNames": ["bid_by_win"],
+            "OutputTopicName": ["max_bids"],
+            "NodeConstraint": "5,6,7,8"
+        },
+        {
+            "funcName": "q7JoinMaxBid",
+            "NumInstance": 1,
+            "InputTopicNames": ["bid_by_price", "max_bids"],
+            "OutputTopicName": ["q7_out"],
+            "NodeConstraint": "5,6,7,8"
         }
     ],
     "StreamParam": {
         "nexmark_src": 1,
-        "bids": 1,
+        "bid_by_price": 1,
+        "bid_by_win": 1,
+        "max_bids": 1,
         "q7_out": 1
     }
 }
