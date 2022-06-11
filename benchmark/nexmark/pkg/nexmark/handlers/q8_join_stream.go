@@ -194,6 +194,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	var perMp *store_with_changelog.MaterializeParam = nil
 	src1KVMsgSerdes := sss.src1.KVMsgSerdes()
 	src2KVMsgSerdes := sss.src2.KVMsgSerdes()
+	warmup := time.Duration(sp.WarmupS) * time.Second
 	if sp.TableType == uint8(store.IN_MEM) {
 		compare := concurrent_skiplist.CompareFunc(q8CompareFunc)
 		toAuctionsWindowTab, auctionsWinStore, aucMp, err = getTabAndToTab(h.env, sp, aucTabName, compare, src1KVMsgSerdes, joinWindows)
@@ -212,14 +213,14 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 
 		toAuctionsWindowTab, auctionsWinStore, err = processor.ToMongoDBWindowTable(ctx,
 			aucTabName, client, joinWindows, src1KVMsgSerdes.KeySerde, src1KVMsgSerdes.ValSerde,
-			time.Duration(sp.WarmupS)*time.Second)
+			warmup)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: fmt.Sprintf("to table err: %v", err)}
 		}
 
 		toPersonsWinTab, personsWinTab, err = processor.ToMongoDBWindowTable(ctx,
 			perTabName, client, joinWindows, src2KVMsgSerdes.KeySerde, src2KVMsgSerdes.ValSerde,
-			time.Duration(sp.WarmupS)*time.Second)
+			warmup)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: fmt.Sprintf("to table err: %v", err)}
 		}
@@ -254,13 +255,12 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	sharedTimeTracker := processor.NewTimeTracker()
 	personsJoinsAuctions := processor.NewMeteredProcessor(
 		processor.NewStreamStreamJoinProcessor(auctionsWinStore, joinWindows,
-			joiner, false, true, sharedTimeTracker), time.Duration(sp.WarmupS)*time.Second)
+			joiner, false, true, sharedTimeTracker), warmup)
 
 	auctionsJoinsPersons := processor.NewMeteredProcessor(
 		processor.NewStreamStreamJoinProcessor(personsWinTab, joinWindows,
 			processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker),
-		time.Duration(sp.WarmupS)*time.Second,
-	)
+		warmup)
 
 	aJoinP := func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		_, err := toAuctionsWindowTab.ProcessAndReturn(ctx, m)
