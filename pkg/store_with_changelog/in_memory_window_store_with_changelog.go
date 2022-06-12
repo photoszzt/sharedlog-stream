@@ -198,7 +198,6 @@ func (s *InMemoryWindowStoreWithChangelog) SetTrackParFunc(trackParFunc tran_int
 }
 
 func ToInMemWindowTableWithChangelog(
-	storeName string,
 	mp *MaterializeParam,
 	joinWindow *processor.JoinWindows,
 	comparable concurrent_skiplist.Comparable,

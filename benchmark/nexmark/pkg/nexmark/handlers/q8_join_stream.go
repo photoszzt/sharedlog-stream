@@ -153,7 +153,10 @@ func getTabAndToTab(env types.Environment,
 ) (*processor.MeteredProcessor, store.WindowStore, *store_with_changelog.MaterializeParam, error) {
 	format := commtypes.SerdeFormat(sp.SerdeFormat)
 	mp, err := store_with_changelog.NewMaterializeParamBuilder().
-		KVMsgSerdes(kvmegSerdes).StoreName(tabName).ParNum(sp.ParNum).SerdeFormat(format).
+		KVMsgSerdes(kvmegSerdes).
+		StoreName(tabName).
+		ParNum(sp.ParNum).
+		SerdeFormat(format).
 		StreamParam(commtypes.CreateStreamParam{
 			Env:          env,
 			NumPartition: sp.NumInPartition,
@@ -162,7 +165,7 @@ func getTabAndToTab(env types.Environment,
 		return nil, nil, nil, err
 	}
 	toTab, winTab, err := store_with_changelog.ToInMemWindowTableWithChangelog(
-		tabName, mp, joinWindows, compare, time.Duration(sp.WarmupS)*time.Second)
+		mp, joinWindows, compare, time.Duration(sp.WarmupS)*time.Second)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -252,14 +255,11 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		}
 	})
 
-	sharedTimeTracker := processor.NewTimeTracker()
-	personsJoinsAuctions := processor.NewMeteredProcessor(
-		processor.NewStreamStreamJoinProcessor(auctionsWinStore, joinWindows,
-			joiner, false, true, sharedTimeTracker), warmup)
-
-	auctionsJoinsPersons := processor.NewMeteredProcessor(
-		processor.NewStreamStreamJoinProcessor(personsWinTab, joinWindows,
-			processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker),
+	auctionsJoinsPersons, personsJoinsAuctions := execution.ConfigureStreamStreamJoinProcessor(
+		auctionsWinStore,
+		personsWinTab,
+		joiner,
+		joinWindows,
 		warmup)
 
 	aJoinP := func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {

@@ -9,6 +9,13 @@ import (
 	"cs.utexas.edu/zjia/faas/types"
 )
 
+type TranProtocol uint8
+
+const (
+	TWO_PHASE_COMMIT TranProtocol = 1
+	EPOCH_MARK       TranProtocol = 2
+)
+
 type StreamTaskArgsTransaction struct {
 	procArgs        proc_interface.ProcArgs
 	env             types.Environment
@@ -27,6 +34,7 @@ type StreamTaskArgsTransaction struct {
 	duration         time.Duration
 	serdeFormat      commtypes.SerdeFormat
 	fixedOutParNum   int16
+	protocol         TranProtocol
 }
 
 type StreamTaskArgsTransactionBuilder struct {
@@ -37,6 +45,7 @@ func NewStreamTaskArgsTransactionBuilder() SetProcArgs {
 	return &StreamTaskArgsTransactionBuilder{
 		stArgs: &StreamTaskArgsTransaction{
 			fixedOutParNum: -1,
+			protocol:       TWO_PHASE_COMMIT,
 		},
 	}
 }

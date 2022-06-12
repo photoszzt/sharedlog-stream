@@ -177,3 +177,5 @@ func (pa *BaseProcArgs) SetTrackParFunc(trackParFunc tran_interface.TrackKeySubS
 }
 
 type ProcessMsgFunc func(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error
+
+type ProcessAndReturnFunc func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error)

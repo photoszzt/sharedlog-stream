@@ -16,6 +16,7 @@ import (
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
 	"sync"
 	"time"
@@ -115,17 +116,6 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	compare := concurrent_skiplist.CompareFunc(q8CompareFunc)
-	toBidByPriceTab, bidByPriceWinStore, bMp, err := getTabAndToTab(h.env, sp, "bidByPriceTab", compare,
-		sss.src1.KVMsgSerdes(), jw)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	toMaxBidByPriceTab, maxBidByPriceTab, maxBMp, err := getTabAndToTab(h.env, sp, "maxBidByPriceTab", compare,
-		sss.src2.KVMsgSerdes(), jw)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-
 	joiner := processor.ValueJoinerWithKeyTsFunc(func(readOnlyKey, value1, value2 interface{},
 		leftTs, otherTs int64) interface{} {
 		fmt.Fprintf(os.Stderr, "val1: %v, val2: %v\n", value1, value2)
@@ -146,29 +136,42 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 			},
 		}
 	})
-
 	warmup := time.Duration(sp.WarmupS) * time.Second
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	bMp, err := store_with_changelog.NewMaterializeParamBuilder().
+		KVMsgSerdes(sss.src1.KVMsgSerdes()).
+		StoreName("bidByPriceTab").
+		ParNum(sp.ParNum).
+		SerdeFormat(serdeFormat).StreamParam(commtypes.CreateStreamParam{
+		Env:          h.env,
+		NumPartition: sp.NumInPartition,
+	}).Build()
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: err.Error()}
+	}
+	maxBMp, err := store_with_changelog.NewMaterializeParamBuilder().
+		KVMsgSerdes(sss.src2.KVMsgSerdes()).
+		StoreName("maxBidByPriceTab").
+		ParNum(sp.ParNum).
+		SerdeFormat(serdeFormat).StreamParam(commtypes.CreateStreamParam{
+		Env:          h.env,
+		NumPartition: sp.NumInPartition,
+	}).Build()
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: err.Error()}
+	}
+	bJoinMaxBFunc, maxBJoinBFunc, procs, wsc, err := execution.SetupStreamStreamJoin(bMp, maxBMp, compare, joiner, jw, warmup)
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: err.Error()}
+	}
+
 	filter := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(func(m *commtypes.Message) (bool, error) {
 		val := m.Value.(*ntypes.BidAndMax)
 		return val.Timestamp >= val.WStartMs && val.Timestamp <= val.WEndMs, nil
 	})), warmup)
 
-	sharedTimeTracker := processor.NewTimeTracker()
-	bidJoinMaxBid := processor.NewMeteredProcessor(
-		processor.NewStreamStreamJoinProcessor(maxBidByPriceTab, jw,
-			joiner, false, true, sharedTimeTracker), warmup)
-
-	maxBidJoinBid := processor.NewMeteredProcessor(
-		processor.NewStreamStreamJoinProcessor(bidByPriceWinStore, jw,
-			processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker),
-		warmup)
-
 	var bJoinM execution.JoinWorkerFunc = func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
-		_, err := toBidByPriceTab.ProcessAndReturn(ctx, m)
-		if err != nil {
-			return nil, err
-		}
-		joined, err := bidJoinMaxBid.ProcessAndReturn(ctx, m)
+		joined, err := bJoinMaxBFunc(ctx, m)
 		if err != nil {
 			return nil, err
 		}
@@ -185,11 +188,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		return outMsgs, nil
 	}
 	var mJoinB execution.JoinWorkerFunc = func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
-		_, err := toMaxBidByPriceTab.ProcessAndReturn(ctx, m)
-		if err != nil {
-			return nil, err
-		}
-		joined, err := maxBidJoinBid.ProcessAndReturn(ctx, m)
+		joined, err := maxBJoinBFunc(ctx, m)
 		if err != nil {
 			return nil, err
 		}
@@ -228,10 +227,9 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		}).InitFunc(func(progArgs interface{}) {
 		sss.src1.StartWarmup()
 		sss.src2.StartWarmup()
-		toBidByPriceTab.StartWarmup()
-		toMaxBidByPriceTab.StartWarmup()
-		bidJoinMaxBid.StartWarmup()
-		maxBidJoinBid.StartWarmup()
+		for _, proc := range procs {
+			proc.StartWarmup()
+		}
 
 		bidManager.Run()
 		maxBidManager.Run()
@@ -255,18 +253,10 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 
 	srcs := []source_sink.Source{sss.src1, sss.src2}
 	sinks_arr := []source_sink.Sink{sss.sink}
-	var wsc []*transaction.WindowStoreChangelog
-	wsc = []*transaction.WindowStoreChangelog{
-		transaction.NewWindowStoreChangelog(bidByPriceWinStore, bMp.ChangelogManager(), nil,
-			sss.src1.KVMsgSerdes(), sp.ParNum),
-		transaction.NewWindowStoreChangelog(maxBidByPriceTab, maxBMp.ChangelogManager(), nil,
-			sss.src2.KVMsgSerdes(), sp.ParNum),
-	}
 	update_stats := func(ret *common.FnOutput) {
-		ret.Latencies["toBidByPriceTab"] = toBidByPriceTab.GetLatency()
-		ret.Latencies["toMaxBidByPriceTab"] = toMaxBidByPriceTab.GetLatency()
-		ret.Latencies["maxBidJoinBid"] = maxBidJoinBid.GetLatency()
-		ret.Latencies["bidJoinMaxBid"] = bidJoinMaxBid.GetLatency()
+		for proc_name, proc := range procs {
+			ret.Latencies[proc_name] = proc.GetLatency()
+		}
 		ret.Latencies["eventTimeLatency"] = sss.sink.GetEventTimeLatency()
 		ret.Counts["bidByPriceSrc"] = sss.src1.GetCount()
 		ret.Counts["maxBidSrc"] = sss.src2.GetCount()
