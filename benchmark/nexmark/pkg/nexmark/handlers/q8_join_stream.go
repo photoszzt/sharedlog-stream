@@ -8,7 +8,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	nutils "sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/debug"
@@ -19,6 +19,7 @@ import (
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/utils"
 	"sync"
 	"time"
 
@@ -49,7 +50,7 @@ func (h *q8JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, e
 		panic(err)
 	}
 	// fmt.Printf("query 3 output: %v\n", encodedOutput)
-	return utils.CompressData(encodedOutput), nil
+	return nutils.CompressData(encodedOutput), nil
 }
 
 func (h *q8JoinStreamHandler) process(
@@ -230,28 +231,17 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	} else {
 		panic("unrecognized table type")
 	}
-
+	windowSizeMs := int64(10 * 1000)
 	joiner := processor.ValueJoinerWithKeyTsFunc(func(readOnlyKey interface{},
 		leftValue interface{}, rightValue interface{}, leftTs int64, rightTs int64) interface{} {
 		// fmt.Fprint(os.Stderr, "get into joiner\n")
-		lv := leftValue.(*ntypes.Event)
 		rv := rightValue.(*ntypes.Event)
-		st := leftTs
-		if st > rightTs {
-			st = rightTs
-		}
-		if lv.Etype == ntypes.PERSON {
-			return &ntypes.PersonTime{
-				ID:        lv.NewPerson.ID,
-				Name:      lv.NewPerson.Name,
-				StartTime: st,
-			}
-		} else {
-			return &ntypes.PersonTime{
-				ID:        rv.NewPerson.ID,
-				Name:      rv.NewPerson.Name,
-				StartTime: st,
-			}
+		ts := rv.NewPerson.DateTime
+		windowStart := (utils.MaxInt64(0, ts-windowSizeMs+windowSizeMs) / windowSizeMs) * windowSizeMs
+		return &ntypes.PersonTime{
+			ID:        rv.NewPerson.ID,
+			Name:      rv.NewPerson.Name,
+			StartTime: windowStart,
 		}
 	})
 
