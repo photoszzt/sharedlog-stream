@@ -18,8 +18,9 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/store"
+	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/store_with_changelog"
-	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/stream_task"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -313,8 +314,8 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src,
 			sinks, h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
-	task := transaction.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
+	task := stream_task.NewStreamTaskBuilder().
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
 			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
@@ -326,19 +327,19 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		}).Build()
 	srcs := []source_sink.Source{src}
 
-	var wsc []*transaction.WindowStoreChangelog
+	var wsc []*store_restore.WindowStoreChangelog
 	if countStore.TableType() == store.IN_MEM {
 		cstore := countStore.(*store_with_changelog.InMemoryWindowStoreWithChangelog)
-		wsc = []*transaction.WindowStoreChangelog{
-			transaction.NewWindowStoreChangelog(
+		wsc = []*store_restore.WindowStoreChangelog{
+			store_restore.NewWindowStoreChangelog(
 				cstore,
 				cstore.MaterializeParam().ChangelogManager(),
 				cstore.KeyWindowTsSerde(),
 				cstore.MaterializeParam().KVMsgSerdes(), 0),
 		}
 	} else if countStore.TableType() == store.MONGODB {
-		wsc = []*transaction.WindowStoreChangelog{
-			transaction.NewWindowStoreChangelogForExternalStore(countStore, input_stream,
+		wsc = []*store_restore.WindowStoreChangelog{
+			store_restore.NewWindowStoreChangelogForExternalStore(countStore, input_stream,
 				h.processWithoutSink, &q5AuctionBidsRestoreArg{
 					countProc:      countProc.InnerProcessor(),
 					groupByAuction: groupByAuction.InnerProcessor(),
@@ -358,7 +359,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 			sp.ParNum, sp.OutputTopicNames[0])
-		builder := transaction.NewStreamTaskArgsTransactionBuilder().
+		builder := stream_task.NewStreamTaskArgsTransactionBuilder().
 			ProcArgs(procArgs).
 			Env(h.env).
 			Srcs(srcs).
@@ -366,14 +367,14 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			TransactionalID(transactionalID)
 		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp, builder).
 			WindowStoreChangelogs(wsc).Build()
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
+		ret := stream_task.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}
 		return ret
 	}
 	// return h.process(ctx, sp, args)
-	streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks).
+	streamTaskArgs := stream_task.NewStreamTaskArgs(h.env, procArgs, srcs, sinks).
 		WithWindowStoreChangelogs(wsc)
 	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
 	ret := task.Process(ctx, streamTaskArgs)

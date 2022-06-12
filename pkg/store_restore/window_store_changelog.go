@@ -1,4 +1,4 @@
-package transaction
+package store_restore
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 
 	"go.mongodb.org/mongo-driver/x/mongo/driver/session"
 )
@@ -41,6 +42,38 @@ func NewWindowStoreChangelog(
 		kvmsgSerdes:      kvmsgSerdes,
 		parNum:           parNum,
 	}
+}
+
+func (wsc *WindowStoreChangelog) SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc) {
+	wsc.winStore.SetTrackParFunc(trackParFunc)
+}
+
+func (wsc *WindowStoreChangelog) TableType() store.TABLE_TYPE {
+	return wsc.winStore.TableType()
+}
+
+func (wsc *WindowStoreChangelog) ChangelogManager() *store_with_changelog.ChangelogManager {
+	return wsc.changelogManager
+}
+
+func (wsc *WindowStoreChangelog) WinExternalStore() store.WindowStoreOpForExternalStore {
+	return wsc.winStore
+}
+
+func (wsc *WindowStoreChangelog) ParNum() uint8 {
+	return wsc.parNum
+}
+
+func (wsc *WindowStoreChangelog) TabTranRepr() string {
+	return wsc.tabTranRepr
+}
+
+func (wsc *WindowStoreChangelog) InputStream() store.Stream {
+	return wsc.inputStream
+}
+
+func (wsc *WindowStoreChangelog) ExecuteRestoreFunc(ctx context.Context) error {
+	return wsc.restoreFunc(ctx, wsc.restoreArg)
 }
 
 func NewWindowStoreChangelogForExternalStore(

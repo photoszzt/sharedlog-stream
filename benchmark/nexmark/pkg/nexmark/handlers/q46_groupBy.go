@@ -15,7 +15,7 @@ import (
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/source_sink"
-	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/stream_task"
 	"sync"
 	"time"
 
@@ -99,8 +99,8 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 	auctionsByIDManager.LaunchProc(ctx, procArgs, &wg)
 	bidsByAuctionIDManager.LaunchProc(ctx, procArgs, &wg)
 
-	task := transaction.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
+	task := stream_task.NewStreamTaskBuilder().
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
 			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
@@ -125,7 +125,7 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 			// debug.Fprintf(os.Stderr, "done flush\n")
 			return nil
 		}).
-		ResumeFunc(func(task *transaction.StreamTask) {
+		ResumeFunc(func(task *stream_task.StreamTask) {
 			debug.Fprintf(os.Stderr, "start resume\n")
 			auctionsByIDManager.RecreateMsgChan(&procArgs.msgChan1)
 			bidsByAuctionIDManager.RecreateMsgChan(&procArgs.msgChan2)
@@ -148,20 +148,20 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName, sp.InputTopicNames[0], sp.ParNum)
 		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp,
-			transaction.NewStreamTaskArgsTransactionBuilder().
+			stream_task.NewStreamTaskArgsTransactionBuilder().
 				ProcArgs(procArgs).
 				Env(h.env).
 				Srcs(srcs).
 				Sinks(sinks_arr).
 				TransactionalID(transactionalID)).
 			Build()
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
+		ret := stream_task.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}
 		return ret
 	} else {
-		streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr)
+		streamTaskArgs := stream_task.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr)
 		benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
 		ret := task.Process(ctx, streamTaskArgs)
 		if ret != nil && ret.Success {

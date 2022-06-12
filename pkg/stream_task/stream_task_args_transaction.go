@@ -1,9 +1,10 @@
-package transaction
+package stream_task
 
 import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/store_restore"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -24,8 +25,8 @@ type StreamTaskArgsTransaction struct {
 	appId           string
 	transactionalId string
 
-	windowStoreChangelogs []*WindowStoreChangelog
-	kvChangelogs          []*KVStoreChangelog
+	windowStoreChangelogs []*store_restore.WindowStoreChangelog
+	kvChangelogs          []*store_restore.KVStoreChangelog
 
 	warmup           time.Duration
 	commitEvery      time.Duration
@@ -100,29 +101,10 @@ type SetSerdeFormat interface {
 
 type BuildStreamTaskArgsTransaction interface {
 	Build() *StreamTaskArgsTransaction
-	WindowStoreChangelogs([]*WindowStoreChangelog) BuildStreamTaskArgsTransaction
-	KVStoreChangelogs([]*KVStoreChangelog) BuildStreamTaskArgsTransaction
+	WindowStoreChangelogs([]*store_restore.WindowStoreChangelog) BuildStreamTaskArgsTransaction
+	KVStoreChangelogs([]*store_restore.KVStoreChangelog) BuildStreamTaskArgsTransaction
 	FixedOutParNum(uint8) BuildStreamTaskArgsTransaction
 }
-
-/*
-func NewStreamTaskArgsTransaction(
-	env types.Environment,
-	transactionalID string,
-	procArgs proc_interface.ProcArgs,
-	srcs []source_sink.Source,
-	sinks []source_sink.Sink,
-) *StreamTaskArgsTransaction {
-	return &StreamTaskArgsTransaction{
-		env:             env,
-		procArgs:        procArgs,
-		srcs:            srcs,
-		sinks:           sinks,
-		transactionalId: transactionalID,
-		fixedOutParNum:  -1,
-	}
-}
-*/
 
 func (b *StreamTaskArgsTransactionBuilder) ProcArgs(procArgs proc_interface.ProcArgs) SetEnv {
 	b.stArgs.procArgs = procArgs
@@ -177,12 +159,12 @@ func (args *StreamTaskArgsTransactionBuilder) SerdeFormat(serdeFormat commtypes.
 	return args
 }
 
-func (args *StreamTaskArgsTransactionBuilder) WindowStoreChangelogs(wschangelogs []*WindowStoreChangelog) BuildStreamTaskArgsTransaction {
+func (args *StreamTaskArgsTransactionBuilder) WindowStoreChangelogs(wschangelogs []*store_restore.WindowStoreChangelog) BuildStreamTaskArgsTransaction {
 	args.stArgs.windowStoreChangelogs = wschangelogs
 	return args
 }
 
-func (args *StreamTaskArgsTransactionBuilder) KVStoreChangelogs(kvchangelogs []*KVStoreChangelog) BuildStreamTaskArgsTransaction {
+func (args *StreamTaskArgsTransactionBuilder) KVStoreChangelogs(kvchangelogs []*store_restore.KVStoreChangelog) BuildStreamTaskArgsTransaction {
 	args.stArgs.kvChangelogs = kvchangelogs
 	return args
 }

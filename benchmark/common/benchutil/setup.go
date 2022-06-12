@@ -13,7 +13,7 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
-	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/stream_task"
 	"sync"
 	"time"
 
@@ -123,7 +123,7 @@ func InvokeFunc(client *http.Client, response *common.FnOutput,
 	}
 }
 
-func UpdateStreamTaskArgsTransaction(sp *common.QueryInput, argsBuilder transaction.SetAppID) transaction.BuildStreamTaskArgsTransaction {
+func UpdateStreamTaskArgsTransaction(sp *common.QueryInput, argsBuilder stream_task.SetAppID) stream_task.BuildStreamTaskArgsTransaction {
 	debug.Assert(sp.AppId != "", "app id should not be empty")
 	return argsBuilder.AppID(sp.AppId).
 		Warmup(time.Duration(sp.WarmupS) * time.Second).
@@ -134,7 +134,7 @@ func UpdateStreamTaskArgsTransaction(sp *common.QueryInput, argsBuilder transact
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat))
 }
 
-func UpdateStreamTaskArgs(sp *common.QueryInput, args *transaction.StreamTaskArgs) {
+func UpdateStreamTaskArgs(sp *common.QueryInput, args *stream_task.StreamTaskArgs) {
 	args.WithDuration(time.Duration(sp.Duration) * time.Second).
 		WithNumInPartition(sp.NumInPartition).
 		WithParNum(sp.ParNum).

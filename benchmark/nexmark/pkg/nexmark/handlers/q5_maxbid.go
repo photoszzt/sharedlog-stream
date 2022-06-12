@@ -17,8 +17,9 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/store"
+	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/store_with_changelog"
-	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/treemap"
 	"time"
 
@@ -301,8 +302,8 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src,
 			sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
-	task := transaction.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
+	task := stream_task.NewStreamTaskBuilder().
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
 			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
@@ -315,18 +316,17 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		}).Build()
 
 	srcs := []source_sink.Source{src}
-	var kvc []*transaction.KVStoreChangelog
+	var kvc []*store_restore.KVStoreChangelog
 	if sp.TableType == uint8(store.IN_MEM) {
 		kvstore_mem := kvstore.(*store_with_changelog.KeyValueStoreWithChangelog)
 		mp := kvstore_mem.MaterializeParam()
-		kvc = []*transaction.KVStoreChangelog{
-			transaction.NewKVStoreChangelog(kvstore, mp.ChangelogManager(),
+		kvc = []*store_restore.KVStoreChangelog{
+			store_restore.NewKVStoreChangelog(kvstore, mp.ChangelogManager(),
 				mp.KVMsgSerdes(), sp.ParNum),
 		}
 	} else if sp.TableType == uint8(store.MONGODB) {
-		// TODO: MONGODB
-		kvc = []*transaction.KVStoreChangelog{
-			transaction.NewKVStoreChangelogForExternalStore(kvstore, input_stream, h.processWithoutSink, &q5MaxBidRestoreArgs{
+		kvc = []*store_restore.KVStoreChangelog{
+			store_restore.NewKVStoreChangelogForExternalStore(kvstore, input_stream, h.processWithoutSink, &q5MaxBidRestoreArgs{
 				maxBid:       maxBid.InnerProcessor(),
 				stJoin:       stJoin.InnerProcessor(),
 				chooseMaxCnt: chooseMaxCnt.InnerProcessor(),
@@ -350,7 +350,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 			sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
 		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp,
-			transaction.NewStreamTaskArgsTransactionBuilder().
+			stream_task.NewStreamTaskArgsTransactionBuilder().
 				ProcArgs(procArgs).
 				Env(h.env).
 				Srcs(srcs).
@@ -358,13 +358,13 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 				TransactionalID(transactionalID)).
 			KVStoreChangelogs(kvc).
 			FixedOutParNum(sp.ParNum).Build()
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
+		ret := stream_task.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}
 		return ret
 	}
-	streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr).
+	streamTaskArgs := stream_task.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr).
 		WithKVChangelogs(kvc)
 	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
 	ret := task.Process(ctx, streamTaskArgs)

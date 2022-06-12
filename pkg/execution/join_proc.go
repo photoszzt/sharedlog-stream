@@ -12,8 +12,9 @@ import (
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/store"
+	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/store_with_changelog"
-	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/stream_task"
 	"sync"
 	"time"
 
@@ -23,7 +24,7 @@ import (
 func joinProcLoop(
 	ctx context.Context,
 	out chan *common.FnOutput,
-	task *transaction.StreamTask,
+	task *stream_task.StreamTask,
 	procArgs *JoinProcArgs,
 	wg *sync.WaitGroup,
 	run chan struct{},
@@ -142,7 +143,7 @@ func SetupStreamStreamJoin(
 ) (proc_interface.ProcessAndReturnFunc,
 	proc_interface.ProcessAndReturnFunc,
 	map[string]*processor.MeteredProcessor,
-	[]*transaction.WindowStoreChangelog,
+	[]*store_restore.WindowStoreChangelog,
 	error,
 ) {
 	toLeftTab, leftTab, err := store_with_changelog.ToInMemWindowTableWithChangelog(
@@ -172,9 +173,9 @@ func SetupStreamStreamJoin(
 		}
 		return rightJoinLeft.ProcessAndReturn(ctx, msg)
 	}
-	wsc := []*transaction.WindowStoreChangelog{
-		transaction.NewWindowStoreChangelog(leftTab, mpLeft.ChangelogManager(), nil, mpLeft.KVMsgSerdes(), mpLeft.ParNum()),
-		transaction.NewWindowStoreChangelog(rightTab, mpRight.ChangelogManager(), nil, mpRight.KVMsgSerdes(), mpRight.ParNum()),
+	wsc := []*store_restore.WindowStoreChangelog{
+		store_restore.NewWindowStoreChangelog(leftTab, mpLeft.ChangelogManager(), nil, mpLeft.KVMsgSerdes(), mpLeft.ParNum()),
+		store_restore.NewWindowStoreChangelog(rightTab, mpRight.ChangelogManager(), nil, mpRight.KVMsgSerdes(), mpRight.ParNum()),
 	}
 	return leftJoinRightFunc, rightJoinLeftFunc,
 		map[string]*processor.MeteredProcessor{

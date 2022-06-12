@@ -8,9 +8,10 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/consume_seq_num_manager"
+	"sharedlog-stream/pkg/consume_seq_num_manager/con_types"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/transaction"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -45,7 +46,7 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	cm, err := transaction.NewConsumeSeqManager(commtypes.MSGP)
+	cm, err := consume_seq_num_manager.NewConsumeSeqManager(commtypes.MSGP)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -155,8 +156,8 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 }
 
 func commitConsumeSeq(ctx context.Context,
-	cm *transaction.ConsumeSeqManager, topicName string, off uint64) error {
-	consumedSeqNumConfig := []transaction.ConsumedSeqNumConfig{
+	cm *consume_seq_num_manager.ConsumeSeqManager, topicName string, off uint64) error {
+	consumedSeqNumConfig := []con_types.ConsumedSeqNumConfig{
 		{
 			TopicToTrack:   topicName,
 			Partition:      0,
@@ -176,7 +177,7 @@ func commitConsumeSeq(ctx context.Context,
 
 func (h *sharedlogConsumeBenchHandler) runLoop(ctx context.Context,
 	stream *sharedlog_stream.ShardedSharedLogStream, duration time.Duration,
-	numEvents int, cm *transaction.ConsumeSeqManager,
+	numEvents int, cm *consume_seq_num_manager.ConsumeSeqManager,
 ) (int, error) {
 	idx := 0
 	var ptSerde datatype.PayloadTsMsgpSerde

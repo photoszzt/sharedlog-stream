@@ -14,8 +14,9 @@ import (
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/store_with_changelog"
-	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/treemap"
 	"time"
 
@@ -177,8 +178,8 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 			sp.ScaleEpoch, sp.ParNum),
 	}
 
-	task := transaction.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
+	task := stream_task.NewStreamTaskBuilder().
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
 			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
@@ -190,9 +191,9 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		}).Build()
 
 	srcs := []source_sink.Source{src}
-	var kvc []*transaction.KVStoreChangelog
-	kvc = []*transaction.KVStoreChangelog{
-		transaction.NewKVStoreChangelog(kvstore, mp.ChangelogManager(), mp.KVMsgSerdes(), sp.ParNum),
+	var kvc []*store_restore.KVStoreChangelog
+	kvc = []*store_restore.KVStoreChangelog{
+		store_restore.NewKVStoreChangelog(kvstore, mp.ChangelogManager(), mp.KVMsgSerdes(), sp.ParNum),
 	}
 
 	update_stats := func(ret *common.FnOutput) {
@@ -206,7 +207,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 			sp.ParNum, sp.OutputTopicNames[0])
-		builder := transaction.NewStreamTaskArgsTransactionBuilder().
+		builder := stream_task.NewStreamTaskArgsTransactionBuilder().
 			ProcArgs(procArgs).
 			Env(h.env).
 			Srcs(srcs).
@@ -214,13 +215,13 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 			TransactionalID(transactionalID)
 		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp, builder).
 			KVStoreChangelogs(kvc).Build()
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
+		ret := stream_task.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}
 		return ret
 	} else {
-		streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr).WithKVChangelogs(kvc)
+		streamTaskArgs := stream_task.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr).WithKVChangelogs(kvc)
 		benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
 		ret := task.Process(ctx, streamTaskArgs)
 		if ret != nil && ret.Success {

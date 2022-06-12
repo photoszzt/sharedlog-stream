@@ -1,4 +1,4 @@
-package transaction
+package store_restore
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 
 	"go.mongodb.org/mongo-driver/x/mongo/driver/session"
 )
@@ -40,6 +41,38 @@ func NewKVStoreChangelog(
 		kvmsgSerdes:      kvmsgSerdes,
 		parNum:           parNum,
 	}
+}
+
+func (kvc *KVStoreChangelog) SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc) {
+	kvc.kvStore.SetTrackParFunc(trackParFunc)
+}
+
+func (kvc *KVStoreChangelog) TableType() store.TABLE_TYPE {
+	return kvc.kvStore.TableType()
+}
+
+func (kvc *KVStoreChangelog) ChangelogManager() *store_with_changelog.ChangelogManager {
+	return kvc.changelogManager
+}
+
+func (kvc *KVStoreChangelog) KVExternalStore() store.KeyValueStoreOpForExternalStore {
+	return kvc.kvStore
+}
+
+func (kvc *KVStoreChangelog) ParNum() uint8 {
+	return kvc.parNum
+}
+
+func (kvc *KVStoreChangelog) TabTranRepr() string {
+	return kvc.tabTranRepr
+}
+
+func (kvc *KVStoreChangelog) InputStream() store.Stream {
+	return kvc.inputStream
+}
+
+func (kvc *KVStoreChangelog) ExecuteRestoreFunc(ctx context.Context) error {
+	return kvc.restoreFunc(ctx, kvc.restoreArg)
 }
 
 func NewKVStoreChangelogForExternalStore(

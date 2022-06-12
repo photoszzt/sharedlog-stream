@@ -16,7 +16,7 @@ import (
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
-	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/stream_task"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 
@@ -85,8 +85,8 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src,
 			[]source_sink.Sink{sink}, h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
-	task := transaction.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *transaction.StreamTask, argsTmp interface{}) *common.FnOutput {
+	task := stream_task.NewStreamTaskBuilder().
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
 			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
@@ -109,7 +109,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%d-%s",
 			h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
-		builder := transaction.NewStreamTaskArgsTransactionBuilder().
+		builder := stream_task.NewStreamTaskArgsTransactionBuilder().
 			ProcArgs(procArgs).
 			Env(h.env).
 			Srcs(srcs).
@@ -117,7 +117,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 			TransactionalID(transactionalID)
 		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp, builder).
 			FixedOutParNum(sp.ParNum).Build()
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
+		ret := stream_task.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}

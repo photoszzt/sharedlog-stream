@@ -1,8 +1,9 @@
-package transaction
+package stream_task
 
 import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/store_restore"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -14,8 +15,8 @@ type StreamTaskArgs struct {
 
 	srcs                  []source_sink.Source
 	sinks                 []source_sink.Sink
-	windowStoreChangelogs []*WindowStoreChangelog
-	kvChangelogs          []*KVStoreChangelog
+	windowStoreChangelogs []*store_restore.WindowStoreChangelog
+	kvChangelogs          []*store_restore.KVStoreChangelog
 
 	duration       time.Duration
 	warmup         time.Duration
@@ -34,12 +35,12 @@ func NewStreamTaskArgs(env types.Environment, procArgs interface{}, srcs []sourc
 	}
 }
 
-func (args *StreamTaskArgs) WithWindowStoreChangelogs(wschangelogs []*WindowStoreChangelog) *StreamTaskArgs {
+func (args *StreamTaskArgs) WithWindowStoreChangelogs(wschangelogs []*store_restore.WindowStoreChangelog) *StreamTaskArgs {
 	args.windowStoreChangelogs = wschangelogs
 	return args
 }
 
-func (args *StreamTaskArgs) WithKVChangelogs(kvchangelogs []*KVStoreChangelog) *StreamTaskArgs {
+func (args *StreamTaskArgs) WithKVChangelogs(kvchangelogs []*store_restore.KVStoreChangelog) *StreamTaskArgs {
 	args.kvChangelogs = kvchangelogs
 	return args
 }

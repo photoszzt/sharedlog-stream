@@ -18,7 +18,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/transaction/tran_interface"
 	"time"
 
@@ -186,7 +186,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 		}
 		return pushMsgsToSink(ctx, sink, joinedMsgs, trackParFunc)
 	}
-	builder := transaction.NewStreamTaskArgsTransactionBuilder().
+	builder := stream_task.NewStreamTaskArgsTransactionBuilder().
 		ProcArgs(nil).
 		Env(h.env).
 		Srcs([]source_sink.Source{src1, src2}).
@@ -194,7 +194,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 		TransactionalID("joinTestMongo")
 	streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(&common.QueryInput{}, builder).Build()
 
-	tm, err := transaction.SetupTransactionManager(ctx, streamTaskArgs)
+	tm, err := stream_task.SetupTransactionManager(ctx, streamTaskArgs)
 	if err != nil {
 		panic(err)
 	}
@@ -432,13 +432,13 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 
 	payloadArrSerde := sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDE
 	streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(&common.QueryInput{},
-		transaction.NewStreamTaskArgsTransactionBuilder().
+		stream_task.NewStreamTaskArgsTransactionBuilder().
 			ProcArgs(nil).
 			Env(h.env).
 			Srcs([]source_sink.Source{src1, src2}).
 			Sinks([]source_sink.Sink{sink}).
 			TransactionalID("joinTestMem")).Build()
-	tm, err := transaction.SetupTransactionManager(ctx, streamTaskArgs)
+	tm, err := stream_task.SetupTransactionManager(ctx, streamTaskArgs)
 	if err != nil {
 		panic(err)
 	}

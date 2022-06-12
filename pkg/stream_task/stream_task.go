@@ -1,16 +1,18 @@
-package transaction
+package stream_task
 
 import (
 	"context"
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
-	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/consume_seq_num_manager/con_types"
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
+	"sharedlog-stream/pkg/store_restore"
+	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/txn_data"
 	"sync"
 	"time"
@@ -21,7 +23,7 @@ import (
 type ProcessFunc func(ctx context.Context, task *StreamTask, args interface{}) *common.FnOutput
 
 type StreamTask struct {
-	appProcessFunc           func(ctx context.Context, task *StreamTask, args interface{}) *common.FnOutput
+	appProcessFunc           ProcessFunc
 	OffMu                    sync.Mutex
 	CurrentOffset            map[string]uint64
 	pauseFunc                func() *common.FnOutput
@@ -29,107 +31,6 @@ type StreamTask struct {
 	initFunc                 func(progArgs interface{})
 	HandleErrFunc            func() error
 	trackEveryForAtLeastOnce time.Duration
-}
-
-type StreamTaskBuilder struct {
-	task *StreamTask
-}
-
-type SetAppProcessFunc interface {
-	AppProcessFunc(process ProcessFunc) SetInitFunc
-}
-
-type SetInitFunc interface {
-	InitFunc(i func(progArgs interface{})) BuildStreamTask
-}
-
-type BuildStreamTask interface {
-	Build() *StreamTask
-	PauseFunc(p func() *common.FnOutput) BuildStreamTask
-	ResumeFunc(r func(task *StreamTask)) BuildStreamTask
-	HandleErrFunc(he func() error) BuildStreamTask
-}
-
-func NewStreamTaskBuilder() SetAppProcessFunc {
-	return &StreamTaskBuilder{
-		task: &StreamTask{
-			CurrentOffset:            make(map[string]uint64),
-			trackEveryForAtLeastOnce: common.CommitDuration,
-			pauseFunc:                nil,
-			resumeFunc:               nil,
-			initFunc:                 nil,
-			HandleErrFunc:            nil,
-			appProcessFunc:           nil,
-		},
-	}
-}
-
-func (b *StreamTaskBuilder) AppProcessFunc(process ProcessFunc) SetInitFunc {
-	b.task.appProcessFunc = process
-	return b
-}
-
-func (b *StreamTaskBuilder) Build() *StreamTask {
-	return b.task
-}
-func (b *StreamTaskBuilder) PauseFunc(p func() *common.FnOutput) BuildStreamTask {
-	b.task.pauseFunc = p
-	return b
-}
-func (b *StreamTaskBuilder) ResumeFunc(r func(task *StreamTask)) BuildStreamTask {
-	b.task.resumeFunc = r
-	return b
-}
-func (b *StreamTaskBuilder) InitFunc(i func(progArgs interface{})) BuildStreamTask {
-	b.task.initFunc = i
-	return b
-}
-func (b *StreamTaskBuilder) HandleErrFunc(he func() error) BuildStreamTask {
-	b.task.HandleErrFunc = he
-	return b
-}
-
-/*
-func NewStreamTask(
-	processFunc func(ctx context.Context, task *StreamTask, args interface{}) (map[string]uint64, *common.FnOutput),
-	currentOffset map[string]uint64,
-	commitEvery time.Duration,
-	closeFunc func(),
-	pauseFunc func(),
-	resumeFunc func(),
-	initFunc func(progArgs interface{}),
-) *StreamTask {
-	t := &StreamTask{
-		ProcessFunc:   processFunc,
-		CurrentOffset: currentOffset,
-		CommitEvery:   commitEvery,
-		CloseFunc:     closeFunc,
-		PauseFunc:     pauseFunc,
-		ResumeFunc:    resumeFunc,
-		InitFunc:      initFunc,
-	}
-	t.runCond = sync.NewCond(t)
-	return t
-}
-*/
-
-// finding the last commited marker and gets the marker's seq number
-// used in restore and in one thread
-func createOffsetTopicAndGetOffset(ctx context.Context, tm *TransactionManager,
-	topic string, numPartition uint8, parNum uint8,
-) (uint64, error) {
-	err := tm.createOffsetTopic(topic, numPartition)
-	if err != nil {
-		return 0, fmt.Errorf("create offset topic failed: %v", err)
-	}
-	debug.Fprintf(os.Stderr, "created offset topic\n")
-	offset, err := tm.FindLastConsumedSeqNum(ctx, topic, parNum)
-	if err != nil {
-		if !common_errors.IsStreamEmptyError(err) {
-			return 0, err
-		}
-	}
-	return offset, nil
 }
 
 func SetupManagersAndProcessTransactional(ctx context.Context,
@@ -149,7 +50,7 @@ func SetupManagersAndProcessTransactional(ctx context.Context,
 func SetupManagers(ctx context.Context, env types.Environment,
 	streamTaskArgs *StreamTaskArgsTransaction,
 	task *StreamTask,
-) (*TransactionManager, *control_channel.ControlChannelManager, error) {
+) (*transaction.TransactionManager, *control_channel.ControlChannelManager, error) {
 	debug.Fprint(os.Stderr, "setup transaction and control manager\n")
 	tm, err := SetupTransactionManager(ctx, streamTaskArgs)
 	if err != nil {
@@ -166,7 +67,7 @@ func SetupManagers(ctx context.Context, env types.Environment,
 		return nil, nil, err
 	}
 	debug.Fprintf(os.Stderr, "got offset map: %v\n", offsetMap)
-	err = restoreStateStore(ctx, tm, task, streamTaskArgs, offsetMap)
+	err = restoreStateStore(ctx, tm, streamTaskArgs, offsetMap)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -191,19 +92,19 @@ func SetupManagers(ctx context.Context, env types.Environment,
 	streamTaskArgs.procArgs.SetTrackParFunc(trackParFunc)
 	streamTaskArgs.procArgs.SetRecordFinishFunc(recordFinish)
 	for _, kvchangelog := range streamTaskArgs.kvChangelogs {
-		kvchangelog.kvStore.SetTrackParFunc(trackParFunc)
+		kvchangelog.SetTrackParFunc(trackParFunc)
 	}
 	for _, wschangelog := range streamTaskArgs.windowStoreChangelogs {
-		wschangelog.winStore.SetTrackParFunc(trackParFunc)
+		wschangelog.SetTrackParFunc(trackParFunc)
 	}
 	return tm, cmm, nil
 }
 
-func getOffsetMap(ctx context.Context, tm *TransactionManager, args *StreamTaskArgsTransaction) (map[string]uint64, error) {
+func getOffsetMap(ctx context.Context, tm *transaction.TransactionManager, args *StreamTaskArgsTransaction) (map[string]uint64, error) {
 	offsetMap := make(map[string]uint64)
 	for _, src := range args.srcs {
 		inputTopicName := src.TopicName()
-		offset, err := createOffsetTopicAndGetOffset(ctx, tm, inputTopicName,
+		offset, err := transaction.CreateOffsetTopicAndGetOffset(ctx, tm, inputTopicName,
 			uint8(src.Stream().NumPartition()), args.procArgs.ParNum())
 		if err != nil {
 			return nil, fmt.Errorf("createOffsetTopicAndGetOffset failed: %v", err)
@@ -222,35 +123,34 @@ func setOffsetOnStream(offsetMap map[string]uint64, args *StreamTaskArgsTransact
 	}
 }
 
-func restoreKVStore(ctx context.Context, tm *TransactionManager,
-	t *StreamTask,
+func restoreKVStore(ctx context.Context, tm *transaction.TransactionManager,
 	args *StreamTaskArgsTransaction, offsetMap map[string]uint64,
 ) error {
 	for _, kvchangelog := range args.kvChangelogs {
-		if kvchangelog.kvStore.TableType() == store.IN_MEM {
-			topic := kvchangelog.changelogManager.TopicName()
+		if kvchangelog.TableType() == store.IN_MEM {
+			topic := kvchangelog.ChangelogManager().TopicName()
 			// offset stream is input stream
 			if offset, ok := offsetMap[topic]; ok && offset != 0 {
-				err := RestoreChangelogKVStateStore(ctx,
+				err := store_restore.RestoreChangelogKVStateStore(ctx,
 					kvchangelog, offset)
 				if err != nil {
 					return fmt.Errorf("RestoreKVStateStore failed: %v", err)
 				}
 			} else {
-				offset, err := createOffsetTopicAndGetOffset(ctx, tm, topic,
-					kvchangelog.changelogManager.NumPartition(), kvchangelog.parNum)
+				offset, err := transaction.CreateOffsetTopicAndGetOffset(ctx, tm, topic,
+					kvchangelog.ChangelogManager().NumPartition(), kvchangelog.ParNum())
 				if err != nil {
 					return fmt.Errorf("createOffsetTopicAndGetOffset kv failed: %v", err)
 				}
 				if offset != 0 {
-					err = RestoreChangelogKVStateStore(ctx, kvchangelog, offset)
+					err = store_restore.RestoreChangelogKVStateStore(ctx, kvchangelog, offset)
 					if err != nil {
 						return fmt.Errorf("RestoreKVStateStore2 failed: %v", err)
 					}
 				}
 			}
-		} else if kvchangelog.kvStore.TableType() == store.MONGODB {
-			if err := restoreMongoDBKVStore(ctx, tm, t, kvchangelog); err != nil {
+		} else if kvchangelog.TableType() == store.MONGODB {
+			if err := restoreMongoDBKVStore(ctx, tm, kvchangelog); err != nil {
 				return err
 			}
 		}
@@ -258,31 +158,32 @@ func restoreKVStore(ctx context.Context, tm *TransactionManager,
 	return nil
 }
 
-func restoreChangelogBackedWindowStore(ctx context.Context, tm *TransactionManager, t *StreamTask, args *StreamTaskArgsTransaction, offsetMap map[string]uint64) error {
+func restoreChangelogBackedWindowStore(ctx context.Context, tm *transaction.TransactionManager,
+	args *StreamTaskArgsTransaction, offsetMap map[string]uint64) error {
 	for _, wschangelog := range args.windowStoreChangelogs {
-		if wschangelog.winStore.TableType() == store.IN_MEM {
-			topic := wschangelog.changelogManager.TopicName()
+		if wschangelog.TableType() == store.IN_MEM {
+			topic := wschangelog.ChangelogManager().TopicName()
 			// offset stream is input stream
 			if offset, ok := offsetMap[topic]; ok && offset != 0 {
-				err := RestoreChangelogWindowStateStore(ctx, wschangelog, offset)
+				err := store_restore.RestoreChangelogWindowStateStore(ctx, wschangelog, offset)
 				if err != nil {
 					return fmt.Errorf("RestoreWindowStateStore failed: %v", err)
 				}
 			} else {
-				offset, err := createOffsetTopicAndGetOffset(ctx, tm, topic,
-					wschangelog.changelogManager.NumPartition(), wschangelog.parNum)
+				offset, err := transaction.CreateOffsetTopicAndGetOffset(ctx, tm, topic,
+					wschangelog.ChangelogManager().NumPartition(), wschangelog.ParNum())
 				if err != nil {
 					return fmt.Errorf("createOffsetTopicAndGetOffset win failed: %v", err)
 				}
 				if offset != 0 {
-					err = RestoreChangelogWindowStateStore(ctx, wschangelog, offset)
+					err = store_restore.RestoreChangelogWindowStateStore(ctx, wschangelog, offset)
 					if err != nil {
 						return fmt.Errorf("RestoreWindowStateStore2 failed: %v", err)
 					}
 				}
 			}
-		} else if wschangelog.winStore.TableType() == store.MONGODB {
-			if err := restoreMongoDBWinStore(ctx, tm, t, wschangelog); err != nil {
+		} else if wschangelog.TableType() == store.MONGODB {
+			if err := restoreMongoDBWinStore(ctx, tm, wschangelog); err != nil {
 				return err
 			}
 		}
@@ -290,15 +191,15 @@ func restoreChangelogBackedWindowStore(ctx context.Context, tm *TransactionManag
 	return nil
 }
 
-func restoreStateStore(ctx context.Context, tm *TransactionManager, t *StreamTask, args *StreamTaskArgsTransaction, offsetMap map[string]uint64) error {
+func restoreStateStore(ctx context.Context, tm *transaction.TransactionManager, args *StreamTaskArgsTransaction, offsetMap map[string]uint64) error {
 	if args.kvChangelogs != nil {
-		err := restoreKVStore(ctx, tm, t, args, offsetMap)
+		err := restoreKVStore(ctx, tm, args, offsetMap)
 		if err != nil {
 			return err
 		}
 	}
 	if args.windowStoreChangelogs != nil {
-		err := restoreChangelogBackedWindowStore(ctx, tm, t, args, offsetMap)
+		err := restoreChangelogBackedWindowStore(ctx, tm, args, offsetMap)
 		if err != nil {
 			return err
 		}
@@ -308,11 +209,10 @@ func restoreStateStore(ctx context.Context, tm *TransactionManager, t *StreamTas
 
 func restoreMongoDBKVStore(
 	ctx context.Context,
-	tm *TransactionManager,
-	t *StreamTask,
-	kvchangelog *KVStoreChangelog,
+	tm *transaction.TransactionManager,
+	kvchangelog *store_restore.KVStoreChangelog,
 ) error {
-	storeTranID, found, err := kvchangelog.kvStore.GetTransactionID(ctx, kvchangelog.tabTranRepr)
+	storeTranID, found, err := kvchangelog.KVExternalStore().GetTransactionID(ctx, kvchangelog.TabTranRepr())
 	if err != nil {
 		return err
 	}
@@ -320,27 +220,27 @@ func restoreMongoDBKVStore(
 		return nil
 	}
 
-	seqNum, err := tm.FindConsumedSeqNumMatchesTransactionID(ctx, kvchangelog.inputStream.TopicName(), kvchangelog.parNum, storeTranID)
+	seqNum, err := tm.FindConsumedSeqNumMatchesTransactionID(ctx,
+		kvchangelog.InputStream().TopicName(), kvchangelog.ParNum(), storeTranID)
 	if err != nil {
 		return err
 	}
-	kvchangelog.inputStream.SetCursor(seqNum, kvchangelog.parNum)
-	if err = kvchangelog.kvStore.StartTransaction(ctx); err != nil {
+	kvchangelog.InputStream().SetCursor(seqNum, kvchangelog.ParNum())
+	if err = kvchangelog.KVExternalStore().StartTransaction(ctx); err != nil {
 		return err
 	}
-	if err = kvchangelog.restoreFunc(ctx, kvchangelog.restoreArg); err != nil {
+	if err = kvchangelog.ExecuteRestoreFunc(ctx); err != nil {
 		return err
 	}
-	return kvchangelog.kvStore.CommitTransaction(ctx, tm.TransactionalId, tm.GetTransactionID())
+	return kvchangelog.KVExternalStore().CommitTransaction(ctx, tm.TransactionalId, tm.GetTransactionID())
 }
 
 func restoreMongoDBWinStore(
 	ctx context.Context,
-	tm *TransactionManager,
-	t *StreamTask,
-	kvchangelog *WindowStoreChangelog,
+	tm *transaction.TransactionManager,
+	kvchangelog *store_restore.WindowStoreChangelog,
 ) error {
-	storeTranID, found, err := kvchangelog.winStore.GetTransactionID(ctx, tm.TransactionalId)
+	storeTranID, found, err := kvchangelog.WinExternalStore().GetTransactionID(ctx, tm.TransactionalId)
 	if err != nil {
 		return err
 	}
@@ -348,25 +248,26 @@ func restoreMongoDBWinStore(
 		return nil
 	}
 
-	seqNum, err := tm.FindConsumedSeqNumMatchesTransactionID(ctx, kvchangelog.inputStream.TopicName(), kvchangelog.parNum, storeTranID)
+	seqNum, err := tm.FindConsumedSeqNumMatchesTransactionID(ctx, kvchangelog.InputStream().TopicName(),
+		kvchangelog.ParNum(), storeTranID)
 	if err != nil {
 		return err
 	}
-	kvchangelog.inputStream.SetCursor(seqNum, kvchangelog.parNum)
-	if err = kvchangelog.winStore.StartTransaction(ctx); err != nil {
+	kvchangelog.InputStream().SetCursor(seqNum, kvchangelog.ParNum())
+	if err = kvchangelog.WinExternalStore().StartTransaction(ctx); err != nil {
 		return err
 	}
-	if err = kvchangelog.restoreFunc(ctx, kvchangelog.restoreArg); err != nil {
+	if err = kvchangelog.ExecuteRestoreFunc(ctx); err != nil {
 		return err
 	}
-	return kvchangelog.winStore.CommitTransaction(ctx, tm.TransactionalId, tm.GetTransactionID())
+	return kvchangelog.WinExternalStore().CommitTransaction(ctx, tm.TransactionalId, tm.GetTransactionID())
 }
 
 func SetupTransactionManager(
 	ctx context.Context,
 	args *StreamTaskArgsTransaction,
-) (*TransactionManager, error) {
-	tm, err := NewTransactionManager(ctx, args.env, args.transactionalId,
+) (*transaction.TransactionManager, error) {
+	tm, err := transaction.NewTransactionManager(ctx, args.env, args.transactionalId,
 		commtypes.SerdeFormat(args.serdeFormat))
 	if err != nil {
 		return nil, fmt.Errorf("NewTransactionManager failed: %v", err)
@@ -390,9 +291,9 @@ func UpdateInputStreamCursor(
 }
 
 func TrackOffsetAndCommit(ctx context.Context,
-	consumedSeqNumConfigs []ConsumedSeqNumConfig,
-	tm *TransactionManager,
-	kvchangelogs []*KVStoreChangelog, winchangelogs []*WindowStoreChangelog,
+	consumedSeqNumConfigs []con_types.ConsumedSeqNumConfig,
+	tm *transaction.TransactionManager,
+	kvchangelogs []*store_restore.KVStoreChangelog, winchangelogs []*store_restore.WindowStoreChangelog,
 	hasLiveTransaction *bool,
 	trackConsumePar *bool,
 	retc chan *common.FnOutput,
@@ -419,95 +320,6 @@ func TrackOffsetAndCommit(ctx context.Context,
 	*trackConsumePar = false
 }
 
-func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.FnOutput {
-	debug.Assert(len(args.srcs) >= 1, "Srcs should be filled")
-	debug.Assert(args.env != nil, "env should be filled")
-	debug.Assert(args.procArgs != nil, "program args should be filled")
-	debug.Assert(args.numInPartition != 0, "number of input partition should not be zero")
-	latencies := make([]int, 0, 128)
-	cm, err := NewConsumeSeqManager(args.serdeFormat)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	debug.Fprint(os.Stderr, "start restore\n")
-	for _, srcStream := range args.srcs {
-		inputTopicName := srcStream.TopicName()
-		err = cm.CreateOffsetTopic(args.env, inputTopicName, args.numInPartition, args.serdeFormat)
-		if err != nil {
-			return &common.FnOutput{Success: false, Message: err.Error()}
-		}
-		offset, err := cm.FindLastConsumedSeqNum(ctx, inputTopicName, args.parNum)
-		if err != nil {
-			if !common_errors.IsStreamEmptyError(err) {
-				return &common.FnOutput{Success: false, Message: err.Error()}
-			}
-		}
-		debug.Fprintf(os.Stderr, "offset restores to %x\n", offset)
-		if offset != 0 {
-			srcStream.SetCursor(offset+1, args.parNum)
-		}
-		cm.AddTopicTrackConsumedSeqs(ctx, inputTopicName, []uint8{args.parNum})
-	}
-	debug.Fprint(os.Stderr, "done restore\n")
-	if t.initFunc != nil {
-		t.initFunc(args.procArgs)
-	}
-	hasUntrackedConsume := false
-
-	var afterWarmupStart time.Time
-	afterWarmup := false
-	commitTimer := time.Now()
-	flushTimer := time.Now()
-	debug.Fprintf(os.Stderr, "warmup time: %v\n", args.warmup)
-	startTime := time.Now()
-	for {
-		timeSinceLastTrack := time.Since(commitTimer)
-		if timeSinceLastTrack >= t.trackEveryForAtLeastOnce && t.CurrentOffset != nil {
-			if ret_err := t.pauseTrackFlushResume(ctx, args, cm, &hasUntrackedConsume, &commitTimer, &flushTimer); ret_err != nil {
-				return ret_err
-			}
-		}
-		timeSinceLastFlush := time.Since(flushTimer)
-		if timeSinceLastFlush >= args.flushEvery {
-			if ret_err := t.pauseFlushResume(ctx, args, &flushTimer); err != nil {
-				return ret_err
-			}
-		}
-		if !afterWarmup && args.warmup != 0 && time.Since(startTime) >= args.warmup {
-			afterWarmup = true
-			afterWarmupStart = time.Now()
-		}
-		if args.duration != 0 && time.Since(startTime) >= args.duration {
-			break
-		}
-		procStart := time.Now()
-		ret := t.appProcessFunc(ctx, t, args.procArgs)
-		if ret != nil {
-			if ret.Success {
-				// elapsed := time.Since(procStart)
-				// latencies = append(latencies, int(elapsed.Microseconds()))
-				debug.Fprintf(os.Stderr, "consume timeout\n")
-				if ret_err := t.pauseTrackFlush(ctx, args, cm, hasUntrackedConsume); ret_err != nil {
-					return ret_err
-				}
-				updateReturnMetric(ret, startTime, afterWarmupStart, args.warmup, afterWarmup, latencies)
-			}
-			return ret
-		}
-		if !hasUntrackedConsume {
-			hasUntrackedConsume = true
-		}
-		if args.warmup == 0 || afterWarmup {
-			elapsed := time.Since(procStart)
-			latencies = append(latencies, int(elapsed.Microseconds()))
-		}
-	}
-	t.pauseTrackFlush(ctx, args, cm, hasUntrackedConsume)
-	ret := &common.FnOutput{Success: true}
-	updateReturnMetric(ret, startTime, afterWarmupStart, args.warmup, afterWarmup, latencies)
-	return ret
-}
-
 func (t *StreamTask) flushStreams(ctx context.Context, args *StreamTaskArgs) error {
 	for _, sink := range args.sinks {
 		if err := sink.Flush(ctx); err != nil {
@@ -515,15 +327,15 @@ func (t *StreamTask) flushStreams(ctx context.Context, args *StreamTaskArgs) err
 		}
 	}
 	for _, kvchangelog := range args.kvChangelogs {
-		if kvchangelog.changelogManager != nil {
-			if err := kvchangelog.changelogManager.Flush(ctx); err != nil {
+		if kvchangelog.ChangelogManager() != nil {
+			if err := kvchangelog.ChangelogManager().Flush(ctx); err != nil {
 				return err
 			}
 		}
 	}
 	for _, wschangelog := range args.windowStoreChangelogs {
-		if wschangelog.changelogManager != nil {
-			if err := wschangelog.changelogManager.Flush(ctx); err != nil {
+		if wschangelog.ChangelogManager() != nil {
+			if err := wschangelog.ChangelogManager().Flush(ctx); err != nil {
 				return err
 			}
 		}
@@ -531,96 +343,9 @@ func (t *StreamTask) flushStreams(ctx context.Context, args *StreamTaskArgs) err
 	return nil
 }
 
-func (t *StreamTask) pauseFlushResume(ctx context.Context, args *StreamTaskArgs, flushTimer *time.Time) *common.FnOutput {
-	if t.pauseFunc != nil {
-		if ret := t.pauseFunc(); ret != nil {
-			return ret
-		}
-	}
-	err := t.flushStreams(ctx, args)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	if t.resumeFunc != nil {
-		t.resumeFunc(t)
-	}
-	*flushTimer = time.Now()
-	return nil
-}
-
-func (t *StreamTask) pauseTrackFlushResume(ctx context.Context, args *StreamTaskArgs, cm *ConsumeSeqManager,
-	hasUncommitted *bool, commitTimer *time.Time, flushTimer *time.Time,
-) *common.FnOutput {
-	if t.pauseFunc != nil {
-		if ret := t.pauseFunc(); ret != nil {
-			return ret
-		}
-	}
-	err := t.trackSrcConSeq(ctx, cm, args.parNum)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	err = t.flushStreams(ctx, args)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	if t.resumeFunc != nil {
-		t.resumeFunc(t)
-	}
-	*hasUncommitted = false
-	*commitTimer = time.Now()
-	*flushTimer = time.Now()
-	return nil
-}
-
-func (t *StreamTask) pauseTrackFlush(ctx context.Context, args *StreamTaskArgs, cm *ConsumeSeqManager, hasUncommitted bool) *common.FnOutput {
-	alreadyPaused := false
-	if hasUncommitted {
-		if t.pauseFunc != nil {
-			if ret := t.pauseFunc(); ret != nil {
-				return ret
-			}
-		}
-		err := t.trackSrcConSeq(ctx, cm, args.parNum)
-		if err != nil {
-			return &common.FnOutput{Success: false, Message: err.Error()}
-		}
-		alreadyPaused = true
-	}
-	if !alreadyPaused && t.pauseFunc != nil {
-		if ret := t.pauseFunc(); ret != nil {
-			return ret
-		}
-	}
-	err := t.flushStreams(ctx, args)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	return nil
-}
-
-func (t *StreamTask) trackSrcConSeq(ctx context.Context, cm *ConsumeSeqManager, parNum uint8) error {
-	consumedSeqNumConfigs := make([]ConsumedSeqNumConfig, 0)
-	t.OffMu.Lock()
-	for topic, offset := range t.CurrentOffset {
-		consumedSeqNumConfigs = append(consumedSeqNumConfigs, ConsumedSeqNumConfig{
-			TopicToTrack:   topic,
-			Partition:      parNum,
-			ConsumedSeqNum: uint64(offset),
-		})
-	}
-	t.OffMu.Unlock()
-	err := cm.AppendConsumedSeqNum(ctx, consumedSeqNumConfigs)
-	if err != nil {
-		return err
-	}
-	err = cm.Track(ctx)
-	return err
-}
-
 func (t *StreamTask) ProcessWithTransaction(
 	ctx context.Context,
-	tm *TransactionManager,
+	tm *transaction.TransactionManager,
 	cmm *control_channel.ControlChannelManager,
 	args *StreamTaskArgsTransaction,
 ) *common.FnOutput {
@@ -640,23 +365,23 @@ func (t *StreamTask) ProcessWithTransaction(
 	}
 
 	for _, kvchangelog := range args.kvChangelogs {
-		if kvchangelog.changelogManager != nil {
-			err := kvchangelog.changelogManager.InTransaction(tm)
+		if kvchangelog.ChangelogManager() != nil {
+			err := kvchangelog.ChangelogManager().InTransaction(tm)
 			if err != nil {
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
-			tm.RecordTopicStreams(kvchangelog.changelogManager.TopicName(), kvchangelog.changelogManager.Stream())
-			cmm.TrackStream(kvchangelog.changelogManager.TopicName(), kvchangelog.changelogManager.Stream())
+			tm.RecordTopicStreams(kvchangelog.ChangelogManager().TopicName(), kvchangelog.ChangelogManager().Stream())
+			cmm.TrackStream(kvchangelog.ChangelogManager().TopicName(), kvchangelog.ChangelogManager().Stream())
 		}
 	}
 	for _, winchangelog := range args.windowStoreChangelogs {
-		if winchangelog.changelogManager != nil {
-			err := winchangelog.changelogManager.InTransaction(tm)
+		if winchangelog.ChangelogManager() != nil {
+			err := winchangelog.ChangelogManager().InTransaction(tm)
 			if err != nil {
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
-			tm.RecordTopicStreams(winchangelog.changelogManager.TopicName(), winchangelog.changelogManager.Stream())
-			cmm.TrackStream(winchangelog.changelogManager.TopicName(), winchangelog.changelogManager.Stream())
+			tm.RecordTopicStreams(winchangelog.ChangelogManager().TopicName(), winchangelog.ChangelogManager().Stream())
+			cmm.TrackStream(winchangelog.ChangelogManager().TopicName(), winchangelog.ChangelogManager().Stream())
 		}
 	}
 
@@ -809,7 +534,7 @@ func (t *StreamTask) ProcessWithTransaction(
 	}
 }
 
-func (t *StreamTask) startNewTransaction(ctx context.Context, args *StreamTaskArgsTransaction, tm *TransactionManager,
+func (t *StreamTask) startNewTransaction(ctx context.Context, args *StreamTaskArgsTransaction, tm *transaction.TransactionManager,
 	hasLiveTransaction *bool, trackConsumePar *bool, init *bool, commitTimer *time.Time,
 ) error {
 	if !*hasLiveTransaction {
@@ -861,7 +586,7 @@ func updateReturnMetric(ret *common.FnOutput,
 }
 
 func (t *StreamTask) commitTransaction(ctx context.Context,
-	tm *TransactionManager,
+	tm *transaction.TransactionManager,
 	args *StreamTaskArgsTransaction,
 	hasLiveTransaction *bool,
 	trackConsumePar *bool,
@@ -873,10 +598,10 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 		}
 	}
 	// debug.Fprintf(os.Stderr, "after pause\n")
-	consumedSeqNumConfigs := make([]ConsumedSeqNumConfig, 0)
+	consumedSeqNumConfigs := make([]con_types.ConsumedSeqNumConfig, 0)
 	t.OffMu.Lock()
 	for topic, offset := range t.CurrentOffset {
-		consumedSeqNumConfigs = append(consumedSeqNumConfigs, ConsumedSeqNumConfig{
+		consumedSeqNumConfigs = append(consumedSeqNumConfigs, con_types.ConsumedSeqNumConfig{
 			TopicToTrack:   topic,
 			TaskId:         tm.GetCurrentTaskId(),
 			TaskEpoch:      tm.GetCurrentEpoch(),

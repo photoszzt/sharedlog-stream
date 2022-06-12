@@ -17,7 +17,7 @@ import (
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
-	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/treemap"
 	"strings"
 	"time"
@@ -104,7 +104,7 @@ type wordcountCounterAggProcessArg struct {
 }
 
 func (h *wordcountCounterAgg) process(ctx context.Context,
-	t *transaction.StreamTask,
+	t *stream_task.StreamTask,
 	argsTmp interface{},
 ) *common.FnOutput {
 	args := argsTmp.(*wordcountCounterAggProcessArg)
@@ -209,7 +209,7 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 		BaseProcArgs:  proc_interface.NewBaseProcArgs(funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 
-	task := transaction.NewStreamTaskBuilder().
+	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(h.process).
 		InitFunc(func(progArgs interface{}) {
 			src.StartWarmup()
@@ -225,21 +225,21 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%s-%s-%d", funcName, sp.InputTopicNames[0], sp.OutputTopicNames[0], sp.ParNum)
 		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp,
-			transaction.NewStreamTaskArgsTransactionBuilder().
+			stream_task.NewStreamTaskArgsTransactionBuilder().
 				ProcArgs(procArgs).
 				Env(h.env).
 				Srcs(srcs).
 				Sinks(nil).
 				TransactionalID(transactionalID)).
 			Build()
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
+		ret := stream_task.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}
 		return ret
 	}
 	// return h.process(ctx, sp, args)
-	streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, nil)
+	streamTaskArgs := stream_task.NewStreamTaskArgs(h.env, procArgs, srcs, nil)
 	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {
 		update_stats(ret)

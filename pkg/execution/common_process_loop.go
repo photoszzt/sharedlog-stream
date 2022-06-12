@@ -8,13 +8,13 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/source_sink"
-	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/txn_data"
 
 	"golang.org/x/xerrors"
 )
 
-func CommonProcess(ctx context.Context, t *transaction.StreamTask, args proc_interface.ProcArgsWithSrcSink,
+func CommonProcess(ctx context.Context, t *stream_task.StreamTask, args proc_interface.ProcArgsWithSrcSink,
 	procMsg proc_interface.ProcessMsgFunc,
 ) *common.FnOutput {
 	if t.HandleErrFunc != nil {

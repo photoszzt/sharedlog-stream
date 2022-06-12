@@ -4,7 +4,7 @@ import (
 	"context"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/stream_task"
 	"sync"
 )
 
@@ -31,7 +31,7 @@ func (jm *JoinProcManager) Out() <-chan *common.FnOutput {
 
 func (jm *JoinProcManager) LaunchJoinProcLoop(
 	ctx context.Context,
-	task *transaction.StreamTask,
+	task *stream_task.StreamTask,
 	procArgs *JoinProcArgs,
 	wg *sync.WaitGroup,
 ) {

@@ -20,10 +20,18 @@ type KeyValueStore interface {
 	PutAll(context.Context, []*commtypes.Message) error
 	Delete(ctx context.Context, key commtypes.KeyT) error
 	TableType() TABLE_TYPE
+	KeyValueStoreOpForExternalStore
+	KeyValueStoreOpWithChangelog
+}
+
+type KeyValueStoreOpForExternalStore interface {
 	StartTransaction(ctx context.Context) error
 	CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error
 	AbortTransaction(ctx context.Context) error
 	GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error)
+}
+
+type KeyValueStoreOpWithChangelog interface {
 	SetTrackParFunc(tran_interface.TrackKeySubStreamFunc)
 }
 

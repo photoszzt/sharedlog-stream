@@ -13,8 +13,8 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
+	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/store_with_changelog"
-	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/treemap"
 	"time"
 
@@ -159,8 +159,8 @@ func (h *tableRestoreHandler) testRestoreKVTable(ctx context.Context) {
 			return 1
 		}
 	})
-	err = transaction.RestoreChangelogKVStateStore(ctx,
-		transaction.NewKVStoreChangelog(kvstore,
+	err = store_restore.RestoreChangelogKVStateStore(ctx,
+		store_restore.NewKVStoreChangelog(kvstore,
 			store_with_changelog.NewChangelogManager(changelog, commtypes.JSON),
 			commtypes.KVMsgSerdes{
 				KeySerde: commtypes.IntSerde{},
@@ -247,8 +247,8 @@ func (h *tableRestoreHandler) testRestoreWindowTable(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	err = transaction.RestoreChangelogWindowStateStore(ctx,
-		transaction.NewWindowStoreChangelog(wstore,
+	err = store_restore.RestoreChangelogWindowStateStore(ctx,
+		store_restore.NewWindowStoreChangelog(wstore,
 			store_with_changelog.NewChangelogManager(changelog, commtypes.JSON),
 			commtypes.KeyAndWindowStartTsJSONSerde{},
 			commtypes.KVMsgSerdes{

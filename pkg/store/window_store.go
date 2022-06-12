@@ -26,11 +26,19 @@ type WindowStore interface {
 	BackwardFetchAll(timeFrom time.Time, timeTo time.Time,
 		iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error
 	IterAll(iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error
-	DropDatabase(ctx context.Context) error
 	TableType() TABLE_TYPE
+	WindowStoreOpForExternalStore
+	WindowStoreOpWithChangelog
+}
+
+type WindowStoreOpForExternalStore interface {
 	StartTransaction(ctx context.Context) error
 	CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error
 	AbortTransaction(ctx context.Context) error
 	GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error)
+	DropDatabase(ctx context.Context) error
+}
+
+type WindowStoreOpWithChangelog interface {
 	SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc)
 }

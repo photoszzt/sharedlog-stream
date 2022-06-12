@@ -12,6 +12,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/transaction/tran_interface"
 
@@ -61,13 +62,13 @@ func (h *multiProducerHandler) getProduceTransactionManager(
 	ctx context.Context, transactionalID string, sink source_sink.Sink,
 ) (*transaction.TransactionManager, tran_interface.TrackKeySubStreamFunc) {
 	args1 := benchutil.UpdateStreamTaskArgsTransaction(&common.QueryInput{},
-		transaction.NewStreamTaskArgsTransactionBuilder().
+		stream_task.NewStreamTaskArgsTransactionBuilder().
 			ProcArgs(nil).
 			Env(h.env).
 			Srcs(nil).
 			Sinks([]source_sink.Sink{sink}).
 			TransactionalID(transactionalID)).Build()
-	tm1, err := transaction.SetupTransactionManager(ctx, args1)
+	tm1, err := stream_task.SetupTransactionManager(ctx, args1)
 	if err != nil {
 		panic(err)
 	}
@@ -90,13 +91,13 @@ func (h *multiProducerHandler) getConsumeTransactionManager(
 	ctx context.Context, transactionalID string, src source_sink.Source,
 ) (*transaction.TransactionManager, tran_interface.TrackKeySubStreamFunc) {
 	args1 := benchutil.UpdateStreamTaskArgsTransaction(&common.QueryInput{},
-		transaction.NewStreamTaskArgsTransactionBuilder().
+		stream_task.NewStreamTaskArgsTransactionBuilder().
 			ProcArgs(nil).
 			Env(h.env).
 			Srcs([]source_sink.Source{src}).
 			Sinks(nil).
 			TransactionalID(transactionalID)).Build()
-	tm1, err := transaction.SetupTransactionManager(ctx, args1)
+	tm1, err := stream_task.SetupTransactionManager(ctx, args1)
 	if err != nil {
 		panic(err)
 	}

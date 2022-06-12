@@ -12,7 +12,7 @@ import (
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
-	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/stream_task"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -138,7 +138,7 @@ func ExecuteApp(
 	env types.Environment,
 	transactionalID string,
 	sp *common.QueryInput,
-	task *transaction.StreamTask,
+	task *stream_task.StreamTask,
 	srcs []source_sink.Source,
 	sinks_arr []source_sink.Sink,
 	procArgs proc_interface.ProcArgs,
@@ -146,20 +146,20 @@ func ExecuteApp(
 ) *common.FnOutput {
 	if sp.EnableTransaction {
 		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp,
-			transaction.NewStreamTaskArgsTransactionBuilder().
+			stream_task.NewStreamTaskArgsTransactionBuilder().
 				ProcArgs(procArgs).
 				Env(env).
 				Srcs(srcs).
 				Sinks(sinks_arr).
 				TransactionalID(transactionalID)).
 			Build()
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, env, streamTaskArgs, task)
+		ret := stream_task.SetupManagersAndProcessTransactional(ctx, env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}
 		return ret
 	} else {
-		streamTaskArgs := transaction.NewStreamTaskArgs(env, procArgs, srcs, sinks_arr)
+		streamTaskArgs := stream_task.NewStreamTaskArgs(env, procArgs, srcs, sinks_arr)
 		benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
 		ret := task.Process(ctx, streamTaskArgs)
 		if ret != nil && ret.Success {
@@ -173,13 +173,13 @@ func ExecuteAppNoTransaction(
 	ctx context.Context,
 	env types.Environment,
 	sp *common.QueryInput,
-	task *transaction.StreamTask,
+	task *stream_task.StreamTask,
 	srcs []source_sink.Source,
 	sinks_arr []source_sink.Sink,
 	procArgs proc_interface.ProcArgs,
 	update_stats func(ret *common.FnOutput),
 ) *common.FnOutput {
-	streamTaskArgs := transaction.NewStreamTaskArgs(env, procArgs, srcs, sinks_arr)
+	streamTaskArgs := stream_task.NewStreamTaskArgs(env, procArgs, srcs, sinks_arr)
 	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
 	ret := task.Process(ctx, streamTaskArgs)
 	if ret != nil && ret.Success {

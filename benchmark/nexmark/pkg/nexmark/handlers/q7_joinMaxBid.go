@@ -17,7 +17,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/store_with_changelog"
-	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/stream_task"
 	"sync"
 	"time"
 
@@ -221,8 +221,8 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	bctx := context.WithValue(ctx, "id", "bid")
 	mctx := context.WithValue(ctx, "id", "maxBid")
 
-	task := transaction.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *transaction.StreamTask, args interface{}) *common.FnOutput {
+	task := stream_task.NewStreamTaskBuilder().
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, args interface{}) *common.FnOutput {
 			return execution.HandleJoinErrReturn(args)
 		}).InitFunc(func(progArgs interface{}) {
 		sss.src1.StartWarmup()
@@ -241,7 +241,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 			return ret
 		}
 		return nil
-	}).ResumeFunc(func(task *transaction.StreamTask) {
+	}).ResumeFunc(func(task *stream_task.StreamTask) {
 		bidManager.LaunchJoinProcLoop(bctx, task, joinProcBid, &wg)
 		maxBidManager.LaunchJoinProcLoop(mctx, task, joinProcMaxBid, &wg)
 
@@ -265,7 +265,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	if sp.EnableTransaction {
 		transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
 		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp,
-			transaction.NewStreamTaskArgsTransactionBuilder().
+			stream_task.NewStreamTaskArgsTransactionBuilder().
 				ProcArgs(procArgs).
 				Env(h.env).
 				Srcs(srcs).
@@ -274,13 +274,13 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 			WindowStoreChangelogs(wsc).
 			FixedOutParNum(sp.ParNum).
 			Build()
-		ret := transaction.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
+		ret := stream_task.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
 		if ret != nil && ret.Success {
 			update_stats(ret)
 		}
 		return ret
 	} else {
-		streamTaskArgs := transaction.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr).
+		streamTaskArgs := stream_task.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr).
 			WithWindowStoreChangelogs(wsc)
 		benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
 		ret := task.Process(ctx, streamTaskArgs)
