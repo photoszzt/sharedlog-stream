@@ -167,7 +167,7 @@ func commitConsumeSeq(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	err = cm.Commit(ctx)
+	err = cm.Track(ctx)
 	if err != nil {
 		return err
 	}

@@ -33,6 +33,7 @@ func NewMeteredSource(src *ShardedSharedLogStreamSource, warmup time.Duration) *
 	return &MeteredSource{
 		ShardedSharedLogStreamSource: *src,
 		latencies:                    stats.NewInt64Collector(src_name, stats.DEFAULT_COLLECT_DURATION),
+		pToCLat:                      stats.NewInt64Collector("procTo"+src_name, stats.DEFAULT_COLLECT_DURATION),
 		consumeTp:                    stats.NewThroughputCounter(src_name, stats.DEFAULT_COLLECT_DURATION),
 		measure:                      checkMeasureSource(),
 	}

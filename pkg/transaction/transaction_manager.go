@@ -609,7 +609,7 @@ func (cm *ConsumeSeqManager) FindLastConsumedSeqNum(ctx context.Context, topicTo
 	return rawMsg.LogSeqNum, nil
 }
 
-func (cm *ConsumeSeqManager) Commit(ctx context.Context) error {
+func (cm *ConsumeSeqManager) Track(ctx context.Context) error {
 	tm := txn_data.TxnMarker{
 		Mark: uint8(txn_data.COMMIT),
 	}

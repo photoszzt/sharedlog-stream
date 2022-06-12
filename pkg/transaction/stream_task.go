@@ -21,14 +21,14 @@ import (
 type ProcessFunc func(ctx context.Context, task *StreamTask, args interface{}) *common.FnOutput
 
 type StreamTask struct {
-	appProcessFunc            func(ctx context.Context, task *StreamTask, args interface{}) *common.FnOutput
-	OffMu                     sync.Mutex
-	CurrentOffset             map[string]uint64
-	pauseFunc                 func() *common.FnOutput
-	resumeFunc                func(task *StreamTask)
-	initFunc                  func(progArgs interface{})
-	HandleErrFunc             func() error
-	commitEveryForAtLeastOnce time.Duration
+	appProcessFunc           func(ctx context.Context, task *StreamTask, args interface{}) *common.FnOutput
+	OffMu                    sync.Mutex
+	CurrentOffset            map[string]uint64
+	pauseFunc                func() *common.FnOutput
+	resumeFunc               func(task *StreamTask)
+	initFunc                 func(progArgs interface{})
+	HandleErrFunc            func() error
+	trackEveryForAtLeastOnce time.Duration
 }
 
 type StreamTaskBuilder struct {
@@ -53,13 +53,13 @@ type BuildStreamTask interface {
 func NewStreamTaskBuilder() SetAppProcessFunc {
 	return &StreamTaskBuilder{
 		task: &StreamTask{
-			CurrentOffset:             make(map[string]uint64),
-			commitEveryForAtLeastOnce: common.CommitDuration,
-			pauseFunc:                 nil,
-			resumeFunc:                nil,
-			initFunc:                  nil,
-			HandleErrFunc:             nil,
-			appProcessFunc:            nil,
+			CurrentOffset:            make(map[string]uint64),
+			trackEveryForAtLeastOnce: common.CommitDuration,
+			pauseFunc:                nil,
+			resumeFunc:               nil,
+			initFunc:                 nil,
+			HandleErrFunc:            nil,
+			appProcessFunc:           nil,
 		},
 	}
 }
@@ -452,7 +452,7 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 	if t.initFunc != nil {
 		t.initFunc(args.procArgs)
 	}
-	hasUncommitted := false
+	hasUntrackedConsume := false
 
 	var afterWarmupStart time.Time
 	afterWarmup := false
@@ -461,9 +461,9 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 	debug.Fprintf(os.Stderr, "warmup time: %v\n", args.warmup)
 	startTime := time.Now()
 	for {
-		timeSinceLastCommit := time.Since(commitTimer)
-		if timeSinceLastCommit >= t.commitEveryForAtLeastOnce && t.CurrentOffset != nil {
-			if ret_err := t.pauseCommitFlushResume(ctx, args, cm, &hasUncommitted, &commitTimer, &flushTimer); ret_err != nil {
+		timeSinceLastTrack := time.Since(commitTimer)
+		if timeSinceLastTrack >= t.trackEveryForAtLeastOnce && t.CurrentOffset != nil {
+			if ret_err := t.pauseTrackFlushResume(ctx, args, cm, &hasUntrackedConsume, &commitTimer, &flushTimer); ret_err != nil {
 				return ret_err
 			}
 		}
@@ -487,22 +487,22 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 				// elapsed := time.Since(procStart)
 				// latencies = append(latencies, int(elapsed.Microseconds()))
 				debug.Fprintf(os.Stderr, "consume timeout\n")
-				if ret_err := t.pauseCommitFlush(ctx, args, cm, hasUncommitted); ret_err != nil {
+				if ret_err := t.pauseTrackFlush(ctx, args, cm, hasUntrackedConsume); ret_err != nil {
 					return ret_err
 				}
 				updateReturnMetric(ret, startTime, afterWarmupStart, args.warmup, afterWarmup, latencies)
 			}
 			return ret
 		}
-		if !hasUncommitted {
-			hasUncommitted = true
+		if !hasUntrackedConsume {
+			hasUntrackedConsume = true
 		}
 		if args.warmup == 0 || afterWarmup {
 			elapsed := time.Since(procStart)
 			latencies = append(latencies, int(elapsed.Microseconds()))
 		}
 	}
-	t.pauseCommitFlush(ctx, args, cm, hasUncommitted)
+	t.pauseTrackFlush(ctx, args, cm, hasUntrackedConsume)
 	ret := &common.FnOutput{Success: true}
 	updateReturnMetric(ret, startTime, afterWarmupStart, args.warmup, afterWarmup, latencies)
 	return ret
@@ -548,7 +548,7 @@ func (t *StreamTask) pauseFlushResume(ctx context.Context, args *StreamTaskArgs,
 	return nil
 }
 
-func (t *StreamTask) pauseCommitFlushResume(ctx context.Context, args *StreamTaskArgs, cm *ConsumeSeqManager,
+func (t *StreamTask) pauseTrackFlushResume(ctx context.Context, args *StreamTaskArgs, cm *ConsumeSeqManager,
 	hasUncommitted *bool, commitTimer *time.Time, flushTimer *time.Time,
 ) *common.FnOutput {
 	if t.pauseFunc != nil {
@@ -556,7 +556,7 @@ func (t *StreamTask) pauseCommitFlushResume(ctx context.Context, args *StreamTas
 			return ret
 		}
 	}
-	err := t.commitOffset(ctx, cm, args.parNum)
+	err := t.trackSrcConSeq(ctx, cm, args.parNum)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -573,7 +573,7 @@ func (t *StreamTask) pauseCommitFlushResume(ctx context.Context, args *StreamTas
 	return nil
 }
 
-func (t *StreamTask) pauseCommitFlush(ctx context.Context, args *StreamTaskArgs, cm *ConsumeSeqManager, hasUncommitted bool) *common.FnOutput {
+func (t *StreamTask) pauseTrackFlush(ctx context.Context, args *StreamTaskArgs, cm *ConsumeSeqManager, hasUncommitted bool) *common.FnOutput {
 	alreadyPaused := false
 	if hasUncommitted {
 		if t.pauseFunc != nil {
@@ -581,7 +581,7 @@ func (t *StreamTask) pauseCommitFlush(ctx context.Context, args *StreamTaskArgs,
 				return ret
 			}
 		}
-		err := t.commitOffset(ctx, cm, args.parNum)
+		err := t.trackSrcConSeq(ctx, cm, args.parNum)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
@@ -599,7 +599,7 @@ func (t *StreamTask) pauseCommitFlush(ctx context.Context, args *StreamTaskArgs,
 	return nil
 }
 
-func (t *StreamTask) commitOffset(ctx context.Context, cm *ConsumeSeqManager, parNum uint8) error {
+func (t *StreamTask) trackSrcConSeq(ctx context.Context, cm *ConsumeSeqManager, parNum uint8) error {
 	consumedSeqNumConfigs := make([]ConsumedSeqNumConfig, 0)
 	t.OffMu.Lock()
 	for topic, offset := range t.CurrentOffset {
@@ -614,7 +614,7 @@ func (t *StreamTask) commitOffset(ctx context.Context, cm *ConsumeSeqManager, pa
 	if err != nil {
 		return err
 	}
-	err = cm.Commit(ctx)
+	err = cm.Track(ctx)
 	return err
 }
 

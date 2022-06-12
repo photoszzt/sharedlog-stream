@@ -1,8 +1,12 @@
 package stats
 
-import "time"
+import (
+	"sync"
+	"time"
+)
 
 type ReportTimer struct {
+	once     sync.Once
 	lastTs   time.Time
 	duration time.Duration
 }
@@ -15,12 +19,10 @@ func NewReportTimer(duration time.Duration) ReportTimer {
 }
 
 func (r *ReportTimer) Check() bool {
-	if r.lastTs.IsZero() {
+	r.once.Do(func() {
 		r.lastTs = time.Now()
-		return false
-	} else {
-		return time.Since(r.lastTs) >= r.duration
-	}
+	})
+	return time.Since(r.lastTs) >= r.duration
 }
 
 func (r *ReportTimer) Mark() time.Duration {

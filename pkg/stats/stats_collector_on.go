@@ -11,7 +11,7 @@ import (
 
 func (c *ConcurrentInt64Collector) AddSample(sample int64) {
 	c.mu.Lock()
-	c.data = append(c.data, sample)
+	c.Int64Collector.AddSample(sample)
 	c.mu.Unlock()
 }
 

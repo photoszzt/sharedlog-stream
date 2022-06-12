@@ -160,9 +160,10 @@ func NewConcurrentMeteredSyncSink(sink *ShardedSharedLogStreamSyncSink, warmup t
 	sink_name := fmt.Sprintf("%s_sink", sink.TopicName())
 	return &ConcurrentMeteredSyncSink{
 		ShardedSharedLogStreamSyncSink: *sink,
-		lat: stats.NewConcurrentIntCollector(sink_name,
+		lat: stats.NewConcurrentInt64Collector(sink_name,
 			stats.DEFAULT_COLLECT_DURATION),
-		produceTp:          stats.NewConcurrentThroughputCounter(sink_name, stats.DEFAULT_COLLECT_DURATION),
+		produceTp: stats.NewConcurrentThroughputCounter(sink_name,
+			stats.DEFAULT_COLLECT_DURATION),
 		measure:            checkMeasureSink(),
 		isFinalOutput:      false,
 		warmup:             stats.NewWarmupGoroutineSafeChecker(warmup),
