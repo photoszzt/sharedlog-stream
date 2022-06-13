@@ -12,13 +12,11 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
-	"sharedlog-stream/pkg/transaction/tran_interface"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -38,36 +36,35 @@ func NewQ4Avg(env types.Environment, funcName string) *q4Avg {
 }
 
 func (h *q4Avg) getSrcSink(ctx context.Context, sp *common.QueryInput,
-	inputStream *sharedlog_stream.ShardedSharedLogStream,
-	outputStream *sharedlog_stream.ShardedSharedLogStream,
-) (*source_sink.MeteredSource, *source_sink.MeteredSyncSink, commtypes.KVMsgSerdes, error) {
+) (*source_sink.MeteredSource, *source_sink.MeteredSyncSink, error) {
+	inputStream, outputStreams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	if err != nil {
+		return nil, nil, err
+	}
 	msgSerde, err := commtypes.GetMsgSerde(commtypes.SerdeFormat(sp.SerdeFormat))
 	if err != nil {
-		return nil, nil, commtypes.KVMsgSerdes{}, fmt.Errorf("get msg serde err: %v", err)
-	}
-	kvmsgSerdes := commtypes.KVMsgSerdes{
-		KeySerde: commtypes.Uint64Serde{},
-		ValSerde: commtypes.Int64Serde{},
-		MsgSerde: msgSerde,
-	}
-	inputConfig := &source_sink.StreamSourceConfig{
-		Timeout:     common.SrcConsumeTimeout,
-		KVMsgSerdes: kvmsgSerdes,
-	}
-	outputConfig := &source_sink.StreamSinkConfig{
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			KeySerde: commtypes.Uint64Serde{},
-			ValSerde: commtypes.Float64Serde{},
-			MsgSerde: msgSerde,
-		},
-		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	src := source_sink.NewMeteredSource(
-		source_sink.NewShardedSharedLogStreamSource(inputStream, inputConfig), warmup)
+		source_sink.NewShardedSharedLogStreamSource(inputStream, &source_sink.StreamSourceConfig{
+			Timeout: common.SrcConsumeTimeout,
+			KVMsgSerdes: commtypes.KVMsgSerdes{
+				KeySerde: commtypes.Uint64Serde{},
+				ValSerde: commtypes.Int64Serde{},
+				MsgSerde: msgSerde,
+			},
+		}), warmup)
 	sink := source_sink.NewMeteredSyncSink(
-		source_sink.NewShardedSharedLogStreamSyncSink(outputStream, outputConfig), warmup)
-	return src, sink, kvmsgSerdes, nil
+		source_sink.NewShardedSharedLogStreamSyncSink(outputStreams[0], &source_sink.StreamSinkConfig{
+			KVMsgSerdes: commtypes.KVMsgSerdes{
+				KeySerde: commtypes.Uint64Serde{},
+				ValSerde: commtypes.Float64Serde{},
+				MsgSerde: msgSerde,
+			},
+			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+		}), warmup)
+	return src, sink, nil
 }
 
 func (h *q4Avg) Call(ctx context.Context, input []byte) ([]byte, error) {
@@ -85,10 +82,9 @@ func (h *q4Avg) Call(ctx context.Context, input []byte) ([]byte, error) {
 }
 
 type Q4AvgProcessArgs struct {
-	sumCount     *processor.MeteredProcessor
-	calcAvg      *processor.MeteredProcessor
-	trackParFunc tran_interface.TrackKeySubStreamFunc
-	proc_interface.BaseProcArgsWithSrcSink
+	sumCount *processor.MeteredProcessor
+	calcAvg  *processor.MeteredProcessor
+	proc_interface.BaseExecutionContext
 }
 
 func (h *q4Avg) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
@@ -109,18 +105,14 @@ func (h *q4Avg) procMsg(ctx context.Context, msg commtypes.Message, argsTmp inte
 }
 
 func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	src, sink, inKVMsgSerdes, err := h.getSrcSink(ctx, sp, input_stream, output_streams[0])
+	src, sink, err := h.getSrcSink(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	sumCountStoreName := "q4SumCountKVStore"
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	mp, err := store_with_changelog.NewMaterializeParamBuilder().
-		KVMsgSerdes(inKVMsgSerdes).
+		KVMsgSerdes(src.KVMsgSerdes()).
 		StoreName(sumCountStoreName).
 		ParNum(sp.ParNum).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
@@ -155,16 +147,17 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 			return float64(val.Sum) / float64(val.Count), nil
 		}),
 	), warmup)
+	srcs := []source_sink.Source{src}
 	sinks_arr := []source_sink.Sink{sink}
 	procArgs := &Q4AvgProcessArgs{
 		sumCount: sumCount,
 		calcAvg:  calcAvg,
-		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src, sinks_arr,
+		BaseExecutionContext: proc_interface.NewExecutionContext(srcs, sinks_arr,
 			h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
+			args := argsTmp.(proc_interface.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgs interface{}) {
@@ -173,7 +166,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 			sumCount.StartWarmup()
 			calcAvg.StartWarmup()
 		}).Build()
-	srcs := []source_sink.Source{src}
+
 	var kvc []*store_restore.KVStoreChangelog
 	kvc = []*store_restore.KVStoreChangelog{
 		store_restore.NewKVStoreChangelog(kvstore, mp.ChangelogManager(), mp.KVMsgSerdes(), sp.ParNum),
@@ -185,31 +178,12 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		ret.Counts["src"] = src.GetCount()
 		ret.Counts["sink"] = sink.GetCount()
 	}
-
-	if sp.EnableTransaction {
-		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
-			sp.ParNum, sp.OutputTopicNames[0])
-		builder := stream_task.NewStreamTaskArgsTransactionBuilder().
-			ProcArgs(procArgs).
-			Env(h.env).
-			Srcs(srcs).
-			Sinks(sinks_arr).
-			TransactionalID(transactionalID)
-		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp, builder).
-			KVStoreChangelogs(kvc).FixedOutParNum(sp.ParNum).Build()
-		ret := stream_task.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	} else {
-		streamTaskArgs := stream_task.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr).
-			WithKVChangelogs(kvc)
-		benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
-		ret := task.Process(ctx, streamTaskArgs)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	}
+	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
+		sp.ParNum, sp.OutputTopicNames[0])
+	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
+		KVStoreChangelogs(kvc).
+		FixedOutParNum(sp.ParNum).
+		Build()
+	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
 }

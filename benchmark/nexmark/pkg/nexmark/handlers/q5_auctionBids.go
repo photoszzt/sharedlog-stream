@@ -15,7 +15,6 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
@@ -53,10 +52,15 @@ func (h *q5AuctionBids) Call(ctx context.Context, input []byte) ([]byte, error) 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput,
-	msgSerde commtypes.MsgSerde, input_stream *sharedlog_stream.ShardedSharedLogStream,
-	output_stream *sharedlog_stream.ShardedSharedLogStream,
+func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde,
 ) (*source_sink.MeteredSource, *source_sink.ConcurrentMeteredSyncSink, error) {
+
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	if err != nil {
+		return nil, nil, err
+	}
+	debug.Assert(len(output_streams) == 1, "expected only one output stream")
+
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	var seSerde commtypes.Serde
 	var aucIdCountSerde commtypes.Serde
@@ -74,27 +78,25 @@ func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	if err != nil {
 		return nil, nil, err
 	}
-	kvmsgSerdes := commtypes.KVMsgSerdes{
-		KeySerde: commtypes.Uint64Serde{},
-		ValSerde: eventSerde,
-		MsgSerde: msgSerde,
-	}
-	inConfig := &source_sink.StreamSourceConfig{
-		Timeout:     time.Duration(5) * time.Second,
-		KVMsgSerdes: kvmsgSerdes,
-	}
-	outConfig := &source_sink.StreamSinkConfig{
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			MsgSerde: msgSerde,
-			KeySerde: seSerde,
-			ValSerde: aucIdCountSerde,
-		},
-		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
-	}
-	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
-		time.Duration(sp.WarmupS)*time.Second)
-	sink := source_sink.NewConcurrentMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_stream, outConfig),
-		time.Duration(sp.WarmupS)*time.Second)
+	warmup := time.Duration(sp.WarmupS) * time.Second
+	src := source_sink.NewMeteredSource(
+		source_sink.NewShardedSharedLogStreamSource(input_stream, &source_sink.StreamSourceConfig{
+			Timeout: time.Duration(5) * time.Second,
+			KVMsgSerdes: commtypes.KVMsgSerdes{
+				KeySerde: commtypes.Uint64Serde{},
+				ValSerde: eventSerde,
+				MsgSerde: msgSerde,
+			},
+		}), warmup)
+	sink := source_sink.NewConcurrentMeteredSyncSink(
+		source_sink.NewShardedSharedLogStreamSyncSink(output_streams[0], &source_sink.StreamSinkConfig{
+			KVMsgSerdes: commtypes.KVMsgSerdes{
+				MsgSerde: msgSerde,
+				KeySerde: seSerde,
+				ValSerde: aucIdCountSerde,
+			},
+			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+		}), warmup)
 	src.SetInitialSource(false)
 	return src, sink, nil
 }
@@ -187,7 +189,7 @@ type q5AuctionBidsProcessArg struct {
 	countProc      *processor.MeteredProcessor
 	groupByAuction *processor.MeteredProcessor
 	groupBy        *processor.GroupBy
-	proc_interface.BaseProcArgsWithSrcSink
+	proc_interface.BaseExecutionContext
 }
 
 type q5AuctionBidsRestoreArg struct {
@@ -277,12 +279,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	debug.Assert(len(output_streams) == 1, "expected only one output stream")
-	src, sink, err := h.getSrcSink(ctx, sp, msgSerde, input_stream, output_streams[0])
+	src, sink, err := h.getSrcSink(ctx, sp, msgSerde)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -306,17 +303,18 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			return commtypes.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
 		})), time.Duration(sp.WarmupS)*time.Second)
 	groupBy := processor.NewGroupBy(sink)
+	srcs := []source_sink.Source{src}
 	sinks := []source_sink.Sink{sink}
 	procArgs := &q5AuctionBidsProcessArg{
 		countProc:      countProc,
 		groupByAuction: groupByAuction,
 		groupBy:        groupBy,
-		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src,
+		BaseExecutionContext: proc_interface.NewExecutionContext(srcs,
 			sinks, h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
+			args := argsTmp.(proc_interface.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgs interface{}) {
@@ -325,7 +323,6 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			groupByAuction.StartWarmup()
 			countProc.StartWarmup()
 		}).Build()
-	srcs := []source_sink.Source{src}
 
 	var wsc []*store_restore.WindowStoreChangelog
 	if countStore.TableType() == store.IN_MEM {
@@ -339,7 +336,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		}
 	} else if countStore.TableType() == store.MONGODB {
 		wsc = []*store_restore.WindowStoreChangelog{
-			store_restore.NewWindowStoreChangelogForExternalStore(countStore, input_stream,
+			store_restore.NewWindowStoreChangelogForExternalStore(countStore, src.Stream(),
 				h.processWithoutSink, &q5AuctionBidsRestoreArg{
 					countProc:      countProc.InnerProcessor(),
 					groupByAuction: groupByAuction.InnerProcessor(),
@@ -356,30 +353,10 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		ret.Counts["src"] = src.GetCount()
 		ret.Counts["sink"] = sink.GetCount()
 	}
-	if sp.EnableTransaction {
-		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
-			sp.ParNum, sp.OutputTopicNames[0])
-		builder := stream_task.NewStreamTaskArgsTransactionBuilder().
-			ProcArgs(procArgs).
-			Env(h.env).
-			Srcs(srcs).
-			Sinks(sinks).
-			TransactionalID(transactionalID)
-		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp, builder).
-			WindowStoreChangelogs(wsc).Build()
-		ret := stream_task.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	}
-	// return h.process(ctx, sp, args)
-	streamTaskArgs := stream_task.NewStreamTaskArgs(h.env, procArgs, srcs, sinks).
-		WithWindowStoreChangelogs(wsc)
-	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
-	ret := task.Process(ctx, streamTaskArgs)
-	if ret != nil && ret.Success {
-		update_stats(ret)
-	}
-	return ret
+	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
+		sp.ParNum, sp.OutputTopicNames[0])
+	builder := stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)
+	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp, builder).
+		WindowStoreChangelogs(wsc).Build()
+	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
 }

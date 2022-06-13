@@ -4,17 +4,12 @@ import (
 	"context"
 	"fmt"
 	"sharedlog-stream/benchmark/common"
-	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"time"
 
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
-	"sharedlog-stream/pkg/stream_task"
-
-	"cs.utexas.edu/zjia/faas/types"
 )
 
 func only_bid(msg *commtypes.Message) (bool, error) {
@@ -71,6 +66,7 @@ func getSrcSinkUint64Key(
 	if err != nil {
 		return nil, nil, err
 	}
+	warmup := time.Duration(sp.WarmupS) * time.Second
 	inConfig := &source_sink.StreamSourceConfig{
 		Timeout: common.SrcConsumeTimeout,
 		KVMsgSerdes: commtypes.KVMsgSerdes{
@@ -87,11 +83,8 @@ func getSrcSinkUint64Key(
 		},
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
-
-	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
-		time.Duration(sp.WarmupS)*time.Second)
-	sink := source_sink.NewMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_stream, outConfig),
-		time.Duration(sp.WarmupS)*time.Second)
+	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig), warmup)
+	sink := source_sink.NewMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_stream, outConfig), warmup)
 	return src, sink, nil
 }
 
@@ -132,61 +125,6 @@ func CommonGetSrcSink(ctx context.Context, sp *common.QueryInput,
 	return src, sink, nil
 }
 */
-
-func ExecuteApp(
-	ctx context.Context,
-	env types.Environment,
-	transactionalID string,
-	sp *common.QueryInput,
-	task *stream_task.StreamTask,
-	srcs []source_sink.Source,
-	sinks_arr []source_sink.Sink,
-	procArgs proc_interface.ProcArgs,
-	update_stats func(ret *common.FnOutput),
-) *common.FnOutput {
-	if sp.EnableTransaction {
-		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp,
-			stream_task.NewStreamTaskArgsTransactionBuilder().
-				ProcArgs(procArgs).
-				Env(env).
-				Srcs(srcs).
-				Sinks(sinks_arr).
-				TransactionalID(transactionalID)).
-			Build()
-		ret := stream_task.SetupManagersAndProcessTransactional(ctx, env, streamTaskArgs, task)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	} else {
-		streamTaskArgs := stream_task.NewStreamTaskArgs(env, procArgs, srcs, sinks_arr)
-		benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
-		ret := task.Process(ctx, streamTaskArgs)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	}
-}
-
-func ExecuteAppNoTransaction(
-	ctx context.Context,
-	env types.Environment,
-	sp *common.QueryInput,
-	task *stream_task.StreamTask,
-	srcs []source_sink.Source,
-	sinks_arr []source_sink.Sink,
-	procArgs proc_interface.ProcArgs,
-	update_stats func(ret *common.FnOutput),
-) *common.FnOutput {
-	streamTaskArgs := stream_task.NewStreamTaskArgs(env, procArgs, srcs, sinks_arr)
-	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
-	ret := task.Process(ctx, streamTaskArgs)
-	if ret != nil && ret.Success {
-		update_stats(ret)
-	}
-	return ret
-}
 
 func GetSerdeFromString(serdeStr string, serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
 	switch serdeStr {

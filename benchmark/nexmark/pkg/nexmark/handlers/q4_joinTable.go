@@ -9,9 +9,8 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/execution"
-	"sharedlog-stream/pkg/hash"
+	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
@@ -27,18 +26,13 @@ import (
 )
 
 type q4JoinTableHandler struct {
-	env types.Environment
-
-	cHashMu sync.RWMutex
-	cHash   *hash.ConsistentHash
-
+	env      types.Environment
 	funcName string
 }
 
 func NewQ4JoinTableHandler(env types.Environment, funcName string) types.FuncHandler {
 	return &q4JoinTableHandler{
 		env:      env,
-		cHash:    hash.NewConsistentHash(),
 		funcName: funcName,
 	}
 }
@@ -231,7 +225,6 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		return filterAndGroupMsg(ctx, msgs)
 	})
 
-	control_channel.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 	joinProcBid := execution.NewJoinProcArgs(bidsSrc, sink, bJoinA,
 		h.funcName, sp.ScaleEpoch, sp.ParNum)
 	joinProcAuction := execution.NewJoinProcArgs(auctionsSrc, sink, aJoinB,
@@ -240,9 +233,12 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 	var wg sync.WaitGroup
 	aucManager := execution.NewJoinProcManager()
 	bidManager := execution.NewJoinProcManager()
-	procArgs := execution.NewCommonJoinProcArgs(joinProcAuction, joinProcBid,
+	srcs := []source_sink.Source{auctionsSrc, bidsSrc}
+	sinks_arr := []source_sink.Sink{sink}
+	procArgs := execution.NewCommonJoinProcArgs(
+		joinProcAuction, joinProcBid,
 		aucManager.Out(), bidManager.Out(),
-		h.funcName, sp.ScaleEpoch, sp.ParNum)
+		proc_interface.NewExecutionContext(srcs, sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum))
 
 	bctx := context.WithValue(ctx, "id", "bid")
 	actx := context.WithValue(ctx, "id", "auction")
@@ -279,8 +275,6 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 	aucManager.LaunchJoinProcLoop(actx, task, joinProcAuction, &wg)
 	bidManager.LaunchJoinProcLoop(bctx, task, joinProcBid, &wg)
 
-	srcs := []source_sink.Source{auctionsSrc, bidsSrc}
-	sinks_arr := []source_sink.Sink{sink}
 	var kvchangelogs []*store_restore.KVStoreChangelog
 	if sp.TableType == uint8(store.IN_MEM) {
 		serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
@@ -313,29 +307,10 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		ret.Counts["bidsSrc"] = bidsSrc.GetCount()
 		ret.Counts["sink"] = sink.GetCount()
 	}
-	if sp.EnableTransaction {
-		transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName,
-			sp.InputTopicNames[0], sp.ParNum)
-		builder := stream_task.NewStreamTaskArgsTransactionBuilder().
-			ProcArgs(procArgs).
-			Env(h.env).
-			Srcs(srcs).
-			Sinks(sinks_arr).
-			TransactionalID(transactionalID)
-		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp, builder).
-			KVStoreChangelogs(kvchangelogs).FixedOutParNum(sp.ParNum).Build()
-		ret := stream_task.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	} else {
-		streamTaskArgs := stream_task.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr)
-		benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
-		ret := task.Process(ctx, streamTaskArgs)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	}
+	transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName,
+		sp.InputTopicNames[0], sp.ParNum)
+	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
+		KVStoreChangelogs(kvchangelogs).FixedOutParNum(sp.ParNum).Build()
+	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
 }

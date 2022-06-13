@@ -60,7 +60,7 @@ func (h *q3GroupByHandler) Call(ctx context.Context, input []byte) ([]byte, erro
 type TwoMsgChanProcArgs struct {
 	msgChan1 chan commtypes.Message
 	msgChan2 chan commtypes.Message
-	proc_interface.BaseProcArgsWithSrcSink
+	proc_interface.BaseExecutionContext
 }
 
 func getSrcSinks(ctx context.Context, sp *common.QueryInput,
@@ -125,11 +125,12 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	var wg sync.WaitGroup
 	personsByIDManager := execution.NewGeneralProcManager(personsByIDFunc)
 	auctionsBySellerIDManager := execution.NewGeneralProcManager(auctionsBySellerIDFunc)
+	srcs := []source_sink.Source{src}
 	sinks_arr := []source_sink.Sink{sinks[0], sinks[1]}
 	procArgs := &TwoMsgChanProcArgs{
 		msgChan1: auctionsBySellerIDManager.MsgChan(),
 		msgChan2: personsByIDManager.MsgChan(),
-		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src, sinks_arr,
+		BaseExecutionContext: proc_interface.NewExecutionContext(srcs, sinks_arr,
 			h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 
@@ -149,7 +150,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
+			args := argsTmp.(proc_interface.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgsTmp interface{}) {
@@ -182,7 +183,6 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 			auctionsBySellerIDManager.LaunchProc(ctx, procArgs, &wg)
 			debug.Fprintf(os.Stderr, "done resume\n")
 		}).Build()
-	srcs := []source_sink.Source{src}
 
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["filterPerson"] = filterPerson.GetLatency()
@@ -193,31 +193,11 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 		ret.Counts["aucSink"] = sinks[0].GetCount()
 		ret.Counts["personSink"] = sinks[1].GetCount()
 	}
-	if sp.EnableTransaction {
-		transactionalID := fmt.Sprintf("%s-%s-%d",
-			h.funcName, sp.InputTopicNames[0], sp.ParNum)
-		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp,
-			stream_task.NewStreamTaskArgsTransactionBuilder().
-				ProcArgs(procArgs).
-				Env(h.env).
-				Srcs(srcs).
-				Sinks(sinks_arr).
-				TransactionalID(transactionalID)).
-			Build()
-		ret := stream_task.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	} else {
-		streamTaskArgs := stream_task.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr)
-		benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
-		ret := task.Process(ctx, streamTaskArgs)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	}
+	transactionalID := fmt.Sprintf("%s-%s-%d",
+		h.funcName, sp.InputTopicNames[0], sp.ParNum)
+	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).Build()
+	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
 }
 
 func (h *q3GroupByHandler) getPersonsByID(warmup time.Duration) (

@@ -75,11 +75,12 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 	var wg sync.WaitGroup
 	auctionsByIDManager := execution.NewGeneralProcManager(auctionsByIDFunc)
 	bidsByAuctionIDManager := execution.NewGeneralProcManager(bidsByAuctionIDFunc)
+	srcs := []source_sink.Source{src}
 	sinks_arr := []source_sink.Sink{sinks[0], sinks[1]}
 	procArgs := &TwoMsgChanProcArgs{
 		msgChan1: auctionsByIDManager.MsgChan(),
 		msgChan2: bidsByAuctionIDManager.MsgChan(),
-		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src, sinks_arr,
+		BaseExecutionContext: proc_interface.NewExecutionContext(srcs, sinks_arr,
 			h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 	auctionsByIDManager.LaunchProc(ctx, procArgs, &wg)
@@ -101,7 +102,7 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
+			args := argsTmp.(proc_interface.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgsTmp interface{}) {
@@ -133,7 +134,6 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 			bidsByAuctionIDManager.LaunchProc(ctx, procArgs, &wg)
 			debug.Fprintf(os.Stderr, "done resume\n")
 		}).HandleErrFunc(handleErrFunc).Build()
-	srcs := []source_sink.Source{src}
 
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["filterAuctions"] = filterAuctions.GetLatency()
@@ -144,31 +144,10 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 		ret.Counts["aucSink"] = sinks[0].GetCount()
 		ret.Counts["bidSink"] = sinks[1].GetCount()
 	}
-
-	if sp.EnableTransaction {
-		transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName, sp.InputTopicNames[0], sp.ParNum)
-		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp,
-			stream_task.NewStreamTaskArgsTransactionBuilder().
-				ProcArgs(procArgs).
-				Env(h.env).
-				Srcs(srcs).
-				Sinks(sinks_arr).
-				TransactionalID(transactionalID)).
-			Build()
-		ret := stream_task.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	} else {
-		streamTaskArgs := stream_task.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr)
-		benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
-		ret := task.Process(ctx, streamTaskArgs)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	}
+	transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName, sp.InputTopicNames[0], sp.ParNum)
+	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).Build()
+	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
 }
 
 func (h *q46GroupByHandler) getAucsByID(warmup time.Duration) (

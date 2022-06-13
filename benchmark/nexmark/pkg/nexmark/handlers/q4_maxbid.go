@@ -101,7 +101,7 @@ type q4MaxBidProcessArgs struct {
 	maxBid    *processor.MeteredProcessor
 	changeKey *processor.MeteredProcessor
 	groupBy   *processor.GroupBy
-	proc_interface.BaseProcArgsWithSrcSink
+	proc_interface.BaseExecutionContext
 }
 
 func (h *q4MaxBid) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
@@ -169,18 +169,19 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 			}, nil
 		})), warmup)
 	groupBy := processor.NewGroupBy(sink)
+	srcs := []source_sink.Source{src}
 	sinks_arr := []source_sink.Sink{sink}
 	procArgs := &q4MaxBidProcessArgs{
 		maxBid:    maxBid,
 		changeKey: changeKey,
 		groupBy:   groupBy,
-		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src, sinks_arr, h.funcName,
+		BaseExecutionContext: proc_interface.NewExecutionContext(srcs, sinks_arr, h.funcName,
 			sp.ScaleEpoch, sp.ParNum),
 	}
 
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
+			args := argsTmp.(proc_interface.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgs interface{}) {
@@ -190,10 +191,12 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 			changeKey.StartWarmup()
 		}).Build()
 
-	srcs := []source_sink.Source{src}
 	var kvc []*store_restore.KVStoreChangelog
 	kvc = []*store_restore.KVStoreChangelog{
-		store_restore.NewKVStoreChangelog(kvstore, mp.ChangelogManager(), mp.KVMsgSerdes(), sp.ParNum),
+		store_restore.NewKVStoreChangelog(kvstore,
+			mp.ChangelogManager(),
+			mp.KVMsgSerdes(),
+			sp.ParNum),
 	}
 
 	update_stats := func(ret *common.FnOutput) {
@@ -203,30 +206,10 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		ret.Counts["src"] = src.GetCount()
 		ret.Counts["sink"] = sink.GetCount()
 	}
-
-	if sp.EnableTransaction {
-		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
-			sp.ParNum, sp.OutputTopicNames[0])
-		builder := stream_task.NewStreamTaskArgsTransactionBuilder().
-			ProcArgs(procArgs).
-			Env(h.env).
-			Srcs(srcs).
-			Sinks(sinks_arr).
-			TransactionalID(transactionalID)
-		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp, builder).
-			KVStoreChangelogs(kvc).Build()
-		ret := stream_task.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	} else {
-		streamTaskArgs := stream_task.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr).WithKVChangelogs(kvc)
-		benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
-		ret := task.Process(ctx, streamTaskArgs)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	}
+	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
+		sp.ParNum, sp.OutputTopicNames[0])
+	builder := stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)
+	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp, builder).
+		KVStoreChangelogs(kvc).Build()
+	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
 }

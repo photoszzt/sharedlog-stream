@@ -87,10 +87,9 @@ func getSrcSink(ctx context.Context,
 }
 
 type wordcountSplitterProcessArg struct {
-	output_stream  *sharedlog_stream.ShardedSharedLogStream
 	splitter       processor.FlatMapperFunc
 	splitLatencies []int
-	proc_interface.BaseProcArgsWithSrcSink
+	proc_interface.BaseExecutionContext
 	numOutPartition uint8
 }
 
@@ -151,18 +150,19 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 	})
 
 	funcName := "wcsplitter"
+	srcs := []source_sink.Source{src}
+	sinks := []source_sink.Sink{sink}
 	procArgs := &wordcountSplitterProcessArg{
-		output_stream:  output_streams[0],
 		splitter:       splitter,
 		splitLatencies: make([]int, 0),
-		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src, []source_sink.Sink{sink},
+		BaseExecutionContext: proc_interface.NewExecutionContext(srcs, sinks,
 			funcName, sp.ScaleEpoch, sp.ParNum),
 		numOutPartition: sp.NumOutPartitions[0],
 	}
 
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
+			args := argsTmp.(proc_interface.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgs interface{}) {
@@ -170,35 +170,13 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 			sink.StartWarmup()
 		}).Build()
 
-	srcs := []source_sink.Source{src}
-	sinks := []source_sink.Sink{sink}
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["split"] = procArgs.splitLatencies
 		ret.Counts["sink"] = sink.GetCount()
 		ret.Counts["src"] = src.GetCount()
 	}
-	if sp.EnableTransaction {
-		// fmt.Fprintf(os.Stderr, "word count counter function enables exactly once semantics\n")
-		transactionalID := fmt.Sprintf("%s-%s-%d", funcName, sp.InputTopicNames[0], sp.ParNum)
-		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp,
-			stream_task.NewStreamTaskArgsTransactionBuilder().
-				ProcArgs(procArgs).
-				Env(h.env).
-				Srcs(srcs).
-				Sinks(sinks).
-				TransactionalID(transactionalID)).
-			Build()
-		ret := stream_task.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	}
-	streamTaskArgs := stream_task.NewStreamTaskArgs(h.env, procArgs, srcs, sinks)
-	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
-	ret := task.Process(ctx, streamTaskArgs)
-	if ret != nil && ret.Success {
-		update_stats(ret)
-	}
-	return ret
+	transactionalID := fmt.Sprintf("%s-%s-%d", funcName, sp.InputTopicNames[0], sp.ParNum)
+	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).Build()
+	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
 }

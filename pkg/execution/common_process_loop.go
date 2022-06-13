@@ -14,7 +14,7 @@ import (
 	"golang.org/x/xerrors"
 )
 
-func CommonProcess(ctx context.Context, t *stream_task.StreamTask, args proc_interface.ProcArgsWithSrcSink,
+func CommonProcess(ctx context.Context, t *stream_task.StreamTask, args proc_interface.ExecutionContext,
 	procMsg proc_interface.ProcessMsgFunc,
 ) *common.FnOutput {
 	if t.HandleErrFunc != nil {
@@ -22,7 +22,7 @@ func CommonProcess(ctx context.Context, t *stream_task.StreamTask, args proc_int
 			return &common.FnOutput{Success: true, Message: err.Error()}
 		}
 	}
-	gotMsgs, err := args.Source().Consume(ctx, args.ParNum())
+	gotMsgs, err := args.Sources()[0].Consume(ctx, args.ParNum())
 	if err != nil {
 		if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 			return &common.FnOutput{Success: true, Message: err.Error()}
@@ -41,7 +41,7 @@ func CommonProcess(ctx context.Context, t *stream_task.StreamTask, args proc_int
 			continue
 		}
 		// err = proc(t, msg)
-		t.CurrentOffset[args.Source().TopicName()] = msg.LogSeqNum
+		t.CurrentOffset[args.Sources()[0].TopicName()] = msg.LogSeqNum
 		err = ProcessMsgAndSeq(ctx, msg, args, procMsg)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}

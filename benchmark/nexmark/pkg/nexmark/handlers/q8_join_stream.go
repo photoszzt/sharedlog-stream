@@ -13,6 +13,7 @@ import (
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
+	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
@@ -277,12 +278,14 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	var wg sync.WaitGroup
 	aucManager := execution.NewJoinProcManager()
 	perManager := execution.NewJoinProcManager()
-
+	srcs := []source_sink.Source{auctionsSrc, personsSrc}
+	sinks_arr := []source_sink.Sink{sink}
 	procArgs := execution.NewCommonJoinProcArgs(
 		joinProcAuction,
 		joinProcPerson,
 		aucManager.Out(),
-		perManager.Out(), h.funcName, sp.ScaleEpoch, sp.ParNum)
+		perManager.Out(),
+		proc_interface.NewExecutionContext(srcs, sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum))
 	pctx := context.WithValue(ctx, "id", "person")
 	actx := context.WithValue(ctx, "id", "auction")
 
@@ -325,8 +328,6 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	aucManager.LaunchJoinProcLoop(actx, task, joinProcAuction, &wg)
 	perManager.LaunchJoinProcLoop(pctx, task, joinProcPerson, &wg)
 
-	srcs := []source_sink.Source{auctionsSrc, personsSrc}
-	sinks_arr := []source_sink.Sink{sink}
 	var wsc []*store_restore.WindowStoreChangelog
 	if sp.TableType == uint8(store.IN_MEM) {
 		wsc = []*store_restore.WindowStoreChangelog{
@@ -370,30 +371,11 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		ret.Counts["personsSrc"] = personsSrc.GetCount()
 		ret.Counts["sink"] = sink.GetCount()
 	}
-	if sp.EnableTransaction {
-		transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
-		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp,
-			stream_task.NewStreamTaskArgsTransactionBuilder().
-				ProcArgs(procArgs).
-				Env(h.env).
-				Srcs(srcs).
-				Sinks(sinks_arr).
-				TransactionalID(transactionalID)).
-			WindowStoreChangelogs(wsc).
-			FixedOutParNum(sp.ParNum).
-			Build()
-		ret := stream_task.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	}
-	streamTaskArgs := stream_task.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr).
-		WithWindowStoreChangelogs(wsc)
-	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
-	ret := task.Process(ctx, streamTaskArgs)
-	if ret != nil && ret.Success {
-		update_stats(ret)
-	}
-	return ret
+	transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
+	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
+		WindowStoreChangelogs(wsc).
+		FixedOutParNum(sp.ParNum).
+		Build()
+	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
 }

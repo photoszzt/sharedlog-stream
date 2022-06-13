@@ -50,7 +50,7 @@ type bidKeyedByAuctionProcessArgs struct {
 	filterBid *processor.MeteredProcessor
 	selectKey *processor.MeteredProcessor
 	groupBy   *processor.GroupBy
-	proc_interface.BaseProcArgsWithSrcSink
+	proc_interface.BaseExecutionContext
 }
 
 func (h *bidByAuction) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
@@ -97,17 +97,18 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 			return commtypes.Message{Key: event.Bid.Auction, Value: m.Value, Timestamp: m.Timestamp}, nil
 		})), time.Duration(sp.WarmupS)*time.Second)
 	groupBy := processor.NewGroupBy(sink)
+	srcs := []source_sink.Source{src}
 	sinks := []source_sink.Sink{sink}
 	procArgs := &bidKeyedByAuctionProcessArgs{
 		filterBid: filterBid,
 		selectKey: selectKey,
 		groupBy:   groupBy,
-		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src,
+		BaseExecutionContext: proc_interface.NewExecutionContext(srcs,
 			sinks, h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
+			args := argsTmp.(proc_interface.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgs interface{}) {
@@ -117,37 +118,16 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 			selectKey.StartWarmup()
 		}).Build()
 
-	srcs := []source_sink.Source{src}
-
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["filterBid"] = filterBid.GetLatency()
 		ret.Latencies["selectKey"] = selectKey.GetLatency()
 		ret.Counts["src"] = src.GetCount()
 		ret.Counts["sink"] = sink.GetCount()
 	}
-	if sp.EnableTransaction {
-		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
-			sp.InputTopicNames[0],
-			sp.ParNum, sp.OutputTopicNames[0])
-		builder := stream_task.NewStreamTaskArgsTransactionBuilder().
-			ProcArgs(procArgs).
-			Env(h.env).
-			Srcs(srcs).
-			Sinks(sinks).
-			TransactionalID(transactionalID)
-		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp, builder).Build()
-		ret := stream_task.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	}
-	// return h.process(ctx, sp, args)
-	streamTaskArgs := stream_task.NewStreamTaskArgs(h.env, procArgs, srcs, sinks)
-	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
-	ret := task.Process(ctx, streamTaskArgs)
-	if ret != nil && ret.Success {
-		update_stats(ret)
-	}
-	return ret
+	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
+		sp.InputTopicNames[0],
+		sp.ParNum, sp.OutputTopicNames[0])
+	builder := stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)
+	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp, builder).Build()
+	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
 }

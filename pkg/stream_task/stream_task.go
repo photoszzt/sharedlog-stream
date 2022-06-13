@@ -16,8 +16,6 @@ import (
 	"sharedlog-stream/pkg/txn_data"
 	"sync"
 	"time"
-
-	"cs.utexas.edu/zjia/faas/types"
 )
 
 type ProcessFunc func(ctx context.Context, task *StreamTask, args interface{}) *common.FnOutput
@@ -33,30 +31,43 @@ type StreamTask struct {
 	trackEveryForAtLeastOnce time.Duration
 }
 
-func SetupManagersAndProcessTransactional(ctx context.Context,
-	env types.Environment,
-	streamTaskArgs *StreamTaskArgsTransaction,
-	task *StreamTask,
+func (t *StreamTask) ExecuteApp(ctx context.Context,
+	streamTaskArgs *StreamTaskArgs,
+	transaction bool,
+	update_stats func(ret *common.FnOutput),
 ) *common.FnOutput {
-	tm, cmm, err := SetupManagers(ctx, env, streamTaskArgs, task)
+	var ret *common.FnOutput
+	if transaction {
+		ret = t.SetupManagersAndProcessTransactional(ctx, streamTaskArgs)
+	} else {
+		ret = t.Process(ctx, streamTaskArgs)
+	}
+	if ret != nil && ret.Success {
+		update_stats(ret)
+	}
+	return ret
+}
+
+func (t *StreamTask) SetupManagersAndProcessTransactional(ctx context.Context,
+	streamTaskArgs *StreamTaskArgs,
+) *common.FnOutput {
+	tm, cmm, err := t.SetupManagers(ctx, streamTaskArgs)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	debug.Fprint(os.Stderr, "begin transaction processing\n")
-	ret := task.ProcessWithTransaction(ctx, tm, cmm, streamTaskArgs)
+	ret := t.ProcessWithTransaction(ctx, tm, cmm, streamTaskArgs)
 	return ret
 }
 
-func SetupManagers(ctx context.Context, env types.Environment,
-	streamTaskArgs *StreamTaskArgsTransaction,
-	task *StreamTask,
+func (t *StreamTask) SetupManagers(ctx context.Context, streamTaskArgs *StreamTaskArgs,
 ) (*transaction.TransactionManager, *control_channel.ControlChannelManager, error) {
 	debug.Fprint(os.Stderr, "setup transaction and control manager\n")
 	tm, err := SetupTransactionManager(ctx, streamTaskArgs)
 	if err != nil {
 		return nil, nil, err
 	}
-	cmm, err := control_channel.NewControlChannelManager(env, streamTaskArgs.appId,
+	cmm, err := control_channel.NewControlChannelManager(streamTaskArgs.env, streamTaskArgs.appId,
 		commtypes.SerdeFormat(streamTaskArgs.serdeFormat), streamTaskArgs.procArgs.CurEpoch())
 	if err != nil {
 		return nil, nil, err
@@ -100,7 +111,7 @@ func SetupManagers(ctx context.Context, env types.Environment,
 	return tm, cmm, nil
 }
 
-func getOffsetMap(ctx context.Context, tm *transaction.TransactionManager, args *StreamTaskArgsTransaction) (map[string]uint64, error) {
+func getOffsetMap(ctx context.Context, tm *transaction.TransactionManager, args *StreamTaskArgs) (map[string]uint64, error) {
 	offsetMap := make(map[string]uint64)
 	for _, src := range args.srcs {
 		inputTopicName := src.TopicName()
@@ -115,7 +126,7 @@ func getOffsetMap(ctx context.Context, tm *transaction.TransactionManager, args 
 	return offsetMap, nil
 }
 
-func setOffsetOnStream(offsetMap map[string]uint64, args *StreamTaskArgsTransaction) {
+func setOffsetOnStream(offsetMap map[string]uint64, args *StreamTaskArgs) {
 	for _, src := range args.srcs {
 		inputTopicName := src.TopicName()
 		offset := offsetMap[inputTopicName]
@@ -124,7 +135,7 @@ func setOffsetOnStream(offsetMap map[string]uint64, args *StreamTaskArgsTransact
 }
 
 func restoreKVStore(ctx context.Context, tm *transaction.TransactionManager,
-	args *StreamTaskArgsTransaction, offsetMap map[string]uint64,
+	args *StreamTaskArgs, offsetMap map[string]uint64,
 ) error {
 	for _, kvchangelog := range args.kvChangelogs {
 		if kvchangelog.TableType() == store.IN_MEM {
@@ -159,7 +170,7 @@ func restoreKVStore(ctx context.Context, tm *transaction.TransactionManager,
 }
 
 func restoreChangelogBackedWindowStore(ctx context.Context, tm *transaction.TransactionManager,
-	args *StreamTaskArgsTransaction, offsetMap map[string]uint64) error {
+	args *StreamTaskArgs, offsetMap map[string]uint64) error {
 	for _, wschangelog := range args.windowStoreChangelogs {
 		if wschangelog.TableType() == store.IN_MEM {
 			topic := wschangelog.ChangelogManager().TopicName()
@@ -191,7 +202,7 @@ func restoreChangelogBackedWindowStore(ctx context.Context, tm *transaction.Tran
 	return nil
 }
 
-func restoreStateStore(ctx context.Context, tm *transaction.TransactionManager, args *StreamTaskArgsTransaction, offsetMap map[string]uint64) error {
+func restoreStateStore(ctx context.Context, tm *transaction.TransactionManager, args *StreamTaskArgs, offsetMap map[string]uint64) error {
 	if args.kvChangelogs != nil {
 		err := restoreKVStore(ctx, tm, args, offsetMap)
 		if err != nil {
@@ -265,7 +276,7 @@ func restoreMongoDBWinStore(
 
 func SetupTransactionManager(
 	ctx context.Context,
-	args *StreamTaskArgsTransaction,
+	args *StreamTaskArgs,
 ) (*transaction.TransactionManager, error) {
 	tm, err := transaction.NewTransactionManager(ctx, args.env, args.transactionalId,
 		commtypes.SerdeFormat(args.serdeFormat))
@@ -281,7 +292,7 @@ func SetupTransactionManager(
 }
 
 func UpdateInputStreamCursor(
-	args *StreamTaskArgsTransaction,
+	args *StreamTaskArgs,
 	offsetMap map[string]uint64,
 ) {
 	for _, src := range args.srcs {
@@ -347,7 +358,7 @@ func (t *StreamTask) ProcessWithTransaction(
 	ctx context.Context,
 	tm *transaction.TransactionManager,
 	cmm *control_channel.ControlChannelManager,
-	args *StreamTaskArgsTransaction,
+	args *StreamTaskArgs,
 ) *common.FnOutput {
 	debug.Assert(len(args.srcs) >= 1, "Srcs should be filled")
 	debug.Assert(args.env != nil, "env should be filled")
@@ -534,7 +545,7 @@ func (t *StreamTask) ProcessWithTransaction(
 	}
 }
 
-func (t *StreamTask) startNewTransaction(ctx context.Context, args *StreamTaskArgsTransaction, tm *transaction.TransactionManager,
+func (t *StreamTask) startNewTransaction(ctx context.Context, args *StreamTaskArgs, tm *transaction.TransactionManager,
 	hasLiveTransaction *bool, trackConsumePar *bool, init *bool, commitTimer *time.Time,
 ) error {
 	if !*hasLiveTransaction {
@@ -587,7 +598,7 @@ func updateReturnMetric(ret *common.FnOutput,
 
 func (t *StreamTask) commitTransaction(ctx context.Context,
 	tm *transaction.TransactionManager,
-	args *StreamTaskArgsTransaction,
+	args *StreamTaskArgs,
 	hasLiveTransaction *bool,
 	trackConsumePar *bool,
 ) *common.FnOutput {

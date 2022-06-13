@@ -44,11 +44,11 @@ func joinProcLoop(
 		default:
 		}
 		// debug.Fprintf(os.Stderr, "before consume\n")
-		gotMsgs, err := procArgs.Source().Consume(ctx, procArgs.ParNum())
+		gotMsgs, err := procArgs.Sources()[0].Consume(ctx, procArgs.ParNum())
 		if err != nil {
 			if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 				debug.Fprintf(os.Stderr, "[TIMEOUT] %s %s timeout, out chan len: %d\n",
-					id, procArgs.Source().TopicName(), len(out))
+					id, procArgs.Sources()[0].TopicName(), len(out))
 				// out <- &common.FnOutput{Success: true, Message: err.Error()}
 				// debug.Fprintf(os.Stderr, "%s done sending msg\n", id)
 				// return
@@ -73,7 +73,7 @@ func joinProcLoop(
 				continue
 			}
 			task.OffMu.Lock()
-			task.CurrentOffset[procArgs.Source().TopicName()] = msg.LogSeqNum
+			task.CurrentOffset[procArgs.Sources()[0].TopicName()] = msg.LogSeqNum
 			task.OffMu.Unlock()
 
 			if msg.MsgArr != nil {

@@ -61,13 +61,8 @@ func (h *multiProducerHandler) tests(ctx context.Context, sp *test_types.TestInp
 func (h *multiProducerHandler) getProduceTransactionManager(
 	ctx context.Context, transactionalID string, sink source_sink.Sink,
 ) (*transaction.TransactionManager, tran_interface.TrackKeySubStreamFunc) {
-	args1 := benchutil.UpdateStreamTaskArgsTransaction(&common.QueryInput{},
-		stream_task.NewStreamTaskArgsTransactionBuilder().
-			ProcArgs(nil).
-			Env(h.env).
-			Srcs(nil).
-			Sinks([]source_sink.Sink{sink}).
-			TransactionalID(transactionalID)).Build()
+	args1 := benchutil.UpdateStreamTaskArgs(&common.QueryInput{},
+		stream_task.NewStreamTaskArgsBuilder(h.env, nil, transactionalID)).Build()
 	tm1, err := stream_task.SetupTransactionManager(ctx, args1)
 	if err != nil {
 		panic(err)
@@ -90,13 +85,8 @@ func (h *multiProducerHandler) getProduceTransactionManager(
 func (h *multiProducerHandler) getConsumeTransactionManager(
 	ctx context.Context, transactionalID string, src source_sink.Source,
 ) (*transaction.TransactionManager, tran_interface.TrackKeySubStreamFunc) {
-	args1 := benchutil.UpdateStreamTaskArgsTransaction(&common.QueryInput{},
-		stream_task.NewStreamTaskArgsTransactionBuilder().
-			ProcArgs(nil).
-			Env(h.env).
-			Srcs([]source_sink.Source{src}).
-			Sinks(nil).
-			TransactionalID(transactionalID)).Build()
+	args1 := benchutil.UpdateStreamTaskArgs(&common.QueryInput{},
+		stream_task.NewStreamTaskArgsBuilder(h.env, nil, transactionalID)).Build()
 	tm1, err := stream_task.SetupTransactionManager(ctx, args1)
 	if err != nil {
 		panic(err)

@@ -13,6 +13,7 @@ import (
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
+	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
@@ -214,10 +215,11 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	var wg sync.WaitGroup
 	bidManager := execution.NewJoinProcManager()
 	maxBidManager := execution.NewJoinProcManager()
-
+	srcs := []source_sink.Source{sss.src1, sss.src2}
+	sinks_arr := []source_sink.Sink{sss.sink}
 	procArgs := execution.NewCommonJoinProcArgs(joinProcBid, joinProcMaxBid,
 		bidManager.Out(), maxBidManager.Out(),
-		h.funcName, sp.ScaleEpoch, sp.ParNum)
+		proc_interface.NewExecutionContext(srcs, sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum))
 	bctx := context.WithValue(ctx, "id", "bid")
 	mctx := context.WithValue(ctx, "id", "maxBid")
 
@@ -251,8 +253,6 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	bidManager.LaunchJoinProcLoop(bctx, task, joinProcBid, &wg)
 	maxBidManager.LaunchJoinProcLoop(mctx, task, joinProcMaxBid, &wg)
 
-	srcs := []source_sink.Source{sss.src1, sss.src2}
-	sinks_arr := []source_sink.Sink{sss.sink}
 	update_stats := func(ret *common.FnOutput) {
 		for proc_name, proc := range procs {
 			ret.Latencies[proc_name] = proc.GetLatency()
@@ -262,31 +262,11 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		ret.Counts["maxBidSrc"] = sss.src2.GetCount()
 		ret.Counts["sink"] = sss.sink.GetCount()
 	}
-	if sp.EnableTransaction {
-		transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
-		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp,
-			stream_task.NewStreamTaskArgsTransactionBuilder().
-				ProcArgs(procArgs).
-				Env(h.env).
-				Srcs(srcs).
-				Sinks(sinks_arr).
-				TransactionalID(transactionalID)).
-			WindowStoreChangelogs(wsc).
-			FixedOutParNum(sp.ParNum).
-			Build()
-		ret := stream_task.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	} else {
-		streamTaskArgs := stream_task.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr).
-			WithWindowStoreChangelogs(wsc)
-		benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
-		ret := task.Process(ctx, streamTaskArgs)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	}
+	transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
+	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
+		WindowStoreChangelogs(wsc).
+		FixedOutParNum(sp.ParNum).
+		Build()
+	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
 }

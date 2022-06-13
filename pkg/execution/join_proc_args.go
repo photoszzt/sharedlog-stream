@@ -7,7 +7,7 @@ import (
 
 type JoinProcArgs struct {
 	runner JoinWorkerFunc
-	proc_interface.BaseProcArgsWithSrcSink
+	proc_interface.BaseExecutionContext
 }
 
 // var _ = proc_interface.ProcArgsWithSink(&JoinProcArgs{})
@@ -22,8 +22,8 @@ func NewJoinProcArgs(
 ) *JoinProcArgs {
 	return &JoinProcArgs{
 		runner: runner,
-		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(
-			src,
+		BaseExecutionContext: proc_interface.NewExecutionContext(
+			[]source_sink.Source{src},
 			[]source_sink.Sink{sink}, funcName, curEpoch, parNum),
 	}
 }

@@ -123,22 +123,14 @@ func InvokeFunc(client *http.Client, response *common.FnOutput,
 	}
 }
 
-func UpdateStreamTaskArgsTransaction(sp *common.QueryInput, argsBuilder stream_task.SetAppID) stream_task.BuildStreamTaskArgsTransaction {
+func UpdateStreamTaskArgs(sp *common.QueryInput, argsBuilder stream_task.SetAppID) stream_task.BuildStreamTaskArgs {
 	debug.Assert(sp.AppId != "", "app id should not be empty")
 	return argsBuilder.AppID(sp.AppId).
 		Warmup(time.Duration(sp.WarmupS) * time.Second).
 		CommitEveryMs(sp.CommitEveryMs).
+		FlushEveryMs(sp.FlushMs).
 		CommitEveryNIter(sp.CommitEveryNIter).
 		ExitAfterNCommit(sp.ExitAfterNCommit).
 		Duration(sp.Duration).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat))
-}
-
-func UpdateStreamTaskArgs(sp *common.QueryInput, args *stream_task.StreamTaskArgs) {
-	args.WithDuration(time.Duration(sp.Duration) * time.Second).
-		WithNumInPartition(sp.NumInPartition).
-		WithParNum(sp.ParNum).
-		WithSerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
-		WithWarmup(time.Duration(sp.WarmupS) * time.Second).
-		WithFlushEvery(time.Duration(sp.FlushMs) * time.Millisecond)
 }

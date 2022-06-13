@@ -2,6 +2,7 @@ package stream_task
 
 import (
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/store_restore"
 	"time"
@@ -9,68 +10,151 @@ import (
 	"cs.utexas.edu/zjia/faas/types"
 )
 
+type TranProtocol uint8
+
+const (
+	TWO_PHASE_COMMIT TranProtocol = 1
+	EPOCH_MARK       TranProtocol = 2
+)
+
 type StreamTaskArgs struct {
-	procArgs interface{}
+	procArgs proc_interface.ExecutionContext
 	env      types.Environment
 
-	srcs                  []source_sink.Source
-	sinks                 []source_sink.Sink
+	srcs            []source_sink.Source
+	sinks           []source_sink.Sink
+	appId           string
+	transactionalId string
+
 	windowStoreChangelogs []*store_restore.WindowStoreChangelog
 	kvChangelogs          []*store_restore.KVStoreChangelog
 
-	duration       time.Duration
-	warmup         time.Duration
-	flushEvery     time.Duration
-	serdeFormat    commtypes.SerdeFormat
-	parNum         uint8
-	numInPartition uint8
+	warmup time.Duration
+
+	// exactly once: commitEvery overwrites flushEvery
+	commitEvery time.Duration
+	// for at least once
+	flushEvery time.Duration
+
+	commitEveryNIter uint32
+	exitAfterNCommit uint32
+	duration         time.Duration
+	serdeFormat      commtypes.SerdeFormat
+	fixedOutParNum   int16
+	protocol         TranProtocol
 }
 
-func NewStreamTaskArgs(env types.Environment, procArgs interface{}, srcs []source_sink.Source, sinks []source_sink.Sink) *StreamTaskArgs {
-	return &StreamTaskArgs{
-		env:      env,
-		procArgs: procArgs,
-		srcs:     srcs,
-		sinks:    sinks,
+type StreamTaskArgsBuilder struct {
+	stArgs *StreamTaskArgs
+}
+
+func NewStreamTaskArgsBuilder(env types.Environment,
+	ectx proc_interface.ExecutionContext,
+	transactionalID string,
+) SetAppID {
+	return &StreamTaskArgsBuilder{
+		stArgs: &StreamTaskArgs{
+			procArgs:        ectx,
+			env:             env,
+			transactionalId: transactionalID,
+			fixedOutParNum:  -1,
+			protocol:        TWO_PHASE_COMMIT,
+		},
 	}
 }
 
-func (args *StreamTaskArgs) WithWindowStoreChangelogs(wschangelogs []*store_restore.WindowStoreChangelog) *StreamTaskArgs {
-	args.windowStoreChangelogs = wschangelogs
+type SetAppID interface {
+	AppID(AppId string) SetWarmup
+}
+
+type SetWarmup interface {
+	Warmup(time.Duration) SetCommitEvery
+}
+
+type SetCommitEvery interface {
+	CommitEveryMs(uint64) SetFlushEveryMs
+}
+
+type SetFlushEveryMs interface {
+	FlushEveryMs(uint32) SetCommitEveryNIter
+}
+
+type SetCommitEveryNIter interface {
+	CommitEveryNIter(uint32) SetExitAfterNCommit
+}
+
+type SetExitAfterNCommit interface {
+	ExitAfterNCommit(uint32) SetDuration
+}
+
+type SetDuration interface {
+	Duration(uint32) SetSerdeFormat
+}
+
+type SetSerdeFormat interface {
+	SerdeFormat(commtypes.SerdeFormat) BuildStreamTaskArgs
+}
+
+type BuildStreamTaskArgs interface {
+	Build() *StreamTaskArgs
+	WindowStoreChangelogs([]*store_restore.WindowStoreChangelog) BuildStreamTaskArgs
+	KVStoreChangelogs([]*store_restore.KVStoreChangelog) BuildStreamTaskArgs
+	FixedOutParNum(uint8) BuildStreamTaskArgs
+}
+
+func (args *StreamTaskArgsBuilder) AppID(appId string) SetWarmup {
+	args.stArgs.appId = appId
 	return args
 }
 
-func (args *StreamTaskArgs) WithKVChangelogs(kvchangelogs []*store_restore.KVStoreChangelog) *StreamTaskArgs {
-	args.kvChangelogs = kvchangelogs
+func (args *StreamTaskArgsBuilder) Warmup(warmup time.Duration) SetCommitEvery {
+	args.stArgs.warmup = warmup
 	return args
 }
 
-func (args *StreamTaskArgs) WithDuration(duration time.Duration) *StreamTaskArgs {
-	args.duration = duration
+func (args *StreamTaskArgsBuilder) CommitEveryMs(commitEveryMs uint64) SetFlushEveryMs {
+	args.stArgs.commitEvery = time.Duration(commitEveryMs) * time.Millisecond
 	return args
 }
 
-func (args *StreamTaskArgs) WithWarmup(warmup time.Duration) *StreamTaskArgs {
-	args.warmup = warmup
+func (args *StreamTaskArgsBuilder) FlushEveryMs(flushEveryMs uint32) SetCommitEveryNIter {
+	args.stArgs.flushEvery = time.Duration(flushEveryMs) * time.Millisecond
 	return args
 }
 
-func (args *StreamTaskArgs) WithFlushEvery(flushEvery time.Duration) *StreamTaskArgs {
-	args.flushEvery = flushEvery
+func (args *StreamTaskArgsBuilder) CommitEveryNIter(commitEveryNIter uint32) SetExitAfterNCommit {
+	args.stArgs.commitEveryNIter = commitEveryNIter
+	return args
+}
+func (args *StreamTaskArgsBuilder) ExitAfterNCommit(exitAfterNCommit uint32) SetDuration {
+	args.stArgs.exitAfterNCommit = exitAfterNCommit
 	return args
 }
 
-func (args *StreamTaskArgs) WithSerdeFormat(serdeFormat commtypes.SerdeFormat) *StreamTaskArgs {
-	args.serdeFormat = serdeFormat
+func (args *StreamTaskArgsBuilder) Duration(duration uint32) SetSerdeFormat {
+	args.stArgs.duration = time.Duration(duration) * time.Second
+	return args
+}
+func (args *StreamTaskArgsBuilder) SerdeFormat(serdeFormat commtypes.SerdeFormat) BuildStreamTaskArgs {
+	args.stArgs.serdeFormat = serdeFormat
 	return args
 }
 
-func (args *StreamTaskArgs) WithParNum(parNum uint8) *StreamTaskArgs {
-	args.parNum = parNum
+func (args *StreamTaskArgsBuilder) WindowStoreChangelogs(wschangelogs []*store_restore.WindowStoreChangelog) BuildStreamTaskArgs {
+	args.stArgs.windowStoreChangelogs = wschangelogs
 	return args
 }
 
-func (args *StreamTaskArgs) WithNumInPartition(numInPartition uint8) *StreamTaskArgs {
-	args.numInPartition = numInPartition
+func (args *StreamTaskArgsBuilder) KVStoreChangelogs(kvchangelogs []*store_restore.KVStoreChangelog) BuildStreamTaskArgs {
+	args.stArgs.kvChangelogs = kvchangelogs
 	return args
+}
+
+func (args *StreamTaskArgsBuilder) FixedOutParNum(fixedOutParNum uint8) BuildStreamTaskArgs {
+	args.stArgs.fixedOutParNum = int16(fixedOutParNum)
+	return args
+}
+
+func (args *StreamTaskArgsBuilder) Build() *StreamTaskArgs {
+	return args.stArgs
 }

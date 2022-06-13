@@ -14,7 +14,6 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream_task"
 
@@ -78,16 +77,17 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 		only_bid)), time.Duration(sp.WarmupS)*time.Second)
 	q1Map := processor.NewMeteredProcessor(processor.NewStreamMapValuesWithKeyProcessor(processor.MapperFunc(q1mapFunc)),
 		time.Duration(sp.WarmupS)*time.Second)
+	srcs := []source_sink.Source{src}
+	sinks := []source_sink.Sink{sink}
 	procArgs := &query1ProcessArgs{
-		filterBid:     filterBid,
-		q1Map:         q1Map,
-		output_stream: output_streams[0],
-		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src,
-			[]source_sink.Sink{sink}, h.funcName, sp.ScaleEpoch, sp.ParNum),
+		filterBid: filterBid,
+		q1Map:     q1Map,
+		BaseExecutionContext: proc_interface.NewExecutionContext(srcs,
+			sinks, h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
+			args := argsTmp.(proc_interface.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgs interface{}) {
@@ -96,8 +96,6 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 			src.StartWarmup()
 			sink.StartWarmup()
 		}).Build()
-	srcs := []source_sink.Source{src}
-	sinks := []source_sink.Sink{sink}
 
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["filterBids"] = filterBid.GetLatency()
@@ -106,32 +104,19 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 		ret.Counts["src"] = src.GetCount()
 		ret.Counts["sink"] = sink.GetCount()
 	}
-	if sp.EnableTransaction {
-		transactionalID := fmt.Sprintf("%s-%s-%d-%s",
-			h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
-		builder := stream_task.NewStreamTaskArgsTransactionBuilder().
-			ProcArgs(procArgs).
-			Env(h.env).
-			Srcs(srcs).
-			Sinks(sinks).
-			TransactionalID(transactionalID)
-		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp, builder).
-			FixedOutParNum(sp.ParNum).Build()
-		ret := stream_task.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	} else {
-		return ExecuteAppNoTransaction(ctx, h.env, sp, task, srcs, sinks, procArgs, update_stats)
-	}
+	transactionalID := fmt.Sprintf("%s-%s-%d-%s",
+		h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
+	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
+		FixedOutParNum(sp.ParNum).
+		Build()
+	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
 }
 
 type query1ProcessArgs struct {
-	filterBid     *processor.MeteredProcessor
-	q1Map         *processor.MeteredProcessor
-	output_stream *sharedlog_stream.ShardedSharedLogStream
-	proc_interface.BaseProcArgsWithSrcSink
+	filterBid *processor.MeteredProcessor
+	q1Map     *processor.MeteredProcessor
+	proc_interface.BaseExecutionContext
 }
 
 func (h *query1Handler) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
@@ -145,9 +130,11 @@ func (h *query1Handler) procMsg(ctx context.Context, msg commtypes.Message, args
 		if err != nil {
 			return err
 		}
-		err = args.Sinks()[0].Produce(ctx, filtered[0], args.ParNum(), false)
-		if err != nil {
-			return err
+		if filtered != nil {
+			err = args.Sinks()[0].Produce(ctx, filtered[0], args.ParNum(), false)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil

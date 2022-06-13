@@ -14,7 +14,6 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
@@ -53,11 +52,14 @@ func (h *q5MaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *q5MaxBid) getSrcSink(ctx context.Context,
-	sp *common.QueryInput,
-	input_stream *sharedlog_stream.ShardedSharedLogStream,
-	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*source_sink.MeteredSource, *source_sink.ConcurrentMeteredSyncSink, commtypes.KVMsgSerdes, error) {
+func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
+) (*source_sink.MeteredSource, *source_sink.ConcurrentMeteredSyncSink, error) {
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	if err != nil {
+		return nil, nil, err
+	}
+	debug.Assert(len(output_streams) == 1, "expected only one output stream")
+
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	var seSerde commtypes.Serde
 	var aucIdCountSerde commtypes.Serde
@@ -73,21 +75,21 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context,
 
 		aucIdCountMaxSerde = ntypes.AuctionIdCntMaxMsgpSerde{}
 	} else {
-		return nil, nil, commtypes.KVMsgSerdes{},
+		return nil, nil,
 			fmt.Errorf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat)
 	}
 	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
-		return nil, nil, commtypes.KVMsgSerdes{}, err
+		return nil, nil, err
 	}
-	kvmsgSerdes := commtypes.KVMsgSerdes{
-		KeySerde: seSerde,
-		ValSerde: aucIdCountSerde,
-		MsgSerde: msgSerde,
-	}
+	warmup := time.Duration(sp.WarmupS) * time.Second
 	inConfig := &source_sink.StreamSourceConfig{
-		Timeout:     time.Duration(20) * time.Second,
-		KVMsgSerdes: kvmsgSerdes,
+		Timeout: time.Duration(20) * time.Second,
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			KeySerde: seSerde,
+			ValSerde: aucIdCountSerde,
+			MsgSerde: msgSerde,
+		},
 	}
 	outConfig := &source_sink.StreamSinkConfig{
 		KVMsgSerdes: commtypes.KVMsgSerdes{
@@ -98,19 +100,19 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
-		time.Duration(sp.WarmupS)*time.Second)
-	sink := source_sink.NewConcurrentMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_stream, outConfig),
-		time.Duration(sp.WarmupS)*time.Second)
+		warmup)
+	sink := source_sink.NewConcurrentMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_streams[0], outConfig),
+		warmup)
 	src.SetInitialSource(false)
 	sink.MarkFinalOutput()
-	return src, sink, kvmsgSerdes, nil
+	return src, sink, nil
 }
 
 type q5MaxBidProcessArgs struct {
 	maxBid       *processor.MeteredProcessor
 	stJoin       *processor.MeteredProcessor
 	chooseMaxCnt *processor.MeteredProcessor
-	proc_interface.BaseProcArgsWithSrcSink
+	proc_interface.BaseExecutionContext
 }
 
 type q5MaxBidRestoreArgs struct {
@@ -203,24 +205,16 @@ func (h *q5MaxBid) procMsgWithoutSink(ctx context.Context, msg commtypes.Message
 }
 
 func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
-	}
-	debug.Assert(len(output_streams) == 1, "expected only one output stream")
-
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	vtSerde, err := commtypes.GetValueTsSerde(serdeFormat, commtypes.Uint64Serde{}, commtypes.Uint64Serde{})
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	src, sink, srcKVMsgSerdes, err := h.getSrcSink(ctx, sp, input_stream, output_streams[0])
+	src, sink, err := h.getSrcSink(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
+	srcKVMsgSerdes := src.KVMsgSerdes()
 	maxBidStoreName := "maxBidsKVStore"
 	var kvstore store.KeyValueStore
 	warmup := time.Duration(sp.WarmupS) * time.Second
@@ -294,17 +288,18 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 				return v.Count >= v.MaxCnt, nil
 			})), warmup)
 
+	srcs := []source_sink.Source{src}
 	sinks_arr := []source_sink.Sink{sink}
 	procArgs := &q5MaxBidProcessArgs{
 		maxBid:       maxBid,
 		stJoin:       stJoin,
 		chooseMaxCnt: chooseMaxCnt,
-		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src,
+		BaseExecutionContext: proc_interface.NewExecutionContext(srcs,
 			sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
+			args := argsTmp.(proc_interface.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgs interface{}) {
@@ -315,7 +310,6 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			chooseMaxCnt.StartWarmup()
 		}).Build()
 
-	srcs := []source_sink.Source{src}
 	var kvc []*store_restore.KVStoreChangelog
 	if sp.TableType == uint8(store.IN_MEM) {
 		kvstore_mem := kvstore.(*store_with_changelog.KeyValueStoreWithChangelog)
@@ -326,7 +320,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		}
 	} else if sp.TableType == uint8(store.MONGODB) {
 		kvc = []*store_restore.KVStoreChangelog{
-			store_restore.NewKVStoreChangelogForExternalStore(kvstore, input_stream, h.processWithoutSink, &q5MaxBidRestoreArgs{
+			store_restore.NewKVStoreChangelogForExternalStore(kvstore, src.Stream(), h.processWithoutSink, &q5MaxBidRestoreArgs{
 				maxBid:       maxBid.InnerProcessor(),
 				stJoin:       stJoin.InnerProcessor(),
 				chooseMaxCnt: chooseMaxCnt.InnerProcessor(),
@@ -346,30 +340,11 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		ret.Counts["src"] = src.GetCount()
 		ret.Counts["sink"] = sink.GetCount()
 	}
-	if sp.EnableTransaction {
-		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
-			sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
-		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp,
-			stream_task.NewStreamTaskArgsTransactionBuilder().
-				ProcArgs(procArgs).
-				Env(h.env).
-				Srcs(srcs).
-				Sinks(sinks_arr).
-				TransactionalID(transactionalID)).
-			KVStoreChangelogs(kvc).
-			FixedOutParNum(sp.ParNum).Build()
-		ret := stream_task.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	}
-	streamTaskArgs := stream_task.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr).
-		WithKVChangelogs(kvc)
-	benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
-	ret := task.Process(ctx, streamTaskArgs)
-	if ret != nil && ret.Success {
-		update_stats(ret)
-	}
-	return ret
+	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
+		sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
+	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
+		KVStoreChangelogs(kvc).
+		FixedOutParNum(sp.ParNum).Build()
+	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
 }

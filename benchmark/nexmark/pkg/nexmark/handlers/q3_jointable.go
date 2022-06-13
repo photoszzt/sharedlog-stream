@@ -12,6 +12,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
+	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
@@ -291,8 +292,12 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	var wg sync.WaitGroup
 	aucManager := execution.NewJoinProcManager()
 	perManager := execution.NewJoinProcManager()
-	procArgs := execution.NewCommonJoinProcArgs(joinProcAuction, joinProcPerson,
-		aucManager.Out(), perManager.Out(), h.funcName, sp.ScaleEpoch, sp.ParNum)
+	srcs := []source_sink.Source{sss.src1, sss.src2}
+	sinks_arr := []source_sink.Sink{sss.sink}
+	procArgs := execution.NewCommonJoinProcArgs(
+		joinProcAuction, joinProcPerson,
+		aucManager.Out(), perManager.Out(),
+		proc_interface.NewExecutionContext(srcs, sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum))
 
 	pctx := context.WithValue(ctx, "id", "person")
 	actx := context.WithValue(ctx, "id", "auction")
@@ -337,8 +342,6 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	aucManager.LaunchJoinProcLoop(actx, task, joinProcAuction, &wg)
 	perManager.LaunchJoinProcLoop(pctx, task, joinProcPerson, &wg)
 
-	srcs := []source_sink.Source{sss.src1, sss.src2}
-	sinks_arr := []source_sink.Sink{sss.sink}
 	var kvchangelogs []*store_restore.KVStoreChangelog
 	if sp.TableType == uint8(store.IN_MEM) {
 		serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
@@ -370,29 +373,11 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		ret.Counts["personsSrc"] = sss.src2.GetCount()
 		ret.Counts["sink"] = uint64(sss.sink.GetCount())
 	}
-	if sp.EnableTransaction {
-		transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
-		builder := stream_task.NewStreamTaskArgsTransactionBuilder().
-			ProcArgs(procArgs).
-			Env(h.env).
-			Srcs(srcs).
-			Sinks(sinks_arr).
-			TransactionalID(transactionalID)
-		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp, builder).
-			KVStoreChangelogs(kvchangelogs).FixedOutParNum(sp.ParNum).Build()
-		ret := stream_task.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	} else {
-		streamTaskArgs := stream_task.NewStreamTaskArgs(h.env, procArgs, srcs, sinks_arr)
-		streamTaskArgs.WithKVChangelogs(kvchangelogs)
-		benchutil.UpdateStreamTaskArgs(sp, streamTaskArgs)
-		ret := task.Process(ctx, streamTaskArgs)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	}
+	transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
+	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
+		KVStoreChangelogs(kvchangelogs).
+		FixedOutParNum(sp.ParNum).
+		Build()
+	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
 }

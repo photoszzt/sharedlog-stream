@@ -13,7 +13,7 @@ type CommonJoinProcArgs struct {
 	arg2     *JoinProcArgs
 	outChan1 <-chan *common.FnOutput
 	outChan2 <-chan *common.FnOutput
-	proc_interface.BaseProcArgs
+	proc_interface.BaseExecutionContext
 }
 
 func NewCommonJoinProcArgs(
@@ -21,16 +21,14 @@ func NewCommonJoinProcArgs(
 	arg2 *JoinProcArgs,
 	outChan1 <-chan *common.FnOutput,
 	outChan2 <-chan *common.FnOutput,
-	funcName string,
-	curEpoch uint64,
-	parNum uint8,
+	ectx proc_interface.BaseExecutionContext,
 ) *CommonJoinProcArgs {
 	return &CommonJoinProcArgs{
-		arg1:         arg1,
-		arg2:         arg2,
-		outChan1:     outChan1,
-		outChan2:     outChan2,
-		BaseProcArgs: proc_interface.NewBaseProcArgs(funcName, curEpoch, parNum),
+		arg1:                 arg1,
+		arg2:                 arg2,
+		outChan1:             outChan1,
+		outChan2:             outChan2,
+		BaseExecutionContext: ectx,
 	}
 }
 

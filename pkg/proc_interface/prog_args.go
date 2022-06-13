@@ -7,9 +7,9 @@ import (
 	"sharedlog-stream/pkg/transaction/tran_interface"
 )
 
-type ProcArgsWithSrcSink interface {
+type ExecutionContext interface {
 	ProcArgsWithSink
-	Source() source_sink.Source
+	Sources() []source_sink.Source
 }
 
 type ProcArgsWithSink interface {
@@ -18,22 +18,26 @@ type ProcArgsWithSink interface {
 	FlushAndPushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error
 }
 
-type BaseProcArgsWithSrcSink struct {
-	src source_sink.Source
+type BaseExecutionContext struct {
+	srcs []source_sink.Source
 	BaseProcArgsWithSink
 }
 
-func NewBaseProcArgsWithSrcSink(src source_sink.Source, sinks []source_sink.Sink, funcName string,
-	curEpoch uint64, parNum uint8,
-) BaseProcArgsWithSrcSink {
-	return BaseProcArgsWithSrcSink{
+func NewExecutionContext(
+	srcs []source_sink.Source,
+	sinks []source_sink.Sink,
+	funcName string,
+	curEpoch uint64,
+	parNum uint8,
+) BaseExecutionContext {
+	return BaseExecutionContext{
 		BaseProcArgsWithSink: NewBaseProcArgsWithSink(sinks, funcName, curEpoch, parNum),
-		src:                  src,
+		srcs:                 srcs,
 	}
 }
 
-func (pa *BaseProcArgsWithSrcSink) Source() source_sink.Source {
-	return pa.src
+func (pa *BaseExecutionContext) Sources() []source_sink.Source {
+	return pa.srcs
 }
 
 type BaseProcArgsWithSink struct {

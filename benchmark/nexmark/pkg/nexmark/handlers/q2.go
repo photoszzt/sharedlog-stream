@@ -13,10 +13,8 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream_task"
-	"sharedlog-stream/pkg/transaction/tran_interface"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 
@@ -55,14 +53,9 @@ func filterFunc(msg *commtypes.Message) (bool, error) {
 }
 
 type query2ProcessArgs struct {
-	src           *source_sink.MeteredSource
-	q2Filter      *processor.MeteredProcessor
-	output_stream *sharedlog_stream.ShardedSharedLogStream
-	trackParFunc  tran_interface.TrackKeySubStreamFunc
-	proc_interface.BaseProcArgsWithSink
+	q2Filter *processor.MeteredProcessor
+	proc_interface.BaseExecutionContext
 }
-
-func (a *query2ProcessArgs) Source() source_sink.Source { return a.src }
 
 func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
@@ -82,17 +75,16 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 	src.SetInitialSource(true)
 	sink.MarkFinalOutput()
 	q2Filter := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(filterFunc)), time.Duration(sp.WarmupS)*time.Second)
+	srcs := []source_sink.Source{src}
+	sinks := []source_sink.Sink{sink}
 	procArgs := &query2ProcessArgs{
-		src:           src,
-		q2Filter:      q2Filter,
-		output_stream: output_streams[0],
-		trackParFunc:  tran_interface.DefaultTrackSubstreamFunc,
-		BaseProcArgsWithSink: proc_interface.NewBaseProcArgsWithSink([]source_sink.Sink{sink}, h.funcName,
+		q2Filter: q2Filter,
+		BaseExecutionContext: proc_interface.NewExecutionContext(srcs, sinks, h.funcName,
 			sp.ScaleEpoch, sp.ParNum),
 	}
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
+			args := argsTmp.(proc_interface.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgs interface{}) {
@@ -100,8 +92,6 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 			sink.StartWarmup()
 			q2Filter.StartWarmup()
 		}).Build()
-	srcs := []source_sink.Source{src}
-	sinks := []source_sink.Sink{sink}
 
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["q2Filter"] = q2Filter.GetLatency()
@@ -109,24 +99,12 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		ret.Counts["src"] = src.GetCount()
 		ret.Counts["sink"] = sink.GetCount()
 	}
-	if sp.EnableTransaction {
-		transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
-		builder := stream_task.NewStreamTaskArgsTransactionBuilder().
-			ProcArgs(procArgs).
-			Env(h.env).
-			Srcs(srcs).
-			Sinks(sinks).
-			TransactionalID(transactionalID)
-		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp, builder).
-			FixedOutParNum(sp.ParNum).Build()
-		ret := stream_task.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	} else {
-		return ExecuteAppNoTransaction(ctx, h.env, sp, task, srcs, sinks, procArgs, update_stats)
-	}
+	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
+	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
+		FixedOutParNum(sp.ParNum).
+		Build()
+	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
 }
 
 func (h *query2Handler) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {

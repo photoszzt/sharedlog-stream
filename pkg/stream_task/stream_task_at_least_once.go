@@ -15,7 +15,6 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 	debug.Assert(len(args.srcs) >= 1, "Srcs should be filled")
 	debug.Assert(args.env != nil, "env should be filled")
 	debug.Assert(args.procArgs != nil, "program args should be filled")
-	debug.Assert(args.numInPartition != 0, "number of input partition should not be zero")
 	latencies := make([]int, 0, 128)
 	cm, err := consume_seq_num_manager.NewConsumeSeqManager(args.serdeFormat)
 	if err != nil {
@@ -24,11 +23,11 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 	debug.Fprint(os.Stderr, "start restore\n")
 	for _, srcStream := range args.srcs {
 		inputTopicName := srcStream.TopicName()
-		err = cm.CreateOffsetTopic(args.env, inputTopicName, args.numInPartition, args.serdeFormat)
+		err = cm.CreateOffsetTopic(args.env, inputTopicName, srcStream.Stream().NumPartition(), args.serdeFormat)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
-		offset, err := cm.FindLastConsumedSeqNum(ctx, inputTopicName, args.parNum)
+		offset, err := cm.FindLastConsumedSeqNum(ctx, inputTopicName, args.procArgs.ParNum())
 		if err != nil {
 			if !common_errors.IsStreamEmptyError(err) {
 				return &common.FnOutput{Success: false, Message: err.Error()}
@@ -36,9 +35,9 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 		}
 		debug.Fprintf(os.Stderr, "offset restores to %x\n", offset)
 		if offset != 0 {
-			srcStream.SetCursor(offset+1, args.parNum)
+			srcStream.SetCursor(offset+1, args.procArgs.ParNum())
 		}
-		cm.AddTopicTrackConsumedSeqs(ctx, inputTopicName, []uint8{args.parNum})
+		cm.AddTopicTrackConsumedSeqs(ctx, inputTopicName, []uint8{args.procArgs.ParNum()})
 	}
 	debug.Fprint(os.Stderr, "done restore\n")
 	if t.initFunc != nil {
@@ -125,7 +124,7 @@ func (t *StreamTask) pauseTrackFlushResume(ctx context.Context, args *StreamTask
 			return ret
 		}
 	}
-	err := t.trackSrcConSeq(ctx, cm, args.parNum)
+	err := t.trackSrcConSeq(ctx, cm, args.procArgs.ParNum())
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -150,7 +149,7 @@ func (t *StreamTask) pauseTrackFlush(ctx context.Context, args *StreamTaskArgs, 
 				return ret
 			}
 		}
-		err := t.trackSrcConSeq(ctx, cm, args.parNum)
+		err := t.trackSrcConSeq(ctx, cm, args.procArgs.ParNum())
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}

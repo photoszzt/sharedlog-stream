@@ -50,7 +50,7 @@ type q7BidKeyedByPriceProcessArgs struct {
 	bid        *processor.MeteredProcessor
 	bidByPrice *processor.MeteredProcessor
 	groupBy    *processor.GroupBy
-	proc_interface.BaseProcArgsWithSrcSink
+	proc_interface.BaseExecutionContext
 }
 
 func (h *q7BidByPrice) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
@@ -94,17 +94,18 @@ func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInpu
 		return commtypes.Message{Key: event.Bid.Price, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 	})), warmup)
 	groupBy := processor.NewGroupBy(sink)
+	srcs := []source_sink.Source{src}
 	sinks_arr := []source_sink.Sink{sink}
 	procArgs := &q7BidKeyedByPriceProcessArgs{
 		bid:        bid,
 		bidByPrice: bidKeyedByPrice,
 		groupBy:    groupBy,
-		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src, sinks_arr, h.funcName,
+		BaseExecutionContext: proc_interface.NewExecutionContext(srcs, sinks_arr, h.funcName,
 			input.ScaleEpoch, input.ParNum),
 	}
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
+			args := argsTmp.(proc_interface.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgs interface{}) {
@@ -113,7 +114,6 @@ func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInpu
 			bid.StartWarmup()
 			bidKeyedByPrice.StartWarmup()
 		}).Build()
-	srcs := []source_sink.Source{src}
 
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["bid"] = bid.GetLatency()
@@ -122,5 +122,7 @@ func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInpu
 		ret.Counts["sink"] = sink.GetCount()
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, input.InputTopicNames[0], input.ParNum, input.OutputTopicNames[0])
-	return ExecuteApp(ctx, h.env, transactionalID, input, task, srcs, sinks_arr, procArgs, update_stats)
+	streamTaskArgs := benchutil.UpdateStreamTaskArgs(input,
+		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).Build()
+	return task.ExecuteApp(ctx, streamTaskArgs, input.EnableTransaction, update_stats)
 }

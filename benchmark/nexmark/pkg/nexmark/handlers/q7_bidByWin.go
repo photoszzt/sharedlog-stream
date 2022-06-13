@@ -13,7 +13,6 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/utils"
@@ -52,7 +51,7 @@ type q7BidByWinProcessArgs struct {
 	bid      *processor.MeteredProcessor
 	bidByWin *processor.MeteredProcessor
 	groupBy  *processor.GroupBy
-	proc_interface.BaseProcArgsWithSrcSink
+	proc_interface.BaseExecutionContext
 }
 
 func (h *q7BidByWin) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
@@ -74,12 +73,14 @@ func (h *q7BidByWin) procMsg(ctx context.Context, msg commtypes.Message, argsTmp
 	return nil
 }
 
-func (h *q7BidByWin) getSrcSink(
-	ctx context.Context,
-	sp *common.QueryInput,
-	input_stream *sharedlog_stream.ShardedSharedLogStream,
-	output_stream *sharedlog_stream.ShardedSharedLogStream,
+func (h *q7BidByWin) getSrcSink(ctx context.Context, sp *common.QueryInput,
 ) (*source_sink.MeteredSource, *source_sink.MeteredSyncSink, error) {
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	if err != nil {
+		return nil, nil, err
+	}
+	debug.Assert(len(output_streams) == 1, "expected only one output stream")
+
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
@@ -109,19 +110,15 @@ func (h *q7BidByWin) getSrcSink(
 		},
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
-	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig), time.Duration(sp.WarmupS)*time.Second)
-	sink := source_sink.NewMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_stream, outConfig), time.Duration(sp.WarmupS)*time.Second)
+	warmup := time.Duration(sp.WarmupS) * time.Second
+	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig), warmup)
+	sink := source_sink.NewMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_streams[0], outConfig), warmup)
 	src.SetInitialSource(true)
 	return src, sink, nil
 }
 
 func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	debug.Assert(len(output_streams) == 1, "expected only one output stream")
-	src, sink, err := h.getSrcSink(ctx, sp, input_stream, output_streams[0])
+	src, sink, err := h.getSrcSink(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -147,16 +144,17 @@ func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *com
 
 	groupBy := processor.NewGroupBy(sink)
 	sinks_arr := []source_sink.Sink{sink}
+	srcs := []source_sink.Source{src}
 	procArgs := &q7BidByWinProcessArgs{
 		bid:      bid,
 		bidByWin: bidByWin,
 		groupBy:  groupBy,
-		BaseProcArgsWithSrcSink: proc_interface.NewBaseProcArgsWithSrcSink(src, sinks_arr,
+		BaseExecutionContext: proc_interface.NewExecutionContext(srcs, sinks_arr,
 			h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(proc_interface.ProcArgsWithSrcSink)
+			args := argsTmp.(proc_interface.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgs interface{}) {
@@ -166,8 +164,6 @@ func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *com
 			sink.StartWarmup()
 		}).Build()
 
-	srcs := []source_sink.Source{src}
-
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["bid"] = bid.GetLatency()
 		ret.Latencies["bidKeyedByPrice"] = bidByWin.GetLatency()
@@ -175,5 +171,7 @@ func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *com
 		ret.Counts["sink"] = sink.GetCount()
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
-	return ExecuteApp(ctx, h.env, transactionalID, sp, task, srcs, sinks_arr, procArgs, update_stats)
+	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).Build()
+	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
 }

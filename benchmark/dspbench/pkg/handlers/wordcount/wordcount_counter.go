@@ -100,7 +100,7 @@ type wordcountCounterAggProcessArg struct {
 	src           *source_sink.MeteredSource
 	output_stream *store.MeteredStream
 	counter       *processor.MeteredProcessor
-	proc_interface.BaseProcArgs
+	proc_interface.BaseExecutionContext
 }
 
 func (h *wordcountCounterAgg) process(ctx context.Context,
@@ -202,11 +202,11 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 	}
 
 	funcName := "wccounter"
+	srcs := []source_sink.Source{src}
 	procArgs := &wordcountCounterAggProcessArg{
-		src:           src,
-		output_stream: meteredOutputStream,
-		counter:       count,
-		BaseProcArgs:  proc_interface.NewBaseProcArgs(funcName, sp.ScaleEpoch, sp.ParNum),
+		output_stream:        meteredOutputStream,
+		counter:              count,
+		BaseExecutionContext: proc_interface.NewExecutionContext(srcs, nil, funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 
 	task := stream_task.NewStreamTaskBuilder().
@@ -216,33 +216,13 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 			count.StartWarmup()
 		}).Build()
 
-	srcs := []source_sink.Source{src}
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["count"] = count.GetLatency()
 		ret.Latencies["changelogRead"] = meteredOutputStream.GetReadNextLatencies()
 		ret.Latencies["changelogPush"] = meteredOutputStream.GetPushLatencies()
 	}
-	if sp.EnableTransaction {
-		transactionalID := fmt.Sprintf("%s-%s-%s-%d", funcName, sp.InputTopicNames[0], sp.OutputTopicNames[0], sp.ParNum)
-		streamTaskArgs := benchutil.UpdateStreamTaskArgsTransaction(sp,
-			stream_task.NewStreamTaskArgsTransactionBuilder().
-				ProcArgs(procArgs).
-				Env(h.env).
-				Srcs(srcs).
-				Sinks(nil).
-				TransactionalID(transactionalID)).
-			Build()
-		ret := stream_task.SetupManagersAndProcessTransactional(ctx, h.env, streamTaskArgs, task)
-		if ret != nil && ret.Success {
-			update_stats(ret)
-		}
-		return ret
-	}
-	// return h.process(ctx, sp, args)
-	streamTaskArgs := stream_task.NewStreamTaskArgs(h.env, procArgs, srcs, nil)
-	ret := task.Process(ctx, streamTaskArgs)
-	if ret != nil && ret.Success {
-		update_stats(ret)
-	}
-	return ret
+	transactionalID := fmt.Sprintf("%s-%s-%s-%d", funcName, sp.InputTopicNames[0], sp.OutputTopicNames[0], sp.ParNum)
+	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).Build()
+	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
 }
