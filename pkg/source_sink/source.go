@@ -17,3 +17,10 @@ type Source interface {
 	IsInitialSource() bool
 	KVMsgSerdes() commtypes.KVMsgSerdes
 }
+
+type MeteredSourceIntr interface {
+	Source
+	StartWarmup()
+	GetCount() uint64
+	InnerSource() Source
+}

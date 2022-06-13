@@ -13,6 +13,14 @@ type Sink interface {
 	KeySerde() commtypes.Serde
 	Flush(ctx context.Context) error
 	InitFlushTimer()
-	InTransaction(tm tran_interface.ReadOnlyTransactionManager)
+	InTransaction(tm tran_interface.ReadOnlyExactlyOnceManager)
 	Stream() *sharedlog_stream.ShardedSharedLogStream
+}
+
+type MeteredSink interface {
+	Sink
+	MarkFinalOutput()
+	StartWarmup()
+	GetEventTimeLatency() []int
+	GetCount() uint64
 }

@@ -28,6 +28,8 @@ func checkMeasureSource() bool {
 	return measure
 }
 
+var _ = MeteredSourceIntr(&MeteredSource{})
+
 func NewMeteredSource(src *ShardedSharedLogStreamSource, warmup time.Duration) *MeteredSource {
 	src_name := fmt.Sprintf("%s_src", src.TopicName())
 	return &MeteredSource{

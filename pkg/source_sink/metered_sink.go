@@ -154,7 +154,7 @@ type ConcurrentMeteredSyncSink struct {
 	isFinalOutput bool
 }
 
-var _ = Sink(&ConcurrentMeteredSyncSink{})
+var _ = MeteredSink(&ConcurrentMeteredSyncSink{})
 
 func NewConcurrentMeteredSyncSink(sink *ShardedSharedLogStreamSyncSink, warmup time.Duration) *ConcurrentMeteredSyncSink {
 	sink_name := fmt.Sprintf("%s_sink", sink.TopicName())
