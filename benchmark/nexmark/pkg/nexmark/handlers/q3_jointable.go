@@ -297,7 +297,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	procArgs := execution.NewCommonJoinProcArgs(
 		joinProcAuction, joinProcPerson,
 		aucManager.Out(), perManager.Out(),
-		proc_interface.NewExecutionContext(srcs, sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum))
+		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr))
 
 	pctx := context.WithValue(ctx, "id", "person")
 	actx := context.WithValue(ctx, "id", "auction")

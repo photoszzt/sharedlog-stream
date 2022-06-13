@@ -13,7 +13,7 @@ type CommonJoinProcArgs struct {
 	arg2     *JoinProcArgs
 	outChan1 <-chan *common.FnOutput
 	outChan2 <-chan *common.FnOutput
-	proc_interface.BaseExecutionContext
+	proc_interface.BaseSrcsSinks
 }
 
 func NewCommonJoinProcArgs(
@@ -21,27 +21,46 @@ func NewCommonJoinProcArgs(
 	arg2 *JoinProcArgs,
 	outChan1 <-chan *common.FnOutput,
 	outChan2 <-chan *common.FnOutput,
-	ectx proc_interface.BaseExecutionContext,
+	ss proc_interface.BaseSrcsSinks,
 ) *CommonJoinProcArgs {
 	return &CommonJoinProcArgs{
-		arg1:                 arg1,
-		arg2:                 arg2,
-		outChan1:             outChan1,
-		outChan2:             outChan2,
-		BaseExecutionContext: ectx,
+		arg1:          arg1,
+		arg2:          arg2,
+		outChan1:      outChan1,
+		outChan2:      outChan2,
+		BaseSrcsSinks: ss,
 	}
 }
 
 func (c *CommonJoinProcArgs) SetRecordFinishFunc(recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
-	c.BaseProcArgs.SetRecordFinishFunc(recordFinishFunc)
 	c.arg1.SetRecordFinishFunc(recordFinishFunc)
 	c.arg2.SetRecordFinishFunc(recordFinishFunc)
 }
 
 func (c *CommonJoinProcArgs) SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc) {
-	c.BaseProcArgs.SetTrackParFunc(trackParFunc)
 	c.arg1.SetTrackParFunc(trackParFunc)
 	c.arg2.SetTrackParFunc(trackParFunc)
+}
+
+// arg1 and arg2 shared the same param for the following functions
+func (c *CommonJoinProcArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
+	return c.arg1.RecordFinishFunc()
+}
+
+func (c *CommonJoinProcArgs) TrackParFunc() tran_interface.TrackKeySubStreamFunc {
+	return c.arg1.TrackParFunc()
+}
+
+func (c *CommonJoinProcArgs) FuncName() string {
+	return c.arg1.FuncName()
+}
+
+func (c *CommonJoinProcArgs) CurEpoch() uint64 {
+	return c.arg1.CurEpoch()
+}
+
+func (c *CommonJoinProcArgs) ParNum() uint8 {
+	return c.arg1.ParNum()
 }
 
 func HandleJoinErrReturn(argsTmp interface{}) *common.FnOutput {

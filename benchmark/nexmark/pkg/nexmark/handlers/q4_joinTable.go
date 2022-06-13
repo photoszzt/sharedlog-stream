@@ -238,7 +238,7 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 	procArgs := execution.NewCommonJoinProcArgs(
 		joinProcAuction, joinProcBid,
 		aucManager.Out(), bidManager.Out(),
-		proc_interface.NewExecutionContext(srcs, sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum))
+		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr))
 
 	bctx := context.WithValue(ctx, "id", "bid")
 	actx := context.WithValue(ctx, "id", "auction")

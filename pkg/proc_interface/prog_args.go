@@ -9,14 +9,17 @@ import (
 
 type ExecutionContext interface {
 	ProcArgs
+	SourcesSinks
+}
+
+type SourcesSinks interface {
 	Sinks() []source_sink.Sink
 	FlushAndPushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error
 	Sources() []source_sink.Source
 }
 
 type BaseExecutionContext struct {
-	srcs  []source_sink.Source
-	sinks []source_sink.Sink
+	BaseSrcsSinks
 	BaseProcArgs
 }
 
@@ -29,16 +32,30 @@ func NewExecutionContext(
 ) BaseExecutionContext {
 	return BaseExecutionContext{
 		BaseProcArgs: NewBaseProcArgs(funcName, curEpoch, parNum),
-		srcs:         srcs,
-		sinks:        sinks,
+		BaseSrcsSinks: BaseSrcsSinks{
+			srcs:  srcs,
+			sinks: sinks,
+		},
 	}
 }
 
-func (pa *BaseExecutionContext) Sources() []source_sink.Source {
+type BaseSrcsSinks struct {
+	srcs  []source_sink.Source
+	sinks []source_sink.Sink
+}
+
+func NewBaseSrcsSinks(srcs []source_sink.Source, sinks []source_sink.Sink) BaseSrcsSinks {
+	return BaseSrcsSinks{
+		srcs:  srcs,
+		sinks: sinks,
+	}
+}
+
+func (pa *BaseSrcsSinks) Sources() []source_sink.Source {
 	return pa.srcs
 }
 
-func (pa *BaseExecutionContext) FlushAndPushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
+func (pa *BaseSrcsSinks) FlushAndPushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
 	for _, sink := range pa.sinks {
 		err := sink.Produce(ctx, msg, parNum, isControl)
 		if err != nil {
@@ -48,7 +65,7 @@ func (pa *BaseExecutionContext) FlushAndPushToAllSinks(ctx context.Context, msg 
 	return nil
 }
 
-func (pa *BaseExecutionContext) Sinks() []source_sink.Sink {
+func (pa *BaseSrcsSinks) Sinks() []source_sink.Sink {
 	return pa.sinks
 }
 

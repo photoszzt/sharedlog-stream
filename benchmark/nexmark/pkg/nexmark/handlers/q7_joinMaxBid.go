@@ -219,7 +219,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	sinks_arr := []source_sink.Sink{sss.sink}
 	procArgs := execution.NewCommonJoinProcArgs(joinProcBid, joinProcMaxBid,
 		bidManager.Out(), maxBidManager.Out(),
-		proc_interface.NewExecutionContext(srcs, sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum))
+		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr))
 	bctx := context.WithValue(ctx, "id", "bid")
 	mctx := context.WithValue(ctx, "id", "maxBid")
 
