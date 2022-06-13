@@ -10,7 +10,6 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
@@ -55,15 +54,7 @@ func q1mapFunc(msg commtypes.Message) (commtypes.Message, error) {
 }
 
 func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("get input output stream failed: %v", err),
-		}
-	}
-	debug.Assert(len(output_streams) == 1, "expected only one output stream")
-	src, sink, err := getSrcSink(ctx, sp, input_stream, output_streams[0])
+	src, sink, err := getSrcSink(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

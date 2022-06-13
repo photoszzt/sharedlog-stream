@@ -58,19 +58,9 @@ type query2ProcessArgs struct {
 }
 
 func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	src, sink, err := getSrcSink(ctx, h.env, sp)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("get input output stream failed: %v", err),
-		}
-	}
-	src, sink, err := getSrcSink(ctx, sp, input_stream, output_streams[0])
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	src.SetInitialSource(true)
 	sink.MarkFinalOutput()

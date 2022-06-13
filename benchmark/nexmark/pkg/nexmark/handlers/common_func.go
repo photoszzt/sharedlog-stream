@@ -4,12 +4,16 @@ import (
 	"context"
 	"fmt"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"time"
 
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
+
+	"cs.utexas.edu/zjia/faas/types"
 )
 
 func only_bid(msg *commtypes.Message) (bool, error) {
@@ -17,10 +21,13 @@ func only_bid(msg *commtypes.Message) (bool, error) {
 	return event.Etype == ntypes.BID, nil
 }
 
-func getSrcSink(ctx context.Context, sp *common.QueryInput,
-	input_stream *sharedlog_stream.ShardedSharedLogStream,
-	output_stream *sharedlog_stream.ShardedSharedLogStream,
+func getSrcSink(ctx context.Context, env types.Environment, sp *common.QueryInput,
 ) (*source_sink.MeteredSource, *source_sink.MeteredSyncSink, error) {
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, env, sp)
+	if err != nil {
+		return nil, nil, err
+	}
+	debug.Assert(len(output_streams) == 1, "expected only one output stream")
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
@@ -46,8 +53,9 @@ func getSrcSink(ctx context.Context, sp *common.QueryInput,
 		},
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
-	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig), time.Duration(sp.WarmupS)*time.Second)
-	sink := source_sink.NewMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_stream, outConfig), time.Duration(sp.WarmupS)*time.Second)
+	warmup := time.Duration(sp.WarmupS) * time.Second
+	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig), warmup)
+	sink := source_sink.NewMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_streams[0], outConfig), warmup)
 	return src, sink, nil
 }
 
