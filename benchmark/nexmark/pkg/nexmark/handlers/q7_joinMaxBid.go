@@ -207,16 +207,15 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 
 	}
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
-
-	joinProcBid := execution.NewJoinProcArgs(sss.src1, sss.sink, bJoinM,
-		h.funcName, sp.ScaleEpoch, sp.ParNum)
-	joinProcMaxBid := execution.NewJoinProcArgs(sss.src2, sss.sink, mJoinB,
-		h.funcName, sp.ScaleEpoch, sp.ParNum)
+	srcs := []source_sink.Source{sss.src1, sss.src2}
+	sinks_arr := []source_sink.Sink{sss.sink}
+	joinProcBid, joinProcMaxBid := execution.CreateJoinProcArgsPair(
+		bJoinM, mJoinB, srcs, sinks_arr,
+		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum))
 	var wg sync.WaitGroup
 	bidManager := execution.NewJoinProcManager()
 	maxBidManager := execution.NewJoinProcManager()
-	srcs := []source_sink.Source{sss.src1, sss.src2}
-	sinks_arr := []source_sink.Sink{sss.sink}
+
 	procArgs := execution.NewCommonJoinProcArgs(joinProcBid, joinProcMaxBid,
 		bidManager.Out(), maxBidManager.Out(),
 		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr))

@@ -60,24 +60,24 @@ func (h *q4JoinTableHandler) process(ctx context.Context,
 }
 
 func (h *q4JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
-	stream1 *sharedlog_stream.ShardedSharedLogStream,
-	stream2 *sharedlog_stream.ShardedSharedLogStream,
-	outputStream *sharedlog_stream.ShardedSharedLogStream,
 ) (*source_sink.MeteredSource, /* src1 */
 	*source_sink.MeteredSource, /* src2 */
 	*source_sink.ConcurrentMeteredSyncSink,
-	commtypes.KVMsgSerdes,
 	error,
 ) {
+	stream1, stream2, outputStream, err := getInOutStreams(ctx, h.env, sp)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
-		return nil, nil, nil, commtypes.KVMsgSerdes{}, fmt.Errorf("get msg serde err: %v", err)
+		return nil, nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
 
 	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
-		return nil, nil, nil, commtypes.KVMsgSerdes{}, fmt.Errorf("get event serde err: %v", err)
+		return nil, nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}
 	kvmsgSerdes := commtypes.KVMsgSerdes{
 		KeySerde: commtypes.Uint64Serde{},
@@ -109,28 +109,20 @@ func (h *q4JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 		},
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
-
+	warmup := time.Duration(sp.WarmupS) * time.Second
 	src1 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream1, auctionsConfig),
-		time.Duration(sp.WarmupS)*time.Second)
+		warmup)
 	src2 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream2, personsConfig),
-		time.Duration(sp.WarmupS)*time.Second)
+		warmup)
 	sink := source_sink.NewConcurrentMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(outputStream, outConfig),
 		time.Duration(sp.WarmupS)*time.Second)
 	src1.SetInitialSource(false)
 	src2.SetInitialSource(false)
-	return src1, src2, sink, kvmsgSerdes, nil
+	return src1, src2, sink, nil
 }
 
 func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	auctionsStream, bidsStream, outputStream, err := getInOutStreams(ctx, h.env, sp)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("get input output err: %v", err),
-		}
-	}
-	auctionsSrc, bidsSrc, sink, inKVMsgSerdes, err := h.getSrcSink(ctx, sp, auctionsStream,
-		bidsStream, outputStream)
+	auctionsSrc, bidsSrc, sink, err := h.getSrcSink(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -224,17 +216,16 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		}
 		return filterAndGroupMsg(ctx, msgs)
 	})
-
-	joinProcBid := execution.NewJoinProcArgs(bidsSrc, sink, bJoinA,
-		h.funcName, sp.ScaleEpoch, sp.ParNum)
-	joinProcAuction := execution.NewJoinProcArgs(auctionsSrc, sink, aJoinB,
-		h.funcName, sp.ScaleEpoch, sp.ParNum)
+	srcs := []source_sink.Source{auctionsSrc, bidsSrc}
+	sinks_arr := []source_sink.Sink{sink}
+	joinProcAuction, joinProcBid := execution.CreateJoinProcArgsPair(
+		aJoinB, bJoinA, srcs, sinks_arr,
+		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum))
 
 	var wg sync.WaitGroup
 	aucManager := execution.NewJoinProcManager()
 	bidManager := execution.NewJoinProcManager()
-	srcs := []source_sink.Source{auctionsSrc, bidsSrc}
-	sinks_arr := []source_sink.Sink{sink}
+
 	procArgs := execution.NewCommonJoinProcArgs(
 		joinProcAuction, joinProcBid,
 		aucManager.Out(), bidManager.Out(),
@@ -280,20 +271,22 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 		kvchangelogs = []*store_restore.KVStoreChangelog{
 			store_restore.NewKVStoreChangelog(auctionsStore,
-				store_with_changelog.NewChangelogManager(auctionsStream, serdeFormat),
-				inKVMsgSerdes, sp.ParNum,
+				store_with_changelog.NewChangelogManager(auctionsSrc.Stream().(*sharedlog_stream.ShardedSharedLogStream),
+					serdeFormat),
+				auctionsSrc.KVMsgSerdes(), sp.ParNum,
 			),
 			store_restore.NewKVStoreChangelog(bidsStore,
-				store_with_changelog.NewChangelogManager(bidsStream, serdeFormat),
-				inKVMsgSerdes, sp.ParNum,
+				store_with_changelog.NewChangelogManager(bidsSrc.Stream().(*sharedlog_stream.ShardedSharedLogStream),
+					serdeFormat),
+				bidsSrc.KVMsgSerdes(), sp.ParNum,
 			),
 		}
 	} else if sp.TableType == uint8(store.MONGODB) {
 		kvchangelogs = []*store_restore.KVStoreChangelog{
-			store_restore.NewKVStoreChangelogForExternalStore(auctionsStore, auctionsStream, execution.JoinProcSerialWithoutSink,
+			store_restore.NewKVStoreChangelogForExternalStore(auctionsStore, auctionsSrc.Stream(), execution.JoinProcSerialWithoutSink,
 				execution.NewJoinProcWithoutSinkArgs(auctionsSrc.InnerSource(), aJoinB, sp.ParNum),
 				fmt.Sprintf("%s-%s-%d", h.funcName, auctionsStore.Name(), sp.ParNum), sp.ParNum),
-			store_restore.NewKVStoreChangelogForExternalStore(bidsStore, bidsStream, execution.JoinProcSerialWithoutSink,
+			store_restore.NewKVStoreChangelogForExternalStore(bidsStore, bidsSrc.Stream(), execution.JoinProcSerialWithoutSink,
 				execution.NewJoinProcWithoutSinkArgs(bidsSrc.InnerSource(), bJoinA, sp.ParNum),
 				fmt.Sprintf("%s-%s-%d", h.funcName, bidsStore.Name(), sp.ParNum), sp.ParNum),
 		}

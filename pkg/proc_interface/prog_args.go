@@ -39,6 +39,16 @@ func NewExecutionContext(
 	}
 }
 
+func NewExecutionContextFromComponents(
+	srcsSinks BaseSrcsSinks,
+	procArgs BaseProcArgs,
+) BaseExecutionContext {
+	return BaseExecutionContext{
+		BaseProcArgs:  procArgs,
+		BaseSrcsSinks: srcsSinks,
+	}
+}
+
 type BaseSrcsSinks struct {
 	srcs  []source_sink.Source
 	sinks []source_sink.Sink

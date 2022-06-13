@@ -13,19 +13,31 @@ type JoinProcArgs struct {
 // var _ = proc_interface.ProcArgsWithSink(&JoinProcArgs{})
 
 func NewJoinProcArgs(
-	src source_sink.Source,
-	sink source_sink.Sink,
 	runner JoinWorkerFunc,
-	funcName string,
-	curEpoch uint64,
-	parNum uint8,
+	ectx proc_interface.BaseExecutionContext,
 ) *JoinProcArgs {
 	return &JoinProcArgs{
-		runner: runner,
-		BaseExecutionContext: proc_interface.NewExecutionContext(
-			[]source_sink.Source{src},
-			[]source_sink.Sink{sink}, funcName, curEpoch, parNum),
+		runner:               runner,
+		BaseExecutionContext: ectx,
 	}
+}
+
+func CreateJoinProcArgsPair(
+	runnerL JoinWorkerFunc,
+	runnerR JoinWorkerFunc,
+	srcs []source_sink.Source,
+	sinks []source_sink.Sink,
+	procArgs proc_interface.BaseProcArgs,
+) (*JoinProcArgs, *JoinProcArgs) {
+	leftArgs := NewJoinProcArgs(runnerL, proc_interface.NewExecutionContextFromComponents(
+		proc_interface.NewBaseSrcsSinks(srcs[:1], sinks),
+		procArgs,
+	))
+	rightArgs := NewJoinProcArgs(runnerL, proc_interface.NewExecutionContextFromComponents(
+		proc_interface.NewBaseSrcsSinks(srcs[1:], sinks),
+		procArgs,
+	))
+	return leftArgs, rightArgs
 }
 
 type JoinProcWithoutSinkArgs struct {

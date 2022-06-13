@@ -284,16 +284,16 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		"expected only one output stream")
 
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
+	srcs := []source_sink.Source{sss.src1, sss.src2}
+	sinks_arr := []source_sink.Sink{sss.sink}
 
-	joinProcPerson := execution.NewJoinProcArgs(sss.src2, sss.sink, pJoinA,
-		h.funcName, sp.ScaleEpoch, sp.ParNum)
-	joinProcAuction := execution.NewJoinProcArgs(sss.src1, sss.sink, aJoinP,
-		h.funcName, sp.ScaleEpoch, sp.ParNum)
+	joinProcAuction, joinProcPerson := execution.CreateJoinProcArgsPair(
+		aJoinP, pJoinA, srcs, sinks_arr,
+		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum))
 	var wg sync.WaitGroup
 	aucManager := execution.NewJoinProcManager()
 	perManager := execution.NewJoinProcManager()
-	srcs := []source_sink.Source{sss.src1, sss.src2}
-	sinks_arr := []source_sink.Sink{sss.sink}
+
 	procArgs := execution.NewCommonJoinProcArgs(
 		joinProcAuction, joinProcPerson,
 		aucManager.Out(), perManager.Out(),
