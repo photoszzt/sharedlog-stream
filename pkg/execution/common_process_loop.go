@@ -87,7 +87,7 @@ func ProcessMsgAndSeq(ctx context.Context, msg commtypes.MsgAndSeq, args interfa
 }
 
 func HandleScaleEpochAndBytes(ctx context.Context, msg commtypes.MsgAndSeq,
-	args proc_interface.ProcArgsWithSink,
+	args proc_interface.ExecutionContext,
 ) *common.FnOutput {
 	v := msg.Msg.Value.(source_sink.ScaleEpochAndBytes)
 	err := args.FlushAndPushToAllSinks(ctx, commtypes.Message{Key: txn_data.SCALE_FENCE_KEY,
