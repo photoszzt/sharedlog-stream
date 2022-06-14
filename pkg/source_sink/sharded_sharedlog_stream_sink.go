@@ -16,8 +16,9 @@ import (
 type ShardedSharedLogStreamSink struct {
 	wg            sync.WaitGroup
 	kvmsgSerdes   commtypes.KVMsgSerdes
-	tm            tran_interface.ReadOnlyTransactionManager
+	tm            tran_interface.ReadOnlyExactlyOnceManager
 	streamPusher  *sharedlog_stream.StreamPush
+	name          string
 	flushDuration time.Duration
 	bufPush       bool
 	transactional bool
@@ -38,15 +39,24 @@ func NewShardedSharedLogStreamSink(stream *sharedlog_stream.ShardedSharedLogStre
 		streamPusher:  streamPusher,
 		flushDuration: config.FlushDuration,
 		bufPush:       utils.CheckBufPush(),
+		name:          "sink",
 	}
 	return s
+}
+
+func (sls *ShardedSharedLogStreamSink) SetName(name string) {
+	sls.name = name
+}
+
+func (sls *ShardedSharedLogStreamSink) Name() string {
+	return sls.name
 }
 
 func (sls *ShardedSharedLogStreamSink) Stream() *sharedlog_stream.ShardedSharedLogStream {
 	return sls.streamPusher.Stream
 }
 
-func (sls *ShardedSharedLogStreamSink) InTransaction(tm tran_interface.ReadOnlyTransactionManager) {
+func (sls *ShardedSharedLogStreamSink) InTransaction(tm tran_interface.ReadOnlyExactlyOnceManager) {
 	sls.transactional = true
 	sls.tm = tm
 }

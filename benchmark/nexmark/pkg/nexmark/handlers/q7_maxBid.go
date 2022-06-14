@@ -15,7 +15,6 @@ import (
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/store_with_changelog"
@@ -77,12 +76,14 @@ func (h *q7MaxBid) procMsg(ctx context.Context, msg commtypes.Message, argsTmp i
 	return err
 }
 
-func (h *q7MaxBid) getSrcSink(
-	ctx context.Context,
-	sp *common.QueryInput,
-	input_stream *sharedlog_stream.ShardedSharedLogStream,
-	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*source_sink.MeteredSource, *source_sink.MeteredSyncSink, error) {
+func (h *q7MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
+) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	if err != nil {
+		return nil, nil, err
+	}
+	debug.Assert(len(output_streams) == 1, "expected only one output stream")
+
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
@@ -118,19 +119,14 @@ func (h *q7MaxBid) getSrcSink(
 		source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
 		warmup)
 	sink := source_sink.NewMeteredSyncSink(
-		source_sink.NewShardedSharedLogStreamSyncSink(output_stream, outConfig),
+		source_sink.NewShardedSharedLogStreamSyncSink(output_streams[0], outConfig),
 		warmup)
 	src.SetInitialSource(false)
-	return src, sink, nil
+	return []source_sink.MeteredSourceIntr{src}, []source_sink.MeteredSink{sink}, nil
 }
 
 func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	debug.Assert(len(output_streams) == 1, "expected only one output stream")
-	src, sink, err := h.getSrcSink(ctx, sp, input_stream, output_streams[0])
+	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -190,9 +186,7 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 		processor.MapperFunc(func(m commtypes.Message) (commtypes.Message, error) {
 			return commtypes.Message{Key: m.Value, Value: m.Key, Timestamp: m.Timestamp}, nil
 		})), warmup)
-	groupBy := processor.NewGroupBy(sink)
-	srcs := []source_sink.Source{src}
-	sinks_arr := []source_sink.Sink{sink}
+	groupBy := processor.NewGroupBy(sinks_arr[0])
 	procArgs := &q7MaxBidByPriceProcessArgs{
 		maxBid:  maxBid,
 		remapKV: remapKV,
@@ -207,8 +201,6 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgs interface{}) {
-			src.StartWarmup()
-			sink.StartWarmup()
 			maxBid.StartWarmup()
 			remapKV.StartWarmup()
 		}).Build()
@@ -225,8 +217,6 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["maxBid"] = maxBid.GetLatency()
 		ret.Latencies["remapKV"] = remapKV.GetLatency()
-		ret.Counts["src"] = src.GetCount()
-		ret.Counts["sink"] = sink.GetCount()
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 		sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])

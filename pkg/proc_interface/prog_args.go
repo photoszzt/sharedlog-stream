@@ -13,9 +13,10 @@ type ExecutionContext interface {
 }
 
 type SourcesSinks interface {
-	Sinks() []source_sink.Sink
+	Sinks() []source_sink.MeteredSink
 	FlushAndPushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error
-	Sources() []source_sink.Source
+	Sources() []source_sink.MeteredSourceIntr
+	StartWarmup()
 }
 
 type BaseExecutionContext struct {
@@ -24,8 +25,8 @@ type BaseExecutionContext struct {
 }
 
 func NewExecutionContext(
-	srcs []source_sink.Source,
-	sinks []source_sink.Sink,
+	srcs []source_sink.MeteredSourceIntr,
+	sinks []source_sink.MeteredSink,
 	funcName string,
 	curEpoch uint64,
 	parNum uint8,
@@ -50,18 +51,18 @@ func NewExecutionContextFromComponents(
 }
 
 type BaseSrcsSinks struct {
-	srcs  []source_sink.Source
-	sinks []source_sink.Sink
+	srcs  []source_sink.MeteredSourceIntr
+	sinks []source_sink.MeteredSink
 }
 
-func NewBaseSrcsSinks(srcs []source_sink.Source, sinks []source_sink.Sink) BaseSrcsSinks {
+func NewBaseSrcsSinks(srcs []source_sink.MeteredSourceIntr, sinks []source_sink.MeteredSink) BaseSrcsSinks {
 	return BaseSrcsSinks{
 		srcs:  srcs,
 		sinks: sinks,
 	}
 }
 
-func (pa *BaseSrcsSinks) Sources() []source_sink.Source {
+func (pa *BaseSrcsSinks) Sources() []source_sink.MeteredSourceIntr {
 	return pa.srcs
 }
 
@@ -75,8 +76,17 @@ func (pa *BaseSrcsSinks) FlushAndPushToAllSinks(ctx context.Context, msg commtyp
 	return nil
 }
 
-func (pa *BaseSrcsSinks) Sinks() []source_sink.Sink {
+func (pa *BaseSrcsSinks) Sinks() []source_sink.MeteredSink {
 	return pa.sinks
+}
+
+func (pa *BaseSrcsSinks) StartWarmup() {
+	for _, src := range pa.srcs {
+		src.StartWarmup()
+	}
+	for _, sink := range pa.sinks {
+		sink.StartWarmup()
+	}
 }
 
 type ProcArgs interface {

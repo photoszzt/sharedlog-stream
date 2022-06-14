@@ -202,7 +202,7 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 	}
 
 	funcName := "wccounter"
-	srcs := []source_sink.Source{src}
+	srcs := []source_sink.MeteredSourceIntr{src}
 	procArgs := &wordcountCounterAggProcessArg{
 		output_stream:        meteredOutputStream,
 		counter:              count,

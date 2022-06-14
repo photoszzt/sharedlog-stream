@@ -55,8 +55,8 @@ func (h *q8GroupByHandler) Call(ctx context.Context, input []byte) ([]byte, erro
 }
 
 func (h *q8GroupByHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
-) (*source_sink.MeteredSource, []*source_sink.MeteredSyncSink, error) {
-	var sinks []*source_sink.MeteredSyncSink
+) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
+	var sinks []source_sink.MeteredSink
 	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return nil, nil, err
@@ -93,16 +93,13 @@ func (h *q8GroupByHandler) getSrcSink(ctx context.Context, sp *common.QueryInput
 		sink := source_sink.NewMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_stream, outConfig), time.Duration(sp.WarmupS)*time.Second)
 		sinks = append(sinks, sink)
 	}
-	return src, sinks, nil
+	return []source_sink.MeteredSourceIntr{src}, sinks, nil
 }
 
 func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	src, sinks, err := h.getSrcSink(ctx, sp)
+	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	filterPerson, personsByIDMap, personsByIDFunc := h.getPersonsByID(time.Duration(sp.WarmupS)*time.Second,
 		time.Duration(sp.FlushMs)*time.Millisecond)
@@ -112,8 +109,6 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 	var wg sync.WaitGroup
 	personsByIDManager := execution.NewGeneralProcManager(personsByIDFunc)
 	auctionsBySellerIDManager := execution.NewGeneralProcManager(auctionsBySellerIDFunc)
-	srcs := []source_sink.Source{src}
-	sinks_arr := []source_sink.Sink{sinks[0], sinks[1]}
 	procArgs := &TwoMsgChanProcArgs{
 		msgChan1:             auctionsBySellerIDManager.MsgChan(),
 		msgChan2:             personsByIDManager.MsgChan(),
@@ -140,9 +135,6 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgs interface{}) {
-			sinks[0].StartWarmup()
-			sinks[1].StartWarmup()
-			src.StartWarmup()
 			filterPerson.StartWarmup()
 			personsByIDMap.StartWarmup()
 			filterAuctions.StartWarmup()
@@ -174,9 +166,6 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 		ret.Latencies["personsByIDMap"] = personsByIDMap.GetLatency()
 		ret.Latencies["filterAuctions"] = filterAuctions.GetLatency()
 		ret.Latencies["auctionsBySellerIDMap"] = auctionsBySellerIDMap.GetLatency()
-		ret.Counts["src"] = src.GetCount()
-		ret.Counts["aucSink"] = sinks[0].GetCount()
-		ret.Counts["personSink"] = sinks[1].GetCount()
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d",
 		h.funcName, sp.InputTopicNames[0], sp.ParNum)

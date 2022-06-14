@@ -53,8 +53,7 @@ func (h *q5AuctionBids) Call(ctx context.Context, input []byte) ([]byte, error) 
 }
 
 func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde,
-) (*source_sink.MeteredSource, *source_sink.ConcurrentMeteredSyncSink, error) {
-
+) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
 	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return nil, nil, err
@@ -98,7 +97,7 @@ func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput, m
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 		}), warmup)
 	src.SetInitialSource(false)
-	return src, sink, nil
+	return []source_sink.MeteredSourceIntr{src}, []source_sink.MeteredSink{sink}, nil
 }
 
 func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde,
@@ -279,7 +278,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	src, sink, err := h.getSrcSink(ctx, sp, msgSerde)
+	srcs, sinks, err := h.getSrcSink(ctx, sp, msgSerde)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -302,9 +301,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			}
 			return commtypes.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
 		})), time.Duration(sp.WarmupS)*time.Second)
-	groupBy := processor.NewGroupBy(sink)
-	srcs := []source_sink.Source{src}
-	sinks := []source_sink.Sink{sink}
+	groupBy := processor.NewGroupBy(sinks[0])
 	procArgs := &q5AuctionBidsProcessArg{
 		countProc:      countProc,
 		groupByAuction: groupByAuction,
@@ -318,8 +315,6 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgs interface{}) {
-			src.StartWarmup()
-			sink.StartWarmup()
 			groupByAuction.StartWarmup()
 			countProc.StartWarmup()
 		}).Build()
@@ -336,11 +331,11 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		}
 	} else if countStore.TableType() == store.MONGODB {
 		wsc = []*store_restore.WindowStoreChangelog{
-			store_restore.NewWindowStoreChangelogForExternalStore(countStore, src.Stream(),
+			store_restore.NewWindowStoreChangelogForExternalStore(countStore, srcs[0].Stream(),
 				h.processWithoutSink, &q5AuctionBidsRestoreArg{
 					countProc:      countProc.InnerProcessor(),
 					groupByAuction: groupByAuction.InnerProcessor(),
-					src:            src.InnerSource(),
+					src:            srcs[0].InnerSource(),
 					parNum:         sp.ParNum,
 				}, fmt.Sprintf("%s-%s-%d", h.funcName, countStore.Name(), sp.ParNum), sp.ParNum),
 		}
@@ -350,8 +345,6 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["count"] = countProc.GetLatency()
 		ret.Latencies["changeKey"] = groupByAuction.GetLatency()
-		ret.Counts["src"] = src.GetCount()
-		ret.Counts["sink"] = sink.GetCount()
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 		sp.ParNum, sp.OutputTopicNames[0])

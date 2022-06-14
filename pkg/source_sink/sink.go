@@ -10,6 +10,8 @@ import (
 type Sink interface {
 	Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error
 	TopicName() string
+	Name() string
+	SetName(string)
 	KeySerde() commtypes.Serde
 	Flush(ctx context.Context) error
 	InitFlushTimer()

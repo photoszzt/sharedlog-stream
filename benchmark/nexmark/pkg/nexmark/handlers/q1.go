@@ -13,7 +13,6 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream_task"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -54,27 +53,27 @@ func q1mapFunc(msg commtypes.Message) (commtypes.Message, error) {
 }
 
 func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	src, sink, err := getSrcSink(ctx, h.env, sp)
+	srcs, sinks, err := getSrcSink(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
 			Message: err.Error(),
 		}
 	}
-	src.SetInitialSource(true)
-	sink.MarkFinalOutput()
+	srcs[0].SetInitialSource(true)
+	sinks[0].MarkFinalOutput()
+	warmup := time.Duration(sp.WarmupS) * time.Second
+	srcsSinks := proc_interface.NewBaseSrcsSinks(srcs, sinks)
 
 	filterBid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
-		only_bid)), time.Duration(sp.WarmupS)*time.Second)
+		only_bid)), warmup)
 	q1Map := processor.NewMeteredProcessor(processor.NewStreamMapValuesWithKeyProcessor(processor.MapperFunc(q1mapFunc)),
-		time.Duration(sp.WarmupS)*time.Second)
-	srcs := []source_sink.Source{src}
-	sinks := []source_sink.Sink{sink}
+		warmup)
 	procArgs := &query1ProcessArgs{
 		filterBid: filterBid,
 		q1Map:     q1Map,
-		BaseExecutionContext: proc_interface.NewExecutionContext(srcs,
-			sinks, h.funcName, sp.ScaleEpoch, sp.ParNum),
+		BaseExecutionContext: proc_interface.NewExecutionContextFromComponents(srcsSinks,
+			proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum)),
 	}
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
@@ -84,16 +83,12 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 		InitFunc(func(progArgs interface{}) {
 			filterBid.StartWarmup()
 			q1Map.StartWarmup()
-			src.StartWarmup()
-			sink.StartWarmup()
 		}).Build()
 
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["filterBids"] = filterBid.GetLatency()
 		ret.Latencies["q1Map"] = q1Map.GetLatency()
-		ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
-		ret.Counts["src"] = src.GetCount()
-		ret.Counts["sink"] = sink.GetCount()
+		ret.Latencies["eventTimeLatency"] = sinks[0].GetEventTimeLatency()
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s",
 		h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])

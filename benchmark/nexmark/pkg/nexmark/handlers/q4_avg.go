@@ -36,7 +36,7 @@ func NewQ4Avg(env types.Environment, funcName string) *q4Avg {
 }
 
 func (h *q4Avg) getSrcSink(ctx context.Context, sp *common.QueryInput,
-) (*source_sink.MeteredSource, *source_sink.MeteredSyncSink, error) {
+) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
 	inputStream, outputStreams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return nil, nil, err
@@ -64,7 +64,7 @@ func (h *q4Avg) getSrcSink(ctx context.Context, sp *common.QueryInput,
 			},
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 		}), warmup)
-	return src, sink, nil
+	return []source_sink.MeteredSourceIntr{src}, []source_sink.MeteredSink{sink}, nil
 }
 
 func (h *q4Avg) Call(ctx context.Context, input []byte) ([]byte, error) {
@@ -105,14 +105,14 @@ func (h *q4Avg) procMsg(ctx context.Context, msg commtypes.Message, argsTmp inte
 }
 
 func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	src, sink, err := h.getSrcSink(ctx, sp)
+	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	sumCountStoreName := "q4SumCountKVStore"
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	mp, err := store_with_changelog.NewMaterializeParamBuilder().
-		KVMsgSerdes(src.KVMsgSerdes()).
+		KVMsgSerdes(srcs[0].KVMsgSerdes()).
 		StoreName(sumCountStoreName).
 		ParNum(sp.ParNum).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
@@ -147,8 +147,6 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 			return float64(val.Sum) / float64(val.Count), nil
 		}),
 	), warmup)
-	srcs := []source_sink.Source{src}
-	sinks_arr := []source_sink.Sink{sink}
 	procArgs := &Q4AvgProcessArgs{
 		sumCount: sumCount,
 		calcAvg:  calcAvg,
@@ -161,8 +159,6 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgs interface{}) {
-			src.StartWarmup()
-			sink.StartWarmup()
 			sumCount.StartWarmup()
 			calcAvg.StartWarmup()
 		}).Build()
@@ -174,9 +170,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["sumCount"] = sumCount.GetLatency()
 		ret.Latencies["calcAvg"] = calcAvg.GetLatency()
-		ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
-		ret.Counts["src"] = src.GetCount()
-		ret.Counts["sink"] = sink.GetCount()
+		ret.Latencies["eventTimeLatency"] = sinks_arr[0].GetEventTimeLatency()
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 		sp.ParNum, sp.OutputTopicNames[0])

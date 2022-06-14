@@ -13,7 +13,7 @@ import (
 
 // a changelog substream has only one producer. Each store would only produce to one substream.
 type ChangelogManager struct {
-	tm            tran_interface.ReadOnlyTransactionManager
+	tm            tran_interface.ReadOnlyExactlyOnceManager
 	changelog     *sharedlog_stream.ShardedSharedLogStream
 	tac           *source_sink.TransactionAwareConsumer
 	bufPush       bool
@@ -40,7 +40,7 @@ func (cm *ChangelogManager) NumPartition() uint8 {
 	return cm.changelog.NumPartition()
 }
 
-func (cm *ChangelogManager) InTransaction(tm tran_interface.ReadOnlyTransactionManager) error {
+func (cm *ChangelogManager) InTransaction(tm tran_interface.ReadOnlyExactlyOnceManager) error {
 	cm.transactional = true
 	cm.tm = tm
 	var err error = nil

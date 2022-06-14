@@ -10,7 +10,6 @@ import (
 
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -22,7 +21,7 @@ func only_bid(msg *commtypes.Message) (bool, error) {
 }
 
 func getSrcSink(ctx context.Context, env types.Environment, sp *common.QueryInput,
-) (*source_sink.MeteredSource, *source_sink.MeteredSyncSink, error) {
+) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
 	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, env, sp)
 	if err != nil {
 		return nil, nil, err
@@ -56,15 +55,19 @@ func getSrcSink(ctx context.Context, env types.Environment, sp *common.QueryInpu
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig), warmup)
 	sink := source_sink.NewMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_streams[0], outConfig), warmup)
-	return src, sink, nil
+	return []source_sink.MeteredSourceIntr{src}, []source_sink.MeteredSink{sink}, nil
 }
 
 func getSrcSinkUint64Key(
 	ctx context.Context,
+	env types.Environment,
 	sp *common.QueryInput,
-	input_stream *sharedlog_stream.ShardedSharedLogStream,
-	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*source_sink.MeteredSource, *source_sink.MeteredSyncSink, error) {
+) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, env, sp)
+	if err != nil {
+		return nil, nil, err
+	}
+	debug.Assert(len(output_streams) == 1, "expected only one output stream")
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
@@ -92,8 +95,8 @@ func getSrcSinkUint64Key(
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig), warmup)
-	sink := source_sink.NewMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_stream, outConfig), warmup)
-	return src, sink, nil
+	sink := source_sink.NewMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_streams[0], outConfig), warmup)
+	return []source_sink.MeteredSourceIntr{src}, []source_sink.MeteredSink{sink}, nil
 }
 
 /*

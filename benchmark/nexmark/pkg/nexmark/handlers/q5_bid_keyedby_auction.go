@@ -9,11 +9,9 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream_task"
 	"time"
 
@@ -75,17 +73,11 @@ func (h *bidByAuction) procMsg(ctx context.Context, msg commtypes.Message, argsT
 func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 	sp *common.QueryInput,
 ) *common.FnOutput {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	srcs, sinks, err := getSrcSinkUint64Key(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	debug.Assert(len(output_streams) == 1, "expected only one output stream")
-
-	src, sink, err := getSrcSinkUint64Key(ctx, sp, input_stream, output_streams[0])
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	src.SetInitialSource(true)
+	srcs[0].SetInitialSource(true)
 	filterBid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
 		func(m *commtypes.Message) (bool, error) {
 			event := m.Value.(*ntypes.Event)
@@ -96,9 +88,7 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 			event := m.Value.(*ntypes.Event)
 			return commtypes.Message{Key: event.Bid.Auction, Value: m.Value, Timestamp: m.Timestamp}, nil
 		})), time.Duration(sp.WarmupS)*time.Second)
-	groupBy := processor.NewGroupBy(sink)
-	srcs := []source_sink.Source{src}
-	sinks := []source_sink.Sink{sink}
+	groupBy := processor.NewGroupBy(sinks[0])
 	procArgs := &bidKeyedByAuctionProcessArgs{
 		filterBid: filterBid,
 		selectKey: selectKey,
@@ -112,8 +102,6 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgs interface{}) {
-			src.StartWarmup()
-			sink.StartWarmup()
 			filterBid.StartWarmup()
 			selectKey.StartWarmup()
 		}).Build()
@@ -121,8 +109,6 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["filterBid"] = filterBid.GetLatency()
 		ret.Latencies["selectKey"] = selectKey.GetLatency()
-		ret.Counts["src"] = src.GetCount()
-		ret.Counts["sink"] = sink.GetCount()
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 		sp.InputTopicNames[0],

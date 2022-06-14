@@ -14,7 +14,6 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream_task"
 	"sync"
 	"time"
@@ -56,27 +55,17 @@ func (h *q46GroupByHandler) Call(ctx context.Context, input []byte) ([]byte, err
 }
 
 func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("get input output stream failed: %v", err),
-		}
-	}
-	debug.Assert(len(output_streams) == 2, "expected 2 output streams")
-	src, sinks, err := getSrcSinks(ctx, sp, input_stream, output_streams)
+	srcs, sinks_arr, err := getSrcSinks(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	src.SetInitialSource(true)
+	srcs[0].SetInitialSource(true)
 	filterAuctions, auctionsByIDMap, auctionsByIDFunc := h.getAucsByID(time.Duration(sp.WarmupS) * time.Second)
 	filterBids, bidsByAuctionIDMap, bidsByAuctionIDFunc := h.getBidsByAuctionID(time.Duration(sp.WarmupS) * time.Second)
 
 	var wg sync.WaitGroup
 	auctionsByIDManager := execution.NewGeneralProcManager(auctionsByIDFunc)
 	bidsByAuctionIDManager := execution.NewGeneralProcManager(bidsByAuctionIDFunc)
-	srcs := []source_sink.Source{src}
-	sinks_arr := []source_sink.Sink{sinks[0], sinks[1]}
 	procArgs := &TwoMsgChanProcArgs{
 		msgChan1: auctionsByIDManager.MsgChan(),
 		msgChan2: bidsByAuctionIDManager.MsgChan(),
@@ -106,9 +95,6 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgsTmp interface{}) {
-			src.StartWarmup()
-			sinks[0].StartWarmup()
-			sinks[1].StartWarmup()
 			filterAuctions.StartWarmup()
 			auctionsByIDMap.StartWarmup()
 			filterBids.StartWarmup()
@@ -140,9 +126,6 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 		ret.Latencies["auctionsByIDMap"] = auctionsByIDMap.GetLatency()
 		ret.Latencies["filterBids"] = filterBids.GetLatency()
 		ret.Latencies["bidsByAuctionIDMap"] = bidsByAuctionIDMap.GetLatency()
-		ret.Counts["src"] = src.GetCount()
-		ret.Counts["aucSink"] = sinks[0].GetCount()
-		ret.Counts["bidSink"] = sinks[1].GetCount()
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName, sp.InputTopicNames[0], sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,

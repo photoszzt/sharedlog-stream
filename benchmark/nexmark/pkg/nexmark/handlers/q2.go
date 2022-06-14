@@ -13,7 +13,6 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream_task"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -58,19 +57,19 @@ type query2ProcessArgs struct {
 }
 
 func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	src, sink, err := getSrcSink(ctx, h.env, sp)
+	srcs, sinks, err := getSrcSink(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	src.SetInitialSource(true)
-	sink.MarkFinalOutput()
+	srcs[0].SetInitialSource(true)
+	sinks[0].MarkFinalOutput()
+	srcsSinks := proc_interface.NewBaseSrcsSinks(srcs, sinks)
+
 	q2Filter := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(filterFunc)), time.Duration(sp.WarmupS)*time.Second)
-	srcs := []source_sink.Source{src}
-	sinks := []source_sink.Sink{sink}
 	procArgs := &query2ProcessArgs{
 		q2Filter: q2Filter,
-		BaseExecutionContext: proc_interface.NewExecutionContext(srcs, sinks, h.funcName,
-			sp.ScaleEpoch, sp.ParNum),
+		BaseExecutionContext: proc_interface.NewExecutionContextFromComponents(srcsSinks, proc_interface.NewBaseProcArgs(h.funcName,
+			sp.ScaleEpoch, sp.ParNum)),
 	}
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
@@ -78,16 +77,12 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgs interface{}) {
-			src.StartWarmup()
-			sink.StartWarmup()
 			q2Filter.StartWarmup()
 		}).Build()
 
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["q2Filter"] = q2Filter.GetLatency()
-		ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
-		ret.Counts["src"] = src.GetCount()
-		ret.Counts["sink"] = sink.GetCount()
+		ret.Latencies["eventTimeLatency"] = sinks[0].GetEventTimeLatency()
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,

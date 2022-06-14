@@ -11,6 +11,8 @@ type Source interface {
 	Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error)
 	SetCursor(cursor uint64, parNum uint8)
 	TopicName() string
+	Name() string
+	SetName(string) 
 	Stream() store.Stream
 	InTransaction(serdeFormat commtypes.SerdeFormat) error
 	SetInitialSource(initial bool)

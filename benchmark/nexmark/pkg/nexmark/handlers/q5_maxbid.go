@@ -53,7 +53,7 @@ func (h *q5MaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 }
 
 func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
-) (*source_sink.MeteredSource, *source_sink.ConcurrentMeteredSyncSink, error) {
+) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
 	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return nil, nil, err
@@ -105,7 +105,7 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		warmup)
 	src.SetInitialSource(false)
 	sink.MarkFinalOutput()
-	return src, sink, nil
+	return []source_sink.MeteredSourceIntr{src}, []source_sink.MeteredSink{sink}, nil
 }
 
 type q5MaxBidProcessArgs struct {
@@ -210,11 +210,11 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	src, sink, err := h.getSrcSink(ctx, sp)
+	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	srcKVMsgSerdes := src.KVMsgSerdes()
+	srcKVMsgSerdes := srcs[0].KVMsgSerdes()
 	maxBidStoreName := "maxBidsKVStore"
 	var kvstore store.KeyValueStore
 	warmup := time.Duration(sp.WarmupS) * time.Second
@@ -287,9 +287,6 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 				v := msg.Value.(*ntypes.AuctionIdCntMax)
 				return v.Count >= v.MaxCnt, nil
 			})), warmup)
-
-	srcs := []source_sink.Source{src}
-	sinks_arr := []source_sink.Sink{sink}
 	procArgs := &q5MaxBidProcessArgs{
 		maxBid:       maxBid,
 		stJoin:       stJoin,
@@ -303,8 +300,6 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgs interface{}) {
-			src.StartWarmup()
-			sink.StartWarmup()
 			maxBid.StartWarmup()
 			stJoin.StartWarmup()
 			chooseMaxCnt.StartWarmup()
@@ -320,11 +315,11 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		}
 	} else if sp.TableType == uint8(store.MONGODB) {
 		kvc = []*store_restore.KVStoreChangelog{
-			store_restore.NewKVStoreChangelogForExternalStore(kvstore, src.Stream(), h.processWithoutSink, &q5MaxBidRestoreArgs{
+			store_restore.NewKVStoreChangelogForExternalStore(kvstore, srcs[0].Stream(), h.processWithoutSink, &q5MaxBidRestoreArgs{
 				maxBid:       maxBid.InnerProcessor(),
 				stJoin:       stJoin.InnerProcessor(),
 				chooseMaxCnt: chooseMaxCnt.InnerProcessor(),
-				src:          src.InnerSource(),
+				src:          srcs[0].InnerSource(),
 				parNum:       sp.ParNum,
 			}, fmt.Sprintf("%s-%s-%d", h.funcName, kvstore.Name(), sp.ParNum), sp.ParNum),
 		}
@@ -336,9 +331,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		ret.Latencies["maxBid"] = maxBid.GetLatency()
 		ret.Latencies["stJoin"] = stJoin.GetLatency()
 		ret.Latencies["chooseMaxCnt"] = chooseMaxCnt.GetLatency()
-		ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
-		ret.Counts["src"] = src.GetCount()
-		ret.Counts["sink"] = sink.GetCount()
+		ret.Latencies["eventTimeLatency"] = sinks_arr[0].GetEventTimeLatency()
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 		sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])

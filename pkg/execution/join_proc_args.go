@@ -25,8 +25,8 @@ func NewJoinProcArgs(
 func CreateJoinProcArgsPair(
 	runnerL JoinWorkerFunc,
 	runnerR JoinWorkerFunc,
-	srcs []source_sink.Source,
-	sinks []source_sink.Sink,
+	srcs []source_sink.MeteredSourceIntr,
+	sinks []source_sink.MeteredSink,
 	procArgs proc_interface.BaseProcArgs,
 ) (*JoinProcArgs, *JoinProcArgs) {
 	leftArgs := NewJoinProcArgs(runnerL, proc_interface.NewExecutionContextFromComponents(

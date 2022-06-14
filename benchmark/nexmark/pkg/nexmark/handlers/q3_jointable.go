@@ -88,26 +88,21 @@ func getInOutStreams(
 	return inputStream1, inputStream2, outputStream, nil
 }
 
-type srcSinkSerde struct {
-	src1 *source_sink.MeteredSource
-	src2 *source_sink.MeteredSource
-	sink *source_sink.ConcurrentMeteredSyncSink
-}
-
 func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
-	stream1 *sharedlog_stream.ShardedSharedLogStream,
-	stream2 *sharedlog_stream.ShardedSharedLogStream,
-	outputStream *sharedlog_stream.ShardedSharedLogStream,
-) (*srcSinkSerde, error) {
+) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
+	stream1, stream2, outputStream, err := getInOutStreams(ctx, h.env, sp)
+	if err != nil {
+		return nil, nil, err
+	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
-		return nil, fmt.Errorf("get msg serde err: %v", err)
+		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
 
 	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
-		return nil, fmt.Errorf("get event serde err: %v", err)
+		return nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}
 	timeout := common.SrcConsumeTimeout
 	warmup := time.Duration(sp.WarmupS) * time.Second
@@ -118,7 +113,7 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	}
 	ncsiSerde, err := ntypes.GetNameCityStateIdSerde(serdeFormat)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	src1 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream1, &source_sink.StreamSourceConfig{
@@ -140,7 +135,7 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}), warmup)
 	sink.MarkFinalOutput()
-	return &srcSinkSerde{src1: src1, src2: src2, sink: sink}, nil
+	return []source_sink.MeteredSourceIntr{src1, src2}, []source_sink.MeteredSink{sink}, nil
 }
 
 type kvtables struct {
@@ -152,7 +147,7 @@ type kvtables struct {
 
 func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 	tabType store.TABLE_TYPE,
-	sss *srcSinkSerde,
+	srcs []source_sink.MeteredSourceIntr,
 	serdeFormat commtypes.SerdeFormat,
 	mongoAddr string,
 	warmup time.Duration,
@@ -180,13 +175,15 @@ func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 			perTabName, compare, warmup)
 		return &kvtables{toAuctionsTable, auctionsStore, toPersonsTable, personsStore}, nil
 	} else if tabType == store.MONGODB {
+		src1ValSerde := srcs[0].KVMsgSerdes().ValSerde
+		src2ValSerde := srcs[1].KVMsgSerdes().ValSerde
 		vtSerde0, err := commtypes.GetValueTsSerde(serdeFormat,
-			sss.src1.KVMsgSerdes().ValSerde, sss.src1.KVMsgSerdes().ValSerde)
+			src1ValSerde, src1ValSerde)
 		if err != nil {
 			return nil, err
 		}
 		vtSerde1, err := commtypes.GetValueTsSerde(serdeFormat,
-			sss.src2.KVMsgSerdes().ValSerde, sss.src2.KVMsgSerdes().ValSerde)
+			src2ValSerde, src2ValSerde)
 		if err != nil {
 			return nil, err
 		}
@@ -196,12 +193,12 @@ func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 		}
 		toAuctionsTable, auctionsStore, err := processor.ToMongoDBKVTable(
 			ctx, aucTabName,
-			client, sss.src1.KVMsgSerdes().KeySerde, vtSerde0, warmup)
+			client, srcs[0].KVMsgSerdes().KeySerde, vtSerde0, warmup)
 		if err != nil {
 			return nil, err
 		}
 		toPersonsTable, personsStore, err := processor.ToMongoDBKVTable(ctx, perTabName,
-			client, sss.src2.KVMsgSerdes().KeySerde, vtSerde1, warmup)
+			client, srcs[1].KVMsgSerdes().KeySerde, vtSerde1, warmup)
 		if err != nil {
 			return nil, err
 		}
@@ -212,20 +209,15 @@ func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 }
 
 func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	auctionsStream, personsStream, outputStream, err := getInOutStreams(ctx, h.env, sp)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("get input output err: %v", err),
-		}
-	}
-	sss, err := h.getSrcSink(ctx, sp, auctionsStream,
-		personsStream, outputStream)
+	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: fmt.Sprintf("getSrcSink err: %v\n", err)}
 	}
+	srcs[0].SetName("auctionsSrc")
+	srcs[1].SetName("personsSrc")
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 
-	kvtabs, err := h.setupTables(ctx, store.TABLE_TYPE(sp.TableType), sss, commtypes.SerdeFormat(sp.SerdeFormat), sp.MongoAddr, time.Duration(sp.WarmupS)*time.Second)
+	kvtabs, err := h.setupTables(ctx, store.TABLE_TYPE(sp.TableType), srcs, serdeFormat, sp.MongoAddr, time.Duration(sp.WarmupS)*time.Second)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -284,8 +276,6 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		"expected only one output stream")
 
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
-	srcs := []source_sink.Source{sss.src1, sss.src2}
-	sinks_arr := []source_sink.Sink{sss.sink}
 
 	joinProcAuction, joinProcPerson := execution.CreateJoinProcArgsPair(
 		aJoinP, pJoinA, srcs, sinks_arr,
@@ -305,9 +295,6 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(h.process).
 		InitFunc(func(procArgsTmp interface{}) {
-			sss.src1.StartWarmup()
-			sss.src2.StartWarmup()
-			sss.sink.StartWarmup()
 			kvtabs.toTab1.StartWarmup()
 			kvtabs.toTab2.StartWarmup()
 			auctionJoinsPersons.StartWarmup()
@@ -344,22 +331,21 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 
 	var kvchangelogs []*store_restore.KVStoreChangelog
 	if sp.TableType == uint8(store.IN_MEM) {
-		serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 		kvchangelogs = []*store_restore.KVStoreChangelog{
 			store_restore.NewKVStoreChangelog(kvtabs.tab1,
-				store_with_changelog.NewChangelogManager(auctionsStream, serdeFormat),
-				sss.src1.KVMsgSerdes(), sp.ParNum),
+				store_with_changelog.NewChangelogManager(srcs[0].Stream().(*sharedlog_stream.ShardedSharedLogStream), serdeFormat),
+				srcs[0].KVMsgSerdes(), sp.ParNum),
 			store_restore.NewKVStoreChangelog(kvtabs.tab2,
-				store_with_changelog.NewChangelogManager(personsStream, serdeFormat),
-				sss.src2.KVMsgSerdes(), sp.ParNum),
+				store_with_changelog.NewChangelogManager(srcs[1].Stream().(*sharedlog_stream.ShardedSharedLogStream), serdeFormat),
+				srcs[1].KVMsgSerdes(), sp.ParNum),
 		}
 	} else if sp.TableType == uint8(store.MONGODB) {
 		kvchangelogs = []*store_restore.KVStoreChangelog{
-			store_restore.NewKVStoreChangelogForExternalStore(kvtabs.tab1, auctionsStream, execution.JoinProcSerialWithoutSink,
-				execution.NewJoinProcWithoutSinkArgs(sss.src1.InnerSource(), aJoinP, sp.ParNum),
+			store_restore.NewKVStoreChangelogForExternalStore(kvtabs.tab1, srcs[0].Stream(), execution.JoinProcSerialWithoutSink,
+				execution.NewJoinProcWithoutSinkArgs(srcs[1].InnerSource(), aJoinP, sp.ParNum),
 				fmt.Sprintf("%s-%s-%d", h.funcName, kvtabs.tab1.Name(), sp.ParNum), sp.ParNum),
-			store_restore.NewKVStoreChangelogForExternalStore(kvtabs.tab2, personsStream, execution.JoinProcSerialWithoutSink,
-				execution.NewJoinProcWithoutSinkArgs(sss.src2.InnerSource(), pJoinA, sp.ParNum),
+			store_restore.NewKVStoreChangelogForExternalStore(kvtabs.tab2, srcs[1].Stream(), execution.JoinProcSerialWithoutSink,
+				execution.NewJoinProcWithoutSinkArgs(srcs[1].InnerSource(), pJoinA, sp.ParNum),
 				fmt.Sprintf("%s-%s-%d", h.funcName, kvtabs.tab2.Name(), sp.ParNum), sp.ParNum),
 		}
 	}
@@ -368,10 +354,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		ret.Latencies["toPersonsTable"] = kvtabs.toTab2.GetLatency()
 		ret.Latencies["personJoinsAuctions"] = personJoinsAuctions.GetLatency()
 		ret.Latencies["auctionJoinsPersons"] = auctionJoinsPersons.GetLatency()
-		ret.Latencies["eventTimeLatency"] = sss.sink.GetEventTimeLatency()
-		ret.Counts["auctionsSrc"] = sss.src1.GetCount()
-		ret.Counts["personsSrc"] = sss.src2.GetCount()
-		ret.Counts["sink"] = uint64(sss.sink.GetCount())
+		ret.Latencies["eventTimeLatency"] = sinks_arr[0].GetEventTimeLatency()
 	}
 	transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,

@@ -150,8 +150,8 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 	})
 
 	funcName := "wcsplitter"
-	srcs := []source_sink.Source{src}
-	sinks := []source_sink.Sink{sink}
+	srcs := []source_sink.MeteredSourceIntr{src}
+	sinks := []source_sink.MeteredSink{sink}
 	procArgs := &wordcountSplitterProcessArg{
 		splitter:       splitter,
 		splitLatencies: make([]int, 0),

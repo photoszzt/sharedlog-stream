@@ -14,7 +14,6 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream_task"
 	"sync"
@@ -63,11 +62,14 @@ type TwoMsgChanProcArgs struct {
 	proc_interface.BaseExecutionContext
 }
 
-func getSrcSinks(ctx context.Context, sp *common.QueryInput,
-	input_stream *sharedlog_stream.ShardedSharedLogStream,
-	output_streams []*sharedlog_stream.ShardedSharedLogStream,
-) (*source_sink.MeteredSource, []*source_sink.MeteredSyncSink, error) {
-	var sinks []*source_sink.MeteredSyncSink
+func getSrcSinks(ctx context.Context, env types.Environment, sp *common.QueryInput,
+) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, env, sp)
+	if err != nil {
+		return nil, nil, err
+	}
+	debug.Assert(len(output_streams) == 2, "expected 2 output streams")
+	var sinks []source_sink.MeteredSink
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
@@ -94,44 +96,38 @@ func getSrcSinks(ctx context.Context, sp *common.QueryInput,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
-	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
-		time.Duration(sp.WarmupS)*time.Second)
+	warmup := time.Duration(sp.WarmupS) * time.Second
+	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig), warmup)
 	for _, output_stream := range output_streams {
 		sink := source_sink.NewMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_stream, outConfig),
-			time.Duration(sp.WarmupS)*time.Second)
+			warmup)
 		sinks = append(sinks, sink)
 	}
-	return src, sinks, nil
+	return []source_sink.MeteredSourceIntr{src}, sinks, nil
 }
 
 func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("get input output stream failed: %v", err),
-		}
-	}
-	debug.Assert(len(output_streams) == 2, "expected 2 output streams")
-	src, sinks, err := getSrcSinks(ctx, sp, input_stream, output_streams)
+	srcs, sinks_arr, err := getSrcSinks(ctx, h.env, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	src.SetInitialSource(true)
+	srcs[0].SetInitialSource(true)
+	sinks_arr[0].SetName("aucSink")
+	sinks_arr[1].SetName("perSink")
+	warmup := time.Duration(sp.WarmupS) * time.Second
 
-	filterPerson, personsByIDMap, personsByIDFunc := h.getPersonsByID(time.Duration(sp.WarmupS) * time.Second)
-	filterAuctions, auctionsBySellerIDMap, auctionsBySellerIDFunc := h.getAucBySellerID(time.Duration(sp.WarmupS) * time.Second)
+	filterPerson, personsByIDMap, personsByIDFunc := h.getPersonsByID(warmup)
+	filterAuctions, auctionsBySellerIDMap, auctionsBySellerIDFunc := h.getAucBySellerID(warmup)
 
 	var wg sync.WaitGroup
 	personsByIDManager := execution.NewGeneralProcManager(personsByIDFunc)
 	auctionsBySellerIDManager := execution.NewGeneralProcManager(auctionsBySellerIDFunc)
-	srcs := []source_sink.Source{src}
-	sinks_arr := []source_sink.Sink{sinks[0], sinks[1]}
+	srcsSinks := proc_interface.NewBaseSrcsSinks(srcs, sinks_arr)
 	procArgs := &TwoMsgChanProcArgs{
 		msgChan1: auctionsBySellerIDManager.MsgChan(),
 		msgChan2: personsByIDManager.MsgChan(),
-		BaseExecutionContext: proc_interface.NewExecutionContext(srcs, sinks_arr,
-			h.funcName, sp.ScaleEpoch, sp.ParNum),
+		BaseExecutionContext: proc_interface.NewExecutionContextFromComponents(srcsSinks,
+			proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum)),
 	}
 
 	personsByIDManager.LaunchProc(ctx, procArgs, &wg)
@@ -154,9 +150,6 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgsTmp interface{}) {
-			src.StartWarmup()
-			sinks[0].StartWarmup()
-			sinks[1].StartWarmup()
 			filterPerson.StartWarmup()
 			personsByIDMap.StartWarmup()
 			filterAuctions.StartWarmup()
@@ -189,9 +182,6 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 		ret.Latencies["personsByIDMap"] = personsByIDMap.GetLatency()
 		ret.Latencies["filterAuctions"] = filterAuctions.GetLatency()
 		ret.Latencies["auctionsBySellerIDMap"] = auctionsBySellerIDMap.GetLatency()
-		ret.Counts["src"] = src.GetCount()
-		ret.Counts["aucSink"] = sinks[0].GetCount()
-		ret.Counts["personSink"] = sinks[1].GetCount()
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d",
 		h.funcName, sp.InputTopicNames[0], sp.ParNum)

@@ -27,6 +27,7 @@ type ShardedSharedLogStreamSource struct {
 	payloadArrSerde commtypes.Serde
 	stream          *sharedlog_stream.ShardedSharedLogStream
 	tac             *TransactionAwareConsumer
+	name            string
 	timeout         time.Duration
 	transactional   bool
 	initialSource   bool
@@ -40,6 +41,7 @@ func NewShardedSharedLogStreamSource(stream *sharedlog_stream.ShardedSharedLogSt
 		stream:          stream,
 		timeout:         config.Timeout,
 		kvmsgSerdes:     config.KVMsgSerdes,
+		name:            "src",
 		payloadArrSerde: sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDE,
 	}
 }
@@ -60,6 +62,14 @@ func (s *ShardedSharedLogStreamSource) InTransaction(serdeFormat commtypes.Serde
 
 func (s *ShardedSharedLogStreamSource) Stream() store.Stream {
 	return s.stream
+}
+
+func (s *ShardedSharedLogStreamSource) SetName(name string) {
+	s.name = name
+}
+
+func (s *ShardedSharedLogStreamSource) Name() string {
+	return s.name
 }
 
 func (s *ShardedSharedLogStreamSource) KVMsgSerdes() commtypes.KVMsgSerdes {

@@ -74,7 +74,7 @@ func (h *q7BidByWin) procMsg(ctx context.Context, msg commtypes.Message, argsTmp
 }
 
 func (h *q7BidByWin) getSrcSink(ctx context.Context, sp *common.QueryInput,
-) (*source_sink.MeteredSource, *source_sink.MeteredSyncSink, error) {
+) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
 	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return nil, nil, err
@@ -114,11 +114,11 @@ func (h *q7BidByWin) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig), warmup)
 	sink := source_sink.NewMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_streams[0], outConfig), warmup)
 	src.SetInitialSource(true)
-	return src, sink, nil
+	return []source_sink.MeteredSourceIntr{src}, []source_sink.MeteredSink{sink}, nil
 }
 
 func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	src, sink, err := h.getSrcSink(ctx, sp)
+	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -142,9 +142,7 @@ func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *com
 		return commtypes.Message{Key: win, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 	})), warmup)
 
-	groupBy := processor.NewGroupBy(sink)
-	sinks_arr := []source_sink.Sink{sink}
-	srcs := []source_sink.Source{src}
+	groupBy := processor.NewGroupBy(sinks_arr[0])
 	procArgs := &q7BidByWinProcessArgs{
 		bid:      bid,
 		bidByWin: bidByWin,
@@ -160,15 +158,11 @@ func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *com
 		InitFunc(func(progArgs interface{}) {
 			bid.StartWarmup()
 			bidByWin.StartWarmup()
-			src.StartWarmup()
-			sink.StartWarmup()
 		}).Build()
 
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["bid"] = bid.GetLatency()
 		ret.Latencies["bidKeyedByPrice"] = bidByWin.GetLatency()
-		ret.Counts["src"] = src.GetCount()
-		ret.Counts["sink"] = sink.GetCount()
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,

@@ -40,6 +40,7 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 		cm.AddTopicTrackConsumedSeqs(ctx, inputTopicName, []uint8{args.procArgs.ParNum()})
 	}
 	debug.Fprint(os.Stderr, "done restore\n")
+	args.procArgs.StartWarmup()
 	if t.initFunc != nil {
 		t.initFunc(args.procArgs)
 	}

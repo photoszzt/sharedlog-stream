@@ -5,7 +5,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 )
 
-type ReadOnlyTransactionManager interface {
+type ReadOnlyExactlyOnceManager interface {
 	GetCurrentEpoch() uint16
 	GetCurrentTaskId() uint64
 	GetTransactionID() uint64

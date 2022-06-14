@@ -9,6 +9,7 @@ import (
 	"sharedlog-stream/pkg/consume_seq_num_manager/con_types"
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
@@ -31,6 +32,15 @@ type StreamTask struct {
 	trackEveryForAtLeastOnce time.Duration
 }
 
+func updateSrcSinkCount(ret *common.FnOutput, srcsSinks proc_interface.SourcesSinks) {
+	for _, src := range srcsSinks.Sources() {
+		ret.Counts[src.Name()] = src.GetCount()
+	}
+	for _, sink := range srcsSinks.Sinks() {
+		ret.Counts[sink.Name()] = sink.GetCount()
+	}
+}
+
 func (t *StreamTask) ExecuteApp(ctx context.Context,
 	streamTaskArgs *StreamTaskArgs,
 	transaction bool,
@@ -43,6 +53,7 @@ func (t *StreamTask) ExecuteApp(ctx context.Context,
 		ret = t.Process(ctx, streamTaskArgs)
 	}
 	if ret != nil && ret.Success {
+		updateSrcSinkCount(ret, streamTaskArgs.procArgs)
 		update_stats(ret)
 	}
 	return ret
@@ -567,8 +578,11 @@ func (t *StreamTask) startNewTransaction(ctx context.Context, args *StreamTaskAr
 		if *init && t.resumeFunc != nil {
 			t.resumeFunc(t)
 		}
-		if !*init && t.initFunc != nil {
-			t.initFunc(args.procArgs)
+		if !*init {
+			args.procArgs.StartWarmup()
+			if t.initFunc != nil {
+				t.initFunc(args.procArgs)
+			}
 			*init = true
 		}
 	}

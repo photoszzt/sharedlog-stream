@@ -15,7 +15,6 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
@@ -54,26 +53,27 @@ func (h *q7JoinMaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 func (h *q7JoinMaxBid) getSrcSink(
 	ctx context.Context,
 	sp *common.QueryInput,
-	stream1 *sharedlog_stream.ShardedSharedLogStream,
-	stream2 *sharedlog_stream.ShardedSharedLogStream,
-	outputStream *sharedlog_stream.ShardedSharedLogStream,
-) (*srcSinkSerde, error) {
+) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
+	stream1, stream2, outputStream, err := getInOutStreams(ctx, h.env, sp)
+	if err != nil {
+		return nil, nil, err
+	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
-		return nil, fmt.Errorf("get msg serde err: %v", err)
+		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
 	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
-		return nil, fmt.Errorf("get event serde err: %v", err)
+		return nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}
 	seSerde, err := ntypes.GetStartEndTimeSerde(serdeFormat)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	bmSerde, err := ntypes.GetBidAndMaxSerde(serdeFormat)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	timeout := common.SrcConsumeTimeout
 	warmup := time.Duration(sp.WarmupS) * time.Second
@@ -100,15 +100,11 @@ func (h *q7JoinMaxBid) getSrcSink(
 			ValSerde: bmSerde,
 		},
 	}), warmup)
-	return &srcSinkSerde{src1: src1, src2: src2, sink: sink}, nil
+	return []source_sink.MeteredSourceIntr{src1, src2}, []source_sink.MeteredSink{sink}, nil
 }
 
 func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	bidByPriceStream, maxBidByPrice, outputStream, err := getInOutStreams(ctx, h.env, sp)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: fmt.Sprintf("get input output err: %v", err)}
-	}
-	sss, err := h.getSrcSink(ctx, sp, bidByPriceStream, maxBidByPrice, outputStream)
+	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -140,7 +136,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	bMp, err := store_with_changelog.NewMaterializeParamBuilder().
-		KVMsgSerdes(sss.src1.KVMsgSerdes()).
+		KVMsgSerdes(srcs[0].KVMsgSerdes()).
 		StoreName("bidByPriceTab").
 		ParNum(sp.ParNum).
 		SerdeFormat(serdeFormat).StreamParam(commtypes.CreateStreamParam{
@@ -151,7 +147,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	maxBMp, err := store_with_changelog.NewMaterializeParamBuilder().
-		KVMsgSerdes(sss.src2.KVMsgSerdes()).
+		KVMsgSerdes(srcs[1].KVMsgSerdes()).
 		StoreName("maxBidByPriceTab").
 		ParNum(sp.ParNum).
 		SerdeFormat(serdeFormat).StreamParam(commtypes.CreateStreamParam{
@@ -207,8 +203,6 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 
 	}
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
-	srcs := []source_sink.Source{sss.src1, sss.src2}
-	sinks_arr := []source_sink.Sink{sss.sink}
 	joinProcBid, joinProcMaxBid := execution.CreateJoinProcArgsPair(
 		bJoinM, mJoinB, srcs, sinks_arr,
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum))
@@ -225,30 +219,31 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, args interface{}) *common.FnOutput {
 			return execution.HandleJoinErrReturn(args)
-		}).InitFunc(func(progArgs interface{}) {
-		sss.src1.StartWarmup()
-		sss.src2.StartWarmup()
-		for _, proc := range procs {
-			proc.StartWarmup()
-		}
+		}).
+		InitFunc(func(progArgs interface{}) {
+			for _, proc := range procs {
+				proc.StartWarmup()
+			}
 
-		bidManager.Run()
-		maxBidManager.Run()
-	}).PauseFunc(func() *common.FnOutput {
-		bidManager.RequestToTerminate()
-		maxBidManager.RequestToTerminate()
-		wg.Wait()
-		if ret := execution.HandleJoinErrReturn(procArgs); ret != nil {
-			return ret
-		}
-		return nil
-	}).ResumeFunc(func(task *stream_task.StreamTask) {
-		bidManager.LaunchJoinProcLoop(bctx, task, joinProcBid, &wg)
-		maxBidManager.LaunchJoinProcLoop(mctx, task, joinProcMaxBid, &wg)
+			bidManager.Run()
+			maxBidManager.Run()
+		}).
+		PauseFunc(func() *common.FnOutput {
+			bidManager.RequestToTerminate()
+			maxBidManager.RequestToTerminate()
+			wg.Wait()
+			if ret := execution.HandleJoinErrReturn(procArgs); ret != nil {
+				return ret
+			}
+			return nil
+		}).
+		ResumeFunc(func(task *stream_task.StreamTask) {
+			bidManager.LaunchJoinProcLoop(bctx, task, joinProcBid, &wg)
+			maxBidManager.LaunchJoinProcLoop(mctx, task, joinProcMaxBid, &wg)
 
-		bidManager.Run()
-		maxBidManager.Run()
-	}).Build()
+			bidManager.Run()
+			maxBidManager.Run()
+		}).Build()
 	bidManager.LaunchJoinProcLoop(bctx, task, joinProcBid, &wg)
 	maxBidManager.LaunchJoinProcLoop(mctx, task, joinProcMaxBid, &wg)
 
@@ -256,10 +251,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		for proc_name, proc := range procs {
 			ret.Latencies[proc_name] = proc.GetLatency()
 		}
-		ret.Latencies["eventTimeLatency"] = sss.sink.GetEventTimeLatency()
-		ret.Counts["bidByPriceSrc"] = sss.src1.GetCount()
-		ret.Counts["maxBidSrc"] = sss.src2.GetCount()
-		ret.Counts["sink"] = sss.sink.GetCount()
+		ret.Latencies["eventTimeLatency"] = sinks_arr[0].GetEventTimeLatency()
 	}
 	transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,

@@ -9,11 +9,9 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/stream_task"
 	"time"
 
@@ -73,16 +71,11 @@ func (h *q7BidByPrice) procMsg(ctx context.Context, msg commtypes.Message, argsT
 }
 
 func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInput) *common.FnOutput {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, input)
+	srcs, sinks_arr, err := getSrcSinkUint64Key(ctx, h.env, input)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	debug.Assert(len(output_streams) == 1, "expected only one output stream")
-	src, sink, err := getSrcSinkUint64Key(ctx, input, input_stream, output_streams[0])
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	src.SetInitialSource(true)
+	srcs[0].SetInitialSource(true)
 
 	warmup := time.Duration(input.WarmupS) * time.Second
 	bid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
@@ -93,9 +86,7 @@ func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInpu
 		event := msg.Value.(*ntypes.Event)
 		return commtypes.Message{Key: event.Bid.Price, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 	})), warmup)
-	groupBy := processor.NewGroupBy(sink)
-	srcs := []source_sink.Source{src}
-	sinks_arr := []source_sink.Sink{sink}
+	groupBy := processor.NewGroupBy(sinks_arr[0])
 	procArgs := &q7BidKeyedByPriceProcessArgs{
 		bid:        bid,
 		bidByPrice: bidKeyedByPrice,
@@ -109,8 +100,6 @@ func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInpu
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgs interface{}) {
-			src.StartWarmup()
-			sink.StartWarmup()
 			bid.StartWarmup()
 			bidKeyedByPrice.StartWarmup()
 		}).Build()
@@ -118,8 +107,6 @@ func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInpu
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["bid"] = bid.GetLatency()
 		ret.Latencies["bidKeyedByPrice"] = bidKeyedByPrice.GetLatency()
-		ret.Counts["src"] = src.GetCount()
-		ret.Counts["sink"] = sink.GetCount()
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, input.InputTopicNames[0], input.ParNum, input.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(input,

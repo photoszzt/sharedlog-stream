@@ -60,24 +60,20 @@ func (h *q4JoinTableHandler) process(ctx context.Context,
 }
 
 func (h *q4JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
-) (*source_sink.MeteredSource, /* src1 */
-	*source_sink.MeteredSource, /* src2 */
-	*source_sink.ConcurrentMeteredSyncSink,
-	error,
-) {
+) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
 	stream1, stream2, outputStream, err := getInOutStreams(ctx, h.env, sp)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("get msg serde err: %v", err)
+		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
 
 	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("get event serde err: %v", err)
+		return nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}
 	kvmsgSerdes := commtypes.KVMsgSerdes{
 		KeySerde: commtypes.Uint64Serde{},
@@ -118,16 +114,13 @@ func (h *q4JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 		time.Duration(sp.WarmupS)*time.Second)
 	src1.SetInitialSource(false)
 	src2.SetInitialSource(false)
-	return src1, src2, sink, nil
+	return []source_sink.MeteredSourceIntr{src1, src2}, []source_sink.MeteredSink{sink}, nil
 }
 
 func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	auctionsSrc, bidsSrc, sink, err := h.getSrcSink(ctx, sp)
+	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("getSrcSink err: %v\n", err),
-		}
+		return &common.FnOutput{Success: false, Message: fmt.Sprintf("getSrcSink err: %v\n", err)}
 	}
 	compare := func(a, b treemap.Key) int {
 		valA := a.(uint64)
@@ -216,8 +209,6 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		}
 		return filterAndGroupMsg(ctx, msgs)
 	})
-	srcs := []source_sink.Source{auctionsSrc, bidsSrc}
-	sinks_arr := []source_sink.Sink{sink}
 	joinProcAuction, joinProcBid := execution.CreateJoinProcArgsPair(
 		aJoinB, bJoinA, srcs, sinks_arr,
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum))
@@ -237,9 +228,6 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(h.process).
 		InitFunc(func(progArgs interface{}) {
-			auctionsSrc.StartWarmup()
-			bidsSrc.StartWarmup()
-			sink.StartWarmup()
 			toAuctionsTable.StartWarmup()
 			toBidsTable.StartWarmup()
 
@@ -271,23 +259,23 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 		kvchangelogs = []*store_restore.KVStoreChangelog{
 			store_restore.NewKVStoreChangelog(auctionsStore,
-				store_with_changelog.NewChangelogManager(auctionsSrc.Stream().(*sharedlog_stream.ShardedSharedLogStream),
+				store_with_changelog.NewChangelogManager(srcs[0].Stream().(*sharedlog_stream.ShardedSharedLogStream),
 					serdeFormat),
-				auctionsSrc.KVMsgSerdes(), sp.ParNum,
+				srcs[0].KVMsgSerdes(), sp.ParNum,
 			),
 			store_restore.NewKVStoreChangelog(bidsStore,
-				store_with_changelog.NewChangelogManager(bidsSrc.Stream().(*sharedlog_stream.ShardedSharedLogStream),
+				store_with_changelog.NewChangelogManager(srcs[1].Stream().(*sharedlog_stream.ShardedSharedLogStream),
 					serdeFormat),
-				bidsSrc.KVMsgSerdes(), sp.ParNum,
+				srcs[1].KVMsgSerdes(), sp.ParNum,
 			),
 		}
 	} else if sp.TableType == uint8(store.MONGODB) {
 		kvchangelogs = []*store_restore.KVStoreChangelog{
-			store_restore.NewKVStoreChangelogForExternalStore(auctionsStore, auctionsSrc.Stream(), execution.JoinProcSerialWithoutSink,
-				execution.NewJoinProcWithoutSinkArgs(auctionsSrc.InnerSource(), aJoinB, sp.ParNum),
+			store_restore.NewKVStoreChangelogForExternalStore(auctionsStore, srcs[0].Stream(), execution.JoinProcSerialWithoutSink,
+				execution.NewJoinProcWithoutSinkArgs(srcs[0].InnerSource(), aJoinB, sp.ParNum),
 				fmt.Sprintf("%s-%s-%d", h.funcName, auctionsStore.Name(), sp.ParNum), sp.ParNum),
-			store_restore.NewKVStoreChangelogForExternalStore(bidsStore, bidsSrc.Stream(), execution.JoinProcSerialWithoutSink,
-				execution.NewJoinProcWithoutSinkArgs(bidsSrc.InnerSource(), bJoinA, sp.ParNum),
+			store_restore.NewKVStoreChangelogForExternalStore(bidsStore, srcs[1].Stream(), execution.JoinProcSerialWithoutSink,
+				execution.NewJoinProcWithoutSinkArgs(srcs[1].InnerSource(), bJoinA, sp.ParNum),
 				fmt.Sprintf("%s-%s-%d", h.funcName, bidsStore.Name(), sp.ParNum), sp.ParNum),
 		}
 	}
@@ -296,9 +284,6 @@ func (h *q4JoinTableHandler) Q4JoinTable(ctx context.Context, sp *common.QueryIn
 		ret.Latencies["toBidsTable"] = toBidsTable.GetLatency()
 		ret.Latencies["bidsJoinAuctions"] = bidsJoinAuctions.GetLatency()
 		ret.Latencies["auctionsJoinBids"] = auctionsJoinBids.GetLatency()
-		ret.Counts["auctionsSrc"] = auctionsSrc.GetCount()
-		ret.Counts["bidsSrc"] = bidsSrc.GetCount()
-		ret.Counts["sink"] = sink.GetCount()
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName,
 		sp.InputTopicNames[0], sp.ParNum)

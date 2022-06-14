@@ -15,7 +15,6 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
@@ -96,19 +95,20 @@ func q8CompareFunc(lhs, rhs interface{}) int {
 }
 
 func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
-	stream1 *sharedlog_stream.ShardedSharedLogStream,
-	stream2 *sharedlog_stream.ShardedSharedLogStream,
-	outputStream *sharedlog_stream.ShardedSharedLogStream,
-) (*srcSinkSerde, error) {
+) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
+	stream1, stream2, outputStream, err := getInOutStreams(ctx, h.env, sp)
+	if err != nil {
+		return nil, nil, err
+	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
-		return nil, fmt.Errorf("get msg serde err: %v", err)
+		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
 
 	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
-		return nil, fmt.Errorf("get event serde err: %v", err)
+		return nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}
 	timeout := common.SrcConsumeTimeout
 	warmup := time.Duration(sp.WarmupS) * time.Second
@@ -119,7 +119,7 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	}
 	ptSerde, err := ntypes.GetPersonTimeSerde(serdeFormat)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	src1 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream1,
@@ -144,7 +144,7 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	src1.SetInitialSource(false)
 	src2.SetInitialSource(false)
 	sink.MarkFinalOutput()
-	return &srcSinkSerde{src1: src1, src2: src2, sink: sink}, nil
+	return []source_sink.MeteredSourceIntr{src1, src2}, []source_sink.MeteredSink{sink}, nil
 }
 
 func getTabAndToTab(env types.Environment,
@@ -176,16 +176,10 @@ func getTabAndToTab(env types.Environment,
 }
 
 func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	auctionsStream, personsStream, outputStream, err := getInOutStreams(ctx, h.env, sp)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: fmt.Sprintf("get input output err: %v", err)}
-	}
-	sss, err := h.getSrcSink(ctx, sp, auctionsStream,
-		personsStream, outputStream)
+	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: fmt.Sprintf("getSrcSink err: %v\n", err)}
 	}
-	auctionsSrc, personsSrc, sink := sss.src1, sss.src2, sss.sink
 	joinWindows, err := processor.NewJoinWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
@@ -198,8 +192,8 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	perTabName := "personsByIDWinTab"
 	var aucMp *store_with_changelog.MaterializeParam = nil
 	var perMp *store_with_changelog.MaterializeParam = nil
-	src1KVMsgSerdes := sss.src1.KVMsgSerdes()
-	src2KVMsgSerdes := sss.src2.KVMsgSerdes()
+	src1KVMsgSerdes := srcs[0].KVMsgSerdes()
+	src2KVMsgSerdes := srcs[1].KVMsgSerdes()
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	if sp.TableType == uint8(store.IN_MEM) {
 		compare := concurrent_skiplist.CompareFunc(q8CompareFunc)
@@ -270,8 +264,6 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		return personsJoinsAuctions.ProcessAndReturn(ctx, m)
 	}
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
-	srcs := []source_sink.Source{auctionsSrc, personsSrc}
-	sinks_arr := []source_sink.Sink{sink}
 
 	joinProcAuction, joinProcPerson := execution.CreateJoinProcArgsPair(
 		aJoinP, pJoinA, srcs, sinks_arr,
@@ -292,9 +284,6 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(h.process).
 		InitFunc(func(progArgs interface{}) {
-			sss.src1.StartWarmup()
-			sss.src2.StartWarmup()
-			sss.sink.StartWarmup()
 			toAuctionsWindowTab.StartWarmup()
 			toPersonsWinTab.StartWarmup()
 			auctionsJoinsPersons.StartWarmup()
@@ -349,12 +338,12 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	} else if sp.TableType == uint8(store.MONGODB) {
 		wsc = []*store_restore.WindowStoreChangelog{
 			store_restore.NewWindowStoreChangelogForExternalStore(
-				auctionsWinStore, auctionsStream, execution.JoinProcSerialWithoutSink,
-				execution.NewJoinProcWithoutSinkArgs(sss.src1.InnerSource(), aJoinP, sp.ParNum),
+				auctionsWinStore, srcs[0].Stream(), execution.JoinProcSerialWithoutSink,
+				execution.NewJoinProcWithoutSinkArgs(srcs[0].InnerSource(), aJoinP, sp.ParNum),
 				fmt.Sprintf("%s-%s-%d", h.funcName, auctionsWinStore.Name(), sp.ParNum), sp.ParNum),
 			store_restore.NewWindowStoreChangelogForExternalStore(
-				personsWinTab, personsStream, execution.JoinProcSerialWithoutSink,
-				execution.NewJoinProcWithoutSinkArgs(sss.src2.InnerSource(), pJoinA, sp.ParNum),
+				personsWinTab, srcs[1].Stream(), execution.JoinProcSerialWithoutSink,
+				execution.NewJoinProcWithoutSinkArgs(srcs[1].InnerSource(), pJoinA, sp.ParNum),
 				fmt.Sprintf("%s-%s-%d", h.funcName, personsWinTab.Name(), sp.ParNum), sp.ParNum),
 		}
 	} else {
@@ -366,10 +355,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		ret.Latencies["toPersonsWinTab"] = toPersonsWinTab.GetLatency()
 		ret.Latencies["personsJoinsAuctions"] = personsJoinsAuctions.GetLatency()
 		ret.Latencies["auctionsJoinsPersons"] = auctionsJoinsPersons.GetLatency()
-		ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
-		ret.Counts["auctionsSrc"] = auctionsSrc.GetCount()
-		ret.Counts["personsSrc"] = personsSrc.GetCount()
-		ret.Counts["sink"] = sink.GetCount()
+		ret.Latencies["eventTimeLatency"] = sinks_arr[0].GetEventTimeLatency()
 	}
 	transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,

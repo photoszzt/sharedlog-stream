@@ -12,7 +12,6 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/store_with_changelog"
@@ -50,9 +49,11 @@ func (h *q4MaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 }
 
 func (h *q4MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
-	inputStream *sharedlog_stream.ShardedSharedLogStream,
-	outputStream *sharedlog_stream.ShardedSharedLogStream,
-) (*source_sink.MeteredSource, *source_sink.MeteredSyncSink, commtypes.KVMsgSerdes, error) {
+) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
+	inputStream, outputStreams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	if err != nil {
+		return nil, nil, err
+	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	var abSerde commtypes.Serde
 	var aicSerde commtypes.Serde
@@ -63,20 +64,19 @@ func (h *q4MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		abSerde = ntypes.AuctionBidMsgpSerde{}
 		aicSerde = ntypes.AuctionIdCategoryMsgpSerde{}
 	} else {
-		return nil, nil, commtypes.KVMsgSerdes{}, fmt.Errorf("unrecognized format: %v", serdeFormat)
+		return nil, nil, fmt.Errorf("unrecognized format: %v", serdeFormat)
 	}
 	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
-		return nil, nil, commtypes.KVMsgSerdes{}, fmt.Errorf("get msg serde err: %v", err)
-	}
-	kvmsgSerdes := commtypes.KVMsgSerdes{
-		KeySerde: aicSerde,
-		ValSerde: abSerde,
-		MsgSerde: msgSerde,
+		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
 	inputConfig := &source_sink.StreamSourceConfig{
-		Timeout:     common.SrcConsumeTimeout,
-		KVMsgSerdes: kvmsgSerdes,
+		Timeout: common.SrcConsumeTimeout,
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			KeySerde: aicSerde,
+			ValSerde: abSerde,
+			MsgSerde: msgSerde,
+		},
 	}
 	outConfig := &source_sink.StreamSinkConfig{
 		KVMsgSerdes: commtypes.KVMsgSerdes{
@@ -91,10 +91,10 @@ func (h *q4MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		source_sink.NewShardedSharedLogStreamSource(inputStream, inputConfig),
 		warmup)
 	sink := source_sink.NewMeteredSyncSink(
-		source_sink.NewShardedSharedLogStreamSyncSink(outputStream, outConfig),
+		source_sink.NewShardedSharedLogStreamSyncSink(outputStreams[0], outConfig),
 		warmup)
 	src.SetInitialSource(false)
-	return src, sink, kvmsgSerdes, nil
+	return []source_sink.MeteredSourceIntr{src}, []source_sink.MeteredSink{sink}, nil
 }
 
 type q4MaxBidProcessArgs struct {
@@ -122,18 +122,14 @@ func (h *q4MaxBid) procMsg(ctx context.Context, msg commtypes.Message, argsTmp i
 }
 
 func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	src, sink, inKVMsgSerdes, err := h.getSrcSink(ctx, sp, input_stream, output_streams[0])
+	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	maxBidStoreName := "q4MaxBidKVStore"
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	mp, err := store_with_changelog.NewMaterializeParamBuilder().
-		KVMsgSerdes(inKVMsgSerdes).
+		KVMsgSerdes(srcs[0].KVMsgSerdes()).
 		StoreName(maxBidStoreName).
 		ParNum(sp.ParNum).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
@@ -168,9 +164,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 				Value: m.Value,
 			}, nil
 		})), warmup)
-	groupBy := processor.NewGroupBy(sink)
-	srcs := []source_sink.Source{src}
-	sinks_arr := []source_sink.Sink{sink}
+	groupBy := processor.NewGroupBy(sinks_arr[0])
 	procArgs := &q4MaxBidProcessArgs{
 		maxBid:    maxBid,
 		changeKey: changeKey,
@@ -185,8 +179,6 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgs interface{}) {
-			src.StartWarmup()
-			sink.StartWarmup()
 			maxBid.StartWarmup()
 			changeKey.StartWarmup()
 		}).Build()
@@ -202,9 +194,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["maxBid"] = maxBid.GetLatency()
 		ret.Latencies["groupBy"] = changeKey.GetLatency()
-		ret.Latencies["eventTimeLatency"] = sink.GetEventTimeLatency()
-		ret.Counts["src"] = src.GetCount()
-		ret.Counts["sink"] = sink.GetCount()
+		ret.Latencies["eventTimeLatency"] = sinks_arr[0].GetEventTimeLatency()
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 		sp.ParNum, sp.OutputTopicNames[0])

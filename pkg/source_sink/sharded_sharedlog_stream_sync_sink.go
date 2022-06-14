@@ -12,8 +12,9 @@ import (
 
 type ShardedSharedLogStreamSyncSink struct {
 	kvmsgSerdes   commtypes.KVMsgSerdes
-	tm            tran_interface.ReadOnlyTransactionManager
+	tm            tran_interface.ReadOnlyExactlyOnceManager
 	stream        *sharedlog_stream.ShardedSharedLogStream
+	name          string
 	bufPush       bool
 	transactional bool
 }
@@ -25,14 +26,24 @@ func NewShardedSharedLogStreamSyncSink(stream *sharedlog_stream.ShardedSharedLog
 		kvmsgSerdes: config.KVMsgSerdes,
 		stream:      stream,
 		bufPush:     utils.CheckBufPush(),
+		name:        "sink",
 	}
+}
+
+// this method is not goroutine safe
+func (sls *ShardedSharedLogStreamSyncSink) SetName(name string) {
+	sls.name = name
+}
+
+func (sls *ShardedSharedLogStreamSyncSink) Name() string {
+	return sls.name
 }
 
 func (sls *ShardedSharedLogStreamSyncSink) Stream() *sharedlog_stream.ShardedSharedLogStream {
 	return sls.stream
 }
 
-func (sls *ShardedSharedLogStreamSyncSink) InTransaction(tm tran_interface.ReadOnlyTransactionManager) {
+func (sls *ShardedSharedLogStreamSyncSink) InTransaction(tm tran_interface.ReadOnlyExactlyOnceManager) {
 	sls.transactional = true
 	sls.tm = tm
 }
