@@ -13,6 +13,7 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store_restore"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sharedlog-stream/pkg/txn_data"
 
 	"cs.utexas.edu/zjia/faas/protocol"
@@ -43,10 +44,9 @@ type TransactionManager struct {
 	currentTopicPartition map[string]map[uint8]struct{}
 
 	TransactionalId string
-	currentTaskId   uint64
 	transactionID   uint64
-	currentEpoch    uint16
-	serdeFormat     commtypes.SerdeFormat
+	tran_interface.BaseTaskGeneration
+	serdeFormat commtypes.SerdeFormat
 
 	currentStatus txn_data.TransactionState
 }
@@ -69,8 +69,7 @@ func NewTransactionManager(ctx context.Context,
 		topicStreams:          make(map[string]*sharedlog_stream.ShardedSharedLogStream),
 		backgroundJobErrg:     errg,
 		backgroundJobCtx:      gctx,
-		currentEpoch:          0,
-		currentTaskId:         0,
+		BaseTaskGeneration:    tran_interface.NewBaseTaskGeneration(),
 		serdeFormat:           serdeFormat,
 		transactionID:         0,
 		env:                   env,
@@ -80,14 +79,6 @@ func NewTransactionManager(ctx context.Context,
 		return nil, err
 	}
 	return tm, nil
-}
-
-func (tc *TransactionManager) GetCurrentEpoch() uint16 {
-	return tc.currentEpoch
-}
-
-func (tc *TransactionManager) GetCurrentTaskId() uint64 {
-	return tc.currentTaskId
 }
 
 func (tc *TransactionManager) GetTransactionID() uint64 {
@@ -109,12 +100,6 @@ func (tc *TransactionManager) setupSerde(serdeFormat commtypes.SerdeFormat) erro
 		return fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
 	}
 	return nil
-}
-
-func (tc *TransactionManager) genAppId() {
-	for tc.currentTaskId == 0 {
-		tc.currentTaskId = tc.env.GenerateUniqueID()
-	}
 }
 
 func (tc *TransactionManager) loadCurrentTopicPartitions(lastTopicPartitions []txn_data.TopicPartition) {
@@ -272,21 +257,21 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) error {
 	}
 	// debug.Fprintf(os.Stderr, "Init transaction: Transition to %s\n", tc.currentStatus)
 	if recentTxnMeta == nil {
-		tc.genAppId()
-		tc.currentEpoch = 0
+		tc.InitTaskId(tc.env)
+		tc.SetCurrentEpoch(0)
 	} else {
-		tc.currentEpoch = recentTxnMeta.TaskEpoch
-		tc.currentTaskId = recentTxnMeta.TaskId
+		tc.SetCurrentEpoch(recentTxnMeta.TaskEpoch)
+		tc.SetCurrentTaskId(recentTxnMeta.TaskId)
 		tc.transactionID = recentTransactionID
 	}
 	if recentTxnMeta != nil && recentTxnMeta.TaskEpoch == math.MaxUint16 {
-		tc.genAppId()
-		tc.currentEpoch = 0
+		tc.InitTaskId(tc.env)
+		tc.SetCurrentEpoch(0)
 	}
-	tc.currentEpoch += 1
+	tc.IncrementEpoch()
 	txnMeta := txn_data.TxnMetadata{
-		TaskId:    tc.currentTaskId,
-		TaskEpoch: tc.currentEpoch,
+		TaskId:    tc.GetCurrentTaskId(),
+		TaskEpoch: tc.GetCurrentEpoch(),
 		State:     tc.currentStatus,
 	}
 	tags := []uint64{sharedlog_stream.NameHashWithPartition(tc.transactionLog.TopicNameHash(), 0),
@@ -334,7 +319,7 @@ func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, quit ch
 			if txnMeta.State != txn_data.FENCE {
 				panic("state should be fence")
 			}
-			if txnMeta.TaskId == tc.currentTaskId && txnMeta.TaskEpoch > tc.currentEpoch {
+			if txnMeta.TaskId == tc.GetCurrentTaskId() && txnMeta.TaskEpoch > tc.GetCurrentEpoch() {
 				// I'm the zoombie
 				dcancel()
 				errc <- nil
@@ -368,7 +353,7 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 	g, ectx := errgroup.WithContext(ctx)
 	for topic, partitions := range tc.currentTopicPartition {
 		stream := tc.topicStreams[topic]
-		err := stream.Flush(ctx, tc.currentTaskId, tc.currentEpoch, tc.transactionID)
+		err := stream.Flush(ctx, tc.GetCurrentTaskId(), tc.GetCurrentEpoch(), tc.transactionID)
 		if err != nil {
 			return err
 		}
@@ -378,7 +363,7 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 				tag := sharedlog_stream.TxnMarkerTag(stream.TopicNameHash(), parNum)
 				tag2 := sharedlog_stream.NameHashWithPartition(stream.TopicNameHash(), parNum)
 				off, err := stream.PushWithTag(ectx, encoded, parNum, []uint64{tag, tag2}, true, false,
-					tc.currentTaskId, tc.currentEpoch, tc.transactionID)
+					tc.GetCurrentTaskId(), tc.GetCurrentEpoch(), tc.transactionID)
 				debug.Fprintf(os.Stderr, "append marker %d to stream %s off %x tag %x\n",
 					marker, stream.TopicName(), off, tag)
 				return err
@@ -443,8 +428,6 @@ func (tc *TransactionManager) AddTopicPartition(ctx context.Context, topic strin
 		txnMd := txn_data.TxnMetadata{
 			TopicPartitions: []txn_data.TopicPartition{{Topic: topic, ParNum: partitions}},
 			State:           tc.currentStatus,
-			// TaskId:          tc.CurrentTaskId,
-			// TaskEpoch:       tc.CurrentEpoch,
 		}
 		_, err := tc.appendToTransactionLog(ctx, &txnMd, nil)
 		return err
@@ -516,7 +499,7 @@ func (tc *TransactionManager) AppendConsumedSeqNum(ctx context.Context, consumed
 		}
 
 		_, err = offsetLog.Push(ctx, encoded, consumedSeqNumConfig.Partition, false, false,
-			tc.currentTaskId, tc.currentEpoch, tc.transactionID)
+			tc.GetCurrentTaskId(), tc.GetCurrentEpoch(), tc.transactionID)
 		if err != nil {
 			return err
 		}
@@ -610,8 +593,8 @@ func (tc *TransactionManager) BeginTransaction(
 	tc.transactionID += 1
 	txnState := txn_data.TxnMetadata{
 		State:     tc.currentStatus,
-		TaskId:    tc.currentTaskId,
-		TaskEpoch: tc.currentEpoch,
+		TaskId:    tc.GetCurrentTaskId(),
+		TaskEpoch: tc.GetCurrentEpoch(),
 	}
 	tags := []uint64{sharedlog_stream.NameHashWithPartition(tc.transactionLog.TopicNameHash(), 0), txn_data.BeginTag(tc.transactionLog.TopicNameHash(), 0)}
 	off, err := tc.appendToTransactionLog(ctx, &txnState, tags)
