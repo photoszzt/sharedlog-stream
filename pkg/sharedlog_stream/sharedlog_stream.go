@@ -47,7 +47,7 @@ var SingleDataRecordMeta = StreamEntryMeta(false, false)
 var ControlRecordMeta = StreamEntryMeta(true, false)
 var ArrRecordMeta = StreamEntryMeta(false, true)
 
-var EmptyProducerId = tran_interface.ProducerId{0, 0, 0}
+var EmptyProducerId = tran_interface.ProducerId{TaskEpoch: 0, TaskId: 0, TransactionID: 0}
 
 type SharedLogStream struct {
 	mux sync.Mutex

@@ -117,7 +117,7 @@ func (h *query1Handler) procMsg(ctx context.Context, msg commtypes.Message, args
 			return err
 		}
 		if filtered != nil {
-			err = args.Sinks()[0].Produce(ctx, filtered[0], args.ParNum(), false)
+			err = args.Sinks()[0].Produce(ctx, filtered[0], args.SubstreamNum(), false)
 			if err != nil {
 				return err
 			}

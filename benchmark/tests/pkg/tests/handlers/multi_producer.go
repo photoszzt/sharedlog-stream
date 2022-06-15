@@ -73,7 +73,7 @@ func (h *multiProducerHandler) getProduceTransactionManager(
 		topicName string,
 		substreamId uint8,
 	) error {
-		err := tm1.AddTopicPartition(ctx, topicName, []uint8{substreamId})
+		err := tm1.AddTopicSubstream(ctx, topicName, substreamId)
 		if err != nil {
 			return err
 		}
@@ -97,7 +97,7 @@ func (h *multiProducerHandler) getConsumeTransactionManager(
 		topicName string,
 		substreamId uint8,
 	) error {
-		err := tm1.AddTopicPartition(ctx, topicName, []uint8{substreamId})
+		err := tm1.AddTopicSubstream(ctx, topicName, substreamId)
 		if err != nil {
 			return err
 		}
@@ -111,7 +111,7 @@ func (h *multiProducerHandler) beginTransaction(ctx context.Context,
 	if err := tm.BeginTransaction(ctx, nil, nil); err != nil {
 		panic(err)
 	}
-	if err := tm.AddTopicPartition(ctx, stream1.TopicName(), []uint8{0}); err != nil {
+	if err := tm.AddTopicSubstream(ctx, stream1.TopicName(), 0); err != nil {
 		panic(err)
 	}
 }

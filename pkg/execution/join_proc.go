@@ -44,7 +44,7 @@ func joinProcLoop(
 		default:
 		}
 		// debug.Fprintf(os.Stderr, "before consume\n")
-		gotMsgs, err := procArgs.Sources()[0].Consume(ctx, procArgs.ParNum())
+		gotMsgs, err := procArgs.Sources()[0].Consume(ctx, procArgs.SubstreamNum())
 		if err != nil {
 			if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 				debug.Fprintf(os.Stderr, "[TIMEOUT] %s %s timeout, out chan len: %d\n",
@@ -124,7 +124,7 @@ func procMsgWithSink(ctx context.Context, msg commtypes.Message, procArgs *JoinP
 		return err
 	}
 	for _, msg := range msgs {
-		err = procArgs.Sinks()[0].Produce(ctx, msg, procArgs.ParNum(), false)
+		err = procArgs.Sinks()[0].Produce(ctx, msg, procArgs.SubstreamNum(), false)
 		if err != nil {
 			debug.Fprintf(os.Stderr, "[ERROR] %s return push to sink: %v\n", ctx.Value("id"), err)
 			return err

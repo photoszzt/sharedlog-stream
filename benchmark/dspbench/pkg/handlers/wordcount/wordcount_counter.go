@@ -105,7 +105,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 	argsTmp interface{},
 ) *common.FnOutput {
 	args := argsTmp.(*wordcountCounterAggProcessArg)
-	msgs, err := args.Sources()[0].Consume(ctx, args.ParNum())
+	msgs, err := args.Sources()[0].Consume(ctx, args.SubstreamNum())
 	if err != nil {
 		if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 			return &common.FnOutput{
@@ -126,18 +126,18 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 		if msg.IsControl {
 			v := msg.Msg.Value.(source_sink.ScaleEpochAndBytes)
 			// TODO: below is not correct
-			err = args.Sinks()[0].Produce(ctx, msg.Msg, args.ParNum(), true)
+			err = args.Sinks()[0].Produce(ctx, msg.Msg, args.SubstreamNum(), true)
 			if err != nil {
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
 			if args.CurEpoch() < v.ScaleEpoch {
-				err = args.RecordFinishFunc()(ctx, args.FuncName(), args.ParNum())
+				err = args.RecordFinishFunc()(ctx, args.FuncName(), args.SubstreamNum())
 				if err != nil {
 					return &common.FnOutput{Success: false, Message: err.Error()}
 				}
 				return &common.FnOutput{
 					Success: true,
-					Message: fmt.Sprintf("%s-%d epoch %d exit", args.FuncName(), args.ParNum(), args.CurEpoch()),
+					Message: fmt.Sprintf("%s-%d epoch %d exit", args.FuncName(), args.SubstreamNum(), args.CurEpoch()),
 					Err:     common_errors.ErrShouldExitForScale,
 				}
 			}

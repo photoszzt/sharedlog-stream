@@ -90,7 +90,7 @@ func (pa *BaseSrcsSinks) StartWarmup() {
 }
 
 type ProcArgs interface {
-	ParNum() uint8
+	SubstreamNum() uint8
 	CurEpoch() uint64
 	FuncName() string
 	RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc
@@ -108,11 +108,11 @@ type SetFuncName interface {
 }
 
 type SetCurEpoch interface {
-	CurEpoch(uint64) SetParNum
+	CurEpoch(uint64) SetSubstreamNum
 }
 
-type SetParNum interface {
-	ParNum(uint8) BuildProcArgs
+type SetSubstreamNum interface {
+	SubstreamNum(uint8) BuildProcArgs
 }
 
 type BuildProcArgs interface {
@@ -131,11 +131,11 @@ func (b *BaseProcArgsBuilder) FuncName(funcName string) SetCurEpoch {
 	b.bp.funcName = funcName
 	return b
 }
-func (b *BaseProcArgsBuilder) CurEpoch(curEpoch uint64) SetParNum {
+func (b *BaseProcArgsBuilder) CurEpoch(curEpoch uint64) SetSubstreamNum {
 	b.bp.curEpoch = curEpoch
 	return b
 }
-func (b *BaseProcArgsBuilder) ParNum(parNum uint8) BuildProcArgs {
+func (b *BaseProcArgsBuilder) SubstreamNum(parNum uint8) BuildProcArgs {
 	b.bp.parNum = parNum
 	return b
 }
@@ -175,7 +175,7 @@ func NewBaseProcArgs(funcName string, curEpoch uint64, parNum uint8) BaseProcArg
 	}
 }
 
-func (pa *BaseProcArgs) ParNum() uint8 {
+func (pa *BaseProcArgs) SubstreamNum() uint8 {
 	return pa.parNum
 }
 

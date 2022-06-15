@@ -139,7 +139,7 @@ func (h *q5MaxBid) procMsg(ctx context.Context, msg commtypes.Message, argsTmp i
 		return fmt.Errorf("filteredMx err: %v", err)
 	}
 	for _, filtered := range filteredMx {
-		err = args.Sinks()[0].Produce(ctx, filtered, args.ParNum(), false)
+		err = args.Sinks()[0].Produce(ctx, filtered, args.SubstreamNum(), false)
 		if err != nil {
 			return fmt.Errorf("sink err: %v", err)
 		}

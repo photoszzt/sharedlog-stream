@@ -200,7 +200,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 		topicName string,
 		substreamId uint8,
 	) error {
-		err := tm.AddTopicPartition(ctx, topicName, []uint8{substreamId})
+		err := tm.AddTopicSubstream(ctx, topicName, substreamId)
 		if err != nil {
 			return err
 		}
@@ -213,7 +213,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	if err = tm.BeginTransaction(ctx, nil, nil); err != nil {
 		panic(err)
 	}
-	if err = tm.AddTopicPartition(ctx, srcStream1.TopicName(), []uint8{0}); err != nil {
+	if err = tm.AddTopicSubstream(ctx, srcStream1.TopicName(), 0); err != nil {
 		panic(err)
 	}
 	for i := 0; i < 2; i++ {
@@ -247,7 +247,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	if err = tm.BeginTransaction(ctx, nil, nil); err != nil {
 		panic(err)
 	}
-	if err = tm.AddTopicPartition(ctx, srcStream2.TopicName(), []uint8{0}); err != nil {
+	if err = tm.AddTopicSubstream(ctx, srcStream2.TopicName(), 0); err != nil {
 		panic(err)
 	}
 	for i := 0; i < 2; i++ {
@@ -281,13 +281,13 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	if err = tm.BeginTransaction(ctx, nil, nil); err != nil {
 		panic(err)
 	}
-	if err = tm.AddTopicPartition(ctx, sinkStream.TopicName(), []uint8{0}); err != nil {
+	if err = tm.AddTopicSubstream(ctx, sinkStream.TopicName(), 0); err != nil {
 		panic(err)
 	}
-	if err = tm.AddTopicPartition(ctx, srcStream1.TopicName(), []uint8{0}); err != nil {
+	if err = tm.AddTopicSubstream(ctx, srcStream1.TopicName(), 0); err != nil {
 		panic(err)
 	}
-	if err = tm.AddTopicPartition(ctx, srcStream2.TopicName(), []uint8{0}); err != nil {
+	if err = tm.AddTopicSubstream(ctx, srcStream2.TopicName(), 0); err != nil {
 		panic(err)
 	}
 	joinProc(ctx, src1, sink, trackParFunc, oneJoinTwo)
@@ -436,7 +436,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		topicName string,
 		substreamId uint8,
 	) error {
-		err := tm.AddTopicPartition(ctx, topicName, []uint8{substreamId})
+		err := tm.AddTopicSubstream(ctx, topicName, substreamId)
 		if err != nil {
 			return err
 		}
@@ -449,7 +449,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	if err = tm.BeginTransaction(ctx, nil, nil); err != nil {
 		panic(err)
 	}
-	if err = tm.AddTopicPartition(ctx, srcStream1.TopicName(), []uint8{0}); err != nil {
+	if err = tm.AddTopicSubstream(ctx, srcStream1.TopicName(), 0); err != nil {
 		panic(err)
 	}
 	for i := 0; i < 2; i++ {
@@ -482,7 +482,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	if err = tm.BeginTransaction(ctx, nil, nil); err != nil {
 		panic(err)
 	}
-	if err = tm.AddTopicPartition(ctx, srcStream2.TopicName(), []uint8{0}); err != nil {
+	if err = tm.AddTopicSubstream(ctx, srcStream2.TopicName(), 0); err != nil {
 		panic(err)
 	}
 	for i := 0; i < 2; i++ {
@@ -516,13 +516,13 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	if err = tm.BeginTransaction(ctx, nil, nil); err != nil {
 		panic(err)
 	}
-	if err = tm.AddTopicPartition(ctx, sinkStream.TopicName(), []uint8{0}); err != nil {
+	if err = tm.AddTopicSubstream(ctx, sinkStream.TopicName(), 0); err != nil {
 		panic(err)
 	}
-	if err = tm.AddTopicPartition(ctx, srcStream1.TopicName(), []uint8{0}); err != nil {
+	if err = tm.AddTopicSubstream(ctx, srcStream1.TopicName(), 0); err != nil {
 		panic(err)
 	}
-	if err = tm.AddTopicPartition(ctx, srcStream2.TopicName(), []uint8{0}); err != nil {
+	if err = tm.AddTopicSubstream(ctx, srcStream2.TopicName(), 0); err != nil {
 		panic(err)
 	}
 	joinProc(ctx, src1, sink, trackParFunc, oneJoinTwo)

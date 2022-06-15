@@ -101,7 +101,7 @@ func (t *StreamTask) SetupManagers(ctx context.Context, streamTaskArgs *StreamTa
 		topicName string,
 		substreamId uint8,
 	) error {
-		err := tm.AddTopicPartition(ctx, topicName, []uint8{substreamId})
+		err := tm.AddTopicSubstream(ctx, topicName, substreamId)
 		if err != nil {
 			return err
 		}
@@ -127,7 +127,7 @@ func getOffsetMap(ctx context.Context, tm *transaction.TransactionManager, args 
 	for _, src := range args.srcs {
 		inputTopicName := src.TopicName()
 		offset, err := transaction.CreateOffsetTopicAndGetOffset(ctx, tm, inputTopicName,
-			uint8(src.Stream().NumPartition()), args.procArgs.ParNum())
+			uint8(src.Stream().NumPartition()), args.procArgs.SubstreamNum())
 		if err != nil {
 			return nil, fmt.Errorf("createOffsetTopicAndGetOffset failed: %v", err)
 		}
@@ -141,7 +141,7 @@ func setOffsetOnStream(offsetMap map[string]uint64, args *StreamTaskArgs) {
 	for _, src := range args.srcs {
 		inputTopicName := src.TopicName()
 		offset := offsetMap[inputTopicName]
-		src.SetCursor(offset+1, args.procArgs.ParNum())
+		src.SetCursor(offset+1, args.procArgs.SubstreamNum())
 	}
 }
 
@@ -308,7 +308,7 @@ func UpdateInputStreamCursor(
 ) {
 	for _, src := range args.srcs {
 		offset := offsetMap[src.TopicName()]
-		src.SetCursor(offset+1, args.procArgs.ParNum())
+		src.SetCursor(offset+1, args.procArgs.SubstreamNum())
 	}
 }
 
@@ -570,7 +570,7 @@ func (t *StreamTask) startNewTransaction(ctx context.Context, args *StreamTaskAr
 		if args.fixedOutParNum != -1 {
 			debug.Assert(len(args.sinks) == 1, "fixed out param is only usable when there's only one output stream")
 			debug.Fprintf(os.Stderr, "%s tracking substream %d\n", args.sinks[0].TopicName(), args.fixedOutParNum)
-			if err := tm.AddTopicPartition(ctx, args.sinks[0].TopicName(), []uint8{uint8(args.fixedOutParNum)}); err != nil {
+			if err := tm.AddTopicSubstream(ctx, args.sinks[0].TopicName(), uint8(args.fixedOutParNum)); err != nil {
 				debug.Fprintf(os.Stderr, "[ERROR] track topic partition failed: %v\n", err)
 				return fmt.Errorf("track topic partition failed: %v\n", err)
 			}
@@ -588,7 +588,7 @@ func (t *StreamTask) startNewTransaction(ctx context.Context, args *StreamTaskAr
 	}
 	if !*trackConsumePar {
 		for _, src := range args.srcs {
-			if err := tm.AddTopicTrackConsumedSeqs(ctx, src.TopicName(), []uint8{args.procArgs.ParNum()}); err != nil {
+			if err := tm.AddTopicTrackConsumedSeqs(ctx, src.TopicName(), args.procArgs.SubstreamNum()); err != nil {
 				return fmt.Errorf("add offsets failed: %v\n", err)
 			}
 		}
@@ -630,7 +630,7 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 			TopicToTrack:   topic,
 			TaskId:         tm.GetCurrentTaskId(),
 			TaskEpoch:      tm.GetCurrentEpoch(),
-			Partition:      args.procArgs.ParNum(),
+			Partition:      args.procArgs.SubstreamNum(),
 			ConsumedSeqNum: uint64(offset),
 		})
 	}

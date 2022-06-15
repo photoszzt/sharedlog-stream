@@ -27,7 +27,7 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
-		offset, err := cm.FindLastConsumedSeqNum(ctx, inputTopicName, args.procArgs.ParNum())
+		offset, err := cm.FindLastConsumedSeqNum(ctx, inputTopicName, args.procArgs.SubstreamNum())
 		if err != nil {
 			if !common_errors.IsStreamEmptyError(err) {
 				return &common.FnOutput{Success: false, Message: err.Error()}
@@ -35,9 +35,9 @@ func (t *StreamTask) Process(ctx context.Context, args *StreamTaskArgs) *common.
 		}
 		debug.Fprintf(os.Stderr, "offset restores to %x\n", offset)
 		if offset != 0 {
-			srcStream.SetCursor(offset+1, args.procArgs.ParNum())
+			srcStream.SetCursor(offset+1, args.procArgs.SubstreamNum())
 		}
-		cm.AddTopicTrackConsumedSeqs(ctx, inputTopicName, []uint8{args.procArgs.ParNum()})
+		cm.AddTopicTrackConsumedSeqs(ctx, inputTopicName, []uint8{args.procArgs.SubstreamNum()})
 	}
 	debug.Fprint(os.Stderr, "done restore\n")
 	args.procArgs.StartWarmup()
@@ -125,7 +125,7 @@ func (t *StreamTask) pauseTrackFlushResume(ctx context.Context, args *StreamTask
 			return ret
 		}
 	}
-	err := t.trackSrcConSeq(ctx, cm, args.procArgs.ParNum())
+	err := t.trackSrcConSeq(ctx, cm, args.procArgs.SubstreamNum())
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -150,7 +150,7 @@ func (t *StreamTask) pauseTrackFlush(ctx context.Context, args *StreamTaskArgs, 
 				return ret
 			}
 		}
-		err := t.trackSrcConSeq(ctx, cm, args.procArgs.ParNum())
+		err := t.trackSrcConSeq(ctx, cm, args.procArgs.SubstreamNum())
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}

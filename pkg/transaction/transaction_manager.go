@@ -41,7 +41,7 @@ type TransactionManager struct {
 	backgroundJobErrg   *errgroup.Group
 
 	tpMapMu               sync.Mutex
-	currentTopicPartition map[string]map[uint8]struct{}
+	currentTopicSubstream map[string]map[uint8]struct{}
 
 	TransactionalId string
 	transactionID   uint64
@@ -65,7 +65,7 @@ func NewTransactionManager(ctx context.Context,
 		transactionLog:        log,
 		TransactionalId:       transactional_id,
 		currentStatus:         txn_data.EMPTY,
-		currentTopicPartition: make(map[string]map[uint8]struct{}),
+		currentTopicSubstream: make(map[string]map[uint8]struct{}),
 		topicStreams:          make(map[string]*sharedlog_stream.ShardedSharedLogStream),
 		backgroundJobErrg:     errg,
 		backgroundJobCtx:      gctx,
@@ -99,7 +99,7 @@ func (tc *TransactionManager) setupSerde(serdeFormat commtypes.SerdeFormat) erro
 
 func (tc *TransactionManager) loadCurrentTopicPartitions(lastTopicPartitions []txn_data.TopicPartition) {
 	for _, tp := range lastTopicPartitions {
-		pars, ok := tc.currentTopicPartition[tp.Topic]
+		pars, ok := tc.currentTopicSubstream[tp.Topic]
 		if !ok {
 			pars = make(map[uint8]struct{})
 		}
@@ -351,7 +351,7 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 	}
 	g, ectx := errgroup.WithContext(ctx)
 	producerId := tc.GetProducerId()
-	for topic, partitions := range tc.currentTopicPartition {
+	for topic, partitions := range tc.currentTopicSubstream {
 		stream := tc.topicStreams[topic]
 		err := stream.Flush(ctx, producerId)
 		if err != nil {
@@ -375,7 +375,7 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 
 func (tc *TransactionManager) append_pre_state(ctx context.Context) error {
 	var tps []txn_data.TopicPartition
-	for topic, pars := range tc.currentTopicPartition {
+	for topic, pars := range tc.currentTopicSubstream {
 		pars_arr := make([]uint8, 0, len(pars))
 		for p := range pars {
 			pars_arr = append(pars_arr, p)
@@ -402,7 +402,7 @@ func (tc *TransactionManager) checkTopicExistsInTopicStream(topic string) bool {
 }
 
 // this function could be called by multiple goroutine.
-func (tc *TransactionManager) AddTopicPartition(ctx context.Context, topic string, partitions []uint8) error {
+func (tc *TransactionManager) AddTopicSubstream(ctx context.Context, topic string, subStreamNum uint8) error {
 	if tc.currentStatus != txn_data.BEGIN {
 		panic("should begin transaction first")
 	}
@@ -411,22 +411,20 @@ func (tc *TransactionManager) AddTopicPartition(ctx context.Context, topic strin
 	needToAppendToLog := false
 	tc.tpMapMu.Lock()
 	defer tc.tpMapMu.Unlock()
-	parSet, ok := tc.currentTopicPartition[topic]
+	parSet, ok := tc.currentTopicSubstream[topic]
 	if !ok {
 		parSet = make(map[uint8]struct{})
 		needToAppendToLog = true
 	}
-	for _, parNum := range partitions {
-		_, ok = parSet[parNum]
-		if !ok {
-			needToAppendToLog = true
-			parSet[parNum] = struct{}{}
-		}
+	_, ok = parSet[subStreamNum]
+	if !ok {
+		needToAppendToLog = true
+		parSet[subStreamNum] = struct{}{}
 	}
-	tc.currentTopicPartition[topic] = parSet
+	tc.currentTopicSubstream[topic] = parSet
 	if needToAppendToLog {
 		txnMd := txn_data.TxnMetadata{
-			TopicPartitions: []txn_data.TopicPartition{{Topic: topic, ParNum: partitions}},
+			TopicPartitions: []txn_data.TopicPartition{{Topic: topic, ParNum: []uint8{subStreamNum}}},
 			State:           tc.currentStatus,
 		}
 		_, err := tc.appendToTransactionLog(ctx, &txnMd, nil)
@@ -460,9 +458,9 @@ func (tc *TransactionManager) RecordTopicStreams(topicToTrack string, stream *sh
 	debug.Fprintf(os.Stderr, "tracking stream %s\n", topicToTrack)
 }
 
-func (tc *TransactionManager) AddTopicTrackConsumedSeqs(ctx context.Context, topicToTrack string, partitions []uint8) error {
+func (tc *TransactionManager) AddTopicTrackConsumedSeqs(ctx context.Context, topicToTrack string, partition uint8) error {
 	offsetTopic := con_types.OffsetTopic(topicToTrack)
-	return tc.AddTopicPartition(ctx, offsetTopic, partitions)
+	return tc.AddTopicSubstream(ctx, offsetTopic, partition)
 }
 
 // finding the last commited marker and gets the marker's seq number
@@ -694,7 +692,7 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context, inRestore bo
 func (tc *TransactionManager) cleanupState() {
 	tc.currentStatus = txn_data.EMPTY
 	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
-	tc.currentTopicPartition = make(map[string]map[uint8]struct{})
+	tc.currentTopicSubstream = make(map[string]map[uint8]struct{})
 }
 
 func (tc *TransactionManager) Close() error {

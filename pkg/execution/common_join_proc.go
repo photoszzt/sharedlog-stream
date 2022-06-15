@@ -59,8 +59,8 @@ func (c *CommonJoinProcArgs) CurEpoch() uint64 {
 	return c.arg1.CurEpoch()
 }
 
-func (c *CommonJoinProcArgs) ParNum() uint8 {
-	return c.arg1.ParNum()
+func (c *CommonJoinProcArgs) SubstreamNum() uint8 {
+	return c.arg1.SubstreamNum()
 }
 
 func HandleJoinErrReturn(argsTmp interface{}) *common.FnOutput {

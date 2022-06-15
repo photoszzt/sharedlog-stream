@@ -99,7 +99,7 @@ func (h *query2Handler) procMsg(ctx context.Context, msg commtypes.Message, args
 		return err
 	}
 	if outMsg != nil {
-		err = args.Sinks()[0].Produce(ctx, outMsg[0], args.ParNum(), false)
+		err = args.Sinks()[0].Produce(ctx, outMsg[0], args.SubstreamNum(), false)
 		if err != nil {
 			return err
 		}

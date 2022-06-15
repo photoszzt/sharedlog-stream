@@ -22,7 +22,7 @@ func CommonProcess(ctx context.Context, t *stream_task.StreamTask, args proc_int
 			return &common.FnOutput{Success: true, Message: err.Error()}
 		}
 	}
-	gotMsgs, err := args.Sources()[0].Consume(ctx, args.ParNum())
+	gotMsgs, err := args.Sources()[0].Consume(ctx, args.SubstreamNum())
 	if err != nil {
 		if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 			return &common.FnOutput{Success: true, Message: err.Error()}
@@ -91,18 +91,18 @@ func HandleScaleEpochAndBytes(ctx context.Context, msg commtypes.MsgAndSeq,
 ) *common.FnOutput {
 	v := msg.Msg.Value.(source_sink.ScaleEpochAndBytes)
 	err := args.FlushAndPushToAllSinks(ctx, commtypes.Message{Key: txn_data.SCALE_FENCE_KEY,
-		Value: v.Payload}, args.ParNum(), true)
+		Value: v.Payload}, args.SubstreamNum(), true)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	if args.CurEpoch() < v.ScaleEpoch {
-		err = args.RecordFinishFunc()(ctx, args.FuncName(), args.ParNum())
+		err = args.RecordFinishFunc()(ctx, args.FuncName(), args.SubstreamNum())
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
 		return &common.FnOutput{
 			Success: true,
-			Message: fmt.Sprintf("%s-%d epoch %d exit", args.FuncName(), args.ParNum(), args.CurEpoch()),
+			Message: fmt.Sprintf("%s-%d epoch %d exit", args.FuncName(), args.SubstreamNum(), args.CurEpoch()),
 			Err:     common_errors.ErrShouldExitForScale,
 		}
 	}
