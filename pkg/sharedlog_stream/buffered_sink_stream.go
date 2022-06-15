@@ -3,6 +3,7 @@ package sharedlog_stream
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sync"
 )
 
@@ -38,7 +39,7 @@ func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8) *BufferedSinkS
 
 // don't mix the nolock version and goroutine safe version
 
-func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, taskId uint64, taskEpoch uint16, transactionID uint64) error {
+func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, producerId tran_interface.ProducerId) error {
 	payload_size := len(payload)
 	if len(s.sinkBuffer) < SINK_BUFFER_MAX_ENTRY && s.currentSize+payload_size < SINK_BUFFER_MAX_SIZE {
 		s.sinkBuffer = append(s.sinkBuffer, payload)
@@ -51,7 +52,7 @@ func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, 
 		if err != nil {
 			return err
 		}
-		_, err = s.Stream.Push(ctx, payloads, s.parNum, false, true, taskId, taskEpoch, transactionID)
+		_, err = s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
 		if err != nil {
 			return err
 		}
@@ -62,7 +63,7 @@ func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, 
 	return nil
 }
 
-func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, taskId uint64, taskEpoch uint16, transactionID uint64) error {
+func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId tran_interface.ProducerId) error {
 	if len(s.sinkBuffer) != 0 {
 		payloadArr := &commtypes.PayloadArr{
 			Payloads: s.sinkBuffer,
@@ -71,7 +72,7 @@ func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, taskId uint64, tas
 		if err != nil {
 			return err
 		}
-		_, err = s.Stream.Push(ctx, payloads, s.parNum, false, true, taskId, taskEpoch, transactionID)
+		_, err = s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
 		if err != nil {
 			return err
 		}
@@ -80,8 +81,7 @@ func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, taskId uint64, tas
 	return nil
 }
 
-func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload []byte,
-	taskId uint64, taskEpoch uint16, transactionID uint64,
+func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload []byte, producerId tran_interface.ProducerId,
 ) error {
 	s.sinkMu.Lock()
 	defer s.sinkMu.Unlock()
@@ -97,7 +97,7 @@ func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload [
 		if err != nil {
 			return err
 		}
-		_, err = s.Stream.Push(ctx, payloads, s.parNum, false, true, taskId, taskEpoch, transactionID)
+		_, err = s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
 		if err != nil {
 			return err
 		}
@@ -108,7 +108,7 @@ func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload [
 	return nil
 }
 
-func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context, taskId uint64, taskEpoch uint16, transactionID uint64) error {
+func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context, producerId tran_interface.ProducerId) error {
 	s.sinkMu.Lock()
 	defer s.sinkMu.Unlock()
 	if len(s.sinkBuffer) != 0 {
@@ -119,7 +119,7 @@ func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context, taskId uint
 		if err != nil {
 			return err
 		}
-		_, err = s.Stream.Push(ctx, payloads, s.parNum, false, true, taskId, taskEpoch, transactionID)
+		_, err = s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
 		if err != nil {
 			return err
 		}

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/store"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 
 	"cs.utexas.edu/zjia/faas/types"
 	"golang.org/x/xerrors"
@@ -21,7 +21,7 @@ type ShardedSharedLogStream struct {
 	serdeFormat         commtypes.SerdeFormat
 }
 
-var _ = store.Stream(&ShardedSharedLogStream{})
+var _ = Stream(&ShardedSharedLogStream{})
 
 var (
 	ErrZeroParNum = xerrors.New("Shards must be positive")
@@ -72,32 +72,31 @@ func (s *ShardedSharedLogStream) NumPartition() uint8 {
 }
 
 func (s *ShardedSharedLogStream) Push(ctx context.Context, payload []byte, parNumber uint8,
-	isControl bool, payloadIsArr bool, taskId uint64, taskEpoch uint16, transactionID uint64,
+	meta LogEntryMeta, producerId tran_interface.ProducerId,
 ) (uint64, error) {
-	return s.subSharedLogStreams[parNumber].Stream.Push(ctx, payload, parNumber, isControl, payloadIsArr,
-		taskId, taskEpoch, transactionID)
+	return s.subSharedLogStreams[parNumber].Stream.Push(ctx, payload, parNumber, meta, producerId)
 }
 
-func (s *ShardedSharedLogStream) BufPush(ctx context.Context, payload []byte, parNum uint8, taskId uint64, taskEpoch uint16, transactionID uint64) error {
-	return s.subSharedLogStreams[parNum].BufPushGoroutineSafe(ctx, payload, taskId, taskEpoch, transactionID)
+func (s *ShardedSharedLogStream) BufPush(ctx context.Context, payload []byte, parNum uint8, producerId tran_interface.ProducerId) error {
+	return s.subSharedLogStreams[parNum].BufPushGoroutineSafe(ctx, payload, producerId)
 }
 
-func (s *ShardedSharedLogStream) Flush(ctx context.Context, taskId uint64, taskEpoch uint16, transactionID uint64) error {
+func (s *ShardedSharedLogStream) Flush(ctx context.Context, producerId tran_interface.ProducerId) error {
 	for i := uint8(0); i < s.numPartitions; i++ {
-		if err := s.subSharedLogStreams[i].FlushGoroutineSafe(ctx, taskId, taskEpoch, transactionID); err != nil {
+		if err := s.subSharedLogStreams[i].FlushGoroutineSafe(ctx, producerId); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *ShardedSharedLogStream) BufPushNoLock(ctx context.Context, payload []byte, parNum uint8, taskId uint64, taskEpoch uint16, transactionID uint64) error {
-	return s.subSharedLogStreams[parNum].BufPushNoLock(ctx, payload, taskId, taskEpoch, transactionID)
+func (s *ShardedSharedLogStream) BufPushNoLock(ctx context.Context, payload []byte, parNum uint8, producerId tran_interface.ProducerId) error {
+	return s.subSharedLogStreams[parNum].BufPushNoLock(ctx, payload, producerId)
 }
 
-func (s *ShardedSharedLogStream) FlushNoLock(ctx context.Context, taskId uint64, taskEpoch uint16, transactionID uint64) error {
+func (s *ShardedSharedLogStream) FlushNoLock(ctx context.Context, producerId tran_interface.ProducerId) error {
 	for i := uint8(0); i < s.numPartitions; i++ {
-		if err := s.subSharedLogStreams[i].FlushNoLock(ctx, taskId, taskEpoch, transactionID); err != nil {
+		if err := s.subSharedLogStreams[i].FlushNoLock(ctx, producerId); err != nil {
 			return err
 		}
 	}
@@ -105,10 +104,10 @@ func (s *ShardedSharedLogStream) FlushNoLock(ctx context.Context, taskId uint64,
 }
 
 func (s *ShardedSharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNumber uint8, tags []uint64,
-	isControl bool, payloadIsArr bool, taskId uint64, taskEpoch uint16, transactionID uint64,
+	additionalTopic []string, meta LogEntryMeta, producerId tran_interface.ProducerId,
 ) (uint64, error) {
-	return s.subSharedLogStreams[parNumber].Stream.PushWithTag(ctx, payload, parNumber, tags, isControl,
-		payloadIsArr, taskId, taskEpoch, transactionID)
+	return s.subSharedLogStreams[parNumber].Stream.PushWithTag(ctx, payload, parNumber, tags,
+		additionalTopic, meta, producerId)
 }
 
 func (s *ShardedSharedLogStream) ReadNext(ctx context.Context, parNumber uint8) (*commtypes.RawMsg, error) {

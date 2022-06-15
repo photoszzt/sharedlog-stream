@@ -19,7 +19,7 @@ type KVStoreChangelog struct {
 	kvStore          store.KeyValueStore
 	changelogManager *store_with_changelog.ChangelogManager
 	kvmsgSerdes      commtypes.KVMsgSerdes
-	inputStream      store.Stream
+	inputStream      sharedlog_stream.Stream
 	restoreFunc      func(ctx context.Context, args interface{}) error
 	restoreArg       interface{}
 	// this is used to identify the db and collection to store the transaction id
@@ -67,7 +67,7 @@ func (kvc *KVStoreChangelog) TabTranRepr() string {
 	return kvc.tabTranRepr
 }
 
-func (kvc *KVStoreChangelog) InputStream() store.Stream {
+func (kvc *KVStoreChangelog) InputStream() sharedlog_stream.Stream {
 	return kvc.inputStream
 }
 
@@ -77,7 +77,7 @@ func (kvc *KVStoreChangelog) ExecuteRestoreFunc(ctx context.Context) error {
 
 func NewKVStoreChangelogForExternalStore(
 	kvStore store.KeyValueStore,
-	inputStream store.Stream,
+	inputStream sharedlog_stream.Stream,
 	restoreFunc func(ctx context.Context, args interface{}) error,
 	restoreArg interface{},
 	tabTranRepr string,

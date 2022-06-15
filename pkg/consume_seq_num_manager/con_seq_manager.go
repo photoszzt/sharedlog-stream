@@ -94,7 +94,8 @@ func (cm *ConsumeSeqManager) AppendConsumedSeqNum(ctx context.Context, consumedS
 			return err
 		}
 
-		_, err = offsetLog.Push(ctx, encoded, consumedSeqNumConfig.Partition, false, false, 0, 0, 0)
+		_, err = offsetLog.Push(ctx, encoded, consumedSeqNumConfig.Partition,
+			sharedlog_stream.SingleDataRecordMeta, sharedlog_stream.EmptyProducerId)
 		if err != nil {
 			return err
 		}
@@ -112,7 +113,7 @@ func (cm *ConsumeSeqManager) FindLastConsumedSeqNum(ctx context.Context, topicTo
 	// debug.Fprintf(os.Stderr, "looking at offsetlog %s, offsetLog tp: %s\n", offsetTopic, offsetLog.TopicName())
 
 	// find the most recent transaction marker
-	txnMarkerTag := sharedlog_stream.TxnMarkerTag(offsetLog.TopicNameHash(), parNum)
+	txnMarkerTag := txn_data.MarkerTag(offsetLog.TopicNameHash(), parNum)
 	var txnMkRawMsg *commtypes.RawMsg = nil
 	var err error
 
@@ -143,15 +144,16 @@ func (cm *ConsumeSeqManager) Track(ctx context.Context) error {
 	g, ectx := errgroup.WithContext(ctx)
 	for topic, partitions := range cm.curConsumePar {
 		stream := cm.offsetLogs[topic]
-		err := stream.Flush(ctx, 0, 0, 0)
+		err := stream.Flush(ctx, sharedlog_stream.EmptyProducerId)
 		if err != nil {
 			return err
 		}
 		for par := range partitions {
 			parNum := par
 			g.Go(func() error {
-				tag := sharedlog_stream.TxnMarkerTag(stream.TopicNameHash(), parNum)
-				off, err := stream.PushWithTag(ectx, encoded, parNum, []uint64{tag}, true, false, 0, 0, 0)
+				tag := txn_data.MarkerTag(stream.TopicNameHash(), parNum)
+				off, err := stream.PushWithTag(ectx, encoded, parNum, []uint64{tag}, nil,
+					sharedlog_stream.ControlRecordMeta, sharedlog_stream.EmptyProducerId)
 				debug.Fprintf(os.Stderr, "append marker %d to stream %s off %x\n", txn_data.COMMIT, stream.TopicName(), off)
 				return err
 			})

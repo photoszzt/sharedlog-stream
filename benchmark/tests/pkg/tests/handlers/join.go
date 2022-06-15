@@ -219,8 +219,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	for i := 0; i < 2; i++ {
 		err := pushMsgToStream(ctx, expected_keys[i],
 			&strTs{Val: fmt.Sprintf("A%d", expected_keys[i]), Ts: 0},
-			inKVMsgSerdes, srcStream1,
-			tm.GetCurrentTaskId(), tm.GetCurrentEpoch(), tm.GetTransactionID())
+			inKVMsgSerdes, srcStream1, tm.GetProducerId())
 		if err != nil {
 			panic(err)
 		}
@@ -254,8 +253,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	for i := 0; i < 2; i++ {
 		err := pushMsgToStream(ctx, expected_keys[i],
 			&strTs{Val: fmt.Sprintf("a%d", expected_keys[i]), Ts: 0},
-			inKVMsgSerdes, srcStream2,
-			tm.GetCurrentTaskId(), tm.GetCurrentEpoch(), tm.GetTransactionID())
+			inKVMsgSerdes, srcStream2, tm.GetProducerId())
 		if err != nil {
 			panic(err)
 		}
@@ -457,8 +455,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	for i := 0; i < 2; i++ {
 		err := pushMsgToStream(ctx, expected_keys[i],
 			&strTs{Val: fmt.Sprintf("A%d", expected_keys[i]), Ts: 0},
-			inKVMsgSerdes, srcStream1,
-			tm.GetCurrentTaskId(), tm.GetCurrentEpoch(), tm.GetTransactionID())
+			inKVMsgSerdes, srcStream1, tm.GetProducerId())
 		if err != nil {
 			panic(err)
 		}
@@ -491,8 +488,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	for i := 0; i < 2; i++ {
 		err := pushMsgToStream(ctx, expected_keys[i],
 			&strTs{Val: fmt.Sprintf("a%d", expected_keys[i]), Ts: 0},
-			inKVMsgSerdes, srcStream2,
-			tm.GetCurrentTaskId(), tm.GetCurrentEpoch(), tm.GetTransactionID())
+			inKVMsgSerdes, srcStream2, tm.GetProducerId())
 		if err != nil {
 			panic(err)
 		}
@@ -621,7 +617,7 @@ func readMsgs(ctx context.Context,
 }
 
 func pushMsgToStream(ctx context.Context, key int, val *strTs, kvmsgSerdes commtypes.KVMsgSerdes,
-	log *sharedlog_stream.ShardedSharedLogStream, taskId uint64, taskEpoch uint16, transactionID uint64,
+	log *sharedlog_stream.ShardedSharedLogStream, producerId tran_interface.ProducerId,
 ) error {
 	encoded, err := commtypes.EncodeMsg(commtypes.Message{Key: key, Value: val}, kvmsgSerdes)
 	if err != nil {
@@ -631,7 +627,7 @@ func pushMsgToStream(ctx context.Context, key int, val *strTs, kvmsgSerdes commt
 		debug.Fprintf(os.Stderr, "%s encoded: \n", log.TopicName())
 		debug.Fprintf(os.Stderr, "%s\n", string(encoded))
 		debug.PrintByteSlice(encoded)
-		_, err = log.Push(ctx, encoded, 0, false, false, taskId, taskEpoch, transactionID)
+		_, err = log.Push(ctx, encoded, 0, sharedlog_stream.SingleDataRecordMeta, producerId)
 		return err
 	}
 	return nil

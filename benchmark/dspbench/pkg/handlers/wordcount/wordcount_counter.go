@@ -15,7 +15,6 @@ import (
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/source_sink"
-	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/treemap"
@@ -97,9 +96,7 @@ func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes
 }
 
 type wordcountCounterAggProcessArg struct {
-	src           *source_sink.MeteredSource
-	output_stream *store.MeteredStream
-	counter       *processor.MeteredProcessor
+	counter *processor.MeteredProcessor
 	proc_interface.BaseExecutionContext
 }
 
@@ -108,7 +105,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 	argsTmp interface{},
 ) *common.FnOutput {
 	args := argsTmp.(*wordcountCounterAggProcessArg)
-	msgs, err := args.src.Consume(ctx, args.ParNum())
+	msgs, err := args.Sources()[0].Consume(ctx, args.ParNum())
 	if err != nil {
 		if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 			return &common.FnOutput{
@@ -129,7 +126,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 		if msg.IsControl {
 			v := msg.Msg.Value.(source_sink.ScaleEpochAndBytes)
 			// TODO: below is not correct
-			_, err = args.output_stream.Push(ctx, v.Payload, args.ParNum(), true, false, 0, 0, 0)
+			err = args.Sinks()[0].Produce(ctx, msg.Msg, args.ParNum(), true)
 			if err != nil {
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
@@ -146,7 +143,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 			}
 			continue
 		}
-		t.CurrentOffset[args.src.TopicName()] = msg.LogSeqNum
+		t.CurrentOffset[args.Sources()[0].TopicName()] = msg.LogSeqNum
 		if msg.MsgArr != nil {
 			for _, subMsg := range msg.MsgArr {
 				_, err = args.counter.ProcessAndReturn(ctx, subMsg)
@@ -173,8 +170,8 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 		}
 	}
 	debug.Assert(len(output_streams) == 1, "expected only one output stream")
-	meteredOutputStream := store.NewMeteredStream(output_streams[0])
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	warmup := time.Duration(sp.WarmupS) * time.Second
 	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
 		return &common.FnOutput{
@@ -191,8 +188,16 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 		},
 	}
 	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
-		time.Duration(sp.WarmupS)*time.Second)
+		warmup)
+	sink := source_sink.NewMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_streams[0], &source_sink.StreamSinkConfig{
+		KVMsgSerdes: commtypes.KVMsgSerdes{
+			KeySerde: commtypes.StringSerde{},
+			ValSerde: commtypes.Uint64Serde{},
+			MsgSerde: msgSerde,
+		},
+	}), warmup)
 	src.SetInitialSource(false)
+	sink.MarkFinalOutput()
 	count, err := setupCounter(ctx, sp, msgSerde, output_streams[0])
 	if err != nil {
 		return &common.FnOutput{
@@ -204,22 +209,19 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 	funcName := "wccounter"
 	srcs := []source_sink.MeteredSourceIntr{src}
 	procArgs := &wordcountCounterAggProcessArg{
-		output_stream:        meteredOutputStream,
-		counter:              count,
-		BaseExecutionContext: proc_interface.NewExecutionContext(srcs, nil, funcName, sp.ScaleEpoch, sp.ParNum),
+		counter: count,
+		BaseExecutionContext: proc_interface.NewExecutionContext(srcs, []source_sink.MeteredSink{sink},
+			funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(h.process).
 		InitFunc(func(progArgs interface{}) {
-			src.StartWarmup()
 			count.StartWarmup()
 		}).Build()
 
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["count"] = count.GetLatency()
-		ret.Latencies["changelogRead"] = meteredOutputStream.GetReadNextLatencies()
-		ret.Latencies["changelogPush"] = meteredOutputStream.GetPushLatencies()
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%s-%d", funcName, sp.InputTopicNames[0], sp.OutputTopicNames[0], sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,

@@ -42,7 +42,8 @@ func (h *AppendHandler) process(ctx context.Context) *common.FnOutput {
 	}
 	var pushSeqNum []uint64
 	for i := 0; i < 10; i++ {
-		seqNum, err := s1.Push(ctx, []byte(fmt.Sprintf("test %d\n", i)), 0, false, false, 0, 0, 0)
+		seqNum, err := s1.Push(ctx, []byte(fmt.Sprintf("test %d\n", i)), 0,
+			sharedlog_stream.SingleDataRecordMeta, sharedlog_stream.EmptyProducerId)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,

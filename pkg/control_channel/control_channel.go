@@ -118,7 +118,7 @@ func (cmm *ControlChannelManager) appendToControlLog(ctx context.Context, cm *tx
 	if err != nil {
 		return err
 	}
-	_, err = cmm.controlLog.Push(ctx, msg_encoded, 0, false, false, 0, 0, 0)
+	_, err = cmm.controlLog.Push(ctx, msg_encoded, 0, sharedlog_stream.SingleDataRecordMeta, sharedlog_stream.EmptyProducerId)
 	// debug.Fprintf(os.Stderr, "appendToControlLog: tp %s %v, off %x\n",
 	// 	cmm.controlLog.TopicName(), cm, off)
 	return err

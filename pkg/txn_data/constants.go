@@ -1,6 +1,8 @@
 package txn_data
 
-import "math"
+import (
+	"math"
+)
 
 const (
 	LogTagReserveBits = 3
@@ -9,9 +11,9 @@ const (
 )
 
 const (
-	TransactionLogBegin = iota
-	TransactionLogFence
-	TxnMarkLowBits
+	Begin = iota
+	Fence
+	MarkLowBits
 	ScaleFenceLowBits
 )
 
@@ -21,15 +23,20 @@ const (
 
 func BeginTag(nameHash uint64, parNum uint8) uint64 {
 	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
-	return nameHash&mask + uint64(parNum)<<LogTagReserveBits + TransactionLogBegin
+	return nameHash&mask + uint64(parNum)<<LogTagReserveBits + Begin
 }
 
 func FenceTag(nameHash uint64, parNum uint8) uint64 {
 	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
-	return nameHash&mask + uint64(parNum)<<LogTagReserveBits + TransactionLogFence
+	return nameHash&mask + uint64(parNum)<<LogTagReserveBits + Fence
 }
 
 func ScaleFenceTag(nameHash uint64, parNum uint8) uint64 {
 	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
 	return nameHash&mask + uint64(parNum)<<LogTagReserveBits + ScaleFenceLowBits
+}
+
+func MarkerTag(nameHash uint64, par uint8) uint64 {
+	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
+	return nameHash&mask + uint64(par)<<LogTagReserveBits + MarkLowBits
 }

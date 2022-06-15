@@ -45,7 +45,7 @@ type TransactionManager struct {
 
 	TransactionalId string
 	transactionID   uint64
-	tran_interface.BaseTaskGeneration
+	tran_interface.ProducerId
 	serdeFormat commtypes.SerdeFormat
 
 	currentStatus txn_data.TransactionState
@@ -69,9 +69,8 @@ func NewTransactionManager(ctx context.Context,
 		topicStreams:          make(map[string]*sharedlog_stream.ShardedSharedLogStream),
 		backgroundJobErrg:     errg,
 		backgroundJobCtx:      gctx,
-		BaseTaskGeneration:    tran_interface.NewBaseTaskGeneration(),
+		ProducerId:            tran_interface.NewProducerId(),
 		serdeFormat:           serdeFormat,
-		transactionID:         0,
 		env:                   env,
 	}
 	err = tm.setupSerde(serdeFormat)
@@ -79,10 +78,6 @@ func NewTransactionManager(ctx context.Context,
 		return nil, err
 	}
 	return tm, nil
-}
-
-func (tc *TransactionManager) GetTransactionID() uint64 {
-	return tc.transactionID
 }
 
 func (tc *TransactionManager) setupSerde(serdeFormat commtypes.SerdeFormat) error {
@@ -258,17 +253,17 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) error {
 	// debug.Fprintf(os.Stderr, "Init transaction: Transition to %s\n", tc.currentStatus)
 	if recentTxnMeta == nil {
 		tc.InitTaskId(tc.env)
-		tc.SetCurrentEpoch(0)
+		tc.TaskEpoch = 0
 	} else {
-		tc.SetCurrentEpoch(recentTxnMeta.TaskEpoch)
-		tc.SetCurrentTaskId(recentTxnMeta.TaskId)
+		tc.TaskEpoch = recentTxnMeta.TaskEpoch
+		tc.TaskId = recentTxnMeta.TaskId
 		tc.transactionID = recentTransactionID
 	}
 	if recentTxnMeta != nil && recentTxnMeta.TaskEpoch == math.MaxUint16 {
 		tc.InitTaskId(tc.env)
-		tc.SetCurrentEpoch(0)
+		tc.TaskEpoch = 0
 	}
-	tc.IncrementEpoch()
+	tc.TaskEpoch += 1
 	txnMeta := txn_data.TxnMetadata{
 		TaskId:    tc.GetCurrentTaskId(),
 		TaskEpoch: tc.GetCurrentEpoch(),
@@ -292,8 +287,8 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) error {
 }
 
 // monitoring entry with fence tag
-func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, quit chan struct{},
-	errc chan error, dcancel context.CancelFunc,
+func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context,
+	quit chan struct{}, errc chan error, dcancel context.CancelFunc,
 ) {
 	fenceTag := txn_data.FenceTag(tc.transactionLog.TopicNameHash(), 0)
 	for {
@@ -329,15 +324,19 @@ func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context, quit ch
 	}
 }
 
-func (tc *TransactionManager) appendToTransactionLog(ctx context.Context, tm *txn_data.TxnMetadata, tags []uint64) (uint64, error) {
+func (tc *TransactionManager) appendToTransactionLog(ctx context.Context,
+	tm *txn_data.TxnMetadata, tags []uint64,
+) (uint64, error) {
 	encoded, err := tc.txnMdSerde.Encode(tm)
 	if err != nil {
 		return 0, fmt.Errorf("txnMdSerde enc err: %v", tm)
 	}
 	if tags != nil {
-		return tc.transactionLog.PushWithTag(ctx, encoded, 0, tags, false, false, 0, 0, 0)
+		return tc.transactionLog.PushWithTag(ctx, encoded, 0, tags, nil,
+			sharedlog_stream.SingleDataRecordMeta, sharedlog_stream.EmptyProducerId)
 	} else {
-		return tc.transactionLog.Push(ctx, encoded, 0, false, false, 0, 0, 0)
+		return tc.transactionLog.Push(ctx, encoded, 0,
+			sharedlog_stream.SingleDataRecordMeta, sharedlog_stream.EmptyProducerId)
 	}
 }
 
@@ -351,19 +350,20 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 		return err
 	}
 	g, ectx := errgroup.WithContext(ctx)
+	producerId := tc.GetProducerId()
 	for topic, partitions := range tc.currentTopicPartition {
 		stream := tc.topicStreams[topic]
-		err := stream.Flush(ctx, tc.GetCurrentTaskId(), tc.GetCurrentEpoch(), tc.transactionID)
+		err := stream.Flush(ctx, producerId)
 		if err != nil {
 			return err
 		}
 		for par := range partitions {
 			parNum := par
 			g.Go(func() error {
-				tag := sharedlog_stream.TxnMarkerTag(stream.TopicNameHash(), parNum)
+				tag := txn_data.MarkerTag(stream.TopicNameHash(), parNum)
 				tag2 := sharedlog_stream.NameHashWithPartition(stream.TopicNameHash(), parNum)
-				off, err := stream.PushWithTag(ectx, encoded, parNum, []uint64{tag, tag2}, true, false,
-					tc.GetCurrentTaskId(), tc.GetCurrentEpoch(), tc.transactionID)
+				off, err := stream.PushWithTag(ectx, encoded, parNum, []uint64{tag, tag2},
+					nil, sharedlog_stream.ControlRecordMeta, producerId)
 				debug.Fprintf(os.Stderr, "append marker %d to stream %s off %x tag %x\n",
 					marker, stream.TopicName(), off, tag)
 				return err
@@ -498,8 +498,8 @@ func (tc *TransactionManager) AppendConsumedSeqNum(ctx context.Context, consumed
 			return err
 		}
 
-		_, err = offsetLog.Push(ctx, encoded, consumedSeqNumConfig.Partition, false, false,
-			tc.GetCurrentTaskId(), tc.GetCurrentEpoch(), tc.transactionID)
+		_, err = offsetLog.Push(ctx, encoded, consumedSeqNumConfig.Partition, sharedlog_stream.SingleDataRecordMeta,
+			tc.GetProducerId())
 		if err != nil {
 			return err
 		}
@@ -516,7 +516,7 @@ func (tc *TransactionManager) FindLastConsumedSeqNum(ctx context.Context, topicT
 	// debug.Fprintf(os.Stderr, "looking at offsetlog %s, offsetLog tp: %s\n", offsetTopic, offsetLog.TopicName())
 
 	// find the most recent transaction marker
-	txnMarkerTag := sharedlog_stream.TxnMarkerTag(offsetLog.TopicNameHash(), parNum)
+	txnMarkerTag := txn_data.MarkerTag(offsetLog.TopicNameHash(), parNum)
 	var txnMkRawMsg *commtypes.RawMsg = nil
 	var err error
 	txnMkRawMsg, err = offsetLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, parNum, txnMarkerTag)
@@ -543,7 +543,7 @@ func (tc *TransactionManager) FindConsumedSeqNumMatchesTransactionID(ctx context
 	offsetLog := tc.topicStreams[offsetTopic]
 	debug.Assert(offsetTopic == offsetLog.TopicName(), fmt.Sprintf("expected offset log tp: %s, got %s",
 		offsetTopic, offsetLog.TopicName()))
-	txnMarkerTag := sharedlog_stream.TxnMarkerTag(offsetLog.TopicNameHash(), parNum)
+	txnMarkerTag := txn_data.MarkerTag(offsetLog.TopicNameHash(), parNum)
 	var txnMkRawMsg *commtypes.RawMsg = nil
 	tailSeqNum := protocol.MaxLogSeqnum
 	var err error

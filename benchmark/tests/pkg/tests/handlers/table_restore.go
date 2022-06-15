@@ -115,7 +115,7 @@ func (h *tableRestoreHandler) pushToLog(ctx context.Context, key int, val string
 	if err != nil {
 		return 0, err
 	}
-	return log.Push(ctx, encoded, 0, false, false, 0, 0, 0)
+	return log.Push(ctx, encoded, 0, sharedlog_stream.SingleDataRecordMeta, sharedlog_stream.EmptyProducerId)
 }
 
 func checkMapEqual(expected map[int]string, got map[int]string) {
@@ -218,7 +218,7 @@ func (h *tableRestoreHandler) pushToWindowLog(ctx context.Context, key int, val 
 	debug.PrintByteSlice(valBytes)
 	debug.Fprint(os.Stderr, "pushToWindowLog: encoded\n")
 	debug.PrintByteSlice(encoded)
-	off, err := log.Push(ctx, encoded, 0, false, false, 0, 0, 0)
+	off, err := log.Push(ctx, encoded, 0, sharedlog_stream.SingleDataRecordMeta, sharedlog_stream.EmptyProducerId)
 	debug.Fprintf(os.Stderr, "offset: %x\n", off)
 	return off, err
 }

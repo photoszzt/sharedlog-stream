@@ -3,7 +3,7 @@ package source_sink
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/store"
+	"sharedlog-stream/pkg/sharedlog_stream"
 )
 
 type Source interface {
@@ -12,8 +12,8 @@ type Source interface {
 	SetCursor(cursor uint64, parNum uint8)
 	TopicName() string
 	Name() string
-	SetName(string) 
-	Stream() store.Stream
+	SetName(string)
+	Stream() sharedlog_stream.Stream
 	InTransaction(serdeFormat commtypes.SerdeFormat) error
 	SetInitialSource(initial bool)
 	IsInitialSource() bool

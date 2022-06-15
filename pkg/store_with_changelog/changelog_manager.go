@@ -70,27 +70,27 @@ func (cm *ChangelogManager) Push(ctx context.Context, payload []byte, parNum uin
 
 func (cm *ChangelogManager) bufPushHelper(ctx context.Context, payload []byte, parNum uint8) error {
 	if cm.transactional {
-		return cm.changelog.BufPush(ctx, payload, parNum, cm.tm.GetCurrentTaskId(), cm.tm.GetCurrentEpoch(), cm.tm.GetTransactionID())
+		return cm.changelog.BufPush(ctx, payload, parNum, cm.tm.GetProducerId())
 	} else {
-		return cm.changelog.BufPush(ctx, payload, parNum, 0, 0, 0)
+		return cm.changelog.BufPush(ctx, payload, parNum, sharedlog_stream.EmptyProducerId)
 	}
 }
 
 func (cm *ChangelogManager) pushHelper(ctx context.Context, payload []byte, parNum uint8) error {
 	if cm.transactional {
-		_, err := cm.changelog.Push(ctx, payload, parNum, false, false, cm.tm.GetCurrentTaskId(), cm.tm.GetCurrentEpoch(), cm.tm.GetTransactionID())
+		_, err := cm.changelog.Push(ctx, payload, parNum, sharedlog_stream.SingleDataRecordMeta, cm.tm.GetProducerId())
 		return err
 	} else {
-		_, err := cm.changelog.Push(ctx, payload, parNum, false, false, 0, 0, 0)
+		_, err := cm.changelog.Push(ctx, payload, parNum, sharedlog_stream.SingleDataRecordMeta, sharedlog_stream.EmptyProducerId)
 		return err
 	}
 }
 
 func (cm *ChangelogManager) Flush(ctx context.Context) error {
 	if cm.transactional {
-		return cm.changelog.FlushNoLock(ctx, cm.tm.GetCurrentTaskId(), cm.tm.GetCurrentEpoch(), cm.tm.GetTransactionID())
+		return cm.changelog.FlushNoLock(ctx, cm.tm.GetProducerId())
 	} else {
-		return cm.changelog.FlushNoLock(ctx, 0, 0, 0)
+		return cm.changelog.FlushNoLock(ctx, sharedlog_stream.EmptyProducerId)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"sharedlog-stream/pkg/bits"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sharedlog-stream/pkg/txn_data"
 	"sync"
 	"sync/atomic"
@@ -24,10 +25,29 @@ const (
 	kBlockingReadTimeout = 1 * time.Second
 )
 
+type LogEntryMeta uint8
+
 const (
 	Control bits.Bits = 1 << iota
 	PayloadArr
 )
+
+func StreamEntryMeta(isControl bool, payloadIsArr bool) LogEntryMeta {
+	var meta bits.Bits
+	if isControl {
+		meta = bits.Set(meta, Control)
+	}
+	if payloadIsArr {
+		meta = bits.Set(meta, PayloadArr)
+	}
+	return LogEntryMeta(meta)
+}
+
+var SingleDataRecordMeta = StreamEntryMeta(false, false)
+var ControlRecordMeta = StreamEntryMeta(true, false)
+var ArrRecordMeta = StreamEntryMeta(false, true)
+
+var EmptyProducerId = tran_interface.ProducerId{0, 0, 0}
 
 type SharedLogStream struct {
 	mux sync.Mutex
@@ -47,20 +67,30 @@ func NameHashWithPartition(nameHash uint64, par uint8) uint64 {
 	return (nameHash & mask) + uint64(par)
 }
 
-func TxnMarkerTag(nameHash uint64, par uint8) uint64 {
-	mask := uint64(math.MaxUint64) - (1<<(txn_data.PartitionBits+txn_data.LogTagReserveBits) - 1)
-	return nameHash&mask + uint64(par)<<txn_data.LogTagReserveBits + txn_data.TxnMarkLowBits
+type StreamLogEntry struct {
+	TopicName     []string `msg:"topicName"`
+	Payload       []byte   `msg:"payload,omitempty"`
+	TaskId        uint64   `msg:"tid,omitempty"`
+	MsgSeqNum     uint64   `msg:"mseq,omitempty"`
+	TransactionID uint64   `msg:"trid,omitempty"`
+	TaskEpoch     uint16   `msg:"te,omitempty"`
+	Meta          uint8    `msg:"meta,omitempty"`
+	seqNum        uint64   `msg:"-"`
 }
 
-type StreamLogEntry struct {
-	TopicName     string `msg:"topicName"`
-	Payload       []byte `msg:"payload,omitempty"`
-	TaskId        uint64 `msg:"tid,omitempty"`
-	MsgSeqNum     uint64 `msg:"mseq,omitempty"`
-	TransactionID uint64 `msg:"trid,omitempty"`
-	TaskEpoch     uint16 `msg:"te,omitempty"`
-	Meta          uint8  `msg:"meta,omitempty"`
-	seqNum        uint64 `msg:"-"`
+func (e *StreamLogEntry) BelongsToTopic(topicName string) bool {
+	// for common case where an entry only belongs to one topic
+	if e.TopicName[0] == topicName {
+		return true
+	} else {
+		// for mark record, it can be read by multiple topics
+		for i := 1; i < len(e.TopicName); i++ {
+			if e.TopicName[i] == topicName {
+				return true
+			}
+		}
+		return false
+	}
 }
 
 func decodeStreamLogEntry(logEntry *types.LogEntry) *StreamLogEntry {
@@ -74,14 +104,6 @@ func decodeStreamLogEntry(logEntry *types.LogEntry) *StreamLogEntry {
 }
 
 func NewSharedLogStream(env types.Environment, topicName string, serdeFormat commtypes.SerdeFormat) (*SharedLogStream, error) {
-	// var txnMarkerSerde commtypes.Serde
-	// if serdeFormat == commtypes.JSON {
-	// 	txnMarkerSerde = txn_data.TxnMarkerJSONSerde{}
-	// } else if serdeFormat == commtypes.MSGP {
-	// 	txnMarkerSerde = txn_data.TxnMarkerMsgpSerde{}
-	// } else {
-	// 	return nil, fmt.Errorf("unrecognized format: %d", serdeFormat)
-	// }
 	return &SharedLogStream{
 		env:           env,
 		topicName:     topicName,
@@ -89,7 +111,6 @@ func NewSharedLogStream(env types.Environment, topicName string, serdeFormat com
 		cursor:        0,
 		tail:          0,
 
-		// txnMarkerSerde:     txnMarkerSerde,
 		curAppendMsgSeqNum: 0,
 	}, nil
 }
@@ -117,21 +138,19 @@ func (s *SharedLogStream) SetCursor(cursor uint64, parNum uint8) {
 }
 
 // multiple thread could push to the same stream but only one reader
-func (s *SharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNum uint8, tags []uint64,
-	isControl bool, payloadIsArr bool, taskId uint64, taskEpoch uint16, transactionID uint64,
+func (s *SharedLogStream) PushWithTag(ctx context.Context,
+	payload []byte, parNum uint8, tags []uint64, additionalTopicNames []string,
+	meta LogEntryMeta, producerId tran_interface.ProducerId,
 ) (uint64, error) {
 	if len(payload) == 0 {
 		return 0, common_errors.ErrEmptyPayload
 	}
-	var meta bits.Bits
-	if isControl {
-		meta = bits.Set(meta, Control)
-	}
-	if payloadIsArr {
-		meta = bits.Set(meta, PayloadArr)
+	topics := []string{s.topicName}
+	if additionalTopicNames != nil {
+		topics = append(topics, additionalTopicNames...)
 	}
 	logEntry := &StreamLogEntry{
-		TopicName: s.topicName,
+		TopicName: topics,
 		Payload:   payload,
 		Meta:      uint8(meta),
 	}
@@ -139,9 +158,9 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNu
 	// TODO: need to deal with sequence number overflow
 	atomic.AddUint64(&s.curAppendMsgSeqNum, 1)
 	logEntry.MsgSeqNum = s.curAppendMsgSeqNum
-	logEntry.TaskEpoch = taskEpoch
-	logEntry.TaskId = taskId
-	logEntry.TransactionID = transactionID
+	logEntry.TaskEpoch = producerId.TaskEpoch
+	logEntry.TaskId = producerId.TaskId
+	logEntry.TransactionID = producerId.TransactionID
 	// }
 	encoded, err := logEntry.MarshalMsg(nil)
 	if err != nil {
@@ -193,11 +212,10 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNu
 	return seqNum, nil
 }
 
-func (s *SharedLogStream) Push(ctx context.Context, payload []byte, parNum uint8, isControl bool, payloadIsArr bool,
-	taskId uint64, taskEpoch uint16, transactionID uint64,
+func (s *SharedLogStream) Push(ctx context.Context, payload []byte, parNum uint8, meta LogEntryMeta, producerId tran_interface.ProducerId,
 ) (uint64, error) {
 	tags := []uint64{NameHashWithPartition(s.topicNameHash, parNum)}
-	return s.PushWithTag(ctx, payload, parNum, tags, isControl, payloadIsArr, taskId, taskEpoch, transactionID)
+	return s.PushWithTag(ctx, payload, parNum, tags, nil, meta, producerId)
 }
 
 func (s *SharedLogStream) isEmpty() bool {
@@ -218,7 +236,7 @@ func (s *SharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum ui
 		}
 		seqNum = logEntry.SeqNum
 		streamLogEntry := decodeStreamLogEntry(logEntry)
-		if streamLogEntry.TopicName != s.topicName {
+		if !streamLogEntry.BelongsToTopic(s.topicName) {
 			continue
 		} else {
 			isControl := bits.Has(bits.Bits(streamLogEntry.Meta), Control)
@@ -267,7 +285,7 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 		}
 		streamLogEntry := decodeStreamLogEntry(logEntry)
 		isControl := bits.Has(bits.Bits(streamLogEntry.Meta), Control)
-		if streamLogEntry.TopicName == s.topicName || bits.Has(bits.Bits(streamLogEntry.Meta), Control) {
+		if streamLogEntry.BelongsToTopic(s.topicName) || bits.Has(bits.Bits(streamLogEntry.Meta), Control) {
 			isPayloadArr := bits.Has(bits.Bits(streamLogEntry.Meta), PayloadArr)
 			s.cursor = streamLogEntry.seqNum + 1
 			return &commtypes.RawMsg{
@@ -343,7 +361,7 @@ func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum 
 		}
 		seqNum = logEntry.SeqNum
 		streamLogEntry := decodeStreamLogEntry(logEntry)
-		if streamLogEntry.TopicName != s.topicName {
+		if !streamLogEntry.BelongsToTopic(s.topicName) {
 			seqNum -= 1
 			continue
 		}

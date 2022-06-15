@@ -25,10 +25,23 @@ func (z *StreamLogEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "topicName":
-			z.TopicName, err = dc.ReadString()
+			var zb0002 uint32
+			zb0002, err = dc.ReadArrayHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "TopicName")
 				return
+			}
+			if cap(z.TopicName) >= int(zb0002) {
+				z.TopicName = (z.TopicName)[:zb0002]
+			} else {
+				z.TopicName = make([]string, zb0002)
+			}
+			for za0001 := range z.TopicName {
+				z.TopicName[za0001], err = dc.ReadString()
+				if err != nil {
+					err = msgp.WrapError(err, "TopicName", za0001)
+					return
+				}
 			}
 		case "payload":
 			z.Payload, err = dc.ReadBytes(z.Payload)
@@ -119,10 +132,17 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteString(z.TopicName)
+	err = en.WriteArrayHeader(uint32(len(z.TopicName)))
 	if err != nil {
 		err = msgp.WrapError(err, "TopicName")
 		return
+	}
+	for za0001 := range z.TopicName {
+		err = en.WriteString(z.TopicName[za0001])
+		if err != nil {
+			err = msgp.WrapError(err, "TopicName", za0001)
+			return
+		}
 	}
 	if (zb0001Mask & 0x2) == 0 { // if not empty
 		// write "payload"
@@ -236,7 +256,10 @@ func (z *StreamLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// string "topicName"
 	o = append(o, 0xa9, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x4e, 0x61, 0x6d, 0x65)
-	o = msgp.AppendString(o, z.TopicName)
+	o = msgp.AppendArrayHeader(o, uint32(len(z.TopicName)))
+	for za0001 := range z.TopicName {
+		o = msgp.AppendString(o, z.TopicName[za0001])
+	}
 	if (zb0001Mask & 0x2) == 0 { // if not empty
 		// string "payload"
 		o = append(o, 0xa7, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64)
@@ -289,10 +312,23 @@ func (z *StreamLogEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "topicName":
-			z.TopicName, bts, err = msgp.ReadStringBytes(bts)
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "TopicName")
 				return
+			}
+			if cap(z.TopicName) >= int(zb0002) {
+				z.TopicName = (z.TopicName)[:zb0002]
+			} else {
+				z.TopicName = make([]string, zb0002)
+			}
+			for za0001 := range z.TopicName {
+				z.TopicName[za0001], bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TopicName", za0001)
+					return
+				}
 			}
 		case "payload":
 			z.Payload, bts, err = msgp.ReadBytesBytes(bts, z.Payload)
@@ -344,6 +380,10 @@ func (z *StreamLogEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *StreamLogEntry) Msgsize() (s int) {
-	s = 1 + 10 + msgp.StringPrefixSize + len(z.TopicName) + 8 + msgp.BytesPrefixSize + len(z.Payload) + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 3 + msgp.Uint16Size + 5 + msgp.Uint8Size
+	s = 1 + 10 + msgp.ArrayHeaderSize
+	for za0001 := range z.TopicName {
+		s += msgp.StringPrefixSize + len(z.TopicName[za0001])
+	}
+	s += 8 + msgp.BytesPrefixSize + len(z.Payload) + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 3 + msgp.Uint16Size + 5 + msgp.Uint8Size
 	return
 }

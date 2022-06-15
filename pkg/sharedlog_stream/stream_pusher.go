@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
 	"sync"
@@ -44,9 +45,9 @@ func (h *StreamPush) InitFlushTimer(duration time.Duration) {
 }
 
 // msgchan has to close and async pusher has to stop first before calling this function
-func (h *StreamPush) Flush(ctx context.Context, taskId uint64, taskEpoch uint16, transactionID uint64) error {
+func (h *StreamPush) Flush(ctx context.Context, producerId tran_interface.ProducerId) error {
 	if h.BufPush {
-		err := h.Stream.Flush(ctx, taskId, taskEpoch, transactionID)
+		err := h.Stream.Flush(ctx, producerId)
 		if err != nil {
 			return err
 		}
@@ -57,9 +58,9 @@ func (h *StreamPush) Flush(ctx context.Context, taskId uint64, taskEpoch uint16,
 }
 
 // msgchan has to close and async pusher has to stop first before calling this function
-func (h *StreamPush) FlushNoLock(ctx context.Context, taskId uint64, taskEpoch uint16, transactionID uint64) error {
+func (h *StreamPush) FlushNoLock(ctx context.Context, producerId tran_interface.ProducerId) error {
 	if h.BufPush {
-		err := h.Stream.FlushNoLock(ctx, taskId, taskEpoch, transactionID)
+		err := h.Stream.FlushNoLock(ctx, producerId)
 		if err != nil {
 			return err
 		}
@@ -69,14 +70,12 @@ func (h *StreamPush) FlushNoLock(ctx context.Context, taskId uint64, taskEpoch u
 	return nil
 }
 
-func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
-	taskId uint64, taskEpoch uint16, transactionID uint64,
-) {
+func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup, producerId tran_interface.ProducerId) {
 	defer wg.Done()
 	for msg := range h.MsgChan {
 		if msg.IsControl {
 			if h.BufPush {
-				err := h.Stream.Flush(ctx, taskId, taskEpoch, transactionID)
+				err := h.Stream.Flush(ctx, producerId)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] flush err: %v\n", err)
 					h.MsgErrChan <- err
@@ -86,8 +85,8 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
 			}
 			for _, i := range msg.Partitions {
 				scale_fence_tag := txn_data.ScaleFenceTag(h.Stream.TopicNameHash(), i)
-				_, err := h.Stream.PushWithTag(ctx, msg.Payload, i, []uint64{scale_fence_tag},
-					true, false, taskId, taskEpoch, transactionID)
+				_, err := h.Stream.PushWithTag(ctx, msg.Payload, i, []uint64{scale_fence_tag}, nil,
+					StreamEntryMeta(true, false), producerId)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] push err: %v\n", err)
 					h.MsgErrChan <- err
@@ -99,7 +98,7 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
 				timeSinceLastFlush := time.Since(h.FlushTimer)
 				if timeSinceLastFlush >= h.FlushDuration {
 					// debug.Fprintf(os.Stderr, "flush timer: %v\n", timeSinceLastFlush)
-					err := h.Stream.FlushNoLock(ctx, taskId, taskEpoch, transactionID)
+					err := h.Stream.FlushNoLock(ctx, producerId)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "[ERROR] flush no lock err: %v\n", err)
 						h.MsgErrChan <- err
@@ -107,7 +106,7 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
 					}
 					h.FlushTimer = time.Now()
 				}
-				err := h.Stream.BufPushNoLock(ctx, msg.Payload, uint8(msg.Partitions[0]), taskId, taskEpoch, transactionID)
+				err := h.Stream.BufPushNoLock(ctx, msg.Payload, uint8(msg.Partitions[0]), producerId)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] buf push nolock err: %v\n", err)
 					h.MsgErrChan <- err
@@ -115,7 +114,7 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
 				}
 			} else {
 				debug.Assert(len(msg.Partitions) == 1, "should only have one partition")
-				_, err := h.Stream.Push(ctx, msg.Payload, uint8(msg.Partitions[0]), false, false, taskId, taskEpoch, transactionID)
+				_, err := h.Stream.Push(ctx, msg.Payload, uint8(msg.Partitions[0]), StreamEntryMeta(false, false), producerId)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] push err: %v\n", err)
 					h.MsgErrChan <- err
@@ -127,14 +126,13 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
 	}
 }
 
-func (h *StreamPush) AsyncStreamPushNoTick(ctx context.Context, wg *sync.WaitGroup,
-	taskId uint64, taskEpoch uint16, transactionID uint64,
+func (h *StreamPush) AsyncStreamPushNoTick(ctx context.Context, wg *sync.WaitGroup, producerId tran_interface.ProducerId,
 ) {
 	defer wg.Done()
 	for msg := range h.MsgChan {
 		if msg.IsControl {
 			if h.BufPush {
-				err := h.Stream.Flush(ctx, taskId, taskEpoch, transactionID)
+				err := h.Stream.Flush(ctx, producerId)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] flush err: %v\n", err)
 					h.MsgErrChan <- err
@@ -143,8 +141,8 @@ func (h *StreamPush) AsyncStreamPushNoTick(ctx context.Context, wg *sync.WaitGro
 			}
 			for _, i := range msg.Partitions {
 				scale_fence_tag := txn_data.ScaleFenceTag(h.Stream.TopicNameHash(), i)
-				_, err := h.Stream.PushWithTag(ctx, msg.Payload, i, []uint64{scale_fence_tag},
-					true, false, taskId, taskEpoch, transactionID)
+				_, err := h.Stream.PushWithTag(ctx, msg.Payload, i, []uint64{scale_fence_tag}, nil,
+					StreamEntryMeta(true, false), producerId)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] push err: %v\n", err)
 					h.MsgErrChan <- err
@@ -153,7 +151,7 @@ func (h *StreamPush) AsyncStreamPushNoTick(ctx context.Context, wg *sync.WaitGro
 			}
 		} else {
 			if h.BufPush {
-				err := h.Stream.BufPushNoLock(ctx, msg.Payload, uint8(msg.Partitions[0]), taskId, taskEpoch, transactionID)
+				err := h.Stream.BufPushNoLock(ctx, msg.Payload, uint8(msg.Partitions[0]), producerId)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] buf flush err: %v\n", err)
 					h.MsgErrChan <- err
@@ -161,7 +159,7 @@ func (h *StreamPush) AsyncStreamPushNoTick(ctx context.Context, wg *sync.WaitGro
 				}
 			} else {
 				debug.Assert(len(msg.Partitions) == 1, "should only have one partition")
-				_, err := h.Stream.Push(ctx, msg.Payload, uint8(msg.Partitions[0]), false, false, taskId, taskEpoch, transactionID)
+				_, err := h.Stream.Push(ctx, msg.Payload, uint8(msg.Partitions[0]), SingleDataRecordMeta, producerId)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] push err: %v\n", err)
 					h.MsgErrChan <- err

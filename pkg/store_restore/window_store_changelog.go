@@ -20,7 +20,7 @@ type WindowStoreChangelog struct {
 	changelogManager *store_with_changelog.ChangelogManager
 	keyWindowTsSerde commtypes.Serde
 	kvmsgSerdes      commtypes.KVMsgSerdes
-	inputStream      store.Stream
+	inputStream      sharedlog_stream.Stream
 	restoreFunc      func(ctx context.Context, args interface{}) error
 	restoreArg       interface{}
 	// this is used to identify the db and collection to store the transaction id
@@ -68,7 +68,7 @@ func (wsc *WindowStoreChangelog) TabTranRepr() string {
 	return wsc.tabTranRepr
 }
 
-func (wsc *WindowStoreChangelog) InputStream() store.Stream {
+func (wsc *WindowStoreChangelog) InputStream() sharedlog_stream.Stream {
 	return wsc.inputStream
 }
 
@@ -78,7 +78,7 @@ func (wsc *WindowStoreChangelog) ExecuteRestoreFunc(ctx context.Context) error {
 
 func NewWindowStoreChangelogForExternalStore(
 	wStore store.WindowStore,
-	inputStream store.Stream,
+	inputStream sharedlog_stream.Stream,
 	restoreFunc func(ctx context.Context, args interface{}) error,
 	restoreArg interface{},
 	tabTranRepr string,

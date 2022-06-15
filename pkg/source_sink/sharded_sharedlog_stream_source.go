@@ -7,7 +7,6 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/txn_data"
 	"time"
 )
@@ -60,7 +59,7 @@ func (s *ShardedSharedLogStreamSource) InTransaction(serdeFormat commtypes.Serde
 	return err
 }
 
-func (s *ShardedSharedLogStreamSource) Stream() store.Stream {
+func (s *ShardedSharedLogStreamSource) Stream() sharedlog_stream.Stream {
 	return s.stream
 }
 

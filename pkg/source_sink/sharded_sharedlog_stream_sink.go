@@ -64,18 +64,20 @@ func (sls *ShardedSharedLogStreamSink) InTransaction(tm tran_interface.ReadOnlyE
 func (sls *ShardedSharedLogStreamSink) StartAsyncPushWithTick(ctx context.Context) {
 	sls.wg.Add(1)
 	if sls.transactional {
-		go sls.streamPusher.AsyncStreamPush(ctx, &sls.wg, sls.tm.GetCurrentTaskId(), sls.tm.GetCurrentEpoch(), sls.tm.GetTransactionID())
+		producerId := sls.tm.GetProducerId()
+		go sls.streamPusher.AsyncStreamPush(ctx, &sls.wg, producerId)
 	} else {
-		go sls.streamPusher.AsyncStreamPush(ctx, &sls.wg, 0, 0, 0)
+		go sls.streamPusher.AsyncStreamPush(ctx, &sls.wg, sharedlog_stream.EmptyProducerId)
 	}
 }
 
 func (sls *ShardedSharedLogStreamSink) StartAsyncPushNoTick(ctx context.Context) {
 	sls.wg.Add(1)
 	if sls.transactional {
-		go sls.streamPusher.AsyncStreamPushNoTick(ctx, &sls.wg, sls.tm.GetCurrentTaskId(), sls.tm.GetCurrentEpoch(), sls.tm.GetTransactionID())
+		producerId := sls.tm.GetProducerId()
+		go sls.streamPusher.AsyncStreamPushNoTick(ctx, &sls.wg, producerId)
 	} else {
-		go sls.streamPusher.AsyncStreamPushNoTick(ctx, &sls.wg, 0, 0, 0)
+		go sls.streamPusher.AsyncStreamPushNoTick(ctx, &sls.wg, sharedlog_stream.EmptyProducerId)
 	}
 }
 
@@ -129,17 +131,19 @@ func (sls *ShardedSharedLogStreamSink) KeySerde() commtypes.Serde {
 
 func (sls *ShardedSharedLogStreamSink) Flush(ctx context.Context) error {
 	if sls.transactional {
-		return sls.streamPusher.Flush(ctx, sls.tm.GetCurrentTaskId(), sls.tm.GetCurrentEpoch(), sls.tm.GetTransactionID())
+		producerId := sls.tm.GetProducerId()
+		return sls.streamPusher.Flush(ctx, producerId)
 	} else {
-		return sls.streamPusher.Flush(ctx, 0, 0, 0)
+		return sls.streamPusher.Flush(ctx, sharedlog_stream.EmptyProducerId)
 	}
 }
 
 func (sls *ShardedSharedLogStreamSink) FlushNoLock(ctx context.Context) error {
 	if sls.transactional {
-		return sls.streamPusher.FlushNoLock(ctx, sls.tm.GetCurrentTaskId(), sls.tm.GetCurrentEpoch(), sls.tm.GetTransactionID())
+		producerId := sls.tm.GetProducerId()
+		return sls.streamPusher.FlushNoLock(ctx, producerId)
 	} else {
-		return sls.streamPusher.Flush(ctx, 0, 0, 0)
+		return sls.streamPusher.Flush(ctx, sharedlog_stream.EmptyProducerId)
 	}
 }
 

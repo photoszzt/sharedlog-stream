@@ -62,7 +62,8 @@ func (sls *ShardedSharedLogStreamSyncSink) Produce(ctx context.Context, msg comm
 			}
 		}
 		scale_fence_tag := txn_data.ScaleFenceTag(sls.Stream().TopicNameHash(), parNum)
-		_, err := sls.pushWithTag(ctx, msg.Value.([]byte), parNum, []uint64{scale_fence_tag}, isControl, false)
+		_, err := sls.pushWithTag(ctx, msg.Value.([]byte), parNum, []uint64{scale_fence_tag},
+			nil, sharedlog_stream.StreamEntryMeta(isControl, false))
 		return err
 	}
 	bytes, err := commtypes.EncodeMsg(msg, sls.kvmsgSerdes)
@@ -78,13 +79,13 @@ func (sls *ShardedSharedLogStreamSyncSink) Produce(ctx context.Context, msg comm
 				if err != nil {
 					return err
 				}
-				_, err = sls.push(ctx, bytes, parNum, isControl, false)
+				_, err = sls.push(ctx, bytes, parNum, sharedlog_stream.ControlRecordMeta)
 				if err != nil {
 					return err
 				}
 			}
 		} else {
-			_, err = sls.push(ctx, bytes, parNum, isControl, false)
+			_, err = sls.push(ctx, bytes, parNum, sharedlog_stream.StreamEntryMeta(isControl, false))
 			if err != nil {
 				return err
 			}
@@ -118,41 +119,45 @@ func (s *ShardedSharedLogStreamSyncSink) InitFlushTimer() {}
 
 func (s *ShardedSharedLogStreamSyncSink) flushNoLock(ctx context.Context) error {
 	if s.transactional {
-		return s.stream.FlushNoLock(ctx,
-			s.tm.GetCurrentTaskId(), s.tm.GetCurrentEpoch(), s.tm.GetTransactionID())
+		producerId := s.tm.GetProducerId()
+		return s.stream.FlushNoLock(ctx, producerId)
 	} else {
-		return s.stream.FlushNoLock(ctx, 0, 0, 0)
+		return s.stream.FlushNoLock(ctx, sharedlog_stream.EmptyProducerId)
 	}
 }
 
 func (s *ShardedSharedLogStreamSyncSink) flush(ctx context.Context) error {
 	if s.transactional {
-		return s.stream.Flush(ctx, s.tm.GetCurrentTaskId(), s.tm.GetCurrentEpoch(), s.tm.GetTransactionID())
+		producerId := s.tm.GetProducerId()
+		return s.stream.Flush(ctx, producerId)
 	} else {
-		return s.stream.Flush(ctx, 0, 0, 0)
+		return s.stream.Flush(ctx, sharedlog_stream.EmptyProducerId)
 	}
 }
 
-func (s *ShardedSharedLogStreamSyncSink) push(ctx context.Context, payload []byte, parNumber uint8, isControl bool, payloadIsArr bool) (uint64, error) {
+func (s *ShardedSharedLogStreamSyncSink) push(ctx context.Context, payload []byte, parNumber uint8, meta sharedlog_stream.LogEntryMeta) (uint64, error) {
 	if s.transactional {
-		return s.stream.Push(ctx, payload, parNumber, isControl, payloadIsArr, s.tm.GetCurrentTaskId(), s.tm.GetCurrentEpoch(), s.tm.GetTransactionID())
+		producerId := s.tm.GetProducerId()
+		return s.stream.Push(ctx, payload, parNumber, meta, producerId)
 	} else {
-		return s.stream.Push(ctx, payload, parNumber, isControl, payloadIsArr, 0, 0, 0)
+		return s.stream.Push(ctx, payload, parNumber, meta, sharedlog_stream.EmptyProducerId)
 	}
 }
 
-func (s *ShardedSharedLogStreamSyncSink) pushWithTag(ctx context.Context, payload []byte, parNumber uint8, tag []uint64, isControl bool, payloadIsArr bool) (uint64, error) {
+func (s *ShardedSharedLogStreamSyncSink) pushWithTag(ctx context.Context, payload []byte, parNumber uint8, tag []uint64,
+	additionalTopic []string, meta sharedlog_stream.LogEntryMeta,
+) (uint64, error) {
 	if s.transactional {
-		return s.stream.PushWithTag(ctx, payload, parNumber, tag, isControl, payloadIsArr, s.tm.GetCurrentTaskId(), s.tm.GetCurrentEpoch(), s.tm.GetTransactionID())
+		return s.stream.PushWithTag(ctx, payload, parNumber, tag, additionalTopic, meta, s.tm.GetProducerId())
 	} else {
-		return s.stream.PushWithTag(ctx, payload, parNumber, tag, isControl, payloadIsArr, 0, 0, 0)
+		return s.stream.PushWithTag(ctx, payload, parNumber, tag, additionalTopic, meta, sharedlog_stream.EmptyProducerId)
 	}
 }
 
 func (s *ShardedSharedLogStreamSyncSink) bufpush(ctx context.Context, payload []byte, parNum uint8) error {
 	if s.transactional {
-		return s.stream.BufPush(ctx, payload, parNum, s.tm.GetCurrentTaskId(), s.tm.GetCurrentEpoch(), s.tm.GetCurrentTaskId())
+		return s.stream.BufPush(ctx, payload, parNum, s.tm.GetProducerId())
 	} else {
-		return s.stream.BufPush(ctx, payload, parNum, 0, 0, 0)
+		return s.stream.BufPush(ctx, payload, parNum, sharedlog_stream.EmptyProducerId)
 	}
 }
