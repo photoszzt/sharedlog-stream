@@ -75,6 +75,10 @@ func (st *InMemoryKeyValueStore) Put(ctx context.Context, key commtypes.KeyT, va
 	return nil
 }
 
+func (st *InMemoryKeyValueStore) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
+	return st.Put(ctx, key, value)
+}
+
 func (st *InMemoryKeyValueStore) PutIfAbsent(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) (commtypes.ValueT, error) {
 	originalVal, exists := st.store.Get(key)
 	if !exists {
@@ -196,5 +200,5 @@ func (st *InMemoryKeyValueStore) GetTransactionID(ctx context.Context, taskRepr 
 	panic("not supported")
 }
 
-func (st *InMemoryKeyValueStore) SetTrackParFunc(tran_interface.TrackKeySubStreamFunc) {
+func (st *InMemoryKeyValueStore) SetTrackParFunc(tran_interface.TrackProdSubStreamFunc) {
 }

@@ -48,6 +48,26 @@ func NewShardedSharedLogStream(env types.Environment, topicName string, numParti
 	}, nil
 }
 
+func (s *ShardedSharedLogStream) ExactlyOnce(gua tran_interface.GuaranteeMth) {
+	for _, substream := range s.subSharedLogStreams {
+		substream.ExactlyOnce(gua)
+	}
+}
+
+func (s *ShardedSharedLogStream) ResetInitialProd() {
+	for _, substream := range s.subSharedLogStreams {
+		substream.ResetInitialProd()
+	}
+}
+
+func (s *ShardedSharedLogStream) GetInitialProdSeqNum(substreamNum uint8) uint64 {
+	return s.subSharedLogStreams[substreamNum].GetInitialProdSeqNum()
+}
+
+func (s *ShardedSharedLogStream) GetCurrentProdSeqNum(substreamNum uint8) uint64 {
+	return s.subSharedLogStreams[substreamNum].GetCurrentProdSeqNum()
+}
+
 func (s *ShardedSharedLogStream) ScaleSubstreams(env types.Environment, scaleTo uint8) error {
 	if scaleTo == 0 {
 		return fmt.Errorf("updated number of substreams should be larger and equal to one")

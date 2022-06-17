@@ -5,6 +5,14 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 )
 
+type GuaranteeMth uint8
+
+const (
+	AT_LEAST_ONCE    GuaranteeMth = 0
+	TWO_PHASE_COMMIT GuaranteeMth = 1
+	EPOCH_MARK       GuaranteeMth = 2
+)
+
 type ReadOnlyExactlyOnceManager interface {
 	GetCurrentEpoch() uint16
 	GetCurrentTaskId() uint64
@@ -12,14 +20,14 @@ type ReadOnlyExactlyOnceManager interface {
 	GetProducerId() ProducerId
 }
 
-type TrackKeySubStreamFunc func(ctx context.Context,
+type TrackProdSubStreamFunc func(ctx context.Context,
 	key interface{},
 	keySerde commtypes.Serde,
 	topicName string,
 	substreamId uint8,
 ) error
 
-func DefaultTrackSubstreamFunc(ctx context.Context,
+func DefaultTrackProdSubstreamFunc(ctx context.Context,
 	key interface{},
 	keySerde commtypes.Serde,
 	topicName string,

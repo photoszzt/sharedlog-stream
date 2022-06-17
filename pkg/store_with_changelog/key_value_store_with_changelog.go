@@ -62,20 +62,12 @@ func (st *KeyValueStoreWithChangelog) FlushChangelog(ctx context.Context) error 
 }
 
 func (st *KeyValueStoreWithChangelog) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
-	keyBytes, err := st.mp.kvMsgSerdes.KeySerde.Encode(key)
-	if err != nil {
-		return err
-	}
-	valBytes, err := st.mp.kvMsgSerdes.ValSerde.Encode(value)
-	if err != nil {
-		return err
-	}
-	encoded, err := st.mp.kvMsgSerdes.MsgSerde.Encode(keyBytes, valBytes)
-	if err != nil {
-		return err
+	msg := commtypes.Message{
+		Key:   key,
+		Value: value,
 	}
 	changelogManager := st.mp.ChangelogManager()
-	err = changelogManager.Push(ctx, encoded, st.mp.parNum)
+	err := changelogManager.Produce(ctx, msg, st.mp.parNum, false)
 	if err != nil {
 		return err
 	}
@@ -84,11 +76,23 @@ func (st *KeyValueStoreWithChangelog) Put(ctx context.Context, key commtypes.Key
 		return err
 	}
 	if st.use_bytes {
+		keyBytes, err := st.mp.kvMsgSerdes.KeySerde.Encode(key)
+		if err != nil {
+			return err
+		}
+		valBytes, err := st.mp.kvMsgSerdes.ValSerde.Encode(value)
+		if err != nil {
+			return err
+		}
 		err = st.kvstore.Put(ctx, keyBytes, valBytes)
 	} else {
 		err = st.kvstore.Put(ctx, key, value)
 	}
 	return err
+}
+
+func (st *KeyValueStoreWithChangelog) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
+	return st.kvstore.Put(ctx, key, value)
 }
 
 func (st *KeyValueStoreWithChangelog) PutIfAbsent(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) (commtypes.ValueT, error) {
@@ -97,23 +101,7 @@ func (st *KeyValueStoreWithChangelog) PutIfAbsent(ctx context.Context, key commt
 		return nil, err
 	}
 	if !exists {
-		keyBytes, err := st.mp.kvMsgSerdes.KeySerde.Encode(key)
-		if err != nil {
-			return nil, err
-		}
-		valBytes, err := st.mp.kvMsgSerdes.ValSerde.Encode(value)
-		if err != nil {
-			return nil, err
-		}
-		encoded, err := st.mp.kvMsgSerdes.MsgSerde.Encode(keyBytes, valBytes)
-		if err != nil {
-			return nil, err
-		}
-		err = st.mp.ChangelogManager().Push(ctx, encoded, st.mp.parNum)
-		if err != nil {
-			return nil, err
-		}
-		err = st.kvstore.Put(ctx, key, value)
+		err := st.Put(ctx, key, value)
 		if err != nil {
 			return nil, err
 		}
@@ -133,15 +121,11 @@ func (st *KeyValueStoreWithChangelog) PutAll(ctx context.Context, entries []*com
 }
 
 func (st *KeyValueStoreWithChangelog) Delete(ctx context.Context, key commtypes.KeyT) error {
-	keyBytes, err := st.mp.kvMsgSerdes.KeySerde.Encode(key)
-	if err != nil {
-		return err
+	msg := commtypes.Message{
+		Key:   key,
+		Value: nil,
 	}
-	encoded, err := st.mp.kvMsgSerdes.MsgSerde.Encode(keyBytes, nil)
-	if err != nil {
-		return err
-	}
-	err = st.mp.ChangelogManager().Push(ctx, encoded, st.mp.parNum)
+	err := st.mp.ChangelogManager().Produce(ctx, msg, st.mp.parNum, false)
 	if err != nil {
 		return err
 	}
@@ -181,7 +165,7 @@ func (st *KeyValueStoreWithChangelog) GetTransactionID(ctx context.Context, task
 	panic("not supported")
 }
 
-func (st *KeyValueStoreWithChangelog) SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc) {
+func (st *KeyValueStoreWithChangelog) SetTrackParFunc(trackParFunc tran_interface.TrackProdSubStreamFunc) {
 	st.mp.SetTrackParFunc(trackParFunc)
 }
 

@@ -2,7 +2,6 @@ package store_with_changelog
 
 import (
 	"context"
-	"fmt"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/processor"
@@ -12,9 +11,8 @@ import (
 )
 
 type InMemoryWindowStoreWithChangelog struct {
-	windowStore      *store.InMemoryWindowStore
-	mp               *MaterializeParam
-	keyWindowTsSerde commtypes.Serde
+	windowStore *store.InMemoryWindowStore
+	mp          *MaterializeParam
 }
 
 var _ = store.WindowStore(&InMemoryWindowStoreWithChangelog{})
@@ -25,19 +23,10 @@ func NewInMemoryWindowStoreWithChangelog(retensionPeriod int64,
 	comparable concurrent_skiplist.Comparable,
 	mp *MaterializeParam,
 ) (*InMemoryWindowStoreWithChangelog, error) {
-	var ktsSerde commtypes.Serde
-	if mp.serdeFormat == commtypes.JSON {
-		ktsSerde = commtypes.KeyAndWindowStartTsJSONSerde{}
-	} else if mp.serdeFormat == commtypes.MSGP {
-		ktsSerde = commtypes.KeyAndWindowStartTsMsgpSerde{}
-	} else {
-		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", mp.SerdeFormat())
-	}
 	return &InMemoryWindowStoreWithChangelog{
 		windowStore: store.NewInMemoryWindowStore(mp.storeName,
 			retensionPeriod, windowSize, retainDuplicates, comparable),
-		mp:               mp,
-		keyWindowTsSerde: ktsSerde,
+		mp: mp,
 	}, nil
 }
 
@@ -54,10 +43,6 @@ func (st *InMemoryWindowStoreWithChangelog) MaterializeParam() *MaterializeParam
 	return st.mp
 }
 
-func (st *InMemoryWindowStoreWithChangelog) KeyWindowTsSerde() commtypes.Serde {
-	return st.keyWindowTsSerde
-}
-
 func (st *InMemoryWindowStoreWithChangelog) Name() string {
 	return st.windowStore.Name()
 }
@@ -66,30 +51,19 @@ func (st *InMemoryWindowStoreWithChangelog) FlushChangelog(ctx context.Context) 
 	return st.mp.ChangelogManager().Flush(ctx)
 }
 
-func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error {
-	keyBytes, err := st.mp.kvMsgSerdes.KeySerde.Encode(key)
-	if err != nil {
-		return err
-	}
-	valBytes, err := st.mp.kvMsgSerdes.ValSerde.Encode(value)
-	if err != nil {
-		return err
-	}
-
-	keyAndTs := &commtypes.KeyAndWindowStartTs{
-		Key:           keyBytes,
+func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context,
+	key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64,
+) error {
+	keyTs := &commtypes.KeyAndWindowStartTs{
+		Key:           key,
 		WindowStartTs: windowStartTimestamp,
 	}
-	ktsBytes, err := st.keyWindowTsSerde.Encode(keyAndTs)
-	if err != nil {
-		return err
-	}
-	encoded, err := st.mp.kvMsgSerdes.MsgSerde.Encode(ktsBytes, valBytes)
-	if err != nil {
-		return err
+	msg := commtypes.Message{
+		Key:   keyTs,
+		Value: value,
 	}
 	changelogManager := st.mp.ChangelogManager()
-	err = changelogManager.Push(ctx, encoded, st.mp.parNum)
+	err := changelogManager.Produce(ctx, msg, st.mp.parNum, false)
 	if err != nil {
 		return err
 	}
@@ -99,6 +73,12 @@ func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context, key commtyp
 	}
 	err = st.windowStore.Put(ctx, key, value, windowStartTimestamp)
 	return err
+}
+
+func (st *InMemoryWindowStoreWithChangelog) PutWithoutPushToChangelog(ctx context.Context,
+	key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64,
+) error {
+	return st.windowStore.Put(ctx, key, value, windowStartTimestamp)
 }
 
 func (st *InMemoryWindowStoreWithChangelog) Get(ctx context.Context, key commtypes.KeyT, windowStartTimestamp int64) (commtypes.ValueT, bool, error) {
@@ -193,7 +173,7 @@ func (s *InMemoryWindowStoreWithChangelog) AbortTransaction(ctx context.Context)
 func (s *InMemoryWindowStoreWithChangelog) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
 	panic("not supported")
 }
-func (s *InMemoryWindowStoreWithChangelog) SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc) {
+func (s *InMemoryWindowStoreWithChangelog) SetTrackParFunc(trackParFunc tran_interface.TrackProdSubStreamFunc) {
 	s.mp.SetTrackParFunc(trackParFunc)
 }
 

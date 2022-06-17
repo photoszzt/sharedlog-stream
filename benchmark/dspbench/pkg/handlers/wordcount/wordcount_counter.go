@@ -14,7 +14,7 @@ import (
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/treemap"
@@ -71,7 +71,8 @@ func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes
 	mp, err := store_with_changelog.NewMaterializeParamBuilder().KVMsgSerdes(kvMsgSerdes).
 		StoreName(sp.OutputTopicNames[0] + "-tab").ParNum(sp.ParNum).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
-		ChangelogManager(store_with_changelog.NewChangelogManager(output_stream, commtypes.SerdeFormat(sp.SerdeFormat))).Build()
+		BuildWithChangelogManager(store_with_changelog.NewChangelogManager(output_stream,
+			kvMsgSerdes, common.SrcConsumeTimeout, time.Duration(sp.FlushMs)*time.Millisecond))
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +125,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 			continue
 		}
 		if msg.IsControl {
-			v := msg.Msg.Value.(source_sink.ScaleEpochAndBytes)
+			v := msg.Msg.Value.(producer_consumer.ScaleEpochAndBytes)
 			// TODO: below is not correct
 			err = args.Sinks()[0].Produce(ctx, msg.Msg, args.SubstreamNum(), true)
 			if err != nil {
@@ -143,7 +144,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 			}
 			continue
 		}
-		t.CurrentOffset[args.Sources()[0].TopicName()] = msg.LogSeqNum
+		t.CurrentConsumeOffset[args.Sources()[0].TopicName()] = msg.LogSeqNum
 		if msg.MsgArr != nil {
 			for _, subMsg := range msg.MsgArr {
 				_, err = args.counter.ProcessAndReturn(ctx, subMsg)
@@ -179,7 +180,7 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 			Message: fmt.Sprintf("get msg serde failed: %v", err),
 		}
 	}
-	inConfig := &source_sink.StreamSourceConfig{
+	inConfig := &producer_consumer.StreamConsumerConfig{
 		Timeout: common.SrcConsumeTimeout,
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			KeySerde: commtypes.StringSerde{},
@@ -187,9 +188,9 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 			MsgSerde: msgSerde,
 		},
 	}
-	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
+	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, inConfig),
 		warmup)
-	sink := source_sink.NewMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_streams[0], &source_sink.StreamSinkConfig{
+	sink := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], &producer_consumer.StreamSinkConfig{
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			KeySerde: commtypes.StringSerde{},
 			ValSerde: commtypes.Uint64Serde{},
@@ -207,10 +208,10 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 	}
 
 	funcName := "wccounter"
-	srcs := []source_sink.MeteredSourceIntr{src}
+	srcs := []producer_consumer.MeteredConsumerIntr{src}
 	procArgs := &wordcountCounterAggProcessArg{
 		counter: count,
-		BaseExecutionContext: proc_interface.NewExecutionContext(srcs, []source_sink.MeteredSink{sink},
+		BaseExecutionContext: proc_interface.NewExecutionContext(srcs, []producer_consumer.MeteredProducerIntr{sink},
 			funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 
@@ -226,5 +227,5 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 	transactionalID := fmt.Sprintf("%s-%s-%s-%d", funcName, sp.InputTopicNames[0], sp.OutputTopicNames[0], sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
 }

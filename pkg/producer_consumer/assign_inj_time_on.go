@@ -1,7 +1,7 @@
 //go:build stats
 // +build stats
 
-package source_sink
+package producer_consumer
 
 import (
 	"sharedlog-stream/pkg/commtypes"

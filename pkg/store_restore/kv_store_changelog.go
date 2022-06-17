@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/pkg/common_errors"
-	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
@@ -13,37 +12,33 @@ import (
 	"sharedlog-stream/pkg/transaction/tran_interface"
 
 	"go.mongodb.org/mongo-driver/x/mongo/driver/session"
+	"golang.org/x/xerrors"
 )
 
 type KVStoreChangelog struct {
 	kvStore          store.KeyValueStore
 	changelogManager *store_with_changelog.ChangelogManager
-	kvmsgSerdes      commtypes.KVMsgSerdes
 	inputStream      sharedlog_stream.Stream
 	restoreFunc      func(ctx context.Context, args interface{}) error
 	restoreArg       interface{}
 	// this is used to identify the db and collection to store the transaction id
 	tabTranRepr string
-	// when used by changelog backed kv store, parnum is the parnum of changelog
-	// when used by mongodb, parnum is the parnum of the input streams
-	parNum uint8
+	parNum      uint8
 }
 
 func NewKVStoreChangelog(
 	kvStore store.KeyValueStore,
 	changelogManager *store_with_changelog.ChangelogManager,
-	kvmsgSerdes commtypes.KVMsgSerdes,
 	parNum uint8,
 ) *KVStoreChangelog {
 	return &KVStoreChangelog{
 		kvStore:          kvStore,
 		changelogManager: changelogManager,
-		kvmsgSerdes:      kvmsgSerdes,
 		parNum:           parNum,
 	}
 }
 
-func (kvc *KVStoreChangelog) SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc) {
+func (kvc *KVStoreChangelog) SetTrackParFunc(trackParFunc tran_interface.TrackProdSubStreamFunc) {
 	kvc.kvStore.SetTrackParFunc(trackParFunc)
 }
 
@@ -138,54 +133,43 @@ func AbortKVStoreTransaction(ctx context.Context, kvstores []*KVStoreChangelog) 
 func RestoreChangelogKVStateStore(
 	ctx context.Context,
 	kvchangelog *KVStoreChangelog,
-	offset uint64,
+	consumedOffset uint64,
 ) error {
-	currentOffset := uint64(0)
-	debug.Assert(kvchangelog.kvmsgSerdes.ValSerde != nil, "val serde should not be nil")
-	debug.Assert(kvchangelog.kvmsgSerdes.KeySerde != nil, "key serde should not be nil")
-	debug.Assert(kvchangelog.kvmsgSerdes.MsgSerde != nil, "msg serde should not be nil")
+	kvStore := kvchangelog.kvStore
 	for {
-		msg, err := kvchangelog.changelogManager.ReadNext(ctx, kvchangelog.parNum)
+		gotMsgs, err := kvchangelog.changelogManager.Consume(ctx, kvchangelog.parNum)
 		// nothing to restore
 		if common_errors.IsStreamEmptyError(err) {
+			return nil
+		} else if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 			return nil
 		} else if err != nil {
 			return fmt.Errorf("ReadNext failed: %v", err)
 		}
-		currentOffset = msg.LogSeqNum
-		if msg.Payload == nil {
-			continue
-		}
-		msgAndSeqs, err := commtypes.DecodeRawMsg(msg,
-			kvchangelog.kvmsgSerdes,
-			sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDE,
-			commtypes.DecodeMsg,
-		)
-		if err != nil {
-			return err
-		}
-		if msgAndSeqs.MsgArr != nil {
-			for _, msg := range msgAndSeqs.MsgArr {
-				if msg.Key == nil && msg.Value == nil {
+		for _, msg := range gotMsgs.Msgs {
+			seqNum := msg.LogSeqNum
+			if seqNum >= consumedOffset && kvchangelog.changelogManager.ChangelogIsSrc() {
+				return nil
+			}
+			if msg.MsgArr != nil {
+				for _, msg := range msg.MsgArr {
+					if msg.Key == nil && msg.Value == nil {
+						continue
+					}
+					err = kvStore.PutWithoutPushToChangelog(ctx, msg.Key, msg.Value)
+					if err != nil {
+						return err
+					}
+				}
+			} else {
+				if msg.Msg.Key == nil && msg.Msg.Value == nil {
 					continue
 				}
-				err = kvchangelog.kvStore.Put(ctx, msg.Key, msg.Value)
+				err = kvStore.PutWithoutPushToChangelog(ctx, msg.Msg.Key, msg.Msg.Value)
 				if err != nil {
 					return err
 				}
 			}
-		} else {
-			if msgAndSeqs.Msg.Key == nil && msgAndSeqs.Msg.Value == nil {
-				continue
-			}
-			err = kvchangelog.kvStore.Put(ctx, msgAndSeqs.Msg.Key, msgAndSeqs.Msg.Value)
-			if err != nil {
-				return err
-			}
-		}
-
-		if currentOffset == offset {
-			return nil
 		}
 	}
 }

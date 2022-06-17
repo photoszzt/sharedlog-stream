@@ -1,4 +1,4 @@
-package source_sink
+package producer_consumer
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-type ShardedSharedLogStreamSink struct {
+type ShardedSharedLogStreamAsyncProducer struct {
 	wg            sync.WaitGroup
 	kvmsgSerdes   commtypes.KVMsgSerdes
 	tm            tran_interface.ReadOnlyExactlyOnceManager
@@ -29,12 +29,10 @@ type StreamSinkConfig struct {
 	FlushDuration time.Duration
 }
 
-var _ = Sink(&ShardedSharedLogStreamSink{})
-
-func NewShardedSharedLogStreamSink(stream *sharedlog_stream.ShardedSharedLogStream, config *StreamSinkConfig) *ShardedSharedLogStreamSink {
+func NewShardedSharedLogStreamAsyncSink(stream *sharedlog_stream.ShardedSharedLogStream, config *StreamSinkConfig) *ShardedSharedLogStreamAsyncProducer {
 	streamPusher := sharedlog_stream.NewStreamPush(stream)
 	debug.Assert(config.FlushDuration != 0, "flush duration cannot be zero")
-	s := &ShardedSharedLogStreamSink{
+	s := &ShardedSharedLogStreamAsyncProducer{
 		kvmsgSerdes:   config.KVMsgSerdes,
 		streamPusher:  streamPusher,
 		flushDuration: config.FlushDuration,
@@ -44,24 +42,24 @@ func NewShardedSharedLogStreamSink(stream *sharedlog_stream.ShardedSharedLogStre
 	return s
 }
 
-func (sls *ShardedSharedLogStreamSink) SetName(name string) {
+func (sls *ShardedSharedLogStreamAsyncProducer) SetName(name string) {
 	sls.name = name
 }
 
-func (sls *ShardedSharedLogStreamSink) Name() string {
+func (sls *ShardedSharedLogStreamAsyncProducer) Name() string {
 	return sls.name
 }
 
-func (sls *ShardedSharedLogStreamSink) Stream() *sharedlog_stream.ShardedSharedLogStream {
+func (sls *ShardedSharedLogStreamAsyncProducer) Stream() *sharedlog_stream.ShardedSharedLogStream {
 	return sls.streamPusher.Stream
 }
 
-func (sls *ShardedSharedLogStreamSink) InTransaction(tm tran_interface.ReadOnlyExactlyOnceManager) {
+func (sls *ShardedSharedLogStreamAsyncProducer) ConfigExactlyOnce(tm tran_interface.ReadOnlyExactlyOnceManager) {
 	sls.transactional = true
 	sls.tm = tm
 }
 
-func (sls *ShardedSharedLogStreamSink) StartAsyncPushWithTick(ctx context.Context) {
+func (sls *ShardedSharedLogStreamAsyncProducer) StartAsyncPushWithTick(ctx context.Context) {
 	sls.wg.Add(1)
 	if sls.transactional {
 		producerId := sls.tm.GetProducerId()
@@ -71,7 +69,7 @@ func (sls *ShardedSharedLogStreamSink) StartAsyncPushWithTick(ctx context.Contex
 	}
 }
 
-func (sls *ShardedSharedLogStreamSink) StartAsyncPushNoTick(ctx context.Context) {
+func (sls *ShardedSharedLogStreamAsyncProducer) StartAsyncPushNoTick(ctx context.Context) {
 	sls.wg.Add(1)
 	if sls.transactional {
 		producerId := sls.tm.GetProducerId()
@@ -81,11 +79,11 @@ func (sls *ShardedSharedLogStreamSink) StartAsyncPushNoTick(ctx context.Context)
 	}
 }
 
-func (sls *ShardedSharedLogStreamSink) RebuildMsgChan() {
+func (sls *ShardedSharedLogStreamAsyncProducer) RebuildMsgChan() {
 	sls.streamPusher.MsgChan = make(chan sharedlog_stream.PayloadToPush, sharedlog_stream.MSG_CHAN_SIZE)
 }
 
-func (sls *ShardedSharedLogStreamSink) CloseAsyncPush() {
+func (sls *ShardedSharedLogStreamAsyncProducer) CloseAsyncPush() {
 	debug.Fprintf(os.Stderr, "stream pusher msg chan len: %d\n", len(sls.streamPusher.MsgChan))
 	// for len(sls.streamPusher.MsgChan) > 0 {
 	// 	debug.Fprintf(os.Stderr, "stream pusher msg chan len: %d\n", len(sls.streamPusher.MsgChan))
@@ -95,7 +93,7 @@ func (sls *ShardedSharedLogStreamSink) CloseAsyncPush() {
 	sls.wg.Wait()
 }
 
-func (sls *ShardedSharedLogStreamSink) TopicName() string {
+func (sls *ShardedSharedLogStreamAsyncProducer) TopicName() string {
 	return sls.streamPusher.Stream.TopicName()
 }
 
@@ -104,7 +102,7 @@ func MsgIsScaleFence(msg *commtypes.Message) bool {
 	return ok && ctrl == txn_data.SCALE_FENCE_KEY
 }
 
-func (sls *ShardedSharedLogStreamSink) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
+func (sls *ShardedSharedLogStreamAsyncProducer) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
 	if msg.Key == nil && msg.Value == nil {
 		return nil
 	}
@@ -125,11 +123,11 @@ func (sls *ShardedSharedLogStreamSink) Produce(ctx context.Context, msg commtype
 	return nil
 }
 
-func (sls *ShardedSharedLogStreamSink) KeySerde() commtypes.Serde {
+func (sls *ShardedSharedLogStreamAsyncProducer) KeySerde() commtypes.Serde {
 	return sls.kvmsgSerdes.KeySerde
 }
 
-func (sls *ShardedSharedLogStreamSink) Flush(ctx context.Context) error {
+func (sls *ShardedSharedLogStreamAsyncProducer) Flush(ctx context.Context) error {
 	if sls.transactional {
 		producerId := sls.tm.GetProducerId()
 		return sls.streamPusher.Flush(ctx, producerId)
@@ -138,7 +136,7 @@ func (sls *ShardedSharedLogStreamSink) Flush(ctx context.Context) error {
 	}
 }
 
-func (sls *ShardedSharedLogStreamSink) FlushNoLock(ctx context.Context) error {
+func (sls *ShardedSharedLogStreamAsyncProducer) FlushNoLock(ctx context.Context) error {
 	if sls.transactional {
 		producerId := sls.tm.GetProducerId()
 		return sls.streamPusher.FlushNoLock(ctx, producerId)
@@ -147,6 +145,6 @@ func (sls *ShardedSharedLogStreamSink) FlushNoLock(ctx context.Context) error {
 	}
 }
 
-func (sls *ShardedSharedLogStreamSink) InitFlushTimer() {
+func (sls *ShardedSharedLogStreamAsyncProducer) InitFlushTimer() {
 	sls.streamPusher.InitFlushTimer(sls.flushDuration)
 }

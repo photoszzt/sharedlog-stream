@@ -2,7 +2,7 @@ package stream
 
 import (
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/producer_consumer"
 )
 
 type StreamBuilder struct {
@@ -15,7 +15,7 @@ func NewStreamBuilder() *StreamBuilder {
 	}
 }
 
-func (sb *StreamBuilder) Source(name string, source source_sink.Source) Stream {
+func (sb *StreamBuilder) Source(name string, source producer_consumer.Consumer) Stream {
 	n := sb.tp.AddSource(name, source)
 	return newStream(sb.tp, []processor.Node{n})
 }

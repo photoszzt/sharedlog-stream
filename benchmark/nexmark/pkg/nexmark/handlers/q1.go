@@ -96,7 +96,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
 		FixedOutParNum(sp.ParNum).
 		Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
 }
 
 type query1ProcessArgs struct {

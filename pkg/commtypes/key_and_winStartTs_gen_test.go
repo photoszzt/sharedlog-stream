@@ -9,8 +9,8 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
-func TestMarshalUnmarshalKeyAndWindowStartTs(t *testing.T) {
-	v := KeyAndWindowStartTs{}
+func TestMarshalUnmarshalKeyAndWindowStartTsSerialized(t *testing.T) {
+	v := KeyAndWindowStartTsSerialized{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -32,8 +32,8 @@ func TestMarshalUnmarshalKeyAndWindowStartTs(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgKeyAndWindowStartTs(b *testing.B) {
-	v := KeyAndWindowStartTs{}
+func BenchmarkMarshalMsgKeyAndWindowStartTsSerialized(b *testing.B) {
+	v := KeyAndWindowStartTsSerialized{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -41,8 +41,8 @@ func BenchmarkMarshalMsgKeyAndWindowStartTs(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgKeyAndWindowStartTs(b *testing.B) {
-	v := KeyAndWindowStartTs{}
+func BenchmarkAppendMsgKeyAndWindowStartTsSerialized(b *testing.B) {
+	v := KeyAndWindowStartTsSerialized{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -53,8 +53,8 @@ func BenchmarkAppendMsgKeyAndWindowStartTs(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalKeyAndWindowStartTs(b *testing.B) {
-	v := KeyAndWindowStartTs{}
+func BenchmarkUnmarshalKeyAndWindowStartTsSerialized(b *testing.B) {
+	v := KeyAndWindowStartTsSerialized{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -67,17 +67,17 @@ func BenchmarkUnmarshalKeyAndWindowStartTs(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodeKeyAndWindowStartTs(t *testing.T) {
-	v := KeyAndWindowStartTs{}
+func TestEncodeDecodeKeyAndWindowStartTsSerialized(t *testing.T) {
+	v := KeyAndWindowStartTsSerialized{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodeKeyAndWindowStartTs Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeKeyAndWindowStartTsSerialized Msgsize() is inaccurate")
 	}
 
-	vn := KeyAndWindowStartTs{}
+	vn := KeyAndWindowStartTsSerialized{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -91,8 +91,8 @@ func TestEncodeDecodeKeyAndWindowStartTs(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodeKeyAndWindowStartTs(b *testing.B) {
-	v := KeyAndWindowStartTs{}
+func BenchmarkEncodeKeyAndWindowStartTsSerialized(b *testing.B) {
+	v := KeyAndWindowStartTsSerialized{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -105,8 +105,8 @@ func BenchmarkEncodeKeyAndWindowStartTs(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodeKeyAndWindowStartTs(b *testing.B) {
-	v := KeyAndWindowStartTs{}
+func BenchmarkDecodeKeyAndWindowStartTsSerialized(b *testing.B) {
+	v := KeyAndWindowStartTsSerialized{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))

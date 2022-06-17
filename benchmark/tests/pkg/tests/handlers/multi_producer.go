@@ -11,7 +11,7 @@ import (
 	"sharedlog-stream/benchmark/tests/pkg/tests/test_types"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/transaction/tran_interface"
@@ -59,8 +59,8 @@ func (h *multiProducerHandler) tests(ctx context.Context, sp *test_types.TestInp
 }
 
 func (h *multiProducerHandler) getProduceTransactionManager(
-	ctx context.Context, transactionalID string, sink source_sink.Sink,
-) (*transaction.TransactionManager, tran_interface.TrackKeySubStreamFunc) {
+	ctx context.Context, transactionalID string, sink producer_consumer.Producer,
+) (*transaction.TransactionManager, tran_interface.TrackProdSubStreamFunc) {
 	args1 := benchutil.UpdateStreamTaskArgs(&common.QueryInput{},
 		stream_task.NewStreamTaskArgsBuilder(h.env, nil, transactionalID)).Build()
 	tm1, err := stream_task.SetupTransactionManager(ctx, args1)
@@ -83,8 +83,8 @@ func (h *multiProducerHandler) getProduceTransactionManager(
 }
 
 func (h *multiProducerHandler) getConsumeTransactionManager(
-	ctx context.Context, transactionalID string, src source_sink.Source,
-) (*transaction.TransactionManager, tran_interface.TrackKeySubStreamFunc) {
+	ctx context.Context, transactionalID string, src producer_consumer.Consumer,
+) (*transaction.TransactionManager, tran_interface.TrackProdSubStreamFunc) {
 	args1 := benchutil.UpdateStreamTaskArgs(&common.QueryInput{},
 		stream_task.NewStreamTaskArgsBuilder(h.env, nil, transactionalID)).Build()
 	tm1, err := stream_task.SetupTransactionManager(ctx, args1)
@@ -132,20 +132,20 @@ func (h *multiProducerHandler) testMultiProducer(ctx context.Context) {
 		ValSerde: commtypes.StringSerde{},
 		MsgSerde: commtypes.MessageSerializedJSONSerde{},
 	}
-	produceSinkConfig := &source_sink.StreamSinkConfig{
+	produceSinkConfig := &producer_consumer.StreamSinkConfig{
 		KVMsgSerdes:   kvmsgSerdes,
 		FlushDuration: common.FlushDuration,
 	}
 
-	produceSink := source_sink.NewShardedSharedLogStreamSyncSink(stream1, produceSinkConfig)
-	produceSinkCopy := source_sink.NewShardedSharedLogStreamSyncSink(stream1Copy, produceSinkConfig)
+	produceSink := producer_consumer.NewShardedSharedLogStreamProducer(stream1, produceSinkConfig)
+	produceSinkCopy := producer_consumer.NewShardedSharedLogStreamProducer(stream1Copy, produceSinkConfig)
 
 	tm1, trackParFunc1 := h.getProduceTransactionManager(ctx, "prod1", produceSink)
 	tm2, trackParFunc2 := h.getProduceTransactionManager(ctx, "prod2", produceSinkCopy)
 	tm1.RecordTopicStreams(stream1.TopicName(), stream1)
 	tm2.RecordTopicStreams(stream1.TopicName(), stream1)
-	produceSink.InTransaction(tm1)
-	produceSinkCopy.InTransaction(tm2)
+	produceSink.ConfigExactlyOnce(tm1, tran_interface.TWO_PHASE_COMMIT)
+	produceSinkCopy.ConfigExactlyOnce(tm2, tran_interface.TWO_PHASE_COMMIT)
 
 	h.beginTransaction(ctx, tm1, stream1)
 	h.beginTransaction(ctx, tm2, stream1Copy)
@@ -221,13 +221,13 @@ func (h *multiProducerHandler) testMultiProducer(ctx context.Context) {
 		panic(err)
 	}
 
-	srcConfig := &source_sink.StreamSourceConfig{
+	srcConfig := &producer_consumer.StreamConsumerConfig{
 		Timeout:     common.SrcConsumeTimeout,
 		KVMsgSerdes: kvmsgSerdes,
 	}
 
-	src1 := source_sink.NewShardedSharedLogStreamSource(stream1ForRead, srcConfig)
-	src1.InTransaction(commtypes.JSON)
+	src1 := producer_consumer.NewShardedSharedLogStreamConsumer(stream1ForRead, srcConfig)
+	src1.ConfigExactlyOnce(commtypes.JSON, tran_interface.TWO_PHASE_COMMIT)
 	payloadArrSerde := sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDE
 	got, err := readMsgs(ctx, kvmsgSerdes, payloadArrSerde, commtypes.JSON, stream1ForRead)
 	if err != nil {

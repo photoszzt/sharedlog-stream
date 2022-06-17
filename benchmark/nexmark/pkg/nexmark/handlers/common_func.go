@@ -10,7 +10,7 @@ import (
 
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/producer_consumer"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -21,7 +21,7 @@ func only_bid(msg *commtypes.Message) (bool, error) {
 }
 
 func getSrcSink(ctx context.Context, env types.Environment, sp *common.QueryInput,
-) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
+) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
 	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, env, sp)
 	if err != nil {
 		return nil, nil, err
@@ -36,7 +36,7 @@ func getSrcSink(ctx context.Context, env types.Environment, sp *common.QueryInpu
 	if err != nil {
 		return nil, nil, err
 	}
-	inConfig := &source_sink.StreamSourceConfig{
+	inConfig := &producer_consumer.StreamConsumerConfig{
 		Timeout: common.SrcConsumeTimeout,
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			KeySerde: commtypes.StringSerde{},
@@ -44,7 +44,7 @@ func getSrcSink(ctx context.Context, env types.Environment, sp *common.QueryInpu
 			MsgSerde: msgSerde,
 		},
 	}
-	outConfig := &source_sink.StreamSinkConfig{
+	outConfig := &producer_consumer.StreamSinkConfig{
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			KeySerde: commtypes.StringSerde{},
 			ValSerde: eventSerde,
@@ -53,16 +53,16 @@ func getSrcSink(ctx context.Context, env types.Environment, sp *common.QueryInpu
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig), warmup)
-	sink := source_sink.NewMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_streams[0], outConfig), warmup)
-	return []source_sink.MeteredSourceIntr{src}, []source_sink.MeteredSink{sink}, nil
+	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, inConfig), warmup)
+	sink := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], outConfig), warmup)
+	return []producer_consumer.MeteredConsumerIntr{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
 func getSrcSinkUint64Key(
 	ctx context.Context,
 	env types.Environment,
 	sp *common.QueryInput,
-) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
+) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
 	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, env, sp)
 	if err != nil {
 		return nil, nil, err
@@ -78,7 +78,7 @@ func getSrcSinkUint64Key(
 		return nil, nil, err
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	inConfig := &source_sink.StreamSourceConfig{
+	inConfig := &producer_consumer.StreamConsumerConfig{
 		Timeout: common.SrcConsumeTimeout,
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			KeySerde: commtypes.StringSerde{},
@@ -86,7 +86,7 @@ func getSrcSinkUint64Key(
 			MsgSerde: msgSerde,
 		},
 	}
-	outConfig := &source_sink.StreamSinkConfig{
+	outConfig := &producer_consumer.StreamSinkConfig{
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			MsgSerde: msgSerde,
 			ValSerde: eventSerde,
@@ -94,16 +94,16 @@ func getSrcSinkUint64Key(
 		},
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
-	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig), warmup)
-	sink := source_sink.NewMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_streams[0], outConfig), warmup)
-	return []source_sink.MeteredSourceIntr{src}, []source_sink.MeteredSink{sink}, nil
+	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, inConfig), warmup)
+	sink := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], outConfig), warmup)
+	return []producer_consumer.MeteredConsumerIntr{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
 /*
 func CommonGetSrcSink(ctx context.Context, sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*source_sink.MeteredSource, *source_sink.MeteredSink, error) {
+) (*producer_consumer.MeteredSource, *producer_consumer.MeteredSink, error) {
 	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
@@ -112,7 +112,7 @@ func CommonGetSrcSink(ctx context.Context, sp *common.QueryInput,
 	if err != nil {
 		return nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}
-	inConfig := &source_sink.StreamSourceConfig{
+	inConfig := &producer_consumer.StreamSourceConfig{
 		Timeout: common.SrcConsumeTimeout,
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			KeySerde: commtypes.StringSerde{},
@@ -120,7 +120,7 @@ func CommonGetSrcSink(ctx context.Context, sp *common.QueryInput,
 			MsgSerde: msgSerde,
 		},
 	}
-	outConfig := &source_sink.StreamSinkConfig{
+	outConfig := &producer_consumer.StreamSinkConfig{
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			KeySerde: commtypes.Uint64Serde{},
 			ValSerde: eventSerde,
@@ -129,9 +129,9 @@ func CommonGetSrcSink(ctx context.Context, sp *common.QueryInput,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
-	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
+	src := producer_consumer.NewMeteredSource(producer_consumer.NewShardedSharedLogStreamSource(input_stream, inConfig),
 		time.Duration(sp.WarmupS)*time.Second)
-	sink := source_sink.NewMeteredSink(source_sink.NewShardedSharedLogStreamSink(output_stream, outConfig),
+	sink := producer_consumer.NewMeteredSink(producer_consumer.NewShardedSharedLogStreamSink(output_stream, outConfig),
 		time.Duration(sp.WarmupS)*time.Second)
 	return src, sink, nil
 }

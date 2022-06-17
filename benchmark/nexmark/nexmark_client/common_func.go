@@ -5,6 +5,7 @@ import (
 	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/store"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 )
 
 func NewQueryInput(serdeFormat uint8) *common.QueryInput {
@@ -20,17 +21,23 @@ func NewQueryInput(serdeFormat uint8) *common.QueryInput {
 		panic(fmt.Sprintf("unrecognized table type: %s", FLAGS_app_name))
 	}
 	fmt.Fprintf(os.Stderr, "warmup: %d\n", FLAGS_warmup_time)
+	guarantee := tran_interface.AT_LEAST_ONCE
+	if FLAGS_guarantee == "2pc" {
+		guarantee = tran_interface.TWO_PHASE_COMMIT
+	} else if FLAGS_guarantee == "epoch" {
+		guarantee = tran_interface.EPOCH_MARK
+	}
 	return &common.QueryInput{
-		Duration:          uint32(FLAGS_duration),
-		EnableTransaction: FLAGS_tran,
-		CommitEveryMs:     FLAGS_commit_everyMs,
-		CommitEveryNIter:  uint32(FLAGS_commit_every_niter),
-		ExitAfterNCommit:  uint32(FLAGS_exit_after_ncomm),
-		SerdeFormat:       serdeFormat,
-		AppId:             FLAGS_app_name,
-		TableType:         uint8(table_type),
-		MongoAddr:         FLAGS_mongo_addr,
-		FlushMs:           uint32(FLAGS_flush_ms),
-		WarmupS:           uint32(FLAGS_warmup_time),
+		Duration:         uint32(FLAGS_duration),
+		GuaranteeMth:     uint8(guarantee),
+		CommitEveryMs:    FLAGS_commit_everyMs,
+		CommitEveryNIter: uint32(FLAGS_commit_every_niter),
+		ExitAfterNCommit: uint32(FLAGS_exit_after_ncomm),
+		SerdeFormat:      serdeFormat,
+		AppId:            FLAGS_app_name,
+		TableType:        uint8(table_type),
+		MongoAddr:        FLAGS_mongo_addr,
+		FlushMs:          uint32(FLAGS_flush_ms),
+		WarmupS:          uint32(FLAGS_warmup_time),
 	}
 }

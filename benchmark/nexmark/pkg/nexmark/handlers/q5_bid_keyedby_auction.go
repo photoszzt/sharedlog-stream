@@ -115,5 +115,5 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 		sp.ParNum, sp.OutputTopicNames[0])
 	builder := stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp, builder).Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
 }

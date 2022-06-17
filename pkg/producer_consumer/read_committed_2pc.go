@@ -1,4 +1,4 @@
-package source_sink
+package producer_consumer
 
 import (
 	"context"

@@ -1,12 +1,11 @@
-package source_sink
+package producer_consumer
 
 import (
 	"context"
-	"os"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sharedlog-stream/pkg/txn_data"
 	"time"
 )
@@ -16,82 +15,87 @@ type ScaleEpochAndBytes struct {
 	ScaleEpoch uint64
 }
 
-type StreamSourceConfig struct {
+type StreamConsumerConfig struct {
 	KVMsgSerdes commtypes.KVMsgSerdes
 	Timeout     time.Duration
 }
 
-type ShardedSharedLogStreamSource struct {
+type ShardedSharedLogStreamConsumer struct {
 	kvmsgSerdes     commtypes.KVMsgSerdes
 	payloadArrSerde commtypes.Serde
 	stream          *sharedlog_stream.ShardedSharedLogStream
 	tac             *TransactionAwareConsumer
 	name            string
 	timeout         time.Duration
-	transactional   bool
+	guarantee       tran_interface.GuaranteeMth
 	initialSource   bool
 }
 
-var _ = Source(&ShardedSharedLogStreamSource{})
+var _ = Consumer(&ShardedSharedLogStreamConsumer{})
 
-func NewShardedSharedLogStreamSource(stream *sharedlog_stream.ShardedSharedLogStream, config *StreamSourceConfig) *ShardedSharedLogStreamSource {
-	debug.Fprintf(os.Stderr, "%s timeout: %v\n", stream.TopicName(), config.Timeout)
-	return &ShardedSharedLogStreamSource{
+func NewShardedSharedLogStreamConsumer(stream *sharedlog_stream.ShardedSharedLogStream,
+	config *StreamConsumerConfig,
+) *ShardedSharedLogStreamConsumer {
+	// debug.Fprintf(os.Stderr, "%s timeout: %v\n", stream.TopicName(), config.Timeout)
+	return &ShardedSharedLogStreamConsumer{
 		stream:          stream,
 		timeout:         config.Timeout,
 		kvmsgSerdes:     config.KVMsgSerdes,
 		name:            "src",
 		payloadArrSerde: sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDE,
+		guarantee:       tran_interface.AT_LEAST_ONCE,
 	}
 }
 
-func (s *ShardedSharedLogStreamSource) SetInitialSource(initial bool) {
+func (s *ShardedSharedLogStreamConsumer) SetInitialSource(initial bool) {
 	s.initialSource = initial
 }
-func (s *ShardedSharedLogStreamSource) IsInitialSource() bool {
+func (s *ShardedSharedLogStreamConsumer) IsInitialSource() bool {
 	return s.initialSource
 }
 
-func (s *ShardedSharedLogStreamSource) InTransaction(serdeFormat commtypes.SerdeFormat) error {
-	s.transactional = true
+func (s *ShardedSharedLogStreamConsumer) ConfigExactlyOnce(
+	serdeFormat commtypes.SerdeFormat, guarantee tran_interface.GuaranteeMth,
+) error {
+	s.guarantee = guarantee
 	var err error = nil
 	s.tac, err = NewTransactionAwareConsumer(s.stream, serdeFormat)
 	return err
 }
 
-func (s *ShardedSharedLogStreamSource) Stream() sharedlog_stream.Stream {
+func (s *ShardedSharedLogStreamConsumer) Stream() sharedlog_stream.Stream {
 	return s.stream
 }
 
-func (s *ShardedSharedLogStreamSource) SetName(name string) {
+func (s *ShardedSharedLogStreamConsumer) SetName(name string) {
 	s.name = name
 }
 
-func (s *ShardedSharedLogStreamSource) Name() string {
+func (s *ShardedSharedLogStreamConsumer) Name() string {
 	return s.name
 }
 
-func (s *ShardedSharedLogStreamSource) KVMsgSerdes() commtypes.KVMsgSerdes {
+func (s *ShardedSharedLogStreamConsumer) KVMsgSerdes() commtypes.KVMsgSerdes {
 	return s.kvmsgSerdes
 }
 
-func (s *ShardedSharedLogStreamSource) TopicName() string {
+func (s *ShardedSharedLogStreamConsumer) TopicName() string {
 	return s.stream.TopicName()
 }
 
-func (s *ShardedSharedLogStreamSource) SetCursor(cursor uint64, parNum uint8) {
+func (s *ShardedSharedLogStreamConsumer) SetCursor(cursor uint64, parNum uint8) {
 	s.stream.SetCursor(cursor, parNum)
 }
 
-func (s *ShardedSharedLogStreamSource) readNext(ctx context.Context, parNum uint8) (*commtypes.RawMsg, error) {
-	if s.transactional {
+func (s *ShardedSharedLogStreamConsumer) readNext(ctx context.Context, parNum uint8) (*commtypes.RawMsg, error) {
+	if s.guarantee == tran_interface.TWO_PHASE_COMMIT {
 		return s.tac.ReadNext(ctx, parNum)
 	} else {
 		return s.stream.ReadNext(ctx, parNum)
 	}
 }
 
-func (s *ShardedSharedLogStreamSource) Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
+func (s *ShardedSharedLogStreamConsumer) Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
 	startTime := time.Now()
 	var msgs []commtypes.MsgAndSeq
 	totalLen := uint32(0)

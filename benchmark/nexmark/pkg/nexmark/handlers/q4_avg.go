@@ -12,7 +12,7 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/store_with_changelog"
@@ -36,7 +36,7 @@ func NewQ4Avg(env types.Environment, funcName string) *q4Avg {
 }
 
 func (h *q4Avg) getSrcSink(ctx context.Context, sp *common.QueryInput,
-) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
+) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
 	inputStream, outputStreams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return nil, nil, err
@@ -46,8 +46,8 @@ func (h *q4Avg) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	src := source_sink.NewMeteredSource(
-		source_sink.NewShardedSharedLogStreamSource(inputStream, &source_sink.StreamSourceConfig{
+	src := producer_consumer.NewMeteredConsumer(
+		producer_consumer.NewShardedSharedLogStreamConsumer(inputStream, &producer_consumer.StreamConsumerConfig{
 			Timeout: common.SrcConsumeTimeout,
 			KVMsgSerdes: commtypes.KVMsgSerdes{
 				KeySerde: commtypes.Uint64Serde{},
@@ -55,8 +55,8 @@ func (h *q4Avg) getSrcSink(ctx context.Context, sp *common.QueryInput,
 				MsgSerde: msgSerde,
 			},
 		}), warmup)
-	sink := source_sink.NewMeteredSyncSink(
-		source_sink.NewShardedSharedLogStreamSyncSink(outputStreams[0], &source_sink.StreamSinkConfig{
+	sink := producer_consumer.NewMeteredProducer(
+		producer_consumer.NewShardedSharedLogStreamProducer(outputStreams[0], &producer_consumer.StreamSinkConfig{
 			KVMsgSerdes: commtypes.KVMsgSerdes{
 				KeySerde: commtypes.Uint64Serde{},
 				ValSerde: commtypes.Float64Serde{},
@@ -64,7 +64,7 @@ func (h *q4Avg) getSrcSink(ctx context.Context, sp *common.QueryInput,
 			},
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 		}), warmup)
-	return []source_sink.MeteredSourceIntr{src}, []source_sink.MeteredSink{sink}, nil
+	return []producer_consumer.MeteredConsumerIntr{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
 func (h *q4Avg) Call(ctx context.Context, input []byte) ([]byte, error) {
@@ -119,7 +119,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		StreamParam(commtypes.CreateStreamParam{
 			Env:          h.env,
 			NumPartition: sp.NumInPartition,
-		}).Build()
+		}).Build(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -165,7 +165,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 
 	var kvc []*store_restore.KVStoreChangelog
 	kvc = []*store_restore.KVStoreChangelog{
-		store_restore.NewKVStoreChangelog(kvstore, mp.ChangelogManager(), mp.KVMsgSerdes(), sp.ParNum),
+		store_restore.NewKVStoreChangelog(kvstore, mp.ChangelogManager(), sp.ParNum),
 	}
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["sumCount"] = sumCount.GetLatency()
@@ -179,5 +179,5 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		KVStoreChangelogs(kvc).
 		FixedOutParNum(sp.ParNum).
 		Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
 }

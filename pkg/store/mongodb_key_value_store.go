@@ -360,6 +360,10 @@ func (s *MongoDBKeyValueStore) Put(ctx context.Context, key commtypes.KeyT, valu
 	return s.PutWithCollection(ctx, kBytes, vBytes, s.config.CollectionName)
 }
 
+func (s *MongoDBKeyValueStore) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
+	return s.Put(ctx, key, value)
+}
+
 func (s *MongoDBKeyValueStore) PutWithCollection(ctx context.Context, kBytes []byte,
 	vBytes []byte, collection string,
 ) error {
@@ -487,4 +491,4 @@ func (s *MongoDBKeyValueStore) GetTransactionID(ctx context.Context, taskRepr st
 	return uint64(val.(int64)), true, nil
 }
 
-func (s *MongoDBKeyValueStore) SetTrackParFunc(tran_interface.TrackKeySubStreamFunc) {}
+func (s *MongoDBKeyValueStore) SetTrackParFunc(tran_interface.TrackProdSubStreamFunc) {}

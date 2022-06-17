@@ -25,7 +25,7 @@ var (
 	FLAGS_tps                int
 	FLAGS_serdeFormat        string
 	FLAGS_workload_config    string
-	FLAGS_tran               bool
+	FLAGS_guarantee          string
 	FLAGS_commit_everyMs     uint64
 	FLAGS_commit_every_niter uint
 	FLAGS_exit_after_ncomm   uint
@@ -161,13 +161,17 @@ func main() {
 	flag.UintVar(&FLAGS_commit_every_niter, "comm_every_niter", 0, "commit a transaction every iter(for test)")
 	flag.UintVar(&FLAGS_exit_after_ncomm, "exit_after_ncomm", 0, "exit after n commits(for test)")
 
-	flag.BoolVar(&FLAGS_tran, "tran", false, "enable transaction or not")
+	flag.StringVar(&FLAGS_guarantee, "guarantee", "alo", "alo(at least once), 2pc(two phase commit) or epoch(epoch marking)")
 	flag.BoolVar(&FLAGS_local, "local", false, "local mode without setting node constraint")
 
 	flag.Parse()
 
 	if FLAGS_stat_dir == "" {
 		panic("should specify non empty stats dir")
+	}
+	if FLAGS_guarantee != "alo" && FLAGS_guarantee != "2pc" && FLAGS_guarantee != "epoch" {
+		fmt.Fprintf(os.Stderr, "expected guarantee is alo, 2pc and epoch")
+		return
 	}
 	switch FLAGS_app_name {
 	case "q1", "q2", "q3", "q4", "q5", "q7", "q8", "windowedAvg":

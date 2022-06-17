@@ -2,7 +2,7 @@ package execution
 
 import (
 	"sharedlog-stream/pkg/proc_interface"
-	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/producer_consumer"
 )
 
 type JoinProcArgs struct {
@@ -25,8 +25,8 @@ func NewJoinProcArgs(
 func CreateJoinProcArgsPair(
 	runnerL JoinWorkerFunc,
 	runnerR JoinWorkerFunc,
-	srcs []source_sink.MeteredSourceIntr,
-	sinks []source_sink.MeteredSink,
+	srcs []producer_consumer.MeteredConsumerIntr,
+	sinks []producer_consumer.MeteredProducerIntr,
 	procArgs proc_interface.BaseProcArgs,
 ) (*JoinProcArgs, *JoinProcArgs) {
 	leftArgs := NewJoinProcArgs(runnerL, proc_interface.NewExecutionContextFromComponents(
@@ -41,12 +41,12 @@ func CreateJoinProcArgsPair(
 }
 
 type JoinProcWithoutSinkArgs struct {
-	src    source_sink.Source
+	src    producer_consumer.Consumer
 	runner JoinWorkerFunc
 	parNum uint8
 }
 
-func NewJoinProcWithoutSinkArgs(src source_sink.Source, runner JoinWorkerFunc, parNum uint8) *JoinProcWithoutSinkArgs {
+func NewJoinProcWithoutSinkArgs(src producer_consumer.Consumer, runner JoinWorkerFunc, parNum uint8) *JoinProcWithoutSinkArgs {
 	return &JoinProcWithoutSinkArgs{
 		src:    src,
 		runner: runner,

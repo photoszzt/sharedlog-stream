@@ -8,6 +8,12 @@ import (
 )
 
 type WindowStore interface {
+	CoreWindowStore
+	WindowStoreOpForExternalStore
+	WindowStoreOpWithChangelog
+}
+
+type CoreWindowStore interface {
 	StateStore
 	Init(ctx StoreContext)
 	Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error
@@ -27,8 +33,16 @@ type WindowStore interface {
 		iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error
 	IterAll(iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error
 	TableType() TABLE_TYPE
-	WindowStoreOpForExternalStore
+}
+
+type WindowStoreBackedByChangelog interface {
+	CoreWindowStore
 	WindowStoreOpWithChangelog
+}
+
+type ExternalWindowStore interface {
+	CoreWindowStore
+	WindowStoreOpForExternalStore
 }
 
 type WindowStoreOpForExternalStore interface {
@@ -40,5 +54,7 @@ type WindowStoreOpForExternalStore interface {
 }
 
 type WindowStoreOpWithChangelog interface {
-	SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc)
+	SetTrackParFunc(trackParFunc tran_interface.TrackProdSubStreamFunc)
+	PutWithoutPushToChangelog(ctx context.Context,
+		key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error
 }

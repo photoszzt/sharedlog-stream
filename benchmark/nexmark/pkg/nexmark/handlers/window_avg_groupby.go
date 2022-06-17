@@ -11,7 +11,7 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/producer_consumer"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -49,7 +49,7 @@ func (h *windowAvgGroupBy) Call(ctx context.Context, input []byte) ([]byte, erro
 func (h *windowAvgGroupBy) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*source_sink.MeteredSource, *source_sink.ConcurrentMeteredSyncSink, error) {
+) (*producer_consumer.MeteredConsumer, *producer_consumer.ConcurrentMeteredSink, error) {
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
@@ -64,12 +64,12 @@ func (h *windowAvgGroupBy) getSrcSink(ctx context.Context, sp *common.QueryInput
 		ValSerde: eventSerde,
 		MsgSerde: msgSerde,
 	}
-	inConfig := &source_sink.StreamSourceConfig{
+	inConfig := &producer_consumer.StreamConsumerConfig{
 		Timeout:     common.SrcConsumeTimeout,
 		KVMsgSerdes: kvmsgSerdes,
 	}
 
-	outConfig := &source_sink.StreamSinkConfig{
+	outConfig := &producer_consumer.StreamSinkConfig{
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			MsgSerde: msgSerde,
 			KeySerde: commtypes.Uint64Serde{},
@@ -78,16 +78,16 @@ func (h *windowAvgGroupBy) getSrcSink(ctx context.Context, sp *common.QueryInput
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 
-	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
+	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, inConfig),
 		time.Duration(sp.WarmupS)*time.Second)
 	src.SetInitialSource(true)
-	sink := source_sink.NewConcurrentMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_stream, outConfig),
+	sink := producer_consumer.NewConcurrentMeteredSyncProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_stream, outConfig),
 		time.Duration(sp.WarmupS)*time.Second)
 	return src, sink, nil
 }
 
 func (h *windowAvgGroupBy) process(ctx context.Context, sp *common.QueryInput,
-	src *source_sink.MeteredSource, sink *source_sink.ConcurrentMeteredSyncSink,
+	src *producer_consumer.MeteredConsumer, sink *producer_consumer.ConcurrentMeteredSink,
 ) *common.FnOutput {
 	duration := time.Duration(sp.Duration) * time.Second
 	latencies := make([]int, 0, 128)

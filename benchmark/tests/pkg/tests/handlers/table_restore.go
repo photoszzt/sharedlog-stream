@@ -161,12 +161,11 @@ func (h *tableRestoreHandler) testRestoreKVTable(ctx context.Context) {
 	})
 	err = store_restore.RestoreChangelogKVStateStore(ctx,
 		store_restore.NewKVStoreChangelog(kvstore,
-			store_with_changelog.NewChangelogManager(changelog, commtypes.JSON),
-			commtypes.KVMsgSerdes{
+			store_with_changelog.NewChangelogManagerForSrc(changelog, commtypes.KVMsgSerdes{
 				KeySerde: commtypes.IntSerde{},
 				ValSerde: strTsJSONSerde{},
 				MsgSerde: h.msgSerde,
-			}, 0), offset)
+			}, common.SrcConsumeTimeout), 0), offset)
 	if err != nil {
 		panic(err)
 	}
@@ -198,8 +197,8 @@ func (h *tableRestoreHandler) pushToWindowLog(ctx context.Context, key int, val 
 		return 0, err
 	}
 
-	keyAndTs := &commtypes.KeyAndWindowStartTs{
-		Key:           keyBytes,
+	keyAndTs := &commtypes.KeyAndWindowStartTsSerialized{
+		KeySerialized: keyBytes,
 		WindowStartTs: windowStartTimestamp,
 	}
 
@@ -233,7 +232,6 @@ func (h *tableRestoreHandler) testRestoreWindowTable(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	offset := uint64(0)
 	ss := commtypes.StringSerde{}
 	_, err = h.pushToWindowLog(ctx, 1, "one", ss, 0, changelog)
 	if err != nil {
@@ -243,19 +241,17 @@ func (h *tableRestoreHandler) testRestoreWindowTable(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	offset, err = h.pushToWindowLog(ctx, 3, "three", ss, store.TEST_WINDOW_SIZE*2, changelog)
+	_, err = h.pushToWindowLog(ctx, 3, "three", ss, store.TEST_WINDOW_SIZE*2, changelog)
 	if err != nil {
 		panic(err)
 	}
 	err = store_restore.RestoreChangelogWindowStateStore(ctx,
 		store_restore.NewWindowStoreChangelog(wstore,
-			store_with_changelog.NewChangelogManager(changelog, commtypes.JSON),
-			commtypes.KeyAndWindowStartTsJSONSerde{},
-			commtypes.KVMsgSerdes{
+			store_with_changelog.NewChangelogManager(changelog, commtypes.KVMsgSerdes{
 				KeySerde: commtypes.IntSerde{},
 				ValSerde: commtypes.StringSerde{},
 				MsgSerde: h.msgSerde,
-			}, 0), uint64(offset))
+			}, common.SrcConsumeTimeout, time.Duration(5)*time.Millisecond), 0))
 	if err != nil {
 		panic(err)
 	}

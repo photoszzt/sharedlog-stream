@@ -85,6 +85,10 @@ func (rws *SegmentedWindowStore) Put(ctx context.Context, key commtypes.KeyT, va
 	return nil
 }
 
+func (rws *SegmentedWindowStore) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error {
+	return rws.Put(ctx, key, value, windowStartTimestamp)
+}
+
 func (rws *SegmentedWindowStore) Get(ctx context.Context, key commtypes.KeyT, windowStartTimestamp int64) (commtypes.ValueT, bool, error) {
 	var err error
 	kBytes, ok := key.([]byte)
@@ -236,4 +240,5 @@ func (rws *SegmentedWindowStore) GetTransactionID(ctx context.Context, taskRepr 
 	return rws.bytesStore.GetTransactionID(ctx, taskRepr)
 }
 
-func (rws *SegmentedWindowStore) SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc) {}
+func (rws *SegmentedWindowStore) SetTrackParFunc(trackParFunc tran_interface.TrackProdSubStreamFunc) {
+}

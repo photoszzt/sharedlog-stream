@@ -16,7 +16,7 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/transaction/tran_interface"
@@ -75,26 +75,26 @@ func (h *joinHandler) getSrcSink(
 	stream1 *sharedlog_stream.ShardedSharedLogStream,
 	stream2 *sharedlog_stream.ShardedSharedLogStream,
 	outputStream *sharedlog_stream.ShardedSharedLogStream,
-) (*source_sink.ShardedSharedLogStreamSource, /* src1 */
-	*source_sink.ShardedSharedLogStreamSource, /* src2 */
-	*source_sink.ShardedSharedLogStreamSyncSink,
+) (*producer_consumer.ShardedSharedLogStreamConsumer, /* src1 */
+	*producer_consumer.ShardedSharedLogStreamConsumer, /* src2 */
+	*producer_consumer.ShardedSharedLogStreamProducer,
 	error,
 ) {
-	src1Config := &source_sink.StreamSourceConfig{
+	src1Config := &producer_consumer.StreamConsumerConfig{
 		Timeout:     common.SrcConsumeTimeout,
 		KVMsgSerdes: inKVMsgSerdes,
 	}
-	src2Config := &source_sink.StreamSourceConfig{
+	src2Config := &producer_consumer.StreamConsumerConfig{
 		Timeout:     common.SrcConsumeTimeout,
 		KVMsgSerdes: inKVMsgSerdes,
 	}
-	outConfig := &source_sink.StreamSinkConfig{
+	outConfig := &producer_consumer.StreamSinkConfig{
 		KVMsgSerdes:   outKVMsgSerdes,
 		FlushDuration: flush,
 	}
-	src1 := source_sink.NewShardedSharedLogStreamSource(stream1, src1Config)
-	src2 := source_sink.NewShardedSharedLogStreamSource(stream2, src2Config)
-	sink := source_sink.NewShardedSharedLogStreamSyncSink(outputStream, outConfig)
+	src1 := producer_consumer.NewShardedSharedLogStreamConsumer(stream1, src1Config)
+	src2 := producer_consumer.NewShardedSharedLogStreamConsumer(stream2, src2Config)
+	sink := producer_consumer.NewShardedSharedLogStreamProducer(outputStream, outConfig)
 	return src1, src2, sink, nil
 }
 
@@ -160,8 +160,8 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	sharedTimeTracker := processor.NewTimeTracker()
 	oneJoinTwoProc := processor.NewStreamStreamJoinProcessor(winTab2, joinWindows, joiner, false, true, sharedTimeTracker)
 	twoJoinOneProc := processor.NewStreamStreamJoinProcessor(winTab1, joinWindows, processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker)
-	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *source_sink.ShardedSharedLogStreamSyncSink,
-		trackParFunc tran_interface.TrackKeySubStreamFunc,
+	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *producer_consumer.ShardedSharedLogStreamProducer,
+		trackParFunc tran_interface.TrackProdSubStreamFunc,
 	) error {
 		_, err := toWinTab1.ProcessAndReturn(ctx, m)
 		if err != nil {
@@ -173,8 +173,8 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 		}
 		return pushMsgsToSink(ctx, sink, joinedMsgs, trackParFunc)
 	}
-	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *source_sink.ShardedSharedLogStreamSyncSink,
-		trackParFunc tran_interface.TrackKeySubStreamFunc,
+	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *producer_consumer.ShardedSharedLogStreamProducer,
+		trackParFunc tran_interface.TrackProdSubStreamFunc,
 	) error {
 		_, err := toWinTab2.ProcessAndReturn(ctx, m)
 		if err != nil {
@@ -396,8 +396,8 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	sharedTimeTracker := processor.NewTimeTracker()
 	oneJoinTwoProc := processor.NewStreamStreamJoinProcessor(winTab2, joinWindows, joiner, false, true, sharedTimeTracker)
 	twoJoinOneProc := processor.NewStreamStreamJoinProcessor(winTab1, joinWindows, processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker)
-	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *source_sink.ShardedSharedLogStreamSyncSink,
-		trackParFunc tran_interface.TrackKeySubStreamFunc,
+	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *producer_consumer.ShardedSharedLogStreamProducer,
+		trackParFunc tran_interface.TrackProdSubStreamFunc,
 	) error {
 		_, err := toWinTab1.ProcessAndReturn(ctx, m)
 		if err != nil {
@@ -409,8 +409,8 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		}
 		return pushMsgsToSink(ctx, sink, joinedMsgs, trackParFunc)
 	}
-	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *source_sink.ShardedSharedLogStreamSyncSink,
-		trackParFunc tran_interface.TrackKeySubStreamFunc,
+	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *producer_consumer.ShardedSharedLogStreamProducer,
+		trackParFunc tran_interface.TrackProdSubStreamFunc,
 	) error {
 		_, err := toWinTab2.ProcessAndReturn(ctx, m)
 		if err != nil {
@@ -544,16 +544,16 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 }
 
 func joinProc(ctx context.Context,
-	src *source_sink.ShardedSharedLogStreamSource,
-	sink *source_sink.ShardedSharedLogStreamSyncSink,
+	src *producer_consumer.ShardedSharedLogStreamConsumer,
+	sink *producer_consumer.ShardedSharedLogStreamProducer,
 	trackParFunc func(ctx context.Context,
 		key interface{},
 		keySerde commtypes.Serde,
 		topicName string,
 		substreamId uint8,
 	) error,
-	runner func(ctx context.Context, m commtypes.Message, sink *source_sink.ShardedSharedLogStreamSyncSink,
-		trackParFunc tran_interface.TrackKeySubStreamFunc,
+	runner func(ctx context.Context, m commtypes.Message, sink *producer_consumer.ShardedSharedLogStreamProducer,
+		trackParFunc tran_interface.TrackProdSubStreamFunc,
 	) error,
 ) {
 	for {
@@ -590,7 +590,7 @@ func readMsgs(ctx context.Context,
 	log *sharedlog_stream.ShardedSharedLogStream,
 ) ([]commtypes.Message, error) {
 	ret := make([]commtypes.Message, 0)
-	tac, err := source_sink.NewTransactionAwareConsumer(log, serdeFormat)
+	tac, err := producer_consumer.NewTransactionAwareConsumer(log, serdeFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -633,8 +633,8 @@ func pushMsgToStream(ctx context.Context, key int, val *strTs, kvmsgSerdes commt
 	return nil
 }
 
-func pushMsgsToSink(ctx context.Context, sink *source_sink.ShardedSharedLogStreamSyncSink,
-	msgs []commtypes.Message, trackParFunc tran_interface.TrackKeySubStreamFunc,
+func pushMsgsToSink(ctx context.Context, sink *producer_consumer.ShardedSharedLogStreamProducer,
+	msgs []commtypes.Message, trackParFunc tran_interface.TrackProdSubStreamFunc,
 ) error {
 	for _, msg := range msgs {
 		key := msg.Key.(int)

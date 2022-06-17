@@ -7,7 +7,7 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/proc_interface"
-	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/txn_data"
 
@@ -41,7 +41,7 @@ func CommonProcess(ctx context.Context, t *stream_task.StreamTask, args proc_int
 			continue
 		}
 		// err = proc(t, msg)
-		t.CurrentOffset[args.Sources()[0].TopicName()] = msg.LogSeqNum
+		t.CurrentConsumeOffset[args.Sources()[0].TopicName()] = msg.LogSeqNum
 		err = ProcessMsgAndSeq(ctx, msg, args, procMsg)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
@@ -89,7 +89,7 @@ func ProcessMsgAndSeq(ctx context.Context, msg commtypes.MsgAndSeq, args interfa
 func HandleScaleEpochAndBytes(ctx context.Context, msg commtypes.MsgAndSeq,
 	args proc_interface.ExecutionContext,
 ) *common.FnOutput {
-	v := msg.Msg.Value.(source_sink.ScaleEpochAndBytes)
+	v := msg.Msg.Value.(producer_consumer.ScaleEpochAndBytes)
 	err := args.FlushAndPushToAllSinks(ctx, commtypes.Message{Key: txn_data.SCALE_FENCE_KEY,
 		Value: v.Payload}, args.SubstreamNum(), true)
 	if err != nil {

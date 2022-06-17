@@ -24,13 +24,12 @@ type BuildStreamTask interface {
 func NewStreamTaskBuilder() SetAppProcessFunc {
 	return &StreamTaskBuilder{
 		task: &StreamTask{
-			CurrentOffset:            make(map[string]uint64),
-			trackEveryForAtLeastOnce: common.CommitDuration,
-			pauseFunc:                nil,
-			resumeFunc:               nil,
-			initFunc:                 nil,
-			HandleErrFunc:            nil,
-			appProcessFunc:           nil,
+			CurrentConsumeOffset: make(map[string]uint64),
+			pauseFunc:            nil,
+			resumeFunc:           nil,
+			initFunc:             nil,
+			HandleErrFunc:        nil,
+			appProcessFunc:       nil,
 		},
 	}
 }

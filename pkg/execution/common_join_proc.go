@@ -37,7 +37,7 @@ func (c *CommonJoinProcArgs) SetRecordFinishFunc(recordFinishFunc tran_interface
 	c.arg2.SetRecordFinishFunc(recordFinishFunc)
 }
 
-func (c *CommonJoinProcArgs) SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc) {
+func (c *CommonJoinProcArgs) SetTrackParFunc(trackParFunc tran_interface.TrackProdSubStreamFunc) {
 	c.arg1.SetTrackParFunc(trackParFunc)
 	c.arg2.SetTrackParFunc(trackParFunc)
 }
@@ -47,7 +47,7 @@ func (c *CommonJoinProcArgs) RecordFinishFunc() tran_interface.RecordPrevInstanc
 	return c.arg1.RecordFinishFunc()
 }
 
-func (c *CommonJoinProcArgs) TrackParFunc() tran_interface.TrackKeySubStreamFunc {
+func (c *CommonJoinProcArgs) TrackParFunc() tran_interface.TrackProdSubStreamFunc {
 	return c.arg1.TrackParFunc()
 }
 

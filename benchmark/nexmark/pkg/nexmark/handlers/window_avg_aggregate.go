@@ -12,8 +12,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"time"
 
@@ -54,7 +53,7 @@ func (h *windowedAvg) Call(ctx context.Context, input []byte) ([]byte, error) {
 }
 
 func (h *windowedAvg) getSrcSink(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde) (
-	*source_sink.MeteredSource, *source_sink.ConcurrentMeteredSyncSink, error,
+	*producer_consumer.MeteredConsumer, *producer_consumer.ConcurrentMeteredSink, error,
 ) {
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
@@ -85,12 +84,12 @@ func (h *windowedAvg) getSrcSink(ctx context.Context, sp *common.QueryInput, msg
 		ValSerde: eventSerde,
 		MsgSerde: msgSerde,
 	}
-	inConfig := &source_sink.StreamSourceConfig{
+	inConfig := &producer_consumer.StreamConsumerConfig{
 		Timeout:     common.SrcConsumeTimeout,
 		KVMsgSerdes: kvmsgSerdes,
 	}
 
-	outConfig := &source_sink.StreamSinkConfig{
+	outConfig := &producer_consumer.StreamSinkConfig{
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			MsgSerde: msgSerde,
 			KeySerde: wkSerde,
@@ -99,10 +98,10 @@ func (h *windowedAvg) getSrcSink(ctx context.Context, sp *common.QueryInput, msg
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 
-	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
+	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, inConfig),
 		time.Duration(sp.WarmupS)*time.Second)
 	src.SetInitialSource(false)
-	sink := source_sink.NewConcurrentMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_streams[0], outConfig),
+	sink := producer_consumer.NewConcurrentMeteredSyncProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], outConfig),
 		time.Duration(sp.WarmupS)*time.Second)
 	sink.MarkFinalOutput()
 	return src, sink, nil
@@ -111,16 +110,6 @@ func (h *windowedAvg) getSrcSink(ctx context.Context, sp *common.QueryInput, msg
 func (h *windowedAvg) getAggProcessor(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde) (*processor.MeteredProcessor, error) {
 	var scSerde commtypes.Serde
 	var vtSerde commtypes.Serde
-	changelog_stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "windowedAvgAgg_changelog", uint8(sp.NumOutPartitions[0]), commtypes.SerdeFormat(sp.SerdeFormat))
-	if err != nil {
-		return nil, fmt.Errorf("create changelog stream failed: %v", err)
-	}
-	/*
-		err = changelog_stream.InitStream(ctx, true)
-		if err != nil {
-			return nil, fmt.Errorf("changelog stream init failed: %v", err)
-		}
-	*/
 	if sp.SerdeFormat == uint8(commtypes.JSON) {
 		scSerde = ntypes.SumAndCountJSONSerde{}
 		vtSerde = commtypes.ValueTimestampJSONSerde{
@@ -150,9 +139,11 @@ func (h *windowedAvg) getAggProcessor(ctx context.Context, sp *common.QueryInput
 		StoreName(tabName).
 		ParNum(sp.ParNum).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
-		ChangelogManager(store_with_changelog.NewChangelogManager(changelog_stream,
-			commtypes.SerdeFormat(sp.SerdeFormat))).
-		Build()
+		StreamParam(commtypes.CreateStreamParam{
+			Env:          h.env,
+			NumPartition: sp.NumInPartition,
+		}).
+		Build(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +173,7 @@ func (h *windowedAvg) getAggProcessor(ctx context.Context, sp *common.QueryInput
 }
 
 func (h *windowedAvg) process(ctx context.Context, sp *common.QueryInput,
-	src *source_sink.MeteredSource, sink *source_sink.ConcurrentMeteredSyncSink,
+	src *producer_consumer.MeteredConsumer, sink *producer_consumer.ConcurrentMeteredSink,
 	aggProc *processor.MeteredProcessor, calcAvg *processor.MeteredProcessor,
 ) *common.FnOutput {
 	duration := time.Duration(sp.Duration) * time.Second
@@ -252,7 +243,7 @@ func (h *windowedAvg) procMsg(ctx context.Context,
 	msg commtypes.Message,
 	aggProc *processor.MeteredProcessor,
 	calcAvg *processor.MeteredProcessor,
-	sink *source_sink.ConcurrentMeteredSyncSink,
+	sink *producer_consumer.ConcurrentMeteredSink,
 	parNum uint8,
 ) error {
 	newMsgs, err := aggProc.ProcessAndReturn(ctx, msg)

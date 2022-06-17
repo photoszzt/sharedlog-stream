@@ -1,12 +1,13 @@
-package source_sink
+package producer_consumer
 
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 )
 
-type Source interface {
+type Consumer interface {
 	// Consume gets the next commtypes.Message from the source
 	Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error)
 	SetCursor(cursor uint64, parNum uint8)
@@ -14,15 +15,15 @@ type Source interface {
 	Name() string
 	SetName(string)
 	Stream() sharedlog_stream.Stream
-	InTransaction(serdeFormat commtypes.SerdeFormat) error
+	ConfigExactlyOnce(serdeFormat commtypes.SerdeFormat, guarantee tran_interface.GuaranteeMth) error
 	SetInitialSource(initial bool)
 	IsInitialSource() bool
 	KVMsgSerdes() commtypes.KVMsgSerdes
 }
 
-type MeteredSourceIntr interface {
-	Source
+type MeteredConsumerIntr interface {
+	Consumer
 	StartWarmup()
 	GetCount() uint64
-	InnerSource() Source
+	InnerSource() Consumer
 }

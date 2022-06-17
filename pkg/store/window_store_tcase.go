@@ -48,7 +48,7 @@ func CompareWithDup(lhs, rhs interface{}) int {
 	}
 }
 
-func assertGet(ctx context.Context, store WindowStore, k uint32, expected_val string, startTime int64) error {
+func assertGet(ctx context.Context, store CoreWindowStore, k uint32, expected_val string, startTime int64) error {
 	val, ok, err := store.Get(ctx, k, startTime)
 	if err != nil {
 		return err
@@ -62,7 +62,7 @@ func assertGet(ctx context.Context, store WindowStore, k uint32, expected_val st
 	return nil
 }
 
-func assertFetch(ctx context.Context, store WindowStore, k uint32, timeFrom int64, timeTo int64) (map[string]struct{}, error) {
+func assertFetch(ctx context.Context, store CoreWindowStore, k uint32, timeFrom int64, timeTo int64) (map[string]struct{}, error) {
 	res := make(map[string]struct{})
 	err := store.Fetch(ctx, k, time.UnixMilli(timeFrom), time.UnixMilli(timeTo),
 		func(i int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
@@ -77,7 +77,7 @@ func assertFetch(ctx context.Context, store WindowStore, k uint32, timeFrom int6
 	return res, nil
 }
 
-func putFirstBatch(ctx context.Context, store WindowStore, startTime int64) error {
+func putFirstBatch(ctx context.Context, store CoreWindowStore, startTime int64) error {
 	err := store.Put(ctx, uint32(0), "zero", startTime)
 	if err != nil {
 		return err
@@ -98,7 +98,7 @@ func putFirstBatch(ctx context.Context, store WindowStore, startTime int64) erro
 	return err
 }
 
-func putSecondBatch(ctx context.Context, store WindowStore, startTime int64) error {
+func putSecondBatch(ctx context.Context, store CoreWindowStore, startTime int64) error {
 	err := store.Put(ctx, uint32(2), "two+1", startTime+3)
 	if err != nil {
 		return err
@@ -123,7 +123,7 @@ func putSecondBatch(ctx context.Context, store WindowStore, startTime int64) err
 	return err
 }
 
-func check_get(ctx context.Context, k uint32, expected_val string, time int64, store WindowStore, t testing.TB) {
+func check_get(ctx context.Context, k uint32, expected_val string, time int64, store CoreWindowStore, t testing.TB) {
 	val, ok, err := store.Get(ctx, k, time)
 	if err != nil {
 		t.Fatalf("get err: %v", err)
@@ -140,7 +140,7 @@ func check_get(ctx context.Context, k uint32, expected_val string, time int64, s
 	}
 }
 
-func GetAndRangeTest(ctx context.Context, store WindowStore, t testing.TB) {
+func GetAndRangeTest(ctx context.Context, store CoreWindowStore, t testing.TB) {
 	startTime := TEST_SEGMENT_INTERVAL - 4
 	err := putFirstBatch(ctx, store, startTime)
 	if err != nil {
@@ -487,7 +487,7 @@ func GetAndRangeTest(ctx context.Context, store WindowStore, t testing.TB) {
 	}
 }
 
-func ShouldGetAllNonDeletedMsgsTest(ctx context.Context, store WindowStore, t testing.TB) {
+func ShouldGetAllNonDeletedMsgsTest(ctx context.Context, store CoreWindowStore, t testing.TB) {
 	startTime := TEST_SEGMENT_INTERVAL - 4
 	err := store.Put(ctx, uint32(0), "zero", startTime)
 	if err != nil {
@@ -553,7 +553,7 @@ func ShouldGetAllNonDeletedMsgsTest(ctx context.Context, store WindowStore, t te
 	}
 }
 
-func ExpirationTest(ctx context.Context, store WindowStore, t testing.TB) {
+func ExpirationTest(ctx context.Context, store CoreWindowStore, t testing.TB) {
 	currentTime := int64(0)
 	err := store.Put(ctx, uint32(1), "one", int64(currentTime))
 	if err != nil {
@@ -688,7 +688,7 @@ func ExpirationTest(ctx context.Context, store WindowStore, t testing.TB) {
 	}
 }
 
-func ShouldGetAllTest(ctx context.Context, store WindowStore, t testing.TB) {
+func ShouldGetAllTest(ctx context.Context, store CoreWindowStore, t testing.TB) {
 	startTime := TEST_SEGMENT_INTERVAL - 4
 	err := putFirstBatch(ctx, store, startTime)
 	if err != nil {
@@ -760,7 +760,7 @@ func checkSlice(ref_msgs []commtypes.Message, msgs []commtypes.Message, t testin
 	}
 }
 
-func outOfOrderPut(ctx context.Context, store WindowStore, startTime int64) error {
+func outOfOrderPut(ctx context.Context, store CoreWindowStore, startTime int64) error {
 	err := store.Put(ctx, uint32(4), "four", startTime+4)
 	if err != nil {
 		return err
@@ -784,7 +784,7 @@ func outOfOrderPut(ctx context.Context, store WindowStore, startTime int64) erro
 	return nil
 }
 
-func ShouldGetAllReturnTimestampOrderedTest(ctx context.Context, store WindowStore, t testing.TB) {
+func ShouldGetAllReturnTimestampOrderedTest(ctx context.Context, store CoreWindowStore, t testing.TB) {
 	startTime := TEST_SEGMENT_INTERVAL - 4
 	err := outOfOrderPut(ctx, store, startTime)
 	if err != nil {
@@ -834,7 +834,7 @@ func ShouldGetAllReturnTimestampOrderedTest(ctx context.Context, store WindowSto
 	checkSlice(ref_msgs, msgs, t)
 }
 
-func FetchRangeTest(ctx context.Context, store WindowStore, t testing.TB) {
+func FetchRangeTest(ctx context.Context, store CoreWindowStore, t testing.TB) {
 	startTime := TEST_SEGMENT_INTERVAL - 4
 	err := putFirstBatch(ctx, store, startTime)
 	if err != nil {
@@ -1088,7 +1088,7 @@ func FetchRangeTest(ctx context.Context, store WindowStore, t testing.TB) {
 	checkSlice(ref_msgs, msgs, t)
 }
 
-func PutAndFetchBeforeTest(ctx context.Context, store WindowStore, t testing.TB) {
+func PutAndFetchBeforeTest(ctx context.Context, store CoreWindowStore, t testing.TB) {
 	startTime := TEST_SEGMENT_INTERVAL - 4
 	err := putFirstBatch(ctx, store, startTime)
 	if err != nil {
@@ -1626,7 +1626,7 @@ func PutAndFetchBeforeTest(ctx context.Context, store WindowStore, t testing.TB)
 	checkSlice(ref_msgs, msgs, t)
 }
 
-func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) {
+func PutAndFetchAfterTest(ctx context.Context, store CoreWindowStore, t testing.TB) {
 	startTime := TEST_SEGMENT_INTERVAL - 4
 	err := putFirstBatch(ctx, store, startTime)
 	if err != nil {
@@ -2176,7 +2176,7 @@ func PutAndFetchAfterTest(ctx context.Context, store WindowStore, t testing.TB) 
 	checkSlice(ref_msgs, msgs, t)
 }
 
-func PutSameKeyTsTest(ctx context.Context, store WindowStore, t testing.TB) {
+func PutSameKeyTsTest(ctx context.Context, store CoreWindowStore, t testing.TB) {
 	startTime := TEST_SEGMENT_INTERVAL - 4
 	err := store.Put(ctx, uint32(0), "zero", startTime)
 	if err != nil {
@@ -2319,7 +2319,7 @@ func PutSameKeyTsTest(ctx context.Context, store WindowStore, t testing.TB) {
 	checkSlice(ref_msgs, msgs, t)
 }
 
-func FetchDuplicates(ctx context.Context, store WindowStore, t testing.TB) {
+func FetchDuplicates(ctx context.Context, store CoreWindowStore, t testing.TB) {
 	currentTime := 0
 	err := store.Put(ctx, uint32(1), "one", int64(currentTime))
 	if err != nil {

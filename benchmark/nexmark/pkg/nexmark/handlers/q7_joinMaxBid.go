@@ -15,7 +15,7 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
 	"sync"
@@ -53,7 +53,7 @@ func (h *q7JoinMaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 func (h *q7JoinMaxBid) getSrcSink(
 	ctx context.Context,
 	sp *common.QueryInput,
-) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
+) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
 	stream1, stream2, outputStream, err := getInOutStreams(ctx, h.env, sp)
 	if err != nil {
 		return nil, nil, err
@@ -77,7 +77,7 @@ func (h *q7JoinMaxBid) getSrcSink(
 	}
 	timeout := common.SrcConsumeTimeout
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	src1 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream1, &source_sink.StreamSourceConfig{
+	src1 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(stream1, &producer_consumer.StreamConsumerConfig{
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			MsgSerde: msgSerde,
 			KeySerde: commtypes.Uint64Serde{},
@@ -85,7 +85,7 @@ func (h *q7JoinMaxBid) getSrcSink(
 		},
 		Timeout: timeout,
 	}), warmup)
-	src2 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream2, &source_sink.StreamSourceConfig{
+	src2 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(stream2, &producer_consumer.StreamConsumerConfig{
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			MsgSerde: msgSerde,
 			KeySerde: commtypes.Uint64Serde{},
@@ -93,14 +93,14 @@ func (h *q7JoinMaxBid) getSrcSink(
 		},
 		Timeout: timeout,
 	}), warmup)
-	sink := source_sink.NewConcurrentMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(outputStream, &source_sink.StreamSinkConfig{
+	sink := producer_consumer.NewConcurrentMeteredSyncProducer(producer_consumer.NewShardedSharedLogStreamProducer(outputStream, &producer_consumer.StreamSinkConfig{
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			MsgSerde: msgSerde,
 			KeySerde: commtypes.Uint64Serde{},
 			ValSerde: bmSerde,
 		},
 	}), warmup)
-	return []source_sink.MeteredSourceIntr{src1, src2}, []source_sink.MeteredSink{sink}, nil
+	return []producer_consumer.MeteredConsumerIntr{src1, src2}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
 func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -135,6 +135,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	})
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
 	bMp, err := store_with_changelog.NewMaterializeParamBuilder().
 		KVMsgSerdes(srcs[0].KVMsgSerdes()).
 		StoreName("bidByPriceTab").
@@ -142,7 +143,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		SerdeFormat(serdeFormat).StreamParam(commtypes.CreateStreamParam{
 		Env:          h.env,
 		NumPartition: sp.NumInPartition,
-	}).Build()
+	}).Build(flushDur, common.SrcConsumeTimeout)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -153,7 +154,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		SerdeFormat(serdeFormat).StreamParam(commtypes.CreateStreamParam{
 		Env:          h.env,
 		NumPartition: sp.NumInPartition,
-	}).Build()
+	}).Build(flushDur, common.SrcConsumeTimeout)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -259,5 +260,5 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		WindowStoreChangelogs(wsc).
 		FixedOutParNum(sp.ParNum).
 		Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
 }

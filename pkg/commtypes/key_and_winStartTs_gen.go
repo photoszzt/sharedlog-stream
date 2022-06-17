@@ -7,7 +7,7 @@ import (
 )
 
 // DecodeMsg implements msgp.Decodable
-func (z *KeyAndWindowStartTs) DecodeMsg(dc *msgp.Reader) (err error) {
+func (z *KeyAndWindowStartTsSerialized) DecodeMsg(dc *msgp.Reader) (err error) {
 	var field []byte
 	_ = field
 	var zb0001 uint32
@@ -25,9 +25,9 @@ func (z *KeyAndWindowStartTs) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "k":
-			z.Key, err = dc.ReadBytes(z.Key)
+			z.KeySerialized, err = dc.ReadBytes(z.KeySerialized)
 			if err != nil {
-				err = msgp.WrapError(err, "Key")
+				err = msgp.WrapError(err, "KeySerialized")
 				return
 			}
 		case "ts":
@@ -48,16 +48,16 @@ func (z *KeyAndWindowStartTs) DecodeMsg(dc *msgp.Reader) (err error) {
 }
 
 // EncodeMsg implements msgp.Encodable
-func (z *KeyAndWindowStartTs) EncodeMsg(en *msgp.Writer) (err error) {
+func (z *KeyAndWindowStartTsSerialized) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 2
 	// write "k"
 	err = en.Append(0x82, 0xa1, 0x6b)
 	if err != nil {
 		return
 	}
-	err = en.WriteBytes(z.Key)
+	err = en.WriteBytes(z.KeySerialized)
 	if err != nil {
-		err = msgp.WrapError(err, "Key")
+		err = msgp.WrapError(err, "KeySerialized")
 		return
 	}
 	// write "ts"
@@ -74,12 +74,12 @@ func (z *KeyAndWindowStartTs) EncodeMsg(en *msgp.Writer) (err error) {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *KeyAndWindowStartTs) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *KeyAndWindowStartTsSerialized) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 2
 	// string "k"
 	o = append(o, 0x82, 0xa1, 0x6b)
-	o = msgp.AppendBytes(o, z.Key)
+	o = msgp.AppendBytes(o, z.KeySerialized)
 	// string "ts"
 	o = append(o, 0xa2, 0x74, 0x73)
 	o = msgp.AppendInt64(o, z.WindowStartTs)
@@ -87,7 +87,7 @@ func (z *KeyAndWindowStartTs) MarshalMsg(b []byte) (o []byte, err error) {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *KeyAndWindowStartTs) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *KeyAndWindowStartTsSerialized) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 uint32
@@ -105,9 +105,9 @@ func (z *KeyAndWindowStartTs) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "k":
-			z.Key, bts, err = msgp.ReadBytesBytes(bts, z.Key)
+			z.KeySerialized, bts, err = msgp.ReadBytesBytes(bts, z.KeySerialized)
 			if err != nil {
-				err = msgp.WrapError(err, "Key")
+				err = msgp.WrapError(err, "KeySerialized")
 				return
 			}
 		case "ts":
@@ -129,7 +129,7 @@ func (z *KeyAndWindowStartTs) UnmarshalMsg(bts []byte) (o []byte, err error) {
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *KeyAndWindowStartTs) Msgsize() (s int) {
-	s = 1 + 2 + msgp.BytesPrefixSize + len(z.Key) + 3 + msgp.Int64Size
+func (z *KeyAndWindowStartTsSerialized) Msgsize() (s int) {
+	s = 1 + 2 + msgp.BytesPrefixSize + len(z.KeySerialized) + 3 + msgp.Int64Size
 	return
 }

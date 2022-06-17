@@ -61,6 +61,7 @@ func (p *StoreToWindowTableProcessor) ProcessAndReturn(ctx context.Context, msg 
 	return nil, nil
 }
 
+// for test
 func ToInMemWindowTable(
 	storeName string,
 	joinWindow *JoinWindows,

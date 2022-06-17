@@ -15,7 +15,7 @@ import (
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
@@ -77,7 +77,7 @@ func (h *q7MaxBid) procMsg(ctx context.Context, msg commtypes.Message, argsTmp i
 }
 
 func (h *q7MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
-) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
+) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
 	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return nil, nil, err
@@ -102,11 +102,11 @@ func (h *q7MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		ValSerde: eventSerde,
 		KeySerde: seSerde,
 	}
-	inConfig := &source_sink.StreamSourceConfig{
+	inConfig := &producer_consumer.StreamConsumerConfig{
 		KVMsgSerdes: inKVMsgSerdes,
 		Timeout:     common.SrcConsumeTimeout,
 	}
-	outConfig := &source_sink.StreamSinkConfig{
+	outConfig := &producer_consumer.StreamSinkConfig{
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			MsgSerde: msgSerde,
 			KeySerde: commtypes.Uint64Serde{},
@@ -115,14 +115,14 @@ func (h *q7MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	src := source_sink.NewMeteredSource(
-		source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
+	src := producer_consumer.NewMeteredConsumer(
+		producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, inConfig),
 		warmup)
-	sink := source_sink.NewMeteredSyncSink(
-		source_sink.NewShardedSharedLogStreamSyncSink(output_streams[0], outConfig),
+	sink := producer_consumer.NewMeteredProducer(
+		producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], outConfig),
 		warmup)
 	src.SetInitialSource(false)
-	return []source_sink.MeteredSourceIntr{src}, []source_sink.MeteredSink{sink}, nil
+	return []producer_consumer.MeteredConsumerIntr{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
 func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -159,7 +159,7 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 		StreamParam(commtypes.CreateStreamParam{
 			Env:          h.env,
 			NumPartition: sp.NumInPartition,
-		}).Build()
+		}).Build(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -210,7 +210,6 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 	kvc = []*store_restore.KVStoreChangelog{
 		store_restore.NewKVStoreChangelog(
 			kvstore, kvstore.MaterializeParam().ChangelogManager(),
-			kvstore.MaterializeParam().KVMsgSerdes(),
 			kvstore.MaterializeParam().ParNum(),
 		),
 	}
@@ -223,5 +222,5 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
 		KVStoreChangelogs(kvc).Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
 }

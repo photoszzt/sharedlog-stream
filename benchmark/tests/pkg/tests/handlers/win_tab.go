@@ -12,6 +12,7 @@ import (
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
+	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -48,7 +49,7 @@ func getWindowStoreWithChangelog(env types.Environment, retainDuplicates bool) *
 		StoreName(storeName).
 		ParNum(0).
 		SerdeFormat(commtypes.JSON).
-		StreamParam(streamParam).Build()
+		StreamParam(streamParam).Build(time.Duration(5)*time.Millisecond, common.SrcConsumeTimeout)
 	if err != nil {
 		panic(err)
 	}

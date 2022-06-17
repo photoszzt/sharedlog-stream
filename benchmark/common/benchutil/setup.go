@@ -12,8 +12,9 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/stream_task"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"sync"
 	"time"
 
@@ -57,7 +58,7 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 	if err != nil {
 		return err
 	}
-	src := source_sink.NewShardedSharedLogStreamSource(log, &source_sink.StreamSourceConfig{
+	src := producer_consumer.NewShardedSharedLogStreamConsumer(log, &producer_consumer.StreamConsumerConfig{
 		KVMsgSerdes: args.KVMsgSerdes,
 		Timeout:     common.SrcConsumeTimeout,
 	})
@@ -123,9 +124,10 @@ func InvokeFunc(client *http.Client, response *common.FnOutput,
 	}
 }
 
-func UpdateStreamTaskArgs(sp *common.QueryInput, argsBuilder stream_task.SetAppID) stream_task.BuildStreamTaskArgs {
+func UpdateStreamTaskArgs(sp *common.QueryInput, argsBuilder stream_task.SetGuarantee) stream_task.BuildStreamTaskArgs {
 	debug.Assert(sp.AppId != "", "app id should not be empty")
-	return argsBuilder.AppID(sp.AppId).
+	return argsBuilder.Guarantee(tran_interface.GuaranteeMth(sp.GuaranteeMth)).
+		AppID(sp.AppId).
 		Warmup(time.Duration(sp.WarmupS) * time.Second).
 		CommitEveryMs(sp.CommitEveryMs).
 		FlushEveryMs(sp.FlushMs).

@@ -4,94 +4,92 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/transaction/tran_interface"
-	"sharedlog-stream/pkg/utils"
+	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
 
 // a changelog substream has only one producer. Each store would only produce to one substream.
 type ChangelogManager struct {
-	tm            tran_interface.ReadOnlyExactlyOnceManager
-	changelog     *sharedlog_stream.ShardedSharedLogStream
-	tac           *source_sink.TransactionAwareConsumer
-	bufPush       bool
-	transactional bool
-	serdeFormat   commtypes.SerdeFormat
+	restoreConsumer *producer_consumer.ShardedSharedLogStreamConsumer
+	producer        *producer_consumer.ShardedSharedLogStreamProducer
+	stream          *sharedlog_stream.ShardedSharedLogStream
+	changelogIsSrc  bool
 }
 
-func NewChangelogManager(stream *sharedlog_stream.ShardedSharedLogStream, serdeFormat commtypes.SerdeFormat) *ChangelogManager {
+func NewChangelogManagerForSrc(stream *sharedlog_stream.ShardedSharedLogStream,
+	kvMsgSerdes commtypes.KVMsgSerdes, timeout time.Duration,
+) *ChangelogManager {
 	return &ChangelogManager{
-		tm:            nil,
-		changelog:     stream,
-		tac:           nil,
-		bufPush:       utils.CheckBufPush(),
-		transactional: false,
-		serdeFormat:   serdeFormat,
+		restoreConsumer: producer_consumer.NewShardedSharedLogStreamConsumer(stream,
+			&producer_consumer.StreamConsumerConfig{
+				KVMsgSerdes: kvMsgSerdes,
+				Timeout:     timeout,
+			}),
+		producer:       nil,
+		changelogIsSrc: true,
 	}
+}
+
+func NewChangelogManager(stream *sharedlog_stream.ShardedSharedLogStream,
+	kvMsgSerdes commtypes.KVMsgSerdes,
+	timeout time.Duration,
+	flushDuration time.Duration,
+) *ChangelogManager {
+	return &ChangelogManager{
+		restoreConsumer: producer_consumer.NewShardedSharedLogStreamConsumer(stream,
+			&producer_consumer.StreamConsumerConfig{
+				KVMsgSerdes: kvMsgSerdes,
+				Timeout:     timeout,
+			}),
+		producer: producer_consumer.NewShardedSharedLogStreamProducer(stream,
+			&producer_consumer.StreamSinkConfig{
+				KVMsgSerdes:   kvMsgSerdes,
+				FlushDuration: flushDuration,
+			}),
+		changelogIsSrc: false,
+	}
+}
+
+func (cm *ChangelogManager) ChangelogIsSrc() bool {
+	return cm.changelogIsSrc
 }
 
 func (cm *ChangelogManager) TopicName() string {
-	return cm.changelog.TopicName()
+	return cm.restoreConsumer.TopicName()
 }
 
 func (cm *ChangelogManager) NumPartition() uint8 {
-	return cm.changelog.NumPartition()
+	return cm.restoreConsumer.Stream().NumPartition()
 }
 
-func (cm *ChangelogManager) InTransaction(tm tran_interface.ReadOnlyExactlyOnceManager) error {
-	cm.transactional = true
-	cm.tm = tm
-	var err error = nil
-	cm.tac, err = source_sink.NewTransactionAwareConsumer(cm.changelog, cm.serdeFormat)
-	return err
+func (cm *ChangelogManager) ConfigExactlyOnce(
+	rem tran_interface.ReadOnlyExactlyOnceManager,
+	guarantee tran_interface.GuaranteeMth,
+	serdeFormat commtypes.SerdeFormat,
+) error {
+	if !cm.changelogIsSrc {
+		cm.producer.ConfigExactlyOnce(rem, guarantee)
+		return cm.restoreConsumer.ConfigExactlyOnce(serdeFormat, guarantee)
+	}
+	return nil
 }
 
 func (cm *ChangelogManager) Stream() *sharedlog_stream.ShardedSharedLogStream {
-	return cm.changelog
-}
-
-func (cm *ChangelogManager) ReadNext(ctx context.Context, parNum uint8) (*commtypes.RawMsg, error) {
-	if cm.transactional {
-		return cm.tac.ReadNext(ctx, parNum)
-	} else {
-		return cm.changelog.ReadNext(ctx, parNum)
-	}
-}
-
-func (cm *ChangelogManager) Push(ctx context.Context, payload []byte, parNum uint8) error {
-	if cm.bufPush {
-		return cm.bufPushHelper(ctx, payload, parNum)
-	} else {
-		return cm.pushHelper(ctx, payload, parNum)
-	}
-}
-
-func (cm *ChangelogManager) bufPushHelper(ctx context.Context, payload []byte, parNum uint8) error {
-	if cm.transactional {
-		return cm.changelog.BufPush(ctx, payload, parNum, cm.tm.GetProducerId())
-	} else {
-		return cm.changelog.BufPush(ctx, payload, parNum, sharedlog_stream.EmptyProducerId)
-	}
-}
-
-func (cm *ChangelogManager) pushHelper(ctx context.Context, payload []byte, parNum uint8) error {
-	if cm.transactional {
-		_, err := cm.changelog.Push(ctx, payload, parNum, sharedlog_stream.SingleDataRecordMeta, cm.tm.GetProducerId())
-		return err
-	} else {
-		_, err := cm.changelog.Push(ctx, payload, parNum, sharedlog_stream.SingleDataRecordMeta, sharedlog_stream.EmptyProducerId)
-		return err
-	}
+	return cm.stream
 }
 
 func (cm *ChangelogManager) Flush(ctx context.Context) error {
-	if cm.transactional {
-		return cm.changelog.FlushNoLock(ctx, cm.tm.GetProducerId())
-	} else {
-		return cm.changelog.FlushNoLock(ctx, sharedlog_stream.EmptyProducerId)
-	}
+	return cm.producer.FlushNoLock(ctx)
+}
+func (cm *ChangelogManager) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
+	return cm.producer.Produce(ctx, msg, parNum, isControl)
+}
+
+func (cm *ChangelogManager) Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
+	return cm.restoreConsumer.Consume(ctx, parNum)
 }
 
 func CreateChangelog(env types.Environment, tabName string,

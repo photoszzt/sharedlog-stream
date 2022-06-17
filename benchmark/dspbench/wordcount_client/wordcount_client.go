@@ -9,6 +9,7 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"strings"
 	"sync"
 	"time"
@@ -22,7 +23,7 @@ var (
 	FLAGS_events_num       int
 	FLAGS_serdeFormat      string
 	FLAGS_file_name        string
-	FLAGS_tran             bool
+	FLAGS_guarantee        string
 	FLAGS_commit_every     uint64
 	FLAGS_dump_file_folder string
 	FLAGS_stat_dir         string
@@ -52,7 +53,7 @@ func main() {
 	flag.IntVar(&FLAGS_events_num, "nevent", 0, "number of events")
 	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
 	flag.StringVar(&FLAGS_file_name, "in_fname", "/mnt/data/books.dat", "data source file name")
-	flag.BoolVar(&FLAGS_tran, "tran", false, "enable transaction or not")
+	flag.StringVar(&FLAGS_guarantee, "guarantee", "alo", "alo(at least once), 2pc(two phase commit) or epoch(epoch marking)")
 	flag.Uint64Var(&FLAGS_commit_every, "comm_every", 0, "commit a transaction every (ms)")
 	flag.StringVar(&FLAGS_dump_file_folder, "dump_dir", "", "folder to dump the final output")
 	flag.StringVar(&FLAGS_stat_dir, "stats_dir", "", "folder to store stats")
@@ -60,6 +61,10 @@ func main() {
 
 	if FLAGS_stat_dir == "" {
 		panic("should specify stats dir")
+	}
+	if FLAGS_guarantee != "alo" && FLAGS_guarantee != "2pc" && FLAGS_guarantee != "epoch" {
+		fmt.Fprintf(os.Stderr, "expected guarantee is alo, 2pc and epoch")
+		return
 	}
 
 	var serdeFormat commtypes.SerdeFormat
@@ -84,16 +89,22 @@ func main() {
 	}
 
 	splitInputParams := make([]*common.QueryInput, splitNodeConfig.NumInstance)
+	guarantee := tran_interface.AT_LEAST_ONCE
+	if FLAGS_guarantee == "2pc" {
+		guarantee = tran_interface.TWO_PHASE_COMMIT
+	} else if FLAGS_guarantee == "epoch" {
+		guarantee = tran_interface.EPOCH_MARK
+	}
 	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
 		splitInputParams[i] = &common.QueryInput{
-			Duration:          uint32(FLAGS_duration),
-			InputTopicNames:   []string{"wc_src"},
-			OutputTopicNames:  []string{splitOutputTopic},
-			SerdeFormat:       uint8(serdeFormat),
-			NumInPartition:    1,
-			NumOutPartitions:  []uint8{numCountInstance},
-			EnableTransaction: FLAGS_tran,
-			CommitEveryMs:     FLAGS_commit_every,
+			Duration:         uint32(FLAGS_duration),
+			InputTopicNames:  []string{"wc_src"},
+			OutputTopicNames: []string{splitOutputTopic},
+			SerdeFormat:      uint8(serdeFormat),
+			NumInPartition:   1,
+			NumOutPartitions: []uint8{numCountInstance},
+			GuaranteeMth:     uint8(guarantee),
+			CommitEveryMs:    FLAGS_commit_every,
 		}
 	}
 	split := common.NewClientNode(splitNodeConfig)
@@ -118,15 +129,15 @@ func main() {
 	}
 	for i := 0; i < int(countNodeConfig.NumInstance); i++ {
 		countInputParams[i] = &common.QueryInput{
-			Duration:          uint32(FLAGS_duration),
-			InputTopicNames:   []string{splitOutputTopic},
-			OutputTopicNames:  []string{countOutputTopic},
-			SerdeFormat:       uint8(serdeFormat),
-			NumInPartition:    numCountInstance,
-			NumOutPartitions:  []uint8{numCountInstance},
-			EnableTransaction: FLAGS_tran,
-			CommitEveryMs:     FLAGS_commit_every,
-			TestParams:        testParams,
+			Duration:         uint32(FLAGS_duration),
+			InputTopicNames:  []string{splitOutputTopic},
+			OutputTopicNames: []string{countOutputTopic},
+			SerdeFormat:      uint8(serdeFormat),
+			NumInPartition:   numCountInstance,
+			NumOutPartitions: []uint8{numCountInstance},
+			GuaranteeMth:     uint8(guarantee),
+			CommitEveryMs:    FLAGS_commit_every,
+			TestParams:       testParams,
 		}
 	}
 	count := common.NewClientNode(countNodeConfig)

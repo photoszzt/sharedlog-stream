@@ -15,7 +15,7 @@ import (
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/store_with_changelog"
@@ -89,7 +89,7 @@ func getInOutStreams(
 }
 
 func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
-) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
+) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
 	stream1, stream2, outputStream, err := getInOutStreams(ctx, h.env, sp)
 	if err != nil {
 		return nil, nil, err
@@ -116,17 +116,17 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 		return nil, nil, err
 	}
 
-	src1 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream1, &source_sink.StreamSourceConfig{
+	src1 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(stream1, &producer_consumer.StreamConsumerConfig{
 		Timeout:     timeout,
 		KVMsgSerdes: kvmsgSerdes,
 	}), warmup)
-	src2 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream2, &source_sink.StreamSourceConfig{
+	src2 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(stream2, &producer_consumer.StreamConsumerConfig{
 		Timeout:     timeout,
 		KVMsgSerdes: kvmsgSerdes,
 	}), warmup)
 	src1.SetInitialSource(false)
 	src2.SetInitialSource(false)
-	sink := source_sink.NewConcurrentMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(outputStream, &source_sink.StreamSinkConfig{
+	sink := producer_consumer.NewConcurrentMeteredSyncProducer(producer_consumer.NewShardedSharedLogStreamProducer(outputStream, &producer_consumer.StreamSinkConfig{
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			KeySerde: commtypes.Uint64Serde{},
 			ValSerde: ncsiSerde,
@@ -135,7 +135,7 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}), warmup)
 	sink.MarkFinalOutput()
-	return []source_sink.MeteredSourceIntr{src1, src2}, []source_sink.MeteredSink{sink}, nil
+	return []producer_consumer.MeteredConsumerIntr{src1, src2}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
 type kvtables struct {
@@ -147,7 +147,7 @@ type kvtables struct {
 
 func (h *q3JoinTableHandler) setupTables(ctx context.Context,
 	tabType store.TABLE_TYPE,
-	srcs []source_sink.MeteredSourceIntr,
+	srcs []producer_consumer.MeteredConsumerIntr,
 	serdeFormat commtypes.SerdeFormat,
 	mongoAddr string,
 	warmup time.Duration,
@@ -333,11 +333,13 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	if sp.TableType == uint8(store.IN_MEM) {
 		kvchangelogs = []*store_restore.KVStoreChangelog{
 			store_restore.NewKVStoreChangelog(kvtabs.tab1,
-				store_with_changelog.NewChangelogManager(srcs[0].Stream().(*sharedlog_stream.ShardedSharedLogStream), serdeFormat),
-				srcs[0].KVMsgSerdes(), sp.ParNum),
+				store_with_changelog.NewChangelogManagerForSrc(
+					srcs[0].Stream().(*sharedlog_stream.ShardedSharedLogStream),
+					srcs[0].KVMsgSerdes(), common.SrcConsumeTimeout), sp.ParNum),
 			store_restore.NewKVStoreChangelog(kvtabs.tab2,
-				store_with_changelog.NewChangelogManager(srcs[1].Stream().(*sharedlog_stream.ShardedSharedLogStream), serdeFormat),
-				srcs[1].KVMsgSerdes(), sp.ParNum),
+				store_with_changelog.NewChangelogManagerForSrc(
+					srcs[1].Stream().(*sharedlog_stream.ShardedSharedLogStream),
+					srcs[1].KVMsgSerdes(), common.SrcConsumeTimeout), sp.ParNum),
 		}
 	} else if sp.TableType == uint8(store.MONGODB) {
 		kvchangelogs = []*store_restore.KVStoreChangelog{
@@ -362,5 +364,5 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		KVStoreChangelogs(kvchangelogs).
 		FixedOutParNum(sp.ParNum).
 		Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
 }

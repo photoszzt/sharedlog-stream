@@ -1,28 +1,20 @@
 package stream_task
 
 import (
+	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/proc_interface"
-	"sharedlog-stream/pkg/source_sink"
 	"sharedlog-stream/pkg/store_restore"
+	"sharedlog-stream/pkg/transaction/tran_interface"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
-)
-
-type TranProtocol uint8
-
-const (
-	TWO_PHASE_COMMIT TranProtocol = 1
-	EPOCH_MARK       TranProtocol = 2
 )
 
 type StreamTaskArgs struct {
 	procArgs proc_interface.ExecutionContext
 	env      types.Environment
 
-	srcs            []source_sink.Source
-	sinks           []source_sink.Sink
 	appId           string
 	transactionalId string
 
@@ -33,15 +25,17 @@ type StreamTaskArgs struct {
 
 	// exactly once: commitEvery overwrites flushEvery
 	commitEvery time.Duration
+
 	// for at least once
-	flushEvery time.Duration
+	flushEvery               time.Duration
+	trackEveryForAtLeastOnce time.Duration
 
 	commitEveryNIter uint32
 	exitAfterNCommit uint32
 	duration         time.Duration
 	serdeFormat      commtypes.SerdeFormat
 	fixedOutParNum   int16
-	protocol         TranProtocol
+	guarantee        tran_interface.GuaranteeMth
 }
 
 type StreamTaskArgsBuilder struct {
@@ -51,16 +45,21 @@ type StreamTaskArgsBuilder struct {
 func NewStreamTaskArgsBuilder(env types.Environment,
 	ectx proc_interface.ExecutionContext,
 	transactionalID string,
-) SetAppID {
+) SetGuarantee {
 	return &StreamTaskArgsBuilder{
 		stArgs: &StreamTaskArgs{
-			procArgs:        ectx,
-			env:             env,
-			transactionalId: transactionalID,
-			fixedOutParNum:  -1,
-			protocol:        TWO_PHASE_COMMIT,
+			procArgs:                 ectx,
+			env:                      env,
+			transactionalId:          transactionalID,
+			fixedOutParNum:           -1,
+			guarantee:                tran_interface.AT_LEAST_ONCE,
+			trackEveryForAtLeastOnce: common.CommitDuration,
 		},
 	}
+}
+
+type SetGuarantee interface {
+	Guarantee(gua tran_interface.GuaranteeMth) SetAppID
 }
 
 type SetAppID interface {
@@ -100,6 +99,11 @@ type BuildStreamTaskArgs interface {
 	WindowStoreChangelogs([]*store_restore.WindowStoreChangelog) BuildStreamTaskArgs
 	KVStoreChangelogs([]*store_restore.KVStoreChangelog) BuildStreamTaskArgs
 	FixedOutParNum(uint8) BuildStreamTaskArgs
+}
+
+func (args *StreamTaskArgsBuilder) Guarantee(gua tran_interface.GuaranteeMth) SetAppID {
+	args.stArgs.guarantee = gua
+	return args
 }
 
 func (args *StreamTaskArgsBuilder) AppID(appId string) SetWarmup {

@@ -7,6 +7,12 @@ import (
 )
 
 type KeyValueStore interface {
+	CoreKeyValueStore
+	KeyValueStoreOpForExternalStore
+	KeyValueStoreOpWithChangelog
+}
+
+type CoreKeyValueStore interface {
 	StateStore
 	Init(ctx StoreContext)
 	Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error)
@@ -20,8 +26,6 @@ type KeyValueStore interface {
 	PutAll(context.Context, []*commtypes.Message) error
 	Delete(ctx context.Context, key commtypes.KeyT) error
 	TableType() TABLE_TYPE
-	KeyValueStoreOpForExternalStore
-	KeyValueStoreOpWithChangelog
 }
 
 type KeyValueStoreOpForExternalStore interface {
@@ -32,7 +36,13 @@ type KeyValueStoreOpForExternalStore interface {
 }
 
 type KeyValueStoreOpWithChangelog interface {
-	SetTrackParFunc(tran_interface.TrackKeySubStreamFunc)
+	SetTrackParFunc(tran_interface.TrackProdSubStreamFunc)
+	PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error
+}
+
+type KeyValueStoreBackedByChangelog interface {
+	CoreKeyValueStore
+	KeyValueStoreOpWithChangelog
 }
 
 type Segment interface {

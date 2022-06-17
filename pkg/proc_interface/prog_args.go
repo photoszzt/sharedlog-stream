@@ -3,7 +3,7 @@ package proc_interface
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/transaction/tran_interface"
 )
 
@@ -13,9 +13,9 @@ type ExecutionContext interface {
 }
 
 type SourcesSinks interface {
-	Sinks() []source_sink.MeteredSink
+	Sinks() []producer_consumer.MeteredProducerIntr
 	FlushAndPushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error
-	Sources() []source_sink.MeteredSourceIntr
+	Sources() []producer_consumer.MeteredConsumerIntr
 	StartWarmup()
 }
 
@@ -25,8 +25,8 @@ type BaseExecutionContext struct {
 }
 
 func NewExecutionContext(
-	srcs []source_sink.MeteredSourceIntr,
-	sinks []source_sink.MeteredSink,
+	srcs []producer_consumer.MeteredConsumerIntr,
+	sinks []producer_consumer.MeteredProducerIntr,
 	funcName string,
 	curEpoch uint64,
 	parNum uint8,
@@ -51,18 +51,18 @@ func NewExecutionContextFromComponents(
 }
 
 type BaseSrcsSinks struct {
-	srcs  []source_sink.MeteredSourceIntr
-	sinks []source_sink.MeteredSink
+	srcs  []producer_consumer.MeteredConsumerIntr
+	sinks []producer_consumer.MeteredProducerIntr
 }
 
-func NewBaseSrcsSinks(srcs []source_sink.MeteredSourceIntr, sinks []source_sink.MeteredSink) BaseSrcsSinks {
+func NewBaseSrcsSinks(srcs []producer_consumer.MeteredConsumerIntr, sinks []producer_consumer.MeteredProducerIntr) BaseSrcsSinks {
 	return BaseSrcsSinks{
 		srcs:  srcs,
 		sinks: sinks,
 	}
 }
 
-func (pa *BaseSrcsSinks) Sources() []source_sink.MeteredSourceIntr {
+func (pa *BaseSrcsSinks) Sources() []producer_consumer.MeteredConsumerIntr {
 	return pa.srcs
 }
 
@@ -76,7 +76,7 @@ func (pa *BaseSrcsSinks) FlushAndPushToAllSinks(ctx context.Context, msg commtyp
 	return nil
 }
 
-func (pa *BaseSrcsSinks) Sinks() []source_sink.MeteredSink {
+func (pa *BaseSrcsSinks) Sinks() []producer_consumer.MeteredProducerIntr {
 	return pa.sinks
 }
 
@@ -95,8 +95,8 @@ type ProcArgs interface {
 	FuncName() string
 	RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc
 	SetRecordFinishFunc(recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc)
-	TrackParFunc() tran_interface.TrackKeySubStreamFunc
-	SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc)
+	TrackParFunc() tran_interface.TrackProdSubStreamFunc
+	SetTrackParFunc(trackParFunc tran_interface.TrackProdSubStreamFunc)
 }
 
 type BaseProcArgsBuilder struct {
@@ -117,7 +117,7 @@ type SetSubstreamNum interface {
 
 type BuildProcArgs interface {
 	Build() ProcArgs
-	TrackParFunc(tran_interface.TrackKeySubStreamFunc) BuildProcArgs
+	TrackParFunc(tran_interface.TrackProdSubStreamFunc) BuildProcArgs
 	RecordFinishFunc(tran_interface.RecordPrevInstanceFinishFunc) BuildProcArgs
 }
 
@@ -141,14 +141,14 @@ func (b *BaseProcArgsBuilder) SubstreamNum(parNum uint8) BuildProcArgs {
 }
 func (b *BaseProcArgsBuilder) Build() ProcArgs {
 	if b.bp.trackParFunc == nil {
-		b.bp.trackParFunc = tran_interface.DefaultTrackSubstreamFunc
+		b.bp.trackParFunc = tran_interface.DefaultTrackProdSubstreamFunc
 	}
 	if b.bp.recordFinishFunc == nil {
 		b.bp.recordFinishFunc = tran_interface.DefaultRecordPrevInstanceFinishFunc
 	}
 	return b.bp
 }
-func (b *BaseProcArgsBuilder) TrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc) BuildProcArgs {
+func (b *BaseProcArgsBuilder) TrackParFunc(trackParFunc tran_interface.TrackProdSubStreamFunc) BuildProcArgs {
 	b.bp.trackParFunc = trackParFunc
 	return b
 }
@@ -159,7 +159,7 @@ func (b *BaseProcArgsBuilder) RecordFinishFunc(recordFinishFunc tran_interface.R
 
 type BaseProcArgs struct {
 	recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc
-	trackParFunc     tran_interface.TrackKeySubStreamFunc
+	trackParFunc     tran_interface.TrackProdSubStreamFunc
 	funcName         string
 	curEpoch         uint64
 	parNum           uint8
@@ -168,7 +168,7 @@ type BaseProcArgs struct {
 func NewBaseProcArgs(funcName string, curEpoch uint64, parNum uint8) BaseProcArgs {
 	return BaseProcArgs{
 		recordFinishFunc: tran_interface.DefaultRecordPrevInstanceFinishFunc,
-		trackParFunc:     tran_interface.DefaultTrackSubstreamFunc,
+		trackParFunc:     tran_interface.DefaultTrackProdSubstreamFunc,
 		funcName:         funcName,
 		curEpoch:         curEpoch,
 		parNum:           parNum,
@@ -195,11 +195,11 @@ func (pa *BaseProcArgs) SetRecordFinishFunc(recordFinishFunc tran_interface.Reco
 	pa.recordFinishFunc = recordFinishFunc
 }
 
-func (pa *BaseProcArgs) TrackParFunc() tran_interface.TrackKeySubStreamFunc {
+func (pa *BaseProcArgs) TrackParFunc() tran_interface.TrackProdSubStreamFunc {
 	return pa.trackParFunc
 }
 
-func (pa *BaseProcArgs) SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc) {
+func (pa *BaseProcArgs) SetTrackParFunc(trackParFunc tran_interface.TrackProdSubStreamFunc) {
 	pa.trackParFunc = trackParFunc
 }
 

@@ -117,6 +117,10 @@ func (s *InMemoryWindowStore) Put(ctx context.Context, key commtypes.KeyT, value
 	return nil
 }
 
+func (s *InMemoryWindowStore) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error {
+	return s.Put(ctx, key, value, windowStartTimestamp)
+}
+
 func (s *InMemoryWindowStore) Get(ctx context.Context, key commtypes.KeyT, windowStartTimestamp int64) (commtypes.ValueT, bool, error) {
 	s.removeExpiredSegments()
 	if windowStartTimestamp <= s.observedStreamTime-s.retentionPeriod {
@@ -390,5 +394,5 @@ func (s *InMemoryWindowStore) AbortTransaction(ctx context.Context) error { retu
 func (s *InMemoryWindowStore) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
 	panic("not supported")
 }
-func (s *InMemoryWindowStore) SetTrackParFunc(trackParFunc tran_interface.TrackKeySubStreamFunc) {
+func (s *InMemoryWindowStore) SetTrackParFunc(trackParFunc tran_interface.TrackProdSubStreamFunc) {
 }

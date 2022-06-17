@@ -15,7 +15,7 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/store_with_changelog"
@@ -53,7 +53,7 @@ func (h *q5AuctionBids) Call(ctx context.Context, input []byte) ([]byte, error) 
 }
 
 func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde,
-) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
+) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
 	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return nil, nil, err
@@ -78,8 +78,8 @@ func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput, m
 		return nil, nil, err
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	src := source_sink.NewMeteredSource(
-		source_sink.NewShardedSharedLogStreamSource(input_stream, &source_sink.StreamSourceConfig{
+	src := producer_consumer.NewMeteredConsumer(
+		producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, &producer_consumer.StreamConsumerConfig{
 			Timeout: time.Duration(5) * time.Second,
 			KVMsgSerdes: commtypes.KVMsgSerdes{
 				KeySerde: commtypes.Uint64Serde{},
@@ -87,8 +87,8 @@ func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput, m
 				MsgSerde: msgSerde,
 			},
 		}), warmup)
-	sink := source_sink.NewConcurrentMeteredSyncSink(
-		source_sink.NewShardedSharedLogStreamSyncSink(output_streams[0], &source_sink.StreamSinkConfig{
+	sink := producer_consumer.NewConcurrentMeteredSyncProducer(
+		producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], &producer_consumer.StreamSinkConfig{
 			KVMsgSerdes: commtypes.KVMsgSerdes{
 				MsgSerde: msgSerde,
 				KeySerde: seSerde,
@@ -97,7 +97,7 @@ func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput, m
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 		}), warmup)
 	src.SetInitialSource(false)
-	return []source_sink.MeteredSourceIntr{src}, []source_sink.MeteredSink{sink}, nil
+	return []producer_consumer.MeteredConsumerIntr{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
 func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde,
@@ -127,20 +127,19 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 	countStoreName := "auctionBidsCountStore"
 	if sp.TableType == uint8(store.IN_MEM) {
 		comparable := concurrent_skiplist.CompareFunc(concurrent_skiplist.Uint64KeyCompare)
-		inKVMsgSerdes := commtypes.KVMsgSerdes{
-			KeySerde: commtypes.Uint64Serde{},
-			ValSerde: vtSerde,
-			MsgSerde: msgSerde,
-		}
 		countMp, err := store_with_changelog.NewMaterializeParamBuilder().
-			KVMsgSerdes(inKVMsgSerdes).
+			KVMsgSerdes(commtypes.KVMsgSerdes{
+				KeySerde: commtypes.Uint64Serde{},
+				ValSerde: vtSerde,
+				MsgSerde: msgSerde,
+			}).
 			StoreName(countStoreName).
 			ParNum(sp.ParNum).
 			SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
 			StreamParam(commtypes.CreateStreamParam{
 				Env:          h.env,
 				NumPartition: sp.NumInPartition,
-			}).Build()
+			}).Build(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -194,7 +193,7 @@ type q5AuctionBidsProcessArg struct {
 type q5AuctionBidsRestoreArg struct {
 	countProc      processor.Processor
 	groupByAuction processor.Processor
-	src            source_sink.Source
+	src            producer_consumer.Consumer
 	parNum         uint8
 }
 
@@ -324,24 +323,22 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		cstore := countStore.(*store_with_changelog.InMemoryWindowStoreWithChangelog)
 		wsc = []*store_restore.WindowStoreChangelog{
 			store_restore.NewWindowStoreChangelog(
-				cstore,
-				cstore.MaterializeParam().ChangelogManager(),
-				cstore.KeyWindowTsSerde(),
-				cstore.MaterializeParam().KVMsgSerdes(), 0),
-		}
-	} else if countStore.TableType() == store.MONGODB {
-		wsc = []*store_restore.WindowStoreChangelog{
-			store_restore.NewWindowStoreChangelogForExternalStore(countStore, srcs[0].Stream(),
-				h.processWithoutSink, &q5AuctionBidsRestoreArg{
-					countProc:      countProc.InnerProcessor(),
-					groupByAuction: groupByAuction.InnerProcessor(),
-					src:            srcs[0].InnerSource(),
-					parNum:         sp.ParNum,
-				}, fmt.Sprintf("%s-%s-%d", h.funcName, countStore.Name(), sp.ParNum), sp.ParNum),
+				cstore, cstore.MaterializeParam().ChangelogManager(), sp.ParNum),
 		}
 	} else {
 		panic("unrecognized table type")
 	}
+	// else if countStore.TableType() == store.MONGODB {
+	// 	wsc = []*store_restore.WindowStoreChangelog{
+	// 		store_restore.NewWindowStoreChangelogForExternalStore(countStore, srcs[0].Stream(),
+	// 			h.processWithoutSink, &q5AuctionBidsRestoreArg{
+	// 				countProc:      countProc.InnerProcessor(),
+	// 				groupByAuction: groupByAuction.InnerProcessor(),
+	// 				src:            srcs[0].InnerSource(),
+	// 				parNum:         sp.ParNum,
+	// 			}, fmt.Sprintf("%s-%s-%d", h.funcName, countStore.Name(), sp.ParNum), sp.ParNum),
+	// 	}
+	// }
 	update_stats := func(ret *common.FnOutput) {
 		ret.Latencies["count"] = countProc.GetLatency()
 		ret.Latencies["changeKey"] = groupByAuction.GetLatency()
@@ -351,5 +348,5 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	builder := stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp, builder).
 		WindowStoreChangelogs(wsc).Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
 }

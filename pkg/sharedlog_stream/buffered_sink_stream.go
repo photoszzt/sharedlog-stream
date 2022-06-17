@@ -21,10 +21,15 @@ type BufferedSinkStream struct {
 	sinkMu     sync.Mutex
 	sinkBuffer [][]byte
 
-	Stream          *SharedLogStream
 	payloadArrSerde commtypes.Serde
-	currentSize     int
-	parNum          uint8
+	Stream          *SharedLogStream
+
+	once               sync.Once
+	initialProdInEpoch uint64
+	currentProdInEpoch uint64
+	currentSize        int
+	guarantee          tran_interface.GuaranteeMth
+	parNum             uint8
 }
 
 func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8) *BufferedSinkStream {
@@ -34,6 +39,8 @@ func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8) *BufferedSinkS
 		parNum:          parNum,
 		Stream:          stream,
 		currentSize:     0,
+		once:            sync.Once{},
+		guarantee:       tran_interface.AT_LEAST_ONCE,
 	}
 }
 
@@ -52,15 +59,43 @@ func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, 
 		if err != nil {
 			return err
 		}
-		_, err = s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
+		seqNum, err := s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
 		if err != nil {
 			return err
 		}
+		s.updateProdSeqNum(seqNum)
 		s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
 		s.sinkBuffer = append(s.sinkBuffer, payload)
 		s.currentSize = payload_size
 	}
 	return nil
+}
+
+func (s *BufferedSinkStream) updateProdSeqNum(seqNum uint64) {
+	if s.guarantee == tran_interface.EPOCH_MARK {
+		s.once.Do(func() {
+			s.initialProdInEpoch = seqNum
+		})
+		s.currentProdInEpoch = seqNum
+	}
+}
+
+func (s *BufferedSinkStream) ExactlyOnce(gua tran_interface.GuaranteeMth) {
+	s.guarantee = gua
+}
+
+func (s *BufferedSinkStream) ResetInitialProd() {
+	if s.guarantee == tran_interface.EPOCH_MARK {
+		s.once = sync.Once{}
+	}
+}
+
+func (s *BufferedSinkStream) GetInitialProdSeqNum() uint64 {
+	return s.initialProdInEpoch
+}
+
+func (s *BufferedSinkStream) GetCurrentProdSeqNum() uint64 {
+	return s.currentProdInEpoch
 }
 
 func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId tran_interface.ProducerId) error {
@@ -72,10 +107,11 @@ func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId tran_in
 		if err != nil {
 			return err
 		}
-		_, err = s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
+		seqNum, err := s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
 		if err != nil {
 			return err
 		}
+		s.updateProdSeqNum(seqNum)
 		s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
 	}
 	return nil
@@ -97,10 +133,11 @@ func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload [
 		if err != nil {
 			return err
 		}
-		_, err = s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
+		seqNum, err := s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
 		if err != nil {
 			return err
 		}
+		s.updateProdSeqNum(seqNum)
 		s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
 		s.sinkBuffer = append(s.sinkBuffer, payload)
 		s.currentSize = payload_size
@@ -119,10 +156,11 @@ func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context, producerId 
 		if err != nil {
 			return err
 		}
-		_, err = s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
+		seqNum, err := s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
 		if err != nil {
 			return err
 		}
+		s.updateProdSeqNum(seqNum)
 		s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
 	}
 	return nil

@@ -6,16 +6,16 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/hash"
-	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/transaction/tran_interface"
 )
 
 type GroupBy struct {
 	cHash *hash.ConsistentHash
-	sink  source_sink.Sink
+	sink  producer_consumer.Producer
 }
 
-func NewGroupBy(sink source_sink.Sink) *GroupBy {
+func NewGroupBy(sink producer_consumer.Producer) *GroupBy {
 	numPartition := sink.Stream().NumPartition()
 	g := GroupBy{
 		cHash: hash.NewConsistentHash(),
@@ -28,7 +28,7 @@ func NewGroupBy(sink source_sink.Sink) *GroupBy {
 }
 
 func (g *GroupBy) GroupByAndProduce(ctx context.Context, msg commtypes.Message,
-	trackParFunc tran_interface.TrackKeySubStreamFunc,
+	trackParFunc tran_interface.TrackProdSubStreamFunc,
 ) error {
 	parTmp, ok := g.cHash.Get(msg.Key)
 	if !ok {

@@ -15,7 +15,7 @@ import (
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/stream_task"
 	"strings"
 	"time"
@@ -57,13 +57,13 @@ func getSrcSink(ctx context.Context,
 	sp *common.QueryInput,
 	input_stream *sharedlog_stream.ShardedSharedLogStream,
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*source_sink.MeteredSource, *source_sink.MeteredSyncSink, error) {
+) (*producer_consumer.MeteredConsumer, *producer_consumer.MeteredProducer, error) {
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get msg serde failed: %v", err)
 	}
-	inConfig := &source_sink.StreamSourceConfig{
+	inConfig := &producer_consumer.StreamConsumerConfig{
 		Timeout: common.SrcConsumeTimeout,
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			KeySerde: commtypes.StringSerde{},
@@ -71,7 +71,7 @@ func getSrcSink(ctx context.Context,
 			MsgSerde: msgSerde,
 		},
 	}
-	outConfig := &source_sink.StreamSinkConfig{
+	outConfig := &producer_consumer.StreamSinkConfig{
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			KeySerde: commtypes.StringSerde{},
 			ValSerde: commtypes.StringSerde{},
@@ -79,9 +79,9 @@ func getSrcSink(ctx context.Context,
 		},
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
-	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig),
+	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, inConfig),
 		time.Duration(sp.WarmupS)*time.Second)
-	sink := source_sink.NewMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_stream, outConfig),
+	sink := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_stream, outConfig),
 		time.Duration(sp.WarmupS)*time.Second)
 	return src, sink, nil
 }
@@ -150,8 +150,8 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 	})
 
 	funcName := "wcsplitter"
-	srcs := []source_sink.MeteredSourceIntr{src}
-	sinks := []source_sink.MeteredSink{sink}
+	srcs := []producer_consumer.MeteredConsumerIntr{src}
+	sinks := []producer_consumer.MeteredProducerIntr{sink}
 	procArgs := &wordcountSplitterProcessArg{
 		splitter:       splitter,
 		splitLatencies: make([]int, 0),
@@ -178,5 +178,5 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 	transactionalID := fmt.Sprintf("%s-%s-%d", funcName, sp.InputTopicNames[0], sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
 }

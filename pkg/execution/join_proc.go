@@ -73,7 +73,7 @@ func joinProcLoop(
 				continue
 			}
 			task.OffMu.Lock()
-			task.CurrentOffset[procArgs.Sources()[0].TopicName()] = msg.LogSeqNum
+			task.CurrentConsumeOffset[procArgs.Sources()[0].TopicName()] = msg.LogSeqNum
 			task.OffMu.Unlock()
 
 			if msg.MsgArr != nil {
@@ -174,8 +174,8 @@ func SetupStreamStreamJoin(
 		return rightJoinLeft.ProcessAndReturn(ctx, msg)
 	}
 	wsc := []*store_restore.WindowStoreChangelog{
-		store_restore.NewWindowStoreChangelog(leftTab, mpLeft.ChangelogManager(), nil, mpLeft.KVMsgSerdes(), mpLeft.ParNum()),
-		store_restore.NewWindowStoreChangelog(rightTab, mpRight.ChangelogManager(), nil, mpRight.KVMsgSerdes(), mpRight.ParNum()),
+		store_restore.NewWindowStoreChangelog(leftTab, mpLeft.ChangelogManager(), mpLeft.ParNum()),
+		store_restore.NewWindowStoreChangelog(rightTab, mpRight.ChangelogManager(), mpRight.ParNum()),
 	}
 	return leftJoinRightFunc, rightJoinLeftFunc,
 		map[string]*processor.MeteredProcessor{

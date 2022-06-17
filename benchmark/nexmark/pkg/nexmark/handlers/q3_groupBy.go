@@ -14,7 +14,7 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/stream_task"
 	"sync"
 	"time"
@@ -63,13 +63,13 @@ type TwoMsgChanProcArgs struct {
 }
 
 func getSrcSinks(ctx context.Context, env types.Environment, sp *common.QueryInput,
-) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
+) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
 	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, env, sp)
 	if err != nil {
 		return nil, nil, err
 	}
 	debug.Assert(len(output_streams) == 2, "expected 2 output streams")
-	var sinks []source_sink.MeteredSink
+	var sinks []producer_consumer.MeteredProducerIntr
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
@@ -79,7 +79,7 @@ func getSrcSinks(ctx context.Context, env types.Environment, sp *common.QueryInp
 	if err != nil {
 		return nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}
-	inConfig := &source_sink.StreamSourceConfig{
+	inConfig := &producer_consumer.StreamConsumerConfig{
 		Timeout: common.SrcConsumeTimeout,
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			KeySerde: commtypes.StringSerde{},
@@ -87,7 +87,7 @@ func getSrcSinks(ctx context.Context, env types.Environment, sp *common.QueryInp
 			MsgSerde: msgSerde,
 		},
 	}
-	outConfig := &source_sink.StreamSinkConfig{
+	outConfig := &producer_consumer.StreamSinkConfig{
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			KeySerde: commtypes.Uint64Serde{},
 			ValSerde: eventSerde,
@@ -97,13 +97,13 @@ func getSrcSinks(ctx context.Context, env types.Environment, sp *common.QueryInp
 	}
 	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig), warmup)
+	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, inConfig), warmup)
 	for _, output_stream := range output_streams {
-		sink := source_sink.NewMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_stream, outConfig),
+		sink := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_stream, outConfig),
 			warmup)
 		sinks = append(sinks, sink)
 	}
-	return []source_sink.MeteredSourceIntr{src}, sinks, nil
+	return []producer_consumer.MeteredConsumerIntr{src}, sinks, nil
 }
 
 func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -187,7 +187,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 		h.funcName, sp.InputTopicNames[0], sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
 }
 
 func (h *q3GroupByHandler) getPersonsByID(warmup time.Duration) (

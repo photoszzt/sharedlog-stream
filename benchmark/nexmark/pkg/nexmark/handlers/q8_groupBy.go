@@ -13,7 +13,7 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/stream_task"
 	"sync"
 	"time"
@@ -55,8 +55,8 @@ func (h *q8GroupByHandler) Call(ctx context.Context, input []byte) ([]byte, erro
 }
 
 func (h *q8GroupByHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
-) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
-	var sinks []source_sink.MeteredSink
+) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
+	var sinks []producer_consumer.MeteredProducerIntr
 	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return nil, nil, err
@@ -70,7 +70,7 @@ func (h *q8GroupByHandler) getSrcSink(ctx context.Context, sp *common.QueryInput
 	if err != nil {
 		return nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}
-	inConfig := &source_sink.StreamSourceConfig{
+	inConfig := &producer_consumer.StreamConsumerConfig{
 		Timeout: common.SrcConsumeTimeout,
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			KeySerde: commtypes.StringSerde{},
@@ -78,7 +78,7 @@ func (h *q8GroupByHandler) getSrcSink(ctx context.Context, sp *common.QueryInput
 			MsgSerde: msgSerde,
 		},
 	}
-	outConfig := &source_sink.StreamSinkConfig{
+	outConfig := &producer_consumer.StreamSinkConfig{
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			KeySerde: commtypes.Uint64Serde{},
 			ValSerde: eventSerde,
@@ -87,13 +87,13 @@ func (h *q8GroupByHandler) getSrcSink(ctx context.Context, sp *common.QueryInput
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
-	src := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(input_stream, inConfig), time.Duration(sp.WarmupS)*time.Second)
+	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, inConfig), time.Duration(sp.WarmupS)*time.Second)
 	src.SetInitialSource(true)
 	for _, output_stream := range output_streams {
-		sink := source_sink.NewMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(output_stream, outConfig), time.Duration(sp.WarmupS)*time.Second)
+		sink := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_stream, outConfig), time.Duration(sp.WarmupS)*time.Second)
 		sinks = append(sinks, sink)
 	}
-	return []source_sink.MeteredSourceIntr{src}, sinks, nil
+	return []producer_consumer.MeteredConsumerIntr{src}, sinks, nil
 }
 
 func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -172,7 +172,7 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
 		Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
 }
 
 func (h *q8GroupByHandler) getPersonsByID(warmup time.Duration, pollTimeout time.Duration) (

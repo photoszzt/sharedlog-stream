@@ -15,7 +15,7 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/source_sink"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/store_with_changelog"
@@ -95,7 +95,7 @@ func q8CompareFunc(lhs, rhs interface{}) int {
 }
 
 func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
-) ([]source_sink.MeteredSourceIntr, []source_sink.MeteredSink, error) {
+) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
 	stream1, stream2, outputStream, err := getInOutStreams(ctx, h.env, sp)
 	if err != nil {
 		return nil, nil, err
@@ -122,18 +122,18 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 		return nil, nil, err
 	}
 
-	src1 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream1,
-		&source_sink.StreamSourceConfig{
+	src1 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(stream1,
+		&producer_consumer.StreamConsumerConfig{
 			Timeout:     timeout,
 			KVMsgSerdes: kvmsgSerdes,
 		}), warmup)
-	src2 := source_sink.NewMeteredSource(source_sink.NewShardedSharedLogStreamSource(stream2,
-		&source_sink.StreamSourceConfig{
+	src2 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(stream2,
+		&producer_consumer.StreamConsumerConfig{
 			Timeout:     timeout,
 			KVMsgSerdes: kvmsgSerdes,
 		}), warmup)
-	sink := source_sink.NewConcurrentMeteredSyncSink(source_sink.NewShardedSharedLogStreamSyncSink(outputStream,
-		&source_sink.StreamSinkConfig{
+	sink := producer_consumer.NewConcurrentMeteredSyncProducer(producer_consumer.NewShardedSharedLogStreamProducer(outputStream,
+		&producer_consumer.StreamSinkConfig{
 			KVMsgSerdes: commtypes.KVMsgSerdes{
 				KeySerde: commtypes.Uint64Serde{},
 				ValSerde: ptSerde,
@@ -144,7 +144,7 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	src1.SetInitialSource(false)
 	src2.SetInitialSource(false)
 	sink.MarkFinalOutput()
-	return []source_sink.MeteredSourceIntr{src1, src2}, []source_sink.MeteredSink{sink}, nil
+	return []producer_consumer.MeteredConsumerIntr{src1, src2}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
 func getTabAndToTab(env types.Environment,
@@ -163,7 +163,7 @@ func getTabAndToTab(env types.Environment,
 		StreamParam(commtypes.CreateStreamParam{
 			Env:          env,
 			NumPartition: sp.NumInPartition,
-		}).Build()
+		}).Build(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -321,19 +321,9 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	if sp.TableType == uint8(store.IN_MEM) {
 		wsc = []*store_restore.WindowStoreChangelog{
 			store_restore.NewWindowStoreChangelog(
-				auctionsWinStore,
-				aucMp.ChangelogManager(),
-				nil,
-				src1KVMsgSerdes,
-				sp.ParNum,
-			),
+				auctionsWinStore, aucMp.ChangelogManager(), sp.ParNum),
 			store_restore.NewWindowStoreChangelog(
-				personsWinTab,
-				perMp.ChangelogManager(),
-				nil,
-				src2KVMsgSerdes,
-				sp.ParNum,
-			),
+				personsWinTab, perMp.ChangelogManager(), sp.ParNum),
 		}
 	} else if sp.TableType == uint8(store.MONGODB) {
 		wsc = []*store_restore.WindowStoreChangelog{
@@ -363,5 +353,5 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		WindowStoreChangelogs(wsc).
 		FixedOutParNum(sp.ParNum).
 		Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, sp.EnableTransaction, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
 }
