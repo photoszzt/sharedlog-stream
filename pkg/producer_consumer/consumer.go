@@ -4,7 +4,7 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 )
 
 type Consumer interface {
@@ -15,7 +15,7 @@ type Consumer interface {
 	Name() string
 	SetName(string)
 	Stream() sharedlog_stream.Stream
-	ConfigExactlyOnce(serdeFormat commtypes.SerdeFormat, guarantee tran_interface.GuaranteeMth) error
+	ConfigExactlyOnce(serdeFormat commtypes.SerdeFormat, guarantee exactly_once_intr.GuaranteeMth) error
 	SetInitialSource(initial bool)
 	IsInitialSource() bool
 	KVMsgSerdes() commtypes.KVMsgSerdes

@@ -4,7 +4,7 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/producer_consumer"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 )
 
 type ExecutionContext interface {
@@ -93,10 +93,10 @@ type ProcArgs interface {
 	SubstreamNum() uint8
 	CurEpoch() uint64
 	FuncName() string
-	RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc
-	SetRecordFinishFunc(recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc)
-	TrackParFunc() tran_interface.TrackProdSubStreamFunc
-	SetTrackParFunc(trackParFunc tran_interface.TrackProdSubStreamFunc)
+	RecordFinishFunc() exactly_once_intr.RecordPrevInstanceFinishFunc
+	SetRecordFinishFunc(recordFinishFunc exactly_once_intr.RecordPrevInstanceFinishFunc)
+	TrackParFunc() exactly_once_intr.TrackProdSubStreamFunc
+	SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc)
 }
 
 type BaseProcArgsBuilder struct {
@@ -117,8 +117,8 @@ type SetSubstreamNum interface {
 
 type BuildProcArgs interface {
 	Build() ProcArgs
-	TrackParFunc(tran_interface.TrackProdSubStreamFunc) BuildProcArgs
-	RecordFinishFunc(tran_interface.RecordPrevInstanceFinishFunc) BuildProcArgs
+	TrackParFunc(exactly_once_intr.TrackProdSubStreamFunc) BuildProcArgs
+	RecordFinishFunc(exactly_once_intr.RecordPrevInstanceFinishFunc) BuildProcArgs
 }
 
 func NewBaseProcArgsBuilder() SetFuncName {
@@ -141,25 +141,25 @@ func (b *BaseProcArgsBuilder) SubstreamNum(parNum uint8) BuildProcArgs {
 }
 func (b *BaseProcArgsBuilder) Build() ProcArgs {
 	if b.bp.trackParFunc == nil {
-		b.bp.trackParFunc = tran_interface.DefaultTrackProdSubstreamFunc
+		b.bp.trackParFunc = exactly_once_intr.DefaultTrackProdSubstreamFunc
 	}
 	if b.bp.recordFinishFunc == nil {
-		b.bp.recordFinishFunc = tran_interface.DefaultRecordPrevInstanceFinishFunc
+		b.bp.recordFinishFunc = exactly_once_intr.DefaultRecordPrevInstanceFinishFunc
 	}
 	return b.bp
 }
-func (b *BaseProcArgsBuilder) TrackParFunc(trackParFunc tran_interface.TrackProdSubStreamFunc) BuildProcArgs {
+func (b *BaseProcArgsBuilder) TrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) BuildProcArgs {
 	b.bp.trackParFunc = trackParFunc
 	return b
 }
-func (b *BaseProcArgsBuilder) RecordFinishFunc(recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) BuildProcArgs {
+func (b *BaseProcArgsBuilder) RecordFinishFunc(recordFinishFunc exactly_once_intr.RecordPrevInstanceFinishFunc) BuildProcArgs {
 	b.bp.recordFinishFunc = recordFinishFunc
 	return b
 }
 
 type BaseProcArgs struct {
-	recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc
-	trackParFunc     tran_interface.TrackProdSubStreamFunc
+	recordFinishFunc exactly_once_intr.RecordPrevInstanceFinishFunc
+	trackParFunc     exactly_once_intr.TrackProdSubStreamFunc
 	funcName         string
 	curEpoch         uint64
 	parNum           uint8
@@ -167,8 +167,8 @@ type BaseProcArgs struct {
 
 func NewBaseProcArgs(funcName string, curEpoch uint64, parNum uint8) BaseProcArgs {
 	return BaseProcArgs{
-		recordFinishFunc: tran_interface.DefaultRecordPrevInstanceFinishFunc,
-		trackParFunc:     tran_interface.DefaultTrackProdSubstreamFunc,
+		recordFinishFunc: exactly_once_intr.DefaultRecordPrevInstanceFinishFunc,
+		trackParFunc:     exactly_once_intr.DefaultTrackProdSubstreamFunc,
 		funcName:         funcName,
 		curEpoch:         curEpoch,
 		parNum:           parNum,
@@ -187,19 +187,19 @@ func (pa *BaseProcArgs) CurEpoch() uint64 {
 	return pa.curEpoch
 }
 
-func (pa *BaseProcArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
+func (pa *BaseProcArgs) RecordFinishFunc() exactly_once_intr.RecordPrevInstanceFinishFunc {
 	return pa.recordFinishFunc
 }
 
-func (pa *BaseProcArgs) SetRecordFinishFunc(recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
+func (pa *BaseProcArgs) SetRecordFinishFunc(recordFinishFunc exactly_once_intr.RecordPrevInstanceFinishFunc) {
 	pa.recordFinishFunc = recordFinishFunc
 }
 
-func (pa *BaseProcArgs) TrackParFunc() tran_interface.TrackProdSubStreamFunc {
+func (pa *BaseProcArgs) TrackParFunc() exactly_once_intr.TrackProdSubStreamFunc {
 	return pa.trackParFunc
 }
 
-func (pa *BaseProcArgs) SetTrackParFunc(trackParFunc tran_interface.TrackProdSubStreamFunc) {
+func (pa *BaseProcArgs) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 	pa.trackParFunc = trackParFunc
 }
 

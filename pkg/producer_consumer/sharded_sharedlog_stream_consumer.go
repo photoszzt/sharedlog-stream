@@ -5,7 +5,7 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/txn_data"
 	"time"
 )
@@ -27,7 +27,7 @@ type ShardedSharedLogStreamConsumer struct {
 	tac             *TransactionAwareConsumer
 	name            string
 	timeout         time.Duration
-	guarantee       tran_interface.GuaranteeMth
+	guarantee       exactly_once_intr.GuaranteeMth
 	initialSource   bool
 }
 
@@ -43,7 +43,7 @@ func NewShardedSharedLogStreamConsumer(stream *sharedlog_stream.ShardedSharedLog
 		kvmsgSerdes:     config.KVMsgSerdes,
 		name:            "src",
 		payloadArrSerde: sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDE,
-		guarantee:       tran_interface.AT_LEAST_ONCE,
+		guarantee:       exactly_once_intr.AT_LEAST_ONCE,
 	}
 }
 
@@ -55,7 +55,7 @@ func (s *ShardedSharedLogStreamConsumer) IsInitialSource() bool {
 }
 
 func (s *ShardedSharedLogStreamConsumer) ConfigExactlyOnce(
-	serdeFormat commtypes.SerdeFormat, guarantee tran_interface.GuaranteeMth,
+	serdeFormat commtypes.SerdeFormat, guarantee exactly_once_intr.GuaranteeMth,
 ) error {
 	s.guarantee = guarantee
 	var err error = nil
@@ -88,7 +88,7 @@ func (s *ShardedSharedLogStreamConsumer) SetCursor(cursor uint64, parNum uint8) 
 }
 
 func (s *ShardedSharedLogStreamConsumer) readNext(ctx context.Context, parNum uint8) (*commtypes.RawMsg, error) {
-	if s.guarantee == tran_interface.TWO_PHASE_COMMIT {
+	if s.guarantee == exactly_once_intr.TWO_PHASE_COMMIT {
 		return s.tac.ReadNext(ctx, parNum)
 	} else {
 		return s.stream.ReadNext(ctx, parNum)

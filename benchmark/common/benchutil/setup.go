@@ -14,7 +14,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/stream_task"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sync"
 	"time"
 
@@ -126,7 +126,7 @@ func InvokeFunc(client *http.Client, response *common.FnOutput,
 
 func UpdateStreamTaskArgs(sp *common.QueryInput, argsBuilder stream_task.SetGuarantee) stream_task.BuildStreamTaskArgs {
 	debug.Assert(sp.AppId != "", "app id should not be empty")
-	return argsBuilder.Guarantee(tran_interface.GuaranteeMth(sp.GuaranteeMth)).
+	return argsBuilder.Guarantee(exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)).
 		AppID(sp.AppId).
 		Warmup(time.Duration(sp.WarmupS) * time.Second).
 		CommitEveryMs(sp.CommitEveryMs).

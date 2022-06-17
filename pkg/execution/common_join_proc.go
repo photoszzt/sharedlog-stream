@@ -5,7 +5,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/proc_interface"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 )
 
 type CommonJoinProcArgs struct {
@@ -32,22 +32,22 @@ func NewCommonJoinProcArgs(
 	}
 }
 
-func (c *CommonJoinProcArgs) SetRecordFinishFunc(recordFinishFunc tran_interface.RecordPrevInstanceFinishFunc) {
+func (c *CommonJoinProcArgs) SetRecordFinishFunc(recordFinishFunc exactly_once_intr.RecordPrevInstanceFinishFunc) {
 	c.arg1.SetRecordFinishFunc(recordFinishFunc)
 	c.arg2.SetRecordFinishFunc(recordFinishFunc)
 }
 
-func (c *CommonJoinProcArgs) SetTrackParFunc(trackParFunc tran_interface.TrackProdSubStreamFunc) {
+func (c *CommonJoinProcArgs) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 	c.arg1.SetTrackParFunc(trackParFunc)
 	c.arg2.SetTrackParFunc(trackParFunc)
 }
 
 // arg1 and arg2 shared the same param for the following functions
-func (c *CommonJoinProcArgs) RecordFinishFunc() tran_interface.RecordPrevInstanceFinishFunc {
+func (c *CommonJoinProcArgs) RecordFinishFunc() exactly_once_intr.RecordPrevInstanceFinishFunc {
 	return c.arg1.RecordFinishFunc()
 }
 
-func (c *CommonJoinProcArgs) TrackParFunc() tran_interface.TrackProdSubStreamFunc {
+func (c *CommonJoinProcArgs) TrackParFunc() exactly_once_intr.TrackProdSubStreamFunc {
 	return c.arg1.TrackParFunc()
 }
 

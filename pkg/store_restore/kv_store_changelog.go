@@ -9,7 +9,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 
 	"go.mongodb.org/mongo-driver/x/mongo/driver/session"
 	"golang.org/x/xerrors"
@@ -38,7 +38,7 @@ func NewKVStoreChangelog(
 	}
 }
 
-func (kvc *KVStoreChangelog) SetTrackParFunc(trackParFunc tran_interface.TrackProdSubStreamFunc) {
+func (kvc *KVStoreChangelog) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 	kvc.kvStore.SetTrackParFunc(trackParFunc)
 }
 

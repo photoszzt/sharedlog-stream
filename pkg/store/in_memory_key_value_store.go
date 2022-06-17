@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/treemap"
 )
 
@@ -200,5 +200,5 @@ func (st *InMemoryKeyValueStore) GetTransactionID(ctx context.Context, taskRepr 
 	panic("not supported")
 }
 
-func (st *InMemoryKeyValueStore) SetTrackParFunc(tran_interface.TrackProdSubStreamFunc) {
+func (st *InMemoryKeyValueStore) SetTrackParFunc(exactly_once_intr.TrackProdSubStreamFunc) {
 }

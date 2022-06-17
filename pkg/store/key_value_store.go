@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 )
 
 type KeyValueStore interface {
@@ -36,7 +36,7 @@ type KeyValueStoreOpForExternalStore interface {
 }
 
 type KeyValueStoreOpWithChangelog interface {
-	SetTrackParFunc(tran_interface.TrackProdSubStreamFunc)
+	SetTrackParFunc(exactly_once_intr.TrackProdSubStreamFunc)
 	PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error
 }
 

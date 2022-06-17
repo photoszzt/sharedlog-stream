@@ -1,4 +1,4 @@
-package tran_interface
+package exactly_once_intr
 
 import (
 	"context"

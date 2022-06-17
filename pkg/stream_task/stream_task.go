@@ -9,7 +9,7 @@ import (
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sync"
 	"time"
 )
@@ -44,14 +44,14 @@ func (t *StreamTask) ExecuteApp(ctx context.Context,
 	update_stats func(ret *common.FnOutput),
 ) *common.FnOutput {
 	var ret *common.FnOutput
-	if streamTaskArgs.guarantee == tran_interface.TWO_PHASE_COMMIT {
+	if streamTaskArgs.guarantee == exactly_once_intr.TWO_PHASE_COMMIT {
 		tm, cmm, err := t.setupManagersFor2pc(ctx, streamTaskArgs)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
 		debug.Fprint(os.Stderr, "begin transaction processing\n")
 		ret = t.processWithTransaction(ctx, tm, cmm, streamTaskArgs)
-	} else if streamTaskArgs.guarantee == tran_interface.EPOCH_MARK {
+	} else if streamTaskArgs.guarantee == exactly_once_intr.EPOCH_MARK {
 	} else {
 		ret = t.process(ctx, streamTaskArgs)
 	}
@@ -157,7 +157,7 @@ func restoreStateStore(ctx context.Context, args *StreamTaskArgs, offsetMap map[
 	return nil
 }
 
-func configChangelogExactlyOnce(rem tran_interface.ReadOnlyExactlyOnceManager, args *StreamTaskArgs) error {
+func configChangelogExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager, args *StreamTaskArgs) error {
 	for _, kvchangelog := range args.kvChangelogs {
 		err := kvchangelog.ChangelogManager().ConfigExactlyOnce(rem, args.guarantee, args.serdeFormat)
 		if err != nil {

@@ -6,7 +6,7 @@ import (
 	"math"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sync"
 	"time"
 
@@ -394,5 +394,5 @@ func (s *InMemoryWindowStore) AbortTransaction(ctx context.Context) error { retu
 func (s *InMemoryWindowStore) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
 	panic("not supported")
 }
-func (s *InMemoryWindowStore) SetTrackParFunc(trackParFunc tran_interface.TrackProdSubStreamFunc) {
+func (s *InMemoryWindowStore) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 }

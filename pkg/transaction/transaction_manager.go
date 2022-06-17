@@ -13,7 +13,7 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store_restore"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/txn_data"
 
 	"cs.utexas.edu/zjia/faas/protocol"
@@ -45,7 +45,7 @@ type TransactionManager struct {
 
 	TransactionalId string
 	transactionID   uint64
-	tran_interface.ProducerId
+	exactly_once_intr.ProducerId
 	serdeFormat commtypes.SerdeFormat
 
 	currentStatus txn_data.TransactionState
@@ -69,7 +69,7 @@ func NewTransactionManager(ctx context.Context,
 		topicStreams:          make(map[string]*sharedlog_stream.ShardedSharedLogStream),
 		backgroundJobErrg:     errg,
 		backgroundJobCtx:      gctx,
-		ProducerId:            tran_interface.NewProducerId(),
+		ProducerId:            exactly_once_intr.NewProducerId(),
 		serdeFormat:           serdeFormat,
 		env:                   env,
 	}

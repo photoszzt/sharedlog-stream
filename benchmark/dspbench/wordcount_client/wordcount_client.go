@@ -9,7 +9,7 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"strings"
 	"sync"
 	"time"
@@ -89,11 +89,11 @@ func main() {
 	}
 
 	splitInputParams := make([]*common.QueryInput, splitNodeConfig.NumInstance)
-	guarantee := tran_interface.AT_LEAST_ONCE
+	guarantee := exactly_once_intr.AT_LEAST_ONCE
 	if FLAGS_guarantee == "2pc" {
-		guarantee = tran_interface.TWO_PHASE_COMMIT
+		guarantee = exactly_once_intr.TWO_PHASE_COMMIT
 	} else if FLAGS_guarantee == "epoch" {
-		guarantee = tran_interface.EPOCH_MARK
+		guarantee = exactly_once_intr.EPOCH_MARK
 	}
 	for i := 0; i < int(splitNodeConfig.NumInstance); i++ {
 		splitInputParams[i] = &common.QueryInput{

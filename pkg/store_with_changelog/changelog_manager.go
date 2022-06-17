@@ -5,7 +5,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/producer_consumer"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -66,8 +66,8 @@ func (cm *ChangelogManager) NumPartition() uint8 {
 }
 
 func (cm *ChangelogManager) ConfigExactlyOnce(
-	rem tran_interface.ReadOnlyExactlyOnceManager,
-	guarantee tran_interface.GuaranteeMth,
+	rem exactly_once_intr.ReadOnlyExactlyOnceManager,
+	guarantee exactly_once_intr.GuaranteeMth,
 	serdeFormat commtypes.SerdeFormat,
 ) error {
 	if !cm.changelogIsSrc {

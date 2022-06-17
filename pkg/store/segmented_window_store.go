@@ -4,7 +4,7 @@ import (
 	"context"
 	"math"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sync"
 	"time"
 )
@@ -240,5 +240,5 @@ func (rws *SegmentedWindowStore) GetTransactionID(ctx context.Context, taskRepr 
 	return rws.bytesStore.GetTransactionID(ctx, taskRepr)
 }
 
-func (rws *SegmentedWindowStore) SetTrackParFunc(trackParFunc tran_interface.TrackProdSubStreamFunc) {
+func (rws *SegmentedWindowStore) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 }

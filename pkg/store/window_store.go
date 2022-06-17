@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"time"
 )
 
@@ -54,7 +54,7 @@ type WindowStoreOpForExternalStore interface {
 }
 
 type WindowStoreOpWithChangelog interface {
-	SetTrackParFunc(trackParFunc tran_interface.TrackProdSubStreamFunc)
+	SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc)
 	PutWithoutPushToChangelog(ctx context.Context,
 		key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error
 }

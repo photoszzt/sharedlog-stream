@@ -6,7 +6,7 @@ import (
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"time"
 )
 
@@ -173,7 +173,7 @@ func (s *InMemoryWindowStoreWithChangelog) AbortTransaction(ctx context.Context)
 func (s *InMemoryWindowStoreWithChangelog) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
 	panic("not supported")
 }
-func (s *InMemoryWindowStoreWithChangelog) SetTrackParFunc(trackParFunc tran_interface.TrackProdSubStreamFunc) {
+func (s *InMemoryWindowStoreWithChangelog) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 	s.mp.SetTrackParFunc(trackParFunc)
 }
 

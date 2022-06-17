@@ -14,7 +14,7 @@ import (
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/transaction"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -60,7 +60,7 @@ func (h *multiProducerHandler) tests(ctx context.Context, sp *test_types.TestInp
 
 func (h *multiProducerHandler) getProduceTransactionManager(
 	ctx context.Context, transactionalID string, sink producer_consumer.Producer,
-) (*transaction.TransactionManager, tran_interface.TrackProdSubStreamFunc) {
+) (*transaction.TransactionManager, exactly_once_intr.TrackProdSubStreamFunc) {
 	args1 := benchutil.UpdateStreamTaskArgs(&common.QueryInput{},
 		stream_task.NewStreamTaskArgsBuilder(h.env, nil, transactionalID)).Build()
 	tm1, err := stream_task.SetupTransactionManager(ctx, args1)
@@ -84,7 +84,7 @@ func (h *multiProducerHandler) getProduceTransactionManager(
 
 func (h *multiProducerHandler) getConsumeTransactionManager(
 	ctx context.Context, transactionalID string, src producer_consumer.Consumer,
-) (*transaction.TransactionManager, tran_interface.TrackProdSubStreamFunc) {
+) (*transaction.TransactionManager, exactly_once_intr.TrackProdSubStreamFunc) {
 	args1 := benchutil.UpdateStreamTaskArgs(&common.QueryInput{},
 		stream_task.NewStreamTaskArgsBuilder(h.env, nil, transactionalID)).Build()
 	tm1, err := stream_task.SetupTransactionManager(ctx, args1)
@@ -144,8 +144,8 @@ func (h *multiProducerHandler) testMultiProducer(ctx context.Context) {
 	tm2, trackParFunc2 := h.getProduceTransactionManager(ctx, "prod2", produceSinkCopy)
 	tm1.RecordTopicStreams(stream1.TopicName(), stream1)
 	tm2.RecordTopicStreams(stream1.TopicName(), stream1)
-	produceSink.ConfigExactlyOnce(tm1, tran_interface.TWO_PHASE_COMMIT)
-	produceSinkCopy.ConfigExactlyOnce(tm2, tran_interface.TWO_PHASE_COMMIT)
+	produceSink.ConfigExactlyOnce(tm1, exactly_once_intr.TWO_PHASE_COMMIT)
+	produceSinkCopy.ConfigExactlyOnce(tm2, exactly_once_intr.TWO_PHASE_COMMIT)
 
 	h.beginTransaction(ctx, tm1, stream1)
 	h.beginTransaction(ctx, tm2, stream1Copy)
@@ -227,7 +227,7 @@ func (h *multiProducerHandler) testMultiProducer(ctx context.Context) {
 	}
 
 	src1 := producer_consumer.NewShardedSharedLogStreamConsumer(stream1ForRead, srcConfig)
-	src1.ConfigExactlyOnce(commtypes.JSON, tran_interface.TWO_PHASE_COMMIT)
+	src1.ConfigExactlyOnce(commtypes.JSON, exactly_once_intr.TWO_PHASE_COMMIT)
 	payloadArrSerde := sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDE
 	got, err := readMsgs(ctx, kvmsgSerdes, payloadArrSerde, commtypes.JSON, stream1ForRead)
 	if err != nil {

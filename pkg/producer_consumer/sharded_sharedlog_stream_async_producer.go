@@ -6,7 +6,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
 	"sync"
@@ -16,7 +16,7 @@ import (
 type ShardedSharedLogStreamAsyncProducer struct {
 	wg            sync.WaitGroup
 	kvmsgSerdes   commtypes.KVMsgSerdes
-	tm            tran_interface.ReadOnlyExactlyOnceManager
+	tm            exactly_once_intr.ReadOnlyExactlyOnceManager
 	streamPusher  *sharedlog_stream.StreamPush
 	name          string
 	flushDuration time.Duration
@@ -54,7 +54,7 @@ func (sls *ShardedSharedLogStreamAsyncProducer) Stream() *sharedlog_stream.Shard
 	return sls.streamPusher.Stream
 }
 
-func (sls *ShardedSharedLogStreamAsyncProducer) ConfigExactlyOnce(tm tran_interface.ReadOnlyExactlyOnceManager) {
+func (sls *ShardedSharedLogStreamAsyncProducer) ConfigExactlyOnce(tm exactly_once_intr.ReadOnlyExactlyOnceManager) {
 	sls.transactional = true
 	sls.tm = tm
 }

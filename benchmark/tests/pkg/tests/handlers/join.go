@@ -19,7 +19,7 @@ import (
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/stream_task"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -161,7 +161,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	oneJoinTwoProc := processor.NewStreamStreamJoinProcessor(winTab2, joinWindows, joiner, false, true, sharedTimeTracker)
 	twoJoinOneProc := processor.NewStreamStreamJoinProcessor(winTab1, joinWindows, processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker)
 	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *producer_consumer.ShardedSharedLogStreamProducer,
-		trackParFunc tran_interface.TrackProdSubStreamFunc,
+		trackParFunc exactly_once_intr.TrackProdSubStreamFunc,
 	) error {
 		_, err := toWinTab1.ProcessAndReturn(ctx, m)
 		if err != nil {
@@ -174,7 +174,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 		return pushMsgsToSink(ctx, sink, joinedMsgs, trackParFunc)
 	}
 	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *producer_consumer.ShardedSharedLogStreamProducer,
-		trackParFunc tran_interface.TrackProdSubStreamFunc,
+		trackParFunc exactly_once_intr.TrackProdSubStreamFunc,
 	) error {
 		_, err := toWinTab2.ProcessAndReturn(ctx, m)
 		if err != nil {
@@ -397,7 +397,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	oneJoinTwoProc := processor.NewStreamStreamJoinProcessor(winTab2, joinWindows, joiner, false, true, sharedTimeTracker)
 	twoJoinOneProc := processor.NewStreamStreamJoinProcessor(winTab1, joinWindows, processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker)
 	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *producer_consumer.ShardedSharedLogStreamProducer,
-		trackParFunc tran_interface.TrackProdSubStreamFunc,
+		trackParFunc exactly_once_intr.TrackProdSubStreamFunc,
 	) error {
 		_, err := toWinTab1.ProcessAndReturn(ctx, m)
 		if err != nil {
@@ -410,7 +410,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		return pushMsgsToSink(ctx, sink, joinedMsgs, trackParFunc)
 	}
 	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *producer_consumer.ShardedSharedLogStreamProducer,
-		trackParFunc tran_interface.TrackProdSubStreamFunc,
+		trackParFunc exactly_once_intr.TrackProdSubStreamFunc,
 	) error {
 		_, err := toWinTab2.ProcessAndReturn(ctx, m)
 		if err != nil {
@@ -553,7 +553,7 @@ func joinProc(ctx context.Context,
 		substreamId uint8,
 	) error,
 	runner func(ctx context.Context, m commtypes.Message, sink *producer_consumer.ShardedSharedLogStreamProducer,
-		trackParFunc tran_interface.TrackProdSubStreamFunc,
+		trackParFunc exactly_once_intr.TrackProdSubStreamFunc,
 	) error,
 ) {
 	for {
@@ -617,7 +617,7 @@ func readMsgs(ctx context.Context,
 }
 
 func pushMsgToStream(ctx context.Context, key int, val *strTs, kvmsgSerdes commtypes.KVMsgSerdes,
-	log *sharedlog_stream.ShardedSharedLogStream, producerId tran_interface.ProducerId,
+	log *sharedlog_stream.ShardedSharedLogStream, producerId exactly_once_intr.ProducerId,
 ) error {
 	encoded, err := commtypes.EncodeMsg(commtypes.Message{Key: key, Value: val}, kvmsgSerdes)
 	if err != nil {
@@ -634,7 +634,7 @@ func pushMsgToStream(ctx context.Context, key int, val *strTs, kvmsgSerdes commt
 }
 
 func pushMsgsToSink(ctx context.Context, sink *producer_consumer.ShardedSharedLogStreamProducer,
-	msgs []commtypes.Message, trackParFunc tran_interface.TrackProdSubStreamFunc,
+	msgs []commtypes.Message, trackParFunc exactly_once_intr.TrackProdSubStreamFunc,
 ) error {
 	for _, msg := range msgs {
 		key := msg.Key.(int)

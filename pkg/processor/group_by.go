@@ -7,7 +7,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/producer_consumer"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 )
 
 type GroupBy struct {
@@ -28,7 +28,7 @@ func NewGroupBy(sink producer_consumer.Producer) *GroupBy {
 }
 
 func (g *GroupBy) GroupByAndProduce(ctx context.Context, msg commtypes.Message,
-	trackParFunc tran_interface.TrackProdSubStreamFunc,
+	trackParFunc exactly_once_intr.TrackProdSubStreamFunc,
 ) error {
 	parTmp, ok := g.cHash.Get(msg.Key)
 	if !ok {

@@ -5,7 +5,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/store_restore"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -35,7 +35,7 @@ type StreamTaskArgs struct {
 	duration         time.Duration
 	serdeFormat      commtypes.SerdeFormat
 	fixedOutParNum   int16
-	guarantee        tran_interface.GuaranteeMth
+	guarantee        exactly_once_intr.GuaranteeMth
 }
 
 type StreamTaskArgsBuilder struct {
@@ -52,14 +52,14 @@ func NewStreamTaskArgsBuilder(env types.Environment,
 			env:                      env,
 			transactionalId:          transactionalID,
 			fixedOutParNum:           -1,
-			guarantee:                tran_interface.AT_LEAST_ONCE,
+			guarantee:                exactly_once_intr.AT_LEAST_ONCE,
 			trackEveryForAtLeastOnce: common.CommitDuration,
 		},
 	}
 }
 
 type SetGuarantee interface {
-	Guarantee(gua tran_interface.GuaranteeMth) SetAppID
+	Guarantee(gua exactly_once_intr.GuaranteeMth) SetAppID
 }
 
 type SetAppID interface {
@@ -101,7 +101,7 @@ type BuildStreamTaskArgs interface {
 	FixedOutParNum(uint8) BuildStreamTaskArgs
 }
 
-func (args *StreamTaskArgsBuilder) Guarantee(gua tran_interface.GuaranteeMth) SetAppID {
+func (args *StreamTaskArgsBuilder) Guarantee(gua exactly_once_intr.GuaranteeMth) SetAppID {
 	args.stArgs.guarantee = gua
 	return args
 }

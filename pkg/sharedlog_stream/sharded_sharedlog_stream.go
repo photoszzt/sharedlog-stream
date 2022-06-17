@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 
 	"cs.utexas.edu/zjia/faas/types"
 	"golang.org/x/xerrors"
@@ -48,7 +48,7 @@ func NewShardedSharedLogStream(env types.Environment, topicName string, numParti
 	}, nil
 }
 
-func (s *ShardedSharedLogStream) ExactlyOnce(gua tran_interface.GuaranteeMth) {
+func (s *ShardedSharedLogStream) ExactlyOnce(gua exactly_once_intr.GuaranteeMth) {
 	for _, substream := range s.subSharedLogStreams {
 		substream.ExactlyOnce(gua)
 	}
@@ -92,16 +92,16 @@ func (s *ShardedSharedLogStream) NumPartition() uint8 {
 }
 
 func (s *ShardedSharedLogStream) Push(ctx context.Context, payload []byte, parNumber uint8,
-	meta LogEntryMeta, producerId tran_interface.ProducerId,
+	meta LogEntryMeta, producerId exactly_once_intr.ProducerId,
 ) (uint64, error) {
 	return s.subSharedLogStreams[parNumber].Stream.Push(ctx, payload, parNumber, meta, producerId)
 }
 
-func (s *ShardedSharedLogStream) BufPush(ctx context.Context, payload []byte, parNum uint8, producerId tran_interface.ProducerId) error {
+func (s *ShardedSharedLogStream) BufPush(ctx context.Context, payload []byte, parNum uint8, producerId exactly_once_intr.ProducerId) error {
 	return s.subSharedLogStreams[parNum].BufPushGoroutineSafe(ctx, payload, producerId)
 }
 
-func (s *ShardedSharedLogStream) Flush(ctx context.Context, producerId tran_interface.ProducerId) error {
+func (s *ShardedSharedLogStream) Flush(ctx context.Context, producerId exactly_once_intr.ProducerId) error {
 	for i := uint8(0); i < s.numPartitions; i++ {
 		if err := s.subSharedLogStreams[i].FlushGoroutineSafe(ctx, producerId); err != nil {
 			return err
@@ -110,11 +110,11 @@ func (s *ShardedSharedLogStream) Flush(ctx context.Context, producerId tran_inte
 	return nil
 }
 
-func (s *ShardedSharedLogStream) BufPushNoLock(ctx context.Context, payload []byte, parNum uint8, producerId tran_interface.ProducerId) error {
+func (s *ShardedSharedLogStream) BufPushNoLock(ctx context.Context, payload []byte, parNum uint8, producerId exactly_once_intr.ProducerId) error {
 	return s.subSharedLogStreams[parNum].BufPushNoLock(ctx, payload, producerId)
 }
 
-func (s *ShardedSharedLogStream) FlushNoLock(ctx context.Context, producerId tran_interface.ProducerId) error {
+func (s *ShardedSharedLogStream) FlushNoLock(ctx context.Context, producerId exactly_once_intr.ProducerId) error {
 	for i := uint8(0); i < s.numPartitions; i++ {
 		if err := s.subSharedLogStreams[i].FlushNoLock(ctx, producerId); err != nil {
 			return err
@@ -124,7 +124,7 @@ func (s *ShardedSharedLogStream) FlushNoLock(ctx context.Context, producerId tra
 }
 
 func (s *ShardedSharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNumber uint8, tags []uint64,
-	additionalTopic []string, meta LogEntryMeta, producerId tran_interface.ProducerId,
+	additionalTopic []string, meta LogEntryMeta, producerId exactly_once_intr.ProducerId,
 ) (uint64, error) {
 	return s.subSharedLogStreams[parNumber].Stream.PushWithTag(ctx, payload, parNumber, tags,
 		additionalTopic, meta, producerId)

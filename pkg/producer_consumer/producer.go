@@ -4,7 +4,7 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	exactly_once_intr "sharedlog-stream/pkg/transaction/tran_interface"
+	exactly_once_intr "sharedlog-stream/pkg/exactly_once_intr"
 )
 
 type Producer interface {

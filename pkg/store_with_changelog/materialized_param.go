@@ -3,14 +3,14 @@ package store_with_changelog
 import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"time"
 )
 
 type MaterializeParam struct {
 	kvMsgSerdes      commtypes.KVMsgSerdes
 	changelogManager *ChangelogManager
-	trackFunc        tran_interface.TrackProdSubStreamFunc
+	trackFunc        exactly_once_intr.TrackProdSubStreamFunc
 	storeName        string
 	parNum           uint8
 	serdeFormat      commtypes.SerdeFormat
@@ -36,11 +36,11 @@ func (m *MaterializeParam) KVMsgSerdes() commtypes.KVMsgSerdes {
 	return m.kvMsgSerdes
 }
 
-func (m *MaterializeParam) TrackFunc() tran_interface.TrackProdSubStreamFunc {
+func (m *MaterializeParam) TrackFunc() exactly_once_intr.TrackProdSubStreamFunc {
 	return m.trackFunc
 }
 
-func (m *MaterializeParam) SetTrackParFunc(trackFunc tran_interface.TrackProdSubStreamFunc) {
+func (m *MaterializeParam) SetTrackParFunc(trackFunc exactly_once_intr.TrackProdSubStreamFunc) {
 	m.trackFunc = trackFunc
 }
 
@@ -52,7 +52,7 @@ type MaterializeParamBuilder struct {
 func NewMaterializeParamBuilder() SetKVMsgSerdes {
 	mb := &MaterializeParamBuilder{
 		mp: &MaterializeParam{
-			trackFunc: tran_interface.DefaultTrackProdSubstreamFunc,
+			trackFunc: exactly_once_intr.DefaultTrackProdSubstreamFunc,
 		},
 	}
 	return mb
@@ -172,7 +172,7 @@ func NewMaterializeParamForWindowStore(
 	return &MaterializeParam{
 		KVMsgSerdes:       kvmsgSerdes,
 		ChangelogManager_: NewChangelogManager(changelog, streamParam.Format),
-		TrackFunc:         tran_interface.DefaultTrackSubstreamFunc,
+		TrackFunc:         exactly_once_intr.DefaultTrackSubstreamFunc,
 		StoreName:         storeName,
 		ParNum:            parNum,
 		SerdeFormat:       streamParam.Format,
@@ -192,7 +192,7 @@ func NewMaterializeParamForKeyValueStore(
 	return &MaterializeParam{
 		KVMsgSerdes:       kvmsgSerdes,
 		StoreName:         storeName,
-		TrackFunc:         tran_interface.DefaultTrackSubstreamFunc,
+		TrackFunc:         exactly_once_intr.DefaultTrackSubstreamFunc,
 		ChangelogManager_: NewChangelogManager(changelog, streamParam.Format),
 		ParNum:            parNum,
 		SerdeFormat:       streamParam.Format,

@@ -3,7 +3,7 @@ package sharedlog_stream
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/transaction/tran_interface"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sync"
 )
 
@@ -28,7 +28,7 @@ type BufferedSinkStream struct {
 	initialProdInEpoch uint64
 	currentProdInEpoch uint64
 	currentSize        int
-	guarantee          tran_interface.GuaranteeMth
+	guarantee          exactly_once_intr.GuaranteeMth
 	parNum             uint8
 }
 
@@ -40,13 +40,13 @@ func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8) *BufferedSinkS
 		Stream:          stream,
 		currentSize:     0,
 		once:            sync.Once{},
-		guarantee:       tran_interface.AT_LEAST_ONCE,
+		guarantee:       exactly_once_intr.AT_LEAST_ONCE,
 	}
 }
 
 // don't mix the nolock version and goroutine safe version
 
-func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, producerId tran_interface.ProducerId) error {
+func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, producerId exactly_once_intr.ProducerId) error {
 	payload_size := len(payload)
 	if len(s.sinkBuffer) < SINK_BUFFER_MAX_ENTRY && s.currentSize+payload_size < SINK_BUFFER_MAX_SIZE {
 		s.sinkBuffer = append(s.sinkBuffer, payload)
@@ -72,7 +72,7 @@ func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, 
 }
 
 func (s *BufferedSinkStream) updateProdSeqNum(seqNum uint64) {
-	if s.guarantee == tran_interface.EPOCH_MARK {
+	if s.guarantee == exactly_once_intr.EPOCH_MARK {
 		s.once.Do(func() {
 			s.initialProdInEpoch = seqNum
 		})
@@ -80,12 +80,12 @@ func (s *BufferedSinkStream) updateProdSeqNum(seqNum uint64) {
 	}
 }
 
-func (s *BufferedSinkStream) ExactlyOnce(gua tran_interface.GuaranteeMth) {
+func (s *BufferedSinkStream) ExactlyOnce(gua exactly_once_intr.GuaranteeMth) {
 	s.guarantee = gua
 }
 
 func (s *BufferedSinkStream) ResetInitialProd() {
-	if s.guarantee == tran_interface.EPOCH_MARK {
+	if s.guarantee == exactly_once_intr.EPOCH_MARK {
 		s.once = sync.Once{}
 	}
 }
@@ -98,7 +98,7 @@ func (s *BufferedSinkStream) GetCurrentProdSeqNum() uint64 {
 	return s.currentProdInEpoch
 }
 
-func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId tran_interface.ProducerId) error {
+func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId exactly_once_intr.ProducerId) error {
 	if len(s.sinkBuffer) != 0 {
 		payloadArr := &commtypes.PayloadArr{
 			Payloads: s.sinkBuffer,
@@ -117,7 +117,7 @@ func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId tran_in
 	return nil
 }
 
-func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload []byte, producerId tran_interface.ProducerId,
+func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload []byte, producerId exactly_once_intr.ProducerId,
 ) error {
 	s.sinkMu.Lock()
 	defer s.sinkMu.Unlock()
@@ -145,7 +145,7 @@ func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload [
 	return nil
 }
 
-func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context, producerId tran_interface.ProducerId) error {
+func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context, producerId exactly_once_intr.ProducerId) error {
 	s.sinkMu.Lock()
 	defer s.sinkMu.Unlock()
 	if len(s.sinkBuffer) != 0 {
