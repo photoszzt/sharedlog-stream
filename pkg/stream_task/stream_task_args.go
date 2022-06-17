@@ -3,17 +3,17 @@ package stream_task
 import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/store_restore"
-	"sharedlog-stream/pkg/exactly_once_intr"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
 
 type StreamTaskArgs struct {
-	procArgs proc_interface.ExecutionContext
-	env      types.Environment
+	ectx proc_interface.ExecutionContext
+	env  types.Environment
 
 	appId           string
 	transactionalId string
@@ -48,7 +48,7 @@ func NewStreamTaskArgsBuilder(env types.Environment,
 ) SetGuarantee {
 	return &StreamTaskArgsBuilder{
 		stArgs: &StreamTaskArgs{
-			procArgs:                 ectx,
+			ectx:                     ectx,
 			env:                      env,
 			transactionalId:          transactionalID,
 			fixedOutParNum:           -1,

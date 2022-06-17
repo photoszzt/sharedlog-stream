@@ -3,71 +3,71 @@ package proc_interface
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/producer_consumer"
 )
 
 type ExecutionContext interface {
 	ProcArgs
-	SourcesSinks
+	ProducersConsumers
 }
 
-type SourcesSinks interface {
-	Sinks() []producer_consumer.MeteredProducerIntr
+type ProducersConsumers interface {
+	Producers() []producer_consumer.MeteredProducerIntr
 	FlushAndPushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error
-	Sources() []producer_consumer.MeteredConsumerIntr
+	Consumers() []producer_consumer.MeteredConsumerIntr
 	StartWarmup()
 }
 
 type BaseExecutionContext struct {
-	BaseSrcsSinks
+	BaseConsumersProducers
 	BaseProcArgs
 }
 
 func NewExecutionContext(
-	srcs []producer_consumer.MeteredConsumerIntr,
-	sinks []producer_consumer.MeteredProducerIntr,
+	consumers []producer_consumer.MeteredConsumerIntr,
+	producers []producer_consumer.MeteredProducerIntr,
 	funcName string,
 	curEpoch uint64,
 	parNum uint8,
 ) BaseExecutionContext {
 	return BaseExecutionContext{
 		BaseProcArgs: NewBaseProcArgs(funcName, curEpoch, parNum),
-		BaseSrcsSinks: BaseSrcsSinks{
-			srcs:  srcs,
-			sinks: sinks,
+		BaseConsumersProducers: BaseConsumersProducers{
+			consumers: consumers,
+			producers: producers,
 		},
 	}
 }
 
 func NewExecutionContextFromComponents(
-	srcsSinks BaseSrcsSinks,
+	consumersProducers BaseConsumersProducers,
 	procArgs BaseProcArgs,
 ) BaseExecutionContext {
 	return BaseExecutionContext{
-		BaseProcArgs:  procArgs,
-		BaseSrcsSinks: srcsSinks,
+		BaseProcArgs:           procArgs,
+		BaseConsumersProducers: consumersProducers,
 	}
 }
 
-type BaseSrcsSinks struct {
-	srcs  []producer_consumer.MeteredConsumerIntr
-	sinks []producer_consumer.MeteredProducerIntr
+type BaseConsumersProducers struct {
+	consumers []producer_consumer.MeteredConsumerIntr
+	producers []producer_consumer.MeteredProducerIntr
 }
 
-func NewBaseSrcsSinks(srcs []producer_consumer.MeteredConsumerIntr, sinks []producer_consumer.MeteredProducerIntr) BaseSrcsSinks {
-	return BaseSrcsSinks{
-		srcs:  srcs,
-		sinks: sinks,
+func NewBaseSrcsSinks(srcs []producer_consumer.MeteredConsumerIntr, sinks []producer_consumer.MeteredProducerIntr) BaseConsumersProducers {
+	return BaseConsumersProducers{
+		consumers: srcs,
+		producers: sinks,
 	}
 }
 
-func (pa *BaseSrcsSinks) Sources() []producer_consumer.MeteredConsumerIntr {
-	return pa.srcs
+func (pa *BaseConsumersProducers) Consumers() []producer_consumer.MeteredConsumerIntr {
+	return pa.consumers
 }
 
-func (pa *BaseSrcsSinks) FlushAndPushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
-	for _, sink := range pa.sinks {
+func (pa *BaseConsumersProducers) FlushAndPushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
+	for _, sink := range pa.producers {
 		err := sink.Produce(ctx, msg, parNum, isControl)
 		if err != nil {
 			return err
@@ -76,15 +76,15 @@ func (pa *BaseSrcsSinks) FlushAndPushToAllSinks(ctx context.Context, msg commtyp
 	return nil
 }
 
-func (pa *BaseSrcsSinks) Sinks() []producer_consumer.MeteredProducerIntr {
-	return pa.sinks
+func (pa *BaseConsumersProducers) Producers() []producer_consumer.MeteredProducerIntr {
+	return pa.producers
 }
 
-func (pa *BaseSrcsSinks) StartWarmup() {
-	for _, src := range pa.srcs {
+func (pa *BaseConsumersProducers) StartWarmup() {
+	for _, src := range pa.consumers {
 		src.StartWarmup()
 	}
-	for _, sink := range pa.sinks {
+	for _, sink := range pa.producers {
 		sink.StartWarmup()
 	}
 }

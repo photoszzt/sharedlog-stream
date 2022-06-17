@@ -44,11 +44,11 @@ func joinProcLoop(
 		default:
 		}
 		// debug.Fprintf(os.Stderr, "before consume\n")
-		gotMsgs, err := procArgs.Sources()[0].Consume(ctx, procArgs.SubstreamNum())
+		gotMsgs, err := procArgs.Consumers()[0].Consume(ctx, procArgs.SubstreamNum())
 		if err != nil {
 			if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 				debug.Fprintf(os.Stderr, "[TIMEOUT] %s %s timeout, out chan len: %d\n",
-					id, procArgs.Sources()[0].TopicName(), len(out))
+					id, procArgs.Consumers()[0].TopicName(), len(out))
 				// out <- &common.FnOutput{Success: true, Message: err.Error()}
 				// debug.Fprintf(os.Stderr, "%s done sending msg\n", id)
 				// return
@@ -73,7 +73,7 @@ func joinProcLoop(
 				continue
 			}
 			task.OffMu.Lock()
-			task.CurrentConsumeOffset[procArgs.Sources()[0].TopicName()] = msg.LogSeqNum
+			task.CurrentConsumeOffset[procArgs.Consumers()[0].TopicName()] = msg.LogSeqNum
 			task.OffMu.Unlock()
 
 			if msg.MsgArr != nil {
@@ -124,7 +124,7 @@ func procMsgWithSink(ctx context.Context, msg commtypes.Message, procArgs *JoinP
 		return err
 	}
 	for _, msg := range msgs {
-		err = procArgs.Sinks()[0].Produce(ctx, msg, procArgs.SubstreamNum(), false)
+		err = procArgs.Producers()[0].Produce(ctx, msg, procArgs.SubstreamNum(), false)
 		if err != nil {
 			debug.Fprintf(os.Stderr, "[ERROR] %s return push to sink: %v\n", ctx.Value("id"), err)
 			return err

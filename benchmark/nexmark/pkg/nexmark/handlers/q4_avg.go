@@ -97,7 +97,7 @@ func (h *q4Avg) procMsg(ctx context.Context, msg commtypes.Message, argsTmp inte
 	if err != nil {
 		return err
 	}
-	err = args.Sinks()[0].Produce(ctx, avg[0], args.SubstreamNum(), false)
+	err = args.Producers()[0].Produce(ctx, avg[0], args.SubstreamNum(), false)
 	if err != nil {
 		return err
 	}

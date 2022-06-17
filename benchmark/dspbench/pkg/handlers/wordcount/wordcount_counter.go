@@ -13,8 +13,8 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/producer_consumer"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/treemap"
@@ -106,7 +106,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 	argsTmp interface{},
 ) *common.FnOutput {
 	args := argsTmp.(*wordcountCounterAggProcessArg)
-	msgs, err := args.Sources()[0].Consume(ctx, args.SubstreamNum())
+	msgs, err := args.Consumers()[0].Consume(ctx, args.SubstreamNum())
 	if err != nil {
 		if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 			return &common.FnOutput{
@@ -127,7 +127,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 		if msg.IsControl {
 			v := msg.Msg.Value.(producer_consumer.ScaleEpochAndBytes)
 			// TODO: below is not correct
-			err = args.Sinks()[0].Produce(ctx, msg.Msg, args.SubstreamNum(), true)
+			err = args.Producers()[0].Produce(ctx, msg.Msg, args.SubstreamNum(), true)
 			if err != nil {
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
@@ -144,7 +144,7 @@ func (h *wordcountCounterAgg) process(ctx context.Context,
 			}
 			continue
 		}
-		t.CurrentConsumeOffset[args.Sources()[0].TopicName()] = msg.LogSeqNum
+		t.CurrentConsumeOffset[args.Consumers()[0].TopicName()] = msg.LogSeqNum
 		if msg.MsgArr != nil {
 			for _, subMsg := range msg.MsgArr {
 				_, err = args.counter.ProcessAndReturn(ctx, subMsg)

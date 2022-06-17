@@ -23,7 +23,7 @@ func (t *StreamTask) setupManagersFor2pc(ctx context.Context, streamTaskArgs *St
 		return nil, nil, err
 	}
 	cmm, err := control_channel.NewControlChannelManager(streamTaskArgs.env, streamTaskArgs.appId,
-		commtypes.SerdeFormat(streamTaskArgs.serdeFormat), streamTaskArgs.procArgs.CurEpoch())
+		commtypes.SerdeFormat(streamTaskArgs.serdeFormat), streamTaskArgs.ectx.CurEpoch())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -59,38 +59,8 @@ func (t *StreamTask) setupManagersFor2pc(ctx context.Context, streamTaskArgs *St
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
 		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, cmm.CurrentEpoch())
 	}
-	streamTaskArgs.procArgs.SetTrackParFunc(trackParFunc)
-	streamTaskArgs.procArgs.SetRecordFinishFunc(recordFinish)
-	for _, kvchangelog := range streamTaskArgs.kvChangelogs {
-		kvchangelog.SetTrackParFunc(trackParFunc)
-	}
-	for _, wschangelog := range streamTaskArgs.windowStoreChangelogs {
-		wschangelog.SetTrackParFunc(trackParFunc)
-	}
+	updateFuncs(streamTaskArgs, trackParFunc, recordFinish)
 	return tm, cmm, nil
-}
-
-func getOffsetMap(ctx context.Context, tm *transaction.TransactionManager, args *StreamTaskArgs) (map[string]uint64, error) {
-	offsetMap := make(map[string]uint64)
-	for _, src := range args.procArgs.Sources() {
-		inputTopicName := src.TopicName()
-		offset, err := transaction.CreateOffsetTopicAndGetOffset(ctx, tm, inputTopicName,
-			uint8(src.Stream().NumPartition()), args.procArgs.SubstreamNum())
-		if err != nil {
-			return nil, fmt.Errorf("createOffsetTopicAndGetOffset failed: %v", err)
-		}
-		offsetMap[inputTopicName] = offset
-		debug.Fprintf(os.Stderr, "tp %s offset %d\n", inputTopicName, offset)
-	}
-	return offsetMap, nil
-}
-
-func setOffsetOnStream(offsetMap map[string]uint64, args *StreamTaskArgs) {
-	for _, src := range args.procArgs.Sources() {
-		inputTopicName := src.TopicName()
-		offset := offsetMap[inputTopicName]
-		src.SetCursor(offset+1, args.procArgs.SubstreamNum())
-	}
 }
 
 /*
@@ -174,16 +144,16 @@ func (t *StreamTask) processWithTransaction(
 	cmm *control_channel.ControlChannelManager,
 	args *StreamTaskArgs,
 ) *common.FnOutput {
-	debug.Assert(len(args.procArgs.Sources()) >= 1, "Srcs should be filled")
+	debug.Assert(len(args.ectx.Consumers()) >= 1, "Srcs should be filled")
 	debug.Assert(args.env != nil, "env should be filled")
-	debug.Assert(args.procArgs != nil, "program args should be filled")
-	for _, src := range args.procArgs.Sources() {
+	debug.Assert(args.ectx != nil, "program args should be filled")
+	for _, src := range args.ectx.Consumers() {
 		if !src.IsInitialSource() {
 			src.ConfigExactlyOnce(args.serdeFormat, args.guarantee)
 		}
 		cmm.TrackStream(src.TopicName(), src.Stream().(*sharedlog_stream.ShardedSharedLogStream))
 	}
-	for _, sink := range args.procArgs.Sinks() {
+	for _, sink := range args.ectx.Producers() {
 		sink.ConfigExactlyOnce(tm, args.guarantee)
 		tm.RecordTopicStreams(sink.TopicName(), sink.Stream())
 		cmm.TrackStream(sink.TopicName(), sink.Stream())
@@ -192,13 +162,15 @@ func (t *StreamTask) processWithTransaction(
 	for _, kvchangelog := range args.kvChangelogs {
 		if kvchangelog.ChangelogManager() != nil {
 			tm.RecordTopicStreams(kvchangelog.ChangelogManager().TopicName(), kvchangelog.ChangelogManager().Stream())
-			cmm.TrackStream(kvchangelog.ChangelogManager().TopicName(), kvchangelog.ChangelogManager().Stream())
+			cmm.TrackStream(kvchangelog.ChangelogManager().TopicName(),
+				kvchangelog.ChangelogManager().Stream())
 		}
 	}
 	for _, winchangelog := range args.windowStoreChangelogs {
 		if winchangelog.ChangelogManager() != nil {
 			tm.RecordTopicStreams(winchangelog.ChangelogManager().TopicName(), winchangelog.ChangelogManager().Stream())
-			cmm.TrackStream(winchangelog.ChangelogManager().TopicName(), winchangelog.ChangelogManager().Stream())
+			cmm.TrackStream(winchangelog.ChangelogManager().TopicName(),
+				winchangelog.ChangelogManager().Stream())
 		}
 	}
 
@@ -235,8 +207,8 @@ func (t *StreamTask) processWithTransaction(
 			return &common.FnOutput{Success: true, Message: "exit due to ctx cancel"}
 		case m := <-meta:
 			debug.Fprintf(os.Stderr, "finished prev task %s, funcName %s, meta epoch %d, input epoch %d\n",
-				m.FinishedPrevTask, args.procArgs.FuncName(), m.Epoch, args.procArgs.CurEpoch())
-			if m.FinishedPrevTask == args.procArgs.FuncName() && m.Epoch+1 == args.procArgs.CurEpoch() {
+				m.FinishedPrevTask, args.ectx.FuncName(), m.Epoch, args.ectx.CurEpoch())
+			if m.FinishedPrevTask == args.ectx.FuncName() && m.Epoch+1 == args.ectx.CurEpoch() {
 				run = true
 			}
 		case merr := <-monitorErrc:
@@ -321,7 +293,7 @@ func (t *StreamTask) processWithTransaction(
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
 
-			ret := t.appProcessFunc(ctx, t, args.procArgs)
+			ret := t.appProcessFunc(ctx, t, args.ectx)
 			if ret != nil {
 				if ret.Success {
 					if hasLiveTransaction {
@@ -363,7 +335,7 @@ func (t *StreamTask) startNewTransaction(ctx context.Context, args *StreamTaskAr
 		*commitTimer = time.Now()
 		debug.Fprintf(os.Stderr, "fixedOutParNum: %d\n", args.fixedOutParNum)
 		if args.fixedOutParNum != -1 {
-			sinks := args.procArgs.Sinks()
+			sinks := args.ectx.Producers()
 			debug.Assert(len(sinks) == 1, "fixed out param is only usable when there's only one output stream")
 			debug.Fprintf(os.Stderr, "%s tracking substream %d\n", sinks[0].TopicName(), args.fixedOutParNum)
 			if err := tm.AddTopicSubstream(ctx, sinks[0].TopicName(), uint8(args.fixedOutParNum)); err != nil {
@@ -375,16 +347,16 @@ func (t *StreamTask) startNewTransaction(ctx context.Context, args *StreamTaskAr
 			t.resumeFunc(t)
 		}
 		if !*init {
-			args.procArgs.StartWarmup()
+			args.ectx.StartWarmup()
 			if t.initFunc != nil {
-				t.initFunc(args.procArgs)
+				t.initFunc(args.ectx)
 			}
 			*init = true
 		}
 	}
 	if !*trackConsumePar {
-		for _, src := range args.procArgs.Sources() {
-			if err := tm.AddTopicTrackConsumedSeqs(ctx, src.TopicName(), args.procArgs.SubstreamNum()); err != nil {
+		for _, src := range args.ectx.Consumers() {
+			if err := tm.AddTopicTrackConsumedSeqs(ctx, src.TopicName(), args.ectx.SubstreamNum()); err != nil {
 				return fmt.Errorf("add offsets failed: %v\n", err)
 			}
 		}
@@ -413,7 +385,7 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 			TopicToTrack:   topic,
 			TaskId:         tm.GetCurrentTaskId(),
 			TaskEpoch:      tm.GetCurrentEpoch(),
-			Partition:      args.procArgs.SubstreamNum(),
+			Partition:      args.ectx.SubstreamNum(),
 			ConsumedSeqNum: uint64(offset),
 		})
 	}

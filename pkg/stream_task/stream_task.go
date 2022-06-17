@@ -6,10 +6,12 @@ import (
 	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/proc_interface"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
-	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/transaction"
 	"sync"
 	"time"
 )
@@ -30,11 +32,11 @@ type StreamTask struct {
 	HandleErrFunc func() error
 }
 
-func updateSrcSinkCount(ret *common.FnOutput, srcsSinks proc_interface.SourcesSinks) {
-	for _, src := range srcsSinks.Sources() {
+func updateSrcSinkCount(ret *common.FnOutput, srcsSinks proc_interface.ProducersConsumers) {
+	for _, src := range srcsSinks.Consumers() {
 		ret.Counts[src.Name()] = src.GetCount()
 	}
-	for _, sink := range srcsSinks.Sinks() {
+	for _, sink := range srcsSinks.Producers() {
 		ret.Counts[sink.Name()] = sink.GetCount()
 	}
 }
@@ -56,14 +58,14 @@ func (t *StreamTask) ExecuteApp(ctx context.Context,
 		ret = t.process(ctx, streamTaskArgs)
 	}
 	if ret != nil && ret.Success {
-		updateSrcSinkCount(ret, streamTaskArgs.procArgs)
+		updateSrcSinkCount(ret, streamTaskArgs.ectx)
 		update_stats(ret)
 	}
 	return ret
 }
 
 func (t *StreamTask) flushStreams(ctx context.Context, args *StreamTaskArgs) error {
-	for _, sink := range args.procArgs.Sinks() {
+	for _, sink := range args.ectx.Producers() {
 		if err := sink.Flush(ctx); err != nil {
 			return err
 		}
@@ -105,9 +107,13 @@ func restoreKVStore(ctx context.Context, args *StreamTaskArgs, offsetMap map[str
 	for _, kvchangelog := range args.kvChangelogs {
 		if kvchangelog.TableType() == store.IN_MEM {
 			topic := kvchangelog.ChangelogManager().TopicName()
-			offset, ok := offsetMap[topic]
-			if !ok {
-				offset = 0
+			offset := uint64(0)
+			ok := false
+			if kvchangelog.ChangelogManager().ChangelogIsSrc() {
+				offset, ok = offsetMap[topic]
+				if !ok {
+					continue
+				}
 			}
 			err := store_restore.RestoreChangelogKVStateStore(ctx, kvchangelog, offset)
 			if err != nil {
@@ -171,4 +177,72 @@ func configChangelogExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager
 		}
 	}
 	return nil
+}
+
+func updateFuncs(streamTaskArgs *StreamTaskArgs,
+	trackParFunc exactly_once_intr.TrackProdSubStreamFunc,
+	recordFinish exactly_once_intr.RecordPrevInstanceFinishFunc,
+) {
+	streamTaskArgs.ectx.SetTrackParFunc(trackParFunc)
+	streamTaskArgs.ectx.SetRecordFinishFunc(recordFinish)
+	for _, kvchangelog := range streamTaskArgs.kvChangelogs {
+		kvchangelog.SetTrackParFunc(trackParFunc)
+	}
+	for _, wschangelog := range streamTaskArgs.windowStoreChangelogs {
+		wschangelog.SetTrackParFunc(trackParFunc)
+	}
+}
+
+func getOffsetMap(ctx context.Context, tm *transaction.TransactionManager, args *StreamTaskArgs) (map[string]uint64, error) {
+	offsetMap := make(map[string]uint64)
+	for _, src := range args.ectx.Consumers() {
+		inputTopicName := src.TopicName()
+		offset, err := transaction.CreateOffsetTopicAndGetOffset(ctx, tm, inputTopicName,
+			uint8(src.Stream().NumPartition()), args.ectx.SubstreamNum())
+		if err != nil {
+			return nil, fmt.Errorf("createOffsetTopicAndGetOffset failed: %v", err)
+		}
+		offsetMap[inputTopicName] = offset
+		debug.Fprintf(os.Stderr, "tp %s offset %d\n", inputTopicName, offset)
+	}
+	return offsetMap, nil
+}
+
+func setOffsetOnStream(offsetMap map[string]uint64, args *StreamTaskArgs) {
+	for _, src := range args.ectx.Consumers() {
+		inputTopicName := src.TopicName()
+		offset := offsetMap[inputTopicName]
+		src.SetCursor(offset+1, args.ectx.SubstreamNum())
+	}
+}
+
+func trackStreamAndConfigureExactlyOnce(args *StreamTaskArgs,
+	rem exactly_once_intr.ReadOnlyExactlyOnceManager,
+	trackStream func(name string, stream *sharedlog_stream.ShardedSharedLogStream),
+) {
+	debug.Assert(len(args.ectx.Consumers()) >= 1, "Srcs should be filled")
+	debug.Assert(args.env != nil, "env should be filled")
+	debug.Assert(args.ectx != nil, "program args should be filled")
+	for _, src := range args.ectx.Consumers() {
+		if !src.IsInitialSource() {
+			src.ConfigExactlyOnce(args.serdeFormat, args.guarantee)
+		}
+		trackStream(src.TopicName(),
+			src.Stream().(*sharedlog_stream.ShardedSharedLogStream))
+	}
+	for _, sink := range args.ectx.Producers() {
+		sink.ConfigExactlyOnce(rem, args.guarantee)
+		trackStream(sink.TopicName(), sink.Stream())
+	}
+
+	for _, kvchangelog := range args.kvChangelogs {
+		if kvchangelog.ChangelogManager() != nil {
+			trackStream(kvchangelog.ChangelogManager().TopicName(), kvchangelog.ChangelogManager().Stream())
+		}
+	}
+	for _, winchangelog := range args.windowStoreChangelogs {
+		if winchangelog.ChangelogManager() != nil {
+			trackStream(winchangelog.ChangelogManager().TopicName(), winchangelog.ChangelogManager().Stream())
+		}
+	}
 }

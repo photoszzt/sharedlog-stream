@@ -154,7 +154,7 @@ func (h *q46GroupByHandler) getAucsByID(warmup time.Duration) (
 		msgChan chan commtypes.Message, errChan chan error,
 	) {
 		args := argsTmp.(*TwoMsgChanProcArgs)
-		g := processor.NewGroupBy(args.Sinks()[0])
+		g := processor.NewGroupBy(args.Producers()[0])
 		defer wg.Done()
 	L:
 		for {
@@ -210,7 +210,7 @@ func (h *q46GroupByHandler) getBidsByAuctionID(warmup time.Duration) (
 		msgChan chan commtypes.Message, errChan chan error,
 	) {
 		args := argsTmp.(*TwoMsgChanProcArgs)
-		g := processor.NewGroupBy(args.Sinks()[1])
+		g := processor.NewGroupBy(args.Producers()[1])
 		defer wg.Done()
 	L:
 		for {

@@ -22,7 +22,7 @@ func CommonProcess(ctx context.Context, t *stream_task.StreamTask, args proc_int
 			return &common.FnOutput{Success: true, Message: err.Error()}
 		}
 	}
-	gotMsgs, err := args.Sources()[0].Consume(ctx, args.SubstreamNum())
+	gotMsgs, err := args.Consumers()[0].Consume(ctx, args.SubstreamNum())
 	if err != nil {
 		if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 			return &common.FnOutput{Success: true, Message: err.Error()}
@@ -41,7 +41,7 @@ func CommonProcess(ctx context.Context, t *stream_task.StreamTask, args proc_int
 			continue
 		}
 		// err = proc(t, msg)
-		t.CurrentConsumeOffset[args.Sources()[0].TopicName()] = msg.LogSeqNum
+		t.CurrentConsumeOffset[args.Consumers()[0].TopicName()] = msg.LogSeqNum
 		err = ProcessMsgAndSeq(ctx, msg, args, procMsg)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}

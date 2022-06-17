@@ -11,9 +11,9 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/consume_seq_num_manager/con_types"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store_restore"
-	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/txn_data"
 
 	"cs.utexas.edu/zjia/faas/protocol"
@@ -121,17 +121,14 @@ func (tc *TransactionManager) getMostRecentTransactionState(ctx context.Context)
 
 	// find the begin of the last transaction
 	for {
-		rawMsg, err := tc.transactionLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, 0, txn_data.BeginTag(tc.transactionLog.TopicNameHash(), 0))
+		rawMsg, err := tc.transactionLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, 0,
+			txn_data.BeginTag(tc.transactionLog.TopicNameHash(), 0))
 		if err != nil {
 			// empty log
 			if common_errors.IsStreamEmptyError(err) {
 				return nil, 0, nil
 			}
 			return nil, 0, err
-		}
-		// empty log
-		if rawMsg == nil {
-			return nil, 0, nil
 		}
 		val, err := tc.txnMdSerde.Decode(rawMsg.Payload)
 		if err != nil {
@@ -269,7 +266,8 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) error {
 		TaskEpoch: tc.GetCurrentEpoch(),
 		State:     tc.currentStatus,
 	}
-	tags := []uint64{sharedlog_stream.NameHashWithPartition(tc.transactionLog.TopicNameHash(), 0),
+	tags := []uint64{
+		sharedlog_stream.NameHashWithPartition(tc.transactionLog.TopicNameHash(), 0),
 		txn_data.FenceTag(tc.transactionLog.TopicNameHash(), 0)}
 	_, err = tc.appendToTransactionLog(ctx, &txnMeta, tags)
 	if err != nil {

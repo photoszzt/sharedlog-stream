@@ -200,7 +200,7 @@ func (h *q8GroupByHandler) getPersonsByID(warmup time.Duration, pollTimeout time
 			msgChan chan commtypes.Message, errChan chan error,
 		) {
 			args := argsTmp.(*TwoMsgChanProcArgs)
-			g := processor.NewGroupBy(args.Sinks()[1])
+			g := processor.NewGroupBy(args.Producers()[1])
 			defer wg.Done()
 			for {
 				select {
@@ -252,7 +252,7 @@ func (h *q8GroupByHandler) getAucBySellerID(warmup time.Duration, pollTimeout ti
 
 	return filterAuctions, auctionsBySellerIDMap, func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error) {
 		args := argsTmp.(*TwoMsgChanProcArgs)
-		g := processor.NewGroupBy(args.Sinks()[0])
+		g := processor.NewGroupBy(args.Producers()[0])
 		defer wg.Done()
 		for {
 			select {

@@ -14,8 +14,8 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/producer_consumer"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream_task"
 	"strings"
 	"time"
@@ -105,11 +105,12 @@ func (h *wordcountSplitFlatMap) procMsg(ctx context.Context, msg commtypes.Messa
 	for _, m := range msgs {
 		hashed := hashKey(m.Key.(string))
 		par := uint8(hashed % uint32(args.numOutPartition))
-		err = args.TrackParFunc()(ctx, m.Key, args.Sinks()[0].KeySerde(), args.Sinks()[0].TopicName(), par)
+		err = args.TrackParFunc()(ctx, m.Key, args.Producers()[0].KeySerde(),
+			args.Producers()[0].TopicName(), par)
 		if err != nil {
 			return fmt.Errorf("add topic partition failed: %v", err)
 		}
-		err = args.Sinks()[0].Produce(ctx, m, par, false)
+		err = args.Producers()[0].Produce(ctx, m, par, false)
 		if err != nil {
 			return fmt.Errorf("sink failed: %v", err)
 		}

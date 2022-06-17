@@ -4,8 +4,8 @@ import (
 	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/proc_interface"
 )
 
 type CommonJoinProcArgs struct {
@@ -13,7 +13,7 @@ type CommonJoinProcArgs struct {
 	arg2     *JoinProcArgs
 	outChan1 <-chan *common.FnOutput
 	outChan2 <-chan *common.FnOutput
-	proc_interface.BaseSrcsSinks
+	proc_interface.BaseConsumersProducers
 }
 
 func NewCommonJoinProcArgs(
@@ -21,14 +21,14 @@ func NewCommonJoinProcArgs(
 	arg2 *JoinProcArgs,
 	outChan1 <-chan *common.FnOutput,
 	outChan2 <-chan *common.FnOutput,
-	ss proc_interface.BaseSrcsSinks,
+	ss proc_interface.BaseConsumersProducers,
 ) *CommonJoinProcArgs {
 	return &CommonJoinProcArgs{
-		arg1:          arg1,
-		arg2:          arg2,
-		outChan1:      outChan1,
-		outChan2:      outChan2,
-		BaseSrcsSinks: ss,
+		arg1:                   arg1,
+		arg2:                   arg2,
+		outChan1:               outChan1,
+		outChan2:               outChan2,
+		BaseConsumersProducers: ss,
 	}
 }
 
