@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
 	"sync"
@@ -18,16 +17,7 @@ const (
 	CONTROL_LOG_TOPIC_NAME = "__control_log"
 )
 
-func SetupConsistentHash(cHashMu *sync.RWMutex, cHash *hash.ConsistentHash, numPartition uint8) {
-	cHashMu.Lock()
-	defer cHashMu.Unlock()
-	for i := uint8(0); i < numPartition; i++ {
-		cHash.Add(i)
-	}
-}
-
 type ControlChannelManager struct {
-	env              types.Environment
 	controlMetaSerde commtypes.Serde
 	msgSerde         commtypes.MsgSerde
 	controlLog       *sharedlog_stream.SharedLogStream
@@ -38,13 +28,11 @@ type ControlChannelManager struct {
 
 	topicStreams map[string]*sharedlog_stream.ShardedSharedLogStream
 
-	/*
-		cHashMu *sync.RWMutex
-		cHash   *hash.ConsistentHash
-	*/
-
 	funcName     string
 	currentEpoch uint64
+
+	controlOutput chan ControlChannelResult
+	controlQuit   chan struct{}
 }
 
 func (cm *ControlChannelManager) CurrentEpoch() uint64 {
@@ -61,7 +49,6 @@ func NewControlChannelManager(env types.Environment,
 		return nil, err
 	}
 	cm := &ControlChannelManager{
-		env:          env,
 		controlLog:   log,
 		currentEpoch: 0,
 		topicStreams: make(map[string]*sharedlog_stream.ShardedSharedLogStream),
@@ -213,11 +200,24 @@ func (cmm *ControlChannelManager) updateKeyMapping(ctrlMeta *txn_data.ControlMet
 	cmm.kmMu.Unlock()
 }
 
-func (cmm *ControlChannelManager) MonitorControlChannel(
+func (cmm *ControlChannelManager) StartMonitorControlChannel(ctx context.Context) {
+	cmm.controlQuit = make(chan struct{})
+	cmm.controlOutput = make(chan ControlChannelResult, 1)
+	go cmm.monitorControlChannel(ctx, cmm.controlQuit, cmm.controlOutput)
+}
+
+func (cmm *ControlChannelManager) OutputChan() chan ControlChannelResult {
+	return cmm.controlOutput
+}
+
+func (cmm *ControlChannelManager) SendQuit() {
+	cmm.controlQuit <- struct{}{}
+}
+
+func (cmm *ControlChannelManager) monitorControlChannel(
 	ctx context.Context,
-	quit chan struct{},
-	errc chan error,
-	meta chan txn_data.ControlMetadata,
+	quit <-chan struct{},
+	output chan<- ControlChannelResult,
 ) {
 	for {
 		select {
@@ -231,17 +231,17 @@ func (cmm *ControlChannelManager) MonitorControlChannel(
 			if common_errors.IsStreamEmptyError(err) {
 				continue
 			}
-			errc <- err
+			output <- ControlChannelErr(err)
 			break
 		} else {
 			_, valBytes, err := cmm.msgSerde.Decode(rawMsg.Payload)
 			if err != nil {
-				errc <- err
+				output <- ControlChannelErr(err)
 				break
 			}
 			ctrlMetaTmp, err := cmm.controlMetaSerde.Decode(valBytes)
 			if err != nil {
-				errc <- err
+				output <- ControlChannelErr(err)
 				break
 			}
 			ctrlMeta := ctrlMetaTmp.(txn_data.ControlMetadata)
@@ -250,7 +250,7 @@ func (cmm *ControlChannelManager) MonitorControlChannel(
 			if ctrlMeta.Key != nil && ctrlMeta.Topic != "" {
 				cmm.updateKeyMapping(&ctrlMeta)
 			} else {
-				meta <- ctrlMeta
+				output <- ControlChannelVal(&ctrlMeta)
 			}
 		}
 	}

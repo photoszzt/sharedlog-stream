@@ -1,14 +1,16 @@
 package stats
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 )
 
 type Warmup struct {
-	initial     time.Time
-	warmupTime  time.Duration
-	afterWarmup bool
+	afterWarmup      bool
+	initial          time.Time
+	warmupTime       time.Duration
+	afterWarmupStart time.Time
 }
 
 func NewWarmupChecker(warmupTime time.Duration) Warmup {
@@ -25,6 +27,7 @@ func NewWarmupChecker(warmupTime time.Duration) Warmup {
 func (w *Warmup) Check() {
 	if !w.afterWarmup && time.Since(w.initial) >= w.warmupTime {
 		w.afterWarmup = true
+		w.afterWarmupStart = time.Now()
 	}
 }
 
@@ -34,12 +37,29 @@ func (w *Warmup) AfterWarmup() bool {
 
 func (w *Warmup) StartWarmup() {
 	w.initial = time.Now()
+	if w.afterWarmup {
+		w.afterWarmupStart = w.initial
+	}
+}
+
+func (w *Warmup) GetStartTime() time.Time {
+	return w.initial
+}
+
+func (w *Warmup) ElapsedAfterWarmup() time.Duration {
+	return time.Since(w.afterWarmupStart)
+}
+
+func (w *Warmup) ElapsedSinceInitial() time.Duration {
+	return time.Since(w.initial)
 }
 
 type WarmupGoroutineSafe struct {
-	initial     time.Time
-	warmupTime  time.Duration
 	afterWarmup uint32
+	sync.Mutex
+	initial          time.Time
+	afterWarmupStart time.Time
+	warmupTime       time.Duration
 }
 
 func NewWarmupGoroutineSafeChecker(warmupTime time.Duration) WarmupGoroutineSafe {
@@ -55,7 +75,10 @@ func NewWarmupGoroutineSafeChecker(warmupTime time.Duration) WarmupGoroutineSafe
 
 func (w *WarmupGoroutineSafe) Check() {
 	if atomic.LoadUint32(&w.afterWarmup) == 0 && time.Since(w.initial) >= w.warmupTime {
+		w.Lock()
 		atomic.StoreUint32(&w.afterWarmup, 1)
+		w.afterWarmupStart = time.Now()
+		w.Unlock()
 	}
 }
 
@@ -64,5 +87,28 @@ func (w *WarmupGoroutineSafe) AfterWarmup() bool {
 }
 
 func (w *WarmupGoroutineSafe) StartWarmup() {
+	w.Lock()
 	w.initial = time.Now()
+	if atomic.LoadUint32(&w.afterWarmup) == 1 {
+		w.afterWarmupStart = w.initial
+	}
+	w.Unlock()
+}
+
+func (w *WarmupGoroutineSafe) GetStartTime() time.Time {
+	w.Lock()
+	defer w.Unlock()
+	return w.initial
+}
+
+func (w *WarmupGoroutineSafe) ElapsedAfterWarmup() time.Duration {
+	w.Lock()
+	defer w.Unlock()
+	return time.Since(w.afterWarmupStart)
+}
+
+func (w *WarmupGoroutineSafe) ElapsedSinceInitial() time.Duration {
+	w.Lock()
+	defer w.Unlock()
+	return time.Since(w.initial)
 }

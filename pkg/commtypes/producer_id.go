@@ -1,4 +1,4 @@
-package exactly_once_intr
+package commtypes
 
 import "cs.utexas.edu/zjia/faas/types"
 
@@ -7,8 +7,6 @@ type ProducerId struct {
 	TransactionID uint64
 	TaskEpoch     uint16
 }
-
-var _ = ReadOnlyExactlyOnceManager(&ProducerId{})
 
 func NewProducerId() ProducerId {
 	return ProducerId{

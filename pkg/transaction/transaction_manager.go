@@ -11,7 +11,6 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/consume_seq_num_manager/con_types"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/txn_data"
@@ -45,10 +44,12 @@ type TransactionManager struct {
 
 	TransactionalId string
 	transactionID   uint64
-	exactly_once_intr.ProducerId
+	commtypes.ProducerId
 	serdeFormat commtypes.SerdeFormat
 
 	currentStatus txn_data.TransactionState
+	errChan       chan error
+	quitChan      chan struct{}
 }
 
 func NewTransactionManager(ctx context.Context,
@@ -69,7 +70,7 @@ func NewTransactionManager(ctx context.Context,
 		topicStreams:          make(map[string]*sharedlog_stream.ShardedSharedLogStream),
 		backgroundJobErrg:     errg,
 		backgroundJobCtx:      gctx,
-		ProducerId:            exactly_once_intr.NewProducerId(),
+		ProducerId:            commtypes.NewProducerId(),
 		serdeFormat:           serdeFormat,
 		env:                   env,
 	}
@@ -285,7 +286,7 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) error {
 }
 
 // monitoring entry with fence tag
-func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context,
+func (tc *TransactionManager) monitorTransactionLog(ctx context.Context,
 	quit chan struct{}, errc chan error, dcancel context.CancelFunc,
 ) {
 	fenceTag := txn_data.FenceTag(tc.transactionLog.TopicNameHash(), 0)
@@ -320,6 +321,22 @@ func (tc *TransactionManager) MonitorTransactionLog(ctx context.Context,
 			}
 		}
 	}
+}
+
+func (tc *TransactionManager) StartMonitorLog(ctx context.Context,
+	dcancel context.CancelFunc,
+) {
+	tc.quitChan = make(chan struct{})
+	tc.errChan = make(chan error, 1)
+	go tc.monitorTransactionLog(ctx, tc.quitChan, tc.errChan, dcancel)
+}
+
+func (tc *TransactionManager) SendQuit() {
+	tc.quitChan <- struct{}{}
+}
+
+func (tc *TransactionManager) ErrChan() chan error {
+	return tc.errChan
 }
 
 func (tc *TransactionManager) appendToTransactionLog(ctx context.Context,

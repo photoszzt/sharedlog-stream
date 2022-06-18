@@ -17,7 +17,17 @@ type ReadOnlyExactlyOnceManager interface {
 	GetCurrentEpoch() uint16
 	GetCurrentTaskId() uint64
 	GetTransactionID() uint64
-	GetProducerId() ProducerId
+	GetProducerId() commtypes.ProducerId
+}
+
+type ExactlyOnceManagerLogMonitor interface {
+	ErrChan() chan error
+	SendQuit()
+	StartMonitorLog(ctx context.Context, cancel context.CancelFunc)
+}
+
+type TopicSubstreamTracker interface {
+	AddTopicSubstream(ctx context.Context, name string, subNum uint8) error
 }
 
 type TrackProdSubStreamFunc func(ctx context.Context,

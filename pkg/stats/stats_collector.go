@@ -32,10 +32,10 @@ type Int64Collector struct {
 	min_report_samples uint32
 }
 
-func NewInt64Collector(tag string, duration time.Duration) Int64Collector {
+func NewInt64Collector(tag string, reportInterval time.Duration) Int64Collector {
 	return Int64Collector{
 		data:               make([]int64, 0, 128),
-		report_timer:       NewReportTimer(duration),
+		report_timer:       NewReportTimer(reportInterval),
 		tag:                tag,
 		min_report_samples: DEFAULT_MIN_REPORT_SAMPLES,
 	}

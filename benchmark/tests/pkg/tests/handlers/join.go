@@ -617,7 +617,7 @@ func readMsgs(ctx context.Context,
 }
 
 func pushMsgToStream(ctx context.Context, key int, val *strTs, kvmsgSerdes commtypes.KVMsgSerdes,
-	log *sharedlog_stream.ShardedSharedLogStream, producerId exactly_once_intr.ProducerId,
+	log *sharedlog_stream.ShardedSharedLogStream, producerId commtypes.ProducerId,
 ) error {
 	encoded, err := commtypes.EncodeMsg(commtypes.Message{Key: key, Value: val}, kvmsgSerdes)
 	if err != nil {

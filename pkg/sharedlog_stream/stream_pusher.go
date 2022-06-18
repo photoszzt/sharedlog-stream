@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
 	"sync"
@@ -45,7 +45,7 @@ func (h *StreamPush) InitFlushTimer(duration time.Duration) {
 }
 
 // msgchan has to close and async pusher has to stop first before calling this function
-func (h *StreamPush) Flush(ctx context.Context, producerId exactly_once_intr.ProducerId) error {
+func (h *StreamPush) Flush(ctx context.Context, producerId commtypes.ProducerId) error {
 	if h.BufPush {
 		err := h.Stream.Flush(ctx, producerId)
 		if err != nil {
@@ -58,7 +58,7 @@ func (h *StreamPush) Flush(ctx context.Context, producerId exactly_once_intr.Pro
 }
 
 // msgchan has to close and async pusher has to stop first before calling this function
-func (h *StreamPush) FlushNoLock(ctx context.Context, producerId exactly_once_intr.ProducerId) error {
+func (h *StreamPush) FlushNoLock(ctx context.Context, producerId commtypes.ProducerId) error {
 	if h.BufPush {
 		err := h.Stream.FlushNoLock(ctx, producerId)
 		if err != nil {
@@ -70,7 +70,7 @@ func (h *StreamPush) FlushNoLock(ctx context.Context, producerId exactly_once_in
 	return nil
 }
 
-func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup, producerId exactly_once_intr.ProducerId) {
+func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup, producerId commtypes.ProducerId) {
 	defer wg.Done()
 	for msg := range h.MsgChan {
 		if msg.IsControl {
@@ -126,7 +126,7 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup, pr
 	}
 }
 
-func (h *StreamPush) AsyncStreamPushNoTick(ctx context.Context, wg *sync.WaitGroup, producerId exactly_once_intr.ProducerId,
+func (h *StreamPush) AsyncStreamPushNoTick(ctx context.Context, wg *sync.WaitGroup, producerId commtypes.ProducerId,
 ) {
 	defer wg.Done()
 	for msg := range h.MsgChan {

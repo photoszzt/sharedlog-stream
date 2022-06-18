@@ -15,12 +15,6 @@ var EmptyMessage = Message{}
 
 var EmptyRawMsg = RawMsg{Payload: nil, MsgSeqNum: 0, LogSeqNum: 0}
 
-type TranIdentifier struct {
-	TaskId        uint64
-	TransactionID uint64
-	TaskEpoch     uint16
-}
-
 type RawMsg struct {
 	Payload []byte
 
@@ -28,7 +22,7 @@ type RawMsg struct {
 	LogSeqNum  uint64
 	ScaleEpoch uint64
 
-	TranId TranIdentifier
+	TranId ProducerId
 
 	IsControl    bool
 	IsPayloadArr bool

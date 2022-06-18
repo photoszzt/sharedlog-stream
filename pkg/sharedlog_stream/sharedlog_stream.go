@@ -9,7 +9,6 @@ import (
 	"sharedlog-stream/pkg/bits"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/txn_data"
 	"sync"
 	"sync/atomic"
@@ -47,7 +46,7 @@ var SingleDataRecordMeta = StreamEntryMeta(false, false)
 var ControlRecordMeta = StreamEntryMeta(true, false)
 var ArrRecordMeta = StreamEntryMeta(false, true)
 
-var EmptyProducerId = exactly_once_intr.ProducerId{TaskEpoch: 0, TaskId: 0, TransactionID: 0}
+var EmptyProducerId = commtypes.ProducerId{TaskEpoch: 0, TaskId: 0, TransactionID: 0}
 
 type SharedLogStream struct {
 	mux sync.Mutex
@@ -140,7 +139,7 @@ func (s *SharedLogStream) SetCursor(cursor uint64, parNum uint8) {
 // multiple thread could push to the same stream but only one reader
 func (s *SharedLogStream) PushWithTag(ctx context.Context,
 	payload []byte, parNum uint8, tags []uint64, additionalTopicNames []string,
-	meta LogEntryMeta, producerId exactly_once_intr.ProducerId,
+	meta LogEntryMeta, producerId commtypes.ProducerId,
 ) (uint64, error) {
 	if len(payload) == 0 {
 		return 0, common_errors.ErrEmptyPayload
@@ -212,7 +211,7 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context,
 	return seqNum, nil
 }
 
-func (s *SharedLogStream) Push(ctx context.Context, payload []byte, parNum uint8, meta LogEntryMeta, producerId exactly_once_intr.ProducerId,
+func (s *SharedLogStream) Push(ctx context.Context, payload []byte, parNum uint8, meta LogEntryMeta, producerId commtypes.ProducerId,
 ) (uint64, error) {
 	tags := []uint64{NameHashWithPartition(s.topicNameHash, parNum)}
 	return s.PushWithTag(ctx, payload, parNum, tags, nil, meta, producerId)
@@ -294,7 +293,7 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 				LogSeqNum:    streamLogEntry.seqNum,
 				IsControl:    isControl,
 				IsPayloadArr: isPayloadArr,
-				TranId: commtypes.TranIdentifier{
+				TranId: commtypes.ProducerId{
 					TaskId:        streamLogEntry.TaskId,
 					TaskEpoch:     streamLogEntry.TaskEpoch,
 					TransactionID: streamLogEntry.TransactionID,

@@ -10,8 +10,9 @@ import (
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/transaction"
-	"sharedlog-stream/pkg/txn_data"
+	"sync"
 	"time"
 )
 
@@ -144,49 +145,19 @@ func (t *StreamTask) processWithTransaction(
 	cmm *control_channel.ControlChannelManager,
 	args *StreamTaskArgs,
 ) *common.FnOutput {
-	debug.Assert(len(args.ectx.Consumers()) >= 1, "Srcs should be filled")
-	debug.Assert(args.env != nil, "env should be filled")
-	debug.Assert(args.ectx != nil, "program args should be filled")
-	for _, src := range args.ectx.Consumers() {
-		if !src.IsInitialSource() {
-			src.ConfigExactlyOnce(args.serdeFormat, args.guarantee)
-		}
-		cmm.TrackStream(src.TopicName(), src.Stream().(*sharedlog_stream.ShardedSharedLogStream))
-	}
-	for _, sink := range args.ectx.Producers() {
-		sink.ConfigExactlyOnce(tm, args.guarantee)
-		tm.RecordTopicStreams(sink.TopicName(), sink.Stream())
-		cmm.TrackStream(sink.TopicName(), sink.Stream())
-	}
-
-	for _, kvchangelog := range args.kvChangelogs {
-		if kvchangelog.ChangelogManager() != nil {
-			tm.RecordTopicStreams(kvchangelog.ChangelogManager().TopicName(), kvchangelog.ChangelogManager().Stream())
-			cmm.TrackStream(kvchangelog.ChangelogManager().TopicName(),
-				kvchangelog.ChangelogManager().Stream())
-		}
-	}
-	for _, winchangelog := range args.windowStoreChangelogs {
-		if winchangelog.ChangelogManager() != nil {
-			tm.RecordTopicStreams(winchangelog.ChangelogManager().TopicName(), winchangelog.ChangelogManager().Stream())
-			cmm.TrackStream(winchangelog.ChangelogManager().TopicName(),
-				winchangelog.ChangelogManager().Stream())
-		}
-	}
-
-	monitorQuit := make(chan struct{})
-	monitorErrc := make(chan error, 1)
-	controlErrc := make(chan error, 1)
-	controlQuit := make(chan struct{})
-	meta := make(chan txn_data.ControlMetadata)
+	trackStreamAndConfigureExactlyOnce(args, tm,
+		func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {
+			tm.RecordTopicStreams(name, stream)
+			cmm.TrackStream(name, stream)
+		})
 
 	dctx, dcancel := context.WithCancel(ctx)
-	go tm.MonitorTransactionLog(dctx, monitorQuit, monitorErrc, dcancel)
-	go cmm.MonitorControlChannel(dctx, controlQuit, controlErrc, meta)
+	tm.StartMonitorLog(dctx, dcancel)
+	cmm.StartMonitorControlChannel(dctx)
 
 	run := false
 
-	latencies := make([]int, 0, 128)
+	latencies := stats.NewInt64Collector("latPerIter", stats.DEFAULT_COLLECT_DURATION)
 	hasLiveTransaction := false
 	trackConsumePar := false
 	commitTimer := time.Now()
@@ -196,65 +167,30 @@ func (t *StreamTask) processWithTransaction(
 	debug.Fprintf(os.Stderr, "commit every(ms): %d, commit everyIter: %d, exitAfterNComm: %d\n",
 		args.commitEvery, args.commitEveryNIter, args.exitAfterNCommit)
 	init := false
-	startTimeInit := false
-	var afterWarmupStart time.Time
-	afterWarmup := false
-	warmupDuration := args.warmup
-	var startTime time.Time
+	var once sync.Once
+	warmupCheck := stats.NewWarmupChecker(args.warmup)
 	for {
-		select {
-		case <-dctx.Done():
-			return &common.FnOutput{Success: true, Message: "exit due to ctx cancel"}
-		case m := <-meta:
-			debug.Fprintf(os.Stderr, "finished prev task %s, funcName %s, meta epoch %d, input epoch %d\n",
-				m.FinishedPrevTask, args.ectx.FuncName(), m.Epoch, args.ectx.CurEpoch())
-			if m.FinishedPrevTask == args.ectx.FuncName() && m.Epoch+1 == args.ectx.CurEpoch() {
-				run = true
-			}
-		case merr := <-monitorErrc:
-			debug.Fprintf(os.Stderr, "got monitor error chan\n")
-			monitorQuit <- struct{}{}
-			controlQuit <- struct{}{}
-			if merr != nil {
-				debug.Fprintf(os.Stderr, "[ERROR] control channel manager: %v", merr)
-				dcancel()
-				return &common.FnOutput{Success: false, Message: fmt.Sprintf("monitor failed: %v", merr)}
-			}
-		case cerr := <-controlErrc:
-			debug.Fprintf(os.Stderr, "got control error chan\n")
-			monitorQuit <- struct{}{}
-			controlQuit <- struct{}{}
-			if cerr != nil {
-				debug.Fprintf(os.Stderr, "[ERROR] control channel manager: %v", cerr)
-				dcancel()
-				return &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("control channel manager failed: %v", cerr),
-				}
-			}
-		default:
+		ret := checkMonitorReturns(dctx, dcancel, args, cmm, tm, &run)
+		if ret != nil {
+			return ret
 		}
 		if run {
 			procStart := time.Now()
-			if !startTimeInit {
-				startTime = time.Now()
-				startTimeInit = true
-			}
-			if !afterWarmup && warmupDuration != 0 && time.Since(startTime) >= warmupDuration {
-				debug.Fprintf(os.Stderr, "after warmup\n")
-				afterWarmup = true
-				afterWarmupStart = time.Now()
-			}
+			once.Do(func() {
+				warmupCheck.StartWarmup()
+			})
+			warmupCheck.Check()
 			timeSinceTranStart := time.Since(commitTimer)
-			cur_elapsed := time.Since(startTime)
+			cur_elapsed := warmupCheck.ElapsedSinceInitial()
 			timeout := args.duration != 0 && cur_elapsed >= args.duration
 			shouldCommitByIter := args.commitEveryNIter != 0 &&
 				uint32(idx)%args.commitEveryNIter == 0 && idx != 0
+			shouldCommitByTime := (args.commitEvery != 0 && timeSinceTranStart > args.commitEvery)
 			// debug.Fprintf(os.Stderr, "iter: %d, shouldCommitByIter: %v, timeSinceTranStart: %v, cur_elapsed: %v, duration: %v\n",
 			// 	idx, shouldCommitByIter, timeSinceTranStart, cur_elapsed, duration)
 
 			// should commit
-			if ((args.commitEvery != 0 && timeSinceTranStart > args.commitEvery) || timeout || shouldCommitByIter) && hasLiveTransaction {
+			if (shouldCommitByTime || timeout || shouldCommitByIter) && hasLiveTransaction {
 				err_out := t.commitTransaction(ctx, tm, args, &hasLiveTransaction, &trackConsumePar)
 				if err_out != nil {
 					return err_out
@@ -265,9 +201,10 @@ func (t *StreamTask) processWithTransaction(
 			}
 
 			// Exit routine
-			cur_elapsed = time.Since(startTime)
+			cur_elapsed = warmupCheck.ElapsedSinceInitial()
 			timeout = args.duration != 0 && cur_elapsed >= args.duration
-			if timeout || (args.exitAfterNCommit != 0 && numCommit == int(args.exitAfterNCommit)) {
+			shouldExitAfterNCommit := (args.exitAfterNCommit != 0 && numCommit == int(args.exitAfterNCommit))
+			if timeout || shouldExitAfterNCommit {
 				if err := tm.Close(); err != nil {
 					debug.Fprintf(os.Stderr, "[ERROR] close transaction manager: %v\n", err)
 					return &common.FnOutput{Success: false, Message: fmt.Sprintf("close transaction manager: %v\n", err)}
@@ -279,11 +216,11 @@ func (t *StreamTask) processWithTransaction(
 					}
 				}
 				elapsed := time.Since(procStart)
-				latencies = append(latencies, int(elapsed.Microseconds()))
+				latencies.AddSample(elapsed.Microseconds())
 				ret := &common.FnOutput{
 					Success: true,
 				}
-				updateReturnMetric(ret, startTime, afterWarmupStart, warmupDuration, afterWarmup, latencies)
+				updateReturnMetric(ret, &warmupCheck)
 				return ret
 			}
 
@@ -304,7 +241,7 @@ func (t *StreamTask) processWithTransaction(
 					}
 					// elapsed := time.Since(procStart)
 					// latencies = append(latencies, int(elapsed.Microseconds()))
-					updateReturnMetric(ret, startTime, afterWarmupStart, warmupDuration, afterWarmup, latencies)
+					updateReturnMetric(ret, &warmupCheck)
 				} else {
 					if hasLiveTransaction {
 						if err := tm.AbortTransaction(ctx, false, args.kvChangelogs, args.windowStoreChangelogs); err != nil {
@@ -314,9 +251,9 @@ func (t *StreamTask) processWithTransaction(
 				}
 				return ret
 			}
-			if warmupDuration == 0 || afterWarmup {
+			if warmupCheck.AfterWarmup() {
 				elapsed := time.Since(procStart)
-				latencies = append(latencies, int(elapsed.Microseconds()))
+				latencies.AddSample(elapsed.Microseconds())
 			}
 			idx += 1
 		}
@@ -334,24 +271,9 @@ func (t *StreamTask) startNewTransaction(ctx context.Context, args *StreamTaskAr
 		*hasLiveTransaction = true
 		*commitTimer = time.Now()
 		debug.Fprintf(os.Stderr, "fixedOutParNum: %d\n", args.fixedOutParNum)
-		if args.fixedOutParNum != -1 {
-			sinks := args.ectx.Producers()
-			debug.Assert(len(sinks) == 1, "fixed out param is only usable when there's only one output stream")
-			debug.Fprintf(os.Stderr, "%s tracking substream %d\n", sinks[0].TopicName(), args.fixedOutParNum)
-			if err := tm.AddTopicSubstream(ctx, sinks[0].TopicName(), uint8(args.fixedOutParNum)); err != nil {
-				debug.Fprintf(os.Stderr, "[ERROR] track topic partition failed: %v\n", err)
-				return fmt.Errorf("track topic partition failed: %v\n", err)
-			}
-		}
-		if *init && t.resumeFunc != nil {
-			t.resumeFunc(t)
-		}
-		if !*init {
-			args.ectx.StartWarmup()
-			if t.initFunc != nil {
-				t.initFunc(args.ectx)
-			}
-			*init = true
+		err := t.initAfterMarkOrCommit(ctx, args, tm, init)
+		if err != nil {
+			return err
 		}
 	}
 	if !*trackConsumePar {

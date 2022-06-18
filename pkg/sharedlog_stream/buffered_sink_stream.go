@@ -46,7 +46,7 @@ func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8) *BufferedSinkS
 
 // don't mix the nolock version and goroutine safe version
 
-func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, producerId exactly_once_intr.ProducerId) error {
+func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, producerId commtypes.ProducerId) error {
 	payload_size := len(payload)
 	if len(s.sinkBuffer) < SINK_BUFFER_MAX_ENTRY && s.currentSize+payload_size < SINK_BUFFER_MAX_SIZE {
 		s.sinkBuffer = append(s.sinkBuffer, payload)
@@ -98,7 +98,7 @@ func (s *BufferedSinkStream) GetCurrentProdSeqNum() uint64 {
 	return s.currentProdInEpoch
 }
 
-func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId exactly_once_intr.ProducerId) error {
+func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId commtypes.ProducerId) error {
 	if len(s.sinkBuffer) != 0 {
 		payloadArr := &commtypes.PayloadArr{
 			Payloads: s.sinkBuffer,
@@ -117,7 +117,7 @@ func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId exactly
 	return nil
 }
 
-func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload []byte, producerId exactly_once_intr.ProducerId,
+func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload []byte, producerId commtypes.ProducerId,
 ) error {
 	s.sinkMu.Lock()
 	defer s.sinkMu.Unlock()
@@ -145,7 +145,7 @@ func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload [
 	return nil
 }
 
-func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context, producerId exactly_once_intr.ProducerId) error {
+func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context, producerId commtypes.ProducerId) error {
 	s.sinkMu.Lock()
 	defer s.sinkMu.Unlock()
 	if len(s.sinkBuffer) != 0 {

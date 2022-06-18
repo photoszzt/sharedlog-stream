@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/pkg/consume_seq_num_manager"
 	"sharedlog-stream/pkg/consume_seq_num_manager/con_types"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/stats"
 	"time"
 )
 
@@ -15,7 +16,7 @@ func (t *StreamTask) process(ctx context.Context, args *StreamTaskArgs) *common.
 	debug.Assert(len(args.ectx.Consumers()) >= 1, "Srcs should be filled")
 	debug.Assert(args.env != nil, "env should be filled")
 	debug.Assert(args.ectx != nil, "program args should be filled")
-	latencies := make([]int, 0, 128)
+	latencies := stats.NewInt64Collector("latPerIter", stats.DEFAULT_COLLECT_DURATION)
 	cm, err := consume_seq_num_manager.NewConsumeSeqManager(args.serdeFormat)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
@@ -46,12 +47,11 @@ func (t *StreamTask) process(ctx context.Context, args *StreamTaskArgs) *common.
 	}
 	hasUntrackedConsume := false
 
-	var afterWarmupStart time.Time
-	afterWarmup := false
 	commitTimer := time.Now()
 	flushTimer := time.Now()
 	debug.Fprintf(os.Stderr, "warmup time: %v\n", args.warmup)
-	startTime := time.Now()
+	warmupCheck := stats.NewWarmupChecker(args.warmup)
+	warmupCheck.StartWarmup()
 	for {
 		timeSinceLastTrack := time.Since(commitTimer)
 		if timeSinceLastTrack >= args.trackEveryForAtLeastOnce {
@@ -65,11 +65,8 @@ func (t *StreamTask) process(ctx context.Context, args *StreamTaskArgs) *common.
 				return ret_err
 			}
 		}
-		if !afterWarmup && args.warmup != 0 && time.Since(startTime) >= args.warmup {
-			afterWarmup = true
-			afterWarmupStart = time.Now()
-		}
-		if args.duration != 0 && time.Since(startTime) >= args.duration {
+		warmupCheck.Check()
+		if args.duration != 0 && warmupCheck.ElapsedSinceInitial() >= args.duration {
 			break
 		}
 		procStart := time.Now()
@@ -82,21 +79,21 @@ func (t *StreamTask) process(ctx context.Context, args *StreamTaskArgs) *common.
 				if ret_err := t.pauseTrackFlush(ctx, args, cm, hasUntrackedConsume); ret_err != nil {
 					return ret_err
 				}
-				updateReturnMetric(ret, startTime, afterWarmupStart, args.warmup, afterWarmup, latencies)
+				updateReturnMetric(ret, &warmupCheck)
 			}
 			return ret
 		}
 		if !hasUntrackedConsume {
 			hasUntrackedConsume = true
 		}
-		if args.warmup == 0 || afterWarmup {
+		if warmupCheck.AfterWarmup() {
 			elapsed := time.Since(procStart)
-			latencies = append(latencies, int(elapsed.Microseconds()))
+			latencies.AddSample(elapsed.Microseconds())
 		}
 	}
 	t.pauseTrackFlush(ctx, args, cm, hasUntrackedConsume)
 	ret := &common.FnOutput{Success: true}
-	updateReturnMetric(ret, startTime, afterWarmupStart, args.warmup, afterWarmup, latencies)
+	updateReturnMetric(ret, &warmupCheck)
 	return ret
 }
 

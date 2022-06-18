@@ -198,11 +198,8 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 			Message: err.Error(),
 		}
 	}
-	controlErrc := make(chan error, 1)
-	controlQuit := make(chan struct{})
-	meta := make(chan txn_data.ControlMetadata)
 	dctx, dcancel := context.WithCancel(ctx)
-	go cmm.MonitorControlChannel(ctx, controlQuit, controlErrc, meta)
+	cmm.StartMonitorControlChannel(dctx)
 
 	msgChan := make(chan sharedlog_stream.PayloadToPush, 10000)
 	msgErrChan := make(chan error)
@@ -232,65 +229,67 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 		BufPush:    h.bufPush,
 	}
 	wg.Add(1)
-	go streamPusher.AsyncStreamPush(ctx, &wg, sharedlog_stream.EmptyProducerId)
+	go streamPusher.AsyncStreamPush(dctx, &wg, sharedlog_stream.EmptyProducerId)
 	streamPusher.InitFlushTimer(time.Duration(inputConfig.FlushMs) * time.Millisecond)
 	startTime := time.Now()
 	for {
 		select {
 		case merr := <-msgErrChan:
-			controlQuit <- struct{}{}
+			cmm.SendQuit()
 			dcancel()
 			return &common.FnOutput{Success: false, Message: fmt.Sprintf("failed to push to src stream: %v", merr)}
-		case cerr := <-controlErrc:
-			controlQuit <- struct{}{}
-			if cerr != nil {
+		case out := <-cmm.OutputChan():
+			if out.Valid() {
+				m := out.Value()
+				numInstance := m.Config[h.funcName]
+				if inputConfig.ParNum >= numInstance {
+					cmm.SendQuit()
+					close(msgChan)
+					wg.Wait()
+					dcancel()
+					return &common.FnOutput{
+						Success:   true,
+						Duration:  time.Since(startTime).Seconds(),
+						Latencies: map[string][]int{"e2e": procArgs.latencies},
+					}
+				}
+				numSubstreams := m.Config[stream.TopicName()]
+				flushMsgChan()
+				err = stream.ScaleSubstreams(h.env, numSubstreams)
+				if err != nil {
+					dcancel()
+					return &common.FnOutput{Success: false, Message: err.Error()}
+				}
+				// piggy back scale fence in txn marker
+				txnMarker := txn_data.TxnMarker{
+					Mark:               uint8(txn_data.SCALE_FENCE),
+					TranIDOrScaleEpoch: m.Epoch,
+				}
+				vBytes, err := txnMarkerSerde.Encode(txnMarker)
+				if err != nil {
+					dcancel()
+					return &common.FnOutput{Success: false, Message: err.Error()}
+				}
+				encoded, err := msgSerde.Encode(nil, vBytes)
+				if err != nil {
+					dcancel()
+					return &common.FnOutput{Success: false, Message: err.Error()}
+				}
+				var partitions []uint8
+				for i := uint8(0); i < numSubstreams; i++ {
+					partitions = append(partitions, i)
+				}
+				procArgs.numPartition = stream.NumPartition()
+				msgChan <- sharedlog_stream.PayloadToPush{Payload: encoded, IsControl: true, Partitions: partitions}
+			} else {
+				cerr := out.Err()
+				cmm.SendQuit()
 				close(msgChan)
 				wg.Wait()
 				h.flush(ctx, stream)
 				dcancel()
 				return &common.FnOutput{Success: false, Message: fmt.Sprintf("control channel manager failed: %v", cerr)}
 			}
-		case m := <-meta:
-			numInstance := m.Config[h.funcName]
-			if inputConfig.ParNum >= numInstance {
-				controlQuit <- struct{}{}
-				close(msgChan)
-				wg.Wait()
-				dcancel()
-				return &common.FnOutput{
-					Success:   true,
-					Duration:  time.Since(startTime).Seconds(),
-					Latencies: map[string][]int{"e2e": procArgs.latencies},
-				}
-			}
-			numSubstreams := m.Config[stream.TopicName()]
-			flushMsgChan()
-			err = stream.ScaleSubstreams(h.env, numSubstreams)
-			if err != nil {
-				dcancel()
-				return &common.FnOutput{Success: false, Message: err.Error()}
-			}
-			// piggy back scale fence in txn marker
-			txnMarker := txn_data.TxnMarker{
-				Mark:               uint8(txn_data.SCALE_FENCE),
-				TranIDOrScaleEpoch: m.Epoch,
-			}
-			vBytes, err := txnMarkerSerde.Encode(txnMarker)
-			if err != nil {
-				dcancel()
-				return &common.FnOutput{Success: false, Message: err.Error()}
-			}
-			encoded, err := msgSerde.Encode(nil, vBytes)
-			if err != nil {
-				dcancel()
-				return &common.FnOutput{Success: false, Message: err.Error()}
-			}
-			var partitions []uint8
-			for i := uint8(0); i < numSubstreams; i++ {
-				partitions = append(partitions, i)
-			}
-			procArgs.numPartition = stream.NumPartition()
-			msgChan <- sharedlog_stream.PayloadToPush{Payload: encoded, IsControl: true, Partitions: partitions}
 		default:
 		}
 		if !eventGenerator.HasNext() {
@@ -307,11 +306,6 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 			return fnout
 		}
 	}
-	/*
-		if out := closeAllChanAndWait(inChans, g, err); out != nil {
-			return out
-		}
-	*/
 	close(msgChan)
 	wg.Wait()
 	h.flush(ctx, stream)

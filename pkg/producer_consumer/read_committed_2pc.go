@@ -15,9 +15,9 @@ import (
 type TransactionAwareConsumer struct {
 	txnMarkerSerde   commtypes.Serde
 	stream           *sharedlog_stream.ShardedSharedLogStream
-	committed        map[commtypes.TranIdentifier]struct{}
-	aborted          map[commtypes.TranIdentifier]struct{}
-	curReadMsgSeqNum map[commtypes.TranIdentifier]uint64
+	committed        map[commtypes.ProducerId]struct{}
+	aborted          map[commtypes.ProducerId]struct{}
+	curReadMsgSeqNum map[commtypes.ProducerId]uint64
 	msgBuffer        []*deque.Deque
 }
 
@@ -34,9 +34,9 @@ func NewTransactionAwareConsumer(stream *sharedlog_stream.ShardedSharedLogStream
 		msgBuffer:        make([]*deque.Deque, stream.NumPartition()),
 		stream:           stream,
 		txnMarkerSerde:   txnMarkerSerde,
-		committed:        make(map[commtypes.TranIdentifier]struct{}),
-		aborted:          make(map[commtypes.TranIdentifier]struct{}),
-		curReadMsgSeqNum: make(map[commtypes.TranIdentifier]uint64),
+		committed:        make(map[commtypes.ProducerId]struct{}),
+		aborted:          make(map[commtypes.ProducerId]struct{}),
+		curReadMsgSeqNum: make(map[commtypes.ProducerId]uint64),
 	}, nil
 }
 
@@ -138,13 +138,13 @@ func (tac *TransactionAwareConsumer) ReadNext(ctx context.Context, parNum uint8)
 	}
 }
 
-func (tac *TransactionAwareConsumer) HasCommited(tranId commtypes.TranIdentifier) bool {
+func (tac *TransactionAwareConsumer) HasCommited(tranId commtypes.ProducerId) bool {
 	// debug.Fprintf(os.Stderr, "committed has %v, tranId: %v\n", tac.committed, tranId)
 	_, ok := tac.committed[tranId]
 	return ok
 }
 
-func (tas *TransactionAwareConsumer) HasAborted(tranId commtypes.TranIdentifier) bool {
+func (tas *TransactionAwareConsumer) HasAborted(tranId commtypes.ProducerId) bool {
 	_, ok := tas.aborted[tranId]
 	return ok
 }

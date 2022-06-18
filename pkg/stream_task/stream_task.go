@@ -5,15 +5,16 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/transaction"
 	"sync"
-	"time"
 )
 
 type ProcessFunc func(ctx context.Context, task *StreamTask, args interface{}) *common.FnOutput
@@ -54,6 +55,12 @@ func (t *StreamTask) ExecuteApp(ctx context.Context,
 		debug.Fprint(os.Stderr, "begin transaction processing\n")
 		ret = t.processWithTransaction(ctx, tm, cmm, streamTaskArgs)
 	} else if streamTaskArgs.guarantee == exactly_once_intr.EPOCH_MARK {
+		em, cmm, err := t.setupManagersForEpoch(ctx, streamTaskArgs)
+		if err != nil {
+			return &common.FnOutput{Success: false, Message: err.Error()}
+		}
+		debug.Fprint(os.Stderr, "begin epoch processing\n")
+		ret = t.processInEpoch(ctx, em, cmm, streamTaskArgs)
 	} else {
 		ret = t.process(ctx, streamTaskArgs)
 	}
@@ -87,17 +94,10 @@ func (t *StreamTask) flushStreams(ctx context.Context, args *StreamTaskArgs) err
 	return nil
 }
 
-func updateReturnMetric(ret *common.FnOutput,
-	startTime time.Time, afterWarmupStart time.Time, warmupDuration time.Duration, afterWarmup bool,
-	latencies []int,
-) {
-	ret.Latencies = map[string][]int{"e2e": latencies}
+func updateReturnMetric(ret *common.FnOutput, warmupChecker *stats.Warmup) {
+	ret.Latencies = make(map[string][]int)
 	ret.Counts = make(map[string]uint64)
-	e2eTime := time.Since(startTime).Seconds()
-	if warmupDuration != 0 && afterWarmup {
-		e2eTime = time.Since(afterWarmupStart).Seconds()
-	}
-	ret.Duration = e2eTime
+	ret.Duration = warmupChecker.ElapsedAfterWarmup().Seconds()
 }
 
 // for key value table, it's possible that the changelog is the source stream of the task
@@ -245,4 +245,76 @@ func trackStreamAndConfigureExactlyOnce(args *StreamTaskArgs,
 			trackStream(winchangelog.ChangelogManager().TopicName(), winchangelog.ChangelogManager().Stream())
 		}
 	}
+}
+
+func checkMonitorReturns(
+	dctx context.Context,
+	dcancel context.CancelFunc,
+	args *StreamTaskArgs,
+	cmm *control_channel.ControlChannelManager,
+	lm exactly_once_intr.ExactlyOnceManagerLogMonitor,
+	run *bool,
+) *common.FnOutput {
+	select {
+	case <-dctx.Done():
+		return &common.FnOutput{Success: true, Message: "exit due to ctx cancel"}
+	case out := <-cmm.OutputChan():
+		if out.Valid() {
+			m := out.Value()
+			debug.Fprintf(os.Stderr, "finished prev task %s, funcName %s, meta epoch %d, input epoch %d\n",
+				m.FinishedPrevTask, args.ectx.FuncName(), m.Epoch, args.ectx.CurEpoch())
+			if m.FinishedPrevTask == args.ectx.FuncName() && m.Epoch+1 == args.ectx.CurEpoch() {
+				*run = true
+			}
+		} else {
+			cerr := out.Err()
+			debug.Fprintf(os.Stderr, "got control error chan\n")
+			lm.SendQuit()
+			cmm.SendQuit()
+			if cerr != nil {
+				debug.Fprintf(os.Stderr, "[ERROR] control channel manager: %v", cerr)
+				dcancel()
+				return &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("control channel manager failed: %v", cerr),
+				}
+			}
+		}
+	case merr := <-lm.ErrChan():
+		debug.Fprintf(os.Stderr, "got monitor error chan\n")
+		lm.SendQuit()
+		cmm.SendQuit()
+		if merr != nil {
+			debug.Fprintf(os.Stderr, "[ERROR] control channel manager: %v", merr)
+			dcancel()
+			return &common.FnOutput{Success: false, Message: fmt.Sprintf("monitor failed: %v", merr)}
+		}
+	default:
+	}
+	return nil
+}
+
+func (t *StreamTask) initAfterMarkOrCommit(ctx context.Context, args *StreamTaskArgs,
+	tracker exactly_once_intr.TopicSubstreamTracker, init *bool,
+) error {
+	if args.fixedOutParNum != -1 {
+		sinks := args.ectx.Producers()
+		debug.Assert(len(sinks) == 1, "fixed out param is only usable when there's only one output stream")
+		debug.Fprintf(os.Stderr, "%s tracking substream %d\n", sinks[0].TopicName(), args.fixedOutParNum)
+		if err := tracker.AddTopicSubstream(ctx, sinks[0].TopicName(), uint8(args.fixedOutParNum)); err != nil {
+			debug.Fprintf(os.Stderr, "[ERROR] track topic partition failed: %v\n", err)
+			return fmt.Errorf("track topic partition failed: %v\n", err)
+		}
+	}
+	if *init && t.resumeFunc != nil {
+		t.resumeFunc(t)
+	}
+	if !*init {
+		args.ectx.StartWarmup()
+		if t.initFunc != nil {
+			t.initFunc(args.ectx)
+		}
+		*init = true
+	}
+	return nil
 }
