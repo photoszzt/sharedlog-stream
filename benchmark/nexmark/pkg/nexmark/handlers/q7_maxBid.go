@@ -9,10 +9,8 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	nutils "sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
-	"sharedlog-stream/pkg/hash"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
@@ -20,7 +18,6 @@ import (
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/treemap"
-	"sync"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -28,15 +25,12 @@ import (
 
 type q7MaxBid struct {
 	env      types.Environment
-	cHashMu  sync.RWMutex
-	cHash    *hash.ConsistentHash
 	funcName string
 }
 
 func NewQ7MaxBid(env types.Environment, funcName string) types.FuncHandler {
 	return &q7MaxBid{
 		env:      env,
-		cHash:    hash.NewConsistentHash(),
 		funcName: funcName,
 	}
 }
@@ -204,7 +198,6 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 			maxBid.StartWarmup()
 			remapKV.StartWarmup()
 		}).Build()
-	control_channel.SetupConsistentHash(&h.cHashMu, h.cHash, sp.NumOutPartitions[0])
 
 	var kvc []*store_restore.KVStoreChangelog
 	kvc = []*store_restore.KVStoreChangelog{
