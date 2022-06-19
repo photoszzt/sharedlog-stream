@@ -6,34 +6,32 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/exactly_once_intr"
 )
 
 type NexMarkConfigInput struct {
-	TopicName              string                         `json:"topic_name"`
-	RateShape              string                         `json:"rate_shape"`
-	AppId                  string                         `json:"aid"`
-	EventsNum              uint64                         `json:"events_num"`
-	RatePeriod             time.Duration                  `json:"rate_period"`
-	BidAvgSize             uint32                         `json:"bid_avg_size"`
-	FirstEventRate         uint32                         `json:"first_event_rate"`
-	NextEventRate          uint32                         `json:"next_event_rate"`
-	PersonAvgSize          uint32                         `json:"person_avg_size"`
-	AuctionAvgSize         uint32                         `json:"auction_avg_size"`
-	Duration               uint32                         `json:"duration"`
-	PersonProportion       uint32                         `json:"person_proportion"`
-	AuctionProportion      uint32                         `json:"auction_proportion"`
-	BidProportion          uint32                         `json:"bid_proportion"`
-	BidHotRatioAuctions    uint32                         `json:"bid_hot_ratio_auctions"`
-	BidHotRatioBidders     uint32                         `json:"bid_hot_ratio_bidders"`
-	AuctionHotRatioSellers uint32                         `json:"auction_hot_ratio_sellers"`
-	FlushMs                uint32                         `json:"flushms"`
-	RateLimited            bool                           `json:"rate_limited"`
-	SerdeFormat            uint8                          `json:"serde_format"`
-	NumOutPartition        uint8                          `json:"numOutPar,omitempty"`
-	ParNum                 uint8                          `json:"parNum,omitempty"`
-	NumSrcInstance         uint8                          `json:"nSrcIns,omitempty"`
-	GuaranteeMeth          exactly_once_intr.GuaranteeMth `json:"gua,omitempty"`
+	TopicName              string        `json:"topic_name"`
+	RateShape              string        `json:"rate_shape"`
+	AppId                  string        `json:"aid"`
+	EventsNum              uint64        `json:"events_num"`
+	RatePeriod             time.Duration `json:"rate_period"`
+	BidAvgSize             uint32        `json:"bid_avg_size"`
+	FirstEventRate         uint32        `json:"first_event_rate"`
+	NextEventRate          uint32        `json:"next_event_rate"`
+	PersonAvgSize          uint32        `json:"person_avg_size"`
+	AuctionAvgSize         uint32        `json:"auction_avg_size"`
+	Duration               uint32        `json:"duration"`
+	PersonProportion       uint32        `json:"person_proportion"`
+	AuctionProportion      uint32        `json:"auction_proportion"`
+	BidProportion          uint32        `json:"bid_proportion"`
+	BidHotRatioAuctions    uint32        `json:"bid_hot_ratio_auctions"`
+	BidHotRatioBidders     uint32        `json:"bid_hot_ratio_bidders"`
+	AuctionHotRatioSellers uint32        `json:"auction_hot_ratio_sellers"`
+	FlushMs                uint32        `json:"flushms"`
+	RateLimited            bool          `json:"rate_limited"`
+	SerdeFormat            uint8         `json:"serde_format"`
+	NumOutPartition        uint8         `json:"numOutPar,omitempty"`
+	ParNum                 uint8         `json:"parNum,omitempty"`
+	NumSrcInstance         uint8         `json:"nSrcIns,omitempty"`
 }
 
 func NewNexMarkConfigInput(topicName string, serdeFormat commtypes.SerdeFormat) *NexMarkConfigInput {

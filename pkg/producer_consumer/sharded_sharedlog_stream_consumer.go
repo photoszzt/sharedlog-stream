@@ -4,8 +4,9 @@ import (
 	"context"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
 	"time"
 )
@@ -25,6 +26,7 @@ type ShardedSharedLogStreamConsumer struct {
 	payloadArrSerde commtypes.Serde
 	stream          *sharedlog_stream.ShardedSharedLogStream
 	tac             *TransactionAwareConsumer
+	emc             *EpochMarkConsumer
 	name            string
 	timeout         time.Duration
 	guarantee       exactly_once_intr.GuaranteeMth
@@ -57,9 +59,15 @@ func (s *ShardedSharedLogStreamConsumer) IsInitialSource() bool {
 func (s *ShardedSharedLogStreamConsumer) ConfigExactlyOnce(
 	serdeFormat commtypes.SerdeFormat, guarantee exactly_once_intr.GuaranteeMth,
 ) error {
+	debug.Assert(guarantee == exactly_once_intr.TWO_PHASE_COMMIT || guarantee == exactly_once_intr.EPOCH_MARK,
+		"configure exactly once should specify 2pc or epoch mark")
 	s.guarantee = guarantee
 	var err error = nil
-	s.tac, err = NewTransactionAwareConsumer(s.stream, serdeFormat)
+	if s.guarantee == exactly_once_intr.TWO_PHASE_COMMIT {
+		s.tac, err = NewTransactionAwareConsumer(s.stream, serdeFormat)
+	} else if s.guarantee == exactly_once_intr.EPOCH_MARK {
+		s.emc, err = NewEpochMarkConsumer(s.stream, serdeFormat)
+	}
 	return err
 }
 
@@ -90,6 +98,8 @@ func (s *ShardedSharedLogStreamConsumer) SetCursor(cursor uint64, parNum uint8) 
 func (s *ShardedSharedLogStreamConsumer) readNext(ctx context.Context, parNum uint8) (*commtypes.RawMsg, error) {
 	if s.guarantee == exactly_once_intr.TWO_PHASE_COMMIT {
 		return s.tac.ReadNext(ctx, parNum)
+	} else if s.guarantee == exactly_once_intr.EPOCH_MARK {
+		return s.emc.ReadNext(ctx, parNum)
 	} else {
 		return s.stream.ReadNext(ctx, parNum)
 	}

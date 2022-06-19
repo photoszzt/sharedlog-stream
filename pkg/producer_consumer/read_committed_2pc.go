@@ -37,32 +37,7 @@ func NewTransactionAwareConsumer(stream *sharedlog_stream.ShardedSharedLogStream
 	}, nil
 }
 
-func (tac *TransactionAwareConsumer) checkCommitted(msgQueue *deque.Deque) *commtypes.RawMsg {
-	if msgQueue.Len() > 0 {
-		frontMsg := msgQueue.Front().(*commtypes.RawMsg)
-		if frontMsg.ScaleEpoch != 0 {
-			msgQueue.PopFront()
-			return frontMsg
-		}
-		if tac.HasCommited(frontMsg.ProdId) {
-			msgQueue.PopFront()
-			return frontMsg
-		}
-	}
-	return nil
-}
-
-func (tac *TransactionAwareConsumer) dropAborted(msgQueue *deque.Deque) {
-	if msgQueue.Len() > 0 {
-		frontMsg := msgQueue.Front().(*commtypes.RawMsg)
-		for tac.HasAborted(frontMsg.ProdId) {
-			msgQueue.PopFront()
-			frontMsg = msgQueue.Front().(*commtypes.RawMsg)
-		}
-	}
-}
-
-func (tac *TransactionAwareConsumer) checkControlMsg(msgQueue *deque.Deque) {
+func (tac *TransactionAwareConsumer) checkMsgQueue(msgQueue *deque.Deque, parNum uint8) *commtypes.RawMsg {
 	if msgQueue.Len() > 0 {
 		frontMsg := msgQueue.Front().(*commtypes.RawMsg)
 		if frontMsg.IsControl && frontMsg.Mark == commtypes.EPOCH_END {
@@ -72,7 +47,20 @@ func (tac *TransactionAwareConsumer) checkControlMsg(msgQueue *deque.Deque) {
 			delete(tac.committed, frontMsg.ProdId)
 			msgQueue.PopFront()
 		}
+		if frontMsg.ScaleEpoch != 0 {
+			msgQueue.PopFront()
+			return frontMsg
+		}
+		if tac.HasCommited(frontMsg.ProdId) {
+			msgQueue.PopFront()
+			return frontMsg
+		}
+		for tac.HasAborted(frontMsg.ProdId) {
+			msgQueue.PopFront()
+			frontMsg = msgQueue.Front().(*commtypes.RawMsg)
+		}
 	}
+	return nil
 }
 
 func (tac *TransactionAwareConsumer) ReadNext(ctx context.Context, parNum uint8) (*commtypes.RawMsg, error) {
@@ -81,13 +69,10 @@ func (tac *TransactionAwareConsumer) ReadNext(ctx context.Context, parNum uint8)
 	}
 	msgQueue := tac.msgBuffer[parNum]
 	if msgQueue.Len() != 0 && len(tac.committed) != 0 {
-		tac.checkControlMsg(msgQueue)
-		ret := tac.checkCommitted(msgQueue)
-		if ret != nil {
-			debug.Fprintf(os.Stderr, "return output1 %v\n", string(ret.Payload))
-			return ret, nil
+		retMsg := tac.checkMsgQueue(msgQueue, parNum)
+		if retMsg != nil {
+			return retMsg, nil
 		}
-		tac.dropAborted(msgQueue)
 	}
 	for {
 		rawMsg, err := tac.stream.ReadNext(ctx, parNum)
@@ -122,12 +107,10 @@ func (tac *TransactionAwareConsumer) ReadNext(ctx context.Context, parNum uint8)
 			}
 		}
 		msgQueue.PushBack(rawMsg)
-		tac.checkControlMsg(msgQueue)
-		ret := tac.checkCommitted(msgQueue)
-		if ret != nil {
-			return ret, nil
+		retMsg := tac.checkMsgQueue(msgQueue, parNum)
+		if retMsg != nil {
+			return retMsg, nil
 		}
-		tac.dropAborted(msgQueue)
 	}
 }
 
