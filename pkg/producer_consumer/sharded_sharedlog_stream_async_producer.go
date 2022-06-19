@@ -65,7 +65,7 @@ func (sls *ShardedSharedLogStreamAsyncProducer) StartAsyncPushWithTick(ctx conte
 		producerId := sls.tm.GetProducerId()
 		go sls.streamPusher.AsyncStreamPush(ctx, &sls.wg, producerId)
 	} else {
-		go sls.streamPusher.AsyncStreamPush(ctx, &sls.wg, sharedlog_stream.EmptyProducerId)
+		go sls.streamPusher.AsyncStreamPush(ctx, &sls.wg, commtypes.EmptyProducerId)
 	}
 }
 
@@ -75,7 +75,7 @@ func (sls *ShardedSharedLogStreamAsyncProducer) StartAsyncPushNoTick(ctx context
 		producerId := sls.tm.GetProducerId()
 		go sls.streamPusher.AsyncStreamPushNoTick(ctx, &sls.wg, producerId)
 	} else {
-		go sls.streamPusher.AsyncStreamPushNoTick(ctx, &sls.wg, sharedlog_stream.EmptyProducerId)
+		go sls.streamPusher.AsyncStreamPushNoTick(ctx, &sls.wg, commtypes.EmptyProducerId)
 	}
 }
 
@@ -132,7 +132,7 @@ func (sls *ShardedSharedLogStreamAsyncProducer) Flush(ctx context.Context) error
 		producerId := sls.tm.GetProducerId()
 		return sls.streamPusher.Flush(ctx, producerId)
 	} else {
-		return sls.streamPusher.Flush(ctx, sharedlog_stream.EmptyProducerId)
+		return sls.streamPusher.Flush(ctx, commtypes.EmptyProducerId)
 	}
 }
 
@@ -141,7 +141,7 @@ func (sls *ShardedSharedLogStreamAsyncProducer) FlushNoLock(ctx context.Context)
 		producerId := sls.tm.GetProducerId()
 		return sls.streamPusher.FlushNoLock(ctx, producerId)
 	} else {
-		return sls.streamPusher.Flush(ctx, sharedlog_stream.EmptyProducerId)
+		return sls.streamPusher.Flush(ctx, commtypes.EmptyProducerId)
 	}
 }
 

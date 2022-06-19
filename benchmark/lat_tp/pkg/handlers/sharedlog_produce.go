@@ -68,7 +68,7 @@ func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context
 		BufPush:    h.bufPush,
 	}
 	wg.Add(1)
-	go streamPusher.AsyncStreamPush(ctx, &wg, sharedlog_stream.EmptyProducerId)
+	go streamPusher.AsyncStreamPush(ctx, &wg, commtypes.EmptyProducerId)
 	streamPusher.InitFlushTimer(time.Duration(sp.FlushMs) * time.Millisecond)
 	startTime := time.Now()
 	next := time.Now()
@@ -111,7 +111,7 @@ func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context
 	close(msgChan)
 	wg.Wait()
 	if h.bufPush {
-		err = stream.Flush(ctx, sharedlog_stream.EmptyProducerId)
+		err = stream.Flush(ctx, commtypes.EmptyProducerId)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[Error] Flush failed: %v\n", err)
 		}

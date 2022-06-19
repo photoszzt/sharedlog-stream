@@ -69,7 +69,7 @@ func (h *testEventSource) eventGeneration(ctx context.Context, sp *common.TestSo
 			return &common.FnOutput{Success: false, Message: fmt.Sprintf("msg serialization failed: %v", err)}
 		}
 		_, err = stream.Push(ctx, msgEncoded, 0, sharedlog_stream.SingleDataRecordMeta,
-			sharedlog_stream.EmptyProducerId)
+			commtypes.EmptyProducerId)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}

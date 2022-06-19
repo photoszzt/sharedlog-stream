@@ -46,8 +46,6 @@ var SingleDataRecordMeta = StreamEntryMeta(false, false)
 var ControlRecordMeta = StreamEntryMeta(true, false)
 var ArrRecordMeta = StreamEntryMeta(false, true)
 
-var EmptyProducerId = commtypes.ProducerId{TaskEpoch: 0, TaskId: 0, TransactionID: 0}
-
 type SharedLogStream struct {
 	mux sync.Mutex
 
@@ -293,7 +291,7 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 				LogSeqNum:    streamLogEntry.seqNum,
 				IsControl:    isControl,
 				IsPayloadArr: isPayloadArr,
-				TranId: commtypes.ProducerId{
+				ProdId: commtypes.ProducerId{
 					TaskId:        streamLogEntry.TaskId,
 					TaskEpoch:     streamLogEntry.TaskEpoch,
 					TransactionID: streamLogEntry.TransactionID,

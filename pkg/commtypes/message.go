@@ -2,7 +2,6 @@ package commtypes
 
 import (
 	"fmt"
-	"sharedlog-stream/pkg/txn_data"
 )
 
 type Message struct {
@@ -22,11 +21,11 @@ type RawMsg struct {
 	LogSeqNum  uint64
 	ScaleEpoch uint64
 
-	TranId ProducerId
+	ProdId ProducerId
 
 	IsControl    bool
 	IsPayloadArr bool
-	Mark         txn_data.TxnMark
+	Mark         EpochMark
 }
 
 type MsgAndSeq struct {

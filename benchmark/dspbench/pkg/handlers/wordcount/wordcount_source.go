@@ -91,7 +91,7 @@ func (h *wordCountSource) eventGeneration(ctx context.Context, env types.Environ
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
 		_, err = stream.Push(ctx, msgEncoded, 0,
-			sharedlog_stream.SingleDataRecordMeta, sharedlog_stream.EmptyProducerId)
+			sharedlog_stream.SingleDataRecordMeta, commtypes.EmptyProducerId)
 		if err != nil {
 			return &common.FnOutput{
 				Success: false,

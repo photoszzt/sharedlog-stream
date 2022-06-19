@@ -6,7 +6,6 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/epoch_manager/epoch_data"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
@@ -43,7 +42,7 @@ func NewEpochManager(env types.Environment, epochMngrName string,
 	if err != nil {
 		return nil, err
 	}
-	epochMetaSerde, err := epoch_data.GetEpochMetaSerde(serdeFormat)
+	epochMetaSerde, err := commtypes.GetEpochMarkerSerde(serdeFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -93,11 +92,11 @@ func (em *EpochManager) monitorEpochLog(ctx context.Context,
 				errc <- err
 				return
 			}
-			epochMeta := epochMetaTmp.(epoch_data.EpochMeta)
-			if epochMeta.Mark != epoch_data.FENCE {
+			epochMeta := epochMetaTmp.(commtypes.EpochMarker)
+			if epochMeta.Mark != commtypes.FENCE {
 				panic("mark should be fence")
 			}
-			if epochMeta.TaskId == em.TaskId && epochMeta.TaskEpoch > em.GetCurrentEpoch() {
+			if rawMsg.ProdId.TaskId == em.TaskId && rawMsg.ProdId.TaskEpoch > em.GetCurrentEpoch() {
 				// I'm the zoombie
 				dcancel()
 				errc <- nil
@@ -116,7 +115,7 @@ func (em *EpochManager) StartMonitorLog(
 }
 
 func (em *EpochManager) appendToEpochLog(ctx context.Context,
-	meta *epoch_data.EpochMeta, tags []uint64, additionalTopic []string,
+	meta *commtypes.EpochMarker, tags []uint64, additionalTopic []string,
 ) (uint64, error) {
 	encoded, err := em.epochMetaSerde.Encode(meta)
 	if err != nil {
@@ -153,17 +152,17 @@ func (em *EpochManager) MarkEpoch(ctx context.Context,
 	consumeSeqNums map[string]uint64,
 	producers []producer_consumer.MeteredProducerIntr,
 ) error {
-	outputRanges := make(map[string]map[uint8]epoch_data.ProduceRange)
+	outputRanges := make(map[string]map[uint8]commtypes.ProduceRange)
 	for _, producer := range producers {
 		topicName := producer.TopicName()
 		parSet, ok := em.currentTopicSubstream[producer.TopicName()]
 		if ok {
 			ranges, ok := outputRanges[topicName]
 			if !ok {
-				ranges = make(map[uint8]epoch_data.ProduceRange)
+				ranges = make(map[uint8]commtypes.ProduceRange)
 			}
 			for subNum := range parSet {
-				ranges[subNum] = epoch_data.ProduceRange{
+				ranges[subNum] = commtypes.ProduceRange{
 					Start: producer.GetInitialProdSeqNum(subNum),
 					End:   producer.GetCurrentProdSeqNum(subNum),
 				}
@@ -171,10 +170,8 @@ func (em *EpochManager) MarkEpoch(ctx context.Context,
 			outputRanges[topicName] = ranges
 		}
 	}
-	epochMeta := epoch_data.EpochMeta{
-		TaskId:       em.TaskId,
-		TaskEpoch:    em.TaskEpoch,
-		Mark:         epoch_data.EPOCH_END,
+	epochMeta := commtypes.EpochMarker{
+		Mark:         commtypes.EPOCH_END,
 		ConSeqNums:   consumeSeqNums,
 		OutputRanges: outputRanges,
 	}
@@ -191,8 +188,8 @@ func (em *EpochManager) MarkEpoch(ctx context.Context,
 	return err
 }
 
-func (em *EpochManager) Init(ctx context.Context) (*epoch_data.EpochMeta, uint64, error) {
-	recentMeta, metaSeqNum, err := em.getMostRecentCommitEpoch(ctx)
+func (em *EpochManager) Init(ctx context.Context) (*commtypes.EpochMarker, uint64, error) {
+	recentMeta, metaMsg, err := em.getMostRecentCommitEpoch(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -200,17 +197,15 @@ func (em *EpochManager) Init(ctx context.Context) (*epoch_data.EpochMeta, uint64
 		em.InitTaskId(em.env)
 		em.TaskEpoch = 0
 	} else {
-		em.TaskEpoch = recentMeta.TaskEpoch
-		em.TaskId = recentMeta.TaskId
+		em.TaskEpoch = metaMsg.ProdId.TaskEpoch
+		em.TaskId = metaMsg.ProdId.TaskId
 	}
-	if recentMeta != nil && recentMeta.TaskEpoch == math.MaxUint16 {
+	if recentMeta != nil && metaMsg.ProdId.TaskEpoch == math.MaxUint16 {
 		em.InitTaskId(em.env)
 		em.TaskEpoch = 0
 	}
-	meta := epoch_data.EpochMeta{
-		TaskId:    em.TaskId,
-		TaskEpoch: em.TaskEpoch,
-		Mark:      epoch_data.FENCE,
+	meta := commtypes.EpochMarker{
+		Mark: commtypes.FENCE,
 	}
 	tags := []uint64{
 		sharedlog_stream.NameHashWithPartition(em.epochLog.TopicNameHash(), 0),
@@ -220,28 +215,28 @@ func (em *EpochManager) Init(ctx context.Context) (*epoch_data.EpochMeta, uint64
 	if err != nil {
 		return nil, 0, err
 	}
-	return recentMeta, metaSeqNum, nil
+	return recentMeta, metaMsg.LogSeqNum, nil
 }
 
-func (em *EpochManager) getMostRecentCommitEpoch(ctx context.Context) (*epoch_data.EpochMeta, uint64, error) {
+func (em *EpochManager) getMostRecentCommitEpoch(ctx context.Context) (*commtypes.EpochMarker, *commtypes.RawMsg, error) {
 	rawMsg, err := em.epochLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, 0, em.epochLogMarkerTag)
 	if err != nil {
 		if common_errors.IsStreamEmptyError(err) {
-			return nil, 0, nil
+			return nil, nil, nil
 		}
-		return nil, 0, err
+		return nil, nil, err
 	}
 	val, err := em.epochMetaSerde.Decode(rawMsg.Payload)
 	if err != nil {
-		return nil, 0, err
+		return nil, nil, err
 	}
-	meta := val.(epoch_data.EpochMeta)
-	return &meta, rawMsg.LogSeqNum, nil
+	meta := val.(commtypes.EpochMarker)
+	return &meta, rawMsg, nil
 }
 
 func (em *EpochManager) FindMostRecentEpochMetaThatHasConsumed(
 	ctx context.Context, seqNum uint64,
-) (*epoch_data.EpochMeta, error) {
+) (*commtypes.EpochMarker, error) {
 	for {
 		rawMsg, err := em.epochLog.ReadBackwardWithTag(ctx, seqNum, 0, em.epochLogMarkerTag)
 		if err != nil {
@@ -254,7 +249,7 @@ func (em *EpochManager) FindMostRecentEpochMetaThatHasConsumed(
 		if err != nil {
 			return nil, err
 		}
-		meta := val.(epoch_data.EpochMeta)
+		meta := val.(commtypes.EpochMarker)
 		if meta.ConSeqNums != nil && len(meta.ConSeqNums) != 0 {
 			return &meta, nil
 		}

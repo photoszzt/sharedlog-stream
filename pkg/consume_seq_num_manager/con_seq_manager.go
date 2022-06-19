@@ -18,7 +18,7 @@ import (
 
 type ConsumeSeqManager struct {
 	offsetRecordSerde commtypes.Serde
-	txnMarkerSerde    commtypes.Serde
+	epochMarkerSerde  commtypes.Serde
 	mapMu             sync.Mutex
 	curConsumePar     map[string]map[uint8]struct{}
 	offsetLogs        map[string]*sharedlog_stream.ShardedSharedLogStream
@@ -63,19 +63,16 @@ func (cm *ConsumeSeqManager) CreateOffsetTopic(env types.Environment, topicToTra
 }
 
 func NewConsumeSeqManager(serdeFormat commtypes.SerdeFormat) (*ConsumeSeqManager, error) {
-	var offsetRecordSerde commtypes.Serde
-	var txnMarkerSerde commtypes.Serde
-	if serdeFormat == commtypes.JSON {
-		offsetRecordSerde = txn_data.OffsetRecordJSONSerde{}
-		txnMarkerSerde = txn_data.TxnMarkerJSONSerde{}
-	} else if serdeFormat == commtypes.MSGP {
-		offsetRecordSerde = txn_data.OffsetRecordMsgpSerde{}
-		txnMarkerSerde = txn_data.TxnMarkerMsgpSerde{}
-	} else {
-		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
+	offsetRecordSerde, err := txn_data.GetOffsetRecordSerde(serdeFormat)
+	if err != nil {
+		return nil, err
+	}
+	txnMarkerSerde, err := commtypes.GetEpochMarkerSerde(serdeFormat)
+	if err != nil {
+		return nil, err
 	}
 	return &ConsumeSeqManager{
-		txnMarkerSerde:    txnMarkerSerde,
+		epochMarkerSerde:  txnMarkerSerde,
 		offsetRecordSerde: offsetRecordSerde,
 		offsetLogs:        make(map[string]*sharedlog_stream.ShardedSharedLogStream),
 		curConsumePar:     make(map[string]map[uint8]struct{}),
@@ -95,7 +92,7 @@ func (cm *ConsumeSeqManager) AppendConsumedSeqNum(ctx context.Context, consumedS
 		}
 
 		_, err = offsetLog.Push(ctx, encoded, consumedSeqNumConfig.Partition,
-			sharedlog_stream.SingleDataRecordMeta, sharedlog_stream.EmptyProducerId)
+			sharedlog_stream.SingleDataRecordMeta, commtypes.EmptyProducerId)
 		if err != nil {
 			return err
 		}
@@ -134,17 +131,17 @@ func (cm *ConsumeSeqManager) FindLastConsumedSeqNum(ctx context.Context, topicTo
 }
 
 func (cm *ConsumeSeqManager) Track(ctx context.Context) error {
-	tm := txn_data.TxnMarker{
-		Mark: uint8(txn_data.COMMIT),
+	tm := commtypes.EpochMarker{
+		Mark: commtypes.EPOCH_END,
 	}
-	encoded, err := cm.txnMarkerSerde.Encode(&tm)
+	encoded, err := cm.epochMarkerSerde.Encode(&tm)
 	if err != nil {
 		return err
 	}
 	g, ectx := errgroup.WithContext(ctx)
 	for topic, partitions := range cm.curConsumePar {
 		stream := cm.offsetLogs[topic]
-		err := stream.Flush(ctx, sharedlog_stream.EmptyProducerId)
+		err := stream.Flush(ctx, commtypes.EmptyProducerId)
 		if err != nil {
 			return err
 		}
@@ -153,8 +150,9 @@ func (cm *ConsumeSeqManager) Track(ctx context.Context) error {
 			g.Go(func() error {
 				tag := txn_data.MarkerTag(stream.TopicNameHash(), parNum)
 				off, err := stream.PushWithTag(ectx, encoded, parNum, []uint64{tag}, nil,
-					sharedlog_stream.ControlRecordMeta, sharedlog_stream.EmptyProducerId)
-				debug.Fprintf(os.Stderr, "append marker %d to stream %s off %x\n", txn_data.COMMIT, stream.TopicName(), off)
+					sharedlog_stream.ControlRecordMeta, commtypes.EmptyProducerId)
+				debug.Fprintf(os.Stderr, "append marker %d to stream %s off %x\n",
+					commtypes.EPOCH_END, stream.TopicName(), off)
 				return err
 			})
 		}

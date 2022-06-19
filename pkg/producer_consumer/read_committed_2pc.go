@@ -2,38 +2,35 @@ package producer_consumer
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/txn_data"
 
 	"github.com/gammazero/deque"
 )
 
 type TransactionAwareConsumer struct {
-	txnMarkerSerde   commtypes.Serde
+	epochMarkerSerde commtypes.Serde
 	stream           *sharedlog_stream.ShardedSharedLogStream
 	committed        map[commtypes.ProducerId]struct{}
 	aborted          map[commtypes.ProducerId]struct{}
+	// check whether producer produces duplicate records
 	curReadMsgSeqNum map[commtypes.ProducerId]uint64
 	msgBuffer        []*deque.Deque
 }
 
-func NewTransactionAwareConsumer(stream *sharedlog_stream.ShardedSharedLogStream, serdeFormat commtypes.SerdeFormat) (*TransactionAwareConsumer, error) {
-	var txnMarkerSerde commtypes.Serde
-	if serdeFormat == commtypes.JSON {
-		txnMarkerSerde = txn_data.TxnMarkerJSONSerde{}
-	} else if serdeFormat == commtypes.MSGP {
-		txnMarkerSerde = txn_data.TxnMarkerMsgpSerde{}
-	} else {
-		return nil, fmt.Errorf("unrecognized format: %d", serdeFormat)
+func NewTransactionAwareConsumer(stream *sharedlog_stream.ShardedSharedLogStream,
+	serdeFormat commtypes.SerdeFormat,
+) (*TransactionAwareConsumer, error) {
+	epochMarkerSerde, err := commtypes.GetEpochMarkerSerde(serdeFormat)
+	if err != nil {
+		return nil, err
 	}
 	return &TransactionAwareConsumer{
 		msgBuffer:        make([]*deque.Deque, stream.NumPartition()),
 		stream:           stream,
-		txnMarkerSerde:   txnMarkerSerde,
+		epochMarkerSerde: epochMarkerSerde,
 		committed:        make(map[commtypes.ProducerId]struct{}),
 		aborted:          make(map[commtypes.ProducerId]struct{}),
 		curReadMsgSeqNum: make(map[commtypes.ProducerId]uint64),
@@ -47,7 +44,7 @@ func (tac *TransactionAwareConsumer) checkCommitted(msgQueue *deque.Deque) *comm
 			msgQueue.PopFront()
 			return frontMsg
 		}
-		if tac.HasCommited(frontMsg.TranId) {
+		if tac.HasCommited(frontMsg.ProdId) {
 			msgQueue.PopFront()
 			return frontMsg
 		}
@@ -58,7 +55,7 @@ func (tac *TransactionAwareConsumer) checkCommitted(msgQueue *deque.Deque) *comm
 func (tac *TransactionAwareConsumer) dropAborted(msgQueue *deque.Deque) {
 	if msgQueue.Len() > 0 {
 		frontMsg := msgQueue.Front().(*commtypes.RawMsg)
-		for tac.HasAborted(frontMsg.TranId) {
+		for tac.HasAborted(frontMsg.ProdId) {
 			msgQueue.PopFront()
 			frontMsg = msgQueue.Front().(*commtypes.RawMsg)
 		}
@@ -68,11 +65,11 @@ func (tac *TransactionAwareConsumer) dropAborted(msgQueue *deque.Deque) {
 func (tac *TransactionAwareConsumer) checkControlMsg(msgQueue *deque.Deque) {
 	if msgQueue.Len() > 0 {
 		frontMsg := msgQueue.Front().(*commtypes.RawMsg)
-		if frontMsg.IsControl && frontMsg.Mark == txn_data.COMMIT {
-			delete(tac.committed, frontMsg.TranId)
+		if frontMsg.IsControl && frontMsg.Mark == commtypes.EPOCH_END {
+			delete(tac.committed, frontMsg.ProdId)
 			msgQueue.PopFront()
-		} else if frontMsg.IsControl && frontMsg.Mark == txn_data.ABORT {
-			delete(tac.committed, frontMsg.TranId)
+		} else if frontMsg.IsControl && frontMsg.Mark == commtypes.ABORT {
+			delete(tac.committed, frontMsg.ProdId)
 			msgQueue.PopFront()
 		}
 	}
@@ -102,30 +99,26 @@ func (tac *TransactionAwareConsumer) ReadNext(ctx context.Context, parNum uint8)
 		// debug.Fprintf(os.Stderr, "\tLogSeq 0x%x\n", rawMsg.LogSeqNum)
 		// debug.Fprintf(os.Stderr, "\tIsControl: %v\n", rawMsg.IsControl)
 		// debug.Fprintf(os.Stderr, "\tIsPayloadArr: %v\n", rawMsg.IsPayloadArr)
-		tranId := rawMsg.TranId
-		msgSeqNum, ok := tac.curReadMsgSeqNum[tranId]
-		if ok && msgSeqNum == rawMsg.MsgSeqNum {
+		if shouldIgnoreThisMsg(tac.curReadMsgSeqNum, rawMsg) {
 			debug.Fprintf(os.Stderr, "got a duplicate entry; continue\n")
 			continue
 		}
-
-		tac.curReadMsgSeqNum[tranId] = rawMsg.MsgSeqNum
 		if rawMsg.IsControl {
-			txnMarkTmp, err := tac.txnMarkerSerde.Decode(rawMsg.Payload)
+			txnMarkTmp, err := tac.epochMarkerSerde.Decode(rawMsg.Payload)
 			if err != nil {
 				return nil, err
 			}
-			txnMark := txnMarkTmp.(txn_data.TxnMarker)
-			if txnMark.Mark == uint8(txn_data.COMMIT) {
-				debug.Fprintf(os.Stderr, "Got commit msg with tranid: %v\n", rawMsg.TranId)
-				tac.committed[rawMsg.TranId] = struct{}{}
-				rawMsg.Mark = txn_data.COMMIT
-			} else if txnMark.Mark == uint8(txn_data.ABORT) {
+			txnMark := txnMarkTmp.(commtypes.EpochMarker)
+			if txnMark.Mark == commtypes.EPOCH_END {
+				debug.Fprintf(os.Stderr, "Got commit msg with tranid: %v\n", rawMsg.ProdId)
+				tac.committed[rawMsg.ProdId] = struct{}{}
+				rawMsg.Mark = commtypes.EPOCH_END
+			} else if txnMark.Mark == commtypes.ABORT {
 				// debug.Fprintf(os.Stderr, "Got abort msg with tranid: %v\n", rawMsg.TranId)
-				tac.aborted[rawMsg.TranId] = struct{}{}
-				rawMsg.Mark = txn_data.ABORT
-			} else if txnMark.Mark == uint8(txn_data.SCALE_FENCE) {
-				rawMsg.ScaleEpoch = txnMark.TranIDOrScaleEpoch
+				tac.aborted[rawMsg.ProdId] = struct{}{}
+				rawMsg.Mark = commtypes.ABORT
+			} else if txnMark.Mark == commtypes.SCALE_FENCE {
+				rawMsg.ScaleEpoch = txnMark.ScaleEpoch
 			}
 		}
 		msgQueue.PushBack(rawMsg)

@@ -2,7 +2,11 @@
 //msgp:ignore OffsetRecordJSONSerde OffsetRecordMsgpSerde
 package txn_data
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"sharedlog-stream/pkg/common_errors"
+	"sharedlog-stream/pkg/commtypes"
+)
 
 type OffsetRecord struct {
 	Offset    uint64 `json:"offset" msg:"os"`
@@ -38,4 +42,14 @@ func (s OffsetRecordMsgpSerde) Decode(value []byte) (interface{}, error) {
 		return nil, err
 	}
 	return or, nil
+}
+
+func GetOffsetRecordSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
+	if serdeFormat == commtypes.JSON {
+		return OffsetRecordJSONSerde{}, nil
+	} else if serdeFormat == commtypes.MSGP {
+		return OffsetRecordMsgpSerde{}, nil
+	} else {
+		return nil, common_errors.ErrUnrecognizedSerdeFormat
+	}
 }

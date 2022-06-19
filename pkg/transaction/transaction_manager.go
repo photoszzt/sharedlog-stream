@@ -85,12 +85,12 @@ func (tc *TransactionManager) setupSerde(serdeFormat commtypes.SerdeFormat) erro
 	if serdeFormat == commtypes.JSON {
 		tc.txnMdSerde = txn_data.TxnMetadataJSONSerde{}
 		tc.topicPartitionSerde = txn_data.TopicPartitionJSONSerde{}
-		tc.txnMarkerSerde = txn_data.TxnMarkerJSONSerde{}
+		tc.txnMarkerSerde = commtypes.EpochMarkerJSONSerde{}
 		tc.offsetRecordSerde = txn_data.OffsetRecordJSONSerde{}
 	} else if serdeFormat == commtypes.MSGP {
 		tc.txnMdSerde = txn_data.TxnMetadataMsgpSerde{}
 		tc.topicPartitionSerde = txn_data.TopicPartitionMsgpSerde{}
-		tc.txnMarkerSerde = txn_data.TxnMarkerMsgpSerde{}
+		tc.txnMarkerSerde = commtypes.EpochMarkerMsgpSerde{}
 		tc.offsetRecordSerde = txn_data.OffsetRecordMsgpSerde{}
 	} else {
 		return fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
@@ -110,15 +110,13 @@ func (tc *TransactionManager) loadCurrentTopicPartitions(lastTopicPartitions []t
 	}
 }
 
-func (tc *TransactionManager) getMostRecentTransactionState(ctx context.Context) (*txn_data.TxnMetadata, uint64, error) {
+func (tc *TransactionManager) getMostRecentTransactionState(ctx context.Context) (*txn_data.TxnMetadata, commtypes.ProducerId, error) {
 	// debug.Fprintf(os.Stderr, "load transaction log\n")
 	mostRecentTxnMetadata := &txn_data.TxnMetadata{
 		TopicPartitions: make([]txn_data.TopicPartition, 0),
-		TaskId:          0,
-		TaskEpoch:       0,
 		State:           txn_data.EMPTY,
 	}
-	recentTransactionID := uint64(0)
+	recentProdId := commtypes.ProducerId{}
 
 	// find the begin of the last transaction
 	for {
@@ -127,13 +125,13 @@ func (tc *TransactionManager) getMostRecentTransactionState(ctx context.Context)
 		if err != nil {
 			// empty log
 			if common_errors.IsStreamEmptyError(err) {
-				return nil, 0, nil
+				return nil, commtypes.EmptyProducerId, nil
 			}
-			return nil, 0, err
+			return nil, commtypes.EmptyProducerId, err
 		}
 		val, err := tc.txnMdSerde.Decode(rawMsg.Payload)
 		if err != nil {
-			return nil, 0, err
+			return nil, commtypes.EmptyProducerId, err
 		}
 		txnMeta := val.(txn_data.TxnMetadata)
 		if txnMeta.State != txn_data.BEGIN {
@@ -141,7 +139,7 @@ func (tc *TransactionManager) getMostRecentTransactionState(ctx context.Context)
 		} else {
 			// read from the begin of the last transaction
 			tc.transactionLog.SetCursor(rawMsg.LogSeqNum, 0)
-			recentTransactionID = rawMsg.LogSeqNum
+			recentProdId.TransactionID = rawMsg.LogSeqNum
 			break
 		}
 	}
@@ -151,24 +149,24 @@ func (tc *TransactionManager) getMostRecentTransactionState(ctx context.Context)
 		if common_errors.IsStreamEmptyError(err) {
 			break
 		} else if err != nil {
-			return nil, 0, err
+			return nil, commtypes.EmptyProducerId, err
 		}
 		val, err := tc.txnMdSerde.Decode(msg.Payload)
 		if err != nil {
-			return nil, 0, err
+			return nil, commtypes.EmptyProducerId, err
 		}
 		txnMeta := val.(txn_data.TxnMetadata)
 
 		if txnMeta.TopicPartitions != nil {
 			mostRecentTxnMetadata.TopicPartitions = append(mostRecentTxnMetadata.TopicPartitions, txnMeta.TopicPartitions...)
 			mostRecentTxnMetadata.State = txnMeta.State
+			recentProdId = msg.ProdId
 		} else {
 			mostRecentTxnMetadata.State = txnMeta.State
-			mostRecentTxnMetadata.TaskId = txnMeta.TaskId
-			mostRecentTxnMetadata.TaskEpoch = txnMeta.TaskEpoch
+			recentProdId = msg.ProdId
 		}
 	}
-	return mostRecentTxnMetadata, recentTransactionID, nil
+	return mostRecentTxnMetadata, recentProdId, nil
 }
 
 // each transaction id corresponds to a separate transaction log; we only have one transaction id per serverless function
@@ -205,7 +203,7 @@ func (tc *TransactionManager) loadAndFixTransaction(ctx context.Context, mostRec
 
 		// the transaction is aborted but the marker might not pushed to the relevant partitions yet
 		tc.loadCurrentTopicPartitions(mostRecentTxnMetadata.TopicPartitions)
-		err := tc.completeTransaction(ctx, txn_data.ABORT, txn_data.COMPLETE_ABORT)
+		err := tc.completeTransaction(ctx, commtypes.ABORT, txn_data.COMPLETE_ABORT)
 		if err != nil {
 			return err
 		}
@@ -222,7 +220,7 @@ func (tc *TransactionManager) loadAndFixTransaction(ctx context.Context, mostRec
 		// debug.Fprintf(os.Stderr, "In repair: Transition to %s to restore\n", tc.currentStatus)
 
 		tc.loadCurrentTopicPartitions(mostRecentTxnMetadata.TopicPartitions)
-		err := tc.completeTransaction(ctx, txn_data.COMMIT, txn_data.COMPLETE_COMMIT)
+		err := tc.completeTransaction(ctx, commtypes.EPOCH_END, txn_data.COMPLETE_COMMIT)
 		if err != nil {
 			return err
 		}
@@ -244,7 +242,7 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) error {
 	// fence first, to stop the zoombie instance from writing to the transaction log
 	// clean up the log
 	tc.currentStatus = txn_data.FENCE
-	recentTxnMeta, recentTransactionID, err := tc.getMostRecentTransactionState(ctx)
+	recentTxnMeta, recentProdID, err := tc.getMostRecentTransactionState(ctx)
 	if err != nil {
 		return fmt.Errorf("getMostRecentTransactionState failed: %v", err)
 	}
@@ -253,19 +251,17 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) error {
 		tc.InitTaskId(tc.env)
 		tc.TaskEpoch = 0
 	} else {
-		tc.TaskEpoch = recentTxnMeta.TaskEpoch
-		tc.TaskId = recentTxnMeta.TaskId
-		tc.transactionID = recentTransactionID
+		tc.TaskEpoch = recentProdID.TaskEpoch
+		tc.TaskId = recentProdID.TaskId
+		tc.transactionID = recentProdID.TransactionID
 	}
-	if recentTxnMeta != nil && recentTxnMeta.TaskEpoch == math.MaxUint16 {
+	if recentTxnMeta != nil && recentProdID.TaskEpoch == math.MaxUint16 {
 		tc.InitTaskId(tc.env)
 		tc.TaskEpoch = 0
 	}
 	tc.TaskEpoch += 1
 	txnMeta := txn_data.TxnMetadata{
-		TaskId:    tc.GetCurrentTaskId(),
-		TaskEpoch: tc.GetCurrentEpoch(),
-		State:     tc.currentStatus,
+		State: tc.currentStatus,
 	}
 	tags := []uint64{
 		sharedlog_stream.NameHashWithPartition(tc.transactionLog.TopicNameHash(), 0),
@@ -313,7 +309,7 @@ func (tc *TransactionManager) monitorTransactionLog(ctx context.Context,
 			if txnMeta.State != txn_data.FENCE {
 				panic("state should be fence")
 			}
-			if txnMeta.TaskId == tc.GetCurrentTaskId() && txnMeta.TaskEpoch > tc.GetCurrentEpoch() {
+			if rawMsg.ProdId.TaskId == tc.GetCurrentTaskId() && rawMsg.ProdId.TaskEpoch > tc.GetCurrentEpoch() {
 				// I'm the zoombie
 				dcancel()
 				errc <- nil
@@ -346,19 +342,19 @@ func (tc *TransactionManager) appendToTransactionLog(ctx context.Context,
 	if err != nil {
 		return 0, fmt.Errorf("txnMdSerde enc err: %v", tm)
 	}
+	prodId := tc.GetProducerId()
 	if tags != nil {
 		return tc.transactionLog.PushWithTag(ctx, encoded, 0, tags, nil,
-			sharedlog_stream.SingleDataRecordMeta, sharedlog_stream.EmptyProducerId)
+			sharedlog_stream.SingleDataRecordMeta, prodId)
 	} else {
 		return tc.transactionLog.Push(ctx, encoded, 0,
-			sharedlog_stream.SingleDataRecordMeta, sharedlog_stream.EmptyProducerId)
+			sharedlog_stream.SingleDataRecordMeta, prodId)
 	}
 }
 
-func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, marker txn_data.TxnMark) error {
-	tm := txn_data.TxnMarker{
-		Mark:               uint8(marker),
-		TranIDOrScaleEpoch: tc.transactionID,
+func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, marker commtypes.EpochMark) error {
+	tm := commtypes.EpochMarker{
+		Mark: marker,
 	}
 	encoded, err := tc.txnMarkerSerde.Encode(&tm)
 	if err != nil {
@@ -404,8 +400,6 @@ func (tc *TransactionManager) append_pre_state(ctx context.Context) error {
 	txnMd := txn_data.TxnMetadata{
 		TopicPartitions: tps,
 		State:           tc.currentStatus,
-		// TaskId:          tc.CurrentTaskId,
-		// TaskEpoch:       tc.CurrentEpoch,
 	}
 	_, err := tc.appendToTransactionLog(ctx, &txnMd, nil)
 	return err
@@ -568,12 +562,7 @@ func (tc *TransactionManager) FindConsumedSeqNumMatchesTransactionID(ctx context
 		if !txnMkRawMsg.IsControl {
 			continue
 		} else {
-			txnMarkerTmp, err := tc.txnMarkerSerde.Decode(txnMkRawMsg.Payload)
-			if err != nil {
-				return 0, err
-			}
-			txnMarker := txnMarkerTmp.(txn_data.TxnMarker)
-			if txnMarker.TranIDOrScaleEpoch == transactionID {
+			if txnMkRawMsg.ProdId.TransactionID == transactionID {
 				break
 			}
 		}
@@ -605,9 +594,7 @@ func (tc *TransactionManager) BeginTransaction(
 
 	tc.transactionID += 1
 	txnState := txn_data.TxnMetadata{
-		State:     tc.currentStatus,
-		TaskId:    tc.GetCurrentTaskId(),
-		TaskEpoch: tc.GetCurrentEpoch(),
+		State: tc.currentStatus,
 	}
 	tags := []uint64{sharedlog_stream.NameHashWithPartition(tc.transactionLog.TopicNameHash(), 0), txn_data.BeginTag(tc.transactionLog.TopicNameHash(), 0)}
 	off, err := tc.appendToTransactionLog(ctx, &txnState, tags)
@@ -622,7 +609,7 @@ func (tc *TransactionManager) BeginTransaction(
 }
 
 // second phase of the 2-phase commit protocol
-func (tc *TransactionManager) completeTransaction(ctx context.Context, trMark txn_data.TxnMark, trState txn_data.TransactionState) error {
+func (tc *TransactionManager) completeTransaction(ctx context.Context, trMark commtypes.EpochMark, trState txn_data.TransactionState) error {
 	// append txn marker to all topic partitions
 	err := tc.appendTxnMarkerToStreams(ctx, trMark)
 	if err != nil {
@@ -663,7 +650,7 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context, kvstores []
 		return err
 	}
 	// second phase of the commit
-	err = tc.completeTransaction(ctx, txn_data.COMMIT, txn_data.COMPLETE_COMMIT)
+	err = tc.completeTransaction(ctx, commtypes.EPOCH_END, txn_data.COMPLETE_COMMIT)
 	if err != nil {
 		return err
 	}
@@ -696,7 +683,7 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context, inRestore bo
 		}
 	}
 
-	err = tc.completeTransaction(ctx, txn_data.ABORT, txn_data.COMPLETE_ABORT)
+	err = tc.completeTransaction(ctx, commtypes.ABORT, txn_data.COMPLETE_ABORT)
 	if err != nil {
 		return err
 	}

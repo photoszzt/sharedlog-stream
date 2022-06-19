@@ -11,7 +11,6 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -64,24 +63,6 @@ func encodeEvent(event *ntypes.Event,
 		return nil, err
 	}
 	return msgEncoded, nil
-}
-
-func (h *nexmarkSourceHandler) getSerde(serdeFormat uint8) (commtypes.Serde, commtypes.Serde, commtypes.MsgSerde, error) {
-	var eventSerde commtypes.Serde
-	var msgSerde commtypes.MsgSerde
-	var txnMarkerSerde commtypes.Serde
-	if serdeFormat == uint8(commtypes.JSON) {
-		eventSerde = ntypes.EventJSONSerde{}
-		msgSerde = commtypes.MessageSerializedJSONSerde{}
-		txnMarkerSerde = txn_data.TxnMarkerJSONSerde{}
-	} else if serdeFormat == uint8(commtypes.MSGP) {
-		eventSerde = ntypes.EventMsgpSerde{}
-		msgSerde = commtypes.MessageSerializedMsgpSerde{}
-		txnMarkerSerde = txn_data.TxnMarkerMsgpSerde{}
-	} else {
-		return nil, nil, nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
-	}
-	return eventSerde, txnMarkerSerde, msgSerde, nil
 }
 
 type nexmarkSrcProcArgs struct {
@@ -186,7 +167,16 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	fmt.Fprintf(os.Stderr, "\tOutOfOrderGroupSize  : %v\n", generatorConfig.Configuration.OutOfOrderGroupSize)
 	eventGenerator := generator.NewSimpleNexmarkGenerator(generatorConfig, int(inputConfig.ParNum))
 	duration := time.Duration(inputConfig.Duration) * time.Second
-	eventSerde, txnMarkerSerde, msgSerde, err := h.getSerde(inputConfig.SerdeFormat)
+	serdeFormat := commtypes.SerdeFormat(inputConfig.SerdeFormat)
+	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: err.Error()}
+	}
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: err.Error()}
+	}
+	epochMarkerSerde, err := commtypes.GetEpochMarkerSerde(serdeFormat)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -199,6 +189,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 		}
 	}
 	dctx, dcancel := context.WithCancel(ctx)
+	defer dcancel()
 	cmm.StartMonitorControlChannel(dctx)
 
 	msgChan := make(chan sharedlog_stream.PayloadToPush, 10000)
@@ -229,7 +220,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 		BufPush:    h.bufPush,
 	}
 	wg.Add(1)
-	go streamPusher.AsyncStreamPush(dctx, &wg, sharedlog_stream.EmptyProducerId)
+	go streamPusher.AsyncStreamPush(dctx, &wg, commtypes.EmptyProducerId)
 	streamPusher.InitFlushTimer(time.Duration(inputConfig.FlushMs) * time.Millisecond)
 	startTime := time.Now()
 	for {
@@ -246,7 +237,6 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 					cmm.SendQuit()
 					close(msgChan)
 					wg.Wait()
-					dcancel()
 					return &common.FnOutput{
 						Success:   true,
 						Duration:  time.Since(startTime).Seconds(),
@@ -257,22 +247,20 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 				flushMsgChan()
 				err = stream.ScaleSubstreams(h.env, numSubstreams)
 				if err != nil {
-					dcancel()
 					return &common.FnOutput{Success: false, Message: err.Error()}
 				}
 				// piggy back scale fence in txn marker
-				txnMarker := txn_data.TxnMarker{
-					Mark:               uint8(txn_data.SCALE_FENCE),
-					TranIDOrScaleEpoch: m.Epoch,
+				txnMarker := commtypes.EpochMarker{
+					Mark:       commtypes.SCALE_FENCE,
+					ScaleEpoch: m.Epoch,
 				}
-				vBytes, err := txnMarkerSerde.Encode(txnMarker)
+				vBytes, err := epochMarkerSerde.Encode(txnMarker)
 				if err != nil {
-					dcancel()
 					return &common.FnOutput{Success: false, Message: err.Error()}
 				}
+
 				encoded, err := msgSerde.Encode(nil, vBytes)
 				if err != nil {
-					dcancel()
 					return &common.FnOutput{Success: false, Message: err.Error()}
 				}
 				var partitions []uint8
@@ -287,7 +275,6 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 				close(msgChan)
 				wg.Wait()
 				h.flush(ctx, stream)
-				dcancel()
 				return &common.FnOutput{Success: false, Message: fmt.Sprintf("control channel manager failed: %v", cerr)}
 			}
 		default:
@@ -302,14 +289,12 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 		fnout := h.process(dctx, procArgs)
 		if fnout != nil && !fnout.Success {
 			h.flush(ctx, stream)
-			dcancel()
 			return fnout
 		}
 	}
 	close(msgChan)
 	wg.Wait()
 	h.flush(ctx, stream)
-	dcancel()
 	return &common.FnOutput{
 		Success:   true,
 		Duration:  time.Since(startTime).Seconds(),
@@ -319,7 +304,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 
 func (h *nexmarkSourceHandler) flush(ctx context.Context, stream *sharedlog_stream.ShardedSharedLogStream) {
 	if h.bufPush {
-		err := stream.Flush(ctx, sharedlog_stream.EmptyProducerId)
+		err := stream.Flush(ctx, commtypes.EmptyProducerId)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[Error] Flush failed: %v\n", err)
 		}

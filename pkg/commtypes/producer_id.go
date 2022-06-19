@@ -2,6 +2,8 @@ package commtypes
 
 import "cs.utexas.edu/zjia/faas/types"
 
+var EmptyProducerId = ProducerId{TaskEpoch: 0, TaskId: 0, TransactionID: 0}
+
 type ProducerId struct {
 	TaskId        uint64
 	TransactionID uint64

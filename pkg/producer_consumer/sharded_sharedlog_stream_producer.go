@@ -130,7 +130,7 @@ func (s *ShardedSharedLogStreamProducer) flushNoLock(ctx context.Context) error 
 		producerId := s.eom.GetProducerId()
 		return s.stream.FlushNoLock(ctx, producerId)
 	} else {
-		return s.stream.FlushNoLock(ctx, sharedlog_stream.EmptyProducerId)
+		return s.stream.FlushNoLock(ctx, commtypes.EmptyProducerId)
 	}
 }
 
@@ -139,7 +139,7 @@ func (s *ShardedSharedLogStreamProducer) flush(ctx context.Context) error {
 		producerId := s.eom.GetProducerId()
 		return s.stream.Flush(ctx, producerId)
 	} else {
-		return s.stream.Flush(ctx, sharedlog_stream.EmptyProducerId)
+		return s.stream.Flush(ctx, commtypes.EmptyProducerId)
 	}
 }
 
@@ -148,7 +148,7 @@ func (s *ShardedSharedLogStreamProducer) push(ctx context.Context, payload []byt
 		producerId := s.eom.GetProducerId()
 		return s.stream.Push(ctx, payload, parNumber, meta, producerId)
 	} else {
-		return s.stream.Push(ctx, payload, parNumber, meta, sharedlog_stream.EmptyProducerId)
+		return s.stream.Push(ctx, payload, parNumber, meta, commtypes.EmptyProducerId)
 	}
 }
 
@@ -158,7 +158,7 @@ func (s *ShardedSharedLogStreamProducer) pushWithTag(ctx context.Context, payloa
 	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK {
 		return s.stream.PushWithTag(ctx, payload, parNumber, tag, additionalTopic, meta, s.eom.GetProducerId())
 	} else {
-		return s.stream.PushWithTag(ctx, payload, parNumber, tag, additionalTopic, meta, sharedlog_stream.EmptyProducerId)
+		return s.stream.PushWithTag(ctx, payload, parNumber, tag, additionalTopic, meta, commtypes.EmptyProducerId)
 	}
 }
 
@@ -166,6 +166,6 @@ func (s *ShardedSharedLogStreamProducer) bufpush(ctx context.Context, payload []
 	if s.guarantee == eo_intr.TWO_PHASE_COMMIT {
 		return s.stream.BufPush(ctx, payload, parNum, s.eom.GetProducerId())
 	} else {
-		return s.stream.BufPush(ctx, payload, parNum, sharedlog_stream.EmptyProducerId)
+		return s.stream.BufPush(ctx, payload, parNum, commtypes.EmptyProducerId)
 	}
 }

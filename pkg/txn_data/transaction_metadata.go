@@ -47,8 +47,6 @@ func (ts TransactionState) IsValidPreviousState(prevState TransactionState) bool
 // log entries in transaction log
 type TxnMetadata struct {
 	TopicPartitions []TopicPartition `json:"tp,omitempty" msg:"tp,omitempty"`
-	TaskId          uint64           `json:"tid,omitempty" msg:"tid,omitempty"`
-	TaskEpoch       uint16           `json:"te,omitempty" msg:"te,omitempty"`
 	State           TransactionState `json:"st,omitempty" msg:"st,omitempty"`
 }
 
