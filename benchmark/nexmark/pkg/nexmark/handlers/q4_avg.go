@@ -10,7 +10,6 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/execution"
-	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store"
@@ -81,10 +80,11 @@ func (h *q4Avg) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return utils.CompressData(encodedOutput), nil
 }
 
+/*
 type Q4AvgProcessArgs struct {
 	sumCount *processor.MeteredProcessor
 	calcAvg  *processor.MeteredProcessor
-	proc_interface.BaseExecutionContext
+	processor.BaseExecutionContext
 }
 
 func (h *q4Avg) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
@@ -93,7 +93,7 @@ func (h *q4Avg) procMsg(ctx context.Context, msg commtypes.Message, argsTmp inte
 	if err != nil {
 		return err
 	}
-	avg, err := args.sumCount.ProcessAndReturn(ctx, sumCounts[0])
+	avg, err := args.calcAvg.ProcessAndReturn(ctx, sumCounts[0])
 	if err != nil {
 		return err
 	}
@@ -103,12 +103,15 @@ func (h *q4Avg) procMsg(ctx context.Context, msg commtypes.Message, argsTmp inte
 	}
 	return nil
 }
+*/
 
 func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
+	ectx := processor.NewExecutionContext(srcs, sinks_arr,
+		h.funcName, sp.ScaleEpoch, sp.ParNum)
 	sumCountStoreName := "q4SumCountKVStore"
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	mp, err := store_with_changelog.NewMaterializeParamBuilder().
@@ -124,7 +127,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	kvstore := store_with_changelog.CreateInMemKVTableWithChangelog(mp, store.Uint64KeyKVStoreCompare, warmup)
-	sumCount := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor("sumCount",
+	ectx.Via(processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor("sumCount",
 		kvstore,
 		processor.InitializerFunc(func() interface{} {
 			return &ntypes.SumAndCount{
@@ -140,27 +143,19 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 				Count: agg.Count + 1,
 			}
 		}),
-	), warmup)
-	calcAvg := processor.NewMeteredProcessor(processor.NewStreamMapValuesProcessor(
-		processor.ValueMapperFunc(func(value interface{}) (interface{}, error) {
-			val := value.(*ntypes.SumAndCount)
-			return float64(val.Sum) / float64(val.Count), nil
-		}),
-	), warmup)
-	procArgs := &Q4AvgProcessArgs{
-		sumCount: sumCount,
-		calcAvg:  calcAvg,
-		BaseExecutionContext: proc_interface.NewExecutionContext(srcs, sinks_arr,
-			h.funcName, sp.ScaleEpoch, sp.ParNum),
-	}
+	), warmup)).
+		Via(
+			processor.NewMeteredProcessor(processor.NewStreamMapValuesProcessor(
+				processor.ValueMapperFunc(func(value interface{}) (interface{}, error) {
+					val := value.(*ntypes.SumAndCount)
+					return float64(val.Sum) / float64(val.Count), nil
+				}),
+			), warmup)).
+		Via(processor.NewFixedSubstreamOutputProcessor(sinks_arr[0], sp.ParNum))
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(proc_interface.ExecutionContext)
-			return execution.CommonProcess(ctx, task, args, h.procMsg)
-		}).
-		InitFunc(func(progArgs interface{}) {
-			sumCount.StartWarmup()
-			calcAvg.StartWarmup()
+			args := argsTmp.(processor.ExecutionContext)
+			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
 		}).Build()
 
 	var kvc []*store_restore.KVStoreChangelog
@@ -168,14 +163,12 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		store_restore.NewKVStoreChangelog(kvstore, mp.ChangelogManager(), sp.ParNum),
 	}
 	update_stats := func(ret *common.FnOutput) {
-		ret.Latencies["sumCount"] = sumCount.GetLatency()
-		ret.Latencies["calcAvg"] = calcAvg.GetLatency()
 		ret.Latencies["eventTimeLatency"] = sinks_arr[0].GetEventTimeLatency()
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 		sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
+		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).
 		KVStoreChangelogs(kvc).
 		FixedOutParNum(sp.ParNum).
 		Build()

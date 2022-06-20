@@ -11,7 +11,6 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
-	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/stream_task"
@@ -47,11 +46,12 @@ func (h *q7BidByWin) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return nutils.CompressData(encodedOutput), nil
 }
 
+/*
 type q7BidByWinProcessArgs struct {
 	bid      *processor.MeteredProcessor
 	bidByWin *processor.MeteredProcessor
 	groupBy  *processor.GroupBy
-	proc_interface.BaseExecutionContext
+	processor.BaseExecutionContext
 }
 
 func (h *q7BidByWin) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
@@ -72,6 +72,7 @@ func (h *q7BidByWin) procMsg(ctx context.Context, msg commtypes.Message, argsTmp
 	}
 	return nil
 }
+*/
 
 func (h *q7BidByWin) getSrcSink(ctx context.Context, sp *common.QueryInput,
 ) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
@@ -122,52 +123,39 @@ func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *com
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
+	ectx := processor.NewExecutionContext(srcs, sinks_arr,
+		h.funcName, sp.ScaleEpoch, sp.ParNum)
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	tw, err := processor.NewTimeWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(2)*time.Second)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	bid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterBids",
+	ectx.Via(processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterBids",
 		processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
 			event := msg.Value.(*ntypes.Event)
 			return event.Etype == ntypes.BID, nil
-		})), warmup)
-	bidByWin := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
-		"bidByWin", processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
-			event := msg.Value.(*ntypes.Event)
-			ts := event.Bid.DateTime
-			windowStart := utils.MaxInt64(0, ts-tw.SizeMs+tw.AdvanceMs) / tw.AdvanceMs * tw.AdvanceMs
-			wEnd := windowStart + tw.SizeMs
-			debug.Assert(windowStart >= 0, "window start should be >= 0")
-			debug.Assert(wEnd > 0, "window end should be > 0")
-			win := ntypes.StartEndTime{StartTimeMs: windowStart, EndTimeMs: wEnd}
-			return commtypes.Message{Key: win, Value: msg.Value, Timestamp: msg.Timestamp}, nil
-		})), warmup)
-
-	groupBy := processor.NewGroupBy(sinks_arr[0])
-	procArgs := &q7BidByWinProcessArgs{
-		bid:      bid,
-		bidByWin: bidByWin,
-		groupBy:  groupBy,
-		BaseExecutionContext: proc_interface.NewExecutionContext(srcs, sinks_arr,
-			h.funcName, sp.ScaleEpoch, sp.ParNum),
-	}
+		})), warmup)).
+		Via(processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
+			"bidByWin", processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
+				event := msg.Value.(*ntypes.Event)
+				ts := event.Bid.DateTime
+				windowStart := utils.MaxInt64(0, ts-tw.SizeMs+tw.AdvanceMs) / tw.AdvanceMs * tw.AdvanceMs
+				wEnd := windowStart + tw.SizeMs
+				debug.Assert(windowStart >= 0, "window start should be >= 0")
+				debug.Assert(wEnd > 0, "window end should be > 0")
+				win := ntypes.StartEndTime{StartTimeMs: windowStart, EndTimeMs: wEnd}
+				return commtypes.Message{Key: win, Value: msg.Value, Timestamp: msg.Timestamp}, nil
+			})), warmup)).
+		Via(processor.NewGroupByOutputProcessor(sinks_arr[0], &ectx))
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(proc_interface.ExecutionContext)
-			return execution.CommonProcess(ctx, task, args, h.procMsg)
-		}).
-		InitFunc(func(progArgs interface{}) {
-			bid.StartWarmup()
-			bidByWin.StartWarmup()
+			args := argsTmp.(processor.ExecutionContext)
+			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
 		}).Build()
 
-	update_stats := func(ret *common.FnOutput) {
-		ret.Latencies["bid"] = bid.GetLatency()
-		ret.Latencies["bidKeyedByPrice"] = bidByWin.GetLatency()
-	}
+	update_stats := func(ret *common.FnOutput) {}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).Build()
+		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).Build()
 	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
 }

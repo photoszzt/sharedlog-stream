@@ -46,8 +46,6 @@ func (t *TimeTracker) AdvanceNextTimeToEmit() {
 }
 
 type StreamStreamJoinProcessor struct {
-	pipe              Pipe
-	pctx              store.StoreContext
 	otherWindowStore  store.WindowStore
 	joiner            ValueJoinerWithKeyTs
 	sharedTimeTracker *TimeTracker
@@ -89,30 +87,8 @@ func NewStreamStreamJoinProcessor(
 	return ssjp
 }
 
-func (p *StreamStreamJoinProcessor) WithPipe(pipe Pipe) {
-	p.pipe = pipe
-}
-
-func (p *StreamStreamJoinProcessor) WithProcessorContext(pctx store.StoreContext) {
-	p.pctx = pctx
-}
-
 func (p *StreamStreamJoinProcessor) Name() string {
 	return p.name
-}
-
-func (p *StreamStreamJoinProcessor) Process(ctx context.Context, msg commtypes.Message) error {
-	newMsgs, err := p.ProcessAndReturn(ctx, msg)
-	if err != nil {
-		return err
-	}
-	for _, newMsg := range newMsgs {
-		err := p.pipe.Forward(ctx, newMsg)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (p *StreamStreamJoinProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {

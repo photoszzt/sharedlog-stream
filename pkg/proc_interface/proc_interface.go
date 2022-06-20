@@ -7,47 +7,11 @@ import (
 	"sharedlog-stream/pkg/producer_consumer"
 )
 
-type ExecutionContext interface {
-	ProcArgs
-	ProducersConsumers
-}
-
 type ProducersConsumers interface {
 	Producers() []producer_consumer.MeteredProducerIntr
 	FlushAndPushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error
 	Consumers() []producer_consumer.MeteredConsumerIntr
 	StartWarmup()
-}
-
-type BaseExecutionContext struct {
-	BaseConsumersProducers
-	BaseProcArgs
-}
-
-func NewExecutionContext(
-	consumers []producer_consumer.MeteredConsumerIntr,
-	producers []producer_consumer.MeteredProducerIntr,
-	funcName string,
-	curEpoch uint64,
-	parNum uint8,
-) BaseExecutionContext {
-	return BaseExecutionContext{
-		BaseProcArgs: NewBaseProcArgs(funcName, curEpoch, parNum),
-		BaseConsumersProducers: BaseConsumersProducers{
-			consumers: consumers,
-			producers: producers,
-		},
-	}
-}
-
-func NewExecutionContextFromComponents(
-	consumersProducers BaseConsumersProducers,
-	procArgs BaseProcArgs,
-) BaseExecutionContext {
-	return BaseExecutionContext{
-		BaseProcArgs:           procArgs,
-		BaseConsumersProducers: consumersProducers,
-	}
 }
 
 type BaseConsumersProducers struct {

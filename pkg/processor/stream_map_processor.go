@@ -3,7 +3,6 @@ package processor
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/store"
 )
 
 type Mapper interface {
@@ -18,9 +17,7 @@ func (fn MapperFunc) Map(msg commtypes.Message) (commtypes.Message, error) {
 }
 
 type StreamMapProcessor struct {
-	pipe   Pipe
 	mapper Mapper
-	pctx   store.StoreContext
 	name   string
 }
 
@@ -33,25 +30,8 @@ func NewStreamMapProcessor(name string, mapper Mapper) *StreamMapProcessor {
 	}
 }
 
-func (p *StreamMapProcessor) WithPipe(pipe Pipe) {
-	p.pipe = pipe
-}
-
-func (p *StreamMapProcessor) WithProcessorContext(pctx store.StoreContext) {
-	p.pctx = pctx
-}
-
 func (p *StreamMapProcessor) Name() string {
 	return p.name
-}
-
-func (p *StreamMapProcessor) Process(ctx context.Context, msg commtypes.Message) error {
-	m, err := p.mapper.Map(msg)
-	if err != nil {
-		return err
-	}
-	m.Timestamp = msg.Timestamp
-	return p.pipe.Forward(ctx, m)
 }
 
 func (p *StreamMapProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
@@ -75,9 +55,7 @@ func (fn ValueMapperFunc) MapValue(value interface{}) (interface{}, error) {
 }
 
 type StreamMapValuesProcessor struct {
-	pipe        Pipe
 	valueMapper ValueMapper
-	pctx        store.StoreContext
 	name        string
 }
 
@@ -89,24 +67,8 @@ func NewStreamMapValuesProcessor(mapper ValueMapper) *StreamMapValuesProcessor {
 	}
 }
 
-func (p *StreamMapValuesProcessor) WithPipe(pipe Pipe) {
-	p.pipe = pipe
-}
-
-func (p *StreamMapValuesProcessor) WithProcessorContext(pctx store.StoreContext) {
-	p.pctx = pctx
-}
-
 func (p *StreamMapValuesProcessor) Name() string {
 	return p.name
-}
-
-func (p *StreamMapValuesProcessor) Process(ctx context.Context, msg commtypes.Message) error {
-	newV, err := p.valueMapper.MapValue(msg.Value)
-	if err != nil {
-		return err
-	}
-	return p.pipe.Forward(ctx, commtypes.Message{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp})
 }
 
 func (p *StreamMapValuesProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
@@ -118,9 +80,7 @@ func (p *StreamMapValuesProcessor) ProcessAndReturn(ctx context.Context, msg com
 }
 
 type StreamMapValuesWithKeyProcessor struct {
-	pipe               Pipe
 	valueWithKeyMapper Mapper
-	pctx               store.StoreContext
 	name               string
 }
 
@@ -130,24 +90,8 @@ func NewStreamMapValuesWithKeyProcessor(mapper Mapper) Processor {
 	}
 }
 
-func (p *StreamMapValuesWithKeyProcessor) WithPipe(pipe Pipe) {
-	p.pipe = pipe
-}
-
-func (p *StreamMapValuesWithKeyProcessor) WithProcessorContext(pctx store.StoreContext) {
-	p.pctx = pctx
-}
-
 func (p *StreamMapValuesWithKeyProcessor) Name() string {
 	return p.name
-}
-
-func (p *StreamMapValuesWithKeyProcessor) Process(ctx context.Context, msg commtypes.Message) error {
-	newMsg, err := p.ProcessAndReturn(ctx, msg)
-	if err != nil {
-		return err
-	}
-	return p.pipe.Forward(ctx, newMsg[0])
 }
 
 func (p *StreamMapValuesWithKeyProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
@@ -170,9 +114,7 @@ func (fn SelectKeyFunc) SelectKey(msg commtypes.Message) (interface{}, error) {
 }
 
 type StreamSelectKeyProcessor struct {
-	pipe      Pipe
 	selectKey SelectKeyMapper
-	pctx      store.StoreContext
 	name      string
 }
 
@@ -183,23 +125,8 @@ func NewStreamSelectKeyProcessor(name string, keySelector SelectKeyMapper) Proce
 	}
 }
 
-func (p *StreamSelectKeyProcessor) WithPipe(pipe Pipe) {
-	p.pipe = pipe
-}
-
-func (p *StreamSelectKeyProcessor) WithProcessorContext(pctx store.StoreContext) {
-	p.pctx = pctx
-}
 func (p *StreamSelectKeyProcessor) Name() string {
 	return p.name
-}
-
-func (p *StreamSelectKeyProcessor) Process(ctx context.Context, msg commtypes.Message) error {
-	newMsg, err := p.ProcessAndReturn(ctx, msg)
-	if err != nil {
-		return err
-	}
-	return p.pipe.Forward(ctx, newMsg[0])
 }
 
 func (p *StreamSelectKeyProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {

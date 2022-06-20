@@ -10,9 +10,7 @@ import (
 )
 
 type StreamWindowAggregateProcessor struct {
-	pipe               Pipe
 	store              store.WindowStore
-	pctx               store.StoreContext
 	initializer        Initializer
 	aggregator         Aggregator
 	windows            EnumerableWindowDefinition
@@ -32,30 +30,8 @@ func NewStreamWindowAggregateProcessor(name string, store store.WindowStore, ini
 	}
 }
 
-func (p *StreamWindowAggregateProcessor) WithPipe(pipe Pipe) {
-	p.pipe = pipe
-}
-
-func (p *StreamWindowAggregateProcessor) WithProcessorContext(pctx store.StoreContext) {
-	p.pctx = pctx
-}
-
 func (p *StreamWindowAggregateProcessor) Name() string {
 	return p.name
-}
-
-func (p *StreamWindowAggregateProcessor) Process(ctx context.Context, msg commtypes.Message) error {
-	newMsgs, err := p.ProcessAndReturn(ctx, msg)
-	if err != nil {
-		return err
-	}
-	for _, newMsg := range newMsgs {
-		err := p.pipe.Forward(ctx, newMsg)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (p *StreamWindowAggregateProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {

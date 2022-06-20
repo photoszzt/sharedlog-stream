@@ -1,11 +1,14 @@
 package execution
 
 import (
+	"context"
 	"os"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/proc_interface"
+	"sharedlog-stream/pkg/processor"
 )
 
 type CommonJoinProcArgs struct {
@@ -61,6 +64,21 @@ func (c *CommonJoinProcArgs) CurEpoch() uint64 {
 
 func (c *CommonJoinProcArgs) SubstreamNum() uint8 {
 	return c.arg1.SubstreamNum()
+}
+
+func (c *CommonJoinProcArgs) Processors() []processor.Processor {
+	var proc []processor.Processor
+	proc = append(proc, c.arg1.Processors()...)
+	proc = append(proc, c.arg2.Processors()...)
+	return proc
+}
+
+func (c *CommonJoinProcArgs) RunChains(ctx context.Context, initMsg commtypes.Message) ([]commtypes.Message, error) {
+	panic("not implemented")
+}
+
+func (c *CommonJoinProcArgs) Via(proc processor.Processor) processor.ProcessorChainIntr {
+	panic("not implemented")
 }
 
 func HandleJoinErrReturn(argsTmp interface{}) *common.FnOutput {

@@ -8,12 +8,10 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
-	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store"
@@ -23,7 +21,6 @@ import (
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
-	"golang.org/x/xerrors"
 )
 
 type q5AuctionBids struct {
@@ -101,7 +98,7 @@ func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput, m
 }
 
 func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde,
-) (*processor.MeteredProcessor, store.WindowStore, error) {
+) (*processor.MeteredProcessor, []*store_restore.WindowStoreChangelog, error) {
 	hopWindow, err := processor.NewTimeWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
 	if err != nil {
 		return nil, nil, err
@@ -125,54 +122,29 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 	}
 	var countWindowStore store.WindowStore
 	countStoreName := "auctionBidsCountStore"
-	if sp.TableType == uint8(store.IN_MEM) {
-		comparable := concurrent_skiplist.CompareFunc(concurrent_skiplist.Uint64KeyCompare)
-		countMp, err := store_with_changelog.NewMaterializeParamBuilder().
-			KVMsgSerdes(commtypes.KVMsgSerdes{
-				KeySerde: commtypes.Uint64Serde{},
-				ValSerde: vtSerde,
-				MsgSerde: msgSerde,
-			}).
-			StoreName(countStoreName).
-			ParNum(sp.ParNum).
-			SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
-			StreamParam(commtypes.CreateStreamParam{
-				Env:          h.env,
-				NumPartition: sp.NumInPartition,
-			}).Build(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
-		if err != nil {
-			return nil, nil, err
-		}
-		countWindowStore, err = store_with_changelog.NewInMemoryWindowStoreWithChangelog(
-			hopWindow.MaxSize()+hopWindow.GracePeriodMs(),
-			hopWindow.MaxSize(), false, comparable, countMp,
-		)
-		if err != nil {
-			return nil, nil, err
-		}
-	} else if sp.TableType == uint8(store.MONGODB) {
-		client, err := store.InitMongoDBClient(ctx, sp.MongoAddr)
-		if err != nil {
-			return nil, nil, err
-		}
-		mkvs, err := store.NewMongoDBKeyValueStore(ctx, &store.MongoDBConfig{
-			Client:         client,
-			CollectionName: countStoreName,
-			DBName:         countStoreName,
-			KeySerde:       nil,
-			ValueSerde:     nil,
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-		byteStore, err := store.NewMongoDBSegmentedBytesStore(ctx, countStoreName,
-			hopWindow.MaxSize()+hopWindow.GracePeriodMs(),
-			&store.WindowKeySchema{}, mkvs)
-		if err != nil {
-			return nil, nil, err
-		}
-		countWindowStore = store.NewSegmentedWindowStore(byteStore, false, hopWindow.MaxSize(),
-			commtypes.Uint64Serde{}, vtSerde)
+	comparable := concurrent_skiplist.CompareFunc(concurrent_skiplist.Uint64KeyCompare)
+	countMp, err := store_with_changelog.NewMaterializeParamBuilder().
+		KVMsgSerdes(commtypes.KVMsgSerdes{
+			KeySerde: commtypes.Uint64Serde{},
+			ValSerde: vtSerde,
+			MsgSerde: msgSerde,
+		}).
+		StoreName(countStoreName).
+		ParNum(sp.ParNum).
+		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
+		StreamParam(commtypes.CreateStreamParam{
+			Env:          h.env,
+			NumPartition: sp.NumInPartition,
+		}).Build(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
+	if err != nil {
+		return nil, nil, err
+	}
+	countWindowStore, err = store_with_changelog.NewInMemoryWindowStoreWithChangelog(
+		hopWindow.MaxSize()+hopWindow.GracePeriodMs(),
+		hopWindow.MaxSize(), false, comparable, countMp,
+	)
+	if err != nil {
+		return nil, nil, err
 	}
 	countProc := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(
 		"countProc", countWindowStore,
@@ -181,16 +153,22 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 			val := aggregate.(uint64)
 			return val + 1
 		}), hopWindow), time.Duration(sp.WarmupS)*time.Second)
-	return countProc, countWindowStore, nil
+	var wsc []*store_restore.WindowStoreChangelog
+	wsc = []*store_restore.WindowStoreChangelog{
+		store_restore.NewWindowStoreChangelog(
+			countWindowStore, countMp.ChangelogManager(), sp.ParNum),
+	}
+	return countProc, wsc, nil
 }
 
 type q5AuctionBidsProcessArg struct {
 	countProc      *processor.MeteredProcessor
 	groupByAuction *processor.MeteredProcessor
-	groupBy        *processor.GroupBy
-	proc_interface.BaseExecutionContext
+	groupBy        *processor.MeteredProcessor
+	processor.BaseExecutionContext
 }
 
+/*
 type q5AuctionBidsRestoreArg struct {
 	countProc      processor.Processor
 	groupByAuction processor.Processor
@@ -210,68 +188,14 @@ func (h *q5AuctionBids) procMsg(ctx context.Context, msg commtypes.Message, args
 		if err != nil {
 			return fmt.Errorf("groupByAuction err %v", err)
 		}
-		err = args.groupBy.GroupByAndProduce(ctx, changeKeyedMsg[0], args.TrackParFunc())
+		_, err = args.groupBy.ProcessAndReturn(ctx, changeKeyedMsg[0])
 		if err != nil {
 			return err
 		}
 	}
 	return nil
 }
-
-func (h *q5AuctionBids) processWithoutSink(ctx context.Context, argsTmp interface{}) error {
-	args := argsTmp.(*q5AuctionBidsRestoreArg)
-	gotMsgs, err := args.src.Consume(ctx, args.parNum)
-	if err != nil {
-		if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
-			return nil
-		}
-		return err
-	}
-
-	for _, msg := range gotMsgs.Msgs {
-		if msg.MsgArr != nil {
-			for _, subMsg := range msg.MsgArr {
-				if subMsg.Value == nil {
-					continue
-				}
-				err := h.procMsgWithoutSink(ctx, subMsg, args)
-				if err != nil {
-					return err
-				}
-			}
-		} else {
-			if msg.Msg.Value == nil {
-				continue
-			}
-			err := h.procMsgWithoutSink(ctx, msg.Msg, args)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (h *q5AuctionBids) procMsgWithoutSink(ctx context.Context, msg commtypes.Message, args *q5AuctionBidsRestoreArg) error {
-	event := msg.Value.(*ntypes.Event)
-	ts, err := event.ExtractEventTime()
-	if err != nil {
-		return fmt.Errorf("fail to extract timestamp: %v", err)
-	}
-	msg.Timestamp = ts
-	countMsgs, err := args.countProc.ProcessAndReturn(ctx, msg)
-	if err != nil {
-		return err
-	}
-	for _, countMsg := range countMsgs {
-		// fmt.Fprintf(os.Stderr, "count msg ts: %v, ", countMsg.Timestamp)
-		_, err := args.groupByAuction.ProcessAndReturn(ctx, countMsg)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
+*/
 
 func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	msgSerde, err := commtypes.GetMsgSerde(commtypes.SerdeFormat(sp.SerdeFormat))
@@ -282,72 +206,42 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	countProc, countStore, err := h.getCountAggProc(ctx, sp, msgSerde)
+	ectx := processor.NewExecutionContext(srcs,
+		sinks, h.funcName, sp.ScaleEpoch, sp.ParNum)
+	countProc, wsc, err := h.getCountAggProc(ctx, sp, msgSerde)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	groupByAuction := processor.NewMeteredProcessor(processor.NewStreamMapProcessor("groupByAuction",
-		processor.MapperFunc(
-			func(msg commtypes.Message) (commtypes.Message, error) {
-				key := msg.Key.(*commtypes.WindowedKey)
-				value := msg.Value.(uint64)
-				newKey := &ntypes.StartEndTime{
-					StartTimeMs: key.Window.Start(),
-					EndTimeMs:   key.Window.End(),
-				}
-				newVal := &ntypes.AuctionIdCount{
-					AucId:  key.Key.(uint64),
-					Count:  value,
-					BaseTs: ntypes.BaseTs{Timestamp: msg.Timestamp},
-				}
-				return commtypes.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
-			})), time.Duration(sp.WarmupS)*time.Second)
-	groupBy := processor.NewGroupBy(sinks[0])
-	procArgs := &q5AuctionBidsProcessArg{
-		countProc:      countProc,
-		groupByAuction: groupByAuction,
-		groupBy:        groupBy,
-		BaseExecutionContext: proc_interface.NewExecutionContext(srcs,
-			sinks, h.funcName, sp.ScaleEpoch, sp.ParNum),
-	}
+	warmup := time.Duration(sp.WarmupS) * time.Second
+	ectx.Via(countProc).
+		Via(processor.NewMeteredProcessor(processor.NewStreamMapProcessor("groupByAuction",
+			processor.MapperFunc(
+				func(msg commtypes.Message) (commtypes.Message, error) {
+					key := msg.Key.(*commtypes.WindowedKey)
+					value := msg.Value.(uint64)
+					newKey := &ntypes.StartEndTime{
+						StartTimeMs: key.Window.Start(),
+						EndTimeMs:   key.Window.End(),
+					}
+					newVal := &ntypes.AuctionIdCount{
+						AucId:  key.Key.(uint64),
+						Count:  value,
+						BaseTs: ntypes.BaseTs{Timestamp: msg.Timestamp},
+					}
+					return commtypes.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
+				})), warmup)).
+		Via(processor.NewGroupByOutputProcessor(sinks[0], &ectx))
+
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(proc_interface.ExecutionContext)
-			return execution.CommonProcess(ctx, task, args, h.procMsg)
-		}).
-		InitFunc(func(progArgs interface{}) {
-			groupByAuction.StartWarmup()
-			countProc.StartWarmup()
+			args := argsTmp.(processor.ExecutionContext)
+			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
 		}).Build()
 
-	var wsc []*store_restore.WindowStoreChangelog
-	if countStore.TableType() == store.IN_MEM {
-		cstore := countStore.(*store_with_changelog.InMemoryWindowStoreWithChangelog)
-		wsc = []*store_restore.WindowStoreChangelog{
-			store_restore.NewWindowStoreChangelog(
-				cstore, cstore.MaterializeParam().ChangelogManager(), sp.ParNum),
-		}
-	} else {
-		panic("unrecognized table type")
-	}
-	// else if countStore.TableType() == store.MONGODB {
-	// 	wsc = []*store_restore.WindowStoreChangelog{
-	// 		store_restore.NewWindowStoreChangelogForExternalStore(countStore, srcs[0].Stream(),
-	// 			h.processWithoutSink, &q5AuctionBidsRestoreArg{
-	// 				countProc:      countProc.InnerProcessor(),
-	// 				groupByAuction: groupByAuction.InnerProcessor(),
-	// 				src:            srcs[0].InnerSource(),
-	// 				parNum:         sp.ParNum,
-	// 			}, fmt.Sprintf("%s-%s-%d", h.funcName, countStore.Name(), sp.ParNum), sp.ParNum),
-	// 	}
-	// }
-	update_stats := func(ret *common.FnOutput) {
-		ret.Latencies["count"] = countProc.GetLatency()
-		ret.Latencies["changeKey"] = groupByAuction.GetLatency()
-	}
+	update_stats := func(ret *common.FnOutput) {}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 		sp.ParNum, sp.OutputTopicNames[0])
-	builder := stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)
+	builder := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp, builder).
 		WindowStoreChangelogs(wsc).Build()
 	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)

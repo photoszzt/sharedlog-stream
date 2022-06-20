@@ -4,7 +4,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
-	"sharedlog-stream/pkg/proc_interface"
+	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/store_restore"
 	"time"
 
@@ -12,7 +12,7 @@ import (
 )
 
 type StreamTaskArgs struct {
-	ectx proc_interface.ExecutionContext
+	ectx processor.ExecutionContext
 	env  types.Environment
 
 	appId           string
@@ -43,7 +43,7 @@ type StreamTaskArgsBuilder struct {
 }
 
 func NewStreamTaskArgsBuilder(env types.Environment,
-	ectx proc_interface.ExecutionContext,
+	ectx processor.ExecutionContext,
 	transactionalID string,
 ) SetGuarantee {
 	return &StreamTaskArgsBuilder{

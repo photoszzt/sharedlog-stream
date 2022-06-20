@@ -7,15 +7,12 @@ type StreamTaskBuilder struct {
 }
 
 type SetAppProcessFunc interface {
-	AppProcessFunc(process ProcessFunc) SetInitFunc
-}
-
-type SetInitFunc interface {
-	InitFunc(i func(progArgs interface{})) BuildStreamTask
+	AppProcessFunc(process ProcessFunc) BuildStreamTask
 }
 
 type BuildStreamTask interface {
 	Build() *StreamTask
+	InitFunc(i func(progArgs interface{})) BuildStreamTask
 	PauseFunc(p func() *common.FnOutput) BuildStreamTask
 	ResumeFunc(r func(task *StreamTask)) BuildStreamTask
 	HandleErrFunc(he func() error) BuildStreamTask
@@ -34,7 +31,7 @@ func NewStreamTaskBuilder() SetAppProcessFunc {
 	}
 }
 
-func (b *StreamTaskBuilder) AppProcessFunc(process ProcessFunc) SetInitFunc {
+func (b *StreamTaskBuilder) AppProcessFunc(process ProcessFunc) BuildStreamTask {
 	b.task.appProcessFunc = process
 	return b
 }

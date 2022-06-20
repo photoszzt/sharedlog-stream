@@ -10,7 +10,6 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/execution"
-	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/stream_task"
 	"time"
@@ -44,11 +43,12 @@ func (h *bidByAuction) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return utils.CompressData(encodedOutput), nil
 }
 
+/*
 type bidKeyedByAuctionProcessArgs struct {
 	filterBid *processor.MeteredProcessor
 	selectKey *processor.MeteredProcessor
-	groupBy   *processor.GroupBy
-	proc_interface.BaseExecutionContext
+	groupBy   *processor.MeteredProcessor
+	processor.BaseExecutionContext
 }
 
 func (h *bidByAuction) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
@@ -62,13 +62,14 @@ func (h *bidByAuction) procMsg(ctx context.Context, msg commtypes.Message, argsT
 		if err != nil {
 			return err
 		}
-		err = args.groupBy.GroupByAndProduce(ctx, mappedKey[0], args.TrackParFunc())
+		_, err = args.groupBy.ProcessAndReturn(ctx, mappedKey[0])
 		if err != nil {
 			return err
 		}
 	}
 	return nil
 }
+*/
 
 func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 	sp *common.QueryInput,
@@ -78,44 +79,34 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	srcs[0].SetInitialSource(true)
-	filterBid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterBid",
-		processor.PredicateFunc(
+	warmup := time.Duration(sp.WarmupS) * time.Second
+	ectx := processor.NewExecutionContext(srcs,
+		sinks, h.funcName, sp.ScaleEpoch, sp.ParNum)
+	ectx.Via(processor.NewMeteredProcessor(
+		processor.NewStreamFilterProcessor("filterBid", processor.PredicateFunc(
 			func(m *commtypes.Message) (bool, error) {
 				event := m.Value.(*ntypes.Event)
 				return event.Etype == ntypes.BID, nil
-			})), time.Duration(sp.WarmupS)*time.Second)
-	selectKey := processor.NewMeteredProcessor(processor.NewStreamMapProcessor("selectKey",
-		processor.MapperFunc(
-			func(m commtypes.Message) (commtypes.Message, error) {
-				event := m.Value.(*ntypes.Event)
-				return commtypes.Message{Key: event.Bid.Auction, Value: m.Value, Timestamp: m.Timestamp}, nil
-			})), time.Duration(sp.WarmupS)*time.Second)
-	groupBy := processor.NewGroupBy(sinks[0])
-	procArgs := &bidKeyedByAuctionProcessArgs{
-		filterBid: filterBid,
-		selectKey: selectKey,
-		groupBy:   groupBy,
-		BaseExecutionContext: proc_interface.NewExecutionContext(srcs,
-			sinks, h.funcName, sp.ScaleEpoch, sp.ParNum),
-	}
+			})), warmup)).
+		Via(processor.NewMeteredProcessor(
+			processor.NewStreamMapProcessor("selectKey", processor.MapperFunc(
+				func(m commtypes.Message) (commtypes.Message, error) {
+					event := m.Value.(*ntypes.Event)
+					return commtypes.Message{Key: event.Bid.Auction, Value: m.Value, Timestamp: m.Timestamp}, nil
+				})), warmup)).
+		Via(processor.NewGroupByOutputProcessor(sinks[0], &ectx))
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(proc_interface.ExecutionContext)
-			return execution.CommonProcess(ctx, task, args, h.procMsg)
-		}).
-		InitFunc(func(progArgs interface{}) {
-			filterBid.StartWarmup()
-			selectKey.StartWarmup()
+			args := argsTmp.(processor.ExecutionContext)
+			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
 		}).Build()
 
 	update_stats := func(ret *common.FnOutput) {
-		ret.Latencies["filterBid"] = filterBid.GetLatency()
-		ret.Latencies["selectKey"] = selectKey.GetLatency()
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 		sp.InputTopicNames[0],
 		sp.ParNum, sp.OutputTopicNames[0])
-	builder := stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)
+	builder := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp, builder).Build()
 	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
 }

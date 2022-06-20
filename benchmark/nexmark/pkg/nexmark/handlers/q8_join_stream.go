@@ -284,11 +284,6 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(h.process).
 		InitFunc(func(progArgs interface{}) {
-			toAuctionsWindowTab.StartWarmup()
-			toPersonsWinTab.StartWarmup()
-			auctionsJoinsPersons.StartWarmup()
-			personsJoinsAuctions.StartWarmup()
-
 			aucManager.Run()
 			perManager.Run()
 		}).
@@ -341,10 +336,6 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	}
 
 	update_stats := func(ret *common.FnOutput) {
-		ret.Latencies["toAuctionsWindowTab"] = toAuctionsWindowTab.GetLatency()
-		ret.Latencies["toPersonsWinTab"] = toPersonsWinTab.GetLatency()
-		ret.Latencies["personsJoinsAuctions"] = personsJoinsAuctions.GetLatency()
-		ret.Latencies["auctionsJoinsPersons"] = auctionsJoinsPersons.GetLatency()
 		ret.Latencies["eventTimeLatency"] = sinks_arr[0].GetEventTimeLatency()
 	}
 	transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)

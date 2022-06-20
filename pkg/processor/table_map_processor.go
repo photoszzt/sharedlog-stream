@@ -7,7 +7,6 @@ import (
 )
 
 type TableMapValuesProcessor struct {
-	pipe        Pipe
 	store       store.KeyValueStore
 	valueMapper ValueMapper
 	name        string
@@ -21,20 +20,8 @@ func NewTableMapValuesProcessor(name string, mapper ValueMapper, store store.Key
 	}
 }
 
-func (p *TableMapValuesProcessor) WithPipe(pipe Pipe) {
-	p.pipe = pipe
-}
-
 func (p *TableMapValuesProcessor) Name() string {
 	return p.name
-}
-
-func (p *TableMapValuesProcessor) Process(ctx context.Context, msg commtypes.Message) error {
-	newMsg, err := p.ProcessAndReturn(ctx, msg)
-	if err != nil {
-		return err
-	}
-	return p.pipe.Forward(ctx, newMsg[0])
 }
 
 func (p *TableMapValuesProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {

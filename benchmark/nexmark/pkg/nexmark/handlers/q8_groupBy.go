@@ -11,7 +11,6 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/execution"
-	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/stream_task"
@@ -101,9 +100,9 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	filterPerson, personsByIDMap, personsByIDFunc := h.getPersonsByID(time.Duration(sp.WarmupS)*time.Second,
+	personsByIDFunc := h.getPersonsByID(time.Duration(sp.WarmupS)*time.Second,
 		time.Duration(sp.FlushMs)*time.Millisecond)
-	filterAuctions, auctionsBySellerIDMap, auctionsBySellerIDFunc := h.getAucBySellerID(time.Duration(sp.WarmupS)*time.Second,
+	auctionsBySellerIDFunc := h.getAucBySellerID(time.Duration(sp.WarmupS)*time.Second,
 		time.Duration(sp.FlushMs)*time.Millisecond)
 
 	var wg sync.WaitGroup
@@ -112,7 +111,7 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 	procArgs := &TwoMsgChanProcArgs{
 		msgChan1:             auctionsBySellerIDManager.MsgChan(),
 		msgChan2:             personsByIDManager.MsgChan(),
-		BaseExecutionContext: proc_interface.NewExecutionContext(srcs, sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum),
+		BaseExecutionContext: processor.NewExecutionContext(srcs, sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 
 	personsByIDManager.LaunchProc(ctx, procArgs, &wg)
@@ -131,14 +130,8 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(proc_interface.ExecutionContext)
+			args := argsTmp.(processor.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
-		}).
-		InitFunc(func(progArgs interface{}) {
-			filterPerson.StartWarmup()
-			personsByIDMap.StartWarmup()
-			filterAuctions.StartWarmup()
-			auctionsBySellerIDMap.StartWarmup()
 		}).
 		PauseFunc(func() *common.FnOutput {
 			// debug.Fprintf(os.Stderr, "begin flush\n")
@@ -161,12 +154,7 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 		}).
 		HandleErrFunc(handleErrFunc).Build()
 
-	update_stats := func(ret *common.FnOutput) {
-		ret.Latencies["filterPerson"] = filterPerson.GetLatency()
-		ret.Latencies["personsByIDMap"] = personsByIDMap.GetLatency()
-		ret.Latencies["filterAuctions"] = filterAuctions.GetLatency()
-		ret.Latencies["auctionsBySellerIDMap"] = auctionsBySellerIDMap.GetLatency()
-	}
+	update_stats := func(ret *common.FnOutput) {}
 	transactionalID := fmt.Sprintf("%s-%s-%d",
 		h.funcName, sp.InputTopicNames[0], sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
@@ -175,11 +163,7 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
 }
 
-func (h *q8GroupByHandler) getPersonsByID(warmup time.Duration, pollTimeout time.Duration) (
-	*processor.MeteredProcessor,
-	*processor.MeteredProcessor,
-	execution.GeneralProcFunc,
-) {
+func (h *q8GroupByHandler) getPersonsByID(warmup time.Duration, pollTimeout time.Duration) execution.GeneralProcFunc {
 	filterPerson := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterPerson",
 		processor.PredicateFunc(
 			func(msg *commtypes.Message) (bool, error) {
@@ -196,49 +180,46 @@ func (h *q8GroupByHandler) getPersonsByID(warmup time.Duration, pollTimeout time
 			}, nil
 		})), warmup)
 
-	return filterPerson, personsByIDMap,
-		func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup,
-			msgChan chan commtypes.Message, errChan chan error,
-		) {
-			args := argsTmp.(*TwoMsgChanProcArgs)
-			g := processor.NewGroupBy(args.Producers()[1])
-			defer wg.Done()
-			for {
-				select {
-				case <-ctx.Done():
+	return func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup,
+		msgChan chan commtypes.Message, errChan chan error,
+	) {
+		args := argsTmp.(*TwoMsgChanProcArgs)
+		g := processor.NewGroupByOutputProcessor(args.Producers()[1], args)
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg, ok := <-msgChan:
+				if !ok {
 					return
-				case msg, ok := <-msgChan:
-					if !ok {
-						return
-					}
-					filteredMsgs, err := filterPerson.ProcessAndReturn(ctx, msg)
+				}
+				filteredMsgs, err := filterPerson.ProcessAndReturn(ctx, msg)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "[ERROR] filterPerson err: %v\n", err)
+					errChan <- fmt.Errorf("filterPerson err: %v", err)
+					return
+				}
+				for _, filteredMsg := range filteredMsgs {
+					changeKeyedMsg, err := personsByIDMap.ProcessAndReturn(ctx, filteredMsg)
 					if err != nil {
-						fmt.Fprintf(os.Stderr, "[ERROR] filterPerson err: %v\n", err)
-						errChan <- fmt.Errorf("filterPerson err: %v", err)
+						fmt.Fprintf(os.Stderr, "[ERROR] personsByIDMap err: %v\n", err)
+						errChan <- fmt.Errorf("personsByIDMap err: %v", err)
 						return
 					}
-					for _, filteredMsg := range filteredMsgs {
-						changeKeyedMsg, err := personsByIDMap.ProcessAndReturn(ctx, filteredMsg)
-						if err != nil {
-							fmt.Fprintf(os.Stderr, "[ERROR] personsByIDMap err: %v\n", err)
-							errChan <- fmt.Errorf("personsByIDMap err: %v", err)
-							return
-						}
-						err = g.GroupByAndProduce(ctx, changeKeyedMsg[0], args.TrackParFunc())
-						if err != nil {
-							fmt.Fprintf(os.Stderr, "[ERROR] groupby failed: %v", err)
-							errChan <- err
-							return
-						}
+					_, err = g.ProcessAndReturn(ctx, changeKeyedMsg[0])
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "[ERROR] groupby failed: %v", err)
+						errChan <- err
+						return
 					}
 				}
 			}
 		}
+	}
 }
 
-func (h *q8GroupByHandler) getAucBySellerID(warmup time.Duration, pollTimeout time.Duration) (*processor.MeteredProcessor, *processor.MeteredProcessor,
-	execution.GeneralProcFunc,
-) {
+func (h *q8GroupByHandler) getAucBySellerID(warmup time.Duration, pollTimeout time.Duration) execution.GeneralProcFunc {
 	filterAuctions := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(
 		"filterAuctions", processor.PredicateFunc(
 			func(m *commtypes.Message) (bool, error) {
@@ -252,9 +233,9 @@ func (h *q8GroupByHandler) getAucBySellerID(warmup time.Duration, pollTimeout ti
 			return commtypes.Message{Key: event.NewAuction.Seller, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 		})), warmup)
 
-	return filterAuctions, auctionsBySellerIDMap, func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error) {
+	return func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error) {
 		args := argsTmp.(*TwoMsgChanProcArgs)
-		g := processor.NewGroupBy(args.Producers()[0])
+		g := processor.NewGroupByOutputProcessor(args.Producers()[0], args)
 		defer wg.Done()
 		for {
 			select {
@@ -276,7 +257,7 @@ func (h *q8GroupByHandler) getAucBySellerID(warmup time.Duration, pollTimeout ti
 						fmt.Fprintf(os.Stderr, "[ERROR] auctionsBySellerIDMap err: %v\n", err)
 						errChan <- fmt.Errorf("auctionsBySellerIDMap err: %v", err)
 					}
-					err = g.GroupByAndProduce(ctx, changeKeyedMsg[0], args.TrackParFunc())
+					_, err = g.ProcessAndReturn(ctx, changeKeyedMsg[0])
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "[ERROR] groupby failed: %v", err)
 						errChan <- err

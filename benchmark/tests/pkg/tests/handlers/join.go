@@ -14,12 +14,12 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/producer_consumer"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/stream_task"
-	"sharedlog-stream/pkg/exactly_once_intr"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -158,8 +158,8 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 			return fmt.Sprintf("%s+%s", leftValue.(strTs).Val, rightValue.(strTs).Val)
 		})
 	sharedTimeTracker := processor.NewTimeTracker()
-	oneJoinTwoProc := processor.NewStreamStreamJoinProcessor(winTab2, joinWindows, joiner, false, true, sharedTimeTracker)
-	twoJoinOneProc := processor.NewStreamStreamJoinProcessor(winTab1, joinWindows, processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker)
+	oneJoinTwoProc := processor.NewStreamStreamJoinProcessor("oneJoinTwo", winTab2, joinWindows, joiner, false, true, sharedTimeTracker)
+	twoJoinOneProc := processor.NewStreamStreamJoinProcessor("twoJoinOne", winTab1, joinWindows, processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker)
 	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *producer_consumer.ShardedSharedLogStreamProducer,
 		trackParFunc exactly_once_intr.TrackProdSubStreamFunc,
 	) error {
@@ -394,8 +394,8 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 			return fmt.Sprintf("%s+%s", leftValue.(strTs).Val, rightValue.(strTs).Val)
 		})
 	sharedTimeTracker := processor.NewTimeTracker()
-	oneJoinTwoProc := processor.NewStreamStreamJoinProcessor(winTab2, joinWindows, joiner, false, true, sharedTimeTracker)
-	twoJoinOneProc := processor.NewStreamStreamJoinProcessor(winTab1, joinWindows, processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker)
+	oneJoinTwoProc := processor.NewStreamStreamJoinProcessor("oneJoinTwo", winTab2, joinWindows, joiner, false, true, sharedTimeTracker)
+	twoJoinOneProc := processor.NewStreamStreamJoinProcessor("twoJoinOne", winTab1, joinWindows, processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker)
 	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *producer_consumer.ShardedSharedLogStreamProducer,
 		trackParFunc exactly_once_intr.TrackProdSubStreamFunc,
 	) error {

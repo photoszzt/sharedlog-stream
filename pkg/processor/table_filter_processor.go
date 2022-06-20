@@ -7,7 +7,6 @@ import (
 )
 
 type TableFilterProcessor struct {
-	pipe      Pipe
 	pred      Predicate
 	store     store.KeyValueStore
 	filterNot bool
@@ -25,29 +24,21 @@ func NewTableFilterProcessor(name string, store store.KeyValueStore, pred Predic
 	}
 }
 
-func (p *TableFilterProcessor) WithPipe(pipe Pipe) {
-	p.pipe = pipe
-}
-
 func (p *TableFilterProcessor) Name() string {
 	return p.name
 }
 
-func (p *TableFilterProcessor) Process(ctx context.Context, msg commtypes.Message) error {
+func (p *TableFilterProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	ok, err := p.pred.Assert(&msg)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if ok != p.filterNot {
 		err = p.store.Put(ctx, msg.Key, &commtypes.ValueTimestamp{Value: msg.Value, Timestamp: msg.Timestamp})
 		if err != nil {
-			return err
+			return nil, err
 		}
-		return p.pipe.Forward(ctx, msg)
+		return []commtypes.Message{msg}, nil
 	}
-	return nil
-}
-
-func (p *TableFilterProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	panic("not implemented")
+	return nil, nil
 }

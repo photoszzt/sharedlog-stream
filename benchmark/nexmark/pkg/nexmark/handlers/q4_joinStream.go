@@ -162,7 +162,7 @@ func (h *q4JoinStreamHandler) Q4JoinTable(ctx context.Context, sp *common.QueryI
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	aucJoinBidsFunc, bidsJoinAucFunc, procs, wsc, err := execution.SetupStreamStreamJoin(
+	aucJoinBidsFunc, bidsJoinAucFunc, wsc, err := execution.SetupStreamStreamJoin(
 		aucMp, bidMp, compare, joiner, jw, warmup)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
@@ -176,7 +176,6 @@ func (h *q4JoinStreamHandler) Q4JoinTable(ctx context.Context, sp *common.QueryI
 				})),
 		time.Duration(sp.WarmupS)*time.Second,
 	)
-	procs = append(procs, getValidBid)
 
 	filterAndGroupMsg := func(ctx context.Context, msgs []commtypes.Message) ([]commtypes.Message, error) {
 		var newMsgs []commtypes.Message
@@ -231,10 +230,6 @@ func (h *q4JoinStreamHandler) Q4JoinTable(ctx context.Context, sp *common.QueryI
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(h.process).
 		InitFunc(func(progArgs interface{}) {
-			for _, proc := range procs {
-				proc.StartWarmup()
-			}
-
 			aucManager.Run()
 			bidManager.Run()
 		}).
@@ -258,11 +253,7 @@ func (h *q4JoinStreamHandler) Q4JoinTable(ctx context.Context, sp *common.QueryI
 	aucManager.LaunchJoinProcLoop(actx, task, joinProcAuction, &wg)
 	bidManager.LaunchJoinProcLoop(bctx, task, joinProcBid, &wg)
 
-	update_stats := func(ret *common.FnOutput) {
-		for _, proc := range procs {
-			ret.Latencies[proc.Name()] = proc.GetLatency()
-		}
-	}
+	update_stats := func(ret *common.FnOutput) {}
 	transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName,
 		sp.InputTopicNames[0], sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,

@@ -10,7 +10,6 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/execution"
-	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store_restore"
@@ -97,11 +96,12 @@ func (h *q4MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	return []producer_consumer.MeteredConsumerIntr{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
+/*
 type q4MaxBidProcessArgs struct {
 	maxBid    *processor.MeteredProcessor
 	changeKey *processor.MeteredProcessor
-	groupBy   *processor.GroupBy
-	proc_interface.BaseExecutionContext
+	groupBy   *processor.MeteredProcessor
+	processor.BaseExecutionContext
 }
 
 func (h *q4MaxBid) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
@@ -114,18 +114,21 @@ func (h *q4MaxBid) procMsg(ctx context.Context, msg commtypes.Message, argsTmp i
 	if err != nil {
 		return err
 	}
-	err = args.groupBy.GroupByAndProduce(ctx, remapped[0], args.TrackParFunc())
+	_, err = args.groupBy.ProcessAndReturn(ctx, remapped[0])
 	if err != nil {
 		return err
 	}
 	return nil
 }
+*/
 
 func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
+	ectx := processor.NewExecutionContext(srcs, sinks_arr, h.funcName,
+		sp.ScaleEpoch, sp.ParNum)
 	maxBidStoreName := "q4MaxBidKVStore"
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	mp, err := store_with_changelog.NewMaterializeParamBuilder().
@@ -146,7 +149,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		return ntypes.CompareAuctionIdCategory(ka, kb)
 	}
 	kvstore := store_with_changelog.CreateInMemKVTableWithChangelog(mp, compare, warmup)
-	maxBid := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor("maxBid", kvstore,
+	ectx.Via(processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor("maxBid", kvstore,
 		processor.InitializerFunc(func() interface{} { return uint64(0) }),
 		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
 			v := value.(*ntypes.AuctionBid)
@@ -156,31 +159,20 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 			} else {
 				return agg
 			}
-		})), warmup)
-	changeKey := processor.NewMeteredProcessor(processor.NewStreamMapProcessor("changeKey",
-		processor.MapperFunc(func(m commtypes.Message) (commtypes.Message, error) {
-			return commtypes.Message{
-				Key:   m.Key.(*ntypes.AuctionIdCategory).Category,
-				Value: m.Value,
-			}, nil
-		})), warmup)
-	groupBy := processor.NewGroupBy(sinks_arr[0])
-	procArgs := &q4MaxBidProcessArgs{
-		maxBid:    maxBid,
-		changeKey: changeKey,
-		groupBy:   groupBy,
-		BaseExecutionContext: proc_interface.NewExecutionContext(srcs, sinks_arr, h.funcName,
-			sp.ScaleEpoch, sp.ParNum),
-	}
+		})), warmup)).
+		Via(processor.NewMeteredProcessor(processor.NewStreamMapProcessor("changeKey",
+			processor.MapperFunc(func(m commtypes.Message) (commtypes.Message, error) {
+				return commtypes.Message{
+					Key:   m.Key.(*ntypes.AuctionIdCategory).Category,
+					Value: m.Value,
+				}, nil
+			})), warmup)).
+		Via(processor.NewGroupByOutputProcessor(sinks_arr[0], &ectx))
 
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(proc_interface.ExecutionContext)
-			return execution.CommonProcess(ctx, task, args, h.procMsg)
-		}).
-		InitFunc(func(progArgs interface{}) {
-			maxBid.StartWarmup()
-			changeKey.StartWarmup()
+			args := argsTmp.(processor.ExecutionContext)
+			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
 		}).Build()
 
 	var kvc []*store_restore.KVStoreChangelog
@@ -189,13 +181,11 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	}
 
 	update_stats := func(ret *common.FnOutput) {
-		ret.Latencies["maxBid"] = maxBid.GetLatency()
-		ret.Latencies["groupBy"] = changeKey.GetLatency()
 		ret.Latencies["eventTimeLatency"] = sinks_arr[0].GetEventTimeLatency()
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 		sp.ParNum, sp.OutputTopicNames[0])
-	builder := stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)
+	builder := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp, builder).
 		KVStoreChangelogs(kvc).Build()
 	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)

@@ -12,7 +12,6 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
-	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/stream_task"
 	"sync"
@@ -60,8 +59,8 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	srcs[0].SetInitialSource(true)
-	filterAuctions, auctionsByIDMap, auctionsByIDFunc := h.getAucsByID(time.Duration(sp.WarmupS) * time.Second)
-	filterBids, bidsByAuctionIDMap, bidsByAuctionIDFunc := h.getBidsByAuctionID(time.Duration(sp.WarmupS) * time.Second)
+	auctionsByIDFunc := h.getAucsByID(time.Duration(sp.WarmupS) * time.Second)
+	bidsByAuctionIDFunc := h.getBidsByAuctionID(time.Duration(sp.WarmupS) * time.Second)
 
 	var wg sync.WaitGroup
 	auctionsByIDManager := execution.NewGeneralProcManager(auctionsByIDFunc)
@@ -69,7 +68,7 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 	procArgs := &TwoMsgChanProcArgs{
 		msgChan1: auctionsByIDManager.MsgChan(),
 		msgChan2: bidsByAuctionIDManager.MsgChan(),
-		BaseExecutionContext: proc_interface.NewExecutionContext(srcs, sinks_arr,
+		BaseExecutionContext: processor.NewExecutionContext(srcs, sinks_arr,
 			h.funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 	auctionsByIDManager.LaunchProc(ctx, procArgs, &wg)
@@ -91,15 +90,8 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(proc_interface.ExecutionContext)
+			args := argsTmp.(processor.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
-		}).
-		InitFunc(func(progArgsTmp interface{}) {
-			filterAuctions.StartWarmup()
-			auctionsByIDMap.StartWarmup()
-			filterBids.StartWarmup()
-			bidsByAuctionIDMap.StartWarmup()
-			// debug.Fprintf(os.Stderr, "done warmup start\n")
 		}).
 		PauseFunc(func() *common.FnOutput {
 			// debug.Fprintf(os.Stderr, "begin flush\n")
@@ -121,23 +113,14 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 			debug.Fprintf(os.Stderr, "done resume\n")
 		}).HandleErrFunc(handleErrFunc).Build()
 
-	update_stats := func(ret *common.FnOutput) {
-		ret.Latencies["filterAuctions"] = filterAuctions.GetLatency()
-		ret.Latencies["auctionsByIDMap"] = auctionsByIDMap.GetLatency()
-		ret.Latencies["filterBids"] = filterBids.GetLatency()
-		ret.Latencies["bidsByAuctionIDMap"] = bidsByAuctionIDMap.GetLatency()
-	}
+	update_stats := func(ret *common.FnOutput) {}
 	transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName, sp.InputTopicNames[0], sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).Build()
 	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
 }
 
-func (h *q46GroupByHandler) getAucsByID(warmup time.Duration) (
-	*processor.MeteredProcessor,
-	*processor.MeteredProcessor,
-	execution.GeneralProcFunc,
-) {
+func (h *q46GroupByHandler) getAucsByID(warmup time.Duration) execution.GeneralProcFunc {
 	filterAuctions := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterAuctions",
 		processor.PredicateFunc(
 			func(m *commtypes.Message) (bool, error) {
@@ -151,11 +134,11 @@ func (h *q46GroupByHandler) getAucsByID(warmup time.Duration) (
 			return commtypes.Message{Key: event.NewAuction.ID, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 		})), time.Duration(warmup)*time.Second)
 
-	return filterAuctions, auctionsByIDMap, func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup,
+	return func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup,
 		msgChan chan commtypes.Message, errChan chan error,
 	) {
 		args := argsTmp.(*TwoMsgChanProcArgs)
-		g := processor.NewGroupBy(args.Producers()[0])
+		g := processor.NewGroupByOutputProcessor(args.Producers()[0], args)
 		defer wg.Done()
 	L:
 		for {
@@ -179,7 +162,7 @@ func (h *q46GroupByHandler) getAucsByID(warmup time.Duration) (
 						errChan <- fmt.Errorf("auctionsBySellerIDMap err: %v", err)
 						return
 					}
-					err = g.GroupByAndProduce(ctx, changeKeyedMsg[0], args.TrackParFunc())
+					_, err = g.ProcessAndReturn(ctx, changeKeyedMsg[0])
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "[ERROR] groupby failed: %v", err)
 						errChan <- err
@@ -191,11 +174,7 @@ func (h *q46GroupByHandler) getAucsByID(warmup time.Duration) (
 	}
 }
 
-func (h *q46GroupByHandler) getBidsByAuctionID(warmup time.Duration) (
-	*processor.MeteredProcessor,
-	*processor.MeteredProcessor,
-	execution.GeneralProcFunc,
-) {
+func (h *q46GroupByHandler) getBidsByAuctionID(warmup time.Duration) execution.GeneralProcFunc {
 	filterBids := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterBids",
 		processor.PredicateFunc(
 			func(m *commtypes.Message) (bool, error) {
@@ -208,11 +187,11 @@ func (h *q46GroupByHandler) getBidsByAuctionID(warmup time.Duration) (
 			event := msg.Value.(*ntypes.Event)
 			return commtypes.Message{Key: event.Bid.Auction, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 		})), time.Duration(warmup)*time.Second)
-	return filterBids, bidsByAuctionIDMap, func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup,
+	return func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup,
 		msgChan chan commtypes.Message, errChan chan error,
 	) {
 		args := argsTmp.(*TwoMsgChanProcArgs)
-		g := processor.NewGroupBy(args.Producers()[1])
+		g := processor.NewGroupByOutputProcessor(args.Producers()[1], args)
 		defer wg.Done()
 	L:
 		for {
@@ -236,7 +215,7 @@ func (h *q46GroupByHandler) getBidsByAuctionID(warmup time.Duration) (
 						errChan <- fmt.Errorf("auctionsBySellerIDMap err: %v", err)
 						return
 					}
-					err = g.GroupByAndProduce(ctx, changeKeyedMsg[0], args.TrackParFunc())
+					_, err = g.ProcessAndReturn(ctx, changeKeyedMsg[0])
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "[ERROR] groupBy failed: %v", err)
 						errChan <- err

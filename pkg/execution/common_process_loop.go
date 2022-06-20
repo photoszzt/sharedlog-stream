@@ -7,6 +7,7 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/proc_interface"
+	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/txn_data"
@@ -14,7 +15,7 @@ import (
 	"golang.org/x/xerrors"
 )
 
-func CommonProcess(ctx context.Context, t *stream_task.StreamTask, args proc_interface.ExecutionContext,
+func CommonProcess(ctx context.Context, t *stream_task.StreamTask, args processor.ExecutionContext,
 	procMsg proc_interface.ProcessMsgFunc,
 ) *common.FnOutput {
 	if t.HandleErrFunc != nil {
@@ -87,7 +88,7 @@ func ProcessMsgAndSeq(ctx context.Context, msg commtypes.MsgAndSeq, args interfa
 }
 
 func HandleScaleEpochAndBytes(ctx context.Context, msg commtypes.MsgAndSeq,
-	args proc_interface.ExecutionContext,
+	args processor.ExecutionContext,
 ) *common.FnOutput {
 	v := msg.Msg.Value.(producer_consumer.ScaleEpochAndBytes)
 	err := args.FlushAndPushToAllSinks(ctx, commtypes.Message{Key: txn_data.SCALE_FENCE_KEY,

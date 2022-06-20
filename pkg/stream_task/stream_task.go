@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
-	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
@@ -31,15 +30,6 @@ type StreamTask struct {
 	resumeFunc    func(task *StreamTask)
 	initFunc      func(progArgs interface{})
 	HandleErrFunc func() error
-}
-
-func updateSrcSinkCount(ret *common.FnOutput, srcsSinks proc_interface.ProducersConsumers) {
-	for _, src := range srcsSinks.Consumers() {
-		ret.Counts[src.Name()] = src.GetCount()
-	}
-	for _, sink := range srcsSinks.Producers() {
-		ret.Counts[sink.Name()] = sink.GetCount()
-	}
 }
 
 func (t *StreamTask) ExecuteApp(ctx context.Context,
@@ -65,7 +55,12 @@ func (t *StreamTask) ExecuteApp(ctx context.Context,
 		ret = t.process(ctx, streamTaskArgs)
 	}
 	if ret != nil && ret.Success {
-		updateSrcSinkCount(ret, streamTaskArgs.ectx)
+		for _, src := range streamTaskArgs.ectx.Consumers() {
+			ret.Counts[src.Name()] = src.GetCount()
+		}
+		for _, sink := range streamTaskArgs.ectx.Producers() {
+			ret.Counts[sink.Name()] = sink.GetCount()
+		}
 		update_stats(ret)
 	}
 	return ret

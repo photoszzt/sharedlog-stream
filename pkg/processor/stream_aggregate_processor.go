@@ -9,9 +9,7 @@ import (
 )
 
 type StreamAggregateProcessor struct {
-	pipe        Pipe
 	store       store.KeyValueStore
-	pctx        store.StoreContext
 	initializer Initializer
 	aggregator  Aggregator
 	name        string
@@ -28,24 +26,8 @@ func NewStreamAggregateProcessor(name string, store store.KeyValueStore, initial
 	}
 }
 
-func (p *StreamAggregateProcessor) WithPipe(pipe Pipe) {
-	p.pipe = pipe
-}
-
-func (p *StreamAggregateProcessor) WithProcessorContext(pctx store.StoreContext) {
-	p.pctx = pctx
-}
-
 func (p *StreamAggregateProcessor) Name() string {
 	return p.name
-}
-
-func (p *StreamAggregateProcessor) Process(ctx context.Context, msg commtypes.Message) error {
-	newMsg, err := p.ProcessAndReturn(ctx, msg)
-	if err != nil {
-		return err
-	}
-	return p.pipe.Forward(ctx, newMsg[0])
 }
 
 func (p *StreamAggregateProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {

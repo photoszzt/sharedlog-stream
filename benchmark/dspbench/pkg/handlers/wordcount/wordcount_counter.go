@@ -11,7 +11,6 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -98,7 +97,7 @@ func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes
 
 type wordcountCounterAggProcessArg struct {
 	counter *processor.MeteredProcessor
-	proc_interface.BaseExecutionContext
+	processor.BaseExecutionContext
 }
 
 func (h *wordcountCounterAgg) process(ctx context.Context,
@@ -211,18 +210,14 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 	srcs := []producer_consumer.MeteredConsumerIntr{src}
 	procArgs := &wordcountCounterAggProcessArg{
 		counter: count,
-		BaseExecutionContext: proc_interface.NewExecutionContext(srcs, []producer_consumer.MeteredProducerIntr{sink},
+		BaseExecutionContext: processor.NewExecutionContext(srcs, []producer_consumer.MeteredProducerIntr{sink},
 			funcName, sp.ScaleEpoch, sp.ParNum),
 	}
 
 	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(h.process).
-		InitFunc(func(progArgs interface{}) {
-			count.StartWarmup()
-		}).Build()
+		AppProcessFunc(h.process).Build()
 
 	update_stats := func(ret *common.FnOutput) {
-		ret.Latencies["count"] = count.GetLatency()
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%s-%d", funcName, sp.InputTopicNames[0], sp.OutputTopicNames[0], sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,

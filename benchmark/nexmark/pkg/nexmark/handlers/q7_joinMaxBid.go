@@ -157,7 +157,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	bJoinMaxBFunc, maxBJoinBFunc, procs, wsc, err := execution.SetupStreamStreamJoin(bMp, maxBMp, compare, joiner, jw, warmup)
+	bJoinMaxBFunc, maxBJoinBFunc, wsc, err := execution.SetupStreamStreamJoin(bMp, maxBMp, compare, joiner, jw, warmup)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -222,10 +222,6 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 			return execution.HandleJoinErrReturn(args)
 		}).
 		InitFunc(func(progArgs interface{}) {
-			for _, proc := range procs {
-				proc.StartWarmup()
-			}
-
 			bidManager.Run()
 			maxBidManager.Run()
 		}).
@@ -249,9 +245,6 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	maxBidManager.LaunchJoinProcLoop(mctx, task, joinProcMaxBid, &wg)
 
 	update_stats := func(ret *common.FnOutput) {
-		for _, proc := range procs {
-			ret.Latencies[proc.Name()] = proc.GetLatency()
-		}
 		ret.Latencies["eventTimeLatency"] = sinks_arr[0].GetEventTimeLatency()
 	}
 	transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)

@@ -10,7 +10,6 @@ import (
 )
 
 type TableTableJoinProcessor struct {
-	pipe              Pipe
 	store             store.KeyValueStore
 	joiner            ValueJoinerWithKey
 	streamTimeTracker commtypes.StreamTimeTracker
@@ -28,26 +27,8 @@ func NewTableTableJoinProcessor(name string, store store.KeyValueStore, joiner V
 	}
 }
 
-func (p *TableTableJoinProcessor) WithPipe(pipe Pipe) {
-	p.pipe = pipe
-}
-
 func (p *TableTableJoinProcessor) Name() string {
 	return p.name
-}
-
-func (p *TableTableJoinProcessor) Process(ctx context.Context, msg commtypes.Message) error {
-	newMsg, err := p.ProcessAndReturn(ctx, msg)
-	if err != nil {
-		return err
-	}
-	if newMsg != nil {
-		err := p.pipe.Forward(ctx, newMsg[0])
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (p *TableTableJoinProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {

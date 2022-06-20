@@ -11,22 +11,12 @@ import (
 )
 
 type StoreToWindowTableProcessor struct {
-	pctx       store.StoreContext
-	pipe       Pipe
 	store      store.WindowStore
 	name       string
 	observedTs int64
 }
 
 var _ = Processor(&StoreToWindowTableProcessor{})
-
-func (p *StoreToWindowTableProcessor) WithProcessorContext(pctx store.StoreContext) {
-	p.pctx = pctx
-}
-
-func (p *StoreToWindowTableProcessor) WithPipe(pipe Pipe) {
-	p.pipe = pipe
-}
 
 func NewStoreToWindowTableProcessor(store store.WindowStore) *StoreToWindowTableProcessor {
 	return &StoreToWindowTableProcessor{
@@ -37,20 +27,6 @@ func NewStoreToWindowTableProcessor(store store.WindowStore) *StoreToWindowTable
 
 func (p *StoreToWindowTableProcessor) Name() string {
 	return p.name
-}
-
-func (p *StoreToWindowTableProcessor) Process(ctx context.Context, msg commtypes.Message) error {
-	newMsg, err := p.ProcessAndReturn(ctx, msg)
-	if err != nil {
-		return err
-	}
-	if newMsg != nil {
-		err := p.pipe.Forward(ctx, newMsg[0])
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (p *StoreToWindowTableProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {

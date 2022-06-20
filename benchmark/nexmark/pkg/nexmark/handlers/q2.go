@@ -51,10 +51,12 @@ func filterFunc(msg *commtypes.Message) (bool, error) {
 	return event.Etype == ntypes.BID && event.Bid.Auction%123 == 0, nil
 }
 
+/*
 type query2ProcessArgs struct {
 	q2Filter *processor.MeteredProcessor
-	proc_interface.BaseExecutionContext
+	processor.BaseExecutionContext
 }
+*/
 
 func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	srcs, sinks, err := getSrcSink(ctx, h.env, sp)
@@ -64,34 +66,32 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 	srcs[0].SetInitialSource(true)
 	sinks[0].MarkFinalOutput()
 	srcsSinks := proc_interface.NewBaseSrcsSinks(srcs, sinks)
-
-	q2Filter := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("q2Filter", processor.PredicateFunc(filterFunc)), time.Duration(sp.WarmupS)*time.Second)
-	procArgs := &query2ProcessArgs{
-		q2Filter: q2Filter,
-		BaseExecutionContext: proc_interface.NewExecutionContextFromComponents(srcsSinks, proc_interface.NewBaseProcArgs(h.funcName,
-			sp.ScaleEpoch, sp.ParNum)),
-	}
+	ectx := processor.NewExecutionContextFromComponents(srcsSinks, proc_interface.NewBaseProcArgs(h.funcName,
+		sp.ScaleEpoch, sp.ParNum))
+	warmup := time.Duration(sp.WarmupS) * time.Second
+	ectx.Via(processor.NewMeteredProcessor(
+		processor.NewStreamFilterProcessor("q2Filter",
+			processor.PredicateFunc(filterFunc)), warmup)).
+		Via(processor.NewMeteredProcessor(
+			processor.NewFixedSubstreamOutputProcessor(sinks[0], sp.ParNum), warmup))
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(proc_interface.ExecutionContext)
-			return execution.CommonProcess(ctx, task, args, h.procMsg)
-		}).
-		InitFunc(func(progArgs interface{}) {
-			q2Filter.StartWarmup()
+			args := argsTmp.(processor.ExecutionContext)
+			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
 		}).Build()
 
 	update_stats := func(ret *common.FnOutput) {
-		ret.Latencies["q2Filter"] = q2Filter.GetLatency()
 		ret.Latencies["eventTimeLatency"] = sinks[0].GetEventTimeLatency()
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
+		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).
 		FixedOutParNum(sp.ParNum).
 		Build()
 	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
 }
 
+/*
 func (h *query2Handler) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
 	args := argsTmp.(*query2ProcessArgs)
 	outMsg, err := args.q2Filter.ProcessAndReturn(ctx, msg)
@@ -106,3 +106,4 @@ func (h *query2Handler) procMsg(ctx context.Context, msg commtypes.Message, args
 	}
 	return nil
 }
+*/

@@ -13,21 +13,11 @@ import (
 )
 
 type StoreToKVTableProcessor struct {
-	pctx  store.StoreContext
-	pipe  Pipe
 	store store.KeyValueStore
 	name  string
 }
 
 var _ = Processor(&StoreToKVTableProcessor{})
-
-func (p *StoreToKVTableProcessor) WithProcessorContext(pctx store.StoreContext) {
-	p.pctx = pctx
-}
-
-func (p *StoreToKVTableProcessor) WithPipe(pipe Pipe) {
-	p.pipe = pipe
-}
 
 func NewStoreToKVTableProcessor(store store.KeyValueStore) *StoreToKVTableProcessor {
 	return &StoreToKVTableProcessor{
@@ -38,20 +28,6 @@ func NewStoreToKVTableProcessor(store store.KeyValueStore) *StoreToKVTableProces
 
 func (p *StoreToKVTableProcessor) Name() string {
 	return p.name
-}
-
-func (p *StoreToKVTableProcessor) Process(ctx context.Context, msg commtypes.Message) error {
-	newMsg, err := p.ProcessAndReturn(ctx, msg)
-	if err != nil {
-		return err
-	}
-	if newMsg != nil {
-		err := p.pipe.Forward(ctx, newMsg[0])
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (p *StoreToKVTableProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {

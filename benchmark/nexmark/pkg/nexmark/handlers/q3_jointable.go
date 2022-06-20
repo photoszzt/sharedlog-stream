@@ -295,11 +295,6 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(h.process).
 		InitFunc(func(procArgsTmp interface{}) {
-			kvtabs.toTab1.StartWarmup()
-			kvtabs.toTab2.StartWarmup()
-			auctionJoinsPersons.StartWarmup()
-			personJoinsAuctions.StartWarmup()
-
 			aucManager.Run()
 			perManager.Run()
 		}).
@@ -352,10 +347,6 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		}
 	}
 	update_stats := func(ret *common.FnOutput) {
-		ret.Latencies["toAuctionsTable"] = kvtabs.toTab1.GetLatency()
-		ret.Latencies["toPersonsTable"] = kvtabs.toTab2.GetLatency()
-		ret.Latencies["personJoinsAuctions"] = personJoinsAuctions.GetLatency()
-		ret.Latencies["auctionJoinsPersons"] = auctionJoinsPersons.GetLatency()
 		ret.Latencies["eventTimeLatency"] = sinks_arr[0].GetEventTimeLatency()
 	}
 	transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)

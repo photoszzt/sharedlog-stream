@@ -142,7 +142,6 @@ func SetupStreamStreamJoin(
 	warmup time.Duration,
 ) (proc_interface.ProcessAndReturnFunc,
 	proc_interface.ProcessAndReturnFunc,
-	[]*processor.MeteredProcessor,
 	[]*store_restore.WindowStoreChangelog,
 	error,
 ) {
@@ -150,13 +149,13 @@ func SetupStreamStreamJoin(
 		mpLeft, jw, compare, warmup,
 	)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, err
 	}
 	toRightTab, rightTab, err := store_with_changelog.ToInMemWindowTableWithChangelog(
 		mpRight, jw, compare, warmup,
 	)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, err
 	}
 	leftJoinRight, rightJoinLeft := ConfigureStreamStreamJoinProcessor(leftTab, rightTab, joiner, jw, warmup)
 	leftJoinRightFunc := func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
@@ -177,13 +176,7 @@ func SetupStreamStreamJoin(
 		store_restore.NewWindowStoreChangelog(leftTab, mpLeft.ChangelogManager(), mpLeft.ParNum()),
 		store_restore.NewWindowStoreChangelog(rightTab, mpRight.ChangelogManager(), mpRight.ParNum()),
 	}
-	return leftJoinRightFunc, rightJoinLeftFunc,
-		[]*processor.MeteredProcessor{
-			toLeftTab,
-			toRightTab,
-			leftJoinRight,
-			rightJoinLeft,
-		}, wsc, nil
+	return leftJoinRightFunc, rightJoinLeftFunc, wsc, nil
 }
 
 func ConfigureStreamStreamJoinProcessor(leftTab store.WindowStore,

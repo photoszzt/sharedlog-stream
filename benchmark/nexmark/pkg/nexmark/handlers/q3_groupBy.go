@@ -59,7 +59,7 @@ func (h *q3GroupByHandler) Call(ctx context.Context, input []byte) ([]byte, erro
 type TwoMsgChanProcArgs struct {
 	msgChan1 chan commtypes.Message
 	msgChan2 chan commtypes.Message
-	proc_interface.BaseExecutionContext
+	processor.BaseExecutionContext
 }
 
 func getSrcSinks(ctx context.Context, env types.Environment, sp *common.QueryInput,
@@ -116,8 +116,8 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	sinks_arr[1].SetName("perSink")
 	warmup := time.Duration(sp.WarmupS) * time.Second
 
-	filterPerson, personsByIDMap, personsByIDFunc := h.getPersonsByID(warmup)
-	filterAuctions, auctionsBySellerIDMap, auctionsBySellerIDFunc := h.getAucBySellerID(warmup)
+	personsByIDFunc := h.getPersonsByID(warmup)
+	auctionsBySellerIDFunc := h.getAucBySellerID(warmup)
 
 	var wg sync.WaitGroup
 	personsByIDManager := execution.NewGeneralProcManager(personsByIDFunc)
@@ -126,7 +126,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	procArgs := &TwoMsgChanProcArgs{
 		msgChan1: auctionsBySellerIDManager.MsgChan(),
 		msgChan2: personsByIDManager.MsgChan(),
-		BaseExecutionContext: proc_interface.NewExecutionContextFromComponents(srcsSinks,
+		BaseExecutionContext: processor.NewExecutionContextFromComponents(srcsSinks,
 			proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum)),
 	}
 
@@ -146,15 +146,8 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(proc_interface.ExecutionContext)
+			args := argsTmp.(processor.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
-		}).
-		InitFunc(func(progArgsTmp interface{}) {
-			filterPerson.StartWarmup()
-			personsByIDMap.StartWarmup()
-			filterAuctions.StartWarmup()
-			auctionsBySellerIDMap.StartWarmup()
-			// debug.Fprintf(os.Stderr, "done warmup start\n")
 		}).
 		HandleErrFunc(handleErrFunc).
 		PauseFunc(func() *common.FnOutput {
@@ -177,12 +170,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 			debug.Fprintf(os.Stderr, "done resume\n")
 		}).Build()
 
-	update_stats := func(ret *common.FnOutput) {
-		ret.Latencies["filterPerson"] = filterPerson.GetLatency()
-		ret.Latencies["personsByIDMap"] = personsByIDMap.GetLatency()
-		ret.Latencies["filterAuctions"] = filterAuctions.GetLatency()
-		ret.Latencies["auctionsBySellerIDMap"] = auctionsBySellerIDMap.GetLatency()
-	}
+	update_stats := func(ret *common.FnOutput) {}
 	transactionalID := fmt.Sprintf("%s-%s-%d",
 		h.funcName, sp.InputTopicNames[0], sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
@@ -190,11 +178,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
 }
 
-func (h *q3GroupByHandler) getPersonsByID(warmup time.Duration) (
-	*processor.MeteredProcessor,
-	*processor.MeteredProcessor,
-	execution.GeneralProcFunc,
-) {
+func (h *q3GroupByHandler) getPersonsByID(warmup time.Duration) execution.GeneralProcFunc {
 	filterPerson := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterPerson", processor.PredicateFunc(
 		func(msg *commtypes.Message) (bool, error) {
 			event := msg.Value.(*ntypes.Event)
@@ -212,10 +196,10 @@ func (h *q3GroupByHandler) getPersonsByID(warmup time.Duration) (
 			}, nil
 		})), warmup)
 
-	return filterPerson, personsByIDMap, func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error) {
+	return func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error) {
 		args := argsTmp.(*TwoMsgChanProcArgs)
 		defer wg.Done()
-		g := processor.NewGroupBy(args.Producers()[1])
+		g := processor.NewGroupByOutputProcessor(args.Producers()[1], args)
 	L:
 		for {
 			select {
@@ -238,7 +222,7 @@ func (h *q3GroupByHandler) getPersonsByID(warmup time.Duration) (
 						errChan <- fmt.Errorf("personsByIDMap err: %v", err)
 						return
 					}
-					err = g.GroupByAndProduce(ctx, changeKeyedMsg[0], args.TrackParFunc())
+					_, err = g.ProcessAndReturn(ctx, changeKeyedMsg[0])
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "[ERROR] fail groupby: %v\n", err)
 						errChan <- err
@@ -250,11 +234,7 @@ func (h *q3GroupByHandler) getPersonsByID(warmup time.Duration) (
 	}
 }
 
-func (h *q3GroupByHandler) getAucBySellerID(warmup time.Duration) (
-	*processor.MeteredProcessor,
-	*processor.MeteredProcessor,
-	execution.GeneralProcFunc,
-) {
+func (h *q3GroupByHandler) getAucBySellerID(warmup time.Duration) execution.GeneralProcFunc {
 	filterAuctions := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterAuctions", processor.PredicateFunc(
 		func(m *commtypes.Message) (bool, error) {
 			event := m.Value.(*ntypes.Event)
@@ -267,43 +247,42 @@ func (h *q3GroupByHandler) getAucBySellerID(warmup time.Duration) (
 			return commtypes.Message{Key: event.NewAuction.Seller, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 		})), warmup)
 
-	return filterAuctions, auctionsBySellerIDMap,
-		func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup,
-			msgChan chan commtypes.Message, errChan chan error,
-		) {
-			args := argsTmp.(*TwoMsgChanProcArgs)
-			g := processor.NewGroupBy(args.Producers()[0])
-			defer wg.Done()
-			for {
-				select {
-				case <-ctx.Done():
+	return func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup,
+		msgChan chan commtypes.Message, errChan chan error,
+	) {
+		args := argsTmp.(*TwoMsgChanProcArgs)
+		g := processor.NewGroupByOutputProcessor(args.Producers()[0], args)
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg, ok := <-msgChan:
+				if !ok {
 					return
-				case msg, ok := <-msgChan:
-					if !ok {
-						return
-					}
-					filteredMsgs, err := filterAuctions.ProcessAndReturn(ctx, msg)
+				}
+				filteredMsgs, err := filterAuctions.ProcessAndReturn(ctx, msg)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "filterAuctions err: %v\n", err)
+					errChan <- fmt.Errorf("filterAuctions err: %v", err)
+					return
+				}
+				for _, filteredMsg := range filteredMsgs {
+					changeKeyedMsg, err := auctionsBySellerIDMap.ProcessAndReturn(ctx, filteredMsg)
 					if err != nil {
-						fmt.Fprintf(os.Stderr, "filterAuctions err: %v\n", err)
-						errChan <- fmt.Errorf("filterAuctions err: %v", err)
+						fmt.Fprintf(os.Stderr, "[ERROR] auctionsBySellerIDMap err: %v\n", err)
+						errChan <- fmt.Errorf("auctionsBySellerIDMap err: %v", err)
 						return
 					}
-					for _, filteredMsg := range filteredMsgs {
-						changeKeyedMsg, err := auctionsBySellerIDMap.ProcessAndReturn(ctx, filteredMsg)
-						if err != nil {
-							fmt.Fprintf(os.Stderr, "[ERROR] auctionsBySellerIDMap err: %v\n", err)
-							errChan <- fmt.Errorf("auctionsBySellerIDMap err: %v", err)
-							return
-						}
 
-						err = g.GroupByAndProduce(ctx, changeKeyedMsg[0], args.TrackParFunc())
-						if err != nil {
-							fmt.Fprintf(os.Stderr, "[ERROR] fail groupby: %v\n", err)
-							errChan <- err
-							return
-						}
+					_, err = g.ProcessAndReturn(ctx, changeKeyedMsg[0])
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "[ERROR] fail groupby: %v\n", err)
+						errChan <- err
+						return
 					}
 				}
 			}
 		}
+	}
 }

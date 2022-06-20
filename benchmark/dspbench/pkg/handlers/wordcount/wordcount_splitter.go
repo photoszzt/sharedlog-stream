@@ -12,7 +12,6 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
-	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -89,7 +88,7 @@ func getSrcSink(ctx context.Context,
 type wordcountSplitterProcessArg struct {
 	splitter       processor.FlatMapperFunc
 	splitLatencies []int
-	proc_interface.BaseExecutionContext
+	processor.BaseExecutionContext
 	numOutPartition uint8
 }
 
@@ -156,14 +155,14 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 	procArgs := &wordcountSplitterProcessArg{
 		splitter:       splitter,
 		splitLatencies: make([]int, 0),
-		BaseExecutionContext: proc_interface.NewExecutionContext(srcs, sinks,
+		BaseExecutionContext: processor.NewExecutionContext(srcs, sinks,
 			funcName, sp.ScaleEpoch, sp.ParNum),
 		numOutPartition: sp.NumOutPartitions[0],
 	}
 
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(proc_interface.ExecutionContext)
+			args := argsTmp.(processor.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).
 		InitFunc(func(progArgs interface{}) {
