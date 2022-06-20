@@ -13,6 +13,7 @@ type StreamReduceProcessor struct {
 	store   store.KeyValueStore
 	pctx    store.StoreContext
 	reducer Reducer
+	name    string
 }
 
 var _ = Processor(&StreamReduceProcessor{})
@@ -29,6 +30,10 @@ func (p *StreamReduceProcessor) WithPipe(pipe Pipe) {
 
 func (p *StreamReduceProcessor) WithProcessorContext(pctx store.StoreContext) {
 	p.pctx = pctx
+}
+
+func (p *StreamReduceProcessor) Name() string {
+	return p.name
 }
 
 func (p *StreamReduceProcessor) Process(ctx context.Context, msg commtypes.Message) error {

@@ -30,6 +30,10 @@ func NewMeteredProcessor(proc Processor, warmup time.Duration) *MeteredProcessor
 	}
 }
 
+func (p *MeteredProcessor) Name() string {
+	return p.proc.Name()
+}
+
 func (p *MeteredProcessor) StartWarmup() {
 	if p.measure {
 		p.initial = time.Now()

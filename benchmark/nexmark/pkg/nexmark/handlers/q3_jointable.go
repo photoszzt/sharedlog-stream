@@ -14,8 +14,8 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/producer_consumer"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/store_with_changelog"
@@ -239,11 +239,11 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		})
 
 	auctionJoinsPersons := processor.NewMeteredProcessor(
-		processor.NewTableTableJoinProcessor(kvtabs.tab2.Name(), kvtabs.tab2, joiner),
+		processor.NewTableTableJoinProcessor("auctionJoinsPersons", kvtabs.tab2, joiner),
 		time.Duration(sp.WarmupS)*time.Second)
 
 	personJoinsAuctions := processor.NewMeteredProcessor(
-		processor.NewTableTableJoinProcessor(kvtabs.tab1.Name(), kvtabs.tab1,
+		processor.NewTableTableJoinProcessor("personJoinsAuctions", kvtabs.tab1,
 			processor.ReverseValueJoinerWithKey(joiner)),
 		time.Duration(sp.WarmupS)*time.Second)
 

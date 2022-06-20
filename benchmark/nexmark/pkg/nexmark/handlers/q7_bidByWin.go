@@ -127,20 +127,22 @@ func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *com
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	bid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
-		event := msg.Value.(*ntypes.Event)
-		return event.Etype == ntypes.BID, nil
-	})), warmup)
-	bidByWin := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
-		event := msg.Value.(*ntypes.Event)
-		ts := event.Bid.DateTime
-		windowStart := utils.MaxInt64(0, ts-tw.SizeMs+tw.AdvanceMs) / tw.AdvanceMs * tw.AdvanceMs
-		wEnd := windowStart + tw.SizeMs
-		debug.Assert(windowStart >= 0, "window start should be >= 0")
-		debug.Assert(wEnd > 0, "window end should be > 0")
-		win := ntypes.StartEndTime{StartTimeMs: windowStart, EndTimeMs: wEnd}
-		return commtypes.Message{Key: win, Value: msg.Value, Timestamp: msg.Timestamp}, nil
-	})), warmup)
+	bid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterBids",
+		processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
+			event := msg.Value.(*ntypes.Event)
+			return event.Etype == ntypes.BID, nil
+		})), warmup)
+	bidByWin := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
+		"bidByWin", processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
+			event := msg.Value.(*ntypes.Event)
+			ts := event.Bid.DateTime
+			windowStart := utils.MaxInt64(0, ts-tw.SizeMs+tw.AdvanceMs) / tw.AdvanceMs * tw.AdvanceMs
+			wEnd := windowStart + tw.SizeMs
+			debug.Assert(windowStart >= 0, "window start should be >= 0")
+			debug.Assert(wEnd > 0, "window end should be > 0")
+			win := ntypes.StartEndTime{StartTimeMs: windowStart, EndTimeMs: wEnd}
+			return commtypes.Message{Key: win, Value: msg.Value, Timestamp: msg.Timestamp}, nil
+		})), warmup)
 
 	groupBy := processor.NewGroupBy(sinks_arr[0])
 	procArgs := &q7BidByWinProcessArgs{

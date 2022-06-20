@@ -12,20 +12,19 @@ import (
 type TableTableJoinProcessor struct {
 	pipe              Pipe
 	store             store.KeyValueStore
-	pctx              store.StoreContext
 	joiner            ValueJoinerWithKey
 	streamTimeTracker commtypes.StreamTimeTracker
-	storeName         string
+	name              string
 }
 
 var _ = Processor(&StreamTableJoinProcessor{})
 
-func NewTableTableJoinProcessor(storeName string, store store.KeyValueStore, joiner ValueJoinerWithKey) *TableTableJoinProcessor {
+func NewTableTableJoinProcessor(name string, store store.KeyValueStore, joiner ValueJoinerWithKey) *TableTableJoinProcessor {
 	return &TableTableJoinProcessor{
-		storeName:         storeName,
 		joiner:            joiner,
 		store:             store,
 		streamTimeTracker: commtypes.NewStreamTimeTracker(),
+		name:              name,
 	}
 }
 
@@ -33,9 +32,8 @@ func (p *TableTableJoinProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *TableTableJoinProcessor) WithProcessorContext(pctx store.StoreContext) {
-	p.pctx = pctx
-	p.store = p.pctx.GetKeyValueStore(p.storeName)
+func (p *TableTableJoinProcessor) Name() string {
+	return p.name
 }
 
 func (p *TableTableJoinProcessor) Process(ctx context.Context, msg commtypes.Message) error {

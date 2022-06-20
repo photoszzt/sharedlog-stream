@@ -7,33 +7,30 @@ import (
 )
 
 type TableFilterProcessor struct {
-	pipe          Pipe
-	pctx          store.StoreContext
-	pred          Predicate
-	store         store.KeyValueStore
-	queryableName string
-	filterNot     bool
+	pipe      Pipe
+	pred      Predicate
+	store     store.KeyValueStore
+	filterNot bool
+	name      string
 }
 
 var _ = Processor(&TableFilterProcessor{})
 
-func NewTableFilterProcessor(pred Predicate, filterNot bool, queryableName string) *TableFilterProcessor {
+func NewTableFilterProcessor(name string, store store.KeyValueStore, pred Predicate, filterNot bool) *TableFilterProcessor {
 	return &TableFilterProcessor{
-		pred:          pred,
-		filterNot:     filterNot,
-		queryableName: queryableName,
-	}
-}
-
-func (p *TableFilterProcessor) WithProcessorContext(pctx store.StoreContext) {
-	p.pctx = pctx
-	if p.queryableName != "" {
-		p.store = p.pctx.GetKeyValueStore(p.queryableName)
+		pred:      pred,
+		filterNot: filterNot,
+		store:     store,
+		name:      name,
 	}
 }
 
 func (p *TableFilterProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
+}
+
+func (p *TableFilterProcessor) Name() string {
+	return p.name
 }
 
 func (p *TableFilterProcessor) Process(ctx context.Context, msg commtypes.Message) error {
@@ -42,11 +39,9 @@ func (p *TableFilterProcessor) Process(ctx context.Context, msg commtypes.Messag
 		return err
 	}
 	if ok != p.filterNot {
-		if p.queryableName != "" {
-			err = p.store.Put(ctx, msg.Key, &commtypes.ValueTimestamp{Value: msg.Value, Timestamp: msg.Timestamp})
-			if err != nil {
-				return err
-			}
+		err = p.store.Put(ctx, msg.Key, &commtypes.ValueTimestamp{Value: msg.Value, Timestamp: msg.Timestamp})
+		if err != nil {
+			return err
 		}
 		return p.pipe.Forward(ctx, msg)
 	}

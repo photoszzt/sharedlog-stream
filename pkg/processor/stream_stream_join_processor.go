@@ -51,6 +51,7 @@ type StreamStreamJoinProcessor struct {
 	otherWindowStore  store.WindowStore
 	joiner            ValueJoinerWithKeyTs
 	sharedTimeTracker *TimeTracker
+	name              string
 	joinAfterMs       int64
 	joinGraceMs       int64
 	joinBeforeMs      int64
@@ -61,6 +62,7 @@ type StreamStreamJoinProcessor struct {
 var _ = Processor(&StreamStreamJoinProcessor{})
 
 func NewStreamStreamJoinProcessor(
+	name string,
 	otherWindowStore store.WindowStore,
 	jw *JoinWindows,
 	joiner ValueJoinerWithKeyTs,
@@ -75,6 +77,7 @@ func NewStreamStreamJoinProcessor(
 		joiner:            joiner,
 		joinGraceMs:       jw.GracePeriodMs(),
 		sharedTimeTracker: stk,
+		name:              name,
 	}
 	if isLeftSide {
 		ssjp.joinBeforeMs = jw.beforeMs
@@ -92,6 +95,10 @@ func (p *StreamStreamJoinProcessor) WithPipe(pipe Pipe) {
 
 func (p *StreamStreamJoinProcessor) WithProcessorContext(pctx store.StoreContext) {
 	p.pctx = pctx
+}
+
+func (p *StreamStreamJoinProcessor) Name() string {
+	return p.name
 }
 
 func (p *StreamStreamJoinProcessor) Process(ctx context.Context, msg commtypes.Message) error {

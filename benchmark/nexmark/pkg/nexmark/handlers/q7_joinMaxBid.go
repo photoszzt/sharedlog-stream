@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -115,7 +114,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	compare := concurrent_skiplist.CompareFunc(q8CompareFunc)
 	joiner := processor.ValueJoinerWithKeyTsFunc(func(readOnlyKey, value1, value2 interface{},
 		leftTs, otherTs int64) interface{} {
-		fmt.Fprintf(os.Stderr, "val1: %v, val2: %v\n", value1, value2)
+		// fmt.Fprintf(os.Stderr, "val1: %v, val2: %v\n", value1, value2)
 		lv := value1.(*ntypes.Event)
 		rv := value2.(*ntypes.StartEndTime)
 		st := leftTs
@@ -163,10 +162,11 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 
-	filter := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(func(m *commtypes.Message) (bool, error) {
-		val := m.Value.(*ntypes.BidAndMax)
-		return val.Timestamp >= val.WStartMs && val.Timestamp <= val.WEndMs, nil
-	})), warmup)
+	filter := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(
+		"filter", processor.PredicateFunc(func(m *commtypes.Message) (bool, error) {
+			val := m.Value.(*ntypes.BidAndMax)
+			return val.Timestamp >= val.WStartMs && val.Timestamp <= val.WEndMs, nil
+		})), warmup)
 
 	var bJoinM execution.JoinWorkerFunc = func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		joined, err := bJoinMaxBFunc(ctx, m)
@@ -249,8 +249,8 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	maxBidManager.LaunchJoinProcLoop(mctx, task, joinProcMaxBid, &wg)
 
 	update_stats := func(ret *common.FnOutput) {
-		for proc_name, proc := range procs {
-			ret.Latencies[proc_name] = proc.GetLatency()
+		for _, proc := range procs {
+			ret.Latencies[proc.Name()] = proc.GetLatency()
 		}
 		ret.Latencies["eventTimeLatency"] = sinks_arr[0].GetEventTimeLatency()
 	}

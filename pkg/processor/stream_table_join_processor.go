@@ -9,22 +9,21 @@ import (
 )
 
 type StreamTableJoinProcessor struct {
-	pipe      Pipe
-	store     store.KeyValueStore
-	pctx      store.StoreContext
-	joiner    ValueJoinerWithKey
-	storeName string
-	leftJoin  bool
+	pipe     Pipe
+	store    store.KeyValueStore
+	pctx     store.StoreContext
+	joiner   ValueJoinerWithKey
+	name     string
+	leftJoin bool
 }
 
 var _ = Processor(&StreamTableJoinProcessor{})
 
-func NewStreamTableJoinProcessor(storeName string, store store.KeyValueStore, joiner ValueJoinerWithKey) *StreamTableJoinProcessor {
+func NewStreamTableJoinProcessor(store store.KeyValueStore, joiner ValueJoinerWithKey) *StreamTableJoinProcessor {
 	return &StreamTableJoinProcessor{
-		storeName: storeName,
-		joiner:    joiner,
-		store:     store,
-		leftJoin:  false,
+		joiner:   joiner,
+		store:    store,
+		leftJoin: false,
 	}
 }
 
@@ -32,9 +31,8 @@ func (p *StreamTableJoinProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *StreamTableJoinProcessor) WithProcessorContext(pctx store.StoreContext) {
-	p.pctx = pctx
-	p.store = p.pctx.GetKeyValueStore(p.storeName)
+func (p *StreamTableJoinProcessor) Name() string {
+	return p.name
 }
 
 func (p *StreamTableJoinProcessor) Process(ctx context.Context, msg commtypes.Message) error {

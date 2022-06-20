@@ -154,7 +154,8 @@ func (h *windowedAvg) getAggProcessor(ctx context.Context, sp *common.QueryInput
 	if err != nil {
 		return nil, err
 	}
-	aggProc := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(store,
+	aggProc := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(
+		"aggProc", store,
 		processor.InitializerFunc(func() interface{} {
 			return &ntypes.SumAndCount{
 				Sum:   0,

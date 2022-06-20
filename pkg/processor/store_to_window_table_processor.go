@@ -14,6 +14,7 @@ type StoreToWindowTableProcessor struct {
 	pctx       store.StoreContext
 	pipe       Pipe
 	store      store.WindowStore
+	name       string
 	observedTs int64
 }
 
@@ -30,7 +31,12 @@ func (p *StoreToWindowTableProcessor) WithPipe(pipe Pipe) {
 func NewStoreToWindowTableProcessor(store store.WindowStore) *StoreToWindowTableProcessor {
 	return &StoreToWindowTableProcessor{
 		store: store,
+		name:  "StoreTo" + store.Name(),
 	}
+}
+
+func (p *StoreToWindowTableProcessor) Name() string {
+	return p.name
 }
 
 func (p *StoreToWindowTableProcessor) Process(ctx context.Context, msg commtypes.Message) error {

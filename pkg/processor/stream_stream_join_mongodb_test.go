@@ -39,8 +39,8 @@ func getStreamJoinMongoDB(ctx context.Context, joinWindows *JoinWindows, dbName1
 			return fmt.Sprintf("%s+%s", leftValue.(string), rightValue.(string))
 		})
 	sharedTimeTracker := NewTimeTracker()
-	oneJoinTwoProc := NewStreamStreamJoinProcessor(winTab2, joinWindows, joiner, false, true, sharedTimeTracker)
-	twoJoinOneProc := NewStreamStreamJoinProcessor(winTab1, joinWindows, ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker)
+	oneJoinTwoProc := NewStreamStreamJoinProcessor("oneJoinTwo", winTab2, joinWindows, joiner, false, true, sharedTimeTracker)
+	twoJoinOneProc := NewStreamStreamJoinProcessor("twoJoinOne", winTab1, joinWindows, ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker)
 	oneJoinTwo := func(ctx context.Context, m commtypes.Message) []commtypes.Message {
 		_, err := toWinTab1.ProcessAndReturn(ctx, m)
 		if err != nil {

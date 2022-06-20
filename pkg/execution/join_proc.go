@@ -142,7 +142,7 @@ func SetupStreamStreamJoin(
 	warmup time.Duration,
 ) (proc_interface.ProcessAndReturnFunc,
 	proc_interface.ProcessAndReturnFunc,
-	map[string]*processor.MeteredProcessor,
+	[]*processor.MeteredProcessor,
 	[]*store_restore.WindowStoreChangelog,
 	error,
 ) {
@@ -178,11 +178,11 @@ func SetupStreamStreamJoin(
 		store_restore.NewWindowStoreChangelog(rightTab, mpRight.ChangelogManager(), mpRight.ParNum()),
 	}
 	return leftJoinRightFunc, rightJoinLeftFunc,
-		map[string]*processor.MeteredProcessor{
-			"toLeft":  toLeftTab,
-			"toRight": toRightTab,
-			"lJoinR":  leftJoinRight,
-			"rJoinL":  rightJoinLeft,
+		[]*processor.MeteredProcessor{
+			toLeftTab,
+			toRightTab,
+			leftJoinRight,
+			rightJoinLeft,
 		}, wsc, nil
 }
 
@@ -194,11 +194,11 @@ func ConfigureStreamStreamJoinProcessor(leftTab store.WindowStore,
 ) (*processor.MeteredProcessor, *processor.MeteredProcessor) {
 	sharedTimeTracker := processor.NewTimeTracker()
 	leftJoinRight := processor.NewMeteredProcessor(
-		processor.NewStreamStreamJoinProcessor(rightTab, jw, joiner, false, true, sharedTimeTracker),
+		processor.NewStreamStreamJoinProcessor("leftJoinRight", rightTab, jw, joiner, false, true, sharedTimeTracker),
 		warmup,
 	)
 	rightJoinLeft := processor.NewMeteredProcessor(
-		processor.NewStreamStreamJoinProcessor(leftTab, jw,
+		processor.NewStreamStreamJoinProcessor("rightJoinLeft", leftTab, jw,
 			processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker),
 		warmup,
 	)

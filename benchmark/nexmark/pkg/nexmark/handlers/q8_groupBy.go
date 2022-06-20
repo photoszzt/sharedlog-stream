@@ -180,12 +180,13 @@ func (h *q8GroupByHandler) getPersonsByID(warmup time.Duration, pollTimeout time
 	*processor.MeteredProcessor,
 	execution.GeneralProcFunc,
 ) {
-	filterPerson := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
-		func(msg *commtypes.Message) (bool, error) {
-			event := msg.Value.(*ntypes.Event)
-			return event.Etype == ntypes.PERSON, nil
-		})), warmup)
-	personsByIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
+	filterPerson := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterPerson",
+		processor.PredicateFunc(
+			func(msg *commtypes.Message) (bool, error) {
+				event := msg.Value.(*ntypes.Event)
+				return event.Etype == ntypes.PERSON, nil
+			})), warmup)
+	personsByIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor("personsByIDMap",
 		processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 			event := msg.Value.(*ntypes.Event)
 			return commtypes.Message{
@@ -238,13 +239,14 @@ func (h *q8GroupByHandler) getPersonsByID(warmup time.Duration, pollTimeout time
 func (h *q8GroupByHandler) getAucBySellerID(warmup time.Duration, pollTimeout time.Duration) (*processor.MeteredProcessor, *processor.MeteredProcessor,
 	execution.GeneralProcFunc,
 ) {
-	filterAuctions := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
-		func(m *commtypes.Message) (bool, error) {
-			event := m.Value.(*ntypes.Event)
-			return event.Etype == ntypes.AUCTION, nil
-		})), warmup)
+	filterAuctions := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(
+		"filterAuctions", processor.PredicateFunc(
+			func(m *commtypes.Message) (bool, error) {
+				event := m.Value.(*ntypes.Event)
+				return event.Etype == ntypes.AUCTION, nil
+			})), warmup)
 
-	auctionsBySellerIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
+	auctionsBySellerIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor("auctionsBySellerIDMap",
 		processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 			event := msg.Value.(*ntypes.Event)
 			return commtypes.Message{Key: event.NewAuction.Seller, Value: msg.Value, Timestamp: msg.Timestamp}, nil

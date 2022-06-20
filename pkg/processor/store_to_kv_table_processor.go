@@ -16,6 +16,7 @@ type StoreToKVTableProcessor struct {
 	pctx  store.StoreContext
 	pipe  Pipe
 	store store.KeyValueStore
+	name  string
 }
 
 var _ = Processor(&StoreToKVTableProcessor{})
@@ -31,7 +32,12 @@ func (p *StoreToKVTableProcessor) WithPipe(pipe Pipe) {
 func NewStoreToKVTableProcessor(store store.KeyValueStore) *StoreToKVTableProcessor {
 	return &StoreToKVTableProcessor{
 		store: store,
+		name:  "StoreTo" + store.Name(),
 	}
+}
+
+func (p *StoreToKVTableProcessor) Name() string {
+	return p.name
 }
 
 func (p *StoreToKVTableProcessor) Process(ctx context.Context, msg commtypes.Message) error {

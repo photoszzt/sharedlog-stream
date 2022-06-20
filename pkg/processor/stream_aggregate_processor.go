@@ -14,15 +14,17 @@ type StreamAggregateProcessor struct {
 	pctx        store.StoreContext
 	initializer Initializer
 	aggregator  Aggregator
+	name        string
 }
 
 var _ = Processor(&StreamAggregateProcessor{})
 
-func NewStreamAggregateProcessor(store store.KeyValueStore, initializer Initializer, aggregator Aggregator) *StreamAggregateProcessor {
+func NewStreamAggregateProcessor(name string, store store.KeyValueStore, initializer Initializer, aggregator Aggregator) *StreamAggregateProcessor {
 	return &StreamAggregateProcessor{
 		initializer: initializer,
 		aggregator:  aggregator,
 		store:       store,
+		name:        name,
 	}
 }
 
@@ -32,6 +34,10 @@ func (p *StreamAggregateProcessor) WithPipe(pipe Pipe) {
 
 func (p *StreamAggregateProcessor) WithProcessorContext(pctx store.StoreContext) {
 	p.pctx = pctx
+}
+
+func (p *StreamAggregateProcessor) Name() string {
+	return p.name
 }
 
 func (p *StreamAggregateProcessor) Process(ctx context.Context, msg commtypes.Message) error {

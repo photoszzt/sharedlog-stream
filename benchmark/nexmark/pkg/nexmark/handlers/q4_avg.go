@@ -124,7 +124,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	kvstore := store_with_changelog.CreateInMemKVTableWithChangelog(mp, store.Uint64KeyKVStoreCompare, warmup)
-	sumCount := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor(
+	sumCount := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor("sumCount",
 		kvstore,
 		processor.InitializerFunc(func() interface{} {
 			return &ntypes.SumAndCount{

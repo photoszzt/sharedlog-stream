@@ -84,7 +84,7 @@ func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	store := store_with_changelog.CreateInMemKVTableWithChangelog(mp, compare, warmup)
 	// fmt.Fprintf(os.Stderr, "before restore\n")
-	p := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor(store,
+	p := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor("word_counter", store,
 		processor.InitializerFunc(func() interface{} {
 			return uint64(0)
 		}),

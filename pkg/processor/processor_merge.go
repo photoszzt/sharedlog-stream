@@ -9,10 +9,17 @@ import (
 type MergeProcessor struct {
 	pipe Pipe
 	pctx store.StoreContext
+	name string
 }
 
-func NewMergeProcessor() Processor {
-	return &MergeProcessor{}
+func NewMergeProcessor(name string) Processor {
+	return &MergeProcessor{
+		name: name,
+	}
+}
+
+func (p *MergeProcessor) Name() string {
+	return p.name
 }
 
 func (p *MergeProcessor) WithPipe(pipe Pipe) {

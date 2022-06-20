@@ -22,7 +22,7 @@ func getJoinProcessor() *StreamTableJoinProcessor {
 			return -1
 		}
 	})
-	joinProc := NewStreamTableJoinProcessor("test1", store, ValueJoinerWithKeyFunc(
+	joinProc := NewStreamTableJoinProcessor(store, ValueJoinerWithKeyFunc(
 		func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
 			lv := leftValue.(int)
 			if rightValue != nil {
@@ -48,7 +48,7 @@ func getJoinProcessorWithStr() *StreamTableJoinProcessor {
 			return -1
 		}
 	})
-	joinProc := NewStreamTableJoinProcessor("test1", store, ValueJoinerWithKeyFunc(
+	joinProc := NewStreamTableJoinProcessor(store, ValueJoinerWithKeyFunc(
 		func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
 			lv := leftValue.(string)
 			if rightValue != nil {

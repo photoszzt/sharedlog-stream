@@ -260,17 +260,18 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	} else {
 		panic("unrecognized table type")
 	}
-	maxBid := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor(kvstore, processor.InitializerFunc(func() interface{} {
-		return uint64(0)
-	}), processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
-		v := value.(*ntypes.AuctionIdCount)
-		agg := aggregate.(uint64)
-		if v.Count > agg {
-			return v.Count
-		}
-		return agg
-	})), warmup)
-	stJoin := processor.NewMeteredProcessor(processor.NewStreamTableJoinProcessor(maxBidStoreName, kvstore,
+	maxBid := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor("maxBid",
+		kvstore, processor.InitializerFunc(func() interface{} {
+			return uint64(0)
+		}), processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
+			v := value.(*ntypes.AuctionIdCount)
+			agg := aggregate.(uint64)
+			if v.Count > agg {
+				return v.Count
+			}
+			return agg
+		})), warmup)
+	stJoin := processor.NewMeteredProcessor(processor.NewStreamTableJoinProcessor(kvstore,
 		processor.ValueJoinerWithKeyFunc(
 			func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
 				lv := leftValue.(*ntypes.AuctionIdCount)
@@ -282,7 +283,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 				}
 			})), warmup)
 	chooseMaxCnt := processor.NewMeteredProcessor(
-		processor.NewStreamFilterProcessor(
+		processor.NewStreamFilterProcessor("chooseMaxCnt",
 			processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
 				v := msg.Value.(*ntypes.AuctionIdCntMax)
 				return v.Count >= v.MaxCnt, nil

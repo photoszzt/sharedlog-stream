@@ -7,17 +7,17 @@ import (
 )
 
 type TableMapValuesProcessor struct {
-	pipe          Pipe
-	pctx          store.StoreContext
-	store         store.KeyValueStore
-	valueMapper   ValueMapper
-	queryableName string
+	pipe        Pipe
+	store       store.KeyValueStore
+	valueMapper ValueMapper
+	name        string
 }
 
-func NewTableMapValuesProcessor(mapper ValueMapper, queryableName string) Processor {
+func NewTableMapValuesProcessor(name string, mapper ValueMapper, store store.KeyValueStore) Processor {
 	return &TableMapValuesProcessor{
-		valueMapper:   mapper,
-		queryableName: queryableName,
+		valueMapper: mapper,
+		store:       store,
+		name:        name,
 	}
 }
 
@@ -25,11 +25,8 @@ func (p *TableMapValuesProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
 }
 
-func (p *TableMapValuesProcessor) WithProcessorContext(pctx store.StoreContext) {
-	p.pctx = pctx
-	if p.queryableName != "" {
-		p.store = p.pctx.GetKeyValueStore(p.queryableName)
-	}
+func (p *TableMapValuesProcessor) Name() string {
+	return p.name
 }
 
 func (p *TableMapValuesProcessor) Process(ctx context.Context, msg commtypes.Message) error {
@@ -46,11 +43,9 @@ func (p *TableMapValuesProcessor) ProcessAndReturn(ctx context.Context, msg comm
 		return nil, err
 	}
 	newMsg := commtypes.Message{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp}
-	if p.queryableName != "" {
-		err = p.store.Put(ctx, msg.Key, &commtypes.ValueTimestamp{Value: newMsg.Value, Timestamp: newMsg.Timestamp})
-		if err != nil {
-			return nil, err
-		}
+	err = p.store.Put(ctx, msg.Key, &commtypes.ValueTimestamp{Value: newMsg.Value, Timestamp: newMsg.Timestamp})
+	if err != nil {
+		return nil, err
 	}
 	return []commtypes.Message{newMsg}, nil
 }

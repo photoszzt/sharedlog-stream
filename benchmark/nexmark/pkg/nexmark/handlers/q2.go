@@ -65,7 +65,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 	sinks[0].MarkFinalOutput()
 	srcsSinks := proc_interface.NewBaseSrcsSinks(srcs, sinks)
 
-	q2Filter := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(filterFunc)), time.Duration(sp.WarmupS)*time.Second)
+	q2Filter := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("q2Filter", processor.PredicateFunc(filterFunc)), time.Duration(sp.WarmupS)*time.Second)
 	procArgs := &query2ProcessArgs{
 		q2Filter: q2Filter,
 		BaseExecutionContext: proc_interface.NewExecutionContextFromComponents(srcsSinks, proc_interface.NewBaseProcArgs(h.funcName,

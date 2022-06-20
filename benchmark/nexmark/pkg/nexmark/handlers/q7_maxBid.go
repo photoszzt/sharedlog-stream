@@ -124,6 +124,7 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
+	ectx := proc_interface.NewExecutionContext(srcs, sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum)
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 
@@ -163,8 +164,8 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 		return ntypes.CompareStartEndTime(ka, kb)
 	}
 	kvstore := store_with_changelog.CreateInMemKVTableWithChangelog(mp, compare, warmup)
-	maxBid := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor(kvstore,
-		processor.InitializerFunc(func() interface{} {
+	maxBid := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor("maxBid",
+		kvstore, processor.InitializerFunc(func() interface{} {
 			return uint64(0)
 		}),
 		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
@@ -177,17 +178,15 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 		})), warmup)
 
 	remapKV := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
-		processor.MapperFunc(func(m commtypes.Message) (commtypes.Message, error) {
+		"remapKV", processor.MapperFunc(func(m commtypes.Message) (commtypes.Message, error) {
 			return commtypes.Message{Key: m.Value, Value: m.Key, Timestamp: m.Timestamp}, nil
 		})), warmup)
 	groupBy := processor.NewGroupBy(sinks_arr[0])
 	procArgs := &q7MaxBidByPriceProcessArgs{
-		maxBid:  maxBid,
-		remapKV: remapKV,
-		groupBy: groupBy,
-		BaseExecutionContext: proc_interface.NewExecutionContext(
-			srcs, sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum,
-		),
+		maxBid:               maxBid,
+		remapKV:              remapKV,
+		groupBy:              groupBy,
+		BaseExecutionContext: ectx,
 	}
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {

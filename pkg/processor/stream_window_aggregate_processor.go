@@ -17,11 +17,12 @@ type StreamWindowAggregateProcessor struct {
 	aggregator         Aggregator
 	windows            EnumerableWindowDefinition
 	observedStreamTime int64
+	name               string
 }
 
 var _ = Processor(&StreamWindowAggregateProcessor{})
 
-func NewStreamWindowAggregateProcessor(store store.WindowStore, initializer Initializer, aggregator Aggregator, windows EnumerableWindowDefinition) *StreamWindowAggregateProcessor {
+func NewStreamWindowAggregateProcessor(name string, store store.WindowStore, initializer Initializer, aggregator Aggregator, windows EnumerableWindowDefinition) *StreamWindowAggregateProcessor {
 	return &StreamWindowAggregateProcessor{
 		initializer:        initializer,
 		aggregator:         aggregator,
@@ -37,6 +38,10 @@ func (p *StreamWindowAggregateProcessor) WithPipe(pipe Pipe) {
 
 func (p *StreamWindowAggregateProcessor) WithProcessorContext(pctx store.StoreContext) {
 	p.pctx = pctx
+}
+
+func (p *StreamWindowAggregateProcessor) Name() string {
+	return p.name
 }
 
 func (p *StreamWindowAggregateProcessor) Process(ctx context.Context, msg commtypes.Message) error {

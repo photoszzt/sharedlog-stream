@@ -138,13 +138,14 @@ func (h *q46GroupByHandler) getAucsByID(warmup time.Duration) (
 	*processor.MeteredProcessor,
 	execution.GeneralProcFunc,
 ) {
-	filterAuctions := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
-		func(m *commtypes.Message) (bool, error) {
-			event := m.Value.(*ntypes.Event)
-			return event.Etype == ntypes.AUCTION, nil
-		})), time.Duration(warmup)*time.Second)
+	filterAuctions := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterAuctions",
+		processor.PredicateFunc(
+			func(m *commtypes.Message) (bool, error) {
+				event := m.Value.(*ntypes.Event)
+				return event.Etype == ntypes.AUCTION, nil
+			})), time.Duration(warmup)*time.Second)
 
-	auctionsByIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
+	auctionsByIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor("auctionsByIDMap",
 		processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 			event := msg.Value.(*ntypes.Event)
 			return commtypes.Message{Key: event.NewAuction.ID, Value: msg.Value, Timestamp: msg.Timestamp}, nil
@@ -195,13 +196,14 @@ func (h *q46GroupByHandler) getBidsByAuctionID(warmup time.Duration) (
 	*processor.MeteredProcessor,
 	execution.GeneralProcFunc,
 ) {
-	filterBids := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
-		func(m *commtypes.Message) (bool, error) {
-			event := m.Value.(*ntypes.Event)
-			return event.Etype == ntypes.BID, nil
-		})), time.Duration(warmup)*time.Second)
+	filterBids := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterBids",
+		processor.PredicateFunc(
+			func(m *commtypes.Message) (bool, error) {
+				event := m.Value.(*ntypes.Event)
+				return event.Etype == ntypes.BID, nil
+			})), time.Duration(warmup)*time.Second)
 
-	bidsByAuctionIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
+	bidsByAuctionIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor("bidsByAuctionIDMap",
 		processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 			event := msg.Value.(*ntypes.Event)
 			return commtypes.Message{Key: event.Bid.Auction, Value: msg.Value, Timestamp: msg.Timestamp}, nil

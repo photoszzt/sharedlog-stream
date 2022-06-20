@@ -195,13 +195,14 @@ func (h *q3GroupByHandler) getPersonsByID(warmup time.Duration) (
 	*processor.MeteredProcessor,
 	execution.GeneralProcFunc,
 ) {
-	filterPerson := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
+	filterPerson := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterPerson", processor.PredicateFunc(
 		func(msg *commtypes.Message) (bool, error) {
 			event := msg.Value.(*ntypes.Event)
 			return event.Etype == ntypes.PERSON && ((event.NewPerson.State == "OR") ||
 				event.NewPerson.State == "ID" || event.NewPerson.State == "CA"), nil
 		})), warmup)
 	personsByIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
+		"personsByIDMap",
 		processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 			event := msg.Value.(*ntypes.Event)
 			return commtypes.Message{
@@ -254,14 +255,14 @@ func (h *q3GroupByHandler) getAucBySellerID(warmup time.Duration) (
 	*processor.MeteredProcessor,
 	execution.GeneralProcFunc,
 ) {
-	filterAuctions := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
+	filterAuctions := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterAuctions", processor.PredicateFunc(
 		func(m *commtypes.Message) (bool, error) {
 			event := m.Value.(*ntypes.Event)
 			return event.Etype == ntypes.AUCTION && event.NewAuction.Category == 10, nil
 		})), warmup)
 
 	auctionsBySellerIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
-		processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
+		"auctionsBySellerIDMap", processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 			event := msg.Value.(*ntypes.Event)
 			return commtypes.Message{Key: event.NewAuction.Seller, Value: msg.Value, Timestamp: msg.Timestamp}, nil
 		})), warmup)

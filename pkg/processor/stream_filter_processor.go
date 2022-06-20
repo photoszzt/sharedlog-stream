@@ -10,14 +10,20 @@ type StreamFilterProcessor struct {
 	pipe Pipe
 	pctx store.StoreContext
 	pred Predicate
+	name string
 }
 
 var _ = Processor(&StreamFilterProcessor{})
 
-func NewStreamFilterProcessor(pred Predicate) *StreamFilterProcessor {
+func NewStreamFilterProcessor(name string, pred Predicate) *StreamFilterProcessor {
 	return &StreamFilterProcessor{
 		pred: pred,
+		name: name,
 	}
+}
+
+func (p *StreamFilterProcessor) Name() string {
+	return p.name
 }
 
 func (p *StreamFilterProcessor) WithProcessorContext(pctx store.StoreContext) {
@@ -54,11 +60,12 @@ type StreamFilterNotProcessor struct {
 	pipe Pipe
 	pctx store.StoreContext
 	pred Predicate
+	name string
 }
 
 var _ = Processor(&StreamFilterNotProcessor{})
 
-func NewStreamFilterNotProcessor(pred Predicate) *StreamFilterNotProcessor {
+func NewStreamFilterNotProcessor(name string, pred Predicate) *StreamFilterNotProcessor {
 	return &StreamFilterNotProcessor{
 		pred: pred,
 	}
@@ -70,6 +77,10 @@ func (p *StreamFilterNotProcessor) WithProcessorContext(pctx store.StoreContext)
 
 func (p *StreamFilterNotProcessor) WithPipe(pipe Pipe) {
 	p.pipe = pipe
+}
+
+func (p *StreamFilterNotProcessor) Name() string {
+	return p.name
 }
 
 func (p *StreamFilterNotProcessor) Process(ctx context.Context, msg commtypes.Message) error {

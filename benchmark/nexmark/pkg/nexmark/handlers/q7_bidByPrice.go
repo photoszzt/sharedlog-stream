@@ -78,14 +78,15 @@ func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInpu
 	srcs[0].SetInitialSource(true)
 
 	warmup := time.Duration(input.WarmupS) * time.Second
-	bid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
+	bid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterBids", processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
 		event := msg.Value.(*ntypes.Event)
 		return event.Etype == ntypes.BID, nil
 	})), warmup)
-	bidKeyedByPrice := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
-		event := msg.Value.(*ntypes.Event)
-		return commtypes.Message{Key: event.Bid.Price, Value: msg.Value, Timestamp: msg.Timestamp}, nil
-	})), warmup)
+	bidKeyedByPrice := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
+		"bidKeyedByPrice", processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
+			event := msg.Value.(*ntypes.Event)
+			return commtypes.Message{Key: event.Bid.Price, Value: msg.Value, Timestamp: msg.Timestamp}, nil
+		})), warmup)
 	groupBy := processor.NewGroupBy(sinks_arr[0])
 	procArgs := &q7BidKeyedByPriceProcessArgs{
 		bid:        bid,

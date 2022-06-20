@@ -146,7 +146,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		return ntypes.CompareAuctionIdCategory(ka, kb)
 	}
 	kvstore := store_with_changelog.CreateInMemKVTableWithChangelog(mp, compare, warmup)
-	maxBid := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor(kvstore,
+	maxBid := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor("maxBid", kvstore,
 		processor.InitializerFunc(func() interface{} { return uint64(0) }),
 		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
 			v := value.(*ntypes.AuctionBid)
@@ -157,7 +157,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 				return agg
 			}
 		})), warmup)
-	changeKey := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
+	changeKey := processor.NewMeteredProcessor(processor.NewStreamMapProcessor("changeKey",
 		processor.MapperFunc(func(m commtypes.Message) (commtypes.Message, error) {
 			return commtypes.Message{
 				Key:   m.Key.(*ntypes.AuctionIdCategory).Category,

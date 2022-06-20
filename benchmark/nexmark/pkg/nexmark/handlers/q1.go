@@ -65,7 +65,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	srcsSinks := proc_interface.NewBaseSrcsSinks(srcs, sinks)
 
-	filterBid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
+	filterBid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterBid", processor.PredicateFunc(
 		only_bid)), warmup)
 	q1Map := processor.NewMeteredProcessor(processor.NewStreamMapValuesWithKeyProcessor(processor.MapperFunc(q1mapFunc)),
 		warmup)

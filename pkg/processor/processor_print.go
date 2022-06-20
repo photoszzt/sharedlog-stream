@@ -11,11 +11,18 @@ import (
 type PrintProcessor struct {
 	pipe Pipe
 	pctx store.StoreContext
+	name string
 }
 
 // NewPrintProcessor creates a new PrintProcessor instance.
-func NewPrintProcessor() Processor {
-	return &PrintProcessor{}
+func NewPrintProcessor(name string) Processor {
+	return &PrintProcessor{
+		name: name,
+	}
+}
+
+func (p *PrintProcessor) Name() string {
+	return p.name
 }
 
 // WithPipe sets the pipe on the Processor.

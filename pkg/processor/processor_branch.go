@@ -11,12 +11,18 @@ type BranchProcessor struct {
 	pipe  Pipe
 	pctx  store.StoreContext
 	preds []Predicate
+	name  string
 }
 
-func NewBranchProcessor(preds []Predicate) Processor {
+func NewBranchProcessor(name string, preds []Predicate) Processor {
 	return &BranchProcessor{
 		preds: preds,
+		name:  name,
 	}
+}
+
+func (p *BranchProcessor) Name() string {
+	return p.name
 }
 
 // WithPipe sets the pipe on the Processor.

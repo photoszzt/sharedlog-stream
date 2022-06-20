@@ -174,7 +174,8 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 		countWindowStore = store.NewSegmentedWindowStore(byteStore, false, hopWindow.MaxSize(),
 			commtypes.Uint64Serde{}, vtSerde)
 	}
-	countProc := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(countWindowStore,
+	countProc := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(
+		"countProc", countWindowStore,
 		processor.InitializerFunc(func() interface{} { return uint64(0) }),
 		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
 			val := aggregate.(uint64)
@@ -285,21 +286,22 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	groupByAuction := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(processor.MapperFunc(
-		func(msg commtypes.Message) (commtypes.Message, error) {
-			key := msg.Key.(*commtypes.WindowedKey)
-			value := msg.Value.(uint64)
-			newKey := &ntypes.StartEndTime{
-				StartTimeMs: key.Window.Start(),
-				EndTimeMs:   key.Window.End(),
-			}
-			newVal := &ntypes.AuctionIdCount{
-				AucId:  key.Key.(uint64),
-				Count:  value,
-				BaseTs: ntypes.BaseTs{Timestamp: msg.Timestamp},
-			}
-			return commtypes.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
-		})), time.Duration(sp.WarmupS)*time.Second)
+	groupByAuction := processor.NewMeteredProcessor(processor.NewStreamMapProcessor("groupByAuction",
+		processor.MapperFunc(
+			func(msg commtypes.Message) (commtypes.Message, error) {
+				key := msg.Key.(*commtypes.WindowedKey)
+				value := msg.Value.(uint64)
+				newKey := &ntypes.StartEndTime{
+					StartTimeMs: key.Window.Start(),
+					EndTimeMs:   key.Window.End(),
+				}
+				newVal := &ntypes.AuctionIdCount{
+					AucId:  key.Key.(uint64),
+					Count:  value,
+					BaseTs: ntypes.BaseTs{Timestamp: msg.Timestamp},
+				}
+				return commtypes.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
+			})), time.Duration(sp.WarmupS)*time.Second)
 	groupBy := processor.NewGroupBy(sinks[0])
 	procArgs := &q5AuctionBidsProcessArg{
 		countProc:      countProc,

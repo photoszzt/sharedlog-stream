@@ -78,16 +78,18 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	srcs[0].SetInitialSource(true)
-	filterBid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(processor.PredicateFunc(
-		func(m *commtypes.Message) (bool, error) {
-			event := m.Value.(*ntypes.Event)
-			return event.Etype == ntypes.BID, nil
-		})), time.Duration(sp.WarmupS)*time.Second)
-	selectKey := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(processor.MapperFunc(
-		func(m commtypes.Message) (commtypes.Message, error) {
-			event := m.Value.(*ntypes.Event)
-			return commtypes.Message{Key: event.Bid.Auction, Value: m.Value, Timestamp: m.Timestamp}, nil
-		})), time.Duration(sp.WarmupS)*time.Second)
+	filterBid := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterBid",
+		processor.PredicateFunc(
+			func(m *commtypes.Message) (bool, error) {
+				event := m.Value.(*ntypes.Event)
+				return event.Etype == ntypes.BID, nil
+			})), time.Duration(sp.WarmupS)*time.Second)
+	selectKey := processor.NewMeteredProcessor(processor.NewStreamMapProcessor("selectKey",
+		processor.MapperFunc(
+			func(m commtypes.Message) (commtypes.Message, error) {
+				event := m.Value.(*ntypes.Event)
+				return commtypes.Message{Key: event.Bid.Auction, Value: m.Value, Timestamp: m.Timestamp}, nil
+			})), time.Duration(sp.WarmupS)*time.Second)
 	groupBy := processor.NewGroupBy(sinks[0])
 	procArgs := &bidKeyedByAuctionProcessArgs{
 		filterBid: filterBid,
