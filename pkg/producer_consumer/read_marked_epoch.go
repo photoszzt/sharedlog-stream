@@ -47,7 +47,7 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 		emc.msgBuffer[parNum] = deque.New()
 	}
 	msgQueue := emc.msgBuffer[parNum]
-	if msgQueue.Len() != 0 && len(emc.marked) != 0 {
+	if msgQueue.Len() != 0 {
 		retMsg := emc.checkMsgQueue(msgQueue, parNum)
 		if retMsg != nil {
 			return retMsg, nil
@@ -58,12 +58,17 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 		if err != nil {
 			return nil, err
 		}
-		debug.Fprintf(os.Stderr, "RawMsg\n")
-		debug.Fprintf(os.Stderr, "\tPayload %v\n", string(rawMsg.Payload))
-		debug.Fprintf(os.Stderr, "\tLogSeq 0x%x\n", rawMsg.LogSeqNum)
-		debug.Fprintf(os.Stderr, "\tIsControl: %v\n", rawMsg.IsControl)
-		debug.Fprintf(os.Stderr, "\tIsPayloadArr: %v\n", rawMsg.IsPayloadArr)
-		if shouldIgnoreThisMsg(emc.curReadMsgSeqNum, rawMsg) {
+		// debug.Fprintf(os.Stderr, "RawMsg\n")
+		// debug.Fprintf(os.Stderr, "\tPayload %v\n", string(rawMsg.Payload))
+		// debug.Fprintf(os.Stderr, "\tLogSeq 0x%x\n", rawMsg.LogSeqNum)
+		// debug.Fprintf(os.Stderr, "\tIsControl: %v\n", rawMsg.IsControl)
+		// debug.Fprintf(os.Stderr, "\tIsPayloadArr: %v\n", rawMsg.IsPayloadArr)
+
+		// control entry's msgseqnum is written for the epoch log;
+		// reading from the normal stream, we don't count this entry as a duplicate one
+		// control entry itself is idempodent; n commit record with the same content is the
+		// same as one commit record
+		if shouldIgnoreThisMsg(emc.curReadMsgSeqNum, rawMsg) && !rawMsg.IsControl {
 			debug.Fprintf(os.Stderr, "got a duplicate entry; continue\n")
 			continue
 		}
@@ -82,11 +87,13 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 				for sNum, r := range markRanges {
 					ranges[sNum] = r
 				}
+				emc.marked[rawMsg.ProdId] = ranges
 				rawMsg.Mark = commtypes.EPOCH_END
 			} else if epochMark.Mark == commtypes.SCALE_FENCE {
 				rawMsg.ScaleEpoch = epochMark.ScaleEpoch
 			}
 		}
+
 		msgQueue.PushBack(rawMsg)
 		retMsg := emc.checkMsgQueue(msgQueue, parNum)
 		if retMsg != nil {
@@ -98,7 +105,7 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 func (emc *EpochMarkConsumer) checkMsgQueue(msgQueue *deque.Deque, parNum uint8) *commtypes.RawMsg {
 	if msgQueue.Len() > 0 {
 		frontMsg := msgQueue.Front().(*commtypes.RawMsg)
-		if frontMsg.IsControl && frontMsg.Mark == commtypes.EPOCH_END {
+		for frontMsg.IsControl && frontMsg.Mark == commtypes.EPOCH_END {
 			ranges := emc.marked[frontMsg.ProdId]
 			ranges[parNum].Start = 0
 			ranges[parNum].End = 0
@@ -120,8 +127,12 @@ func (emc *EpochMarkConsumer) checkMsgQueue(msgQueue *deque.Deque, parNum uint8)
 		}
 		for msgStatus == SHOULD_DROP {
 			msgQueue.PopFront()
-			frontMsg = msgQueue.Front().(*commtypes.RawMsg)
-			msgStatus = emc.checkMsgStatus(frontMsg, parNum)
+			if msgQueue.Len() > 0 {
+				frontMsg = msgQueue.Front().(*commtypes.RawMsg)
+				msgStatus = emc.checkMsgStatus(frontMsg, parNum)
+			} else {
+				return nil
+			}
 		}
 	}
 	return nil

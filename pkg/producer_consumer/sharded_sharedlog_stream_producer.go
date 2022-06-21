@@ -4,8 +4,8 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	eo_intr "sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
 )
@@ -28,6 +28,10 @@ func NewShardedSharedLogStreamProducer(stream *sharedlog_stream.ShardedSharedLog
 		bufPush:     utils.CheckBufPush(),
 		name:        "sink",
 	}
+}
+
+func (sls *ShardedSharedLogStreamProducer) ResetInitialProd() {
+	sls.stream.ResetInitialProd()
 }
 
 func (sls *ShardedSharedLogStreamProducer) GetInitialProdSeqNum(substreamNum uint8) uint64 {
@@ -56,6 +60,7 @@ func (sls *ShardedSharedLogStreamProducer) ConfigExactlyOnce(
 	guarantee eo_intr.GuaranteeMth,
 ) {
 	sls.guarantee = guarantee
+	sls.stream.ExactlyOnce(guarantee)
 	sls.eom = eos
 }
 

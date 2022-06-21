@@ -154,6 +154,10 @@ func (em *EpochManager) MarkEpoch(ctx context.Context,
 ) error {
 	outputRanges := make(map[string]map[uint8]commtypes.ProduceRange)
 	for _, producer := range producers {
+		err := producer.Flush(ctx)
+		if err != nil {
+			return err
+		}
 		topicName := producer.TopicName()
 		parSet, ok := em.currentTopicSubstream[producer.TopicName()]
 		if ok {
@@ -176,15 +180,19 @@ func (em *EpochManager) MarkEpoch(ctx context.Context,
 		OutputRanges: outputRanges,
 	}
 	tags := []uint64{em.epochLogMarkerTag}
+	// debug.Fprintf(os.Stderr, "marker with tag: 0x%x\n", em.epochLogMarkerTag)
 	var additionalTopic []string
 	for tp, parSet := range em.currentTopicSubstream {
 		additionalTopic = append(additionalTopic, tp)
+		nameHash := sharedlog_stream.NameHash(tp)
 		for sub := range parSet {
-			tag := txn_data.MarkerTag(sharedlog_stream.NameHash(tp), sub)
+			tag := sharedlog_stream.NameHashWithPartition(nameHash, sub)
+			// debug.Fprintf(os.Stderr, "marker with tag: 0x%x\n", tag)
 			tags = append(tags, tag)
 		}
 	}
 	_, err := em.appendToEpochLog(ctx, &epochMeta, tags, additionalTopic)
+	em.cleanupState(producers)
 	return err
 }
 
@@ -260,6 +268,9 @@ func (em *EpochManager) FindMostRecentEpochMetaThatHasConsumed(
 	}
 }
 
-func (em *EpochManager) cleanupState() {
+func (em *EpochManager) cleanupState(producers []producer_consumer.MeteredProducerIntr) {
 	em.currentTopicSubstream = make(map[string]map[uint8]struct{})
+	for _, producer := range producers {
+		producer.ResetInitialProd()
+	}
 }

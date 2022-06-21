@@ -95,13 +95,13 @@ func (tac *TransactionAwareConsumer) ReadNext(ctx context.Context, parNum uint8)
 			debug.Fprintf(os.Stderr, "[ERROR] return err: %v\n", err)
 			return nil, err
 		}
-		debug.Fprintf(os.Stderr, "RawMsg\n")
-		debug.Fprintf(os.Stderr, "\tPayload %v\n", string(rawMsg.Payload))
-		debug.Fprintf(os.Stderr, "\tLogSeq 0x%x\n", rawMsg.LogSeqNum)
-		debug.Fprintf(os.Stderr, "\tProdId taskId 0x%x, taskEpoch %d, tranID %d\n",
-			rawMsg.ProdId.TaskId, rawMsg.ProdId.TaskEpoch, rawMsg.ProdId.TransactionID)
-		debug.Fprintf(os.Stderr, "\tIsControl: %v\n", rawMsg.IsControl)
-		debug.Fprintf(os.Stderr, "\tIsPayloadArr: %v\n", rawMsg.IsPayloadArr)
+		// debug.Fprintf(os.Stderr, "RawMsg\n")
+		// debug.Fprintf(os.Stderr, "\tPayload %v\n", string(rawMsg.Payload))
+		// debug.Fprintf(os.Stderr, "\tLogSeq 0x%x\n", rawMsg.LogSeqNum)
+		// debug.Fprintf(os.Stderr, "\tProdId taskId 0x%x, taskEpoch %d, tranID %d\n",
+		// 	rawMsg.ProdId.TaskId, rawMsg.ProdId.TaskEpoch, rawMsg.ProdId.TransactionID)
+		// debug.Fprintf(os.Stderr, "\tIsControl: %v\n", rawMsg.IsControl)
+		// debug.Fprintf(os.Stderr, "\tIsPayloadArr: %v\n", rawMsg.IsPayloadArr)
 		if shouldIgnoreThisMsg(tac.curReadMsgSeqNum, rawMsg) {
 			debug.Fprintf(os.Stderr, "got a duplicate entry; continue\n")
 			continue

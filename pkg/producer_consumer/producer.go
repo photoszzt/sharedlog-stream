@@ -3,8 +3,8 @@ package producer_consumer
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	exactly_once_intr "sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/sharedlog_stream"
 )
 
 type Producer interface {
@@ -20,6 +20,7 @@ type Producer interface {
 	Stream() *sharedlog_stream.ShardedSharedLogStream
 	GetInitialProdSeqNum(substreamNum uint8) uint64
 	GetCurrentProdSeqNum(substreamNum uint8) uint64
+	ResetInitialProd()
 }
 
 type MeteredProducerIntr interface {
