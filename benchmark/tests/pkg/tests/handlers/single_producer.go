@@ -36,8 +36,8 @@ func getEpochManager(ctx context.Context, env types.Environment,
 	return em, trackParFunc, nil
 }
 
-func (h *produceConsumeHandler) testSingleProducerEpoch(ctx context.Context) {
-	debug.Fprintf(os.Stderr, "single producer epoch test\n")
+func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Context) {
+	debug.Fprintf(os.Stderr, "single produce consume epoch test\n")
 	stream1, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "test2", 1, commtypes.JSON)
 	if err != nil {
 		panic(err)
@@ -52,37 +52,36 @@ func (h *produceConsumeHandler) testSingleProducerEpoch(ctx context.Context) {
 		KVMsgSerdes:   kvmsgSerdes,
 		FlushDuration: common.FlushDuration,
 	}
-	produceSink :=
-		producer_consumer.NewShardedSharedLogStreamProducer(stream1, produceSinkConfig)
-	meteredProducer := producer_consumer.NewMeteredProducer(produceSink, 0)
+	meteredProducer := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(stream1, produceSinkConfig), 0)
 	em1, trackParFunc1, err := getEpochManager(ctx, h.env, "prod1")
-	produceSink.ConfigExactlyOnce(em1, exactly_once_intr.EPOCH_MARK)
+	meteredProducer.ConfigExactlyOnce(em1, exactly_once_intr.EPOCH_MARK)
 	msgForTm1 := []commtypes.Message{
 		{
 			Key:   1,
 			Value: "tm1_a",
 		},
 	}
-	err = pushMsgsToSink(ctx, produceSink, msgForTm1, trackParFunc1)
+	err = pushMsgsToSink(ctx, meteredProducer, msgForTm1, trackParFunc1)
 	if err != nil {
 		panic(err)
 	}
-	produceSink.Flush(ctx)
+	meteredProducer.Flush(ctx)
 	msgForTm2 := []commtypes.Message{
 		{
 			Key:   2,
 			Value: "tm2_a",
 		},
 	}
-	err = pushMsgsToSink(ctx, produceSink, msgForTm2, trackParFunc1)
+	err = pushMsgsToSink(ctx, meteredProducer, msgForTm2, trackParFunc1)
 	if err != nil {
 		panic(err)
 	}
-	err = produceSink.Flush(ctx)
+	err = meteredProducer.Flush(ctx)
 	if err != nil {
 		panic(err)
 	}
-	err = em1.MarkEpoch(ctx, nil, []producer_consumer.MeteredProducerIntr{meteredProducer})
+	producers := []producer_consumer.MeteredProducerIntr{meteredProducer}
+	err = em1.MarkEpoch(ctx, nil, producers)
 	if err != nil {
 		panic(err)
 	}
@@ -109,6 +108,72 @@ func (h *produceConsumeHandler) testSingleProducerEpoch(ctx context.Context) {
 		{
 			Key:   2,
 			Value: "tm2_a",
+		},
+	}
+	if !reflect.DeepEqual(expected_msgs, got) {
+		panic(fmt.Sprintf("should equal. expected: %v, got: %v", expected_msgs, got))
+	}
+
+	debug.Fprintf(os.Stderr, "single producer produces two epochs\n")
+	// two epochs
+	msgForTm1 = []commtypes.Message{
+		{
+			Key:   3,
+			Value: "tm1_c",
+		},
+		{
+			Key:   4,
+			Value: "tm1_d",
+		},
+	}
+	err = pushMsgsToSink(ctx, meteredProducer, msgForTm1, trackParFunc1)
+	if err != nil {
+		panic(err)
+	}
+	err = em1.MarkEpoch(ctx, nil, producers)
+	if err != nil {
+		panic(err)
+	}
+
+	msgForTm1 = []commtypes.Message{
+		{
+			Key:   5,
+			Value: "tm1_e",
+		},
+		{
+			Key:   6,
+			Value: "tm1_f",
+		},
+	}
+	err = pushMsgsToSink(ctx, meteredProducer, msgForTm1, trackParFunc1)
+	if err != nil {
+		panic(err)
+	}
+	err = em1.MarkEpoch(ctx, nil, producers)
+	if err != nil {
+		panic(err)
+	}
+
+	got, err = readMsgsEpoch(ctx, src1)
+	if err != nil {
+		panic(err)
+	}
+	expected_msgs = []commtypes.Message{
+		{
+			Key:   3,
+			Value: "tm1_c",
+		},
+		{
+			Key:   4,
+			Value: "tm1_d",
+		},
+		{
+			Key:   5,
+			Value: "tm1_e",
+		},
+		{
+			Key:   6,
+			Value: "tm1_f",
 		},
 	}
 	if !reflect.DeepEqual(expected_msgs, got) {

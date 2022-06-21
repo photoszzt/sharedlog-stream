@@ -638,7 +638,7 @@ func pushMsgToStream(ctx context.Context, key int, val *strTs, kvmsgSerdes commt
 	return nil
 }
 
-func pushMsgsToSink(ctx context.Context, sink *producer_consumer.ShardedSharedLogStreamProducer,
+func pushMsgsToSink(ctx context.Context, sink producer_consumer.Producer,
 	msgs []commtypes.Message, trackParFunc exactly_once_intr.TrackProdSubStreamFunc,
 ) error {
 	for _, msg := range msgs {
