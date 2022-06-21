@@ -30,12 +30,10 @@ type StreamTaskArgs struct {
 	flushEvery               time.Duration
 	trackEveryForAtLeastOnce time.Duration
 
-	commitEveryNIter uint32
-	exitAfterNCommit uint32
-	duration         time.Duration
-	serdeFormat      commtypes.SerdeFormat
-	fixedOutParNum   int16
-	guarantee        exactly_once_intr.GuaranteeMth
+	duration       time.Duration
+	serdeFormat    commtypes.SerdeFormat
+	fixedOutParNum int16
+	guarantee      exactly_once_intr.GuaranteeMth
 }
 
 type StreamTaskArgsBuilder struct {
@@ -75,15 +73,7 @@ type SetCommitEvery interface {
 }
 
 type SetFlushEveryMs interface {
-	FlushEveryMs(uint32) SetCommitEveryNIter
-}
-
-type SetCommitEveryNIter interface {
-	CommitEveryNIter(uint32) SetExitAfterNCommit
-}
-
-type SetExitAfterNCommit interface {
-	ExitAfterNCommit(uint32) SetDuration
+	FlushEveryMs(uint32) SetDuration
 }
 
 type SetDuration interface {
@@ -121,17 +111,8 @@ func (args *StreamTaskArgsBuilder) CommitEveryMs(commitEveryMs uint64) SetFlushE
 	return args
 }
 
-func (args *StreamTaskArgsBuilder) FlushEveryMs(flushEveryMs uint32) SetCommitEveryNIter {
+func (args *StreamTaskArgsBuilder) FlushEveryMs(flushEveryMs uint32) SetDuration {
 	args.stArgs.flushEvery = time.Duration(flushEveryMs) * time.Millisecond
-	return args
-}
-
-func (args *StreamTaskArgsBuilder) CommitEveryNIter(commitEveryNIter uint32) SetExitAfterNCommit {
-	args.stArgs.commitEveryNIter = commitEveryNIter
-	return args
-}
-func (args *StreamTaskArgsBuilder) ExitAfterNCommit(exitAfterNCommit uint32) SetDuration {
-	args.stArgs.exitAfterNCommit = exitAfterNCommit
 	return args
 }
 

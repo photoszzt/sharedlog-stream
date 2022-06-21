@@ -601,16 +601,21 @@ func readMsgs(ctx context.Context,
 		} else if err != nil {
 			return ret, err
 		}
-		debug.Fprintf(os.Stderr, "readMsgs: %s got %v\n", log.TopicName(), msg)
-		debug.Fprintf(os.Stderr, "readMsgs: payload: %v\n", string(msg.Payload))
+
 		msgAndSeq, err := commtypes.DecodeRawMsg(
 			msg, kvmsgSerdes, payloadArrSerde, commtypes.DecodeMsg)
 		if err != nil {
 			return nil, fmt.Errorf("DecodeRawMsg err: %v", err)
 		}
+		debug.Fprintf(os.Stderr, "readMsgs: %s got %v\n", log.TopicName(), msg.LogSeqNum)
 		if msgAndSeq.MsgArr != nil {
+			for _, msg := range msgAndSeq.MsgArr {
+				debug.Fprintf(os.Stderr, "readMsgs: got msg key: %v, val: %v\n", msg.Key, msg.Value)
+			}
 			ret = append(ret, msgAndSeq.MsgArr...)
 		} else {
+			debug.Fprintf(os.Stderr, "readMsgs: got msg key: %v, val: %v\n",
+				msgAndSeq.Msg.Key, msgAndSeq.Msg.Value)
 			ret = append(ret, msgAndSeq.Msg)
 		}
 	}

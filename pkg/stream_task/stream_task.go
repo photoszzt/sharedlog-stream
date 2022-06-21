@@ -45,7 +45,7 @@ func (t *StreamTask) ExecuteApp(ctx context.Context,
 		debug.Fprint(os.Stderr, "begin transaction processing\n")
 		ret = t.processWithTransaction(ctx, tm, cmm, streamTaskArgs)
 	} else if streamTaskArgs.guarantee == exactly_once_intr.EPOCH_MARK {
-		em, cmm, err := t.setupManagersForEpoch(ctx, streamTaskArgs)
+		em, cmm, err := t.SetupManagersForEpoch(ctx, streamTaskArgs)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}

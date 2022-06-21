@@ -58,6 +58,11 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 		if err != nil {
 			return nil, err
 		}
+		debug.Fprintf(os.Stderr, "RawMsg\n")
+		debug.Fprintf(os.Stderr, "\tPayload %v\n", string(rawMsg.Payload))
+		debug.Fprintf(os.Stderr, "\tLogSeq 0x%x\n", rawMsg.LogSeqNum)
+		debug.Fprintf(os.Stderr, "\tIsControl: %v\n", rawMsg.IsControl)
+		debug.Fprintf(os.Stderr, "\tIsPayloadArr: %v\n", rawMsg.IsPayloadArr)
 		if shouldIgnoreThisMsg(emc.curReadMsgSeqNum, rawMsg) {
 			debug.Fprintf(os.Stderr, "got a duplicate entry; continue\n")
 			continue
@@ -98,6 +103,11 @@ func (emc *EpochMarkConsumer) checkMsgQueue(msgQueue *deque.Deque, parNum uint8)
 			ranges[parNum].Start = 0
 			ranges[parNum].End = 0
 			msgQueue.PopFront()
+			if msgQueue.Len() > 0 {
+				frontMsg = msgQueue.Front().(*commtypes.RawMsg)
+			} else {
+				return nil
+			}
 		}
 		if frontMsg.ScaleEpoch != 0 {
 			msgQueue.PopFront()

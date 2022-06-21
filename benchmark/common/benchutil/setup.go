@@ -11,10 +11,10 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/producer_consumer"
-	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/producer_consumer"
+	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/stream_task"
 	"sync"
 	"time"
 
@@ -131,8 +131,6 @@ func UpdateStreamTaskArgs(sp *common.QueryInput, argsBuilder stream_task.SetGuar
 		Warmup(time.Duration(sp.WarmupS) * time.Second).
 		CommitEveryMs(sp.CommitEveryMs).
 		FlushEveryMs(sp.FlushMs).
-		CommitEveryNIter(sp.CommitEveryNIter).
-		ExitAfterNCommit(sp.ExitAfterNCommit).
 		Duration(sp.Duration).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat))
 }

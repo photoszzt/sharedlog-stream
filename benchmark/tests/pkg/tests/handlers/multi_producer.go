@@ -10,26 +10,27 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/benchmark/tests/pkg/tests/test_types"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/transaction"
-	"sharedlog-stream/pkg/exactly_once_intr"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
 
-type multiProducerHandler struct {
+type produceConsumeHandler struct {
 	env types.Environment
 }
 
-func NewMultiProducerHandler(env types.Environment) types.FuncHandler {
-	return &multiProducerHandler{
+func NewProducerConsumerTestHandler(env types.Environment) types.FuncHandler {
+	return &produceConsumeHandler{
 		env: env,
 	}
 }
 
-func (h *multiProducerHandler) Call(ctx context.Context, input []byte) ([]byte, error) {
+func (h *produceConsumeHandler) Call(ctx context.Context, input []byte) ([]byte, error) {
 	parsedInput := &test_types.TestInput{}
 	err := json.Unmarshal(input, parsedInput)
 	if err != nil {
@@ -43,9 +44,11 @@ func (h *multiProducerHandler) Call(ctx context.Context, input []byte) ([]byte, 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *multiProducerHandler) tests(ctx context.Context, sp *test_types.TestInput) *common.FnOutput {
-	if sp.TestName == "multiProducer" {
-		h.testMultiProducer(ctx)
+func (h *produceConsumeHandler) tests(ctx context.Context, sp *test_types.TestInput) *common.FnOutput {
+	if sp.TestName == "multiProducer2pc" {
+		h.testMultiProducer2pc(ctx)
+	} else if sp.TestName == "singleProducerEpoch" {
+		h.testSingleProducerEpoch(ctx)
 	} else {
 		return &common.FnOutput{
 			Success: false,
@@ -58,11 +61,16 @@ func (h *multiProducerHandler) tests(ctx context.Context, sp *test_types.TestInp
 	}
 }
 
-func (h *multiProducerHandler) getProduceTransactionManager(
-	ctx context.Context, transactionalID string, sink producer_consumer.Producer,
+func getProduceTransactionManager(
+	ctx context.Context, env types.Environment, transactionalID string,
+	sink *producer_consumer.ShardedSharedLogStreamProducer,
+	sp *common.QueryInput,
 ) (*transaction.TransactionManager, exactly_once_intr.TrackProdSubStreamFunc) {
-	args1 := benchutil.UpdateStreamTaskArgs(&common.QueryInput{},
-		stream_task.NewStreamTaskArgsBuilder(h.env, nil, transactionalID)).Build()
+	ectx := processor.NewExecutionContext(nil,
+		[]producer_consumer.MeteredProducerIntr{producer_consumer.NewMeteredProducer(sink, 0)},
+		"prodConsume", sp.ScaleEpoch, sp.ParNum)
+	args1 := benchutil.UpdateStreamTaskArgs(sp, stream_task.NewStreamTaskArgsBuilder(env,
+		&ectx, transactionalID)).Build()
 	tm1, err := stream_task.SetupTransactionManager(ctx, args1)
 	if err != nil {
 		panic(err)
@@ -82,11 +90,14 @@ func (h *multiProducerHandler) getProduceTransactionManager(
 	return tm1, trackParFunc1
 }
 
-func (h *multiProducerHandler) getConsumeTransactionManager(
-	ctx context.Context, transactionalID string, src producer_consumer.Consumer,
+func getConsumeTransactionManager(
+	ctx context.Context, env types.Environment, transactionalID string,
+	src *producer_consumer.ShardedSharedLogStreamConsumer, sp *common.QueryInput,
 ) (*transaction.TransactionManager, exactly_once_intr.TrackProdSubStreamFunc) {
-	args1 := benchutil.UpdateStreamTaskArgs(&common.QueryInput{},
-		stream_task.NewStreamTaskArgsBuilder(h.env, nil, transactionalID)).Build()
+	ectx := processor.NewExecutionContext(
+		[]producer_consumer.MeteredConsumerIntr{producer_consumer.NewMeteredConsumer(src, 0)},
+		nil, "prodConsume", sp.ScaleEpoch, sp.ParNum)
+	args1 := benchutil.UpdateStreamTaskArgs(sp, stream_task.NewStreamTaskArgsBuilder(env, &ectx, transactionalID)).Build()
 	tm1, err := stream_task.SetupTransactionManager(ctx, args1)
 	if err != nil {
 		panic(err)
@@ -106,7 +117,7 @@ func (h *multiProducerHandler) getConsumeTransactionManager(
 	return tm1, trackParFunc1
 }
 
-func (h *multiProducerHandler) beginTransaction(ctx context.Context,
+func (h *produceConsumeHandler) beginTransaction(ctx context.Context,
 	tm *transaction.TransactionManager, stream1 *sharedlog_stream.ShardedSharedLogStream) {
 	if err := tm.BeginTransaction(ctx, nil, nil); err != nil {
 		panic(err)
@@ -116,7 +127,7 @@ func (h *multiProducerHandler) beginTransaction(ctx context.Context,
 	}
 }
 
-func (h *multiProducerHandler) testMultiProducer(ctx context.Context) {
+func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 	// two producer push to the same stream
 	stream1, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "test", 1, commtypes.JSON)
 	if err != nil {
@@ -136,14 +147,23 @@ func (h *multiProducerHandler) testMultiProducer(ctx context.Context) {
 		KVMsgSerdes:   kvmsgSerdes,
 		FlushDuration: common.FlushDuration,
 	}
+	sp := &common.QueryInput{
+		AppId:         "prodConsume",
+		GuaranteeMth:  uint8(exactly_once_intr.TWO_PHASE_COMMIT),
+		CommitEveryMs: 5,
+		FlushMs:       5,
+		WarmupS:       0,
+		ParNum:        0,
+		ScaleEpoch:    1,
+	}
 
 	produceSink := producer_consumer.NewShardedSharedLogStreamProducer(stream1, produceSinkConfig)
 	produceSinkCopy := producer_consumer.NewShardedSharedLogStreamProducer(stream1Copy, produceSinkConfig)
 
-	tm1, trackParFunc1 := h.getProduceTransactionManager(ctx, "prod1", produceSink)
-	tm2, trackParFunc2 := h.getProduceTransactionManager(ctx, "prod2", produceSinkCopy)
+	tm1, trackParFunc1 := getProduceTransactionManager(ctx, h.env, "prod1", produceSink, sp)
+	tm2, trackParFunc2 := getProduceTransactionManager(ctx, h.env, "prod2", produceSinkCopy, sp)
 	tm1.RecordTopicStreams(stream1.TopicName(), stream1)
-	tm2.RecordTopicStreams(stream1.TopicName(), stream1)
+	tm2.RecordTopicStreams(stream1Copy.TopicName(), stream1Copy)
 	produceSink.ConfigExactlyOnce(tm1, exactly_once_intr.TWO_PHASE_COMMIT)
 	produceSinkCopy.ConfigExactlyOnce(tm2, exactly_once_intr.TWO_PHASE_COMMIT)
 

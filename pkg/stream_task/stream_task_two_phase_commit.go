@@ -162,10 +162,7 @@ func (t *StreamTask) processWithTransaction(
 	trackConsumePar := false
 	commitTimer := time.Now()
 
-	idx := 0
-	numCommit := 0
-	debug.Fprintf(os.Stderr, "commit every(ms): %d, commit everyIter: %d, exitAfterNComm: %d\n",
-		args.commitEvery, args.commitEveryNIter, args.exitAfterNCommit)
+	debug.Fprintf(os.Stderr, "commit every(ms): %d\n", args.commitEvery)
 	init := false
 	var once sync.Once
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
@@ -183,28 +180,24 @@ func (t *StreamTask) processWithTransaction(
 			timeSinceTranStart := time.Since(commitTimer)
 			cur_elapsed := warmupCheck.ElapsedSinceInitial()
 			timeout := args.duration != 0 && cur_elapsed >= args.duration
-			shouldCommitByIter := args.commitEveryNIter != 0 &&
-				uint32(idx)%args.commitEveryNIter == 0 && idx != 0
 			shouldCommitByTime := (args.commitEvery != 0 && timeSinceTranStart > args.commitEvery)
 			// debug.Fprintf(os.Stderr, "iter: %d, shouldCommitByIter: %v, timeSinceTranStart: %v, cur_elapsed: %v, duration: %v\n",
 			// 	idx, shouldCommitByIter, timeSinceTranStart, cur_elapsed, duration)
 
 			// should commit
-			if (shouldCommitByTime || timeout || shouldCommitByIter) && hasLiveTransaction {
+			if (shouldCommitByTime || timeout) && hasLiveTransaction {
 				err_out := t.commitTransaction(ctx, tm, args, &hasLiveTransaction, &trackConsumePar)
 				if err_out != nil {
 					return err_out
 				}
 				debug.Assert(!hasLiveTransaction, "after commit. there should be no live transaction\n")
-				numCommit += 1
 				debug.Fprintf(os.Stderr, "transaction committed\n")
 			}
 
 			// Exit routine
 			cur_elapsed = warmupCheck.ElapsedSinceInitial()
 			timeout = args.duration != 0 && cur_elapsed >= args.duration
-			shouldExitAfterNCommit := (args.exitAfterNCommit != 0 && numCommit == int(args.exitAfterNCommit))
-			if timeout || shouldExitAfterNCommit {
+			if timeout {
 				if err := tm.Close(); err != nil {
 					debug.Fprintf(os.Stderr, "[ERROR] close transaction manager: %v\n", err)
 					return &common.FnOutput{Success: false, Message: fmt.Sprintf("close transaction manager: %v\n", err)}
@@ -255,7 +248,6 @@ func (t *StreamTask) processWithTransaction(
 				elapsed := time.Since(procStart)
 				latencies.AddSample(elapsed.Microseconds())
 			}
-			idx += 1
 		}
 	}
 }

@@ -22,8 +22,6 @@ type QueryInput struct {
 	ScaleEpoch       uint64          `json:"epoch"`
 	FlushMs          uint32          `json:"flushMs,omitempty"`
 	WarmupS          uint32          `json:"warmup,omitempty"`
-	CommitEveryNIter uint32          `json:"commEveryNIter,omitempty"`
-	ExitAfterNCommit uint32          `json:"exitAfterNCommit,omitempty"`
 	Duration         uint32          `json:"duration,omitempty"`
 	NumInPartition   uint8           `json:"numInPartition,omitempty"`
 	ParNum           uint8           `json:"ParNum,omitempty"`

@@ -74,8 +74,10 @@ func main() {
 		invokeTest(client, "streamStreamJoinMem", "streamStreamJoinMem", &response)
 		response = common.FnOutput{}
 		invokeTest(client, "streamStreamJoinMongo", "streamStreamJoinMongo", &response)
-	case "multiprod":
+	case "prodConsume":
 		response := common.FnOutput{}
-		invokeTest(client, "multiProducer", "multiProducer", &response)
+		invokeTest(client, "multiProducer2pc", "multiProducer2pc", &response)
+		response = common.FnOutput{}
+		invokeTest(client, "singleProducerEpoch", "singleProducerEpoch", &response)
 	}
 }

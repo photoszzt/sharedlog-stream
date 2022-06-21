@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-func (t *StreamTask) setupManagersForEpoch(ctx context.Context,
+func (t *StreamTask) SetupManagersForEpoch(ctx context.Context,
 	args *StreamTaskArgs,
 ) (*epoch_manager.EpochManager, *control_channel.ControlChannelManager, error) {
 	em, err := epoch_manager.NewEpochManager(args.env, args.transactionalId, args.serdeFormat)
@@ -93,10 +93,7 @@ func (t *StreamTask) processInEpoch(
 	init := false
 	var once sync.Once
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
-	idx := 0
-	numMark := 0
-	debug.Fprintf(os.Stderr, "commit every(ms): %d, commit everyIter: %d, exitAfterNComm: %d\n",
-		args.commitEvery, args.commitEveryNIter, args.exitAfterNCommit)
+	debug.Fprintf(os.Stderr, "commit every(ms): %d\n", args.commitEvery)
 	for {
 		ret := checkMonitorReturns(dctx, dcancel, args, cmm, em, &run)
 		if ret != nil {
@@ -111,21 +108,17 @@ func (t *StreamTask) processInEpoch(
 			timeSinceLastMark := time.Since(markTimer)
 			cur_elapsed := warmupCheck.ElapsedSinceInitial()
 			timeout := args.duration != 0 && cur_elapsed >= args.duration
-			shouldMarkByIter := args.commitEveryNIter != 0 &&
-				uint32(idx)%args.commitEveryNIter == 0 && idx != 0
 			shouldMarkByTime := (args.commitEvery != 0 && timeSinceLastMark > args.commitEvery)
-			if (shouldMarkByTime || timeout || shouldMarkByIter) && hasProcessData {
+			if (shouldMarkByTime || timeout) && hasProcessData {
 				err_out := t.markEpoch(dctx, em, args, &hasProcessData)
 				if err_out != nil {
 					return err_out
 				}
-				numMark += 1
 			}
 			// Exit routine
 			cur_elapsed = warmupCheck.ElapsedSinceInitial()
 			timeout = args.duration != 0 && cur_elapsed >= args.duration
-			shouldExitAfterNMark := (args.exitAfterNCommit != 0 && numMark == int(args.exitAfterNCommit))
-			if timeout || shouldExitAfterNMark {
+			if timeout {
 				if hasProcessData {
 					err_out := t.markEpoch(dctx, em, args, &hasProcessData)
 					if err_out != nil {
@@ -168,7 +161,6 @@ func (t *StreamTask) processInEpoch(
 				elapsed := time.Since(procStart)
 				latencies.AddSample(elapsed.Microseconds())
 			}
-			idx += 1
 		}
 	}
 }
