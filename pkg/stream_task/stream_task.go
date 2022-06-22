@@ -214,13 +214,16 @@ func setOffsetOnStream(offsetMap map[string]uint64, args *StreamTaskArgs) {
 func trackStreamAndConfigureExactlyOnce(args *StreamTaskArgs,
 	rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	trackStream func(name string, stream *sharedlog_stream.ShardedSharedLogStream),
-) {
+) error {
 	debug.Assert(len(args.ectx.Consumers()) >= 1, "Srcs should be filled")
 	debug.Assert(args.env != nil, "env should be filled")
 	debug.Assert(args.ectx != nil, "program args should be filled")
 	for _, src := range args.ectx.Consumers() {
 		if !src.IsInitialSource() {
-			src.ConfigExactlyOnce(args.serdeFormat, args.guarantee)
+			err := src.ConfigExactlyOnce(args.serdeFormat, args.guarantee)
+			if err != nil {
+				return err
+			}
 		}
 		trackStream(src.TopicName(),
 			src.Stream().(*sharedlog_stream.ShardedSharedLogStream))
@@ -240,6 +243,7 @@ func trackStreamAndConfigureExactlyOnce(args *StreamTaskArgs,
 			trackStream(winchangelog.ChangelogManager().TopicName(), winchangelog.ChangelogManager().Stream())
 		}
 	}
+	return nil
 }
 
 func checkMonitorReturns(

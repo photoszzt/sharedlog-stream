@@ -278,8 +278,8 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		aucManager.Out(),
 		perManager.Out(),
 		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr))
-	pctx := context.WithValue(ctx, "id", "person")
-	actx := context.WithValue(ctx, "id", "auction")
+	pctx := context.WithValue(ctx, benchutil.CTXID("id"), "person")
+	actx := context.WithValue(ctx, benchutil.CTXID("id"), "auction")
 
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(h.process).

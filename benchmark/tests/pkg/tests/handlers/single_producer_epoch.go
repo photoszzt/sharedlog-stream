@@ -26,6 +26,9 @@ func getEpochManager(ctx context.Context, env types.Environment,
 		return nil, nil, err
 	}
 	_, _, err = em.Init(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
 	trackParFunc := exactly_once_intr.TrackProdSubStreamFunc(
 		func(ctx context.Context, key interface{}, keySerde commtypes.Serde,
 			topicName string, substreamId uint8,
@@ -54,6 +57,9 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 	}
 	meteredProducer := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(stream1, produceSinkConfig), 0)
 	em1, trackParFunc1, err := getEpochManager(ctx, h.env, "prod1")
+	if err != nil {
+		panic(err)
+	}
 	meteredProducer.ConfigExactlyOnce(em1, exactly_once_intr.EPOCH_MARK)
 	msgForTm1 := []commtypes.Message{
 		{
@@ -95,7 +101,10 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 		panic(err)
 	}
 	src1 := producer_consumer.NewShardedSharedLogStreamConsumer(stream1ForRead, srcConfig)
-	src1.ConfigExactlyOnce(commtypes.JSON, exactly_once_intr.EPOCH_MARK)
+	err = src1.ConfigExactlyOnce(commtypes.JSON, exactly_once_intr.EPOCH_MARK)
+	if err != nil {
+		panic(err)
+	}
 	got, err := readMsgsEpoch(ctx, src1)
 	if err != nil {
 		panic(err)

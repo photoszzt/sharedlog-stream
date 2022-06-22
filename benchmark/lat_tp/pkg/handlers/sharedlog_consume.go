@@ -243,7 +243,6 @@ func (h *sharedlogConsumeBenchHandler) runLoop(ctx context.Context,
 		if err != nil {
 			return 0, err
 		}
-		hasUncommitted = false
 	}
 	return idx, nil
 }

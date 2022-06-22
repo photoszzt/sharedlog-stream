@@ -23,6 +23,8 @@ import (
 	"golang.org/x/xerrors"
 )
 
+type CTXID string
+
 type DumpOutputStreamConfig struct {
 	KVMsgSerdes   commtypes.KVMsgSerdes
 	OutputDir     string
@@ -88,10 +90,16 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 				}
 				if msgAndSeq.MsgArr != nil {
 					for _, msg := range msgAndSeq.MsgArr {
-						outputMsg(msg, outFile)
+						err = outputMsg(msg, outFile)
+						if err != nil {
+							return err
+						}
 					}
 				} else {
-					outputMsg(msgAndSeq.Msg, outFile)
+					err = outputMsg(msgAndSeq.Msg, outFile)
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}

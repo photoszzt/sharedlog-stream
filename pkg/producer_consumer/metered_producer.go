@@ -73,7 +73,10 @@ func (s *ConcurrentMeteredSink) InitFlushTimer() {}
 func (s *ConcurrentMeteredSink) Produce(ctx context.Context, msg commtypes.Message,
 	parNum uint8, isControl bool,
 ) error {
-	assignInjTime(&msg)
+	err := assignInjTime(&msg)
+	if err != nil {
+		return err
+	}
 	s.produceTp.Tick(1)
 	if s.measure {
 		s.warmup.Check()
@@ -94,7 +97,7 @@ func (s *ConcurrentMeteredSink) Produce(ctx context.Context, msg commtypes.Messa
 		}
 	}
 	procStart := stats.TimerBegin()
-	err := s.ShardedSharedLogStreamProducer.Produce(ctx, msg, parNum, isControl)
+	err = s.ShardedSharedLogStreamProducer.Produce(ctx, msg, parNum, isControl)
 	elapsed := stats.Elapsed(procStart).Microseconds()
 	s.lat.AddSample(elapsed)
 	return err
@@ -135,7 +138,10 @@ func (s *MeteredProducer) StartWarmup() {
 }
 
 func (s *MeteredProducer) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
-	assignInjTime(&msg)
+	err := assignInjTime(&msg)
+	if err != nil {
+		return err
+	}
 	s.produceTp.Tick(1)
 	if s.measure {
 		s.warmup.Check()
@@ -154,7 +160,7 @@ func (s *MeteredProducer) Produce(ctx context.Context, msg commtypes.Message, pa
 		}
 	}
 	procStart := stats.TimerBegin()
-	err := s.ShardedSharedLogStreamProducer.Produce(ctx, msg, parNum, isControl)
+	err = s.ShardedSharedLogStreamProducer.Produce(ctx, msg, parNum, isControl)
 	elapsed := stats.Elapsed(procStart).Microseconds()
 	s.latencies.AddSample(elapsed)
 	return err

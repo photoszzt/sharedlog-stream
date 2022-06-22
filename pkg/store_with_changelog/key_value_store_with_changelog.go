@@ -3,9 +3,9 @@ package store_with_changelog
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/treemap"
 	"time"
 )
@@ -85,10 +85,11 @@ func (st *KeyValueStoreWithChangelog) Put(ctx context.Context, key commtypes.Key
 			return err
 		}
 		err = st.kvstore.Put(ctx, keyBytes, valBytes)
+		return err
 	} else {
 		err = st.kvstore.Put(ctx, key, value)
+		return err
 	}
-	return err
 }
 
 func (st *KeyValueStoreWithChangelog) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {

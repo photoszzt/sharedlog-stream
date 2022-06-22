@@ -117,10 +117,6 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		// fmt.Fprintf(os.Stderr, "val1: %v, val2: %v\n", value1, value2)
 		lv := value1.(*ntypes.Event)
 		rv := value2.(*ntypes.StartEndTime)
-		st := leftTs
-		if st > otherTs {
-			st = otherTs
-		}
 		return &ntypes.BidAndMax{
 			Price:    lv.Bid.Price,
 			Auction:  lv.Bid.Auction,
@@ -214,8 +210,18 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	procArgs := execution.NewCommonJoinProcArgs(joinProcBid, joinProcMaxBid,
 		bidManager.Out(), maxBidManager.Out(),
 		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr))
-	bctx := context.WithValue(ctx, "id", "bid")
-	mctx := context.WithValue(ctx, "id", "maxBid")
+	update_stats := func(ret *common.FnOutput) {
+		ret.Latencies["eventTimeLatency"] = sinks_arr[0].GetEventTimeLatency()
+	}
+	transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
+	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
+		WindowStoreChangelogs(wsc).
+		FixedOutParNum(sp.ParNum).
+		Build()
+
+	bctx := context.WithValue(ctx, benchutil.CTXID("id"), "bid")
+	mctx := context.WithValue(ctx, benchutil.CTXID("id"), "maxBid")
 
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, args interface{}) *common.FnOutput {
@@ -244,14 +250,5 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	bidManager.LaunchJoinProcLoop(bctx, task, joinProcBid, &wg)
 	maxBidManager.LaunchJoinProcLoop(mctx, task, joinProcMaxBid, &wg)
 
-	update_stats := func(ret *common.FnOutput) {
-		ret.Latencies["eventTimeLatency"] = sinks_arr[0].GetEventTimeLatency()
-	}
-	transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
-	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
-		WindowStoreChangelogs(wsc).
-		FixedOutParNum(sp.ParNum).
-		Build()
 	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
 }

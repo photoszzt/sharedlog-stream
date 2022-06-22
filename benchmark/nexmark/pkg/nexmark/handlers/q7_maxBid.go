@@ -188,9 +188,7 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 			args := argsTmp.(processor.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
 		}).Build()
-
-	var kvc []*store_restore.KVStoreChangelog
-	kvc = []*store_restore.KVStoreChangelog{
+	kvc := []*store_restore.KVStoreChangelog{
 		store_restore.NewKVStoreChangelog(
 			kvstore, kvstore.MaterializeParam().ChangelogManager(),
 			kvstore.MaterializeParam().ParNum(),

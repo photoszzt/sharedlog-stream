@@ -9,11 +9,15 @@ import (
 	"time"
 )
 
-func assignInjTime(msg *commtypes.Message) {
+func assignInjTime(msg *commtypes.Message) error {
 	nowMs := time.Now().UnixMilli()
 	if !MsgIsScaleFence(msg) {
-		commtypes.UpdateValInjectTime(msg, nowMs)
+		err := commtypes.UpdateValInjectTime(msg, nowMs)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func extractProduceToConsumeTime(msgSeqs *commtypes.MsgAndSeqs, isInitialSrc bool, collector *stats.Int64Collector) error {

@@ -73,7 +73,10 @@ func main() {
 		rest := FLAGS_events_num
 		if FLAGS_warmup > 0 && FLAGS_warmupEvents > 0 {
 			fmt.Fprintf(os.Stdout, "begin warmup")
-			idx_consumed := runLoop(time.Duration(FLAGS_warmup)*time.Second, FLAGS_warmupEvents, c, commitEvery)
+			idx_consumed, err := runLoop(time.Duration(FLAGS_warmup)*time.Second, FLAGS_warmupEvents, c, commitEvery)
+			if err != nil {
+				panic(err)
+			}
 			rest = FLAGS_events_num - idx_consumed
 			fmt.Fprintf(os.Stdout, "down warmup")
 		}
@@ -85,7 +88,10 @@ func main() {
 		for {
 			select {
 			case <-commitTimer.C:
-				c.Commit()
+				_, err := c.Commit()
+				if err != nil {
+					panic(err)
+				}
 				hasUncommitted = false
 			default:
 			}
@@ -113,7 +119,10 @@ func main() {
 			}
 		}
 		if hasUncommitted {
-			c.Commit()
+			_, err := c.Commit()
+			if err != nil {
+				panic(err)
+			}
 		}
 		totalTime := time.Since(start).Seconds()
 		fmt.Fprintf(os.Stderr, "\n%v\n", prod_to_con_lat)
@@ -124,10 +133,10 @@ func main() {
 		fmt.Fprint(w, "done consume")
 	}
 	http.HandleFunc("/consume", handleConsume)
-	http.ListenAndServe(":8090", nil)
+	_ = http.ListenAndServe(":8090", nil)
 }
 
-func runLoop(duration time.Duration, warmup_events int, c *kafka.Consumer, commitEvery time.Duration) int {
+func runLoop(duration time.Duration, warmup_events int, c *kafka.Consumer, commitEvery time.Duration) (int, error) {
 	start := time.Now()
 	commitTimer := time.Now()
 	idx := 0
@@ -144,12 +153,15 @@ func runLoop(duration time.Duration, warmup_events int, c *kafka.Consumer, commi
 		switch ev.(type) {
 		case *kafka.Message:
 			if time.Since(commitTimer) >= commitEvery {
-				c.Commit()
+				_, err := c.Commit()
+				if err != nil {
+					return idx, err
+				}
 				commitTimer = time.Now()
 			}
 			idx += 1
 		}
 	}
-	c.Commit()
-	return idx
+	_, err := c.Commit()
+	return idx, err
 }

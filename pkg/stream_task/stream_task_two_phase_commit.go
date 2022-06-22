@@ -145,11 +145,14 @@ func (t *StreamTask) processWithTransaction(
 	cmm *control_channel.ControlChannelManager,
 	args *StreamTaskArgs,
 ) *common.FnOutput {
-	trackStreamAndConfigureExactlyOnce(args, tm,
+	err := trackStreamAndConfigureExactlyOnce(args, tm,
 		func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {
 			tm.RecordTopicStreams(name, stream)
 			cmm.TrackStream(name, stream)
 		})
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 
 	dctx, dcancel := context.WithCancel(ctx)
 	tm.StartMonitorLog(dctx, dcancel)

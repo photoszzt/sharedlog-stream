@@ -111,7 +111,7 @@ func (cm *ConsumeSeqManager) FindLastConsumedSeqNum(ctx context.Context, topicTo
 
 	// find the most recent transaction marker
 	txnMarkerTag := txn_data.MarkerTag(offsetLog.TopicNameHash(), parNum)
-	var txnMkRawMsg *commtypes.RawMsg = nil
+	var txnMkRawMsg *commtypes.RawMsg
 	var err error
 
 	txnMkRawMsg, err = offsetLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, parNum, txnMarkerTag)

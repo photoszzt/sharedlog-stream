@@ -46,6 +46,7 @@ func getProduceTransactionManager(
 	return tm1, trackParFunc1
 }
 
+/*
 func getConsumeTransactionManager(
 	ctx context.Context, env types.Environment, transactionalID string,
 	src *producer_consumer.ShardedSharedLogStreamConsumer, sp *common.QueryInput,
@@ -72,6 +73,7 @@ func getConsumeTransactionManager(
 	}
 	return tm1, trackParFunc1
 }
+*/
 
 func (h *produceConsumeHandler) beginTransaction(ctx context.Context,
 	tm *transaction.TransactionManager, stream1 *sharedlog_stream.ShardedSharedLogStream) {
@@ -203,7 +205,10 @@ func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 	}
 
 	src1 := producer_consumer.NewShardedSharedLogStreamConsumer(stream1ForRead, srcConfig)
-	src1.ConfigExactlyOnce(commtypes.JSON, exactly_once_intr.TWO_PHASE_COMMIT)
+	err = src1.ConfigExactlyOnce(commtypes.JSON, exactly_once_intr.TWO_PHASE_COMMIT)
+	if err != nil {
+		panic(err)
+	}
 	payloadArrSerde := sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDE
 	got, err := readMsgs(ctx, kvmsgSerdes, payloadArrSerde, commtypes.JSON, stream1ForRead)
 	if err != nil {

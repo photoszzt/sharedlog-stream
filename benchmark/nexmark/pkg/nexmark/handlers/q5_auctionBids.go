@@ -153,14 +153,14 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 			val := aggregate.(uint64)
 			return val + 1
 		}), hopWindow), time.Duration(sp.WarmupS)*time.Second)
-	var wsc []*store_restore.WindowStoreChangelog
-	wsc = []*store_restore.WindowStoreChangelog{
+	wsc := []*store_restore.WindowStoreChangelog{
 		store_restore.NewWindowStoreChangelog(
 			countWindowStore, countMp.ChangelogManager(), sp.ParNum),
 	}
 	return countProc, wsc, nil
 }
 
+/*
 type q5AuctionBidsProcessArg struct {
 	countProc      *processor.MeteredProcessor
 	groupByAuction *processor.MeteredProcessor
@@ -168,7 +168,6 @@ type q5AuctionBidsProcessArg struct {
 	processor.BaseExecutionContext
 }
 
-/*
 type q5AuctionBidsRestoreArg struct {
 	countProc      processor.Processor
 	groupByAuction processor.Processor

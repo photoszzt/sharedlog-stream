@@ -61,6 +61,10 @@ type FnOutput struct {
 	Success   bool              `json:"success,omitempty"`
 }
 
+func GenErrFnOutput(err error) *FnOutput {
+	return &FnOutput{Success: false, Message: err.Error()}
+}
+
 type SourceParam struct {
 	TopicName       string `json:"topicName"`
 	FileName        string `json:"fname,omitempty"`

@@ -77,10 +77,13 @@ func (t *StreamTask) processInEpoch(
 	cmm *control_channel.ControlChannelManager,
 	args *StreamTaskArgs,
 ) *common.FnOutput {
-	trackStreamAndConfigureExactlyOnce(args, em,
+	err := trackStreamAndConfigureExactlyOnce(args, em,
 		func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {
 			cmm.TrackStream(name, stream)
 		})
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 
 	dctx, dcancel := context.WithCancel(ctx)
 	em.StartMonitorLog(dctx, dcancel)
@@ -136,7 +139,10 @@ func (t *StreamTask) processInEpoch(
 
 			// init
 			if !hasProcessData {
-				t.initAfterMarkOrCommit(ctx, args, em, &init)
+				err := t.initAfterMarkOrCommit(ctx, args, em, &init)
+				if err != nil {
+					return common.GenErrFnOutput(err)
+				}
 				markTimer = time.Now()
 			}
 			ret := t.appProcessFunc(ctx, t, args.ectx)

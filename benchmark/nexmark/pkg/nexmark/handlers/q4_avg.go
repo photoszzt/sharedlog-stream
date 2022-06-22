@@ -158,8 +158,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
 		}).Build()
 
-	var kvc []*store_restore.KVStoreChangelog
-	kvc = []*store_restore.KVStoreChangelog{
+	kvc := []*store_restore.KVStoreChangelog{
 		store_restore.NewKVStoreChangelog(kvstore, mp.ChangelogManager(), sp.ParNum),
 	}
 	update_stats := func(ret *common.FnOutput) {

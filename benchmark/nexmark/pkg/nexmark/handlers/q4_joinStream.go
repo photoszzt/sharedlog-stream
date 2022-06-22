@@ -224,8 +224,8 @@ func (h *q4JoinStreamHandler) Q4JoinTable(ctx context.Context, sp *common.QueryI
 		aucManager.Out(), bidManager.Out(),
 		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr))
 
-	bctx := context.WithValue(ctx, "id", "bid")
-	actx := context.WithValue(ctx, "id", "auction")
+	bctx := context.WithValue(ctx, benchutil.CTXID("id"), "bid")
+	actx := context.WithValue(ctx, benchutil.CTXID("id"), "auction")
 
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(h.process).

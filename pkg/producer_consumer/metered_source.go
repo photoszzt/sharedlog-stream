@@ -54,7 +54,7 @@ func (s *MeteredConsumer) Consume(ctx context.Context, parNum uint8) (*commtypes
 	}
 	s.latencies.AddSample(elapsed)
 	s.consumeTp.Tick(uint64(msgs.TotalLen))
-	extractProduceToConsumeTime(msgs, s.IsInitialSource(), &s.pToCLat)
+	err = extractProduceToConsumeTime(msgs, s.IsInitialSource(), &s.pToCLat)
 	// debug.Fprintf(os.Stderr, "%s consumed %d\n", s.src.TopicName(), s.count)
 	return msgs, err
 }

@@ -175,8 +175,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
 		}).Build()
 
-	var kvc []*store_restore.KVStoreChangelog
-	kvc = []*store_restore.KVStoreChangelog{
+	kvc := []*store_restore.KVStoreChangelog{
 		store_restore.NewKVStoreChangelog(kvstore, mp.ChangelogManager(), sp.ParNum),
 	}
 
