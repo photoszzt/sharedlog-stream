@@ -9,8 +9,8 @@ import (
 type TableFilterProcessor struct {
 	pred      Predicate
 	store     store.KeyValueStore
-	filterNot bool
 	name      string
+	filterNot bool
 }
 
 var _ = Processor(&TableFilterProcessor{})

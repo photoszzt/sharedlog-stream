@@ -7,8 +7,8 @@ import (
 
 // Branch processor
 type BranchProcessor struct {
-	preds []Predicate
 	name  string
+	preds []Predicate
 }
 
 func NewBranchProcessor(name string, preds []Predicate) Processor {

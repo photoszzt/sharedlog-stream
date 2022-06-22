@@ -14,8 +14,8 @@ type StreamWindowAggregateProcessor struct {
 	initializer        Initializer
 	aggregator         Aggregator
 	windows            EnumerableWindowDefinition
-	observedStreamTime int64
 	name               string
+	observedStreamTime int64
 }
 
 var _ = Processor(&StreamWindowAggregateProcessor{})
