@@ -79,5 +79,7 @@ func main() {
 		invokeTest(client, "multiProducer2pc", "multiProducer2pc", &response)
 		response = common.FnOutput{}
 		invokeTest(client, "singleProducerEpoch", "singleProducerEpoch", &response)
+		response = common.FnOutput{}
+		invokeTest(client, "multiProducerEpoch", "multiProducerEpoch", &response)
 	}
 }

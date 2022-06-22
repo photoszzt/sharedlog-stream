@@ -40,6 +40,8 @@ func (h *produceConsumeHandler) tests(ctx context.Context, sp *test_types.TestIn
 		h.testMultiProducer2pc(ctx)
 	} else if sp.TestName == "singleProducerEpoch" {
 		h.testSingleProduceConsumeEpoch(ctx)
+	} else if sp.TestName == "multiProducerEpoch" {
+		h.testMultiProducerEpoch(ctx)
 	} else {
 		return &common.FnOutput{
 			Success: false,
