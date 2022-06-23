@@ -169,13 +169,11 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 			auctionsBySellerIDManager.LaunchProc(ctx, procArgs, &wg)
 			debug.Fprintf(os.Stderr, "done resume\n")
 		}).Build()
-
-	update_stats := func(ret *common.FnOutput) {}
-	transactionalID := fmt.Sprintf("%s-%s-%d",
-		h.funcName, sp.InputTopicNames[0], sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
+		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs,
+			fmt.Sprintf("%s-%s-%d",
+				h.funcName, sp.InputTopicNames[0], sp.ParNum))).Build()
+	return task.ExecuteApp(ctx, streamTaskArgs)
 }
 
 func (h *q3GroupByHandler) getPersonsByID(warmup time.Duration) execution.GeneralProcFunc {
@@ -184,7 +182,7 @@ func (h *q3GroupByHandler) getPersonsByID(warmup time.Duration) execution.Genera
 			event := msg.Value.(*ntypes.Event)
 			return event.Etype == ntypes.PERSON && ((event.NewPerson.State == "OR") ||
 				event.NewPerson.State == "ID" || event.NewPerson.State == "CA"), nil
-		})), warmup)
+		})))
 	personsByIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
 		"personsByIDMap",
 		processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
@@ -194,7 +192,7 @@ func (h *q3GroupByHandler) getPersonsByID(warmup time.Duration) execution.Genera
 				Value:     msg.Value,
 				Timestamp: msg.Timestamp,
 			}, nil
-		})), warmup)
+		})))
 
 	return func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error) {
 		args := argsTmp.(*TwoMsgChanProcArgs)
@@ -239,13 +237,13 @@ func (h *q3GroupByHandler) getAucBySellerID(warmup time.Duration) execution.Gene
 		func(m *commtypes.Message) (bool, error) {
 			event := m.Value.(*ntypes.Event)
 			return event.Etype == ntypes.AUCTION && event.NewAuction.Category == 10, nil
-		})), warmup)
+		})))
 
 	auctionsBySellerIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
 		"auctionsBySellerIDMap", processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 			event := msg.Value.(*ntypes.Event)
 			return commtypes.Message{Key: event.NewAuction.Seller, Value: msg.Value, Timestamp: msg.Timestamp}, nil
-		})), warmup)
+		})))
 
 	return func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup,
 		msgChan chan commtypes.Message, errChan chan error,

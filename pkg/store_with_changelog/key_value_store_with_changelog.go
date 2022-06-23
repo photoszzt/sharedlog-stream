@@ -171,11 +171,11 @@ func (st *KeyValueStoreWithChangelog) SetTrackParFunc(trackParFunc exactly_once_
 }
 
 func ToInMemKVTableWithChangelog(storeName string, mp *MaterializeParam,
-	compare func(a, b treemap.Key) int, warmup time.Duration,
+	compare func(a, b treemap.Key) int,
 ) (*processor.MeteredProcessor, store.KeyValueStore, error) {
 	s := store.NewInMemoryKeyValueStore(storeName, compare)
 	tabWithLog := NewKeyValueStoreWithChangelog(mp, s, false)
-	toTableProc := processor.NewMeteredProcessor(processor.NewStoreToKVTableProcessor(tabWithLog), warmup)
+	toTableProc := processor.NewMeteredProcessor(processor.NewStoreToKVTableProcessor(tabWithLog))
 	return toTableProc, tabWithLog, nil
 }
 

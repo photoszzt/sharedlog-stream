@@ -4,9 +4,9 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/exactly_once_intr"
 	"time"
 )
 
@@ -181,7 +181,6 @@ func ToInMemWindowTableWithChangelog(
 	mp *MaterializeParam,
 	joinWindow *processor.JoinWindows,
 	comparable concurrent_skiplist.Comparable,
-	warmup time.Duration,
 ) (*processor.MeteredProcessor, store.WindowStore, error) {
 	tabWithLog, err := NewInMemoryWindowStoreWithChangelog(
 		joinWindow.MaxSize()+joinWindow.GracePeriodMs(),
@@ -189,6 +188,6 @@ func ToInMemWindowTableWithChangelog(
 	if err != nil {
 		return nil, nil, err
 	}
-	toTableProc := processor.NewMeteredProcessor(processor.NewStoreToWindowTableProcessor(tabWithLog), warmup)
+	toTableProc := processor.NewMeteredProcessor(processor.NewStoreToWindowTableProcessor(tabWithLog))
 	return toTableProc, tabWithLog, nil
 }

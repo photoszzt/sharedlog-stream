@@ -50,11 +50,11 @@ func (p *StoreToKVTableProcessor) ProcessAndReturn(ctx context.Context, msg comm
 	return []commtypes.Message{msg}, nil
 }
 
-func ToInMemKVTable(storeName string, compare func(a, b treemap.Key) int, warmup time.Duration) (
+func ToInMemKVTable(storeName string, compare func(a, b treemap.Key) int) (
 	*MeteredProcessor, store.KeyValueStore,
 ) {
 	s := store.NewInMemoryKeyValueStore(storeName, compare)
-	toTableProc := NewMeteredProcessor(NewStoreToKVTableProcessor(s), warmup)
+	toTableProc := NewMeteredProcessor(NewStoreToKVTableProcessor(s))
 	return toTableProc, s
 }
 
@@ -75,5 +75,5 @@ func ToMongoDBKVTable(ctx context.Context,
 	if err != nil {
 		return nil, nil, err
 	}
-	return NewMeteredProcessor(NewStoreToKVTableProcessor(mkvs), warmup), mkvs, nil
+	return NewMeteredProcessor(NewStoreToKVTableProcessor(mkvs)), mkvs, nil
 }

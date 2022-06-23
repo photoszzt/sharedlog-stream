@@ -16,7 +16,6 @@ import (
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
-	"sync"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -141,7 +140,6 @@ func (h *q4JoinStreamHandler) Q4JoinTable(ctx context.Context, sp *common.QueryI
 			AucCategory: auc.Category,
 		}
 	})
-	warmup := time.Duration(sp.WarmupS) * time.Second
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
 	aucMp, err := store_with_changelog.NewMaterializeParamBuilder().
@@ -163,7 +161,7 @@ func (h *q4JoinStreamHandler) Q4JoinTable(ctx context.Context, sp *common.QueryI
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	aucJoinBidsFunc, bidsJoinAucFunc, wsc, err := execution.SetupStreamStreamJoin(
-		aucMp, bidMp, compare, joiner, jw, warmup)
+		aucMp, bidMp, compare, joiner, jw)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -173,9 +171,7 @@ func (h *q4JoinStreamHandler) Q4JoinTable(ctx context.Context, sp *common.QueryI
 				func(msg *commtypes.Message) (bool, error) {
 					ab := msg.Value.(*ntypes.AuctionBid)
 					return ab.BidDateTime >= ab.AucDateTime && ab.BidDateTime <= ab.AucExpires, nil
-				})),
-		time.Duration(sp.WarmupS)*time.Second,
-	)
+				})))
 
 	filterAndGroupMsg := func(ctx context.Context, msgs []commtypes.Message) ([]commtypes.Message, error) {
 		var newMsgs []commtypes.Message
@@ -211,53 +207,14 @@ func (h *q4JoinStreamHandler) Q4JoinTable(ctx context.Context, sp *common.QueryI
 		}
 		return filterAndGroupMsg(ctx, joined)
 	})
-	joinProcAuction, joinProcBid := execution.CreateJoinProcArgsPair(
-		aJoinB, bJoinA, srcs, sinks_arr,
-		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum))
-
-	var wg sync.WaitGroup
-	aucManager := execution.NewJoinProcManager()
-	bidManager := execution.NewJoinProcManager()
-
-	procArgs := execution.NewCommonJoinProcArgs(
-		joinProcAuction, joinProcBid,
-		aucManager.Out(), bidManager.Out(),
-		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr))
-
-	bctx := context.WithValue(ctx, benchutil.CTXID("id"), "bid")
-	actx := context.WithValue(ctx, benchutil.CTXID("id"), "auction")
-
-	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(h.process).
-		InitFunc(func(progArgs interface{}) {
-			aucManager.Run()
-			bidManager.Run()
-		}).
-		PauseFunc(func() *common.FnOutput {
-			aucManager.RequestToTerminate()
-			bidManager.RequestToTerminate()
-			wg.Wait()
-			ret := execution.HandleJoinErrReturn(procArgs)
-			if ret != nil {
-				return ret
-			}
-			return nil
-		}).
-		ResumeFunc(func(task *stream_task.StreamTask) {
-			aucManager.LaunchJoinProcLoop(actx, task, joinProcAuction, &wg)
-			bidManager.LaunchJoinProcLoop(bctx, task, joinProcBid, &wg)
-
-			aucManager.Run()
-			bidManager.Run()
-		}).Build()
-	aucManager.LaunchJoinProcLoop(actx, task, joinProcAuction, &wg)
-	bidManager.LaunchJoinProcLoop(bctx, task, joinProcBid, &wg)
-
-	update_stats := func(ret *common.FnOutput) {}
+	task, procArgs := execution.PrepareTaskWithJoin(
+		ctx, aJoinB, bJoinA, proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
+		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum),
+	)
 	transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName,
 		sp.InputTopicNames[0], sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
 		WindowStoreChangelogs(wsc).FixedOutParNum(sp.ParNum).Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs)
 }

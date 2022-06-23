@@ -177,11 +177,12 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 				return v.Bid.Price
 			}
 			return agg
-		})), warmup)).Via(
-		processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
-			"remapKV", processor.MapperFunc(func(m commtypes.Message) (commtypes.Message, error) {
-				return commtypes.Message{Key: m.Value, Value: m.Key, Timestamp: m.Timestamp}, nil
-			})), warmup)).
+		})))).
+		Via(
+			processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
+				"remapKV", processor.MapperFunc(func(m commtypes.Message) (commtypes.Message, error) {
+					return commtypes.Message{Key: m.Value, Value: m.Key, Timestamp: m.Timestamp}, nil
+				})))).
 		Via(processor.NewGroupByOutputProcessor(sinks_arr[0], &ectx))
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
@@ -194,11 +195,10 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 			kvstore.MaterializeParam().ParNum(),
 		),
 	}
-	update_stats := func(ret *common.FnOutput) {}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 		sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).
 		KVStoreChangelogs(kvc).Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs)
 }

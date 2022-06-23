@@ -17,7 +17,6 @@ import (
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
-	"sync"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -107,6 +106,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
+	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
 	jw, err := processor.NewJoinWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
@@ -128,7 +128,6 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 			},
 		}
 	})
-	warmup := time.Duration(sp.WarmupS) * time.Second
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
 	bMp, err := store_with_changelog.NewMaterializeParamBuilder().
@@ -153,7 +152,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	bJoinMaxBFunc, maxBJoinBFunc, wsc, err := execution.SetupStreamStreamJoin(bMp, maxBMp, compare, joiner, jw, warmup)
+	bJoinMaxBFunc, maxBJoinBFunc, wsc, err := execution.SetupStreamStreamJoin(bMp, maxBMp, compare, joiner, jw)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -162,7 +161,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		"filter", processor.PredicateFunc(func(m *commtypes.Message) (bool, error) {
 			val := m.Value.(*ntypes.BidAndMax)
 			return val.Timestamp >= val.WStartMs && val.Timestamp <= val.WEndMs, nil
-		})), warmup)
+		})))
 
 	var bJoinM execution.JoinWorkerFunc = func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		joined, err := bJoinMaxBFunc(ctx, m)
@@ -199,56 +198,13 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		return outMsgs, nil
 
 	}
-	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
-	joinProcBid, joinProcMaxBid := execution.CreateJoinProcArgsPair(
-		bJoinM, mJoinB, srcs, sinks_arr,
-		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum))
-	var wg sync.WaitGroup
-	bidManager := execution.NewJoinProcManager()
-	maxBidManager := execution.NewJoinProcManager()
-
-	procArgs := execution.NewCommonJoinProcArgs(joinProcBid, joinProcMaxBid,
-		bidManager.Out(), maxBidManager.Out(),
-		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr))
-	update_stats := func(ret *common.FnOutput) {
-		ret.Latencies["eventTimeLatency"] = sinks_arr[0].GetEventTimeLatency()
-	}
-	transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
+	task, procArgs := execution.PrepareTaskWithJoin(
+		ctx, bJoinM, mJoinB, proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
+		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum),
+	)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
-		WindowStoreChangelogs(wsc).
-		FixedOutParNum(sp.ParNum).
-		Build()
-
-	bctx := context.WithValue(ctx, benchutil.CTXID("id"), "bid")
-	mctx := context.WithValue(ctx, benchutil.CTXID("id"), "maxBid")
-
-	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, args interface{}) *common.FnOutput {
-			return execution.HandleJoinErrReturn(args)
-		}).
-		InitFunc(func(progArgs interface{}) {
-			bidManager.Run()
-			maxBidManager.Run()
-		}).
-		PauseFunc(func() *common.FnOutput {
-			bidManager.RequestToTerminate()
-			maxBidManager.RequestToTerminate()
-			wg.Wait()
-			if ret := execution.HandleJoinErrReturn(procArgs); ret != nil {
-				return ret
-			}
-			return nil
-		}).
-		ResumeFunc(func(task *stream_task.StreamTask) {
-			bidManager.LaunchJoinProcLoop(bctx, task, joinProcBid, &wg)
-			maxBidManager.LaunchJoinProcLoop(mctx, task, joinProcMaxBid, &wg)
-
-			bidManager.Run()
-			maxBidManager.Run()
-		}).Build()
-	bidManager.LaunchJoinProcLoop(bctx, task, joinProcBid, &wg)
-	maxBidManager.LaunchJoinProcLoop(mctx, task, joinProcMaxBid, &wg)
-
-	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
+		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs,
+			fmt.Sprintf("%s-%d", h.funcName, sp.ParNum))).
+		WindowStoreChangelogs(wsc).FixedOutParNum(sp.ParNum).Build()
+	return task.ExecuteApp(ctx, streamTaskArgs)
 }

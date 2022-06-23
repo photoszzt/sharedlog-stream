@@ -4,7 +4,6 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/stats"
-	"time"
 )
 
 type MeteredProcessor struct {
@@ -12,7 +11,7 @@ type MeteredProcessor struct {
 	latencies stats.ConcurrentInt64Collector
 }
 
-func NewMeteredProcessor(proc Processor, warmup time.Duration) *MeteredProcessor {
+func NewMeteredProcessor(proc Processor) *MeteredProcessor {
 	return &MeteredProcessor{
 		proc:      proc,
 		latencies: stats.NewConcurrentInt64Collector(proc.Name(), stats.DEFAULT_COLLECT_DURATION),

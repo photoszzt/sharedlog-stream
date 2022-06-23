@@ -169,7 +169,7 @@ func (h *windowedAvg) getAggProcessor(ctx context.Context, sp *common.QueryInput
 				Sum:   agg.Sum + val.Bid.Price,
 				Count: agg.Count + 1,
 			}
-		}), timeWindows), time.Duration(sp.WarmupS)*time.Second)
+		}), timeWindows))
 	return aggProc, nil
 }
 
@@ -289,6 +289,6 @@ func (h *windowedAvg) windowavg_aggregate(ctx context.Context, sp *common.QueryI
 		processor.ValueMapperFunc(func(value interface{}) (interface{}, error) {
 			val := value.(*ntypes.SumAndCount)
 			return float64(val.Sum) / float64(val.Count), nil
-		})), time.Duration(sp.WarmupS)*time.Second)
+		})))
 	return h.process(ctx, sp, src, sink, aggProc, calcAvg)
 }

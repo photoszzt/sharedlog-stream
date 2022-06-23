@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
@@ -68,27 +67,22 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 	srcsSinks := proc_interface.NewBaseSrcsSinks(srcs, sinks)
 	ectx := processor.NewExecutionContextFromComponents(srcsSinks, proc_interface.NewBaseProcArgs(h.funcName,
 		sp.ScaleEpoch, sp.ParNum))
-	warmup := time.Duration(sp.WarmupS) * time.Second
 	ectx.Via(processor.NewMeteredProcessor(
 		processor.NewStreamFilterProcessor("q2Filter",
-			processor.PredicateFunc(filterFunc)), warmup)).
+			processor.PredicateFunc(filterFunc)))).
 		Via(processor.NewMeteredProcessor(
-			processor.NewFixedSubstreamOutputProcessor(sinks[0], sp.ParNum), warmup))
+			processor.NewFixedSubstreamOutputProcessor(sinks[0], sp.ParNum)))
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
 			args := argsTmp.(processor.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
 		}).Build()
-
-	update_stats := func(ret *common.FnOutput) {
-		ret.Latencies["eventTimeLatency"] = sinks[0].GetEventTimeLatency()
-	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).
 		FixedOutParNum(sp.ParNum).
 		Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs)
 }
 
 /*

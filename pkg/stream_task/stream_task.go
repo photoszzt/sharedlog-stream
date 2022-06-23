@@ -34,7 +34,6 @@ type StreamTask struct {
 
 func (t *StreamTask) ExecuteApp(ctx context.Context,
 	streamTaskArgs *StreamTaskArgs,
-	update_stats func(ret *common.FnOutput),
 ) *common.FnOutput {
 	var ret *common.FnOutput
 	if streamTaskArgs.guarantee == exactly_once_intr.TWO_PHASE_COMMIT {
@@ -60,8 +59,10 @@ func (t *StreamTask) ExecuteApp(ctx context.Context,
 		}
 		for _, sink := range streamTaskArgs.ectx.Producers() {
 			ret.Counts[sink.Name()] = sink.GetCount()
+			if sink.IsFinalOutput() {
+				ret.Latencies["eventTimeLatency_"+sink.Name()] = sink.GetEventTimeLatency()
+			}
 		}
-		update_stats(ret)
 	}
 	return ret
 }

@@ -125,7 +125,6 @@ func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *com
 	}
 	ectx := processor.NewExecutionContext(srcs, sinks_arr,
 		h.funcName, sp.ScaleEpoch, sp.ParNum)
-	warmup := time.Duration(sp.WarmupS) * time.Second
 	tw, err := processor.NewTimeWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(2)*time.Second)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
@@ -134,7 +133,7 @@ func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *com
 		processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
 			event := msg.Value.(*ntypes.Event)
 			return event.Etype == ntypes.BID, nil
-		})), warmup)).
+		})))).
 		Via(processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
 			"bidByWin", processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 				event := msg.Value.(*ntypes.Event)
@@ -145,17 +144,16 @@ func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *com
 				debug.Assert(wEnd > 0, "window end should be > 0")
 				win := ntypes.StartEndTime{StartTimeMs: windowStart, EndTimeMs: wEnd}
 				return commtypes.Message{Key: win, Value: msg.Value, Timestamp: msg.Timestamp}, nil
-			})), warmup)).
+			})))).
 		Via(processor.NewGroupByOutputProcessor(sinks_arr[0], &ectx))
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
 			args := argsTmp.(processor.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
 		}).Build()
-
-	update_stats := func(ret *common.FnOutput) {}
-	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
+	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
+		sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs)
 }

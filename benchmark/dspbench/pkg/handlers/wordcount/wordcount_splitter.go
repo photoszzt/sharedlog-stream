@@ -169,14 +169,8 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 			src.StartWarmup()
 			sink.StartWarmup()
 		}).Build()
-
-	update_stats := func(ret *common.FnOutput) {
-		ret.Latencies["split"] = procArgs.splitLatencies
-		ret.Counts["sink"] = sink.GetCount()
-		ret.Counts["src"] = src.GetCount()
-	}
-	transactionalID := fmt.Sprintf("%s-%s-%d", funcName, sp.InputTopicNames[0], sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
+		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs,
+			fmt.Sprintf("%s-%s-%d", funcName, sp.InputTopicNames[0], sp.ParNum))).Build()
+	return task.ExecuteApp(ctx, streamTaskArgs)
 }

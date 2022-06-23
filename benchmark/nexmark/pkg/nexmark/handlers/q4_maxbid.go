@@ -159,14 +159,14 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 			} else {
 				return agg
 			}
-		})), warmup)).
+		})))).
 		Via(processor.NewMeteredProcessor(processor.NewStreamMapProcessor("changeKey",
 			processor.MapperFunc(func(m commtypes.Message) (commtypes.Message, error) {
 				return commtypes.Message{
 					Key:   m.Key.(*ntypes.AuctionIdCategory).Category,
 					Value: m.Value,
 				}, nil
-			})), warmup)).
+			})))).
 		Via(processor.NewGroupByOutputProcessor(sinks_arr[0], &ectx))
 
 	task := stream_task.NewStreamTaskBuilder().
@@ -178,14 +178,10 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	kvc := []*store_restore.KVStoreChangelog{
 		store_restore.NewKVStoreChangelog(kvstore, mp.ChangelogManager(), sp.ParNum),
 	}
-
-	update_stats := func(ret *common.FnOutput) {
-		ret.Latencies["eventTimeLatency"] = sinks_arr[0].GetEventTimeLatency()
-	}
-	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
-		sp.ParNum, sp.OutputTopicNames[0])
-	builder := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)
+	builder := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,
+		fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
+			sp.ParNum, sp.OutputTopicNames[0]))
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp, builder).
 		KVStoreChangelogs(kvc).Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs)
 }

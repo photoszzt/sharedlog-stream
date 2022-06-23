@@ -5,7 +5,6 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/store"
-	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -48,14 +47,13 @@ func ToInMemWindowTable(
 	storeName string,
 	joinWindow *JoinWindows,
 	compare concurrent_skiplist.CompareFunc,
-	warmup time.Duration,
 ) (*MeteredProcessor, store.WindowStore, error) {
 	store := store.NewInMemoryWindowStore(
 		storeName,
 		joinWindow.MaxSize()+joinWindow.GracePeriodMs(),
 		joinWindow.MaxSize(),
 		true, compare)
-	toTableProc := NewMeteredProcessor(NewStoreToWindowTableProcessor(store), warmup)
+	toTableProc := NewMeteredProcessor(NewStoreToWindowTableProcessor(store))
 	return toTableProc, store, nil
 }
 
@@ -66,7 +64,6 @@ func ToMongoDBWindowTable(
 	joinWindow *JoinWindows,
 	keySerde commtypes.Serde,
 	valSerde commtypes.Serde,
-	warmup time.Duration,
 ) (*MeteredProcessor, store.WindowStore, error) {
 	mkvs, err := store.NewMongoDBKeyValueStore(ctx, &store.MongoDBConfig{
 		Client:         client,
@@ -84,7 +81,7 @@ func ToMongoDBWindowTable(
 		return nil, nil, err
 	}
 	wstore := store.NewSegmentedWindowStore(byteStore, true, joinWindow.MaxSize(), keySerde, valSerde)
-	toTableProc := NewMeteredProcessor(NewStoreToWindowTableProcessor(wstore), warmup)
+	toTableProc := NewMeteredProcessor(NewStoreToWindowTableProcessor(wstore))
 	return toTableProc, wstore, nil
 }
 

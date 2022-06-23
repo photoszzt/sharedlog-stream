@@ -153,14 +153,12 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 			// debug.Fprintf(os.Stderr, "done resume\n")
 		}).
 		HandleErrFunc(handleErrFunc).Build()
-
-	update_stats := func(ret *common.FnOutput) {}
 	transactionalID := fmt.Sprintf("%s-%s-%d",
 		h.funcName, sp.InputTopicNames[0], sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
 		Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs)
 }
 
 func (h *q8GroupByHandler) getPersonsByID(warmup time.Duration, pollTimeout time.Duration) execution.GeneralProcFunc {
@@ -169,7 +167,7 @@ func (h *q8GroupByHandler) getPersonsByID(warmup time.Duration, pollTimeout time
 			func(msg *commtypes.Message) (bool, error) {
 				event := msg.Value.(*ntypes.Event)
 				return event.Etype == ntypes.PERSON, nil
-			})), warmup)
+			})))
 	personsByIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor("personsByIDMap",
 		processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 			event := msg.Value.(*ntypes.Event)
@@ -178,7 +176,7 @@ func (h *q8GroupByHandler) getPersonsByID(warmup time.Duration, pollTimeout time
 				Value:     msg.Value,
 				Timestamp: msg.Timestamp,
 			}, nil
-		})), warmup)
+		})))
 
 	return func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup,
 		msgChan chan commtypes.Message, errChan chan error,
@@ -225,13 +223,13 @@ func (h *q8GroupByHandler) getAucBySellerID(warmup time.Duration, pollTimeout ti
 			func(m *commtypes.Message) (bool, error) {
 				event := m.Value.(*ntypes.Event)
 				return event.Etype == ntypes.AUCTION, nil
-			})), warmup)
+			})))
 
 	auctionsBySellerIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor("auctionsBySellerIDMap",
 		processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 			event := msg.Value.(*ntypes.Event)
 			return commtypes.Message{Key: event.NewAuction.Seller, Value: msg.Value, Timestamp: msg.Timestamp}, nil
-		})), warmup)
+		})))
 
 	return func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error) {
 		args := argsTmp.(*TwoMsgChanProcArgs)

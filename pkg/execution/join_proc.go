@@ -7,16 +7,9 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/proc_interface"
-	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/store_restore"
-	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
 	"sync"
-	"time"
 
 	"golang.org/x/xerrors"
 )
@@ -33,7 +26,7 @@ func joinProcLoop(
 	defer wg.Done()
 	<-run
 	debug.Fprintf(os.Stderr, "joinProc start running\n")
-	id := ctx.Value("id").(string)
+	id := ctx.Value(commtypes.CTXID("id")).(string)
 	for {
 		select {
 		case <-ctx.Done():
@@ -131,69 +124,4 @@ func procMsgWithSink(ctx context.Context, msg commtypes.Message, procArgs *JoinP
 		}
 	}
 	return nil
-}
-
-func SetupStreamStreamJoin(
-	mpLeft *store_with_changelog.MaterializeParam,
-	mpRight *store_with_changelog.MaterializeParam,
-	compare concurrent_skiplist.CompareFunc,
-	joiner processor.ValueJoinerWithKeyTsFunc,
-	jw *processor.JoinWindows,
-	warmup time.Duration,
-) (proc_interface.ProcessAndReturnFunc,
-	proc_interface.ProcessAndReturnFunc,
-	[]*store_restore.WindowStoreChangelog,
-	error,
-) {
-	toLeftTab, leftTab, err := store_with_changelog.ToInMemWindowTableWithChangelog(
-		mpLeft, jw, compare, warmup,
-	)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	toRightTab, rightTab, err := store_with_changelog.ToInMemWindowTableWithChangelog(
-		mpRight, jw, compare, warmup,
-	)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	leftJoinRight, rightJoinLeft := ConfigureStreamStreamJoinProcessor(leftTab, rightTab, joiner, jw, warmup)
-	leftJoinRightFunc := func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-		_, err := toLeftTab.ProcessAndReturn(ctx, msg)
-		if err != nil {
-			return nil, err
-		}
-		return leftJoinRight.ProcessAndReturn(ctx, msg)
-	}
-	rightJoinLeftFunc := func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-		_, err := toRightTab.ProcessAndReturn(ctx, msg)
-		if err != nil {
-			return nil, err
-		}
-		return rightJoinLeft.ProcessAndReturn(ctx, msg)
-	}
-	wsc := []*store_restore.WindowStoreChangelog{
-		store_restore.NewWindowStoreChangelog(leftTab, mpLeft.ChangelogManager(), mpLeft.ParNum()),
-		store_restore.NewWindowStoreChangelog(rightTab, mpRight.ChangelogManager(), mpRight.ParNum()),
-	}
-	return leftJoinRightFunc, rightJoinLeftFunc, wsc, nil
-}
-
-func ConfigureStreamStreamJoinProcessor(leftTab store.WindowStore,
-	rightTab store.WindowStore,
-	joiner processor.ValueJoinerWithKeyTsFunc,
-	jw *processor.JoinWindows,
-	warmup time.Duration,
-) (*processor.MeteredProcessor, *processor.MeteredProcessor) {
-	sharedTimeTracker := processor.NewTimeTracker()
-	leftJoinRight := processor.NewMeteredProcessor(
-		processor.NewStreamStreamJoinProcessor("leftJoinRight", rightTab, jw, joiner, false, true, sharedTimeTracker),
-		warmup,
-	)
-	rightJoinLeft := processor.NewMeteredProcessor(
-		processor.NewStreamStreamJoinProcessor("rightJoinLeft", leftTab, jw,
-			processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker),
-		warmup,
-	)
-	return leftJoinRight, rightJoinLeft
 }

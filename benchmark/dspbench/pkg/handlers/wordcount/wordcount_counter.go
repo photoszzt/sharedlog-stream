@@ -91,7 +91,7 @@ func setupCounter(ctx context.Context, sp *common.QueryInput, msgSerde commtypes
 			aggVal := agg.(uint64)
 			fmt.Fprintf(os.Stderr, "update %v count to %d\n", key, aggVal+1)
 			return aggVal + 1
-		})), warmup)
+		})))
 	return p, nil
 }
 
@@ -216,11 +216,8 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(h.process).Build()
-
-	update_stats := func(ret *common.FnOutput) {
-	}
 	transactionalID := fmt.Sprintf("%s-%s-%s-%d", funcName, sp.InputTopicNames[0], sp.OutputTopicNames[0], sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs)
 }

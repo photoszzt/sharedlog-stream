@@ -54,6 +54,10 @@ func (s *ConcurrentMeteredSink) MarkFinalOutput() {
 	s.isFinalOutput = true
 }
 
+func (s *ConcurrentMeteredSink) IsFinalOutput() bool {
+	return s.isFinalOutput
+}
+
 func (s *ConcurrentMeteredSink) StartWarmup() {
 	if s.measure {
 		s.warmup.StartWarmup()
@@ -129,6 +133,10 @@ func (s *MeteredProducer) InitFlushTimer() {}
 
 func (s *MeteredProducer) MarkFinalOutput() {
 	s.isFinalOutput = true
+}
+
+func (s *MeteredProducer) IsFinalOutput() bool {
+	return s.isFinalOutput
 }
 
 func (s *MeteredProducer) StartWarmup() {

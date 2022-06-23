@@ -142,11 +142,11 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	toWinTab1, winTab1, err := processor.ToMongoDBWindowTable(ctx, "tab1Mongo", client, joinWindows, kSerde, vSerde, 0)
+	toWinTab1, winTab1, err := processor.ToMongoDBWindowTable(ctx, "tab1Mongo", client, joinWindows, kSerde, vSerde)
 	if err != nil {
 		panic(err)
 	}
-	toWinTab2, winTab2, err := processor.ToMongoDBWindowTable(ctx, "tab2Mongo", client, joinWindows, kSerde, vSerde, 0)
+	toWinTab2, winTab2, err := processor.ToMongoDBWindowTable(ctx, "tab2Mongo", client, joinWindows, kSerde, vSerde)
 	if err != nil {
 		panic(err)
 	}
@@ -378,11 +378,11 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	toWinTab1, winTab1, err := processor.ToInMemWindowTable("tab1", joinWindows, compare, 0)
+	toWinTab1, winTab1, err := processor.ToInMemWindowTable("tab1", joinWindows, compare)
 	if err != nil {
 		panic(err)
 	}
-	toWinTab2, winTab2, err := processor.ToInMemWindowTable("tab2", joinWindows, compare, 0)
+	toWinTab2, winTab2, err := processor.ToInMemWindowTable("tab2", joinWindows, compare)
 	if err != nil {
 		panic(err)
 	}

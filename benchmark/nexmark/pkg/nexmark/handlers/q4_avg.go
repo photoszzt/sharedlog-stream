@@ -143,14 +143,14 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 				Count: agg.Count + 1,
 			}
 		}),
-	), warmup)).
+	))).
 		Via(
 			processor.NewMeteredProcessor(processor.NewStreamMapValuesProcessor(
 				processor.ValueMapperFunc(func(value interface{}) (interface{}, error) {
 					val := value.(*ntypes.SumAndCount)
 					return float64(val.Sum) / float64(val.Count), nil
 				}),
-			), warmup)).
+			))).
 		Via(processor.NewFixedSubstreamOutputProcessor(sinks_arr[0], sp.ParNum))
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
@@ -161,9 +161,6 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	kvc := []*store_restore.KVStoreChangelog{
 		store_restore.NewKVStoreChangelog(kvstore, mp.ChangelogManager(), sp.ParNum),
 	}
-	update_stats := func(ret *common.FnOutput) {
-		ret.Latencies["eventTimeLatency"] = sinks_arr[0].GetEventTimeLatency()
-	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 		sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
@@ -171,5 +168,5 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		KVStoreChangelogs(kvc).
 		FixedOutParNum(sp.ParNum).
 		Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs)
 }

@@ -12,7 +12,6 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/stream_task"
-	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -79,7 +78,6 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	srcs[0].SetInitialSource(true)
-	warmup := time.Duration(sp.WarmupS) * time.Second
 	ectx := processor.NewExecutionContext(srcs,
 		sinks, h.funcName, sp.ScaleEpoch, sp.ParNum)
 	ectx.Via(processor.NewMeteredProcessor(
@@ -87,26 +85,22 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 			func(m *commtypes.Message) (bool, error) {
 				event := m.Value.(*ntypes.Event)
 				return event.Etype == ntypes.BID, nil
-			})), warmup)).
+			})))).
 		Via(processor.NewMeteredProcessor(
 			processor.NewStreamMapProcessor("selectKey", processor.MapperFunc(
 				func(m commtypes.Message) (commtypes.Message, error) {
 					event := m.Value.(*ntypes.Event)
 					return commtypes.Message{Key: event.Bid.Auction, Value: m.Value, Timestamp: m.Timestamp}, nil
-				})), warmup)).
+				})))).
 		Via(processor.NewGroupByOutputProcessor(sinks[0], &ectx))
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
 			args := argsTmp.(processor.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
 		}).Build()
-
-	update_stats := func(ret *common.FnOutput) {
-	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
-		sp.InputTopicNames[0],
-		sp.ParNum, sp.OutputTopicNames[0])
+		sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
 	builder := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp, builder).Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs)
 }

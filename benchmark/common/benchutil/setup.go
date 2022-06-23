@@ -23,8 +23,6 @@ import (
 	"golang.org/x/xerrors"
 )
 
-type CTXID string
-
 type DumpOutputStreamConfig struct {
 	KVMsgSerdes   commtypes.KVMsgSerdes
 	OutputDir     string

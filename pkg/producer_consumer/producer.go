@@ -26,6 +26,7 @@ type Producer interface {
 type MeteredProducerIntr interface {
 	Producer
 	MarkFinalOutput()
+	IsFinalOutput() bool
 	StartWarmup()
 	GetEventTimeLatency() []int
 	GetCount() uint64

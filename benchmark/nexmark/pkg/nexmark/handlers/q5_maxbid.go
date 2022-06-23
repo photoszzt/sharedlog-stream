@@ -183,7 +183,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 				return v.Count
 			}
 			return agg
-		})), warmup)
+		})))
 	stJoin := processor.NewMeteredProcessor(processor.NewStreamTableJoinProcessor(kvstore,
 		processor.ValueJoinerWithKeyFunc(
 			func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
@@ -194,13 +194,13 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 					Count:  lv.Count,
 					MaxCnt: rv.Value.(uint64),
 				}
-			})), warmup)
+			})))
 	chooseMaxCnt := processor.NewMeteredProcessor(
 		processor.NewStreamFilterProcessor("chooseMaxCnt",
 			processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
 				v := msg.Value.(*ntypes.AuctionIdCntMax)
 				return v.Count >= v.MaxCnt, nil
-			})), warmup)
+			})))
 	procArgs := &q5MaxBidProcessArgs{
 		maxBid:       maxBid,
 		stJoin:       stJoin,
@@ -216,14 +216,10 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	kvc := []*store_restore.KVStoreChangelog{
 		store_restore.NewKVStoreChangelog(kvstore, mp.ChangelogManager(), sp.ParNum),
 	}
-	update_stats := func(ret *common.FnOutput) {
-		ret.Latencies["eventTimeLatency"] = sinks_arr[0].GetEventTimeLatency()
-	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 		sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
-		KVStoreChangelogs(kvc).
-		FixedOutParNum(sp.ParNum).Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
+		KVStoreChangelogs(kvc).FixedOutParNum(sp.ParNum).Build()
+	return task.ExecuteApp(ctx, streamTaskArgs)
 }

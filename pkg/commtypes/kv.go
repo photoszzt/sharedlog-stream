@@ -2,6 +2,8 @@ package commtypes
 
 import "cs.utexas.edu/zjia/faas/types"
 
+type CTXID string
+
 type KeyT interface{}
 
 type ValueT interface{}

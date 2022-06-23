@@ -26,8 +26,8 @@ func getJoinTable(t *testing.T) (
 			return 1
 		}
 	}
-	toTab1, tab1 := ToInMemKVTable("tab1", compare, 0)
-	toTab2, tab2 := ToInMemKVTable("tab2", compare, 0)
+	toTab1, tab1 := ToInMemKVTable("tab1", compare)
+	toTab2, tab2 := ToInMemKVTable("tab2", compare)
 	joiner := ValueJoinerWithKeyFunc(
 		func(readOnlyKey interface{},
 			leftValue interface{}, rightValue interface{},

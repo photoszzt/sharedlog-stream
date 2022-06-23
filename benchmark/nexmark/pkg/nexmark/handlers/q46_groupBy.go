@@ -112,12 +112,10 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 			bidsByAuctionIDManager.LaunchProc(ctx, procArgs, &wg)
 			debug.Fprintf(os.Stderr, "done resume\n")
 		}).HandleErrFunc(handleErrFunc).Build()
-
-	update_stats := func(ret *common.FnOutput) {}
 	transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName, sp.InputTopicNames[0], sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs)
 }
 
 func (h *q46GroupByHandler) getAucsByID(warmup time.Duration) execution.GeneralProcFunc {
@@ -126,13 +124,13 @@ func (h *q46GroupByHandler) getAucsByID(warmup time.Duration) execution.GeneralP
 			func(m *commtypes.Message) (bool, error) {
 				event := m.Value.(*ntypes.Event)
 				return event.Etype == ntypes.AUCTION, nil
-			})), time.Duration(warmup)*time.Second)
+			})))
 
 	auctionsByIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor("auctionsByIDMap",
 		processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 			event := msg.Value.(*ntypes.Event)
 			return commtypes.Message{Key: event.NewAuction.ID, Value: msg.Value, Timestamp: msg.Timestamp}, nil
-		})), time.Duration(warmup)*time.Second)
+		})))
 
 	return func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup,
 		msgChan chan commtypes.Message, errChan chan error,
@@ -180,13 +178,13 @@ func (h *q46GroupByHandler) getBidsByAuctionID(warmup time.Duration) execution.G
 			func(m *commtypes.Message) (bool, error) {
 				event := m.Value.(*ntypes.Event)
 				return event.Etype == ntypes.BID, nil
-			})), time.Duration(warmup)*time.Second)
+			})))
 
 	bidsByAuctionIDMap := processor.NewMeteredProcessor(processor.NewStreamMapProcessor("bidsByAuctionIDMap",
 		processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
 			event := msg.Value.(*ntypes.Event)
 			return commtypes.Message{Key: event.Bid.Auction, Value: msg.Value, Timestamp: msg.Timestamp}, nil
-		})), time.Duration(warmup)*time.Second)
+		})))
 	return func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup,
 		msgChan chan commtypes.Message, errChan chan error,
 	) {

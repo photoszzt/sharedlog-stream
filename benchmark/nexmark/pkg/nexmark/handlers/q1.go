@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
@@ -62,16 +61,15 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 	}
 	srcs[0].SetInitialSource(true)
 	sinks[0].MarkFinalOutput()
-	warmup := time.Duration(sp.WarmupS) * time.Second
 	ectx := processor.NewExecutionContextFromComponents(proc_interface.NewBaseSrcsSinks(srcs, sinks),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum))
 	ectx.
 		Via(processor.NewMeteredProcessor(
-			processor.NewStreamFilterProcessor("filterBid", processor.PredicateFunc(only_bid)), warmup)).
+			processor.NewStreamFilterProcessor("filterBid", processor.PredicateFunc(only_bid)))).
 		Via(processor.NewMeteredProcessor(
-			processor.NewStreamMapValuesWithKeyProcessor(processor.MapperFunc(q1mapFunc)), warmup)).
+			processor.NewStreamMapValuesWithKeyProcessor(processor.MapperFunc(q1mapFunc)))).
 		Via(processor.NewMeteredProcessor(
-			processor.NewFixedSubstreamOutputProcessor(sinks[0], sp.ParNum), warmup))
+			processor.NewFixedSubstreamOutputProcessor(sinks[0], sp.ParNum)))
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
 			args := argsTmp.(processor.ExecutionContext)
@@ -79,17 +77,13 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 		}).
 		InitFunc(func(progArgs interface{}) {
 		}).Build()
-
-	update_stats := func(ret *common.FnOutput) {
-		ret.Latencies["eventTimeLatency"] = sinks[0].GetEventTimeLatency()
-	}
-	transactionalID := fmt.Sprintf("%s-%s-%d-%s",
-		h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).
+		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,
+			fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
+				sp.ParNum, sp.OutputTopicNames[0]))).
 		FixedOutParNum(sp.ParNum).
 		Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs)
 }
 
 /*

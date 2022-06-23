@@ -152,7 +152,7 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
 			val := aggregate.(uint64)
 			return val + 1
-		}), hopWindow), time.Duration(sp.WarmupS)*time.Second)
+		}), hopWindow))
 	wsc := []*store_restore.WindowStoreChangelog{
 		store_restore.NewWindowStoreChangelog(
 			countWindowStore, countMp.ChangelogManager(), sp.ParNum),
@@ -211,7 +211,6 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	warmup := time.Duration(sp.WarmupS) * time.Second
 	ectx.Via(countProc).
 		Via(processor.NewMeteredProcessor(processor.NewStreamMapProcessor("groupByAuction",
 			processor.MapperFunc(
@@ -228,7 +227,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 						BaseTs: ntypes.BaseTs{Timestamp: msg.Timestamp},
 					}
 					return commtypes.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
-				})), warmup)).
+				})))).
 		Via(processor.NewGroupByOutputProcessor(sinks[0], &ectx))
 
 	task := stream_task.NewStreamTaskBuilder().
@@ -236,12 +235,10 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			args := argsTmp.(processor.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
 		}).Build()
-
-	update_stats := func(ret *common.FnOutput) {}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 		sp.ParNum, sp.OutputTopicNames[0])
 	builder := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp, builder).
 		WindowStoreChangelogs(wsc).Build()
-	return task.ExecuteApp(ctx, streamTaskArgs, update_stats)
+	return task.ExecuteApp(ctx, streamTaskArgs)
 }
