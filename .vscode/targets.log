@@ -1,0 +1,478 @@
+make all --print-data-base --no-builtin-variables --no-builtin-rules --question
+make: *** No rule to make target 'all'.  Stop.
+
+# GNU Make 4.2.1
+# Built for x86_64-pc-linux-gnu
+# Copyright (C) 1988-2016 Free Software Foundation, Inc.
+# License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+# This is free software: you are free to change and redistribute it.
+# There is NO WARRANTY, to the extent permitted by law.
+
+# Make data base, printed on Thu Jun 23 10:19:48 2022
+
+# Variables
+
+# automatic
+<D = $(patsubst %/,%,$(dir $<))
+# automatic
+?F = $(notdir $?)
+# default
+.SHELLFLAGS := -c
+# environment
+PROVIDE_FULLSTACK_ACTION = true
+# environment
+XDG_SESSION_CLASS = user
+# environment
+VSCODE_AGENT_FOLDER = /home/zhitingz/.vscode-server
+# environment
+XDG_SESSION_TYPE = tty
+# environment
+VSCODE_LOG_NATIVE = false
+# automatic
+?D = $(patsubst %/,%,$(dir $?))
+# environment
+GRADLE_HOME = /home/zhitingz/.sdkman/candidates/gradle/current
+# automatic
+@D = $(patsubst %/,%,$(dir $@))
+# automatic
+@F = $(notdir $@)
+# default
+MAKE_VERSION := 4.2.1
+# makefile
+CURDIR := /mnt/data/src/stream_workspace/sharedlog-stream
+# makefile
+SHELL = /bin/sh
+# environment
+VSCODE_NLS_CONFIG = {"locale":"en","availableLanguages":{}}
+# environment
+_ = /home/zhitingz/.vscode-server/bin/30d9c6cd9483b2cc586687151bcbcd635f373630/node
+# makefile (from 'Makefile', line 1)
+MAKEFILE_LIST :=  Makefile
+# 'override' directive
+GNUMAKEFLAGS := 
+# environment
+VSCODE_AMD_ENTRYPOINT = vs/workbench/api/node/extensionHostProcess
+# environment
+DBUS_SESSION_BUS_ADDRESS = unix:path=/run/user/1000/bus
+# environment
+VSCODE_VERBOSE_LOGGING = true
+# environment
+WASMER_DIR = /home/zhitingz/.wasmer
+# environment
+VSCODE_CWD = /home/zhitingz
+# environment
+GOPROXY = https://proxy.golang.org,direct
+# environment
+SSH_CONNECTION = 192.168.10.199 50103 192.168.10.50 22
+# environment
+PATH = /home/zhitingz/.vscode-server/bin/30d9c6cd9483b2cc586687151bcbcd635f373630/bin/remote-cli:/home/zhitingz/.local/bin:/mnt/data/miniconda3/condabin:/home/zhitingz/.sdkman/candidates/gradle/current/bin:/home/zhitingz/.wasmer/bin:/home/zhitingz/.wasmer/globals/wapm_packages/.bin:/home/zhitingz/.cargo/bin:/mnt/data/src/android-studio/bin:/mnt/data/go/bin:/mnt/data/bin:/home/zhitingz/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/usr/local/go/bin:/home/zhitingz/.antigen/bundles/robbyrussell/oh-my-zsh/lib:/home/zhitingz/.antigen/bundles/robbyrussell/oh-my-zsh/plugins/git:/home/zhitingz/.antigen/bundles/robbyrussell/oh-my-zsh/plugins/command-not-found:/home/zhitingz/.antigen/bundles/zsh-users/zsh-syntax-highlighting:/home/zhitingz/.antigen/bundles/zsh-users/zsh-autosuggestions:/home/zhitingz/.antigen/bundles/zsh-users/zsh-completions:/home/zhitingz/.fzf/bin
+# environment
+LSCOLORS = Gxfxcxdxbxegedabagacad
+# environment
+GOLANG_EXECUTABLE = go
+# environment
+XDG_RUNTIME_DIR = /run/user/1000
+# environment
+SDKMAN_DIR = /home/zhitingz/.sdkman
+# environment
+SDKMAN_CANDIDATES_API = https://api.sdkman.io/2
+# environment
+GOPATH = /home/zhitingz/go
+# environment
+GOCACHE = /mnt/data/.cache/go-build
+# environment
+SDKMAN_PLATFORM = Linux64
+# environment
+VSCODE_LOG_STACK = false
+# environment
+VSCODE_IPC_HOOK_CLI = /run/user/1000/vscode-ipc-ef49797a-3f6c-4eb5-9043-8bceb7012bc5.sock
+# default
+.FEATURES := target-specific order-only second-expansion else-if shortest-stem undefine oneshell archives jobserver output-sync check-symlink load
+# environment
+UUID = b46553fa-8d5c-4393-a0a1-2c3cf226323a
+# environment
+LS_COLORS = 
+# automatic
+%F = $(notdir $%)
+# environment
+CONDA_EXE = /mnt/data/miniconda3/bin/conda
+# environment
+VSCODE_PIPE_LOGGING = true
+# environment
+PWD = /mnt/data/src/stream_workspace/sharedlog-stream
+# default
+.LOADED := 
+# automatic
+*D = $(patsubst %/,%,$(dir $*))
+# environment
+RUSTUP_HOME = /mnt/data/.rustup
+# environment
+GOMODCACHE = /home/zhitingz/go/pkg/mod
+# environment
+HOME = /home/zhitingz
+# environment
+LOGNAME = zhitingz
+# environment
+APPLICATION_INSIGHTS_NO_DIAGNOSTIC_CHANNEL = true
+# automatic
++F = $(notdir $+)
+# environment
+TELEMETRY_ID = c024b6a3-98c6-424c-965a-53265657603a
+# environment
+VSCODE_HANDLES_UNCAUGHT_ERRORS = true
+# automatic
+^D = $(patsubst %/,%,$(dir $^))
+# environment
+MAKELEVEL := 0
+# environment
+SDKMAN_VERSION = 5.7.3+337
+# default
+MAKE = $(MAKE_COMMAND)
+# environment
+RUST_SRC_PATH = /mnt/data/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/src
+# environment
+SHLVL = 1
+# environment
+WASMER_CACHE_DIR = /home/zhitingz/.wasmer/cache
+# environment
+XDG_SESSION_ID = 19
+# environment
+USER = zhitingz
+# environment
+LC_CTYPE = en_US.UTF-8
+# makefile
+.DEFAULT_GOAL := default
+# environment
+THREE_SCALE_USER_TOKEN = 207c527cfc2a6b8dcf4fa43ad7a976da
+# default
+MAKECMDGOALS := all
+# environment
+BASE16_THEME = base16-default-dark
+# environment
+LESS = -R
+# automatic
+%D = $(patsubst %/,%,$(dir $%))
+# environment
+CONDA_SHLVL = 0
+# default
+MAKE_COMMAND := make
+# environment
+UTM_SOURCE = vscode
+# environment
+OLDPWD = /home/zhitingz
+# default
+.VARIABLES := 
+# automatic
+*F = $(notdir $*)
+# makefile
+MAKEFLAGS = pqrR
+# environment
+MFLAGS = -pqrR
+# environment
+SSH_CLIENT = 192.168.10.199 50103 22
+# automatic
++D = $(patsubst %/,%,$(dir $+))
+# environment
+RECOMMENDER_API_URL = https://gw.api.openshift.io//api/v2
+# environment
+BROWSER = /home/zhitingz/.vscode-server/bin/30d9c6cd9483b2cc586687151bcbcd635f373630/bin/helpers/browser.sh
+# environment
+VSCODE_HANDLES_SIGPIPE = true
+# default
+MAKEFILES := 
+# automatic
+<F = $(notdir $<)
+# environment
+SDKMAN_CANDIDATES_DIR = /home/zhitingz/.sdkman/candidates
+# environment
+PAGER = less
+# environment
+LC_ALL = C
+# environment
+CONDA_PYTHON_EXE = /mnt/data/miniconda3/bin/python
+# automatic
+^F = $(notdir $^)
+# default
+SUFFIXES := 
+# environment
+_CE_M = 
+# default
+.INCLUDE_DIRS = /usr/include /usr/local/include /usr/include
+# makefile (from 'Makefile', line 1)
+GO_FILES = $$(find . -name '*.go' |grep -v deps)
+# default
+.RECIPEPREFIX := 
+# default
+MAKE_HOST := x86_64-pc-linux-gnu
+# environment
+LANG = C
+# environment
+VSCODE_EXTHOST_WILL_SEND_SOCKET = true
+# environment
+MOTD_SHOWN = pam
+# environment
+_CE_CONDA = 
+# variable set hash-table stats:
+# Load=100/1024=10%, Rehash=0, Collisions=15/126=12%
+
+# Pattern-specific Variable Values
+
+# No pattern-specific variable values.
+
+# Directories
+
+# . (device 2070, inode 43779458): 27 files, no impossibilities.
+
+# 27 files, no impossibilities in 1 directories.
+
+# Implicit Rules
+
+# No implicit rules.
+
+# Files
+
+nexmark_genevents_kafka:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 40):
+	mkdir -p ./bin
+	GO111MODULE=on go build -o bin/nexmark_genevents_kafka ./benchmark/nexmark/nexmark_genevents_kafka
+
+kafka_produce_bench:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 90):
+	mkdir -p ./bin
+	GO111MODULE=on go build -o bin/kafka_produce_bench ./benchmark/lat_tp/kafka_produce
+
+wordcount_client:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 80):
+	mkdir -p ./bin
+	GO111MODULE=on go build -o bin/wordcount_client ./benchmark/dspbench/wordcount_client
+
+nexmark_debug:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 30):
+	mkdir -p ./bin
+	GO111MODULE=on go build -tags "debug,stats" -o bin/nexmark_handler_debug ./benchmark/nexmark/nexmark_handler
+
+golangci-lint:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 11):
+	@golangci-lint -E goimports run ./...
+
+dspbench:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 65):
+	mkdir -p ./bin
+	GO111MODULE=on go build -o bin/dspbench_handler ./benchmark/dspbench/dspbench_handler
+
+# Not a target:
+all:
+#  Command line target.
+#  Implicit rule search has been done.
+#  File does not exist.
+#  File has not been updated.
+
+ 
+.PHONY: golangci-lint nexmark_gen_data_by_spec nexmark nexmark_stats nexmark_debug nexmark_client nexmark_genevents_kafka nexmark_kafka_test_src tests_debug tests_client wordcount_genevents_kafka dspbench dspbench_debug dspbench_client wordcount_client append_read_client kafka_produce_bench kafka_consume_bench lat_tp_handler lat_tp_handler_debug sharedlog_bench_client download-book
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+nexmark_client:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 35):
+	mkdir -p ./bin
+	GO111MODULE=on go build -o bin/nexmark_client ./benchmark/nexmark/nexmark_client
+
+kafka_consume_bench:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 95):
+	mkdir -p ./bin
+	GO111MODULE=on go build -o bin/kafka_consume_bench ./benchmark/lat_tp/kafka_consume
+
+sharedlog_bench_client:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 110):
+	mkdir -p ./bin
+	GO111MODULE=on go build -o bin/sharedlog_bench_client ./benchmark/lat_tp/sharedlog_bench_client
+
+# Not a target:
+Makefile:
+#  Implicit rule search has been done.
+#  Last modified 2022-06-05 23:58:35.25074588
+#  File has been updated.
+#  Successfully updated.
+
+nexmark:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 20):
+	mkdir -p ./bin
+	GO111MODULE=on go build -o bin/nexmark_handler ./benchmark/nexmark/nexmark_handler
+
+nexmark_gen_data_by_spec:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 15):
+	mkdir -p ./bin
+	GO111MODULE=on go build -o bin/nexmark_gen_data_by_spec ./benchmark/nexmark/gen_test_data
+
+default: lat_tp_handler_debug lat_tp_handler sharedlog_bench_client nexmark_kafka_test_src kafka_consume_bench kafka_produce_bench nexmark nexmark_stats nexmark_debug nexmark_gen_data_by_spec nexmark_client nexmark_genevents_kafka tests_debug tests_client dspbench dspbench_debug dspbench_client wordcount_client wordcount_genevents_kafka append_read_client
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+lat_tp_handler_debug:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 105):
+	mkdir -p ./bin
+	GO111MODULE=on go build -tags debug -o bin/lat_tp_handler_debug ./benchmark/lat_tp/lat_tp_handler
+
+nexmark_stats:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 25):
+	mkdir -p ./bin
+	GO111MODULE=on go build -tags stats -o bin/nexmark_handler_stats ./benchmark/nexmark/nexmark_handler
+
+# Not a target:
+.DEFAULT:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+nexmark_kafka_test_src:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 45):
+	mkdir -p ./bin
+	GO111MODULE=on go build -o bin/nexmark_kafka_test_src ./benchmark/nexmark/nexmark_kafka_test_src
+
+dspbench_debug:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 70):
+	mkdir -p ./bin
+	GO111MODULE=on go build -tags debug -o bin/dspbench_handler_debug ./benchmark/dspbench/dspbench_handler
+
+dspbench_client:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 75):
+	mkdir -p ./bin
+	GO111MODULE=on go build -o bin/dspbench_client ./benchmark/dspbench/dspbench_client
+
+lat_tp_handler:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 100):
+	mkdir -p ./bin
+	GO111MODULE=on go build -o bin/lat_tp_handler ./benchmark/lat_tp/lat_tp_handler
+
+download-book:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 115):
+	mkdir -p data
+	wget -O data/books.dat https://raw.githubusercontent.com/mayconbordin/storm-applications/master/data/books.dat
+
+tests_debug:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 50):
+	mkdir -p ./bin
+	GO111MODULE=on go build -tags debug -o bin/tests_handler_debug ./benchmark/tests/tests_handler
+
+wordcount_genevents_kafka:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 60):
+	mkdir -p ./bin
+	GO111MODULE=on go build -o bin/wordcount_genevents_kafka ./benchmark/dspbench/wordcount_genevents_kafka
+
+append_read_client:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 85):
+	mkdir -p ./bin
+	GO111MODULE=on go build -o bin/append_read_client ./benchmark/dspbench/append_read_client
+
+tests_client:
+#  Phony target (prerequisite of .PHONY).
+#  Implicit rule search has not been done.
+#  File does not exist.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 55):
+	mkdir -p ./bin
+	GO111MODULE=on go build -o bin/tests_client ./benchmark/tests/tests_client
+
+# files hash-table stats:
+# Load=28/1024=3%, Rehash=0, Collisions=0/123=0%
+# VPATH Search Paths
+
+# No 'vpath' search paths.
+
+# No general ('VPATH' variable) search path.
+
+# strcache buffers: 1 (0) / strings = 56 / storage = 678 B / avg = 12 B
+# current buf: size = 8162 B / used = 678 B / count = 56 / avg = 12 B
+
+# strcache performance: lookups = 168 / hit rate = 66%
+# hash-table stats:
+# Load=56/8192=1%, Rehash=0, Collisions=1/168=1%
+# Finished Make data base on Thu Jun 23 10:19:48 2022
+
+ 
