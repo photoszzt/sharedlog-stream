@@ -229,15 +229,8 @@ func (t *StreamTask) processWithTransaction(
 			ret := t.appProcessFunc(ctx, t, args.ectx)
 			if ret != nil {
 				if ret.Success {
-					if hasLiveTransaction {
-						err_out := t.commitTransaction(ctx, tm, args, &hasLiveTransaction, &trackConsumePar)
-						if err_out != nil {
-							return err_out
-						}
-					}
-					// elapsed := time.Since(procStart)
-					// latencies = append(latencies, int(elapsed.Microseconds()))
-					updateReturnMetric(ret, &warmupCheck)
+					// consume timeout but not sure whether there's more data is coming; continue to process
+					continue
 				} else {
 					if hasLiveTransaction {
 						if err := tm.AbortTransaction(ctx, false, args.kvChangelogs, args.windowStoreChangelogs); err != nil {

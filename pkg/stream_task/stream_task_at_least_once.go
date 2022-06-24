@@ -69,22 +69,14 @@ func (t *StreamTask) process(ctx context.Context, args *StreamTaskArgs) *common.
 		if args.duration != 0 && warmupCheck.ElapsedSinceInitial() >= args.duration {
 			break
 		}
-		debug.Fprintf(os.Stderr, "before appProcessFunc\n")
 		procStart := time.Now()
 		ret := t.appProcessFunc(ctx, t, args.ectx)
 		if ret != nil {
 			if ret.Success {
-				// elapsed := time.Since(procStart)
-				// latencies = append(latencies, int(elapsed.Microseconds()))
-				debug.Fprintf(os.Stderr, "consume timeout\n")
-				if ret_err := t.pauseTrackFlush(ctx, args, cm, hasUntrackedConsume); ret_err != nil {
-					return ret_err
-				}
-				updateReturnMetric(ret, &warmupCheck)
+				continue
 			}
 			return ret
 		}
-		debug.Fprintf(os.Stderr, "after appProcessFunc\n")
 		if !hasUntrackedConsume {
 			hasUntrackedConsume = true
 		}

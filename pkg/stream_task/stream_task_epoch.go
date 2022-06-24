@@ -148,15 +148,8 @@ func (t *StreamTask) processInEpoch(
 			ret := t.appProcessFunc(ctx, t, args.ectx)
 			if ret != nil {
 				if ret.Success {
-					if hasProcessData {
-						err_out := t.markEpoch(ctx, em, args, &hasProcessData)
-						if err_out != nil {
-							return err_out
-						}
-					}
-					// elapsed := time.Since(procStart)
-					// latencies = append(latencies, int(elapsed.Microseconds()))
-					updateReturnMetric(ret, &warmupCheck)
+					// consume timeout but not sure whether there's more data is coming; continue to process
+					continue
 				}
 				return ret
 			}
