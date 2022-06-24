@@ -128,24 +128,17 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 			KeySerde: commtypes.Uint64Serde{},
 			ValSerde: vtSerde,
 			MsgSerde: msgSerde,
-		}).
-		StoreName(countStoreName).
-		ParNum(sp.ParNum).
+		}).StoreName(countStoreName).ParNum(sp.ParNum).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
 		StreamParam(commtypes.CreateStreamParam{
 			Env:          h.env,
 			NumPartition: sp.NumInPartition,
-		}).Build(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
+		}).BuildForWindowStore(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
 	if err != nil {
 		return nil, nil, err
 	}
-	countWindowStore, err = store_with_changelog.NewInMemoryWindowStoreWithChangelog(
-		hopWindow.MaxSize()+hopWindow.GracePeriodMs(),
-		hopWindow.MaxSize(), false, comparable, countMp,
-	)
-	if err != nil {
-		return nil, nil, err
-	}
+	countWindowStore = store_with_changelog.NewInMemoryWindowStoreWithChangelog(
+		hopWindow, false, comparable, countMp)
 	countProc := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(
 		"countProc", countWindowStore,
 		processor.InitializerFunc(func() interface{} { return uint64(0) }),

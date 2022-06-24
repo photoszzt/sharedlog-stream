@@ -49,16 +49,14 @@ func getWindowStoreWithChangelog(env types.Environment, retainDuplicates bool) *
 		StoreName(storeName).
 		ParNum(0).
 		SerdeFormat(commtypes.JSON).
-		StreamParam(streamParam).Build(time.Duration(5)*time.Millisecond, common.SrcConsumeTimeout)
+		StreamParam(streamParam).BuildForKVStore(time.Duration(5)*time.Millisecond, common.SrcConsumeTimeout)
 	if err != nil {
 		panic(err)
 	}
-	store, err := store_with_changelog.NewInMemoryWindowStoreWithChangelog(
-		store.TEST_RETENTION_PERIOD, store.TEST_WINDOW_SIZE,
-		retainDuplicates, compareFunc, mp)
-	if err != nil {
-		panic(err)
-	}
+	store := store_with_changelog.NewInMemoryWindowStoreWithChangelogForTest(
+		store.TEST_RETENTION_PERIOD, store.TEST_WINDOW_SIZE, retainDuplicates, compareFunc,
+		mp,
+	)
 	return store
 }
 

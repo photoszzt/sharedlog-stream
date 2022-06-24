@@ -137,7 +137,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		SerdeFormat(serdeFormat).StreamParam(commtypes.CreateStreamParam{
 		Env:          h.env,
 		NumPartition: sp.NumInPartition,
-	}).Build(flushDur, common.SrcConsumeTimeout)
+	}).BuildForKVStore(flushDur, common.SrcConsumeTimeout)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -148,7 +148,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		SerdeFormat(serdeFormat).StreamParam(commtypes.CreateStreamParam{
 		Env:          h.env,
 		NumPartition: sp.NumInPartition,
-	}).Build(flushDur, common.SrcConsumeTimeout)
+	}).BuildForKVStore(flushDur, common.SrcConsumeTimeout)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

@@ -122,13 +122,12 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		StreamParam(commtypes.CreateStreamParam{
 			Env:          h.env,
 			NumPartition: sp.NumInPartition,
-		}).Build(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
+		}).BuildForKVStore(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	kvstore := store_with_changelog.CreateInMemKVTableWithChangelog(mp, store.Uint64KeyKVStoreCompare, warmup)
-	ectx.Via(processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor("sumCount",
-		kvstore,
+	ectx.Via(processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor("sumCount", kvstore,
 		processor.InitializerFunc(func() interface{} {
 			return &ntypes.SumAndCount{
 				Sum:   0,

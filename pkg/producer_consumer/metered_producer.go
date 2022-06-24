@@ -119,7 +119,7 @@ func (s *ConcurrentMeteredSink) ConfigExactlyOnce(rem exactly_once_intr.ReadOnly
 ) {
 	s.producer.ConfigExactlyOnce(rem, guarantee)
 }
-func (s *ConcurrentMeteredSink) Stream() *sharedlog_stream.ShardedSharedLogStream {
+func (s *ConcurrentMeteredSink) Stream() sharedlog_stream.Stream {
 	return s.producer.Stream()
 }
 func (s *ConcurrentMeteredSink) GetInitialProdSeqNum(substreamNum uint8) uint64 {
@@ -209,7 +209,7 @@ func (s *MeteredProducer) ConfigExactlyOnce(rem exactly_once_intr.ReadOnlyExactl
 ) {
 	s.producer.ConfigExactlyOnce(rem, guarantee)
 }
-func (s *MeteredProducer) Stream() *sharedlog_stream.ShardedSharedLogStream {
+func (s *MeteredProducer) Stream() sharedlog_stream.Stream {
 	return s.producer.Stream()
 }
 func (s *MeteredProducer) GetInitialProdSeqNum(substreamNum uint8) uint64 {

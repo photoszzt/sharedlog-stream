@@ -231,7 +231,7 @@ func trackStreamAndConfigureExactlyOnce(args *StreamTaskArgs,
 	}
 	for _, sink := range args.ectx.Producers() {
 		sink.ConfigExactlyOnce(rem, args.guarantee)
-		trackStream(sink.TopicName(), sink.Stream())
+		trackStream(sink.TopicName(), sink.Stream().(*sharedlog_stream.ShardedSharedLogStream))
 	}
 
 	for _, kvchangelog := range args.kvChangelogs {

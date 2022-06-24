@@ -15,7 +15,6 @@ import (
 type ChangelogManager struct {
 	restoreConsumer *producer_consumer.ShardedSharedLogStreamConsumer
 	producer        *producer_consumer.ShardedSharedLogStreamProducer
-	stream          *sharedlog_stream.ShardedSharedLogStream
 	changelogIsSrc  bool
 }
 
@@ -78,7 +77,7 @@ func (cm *ChangelogManager) ConfigExactlyOnce(
 }
 
 func (cm *ChangelogManager) Stream() *sharedlog_stream.ShardedSharedLogStream {
-	return cm.stream
+	return cm.restoreConsumer.Stream().(*sharedlog_stream.ShardedSharedLogStream)
 }
 
 // when changelog is src, there's nothing to flush

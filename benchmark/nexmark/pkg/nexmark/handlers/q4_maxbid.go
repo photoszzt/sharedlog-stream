@@ -139,7 +139,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		StreamParam(commtypes.CreateStreamParam{
 			Env:          h.env,
 			NumPartition: sp.NumInPartition,
-		}).Build(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
+		}).BuildForKVStore(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

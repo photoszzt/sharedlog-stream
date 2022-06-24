@@ -22,16 +22,10 @@ func SetupStreamStreamJoin(
 	[]*store_restore.WindowStoreChangelog,
 	error,
 ) {
-	toLeftTab, leftTab, err := store_with_changelog.ToInMemWindowTableWithChangelog(
+	toLeftTab, leftTab := store_with_changelog.ToInMemWindowTableWithChangelog(
 		mpLeft, jw, compare)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	toRightTab, rightTab, err := store_with_changelog.ToInMemWindowTableWithChangelog(
+	toRightTab, rightTab := store_with_changelog.ToInMemWindowTableWithChangelog(
 		mpRight, jw, compare)
-	if err != nil {
-		return nil, nil, nil, err
-	}
 	leftJoinRight, rightJoinLeft := configureStreamStreamJoinProcessor(leftTab, rightTab, joiner, jw)
 	leftJoinRightFunc := func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 		_, err := toLeftTab.ProcessAndReturn(ctx, msg)

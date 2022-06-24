@@ -17,17 +17,28 @@ type InMemoryWindowStoreWithChangelog struct {
 
 var _ = store.WindowStore(&InMemoryWindowStoreWithChangelog{})
 
-func NewInMemoryWindowStoreWithChangelog(retensionPeriod int64,
-	windowSize int64,
+func NewInMemoryWindowStoreWithChangelog(
+	winDefs processor.EnumerableWindowDefinition,
 	retainDuplicates bool,
 	comparable concurrent_skiplist.Comparable,
 	mp *MaterializeParam,
-) (*InMemoryWindowStoreWithChangelog, error) {
+) *InMemoryWindowStoreWithChangelog {
 	return &InMemoryWindowStoreWithChangelog{
 		windowStore: store.NewInMemoryWindowStore(mp.storeName,
-			retensionPeriod, windowSize, retainDuplicates, comparable),
+			winDefs.MaxSize()+winDefs.GracePeriodMs(), winDefs.MaxSize(), retainDuplicates, comparable),
 		mp: mp,
-	}, nil
+	}
+}
+
+func NewInMemoryWindowStoreWithChangelogForTest(
+	retentionPeriod int64, windowSize int64, retainDuplicates bool, comparable concurrent_skiplist.Comparable,
+	mp *MaterializeParam,
+) *InMemoryWindowStoreWithChangelog {
+	return &InMemoryWindowStoreWithChangelog{
+		windowStore: store.NewInMemoryWindowStore(mp.storeName,
+			retentionPeriod, windowSize, retainDuplicates, comparable),
+		mp: mp,
+	}
 }
 
 func (st *InMemoryWindowStoreWithChangelog) Init(ctx store.StoreContext) {
@@ -181,13 +192,9 @@ func ToInMemWindowTableWithChangelog(
 	mp *MaterializeParam,
 	joinWindow *processor.JoinWindows,
 	comparable concurrent_skiplist.Comparable,
-) (*processor.MeteredProcessor, store.WindowStore, error) {
-	tabWithLog, err := NewInMemoryWindowStoreWithChangelog(
-		joinWindow.MaxSize()+joinWindow.GracePeriodMs(),
-		joinWindow.MaxSize(), true, comparable, mp)
-	if err != nil {
-		return nil, nil, err
-	}
+) (*processor.MeteredProcessor, store.WindowStore) {
+	tabWithLog := NewInMemoryWindowStoreWithChangelog(
+		joinWindow, true, comparable, mp)
 	toTableProc := processor.NewMeteredProcessor(processor.NewStoreToWindowTableProcessor(tabWithLog))
-	return toTableProc, tabWithLog, nil
+	return toTableProc, tabWithLog
 }

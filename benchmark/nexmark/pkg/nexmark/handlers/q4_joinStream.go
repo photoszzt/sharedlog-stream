@@ -147,7 +147,7 @@ func (h *q4JoinStreamHandler) Q4JoinTable(ctx context.Context, sp *common.QueryI
 		ParNum(sp.ParNum).SerdeFormat(serdeFormat).StreamParam(commtypes.CreateStreamParam{
 		Env:          h.env,
 		NumPartition: sp.NumInPartition,
-	}).Build(flushDur, common.SrcConsumeTimeout)
+	}).BuildForWindowStore(flushDur, common.SrcConsumeTimeout)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -156,7 +156,7 @@ func (h *q4JoinStreamHandler) Q4JoinTable(ctx context.Context, sp *common.QueryI
 		ParNum(sp.ParNum).SerdeFormat(serdeFormat).StreamParam(commtypes.CreateStreamParam{
 		Env:          h.env,
 		NumPartition: sp.NumInPartition,
-	}).Build(flushDur, common.SrcConsumeTimeout)
+	}).BuildForWindowStore(flushDur, common.SrcConsumeTimeout)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

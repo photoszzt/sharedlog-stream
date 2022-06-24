@@ -29,6 +29,9 @@ const (
 // transaction manager is not goroutine safe, it's assumed to be used by
 // only one stream task and only one goroutine could update it
 type TransactionManager struct {
+	tpMapMu               sync.Mutex
+	currentTopicSubstream map[string]map[uint8]struct{}
+
 	backgroundJobCtx    context.Context
 	txnMdSerde          commtypes.Serde
 	topicPartitionSerde commtypes.Serde
@@ -38,9 +41,6 @@ type TransactionManager struct {
 	transactionLog      *sharedlog_stream.SharedLogStream
 	topicStreams        map[string]*sharedlog_stream.ShardedSharedLogStream
 	backgroundJobErrg   *errgroup.Group
-
-	tpMapMu               sync.Mutex
-	currentTopicSubstream map[string]map[uint8]struct{}
 
 	TransactionalId string
 	transactionID   uint64
@@ -459,12 +459,8 @@ func (tc *TransactionManager) createOffsetTopic(topicToTrack string, numPartitio
 }
 
 func (tc *TransactionManager) RecordTopicStreams(topicToTrack string, stream *sharedlog_stream.ShardedSharedLogStream) {
-	_, ok := tc.topicStreams[topicToTrack]
-	if ok {
-		return
-	}
 	tc.topicStreams[topicToTrack] = stream
-	debug.Fprintf(os.Stderr, "tracking stream %s\n", topicToTrack)
+	debug.Fprintf(os.Stderr, "tracking stream %s, stream ptr %v\n", topicToTrack, stream)
 }
 
 func (tc *TransactionManager) AddTopicTrackConsumedSeqs(ctx context.Context, topicToTrack string, partition uint8) error {

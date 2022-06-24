@@ -152,15 +152,11 @@ func getTabAndToTab(env types.Environment,
 		StreamParam(commtypes.CreateStreamParam{
 			Env:          env,
 			NumPartition: sp.NumInPartition,
-		}).Build(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
+		}).BuildForKVStore(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	toTab, winTab, err := store_with_changelog.ToInMemWindowTableWithChangelog(
-		mp, joinWindows, compare)
-	if err != nil {
-		return nil, nil, nil, err
-	}
+	toTab, winTab := store_with_changelog.ToInMemWindowTableWithChangelog(mp, joinWindows, compare)
 	return toTab, winTab, mp, nil
 }
 
@@ -198,7 +194,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		StreamParam(commtypes.CreateStreamParam{
 			Env:          h.env,
 			NumPartition: sp.NumInPartition,
-		}).Build(flushDur, common.SrcConsumeTimeout)
+		}).BuildForWindowStore(flushDur, common.SrcConsumeTimeout)
 	perMp, err := store_with_changelog.NewMaterializeParamBuilder().
 		KVMsgSerdes(srcs[1].KVMsgSerdes()).
 		StoreName("personsByIDWinTab").
@@ -207,7 +203,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		StreamParam(commtypes.CreateStreamParam{
 			Env:          h.env,
 			NumPartition: sp.NumInPartition,
-		}).Build(flushDur, common.SrcConsumeTimeout)
+		}).BuildForWindowStore(flushDur, common.SrcConsumeTimeout)
 
 	aucJoinsPerFunc, perJoinsAucFunc, wsc, err := execution.SetupStreamStreamJoin(aucMp, perMp, compare, joiner, joinWindows)
 	if err != nil {

@@ -53,7 +53,7 @@ func (sls *ShardedSharedLogStreamProducer) Name() string {
 	return sls.name
 }
 
-func (sls *ShardedSharedLogStreamProducer) Stream() *sharedlog_stream.ShardedSharedLogStream {
+func (sls *ShardedSharedLogStreamProducer) Stream() sharedlog_stream.Stream {
 	return sls.stream
 }
 

@@ -143,17 +143,13 @@ func (h *windowedAvg) getAggProcessor(ctx context.Context, sp *common.QueryInput
 			Env:          h.env,
 			NumPartition: sp.NumInPartition,
 		}).
-		Build(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
+		BuildForKVStore(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
 	if err != nil {
 		return nil, err
 	}
 
-	store, err := store_with_changelog.NewInMemoryWindowStoreWithChangelog(
-		timeWindows.MaxSize()+timeWindows.GracePeriodMs(), timeWindows.MaxSize(), false,
-		concurrent_skiplist.CompareFunc(concurrent_skiplist.Uint64KeyCompare), winStoreMp)
-	if err != nil {
-		return nil, err
-	}
+	store := store_with_changelog.NewInMemoryWindowStoreWithChangelog(
+		timeWindows, false, concurrent_skiplist.CompareFunc(concurrent_skiplist.Uint64KeyCompare), winStoreMp)
 	aggProc := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(
 		"aggProc", store,
 		processor.InitializerFunc(func() interface{} {
