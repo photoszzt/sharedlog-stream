@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"sync"
 	"time"
@@ -23,7 +25,7 @@ type ConcurrentMeteredSink struct {
 	mu                 sync.Mutex
 	eventTimeLatencies []int
 
-	ShardedSharedLogStreamProducer
+	producer *ShardedSharedLogStreamProducer
 
 	produceTp stats.ConcurrentThroughputCounter
 	lat       stats.ConcurrentInt64Collector
@@ -38,7 +40,7 @@ var _ = MeteredProducerIntr(&ConcurrentMeteredSink{})
 func NewConcurrentMeteredSyncProducer(sink *ShardedSharedLogStreamProducer, warmup time.Duration) *ConcurrentMeteredSink {
 	sink_name := fmt.Sprintf("%s_sink", sink.TopicName())
 	return &ConcurrentMeteredSink{
-		ShardedSharedLogStreamProducer: *sink,
+		producer: sink,
 		lat: stats.NewConcurrentInt64Collector(sink_name,
 			stats.DEFAULT_COLLECT_DURATION),
 		produceTp: stats.NewConcurrentThroughputCounter(sink_name,
@@ -101,14 +103,37 @@ func (s *ConcurrentMeteredSink) Produce(ctx context.Context, msg commtypes.Messa
 		}
 	}
 	procStart := stats.TimerBegin()
-	err = s.ShardedSharedLogStreamProducer.Produce(ctx, msg, parNum, isControl)
+	err = s.producer.Produce(ctx, msg, parNum, isControl)
 	elapsed := stats.Elapsed(procStart).Microseconds()
 	s.lat.AddSample(elapsed)
 	return err
 }
 
+func (s *ConcurrentMeteredSink) TopicName() string               { return s.producer.TopicName() }
+func (s *ConcurrentMeteredSink) Name() string                    { return s.producer.Name() }
+func (s *ConcurrentMeteredSink) SetName(name string)             { s.producer.SetName(name) }
+func (s *ConcurrentMeteredSink) KeySerde() commtypes.Serde       { return s.producer.KeySerde() }
+func (s *ConcurrentMeteredSink) Flush(ctx context.Context) error { return s.producer.Flush(ctx) }
+func (s *ConcurrentMeteredSink) ConfigExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
+	guarantee exactly_once_intr.GuaranteeMth,
+) {
+	s.producer.ConfigExactlyOnce(rem, guarantee)
+}
+func (s *ConcurrentMeteredSink) Stream() *sharedlog_stream.ShardedSharedLogStream {
+	return s.producer.Stream()
+}
+func (s *ConcurrentMeteredSink) GetInitialProdSeqNum(substreamNum uint8) uint64 {
+	return s.producer.GetInitialProdSeqNum(substreamNum)
+}
+func (s *ConcurrentMeteredSink) GetCurrentProdSeqNum(substreamNum uint8) uint64 {
+	return s.producer.GetCurrentProdSeqNum(substreamNum)
+}
+func (s *ConcurrentMeteredSink) ResetInitialProd() { s.producer.ResetInitialProd() }
+func (s *ConcurrentMeteredSink) Lock()             { s.producer.Lock() }
+func (s *ConcurrentMeteredSink) Unlock()           { s.producer.Unlock() }
+
 type MeteredProducer struct {
-	ShardedSharedLogStreamProducer
+	producer           *ShardedSharedLogStreamProducer
 	eventTimeLatencies []int
 	latencies          stats.Int64Collector
 	produceTp          stats.ThroughputCounter
@@ -120,12 +145,12 @@ type MeteredProducer struct {
 func NewMeteredProducer(sink *ShardedSharedLogStreamProducer, warmup time.Duration) *MeteredProducer {
 	sink_name := fmt.Sprintf("%s_sink", sink.TopicName())
 	return &MeteredProducer{
-		ShardedSharedLogStreamProducer: *sink,
-		latencies:                      stats.NewInt64Collector(sink_name, stats.DEFAULT_COLLECT_DURATION),
-		produceTp:                      stats.NewThroughputCounter(sink_name, stats.DEFAULT_COLLECT_DURATION),
-		measure:                        checkMeasureSink(),
-		isFinalOutput:                  false,
-		warmup:                         stats.NewWarmupChecker(warmup),
+		producer:      sink,
+		latencies:     stats.NewInt64Collector(sink_name, stats.DEFAULT_COLLECT_DURATION),
+		produceTp:     stats.NewThroughputCounter(sink_name, stats.DEFAULT_COLLECT_DURATION),
+		measure:       checkMeasureSink(),
+		isFinalOutput: false,
+		warmup:        stats.NewWarmupChecker(warmup),
 	}
 }
 
@@ -168,10 +193,39 @@ func (s *MeteredProducer) Produce(ctx context.Context, msg commtypes.Message, pa
 		}
 	}
 	procStart := stats.TimerBegin()
-	err = s.ShardedSharedLogStreamProducer.Produce(ctx, msg, parNum, isControl)
+	err = s.producer.Produce(ctx, msg, parNum, isControl)
 	elapsed := stats.Elapsed(procStart).Microseconds()
 	s.latencies.AddSample(elapsed)
 	return err
+}
+
+func (s *MeteredProducer) TopicName() string               { return s.producer.TopicName() }
+func (s *MeteredProducer) Name() string                    { return s.producer.Name() }
+func (s *MeteredProducer) SetName(name string)             { s.producer.SetName(name) }
+func (s *MeteredProducer) KeySerde() commtypes.Serde       { return s.producer.KeySerde() }
+func (s *MeteredProducer) Flush(ctx context.Context) error { return s.producer.Flush(ctx) }
+func (s *MeteredProducer) ConfigExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
+	guarantee exactly_once_intr.GuaranteeMth,
+) {
+	s.producer.ConfigExactlyOnce(rem, guarantee)
+}
+func (s *MeteredProducer) Stream() *sharedlog_stream.ShardedSharedLogStream {
+	return s.producer.Stream()
+}
+func (s *MeteredProducer) GetInitialProdSeqNum(substreamNum uint8) uint64 {
+	return s.producer.GetInitialProdSeqNum(substreamNum)
+}
+func (s *MeteredProducer) GetCurrentProdSeqNum(substreamNum uint8) uint64 {
+	return s.producer.GetCurrentProdSeqNum(substreamNum)
+}
+func (s *MeteredProducer) ResetInitialProd() {
+	s.producer.ResetInitialProd()
+}
+func (s *MeteredProducer) Lock() {
+	s.producer.Lock()
+}
+func (s *MeteredProducer) Unlock() {
+	s.producer.Unlock()
 }
 
 func extractEventTs(msg *commtypes.Message) (int64, error) {

@@ -290,7 +290,7 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 ) *common.FnOutput {
 	// debug.Fprintf(os.Stderr, "about to pause\n")
 	if t.pauseFunc != nil {
-		if ret := t.pauseFunc(); ret != nil {
+		if ret := t.pauseFunc(args); ret != nil {
 			return ret
 		}
 	}

@@ -3,6 +3,8 @@ package execution
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/processor"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sync"
 )
 
@@ -18,7 +20,7 @@ type GeneralProcFunc func(ctx context.Context,
 
 func NewGeneralProcManager(generalProcFunc GeneralProcFunc) *GeneralProcManager {
 	return &GeneralProcManager{
-		msgChan:         make(chan commtypes.Message, 1),
+		msgChan:         make(chan commtypes.Message),
 		errChan:         make(chan error, 1),
 		generalProcFunc: generalProcFunc,
 	}
@@ -44,4 +46,47 @@ func (gm *GeneralProcManager) RequestToTerminate() {
 func (gm *GeneralProcManager) RecreateMsgChan(updateMsg *chan commtypes.Message) {
 	gm.msgChan = make(chan commtypes.Message, 1)
 	*updateMsg = gm.msgChan
+}
+
+type GeneralProcCtx struct {
+	chains processor.ProcessorChains
+}
+
+func NewGeneralProcCtx() *GeneralProcCtx {
+	return &GeneralProcCtx{
+		chains: processor.NewProcessorChains(),
+	}
+}
+
+func (c *GeneralProcCtx) AppendProcessor(processor processor.Processor) {
+	_ = c.chains.Via(processor)
+}
+
+func (c *GeneralProcCtx) GeneralProc(ctx context.Context,
+	producer producer_consumer.Producer,
+	msgChan chan commtypes.Message,
+	errChan chan error,
+) {
+L:
+	for {
+		producer.Lock()
+		select {
+		case <-ctx.Done():
+			producer.Unlock()
+			break L
+		case msg, ok := <-msgChan:
+			if !ok {
+				producer.Unlock()
+				break L
+			}
+			_, err := c.chains.RunChains(ctx, msg)
+			if err != nil {
+				errChan <- err
+				producer.Unlock()
+				return
+			}
+		default:
+		}
+		producer.Unlock()
+	}
 }

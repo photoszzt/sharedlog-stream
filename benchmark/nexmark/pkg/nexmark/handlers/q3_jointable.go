@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -192,12 +193,14 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			} else {
 				event = rightVal.(*ntypes.Event)
 			}
-			return &ntypes.NameCityStateId{
+			ncsi := &ntypes.NameCityStateId{
 				Name:  event.NewPerson.Name,
 				City:  event.NewPerson.City,
 				State: event.NewPerson.State,
 				ID:    event.NewPerson.ID,
 			}
+			debug.Fprintf(os.Stderr, "join outputs: %v\n", ncsi)
+			return ncsi
 		})
 
 	auctionJoinsPersons := processor.NewMeteredProcessor(

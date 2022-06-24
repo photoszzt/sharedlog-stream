@@ -15,15 +15,15 @@ import (
 	"golang.org/x/xerrors"
 )
 
-func CommonProcess(ctx context.Context, t *stream_task.StreamTask, args processor.ExecutionContext,
+func CommonProcess(ctx context.Context, t *stream_task.StreamTask, ectx processor.ExecutionContext,
 	procMsg proc_interface.ProcessMsgFunc,
 ) *common.FnOutput {
 	if t.HandleErrFunc != nil {
 		if err := t.HandleErrFunc(); err != nil {
-			return &common.FnOutput{Success: true, Message: err.Error()}
+			return common.GenErrFnOutput(err)
 		}
 	}
-	gotMsgs, err := args.Consumers()[0].Consume(ctx, args.SubstreamNum())
+	gotMsgs, err := ectx.Consumers()[0].Consume(ctx, ectx.SubstreamNum())
 	if err != nil {
 		if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 			return &common.FnOutput{Success: true, Message: err.Error()}
@@ -35,15 +35,15 @@ func CommonProcess(ctx context.Context, t *stream_task.StreamTask, args processo
 			continue
 		}
 		if msg.IsControl {
-			ret_err := HandleScaleEpochAndBytes(ctx, msg, args)
+			ret_err := HandleScaleEpochAndBytes(ctx, msg, ectx)
 			if ret_err != nil {
 				return ret_err
 			}
 			continue
 		}
 		// err = proc(t, msg)
-		t.CurrentConsumeOffset[args.Consumers()[0].TopicName()] = msg.LogSeqNum
-		err = ProcessMsgAndSeq(ctx, msg, args, procMsg)
+		t.CurrentConsumeOffset[ectx.Consumers()[0].TopicName()] = msg.LogSeqNum
+		err = ProcessMsgAndSeq(ctx, msg, ectx, procMsg)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}

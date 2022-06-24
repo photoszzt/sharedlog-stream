@@ -177,7 +177,7 @@ func (t *StreamTask) markEpoch(ctx context.Context,
 	hasProcessData *bool,
 ) *common.FnOutput {
 	if t.pauseFunc != nil {
-		if ret := t.pauseFunc(); ret != nil {
+		if ret := t.pauseFunc(args); ret != nil {
 			return ret
 		}
 	}

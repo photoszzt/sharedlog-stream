@@ -36,6 +36,14 @@ type StreamTaskArgs struct {
 	guarantee      exactly_once_intr.GuaranteeMth
 }
 
+func (s *StreamTaskArgs) LockProducerConsumer() {
+	s.ectx.LockProducerConsumer()
+}
+
+func (s *StreamTaskArgs) UnlockProducerConsumer() {
+	s.ectx.UnlockProducerConsumer()
+}
+
 type StreamTaskArgsBuilder struct {
 	stArgs *StreamTaskArgs
 }

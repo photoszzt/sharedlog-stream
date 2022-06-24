@@ -12,6 +12,8 @@ type ProducersConsumers interface {
 	FlushAndPushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error
 	Consumers() []producer_consumer.MeteredConsumerIntr
 	StartWarmup()
+	LockProducerConsumer()
+	UnlockProducerConsumer()
 }
 
 type BaseConsumersProducers struct {
@@ -28,6 +30,24 @@ func NewBaseSrcsSinks(srcs []producer_consumer.MeteredConsumerIntr, sinks []prod
 
 func (pa *BaseConsumersProducers) Consumers() []producer_consumer.MeteredConsumerIntr {
 	return pa.consumers
+}
+
+func (pa *BaseConsumersProducers) LockProducerConsumer() {
+	for _, consumer := range pa.consumers {
+		consumer.Lock()
+	}
+	for _, producer := range pa.producers {
+		producer.Lock()
+	}
+}
+
+func (pa *BaseConsumersProducers) UnlockProducerConsumer() {
+	for _, consumer := range pa.consumers {
+		consumer.Unlock()
+	}
+	for _, producer := range pa.producers {
+		producer.Unlock()
+	}
 }
 
 func (pa *BaseConsumersProducers) FlushAndPushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {

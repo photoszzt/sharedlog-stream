@@ -6,11 +6,16 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
+	"sync"
 	"time"
 
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/execution"
+	"sharedlog-stream/pkg/proc_interface"
+	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
+	"sharedlog-stream/pkg/stream_task"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -158,4 +163,75 @@ func GetSerdeFromString(serdeStr string, serdeFormat commtypes.SerdeFormat) (com
 	default:
 		return nil, fmt.Errorf("Unrecognized serde string %s", serdeStr)
 	}
+}
+
+func PrepareProcessByTwoGeneralProc(
+	ctx context.Context,
+	func1 execution.GeneralProcFunc,
+	func2 execution.GeneralProcFunc,
+	ectx processor.BaseExecutionContext,
+	procMsg proc_interface.ProcessMsgFunc,
+) (*stream_task.StreamTask, *TwoMsgChanProcArgs) {
+	var wg sync.WaitGroup
+	func1Manager := execution.NewGeneralProcManager(func1)
+	func2Manager := execution.NewGeneralProcManager(func2)
+	procArgs := &TwoMsgChanProcArgs{
+		msgChan1:             func1Manager.MsgChan(),
+		msgChan2:             func2Manager.MsgChan(),
+		BaseExecutionContext: ectx,
+	}
+
+	handleErrFunc := func() error {
+		select {
+		case aucErr := <-func1Manager.ErrChan():
+			return aucErr
+		case bidErr := <-func2Manager.ErrChan():
+			return bidErr
+		default:
+		}
+		return nil
+	}
+
+	task := stream_task.NewStreamTaskBuilder().
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
+			args := argsTmp.(processor.ExecutionContext)
+			return execution.CommonProcess(ctx, task, args, procMsg)
+		}).
+		InitFunc(func(task *stream_task.StreamTask) {
+			func1Manager.LaunchProc(ctx, procArgs, &wg)
+			func2Manager.LaunchProc(ctx, procArgs, &wg)
+		}).
+		PauseFunc(func(sargs *stream_task.StreamTaskArgs) *common.FnOutput {
+			// debug.Fprintf(os.Stderr, "begin pause\n")
+			/*
+				func1Manager.RequestToTerminate()
+				func2Manager.RequestToTerminate()
+				wg.Wait()
+			*/
+			if err := handleErrFunc(); err != nil {
+				return &common.FnOutput{Success: false, Message: err.Error()}
+			}
+			sargs.LockProducerConsumer()
+			// debug.Fprintf(os.Stderr, "done pause\n")
+			return nil
+		}).
+		ResumeFunc(func(task *stream_task.StreamTask, sargs *stream_task.StreamTaskArgs) {
+			// debug.Fprintf(os.Stderr, "start resume\n")
+			sargs.UnlockProducerConsumer()
+			/*
+				func1Manager.RecreateMsgChan(&procArgs.msgChan1)
+				func2Manager.RecreateMsgChan(&procArgs.msgChan2)
+				func1Manager.LaunchProc(ctx, procArgs, &wg)
+				func2Manager.LaunchProc(ctx, procArgs, &wg)
+			*/
+			// debug.Fprintf(os.Stderr, "done resume\n")
+		}).HandleErrFunc(handleErrFunc).Build()
+	return task, procArgs
+}
+
+func procMsgWithTwoMsgChan(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
+	args := argsTmp.(*TwoMsgChanProcArgs)
+	args.msgChan1 <- msg
+	args.msgChan2 <- msg
+	return nil
 }

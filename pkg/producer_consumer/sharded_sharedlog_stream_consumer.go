@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
+	"sync"
 	"time"
 )
 
@@ -22,6 +23,7 @@ type StreamConsumerConfig struct {
 }
 
 type ShardedSharedLogStreamConsumer struct {
+	sync.Mutex
 	kvmsgSerdes     commtypes.KVMsgSerdes
 	payloadArrSerde commtypes.Serde
 	stream          *sharedlog_stream.ShardedSharedLogStream

@@ -12,16 +12,13 @@ type JoinWorkerFunc func(c context.Context, m commtypes.Message) ([]commtypes.Me
 
 type JoinProcManager struct {
 	out  chan *common.FnOutput
-	run  chan struct{}
 	done chan struct{}
 }
 
 func NewJoinProcManager() *JoinProcManager {
 	out := make(chan *common.FnOutput, 1)
-	run := make(chan struct{})
 	return &JoinProcManager{
 		out: out,
-		run: run,
 	}
 }
 
@@ -35,14 +32,9 @@ func (jm *JoinProcManager) LaunchJoinProcLoop(
 	procArgs *JoinProcArgs,
 	wg *sync.WaitGroup,
 ) {
-	done := make(chan struct{})
-	jm.done = done
+	jm.done = make(chan struct{})
 	wg.Add(1)
-	go joinProcLoop(ctx, jm.out, task, procArgs, wg, jm.run, done)
-}
-
-func (jm *JoinProcManager) Run() {
-	jm.run <- struct{}{}
+	go joinProcLoop(ctx, jm.out, task, procArgs, wg, jm.done)
 }
 
 func (jm *JoinProcManager) RequestToTerminate() {

@@ -12,9 +12,9 @@ type SetAppProcessFunc interface {
 
 type BuildStreamTask interface {
 	Build() *StreamTask
-	InitFunc(i func(progArgs interface{})) BuildStreamTask
-	PauseFunc(p func() *common.FnOutput) BuildStreamTask
-	ResumeFunc(r func(task *StreamTask)) BuildStreamTask
+	InitFunc(i func(task *StreamTask)) BuildStreamTask
+	PauseFunc(p func(sargs *StreamTaskArgs) *common.FnOutput) BuildStreamTask
+	ResumeFunc(r func(task *StreamTask, sargs *StreamTaskArgs)) BuildStreamTask
 	HandleErrFunc(he func() error) BuildStreamTask
 }
 
@@ -39,15 +39,15 @@ func (b *StreamTaskBuilder) AppProcessFunc(process ProcessFunc) BuildStreamTask 
 func (b *StreamTaskBuilder) Build() *StreamTask {
 	return b.task
 }
-func (b *StreamTaskBuilder) PauseFunc(p func() *common.FnOutput) BuildStreamTask {
+func (b *StreamTaskBuilder) PauseFunc(p func(sargs *StreamTaskArgs) *common.FnOutput) BuildStreamTask {
 	b.task.pauseFunc = p
 	return b
 }
-func (b *StreamTaskBuilder) ResumeFunc(r func(task *StreamTask)) BuildStreamTask {
+func (b *StreamTaskBuilder) ResumeFunc(r func(task *StreamTask, sargs *StreamTaskArgs)) BuildStreamTask {
 	b.task.resumeFunc = r
 	return b
 }
-func (b *StreamTaskBuilder) InitFunc(i func(progArgs interface{})) BuildStreamTask {
+func (b *StreamTaskBuilder) InitFunc(i func(task *StreamTask)) BuildStreamTask {
 	b.task.initFunc = i
 	return b
 }

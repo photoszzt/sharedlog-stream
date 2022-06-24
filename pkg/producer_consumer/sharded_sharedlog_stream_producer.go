@@ -8,9 +8,11 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
+	"sync"
 )
 
 type ShardedSharedLogStreamProducer struct {
+	sync.Mutex
 	kvmsgSerdes commtypes.KVMsgSerdes
 	eom         eo_intr.ReadOnlyExactlyOnceManager
 	stream      *sharedlog_stream.ShardedSharedLogStream

@@ -43,15 +43,15 @@ func (t *StreamTask) process(ctx context.Context, args *StreamTaskArgs) *common.
 	debug.Fprint(os.Stderr, "done restore\n")
 	args.ectx.StartWarmup()
 	if t.initFunc != nil {
-		t.initFunc(args.ectx)
+		t.initFunc(t)
 	}
 	hasUntrackedConsume := false
 
-	commitTimer := time.Now()
-	flushTimer := time.Now()
-	debug.Fprintf(os.Stderr, "warmup time: %v\n", args.warmup)
+	debug.Fprintf(os.Stderr, "warmup time: %v, flush every: %v\n", args.warmup, args.flushEvery)
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
 	warmupCheck.StartWarmup()
+	commitTimer := time.Now()
+	flushTimer := time.Now()
 	for {
 		timeSinceLastTrack := time.Since(commitTimer)
 		if timeSinceLastTrack >= args.trackEveryForAtLeastOnce {
@@ -69,6 +69,7 @@ func (t *StreamTask) process(ctx context.Context, args *StreamTaskArgs) *common.
 		if args.duration != 0 && warmupCheck.ElapsedSinceInitial() >= args.duration {
 			break
 		}
+		debug.Fprintf(os.Stderr, "before appProcessFunc\n")
 		procStart := time.Now()
 		ret := t.appProcessFunc(ctx, t, args.ectx)
 		if ret != nil {
@@ -83,6 +84,7 @@ func (t *StreamTask) process(ctx context.Context, args *StreamTaskArgs) *common.
 			}
 			return ret
 		}
+		debug.Fprintf(os.Stderr, "after appProcessFunc\n")
 		if !hasUntrackedConsume {
 			hasUntrackedConsume = true
 		}
@@ -99,7 +101,7 @@ func (t *StreamTask) process(ctx context.Context, args *StreamTaskArgs) *common.
 
 func (t *StreamTask) pauseFlushResume(ctx context.Context, args *StreamTaskArgs, flushTimer *time.Time) *common.FnOutput {
 	if t.pauseFunc != nil {
-		if ret := t.pauseFunc(); ret != nil {
+		if ret := t.pauseFunc(args); ret != nil {
 			return ret
 		}
 	}
@@ -108,7 +110,7 @@ func (t *StreamTask) pauseFlushResume(ctx context.Context, args *StreamTaskArgs,
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	if t.resumeFunc != nil {
-		t.resumeFunc(t)
+		t.resumeFunc(t, args)
 	}
 	*flushTimer = time.Now()
 	return nil
@@ -118,7 +120,7 @@ func (t *StreamTask) pauseTrackFlushResume(ctx context.Context, args *StreamTask
 	hasUncommitted *bool, commitTimer *time.Time, flushTimer *time.Time,
 ) *common.FnOutput {
 	if t.pauseFunc != nil {
-		if ret := t.pauseFunc(); ret != nil {
+		if ret := t.pauseFunc(args); ret != nil {
 			return ret
 		}
 	}
@@ -131,7 +133,7 @@ func (t *StreamTask) pauseTrackFlushResume(ctx context.Context, args *StreamTask
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	if t.resumeFunc != nil {
-		t.resumeFunc(t)
+		t.resumeFunc(t, args)
 	}
 	*hasUncommitted = false
 	*commitTimer = time.Now()
@@ -143,7 +145,7 @@ func (t *StreamTask) pauseTrackFlush(ctx context.Context, args *StreamTaskArgs, 
 	alreadyPaused := false
 	if hasUncommitted {
 		if t.pauseFunc != nil {
-			if ret := t.pauseFunc(); ret != nil {
+			if ret := t.pauseFunc(args); ret != nil {
 				return ret
 			}
 		}
@@ -154,7 +156,7 @@ func (t *StreamTask) pauseTrackFlush(ctx context.Context, args *StreamTaskArgs, 
 		alreadyPaused = true
 	}
 	if !alreadyPaused && t.pauseFunc != nil {
-		if ret := t.pauseFunc(); ret != nil {
+		if ret := t.pauseFunc(args); ret != nil {
 			return ret
 		}
 	}

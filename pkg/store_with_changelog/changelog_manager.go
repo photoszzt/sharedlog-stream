@@ -3,9 +3,9 @@ package store_with_changelog
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/producer_consumer"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -81,11 +81,18 @@ func (cm *ChangelogManager) Stream() *sharedlog_stream.ShardedSharedLogStream {
 	return cm.stream
 }
 
+// when changelog is src, there's nothing to flush
 func (cm *ChangelogManager) Flush(ctx context.Context) error {
-	return cm.producer.FlushNoLock(ctx)
+	if !cm.changelogIsSrc {
+		return cm.producer.FlushNoLock(ctx)
+	}
+	return nil
 }
 func (cm *ChangelogManager) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
-	return cm.producer.Produce(ctx, msg, parNum, isControl)
+	if !cm.changelogIsSrc {
+		return cm.producer.Produce(ctx, msg, parNum, isControl)
+	}
+	return nil
 }
 
 func (cm *ChangelogManager) Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {

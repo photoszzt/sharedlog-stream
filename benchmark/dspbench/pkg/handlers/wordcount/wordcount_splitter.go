@@ -164,10 +164,6 @@ func (h *wordcountSplitFlatMap) wordcount_split(ctx context.Context, sp *common.
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
 			args := argsTmp.(processor.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
-		}).
-		InitFunc(func(progArgs interface{}) {
-			src.StartWarmup()
-			sink.StartWarmup()
 		}).Build()
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs,

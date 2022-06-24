@@ -34,7 +34,7 @@ func CreateJoinProcArgsPair(
 		proc_interface.NewBaseSrcsSinks(srcs[:1], sinks),
 		procArgs,
 	))
-	rightArgs := NewJoinProcArgs(runnerL, processor.NewExecutionContextFromComponents(
+	rightArgs := NewJoinProcArgs(runnerR, processor.NewExecutionContextFromComponents(
 		proc_interface.NewBaseSrcsSinks(srcs[1:], sinks),
 		procArgs,
 	))

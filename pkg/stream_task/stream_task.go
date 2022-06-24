@@ -26,9 +26,9 @@ type StreamTask struct {
 	OffMu                sync.Mutex
 	CurrentConsumeOffset map[string]uint64
 
-	pauseFunc     func() *common.FnOutput
-	resumeFunc    func(task *StreamTask)
-	initFunc      func(progArgs interface{})
+	pauseFunc     func(sargs *StreamTaskArgs) *common.FnOutput
+	resumeFunc    func(task *StreamTask, sargs *StreamTaskArgs)
+	initFunc      func(task *StreamTask)
 	HandleErrFunc func() error
 }
 
@@ -307,12 +307,12 @@ func (t *StreamTask) initAfterMarkOrCommit(ctx context.Context, args *StreamTask
 		}
 	}
 	if *init && t.resumeFunc != nil {
-		t.resumeFunc(t)
+		t.resumeFunc(t, args)
 	}
 	if !*init {
 		args.ectx.StartWarmup()
 		if t.initFunc != nil {
-			t.initFunc(args.ectx)
+			t.initFunc(t)
 		}
 		*init = true
 	}

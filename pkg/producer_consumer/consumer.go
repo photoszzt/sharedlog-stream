@@ -3,8 +3,8 @@ package producer_consumer
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/sharedlog_stream"
 )
 
 type Consumer interface {
@@ -19,6 +19,8 @@ type Consumer interface {
 	SetInitialSource(initial bool)
 	IsInitialSource() bool
 	KVMsgSerdes() commtypes.KVMsgSerdes
+	Lock()
+	Unlock()
 }
 
 type MeteredConsumerIntr interface {

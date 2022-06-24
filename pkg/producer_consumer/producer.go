@@ -21,6 +21,8 @@ type Producer interface {
 	GetInitialProdSeqNum(substreamNum uint8) uint64
 	GetCurrentProdSeqNum(substreamNum uint8) uint64
 	ResetInitialProd()
+	Lock()
+	Unlock()
 }
 
 type MeteredProducerIntr interface {
