@@ -64,13 +64,18 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 		// debug.Fprintf(os.Stderr, "\tIsControl: %v\n", rawMsg.IsControl)
 		// debug.Fprintf(os.Stderr, "\tIsPayloadArr: %v\n", rawMsg.IsPayloadArr)
 
+		debug.Fprintf(os.Stderr, "%s RawMsg: Payload %v, LogSeq 0x%x, MsgSeqNum 0x%x, IsControl: %v, IsPayloadArr: %v\n",
+			emc.stream.TopicName(), string(rawMsg.Payload), rawMsg.LogSeqNum, rawMsg.MsgSeqNum, rawMsg.IsControl, rawMsg.IsPayloadArr)
+
 		// control entry's msgseqnum is written for the epoch log;
 		// reading from the normal stream, we don't count this entry as a duplicate one
 		// control entry itself is idempodent; n commit record with the same content is the
 		// same as one commit record
-		if shouldIgnoreThisMsg(emc.curReadMsgSeqNum, rawMsg) && !rawMsg.IsControl {
-			debug.Fprintf(os.Stderr, "got a duplicate entry; continue\n")
-			continue
+		if !rawMsg.IsControl {
+			if shouldIgnoreThisMsg(emc.curReadMsgSeqNum, rawMsg) {
+				debug.Fprintf(os.Stderr, "got a duplicate entry; continue\n")
+				continue
+			}
 		}
 		if rawMsg.IsControl {
 			epochMarkTmp, err := emc.epochMarkerSerde.Decode(rawMsg.Payload)
