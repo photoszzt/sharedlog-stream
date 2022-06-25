@@ -132,6 +132,8 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 		}), warmup)
 	src1.SetInitialSource(false)
 	src2.SetInitialSource(false)
+	src1.SetName("auctionsBySellerIDSrc")
+	src2.SetName("personsByIDSrc")
 	sink.MarkFinalOutput()
 	return []producer_consumer.MeteredConsumerIntr{src1, src2}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }

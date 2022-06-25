@@ -129,8 +129,14 @@ func (s *ConcurrentMeteredSink) GetCurrentProdSeqNum(substreamNum uint8) uint64 
 	return s.producer.GetCurrentProdSeqNum(substreamNum)
 }
 func (s *ConcurrentMeteredSink) ResetInitialProd() { s.producer.ResetInitialProd() }
-func (s *ConcurrentMeteredSink) Lock()             { s.producer.Lock() }
-func (s *ConcurrentMeteredSink) Unlock()           { s.producer.Unlock() }
+func (s *ConcurrentMeteredSink) Lock() {
+	// debug.Fprintf(os.Stderr, "lock producer %s\n", s.Name())
+	s.producer.Lock()
+}
+func (s *ConcurrentMeteredSink) Unlock() {
+	// debug.Fprintf(os.Stderr, "unlock producer %s\n", s.Name())
+	s.producer.Unlock()
+}
 
 type MeteredProducer struct {
 	producer           *ShardedSharedLogStreamProducer

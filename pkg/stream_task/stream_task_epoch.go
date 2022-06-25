@@ -90,10 +90,11 @@ func (t *StreamTask) processInEpoch(
 	cmm.StartMonitorControlChannel(dctx)
 
 	run := false
-	latencies := stats.NewInt64Collector("latPerIter", stats.DEFAULT_COLLECT_DURATION)
 	hasProcessData := false
-	markTimer := time.Now()
 	init := false
+	paused := false
+	latencies := stats.NewInt64Collector("latPerIter", stats.DEFAULT_COLLECT_DURATION)
+	markTimer := time.Now()
 	var once sync.Once
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
 	debug.Fprintf(os.Stderr, "commit every(ms): %d\n", args.commitEvery)
@@ -113,7 +114,7 @@ func (t *StreamTask) processInEpoch(
 			timeout := args.duration != 0 && cur_elapsed >= args.duration
 			shouldMarkByTime := (args.commitEvery != 0 && timeSinceLastMark > args.commitEvery)
 			if (shouldMarkByTime || timeout) && hasProcessData {
-				err_out := t.markEpoch(dctx, em, args, &hasProcessData)
+				err_out := t.markEpoch(dctx, em, args, &hasProcessData, &paused)
 				if err_out != nil {
 					return err_out
 				}
@@ -122,24 +123,17 @@ func (t *StreamTask) processInEpoch(
 			cur_elapsed = warmupCheck.ElapsedSinceInitial()
 			timeout = args.duration != 0 && cur_elapsed >= args.duration
 			if timeout {
-				if hasProcessData {
-					err_out := t.markEpoch(dctx, em, args, &hasProcessData)
-					if err_out != nil {
-						return err_out
-					}
-				}
 				elapsed := time.Since(procStart)
 				latencies.AddSample(elapsed.Microseconds())
-				ret := &common.FnOutput{
-					Success: true,
-				}
+				ret := &common.FnOutput{Success: true}
 				updateReturnMetric(ret, &warmupCheck)
 				return ret
 			}
 
 			// init
 			if !hasProcessData {
-				err := t.initAfterMarkOrCommit(ctx, args, em, &init)
+				//
+				err := t.initAfterMarkOrCommit(ctx, args, em, &init, &paused)
 				if err != nil {
 					return common.GenErrFnOutput(err)
 				}
@@ -168,11 +162,13 @@ func (t *StreamTask) markEpoch(ctx context.Context,
 	em *epoch_manager.EpochManager,
 	args *StreamTaskArgs,
 	hasProcessData *bool,
+	paused *bool,
 ) *common.FnOutput {
 	if t.pauseFunc != nil {
 		if ret := t.pauseFunc(args); ret != nil {
 			return ret
 		}
+		*paused = true
 	}
 	err := em.MarkEpoch(ctx, t.CurrentConsumeOffset, args.ectx.Producers())
 	if err != nil {

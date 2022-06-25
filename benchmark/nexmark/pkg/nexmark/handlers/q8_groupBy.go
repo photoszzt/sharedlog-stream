@@ -84,6 +84,8 @@ func (h *q8GroupByHandler) getExecutionCtx(ctx context.Context, sp *common.Query
 		sink := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_stream, outConfig), time.Duration(sp.WarmupS)*time.Second)
 		sinks = append(sinks, sink)
 	}
+	sinks[0].SetName("auctionsBySellerIDSink")
+	sinks[1].SetName("personsByIDSink")
 	return processor.NewExecutionContext([]producer_consumer.MeteredConsumerIntr{src}, sinks,
 		h.funcName, sp.ScaleEpoch, sp.ParNum), nil
 }

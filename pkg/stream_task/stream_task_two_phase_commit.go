@@ -163,6 +163,7 @@ func (t *StreamTask) processWithTransaction(
 	latencies := stats.NewInt64Collector("latPerIter", stats.DEFAULT_COLLECT_DURATION)
 	hasLiveTransaction := false
 	trackConsumePar := false
+	paused := false
 	commitTimer := time.Now()
 
 	debug.Fprintf(os.Stderr, "commit every(ms): %d\n", args.commitEvery)
@@ -189,7 +190,8 @@ func (t *StreamTask) processWithTransaction(
 
 			// should commit
 			if (shouldCommitByTime || timeout) && hasLiveTransaction {
-				err_out := t.commitTransaction(ctx, tm, args, &hasLiveTransaction, &trackConsumePar)
+				err_out := t.commitTransaction(ctx, tm, args, &hasLiveTransaction,
+					&trackConsumePar, &paused)
 				if err_out != nil {
 					return err_out
 				}
@@ -205,12 +207,6 @@ func (t *StreamTask) processWithTransaction(
 					debug.Fprintf(os.Stderr, "[ERROR] close transaction manager: %v\n", err)
 					return &common.FnOutput{Success: false, Message: fmt.Sprintf("close transaction manager: %v\n", err)}
 				}
-				if hasLiveTransaction {
-					err_out := t.commitTransaction(ctx, tm, args, &hasLiveTransaction, &trackConsumePar)
-					if err_out != nil {
-						return err_out
-					}
-				}
 				elapsed := time.Since(procStart)
 				latencies.AddSample(elapsed.Microseconds())
 				ret := &common.FnOutput{
@@ -221,7 +217,8 @@ func (t *StreamTask) processWithTransaction(
 			}
 
 			// begin new transaction
-			err := t.startNewTransaction(ctx, args, tm, &hasLiveTransaction, &trackConsumePar, &init, &commitTimer)
+			err := t.startNewTransaction(ctx, args, tm, &hasLiveTransaction,
+				&trackConsumePar, &init, &paused, &commitTimer)
 			if err != nil {
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
@@ -249,7 +246,7 @@ func (t *StreamTask) processWithTransaction(
 }
 
 func (t *StreamTask) startNewTransaction(ctx context.Context, args *StreamTaskArgs, tm *transaction.TransactionManager,
-	hasLiveTransaction *bool, trackConsumePar *bool, init *bool, commitTimer *time.Time,
+	hasLiveTransaction *bool, trackConsumePar *bool, init *bool, paused *bool, commitTimer *time.Time,
 ) error {
 	if !*hasLiveTransaction {
 		if err := tm.BeginTransaction(ctx, args.kvChangelogs, args.windowStoreChangelogs); err != nil {
@@ -259,7 +256,7 @@ func (t *StreamTask) startNewTransaction(ctx context.Context, args *StreamTaskAr
 		*hasLiveTransaction = true
 		*commitTimer = time.Now()
 		debug.Fprintf(os.Stderr, "fixedOutParNum: %d\n", args.fixedOutParNum)
-		err := t.initAfterMarkOrCommit(ctx, args, tm, init)
+		err := t.initAfterMarkOrCommit(ctx, args, tm, init, paused)
 		if err != nil {
 			return err
 		}
@@ -280,12 +277,14 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 	args *StreamTaskArgs,
 	hasLiveTransaction *bool,
 	trackConsumePar *bool,
+	paused *bool,
 ) *common.FnOutput {
 	// debug.Fprintf(os.Stderr, "about to pause\n")
 	if t.pauseFunc != nil {
 		if ret := t.pauseFunc(args); ret != nil {
 			return ret
 		}
+		*paused = true
 	}
 	// debug.Fprintf(os.Stderr, "after pause\n")
 	consumedSeqNumConfigs := make([]con_types.ConsumedSeqNumConfig, 0)

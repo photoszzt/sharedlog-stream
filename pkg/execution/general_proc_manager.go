@@ -63,7 +63,7 @@ func (c *GeneralProcCtx) AppendProcessor(processor processor.Processor) {
 }
 
 func (c *GeneralProcCtx) GeneralProc(ctx context.Context,
-	producer producer_consumer.Producer,
+	producer producer_consumer.MeteredProducerIntr,
 	msgChan chan commtypes.Message,
 	errChan chan error,
 ) {

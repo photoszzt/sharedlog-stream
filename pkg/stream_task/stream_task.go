@@ -56,9 +56,11 @@ func (t *StreamTask) ExecuteApp(ctx context.Context,
 	if ret != nil && ret.Success {
 		for _, src := range streamTaskArgs.ectx.Consumers() {
 			ret.Counts[src.Name()] = src.GetCount()
+			// debug.Fprintf(os.Stderr, "src %s count %d\n", src.Name(), src.GetCount())
 		}
 		for _, sink := range streamTaskArgs.ectx.Producers() {
 			ret.Counts[sink.Name()] = sink.GetCount()
+			// debug.Fprintf(os.Stderr, "sink %s count %d\n", sink.Name(), sink.GetCount())
 			if sink.IsFinalOutput() {
 				ret.Latencies["eventTimeLatency_"+sink.Name()] = sink.GetEventTimeLatency()
 			}
@@ -295,7 +297,7 @@ func checkMonitorReturns(
 }
 
 func (t *StreamTask) initAfterMarkOrCommit(ctx context.Context, args *StreamTaskArgs,
-	tracker exactly_once_intr.TopicSubstreamTracker, init *bool,
+	tracker exactly_once_intr.TopicSubstreamTracker, init *bool, paused *bool,
 ) error {
 	if args.fixedOutParNum != -1 {
 		sinks := args.ectx.Producers()
@@ -306,8 +308,9 @@ func (t *StreamTask) initAfterMarkOrCommit(ctx context.Context, args *StreamTask
 			return fmt.Errorf("track topic partition failed: %v\n", err)
 		}
 	}
-	if *init && t.resumeFunc != nil {
+	if *paused && t.resumeFunc != nil {
 		t.resumeFunc(t, args)
+		*paused = false
 	}
 	if !*init {
 		args.ectx.StartWarmup()

@@ -82,5 +82,11 @@ func (s *MeteredConsumer) ConfigExactlyOnce(serdeFormat commtypes.SerdeFormat, g
 func (s *MeteredConsumer) SetInitialSource(initial bool)      { s.consumer.SetInitialSource(initial) }
 func (s *MeteredConsumer) IsInitialSource() bool              { return s.consumer.IsInitialSource() }
 func (s *MeteredConsumer) KVMsgSerdes() commtypes.KVMsgSerdes { return s.consumer.KVMsgSerdes() }
-func (s *MeteredConsumer) Lock()                              { s.consumer.Lock() }
-func (s *MeteredConsumer) Unlock()                            { s.consumer.Unlock() }
+func (s *MeteredConsumer) Lock() {
+	// debug.Fprintf(os.Stderr, "lock consumer %s\n", s.Name())
+	s.consumer.Lock()
+}
+func (s *MeteredConsumer) Unlock() {
+	// debug.Fprintf(os.Stderr, "unlock consumer %s\n", s.Name())
+	s.consumer.Unlock()
+}
