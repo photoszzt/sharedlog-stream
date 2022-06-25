@@ -39,11 +39,10 @@ func (p *StreamAggregateProcessor) ProcessAndReturn(ctx context.Context, msg com
 	if err != nil {
 		return nil, err
 	}
-	var oldAggTs commtypes.ValueTimestamp
 	var oldAgg interface{}
 	var newTs int64
 	if ok {
-		oldAggTs = val.(commtypes.ValueTimestamp)
+		oldAggTs := val.(commtypes.ValueTimestamp)
 		oldAgg = oldAggTs.Value
 		if msg.Timestamp > oldAggTs.Timestamp {
 			newTs = msg.Timestamp
@@ -59,5 +58,9 @@ func (p *StreamAggregateProcessor) ProcessAndReturn(ctx context.Context, msg com
 	if err != nil {
 		return nil, err
 	}
-	return []commtypes.Message{{Key: msg.Key, Value: newAgg, Timestamp: newTs}}, nil
+	change := commtypes.Change{
+		NewVal: newAgg,
+		OldVal: oldAgg,
+	}
+	return []commtypes.Message{{Key: msg.Key, Value: change, Timestamp: newTs}}, nil
 }

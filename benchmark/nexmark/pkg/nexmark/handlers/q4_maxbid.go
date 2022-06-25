@@ -47,11 +47,10 @@ func (h *q4MaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *q4MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
-) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
+func (h *q4MaxBid) getExecutionCtx(ctx context.Context, sp *common.QueryInput) (processor.BaseExecutionContext, error) {
 	inputStream, outputStreams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
-		return nil, nil, err
+		return processor.EmptyBaseExecutionContext, err
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	var abSerde commtypes.Serde
@@ -63,11 +62,11 @@ func (h *q4MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		abSerde = ntypes.AuctionBidMsgpSerde{}
 		aicSerde = ntypes.AuctionIdCategoryMsgpSerde{}
 	} else {
-		return nil, nil, fmt.Errorf("unrecognized format: %v", serdeFormat)
+		return processor.EmptyBaseExecutionContext, fmt.Errorf("unrecognized format: %v", serdeFormat)
 	}
 	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
 	if err != nil {
-		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
+		return processor.EmptyBaseExecutionContext, fmt.Errorf("get msg serde err: %v", err)
 	}
 	inputConfig := &producer_consumer.StreamConsumerConfig{
 		Timeout: common.SrcConsumeTimeout,
@@ -77,10 +76,14 @@ func (h *q4MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 			MsgSerde: msgSerde,
 		},
 	}
+	changeSerde, err := commtypes.GetChangeSerde(serdeFormat, commtypes.Uint64Serde{})
+	if err != nil {
+		return processor.EmptyBaseExecutionContext, err
+	}
 	outConfig := &producer_consumer.StreamSinkConfig{
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			KeySerde: commtypes.Uint64Serde{},
-			ValSerde: commtypes.Uint64Serde{},
+			ValSerde: changeSerde,
 			MsgSerde: msgSerde,
 		},
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
@@ -93,7 +96,9 @@ func (h *q4MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		producer_consumer.NewShardedSharedLogStreamProducer(outputStreams[0], outConfig),
 		warmup)
 	src.SetInitialSource(false)
-	return []producer_consumer.MeteredConsumerIntr{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
+	ectx := processor.NewExecutionContext([]producer_consumer.MeteredConsumerIntr{src},
+		[]producer_consumer.MeteredProducerIntr{sink}, h.funcName, sp.ScaleEpoch, sp.ParNum)
+	return ectx, nil
 }
 
 /*
@@ -123,16 +128,14 @@ func (h *q4MaxBid) procMsg(ctx context.Context, msg commtypes.Message, argsTmp i
 */
 
 func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
+	ectx, err := h.getExecutionCtx(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	ectx := processor.NewExecutionContext(srcs, sinks_arr, h.funcName,
-		sp.ScaleEpoch, sp.ParNum)
 	maxBidStoreName := "q4MaxBidKVStore"
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	mp, err := store_with_changelog.NewMaterializeParamBuilder().
-		KVMsgSerdes(srcs[0].KVMsgSerdes()).
+		KVMsgSerdes(ectx.Consumers()[0].KVMsgSerdes()).
 		StoreName(maxBidStoreName).
 		ParNum(sp.ParNum).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
@@ -167,7 +170,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 					Value: m.Value,
 				}, nil
 			})))).
-		Via(processor.NewGroupByOutputProcessor(sinks_arr[0], &ectx))
+		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[0], &ectx))
 
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {

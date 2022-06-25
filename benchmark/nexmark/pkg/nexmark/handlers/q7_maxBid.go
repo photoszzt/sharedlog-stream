@@ -181,7 +181,8 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 		Via(
 			processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
 				"remapKV", processor.MapperFunc(func(m commtypes.Message) (commtypes.Message, error) {
-					return commtypes.Message{Key: m.Value, Value: m.Key, Timestamp: m.Timestamp}, nil
+					change := m.Value.(commtypes.Change)
+					return commtypes.Message{Key: change.NewVal, Value: m.Key, Timestamp: m.Timestamp}, nil
 				})))).
 		Via(processor.NewGroupByOutputProcessor(sinks_arr[0], &ectx))
 	task := stream_task.NewStreamTaskBuilder().

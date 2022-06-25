@@ -146,8 +146,9 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		Via(
 			processor.NewMeteredProcessor(processor.NewStreamMapValuesProcessor(
 				processor.ValueMapperFunc(func(value interface{}) (interface{}, error) {
-					val := value.(*ntypes.SumAndCount)
-					return float64(val.Sum) / float64(val.Count), nil
+					val := value.(commtypes.Change)
+					sc := val.NewVal.(*ntypes.SumAndCount)
+					return float64(sc.Sum) / float64(sc.Count), nil
 				}),
 			))).
 		Via(processor.NewFixedSubstreamOutputProcessor(sinks_arr[0], sp.ParNum))

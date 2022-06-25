@@ -189,10 +189,14 @@ func (h *wordcountCounterAgg) wordcount_counter(ctx context.Context, sp *common.
 	}
 	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, inConfig),
 		warmup)
+	changeSerde, err := commtypes.GetChangeSerde(serdeFormat, commtypes.Uint64Serde{})
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	sink := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], &producer_consumer.StreamSinkConfig{
 		KVMsgSerdes: commtypes.KVMsgSerdes{
 			KeySerde: commtypes.StringSerde{},
-			ValSerde: commtypes.Uint64Serde{},
+			ValSerde: changeSerde,
 			MsgSerde: msgSerde,
 		},
 	}), warmup)
