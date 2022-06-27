@@ -9,26 +9,32 @@ import (
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
 	"sync"
+	"time"
 )
+
+type StreamSinkConfig struct {
+	MsgSerde      commtypes.MessageSerde
+	FlushDuration time.Duration
+}
 
 type ShardedSharedLogStreamProducer struct {
 	sync.Mutex
-	kvmsgSerdes commtypes.KVMsgSerdes
-	eom         eo_intr.ReadOnlyExactlyOnceManager
-	stream      *sharedlog_stream.ShardedSharedLogStream
-	name        string
-	bufPush     bool
-	guarantee   eo_intr.GuaranteeMth
+	msgSerde  commtypes.MessageSerde
+	eom       eo_intr.ReadOnlyExactlyOnceManager
+	stream    *sharedlog_stream.ShardedSharedLogStream
+	name      string
+	bufPush   bool
+	guarantee eo_intr.GuaranteeMth
 }
 
 var _ = Producer(&ShardedSharedLogStreamProducer{})
 
 func NewShardedSharedLogStreamProducer(stream *sharedlog_stream.ShardedSharedLogStream, config *StreamSinkConfig) *ShardedSharedLogStreamProducer {
 	return &ShardedSharedLogStreamProducer{
-		kvmsgSerdes: config.KVMsgSerdes,
-		stream:      stream,
-		bufPush:     utils.CheckBufPush(),
-		name:        "sink",
+		msgSerde: config.MsgSerde,
+		stream:   stream,
+		bufPush:  utils.CheckBufPush(),
+		name:     "sink",
 	}
 }
 
@@ -84,7 +90,7 @@ func (sls *ShardedSharedLogStreamProducer) Produce(ctx context.Context, msg comm
 			nil, sharedlog_stream.StreamEntryMeta(isControl, false))
 		return err
 	}
-	bytes, err := commtypes.EncodeMsg(msg, sls.kvmsgSerdes)
+	bytes, err := sls.msgSerde.Encode(&msg)
 	if err != nil {
 		return err
 	}
@@ -110,7 +116,7 @@ func (sls *ShardedSharedLogStreamProducer) Produce(ctx context.Context, msg comm
 
 func (s *ShardedSharedLogStreamProducer) TopicName() string { return s.stream.TopicName() }
 func (s *ShardedSharedLogStreamProducer) KeySerde() commtypes.Serde {
-	return s.kvmsgSerdes.KeySerde
+	return s.msgSerde.GetKeySerde()
 }
 func (s *ShardedSharedLogStreamProducer) Flush(ctx context.Context) error {
 	if s.bufPush {

@@ -22,20 +22,12 @@ import (
 )
 
 type tableRestoreHandler struct {
-	env              types.Environment
-	kSerde           commtypes.Serde
-	vSerde           commtypes.Serde
-	keyWindowTsSerde commtypes.Serde
-	msgSerde         commtypes.MsgSerde
+	env types.Environment
 }
 
 func NewTableRestoreHandler(env types.Environment) types.FuncHandler {
 	return &tableRestoreHandler{
-		env:              env,
-		kSerde:           commtypes.IntSerde{},
-		vSerde:           strTsJSONSerde{},
-		msgSerde:         commtypes.MessageSerializedJSONSerde{},
-		keyWindowTsSerde: commtypes.KeyAndWindowStartTsJSONSerde{},
+		env: env,
 	}
 }
 
@@ -74,7 +66,6 @@ func (h *tableRestoreHandler) tests(ctx context.Context, sp *test_types.TestInpu
 type strTs struct {
 	Val string
 	Ts  int64
-	commtypes.BaseInjTime
 }
 
 var _ = commtypes.EventTimeExtractor(&strTs{})
@@ -102,16 +93,20 @@ func (s strTsJSONSerde) Decode(value []byte) (interface{}, error) {
 	return val, nil
 }
 
-func (h *tableRestoreHandler) pushToLog(ctx context.Context, key int, val string, ts int64, log *sharedlog_stream.ShardedSharedLogStream) (uint64, error) {
-	keyBytes, err := h.kSerde.Encode(key)
-	if err != nil {
-		return 0, err
+func (h *tableRestoreHandler) pushToLog(ctx context.Context,
+	key int, val string, ts int64,
+	msgSerde commtypes.MessageSerde,
+	log *sharedlog_stream.ShardedSharedLogStream,
+) (uint64, error) {
+	msg := commtypes.Message{
+		Key: key,
+		Value: &strTs{
+			Val: val,
+			Ts:  ts,
+		},
+		Timestamp: ts,
 	}
-	valBytes, err := h.vSerde.Encode(&strTs{Val: val, Ts: ts})
-	if err != nil {
-		return 0, err
-	}
-	encoded, err := h.msgSerde.Encode(keyBytes, valBytes)
+	encoded, err := msgSerde.Encode(&msg)
 	if err != nil {
 		return 0, err
 	}
@@ -135,17 +130,21 @@ func (h *tableRestoreHandler) testRestoreKVTable(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
+	msgSerde := commtypes.MessageJSONSerde{
+		KeySerde: commtypes.IntSerde{},
+		ValSerde: commtypes.StringSerde{},
+	}
 	offset := uint64(0)
-	if _, err = h.pushToLog(ctx, 0, "zero", 0, changelog); err != nil {
+	if _, err = h.pushToLog(ctx, 0, "zero", 0, msgSerde, changelog); err != nil {
 		panic(err)
 	}
-	if _, err = h.pushToLog(ctx, 1, "one", 0, changelog); err != nil {
+	if _, err = h.pushToLog(ctx, 1, "one", 0, msgSerde, changelog); err != nil {
 		panic(err)
 	}
-	if _, err = h.pushToLog(ctx, 2, "two", 0, changelog); err != nil {
+	if _, err = h.pushToLog(ctx, 2, "two", 0, msgSerde, changelog); err != nil {
 		panic(err)
 	}
-	if offset, err = h.pushToLog(ctx, 3, "three", 0, changelog); err != nil {
+	if offset, err = h.pushToLog(ctx, 3, "three", 0, msgSerde, changelog); err != nil {
 		panic(err)
 	}
 	kvstore := store.NewInMemoryKeyValueStore("test1", func(a, b treemap.Key) int {
@@ -161,10 +160,9 @@ func (h *tableRestoreHandler) testRestoreKVTable(ctx context.Context) {
 	})
 	err = store_restore.RestoreChangelogKVStateStore(ctx,
 		store_restore.NewKVStoreChangelog(kvstore,
-			store_with_changelog.NewChangelogManagerForSrc(changelog, commtypes.KVMsgSerdes{
+			store_with_changelog.NewChangelogManagerForSrc(changelog, commtypes.MessageJSONSerde{
 				KeySerde: commtypes.IntSerde{},
 				ValSerde: strTsJSONSerde{},
-				MsgSerde: h.msgSerde,
 			}, common.SrcConsumeTimeout), 0), offset)
 	if err != nil {
 		panic(err)
@@ -185,36 +183,22 @@ func (h *tableRestoreHandler) testRestoreKVTable(ctx context.Context) {
 }
 
 func (h *tableRestoreHandler) pushToWindowLog(ctx context.Context, key int, val string,
-	vSerde commtypes.Serde,
+	msgSerde commtypes.MessageSerde,
 	windowStartTimestamp int64, log *sharedlog_stream.ShardedSharedLogStream,
 ) (uint64, error) {
-	keyBytes, err := h.kSerde.Encode(key)
-	if err != nil {
-		return 0, err
-	}
-	valBytes, err := vSerde.Encode(val)
-	if err != nil {
-		return 0, err
-	}
-
-	keyAndTs := &commtypes.KeyAndWindowStartTsSerialized{
-		KeySerialized: keyBytes,
+	keyAndTs := &commtypes.KeyAndWindowStartTs{
+		Key:           key,
 		WindowStartTs: windowStartTimestamp,
 	}
-
-	ktsBytes, err := h.keyWindowTsSerde.Encode(keyAndTs)
-	if err != nil {
-		return 0, err
+	msg := commtypes.Message{
+		Key:   keyAndTs,
+		Value: val,
 	}
-	encoded, err := h.msgSerde.Encode(ktsBytes, valBytes)
+	encoded, err := msgSerde.Encode(&msg)
 	if err != nil {
 		return 0, err
 	}
 	debug.Fprintf(os.Stderr, "pushToWindowLog: keyAndTs %v\n", keyAndTs)
-	debug.Fprint(os.Stderr, "pushToWindowLog: ktsBytes\n")
-	debug.PrintByteSlice(ktsBytes)
-	debug.Fprint(os.Stderr, "pushToWindowLog: valBytes\n")
-	debug.PrintByteSlice(valBytes)
 	debug.Fprint(os.Stderr, "pushToWindowLog: encoded\n")
 	debug.PrintByteSlice(encoded)
 	off, err := log.Push(ctx, encoded, 0, sharedlog_stream.SingleDataRecordMeta, commtypes.EmptyProducerId)
@@ -232,7 +216,12 @@ func (h *tableRestoreHandler) testRestoreWindowTable(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	ss := commtypes.StringSerde{}
+	ss := commtypes.MessageJSONSerde{
+		KeySerde: commtypes.KeyAndWindowStartTsJSONSerde{
+			KeyJSONSerde: commtypes.IntSerde{},
+		},
+		ValSerde: commtypes.StringSerde{},
+	}
 	_, err = h.pushToWindowLog(ctx, 1, "one", ss, 0, changelog)
 	if err != nil {
 		panic(err)
@@ -247,10 +236,9 @@ func (h *tableRestoreHandler) testRestoreWindowTable(ctx context.Context) {
 	}
 	err = store_restore.RestoreChangelogWindowStateStore(ctx,
 		store_restore.NewWindowStoreChangelog(wstore,
-			store_with_changelog.NewChangelogManager(changelog, commtypes.KVMsgSerdes{
+			store_with_changelog.NewChangelogManager(changelog, commtypes.MessageJSONSerde{
 				KeySerde: commtypes.IntSerde{},
 				ValSerde: commtypes.StringSerde{},
-				MsgSerde: h.msgSerde,
 			}, common.SrcConsumeTimeout, time.Duration(5)*time.Millisecond), 0))
 	if err != nil {
 		panic(err)

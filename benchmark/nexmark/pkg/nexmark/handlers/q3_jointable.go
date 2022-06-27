@@ -94,43 +94,37 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 		return nil, nil, err
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
-	if err != nil {
-		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
-	}
-
 	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}
+	inMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, eventSerde)
+	if err != nil {
+		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
+	}
+
 	timeout := common.SrcConsumeTimeout
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	kvmsgSerdes := commtypes.KVMsgSerdes{
-		KeySerde: commtypes.Uint64Serde{},
-		ValSerde: eventSerde,
-		MsgSerde: msgSerde,
-	}
 	ncsiSerde, err := ntypes.GetNameCityStateIdSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
-
+	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, ncsiSerde)
+	if err != nil {
+		return nil, nil, err
+	}
 	src1 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(stream1, &producer_consumer.StreamConsumerConfig{
-		Timeout:     timeout,
-		KVMsgSerdes: kvmsgSerdes,
+		Timeout:  timeout,
+		MsgSerde: inMsgSerde,
 	}), warmup)
 	src2 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(stream2, &producer_consumer.StreamConsumerConfig{
-		Timeout:     timeout,
-		KVMsgSerdes: kvmsgSerdes,
+		Timeout:  timeout,
+		MsgSerde: inMsgSerde,
 	}), warmup)
 	src1.SetInitialSource(false)
 	src2.SetInitialSource(false)
 	sink := producer_consumer.NewConcurrentMeteredSyncProducer(producer_consumer.NewShardedSharedLogStreamProducer(outputStream, &producer_consumer.StreamSinkConfig{
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			KeySerde: commtypes.Uint64Serde{},
-			ValSerde: ncsiSerde,
-			MsgSerde: msgSerde,
-		},
+		MsgSerde:      outMsgSerde,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}), warmup)
 	sink.MarkFinalOutput()
@@ -242,11 +236,11 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		store_restore.NewKVStoreChangelog(kvtabs.tab1,
 			store_with_changelog.NewChangelogManagerForSrc(
 				srcs[0].Stream().(*sharedlog_stream.ShardedSharedLogStream),
-				srcs[0].KVMsgSerdes(), common.SrcConsumeTimeout), sp.ParNum),
+				srcs[0].MsgSerde(), common.SrcConsumeTimeout), sp.ParNum),
 		store_restore.NewKVStoreChangelog(kvtabs.tab2,
 			store_with_changelog.NewChangelogManagerForSrc(
 				srcs[1].Stream().(*sharedlog_stream.ShardedSharedLogStream),
-				srcs[1].KVMsgSerdes(), common.SrcConsumeTimeout), sp.ParNum),
+				srcs[1].MsgSerde(), common.SrcConsumeTimeout), sp.ParNum),
 	}
 	transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,

@@ -19,13 +19,13 @@ type ChangelogManager struct {
 }
 
 func NewChangelogManagerForSrc(stream *sharedlog_stream.ShardedSharedLogStream,
-	kvMsgSerdes commtypes.KVMsgSerdes, timeout time.Duration,
+	msgSerde commtypes.MessageSerde, timeout time.Duration,
 ) *ChangelogManager {
 	return &ChangelogManager{
 		restoreConsumer: producer_consumer.NewShardedSharedLogStreamConsumer(stream,
 			&producer_consumer.StreamConsumerConfig{
-				KVMsgSerdes: kvMsgSerdes,
-				Timeout:     timeout,
+				MsgSerde: msgSerde,
+				Timeout:  timeout,
 			}),
 		producer:       nil,
 		changelogIsSrc: true,
@@ -33,19 +33,19 @@ func NewChangelogManagerForSrc(stream *sharedlog_stream.ShardedSharedLogStream,
 }
 
 func NewChangelogManager(stream *sharedlog_stream.ShardedSharedLogStream,
-	kvMsgSerdes commtypes.KVMsgSerdes,
+	msgSerde commtypes.MessageSerde,
 	timeout time.Duration,
 	flushDuration time.Duration,
 ) *ChangelogManager {
 	return &ChangelogManager{
 		restoreConsumer: producer_consumer.NewShardedSharedLogStreamConsumer(stream,
 			&producer_consumer.StreamConsumerConfig{
-				KVMsgSerdes: kvMsgSerdes,
-				Timeout:     timeout,
+				MsgSerde: msgSerde,
+				Timeout:  timeout,
 			}),
 		producer: producer_consumer.NewShardedSharedLogStreamProducer(stream,
 			&producer_consumer.StreamSinkConfig{
-				KVMsgSerdes:   kvMsgSerdes,
+				MsgSerde:      msgSerde,
 				FlushDuration: flushDuration,
 			}),
 		changelogIsSrc: false,

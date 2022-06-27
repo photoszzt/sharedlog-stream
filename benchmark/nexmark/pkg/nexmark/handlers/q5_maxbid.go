@@ -75,25 +75,18 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		return nil, nil,
 			fmt.Errorf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat)
 	}
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
+	inMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, seSerde, aucIdCountSerde)
 	if err != nil {
 		return nil, nil, err
 	}
+	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, seSerde, aucIdCountMaxSerde)
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	inConfig := &producer_consumer.StreamConsumerConfig{
-		Timeout: time.Duration(20) * time.Second,
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			KeySerde: seSerde,
-			ValSerde: aucIdCountSerde,
-			MsgSerde: msgSerde,
-		},
+		Timeout:  time.Duration(20) * time.Second,
+		MsgSerde: inMsgSerde,
 	}
 	outConfig := &producer_consumer.StreamSinkConfig{
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			MsgSerde: msgSerde,
-			KeySerde: seSerde,
-			ValSerde: aucIdCountMaxSerde,
-		},
+		MsgSerde:      outMsgSerde,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, inConfig),
@@ -138,25 +131,20 @@ func (h *q5MaxBid) procMsg(ctx context.Context, msg commtypes.Message, argsTmp i
 
 func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	vtSerde, err := commtypes.GetValueTsSerde(serdeFormat, commtypes.Uint64Serde{}, commtypes.Uint64Serde{})
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
 	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	srcKVMsgSerdes := srcs[0].KVMsgSerdes()
 	maxBidStoreName := "maxBidsKVStore"
 	var kvstore store.KeyValueStore
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	inKVMsgSerdes := commtypes.KVMsgSerdes{
-		KeySerde: srcKVMsgSerdes.KeySerde,
-		ValSerde: vtSerde,
-		MsgSerde: srcKVMsgSerdes.MsgSerde,
+	srcMsgSerde := srcs[0].MsgSerde()
+	msgSerde, err := commtypes.GetMsgSerde(commtypes.SerdeFormat(sp.SerdeFormat), srcMsgSerde.GetKeySerde(), commtypes.Uint64Serde{})
+	if err != nil {
+		return common.GenErrFnOutput(err)
 	}
 	mp, err := store_with_changelog.NewMaterializeParamBuilder().
-		KVMsgSerdes(inKVMsgSerdes).
+		MessageSerde(msgSerde).
 		StoreName(maxBidStoreName).
 		ParNum(sp.ParNum).
 		SerdeFormat(serdeFormat).

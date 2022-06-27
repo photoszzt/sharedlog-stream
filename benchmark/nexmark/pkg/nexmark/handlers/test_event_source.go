@@ -46,11 +46,11 @@ func (h *testEventSource) eventGeneration(ctx context.Context, sp *common.TestSo
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	msgSerde, err := commtypes.GetMsgSerde(commtypes.JSON)
+	eventSerde, err := ntypes.GetEventSerde(commtypes.JSON)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	eventSerde, err := ntypes.GetEventSerde(commtypes.JSON)
+	msgSerde, err := commtypes.GetMsgSerde(commtypes.JSON, commtypes.StringSerde{}, eventSerde)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -64,7 +64,11 @@ func (h *testEventSource) eventGeneration(ctx context.Context, sp *common.TestSo
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	for _, event := range events.EventsArr {
-		msgEncoded, err := encodeEvent(&event, eventSerde, msgSerde)
+		msg := commtypes.Message{
+			Key:   nil,
+			Value: &event,
+		}
+		msgEncoded, err := msgSerde.Encode(&msg)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: fmt.Sprintf("msg serialization failed: %v", err)}
 		}

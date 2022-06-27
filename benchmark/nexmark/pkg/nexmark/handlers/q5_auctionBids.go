@@ -49,7 +49,7 @@ func (h *q5AuctionBids) Call(ctx context.Context, input []byte) ([]byte, error) 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde,
+func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput,
 ) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
 	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
@@ -75,29 +75,29 @@ func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput, m
 		return nil, nil, err
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
+	srcMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, eventSerde)
+	if err != nil {
+		return nil, nil, err
+	}
+	sinkMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, seSerde, aucIdCountSerde)
+	if err != nil {
+		return nil, nil, err
+	}
 	src := producer_consumer.NewMeteredConsumer(
 		producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, &producer_consumer.StreamConsumerConfig{
-			Timeout: time.Duration(5) * time.Second,
-			KVMsgSerdes: commtypes.KVMsgSerdes{
-				KeySerde: commtypes.Uint64Serde{},
-				ValSerde: eventSerde,
-				MsgSerde: msgSerde,
-			},
+			Timeout:  time.Duration(5) * time.Second,
+			MsgSerde: srcMsgSerde,
 		}), warmup)
 	sink := producer_consumer.NewConcurrentMeteredSyncProducer(
 		producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], &producer_consumer.StreamSinkConfig{
-			KVMsgSerdes: commtypes.KVMsgSerdes{
-				MsgSerde: msgSerde,
-				KeySerde: seSerde,
-				ValSerde: aucIdCountSerde,
-			},
+			MsgSerde:      sinkMsgSerde,
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 		}), warmup)
 	src.SetInitialSource(false)
 	return []producer_consumer.MeteredConsumerIntr{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
-func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde,
+func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInput,
 ) (*processor.MeteredProcessor, []*store_restore.WindowStoreChangelog, error) {
 	hopWindow, err := processor.NewTimeWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
 	if err != nil {
@@ -107,28 +107,16 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 	if err != nil {
 		return nil, nil, err
 	}
-
-	var vtSerde commtypes.Serde
-	if sp.SerdeFormat == uint8(commtypes.JSON) {
-		vtSerde = commtypes.ValueTimestampJSONSerde{
-			ValJSONSerde: commtypes.Uint64Serde{},
-		}
-	} else if sp.SerdeFormat == uint8(commtypes.MSGP) {
-		vtSerde = commtypes.ValueTimestampMsgpSerde{
-			ValMsgpSerde: commtypes.Uint64Serde{},
-		}
-	} else {
-		return nil, nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(commtypes.SerdeFormat(sp.SerdeFormat),
+		commtypes.Uint64Serde{}, commtypes.Uint64Serde{})
+	if err != nil {
+		return nil, nil, err
 	}
 	var countWindowStore store.WindowStore
 	countStoreName := "auctionBidsCountStore"
 	comparable := concurrent_skiplist.CompareFunc(concurrent_skiplist.Uint64KeyCompare)
 	countMp, err := store_with_changelog.NewMaterializeParamBuilder().
-		KVMsgSerdes(commtypes.KVMsgSerdes{
-			KeySerde: commtypes.Uint64Serde{},
-			ValSerde: vtSerde,
-			MsgSerde: msgSerde,
-		}).StoreName(countStoreName).ParNum(sp.ParNum).
+		MessageSerde(msgSerde).StoreName(countStoreName).ParNum(sp.ParNum).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
 		StreamParam(commtypes.CreateStreamParam{
 			Env:          h.env,
@@ -190,17 +178,13 @@ func (h *q5AuctionBids) procMsg(ctx context.Context, msg commtypes.Message, args
 */
 
 func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	msgSerde, err := commtypes.GetMsgSerde(commtypes.SerdeFormat(sp.SerdeFormat))
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	srcs, sinks, err := h.getSrcSink(ctx, sp, msgSerde)
+	srcs, sinks, err := h.getSrcSink(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	ectx := processor.NewExecutionContext(srcs,
 		sinks, h.funcName, sp.ScaleEpoch, sp.ParNum)
-	countProc, wsc, err := h.getCountAggProc(ctx, sp, msgSerde)
+	countProc, wsc, err := h.getCountAggProc(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

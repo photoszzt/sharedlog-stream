@@ -46,13 +46,12 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 		panic(err)
 	}
 
-	kvmsgSerdes := commtypes.KVMsgSerdes{
+	msgSerde := commtypes.MessageJSONSerde{
 		KeySerde: commtypes.IntSerde{},
 		ValSerde: commtypes.StringSerde{},
-		MsgSerde: commtypes.MessageSerializedJSONSerde{},
 	}
 	produceSinkConfig := &producer_consumer.StreamSinkConfig{
-		KVMsgSerdes:   kvmsgSerdes,
+		MsgSerde:      msgSerde,
 		FlushDuration: common.FlushDuration,
 	}
 	meteredProducer := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(stream1, produceSinkConfig), 0)
@@ -93,8 +92,8 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 	}
 
 	srcConfig := &producer_consumer.StreamConsumerConfig{
-		Timeout:     common.SrcConsumeTimeout,
-		KVMsgSerdes: kvmsgSerdes,
+		Timeout:  common.SrcConsumeTimeout,
+		MsgSerde: msgSerde,
 	}
 	stream1ForRead, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "test2", 1, commtypes.JSON)
 	if err != nil {

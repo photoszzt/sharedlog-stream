@@ -33,28 +33,20 @@ func getSrcSink(ctx context.Context, env types.Environment, sp *common.QueryInpu
 	}
 	debug.Assert(len(output_streams) == 1, "expected only one output stream")
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
-	if err != nil {
-		return nil, nil, fmt.Errorf("get msg serde failed: %v", err)
-	}
 	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.StringSerde{}, eventSerde)
+	if err != nil {
+		return nil, nil, fmt.Errorf("get msg serde failed: %v", err)
+	}
 	inConfig := &producer_consumer.StreamConsumerConfig{
-		Timeout: common.SrcConsumeTimeout,
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			KeySerde: commtypes.StringSerde{},
-			ValSerde: eventSerde,
-			MsgSerde: msgSerde,
-		},
+		Timeout:  common.SrcConsumeTimeout,
+		MsgSerde: msgSerde,
 	}
 	outConfig := &producer_consumer.StreamSinkConfig{
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			KeySerde: commtypes.StringSerde{},
-			ValSerde: eventSerde,
-			MsgSerde: msgSerde,
-		},
+		MsgSerde:      msgSerde,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
@@ -74,29 +66,25 @@ func getSrcSinkUint64Key(
 	}
 	debug.Assert(len(output_streams) == 1, "expected only one output stream")
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
+	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
-	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
+	inMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.StringSerde{}, eventSerde)
+	if err != nil {
+		return nil, nil, err
+	}
+	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, eventSerde)
 	if err != nil {
 		return nil, nil, err
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	inConfig := &producer_consumer.StreamConsumerConfig{
-		Timeout: common.SrcConsumeTimeout,
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			KeySerde: commtypes.StringSerde{},
-			ValSerde: eventSerde,
-			MsgSerde: msgSerde,
-		},
+		Timeout:  common.SrcConsumeTimeout,
+		MsgSerde: inMsgSerde,
 	}
 	outConfig := &producer_consumer.StreamSinkConfig{
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			MsgSerde: msgSerde,
-			ValSerde: eventSerde,
-			KeySerde: commtypes.Uint64Serde{},
-		},
+		MsgSerde:      outMsgSerde,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, inConfig), warmup)

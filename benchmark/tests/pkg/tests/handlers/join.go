@@ -70,8 +70,8 @@ func (h *joinHandler) tests(ctx context.Context, sp *test_types.TestInput) *comm
 func (h *joinHandler) getSrcSink(
 	ctx context.Context,
 	flush time.Duration,
-	inKVMsgSerdes commtypes.KVMsgSerdes,
-	outKVMsgSerdes commtypes.KVMsgSerdes,
+	inMsgSerde commtypes.MessageSerde,
+	outMsgSerde commtypes.MessageSerde,
 	stream1 *sharedlog_stream.ShardedSharedLogStream,
 	stream2 *sharedlog_stream.ShardedSharedLogStream,
 	outputStream *sharedlog_stream.ShardedSharedLogStream,
@@ -81,15 +81,15 @@ func (h *joinHandler) getSrcSink(
 	error,
 ) {
 	src1Config := &producer_consumer.StreamConsumerConfig{
-		Timeout:     common.SrcConsumeTimeout,
-		KVMsgSerdes: inKVMsgSerdes,
+		Timeout:  common.SrcConsumeTimeout,
+		MsgSerde: inMsgSerde,
 	}
 	src2Config := &producer_consumer.StreamConsumerConfig{
-		Timeout:     common.SrcConsumeTimeout,
-		KVMsgSerdes: inKVMsgSerdes,
+		Timeout:  common.SrcConsumeTimeout,
+		MsgSerde: inMsgSerde,
 	}
 	outConfig := &producer_consumer.StreamSinkConfig{
-		KVMsgSerdes:   outKVMsgSerdes,
+		MsgSerde:      outMsgSerde,
 		FlushDuration: flush,
 	}
 	src1 := producer_consumer.NewShardedSharedLogStreamConsumer(stream1, src1Config)
@@ -112,21 +112,18 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	msgSerde := commtypes.MessageSerializedJSONSerde{}
 	kSerde := commtypes.IntSerde{}
 	vSerde := strTsJSONSerde{}
-	inKVMsgSerdes := commtypes.KVMsgSerdes{
-		KeySerde: kSerde,
-		ValSerde: vSerde,
-		MsgSerde: msgSerde,
+	inMsgSerde, err := commtypes.GetMsgSerde(commtypes.JSON, kSerde, vSerde)
+	if err != nil {
+		panic(err)
 	}
-	outKVMsgSerdes := commtypes.KVMsgSerdes{
-		KeySerde: kSerde,
-		ValSerde: commtypes.StringSerde{},
-		MsgSerde: msgSerde,
+	outMsgSerde, err := commtypes.GetMsgSerde(commtypes.JSON, kSerde, commtypes.StringSerde{})
+	if err != nil {
+		panic(err)
 	}
-	src1, src2, sink, err := h.getSrcSink(ctx, common.FlushDuration, inKVMsgSerdes,
-		outKVMsgSerdes, srcStream1, srcStream2, sinkStream)
+	src1, src2, sink, err := h.getSrcSink(ctx, common.FlushDuration, inMsgSerde,
+		outMsgSerde, srcStream1, srcStream2, sinkStream)
 	if err != nil {
 		panic(err)
 	}
@@ -219,7 +216,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	for i := 0; i < 2; i++ {
 		err := pushMsgToStream(ctx, expected_keys[i],
 			&strTs{Val: fmt.Sprintf("A%d", expected_keys[i]), Ts: 0},
-			inKVMsgSerdes, srcStream1, tm.GetProducerId())
+			inMsgSerde, srcStream1, tm.GetProducerId())
 		if err != nil {
 			panic(err)
 		}
@@ -253,7 +250,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	for i := 0; i < 2; i++ {
 		err := pushMsgToStream(ctx, expected_keys[i],
 			&strTs{Val: fmt.Sprintf("a%d", expected_keys[i]), Ts: 0},
-			inKVMsgSerdes, srcStream2, tm.GetProducerId())
+			inMsgSerde, srcStream2, tm.GetProducerId())
 		if err != nil {
 			panic(err)
 		}
@@ -296,7 +293,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 		panic(err)
 	}
 	tm.RecordTopicStreams(sinkStream.TopicName(), sinkStream)
-	got, err := readMsgs(ctx, outKVMsgSerdes, payloadArrSerde, commtypes.JSON, sinkStream)
+	got, err := readMsgs(ctx, outMsgSerde, payloadArrSerde, commtypes.JSON, sinkStream)
 	if err != nil {
 		panic(err)
 	}
@@ -323,21 +320,16 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	msgSerde := commtypes.MessageSerializedJSONSerde{}
-	kSerde := commtypes.IntSerde{}
-	vSerde := strTsJSONSerde{}
-	inKVMsgSerdes := commtypes.KVMsgSerdes{
-		KeySerde: kSerde,
-		ValSerde: vSerde,
-		MsgSerde: msgSerde,
+	inMsgSerde := commtypes.MessageJSONSerde{
+		KeySerde: commtypes.IntSerde{},
+		ValSerde: strTsJSONSerde{},
 	}
-	outKVMsgSerdes := commtypes.KVMsgSerdes{
-		KeySerde: kSerde,
+	outMsgSerde := commtypes.MessageJSONSerde{
+		KeySerde: commtypes.IntSerde{},
 		ValSerde: commtypes.StringSerde{},
-		MsgSerde: msgSerde,
 	}
-	src1, src2, sink, err := h.getSrcSink(ctx, common.FlushDuration, inKVMsgSerdes,
-		outKVMsgSerdes, srcStream1, srcStream2, sinkStream)
+	src1, src2, sink, err := h.getSrcSink(ctx, common.FlushDuration, inMsgSerde,
+		outMsgSerde, srcStream1, srcStream2, sinkStream)
 	if err != nil {
 		panic(err)
 	}
@@ -455,7 +447,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	for i := 0; i < 2; i++ {
 		err := pushMsgToStream(ctx, expected_keys[i],
 			&strTs{Val: fmt.Sprintf("A%d", expected_keys[i]), Ts: 0},
-			inKVMsgSerdes, srcStream1, tm.GetProducerId())
+			inMsgSerde, srcStream1, tm.GetProducerId())
 		if err != nil {
 			panic(err)
 		}
@@ -465,7 +457,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		panic(err)
 	}
 
-	got, err := readMsgs(ctx, inKVMsgSerdes, payloadArrSerde, commtypes.JSON, srcStream1)
+	got, err := readMsgs(ctx, inMsgSerde, payloadArrSerde, commtypes.JSON, srcStream1)
 	if err != nil {
 		panic(err)
 	}
@@ -488,7 +480,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	for i := 0; i < 2; i++ {
 		err := pushMsgToStream(ctx, expected_keys[i],
 			&strTs{Val: fmt.Sprintf("a%d", expected_keys[i]), Ts: 0},
-			inKVMsgSerdes, srcStream2, tm.GetProducerId())
+			inMsgSerde, srcStream2, tm.GetProducerId())
 		if err != nil {
 			panic(err)
 		}
@@ -497,7 +489,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		panic(err)
 	}
 
-	got, err = readMsgs(ctx, inKVMsgSerdes, payloadArrSerde, commtypes.JSON, srcStream2)
+	got, err = readMsgs(ctx, inMsgSerde, payloadArrSerde, commtypes.JSON, srcStream2)
 	if err != nil {
 		panic(err)
 	}
@@ -530,7 +522,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	if err = tm.CommitTransaction(ctx, nil, nil); err != nil {
 		panic(err)
 	}
-	got, err = readMsgs(ctx, outKVMsgSerdes, payloadArrSerde, commtypes.JSON, sinkStream)
+	got, err = readMsgs(ctx, outMsgSerde, payloadArrSerde, commtypes.JSON, sinkStream)
 	if err != nil {
 		panic(err)
 	}
@@ -584,7 +576,7 @@ func joinProc(ctx context.Context,
 }
 
 func readMsgs(ctx context.Context,
-	kvmsgSerdes commtypes.KVMsgSerdes,
+	msgSerde commtypes.MessageSerde,
 	payloadArrSerde commtypes.Serde,
 	serdeFormat commtypes.SerdeFormat,
 	log *sharedlog_stream.ShardedSharedLogStream,
@@ -602,8 +594,7 @@ func readMsgs(ctx context.Context,
 			return ret, err
 		}
 
-		msgAndSeq, err := commtypes.DecodeRawMsg(
-			msg, kvmsgSerdes, payloadArrSerde, commtypes.DecodeMsg)
+		msgAndSeq, err := commtypes.DecodeRawMsg(msg, msgSerde, payloadArrSerde)
 		if err != nil {
 			return nil, fmt.Errorf("DecodeRawMsg err: %v", err)
 		}
@@ -621,10 +612,11 @@ func readMsgs(ctx context.Context,
 	}
 }
 
-func pushMsgToStream(ctx context.Context, key int, val *strTs, kvmsgSerdes commtypes.KVMsgSerdes,
+func pushMsgToStream(ctx context.Context, key int, val *strTs, msgSerde commtypes.Serde,
 	log *sharedlog_stream.ShardedSharedLogStream, producerId commtypes.ProducerId,
 ) error {
-	encoded, err := commtypes.EncodeMsg(commtypes.Message{Key: key, Value: val}, kvmsgSerdes)
+	msg := commtypes.Message{Key: key, Value: val}
+	encoded, err := msgSerde.Encode(&msg)
 	if err != nil {
 		return err
 	}

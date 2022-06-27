@@ -87,7 +87,7 @@ func (h *q7BidByWin) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	if err != nil {
 		return nil, nil, err
 	}
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
+	inMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.StringSerde{}, eventSerde)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -95,20 +95,13 @@ func (h *q7BidByWin) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	if err != nil {
 		return nil, nil, err
 	}
+	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, seSerde, eventSerde)
 	inConfig := &producer_consumer.StreamConsumerConfig{
-		Timeout: common.SrcConsumeTimeout,
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			KeySerde: commtypes.StringSerde{},
-			ValSerde: eventSerde,
-			MsgSerde: msgSerde,
-		},
+		Timeout:  common.SrcConsumeTimeout,
+		MsgSerde: inMsgSerde,
 	}
 	outConfig := &producer_consumer.StreamSinkConfig{
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			MsgSerde: msgSerde,
-			ValSerde: eventSerde,
-			KeySerde: seSerde,
-		},
+		MsgSerde:      outMsgSerde,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second

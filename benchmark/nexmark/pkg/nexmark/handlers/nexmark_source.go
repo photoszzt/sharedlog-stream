@@ -50,24 +50,8 @@ func (h *nexmarkSourceHandler) Call(ctx context.Context, input []byte) ([]byte, 
 	return nexmarkutils.CompressData(encodedOutput), nil
 }
 
-func encodeEvent(event *ntypes.Event,
-	eventSerde commtypes.Serde,
-	msgSerde commtypes.MsgSerde,
-) ([]byte, error) {
-	encoded, err := eventSerde.Encode(event)
-	if err != nil {
-		return nil, err
-	}
-	msgEncoded, err := msgSerde.Encode(nil, encoded)
-	if err != nil {
-		return nil, err
-	}
-	return msgEncoded, nil
-}
-
 type nexmarkSrcProcArgs struct {
-	eventSerde        commtypes.Serde
-	msgSerde          commtypes.MsgSerde
+	msgSerde          commtypes.MessageSerde
 	channel_url_cache map[uint32]*generator.ChannelUrl
 	eventGenerator    *generator.NexmarkGenerator
 	msgChan           chan sharedlog_stream.PayloadToPush
@@ -87,7 +71,11 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 	}
 
 	// fmt.Fprintf(os.Stderr, "gen event with ts: %v\n", nextEvent.EventTimestamp)
-	msgEncoded, err := encodeEvent(nextEvent.Event, args.eventSerde, args.msgSerde)
+	msg := commtypes.Message{
+		Key:   nil,
+		Value: nextEvent.Event,
+	}
+	msgEncoded, err := args.msgSerde.Encode(&msg)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: fmt.Sprintf("msg serialization failed: %v", err)}
 	}
@@ -172,13 +160,17 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.StringSerde{}, eventSerde)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	epochMarkerSerde, err := commtypes.GetEpochMarkerSerde(serdeFormat)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
+	}
+	txnMarkMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.StringSerde{}, epochMarkerSerde)
+	if err != nil {
+		return common.GenErrFnOutput(err)
 	}
 	cmm, err := control_channel.NewControlChannelManager(h.env, inputConfig.AppId,
 		commtypes.SerdeFormat(inputConfig.SerdeFormat), 0)
@@ -202,7 +194,6 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	}
 	procArgs := &nexmarkSrcProcArgs{
 		channel_url_cache: make(map[uint32]*generator.ChannelUrl),
-		eventSerde:        eventSerde,
 		msgSerde:          msgSerde,
 		eventGenerator:    eventGenerator,
 		// inChans:           inChans,
@@ -254,12 +245,11 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 					Mark:       commtypes.SCALE_FENCE,
 					ScaleEpoch: m.Epoch,
 				}
-				vBytes, err := epochMarkerSerde.Encode(txnMarker)
-				if err != nil {
-					return &common.FnOutput{Success: false, Message: err.Error()}
+				msg := commtypes.Message{
+					Key:   nil,
+					Value: txnMarker,
 				}
-
-				encoded, err := msgSerde.Encode(nil, vBytes)
+				encoded, err := txnMarkMsgSerde.Encode(&msg)
 				if err != nil {
 					return &common.FnOutput{Success: false, Message: err.Error()}
 				}

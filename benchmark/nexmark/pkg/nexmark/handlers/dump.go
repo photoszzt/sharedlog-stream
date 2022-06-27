@@ -37,10 +37,6 @@ func (h *dump) Call(ctx context.Context, input []byte) ([]byte, error) {
 
 func (h *dump) process(ctx context.Context, di *common.DumpInput) *common.FnOutput {
 	serdeFormat := commtypes.SerdeFormat(di.SerdeFormat)
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
 	keySerde, err := GetSerdeFromString(di.KeySerde, serdeFormat)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
@@ -49,16 +45,17 @@ func (h *dump) process(ctx context.Context, di *common.DumpInput) *common.FnOutp
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat, keySerde, valSerde)
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: err.Error()}
+	}
+
 	err = benchutil.DumpOutputStream(ctx, h.env, benchutil.DumpOutputStreamConfig{
 		OutputDir:     di.DumpDir,
 		TopicName:     di.TopicName,
 		SerdeFormat:   serdeFormat,
 		NumPartitions: 1,
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			MsgSerde: msgSerde,
-			KeySerde: keySerde,
-			ValSerde: valSerde,
-		},
+		MsgSerde:      msgSerde,
 	})
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}

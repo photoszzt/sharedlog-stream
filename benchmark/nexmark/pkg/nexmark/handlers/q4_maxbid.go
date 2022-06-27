@@ -64,28 +64,24 @@ func (h *q4MaxBid) getExecutionCtx(ctx context.Context, sp *common.QueryInput) (
 	} else {
 		return processor.EmptyBaseExecutionContext, fmt.Errorf("unrecognized format: %v", serdeFormat)
 	}
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
+	inMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, aicSerde, abSerde)
 	if err != nil {
 		return processor.EmptyBaseExecutionContext, fmt.Errorf("get msg serde err: %v", err)
 	}
 	inputConfig := &producer_consumer.StreamConsumerConfig{
-		Timeout: common.SrcConsumeTimeout,
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			KeySerde: aicSerde,
-			ValSerde: abSerde,
-			MsgSerde: msgSerde,
-		},
+		Timeout:  common.SrcConsumeTimeout,
+		MsgSerde: inMsgSerde,
 	}
 	changeSerde, err := commtypes.GetChangeSerde(serdeFormat, commtypes.Uint64Serde{})
 	if err != nil {
 		return processor.EmptyBaseExecutionContext, err
 	}
+	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, changeSerde)
+	if err != nil {
+		return processor.EmptyBaseExecutionContext, fmt.Errorf("get msg serde err: %v", err)
+	}
 	outConfig := &producer_consumer.StreamSinkConfig{
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			KeySerde: commtypes.Uint64Serde{},
-			ValSerde: changeSerde,
-			MsgSerde: msgSerde,
-		},
+		MsgSerde:      outMsgSerde,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
@@ -134,8 +130,13 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	}
 	maxBidStoreName := "q4MaxBidKVStore"
 	warmup := time.Duration(sp.WarmupS) * time.Second
+	msgSerde, err := commtypes.GetMsgSerde(commtypes.SerdeFormat(sp.SerdeFormat),
+		ectx.Consumers()[0].MsgSerde().GetKeySerde(), commtypes.Uint64Serde{})
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	mp, err := store_with_changelog.NewMaterializeParamBuilder().
-		KVMsgSerdes(ectx.Consumers()[0].KVMsgSerdes()).
+		MessageSerde(msgSerde).
 		StoreName(maxBidStoreName).
 		ParNum(sp.ParNum).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
@@ -155,7 +156,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	ectx.Via(processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor("maxBid", kvstore,
 		processor.InitializerFunc(func() interface{} { return uint64(0) }),
 		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
-			v := value.(*ntypes.AuctionBid)
+			v := value.(ntypes.AuctionBid)
 			agg := aggregate.(uint64)
 			if v.BidPrice > agg {
 				return v.BidPrice
@@ -165,9 +166,10 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		})))).
 		Via(processor.NewMeteredProcessor(processor.NewStreamMapProcessor("changeKey",
 			processor.MapperFunc(func(m commtypes.Message) (commtypes.Message, error) {
+				v := m.Value.(commtypes.Change)
 				return commtypes.Message{
 					Key:   m.Key.(*ntypes.AuctionIdCategory).Category,
-					Value: m.Value,
+					Value: &v,
 				}, nil
 			})))).
 		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[0], &ectx))

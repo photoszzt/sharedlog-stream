@@ -36,12 +36,6 @@ func (z *ValueTimestampSerialized) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Timestamp")
 				return
 			}
-		case "injT":
-			z.InjectToStream, err = dc.ReadInt64()
-			if err != nil {
-				err = msgp.WrapError(err, "InjectToStream")
-				return
-			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -56,8 +50,8 @@ func (z *ValueTimestampSerialized) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *ValueTimestampSerialized) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
-	zb0001Len := uint32(3)
-	var zb0001Mask uint8 /* 3 bits */
+	zb0001Len := uint32(2)
+	var zb0001Mask uint8 /* 2 bits */
 	if z.ValueSerialized == nil {
 		zb0001Len--
 		zb0001Mask |= 0x1
@@ -98,16 +92,6 @@ func (z *ValueTimestampSerialized) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
-	// write "injT"
-	err = en.Append(0xa4, 0x69, 0x6e, 0x6a, 0x54)
-	if err != nil {
-		return
-	}
-	err = en.WriteInt64(z.InjectToStream)
-	if err != nil {
-		err = msgp.WrapError(err, "InjectToStream")
-		return
-	}
 	return
 }
 
@@ -115,8 +99,8 @@ func (z *ValueTimestampSerialized) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *ValueTimestampSerialized) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(3)
-	var zb0001Mask uint8 /* 3 bits */
+	zb0001Len := uint32(2)
+	var zb0001Mask uint8 /* 2 bits */
 	if z.ValueSerialized == nil {
 		zb0001Len--
 		zb0001Mask |= 0x1
@@ -140,9 +124,6 @@ func (z *ValueTimestampSerialized) MarshalMsg(b []byte) (o []byte, err error) {
 		o = append(o, 0xa2, 0x74, 0x73)
 		o = msgp.AppendInt64(o, z.Timestamp)
 	}
-	// string "injT"
-	o = append(o, 0xa4, 0x69, 0x6e, 0x6a, 0x54)
-	o = msgp.AppendInt64(o, z.InjectToStream)
 	return
 }
 
@@ -176,12 +157,6 @@ func (z *ValueTimestampSerialized) UnmarshalMsg(bts []byte) (o []byte, err error
 				err = msgp.WrapError(err, "Timestamp")
 				return
 			}
-		case "injT":
-			z.InjectToStream, bts, err = msgp.ReadInt64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "InjectToStream")
-				return
-			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -196,6 +171,6 @@ func (z *ValueTimestampSerialized) UnmarshalMsg(bts []byte) (o []byte, err error
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *ValueTimestampSerialized) Msgsize() (s int) {
-	s = 1 + 3 + msgp.BytesPrefixSize + len(z.ValueSerialized) + 3 + msgp.Int64Size + 5 + msgp.Int64Size
+	s = 1 + 3 + msgp.BytesPrefixSize + len(z.ValueSerialized) + 3 + msgp.Int64Size
 	return
 }

@@ -29,7 +29,11 @@ type BaseTs struct {
 	Timestamp int64 `msg:"ts,omitempty" json:"ts,omitempty"`
 }
 
-func (ts *BaseTs) ExtractEventTime() (int64, error) {
+func (bts *BaseTs) UpdateEventTime(ts int64) {
+	bts.Timestamp = ts
+}
+
+func (ts BaseTs) ExtractEventTime() (int64, error) {
 	return ts.Timestamp, nil
 }
 

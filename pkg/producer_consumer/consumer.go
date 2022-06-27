@@ -18,7 +18,7 @@ type Consumer interface {
 	ConfigExactlyOnce(serdeFormat commtypes.SerdeFormat, guarantee exactly_once_intr.GuaranteeMth) error
 	SetInitialSource(initial bool)
 	IsInitialSource() bool
-	KVMsgSerdes() commtypes.KVMsgSerdes
+	MsgSerde() commtypes.MessageSerde
 	Lock()
 	Unlock()
 }

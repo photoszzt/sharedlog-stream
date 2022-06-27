@@ -8,7 +8,7 @@ import (
 )
 
 type MaterializeParam struct {
-	kvMsgSerdes      commtypes.KVMsgSerdes
+	msgSerde         commtypes.MessageSerde
 	changelogManager *ChangelogManager
 	trackFunc        exactly_once_intr.TrackProdSubStreamFunc
 	storeName        string
@@ -32,8 +32,8 @@ func (m *MaterializeParam) SerdeFormat() commtypes.SerdeFormat {
 	return m.serdeFormat
 }
 
-func (m *MaterializeParam) KVMsgSerdes() commtypes.KVMsgSerdes {
-	return m.kvMsgSerdes
+func (m *MaterializeParam) MessageSerde() commtypes.MessageSerde {
+	return m.msgSerde
 }
 
 func (m *MaterializeParam) TrackFunc() exactly_once_intr.TrackProdSubStreamFunc {
@@ -49,7 +49,7 @@ type MaterializeParamBuilder struct {
 	streamParam commtypes.CreateStreamParam
 }
 
-func NewMaterializeParamBuilder() SetKVMsgSerdes {
+func NewMaterializeParamBuilder() SetMessageSerde {
 	mb := &MaterializeParamBuilder{
 		mp: &MaterializeParam{
 			trackFunc: exactly_once_intr.DefaultTrackProdSubstreamFunc,
@@ -58,8 +58,8 @@ func NewMaterializeParamBuilder() SetKVMsgSerdes {
 	return mb
 }
 
-type SetKVMsgSerdes interface {
-	KVMsgSerdes(kvmsgserdes commtypes.KVMsgSerdes) SetStoreName
+type SetMessageSerde interface {
+	MessageSerde(kvmsgserdes commtypes.MessageSerde) SetStoreName
 }
 
 type SetStoreName interface {
@@ -81,8 +81,8 @@ type BuildMaterializeParam interface {
 	BuildWithChangelogManager(changelogManager *ChangelogManager) (*MaterializeParam, error)
 }
 
-func (mb *MaterializeParamBuilder) KVMsgSerdes(kvmsgserdes commtypes.KVMsgSerdes) SetStoreName {
-	mb.mp.kvMsgSerdes = kvmsgserdes
+func (mb *MaterializeParamBuilder) MessageSerde(msgSerde commtypes.MessageSerde) SetStoreName {
+	mb.mp.msgSerde = msgSerde
 	return mb
 }
 
@@ -112,8 +112,15 @@ func (mb *MaterializeParamBuilder) BuildForKVStore(flushDuration time.Duration, 
 	if err != nil {
 		return nil, err
 	}
-	mb.mp.changelogManager = NewChangelogManager(changelog,
-		mb.mp.kvMsgSerdes, timeOut, flushDuration)
+	valueTsSerde, err := commtypes.GetValueTsSerde(mb.mp.serdeFormat, mb.mp.msgSerde.GetValSerde())
+	if err != nil {
+		return nil, err
+	}
+	msgSerde, err := commtypes.GetMsgSerde(mb.mp.serdeFormat, mb.mp.msgSerde.GetKeySerde(), valueTsSerde)
+	if err != nil {
+		return nil, err
+	}
+	mb.mp.changelogManager = NewChangelogManager(changelog, msgSerde, timeOut, flushDuration)
 	return mb.mp, nil
 }
 
@@ -131,22 +138,20 @@ func (mb *MaterializeParamBuilder) BuildForWindowStore(flushDuration time.Durati
 	var keyAndWindowStartTsSerde commtypes.Serde
 	if mb.mp.serdeFormat == commtypes.JSON {
 		keyAndWindowStartTsSerde = commtypes.KeyAndWindowStartTsJSONSerde{
-			KeyJSONSerde: mb.mp.kvMsgSerdes.KeySerde,
+			KeyJSONSerde: mb.mp.msgSerde.GetKeySerde(),
 		}
 	} else if mb.mp.serdeFormat == commtypes.MSGP {
 		keyAndWindowStartTsSerde = commtypes.KeyAndWindowStartTsMsgpSerde{
-			KeyMsgpSerde: mb.mp.kvMsgSerdes.KeySerde,
+			KeyMsgpSerde: mb.mp.msgSerde.GetKeySerde(),
 		}
 	} else {
 		return nil, common_errors.ErrUnrecognizedSerdeFormat
 	}
-	kvMsgSerdes := commtypes.KVMsgSerdes{
-		KeySerde: keyAndWindowStartTsSerde,
-		ValSerde: mb.mp.kvMsgSerdes.ValSerde,
-		MsgSerde: mb.mp.kvMsgSerdes.MsgSerde,
+	msgSerde, err := commtypes.GetMsgSerde(mb.mp.serdeFormat, keyAndWindowStartTsSerde, mb.mp.msgSerde.GetValSerde())
+	if err != nil {
+		return nil, err
 	}
-	mb.mp.changelogManager = NewChangelogManager(changelog, kvMsgSerdes,
-		timeOut, flushDuration)
+	mb.mp.changelogManager = NewChangelogManager(changelog, msgSerde, timeOut, flushDuration)
 	return mb.mp, nil
 }
 

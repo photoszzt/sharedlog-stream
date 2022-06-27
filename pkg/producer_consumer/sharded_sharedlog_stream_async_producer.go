@@ -5,8 +5,8 @@ import (
 	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
 	"sync"
@@ -15,7 +15,7 @@ import (
 
 type ShardedSharedLogStreamAsyncProducer struct {
 	wg            sync.WaitGroup
-	kvmsgSerdes   commtypes.KVMsgSerdes
+	msgSerde      commtypes.MessageSerde
 	tm            exactly_once_intr.ReadOnlyExactlyOnceManager
 	streamPusher  *sharedlog_stream.StreamPush
 	name          string
@@ -24,16 +24,11 @@ type ShardedSharedLogStreamAsyncProducer struct {
 	transactional bool
 }
 
-type StreamSinkConfig struct {
-	KVMsgSerdes   commtypes.KVMsgSerdes
-	FlushDuration time.Duration
-}
-
 func NewShardedSharedLogStreamAsyncSink(stream *sharedlog_stream.ShardedSharedLogStream, config *StreamSinkConfig) *ShardedSharedLogStreamAsyncProducer {
 	streamPusher := sharedlog_stream.NewStreamPush(stream)
 	debug.Assert(config.FlushDuration != 0, "flush duration cannot be zero")
 	s := &ShardedSharedLogStreamAsyncProducer{
-		kvmsgSerdes:   config.KVMsgSerdes,
+		msgSerde:      config.MsgSerde,
 		streamPusher:  streamPusher,
 		flushDuration: config.FlushDuration,
 		bufPush:       utils.CheckBufPush(),
@@ -112,7 +107,7 @@ func (sls *ShardedSharedLogStreamAsyncProducer) Produce(ctx context.Context, msg
 			Partitions: []uint8{parNum}, IsControl: isControl}
 		return nil
 	}
-	bytes, err := commtypes.EncodeMsg(msg, sls.kvmsgSerdes)
+	bytes, err := sls.msgSerde.Encode(&msg)
 	if err != nil {
 		return err
 	}
@@ -124,7 +119,7 @@ func (sls *ShardedSharedLogStreamAsyncProducer) Produce(ctx context.Context, msg
 }
 
 func (sls *ShardedSharedLogStreamAsyncProducer) KeySerde() commtypes.Serde {
-	return sls.kvmsgSerdes.KeySerde
+	return sls.msgSerde.GetKeySerde()
 }
 
 func (sls *ShardedSharedLogStreamAsyncProducer) Flush(ctx context.Context) error {

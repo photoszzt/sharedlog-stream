@@ -62,28 +62,24 @@ func getExecutionCtx(ctx context.Context, env types.Environment, sp *common.Quer
 	debug.Assert(len(output_streams) == 2, "expected 2 output streams")
 	var sinks []producer_consumer.MeteredProducerIntr
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
-	if err != nil {
-		return processor.EmptyBaseExecutionContext, fmt.Errorf("get msg serde err: %v", err)
-	}
 	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
 		return processor.EmptyBaseExecutionContext, fmt.Errorf("get event serde err: %v", err)
 	}
+	inMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.StringSerde{}, eventSerde)
+	if err != nil {
+		return processor.EmptyBaseExecutionContext, fmt.Errorf("get msg serde err: %v", err)
+	}
+	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, eventSerde)
+	if err != nil {
+		return processor.EmptyBaseExecutionContext, fmt.Errorf("get msg serde err: %v", err)
+	}
 	inConfig := &producer_consumer.StreamConsumerConfig{
-		Timeout: common.SrcConsumeTimeout,
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			KeySerde: commtypes.StringSerde{},
-			ValSerde: eventSerde,
-			MsgSerde: msgSerde,
-		},
+		Timeout:  common.SrcConsumeTimeout,
+		MsgSerde: inMsgSerde,
 	}
 	outConfig := &producer_consumer.StreamSinkConfig{
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			KeySerde: commtypes.Uint64Serde{},
-			ValSerde: eventSerde,
-			MsgSerde: msgSerde,
-		},
+		MsgSerde:      outMsgSerde,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())

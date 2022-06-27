@@ -42,7 +42,7 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewQ3JoinTableHandler(env, funcName), nil
 	case "q3GroupBy":
 		return handlers.NewQ3GroupByHandler(env, funcName), nil
-	case "q4JoinTable":
+	case "q4JoinStream":
 		return handlers.NewQ4JoinStreamHandler(env, funcName), nil
 	case "q46GroupBy":
 		return handlers.NewQ46GroupByHandler(env, funcName), nil

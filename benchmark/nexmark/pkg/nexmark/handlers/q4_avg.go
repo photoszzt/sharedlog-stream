@@ -34,36 +34,40 @@ func NewQ4Avg(env types.Environment, funcName string) *q4Avg {
 	}
 }
 
-func (h *q4Avg) getSrcSink(ctx context.Context, sp *common.QueryInput,
-) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
+func (h *q4Avg) getExecutionCtx(ctx context.Context, sp *common.QueryInput,
+) (processor.BaseExecutionContext, error) {
 	inputStream, outputStreams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
-		return nil, nil, err
+		return processor.EmptyBaseExecutionContext, err
 	}
-	msgSerde, err := commtypes.GetMsgSerde(commtypes.SerdeFormat(sp.SerdeFormat))
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	changeSerde, err := commtypes.GetChangeSerde(serdeFormat, commtypes.Int64Serde{})
 	if err != nil {
-		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
+		return processor.EmptyBaseExecutionContext, err
+	}
+	inMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, changeSerde)
+	if err != nil {
+		return processor.EmptyBaseExecutionContext, fmt.Errorf("get msg serde err: %v", err)
+	}
+	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, commtypes.Float64Serde{})
+	if err != nil {
+		return processor.EmptyBaseExecutionContext, fmt.Errorf("get msg serde err: %v", err)
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
+
 	src := producer_consumer.NewMeteredConsumer(
 		producer_consumer.NewShardedSharedLogStreamConsumer(inputStream, &producer_consumer.StreamConsumerConfig{
-			Timeout: common.SrcConsumeTimeout,
-			KVMsgSerdes: commtypes.KVMsgSerdes{
-				KeySerde: commtypes.Uint64Serde{},
-				ValSerde: commtypes.Int64Serde{},
-				MsgSerde: msgSerde,
-			},
+			Timeout:  common.SrcConsumeTimeout,
+			MsgSerde: inMsgSerde,
 		}), warmup)
 	sink := producer_consumer.NewMeteredProducer(
 		producer_consumer.NewShardedSharedLogStreamProducer(outputStreams[0], &producer_consumer.StreamSinkConfig{
-			KVMsgSerdes: commtypes.KVMsgSerdes{
-				KeySerde: commtypes.Uint64Serde{},
-				ValSerde: commtypes.Float64Serde{},
-				MsgSerde: msgSerde,
-			},
+			MsgSerde:      outMsgSerde,
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 		}), warmup)
-	return []producer_consumer.MeteredConsumerIntr{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
+	ectx := processor.NewExecutionContext([]producer_consumer.MeteredConsumerIntr{src},
+		[]producer_consumer.MeteredProducerIntr{sink}, h.funcName, sp.ScaleEpoch, sp.ParNum)
+	return ectx, nil
 }
 
 func (h *q4Avg) Call(ctx context.Context, input []byte) ([]byte, error) {
@@ -106,16 +110,15 @@ func (h *q4Avg) procMsg(ctx context.Context, msg commtypes.Message, argsTmp inte
 */
 
 func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
+	ectx, err := h.getExecutionCtx(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	ectx := processor.NewExecutionContext(srcs, sinks_arr,
-		h.funcName, sp.ScaleEpoch, sp.ParNum)
+
 	sumCountStoreName := "q4SumCountKVStore"
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	mp, err := store_with_changelog.NewMaterializeParamBuilder().
-		KVMsgSerdes(srcs[0].KVMsgSerdes()).
+		MessageSerde(ectx.Consumers()[0].MsgSerde()).
 		StoreName(sumCountStoreName).
 		ParNum(sp.ParNum).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
@@ -127,7 +130,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	kvstore := store_with_changelog.CreateInMemKVTableWithChangelog(mp, store.Uint64KeyKVStoreCompare, warmup)
-	ectx.Via(processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor("sumCount", kvstore,
+	ectx.Via(processor.NewMeteredProcessor(processor.NewTableAggregateProcessor("sumCount", kvstore,
 		processor.InitializerFunc(func() interface{} {
 			return &ntypes.SumAndCount{
 				Sum:   0,
@@ -142,6 +145,14 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 				Count: agg.Count + 1,
 			}
 		}),
+		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
+			val := value.(uint64)
+			agg := aggregate.(*ntypes.SumAndCount)
+			return &ntypes.SumAndCount{
+				Sum:   agg.Sum - val,
+				Count: agg.Count - 1,
+			}
+		}),
 	))).
 		Via(
 			processor.NewMeteredProcessor(processor.NewStreamMapValuesProcessor(
@@ -151,7 +162,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 					return float64(sc.Sum) / float64(sc.Count), nil
 				}),
 			))).
-		Via(processor.NewFixedSubstreamOutputProcessor(sinks_arr[0], sp.ParNum))
+		Via(processor.NewFixedSubstreamOutputProcessor(ectx.Producers()[0], sp.ParNum))
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
 			args := argsTmp.(processor.ExecutionContext)

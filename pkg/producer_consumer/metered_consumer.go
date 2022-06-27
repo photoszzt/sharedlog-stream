@@ -79,9 +79,9 @@ func (s *MeteredConsumer) Stream() sharedlog_stream.Stream { return s.consumer.S
 func (s *MeteredConsumer) ConfigExactlyOnce(serdeFormat commtypes.SerdeFormat, guarantee exactly_once_intr.GuaranteeMth) error {
 	return s.consumer.ConfigExactlyOnce(serdeFormat, guarantee)
 }
-func (s *MeteredConsumer) SetInitialSource(initial bool)      { s.consumer.SetInitialSource(initial) }
-func (s *MeteredConsumer) IsInitialSource() bool              { return s.consumer.IsInitialSource() }
-func (s *MeteredConsumer) KVMsgSerdes() commtypes.KVMsgSerdes { return s.consumer.KVMsgSerdes() }
+func (s *MeteredConsumer) SetInitialSource(initial bool)    { s.consumer.SetInitialSource(initial) }
+func (s *MeteredConsumer) IsInitialSource() bool            { return s.consumer.IsInitialSource() }
+func (s *MeteredConsumer) MsgSerde() commtypes.MessageSerde { return s.consumer.MsgSerde() }
 func (s *MeteredConsumer) Lock() {
 	// debug.Fprintf(os.Stderr, "lock consumer %s\n", s.Name())
 	s.consumer.Lock()

@@ -52,7 +52,7 @@ func (h *windowedAvg) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *windowedAvg) getSrcSink(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde) (
+func (h *windowedAvg) getSrcSink(ctx context.Context, sp *common.QueryInput) (
 	*producer_consumer.MeteredConsumer, *producer_consumer.ConcurrentMeteredSink, error,
 ) {
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
@@ -79,25 +79,22 @@ func (h *windowedAvg) getSrcSink(ctx context.Context, sp *common.QueryInput, msg
 	if err != nil {
 		return nil, nil, err
 	}
-	kvmsgSerdes := commtypes.KVMsgSerdes{
-		KeySerde: commtypes.Uint64Serde{},
-		ValSerde: eventSerde,
-		MsgSerde: msgSerde,
+	inMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, eventSerde)
+	if err != nil {
+		return nil, nil, err
 	}
 	inConfig := &producer_consumer.StreamConsumerConfig{
-		Timeout:     common.SrcConsumeTimeout,
-		KVMsgSerdes: kvmsgSerdes,
+		Timeout:  common.SrcConsumeTimeout,
+		MsgSerde: inMsgSerde,
 	}
-
+	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, wkSerde, commtypes.Float64Serde{})
+	if err != nil {
+		return nil, nil, err
+	}
 	outConfig := &producer_consumer.StreamSinkConfig{
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			MsgSerde: msgSerde,
-			KeySerde: wkSerde,
-			ValSerde: commtypes.Float64Serde{},
-		},
+		MsgSerde:      outMsgSerde,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
-
 	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, inConfig),
 		time.Duration(sp.WarmupS)*time.Second)
 	src.SetInitialSource(false)
@@ -107,15 +104,16 @@ func (h *windowedAvg) getSrcSink(ctx context.Context, sp *common.QueryInput, msg
 	return src, sink, nil
 }
 
-func (h *windowedAvg) getAggProcessor(ctx context.Context, sp *common.QueryInput, msgSerde commtypes.MsgSerde) (*processor.MeteredProcessor, error) {
+func (h *windowedAvg) getAggProcessor(ctx context.Context, sp *common.QueryInput) (*processor.MeteredProcessor, error) {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	var scSerde commtypes.Serde
 	var vtSerde commtypes.Serde
-	if sp.SerdeFormat == uint8(commtypes.JSON) {
+	if serdeFormat == commtypes.JSON {
 		scSerde = ntypes.SumAndCountJSONSerde{}
 		vtSerde = commtypes.ValueTimestampJSONSerde{
 			ValJSONSerde: scSerde,
 		}
-	} else if sp.SerdeFormat == uint8(commtypes.MSGP) {
+	} else if serdeFormat == commtypes.MSGP {
 		scSerde = ntypes.SumAndCountMsgpSerde{}
 		vtSerde = commtypes.ValueTimestampMsgpSerde{
 			ValMsgpSerde: scSerde,
@@ -128,14 +126,13 @@ func (h *windowedAvg) getAggProcessor(ctx context.Context, sp *common.QueryInput
 	if err != nil {
 		return nil, err
 	}
-	kvMsgSerdes := commtypes.KVMsgSerdes{
-		MsgSerde: msgSerde,
-		KeySerde: commtypes.Uint64Serde{},
-		ValSerde: vtSerde,
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, vtSerde)
+	if err != nil {
+		return nil, err
 	}
 	tabName := "windowed-avg-store"
 	winStoreMp, err := store_with_changelog.NewMaterializeParamBuilder().
-		KVMsgSerdes(kvMsgSerdes).
+		MessageSerde(msgSerde).
 		StoreName(tabName).
 		ParNum(sp.ParNum).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
@@ -258,15 +255,7 @@ func (h *windowedAvg) procMsg(ctx context.Context,
 }
 
 func (h *windowedAvg) windowavg_aggregate(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
-	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("get msg serde failed: %v", err),
-		}
-	}
-	src, sink, err := h.getSrcSink(ctx, sp, msgSerde)
+	src, sink, err := h.getSrcSink(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -274,7 +263,7 @@ func (h *windowedAvg) windowavg_aggregate(ctx context.Context, sp *common.QueryI
 		}
 	}
 
-	aggProc, err := h.getAggProcessor(ctx, sp, msgSerde)
+	aggProc, err := h.getAggProcessor(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

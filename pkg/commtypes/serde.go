@@ -46,19 +46,6 @@ type Serde interface {
 	Decoder
 }
 
-type MsgEncoder interface {
-	Encode(key []byte, value []byte) ([]byte, error)
-}
-
-type MsgDecoder interface {
-	Decode([]byte) ([]byte /* key */, []byte /* value */, error)
-}
-
-type MsgSerde interface {
-	MsgEncoder
-	MsgDecoder
-}
-
 type Float64Encoder struct{}
 
 var _ = Encoder(Float64Encoder{})

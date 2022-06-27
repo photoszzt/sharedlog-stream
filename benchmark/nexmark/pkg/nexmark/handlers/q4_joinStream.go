@@ -66,27 +66,21 @@ func (h *q4JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 		return nil, nil, err
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
-	if err != nil {
-		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
-	}
-
 	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}
-	kvmsgSerdes := commtypes.KVMsgSerdes{
-		KeySerde: commtypes.Uint64Serde{},
-		ValSerde: eventSerde,
-		MsgSerde: msgSerde,
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, eventSerde)
+	if err != nil {
+		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
 	auctionsConfig := &producer_consumer.StreamConsumerConfig{
-		Timeout:     common.SrcConsumeTimeout,
-		KVMsgSerdes: kvmsgSerdes,
+		Timeout:  common.SrcConsumeTimeout,
+		MsgSerde: msgSerde,
 	}
 	personsConfig := &producer_consumer.StreamConsumerConfig{
-		Timeout:     common.SrcConsumeTimeout,
-		KVMsgSerdes: kvmsgSerdes,
+		Timeout:  common.SrcConsumeTimeout,
+		MsgSerde: msgSerde,
 	}
 	var abSerde commtypes.Serde
 	var aicSerde commtypes.Serde
@@ -97,12 +91,12 @@ func (h *q4JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 		abSerde = ntypes.AuctionBidMsgpSerde{}
 		aicSerde = ntypes.AuctionIdCategoryMsgpSerde{}
 	}
+	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, aicSerde, abSerde)
+	if err != nil {
+		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
+	}
 	outConfig := &producer_consumer.StreamSinkConfig{
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			KeySerde: aicSerde,
-			ValSerde: abSerde,
-			MsgSerde: msgSerde,
-		},
+		MsgSerde:      outMsgSerde,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
@@ -143,7 +137,7 @@ func (h *q4JoinStreamHandler) Q4JoinTable(ctx context.Context, sp *common.QueryI
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
 	aucMp, err := store_with_changelog.NewMaterializeParamBuilder().
-		KVMsgSerdes(srcs[0].KVMsgSerdes()).StoreName("auctionsByIDStore").
+		MessageSerde(srcs[0].MsgSerde()).StoreName("auctionsByIDStore").
 		ParNum(sp.ParNum).SerdeFormat(serdeFormat).StreamParam(commtypes.CreateStreamParam{
 		Env:          h.env,
 		NumPartition: sp.NumInPartition,
@@ -152,7 +146,7 @@ func (h *q4JoinStreamHandler) Q4JoinTable(ctx context.Context, sp *common.QueryI
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	bidMp, err := store_with_changelog.NewMaterializeParamBuilder().
-		KVMsgSerdes(srcs[1].KVMsgSerdes()).StoreName("bidsByAuctionIDStore").
+		MessageSerde(srcs[1].MsgSerde()).StoreName("bidsByAuctionIDStore").
 		ParNum(sp.ParNum).SerdeFormat(serdeFormat).StreamParam(commtypes.CreateStreamParam{
 		Env:          h.env,
 		NumPartition: sp.NumInPartition,
@@ -180,12 +174,14 @@ func (h *q4JoinStreamHandler) Q4JoinTable(ctx context.Context, sp *common.QueryI
 			if err != nil {
 				return nil, err
 			}
-			if validBid != nil {
+			if validBid != nil && validBid[0].Value != nil {
 				aic := ntypes.AuctionIdCategory{
 					AucId:    validBid[0].Key.(uint64),
 					Category: validBid[0].Value.(*ntypes.AuctionBid).AucCategory,
 				}
-				newMsg := commtypes.Message{Key: &aic, Value: validBid[0].Value, Timestamp: validBid[0].Timestamp}
+				aucBid := validBid[0].Value.(*ntypes.AuctionBid)
+				aucBid.UpdateEventTime(validBid[0].Timestamp)
+				newMsg := commtypes.Message{Key: &aic, Value: aucBid, Timestamp: validBid[0].Timestamp}
 				newMsgs = append(newMsgs, newMsg)
 			}
 		}

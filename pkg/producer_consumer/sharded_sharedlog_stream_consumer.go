@@ -18,13 +18,14 @@ type ScaleEpochAndBytes struct {
 }
 
 type StreamConsumerConfig struct {
-	KVMsgSerdes commtypes.KVMsgSerdes
-	Timeout     time.Duration
+	MsgSerde commtypes.MessageSerde
+	Timeout  time.Duration
 }
 
 type ShardedSharedLogStreamConsumer struct {
 	sync.Mutex
-	kvmsgSerdes     commtypes.KVMsgSerdes
+
+	msgSerde        commtypes.MessageSerde
 	payloadArrSerde commtypes.Serde
 	stream          *sharedlog_stream.ShardedSharedLogStream
 	tac             *TransactionAwareConsumer
@@ -44,7 +45,7 @@ func NewShardedSharedLogStreamConsumer(stream *sharedlog_stream.ShardedSharedLog
 	return &ShardedSharedLogStreamConsumer{
 		stream:          stream,
 		timeout:         config.Timeout,
-		kvmsgSerdes:     config.KVMsgSerdes,
+		msgSerde:        config.MsgSerde,
 		name:            "src",
 		payloadArrSerde: sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDE,
 		guarantee:       exactly_once_intr.AT_LEAST_ONCE,
@@ -85,8 +86,8 @@ func (s *ShardedSharedLogStreamConsumer) Name() string {
 	return s.name
 }
 
-func (s *ShardedSharedLogStreamConsumer) KVMsgSerdes() commtypes.KVMsgSerdes {
-	return s.kvmsgSerdes
+func (s *ShardedSharedLogStreamConsumer) MsgSerde() commtypes.MessageSerde {
+	return s.msgSerde
 }
 
 func (s *ShardedSharedLogStreamConsumer) TopicName() string {
@@ -157,10 +158,7 @@ L:
 			totalLen += 1
 			continue
 		}
-		msgAndSeq, err := commtypes.DecodeRawMsg(
-			rawMsg, s.kvmsgSerdes, s.payloadArrSerde,
-			commtypes.DecodeMsg,
-		)
+		msgAndSeq, err := commtypes.DecodeRawMsg(rawMsg, s.msgSerde, s.payloadArrSerde)
 		if err != nil {
 			return nil, err
 		}

@@ -43,7 +43,7 @@ func (st *KeyValueStoreWithChangelog) IsOpen() bool {
 
 func (st *KeyValueStoreWithChangelog) Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error) {
 	if st.use_bytes {
-		keyBytes, err := st.mp.kvMsgSerdes.KeySerde.Encode(key)
+		keyBytes, err := st.mp.msgSerde.GetKeySerde().Encode(key)
 		if err != nil {
 			return nil, false, err
 		}
@@ -51,7 +51,7 @@ func (st *KeyValueStoreWithChangelog) Get(ctx context.Context, key commtypes.Key
 		if err != nil {
 			return nil, ok, err
 		}
-		val, err := st.mp.kvMsgSerdes.ValSerde.Decode(valBytes.([]byte))
+		val, err := st.mp.msgSerde.GetValSerde().Decode(valBytes.([]byte))
 		return val, ok, err
 	}
 	return st.kvstore.Get(ctx, key)
@@ -71,16 +71,16 @@ func (st *KeyValueStoreWithChangelog) Put(ctx context.Context, key commtypes.Key
 	if err != nil {
 		return err
 	}
-	err = st.mp.trackFunc(ctx, key, st.mp.kvMsgSerdes.KeySerde, changelogManager.TopicName(), st.mp.parNum)
+	err = st.mp.trackFunc(ctx, key, st.mp.msgSerde.GetKeySerde(), changelogManager.TopicName(), st.mp.parNum)
 	if err != nil {
 		return err
 	}
 	if st.use_bytes {
-		keyBytes, err := st.mp.kvMsgSerdes.KeySerde.Encode(key)
+		keyBytes, err := st.mp.msgSerde.GetKeySerde().Encode(key)
 		if err != nil {
 			return err
 		}
-		valBytes, err := st.mp.kvMsgSerdes.ValSerde.Encode(value)
+		valBytes, err := st.mp.msgSerde.GetValSerde().Encode(value)
 		if err != nil {
 			return err
 		}

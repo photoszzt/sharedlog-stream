@@ -24,7 +24,7 @@ import (
 )
 
 type DumpOutputStreamConfig struct {
-	KVMsgSerdes   commtypes.KVMsgSerdes
+	MsgSerde      commtypes.MessageSerde
 	OutputDir     string
 	TopicName     string
 	SerdeFormat   commtypes.SerdeFormat
@@ -59,8 +59,8 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 		return err
 	}
 	src := producer_consumer.NewShardedSharedLogStreamConsumer(log, &producer_consumer.StreamConsumerConfig{
-		KVMsgSerdes: args.KVMsgSerdes,
-		Timeout:     common.SrcConsumeTimeout,
+		MsgSerde: args.MsgSerde,
+		Timeout:  common.SrcConsumeTimeout,
 	})
 	for i := uint8(0); i < args.NumPartitions; i++ {
 		outFilePath := path.Join(args.OutputDir, fmt.Sprintf("%s-%d.txt", args.TopicName, i))

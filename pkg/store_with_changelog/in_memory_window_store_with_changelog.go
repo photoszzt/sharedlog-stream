@@ -78,7 +78,7 @@ func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	err = st.mp.trackFunc(ctx, key, st.mp.kvMsgSerdes.KeySerde, changelogManager.TopicName(), st.mp.parNum)
+	err = st.mp.trackFunc(ctx, key, st.mp.msgSerde.GetKeySerde(), changelogManager.TopicName(), st.mp.parNum)
 	if err != nil {
 		return err
 	}

@@ -28,10 +28,9 @@ func NewWinTabTestsHandler(env types.Environment) types.FuncHandler {
 }
 
 func getWindowStoreWithChangelog(env types.Environment, retainDuplicates bool) *store_with_changelog.InMemoryWindowStoreWithChangelog {
-	kvmsgSerdes := commtypes.KVMsgSerdes{
+	msgSerde := commtypes.MessageJSONSerde{
 		KeySerde: commtypes.Uint32Serde{},
 		ValSerde: commtypes.StringSerde{},
-		MsgSerde: commtypes.MessageSerializedJSONSerde{},
 	}
 	storeName := "test1"
 	var compareFunc concurrent_skiplist.CompareFunc
@@ -45,7 +44,7 @@ func getWindowStoreWithChangelog(env types.Environment, retainDuplicates bool) *
 		NumPartition: 1,
 	}
 	mp, err := store_with_changelog.NewMaterializeParamBuilder().
-		KVMsgSerdes(kvmsgSerdes).
+		MessageSerde(msgSerde).
 		StoreName(storeName).
 		ParNum(0).
 		SerdeFormat(commtypes.JSON).

@@ -10,8 +10,8 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/producer_consumer"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -51,30 +51,25 @@ func (h *windowAvgGroupBy) getSrcSink(ctx context.Context, sp *common.QueryInput
 	output_stream *sharedlog_stream.ShardedSharedLogStream,
 ) (*producer_consumer.MeteredConsumer, *producer_consumer.ConcurrentMeteredSink, error) {
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
-	if err != nil {
-		return nil, nil, err
-	}
 	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
-	kvmsgSerdes := commtypes.KVMsgSerdes{
-		KeySerde: commtypes.StringSerde{},
-		ValSerde: eventSerde,
-		MsgSerde: msgSerde,
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.StringSerde{}, eventSerde)
+	if err != nil {
+		return nil, nil, err
 	}
 	inConfig := &producer_consumer.StreamConsumerConfig{
-		Timeout:     common.SrcConsumeTimeout,
-		KVMsgSerdes: kvmsgSerdes,
+		Timeout:  common.SrcConsumeTimeout,
+		MsgSerde: msgSerde,
+	}
+	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, eventSerde)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	outConfig := &producer_consumer.StreamSinkConfig{
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			MsgSerde: msgSerde,
-			KeySerde: commtypes.Uint64Serde{},
-			ValSerde: eventSerde,
-		},
+		MsgSerde:      outMsgSerde,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 

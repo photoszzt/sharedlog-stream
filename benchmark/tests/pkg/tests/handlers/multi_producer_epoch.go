@@ -25,21 +25,20 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(ctx context.Context) {
 		panic(err)
 	}
 
-	kvmsgSerdes := commtypes.KVMsgSerdes{
+	msgSerde := commtypes.MessageJSONSerde{
 		KeySerde: commtypes.IntSerde{},
 		ValSerde: commtypes.StringSerde{},
-		MsgSerde: commtypes.MessageSerializedJSONSerde{},
 	}
 	meteredProducer1 := producer_consumer.NewMeteredProducer(
 		producer_consumer.NewShardedSharedLogStreamProducer(stream1,
 			&producer_consumer.StreamSinkConfig{
-				KVMsgSerdes:   kvmsgSerdes,
+				MsgSerde:      msgSerde,
 				FlushDuration: common.FlushDuration,
 			}), 0)
 	meteredProducer2 := producer_consumer.NewMeteredProducer(
 		producer_consumer.NewShardedSharedLogStreamProducer(stream2,
 			&producer_consumer.StreamSinkConfig{
-				KVMsgSerdes:   kvmsgSerdes,
+				MsgSerde:      msgSerde,
 				FlushDuration: common.FlushDuration,
 			}), 0)
 	em1, trackParFunc1, err := getEpochManager(ctx, h.env, "prod1")
@@ -122,8 +121,8 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(ctx context.Context) {
 	}
 
 	srcConfig := &producer_consumer.StreamConsumerConfig{
-		Timeout:     common.SrcConsumeTimeout,
-		KVMsgSerdes: kvmsgSerdes,
+		Timeout:  common.SrcConsumeTimeout,
+		MsgSerde: msgSerde,
 	}
 	stream1ForRead, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "test3", 1, commtypes.JSON)
 	if err != nil {

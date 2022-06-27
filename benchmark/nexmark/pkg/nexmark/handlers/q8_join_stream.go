@@ -90,44 +90,39 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 		return nil, nil, err
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
-	if err != nil {
-		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
-	}
-
 	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}
-	timeout := common.SrcConsumeTimeout
-	warmup := time.Duration(sp.WarmupS) * time.Second
-	kvmsgSerdes := commtypes.KVMsgSerdes{
-		KeySerde: commtypes.Uint64Serde{},
-		ValSerde: eventSerde,
-		MsgSerde: msgSerde,
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, eventSerde)
+	if err != nil {
+		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
 	ptSerde, err := ntypes.GetPersonTimeSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
+	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, ptSerde)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	timeout := common.SrcConsumeTimeout
+	warmup := time.Duration(sp.WarmupS) * time.Second
 
 	src1 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(stream1,
 		&producer_consumer.StreamConsumerConfig{
-			Timeout:     timeout,
-			KVMsgSerdes: kvmsgSerdes,
+			Timeout:  timeout,
+			MsgSerde: msgSerde,
 		}), warmup)
 	src2 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(stream2,
 		&producer_consumer.StreamConsumerConfig{
-			Timeout:     timeout,
-			KVMsgSerdes: kvmsgSerdes,
+			Timeout:  timeout,
+			MsgSerde: msgSerde,
 		}), warmup)
 	sink := producer_consumer.NewConcurrentMeteredSyncProducer(producer_consumer.NewShardedSharedLogStreamProducer(outputStream,
 		&producer_consumer.StreamSinkConfig{
-			KVMsgSerdes: commtypes.KVMsgSerdes{
-				KeySerde: commtypes.Uint64Serde{},
-				ValSerde: ptSerde,
-				MsgSerde: msgSerde,
-			},
+			MsgSerde:      outMsgSerde,
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 		}), warmup)
 	src1.SetInitialSource(false)
@@ -136,30 +131,6 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	src2.SetName("personsByIDSrc")
 	sink.MarkFinalOutput()
 	return []producer_consumer.MeteredConsumerIntr{src1, src2}, []producer_consumer.MeteredProducerIntr{sink}, nil
-}
-
-func getTabAndToTab(env types.Environment,
-	sp *common.QueryInput,
-	tabName string,
-	compare concurrent_skiplist.CompareFunc,
-	kvmegSerdes commtypes.KVMsgSerdes,
-	joinWindows *processor.JoinWindows,
-) (*processor.MeteredProcessor, store.WindowStore, *store_with_changelog.MaterializeParam, error) {
-	format := commtypes.SerdeFormat(sp.SerdeFormat)
-	mp, err := store_with_changelog.NewMaterializeParamBuilder().
-		KVMsgSerdes(kvmegSerdes).
-		StoreName(tabName).
-		ParNum(sp.ParNum).
-		SerdeFormat(format).
-		StreamParam(commtypes.CreateStreamParam{
-			Env:          env,
-			NumPartition: sp.NumInPartition,
-		}).BuildForKVStore(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	toTab, winTab := store_with_changelog.ToInMemWindowTableWithChangelog(mp, joinWindows, compare)
-	return toTab, winTab, mp, nil
 }
 
 func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -189,7 +160,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	format := commtypes.SerdeFormat(sp.SerdeFormat)
 	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
 	aucMp, err := store_with_changelog.NewMaterializeParamBuilder().
-		KVMsgSerdes(srcs[0].KVMsgSerdes()).
+		MessageSerde(srcs[0].MsgSerde()).
 		StoreName("auctionsBySellerIDWinTab").
 		ParNum(sp.ParNum).
 		SerdeFormat(format).
@@ -198,7 +169,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			NumPartition: sp.NumInPartition,
 		}).BuildForWindowStore(flushDur, common.SrcConsumeTimeout)
 	perMp, err := store_with_changelog.NewMaterializeParamBuilder().
-		KVMsgSerdes(srcs[1].KVMsgSerdes()).
+		MessageSerde(srcs[1].MsgSerde()).
 		StoreName("personsByIDWinTab").
 		ParNum(sp.ParNum).
 		SerdeFormat(format).

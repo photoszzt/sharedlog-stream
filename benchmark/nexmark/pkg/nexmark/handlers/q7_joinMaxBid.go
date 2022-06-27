@@ -57,10 +57,6 @@ func (h *q7JoinMaxBid) getSrcSink(
 		return nil, nil, err
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat)
-	if err != nil {
-		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
-	}
 	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get event serde err: %v", err)
@@ -69,35 +65,39 @@ func (h *q7JoinMaxBid) getSrcSink(
 	if err != nil {
 		return nil, nil, err
 	}
+	inMsgSerde1, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, eventSerde)
+	if err != nil {
+		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
+	}
+	inMsgSerde2, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, seSerde)
+	if err != nil {
+		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
+	}
 	bmSerde, err := ntypes.GetBidAndMaxSerde(serdeFormat)
+	if err != nil {
+		return nil, nil, err
+	}
+	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, bmSerde)
 	if err != nil {
 		return nil, nil, err
 	}
 	timeout := common.SrcConsumeTimeout
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	src1 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(stream1, &producer_consumer.StreamConsumerConfig{
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			MsgSerde: msgSerde,
-			KeySerde: commtypes.Uint64Serde{},
-			ValSerde: eventSerde,
-		},
-		Timeout: timeout,
-	}), warmup)
-	src2 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(stream2, &producer_consumer.StreamConsumerConfig{
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			MsgSerde: msgSerde,
-			KeySerde: commtypes.Uint64Serde{},
-			ValSerde: seSerde,
-		},
-		Timeout: timeout,
-	}), warmup)
-	sink := producer_consumer.NewConcurrentMeteredSyncProducer(producer_consumer.NewShardedSharedLogStreamProducer(outputStream, &producer_consumer.StreamSinkConfig{
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			MsgSerde: msgSerde,
-			KeySerde: commtypes.Uint64Serde{},
-			ValSerde: bmSerde,
-		},
-	}), warmup)
+	src1 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(stream1,
+		&producer_consumer.StreamConsumerConfig{
+			MsgSerde: inMsgSerde1,
+			Timeout:  timeout,
+		}), warmup)
+	src2 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(stream2,
+		&producer_consumer.StreamConsumerConfig{
+			MsgSerde: inMsgSerde2,
+			Timeout:  timeout,
+		}), warmup)
+	sink := producer_consumer.NewConcurrentMeteredSyncProducer(producer_consumer.NewShardedSharedLogStreamProducer(outputStream,
+		&producer_consumer.StreamSinkConfig{
+			MsgSerde:      outMsgSerde,
+			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+		}), warmup)
 	return []producer_consumer.MeteredConsumerIntr{src1, src2}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
@@ -131,7 +131,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
 	bMp, err := store_with_changelog.NewMaterializeParamBuilder().
-		KVMsgSerdes(srcs[0].KVMsgSerdes()).
+		MessageSerde(srcs[0].MsgSerde()).
 		StoreName("bidByPriceTab").
 		ParNum(sp.ParNum).
 		SerdeFormat(serdeFormat).StreamParam(commtypes.CreateStreamParam{
@@ -142,7 +142,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	maxBMp, err := store_with_changelog.NewMaterializeParamBuilder().
-		KVMsgSerdes(srcs[1].KVMsgSerdes()).
+		MessageSerde(srcs[1].MsgSerde()).
 		StoreName("maxBidByPriceTab").
 		ParNum(sp.ParNum).
 		SerdeFormat(serdeFormat).StreamParam(commtypes.CreateStreamParam{

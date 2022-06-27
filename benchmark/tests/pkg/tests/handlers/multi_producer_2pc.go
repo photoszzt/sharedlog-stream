@@ -96,13 +96,12 @@ func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 		panic(err)
 	}
 
-	kvmsgSerdes := commtypes.KVMsgSerdes{
+	msgSerdes := commtypes.MessageJSONSerde{
 		KeySerde: commtypes.IntSerde{},
 		ValSerde: commtypes.StringSerde{},
-		MsgSerde: commtypes.MessageSerializedJSONSerde{},
 	}
 	produceSinkConfig := &producer_consumer.StreamSinkConfig{
-		KVMsgSerdes:   kvmsgSerdes,
+		MsgSerde:      msgSerdes,
 		FlushDuration: common.FlushDuration,
 	}
 	sp := &common.QueryInput{
@@ -200,8 +199,8 @@ func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 	}
 
 	srcConfig := &producer_consumer.StreamConsumerConfig{
-		Timeout:     common.SrcConsumeTimeout,
-		KVMsgSerdes: kvmsgSerdes,
+		Timeout:  common.SrcConsumeTimeout,
+		MsgSerde: msgSerdes,
 	}
 
 	src1 := producer_consumer.NewShardedSharedLogStreamConsumer(stream1ForRead, srcConfig)
@@ -210,7 +209,7 @@ func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 		panic(err)
 	}
 	payloadArrSerde := sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDE
-	got, err := readMsgs(ctx, kvmsgSerdes, payloadArrSerde, commtypes.JSON, stream1ForRead)
+	got, err := readMsgs(ctx, msgSerdes, payloadArrSerde, commtypes.JSON, stream1ForRead)
 	if err != nil {
 		panic(err)
 	}
