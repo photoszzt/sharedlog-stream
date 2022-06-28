@@ -113,20 +113,20 @@ func joinProcLoop(
 
 func procMsgWithSink(ctx context.Context, msg commtypes.Message, procArgs *JoinProcArgs,
 ) error {
-	st := msg.Value.(commtypes.EventTimeExtractor)
-	ts, err := st.ExtractEventTime()
-	if err != nil {
-		debug.Fprintf(os.Stderr, "[ERROR] %s return extract ts: %v\n", ctx.Value("id"), err)
-		return fmt.Errorf("fail to extract timestamp: %v", err)
-	}
-	msg.Timestamp = ts
+	// st := msg.Value.(commtypes.EventTimeExtractor)
+	// ts, err := st.ExtractEventTime()
+	// if err != nil {
+	// 	debug.Fprintf(os.Stderr, "[ERROR] %s return extract ts: %v\n", ctx.Value("id"), err)
+	// 	return fmt.Errorf("fail to extract timestamp: %v", err)
+	// }
+	// msg.Timestamp = ts
 	msgs, err := procArgs.runner(ctx, msg)
 	if err != nil {
 		debug.Fprintf(os.Stderr, "[ERROR] %s return runner: %v\n", ctx.Value("id"), err)
 		return err
 	}
 	for _, msg := range msgs {
-		debug.Fprintf(os.Stderr, "k %v, v %v\n", msg.Key, msg.Value)
+		debug.Fprintf(os.Stderr, "k %v, v %v, ts %d\n", msg.Key, msg.Value, msg.Timestamp)
 		err = procArgs.Producers()[0].Produce(ctx, msg, procArgs.SubstreamNum(), false)
 		if err != nil {
 			debug.Fprintf(os.Stderr, "[ERROR] %s return push to sink: %v\n", ctx.Value("id"), err)

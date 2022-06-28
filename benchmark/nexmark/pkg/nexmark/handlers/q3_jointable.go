@@ -236,11 +236,11 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		store_restore.NewKVStoreChangelog(kvtabs.tab1,
 			store_with_changelog.NewChangelogManagerForSrc(
 				srcs[0].Stream().(*sharedlog_stream.ShardedSharedLogStream),
-				srcs[0].MsgSerde(), common.SrcConsumeTimeout), sp.ParNum),
+				srcs[0].MsgSerde(), common.SrcConsumeTimeout)),
 		store_restore.NewKVStoreChangelog(kvtabs.tab2,
 			store_with_changelog.NewChangelogManagerForSrc(
 				srcs[1].Stream().(*sharedlog_stream.ShardedSharedLogStream),
-				srcs[1].MsgSerde(), common.SrcConsumeTimeout), sp.ParNum),
+				srcs[1].MsgSerde(), common.SrcConsumeTimeout)),
 	}
 	transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,

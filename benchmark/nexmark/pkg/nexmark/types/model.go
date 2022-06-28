@@ -12,31 +12,6 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 )
 
-type BaseInjTime struct {
-	InjT int64 `msg:"injT,omitempty" json:"injT,omitempty"`
-}
-
-func (ij *BaseInjTime) UpdateInjectTime(ts int64) error {
-	ij.InjT = ts
-	return nil
-}
-
-func (ij *BaseInjTime) ExtractInjectTimeMs() (int64, error) {
-	return ij.InjT, nil
-}
-
-type BaseTs struct {
-	Timestamp int64 `msg:"ts,omitempty" json:"ts,omitempty"`
-}
-
-func (bts *BaseTs) UpdateEventTime(ts int64) {
-	bts.Timestamp = ts
-}
-
-func (ts BaseTs) ExtractEventTime() (int64, error) {
-	return ts.Timestamp, nil
-}
-
 type Auction struct {
 	ItemName    string `msg:"itemName" json:"itemName"`
 	Description string `msg:"description" json:"description"`
@@ -48,8 +23,6 @@ type Auction struct {
 	Seller      uint64 `msg:"seller" json:"seller"`
 	Category    uint64 `msg:"category" json:"category"`
 	InitialBid  uint64 `msg:"initialBid" json:"initialBid"`
-
-	BaseInjTime `msg:",flatten"`
 }
 
 type Bid struct {
@@ -60,8 +33,6 @@ type Bid struct {
 	Price    uint64 `msg:"price" json:"price"`
 	DateTime int64  `msg:"dateTime" json:"dateTime"`
 	Auction  uint64 `msg:"auction" json:"auction"`
-
-	BaseInjTime `msg:",flatten"`
 }
 
 type Person struct {
@@ -73,8 +44,6 @@ type Person struct {
 	Extra        string `msg:"extra" json:"extra"`
 	ID           uint64 `msg:"id" json:"id"`
 	DateTime     int64  `msg:"dateTime" json:"dateTime"`
-
-	BaseInjTime `msg:",flatten"`
 }
 
 type EType uint8
@@ -179,50 +148,6 @@ func (e *Event) ExtractEventTime() (int64, error) {
 			return 0, fmt.Errorf("new auction should not be nil")
 		}
 		return e.NewAuction.DateTime, nil
-	default:
-		return 0, fmt.Errorf("failed to recognize event type")
-	}
-}
-
-func (e *Event) UpdateInjectTime(ts int64) error {
-	switch e.Etype {
-	case PERSON:
-		if e.NewPerson == nil {
-			return fmt.Errorf("new person should not be nil")
-		}
-		return e.NewPerson.UpdateInjectTime(ts)
-	case BID:
-		if e.Bid == nil {
-			return fmt.Errorf("bid should not be nil")
-		}
-		return e.Bid.UpdateInjectTime(ts)
-	case AUCTION:
-		if e.NewAuction == nil {
-			return fmt.Errorf("new auction should not be nil")
-		}
-		return e.NewAuction.UpdateInjectTime(ts)
-	default:
-		return fmt.Errorf("failed to recognize event type")
-	}
-}
-
-func (e *Event) ExtractInjectTimeMs() (int64, error) {
-	switch e.Etype {
-	case PERSON:
-		if e.NewPerson == nil {
-			return 0, fmt.Errorf("new person should not be nil")
-		}
-		return e.NewPerson.ExtractInjectTimeMs()
-	case BID:
-		if e.Bid == nil {
-			return 0, fmt.Errorf("bid should not be nil")
-		}
-		return e.Bid.ExtractInjectTimeMs()
-	case AUCTION:
-		if e.NewAuction == nil {
-			return 0, fmt.Errorf("new auction should not be nil")
-		}
-		return e.NewAuction.ExtractInjectTimeMs()
 	default:
 		return 0, fmt.Errorf("failed to recognize event type")
 	}

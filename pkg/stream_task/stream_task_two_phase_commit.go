@@ -230,7 +230,7 @@ func (t *StreamTask) processWithTransaction(
 					continue
 				} else {
 					if hasLiveTransaction {
-						if err := tm.AbortTransaction(ctx, false, args.kvChangelogs, args.windowStoreChangelogs); err != nil {
+						if err := tm.AbortTransaction(ctx); err != nil {
 							return &common.FnOutput{Success: false, Message: fmt.Sprintf("abort failed: %v\n", err)}
 						}
 					}
@@ -249,7 +249,7 @@ func (t *StreamTask) startNewTransaction(ctx context.Context, args *StreamTaskAr
 	hasLiveTransaction *bool, trackConsumePar *bool, init *bool, paused *bool, commitTimer *time.Time,
 ) error {
 	if !*hasLiveTransaction {
-		if err := tm.BeginTransaction(ctx, args.kvChangelogs, args.windowStoreChangelogs); err != nil {
+		if err := tm.BeginTransaction(ctx); err != nil {
 			debug.Fprintf(os.Stderr, "[ERROR] transaction begin failed: %v", err)
 			return fmt.Errorf("transaction begin failed: %v\n", err)
 		}

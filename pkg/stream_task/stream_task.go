@@ -10,7 +10,6 @@ import (
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
-	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/transaction"
 	"sync"
@@ -103,44 +102,30 @@ func updateReturnMetric(ret *common.FnOutput, warmupChecker *stats.Warmup) {
 func restoreKVStore(ctx context.Context, args *StreamTaskArgs, offsetMap map[string]uint64,
 ) error {
 	for _, kvchangelog := range args.kvChangelogs {
-		if kvchangelog.TableType() == store.IN_MEM {
-			topic := kvchangelog.ChangelogManager().TopicName()
-			offset := uint64(0)
-			ok := false
-			if kvchangelog.ChangelogManager().ChangelogIsSrc() {
-				offset, ok = offsetMap[topic]
-				if !ok {
-					continue
-				}
-			}
-			err := store_restore.RestoreChangelogKVStateStore(ctx, kvchangelog, offset)
-			if err != nil {
-				return fmt.Errorf("RestoreKVStateStore failed: %v", err)
+		topic := kvchangelog.ChangelogManager().TopicName()
+		offset := uint64(0)
+		ok := false
+		if kvchangelog.ChangelogManager().ChangelogIsSrc() {
+			offset, ok = offsetMap[topic]
+			if !ok {
+				continue
 			}
 		}
-		/* else if kvchangelog.TableType() == store.MONGODB {
-			if err := restoreMongoDBKVStore(ctx, tm, kvchangelog); err != nil {
-				return err
-			}
+		err := store_restore.RestoreChangelogKVStateStore(ctx, kvchangelog,
+			offset, args.ectx.SubstreamNum())
+		if err != nil {
+			return fmt.Errorf("RestoreKVStateStore failed: %v", err)
 		}
-		*/
 	}
 	return nil
 }
 
 func restoreChangelogBackedWindowStore(ctx context.Context, args *StreamTaskArgs) error {
 	for _, wschangelog := range args.windowStoreChangelogs {
-		if wschangelog.TableType() == store.IN_MEM {
-			err := store_restore.RestoreChangelogWindowStateStore(ctx, wschangelog)
-			if err != nil {
-				return fmt.Errorf("RestoreWindowStateStore failed: %v", err)
-			}
+		err := store_restore.RestoreChangelogWindowStateStore(ctx, wschangelog, args.ectx.SubstreamNum())
+		if err != nil {
+			return fmt.Errorf("RestoreWindowStateStore failed: %v", err)
 		}
-		/*else if wschangelog.TableType() == store.MONGODB {
-			if err := restoreMongoDBWinStore(ctx, tm, wschangelog); err != nil {
-				return err
-			}
-		}*/
 	}
 	return nil
 }

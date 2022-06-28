@@ -123,9 +123,6 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 			Bidder:   lv.Bid.Bidder,
 			WStartMs: rv.StartTimeMs,
 			WEndMs:   rv.EndTimeMs,
-			BaseTs: ntypes.BaseTs{
-				Timestamp: lv.Bid.DateTime,
-			},
 		}
 	})
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
@@ -134,10 +131,13 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		MessageSerde(srcs[0].MsgSerde()).
 		StoreName("bidByPriceTab").
 		ParNum(sp.ParNum).
-		SerdeFormat(serdeFormat).StreamParam(commtypes.CreateStreamParam{
-		Env:          h.env,
-		NumPartition: sp.NumInPartition,
-	}).BuildForWindowStore(flushDur, common.SrcConsumeTimeout)
+		SerdeFormat(serdeFormat).
+		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
+			Env:           h.env,
+			NumPartition:  sp.NumInPartition,
+			FlushDuration: flushDur,
+			TimeOut:       common.SrcConsumeTimeout,
+		}).Build()
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -145,10 +145,13 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		MessageSerde(srcs[1].MsgSerde()).
 		StoreName("maxBidByPriceTab").
 		ParNum(sp.ParNum).
-		SerdeFormat(serdeFormat).StreamParam(commtypes.CreateStreamParam{
-		Env:          h.env,
-		NumPartition: sp.NumInPartition,
-	}).BuildForWindowStore(flushDur, common.SrcConsumeTimeout)
+		SerdeFormat(serdeFormat).
+		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
+			Env:           h.env,
+			NumPartition:  sp.NumInPartition,
+			FlushDuration: flushDur,
+			TimeOut:       common.SrcConsumeTimeout,
+		}).Build()
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -160,7 +163,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	filter := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(
 		"filter", processor.PredicateFunc(func(m *commtypes.Message) (bool, error) {
 			val := m.Value.(*ntypes.BidAndMax)
-			return val.Timestamp >= val.WStartMs && val.Timestamp <= val.WEndMs, nil
+			return m.Timestamp >= val.WStartMs && m.Timestamp <= val.WEndMs, nil
 		})))
 
 	var bJoinM execution.JoinWorkerFunc = func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {

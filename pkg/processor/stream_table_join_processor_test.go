@@ -26,8 +26,8 @@ func getJoinProcessor() *StreamTableJoinProcessor {
 		func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
 			lv := leftValue.(int)
 			if rightValue != nil {
-				rv := rightValue.(commtypes.ValueTimestamp)
-				return fmt.Sprintf("%d+%d", lv, rv.Value.(int))
+				rv := rightValue.(int)
+				return fmt.Sprintf("%d+%d", lv, rv)
 			} else {
 				return nil
 			}
@@ -52,8 +52,8 @@ func getJoinProcessorWithStr() *StreamTableJoinProcessor {
 		func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
 			lv := leftValue.(string)
 			if rightValue != nil {
-				rv := rightValue.(commtypes.ValueTimestamp)
-				return fmt.Sprintf("%s+%s", lv, rv.Value.(string))
+				rv := rightValue.(string)
+				return fmt.Sprintf("%s+%s", lv, rv)
 			} else {
 				return nil
 			}

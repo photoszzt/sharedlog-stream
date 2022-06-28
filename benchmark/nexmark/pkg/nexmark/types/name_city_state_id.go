@@ -14,8 +14,6 @@ type NameCityStateId struct {
 	City  string `msg:"city" json:"city"`
 	State string `msg:"state" json:"state"`
 	ID    uint64 `msg:"id" json:"id"`
-
-	BaseInjTime `msg:"bInjT"`
 }
 
 type NameCityStateIdJSONSerde struct{}

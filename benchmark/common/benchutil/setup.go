@@ -106,7 +106,7 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 }
 
 func outputMsg(msg commtypes.Message, outFile *os.File) error {
-	outStr := fmt.Sprintf("%v : %v\n", msg.Key, msg.Value)
+	outStr := fmt.Sprintf("%v : %v, ts %d\n", msg.Key, msg.Value, msg.Timestamp)
 	fmt.Fprint(os.Stderr, outStr)
 	writted, err := outFile.WriteString(outStr)
 	if err != nil {

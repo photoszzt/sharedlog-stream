@@ -107,17 +107,10 @@ func (h *windowedAvg) getSrcSink(ctx context.Context, sp *common.QueryInput) (
 func (h *windowedAvg) getAggProcessor(ctx context.Context, sp *common.QueryInput) (*processor.MeteredProcessor, error) {
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	var scSerde commtypes.Serde
-	var vtSerde commtypes.Serde
 	if serdeFormat == commtypes.JSON {
 		scSerde = ntypes.SumAndCountJSONSerde{}
-		vtSerde = commtypes.ValueTimestampJSONSerde{
-			ValJSONSerde: scSerde,
-		}
 	} else if serdeFormat == commtypes.MSGP {
 		scSerde = ntypes.SumAndCountMsgpSerde{}
-		vtSerde = commtypes.ValueTimestampMsgpSerde{
-			ValMsgpSerde: scSerde,
-		}
 	} else {
 		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat)
 	}
@@ -126,7 +119,8 @@ func (h *windowedAvg) getAggProcessor(ctx context.Context, sp *common.QueryInput
 	if err != nil {
 		return nil, err
 	}
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, vtSerde)
+	msgSerde, err := processor.MsgSerdeWithValueTs(serdeFormat,
+		commtypes.Uint64Serde{}, scSerde)
 	if err != nil {
 		return nil, err
 	}
@@ -136,17 +130,21 @@ func (h *windowedAvg) getAggProcessor(ctx context.Context, sp *common.QueryInput
 		StoreName(tabName).
 		ParNum(sp.ParNum).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
-		StreamParam(commtypes.CreateStreamParam{
-			Env:          h.env,
-			NumPartition: sp.NumInPartition,
-		}).
-		BuildForKVStore(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
+		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
+			Env:           h.env,
+			NumPartition:  sp.NumInPartition,
+			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+			TimeOut:       common.SrcConsumeTimeout,
+		}).Build()
 	if err != nil {
 		return nil, err
 	}
 
-	store := store_with_changelog.NewInMemoryWindowStoreWithChangelog(
+	store, err := store_with_changelog.NewInMemoryWindowStoreWithChangelog(
 		timeWindows, false, concurrent_skiplist.CompareFunc(concurrent_skiplist.Uint64KeyCompare), winStoreMp)
+	if err != nil {
+		return nil, err
+	}
 	aggProc := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(
 		"aggProc", store,
 		processor.InitializerFunc(func() interface{} {

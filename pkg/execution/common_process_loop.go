@@ -23,6 +23,7 @@ func CommonProcess(ctx context.Context, t *stream_task.StreamTask, ectx processo
 			return common.GenErrFnOutput(err)
 		}
 	}
+	isInitialSrc := ectx.Consumers()[0].IsInitialSource()
 	gotMsgs, err := ectx.Consumers()[0].Consume(ctx, ectx.SubstreamNum())
 	if err != nil {
 		if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
@@ -43,7 +44,7 @@ func CommonProcess(ctx context.Context, t *stream_task.StreamTask, ectx processo
 		}
 		// err = proc(t, msg)
 		t.CurrentConsumeOffset[ectx.Consumers()[0].TopicName()] = msg.LogSeqNum
-		err = ProcessMsgAndSeq(ctx, msg, ectx, procMsg)
+		err = ProcessMsgAndSeq(ctx, msg, ectx, procMsg, isInitialSrc)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
@@ -51,25 +52,25 @@ func CommonProcess(ctx context.Context, t *stream_task.StreamTask, ectx processo
 	return nil
 }
 
-func extractEventTs(msg *commtypes.Message) error {
-	event := msg.Value.(commtypes.EventTimeExtractor)
-	ts, err := event.ExtractEventTime()
-	if err != nil {
+func extractEventTs(msg *commtypes.Message, isInitialSrc bool) error {
+	if isInitialSrc {
+		err := msg.ExtractEventTimeFromVal()
+		// debug.Fprintf(os.Stderr, "msg k %v, v %v, ts %d\n", msg.Key, msg.Value, msg.Timestamp)
 		return err
 	}
-	msg.Timestamp = ts
+	// debug.Fprintf(os.Stderr, "msg k %v, v %v, ts %d\n", msg.Key, msg.Value, msg.Timestamp)
 	return nil
 }
 
 func ProcessMsgAndSeq(ctx context.Context, msg commtypes.MsgAndSeq, args interface{},
-	procMsg proc_interface.ProcessMsgFunc,
+	procMsg proc_interface.ProcessMsgFunc, isInitialSrc bool,
 ) error {
 	if msg.MsgArr != nil {
 		for _, subMsg := range msg.MsgArr {
 			if subMsg.Value == nil {
 				continue
 			}
-			err := extractEventTs(&subMsg)
+			err := extractEventTs(&subMsg, isInitialSrc)
 			if err != nil {
 				return err
 			}
@@ -80,7 +81,7 @@ func ProcessMsgAndSeq(ctx context.Context, msg commtypes.MsgAndSeq, args interfa
 		}
 		return nil
 	}
-	err := extractEventTs(&msg.Msg)
+	err := extractEventTs(&msg.Msg, isInitialSrc)
 	if err != nil {
 		return err
 	}

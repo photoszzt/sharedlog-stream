@@ -77,7 +77,7 @@ func getConsumeTransactionManager(
 
 func (h *produceConsumeHandler) beginTransaction(ctx context.Context,
 	tm *transaction.TransactionManager, stream1 *sharedlog_stream.ShardedSharedLogStream) {
-	if err := tm.BeginTransaction(ctx, nil, nil); err != nil {
+	if err := tm.BeginTransaction(ctx); err != nil {
 		panic(err)
 	}
 	if err := tm.AddTopicSubstream(ctx, stream1.TopicName(), 0); err != nil {

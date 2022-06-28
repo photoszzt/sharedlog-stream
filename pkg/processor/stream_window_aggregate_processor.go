@@ -20,7 +20,9 @@ type StreamWindowAggregateProcessor struct {
 
 var _ = Processor(&StreamWindowAggregateProcessor{})
 
-func NewStreamWindowAggregateProcessor(name string, store store.WindowStore, initializer Initializer, aggregator Aggregator, windows EnumerableWindowDefinition) *StreamWindowAggregateProcessor {
+func NewStreamWindowAggregateProcessor(name string, store store.WindowStore, initializer Initializer,
+	aggregator Aggregator, windows EnumerableWindowDefinition,
+) *StreamWindowAggregateProcessor {
 	return &StreamWindowAggregateProcessor{
 		initializer:        initializer,
 		aggregator:         aggregator,

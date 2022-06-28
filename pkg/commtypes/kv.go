@@ -1,6 +1,10 @@
 package commtypes
 
-import "cs.utexas.edu/zjia/faas/types"
+import (
+	"time"
+
+	"cs.utexas.edu/zjia/faas/types"
+)
 
 type CTXID string
 
@@ -8,7 +12,9 @@ type KeyT interface{}
 
 type ValueT interface{}
 
-type CreateStreamParam struct {
-	Env          types.Environment
-	NumPartition uint8
+type CreateChangelogManagerParam struct {
+	Env           types.Environment
+	NumPartition  uint8
+	FlushDuration time.Duration
+	TimeOut       time.Duration
 }

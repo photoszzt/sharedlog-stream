@@ -13,9 +13,6 @@ import (
 type AuctionIdCount struct {
 	AucId uint64 `json:"aucId,omitempty" msg:"aucId,omitempty"`
 	Count uint64 `json:"cnt,omitempty" msg:"cnt,omitempty"`
-
-	BaseTs      `msg:"bTs"`
-	BaseInjTime `msg:"bInjT"`
 }
 
 type AuctionIdCountJSONEncoder struct{}

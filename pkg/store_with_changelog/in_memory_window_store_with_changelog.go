@@ -2,6 +2,7 @@ package store_with_changelog
 
 import (
 	"context"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/exactly_once_intr"
@@ -11,8 +12,12 @@ import (
 )
 
 type InMemoryWindowStoreWithChangelog struct {
-	windowStore *store.InMemoryWindowStore
-	mp          *MaterializeParam
+	msgSerde         commtypes.MessageSerde
+	originKeySerde   commtypes.Serde
+	windowStore      *store.InMemoryWindowStore
+	trackFunc        exactly_once_intr.TrackProdSubStreamFunc
+	changelogManager *ChangelogManager
+	parNum           uint8
 }
 
 var _ = store.WindowStore(&InMemoryWindowStoreWithChangelog{})
@@ -22,44 +27,79 @@ func NewInMemoryWindowStoreWithChangelog(
 	retainDuplicates bool,
 	comparable concurrent_skiplist.Comparable,
 	mp *MaterializeParam,
-) *InMemoryWindowStoreWithChangelog {
+) (*InMemoryWindowStoreWithChangelog, error) {
+	changelogManager, msgSerde, err := createChangelogManagerAndUpdateMsgSerde(mp)
+	if err != nil {
+		return nil, err
+	}
 	return &InMemoryWindowStoreWithChangelog{
 		windowStore: store.NewInMemoryWindowStore(mp.storeName,
 			winDefs.MaxSize()+winDefs.GracePeriodMs(), winDefs.MaxSize(), retainDuplicates, comparable),
-		mp: mp,
+		msgSerde:         msgSerde,
+		originKeySerde:   mp.msgSerde.GetKeySerde(),
+		parNum:           mp.ParNum(),
+		trackFunc:        exactly_once_intr.DefaultTrackProdSubstreamFunc,
+		changelogManager: changelogManager,
+	}, nil
+}
+
+func createChangelogManagerAndUpdateMsgSerde(mp *MaterializeParam) (*ChangelogManager, commtypes.MessageSerde, error) {
+	changelog, err := CreateChangelog(mp.changelogParam.Env,
+		mp.storeName+"_changelog", mp.changelogParam.NumPartition,
+		mp.serdeFormat)
+	if err != nil {
+		return nil, nil, err
 	}
+	var keyAndWindowStartTsSerde commtypes.Serde
+	if mp.serdeFormat == commtypes.JSON {
+		keyAndWindowStartTsSerde = commtypes.KeyAndWindowStartTsJSONSerde{
+			KeyJSONSerde: mp.msgSerde.GetKeySerde(),
+		}
+	} else if mp.serdeFormat == commtypes.MSGP {
+		keyAndWindowStartTsSerde = commtypes.KeyAndWindowStartTsMsgpSerde{
+			KeyMsgpSerde: mp.msgSerde.GetKeySerde(),
+		}
+	} else {
+		return nil, nil, common_errors.ErrUnrecognizedSerdeFormat
+	}
+	msgSerde, err := commtypes.GetMsgSerde(mp.serdeFormat, keyAndWindowStartTsSerde, mp.msgSerde.GetValSerde())
+	if err != nil {
+		return nil, nil, err
+	}
+	changelogManager := NewChangelogManager(changelog, msgSerde, mp.changelogParam.TimeOut, mp.changelogParam.FlushDuration)
+	return changelogManager, msgSerde, nil
 }
 
 func NewInMemoryWindowStoreWithChangelogForTest(
-	retentionPeriod int64, windowSize int64, retainDuplicates bool, comparable concurrent_skiplist.Comparable,
+	retentionPeriod int64, windowSize int64,
+	retainDuplicates bool,
+	comparable concurrent_skiplist.Comparable,
 	mp *MaterializeParam,
-) *InMemoryWindowStoreWithChangelog {
+) (*InMemoryWindowStoreWithChangelog, error) {
+	changelogManager, msgSerde, err := createChangelogManagerAndUpdateMsgSerde(mp)
+	if err != nil {
+		return nil, err
+	}
 	return &InMemoryWindowStoreWithChangelog{
 		windowStore: store.NewInMemoryWindowStore(mp.storeName,
 			retentionPeriod, windowSize, retainDuplicates, comparable),
-		mp: mp,
-	}
-}
-
-func (st *InMemoryWindowStoreWithChangelog) Init(ctx store.StoreContext) {
-	st.windowStore.Init(ctx)
-	ctx.RegisterWindowStore(st)
-}
-
-func (st *InMemoryWindowStoreWithChangelog) IsOpen() bool {
-	return true
-}
-
-func (st *InMemoryWindowStoreWithChangelog) MaterializeParam() *MaterializeParam {
-	return st.mp
+		changelogManager: changelogManager,
+		msgSerde:         msgSerde,
+		parNum:           mp.ParNum(),
+		trackFunc:        exactly_once_intr.DefaultTrackProdSubstreamFunc,
+	}, nil
 }
 
 func (st *InMemoryWindowStoreWithChangelog) Name() string {
 	return st.windowStore.Name()
 }
 
+func (st *InMemoryWindowStoreWithChangelog) ChangelogManager() *ChangelogManager {
+	return st.changelogManager
+}
+
 func (st *InMemoryWindowStoreWithChangelog) FlushChangelog(ctx context.Context) error {
-	return st.mp.ChangelogManager().Flush(ctx)
+	return st.changelogManager.Flush(ctx)
 }
 
 func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context,
@@ -73,12 +113,11 @@ func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context,
 		Key:   keyTs,
 		Value: value,
 	}
-	changelogManager := st.mp.ChangelogManager()
-	err := changelogManager.Produce(ctx, msg, st.mp.parNum, false)
+	err := st.changelogManager.Produce(ctx, msg, st.parNum, false)
 	if err != nil {
 		return err
 	}
-	err = st.mp.trackFunc(ctx, key, st.mp.msgSerde.GetKeySerde(), changelogManager.TopicName(), st.mp.parNum)
+	err = st.trackFunc(ctx, key, st.originKeySerde, st.changelogManager.TopicName(), st.parNum)
 	if err != nil {
 		return err
 	}
@@ -185,16 +224,19 @@ func (s *InMemoryWindowStoreWithChangelog) GetTransactionID(ctx context.Context,
 	panic("not supported")
 }
 func (s *InMemoryWindowStoreWithChangelog) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
-	s.mp.SetTrackParFunc(trackParFunc)
+	s.trackFunc = trackParFunc
 }
 
 func ToInMemWindowTableWithChangelog(
 	mp *MaterializeParam,
 	joinWindow *processor.JoinWindows,
 	comparable concurrent_skiplist.Comparable,
-) (*processor.MeteredProcessor, store.WindowStore) {
-	tabWithLog := NewInMemoryWindowStoreWithChangelog(
+) (*processor.MeteredProcessor, *InMemoryWindowStoreWithChangelog, error) {
+	tabWithLog, err := NewInMemoryWindowStoreWithChangelog(
 		joinWindow, true, comparable, mp)
+	if err != nil {
+		return nil, nil, err
+	}
 	toTableProc := processor.NewMeteredProcessor(processor.NewStoreToWindowTableProcessor(tabWithLog))
-	return toTableProc, tabWithLog
+	return toTableProc, tabWithLog, nil
 }

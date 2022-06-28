@@ -14,8 +14,6 @@ type PersonTime struct {
 	Name      string `json:"name" msg:"name"`
 	ID        uint64 `json:"id" msg:"id"`
 	StartTime int64  `json:"startTime" msg:"startTime"`
-
-	BaseInjTime `msg:"bInjT"`
 }
 
 type PersonTimeJSONEncoder struct{}

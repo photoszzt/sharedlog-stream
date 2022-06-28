@@ -13,7 +13,6 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
-	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
@@ -136,10 +135,9 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	maxBidStoreName := "maxBidsKVStore"
-	var kvstore store.KeyValueStore
-	warmup := time.Duration(sp.WarmupS) * time.Second
 	srcMsgSerde := srcs[0].MsgSerde()
-	msgSerde, err := commtypes.GetMsgSerde(commtypes.SerdeFormat(sp.SerdeFormat), srcMsgSerde.GetKeySerde(), commtypes.Uint64Serde{})
+	msgSerde, err := processor.MsgSerdeWithValueTs(serdeFormat,
+		srcMsgSerde.GetKeySerde(), commtypes.Uint64Serde{})
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -148,10 +146,12 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		StoreName(maxBidStoreName).
 		ParNum(sp.ParNum).
 		SerdeFormat(serdeFormat).
-		StreamParam(commtypes.CreateStreamParam{
-			Env:          h.env,
-			NumPartition: sp.NumInPartition,
-		}).BuildForKVStore(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
+		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
+			Env:           h.env,
+			NumPartition:  sp.NumInPartition,
+			TimeOut:       common.SrcConsumeTimeout,
+			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+		}).Build()
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -160,7 +160,10 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		kb := b.(*ntypes.StartEndTime)
 		return ntypes.CompareStartEndTime(ka, kb)
 	}
-	kvstore = store_with_changelog.CreateInMemKVTableWithChangelog(mp, compare, warmup)
+	kvstore, err := store_with_changelog.CreateInMemKVTableWithChangelog(mp, compare)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	maxBid := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor("maxBid",
 		kvstore, processor.InitializerFunc(func() interface{} {
 			return uint64(0)
@@ -176,11 +179,11 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		processor.ValueJoinerWithKeyFunc(
 			func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
 				lv := leftValue.(*ntypes.AuctionIdCount)
-				rv := rightValue.(commtypes.ValueTimestamp)
+				rv := rightValue.(uint64)
 				return &ntypes.AuctionIdCntMax{
 					AucId:  lv.AucId,
 					Count:  lv.Count,
-					MaxCnt: rv.Value.(uint64),
+					MaxCnt: rv,
 				}
 			})))
 	chooseMaxCnt := processor.NewMeteredProcessor(
@@ -202,7 +205,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).Build()
 	kvc := []*store_restore.KVStoreChangelog{
-		store_restore.NewKVStoreChangelog(kvstore, mp.ChangelogManager(), sp.ParNum),
+		store_restore.NewKVStoreChangelog(kvstore, kvstore.ChangelogManager()),
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 		sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])

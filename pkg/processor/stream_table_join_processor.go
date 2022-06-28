@@ -39,7 +39,8 @@ func (p *StreamTableJoinProcessor) ProcessAndReturn(ctx context.Context, msg com
 		return nil, err
 	}
 	if p.leftJoin || ok {
-		joined := p.joiner.Apply(msg.Key, msg.Value, val2)
+		valAgg := val2.(commtypes.ValueTimestamp)
+		joined := p.joiner.Apply(msg.Key, msg.Value, valAgg.Value)
 		newMsg := commtypes.Message{Key: msg.Key, Value: joined, Timestamp: msg.Timestamp}
 		return []commtypes.Message{newMsg}, nil
 	}

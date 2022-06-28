@@ -163,7 +163,7 @@ func (h *tableRestoreHandler) testRestoreKVTable(ctx context.Context) {
 			store_with_changelog.NewChangelogManagerForSrc(changelog, commtypes.MessageJSONSerde{
 				KeySerde: commtypes.IntSerde{},
 				ValSerde: strTsJSONSerde{},
-			}, common.SrcConsumeTimeout), 0), offset)
+			}, common.SrcConsumeTimeout)), offset, 0)
 	if err != nil {
 		panic(err)
 	}
@@ -239,7 +239,7 @@ func (h *tableRestoreHandler) testRestoreWindowTable(ctx context.Context) {
 			store_with_changelog.NewChangelogManager(changelog, commtypes.MessageJSONSerde{
 				KeySerde: commtypes.IntSerde{},
 				ValSerde: commtypes.StringSerde{},
-			}, common.SrcConsumeTimeout, time.Duration(5)*time.Millisecond), 0))
+			}, common.SrcConsumeTimeout, time.Duration(5)*time.Millisecond)), 0)
 	if err != nil {
 		panic(err)
 	}

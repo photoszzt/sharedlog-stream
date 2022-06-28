@@ -8,13 +8,12 @@ import (
 
 type KeyValueStore interface {
 	CoreKeyValueStore
-	KeyValueStoreOpForExternalStore
+	// KeyValueStoreOpForExternalStore
 	KeyValueStoreOpWithChangelog
 }
 
 type CoreKeyValueStore interface {
 	StateStore
-	Init(ctx StoreContext)
 	Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error)
 	Range(ctx context.Context, from commtypes.KeyT, to commtypes.KeyT,
 		iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error
@@ -28,12 +27,14 @@ type CoreKeyValueStore interface {
 	TableType() TABLE_TYPE
 }
 
+/*
 type KeyValueStoreOpForExternalStore interface {
 	StartTransaction(ctx context.Context) error
 	CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error
 	AbortTransaction(ctx context.Context) error
 	GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error)
 }
+*/
 
 type KeyValueStoreOpWithChangelog interface {
 	SetTrackParFunc(exactly_once_intr.TrackProdSubStreamFunc)

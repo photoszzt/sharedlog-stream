@@ -42,12 +42,6 @@ func (z *PersonTime) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "StartTime")
 				return
 			}
-		case "bInjT":
-			err = z.BaseInjTime.DecodeMsg(dc)
-			if err != nil {
-				err = msgp.WrapError(err, "BaseInjTime")
-				return
-			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -60,10 +54,10 @@ func (z *PersonTime) DecodeMsg(dc *msgp.Reader) (err error) {
 }
 
 // EncodeMsg implements msgp.Encodable
-func (z *PersonTime) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 4
+func (z PersonTime) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 3
 	// write "name"
-	err = en.Append(0x84, 0xa4, 0x6e, 0x61, 0x6d, 0x65)
+	err = en.Append(0x83, 0xa4, 0x6e, 0x61, 0x6d, 0x65)
 	if err != nil {
 		return
 	}
@@ -92,25 +86,15 @@ func (z *PersonTime) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "StartTime")
 		return
 	}
-	// write "bInjT"
-	err = en.Append(0xa5, 0x62, 0x49, 0x6e, 0x6a, 0x54)
-	if err != nil {
-		return
-	}
-	err = z.BaseInjTime.EncodeMsg(en)
-	if err != nil {
-		err = msgp.WrapError(err, "BaseInjTime")
-		return
-	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *PersonTime) MarshalMsg(b []byte) (o []byte, err error) {
+func (z PersonTime) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 4
+	// map header, size 3
 	// string "name"
-	o = append(o, 0x84, 0xa4, 0x6e, 0x61, 0x6d, 0x65)
+	o = append(o, 0x83, 0xa4, 0x6e, 0x61, 0x6d, 0x65)
 	o = msgp.AppendString(o, z.Name)
 	// string "id"
 	o = append(o, 0xa2, 0x69, 0x64)
@@ -118,13 +102,6 @@ func (z *PersonTime) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "startTime"
 	o = append(o, 0xa9, 0x73, 0x74, 0x61, 0x72, 0x74, 0x54, 0x69, 0x6d, 0x65)
 	o = msgp.AppendInt64(o, z.StartTime)
-	// string "bInjT"
-	o = append(o, 0xa5, 0x62, 0x49, 0x6e, 0x6a, 0x54)
-	o, err = z.BaseInjTime.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "BaseInjTime")
-		return
-	}
 	return
 }
 
@@ -164,12 +141,6 @@ func (z *PersonTime) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "StartTime")
 				return
 			}
-		case "bInjT":
-			bts, err = z.BaseInjTime.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "BaseInjTime")
-				return
-			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -183,7 +154,7 @@ func (z *PersonTime) UnmarshalMsg(bts []byte) (o []byte, err error) {
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *PersonTime) Msgsize() (s int) {
-	s = 1 + 5 + msgp.StringPrefixSize + len(z.Name) + 3 + msgp.Uint64Size + 10 + msgp.Int64Size + 6 + z.BaseInjTime.Msgsize()
+func (z PersonTime) Msgsize() (s int) {
+	s = 1 + 5 + msgp.StringPrefixSize + len(z.Name) + 3 + msgp.Uint64Size + 10 + msgp.Int64Size
 	return
 }

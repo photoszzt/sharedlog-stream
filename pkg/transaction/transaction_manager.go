@@ -186,7 +186,7 @@ func (tc *TransactionManager) loadAndFixTransaction(ctx context.Context, mostRec
 		// debug.Fprintf(os.Stderr, "before load current topic partitions\n")
 		tc.loadCurrentTopicPartitions(mostRecentTxnMetadata.TopicPartitions)
 		// debug.Fprintf(os.Stderr, "after load current topic partitions\n")
-		err := tc.AbortTransaction(ctx, true, nil, nil)
+		err := tc.AbortTransaction(ctx)
 		// debug.Fprintf(os.Stderr, "after abort transactions\n")
 		if err != nil {
 			return err
@@ -576,11 +576,7 @@ func (tc *TransactionManager) FindConsumedSeqNumMatchesTransactionID(ctx context
 	return rawMsg.LogSeqNum, nil
 }
 
-func (tc *TransactionManager) BeginTransaction(
-	ctx context.Context,
-	kvstores []*store_restore.KVStoreChangelog,
-	winstores []*store_restore.WindowStoreChangelog,
-) error {
+func (tc *TransactionManager) BeginTransaction(ctx context.Context) error {
 	if !txn_data.BEGIN.IsValidPreviousState(tc.currentStatus) {
 		debug.Fprintf(os.Stderr, "fail to transition from %v to BEGIN\n", tc.currentStatus)
 		return common_errors.ErrInvalidStateTransition
@@ -594,14 +590,11 @@ func (tc *TransactionManager) BeginTransaction(
 	}
 	tags := []uint64{sharedlog_stream.NameHashWithPartition(tc.transactionLog.TopicNameHash(), 0), txn_data.BeginTag(tc.transactionLog.TopicNameHash(), 0)}
 	off, err := tc.appendToTransactionLog(ctx, &txnState, tags)
-	tc.transactionID = off
 	if err != nil {
 		return err
 	}
-	if err := store_restore.BeginKVStoreTransaction(ctx, kvstores); err != nil {
-		return err
-	}
-	return store_restore.BeginWindowStoreTransaction(ctx, winstores)
+	tc.transactionID = off
+	return nil
 }
 
 // second phase of the 2-phase commit protocol
@@ -639,12 +632,14 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context, kvstores []
 	if err != nil {
 		return err
 	}
-	if err := store_restore.CommitKVStoreTransaction(ctx, kvstores, tc.transactionID); err != nil {
-		return err
-	}
-	if err := store_restore.CommitWindowStoreTransaction(ctx, winstores, tc.transactionID); err != nil {
-		return err
-	}
+	/*
+		if err := store_restore.CommitKVStoreTransaction(ctx, kvstores, tc.transactionID); err != nil {
+			return err
+		}
+		if err := store_restore.CommitWindowStoreTransaction(ctx, winstores, tc.transactionID); err != nil {
+			return err
+		}
+	*/
 	// second phase of the commit
 	err = tc.completeTransaction(ctx, commtypes.EPOCH_END, txn_data.COMPLETE_COMMIT)
 	if err != nil {
@@ -655,10 +650,7 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context, kvstores []
 	return nil
 }
 
-func (tc *TransactionManager) AbortTransaction(ctx context.Context, inRestore bool,
-	kvstores []*store_restore.KVStoreChangelog,
-	winstores []*store_restore.WindowStoreChangelog,
-) error {
+func (tc *TransactionManager) AbortTransaction(ctx context.Context) error {
 	if !txn_data.PREPARE_ABORT.IsValidPreviousState(tc.currentStatus) {
 		debug.Fprintf(os.Stderr, "fail to transition state from %d to PRE_ABORT", tc.currentStatus)
 		return common_errors.ErrInvalidStateTransition
@@ -669,16 +661,6 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context, inRestore bo
 	if err != nil {
 		return err
 	}
-
-	if !inRestore {
-		if err := store_restore.AbortKVStoreTransaction(ctx, kvstores); err != nil {
-			return err
-		}
-		if err := store_restore.AbortWindowStoreTransaction(ctx, winstores); err != nil {
-			return err
-		}
-	}
-
 	err = tc.completeTransaction(ctx, commtypes.ABORT, txn_data.COMPLETE_ABORT)
 	if err != nil {
 		return err

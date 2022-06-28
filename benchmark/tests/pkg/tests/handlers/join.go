@@ -207,7 +207,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 
 	tm.RecordTopicStreams(src1.TopicName(), srcStream1)
 
-	if err = tm.BeginTransaction(ctx, nil, nil); err != nil {
+	if err = tm.BeginTransaction(ctx); err != nil {
 		panic(err)
 	}
 	if err = tm.AddTopicSubstream(ctx, srcStream1.TopicName(), 0); err != nil {
@@ -241,7 +241,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	*/
 
 	tm.RecordTopicStreams(src2.TopicName(), srcStream2)
-	if err = tm.BeginTransaction(ctx, nil, nil); err != nil {
+	if err = tm.BeginTransaction(ctx); err != nil {
 		panic(err)
 	}
 	if err = tm.AddTopicSubstream(ctx, srcStream2.TopicName(), 0); err != nil {
@@ -275,7 +275,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	tm.RecordTopicStreams(src1.TopicName(), srcStream1)
 	tm.RecordTopicStreams(src2.TopicName(), srcStream2)
 	tm.RecordTopicStreams(sinkStream.TopicName(), sinkStream)
-	if err = tm.BeginTransaction(ctx, nil, nil); err != nil {
+	if err = tm.BeginTransaction(ctx); err != nil {
 		panic(err)
 	}
 	if err = tm.AddTopicSubstream(ctx, sinkStream.TopicName(), 0); err != nil {
@@ -438,7 +438,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 
 	tm.RecordTopicStreams(src1.TopicName(), srcStream1)
 
-	if err = tm.BeginTransaction(ctx, nil, nil); err != nil {
+	if err = tm.BeginTransaction(ctx); err != nil {
 		panic(err)
 	}
 	if err = tm.AddTopicSubstream(ctx, srcStream1.TopicName(), 0); err != nil {
@@ -471,7 +471,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	srcStream1.SetCursor(0, 0)
 
 	tm.RecordTopicStreams(src2.TopicName(), srcStream2)
-	if err = tm.BeginTransaction(ctx, nil, nil); err != nil {
+	if err = tm.BeginTransaction(ctx); err != nil {
 		panic(err)
 	}
 	if err = tm.AddTopicSubstream(ctx, srcStream2.TopicName(), 0); err != nil {
@@ -505,7 +505,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	tm.RecordTopicStreams(src1.TopicName(), srcStream1)
 	tm.RecordTopicStreams(src2.TopicName(), srcStream2)
 	tm.RecordTopicStreams(sinkStream.TopicName(), sinkStream)
-	if err = tm.BeginTransaction(ctx, nil, nil); err != nil {
+	if err = tm.BeginTransaction(ctx); err != nil {
 		panic(err)
 	}
 	if err = tm.AddTopicSubstream(ctx, sinkStream.TopicName(), 0); err != nil {

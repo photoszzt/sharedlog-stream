@@ -14,7 +14,6 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
-	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
@@ -107,25 +106,27 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 	if err != nil {
 		return nil, nil, err
 	}
-	msgSerde, err := commtypes.GetMsgSerde(commtypes.SerdeFormat(sp.SerdeFormat),
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	msgSerde, err := processor.MsgSerdeWithValueTs(serdeFormat,
 		commtypes.Uint64Serde{}, commtypes.Uint64Serde{})
 	if err != nil {
 		return nil, nil, err
 	}
-	var countWindowStore store.WindowStore
 	countStoreName := "auctionBidsCountStore"
 	comparable := concurrent_skiplist.CompareFunc(concurrent_skiplist.Uint64KeyCompare)
 	countMp, err := store_with_changelog.NewMaterializeParamBuilder().
 		MessageSerde(msgSerde).StoreName(countStoreName).ParNum(sp.ParNum).
-		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
-		StreamParam(commtypes.CreateStreamParam{
-			Env:          h.env,
-			NumPartition: sp.NumInPartition,
-		}).BuildForWindowStore(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
+		SerdeFormat(serdeFormat).
+		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
+			Env:           h.env,
+			NumPartition:  sp.NumInPartition,
+			TimeOut:       common.SrcConsumeTimeout,
+			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+		}).Build()
 	if err != nil {
 		return nil, nil, err
 	}
-	countWindowStore = store_with_changelog.NewInMemoryWindowStoreWithChangelog(
+	countWindowStore, err := store_with_changelog.NewInMemoryWindowStoreWithChangelog(
 		hopWindow, false, comparable, countMp)
 	countProc := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(
 		"countProc", countWindowStore,
@@ -136,7 +137,7 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 		}), hopWindow))
 	wsc := []*store_restore.WindowStoreChangelog{
 		store_restore.NewWindowStoreChangelog(
-			countWindowStore, countMp.ChangelogManager(), sp.ParNum),
+			countWindowStore, countWindowStore.ChangelogManager()),
 	}
 	return countProc, wsc, nil
 }
@@ -199,9 +200,8 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 						EndTimeMs:   key.Window.End(),
 					}
 					newVal := &ntypes.AuctionIdCount{
-						AucId:  key.Key.(uint64),
-						Count:  value,
-						BaseTs: ntypes.BaseTs{Timestamp: msg.Timestamp},
+						AucId: key.Key.(uint64),
+						Count: value,
 					}
 					return commtypes.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
 				})))).

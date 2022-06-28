@@ -138,19 +138,25 @@ func (h *q4JoinStreamHandler) Q4JoinTable(ctx context.Context, sp *common.QueryI
 	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
 	aucMp, err := store_with_changelog.NewMaterializeParamBuilder().
 		MessageSerde(srcs[0].MsgSerde()).StoreName("auctionsByIDStore").
-		ParNum(sp.ParNum).SerdeFormat(serdeFormat).StreamParam(commtypes.CreateStreamParam{
-		Env:          h.env,
-		NumPartition: sp.NumInPartition,
-	}).BuildForWindowStore(flushDur, common.SrcConsumeTimeout)
+		ParNum(sp.ParNum).SerdeFormat(serdeFormat).
+		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
+			Env:           h.env,
+			NumPartition:  sp.NumInPartition,
+			TimeOut:       common.SrcConsumeTimeout,
+			FlushDuration: flushDur,
+		}).Build()
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	bidMp, err := store_with_changelog.NewMaterializeParamBuilder().
 		MessageSerde(srcs[1].MsgSerde()).StoreName("bidsByAuctionIDStore").
-		ParNum(sp.ParNum).SerdeFormat(serdeFormat).StreamParam(commtypes.CreateStreamParam{
-		Env:          h.env,
-		NumPartition: sp.NumInPartition,
-	}).BuildForWindowStore(flushDur, common.SrcConsumeTimeout)
+		ParNum(sp.ParNum).SerdeFormat(serdeFormat).
+		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
+			Env:           h.env,
+			NumPartition:  sp.NumInPartition,
+			TimeOut:       common.SrcConsumeTimeout,
+			FlushDuration: flushDur,
+		}).Build()
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -180,7 +186,6 @@ func (h *q4JoinStreamHandler) Q4JoinTable(ctx context.Context, sp *common.QueryI
 					Category: validBid[0].Value.(*ntypes.AuctionBid).AucCategory,
 				}
 				aucBid := validBid[0].Value.(*ntypes.AuctionBid)
-				aucBid.UpdateEventTime(validBid[0].Timestamp)
 				newMsg := commtypes.Message{Key: &aic, Value: aucBid, Timestamp: validBid[0].Timestamp}
 				newMsgs = append(newMsgs, newMsg)
 			}

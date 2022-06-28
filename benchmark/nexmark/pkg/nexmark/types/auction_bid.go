@@ -13,8 +13,6 @@ type AuctionBid struct {
 	AucExpires  int64  `json:"aucExpires" msg:"aucExpires"`
 	BidPrice    uint64 `json:"bidPrice" msg:"bidPrice"`
 	AucCategory uint64 `json:"aucCategory" msg:"aucCategory"`
-	BaseInjTime `msg:"bInjT"`
-	BaseTs      `msg:"bTs"`
 }
 
 type AuctionBidJSONSerde struct{}

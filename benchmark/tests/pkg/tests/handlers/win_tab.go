@@ -39,23 +39,27 @@ func getWindowStoreWithChangelog(env types.Environment, retainDuplicates bool) *
 	} else {
 		compareFunc = store.CompareWithDup
 	}
-	streamParam := commtypes.CreateStreamParam{
-		Env:          env,
-		NumPartition: 1,
-	}
 	mp, err := store_with_changelog.NewMaterializeParamBuilder().
 		MessageSerde(msgSerde).
 		StoreName(storeName).
 		ParNum(0).
 		SerdeFormat(commtypes.JSON).
-		StreamParam(streamParam).BuildForKVStore(time.Duration(5)*time.Millisecond, common.SrcConsumeTimeout)
+		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
+			Env:           env,
+			NumPartition:  1,
+			TimeOut:       common.SrcConsumeTimeout,
+			FlushDuration: time.Duration(5) * time.Millisecond,
+		}).Build()
 	if err != nil {
 		panic(err)
 	}
-	store := store_with_changelog.NewInMemoryWindowStoreWithChangelogForTest(
+	store, err := store_with_changelog.NewInMemoryWindowStoreWithChangelogForTest(
 		store.TEST_RETENTION_PERIOD, store.TEST_WINDOW_SIZE, retainDuplicates, compareFunc,
 		mp,
 	)
+	if err != nil {
+		panic(err)
+	}
 	return store
 }
 

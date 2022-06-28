@@ -51,6 +51,14 @@ func (p *StoreToKVTableProcessor) ProcessAndReturn(ctx context.Context, msg comm
 	return []commtypes.Message{msg}, nil
 }
 
+func MsgSerdeWithValueTs(serdeFormat commtypes.SerdeFormat, keySerde commtypes.Serde, valSerde commtypes.Serde) (commtypes.MessageSerde, error) {
+	valueTsSerde, err := commtypes.GetValueTsSerde(serdeFormat, valSerde)
+	if err != nil {
+		return nil, err
+	}
+	return commtypes.GetMsgSerde(serdeFormat, keySerde, valueTsSerde)
+}
+
 func ToInMemKVTable(storeName string, compare func(a, b treemap.Key) int) (
 	*MeteredProcessor, store.KeyValueStore,
 ) {

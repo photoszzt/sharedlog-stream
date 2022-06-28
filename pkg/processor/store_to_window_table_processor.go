@@ -37,9 +37,8 @@ func (p *StoreToWindowTableProcessor) ProcessAndReturn(ctx context.Context, msg 
 		if err != nil {
 			return nil, err
 		}
-		return []commtypes.Message{msg}, nil
 	}
-	return nil, nil
+	return []commtypes.Message{msg}, nil
 }
 
 // for test

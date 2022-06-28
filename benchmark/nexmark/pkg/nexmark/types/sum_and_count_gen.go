@@ -36,12 +36,6 @@ func (z *SumAndCount) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Count")
 				return
 			}
-		case "bInjT":
-			err = z.BaseInjTime.DecodeMsg(dc)
-			if err != nil {
-				err = msgp.WrapError(err, "BaseInjTime")
-				return
-			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -54,10 +48,10 @@ func (z *SumAndCount) DecodeMsg(dc *msgp.Reader) (err error) {
 }
 
 // EncodeMsg implements msgp.Encodable
-func (z *SumAndCount) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 3
+func (z SumAndCount) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 2
 	// write "sum"
-	err = en.Append(0x83, 0xa3, 0x73, 0x75, 0x6d)
+	err = en.Append(0x82, 0xa3, 0x73, 0x75, 0x6d)
 	if err != nil {
 		return
 	}
@@ -76,36 +70,19 @@ func (z *SumAndCount) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Count")
 		return
 	}
-	// write "bInjT"
-	err = en.Append(0xa5, 0x62, 0x49, 0x6e, 0x6a, 0x54)
-	if err != nil {
-		return
-	}
-	err = z.BaseInjTime.EncodeMsg(en)
-	if err != nil {
-		err = msgp.WrapError(err, "BaseInjTime")
-		return
-	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *SumAndCount) MarshalMsg(b []byte) (o []byte, err error) {
+func (z SumAndCount) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 3
+	// map header, size 2
 	// string "sum"
-	o = append(o, 0x83, 0xa3, 0x73, 0x75, 0x6d)
+	o = append(o, 0x82, 0xa3, 0x73, 0x75, 0x6d)
 	o = msgp.AppendUint64(o, z.Sum)
 	// string "count"
 	o = append(o, 0xa5, 0x63, 0x6f, 0x75, 0x6e, 0x74)
 	o = msgp.AppendUint64(o, z.Count)
-	// string "bInjT"
-	o = append(o, 0xa5, 0x62, 0x49, 0x6e, 0x6a, 0x54)
-	o, err = z.BaseInjTime.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "BaseInjTime")
-		return
-	}
 	return
 }
 
@@ -139,12 +116,6 @@ func (z *SumAndCount) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Count")
 				return
 			}
-		case "bInjT":
-			bts, err = z.BaseInjTime.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "BaseInjTime")
-				return
-			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -158,7 +129,7 @@ func (z *SumAndCount) UnmarshalMsg(bts []byte) (o []byte, err error) {
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *SumAndCount) Msgsize() (s int) {
-	s = 1 + 4 + msgp.Uint64Size + 6 + msgp.Uint64Size + 6 + z.BaseInjTime.Msgsize()
+func (z SumAndCount) Msgsize() (s int) {
+	s = 1 + 4 + msgp.Uint64Size + 6 + msgp.Uint64Size
 	return
 }

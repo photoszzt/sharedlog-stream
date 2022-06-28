@@ -37,5 +37,8 @@ func (p *FlatMapProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.M
 	if err != nil {
 		return nil, err
 	}
+	for _, msg_out := range msgs {
+		msg_out.Timestamp = msg.Timestamp
+	}
 	return msgs, nil
 }

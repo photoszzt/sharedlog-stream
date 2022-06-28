@@ -9,13 +9,12 @@ import (
 
 type WindowStore interface {
 	CoreWindowStore
-	WindowStoreOpForExternalStore
+	// WindowStoreOpForExternalStore
 	WindowStoreOpWithChangelog
 }
 
 type CoreWindowStore interface {
 	StateStore
-	Init(ctx StoreContext)
 	Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error
 	Get(ctx context.Context, key commtypes.KeyT, windowStartTimestamp int64) (commtypes.ValueT, bool, error)
 	Fetch(ctx context.Context, key commtypes.KeyT, timeFrom time.Time, timeTo time.Time,
@@ -40,6 +39,7 @@ type WindowStoreBackedByChangelog interface {
 	WindowStoreOpWithChangelog
 }
 
+/*
 type ExternalWindowStore interface {
 	CoreWindowStore
 	WindowStoreOpForExternalStore
@@ -52,6 +52,7 @@ type WindowStoreOpForExternalStore interface {
 	GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error)
 	DropDatabase(ctx context.Context) error
 }
+*/
 
 type WindowStoreOpWithChangelog interface {
 	SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc)

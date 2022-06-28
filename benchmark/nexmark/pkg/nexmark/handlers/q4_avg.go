@@ -116,20 +116,24 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	}
 
 	sumCountStoreName := "q4SumCountKVStore"
-	warmup := time.Duration(sp.WarmupS) * time.Second
 	mp, err := store_with_changelog.NewMaterializeParamBuilder().
 		MessageSerde(ectx.Consumers()[0].MsgSerde()).
 		StoreName(sumCountStoreName).
 		ParNum(sp.ParNum).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
-		StreamParam(commtypes.CreateStreamParam{
-			Env:          h.env,
-			NumPartition: sp.NumInPartition,
-		}).BuildForKVStore(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
+		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
+			Env:           h.env,
+			NumPartition:  sp.NumInPartition,
+			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+			TimeOut:       common.SrcConsumeTimeout,
+		}).Build()
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	kvstore := store_with_changelog.CreateInMemKVTableWithChangelog(mp, store.Uint64KeyKVStoreCompare, warmup)
+	kvstore, err := store_with_changelog.CreateInMemKVTableWithChangelog(mp, store.Uint64KeyKVStoreCompare)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	ectx.Via(processor.NewMeteredProcessor(processor.NewTableAggregateProcessor("sumCount", kvstore,
 		processor.InitializerFunc(func() interface{} {
 			return &ntypes.SumAndCount{
@@ -170,7 +174,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		}).Build()
 
 	kvc := []*store_restore.KVStoreChangelog{
-		store_restore.NewKVStoreChangelog(kvstore, mp.ChangelogManager(), sp.ParNum),
+		store_restore.NewKVStoreChangelog(kvstore, kvstore.ChangelogManager()),
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 		sp.ParNum, sp.OutputTopicNames[0])

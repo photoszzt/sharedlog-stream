@@ -129,8 +129,8 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	maxBidStoreName := "q4MaxBidKVStore"
-	warmup := time.Duration(sp.WarmupS) * time.Second
-	msgSerde, err := commtypes.GetMsgSerde(commtypes.SerdeFormat(sp.SerdeFormat),
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	msgSerde, err := processor.MsgSerdeWithValueTs(serdeFormat,
 		ectx.Consumers()[0].MsgSerde().GetKeySerde(), commtypes.Uint64Serde{})
 	if err != nil {
 		return common.GenErrFnOutput(err)
@@ -140,10 +140,12 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		StoreName(maxBidStoreName).
 		ParNum(sp.ParNum).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
-		StreamParam(commtypes.CreateStreamParam{
-			Env:          h.env,
-			NumPartition: sp.NumInPartition,
-		}).BuildForKVStore(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
+		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
+			Env:           h.env,
+			NumPartition:  sp.NumInPartition,
+			TimeOut:       common.SrcConsumeTimeout,
+			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+		}).Build()
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -152,7 +154,10 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		kb := b.(*ntypes.AuctionIdCategory)
 		return ntypes.CompareAuctionIdCategory(ka, kb)
 	}
-	kvstore := store_with_changelog.CreateInMemKVTableWithChangelog(mp, compare, warmup)
+	kvstore, err := store_with_changelog.CreateInMemKVTableWithChangelog(mp, compare)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	ectx.Via(processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor("maxBid", kvstore,
 		processor.InitializerFunc(func() interface{} { return uint64(0) }),
 		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
@@ -181,7 +186,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		}).Build()
 
 	kvc := []*store_restore.KVStoreChangelog{
-		store_restore.NewKVStoreChangelog(kvstore, mp.ChangelogManager(), sp.ParNum),
+		store_restore.NewKVStoreChangelog(kvstore, kvstore.ChangelogManager()),
 	}
 	builder := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,
 		fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],

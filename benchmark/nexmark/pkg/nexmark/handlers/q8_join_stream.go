@@ -164,19 +164,23 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		StoreName("auctionsBySellerIDWinTab").
 		ParNum(sp.ParNum).
 		SerdeFormat(format).
-		StreamParam(commtypes.CreateStreamParam{
-			Env:          h.env,
-			NumPartition: sp.NumInPartition,
-		}).BuildForWindowStore(flushDur, common.SrcConsumeTimeout)
+		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
+			Env:           h.env,
+			NumPartition:  sp.NumInPartition,
+			FlushDuration: flushDur,
+			TimeOut:       common.SrcConsumeTimeout,
+		}).Build()
 	perMp, err := store_with_changelog.NewMaterializeParamBuilder().
 		MessageSerde(srcs[1].MsgSerde()).
 		StoreName("personsByIDWinTab").
 		ParNum(sp.ParNum).
 		SerdeFormat(format).
-		StreamParam(commtypes.CreateStreamParam{
-			Env:          h.env,
-			NumPartition: sp.NumInPartition,
-		}).BuildForWindowStore(flushDur, common.SrcConsumeTimeout)
+		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
+			Env:           h.env,
+			NumPartition:  sp.NumInPartition,
+			FlushDuration: flushDur,
+			TimeOut:       common.SrcConsumeTimeout,
+		}).Build()
 
 	aucJoinsPerFunc, perJoinsAucFunc, wsc, err := execution.SetupStreamStreamJoin(aucMp, perMp, compare, joiner, joinWindows)
 	if err != nil {

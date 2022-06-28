@@ -48,29 +48,6 @@ func (h *q7MaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return nutils.CompressData(encodedOutput), nil
 }
 
-/*
-type q7MaxBidByPriceProcessArgs struct {
-	maxBid  *processor.MeteredProcessor
-	remapKV *processor.MeteredProcessor
-	groupBy *processor.GroupBy
-	processor.BaseExecutionContext
-}
-
-func (h *q7MaxBid) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
-	args := argsTmp.(*q7MaxBidByPriceProcessArgs)
-	maxBids, err := args.maxBid.ProcessAndReturn(ctx, msg)
-	if err != nil {
-		return err
-	}
-	remaped, err := args.remapKV.ProcessAndReturn(ctx, maxBids[0])
-	if err != nil {
-		return err
-	}
-	err = args.groupBy.GroupByAndProduce(ctx, remaped[0], args.TrackParFunc())
-	return err
-}
-*/
-
 func (h *q7MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 ) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
 	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
@@ -121,12 +98,11 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	ectx := processor.NewExecutionContext(srcs, sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum)
-	warmup := time.Duration(sp.WarmupS) * time.Second
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 
 	maxBidByWinStoreName := "maxBidByWinKVStore"
 	srcMsgSerde := srcs[0].MsgSerde()
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat, srcMsgSerde.GetKeySerde(), commtypes.Uint64Serde{})
+	msgSerde, err := processor.MsgSerdeWithValueTs(serdeFormat, srcMsgSerde.GetKeySerde(), commtypes.Uint64Serde{})
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -135,10 +111,12 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 		StoreName(maxBidByWinStoreName).
 		ParNum(sp.ParNum).
 		SerdeFormat(serdeFormat).
-		StreamParam(commtypes.CreateStreamParam{
-			Env:          h.env,
-			NumPartition: sp.NumInPartition,
-		}).BuildForKVStore(time.Duration(sp.FlushMs)*time.Millisecond, common.SrcConsumeTimeout)
+		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
+			Env:           h.env,
+			NumPartition:  sp.NumInPartition,
+			TimeOut:       common.SrcConsumeTimeout,
+			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+		}).Build()
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -147,7 +125,10 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 		kb := b.(*ntypes.StartEndTime)
 		return ntypes.CompareStartEndTime(ka, kb)
 	}
-	kvstore := store_with_changelog.CreateInMemKVTableWithChangelog(mp, compare, warmup)
+	kvstore, err := store_with_changelog.CreateInMemKVTableWithChangelog(mp, compare)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 
 	ectx.Via(processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor("maxBid",
 		kvstore, processor.InitializerFunc(func() interface{} {
@@ -175,8 +156,7 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 		}).Build()
 	kvc := []*store_restore.KVStoreChangelog{
 		store_restore.NewKVStoreChangelog(
-			kvstore, kvstore.MaterializeParam().ChangelogManager(),
-			kvstore.MaterializeParam().ParNum(),
+			kvstore, kvstore.ChangelogManager(),
 		),
 	}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
