@@ -190,21 +190,25 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	ectx.Via(countProc).
+		Via(processor.NewStreamMapValuesProcessor("toStream",
+			processor.ValueMapperWithKeyFunc(func(key, value interface{}) (interface{}, error) {
+				val := value.(commtypes.Change)
+				return val.NewVal, nil
+			}))).
 		Via(processor.NewMeteredProcessor(processor.NewStreamMapProcessor("groupByAuction",
-			processor.MapperFunc(
-				func(msg commtypes.Message) (commtypes.Message, error) {
-					key := msg.Key.(*commtypes.WindowedKey)
-					value := msg.Value.(uint64)
-					newKey := &ntypes.StartEndTime{
-						StartTimeMs: key.Window.Start(),
-						EndTimeMs:   key.Window.End(),
-					}
-					newVal := &ntypes.AuctionIdCount{
-						AucId: key.Key.(uint64),
-						Count: value,
-					}
-					return commtypes.Message{Key: newKey, Value: newVal, Timestamp: msg.Timestamp}, nil
-				})))).
+			processor.MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
+				k := key.(*commtypes.WindowedKey)
+				v := value.(uint64)
+				newKey := &ntypes.StartEndTime{
+					StartTimeMs: k.Window.Start(),
+					EndTimeMs:   k.Window.End(),
+				}
+				newVal := &ntypes.AuctionIdCount{
+					AucId: k.Key.(uint64),
+					Count: v,
+				}
+				return newKey, newVal, nil
+			})))).
 		Via(processor.NewGroupByOutputProcessor(sinks[0], &ectx))
 
 	task := stream_task.NewStreamTaskBuilder().

@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
@@ -45,8 +44,8 @@ func (h *query2Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func filterFunc(msg *commtypes.Message) (bool, error) {
-	event := msg.Value.(*ntypes.Event)
+func filterFunc(key interface{}, value interface{}) (bool, error) {
+	event := value.(*ntypes.Event)
 	return event.Etype == ntypes.BID && event.Bid.Auction%123 == 0, nil
 }
 

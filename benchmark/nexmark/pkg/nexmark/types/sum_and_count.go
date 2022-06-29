@@ -2,7 +2,11 @@
 //msgp:ignore SumAndCountJSONSerde SumAndCountMsgpSerde
 package types
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"sharedlog-stream/pkg/common_errors"
+	"sharedlog-stream/pkg/commtypes"
+)
 
 type SumAndCount struct {
 	Sum   uint64 `json:"sum" msg:"sum"`
@@ -37,4 +41,14 @@ func (s SumAndCountMsgpSerde) Decode(value []byte) (interface{}, error) {
 		return nil, err
 	}
 	return sc, nil
+}
+
+func GetSumAndCountSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
+	if serdeFormat == commtypes.JSON {
+		return SumAndCountJSONSerde{}, nil
+	} else if serdeFormat == commtypes.MSGP {
+		return SumAndCountMsgpSerde{}, nil
+	} else {
+		return nil, common_errors.ErrUnrecognizedSerdeFormat
+	}
 }

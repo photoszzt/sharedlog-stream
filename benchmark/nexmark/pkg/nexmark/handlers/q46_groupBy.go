@@ -66,15 +66,15 @@ func (h *q46GroupByHandler) getAucsByID() execution.GeneralProcFunc {
 
 	gpCtx.AppendProcessor(processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterAuctions",
 		processor.PredicateFunc(
-			func(m *commtypes.Message) (bool, error) {
-				event := m.Value.(*ntypes.Event)
+			func(key, value interface{}) (bool, error) {
+				event := value.(*ntypes.Event)
 				return event.Etype == ntypes.AUCTION, nil
 			}))))
 
-	gpCtx.AppendProcessor(processor.NewMeteredProcessor(processor.NewStreamMapProcessor("auctionsByIDMap",
-		processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
-			event := msg.Value.(*ntypes.Event)
-			return commtypes.Message{Key: event.NewAuction.ID, Value: msg.Value, Timestamp: msg.Timestamp}, nil
+	gpCtx.AppendProcessor(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessor("auctionsByIDMap",
+		processor.SelectKeyFunc(func(key, value interface{}) (interface{}, error) {
+			event := value.(*ntypes.Event)
+			return event.NewAuction.ID, nil
 		}))))
 
 	return func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup,
@@ -91,15 +91,15 @@ func (h *q46GroupByHandler) getBidsByAuctionID() execution.GeneralProcFunc {
 	gpCtx := execution.NewGeneralProcCtx()
 	gpCtx.AppendProcessor(processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterBids",
 		processor.PredicateFunc(
-			func(m *commtypes.Message) (bool, error) {
-				event := m.Value.(*ntypes.Event)
+			func(key, value interface{}) (bool, error) {
+				event := value.(*ntypes.Event)
 				return event.Etype == ntypes.BID, nil
 			}))))
 
-	gpCtx.AppendProcessor(processor.NewMeteredProcessor(processor.NewStreamMapProcessor("bidsByAuctionIDMap",
-		processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
-			event := msg.Value.(*ntypes.Event)
-			return commtypes.Message{Key: event.Bid.Auction, Value: msg.Value, Timestamp: msg.Timestamp}, nil
+	gpCtx.AppendProcessor(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessor("bidsByAuctionIDMap",
+		processor.SelectKeyFunc(func(key, value interface{}) (interface{}, error) {
+			event := value.(*ntypes.Event)
+			return event.Bid.Auction, nil
 		}))))
 	return func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup,
 		msgChan chan commtypes.Message, errChan chan error,

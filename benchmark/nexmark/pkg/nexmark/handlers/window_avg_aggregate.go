@@ -268,8 +268,8 @@ func (h *windowedAvg) windowavg_aggregate(ctx context.Context, sp *common.QueryI
 			Message: err.Error(),
 		}
 	}
-	calcAvg := processor.NewMeteredProcessor(processor.NewStreamMapValuesProcessor(
-		processor.ValueMapperFunc(func(value interface{}) (interface{}, error) {
+	calcAvg := processor.NewMeteredProcessor(processor.NewStreamMapValuesProcessor("calcAvg",
+		processor.ValueMapperWithKeyFunc(func(key, value interface{}) (interface{}, error) {
 			val := value.(*ntypes.SumAndCount)
 			return float64(val.Sum) / float64(val.Count), nil
 		})))

@@ -169,13 +169,9 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 				return agg
 			}
 		})))).
-		Via(processor.NewMeteredProcessor(processor.NewStreamMapProcessor("changeKey",
-			processor.MapperFunc(func(m commtypes.Message) (commtypes.Message, error) {
-				v := m.Value.(commtypes.Change)
-				return commtypes.Message{
-					Key:   m.Key.(*ntypes.AuctionIdCategory).Category,
-					Value: &v,
-				}, nil
+		Via(processor.NewMeteredProcessor(processor.NewTableGroupByMapProcessor("changeKey",
+			processor.MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
+				return key.(*ntypes.AuctionIdCategory).Category, value, nil
 			})))).
 		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[0], &ectx))
 

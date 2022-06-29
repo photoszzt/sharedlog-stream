@@ -123,20 +123,20 @@ func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *com
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	ectx.Via(processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterBids",
-		processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
-			event := msg.Value.(*ntypes.Event)
+		processor.PredicateFunc(func(key, value interface{}) (bool, error) {
+			event := value.(*ntypes.Event)
 			return event.Etype == ntypes.BID, nil
 		})))).
-		Via(processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
-			"bidByWin", processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
-				event := msg.Value.(*ntypes.Event)
+		Via(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessor("bidByWin",
+			processor.SelectKeyFunc(func(key, value interface{}) (interface{}, error) {
+				event := value.(*ntypes.Event)
 				ts := event.Bid.DateTime
 				windowStart := utils.MaxInt64(0, ts-tw.SizeMs+tw.AdvanceMs) / tw.AdvanceMs * tw.AdvanceMs
 				wEnd := windowStart + tw.SizeMs
 				debug.Assert(windowStart >= 0, "window start should be >= 0")
 				debug.Assert(wEnd > 0, "window end should be > 0")
 				win := ntypes.StartEndTime{StartTimeMs: windowStart, EndTimeMs: wEnd}
-				return commtypes.Message{Key: win, Value: msg.Value, Timestamp: msg.Timestamp}, nil
+				return win, nil
 			})))).
 		Via(processor.NewGroupByOutputProcessor(sinks_arr[0], &ectx))
 	task := stream_task.NewStreamTaskBuilder().

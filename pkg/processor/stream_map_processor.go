@@ -6,14 +6,14 @@ import (
 )
 
 type Mapper interface {
-	Map(commtypes.Message) (commtypes.Message, error)
+	Map(key, value interface{}) (interface{} /* key */, interface{} /* value */, error)
 }
-type MapperFunc func(commtypes.Message) (commtypes.Message, error)
+type MapperFunc func(key, value interface{}) (interface{} /* key */, interface{} /* value */, error)
 
 var _ = (Mapper)(MapperFunc(nil))
 
-func (fn MapperFunc) Map(msg commtypes.Message) (commtypes.Message, error) {
-	return fn(msg)
+func (fn MapperFunc) Map(key, value interface{}) (interface{} /* key */, interface{} /* value */, error) {
+	return fn(key, value)
 }
 
 type StreamMapProcessor struct {
@@ -35,35 +35,35 @@ func (p *StreamMapProcessor) Name() string {
 }
 
 func (p *StreamMapProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	m, err := p.mapper.Map(msg)
+	newK, newV, err := p.mapper.Map(msg.Key, msg.Value)
 	if err != nil {
 		return nil, err
 	}
-	m.Timestamp = msg.Timestamp
-	return []commtypes.Message{m}, nil
+	return []commtypes.Message{{Key: newK, Value: newV, Timestamp: msg.Timestamp}}, nil
 }
 
-type ValueMapper interface {
-	MapValue(value interface{}) (interface{}, error)
+type ValueMapperWithKey interface {
+	MapValue(key interface{}, value interface{}) (interface{}, error)
 }
-type ValueMapperFunc func(interface{}) (interface{}, error)
+type ValueMapperWithKeyFunc func(key interface{}, value interface{}) (interface{}, error)
 
-var _ = ValueMapper(ValueMapperFunc(nil))
+var _ = ValueMapperWithKey(ValueMapperWithKeyFunc(nil))
 
-func (fn ValueMapperFunc) MapValue(value interface{}) (interface{}, error) {
-	return fn(value)
+func (fn ValueMapperWithKeyFunc) MapValue(key interface{}, value interface{}) (interface{}, error) {
+	return fn(key, value)
 }
 
 type StreamMapValuesProcessor struct {
-	valueMapper ValueMapper
-	name        string
+	valueMapperWithKey ValueMapperWithKey
+	name               string
 }
 
 var _ = Processor(&StreamMapValuesProcessor{})
 
-func NewStreamMapValuesProcessor(mapper ValueMapper) *StreamMapValuesProcessor {
+func NewStreamMapValuesProcessor(name string, mapper ValueMapperWithKey) *StreamMapValuesProcessor {
 	return &StreamMapValuesProcessor{
-		valueMapper: mapper,
+		valueMapperWithKey: mapper,
+		name:               name,
 	}
 }
 
@@ -72,45 +72,22 @@ func (p *StreamMapValuesProcessor) Name() string {
 }
 
 func (p *StreamMapValuesProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	newV, err := p.valueMapper.MapValue(msg.Value)
+	newV, err := p.valueMapperWithKey.MapValue(msg.Key, msg.Value)
 	if err != nil {
 		return nil, err
 	}
 	return []commtypes.Message{{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp}}, nil
 }
 
-type StreamMapValuesWithKeyProcessor struct {
-	valueWithKeyMapper Mapper
-	name               string
-}
-
-func NewStreamMapValuesWithKeyProcessor(mapper Mapper) Processor {
-	return &StreamMapValuesWithKeyProcessor{
-		valueWithKeyMapper: mapper,
-	}
-}
-
-func (p *StreamMapValuesWithKeyProcessor) Name() string {
-	return p.name
-}
-
-func (p *StreamMapValuesWithKeyProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	newMsg, err := p.valueWithKeyMapper.Map(msg)
-	if err != nil {
-		return nil, err
-	}
-	return []commtypes.Message{{Key: msg.Key, Value: newMsg.Value, Timestamp: msg.Timestamp}}, nil
-}
-
 type SelectKeyMapper interface {
-	SelectKey(msg commtypes.Message) (interface{}, error)
+	SelectKey(key, value interface{}) (interface{}, error)
 }
-type SelectKeyFunc func(msg commtypes.Message) (interface{}, error)
+type SelectKeyFunc func(key, value interface{}) (interface{}, error)
 
 var _ = SelectKeyMapper(SelectKeyFunc(nil))
 
-func (fn SelectKeyFunc) SelectKey(msg commtypes.Message) (interface{}, error) {
-	return fn(msg)
+func (fn SelectKeyFunc) SelectKey(key, value interface{}) (interface{}, error) {
+	return fn(key, value)
 }
 
 type StreamSelectKeyProcessor struct {
@@ -130,7 +107,7 @@ func (p *StreamSelectKeyProcessor) Name() string {
 }
 
 func (p *StreamSelectKeyProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	newKey, err := p.selectKey.SelectKey(msg)
+	newKey, err := p.selectKey.SelectKey(msg.Key, msg.Value)
 	if err != nil {
 		return nil, err
 	}

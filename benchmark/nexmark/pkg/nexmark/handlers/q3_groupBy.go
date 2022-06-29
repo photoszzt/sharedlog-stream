@@ -118,20 +118,16 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 func (h *q3GroupByHandler) getPersonsByID() execution.GeneralProcFunc {
 	gpCtx := execution.NewGeneralProcCtx()
 	gpCtx.AppendProcessor(processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterPerson", processor.PredicateFunc(
-		func(msg *commtypes.Message) (bool, error) {
-			event := msg.Value.(*ntypes.Event)
+		func(key interface{}, value interface{}) (bool, error) {
+			event := value.(*ntypes.Event)
 			return event.Etype == ntypes.PERSON && ((event.NewPerson.State == "OR") ||
 				event.NewPerson.State == "ID" || event.NewPerson.State == "CA"), nil
 		}))))
-	gpCtx.AppendProcessor(processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
+	gpCtx.AppendProcessor(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessor(
 		"personsByIDMap",
-		processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
-			event := msg.Value.(*ntypes.Event)
-			return commtypes.Message{
-				Key:       event.NewPerson.ID,
-				Value:     msg.Value,
-				Timestamp: msg.Timestamp,
-			}, nil
+		processor.SelectKeyFunc(func(key, value interface{}) (interface{}, error) {
+			event := value.(*ntypes.Event)
+			return event.NewPerson.ID, nil
 		}))))
 
 	return func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup, msgChan chan commtypes.Message, errChan chan error) {
@@ -145,15 +141,16 @@ func (h *q3GroupByHandler) getPersonsByID() execution.GeneralProcFunc {
 func (h *q3GroupByHandler) getAucBySellerID() execution.GeneralProcFunc {
 	gpCtx := execution.NewGeneralProcCtx()
 	gpCtx.AppendProcessor(processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterAuctions", processor.PredicateFunc(
-		func(m *commtypes.Message) (bool, error) {
-			event := m.Value.(*ntypes.Event)
+		func(key, value interface{}) (bool, error) {
+			event := value.(*ntypes.Event)
 			return event.Etype == ntypes.AUCTION && event.NewAuction.Category == 10, nil
 		}))))
 
-	gpCtx.AppendProcessor(processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
-		"auctionsBySellerIDMap", processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
-			event := msg.Value.(*ntypes.Event)
-			return commtypes.Message{Key: event.NewAuction.Seller, Value: msg.Value, Timestamp: msg.Timestamp}, nil
+	gpCtx.AppendProcessor(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessor(
+		"auctionsBySellerIDMap",
+		processor.SelectKeyFunc(func(key, value interface{}) (interface{}, error) {
+			event := value.(*ntypes.Event)
+			return event.NewAuction.Seller, nil
 		}))))
 
 	return func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup,

@@ -188,8 +188,8 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			})))
 	chooseMaxCnt := processor.NewMeteredProcessor(
 		processor.NewStreamFilterProcessor("chooseMaxCnt",
-			processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
-				v := msg.Value.(*ntypes.AuctionIdCntMax)
+			processor.PredicateFunc(func(key, value interface{}) (bool, error) {
+				v := value.(*ntypes.AuctionIdCntMax)
 				return v.Count >= v.MaxCnt, nil
 			})))
 	procArgs := &q5MaxBidProcessArgs{

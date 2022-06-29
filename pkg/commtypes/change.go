@@ -21,7 +21,7 @@ type ChangeJSONSerde struct {
 	ValJSONSerde Serde
 }
 
-func castToChangePtr(value interface{}) *Change {
+func CastToChangePtr(value interface{}) *Change {
 	v, ok := value.(*Change)
 	if !ok {
 		vtmp := value.(Change)
@@ -31,7 +31,7 @@ func castToChangePtr(value interface{}) *Change {
 }
 
 func (s ChangeJSONSerde) Encode(value interface{}) ([]byte, error) {
-	val := castToChangePtr(value)
+	val := CastToChangePtr(value)
 	newValEnc, err := s.ValJSONSerde.Encode(val.NewVal)
 	if err != nil {
 		return nil, err
@@ -70,7 +70,7 @@ type ChangeMsgpSerde struct {
 }
 
 func (s ChangeMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	val := castToChangePtr(value)
+	val := CastToChangePtr(value)
 	newValEnc, err := s.ValMsgpSerde.Encode(val.NewVal)
 	if err != nil {
 		return nil, err

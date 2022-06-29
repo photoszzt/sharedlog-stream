@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/stream_task"
@@ -80,16 +79,15 @@ func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInpu
 		input.ScaleEpoch, input.ParNum)
 	ectx.Via(processor.NewMeteredProcessor(
 		processor.NewStreamFilterProcessor("filterBids",
-			processor.PredicateFunc(func(msg *commtypes.Message) (bool, error) {
-				event := msg.Value.(*ntypes.Event)
+			processor.PredicateFunc(func(key, value interface{}) (bool, error) {
+				event := value.(*ntypes.Event)
 				return event.Etype == ntypes.BID, nil
 			})))).
-		Via(
-			processor.NewMeteredProcessor(processor.NewStreamMapProcessor(
-				"bidKeyedByPrice", processor.MapperFunc(func(msg commtypes.Message) (commtypes.Message, error) {
-					event := msg.Value.(*ntypes.Event)
-					return commtypes.Message{Key: event.Bid.Price, Value: msg.Value, Timestamp: msg.Timestamp}, nil
-				})))).
+		Via(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessor("bidKeyedByPrice",
+			processor.SelectKeyFunc(func(key, value interface{}) (interface{}, error) {
+				event := value.(*ntypes.Event)
+				return event.Bid.Price, nil
+			})))).
 		Via(processor.NewGroupByOutputProcessor(sinks_arr[0], &ectx))
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {

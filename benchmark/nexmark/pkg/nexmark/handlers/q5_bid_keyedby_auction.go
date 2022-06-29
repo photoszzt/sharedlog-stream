@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/stream_task"
@@ -82,15 +81,15 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 		sinks, h.funcName, sp.ScaleEpoch, sp.ParNum)
 	ectx.Via(processor.NewMeteredProcessor(
 		processor.NewStreamFilterProcessor("filterBid", processor.PredicateFunc(
-			func(m *commtypes.Message) (bool, error) {
-				event := m.Value.(*ntypes.Event)
+			func(key, value interface{}) (bool, error) {
+				event := value.(*ntypes.Event)
 				return event.Etype == ntypes.BID, nil
 			})))).
 		Via(processor.NewMeteredProcessor(
 			processor.NewStreamMapProcessor("selectKey", processor.MapperFunc(
-				func(m commtypes.Message) (commtypes.Message, error) {
-					event := m.Value.(*ntypes.Event)
-					return commtypes.Message{Key: event.Bid.Auction, Value: m.Value, Timestamp: m.Timestamp}, nil
+				func(key, value interface{}) (interface{}, interface{}, error) {
+					event := value.(*ntypes.Event)
+					return event.Bid.Auction, value, nil
 				})))).
 		Via(processor.NewGroupByOutputProcessor(sinks[0], &ectx))
 	task := stream_task.NewStreamTaskBuilder().

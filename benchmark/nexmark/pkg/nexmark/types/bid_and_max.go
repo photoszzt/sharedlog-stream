@@ -12,6 +12,7 @@ type BidAndMax struct {
 	Price    uint64 `json:"price" msg:"price"`
 	Auction  uint64 `json:"auction" msg:"auction"`
 	Bidder   uint64 `json:"bidder" msg:"bidder"`
+	BidTs    int64  `json:"bTs" msg:"bTs"`
 	WStartMs int64  `json:"wStartMs" msg:"wStartMs"`
 	WEndMs   int64  `json:"wEndMs" msg:"wEndMs"`
 }

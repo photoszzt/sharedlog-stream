@@ -168,8 +168,8 @@ func (h *q4JoinStreamHandler) Q4JoinTable(ctx context.Context, sp *common.QueryI
 	getValidBid := processor.NewMeteredProcessor(
 		processor.NewStreamFilterProcessor("getValidBid",
 			processor.PredicateFunc(
-				func(msg *commtypes.Message) (bool, error) {
-					ab := msg.Value.(*ntypes.AuctionBid)
+				func(key, value interface{}) (bool, error) {
+					ab := value.(*ntypes.AuctionBid)
 					return ab.BidDateTime >= ab.AucDateTime && ab.BidDateTime <= ab.AucExpires, nil
 				})))
 

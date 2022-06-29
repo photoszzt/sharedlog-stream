@@ -121,6 +121,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 			Price:    lv.Bid.Price,
 			Auction:  lv.Bid.Auction,
 			Bidder:   lv.Bid.Bidder,
+			BidTs:    lv.Bid.DateTime,
 			WStartMs: rv.StartTimeMs,
 			WEndMs:   rv.EndTimeMs,
 		}
@@ -161,9 +162,9 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	}
 
 	filter := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor(
-		"filter", processor.PredicateFunc(func(m *commtypes.Message) (bool, error) {
-			val := m.Value.(*ntypes.BidAndMax)
-			return m.Timestamp >= val.WStartMs && m.Timestamp <= val.WEndMs, nil
+		"filter", processor.PredicateFunc(func(key, value interface{}) (bool, error) {
+			val := value.(*ntypes.BidAndMax)
+			return val.BidTs >= val.WStartMs && val.BidTs <= val.WEndMs, nil
 		})))
 
 	var bJoinM execution.JoinWorkerFunc = func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {

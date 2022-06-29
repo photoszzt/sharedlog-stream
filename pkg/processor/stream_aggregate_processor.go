@@ -2,7 +2,9 @@ package processor
 
 import (
 	"context"
+	"os"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/store"
 
 	"github.com/rs/zerolog/log"
@@ -62,5 +64,6 @@ func (p *StreamAggregateProcessor) ProcessAndReturn(ctx context.Context, msg com
 		NewVal: newAgg,
 		OldVal: oldAgg,
 	}
-	return []commtypes.Message{{Key: msg.Key, Value: change, Timestamp: newTs}}, nil
+	debug.Fprintf(os.Stderr, "key %v, oldVal %v, newVal %v\n", msg.Key, oldAgg, newAgg)
+	return []commtypes.Message{{Key: msg.Key, Value: &change, Timestamp: newTs}}, nil
 }

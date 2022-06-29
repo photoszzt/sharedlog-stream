@@ -3,7 +3,9 @@ package processor
 import (
 	"context"
 	"fmt"
+	"os"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/store"
 
 	"github.com/rs/zerolog/log"
@@ -41,6 +43,7 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(ctx context.Context, m
 		log.Warn().Msgf("skipping record due to null key. key=%v, val=%v", msg.Key, msg.Value)
 		return nil, nil
 	}
+	debug.Fprintf(os.Stderr, "stream window agg msg k %v, v %v, ts %d\n", msg.Key, msg.Value, msg.Timestamp)
 	ts := msg.Timestamp
 	if p.observedStreamTime < ts {
 		p.observedStreamTime = ts
@@ -56,7 +59,6 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(ctx context.Context, m
 		windowEnd := window.End()
 		if windowEnd > closeTime {
 			var oldAgg interface{}
-			var newAgg interface{}
 			var newTs int64
 			val, exists, err := p.store.Get(ctx, msg.Key, windowStart)
 			if err != nil {
@@ -78,12 +80,16 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(ctx context.Context, m
 				oldAgg = p.initializer.Apply()
 				newTs = msg.Timestamp
 			}
-			newAgg = p.aggregator.Apply(msg.Key, msg.Value, oldAgg)
+			newAgg := p.aggregator.Apply(msg.Key, msg.Value, oldAgg)
 			err = p.store.Put(ctx, msg.Key, &commtypes.ValueTimestamp{Value: newAgg, Timestamp: newTs}, windowStart)
 			if err != nil {
 				return nil, fmt.Errorf("win agg put err %v", err)
 			}
-			newMsgs = append(newMsgs, commtypes.Message{Key: &commtypes.WindowedKey{Key: msg.Key, Window: window}, Value: newAgg, Timestamp: newTs})
+			newMsgs = append(newMsgs, commtypes.Message{
+				Key:       &commtypes.WindowedKey{Key: msg.Key, Window: window},
+				Value:     commtypes.Change{NewVal: newAgg, OldVal: oldAgg},
+				Timestamp: newTs,
+			})
 		} else {
 			log.Warn().Interface("key", msg.Key).
 				Interface("value", msg.Value).

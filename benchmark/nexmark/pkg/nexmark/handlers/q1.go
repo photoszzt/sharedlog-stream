@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
@@ -45,10 +44,10 @@ func (h *query1Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func q1mapFunc(msg commtypes.Message) (commtypes.Message, error) {
-	event := msg.Value.(*ntypes.Event)
+func q1mapFunc(key interface{}, value interface{}) (interface{}, error) {
+	event := value.(*ntypes.Event)
 	event.Bid.Price = uint64(event.Bid.Price * 908 / 1000.0)
-	return commtypes.Message{Value: event}, nil
+	return event, nil
 }
 
 func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -67,7 +66,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 		Via(processor.NewMeteredProcessor(
 			processor.NewStreamFilterProcessor("filterBid", processor.PredicateFunc(only_bid)))).
 		Via(processor.NewMeteredProcessor(
-			processor.NewStreamMapValuesWithKeyProcessor(processor.MapperFunc(q1mapFunc)))).
+			processor.NewStreamMapValuesProcessor("mapBid", processor.ValueMapperWithKeyFunc(q1mapFunc)))).
 		Via(processor.NewMeteredProcessor(
 			processor.NewFixedSubstreamOutputProcessor(sinks[0], sp.ParNum)))
 	task := stream_task.NewStreamTaskBuilder().

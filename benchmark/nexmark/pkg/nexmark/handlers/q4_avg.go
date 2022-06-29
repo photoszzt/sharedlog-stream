@@ -41,7 +41,7 @@ func (h *q4Avg) getExecutionCtx(ctx context.Context, sp *common.QueryInput,
 		return processor.EmptyBaseExecutionContext, err
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	changeSerde, err := commtypes.GetChangeSerde(serdeFormat, commtypes.Int64Serde{})
+	changeSerde, err := commtypes.GetChangeSerde(serdeFormat, commtypes.Uint64Serde{})
 	if err != nil {
 		return processor.EmptyBaseExecutionContext, err
 	}
@@ -114,13 +114,22 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-
 	sumCountStoreName := "q4SumCountKVStore"
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	scSerde, err := ntypes.GetSumAndCountSerde(serdeFormat)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	storeMsgSerde, err := processor.MsgSerdeWithValueTs(serdeFormat, commtypes.Uint64Serde{},
+		scSerde)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	mp, err := store_with_changelog.NewMaterializeParamBuilder().
-		MessageSerde(ectx.Consumers()[0].MsgSerde()).
+		MessageSerde(storeMsgSerde).
 		StoreName(sumCountStoreName).
 		ParNum(sp.ParNum).
-		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
+		SerdeFormat(serdeFormat).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
 			Env:           h.env,
 			NumPartition:  sp.NumInPartition,
@@ -134,38 +143,42 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	ectx.Via(processor.NewMeteredProcessor(processor.NewTableAggregateProcessor("sumCount", kvstore,
-		processor.InitializerFunc(func() interface{} {
-			return &ntypes.SumAndCount{
-				Sum:   0,
-				Count: 0,
-			}
-		}),
-		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
-			val := value.(uint64)
-			agg := aggregate.(*ntypes.SumAndCount)
-			return &ntypes.SumAndCount{
-				Sum:   agg.Sum + val,
-				Count: agg.Count + 1,
-			}
-		}),
-		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
-			val := value.(uint64)
-			agg := aggregate.(*ntypes.SumAndCount)
-			return &ntypes.SumAndCount{
-				Sum:   agg.Sum - val,
-				Count: agg.Count - 1,
-			}
-		}),
-	))).
-		Via(
-			processor.NewMeteredProcessor(processor.NewStreamMapValuesProcessor(
-				processor.ValueMapperFunc(func(value interface{}) (interface{}, error) {
-					val := value.(commtypes.Change)
-					sc := val.NewVal.(*ntypes.SumAndCount)
-					return float64(sc.Sum) / float64(sc.Count), nil
-				}),
-			))).
+	ectx.
+		Via(processor.NewMeteredProcessor(processor.NewTableAggregateProcessor("sumCount", kvstore,
+			processor.InitializerFunc(func() interface{} {
+				return &ntypes.SumAndCount{
+					Sum:   0,
+					Count: 0,
+				}
+			}),
+			processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
+				val := value.(uint64)
+				agg := aggregate.(*ntypes.SumAndCount)
+				return &ntypes.SumAndCount{
+					Sum:   agg.Sum + val,
+					Count: agg.Count + 1,
+				}
+			}),
+			processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
+				val := value.(uint64)
+				agg := aggregate.(*ntypes.SumAndCount)
+				return &ntypes.SumAndCount{
+					Sum:   agg.Sum - val,
+					Count: agg.Count - 1,
+				}
+			}),
+		))).
+		Via(processor.NewMeteredProcessor(processor.NewTableMapValuesProcessor("calcAvg",
+			processor.ValueMapperWithKeyFunc(func(key, value interface{}) (interface{}, error) {
+				sc := value.(*ntypes.SumAndCount)
+				return float64(sc.Sum) / float64(sc.Count), nil
+			}),
+		))).
+		Via(processor.NewStreamMapValuesProcessor("toStream",
+			processor.ValueMapperWithKeyFunc(func(key, value interface{}) (interface{}, error) {
+				val := commtypes.CastToChangePtr(value)
+				return val.NewVal, nil
+			}))).
 		Via(processor.NewFixedSubstreamOutputProcessor(ectx.Producers()[0], sp.ParNum))
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {

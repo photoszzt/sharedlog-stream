@@ -24,7 +24,7 @@ func (p *StreamFilterProcessor) Name() string {
 }
 
 func (p *StreamFilterProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	ok, err := p.pred.Assert(&msg)
+	ok, err := p.pred.Assert(msg.Key, msg.Value)
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +52,7 @@ func (p *StreamFilterNotProcessor) Name() string {
 }
 
 func (p *StreamFilterNotProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	ok, err := p.pred.Assert(&msg)
+	ok, err := p.pred.Assert(msg.Key, msg.Value)
 	if err != nil {
 		return nil, err
 	}

@@ -20,8 +20,8 @@ import (
 	"cs.utexas.edu/zjia/faas/types"
 )
 
-func only_bid(msg *commtypes.Message) (bool, error) {
-	event := msg.Value.(*ntypes.Event)
+func only_bid(key interface{}, value interface{}) (bool, error) {
+	event := value.(*ntypes.Event)
 	return event.Etype == ntypes.BID, nil
 }
 

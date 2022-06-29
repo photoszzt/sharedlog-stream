@@ -42,6 +42,12 @@ func (z *BidAndMax) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Bidder")
 				return
 			}
+		case "bTs":
+			z.BidTs, err = dc.ReadInt64()
+			if err != nil {
+				err = msgp.WrapError(err, "BidTs")
+				return
+			}
 		case "wStartMs":
 			z.WStartMs, err = dc.ReadInt64()
 			if err != nil {
@@ -67,9 +73,9 @@ func (z *BidAndMax) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *BidAndMax) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 5
+	// map header, size 6
 	// write "price"
-	err = en.Append(0x85, 0xa5, 0x70, 0x72, 0x69, 0x63, 0x65)
+	err = en.Append(0x86, 0xa5, 0x70, 0x72, 0x69, 0x63, 0x65)
 	if err != nil {
 		return
 	}
@@ -98,6 +104,16 @@ func (z *BidAndMax) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Bidder")
 		return
 	}
+	// write "bTs"
+	err = en.Append(0xa3, 0x62, 0x54, 0x73)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt64(z.BidTs)
+	if err != nil {
+		err = msgp.WrapError(err, "BidTs")
+		return
+	}
 	// write "wStartMs"
 	err = en.Append(0xa8, 0x77, 0x53, 0x74, 0x61, 0x72, 0x74, 0x4d, 0x73)
 	if err != nil {
@@ -124,9 +140,9 @@ func (z *BidAndMax) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *BidAndMax) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 5
+	// map header, size 6
 	// string "price"
-	o = append(o, 0x85, 0xa5, 0x70, 0x72, 0x69, 0x63, 0x65)
+	o = append(o, 0x86, 0xa5, 0x70, 0x72, 0x69, 0x63, 0x65)
 	o = msgp.AppendUint64(o, z.Price)
 	// string "auction"
 	o = append(o, 0xa7, 0x61, 0x75, 0x63, 0x74, 0x69, 0x6f, 0x6e)
@@ -134,6 +150,9 @@ func (z *BidAndMax) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "bidder"
 	o = append(o, 0xa6, 0x62, 0x69, 0x64, 0x64, 0x65, 0x72)
 	o = msgp.AppendUint64(o, z.Bidder)
+	// string "bTs"
+	o = append(o, 0xa3, 0x62, 0x54, 0x73)
+	o = msgp.AppendInt64(o, z.BidTs)
 	// string "wStartMs"
 	o = append(o, 0xa8, 0x77, 0x53, 0x74, 0x61, 0x72, 0x74, 0x4d, 0x73)
 	o = msgp.AppendInt64(o, z.WStartMs)
@@ -179,6 +198,12 @@ func (z *BidAndMax) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Bidder")
 				return
 			}
+		case "bTs":
+			z.BidTs, bts, err = msgp.ReadInt64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "BidTs")
+				return
+			}
 		case "wStartMs":
 			z.WStartMs, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
@@ -205,6 +230,6 @@ func (z *BidAndMax) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BidAndMax) Msgsize() (s int) {
-	s = 1 + 6 + msgp.Uint64Size + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 9 + msgp.Int64Size + 7 + msgp.Int64Size
+	s = 1 + 6 + msgp.Uint64Size + 8 + msgp.Uint64Size + 7 + msgp.Uint64Size + 4 + msgp.Int64Size + 9 + msgp.Int64Size + 7 + msgp.Int64Size
 	return
 }
