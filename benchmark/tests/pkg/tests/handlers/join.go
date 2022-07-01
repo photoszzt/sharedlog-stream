@@ -53,8 +53,6 @@ func (h *joinHandler) tests(ctx context.Context, sp *test_types.TestInput) *comm
 	switch sp.TestName {
 	case "streamStreamJoinMem":
 		h.testStreamStreamJoinMem(ctx)
-	case "streamStreamJoinMongo":
-		h.testStreamStreamJoinMongoDB(ctx)
 	default:
 		return &common.FnOutput{
 			Success: false,
@@ -98,6 +96,7 @@ func (h *joinHandler) getSrcSink(
 	return src1, src2, sink, nil
 }
 
+/*
 func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	debug.Fprint(os.Stderr, "############## stream stream join mongodb\n")
 	srcStream1, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "src1Mongo", 1, commtypes.JSON)
@@ -226,19 +225,6 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 		panic(err)
 	}
 
-	/*
-		got, err := readMsgs(ctx, kSerde, vSerde, msgSerde, srcStream1)
-		if err != nil {
-			panic(err)
-		}
-		expected := []commtypes.Message{
-			{Key: 0, Value: strTs{Val: "A0", Ts: 0}, Timestamp: 0},
-			{Key: 1, Value: strTs{Val: "A1", Ts: 0}, Timestamp: 0},
-		}
-		if !reflect.DeepEqual(expected, got) {
-			panic(fmt.Sprintf("should equal. expected: %v, got: %v", expected, got))
-		}
-	*/
 
 	tm.RecordTopicStreams(src2.TopicName(), srcStream2)
 	if err = tm.BeginTransaction(ctx); err != nil {
@@ -259,19 +245,6 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 		panic(err)
 	}
 
-	/*
-		got, err = readMsgs(ctx, kSerde, vSerde, msgSerde, srcStream2)
-		if err != nil {
-			panic(err)
-		}
-		expected = []commtypes.Message{
-			{Key: 0, Value: strTs{Val: "a0", Ts: 0}, Timestamp: 0},
-			{Key: 1, Value: strTs{Val: "a1", Ts: 0}, Timestamp: 0},
-		}
-		if !reflect.DeepEqual(expected, got) {
-			panic(fmt.Sprintf("should equal. expected: %v, got: %v", expected, got))
-		}
-	*/
 	tm.RecordTopicStreams(src1.TopicName(), srcStream1)
 	tm.RecordTopicStreams(src2.TopicName(), srcStream2)
 	tm.RecordTopicStreams(sinkStream.TopicName(), sinkStream)
@@ -306,6 +279,7 @@ func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
 	}
 
 }
+*/
 
 func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	srcStream1, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "src1", 1, commtypes.JSON)

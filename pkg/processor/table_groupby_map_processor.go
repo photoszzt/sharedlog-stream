@@ -3,6 +3,7 @@ package processor
 import (
 	"context"
 	"fmt"
+	"os"
 	"sharedlog-stream/pkg/commtypes"
 )
 
@@ -69,5 +70,6 @@ func (p *TableGroupByMapProcessor) ProcessAndReturn(ctx context.Context, msg com
 			Timestamp: msg.Timestamp,
 		})
 	}
+	fmt.Fprintf(os.Stderr, "tableGroupByMap output: %v\n", outMsgs)
 	return outMsgs, nil
 }

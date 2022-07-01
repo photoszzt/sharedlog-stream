@@ -49,10 +49,11 @@ func (t *StreamTask) ExecuteApp(ctx context.Context,
 		}
 		debug.Fprint(os.Stderr, "begin epoch processing\n")
 		ret = t.processInEpoch(ctx, em, cmm, streamTaskArgs)
+		fmt.Fprintf(os.Stderr, "epoch ret: %v\n", ret)
 	} else {
 		ret = t.process(ctx, streamTaskArgs)
 	}
-	if ret != nil && ret.Success {
+	if ret != nil {
 		for _, src := range streamTaskArgs.ectx.Consumers() {
 			ret.Counts[src.Name()] = src.GetCount()
 			// debug.Fprintf(os.Stderr, "src %s count %d\n", src.Name(), src.GetCount())

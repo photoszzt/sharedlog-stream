@@ -27,7 +27,7 @@ type ValueTimestampJSONSerde struct {
 	ValJSONSerde Serde
 }
 
-func castToValTsPtr(value interface{}) *ValueTimestamp {
+func CastToValTsPtr(value interface{}) *ValueTimestamp {
 	v, ok := value.(*ValueTimestamp)
 	if !ok {
 		vtmp := value.(ValueTimestamp)
@@ -37,7 +37,7 @@ func castToValTsPtr(value interface{}) *ValueTimestamp {
 }
 
 func (s ValueTimestampJSONSerde) Encode(value interface{}) ([]byte, error) {
-	v := castToValTsPtr(value)
+	v := CastToValTsPtr(value)
 	enc, err := s.ValJSONSerde.Encode(v.Value)
 	if err != nil {
 		return nil, err
@@ -69,7 +69,7 @@ type ValueTimestampMsgpSerde struct {
 }
 
 func (s ValueTimestampMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	v := castToValTsPtr(value)
+	v := CastToValTsPtr(value)
 	enc, err := s.ValMsgpSerde.Encode(v.Value)
 	if err != nil {
 		return nil, err

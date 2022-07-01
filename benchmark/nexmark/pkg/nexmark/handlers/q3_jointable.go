@@ -206,27 +206,33 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 
 	aJoinP := execution.JoinWorkerFunc(func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		// msg is auction
-		_, err := kvtabs.toTab1.ProcessAndReturn(ctx, m)
+		ret, err := kvtabs.toTab1.ProcessAndReturn(ctx, m)
 		if err != nil {
 			return nil, fmt.Errorf("ToTabA err: %v", err)
 		}
-		msgs, err := auctionJoinsPersons.ProcessAndReturn(ctx, m)
-		if err != nil {
-			err = fmt.Errorf("aJoinP err: %v", err)
+		if ret != nil {
+			msgs, err := auctionJoinsPersons.ProcessAndReturn(ctx, m)
+			if err != nil {
+				err = fmt.Errorf("aJoinP err: %v", err)
+			}
+			return msgs, err
 		}
-		return msgs, err
+		return nil, nil
 	})
 	pJoinA := execution.JoinWorkerFunc(func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		// msg is person
-		_, err := kvtabs.toTab2.ProcessAndReturn(ctx, m)
+		ret, err := kvtabs.toTab2.ProcessAndReturn(ctx, m)
 		if err != nil {
 			return nil, fmt.Errorf("ToTabP err: %v", err)
 		}
-		msgs, err := personJoinsAuctions.ProcessAndReturn(ctx, m)
-		if err != nil {
-			err = fmt.Errorf("pJoinA err: %v", err)
+		if ret != nil {
+			msgs, err := personJoinsAuctions.ProcessAndReturn(ctx, m)
+			if err != nil {
+				err = fmt.Errorf("pJoinA err: %v", err)
+			}
+			return msgs, err
 		}
-		return msgs, err
+		return nil, nil
 	})
 	task, procArgs := execution.PrepareTaskWithJoin(ctx, aJoinP, pJoinA,
 		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),

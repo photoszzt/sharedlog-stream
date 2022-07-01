@@ -5,6 +5,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/treemap"
+	"strings"
 )
 
 type InMemoryKeyValueStore struct {
@@ -28,6 +29,12 @@ func Uint64KeyKVStoreCompare(a, b treemap.Key) int {
 	} else {
 		return -1
 	}
+}
+
+func StringKeyKVStoreCompare(a, b treemap.Key) int {
+	a1 := a.(string)
+	b1 := b.(string)
+	return strings.Compare(a1, b1)
 }
 
 func NewInMemoryKeyValueStore(name string, compare KVStoreCompareFunc) *InMemoryKeyValueStore {

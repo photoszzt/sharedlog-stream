@@ -7,10 +7,10 @@ import (
 )
 
 type Warmup struct {
-	afterWarmup      bool
 	initial          time.Time
-	warmupTime       time.Duration
 	afterWarmupStart time.Time
+	warmupTime       time.Duration
+	afterWarmup      bool
 }
 
 func NewWarmupChecker(warmupTime time.Duration) Warmup {

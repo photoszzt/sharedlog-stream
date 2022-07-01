@@ -142,11 +142,7 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 			}
 			return agg
 		})))).
-		Via(processor.NewStreamMapValuesProcessor("toStream",
-			processor.ValueMapperWithKeyFunc(func(key, value interface{}) (interface{}, error) {
-				val := commtypes.CastToChangePtr(value)
-				return val.NewVal, nil
-			}))).
+		Via(processor.NewTableToStreamProcessor()).
 		Via(processor.NewMeteredProcessor(processor.NewStreamMapProcessor("remapKV",
 			processor.MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
 				return value, key, nil

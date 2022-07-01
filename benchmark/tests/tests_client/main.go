@@ -72,8 +72,6 @@ func main() {
 	case "join":
 		response := common.FnOutput{}
 		invokeTest(client, "streamStreamJoinMem", "streamStreamJoinMem", &response)
-		response = common.FnOutput{}
-		invokeTest(client, "streamStreamJoinMongo", "streamStreamJoinMongo", &response)
 	case "prodConsume":
 		response := common.FnOutput{}
 		invokeTest(client, "multiProducer2pc", "multiProducer2pc", &response)

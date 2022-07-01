@@ -48,26 +48,32 @@ func getJoinTable(t *testing.T) (
 	oneJoinTwo := NewTableTableJoinProcessor(tab2.Name(), tab2, joiner)
 	twoJoinOne := NewTableTableJoinProcessor(tab1.Name(), tab1, ReverseValueJoinerWithKey(joiner))
 	oneJoinTwoFunc := func(ctx context.Context, m commtypes.Message) []commtypes.Message {
-		_, err := toTab1.ProcessAndReturn(ctx, m)
+		outMsgs, err := toTab1.ProcessAndReturn(ctx, m)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
-		joinedMsgs, err := oneJoinTwo.ProcessAndReturn(ctx, m)
-		if err != nil {
-			t.Fatal(err.Error())
+		if outMsgs != nil {
+			joinedMsgs, err := oneJoinTwo.ProcessAndReturn(ctx, outMsgs[0])
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+			return joinedMsgs
 		}
-		return joinedMsgs
+		return nil
 	}
 	twoJoinOneFunc := func(ctx context.Context, m commtypes.Message) []commtypes.Message {
-		_, err := toTab2.ProcessAndReturn(ctx, m)
+		ret, err := toTab2.ProcessAndReturn(ctx, m)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
-		joinedMsgs, err := twoJoinOne.ProcessAndReturn(ctx, m)
-		if err != nil {
-			t.Fatal(err.Error())
+		if ret != nil {
+			joinedMsgs, err := twoJoinOne.ProcessAndReturn(ctx, ret[0])
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+			return joinedMsgs
 		}
-		return joinedMsgs
+		return nil
 	}
 	return oneJoinTwoFunc, twoJoinOneFunc
 }
@@ -103,8 +109,8 @@ func TestTableTableInnerJoin(t *testing.T) {
 	// left: X0:0 (ts: 5), X1:1 (ts: 6)
 	// right: Y0:0 (ts: 0), Y1:1 (ts: 10)
 	expected_join := []commtypes.Message{
-		{Key: 0, Value: "X0+Y0", Timestamp: 5},
-		{Key: 1, Value: "X1+Y1", Timestamp: 10},
+		{Key: 0, Value: commtypes.Change{NewVal: "X0+Y0"}, Timestamp: 5},
+		{Key: 1, Value: commtypes.Change{NewVal: "X1+Y1"}, Timestamp: 10},
 	}
 	if !reflect.DeepEqual(expected_join, got) {
 		t.Fatalf("should equal. expected: %v, got: %v", expected_join, got)
@@ -119,8 +125,8 @@ func TestTableTableInnerJoin(t *testing.T) {
 	// left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
 	// right: Y0:0 (ts: 0), Y1:1 (ts: 10)
 	expected_join = []commtypes.Message{
-		{Key: 0, Value: "XX0+Y0", Timestamp: 7},
-		{Key: 1, Value: "XX1+Y1", Timestamp: 10},
+		{Key: 0, Value: commtypes.Change{NewVal: "XX0+Y0", OldVal: "X0+Y0"}, Timestamp: 7},
+		{Key: 1, Value: commtypes.Change{NewVal: "XX1+Y1", OldVal: "X1+Y1"}, Timestamp: 10},
 	}
 	if !reflect.DeepEqual(expected_join, got) {
 		t.Fatalf("should equal. expected: %v, got: %v", expected_join, got)
@@ -135,10 +141,10 @@ func TestTableTableInnerJoin(t *testing.T) {
 	// left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
 	// right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
 	expected_join = []commtypes.Message{
-		{Key: 0, Value: "XX0+YY0", Timestamp: 10},
-		{Key: 1, Value: "XX1+YY1", Timestamp: 10},
-		{Key: 2, Value: "XX2+YY2", Timestamp: 10},
-		{Key: 3, Value: "XX3+YY3", Timestamp: 15},
+		{Key: 0, Value: commtypes.Change{NewVal: "XX0+YY0", OldVal: "XX0+Y0"}, Timestamp: 7},
+		{Key: 1, Value: commtypes.Change{NewVal: "XX1+YY1", OldVal: "XX1+Y1"}, Timestamp: 7},
+		{Key: 2, Value: commtypes.Change{NewVal: "XX2+YY2", OldVal: nil}, Timestamp: 10},
+		{Key: 3, Value: commtypes.Change{NewVal: "XX3+YY3", OldVal: nil}, Timestamp: 15},
 	}
 	if !reflect.DeepEqual(expected_join, got) {
 		t.Fatalf("should equal. expected: %v, got: %v", expected_join, got)
@@ -153,10 +159,10 @@ func TestTableTableInnerJoin(t *testing.T) {
 	// left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
 	// right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
 	expected_join = []commtypes.Message{
-		{Key: 0, Value: "XXX0+YY0", Timestamp: 7},
-		{Key: 1, Value: "XXX1+YY1", Timestamp: 7},
-		{Key: 2, Value: "XXX2+YY2", Timestamp: 10},
-		{Key: 3, Value: "XXX3+YY3", Timestamp: 15},
+		{Key: 0, Value: commtypes.Change{NewVal: "XXX0+YY0", OldVal: "XX0+YY0"}, Timestamp: 6},
+		{Key: 1, Value: commtypes.Change{NewVal: "XXX1+YY1", OldVal: "XX1+YY1"}, Timestamp: 6},
+		{Key: 2, Value: commtypes.Change{NewVal: "XXX2+YY2", OldVal: "XX2+YY2"}, Timestamp: 10},
+		{Key: 3, Value: commtypes.Change{NewVal: "XXX3+YY3", OldVal: "XX3+YY3"}, Timestamp: 15},
 	}
 	if !reflect.DeepEqual(expected_join, got) {
 		t.Fatalf("should equal. expected: %v, got: %v", expected_join, got)
@@ -172,8 +178,8 @@ func TestTableTableInnerJoin(t *testing.T) {
 	// left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
 	// right: YY2:2 (ts: 10), YY3:3 (ts: 15)
 	expected_join = []commtypes.Message{
-		{Key: 0, Value: nil, Timestamp: 15},
-		{Key: 1, Value: nil, Timestamp: 15},
+		{Key: 0, Value: commtypes.Change{NewVal: nil, OldVal: "XXX0+YY0"}, Timestamp: 6},
+		{Key: 1, Value: commtypes.Change{NewVal: nil, OldVal: "XXX1+YY1"}, Timestamp: 7},
 	}
 	if !reflect.DeepEqual(expected_join, got) {
 		t.Fatalf("should equal. expected: %v, got: %v", expected_join, got)
@@ -189,8 +195,8 @@ func TestTableTableInnerJoin(t *testing.T) {
 	// left: XXXX0:0 (ts: 13), XXXX1:1 (ts: 13), XXXX2:2 (ts: 13), XXXX3:3 (ts: 13)
 	// right: YY2:2 (ts: 10), YY3:3 (ts: 15)
 	expected_join = []commtypes.Message{
-		{Key: 2, Value: "XXXX2+YY2", Timestamp: 13},
-		{Key: 3, Value: "XXXX3+YY3", Timestamp: 15},
+		{Key: 2, Value: commtypes.Change{NewVal: "XXXX2+YY2", OldVal: "XXX2+YY2"}, Timestamp: 13},
+		{Key: 3, Value: commtypes.Change{NewVal: "XXXX3+YY3", OldVal: "XXX3+YY3"}, Timestamp: 15},
 	}
 	if !reflect.DeepEqual(expected_join, got) {
 		t.Fatalf("should equal. expected: %v, got: %v", expected_join, got)
@@ -209,8 +215,8 @@ func TestTableTableInnerJoin(t *testing.T) {
 	// left:
 	// right: YY2:2 (ts: 10), YY3:3 (ts: 15)
 	expected_join = []commtypes.Message{
-		{Key: 2, Value: nil, Timestamp: 13},
-		{Key: 3, Value: nil, Timestamp: 20},
+		{Key: 2, Value: commtypes.Change{NewVal: nil, OldVal: "XXXX2+YY2"}, Timestamp: 10},
+		{Key: 3, Value: commtypes.Change{NewVal: nil, OldVal: "XXXX3+YY3"}, Timestamp: 20},
 	}
 	if !reflect.DeepEqual(expected_join, got) {
 		t.Fatalf("should equal. expected: %v, got: %v", expected_join, got)

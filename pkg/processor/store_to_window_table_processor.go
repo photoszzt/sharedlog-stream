@@ -5,8 +5,6 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/store"
-
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type StoreToWindowTableProcessor struct {
@@ -54,60 +52,4 @@ func ToInMemWindowTable(
 		true, compare)
 	toTableProc := NewMeteredProcessor(NewStoreToWindowTableProcessor(store))
 	return toTableProc, store, nil
-}
-
-func ToMongoDBWindowTable(
-	ctx context.Context,
-	storeName string,
-	client *mongo.Client,
-	joinWindow *JoinWindows,
-	keySerde commtypes.Serde,
-	valSerde commtypes.Serde,
-) (*MeteredProcessor, store.WindowStore, error) {
-	mkvs, err := store.NewMongoDBKeyValueStore(ctx, &store.MongoDBConfig{
-		Client:         client,
-		CollectionName: storeName,
-		DBName:         storeName,
-		KeySerde:       nil,
-		ValueSerde:     nil,
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	byteStore, err := store.NewMongoDBSegmentedBytesStore(ctx, storeName,
-		joinWindow.MaxSize()+joinWindow.GracePeriodMs(), &store.WindowKeySchema{}, mkvs)
-	if err != nil {
-		return nil, nil, err
-	}
-	wstore := store.NewSegmentedWindowStore(byteStore, true, joinWindow.MaxSize(), keySerde, valSerde)
-	toTableProc := NewMeteredProcessor(NewStoreToWindowTableProcessor(wstore))
-	return toTableProc, wstore, nil
-}
-
-func CreateMongoDBWindoeTable(
-	ctx context.Context,
-	storeName string,
-	client *mongo.Client,
-	retention int64,
-	windowSize int64,
-	keySerde commtypes.Serde,
-	valSerde commtypes.Serde,
-) (store.WindowStore, error) {
-	mkvs, err := store.NewMongoDBKeyValueStore(ctx, &store.MongoDBConfig{
-		Client:         client,
-		CollectionName: storeName,
-		DBName:         storeName,
-		KeySerde:       nil,
-		ValueSerde:     nil,
-	})
-	if err != nil {
-		return nil, err
-	}
-	byteStore, err := store.NewMongoDBSegmentedBytesStore(ctx, storeName,
-		retention, &store.WindowKeySchema{}, mkvs)
-	if err != nil {
-		return nil, err
-	}
-	wstore := store.NewSegmentedWindowStore(byteStore, true, windowSize, keySerde, valSerde)
-	return wstore, nil
 }

@@ -41,22 +41,24 @@ func (p *TableTableJoinProcessor) ProcessAndReturn(ctx context.Context, msg comm
 		return nil, fmt.Errorf("get err: %v", err)
 	}
 	if ok {
-		rv := val2.(commtypes.ValueTimestamp)
-		if rv.Value == nil {
+		rvTs := val2.(commtypes.ValueTimestamp)
+		if rvTs.Value == nil {
 			return nil, nil
 		}
-		p.streamTimeTracker.UpdateStreamTime(&msg)
 		ts := msg.Timestamp
-		if ts < rv.Timestamp {
-			ts = rv.Timestamp
+		if ts < rvTs.Timestamp {
+			ts = rvTs.Timestamp
 		}
-		if msg.Value != nil {
-			joined := p.joiner.Apply(msg.Key, msg.Value, val2)
-			newMsg := commtypes.Message{Key: msg.Key, Value: joined, Timestamp: ts}
-			return []commtypes.Message{newMsg}, nil
-		} else {
-			return []commtypes.Message{{Key: msg.Key, Value: nil, Timestamp: ts}}, nil
+		var newVal interface{}
+		var oldVal interface{}
+		change := commtypes.CastToChangePtr(msg.Value)
+		if change.NewVal != nil {
+			newVal = p.joiner.Apply(msg.Key, change.NewVal, rvTs.Value)
 		}
+		if change.OldVal != nil {
+			oldVal = p.joiner.Apply(msg.Key, change.OldVal, rvTs.Value)
+		}
+		return []commtypes.Message{{Key: msg.Key, Value: commtypes.Change{NewVal: newVal, OldVal: oldVal}, Timestamp: ts}}, nil
 	}
 	return nil, nil
 }

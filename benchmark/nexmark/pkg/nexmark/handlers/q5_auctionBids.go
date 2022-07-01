@@ -142,42 +142,6 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 	return countProc, wsc, nil
 }
 
-/*
-type q5AuctionBidsProcessArg struct {
-	countProc      *processor.MeteredProcessor
-	groupByAuction *processor.MeteredProcessor
-	groupBy        *processor.MeteredProcessor
-	processor.BaseExecutionContext
-}
-
-type q5AuctionBidsRestoreArg struct {
-	countProc      processor.Processor
-	groupByAuction processor.Processor
-	src            producer_consumer.Consumer
-	parNum         uint8
-}
-
-func (h *q5AuctionBids) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
-	args := argsTmp.(*q5AuctionBidsProcessArg)
-	countMsgs, err := args.countProc.ProcessAndReturn(ctx, msg)
-	if err != nil {
-		return fmt.Errorf("countProc err %v", err)
-	}
-	for _, countMsg := range countMsgs {
-		// fmt.Fprintf(os.Stderr, "count msg ts: %v, ", countMsg.Timestamp)
-		changeKeyedMsg, err := args.groupByAuction.ProcessAndReturn(ctx, countMsg)
-		if err != nil {
-			return fmt.Errorf("groupByAuction err %v", err)
-		}
-		_, err = args.groupBy.ProcessAndReturn(ctx, changeKeyedMsg[0])
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-*/
-
 func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	srcs, sinks, err := h.getSrcSink(ctx, sp)
 	if err != nil {
@@ -190,11 +154,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	ectx.Via(countProc).
-		Via(processor.NewStreamMapValuesProcessor("toStream",
-			processor.ValueMapperWithKeyFunc(func(key, value interface{}) (interface{}, error) {
-				val := value.(commtypes.Change)
-				return val.NewVal, nil
-			}))).
+		Via(processor.NewTableToStreamProcessor()).
 		Via(processor.NewMeteredProcessor(processor.NewStreamMapProcessor("groupByAuction",
 			processor.MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
 				k := key.(*commtypes.WindowedKey)

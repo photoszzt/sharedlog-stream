@@ -174,11 +174,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 				return float64(sc.Sum) / float64(sc.Count), nil
 			}),
 		))).
-		Via(processor.NewStreamMapValuesProcessor("toStream",
-			processor.ValueMapperWithKeyFunc(func(key, value interface{}) (interface{}, error) {
-				val := commtypes.CastToChangePtr(value)
-				return val.NewVal, nil
-			}))).
+		Via(processor.NewTableToStreamProcessor()).
 		Via(processor.NewFixedSubstreamOutputProcessor(ectx.Producers()[0], sp.ParNum))
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
