@@ -1,6 +1,7 @@
 //go:generate msgp
-//msgp:ignore EventMsgpEncoder EventMsgpDecoder
-//msgp:ignore EventJSONEncoder EventJSONDecoder
+//msgp:ignore EventMsgpEncoder EventMsgpDecoder EventMsgpSerde
+//msgp:ignore EventJSONEncoder EventJSONDecoder EventJSONSerde
+//go:generate stringer -type=EType
 
 package types
 
@@ -25,6 +26,13 @@ type Auction struct {
 	InitialBid  uint64 `msg:"initialBid" json:"initialBid"`
 }
 
+var _ = fmt.Stringer(Auction{})
+
+func (a Auction) String() string {
+	return fmt.Sprintf("Auction: {ItemName: %s, Description: %s, Extra: %s, ID: %d, Reserve: %d, TsMs: %d, Expires: %d, Seller: %d, Cat: %d, InitBid: %d}",
+		a.ItemName, a.Description, a.Extra, a.ID, a.Reserve, a.DateTime, a.Expires, a.Seller, a.Category, a.InitialBid)
+}
+
 type Bid struct {
 	Extra    string `msg:"extra" json:"extra"`
 	Channel  string `msg:"channel" json:"channel"`
@@ -33,6 +41,13 @@ type Bid struct {
 	Price    uint64 `msg:"price" json:"price"`
 	DateTime int64  `msg:"dateTime" json:"dateTime"`
 	Auction  uint64 `msg:"auction" json:"auction"`
+}
+
+var _ = fmt.Stringer(Bid{})
+
+func (b Bid) String() string {
+	return fmt.Sprintf("Bid: {Extra: %s, Channel: %s, Url: %s, Bidder: %d, Price: %d, Ts: %d, Auc: %d}",
+		b.Extra, b.Channel, b.Url, b.Bidder, b.Price, b.DateTime, b.Auction)
 }
 
 type Person struct {
@@ -44,6 +59,13 @@ type Person struct {
 	Extra        string `msg:"extra" json:"extra"`
 	ID           uint64 `msg:"id" json:"id"`
 	DateTime     int64  `msg:"dateTime" json:"dateTime"`
+}
+
+var _ = fmt.Stringer(Person{})
+
+func (p Person) String() string {
+	return fmt.Sprintf("Person: {Name: %s, Email: %s, CreditCard: %s, City: %s, State: %s, Extra: %s, ID: %d, Ts: %d}",
+		p.Name, p.EmailAddress, p.CreditCard, p.City, p.State, p.Extra, p.ID, p.DateTime)
 }
 
 type EType uint8

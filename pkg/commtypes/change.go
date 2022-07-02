@@ -4,12 +4,17 @@ package commtypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 )
 
 type Change struct {
 	NewVal interface{}
 	OldVal interface{}
+}
+
+func (c Change) String() string {
+	return fmt.Sprintf("Change: {NewVal: %v, OldVal: %v}", c.NewVal, c.OldVal)
 }
 
 type ChangeSerialized struct {

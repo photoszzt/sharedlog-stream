@@ -5,6 +5,7 @@ package types
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
@@ -13,6 +14,12 @@ import (
 type AuctionIdCount struct {
 	AucId uint64 `json:"aucId,omitempty" msg:"aucId,omitempty"`
 	Count uint64 `json:"cnt,omitempty" msg:"cnt,omitempty"`
+}
+
+var _ = fmt.Stringer(AuctionIdCount{})
+
+func (aic AuctionIdCount) String() string {
+	return fmt.Sprintf("AuctionIdCount: {AucId: %d, Count: %d}", aic.AucId, aic.Count)
 }
 
 type AuctionIdCountJSONEncoder struct{}

@@ -5,6 +5,7 @@ package types
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -14,6 +15,13 @@ type NameCityStateId struct {
 	City  string `msg:"city" json:"city"`
 	State string `msg:"state" json:"state"`
 	ID    uint64 `msg:"id" json:"id"`
+}
+
+var _ = fmt.Stringer(NameCityStateId{})
+
+func (ncsi NameCityStateId) String() string {
+	return fmt.Sprintf("NameCityStateId: {Name: %s, City: %s, State: %s, ID: %d}",
+		ncsi.Name, ncsi.City, ncsi.State, ncsi.ID)
 }
 
 type NameCityStateIdJSONSerde struct{}

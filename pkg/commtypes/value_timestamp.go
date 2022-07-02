@@ -12,6 +12,12 @@ type ValueTimestamp struct {
 	Timestamp int64
 }
 
+var _ = fmt.Stringer(ValueTimestamp{})
+
+func (vts ValueTimestamp) String() string {
+	return fmt.Sprintf("ValueTs: {Value: %v, Ts: %d}", vts.Value, vts.Timestamp)
+}
+
 func CreateValueTimestamp(val interface{}, ts int64) *ValueTimestamp {
 	if val == nil {
 		return nil

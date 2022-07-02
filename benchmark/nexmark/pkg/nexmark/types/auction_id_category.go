@@ -2,11 +2,20 @@
 //msgp:ignore AuctionIdCategoryJSONSerde AuctionIdCategoryMsgpSerde
 package types
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 type AuctionIdCategory struct {
 	AucId    uint64 `json:"aucId,omitempty" msg:"aucId,omitempty"`
 	Category uint64 `json:"cat,omitempty" msg:"cat,omitempty"`
+}
+
+var _ = fmt.Stringer(AuctionIdCategory{})
+
+func (aic AuctionIdCategory) String() string {
+	return fmt.Sprintf("AuctionIdCat: {AucID: %d, Cat: %d}", aic.AucId, aic.Category)
 }
 
 func CompareAuctionIdCategory(a, b *AuctionIdCategory) int {

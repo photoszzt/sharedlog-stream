@@ -4,12 +4,20 @@ package types
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/commtypes"
 )
 
 type PriceTime struct {
 	Price    uint64 `json:"price" msg:"price"`
 	DateTime int64  `json:"dateTime" msg:"dateTime"` // unix timestamp in ms
+}
+
+var _ = fmt.Stringer(PriceTime{})
+
+func (pt PriceTime) String() string {
+	return fmt.Sprintf("PriceTime: {Price: %d, Ts: %d}",
+		pt.Price, pt.DateTime)
 }
 
 type PriceTimeJSONSerde struct{}

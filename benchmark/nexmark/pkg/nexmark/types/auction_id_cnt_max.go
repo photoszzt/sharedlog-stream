@@ -4,6 +4,7 @@ package types
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -12,6 +13,13 @@ type AuctionIdCntMax struct {
 	AucId  uint64 `json:"aucId" msg:"aucId"`
 	Count  uint64 `json:"cnt" msg:"cnt"`
 	MaxCnt uint64 `json:"maxCnt" msg:"maxCnt"`
+}
+
+var _ = fmt.Stringer(AuctionIdCntMax{})
+
+func (aicm AuctionIdCntMax) String() string {
+	return fmt.Sprintf("AuctionIdCntMax: {AucID: %d, Count: %d, MaxCnt: %d}",
+		aicm.AucId, aicm.Count, aicm.MaxCnt)
 }
 
 type AuctionIdCntMaxJSONSerde struct{}

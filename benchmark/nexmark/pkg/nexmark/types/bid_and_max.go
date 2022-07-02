@@ -4,6 +4,7 @@ package types
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -15,6 +16,13 @@ type BidAndMax struct {
 	BidTs    int64  `json:"bTs" msg:"bTs"`
 	WStartMs int64  `json:"wStartMs" msg:"wStartMs"`
 	WEndMs   int64  `json:"wEndMs" msg:"wEndMs"`
+}
+
+var _ = fmt.Stringer(BidAndMax{})
+
+func (bm BidAndMax) String() string {
+	return fmt.Sprintf("BidAndMax: {Price: %d, Auction: %d, Bidder: %d, BidTs: %d, WinStartMs: %d, WinEndMs: %d}",
+		bm.Price, bm.Auction, bm.Bidder, bm.BidTs, bm.WStartMs, bm.WEndMs)
 }
 
 type BidAndMaxJSONSerde struct{}

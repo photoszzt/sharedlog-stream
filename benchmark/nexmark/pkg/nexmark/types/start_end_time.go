@@ -16,6 +16,12 @@ type StartEndTime struct {
 	EndTimeMs   int64 `json:"eTs" msg:"eTs"`
 }
 
+var _ = fmt.Stringer(StartEndTime{})
+
+func (se StartEndTime) Stringer() string {
+	return fmt.Sprintf("StartEndTime: {StartTsMs: %d, EndTsMs: %d}", se.StartTimeMs, se.EndTimeMs)
+}
+
 func CompareStartEndTime(a, b *StartEndTime) int {
 	if a.StartTimeMs < b.StartTimeMs {
 		return -1

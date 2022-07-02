@@ -1,10 +1,18 @@
 package commtypes
 
+import "fmt"
+
 type Message struct {
 	Key       interface{}
 	Value     interface{}
 	Timestamp int64
-	InjT      int64 `msg:"injT" json:"injT"`
+	InjT      int64
+}
+
+var _ = fmt.Stringer(Message{})
+
+func (m Message) String() string {
+	return fmt.Sprintf("Msg: {Key: %v, Value: %v, Ts: %d, InjectTs: %d}", m.Key, m.Value, m.Timestamp, m.InjT)
 }
 
 var _ = EventTimeExtractor(Message{})

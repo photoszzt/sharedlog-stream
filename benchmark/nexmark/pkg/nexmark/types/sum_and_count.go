@@ -4,6 +4,7 @@ package types
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -11,6 +12,12 @@ import (
 type SumAndCount struct {
 	Sum   uint64 `json:"sum" msg:"sum"`
 	Count uint64 `json:"count" msg:"count"`
+}
+
+var _ = fmt.Stringer(SumAndCount{})
+
+func (sc SumAndCount) String() string {
+	return fmt.Sprintf("SumAndCount: {Sum: %d, Count: %d}", sc.Sum, sc.Count)
 }
 
 type SumAndCountJSONSerde struct{}

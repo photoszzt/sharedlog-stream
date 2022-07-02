@@ -4,6 +4,7 @@ package types
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/commtypes"
 )
 
@@ -13,6 +14,13 @@ type AuctionBid struct {
 	AucExpires  int64  `json:"aucExpires" msg:"aucExpires"`
 	BidPrice    uint64 `json:"bidPrice" msg:"bidPrice"`
 	AucCategory uint64 `json:"aucCategory" msg:"aucCategory"`
+}
+
+var _ = fmt.Stringer(AuctionBid{})
+
+func (ab AuctionBid) String() string {
+	return fmt.Sprintf("AuctionBid: {BidTs: %d, AucTs: %d, AucExpiresTs: %d, BidPrice: %d, AucCat: %d}",
+		ab.BidDateTime, ab.AucDateTime, ab.AucExpires, ab.BidPrice, ab.AucCategory)
 }
 
 type AuctionBidJSONSerde struct{}

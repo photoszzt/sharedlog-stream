@@ -2,12 +2,20 @@
 //msgp:ignore KeyAndWindowStartTs KeyAndWindowStartTsJSONSerde KeyAndWindowStartTsMsgpSerde
 package commtypes
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 type KeyAndWindowStartTs struct {
 	Key           interface{}
 	WindowStartTs int64
 }
+
+func (kwTs KeyAndWindowStartTs) String() string {
+	return fmt.Sprintf("KeyAndWindowStartTs: {Key: %v, WindowStartTs: %d}", kwTs.Key, kwTs.WindowStartTs)
+}
+
 type KeyAndWindowStartTsSerialized struct {
 	KeySerialized []byte `msg:"k" json:"k"`
 	WindowStartTs int64  `msg:"ts" json:"ts"`
@@ -17,7 +25,7 @@ type KeyAndWindowStartTsJSONSerde struct {
 	KeyJSONSerde Serde
 }
 
-func castToKeyAndWindowStartTs(value interface{}) *KeyAndWindowStartTs {
+func CastToKeyAndWindowStartTs(value interface{}) *KeyAndWindowStartTs {
 	v, ok := value.(*KeyAndWindowStartTs)
 	if !ok {
 		vtmp := value.(KeyAndWindowStartTs)
@@ -27,7 +35,7 @@ func castToKeyAndWindowStartTs(value interface{}) *KeyAndWindowStartTs {
 }
 
 func (s KeyAndWindowStartTsJSONSerde) Encode(value interface{}) ([]byte, error) {
-	val := castToKeyAndWindowStartTs(value)
+	val := CastToKeyAndWindowStartTs(value)
 	kenc, err := s.KeyJSONSerde.Encode(val.Key)
 	if err != nil {
 		return nil, err
@@ -59,7 +67,7 @@ type KeyAndWindowStartTsMsgpSerde struct {
 }
 
 func (s KeyAndWindowStartTsMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	val := castToKeyAndWindowStartTs(value)
+	val := CastToKeyAndWindowStartTs(value)
 	kenc, err := s.KeyMsgpSerde.Encode(val.Key)
 	if err != nil {
 		return nil, err

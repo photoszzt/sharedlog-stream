@@ -5,6 +5,7 @@ package types
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
@@ -14,6 +15,13 @@ type PersonTime struct {
 	Name      string `json:"name" msg:"name"`
 	ID        uint64 `json:"id" msg:"id"`
 	StartTime int64  `json:"startTime" msg:"startTime"`
+}
+
+var _ = fmt.Stringer(PersonTime{})
+
+func (pt PersonTime) String() string {
+	return fmt.Sprintf("PersonTime: {Name: %s, ID: %d, StartTime: %d}",
+		pt.Name, pt.ID, pt.StartTime)
 }
 
 type PersonTimeJSONEncoder struct{}

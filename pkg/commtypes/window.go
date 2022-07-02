@@ -3,6 +3,7 @@
 package commtypes
 
 import (
+	"fmt"
 	"time"
 
 	"golang.org/x/xerrors"
@@ -30,6 +31,12 @@ type BaseWindow struct {
 	endT    *time.Time `json:"-" msg:"-"`
 	StartTs int64      `json:"startTs" msg:"startTs"`
 	EndTs   int64      `json:"endTs" msg:"endTs"`
+}
+
+var _ = fmt.Stringer(BaseWindow{})
+
+func (bw BaseWindow) String() string {
+	return fmt.Sprintf("BaseWindow: {StartTs: %d, EndTs: %d}", bw.StartTs, bw.EndTs)
 }
 
 func NewBaseWindow(startTs int64, endTs int64) BaseWindow {

@@ -4,6 +4,7 @@ package commtypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 )
 
@@ -19,6 +20,12 @@ const (
 type ProduceRange struct {
 	Start uint64 `json:"s" msg:"s"`
 	End   uint64 `json:"e" msg:"e"`
+}
+
+var _ = fmt.Stringer(ProduceRange{})
+
+func (p ProduceRange) String() string {
+	return fmt.Sprintf("ProduceRange: {Start: %d, End: %d}", p.Start, p.End)
 }
 
 type EpochMarker struct {
