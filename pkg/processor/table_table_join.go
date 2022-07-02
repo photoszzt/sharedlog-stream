@@ -41,7 +41,7 @@ func (p *TableTableJoinProcessor) ProcessAndReturn(ctx context.Context, msg comm
 		return nil, fmt.Errorf("get err: %v", err)
 	}
 	if ok {
-		rvTs := val2.(commtypes.ValueTimestamp)
+		rvTs := val2.(*commtypes.ValueTimestamp)
 		if rvTs.Value == nil {
 			return nil, nil
 		}

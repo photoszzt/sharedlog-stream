@@ -6,6 +6,7 @@ package commtypes
 import (
 	"encoding/json"
 	"fmt"
+	"sharedlog-stream/pkg/utils"
 )
 
 type MessageSerde interface {
@@ -29,7 +30,7 @@ func convertToMsgSer(value interface{}, keySerde Serde, valSerde Serde) (*Messag
 	}
 
 	var kenc []byte
-	if v.Key != nil {
+	if !utils.IsNil(v.Key) {
 		kencTmp, err := keySerde.Encode(v.Key)
 		if err != nil {
 			return nil, err
@@ -38,7 +39,7 @@ func convertToMsgSer(value interface{}, keySerde Serde, valSerde Serde) (*Messag
 	}
 
 	var venc []byte
-	if v.Value != nil {
+	if !utils.IsNil(v.Value) {
 		vencTmp, err := valSerde.Encode(v.Value)
 		if err != nil {
 			return nil, err

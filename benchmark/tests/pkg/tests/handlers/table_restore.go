@@ -243,16 +243,16 @@ func (h *tableRestoreHandler) testRestoreWindowTable(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	ret := make(map[int]commtypes.ValueTimestamp)
+	ret := make(map[int]*commtypes.ValueTimestamp)
 	err = wstore.FetchAll(ctx, time.UnixMilli(0), time.UnixMilli(store.TEST_WINDOW_SIZE*2),
 		func(i int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
-			ret[kt.(int)] = commtypes.ValueTimestamp{Value: vt, Timestamp: i}
+			ret[kt.(int)] = commtypes.CreateValueTimestamp(vt, i)
 			return nil
 		})
 	if err != nil {
 		panic(err)
 	}
-	expected := map[int]commtypes.ValueTimestamp{
+	expected := map[int]*commtypes.ValueTimestamp{
 		1: {Value: "one", Timestamp: 0},
 		2: {Value: "two", Timestamp: store.TEST_WINDOW_SIZE},
 		3: {Value: "three", Timestamp: store.TEST_WINDOW_SIZE * 2},

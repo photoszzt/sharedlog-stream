@@ -81,7 +81,7 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(ctx context.Context, m
 				newTs = msg.Timestamp
 			}
 			newAgg := p.aggregator.Apply(msg.Key, msg.Value, oldAgg)
-			err = p.store.Put(ctx, msg.Key, &commtypes.ValueTimestamp{Value: newAgg, Timestamp: newTs}, windowStart)
+			err = p.store.Put(ctx, msg.Key, commtypes.CreateValueTimestamp(newAgg, newTs), windowStart)
 			if err != nil {
 				return nil, fmt.Errorf("win agg put err %v", err)
 			}

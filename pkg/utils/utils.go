@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"os"
 	"reflect"
-	"sharedlog-stream/pkg/commtypes"
 	"strconv"
 	"testing"
 )
@@ -115,18 +114,6 @@ func reprOfValue(val reflect.Value) string {
 	}
 }
 
-func ConvertToBytes(a interface{}, serde commtypes.Serde) ([]byte, error) {
-	var err error
-	aBytes, ok := a.([]byte)
-	if !ok {
-		aBytes, err = serde.Encode(a)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return aBytes, nil
-}
-
 func FatalMsg(expected interface{}, got interface{}, t testing.TB) {
 	t.Fatalf("expected %v, got %v", expected, got)
 }
@@ -148,4 +135,15 @@ func ReadFileContent(fname string) ([]byte, error) {
 	defer jsonFile.Close()
 
 	return ioutil.ReadAll(jsonFile)
+}
+
+func IsNil(i interface{}) bool {
+	if i == nil {
+		return true
+	}
+	switch reflect.TypeOf(i).Kind() {
+	case reflect.Ptr, reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
+		return reflect.ValueOf(i).IsNil()
+	}
+	return false
 }

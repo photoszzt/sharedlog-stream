@@ -66,7 +66,7 @@ func TestJoinOnlyIfMatchFound(t *testing.T) {
 	joinProc := getJoinProcessor()
 	ctx := context.Background()
 	for i := 0; i < 2; i++ {
-		err := joinProc.store.Put(ctx, i, commtypes.ValueTimestamp{Value: i, Timestamp: int64(i)})
+		err := joinProc.store.Put(ctx, i, commtypes.CreateValueTimestamp(i, int64(i)))
 		if err != nil {
 			t.Errorf("fail to put val to store: %v", err)
 		}
@@ -95,7 +95,7 @@ func TestShouldClearTableEntryOnNullValueUpdate(t *testing.T) {
 	joinProc := getJoinProcessorWithStr()
 	ctx := context.Background()
 	for i := 0; i < 4; i++ {
-		err := joinProc.store.Put(ctx, i, commtypes.ValueTimestamp{Value: fmt.Sprintf("Y%d", i), Timestamp: int64(i)})
+		err := joinProc.store.Put(ctx, i, commtypes.CreateValueTimestamp(fmt.Sprintf("Y%d", i), int64(i)))
 		if err != nil {
 			t.Errorf("fail to put val to store: %v", err)
 		}

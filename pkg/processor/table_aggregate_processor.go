@@ -40,18 +40,17 @@ func (p *TableAggregateProcessor) Name() string {
 }
 
 func (p *TableAggregateProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	if msg.Key == nil {
+	if utils.IsNil(msg.Key) {
 		return nil, fmt.Errorf("msg key for table aggregate should not be nil")
 	}
 	val, ok, err := p.store.Get(ctx, msg.Key)
 	if err != nil {
 		return nil, err
 	}
-	var oldAggTs *commtypes.ValueTimestamp
-	var oldAgg interface{}
+	var oldAggTs *commtypes.ValueTimestamp = nil
+	var oldAgg interface{} = nil
 	if ok {
-		oldAggTsTmp := val.(commtypes.ValueTimestamp)
-		oldAggTs = &oldAggTsTmp
+		oldAggTs = val.(*commtypes.ValueTimestamp)
 		oldAgg = oldAggTs.Value
 	}
 	newTs := msg.Timestamp
@@ -59,9 +58,10 @@ func (p *TableAggregateProcessor) ProcessAndReturn(ctx context.Context, msg comm
 
 	// first try to remove the old val
 	msgVal := msg.Value.(commtypes.Change)
-	debug.Fprintf(os.Stderr, "msg key %v, msg newVal %v, msg oldVal %v, ts %d\n",
+	fmt.Fprintf(os.Stderr, "msg key %v, msg newVal %v, msg oldVal %v, ts %d\n",
 		msg.Key, msgVal.NewVal, msgVal.OldVal, msg.Timestamp)
-	if msgVal.OldVal != nil && oldAgg != nil {
+	fmt.Fprintf(os.Stderr, "oldAggTs: %v, oldAgg: %v\n", oldAggTs, oldAgg)
+	if !utils.IsNil(msgVal.OldVal) && !utils.IsNil(oldAgg) {
 		intermediateAgg = p.remove.Apply(msg.Key, msgVal.OldVal, oldAgg)
 		newTs = utils.MaxInt64(msg.Timestamp, oldAggTs.Timestamp)
 	} else {
@@ -70,15 +70,15 @@ func (p *TableAggregateProcessor) ProcessAndReturn(ctx context.Context, msg comm
 
 	// then try to add the new val
 	var newAgg interface{}
-	if msgVal.NewVal != nil {
+	if !utils.IsNil(msgVal.NewVal) {
 		var initAgg interface{}
-		if intermediateAgg == nil {
+		if utils.IsNil(intermediateAgg) {
 			initAgg = p.initializer.Apply()
 		} else {
 			initAgg = intermediateAgg
 		}
 		newAgg = p.add.Apply(msg.Key, msgVal.NewVal, initAgg)
-		if oldAggTs != nil {
+		if !utils.IsNil(oldAggTs) {
 			newTs = utils.MaxInt64(msg.Timestamp, oldAggTs.Timestamp)
 		}
 	} else {
@@ -86,7 +86,7 @@ func (p *TableAggregateProcessor) ProcessAndReturn(ctx context.Context, msg comm
 	}
 	debug.Fprintf(os.Stderr, "k %v, newAgg %v, oldAgg %v\n", msg.Key, newAgg, oldAgg)
 
-	err = p.store.Put(ctx, msg.Key, commtypes.ValueTimestamp{Timestamp: newTs, Value: newAgg})
+	err = p.store.Put(ctx, msg.Key, commtypes.CreateValueTimestamp(newAgg, newTs))
 	if err != nil {
 		return nil, err
 	}

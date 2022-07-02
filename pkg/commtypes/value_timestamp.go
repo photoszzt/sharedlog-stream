@@ -12,6 +12,17 @@ type ValueTimestamp struct {
 	Timestamp int64
 }
 
+func CreateValueTimestamp(val interface{}, ts int64) *ValueTimestamp {
+	if val == nil {
+		return nil
+	} else {
+		return &ValueTimestamp{
+			Value:     val,
+			Timestamp: ts,
+		}
+	}
+}
+
 type ValueTimestampSerialized struct {
 	ValueSerialized []byte `json:"vs,omitempty" msg:"vs,omitempty"`
 	Timestamp       int64  `json:"ts,omitempty" msg:"ts,omitempty"`
@@ -19,6 +30,14 @@ type ValueTimestampSerialized struct {
 
 func (s *ValueTimestamp) ExtractEventTime() (int64, error) {
 	return s.Timestamp, nil
+}
+
+func GetValOrNil(valTs *ValueTimestamp) interface{} {
+	if valTs == nil {
+		return nil
+	} else {
+		return valTs.Value
+	}
 }
 
 var _ = EventTimeExtractor(&ValueTimestamp{})

@@ -131,10 +131,7 @@ func RestoreChangelogKVStateStore(
 					}
 					val := msg.Value
 					if changelogManager.ChangelogIsSrc() {
-						val = commtypes.ValueTimestamp{
-							Value:     msg.Value,
-							Timestamp: msg.Timestamp,
-						}
+						val = commtypes.CreateValueTimestamp(msg.Value, msg.Timestamp)
 					}
 					err = kvStore.PutWithoutPushToChangelog(ctx, msg.Key, val)
 					if err != nil {
@@ -147,10 +144,7 @@ func RestoreChangelogKVStateStore(
 				}
 				val := msg.Msg.Value
 				if changelogManager.ChangelogIsSrc() {
-					val = commtypes.ValueTimestamp{
-						Value:     msg.Msg.Value,
-						Timestamp: msg.Msg.Timestamp,
-					}
+					val = commtypes.CreateValueTimestamp(msg.Msg.Value, msg.Msg.Timestamp)
 				}
 				err = kvStore.PutWithoutPushToChangelog(ctx, msg.Msg.Key, val)
 				if err != nil {

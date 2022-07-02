@@ -73,7 +73,7 @@ func (sls *ShardedSharedLogStreamProducer) ConfigExactlyOnce(
 }
 
 func (sls *ShardedSharedLogStreamProducer) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
-	if msg.Key == nil && msg.Value == nil {
+	if utils.IsNil(msg.Key) && utils.IsNil(msg.Value) {
 		return nil
 	}
 	ctrl, ok := msg.Key.(string)

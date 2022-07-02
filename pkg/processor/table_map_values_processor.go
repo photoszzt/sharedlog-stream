@@ -59,7 +59,7 @@ func (p *TableMapValuesProcessor) ProcessAndReturn(ctx context.Context, msg comm
 		return nil, err
 	}
 	if p.store != nil {
-		p.store.Put(ctx, msg.Key, commtypes.ValueTimestamp{Value: newV, Timestamp: msg.Timestamp})
+		p.store.Put(ctx, msg.Key, commtypes.CreateValueTimestamp(newV, msg.Timestamp))
 	}
 	newMsg := commtypes.Message{
 		Key: msg.Key,

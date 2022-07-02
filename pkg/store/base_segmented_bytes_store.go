@@ -18,6 +18,7 @@ type BaseSegmentedBytesStore struct {
 
 var _ = SegmentedBytesStore(&BaseSegmentedBytesStore{})
 
+/*
 func NewRedisSegmentedBytesStore(name string,
 	retention int64, // ms
 	keySchema KeySchema,
@@ -56,6 +57,7 @@ func NewMongoDBSegmentedBytesStore(ctx context.Context, name string,
 		tableType:          MONGODB,
 	}, nil
 }
+*/
 
 func (s *BaseSegmentedBytesStore) IsOpen() bool { return true }
 func (s *BaseSegmentedBytesStore) Name() string { return s.name }

@@ -142,6 +142,8 @@ func GetSerdeFromString(serdeStr string, serdeFormat commtypes.SerdeFormat) (com
 		return ntypes.GetEventSerde(serdeFormat)
 	case "Uint64":
 		return commtypes.Uint64Serde{}, nil
+	case "Float64":
+		return commtypes.Float64Serde{}, nil
 	case "String":
 		return commtypes.StringSerde{}, nil
 	case "PersonTime":

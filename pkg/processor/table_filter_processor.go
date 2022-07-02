@@ -69,7 +69,7 @@ func (p *TableFilterProcessor) ProcessAndReturn(ctx context.Context, msg commtyp
 		return nil, nil
 	}
 	if p.store != nil {
-		err = p.store.Put(ctx, msg.Key, &commtypes.ValueTimestamp{Value: newVal, Timestamp: msg.Timestamp})
+		err = p.store.Put(ctx, msg.Key, commtypes.CreateValueTimestamp(newVal, msg.Timestamp))
 		if err != nil {
 			return nil, err
 		}

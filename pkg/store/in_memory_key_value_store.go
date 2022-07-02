@@ -5,6 +5,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/treemap"
+	"sharedlog-stream/pkg/utils"
 	"strings"
 )
 
@@ -46,12 +47,6 @@ func NewInMemoryKeyValueStore(name string, compare KVStoreCompareFunc) *InMemory
 	}
 }
 
-func (st *InMemoryKeyValueStore) Init(sctx StoreContext) {
-	st.sctx = sctx
-	st.open = true
-	st.sctx.RegisterKeyValueStore(st)
-}
-
 func (st *InMemoryKeyValueStore) Name() string {
 	return st.name
 }
@@ -66,15 +61,9 @@ func (st *InMemoryKeyValueStore) Get(ctx context.Context, key commtypes.KeyT) (c
 }
 
 func (st *InMemoryKeyValueStore) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
-	if value == nil {
+	if utils.IsNil(value) {
 		st.store.Del(key)
 	} else {
-		vts, ok := value.(commtypes.ValueTimestamp)
-		if ok {
-			if vts.Value == nil {
-				st.store.Del(key)
-			}
-		}
 		if key != nil {
 			st.store.Set(key, value)
 		}
@@ -111,7 +100,7 @@ func (st *InMemoryKeyValueStore) ApproximateNumEntries(ctx context.Context) (uin
 }
 
 func (st *InMemoryKeyValueStore) Range(ctx context.Context, from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
-	if from == nil && to == nil {
+	if utils.IsNil(from) && utils.IsNil(to) {
 		it := st.store.Iterator()
 		for ; it.Valid(); it.Next() {
 			err := iterFunc(it.Key(), it.Value())
@@ -119,7 +108,7 @@ func (st *InMemoryKeyValueStore) Range(ctx context.Context, from commtypes.KeyT,
 				return err
 			}
 		}
-	} else if from == nil && to != nil {
+	} else if utils.IsNil(from) && !utils.IsNil(to) {
 		it := st.store.UpperBound(to)
 		for ; it.Valid(); it.Next() {
 			err := iterFunc(it.Key(), it.Value())
@@ -127,7 +116,7 @@ func (st *InMemoryKeyValueStore) Range(ctx context.Context, from commtypes.KeyT,
 				return err
 			}
 		}
-	} else if from != nil && to == nil {
+	} else if !utils.IsNil(from) && utils.IsNil(to) {
 		it := st.store.LowerBound(from)
 		for ; it.Valid(); it.Next() {
 			err := iterFunc(it.Key(), it.Value())
@@ -148,7 +137,7 @@ func (st *InMemoryKeyValueStore) Range(ctx context.Context, from commtypes.KeyT,
 }
 
 func (st *InMemoryKeyValueStore) ReverseRange(from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
-	if from == nil && to == nil {
+	if utils.IsNil(from) && utils.IsNil(to) {
 		it := st.store.Reverse()
 		for ; it.Valid(); it.Next() {
 			err := iterFunc(it.Key(), it.Value())
@@ -156,7 +145,7 @@ func (st *InMemoryKeyValueStore) ReverseRange(from commtypes.KeyT, to commtypes.
 				return err
 			}
 		}
-	} else if from == nil && to != nil {
+	} else if utils.IsNil(from) && !utils.IsNil(to) {
 		it := st.store.ReverseUpperBound(to)
 		for ; it.Valid(); it.Next() {
 			err := iterFunc(it.Key(), it.Value())
@@ -164,7 +153,7 @@ func (st *InMemoryKeyValueStore) ReverseRange(from commtypes.KeyT, to commtypes.
 				return err
 			}
 		}
-	} else if from != nil && to == nil {
+	} else if !utils.IsNil(from) && utils.IsNil(to) {
 		it := st.store.ReverseLowerBound(from)
 		for ; it.Valid(); it.Next() {
 			err := iterFunc(it.Key(), it.Value())

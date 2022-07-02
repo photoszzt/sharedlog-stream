@@ -44,7 +44,7 @@ func (p *StreamAggregateProcessor) ProcessAndReturn(ctx context.Context, msg com
 	var oldAgg interface{}
 	var newTs int64
 	if ok {
-		oldAggTs := val.(commtypes.ValueTimestamp)
+		oldAggTs := val.(*commtypes.ValueTimestamp)
 		oldAgg = oldAggTs.Value
 		if msg.Timestamp > oldAggTs.Timestamp {
 			newTs = msg.Timestamp
@@ -56,7 +56,7 @@ func (p *StreamAggregateProcessor) ProcessAndReturn(ctx context.Context, msg com
 		newTs = msg.Timestamp
 	}
 	newAgg := p.aggregator.Apply(msg.Key, msg.Value, oldAgg)
-	err = p.store.Put(ctx, msg.Key, commtypes.ValueTimestamp{Timestamp: newTs, Value: newAgg})
+	err = p.store.Put(ctx, msg.Key, commtypes.CreateValueTimestamp(newAgg, newTs))
 	if err != nil {
 		return nil, err
 	}

@@ -46,15 +46,17 @@ func (p *TableSourceProcessor) ProcessAndReturn(ctx context.Context, msg commtyp
 		}
 		if ok {
 			oldValTs := commtypes.CastToValTsPtr(v)
-			oldVal = oldValTs.Value
-			if msg.Timestamp < oldValTs.Timestamp {
-				log.Warn().Msgf("Detected out-of-order table update for %s, old Ts=[%v] new Ts=[%v].",
-					p.store.Name(), oldValTs.Timestamp, msg.Timestamp)
+			if oldValTs != nil {
+				oldVal = oldValTs.Value
+				if msg.Timestamp < oldValTs.Timestamp {
+					log.Warn().Msgf("Detected out-of-order table update for %s, old Ts=[%v] new Ts=[%v].",
+						p.store.Name(), oldValTs.Timestamp, msg.Timestamp)
+				}
 			}
 		} else {
 			oldVal = nil
 		}
-		err = p.store.Put(ctx, msg.Key, commtypes.ValueTimestamp{Value: msg.Value, Timestamp: msg.Timestamp})
+		err = p.store.Put(ctx, msg.Key, commtypes.CreateValueTimestamp(msg.Value, msg.Timestamp))
 		if err != nil {
 			return nil, err
 		}

@@ -7,6 +7,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/utils"
 	"sync"
 	"time"
 
@@ -95,7 +96,7 @@ func (s *InMemoryWindowStore) Put(ctx context.Context, key commtypes.KeyT, value
 	if windowStartTimestamp <= s.observedStreamTime-s.retentionPeriod {
 		log.Warn().Msgf("Skipping record for expired segment.")
 	} else {
-		if value != nil {
+		if !utils.IsNil(value) {
 			s.updateSeqnumForDups()
 			k := key
 			if s.retainDuplicates {

@@ -110,6 +110,9 @@ func invokeDumpFunc(client *http.Client) {
 	case "q3":
 		dumpInput.KeySerde = "Uint64"
 		dumpInput.ValueSerde = "NameCityStateId"
+	case "q4":
+		dumpInput.KeySerde = "Uint64"
+		dumpInput.ValueSerde = "Float64"
 	case "q5":
 		dumpInput.KeySerde = "StartEndTime"
 		dumpInput.ValueSerde = "AuctionIdCntMax"
