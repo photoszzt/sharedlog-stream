@@ -109,6 +109,8 @@ func (h *q4JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 		time.Duration(sp.WarmupS)*time.Second)
 	src1.SetInitialSource(false)
 	src2.SetInitialSource(false)
+	src1.SetName("aucsByIDSrc")
+	src2.SetName("bidsByAucIDSrc")
 	return []producer_consumer.MeteredConsumerIntr{src1, src2}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 

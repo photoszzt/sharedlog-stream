@@ -153,6 +153,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	fmt.Fprintf(os.Stderr, "\tOccasionalDelaySec   : %v\n", generatorConfig.Configuration.OccasionalDelaySec)
 	fmt.Fprintf(os.Stderr, "\tProbDelayedEvent     : %v\n", generatorConfig.Configuration.ProbDelayedEvent)
 	fmt.Fprintf(os.Stderr, "\tOutOfOrderGroupSize  : %v\n", generatorConfig.Configuration.OutOfOrderGroupSize)
+	eventsPerGen := inputConfig.EventsNum / uint64(generatorConfig.Configuration.NumEventGenerators)
 	eventGenerator := generator.NewSimpleNexmarkGenerator(generatorConfig, int(inputConfig.ParNum))
 	duration := time.Duration(inputConfig.Duration) * time.Second
 	serdeFormat := commtypes.SerdeFormat(inputConfig.SerdeFormat)
@@ -273,7 +274,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 			break
 		}
 		if (duration != 0 && time.Since(startTime) >= duration) ||
-			(inputConfig.EventsNum != 0 && procArgs.idx == int(inputConfig.EventsNum)) {
+			(eventsPerGen != 0 && procArgs.idx == int(eventsPerGen)) {
 			break
 		}
 		fnout := h.process(dctx, procArgs)

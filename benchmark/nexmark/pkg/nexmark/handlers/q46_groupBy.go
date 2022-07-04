@@ -49,6 +49,8 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	ectx.Consumers()[0].SetInitialSource(true)
+	ectx.Producers()[0].SetName("aucsByIDSink")
+	ectx.Producers()[1].SetName("bidsByAucIDSink")
 	auctionsByIDFunc := h.getAucsByID()
 	bidsByAuctionIDFunc := h.getBidsByAuctionID()
 	dctx, dcancel := context.WithCancel(ctx)
