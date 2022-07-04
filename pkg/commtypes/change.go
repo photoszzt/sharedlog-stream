@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sharedlog-stream/pkg/common_errors"
+	"sharedlog-stream/pkg/utils"
 )
 
 type Change struct {
@@ -35,19 +36,60 @@ func CastToChangePtr(value interface{}) *Change {
 	return v
 }
 
-func (s ChangeJSONSerde) Encode(value interface{}) ([]byte, error) {
-	val := CastToChangePtr(value)
-	newValEnc, err := s.ValJSONSerde.Encode(val.NewVal)
-	if err != nil {
-		return nil, err
+func convertToChangeSer(value interface{}, valSerde Serde) (*ChangeSerialized, error) {
+	if value == nil {
+		return nil, nil
 	}
-	oldValEnc, err := s.ValJSONSerde.Encode(val.OldVal)
-	if err != nil {
-		return nil, err
+	val := CastToChangePtr(value)
+	if val == nil {
+		return nil, nil
+	}
+	var newValEnc, oldValEnc []byte
+	var err error
+	if !utils.IsNil(val.NewVal) {
+		newValEnc, err = valSerde.Encode(val.NewVal)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if !utils.IsNil(val.OldVal) {
+		oldValEnc, err = valSerde.Encode(val.OldVal)
+		if err != nil {
+			return nil, err
+		}
 	}
 	c := &ChangeSerialized{
 		NewValSerialized: newValEnc,
 		OldValSerialized: oldValEnc,
+	}
+	return c, nil
+}
+
+func decodeToChange(val *ChangeSerialized, valSerde Serde) (interface{}, error) {
+	var newVal, oldVal interface{} = nil, nil
+	var err error
+	if val.NewValSerialized != nil {
+		newVal, err = valSerde.Decode(val.NewValSerialized)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if val.OldValSerialized != nil {
+		oldVal, err = valSerde.Decode(val.OldValSerialized)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return Change{
+		NewVal: newVal,
+		OldVal: oldVal,
+	}, nil
+}
+
+func (s ChangeJSONSerde) Encode(value interface{}) ([]byte, error) {
+	c, err := convertToChangeSer(value, s.ValJSONSerde)
+	if err != nil {
+		return nil, err
 	}
 	return json.Marshal(c)
 }
@@ -56,18 +98,7 @@ func (s ChangeJSONSerde) Decode(value []byte) (interface{}, error) {
 	if err := json.Unmarshal(value, &val); err != nil {
 		return nil, err
 	}
-	newVal, err := s.ValJSONSerde.Decode(val.NewValSerialized)
-	if err != nil {
-		return nil, err
-	}
-	oldVal, err := s.ValJSONSerde.Decode(val.OldValSerialized)
-	if err != nil {
-		return nil, err
-	}
-	return Change{
-		NewVal: newVal,
-		OldVal: oldVal,
-	}, nil
+	return decodeToChange(&val, s.ValJSONSerde)
 }
 
 type ChangeMsgpSerde struct {
@@ -75,18 +106,9 @@ type ChangeMsgpSerde struct {
 }
 
 func (s ChangeMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	val := CastToChangePtr(value)
-	newValEnc, err := s.ValMsgpSerde.Encode(val.NewVal)
+	c, err := convertToChangeSer(value, s.ValMsgpSerde)
 	if err != nil {
 		return nil, err
-	}
-	oldValEnc, err := s.ValMsgpSerde.Encode(val.OldVal)
-	if err != nil {
-		return nil, err
-	}
-	c := &ChangeSerialized{
-		NewValSerialized: newValEnc,
-		OldValSerialized: oldValEnc,
 	}
 	return c.MarshalMsg(nil)
 }
@@ -96,18 +118,7 @@ func (s ChangeMsgpSerde) Decode(value []byte) (interface{}, error) {
 	if _, err := val.UnmarshalMsg(value); err != nil {
 		return nil, err
 	}
-	newVal, err := s.ValMsgpSerde.Decode(val.NewValSerialized)
-	if err != nil {
-		return nil, err
-	}
-	oldVal, err := s.ValMsgpSerde.Decode(val.OldValSerialized)
-	if err != nil {
-		return nil, err
-	}
-	return Change{
-		NewVal: newVal,
-		OldVal: oldVal,
-	}, nil
+	return decodeToChange(&val, s.ValMsgpSerde)
 }
 
 func GetChangeSerde(serdeFormat SerdeFormat, valSerde Serde) (Serde, error) {

@@ -3,8 +3,8 @@ package processor
 import (
 	"context"
 	"fmt"
-	"os"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/utils"
 )
 
 type TableGroupByMapProcessor struct {
@@ -36,7 +36,7 @@ func (p *TableGroupByMapProcessor) ProcessAndReturn(ctx context.Context, msg com
 	}
 	var newK, newV interface{}
 	var err error
-	if change.NewVal == nil {
+	if utils.IsNil(change.NewVal) {
 		newK = nil
 		newV = nil
 	} else {
@@ -46,7 +46,7 @@ func (p *TableGroupByMapProcessor) ProcessAndReturn(ctx context.Context, msg com
 		}
 	}
 	var oldK, oldV interface{}
-	if change.OldVal == nil {
+	if utils.IsNil(change.OldVal) {
 		oldK = nil
 		oldV = nil
 	} else {
@@ -56,20 +56,19 @@ func (p *TableGroupByMapProcessor) ProcessAndReturn(ctx context.Context, msg com
 		}
 	}
 	var outMsgs []commtypes.Message
-	if oldK != nil && oldV != nil {
+	if !utils.IsNil(oldK) && !utils.IsNil(oldV) {
 		outMsgs = append(outMsgs, commtypes.Message{
 			Key:       oldK,
 			Value:     commtypes.Change{NewVal: nil, OldVal: oldV},
 			Timestamp: msg.Timestamp,
 		})
 	}
-	if newK != nil && newV != nil {
+	if !utils.IsNil(newK) && !utils.IsNil(newV) {
 		outMsgs = append(outMsgs, commtypes.Message{
 			Key:       newK,
 			Value:     commtypes.Change{NewVal: newV, OldVal: nil},
 			Timestamp: msg.Timestamp,
 		})
 	}
-	fmt.Fprintf(os.Stderr, "tableGroupByMap output: %v\n", outMsgs)
 	return outMsgs, nil
 }

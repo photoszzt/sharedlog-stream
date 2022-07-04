@@ -51,10 +51,6 @@ func (st *InMemoryKeyValueStore) Name() string {
 	return st.name
 }
 
-func (st *InMemoryKeyValueStore) IsOpen() bool {
-	return st.open
-}
-
 func (st *InMemoryKeyValueStore) Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error) {
 	val, ok := st.store.Get(key)
 	return val, ok, nil

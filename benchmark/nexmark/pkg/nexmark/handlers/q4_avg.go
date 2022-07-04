@@ -84,31 +84,6 @@ func (h *q4Avg) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return utils.CompressData(encodedOutput), nil
 }
 
-/*
-type Q4AvgProcessArgs struct {
-	sumCount *processor.MeteredProcessor
-	calcAvg  *processor.MeteredProcessor
-	processor.BaseExecutionContext
-}
-
-func (h *q4Avg) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
-	args := argsTmp.(*Q4AvgProcessArgs)
-	sumCounts, err := args.sumCount.ProcessAndReturn(ctx, msg)
-	if err != nil {
-		return err
-	}
-	avg, err := args.calcAvg.ProcessAndReturn(ctx, sumCounts[0])
-	if err != nil {
-		return err
-	}
-	err = args.Producers()[0].Produce(ctx, avg[0], args.SubstreamNum(), false)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-*/
-
 func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	ectx, err := h.getExecutionCtx(ctx, sp)
 	if err != nil {
@@ -152,19 +127,27 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 				}
 			}),
 			processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
-				val := value.(uint64)
-				agg := aggregate.(*ntypes.SumAndCount)
-				return &ntypes.SumAndCount{
-					Sum:   agg.Sum + val,
-					Count: agg.Count + 1,
+				if value != nil {
+					val := value.(uint64)
+					agg := aggregate.(*ntypes.SumAndCount)
+					return &ntypes.SumAndCount{
+						Sum:   agg.Sum + val,
+						Count: agg.Count + 1,
+					}
+				} else {
+					return aggregate
 				}
 			}),
 			processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
-				val := value.(uint64)
-				agg := aggregate.(*ntypes.SumAndCount)
-				return &ntypes.SumAndCount{
-					Sum:   agg.Sum - val,
-					Count: agg.Count - 1,
+				if value != nil {
+					val := value.(uint64)
+					agg := aggregate.(*ntypes.SumAndCount)
+					return &ntypes.SumAndCount{
+						Sum:   agg.Sum - val,
+						Count: agg.Count - 1,
+					}
+				} else {
+					return aggregate
 				}
 			}),
 		))).

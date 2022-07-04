@@ -5,6 +5,7 @@ package commtypes
 import (
 	"encoding/json"
 	"fmt"
+	"sharedlog-stream/pkg/utils"
 )
 
 type ValueTimestamp struct {
@@ -61,32 +62,63 @@ func CastToValTsPtr(value interface{}) *ValueTimestamp {
 	return v
 }
 
-func (s ValueTimestampJSONSerde) Encode(value interface{}) ([]byte, error) {
+func convertToValueTsSer(value interface{}, valSerde Serde) (*ValueTimestampSerialized, error) {
+	if value == nil {
+		return nil, nil
+	}
 	v := CastToValTsPtr(value)
-	enc, err := s.ValJSONSerde.Encode(v.Value)
+	if v == nil {
+		return nil, nil
+	}
+	var enc []byte
+	var err error
+	if !utils.IsNil(v.Value) {
+		enc, err = valSerde.Encode(v.Value)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &ValueTimestampSerialized{
+		Timestamp:       v.Timestamp,
+		ValueSerialized: enc,
+	}, nil
+}
+
+func (s ValueTimestampJSONSerde) Encode(value interface{}) ([]byte, error) {
+	vs, err := convertToValueTsSer(value, s.ValJSONSerde)
 	if err != nil {
 		return nil, err
 	}
-	vs := ValueTimestampSerialized{
-		Timestamp:       v.Timestamp,
-		ValueSerialized: enc,
+	if vs == nil {
+		return nil, nil
 	}
-	return json.Marshal(&vs)
+	return json.Marshal(vs)
+}
+
+func decodeToValueTs(vtsSer *ValueTimestampSerialized, valSerde Serde) (interface{}, error) {
+	var v interface{}
+	var err error
+	if vtsSer.ValueSerialized != nil {
+		v, err = valSerde.Decode(vtsSer.ValueSerialized)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return ValueTimestamp{
+		Timestamp: vtsSer.Timestamp,
+		Value:     v,
+	}, nil
 }
 
 func (s ValueTimestampJSONSerde) Decode(value []byte) (interface{}, error) {
+	if value == nil {
+		return nil, nil
+	}
 	vs := ValueTimestampSerialized{}
 	if err := json.Unmarshal(value, &vs); err != nil {
 		return nil, err
 	}
-	v, err := s.ValJSONSerde.Decode(vs.ValueSerialized)
-	if err != nil {
-		return nil, err
-	}
-	return ValueTimestamp{
-		Timestamp: vs.Timestamp,
-		Value:     v,
-	}, nil
+	return decodeToValueTs(&vs, s.ValJSONSerde)
 }
 
 type ValueTimestampMsgpSerde struct {
@@ -94,32 +126,26 @@ type ValueTimestampMsgpSerde struct {
 }
 
 func (s ValueTimestampMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	v := CastToValTsPtr(value)
-	enc, err := s.ValMsgpSerde.Encode(v.Value)
+	vs, err := convertToValueTsSer(value, s.ValMsgpSerde)
 	if err != nil {
 		return nil, err
 	}
-	vs := ValueTimestampSerialized{
-		Timestamp:       v.Timestamp,
-		ValueSerialized: enc,
+	if vs == nil {
+		return nil, nil
 	}
 	return vs.MarshalMsg(nil)
 }
 
 func (s ValueTimestampMsgpSerde) Decode(value []byte) (interface{}, error) {
+	if value == nil {
+		return nil, nil
+	}
 	vs := ValueTimestampSerialized{}
 	_, err := vs.UnmarshalMsg(value)
 	if err != nil {
 		return nil, err
 	}
-	v, err := s.ValMsgpSerde.Decode(vs.ValueSerialized)
-	if err != nil {
-		return nil, err
-	}
-	return ValueTimestamp{
-		Timestamp: vs.Timestamp,
-		Value:     v,
-	}, nil
+	return decodeToValueTs(&vs, s.ValMsgpSerde)
 }
 
 func GetValueTsSerde(serdeFormat SerdeFormat, valSerde Serde) (Serde, error) {

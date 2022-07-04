@@ -23,28 +23,33 @@ type MessageSerialized struct {
 }
 
 func convertToMsgSer(value interface{}, keySerde Serde, valSerde Serde) (*MessageSerialized, error) {
+	if value == nil {
+		return nil, nil
+	}
 	v, ok := value.(*Message)
 	if !ok {
 		vtmp := value.(Message)
 		v = &vtmp
 	}
+	if v == nil {
+		return nil, nil
+	}
+	var err error
 
 	var kenc []byte
 	if !utils.IsNil(v.Key) {
-		kencTmp, err := keySerde.Encode(v.Key)
+		kenc, err = keySerde.Encode(v.Key)
 		if err != nil {
 			return nil, err
 		}
-		kenc = kencTmp
 	}
 
 	var venc []byte
 	if !utils.IsNil(v.Value) {
-		vencTmp, err := valSerde.Encode(v.Value)
+		venc, err = valSerde.Encode(v.Value)
 		if err != nil {
 			return nil, err
 		}
-		venc = vencTmp
 	}
 	if kenc == nil && venc == nil {
 		return nil, nil
@@ -74,9 +79,6 @@ func decodeToMsg(msgSer *MessageSerialized, keySerde Serde, valSerde Serde) (int
 			return nil, err
 		}
 	}
-	if key == nil && val == nil {
-		return EmptyMessage, nil
-	}
 	msg := Message{
 		Key:       key,
 		Value:     val,
@@ -103,6 +105,9 @@ func (s MessageMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	msg, err := convertToMsgSer(value, s.KeySerde, s.ValSerde)
 	if err != nil {
 		return nil, err
+	}
+	if msg == nil {
+		return nil, nil
 	}
 	return msg.MarshalMsg(nil)
 }
@@ -133,6 +138,9 @@ func (s MessageJSONSerde) Encode(value interface{}) ([]byte, error) {
 	msg, err := convertToMsgSer(value, s.KeySerde, s.ValSerde)
 	if err != nil {
 		return nil, err
+	}
+	if msg == nil {
+		return nil, nil
 	}
 	return json.Marshal(msg)
 }

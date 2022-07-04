@@ -38,6 +38,9 @@ type EpochMarker struct {
 type EpochMarkerJSONSerde struct{}
 
 func (s EpochMarkerJSONSerde) Encode(value interface{}) ([]byte, error) {
+	if value == nil {
+		return nil, nil
+	}
 	em := value.(*EpochMarker)
 	return json.Marshal(em)
 }
@@ -52,6 +55,9 @@ func (s EpochMarkerJSONSerde) Decode(value []byte) (interface{}, error) {
 type EpochMarkerMsgpSerde struct{}
 
 func (s EpochMarkerMsgpSerde) Encode(value interface{}) ([]byte, error) {
+	if value == nil {
+		return nil, nil
+	}
 	em := value.(*EpochMarker)
 	return em.MarshalMsg(nil)
 }

@@ -159,9 +159,12 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		return common.GenErrFnOutput(err)
 	}
 	ectx.Via(processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor("maxBid", kvstore,
-		processor.InitializerFunc(func() interface{} { return uint64(0) }),
+		processor.InitializerFunc(func() interface{} { return nil }),
 		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
 			v := value.(ntypes.AuctionBid)
+			if aggregate == nil {
+				return v.BidPrice
+			}
 			agg := aggregate.(uint64)
 			if v.BidPrice > agg {
 				return v.BidPrice

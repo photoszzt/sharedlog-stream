@@ -11,6 +11,9 @@ type PayloadArr struct {
 type PayloadArrJSONSerde struct{}
 
 func (s PayloadArrJSONSerde) Encode(value interface{}) ([]byte, error) {
+	if value == nil {
+		return nil, nil
+	}
 	v := value.(*PayloadArr)
 	return json.Marshal(v)
 }

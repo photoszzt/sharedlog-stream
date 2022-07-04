@@ -6,6 +6,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/store"
+	"sharedlog-stream/pkg/utils"
 
 	"github.com/rs/zerolog/log"
 )
@@ -33,7 +34,7 @@ func (p *StreamAggregateProcessor) Name() string {
 }
 
 func (p *StreamAggregateProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	if msg.Key == nil || msg.Value == nil {
+	if utils.IsNil(msg.Key) || utils.IsNil(msg.Value) {
 		log.Warn().Msgf("skipping record due to null key or value. key=%v, val=%v", msg.Key, msg.Value)
 		return nil, nil
 	}
@@ -64,6 +65,6 @@ func (p *StreamAggregateProcessor) ProcessAndReturn(ctx context.Context, msg com
 		NewVal: newAgg,
 		OldVal: oldAgg,
 	}
-	debug.Fprintf(os.Stderr, "key %v, oldVal %v, newVal %v\n", msg.Key, oldAgg, newAgg)
+	debug.Fprintf(os.Stderr, "StreamAgg key %v, oldVal %v, newVal %v\n", msg.Key, oldAgg, newAgg)
 	return []commtypes.Message{{Key: msg.Key, Value: &change, Timestamp: newTs}}, nil
 }

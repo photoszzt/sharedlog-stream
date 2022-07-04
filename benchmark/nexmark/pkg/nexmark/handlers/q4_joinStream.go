@@ -7,7 +7,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	nutils "sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/execution"
@@ -16,6 +16,7 @@ import (
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
+	"sharedlog-stream/pkg/utils"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -49,7 +50,7 @@ func (h *q4JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, e
 		panic(err)
 	}
 	// fmt.Printf("query 3 output: %v\n", encodedOutput)
-	return utils.CompressData(encodedOutput), nil
+	return nutils.CompressData(encodedOutput), nil
 }
 
 func (h *q4JoinStreamHandler) process(ctx context.Context,
@@ -180,7 +181,7 @@ func (h *q4JoinStreamHandler) Q4JoinTable(ctx context.Context, sp *common.QueryI
 			if err != nil {
 				return nil, err
 			}
-			if validBid != nil && validBid[0].Value != nil {
+			if validBid != nil && !utils.IsNil(validBid[0].Value) {
 				aic := ntypes.AuctionIdCategory{
 					AucId:    validBid[0].Key.(uint64),
 					Category: validBid[0].Value.(*ntypes.AuctionBid).AucCategory,

@@ -1,0 +1,75 @@
+11      11.0
+10      11.0
+10      15.0
+11      17.0
+
+
+groupby input:
+max, key: AucIdCat: {id: 7, cat: 11} value: 11
+max, key: AucIdCat: {id: 5, cat: 10} value: 14
+max, key: AucIdCat: {id: 5, cat: 10} value: 10
+max, key: AucIdCat: {id: 7, cat: 11} value: 15
+max, key: AucIdCat: {id: 7, cat: 11} value: 11
+max, key: AucIdCat: {id: 8, cat: 10} value: 16
+max, key: AucIdCat: {id: 10, cat: 11} value: 19
+max, key: AucIdCat: {id: 9, cat: 11} value: 17
+
+max agg out:
+max agg output, key: AucIdCat: {id: 5, cat: 10} value: 10
+max agg output, key: AucIdCat: {id: 7, cat: 11} value: 11
+max agg output, key: AucIdCat: {id: 5, cat: 10} value: 14
+max agg output, key: AucIdCat: {id: 5, cat: 10} value: 10
+max agg output, key: AucIdCat: {id: 7, cat: 11} value: 15
+max agg output, key: AucIdCat: {id: 7, cat: 11} value: 11
+max agg output, key: AucIdCat: {id: 8, cat: 10} value: 16
+max agg output, key: AucIdCat: {id: 10, cat: 11} value: 19
+max agg output, key: AucIdCat: {id: 9, cat: 11} value: 17
+
+
+
+agg add input key: 11, value: 11, agg: SumAndCount: {Sum: 0, Count: 0}
+agg add input key: 10, value: 12, agg: SumAndCount: {Sum: 10, Count: 1}
+agg rm input key: 10, value: 10, agg: SumAndCount: {Sum: 22, Count: 2}
+agg add input key: 10, value: 14, agg: SumAndCount: {Sum: 12, Count: 1}
+agg rm input key: 11, value: 11, agg: SumAndCount: {Sum: 11, Count: 1}
+agg add input key: 11, value: 15, agg: SumAndCount: {Sum: 0, Count: 0}
+agg rm input key: 10, value: 12, agg: SumAndCount: {Sum: 26, Count: 2}
+agg add input key: 10, value: 16, agg: SumAndCount: {Sum: 14, Count: 1}
+agg add input key: 11, value: 19, agg: SumAndCount: {Sum: 15, Count: 1}
+agg add input key: 11, value: 17, agg: SumAndCount: {Sum: 34, Count: 2}
+
+
+agg add input key: 10, value: 10, agg: SumAndCount: {Sum: 0, Count: 0}
+agg add input key: 11, value: 11, agg: SumAndCount: {Sum: 0, Count: 0}
+agg rm input key: 10, value: 10, agg: SumAndCount: {Sum: 10, Count: 1}
+agg add input key: 10, value: 14, agg: SumAndCount: {Sum: 0, Count: 0}
+agg rm input key: 11, value: 11, agg: SumAndCount: {Sum: 11, Count: 1}
+agg add input key: 11, value: 15, agg: SumAndCount: {Sum: 0, Count: 0}
+agg add input key: 10, value: 16, agg: SumAndCount: {Sum: 14, Count: 1}
+agg add input key: 11, value: 19, agg: SumAndCount: {Sum: 15, Count: 1}
+agg add input key: 11, value: 17, agg: SumAndCount: {Sum: 34, Count: 2}
+
+
+
+current impl:
+17:max, key: AuctionIdCat: {AucID: 5, Cat: 10}, val: 10
+18:max, key: AuctionIdCat: {AucID: 5, Cat: 10}, val: 0
+21:max, key: AuctionIdCat: {AucID: 7, Cat: 11}, val: 11
+22:max, key: AuctionIdCat: {AucID: 7, Cat: 11}, val: 0
+25:max, key: AuctionIdCat: {AucID: 8, Cat: 10}, val: 12
+26:max, key: AuctionIdCat: {AucID: 8, Cat: 10}, val: 0
+29:max, key: AuctionIdCat: {AucID: 9, Cat: 11}, val: 13
+30:max, key: AuctionIdCat: {AucID: 9, Cat: 11}, val: 0
+34:max, key: AuctionIdCat: {AucID: 5, Cat: 10}, val: 14
+35:max, key: AuctionIdCat: {AucID: 5, Cat: 10}, val: 10
+38:max, key: AuctionIdCat: {AucID: 7, Cat: 11}, val: 15
+39:max, key: AuctionIdCat: {AucID: 7, Cat: 11}, val: 11
+42:max, key: AuctionIdCat: {AucID: 10, Cat: 11}, val: 14
+43:max, key: AuctionIdCat: {AucID: 10, Cat: 11}, val: 0
+46:max, key: AuctionIdCat: {AucID: 8, Cat: 10}, val: 16
+47:max, key: AuctionIdCat: {AucID: 8, Cat: 10}, val: 12
+50:max, key: AuctionIdCat: {AucID: 10, Cat: 11}, val: 19
+51:max, key: AuctionIdCat: {AucID: 10, Cat: 11}, val: 14
+54:max, key: AuctionIdCat: {AucID: 9, Cat: 11}, val: 17
+55:max, key: AuctionIdCat: {AucID: 9, Cat: 11}, val: 13
+

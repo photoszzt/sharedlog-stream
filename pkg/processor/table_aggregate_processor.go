@@ -3,9 +3,7 @@ package processor
 import (
 	"context"
 	"fmt"
-	"os"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/utils"
 )
@@ -58,9 +56,6 @@ func (p *TableAggregateProcessor) ProcessAndReturn(ctx context.Context, msg comm
 
 	// first try to remove the old val
 	msgVal := msg.Value.(commtypes.Change)
-	fmt.Fprintf(os.Stderr, "msg key %v, msg newVal %v, msg oldVal %v, ts %d\n",
-		msg.Key, msgVal.NewVal, msgVal.OldVal, msg.Timestamp)
-	fmt.Fprintf(os.Stderr, "oldAggTs: %v, oldAgg: %v\n", oldAggTs, oldAgg)
 	if !utils.IsNil(msgVal.OldVal) && !utils.IsNil(oldAgg) {
 		intermediateAgg = p.remove.Apply(msg.Key, msgVal.OldVal, oldAgg)
 		newTs = utils.MaxInt64(msg.Timestamp, oldAggTs.Timestamp)
@@ -84,7 +79,6 @@ func (p *TableAggregateProcessor) ProcessAndReturn(ctx context.Context, msg comm
 	} else {
 		newAgg = intermediateAgg
 	}
-	debug.Fprintf(os.Stderr, "k %v, newAgg %v, oldAgg %v\n", msg.Key, newAgg, oldAgg)
 
 	err = p.store.Put(ctx, msg.Key, commtypes.CreateValueTimestamp(newAgg, newTs))
 	if err != nil {

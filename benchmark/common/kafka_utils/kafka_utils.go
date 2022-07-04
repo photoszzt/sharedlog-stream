@@ -77,9 +77,9 @@ func CreateTopicSpecification(topic string, numPartition int) []kafka.TopicSpeci
 		{
 			Topic:             topic,
 			NumPartitions:     numPartition,
-			ReplicationFactor: 3,
+			ReplicationFactor: 1,
 			Config: map[string]string{
-				"min.insync.replicas": "3",
+				"min.insync.replicas": "1",
 			},
 		},
 	}
