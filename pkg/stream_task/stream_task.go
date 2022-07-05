@@ -53,7 +53,7 @@ func (t *StreamTask) ExecuteApp(ctx context.Context,
 	} else {
 		ret = t.process(ctx, streamTaskArgs)
 	}
-	if ret != nil {
+	if ret != nil && ret.Success {
 		for _, src := range streamTaskArgs.ectx.Consumers() {
 			ret.Counts[src.Name()] = src.GetCount()
 			// debug.Fprintf(os.Stderr, "src %s count %d\n", src.Name(), src.GetCount())

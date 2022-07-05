@@ -196,6 +196,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	personJoinsAuctions := processor.NewMeteredProcessor(
 		processor.NewTableTableJoinProcessor("personJoinsAuctions", kvtabs.tab1,
 			processor.ReverseValueJoinerWithKey(joiner)))
+	toStream := processor.NewTableToStreamProcessor()
 
 	aJoinP := execution.JoinWorkerFunc(func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		// msg is auction
@@ -204,11 +205,13 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			return nil, fmt.Errorf("ToTabA err: %v", err)
 		}
 		if ret != nil {
-			msgs, err := auctionJoinsPersons.ProcessAndReturn(ctx, m)
+			joinMsgs, err := auctionJoinsPersons.ProcessAndReturn(ctx, ret[0])
 			if err != nil {
 				err = fmt.Errorf("aJoinP err: %v", err)
 			}
-			return msgs, err
+			if joinMsgs != nil {
+				return toStream.ProcessAndReturn(ctx, joinMsgs[0])
+			}
 		}
 		return nil, nil
 	})
@@ -219,11 +222,13 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			return nil, fmt.Errorf("ToTabP err: %v", err)
 		}
 		if ret != nil {
-			msgs, err := personJoinsAuctions.ProcessAndReturn(ctx, m)
+			joinMsgs, err := personJoinsAuctions.ProcessAndReturn(ctx, ret[0])
 			if err != nil {
 				err = fmt.Errorf("pJoinA err: %v", err)
 			}
-			return msgs, err
+			if joinMsgs != nil {
+				return toStream.ProcessAndReturn(ctx, joinMsgs[0])
+			}
 		}
 		return nil, nil
 	})

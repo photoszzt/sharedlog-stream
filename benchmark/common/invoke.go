@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -200,22 +199,10 @@ func Invoke(config_file string, stat_dir string, gateway_url string,
 			}
 		}
 		if len(num) != 0 {
-			if len(num) == 1 {
-				fmt.Fprintf(os.Stderr, "%s processed %v events, time %v s, throughput %v (event/s)\n",
-					funcName, num["src"], endToEnd, float64(num["src"])/endToEnd)
-				for name, count := range num {
-					if strings.Contains(name, "sink") || strings.Contains(name, "Sink") {
-						fmt.Fprintf(os.Stderr, "outputs to %s %v events\n\n", name, count)
-					}
-				}
-			} else {
-				for k, v := range num {
-					fmt.Fprintf(os.Stderr, "%s processed %v events, time %v s, throughput %v (event/s)\n",
-						k, v, endToEnd, float64(v)/endToEnd)
-				}
-				fmt.Fprintf(os.Stderr, "%s outputs %v events\n", funcName, num["sink"])
-				fmt.Fprintf(os.Stderr, "\n")
+			for k, v := range num {
+				fmt.Fprintf(os.Stderr, "%s processed %v events\n", k, v)
 			}
+			fmt.Fprintf(os.Stderr, "\n")
 		}
 	}
 	return nil

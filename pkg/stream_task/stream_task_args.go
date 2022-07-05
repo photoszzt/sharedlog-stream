@@ -44,6 +44,14 @@ func (s *StreamTaskArgs) UnlockProducerConsumer() {
 	s.ectx.UnlockProducerConsumer()
 }
 
+func (s *StreamTaskArgs) LockProducer() {
+	s.ectx.LockProducer()
+}
+
+func (s *StreamTaskArgs) UnlockProducer() {
+	s.ectx.UnlockProducer()
+}
+
 type StreamTaskArgsBuilder struct {
 	stArgs *StreamTaskArgs
 }

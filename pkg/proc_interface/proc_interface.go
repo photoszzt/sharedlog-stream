@@ -14,6 +14,8 @@ type ProducersConsumers interface {
 	StartWarmup()
 	LockProducerConsumer()
 	UnlockProducerConsumer()
+	LockProducer()
+	UnlockProducer()
 }
 
 type BaseConsumersProducers struct {
@@ -45,6 +47,18 @@ func (pa *BaseConsumersProducers) UnlockProducerConsumer() {
 	for _, consumer := range pa.consumers {
 		consumer.Unlock()
 	}
+	for _, producer := range pa.producers {
+		producer.Unlock()
+	}
+}
+
+func (pa *BaseConsumersProducers) LockProducer() {
+	for _, producer := range pa.producers {
+		producer.Lock()
+	}
+}
+
+func (pa *BaseConsumersProducers) UnlockProducer() {
 	for _, producer := range pa.producers {
 		producer.Unlock()
 	}

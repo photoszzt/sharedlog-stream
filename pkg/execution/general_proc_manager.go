@@ -14,13 +14,17 @@ type GeneralProcManager struct {
 	generalProcFunc GeneralProcFunc
 }
 
-type GeneralProcFunc func(ctx context.Context,
-	args interface{}, wg *sync.WaitGroup,
-	msgChan chan commtypes.Message, errChan chan error)
+type GeneralProcFunc func(
+	ctx context.Context,
+	args interface{},
+	wg *sync.WaitGroup,
+	msgChan chan commtypes.Message,
+	errChan chan error,
+)
 
 func NewGeneralProcManager(generalProcFunc GeneralProcFunc) *GeneralProcManager {
 	return &GeneralProcManager{
-		msgChan:         make(chan commtypes.Message),
+		msgChan:         make(chan commtypes.Message, 1),
 		errChan:         make(chan error, 1),
 		generalProcFunc: generalProcFunc,
 	}
@@ -67,17 +71,16 @@ func (c *GeneralProcCtx) GeneralProc(ctx context.Context,
 	msgChan chan commtypes.Message,
 	errChan chan error,
 ) {
-L:
 	for {
 		producer.Lock()
 		select {
 		case <-ctx.Done():
 			producer.Unlock()
-			break L
+			return
 		case msg, ok := <-msgChan:
 			if !ok {
 				producer.Unlock()
-				break L
+				return
 			}
 			_, err := c.chains.RunChains(ctx, msg)
 			if err != nil {

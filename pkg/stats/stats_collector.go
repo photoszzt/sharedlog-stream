@@ -25,6 +25,17 @@ func NewConcurrentInt64Collector(tag string, duration time.Duration) ConcurrentI
 	}
 }
 
+type ConcurrentIntCollector struct {
+	mu sync.Mutex
+	IntCollector
+}
+
+func NewConcurrentIntCollector(tag string, duration time.Duration) ConcurrentIntCollector {
+	return ConcurrentIntCollector{
+		IntCollector: NewIntCollector(tag, duration),
+	}
+}
+
 type Int64Collector struct {
 	tag                string
 	data               []int64
@@ -35,6 +46,22 @@ type Int64Collector struct {
 func NewInt64Collector(tag string, reportInterval time.Duration) Int64Collector {
 	return Int64Collector{
 		data:               make([]int64, 0, 128),
+		report_timer:       NewReportTimer(reportInterval),
+		tag:                tag,
+		min_report_samples: DEFAULT_MIN_REPORT_SAMPLES,
+	}
+}
+
+type IntCollector struct {
+	tag                string
+	data               []int
+	report_timer       ReportTimer
+	min_report_samples uint32
+}
+
+func NewIntCollector(tag string, reportInterval time.Duration) IntCollector {
+	return IntCollector{
+		data:               make([]int, 0, 128),
 		report_timer:       NewReportTimer(reportInterval),
 		tag:                tag,
 		min_report_samples: DEFAULT_MIN_REPORT_SAMPLES,

@@ -201,13 +201,13 @@ func PrepareProcessByTwoGeneralProc(
 			if err := handleErrFunc(); err != nil {
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
-			sargs.LockProducerConsumer()
+			sargs.LockProducer()
 			// debug.Fprintf(os.Stderr, "done pause\n")
 			return nil
 		}).
 		ResumeFunc(func(task *stream_task.StreamTask, sargs *stream_task.StreamTaskArgs) {
 			// debug.Fprintf(os.Stderr, "start resume\n")
-			sargs.UnlockProducerConsumer()
+			sargs.UnlockProducer()
 			/*
 				func1Manager.RecreateMsgChan(&procArgs.msgChan1)
 				func2Manager.RecreateMsgChan(&procArgs.msgChan2)

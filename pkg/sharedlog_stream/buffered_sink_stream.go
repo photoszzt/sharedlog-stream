@@ -2,8 +2,10 @@ package sharedlog_stream
 
 import (
 	"context"
+	"fmt"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/stats"
 	"sync"
 )
 
@@ -24,6 +26,8 @@ type BufferedSinkStream struct {
 	payloadArrSerde commtypes.Serde
 	Stream          *SharedLogStream
 
+	bufferSizeStats stats.IntCollector
+
 	once               sync.Once
 	initialProdInEpoch uint64
 	currentProdInEpoch uint64
@@ -41,6 +45,8 @@ func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8) *BufferedSinkS
 		currentSize:     0,
 		once:            sync.Once{},
 		guarantee:       exactly_once_intr.AT_LEAST_ONCE,
+		bufferSizeStats: stats.NewIntCollector(fmt.Sprintf("bufSize_%v", parNum),
+			stats.DEFAULT_COLLECT_DURATION),
 	}
 }
 
@@ -52,6 +58,7 @@ func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, 
 		s.sinkBuffer = append(s.sinkBuffer, payload)
 		s.currentSize += payload_size
 	} else {
+		s.bufferSizeStats.AddSample(len(s.sinkBuffer))
 		payloadArr := &commtypes.PayloadArr{
 			Payloads: s.sinkBuffer,
 		}
@@ -100,6 +107,7 @@ func (s *BufferedSinkStream) GetCurrentProdSeqNum() uint64 {
 
 func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId commtypes.ProducerId) error {
 	if len(s.sinkBuffer) != 0 {
+		s.bufferSizeStats.AddSample(len(s.sinkBuffer))
 		payloadArr := &commtypes.PayloadArr{
 			Payloads: s.sinkBuffer,
 		}
@@ -126,6 +134,7 @@ func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload [
 		s.sinkBuffer = append(s.sinkBuffer, payload)
 		s.currentSize += payload_size
 	} else {
+		s.bufferSizeStats.AddSample(len(s.sinkBuffer))
 		payloadArr := &commtypes.PayloadArr{
 			Payloads: s.sinkBuffer,
 		}
@@ -149,6 +158,7 @@ func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context, producerId 
 	s.sinkMu.Lock()
 	defer s.sinkMu.Unlock()
 	if len(s.sinkBuffer) != 0 {
+		s.bufferSizeStats.AddSample(len(s.sinkBuffer))
 		payloadArr := &commtypes.PayloadArr{
 			Payloads: s.sinkBuffer,
 		}

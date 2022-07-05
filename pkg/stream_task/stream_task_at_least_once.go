@@ -55,7 +55,7 @@ func (t *StreamTask) process(ctx context.Context, args *StreamTaskArgs) *common.
 	for {
 		timeSinceLastTrack := time.Since(commitTimer)
 		if timeSinceLastTrack >= args.trackEveryForAtLeastOnce {
-			if ret_err := t.pauseTrackFlushResume(ctx, args, cm, &hasUntrackedConsume, &commitTimer, &flushTimer); ret_err != nil {
+			if ret_err := t.track(ctx, cm, args.ectx.SubstreamNum(), &hasUntrackedConsume, &commitTimer); ret_err != nil {
 				return ret_err
 			}
 		}
@@ -108,28 +108,15 @@ func (t *StreamTask) pauseFlushResume(ctx context.Context, args *StreamTaskArgs,
 	return nil
 }
 
-func (t *StreamTask) pauseTrackFlushResume(ctx context.Context, args *StreamTaskArgs, cm *consume_seq_num_manager.ConsumeSeqManager,
-	hasUncommitted *bool, commitTimer *time.Time, flushTimer *time.Time,
+func (t *StreamTask) track(ctx context.Context, cm *consume_seq_num_manager.ConsumeSeqManager, substreamNum uint8,
+	hasUncommitted *bool, commitTimer *time.Time,
 ) *common.FnOutput {
-	if t.pauseFunc != nil {
-		if ret := t.pauseFunc(args); ret != nil {
-			return ret
-		}
-	}
-	err := t.trackSrcConSeq(ctx, cm, args.ectx.SubstreamNum())
+	err := t.trackSrcConSeq(ctx, cm, substreamNum)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	err = t.flushStreams(ctx, args)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	if t.resumeFunc != nil {
-		t.resumeFunc(t, args)
 	}
 	*hasUncommitted = false
 	*commitTimer = time.Now()
-	*flushTimer = time.Now()
 	return nil
 }
 
@@ -160,8 +147,9 @@ func (t *StreamTask) pauseTrackFlush(ctx context.Context, args *StreamTaskArgs, 
 }
 
 func (t *StreamTask) trackSrcConSeq(ctx context.Context, cm *consume_seq_num_manager.ConsumeSeqManager, parNum uint8) error {
-	consumedSeqNumConfigs := make([]con_types.ConsumedSeqNumConfig, 0)
 	t.OffMu.Lock()
+	defer t.OffMu.Unlock()
+	consumedSeqNumConfigs := make([]con_types.ConsumedSeqNumConfig, 0)
 	for topic, offset := range t.CurrentConsumeOffset {
 		consumedSeqNumConfigs = append(consumedSeqNumConfigs, con_types.ConsumedSeqNumConfig{
 			TopicToTrack:   topic,
@@ -169,7 +157,6 @@ func (t *StreamTask) trackSrcConSeq(ctx context.Context, cm *consume_seq_num_man
 			ConsumedSeqNum: uint64(offset),
 		})
 	}
-	t.OffMu.Unlock()
 	err := cm.AppendConsumedSeqNum(ctx, consumedSeqNumConfigs)
 	if err != nil {
 		return err

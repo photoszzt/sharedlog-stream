@@ -10,7 +10,9 @@ import (
 
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/control_channel"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/utils"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
@@ -55,13 +57,14 @@ type nexmarkSrcProcArgs struct {
 	channel_url_cache map[uint32]*generator.ChannelUrl
 	eventGenerator    *generator.NexmarkGenerator
 	msgChan           chan sharedlog_stream.PayloadToPush
-	latencies         []int
+	latencies         stats.Int64Collector
 	idx               int
 	numPartition      uint8
 	parNum            uint8
 }
 
 func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProcArgs) *common.FnOutput {
+	procStart := stats.TimerBegin()
 	nextEvent, err := args.eventGenerator.NextEvent(ctx, args.channel_url_cache)
 	if err != nil {
 		return &common.FnOutput{
@@ -83,16 +86,15 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 	args.idx += 1
 	// parNum := args.idx
 
-	nowT := time.Now()
-	nowMs := nowT.UnixMilli()
+	nowMs := time.Now().UnixMilli()
 	wtsMs := nextEvent.WallclockTimestamp
 	if wtsMs > nowMs {
 		// fmt.Fprintf(os.Stderr, "sleep %v ms to generate event\n", wtsSec-now)
 		time.Sleep(time.Duration(wtsMs-nowMs) * time.Millisecond)
 	}
 	args.msgChan <- sharedlog_stream.PayloadToPush{Payload: msgEncoded, Partitions: []uint8{uint8(args.parNum)}, IsControl: false}
-	elapsed := time.Since(nowT)
-	args.latencies = append(args.latencies, int(elapsed.Microseconds()))
+	elapsed := stats.Elapsed(procStart).Microseconds()
+	args.latencies.AddSample(elapsed)
 	return nil
 }
 
@@ -185,11 +187,10 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	defer dcancel()
 	cmm.StartMonitorControlChannel(dctx)
 
-	msgChan := make(chan sharedlog_stream.PayloadToPush, 10000)
-	msgErrChan := make(chan error)
+	streamPusher := sharedlog_stream.NewStreamPush(stream)
 	var wg sync.WaitGroup
 	flushMsgChan := func() {
-		for len(msgChan) > 0 {
+		for len(streamPusher.MsgChan) > 0 {
 			time.Sleep(time.Duration(100) * time.Microsecond)
 		}
 	}
@@ -200,16 +201,11 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 		// inChans:           inChans,
 		idx: 0,
 		// errg:      g,
-		latencies:    make([]int, 0, 128),
-		msgChan:      msgChan,
+		latencies: stats.NewInt64Collector(fmt.Sprintf("srcGen_%d", inputConfig.ParNum),
+			stats.DEFAULT_COLLECT_DURATION),
+		msgChan:      streamPusher.MsgChan,
 		numPartition: stream.NumPartition(),
 		parNum:       inputConfig.ParNum % stream.NumPartition(),
-	}
-	streamPusher := sharedlog_stream.StreamPush{
-		MsgChan:    msgChan,
-		MsgErrChan: msgErrChan,
-		Stream:     stream,
-		BufPush:    h.bufPush,
 	}
 	wg.Add(1)
 	go streamPusher.AsyncStreamPush(dctx, &wg, commtypes.EmptyProducerId)
@@ -217,7 +213,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	startTime := time.Now()
 	for {
 		select {
-		case merr := <-msgErrChan:
+		case merr := <-streamPusher.MsgErrChan:
 			cmm.SendQuit()
 			dcancel()
 			return &common.FnOutput{Success: false, Message: fmt.Sprintf("failed to push to src stream: %v", merr)}
@@ -227,12 +223,12 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 				numInstance := m.Config[h.funcName]
 				if inputConfig.ParNum >= numInstance {
 					cmm.SendQuit()
-					close(msgChan)
+					close(streamPusher.MsgChan)
 					wg.Wait()
 					return &common.FnOutput{
-						Success:   true,
-						Duration:  time.Since(startTime).Seconds(),
-						Latencies: map[string][]int{"e2e": procArgs.latencies},
+						Success:  true,
+						Duration: time.Since(startTime).Seconds(),
+						Counts:   map[string]uint64{"sink": streamPusher.GetCount()},
 					}
 				}
 				numSubstreams := m.Config[stream.TopicName()]
@@ -254,16 +250,17 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 				if err != nil {
 					return &common.FnOutput{Success: false, Message: err.Error()}
 				}
+				debug.Fprintf(os.Stderr, "updated numPartition is %d\n", numSubstreams)
 				var partitions []uint8
 				for i := uint8(0); i < numSubstreams; i++ {
 					partitions = append(partitions, i)
 				}
 				procArgs.numPartition = stream.NumPartition()
-				msgChan <- sharedlog_stream.PayloadToPush{Payload: encoded, IsControl: true, Partitions: partitions}
+				streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{Payload: encoded, IsControl: true, Partitions: partitions}
 			} else {
 				cerr := out.Err()
 				cmm.SendQuit()
-				close(msgChan)
+				close(streamPusher.MsgChan)
 				wg.Wait()
 				h.flush(ctx, stream)
 				return &common.FnOutput{Success: false, Message: fmt.Sprintf("control channel manager failed: %v", cerr)}
@@ -283,13 +280,13 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 			return fnout
 		}
 	}
-	close(msgChan)
+	close(streamPusher.MsgChan)
 	wg.Wait()
 	h.flush(ctx, stream)
 	return &common.FnOutput{
-		Success:   true,
-		Duration:  time.Since(startTime).Seconds(),
-		Latencies: map[string][]int{"e2e": procArgs.latencies},
+		Success:  true,
+		Duration: time.Since(startTime).Seconds(),
+		Counts:   map[string]uint64{"sink": streamPusher.GetCount()},
 	}
 }
 

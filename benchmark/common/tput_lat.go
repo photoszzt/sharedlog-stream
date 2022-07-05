@@ -78,6 +78,9 @@ func ProcessThroughputLat(name string, stat_dir string, latencies map[string][]i
 	}
 	for n, count := range counts {
 		fmt.Fprintf(os.Stderr, "%s processed: %v, throughput: (event/s) %v\n", n, count, float64(count)/duration)
+		if n == "src" || strings.Contains(name, "source") || strings.Contains(n, "Src") || n == "sink" || strings.Contains(n, "Sink") {
+			num[n] += count
+		}
 	}
 	fmt.Fprintf(os.Stderr, "%s duration: %v\n\n", name, duration)
 }

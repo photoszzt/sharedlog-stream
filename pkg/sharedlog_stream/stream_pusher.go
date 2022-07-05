@@ -6,6 +6,7 @@ import (
 	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
 	"sync"
@@ -23,16 +24,18 @@ type StreamPush struct {
 	MsgChan       chan PayloadToPush
 	MsgErrChan    chan error
 	Stream        *ShardedSharedLogStream
+	produceCount  stats.ThroughputCounter
 	FlushDuration time.Duration
 	BufPush       bool
 }
 
 func NewStreamPush(stream *ShardedSharedLogStream) *StreamPush {
 	return &StreamPush{
-		MsgChan:    make(chan PayloadToPush, MSG_CHAN_SIZE),
-		MsgErrChan: make(chan error, 1),
-		BufPush:    utils.CheckBufPush(),
-		Stream:     stream,
+		MsgChan:      make(chan PayloadToPush, MSG_CHAN_SIZE),
+		MsgErrChan:   make(chan error, 1),
+		BufPush:      utils.CheckBufPush(),
+		Stream:       stream,
+		produceCount: stats.NewThroughputCounter("streamPush", stats.DEFAULT_COLLECT_DURATION),
 	}
 }
 
@@ -70,6 +73,10 @@ func (h *StreamPush) FlushNoLock(ctx context.Context, producerId commtypes.Produ
 	return nil
 }
 
+func (h *StreamPush) GetCount() uint64 {
+	return h.produceCount.GetCount()
+}
+
 func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup, producerId commtypes.ProducerId) {
 	defer wg.Done()
 	for msg := range h.MsgChan {
@@ -92,6 +99,7 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup, pr
 					h.MsgErrChan <- err
 					return
 				}
+				h.produceCount.Tick(1)
 			}
 		} else {
 			if h.BufPush {
@@ -112,6 +120,7 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup, pr
 					h.MsgErrChan <- err
 					return
 				}
+				h.produceCount.Tick(1)
 			} else {
 				debug.Assert(len(msg.Partitions) == 1, "should only have one partition")
 				_, err := h.Stream.Push(ctx, msg.Payload, uint8(msg.Partitions[0]), StreamEntryMeta(false, false), producerId)
@@ -120,6 +129,7 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup, pr
 					h.MsgErrChan <- err
 					return
 				}
+				h.produceCount.Tick(1)
 			}
 
 		}
