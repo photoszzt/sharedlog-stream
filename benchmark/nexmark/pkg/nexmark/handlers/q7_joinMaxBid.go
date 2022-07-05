@@ -100,6 +100,9 @@ func (h *q7JoinMaxBid) getSrcSink(
 			MsgSerde:      outMsgSerde,
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 		}), warmup)
+	src1.SetInitialSource(false)
+	src2.SetInitialSource(false)
+	sink.MarkFinalOutput()
 	return []producer_consumer.MeteredConsumerIntr{src1, src2}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 

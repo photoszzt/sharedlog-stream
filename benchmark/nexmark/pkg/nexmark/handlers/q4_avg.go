@@ -65,6 +65,7 @@ func (h *q4Avg) getExecutionCtx(ctx context.Context, sp *common.QueryInput,
 			MsgSerde:      outMsgSerde,
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 		}), warmup)
+	sink.MarkFinalOutput()
 	ectx := processor.NewExecutionContext([]producer_consumer.MeteredConsumerIntr{src},
 		[]producer_consumer.MeteredProducerIntr{sink}, h.funcName, sp.ScaleEpoch, sp.ParNum)
 	return ectx, nil
