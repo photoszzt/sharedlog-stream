@@ -83,8 +83,10 @@ func invokeTestSrcFunc(client *http.Client, numOutPartition uint8, topicName str
 	numSrcInstance uint8, response *common.FnOutput, wg *sync.WaitGroup, warmup bool,
 ) {
 	defer wg.Done()
+	serdeFormat := getSerdeFormat(FLAGS_serdeFormat)
 	src := common.TestSourceInput{
-		FileName: FLAGS_test_src,
+		FileName:    FLAGS_test_src,
+		SerdeFormat: uint8(serdeFormat),
 	}
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "testSrc")
 	fmt.Printf("func source url is %v\n", url)

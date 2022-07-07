@@ -13,21 +13,28 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 )
 
-func (h *produceConsumeHandler) testMultiProducerEpoch(ctx context.Context) {
+func (h *produceConsumeHandler) testMultiProducerEpoch(
+	ctx context.Context,
+	serdeFormat commtypes.SerdeFormat,
+	topicName string,
+) {
 	debug.Fprintf(os.Stderr, "multi producer epoch test\n")
-	stream1, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "test3", 1, commtypes.JSON)
+	stream1, err := sharedlog_stream.NewShardedSharedLogStream(h.env, topicName, 1, serdeFormat)
 	if err != nil {
 		panic(err)
 	}
 
-	stream2, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "test3", 1, commtypes.JSON)
+	stream2, err := sharedlog_stream.NewShardedSharedLogStream(h.env, topicName, 1, serdeFormat)
 	if err != nil {
 		panic(err)
 	}
 
-	msgSerde := commtypes.MessageJSONSerde{
-		KeySerde: commtypes.IntSerde{},
-		ValSerde: commtypes.StringSerde{},
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat,
+		commtypes.IntSerde{},
+		commtypes.StringSerde{},
+	)
+	if err != nil {
+		panic(err)
 	}
 	meteredProducer1 := producer_consumer.NewMeteredProducer(
 		producer_consumer.NewShardedSharedLogStreamProducer(stream1,
@@ -41,11 +48,13 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(ctx context.Context) {
 				MsgSerde:      msgSerde,
 				FlushDuration: common.FlushDuration,
 			}), 0)
-	em1, trackParFunc1, err := getEpochManager(ctx, h.env, "prod1")
+	em1, trackParFunc1, err := getEpochManager(ctx, h.env,
+		"prod1_multi"+serdeFormat.String(), serdeFormat)
 	if err != nil {
 		panic(err)
 	}
-	em2, trackParFunc2, err := getEpochManager(ctx, h.env, "prod2")
+	em2, trackParFunc2, err := getEpochManager(ctx, h.env,
+		"prod2_multi"+serdeFormat.String(), serdeFormat)
 	if err != nil {
 		panic(err)
 	}
@@ -124,12 +133,12 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(ctx context.Context) {
 		Timeout:  common.SrcConsumeTimeout,
 		MsgSerde: msgSerde,
 	}
-	stream1ForRead, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "test3", 1, commtypes.JSON)
+	stream1ForRead, err := sharedlog_stream.NewShardedSharedLogStream(h.env, topicName, 1, serdeFormat)
 	if err != nil {
 		panic(err)
 	}
 	src1 := producer_consumer.NewShardedSharedLogStreamConsumer(stream1ForRead, srcConfig)
-	err = src1.ConfigExactlyOnce(commtypes.JSON, exactly_once_intr.EPOCH_MARK)
+	err = src1.ConfigExactlyOnce(serdeFormat, exactly_once_intr.EPOCH_MARK)
 	if err != nil {
 		panic(err)
 	}

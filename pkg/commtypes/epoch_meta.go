@@ -1,5 +1,6 @@
 //go:generate msgp
 //msgp:ignore EpochMetaJSONSerde EpochMetaMsgpSerde
+//go:generate stringer -type=EpochMark
 package commtypes
 
 import (
@@ -18,8 +19,9 @@ const (
 )
 
 type ProduceRange struct {
-	Start uint64 `json:"s" msg:"s"`
-	End   uint64 `json:"e" msg:"e"`
+	Start        uint64 `json:"s" msg:"s"`
+	End          uint64 `json:"e" msg:"e"`
+	SubStreamNum uint8  `json:"sNum" msg:"sNum"`
 }
 
 var _ = fmt.Stringer(ProduceRange{})
@@ -29,10 +31,10 @@ func (p ProduceRange) String() string {
 }
 
 type EpochMarker struct {
-	ConSeqNums   map[string]uint64                 `json:"ConSeqNum,omitempty" msg:"ConSeqNum,omitempty"`
-	OutputRanges map[string]map[uint8]ProduceRange `json:"outRng,omitempty" msg:"outRng,omitempty"`
-	ScaleEpoch   uint64                            `json:"sepoch,omitempty" msg:"sepoch,omitempty"`
-	Mark         EpochMark                         `json:"mark,omitempty" msg:"mark,omitempty"`
+	ConSeqNums   map[string]uint64         `json:"ConSeqNum,omitempty" msg:"ConSeqNum,omitempty"`
+	OutputRanges map[string][]ProduceRange `json:"outRng,omitempty" msg:"outRng,omitempty"`
+	ScaleEpoch   uint64                    `json:"sepoch,omitempty" msg:"sepoch,omitempty"`
+	Mark         EpochMark                 `json:"mark,omitempty" msg:"mark,omitempty"`
 }
 
 type EpochMarkerJSONSerde struct{}

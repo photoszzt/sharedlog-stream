@@ -2,9 +2,9 @@ package producer_consumer
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
 
 	"github.com/gammazero/deque"
@@ -21,7 +21,7 @@ const (
 type EpochMarkConsumer struct {
 	epochMarkerSerde commtypes.Serde
 	stream           *sharedlog_stream.ShardedSharedLogStream
-	marked           map[commtypes.ProducerId][]commtypes.ProduceRange
+	marked           map[commtypes.ProducerId]map[uint8]commtypes.ProduceRange
 	curReadMsgSeqNum map[commtypes.ProducerId]uint64
 	msgBuffer        []*deque.Deque
 }
@@ -36,7 +36,7 @@ func NewEpochMarkConsumer(stream *sharedlog_stream.ShardedSharedLogStream,
 	return &EpochMarkConsumer{
 		epochMarkerSerde: epochMarkSerde,
 		stream:           stream,
-		marked:           make(map[commtypes.ProducerId][]commtypes.ProduceRange),
+		marked:           make(map[commtypes.ProducerId]map[uint8]commtypes.ProduceRange),
 		msgBuffer:        make([]*deque.Deque, stream.NumPartition()),
 		curReadMsgSeqNum: make(map[commtypes.ProducerId]uint64),
 	}, nil
@@ -73,7 +73,7 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 		// same as one commit record
 		if !rawMsg.IsControl {
 			if shouldIgnoreThisMsg(emc.curReadMsgSeqNum, rawMsg) {
-				debug.Fprintf(os.Stderr, "got a duplicate entry; continue\n")
+				fmt.Fprintf(os.Stderr, "got a duplicate entry; continue\n")
 				continue
 			}
 		}
@@ -84,13 +84,14 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 			}
 			epochMark := epochMarkTmp.(commtypes.EpochMarker)
 			if epochMark.Mark == commtypes.EPOCH_END {
+				// debug.Fprintf(os.Stderr, "%+v\n", epochMark)
 				ranges, ok := emc.marked[rawMsg.ProdId]
 				if !ok {
-					ranges = make([]commtypes.ProduceRange, emc.stream.NumPartition())
+					ranges = make(map[uint8]commtypes.ProduceRange)
 				}
 				markRanges := epochMark.OutputRanges[emc.stream.TopicName()]
-				for sNum, r := range markRanges {
-					ranges[sNum] = r
+				for _, r := range markRanges {
+					ranges[r.SubStreamNum] = r
 				}
 				emc.marked[rawMsg.ProdId] = ranges
 				rawMsg.Mark = commtypes.EPOCH_END
@@ -112,8 +113,11 @@ func (emc *EpochMarkConsumer) checkMsgQueue(msgQueue *deque.Deque, parNum uint8)
 		frontMsg := msgQueue.Front().(*commtypes.RawMsg)
 		for frontMsg.IsControl && frontMsg.Mark == commtypes.EPOCH_END {
 			ranges := emc.marked[frontMsg.ProdId]
-			ranges[parNum].Start = 0
-			ranges[parNum].End = 0
+			produce := commtypes.ProduceRange{}
+			produce.Start = 0
+			produce.End = 0
+			produce.SubStreamNum = parNum
+			ranges[parNum] = produce
 			msgQueue.PopFront()
 			if msgQueue.Len() > 0 {
 				frontMsg = msgQueue.Front().(*commtypes.RawMsg)

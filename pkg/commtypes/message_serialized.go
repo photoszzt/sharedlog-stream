@@ -6,6 +6,7 @@ package commtypes
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"sharedlog-stream/pkg/utils"
 )
 
@@ -40,7 +41,7 @@ func convertToMsgSer(value interface{}, keySerde Serde, valSerde Serde) (*Messag
 	if !utils.IsNil(v.Key) {
 		kenc, err = keySerde.Encode(v.Key)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("fail to encode key: %v", err)
 		}
 	}
 
@@ -48,7 +49,7 @@ func convertToMsgSer(value interface{}, keySerde Serde, valSerde Serde) (*Messag
 	if !utils.IsNil(v.Value) {
 		venc, err = valSerde.Encode(v.Value)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("fail encode val: %v", err)
 		}
 	}
 	if kenc == nil && venc == nil {
@@ -69,14 +70,14 @@ func decodeToMsg(msgSer *MessageSerialized, keySerde Serde, valSerde Serde) (int
 	if msgSer.KeyEnc != nil {
 		key, err = keySerde.Decode(msgSer.KeyEnc)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("fail to decode key: %v", err)
 		}
 	}
 	var val interface{} = nil
 	if msgSer.ValueEnc != nil {
 		val, err = valSerde.Decode(msgSer.ValueEnc)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("fail to decode val: %v", err)
 		}
 	}
 	msg := Message{
@@ -116,7 +117,8 @@ func (s MessageMsgpSerde) Decode(value []byte) (interface{}, error) {
 	msgSer := MessageSerialized{}
 	_, err := msgSer.UnmarshalMsg(value)
 	if err != nil {
-		return nil, err
+		fmt.Fprintf(os.Stderr, "[ERROR] fail to unmarshal this msg: %v", string(value))
+		return nil, fmt.Errorf("fail to unmarshal msg: %v", err)
 	}
 	return decodeToMsg(&msgSer, s.KeySerde, s.ValSerde)
 }

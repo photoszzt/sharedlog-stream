@@ -1,3 +1,4 @@
+//go:generate stringer -type=SerdeFormat
 package commtypes
 
 import (

@@ -42,15 +42,16 @@ func (h *testEventSource) Call(ctx context.Context, input []byte) ([]byte, error
 }
 
 func (h *testEventSource) eventGeneration(ctx context.Context, sp *common.TestSourceInput) *common.FnOutput {
-	stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "nexmark_src", 1, commtypes.JSON)
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "nexmark_src", 1, serdeFormat)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	eventSerde, err := ntypes.GetEventSerde(commtypes.JSON)
+	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	msgSerde, err := commtypes.GetMsgSerde(commtypes.JSON, commtypes.StringSerde{}, eventSerde)
+	msgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.StringSerde{}, eventSerde)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

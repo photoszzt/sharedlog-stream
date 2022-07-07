@@ -80,14 +80,14 @@ func DecodeRawMsg(rawMsg *RawMsg, msgSerde MessageSerde,
 	if rawMsg.IsPayloadArr {
 		payloadArrTmp, err := payloadArrSerde.Decode(rawMsg.Payload)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("fail to decode payload arr: %v", err)
 		}
 		payloadArr := payloadArrTmp.(PayloadArr)
 		var msgArr []Message
 		for _, payload := range payloadArr.Payloads {
 			msgTmp, err := msgSerde.Decode(payload)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("fail to decode msg 1: %v", err)
 			}
 			msg := msgTmp.(Message)
 			msgArr = append(msgArr, msg)
@@ -97,7 +97,7 @@ func DecodeRawMsg(rawMsg *RawMsg, msgSerde MessageSerde,
 	} else {
 		msgTmp, err := msgSerde.Decode(rawMsg.Payload)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("fail to decode msg 2: %v", err)
 		}
 		msg := msgTmp.(Message)
 		return &MsgAndSeq{

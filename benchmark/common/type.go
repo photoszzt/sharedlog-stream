@@ -49,7 +49,8 @@ type DumpInput struct {
 }
 
 type TestSourceInput struct {
-	FileName string `json:"fname"`
+	FileName    string `json:"fname"`
+	SerdeFormat uint8  `json:"serdeFormat"`
 }
 
 type FnOutput struct {

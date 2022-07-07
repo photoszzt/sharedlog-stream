@@ -121,6 +121,7 @@ func (em *EpochManager) appendToEpochLog(ctx context.Context,
 	if err != nil {
 		return 0, err
 	}
+	// debug.Fprintf(os.Stderr, "encoded epochMeta: %v\n", string(encoded))
 	debug.Assert(tags != nil, "tags should not be null")
 	producerId := commtypes.ProducerId{
 		TaskId:        em.TaskId,
@@ -152,7 +153,7 @@ func (em *EpochManager) MarkEpoch(ctx context.Context,
 	consumeSeqNums map[string]uint64,
 	producers []producer_consumer.MeteredProducerIntr,
 ) error {
-	outputRanges := make(map[string]map[uint8]commtypes.ProduceRange)
+	outputRanges := make(map[string][]commtypes.ProduceRange)
 	for _, producer := range producers {
 		err := producer.Flush(ctx)
 		if err != nil {
@@ -163,13 +164,14 @@ func (em *EpochManager) MarkEpoch(ctx context.Context,
 		if ok {
 			ranges, ok := outputRanges[topicName]
 			if !ok {
-				ranges = make(map[uint8]commtypes.ProduceRange)
+				ranges = make([]commtypes.ProduceRange, 0, 4)
 			}
 			for subNum := range parSet {
-				ranges[subNum] = commtypes.ProduceRange{
-					Start: producer.GetInitialProdSeqNum(subNum),
-					End:   producer.GetCurrentProdSeqNum(subNum),
-				}
+				ranges = append(ranges, commtypes.ProduceRange{
+					SubStreamNum: subNum,
+					Start:        producer.GetInitialProdSeqNum(subNum),
+					End:          producer.GetCurrentProdSeqNum(subNum),
+				})
 			}
 			outputRanges[topicName] = ranges
 		}
@@ -179,6 +181,7 @@ func (em *EpochManager) MarkEpoch(ctx context.Context,
 		ConSeqNums:   consumeSeqNums,
 		OutputRanges: outputRanges,
 	}
+	// debug.Fprintf(os.Stderr, "epochMeta to push: %+v\n", epochMeta)
 	tags := []uint64{em.epochLogMarkerTag}
 	// debug.Fprintf(os.Stderr, "marker with tag: 0x%x\n", em.epochLogMarkerTag)
 	var additionalTopic []string

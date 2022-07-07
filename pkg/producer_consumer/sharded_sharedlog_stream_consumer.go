@@ -2,6 +2,7 @@ package producer_consumer
 
 import (
 	"context"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
@@ -138,9 +139,6 @@ L:
 			}
 		}
 
-		if !rawMsg.IsControl && len(rawMsg.Payload) == 0 {
-			continue
-		}
 		if rawMsg.IsControl {
 			msgs = append(msgs, commtypes.MsgAndSeq{
 				Msg: commtypes.Message{
@@ -157,10 +155,12 @@ L:
 			})
 			totalLen += 1
 			continue
+		} else if len(rawMsg.Payload) == 0 {
+			continue
 		}
 		msgAndSeq, err := commtypes.DecodeRawMsg(rawMsg, s.msgSerde, s.payloadArrSerde)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("fail to decode raw msg: %v", err)
 		}
 		if msgAndSeq.MsgArr != nil {
 			totalLen += uint32(len(msgAndSeq.MsgArr))

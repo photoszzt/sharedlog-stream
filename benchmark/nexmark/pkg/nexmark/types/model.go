@@ -1,7 +1,6 @@
 //go:generate msgp
 //msgp:ignore EventMsgpEncoder EventMsgpDecoder EventMsgpSerde
 //msgp:ignore EventJSONEncoder EventJSONDecoder EventJSONSerde
-//go:generate stringer -type=EType
 
 package types
 

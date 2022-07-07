@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/benchmark/tests/pkg/tests/test_types"
+	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/debug"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -37,11 +40,19 @@ func (h *produceConsumeHandler) Call(ctx context.Context, input []byte) ([]byte,
 
 func (h *produceConsumeHandler) tests(ctx context.Context, sp *test_types.TestInput) *common.FnOutput {
 	if sp.TestName == "multiProducer2pc" {
+		debug.Fprintf(os.Stderr, "testing multi producer 2pc\n")
 		h.testMultiProducer2pc(ctx)
+		debug.Fprintf(os.Stderr, "done testing multi producer 2pc\n")
 	} else if sp.TestName == "singleProducerEpoch" {
-		h.testSingleProduceConsumeEpoch(ctx)
+		debug.Fprintf(os.Stderr, "testing single producer EPOCH with JSON serde\n")
+		h.testSingleProduceConsumeEpoch(ctx, commtypes.JSON, "test2JSON")
+		debug.Fprintf(os.Stderr, "testing single producer EPOCH with MSGP serde\n")
+		h.testSingleProduceConsumeEpoch(ctx, commtypes.MSGP, "test2MSGP")
 	} else if sp.TestName == "multiProducerEpoch" {
-		h.testMultiProducerEpoch(ctx)
+		debug.Fprintf(os.Stderr, "testing multi producer EPOCH with JSON serde\n")
+		h.testMultiProducerEpoch(ctx, commtypes.JSON, "test1JSON")
+		debug.Fprintf(os.Stderr, "testing multi producer EPOCH with MSGP serde\n")
+		h.testMultiProducerEpoch(ctx, commtypes.MSGP, "test1MSGP")
 	} else {
 		return &common.FnOutput{
 			Success: false,
