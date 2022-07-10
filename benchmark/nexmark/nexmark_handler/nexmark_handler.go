@@ -56,6 +56,12 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewQ5AuctionBids(env, funcName), nil
 	case "q5maxbid":
 		return handlers.NewQ5MaxBid(env, funcName), nil
+	case "q6JoinStream":
+		return handlers.NewQ6JoinStreamHandler(env, funcName), nil
+	case "q6MaxBid":
+		return handlers.NewQ6MaxBid(env, funcName), nil
+	case "q6Avg":
+		return handlers.NewQ6Avg(env, funcName), nil
 	case "dump":
 		return handlers.NewDump(env), nil
 	case "q7BidByPrice":
