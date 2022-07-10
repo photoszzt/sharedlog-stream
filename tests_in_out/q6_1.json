@@ -1,0 +1,2344 @@
+{
+    "events": [
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 1,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 1,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 9,
+                "dateTime": 1010,
+                "auction": 1
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 10,
+                "dateTime": 1010,
+                "auction": 1
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 2,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 1,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 10,
+                "dateTime": 1011,
+                "auction": 2
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 11,
+                "dateTime": 1011,
+                "auction": 2
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 3,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 1,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 11,
+                "dateTime": 1012,
+                "auction": 3
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 12,
+                "dateTime": 1012,
+                "auction": 3
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 4,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 1,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 12,
+                "dateTime": 1013,
+                "auction": 4
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 13,
+                "dateTime": 1013,
+                "auction": 4
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 5,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 1,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 13,
+                "dateTime": 1014,
+                "auction": 5
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 14,
+                "dateTime": 1014,
+                "auction": 5
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 6,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 1,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 14,
+                "dateTime": 1015,
+                "auction": 6
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 15,
+                "dateTime": 1015,
+                "auction": 6
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 7,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 1,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 15,
+                "dateTime": 1016,
+                "auction": 7
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 16,
+                "dateTime": 1016,
+                "auction": 7
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 8,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 1,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 16,
+                "dateTime": 1017,
+                "auction": 8
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 17,
+                "dateTime": 1017,
+                "auction": 8
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 9,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 1,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 17,
+                "dateTime": 1018,
+                "auction": 9
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 18,
+                "dateTime": 1018,
+                "auction": 9
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 10,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 1,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 18,
+                "dateTime": 1019,
+                "auction": 10
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 19,
+                "dateTime": 1019,
+                "auction": 10
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 11,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 2,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 19,
+                "dateTime": 1020,
+                "auction": 11
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 20,
+                "dateTime": 1020,
+                "auction": 11
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 12,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 2,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 20,
+                "dateTime": 1021,
+                "auction": 12
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 21,
+                "dateTime": 1021,
+                "auction": 12
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 13,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 2,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 21,
+                "dateTime": 1022,
+                "auction": 13
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 22,
+                "dateTime": 1022,
+                "auction": 13
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 14,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 2,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 22,
+                "dateTime": 1023,
+                "auction": 14
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 23,
+                "dateTime": 1023,
+                "auction": 14
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 15,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 2,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 23,
+                "dateTime": 1024,
+                "auction": 15
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 24,
+                "dateTime": 1024,
+                "auction": 15
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 16,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 2,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 24,
+                "dateTime": 1025,
+                "auction": 16
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 25,
+                "dateTime": 1025,
+                "auction": 16
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 17,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 2,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 25,
+                "dateTime": 1026,
+                "auction": 17
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 26,
+                "dateTime": 1026,
+                "auction": 17
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 18,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 2,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 26,
+                "dateTime": 1027,
+                "auction": 18
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 27,
+                "dateTime": 1027,
+                "auction": 18
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 19,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 2,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 27,
+                "dateTime": 1028,
+                "auction": 19
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 28,
+                "dateTime": 1028,
+                "auction": 19
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 20,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 2,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 28,
+                "dateTime": 1029,
+                "auction": 20
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 29,
+                "dateTime": 1029,
+                "auction": 20
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 21,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 3,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 29,
+                "dateTime": 1030,
+                "auction": 21
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 30,
+                "dateTime": 1030,
+                "auction": 21
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 22,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 3,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 30,
+                "dateTime": 1031,
+                "auction": 22
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 31,
+                "dateTime": 1031,
+                "auction": 22
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 23,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 3,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 31,
+                "dateTime": 1032,
+                "auction": 23
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 32,
+                "dateTime": 1032,
+                "auction": 23
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 24,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 3,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 32,
+                "dateTime": 1033,
+                "auction": 24
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 33,
+                "dateTime": 1033,
+                "auction": 24
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 25,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 3,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 33,
+                "dateTime": 1034,
+                "auction": 25
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 34,
+                "dateTime": 1034,
+                "auction": 25
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 26,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 3,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 34,
+                "dateTime": 1035,
+                "auction": 26
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 35,
+                "dateTime": 1035,
+                "auction": 26
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 27,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 3,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 35,
+                "dateTime": 1036,
+                "auction": 27
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 36,
+                "dateTime": 1036,
+                "auction": 27
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 28,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 3,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 36,
+                "dateTime": 1037,
+                "auction": 28
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 37,
+                "dateTime": 1037,
+                "auction": 28
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 29,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 3,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 37,
+                "dateTime": 1038,
+                "auction": 29
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 38,
+                "dateTime": 1038,
+                "auction": 29
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 30,
+                "reserve": 0,
+                "dateTime": 1000,
+                "expires": 1999,
+                "seller": 3,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 38,
+                "dateTime": 1039,
+                "auction": 30
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 39,
+                "dateTime": 1039,
+                "auction": 30
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 31,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 1,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 39,
+                "dateTime": 2010,
+                "auction": 31
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 40,
+                "dateTime": 2010,
+                "auction": 31
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 32,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 1,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 40,
+                "dateTime": 2011,
+                "auction": 32
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 41,
+                "dateTime": 2011,
+                "auction": 32
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 33,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 1,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 41,
+                "dateTime": 2012,
+                "auction": 33
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 42,
+                "dateTime": 2012,
+                "auction": 33
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 34,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 1,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 42,
+                "dateTime": 2013,
+                "auction": 34
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 43,
+                "dateTime": 2013,
+                "auction": 34
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 35,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 1,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 43,
+                "dateTime": 2014,
+                "auction": 35
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 44,
+                "dateTime": 2014,
+                "auction": 35
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 36,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 1,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 44,
+                "dateTime": 2015,
+                "auction": 36
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 45,
+                "dateTime": 2015,
+                "auction": 36
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 37,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 1,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 45,
+                "dateTime": 2016,
+                "auction": 37
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 46,
+                "dateTime": 2016,
+                "auction": 37
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 38,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 1,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 46,
+                "dateTime": 2017,
+                "auction": 38
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 47,
+                "dateTime": 2017,
+                "auction": 38
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 39,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 1,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 47,
+                "dateTime": 2018,
+                "auction": 39
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 48,
+                "dateTime": 2018,
+                "auction": 39
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 40,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 1,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 48,
+                "dateTime": 2019,
+                "auction": 40
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 49,
+                "dateTime": 2019,
+                "auction": 40
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 41,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 2,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 49,
+                "dateTime": 2020,
+                "auction": 41
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 50,
+                "dateTime": 2020,
+                "auction": 41
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 42,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 2,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 50,
+                "dateTime": 2021,
+                "auction": 42
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 51,
+                "dateTime": 2021,
+                "auction": 42
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 43,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 2,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 51,
+                "dateTime": 2022,
+                "auction": 43
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 52,
+                "dateTime": 2022,
+                "auction": 43
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 44,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 2,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 52,
+                "dateTime": 2023,
+                "auction": 44
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 53,
+                "dateTime": 2023,
+                "auction": 44
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 45,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 2,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 53,
+                "dateTime": 2024,
+                "auction": 45
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 54,
+                "dateTime": 2024,
+                "auction": 45
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 46,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 2,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 54,
+                "dateTime": 2025,
+                "auction": 46
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 55,
+                "dateTime": 2025,
+                "auction": 46
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 47,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 2,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 55,
+                "dateTime": 2026,
+                "auction": 47
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 56,
+                "dateTime": 2026,
+                "auction": 47
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 48,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 2,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 56,
+                "dateTime": 2027,
+                "auction": 48
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 57,
+                "dateTime": 2027,
+                "auction": 48
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 49,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 2,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 57,
+                "dateTime": 2028,
+                "auction": 49
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 58,
+                "dateTime": 2028,
+                "auction": 49
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 50,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 2,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 58,
+                "dateTime": 2029,
+                "auction": 50
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 59,
+                "dateTime": 2029,
+                "auction": 50
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 51,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 3,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 59,
+                "dateTime": 2030,
+                "auction": 51
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 60,
+                "dateTime": 2030,
+                "auction": 51
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 52,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 3,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 60,
+                "dateTime": 2031,
+                "auction": 52
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 61,
+                "dateTime": 2031,
+                "auction": 52
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 53,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 3,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 61,
+                "dateTime": 2032,
+                "auction": 53
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 62,
+                "dateTime": 2032,
+                "auction": 53
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 54,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 3,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 62,
+                "dateTime": 2033,
+                "auction": 54
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 63,
+                "dateTime": 2033,
+                "auction": 54
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 55,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 3,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 63,
+                "dateTime": 2034,
+                "auction": 55
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 64,
+                "dateTime": 2034,
+                "auction": 55
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 56,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 3,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 64,
+                "dateTime": 2035,
+                "auction": 56
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 65,
+                "dateTime": 2035,
+                "auction": 56
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 57,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 3,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 65,
+                "dateTime": 2036,
+                "auction": 57
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 66,
+                "dateTime": 2036,
+                "auction": 57
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 58,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 3,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 66,
+                "dateTime": 2037,
+                "auction": 58
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 67,
+                "dateTime": 2037,
+                "auction": 58
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 59,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 3,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 67,
+                "dateTime": 2038,
+                "auction": 59
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 68,
+                "dateTime": 2038,
+                "auction": 59
+            },
+            "etype": 2
+        },
+        {
+            "newAuction": {
+                "itemName": "",
+                "description": "",
+                "extra": "",
+                "id": 60,
+                "reserve": 0,
+                "dateTime": 2000,
+                "expires": 2999,
+                "seller": 3,
+                "category": 0,
+                "initialBid": 0
+            },
+            "etype": 1
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 68,
+                "dateTime": 2039,
+                "auction": 60
+            },
+            "etype": 2
+        },
+        {
+            "bid": {
+                "extra": "",
+                "channel": "",
+                "url": "",
+                "bidder": 0,
+                "price": 69,
+                "dateTime": 2039,
+                "auction": 60
+            },
+            "etype": 2
+        }
+    ]
+}

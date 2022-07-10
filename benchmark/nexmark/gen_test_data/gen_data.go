@@ -47,30 +47,21 @@ func main() {
 		fmt.Fprintf(os.Stderr, "should specify output file name")
 		return
 	}
-
-	if FLAGS_spec == "" {
-		fmt.Fprintf(os.Stderr, "spec file must be specified")
-		return
+	var specs []byte
+	var err error
+	if FLAGS_spec != "" {
+		specs, err = utils.ReadFileContent(FLAGS_spec)
 	}
-
-	specs, err := utils.ReadFileContent(FLAGS_spec)
+	if FLAGS_app_name == "q5" && specs != nil {
+		err = q5_gen_data(specs, FLAGS_outputFile)
+	} else if FLAGS_app_name == "q6" {
+		err = q6_gen_data(FLAGS_outputFile)
+	} else if FLAGS_app_name == "q7" && specs != nil {
+		err = q7_gen_data(specs, FLAGS_outputFile)
+	} else if FLAGS_app_name == "q8" && specs != nil {
+		err = q8_gen_data(specs, FLAGS_outputFile)
+	}
 	if err != nil {
 		panic(err)
-	}
-	if FLAGS_app_name == "q5" {
-		err = q5_gen_data(specs, FLAGS_outputFile)
-		if err != nil {
-			panic(err)
-		}
-	} else if FLAGS_app_name == "q7" {
-		err = q7_gen_data(specs, FLAGS_outputFile)
-		if err != nil {
-			panic(err)
-		}
-	} else if FLAGS_app_name == "q8" {
-		err = q8_gen_data(specs, FLAGS_outputFile)
-		if err != nil {
-			panic(err)
-		}
 	}
 }
