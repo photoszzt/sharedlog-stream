@@ -5,6 +5,7 @@ package types
 import (
 	"encoding/json"
 	"fmt"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
 
@@ -14,6 +15,7 @@ type AuctionBid struct {
 	AucExpires  int64  `json:"aucExpires" msg:"aucExpires"`
 	BidPrice    uint64 `json:"bidPrice" msg:"bidPrice"`
 	AucCategory uint64 `json:"aucCategory" msg:"aucCategory"`
+	AucSeller   uint64 `json:"aucSeller,omitempty" msg:"aucSeller,omitempty"`
 }
 
 var _ = fmt.Stringer(AuctionBid{})
@@ -53,4 +55,15 @@ func (s AuctionBidMsgpSerde) Decode(value []byte) (interface{}, error) {
 		return nil, err
 	}
 	return ab, nil
+}
+
+func GetAuctionBidSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
+	switch serdeFormat {
+	case commtypes.JSON:
+		return AuctionBidJSONSerde{}, nil
+	case commtypes.MSGP:
+		return AuctionBidMsgpSerde{}, nil
+	default:
+		return nil, common_errors.ErrUnrecognizedSerdeFormat
+	}
 }

@@ -5,6 +5,8 @@ package types
 import (
 	"encoding/json"
 	"fmt"
+	"sharedlog-stream/pkg/common_errors"
+	"sharedlog-stream/pkg/commtypes"
 )
 
 type AuctionIdCategory struct {
@@ -21,18 +23,16 @@ func (aic AuctionIdCategory) String() string {
 func CompareAuctionIdCategory(a, b *AuctionIdCategory) int {
 	if a.AucId < b.AucId {
 		return -1
-	} else {
-		if a.AucId == b.AucId {
-			if a.Category < b.Category {
-				return -1
-			} else if a.Category == b.Category {
-				return 0
-			} else {
-				return 1
-			}
+	} else if a.AucId == b.AucId {
+		if a.Category < b.Category {
+			return -1
+		} else if a.Category == b.Category {
+			return 0
 		} else {
 			return 1
 		}
+	} else {
+		return 1
 	}
 }
 
@@ -44,8 +44,8 @@ func (s AuctionIdCategoryJSONSerde) Encode(value interface{}) ([]byte, error) {
 }
 
 func (s AuctionIdCategoryJSONSerde) Decode(value []byte) (interface{}, error) {
-	v := &AuctionIdCategory{}
-	err := json.Unmarshal(value, v)
+	v := AuctionIdCategory{}
+	err := json.Unmarshal(value, &v)
 	if err != nil {
 		return nil, err
 	}
@@ -60,10 +60,21 @@ func (s AuctionIdCategoryMsgpSerde) Encode(value interface{}) ([]byte, error) {
 }
 
 func (s AuctionIdCategoryMsgpSerde) Decode(value []byte) (interface{}, error) {
-	aic := &AuctionIdCategory{}
+	aic := AuctionIdCategory{}
 	_, err := aic.UnmarshalMsg(value)
 	if err != nil {
 		return nil, err
 	}
 	return aic, nil
+}
+
+func GetAuctionIdCategorySerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
+	switch serdeFormat {
+	case commtypes.JSON:
+		return AuctionIdCategoryJSONSerde{}, nil
+	case commtypes.MSGP:
+		return AuctionIdCategoryMsgpSerde{}, nil
+	default:
+		return nil, common_errors.ErrUnrecognizedSerdeFormat
+	}
 }

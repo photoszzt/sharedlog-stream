@@ -21,25 +21,25 @@ import (
 	"cs.utexas.edu/zjia/faas/types"
 )
 
-type q4MaxBid struct {
+type q6MaxBid struct {
 	env      types.Environment
 	funcName string
 }
 
-func NewQ4MaxBid(env types.Environment, funcName string) *q4MaxBid {
-	return &q4MaxBid{
+func NewQ6MaxBid(env types.Environment, funcName string) *q6MaxBid {
+	return &q6MaxBid{
 		env:      env,
 		funcName: funcName,
 	}
 }
 
-func (h *q4MaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
+func (h *q6MaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 	parsedInput := &common.QueryInput{}
 	err := json.Unmarshal(input, parsedInput)
 	if err != nil {
 		return nil, err
 	}
-	output := h.Q4MaxBid(ctx, parsedInput)
+	output := h.Q6MaxBid(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
 		panic(err)
@@ -47,32 +47,33 @@ func (h *q4MaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *q4MaxBid) getExecutionCtx(ctx context.Context, sp *common.QueryInput) (processor.BaseExecutionContext, error) {
+func (h *q6MaxBid) getExecutionCtx(ctx context.Context, sp *common.QueryInput) (processor.BaseExecutionContext, error) {
 	inputStream, outputStreams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return processor.EmptyBaseExecutionContext, err
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	var abSerde commtypes.Serde
-	var aicSerde commtypes.Serde
-	if serdeFormat == commtypes.JSON {
-		abSerde = ntypes.AuctionBidJSONSerde{}
-		aicSerde = ntypes.AuctionIdCategoryJSONSerde{}
-	} else if serdeFormat == commtypes.MSGP {
-		abSerde = ntypes.AuctionBidMsgpSerde{}
-		aicSerde = ntypes.AuctionIdCategoryMsgpSerde{}
-	} else {
-		return processor.EmptyBaseExecutionContext, fmt.Errorf("unrecognized format: %v", serdeFormat)
-	}
-	inMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, aicSerde, abSerde)
+	abSerde, err := ntypes.GetAuctionBidSerde(serdeFormat)
 	if err != nil {
-		return processor.EmptyBaseExecutionContext, fmt.Errorf("get msg serde err: %v", err)
+		return processor.EmptyBaseExecutionContext, err
+	}
+	asSerde, err := ntypes.GetAuctionIDSellerSerde(serdeFormat)
+	if err != nil {
+		return processor.EmptyBaseExecutionContext, err
+	}
+	inMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, asSerde, abSerde)
+	if err != nil {
+		return processor.EmptyBaseExecutionContext, err
 	}
 	inputConfig := &producer_consumer.StreamConsumerConfig{
 		Timeout:  common.SrcConsumeTimeout,
 		MsgSerde: inMsgSerde,
 	}
-	changeSerde, err := commtypes.GetChangeSerde(serdeFormat, commtypes.Uint64Serde{})
+	ptSerde, err := ntypes.GetPriceTimeSerde(serdeFormat)
+	if err != nil {
+		return processor.EmptyBaseExecutionContext, err
+	}
+	changeSerde, err := commtypes.GetChangeSerde(serdeFormat, ptSerde)
 	if err != nil {
 		return processor.EmptyBaseExecutionContext, err
 	}
@@ -97,15 +98,19 @@ func (h *q4MaxBid) getExecutionCtx(ctx context.Context, sp *common.QueryInput) (
 	return ectx, nil
 }
 
-func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	ectx, err := h.getExecutionCtx(ctx, sp)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		panic(err)
 	}
-	maxBidStoreName := "q4MaxBidKVStore"
+	maxBidStoreName := "q6MaxBidKVStore"
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	ptSerde, err := ntypes.GetPriceTimeSerde(serdeFormat)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	msgSerde, err := processor.MsgSerdeWithValueTs(serdeFormat,
-		ectx.Consumers()[0].MsgSerde().GetKeySerde(), commtypes.Uint64Serde{})
+		ectx.Consumers()[0].MsgSerde().GetKeySerde(), ptSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -124,11 +129,12 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	compare := func(a, b treemap.Key) int {
-		ka := a.(*ntypes.AuctionIdCategory)
-		kb := b.(*ntypes.AuctionIdCategory)
-		return ntypes.CompareAuctionIdCategory(ka, kb)
+		ka := a.(*ntypes.AuctionIdSeller)
+		kb := b.(*ntypes.AuctionIdSeller)
+		return ntypes.CompareAuctionIDSeller(ka, kb)
 	}
-	kvstore, err := store_with_changelog.CreateInMemKVTableWithChangelog(mp, compare)
+	kvstore, err := store_with_changelog.CreateInMemKVTableWithChangelog(
+		mp, compare)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -137,21 +143,20 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
 			v := value.(ntypes.AuctionBid)
 			if aggregate == nil {
-				return v.BidPrice
+				return ntypes.PriceTime{Price: v.BidPrice, DateTime: v.BidDateTime}
 			}
-			agg := aggregate.(uint64)
-			if v.BidPrice > agg {
-				return v.BidPrice
+			agg := aggregate.(ntypes.PriceTime)
+			if v.BidPrice > agg.Price {
+				return ntypes.PriceTime{Price: v.BidPrice, DateTime: v.BidDateTime}
 			} else {
 				return agg
 			}
 		})))).
 		Via(processor.NewMeteredProcessor(processor.NewTableGroupByMapProcessor("changeKey",
 			processor.MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
-				return key.(*ntypes.AuctionIdCategory).Category, value, nil
+				return key.(*ntypes.AuctionIdSeller).Seller, value, nil
 			})))).
 		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[0], &ectx))
-
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
 			args := argsTmp.(processor.ExecutionContext)

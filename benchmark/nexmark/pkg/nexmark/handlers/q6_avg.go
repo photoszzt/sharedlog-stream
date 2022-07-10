@@ -16,32 +16,35 @@ import (
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
+	"sort"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
 
-type q4Avg struct {
-	env types.Environment
-
+type q6Avg struct {
+	env      types.Environment
 	funcName string
 }
 
-func NewQ4Avg(env types.Environment, funcName string) *q4Avg {
-	return &q4Avg{
+func NewQ6Avg(env types.Environment, funcName string) *q6Avg {
+	return &q6Avg{
 		env:      env,
 		funcName: funcName,
 	}
 }
 
-func (h *q4Avg) getExecutionCtx(ctx context.Context, sp *common.QueryInput,
-) (processor.BaseExecutionContext, error) {
+func (h *q6Avg) getExecutionCtx(ctx context.Context, sp *common.QueryInput) (processor.BaseExecutionContext, error) {
 	inputStream, outputStreams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
 		return processor.EmptyBaseExecutionContext, err
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	changeSerde, err := commtypes.GetChangeSerde(serdeFormat, commtypes.Uint64Serde{})
+	ptSerde, err := ntypes.GetPriceTimeSerde(serdeFormat)
+	if err != nil {
+		return processor.EmptyBaseExecutionContext, err
+	}
+	changeSerde, err := commtypes.GetChangeSerde(serdeFormat, ptSerde)
 	if err != nil {
 		return processor.EmptyBaseExecutionContext, err
 	}
@@ -54,7 +57,6 @@ func (h *q4Avg) getExecutionCtx(ctx context.Context, sp *common.QueryInput,
 		return processor.EmptyBaseExecutionContext, fmt.Errorf("get msg serde err: %v", err)
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
-
 	src := producer_consumer.NewMeteredConsumer(
 		producer_consumer.NewShardedSharedLogStreamConsumer(inputStream, &producer_consumer.StreamConsumerConfig{
 			Timeout:  common.SrcConsumeTimeout,
@@ -71,13 +73,13 @@ func (h *q4Avg) getExecutionCtx(ctx context.Context, sp *common.QueryInput,
 	return ectx, nil
 }
 
-func (h *q4Avg) Call(ctx context.Context, input []byte) ([]byte, error) {
+func (h *q6Avg) Call(ctx context.Context, input []byte) ([]byte, error) {
 	parsedInput := &common.QueryInput{}
 	err := json.Unmarshal(input, parsedInput)
 	if err != nil {
 		return nil, err
 	}
-	output := h.Q4Avg(ctx, parsedInput)
+	output := h.Q6Avg(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
 		panic(err)
@@ -85,25 +87,24 @@ func (h *q4Avg) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	ectx, err := h.getExecutionCtx(ctx, sp)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	sumCountStoreName := "q4SumCountKVStore"
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	scSerde, err := ntypes.GetSumAndCountSerde(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	storeMsgSerde, err := processor.MsgSerdeWithValueTs(serdeFormat, commtypes.Uint64Serde{},
-		scSerde)
+	aggStoreName := "q6AggKVStore"
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	ptlSerde, err := ntypes.GetPriceTimeListSerde(serdeFormat)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	storeMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, ptlSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
 	mp, err := store_with_changelog.NewMaterializeParamBuilder().
 		MessageSerde(storeMsgSerde).
-		StoreName(sumCountStoreName).
+		StoreName(aggStoreName).
 		ParNum(sp.ParNum).
 		SerdeFormat(serdeFormat).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
@@ -119,46 +120,41 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	maxSize := 10
 	ectx.
 		Via(processor.NewMeteredProcessor(
-			processor.NewTableAggregateProcessor("sumCount", kvstore,
+			processor.NewTableAggregateProcessor("q6Agg", kvstore,
 				processor.InitializerFunc(func() interface{} {
-					return &ntypes.SumAndCount{
-						Sum:   0,
-						Count: 0,
+					return ntypes.PriceTimeList{
+						PTList: make([]ntypes.PriceTime, 11),
 					}
 				}),
 				processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
-					if value != nil {
-						val := value.(uint64)
-						agg := aggregate.(*ntypes.SumAndCount)
-						return &ntypes.SumAndCount{
-							Sum:   agg.Sum + val,
-							Count: agg.Count + 1,
-						}
-					} else {
-						return aggregate
+					agg := aggregate.(ntypes.PriceTimeList)
+					agg.PTList = append(agg.PTList, value.(ntypes.PriceTime))
+					sort.Sort(agg.PTList)
+					if len(agg.PTList) > maxSize {
+						agg.PTList.Delete(0, 1)
 					}
+					return agg
 				}),
 				processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
-					if value != nil {
-						val := value.(uint64)
-						agg := aggregate.(*ntypes.SumAndCount)
-						return &ntypes.SumAndCount{
-							Sum:   agg.Sum - val,
-							Count: agg.Count - 1,
-						}
-					} else {
-						return aggregate
-					}
+					agg := aggregate.(ntypes.PriceTimeList)
+					val := ntypes.CastToPriceTimePtr(value)
+					agg.PTList.RemoveMatching(val)
+					return agg
 				}),
 			))).
-		Via(processor.NewMeteredProcessor(processor.NewTableMapValuesProcessor("calcAvg",
+		Via(processor.NewMeteredProcessor(processor.NewTableMapValuesProcessor("avg",
 			processor.ValueMapperWithKeyFunc(func(key, value interface{}) (interface{}, error) {
-				sc := value.(*ntypes.SumAndCount)
-				return float64(sc.Sum) / float64(sc.Count), nil
-			}),
-		))).
+				pt := value.(ntypes.PriceTimeList)
+				sum := uint64(0)
+				l := len(pt.PTList)
+				for _, p := range pt.PTList {
+					sum += p.Price
+				}
+				return float64(sum) / float64(l), nil
+			})))).
 		Via(processor.NewTableToStreamProcessor()).
 		Via(processor.NewFixedSubstreamOutputProcessor(ectx.Producers()[0], sp.ParNum))
 	task := stream_task.NewStreamTaskBuilder().

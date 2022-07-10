@@ -22,38 +22,33 @@ import (
 	"cs.utexas.edu/zjia/faas/types"
 )
 
-const (
-	auctionDurationUpper = time.Duration(1800) * time.Second
-)
-
-type q4JoinStreamHandler struct {
+type q6JoinStreamHandler struct {
 	env      types.Environment
 	funcName string
 }
 
-func NewQ4JoinStreamHandler(env types.Environment, funcName string) types.FuncHandler {
-	return &q4JoinStreamHandler{
+func NewQ6JoinStreamHandler(env types.Environment, funcName string) types.FuncHandler {
+	return &q6JoinStreamHandler{
 		env:      env,
 		funcName: funcName,
 	}
 }
 
-func (h *q4JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, error) {
+func (h *q6JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, error) {
 	parsedInput := &common.QueryInput{}
 	err := json.Unmarshal(input, parsedInput)
 	if err != nil {
 		return nil, err
 	}
-	output := h.Q4JoinStream(ctx, parsedInput)
+	output := h.Q6JoinStream(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
 		panic(err)
 	}
-	// fmt.Printf("query 3 output: %v\n", encodedOutput)
 	return nutils.CompressData(encodedOutput), nil
 }
 
-func (h *q4JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
+func (h *q6JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
 ) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
 	stream1, stream2, outputStream, err := getInOutStreams(ctx, h.env, sp)
 	if err != nil {
@@ -68,11 +63,11 @@ func (h *q4JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	if err != nil {
 		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
-	auctionsConfig := &producer_consumer.StreamConsumerConfig{
+	src1Config := &producer_consumer.StreamConsumerConfig{
 		Timeout:  common.SrcConsumeTimeout,
 		MsgSerde: msgSerde,
 	}
-	personsConfig := &producer_consumer.StreamConsumerConfig{
+	src2Config := &producer_consumer.StreamConsumerConfig{
 		Timeout:  common.SrcConsumeTimeout,
 		MsgSerde: msgSerde,
 	}
@@ -80,23 +75,23 @@ func (h *q4JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	if err != nil {
 		return nil, nil, err
 	}
-	aicSerde, err := ntypes.GetAuctionIdCategorySerde(serdeFormat)
+	asSerde, err := ntypes.GetAuctionIDSellerSerde(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
-	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, aicSerde, abSerde)
+	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, abSerde, asSerde)
 	if err != nil {
-		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
+		return nil, nil, err
 	}
 	outConfig := &producer_consumer.StreamSinkConfig{
-		MsgSerde:      outMsgSerde,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+		MsgSerde:      outMsgSerde,
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	src1 := producer_consumer.NewMeteredConsumer(
-		producer_consumer.NewShardedSharedLogStreamConsumer(stream1, auctionsConfig), warmup)
+		producer_consumer.NewShardedSharedLogStreamConsumer(stream1, src1Config), warmup)
 	src2 := producer_consumer.NewMeteredConsumer(
-		producer_consumer.NewShardedSharedLogStreamConsumer(stream2, personsConfig), warmup)
+		producer_consumer.NewShardedSharedLogStreamConsumer(stream2, src2Config), warmup)
 	sink := producer_consumer.NewConcurrentMeteredSyncProducer(
 		producer_consumer.NewShardedSharedLogStreamProducer(outputStream, outConfig), warmup)
 	src1.SetInitialSource(false)
@@ -106,7 +101,7 @@ func (h *q4JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	return []producer_consumer.MeteredConsumerIntr{src1, src2}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
-func (h *q4JoinStreamHandler) Q4JoinStream(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+func (h *q6JoinStreamHandler) Q6JoinStream(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: fmt.Sprintf("getSrcSink err: %v\n", err)}
@@ -126,6 +121,7 @@ func (h *q4JoinStreamHandler) Q4JoinStream(ctx context.Context, sp *common.Query
 			BidPrice:    bid.Price,
 			AucDateTime: auc.DateTime,
 			AucExpires:  auc.Expires,
+			AucSeller:   auc.Seller,
 			AucCategory: auc.Category,
 		}
 	})
@@ -167,7 +163,6 @@ func (h *q4JoinStreamHandler) Q4JoinStream(ctx context.Context, sp *common.Query
 					ab := value.(*ntypes.AuctionBid)
 					return ab.BidDateTime >= ab.AucDateTime && ab.BidDateTime <= ab.AucExpires, nil
 				})))
-
 	filterAndGroupMsg := func(ctx context.Context, msgs []commtypes.Message) ([]commtypes.Message, error) {
 		var newMsgs []commtypes.Message
 		for _, msg := range msgs {
@@ -176,9 +171,9 @@ func (h *q4JoinStreamHandler) Q4JoinStream(ctx context.Context, sp *common.Query
 				return nil, err
 			}
 			if validBid != nil && !utils.IsNil(validBid[0].Value) {
-				aic := ntypes.AuctionIdCategory{
-					AucId:    validBid[0].Key.(uint64),
-					Category: validBid[0].Value.(*ntypes.AuctionBid).AucCategory,
+				aic := ntypes.AuctionIdSeller{
+					AucId:  validBid[0].Key.(uint64),
+					Seller: validBid[0].Value.(*ntypes.AuctionBid).AucSeller,
 				}
 				aucBid := validBid[0].Value.(*ntypes.AuctionBid)
 				newMsg := commtypes.Message{Key: &aic, Value: aucBid, Timestamp: validBid[0].Timestamp}
@@ -187,7 +182,6 @@ func (h *q4JoinStreamHandler) Q4JoinStream(ctx context.Context, sp *common.Query
 		}
 		return newMsgs, nil
 	}
-
 	aJoinB := execution.JoinWorkerFunc(func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		joined, err := aucJoinBidsFunc(ctx, m)
 		if err != nil {
