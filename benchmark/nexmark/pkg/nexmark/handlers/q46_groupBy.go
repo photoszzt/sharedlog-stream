@@ -81,11 +81,12 @@ func (h *q46GroupByHandler) getAucsByID() execution.GeneralProcFunc {
 
 	return func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup,
 		msgChan chan commtypes.Message, errChan chan error,
+		pause chan struct{}, resume chan struct{},
 	) {
 		args := argsTmp.(*TwoMsgChanProcArgs)
 		gpCtx.AppendProcessor(processor.NewGroupByOutputProcessor(args.Producers()[0], args))
 		defer wg.Done()
-		gpCtx.GeneralProc(ctx, args.Producers()[0], msgChan, errChan)
+		gpCtx.GeneralProc(ctx, args.Producers()[0], msgChan, errChan, pause, resume)
 	}
 }
 
@@ -105,10 +106,11 @@ func (h *q46GroupByHandler) getBidsByAuctionID() execution.GeneralProcFunc {
 		}))))
 	return func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup,
 		msgChan chan commtypes.Message, errChan chan error,
+		pause chan struct{}, resume chan struct{},
 	) {
 		args := argsTmp.(*TwoMsgChanProcArgs)
 		gpCtx.AppendProcessor(processor.NewGroupByOutputProcessor(args.Producers()[1], args))
 		defer wg.Done()
-		gpCtx.GeneralProc(ctx, args.Producers()[1], msgChan, errChan)
+		gpCtx.GeneralProc(ctx, args.Producers()[1], msgChan, errChan, pause, resume)
 	}
 }

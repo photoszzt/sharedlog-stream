@@ -201,13 +201,21 @@ func PrepareProcessByTwoGeneralProc(
 			if err := handleErrFunc(); err != nil {
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
-			sargs.LockProducer()
+			for len(func1Manager.MsgChan()) != 0 || len(func2Manager.MsgChan()) != 0 {
+				time.Sleep(time.Millisecond * 1)
+			}
+			func1Manager.PauseChan() <- struct{}{}
+			func2Manager.PauseChan() <- struct{}{}
+			// sargs.LockProducer()
 			// debug.Fprintf(os.Stderr, "done pause\n")
 			return nil
 		}).
 		ResumeFunc(func(task *stream_task.StreamTask, sargs *stream_task.StreamTaskArgs) {
 			// debug.Fprintf(os.Stderr, "start resume\n")
-			sargs.UnlockProducer()
+			// sargs.UnlockProducer()
+
+			func1Manager.ResumeChan() <- struct{}{}
+			func2Manager.ResumeChan() <- struct{}{}
 			/*
 				func1Manager.RecreateMsgChan(&procArgs.msgChan1)
 				func2Manager.RecreateMsgChan(&procArgs.msgChan2)

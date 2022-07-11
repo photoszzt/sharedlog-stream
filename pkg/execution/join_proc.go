@@ -22,6 +22,8 @@ func joinProcLoop(
 	procArgs *JoinProcArgs,
 	wg *sync.WaitGroup,
 	done chan struct{},
+	pause chan struct{},
+	resume chan struct{},
 ) {
 	id := ctx.Value(commtypes.CTXID("id")).(string)
 	defer wg.Done()
@@ -35,9 +37,11 @@ func joinProcLoop(
 			debug.Fprintf(os.Stderr, "[id=%s, ts=%d] got done msg\n",
 				id, time.Now().UnixMilli())
 			return
+		case <-pause:
+			<-resume
 		default:
 		}
-		procArgs.LockProducerConsumer()
+		// procArgs.LockProducerConsumer()
 		// debug.Fprintf(os.Stderr, "[id=%s] before consume, stream name %s\n", id, procArgs.Consumers()[0].Stream().TopicName())
 		gotMsgs, err := procArgs.Consumers()[0].Consume(ctx, procArgs.SubstreamNum())
 		if err != nil {
@@ -47,13 +51,13 @@ func joinProcLoop(
 				// out <- &common.FnOutput{Success: true, Message: err.Error()}
 				// debug.Fprintf(os.Stderr, "%s done sending msg\n", id)
 				// return
-				procArgs.UnlockProducerConsumer()
+				// procArgs.UnlockProducerConsumer()
 				continue
 			}
 			fmt.Fprintf(os.Stderr, "[ERROR] consume: %v, out chan len: %d\n", err, len(out))
 			out <- &common.FnOutput{Success: false, Message: err.Error()}
 			fmt.Fprintf(os.Stderr, "%s done sending msg2\n", id)
-			procArgs.UnlockProducerConsumer()
+			// procArgs.UnlockProducerConsumer()
 			return
 		}
 		// debug.Fprintf(os.Stderr, "[id=%s] after consume\n", id)
@@ -66,7 +70,7 @@ func joinProcLoop(
 				if ret_err != nil {
 					fmt.Fprintf(os.Stderr, "[SCALE_EPOCH] out: %v, out chan len: %d\n", ret_err, len(out))
 					out <- ret_err
-					procArgs.UnlockProducerConsumer()
+					// procArgs.UnlockProducerConsumer()
 					return
 				}
 				continue
@@ -87,7 +91,7 @@ func joinProcLoop(
 						fmt.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink: %v, out chan len: %d\n", id, err, len(out))
 						out <- &common.FnOutput{Success: false, Message: err.Error()}
 						fmt.Fprintf(os.Stderr, "%s done send msg3\n", id)
-						procArgs.UnlockProducerConsumer()
+						// procArgs.UnlockProducerConsumer()
 						return
 					}
 				}
@@ -101,12 +105,12 @@ func joinProcLoop(
 					fmt.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink2: %v, out chan len: %d\n", id, err, len(out))
 					out <- &common.FnOutput{Success: false, Message: err.Error()}
 					fmt.Fprintf(os.Stderr, "[id=%s] done send msg4\n", id)
-					procArgs.UnlockProducerConsumer()
+					// procArgs.UnlockProducerConsumer()
 					return
 				}
 			}
 		}
-		procArgs.UnlockProducerConsumer()
+		// procArgs.UnlockProducerConsumer()
 		// debug.Fprintf(os.Stderr, "after for loop\n")
 	}
 }
@@ -126,7 +130,7 @@ func procMsgWithSink(ctx context.Context, msg commtypes.Message, procArgs *JoinP
 		return err
 	}
 	for _, msg := range msgs {
-		debug.Fprintf(os.Stderr, "k %v, v %v, ts %d\n", msg.Key, msg.Value, msg.Timestamp)
+		// debug.Fprintf(os.Stderr, "k %v, v %v, ts %d\n", msg.Key, msg.Value, msg.Timestamp)
 		err = procArgs.Producers()[0].Produce(ctx, msg, procArgs.SubstreamNum(), false)
 		if err != nil {
 			debug.Fprintf(os.Stderr, "[ERROR] %s return push to sink: %v\n", ctx.Value("id"), err)
