@@ -23,17 +23,17 @@ func (t PriceTimeSlice) Swap(i, j int) {
 	t[i], t[j] = t[j], t[i]
 }
 
-func (t PriceTimeSlice) Delete(i, j int) PriceTimeSlice {
+func Delete(t PriceTimeSlice, i, j int) PriceTimeSlice {
 	return append(t[:i], t[j:]...)
 }
 
-func (t PriceTimeSlice) RemoveMatching(pt *PriceTime) {
+func RemoveMatching(t PriceTimeSlice, pt *PriceTime) PriceTimeSlice {
 	for i, v := range t {
 		if v.Price == pt.Price && v.DateTime == pt.DateTime {
-			t = t.Delete(i, i+1)
-			return
+			return Delete(t, i, i+1)
 		}
 	}
+	return t
 }
 
 type PriceTimeList struct {

@@ -79,7 +79,7 @@ func (h *q6JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	if err != nil {
 		return nil, nil, err
 	}
-	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, abSerde, asSerde)
+	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, asSerde, abSerde)
 	if err != nil {
 		return nil, nil, err
 	}

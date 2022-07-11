@@ -36,7 +36,7 @@ func (aic AuctionIdSeller) String() string {
 	return fmt.Sprintf("AuctionIdSeller: {AucID: %d, Seller: %d}", aic.AucId, aic.Seller)
 }
 
-func castToAuctionIdSeller(value interface{}) *AuctionIdSeller {
+func CastToAuctionIdSeller(value interface{}) *AuctionIdSeller {
 	val, ok := value.(*AuctionIdSeller)
 	if !ok {
 		valTmp := value.(AuctionIdSeller)
@@ -48,7 +48,7 @@ func castToAuctionIdSeller(value interface{}) *AuctionIdSeller {
 type AuctionIdSellerJSONSerde struct{}
 
 func (s AuctionIdSellerJSONSerde) Encode(value interface{}) ([]byte, error) {
-	v := castToAuctionIdSeller(value)
+	v := CastToAuctionIdSeller(value)
 	return json.Marshal(v)
 }
 
@@ -64,7 +64,7 @@ func (s AuctionIdSellerJSONSerde) Decode(value []byte) (interface{}, error) {
 type AuctionIdSellerMsgpSerde struct{}
 
 func (s AuctionIdSellerMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	v := castToAuctionIdSeller(value)
+	v := CastToAuctionIdSeller(value)
 	return v.MarshalMsg(nil)
 }
 

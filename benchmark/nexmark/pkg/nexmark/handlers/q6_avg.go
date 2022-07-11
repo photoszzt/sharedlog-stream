@@ -98,7 +98,7 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	storeMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, ptlSerde)
+	storeMsgSerde, err := processor.MsgSerdeWithValueTs(serdeFormat, commtypes.Uint64Serde{}, ptlSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -126,22 +126,28 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 			processor.NewTableAggregateProcessor("q6Agg", kvstore,
 				processor.InitializerFunc(func() interface{} {
 					return ntypes.PriceTimeList{
-						PTList: make([]ntypes.PriceTime, 11),
+						PTList: make([]ntypes.PriceTime, 0),
 					}
 				}),
 				processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
 					agg := aggregate.(ntypes.PriceTimeList)
 					agg.PTList = append(agg.PTList, value.(ntypes.PriceTime))
 					sort.Sort(agg.PTList)
-					if len(agg.PTList) > maxSize {
-						agg.PTList.Delete(0, 1)
+					// debug.Fprintf(os.Stderr, "[ADD] agg before delete: %v\n", agg.PTList)
+					if len(agg.PTList) > maxSize+1 {
+						agg.PTList = ntypes.Delete(agg.PTList, 0, 1)
 					}
+					// debug.Fprintf(os.Stderr, "[ADD] agg after delete: %v\n", agg.PTList)
 					return agg
 				}),
 				processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
 					agg := aggregate.(ntypes.PriceTimeList)
-					val := ntypes.CastToPriceTimePtr(value)
-					agg.PTList.RemoveMatching(val)
+					if len(agg.PTList) > 0 {
+						// debug.Fprintf(os.Stderr, "[RM] element to delete: %+v\n", value)
+						val := ntypes.CastToPriceTimePtr(value)
+						agg.PTList = ntypes.RemoveMatching(agg.PTList, val)
+						// debug.Fprintf(os.Stderr, "[RM] after delete agg: %v\n", agg)
+					}
 					return agg
 				}),
 			))).
@@ -150,10 +156,17 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 				pt := value.(ntypes.PriceTimeList)
 				sum := uint64(0)
 				l := len(pt.PTList)
-				for _, p := range pt.PTList {
+				start := 0
+				count := l
+				if l > 10 {
+					start = l - 10
+					count = 10
+				}
+				for i := start; i < l; i++ {
+					p := pt.PTList[i]
 					sum += p.Price
 				}
-				return float64(sum) / float64(l), nil
+				return float64(sum) / float64(count), nil
 			})))).
 		Via(processor.NewTableToStreamProcessor()).
 		Via(processor.NewFixedSubstreamOutputProcessor(ectx.Producers()[0], sp.ParNum))

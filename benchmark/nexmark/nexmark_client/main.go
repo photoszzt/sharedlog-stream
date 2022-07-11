@@ -112,7 +112,7 @@ func invokeDumpFunc(client *http.Client) {
 	case "q3":
 		dumpInput.KeySerde = "Uint64"
 		dumpInput.ValueSerde = "NameCityStateId"
-	case "q4":
+	case "q4", "q6":
 		dumpInput.KeySerde = "Uint64"
 		dumpInput.ValueSerde = "Float64"
 	case "q5":
@@ -168,7 +168,7 @@ func main() {
 		return
 	}
 	switch FLAGS_app_name {
-	case "q1", "q2", "q3", "q4", "q5", "q7", "q8", "windowedAvg":
+	case "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "windowedAvg":
 		var invokeSourceFunc_ invokeSource
 		if FLAGS_test_src != "" {
 			invokeSourceFunc_ = invokeTestSrcFunc

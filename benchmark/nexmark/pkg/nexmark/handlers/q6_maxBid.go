@@ -129,9 +129,9 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	compare := func(a, b treemap.Key) int {
-		ka := a.(*ntypes.AuctionIdSeller)
-		kb := b.(*ntypes.AuctionIdSeller)
-		return ntypes.CompareAuctionIDSeller(ka, kb)
+		ka := a.(ntypes.AuctionIdSeller)
+		kb := b.(ntypes.AuctionIdSeller)
+		return ntypes.CompareAuctionIDSeller(&ka, &kb)
 	}
 	kvstore, err := store_with_changelog.CreateInMemKVTableWithChangelog(
 		mp, compare)
@@ -154,7 +154,7 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		})))).
 		Via(processor.NewMeteredProcessor(processor.NewTableGroupByMapProcessor("changeKey",
 			processor.MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
-				return key.(*ntypes.AuctionIdSeller).Seller, value, nil
+				return key.(ntypes.AuctionIdSeller).Seller, value, nil
 			})))).
 		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[0], &ectx))
 	task := stream_task.NewStreamTaskBuilder().
