@@ -28,7 +28,7 @@ type GeneralProcFunc func(
 
 func NewGeneralProcManager(generalProcFunc GeneralProcFunc) *GeneralProcManager {
 	return &GeneralProcManager{
-		msgChan:         make(chan commtypes.Message, 1),
+		msgChan:         make(chan commtypes.Message, 10),
 		errChan:         make(chan error, 1),
 		pauseChan:       make(chan struct{}),
 		resumeChan:      make(chan struct{}),

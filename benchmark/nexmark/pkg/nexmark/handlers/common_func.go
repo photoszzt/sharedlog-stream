@@ -15,6 +15,7 @@ import (
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
+	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/stream_task"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -182,6 +183,9 @@ func PrepareProcessByTwoGeneralProc(
 		return nil
 	}
 
+	pauseTime := stats.NewInt64Collector("2proc_pause_us", stats.DEFAULT_COLLECT_DURATION)
+	resumeTime := stats.NewInt64Collector("2proc_resume_us", stats.DEFAULT_COLLECT_DURATION)
+
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
 			args := argsTmp.(processor.ExecutionContext)
@@ -201,11 +205,14 @@ func PrepareProcessByTwoGeneralProc(
 			if err := handleErrFunc(); err != nil {
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
+			pStart := stats.TimerBegin()
 			for len(func1Manager.MsgChan()) != 0 || len(func2Manager.MsgChan()) != 0 {
-				time.Sleep(time.Millisecond * 1)
+				time.Sleep(time.Microsecond * 50)
 			}
 			func1Manager.PauseChan() <- struct{}{}
 			func2Manager.PauseChan() <- struct{}{}
+			elapsed := stats.Elapsed(pStart)
+			pauseTime.AddSample(elapsed.Microseconds())
 			// sargs.LockProducer()
 			// debug.Fprintf(os.Stderr, "done pause\n")
 			return nil
@@ -214,8 +221,11 @@ func PrepareProcessByTwoGeneralProc(
 			// debug.Fprintf(os.Stderr, "start resume\n")
 			// sargs.UnlockProducer()
 
+			rStart := stats.TimerBegin()
 			func1Manager.ResumeChan() <- struct{}{}
 			func2Manager.ResumeChan() <- struct{}{}
+			elapsed := stats.Elapsed(rStart)
+			resumeTime.AddSample(elapsed.Microseconds())
 			/*
 				func1Manager.RecreateMsgChan(&procArgs.msgChan1)
 				func2Manager.RecreateMsgChan(&procArgs.msgChan2)

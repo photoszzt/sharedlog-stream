@@ -5,6 +5,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/proc_interface"
+	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/stream_task"
 	"sync"
 )
@@ -32,6 +33,9 @@ func PrepareTaskWithJoin(
 	lctx := context.WithValue(ctx, commtypes.CTXID("id"), "left")
 	rctx := context.WithValue(ctx, commtypes.CTXID("id"), "right")
 
+	pauseTime := stats.NewInt64Collector("join_pause_us", stats.DEFAULT_COLLECT_DURATION)
+	resumeTime := stats.NewInt64Collector("join_resume_us", stats.DEFAULT_COLLECT_DURATION)
+
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
 			return HandleJoinErrReturn(argsTmp)
@@ -54,8 +58,11 @@ func PrepareTaskWithJoin(
 				return ret
 			}
 			// sargs.LockProducerConsumer()
+			pStart := stats.TimerBegin()
 			leftManager.Pause() <- struct{}{}
 			rightManager.Pause() <- struct{}{}
+			elapsed := stats.Elapsed(pStart)
+			pauseTime.AddSample(elapsed.Microseconds())
 			// debug.Fprintf(os.Stderr, "join procs exited\n")
 			return nil
 		}).
@@ -67,8 +74,11 @@ func PrepareTaskWithJoin(
 				rightManager.LaunchJoinProcLoop(rctx, task, joinProcRight, &wg)
 			*/
 			// sargs.UnlockProducerConsumer()
+			rStart := stats.TimerBegin()
 			leftManager.Resume() <- struct{}{}
 			rightManager.Resume() <- struct{}{}
+			elapsed := stats.Elapsed(rStart)
+			resumeTime.AddSample(elapsed.Microseconds())
 			// debug.Fprintf(os.Stderr, "ts=%d done invoke join proc loops\n", time.Now().UnixMilli())
 			// debug.Fprintf(os.Stderr, "done resume join proc\n")
 		}).Build()
