@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
@@ -134,7 +136,7 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 					agg.PTList = append(agg.PTList, value.(ntypes.PriceTime))
 					sort.Sort(agg.PTList)
 					// debug.Fprintf(os.Stderr, "[ADD] agg before delete: %v\n", agg.PTList)
-					if len(agg.PTList) > maxSize+1 {
+					if len(agg.PTList) > maxSize {
 						agg.PTList = ntypes.Delete(agg.PTList, 0, 1)
 					}
 					// debug.Fprintf(os.Stderr, "[ADD] agg after delete: %v\n", agg.PTList)
@@ -156,17 +158,10 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 				pt := value.(ntypes.PriceTimeList)
 				sum := uint64(0)
 				l := len(pt.PTList)
-				start := 0
-				count := l
-				if l > maxSize {
-					start = l - maxSize
-					count = maxSize
-				}
-				for i := start; i < l; i++ {
-					p := pt.PTList[i]
+				for _, p := range pt.PTList {
 					sum += p.Price
 				}
-				return float64(sum) / float64(count), nil
+				return float64(sum) / float64(l), nil
 			})))).
 		Via(processor.NewTableToStreamProcessor()).
 		Via(processor.NewFixedSubstreamOutputProcessor(ectx.Producers()[0], sp.ParNum))
