@@ -158,9 +158,9 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 				l := len(pt.PTList)
 				start := 0
 				count := l
-				if l > 10 {
-					start = l - 10
-					count = 10
+				if l > maxSize {
+					start = l - maxSize
+					count = maxSize
 				}
 				for i := start; i < l; i++ {
 					p := pt.PTList[i]

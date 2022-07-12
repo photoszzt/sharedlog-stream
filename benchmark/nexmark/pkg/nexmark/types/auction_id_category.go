@@ -39,7 +39,7 @@ func CompareAuctionIdCategory(a, b *AuctionIdCategory) int {
 type AuctionIdCategoryJSONSerde struct{}
 
 func (s AuctionIdCategoryJSONSerde) Encode(value interface{}) ([]byte, error) {
-	v := value.(*AuctionIdCategory)
+	v := value.(AuctionIdCategory)
 	return json.Marshal(v)
 }
 
@@ -55,7 +55,7 @@ func (s AuctionIdCategoryJSONSerde) Decode(value []byte) (interface{}, error) {
 type AuctionIdCategoryMsgpSerde struct{}
 
 func (s AuctionIdCategoryMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	aic := value.(*AuctionIdCategory)
+	aic := value.(AuctionIdCategory)
 	return aic.MarshalMsg(nil)
 }
 

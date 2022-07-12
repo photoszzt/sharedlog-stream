@@ -124,9 +124,9 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	compare := func(a, b treemap.Key) int {
-		ka := a.(*ntypes.AuctionIdCategory)
-		kb := b.(*ntypes.AuctionIdCategory)
-		return ntypes.CompareAuctionIdCategory(ka, kb)
+		ka := a.(ntypes.AuctionIdCategory)
+		kb := b.(ntypes.AuctionIdCategory)
+		return ntypes.CompareAuctionIdCategory(&ka, &kb)
 	}
 	kvstore, err := store_with_changelog.CreateInMemKVTableWithChangelog(mp, compare)
 	if err != nil {
@@ -148,7 +148,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		})))).
 		Via(processor.NewMeteredProcessor(processor.NewTableGroupByMapProcessor("changeKey",
 			processor.MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
-				return key.(*ntypes.AuctionIdCategory).Category, value, nil
+				return key.(ntypes.AuctionIdCategory).Category, value, nil
 			})))).
 		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[0], &ectx))
 
