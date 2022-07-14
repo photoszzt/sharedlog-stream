@@ -25,10 +25,11 @@ type StreamTask struct {
 	OffMu                sync.Mutex
 	CurrentConsumeOffset map[string]uint64
 
-	pauseFunc     func(sargs *StreamTaskArgs) *common.FnOutput
-	resumeFunc    func(task *StreamTask, sargs *StreamTaskArgs)
-	initFunc      func(task *StreamTask)
-	HandleErrFunc func() error
+	pauseFunc               func(sargs *StreamTaskArgs) *common.FnOutput
+	resumeFunc              func(task *StreamTask, sargs *StreamTaskArgs)
+	initFunc                func(task *StreamTask)
+	flushFuncForAtLeastOnce func(ctx context.Context, args *StreamTaskArgs) error
+	HandleErrFunc           func() error
 }
 
 func (t *StreamTask) ExecuteApp(ctx context.Context,

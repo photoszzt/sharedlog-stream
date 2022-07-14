@@ -487,26 +487,24 @@ func CreateOffsetTopicAndGetOffset(ctx context.Context, tm *TransactionManager,
 	return offset, nil
 }
 
-func (tc *TransactionManager) AppendConsumedSeqNum(ctx context.Context, consumedSeqNumConfigs []con_types.ConsumedSeqNumConfig) error {
-	for _, consumedSeqNumConfig := range consumedSeqNumConfigs {
-		offsetTopic := con_types.OffsetTopic(consumedSeqNumConfig.TopicToTrack)
+func (tc *TransactionManager) AppendConsumedSeqNum(ctx context.Context, currentOffset map[string]uint64, parNum uint8) error {
+	for topic, offset := range currentOffset {
+		offsetTopic := con_types.OffsetTopic(topic)
 		offsetLog := tc.topicStreams[offsetTopic]
 		offsetRecord := txn_data.OffsetRecord{
-			Offset:    consumedSeqNumConfig.ConsumedSeqNum,
-			TaskId:    consumedSeqNumConfig.TaskId,
-			TaskEpoch: consumedSeqNumConfig.TaskEpoch,
+			Offset: offset,
 		}
 		encoded, err := tc.offsetRecordSerde.Encode(&offsetRecord)
 		if err != nil {
 			return err
 		}
 
-		_, err = offsetLog.Push(ctx, encoded, consumedSeqNumConfig.Partition, sharedlog_stream.SingleDataRecordMeta,
+		_, err = offsetLog.Push(ctx, encoded, parNum, sharedlog_stream.SingleDataRecordMeta,
 			tc.GetProducerId())
 		if err != nil {
 			return err
 		}
-		debug.Fprintf(os.Stderr, "consumed offset 0x%x for %s\n", consumedSeqNumConfig.ConsumedSeqNum, consumedSeqNumConfig.TopicToTrack)
+		debug.Fprintf(os.Stderr, "consumed offset 0x%x for %s\n", offset, topic)
 	}
 	return nil
 }
@@ -536,44 +534,12 @@ func (tc *TransactionManager) FindLastConsumedSeqNum(ctx context.Context, topicT
 	if err != nil {
 		return 0, err
 	}
-	return rawMsg.LogSeqNum, nil
-}
-
-func (tc *TransactionManager) FindConsumedSeqNumMatchesTransactionID(ctx context.Context, topicToTrack string, parNum uint8,
-	transactionID uint64,
-) (uint64, error) {
-	offsetTopic := con_types.OffsetTopic(topicToTrack)
-	offsetLog := tc.topicStreams[offsetTopic]
-	debug.Assert(offsetTopic == offsetLog.TopicName(), fmt.Sprintf("expected offset log tp: %s, got %s",
-		offsetTopic, offsetLog.TopicName()))
-	txnMarkerTag := txn_data.MarkerTag(offsetLog.TopicNameHash(), parNum)
-	var txnMkRawMsg *commtypes.RawMsg = nil
-	tailSeqNum := protocol.MaxLogSeqnum
-	var err error
-	for {
-		txnMkRawMsg, err = offsetLog.ReadBackwardWithTag(ctx, tailSeqNum, parNum, txnMarkerTag)
-		if err != nil {
-			return 0, err
-		}
-		if !txnMkRawMsg.IsControl {
-			continue
-		} else {
-			if txnMkRawMsg.ProdId.TransactionID == transactionID {
-				break
-			}
-		}
-	}
-	if txnMkRawMsg == nil {
-		return 0, common_errors.ErrStreamEmpty
-	}
-	tag := sharedlog_stream.NameHashWithPartition(offsetLog.TopicNameHash(), parNum)
-
-	// read the previous item which should record the offset number
-	rawMsg, err := offsetLog.ReadBackwardWithTag(ctx, txnMkRawMsg.LogSeqNum, parNum, tag)
+	offsetTmp, err := tc.offsetRecordSerde.Decode(rawMsg.Payload)
 	if err != nil {
 		return 0, err
 	}
-	return rawMsg.LogSeqNum, nil
+	offsetRecord := offsetTmp.(txn_data.OffsetRecord)
+	return offsetRecord.Offset, nil
 }
 
 func (tc *TransactionManager) BeginTransaction(ctx context.Context) error {

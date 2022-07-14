@@ -9,7 +9,6 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/consume_seq_num_manager"
-	"sharedlog-stream/pkg/consume_seq_num_manager/con_types"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"time"
@@ -54,7 +53,6 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	cm.AddTopicTrackConsumedSeqs(ctx, sp.TopicName, []uint8{0})
 
 	// warmup
 	rest := sp.NumEvents
@@ -157,22 +155,7 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 
 func commitConsumeSeq(ctx context.Context,
 	cm *consume_seq_num_manager.ConsumeSeqManager, topicName string, off uint64) error {
-	consumedSeqNumConfig := []con_types.ConsumedSeqNumConfig{
-		{
-			TopicToTrack:   topicName,
-			Partition:      0,
-			ConsumedSeqNum: off,
-		},
-	}
-	err := cm.AppendConsumedSeqNum(ctx, consumedSeqNumConfig)
-	if err != nil {
-		return err
-	}
-	err = cm.Track(ctx)
-	if err != nil {
-		return err
-	}
-	return nil
+	return cm.Track(ctx, map[string]uint64{topicName: off}, 0)
 }
 
 func (h *sharedlogConsumeBenchHandler) runLoop(ctx context.Context,

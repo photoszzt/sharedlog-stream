@@ -6,7 +6,6 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/consume_seq_num_manager"
-	"sharedlog-stream/pkg/consume_seq_num_manager/con_types"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stats"
 	"time"
@@ -38,7 +37,6 @@ func (t *StreamTask) process(ctx context.Context, args *StreamTaskArgs) *common.
 		if offset != 0 {
 			src.SetCursor(offset+1, args.ectx.SubstreamNum())
 		}
-		cm.AddTopicTrackConsumedSeqs(ctx, inputTopicName, []uint8{args.ectx.SubstreamNum()})
 	}
 	debug.Fprint(os.Stderr, "done restore\n")
 	args.ectx.StartWarmup()
@@ -61,9 +59,10 @@ func (t *StreamTask) process(ctx context.Context, args *StreamTaskArgs) *common.
 		}
 		timeSinceLastFlush := time.Since(flushTimer)
 		if timeSinceLastFlush >= args.flushEvery {
-			if ret_err := t.pauseFlushResume(ctx, args, &flushTimer); err != nil {
-				return ret_err
+			if ret_err := t.flushFuncForAtLeastOnce(ctx, args); ret_err != nil {
+				return common.GenErrFnOutput(ret_err)
 			}
+			flushTimer = time.Now()
 		}
 		warmupCheck.Check()
 		if args.duration != 0 && warmupCheck.ElapsedSinceInitial() >= args.duration {
@@ -91,27 +90,15 @@ func (t *StreamTask) process(ctx context.Context, args *StreamTaskArgs) *common.
 	return ret
 }
 
-func (t *StreamTask) pauseFlushResume(ctx context.Context, args *StreamTaskArgs, flushTimer *time.Time) *common.FnOutput {
-	if t.pauseFunc != nil {
-		if ret := t.pauseFunc(args); ret != nil {
-			return ret
-		}
-	}
-	err := t.flushStreams(ctx, args)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	if t.resumeFunc != nil {
-		t.resumeFunc(t, args)
-	}
-	*flushTimer = time.Now()
-	return nil
-}
-
 func (t *StreamTask) track(ctx context.Context, cm *consume_seq_num_manager.ConsumeSeqManager, substreamNum uint8,
 	hasUncommitted *bool, commitTimer *time.Time,
 ) *common.FnOutput {
-	err := t.trackSrcConSeq(ctx, cm, substreamNum)
+	t.OffMu.Lock()
+	err := cm.Track(ctx, t.CurrentConsumeOffset, substreamNum)
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: err.Error()}
+	}
+	t.OffMu.Unlock()
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -128,10 +115,12 @@ func (t *StreamTask) pauseTrackFlush(ctx context.Context, args *StreamTaskArgs, 
 				return ret
 			}
 		}
-		err := t.trackSrcConSeq(ctx, cm, args.ectx.SubstreamNum())
+		t.OffMu.Lock()
+		err := cm.Track(ctx, t.CurrentConsumeOffset, args.ectx.SubstreamNum())
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
+		t.OffMu.Unlock()
 		alreadyPaused = true
 	}
 	if !alreadyPaused && t.pauseFunc != nil {
@@ -144,23 +133,4 @@ func (t *StreamTask) pauseTrackFlush(ctx context.Context, args *StreamTaskArgs, 
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	return nil
-}
-
-func (t *StreamTask) trackSrcConSeq(ctx context.Context, cm *consume_seq_num_manager.ConsumeSeqManager, parNum uint8) error {
-	t.OffMu.Lock()
-	defer t.OffMu.Unlock()
-	consumedSeqNumConfigs := make([]con_types.ConsumedSeqNumConfig, 0)
-	for topic, offset := range t.CurrentConsumeOffset {
-		consumedSeqNumConfigs = append(consumedSeqNumConfigs, con_types.ConsumedSeqNumConfig{
-			TopicToTrack:   topic,
-			Partition:      parNum,
-			ConsumedSeqNum: uint64(offset),
-		})
-	}
-	err := cm.AppendConsumedSeqNum(ctx, consumedSeqNumConfigs)
-	if err != nil {
-		return err
-	}
-	err = cm.Track(ctx)
-	return err
 }

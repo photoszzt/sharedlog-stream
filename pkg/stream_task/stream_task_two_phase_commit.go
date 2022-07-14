@@ -6,7 +6,6 @@ import (
 	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/consume_seq_num_manager/con_types"
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -279,6 +278,8 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 	trackConsumePar *bool,
 	paused *bool,
 ) *common.FnOutput {
+	t.OffMu.Lock()
+	defer t.OffMu.Unlock()
 	// debug.Fprintf(os.Stderr, "about to pause\n")
 	if t.pauseFunc != nil {
 		if ret := t.pauseFunc(args); ret != nil {
@@ -286,21 +287,7 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 		}
 		*paused = true
 	}
-	// debug.Fprintf(os.Stderr, "after pause\n")
-	consumedSeqNumConfigs := make([]con_types.ConsumedSeqNumConfig, 0)
-	t.OffMu.Lock()
-	for topic, offset := range t.CurrentConsumeOffset {
-		consumedSeqNumConfigs = append(consumedSeqNumConfigs, con_types.ConsumedSeqNumConfig{
-			TopicToTrack:   topic,
-			TaskId:         tm.GetCurrentTaskId(),
-			TaskEpoch:      tm.GetCurrentEpoch(),
-			Partition:      args.ectx.SubstreamNum(),
-			ConsumedSeqNum: uint64(offset),
-		})
-	}
-	t.OffMu.Unlock()
-	// debug.Fprintf(os.Stderr, "about to commit transaction\n")
-	err := tm.AppendConsumedSeqNum(ctx, consumedSeqNumConfigs)
+	err := tm.AppendConsumedSeqNum(ctx, t.CurrentConsumeOffset, args.ectx.SubstreamNum())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] append offset failed: %v\n", err)
 		return &common.FnOutput{Success: false, Message: fmt.Sprintf("append offset failed: %v\n", err)}

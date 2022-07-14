@@ -6,9 +6,7 @@ const (
 
 type ConsumedSeqNumConfig struct {
 	TopicToTrack   string
-	TaskId         uint64
 	ConsumedSeqNum uint64
-	TaskEpoch      uint16
 	Partition      uint8
 }
 
