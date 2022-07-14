@@ -197,6 +197,7 @@ func setOffsetOnStream(offsetMap map[string]uint64, args *StreamTaskArgs) {
 	for _, src := range args.ectx.Consumers() {
 		inputTopicName := src.TopicName()
 		offset := offsetMap[inputTopicName]
+		debug.Fprintf(os.Stderr, "offset restores to %x\n", offset+1)
 		src.SetCursor(offset+1, args.ectx.SubstreamNum())
 	}
 }

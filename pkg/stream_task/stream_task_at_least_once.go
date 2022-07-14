@@ -21,23 +21,30 @@ func (t *StreamTask) process(ctx context.Context, args *StreamTaskArgs) *common.
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	debug.Fprint(os.Stderr, "start restore\n")
+	offsetMap := make(map[string]uint64)
 	for _, src := range args.ectx.Consumers() {
 		inputTopicName := src.TopicName()
 		err = cm.CreateOffsetTopic(args.env, inputTopicName, src.Stream().NumPartition(), args.serdeFormat)
 		if err != nil {
-			return &common.FnOutput{Success: false, Message: err.Error()}
+			return common.GenErrFnOutput(err)
 		}
 		offset, err := cm.FindLastConsumedSeqNum(ctx, inputTopicName, args.ectx.SubstreamNum())
 		if err != nil {
 			if !common_errors.IsStreamEmptyError(err) {
-				return &common.FnOutput{Success: false, Message: err.Error()}
+				return common.GenErrFnOutput(err)
 			}
 		}
-		debug.Fprintf(os.Stderr, "offset restores to %x\n", offset)
-		if offset != 0 {
-			src.SetCursor(offset+1, args.ectx.SubstreamNum())
-		}
+		offsetMap[inputTopicName] = offset
+		// debug.Fprintf(os.Stderr, "offset restores to %x\n", offset)
+		// if offset != 0 {
+		// 	src.SetCursor(offset+1, args.ectx.SubstreamNum())
+		// }
 	}
+	err = restoreStateStore(ctx, args, offsetMap)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	setOffsetOnStream(offsetMap, args)
 	debug.Fprint(os.Stderr, "done restore\n")
 	args.ectx.StartWarmup()
 	if t.initFunc != nil {
