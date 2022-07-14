@@ -2,6 +2,8 @@ package commtypes
 
 import "fmt"
 
+type Punctuate struct{}
+
 type Message struct {
 	Key       interface{}
 	Value     interface{}

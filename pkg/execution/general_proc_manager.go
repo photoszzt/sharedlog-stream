@@ -23,12 +23,11 @@ type GeneralProcFunc func(
 	msgChan chan commtypes.Message,
 	errChan chan error,
 	pause chan struct{},
-	resume chan struct{},
 )
 
 func NewGeneralProcManager(generalProcFunc GeneralProcFunc) *GeneralProcManager {
 	return &GeneralProcManager{
-		msgChan:         make(chan commtypes.Message, 10),
+		msgChan:         make(chan commtypes.Message, 1),
 		errChan:         make(chan error, 1),
 		pauseChan:       make(chan struct{}),
 		resumeChan:      make(chan struct{}),
@@ -54,7 +53,7 @@ func (gm *GeneralProcManager) ResumeChan() chan struct{} {
 
 func (gm *GeneralProcManager) LaunchProc(ctx context.Context, args interface{}, wg *sync.WaitGroup) {
 	wg.Add(1)
-	go gm.generalProcFunc(ctx, args, wg, gm.msgChan, gm.errChan, gm.pauseChan, gm.resumeChan)
+	go gm.generalProcFunc(ctx, args, wg, gm.msgChan, gm.errChan, gm.pauseChan)
 }
 
 func (gm *GeneralProcManager) RequestToTerminate() {
@@ -85,7 +84,6 @@ func (c *GeneralProcCtx) GeneralProc(ctx context.Context,
 	msgChan chan commtypes.Message,
 	errChan chan error,
 	pause chan struct{},
-	resume chan struct{},
 ) {
 	for {
 		// producer.Lock()
@@ -98,14 +96,17 @@ func (c *GeneralProcCtx) GeneralProc(ctx context.Context,
 				// producer.Unlock()
 				return
 			}
-			_, err := c.chains.RunChains(ctx, msg)
-			if err != nil {
-				errChan <- err
-				// producer.Unlock()
-				return
+			_, ok_p := msg.Key.(commtypes.Punctuate)
+			if ok_p {
+				pause <- struct{}{}
+			} else {
+				_, err := c.chains.RunChains(ctx, msg)
+				if err != nil {
+					errChan <- err
+					// producer.Unlock()
+					return
+				}
 			}
-		case _ = <-pause:
-			<-resume
 		default:
 		}
 		// producer.Unlock()

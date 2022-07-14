@@ -184,7 +184,6 @@ func PrepareProcessByTwoGeneralProc(
 	}
 
 	pauseTime := stats.NewInt64Collector("2proc_pause_us", stats.DEFAULT_COLLECT_DURATION)
-	resumeTime := stats.NewInt64Collector("2proc_resume_us", stats.DEFAULT_COLLECT_DURATION)
 
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
@@ -197,42 +196,22 @@ func PrepareProcessByTwoGeneralProc(
 		}).
 		PauseFunc(func(sargs *stream_task.StreamTaskArgs) *common.FnOutput {
 			// debug.Fprintf(os.Stderr, "begin pause\n")
-			/*
-				func1Manager.RequestToTerminate()
-				func2Manager.RequestToTerminate()
-				wg.Wait()
-			*/
 			if err := handleErrFunc(); err != nil {
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
+
 			pStart := stats.TimerBegin()
-			for len(func1Manager.MsgChan()) != 0 || len(func2Manager.MsgChan()) != 0 {
-				time.Sleep(time.Microsecond * 50)
-			}
-			func1Manager.PauseChan() <- struct{}{}
-			func2Manager.PauseChan() <- struct{}{}
+			func1Manager.MsgChan() <- commtypes.Message{Key: commtypes.Punctuate{}}
+			func2Manager.MsgChan() <- commtypes.Message{Key: commtypes.Punctuate{}}
+
+			<-func1Manager.PauseChan()
+			<-func2Manager.PauseChan()
 			elapsed := stats.Elapsed(pStart)
 			pauseTime.AddSample(elapsed.Microseconds())
+
 			// sargs.LockProducer()
 			// debug.Fprintf(os.Stderr, "done pause\n")
 			return nil
-		}).
-		ResumeFunc(func(task *stream_task.StreamTask, sargs *stream_task.StreamTaskArgs) {
-			// debug.Fprintf(os.Stderr, "start resume\n")
-			// sargs.UnlockProducer()
-
-			rStart := stats.TimerBegin()
-			func1Manager.ResumeChan() <- struct{}{}
-			func2Manager.ResumeChan() <- struct{}{}
-			elapsed := stats.Elapsed(rStart)
-			resumeTime.AddSample(elapsed.Microseconds())
-			/*
-				func1Manager.RecreateMsgChan(&procArgs.msgChan1)
-				func2Manager.RecreateMsgChan(&procArgs.msgChan2)
-				func1Manager.LaunchProc(ctx, procArgs, &wg)
-				func2Manager.LaunchProc(ctx, procArgs, &wg)
-			*/
-			// debug.Fprintf(os.Stderr, "done resume\n")
 		}).HandleErrFunc(handleErrFunc).Build()
 	return task, procArgs
 }

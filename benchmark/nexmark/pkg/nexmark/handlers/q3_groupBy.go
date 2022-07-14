@@ -14,7 +14,6 @@ import (
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/stream_task"
-	"sync"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -102,67 +101,48 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	ectx.Consumers()[0].SetInitialSource(true)
 	ectx.Producers()[0].SetName("aucSink")
 	ectx.Producers()[1].SetName("perSink")
-	personsByIDFunc := h.getPersonsByID()
-	auctionsBySellerIDFunc := h.getAucBySellerID()
-	dctx, dcancel := context.WithCancel(ctx)
-	defer dcancel()
-	task, procArgs := PrepareProcessByTwoGeneralProc(dctx, auctionsBySellerIDFunc, personsByIDFunc,
-		ectx, procMsgWithTwoMsgChan)
+	aucBySellerChain := processor.NewProcessorChains()
+	aucBySellerChain.
+		Via(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessor(
+			"auctionsBySellerIDMap",
+			processor.SelectKeyFunc(func(key, value interface{}) (interface{}, error) {
+				event := value.(*ntypes.Event)
+				return event.NewAuction.Seller, nil
+			})))).
+		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[0], &ectx))
+	personsByIDChain := processor.NewProcessorChains()
+	personsByIDChain.
+		Via(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessor(
+			"personsByIDMap",
+			processor.SelectKeyFunc(func(key, value interface{}) (interface{}, error) {
+				event := value.(*ntypes.Event)
+				return event.NewPerson.ID, nil
+			})))).
+		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[1], &ectx))
+
+	task := stream_task.NewStreamTaskBuilder().
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
+			args := argsTmp.(processor.ExecutionContext)
+			return execution.CommonProcess(ctx, task, args,
+				func(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
+					event := msg.Value.(*ntypes.Event)
+					if event.Etype == ntypes.PERSON && ((event.NewPerson.State == "OR") ||
+						event.NewPerson.State == "ID" || event.NewPerson.State == "CA") {
+						_, err := personsByIDChain.RunChains(ctx, msg)
+						if err != nil {
+							return err
+						}
+					} else if event.Etype == ntypes.AUCTION && event.NewAuction.Category == 10 {
+						_, err := aucBySellerChain.RunChains(ctx, msg)
+						if err != nil {
+							return err
+						}
+					}
+					return nil
+				})
+		}).Build()
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs,
-			fmt.Sprintf("%s-%s-%d",
-				h.funcName, sp.InputTopicNames[0], sp.ParNum))).Build()
-	return task.ExecuteApp(dctx, streamTaskArgs)
-}
-
-func (h *q3GroupByHandler) getPersonsByID() execution.GeneralProcFunc {
-	gpCtx := execution.NewGeneralProcCtx()
-	gpCtx.AppendProcessor(processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterPerson", processor.PredicateFunc(
-		func(key interface{}, value interface{}) (bool, error) {
-			event := value.(*ntypes.Event)
-			return event.Etype == ntypes.PERSON && ((event.NewPerson.State == "OR") ||
-				event.NewPerson.State == "ID" || event.NewPerson.State == "CA"), nil
-		}))))
-	gpCtx.AppendProcessor(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessor(
-		"personsByIDMap",
-		processor.SelectKeyFunc(func(key, value interface{}) (interface{}, error) {
-			event := value.(*ntypes.Event)
-			return event.NewPerson.ID, nil
-		}))))
-
-	return func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup,
-		msgChan chan commtypes.Message, errChan chan error,
-		pause chan struct{}, resume chan struct{},
-	) {
-		args := argsTmp.(*TwoMsgChanProcArgs)
-		defer wg.Done()
-		gpCtx.AppendProcessor(processor.NewGroupByOutputProcessor(args.Producers()[1], args))
-		gpCtx.GeneralProc(ctx, args.Producers()[1], msgChan, errChan, pause, resume)
-	}
-}
-
-func (h *q3GroupByHandler) getAucBySellerID() execution.GeneralProcFunc {
-	gpCtx := execution.NewGeneralProcCtx()
-	gpCtx.AppendProcessor(processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterAuctions", processor.PredicateFunc(
-		func(key, value interface{}) (bool, error) {
-			event := value.(*ntypes.Event)
-			return event.Etype == ntypes.AUCTION && event.NewAuction.Category == 10, nil
-		}))))
-
-	gpCtx.AppendProcessor(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessor(
-		"auctionsBySellerIDMap",
-		processor.SelectKeyFunc(func(key, value interface{}) (interface{}, error) {
-			event := value.(*ntypes.Event)
-			return event.NewAuction.Seller, nil
-		}))))
-
-	return func(ctx context.Context, argsTmp interface{}, wg *sync.WaitGroup,
-		msgChan chan commtypes.Message, errChan chan error,
-		pause chan struct{}, resume chan struct{},
-	) {
-		args := argsTmp.(*TwoMsgChanProcArgs)
-		gpCtx.AppendProcessor(processor.NewGroupByOutputProcessor(args.Producers()[0], args))
-		defer wg.Done()
-		gpCtx.GeneralProc(ctx, args.Producers()[0], msgChan, errChan, pause, resume)
-	}
+		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,
+			fmt.Sprintf("%s-%s-%d", h.funcName, sp.InputTopicNames[0], sp.ParNum))).Build()
+	return task.ExecuteApp(ctx, streamTaskArgs)
 }

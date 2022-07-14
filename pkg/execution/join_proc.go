@@ -8,9 +8,9 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/stream_task"
 	"sync"
-	"time"
 
 	"golang.org/x/xerrors"
 )
@@ -27,18 +27,22 @@ func joinProcLoop(
 ) {
 	id := ctx.Value(commtypes.CTXID("id")).(string)
 	defer wg.Done()
-	debug.Fprintf(os.Stderr, "[id=%s, ts=%d] joinProc start running\n",
-		id, time.Now().UnixMilli())
+	// debug.Fprintf(os.Stderr, "[id=%s, ts=%d] joinProc start running\n",
+	// 	id, time.Now().UnixMilli())
+	resume_us := stats.NewInt64Collector(fmt.Sprintf("joinProc_%s_us", id), stats.DEFAULT_COLLECT_DURATION)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-done:
-			debug.Fprintf(os.Stderr, "[id=%s, ts=%d] got done msg\n",
-				id, time.Now().UnixMilli())
+			// debug.Fprintf(os.Stderr, "[id=%s, ts=%d] got done msg\n",
+			// 	id, time.Now().UnixMilli())
 			return
 		case <-pause:
+			rStart := stats.TimerBegin()
 			<-resume
+			rElapsed := stats.Elapsed(rStart)
+			resume_us.AddSample(rElapsed.Microseconds())
 		default:
 		}
 		// procArgs.LockProducerConsumer()
