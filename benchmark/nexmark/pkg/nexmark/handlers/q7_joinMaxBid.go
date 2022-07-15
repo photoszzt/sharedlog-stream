@@ -208,7 +208,15 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 
 	}
 	task, procArgs := execution.PrepareTaskWithJoin(
-		ctx, bJoinM, mJoinB, proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
+		ctx, execution.NewJoinWorker(bJoinM, func(ctx context.Context) error {
+			err := sinks_arr[0].Flush(ctx)
+			if err != nil {
+				return err
+			}
+			return wsc[0].ChangelogManager().Flush(ctx)
+		}), execution.NewJoinWorker(mJoinB, func(ctx context.Context) error {
+			return wsc[1].ChangelogManager().Flush(ctx)
+		}), proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum),
 	)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,

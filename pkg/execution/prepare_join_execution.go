@@ -12,14 +12,13 @@ import (
 
 func PrepareTaskWithJoin(
 	ctx context.Context,
-	leftJoinWorker JoinWorkerFunc,
-	rightJoinWorker JoinWorkerFunc,
+	leftJoinWorker JoinWorker,
+	rightJoinWorker JoinWorker,
 	allConsumersProducers proc_interface.BaseConsumersProducers,
 	baseProcArgs proc_interface.BaseProcArgs,
 ) (*stream_task.StreamTask, *CommonJoinProcArgs) {
 	joinProcLeft, joinProcRight := CreateJoinProcArgsPair(
-		JoinWorkerFunc(leftJoinWorker),
-		JoinWorkerFunc(rightJoinWorker),
+		leftJoinWorker, rightJoinWorker,
 		allConsumersProducers.Consumers(),
 		allConsumersProducers.Producers(), baseProcArgs)
 	var wg sync.WaitGroup
@@ -30,8 +29,8 @@ func PrepareTaskWithJoin(
 		joinProcLeft, joinProcRight,
 		leftManager.Out(), rightManager.Out(),
 		allConsumersProducers)
-	lctx := context.WithValue(ctx, commtypes.CTXID("id"), "left")
-	rctx := context.WithValue(ctx, commtypes.CTXID("id"), "right")
+	lctx := context.WithValue(ctx, commtypes.CTXID{}, "left")
+	rctx := context.WithValue(ctx, commtypes.CTXID{}, "right")
 
 	pauseTime := stats.NewInt64Collector("join_pause_us", stats.DEFAULT_COLLECT_DURATION)
 	resumeTime := stats.NewInt64Collector("join_resume_us", stats.DEFAULT_COLLECT_DURATION)
@@ -81,6 +80,11 @@ func PrepareTaskWithJoin(
 			resumeTime.AddSample(elapsed.Microseconds())
 			// debug.Fprintf(os.Stderr, "ts=%d done invoke join proc loops\n", time.Now().UnixMilli())
 			// debug.Fprintf(os.Stderr, "done resume join proc\n")
+		}).
+		FlushFunc(func(ctx context.Context, args *stream_task.StreamTaskArgs) error {
+			leftManager.ShouldFlush() <- struct{}{}
+			rightManager.ShouldFlush() <- struct{}{}
+			return nil
 		}).Build()
 
 	return task, procArgs

@@ -94,18 +94,28 @@ func (s *ShardedSharedLogStream) NumPartition() uint8 {
 func (s *ShardedSharedLogStream) Push(ctx context.Context, payload []byte, parNumber uint8,
 	meta LogEntryMeta, producerId commtypes.ProducerId,
 ) (uint64, error) {
-	return s.subSharedLogStreams[parNumber].Stream.Push(ctx, payload, parNumber, meta, producerId)
+	subStream := s.subSharedLogStreams[parNumber]
+	subStream.Lock()
+	defer subStream.Unlock()
+	return subStream.Stream.Push(ctx, payload, parNumber, meta, producerId)
 }
 
 func (s *ShardedSharedLogStream) BufPush(ctx context.Context, payload []byte, parNum uint8, producerId commtypes.ProducerId) error {
-	return s.subSharedLogStreams[parNum].BufPushGoroutineSafe(ctx, payload, producerId)
+	subStream := s.subSharedLogStreams[parNum]
+	subStream.Lock()
+	defer subStream.Unlock()
+	return subStream.BufPushNoLock(ctx, payload, producerId)
 }
 
 func (s *ShardedSharedLogStream) Flush(ctx context.Context, producerId commtypes.ProducerId) error {
 	for i := uint8(0); i < s.numPartitions; i++ {
-		if err := s.subSharedLogStreams[i].FlushGoroutineSafe(ctx, producerId); err != nil {
+		s.subSharedLogStreams[i].Lock()
+		err := s.subSharedLogStreams[i].FlushNoLock(ctx, producerId)
+		if err != nil {
+			s.subSharedLogStreams[i].Unlock()
 			return err
 		}
+		s.subSharedLogStreams[i].Unlock()
 	}
 	return nil
 }
@@ -126,7 +136,10 @@ func (s *ShardedSharedLogStream) FlushNoLock(ctx context.Context, producerId com
 func (s *ShardedSharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNumber uint8, tags []uint64,
 	additionalTopic []string, meta LogEntryMeta, producerId commtypes.ProducerId,
 ) (uint64, error) {
-	return s.subSharedLogStreams[parNumber].Stream.PushWithTag(ctx, payload, parNumber, tags,
+	subStream := s.subSharedLogStreams[parNumber]
+	subStream.Lock()
+	defer subStream.Unlock()
+	return subStream.Stream.PushWithTag(ctx, payload, parNumber, tags,
 		additionalTopic, meta, producerId)
 }
 
@@ -170,6 +183,7 @@ func (s *ShardedSharedLogStream) TopicNameHash() uint64 {
 	return s.subSharedLogStreams[0].Stream.topicNameHash
 }
 
+// not threadsafe
 func (s *ShardedSharedLogStream) SetCursor(cursor uint64, parNum uint8) {
 	s.subSharedLogStreams[parNum].Stream.cursor = cursor
 }

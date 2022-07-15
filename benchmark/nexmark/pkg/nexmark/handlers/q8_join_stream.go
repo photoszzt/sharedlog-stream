@@ -187,8 +187,16 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		return common.GenErrFnOutput(err)
 	}
 	task, procArgs := execution.PrepareTaskWithJoin(ctx,
-		execution.JoinWorkerFunc(aucJoinsPerFunc),
-		execution.JoinWorkerFunc(perJoinsAucFunc),
+		execution.NewJoinWorker(execution.JoinWorkerFunc(aucJoinsPerFunc), func(ctx context.Context) error {
+			err := sinks_arr[0].Flush(ctx)
+			if err != nil {
+				return err
+			}
+			return wsc[0].ChangelogManager().Flush(ctx)
+		}),
+		execution.NewJoinWorker(execution.JoinWorkerFunc(perJoinsAucFunc), func(ctx context.Context) error {
+			return wsc[1].ChangelogManager().Flush(ctx)
+		}),
 		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum),
 	)

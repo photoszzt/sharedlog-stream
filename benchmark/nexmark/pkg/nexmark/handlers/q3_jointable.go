@@ -232,10 +232,13 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		}
 		return nil, nil
 	})
-	task, procArgs := execution.PrepareTaskWithJoin(ctx, aJoinP, pJoinA,
+	task, procArgs := execution.PrepareTaskWithJoin(ctx,
+		execution.NewJoinWorker(aJoinP, func(ctx context.Context) error {
+			return sinks_arr[0].Flush(ctx)
+		}),
+		execution.NewJoinWorkerWithRunner(pJoinA),
 		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
-		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum),
-	)
+		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum))
 	kvchangelogs := []*store_restore.KVStoreChangelog{
 		store_restore.NewKVStoreChangelog(kvtabs.tab1,
 			store_with_changelog.NewChangelogManagerForSrc(

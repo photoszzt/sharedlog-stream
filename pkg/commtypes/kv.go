@@ -6,7 +6,7 @@ import (
 	"cs.utexas.edu/zjia/faas/types"
 )
 
-type CTXID string
+type CTXID struct{}
 
 type KeyT interface{}
 

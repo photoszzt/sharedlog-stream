@@ -11,21 +11,18 @@ import (
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/stream_task"
 	"sync"
+	"time"
 
 	"golang.org/x/xerrors"
 )
 
-func joinProcLoop(
+func (jm *JoinProcManager) joinProcLoop(
 	ctx context.Context,
-	out chan *common.FnOutput,
 	task *stream_task.StreamTask,
 	procArgs *JoinProcArgs,
 	wg *sync.WaitGroup,
-	done chan struct{},
-	pause chan struct{},
-	resume chan struct{},
 ) {
-	id := ctx.Value(commtypes.CTXID("id")).(string)
+	id := ctx.Value(commtypes.CTXID{}).(string)
 	defer wg.Done()
 	// debug.Fprintf(os.Stderr, "[id=%s, ts=%d] joinProc start running\n",
 	// 	id, time.Now().UnixMilli())
@@ -34,15 +31,22 @@ func joinProcLoop(
 		select {
 		case <-ctx.Done():
 			return
-		case <-done:
+		case <-jm.done:
 			// debug.Fprintf(os.Stderr, "[id=%s, ts=%d] got done msg\n",
 			// 	id, time.Now().UnixMilli())
 			return
-		case <-pause:
+		case <-jm.pause:
 			rStart := stats.TimerBegin()
-			<-resume
+			<-jm.resume
 			rElapsed := stats.Elapsed(rStart)
 			resume_us.AddSample(rElapsed.Microseconds())
+		case <-jm.shouldFlush:
+			debug.Fprintf(os.Stderr, "[id=%s, ts=%d] got shouldFlush msg\n", time.Now().UnixMilli())
+			err := procArgs.flushFunc(ctx)
+			if err != nil {
+				jm.out <- &common.FnOutput{Success: false, Message: err.Error()}
+				return
+			}
 		default:
 		}
 		// procArgs.LockProducerConsumer()
@@ -51,15 +55,15 @@ func joinProcLoop(
 		if err != nil {
 			if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 				debug.Fprintf(os.Stderr, "[TIMEOUT] %s %s timeout, out chan len: %d\n",
-					id, procArgs.Consumers()[0].TopicName(), len(out))
+					id, procArgs.Consumers()[0].TopicName(), len(jm.out))
 				// out <- &common.FnOutput{Success: true, Message: err.Error()}
 				// debug.Fprintf(os.Stderr, "%s done sending msg\n", id)
 				// return
 				// procArgs.UnlockProducerConsumer()
 				continue
 			}
-			fmt.Fprintf(os.Stderr, "[ERROR] consume: %v, out chan len: %d\n", err, len(out))
-			out <- &common.FnOutput{Success: false, Message: err.Error()}
+			fmt.Fprintf(os.Stderr, "[ERROR] consume: %v, out chan len: %d\n", err, len(jm.out))
+			jm.out <- &common.FnOutput{Success: false, Message: err.Error()}
 			fmt.Fprintf(os.Stderr, "%s done sending msg2\n", id)
 			// procArgs.UnlockProducerConsumer()
 			return
@@ -72,8 +76,8 @@ func joinProcLoop(
 			if msg.IsControl {
 				ret_err := HandleScaleEpochAndBytes(ctx, msg, procArgs)
 				if ret_err != nil {
-					fmt.Fprintf(os.Stderr, "[SCALE_EPOCH] out: %v, out chan len: %d\n", ret_err, len(out))
-					out <- ret_err
+					fmt.Fprintf(os.Stderr, "[SCALE_EPOCH] out: %v, out chan len: %d\n", ret_err, len(jm.out))
+					jm.out <- ret_err
 					// procArgs.UnlockProducerConsumer()
 					return
 				}
@@ -92,8 +96,8 @@ func joinProcLoop(
 					// debug.Fprintf(os.Stderr, "[id=%s] before proc msg with sink1\n", id)
 					err = procMsgWithSink(ctx, subMsg, procArgs)
 					if err != nil {
-						fmt.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink: %v, out chan len: %d\n", id, err, len(out))
-						out <- &common.FnOutput{Success: false, Message: err.Error()}
+						fmt.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink: %v, out chan len: %d\n", id, err, len(jm.out))
+						jm.out <- &common.FnOutput{Success: false, Message: err.Error()}
 						fmt.Fprintf(os.Stderr, "%s done send msg3\n", id)
 						// procArgs.UnlockProducerConsumer()
 						return
@@ -106,8 +110,8 @@ func joinProcLoop(
 				}
 				err = procMsgWithSink(ctx, msg.Msg, procArgs)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink2: %v, out chan len: %d\n", id, err, len(out))
-					out <- &common.FnOutput{Success: false, Message: err.Error()}
+					fmt.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink2: %v, out chan len: %d\n", id, err, len(jm.out))
+					jm.out <- &common.FnOutput{Success: false, Message: err.Error()}
 					fmt.Fprintf(os.Stderr, "[id=%s] done send msg4\n", id)
 					// procArgs.UnlockProducerConsumer()
 					return

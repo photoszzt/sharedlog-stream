@@ -20,7 +20,7 @@ var (
 )
 
 type BufferedSinkStream struct {
-	sinkMu     sync.Mutex
+	sync.Mutex
 	sinkBuffer [][]byte
 
 	payloadArrSerde commtypes.Serde
@@ -106,57 +106,6 @@ func (s *BufferedSinkStream) GetCurrentProdSeqNum() uint64 {
 }
 
 func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId commtypes.ProducerId) error {
-	if len(s.sinkBuffer) != 0 {
-		s.bufferSizeStats.AddSample(len(s.sinkBuffer))
-		payloadArr := &commtypes.PayloadArr{
-			Payloads: s.sinkBuffer,
-		}
-		payloads, err := s.payloadArrSerde.Encode(payloadArr)
-		if err != nil {
-			return err
-		}
-		seqNum, err := s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
-		if err != nil {
-			return err
-		}
-		s.updateProdSeqNum(seqNum)
-		s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
-	}
-	return nil
-}
-
-func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload []byte, producerId commtypes.ProducerId,
-) error {
-	s.sinkMu.Lock()
-	defer s.sinkMu.Unlock()
-	payload_size := len(payload)
-	if len(s.sinkBuffer) < SINK_BUFFER_MAX_ENTRY && s.currentSize+payload_size < SINK_BUFFER_MAX_SIZE {
-		s.sinkBuffer = append(s.sinkBuffer, payload)
-		s.currentSize += payload_size
-	} else {
-		s.bufferSizeStats.AddSample(len(s.sinkBuffer))
-		payloadArr := &commtypes.PayloadArr{
-			Payloads: s.sinkBuffer,
-		}
-		payloads, err := s.payloadArrSerde.Encode(payloadArr)
-		if err != nil {
-			return err
-		}
-		seqNum, err := s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
-		if err != nil {
-			return err
-		}
-		s.updateProdSeqNum(seqNum)
-		s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
-		s.sinkBuffer = append(s.sinkBuffer, payload)
-		s.currentSize = payload_size
-	}
-	return nil
-}
-
-func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context, producerId commtypes.ProducerId) error {
-	s.sinkMu.Lock()
-	defer s.sinkMu.Unlock()
 	if len(s.sinkBuffer) != 0 {
 		s.bufferSizeStats.AddSample(len(s.sinkBuffer))
 		payloadArr := &commtypes.PayloadArr{

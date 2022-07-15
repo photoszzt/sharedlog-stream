@@ -10,7 +10,6 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/txn_data"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -47,8 +46,6 @@ var ControlRecordMeta = StreamEntryMeta(true, false)
 var ArrRecordMeta = StreamEntryMeta(false, true)
 
 type SharedLogStream struct {
-	mux sync.Mutex
-
 	env types.Environment
 	// txnMarkerSerde commtypes.Serde
 	topicName     string
@@ -129,8 +126,6 @@ func (s *SharedLogStream) TopicName() string {
 }
 
 func (s *SharedLogStream) SetCursor(cursor uint64, parNum uint8) {
-	s.mux.Lock()
-	defer s.mux.Unlock()
 	s.cursor = cursor
 }
 
@@ -165,9 +160,7 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context,
 	}
 
 	seqNum, err := s.env.SharedLogAppend(ctx, tags, encoded)
-	s.mux.Lock()
 	s.tail = seqNum + 1
-	s.mux.Unlock()
 
 	// verify that push is successful
 
@@ -216,8 +209,6 @@ func (s *SharedLogStream) Push(ctx context.Context, payload []byte, parNum uint8
 }
 
 func (s *SharedLogStream) isEmpty() bool {
-	s.mux.Lock()
-	defer s.mux.Unlock()
 	return s.cursor >= s.tail
 }
 
