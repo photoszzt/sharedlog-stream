@@ -198,7 +198,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			processor.ReverseValueJoinerWithKey(joiner)))
 	toStream := processor.NewTableToStreamProcessor()
 
-	aJoinP := execution.JoinWorkerFunc(func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
+	aJoinP := execution.JoinWorkerFunc(func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		// msg is auction
 		ret, err := kvtabs.toTab1.ProcessAndReturn(ctx, m)
 		if err != nil {

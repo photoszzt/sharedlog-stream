@@ -172,7 +172,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 			return val.BidTs >= val.WStartMs && val.BidTs <= val.WEndMs, nil
 		})))
 
-	var bJoinM execution.JoinWorkerFunc = func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
+	var bJoinM execution.JoinWorkerFunc = func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		joined, err := bJoinMaxBFunc(ctx, m)
 		if err != nil {
 			return nil, err
@@ -189,7 +189,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		}
 		return outMsgs, nil
 	}
-	var mJoinB execution.JoinWorkerFunc = func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
+	var mJoinB execution.JoinWorkerFunc = func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		joined, err := maxBJoinBFunc(ctx, m)
 		if err != nil {
 			return nil, err

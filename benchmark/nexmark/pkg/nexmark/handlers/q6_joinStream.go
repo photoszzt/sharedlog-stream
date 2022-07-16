@@ -190,7 +190,7 @@ func (h *q6JoinStreamHandler) Q6JoinStream(ctx context.Context, sp *common.Query
 		return filterAndGroupMsg(ctx, joined)
 	})
 
-	bJoinA := execution.JoinWorkerFunc(func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
+	bJoinA := execution.JoinWorkerFunc(func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		joined, err := bidsJoinAucFunc(ctx, m)
 		if err != nil {
 			return nil, err

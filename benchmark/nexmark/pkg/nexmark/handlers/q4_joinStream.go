@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	nutils "sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
@@ -193,15 +195,19 @@ func (h *q4JoinStreamHandler) Q4JoinStream(ctx context.Context, sp *common.Query
 		if err != nil {
 			return nil, err
 		}
-		return filterAndGroupMsg(ctx, joined)
+		msgs, err := filterAndGroupMsg(ctx, joined)
+		debug.Fprintf(os.Stderr, "after left filter and group\n")
+		return msgs, err
 	})
 
-	bJoinA := execution.JoinWorkerFunc(func(c context.Context, m commtypes.Message) ([]commtypes.Message, error) {
+	bJoinA := execution.JoinWorkerFunc(func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		joined, err := bidsJoinAucFunc(ctx, m)
 		if err != nil {
 			return nil, err
 		}
-		return filterAndGroupMsg(ctx, joined)
+		msgs, err := filterAndGroupMsg(ctx, joined)
+		debug.Fprintf(os.Stderr, "after right filter and group\n")
+		return msgs, err
 	})
 	task, procArgs := execution.PrepareTaskWithJoin(
 		ctx, execution.NewJoinWorker(aJoinB, func(ctx context.Context) error {
