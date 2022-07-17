@@ -7,6 +7,8 @@ import (
 	configscale "sharedlog-stream/benchmark/common/config_scale"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/handlers"
 
+	// _ "net/http/pprof"
+
 	"cs.utexas.edu/zjia/faas"
 	"cs.utexas.edu/zjia/faas/types"
 	"github.com/rs/zerolog"
@@ -28,6 +30,9 @@ func init() {
 }
 
 func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.FuncHandler, error) {
+	// go func() {
+	// 	log.Print(http.ListenAndServe("localhost:6060", nil))
+	// }()
 	fmt.Fprintf(os.Stderr, "Enter nexmark: funcName: %v\n", funcName)
 	switch funcName {
 	case "source":
