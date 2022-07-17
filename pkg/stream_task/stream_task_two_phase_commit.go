@@ -63,64 +63,6 @@ func (t *StreamTask) setupManagersFor2pc(ctx context.Context, streamTaskArgs *St
 	return tm, cmm, nil
 }
 
-/*
-func restoreMongoDBKVStore(
-	ctx context.Context,
-	tm *transaction.TransactionManager,
-	kvchangelog *store_restore.KVStoreChangelog,
-) error {
-	storeTranID, found, err := kvchangelog.KVExternalStore().GetTransactionID(ctx, kvchangelog.TabTranRepr())
-	if err != nil {
-		return err
-	}
-	if !found || tm.GetTransactionID() == storeTranID {
-		return nil
-	}
-
-	seqNum, err := tm.FindConsumedSeqNumMatchesTransactionID(ctx,
-		kvchangelog.InputStream().TopicName(), kvchangelog.ParNum(), storeTranID)
-	if err != nil {
-		return err
-	}
-	kvchangelog.InputStream().SetCursor(seqNum, kvchangelog.ParNum())
-	if err = kvchangelog.KVExternalStore().StartTransaction(ctx); err != nil {
-		return err
-	}
-	if err = kvchangelog.ExecuteRestoreFunc(ctx); err != nil {
-		return err
-	}
-	return kvchangelog.KVExternalStore().CommitTransaction(ctx, tm.TransactionalId, tm.GetTransactionID())
-}
-
-func restoreMongoDBWinStore(
-	ctx context.Context,
-	tm *transaction.TransactionManager,
-	kvchangelog *store_restore.WindowStoreChangelog,
-) error {
-	storeTranID, found, err := kvchangelog.WinExternalStore().GetTransactionID(ctx, tm.TransactionalId)
-	if err != nil {
-		return err
-	}
-	if !found || tm.GetTransactionID() == storeTranID {
-		return nil
-	}
-
-	seqNum, err := tm.FindConsumedSeqNumMatchesTransactionID(ctx, kvchangelog.InputStream().TopicName(),
-		kvchangelog.ParNum(), storeTranID)
-	if err != nil {
-		return err
-	}
-	kvchangelog.InputStream().SetCursor(seqNum, kvchangelog.ParNum())
-	if err = kvchangelog.WinExternalStore().StartTransaction(ctx); err != nil {
-		return err
-	}
-	if err = kvchangelog.ExecuteRestoreFunc(ctx); err != nil {
-		return err
-	}
-	return kvchangelog.WinExternalStore().CommitTransaction(ctx, tm.TransactionalId, tm.GetTransactionID())
-}
-*/
-
 func SetupTransactionManager(
 	ctx context.Context,
 	args *StreamTaskArgs,
@@ -160,14 +102,12 @@ func (t *StreamTask) processWithTransaction(
 	run := false
 
 	latencies := stats.NewInt64Collector("latPerIter", stats.DEFAULT_COLLECT_DURATION)
-	commitTrTime := stats.NewInt64Collector("commitTrTime", stats.DEFAULT_COLLECT_DURATION)
-	beginTrTime := stats.NewInt64Collector("beginTrTime", stats.DEFAULT_COLLECT_DURATION)
 	hasLiveTransaction := false
 	trackConsumePar := false
 	paused := false
 	commitTimer := time.Now()
 
-	debug.Fprintf(os.Stderr, "commit every(ms): %d\n", args.commitEvery)
+	debug.Fprintf(os.Stderr, "commit every: %v, guarantee: %v\n", args.commitEvery, args.guarantee)
 	init := false
 	var once sync.Once
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
@@ -186,12 +126,11 @@ func (t *StreamTask) processWithTransaction(
 			cur_elapsed := warmupCheck.ElapsedSinceInitial()
 			timeout := args.duration != 0 && cur_elapsed >= args.duration
 			shouldCommitByTime := (args.commitEvery != 0 && timeSinceTranStart > args.commitEvery)
-			// debug.Fprintf(os.Stderr, "iter: %d, shouldCommitByIter: %v, timeSinceTranStart: %v, cur_elapsed: %v, duration: %v\n",
-			// 	idx, shouldCommitByIter, timeSinceTranStart, cur_elapsed, duration)
+			// debug.Fprintf(os.Stderr, "shouldCommitByTime: %v, timeSinceTranStart: %v, cur_elapsed: %v\n",
+			// 	shouldCommitByTime, timeSinceTranStart, cur_elapsed)
 
 			// should commit
 			if (shouldCommitByTime || timeout) && hasLiveTransaction {
-				cStart := stats.TimerBegin()
 				err_out := t.commitTransaction(ctx, tm, args, &hasLiveTransaction,
 					&trackConsumePar, &paused)
 				if err_out != nil {
@@ -199,8 +138,6 @@ func (t *StreamTask) processWithTransaction(
 				}
 				debug.Assert(!hasLiveTransaction, "after commit. there should be no live transaction\n")
 				// debug.Fprintf(os.Stderr, "transaction committed\n")
-				elapsed := stats.Elapsed(cStart).Microseconds()
-				commitTrTime.AddSample(elapsed)
 			}
 
 			// Exit routine
@@ -221,14 +158,12 @@ func (t *StreamTask) processWithTransaction(
 			}
 
 			// begin new transaction
-			tBeg := stats.TimerBegin()
 			err := t.startNewTransaction(ctx, args, tm, &hasLiveTransaction,
 				&trackConsumePar, &init, &paused, &commitTimer)
 			if err != nil {
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
-			tBegElapsed := stats.Elapsed(tBeg).Microseconds()
-			beginTrTime.AddSample(tBegElapsed)
+			debug.Assert(hasLiveTransaction, "after start new transaction. there should be a live transaction\n")
 
 			ret := t.appProcessFunc(ctx, t, args.ectx)
 			if ret != nil {
@@ -256,10 +191,13 @@ func (t *StreamTask) startNewTransaction(ctx context.Context, args *StreamTaskAr
 	hasLiveTransaction *bool, trackConsumePar *bool, init *bool, paused *bool, commitTimer *time.Time,
 ) error {
 	if !*hasLiveTransaction {
+		begTrStart := stats.TimerBegin()
 		if err := tm.BeginTransaction(ctx); err != nil {
 			debug.Fprintf(os.Stderr, "[ERROR] transaction begin failed: %v", err)
 			return fmt.Errorf("transaction begin failed: %v\n", err)
 		}
+		begTrElapsed := stats.Elapsed(begTrStart).Microseconds()
+		t.beginTrTime.AddSample(begTrElapsed)
 		*hasLiveTransaction = true
 		*commitTimer = time.Now()
 		debug.Fprintf(os.Stderr, "fixedOutParNum: %d\n", args.fixedOutParNum)
@@ -293,6 +231,7 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 		}
 		*paused = true
 	}
+	cBeg := stats.TimerBegin()
 	err := tm.AppendConsumedSeqNum(ctx, args.ectx.Consumers(), args.ectx.SubstreamNum())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] append offset failed: %v\n", err)
@@ -303,6 +242,8 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 		fmt.Fprintf(os.Stderr, "[ERROR] commit failed: %v\n", err)
 		return &common.FnOutput{Success: false, Message: fmt.Sprintf("commit failed: %v\n", err)}
 	}
+	cElapsed := stats.Elapsed(cBeg).Microseconds()
+	t.commitTrTime.AddSample(cElapsed)
 	*hasLiveTransaction = false
 	*trackConsumePar = false
 	return nil

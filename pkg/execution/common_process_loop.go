@@ -32,7 +32,7 @@ func CommonProcess(ctx context.Context, t *stream_task.StreamTask, ectx processo
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	for _, msg := range gotMsgs.Msgs {
-		if msg.MsgArr == nil && msg.Msg.Value == nil {
+		if msg.MsgArr == nil || (msg.Msg.Key == nil && msg.Msg.Value == nil) {
 			continue
 		}
 		if msg.IsControl {
@@ -62,7 +62,7 @@ func extractEventTs(msg *commtypes.Message, isInitialSrc bool) error {
 	return nil
 }
 
-func ProcessMsgAndSeq(ctx context.Context, msg commtypes.MsgAndSeq, args interface{},
+func ProcessMsgAndSeq(ctx context.Context, msg commtypes.MsgAndSeq, args processor.ExecutionContext,
 	procMsg proc_interface.ProcessMsgFunc, isInitialSrc bool,
 ) error {
 	if msg.MsgArr != nil {
@@ -70,6 +70,7 @@ func ProcessMsgAndSeq(ctx context.Context, msg commtypes.MsgAndSeq, args interfa
 			if subMsg.Value == nil {
 				continue
 			}
+			args.Consumers()[0].ExtractProduceToConsumeTime(&subMsg)
 			err := extractEventTs(&subMsg, isInitialSrc)
 			if err != nil {
 				return err
@@ -85,6 +86,7 @@ func ProcessMsgAndSeq(ctx context.Context, msg commtypes.MsgAndSeq, args interfa
 	if err != nil {
 		return err
 	}
+	args.Consumers()[0].ExtractProduceToConsumeTime(&msg.Msg)
 	return procMsg(ctx, msg.Msg, args)
 }
 

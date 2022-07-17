@@ -78,6 +78,7 @@ func (jm *JoinProcManager) joinProcLoop(
 					if subMsg.Value == nil {
 						continue
 					}
+					procArgs.Consumers()[0].ExtractProduceToConsumeTime(&subMsg)
 					// debug.Fprintf(os.Stderr, "[id=%s] before proc msg with sink1\n", id)
 					err = procMsgWithSink(ctx, subMsg, procArgs, id)
 					if err != nil {
@@ -93,6 +94,7 @@ func (jm *JoinProcManager) joinProcLoop(
 				if msg.Msg.Value == nil {
 					continue
 				}
+				procArgs.Consumers()[0].ExtractProduceToConsumeTime(&msg.Msg)
 				err = procMsgWithSink(ctx, msg.Msg, procArgs, id)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink2: %v, out chan len: %d\n", id, err, len(jm.out))

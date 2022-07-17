@@ -16,18 +16,10 @@ func assignInjTime(msg *commtypes.Message) {
 	}
 }
 
-func extractProduceToConsumeTime(msgSeqs *commtypes.MsgAndSeqs, isInitialSrc bool, collector *stats.Int64Collector) error {
+func extractProduceToConsumeTime(msg *commtypes.Message, isInitialSrc bool, collector *stats.Int64Collector) {
 	if !isInitialSrc {
-		callback := func(msg *commtypes.Message) error {
-			ts := msg.ExtractInjectTimeMs()
-			dur := time.Now().UnixMilli() - ts
-			collector.AddSample(dur)
-			return nil
-		}
-		err := commtypes.ApplyFuncToMsgSeqs(msgSeqs, callback)
-		if err != nil {
-			return err
-		}
+		ts := msg.ExtractInjectTimeMs()
+		dur := time.Now().UnixMilli() - ts
+		collector.AddSample(dur)
 	}
-	return nil
 }

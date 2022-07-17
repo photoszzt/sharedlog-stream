@@ -28,6 +28,9 @@ type StreamTask struct {
 	HandleErrFunc func() error
 
 	flushForALO stats.Int64Collector
+	// 2pc stat
+	commitTrTime stats.Int64Collector
+	beginTrTime  stats.Int64Collector
 }
 
 func (t *StreamTask) ExecuteApp(ctx context.Context,
@@ -198,8 +201,12 @@ func setOffsetOnStream(offsetMap map[string]uint64, args *StreamTaskArgs) {
 	for _, src := range args.ectx.Consumers() {
 		inputTopicName := src.TopicName()
 		offset := offsetMap[inputTopicName]
-		debug.Fprintf(os.Stderr, "offset restores to %x\n", offset+1)
-		src.SetCursor(offset+1, args.ectx.SubstreamNum())
+		resetTo := offset + 1
+		if offset == 0 {
+			resetTo = offset
+		}
+		debug.Fprintf(os.Stderr, "offset restores to %x\n", resetTo)
+		src.SetCursor(resetTo, args.ectx.SubstreamNum())
 	}
 }
 
