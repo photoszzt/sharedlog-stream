@@ -42,7 +42,7 @@ func ProcessThroughputLat(name string, stat_dir string, latencies map[string][]i
 		if len(lat_arr) != 0 {
 			ts := stats.IntSlice(lat_arr)
 			sort.Sort(ts)
-			if n != "eventTimeLatency" {
+			if !strings.Contains(n, "eventTimeLatency") {
 				sumTime := float64(0)
 				for _, lat := range lat_arr {
 					sumTime += float64(lat) / 1000000.0
