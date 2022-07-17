@@ -198,15 +198,7 @@ func (h *q6JoinStreamHandler) Q6JoinStream(ctx context.Context, sp *common.Query
 		return filterAndGroupMsg(ctx, joined)
 	})
 	task, procArgs := execution.PrepareTaskWithJoin(
-		ctx, execution.NewJoinWorker(aJoinB, func(ctx context.Context) error {
-			err := sinks_arr[0].Flush(ctx)
-			if err != nil {
-				return err
-			}
-			return wsc[0].ChangelogManager().Flush(ctx)
-		}), execution.NewJoinWorker(bJoinA, func(ctx context.Context) error {
-			return wsc[1].ChangelogManager().Flush(ctx)
-		}), proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
+		ctx, aJoinB, bJoinA, proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum),
 	)
 	transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName,
