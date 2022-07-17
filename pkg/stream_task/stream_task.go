@@ -31,6 +31,9 @@ type StreamTask struct {
 	// 2pc stat
 	commitTrTime stats.Int64Collector
 	beginTrTime  stats.Int64Collector
+
+	// epoch stat
+	markEpochTime stats.Int64Collector
 }
 
 func (t *StreamTask) ExecuteApp(ctx context.Context,

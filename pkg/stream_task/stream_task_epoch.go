@@ -94,8 +94,6 @@ func (t *StreamTask) processInEpoch(
 	init := false
 	paused := false
 	latencies := stats.NewInt64Collector("latPerIter", stats.DEFAULT_COLLECT_DURATION)
-	markEpochTime := stats.NewInt64Collector("markEpochTime", stats.DEFAULT_COLLECT_DURATION)
-	reInitTime := stats.NewInt64Collector("reInitTime", stats.DEFAULT_COLLECT_DURATION)
 	markTimer := time.Now()
 	var once sync.Once
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
@@ -116,13 +114,10 @@ func (t *StreamTask) processInEpoch(
 			timeout := args.duration != 0 && cur_elapsed >= args.duration
 			shouldMarkByTime := (args.commitEvery != 0 && timeSinceLastMark > args.commitEvery)
 			if (shouldMarkByTime || timeout) && hasProcessData {
-				mStart := stats.TimerBegin()
 				err_out := t.markEpoch(dctx, em, args, &hasProcessData, &paused)
 				if err_out != nil {
 					return err_out
 				}
-				elapsed := stats.Elapsed(mStart).Microseconds()
-				markEpochTime.AddSample(elapsed)
 			}
 			// Exit routine
 			cur_elapsed = warmupCheck.ElapsedSinceInitial()
@@ -137,14 +132,11 @@ func (t *StreamTask) processInEpoch(
 
 			// init
 			if !hasProcessData {
-				rStart := stats.TimerBegin()
 				err := t.initAfterMarkOrCommit(ctx, args, em, &init, &paused)
 				if err != nil {
 					return common.GenErrFnOutput(err)
 				}
 				markTimer = time.Now()
-				elapsed := stats.Elapsed(rStart).Microseconds()
-				reInitTime.AddSample(elapsed)
 			}
 			ret := t.appProcessFunc(ctx, t, args.ectx)
 			if ret != nil {
@@ -177,10 +169,13 @@ func (t *StreamTask) markEpoch(ctx context.Context,
 		}
 		*paused = true
 	}
+	mStart := stats.TimerBegin()
 	err := em.MarkEpoch(ctx, args.ectx.Consumers(), args.ectx.Producers())
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
+	mElapsed := stats.Elapsed(mStart).Microseconds()
+	t.markEpochTime.AddSample(mElapsed)
 	*hasProcessData = false
 	return nil
 }

@@ -11,6 +11,6 @@ import (
 func assignInjTime(msg *commtypes.Message) error {
 	return nil
 }
-func extractProduceToConsumeTime(msgSeqs *commtypes.MsgAndSeqs, isInitialSrc bool, collector *stats.Int64Collector) error {
+func extractProduceToConsumeTime(msgSeqs *commtypes.Message, isInitialSrc bool, collector *stats.Int64Collector) error {
 	return nil
 }
