@@ -1,3 +1,4 @@
+//go:generate stringer -type=GuaranteeMth
 package exactly_once_intr
 
 import (
