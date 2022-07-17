@@ -6,6 +6,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/stats"
+	"sharedlog-stream/pkg/utils/syncutils"
 	"sync"
 )
 
@@ -20,7 +21,7 @@ var (
 )
 
 type BufferedSinkStream struct {
-	sync.Mutex
+	mux        syncutils.Mutex
 	sinkBuffer [][]byte
 
 	payloadArrSerde commtypes.Serde

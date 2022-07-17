@@ -1,7 +1,7 @@
 package stats
 
 import (
-	"sync"
+	"sharedlog-stream/pkg/utils/syncutils"
 	"time"
 )
 
@@ -15,7 +15,7 @@ func LatStart() time.Time {
 }
 
 type ConcurrentInt64Collector struct {
-	mu sync.Mutex
+	mu syncutils.Mutex
 	Int64Collector
 }
 
@@ -26,7 +26,7 @@ func NewConcurrentInt64Collector(tag string, duration time.Duration) ConcurrentI
 }
 
 type ConcurrentIntCollector struct {
-	mu sync.Mutex
+	mu syncutils.Mutex
 	IntCollector
 }
 

@@ -1,7 +1,7 @@
 package stats
 
 import (
-	"sync"
+	"sharedlog-stream/pkg/utils/syncutils"
 	"time"
 )
 
@@ -26,7 +26,7 @@ func (c *ThroughputCounter) GetCount() uint64 {
 }
 
 type ConcurrentThroughputCounter struct {
-	sync.Mutex
+	syncutils.Mutex
 	tag          string
 	count        uint64
 	last_count   uint64

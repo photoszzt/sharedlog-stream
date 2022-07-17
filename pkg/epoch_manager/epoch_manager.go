@@ -9,7 +9,7 @@ import (
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
-	"sync"
+	"sharedlog-stream/pkg/utils/syncutils"
 
 	"cs.utexas.edu/zjia/faas/protocol"
 	"cs.utexas.edu/zjia/faas/types"
@@ -23,7 +23,7 @@ type EpochManager struct {
 	epochMetaSerde commtypes.Serde
 	env            types.Environment
 
-	tpMapMu               sync.Mutex
+	tpMapMu               syncutils.Mutex
 	currentTopicSubstream map[string]map[uint8]struct{}
 
 	epochLog          *sharedlog_stream.SharedLogStream

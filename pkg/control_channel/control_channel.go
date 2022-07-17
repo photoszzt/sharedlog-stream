@@ -7,7 +7,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
-	"sync"
+	"sharedlog-stream/pkg/utils/syncutils"
 
 	"cs.utexas.edu/zjia/faas/types"
 	"github.com/huandu/skiplist"
@@ -18,7 +18,7 @@ const (
 )
 
 type ControlChannelManager struct {
-	kmMu sync.Mutex
+	kmMu syncutils.Mutex
 	// topic -> (key -> set of substreamid)
 	keyMappings map[string]*skiplist.SkipList
 

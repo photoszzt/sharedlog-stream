@@ -1,6 +1,6 @@
 package commtypes
 
-import "sync"
+import "sharedlog-stream/pkg/utils/syncutils"
 
 type EventTimeExtractor interface {
 	ExtractEventTime() (int64, error)
@@ -24,7 +24,7 @@ type StreamTimeTracker interface {
 }
 
 type streamTimeTracker struct {
-	lock      sync.Mutex
+	lock      syncutils.Mutex
 	timeStamp int64
 }
 

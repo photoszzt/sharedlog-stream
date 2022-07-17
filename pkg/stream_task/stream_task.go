@@ -12,7 +12,7 @@ import (
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/transaction"
-	"sync"
+	"sharedlog-stream/pkg/utils/syncutils"
 )
 
 type ProcessFunc func(ctx context.Context, task *StreamTask, args interface{}) *common.FnOutput
@@ -22,7 +22,7 @@ type StreamTask struct {
 
 	// in case the task consumes multiple streams, the task consumes from the same substream number
 	// and the substreams must have the same number of substreams.
-	OffMu                sync.Mutex
+	OffMu                syncutils.Mutex
 	CurrentConsumeOffset map[string]uint64
 
 	pauseFunc               func(sargs *StreamTaskArgs) *common.FnOutput

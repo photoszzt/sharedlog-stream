@@ -10,6 +10,7 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/txn_data"
+	"sharedlog-stream/pkg/utils/syncutils"
 	"sync/atomic"
 	"time"
 
@@ -46,6 +47,7 @@ var ControlRecordMeta = StreamEntryMeta(true, false)
 var ArrRecordMeta = StreamEntryMeta(false, true)
 
 type SharedLogStream struct {
+	mux syncutils.Mutex
 	env types.Environment
 	// txnMarkerSerde commtypes.Serde
 	topicName     string
@@ -160,13 +162,15 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context,
 	}
 
 	seqNum, err := s.env.SharedLogAppend(ctx, tags, encoded)
-	s.tail = seqNum + 1
-
-	// verify that push is successful
-
 	if err != nil {
 		return 0, err
 	}
+	s.mux.Lock()
+	s.tail = seqNum + 1
+	s.mux.Unlock()
+
+	// verify that push is successful
+
 	// debug.Fprintf(os.Stderr, "push to %s tag: ", s.topicName)
 	// for _, t := range tags {
 	// 	debug.Fprintf(os.Stderr, "0x%x ", t)

@@ -31,11 +31,12 @@ type JoinWorkerFunc func(c context.Context, m commtypes.Message) ([]commtypes.Me
 type FlushFunc func(ctx context.Context) error
 
 type JoinProcManager struct {
+	runLock     syncutils.Mutex
 	out         chan *common.FnOutput
 	done        chan struct{}
 	pause       chan struct{}
 	resume      chan struct{}
-	shouldFlush chan struct{}
+	shouldFlush uint64
 }
 
 func NewJoinProcManager() *JoinProcManager {

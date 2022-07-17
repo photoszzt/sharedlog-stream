@@ -9,7 +9,7 @@ import (
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
-	"sync"
+	"sharedlog-stream/pkg/utils/syncutils"
 	"time"
 )
 
@@ -24,7 +24,7 @@ type StreamConsumerConfig struct {
 }
 
 type ShardedSharedLogStreamConsumer struct {
-	sync.Mutex
+	syncutils.Mutex
 
 	msgSerde        commtypes.MessageSerde
 	payloadArrSerde commtypes.Serde

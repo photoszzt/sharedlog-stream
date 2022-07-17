@@ -8,7 +8,7 @@ import (
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
-	"sync"
+	"sharedlog-stream/pkg/utils/syncutils"
 	"time"
 )
 
@@ -22,7 +22,7 @@ func checkMeasureSink() bool {
 }
 
 type ConcurrentMeteredSink struct {
-	mu                 sync.Mutex
+	mu                 syncutils.Mutex
 	eventTimeLatencies []int
 
 	producer *ShardedSharedLogStreamProducer

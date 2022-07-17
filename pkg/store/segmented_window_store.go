@@ -5,12 +5,12 @@ import (
 	"math"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
-	"sync"
+	"sharedlog-stream/pkg/utils/syncutils"
 	"time"
 )
 
 type SegmentedWindowStore struct {
-	seqNumMu         sync.Mutex
+	seqNumMu         syncutils.Mutex
 	bytesStore       SegmentedBytesStore
 	valSerde         commtypes.Serde
 	keySerde         commtypes.Serde

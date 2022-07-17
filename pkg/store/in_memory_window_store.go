@@ -8,14 +8,14 @@ import (
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/utils"
-	"sync"
+	"sharedlog-stream/pkg/utils/syncutils"
 	"time"
 
 	"github.com/rs/zerolog/log"
 )
 
 type InMemoryWindowStore struct {
-	otrMu           sync.RWMutex
+	otrMu           syncutils.Mutex
 	openedTimeRange map[int64]struct{}
 
 	sctx StoreContext
@@ -28,7 +28,7 @@ type InMemoryWindowStore struct {
 	retentionPeriod    int64
 	observedStreamTime int64
 
-	seqNumMu sync.Mutex
+	seqNumMu syncutils.Mutex
 	seqNum   uint32
 
 	retainDuplicates bool
@@ -303,13 +303,14 @@ func (s *InMemoryWindowStore) removeExpiredSegments() {
 		minLiveTime = int64(minLiveTimeTmp)
 	}
 
-	s.otrMu.RLock()
-	defer s.otrMu.RUnlock()
+	s.otrMu.Lock()
 	for minT := range s.openedTimeRange {
 		if minT < minLiveTime {
 			minLiveTime = minT
 		}
 	}
+	s.otrMu.Unlock()
+
 	s.store.RemoveUntil(minLiveTime)
 }
 

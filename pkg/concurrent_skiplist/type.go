@@ -25,7 +25,7 @@ package concurrent_skiplist
 
 import (
 	"math/rand"
-	"sync"
+	"sharedlog-stream/pkg/utils/syncutils"
 )
 
 // template type SkipList(ValueT)
@@ -63,7 +63,7 @@ func (element *Element) Next() *Element {
 }
 
 type SkipList struct {
-	mutex          sync.RWMutex
+	mutex          syncutils.Mutex
 	prevNodesCache []*elementNode
 	comparable     Comparable
 	randSource     rand.Source

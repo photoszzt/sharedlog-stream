@@ -1,7 +1,7 @@
 package stats
 
 import (
-	"sync"
+	"sharedlog-stream/pkg/utils/syncutils"
 	"sync/atomic"
 	"time"
 )
@@ -55,8 +55,8 @@ func (w *Warmup) ElapsedSinceInitial() time.Duration {
 }
 
 type WarmupGoroutineSafe struct {
-	afterWarmup uint32
-	sync.Mutex
+	syncutils.Mutex
+	afterWarmup      uint32
 	initial          time.Time
 	afterWarmupStart time.Time
 	warmupTime       time.Duration

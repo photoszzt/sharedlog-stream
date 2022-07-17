@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"sync"
 
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
@@ -14,6 +13,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/txn_data"
+	"sharedlog-stream/pkg/utils/syncutils"
 
 	"cs.utexas.edu/zjia/faas/protocol"
 	"cs.utexas.edu/zjia/faas/types"
@@ -29,7 +29,7 @@ const (
 // transaction manager is not goroutine safe, it's assumed to be used by
 // only one stream task and only one goroutine could update it
 type TransactionManager struct {
-	tpMapMu               sync.Mutex
+	tpMapMu               syncutils.Mutex
 	currentTopicSubstream map[string]map[uint8]struct{}
 
 	backgroundJobCtx    context.Context
