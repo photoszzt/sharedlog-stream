@@ -32,6 +32,7 @@ func NewStreamTaskBuilder() SetAppProcessFunc {
 			flushForALO:    stats.NewInt64Collector("flushForALO", stats.DEFAULT_COLLECT_DURATION),
 			commitTrTime:   stats.NewInt64Collector("commitTrTime", stats.DEFAULT_COLLECT_DURATION),
 			beginTrTime:    stats.NewInt64Collector("beginTrTime", stats.DEFAULT_COLLECT_DURATION),
+			markEpochTime:  stats.NewInt64Collector("markEpochTime", stats.DEFAULT_COLLECT_DURATION),
 		},
 	}
 }
