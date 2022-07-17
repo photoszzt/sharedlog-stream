@@ -32,7 +32,7 @@ func CommonProcess(ctx context.Context, t *stream_task.StreamTask, ectx processo
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	for _, msg := range gotMsgs.Msgs {
-		if msg.MsgArr == nil || (msg.Msg.Key == nil && msg.Msg.Value == nil) {
+		if msg.MsgArr == nil && msg.Msg.Key == nil && msg.Msg.Value == nil {
 			continue
 		}
 		if msg.IsControl {

@@ -57,7 +57,7 @@ func (jm *JoinProcManager) joinProcLoop(
 		}
 		// debug.Fprintf(os.Stderr, "[id=%s] after consume\n", id)
 		for _, msg := range gotMsgs.Msgs {
-			if msg.MsgArr == nil && msg.Msg.Value == nil {
+			if msg.MsgArr == nil && msg.Msg.Value == nil && msg.Msg.Key == nil {
 				continue
 			}
 			if msg.IsControl {
