@@ -7,6 +7,7 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/consume_seq_num_manager"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/stats"
 	"time"
 )
@@ -60,14 +61,20 @@ func (t *StreamTask) process(ctx context.Context, args *StreamTaskArgs) *common.
 	for {
 		timeSinceLastTrack := time.Since(commitTimer)
 		if timeSinceLastTrack >= args.trackEveryForAtLeastOnce {
-			if ret_err := t.track(ctx, cm, args.ectx.SubstreamNum(), &hasUntrackedConsume, &commitTimer); ret_err != nil {
+			if ret_err := t.track(ctx, cm, args.ectx.Consumers(), args.ectx.SubstreamNum(), &hasUntrackedConsume, &commitTimer); ret_err != nil {
 				return ret_err
 			}
 		}
 		timeSinceLastFlush := time.Since(flushTimer)
 		if timeSinceLastFlush >= args.flushEvery {
-			if ret_err := t.flushFuncForAtLeastOnce(ctx, args); ret_err != nil {
+			if t.pauseFunc != nil {
+				t.pauseFunc(args)
+			}
+			if ret_err := t.flushStreams(ctx, args); ret_err != nil {
 				return common.GenErrFnOutput(ret_err)
+			}
+			if t.resumeFunc != nil {
+				t.resumeFunc(t, args)
 			}
 			flushTimer = time.Now()
 		}
@@ -97,15 +104,14 @@ func (t *StreamTask) process(ctx context.Context, args *StreamTaskArgs) *common.
 	return ret
 }
 
-func (t *StreamTask) track(ctx context.Context, cm *consume_seq_num_manager.ConsumeSeqManager, substreamNum uint8,
+func (t *StreamTask) track(ctx context.Context, cm *consume_seq_num_manager.ConsumeSeqManager,
+	consumers []producer_consumer.MeteredConsumerIntr, substreamNum uint8,
 	hasUncommitted *bool, commitTimer *time.Time,
 ) *common.FnOutput {
-	t.OffMu.Lock()
-	err := cm.Track(ctx, t.CurrentConsumeOffset, substreamNum)
+	err := cm.Track(ctx, consumers, substreamNum)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	t.OffMu.Unlock()
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -122,12 +128,10 @@ func (t *StreamTask) pauseTrackFlush(ctx context.Context, args *StreamTaskArgs, 
 				return ret
 			}
 		}
-		t.OffMu.Lock()
-		err := cm.Track(ctx, t.CurrentConsumeOffset, args.ectx.SubstreamNum())
+		err := cm.Track(ctx, args.ectx.Consumers(), args.ectx.SubstreamNum())
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
-		t.OffMu.Unlock()
 		alreadyPaused = true
 	}
 	if !alreadyPaused && t.pauseFunc != nil {

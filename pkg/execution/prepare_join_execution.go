@@ -12,8 +12,8 @@ import (
 
 func PrepareTaskWithJoin(
 	ctx context.Context,
-	leftJoinWorker JoinWorker,
-	rightJoinWorker JoinWorker,
+	leftJoinWorker JoinWorkerFunc,
+	rightJoinWorker JoinWorkerFunc,
 	allConsumersProducers proc_interface.BaseConsumersProducers,
 	baseProcArgs proc_interface.BaseProcArgs,
 ) (*stream_task.StreamTask, *CommonJoinProcArgs) {
@@ -46,46 +46,25 @@ func PrepareTaskWithJoin(
 			// debug.Fprintf(os.Stderr, "init ts=%d done invoke join proc loops\n", time.Now().UnixMilli())
 		}).
 		PauseFunc(func(sargs *stream_task.StreamTaskArgs) *common.FnOutput {
-			// debug.Fprintf(os.Stderr, "in flush func\n")
-			/*
-				leftManager.RequestToTerminate()
-				rightManager.RequestToTerminate()
-				debug.Fprintf(os.Stderr, "waiting join proc to exit\n")
-				wg.Wait()
-			*/
+			// debug.Fprintf(os.Stderr, "in pause func\n")
 			if ret := HandleJoinErrReturn(procArgs); ret != nil {
 				return ret
 			}
-			// sargs.LockProducerConsumer()
 			pStart := stats.TimerBegin()
-			leftManager.Pause() <- struct{}{}
-			rightManager.Pause() <- struct{}{}
+			leftManager.LockRunlock()
+			rightManager.LockRunlock()
 			elapsed := stats.Elapsed(pStart)
 			pauseTime.AddSample(elapsed.Microseconds())
-			// debug.Fprintf(os.Stderr, "join procs exited\n")
 			return nil
 		}).
 		ResumeFunc(func(task *stream_task.StreamTask, sargs *stream_task.StreamTaskArgs) {
 			// debug.Fprintf(os.Stderr, "resume join porc\n")
-			// debug.Fprintf(os.Stderr, "ts=%d launch join proc loops\n", time.Now().UnixMilli())
-			/*
-				leftManager.LaunchJoinProcLoop(lctx, task, joinProcLeft, &wg)
-				rightManager.LaunchJoinProcLoop(rctx, task, joinProcRight, &wg)
-			*/
-			// sargs.UnlockProducerConsumer()
 			rStart := stats.TimerBegin()
-			leftManager.Resume() <- struct{}{}
-			rightManager.Resume() <- struct{}{}
+			leftManager.UnlockRunlock()
+			rightManager.UnlockRunlock()
 			elapsed := stats.Elapsed(rStart)
 			resumeTime.AddSample(elapsed.Microseconds())
-			// debug.Fprintf(os.Stderr, "ts=%d done invoke join proc loops\n", time.Now().UnixMilli())
 			// debug.Fprintf(os.Stderr, "done resume join proc\n")
-		}).
-		FlushFunc(func(ctx context.Context, args *stream_task.StreamTaskArgs) error {
-			leftManager.ShouldFlush() <- struct{}{}
-			rightManager.ShouldFlush() <- struct{}{}
-			return nil
 		}).Build()
-
 	return task, procArgs
 }

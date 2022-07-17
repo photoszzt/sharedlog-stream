@@ -10,6 +10,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils/syncutils"
+	"sync/atomic"
 	"time"
 )
 
@@ -35,6 +36,8 @@ type ShardedSharedLogStreamConsumer struct {
 	timeout         time.Duration
 	guarantee       exactly_once_intr.GuaranteeMth
 	initialSource   bool
+
+	currentSeqNum uint64
 }
 
 var _ = Consumer(&ShardedSharedLogStreamConsumer{})
@@ -107,6 +110,14 @@ func (s *ShardedSharedLogStreamConsumer) readNext(ctx context.Context, parNum ui
 	} else {
 		return s.stream.ReadNext(ctx, parNum)
 	}
+}
+
+func (s *ShardedSharedLogStreamConsumer) RecordCurrentConsumedSeqNum(seqNum uint64) {
+	atomic.StoreUint64(&s.currentSeqNum, seqNum)
+}
+
+func (s *ShardedSharedLogStreamConsumer) CurrentConsumedSeqNum() uint64 {
+	return atomic.LoadUint64(&s.currentSeqNum)
 }
 
 func (s *ShardedSharedLogStreamConsumer) Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {

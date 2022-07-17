@@ -12,7 +12,6 @@ import (
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/transaction"
-	"sharedlog-stream/pkg/utils/syncutils"
 )
 
 type ProcessFunc func(ctx context.Context, task *StreamTask, args interface{}) *common.FnOutput
@@ -22,14 +21,13 @@ type StreamTask struct {
 
 	// in case the task consumes multiple streams, the task consumes from the same substream number
 	// and the substreams must have the same number of substreams.
-	OffMu                syncutils.Mutex
-	CurrentConsumeOffset map[string]uint64
 
-	pauseFunc               func(sargs *StreamTaskArgs) *common.FnOutput
-	resumeFunc              func(task *StreamTask, sargs *StreamTaskArgs)
-	initFunc                func(task *StreamTask)
-	flushFuncForAtLeastOnce func(ctx context.Context, args *StreamTaskArgs) error
-	HandleErrFunc           func() error
+	pauseFunc     func(sargs *StreamTaskArgs) *common.FnOutput
+	resumeFunc    func(task *StreamTask, sargs *StreamTaskArgs)
+	initFunc      func(task *StreamTask)
+	HandleErrFunc func() error
+
+	flushForALO stats.Int64Collector
 }
 
 func (t *StreamTask) ExecuteApp(ctx context.Context,
@@ -71,6 +69,7 @@ func (t *StreamTask) ExecuteApp(ctx context.Context,
 }
 
 func (t *StreamTask) flushStreams(ctx context.Context, args *StreamTaskArgs) error {
+	pStart := stats.TimerBegin()
 	for _, sink := range args.ectx.Producers() {
 		if err := sink.Flush(ctx); err != nil {
 			return err
@@ -90,6 +89,8 @@ func (t *StreamTask) flushStreams(ctx context.Context, args *StreamTaskArgs) err
 			}
 		}
 	}
+	elapsed := stats.Elapsed(pStart)
+	t.flushForALO.AddSample(elapsed.Microseconds())
 	return nil
 }
 

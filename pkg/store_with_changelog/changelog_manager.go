@@ -83,7 +83,7 @@ func (cm *ChangelogManager) Stream() *sharedlog_stream.ShardedSharedLogStream {
 // when changelog is src, there's nothing to flush
 func (cm *ChangelogManager) Flush(ctx context.Context) error {
 	if !cm.changelogIsSrc {
-		return cm.producer.FlushNoLock(ctx)
+		return cm.producer.Flush(ctx)
 	}
 	return nil
 }

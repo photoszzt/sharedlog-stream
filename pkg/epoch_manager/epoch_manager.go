@@ -150,7 +150,7 @@ func (em *EpochManager) AddTopicSubstream(ctx context.Context,
 }
 
 func (em *EpochManager) MarkEpoch(ctx context.Context,
-	consumeSeqNums map[string]uint64,
+	consumers []producer_consumer.MeteredConsumerIntr,
 	producers []producer_consumer.MeteredProducerIntr,
 ) error {
 	outputRanges := make(map[string][]commtypes.ProduceRange)
@@ -175,6 +175,10 @@ func (em *EpochManager) MarkEpoch(ctx context.Context,
 			}
 			outputRanges[topicName] = ranges
 		}
+	}
+	consumeSeqNums := make(map[string]uint64)
+	for _, consumer := range consumers {
+		consumeSeqNums[consumer.TopicName()] = consumer.CurrentConsumedSeqNum()
 	}
 	epochMeta := commtypes.EpochMarker{
 		Mark:         commtypes.EPOCH_END,

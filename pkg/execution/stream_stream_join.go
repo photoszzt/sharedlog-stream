@@ -34,18 +34,26 @@ func SetupStreamStreamJoin(
 	}
 	leftJoinRight, rightJoinLeft := configureStreamStreamJoinProcessor(leftTab, rightTab, joiner, jw)
 	leftJoinRightFunc := func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-		_, err := toLeftTab.ProcessAndReturn(ctx, msg)
+		// debug.Fprintf(os.Stderr, "before toLeft\n")
+		rets, err := toLeftTab.ProcessAndReturn(ctx, msg)
 		if err != nil {
 			return nil, err
 		}
-		return leftJoinRight.ProcessAndReturn(ctx, msg)
+		// debug.Fprintf(os.Stderr, "after toLeft\n")
+		msgs, err := leftJoinRight.ProcessAndReturn(ctx, rets[0])
+		// debug.Fprintf(os.Stderr, "after leftJoinRight\n")
+		return msgs, err
 	}
 	rightJoinLeftFunc := func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-		_, err := toRightTab.ProcessAndReturn(ctx, msg)
+		// debug.Fprintf(os.Stderr, "before toRight\n")
+		rets, err := toRightTab.ProcessAndReturn(ctx, msg)
 		if err != nil {
 			return nil, err
 		}
-		return rightJoinLeft.ProcessAndReturn(ctx, msg)
+		// debug.Fprintf(os.Stderr, "after toRight\n")
+		msgs, err := rightJoinLeft.ProcessAndReturn(ctx, rets[0])
+		// debug.Fprintf(os.Stderr, "after rightJoinLeft\n")
+		return msgs, err
 	}
 	wsc := []*store_restore.WindowStoreChangelog{
 		store_restore.NewWindowStoreChangelog(leftTab, leftTab.ChangelogManager()),

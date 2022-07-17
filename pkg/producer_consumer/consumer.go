@@ -21,6 +21,8 @@ type Consumer interface {
 	MsgSerde() commtypes.MessageSerde
 	Lock()
 	Unlock()
+	RecordCurrentConsumedSeqNum(seqNum uint64)
+	CurrentConsumedSeqNum() uint64
 }
 
 type MeteredConsumerIntr interface {

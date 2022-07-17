@@ -1,8 +1,8 @@
 package stream_task
 
 import (
-	"context"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/stats"
 )
 
 type StreamTaskBuilder struct {
@@ -18,20 +18,18 @@ type BuildStreamTask interface {
 	InitFunc(i func(task *StreamTask)) BuildStreamTask
 	PauseFunc(p func(sargs *StreamTaskArgs) *common.FnOutput) BuildStreamTask
 	ResumeFunc(r func(task *StreamTask, sargs *StreamTaskArgs)) BuildStreamTask
-	FlushFunc(r func(ctx context.Context, args *StreamTaskArgs) error) BuildStreamTask
 	HandleErrFunc(he func() error) BuildStreamTask
 }
 
 func NewStreamTaskBuilder() SetAppProcessFunc {
 	return &StreamTaskBuilder{
 		task: &StreamTask{
-			CurrentConsumeOffset:    make(map[string]uint64),
-			pauseFunc:               nil,
-			resumeFunc:              nil,
-			initFunc:                nil,
-			HandleErrFunc:           nil,
-			appProcessFunc:          nil,
-			flushFuncForAtLeastOnce: nil,
+			pauseFunc:      nil,
+			resumeFunc:     nil,
+			initFunc:       nil,
+			HandleErrFunc:  nil,
+			appProcessFunc: nil,
+			flushForALO:    stats.NewInt64Collector("flushForALO", stats.DEFAULT_COLLECT_DURATION),
 		},
 	}
 }
@@ -42,9 +40,6 @@ func (b *StreamTaskBuilder) AppProcessFunc(process ProcessFunc) BuildStreamTask 
 }
 
 func (b *StreamTaskBuilder) Build() *StreamTask {
-	if b.task.flushFuncForAtLeastOnce == nil {
-		b.task.flushFuncForAtLeastOnce = b.task.flushStreams
-	}
 	return b.task
 }
 func (b *StreamTaskBuilder) PauseFunc(p func(sargs *StreamTaskArgs) *common.FnOutput) BuildStreamTask {
@@ -61,10 +56,5 @@ func (b *StreamTaskBuilder) InitFunc(i func(task *StreamTask)) BuildStreamTask {
 }
 func (b *StreamTaskBuilder) HandleErrFunc(he func() error) BuildStreamTask {
 	b.task.HandleErrFunc = he
-	return b
-}
-
-func (b *StreamTaskBuilder) FlushFunc(r func(ctx context.Context, args *StreamTaskArgs) error) BuildStreamTask {
-	b.task.flushFuncForAtLeastOnce = r
 	return b
 }

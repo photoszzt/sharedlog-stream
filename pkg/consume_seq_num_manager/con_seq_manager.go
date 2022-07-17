@@ -7,6 +7,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/consume_seq_num_manager/con_types"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
 
@@ -76,8 +77,31 @@ func (cm *ConsumeSeqManager) FindLastConsumedSeqNum(ctx context.Context, topicTo
 	return rawMsg.LogSeqNum, nil
 }
 
-func (cm *ConsumeSeqManager) Track(ctx context.Context, currentOffset map[string]uint64, parNum uint8) error {
-	for topic, offset := range currentOffset {
+func (cm *ConsumeSeqManager) Track(ctx context.Context, consumers []producer_consumer.MeteredConsumerIntr, parNum uint8) error {
+	for _, consumer := range consumers {
+		topic := consumer.TopicName()
+		offset := consumer.CurrentConsumedSeqNum()
+		offsetTopic := con_types.CONSUMER_OFFSET_LOG_TOPIC_NAME + topic
+		stream := cm.offsetLogs[offsetTopic]
+		tm := commtypes.OffsetMarker{
+			Mark:   commtypes.EPOCH_END,
+			Offset: offset,
+		}
+		encoded, err := cm.offsetMarkerSerde.Encode(&tm)
+		if err != nil {
+			return err
+		}
+		tag := txn_data.MarkerTag(stream.TopicNameHash(), parNum)
+		off, err := stream.PushWithTag(ctx, encoded, parNum, []uint64{tag}, nil,
+			sharedlog_stream.ControlRecordMeta, commtypes.EmptyProducerId)
+		debug.Fprintf(os.Stderr, "append marker %d to stream %s off %x\n",
+			commtypes.EPOCH_END, stream.TopicName(), off)
+	}
+	return nil
+}
+
+func (cm *ConsumeSeqManager) TrackForTest(ctx context.Context, currentConSeqNum map[string]uint64, parNum uint8) error {
+	for topic, offset := range currentConSeqNum {
 		offsetTopic := con_types.CONSUMER_OFFSET_LOG_TOPIC_NAME + topic
 		stream := cm.offsetLogs[offsetTopic]
 		tm := commtypes.OffsetMarker{

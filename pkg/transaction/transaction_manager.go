@@ -10,6 +10,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/consume_seq_num_manager/con_types"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/txn_data"
@@ -487,8 +488,10 @@ func CreateOffsetTopicAndGetOffset(ctx context.Context, tm *TransactionManager,
 	return offset, nil
 }
 
-func (tc *TransactionManager) AppendConsumedSeqNum(ctx context.Context, currentOffset map[string]uint64, parNum uint8) error {
-	for topic, offset := range currentOffset {
+func (tc *TransactionManager) AppendConsumedSeqNum(ctx context.Context, consumers []producer_consumer.MeteredConsumerIntr, parNum uint8) error {
+	for _, consumer := range consumers {
+		topic := consumer.TopicName()
+		offset := consumer.CurrentConsumedSeqNum()
 		offsetTopic := con_types.OffsetTopic(topic)
 		offsetLog := tc.topicStreams[offsetTopic]
 		offsetRecord := txn_data.OffsetRecord{

@@ -7,27 +7,25 @@ import (
 )
 
 type JoinProcArgs struct {
-	runner    JoinWorkerFunc
-	flushFunc FlushFunc
+	runner JoinWorkerFunc
 	processor.BaseExecutionContext
 }
 
 // var _ = proc_interface.ProcArgsWithSink(&JoinProcArgs{})
 
 func NewJoinProcArgs(
-	worker JoinWorker,
+	worker JoinWorkerFunc,
 	ectx processor.BaseExecutionContext,
 ) *JoinProcArgs {
 	return &JoinProcArgs{
-		runner:               worker.joinWorkerFunc,
-		flushFunc:            worker.flushTableFunc,
+		runner:               worker,
 		BaseExecutionContext: ectx,
 	}
 }
 
 func CreateJoinProcArgsPair(
-	runnerL JoinWorker,
-	runnerR JoinWorker,
+	runnerL JoinWorkerFunc,
+	runnerR JoinWorkerFunc,
 	srcs []producer_consumer.MeteredConsumerIntr,
 	sinks []producer_consumer.MeteredProducerIntr,
 	procArgs proc_interface.BaseProcArgs,

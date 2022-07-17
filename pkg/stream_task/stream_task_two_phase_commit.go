@@ -160,6 +160,8 @@ func (t *StreamTask) processWithTransaction(
 	run := false
 
 	latencies := stats.NewInt64Collector("latPerIter", stats.DEFAULT_COLLECT_DURATION)
+	commitTrTime := stats.NewInt64Collector("commitTrTime", stats.DEFAULT_COLLECT_DURATION)
+	beginTrTime := stats.NewInt64Collector("beginTrTime", stats.DEFAULT_COLLECT_DURATION)
 	hasLiveTransaction := false
 	trackConsumePar := false
 	paused := false
@@ -189,13 +191,16 @@ func (t *StreamTask) processWithTransaction(
 
 			// should commit
 			if (shouldCommitByTime || timeout) && hasLiveTransaction {
+				cStart := stats.TimerBegin()
 				err_out := t.commitTransaction(ctx, tm, args, &hasLiveTransaction,
 					&trackConsumePar, &paused)
 				if err_out != nil {
 					return err_out
 				}
 				debug.Assert(!hasLiveTransaction, "after commit. there should be no live transaction\n")
-				debug.Fprintf(os.Stderr, "transaction committed\n")
+				// debug.Fprintf(os.Stderr, "transaction committed\n")
+				elapsed := stats.Elapsed(cStart).Microseconds()
+				commitTrTime.AddSample(elapsed)
 			}
 
 			// Exit routine
@@ -216,11 +221,14 @@ func (t *StreamTask) processWithTransaction(
 			}
 
 			// begin new transaction
+			tBeg := stats.TimerBegin()
 			err := t.startNewTransaction(ctx, args, tm, &hasLiveTransaction,
 				&trackConsumePar, &init, &paused, &commitTimer)
 			if err != nil {
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
+			tBegElapsed := stats.Elapsed(tBeg).Microseconds()
+			beginTrTime.AddSample(tBegElapsed)
 
 			ret := t.appProcessFunc(ctx, t, args.ectx)
 			if ret != nil {
@@ -278,8 +286,6 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 	trackConsumePar *bool,
 	paused *bool,
 ) *common.FnOutput {
-	t.OffMu.Lock()
-	defer t.OffMu.Unlock()
 	// debug.Fprintf(os.Stderr, "about to pause\n")
 	if t.pauseFunc != nil {
 		if ret := t.pauseFunc(args); ret != nil {
@@ -287,7 +293,7 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 		}
 		*paused = true
 	}
-	err := tm.AppendConsumedSeqNum(ctx, t.CurrentConsumeOffset, args.ectx.SubstreamNum())
+	err := tm.AppendConsumedSeqNum(ctx, args.ectx.Consumers(), args.ectx.SubstreamNum())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] append offset failed: %v\n", err)
 		return &common.FnOutput{Success: false, Message: fmt.Sprintf("append offset failed: %v\n", err)}

@@ -79,6 +79,12 @@ func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, 
 	return nil
 }
 
+func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload []byte, producerId commtypes.ProducerId) error {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+	return s.BufPushNoLock(ctx, payload, producerId)
+}
+
 func (s *BufferedSinkStream) updateProdSeqNum(seqNum uint64) {
 	if s.guarantee == exactly_once_intr.EPOCH_MARK {
 		s.once.Do(func() {
@@ -124,4 +130,10 @@ func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId commtyp
 		s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
 	}
 	return nil
+}
+
+func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context, producerId commtypes.ProducerId) error {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+	return s.FlushNoLock(ctx, producerId)
 }

@@ -45,7 +45,7 @@ func NewInMemoryWindowStoreWithChangelog(
 
 func createChangelogManagerAndUpdateMsgSerde(mp *MaterializeParam) (*ChangelogManager, commtypes.MessageSerde, error) {
 	changelog, err := CreateChangelog(mp.changelogParam.Env,
-		mp.storeName+"_changelog", mp.changelogParam.NumPartition,
+		mp.storeName, mp.changelogParam.NumPartition,
 		mp.serdeFormat)
 	if err != nil {
 		return nil, nil, err

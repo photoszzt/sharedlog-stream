@@ -43,7 +43,7 @@ func CommonProcess(ctx context.Context, t *stream_task.StreamTask, ectx processo
 			continue
 		}
 		// err = proc(t, msg)
-		t.CurrentConsumeOffset[ectx.Consumers()[0].TopicName()] = msg.LogSeqNum
+		ectx.Consumers()[0].RecordCurrentConsumedSeqNum(msg.LogSeqNum)
 		err = ProcessMsgAndSeq(ctx, msg, ectx, procMsg, isInitialSrc)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}

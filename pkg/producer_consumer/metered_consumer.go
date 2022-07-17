@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
@@ -46,12 +45,20 @@ func NewMeteredConsumer(src *ShardedSharedLogStreamConsumer, warmup time.Duratio
 func (s *MeteredConsumer) StartWarmup() {
 }
 
+func (s *MeteredConsumer) RecordCurrentConsumedSeqNum(seqNum uint64) {
+	s.consumer.RecordCurrentConsumedSeqNum(seqNum)
+}
+
+func (s *MeteredConsumer) CurrentConsumedSeqNum() uint64 {
+	return s.consumer.CurrentConsumedSeqNum()
+}
+
 func (s *MeteredConsumer) Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
 	procStart := stats.TimerBegin()
 	msgs, err := s.consumer.Consume(ctx, parNum)
 	elapsed := stats.Elapsed(procStart).Microseconds()
 	if err != nil {
-		debug.Fprintf(os.Stderr, "[ERROR] src out err: %v\n", err)
+		// debug.Fprintf(os.Stderr, "[ERROR] src out err: %v\n", err)
 		return msgs, err
 	}
 	s.latencies.AddSample(elapsed)

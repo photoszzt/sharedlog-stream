@@ -155,7 +155,7 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 
 func commitConsumeSeq(ctx context.Context,
 	cm *consume_seq_num_manager.ConsumeSeqManager, topicName string, off uint64) error {
-	return cm.Track(ctx, map[string]uint64{topicName: off}, 0)
+	return cm.TrackForTest(ctx, map[string]uint64{topicName: off}, 0)
 }
 
 func (h *sharedlogConsumeBenchHandler) runLoop(ctx context.Context,
