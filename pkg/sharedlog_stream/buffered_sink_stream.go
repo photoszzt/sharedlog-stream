@@ -27,7 +27,8 @@ type BufferedSinkStream struct {
 	payloadArrSerde commtypes.Serde
 	Stream          *SharedLogStream
 
-	bufferSizeStats stats.IntCollector
+	bufferEntryStats stats.IntCollector
+	bufferSizeStats  stats.IntCollector
 
 	once               sync.Once
 	initialProdInEpoch uint64
@@ -46,6 +47,8 @@ func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8) *BufferedSinkS
 		currentSize:     0,
 		once:            sync.Once{},
 		guarantee:       exactly_once_intr.AT_LEAST_ONCE,
+		bufferEntryStats: stats.NewIntCollector(fmt.Sprintf("bufEntry_%v", parNum),
+			stats.DEFAULT_COLLECT_DURATION),
 		bufferSizeStats: stats.NewIntCollector(fmt.Sprintf("bufSize_%v", parNum),
 			stats.DEFAULT_COLLECT_DURATION),
 	}
@@ -59,7 +62,8 @@ func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, 
 		s.sinkBuffer = append(s.sinkBuffer, payload)
 		s.currentSize += payload_size
 	} else {
-		s.bufferSizeStats.AddSample(len(s.sinkBuffer))
+		s.bufferEntryStats.AddSample(len(s.sinkBuffer))
+		s.bufferSizeStats.AddSample(s.currentSize)
 		payloadArr := &commtypes.PayloadArr{
 			Payloads: s.sinkBuffer,
 		}
@@ -114,7 +118,8 @@ func (s *BufferedSinkStream) GetCurrentProdSeqNum() uint64 {
 
 func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId commtypes.ProducerId) error {
 	if len(s.sinkBuffer) != 0 {
-		s.bufferSizeStats.AddSample(len(s.sinkBuffer))
+		s.bufferEntryStats.AddSample(len(s.sinkBuffer))
+		s.bufferSizeStats.AddSample(s.currentSize)
 		payloadArr := &commtypes.PayloadArr{
 			Payloads: s.sinkBuffer,
 		}
@@ -128,6 +133,7 @@ func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId commtyp
 		}
 		s.updateProdSeqNum(seqNum)
 		s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
+		s.currentSize = 0
 	}
 	return nil
 }
