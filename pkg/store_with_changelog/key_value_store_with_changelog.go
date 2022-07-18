@@ -9,7 +9,7 @@ import (
 )
 
 type KeyValueStoreWithChangelog struct {
-	kvstore          *store.InMemoryKeyValueStore
+	kvstore          store.KeyValueStore
 	msgSerde         commtypes.MessageSerde
 	trackFunc        exactly_once_intr.TrackProdSubStreamFunc
 	changelogManager *ChangelogManager
@@ -18,7 +18,7 @@ type KeyValueStoreWithChangelog struct {
 }
 
 func NewKeyValueStoreWithChangelog(mp *MaterializeParam,
-	store *store.InMemoryKeyValueStore, use_bytes bool,
+	store store.KeyValueStore, use_bytes bool,
 ) (*KeyValueStoreWithChangelog, error) {
 	changelog, err := CreateChangelog(mp.changelogParam.Env,
 		mp.storeName+"_changelog", mp.changelogParam.NumPartition, mp.serdeFormat)
@@ -136,8 +136,8 @@ func (st *KeyValueStoreWithChangelog) Delete(ctx context.Context, key commtypes.
 	return st.kvstore.Delete(ctx, key)
 }
 
-func (st *KeyValueStoreWithChangelog) ApproximateNumEntries(ctx context.Context) (uint64, error) {
-	return st.kvstore.ApproximateNumEntries(ctx)
+func (st *KeyValueStoreWithChangelog) ApproximateNumEntries() (uint64, error) {
+	return st.kvstore.ApproximateNumEntries()
 }
 
 func (st *KeyValueStoreWithChangelog) Range(ctx context.Context, from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {

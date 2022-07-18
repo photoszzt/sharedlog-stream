@@ -7,13 +7,13 @@ import (
 	"sharedlog-stream/pkg/treemap"
 	"sharedlog-stream/pkg/utils"
 	"strings"
+	"sync"
 )
 
 type InMemoryKeyValueStore struct {
-	sctx  StoreContext
+	mux   sync.Mutex
 	store *treemap.TreeMap
 	name  string
-	open  bool
 }
 
 var _ = KeyValueStore(NewInMemoryKeyValueStore("a", nil))
@@ -52,11 +52,15 @@ func (st *InMemoryKeyValueStore) Name() string {
 }
 
 func (st *InMemoryKeyValueStore) Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error) {
+	st.mux.Lock()
+	defer st.mux.Unlock()
 	val, ok := st.store.Get(key)
 	return val, ok, nil
 }
 
 func (st *InMemoryKeyValueStore) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
+	st.mux.Lock()
+	defer st.mux.Unlock()
 	if utils.IsNil(value) {
 		st.store.Del(key)
 	} else {
@@ -72,6 +76,8 @@ func (st *InMemoryKeyValueStore) PutWithoutPushToChangelog(ctx context.Context, 
 }
 
 func (st *InMemoryKeyValueStore) PutIfAbsent(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) (commtypes.ValueT, error) {
+	st.mux.Lock()
+	defer st.mux.Unlock()
 	originalVal, exists := st.store.Get(key)
 	if !exists {
 		st.store.Set(key, value)
@@ -80,6 +86,8 @@ func (st *InMemoryKeyValueStore) PutIfAbsent(ctx context.Context, key commtypes.
 }
 
 func (st *InMemoryKeyValueStore) PutAll(ctx context.Context, entries []*commtypes.Message) error {
+	st.mux.Lock()
+	defer st.mux.Unlock()
 	for _, msg := range entries {
 		st.store.Set(msg.Key, msg.Value)
 	}
@@ -87,15 +95,19 @@ func (st *InMemoryKeyValueStore) PutAll(ctx context.Context, entries []*commtype
 }
 
 func (st *InMemoryKeyValueStore) Delete(ctx context.Context, key commtypes.KeyT) error {
+	st.mux.Lock()
+	defer st.mux.Unlock()
 	st.store.Del(key)
 	return nil
 }
 
-func (st *InMemoryKeyValueStore) ApproximateNumEntries(ctx context.Context) (uint64, error) {
+func (st *InMemoryKeyValueStore) ApproximateNumEntries() (uint64, error) {
 	return uint64(st.store.Len()), nil
 }
 
 func (st *InMemoryKeyValueStore) Range(ctx context.Context, from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
+	st.mux.Lock()
+	defer st.mux.Unlock()
 	if utils.IsNil(from) && utils.IsNil(to) {
 		it := st.store.Iterator()
 		for ; it.Valid(); it.Next() {
@@ -133,6 +145,8 @@ func (st *InMemoryKeyValueStore) Range(ctx context.Context, from commtypes.KeyT,
 }
 
 func (st *InMemoryKeyValueStore) ReverseRange(from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
+	st.mux.Lock()
+	defer st.mux.Unlock()
 	if utils.IsNil(from) && utils.IsNil(to) {
 		it := st.store.Reverse()
 		for ; it.Valid(); it.Next() {

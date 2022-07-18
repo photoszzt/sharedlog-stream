@@ -1,6 +1,6 @@
 module sharedlog-stream
 
-go 1.17
+go 1.18
 
 require (
 	cs.utexas.edu/zjia/faas v0.0.0
@@ -8,7 +8,7 @@ require (
 	github.com/confluentinc/confluent-kafka-go v1.8.2
 	github.com/gammazero/deque v0.1.1
 	github.com/go-redis/redis/v8 v8.11.4
-	github.com/google/btree v1.0.1
+	github.com/google/btree v1.1.2
 	github.com/huandu/skiplist v1.2.0
 	github.com/rs/zerolog v1.26.1
 	github.com/spaolacci/murmur3 v1.1.0
