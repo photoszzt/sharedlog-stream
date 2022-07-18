@@ -12,7 +12,6 @@ import (
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
-	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store"
@@ -186,14 +185,23 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	task, procArgs := execution.PrepareTaskWithJoin(ctx,
-		execution.JoinWorkerFunc(aucJoinsPerFunc),
-		execution.JoinWorkerFunc(perJoinsAucFunc),
-		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
-		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum),
-	)
+	// task, procArgs := execution.PrepareTaskWithJoin(ctx,
+	// 	execution.JoinWorkerFunc(aucJoinsPerFunc),
+	// 	execution.JoinWorkerFunc(perJoinsAucFunc),
+	// 	proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
+	// 	proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum),
+	// )
+	ectx := processor.NewExecutionContext(srcs, sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum)
+	serJm := execution.NewJoinProcManagerSerial()
+	task := stream_task.NewStreamTaskBuilder().
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
+			args := argsTmp.(processor.ExecutionContext)
+			return serJm.CommonProcessJoin(ctx, task, args,
+				execution.JoinWorkerFunc(aucJoinsPerFunc),
+				execution.JoinWorkerFunc(perJoinsAucFunc))
+		}).Build()
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, fmt.Sprintf("%s-%d", h.funcName, sp.ParNum))).
+		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, fmt.Sprintf("%s-%d", h.funcName, sp.ParNum))).
 		WindowStoreChangelogs(wsc).FixedOutParNum(sp.ParNum).Build()
 	return task.ExecuteApp(ctx, streamTaskArgs)
 }

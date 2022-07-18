@@ -11,7 +11,6 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
-	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -232,9 +231,16 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		}
 		return nil, nil
 	})
-	task, procArgs := execution.PrepareTaskWithJoin(ctx, aJoinP, pJoinA,
-		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
-		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum))
+	ectx := processor.NewExecutionContext(srcs, sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum)
+	serJm := execution.NewJoinProcManagerSerial()
+	task := stream_task.NewStreamTaskBuilder().
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
+			args := argsTmp.(processor.ExecutionContext)
+			return serJm.CommonProcessJoin(ctx, task, args, aJoinP, pJoinA)
+		}).Build()
+	// task, procArgs := execution.PrepareTaskWithJoin(ctx, aJoinP, pJoinA,
+	// 	proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
+	// 	proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum))
 	kvchangelogs := []*store_restore.KVStoreChangelog{
 		store_restore.NewKVStoreChangelog(kvtabs.tab1,
 			store_with_changelog.NewChangelogManagerForSrc(
@@ -247,7 +253,8 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	}
 	transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
+		// stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
+		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).
 		KVStoreChangelogs(kvchangelogs).FixedOutParNum(sp.ParNum).Build()
 	return task.ExecuteApp(ctx, streamTaskArgs)
 }

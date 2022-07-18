@@ -44,7 +44,7 @@ func CommonProcess(ctx context.Context, t *stream_task.StreamTask, ectx processo
 		}
 		// err = proc(t, msg)
 		ectx.Consumers()[0].RecordCurrentConsumedSeqNum(msg.LogSeqNum)
-		err = ProcessMsgAndSeq(ctx, msg, ectx, procMsg, isInitialSrc)
+		err = processMsgAndSeq(ctx, msg, ectx, procMsg, isInitialSrc)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
@@ -62,7 +62,7 @@ func extractEventTs(msg *commtypes.Message, isInitialSrc bool) error {
 	return nil
 }
 
-func ProcessMsgAndSeq(ctx context.Context, msg commtypes.MsgAndSeq, args processor.ExecutionContext,
+func processMsgAndSeq(ctx context.Context, msg commtypes.MsgAndSeq, args processor.ExecutionContext,
 	procMsg proc_interface.ProcessMsgFunc, isInitialSrc bool,
 ) error {
 	if msg.MsgArr != nil {

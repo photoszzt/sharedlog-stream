@@ -12,7 +12,6 @@ import (
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
-	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store_with_changelog"
@@ -207,13 +206,20 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		return outMsgs, nil
 
 	}
-	task, procArgs := execution.PrepareTaskWithJoin(
-		ctx, bJoinM, mJoinB, proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
-		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum),
-	)
+	ectx := processor.NewExecutionContext(srcs, sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum)
+	serJm := execution.NewJoinProcManagerSerial()
+	task := stream_task.NewStreamTaskBuilder().
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
+			args := argsTmp.(processor.ExecutionContext)
+			return serJm.CommonProcessJoin(ctx, task, args, bJoinM, mJoinB)
+		}).Build()
+	// task, procArgs := execution.PrepareTaskWithJoin(
+	// 	ctx, bJoinM, mJoinB, proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
+	// 	proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum),
+	// )
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs,
-			fmt.Sprintf("%s-%d", h.funcName, sp.ParNum))).
+		//stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, fmt.Sprintf("%s-%d", h.funcName, sp.ParNum))).
+		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, fmt.Sprintf("%s-%d", h.funcName, sp.ParNum))).
 		WindowStoreChangelogs(wsc).FixedOutParNum(sp.ParNum).Build()
 	return task.ExecuteApp(ctx, streamTaskArgs)
 }

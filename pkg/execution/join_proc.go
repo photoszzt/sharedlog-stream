@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/stream_task"
 	"sync"
@@ -26,6 +27,9 @@ func (jm *JoinProcManager) joinProcLoop(
 	// debug.Fprintf(os.Stderr, "[id=%s, ts=%d] joinProc start running\n",
 	// 	id, time.Now().UnixMilli())
 	lockAcqTime := stats.NewInt64Collector(fmt.Sprintf("%s_lockAcq", id), stats.DEFAULT_COLLECT_DURATION)
+	substreamNum := procArgs.SubstreamNum()
+	producer := procArgs.Producers()[0]
+	consumer := procArgs.Consumers()[0]
 	for {
 		select {
 		case <-ctx.Done():
@@ -41,7 +45,7 @@ func (jm *JoinProcManager) joinProcLoop(
 		lelapsed := stats.Elapsed(lSt).Microseconds()
 		lockAcqTime.AddSample(lelapsed)
 		// debug.Fprintf(os.Stderr, "[id=%s] before consume, stream name %s\n", id, procArgs.Consumers()[0].Stream().TopicName())
-		gotMsgs, err := procArgs.Consumers()[0].Consume(ctx, procArgs.SubstreamNum())
+		gotMsgs, err := procArgs.Consumers()[0].Consume(ctx, substreamNum)
 		if err != nil {
 			if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 				// debug.Fprintf(os.Stderr, "[TIMEOUT] %s %s timeout, out chan len: %d\n",
@@ -73,17 +77,18 @@ func (jm *JoinProcManager) joinProcLoop(
 				}
 				continue
 			}
-			procArgs.Consumers()[0].RecordCurrentConsumedSeqNum(msg.LogSeqNum)
+			consumer.RecordCurrentConsumedSeqNum(msg.LogSeqNum)
 
 			if msg.MsgArr != nil {
 				// debug.Fprintf(os.Stderr, "[id=%s] got msgarr\n", id)
 				for _, subMsg := range msg.MsgArr {
-					if subMsg.Value == nil {
+					if subMsg.Value == nil && subMsg.Key == nil {
 						continue
 					}
-					procArgs.Consumers()[0].ExtractProduceToConsumeTime(&subMsg)
+					consumer.ExtractProduceToConsumeTime(&subMsg)
 					// debug.Fprintf(os.Stderr, "[id=%s] before proc msg with sink1\n", id)
-					err = procMsgWithSink(ctx, subMsg, procArgs, id)
+					err = procMsgWithSink(ctx, subMsg, procArgs.runner,
+						producer, substreamNum, id)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink: %v, out chan len: %d\n", id, err, len(jm.out))
 						jm.out <- &common.FnOutput{Success: false, Message: err.Error()}
@@ -94,11 +99,11 @@ func (jm *JoinProcManager) joinProcLoop(
 				}
 			} else {
 				// debug.Fprintf(os.Stderr, "[id=%s] got single msg\n", id)
-				if msg.Msg.Value == nil {
+				if msg.Msg.Key == nil && msg.Msg.Value == nil {
 					continue
 				}
-				procArgs.Consumers()[0].ExtractProduceToConsumeTime(&msg.Msg)
-				err = procMsgWithSink(ctx, msg.Msg, procArgs, id)
+				consumer.ExtractProduceToConsumeTime(&msg.Msg)
+				err = procMsgWithSink(ctx, msg.Msg, procArgs.runner, producer, substreamNum, id)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink2: %v, out chan len: %d\n", id, err, len(jm.out))
 					jm.out <- &common.FnOutput{Success: false, Message: err.Error()}
@@ -113,31 +118,21 @@ func (jm *JoinProcManager) joinProcLoop(
 	}
 }
 
-func procMsgWithSink(ctx context.Context, msg commtypes.Message, procArgs *JoinProcArgs, id string,
+func procMsgWithSink(ctx context.Context, msg commtypes.Message,
+	runner JoinWorkerFunc, producer producer_consumer.MeteredProducerIntr, parNum uint8, id string,
 ) error {
-	// st := msg.Value.(commtypes.EventTimeExtractor)
-	// ts, err := st.ExtractEventTime()
-	// if err != nil {
-	// 	debug.Fprintf(os.Stderr, "[ERROR] %s return extract ts: %v\n", ctx.Value("id"), err)
-	// 	return fmt.Errorf("fail to extract timestamp: %v", err)
-	// }
-	// msg.Timestamp = ts
-
-	// debug.Fprintf(os.Stderr, "[id=%s] before runner\n", id)
-	msgs, err := procArgs.runner(ctx, msg)
+	msgs, err := runner(ctx, msg)
 	if err != nil {
 		debug.Fprintf(os.Stderr, "[ERROR] %s return runner: %v\n", ctx.Value("id"), err)
 		return err
 	}
-	// debug.Fprintf(os.Stderr, "[id=%s] after runner\n", id)
 	for _, msg := range msgs {
 		// debug.Fprintf(os.Stderr, "k %v, v %v, ts %d\n", msg.Key, msg.Value, msg.Timestamp)
-		err = procArgs.Producers()[0].Produce(ctx, msg, procArgs.SubstreamNum(), false)
+		err = producer.Produce(ctx, msg, parNum, false)
 		if err != nil {
 			debug.Fprintf(os.Stderr, "[ERROR] %s return push to sink: %v\n", ctx.Value("id"), err)
 			return err
 		}
 	}
-	// debug.Fprintf(os.Stderr, "[id=%s] after produce\n", id)
 	return nil
 }
