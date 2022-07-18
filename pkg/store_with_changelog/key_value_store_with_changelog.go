@@ -4,6 +4,7 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/treemap"
 )
@@ -13,6 +14,7 @@ type KeyValueStoreWithChangelog struct {
 	msgSerde         commtypes.MessageSerde
 	trackFunc        exactly_once_intr.TrackProdSubStreamFunc
 	changelogManager *ChangelogManager
+	changelogProduce stats.ConcurrentInt64Collector
 	use_bytes        bool
 	parNum           uint8
 }
@@ -34,6 +36,8 @@ func NewKeyValueStoreWithChangelog(mp *MaterializeParam,
 		msgSerde:         mp.msgSerde,
 		changelogManager: changelogManager,
 		parNum:           mp.ParNum(),
+		changelogProduce: stats.NewConcurrentInt64Collector(mp.storeName+"-clProd",
+			stats.DEFAULT_COLLECT_DURATION),
 	}, nil
 }
 
@@ -70,7 +74,10 @@ func (st *KeyValueStoreWithChangelog) Put(ctx context.Context, key commtypes.Key
 		Key:   key,
 		Value: value,
 	}
+	pStart := stats.TimerBegin()
 	err := st.changelogManager.Produce(ctx, msg, st.parNum, false)
+	elapsed := stats.Elapsed(pStart).Microseconds()
+	st.changelogProduce.AddSample(elapsed)
 	if err != nil {
 		return err
 	}

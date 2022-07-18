@@ -7,6 +7,7 @@ import (
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/processor"
+	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
 	"time"
 )
@@ -17,6 +18,7 @@ type InMemoryWindowStoreWithChangelog struct {
 	windowStore      *store.InMemoryWindowStore
 	trackFunc        exactly_once_intr.TrackProdSubStreamFunc
 	changelogManager *ChangelogManager
+	changeLogProduce stats.ConcurrentInt64Collector
 	parNum           uint8
 }
 
@@ -40,6 +42,7 @@ func NewInMemoryWindowStoreWithChangelog(
 		parNum:           mp.ParNum(),
 		trackFunc:        exactly_once_intr.DefaultTrackProdSubstreamFunc,
 		changelogManager: changelogManager,
+		changeLogProduce: stats.NewConcurrentInt64Collector(mp.storeName+"-clProd", stats.DEFAULT_COLLECT_DURATION),
 	}, nil
 }
 
@@ -113,7 +116,10 @@ func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context,
 		Key:   keyTs,
 		Value: value,
 	}
+	pStart := stats.TimerBegin()
 	err := st.changelogManager.Produce(ctx, msg, st.parNum, false)
+	elapsed := stats.Elapsed(pStart).Microseconds()
+	st.changeLogProduce.AddSample(elapsed)
 	if err != nil {
 		return err
 	}
