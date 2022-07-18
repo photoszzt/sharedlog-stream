@@ -92,10 +92,10 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 	}
 	aucBySellerChain := processor.NewProcessorChains()
 	aucBySellerChain.
-		Via(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessor("personsByIDMap",
+		Via(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessor("auctionsBySellerIDMap",
 			processor.SelectKeyFunc(func(key, value interface{}) (interface{}, error) {
 				event := value.(*ntypes.Event)
-				return event.NewPerson.ID, nil
+				return event.NewAuction.Seller, nil
 			})))).
 		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[0], &ectx))
 	personsByIDChain := processor.NewProcessorChains()
