@@ -106,17 +106,17 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup, pr
 				timeSinceLastFlush := time.Since(h.FlushTimer)
 				if timeSinceLastFlush >= h.FlushDuration {
 					// debug.Fprintf(os.Stderr, "flush timer: %v\n", timeSinceLastFlush)
-					err := h.Stream.FlushNoLock(ctx, producerId)
+					err := h.Stream.Flush(ctx, producerId)
 					if err != nil {
-						fmt.Fprintf(os.Stderr, "[ERROR] flush no lock err: %v\n", err)
+						fmt.Fprintf(os.Stderr, "[ERROR] flush err: %v\n", err)
 						h.MsgErrChan <- err
 						return
 					}
 					h.FlushTimer = time.Now()
 				}
-				err := h.Stream.BufPushNoLock(ctx, msg.Payload, uint8(msg.Partitions[0]), producerId)
+				err := h.Stream.BufPush(ctx, msg.Payload, uint8(msg.Partitions[0]), producerId)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "[ERROR] buf push nolock err: %v\n", err)
+					fmt.Fprintf(os.Stderr, "[ERROR] buf push err: %v\n", err)
 					h.MsgErrChan <- err
 					return
 				}
@@ -131,7 +131,6 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup, pr
 				}
 				h.produceCount.Tick(1)
 			}
-
 		}
 	}
 }

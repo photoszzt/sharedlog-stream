@@ -58,13 +58,13 @@ func PrepareTaskWithJoin(
 			return nil
 		}).
 		ResumeFunc(func(task *stream_task.StreamTask, sargs *stream_task.StreamTaskArgs) {
-			// debug.Fprintf(os.Stderr, "resume join porc\n")
+			// debug.Fprintf(os.Stderr, "in resume func\n")
 			rStart := stats.TimerBegin()
 			leftManager.UnlockRunlock()
 			rightManager.UnlockRunlock()
 			elapsed := stats.Elapsed(rStart)
 			resumeTime.AddSample(elapsed.Microseconds())
-			// debug.Fprintf(os.Stderr, "done resume join proc\n")
+			// debug.Fprintf(os.Stderr, "done resume func\n")
 		}).Build()
 	return task, procArgs
 }

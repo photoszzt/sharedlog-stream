@@ -233,10 +233,12 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 				}
 				numSubstreams := m.Config[stream.TopicName()]
 				flushMsgChan()
-				err = stream.ScaleSubstreams(h.env, numSubstreams)
-				if err != nil {
-					return &common.FnOutput{Success: false, Message: err.Error()}
-				}
+
+				// err = stream.ScaleSubstreams(h.env, numSubstreams)
+				// if err != nil {
+				// 	return &common.FnOutput{Success: false, Message: err.Error()}
+				// }
+
 				// piggy back scale fence in txn marker
 				txnMarker := commtypes.EpochMarker{
 					Mark:       commtypes.SCALE_FENCE,
@@ -251,12 +253,9 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 					return &common.FnOutput{Success: false, Message: err.Error()}
 				}
 				debug.Fprintf(os.Stderr, "updated numPartition is %d\n", numSubstreams)
-				var partitions []uint8
-				for i := uint8(0); i < numSubstreams; i++ {
-					partitions = append(partitions, i)
-				}
 				procArgs.numPartition = stream.NumPartition()
-				streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{Payload: encoded, IsControl: true, Partitions: partitions}
+				streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{Payload: encoded,
+					IsControl: true, Partitions: []uint8{inputConfig.ParNum}}
 			} else {
 				cerr := out.Err()
 				cmm.SendQuit()

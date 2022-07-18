@@ -66,9 +66,11 @@ func (pa *BaseConsumersProducers) UnlockProducer() {
 
 func (pa *BaseConsumersProducers) FlushAndPushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
 	for _, sink := range pa.producers {
-		err := sink.Produce(ctx, msg, parNum, isControl)
-		if err != nil {
-			return err
+		if sink.Stream().NumPartition() > parNum {
+			err := sink.Produce(ctx, msg, parNum, isControl)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil

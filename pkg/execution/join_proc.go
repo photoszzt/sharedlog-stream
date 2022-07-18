@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/stream_task"
 	"sync"
 
@@ -21,11 +22,10 @@ func (jm *JoinProcManager) joinProcLoop(
 	wg *sync.WaitGroup,
 ) {
 	id := ctx.Value(commtypes.CTXID{}).(string)
-	// joinProcFlushSt := stats.NewInt64Collector(fmt.Sprintf("%s_flushForALO", id), stats.DEFAULT_COLLECT_DURATION)
 	defer wg.Done()
 	// debug.Fprintf(os.Stderr, "[id=%s, ts=%d] joinProc start running\n",
 	// 	id, time.Now().UnixMilli())
-	// resume_us := stats.NewInt64Collector(fmt.Sprintf("joinProc_%s_us", id), stats.DEFAULT_COLLECT_DURATION)
+	lockAcqTime := stats.NewInt64Collector(fmt.Sprintf("%s_lockAcq", id), stats.DEFAULT_COLLECT_DURATION)
 	for {
 		select {
 		case <-ctx.Done():
@@ -36,7 +36,10 @@ func (jm *JoinProcManager) joinProcLoop(
 			return
 		default:
 		}
+		lSt := stats.TimerBegin()
 		jm.runLock.Lock()
+		lelapsed := stats.Elapsed(lSt).Microseconds()
+		lockAcqTime.AddSample(lelapsed)
 		// debug.Fprintf(os.Stderr, "[id=%s] before consume, stream name %s\n", id, procArgs.Consumers()[0].Stream().TopicName())
 		gotMsgs, err := procArgs.Consumers()[0].Consume(ctx, procArgs.SubstreamNum())
 		if err != nil {
