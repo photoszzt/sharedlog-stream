@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/utils/syncutils"
@@ -135,6 +136,8 @@ func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId commtyp
 		s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
 		s.currentSize = 0
 	}
+	debug.Assert(len(s.sinkBuffer) == 0 && s.currentSize == 0,
+		"sink buffer should be empty after flush")
 	return nil
 }
 
