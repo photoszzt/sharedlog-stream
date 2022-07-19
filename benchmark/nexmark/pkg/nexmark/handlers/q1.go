@@ -44,7 +44,7 @@ func (h *query1Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func q1mapFunc(key interface{}, value interface{}) (interface{}, error) {
+func q1mapFunc(_ interface{}, value interface{}) (interface{}, error) {
 	event := value.(*ntypes.Event)
 	event.Bid.Price = uint64(event.Bid.Price * 908 / 1000.0)
 	return event, nil

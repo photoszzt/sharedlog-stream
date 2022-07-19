@@ -44,7 +44,7 @@ func (h *query2Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	return utils.CompressData(encodedOutput), nil
 }
 
-func filterFunc(key interface{}, value interface{}) (bool, error) {
+func filterFunc(_ interface{}, value interface{}) (bool, error) {
 	event := value.(*ntypes.Event)
 	return event.Etype == ntypes.BID && event.Bid.Auction%123 == 0, nil
 }

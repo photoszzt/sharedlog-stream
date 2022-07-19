@@ -128,7 +128,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 						Count: 0,
 					}
 				}),
-				processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
+				processor.AggregatorFunc(func(_, value, aggregate interface{}) interface{} {
 					if value != nil {
 						val := value.(uint64)
 						agg := aggregate.(*ntypes.SumAndCount)
@@ -140,7 +140,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 						return aggregate
 					}
 				}),
-				processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
+				processor.AggregatorFunc(func(_, value, aggregate interface{}) interface{} {
 					if value != nil {
 						val := value.(uint64)
 						agg := aggregate.(*ntypes.SumAndCount)
@@ -154,7 +154,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 				}),
 			))).
 		Via(processor.NewMeteredProcessor(processor.NewTableMapValuesProcessor("calcAvg",
-			processor.ValueMapperWithKeyFunc(func(key, value interface{}) (interface{}, error) {
+			processor.ValueMapperWithKeyFunc(func(_, value interface{}) (interface{}, error) {
 				sc := value.(*ntypes.SumAndCount)
 				return float64(sc.Sum) / float64(sc.Count), nil
 			}),

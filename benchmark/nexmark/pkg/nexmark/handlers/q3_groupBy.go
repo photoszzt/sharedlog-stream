@@ -105,7 +105,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	aucBySellerChain.
 		Via(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessor(
 			"auctionsBySellerIDMap",
-			processor.SelectKeyFunc(func(key, value interface{}) (interface{}, error) {
+			processor.SelectKeyFunc(func(_, value interface{}) (interface{}, error) {
 				event := value.(*ntypes.Event)
 				return event.NewAuction.Seller, nil
 			})))).
@@ -114,7 +114,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	personsByIDChain.
 		Via(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessor(
 			"personsByIDMap",
-			processor.SelectKeyFunc(func(key, value interface{}) (interface{}, error) {
+			processor.SelectKeyFunc(func(_, value interface{}) (interface{}, error) {
 				event := value.(*ntypes.Event)
 				return event.NewPerson.ID, nil
 			})))).
@@ -124,7 +124,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
 			args := argsTmp.(processor.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args,
-				func(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
+				func(ctx context.Context, msg commtypes.Message, _ interface{}) error {
 					event := msg.Value.(*ntypes.Event)
 					if event.Etype == ntypes.PERSON && ((event.NewPerson.State == "OR") ||
 						event.NewPerson.State == "ID" || event.NewPerson.State == "CA") {

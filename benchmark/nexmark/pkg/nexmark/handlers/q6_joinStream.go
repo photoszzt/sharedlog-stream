@@ -50,7 +50,7 @@ func (h *q6JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, e
 
 func (h *q6JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
 ) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
-	stream1, stream2, outputStream, err := getInOutStreams(ctx, h.env, sp)
+	stream1, stream2, outputStream, err := getInOutStreams(h.env, sp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -63,12 +63,13 @@ func (h *q6JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	if err != nil {
 		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
+	timeout := time.Duration(10) * time.Millisecond
 	src1Config := &producer_consumer.StreamConsumerConfig{
-		Timeout:  common.SrcConsumeTimeout,
+		Timeout:  timeout,
 		MsgSerde: msgSerde,
 	}
 	src2Config := &producer_consumer.StreamConsumerConfig{
-		Timeout:  common.SrcConsumeTimeout,
+		Timeout:  timeout,
 		MsgSerde: msgSerde,
 	}
 	abSerde, err := ntypes.GetAuctionBidSerde(serdeFormat)

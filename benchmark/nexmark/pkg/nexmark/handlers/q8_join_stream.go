@@ -85,7 +85,7 @@ func q8CompareFunc(lhs, rhs interface{}) int {
 
 func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
 ) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
-	stream1, stream2, outputStream, err := getInOutStreams(ctx, h.env, sp)
+	stream1, stream2, outputStream, err := getInOutStreams(h.env, sp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -107,7 +107,7 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 		return nil, nil, err
 	}
 
-	timeout := common.SrcConsumeTimeout
+	timeout := time.Duration(10) * time.Millisecond
 	warmup := time.Duration(sp.WarmupS) * time.Second
 
 	src1 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(stream1,

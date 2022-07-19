@@ -60,7 +60,6 @@ func (h *q3JoinTableHandler) process(ctx context.Context,
 }
 
 func getInOutStreams(
-	ctx context.Context,
 	env types.Environment,
 	input *common.QueryInput,
 ) (*sharedlog_stream.ShardedSharedLogStream, /* auction */
@@ -88,7 +87,7 @@ func getInOutStreams(
 
 func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
 ) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
-	stream1, stream2, outputStream, err := getInOutStreams(ctx, h.env, sp)
+	stream1, stream2, outputStream, err := getInOutStreams(h.env, sp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -102,7 +101,7 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
 
-	timeout := common.SrcConsumeTimeout
+	timeout := time.Duration(10) * time.Millisecond
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	ncsiSerde, err := ntypes.GetNameCityStateIdSerde(serdeFormat)
 	if err != nil {
@@ -178,7 +177,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	joiner := processor.ValueJoinerWithKeyFunc(
-		func(readOnlyKey interface{}, leftVal interface{}, rightVal interface{}) interface{} {
+		func(_ interface{}, _ interface{}, rightVal interface{}) interface{} {
 			event := rightVal.(*ntypes.Event)
 			ncsi := &ntypes.NameCityStateId{
 				Name:  event.NewPerson.Name,

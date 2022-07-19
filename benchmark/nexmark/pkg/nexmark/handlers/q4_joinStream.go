@@ -55,7 +55,7 @@ func (h *q4JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, e
 
 func (h *q4JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
 ) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
-	stream1, stream2, outputStream, err := getInOutStreams(ctx, h.env, sp)
+	stream1, stream2, outputStream, err := getInOutStreams(h.env, sp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -68,12 +68,13 @@ func (h *q4JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	if err != nil {
 		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
+	timeout := time.Duration(10) * time.Millisecond
 	auctionsConfig := &producer_consumer.StreamConsumerConfig{
-		Timeout:  common.SrcConsumeTimeout,
+		Timeout:  timeout,
 		MsgSerde: msgSerde,
 	}
 	personsConfig := &producer_consumer.StreamConsumerConfig{
-		Timeout:  common.SrcConsumeTimeout,
+		Timeout:  timeout,
 		MsgSerde: msgSerde,
 	}
 	abSerde, err := ntypes.GetAuctionBidSerde(serdeFormat)
@@ -116,7 +117,7 @@ func (h *q4JoinStreamHandler) Q4JoinStream(ctx context.Context, sp *common.Query
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	compare := concurrent_skiplist.CompareFunc(q8CompareFunc)
-	joiner := processor.ValueJoinerWithKeyTsFunc(func(readOnlyKey, value1, value2 interface{}, leftTs, otherTs int64) interface{} {
+	joiner := processor.ValueJoinerWithKeyTsFunc(func(_readOnlyKey, value1, value2 interface{}, _leftTs, otherTs int64) interface{} {
 		leftE := value1.(*ntypes.Event)
 		auc := leftE.NewAuction
 		rightE := value2.(*ntypes.Event)
