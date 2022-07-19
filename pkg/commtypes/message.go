@@ -4,48 +4,48 @@ import "fmt"
 
 type Punctuate struct{}
 
-type Message struct {
-	Key       interface{}
-	Value     interface{}
+type Message[KeyT any, ValueT any] struct {
+	Key       KeyT
+	Value     ValueT
 	Timestamp int64
 	InjT      int64
 }
 
-var _ = fmt.Stringer(Message{})
+var _ = fmt.Stringer(Message[int, int]{})
 
-func (m Message) String() string {
+func (m Message[KeyT, ValueT]) String() string {
 	return fmt.Sprintf("Msg: {Key: %v, Value: %v, Ts: %d, InjectTs: %d}", m.Key, m.Value, m.Timestamp, m.InjT)
 }
 
-var _ = EventTimeExtractor(Message{})
+var _ = EventTimeExtractor(Message[int, int]{})
 
-func (m *Message) UpdateInjectTime(ts int64) {
+func (m *Message[KeyT, ValueT]) UpdateInjectTime(ts int64) {
 	m.InjT = ts
 }
 
-func (m Message) ExtractInjectTimeMs() int64 {
+func (m Message[KeyT, ValueT]) ExtractInjectTimeMs() int64 {
 	return m.InjT
 }
 
-func (m Message) ExtractEventTime() (int64, error) {
+func (m Message[KeyT, ValueT]) ExtractEventTime() (int64, error) {
 	return m.Timestamp, nil
 }
 
-func (m *Message) ExtractEventTimeFromVal() error {
-	v := m.Value.(EventTimeExtractor)
-	var err error
-	m.Timestamp, err = v.ExtractEventTime()
-	if err != nil {
-		return err
-	}
-	return nil
-}
+// func (m *Message[KeyT any, ValueT EventTimeExtractor]) ExtractEventTimeFromVal() error {
+// 	v := m.Value.(EventTimeExtractor)
+// 	var err error
+// 	m.Timestamp, err = v.ExtractEventTime()
+// 	if err != nil {
+// 		return err
+// 	}
+// 	return nil
+// }
 
-func (m *Message) UpdateEventTime(ts int64) {
+func (m *Message[KeyT, ValueT]) UpdateEventTime(ts int64) {
 	m.Timestamp = ts
 }
 
-var EmptyMessage = Message{}
+var EmptyMessage = Message[interface{}, int]{}
 
 var EmptyRawMsg = RawMsg{Payload: nil, MsgSeqNum: 0, LogSeqNum: 0}
 
@@ -76,8 +76,8 @@ type MsgAndSeqs struct {
 	TotalLen uint32
 }
 
-func DecodeRawMsg(rawMsg *RawMsg, msgSerde MessageSerde,
-	payloadArrSerde Serde,
+func DecodeRawMsg[K, V any](rawMsg *RawMsg, msgSerde MessageSerde[K, V],
+	payloadArrSerde Serde[PayloadArr],
 ) (*MsgAndSeq, error) {
 	if rawMsg.IsPayloadArr {
 		payloadArrTmp, err := payloadArrSerde.Decode(rawMsg.Payload)

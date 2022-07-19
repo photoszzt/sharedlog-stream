@@ -10,13 +10,13 @@ import (
 type PrintProcessor struct {
 }
 
-var _ Processor = PrintProcessor{}
+var _ Processor[any, any, any, any] = PrintProcessor{}
 
 func (p PrintProcessor) Name() string {
 	return "PrintProcessor"
 }
 
-func (p PrintProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
+func (p PrintProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message[any, any]) ([]commtypes.Message[any, any], error) {
 	fmt.Fprintf(os.Stderr, "msg: %v\n", msg)
-	return []commtypes.Message{msg}, nil
+	return []commtypes.Message[any, any]{msg}, nil
 }

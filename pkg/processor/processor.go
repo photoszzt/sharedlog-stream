@@ -5,8 +5,8 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 )
 
-type Processor interface {
+type Processor[KIn, VIn, KOut, VOut any] interface {
 	Name() string
 	// Process processes the stream commtypes.Message.
-	ProcessAndReturn(context.Context, commtypes.Message) ([]commtypes.Message, error)
+	ProcessAndReturn(context.Context, commtypes.Message[KIn, VIn]) ([]commtypes.Message[KOut, VOut], error)
 }

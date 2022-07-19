@@ -39,39 +39,36 @@ type EpochMarker struct {
 
 type EpochMarkerJSONSerde struct{}
 
-func (s EpochMarkerJSONSerde) Encode(value interface{}) ([]byte, error) {
-	if value == nil {
-		return nil, nil
-	}
-	em := value.(*EpochMarker)
-	return json.Marshal(em)
+var _ Serde[EpochMarker] = EpochMarkerJSONSerde{}
+
+func (s EpochMarkerJSONSerde) Encode(value EpochMarker) ([]byte, error) {
+	return json.Marshal(&value)
 }
-func (s EpochMarkerJSONSerde) Decode(value []byte) (interface{}, error) {
+
+func (s EpochMarkerJSONSerde) Decode(value []byte) (EpochMarker, error) {
 	em := EpochMarker{}
 	if err := json.Unmarshal(value, &em); err != nil {
-		return nil, err
+		return EpochMarker{}, err
 	}
 	return em, nil
 }
 
 type EpochMarkerMsgpSerde struct{}
 
-func (s EpochMarkerMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	if value == nil {
-		return nil, nil
-	}
-	em := value.(*EpochMarker)
-	return em.MarshalMsg(nil)
+var _ Serde[EpochMarker] = EpochMarkerMsgpSerde{}
+
+func (s EpochMarkerMsgpSerde) Encode(value EpochMarker) ([]byte, error) {
+	return value.MarshalMsg(nil)
 }
-func (s EpochMarkerMsgpSerde) Decode(value []byte) (interface{}, error) {
+func (s EpochMarkerMsgpSerde) Decode(value []byte) (EpochMarker, error) {
 	em := EpochMarker{}
 	if _, err := em.UnmarshalMsg(value); err != nil {
-		return nil, err
+		return EpochMarker{}, err
 	}
 	return em, nil
 }
 
-func GetEpochMarkerSerde(serdeFormat SerdeFormat) (Serde, error) {
+func GetEpochMarkerSerde(serdeFormat SerdeFormat) (Serde[EpochMarker], error) {
 	if serdeFormat == JSON {
 		return EpochMarkerJSONSerde{}, nil
 	} else if serdeFormat == MSGP {

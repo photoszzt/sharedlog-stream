@@ -19,7 +19,7 @@ type InjectTimeSetter interface {
 }
 
 type StreamTimeTracker interface {
-	UpdateStreamTime(m *Message)
+	UpdateStreamTime(m *Message[any, any])
 	GetStreamTime() int64
 }
 
@@ -35,7 +35,7 @@ func NewStreamTimeTracker() StreamTimeTracker {
 }
 
 // Update the timestamp when the stream
-func (s *streamTimeTracker) UpdateStreamTime(m *Message) {
+func (s *streamTimeTracker) UpdateStreamTime(m *Message[any, any]) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	if m.Timestamp > s.timeStamp {

@@ -9,17 +9,19 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type TableTableJoinProcessor struct {
+type TableTableJoinProcessor[K, V1, V2, Vout any] struct {
 	store             store.KeyValueStore
-	joiner            ValueJoinerWithKey
+	joiner            ValueJoinerWithKey[K, V1, V2, Vout]
 	streamTimeTracker commtypes.StreamTimeTracker
 	name              string
 }
 
 var _ = Processor(&StreamTableJoinProcessor{})
 
-func NewTableTableJoinProcessor(name string, store store.KeyValueStore, joiner ValueJoinerWithKey) *TableTableJoinProcessor {
-	return &TableTableJoinProcessor{
+func NewTableTableJoinProcessor[K, V1, V2, Vout any](name string, store store.KeyValueStore,
+	joiner ValueJoinerWithKey[K, V1, V2, Vout],
+) *TableTableJoinProcessor[K, V1, V2, Vout] {
+	return &TableTableJoinProcessor[K, V1, V2, Vout]{
 		joiner:            joiner,
 		store:             store,
 		streamTimeTracker: commtypes.NewStreamTimeTracker(),
@@ -27,11 +29,13 @@ func NewTableTableJoinProcessor(name string, store store.KeyValueStore, joiner V
 	}
 }
 
-func (p *TableTableJoinProcessor) Name() string {
+func (p *TableTableJoinProcessor[K, V1, V2, Vout]) Name() string {
 	return p.name
 }
 
-func (p *TableTableJoinProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
+func (p *TableTableJoinProcessor[K, V1, V2, Vout]) ProcessAndReturn(ctx context.Context,
+	msg commtypes.Message[K, commtypes.Change[V1]],
+) ([]commtypes.Message[K, commtypes.Change[Vout]], error) {
 	if msg.Key == nil {
 		log.Warn().Msgf("Skipping record due to null join key. key=%v", msg.Key)
 		return nil, nil
@@ -49,16 +53,18 @@ func (p *TableTableJoinProcessor) ProcessAndReturn(ctx context.Context, msg comm
 		if ts < rvTs.Timestamp {
 			ts = rvTs.Timestamp
 		}
-		var newVal interface{}
-		var oldVal interface{}
-		change := commtypes.CastToChangePtr(msg.Value)
+		var newVal Vout
+		var oldVal Vout
+		change := msg.Value
 		if change.NewVal != nil {
 			newVal = p.joiner.Apply(msg.Key, change.NewVal, rvTs.Value)
 		}
 		if change.OldVal != nil {
 			oldVal = p.joiner.Apply(msg.Key, change.OldVal, rvTs.Value)
 		}
-		return []commtypes.Message{{Key: msg.Key, Value: commtypes.Change{NewVal: newVal, OldVal: oldVal}, Timestamp: ts}}, nil
+		return []commtypes.Message[K, commtypes.Change[Vout]]{
+			{Key: msg.Key, Value: commtypes.Change[Vout]{NewVal: newVal, OldVal: oldVal}, Timestamp: ts},
+		}, nil
 	}
 	return nil, nil
 }

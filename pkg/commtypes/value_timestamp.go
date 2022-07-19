@@ -8,22 +8,22 @@ import (
 	"sharedlog-stream/pkg/utils"
 )
 
-type ValueTimestamp struct {
-	Value     interface{}
+type ValueTimestamp[V any] struct {
+	Value     *V
 	Timestamp int64
 }
 
-var _ = fmt.Stringer(ValueTimestamp{})
+var _ = fmt.Stringer(ValueTimestamp[int]{})
 
-func (vts ValueTimestamp) String() string {
+func (vts ValueTimestamp[V]) String() string {
 	return fmt.Sprintf("ValueTs: {Value: %v, Ts: %d}", vts.Value, vts.Timestamp)
 }
 
-func CreateValueTimestamp(val interface{}, ts int64) *ValueTimestamp {
+func CreateValueTimestamp[V any](val *V, ts int64) *ValueTimestamp[V] {
 	if val == nil {
 		return nil
 	} else {
-		return &ValueTimestamp{
+		return &ValueTimestamp[V]{
 			Value:     val,
 			Timestamp: ts,
 		}
@@ -35,11 +35,11 @@ type ValueTimestampSerialized struct {
 	Timestamp       int64  `json:"ts,omitempty" msg:"ts,omitempty"`
 }
 
-func (s *ValueTimestamp) ExtractEventTime() (int64, error) {
+func (s *ValueTimestamp[V]) ExtractEventTime() (int64, error) {
 	return s.Timestamp, nil
 }
 
-func GetValOrNil(valTs *ValueTimestamp) interface{} {
+func GetValOrNil[V any](valTs *ValueTimestamp[V]) interface{} {
 	if valTs == nil {
 		return nil
 	} else {
@@ -47,10 +47,10 @@ func GetValOrNil(valTs *ValueTimestamp) interface{} {
 	}
 }
 
-var _ = EventTimeExtractor(&ValueTimestamp{})
+var _ = EventTimeExtractor(&ValueTimestamp[int]{})
 
-type ValueTimestampJSONSerde struct {
-	ValJSONSerde Serde
+type ValueTimestampJSONSerde[V any] struct {
+	ValJSONSerde Serde[V]
 }
 
 func CastToValTsPtr(value interface{}) *ValueTimestamp {
@@ -62,7 +62,7 @@ func CastToValTsPtr(value interface{}) *ValueTimestamp {
 	return v
 }
 
-func convertToValueTsSer(value interface{}, valSerde Serde) (*ValueTimestampSerialized, error) {
+func convertToValueTsSer[V any](value interface{}, valSerde Serde[V]) (*ValueTimestampSerialized, error) {
 	if value == nil {
 		return nil, nil
 	}

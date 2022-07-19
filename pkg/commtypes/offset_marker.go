@@ -14,41 +14,37 @@ type OffsetMarker struct {
 
 type OffsetMarkerJSONSerde struct{}
 
-func (s OffsetMarkerJSONSerde) Encode(value interface{}) ([]byte, error) {
-	if value == nil {
-		return nil, nil
-	}
-	om := value.(*OffsetMarker)
-	return json.Marshal(om)
+var _ Serde[OffsetMarker] = OffsetMarkerJSONSerde{}
+
+func (s OffsetMarkerJSONSerde) Encode(value OffsetMarker) ([]byte, error) {
+	return json.Marshal(&value)
 }
 
-func (s OffsetMarkerJSONSerde) Decode(value []byte) (interface{}, error) {
+func (s OffsetMarkerJSONSerde) Decode(value []byte) (OffsetMarker, error) {
 	om := OffsetMarker{}
 	if err := json.Unmarshal(value, &om); err != nil {
-		return nil, err
+		return OffsetMarker{}, err
 	}
 	return om, nil
 }
 
 type OffsetMarkerMsgpSerde struct{}
 
-func (s OffsetMarkerMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	if value == nil {
-		return nil, nil
-	}
-	om := value.(*OffsetMarker)
-	return om.MarshalMsg(nil)
+var _ Serde[OffsetMarker] = OffsetMarkerMsgpSerde{}
+
+func (s OffsetMarkerMsgpSerde) Encode(value OffsetMarker) ([]byte, error) {
+	return value.MarshalMsg(nil)
 }
 
-func (s OffsetMarkerMsgpSerde) Decode(value []byte) (interface{}, error) {
+func (s OffsetMarkerMsgpSerde) Decode(value []byte) (OffsetMarker, error) {
 	om := OffsetMarker{}
 	if _, err := om.UnmarshalMsg(value); err != nil {
-		return nil, err
+		return OffsetMarker{}, err
 	}
 	return om, nil
 }
 
-func GetOffsetMarkerSerde(serdeFormat SerdeFormat) (Serde, error) {
+func GetOffsetMarkerSerde(serdeFormat SerdeFormat) (Serde[OffsetMarker], error) {
 	if serdeFormat == JSON {
 		return OffsetMarkerJSONSerde{}, nil
 	} else if serdeFormat == MSGP {

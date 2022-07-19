@@ -10,32 +10,33 @@ type PayloadArr struct {
 
 type PayloadArrJSONSerde struct{}
 
-func (s PayloadArrJSONSerde) Encode(value interface{}) ([]byte, error) {
-	if value == nil {
-		return nil, nil
-	}
-	v := value.(*PayloadArr)
+var _ = Serde[PayloadArr](PayloadArrJSONSerde{})
+
+func (s PayloadArrJSONSerde) Encode(value PayloadArr) ([]byte, error) {
+	v := &value
 	return json.Marshal(v)
 }
 
-func (s PayloadArrJSONSerde) Decode(value []byte) (interface{}, error) {
+func (s PayloadArrJSONSerde) Decode(value []byte) (PayloadArr, error) {
 	v := PayloadArr{}
 	if err := json.Unmarshal(value, &v); err != nil {
-		return nil, err
+		return PayloadArr{}, err
 	}
 	return v, nil
 }
 
 type PayloadArrMsgpSerde struct{}
 
-func (s PayloadArrMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	val := value.(*PayloadArr)
+var _ = Serde[PayloadArr](PayloadArrMsgpSerde{})
+
+func (s PayloadArrMsgpSerde) Encode(value PayloadArr) ([]byte, error) {
+	val := &value
 	return val.MarshalMsg(nil)
 }
-func (s PayloadArrMsgpSerde) Decode(value []byte) (interface{}, error) {
+func (s PayloadArrMsgpSerde) Decode(value []byte) (PayloadArr, error) {
 	val := PayloadArr{}
 	if _, err := val.UnmarshalMsg(value); err != nil {
-		return nil, err
+		return PayloadArr{}, err
 	}
 	return val, nil
 }

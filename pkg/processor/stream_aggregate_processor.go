@@ -11,17 +11,18 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type StreamAggregateProcessor struct {
+type StreamAggregateProcessor[KIn, VIn, VAgg any] struct {
 	store       store.KeyValueStore
-	initializer Initializer
-	aggregator  Aggregator
+	initializer Initializer[VAgg]
+	aggregator  Aggregator[KIn, VIn, VAgg]
 	name        string
 }
 
-var _ = Processor(&StreamAggregateProcessor{})
+var _ = Processor[int, int, int, commtypes.Change[int]](&StreamAggregateProcessor[int, int, int]{})
 
-func NewStreamAggregateProcessor(name string, store store.KeyValueStore, initializer Initializer, aggregator Aggregator) *StreamAggregateProcessor {
-	return &StreamAggregateProcessor{
+func NewStreamAggregateProcessor[KIn, VIn, VAgg any](name string, store store.KeyValueStore,
+	initializer Initializer[VAgg], aggregator Aggregator[KIn, VIn, VAgg]) *StreamAggregateProcessor[KIn, VIn, VAgg] {
+	return &StreamAggregateProcessor[KIn, VIn, VAgg]{
 		initializer: initializer,
 		aggregator:  aggregator,
 		store:       store,
@@ -29,11 +30,11 @@ func NewStreamAggregateProcessor(name string, store store.KeyValueStore, initial
 	}
 }
 
-func (p *StreamAggregateProcessor) Name() string {
+func (p *StreamAggregateProcessor[KIn, VIn, VAgg]) Name() string {
 	return p.name
 }
 
-func (p *StreamAggregateProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
+func (p *StreamAggregateProcessor[KIn, VIn, VAgg]) ProcessAndReturn(ctx context.Context, msg commtypes.Message[KIn, VIn]) ([]commtypes.Message[KIn, commtypes.Change[VAgg]], error) {
 	if utils.IsNil(msg.Key) || utils.IsNil(msg.Value) {
 		log.Warn().Msgf("skipping record due to null key or value. key=%v, val=%v", msg.Key, msg.Value)
 		return nil, nil
@@ -42,11 +43,11 @@ func (p *StreamAggregateProcessor) ProcessAndReturn(ctx context.Context, msg com
 	if err != nil {
 		return nil, err
 	}
-	var oldAgg interface{}
+	var oldAgg VAgg
 	var newTs int64
 	if ok {
 		oldAggTs := val.(*commtypes.ValueTimestamp)
-		oldAgg = oldAggTs.Value
+		oldAgg = oldAggTs.Value.(VAgg)
 		if msg.Timestamp > oldAggTs.Timestamp {
 			newTs = msg.Timestamp
 		} else {
@@ -61,10 +62,16 @@ func (p *StreamAggregateProcessor) ProcessAndReturn(ctx context.Context, msg com
 	if err != nil {
 		return nil, err
 	}
-	change := commtypes.Change{
-		NewVal: newAgg,
-		OldVal: oldAgg,
+	change := commtypes.Change[VAgg]{
+		NewVal: &newAgg,
+		OldVal: &oldAgg,
 	}
 	debug.Fprintf(os.Stderr, "StreamAgg key %v, oldVal %v, newVal %v\n", msg.Key, oldAgg, newAgg)
-	return []commtypes.Message{{Key: msg.Key, Value: &change, Timestamp: newTs}}, nil
+	ret := make([]commtypes.Message[KIn, commtypes.Change[VAgg]], 1)
+	ret[0] = commtypes.Message[KIn, commtypes.Change[VAgg]]{
+		Key:       msg.Key,
+		Value:     change,
+		Timestamp: newTs,
+	}
+	return ret, nil
 }

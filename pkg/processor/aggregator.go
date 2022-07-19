@@ -1,21 +1,21 @@
 package processor
 
-type Aggregator interface {
-	Apply(key interface{}, value interface{}, aggregate interface{}) interface{}
+type Aggregator[K, V, VA any] interface {
+	Apply(key K, value V, aggregate VA) VA
 }
 
-type AggregatorFunc func(key interface{}, value interface{}, aggregate interface{}) interface{}
+type AggregatorFunc[K, V, VA any] func(key K, value V, aggregate VA) VA
 
-func (fn AggregatorFunc) Apply(key interface{}, value interface{}, aggregate interface{}) interface{} {
+func (fn AggregatorFunc[K, V, VA]) Apply(key K, value V, aggregate VA) VA {
 	return fn(key, value, aggregate)
 }
 
-type Initializer interface {
-	Apply() interface{}
+type Initializer[VA any] interface {
+	Apply() VA
 }
 
-type InitializerFunc func() interface{}
+type InitializerFunc[VA any] func() VA
 
-func (fn InitializerFunc) Apply() interface{} {
+func (fn InitializerFunc[VA]) Apply() VA {
 	return fn()
 }

@@ -9,10 +9,10 @@ import (
 )
 
 var (
-	sizeNot8 = xerrors.New("size of value to deserialized is not 8")
-	sizeNot4 = xerrors.New("size of value to deserialized is not 4")
-	sizeNot2 = xerrors.New("size of value to deserialized is not 2")
-	sizeNot1 = xerrors.New("size of value to deserialized is not 1")
+	SizeNot8 = xerrors.New("size of value to deserialized is not 8")
+	SizeNot4 = xerrors.New("size of value to deserialized is not 4")
+	SizeNot2 = xerrors.New("size of value to deserialized is not 2")
+	SizeNot1 = xerrors.New("size of value to deserialized is not 1")
 )
 
 type SerdeFormat uint8
@@ -22,8 +22,8 @@ const (
 	MSGP SerdeFormat = 1
 )
 
-type Encoder interface {
-	Encode(interface{}) ([]byte, error)
+type Encoder[T any] interface {
+	Encode(T) ([]byte, error)
 }
 
 type EncoderFunc func(interface{}) ([]byte, error)
@@ -32,8 +32,8 @@ func (f EncoderFunc) Encode(value interface{}) ([]byte, error) {
 	return f(value)
 }
 
-type Decoder interface {
-	Decode([]byte) (interface{}, error)
+type Decoder[T any] interface {
+	Decode([]byte) (T, error)
 }
 
 type DecoderFunc func([]byte) (interface{}, error)
@@ -42,21 +42,17 @@ func (f DecoderFunc) Decode(value []byte) (interface{}, error) {
 	return f(value)
 }
 
-type Serde interface {
-	Encoder
-	Decoder
+type Serde[T any] interface {
+	Encoder[T]
+	Decoder[T]
 }
 
 type Float64Encoder struct{}
 
-var _ = Encoder(Float64Encoder{})
+var _ = Encoder[float64](Float64Encoder{})
 
-func (e Float64Encoder) Encode(value interface{}) ([]byte, error) {
-	if value == nil {
-		return nil, nil
-	}
-	v := value.(float64)
-	bits := math.Float64bits(v)
+func (e Float64Encoder) Encode(value float64) ([]byte, error) {
+	bits := math.Float64bits(value)
 	bs := make([]byte, 8)
 	binary.BigEndian.PutUint64(bs, bits)
 	return bs, nil
@@ -64,14 +60,14 @@ func (e Float64Encoder) Encode(value interface{}) ([]byte, error) {
 
 type Float64Decoder struct{}
 
-var _ = Decoder(Float64Decoder{})
+var _ = Decoder[float64](Float64Decoder{})
 
-func (e Float64Decoder) Decode(value []byte) (interface{}, error) {
+func (e Float64Decoder) Decode(value []byte) (float64, error) {
 	if value == nil {
-		return nil, nil
+		return 0, nil
 	}
 	if len(value) != 8 {
-		return nil, sizeNot8
+		return 0, SizeNot8
 	}
 	bits := binary.BigEndian.Uint64(value)
 	return math.Float64frombits(bits), nil
@@ -82,18 +78,14 @@ type Float64Serde struct {
 	Float64Decoder
 }
 
-var _ = Serde(Float64Serde{})
+var _ = Serde[float64](Float64Serde{})
 
 type Float32Encoder struct{}
 
-var _ = Encoder(Float32Encoder{})
+var _ = Encoder[float32](Float32Encoder{})
 
-func (e Float32Encoder) Encode(value interface{}) ([]byte, error) {
-	if value == nil {
-		return nil, nil
-	}
-	v := value.(float32)
-	bits := math.Float32bits(v)
+func (e Float32Encoder) Encode(value float32) ([]byte, error) {
+	bits := math.Float32bits(value)
 	bs := make([]byte, 4)
 	binary.BigEndian.PutUint32(bs, bits)
 	return bs, nil
@@ -101,14 +93,14 @@ func (e Float32Encoder) Encode(value interface{}) ([]byte, error) {
 
 type Float32Decoder struct{}
 
-var _ = Decoder(Float32Decoder{})
+var _ = Decoder[float32](Float32Decoder{})
 
-func (e Float32Decoder) Decode(value []byte) (interface{}, error) {
+func (e Float32Decoder) Decode(value []byte) (float32, error) {
 	if value == nil {
-		return nil, nil
+		return 0, nil
 	}
 	if len(value) != 4 {
-		return nil, sizeNot4
+		return 0, SizeNot4
 	}
 	bits := binary.BigEndian.Uint32(value)
 	return math.Float32frombits(bits), nil
@@ -121,28 +113,24 @@ type Float32Serde struct {
 
 type Uint64Encoder struct{}
 
-var _ = Encoder(Uint64Encoder{})
+var _ = Encoder[uint64](Uint64Encoder{})
 
-func (e Uint64Encoder) Encode(value interface{}) ([]byte, error) {
-	if value == nil {
-		return nil, nil
-	}
-	v := value.(uint64)
+func (e Uint64Encoder) Encode(value uint64) ([]byte, error) {
 	bs := make([]byte, 8)
-	binary.BigEndian.PutUint64(bs, v)
+	binary.BigEndian.PutUint64(bs, value)
 	return bs, nil
 }
 
 type Uint64Decoder struct{}
 
-var _ = Decoder(Uint64Decoder{})
+var _ = Decoder[uint64](Uint64Decoder{})
 
-func (d Uint64Decoder) Decode(value []byte) (interface{}, error) {
+func (d Uint64Decoder) Decode(value []byte) (uint64, error) {
 	if value == nil {
-		return nil, nil
+		return 0, nil
 	}
 	if len(value) != 8 {
-		return nil, sizeNot8
+		return 0, SizeNot8
 	}
 	bits := binary.BigEndian.Uint64(value)
 	return bits, nil
@@ -155,28 +143,24 @@ type Uint64Serde struct {
 
 type Int64Encoder struct{}
 
-var _ = Encoder(Int64Encoder{})
+var _ = Encoder[int64](Int64Encoder{})
 
-func (e Int64Encoder) Encode(value interface{}) ([]byte, error) {
-	if value == nil {
-		return nil, nil
-	}
-	v := value.(int64)
+func (e Int64Encoder) Encode(value int64) ([]byte, error) {
 	bs := make([]byte, 8)
-	binary.BigEndian.PutUint64(bs, uint64(v))
+	binary.BigEndian.PutUint64(bs, uint64(value))
 	return bs, nil
 }
 
 type Int64Decoder struct{}
 
-var _ = Decoder(Uint64Decoder{})
+var _ = Decoder[int64](Int64Decoder{})
 
-func (d Int64Decoder) Decode(value []byte) (interface{}, error) {
+func (d Int64Decoder) Decode(value []byte) (int64, error) {
 	if value == nil {
-		return nil, nil
+		return 0, nil
 	}
 	if len(value) != 8 {
-		return nil, sizeNot8
+		return 0, SizeNot8
 	}
 	bits := binary.BigEndian.Uint64(value)
 	return int64(bits), nil
@@ -189,28 +173,24 @@ type Int64Serde struct {
 
 type Uint32Encoder struct{}
 
-var _ = Encoder(Uint32Encoder{})
+var _ = Encoder[uint32](Uint32Encoder{})
 
-func (e Uint32Encoder) Encode(value interface{}) ([]byte, error) {
-	if value == nil {
-		return nil, nil
-	}
-	v := value.(uint32)
+func (e Uint32Encoder) Encode(value uint32) ([]byte, error) {
 	bs := make([]byte, 4)
-	binary.BigEndian.PutUint32(bs, v)
+	binary.BigEndian.PutUint32(bs, value)
 	return bs, nil
 }
 
 type Uint32Decoder struct{}
 
-var _ = Decoder(Uint32Decoder{})
+var _ = Decoder[uint32](Uint32Decoder{})
 
-func (e Uint32Decoder) Decode(value []byte) (interface{}, error) {
+func (e Uint32Decoder) Decode(value []byte) (uint32, error) {
 	if value == nil {
-		return nil, nil
+		return 0, nil
 	}
 	if len(value) != 4 {
-		return nil, sizeNot4
+		return 0, SizeNot4
 	}
 	bits := binary.BigEndian.Uint32(value)
 	return uint32(bits), nil
@@ -223,28 +203,24 @@ type Uint32Serde struct {
 
 type Int32Encoder struct{}
 
-var _ = Encoder(Int32Encoder{})
+var _ = Encoder[int32](Int32Encoder{})
 
-func (e Int32Encoder) Encode(value interface{}) ([]byte, error) {
-	if value == nil {
-		return nil, nil
-	}
-	v := value.(int32)
+func (e Int32Encoder) Encode(value int32) ([]byte, error) {
 	bs := make([]byte, 4)
-	binary.BigEndian.PutUint32(bs, uint32(v))
+	binary.BigEndian.PutUint32(bs, uint32(value))
 	return bs, nil
 }
 
 type Int32Decoder struct{}
 
-var _ = Decoder(Int32Decoder{})
+var _ = Decoder[int32](Int32Decoder{})
 
-func (e Int32Decoder) Decode(value []byte) (interface{}, error) {
+func (e Int32Decoder) Decode(value []byte) (int32, error) {
 	if value == nil {
-		return nil, nil
+		return 0, nil
 	}
 	if len(value) != 4 {
-		return nil, sizeNot4
+		return 0, SizeNot4
 	}
 	bits := binary.BigEndian.Uint32(value)
 	return int32(bits), nil
@@ -257,22 +233,20 @@ type Int32Serde struct {
 
 type IntSerde struct{}
 
-func (s IntSerde) Encode(value interface{}) ([]byte, error) {
-	if value == nil {
-		return nil, nil
-	}
-	v := value.(int)
+var _ = Serde[int](IntSerde{})
+
+func (s IntSerde) Encode(value int) ([]byte, error) {
 	bs := make([]byte, 4)
-	binary.BigEndian.PutUint32(bs, uint32(v))
+	binary.BigEndian.PutUint32(bs, uint32(value))
 	return bs, nil
 }
 
-func (s IntSerde) Decode(value []byte) (interface{}, error) {
+func (s IntSerde) Decode(value []byte) (int, error) {
 	if value == nil {
-		return nil, nil
+		return 0, nil
 	}
 	if len(value) != 4 {
-		return nil, sizeNot4
+		return 0, SizeNot4
 	}
 	bits := binary.BigEndian.Uint32(value)
 	return int(bits), nil
@@ -280,28 +254,24 @@ func (s IntSerde) Decode(value []byte) (interface{}, error) {
 
 type Uint16Encoder struct{}
 
-var _ = Encoder(Uint16Encoder{})
+var _ = Encoder[uint16](Uint16Encoder{})
 
-func (e Uint16Encoder) Encode(value interface{}) ([]byte, error) {
-	if value == nil {
-		return nil, nil
-	}
-	v := value.(uint16)
+func (e Uint16Encoder) Encode(value uint16) ([]byte, error) {
 	bs := make([]byte, 2)
-	binary.BigEndian.PutUint16(bs, v)
+	binary.BigEndian.PutUint16(bs, value)
 	return bs, nil
 }
 
 type Uint16Decoder struct{}
 
-var _ = Decoder(Uint16Decoder{})
+var _ = Decoder[uint16](Uint16Decoder{})
 
-func (e Uint16Decoder) Decode(value []byte) (interface{}, error) {
+func (e Uint16Decoder) Decode(value []byte) (uint16, error) {
 	if value == nil {
-		return nil, nil
+		return 0, nil
 	}
 	if len(value) != 2 {
-		return nil, sizeNot2
+		return 0, SizeNot2
 	}
 	bits := binary.BigEndian.Uint16(value)
 	return bits, nil
@@ -315,31 +285,27 @@ type Uint16Serde struct {
 //
 type Int16Encoder struct{}
 
-var _ = Encoder(Uint16Encoder{})
+var _ = Encoder[int16](Int16Encoder{})
 
-func (e Int16Encoder) Encode(value interface{}) ([]byte, error) {
-	if value == nil {
-		return nil, nil
-	}
-	v := value.(int16)
+func (e Int16Encoder) Encode(value int16) ([]byte, error) {
 	bs := make([]byte, 2)
-	binary.BigEndian.PutUint16(bs, uint16(v))
+	binary.BigEndian.PutUint16(bs, uint16(value))
 	return bs, nil
 }
 
 type Int16Decoder struct{}
 
-var _ = Decoder(Uint16Decoder{})
+var _ = Decoder[int16](Int16Decoder{})
 
-func (e Int16Decoder) Decode(value []byte) (interface{}, error) {
+func (e Int16Decoder) Decode(value []byte) (int16, error) {
 	if value == nil {
-		return nil, nil
+		return 0, nil
 	}
 	if len(value) != 2 {
-		return nil, sizeNot2
+		return 0, SizeNot2
 	}
 	bits := binary.BigEndian.Uint16(value)
-	return bits, nil
+	return int16(bits), nil
 }
 
 type Int16Serde struct {
@@ -349,28 +315,24 @@ type Int16Serde struct {
 
 type Uint8Encoder struct{}
 
-var _ = Encoder(Uint8Encoder{})
+var _ = Encoder[uint8](Uint8Encoder{})
 
-func (e Uint8Encoder) Encode(value interface{}) ([]byte, error) {
-	if value == nil {
-		return nil, nil
-	}
-	v := value.(uint8)
+func (e Uint8Encoder) Encode(value uint8) ([]byte, error) {
 	bs := make([]byte, 1)
-	bs[0] = v
+	bs[0] = value
 	return bs, nil
 }
 
 type Uint8Decoder struct{}
 
-var _ = Decoder(Uint8Decoder{})
+var _ = Decoder[uint8](Uint8Decoder{})
 
-func (e Uint8Decoder) Decode(value []byte) (interface{}, error) {
+func (e Uint8Decoder) Decode(value []byte) (uint8, error) {
 	if value == nil {
-		return nil, nil
+		return 0, nil
 	}
 	if len(value) != 1 {
-		return nil, sizeNot1
+		return 0, SizeNot1
 	}
 	return value[0], nil
 }
@@ -383,28 +345,24 @@ type Uint8Serde struct {
 //
 type Int8Encoder struct{}
 
-var _ = Encoder(Uint8Encoder{})
+var _ = Encoder[int8](Int8Encoder{})
 
-func (e Int8Encoder) Encode(value interface{}) ([]byte, error) {
-	if value == nil {
-		return nil, nil
-	}
-	v := value.(int8)
+func (e Int8Encoder) Encode(value int8) ([]byte, error) {
 	bs := make([]byte, 1)
-	bs[0] = uint8(v)
+	bs[0] = uint8(value)
 	return bs, nil
 }
 
 type Int8Decoder struct{}
 
-var _ = Decoder(Uint8Decoder{})
+var _ = Decoder[int8](Int8Decoder{})
 
-func (e Int8Decoder) Decode(value []byte) (interface{}, error) {
+func (e Int8Decoder) Decode(value []byte) (int8, error) {
 	if value == nil {
-		return nil, nil
+		return 0, nil
 	}
 	if len(value) != 1 {
-		return nil, sizeNot1
+		return 0, SizeNot1
 	}
 	return int8(value[0]), nil
 }
@@ -416,23 +374,19 @@ type Int8Serde struct {
 
 type StringEncoder struct{}
 
-var _ = Encoder(StringEncoder{})
+var _ = Encoder[string](StringEncoder{})
 
-func (e StringEncoder) Encode(value interface{}) ([]byte, error) {
-	if value == nil {
-		return nil, nil
-	}
-	v := value.(string)
-	return []byte(v), nil
+func (e StringEncoder) Encode(value string) ([]byte, error) {
+	return []byte(value), nil
 }
 
 type StringDecoder struct{}
 
-var _ = Decoder(StringDecoder{})
+var _ = Decoder[string](StringDecoder{})
 
-func (d StringDecoder) Decode(value []byte) (interface{}, error) {
+func (d StringDecoder) Decode(value []byte) (string, error) {
 	if value == nil {
-		return nil, nil
+		return "", nil
 	}
 	return string(value), nil
 }
