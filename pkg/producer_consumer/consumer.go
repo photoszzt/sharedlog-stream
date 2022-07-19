@@ -19,8 +19,8 @@ type Consumer interface {
 	SetInitialSource(initial bool)
 	IsInitialSource() bool
 	MsgSerde() commtypes.MessageSerde
-	Lock()
-	Unlock()
+	// Lock()
+	// Unlock()
 	RecordCurrentConsumedSeqNum(seqNum uint64)
 	CurrentConsumedSeqNum() uint64
 }

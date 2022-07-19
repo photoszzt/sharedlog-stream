@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
-	"sharedlog-stream/pkg/utils/syncutils"
 	"time"
 )
 
@@ -18,7 +17,7 @@ type StreamSinkConfig struct {
 }
 
 type ShardedSharedLogStreamProducer struct {
-	syncutils.Mutex
+	// syncutils.Mutex
 	msgSerde  commtypes.MessageSerde
 	eom       eo_intr.ReadOnlyExactlyOnceManager
 	stream    *sharedlog_stream.ShardedSharedLogStream

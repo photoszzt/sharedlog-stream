@@ -27,9 +27,10 @@ type ConcurrentMeteredSink struct {
 
 	producer *ShardedSharedLogStreamProducer
 
-	produceTp stats.ConcurrentThroughputCounter
-	lat       stats.ConcurrentInt64Collector
-	warmup    stats.WarmupGoroutineSafe
+	produceTp       stats.ConcurrentThroughputCounter
+	lat             stats.ConcurrentInt64Collector
+	eventTimeSample stats.ConcurrentInt64Collector
+	warmup          stats.WarmupGoroutineSafe
 
 	measure       bool
 	isFinalOutput bool
@@ -49,6 +50,8 @@ func NewConcurrentMeteredSyncProducer(sink *ShardedSharedLogStreamProducer, warm
 		isFinalOutput:      false,
 		warmup:             stats.NewWarmupGoroutineSafeChecker(warmup),
 		eventTimeLatencies: make([]int, 0),
+		eventTimeSample: stats.NewConcurrentInt64Collector(sink_name+"_ets",
+			stats.DEFAULT_COLLECT_DURATION),
 	}
 }
 
@@ -81,24 +84,38 @@ func (s *ConcurrentMeteredSink) Produce(ctx context.Context, msg commtypes.Messa
 ) error {
 	assignInjTime(&msg)
 	s.produceTp.Tick(1)
-	if s.measure {
-		s.warmup.Check()
-		if s.warmup.AfterWarmup() {
-			procStart := time.Now()
-			if s.isFinalOutput {
-				ts, err := extractEventTs(&msg)
-				if err != nil {
-					return err
-				}
-				if ts != 0 {
-					els := int(procStart.UnixMilli() - ts)
-					s.mu.Lock()
-					s.eventTimeLatencies = append(s.eventTimeLatencies, els)
-					s.mu.Unlock()
-				}
-			}
+	if s.isFinalOutput {
+		procStart := time.Now()
+		ts, err := extractEventTs(&msg)
+		if err != nil {
+			return err
+		}
+		if ts != 0 {
+			els := procStart.UnixMilli() - ts
+			// s.mu.Lock()
+			// s.eventTimeLatencies = append(s.eventTimeLatencies, els)
+			// s.mu.Unlock()
+			s.eventTimeSample.AddSample(els)
 		}
 	}
+	// if s.measure {
+	// 	s.warmup.Check()
+	// 	if s.warmup.AfterWarmup() {
+	// 		if s.isFinalOutput {
+	// 			procStart := time.Now()
+	// 			ts, err := extractEventTs(&msg)
+	// 			if err != nil {
+	// 				return err
+	// 			}
+	// 			if ts != 0 {
+	// 				els := int(procStart.UnixMilli() - ts)
+	// 				s.mu.Lock()
+	// 				s.eventTimeLatencies = append(s.eventTimeLatencies, els)
+	// 				s.mu.Unlock()
+	// 			}
+	// 		}
+	// 	}
+	// }
 	procStart := stats.TimerBegin()
 	err := s.producer.Produce(ctx, msg, parNum, isControl)
 	elapsed := stats.Elapsed(procStart).Microseconds()
@@ -126,20 +143,22 @@ func (s *ConcurrentMeteredSink) GetCurrentProdSeqNum(substreamNum uint8) uint64 
 	return s.producer.GetCurrentProdSeqNum(substreamNum)
 }
 func (s *ConcurrentMeteredSink) ResetInitialProd() { s.producer.ResetInitialProd() }
-func (s *ConcurrentMeteredSink) Lock() {
-	// debug.Fprintf(os.Stderr, "lock producer %s\n", s.Name())
-	s.producer.Lock()
-}
-func (s *ConcurrentMeteredSink) Unlock() {
-	// debug.Fprintf(os.Stderr, "unlock producer %s\n", s.Name())
-	s.producer.Unlock()
-}
+
+// func (s *ConcurrentMeteredSink) Lock() {
+// 	// debug.Fprintf(os.Stderr, "lock producer %s\n", s.Name())
+// 	s.producer.Lock()
+// }
+// func (s *ConcurrentMeteredSink) Unlock() {
+// 	// debug.Fprintf(os.Stderr, "unlock producer %s\n", s.Name())
+// 	s.producer.Unlock()
+// }
 
 type MeteredProducer struct {
 	producer           *ShardedSharedLogStreamProducer
 	eventTimeLatencies []int
 	latencies          stats.Int64Collector
 	produceTp          stats.ThroughputCounter
+	eventTimeSample    stats.Int64Collector
 	warmup             stats.Warmup
 	measure            bool
 	isFinalOutput      bool
@@ -148,12 +167,14 @@ type MeteredProducer struct {
 func NewMeteredProducer(sink *ShardedSharedLogStreamProducer, warmup time.Duration) *MeteredProducer {
 	sink_name := fmt.Sprintf("%s_sink", sink.TopicName())
 	return &MeteredProducer{
-		producer:      sink,
-		latencies:     stats.NewInt64Collector(sink_name, stats.DEFAULT_COLLECT_DURATION),
-		produceTp:     stats.NewThroughputCounter(sink_name, stats.DEFAULT_COLLECT_DURATION),
-		measure:       checkMeasureSink(),
-		isFinalOutput: false,
-		warmup:        stats.NewWarmupChecker(warmup),
+		producer:           sink,
+		eventTimeLatencies: make([]int, 0),
+		latencies:          stats.NewInt64Collector(sink_name, stats.DEFAULT_COLLECT_DURATION),
+		produceTp:          stats.NewThroughputCounter(sink_name, stats.DEFAULT_COLLECT_DURATION),
+		eventTimeSample:    stats.NewInt64Collector(sink_name+"_ets", stats.DEFAULT_COLLECT_DURATION),
+		measure:            checkMeasureSink(),
+		isFinalOutput:      false,
+		warmup:             stats.NewWarmupChecker(warmup),
 	}
 }
 
@@ -176,22 +197,35 @@ func (s *MeteredProducer) StartWarmup() {
 func (s *MeteredProducer) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
 	assignInjTime(&msg)
 	s.produceTp.Tick(1)
-	if s.measure {
-		s.warmup.Check()
-		if s.warmup.AfterWarmup() {
-			procStart := time.Now()
-			if s.isFinalOutput {
-				ts, err := extractEventTs(&msg)
-				if err != nil {
-					return err
-				}
-				if ts != 0 {
-					els := int(procStart.UnixMilli() - ts)
-					s.eventTimeLatencies = append(s.eventTimeLatencies, els)
-				}
-			}
+	if s.isFinalOutput {
+		procStart := time.Now()
+		ts, err := extractEventTs(&msg)
+		if err != nil {
+			return err
+		}
+		if ts != 0 {
+			els := procStart.UnixMilli() - ts
+			// s.eventTimeLatencies = append(s.eventTimeLatencies, els)
+			s.eventTimeSample.AddSample(els)
 		}
 	}
+
+	// if s.measure {
+	// 	s.warmup.Check()
+	// 	if s.warmup.AfterWarmup() {
+	// 		if s.isFinalOutput {
+	// 			procStart := time.Now()
+	// 			ts, err := extractEventTs(&msg)
+	// 			if err != nil {
+	// 				return err
+	// 			}
+	// 			if ts != 0 {
+	// 				els := int(procStart.UnixMilli() - ts)
+	// 				s.eventTimeLatencies = append(s.eventTimeLatencies, els)
+	// 			}
+	// 		}
+	// 	}
+	// }
 	procStart := stats.TimerBegin()
 	err := s.producer.Produce(ctx, msg, parNum, isControl)
 	elapsed := stats.Elapsed(procStart).Microseconds()
@@ -221,12 +255,13 @@ func (s *MeteredProducer) GetCurrentProdSeqNum(substreamNum uint8) uint64 {
 func (s *MeteredProducer) ResetInitialProd() {
 	s.producer.ResetInitialProd()
 }
-func (s *MeteredProducer) Lock() {
-	s.producer.Lock()
-}
-func (s *MeteredProducer) Unlock() {
-	s.producer.Unlock()
-}
+
+// func (s *MeteredProducer) Lock() {
+// 	s.producer.Lock()
+// }
+// func (s *MeteredProducer) Unlock() {
+// 	s.producer.Unlock()
+// }
 
 func extractEventTs(msg *commtypes.Message) (int64, error) {
 	ts := msg.Timestamp
