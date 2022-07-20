@@ -45,7 +45,7 @@ func (t *StreamTask) setupManagersFor2pc(ctx context.Context, streamTaskArgs *St
 	debug.Fprintf(os.Stderr, "down restore\n")
 	trackParFunc := func(ctx context.Context,
 		key interface{},
-		keySerde commtypes.Serde,
+		keySerde commtypes.Serde[any],
 		topicName string,
 		substreamId uint8,
 	) error {

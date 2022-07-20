@@ -2,7 +2,10 @@
 //msgp:ignore ControlMetadataJSONSerde ControlMetadataMsgpSerde
 package txn_data
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"sharedlog-stream/pkg/commtypes"
+)
 
 type ControlMetadata struct {
 	// number of instances for each stage
@@ -26,30 +29,32 @@ type ControlMetadata struct {
 
 type ControlMetadataJSONSerde struct{}
 
-func (s ControlMetadataJSONSerde) Encode(value interface{}) ([]byte, error) {
-	rf := value.(*ControlMetadata)
-	return json.Marshal(rf)
+var _ commtypes.Serde[ControlMetadata] = ControlMetadataJSONSerde{}
+
+func (s ControlMetadataJSONSerde) Encode(value ControlMetadata) ([]byte, error) {
+	return json.Marshal(&value)
 }
 
-func (s ControlMetadataJSONSerde) Decode(value []byte) (interface{}, error) {
+func (s ControlMetadataJSONSerde) Decode(value []byte) (ControlMetadata, error) {
 	rf := ControlMetadata{}
 	if err := json.Unmarshal(value, &rf); err != nil {
-		return nil, err
+		return ControlMetadata{}, err
 	}
 	return rf, nil
 }
 
 type ControlMetadataMsgpSerde struct{}
 
-func (s ControlMetadataMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	rf := value.(*ControlMetadata)
-	return rf.MarshalMsg(nil)
+var _ = commtypes.Serde[ControlMetadata](ControlMetadataMsgpSerde{})
+
+func (s ControlMetadataMsgpSerde) Encode(value ControlMetadata) ([]byte, error) {
+	return value.MarshalMsg(nil)
 }
 
-func (s ControlMetadataMsgpSerde) Decode(value []byte) (interface{}, error) {
+func (s ControlMetadataMsgpSerde) Decode(value []byte) (ControlMetadata, error) {
 	rf := ControlMetadata{}
 	if _, err := rf.UnmarshalMsg(value); err != nil {
-		return nil, err
+		return ControlMetadata{}, err
 	}
 	return rf, nil
 }

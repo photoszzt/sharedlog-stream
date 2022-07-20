@@ -216,8 +216,8 @@ func (h *tableRestoreHandler) testRestoreWindowTable(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	ss := commtypes.MessageJSONSerde{
-		KeySerde: commtypes.KeyAndWindowStartTsJSONSerde{
+	ss := commtypes.MessageJSONSerde[commtypes.KeyAndWindowStartTs[int], string]{
+		KeySerde: commtypes.KeyAndWindowStartTsJSONSerde[int]{
 			KeyJSONSerde: commtypes.IntSerde{},
 		},
 		ValSerde: commtypes.StringSerde{},
@@ -236,17 +236,18 @@ func (h *tableRestoreHandler) testRestoreWindowTable(ctx context.Context) {
 	}
 	err = store_restore.RestoreChangelogWindowStateStore(ctx,
 		store_restore.NewWindowStoreChangelog(wstore,
-			store_with_changelog.NewChangelogManager(changelog, commtypes.MessageJSONSerde{
-				KeySerde: commtypes.IntSerde{},
-				ValSerde: commtypes.StringSerde{},
-			}, common.SrcConsumeTimeout, time.Duration(5)*time.Millisecond)), 0)
+			store_with_changelog.NewChangelogManager[int, string](changelog,
+				commtypes.MessageJSONSerde[int, string]{
+					KeySerde: commtypes.IntSerde{},
+					ValSerde: commtypes.StringSerde{},
+				}, common.SrcConsumeTimeout, time.Duration(5)*time.Millisecond)), 0)
 	if err != nil {
 		panic(err)
 	}
-	ret := make(map[int]*commtypes.ValueTimestamp)
+	ret := make(map[int]*commtypes.ValueTimestamp[string])
 	err = wstore.FetchAll(ctx, time.UnixMilli(0), time.UnixMilli(store.TEST_WINDOW_SIZE*2),
-		func(i int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
-			ret[kt.(int)] = commtypes.CreateValueTimestamp(vt, i)
+		func(i int64, kt int, vt string) error {
+			ret[kt] = commtypes.CreateValueTimestamp(vt, i)
 			return nil
 		})
 	if err != nil {

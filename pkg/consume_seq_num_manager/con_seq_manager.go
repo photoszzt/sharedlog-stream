@@ -16,7 +16,7 @@ import (
 )
 
 type ConsumeSeqManager struct {
-	offsetMarkerSerde commtypes.Serde
+	offsetMarkerSerde commtypes.Serde[commtypes.OffsetMarker]
 	offsetLogs        map[string]*sharedlog_stream.ShardedSharedLogStream
 }
 
@@ -87,7 +87,7 @@ func (cm *ConsumeSeqManager) Track(ctx context.Context, consumers []producer_con
 			Mark:   commtypes.EPOCH_END,
 			Offset: offset,
 		}
-		encoded, err := cm.offsetMarkerSerde.Encode(&tm)
+		encoded, err := cm.offsetMarkerSerde.Encode(tm)
 		if err != nil {
 			return err
 		}
@@ -108,7 +108,7 @@ func (cm *ConsumeSeqManager) TrackForTest(ctx context.Context, currentConSeqNum 
 			Mark:   commtypes.EPOCH_END,
 			Offset: offset,
 		}
-		encoded, err := cm.offsetMarkerSerde.Encode(&tm)
+		encoded, err := cm.offsetMarkerSerde.Encode(tm)
 		if err != nil {
 			return err
 		}

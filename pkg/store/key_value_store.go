@@ -6,24 +6,23 @@ import (
 	"sharedlog-stream/pkg/exactly_once_intr"
 )
 
-type KeyValueStore interface {
-	CoreKeyValueStore
+type KeyValueStore[K, V any] interface {
+	CoreKeyValueStore[K, V]
 	// KeyValueStoreOpForExternalStore
-	KeyValueStoreOpWithChangelog
+	KeyValueStoreOpWithChangelog[K, V]
 }
 
-type CoreKeyValueStore interface {
+type CoreKeyValueStore[K, V any] interface {
 	StateStore
-	Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error)
-	Range(ctx context.Context, from commtypes.KeyT, to commtypes.KeyT,
-		iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error
-	ReverseRange(from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error
-	PrefixScan(prefix interface{}, prefixKeyEncoder commtypes.Encoder, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error
+	Get(ctx context.Context, key K) (V, bool, error)
+	Range(ctx context.Context, from K, to K,
+		iterFunc func(K, V) error) error
+	ReverseRange(from K, to K, iterFunc func(K, V) error) error
 	ApproximateNumEntries() (uint64, error)
-	Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error
-	PutIfAbsent(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) (commtypes.ValueT, error)
-	PutAll(context.Context, []*commtypes.Message) error
-	Delete(ctx context.Context, key commtypes.KeyT) error
+	Put(ctx context.Context, key K, value V) error
+	PutIfAbsent(ctx context.Context, key K, value V) (V, error)
+	PutAll(context.Context, []*commtypes.Message[K, V]) error
+	Delete(ctx context.Context, key K) error
 	TableType() TABLE_TYPE
 }
 
@@ -36,28 +35,26 @@ type KeyValueStoreOpForExternalStore interface {
 }
 */
 
-type KeyValueStoreOpWithChangelog interface {
-	SetTrackParFunc(exactly_once_intr.TrackProdSubStreamFunc)
-	PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error
+type KeyValueStoreOpWithChangelog[K, V any] interface {
+	SetTrackParFunc(exactly_once_intr.TrackProdSubStreamFunc[K])
+	PutWithoutPushToChangelog(ctx context.Context, key K, value V) error
 }
 
-type KeyValueStoreBackedByChangelog interface {
-	CoreKeyValueStore
-	KeyValueStoreOpWithChangelog
+type KeyValueStoreBackedByChangelog[K, V any] interface {
+	CoreKeyValueStore[K, V]
+	KeyValueStoreOpWithChangelog[K, V]
 }
 
 type Segment interface {
 	StateStore
-	Init(ctx StoreContext)
 	Get(ctx context.Context, key []byte) ([]byte, bool, error)
 	Range(ctx context.Context, from []byte, to []byte,
 		iterFunc func([]byte, []byte) error) error
 	ReverseRange(from []byte, to []byte, iterFunc func([]byte, []byte) error) error
-	PrefixScan(prefix interface{}, prefixKeyEncoder commtypes.Encoder, iterFunc func([]byte, []byte) error) error
 	ApproximateNumEntries(ctx context.Context) (uint64, error)
 	Put(ctx context.Context, key []byte, value []byte) error
 	PutIfAbsent(ctx context.Context, key []byte, value []byte) ([]byte, error)
-	PutAll(context.Context, []*commtypes.Message) error
+	PutAll(context.Context, []*commtypes.Message[[]byte, []byte]) error
 	Delete(ctx context.Context, key []byte) error
 
 	Destroy(ctx context.Context) error

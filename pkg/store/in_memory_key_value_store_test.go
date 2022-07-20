@@ -7,7 +7,7 @@ import (
 )
 
 func getKeyValueStore() KeyValueStore {
-	store := NewInMemoryKeyValueStore("test1", func(a, b treemap.Key) int {
+	store := NewInMemoryBTreeKeyValueStore("test1", func(a, b treemap.Key) int {
 		ka := a.(int)
 		kb := b.(int)
 		if ka < kb {

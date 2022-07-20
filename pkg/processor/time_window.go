@@ -40,31 +40,33 @@ func (w *TimeWindow) Overlap(other commtypes.Window) (bool, error) {
 
 type TimeWindowJSONSerde struct{}
 
-func (s TimeWindowJSONSerde) Encode(value interface{}) ([]byte, error) {
-	tw := value.(*TimeWindow)
-	return json.Marshal(tw)
+var _ = commtypes.Serde[TimeWindow](TimeWindowJSONSerde{})
+
+func (s TimeWindowJSONSerde) Encode(value TimeWindow) ([]byte, error) {
+	return json.Marshal(&value)
 }
 
-func (s TimeWindowJSONSerde) Decode(value []byte) (interface{}, error) {
+func (s TimeWindowJSONSerde) Decode(value []byte) (TimeWindow, error) {
 	tw := TimeWindow{}
 	if err := json.Unmarshal(value, &tw); err != nil {
-		return nil, err
+		return TimeWindow{}, err
 	}
 	return tw, nil
 }
 
 type TimeWindowMsgpSerde struct{}
 
-func (s TimeWindowMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	tw := value.(*TimeWindow)
-	return tw.MarshalMsg(nil)
+var _ = commtypes.Serde[TimeWindow](TimeWindowMsgpSerde{})
+
+func (s TimeWindowMsgpSerde) Encode(value TimeWindow) ([]byte, error) {
+	return value.MarshalMsg(nil)
 }
 
-func (s TimeWindowMsgpSerde) Decode(value []byte) (interface{}, error) {
+func (s TimeWindowMsgpSerde) Decode(value []byte) (TimeWindow, error) {
 	tw := TimeWindow{}
 	_, err := tw.UnmarshalMsg(value)
 	if err != nil {
-		return nil, err
+		return TimeWindow{}, err
 	}
 	return tw, nil
 }
@@ -78,8 +80,8 @@ func TimeWindowForSize(startMs int64, windowSize int64) (*TimeWindow, error) {
 	return NewTimeWindow(startMs, endMs)
 }
 
-func GetTimeWindowSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
-	var twSerde commtypes.Serde
+func GetTimeWindowSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde[TimeWindow], error) {
+	var twSerde commtypes.Serde[TimeWindow]
 	if serdeFormat == commtypes.JSON {
 		twSerde = TimeWindowJSONSerde{}
 		return twSerde, nil

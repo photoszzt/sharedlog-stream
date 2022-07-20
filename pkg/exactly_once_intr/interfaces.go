@@ -31,16 +31,16 @@ type TopicSubstreamTracker interface {
 	AddTopicSubstream(ctx context.Context, name string, subNum uint8) error
 }
 
-type TrackProdSubStreamFunc func(ctx context.Context,
-	key interface{},
-	keySerde commtypes.Serde,
+type TrackProdSubStreamFunc[K any] func(ctx context.Context,
+	key K,
+	keySerde commtypes.Serde[K],
 	topicName string,
 	substreamId uint8,
 ) error
 
-func DefaultTrackProdSubstreamFunc(ctx context.Context,
-	key interface{},
-	keySerde commtypes.Serde,
+func DefaultTrackProdSubstreamFunc[K any](ctx context.Context,
+	key K,
+	keySerde commtypes.Serde[K],
 	topicName string,
 	substreamId uint8,
 ) error {

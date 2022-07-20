@@ -5,6 +5,7 @@ package txn_data
 import (
 	"encoding/json"
 	"fmt"
+	"sharedlog-stream/pkg/commtypes"
 )
 
 type TransactionState uint8
@@ -52,30 +53,33 @@ type TxnMetadata struct {
 
 type TxnMetadataJSONSerde struct{}
 
-func (s TxnMetadataJSONSerde) Encode(value interface{}) ([]byte, error) {
-	tm := value.(*TxnMetadata)
+var _ = commtypes.Serde[TxnMetadata](TxnMetadataJSONSerde{})
+
+func (s TxnMetadataJSONSerde) Encode(value TxnMetadata) ([]byte, error) {
+	tm := &value
 	return json.Marshal(tm)
 }
 
-func (s TxnMetadataJSONSerde) Decode(value []byte) (interface{}, error) {
+func (s TxnMetadataJSONSerde) Decode(value []byte) (TxnMetadata, error) {
 	tm := TxnMetadata{}
 	if err := json.Unmarshal(value, &tm); err != nil {
-		return nil, err
+		return TxnMetadata{}, err
 	}
 	return tm, nil
 }
 
 type TxnMetadataMsgpSerde struct{}
 
-func (s TxnMetadataMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	tm := value.(*TxnMetadata)
-	return tm.MarshalMsg(nil)
+var _ = commtypes.Serde[TxnMetadata](TxnMetadataMsgpSerde{})
+
+func (s TxnMetadataMsgpSerde) Encode(value TxnMetadata) ([]byte, error) {
+	return value.MarshalMsg(nil)
 }
 
-func (s TxnMetadataMsgpSerde) Decode(value []byte) (interface{}, error) {
+func (s TxnMetadataMsgpSerde) Decode(value []byte) (TxnMetadata, error) {
 	tm := TxnMetadata{}
 	if _, err := tm.UnmarshalMsg(value); err != nil {
-		return nil, err
+		return TxnMetadata{}, err
 	}
 	return tm, nil
 }

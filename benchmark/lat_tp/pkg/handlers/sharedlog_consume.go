@@ -112,11 +112,10 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 			hasUncommitted = true
 		}
 		if rawMsg.IsPayloadArr {
-			payloadArrTmp, err := paSerde.Decode(rawMsg.Payload)
+			payloadArr, err := paSerde.Decode(rawMsg.Payload)
 			if err != nil {
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
-			payloadArr := payloadArrTmp.(commtypes.PayloadArr)
 			for _, pBytes := range payloadArr.Payloads {
 				ptTmp, err := ptSerde.Decode(pBytes)
 				if err != nil {
@@ -205,11 +204,10 @@ func (h *sharedlogConsumeBenchHandler) runLoop(ctx context.Context,
 			continue
 		}
 		if rawMsg.IsPayloadArr {
-			payloadArrTmp, err := paSerde.Decode(rawMsg.Payload)
+			payloadArr, err := paSerde.Decode(rawMsg.Payload)
 			if err != nil {
 				return 0, err
 			}
-			payloadArr := payloadArrTmp.(commtypes.PayloadArr)
 			for _, pBytes := range payloadArr.Payloads {
 				_ = pBytes
 			}

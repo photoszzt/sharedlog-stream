@@ -20,8 +20,8 @@ const (
 )
 
 type EpochManager struct {
-	epochMetaSerde commtypes.Serde
-	env            types.Environment
+	epochMarkerSerde commtypes.Serde[commtypes.EpochMarker]
+	env              types.Environment
 
 	tpMapMu               syncutils.Mutex
 	currentTopicSubstream map[string]map[uint8]struct{}
@@ -52,7 +52,7 @@ func NewEpochManager(env types.Environment, epochMngrName string,
 		ProducerId:            commtypes.NewProducerId(),
 		currentTopicSubstream: make(map[string]map[uint8]struct{}),
 		epochLog:              log,
-		epochMetaSerde:        epochMetaSerde,
+		epochMarkerSerde:      epochMetaSerde,
 		epochLogMarkerTag:     txn_data.MarkerTag(log.TopicNameHash(), 0),
 	}, nil
 }
@@ -87,12 +87,11 @@ func (em *EpochManager) monitorEpochLog(ctx context.Context,
 			errc <- err
 			return
 		} else {
-			epochMetaTmp, err := em.epochMetaSerde.Decode(rawMsg.Payload)
+			epochMeta, err := em.epochMarkerSerde.Decode(rawMsg.Payload)
 			if err != nil {
 				errc <- err
 				return
 			}
-			epochMeta := epochMetaTmp.(commtypes.EpochMarker)
 			if epochMeta.Mark != commtypes.FENCE {
 				panic("mark should be fence")
 			}
@@ -115,9 +114,9 @@ func (em *EpochManager) StartMonitorLog(
 }
 
 func (em *EpochManager) appendToEpochLog(ctx context.Context,
-	meta *commtypes.EpochMarker, tags []uint64, additionalTopic []string,
+	meta commtypes.EpochMarker, tags []uint64, additionalTopic []string,
 ) (uint64, error) {
-	encoded, err := em.epochMetaSerde.Encode(meta)
+	encoded, err := em.epochMarkerSerde.Encode(meta)
 	if err != nil {
 		return 0, err
 	}
@@ -198,7 +197,7 @@ func (em *EpochManager) MarkEpoch(ctx context.Context,
 			tags = append(tags, tag)
 		}
 	}
-	_, err := em.appendToEpochLog(ctx, &epochMeta, tags, additionalTopic)
+	_, err := em.appendToEpochLog(ctx, epochMeta, tags, additionalTopic)
 	em.cleanupState(producers)
 	return err
 }
@@ -226,7 +225,7 @@ func (em *EpochManager) Init(ctx context.Context) (*commtypes.EpochMarker, uint6
 		sharedlog_stream.NameHashWithPartition(em.epochLog.TopicNameHash(), 0),
 		txn_data.FenceTag(em.epochLog.TopicNameHash(), 0),
 	}
-	_, err = em.appendToEpochLog(ctx, &meta, tags, nil)
+	_, err = em.appendToEpochLog(ctx, meta, tags, nil)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -245,11 +244,10 @@ func (em *EpochManager) getMostRecentCommitEpoch(ctx context.Context) (*commtype
 		}
 		return nil, nil, err
 	}
-	val, err := em.epochMetaSerde.Decode(rawMsg.Payload)
+	meta, err := em.epochMarkerSerde.Decode(rawMsg.Payload)
 	if err != nil {
 		return nil, nil, err
 	}
-	meta := val.(commtypes.EpochMarker)
 	return &meta, rawMsg, nil
 }
 
@@ -264,11 +262,10 @@ func (em *EpochManager) FindMostRecentEpochMetaThatHasConsumed(
 			}
 			return nil, err
 		}
-		val, err := em.epochMetaSerde.Decode(rawMsg.Payload)
+		meta, err := em.epochMarkerSerde.Decode(rawMsg.Payload)
 		if err != nil {
 			return nil, err
 		}
-		meta := val.(commtypes.EpochMarker)
 		if meta.ConSeqNums != nil && len(meta.ConSeqNums) != 0 {
 			return &meta, nil
 		}

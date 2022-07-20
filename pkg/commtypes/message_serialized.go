@@ -10,10 +10,10 @@ import (
 	"sharedlog-stream/pkg/utils"
 )
 
-type MessageSerde interface {
-	Serde
-	GetKeySerde() Serde
-	GetValSerde() Serde
+type MessageSerde[K, V any] interface {
+	Serde[Message[K, V]]
+	GetKeySerde() Serde[K]
+	GetValSerde() Serde[V]
 }
 
 type MessageSerialized struct {
@@ -23,18 +23,8 @@ type MessageSerialized struct {
 	Timestamp int64  `msg:"ts,omitempty" json:"ts,omitempty"`
 }
 
-func convertToMsgSer(value interface{}, keySerde Serde, valSerde Serde) (*MessageSerialized, error) {
-	if value == nil {
-		return nil, nil
-	}
-	v, ok := value.(*Message)
-	if !ok {
-		vtmp := value.(Message)
-		v = &vtmp
-	}
-	if v == nil {
-		return nil, nil
-	}
+func convertToMsgSer[K, V any](value Message[K, V], keySerde Serde[K], valSerde Serde[V]) (*MessageSerialized, error) {
+	v := &value
 	var err error
 
 	var kenc []byte
@@ -64,23 +54,23 @@ func convertToMsgSer(value interface{}, keySerde Serde, valSerde Serde) (*Messag
 	return msg, nil
 }
 
-func decodeToMsg(msgSer *MessageSerialized, keySerde Serde, valSerde Serde) (interface{}, error) {
+func decodeToMsg[K, V any](msgSer *MessageSerialized, keySerde Serde[K], valSerde Serde[V]) (Message[K, V], error) {
 	var err error
-	var key interface{} = nil
+	var key K
 	if msgSer.KeyEnc != nil {
 		key, err = keySerde.Decode(msgSer.KeyEnc)
 		if err != nil {
-			return nil, fmt.Errorf("fail to decode key: %v", err)
+			return Message[K, V]{}, fmt.Errorf("fail to decode key: %v", err)
 		}
 	}
-	var val interface{} = nil
+	var val V
 	if msgSer.ValueEnc != nil {
 		val, err = valSerde.Decode(msgSer.ValueEnc)
 		if err != nil {
-			return nil, fmt.Errorf("fail to decode val: %v", err)
+			return Message[K, V]{}, fmt.Errorf("fail to decode val: %v", err)
 		}
 	}
-	msg := Message{
+	msg := Message[K, V]{
 		Key:       key,
 		Value:     val,
 		InjT:      msgSer.InjT,
@@ -89,20 +79,22 @@ func decodeToMsg(msgSer *MessageSerialized, keySerde Serde, valSerde Serde) (int
 	return msg, nil
 }
 
-type MessageMsgpSerde struct {
-	KeySerde Serde
-	ValSerde Serde
+type MessageMsgpSerde[K, V any] struct {
+	KeySerde Serde[K]
+	ValSerde Serde[V]
 }
 
-func (s MessageMsgpSerde) GetKeySerde() Serde {
+var _ = MessageSerde[int, int](MessageMsgpSerde[int, int]{})
+
+func (s MessageMsgpSerde[K, V]) GetKeySerde() Serde[K] {
 	return s.KeySerde
 }
 
-func (s MessageMsgpSerde) GetValSerde() Serde {
+func (s MessageMsgpSerde[K, V]) GetValSerde() Serde[V] {
 	return s.ValSerde
 }
 
-func (s MessageMsgpSerde) Encode(value interface{}) ([]byte, error) {
+func (s MessageMsgpSerde[K, V]) Encode(value Message[K, V]) ([]byte, error) {
 	msg, err := convertToMsgSer(value, s.KeySerde, s.ValSerde)
 	if err != nil {
 		return nil, err
@@ -113,30 +105,32 @@ func (s MessageMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	return msg.MarshalMsg(nil)
 }
 
-func (s MessageMsgpSerde) Decode(value []byte) (interface{}, error) {
+func (s MessageMsgpSerde[K, V]) Decode(value []byte) (Message[K, V], error) {
 	msgSer := MessageSerialized{}
 	_, err := msgSer.UnmarshalMsg(value)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] fail to unmarshal this msg: %v", string(value))
-		return nil, fmt.Errorf("fail to unmarshal msg: %v", err)
+		return Message[K, V]{}, fmt.Errorf("fail to unmarshal msg: %v", err)
 	}
 	return decodeToMsg(&msgSer, s.KeySerde, s.ValSerde)
 }
 
-type MessageJSONSerde struct {
-	KeySerde Serde
-	ValSerde Serde
+type MessageJSONSerde[K, V any] struct {
+	KeySerde Serde[K]
+	ValSerde Serde[V]
 }
 
-func (s MessageJSONSerde) GetKeySerde() Serde {
+var _ = MessageSerde[int, int](MessageJSONSerde[int, int]{})
+
+func (s MessageJSONSerde[K, V]) GetKeySerde() Serde[K] {
 	return s.KeySerde
 }
 
-func (s MessageJSONSerde) GetValSerde() Serde {
+func (s MessageJSONSerde[K, V]) GetValSerde() Serde[V] {
 	return s.ValSerde
 }
 
-func (s MessageJSONSerde) Encode(value interface{}) ([]byte, error) {
+func (s MessageJSONSerde[K, V]) Encode(value Message[K, V]) ([]byte, error) {
 	msg, err := convertToMsgSer(value, s.KeySerde, s.ValSerde)
 	if err != nil {
 		return nil, err
@@ -147,22 +141,22 @@ func (s MessageJSONSerde) Encode(value interface{}) ([]byte, error) {
 	return json.Marshal(msg)
 }
 
-func (s MessageJSONSerde) Decode(value []byte) (interface{}, error) {
+func (s MessageJSONSerde[K, V]) Decode(value []byte) (Message[K, V], error) {
 	msgSer := MessageSerialized{}
 	if err := json.Unmarshal(value, &msgSer); err != nil {
-		return nil, err
+		return Message[K, V]{}, err
 	}
 	return decodeToMsg(&msgSer, s.KeySerde, s.ValSerde)
 }
 
-func GetMsgSerde(serdeFormat SerdeFormat, keySerde Serde, valSerde Serde) (MessageSerde, error) {
+func GetMsgSerde[K, V any](serdeFormat SerdeFormat, keySerde Serde[K], valSerde Serde[V]) (MessageSerde[K, V], error) {
 	if serdeFormat == JSON {
-		return MessageJSONSerde{
+		return MessageJSONSerde[K, V]{
 			KeySerde: keySerde,
 			ValSerde: valSerde,
 		}, nil
 	} else if serdeFormat == MSGP {
-		return MessageMsgpSerde{
+		return MessageMsgpSerde[K, V]{
 			KeySerde: keySerde,
 			ValSerde: valSerde,
 		}, nil

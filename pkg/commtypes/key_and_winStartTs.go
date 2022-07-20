@@ -7,12 +7,12 @@ import (
 	"fmt"
 )
 
-type KeyAndWindowStartTs struct {
-	Key           interface{}
+type KeyAndWindowStartTs[K any] struct {
+	Key           K
 	WindowStartTs int64
 }
 
-func (kwTs KeyAndWindowStartTs) String() string {
+func (kwTs KeyAndWindowStartTs[K]) String() string {
 	return fmt.Sprintf("KeyAndWindowStartTs: {Key: %v, WindowStartTs: %d}", kwTs.Key, kwTs.WindowStartTs)
 }
 
@@ -21,22 +21,14 @@ type KeyAndWindowStartTsSerialized struct {
 	WindowStartTs int64  `msg:"ts" json:"ts"`
 }
 
-type KeyAndWindowStartTsJSONSerde struct {
-	KeyJSONSerde Serde
+type KeyAndWindowStartTsJSONSerde[K any] struct {
+	KeyJSONSerde Serde[K]
 }
 
-func convertToKeyAndWindowStartTsSer(value interface{}, keySerde Serde) (*KeyAndWindowStartTsSerialized, error) {
-	if value == nil {
-		return nil, nil
-	}
-	val, ok := value.(*KeyAndWindowStartTs)
-	if !ok {
-		vtmp := value.(KeyAndWindowStartTs)
-		val = &vtmp
-	}
-	if val == nil {
-		return nil, nil
-	}
+var _ = Serde[KeyAndWindowStartTs[int]](&KeyAndWindowStartTsJSONSerde[int]{})
+
+func convertToKeyAndWindowStartTsSer[K any](value KeyAndWindowStartTs[K], keySerde Serde[K]) (*KeyAndWindowStartTsSerialized, error) {
+	val := &value
 	kenc, err := keySerde.Encode(val.Key)
 	if err != nil {
 		return nil, err
@@ -48,22 +40,22 @@ func convertToKeyAndWindowStartTsSer(value interface{}, keySerde Serde) (*KeyAnd
 	return kw, nil
 }
 
-func decodeToKeyAndWindowStartTs(kwSer *KeyAndWindowStartTsSerialized, keySerde Serde) (interface{}, error) {
+func decodeToKeyAndWindowStartTs[K any](kwSer *KeyAndWindowStartTsSerialized, keySerde Serde[K]) (KeyAndWindowStartTs[K], error) {
 	var err error
-	var k interface{}
+	var k K
 	if kwSer.KeySerialized != nil {
 		k, err = keySerde.Decode(kwSer.KeySerialized)
 		if err != nil {
-			return nil, err
+			return KeyAndWindowStartTs[K]{}, err
 		}
 	}
-	return KeyAndWindowStartTs{
+	return KeyAndWindowStartTs[K]{
 		Key:           k,
 		WindowStartTs: kwSer.WindowStartTs,
 	}, nil
 }
 
-func (s KeyAndWindowStartTsJSONSerde) Encode(value interface{}) ([]byte, error) {
+func (s KeyAndWindowStartTsJSONSerde[K]) Encode(value KeyAndWindowStartTs[K]) ([]byte, error) {
 	kw, err := convertToKeyAndWindowStartTsSer(value, s.KeyJSONSerde)
 	if err != nil {
 		return nil, err
@@ -74,19 +66,21 @@ func (s KeyAndWindowStartTsJSONSerde) Encode(value interface{}) ([]byte, error) 
 	return json.Marshal(kw)
 }
 
-func (s KeyAndWindowStartTsJSONSerde) Decode(value []byte) (interface{}, error) {
+func (s KeyAndWindowStartTsJSONSerde[K]) Decode(value []byte) (KeyAndWindowStartTs[K], error) {
 	val := KeyAndWindowStartTsSerialized{}
 	if err := json.Unmarshal(value, &val); err != nil {
-		return nil, err
+		return KeyAndWindowStartTs[K]{}, err
 	}
 	return decodeToKeyAndWindowStartTs(&val, s.KeyJSONSerde)
 }
 
-type KeyAndWindowStartTsMsgpSerde struct {
-	KeyMsgpSerde Serde
+type KeyAndWindowStartTsMsgpSerde[K any] struct {
+	KeyMsgpSerde Serde[K]
 }
 
-func (s KeyAndWindowStartTsMsgpSerde) Encode(value interface{}) ([]byte, error) {
+var _ = Serde[KeyAndWindowStartTs[int]](&KeyAndWindowStartTsMsgpSerde[int]{})
+
+func (s KeyAndWindowStartTsMsgpSerde[K]) Encode(value KeyAndWindowStartTs[K]) ([]byte, error) {
 	kw, err := convertToKeyAndWindowStartTsSer(value, s.KeyMsgpSerde)
 	if err != nil {
 		return nil, err
@@ -97,10 +91,10 @@ func (s KeyAndWindowStartTsMsgpSerde) Encode(value interface{}) ([]byte, error) 
 	return kw.MarshalMsg(nil)
 }
 
-func (s KeyAndWindowStartTsMsgpSerde) Decode(value []byte) (interface{}, error) {
+func (s KeyAndWindowStartTsMsgpSerde[K]) Decode(value []byte) (KeyAndWindowStartTs[K], error) {
 	val := KeyAndWindowStartTsSerialized{}
 	if _, err := val.UnmarshalMsg(value); err != nil {
-		return nil, err
+		return KeyAndWindowStartTs[K]{}, err
 	}
 	return decodeToKeyAndWindowStartTs(&val, s.KeyMsgpSerde)
 }

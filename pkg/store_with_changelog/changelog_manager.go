@@ -18,8 +18,8 @@ type ChangelogManager struct {
 	changelogIsSrc  bool
 }
 
-func NewChangelogManagerForSrc(stream *sharedlog_stream.ShardedSharedLogStream,
-	msgSerde commtypes.MessageSerde, timeout time.Duration,
+func NewChangelogManagerForSrc[K, V any](stream *sharedlog_stream.ShardedSharedLogStream,
+	msgSerde commtypes.MessageSerde[K, V], timeout time.Duration,
 ) *ChangelogManager {
 	return &ChangelogManager{
 		restoreConsumer: producer_consumer.NewShardedSharedLogStreamConsumer(stream,
@@ -32,8 +32,8 @@ func NewChangelogManagerForSrc(stream *sharedlog_stream.ShardedSharedLogStream,
 	}
 }
 
-func NewChangelogManager(stream *sharedlog_stream.ShardedSharedLogStream,
-	msgSerde commtypes.MessageSerde,
+func NewChangelogManager[K, V any](stream *sharedlog_stream.ShardedSharedLogStream,
+	msgSerde commtypes.MessageSerde[K, V],
 	timeout time.Duration,
 	flushDuration time.Duration,
 ) *ChangelogManager {

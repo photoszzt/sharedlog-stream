@@ -22,7 +22,7 @@ type ControlChannelManager struct {
 	// topic -> (key -> set of substreamid)
 	keyMappings map[string]*skiplist.SkipList
 
-	msgSerde commtypes.Serde
+	msgSerde commtypes.MessageSerde[string, txn_data.ControlMetadata]
 
 	topicStreams  map[string]*sharedlog_stream.ShardedSharedLogStream
 	controlLog    *sharedlog_stream.SharedLogStream
@@ -53,12 +53,12 @@ func NewControlChannelManager(env types.Environment,
 		funcName:     app_id,
 	}
 	if serdeFormat == commtypes.JSON {
-		cm.msgSerde = commtypes.MessageJSONSerde{
+		cm.msgSerde = commtypes.MessageJSONSerde[string, txn_data.ControlMetadata]{
 			KeySerde: commtypes.StringSerde{},
 			ValSerde: txn_data.ControlMetadataJSONSerde{},
 		}
 	} else if serdeFormat == commtypes.MSGP {
-		cm.msgSerde = commtypes.MessageMsgpSerde{
+		cm.msgSerde = commtypes.MessageMsgpSerde[string, txn_data.ControlMetadata]{
 			KeySerde: commtypes.StringSerde{},
 			ValSerde: txn_data.ControlMetadataMsgpSerde{},
 		}
@@ -77,12 +77,11 @@ func (cmm *ControlChannelManager) RestoreMapping(ctx context.Context) error {
 			}
 			return err
 		}
-		msgTmp, err := cmm.msgSerde.Decode(rawMsg.Payload)
+		msg, err := cmm.msgSerde.Decode(rawMsg.Payload)
 		if err != nil {
 			return err
 		}
-		msg := msgTmp.(commtypes.Message)
-		ctrlMeta := msg.Value.(txn_data.ControlMetadata)
+		ctrlMeta := msg.Value
 		if ctrlMeta.Config == nil {
 			cmm.currentEpoch = ctrlMeta.Epoch
 			cmm.updateKeyMapping(&ctrlMeta)
@@ -94,8 +93,9 @@ func (cmm *ControlChannelManager) TrackStream(topicName string, stream *sharedlo
 	cmm.topicStreams[topicName] = stream
 }
 
-func (cmm *ControlChannelManager) appendToControlLog(ctx context.Context, cm *txn_data.ControlMetadata) error {
-	msg_encoded, err := cmm.msgSerde.Encode(&commtypes.Message{Key: nil, Value: cm})
+func (cmm *ControlChannelManager) appendToControlLog(ctx context.Context, cm txn_data.ControlMetadata) error {
+	msg_encoded, err := cmm.msgSerde.Encode(
+		commtypes.Message[string, txn_data.ControlMetadata]{Key: "", Value: cm})
 	if err != nil {
 		return err
 	}
@@ -113,14 +113,14 @@ func (cmm *ControlChannelManager) AppendRescaleConfig(ctx context.Context,
 		Config: config,
 		Epoch:  cmm.currentEpoch,
 	}
-	err := cmm.appendToControlLog(ctx, &cm)
+	err := cmm.appendToControlLog(ctx, cm)
 	return err
 }
 
 func (cmm *ControlChannelManager) TrackAndAppendKeyMapping(
 	ctx context.Context,
 	key interface{},
-	keySerde commtypes.Serde,
+	keySerde commtypes.Serde[any],
 	substreamId uint8,
 	topic string,
 ) error {
@@ -152,7 +152,7 @@ func (cmm *ControlChannelManager) TrackAndAppendKeyMapping(
 			Topic:       topic,
 			Epoch:       cmm.currentEpoch,
 		}
-		err = cmm.appendToControlLog(ctx, &cm)
+		err = cmm.appendToControlLog(ctx, cm)
 	}
 	return err
 }
@@ -168,7 +168,7 @@ func (cmm *ControlChannelManager) RecordPrevInstanceFinish(
 		InstanceId:       instanceID,
 		Epoch:            epoch,
 	}
-	err := cmm.appendToControlLog(ctx, &cm)
+	err := cmm.appendToControlLog(ctx, cm)
 	return err
 }
 
@@ -228,13 +228,12 @@ func (cmm *ControlChannelManager) monitorControlChannel(
 			output <- ControlChannelErr(err)
 			break
 		} else {
-			msgTmp, err := cmm.msgSerde.Decode(rawMsg.Payload)
+			msg, err := cmm.msgSerde.Decode(rawMsg.Payload)
 			if err != nil {
 				output <- ControlChannelErr(err)
 				break
 			}
-			msg := msgTmp.(commtypes.Message)
-			ctrlMeta := msg.Value.(txn_data.ControlMetadata)
+			ctrlMeta := msg.Value
 			// debug.Fprintf(os.Stderr, "MonitorControlChannel: tp %s got %v, off: %x\n",
 			// 	cmm.controlLog.TopicName(), ctrlMeta, rawMsg.LogSeqNum)
 			if ctrlMeta.Key != nil && ctrlMeta.Topic != "" {

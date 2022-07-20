@@ -39,68 +39,6 @@ func (kvc *KVStoreChangelog) ChangelogManager() *store_with_changelog.ChangelogM
 	return kvc.changelogManager
 }
 
-/*
-func NewKVStoreChangelogForExternalStore(
-	kvStore store.KeyValueStore,
-	inputStream sharedlog_stream.Stream,
-	restoreFunc func(ctx context.Context, args interface{}) error,
-	restoreArg interface{},
-	tabTranRepr string,
-	parNum uint8,
-) *KVStoreChangelog {
-	return &KVStoreChangelog{
-		kvStore:     kvStore,
-		inputStream: inputStream,
-		restoreFunc: restoreFunc,
-		restoreArg:  restoreArg,
-		parNum:      parNum,
-		tabTranRepr: tabTranRepr,
-	}
-}
-
-func BeginKVStoreTransaction(ctx context.Context, kvstores []*KVStoreChangelog) error {
-	for _, kvstorelog := range kvstores {
-		if kvstorelog.kvStore.TableType() == store.MONGODB {
-			debug.Fprintf(os.Stderr, "id %s %d start mongo transaction for db %s\n",
-				ctx.Value("id"), kvstorelog.parNum, kvstorelog.kvStore.Name())
-			if err := kvstorelog.kvStore.StartTransaction(ctx); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func CommitKVStoreTransaction(ctx context.Context, kvstores []*KVStoreChangelog, transactionID uint64) error {
-	for _, kvstorelog := range kvstores {
-		if kvstorelog.kvStore.TableType() == store.MONGODB {
-			debug.Fprintf(os.Stderr, "id %s %d commit mongo transaction for db %s\n",
-				ctx.Value("id"), kvstorelog.parNum, kvstorelog.kvStore.Name())
-			if err := kvstorelog.kvStore.CommitTransaction(ctx, kvstorelog.tabTranRepr, transactionID); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func AbortKVStoreTransaction(ctx context.Context, kvstores []*KVStoreChangelog) error {
-	for _, kvstorelog := range kvstores {
-		if kvstorelog.kvStore.TableType() == store.MONGODB {
-			if err := kvstorelog.kvStore.AbortTransaction(ctx); err != nil {
-				if err == session.ErrAbortTwice {
-					fmt.Fprint(os.Stderr, "transaction already aborted\n")
-					return nil
-				} else {
-					return err
-				}
-			}
-		}
-	}
-	return nil
-}
-*/
-
 func RestoreChangelogKVStateStore(
 	ctx context.Context,
 	kvchangelog *KVStoreChangelog,

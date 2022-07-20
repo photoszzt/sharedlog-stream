@@ -23,8 +23,8 @@ import (
 	"golang.org/x/xerrors"
 )
 
-type DumpOutputStreamConfig struct {
-	MsgSerde      commtypes.MessageSerde
+type DumpOutputStreamConfig[K, V any] struct {
+	MsgSerde      commtypes.MessageSerde[K, V]
 	OutputDir     string
 	TopicName     string
 	SerdeFormat   commtypes.SerdeFormat
@@ -53,7 +53,7 @@ func GetShardedInputOutputStreams(ctx context.Context,
 	return inputStream, output_streams, nil
 }
 
-func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutputStreamConfig) error {
+func DumpOutputStream[K, V any](ctx context.Context, env types.Environment, args DumpOutputStreamConfig[K, V]) error {
 	log, err := sharedlog_stream.NewShardedSharedLogStream(env, args.TopicName, args.NumPartitions, args.SerdeFormat)
 	if err != nil {
 		return err
