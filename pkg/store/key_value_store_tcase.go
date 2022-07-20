@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"sharedlog-stream/pkg/commtypes"
 	"testing"
 )
 
@@ -24,7 +23,7 @@ func checkErr(err error, t testing.TB) {
 	}
 }
 
-func ShouldNotIncludeDeletedFromRangeResult(ctx context.Context, store KeyValueStore, t testing.TB) {
+func ShouldNotIncludeDeletedFromRangeResult(ctx context.Context, store KeyValueStore[int, string], t testing.TB) {
 	checkErr(store.Put(ctx, 0, "zero"), t)
 	checkErr(store.Put(ctx, 1, "one"), t)
 	checkErr(store.Put(ctx, 2, "two"), t)
@@ -45,8 +44,8 @@ func ShouldNotIncludeDeletedFromRangeResult(ctx context.Context, store KeyValueS
 		t.Fatalf("expected two, got %s", val2)
 	}
 	ret := make(map[int]string)
-	err = store.Range(ctx, nil, nil, func(kt commtypes.KeyT, vt commtypes.ValueT) error {
-		ret[kt.(int)] = vt.(string)
+	err = store.Range(ctx, 0, 0, func(kt int, vt string) error {
+		ret[kt] = vt
 		return nil
 	})
 	if err != nil {
@@ -55,12 +54,12 @@ func ShouldNotIncludeDeletedFromRangeResult(ctx context.Context, store KeyValueS
 	checkMapEqual(t, expected, ret)
 }
 
-func ShouldDeleteIfSerializedValueIsNull(ctx context.Context, store KeyValueStore, t testing.TB) {
+func ShouldDeleteIfSerializedValueIsNull(ctx context.Context, store KeyValueStore[int, string], t testing.TB) {
 	checkErr(store.Put(ctx, 0, "zero"), t)
 	checkErr(store.Put(ctx, 1, "one"), t)
 	checkErr(store.Put(ctx, 2, "two"), t)
-	checkErr(store.Put(ctx, 0, nil), t)
-	checkErr(store.Put(ctx, 1, nil), t)
+	checkErr(store.Put(ctx, 0, ""), t)
+	checkErr(store.Put(ctx, 1, ""), t)
 	expected := make(map[int]string)
 	expected[2] = "two"
 
@@ -75,8 +74,8 @@ func ShouldDeleteIfSerializedValueIsNull(ctx context.Context, store KeyValueStor
 		t.Fatalf("expected two, got %s", val2)
 	}
 	ret := make(map[int]string)
-	err = store.Range(ctx, nil, nil, func(kt commtypes.KeyT, vt commtypes.ValueT) error {
-		ret[kt.(int)] = vt.(string)
+	err = store.Range(ctx, 0, 0, func(kt int, vt string) error {
+		ret[kt] = vt
 		return nil
 	})
 	if err != nil {
@@ -91,16 +90,16 @@ func checkExists(expected bool, exists bool, t testing.TB) {
 	}
 }
 
-func checkGet(ctx context.Context, store KeyValueStore, t testing.TB, key int, expected string) {
+func checkGet(ctx context.Context, store KeyValueStore[int, string], t testing.TB, key int, expected string) {
 	ret, exists, err := store.Get(ctx, key)
 	checkErr(err, t)
 	checkExists(true, exists, t)
-	if ret.(string) != expected {
+	if ret != expected {
 		t.Fatalf("expected %v, got %v", expected, ret)
 	}
 }
 
-func PutGetRange(ctx context.Context, store KeyValueStore, t testing.TB) {
+func PutGetRange(ctx context.Context, store KeyValueStore[int, string], t testing.TB) {
 	checkErr(store.Put(ctx, 0, "zero"), t)
 	checkErr(store.Put(ctx, 1, "one"), t)
 	checkErr(store.Put(ctx, 2, "two"), t)
@@ -113,8 +112,8 @@ func PutGetRange(ctx context.Context, store KeyValueStore, t testing.TB) {
 	ret, exists, err := store.Get(ctx, 3)
 	checkErr(err, t)
 	checkExists(false, exists, t)
-	if ret != nil {
-		t.Fatalf("expected nil, got %v", ret)
+	if ret != "" {
+		t.Fatalf("expected , got %v", ret)
 	}
 	checkGet(ctx, store, t, 4, "four")
 	checkGet(ctx, store, t, 5, "five")
@@ -126,8 +125,8 @@ func PutGetRange(ctx context.Context, store KeyValueStore, t testing.TB) {
 	expected[4] = "four"
 
 	ret_range := make(map[int]string)
-	err = store.Range(ctx, 2, 4, func(kt commtypes.KeyT, vt commtypes.ValueT) error {
-		ret_range[kt.(int)] = vt.(string)
+	err = store.Range(ctx, 2, 4, func(kt int, vt string) error {
+		ret_range[kt] = vt
 		return nil
 	})
 	if err != nil {
@@ -136,8 +135,8 @@ func PutGetRange(ctx context.Context, store KeyValueStore, t testing.TB) {
 	checkMapEqual(t, expected, ret_range)
 
 	ret_range = make(map[int]string)
-	err = store.Range(ctx, 2, 6, func(kt commtypes.KeyT, vt commtypes.ValueT) error {
-		ret_range[kt.(int)] = vt.(string)
+	err = store.Range(ctx, 2, 6, func(kt int, vt string) error {
+		ret_range[kt] = vt
 		return nil
 	})
 	if err != nil {

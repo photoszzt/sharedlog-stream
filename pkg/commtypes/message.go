@@ -4,30 +4,30 @@ import "fmt"
 
 type Punctuate struct{}
 
-type Message[KeyT any, ValueT any] struct {
-	Key       KeyT
-	Value     ValueT
+type Message struct {
+	Key       interface{}
+	Value     interface{}
 	Timestamp int64
 	InjT      int64
 }
 
-var _ = fmt.Stringer(Message[int, int]{})
+var _ = fmt.Stringer(Message{})
 
-func (m Message[KeyT, ValueT]) String() string {
+func (m Message) String() string {
 	return fmt.Sprintf("Msg: {Key: %v, Value: %v, Ts: %d, InjectTs: %d}", m.Key, m.Value, m.Timestamp, m.InjT)
 }
 
-var _ = EventTimeExtractor(Message[int, int]{})
+var _ = EventTimeExtractor(Message{})
 
-func (m *Message[KeyT, ValueT]) UpdateInjectTime(ts int64) {
+func (m *Message) UpdateInjectTime(ts int64) {
 	m.InjT = ts
 }
 
-func (m Message[KeyT, ValueT]) ExtractInjectTimeMs() int64 {
+func (m Message) ExtractInjectTimeMs() int64 {
 	return m.InjT
 }
 
-func (m Message[KeyT, ValueT]) ExtractEventTime() (int64, error) {
+func (m Message) ExtractEventTime() (int64, error) {
 	return m.Timestamp, nil
 }
 
@@ -41,11 +41,11 @@ func (m Message[KeyT, ValueT]) ExtractEventTime() (int64, error) {
 // 	return nil
 // }
 
-func (m *Message[KeyT, ValueT]) UpdateEventTime(ts int64) {
+func (m *Message) UpdateEventTime(ts int64) {
 	m.Timestamp = ts
 }
 
-var EmptyMessage = Message[interface{}, int]{}
+var EmptyMessage = Message{}
 
 var EmptyRawMsg = RawMsg{Payload: nil, MsgSeqNum: 0, LogSeqNum: 0}
 
@@ -80,28 +80,25 @@ func DecodeRawMsg[K, V any](rawMsg *RawMsg, msgSerde MessageSerde[K, V],
 	payloadArrSerde Serde[PayloadArr],
 ) (*MsgAndSeq, error) {
 	if rawMsg.IsPayloadArr {
-		payloadArrTmp, err := payloadArrSerde.Decode(rawMsg.Payload)
+		payloadArr, err := payloadArrSerde.Decode(rawMsg.Payload)
 		if err != nil {
 			return nil, fmt.Errorf("fail to decode payload arr: %v", err)
 		}
-		payloadArr := payloadArrTmp.(PayloadArr)
 		var msgArr []Message
 		for _, payload := range payloadArr.Payloads {
-			msgTmp, err := msgSerde.Decode(payload)
+			msg, err := msgSerde.Decode(payload)
 			if err != nil {
 				return nil, fmt.Errorf("fail to decode msg 1: %v", err)
 			}
-			msg := msgTmp.(Message)
 			msgArr = append(msgArr, msg)
 		}
 		return &MsgAndSeq{MsgArr: msgArr, Msg: EmptyMessage,
 			MsgSeqNum: rawMsg.MsgSeqNum, LogSeqNum: rawMsg.LogSeqNum}, nil
 	} else {
-		msgTmp, err := msgSerde.Decode(rawMsg.Payload)
+		msg, err := msgSerde.Decode(rawMsg.Payload)
 		if err != nil {
 			return nil, fmt.Errorf("fail to decode msg 2: %v", err)
 		}
-		msg := msgTmp.(Message)
 		return &MsgAndSeq{
 			Msg:       msg,
 			MsgArr:    nil,

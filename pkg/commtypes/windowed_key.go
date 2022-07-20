@@ -7,8 +7,8 @@ import (
 	"sharedlog-stream/pkg/utils"
 )
 
-type WindowedKey struct {
-	Key    interface{}
+type WindowedKey[K any] struct {
+	Key    K
 	Window Window
 }
 
@@ -17,9 +17,9 @@ type WindowedKeySerialized struct {
 	WindowSerialized []byte `json:"ws" msg:"ws"`
 }
 
-type WindowedKeyJSONSerde struct {
-	KeyJSONSerde    Serde
-	WindowJSONSerde Serde
+type WindowedKeyJSONSerde[K any] struct {
+	KeyJSONSerde    Serde[K]
+	WindowJSONSerde Serde[Window]
 }
 
 func castToWindowedKey(value interface{}) *WindowedKey {
@@ -31,7 +31,7 @@ func castToWindowedKey(value interface{}) *WindowedKey {
 	return v
 }
 
-func convertToWindowedKeySer(value interface{}, keySerde Serde, windowSerde Serde) (*WindowedKeySerialized, error) {
+func convertToWindowedKeySer[K any](value interface{}, keySerde Serde[K], windowSerde Serde[Window]) (*WindowedKeySerialized, error) {
 	if value == nil {
 		return nil, nil
 	}

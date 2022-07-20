@@ -10,7 +10,7 @@ import (
 )
 
 type BaseSegments struct {
-	segments        *btree.BTree
+	segments        *btree.BTreeG
 	name            string
 	retentionPeriod int64
 	segmentInterval int64
@@ -30,9 +30,9 @@ func (x Int64) Less(than btree.Item) bool {
 	return x < t
 }
 
-type KeySegment struct {
+type KeySegment[KeyT, ValT any] struct {
 	Key   btree.Item
-	Value Segment
+	Value Segment[KeyT, ValT]
 }
 
 func (kv *KeySegment) Less(than btree.Item) bool {
@@ -41,7 +41,7 @@ func (kv *KeySegment) Less(than btree.Item) bool {
 
 func NewBaseSegments(name string, retentionPeriod int64, segmentInterval int64) *BaseSegments {
 	return &BaseSegments{
-		segments:        btree.New(2),
+		segments:        btree.NewG(2),
 		name:            name,
 		retentionPeriod: retentionPeriod,
 		segmentInterval: segmentInterval,

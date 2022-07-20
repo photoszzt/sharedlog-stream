@@ -10,7 +10,7 @@ import (
 
 type BaseSegmentedBytesStore struct {
 	keySchema          KeySchema
-	segments           Segments
+	segments           Segments[[]byte, []byte]
 	name               string
 	observedStreamTime int64
 	tableType          TABLE_TYPE

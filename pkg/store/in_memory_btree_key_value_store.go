@@ -7,23 +7,23 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/utils"
-	"strings"
 	"sync"
 
 	"github.com/google/btree"
 )
 
-type InMemoryBTreeKeyValueStore struct {
+type InMemoryBTreeKeyValueStore[KeyT, ValT any] struct {
 	mux   sync.Mutex
-	store *btree.BTree
+	store *btree.BTreeG[kvPair[KeyT, ValT]]
 	name  string
 }
 
-type kvPair struct {
-	key btree.Item
-	val commtypes.ValueT
+type kvPair[KeyT, ValT any] struct {
+	key KeyT
+	val ValT
 }
 
+/*
 func (kv kvPair) Less(than btree.Item) bool {
 	return kv.key.Less(than)
 }
@@ -49,78 +49,80 @@ func (a Uint64Item) Less(than btree.Item) bool {
 	}
 	return a < other
 }
+*/
 
-var _ = KeyValueStore(&InMemoryBTreeKeyValueStore{})
+var _ = KeyValueStore[int, int](&InMemoryBTreeKeyValueStore[int, int]{})
 
-func NewInMemoryBTreeKeyValueStore(name string) *InMemoryBTreeKeyValueStore {
-	return &InMemoryBTreeKeyValueStore{
-		name:  name,
-		store: btree.New(2),
+func NewInMemoryBTreeKeyValueStore[KeyT, ValT any](name string, less btree.LessFunc[KeyT]) *InMemoryBTreeKeyValueStore[KeyT, ValT] {
+	return &InMemoryBTreeKeyValueStore[KeyT, ValT]{
+		name: name,
+		store: btree.NewG(2, func(a, b kvPair[KeyT, ValT]) bool {
+			return less(a.key, b.key)
+		}),
 	}
 }
 
-func (st *InMemoryBTreeKeyValueStore) Name() string {
+func (st *InMemoryBTreeKeyValueStore[KeyT, ValT]) Name() string {
 	return st.name
 }
 
-func (st *InMemoryBTreeKeyValueStore) Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error) {
+func (st *InMemoryBTreeKeyValueStore[KeyT, ValT]) Get(ctx context.Context, key KeyT) (ValT, bool, error) {
 	st.mux.Lock()
 	defer st.mux.Unlock()
-	ret := st.store.Get(key.(btree.Item))
-	return ret, ret != nil, nil
+	ret, exists := st.store.Get(kvPair[KeyT, ValT]{key: key})
+	return ret.val, exists, nil
 }
 
-func (st *InMemoryBTreeKeyValueStore) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
+func (st *InMemoryBTreeKeyValueStore[KeyT, ValT]) Put(ctx context.Context, key KeyT, value ValT) error {
 	st.mux.Lock()
 	defer st.mux.Unlock()
 	if utils.IsNil(value) {
-		st.store.Delete(key.(btree.Item))
+		st.store.Delete(kvPair[KeyT, ValT]{key: key})
 	} else {
-		st.store.ReplaceOrInsert(kvPair{key: key.(btree.Item), val: value})
+		st.store.ReplaceOrInsert(kvPair[KeyT, ValT]{key: key, val: value})
 	}
 	return nil
 }
 
-func (st *InMemoryBTreeKeyValueStore) PutIfAbsent(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) (commtypes.ValueT, error) {
+func (st *InMemoryBTreeKeyValueStore[KeyT, ValT]) PutIfAbsent(ctx context.Context, key KeyT, value ValT) (ValT, error) {
 	st.mux.Lock()
 	defer st.mux.Unlock()
-	originalVal := st.store.Get(key.(btree.Item))
-	if originalVal == nil {
-		st.store.ReplaceOrInsert(kvPair{key: key.(btree.Item), val: value})
+	originalVal, exists := st.store.Get(kvPair[KeyT, ValT]{key: key})
+	if !exists {
+		st.store.ReplaceOrInsert(kvPair[KeyT, ValT]{key: key, val: value})
 	}
-	return originalVal, nil
+	return originalVal.val, nil
 }
 
-func (st *InMemoryBTreeKeyValueStore) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
+func (st *InMemoryBTreeKeyValueStore[KeyT, ValT]) PutWithoutPushToChangelog(ctx context.Context, key KeyT, value ValT) error {
 	return st.Put(ctx, key, value)
 }
 
-func (st *InMemoryBTreeKeyValueStore) PutAll(ctx context.Context, kvs []*commtypes.Message) error {
+func (st *InMemoryBTreeKeyValueStore[KeyT, ValT]) PutAll(ctx context.Context, kvs []*commtypes.Message[KeyT, ValT]) error {
 	for _, kv := range kvs {
 		st.Put(ctx, kv.Key, kv.Value)
 	}
 	return nil
 }
 
-func (st *InMemoryBTreeKeyValueStore) Delete(ctx context.Context, key commtypes.KeyT) error {
+func (st *InMemoryBTreeKeyValueStore[KeyT, ValT]) Delete(ctx context.Context, key KeyT) error {
 	st.mux.Lock()
 	defer st.mux.Unlock()
-	st.store.Delete(key.(btree.Item))
+	st.store.Delete(kvPair[KeyT, ValT]{key: key})
 	return nil
 }
 
-func (st *InMemoryBTreeKeyValueStore) ApproximateNumEntries() (uint64, error) {
+func (st *InMemoryBTreeKeyValueStore[KeyT, ValT]) ApproximateNumEntries() (uint64, error) {
 	st.mux.Lock()
 	defer st.mux.Unlock()
 	return uint64(st.store.Len()), nil
 }
 
-func (st *InMemoryBTreeKeyValueStore) Range(ctx context.Context, from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
+func (st *InMemoryBTreeKeyValueStore[KeyT, ValT]) Range(ctx context.Context, from KeyT, to KeyT, iterFunc func(KeyT, ValT) error) error {
 	st.mux.Lock()
 	defer st.mux.Unlock()
 	if utils.IsNil(from) && utils.IsNil(to) {
-		st.store.Ascend(func(item btree.Item) bool {
-			kv := item.(kvPair)
+		st.store.Ascend(func(kv kvPair[KeyT, ValT]) bool {
 			err := iterFunc(kv.key, kv.val)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "[Error] Range: %v\n", err)
@@ -129,8 +131,7 @@ func (st *InMemoryBTreeKeyValueStore) Range(ctx context.Context, from commtypes.
 			return true
 		})
 	} else if utils.IsNil(from) && !utils.IsNil(to) {
-		st.store.AscendLessThan(to.(btree.Item), func(item btree.Item) bool {
-			kv := item.(kvPair)
+		st.store.AscendLessThan(kvPair[KeyT, ValT]{key: to}, func(kv kvPair[KeyT, ValT]) bool {
 			err := iterFunc(kv.key, kv.val)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "[Error] Range: %v\n", err)
@@ -139,8 +140,7 @@ func (st *InMemoryBTreeKeyValueStore) Range(ctx context.Context, from commtypes.
 			return true
 		})
 	} else if !utils.IsNil(from) && utils.IsNil(to) {
-		st.store.AscendGreaterOrEqual(from.(btree.Item), func(item btree.Item) bool {
-			kv := item.(kvPair)
+		st.store.AscendGreaterOrEqual(kvPair[KeyT, ValT]{key: from}, func(kv kvPair[KeyT, ValT]) bool {
 			err := iterFunc(kv.key, kv.val)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "[Error] Range: %v\n", err)
@@ -149,8 +149,7 @@ func (st *InMemoryBTreeKeyValueStore) Range(ctx context.Context, from commtypes.
 			return true
 		})
 	} else {
-		st.store.AscendRange(from.(btree.Item), to.(btree.Item), func(item btree.Item) bool {
-			kv := item.(kvPair)
+		st.store.AscendRange(kvPair[KeyT, ValT]{key: from}, kvPair[KeyT, ValT]{key: to}, func(kv kvPair[KeyT, ValT]) bool {
 			err := iterFunc(kv.key, kv.val)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "[Error] Range: %v\n", err)
@@ -162,34 +161,28 @@ func (st *InMemoryBTreeKeyValueStore) Range(ctx context.Context, from commtypes.
 	return nil
 }
 
-func (st *InMemoryBTreeKeyValueStore) ReverseRange(from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
+func (st *InMemoryBTreeKeyValueStore[KeyT, ValT]) ReverseRange(from KeyT, to KeyT, iterFunc func(KeyT, ValT) error) error {
 	panic("not implemented")
 }
 
-func (st *InMemoryBTreeKeyValueStore) PrefixScan(prefix interface{}, prefixKeyEncoder commtypes.Encoder,
-	iterFunc func(commtypes.KeyT, commtypes.ValueT) error,
-) error {
-	panic("not implemented")
-}
-
-func (st *InMemoryBTreeKeyValueStore) TableType() TABLE_TYPE {
+func (st *InMemoryBTreeKeyValueStore[KeyT, ValT]) TableType() TABLE_TYPE {
 	return IN_MEM
 }
 
-func (st *InMemoryBTreeKeyValueStore) StartTransaction(ctx context.Context) error {
+func (st *InMemoryBTreeKeyValueStore[KeyT, ValT]) StartTransaction(ctx context.Context) error {
 	panic("not supported")
 }
 
-func (st *InMemoryBTreeKeyValueStore) CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error {
+func (st *InMemoryBTreeKeyValueStore[KeyT, ValT]) CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error {
 	panic("not supported")
 }
 
-func (st *InMemoryBTreeKeyValueStore) AbortTransaction(ctx context.Context) error {
+func (st *InMemoryBTreeKeyValueStore[KeyT, ValT]) AbortTransaction(ctx context.Context) error {
 	panic("not supported")
 }
-func (st *InMemoryBTreeKeyValueStore) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
+func (st *InMemoryBTreeKeyValueStore[KeyT, ValT]) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
 	panic("not supported")
 }
 
-func (st *InMemoryBTreeKeyValueStore) SetTrackParFunc(exactly_once_intr.TrackProdSubStreamFunc) {
+func (st *InMemoryBTreeKeyValueStore[KeyT, ValT]) SetTrackParFunc(exactly_once_intr.TrackProdSubStreamFunc) {
 }

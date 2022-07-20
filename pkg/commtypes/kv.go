@@ -8,10 +8,6 @@ import (
 
 type CTXID struct{}
 
-type KeyT interface{}
-
-type ValueT interface{}
-
 type CreateChangelogManagerParam struct {
 	Env           types.Environment
 	NumPartition  uint8

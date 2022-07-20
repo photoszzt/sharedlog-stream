@@ -53,27 +53,14 @@ type ValueTimestampJSONSerde[V any] struct {
 	ValJSONSerde Serde[V]
 }
 
-func CastToValTsPtr(value interface{}) *ValueTimestamp {
-	v, ok := value.(*ValueTimestamp)
-	if !ok {
-		vtmp := value.(ValueTimestamp)
-		v = &vtmp
-	}
-	return v
-}
+var _ = Serde[ValueTimestamp[int]](ValueTimestampJSONSerde[int]{})
 
-func convertToValueTsSer[V any](value interface{}, valSerde Serde[V]) (*ValueTimestampSerialized, error) {
-	if value == nil {
-		return nil, nil
-	}
-	v := CastToValTsPtr(value)
-	if v == nil {
-		return nil, nil
-	}
+func convertToValueTsSer[V any](value ValueTimestamp[V], valSerde Serde[V]) (*ValueTimestampSerialized, error) {
+	v := &value
 	var enc []byte
 	var err error
 	if !utils.IsNil(v.Value) {
-		enc, err = valSerde.Encode(v.Value)
+		enc, err = valSerde.Encode(*v.Value)
 		if err != nil {
 			return nil, err
 		}
@@ -84,7 +71,7 @@ func convertToValueTsSer[V any](value interface{}, valSerde Serde[V]) (*ValueTim
 	}, nil
 }
 
-func (s ValueTimestampJSONSerde) Encode(value interface{}) ([]byte, error) {
+func (s ValueTimestampJSONSerde[V]) Encode(value ValueTimestamp[V]) ([]byte, error) {
 	vs, err := convertToValueTsSer(value, s.ValJSONSerde)
 	if err != nil {
 		return nil, err
@@ -95,37 +82,39 @@ func (s ValueTimestampJSONSerde) Encode(value interface{}) ([]byte, error) {
 	return json.Marshal(vs)
 }
 
-func decodeToValueTs(vtsSer *ValueTimestampSerialized, valSerde Serde) (interface{}, error) {
-	var v interface{}
-	var err error
+func decodeToValueTs[V any](vtsSer *ValueTimestampSerialized, valSerde Serde[V]) (ValueTimestamp[V], error) {
+	var v *V
 	if vtsSer.ValueSerialized != nil {
-		v, err = valSerde.Decode(vtsSer.ValueSerialized)
+		vTmp, err := valSerde.Decode(vtsSer.ValueSerialized)
 		if err != nil {
-			return nil, err
+			return ValueTimestamp[V]{}, err
 		}
+		v = &vTmp
 	}
-	return ValueTimestamp{
+	return ValueTimestamp[V]{
 		Timestamp: vtsSer.Timestamp,
 		Value:     v,
 	}, nil
 }
 
-func (s ValueTimestampJSONSerde) Decode(value []byte) (interface{}, error) {
+func (s ValueTimestampJSONSerde[V]) Decode(value []byte) (ValueTimestamp[V], error) {
 	if value == nil {
-		return nil, nil
+		return ValueTimestamp[V]{}, nil
 	}
 	vs := ValueTimestampSerialized{}
 	if err := json.Unmarshal(value, &vs); err != nil {
-		return nil, err
+		return ValueTimestamp[V]{}, err
 	}
 	return decodeToValueTs(&vs, s.ValJSONSerde)
 }
 
-type ValueTimestampMsgpSerde struct {
-	ValMsgpSerde Serde
+type ValueTimestampMsgpSerde[V any] struct {
+	ValMsgpSerde Serde[V]
 }
 
-func (s ValueTimestampMsgpSerde) Encode(value interface{}) ([]byte, error) {
+var _ = Serde[ValueTimestamp[int]](ValueTimestampMsgpSerde[int]{})
+
+func (s ValueTimestampMsgpSerde[V]) Encode(value ValueTimestamp[V]) ([]byte, error) {
 	vs, err := convertToValueTsSer(value, s.ValMsgpSerde)
 	if err != nil {
 		return nil, err
@@ -136,30 +125,28 @@ func (s ValueTimestampMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	return vs.MarshalMsg(nil)
 }
 
-func (s ValueTimestampMsgpSerde) Decode(value []byte) (interface{}, error) {
+func (s ValueTimestampMsgpSerde[V]) Decode(value []byte) (ValueTimestamp[V], error) {
 	if value == nil {
-		return nil, nil
+		return ValueTimestamp[V]{}, nil
 	}
 	vs := ValueTimestampSerialized{}
 	_, err := vs.UnmarshalMsg(value)
 	if err != nil {
-		return nil, err
+		return ValueTimestamp[V]{}, err
 	}
 	return decodeToValueTs(&vs, s.ValMsgpSerde)
 }
 
-func GetValueTsSerde(serdeFormat SerdeFormat, valSerde Serde) (Serde, error) {
-	var vtSerde Serde
+func GetValueTsSerde[V any](serdeFormat SerdeFormat, valSerde Serde[V]) (Serde[ValueTimestamp[V]], error) {
 	if serdeFormat == JSON {
-		vtSerde = ValueTimestampJSONSerde{
+		return ValueTimestampJSONSerde[V]{
 			ValJSONSerde: valSerde,
-		}
+		}, nil
 	} else if serdeFormat == MSGP {
-		vtSerde = ValueTimestampMsgpSerde{
+		return ValueTimestampMsgpSerde[V]{
 			ValMsgpSerde: valSerde,
-		}
+		}, nil
 	} else {
 		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
 	}
-	return vtSerde, nil
 }

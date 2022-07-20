@@ -16,35 +16,36 @@ type OffsetRecord struct {
 
 type OffsetRecordJSONSerde struct{}
 
-func (s OffsetRecordJSONSerde) Encode(value interface{}) ([]byte, error) {
-	or := value.(*OffsetRecord)
+var _ = commtypes.Serde[OffsetRecord](OffsetRecordJSONSerde{})
+
+func (s OffsetRecordJSONSerde) Encode(value OffsetRecord) ([]byte, error) {
+	or := &value
 	return json.Marshal(or)
 }
 
-func (s OffsetRecordJSONSerde) Decode(value []byte) (interface{}, error) {
+func (s OffsetRecordJSONSerde) Decode(value []byte) (OffsetRecord, error) {
 	or := OffsetRecord{}
 	if err := json.Unmarshal(value, &or); err != nil {
-		return nil, err
+		return OffsetRecord{}, err
 	}
 	return or, nil
 }
 
 type OffsetRecordMsgpSerde struct{}
 
-func (s OffsetRecordMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	or := value.(*OffsetRecord)
-	return or.MarshalMsg(nil)
+func (s OffsetRecordMsgpSerde) Encode(value OffsetRecord) ([]byte, error) {
+	return value.MarshalMsg(nil)
 }
 
-func (s OffsetRecordMsgpSerde) Decode(value []byte) (interface{}, error) {
+func (s OffsetRecordMsgpSerde) Decode(value []byte) (OffsetRecord, error) {
 	or := OffsetRecord{}
 	if _, err := or.UnmarshalMsg(value); err != nil {
-		return nil, err
+		return OffsetRecord{}, err
 	}
 	return or, nil
 }
 
-func GetOffsetRecordSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
+func GetOffsetRecordSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde[OffsetRecord], error) {
 	if serdeFormat == commtypes.JSON {
 		return OffsetRecordJSONSerde{}, nil
 	} else if serdeFormat == commtypes.MSGP {

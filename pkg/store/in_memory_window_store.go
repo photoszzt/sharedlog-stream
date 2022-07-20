@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/utils"
@@ -14,7 +13,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type InMemoryWindowStore struct {
+type InMemoryWindowStore[KeyT, ValT any] struct {
 	// for val comparison
 	comparable concurrent_skiplist.Comparable
 
@@ -30,12 +29,12 @@ type InMemoryWindowStore struct {
 	open             bool
 }
 
-var _ = WindowStore(&InMemoryWindowStore{})
+var _ = WindowStore[int, string](&InMemoryWindowStore[int, string]{})
 
-func NewInMemoryWindowStore(name string, retentionPeriod int64, windowSize int64, retainDuplicates bool,
+func NewInMemoryWindowStore[KeyT, ValT any](name string, retentionPeriod int64, windowSize int64, retainDuplicates bool,
 	compare concurrent_skiplist.Comparable,
-) *InMemoryWindowStore {
-	return &InMemoryWindowStore{
+) *InMemoryWindowStore[KeyT, ValT] {
+	return &InMemoryWindowStore[KeyT, ValT]{
 		name:               name,
 		windowSize:         windowSize,
 		retentionPeriod:    retentionPeriod,
@@ -57,22 +56,22 @@ func NewInMemoryWindowStore(name string, retentionPeriod int64, windowSize int64
 	}
 }
 
-func (st *InMemoryWindowStore) IsOpen() bool {
+func (st InMemoryWindowStore[KeyT, ValT]) IsOpen() bool {
 	return true
 }
 
-func (st *InMemoryWindowStore) updateSeqnumForDups() {
+func (st InMemoryWindowStore[KeyT, ValT]) updateSeqnumForDups() {
 	if st.retainDuplicates {
 		atomic.CompareAndSwapUint32(&st.seqNum, math.MaxUint32, 0)
 		atomic.AddUint32(&st.seqNum, 1)
 	}
 }
 
-func (s *InMemoryWindowStore) Name() string {
+func (s InMemoryWindowStore[KeyT, ValT]) Name() string {
 	return s.name
 }
 
-func (s *InMemoryWindowStore) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error {
+func (s InMemoryWindowStore[KeyT, ValT]) Put(ctx context.Context, key KeyT, value ValT, windowStartTimestamp int64) error {
 	s.removeExpiredSegments()
 	if windowStartTimestamp > s.observedStreamTime {
 		s.observedStreamTime = windowStartTimestamp
@@ -103,11 +102,11 @@ func (s *InMemoryWindowStore) Put(ctx context.Context, key commtypes.KeyT, value
 	return nil
 }
 
-func (s *InMemoryWindowStore) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error {
+func (s InMemoryWindowStore[KeyT, ValT]) PutWithoutPushToChangelog(ctx context.Context, key KeyT, value ValT, windowStartTimestamp int64) error {
 	return s.Put(ctx, key, value, windowStartTimestamp)
 }
 
-func (s *InMemoryWindowStore) Get(ctx context.Context, key commtypes.KeyT, windowStartTimestamp int64) (commtypes.ValueT, bool, error) {
+func (s InMemoryWindowStore[KeyT, ValT]) Get(ctx context.Context, key KeyT, windowStartTimestamp int64) (ValT, bool, error) {
 	s.removeExpiredSegments()
 	if windowStartTimestamp <= s.observedStreamTime-s.retentionPeriod {
 		return nil, false, nil
@@ -122,17 +121,17 @@ func (s *InMemoryWindowStore) Get(ctx context.Context, key commtypes.KeyT, windo
 		if v == nil {
 			return nil, false, nil
 		} else {
-			return v.Value(), true, nil
+			return v.Value().(ValT), true, nil
 		}
 	}
 }
 
-func (s *InMemoryWindowStore) Fetch(
+func (s InMemoryWindowStore[KeyT, ValT]) Fetch(
 	ctx context.Context,
-	key commtypes.KeyT,
+	key KeyT,
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
+	iterFunc func(int64, KeyT, ValT) error,
 ) error {
 	s.removeExpiredSegments()
 
@@ -175,22 +174,22 @@ func (s *InMemoryWindowStore) Fetch(
 	}
 }
 
-func (s *InMemoryWindowStore) BackwardFetch(
-	key commtypes.KeyT,
+func (s InMemoryWindowStore[KeyT, ValT]) BackwardFetch(
+	key KeyT,
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
+	iterFunc func(int64, KeyT, ValT) error,
 ) error {
 	panic("not implemented")
 }
 
-func (s *InMemoryWindowStore) FetchWithKeyRange(
+func (s InMemoryWindowStore[KeyT, ValT]) FetchWithKeyRange(
 	ctx context.Context,
-	keyFrom commtypes.KeyT,
-	keyTo commtypes.KeyT,
+	keyFrom KeyT,
+	keyTo KeyT,
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
+	iterFunc func(int64, KeyT, ValT) error,
 ) error {
 	s.removeExpiredSegments()
 
@@ -213,12 +212,12 @@ func (s *InMemoryWindowStore) FetchWithKeyRange(
 	return s.fetchWithKeyRange(keyFrom, keyTo, tsFrom, tsTo, iterFunc)
 }
 
-func (s *InMemoryWindowStore) fetchWithKeyRange(
+func (s InMemoryWindowStore[KeyT, ValT]) fetchWithKeyRange(
 	keyFrom interface{},
 	keyTo interface{},
 	tsFrom int64,
 	tsTo int64,
-	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
+	iterFunc func(int64, KeyT, ValT) error,
 ) error {
 	err := s.store.IterateRange(tsFrom, tsTo, func(ts concurrent_skiplist.KeyT, val concurrent_skiplist.ValueT) error {
 		curT := ts.(int64)
@@ -240,7 +239,7 @@ func (s *InMemoryWindowStore) fetchWithKeyRange(
 	return err
 }
 
-func (s *InMemoryWindowStore) IterAll(iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error {
+func (s InMemoryWindowStore[KeyT, ValT]) IterAll(iterFunc func(int64, KeyT, ValT) error) error {
 	s.removeExpiredSegments()
 	minTime := s.observedStreamTime - s.retentionPeriod
 
@@ -258,7 +257,7 @@ func (s *InMemoryWindowStore) IterAll(iterFunc func(int64, commtypes.KeyT, commt
 	return err
 }
 
-func (s *InMemoryWindowStore) removeExpiredSegments() {
+func (s InMemoryWindowStore[KeyT, ValT]) removeExpiredSegments() {
 	minLiveTimeTmp := int64(s.observedStreamTime) - int64(s.retentionPeriod) + 1
 	minLiveTime := int64(0)
 
@@ -269,21 +268,21 @@ func (s *InMemoryWindowStore) removeExpiredSegments() {
 	s.store.RemoveUntil(minLiveTime)
 }
 
-func (s *InMemoryWindowStore) BackwardFetchWithKeyRange(
-	keyFrom commtypes.KeyT,
-	keyTo commtypes.KeyT,
+func (s InMemoryWindowStore[KeyT, ValT]) BackwardFetchWithKeyRange(
+	keyFrom KeyT,
+	keyTo KeyT,
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
+	iterFunc func(int64, KeyT, ValT) error,
 ) error {
 	panic("not implemented")
 }
 
-func (s *InMemoryWindowStore) FetchAll(
+func (s InMemoryWindowStore[KeyT, ValT]) FetchAll(
 	ctx context.Context,
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
+	iterFunc func(int64, KeyT, ValT) error,
 ) error {
 	s.removeExpiredSegments()
 
@@ -321,29 +320,29 @@ func (s *InMemoryWindowStore) FetchAll(
 	return err
 }
 
-func (s *InMemoryWindowStore) BackwardFetchAll(
+func (s InMemoryWindowStore[KeyT, ValT]) BackwardFetchAll(
 	timeFrom time.Time,
 	timeTo time.Time,
-	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
+	iterFunc func(int64, KeyT, ValT) error,
 ) error {
 	panic("not implemented")
 }
 
-func (s *InMemoryWindowStore) DropDatabase(ctx context.Context) error {
+func (s InMemoryWindowStore[KeyT, ValT]) DropDatabase(ctx context.Context) error {
 	panic("not implemented")
 }
 
-func (s *InMemoryWindowStore) TableType() TABLE_TYPE {
+func (s InMemoryWindowStore[KeyT, ValT]) TableType() TABLE_TYPE {
 	return IN_MEM
 }
 
-func (s *InMemoryWindowStore) StartTransaction(ctx context.Context) error { return nil }
-func (s *InMemoryWindowStore) CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error {
+func (s InMemoryWindowStore[KeyT, ValT]) StartTransaction(ctx context.Context) error { return nil }
+func (s InMemoryWindowStore[KeyT, ValT]) CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error {
 	return nil
 }
-func (s *InMemoryWindowStore) AbortTransaction(ctx context.Context) error { return nil }
-func (s *InMemoryWindowStore) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
+func (s InMemoryWindowStore[KeyT, ValT]) AbortTransaction(ctx context.Context) error { return nil }
+func (s InMemoryWindowStore[KeyT, ValT]) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
 	panic("not supported")
 }
-func (s *InMemoryWindowStore) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
+func (s InMemoryWindowStore[KeyT, ValT]) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 }

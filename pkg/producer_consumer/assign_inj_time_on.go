@@ -9,14 +9,14 @@ import (
 	"time"
 )
 
-func assignInjTime(msg *commtypes.Message) {
+func assignInjTime[KeyT, ValT any](msg *commtypes.Message[KeyT, ValT]) {
 	nowMs := time.Now().UnixMilli()
 	if !MsgIsScaleFence(msg) {
 		msg.UpdateInjectTime(nowMs)
 	}
 }
 
-func extractProduceToConsumeTime(msg *commtypes.Message, isInitialSrc bool, collector *stats.Int64Collector) {
+func extractProduceToConsumeTime[KeyT, ValT any](msg *commtypes.Message[KeyT, ValT], isInitialSrc bool, collector *stats.Int64Collector) {
 	if !isInitialSrc {
 		ts := msg.ExtractInjectTimeMs()
 		dur := time.Now().UnixMilli() - ts
