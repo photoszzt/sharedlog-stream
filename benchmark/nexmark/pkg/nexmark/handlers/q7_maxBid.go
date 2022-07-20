@@ -121,9 +121,9 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	compare := func(a, b treemap.Key) int {
-		ka := a.(*ntypes.StartEndTime)
-		kb := b.(*ntypes.StartEndTime)
-		return ntypes.CompareStartEndTime(ka, kb)
+		ka := a.(ntypes.StartEndTime)
+		kb := b.(ntypes.StartEndTime)
+		return ntypes.CompareStartEndTime(&ka, &kb)
 	}
 	kvstore, err := store_with_changelog.CreateInMemKVTableWithChangelog(mp, compare)
 	if err != nil {

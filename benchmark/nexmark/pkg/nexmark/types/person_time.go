@@ -38,8 +38,8 @@ type PersonTimeJSONDecoder struct{}
 var _ = commtypes.Decoder(PersonTimeJSONDecoder{})
 
 func (d PersonTimeJSONDecoder) Decode(value []byte) (interface{}, error) {
-	se := &PersonTime{}
-	err := json.Unmarshal(value, se)
+	se := PersonTime{}
+	err := json.Unmarshal(value, &se)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ type PersonTimeMsgpDecoder struct{}
 var _ = commtypes.Decoder(PersonTimeMsgpDecoder{})
 
 func (d PersonTimeMsgpDecoder) Decode(value []byte) (interface{}, error) {
-	se := &PersonTime{}
+	se := PersonTime{}
 	_, err := se.UnmarshalMsg(value)
 	if err != nil {
 		return nil, err

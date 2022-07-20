@@ -156,9 +156,9 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	compare := func(a, b treemap.Key) int {
-		ka := a.(*ntypes.StartEndTime)
-		kb := b.(*ntypes.StartEndTime)
-		return ntypes.CompareStartEndTime(ka, kb)
+		ka := a.(ntypes.StartEndTime)
+		kb := b.(ntypes.StartEndTime)
+		return ntypes.CompareStartEndTime(&ka, &kb)
 	}
 	kvstore, err := store_with_changelog.CreateInMemKVTableWithChangelog(mp, compare)
 	if err != nil {
@@ -168,7 +168,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		kvstore, processor.InitializerFunc(func() interface{} {
 			return uint64(0)
 		}), processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
-			v := value.(*ntypes.AuctionIdCount)
+			v := value.(ntypes.AuctionIdCount)
 			agg := aggregate.(uint64)
 			if v.Count > agg {
 				return v.Count
@@ -178,7 +178,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	stJoin := processor.NewMeteredProcessor(processor.NewStreamTableJoinProcessor(kvstore,
 		processor.ValueJoinerWithKeyFunc(
 			func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
-				lv := leftValue.(*ntypes.AuctionIdCount)
+				lv := leftValue.(ntypes.AuctionIdCount)
 				rv := rightValue.(uint64)
 				return &ntypes.AuctionIdCntMax{
 					AucId:  lv.AucId,

@@ -33,8 +33,8 @@ func (s AuctionIdCntMaxJSONSerde) Encode(value interface{}) ([]byte, error) {
 }
 
 func (s AuctionIdCntMaxJSONSerde) Decode(value []byte) (interface{}, error) {
-	ai := &AuctionIdCntMax{}
-	err := json.Unmarshal(value, ai)
+	ai := AuctionIdCntMax{}
+	err := json.Unmarshal(value, &ai)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (s AuctionIdCntMaxMsgpSerde) Encode(value interface{}) ([]byte, error) {
 }
 
 func (s AuctionIdCntMaxMsgpSerde) Decode(value []byte) (interface{}, error) {
-	ai := &AuctionIdCntMax{}
+	ai := AuctionIdCntMax{}
 	_, err := ai.UnmarshalMsg(value)
 	if err != nil {
 		return nil, err

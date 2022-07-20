@@ -27,7 +27,7 @@ func (ab AuctionBid) String() string {
 
 type AuctionBidJSONSerde struct{}
 
-var _ = commtypes.Encoder(&AuctionBidJSONSerde{})
+var _ = commtypes.Encoder(AuctionBidJSONSerde{})
 
 func (s AuctionBidJSONSerde) Encode(value interface{}) ([]byte, error) {
 	ab := value.(*AuctionBid)

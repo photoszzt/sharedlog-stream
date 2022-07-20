@@ -36,8 +36,8 @@ type AuctionIdCountJSONDecoder struct{}
 var _ = commtypes.Decoder(AuctionIdCountJSONDecoder{})
 
 func (d AuctionIdCountJSONDecoder) Decode(value []byte) (interface{}, error) {
-	se := &AuctionIdCount{}
-	err := json.Unmarshal(value, se)
+	se := AuctionIdCount{}
+	err := json.Unmarshal(value, &se)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +63,7 @@ type AuctionIdCountMsgpDecoder struct{}
 var _ = commtypes.Decoder(AuctionIdCountMsgpDecoder{})
 
 func (d AuctionIdCountMsgpDecoder) Decode(value []byte) (interface{}, error) {
-	se := &AuctionIdCount{}
+	se := AuctionIdCount{}
 	_, err := se.UnmarshalMsg(value)
 	if err != nil {
 		return nil, err

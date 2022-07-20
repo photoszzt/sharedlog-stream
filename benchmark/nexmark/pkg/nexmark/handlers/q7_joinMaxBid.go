@@ -121,7 +121,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		leftTs, otherTs int64) interface{} {
 		// fmt.Fprintf(os.Stderr, "val1: %v, val2: %v\n", value1, value2)
 		lv := value1.(*ntypes.Event)
-		rv := value2.(*ntypes.StartEndTime)
+		rv := value2.(ntypes.StartEndTime)
 		return &ntypes.BidAndMax{
 			Price:    lv.Bid.Price,
 			Auction:  lv.Bid.Auction,

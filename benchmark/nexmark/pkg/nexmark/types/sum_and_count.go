@@ -28,8 +28,8 @@ func (s SumAndCountJSONSerde) Encode(value interface{}) ([]byte, error) {
 }
 
 func (s SumAndCountJSONSerde) Decode(value []byte) (interface{}, error) {
-	sc := &SumAndCount{}
-	if err := json.Unmarshal(value, sc); err != nil {
+	sc := SumAndCount{}
+	if err := json.Unmarshal(value, &sc); err != nil {
 		return nil, err
 	}
 	return sc, nil
@@ -43,7 +43,7 @@ func (s SumAndCountMsgpSerde) Encode(value interface{}) ([]byte, error) {
 }
 
 func (s SumAndCountMsgpSerde) Decode(value []byte) (interface{}, error) {
-	sc := &SumAndCount{}
+	sc := SumAndCount{}
 	if _, err := sc.UnmarshalMsg(value); err != nil {
 		return nil, err
 	}

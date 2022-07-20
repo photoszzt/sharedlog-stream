@@ -68,8 +68,8 @@ type StartEndTimeJSONDecoder struct{}
 var _ = commtypes.Decoder(StartEndTimeJSONDecoder{})
 
 func (d StartEndTimeJSONDecoder) Decode(value []byte) (interface{}, error) {
-	se := &StartEndTime{}
-	err := json.Unmarshal(value, se)
+	se := StartEndTime{}
+	err := json.Unmarshal(value, &se)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +99,7 @@ type StartEndTimeMsgpDecoder struct{}
 var _ = commtypes.Decoder(StartEndTimeMsgpDecoder{})
 
 func (d StartEndTimeMsgpDecoder) Decode(value []byte) (interface{}, error) {
-	se := &StartEndTime{}
+	se := StartEndTime{}
 	_, err := se.UnmarshalMsg(value)
 	if err != nil {
 		return nil, err
