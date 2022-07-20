@@ -27,37 +27,35 @@ func (ab AuctionBid) String() string {
 
 type AuctionBidJSONSerde struct{}
 
-var _ = commtypes.Encoder(&AuctionBidJSONSerde{})
+var _ = commtypes.Encoder[AuctionBid](AuctionBidJSONSerde{})
 
-func (s AuctionBidJSONSerde) Encode(value interface{}) ([]byte, error) {
-	ab := value.(*AuctionBid)
-	return json.Marshal(ab)
+func (s AuctionBidJSONSerde) Encode(value AuctionBid) ([]byte, error) {
+	return json.Marshal(&value)
 }
 
-func (s AuctionBidJSONSerde) Decode(value []byte) (interface{}, error) {
+func (s AuctionBidJSONSerde) Decode(value []byte) (AuctionBid, error) {
 	ab := AuctionBid{}
 	if err := json.Unmarshal(value, &ab); err != nil {
-		return nil, err
+		return AuctionBid{}, err
 	}
 	return ab, nil
 }
 
 type AuctionBidMsgpSerde struct{}
 
-func (s AuctionBidMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	ab := value.(*AuctionBid)
-	return ab.MarshalMsg(nil)
+func (s AuctionBidMsgpSerde) Encode(value AuctionBid) ([]byte, error) {
+	return value.MarshalMsg(nil)
 }
 
-func (s AuctionBidMsgpSerde) Decode(value []byte) (interface{}, error) {
+func (s AuctionBidMsgpSerde) Decode(value []byte) (AuctionBid, error) {
 	ab := AuctionBid{}
 	if _, err := ab.UnmarshalMsg(value); err != nil {
-		return nil, err
+		return AuctionBid{}, err
 	}
 	return ab, nil
 }
 
-func GetAuctionBidSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
+func GetAuctionBidSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde[AuctionBid], error) {
 	switch serdeFormat {
 	case commtypes.JSON:
 		return AuctionBidJSONSerde{}, nil

@@ -24,22 +24,21 @@ func (aic AuctionIdCount) String() string {
 
 type AuctionIdCountJSONEncoder struct{}
 
-var _ = commtypes.Encoder(AuctionIdCountJSONEncoder{})
+var _ = commtypes.Encoder[AuctionIdCount](AuctionIdCountJSONEncoder{})
 
-func (e AuctionIdCountJSONEncoder) Encode(value interface{}) ([]byte, error) {
-	se := value.(*AuctionIdCount)
-	return json.Marshal(se)
+func (e AuctionIdCountJSONEncoder) Encode(value AuctionIdCount) ([]byte, error) {
+	return json.Marshal(&value)
 }
 
 type AuctionIdCountJSONDecoder struct{}
 
-var _ = commtypes.Decoder(AuctionIdCountJSONDecoder{})
+var _ = commtypes.Decoder[AuctionIdCount](AuctionIdCountJSONDecoder{})
 
-func (d AuctionIdCountJSONDecoder) Decode(value []byte) (interface{}, error) {
-	se := &AuctionIdCount{}
+func (d AuctionIdCountJSONDecoder) Decode(value []byte) (AuctionIdCount, error) {
+	se := AuctionIdCount{}
 	err := json.Unmarshal(value, se)
 	if err != nil {
-		return nil, err
+		return AuctionIdCount{}, err
 	}
 	return se, nil
 }
@@ -51,22 +50,21 @@ type AuctionIdCountJSONSerde struct {
 
 type AuctionIdCountMsgpEncoder struct{}
 
-var _ = commtypes.Encoder(AuctionIdCountMsgpEncoder{})
+var _ = commtypes.Encoder[AuctionIdCount](AuctionIdCountMsgpEncoder{})
 
-func (e AuctionIdCountMsgpEncoder) Encode(value interface{}) ([]byte, error) {
-	se := value.(*AuctionIdCount)
-	return se.MarshalMsg(nil)
+func (e AuctionIdCountMsgpEncoder) Encode(value AuctionIdCount) ([]byte, error) {
+	return value.MarshalMsg(nil)
 }
 
 type AuctionIdCountMsgpDecoder struct{}
 
-var _ = commtypes.Decoder(AuctionIdCountMsgpDecoder{})
+var _ = commtypes.Decoder[AuctionIdCount](AuctionIdCountMsgpDecoder{})
 
-func (d AuctionIdCountMsgpDecoder) Decode(value []byte) (interface{}, error) {
-	se := &AuctionIdCount{}
+func (d AuctionIdCountMsgpDecoder) Decode(value []byte) (AuctionIdCount, error) {
+	se := AuctionIdCount{}
 	_, err := se.UnmarshalMsg(value)
 	if err != nil {
-		return nil, err
+		return AuctionIdCount{}, err
 	}
 	return se, nil
 }
@@ -76,7 +74,7 @@ type AuctionIdCountMsgpSerde struct {
 	AuctionIdCountMsgpDecoder
 }
 
-func NewAuctionIdCountSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
+func NewAuctionIdCountSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde[AuctionIdCount], error) {
 	if serdeFormat == commtypes.JSON {
 		return AuctionIdCountJSONSerde{}, nil
 	} else if serdeFormat == commtypes.MSGP {

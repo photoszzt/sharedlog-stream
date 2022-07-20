@@ -24,42 +24,40 @@ func (aicm AuctionIdCntMax) String() string {
 
 type AuctionIdCntMaxJSONSerde struct{}
 
-var _ = commtypes.Encoder(AuctionIdCntMaxJSONSerde{})
-var _ = commtypes.Decoder(AuctionIdCntMaxJSONSerde{})
+var _ = commtypes.Encoder[AuctionIdCntMax](AuctionIdCntMaxJSONSerde{})
+var _ = commtypes.Decoder[AuctionIdCntMax](AuctionIdCntMaxJSONSerde{})
 
-func (s AuctionIdCntMaxJSONSerde) Encode(value interface{}) ([]byte, error) {
-	ai := value.(*AuctionIdCntMax)
-	return json.Marshal(ai)
+func (s AuctionIdCntMaxJSONSerde) Encode(value AuctionIdCntMax) ([]byte, error) {
+	return json.Marshal(&value)
 }
 
-func (s AuctionIdCntMaxJSONSerde) Decode(value []byte) (interface{}, error) {
-	ai := &AuctionIdCntMax{}
+func (s AuctionIdCntMaxJSONSerde) Decode(value []byte) (AuctionIdCntMax, error) {
+	ai := AuctionIdCntMax{}
 	err := json.Unmarshal(value, ai)
 	if err != nil {
-		return nil, err
+		return AuctionIdCntMax{}, err
 	}
 	return ai, nil
 }
 
 type AuctionIdCntMaxMsgpSerde struct{}
 
-var _ = commtypes.Encoder(AuctionIdCntMaxMsgpSerde{})
+var _ = commtypes.Encoder[AuctionIdCntMax](AuctionIdCntMaxMsgpSerde{})
 
-func (s AuctionIdCntMaxMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	ai := value.(*AuctionIdCntMax)
-	return ai.MarshalMsg(nil)
+func (s AuctionIdCntMaxMsgpSerde) Encode(value AuctionIdCntMax) ([]byte, error) {
+	return value.MarshalMsg(nil)
 }
 
-func (s AuctionIdCntMaxMsgpSerde) Decode(value []byte) (interface{}, error) {
-	ai := &AuctionIdCntMax{}
+func (s AuctionIdCntMaxMsgpSerde) Decode(value []byte) (AuctionIdCntMax, error) {
+	ai := AuctionIdCntMax{}
 	_, err := ai.UnmarshalMsg(value)
 	if err != nil {
-		return nil, err
+		return AuctionIdCntMax{}, err
 	}
 	return ai, nil
 }
 
-func GetAuctionIdCntMaxSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
+func GetAuctionIdCntMaxSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde[AuctionIdCntMax], error) {
 	if serdeFormat == commtypes.JSON {
 		return AuctionIdCntMaxJSONSerde{}, nil
 	} else if serdeFormat == commtypes.MSGP {

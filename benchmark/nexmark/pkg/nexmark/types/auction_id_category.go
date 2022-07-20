@@ -38,37 +38,35 @@ func CompareAuctionIdCategory(a, b *AuctionIdCategory) int {
 
 type AuctionIdCategoryJSONSerde struct{}
 
-func (s AuctionIdCategoryJSONSerde) Encode(value interface{}) ([]byte, error) {
-	v := value.(AuctionIdCategory)
-	return json.Marshal(v)
+func (s AuctionIdCategoryJSONSerde) Encode(value AuctionIdCategory) ([]byte, error) {
+	return json.Marshal(&value)
 }
 
-func (s AuctionIdCategoryJSONSerde) Decode(value []byte) (interface{}, error) {
+func (s AuctionIdCategoryJSONSerde) Decode(value []byte) (AuctionIdCategory, error) {
 	v := AuctionIdCategory{}
 	err := json.Unmarshal(value, &v)
 	if err != nil {
-		return nil, err
+		return AuctionIdCategory{}, err
 	}
 	return v, nil
 }
 
 type AuctionIdCategoryMsgpSerde struct{}
 
-func (s AuctionIdCategoryMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	aic := value.(AuctionIdCategory)
-	return aic.MarshalMsg(nil)
+func (s AuctionIdCategoryMsgpSerde) Encode(value AuctionIdCategory) ([]byte, error) {
+	return value.MarshalMsg(nil)
 }
 
-func (s AuctionIdCategoryMsgpSerde) Decode(value []byte) (interface{}, error) {
+func (s AuctionIdCategoryMsgpSerde) Decode(value []byte) (AuctionIdCategory, error) {
 	aic := AuctionIdCategory{}
 	_, err := aic.UnmarshalMsg(value)
 	if err != nil {
-		return nil, err
+		return AuctionIdCategory{}, err
 	}
 	return aic, nil
 }
 
-func GetAuctionIdCategorySerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
+func GetAuctionIdCategorySerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde[AuctionIdCategory], error) {
 	switch serdeFormat {
 	case commtypes.JSON:
 		return AuctionIdCategoryJSONSerde{}, nil
