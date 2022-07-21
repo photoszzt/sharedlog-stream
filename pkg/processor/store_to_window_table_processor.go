@@ -5,6 +5,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/store"
+	"sharedlog-stream/pkg/utils"
 )
 
 type StoreToWindowTableProcessor struct {
@@ -30,7 +31,7 @@ func (p *StoreToWindowTableProcessor) ProcessAndReturn(ctx context.Context, msg 
 	if msg.Timestamp > p.observedTs {
 		p.observedTs = msg.Timestamp
 	}
-	if msg.Key != nil {
+	if !utils.IsNil(msg.Key) {
 		err := p.store.Put(ctx, msg.Key, msg.Value, p.observedTs)
 		if err != nil {
 			return nil, err

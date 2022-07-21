@@ -18,8 +18,9 @@ type InMemoryWindowStoreWithChangelog struct {
 	windowStore      *store.InMemoryWindowStore
 	trackFunc        exactly_once_intr.TrackProdSubStreamFunc
 	changelogManager *ChangelogManager
-	changeLogProduce stats.ConcurrentInt64Collector
-	parNum           uint8
+	// changeLogProduce stats.ConcurrentInt64Collector
+	storePutLatency stats.ConcurrentInt64Collector
+	parNum          uint8
 }
 
 var _ = store.WindowStore(&InMemoryWindowStoreWithChangelog{})
@@ -42,7 +43,8 @@ func NewInMemoryWindowStoreWithChangelog(
 		parNum:           mp.ParNum(),
 		trackFunc:        exactly_once_intr.DefaultTrackProdSubstreamFunc,
 		changelogManager: changelogManager,
-		changeLogProduce: stats.NewConcurrentInt64Collector(mp.storeName+"-clProd", stats.DEFAULT_COLLECT_DURATION),
+		// changeLogProduce: stats.NewConcurrentInt64Collector(mp.storeName+"-clProd", stats.DEFAULT_COLLECT_DURATION),
+		storePutLatency: stats.NewConcurrentInt64Collector(mp.storeName+"-storePutLatency", stats.DEFAULT_COLLECT_DURATION),
 	}, nil
 }
 
@@ -116,10 +118,10 @@ func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context,
 		Key:   keyTs,
 		Value: value,
 	}
-	pStart := stats.TimerBegin()
+	// pStart := stats.TimerBegin()
 	err := st.changelogManager.Produce(ctx, msg, st.parNum, false)
-	elapsed := stats.Elapsed(pStart).Microseconds()
-	st.changeLogProduce.AddSample(elapsed)
+	// elapsed := stats.Elapsed(pStart).Microseconds()
+	// st.changeLogProduce.AddSample(elapsed)
 	if err != nil {
 		return err
 	}
@@ -127,7 +129,10 @@ func (st *InMemoryWindowStoreWithChangelog) Put(ctx context.Context,
 	if err != nil {
 		return err
 	}
+	putStart := stats.TimerBegin()
 	err = st.windowStore.Put(ctx, key, value, windowStartTimestamp)
+	elapsed := stats.Elapsed(putStart).Microseconds()
+	st.storePutLatency.AddSample(elapsed)
 	return err
 }
 
