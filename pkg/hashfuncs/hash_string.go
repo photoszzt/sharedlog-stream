@@ -1,4 +1,4 @@
-package sharedlog_stream
+package hashfuncs
 
 import (
 	"hash/fnv"

@@ -6,6 +6,7 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
@@ -191,7 +192,7 @@ func (em *EpochManager) MarkEpoch(ctx context.Context,
 	var additionalTopic []string
 	for tp, parSet := range em.currentTopicSubstream {
 		additionalTopic = append(additionalTopic, tp)
-		nameHash := sharedlog_stream.NameHash(tp)
+		nameHash := hashfuncs.NameHash(tp)
 		for sub := range parSet {
 			tag := sharedlog_stream.NameHashWithPartition(nameHash, sub)
 			// debug.Fprintf(os.Stderr, "marker with tag: 0x%x\n", tag)

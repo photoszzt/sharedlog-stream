@@ -1,26 +1,33 @@
 package control_channel
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/data_structure"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils/syncutils"
 
 	"cs.utexas.edu/zjia/faas/types"
-	"github.com/huandu/skiplist"
+	"github.com/google/btree"
 )
 
 const (
 	CONTROL_LOG_TOPIC_NAME = "__control_log"
 )
 
+type kvPair struct {
+	val data_structure.Uint8Set
+	key []byte
+}
+
 type ControlChannelManager struct {
 	kmMu syncutils.Mutex
 	// topic -> (key -> set of substreamid)
-	keyMappings map[string]*skiplist.SkipList
+	keyMappings map[string]*btree.BTreeG[kvPair]
 
 	msgSerde commtypes.Serde
 
@@ -49,7 +56,7 @@ func NewControlChannelManager(env types.Environment,
 		controlLog:   log,
 		currentEpoch: 0,
 		topicStreams: make(map[string]*sharedlog_stream.ShardedSharedLogStream),
-		keyMappings:  make(map[string]*skiplist.SkipList),
+		keyMappings:  make(map[string]*btree.BTreeG[kvPair]),
 		funcName:     app_id,
 	}
 	if serdeFormat == commtypes.JSON {
@@ -129,23 +136,24 @@ func (cmm *ControlChannelManager) TrackAndAppendKeyMapping(
 		return err
 	}
 	cmm.kmMu.Lock()
-	defer cmm.kmMu.Unlock()
 	subs, ok := cmm.keyMappings[topic]
 	if !ok {
-		subs = skiplist.New(skiplist.Bytes)
+		subs = btree.NewG(2, btree.LessFunc[kvPair](func(a, b kvPair) bool {
+			return bytes.Compare(a.key, b.key) < 0
+		}))
 		cmm.keyMappings[topic] = subs
 	}
-	subTmp, ok := subs.GetValue(kBytes)
-	var sub map[uint8]struct{}
+	subTmp, ok := subs.Get(kvPair{key: kBytes})
+	var sub data_structure.Uint8Set
 	if !ok {
-		sub = make(map[uint8]struct{})
-		subs.Set(kBytes, sub)
+		sub = make(data_structure.Uint8Set)
 	} else {
-		sub = subTmp.(map[uint8]struct{})
+		sub = subTmp.val
 	}
-	_, ok = sub[substreamId]
-	if !ok {
-		sub[substreamId] = struct{}{}
+	if !sub.Has(substreamId) {
+		sub.Add(substreamId)
+		subs.ReplaceOrInsert(kvPair{key: kBytes, val: sub})
+		cmm.kmMu.Unlock()
 		cm := txn_data.ControlMetadata{
 			Key:         kBytes,
 			SubstreamId: substreamId,
@@ -153,8 +161,11 @@ func (cmm *ControlChannelManager) TrackAndAppendKeyMapping(
 			Epoch:       cmm.currentEpoch,
 		}
 		err = cmm.appendToControlLog(ctx, &cm)
+		return err
+	} else {
+		cmm.kmMu.Unlock()
+		return nil
 	}
-	return err
 }
 
 func (cmm *ControlChannelManager) RecordPrevInstanceFinish(
@@ -176,20 +187,21 @@ func (cmm *ControlChannelManager) updateKeyMapping(ctrlMeta *txn_data.ControlMet
 	cmm.kmMu.Lock()
 	subs, ok := cmm.keyMappings[ctrlMeta.Topic]
 	if !ok {
-		subs = skiplist.New(skiplist.Bytes)
+		subs = btree.NewG(2, btree.LessFunc[kvPair](func(a, b kvPair) bool {
+			return bytes.Compare(a.key, b.key) < 0
+		}))
 		cmm.keyMappings[ctrlMeta.Topic] = subs
 	}
-	subTmp, ok := subs.GetValue(ctrlMeta.Key)
-	var sub map[uint8]struct{}
+	subTmp, ok := subs.Get(kvPair{key: ctrlMeta.Key})
+	var sub data_structure.Uint8Set
 	if !ok {
-		sub = make(map[uint8]struct{})
-		subs.Set(ctrlMeta.Key, sub)
+		sub = make(data_structure.Uint8Set)
 	} else {
-		sub = subTmp.(map[uint8]struct{})
+		sub = subTmp.val
 	}
-	_, ok = sub[ctrlMeta.SubstreamId]
-	if !ok {
-		sub[ctrlMeta.SubstreamId] = struct{}{}
+	if !sub.Has(ctrlMeta.SubstreamId) {
+		sub.Add(ctrlMeta.SubstreamId)
+		subs.ReplaceOrInsert(kvPair{key: ctrlMeta.Key, val: sub})
 	}
 	cmm.kmMu.Unlock()
 }

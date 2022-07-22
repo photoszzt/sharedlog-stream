@@ -9,6 +9,7 @@ import (
 	"sharedlog-stream/pkg/bits"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils/syncutils"
 	"sync/atomic"
@@ -103,7 +104,7 @@ func NewSharedLogStream(env types.Environment, topicName string, serdeFormat com
 	return &SharedLogStream{
 		env:           env,
 		topicName:     topicName,
-		topicNameHash: NameHash(topicName),
+		topicNameHash: hashfuncs.NameHash(topicName),
 		cursor:        0,
 		tail:          0,
 
