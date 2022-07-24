@@ -51,7 +51,6 @@ func (rws *SegmentedWindowStore) updateSeqnumForDups() {
 	}
 }
 
-func (rws *SegmentedWindowStore) IsOpen() bool { return true }
 func (rws *SegmentedWindowStore) Name() string { return rws.bytesStore.Name() }
 
 func (rws *SegmentedWindowStore) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error {
@@ -142,12 +141,6 @@ func (rws *SegmentedWindowStore) Fetch(ctx context.Context, key commtypes.KeyT, 
 	})
 }
 
-func (rws *SegmentedWindowStore) BackwardFetch(key commtypes.KeyT, timeFrom time.Time, timeTo time.Time,
-	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
-) error {
-	panic("not implemented")
-}
-
 func (rws *SegmentedWindowStore) FetchWithKeyRange(ctx context.Context, keyFrom commtypes.KeyT, keyTo commtypes.KeyT, timeFrom time.Time, timeTo time.Time,
 	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
@@ -182,10 +175,6 @@ func (rws *SegmentedWindowStore) FetchWithKeyRange(ctx context.Context, keyFrom 
 		})
 }
 
-func (rws *SegmentedWindowStore) BackwardFetchWithKeyRange(keyFrom commtypes.KeyT, keyTo commtypes.KeyT, timeFrom time.Time, timeTo time.Time, iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error {
-	panic("not implemented")
-}
-
 func (rws *SegmentedWindowStore) FetchAll(ctx context.Context, timeFrom time.Time, timeTo time.Time,
 	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
 ) error {
@@ -202,12 +191,6 @@ func (rws *SegmentedWindowStore) FetchAll(ctx context.Context, timeFrom time.Tim
 		}
 		return iterFunc(ts, key, val)
 	})
-}
-
-func (rws *SegmentedWindowStore) BackwardFetchAll(timeFrom time.Time, timeTo time.Time,
-	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
-) error {
-	panic("not implemented")
 }
 
 func (rws *SegmentedWindowStore) IterAll(iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error {

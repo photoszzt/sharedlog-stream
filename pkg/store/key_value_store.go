@@ -11,8 +11,6 @@ type CoreKeyValueStore interface {
 	Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error)
 	Range(ctx context.Context, from commtypes.KeyT, to commtypes.KeyT,
 		iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error
-	ReverseRange(from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error
-	PrefixScan(prefix interface{}, prefixKeyEncoder commtypes.Encoder, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error
 	ApproximateNumEntries() (uint64, error)
 	Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error
 	PutIfAbsent(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) (commtypes.ValueT, error)

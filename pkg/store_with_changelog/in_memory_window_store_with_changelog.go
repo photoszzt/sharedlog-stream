@@ -180,15 +180,6 @@ func (st *InMemoryWindowStoreWithChangelog[K, V]) IterAll(iterFunc func(int64, c
 	return st.windowStore.IterAll(iterFunc)
 }
 
-func (st *InMemoryWindowStoreWithChangelog[K, V]) BackwardFetch(
-	key commtypes.KeyT,
-	timeFrom time.Time,
-	timeTo time.Time,
-	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
-) error {
-	return st.windowStore.BackwardFetch(key, timeFrom, timeTo, iterFunc)
-}
-
 func (st *InMemoryWindowStoreWithChangelog[K, V]) FetchWithKeyRange(
 	ctx context.Context,
 	keyFrom commtypes.KeyT,
@@ -200,16 +191,6 @@ func (st *InMemoryWindowStoreWithChangelog[K, V]) FetchWithKeyRange(
 	return st.windowStore.FetchWithKeyRange(ctx, keyFrom, keyTo, timeFrom, timeTo, iterFunc)
 }
 
-func (st *InMemoryWindowStoreWithChangelog[K, V]) BackwardFetchWithKeyRange(
-	keyFrom commtypes.KeyT,
-	keyTo commtypes.KeyT,
-	timeFrom time.Time,
-	timeTo time.Time,
-	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
-) error {
-	return st.windowStore.BackwardFetchWithKeyRange(keyFrom, keyTo, timeFrom, timeTo, iterFunc)
-}
-
 func (st *InMemoryWindowStoreWithChangelog[K, V]) FetchAll(
 	ctx context.Context,
 	timeFrom time.Time,
@@ -219,34 +200,10 @@ func (st *InMemoryWindowStoreWithChangelog[K, V]) FetchAll(
 	return st.windowStore.FetchAll(ctx, timeFrom, timeTo, iterFunc)
 }
 
-func (st *InMemoryWindowStoreWithChangelog[K, V]) BackwardFetchAll(
-	timeFrom time.Time,
-	timeTo time.Time,
-	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
-) error {
-	return st.windowStore.BackwardFetchAll(timeFrom, timeTo, iterFunc)
-}
-
-func (s *InMemoryWindowStoreWithChangelog[K, V]) DropDatabase(ctx context.Context) error {
-	panic("not implemented")
-}
-
 func (s *InMemoryWindowStoreWithChangelog[K, V]) TableType() store.TABLE_TYPE {
 	return store.IN_MEM
 }
 
-func (s *InMemoryWindowStoreWithChangelog[K, V]) StartTransaction(ctx context.Context) error {
-	panic("not supported")
-}
-func (s *InMemoryWindowStoreWithChangelog[K, V]) CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error {
-	panic("not supported")
-}
-func (s *InMemoryWindowStoreWithChangelog[K, V]) AbortTransaction(ctx context.Context) error {
-	panic("not supported")
-}
-func (s *InMemoryWindowStoreWithChangelog[K, V]) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
-	panic("not supported")
-}
 func (s *InMemoryWindowStoreWithChangelog[K, V]) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 	s.trackFunc = trackParFunc
 }

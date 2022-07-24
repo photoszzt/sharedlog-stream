@@ -160,29 +160,8 @@ func (st *KeyValueStoreWithChangelog[K, V]) Range(ctx context.Context, from comm
 	return st.kvstore.Range(ctx, from, to, iterFunc)
 }
 
-func (st *KeyValueStoreWithChangelog[K, V]) ReverseRange(from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
-	return st.kvstore.ReverseRange(from, to, iterFunc)
-}
-
-func (st *KeyValueStoreWithChangelog[K, V]) PrefixScan(prefix interface{},
-	prefixKeyEncoder commtypes.Encoder,
-	iterFunc func(commtypes.KeyT, commtypes.ValueT) error,
-) error {
-	panic("not implemented")
-}
-
 func (st *KeyValueStoreWithChangelog[K, V]) TableType() store.TABLE_TYPE {
 	return st.kvstore.TableType()
-}
-
-func (st *KeyValueStoreWithChangelog[K, V]) StartTransaction(ctx context.Context) error { return nil }
-func (st *KeyValueStoreWithChangelog[K, V]) CommitTransaction(ctx context.Context,
-	taskRepr string, transactionID uint64) error {
-	return nil
-}
-func (st *KeyValueStoreWithChangelog[K, V]) AbortTransaction(ctx context.Context) error { return nil }
-func (st *KeyValueStoreWithChangelog[K, V]) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
-	panic("not supported")
 }
 
 func (st *KeyValueStoreWithChangelog[K, V]) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {

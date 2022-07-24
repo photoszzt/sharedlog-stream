@@ -183,27 +183,8 @@ func (st *InMemoryKeyValueStore) ReverseRange(from commtypes.KeyT, to commtypes.
 	return nil
 }
 
-func (st *InMemoryKeyValueStore) PrefixScan(prefix interface{}, prefixKeyEncoder commtypes.Encoder,
-	iterFunc func(commtypes.KeyT, commtypes.ValueT) error,
-) error {
-	panic("not implemented")
-}
-
 func (st *InMemoryKeyValueStore) TableType() TABLE_TYPE {
 	return IN_MEM
-}
-
-func (st *InMemoryKeyValueStore) StartTransaction(ctx context.Context) error {
-	panic("not supported")
-}
-
-func (st *InMemoryKeyValueStore) CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error {
-	panic("not supported")
-}
-
-func (st *InMemoryKeyValueStore) AbortTransaction(ctx context.Context) error { panic("not supported") }
-func (st *InMemoryKeyValueStore) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
-	panic("not supported")
 }
 
 func (st *InMemoryKeyValueStore) SetTrackParFunc(exactly_once_intr.TrackProdSubStreamFunc) {

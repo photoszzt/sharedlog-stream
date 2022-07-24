@@ -162,33 +162,8 @@ func (st *InMemoryBTreeKeyValueStore) Range(ctx context.Context, from commtypes.
 	return nil
 }
 
-func (st *InMemoryBTreeKeyValueStore) ReverseRange(from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
-	panic("not implemented")
-}
-
-func (st *InMemoryBTreeKeyValueStore) PrefixScan(prefix interface{}, prefixKeyEncoder commtypes.Encoder,
-	iterFunc func(commtypes.KeyT, commtypes.ValueT) error,
-) error {
-	panic("not implemented")
-}
-
 func (st *InMemoryBTreeKeyValueStore) TableType() TABLE_TYPE {
 	return IN_MEM
-}
-
-func (st *InMemoryBTreeKeyValueStore) StartTransaction(ctx context.Context) error {
-	panic("not supported")
-}
-
-func (st *InMemoryBTreeKeyValueStore) CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error {
-	panic("not supported")
-}
-
-func (st *InMemoryBTreeKeyValueStore) AbortTransaction(ctx context.Context) error {
-	panic("not supported")
-}
-func (st *InMemoryBTreeKeyValueStore) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
-	panic("not supported")
 }
 
 func (st *InMemoryBTreeKeyValueStore) SetTrackParFunc(exactly_once_intr.TrackProdSubStreamFunc) {

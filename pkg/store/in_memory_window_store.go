@@ -57,10 +57,6 @@ func NewInMemoryWindowStore(name string, retentionPeriod int64, windowSize int64
 	}
 }
 
-func (st *InMemoryWindowStore) IsOpen() bool {
-	return true
-}
-
 func (st *InMemoryWindowStore) updateSeqnumForDups() {
 	if st.retainDuplicates {
 		atomic.CompareAndSwapUint32(&st.seqNum, math.MaxUint32, 0)
@@ -175,15 +171,6 @@ func (s *InMemoryWindowStore) Fetch(
 	}
 }
 
-func (s *InMemoryWindowStore) BackwardFetch(
-	key commtypes.KeyT,
-	timeFrom time.Time,
-	timeTo time.Time,
-	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
-) error {
-	panic("not implemented")
-}
-
 func (s *InMemoryWindowStore) FetchWithKeyRange(
 	ctx context.Context,
 	keyFrom commtypes.KeyT,
@@ -269,16 +256,6 @@ func (s *InMemoryWindowStore) removeExpiredSegments() {
 	s.store.RemoveUntil(minLiveTime)
 }
 
-func (s *InMemoryWindowStore) BackwardFetchWithKeyRange(
-	keyFrom commtypes.KeyT,
-	keyTo commtypes.KeyT,
-	timeFrom time.Time,
-	timeTo time.Time,
-	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
-) error {
-	panic("not implemented")
-}
-
 func (s *InMemoryWindowStore) FetchAll(
 	ctx context.Context,
 	timeFrom time.Time,
@@ -319,14 +296,6 @@ func (s *InMemoryWindowStore) FetchAll(
 		return nil
 	})
 	return err
-}
-
-func (s *InMemoryWindowStore) BackwardFetchAll(
-	timeFrom time.Time,
-	timeTo time.Time,
-	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
-) error {
-	panic("not implemented")
 }
 
 func (s *InMemoryWindowStore) TableType() TABLE_TYPE {
