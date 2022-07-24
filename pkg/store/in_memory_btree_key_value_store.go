@@ -50,7 +50,7 @@ func (a Uint64Item) Less(than btree.Item) bool {
 	return a < other
 }
 
-var _ = KeyValueStore(&InMemoryBTreeKeyValueStore{})
+var _ = CoreKeyValueStore(&InMemoryBTreeKeyValueStore{})
 
 func NewInMemoryBTreeKeyValueStore(name string) *InMemoryBTreeKeyValueStore {
 	return &InMemoryBTreeKeyValueStore{
@@ -192,4 +192,12 @@ func (st *InMemoryBTreeKeyValueStore) GetTransactionID(ctx context.Context, task
 }
 
 func (st *InMemoryBTreeKeyValueStore) SetTrackParFunc(exactly_once_intr.TrackProdSubStreamFunc) {
+}
+
+func (st *InMemoryBTreeKeyValueStore) FlushChangelog(ctx context.Context) error {
+	return nil
+}
+
+func (s *InMemoryBTreeKeyValueStore) ConsumeChangelog(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
+	return nil, nil
 }

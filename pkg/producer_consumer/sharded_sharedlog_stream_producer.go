@@ -11,14 +11,14 @@ import (
 	"time"
 )
 
-type StreamSinkConfig struct {
-	MsgSerde      commtypes.MessageSerde
+type StreamSinkConfig[K, V any] struct {
+	MsgSerde      commtypes.MessageSerdeG[K, V]
 	FlushDuration time.Duration
 }
 
-type ShardedSharedLogStreamProducer struct {
+type ShardedSharedLogStreamProducer[K, V any] struct {
 	// syncutils.Mutex
-	msgSerde  commtypes.MessageSerde
+	msgSerde  commtypes.MessageSerdeG[K, V]
 	eom       eo_intr.ReadOnlyExactlyOnceManager
 	stream    *sharedlog_stream.ShardedSharedLogStream
 	name      string
@@ -26,10 +26,10 @@ type ShardedSharedLogStreamProducer struct {
 	guarantee eo_intr.GuaranteeMth
 }
 
-var _ = Producer(&ShardedSharedLogStreamProducer{})
+var _ = Producer(&ShardedSharedLogStreamProducer[int, string]{})
 
-func NewShardedSharedLogStreamProducer(stream *sharedlog_stream.ShardedSharedLogStream, config *StreamSinkConfig) *ShardedSharedLogStreamProducer {
-	return &ShardedSharedLogStreamProducer{
+func NewShardedSharedLogStreamProducer[K, V any](stream *sharedlog_stream.ShardedSharedLogStream, config *StreamSinkConfig[K, V]) *ShardedSharedLogStreamProducer[K, V] {
+	return &ShardedSharedLogStreamProducer[K, V]{
 		msgSerde: config.MsgSerde,
 		stream:   stream,
 		bufPush:  utils.CheckBufPush(),
@@ -37,32 +37,32 @@ func NewShardedSharedLogStreamProducer(stream *sharedlog_stream.ShardedSharedLog
 	}
 }
 
-func (sls *ShardedSharedLogStreamProducer) ResetInitialProd() {
+func (sls *ShardedSharedLogStreamProducer[K, V]) ResetInitialProd() {
 	sls.stream.ResetInitialProd()
 }
 
-func (sls *ShardedSharedLogStreamProducer) GetInitialProdSeqNum(substreamNum uint8) uint64 {
+func (sls *ShardedSharedLogStreamProducer[K, V]) GetInitialProdSeqNum(substreamNum uint8) uint64 {
 	return sls.stream.GetInitialProdSeqNum(substreamNum)
 }
 
-func (sls *ShardedSharedLogStreamProducer) GetCurrentProdSeqNum(substreamNum uint8) uint64 {
+func (sls *ShardedSharedLogStreamProducer[K, V]) GetCurrentProdSeqNum(substreamNum uint8) uint64 {
 	return sls.stream.GetCurrentProdSeqNum(substreamNum)
 }
 
 // this method is not goroutine safe
-func (sls *ShardedSharedLogStreamProducer) SetName(name string) {
+func (sls *ShardedSharedLogStreamProducer[K, V]) SetName(name string) {
 	sls.name = name
 }
 
-func (sls *ShardedSharedLogStreamProducer) Name() string {
+func (sls *ShardedSharedLogStreamProducer[K, V]) Name() string {
 	return sls.name
 }
 
-func (sls *ShardedSharedLogStreamProducer) Stream() sharedlog_stream.Stream {
+func (sls *ShardedSharedLogStreamProducer[K, V]) Stream() sharedlog_stream.Stream {
 	return sls.stream
 }
 
-func (sls *ShardedSharedLogStreamProducer) ConfigExactlyOnce(
+func (sls *ShardedSharedLogStreamProducer[K, V]) ConfigExactlyOnce(
 	eos eo_intr.ReadOnlyExactlyOnceManager,
 	guarantee eo_intr.GuaranteeMth,
 ) {
@@ -71,7 +71,7 @@ func (sls *ShardedSharedLogStreamProducer) ConfigExactlyOnce(
 	sls.eom = eos
 }
 
-func (sls *ShardedSharedLogStreamProducer) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
+func (sls *ShardedSharedLogStreamProducer[K, V]) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
 	if utils.IsNil(msg.Key) && utils.IsNil(msg.Value) {
 		return nil
 	}
@@ -89,7 +89,7 @@ func (sls *ShardedSharedLogStreamProducer) Produce(ctx context.Context, msg comm
 			nil, sharedlog_stream.StreamEntryMeta(isControl, false))
 		return err
 	}
-	bytes, err := sls.msgSerde.Encode(&msg)
+	bytes, err := sls.msgSerde.Encode(msg)
 	if err != nil {
 		return err
 	}
@@ -113,11 +113,13 @@ func (sls *ShardedSharedLogStreamProducer) Produce(ctx context.Context, msg comm
 	return nil
 }
 
-func (s *ShardedSharedLogStreamProducer) TopicName() string { return s.stream.TopicName() }
-func (s *ShardedSharedLogStreamProducer) KeySerde() commtypes.Serde {
-	return s.msgSerde.GetKeySerde()
+func (s *ShardedSharedLogStreamProducer[K, V]) TopicName() string { return s.stream.TopicName() }
+func (s *ShardedSharedLogStreamProducer[K, V]) KeyEncoder() commtypes.Encoder {
+	return commtypes.EncoderFunc(func(i interface{}) ([]byte, error) {
+		return s.msgSerde.GetKeySerdeG().Encode(i.(K))
+	})
 }
-func (s *ShardedSharedLogStreamProducer) Flush(ctx context.Context) error {
+func (s *ShardedSharedLogStreamProducer[K, V]) Flush(ctx context.Context) error {
 	if s.bufPush {
 		err := s.flush(ctx)
 		if err != nil {
@@ -126,7 +128,7 @@ func (s *ShardedSharedLogStreamProducer) Flush(ctx context.Context) error {
 	}
 	return nil
 }
-func (s *ShardedSharedLogStreamProducer) FlushNoLock(ctx context.Context) error {
+func (s *ShardedSharedLogStreamProducer[K, V]) FlushNoLock(ctx context.Context) error {
 	if s.bufPush {
 		err := s.flushNoLock(ctx)
 		if err != nil {
@@ -135,9 +137,9 @@ func (s *ShardedSharedLogStreamProducer) FlushNoLock(ctx context.Context) error 
 	}
 	return nil
 }
-func (s *ShardedSharedLogStreamProducer) InitFlushTimer() {}
+func (s *ShardedSharedLogStreamProducer[K, V]) InitFlushTimer() {}
 
-func (s *ShardedSharedLogStreamProducer) flushNoLock(ctx context.Context) error {
+func (s *ShardedSharedLogStreamProducer[K, V]) flushNoLock(ctx context.Context) error {
 	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK {
 		producerId := s.eom.GetProducerId()
 		return s.stream.FlushNoLock(ctx, producerId)
@@ -146,7 +148,7 @@ func (s *ShardedSharedLogStreamProducer) flushNoLock(ctx context.Context) error 
 	}
 }
 
-func (s *ShardedSharedLogStreamProducer) flush(ctx context.Context) error {
+func (s *ShardedSharedLogStreamProducer[K, V]) flush(ctx context.Context) error {
 	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK {
 		producerId := s.eom.GetProducerId()
 		return s.stream.Flush(ctx, producerId)
@@ -155,7 +157,7 @@ func (s *ShardedSharedLogStreamProducer) flush(ctx context.Context) error {
 	}
 }
 
-func (s *ShardedSharedLogStreamProducer) push(ctx context.Context, payload []byte, parNumber uint8, meta sharedlog_stream.LogEntryMeta) (uint64, error) {
+func (s *ShardedSharedLogStreamProducer[K, V]) push(ctx context.Context, payload []byte, parNumber uint8, meta sharedlog_stream.LogEntryMeta) (uint64, error) {
 	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK {
 		producerId := s.eom.GetProducerId()
 		return s.stream.Push(ctx, payload, parNumber, meta, producerId)
@@ -164,7 +166,7 @@ func (s *ShardedSharedLogStreamProducer) push(ctx context.Context, payload []byt
 	}
 }
 
-func (s *ShardedSharedLogStreamProducer) pushWithTag(ctx context.Context, payload []byte, parNumber uint8, tag []uint64,
+func (s *ShardedSharedLogStreamProducer[K, V]) pushWithTag(ctx context.Context, payload []byte, parNumber uint8, tag []uint64,
 	additionalTopic []string, meta sharedlog_stream.LogEntryMeta,
 ) (uint64, error) {
 	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK {
@@ -174,7 +176,7 @@ func (s *ShardedSharedLogStreamProducer) pushWithTag(ctx context.Context, payloa
 	}
 }
 
-func (s *ShardedSharedLogStreamProducer) bufpush(ctx context.Context, payload []byte, parNum uint8) error {
+func (s *ShardedSharedLogStreamProducer[K, V]) bufpush(ctx context.Context, payload []byte, parNum uint8) error {
 	if s.guarantee == eo_intr.TWO_PHASE_COMMIT {
 		return s.stream.BufPush(ctx, payload, parNum, s.eom.GetProducerId())
 	} else {

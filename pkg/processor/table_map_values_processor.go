@@ -8,7 +8,7 @@ import (
 
 type TableMapValuesProcessor struct {
 	valueMapperWithKey ValueMapperWithKey
-	store              store.KeyValueStore
+	store              store.CoreKeyValueStore
 	name               string
 }
 
@@ -20,7 +20,7 @@ func NewTableMapValuesProcessor(name string, mapper ValueMapperWithKey) Processo
 	}
 }
 
-func NewTableMapValuesProcessorQueriable(name string, mapper ValueMapperWithKey, store store.KeyValueStore) Processor {
+func NewTableMapValuesProcessorQueriable(name string, mapper ValueMapperWithKey, store store.CoreKeyValueStore) Processor {
 	return &TableMapValuesProcessor{
 		valueMapperWithKey: mapper,
 		name:               name,
@@ -63,7 +63,7 @@ func (p *TableMapValuesProcessor) ProcessAndReturn(ctx context.Context, msg comm
 	}
 	newMsg := commtypes.Message{
 		Key: msg.Key,
-		Value: &commtypes.Change{
+		Value: commtypes.Change{
 			OldVal: oldV,
 			NewVal: newV,
 		},

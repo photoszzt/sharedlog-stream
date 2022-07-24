@@ -9,7 +9,7 @@ import (
 )
 
 type StreamTableJoinProcessor struct {
-	store    store.KeyValueStore
+	store    store.CoreKeyValueStore
 	joiner   ValueJoinerWithKey
 	name     string
 	leftJoin bool
@@ -17,7 +17,7 @@ type StreamTableJoinProcessor struct {
 
 var _ = Processor(&StreamTableJoinProcessor{})
 
-func NewStreamTableJoinProcessor(store store.KeyValueStore, joiner ValueJoinerWithKey) *StreamTableJoinProcessor {
+func NewStreamTableJoinProcessor(store store.CoreKeyValueStore, joiner ValueJoinerWithKey) *StreamTableJoinProcessor {
 	return &StreamTableJoinProcessor{
 		joiner:   joiner,
 		store:    store,

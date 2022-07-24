@@ -6,12 +6,6 @@ import (
 	"sharedlog-stream/pkg/exactly_once_intr"
 )
 
-type KeyValueStore interface {
-	CoreKeyValueStore
-	// KeyValueStoreOpForExternalStore
-	KeyValueStoreOpWithChangelog
-}
-
 type CoreKeyValueStore interface {
 	StateStore
 	Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error)
@@ -25,20 +19,23 @@ type CoreKeyValueStore interface {
 	PutAll(context.Context, []*commtypes.Message) error
 	Delete(ctx context.Context, key commtypes.KeyT) error
 	TableType() TABLE_TYPE
+	UpdateTrackParFunc
+	OnlyUpdateInMemStore
 }
 
-/*
-type KeyValueStoreOpForExternalStore interface {
-	StartTransaction(ctx context.Context) error
-	CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error
-	AbortTransaction(ctx context.Context) error
-	GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error)
+type UpdateTrackParFunc interface {
+	SetTrackParFunc(exactly_once_intr.TrackProdSubStreamFunc)
 }
-*/
+
+type OnlyUpdateInMemStore interface {
+	PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error
+}
 
 type KeyValueStoreOpWithChangelog interface {
-	SetTrackParFunc(exactly_once_intr.TrackProdSubStreamFunc)
-	PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error
+	StoreBackedByChangelog
+	UpdateTrackParFunc
+	ChangelogIsSrc() bool
+	OnlyUpdateInMemStore
 }
 
 type KeyValueStoreBackedByChangelog interface {
@@ -48,7 +45,6 @@ type KeyValueStoreBackedByChangelog interface {
 
 type Segment interface {
 	StateStore
-	Init(ctx StoreContext)
 	Get(ctx context.Context, key []byte) ([]byte, bool, error)
 	Range(ctx context.Context, from []byte, to []byte,
 		iterFunc func([]byte, []byte) error) error

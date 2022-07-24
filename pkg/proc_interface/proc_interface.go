@@ -23,7 +23,9 @@ type BaseConsumersProducers struct {
 	producers []producer_consumer.MeteredProducerIntr
 }
 
-func NewBaseSrcsSinks(srcs []producer_consumer.MeteredConsumerIntr, sinks []producer_consumer.MeteredProducerIntr) BaseConsumersProducers {
+func NewBaseSrcsSinks(srcs []producer_consumer.MeteredConsumerIntr,
+	sinks []producer_consumer.MeteredProducerIntr,
+) BaseConsumersProducers {
 	return BaseConsumersProducers{
 		consumers: srcs,
 		producers: sinks,
@@ -35,7 +37,7 @@ func (pa *BaseConsumersProducers) Consumers() []producer_consumer.MeteredConsume
 }
 
 /*
-func (pa *BaseConsumersProducers) LockProducerConsumer() {
+func (pa \*BaseConsumersProducers) LockProducerConsumer() {
 	for _, consumer := range pa.consumers {
 		consumer.Lock()
 	}
@@ -44,7 +46,7 @@ func (pa *BaseConsumersProducers) LockProducerConsumer() {
 	}
 }
 
-func (pa *BaseConsumersProducers) UnlockProducerConsumer() {
+func (pa \*BaseConsumersProducers) UnlockProducerConsumer() {
 	for _, consumer := range pa.consumers {
 		consumer.Unlock()
 	}
@@ -53,13 +55,13 @@ func (pa *BaseConsumersProducers) UnlockProducerConsumer() {
 	}
 }
 
-func (pa *BaseConsumersProducers) LockProducer() {
+func (pa \*BaseConsumersProducers) LockProducer() {
 	for _, producer := range pa.producers {
 		producer.Lock()
 	}
 }
 
-func (pa *BaseConsumersProducers) UnlockProducer() {
+func (pa \*BaseConsumersProducers) UnlockProducer() {
 	for _, producer := range pa.producers {
 		producer.Unlock()
 	}

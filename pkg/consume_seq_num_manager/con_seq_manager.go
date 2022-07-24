@@ -16,7 +16,7 @@ import (
 )
 
 type ConsumeSeqManager struct {
-	offsetMarkerSerde commtypes.Serde
+	offsetMarkerSerde commtypes.SerdeG[commtypes.OffsetMarker]
 	offsetLogs        map[string]*sharedlog_stream.ShardedSharedLogStream
 }
 
@@ -38,7 +38,7 @@ func (cm *ConsumeSeqManager) CreateOffsetTopic(env types.Environment, topicToTra
 }
 
 func NewConsumeSeqManager(serdeFormat commtypes.SerdeFormat) (*ConsumeSeqManager, error) {
-	offsetMarkerSerde, err := commtypes.GetOffsetMarkerSerde(serdeFormat)
+	offsetMarkerSerde, err := commtypes.GetOffsetMarkerSerdeG(serdeFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -66,28 +66,32 @@ func (cm *ConsumeSeqManager) FindLastConsumedSeqNum(ctx context.Context, topicTo
 	}
 	debug.Fprintf(os.Stderr, "CM: offlog got entry off %x, control %v\n",
 		txnMkRawMsg.LogSeqNum, txnMkRawMsg.IsControl)
-	cm.offsetMarkerSerde.Decode(txnMkRawMsg.Payload)
-	tag := sharedlog_stream.NameHashWithPartition(offsetLog.TopicNameHash(), parNum)
-
-	// read the previous item which should record the offset number
-	rawMsg, err := offsetLog.ReadBackwardWithTag(ctx, txnMkRawMsg.LogSeqNum, parNum, tag)
+	mark, err := cm.offsetMarkerSerde.Decode(txnMkRawMsg.Payload)
 	if err != nil {
 		return 0, err
 	}
-	return rawMsg.LogSeqNum, nil
+	return mark.Offset, nil
 }
 
-func (cm *ConsumeSeqManager) Track(ctx context.Context, consumers []producer_consumer.MeteredConsumerIntr, parNum uint8) error {
+func CollectOffsetMarker(consumers []producer_consumer.MeteredConsumerIntr) map[string]commtypes.OffsetMarker {
+	ret := make(map[string]commtypes.OffsetMarker)
 	for _, consumer := range consumers {
 		topic := consumer.TopicName()
 		offset := consumer.CurrentConsumedSeqNum()
 		offsetTopic := con_types.CONSUMER_OFFSET_LOG_TOPIC_NAME + topic
-		stream := cm.offsetLogs[offsetTopic]
 		tm := commtypes.OffsetMarker{
 			Mark:   commtypes.EPOCH_END,
 			Offset: offset,
 		}
-		encoded, err := cm.offsetMarkerSerde.Encode(&tm)
+		ret[offsetTopic] = tm
+	}
+	return ret
+}
+
+func (cm *ConsumeSeqManager) Track(ctx context.Context, offsetMarkers map[string]commtypes.OffsetMarker, parNum uint8) error {
+	for offsetTopic, tm := range offsetMarkers {
+		stream := cm.offsetLogs[offsetTopic]
+		encoded, err := cm.offsetMarkerSerde.Encode(tm)
 		if err != nil {
 			return err
 		}
@@ -108,7 +112,7 @@ func (cm *ConsumeSeqManager) TrackForTest(ctx context.Context, currentConSeqNum 
 			Mark:   commtypes.EPOCH_END,
 			Offset: offset,
 		}
-		encoded, err := cm.offsetMarkerSerde.Encode(&tm)
+		encoded, err := cm.offsetMarkerSerde.Encode(tm)
 		if err != nil {
 			return err
 		}

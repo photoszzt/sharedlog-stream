@@ -34,24 +34,24 @@ func getSrcSink(ctx context.Context, env types.Environment, sp *common.QueryInpu
 	}
 	debug.Assert(len(output_streams) == 1, "expected only one output stream")
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
+	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.StringSerde{}, eventSerde)
+	msgSerde, err := commtypes.GetMsgSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get msg serde failed: %v", err)
 	}
-	inConfig := &producer_consumer.StreamConsumerConfig{
+	inConfig := &producer_consumer.StreamConsumerConfigG[string, *ntypes.Event]{
 		Timeout:  common.SrcConsumeTimeout,
 		MsgSerde: msgSerde,
 	}
-	outConfig := &producer_consumer.StreamSinkConfig{
+	outConfig := &producer_consumer.StreamSinkConfig[string, *ntypes.Event]{
 		MsgSerde:      msgSerde,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, inConfig), warmup)
+	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig), warmup)
 	sink := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], outConfig), warmup)
 	return []producer_consumer.MeteredConsumerIntr{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
@@ -67,28 +67,28 @@ func getSrcSinkUint64Key(
 	}
 	debug.Assert(len(output_streams) == 1, "expected only one output stream")
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
+	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
-	inMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.StringSerde{}, eventSerde)
+	inMsgSerde, err := commtypes.GetMsgSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
 	if err != nil {
 		return nil, nil, err
 	}
-	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, eventSerde)
+	outMsgSerde, err := commtypes.GetMsgSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
 	if err != nil {
 		return nil, nil, err
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	inConfig := &producer_consumer.StreamConsumerConfig{
+	inConfig := &producer_consumer.StreamConsumerConfigG[string, *ntypes.Event]{
 		Timeout:  common.SrcConsumeTimeout,
 		MsgSerde: inMsgSerde,
 	}
-	outConfig := &producer_consumer.StreamSinkConfig{
+	outConfig := &producer_consumer.StreamSinkConfig[uint64, *ntypes.Event]{
 		MsgSerde:      outMsgSerde,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
-	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, inConfig), warmup)
+	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig), warmup)
 	sink := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], outConfig), warmup)
 	return []producer_consumer.MeteredConsumerIntr{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
@@ -194,7 +194,7 @@ func PrepareProcessByTwoGeneralProc(
 			func1Manager.LaunchProc(ctx, procArgs, &wg)
 			func2Manager.LaunchProc(ctx, procArgs, &wg)
 		}).
-		PauseFunc(func(sargs *stream_task.StreamTaskArgs) *common.FnOutput {
+		PauseFunc(func() *common.FnOutput {
 			// debug.Fprintf(os.Stderr, "begin pause\n")
 			if err := handleErrFunc(); err != nil {
 				return &common.FnOutput{Success: false, Message: err.Error()}

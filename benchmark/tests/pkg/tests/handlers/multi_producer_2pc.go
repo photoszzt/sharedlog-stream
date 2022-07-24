@@ -19,10 +19,10 @@ import (
 
 func getProduceTransactionManager(
 	ctx context.Context, env types.Environment, transactionalID string,
-	sink *producer_consumer.ShardedSharedLogStreamProducer,
+	sink *producer_consumer.ShardedSharedLogStreamProducer[int, string],
 	sp *common.QueryInput,
 ) (*transaction.TransactionManager, exactly_once_intr.TrackProdSubStreamFunc) {
-	ectx := processor.NewExecutionContext(nil,
+	ectx := processor.NewExecutionContext([]producer_consumer.MeteredConsumerIntr{},
 		[]producer_consumer.MeteredProducerIntr{producer_consumer.NewMeteredProducer(sink, 0)},
 		"prodConsume", sp.ScaleEpoch, sp.ParNum)
 	args1 := benchutil.UpdateStreamTaskArgs(sp, stream_task.NewStreamTaskArgsBuilder(env,
@@ -33,7 +33,7 @@ func getProduceTransactionManager(
 	}
 	trackParFunc1 := func(ctx context.Context,
 		key interface{},
-		keySerde commtypes.Serde,
+		keySerde commtypes.Encoder,
 		topicName string,
 		substreamId uint8,
 	) error {
@@ -96,11 +96,11 @@ func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 		panic(err)
 	}
 
-	msgSerdes := commtypes.MessageJSONSerde{
-		KeySerde: commtypes.IntSerde{},
-		ValSerde: commtypes.StringSerde{},
+	msgSerdes := commtypes.MessageJSONSerdeG[int, string]{
+		KeySerde: commtypes.IntSerdeG{},
+		ValSerde: commtypes.StringSerdeG{},
 	}
-	produceSinkConfig := &producer_consumer.StreamSinkConfig{
+	produceSinkConfig := &producer_consumer.StreamSinkConfig[int, string]{
 		MsgSerde:      msgSerdes,
 		FlushDuration: common.FlushDuration,
 	}
@@ -167,7 +167,7 @@ func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 	produceSink.Flush(ctx)
 
 	// producer1 commits
-	if err = tm1.CommitTransaction(ctx, nil, nil); err != nil {
+	if err = tm1.CommitTransaction(ctx); err != nil {
 		panic(err)
 	}
 
@@ -189,7 +189,7 @@ func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 	produceSinkCopy.Flush(ctx)
 
 	// producer2 commits
-	if err = tm2.CommitTransaction(ctx, nil, nil); err != nil {
+	if err = tm2.CommitTransaction(ctx); err != nil {
 		panic(err)
 	}
 
@@ -198,18 +198,18 @@ func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 		panic(err)
 	}
 
-	srcConfig := &producer_consumer.StreamConsumerConfig{
+	srcConfig := &producer_consumer.StreamConsumerConfigG[int, string]{
 		Timeout:  common.SrcConsumeTimeout,
 		MsgSerde: msgSerdes,
 	}
 
-	src1 := producer_consumer.NewShardedSharedLogStreamConsumer(stream1ForRead, srcConfig)
+	src1 := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1ForRead, srcConfig)
 	err = src1.ConfigExactlyOnce(commtypes.JSON, exactly_once_intr.TWO_PHASE_COMMIT)
 	if err != nil {
 		panic(err)
 	}
-	payloadArrSerde := sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDE
-	got, err := readMsgs(ctx, msgSerdes, payloadArrSerde, commtypes.JSON, stream1ForRead)
+	payloadArrSerde := sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG
+	got, err := readMsgs[int, string](ctx, msgSerdes, payloadArrSerde, commtypes.JSON, stream1ForRead)
 	if err != nil {
 		panic(err)
 	}

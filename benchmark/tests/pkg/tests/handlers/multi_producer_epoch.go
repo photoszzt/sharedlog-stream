@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/epoch_manager"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -29,22 +30,22 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(
 		panic(err)
 	}
 
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat,
-		commtypes.IntSerde{},
-		commtypes.StringSerde{},
+	msgSerde, err := commtypes.GetMsgSerdeG[int, string](serdeFormat,
+		commtypes.IntSerdeG{},
+		commtypes.StringSerdeG{},
 	)
 	if err != nil {
 		panic(err)
 	}
 	meteredProducer1 := producer_consumer.NewMeteredProducer(
 		producer_consumer.NewShardedSharedLogStreamProducer(stream1,
-			&producer_consumer.StreamSinkConfig{
+			&producer_consumer.StreamSinkConfig[int, string]{
 				MsgSerde:      msgSerde,
 				FlushDuration: common.FlushDuration,
 			}), 0)
 	meteredProducer2 := producer_consumer.NewMeteredProducer(
 		producer_consumer.NewShardedSharedLogStreamProducer(stream2,
-			&producer_consumer.StreamSinkConfig{
+			&producer_consumer.StreamSinkConfig[int, string]{
 				MsgSerde:      msgSerde,
 				FlushDuration: common.FlushDuration,
 			}), 0)
@@ -102,7 +103,11 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(
 
 	// producer1 mark
 	producers1 := []producer_consumer.MeteredProducerIntr{meteredProducer1}
-	err = em1.MarkEpoch(ctx, nil, producers1)
+	epochMarker, err := epoch_manager.GenEpochMarker(ctx, em1, nil, producers1)
+	if err != nil {
+		panic(err)
+	}
+	err = epoch_manager.MarkEpochAndCleanupState(ctx, em1, epochMarker, producers1)
 	if err != nil {
 		panic(err)
 	}
@@ -124,12 +129,16 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(
 	}
 	meteredProducer2.Flush(ctx)
 	producers2 := []producer_consumer.MeteredProducerIntr{meteredProducer2}
-	err = em2.MarkEpoch(ctx, nil, producers2)
+	epochMarker2, err := epoch_manager.GenEpochMarker(ctx, em2, nil, producers2)
+	if err != nil {
+		panic(err)
+	}
+	err = epoch_manager.MarkEpochAndCleanupState(ctx, em2, epochMarker2, producers2)
 	if err != nil {
 		panic(err)
 	}
 
-	srcConfig := &producer_consumer.StreamConsumerConfig{
+	srcConfig := &producer_consumer.StreamConsumerConfigG[int, string]{
 		Timeout:  common.SrcConsumeTimeout,
 		MsgSerde: msgSerde,
 	}
@@ -137,7 +146,7 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(
 	if err != nil {
 		panic(err)
 	}
-	src1 := producer_consumer.NewShardedSharedLogStreamConsumer(stream1ForRead, srcConfig)
+	src1 := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1ForRead, srcConfig)
 	err = src1.ConfigExactlyOnce(serdeFormat, exactly_once_intr.EPOCH_MARK)
 	if err != nil {
 		panic(err)

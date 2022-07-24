@@ -9,14 +9,14 @@ import (
 )
 
 type StoreToWindowTableProcessor struct {
-	store      store.WindowStore
+	store      store.CoreWindowStore
 	name       string
 	observedTs int64
 }
 
 var _ = Processor(&StoreToWindowTableProcessor{})
 
-func NewStoreToWindowTableProcessor(store store.WindowStore) *StoreToWindowTableProcessor {
+func NewStoreToWindowTableProcessor(store store.CoreWindowStore) *StoreToWindowTableProcessor {
 	return &StoreToWindowTableProcessor{
 		store: store,
 		name:  "StoreTo" + store.Name(),
@@ -45,7 +45,7 @@ func ToInMemWindowTable(
 	storeName string,
 	joinWindow *JoinWindows,
 	compare concurrent_skiplist.CompareFunc,
-) (*MeteredProcessor, store.WindowStore, error) {
+) (*MeteredProcessor, store.CoreWindowStore, error) {
 	store := store.NewInMemoryWindowStore(
 		storeName,
 		joinWindow.MaxSize()+joinWindow.GracePeriodMs(),

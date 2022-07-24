@@ -4,47 +4,47 @@ import (
 	"context"
 	"fmt"
 	"sharedlog-stream/pkg/common_errors"
-	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/store_with_changelog"
 
 	"golang.org/x/xerrors"
 )
 
-type WindowStoreChangelog struct {
+/*
+type WindowStoreChangelog[K, V any] struct {
 	winStore         store.WindowStore
-	changelogManager *store_with_changelog.ChangelogManager
+	changelogManager *store_with_changelog.ChangelogManager[commtypes.KeyAndWindowStartTsG[K], V]
 }
 
-func NewWindowStoreChangelog(
+func NewWindowStoreChangelog[K, V any](
 	wStore store.WindowStore,
-	changelogManager *store_with_changelog.ChangelogManager,
-) *WindowStoreChangelog {
-	return &WindowStoreChangelog{
+	changelogManager *store_with_changelog.ChangelogManager[commtypes.KeyAndWindowStartTsG[K], V],
+) *WindowStoreChangelog[K, V] {
+	return &WindowStoreChangelog[K, V]{
 		winStore:         wStore,
 		changelogManager: changelogManager,
 	}
 }
 
-func (wsc *WindowStoreChangelog) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
+func (wsc *WindowStoreChangelog[K, V]) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 	wsc.winStore.SetTrackParFunc(trackParFunc)
 }
 
-func (wsc *WindowStoreChangelog) TableType() store.TABLE_TYPE {
+func (wsc *WindowStoreChangelog[K, V]) TableType() store.TABLE_TYPE {
 	return wsc.winStore.TableType()
 }
 
-func (wsc *WindowStoreChangelog) ChangelogManager() *store_with_changelog.ChangelogManager {
+func (wsc *WindowStoreChangelog[K, V]) ChangelogManager() *store_with_changelog.ChangelogManager[commtypes.KeyAndWindowStartTsG[K], V] {
 	return wsc.changelogManager
 }
+*/
 
 func RestoreChangelogWindowStateStore(
 	ctx context.Context,
-	wschangelog *WindowStoreChangelog,
+	wschangelog store.WindowStoreOpWithChangelog,
 	parNum uint8,
 ) error {
 	for {
-		gotMsgs, err := wschangelog.changelogManager.Consume(ctx, parNum)
+		gotMsgs, err := wschangelog.ConsumeChangelog(ctx, parNum)
 		// nothing to restore
 		if common_errors.IsStreamEmptyError(err) {
 			return nil
@@ -60,7 +60,7 @@ func RestoreChangelogWindowStateStore(
 					if msg.Key == nil && msg.Value == nil {
 						continue
 					}
-					err = wschangelog.winStore.PutWithoutPushToChangelog(ctx, msg.Key, msg.Value, msg.Timestamp)
+					err = wschangelog.PutWithoutPushToChangelog(ctx, msg.Key, msg.Value, msg.Timestamp)
 					if err != nil {
 						return fmt.Errorf("window store put failed: %v", err)
 					}
@@ -70,7 +70,7 @@ func RestoreChangelogWindowStateStore(
 				if msg.Key == nil && msg.Value == nil {
 					continue
 				}
-				err = wschangelog.winStore.PutWithoutPushToChangelog(ctx, msg.Key, msg.Value, msg.Timestamp)
+				err = wschangelog.PutWithoutPushToChangelog(ctx, msg.Key, msg.Value, msg.Timestamp)
 				if err != nil {
 					return fmt.Errorf("window store put failed: %v", err)
 				}

@@ -9,7 +9,7 @@ import (
 )
 
 type TableAggregateProcessor struct {
-	store       store.KeyValueStore
+	store       store.CoreKeyValueStore
 	initializer Initializer
 	add         Aggregator
 	remove      Aggregator
@@ -19,7 +19,7 @@ type TableAggregateProcessor struct {
 var _ = Processor(&TableAggregateProcessor{})
 
 func NewTableAggregateProcessor(name string,
-	store store.KeyValueStore,
+	store store.CoreKeyValueStore,
 	initializer Initializer,
 	add Aggregator,
 	remove Aggregator,

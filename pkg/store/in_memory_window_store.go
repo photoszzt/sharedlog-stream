@@ -30,7 +30,7 @@ type InMemoryWindowStore struct {
 	open             bool
 }
 
-var _ = WindowStore(&InMemoryWindowStore{})
+var _ = CoreWindowStore(&InMemoryWindowStore{})
 
 func NewInMemoryWindowStore(name string, retentionPeriod int64, windowSize int64, retainDuplicates bool,
 	compare concurrent_skiplist.Comparable,
@@ -329,21 +329,23 @@ func (s *InMemoryWindowStore) BackwardFetchAll(
 	panic("not implemented")
 }
 
-func (s *InMemoryWindowStore) DropDatabase(ctx context.Context) error {
-	panic("not implemented")
-}
-
 func (s *InMemoryWindowStore) TableType() TABLE_TYPE {
 	return IN_MEM
 }
 
-func (s *InMemoryWindowStore) StartTransaction(ctx context.Context) error { return nil }
-func (s *InMemoryWindowStore) CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error {
-	return nil
+func (s *InMemoryWindowStore) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 }
-func (s *InMemoryWindowStore) AbortTransaction(ctx context.Context) error { return nil }
-func (s *InMemoryWindowStore) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
+func (s *InMemoryWindowStore) FlushChangelog(ctx context.Context) error {
 	panic("not supported")
 }
-func (s *InMemoryWindowStore) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
+func (s *InMemoryWindowStore) ConsumeChangelog(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
+	panic("not supported")
+}
+
+func (s *InMemoryWindowStore) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager, guarantee exactly_once_intr.GuaranteeMth, serdeFormat commtypes.SerdeFormat) error {
+	panic("not supported")
+}
+
+func (s *InMemoryWindowStore) ChangelogTopicName() string {
+	panic("not supported")
 }

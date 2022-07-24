@@ -10,7 +10,7 @@ import (
 )
 
 type TableSourceProcessor struct {
-	store store.KeyValueStore
+	store store.CoreKeyValueStore
 	name  string
 }
 
@@ -22,7 +22,7 @@ func NewTableSourceProcessor() *TableSourceProcessor {
 	}
 }
 
-func NewTableSourceProcessorWithTable(tab store.KeyValueStore) *TableSourceProcessor {
+func NewTableSourceProcessorWithTable(tab store.CoreKeyValueStore) *TableSourceProcessor {
 	return &TableSourceProcessor{
 		name:  "toTable",
 		store: tab,
@@ -74,8 +74,16 @@ func MsgSerdeWithValueTs(serdeFormat commtypes.SerdeFormat, keySerde commtypes.S
 	return commtypes.GetMsgSerde(serdeFormat, keySerde, valueTsSerde)
 }
 
+func MsgSerdeWithValueTsG[K any](serdeFormat commtypes.SerdeFormat, keySerde commtypes.SerdeG[K], valSerde commtypes.Serde) (commtypes.MessageSerdeG[K, *commtypes.ValueTimestamp], error) {
+	valueTsSerde, err := commtypes.GetValueTsSerdeG(serdeFormat, valSerde)
+	if err != nil {
+		return nil, err
+	}
+	return commtypes.GetMsgSerdeG(serdeFormat, keySerde, valueTsSerde)
+}
+
 func ToInMemKVTable(storeName string, compare func(a, b treemap.Key) int) (
-	*MeteredProcessor, store.KeyValueStore,
+	*MeteredProcessor, store.CoreKeyValueStore,
 ) {
 	s := store.NewInMemoryKeyValueStore(storeName, compare)
 	toTableProc := NewMeteredProcessor(NewTableSourceProcessorWithTable(s))

@@ -45,7 +45,7 @@ func (h *dump) process(ctx context.Context, di *common.DumpInput) *common.FnOutp
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat, keySerde, valSerde)
+	msgSerde, err := commtypes.GetMsgSerdeG[interface{}, interface{}](serdeFormat, keySerde, valSerde)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

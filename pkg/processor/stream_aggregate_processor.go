@@ -12,7 +12,7 @@ import (
 )
 
 type StreamAggregateProcessor struct {
-	store       store.KeyValueStore
+	store       store.CoreKeyValueStore
 	initializer Initializer
 	aggregator  Aggregator
 	name        string
@@ -20,7 +20,7 @@ type StreamAggregateProcessor struct {
 
 var _ = Processor(&StreamAggregateProcessor{})
 
-func NewStreamAggregateProcessor(name string, store store.KeyValueStore, initializer Initializer, aggregator Aggregator) *StreamAggregateProcessor {
+func NewStreamAggregateProcessor(name string, store store.CoreKeyValueStore, initializer Initializer, aggregator Aggregator) *StreamAggregateProcessor {
 	return &StreamAggregateProcessor{
 		initializer: initializer,
 		aggregator:  aggregator,
@@ -66,5 +66,5 @@ func (p *StreamAggregateProcessor) ProcessAndReturn(ctx context.Context, msg com
 		OldVal: oldAgg,
 	}
 	debug.Fprintf(os.Stderr, "StreamAgg key %v, oldVal %v, newVal %v\n", msg.Key, oldAgg, newAgg)
-	return []commtypes.Message{{Key: msg.Key, Value: &change, Timestamp: newTs}}, nil
+	return []commtypes.Message{{Key: msg.Key, Value: change, Timestamp: newTs}}, nil
 }

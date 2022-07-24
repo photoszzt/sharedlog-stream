@@ -11,7 +11,7 @@ import (
 )
 
 type TransactionAwareConsumer struct {
-	epochMarkerSerde commtypes.Serde
+	epochMarkerSerde commtypes.SerdeG[commtypes.EpochMarker]
 	stream           *sharedlog_stream.ShardedSharedLogStream
 	committed        map[commtypes.ProducerId]struct{}
 	aborted          map[commtypes.ProducerId]struct{}
@@ -23,7 +23,7 @@ type TransactionAwareConsumer struct {
 func NewTransactionAwareConsumer(stream *sharedlog_stream.ShardedSharedLogStream,
 	serdeFormat commtypes.SerdeFormat,
 ) (*TransactionAwareConsumer, error) {
-	epochMarkerSerde, err := commtypes.GetEpochMarkerSerde(serdeFormat)
+	epochMarkerSerde, err := commtypes.GetEpochMarkerSerdeG(serdeFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -107,12 +107,11 @@ func (tac *TransactionAwareConsumer) ReadNext(ctx context.Context, parNum uint8)
 			continue
 		}
 		if rawMsg.IsControl {
-			txnMarkTmp, err := tac.epochMarkerSerde.Decode(rawMsg.Payload)
+			txnMark, err := tac.epochMarkerSerde.Decode(rawMsg.Payload)
 			if err != nil {
 				debug.Fprintf(os.Stderr, "[ERROR] return err2: %v\n", err)
 				return nil, err
 			}
-			txnMark := txnMarkTmp.(commtypes.EpochMarker)
 			if txnMark.Mark == commtypes.EPOCH_END {
 				debug.Fprintf(os.Stderr, "Got commit msg with tranid: %v\n", rawMsg.ProdId)
 				tac.committed[rawMsg.ProdId] = struct{}{}

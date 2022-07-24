@@ -13,7 +13,7 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
-	"sharedlog-stream/pkg/store_restore"
+	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/treemap"
@@ -57,33 +57,33 @@ func (h *q7MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	debug.Assert(len(output_streams) == 1, "expected only one output stream")
 
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
+	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
-	seSerde, err := ntypes.GetStartEndTimeSerde(serdeFormat)
+	seSerde, err := ntypes.GetStartEndTimeSerdeG(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
-	inMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, seSerde, eventSerde)
+	inMsgSerde, err := commtypes.GetMsgSerdeG(serdeFormat, seSerde, eventSerde)
 	if err != nil {
 		return nil, nil, err
 	}
-	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, seSerde)
+	outMsgSerde, err := commtypes.GetMsgSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, seSerde)
 	if err != nil {
 		return nil, nil, err
 	}
-	inConfig := &producer_consumer.StreamConsumerConfig{
+	inConfig := &producer_consumer.StreamConsumerConfigG[ntypes.StartEndTime, *ntypes.Event]{
 		MsgSerde: inMsgSerde,
 		Timeout:  common.SrcConsumeTimeout,
 	}
-	outConfig := &producer_consumer.StreamSinkConfig{
+	outConfig := &producer_consumer.StreamSinkConfig[uint64, ntypes.StartEndTime]{
 		MsgSerde:      outMsgSerde,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	src := producer_consumer.NewMeteredConsumer(
-		producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, inConfig),
+		producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig),
 		warmup)
 	sink := producer_consumer.NewMeteredProducer(
 		producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], outConfig),
@@ -101,12 +101,15 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 
 	maxBidByWinStoreName := "maxBidByWinKVStore"
-	srcMsgSerde := srcs[0].MsgSerde()
-	msgSerde, err := processor.MsgSerdeWithValueTs(serdeFormat, srcMsgSerde.GetKeySerde(), commtypes.Uint64Serde{})
+	seSerde, err := ntypes.GetStartEndTimeSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	mp, err := store_with_changelog.NewMaterializeParamBuilder().
+	msgSerde, err := processor.MsgSerdeWithValueTsG(serdeFormat, seSerde, commtypes.Uint64Serde{})
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	mp, err := store_with_changelog.NewMaterializeParamBuilder[ntypes.StartEndTime, *commtypes.ValueTimestamp]().
 		MessageSerde(msgSerde).
 		StoreName(maxBidByWinStoreName).
 		ParNum(sp.ParNum).
@@ -153,15 +156,11 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 			args := argsTmp.(processor.ExecutionContext)
 			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
 		}).Build()
-	kvc := []*store_restore.KVStoreChangelog{
-		store_restore.NewKVStoreChangelog(
-			kvstore, kvstore.ChangelogManager(),
-		),
-	}
+	kvc := []store.KeyValueStoreOpWithChangelog{kvstore}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 		sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).
 		KVStoreChangelogs(kvc).Build()
-	return task.ExecuteApp(ctx, streamTaskArgs)
+	return stream_task.ExecuteApp(ctx, task, streamTaskArgs)
 }

@@ -6,8 +6,14 @@ package producer_consumer
 import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/stats"
+	"sharedlog-stream/pkg/txn_data"
 	"time"
 )
+
+func MsgIsScaleFence(msg *commtypes.Message) bool {
+	ctrl, ok := msg.Key.(string)
+	return ok && ctrl == txn_data.SCALE_FENCE_KEY
+}
 
 func assignInjTime(msg *commtypes.Message) {
 	nowMs := time.Now().UnixMilli()

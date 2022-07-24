@@ -11,8 +11,6 @@ type ExecutionContext interface {
 	ProcessorChainIntr
 }
 
-var EmptyBaseExecutionContext = BaseExecutionContext{}
-
 type BaseExecutionContext struct {
 	ProcessorChains
 	proc_interface.BaseConsumersProducers

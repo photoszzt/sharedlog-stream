@@ -9,16 +9,18 @@ import (
 )
 
 type StreamReduceProcessor struct {
-	store   store.KeyValueStore
+	store   store.CoreKeyValueStore
 	reducer Reducer
 	name    string
 }
 
 var _ = Processor(&StreamReduceProcessor{})
 
-func NewStreamReduceProcessor(reducer Reducer) *StreamReduceProcessor {
+func NewStreamReduceProcessor(name string, reducer Reducer, store store.CoreKeyValueStore) *StreamReduceProcessor {
 	return &StreamReduceProcessor{
 		reducer: reducer,
+		store:   store,
+		name:    name,
 	}
 }
 

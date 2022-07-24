@@ -16,7 +16,7 @@ type InMemoryKeyValueStore struct {
 	name  string
 }
 
-var _ = KeyValueStore(NewInMemoryKeyValueStore("a", nil))
+var _ = CoreKeyValueStore(NewInMemoryKeyValueStore("a", nil))
 
 type KVStoreCompareFunc func(a treemap.Key, b treemap.Key) int
 
@@ -207,4 +207,23 @@ func (st *InMemoryKeyValueStore) GetTransactionID(ctx context.Context, taskRepr 
 }
 
 func (st *InMemoryKeyValueStore) SetTrackParFunc(exactly_once_intr.TrackProdSubStreamFunc) {
+}
+
+func (st *InMemoryKeyValueStore) FlushChangelog(context.Context) error {
+	return nil
+}
+
+func (s *InMemoryKeyValueStore) ConsumeChangelog(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
+	panic("not supported")
+}
+
+func (s *InMemoryKeyValueStore) ChangelogTopicName() string {
+	panic("not supported")
+}
+
+func (s *InMemoryKeyValueStore) ChangelogIsSrc() bool {
+	panic("not supported")
+}
+func (s *InMemoryKeyValueStore) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager, guarantee exactly_once_intr.GuaranteeMth, serdeFormat commtypes.SerdeFormat) error {
+	panic("not supported")
 }

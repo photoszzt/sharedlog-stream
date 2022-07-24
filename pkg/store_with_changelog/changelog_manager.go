@@ -12,18 +12,18 @@ import (
 )
 
 // a changelog substream has only one producer. Each store would only produce to one substream.
-type ChangelogManager struct {
-	restoreConsumer *producer_consumer.ShardedSharedLogStreamConsumer
-	producer        *producer_consumer.ShardedSharedLogStreamProducer
+type ChangelogManager[K, V any] struct {
+	restoreConsumer *producer_consumer.ShardedSharedLogStreamConsumer[K, V]
+	producer        *producer_consumer.ShardedSharedLogStreamProducer[K, V]
 	changelogIsSrc  bool
 }
 
-func NewChangelogManagerForSrc(stream *sharedlog_stream.ShardedSharedLogStream,
-	msgSerde commtypes.MessageSerde, timeout time.Duration,
-) *ChangelogManager {
-	return &ChangelogManager{
-		restoreConsumer: producer_consumer.NewShardedSharedLogStreamConsumer(stream,
-			&producer_consumer.StreamConsumerConfig{
+func NewChangelogManagerForSrc[K, V any](stream *sharedlog_stream.ShardedSharedLogStream,
+	msgSerde commtypes.MessageSerdeG[K, V], timeout time.Duration,
+) *ChangelogManager[K, V] {
+	return &ChangelogManager[K, V]{
+		restoreConsumer: producer_consumer.NewShardedSharedLogStreamConsumerG(stream,
+			&producer_consumer.StreamConsumerConfigG[K, V]{
 				MsgSerde: msgSerde,
 				Timeout:  timeout,
 			}),
@@ -32,19 +32,19 @@ func NewChangelogManagerForSrc(stream *sharedlog_stream.ShardedSharedLogStream,
 	}
 }
 
-func NewChangelogManager(stream *sharedlog_stream.ShardedSharedLogStream,
-	msgSerde commtypes.MessageSerde,
+func NewChangelogManager[K, V any](stream *sharedlog_stream.ShardedSharedLogStream,
+	msgSerde commtypes.MessageSerdeG[K, V],
 	timeout time.Duration,
 	flushDuration time.Duration,
-) *ChangelogManager {
-	return &ChangelogManager{
-		restoreConsumer: producer_consumer.NewShardedSharedLogStreamConsumer(stream,
-			&producer_consumer.StreamConsumerConfig{
+) *ChangelogManager[K, V] {
+	return &ChangelogManager[K, V]{
+		restoreConsumer: producer_consumer.NewShardedSharedLogStreamConsumerG(stream,
+			&producer_consumer.StreamConsumerConfigG[K, V]{
 				MsgSerde: msgSerde,
 				Timeout:  timeout,
 			}),
 		producer: producer_consumer.NewShardedSharedLogStreamProducer(stream,
-			&producer_consumer.StreamSinkConfig{
+			&producer_consumer.StreamSinkConfig[K, V]{
 				MsgSerde:      msgSerde,
 				FlushDuration: flushDuration,
 			}),
@@ -52,19 +52,19 @@ func NewChangelogManager(stream *sharedlog_stream.ShardedSharedLogStream,
 	}
 }
 
-func (cm *ChangelogManager) ChangelogIsSrc() bool {
+func (cm *ChangelogManager[K, V]) ChangelogIsSrc() bool {
 	return cm.changelogIsSrc
 }
 
-func (cm *ChangelogManager) TopicName() string {
+func (cm *ChangelogManager[K, V]) TopicName() string {
 	return cm.restoreConsumer.TopicName()
 }
 
-func (cm *ChangelogManager) NumPartition() uint8 {
+func (cm *ChangelogManager[K, V]) NumPartition() uint8 {
 	return cm.restoreConsumer.Stream().NumPartition()
 }
 
-func (cm *ChangelogManager) ConfigExactlyOnce(
+func (cm *ChangelogManager[K, V]) ConfigExactlyOnce(
 	rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	guarantee exactly_once_intr.GuaranteeMth,
 	serdeFormat commtypes.SerdeFormat,
@@ -76,25 +76,25 @@ func (cm *ChangelogManager) ConfigExactlyOnce(
 	return nil
 }
 
-func (cm *ChangelogManager) Stream() *sharedlog_stream.ShardedSharedLogStream {
-	return cm.restoreConsumer.Stream().(*sharedlog_stream.ShardedSharedLogStream)
+func (cm *ChangelogManager[K, V]) Stream() sharedlog_stream.Stream {
+	return cm.restoreConsumer.Stream()
 }
 
 // when changelog is src, there's nothing to flush
-func (cm *ChangelogManager) Flush(ctx context.Context) error {
+func (cm *ChangelogManager[K, V]) Flush(ctx context.Context) error {
 	if !cm.changelogIsSrc {
 		return cm.producer.Flush(ctx)
 	}
 	return nil
 }
-func (cm *ChangelogManager) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
+func (cm *ChangelogManager[K, V]) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
 	if !cm.changelogIsSrc {
 		return cm.producer.Produce(ctx, msg, parNum, isControl)
 	}
 	return nil
 }
 
-func (cm *ChangelogManager) Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
+func (cm *ChangelogManager[K, V]) Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
 	return cm.restoreConsumer.Consume(ctx, parNum)
 }
 

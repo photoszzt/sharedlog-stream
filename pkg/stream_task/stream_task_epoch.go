@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-func (t *StreamTask) SetupManagersForEpoch(ctx context.Context,
+func SetupManagersForEpoch(ctx context.Context,
 	args *StreamTaskArgs,
 ) (*epoch_manager.EpochManager, *control_channel.ControlChannelManager, error) {
 	em, err := epoch_manager.NewEpochManager(args.env, args.transactionalId, args.serdeFormat)
@@ -58,11 +58,11 @@ func (t *StreamTask) SetupManagersForEpoch(ctx context.Context,
 		return nil, nil, err
 	}
 	trackParFunc := exactly_once_intr.TrackProdSubStreamFunc(
-		func(ctx context.Context, key interface{}, keySerde commtypes.Serde,
+		func(ctx context.Context, key interface{}, keySerde commtypes.Encoder,
 			topicName string, substreamId uint8,
 		) error {
 			_ = em.AddTopicSubstream(ctx, topicName, substreamId)
-			return cmm.TrackAndAppendKeyMapping(ctx, key, keySerde, substreamId, topicName)
+			return control_channel.TrackAndAppendKeyMapping(ctx, cmm, key, keySerde, substreamId, topicName)
 		})
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
 		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, cmm.CurrentEpoch())
@@ -71,8 +71,9 @@ func (t *StreamTask) SetupManagersForEpoch(ctx context.Context,
 	return em, cmm, nil
 }
 
-func (t *StreamTask) processInEpoch(
+func processInEpoch(
 	ctx context.Context,
+	t *StreamTask,
 	em *epoch_manager.EpochManager,
 	cmm *control_channel.ControlChannelManager,
 	args *StreamTaskArgs,
@@ -114,7 +115,7 @@ func (t *StreamTask) processInEpoch(
 			timeout := args.duration != 0 && cur_elapsed >= args.duration
 			shouldMarkByTime := (args.commitEvery != 0 && timeSinceLastMark > args.commitEvery)
 			if (shouldMarkByTime || timeout) && hasProcessData {
-				err_out := t.markEpoch(dctx, em, args, &hasProcessData, &paused)
+				err_out := markEpoch(dctx, em, t, args, &hasProcessData, &paused)
 				if err_out != nil {
 					return err_out
 				}
@@ -132,7 +133,7 @@ func (t *StreamTask) processInEpoch(
 
 			// init
 			if !hasProcessData {
-				err := t.initAfterMarkOrCommit(ctx, args, em, &init, &paused)
+				err := initAfterMarkOrCommit(ctx, t, args, em, &init, &paused)
 				if err != nil {
 					return common.GenErrFnOutput(err)
 				}
@@ -157,22 +158,27 @@ func (t *StreamTask) processInEpoch(
 	}
 }
 
-func (t *StreamTask) markEpoch(ctx context.Context,
+func markEpoch(ctx context.Context,
 	em *epoch_manager.EpochManager,
+	t *StreamTask,
 	args *StreamTaskArgs,
 	hasProcessData *bool,
 	paused *bool,
 ) *common.FnOutput {
 	if t.pauseFunc != nil {
-		if ret := t.pauseFunc(args); ret != nil {
+		if ret := t.pauseFunc(); ret != nil {
 			return ret
 		}
 		*paused = true
 	}
 	mStart := stats.TimerBegin()
-	err := em.MarkEpoch(ctx, args.ectx.Consumers(), args.ectx.Producers())
+	epochMarker, err := epoch_manager.GenEpochMarker(ctx, em, args.ectx.Consumers(), args.ectx.Producers())
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
+	}
+	err = epoch_manager.MarkEpochAndCleanupState(ctx, em, epochMarker, args.ectx.Producers())
+	if err != nil {
+		return common.GenErrFnOutput(err)
 	}
 	mElapsed := stats.Elapsed(mStart).Microseconds()
 	t.markEpochTime.AddSample(mElapsed)

@@ -3,15 +3,8 @@ package store
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/exactly_once_intr"
 	"time"
 )
-
-type WindowStore interface {
-	CoreWindowStore
-	// WindowStoreOpForExternalStore
-	WindowStoreOpWithChangelog
-}
 
 type CoreWindowStore interface {
 	StateStore
@@ -32,6 +25,8 @@ type CoreWindowStore interface {
 		iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error
 	IterAll(iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error
 	TableType() TABLE_TYPE
+	UpdateTrackParFunc
+	OnlyUpdateInMemWinStore
 }
 
 type WindowStoreBackedByChangelog interface {
@@ -39,23 +34,13 @@ type WindowStoreBackedByChangelog interface {
 	WindowStoreOpWithChangelog
 }
 
-/*
-type ExternalWindowStore interface {
-	CoreWindowStore
-	WindowStoreOpForExternalStore
-}
-
-type WindowStoreOpForExternalStore interface {
-	StartTransaction(ctx context.Context) error
-	CommitTransaction(ctx context.Context, taskRepr string, transactionID uint64) error
-	AbortTransaction(ctx context.Context) error
-	GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error)
-	DropDatabase(ctx context.Context) error
-}
-*/
-
-type WindowStoreOpWithChangelog interface {
-	SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc)
+type OnlyUpdateInMemWinStore interface {
 	PutWithoutPushToChangelog(ctx context.Context,
 		key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error
+}
+
+type WindowStoreOpWithChangelog interface {
+	StoreBackedByChangelog
+	UpdateTrackParFunc
+	OnlyUpdateInMemWinStore
 }

@@ -81,22 +81,5 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).
 		FixedOutParNum(sp.ParNum).
 		Build()
-	return task.ExecuteApp(ctx, streamTaskArgs)
+	return stream_task.ExecuteApp(ctx, task, streamTaskArgs)
 }
-
-/*
-func (h *query2Handler) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
-	args := argsTmp.(*query2ProcessArgs)
-	outMsg, err := args.q2Filter.ProcessAndReturn(ctx, msg)
-	if err != nil {
-		return err
-	}
-	if outMsg != nil {
-		err = args.Producers()[0].Produce(ctx, outMsg[0], args.SubstreamNum(), false)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-*/

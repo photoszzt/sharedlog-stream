@@ -30,7 +30,7 @@ func getEpochManager(ctx context.Context, env types.Environment,
 		return nil, nil, err
 	}
 	trackParFunc := exactly_once_intr.TrackProdSubStreamFunc(
-		func(ctx context.Context, key interface{}, keySerde commtypes.Serde,
+		func(ctx context.Context, key interface{}, keySerde commtypes.Encoder,
 			topicName string, substreamId uint8,
 		) error {
 			_ = em.AddTopicSubstream(ctx, topicName, substreamId)
@@ -48,11 +48,11 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 		panic(err)
 	}
 
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.IntSerde{}, commtypes.StringSerde{})
+	msgSerde, err := commtypes.GetMsgSerdeG[int, string](serdeFormat, commtypes.IntSerdeG{}, commtypes.StringSerdeG{})
 	if err != nil {
 		panic(err)
 	}
-	produceSinkConfig := &producer_consumer.StreamSinkConfig{
+	produceSinkConfig := &producer_consumer.StreamSinkConfig[int, string]{
 		MsgSerde:      msgSerde,
 		FlushDuration: common.FlushDuration,
 	}
@@ -89,12 +89,16 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 		panic(err)
 	}
 	producers := []producer_consumer.MeteredProducerIntr{meteredProducer}
-	err = em1.MarkEpoch(ctx, nil, producers)
+	epochMarker, err := epoch_manager.GenEpochMarker(ctx, em1, nil, producers)
+	if err != nil {
+		panic(err)
+	}
+	err = epoch_manager.MarkEpochAndCleanupState(ctx, em1, epochMarker, producers)
 	if err != nil {
 		panic(err)
 	}
 
-	srcConfig := &producer_consumer.StreamConsumerConfig{
+	srcConfig := &producer_consumer.StreamConsumerConfigG[int, string]{
 		Timeout:  common.SrcConsumeTimeout,
 		MsgSerde: msgSerde,
 	}
@@ -102,7 +106,7 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 	if err != nil {
 		panic(err)
 	}
-	src1 := producer_consumer.NewShardedSharedLogStreamConsumer(stream1ForRead, srcConfig)
+	src1 := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1ForRead, srcConfig)
 	err = src1.ConfigExactlyOnce(serdeFormat, exactly_once_intr.EPOCH_MARK)
 	if err != nil {
 		panic(err)
@@ -141,7 +145,11 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 	if err != nil {
 		panic(err)
 	}
-	err = em1.MarkEpoch(ctx, nil, producers)
+	epochMarker, err = epoch_manager.GenEpochMarker(ctx, em1, nil, producers)
+	if err != nil {
+		panic(err)
+	}
+	err = epoch_manager.MarkEpochAndCleanupState(ctx, em1, epochMarker, producers)
 	if err != nil {
 		panic(err)
 	}
@@ -160,7 +168,11 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 	if err != nil {
 		panic(err)
 	}
-	err = em1.MarkEpoch(ctx, nil, producers)
+	epochMarker, err = epoch_manager.GenEpochMarker(ctx, em1, nil, producers)
+	if err != nil {
+		panic(err)
+	}
+	err = epoch_manager.MarkEpochAndCleanupState(ctx, em1, epochMarker, producers)
 	if err != nil {
 		panic(err)
 	}
@@ -192,7 +204,7 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 	}
 }
 
-func readMsgsEpoch(ctx context.Context, consumer *producer_consumer.ShardedSharedLogStreamConsumer) ([]commtypes.Message, error) {
+func readMsgsEpoch[KIn, VIn any](ctx context.Context, consumer *producer_consumer.ShardedSharedLogStreamConsumer[KIn, VIn]) ([]commtypes.Message, error) {
 	ret := make([]commtypes.Message, 0)
 	for {
 		gotMsgs, err := consumer.Consume(ctx, 0)

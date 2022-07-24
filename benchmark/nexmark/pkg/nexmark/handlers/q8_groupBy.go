@@ -49,31 +49,31 @@ func (h *q8GroupByHandler) getExecutionCtx(ctx context.Context, sp *common.Query
 	var sinks []producer_consumer.MeteredProducerIntr
 	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
-		return processor.EmptyBaseExecutionContext, err
+		return processor.BaseExecutionContext{}, err
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
+	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
 	if err != nil {
-		return processor.EmptyBaseExecutionContext, fmt.Errorf("get event serde err: %v", err)
+		return processor.BaseExecutionContext{}, fmt.Errorf("get event serde err: %v", err)
 	}
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.StringSerde{}, eventSerde)
+	msgSerde, err := commtypes.GetMsgSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
 	if err != nil {
-		return processor.EmptyBaseExecutionContext, fmt.Errorf("get msg serde err: %v", err)
+		return processor.BaseExecutionContext{}, fmt.Errorf("get msg serde err: %v", err)
 	}
-	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, eventSerde)
+	outMsgSerde, err := commtypes.GetMsgSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
 	if err != nil {
-		return processor.EmptyBaseExecutionContext, fmt.Errorf("get msg serde err: %v", err)
+		return processor.BaseExecutionContext{}, fmt.Errorf("get msg serde err: %v", err)
 	}
-	inConfig := &producer_consumer.StreamConsumerConfig{
+	inConfig := &producer_consumer.StreamConsumerConfigG[string, *ntypes.Event]{
 		Timeout:  common.SrcConsumeTimeout,
 		MsgSerde: msgSerde,
 	}
-	outConfig := &producer_consumer.StreamSinkConfig{
+	outConfig := &producer_consumer.StreamSinkConfig[uint64, *ntypes.Event]{
 		MsgSerde:      outMsgSerde,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
-	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, inConfig), time.Duration(sp.WarmupS)*time.Second)
+	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig), time.Duration(sp.WarmupS)*time.Second)
 	src.SetInitialSource(true)
 	for _, output_stream := range output_streams {
 		sink := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_stream, outConfig), time.Duration(sp.WarmupS)*time.Second)
@@ -132,5 +132,5 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).
 		Build()
-	return task.ExecuteApp(ctx, streamTaskArgs)
+	return stream_task.ExecuteApp(ctx, task, streamTaskArgs)
 }

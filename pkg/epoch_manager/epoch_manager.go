@@ -21,7 +21,7 @@ const (
 )
 
 type EpochManager struct {
-	epochMetaSerde commtypes.Serde
+	epochMetaSerde commtypes.SerdeG[commtypes.EpochMarker]
 	env            types.Environment
 
 	tpMapMu               syncutils.Mutex
@@ -43,7 +43,7 @@ func NewEpochManager(env types.Environment, epochMngrName string,
 	if err != nil {
 		return nil, err
 	}
-	epochMetaSerde, err := commtypes.GetEpochMarkerSerde(serdeFormat)
+	epochMetaSerde, err := commtypes.GetEpochMarkerSerdeG(serdeFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -88,12 +88,11 @@ func (em *EpochManager) monitorEpochLog(ctx context.Context,
 			errc <- err
 			return
 		} else {
-			epochMetaTmp, err := em.epochMetaSerde.Decode(rawMsg.Payload)
+			epochMeta, err := em.epochMetaSerde.Decode(rawMsg.Payload)
 			if err != nil {
 				errc <- err
 				return
 			}
-			epochMeta := epochMetaTmp.(commtypes.EpochMarker)
 			if epochMeta.Mark != commtypes.FENCE {
 				panic("mark should be fence")
 			}
@@ -116,7 +115,7 @@ func (em *EpochManager) StartMonitorLog(
 }
 
 func (em *EpochManager) appendToEpochLog(ctx context.Context,
-	meta *commtypes.EpochMarker, tags []uint64, additionalTopic []string,
+	meta commtypes.EpochMarker, tags []uint64, additionalTopic []string,
 ) (uint64, error) {
 	encoded, err := em.epochMetaSerde.Encode(meta)
 	if err != nil {
@@ -150,15 +149,17 @@ func (em *EpochManager) AddTopicSubstream(ctx context.Context,
 	return nil
 }
 
-func (em *EpochManager) MarkEpoch(ctx context.Context,
+func GenEpochMarker(
+	ctx context.Context,
+	em *EpochManager,
 	consumers []producer_consumer.MeteredConsumerIntr,
 	producers []producer_consumer.MeteredProducerIntr,
-) error {
+) (commtypes.EpochMarker, error) {
 	outputRanges := make(map[string][]commtypes.ProduceRange)
 	for _, producer := range producers {
 		err := producer.Flush(ctx)
 		if err != nil {
-			return err
+			return commtypes.EpochMarker{}, err
 		}
 		topicName := producer.TopicName()
 		parSet, ok := em.currentTopicSubstream[producer.TopicName()]
@@ -186,6 +187,12 @@ func (em *EpochManager) MarkEpoch(ctx context.Context,
 		ConSeqNums:   consumeSeqNums,
 		OutputRanges: outputRanges,
 	}
+	return epochMeta, nil
+}
+
+func (em *EpochManager) MarkEpoch(ctx context.Context,
+	epochMeta commtypes.EpochMarker,
+) error {
 	// debug.Fprintf(os.Stderr, "epochMeta to push: %+v\n", epochMeta)
 	tags := []uint64{em.epochLogMarkerTag}
 	// debug.Fprintf(os.Stderr, "marker with tag: 0x%x\n", em.epochLogMarkerTag)
@@ -199,9 +206,18 @@ func (em *EpochManager) MarkEpoch(ctx context.Context,
 			tags = append(tags, tag)
 		}
 	}
-	_, err := em.appendToEpochLog(ctx, &epochMeta, tags, additionalTopic)
-	em.cleanupState(producers)
+	_, err := em.appendToEpochLog(ctx, epochMeta, tags, additionalTopic)
 	return err
+}
+
+func MarkEpochAndCleanupState(ctx context.Context, em *EpochManager,
+	epochMeta commtypes.EpochMarker, producers []producer_consumer.MeteredProducerIntr) error {
+	err := em.MarkEpoch(ctx, epochMeta)
+	if err != nil {
+		return err
+	}
+	cleanupState(em, producers)
+	return nil
 }
 
 func (em *EpochManager) Init(ctx context.Context) (*commtypes.EpochMarker, uint64, error) {
@@ -227,7 +243,7 @@ func (em *EpochManager) Init(ctx context.Context) (*commtypes.EpochMarker, uint6
 		sharedlog_stream.NameHashWithPartition(em.epochLog.TopicNameHash(), 0),
 		txn_data.FenceTag(em.epochLog.TopicNameHash(), 0),
 	}
-	_, err = em.appendToEpochLog(ctx, &meta, tags, nil)
+	_, err = em.appendToEpochLog(ctx, meta, tags, nil)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -246,11 +262,10 @@ func (em *EpochManager) getMostRecentCommitEpoch(ctx context.Context) (*commtype
 		}
 		return nil, nil, err
 	}
-	val, err := em.epochMetaSerde.Decode(rawMsg.Payload)
+	meta, err := em.epochMetaSerde.Decode(rawMsg.Payload)
 	if err != nil {
 		return nil, nil, err
 	}
-	meta := val.(commtypes.EpochMarker)
 	return &meta, rawMsg, nil
 }
 
@@ -265,18 +280,17 @@ func (em *EpochManager) FindMostRecentEpochMetaThatHasConsumed(
 			}
 			return nil, err
 		}
-		val, err := em.epochMetaSerde.Decode(rawMsg.Payload)
+		meta, err := em.epochMetaSerde.Decode(rawMsg.Payload)
 		if err != nil {
 			return nil, err
 		}
-		meta := val.(commtypes.EpochMarker)
 		if meta.ConSeqNums != nil && len(meta.ConSeqNums) != 0 {
 			return &meta, nil
 		}
 	}
 }
 
-func (em *EpochManager) cleanupState(producers []producer_consumer.MeteredProducerIntr) {
+func cleanupState(em *EpochManager, producers []producer_consumer.MeteredProducerIntr) {
 	em.currentTopicSubstream = make(map[string]map[uint8]struct{})
 	for _, producer := range producers {
 		producer.ResetInitialProd()

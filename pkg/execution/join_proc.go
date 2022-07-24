@@ -15,8 +15,9 @@ import (
 	"golang.org/x/xerrors"
 )
 
-func (jm *JoinProcManager) joinProcLoop(
+func joinProcLoop(
 	ctx context.Context,
+	jm *JoinProcManager,
 	task *stream_task.StreamTask,
 	procArgs *JoinProcArgs,
 	wg *sync.WaitGroup,

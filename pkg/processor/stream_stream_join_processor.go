@@ -46,7 +46,7 @@ func (t *TimeTracker) AdvanceNextTimeToEmit() {
 }
 
 type StreamStreamJoinProcessor struct {
-	otherWindowStore  store.WindowStore
+	otherWindowStore  store.CoreWindowStore
 	joiner            ValueJoinerWithKeyTs
 	sharedTimeTracker *TimeTracker
 	name              string
@@ -61,7 +61,7 @@ var _ = Processor(&StreamStreamJoinProcessor{})
 
 func NewStreamStreamJoinProcessor(
 	name string,
-	otherWindowStore store.WindowStore,
+	otherWindowStore store.CoreWindowStore,
 	jw *JoinWindows,
 	joiner ValueJoinerWithKeyTs,
 	outer bool,

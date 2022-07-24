@@ -90,19 +90,19 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 		return nil, nil, err
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
+	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, eventSerde)
+	msgSerde, err := commtypes.GetMsgSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
-	ptSerde, err := ntypes.GetPersonTimeSerde(serdeFormat)
+	ptSerde, err := ntypes.GetPersonTimeSerdeG(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
-	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, ptSerde)
+	outMsgSerde, err := commtypes.GetMsgSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, ptSerde)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -110,18 +110,18 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	timeout := time.Duration(10) * time.Millisecond
 	warmup := time.Duration(sp.WarmupS) * time.Second
 
-	src1 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(stream1,
-		&producer_consumer.StreamConsumerConfig{
+	src1 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumerG(stream1,
+		&producer_consumer.StreamConsumerConfigG[uint64, *ntypes.Event]{
 			Timeout:  timeout,
 			MsgSerde: msgSerde,
 		}), warmup)
-	src2 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(stream2,
-		&producer_consumer.StreamConsumerConfig{
+	src2 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumerG(stream2,
+		&producer_consumer.StreamConsumerConfigG[uint64, *ntypes.Event]{
 			Timeout:  timeout,
 			MsgSerde: msgSerde,
 		}), warmup)
 	sink := producer_consumer.NewConcurrentMeteredSyncProducer(producer_consumer.NewShardedSharedLogStreamProducer(outputStream,
-		&producer_consumer.StreamSinkConfig{
+		&producer_consumer.StreamSinkConfig[uint64, ntypes.PersonTime]{
 			MsgSerde:      outMsgSerde,
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 		}), warmup)
@@ -151,7 +151,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		rv := rightValue.(*ntypes.Event)
 		ts := rv.NewPerson.DateTime
 		windowStart := (utils.MaxInt64(0, ts-windowSizeMs+windowSizeMs) / windowSizeMs) * windowSizeMs
-		return &ntypes.PersonTime{
+		return ntypes.PersonTime{
 			ID:        rv.NewPerson.ID,
 			Name:      rv.NewPerson.Name,
 			StartTime: windowStart,
@@ -159,8 +159,16 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	})
 	format := commtypes.SerdeFormat(sp.SerdeFormat)
 	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
-	aucMp, err := store_with_changelog.NewMaterializeParamBuilder().
-		MessageSerde(srcs[0].MsgSerde()).
+	eventSerde, err := ntypes.GetEventSerdeG(format)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	msgSerde, err := commtypes.GetMsgSerdeG[uint64](format, commtypes.Uint64SerdeG{}, eventSerde)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	aucMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, *ntypes.Event]().
+		MessageSerde(msgSerde).
 		StoreName("auctionsBySellerIDWinTab").
 		ParNum(sp.ParNum).
 		SerdeFormat(format).
@@ -170,8 +178,8 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			FlushDuration: flushDur,
 			TimeOut:       common.SrcConsumeTimeout,
 		}).Build()
-	perMp, err := store_with_changelog.NewMaterializeParamBuilder().
-		MessageSerde(srcs[1].MsgSerde()).
+	perMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, *ntypes.Event]().
+		MessageSerde(msgSerde).
 		StoreName("personsByIDWinTab").
 		ParNum(sp.ParNum).
 		SerdeFormat(format).
@@ -195,5 +203,5 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, fmt.Sprintf("%s-%d", h.funcName, sp.ParNum))).
 		WindowStoreChangelogs(wsc).FixedOutParNum(sp.ParNum).Build()
-	return task.ExecuteApp(ctx, streamTaskArgs)
+	return stream_task.ExecuteApp(ctx, task, streamTaskArgs)
 }

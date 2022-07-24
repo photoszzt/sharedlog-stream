@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func getKeyValueStore() KeyValueStore {
+func getKeyValueStore() CoreKeyValueStore {
 	store := NewInMemoryKeyValueStore("test1", func(a, b treemap.Key) int {
 		ka := a.(int)
 		kb := b.(int)

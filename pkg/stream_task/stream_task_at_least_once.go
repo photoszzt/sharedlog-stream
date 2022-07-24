@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func (t *StreamTask) process(ctx context.Context, args *StreamTaskArgs) *common.FnOutput {
+func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.FnOutput {
 	debug.Assert(len(args.ectx.Consumers()) >= 1, "Srcs should be filled")
 	debug.Assert(args.env != nil, "env should be filled")
 	debug.Assert(args.ectx != nil, "program args should be filled")
@@ -61,20 +61,20 @@ func (t *StreamTask) process(ctx context.Context, args *StreamTaskArgs) *common.
 	for {
 		timeSinceLastTrack := time.Since(commitTimer)
 		if timeSinceLastTrack >= args.trackEveryForAtLeastOnce {
-			if ret_err := t.track(ctx, cm, args.ectx.Consumers(), args.ectx.SubstreamNum(), &hasUntrackedConsume, &commitTimer); ret_err != nil {
+			if ret_err := track(ctx, cm, args.ectx.Consumers(), args.ectx.SubstreamNum(), &hasUntrackedConsume, &commitTimer); ret_err != nil {
 				return ret_err
 			}
 		}
 		timeSinceLastFlush := time.Since(flushTimer)
 		if timeSinceLastFlush >= args.flushEvery {
 			if t.pauseFunc != nil {
-				t.pauseFunc(args)
+				t.pauseFunc()
 			}
-			if ret_err := t.flushStreams(ctx, args); ret_err != nil {
+			if ret_err := flushStreams(ctx, t, args); ret_err != nil {
 				return common.GenErrFnOutput(ret_err)
 			}
 			if t.resumeFunc != nil {
-				t.resumeFunc(t, args)
+				t.resumeFunc(t)
 			}
 			flushTimer = time.Now()
 		}
@@ -98,17 +98,18 @@ func (t *StreamTask) process(ctx context.Context, args *StreamTaskArgs) *common.
 			latencies.AddSample(elapsed.Microseconds())
 		}
 	}
-	t.pauseTrackFlush(ctx, args, cm, hasUntrackedConsume)
+	pauseTrackFlush(ctx, t, args, cm, hasUntrackedConsume)
 	ret := &common.FnOutput{Success: true}
 	updateReturnMetric(ret, &warmupCheck)
 	return ret
 }
 
-func (t *StreamTask) track(ctx context.Context, cm *consume_seq_num_manager.ConsumeSeqManager,
+func track(ctx context.Context, cm *consume_seq_num_manager.ConsumeSeqManager,
 	consumers []producer_consumer.MeteredConsumerIntr, substreamNum uint8,
 	hasUncommitted *bool, commitTimer *time.Time,
 ) *common.FnOutput {
-	err := cm.Track(ctx, consumers, substreamNum)
+	markers := consume_seq_num_manager.CollectOffsetMarker(consumers)
+	err := cm.Track(ctx, markers, substreamNum)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -120,26 +121,27 @@ func (t *StreamTask) track(ctx context.Context, cm *consume_seq_num_manager.Cons
 	return nil
 }
 
-func (t *StreamTask) pauseTrackFlush(ctx context.Context, args *StreamTaskArgs, cm *consume_seq_num_manager.ConsumeSeqManager, hasUncommitted bool) *common.FnOutput {
+func pauseTrackFlush(ctx context.Context, t *StreamTask, args *StreamTaskArgs, cm *consume_seq_num_manager.ConsumeSeqManager, hasUncommitted bool) *common.FnOutput {
 	alreadyPaused := false
 	if hasUncommitted {
 		if t.pauseFunc != nil {
-			if ret := t.pauseFunc(args); ret != nil {
+			if ret := t.pauseFunc(); ret != nil {
 				return ret
 			}
 		}
-		err := cm.Track(ctx, args.ectx.Consumers(), args.ectx.SubstreamNum())
+		markers := consume_seq_num_manager.CollectOffsetMarker(args.ectx.Consumers())
+		err := cm.Track(ctx, markers, args.ectx.SubstreamNum())
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
 		alreadyPaused = true
 	}
 	if !alreadyPaused && t.pauseFunc != nil {
-		if ret := t.pauseFunc(args); ret != nil {
+		if ret := t.pauseFunc(); ret != nil {
 			return ret
 		}
 	}
-	err := t.flushStreams(ctx, args)
+	err := flushStreams(ctx, t, args)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

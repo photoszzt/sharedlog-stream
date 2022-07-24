@@ -7,19 +7,18 @@ import (
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/store_with_changelog"
 )
 
-func SetupStreamStreamJoin(
-	mpLeft *store_with_changelog.MaterializeParam,
-	mpRight *store_with_changelog.MaterializeParam,
+func SetupStreamStreamJoin[K, VLeft, VRight any](
+	mpLeft *store_with_changelog.MaterializeParam[K, VLeft],
+	mpRight *store_with_changelog.MaterializeParam[K, VRight],
 	compare concurrent_skiplist.CompareFunc,
 	joiner processor.ValueJoinerWithKeyTsFunc,
 	jw *processor.JoinWindows,
 ) (proc_interface.ProcessAndReturnFunc,
 	proc_interface.ProcessAndReturnFunc,
-	[]*store_restore.WindowStoreChangelog,
+	[]store.WindowStoreOpWithChangelog,
 	error,
 ) {
 	toLeftTab, leftTab, err := store_with_changelog.ToInMemWindowTableWithChangelog(
@@ -55,15 +54,12 @@ func SetupStreamStreamJoin(
 		// debug.Fprintf(os.Stderr, "after rightJoinLeft\n")
 		return msgs, err
 	}
-	wsc := []*store_restore.WindowStoreChangelog{
-		store_restore.NewWindowStoreChangelog(leftTab, leftTab.ChangelogManager()),
-		store_restore.NewWindowStoreChangelog(rightTab, rightTab.ChangelogManager()),
-	}
+	wsc := []store.WindowStoreOpWithChangelog{leftTab, rightTab}
 	return leftJoinRightFunc, rightJoinLeftFunc, wsc, nil
 }
 
-func configureStreamStreamJoinProcessor(leftTab store.WindowStore,
-	rightTab store.WindowStore,
+func configureStreamStreamJoinProcessor(leftTab store.CoreWindowStore,
+	rightTab store.CoreWindowStore,
 	joiner processor.ValueJoinerWithKeyTsFunc,
 	jw *processor.JoinWindows,
 ) (*processor.MeteredProcessor, *processor.MeteredProcessor) {

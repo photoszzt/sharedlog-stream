@@ -81,10 +81,6 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewQ8JoinStreamHandler(env, funcName), nil
 	case "q8GroupBy":
 		return handlers.NewQ8GroupByHandler(env, funcName), nil
-	case "windowavggroupby":
-		return handlers.NewWindowAvgGroupByHandler(env), nil
-	case "windowavgagg":
-		return handlers.NewWindowedAvg(env), nil
 	case "scale":
 		return configscale.NewConfigScaleHandler(env), nil
 	default:

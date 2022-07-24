@@ -41,11 +41,11 @@ func PrepareTaskWithJoin(
 		}).
 		InitFunc(func(task *stream_task.StreamTask) {
 			// debug.Fprintf(os.Stderr, "init ts=%d launch join proc loops\n", time.Now().UnixMilli())
-			leftManager.LaunchJoinProcLoop(lctx, task, joinProcLeft, &wg)
-			rightManager.LaunchJoinProcLoop(rctx, task, joinProcRight, &wg)
+			LaunchJoinProcLoop(lctx, leftManager, task, joinProcLeft, &wg)
+			LaunchJoinProcLoop(rctx, rightManager, task, joinProcRight, &wg)
 			// debug.Fprintf(os.Stderr, "init ts=%d done invoke join proc loops\n", time.Now().UnixMilli())
 		}).
-		PauseFunc(func(sargs *stream_task.StreamTaskArgs) *common.FnOutput {
+		PauseFunc(func() *common.FnOutput {
 			// debug.Fprintf(os.Stderr, "in pause func\n")
 			if ret := HandleJoinErrReturn(procArgs); ret != nil {
 				return ret
@@ -57,7 +57,7 @@ func PrepareTaskWithJoin(
 			pauseTime.AddSample(elapsed.Microseconds())
 			return nil
 		}).
-		ResumeFunc(func(task *stream_task.StreamTask, sargs *stream_task.StreamTaskArgs) {
+		ResumeFunc(func(task *stream_task.StreamTask) {
 			// debug.Fprintf(os.Stderr, "in resume func\n")
 			rStart := stats.TimerBegin()
 			leftManager.UnlockRunlock()

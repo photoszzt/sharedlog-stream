@@ -18,7 +18,8 @@ const (
 )
 
 var (
-	DEFAULT_PAYLOAD_ARR_SERDE = commtypes.PayloadArrMsgpSerde{}
+	DEFAULT_PAYLOAD_ARR_SERDE  = commtypes.PayloadArrMsgpSerde{}
+	DEFAULT_PAYLOAD_ARR_SERDEG = commtypes.PayloadArrMsgpSerdeG{}
 )
 
 type BufferedSinkStream struct {

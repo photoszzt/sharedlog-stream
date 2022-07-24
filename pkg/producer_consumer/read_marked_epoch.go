@@ -19,7 +19,7 @@ const (
 )
 
 type EpochMarkConsumer struct {
-	epochMarkerSerde commtypes.Serde
+	epochMarkerSerde commtypes.SerdeG[commtypes.EpochMarker]
 	stream           *sharedlog_stream.ShardedSharedLogStream
 	marked           map[commtypes.ProducerId]map[uint8]commtypes.ProduceRange
 	curReadMsgSeqNum map[commtypes.ProducerId]uint64
@@ -29,7 +29,7 @@ type EpochMarkConsumer struct {
 func NewEpochMarkConsumer(stream *sharedlog_stream.ShardedSharedLogStream,
 	serdeFormat commtypes.SerdeFormat,
 ) (*EpochMarkConsumer, error) {
-	epochMarkSerde, err := commtypes.GetEpochMarkerSerde(serdeFormat)
+	epochMarkSerde, err := commtypes.GetEpochMarkerSerdeG(serdeFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -78,11 +78,10 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 			}
 		}
 		if rawMsg.IsControl {
-			epochMarkTmp, err := emc.epochMarkerSerde.Decode(rawMsg.Payload)
+			epochMark, err := emc.epochMarkerSerde.Decode(rawMsg.Payload)
 			if err != nil {
 				return nil, err
 			}
-			epochMark := epochMarkTmp.(commtypes.EpochMarker)
 			if epochMark.Mark == commtypes.EPOCH_END {
 				// debug.Fprintf(os.Stderr, "%+v\n", epochMark)
 				ranges, ok := emc.marked[rawMsg.ProdId]

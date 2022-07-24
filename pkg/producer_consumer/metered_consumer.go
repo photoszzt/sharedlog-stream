@@ -11,8 +11,8 @@ import (
 	"time"
 )
 
-type MeteredConsumer struct {
-	consumer  *ShardedSharedLogStreamConsumer
+type MeteredConsumer[K, V any] struct {
+	consumer  *ShardedSharedLogStreamConsumer[K, V]
 	latencies stats.Int64Collector
 	pToCLat   stats.Int64Collector
 	consumeTp stats.ThroughputCounter
@@ -29,11 +29,11 @@ func checkMeasureSource() bool {
 	return measure
 }
 
-var _ = MeteredConsumerIntr(&MeteredConsumer{})
+var _ = MeteredConsumerIntr(&MeteredConsumer[int, string]{})
 
-func NewMeteredConsumer(src *ShardedSharedLogStreamConsumer, warmup time.Duration) *MeteredConsumer {
+func NewMeteredConsumer[K, V any](src *ShardedSharedLogStreamConsumer[K, V], warmup time.Duration) *MeteredConsumer[K, V] {
 	src_name := fmt.Sprintf("%s_src", src.TopicName())
-	return &MeteredConsumer{
+	return &MeteredConsumer[K, V]{
 		consumer:  src,
 		latencies: stats.NewInt64Collector(src_name, stats.DEFAULT_COLLECT_DURATION),
 		pToCLat:   stats.NewInt64Collector("procTo"+src_name, stats.DEFAULT_COLLECT_DURATION),
@@ -42,18 +42,18 @@ func NewMeteredConsumer(src *ShardedSharedLogStreamConsumer, warmup time.Duratio
 	}
 }
 
-func (s *MeteredConsumer) StartWarmup() {
+func (s *MeteredConsumer[K, V]) StartWarmup() {
 }
 
-func (s *MeteredConsumer) RecordCurrentConsumedSeqNum(seqNum uint64) {
+func (s *MeteredConsumer[K, V]) RecordCurrentConsumedSeqNum(seqNum uint64) {
 	s.consumer.RecordCurrentConsumedSeqNum(seqNum)
 }
 
-func (s *MeteredConsumer) CurrentConsumedSeqNum() uint64 {
+func (s *MeteredConsumer[K, V]) CurrentConsumedSeqNum() uint64 {
 	return s.consumer.CurrentConsumedSeqNum()
 }
 
-func (s *MeteredConsumer) Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
+func (s *MeteredConsumer[K, V]) Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
 	procStart := stats.TimerBegin()
 	msgs, err := s.consumer.Consume(ctx, parNum)
 	elapsed := stats.Elapsed(procStart).Microseconds()
@@ -67,37 +67,39 @@ func (s *MeteredConsumer) Consume(ctx context.Context, parNum uint8) (*commtypes
 	return msgs, err
 }
 
-func (s *MeteredConsumer) ExtractProduceToConsumeTime(msg *commtypes.Message) {
+func (s *MeteredConsumer[K, V]) ExtractProduceToConsumeTime(msg *commtypes.Message) {
 	extractProduceToConsumeTime(msg, s.IsInitialSource(), &s.pToCLat)
 }
 
-func (s *MeteredConsumer) GetCount() uint64 {
+func (s *MeteredConsumer[K, V]) GetCount() uint64 {
 	return s.consumeTp.GetCount()
 }
 
-func (s *MeteredConsumer) InnerSource() Consumer {
+func (s *MeteredConsumer[K, V]) InnerSource() Consumer {
 	return s.consumer
 }
 
-func (s *MeteredConsumer) SetCursor(cursor uint64, parNum uint8) {
+func (s *MeteredConsumer[K, V]) SetCursor(cursor uint64, parNum uint8) {
 	s.consumer.SetCursor(cursor, parNum)
 }
-func (s *MeteredConsumer) TopicName() string               { return s.consumer.TopicName() }
-func (s *MeteredConsumer) Name() string                    { return s.consumer.Name() }
-func (s *MeteredConsumer) SetName(name string)             { s.consumer.SetName(name) }
-func (s *MeteredConsumer) Stream() sharedlog_stream.Stream { return s.consumer.Stream() }
-func (s *MeteredConsumer) ConfigExactlyOnce(serdeFormat commtypes.SerdeFormat, guarantee exactly_once_intr.GuaranteeMth) error {
+func (s *MeteredConsumer[K, V]) TopicName() string               { return s.consumer.TopicName() }
+func (s *MeteredConsumer[K, V]) Name() string                    { return s.consumer.Name() }
+func (s *MeteredConsumer[K, V]) SetName(name string)             { s.consumer.SetName(name) }
+func (s *MeteredConsumer[K, V]) Stream() sharedlog_stream.Stream { return s.consumer.Stream() }
+func (s *MeteredConsumer[K, V]) ConfigExactlyOnce(serdeFormat commtypes.SerdeFormat, guarantee exactly_once_intr.GuaranteeMth) error {
 	return s.consumer.ConfigExactlyOnce(serdeFormat, guarantee)
 }
-func (s *MeteredConsumer) SetInitialSource(initial bool)    { s.consumer.SetInitialSource(initial) }
-func (s *MeteredConsumer) IsInitialSource() bool            { return s.consumer.IsInitialSource() }
-func (s *MeteredConsumer) MsgSerde() commtypes.MessageSerde { return s.consumer.MsgSerde() }
+func (s *MeteredConsumer[K, V]) SetInitialSource(initial bool) { s.consumer.SetInitialSource(initial) }
+func (s *MeteredConsumer[K, V]) IsInitialSource() bool         { return s.consumer.IsInitialSource() }
+func (s *MeteredConsumer[K, V]) MsgSerde() commtypes.MessageSerdeG[K, V] {
+	return s.consumer.MsgSerde()
+}
 
-// func (s *MeteredConsumer) Lock() {
+// func (s *MeteredConsumer[K, V]) Lock() {
 // 	// debug.Fprintf(os.Stderr, "lock consumer %s\n", s.Name())
 // 	s.consumer.Lock()
 // }
-// func (s *MeteredConsumer) Unlock() {
+// func (s *MeteredConsumer[K, V]) Unlock() {
 // 	// debug.Fprintf(os.Stderr, "unlock consumer %s\n", s.Name())
 // 	s.consumer.Unlock()
 // }

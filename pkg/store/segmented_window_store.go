@@ -20,7 +20,7 @@ type SegmentedWindowStore struct {
 	retainDuplicates bool
 }
 
-var _ = WindowStore(&SegmentedWindowStore{})
+var _ = CoreWindowStore(&SegmentedWindowStore{})
 
 func NewSegmentedWindowStore(
 	bytesStore SegmentedBytesStore,
@@ -53,8 +53,6 @@ func (rws *SegmentedWindowStore) updateSeqnumForDups() {
 
 func (rws *SegmentedWindowStore) IsOpen() bool { return true }
 func (rws *SegmentedWindowStore) Name() string { return rws.bytesStore.Name() }
-
-func (rws *SegmentedWindowStore) Init(ctx StoreContext) {}
 
 func (rws *SegmentedWindowStore) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error {
 	if !(value == nil && rws.retainDuplicates) {
@@ -241,4 +239,18 @@ func (rws *SegmentedWindowStore) GetTransactionID(ctx context.Context, taskRepr 
 }
 
 func (rws *SegmentedWindowStore) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
+}
+func (rws *SegmentedWindowStore) FlushChangelog(ctx context.Context) error {
+	return nil
+}
+func (rws *SegmentedWindowStore) ConsumeChangelog(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
+	return nil, nil
+}
+
+func (rws *SegmentedWindowStore) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager, guarantee exactly_once_intr.GuaranteeMth, serdeFormat commtypes.SerdeFormat) error {
+	panic("not supported")
+}
+
+func (rws *SegmentedWindowStore) ChangelogTopicName() string {
+	panic("not supported")
 }

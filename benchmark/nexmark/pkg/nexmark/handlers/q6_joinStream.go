@@ -55,44 +55,44 @@ func (h *q6JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 		return nil, nil, err
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
+	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get event serde err: %v", err)
 	}
-	msgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, eventSerde)
+	msgSerde, err := commtypes.GetMsgSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
 	if err != nil {
 		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
 	timeout := time.Duration(10) * time.Millisecond
-	src1Config := &producer_consumer.StreamConsumerConfig{
+	src1Config := &producer_consumer.StreamConsumerConfigG[uint64, *ntypes.Event]{
 		Timeout:  timeout,
 		MsgSerde: msgSerde,
 	}
-	src2Config := &producer_consumer.StreamConsumerConfig{
+	src2Config := &producer_consumer.StreamConsumerConfigG[uint64, *ntypes.Event]{
 		Timeout:  timeout,
 		MsgSerde: msgSerde,
 	}
-	abSerde, err := ntypes.GetAuctionBidSerde(serdeFormat)
+	abSerde, err := ntypes.GetAuctionBidSerdeG(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
-	asSerde, err := ntypes.GetAuctionIDSellerSerde(serdeFormat)
+	asSerde, err := ntypes.GetAuctionIDSellerSerdeG(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
-	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, asSerde, abSerde)
+	outMsgSerde, err := commtypes.GetMsgSerdeG(serdeFormat, asSerde, abSerde)
 	if err != nil {
 		return nil, nil, err
 	}
-	outConfig := &producer_consumer.StreamSinkConfig{
+	outConfig := &producer_consumer.StreamSinkConfig[ntypes.AuctionIdSeller, *ntypes.AuctionBid]{
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 		MsgSerde:      outMsgSerde,
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	src1 := producer_consumer.NewMeteredConsumer(
-		producer_consumer.NewShardedSharedLogStreamConsumer(stream1, src1Config), warmup)
+		producer_consumer.NewShardedSharedLogStreamConsumerG(stream1, src1Config), warmup)
 	src2 := producer_consumer.NewMeteredConsumer(
-		producer_consumer.NewShardedSharedLogStreamConsumer(stream2, src2Config), warmup)
+		producer_consumer.NewShardedSharedLogStreamConsumerG(stream2, src2Config), warmup)
 	sink := producer_consumer.NewConcurrentMeteredSyncProducer(
 		producer_consumer.NewShardedSharedLogStreamProducer(outputStream, outConfig), warmup)
 	src1.SetInitialSource(false)
@@ -127,9 +127,17 @@ func (h *q6JoinStreamHandler) Q6JoinStream(ctx context.Context, sp *common.Query
 		}
 	})
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	msgSerde, err := commtypes.GetMsgSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
-	aucMp, err := store_with_changelog.NewMaterializeParamBuilder().
-		MessageSerde(srcs[0].MsgSerde()).StoreName("auctionsByIDStore").
+	aucMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, *ntypes.Event]().
+		MessageSerde(msgSerde).StoreName("auctionsByIDStore").
 		ParNum(sp.ParNum).SerdeFormat(serdeFormat).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
 			Env:           h.env,
@@ -140,8 +148,8 @@ func (h *q6JoinStreamHandler) Q6JoinStream(ctx context.Context, sp *common.Query
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	bidMp, err := store_with_changelog.NewMaterializeParamBuilder().
-		MessageSerde(srcs[1].MsgSerde()).StoreName("bidsByAuctionIDStore").
+	bidMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, *ntypes.Event]().
+		MessageSerde(msgSerde).StoreName("bidsByAuctionIDStore").
 		ParNum(sp.ParNum).SerdeFormat(serdeFormat).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
 			Env:           h.env,
@@ -177,7 +185,7 @@ func (h *q6JoinStreamHandler) Q6JoinStream(ctx context.Context, sp *common.Query
 					Seller: validBid[0].Value.(*ntypes.AuctionBid).AucSeller,
 				}
 				aucBid := validBid[0].Value.(*ntypes.AuctionBid)
-				newMsg := commtypes.Message{Key: &aic, Value: aucBid, Timestamp: validBid[0].Timestamp}
+				newMsg := commtypes.Message{Key: aic, Value: aucBid, Timestamp: validBid[0].Timestamp}
 				newMsgs = append(newMsgs, newMsg)
 			}
 		}
@@ -207,5 +215,5 @@ func (h *q6JoinStreamHandler) Q6JoinStream(ctx context.Context, sp *common.Query
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
 		WindowStoreChangelogs(wsc).FixedOutParNum(sp.ParNum).Build()
-	return task.ExecuteApp(ctx, streamTaskArgs)
+	return stream_task.ExecuteApp(ctx, task, streamTaskArgs)
 }

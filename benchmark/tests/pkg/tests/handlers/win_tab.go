@@ -27,10 +27,10 @@ func NewWinTabTestsHandler(env types.Environment) types.FuncHandler {
 	}
 }
 
-func getWindowStoreWithChangelog(env types.Environment, retainDuplicates bool) *store_with_changelog.InMemoryWindowStoreWithChangelog {
-	msgSerde := commtypes.MessageJSONSerde{
-		KeySerde: commtypes.Uint32Serde{},
-		ValSerde: commtypes.StringSerde{},
+func getWindowStoreWithChangelog(env types.Environment, retainDuplicates bool) *store_with_changelog.InMemoryWindowStoreWithChangelog[uint32, string] {
+	msgSerde := commtypes.MessageJSONSerdeG[uint32, string]{
+		KeySerde: commtypes.Uint32SerdeG{},
+		ValSerde: commtypes.StringSerdeG{},
 	}
 	storeName := "test1"
 	var compareFunc concurrent_skiplist.CompareFunc
@@ -39,7 +39,7 @@ func getWindowStoreWithChangelog(env types.Environment, retainDuplicates bool) *
 	} else {
 		compareFunc = store.CompareWithDup
 	}
-	mp, err := store_with_changelog.NewMaterializeParamBuilder().
+	mp, err := store_with_changelog.NewMaterializeParamBuilder[uint32, string]().
 		MessageSerde(msgSerde).
 		StoreName(storeName).
 		ParNum(0).
@@ -79,7 +79,7 @@ func (wt *winTabTestsHandler) Call(ctx context.Context, input []byte) ([]byte, e
 
 func (wt *winTabTestsHandler) WinTests(ctx context.Context, sp *test_types.TestInput) *common.FnOutput {
 	t := &tests.MockTesting{}
-	var winstore *store_with_changelog.InMemoryWindowStoreWithChangelog
+	var winstore *store_with_changelog.InMemoryWindowStoreWithChangelog[uint32, string]
 	if sp.TestName != "TestPutSameKeyTs" {
 		winstore = getWindowStoreWithChangelog(wt.env, false)
 	} else {

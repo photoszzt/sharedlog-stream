@@ -22,8 +22,8 @@ type StreamTask struct {
 	// in case the task consumes multiple streams, the task consumes from the same substream number
 	// and the substreams must have the same number of substreams.
 
-	pauseFunc     func(sargs *StreamTaskArgs) *common.FnOutput
-	resumeFunc    func(task *StreamTask, sargs *StreamTaskArgs)
+	pauseFunc     func() *common.FnOutput
+	resumeFunc    func(task *StreamTask)
 	initFunc      func(task *StreamTask)
 	HandleErrFunc func() error
 
@@ -36,27 +36,28 @@ type StreamTask struct {
 	markEpochTime stats.Int64Collector
 }
 
-func (t *StreamTask) ExecuteApp(ctx context.Context,
+func ExecuteApp(ctx context.Context,
+	t *StreamTask,
 	streamTaskArgs *StreamTaskArgs,
 ) *common.FnOutput {
 	var ret *common.FnOutput
 	if streamTaskArgs.guarantee == exactly_once_intr.TWO_PHASE_COMMIT {
-		tm, cmm, err := t.setupManagersFor2pc(ctx, streamTaskArgs)
+		tm, cmm, err := setupManagersFor2pc(ctx, t, streamTaskArgs)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
 		debug.Fprint(os.Stderr, "begin transaction processing\n")
-		ret = t.processWithTransaction(ctx, tm, cmm, streamTaskArgs)
+		ret = processWithTransaction(ctx, t, tm, cmm, streamTaskArgs)
 	} else if streamTaskArgs.guarantee == exactly_once_intr.EPOCH_MARK {
-		em, cmm, err := t.SetupManagersForEpoch(ctx, streamTaskArgs)
+		em, cmm, err := SetupManagersForEpoch(ctx, streamTaskArgs)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
 		debug.Fprint(os.Stderr, "begin epoch processing\n")
-		ret = t.processInEpoch(ctx, em, cmm, streamTaskArgs)
+		ret = processInEpoch(ctx, t, em, cmm, streamTaskArgs)
 		fmt.Fprintf(os.Stderr, "epoch ret: %v\n", ret)
 	} else {
-		ret = t.process(ctx, streamTaskArgs)
+		ret = process(ctx, t, streamTaskArgs)
 	}
 	if ret != nil && ret.Success {
 		for _, src := range streamTaskArgs.ectx.Consumers() {
@@ -74,7 +75,9 @@ func (t *StreamTask) ExecuteApp(ctx context.Context,
 	return ret
 }
 
-func (t *StreamTask) flushStreams(ctx context.Context, args *StreamTaskArgs) error {
+func flushStreams(ctx context.Context, t *StreamTask,
+	args *StreamTaskArgs,
+) error {
 	pStart := stats.TimerBegin()
 	for _, sink := range args.ectx.Producers() {
 		if err := sink.Flush(ctx); err != nil {
@@ -82,17 +85,13 @@ func (t *StreamTask) flushStreams(ctx context.Context, args *StreamTaskArgs) err
 		}
 	}
 	for _, kvchangelog := range args.kvChangelogs {
-		if kvchangelog.ChangelogManager() != nil {
-			if err := kvchangelog.ChangelogManager().Flush(ctx); err != nil {
-				return err
-			}
+		if err := kvchangelog.FlushChangelog(ctx); err != nil {
+			return err
 		}
 	}
 	for _, wschangelog := range args.windowStoreChangelogs {
-		if wschangelog.ChangelogManager() != nil {
-			if err := wschangelog.ChangelogManager().Flush(ctx); err != nil {
-				return err
-			}
+		if err := wschangelog.FlushChangelog(ctx); err != nil {
+			return err
 		}
 	}
 	elapsed := stats.Elapsed(pStart)
@@ -108,13 +107,14 @@ func updateReturnMetric(ret *common.FnOutput, warmupChecker *stats.Warmup) {
 
 // for key value table, it's possible that the changelog is the source stream of the task
 // and restore should make sure that it restores to the previous offset and don't read over
-func restoreKVStore(ctx context.Context, args *StreamTaskArgs, offsetMap map[string]uint64,
+func restoreKVStore(ctx context.Context,
+	args *StreamTaskArgs, offsetMap map[string]uint64,
 ) error {
 	for _, kvchangelog := range args.kvChangelogs {
-		topic := kvchangelog.ChangelogManager().TopicName()
+		topic := kvchangelog.ChangelogTopicName()
 		offset := uint64(0)
 		ok := false
-		if kvchangelog.ChangelogManager().ChangelogIsSrc() {
+		if kvchangelog.ChangelogIsSrc() {
 			offset, ok = offsetMap[topic]
 			if !ok {
 				continue
@@ -129,7 +129,9 @@ func restoreKVStore(ctx context.Context, args *StreamTaskArgs, offsetMap map[str
 	return nil
 }
 
-func restoreChangelogBackedWindowStore(ctx context.Context, args *StreamTaskArgs) error {
+func restoreChangelogBackedWindowStore(ctx context.Context,
+	args *StreamTaskArgs,
+) error {
 	for _, wschangelog := range args.windowStoreChangelogs {
 		err := store_restore.RestoreChangelogWindowStateStore(ctx, wschangelog, args.ectx.SubstreamNum())
 		if err != nil {
@@ -157,13 +159,13 @@ func restoreStateStore(ctx context.Context, args *StreamTaskArgs, offsetMap map[
 
 func configChangelogExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager, args *StreamTaskArgs) error {
 	for _, kvchangelog := range args.kvChangelogs {
-		err := kvchangelog.ChangelogManager().ConfigExactlyOnce(rem, args.guarantee, args.serdeFormat)
+		err := kvchangelog.ConfigureExactlyOnce(rem, args.guarantee, args.serdeFormat)
 		if err != nil {
 			return err
 		}
 	}
 	for _, wschangelog := range args.windowStoreChangelogs {
-		err := wschangelog.ChangelogManager().ConfigExactlyOnce(rem, args.guarantee, args.serdeFormat)
+		err := wschangelog.ConfigureExactlyOnce(rem, args.guarantee, args.serdeFormat)
 		if err != nil {
 			return err
 		}
@@ -185,7 +187,9 @@ func updateFuncs(streamTaskArgs *StreamTaskArgs,
 	}
 }
 
-func getOffsetMap(ctx context.Context, tm *transaction.TransactionManager, args *StreamTaskArgs) (map[string]uint64, error) {
+func getOffsetMap(ctx context.Context,
+	tm *transaction.TransactionManager, args *StreamTaskArgs,
+) (map[string]uint64, error) {
 	offsetMap := make(map[string]uint64)
 	for _, src := range args.ectx.Consumers() {
 		inputTopicName := src.TopicName()
@@ -200,7 +204,9 @@ func getOffsetMap(ctx context.Context, tm *transaction.TransactionManager, args 
 	return offsetMap, nil
 }
 
-func setOffsetOnStream(offsetMap map[string]uint64, args *StreamTaskArgs) {
+func setOffsetOnStream(offsetMap map[string]uint64,
+	args *StreamTaskArgs,
+) {
 	for _, src := range args.ectx.Consumers() {
 		inputTopicName := src.TopicName()
 		offset := offsetMap[inputTopicName]
@@ -236,14 +242,10 @@ func trackStreamAndConfigureExactlyOnce(args *StreamTaskArgs,
 	}
 
 	for _, kvchangelog := range args.kvChangelogs {
-		if kvchangelog.ChangelogManager() != nil {
-			trackStream(kvchangelog.ChangelogManager().TopicName(), kvchangelog.ChangelogManager().Stream())
-		}
+		trackStream(kvchangelog.ChangelogTopicName(), kvchangelog.Stream().(*sharedlog_stream.ShardedSharedLogStream))
 	}
 	for _, winchangelog := range args.windowStoreChangelogs {
-		if winchangelog.ChangelogManager() != nil {
-			trackStream(winchangelog.ChangelogManager().TopicName(), winchangelog.ChangelogManager().Stream())
-		}
+		trackStream(winchangelog.ChangelogTopicName(), winchangelog.Stream().(*sharedlog_stream.ShardedSharedLogStream))
 	}
 	return nil
 }
@@ -295,7 +297,7 @@ func checkMonitorReturns(
 	return nil
 }
 
-func (t *StreamTask) initAfterMarkOrCommit(ctx context.Context, args *StreamTaskArgs,
+func initAfterMarkOrCommit(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
 	tracker exactly_once_intr.TopicSubstreamTracker, init *bool, paused *bool,
 ) error {
 	if args.fixedOutParNum != -1 {
@@ -308,7 +310,7 @@ func (t *StreamTask) initAfterMarkOrCommit(ctx context.Context, args *StreamTask
 		}
 	}
 	if *paused && t.resumeFunc != nil {
-		t.resumeFunc(t, args)
+		t.resumeFunc(t)
 		*paused = false
 	}
 	if !*init {

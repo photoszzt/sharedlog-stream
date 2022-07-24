@@ -167,11 +167,11 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	epochMarkerSerde, err := commtypes.GetEpochMarkerSerde(serdeFormat)
+	epochMarkerSerde, err := commtypes.GetEpochMarkerSerdeG(serdeFormat)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	txnMarkMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.StringSerde{}, epochMarkerSerde)
+	txnMarkMsgSerde, err := commtypes.GetMsgSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, epochMarkerSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -245,10 +245,10 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 					ScaleEpoch: m.Epoch,
 				}
 				msg := commtypes.Message{
-					Key:   nil,
+					Key:   "",
 					Value: txnMarker,
 				}
-				encoded, err := txnMarkMsgSerde.Encode(&msg)
+				encoded, err := txnMarkMsgSerde.Encode(msg)
 				if err != nil {
 					return &common.FnOutput{Success: false, Message: err.Error()}
 				}

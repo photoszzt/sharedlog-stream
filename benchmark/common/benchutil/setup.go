@@ -24,7 +24,7 @@ import (
 )
 
 type DumpOutputStreamConfig struct {
-	MsgSerde      commtypes.MessageSerde
+	MsgSerde      commtypes.MessageSerdeG[interface{}, interface{}]
 	OutputDir     string
 	TopicName     string
 	SerdeFormat   commtypes.SerdeFormat
@@ -58,7 +58,7 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 	if err != nil {
 		return err
 	}
-	src := producer_consumer.NewShardedSharedLogStreamConsumer(log, &producer_consumer.StreamConsumerConfig{
+	src := producer_consumer.NewShardedSharedLogStreamConsumerG(log, &producer_consumer.StreamConsumerConfigG[interface{}, interface{}]{
 		MsgSerde: args.MsgSerde,
 		Timeout:  common.SrcConsumeTimeout,
 	})

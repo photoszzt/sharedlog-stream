@@ -4,24 +4,27 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/treemap"
 )
 
-type KeyValueStoreWithChangelog struct {
-	kvstore          store.KeyValueStore
-	msgSerde         commtypes.MessageSerde
+type KeyValueStoreWithChangelog[K, V any] struct {
+	kvstore          store.CoreKeyValueStore
+	msgSerde         commtypes.MessageSerdeG[K, V]
 	trackFunc        exactly_once_intr.TrackProdSubStreamFunc
-	changelogManager *ChangelogManager
+	changelogManager *ChangelogManager[K, V]
 	changelogProduce stats.ConcurrentInt64Collector
 	use_bytes        bool
 	parNum           uint8
 }
 
-func NewKeyValueStoreWithChangelog(mp *MaterializeParam,
-	store store.KeyValueStore, use_bytes bool,
-) (*KeyValueStoreWithChangelog, error) {
+var _ = store.KeyValueStoreBackedByChangelog(&KeyValueStoreWithChangelog[int, int]{})
+
+func NewKeyValueStoreWithChangelog[K, V any](mp *MaterializeParam[K, V],
+	store store.CoreKeyValueStore, use_bytes bool,
+) (*KeyValueStoreWithChangelog[K, V], error) {
 	changelog, err := CreateChangelog(mp.changelogParam.Env,
 		mp.storeName+"_changelog", mp.changelogParam.NumPartition, mp.serdeFormat)
 	if err != nil {
@@ -29,7 +32,7 @@ func NewKeyValueStoreWithChangelog(mp *MaterializeParam,
 	}
 	changelogManager := NewChangelogManager(changelog, mp.msgSerde, mp.changelogParam.TimeOut,
 		mp.changelogParam.FlushDuration)
-	return &KeyValueStoreWithChangelog{
+	return &KeyValueStoreWithChangelog[K, V]{
 		kvstore:          store,
 		trackFunc:        exactly_once_intr.DefaultTrackProdSubstreamFunc,
 		use_bytes:        use_bytes,
@@ -41,17 +44,13 @@ func NewKeyValueStoreWithChangelog(mp *MaterializeParam,
 	}, nil
 }
 
-func (st *KeyValueStoreWithChangelog) Name() string {
+func (st *KeyValueStoreWithChangelog[K, V]) Name() string {
 	return st.kvstore.Name()
 }
 
-func (st *KeyValueStoreWithChangelog) ChangelogManager() *ChangelogManager {
-	return st.changelogManager
-}
-
-func (st *KeyValueStoreWithChangelog) Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error) {
+func (st *KeyValueStoreWithChangelog[K, V]) Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error) {
 	if st.use_bytes {
-		keyBytes, err := st.msgSerde.GetKeySerde().Encode(key)
+		keyBytes, err := st.msgSerde.GetKeySerdeG().Encode(key.(K))
 		if err != nil {
 			return nil, false, err
 		}
@@ -59,17 +58,22 @@ func (st *KeyValueStoreWithChangelog) Get(ctx context.Context, key commtypes.Key
 		if err != nil {
 			return nil, ok, err
 		}
-		val, err := st.msgSerde.GetValSerde().Decode(valBytes.([]byte))
+		val, err := st.msgSerde.GetValSerdeG().Decode(valBytes.([]byte))
 		return val, ok, err
 	}
 	return st.kvstore.Get(ctx, key)
 }
 
-func (st *KeyValueStoreWithChangelog) FlushChangelog(ctx context.Context) error {
+func (st *KeyValueStoreWithChangelog[K, V]) FlushChangelog(ctx context.Context) error {
 	return st.changelogManager.Flush(ctx)
 }
+func (st *KeyValueStoreWithChangelog[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
+	guarantee exactly_once_intr.GuaranteeMth, serdeFormat commtypes.SerdeFormat,
+) error {
+	return st.changelogManager.ConfigExactlyOnce(rem, guarantee, serdeFormat)
+}
 
-func (st *KeyValueStoreWithChangelog) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
+func (st *KeyValueStoreWithChangelog[K, V]) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
 	msg := commtypes.Message{
 		Key:   key,
 		Value: value,
@@ -81,16 +85,21 @@ func (st *KeyValueStoreWithChangelog) Put(ctx context.Context, key commtypes.Key
 	if err != nil {
 		return err
 	}
-	err = st.trackFunc(ctx, key, st.msgSerde.GetKeySerde(), st.changelogManager.TopicName(), st.parNum)
+	err = st.trackFunc(ctx, key.(K), commtypes.EncoderFunc(func(i interface{}) ([]byte, error) {
+		if i == nil {
+			return nil, nil
+		}
+		return st.msgSerde.GetKeySerdeG().Encode(i.(K))
+	}), st.changelogManager.TopicName(), st.parNum)
 	if err != nil {
 		return err
 	}
 	if st.use_bytes {
-		keyBytes, err := st.msgSerde.GetKeySerde().Encode(key)
+		keyBytes, err := st.msgSerde.GetKeySerdeG().Encode(key.(K))
 		if err != nil {
 			return err
 		}
-		valBytes, err := st.msgSerde.GetValSerde().Encode(value)
+		valBytes, err := st.msgSerde.GetValSerdeG().Encode(value.(V))
 		if err != nil {
 			return err
 		}
@@ -102,11 +111,11 @@ func (st *KeyValueStoreWithChangelog) Put(ctx context.Context, key commtypes.Key
 	}
 }
 
-func (st *KeyValueStoreWithChangelog) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
+func (st *KeyValueStoreWithChangelog[K, V]) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
 	return st.kvstore.Put(ctx, key, value)
 }
 
-func (st *KeyValueStoreWithChangelog) PutIfAbsent(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) (commtypes.ValueT, error) {
+func (st *KeyValueStoreWithChangelog[K, V]) PutIfAbsent(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) (commtypes.ValueT, error) {
 	origVal, exists, err := st.kvstore.Get(ctx, key)
 	if err != nil {
 		return nil, err
@@ -121,7 +130,7 @@ func (st *KeyValueStoreWithChangelog) PutIfAbsent(ctx context.Context, key commt
 	return origVal, nil
 }
 
-func (st *KeyValueStoreWithChangelog) PutAll(ctx context.Context, entries []*commtypes.Message) error {
+func (st *KeyValueStoreWithChangelog[K, V]) PutAll(ctx context.Context, entries []*commtypes.Message) error {
 	for _, msg := range entries {
 		err := st.Put(ctx, msg.Key, msg.Value)
 		if err != nil {
@@ -131,7 +140,7 @@ func (st *KeyValueStoreWithChangelog) PutAll(ctx context.Context, entries []*com
 	return nil
 }
 
-func (st *KeyValueStoreWithChangelog) Delete(ctx context.Context, key commtypes.KeyT) error {
+func (st *KeyValueStoreWithChangelog[K, V]) Delete(ctx context.Context, key commtypes.KeyT) error {
 	msg := commtypes.Message{
 		Key:   key,
 		Value: nil,
@@ -143,46 +152,59 @@ func (st *KeyValueStoreWithChangelog) Delete(ctx context.Context, key commtypes.
 	return st.kvstore.Delete(ctx, key)
 }
 
-func (st *KeyValueStoreWithChangelog) ApproximateNumEntries() (uint64, error) {
+func (st *KeyValueStoreWithChangelog[K, V]) ApproximateNumEntries() (uint64, error) {
 	return st.kvstore.ApproximateNumEntries()
 }
 
-func (st *KeyValueStoreWithChangelog) Range(ctx context.Context, from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
+func (st *KeyValueStoreWithChangelog[K, V]) Range(ctx context.Context, from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
 	return st.kvstore.Range(ctx, from, to, iterFunc)
 }
 
-func (st *KeyValueStoreWithChangelog) ReverseRange(from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
+func (st *KeyValueStoreWithChangelog[K, V]) ReverseRange(from commtypes.KeyT, to commtypes.KeyT, iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error {
 	return st.kvstore.ReverseRange(from, to, iterFunc)
 }
 
-func (st *KeyValueStoreWithChangelog) PrefixScan(prefix interface{},
+func (st *KeyValueStoreWithChangelog[K, V]) PrefixScan(prefix interface{},
 	prefixKeyEncoder commtypes.Encoder,
 	iterFunc func(commtypes.KeyT, commtypes.ValueT) error,
 ) error {
 	panic("not implemented")
 }
 
-func (st *KeyValueStoreWithChangelog) TableType() store.TABLE_TYPE {
+func (st *KeyValueStoreWithChangelog[K, V]) TableType() store.TABLE_TYPE {
 	return st.kvstore.TableType()
 }
 
-func (st *KeyValueStoreWithChangelog) StartTransaction(ctx context.Context) error { return nil }
-func (st *KeyValueStoreWithChangelog) CommitTransaction(ctx context.Context,
+func (st *KeyValueStoreWithChangelog[K, V]) StartTransaction(ctx context.Context) error { return nil }
+func (st *KeyValueStoreWithChangelog[K, V]) CommitTransaction(ctx context.Context,
 	taskRepr string, transactionID uint64) error {
 	return nil
 }
-func (st *KeyValueStoreWithChangelog) AbortTransaction(ctx context.Context) error { return nil }
-func (st *KeyValueStoreWithChangelog) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
+func (st *KeyValueStoreWithChangelog[K, V]) AbortTransaction(ctx context.Context) error { return nil }
+func (st *KeyValueStoreWithChangelog[K, V]) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
 	panic("not supported")
 }
 
-func (st *KeyValueStoreWithChangelog) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
+func (st *KeyValueStoreWithChangelog[K, V]) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 	st.trackFunc = trackParFunc
 }
+func (st *KeyValueStoreWithChangelog[K, V]) ConsumeChangelog(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
+	return st.changelogManager.Consume(ctx, parNum)
+}
+func (st *KeyValueStoreWithChangelog[K, V]) ChangelogTopicName() string {
+	return st.changelogManager.TopicName()
+}
+func (st *KeyValueStoreWithChangelog[K, V]) ChangelogIsSrc() bool {
+	return false
+}
 
-func CreateInMemKVTableWithChangelog(mp *MaterializeParam,
+func (st *KeyValueStoreWithChangelog[K, V]) Stream() sharedlog_stream.Stream {
+	return st.changelogManager.Stream()
+}
+
+func CreateInMemKVTableWithChangelog[K, V any](mp *MaterializeParam[K, V],
 	compare func(a, b treemap.Key) int,
-) (*KeyValueStoreWithChangelog, error) {
+) (*KeyValueStoreWithChangelog[K, V], error) {
 	s := store.NewInMemoryKeyValueStore(mp.storeName, compare)
 	return NewKeyValueStoreWithChangelog(mp, s, false)
 }

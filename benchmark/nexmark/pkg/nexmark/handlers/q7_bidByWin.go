@@ -83,29 +83,29 @@ func (h *q7BidByWin) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	debug.Assert(len(output_streams) == 1, "expected only one output stream")
 
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
+	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
-	inMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.StringSerde{}, eventSerde)
+	inMsgSerde, err := commtypes.GetMsgSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
 	if err != nil {
 		return nil, nil, err
 	}
-	seSerde, err := ntypes.GetStartEndTimeSerde(serdeFormat)
+	seSerde, err := ntypes.GetStartEndTimeSerdeG(serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
-	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, seSerde, eventSerde)
-	inConfig := &producer_consumer.StreamConsumerConfig{
+	outMsgSerde, err := commtypes.GetMsgSerdeG(serdeFormat, seSerde, eventSerde)
+	inConfig := &producer_consumer.StreamConsumerConfigG[string, *ntypes.Event]{
 		Timeout:  common.SrcConsumeTimeout,
 		MsgSerde: inMsgSerde,
 	}
-	outConfig := &producer_consumer.StreamSinkConfig{
+	outConfig := &producer_consumer.StreamSinkConfig[ntypes.StartEndTime, *ntypes.Event]{
 		MsgSerde:      outMsgSerde,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, inConfig), warmup)
+	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig), warmup)
 	sink := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], outConfig), warmup)
 	src.SetInitialSource(true)
 	return []producer_consumer.MeteredConsumerIntr{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
@@ -148,5 +148,5 @@ func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *com
 		sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).Build()
-	return task.ExecuteApp(ctx, streamTaskArgs)
+	return stream_task.ExecuteApp(ctx, task, streamTaskArgs)
 }

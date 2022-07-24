@@ -8,7 +8,7 @@ import (
 
 type TableFilterProcessor struct {
 	pred      Predicate
-	store     store.KeyValueStore
+	store     store.CoreKeyValueStore
 	name      string
 	filterNot bool
 }
@@ -24,7 +24,7 @@ func NewTableFilterProcessor(name string, pred Predicate, filterNot bool) *Table
 	}
 }
 
-func NewTableFilterProcessorQuriable(name string, pred Predicate, filterNot bool, store store.KeyValueStore) *TableFilterProcessor {
+func NewTableFilterProcessorQuriable(name string, pred Predicate, filterNot bool, store store.CoreKeyValueStore) *TableFilterProcessor {
 	return &TableFilterProcessor{
 		pred:      pred,
 		filterNot: filterNot,
@@ -76,7 +76,7 @@ func (p *TableFilterProcessor) ProcessAndReturn(ctx context.Context, msg commtyp
 	}
 	return []commtypes.Message{{
 		Key:       msg.Key,
-		Value:     &commtypes.Change{NewVal: newVal, OldVal: oldVal},
+		Value:     commtypes.Change{NewVal: newVal, OldVal: oldVal},
 		Timestamp: msg.Timestamp,
 	}}, nil
 }

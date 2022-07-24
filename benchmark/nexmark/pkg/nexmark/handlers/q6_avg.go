@@ -13,7 +13,6 @@ import (
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
 	"sort"
@@ -37,33 +36,33 @@ func NewQ6Avg(env types.Environment, funcName string) *q6Avg {
 func (h *q6Avg) getExecutionCtx(ctx context.Context, sp *common.QueryInput) (processor.BaseExecutionContext, error) {
 	inputStream, outputStreams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
-		return processor.EmptyBaseExecutionContext, err
+		return processor.BaseExecutionContext{}, err
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	ptSerde, err := ntypes.GetPriceTimeSerde(serdeFormat)
 	if err != nil {
-		return processor.EmptyBaseExecutionContext, err
+		return processor.BaseExecutionContext{}, err
 	}
-	changeSerde, err := commtypes.GetChangeSerde(serdeFormat, ptSerde)
+	changeSerde, err := commtypes.GetChangeSerdeG(serdeFormat, ptSerde)
 	if err != nil {
-		return processor.EmptyBaseExecutionContext, err
+		return processor.BaseExecutionContext{}, err
 	}
-	inMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, changeSerde)
+	inMsgSerde, err := commtypes.GetMsgSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, changeSerde)
 	if err != nil {
-		return processor.EmptyBaseExecutionContext, fmt.Errorf("get msg serde err: %v", err)
+		return processor.BaseExecutionContext{}, fmt.Errorf("get msg serde err: %v", err)
 	}
-	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, commtypes.Float64Serde{})
+	outMsgSerde, err := commtypes.GetMsgSerdeG[uint64, float64](serdeFormat, commtypes.Uint64SerdeG{}, commtypes.Float64SerdeG{})
 	if err != nil {
-		return processor.EmptyBaseExecutionContext, fmt.Errorf("get msg serde err: %v", err)
+		return processor.BaseExecutionContext{}, fmt.Errorf("get msg serde err: %v", err)
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	src := producer_consumer.NewMeteredConsumer(
-		producer_consumer.NewShardedSharedLogStreamConsumer(inputStream, &producer_consumer.StreamConsumerConfig{
+		producer_consumer.NewShardedSharedLogStreamConsumerG(inputStream, &producer_consumer.StreamConsumerConfigG[uint64, commtypes.Change]{
 			Timeout:  common.SrcConsumeTimeout,
 			MsgSerde: inMsgSerde,
 		}), warmup)
 	sink := producer_consumer.NewMeteredProducer(
-		producer_consumer.NewShardedSharedLogStreamProducer(outputStreams[0], &producer_consumer.StreamSinkConfig{
+		producer_consumer.NewShardedSharedLogStreamProducer(outputStreams[0], &producer_consumer.StreamSinkConfig[uint64, float64]{
 			MsgSerde:      outMsgSerde,
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 		}), warmup)
@@ -98,11 +97,11 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	storeMsgSerde, err := processor.MsgSerdeWithValueTs(serdeFormat, commtypes.Uint64Serde{}, ptlSerde)
+	storeMsgSerde, err := processor.MsgSerdeWithValueTsG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, ptlSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	mp, err := store_with_changelog.NewMaterializeParamBuilder().
+	mp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, *commtypes.ValueTimestamp]().
 		MessageSerde(storeMsgSerde).
 		StoreName(aggStoreName).
 		ParNum(sp.ParNum).
@@ -169,9 +168,7 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
 		}).Build()
 
-	kvc := []*store_restore.KVStoreChangelog{
-		store_restore.NewKVStoreChangelog(kvstore, kvstore.ChangelogManager()),
-	}
+	kvc := []store.KeyValueStoreOpWithChangelog{kvstore}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 		sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
@@ -179,5 +176,5 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		KVStoreChangelogs(kvc).
 		FixedOutParNum(sp.ParNum).
 		Build()
-	return task.ExecuteApp(ctx, streamTaskArgs)
+	return stream_task.ExecuteApp(ctx, task, streamTaskArgs)
 }

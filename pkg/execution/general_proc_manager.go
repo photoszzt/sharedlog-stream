@@ -79,7 +79,8 @@ func (c *GeneralProcCtx) AppendProcessor(processor processor.Processor) {
 	_ = c.chains.Via(processor)
 }
 
-func (c *GeneralProcCtx) GeneralProc(ctx context.Context,
+func GeneralProc(ctx context.Context,
+	c *GeneralProcCtx,
 	producer producer_consumer.MeteredProducerIntr,
 	msgChan chan commtypes.Message,
 	errChan chan error,

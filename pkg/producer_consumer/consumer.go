@@ -18,7 +18,6 @@ type Consumer interface {
 	ConfigExactlyOnce(serdeFormat commtypes.SerdeFormat, guarantee exactly_once_intr.GuaranteeMth) error
 	SetInitialSource(initial bool)
 	IsInitialSource() bool
-	MsgSerde() commtypes.MessageSerde
 	// Lock()
 	// Unlock()
 	RecordCurrentConsumedSeqNum(seqNum uint64)

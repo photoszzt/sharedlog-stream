@@ -112,6 +112,39 @@ func DecodeRawMsg(rawMsg *RawMsg, msgSerde MessageSerde,
 	}
 }
 
+func DecodeRawMsgG[K, V any](rawMsg *RawMsg, msgSerde MessageSerdeG[K, V],
+	payloadArrSerde SerdeG[PayloadArr],
+) (*MsgAndSeq, error) {
+	if rawMsg.IsPayloadArr {
+		payloadArr, err := payloadArrSerde.Decode(rawMsg.Payload)
+		if err != nil {
+			return nil, fmt.Errorf("fail to decode payload arr: %v", err)
+		}
+		var msgArr []Message
+		for _, payload := range payloadArr.Payloads {
+			msg, err := msgSerde.Decode(payload)
+			if err != nil {
+				return nil, fmt.Errorf("fail to decode msg 1: %v", err)
+			}
+			msgArr = append(msgArr, msg)
+		}
+		return &MsgAndSeq{MsgArr: msgArr, Msg: EmptyMessage,
+			MsgSeqNum: rawMsg.MsgSeqNum, LogSeqNum: rawMsg.LogSeqNum}, nil
+	} else {
+		msg, err := msgSerde.Decode(rawMsg.Payload)
+		if err != nil {
+			return nil, fmt.Errorf("fail to decode msg 2: %v", err)
+		}
+		return &MsgAndSeq{
+			Msg:       msg,
+			MsgArr:    nil,
+			MsgSeqNum: rawMsg.MsgSeqNum,
+			LogSeqNum: rawMsg.LogSeqNum,
+			IsControl: false,
+		}, nil
+	}
+}
+
 func ApplyFuncToMsgSeqs(msgSeqs *MsgAndSeqs, callback func(msg *Message) error) error {
 	for _, msgSeq := range msgSeqs.Msgs {
 		if msgSeq.MsgArr != nil {

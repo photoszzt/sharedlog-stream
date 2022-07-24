@@ -24,7 +24,7 @@ func checkErr(err error, t testing.TB) {
 	}
 }
 
-func ShouldNotIncludeDeletedFromRangeResult(ctx context.Context, store KeyValueStore, t testing.TB) {
+func ShouldNotIncludeDeletedFromRangeResult(ctx context.Context, store CoreKeyValueStore, t testing.TB) {
 	checkErr(store.Put(ctx, 0, "zero"), t)
 	checkErr(store.Put(ctx, 1, "one"), t)
 	checkErr(store.Put(ctx, 2, "two"), t)
@@ -55,7 +55,7 @@ func ShouldNotIncludeDeletedFromRangeResult(ctx context.Context, store KeyValueS
 	checkMapEqual(t, expected, ret)
 }
 
-func ShouldDeleteIfSerializedValueIsNull(ctx context.Context, store KeyValueStore, t testing.TB) {
+func ShouldDeleteIfSerializedValueIsNull(ctx context.Context, store CoreKeyValueStore, t testing.TB) {
 	checkErr(store.Put(ctx, 0, "zero"), t)
 	checkErr(store.Put(ctx, 1, "one"), t)
 	checkErr(store.Put(ctx, 2, "two"), t)
@@ -91,7 +91,7 @@ func checkExists(expected bool, exists bool, t testing.TB) {
 	}
 }
 
-func checkGet(ctx context.Context, store KeyValueStore, t testing.TB, key int, expected string) {
+func checkGet(ctx context.Context, store CoreKeyValueStore, t testing.TB, key int, expected string) {
 	ret, exists, err := store.Get(ctx, key)
 	checkErr(err, t)
 	checkExists(true, exists, t)
@@ -100,7 +100,7 @@ func checkGet(ctx context.Context, store KeyValueStore, t testing.TB, key int, e
 	}
 }
 
-func PutGetRange(ctx context.Context, store KeyValueStore, t testing.TB) {
+func PutGetRange(ctx context.Context, store CoreKeyValueStore, t testing.TB) {
 	checkErr(store.Put(ctx, 0, "zero"), t)
 	checkErr(store.Put(ctx, 1, "one"), t)
 	checkErr(store.Put(ctx, 2, "two"), t)

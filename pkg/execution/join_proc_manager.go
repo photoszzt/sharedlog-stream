@@ -36,15 +36,16 @@ func (jm *JoinProcManager) UnlockRunlock() {
 	jm.runLock.Unlock()
 }
 
-func (jm *JoinProcManager) LaunchJoinProcLoop(
+func LaunchJoinProcLoop(
 	ctx context.Context,
+	jm *JoinProcManager,
 	task *stream_task.StreamTask,
 	procArgs *JoinProcArgs,
 	wg *sync.WaitGroup,
 ) {
 	jm.done = make(chan struct{})
 	wg.Add(1)
-	go jm.joinProcLoop(ctx, task, procArgs, wg)
+	go joinProcLoop(ctx, jm, task, procArgs, wg)
 }
 
 func (jm *JoinProcManager) RequestToTerminate() {

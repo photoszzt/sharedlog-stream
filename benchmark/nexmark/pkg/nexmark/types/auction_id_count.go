@@ -22,20 +22,18 @@ func (aic AuctionIdCount) String() string {
 	return fmt.Sprintf("AuctionIdCount: {AucId: %d, Count: %d}", aic.AucId, aic.Count)
 }
 
-type AuctionIdCountJSONEncoder struct{}
+type AuctionIdCountJSONSerde struct{}
+type AuctionIdCountJSONSerdeG struct{}
 
-var _ = commtypes.Encoder(AuctionIdCountJSONEncoder{})
+var _ = commtypes.Serde(AuctionIdCountJSONSerde{})
+var _ = commtypes.SerdeG[AuctionIdCount](AuctionIdCountJSONSerdeG{})
 
-func (e AuctionIdCountJSONEncoder) Encode(value interface{}) ([]byte, error) {
+func (e AuctionIdCountJSONSerde) Encode(value interface{}) ([]byte, error) {
 	se := value.(*AuctionIdCount)
 	return json.Marshal(se)
 }
 
-type AuctionIdCountJSONDecoder struct{}
-
-var _ = commtypes.Decoder(AuctionIdCountJSONDecoder{})
-
-func (d AuctionIdCountJSONDecoder) Decode(value []byte) (interface{}, error) {
+func (d AuctionIdCountJSONSerde) Decode(value []byte) (interface{}, error) {
 	se := AuctionIdCount{}
 	err := json.Unmarshal(value, &se)
 	if err != nil {
@@ -44,25 +42,31 @@ func (d AuctionIdCountJSONDecoder) Decode(value []byte) (interface{}, error) {
 	return se, nil
 }
 
-type AuctionIdCountJSONSerde struct {
-	AuctionIdCountJSONEncoder
-	AuctionIdCountJSONDecoder
+func (e AuctionIdCountJSONSerdeG) Encode(value AuctionIdCount) ([]byte, error) {
+	return json.Marshal(&value)
 }
 
-type AuctionIdCountMsgpEncoder struct{}
+func (d AuctionIdCountJSONSerdeG) Decode(value []byte) (AuctionIdCount, error) {
+	se := AuctionIdCount{}
+	err := json.Unmarshal(value, &se)
+	if err != nil {
+		return AuctionIdCount{}, err
+	}
+	return se, nil
+}
 
-var _ = commtypes.Encoder(AuctionIdCountMsgpEncoder{})
+type AuctionIdCountMsgpSerde struct{}
+type AuctionIdCountMsgpSerdeG struct{}
 
-func (e AuctionIdCountMsgpEncoder) Encode(value interface{}) ([]byte, error) {
+var _ = commtypes.Serde(AuctionIdCountMsgpSerde{})
+var _ = commtypes.SerdeG[AuctionIdCount](AuctionIdCountMsgpSerdeG{})
+
+func (e AuctionIdCountMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	se := value.(*AuctionIdCount)
 	return se.MarshalMsg(nil)
 }
 
-type AuctionIdCountMsgpDecoder struct{}
-
-var _ = commtypes.Decoder(AuctionIdCountMsgpDecoder{})
-
-func (d AuctionIdCountMsgpDecoder) Decode(value []byte) (interface{}, error) {
+func (d AuctionIdCountMsgpSerde) Decode(value []byte) (interface{}, error) {
 	se := AuctionIdCount{}
 	_, err := se.UnmarshalMsg(value)
 	if err != nil {
@@ -71,9 +75,17 @@ func (d AuctionIdCountMsgpDecoder) Decode(value []byte) (interface{}, error) {
 	return se, nil
 }
 
-type AuctionIdCountMsgpSerde struct {
-	AuctionIdCountMsgpEncoder
-	AuctionIdCountMsgpDecoder
+func (e AuctionIdCountMsgpSerdeG) Encode(value AuctionIdCount) ([]byte, error) {
+	return value.MarshalMsg(nil)
+}
+
+func (d AuctionIdCountMsgpSerdeG) Decode(value []byte) (AuctionIdCount, error) {
+	se := AuctionIdCount{}
+	_, err := se.UnmarshalMsg(value)
+	if err != nil {
+		return AuctionIdCount{}, err
+	}
+	return se, nil
 }
 
 func NewAuctionIdCountSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
@@ -81,6 +93,16 @@ func NewAuctionIdCountSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde,
 		return AuctionIdCountJSONSerde{}, nil
 	} else if serdeFormat == commtypes.MSGP {
 		return AuctionIdCountMsgpSerde{}, nil
+	} else {
+		return nil, common_errors.ErrUnrecognizedSerdeFormat
+	}
+}
+
+func NewAuctionIdCountSerdeG(serdeFormat commtypes.SerdeFormat) (commtypes.SerdeG[AuctionIdCount], error) {
+	if serdeFormat == commtypes.JSON {
+		return AuctionIdCountJSONSerdeG{}, nil
+	} else if serdeFormat == commtypes.MSGP {
+		return AuctionIdCountMsgpSerdeG{}, nil
 	} else {
 		return nil, common_errors.ErrUnrecognizedSerdeFormat
 	}

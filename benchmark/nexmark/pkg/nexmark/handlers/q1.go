@@ -80,7 +80,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 				sp.ParNum, sp.OutputTopicNames[0]))).
 		FixedOutParNum(sp.ParNum).
 		Build()
-	return task.ExecuteApp(ctx, streamTaskArgs)
+	return stream_task.ExecuteApp(ctx, task, streamTaskArgs)
 }
 
 /*

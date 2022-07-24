@@ -10,7 +10,7 @@ import (
 )
 
 type TableTableJoinProcessor struct {
-	store             store.KeyValueStore
+	store             store.CoreKeyValueStore
 	joiner            ValueJoinerWithKey
 	streamTimeTracker commtypes.StreamTimeTracker
 	name              string
@@ -18,7 +18,7 @@ type TableTableJoinProcessor struct {
 
 var _ = Processor(&StreamTableJoinProcessor{})
 
-func NewTableTableJoinProcessor(name string, store store.KeyValueStore, joiner ValueJoinerWithKey) *TableTableJoinProcessor {
+func NewTableTableJoinProcessor(name string, store store.CoreKeyValueStore, joiner ValueJoinerWithKey) *TableTableJoinProcessor {
 	return &TableTableJoinProcessor{
 		joiner:            joiner,
 		store:             store,

@@ -12,7 +12,7 @@ type Producer interface {
 	TopicName() string
 	Name() string
 	SetName(string)
-	KeySerde() commtypes.Serde
+	KeyEncoder() commtypes.Encoder
 	Flush(ctx context.Context) error
 	InitFlushTimer()
 	ConfigExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,

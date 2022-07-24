@@ -15,7 +15,8 @@ import (
 	"time"
 )
 
-func (t *StreamTask) setupManagersFor2pc(ctx context.Context, streamTaskArgs *StreamTaskArgs,
+func setupManagersFor2pc(ctx context.Context, t *StreamTask,
+	streamTaskArgs *StreamTaskArgs,
 ) (*transaction.TransactionManager, *control_channel.ControlChannelManager, error) {
 	debug.Fprint(os.Stderr, "setup transaction and control manager\n")
 	tm, err := SetupTransactionManager(ctx, streamTaskArgs)
@@ -45,7 +46,7 @@ func (t *StreamTask) setupManagersFor2pc(ctx context.Context, streamTaskArgs *St
 	debug.Fprintf(os.Stderr, "down restore\n")
 	trackParFunc := func(ctx context.Context,
 		key interface{},
-		keySerde commtypes.Serde,
+		keySerde commtypes.Encoder,
 		topicName string,
 		substreamId uint8,
 	) error {
@@ -53,7 +54,7 @@ func (t *StreamTask) setupManagersFor2pc(ctx context.Context, streamTaskArgs *St
 		if err != nil {
 			return err
 		}
-		err = cmm.TrackAndAppendKeyMapping(ctx, key, keySerde, substreamId, topicName)
+		err = control_channel.TrackAndAppendKeyMapping(ctx, cmm, key, keySerde, substreamId, topicName)
 		return err
 	}
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
@@ -80,8 +81,9 @@ func SetupTransactionManager(
 	return tm, nil
 }
 
-func (t *StreamTask) processWithTransaction(
+func processWithTransaction(
 	ctx context.Context,
+	t *StreamTask,
 	tm *transaction.TransactionManager,
 	cmm *control_channel.ControlChannelManager,
 	args *StreamTaskArgs,
@@ -131,7 +133,7 @@ func (t *StreamTask) processWithTransaction(
 
 			// should commit
 			if (shouldCommitByTime || timeout) && hasLiveTransaction {
-				err_out := t.commitTransaction(ctx, tm, args, &hasLiveTransaction,
+				err_out := commitTransaction(ctx, t, tm, args, &hasLiveTransaction,
 					&trackConsumePar, &paused)
 				if err_out != nil {
 					return err_out
@@ -158,7 +160,7 @@ func (t *StreamTask) processWithTransaction(
 			}
 
 			// begin new transaction
-			err := t.startNewTransaction(ctx, args, tm, &hasLiveTransaction,
+			err := startNewTransaction(ctx, t, args, tm, &hasLiveTransaction,
 				&trackConsumePar, &init, &paused, &commitTimer)
 			if err != nil {
 				return &common.FnOutput{Success: false, Message: err.Error()}
@@ -187,7 +189,8 @@ func (t *StreamTask) processWithTransaction(
 	}
 }
 
-func (t *StreamTask) startNewTransaction(ctx context.Context, args *StreamTaskArgs, tm *transaction.TransactionManager,
+func startNewTransaction(ctx context.Context, t *StreamTask,
+	args *StreamTaskArgs, tm *transaction.TransactionManager,
 	hasLiveTransaction *bool, trackConsumePar *bool, init *bool, paused *bool, commitTimer *time.Time,
 ) error {
 	if !*hasLiveTransaction {
@@ -201,7 +204,7 @@ func (t *StreamTask) startNewTransaction(ctx context.Context, args *StreamTaskAr
 		*hasLiveTransaction = true
 		*commitTimer = time.Now()
 		debug.Fprintf(os.Stderr, "fixedOutParNum: %d\n", args.fixedOutParNum)
-		err := t.initAfterMarkOrCommit(ctx, args, tm, init, paused)
+		err := initAfterMarkOrCommit(ctx, t, args, tm, init, paused)
 		if err != nil {
 			return err
 		}
@@ -217,7 +220,8 @@ func (t *StreamTask) startNewTransaction(ctx context.Context, args *StreamTaskAr
 	return nil
 }
 
-func (t *StreamTask) commitTransaction(ctx context.Context,
+func commitTransaction(ctx context.Context,
+	t *StreamTask,
 	tm *transaction.TransactionManager,
 	args *StreamTaskArgs,
 	hasLiveTransaction *bool,
@@ -226,18 +230,19 @@ func (t *StreamTask) commitTransaction(ctx context.Context,
 ) *common.FnOutput {
 	// debug.Fprintf(os.Stderr, "about to pause\n")
 	if t.pauseFunc != nil {
-		if ret := t.pauseFunc(args); ret != nil {
+		if ret := t.pauseFunc(); ret != nil {
 			return ret
 		}
 		*paused = true
 	}
 	cBeg := stats.TimerBegin()
-	err := tm.AppendConsumedSeqNum(ctx, args.ectx.Consumers(), args.ectx.SubstreamNum())
+	offsetRecords := transaction.CollectOffsetRecords(args.ectx.Consumers())
+	err := tm.AppendConsumedSeqNum(ctx, offsetRecords, args.ectx.SubstreamNum())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] append offset failed: %v\n", err)
 		return &common.FnOutput{Success: false, Message: fmt.Sprintf("append offset failed: %v\n", err)}
 	}
-	err = tm.CommitTransaction(ctx, args.kvChangelogs, args.windowStoreChangelogs)
+	err = tm.CommitTransaction(ctx)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] commit failed: %v\n", err)
 		return &common.FnOutput{Success: false, Message: fmt.Sprintf("commit failed: %v\n", err)}

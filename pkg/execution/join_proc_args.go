@@ -41,6 +41,7 @@ func CreateJoinProcArgsPair(
 	return leftArgs, rightArgs
 }
 
+/*
 type JoinProcWithoutSinkArgs struct {
 	src    producer_consumer.Consumer
 	runner JoinWorkerFunc
@@ -54,3 +55,4 @@ func NewJoinProcWithoutSinkArgs(src producer_consumer.Consumer, runner JoinWorke
 		parNum: parNum,
 	}
 }
+*/

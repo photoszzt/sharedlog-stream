@@ -5,7 +5,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/store_restore"
+	"sharedlog-stream/pkg/store"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -18,8 +18,8 @@ type StreamTaskArgs struct {
 	appId           string
 	transactionalId string
 
-	windowStoreChangelogs []*store_restore.WindowStoreChangelog
-	kvChangelogs          []*store_restore.KVStoreChangelog
+	windowStoreChangelogs []store.WindowStoreOpWithChangelog
+	kvChangelogs          []store.KeyValueStoreOpWithChangelog
 
 	warmup time.Duration
 
@@ -102,8 +102,8 @@ type SetSerdeFormat interface {
 
 type BuildStreamTaskArgs interface {
 	Build() *StreamTaskArgs
-	WindowStoreChangelogs([]*store_restore.WindowStoreChangelog) BuildStreamTaskArgs
-	KVStoreChangelogs([]*store_restore.KVStoreChangelog) BuildStreamTaskArgs
+	WindowStoreChangelogs([]store.WindowStoreOpWithChangelog) BuildStreamTaskArgs
+	KVStoreChangelogs([]store.KeyValueStoreOpWithChangelog) BuildStreamTaskArgs
 	FixedOutParNum(uint8) BuildStreamTaskArgs
 }
 
@@ -141,12 +141,12 @@ func (args *StreamTaskArgsBuilder) SerdeFormat(serdeFormat commtypes.SerdeFormat
 	return args
 }
 
-func (args *StreamTaskArgsBuilder) WindowStoreChangelogs(wschangelogs []*store_restore.WindowStoreChangelog) BuildStreamTaskArgs {
+func (args *StreamTaskArgsBuilder) WindowStoreChangelogs(wschangelogs []store.WindowStoreOpWithChangelog) BuildStreamTaskArgs {
 	args.stArgs.windowStoreChangelogs = wschangelogs
 	return args
 }
 
-func (args *StreamTaskArgsBuilder) KVStoreChangelogs(kvchangelogs []*store_restore.KVStoreChangelog) BuildStreamTaskArgs {
+func (args *StreamTaskArgsBuilder) KVStoreChangelogs(kvchangelogs []store.KeyValueStoreOpWithChangelog) BuildStreamTaskArgs {
 	args.stArgs.kvChangelogs = kvchangelogs
 	return args
 }

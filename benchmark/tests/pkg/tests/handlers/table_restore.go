@@ -75,6 +75,10 @@ func (s *strTs) ExtractEventTime() (int64, error) {
 }
 
 type strTsJSONSerde struct{}
+type strTsJSONSerdeG struct{}
+
+var _ = commtypes.Serde(strTsJSONSerde{})
+var _ = commtypes.SerdeG[strTs](strTsJSONSerdeG{})
 
 func (s strTsJSONSerde) Encode(value interface{}) ([]byte, error) {
 	val, ok := value.(*strTs)
@@ -89,6 +93,18 @@ func (s strTsJSONSerde) Decode(value []byte) (interface{}, error) {
 	val := strTs{}
 	if err := json.Unmarshal(value, &val); err != nil {
 		return nil, err
+	}
+	return val, nil
+}
+
+func (s strTsJSONSerdeG) Encode(value strTs) ([]byte, error) {
+	return json.Marshal(&value)
+}
+
+func (s strTsJSONSerdeG) Decode(value []byte) (strTs, error) {
+	val := strTs{}
+	if err := json.Unmarshal(value, &val); err != nil {
+		return strTs{}, err
 	}
 	return val, nil
 }
@@ -160,9 +176,9 @@ func (h *tableRestoreHandler) testRestoreKVTable(ctx context.Context) {
 	})
 	err = store_restore.RestoreChangelogKVStateStore(ctx,
 		store_restore.NewKVStoreChangelog(kvstore,
-			store_with_changelog.NewChangelogManagerForSrc(changelog, commtypes.MessageJSONSerde{
-				KeySerde: commtypes.IntSerde{},
-				ValSerde: strTsJSONSerde{},
+			store_with_changelog.NewChangelogManagerForSrc[int, strTs](changelog, commtypes.MessageJSONSerdeG[int, strTs]{
+				KeySerde: commtypes.IntSerdeG{},
+				ValSerde: strTsJSONSerdeG{},
 			}, common.SrcConsumeTimeout)), offset, 0)
 	if err != nil {
 		panic(err)
@@ -207,12 +223,24 @@ func (h *tableRestoreHandler) pushToWindowLog(ctx context.Context, key int, val 
 }
 
 func (h *tableRestoreHandler) testRestoreWindowTable(ctx context.Context) {
-	changelog, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "c2", 1, commtypes.JSON)
+	storeMsgSerde, err := commtypes.GetMsgSerdeG[int, string](commtypes.JSON, commtypes.IntSerdeG{}, commtypes.StringSerdeG{})
 	if err != nil {
 		panic(err)
 	}
-	wstore := store.NewInMemoryWindowStore("test1", store.TEST_RETENTION_PERIOD, store.TEST_WINDOW_SIZE, false,
-		concurrent_skiplist.CompareFunc(store.CompareNoDup))
+	mp, err := store_with_changelog.NewMaterializeParamBuilder[int, string]().
+		MessageSerde(storeMsgSerde).
+		StoreName("test2").ParNum(0).
+		SerdeFormat(commtypes.JSON).ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
+		Env:           h.env,
+		NumPartition:  1,
+		FlushDuration: time.Duration(5) * time.Millisecond,
+		TimeOut:       common.SrcConsumeTimeout,
+	}).Build()
+	if err != nil {
+		panic(err)
+	}
+	wstore, err := store_with_changelog.NewInMemoryWindowStoreWithChangelogForTest(store.TEST_RETENTION_PERIOD, store.TEST_WINDOW_SIZE, false,
+		concurrent_skiplist.CompareFunc(store.CompareNoDup), mp)
 	if err != nil {
 		panic(err)
 	}
@@ -222,6 +250,7 @@ func (h *tableRestoreHandler) testRestoreWindowTable(ctx context.Context) {
 		},
 		ValSerde: commtypes.StringSerde{},
 	}
+	changelog := wstore.ChangelogManager().Stream().(*sharedlog_stream.ShardedSharedLogStream)
 	_, err = h.pushToWindowLog(ctx, 1, "one", ss, 0, changelog)
 	if err != nil {
 		panic(err)
@@ -234,17 +263,17 @@ func (h *tableRestoreHandler) testRestoreWindowTable(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	err = store_restore.RestoreChangelogWindowStateStore(ctx,
-		store_restore.NewWindowStoreChangelog(wstore,
-			store_with_changelog.NewChangelogManager(changelog, commtypes.MessageJSONSerde{
-				KeySerde: commtypes.IntSerde{},
-				ValSerde: commtypes.StringSerde{},
-			}, common.SrcConsumeTimeout, time.Duration(5)*time.Millisecond)), 0)
+	wstore2, err := store_with_changelog.NewInMemoryWindowStoreWithChangelogForTest(store.TEST_RETENTION_PERIOD, store.TEST_WINDOW_SIZE, false,
+		concurrent_skiplist.CompareFunc(store.CompareNoDup), mp)
+	if err != nil {
+		panic(err)
+	}
+	err = store_restore.RestoreChangelogWindowStateStore(ctx, wstore2, 0)
 	if err != nil {
 		panic(err)
 	}
 	ret := make(map[int]*commtypes.ValueTimestamp)
-	err = wstore.FetchAll(ctx, time.UnixMilli(0), time.UnixMilli(store.TEST_WINDOW_SIZE*2),
+	err = wstore2.FetchAll(ctx, time.UnixMilli(0), time.UnixMilli(store.TEST_WINDOW_SIZE*2),
 		func(i int64, kt commtypes.KeyT, vt commtypes.ValueT) error {
 			ret[kt.(int)] = commtypes.CreateValueTimestamp(vt, i)
 			return nil

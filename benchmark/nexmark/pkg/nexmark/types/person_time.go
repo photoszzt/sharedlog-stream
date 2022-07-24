@@ -24,20 +24,22 @@ func (pt PersonTime) String() string {
 		pt.Name, pt.ID, pt.StartTime)
 }
 
-type PersonTimeJSONEncoder struct{}
+type PersonTimeJSONSerde struct{}
+type PersonTimeJSONSerdeG struct{}
 
-var _ = commtypes.Encoder(PersonTimeJSONEncoder{})
+var _ = commtypes.Serde(PersonTimeJSONSerde{})
+var _ = commtypes.SerdeG[PersonTime](PersonTimeJSONSerdeG{})
 
-func (e PersonTimeJSONEncoder) Encode(value interface{}) ([]byte, error) {
-	se := value.(*PersonTime)
+func (e PersonTimeJSONSerde) Encode(value interface{}) ([]byte, error) {
+	se, ok := value.(*PersonTime)
+	if !ok {
+		seTmp := value.(PersonTime)
+		se = &seTmp
+	}
 	return json.Marshal(se)
 }
 
-type PersonTimeJSONDecoder struct{}
-
-var _ = commtypes.Decoder(PersonTimeJSONDecoder{})
-
-func (d PersonTimeJSONDecoder) Decode(value []byte) (interface{}, error) {
+func (d PersonTimeJSONSerde) Decode(value []byte) (interface{}, error) {
 	se := PersonTime{}
 	err := json.Unmarshal(value, &se)
 	if err != nil {
@@ -46,25 +48,35 @@ func (d PersonTimeJSONDecoder) Decode(value []byte) (interface{}, error) {
 	return se, nil
 }
 
-type PersonTimeJSONSerde struct {
-	PersonTimeJSONEncoder
-	PersonTimeJSONDecoder
+func (e PersonTimeJSONSerdeG) Encode(value PersonTime) ([]byte, error) {
+	return json.Marshal(&value)
 }
 
-type PersonTimeMsgpEncoder struct{}
+func (d PersonTimeJSONSerdeG) Decode(value []byte) (PersonTime, error) {
+	se := PersonTime{}
+	err := json.Unmarshal(value, &se)
+	if err != nil {
+		return PersonTime{}, err
+	}
+	return se, nil
+}
 
-var _ = commtypes.Encoder(PersonTimeMsgpEncoder{})
+type PersonTimeMsgpSerde struct{}
+type PersonTimeMsgpSerdeG struct{}
 
-func (e PersonTimeMsgpEncoder) Encode(value interface{}) ([]byte, error) {
-	se := value.(*PersonTime)
+var _ = commtypes.Serde(PersonTimeMsgpSerde{})
+var _ = commtypes.SerdeG[PersonTime](PersonTimeMsgpSerdeG{})
+
+func (e PersonTimeMsgpSerde) Encode(value interface{}) ([]byte, error) {
+	se, ok := value.(*PersonTime)
+	if !ok {
+		seTmp := value.(PersonTime)
+		se = &seTmp
+	}
 	return se.MarshalMsg(nil)
 }
 
-type PersonTimeMsgpDecoder struct{}
-
-var _ = commtypes.Decoder(PersonTimeMsgpDecoder{})
-
-func (d PersonTimeMsgpDecoder) Decode(value []byte) (interface{}, error) {
+func (d PersonTimeMsgpSerde) Decode(value []byte) (interface{}, error) {
 	se := PersonTime{}
 	_, err := se.UnmarshalMsg(value)
 	if err != nil {
@@ -73,11 +85,18 @@ func (d PersonTimeMsgpDecoder) Decode(value []byte) (interface{}, error) {
 	return se, nil
 }
 
-type PersonTimeMsgpSerde struct {
-	PersonTimeMsgpEncoder
-	PersonTimeMsgpDecoder
+func (e PersonTimeMsgpSerdeG) Encode(value PersonTime) ([]byte, error) {
+	return value.MarshalMsg(nil)
 }
 
+func (d PersonTimeMsgpSerdeG) Decode(value []byte) (PersonTime, error) {
+	se := PersonTime{}
+	_, err := se.UnmarshalMsg(value)
+	if err != nil {
+		return PersonTime{}, err
+	}
+	return se, nil
+}
 func GetPersonTimeSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
 	var ptSerde commtypes.Serde
 	if serdeFormat == commtypes.JSON {
@@ -88,4 +107,14 @@ func GetPersonTimeSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, err
 		return nil, common_errors.ErrUnrecognizedSerdeFormat
 	}
 	return ptSerde, nil
+}
+
+func GetPersonTimeSerdeG(serdeFormat commtypes.SerdeFormat) (commtypes.SerdeG[PersonTime], error) {
+	if serdeFormat == commtypes.JSON {
+		return PersonTimeJSONSerdeG{}, nil
+	} else if serdeFormat == commtypes.MSGP {
+		return PersonTimeMsgpSerdeG{}, nil
+	} else {
+		return nil, common_errors.ErrUnrecognizedSerdeFormat
+	}
 }

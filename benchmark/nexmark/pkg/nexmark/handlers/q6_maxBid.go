@@ -12,7 +12,7 @@ import (
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
-	"sharedlog-stream/pkg/store_restore"
+	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/treemap"
@@ -50,44 +50,44 @@ func (h *q6MaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 func (h *q6MaxBid) getExecutionCtx(ctx context.Context, sp *common.QueryInput) (processor.BaseExecutionContext, error) {
 	inputStream, outputStreams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
 	if err != nil {
-		return processor.EmptyBaseExecutionContext, err
+		return processor.BaseExecutionContext{}, err
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	abSerde, err := ntypes.GetAuctionBidSerde(serdeFormat)
+	abSerde, err := ntypes.GetAuctionBidSerdeG(serdeFormat)
 	if err != nil {
-		return processor.EmptyBaseExecutionContext, err
+		return processor.BaseExecutionContext{}, err
 	}
-	asSerde, err := ntypes.GetAuctionIDSellerSerde(serdeFormat)
+	asSerde, err := ntypes.GetAuctionIDSellerSerdeG(serdeFormat)
 	if err != nil {
-		return processor.EmptyBaseExecutionContext, err
+		return processor.BaseExecutionContext{}, err
 	}
-	inMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, asSerde, abSerde)
+	inMsgSerde, err := commtypes.GetMsgSerdeG(serdeFormat, asSerde, abSerde)
 	if err != nil {
-		return processor.EmptyBaseExecutionContext, err
+		return processor.BaseExecutionContext{}, err
 	}
-	inputConfig := &producer_consumer.StreamConsumerConfig{
+	inputConfig := &producer_consumer.StreamConsumerConfigG[ntypes.AuctionIdSeller, *ntypes.AuctionBid]{
 		Timeout:  common.SrcConsumeTimeout,
 		MsgSerde: inMsgSerde,
 	}
 	ptSerde, err := ntypes.GetPriceTimeSerde(serdeFormat)
 	if err != nil {
-		return processor.EmptyBaseExecutionContext, err
+		return processor.BaseExecutionContext{}, err
 	}
-	changeSerde, err := commtypes.GetChangeSerde(serdeFormat, ptSerde)
+	changeSerde, err := commtypes.GetChangeSerdeG(serdeFormat, ptSerde)
 	if err != nil {
-		return processor.EmptyBaseExecutionContext, err
+		return processor.BaseExecutionContext{}, err
 	}
-	outMsgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.Uint64Serde{}, changeSerde)
+	outMsgSerde, err := commtypes.GetMsgSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, changeSerde)
 	if err != nil {
-		return processor.EmptyBaseExecutionContext, fmt.Errorf("get msg serde err: %v", err)
+		return processor.BaseExecutionContext{}, fmt.Errorf("get msg serde err: %v", err)
 	}
-	outConfig := &producer_consumer.StreamSinkConfig{
+	outConfig := &producer_consumer.StreamSinkConfig[uint64, commtypes.Change]{
 		MsgSerde:      outMsgSerde,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	src := producer_consumer.NewMeteredConsumer(
-		producer_consumer.NewShardedSharedLogStreamConsumer(inputStream, inputConfig),
+		producer_consumer.NewShardedSharedLogStreamConsumerG(inputStream, inputConfig),
 		warmup)
 	sink := producer_consumer.NewMeteredProducer(
 		producer_consumer.NewShardedSharedLogStreamProducer(outputStreams[0], outConfig),
@@ -109,12 +109,15 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	msgSerde, err := processor.MsgSerdeWithValueTs(serdeFormat,
-		ectx.Consumers()[0].MsgSerde().GetKeySerde(), ptSerde)
+	asSerde, err := ntypes.GetAuctionIDSellerSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	mp, err := store_with_changelog.NewMaterializeParamBuilder().
+	msgSerde, err := processor.MsgSerdeWithValueTsG(serdeFormat, asSerde, ptSerde)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	mp, err := store_with_changelog.NewMaterializeParamBuilder[ntypes.AuctionIdSeller, *commtypes.ValueTimestamp]().
 		MessageSerde(msgSerde).
 		StoreName(maxBidStoreName).
 		ParNum(sp.ParNum).
@@ -141,7 +144,7 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	ectx.Via(processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor("maxBid", kvstore,
 		processor.InitializerFunc(func() interface{} { return nil }),
 		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
-			v := value.(ntypes.AuctionBid)
+			v := value.(*ntypes.AuctionBid)
 			if aggregate == nil {
 				return ntypes.PriceTime{Price: v.BidPrice, DateTime: v.BidDateTime}
 			}
@@ -163,13 +166,11 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
 		}).Build()
 
-	kvc := []*store_restore.KVStoreChangelog{
-		store_restore.NewKVStoreChangelog(kvstore, kvstore.ChangelogManager()),
-	}
+	kvc := []store.KeyValueStoreOpWithChangelog{kvstore}
 	builder := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,
 		fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 			sp.ParNum, sp.OutputTopicNames[0]))
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp, builder).
 		KVStoreChangelogs(kvc).Build()
-	return task.ExecuteApp(ctx, streamTaskArgs)
+	return stream_task.ExecuteApp(ctx, task, streamTaskArgs)
 }
