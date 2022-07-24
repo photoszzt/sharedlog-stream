@@ -34,8 +34,8 @@ var _ = commtypes.Serde(ControlMetadataJSONSerde{})
 var _ = commtypes.SerdeG[ControlMetadata](ControlMetadataJSONSerdeG{})
 
 func (s ControlMetadataJSONSerde) Encode(value interface{}) ([]byte, error) {
-	rf := value.(*ControlMetadata)
-	return json.Marshal(rf)
+	rf := value.(ControlMetadata)
+	return json.Marshal(&rf)
 }
 
 func (s ControlMetadataJSONSerde) Decode(value []byte) (interface{}, error) {
