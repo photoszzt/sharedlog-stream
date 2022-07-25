@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/data_structure"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils/syncutils"
 
@@ -35,6 +36,7 @@ type ControlChannelManager struct {
 	controlLog    *sharedlog_stream.SharedLogStream
 	controlOutput chan ControlChannelResult
 	controlQuit   chan struct{}
+	appendCtrlLog stats.ConcurrentInt64Collector
 	funcName      string
 	currentEpoch  uint64
 }
@@ -53,11 +55,12 @@ func NewControlChannelManager(env types.Environment,
 		return nil, err
 	}
 	cm := &ControlChannelManager{
-		controlLog:   log,
-		currentEpoch: 0,
-		topicStreams: make(map[string]*sharedlog_stream.ShardedSharedLogStream),
-		keyMappings:  make(map[string]*btree.BTreeG[kvPair]),
-		funcName:     app_id,
+		controlLog:    log,
+		currentEpoch:  0,
+		topicStreams:  make(map[string]*sharedlog_stream.ShardedSharedLogStream),
+		keyMappings:   make(map[string]*btree.BTreeG[kvPair]),
+		funcName:      app_id,
+		appendCtrlLog: stats.NewConcurrentInt64Collector("append_ctrl_log", stats.DEFAULT_COLLECT_DURATION),
 	}
 	if serdeFormat == commtypes.JSON {
 		cm.msgSerde = commtypes.MessageJSONSerdeG[string, txn_data.ControlMetadata]{
@@ -154,6 +157,7 @@ func TrackAndAppendKeyMapping(
 		sub.Add(substreamId)
 		subs.ReplaceOrInsert(kvPair{key: kBytes, val: sub})
 		cmm.kmMu.Unlock()
+		apStart := stats.TimerBegin()
 		cm := txn_data.ControlMetadata{
 			Key:         kBytes,
 			SubstreamId: substreamId,
@@ -161,6 +165,8 @@ func TrackAndAppendKeyMapping(
 			Epoch:       cmm.currentEpoch,
 		}
 		err = cmm.appendToControlLog(ctx, cm)
+		apElapsed := stats.Elapsed(apStart).Microseconds()
+		cmm.appendCtrlLog.AddSample(apElapsed)
 		return err
 	} else {
 		cmm.kmMu.Unlock()

@@ -2,9 +2,7 @@ package processor
 
 import (
 	"context"
-	"os"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/utils"
 
@@ -65,6 +63,6 @@ func (p *StreamAggregateProcessor) ProcessAndReturn(ctx context.Context, msg com
 		NewVal: newAgg,
 		OldVal: oldAgg,
 	}
-	debug.Fprintf(os.Stderr, "StreamAgg key %v, oldVal %v, newVal %v\n", msg.Key, oldAgg, newAgg)
+	// debug.Fprintf(os.Stderr, "StreamAgg key %v, oldVal %v, newVal %v\n", msg.Key, oldAgg, newAgg)
 	return []commtypes.Message{{Key: msg.Key, Value: change, Timestamp: newTs}}, nil
 }
