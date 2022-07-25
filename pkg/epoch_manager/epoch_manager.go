@@ -332,7 +332,9 @@ func cleanupState(em *EpochManager, producers []producer_consumer.MeteredProduce
 		producer.ResetInitialProd()
 	}
 	for _, kvTab := range kvTabs {
-		kvTab.ResetInitialProd()
+		if !kvTab.ChangelogIsSrc() {
+			kvTab.ResetInitialProd()
+		}
 	}
 	for _, winTab := range winTabs {
 		winTab.ResetInitialProd()
