@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/exactly_once_intr"
 )
 
 type CoreKeyValueStore interface {
@@ -21,10 +20,6 @@ type CoreKeyValueStore interface {
 	OnlyUpdateInMemStore
 }
 
-type UpdateTrackParFunc interface {
-	SetTrackParFunc(exactly_once_intr.TrackProdSubStreamFunc)
-}
-
 type OnlyUpdateInMemStore interface {
 	PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error
 }
@@ -34,6 +29,8 @@ type KeyValueStoreOpWithChangelog interface {
 	UpdateTrackParFunc
 	ChangelogIsSrc() bool
 	OnlyUpdateInMemStore
+	ProduceRangeRecording
+	SubstreamNum() uint8
 }
 
 type KeyValueStoreBackedByChangelog interface {

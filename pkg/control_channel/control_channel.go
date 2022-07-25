@@ -30,10 +30,11 @@ type ControlChannelManager struct {
 	// topic -> (key -> set of substreamid)
 	keyMappings map[string]*btree.BTreeG[kvPair]
 
-	msgSerde commtypes.MessageSerdeG[string, txn_data.ControlMetadata]
+	msgSerde        commtypes.MessageSerdeG[string, txn_data.ControlMetadata]
+	payloadArrSerde commtypes.SerdeG[commtypes.PayloadArr]
 
 	topicStreams  map[string]*sharedlog_stream.ShardedSharedLogStream
-	controlLog    *sharedlog_stream.SharedLogStream
+	controlLog    *sharedlog_stream.ShardedSharedLogStream
 	controlOutput chan ControlChannelResult
 	controlQuit   chan struct{}
 	appendCtrlLog stats.ConcurrentInt64Collector
@@ -50,17 +51,18 @@ func NewControlChannelManager(env types.Environment,
 	serdeFormat commtypes.SerdeFormat,
 	epoch uint64,
 ) (*ControlChannelManager, error) {
-	log, err := sharedlog_stream.NewSharedLogStream(env, app_id+CONTROL_LOG_TOPIC_NAME, serdeFormat)
+	log, err := sharedlog_stream.NewShardedSharedLogStream(env, app_id+CONTROL_LOG_TOPIC_NAME, 1, serdeFormat)
 	if err != nil {
 		return nil, err
 	}
 	cm := &ControlChannelManager{
-		controlLog:    log,
-		currentEpoch:  0,
-		topicStreams:  make(map[string]*sharedlog_stream.ShardedSharedLogStream),
-		keyMappings:   make(map[string]*btree.BTreeG[kvPair]),
-		funcName:      app_id,
-		appendCtrlLog: stats.NewConcurrentInt64Collector("append_ctrl_log", stats.DEFAULT_COLLECT_DURATION),
+		controlLog:      log,
+		currentEpoch:    0,
+		topicStreams:    make(map[string]*sharedlog_stream.ShardedSharedLogStream),
+		keyMappings:     make(map[string]*btree.BTreeG[kvPair]),
+		funcName:        app_id,
+		appendCtrlLog:   stats.NewConcurrentInt64Collector("append_ctrl_log", stats.DEFAULT_COLLECT_DURATION),
+		payloadArrSerde: sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG,
 	}
 	if serdeFormat == commtypes.JSON {
 		cm.msgSerde = commtypes.MessageJSONSerdeG[string, txn_data.ControlMetadata]{
@@ -103,15 +105,24 @@ func (cmm *ControlChannelManager) TrackStream(topicName string, stream *sharedlo
 	cmm.topicStreams[topicName] = stream
 }
 
-func (cmm *ControlChannelManager) appendToControlLog(ctx context.Context, cm txn_data.ControlMetadata) error {
+func (cmm *ControlChannelManager) appendToControlLog(ctx context.Context, cm txn_data.ControlMetadata, allowBuffer bool) error {
 	msg_encoded, err := cmm.msgSerde.Encode(commtypes.Message{Key: "", Value: cm})
 	if err != nil {
 		return err
 	}
-	_, err = cmm.controlLog.Push(ctx, msg_encoded, 0, sharedlog_stream.SingleDataRecordMeta, commtypes.EmptyProducerId)
-	// debug.Fprintf(os.Stderr, "appendToControlLog: tp %s %v, off %x\n",
-	// 	cmm.controlLog.TopicName(), cm, off)
+	if allowBuffer {
+		err = cmm.controlLog.BufPush(ctx, msg_encoded, 0, commtypes.EmptyProducerId)
+		// debug.Fprintf(os.Stderr, "appendToControlLog: tp %s %v, off %x\n",
+		// 	cmm.controlLog.TopicName(), cm, off)
+	} else {
+		_, err = cmm.controlLog.Push(ctx, msg_encoded, 0, sharedlog_stream.SingleDataRecordMeta,
+			commtypes.EmptyProducerId)
+	}
 	return err
+}
+
+func (cmm *ControlChannelManager) FlushControlLog(ctx context.Context) error {
+	return cmm.controlLog.Flush(ctx, commtypes.EmptyProducerId)
 }
 
 func (cmm *ControlChannelManager) AppendRescaleConfig(ctx context.Context,
@@ -122,7 +133,7 @@ func (cmm *ControlChannelManager) AppendRescaleConfig(ctx context.Context,
 		Config: config,
 		Epoch:  cmm.currentEpoch,
 	}
-	err := cmm.appendToControlLog(ctx, cm)
+	err := cmm.appendToControlLog(ctx, cm, false)
 	return err
 }
 
@@ -164,7 +175,7 @@ func TrackAndAppendKeyMapping(
 			Topic:       topic,
 			Epoch:       cmm.currentEpoch,
 		}
-		err = cmm.appendToControlLog(ctx, cm)
+		err = cmm.appendToControlLog(ctx, cm, true)
 		apElapsed := stats.Elapsed(apStart).Microseconds()
 		cmm.appendCtrlLog.AddSample(apElapsed)
 		return err
@@ -185,7 +196,7 @@ func (cmm *ControlChannelManager) RecordPrevInstanceFinish(
 		InstanceId:       instanceID,
 		Epoch:            epoch,
 	}
-	err := cmm.appendToControlLog(ctx, cm)
+	err := cmm.appendToControlLog(ctx, cm, false)
 	return err
 }
 
@@ -246,18 +257,35 @@ func (cmm *ControlChannelManager) monitorControlChannel(
 			output <- ControlChannelErr(err)
 			break
 		} else {
-			msg, err := cmm.msgSerde.Decode(rawMsg.Payload)
-			if err != nil {
-				output <- ControlChannelErr(err)
-				break
-			}
-			ctrlMeta := msg.Value.(txn_data.ControlMetadata)
-			// debug.Fprintf(os.Stderr, "MonitorControlChannel: tp %s got %v, off: %x\n",
-			// 	cmm.controlLog.TopicName(), ctrlMeta, rawMsg.LogSeqNum)
-			if ctrlMeta.Key != nil && ctrlMeta.Topic != "" {
-				cmm.updateKeyMapping(&ctrlMeta)
+			if rawMsg.IsPayloadArr {
+				msgArr, err := cmm.payloadArrSerde.Decode(rawMsg.Payload)
+				if err != nil {
+					output <- ControlChannelErr(err)
+					break
+				}
+				for _, payload := range msgArr.Payloads {
+					msg, err := cmm.msgSerde.Decode(payload)
+					if err != nil {
+						output <- ControlChannelErr(err)
+						break
+					}
+					ctrlMeta := msg.Value.(txn_data.ControlMetadata)
+					cmm.updateKeyMapping(&ctrlMeta)
+				}
 			} else {
-				output <- ControlChannelVal(&ctrlMeta)
+				msg, err := cmm.msgSerde.Decode(rawMsg.Payload)
+				if err != nil {
+					output <- ControlChannelErr(err)
+					break
+				}
+				ctrlMeta := msg.Value.(txn_data.ControlMetadata)
+				// debug.Fprintf(os.Stderr, "MonitorControlChannel: tp %s got %v, off: %x\n",
+				// 	cmm.controlLog.TopicName(), ctrlMeta, rawMsg.LogSeqNum)
+				if ctrlMeta.Key != nil && ctrlMeta.Topic != "" {
+					cmm.updateKeyMapping(&ctrlMeta)
+				} else {
+					output <- ControlChannelVal(&ctrlMeta)
+				}
 			}
 		}
 	}

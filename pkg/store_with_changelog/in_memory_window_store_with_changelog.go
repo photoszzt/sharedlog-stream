@@ -221,6 +221,19 @@ func (s *InMemoryWindowStoreWithChangelog[K, V]) Stream() sharedlog_stream.Strea
 	return s.changelogManager.Stream()
 }
 
+func (s *InMemoryWindowStoreWithChangelog[K, V]) GetInitialProdSeqNum() uint64 {
+	return s.changelogManager.producer.GetInitialProdSeqNum(s.parNum)
+}
+func (s *InMemoryWindowStoreWithChangelog[K, V]) GetCurrentProdSeqNum() uint64 {
+	return s.changelogManager.producer.GetCurrentProdSeqNum(s.parNum)
+}
+func (s *InMemoryWindowStoreWithChangelog[K, V]) ResetInitialProd() {
+	s.changelogManager.producer.ResetInitialProd()
+}
+func (s *InMemoryWindowStoreWithChangelog[K, V]) SubstreamNum() uint8 {
+	return s.parNum
+}
+
 func ToInMemWindowTableWithChangelog[K, V any](
 	mp *MaterializeParam[K, V],
 	joinWindow *processor.JoinWindows,

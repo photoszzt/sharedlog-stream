@@ -9,6 +9,7 @@ import (
 	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils/syncutils"
 
@@ -154,6 +155,8 @@ func GenEpochMarker(
 	em *EpochManager,
 	consumers []producer_consumer.MeteredConsumerIntr,
 	producers []producer_consumer.MeteredProducerIntr,
+	kvTabs []store.KeyValueStoreOpWithChangelog,
+	winTabs []store.WindowStoreOpWithChangelog,
 ) (commtypes.EpochMarker, error) {
 	outputRanges := make(map[string][]commtypes.ProduceRange)
 	for _, producer := range producers {
@@ -164,10 +167,7 @@ func GenEpochMarker(
 		topicName := producer.TopicName()
 		parSet, ok := em.currentTopicSubstream[producer.TopicName()]
 		if ok {
-			ranges, ok := outputRanges[topicName]
-			if !ok {
-				ranges = make([]commtypes.ProduceRange, 0, 4)
-			}
+			ranges := make([]commtypes.ProduceRange, 0, 4)
 			for subNum := range parSet {
 				ranges = append(ranges, commtypes.ProduceRange{
 					SubStreamNum: subNum,
@@ -177,6 +177,36 @@ func GenEpochMarker(
 			}
 			outputRanges[topicName] = ranges
 		}
+	}
+	for _, kvTab := range kvTabs {
+		if !kvTab.ChangelogIsSrc() {
+			err := kvTab.FlushChangelog(ctx)
+			if err != nil {
+				return commtypes.EpochMarker{}, err
+			}
+			ranges := []commtypes.ProduceRange{
+				{
+					SubStreamNum: kvTab.SubstreamNum(),
+					Start:        kvTab.GetInitialProdSeqNum(),
+					End:          kvTab.GetCurrentProdSeqNum(),
+				},
+			}
+			outputRanges[kvTab.ChangelogTopicName()] = ranges
+		}
+	}
+	for _, winTab := range winTabs {
+		err := winTab.FlushChangelog(ctx)
+		if err != nil {
+			return commtypes.EpochMarker{}, err
+		}
+		ranges := []commtypes.ProduceRange{
+			{
+				SubStreamNum: winTab.SubstreamNum(),
+				Start:        winTab.GetInitialProdSeqNum(),
+				End:          winTab.GetCurrentProdSeqNum(),
+			},
+		}
+		outputRanges[winTab.ChangelogTopicName()] = ranges
 	}
 	consumeSeqNums := make(map[string]uint64)
 	for _, consumer := range consumers {
@@ -211,12 +241,16 @@ func (em *EpochManager) MarkEpoch(ctx context.Context,
 }
 
 func MarkEpochAndCleanupState(ctx context.Context, em *EpochManager,
-	epochMeta commtypes.EpochMarker, producers []producer_consumer.MeteredProducerIntr) error {
+	epochMeta commtypes.EpochMarker,
+	producers []producer_consumer.MeteredProducerIntr,
+	kvTabs []store.KeyValueStoreOpWithChangelog,
+	winTabs []store.WindowStoreOpWithChangelog,
+) error {
 	err := em.MarkEpoch(ctx, epochMeta)
 	if err != nil {
 		return err
 	}
-	cleanupState(em, producers)
+	cleanupState(em, producers, kvTabs, winTabs)
 	return nil
 }
 
@@ -290,9 +324,17 @@ func (em *EpochManager) FindMostRecentEpochMetaThatHasConsumed(
 	}
 }
 
-func cleanupState(em *EpochManager, producers []producer_consumer.MeteredProducerIntr) {
+func cleanupState(em *EpochManager, producers []producer_consumer.MeteredProducerIntr,
+	kvTabs []store.KeyValueStoreOpWithChangelog, winTabs []store.WindowStoreOpWithChangelog,
+) {
 	em.currentTopicSubstream = make(map[string]map[uint8]struct{})
 	for _, producer := range producers {
 		producer.ResetInitialProd()
+	}
+	for _, kvTab := range kvTabs {
+		kvTab.ResetInitialProd()
+	}
+	for _, winTab := range winTabs {
+		winTab.ResetInitialProd()
 	}
 }

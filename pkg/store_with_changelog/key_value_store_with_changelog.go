@@ -181,6 +181,19 @@ func (st *KeyValueStoreWithChangelog[K, V]) Stream() sharedlog_stream.Stream {
 	return st.changelogManager.Stream()
 }
 
+func (st *KeyValueStoreWithChangelog[K, V]) GetInitialProdSeqNum() uint64 {
+	return st.changelogManager.producer.GetInitialProdSeqNum(st.parNum)
+}
+func (st *KeyValueStoreWithChangelog[K, V]) GetCurrentProdSeqNum() uint64 {
+	return st.changelogManager.producer.GetCurrentProdSeqNum(st.parNum)
+}
+func (st *KeyValueStoreWithChangelog[K, V]) ResetInitialProd() {
+	st.changelogManager.producer.ResetInitialProd()
+}
+func (st *KeyValueStoreWithChangelog[K, V]) SubstreamNum() uint8 {
+	return st.parNum
+}
+
 func CreateInMemKVTableWithChangelog[K, V any](mp *MaterializeParam[K, V],
 	compare func(a, b treemap.Key) int,
 ) (*KeyValueStoreWithChangelog[K, V], error) {

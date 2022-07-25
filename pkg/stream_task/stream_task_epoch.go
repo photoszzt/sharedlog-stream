@@ -115,7 +115,7 @@ func processInEpoch(
 			timeout := args.duration != 0 && cur_elapsed >= args.duration
 			shouldMarkByTime := (args.commitEvery != 0 && timeSinceLastMark > args.commitEvery)
 			if (shouldMarkByTime || timeout) && hasProcessData {
-				err_out := markEpoch(dctx, em, t, args, &hasProcessData, &paused)
+				err_out := markEpoch(dctx, em, cmm, t, args, &hasProcessData, &paused)
 				if err_out != nil {
 					return err_out
 				}
@@ -160,6 +160,7 @@ func processInEpoch(
 
 func markEpoch(ctx context.Context,
 	em *epoch_manager.EpochManager,
+	cmm *control_channel.ControlChannelManager,
 	t *StreamTask,
 	args *StreamTaskArgs,
 	hasProcessData *bool,
@@ -171,12 +172,18 @@ func markEpoch(ctx context.Context,
 		}
 		*paused = true
 	}
-	mStart := stats.TimerBegin()
-	epochMarker, err := epoch_manager.GenEpochMarker(ctx, em, args.ectx.Consumers(), args.ectx.Producers())
+	err := cmm.FlushControlLog(ctx)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	err = epoch_manager.MarkEpochAndCleanupState(ctx, em, epochMarker, args.ectx.Producers())
+	mStart := stats.TimerBegin()
+	epochMarker, err := epoch_manager.GenEpochMarker(ctx, em, args.ectx.Consumers(), args.ectx.Producers(),
+		args.kvChangelogs, args.windowStoreChangelogs)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	err = epoch_manager.MarkEpochAndCleanupState(ctx, em, epochMarker, args.ectx.Producers(),
+		args.kvChangelogs, args.windowStoreChangelogs)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

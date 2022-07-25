@@ -133,7 +133,7 @@ func processWithTransaction(
 
 			// should commit
 			if (shouldCommitByTime || timeout) && hasLiveTransaction {
-				err_out := commitTransaction(ctx, t, tm, args, &hasLiveTransaction,
+				err_out := commitTransaction(ctx, t, tm, cmm, args, &hasLiveTransaction,
 					&trackConsumePar, &paused)
 				if err_out != nil {
 					return err_out
@@ -223,6 +223,7 @@ func startNewTransaction(ctx context.Context, t *StreamTask,
 func commitTransaction(ctx context.Context,
 	t *StreamTask,
 	tm *transaction.TransactionManager,
+	cmm *control_channel.ControlChannelManager,
 	args *StreamTaskArgs,
 	hasLiveTransaction *bool,
 	trackConsumePar *bool,
@@ -235,9 +236,14 @@ func commitTransaction(ctx context.Context,
 		}
 		*paused = true
 	}
+	err := cmm.FlushControlLog(ctx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] flush control log failed: %v\n", err)
+		return &common.FnOutput{Success: false, Message: fmt.Sprintf("flush control log failed: %v\n", err)}
+	}
 	cBeg := stats.TimerBegin()
 	offsetRecords := transaction.CollectOffsetRecords(args.ectx.Consumers())
-	err := tm.AppendConsumedSeqNum(ctx, offsetRecords, args.ectx.SubstreamNum())
+	err = tm.AppendConsumedSeqNum(ctx, offsetRecords, args.ectx.SubstreamNum())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] append offset failed: %v\n", err)
 		return &common.FnOutput{Success: false, Message: fmt.Sprintf("append offset failed: %v\n", err)}

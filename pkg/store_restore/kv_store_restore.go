@@ -64,6 +64,18 @@ func (kvc *KVStoreChangelog[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.Re
 func (kvc *KVStoreChangelog[K, V]) Stream() sharedlog_stream.Stream {
 	return kvc.changelogManager.Stream()
 }
+func (kvc *KVStoreChangelog[K, V]) GetInitialProdSeqNum() uint64 {
+	panic("not supported")
+}
+func (kvc *KVStoreChangelog[K, V]) GetCurrentProdSeqNum() uint64 {
+	panic("not supported")
+}
+func (kvc *KVStoreChangelog[K, V]) ResetInitialProd() {
+	panic("not supported")
+}
+func (kvc *KVStoreChangelog[K, V]) SubstreamNum() uint8 {
+	panic("not supported")
+}
 
 func RestoreChangelogKVStateStore(
 	ctx context.Context,

@@ -103,11 +103,11 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(
 
 	// producer1 mark
 	producers1 := []producer_consumer.MeteredProducerIntr{meteredProducer1}
-	epochMarker, err := epoch_manager.GenEpochMarker(ctx, em1, nil, producers1)
+	epochMarker, err := epoch_manager.GenEpochMarker(ctx, em1, nil, producers1, nil, nil)
 	if err != nil {
 		panic(err)
 	}
-	err = epoch_manager.MarkEpochAndCleanupState(ctx, em1, epochMarker, producers1)
+	err = epoch_manager.MarkEpochAndCleanupState(ctx, em1, epochMarker, producers1, nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -129,11 +129,11 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(
 	}
 	meteredProducer2.Flush(ctx)
 	producers2 := []producer_consumer.MeteredProducerIntr{meteredProducer2}
-	epochMarker2, err := epoch_manager.GenEpochMarker(ctx, em2, nil, producers2)
+	epochMarker2, err := epoch_manager.GenEpochMarker(ctx, em2, nil, producers2, nil, nil)
 	if err != nil {
 		panic(err)
 	}
-	err = epoch_manager.MarkEpochAndCleanupState(ctx, em2, epochMarker2, producers2)
+	err = epoch_manager.MarkEpochAndCleanupState(ctx, em2, epochMarker2, producers2, nil, nil)
 	if err != nil {
 		panic(err)
 	}

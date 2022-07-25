@@ -89,11 +89,11 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 		panic(err)
 	}
 	producers := []producer_consumer.MeteredProducerIntr{meteredProducer}
-	epochMarker, err := epoch_manager.GenEpochMarker(ctx, em1, nil, producers)
+	epochMarker, err := epoch_manager.GenEpochMarker(ctx, em1, nil, producers, nil, nil)
 	if err != nil {
 		panic(err)
 	}
-	err = epoch_manager.MarkEpochAndCleanupState(ctx, em1, epochMarker, producers)
+	err = epoch_manager.MarkEpochAndCleanupState(ctx, em1, epochMarker, producers, nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -145,11 +145,11 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 	if err != nil {
 		panic(err)
 	}
-	epochMarker, err = epoch_manager.GenEpochMarker(ctx, em1, nil, producers)
+	epochMarker, err = epoch_manager.GenEpochMarker(ctx, em1, nil, producers, nil, nil)
 	if err != nil {
 		panic(err)
 	}
-	err = epoch_manager.MarkEpochAndCleanupState(ctx, em1, epochMarker, producers)
+	err = epoch_manager.MarkEpochAndCleanupState(ctx, em1, epochMarker, producers, nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -168,11 +168,11 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 	if err != nil {
 		panic(err)
 	}
-	epochMarker, err = epoch_manager.GenEpochMarker(ctx, em1, nil, producers)
+	epochMarker, err = epoch_manager.GenEpochMarker(ctx, em1, nil, producers, nil, nil)
 	if err != nil {
 		panic(err)
 	}
-	err = epoch_manager.MarkEpochAndCleanupState(ctx, em1, epochMarker, producers)
+	err = epoch_manager.MarkEpochAndCleanupState(ctx, em1, epochMarker, producers, nil, nil)
 	if err != nil {
 		panic(err)
 	}

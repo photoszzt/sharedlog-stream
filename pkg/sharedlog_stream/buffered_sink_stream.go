@@ -73,7 +73,7 @@ func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, 
 		if err != nil {
 			return err
 		}
-		seqNum, err := s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
+		seqNum, err := s.Stream.Push(ctx, payloads, s.parNum, ArrRecordMeta, producerId)
 		if err != nil {
 			return err
 		}

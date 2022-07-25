@@ -37,4 +37,6 @@ type WindowStoreOpWithChangelog interface {
 	StoreBackedByChangelog
 	UpdateTrackParFunc
 	OnlyUpdateInMemWinStore
+	ProduceRangeRecording
+	SubstreamNum() uint8
 }
