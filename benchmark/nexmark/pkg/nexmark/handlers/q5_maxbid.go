@@ -200,7 +200,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	}
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(processor.ExecutionContext)
+			args := argsTmp.(*processor.BaseExecutionContext)
 			return execution.CommonProcess(ctx, task, args, h.procMsg)
 		}).Build()
 	kvc := []store.KeyValueStoreOpWithChangelog{kvstore}

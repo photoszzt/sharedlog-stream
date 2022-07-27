@@ -15,7 +15,7 @@ import (
 	"golang.org/x/xerrors"
 )
 
-func CommonProcess(ctx context.Context, t *stream_task.StreamTask, ectx processor.ExecutionContext,
+func CommonProcess(ctx context.Context, t *stream_task.StreamTask, ectx *processor.BaseExecutionContext,
 	procMsg proc_interface.ProcessMsgFunc,
 ) *common.FnOutput {
 	if t.HandleErrFunc != nil {

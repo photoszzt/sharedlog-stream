@@ -93,44 +93,6 @@ func getSrcSinkUint64Key(
 	return []producer_consumer.MeteredConsumerIntr{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
-/*
-func CommonGetSrcSink(ctx context.Context, sp *common.QueryInput,
-	input_stream *sharedlog_stream.ShardedSharedLogStream,
-	output_stream *sharedlog_stream.ShardedSharedLogStream,
-) (*producer_consumer.MeteredSource, *producer_consumer.MeteredSink, error) {
-	msgSerde, err := commtypes.GetMsgSerde(sp.SerdeFormat)
-	if err != nil {
-		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
-	}
-	eventSerde, err := getEventSerde(sp.SerdeFormat)
-	if err != nil {
-		return nil, nil, fmt.Errorf("get event serde err: %v", err)
-	}
-	inConfig := &producer_consumer.StreamSourceConfig{
-		Timeout: common.SrcConsumeTimeout,
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			KeySerde: commtypes.StringSerde{},
-			ValSerde: eventSerde,
-			MsgSerde: msgSerde,
-		},
-	}
-	outConfig := &producer_consumer.StreamSinkConfig{
-		KVMsgSerdes: commtypes.KVMsgSerdes{
-			KeySerde: commtypes.Uint64Serde{},
-			ValSerde: eventSerde,
-			MsgSerde: msgSerde,
-		},
-		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
-	}
-	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
-	src := producer_consumer.NewMeteredSource(producer_consumer.NewShardedSharedLogStreamSource(input_stream, inConfig),
-		time.Duration(sp.WarmupS)*time.Second)
-	sink := producer_consumer.NewMeteredSink(producer_consumer.NewShardedSharedLogStreamSink(output_stream, outConfig),
-		time.Duration(sp.WarmupS)*time.Second)
-	return src, sink, nil
-}
-*/
-
 func GetSerdeFromString(serdeStr string, serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
 	switch serdeStr {
 	case "StartEndTime":
@@ -160,18 +122,12 @@ func PrepareProcessByTwoGeneralProc(
 	ctx context.Context,
 	func1 execution.GeneralProcFunc,
 	func2 execution.GeneralProcFunc,
-	ectx processor.BaseExecutionContext,
+	ectx *processor.BaseExecutionContext,
 	procMsg proc_interface.ProcessMsgFunc,
-) (*stream_task.StreamTask, *TwoMsgChanProcArgs) {
+) *stream_task.StreamTask {
 	var wg sync.WaitGroup
 	func1Manager := execution.NewGeneralProcManager(func1)
 	func2Manager := execution.NewGeneralProcManager(func2)
-	procArgs := &TwoMsgChanProcArgs{
-		msgChan1:             func1Manager.MsgChan(),
-		msgChan2:             func2Manager.MsgChan(),
-		BaseExecutionContext: ectx,
-	}
-
 	handleErrFunc := func() error {
 		select {
 		case aucErr := <-func1Manager.ErrChan():
@@ -187,12 +143,16 @@ func PrepareProcessByTwoGeneralProc(
 
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(processor.ExecutionContext)
-			return execution.CommonProcess(ctx, task, args, procMsg)
+			args := argsTmp.(*processor.BaseExecutionContext)
+			return execution.CommonProcess(ctx, task, args, func(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
+				func1Manager.MsgChan() <- msg
+				func2Manager.MsgChan() <- msg
+				return nil
+			})
 		}).
 		InitFunc(func(task *stream_task.StreamTask) {
-			func1Manager.LaunchProc(ctx, procArgs, &wg)
-			func2Manager.LaunchProc(ctx, procArgs, &wg)
+			func1Manager.LaunchProc(ctx, ectx, &wg)
+			func2Manager.LaunchProc(ctx, ectx, &wg)
 		}).
 		PauseFunc(func() *common.FnOutput {
 			// debug.Fprintf(os.Stderr, "begin pause\n")
@@ -213,12 +173,5 @@ func PrepareProcessByTwoGeneralProc(
 			// debug.Fprintf(os.Stderr, "done pause\n")
 			return nil
 		}).HandleErrFunc(handleErrFunc).Build()
-	return task, procArgs
-}
-
-func procMsgWithTwoMsgChan(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
-	args := argsTmp.(*TwoMsgChanProcArgs)
-	args.msgChan1 <- msg
-	args.msgChan2 <- msg
-	return nil
+	return task
 }

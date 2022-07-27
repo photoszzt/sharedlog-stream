@@ -46,12 +46,6 @@ func (h *q3GroupByHandler) Call(ctx context.Context, input []byte) ([]byte, erro
 	return utils.CompressData(encodedOutput), nil
 }
 
-type TwoMsgChanProcArgs struct {
-	msgChan1 chan commtypes.Message
-	msgChan2 chan commtypes.Message
-	processor.BaseExecutionContext
-}
-
 func getExecutionCtx(ctx context.Context, env types.Environment, sp *common.QueryInput, funcName string,
 ) (processor.BaseExecutionContext, error) {
 	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, env, sp)
@@ -122,7 +116,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(processor.ExecutionContext)
+			args := argsTmp.(*processor.BaseExecutionContext)
 			return execution.CommonProcess(ctx, task, args,
 				func(ctx context.Context, msg commtypes.Message, _ interface{}) error {
 					event := msg.Value.(*ntypes.Event)

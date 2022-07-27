@@ -68,7 +68,7 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 
 	task := stream_task.NewStreamTaskBuilder().AppProcessFunc(
 		func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(processor.ExecutionContext)
+			args := argsTmp.(*processor.BaseExecutionContext)
 			return execution.CommonProcess(ctx, task, args,
 				func(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
 					event := msg.Value.(*ntypes.Event)

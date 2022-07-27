@@ -4,7 +4,6 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/producer_consumer"
 	"sync"
 )
 
@@ -81,20 +80,16 @@ func (c *GeneralProcCtx) AppendProcessor(processor processor.Processor) {
 
 func GeneralProc(ctx context.Context,
 	c *GeneralProcCtx,
-	producer producer_consumer.MeteredProducerIntr,
 	msgChan chan commtypes.Message,
 	errChan chan error,
 	pause chan struct{},
 ) {
 	for {
-		// producer.Lock()
 		select {
 		case <-ctx.Done():
-			// producer.Unlock()
 			return
 		case msg, ok := <-msgChan:
 			if !ok {
-				// producer.Unlock()
 				return
 			}
 			_, ok_p := msg.Key.(commtypes.Punctuate)
@@ -104,12 +99,10 @@ func GeneralProc(ctx context.Context,
 				_, err := c.chains.RunChains(ctx, msg)
 				if err != nil {
 					errChan <- err
-					// producer.Unlock()
 					return
 				}
 			}
 		default:
 		}
-		// producer.Unlock()
 	}
 }

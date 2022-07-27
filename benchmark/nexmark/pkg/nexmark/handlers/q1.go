@@ -71,7 +71,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 			processor.NewFixedSubstreamOutputProcessor(sinks[0], sp.ParNum)))
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
-			args := argsTmp.(processor.ExecutionContext)
+			args := argsTmp.(*processor.BaseExecutionContext)
 			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
 		}).Build()
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
