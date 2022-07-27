@@ -19,8 +19,8 @@ type ConcurrentInt64Collector struct {
 	Int64Collector
 }
 
-func NewConcurrentInt64Collector(tag string, duration time.Duration) ConcurrentInt64Collector {
-	return ConcurrentInt64Collector{
+func NewConcurrentInt64Collector(tag string, duration time.Duration) *ConcurrentInt64Collector {
+	return &ConcurrentInt64Collector{
 		Int64Collector: NewInt64Collector(tag, duration),
 	}
 }
@@ -30,8 +30,8 @@ type ConcurrentIntCollector struct {
 	IntCollector
 }
 
-func NewConcurrentIntCollector(tag string, duration time.Duration) ConcurrentIntCollector {
-	return ConcurrentIntCollector{
+func NewConcurrentIntCollector(tag string, duration time.Duration) *ConcurrentIntCollector {
+	return &ConcurrentIntCollector{
 		IntCollector: NewIntCollector(tag, duration),
 	}
 }

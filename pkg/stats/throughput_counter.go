@@ -26,15 +26,15 @@ func (c *ThroughputCounter) GetCount() uint64 {
 }
 
 type ConcurrentThroughputCounter struct {
-	syncutils.Mutex
+	mu           syncutils.Mutex
 	tag          string
 	count        uint64
 	last_count   uint64
 	report_timer ReportTimer
 }
 
-func NewConcurrentThroughputCounter(tag string, duration time.Duration) ConcurrentThroughputCounter {
-	return ConcurrentThroughputCounter{
+func NewConcurrentThroughputCounter(tag string, duration time.Duration) *ConcurrentThroughputCounter {
+	return &ConcurrentThroughputCounter{
 		tag:          tag,
 		count:        0,
 		last_count:   0,

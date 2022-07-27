@@ -8,7 +8,7 @@ import (
 
 type MeteredProcessor struct {
 	proc      Processor
-	latencies stats.ConcurrentInt64Collector
+	latencies *stats.ConcurrentInt64Collector
 }
 
 func NewMeteredProcessor(proc Processor) *MeteredProcessor {

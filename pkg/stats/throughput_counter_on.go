@@ -19,8 +19,8 @@ func (c *ThroughputCounter) Tick(count uint64) {
 }
 
 func (c *ConcurrentThroughputCounter) Tick(count uint64) {
-	c.Lock()
-	defer c.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.count += count
 	if c.count > c.last_count && c.report_timer.Check() {
 		duration := c.report_timer.Mark()

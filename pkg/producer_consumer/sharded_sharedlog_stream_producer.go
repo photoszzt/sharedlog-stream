@@ -78,7 +78,7 @@ func (sls *ShardedSharedLogStreamProducer[K, V]) Produce(ctx context.Context, ms
 	ctrl, ok := msg.Key.(string)
 	if ok && ctrl == txn_data.SCALE_FENCE_KEY {
 		debug.Assert(isControl, "scale fence msg should be a control msg")
-		if sls.bufPush && isControl {
+		if sls.bufPush {
 			err := sls.flush(ctx)
 			if err != nil {
 				return err
@@ -130,28 +130,25 @@ func (s *ShardedSharedLogStreamProducer[K, V]) Flush(ctx context.Context) error 
 }
 func (s *ShardedSharedLogStreamProducer[K, V]) FlushNoLock(ctx context.Context) error {
 	if s.bufPush {
-		err := s.flushNoLock(ctx)
+		err := FlushNoLock(ctx, s.stream, s.guarantee, s.eom.GetProducerId())
 		if err != nil {
 			return err
 		}
 	}
 	return nil
 }
-func (s *ShardedSharedLogStreamProducer[K, V]) InitFlushTimer() {}
 
-func (s *ShardedSharedLogStreamProducer[K, V]) flushNoLock(ctx context.Context) error {
-	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK {
-		producerId := s.eom.GetProducerId()
-		return s.stream.FlushNoLock(ctx, producerId)
+func FlushNoLock(ctx context.Context, stream *sharedlog_stream.ShardedSharedLogStream, guarantee eo_intr.GuaranteeMth, producerId commtypes.ProducerId) error {
+	if guarantee == eo_intr.TWO_PHASE_COMMIT || guarantee == eo_intr.EPOCH_MARK {
+		return stream.FlushNoLock(ctx, producerId)
 	} else {
-		return s.stream.FlushNoLock(ctx, commtypes.EmptyProducerId)
+		return stream.FlushNoLock(ctx, commtypes.EmptyProducerId)
 	}
 }
 
 func (s *ShardedSharedLogStreamProducer[K, V]) flush(ctx context.Context) error {
 	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK {
-		producerId := s.eom.GetProducerId()
-		return s.stream.Flush(ctx, producerId)
+		return s.stream.Flush(ctx, s.eom.GetProducerId())
 	} else {
 		return s.stream.Flush(ctx, commtypes.EmptyProducerId)
 	}
@@ -159,8 +156,7 @@ func (s *ShardedSharedLogStreamProducer[K, V]) flush(ctx context.Context) error 
 
 func (s *ShardedSharedLogStreamProducer[K, V]) push(ctx context.Context, payload []byte, parNumber uint8, meta sharedlog_stream.LogEntryMeta) (uint64, error) {
 	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK {
-		producerId := s.eom.GetProducerId()
-		return s.stream.Push(ctx, payload, parNumber, meta, producerId)
+		return s.stream.Push(ctx, payload, parNumber, meta, s.eom.GetProducerId())
 	} else {
 		return s.stream.Push(ctx, payload, parNumber, meta, commtypes.EmptyProducerId)
 	}
@@ -177,7 +173,7 @@ func (s *ShardedSharedLogStreamProducer[K, V]) pushWithTag(ctx context.Context, 
 }
 
 func (s *ShardedSharedLogStreamProducer[K, V]) bufpush(ctx context.Context, payload []byte, parNum uint8) error {
-	if s.guarantee == eo_intr.TWO_PHASE_COMMIT {
+	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK {
 		return s.stream.BufPush(ctx, payload, parNum, s.eom.GetProducerId())
 	} else {
 		return s.stream.BufPush(ctx, payload, parNum, commtypes.EmptyProducerId)

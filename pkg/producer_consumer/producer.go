@@ -14,7 +14,7 @@ type Producer interface {
 	SetName(string)
 	KeyEncoder() commtypes.Encoder
 	Flush(ctx context.Context) error
-	InitFlushTimer()
+	// InitFlushTimer()
 	ConfigExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 		guarantee exactly_once_intr.GuaranteeMth)
 	Stream() sharedlog_stream.Stream
@@ -30,6 +30,6 @@ type MeteredProducerIntr interface {
 	MarkFinalOutput()
 	IsFinalOutput() bool
 	StartWarmup()
-	GetEventTimeLatency() []int
+	// GetEventTimeLatency() []int
 	GetCount() uint64
 }

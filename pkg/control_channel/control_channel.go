@@ -37,7 +37,7 @@ type ControlChannelManager struct {
 	controlLog    *sharedlog_stream.ShardedSharedLogStream
 	controlOutput chan ControlChannelResult
 	controlQuit   chan struct{}
-	appendCtrlLog stats.ConcurrentInt64Collector
+	appendCtrlLog *stats.ConcurrentInt64Collector
 	funcName      string
 	currentEpoch  uint64
 }

@@ -15,7 +15,7 @@ type KeyValueStoreWithChangelog[K, V any] struct {
 	msgSerde         commtypes.MessageSerdeG[K, V]
 	trackFunc        exactly_once_intr.TrackProdSubStreamFunc
 	changelogManager *ChangelogManager[K, V]
-	changelogProduce stats.ConcurrentInt64Collector
+	changelogProduce *stats.ConcurrentInt64Collector
 	use_bytes        bool
 	parNum           uint8
 }

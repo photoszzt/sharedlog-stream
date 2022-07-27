@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
-	"sharedlog-stream/pkg/utils/syncutils"
 	"time"
 )
 
@@ -22,14 +21,14 @@ func checkMeasureSink() bool {
 }
 
 type ConcurrentMeteredSink[K, V any] struct {
-	mu                 syncutils.Mutex
-	eventTimeLatencies []int
+	// mu syncutils.Mutex
+	// eventTimeLatencies []int
 
 	producer *ShardedSharedLogStreamProducer[K, V]
 
-	produceTp       stats.ConcurrentThroughputCounter
-	lat             stats.ConcurrentInt64Collector
-	eventTimeSample stats.ConcurrentInt64Collector
+	produceTp       *stats.ConcurrentThroughputCounter
+	lat             *stats.ConcurrentInt64Collector
+	eventTimeSample *stats.ConcurrentInt64Collector
 	warmup          stats.WarmupGoroutineSafe
 
 	measure       bool
@@ -46,10 +45,10 @@ func NewConcurrentMeteredSyncProducer[K, V any](sink *ShardedSharedLogStreamProd
 			stats.DEFAULT_COLLECT_DURATION),
 		produceTp: stats.NewConcurrentThroughputCounter(sink_name,
 			stats.DEFAULT_COLLECT_DURATION),
-		measure:            checkMeasureSink(),
-		isFinalOutput:      false,
-		warmup:             stats.NewWarmupGoroutineSafeChecker(warmup),
-		eventTimeLatencies: make([]int, 0),
+		measure:       checkMeasureSink(),
+		isFinalOutput: false,
+		warmup:        stats.NewWarmupGoroutineSafeChecker(warmup),
+		// eventTimeLatencies: make([]int, 0),
 		eventTimeSample: stats.NewConcurrentInt64Collector(sink_name+"_ets",
 			stats.DEFAULT_COLLECT_DURATION),
 	}
@@ -69,9 +68,9 @@ func (s *ConcurrentMeteredSink[K, V]) StartWarmup() {
 	}
 }
 
-func (s *ConcurrentMeteredSink[K, V]) GetEventTimeLatency() []int {
-	return s.eventTimeLatencies
-}
+// func (s *ConcurrentMeteredSink[K, V]) GetEventTimeLatency() []int {
+// 	return s.eventTimeLatencies
+// }
 
 func (s *ConcurrentMeteredSink[K, V]) GetCount() uint64 {
 	return s.produceTp.GetCount()
@@ -154,27 +153,28 @@ func (s *ConcurrentMeteredSink[K, V]) ResetInitialProd() { s.producer.ResetIniti
 // }
 
 type MeteredProducer[K, V any] struct {
-	producer           *ShardedSharedLogStreamProducer[K, V]
-	eventTimeLatencies []int
-	latencies          stats.Int64Collector
-	produceTp          stats.ThroughputCounter
-	eventTimeSample    stats.Int64Collector
-	warmup             stats.Warmup
-	measure            bool
-	isFinalOutput      bool
+	producer *ShardedSharedLogStreamProducer[K, V]
+	// eventTimeLatencies []int
+	latencies       stats.Int64Collector
+	produceTp       stats.ThroughputCounter
+	ctrlCount       stats.Counter
+	eventTimeSample stats.Int64Collector
+	warmup          stats.Warmup
+	measure         bool
+	isFinalOutput   bool
 }
 
 func NewMeteredProducer[K, V any](sink *ShardedSharedLogStreamProducer[K, V], warmup time.Duration) *MeteredProducer[K, V] {
 	sink_name := fmt.Sprintf("%s_sink", sink.TopicName())
 	return &MeteredProducer[K, V]{
-		producer:           sink,
-		eventTimeLatencies: make([]int, 0),
-		latencies:          stats.NewInt64Collector(sink_name, stats.DEFAULT_COLLECT_DURATION),
-		produceTp:          stats.NewThroughputCounter(sink_name, stats.DEFAULT_COLLECT_DURATION),
-		eventTimeSample:    stats.NewInt64Collector(sink_name+"_ets", stats.DEFAULT_COLLECT_DURATION),
-		measure:            checkMeasureSink(),
-		isFinalOutput:      false,
-		warmup:             stats.NewWarmupChecker(warmup),
+		producer: sink,
+		// eventTimeLatencies: make([]int, 0),
+		latencies:       stats.NewInt64Collector(sink_name, stats.DEFAULT_COLLECT_DURATION),
+		produceTp:       stats.NewThroughputCounter(sink_name, stats.DEFAULT_COLLECT_DURATION),
+		eventTimeSample: stats.NewInt64Collector(sink_name+"_ets", stats.DEFAULT_COLLECT_DURATION),
+		measure:         checkMeasureSink(),
+		isFinalOutput:   false,
+		warmup:          stats.NewWarmupChecker(warmup),
 	}
 }
 
@@ -195,8 +195,6 @@ func (s *MeteredProducer[K, V]) StartWarmup() {
 }
 
 func (s *MeteredProducer[K, V]) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
-	assignInjTime(&msg)
-	s.produceTp.Tick(1)
 	if s.isFinalOutput {
 		procStart := time.Now()
 		ts, err := extractEventTs(&msg)
@@ -208,6 +206,11 @@ func (s *MeteredProducer[K, V]) Produce(ctx context.Context, msg commtypes.Messa
 			// s.eventTimeLatencies = append(s.eventTimeLatencies, els)
 			s.eventTimeSample.AddSample(els)
 		}
+	}
+	assignInjTime(&msg)
+	s.produceTp.Tick(1)
+	if isControl {
+		s.ctrlCount.Tick(1)
 	}
 
 	// if s.measure {
@@ -278,9 +281,9 @@ func extractEventTs(msg *commtypes.Message) (int64, error) {
 	return ts, nil
 }
 
-func (s *MeteredProducer[K, V]) GetEventTimeLatency() []int {
-	return s.eventTimeLatencies
-}
+// func (s *MeteredProducer[K, V]) GetEventTimeLatency() []int {
+// 	return s.eventTimeLatencies
+// }
 
 func (s *MeteredProducer[K, V]) GetCount() uint64 {
 	return s.produceTp.GetCount()

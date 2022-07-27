@@ -21,7 +21,7 @@ type InMemoryWindowStoreWithChangelog[K, V any] struct {
 	changelogManager *ChangelogManager[commtypes.KeyAndWindowStartTsG[K], V]
 	// changeLogProduce stats.ConcurrentInt64Collector
 	// storePutLatency stats.ConcurrentInt64Collector
-	trackFuncLat stats.ConcurrentInt64Collector
+	trackFuncLat *stats.ConcurrentInt64Collector
 	parNum       uint8
 }
 
