@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
+	"sync/atomic"
 	"time"
 )
 
@@ -29,6 +30,7 @@ type ConcurrentMeteredSink[K, V any] struct {
 	produceTp       *stats.ConcurrentThroughputCounter
 	lat             *stats.ConcurrentInt64Collector
 	eventTimeSample *stats.ConcurrentInt64Collector
+	ctrlCount       uint64
 	warmup          stats.WarmupGoroutineSafe
 
 	measure       bool
@@ -81,8 +83,6 @@ func (s *ConcurrentMeteredSink[K, V]) InitFlushTimer() {}
 func (s *ConcurrentMeteredSink[K, V]) Produce(ctx context.Context, msg commtypes.Message,
 	parNum uint8, isControl bool,
 ) error {
-	assignInjTime(&msg)
-	s.produceTp.Tick(1)
 	if s.isFinalOutput {
 		procStart := time.Now()
 		ts, err := extractEventTs(&msg)
@@ -96,6 +96,11 @@ func (s *ConcurrentMeteredSink[K, V]) Produce(ctx context.Context, msg commtypes
 			// s.mu.Unlock()
 			s.eventTimeSample.AddSample(els)
 		}
+	}
+	assignInjTime(&msg)
+	s.produceTp.Tick(1)
+	if isControl {
+		atomic.AddUint64(&s.ctrlCount, 1)
 	}
 	// if s.measure {
 	// 	s.warmup.Check()
@@ -142,24 +147,21 @@ func (s *ConcurrentMeteredSink[K, V]) GetCurrentProdSeqNum(substreamNum uint8) u
 	return s.producer.GetCurrentProdSeqNum(substreamNum)
 }
 func (s *ConcurrentMeteredSink[K, V]) ResetInitialProd() { s.producer.ResetInitialProd() }
-
-// func (s *ConcurrentMeteredSink[K, V]) Lock() {
-// 	// debug.Fprintf(os.Stderr, "lock producer %s\n", s.Name())
-// 	s.producer.Lock()
-// }
-// func (s *ConcurrentMeteredSink[K, V]) Unlock() {
-// 	// debug.Fprintf(os.Stderr, "unlock producer %s\n", s.Name())
-// 	s.producer.Unlock()
-// }
+func (s *ConcurrentMeteredSink[K, V]) PrintRemainingStats() {
+	s.lat.PrintRemainingStats()
+	s.eventTimeSample.PrintRemainingStats()
+}
+func (s *ConcurrentMeteredSink[K, V]) NumCtrlMsg() uint64 {
+	return atomic.LoadUint64(&s.ctrlCount)
+}
 
 type MeteredProducer[K, V any] struct {
-	producer *ShardedSharedLogStreamProducer[K, V]
-	// eventTimeLatencies []int
+	producer        *ShardedSharedLogStreamProducer[K, V]
 	latencies       stats.Int64Collector
-	produceTp       stats.ThroughputCounter
-	ctrlCount       stats.Counter
 	eventTimeSample stats.Int64Collector
+	produceTp       stats.ThroughputCounter
 	warmup          stats.Warmup
+	ctrlCount       uint64
 	measure         bool
 	isFinalOutput   bool
 }
@@ -210,7 +212,7 @@ func (s *MeteredProducer[K, V]) Produce(ctx context.Context, msg commtypes.Messa
 	assignInjTime(&msg)
 	s.produceTp.Tick(1)
 	if isControl {
-		s.ctrlCount.Tick(1)
+		s.ctrlCount += 1
 	}
 
 	// if s.measure {
@@ -258,13 +260,10 @@ func (s *MeteredProducer[K, V]) GetCurrentProdSeqNum(substreamNum uint8) uint64 
 func (s *MeteredProducer[K, V]) ResetInitialProd() {
 	s.producer.ResetInitialProd()
 }
-
-// func (s *MeteredProducer[K, V]) Lock() {
-// 	s.producer.Lock()
-// }
-// func (s *MeteredProducer[K, V]) Unlock() {
-// 	s.producer.Unlock()
-// }
+func (s *MeteredProducer[K, V]) PrintRemainingStats() {
+	s.latencies.PrintRemainingStats()
+	s.eventTimeSample.PrintRemainingStats()
+}
 
 func extractEventTs(msg *commtypes.Message) (int64, error) {
 	ts := msg.Timestamp
@@ -287,4 +286,8 @@ func extractEventTs(msg *commtypes.Message) (int64, error) {
 
 func (s *MeteredProducer[K, V]) GetCount() uint64 {
 	return s.produceTp.GetCount()
+}
+
+func (s *MeteredProducer[K, V]) NumCtrlMsg() uint64 {
+	return s.ctrlCount
 }

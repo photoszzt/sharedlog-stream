@@ -62,11 +62,13 @@ func ExecuteApp(ctx context.Context,
 	if ret != nil && ret.Success {
 		for _, src := range streamTaskArgs.ectx.Consumers() {
 			ret.Counts[src.Name()] = src.GetCount()
-			debug.Fprintf(os.Stderr, "src %s count %d\n", src.Name(), src.GetCount())
+			fmt.Fprintf(os.Stderr, "src %s msgCnt %d\n", src.Name(), src.GetCount())
 		}
 		for _, sink := range streamTaskArgs.ectx.Producers() {
+			sink.PrintRemainingStats()
 			ret.Counts[sink.Name()] = sink.GetCount()
-			debug.Fprintf(os.Stderr, "sink %s count %d\n", sink.Name(), sink.GetCount())
+			ret.Counts[sink.Name()+"_ctrl"] = sink.NumCtrlMsg()
+			fmt.Fprintf(os.Stderr, "sink %s msgCnt %d, ctrlCnt %d\n", sink.Name(), sink.GetCount(), sink.NumCtrlMsg())
 			// if sink.IsFinalOutput() {
 			// ret.Latencies["eventTimeLatency_"+sink.Name()] = sink.GetEventTimeLatency()
 			// }

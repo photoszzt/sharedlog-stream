@@ -1,7 +1,10 @@
 package stats
 
 import (
+	"fmt"
+	"os"
 	"sharedlog-stream/pkg/utils/syncutils"
+	"sort"
 	"time"
 )
 
@@ -25,6 +28,10 @@ func NewConcurrentInt64Collector(tag string, duration time.Duration) *Concurrent
 	}
 }
 
+func (c *ConcurrentInt64Collector) PrintRemainingStats() {
+	c.Int64Collector.PrintRemainingStats()
+}
+
 type ConcurrentIntCollector struct {
 	mu syncutils.Mutex
 	IntCollector
@@ -34,6 +41,10 @@ func NewConcurrentIntCollector(tag string, duration time.Duration) *ConcurrentIn
 	return &ConcurrentIntCollector{
 		IntCollector: NewIntCollector(tag, duration),
 	}
+}
+
+func (c *ConcurrentIntCollector) PrintRemainingStats() {
+	c.IntCollector.PrintRemainingStats()
 }
 
 type Int64Collector struct {
@@ -52,6 +63,20 @@ func NewInt64Collector(tag string, reportInterval time.Duration) Int64Collector 
 	}
 }
 
+func (c *Int64Collector) PrintRemainingStats() {
+	if len(c.data) > 0 {
+		il := Int64Slice(c.data)
+		sort.Sort(il)
+		p50 := P(il, 0.5)
+		p90 := P(il, 0.9)
+		p99 := P(il, 0.99)
+		duration := c.report_timer.Mark()
+		fmt.Fprintf(os.Stderr, "%s stats (%d samples): dur=%v, p50=%d, p90=%d, p99=%d\n",
+			c.tag, len(c.data), duration, p50, p90, p99)
+		c.data = make([]int64, 0)
+	}
+}
+
 type IntCollector struct {
 	tag                string
 	data               []int
@@ -65,5 +90,19 @@ func NewIntCollector(tag string, reportInterval time.Duration) IntCollector {
 		report_timer:       NewReportTimer(reportInterval),
 		tag:                tag,
 		min_report_samples: DEFAULT_MIN_REPORT_SAMPLES,
+	}
+}
+
+func (c *IntCollector) PrintRemainingStats() {
+	if len(c.data) > 0 {
+		il := IntSlice(c.data)
+		sort.Sort(il)
+		p50 := P(il, 0.5)
+		p90 := P(il, 0.9)
+		p99 := P(il, 0.99)
+		duration := c.report_timer.Mark()
+		fmt.Fprintf(os.Stderr, "%s stats (%d samples): dur=%v, p50=%d, p90=%d, p99=%d\n",
+			c.tag, len(c.data), duration, p50, p90, p99)
+		c.data = make([]int, 0)
 	}
 }
