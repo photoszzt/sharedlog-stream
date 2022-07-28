@@ -56,10 +56,8 @@ func castToPriceTimeListPtr(value interface{}) *PriceTimeList {
 }
 
 type PriceTimeListJSONSerde struct{}
-type PriceTimeListJSONSerdeG struct{}
 
 var _ = commtypes.Serde(PriceTimeListJSONSerde{})
-var _ = commtypes.SerdeG[PriceTimeList](PriceTimeListJSONSerdeG{})
 
 func (s PriceTimeListJSONSerde) Encode(value interface{}) ([]byte, error) {
 	ptl := castToPriceTimeListPtr(value)
@@ -75,24 +73,9 @@ func (s PriceTimeListJSONSerde) Decode(value []byte) (interface{}, error) {
 	return ptl, nil
 }
 
-func (s PriceTimeListJSONSerdeG) Encode(value PriceTimeList) ([]byte, error) {
-	return json.Marshal(&value)
-}
-
-func (s PriceTimeListJSONSerdeG) Decode(value []byte) (PriceTimeList, error) {
-	ptl := PriceTimeList{}
-	err := json.Unmarshal(value, &ptl)
-	if err != nil {
-		return PriceTimeList{}, err
-	}
-	return ptl, nil
-}
-
 type PriceTimeListMsgpSerde struct{}
-type PriceTimeListMsgpSerdeG struct{}
 
 var _ = commtypes.Serde(PriceTimeListMsgpSerde{})
-var _ = commtypes.SerdeG[PriceTimeList](PriceTimeListMsgpSerdeG{})
 
 func (s PriceTimeListMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	ptl := castToPriceTimeListPtr(value)
@@ -108,35 +91,12 @@ func (s PriceTimeListMsgpSerde) Decode(value []byte) (interface{}, error) {
 	return ptl, nil
 }
 
-func (s PriceTimeListMsgpSerdeG) Encode(value PriceTimeList) ([]byte, error) {
-	return value.MarshalMsg(nil)
-}
-
-func (s PriceTimeListMsgpSerdeG) Decode(value []byte) (PriceTimeList, error) {
-	ptl := PriceTimeList{}
-	_, err := ptl.UnmarshalMsg(value)
-	if err != nil {
-		return PriceTimeList{}, err
-	}
-	return ptl, nil
-}
 func GetPriceTimeListSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
 	switch serdeFormat {
 	case commtypes.JSON:
 		return PriceTimeListJSONSerde{}, nil
 	case commtypes.MSGP:
 		return PriceTimeListMsgpSerde{}, nil
-	default:
-		return nil, common_errors.ErrUnrecognizedSerdeFormat
-	}
-}
-
-func GetPriceTimeListSerdeG(serdeFormat commtypes.SerdeFormat) (commtypes.SerdeG[PriceTimeList], error) {
-	switch serdeFormat {
-	case commtypes.JSON:
-		return PriceTimeListJSONSerdeG{}, nil
-	case commtypes.MSGP:
-		return PriceTimeListMsgpSerdeG{}, nil
 	default:
 		return nil, common_errors.ErrUnrecognizedSerdeFormat
 	}

@@ -47,10 +47,8 @@ func CastToPriceTimePtr(value interface{}) *PriceTime {
 }
 
 type PriceTimeJSONSerde struct{}
-type PriceTimeJSONSerdeG struct{}
 
 var _ = commtypes.Serde(PriceTimeJSONSerde{})
-var _ = commtypes.SerdeG[PriceTime](PriceTimeJSONSerdeG{})
 
 func (s PriceTimeJSONSerde) Encode(value interface{}) ([]byte, error) {
 	pt := CastToPriceTimePtr(value)
@@ -65,23 +63,9 @@ func (s PriceTimeJSONSerde) Decode(value []byte) (interface{}, error) {
 	return pt, nil
 }
 
-func (s PriceTimeJSONSerdeG) Encode(value PriceTime) ([]byte, error) {
-	return json.Marshal(&value)
-}
-
-func (s PriceTimeJSONSerdeG) Decode(value []byte) (PriceTime, error) {
-	pt := PriceTime{}
-	if err := json.Unmarshal(value, &pt); err != nil {
-		return PriceTime{}, err
-	}
-	return pt, nil
-}
-
 type PriceTimeMsgpSerde struct{}
-type PriceTimeMsgpSerdeG struct{}
 
 var _ = commtypes.Serde(PriceTimeMsgpSerde{})
-var _ = commtypes.SerdeG[PriceTime](PriceTimeMsgpSerdeG{})
 
 func (s PriceTimeMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	pt := CastToPriceTimePtr(value)
@@ -96,35 +80,12 @@ func (s PriceTimeMsgpSerde) Decode(value []byte) (interface{}, error) {
 	return pt, nil
 }
 
-func (s PriceTimeMsgpSerdeG) Encode(value PriceTime) ([]byte, error) {
-	return value.MarshalMsg(nil)
-}
-
-func (s PriceTimeMsgpSerdeG) Decode(value []byte) (PriceTime, error) {
-	pt := PriceTime{}
-	if _, err := pt.UnmarshalMsg(value); err != nil {
-		return PriceTime{}, err
-	}
-	return pt, nil
-}
-
 func GetPriceTimeSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
 	switch serdeFormat {
 	case commtypes.JSON:
 		return PriceTimeJSONSerde{}, nil
 	case commtypes.MSGP:
 		return PriceTimeMsgpSerde{}, nil
-	default:
-		return nil, common_errors.ErrUnrecognizedSerdeFormat
-	}
-}
-
-func GetPriceTimeSerdeG(serdeFormat commtypes.SerdeFormat) (commtypes.SerdeG[PriceTime], error) {
-	switch serdeFormat {
-	case commtypes.JSON:
-		return PriceTimeJSONSerdeG{}, nil
-	case commtypes.MSGP:
-		return PriceTimeMsgpSerdeG{}, nil
 	default:
 		return nil, common_errors.ErrUnrecognizedSerdeFormat
 	}

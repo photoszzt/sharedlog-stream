@@ -1,5 +1,5 @@
 //go:generate msgp
-//msgp:ignore AuctionBidJSONSerde AuctionBidMsgpSerde
+//msgp:ignore AuctionBidJSONSerde AuctionBidMsgpSerde AuctionBidMsgpSerdeG AuctionBidJSONSerdeG
 package types
 
 import (
@@ -26,10 +26,8 @@ func (ab AuctionBid) String() string {
 }
 
 type AuctionBidJSONSerde struct{}
-type AuctionBidJSONSerdeG struct{}
 
 var _ = commtypes.Serde(AuctionBidJSONSerde{})
-var _ = commtypes.SerdeG[*AuctionBid](AuctionBidJSONSerdeG{})
 
 func (s AuctionBidJSONSerde) Encode(value interface{}) ([]byte, error) {
 	ab := value.(*AuctionBid)
@@ -44,23 +42,9 @@ func (s AuctionBidJSONSerde) Decode(value []byte) (interface{}, error) {
 	return &ab, nil
 }
 
-func (s AuctionBidJSONSerdeG) Encode(value *AuctionBid) ([]byte, error) {
-	return json.Marshal(value)
-}
-
-func (s AuctionBidJSONSerdeG) Decode(value []byte) (*AuctionBid, error) {
-	ab := AuctionBid{}
-	if err := json.Unmarshal(value, &ab); err != nil {
-		return nil, err
-	}
-	return &ab, nil
-}
-
 type AuctionBidMsgpSerde struct{}
-type AuctionBidMsgpSerdeG struct{}
 
 var _ = commtypes.Serde(AuctionBidMsgpSerde{})
-var _ = commtypes.SerdeG[*AuctionBid](AuctionBidMsgpSerdeG{})
 
 func (s AuctionBidMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	ab := value.(*AuctionBid)
@@ -75,35 +59,12 @@ func (s AuctionBidMsgpSerde) Decode(value []byte) (interface{}, error) {
 	return &ab, nil
 }
 
-func (s AuctionBidMsgpSerdeG) Encode(value *AuctionBid) ([]byte, error) {
-	return value.MarshalMsg(nil)
-}
-
-func (s AuctionBidMsgpSerdeG) Decode(value []byte) (*AuctionBid, error) {
-	ab := AuctionBid{}
-	if _, err := ab.UnmarshalMsg(value); err != nil {
-		return nil, err
-	}
-	return &ab, nil
-}
-
 func GetAuctionBidSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
 	switch serdeFormat {
 	case commtypes.JSON:
 		return AuctionBidJSONSerde{}, nil
 	case commtypes.MSGP:
 		return AuctionBidMsgpSerde{}, nil
-	default:
-		return nil, common_errors.ErrUnrecognizedSerdeFormat
-	}
-}
-
-func GetAuctionBidSerdeG(serdeFormat commtypes.SerdeFormat) (commtypes.SerdeG[*AuctionBid], error) {
-	switch serdeFormat {
-	case commtypes.JSON:
-		return AuctionBidJSONSerdeG{}, nil
-	case commtypes.MSGP:
-		return AuctionBidMsgpSerdeG{}, nil
 	default:
 		return nil, common_errors.ErrUnrecognizedSerdeFormat
 	}

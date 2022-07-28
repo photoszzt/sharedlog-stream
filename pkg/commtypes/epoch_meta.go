@@ -1,5 +1,5 @@
 //go:generate msgp
-//msgp:ignore EpochMetaJSONSerde EpochMetaMsgpSerde
+//msgp:ignore EpochMetaJSONSerde EpochMetaMsgpSerde EpochMetaMsgpSerdeG EpochJSONMsgpSerdeG
 //go:generate stringer -type=EpochMark
 package commtypes
 
@@ -12,7 +12,8 @@ import (
 type EpochMark uint8
 
 const (
-	EPOCH_END = EpochMark(iota) // epoch end, for 2pc protocol, it's commit
+	EMPTY     = EpochMark(iota)
+	EPOCH_END // epoch end, for 2pc protocol, it's commit
 	ABORT
 	SCALE_FENCE
 	FENCE
@@ -38,10 +39,8 @@ type EpochMarker struct {
 }
 
 type EpochMarkerJSONSerde struct{}
-type EpochMarkerJSONSerdeG struct{}
 
 var _ = Serde(EpochMarkerJSONSerde{})
-var _ = SerdeG[EpochMarker](EpochMarkerJSONSerdeG{})
 
 func (s EpochMarkerJSONSerde) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
@@ -58,23 +57,9 @@ func (s EpochMarkerJSONSerde) Decode(value []byte) (interface{}, error) {
 	return em, nil
 }
 
-func (s EpochMarkerJSONSerdeG) Encode(value EpochMarker) ([]byte, error) {
-	return json.Marshal(&value)
-}
-
-func (s EpochMarkerJSONSerdeG) Decode(value []byte) (EpochMarker, error) {
-	em := EpochMarker{}
-	if err := json.Unmarshal(value, &em); err != nil {
-		return em, err
-	}
-	return em, nil
-}
-
 type EpochMarkerMsgpSerde struct{}
-type EpochMarkerMsgpSerdeG struct{}
 
 var _ = Serde(EpochMarkerMsgpSerde{})
-var _ = SerdeG[EpochMarker](EpochMarkerMsgpSerdeG{})
 
 func (s EpochMarkerMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
@@ -84,19 +69,7 @@ func (s EpochMarkerMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	return em.MarshalMsg(nil)
 }
 
-func (s EpochMarkerMsgpSerdeG) Encode(value EpochMarker) ([]byte, error) {
-	return value.MarshalMsg(nil)
-}
-
 func (s EpochMarkerMsgpSerde) Decode(value []byte) (interface{}, error) {
-	em := EpochMarker{}
-	if _, err := em.UnmarshalMsg(value); err != nil {
-		return EpochMarker{}, err
-	}
-	return em, nil
-}
-
-func (s EpochMarkerMsgpSerdeG) Decode(value []byte) (EpochMarker, error) {
 	em := EpochMarker{}
 	if _, err := em.UnmarshalMsg(value); err != nil {
 		return EpochMarker{}, err
@@ -109,16 +82,6 @@ func GetEpochMarkerSerde(serdeFormat SerdeFormat) (Serde, error) {
 		return EpochMarkerJSONSerde{}, nil
 	} else if serdeFormat == MSGP {
 		return EpochMarkerMsgpSerde{}, nil
-	} else {
-		return nil, common_errors.ErrUnrecognizedSerdeFormat
-	}
-}
-
-func GetEpochMarkerSerdeG(serdeFormat SerdeFormat) (SerdeG[EpochMarker], error) {
-	if serdeFormat == JSON {
-		return EpochMarkerJSONSerdeG{}, nil
-	} else if serdeFormat == MSGP {
-		return EpochMarkerMsgpSerdeG{}, nil
 	} else {
 		return nil, common_errors.ErrUnrecognizedSerdeFormat
 	}

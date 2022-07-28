@@ -114,37 +114,24 @@ func NewBidEvent(bid *Bid) *Event {
 }
 
 type EventMsgpSerde struct{}
-type EventMsgpSerdeG struct{}
 
 var _ = commtypes.Encoder(EventMsgpSerde{})
-var _ = commtypes.EncoderG[*Event](EventMsgpSerdeG{})
 
 func (e EventMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	event := value.(*Event)
 	return event.MarshalMsg(nil)
 }
 
-func (e EventMsgpSerdeG) Encode(value *Event) ([]byte, error) {
-	return value.MarshalMsg(nil)
-}
-
 type EventJSONSerde struct{}
-type EventJSONSerdeG struct{}
 
 var _ = commtypes.Encoder(EventJSONSerde{})
-var _ = commtypes.EncoderG[*Event](EventJSONSerdeG{})
 
 func (e EventJSONSerde) Encode(value interface{}) ([]byte, error) {
 	event := value.(*Event)
 	return json.Marshal(event)
 }
 
-func (e EventJSONSerdeG) Encode(value *Event) ([]byte, error) {
-	return json.Marshal(value)
-}
-
 var _ = commtypes.Decoder(EventMsgpSerde{})
-var _ = commtypes.DecoderG[*Event](EventMsgpSerdeG{})
 
 func (emd EventMsgpSerde) Decode(value []byte) (interface{}, error) {
 	e := Event{}
@@ -155,17 +142,7 @@ func (emd EventMsgpSerde) Decode(value []byte) (interface{}, error) {
 	return &e, nil
 }
 
-func (emd EventMsgpSerdeG) Decode(value []byte) (*Event, error) {
-	e := Event{}
-	_, err := e.UnmarshalMsg(value)
-	if err != nil {
-		return nil, err
-	}
-	return &e, nil
-}
-
 var _ = commtypes.Decoder(EventJSONSerde{})
-var _ = commtypes.DecoderG[*Event](EventJSONSerdeG{})
 
 func (ejd EventJSONSerde) Decode(value []byte) (interface{}, error) {
 	e := &Event{}
@@ -173,14 +150,6 @@ func (ejd EventJSONSerde) Decode(value []byte) (interface{}, error) {
 		return nil, err
 	}
 	return e, nil
-}
-
-func (ejd EventJSONSerdeG) Decode(value []byte) (*Event, error) {
-	e := Event{}
-	if err := json.Unmarshal(value, &e); err != nil {
-		return nil, err
-	}
-	return &e, nil
 }
 
 func (e *Event) ExtractEventTime() (int64, error) {
@@ -210,16 +179,6 @@ func GetEventSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
 		return EventJSONSerde{}, nil
 	} else if serdeFormat == commtypes.MSGP {
 		return EventMsgpSerde{}, nil
-	} else {
-		return nil, common_errors.ErrUnrecognizedSerdeFormat
-	}
-}
-
-func GetEventSerdeG(serdeFormat commtypes.SerdeFormat) (commtypes.SerdeG[*Event], error) {
-	if serdeFormat == commtypes.JSON {
-		return EventJSONSerdeG{}, nil
-	} else if serdeFormat == commtypes.MSGP {
-		return EventMsgpSerdeG{}, nil
 	} else {
 		return nil, common_errors.ErrUnrecognizedSerdeFormat
 	}

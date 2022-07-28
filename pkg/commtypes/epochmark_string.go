@@ -8,15 +8,16 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[EPOCH_END-0]
-	_ = x[ABORT-1]
-	_ = x[SCALE_FENCE-2]
-	_ = x[FENCE-3]
+	_ = x[EMPTY-0]
+	_ = x[EPOCH_END-1]
+	_ = x[ABORT-2]
+	_ = x[SCALE_FENCE-3]
+	_ = x[FENCE-4]
 }
 
-const _EpochMark_name = "EPOCH_ENDABORTSCALE_FENCEFENCE"
+const _EpochMark_name = "EMPTYEPOCH_ENDABORTSCALE_FENCEFENCE"
 
-var _EpochMark_index = [...]uint8{0, 9, 14, 25, 30}
+var _EpochMark_index = [...]uint8{0, 5, 14, 19, 30, 35}
 
 func (i EpochMark) String() string {
 	if i >= EpochMark(len(_EpochMark_index)-1) {

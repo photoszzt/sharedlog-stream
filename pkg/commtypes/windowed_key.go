@@ -134,13 +134,7 @@ type WindowedKeyJSONSerde struct {
 	WindowJSONSerde Serde
 }
 
-type WindowedKeyJSONSerdeG struct {
-	KeyJSONSerde    Serde
-	WindowJSONSerde Serde
-}
-
 var _ = Serde(WindowedKeyJSONSerde{})
-var _ = SerdeG[WindowedKey](WindowedKeyJSONSerdeG{})
 
 func (s WindowedKeyJSONSerde) Encode(value interface{}) ([]byte, error) {
 	wk, err := convertToWindowedKeySer(value, s.KeyJSONSerde, s.WindowJSONSerde)
@@ -161,37 +155,12 @@ func (s WindowedKeyJSONSerde) Decode(value []byte) (interface{}, error) {
 	return decodeToWindowedKey(&wk, s.KeyJSONSerde, s.WindowJSONSerde)
 }
 
-func (s WindowedKeyJSONSerdeG) Encode(value WindowedKey) ([]byte, error) {
-	wk, err := winKeyToWindowedKeySer(value, s.KeyJSONSerde, s.WindowJSONSerde)
-	if err != nil {
-		return nil, err
-	}
-	if wk == nil {
-		return nil, nil
-	}
-	return json.Marshal(&wk)
-}
-
-func (s WindowedKeyJSONSerdeG) Decode(value []byte) (WindowedKey, error) {
-	wk := WindowedKeySerialized{}
-	if err := json.Unmarshal(value, &wk); err != nil {
-		return WindowedKey{}, err
-	}
-	return winKeySerToWindowedKey(&wk, s.KeyJSONSerde, s.WindowJSONSerde)
-}
-
 type WindowedKeyMsgpSerde struct {
 	KeyMsgpSerde    Serde
 	WindowMsgpSerde Serde
 }
 
-type WindowedKeyMsgpSerdeG struct {
-	KeyMsgpSerde    Serde
-	WindowMsgpSerde Serde
-}
-
 var _ = Serde(WindowedKeyMsgpSerde{})
-var _ = SerdeG[WindowedKey](WindowedKeyMsgpSerdeG{})
 
 func (s WindowedKeyMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	wk, err := convertToWindowedKeySer(value, s.KeyMsgpSerde, s.WindowMsgpSerde)
@@ -211,24 +180,4 @@ func (s WindowedKeyMsgpSerde) Decode(value []byte) (interface{}, error) {
 		return nil, err
 	}
 	return decodeToWindowedKey(&wk, s.KeyMsgpSerde, s.WindowMsgpSerde)
-}
-
-func (s WindowedKeyMsgpSerdeG) Encode(value WindowedKey) ([]byte, error) {
-	wk, err := winKeyToWindowedKeySer(value, s.KeyMsgpSerde, s.WindowMsgpSerde)
-	if err != nil {
-		return nil, err
-	}
-	if wk == nil {
-		return nil, nil
-	}
-	return wk.MarshalMsg(nil)
-}
-
-func (s WindowedKeyMsgpSerdeG) Decode(value []byte) (WindowedKey, error) {
-	wk := WindowedKeySerialized{}
-	_, err := wk.UnmarshalMsg(value)
-	if err != nil {
-		return WindowedKey{}, err
-	}
-	return winKeySerToWindowedKey(&wk, s.KeyMsgpSerde, s.WindowMsgpSerde)
 }

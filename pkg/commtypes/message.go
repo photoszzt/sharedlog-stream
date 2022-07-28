@@ -4,6 +4,15 @@ import "fmt"
 
 type Punctuate struct{}
 
+type MessageSerde interface {
+	Serde
+	SerdeG[interface{}]
+	EncodeAndRtnKVBin(value interface{}) ([]byte, []byte /* kEnc */, []byte /* vEnc */, error)
+	EncodeKey(key interface{}) ([]byte, error)
+	EncodeVal(val interface{}) ([]byte, error)
+	DecodeVal(value []byte) (interface{}, error)
+}
+
 type Message struct {
 	Key       interface{}
 	Value     interface{}

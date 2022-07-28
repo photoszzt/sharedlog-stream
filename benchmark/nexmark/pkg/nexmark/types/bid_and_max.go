@@ -26,10 +26,8 @@ func (bm BidAndMax) String() string {
 }
 
 type BidAndMaxJSONSerde struct{}
-type BidAndMaxJSONSerdeG struct{}
 
 var _ = commtypes.Serde(BidAndMaxJSONSerde{})
-var _ = commtypes.SerdeG[BidAndMax](BidAndMaxJSONSerdeG{})
 
 func (s BidAndMaxJSONSerde) Encode(value interface{}) ([]byte, error) {
 	bm := value.(*BidAndMax)
@@ -44,23 +42,9 @@ func (s BidAndMaxJSONSerde) Decode(value []byte) (interface{}, error) {
 	return bm, nil
 }
 
-func (s BidAndMaxJSONSerdeG) Encode(value BidAndMax) ([]byte, error) {
-	return json.Marshal(&value)
-}
-
-func (s BidAndMaxJSONSerdeG) Decode(value []byte) (BidAndMax, error) {
-	bm := BidAndMax{}
-	if err := json.Unmarshal(value, &bm); err != nil {
-		return BidAndMax{}, err
-	}
-	return bm, nil
-}
-
 type BidAndMaxMsgpSerde struct{}
-type BidAndMaxMsgpSerdeG struct{}
 
 var _ = commtypes.Serde(BidAndMaxMsgpSerde{})
-var _ = commtypes.SerdeG[BidAndMax](BidAndMaxMsgpSerdeG{})
 
 func (s BidAndMaxMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	bm := value.(*BidAndMax)
@@ -75,33 +59,11 @@ func (s BidAndMaxMsgpSerde) Decode(value []byte) (interface{}, error) {
 	return bm, nil
 }
 
-func (s BidAndMaxMsgpSerdeG) Encode(value BidAndMax) ([]byte, error) {
-	return value.MarshalMsg(nil)
-}
-
-func (s BidAndMaxMsgpSerdeG) Decode(value []byte) (BidAndMax, error) {
-	bm := BidAndMax{}
-	if _, err := bm.UnmarshalMsg(value); err != nil {
-		return BidAndMax{}, err
-	}
-	return bm, nil
-}
-
 func GetBidAndMaxSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
 	if serdeFormat == commtypes.JSON {
 		return BidAndMaxJSONSerde{}, nil
 	} else if serdeFormat == commtypes.MSGP {
 		return BidAndMaxMsgpSerde{}, nil
-	} else {
-		return nil, common_errors.ErrUnrecognizedSerdeFormat
-	}
-}
-
-func GetBidAndMaxSerdeG(serdeFormat commtypes.SerdeFormat) (commtypes.SerdeG[BidAndMax], error) {
-	if serdeFormat == commtypes.JSON {
-		return BidAndMaxJSONSerdeG{}, nil
-	} else if serdeFormat == commtypes.MSGP {
-		return BidAndMaxMsgpSerdeG{}, nil
 	} else {
 		return nil, common_errors.ErrUnrecognizedSerdeFormat
 	}
