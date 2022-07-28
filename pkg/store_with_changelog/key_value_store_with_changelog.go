@@ -50,7 +50,7 @@ func (st *KeyValueStoreWithChangelog[K, V]) Name() string {
 
 func (st *KeyValueStoreWithChangelog[K, V]) Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error) {
 	if st.use_bytes {
-		keyBytes, err := st.msgSerde.GetKeySerdeG().Encode(key.(K))
+		keyBytes, err := st.msgSerde.EncodeKey(key.(K))
 		if err != nil {
 			return nil, false, err
 		}
@@ -58,7 +58,7 @@ func (st *KeyValueStoreWithChangelog[K, V]) Get(ctx context.Context, key commtyp
 		if err != nil {
 			return nil, ok, err
 		}
-		val, err := st.msgSerde.GetValSerdeG().Decode(valBytes.([]byte))
+		val, err := st.msgSerde.DecodeVal(valBytes.([]byte))
 		return val, ok, err
 	}
 	return st.kvstore.Get(ctx, key)
@@ -89,17 +89,17 @@ func (st *KeyValueStoreWithChangelog[K, V]) Put(ctx context.Context, key commtyp
 		if i == nil {
 			return nil, nil
 		}
-		return st.msgSerde.GetKeySerdeG().Encode(i.(K))
+		return st.msgSerde.EncodeKey(i.(K))
 	}), st.changelogManager.TopicName(), st.parNum)
 	if err != nil {
 		return err
 	}
 	if st.use_bytes {
-		keyBytes, err := st.msgSerde.GetKeySerdeG().Encode(key.(K))
+		keyBytes, err := st.msgSerde.EncodeKey(key.(K))
 		if err != nil {
 			return err
 		}
-		valBytes, err := st.msgSerde.GetValSerdeG().Encode(value.(V))
+		valBytes, err := st.msgSerde.EncodeVal(value.(V))
 		if err != nil {
 			return err
 		}

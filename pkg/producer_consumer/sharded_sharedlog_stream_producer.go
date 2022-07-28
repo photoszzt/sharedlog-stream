@@ -116,7 +116,7 @@ func (sls *ShardedSharedLogStreamProducer[K, V]) Produce(ctx context.Context, ms
 func (s *ShardedSharedLogStreamProducer[K, V]) TopicName() string { return s.stream.TopicName() }
 func (s *ShardedSharedLogStreamProducer[K, V]) KeyEncoder() commtypes.Encoder {
 	return commtypes.EncoderFunc(func(i interface{}) ([]byte, error) {
-		return s.msgSerde.GetKeySerdeG().Encode(i.(K))
+		return s.msgSerde.EncodeKey(i.(K))
 	})
 }
 func (s *ShardedSharedLogStreamProducer[K, V]) Flush(ctx context.Context) error {

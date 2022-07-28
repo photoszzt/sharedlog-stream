@@ -3,7 +3,6 @@ package control_channel
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/data_structure"
@@ -64,18 +63,13 @@ func NewControlChannelManager(env types.Environment,
 		appendCtrlLog:   stats.NewConcurrentInt64Collector("append_ctrl_log", stats.DEFAULT_COLLECT_DURATION),
 		payloadArrSerde: sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG,
 	}
-	if serdeFormat == commtypes.JSON {
-		cm.msgSerde = commtypes.MessageJSONSerdeG[string, txn_data.ControlMetadata]{
-			KeySerde: commtypes.StringSerdeG{},
-			ValSerde: txn_data.ControlMetadataJSONSerdeG{},
-		}
-	} else if serdeFormat == commtypes.MSGP {
-		cm.msgSerde = commtypes.MessageMsgpSerdeG[string, txn_data.ControlMetadata]{
-			KeySerde: commtypes.StringSerdeG{},
-			ValSerde: txn_data.ControlMetadataMsgpSerdeG{},
-		}
-	} else {
-		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
+	ctrlMetaSerde, err := txn_data.GetControlMetadataSerdeG(serdeFormat)
+	if err != nil {
+		return nil, err
+	}
+	cm.msgSerde, err = commtypes.GetMsgSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, ctrlMetaSerde)
+	if err != nil {
+		return nil, err
 	}
 	return cm, nil
 }

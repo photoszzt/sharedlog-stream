@@ -4,6 +4,7 @@ package txn_data
 
 import (
 	"encoding/json"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
 
@@ -87,4 +88,26 @@ func (s ControlMetadataMsgpSerdeG) Decode(value []byte) (ControlMetadata, error)
 		return ControlMetadata{}, err
 	}
 	return rf, nil
+}
+
+func GetControlMetadataSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
+	switch serdeFormat {
+	case commtypes.JSON:
+		return ControlMetadataJSONSerde{}, nil
+	case commtypes.MSGP:
+		return ControlMetadataMsgpSerde{}, nil
+	default:
+		return nil, common_errors.ErrUnrecognizedSerdeFormat
+	}
+}
+
+func GetControlMetadataSerdeG(serdeFormat commtypes.SerdeFormat) (commtypes.SerdeG[ControlMetadata], error) {
+	switch serdeFormat {
+	case commtypes.JSON:
+		return ControlMetadataJSONSerdeG{}, nil
+	case commtypes.MSGP:
+		return ControlMetadataMsgpSerdeG{}, nil
+	default:
+		return nil, common_errors.ErrUnrecognizedSerdeFormat
+	}
 }
