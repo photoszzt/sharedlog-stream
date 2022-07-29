@@ -26,7 +26,7 @@ type BufferedSinkStream struct {
 	mux        syncutils.Mutex
 	sinkBuffer [][]byte
 
-	payloadArrSerde commtypes.Serde
+	payloadArrSerde commtypes.SerdeG[commtypes.PayloadArr]
 	Stream          *SharedLogStream
 
 	bufferEntryStats stats.IntCollector
@@ -43,15 +43,15 @@ type BufferedSinkStream struct {
 func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8) *BufferedSinkStream {
 	return &BufferedSinkStream{
 		sinkBuffer:      make([][]byte, 0, SINK_BUFFER_MAX_ENTRY),
-		payloadArrSerde: DEFAULT_PAYLOAD_ARR_SERDE,
+		payloadArrSerde: DEFAULT_PAYLOAD_ARR_SERDEG,
 		parNum:          parNum,
 		Stream:          stream,
 		currentSize:     0,
 		once:            sync.Once{},
 		guarantee:       exactly_once_intr.AT_LEAST_ONCE,
-		bufferEntryStats: stats.NewIntCollector(fmt.Sprintf("bufEntry_%v", parNum),
+		bufferEntryStats: stats.NewIntCollector(fmt.Sprintf("%s_bufEntry_%v", stream.topicName, parNum),
 			stats.DEFAULT_COLLECT_DURATION),
-		bufferSizeStats: stats.NewIntCollector(fmt.Sprintf("bufSize_%v", parNum),
+		bufferSizeStats: stats.NewIntCollector(fmt.Sprintf("%s_bufSize_%v", stream.topicName, parNum),
 			stats.DEFAULT_COLLECT_DURATION),
 	}
 }
@@ -66,7 +66,7 @@ func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, 
 	} else {
 		s.bufferEntryStats.AddSample(len(s.sinkBuffer))
 		s.bufferSizeStats.AddSample(s.currentSize)
-		payloadArr := &commtypes.PayloadArr{
+		payloadArr := commtypes.PayloadArr{
 			Payloads: s.sinkBuffer,
 		}
 		payloads, err := s.payloadArrSerde.Encode(payloadArr)
@@ -122,7 +122,7 @@ func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId commtyp
 	if len(s.sinkBuffer) != 0 {
 		s.bufferEntryStats.AddSample(len(s.sinkBuffer))
 		s.bufferSizeStats.AddSample(s.currentSize)
-		payloadArr := &commtypes.PayloadArr{
+		payloadArr := commtypes.PayloadArr{
 			Payloads: s.sinkBuffer,
 		}
 		payloads, err := s.payloadArrSerde.Encode(payloadArr)
