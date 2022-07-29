@@ -6,7 +6,6 @@ import (
 	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
 	"sync"
@@ -24,7 +23,8 @@ type StreamPush struct {
 	MsgChan       chan PayloadToPush
 	MsgErrChan    chan error
 	Stream        *ShardedSharedLogStream
-	produceCount  stats.ThroughputCounter
+	produceCount  uint64
+	ctrlCount     uint64
 	FlushDuration time.Duration
 	BufPush       bool
 }
@@ -35,7 +35,8 @@ func NewStreamPush(stream *ShardedSharedLogStream) *StreamPush {
 		MsgErrChan:   make(chan error, 1),
 		BufPush:      utils.CheckBufPush(),
 		Stream:       stream,
-		produceCount: stats.NewThroughputCounter("streamPush", stats.DEFAULT_COLLECT_DURATION),
+		produceCount: 0,
+		ctrlCount:    0,
 	}
 }
 
@@ -74,7 +75,11 @@ func (h *StreamPush) FlushNoLock(ctx context.Context, producerId commtypes.Produ
 }
 
 func (h *StreamPush) GetCount() uint64 {
-	return h.produceCount.GetCount()
+	return h.produceCount
+}
+
+func (h *StreamPush) NumCtrlMsgs() uint64 {
+	return h.ctrlCount
 }
 
 func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup, producerId commtypes.ProducerId) {
@@ -99,7 +104,8 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup, pr
 					h.MsgErrChan <- err
 					return
 				}
-				h.produceCount.Tick(1)
+				h.produceCount += 1
+				h.ctrlCount += 1
 			}
 		} else {
 			if h.BufPush {
@@ -120,7 +126,7 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup, pr
 					h.MsgErrChan <- err
 					return
 				}
-				h.produceCount.Tick(1)
+				h.produceCount += 1
 			} else {
 				debug.Assert(len(msg.Partitions) == 1, "should only have one partition")
 				_, err := h.Stream.Push(ctx, msg.Payload, uint8(msg.Partitions[0]), StreamEntryMeta(false, false), producerId)
@@ -129,7 +135,7 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup, pr
 					h.MsgErrChan <- err
 					return
 				}
-				h.produceCount.Tick(1)
+				h.produceCount += 1
 			}
 		}
 	}

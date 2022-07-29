@@ -220,6 +220,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 		case out := <-cmm.OutputChan():
 			if out.Valid() {
 				m := out.Value()
+				debug.Fprintf(os.Stderr, "got data from control channel: %v\n", m)
 				numInstance := m.Config[h.funcName]
 				if inputConfig.ParNum >= numInstance {
 					cmm.SendQuit()
@@ -228,7 +229,10 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 					return &common.FnOutput{
 						Success:  true,
 						Duration: time.Since(startTime).Seconds(),
-						Counts:   map[string]uint64{"sink": streamPusher.GetCount()},
+						Counts: map[string]uint64{
+							"sink":      streamPusher.GetCount(),
+							"sink_ctrl": streamPusher.NumCtrlMsgs(),
+						},
 					}
 				}
 				numSubstreams := m.Config[stream.TopicName()]
@@ -285,7 +289,10 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	return &common.FnOutput{
 		Success:  true,
 		Duration: time.Since(startTime).Seconds(),
-		Counts:   map[string]uint64{"sink": streamPusher.GetCount()},
+		Counts: map[string]uint64{
+			"sink":      streamPusher.GetCount(),
+			"sink_ctrl": streamPusher.NumCtrlMsgs(),
+		},
 	}
 }
 

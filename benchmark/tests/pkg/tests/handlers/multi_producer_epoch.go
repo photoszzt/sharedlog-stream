@@ -8,10 +8,10 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/epoch_manager"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/stream_task"
 )
 
 func (h *produceConsumeHandler) testMultiProducerEpoch(
@@ -103,11 +103,11 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(
 
 	// producer1 mark
 	producers1 := []producer_consumer.MeteredProducerIntr{meteredProducer1}
-	epochMarker, err := epoch_manager.GenEpochMarker(ctx, em1, nil, producers1, nil, nil)
+	epochMarker1, epochMarkerTags1, epochMarkerTopics1, err := stream_task.CaptureEpochStateAndCleanupExplicit(ctx, em1, nil, producers1, nil, nil)
 	if err != nil {
 		panic(err)
 	}
-	err = epoch_manager.MarkEpochAndCleanupState(ctx, em1, epochMarker, producers1, nil, nil)
+	err = em1.MarkEpoch(ctx, epochMarker1, epochMarkerTags1, epochMarkerTopics1)
 	if err != nil {
 		panic(err)
 	}
@@ -129,11 +129,11 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(
 	}
 	meteredProducer2.Flush(ctx)
 	producers2 := []producer_consumer.MeteredProducerIntr{meteredProducer2}
-	epochMarker2, err := epoch_manager.GenEpochMarker(ctx, em2, nil, producers2, nil, nil)
+	epochMarker2, epochMarkerTags2, epochMarkerTopics2, err := stream_task.CaptureEpochStateAndCleanupExplicit(ctx, em2, nil, producers2, nil, nil)
 	if err != nil {
 		panic(err)
 	}
-	err = epoch_manager.MarkEpochAndCleanupState(ctx, em2, epochMarker2, producers2, nil, nil)
+	err = em2.MarkEpoch(ctx, epochMarker2, epochMarkerTags2, epochMarkerTopics2)
 	if err != nil {
 		panic(err)
 	}

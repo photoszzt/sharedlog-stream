@@ -9,8 +9,10 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/epoch_manager"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
+	"sharedlog-stream/pkg/store"
 	"sync"
 	"time"
 )
@@ -114,11 +116,29 @@ func processInEpoch(
 			cur_elapsed := warmupCheck.ElapsedSinceInitial()
 			timeout := args.duration != 0 && cur_elapsed >= args.duration
 			shouldMarkByTime := (args.commitEvery != 0 && timeSinceLastMark > args.commitEvery)
+			var epochMarker commtypes.EpochMarker
+			epochMarker.Mark = commtypes.EMPTY
+			var epochMarkerTags []uint64 = nil
+			var epochMarkerTopics []string = nil
 			if (shouldMarkByTime || timeout) && hasProcessData {
-				err_out := markEpoch(dctx, em, cmm, t, args, &hasProcessData, &paused)
-				if err_out != nil {
-					return err_out
+				if t.pauseFunc != nil {
+					if ret := t.pauseFunc(); ret != nil {
+						return ret
+					}
+					paused = true
 				}
+				pStart := stats.TimerBegin()
+				err := cmm.FlushControlLog(dctx)
+				if err != nil {
+					return common.GenErrFnOutput(err)
+				}
+				epochMarker, epochMarkerTags, epochMarkerTopics, err = CaptureEpochStateAndCleanup(dctx, em, args)
+				if err != nil {
+					return common.GenErrFnOutput(err)
+				}
+				prepareTime := stats.Elapsed(pStart).Microseconds()
+				t.markEpochPrepare.AddSample(prepareTime)
+				hasProcessData = false
 			}
 			// Exit routine
 			cur_elapsed = warmupCheck.ElapsedSinceInitial()
@@ -133,13 +153,22 @@ func processInEpoch(
 
 			// init
 			if !hasProcessData {
-				err := initAfterMarkOrCommit(ctx, t, args, em, &init, &paused)
+				err := initAfterMarkOrCommit(dctx, t, args, em, &init, &paused)
 				if err != nil {
 					return common.GenErrFnOutput(err)
 				}
+				if epochMarker.Mark != commtypes.EMPTY {
+					mStart := stats.TimerBegin()
+					err = em.MarkEpoch(dctx, epochMarker, epochMarkerTags, epochMarkerTopics)
+					if err != nil {
+						return common.GenErrFnOutput(err)
+					}
+					mElapsed := stats.Elapsed(mStart).Microseconds()
+					t.markEpochTime.AddSample(mElapsed)
+				}
 				markTimer = time.Now()
 			}
-			ret := t.appProcessFunc(ctx, t, args.ectx)
+			ret := t.appProcessFunc(dctx, t, args.ectx)
 			if ret != nil {
 				if ret.Success {
 					// consume timeout but not sure whether there's more data is coming; continue to process
@@ -158,37 +187,27 @@ func processInEpoch(
 	}
 }
 
-func markEpoch(ctx context.Context,
-	em *epoch_manager.EpochManager,
-	cmm *control_channel.ControlChannelManager,
-	t *StreamTask,
-	args *StreamTaskArgs,
-	hasProcessData *bool,
-	paused *bool,
-) *common.FnOutput {
-	if t.pauseFunc != nil {
-		if ret := t.pauseFunc(); ret != nil {
-			return ret
-		}
-		*paused = true
-	}
-	err := cmm.FlushControlLog(ctx)
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
-	mStart := stats.TimerBegin()
+func CaptureEpochStateAndCleanup(ctx context.Context, em *epoch_manager.EpochManager, args *StreamTaskArgs) (commtypes.EpochMarker, []uint64, []string, error) {
 	epochMarker, err := epoch_manager.GenEpochMarker(ctx, em, args.ectx.Consumers(), args.ectx.Producers(),
 		args.kvChangelogs, args.windowStoreChangelogs)
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return commtypes.EpochMarker{}, nil, nil, err
 	}
-	err = epoch_manager.MarkEpochAndCleanupState(ctx, em, epochMarker, args.ectx.Producers(),
-		args.kvChangelogs, args.windowStoreChangelogs)
+	epochMarkTags, epochMarkTopics := em.GenTagsAndTopicsForEpochMarker()
+	epoch_manager.CleanupState(em, args.ectx.Producers(), args.kvChangelogs, args.windowStoreChangelogs)
+	return epochMarker, epochMarkTags, epochMarkTopics, nil
+}
+
+func CaptureEpochStateAndCleanupExplicit(ctx context.Context, em *epoch_manager.EpochManager,
+	consumers []producer_consumer.MeteredConsumerIntr, producers []producer_consumer.MeteredProducerIntr,
+	kvChangelogs []store.KeyValueStoreOpWithChangelog, windowStoreChangelogs []store.WindowStoreOpWithChangelog,
+) (commtypes.EpochMarker, []uint64, []string, error) {
+	epochMarker, err := epoch_manager.GenEpochMarker(ctx, em, consumers, producers,
+		kvChangelogs, windowStoreChangelogs)
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return commtypes.EpochMarker{}, nil, nil, err
 	}
-	mElapsed := stats.Elapsed(mStart).Microseconds()
-	t.markEpochTime.AddSample(mElapsed)
-	*hasProcessData = false
-	return nil
+	epochMarkTags, epochMarkTopics := em.GenTagsAndTopicsForEpochMarker()
+	epoch_manager.CleanupState(em, producers, kvChangelogs, windowStoreChangelogs)
+	return epochMarker, epochMarkTags, epochMarkTopics, nil
 }

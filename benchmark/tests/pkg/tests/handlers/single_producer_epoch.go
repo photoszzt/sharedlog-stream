@@ -13,6 +13,7 @@ import (
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/stream_task"
 
 	"cs.utexas.edu/zjia/faas/types"
 	"golang.org/x/xerrors"
@@ -89,11 +90,11 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 		panic(err)
 	}
 	producers := []producer_consumer.MeteredProducerIntr{meteredProducer}
-	epochMarker, err := epoch_manager.GenEpochMarker(ctx, em1, nil, producers, nil, nil)
+	epochMarker, epochMarkerTags, epochMarkerTopics, err := stream_task.CaptureEpochStateAndCleanupExplicit(ctx, em1, nil, producers, nil, nil)
 	if err != nil {
 		panic(err)
 	}
-	err = epoch_manager.MarkEpochAndCleanupState(ctx, em1, epochMarker, producers, nil, nil)
+	err = em1.MarkEpoch(ctx, epochMarker, epochMarkerTags, epochMarkerTopics)
 	if err != nil {
 		panic(err)
 	}
@@ -145,11 +146,11 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 	if err != nil {
 		panic(err)
 	}
-	epochMarker, err = epoch_manager.GenEpochMarker(ctx, em1, nil, producers, nil, nil)
+	epochMarker, epochMarkerTags, epochMarkerTopics, err = stream_task.CaptureEpochStateAndCleanupExplicit(ctx, em1, nil, producers, nil, nil)
 	if err != nil {
 		panic(err)
 	}
-	err = epoch_manager.MarkEpochAndCleanupState(ctx, em1, epochMarker, producers, nil, nil)
+	err = em1.MarkEpoch(ctx, epochMarker, epochMarkerTags, epochMarkerTopics)
 	if err != nil {
 		panic(err)
 	}
@@ -168,11 +169,11 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 	if err != nil {
 		panic(err)
 	}
-	epochMarker, err = epoch_manager.GenEpochMarker(ctx, em1, nil, producers, nil, nil)
+	epochMarker, epochMarkerTags, epochMarkerTopics, err = stream_task.CaptureEpochStateAndCleanupExplicit(ctx, em1, nil, producers, nil, nil)
 	if err != nil {
 		panic(err)
 	}
-	err = epoch_manager.MarkEpochAndCleanupState(ctx, em1, epochMarker, producers, nil, nil)
+	err = em1.MarkEpoch(ctx, epochMarker, epochMarkerTags, epochMarkerTopics)
 	if err != nil {
 		panic(err)
 	}

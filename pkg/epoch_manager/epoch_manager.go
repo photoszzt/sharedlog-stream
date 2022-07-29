@@ -5,6 +5,7 @@ import (
 	"math"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/data_structure"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/producer_consumer"
@@ -26,7 +27,7 @@ type EpochManager struct {
 	env            types.Environment
 
 	tpMapMu               syncutils.Mutex
-	currentTopicSubstream map[string]map[uint8]struct{}
+	currentTopicSubstream map[string]data_structure.Uint8Set
 
 	epochLog          *sharedlog_stream.SharedLogStream
 	epochLogMarkerTag uint64
@@ -52,7 +53,7 @@ func NewEpochManager(env types.Environment, epochMngrName string,
 		epochMngrName:         epochMngrName,
 		env:                   env,
 		ProducerId:            commtypes.NewProducerId(),
-		currentTopicSubstream: make(map[string]map[uint8]struct{}),
+		currentTopicSubstream: make(map[string]data_structure.Uint8Set),
 		epochLog:              log,
 		epochMetaSerde:        epochMetaSerde,
 		epochLogMarkerTag:     txn_data.MarkerTag(log.TopicNameHash(), 0),
@@ -220,10 +221,7 @@ func GenEpochMarker(
 	return epochMeta, nil
 }
 
-func (em *EpochManager) MarkEpoch(ctx context.Context,
-	epochMeta commtypes.EpochMarker,
-) error {
-	// debug.Fprintf(os.Stderr, "epochMeta to push: %+v\n", epochMeta)
+func (em *EpochManager) GenTagsAndTopicsForEpochMarker() ([]uint64, []string) {
 	tags := []uint64{em.epochLogMarkerTag}
 	// debug.Fprintf(os.Stderr, "marker with tag: 0x%x\n", em.epochLogMarkerTag)
 	var additionalTopic []string
@@ -236,22 +234,15 @@ func (em *EpochManager) MarkEpoch(ctx context.Context,
 			tags = append(tags, tag)
 		}
 	}
-	_, err := em.appendToEpochLog(ctx, epochMeta, tags, additionalTopic)
-	return err
+	return tags, additionalTopic
 }
 
-func MarkEpochAndCleanupState(ctx context.Context, em *EpochManager,
-	epochMeta commtypes.EpochMarker,
-	producers []producer_consumer.MeteredProducerIntr,
-	kvTabs []store.KeyValueStoreOpWithChangelog,
-	winTabs []store.WindowStoreOpWithChangelog,
+func (em *EpochManager) MarkEpoch(ctx context.Context,
+	epochMeta commtypes.EpochMarker, tags []uint64, additionalTopic []string,
 ) error {
-	err := em.MarkEpoch(ctx, epochMeta)
-	if err != nil {
-		return err
-	}
-	cleanupState(em, producers, kvTabs, winTabs)
-	return nil
+	// debug.Fprintf(os.Stderr, "epochMeta to push: %+v\n", epochMeta)
+	_, err := em.appendToEpochLog(ctx, epochMeta, tags, additionalTopic)
+	return err
 }
 
 func (em *EpochManager) Init(ctx context.Context) (*commtypes.EpochMarker, uint64, error) {
@@ -324,10 +315,10 @@ func (em *EpochManager) FindMostRecentEpochMetaThatHasConsumed(
 	}
 }
 
-func cleanupState(em *EpochManager, producers []producer_consumer.MeteredProducerIntr,
+func CleanupState(em *EpochManager, producers []producer_consumer.MeteredProducerIntr,
 	kvTabs []store.KeyValueStoreOpWithChangelog, winTabs []store.WindowStoreOpWithChangelog,
 ) {
-	em.currentTopicSubstream = make(map[string]map[uint8]struct{})
+	em.currentTopicSubstream = make(map[string]data_structure.Uint8Set)
 	for _, producer := range producers {
 		producer.ResetInitialProd()
 	}

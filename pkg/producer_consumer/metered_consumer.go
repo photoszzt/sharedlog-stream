@@ -94,12 +94,3 @@ func (s *MeteredConsumer[K, V]) IsInitialSource() bool         { return s.consum
 func (s *MeteredConsumer[K, V]) MsgSerde() commtypes.MessageSerdeG[K, V] {
 	return s.consumer.MsgSerde()
 }
-
-// func (s *MeteredConsumer[K, V]) Lock() {
-// 	// debug.Fprintf(os.Stderr, "lock consumer %s\n", s.Name())
-// 	s.consumer.Lock()
-// }
-// func (s *MeteredConsumer[K, V]) Unlock() {
-// 	// debug.Fprintf(os.Stderr, "unlock consumer %s\n", s.Name())
-// 	s.consumer.Unlock()
-// }

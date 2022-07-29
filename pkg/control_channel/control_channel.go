@@ -3,9 +3,11 @@ package control_channel
 import (
 	"bytes"
 	"context"
+	"os"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/data_structure"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/txn_data"
@@ -264,7 +266,11 @@ func (cmm *ControlChannelManager) monitorControlChannel(
 						break
 					}
 					ctrlMeta := msg.Value.(txn_data.ControlMetadata)
-					cmm.updateKeyMapping(&ctrlMeta)
+					debug.Fprintf(os.Stderr, "MonitorControlChannel: tp %s got %v, off: %x\n",
+						cmm.controlLog.TopicName(), ctrlMeta, rawMsg.LogSeqNum)
+					if ctrlMeta.Key != nil && ctrlMeta.Topic != "" {
+						cmm.updateKeyMapping(&ctrlMeta)
+					}
 				}
 			} else {
 				msg, err := cmm.msgSerde.Decode(rawMsg.Payload)
@@ -273,8 +279,8 @@ func (cmm *ControlChannelManager) monitorControlChannel(
 					break
 				}
 				ctrlMeta := msg.Value.(txn_data.ControlMetadata)
-				// debug.Fprintf(os.Stderr, "MonitorControlChannel: tp %s got %v, off: %x\n",
-				// 	cmm.controlLog.TopicName(), ctrlMeta, rawMsg.LogSeqNum)
+				debug.Fprintf(os.Stderr, "MonitorControlChannel: tp %s got %v, off: %x\n",
+					cmm.controlLog.TopicName(), ctrlMeta, rawMsg.LogSeqNum)
 				if ctrlMeta.Key != nil && ctrlMeta.Topic != "" {
 					cmm.updateKeyMapping(&ctrlMeta)
 				} else {

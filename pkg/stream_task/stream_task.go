@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store_restore"
@@ -33,7 +34,8 @@ type StreamTask struct {
 	beginTrTime  stats.Int64Collector
 
 	// epoch stat
-	markEpochTime stats.Int64Collector
+	markEpochTime    stats.Int64Collector
+	markEpochPrepare stats.Int64Collector
 }
 
 func ExecuteApp(ctx context.Context,
@@ -61,14 +63,16 @@ func ExecuteApp(ctx context.Context,
 	}
 	if ret != nil && ret.Success {
 		for _, src := range streamTaskArgs.ectx.Consumers() {
-			ret.Counts[src.Name()] = src.GetCount()
-			fmt.Fprintf(os.Stderr, "src %s msgCnt %d\n", src.Name(), src.GetCount())
+			consumer := src.(producer_consumer.MeteredConsumerIntr)
+			ret.Counts[src.Name()] = consumer.GetCount()
+			fmt.Fprintf(os.Stderr, "src %s msgCnt %d\n", src.Name(), consumer.GetCount())
 		}
 		for _, sink := range streamTaskArgs.ectx.Producers() {
-			sink.PrintRemainingStats()
-			ret.Counts[sink.Name()] = sink.GetCount()
-			ret.Counts[sink.Name()+"_ctrl"] = sink.NumCtrlMsg()
-			fmt.Fprintf(os.Stderr, "sink %s msgCnt %d, ctrlCnt %d\n", sink.Name(), sink.GetCount(), sink.NumCtrlMsg())
+			meteredProducer := sink.(producer_consumer.MeteredProducerIntr)
+			meteredProducer.PrintRemainingStats()
+			ret.Counts[sink.Name()] = meteredProducer.GetCount()
+			ret.Counts[sink.Name()+"_ctrl"] = meteredProducer.NumCtrlMsg()
+			fmt.Fprintf(os.Stderr, "sink %s msgCnt %d, ctrlCnt %d\n", sink.Name(), meteredProducer.GetCount(), meteredProducer.NumCtrlMsg())
 			// if sink.IsFinalOutput() {
 			// ret.Latencies["eventTimeLatency_"+sink.Name()] = sink.GetEventTimeLatency()
 			// }
