@@ -24,7 +24,8 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 		return nil, nil, err
 	}
 	cmm, err := control_channel.NewControlChannelManager(streamTaskArgs.env, streamTaskArgs.appId,
-		commtypes.SerdeFormat(streamTaskArgs.serdeFormat), streamTaskArgs.ectx.CurEpoch())
+		commtypes.SerdeFormat(streamTaskArgs.serdeFormat), streamTaskArgs.ectx.CurEpoch(),
+		streamTaskArgs.ectx.SubstreamNum())
 	if err != nil {
 		return nil, nil, err
 	}

@@ -55,7 +55,7 @@ func SetupManagersForEpoch(ctx context.Context,
 		debug.Fprintf(os.Stderr, "down restore\n")
 	}
 	cmm, err := control_channel.NewControlChannelManager(args.env, args.appId,
-		args.serdeFormat, args.ectx.CurEpoch())
+		args.serdeFormat, args.ectx.CurEpoch(), args.ectx.SubstreamNum())
 	if err != nil {
 		return nil, nil, err
 	}

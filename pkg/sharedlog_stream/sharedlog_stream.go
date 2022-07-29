@@ -162,11 +162,11 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context,
 		return 0, err
 	}
 
+	s.mux.Lock()
 	seqNum, err := s.env.SharedLogAppend(ctx, tags, encoded)
 	if err != nil {
 		return 0, err
 	}
-	s.mux.Lock()
 	s.tail = seqNum + 1
 	s.mux.Unlock()
 

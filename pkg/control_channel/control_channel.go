@@ -1,20 +1,16 @@
 package control_channel
 
 import (
-	"bytes"
 	"context"
-	"os"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/data_structure"
-	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils/syncutils"
 
 	"cs.utexas.edu/zjia/faas/types"
-	"github.com/google/btree"
 )
 
 const (
@@ -29,7 +25,7 @@ type kvPair struct {
 type ControlChannelManager struct {
 	kmMu syncutils.Mutex
 	// topic -> (key -> set of substreamid)
-	keyMappings map[string]*btree.BTreeG[kvPair]
+	keyMappings map[string]map[string]data_structure.Uint8Set
 
 	msgSerde        commtypes.MessageSerdeG[string, txn_data.ControlMetadata]
 	payloadArrSerde commtypes.SerdeG[commtypes.PayloadArr]
@@ -41,6 +37,7 @@ type ControlChannelManager struct {
 	appendCtrlLog *stats.ConcurrentInt64Collector
 	funcName      string
 	currentEpoch  uint64
+	instanceID    uint8
 }
 
 func (cm *ControlChannelManager) CurrentEpoch() uint64 {
@@ -51,6 +48,7 @@ func NewControlChannelManager(env types.Environment,
 	app_id string,
 	serdeFormat commtypes.SerdeFormat,
 	epoch uint64,
+	instanceID uint8,
 ) (*ControlChannelManager, error) {
 	log, err := sharedlog_stream.NewShardedSharedLogStream(env, app_id+CONTROL_LOG_TOPIC_NAME, 1, serdeFormat)
 	if err != nil {
@@ -60,10 +58,11 @@ func NewControlChannelManager(env types.Environment,
 		controlLog:      log,
 		currentEpoch:    0,
 		topicStreams:    make(map[string]*sharedlog_stream.ShardedSharedLogStream),
-		keyMappings:     make(map[string]*btree.BTreeG[kvPair]),
+		keyMappings:     make(map[string]map[string]data_structure.Uint8Set),
 		funcName:        app_id,
 		appendCtrlLog:   stats.NewConcurrentInt64Collector("append_ctrl_log", stats.DEFAULT_COLLECT_DURATION),
 		payloadArrSerde: sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG,
+		instanceID:      instanceID,
 	}
 	ctrlMetaSerde, err := txn_data.GetControlMetadataSerdeG(serdeFormat)
 	if err != nil {
@@ -148,27 +147,23 @@ func TrackAndAppendKeyMapping(
 	cmm.kmMu.Lock()
 	subs, ok := cmm.keyMappings[topic]
 	if !ok {
-		subs = btree.NewG(2, btree.LessFunc[kvPair](func(a, b kvPair) bool {
-			return bytes.Compare(a.key, b.key) < 0
-		}))
+		subs = make(map[string]data_structure.Uint8Set)
 		cmm.keyMappings[topic] = subs
 	}
-	subTmp, ok := subs.Get(kvPair{key: kBytes})
-	var sub data_structure.Uint8Set
+	sub, ok := subs[string(kBytes)]
 	if !ok {
 		sub = make(data_structure.Uint8Set)
-	} else {
-		sub = subTmp.val
 	}
 	if !sub.Has(substreamId) {
 		sub.Add(substreamId)
-		subs.ReplaceOrInsert(kvPair{key: kBytes, val: sub})
+		subs[string(kBytes)] = sub
 		cmm.kmMu.Unlock()
 		apStart := stats.TimerBegin()
 		cm := txn_data.ControlMetadata{
 			Key:         kBytes,
 			SubstreamId: substreamId,
 			Topic:       topic,
+			InstanceId:  cmm.instanceID,
 			Epoch:       cmm.currentEpoch,
 		}
 		err = cmm.appendToControlLog(ctx, cm, true)
@@ -200,21 +195,16 @@ func (cmm *ControlChannelManager) updateKeyMapping(ctrlMeta *txn_data.ControlMet
 	cmm.kmMu.Lock()
 	subs, ok := cmm.keyMappings[ctrlMeta.Topic]
 	if !ok {
-		subs = btree.NewG(2, btree.LessFunc[kvPair](func(a, b kvPair) bool {
-			return bytes.Compare(a.key, b.key) < 0
-		}))
+		subs = make(map[string]data_structure.Uint8Set)
 		cmm.keyMappings[ctrlMeta.Topic] = subs
 	}
-	subTmp, ok := subs.Get(kvPair{key: ctrlMeta.Key})
-	var sub data_structure.Uint8Set
+	sub, ok := subs[string(ctrlMeta.Key)]
 	if !ok {
 		sub = make(data_structure.Uint8Set)
-	} else {
-		sub = subTmp.val
 	}
 	if !sub.Has(ctrlMeta.SubstreamId) {
 		sub.Add(ctrlMeta.SubstreamId)
-		subs.ReplaceOrInsert(kvPair{key: ctrlMeta.Key, val: sub})
+		subs[string(ctrlMeta.Key)] = sub
 	}
 	cmm.kmMu.Unlock()
 }
@@ -253,37 +243,14 @@ func (cmm *ControlChannelManager) monitorControlChannel(
 			output <- ControlChannelErr(err)
 			break
 		} else {
-			if rawMsg.IsPayloadArr {
-				msgArr, err := cmm.payloadArrSerde.Decode(rawMsg.Payload)
-				if err != nil {
-					output <- ControlChannelErr(err)
-					break
-				}
-				for _, payload := range msgArr.Payloads {
-					msg, err := cmm.msgSerde.Decode(payload)
-					if err != nil {
-						output <- ControlChannelErr(err)
-						break
-					}
-					ctrlMeta := msg.Value.(txn_data.ControlMetadata)
-					debug.Fprintf(os.Stderr, "MonitorControlChannel: tp %s got %v, off: %x\n",
-						cmm.controlLog.TopicName(), ctrlMeta, rawMsg.LogSeqNum)
-					if ctrlMeta.Key != nil && ctrlMeta.Topic != "" {
-						cmm.updateKeyMapping(&ctrlMeta)
-					}
-				}
-			} else {
+			if !rawMsg.IsPayloadArr {
 				msg, err := cmm.msgSerde.Decode(rawMsg.Payload)
 				if err != nil {
 					output <- ControlChannelErr(err)
 					break
 				}
 				ctrlMeta := msg.Value.(txn_data.ControlMetadata)
-				debug.Fprintf(os.Stderr, "MonitorControlChannel: tp %s got %v, off: %x\n",
-					cmm.controlLog.TopicName(), ctrlMeta, rawMsg.LogSeqNum)
-				if ctrlMeta.Key != nil && ctrlMeta.Topic != "" {
-					cmm.updateKeyMapping(&ctrlMeta)
-				} else {
+				if ctrlMeta.Key == nil {
 					output <- ControlChannelVal(&ctrlMeta)
 				}
 			}
