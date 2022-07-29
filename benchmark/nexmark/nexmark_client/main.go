@@ -51,36 +51,33 @@ func getSerdeFormat(fmtStr string) commtypes.SerdeFormat {
 	return serdeFormat
 }
 
-type invokeSource func(client *http.Client, numOutPartition uint8, topicName string, nodeConstraint string, instanceId uint8,
-	numSrcInstance uint8, response *common.FnOutput, wg *sync.WaitGroup, warmup bool,
-)
+type invokeSource func(client *http.Client, srcInvokeConfig common.SrcInvokeConfig, response *common.FnOutput, wg *sync.WaitGroup, warmup bool)
 
-func invokeSourceFunc(client *http.Client, numOutPartition uint8, topicName string, nodeConstraint string, instanceId uint8,
-	numSrcInstance uint8, response *common.FnOutput, wg *sync.WaitGroup, warmup bool,
+func invokeSourceFunc(client *http.Client, srcInvokeConfig common.SrcInvokeConfig, response *common.FnOutput, wg *sync.WaitGroup, warmup bool,
 ) {
 	defer wg.Done()
 	serdeFormat := getSerdeFormat(FLAGS_serdeFormat)
-	nexmarkConfig := ntypes.NewNexMarkConfigInput(topicName, serdeFormat)
+	nexmarkConfig := ntypes.NewNexMarkConfigInput(srcInvokeConfig.TopicName, serdeFormat)
 	nexmarkConfig.Duration = uint32(FLAGS_duration)
 	nexmarkConfig.EventsNum = uint64(FLAGS_events_num)
 	nexmarkConfig.FirstEventRate = uint32(FLAGS_tps)
 	nexmarkConfig.NextEventRate = uint32(FLAGS_tps)
-	nexmarkConfig.NumOutPartition = numOutPartition
-	nexmarkConfig.ParNum = instanceId
-	nexmarkConfig.NumSrcInstance = numSrcInstance
+	nexmarkConfig.NumOutPartition = srcInvokeConfig.NumOutPartition
+	nexmarkConfig.ParNum = srcInvokeConfig.InstanceID
+	nexmarkConfig.NumSrcInstance = srcInvokeConfig.NumSrcInstance
 	nexmarkConfig.FlushMs = uint32(FLAGS_flush_ms)
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "source")
 	fmt.Printf("func source url is %v\n", url)
-	if err := utils.JsonPostRequest(client, url, nodeConstraint, nexmarkConfig, response); err != nil {
+	if err := utils.JsonPostRequest(client, url, srcInvokeConfig.NodeConstraint, nexmarkConfig, response); err != nil {
 		log.Error().Msgf("source request failed: %v", err)
 	} else if !response.Success {
 		log.Error().Msgf("source request failed: %s", response.Message)
 	}
-	fmt.Fprintf(os.Stderr, "source-%d invoke done\n", instanceId)
+	fmt.Fprintf(os.Stderr, "source-%d invoke done\n", srcInvokeConfig.InstanceID)
 }
 
-func invokeTestSrcFunc(client *http.Client, numOutPartition uint8, topicName string, nodeConstraint string, instanceId uint8,
-	numSrcInstance uint8, response *common.FnOutput, wg *sync.WaitGroup, warmup bool,
+func invokeTestSrcFunc(client *http.Client, srcInvokeConfig common.SrcInvokeConfig,
+	response *common.FnOutput, wg *sync.WaitGroup, warmup bool,
 ) {
 	defer wg.Done()
 	serdeFormat := getSerdeFormat(FLAGS_serdeFormat)
@@ -90,12 +87,12 @@ func invokeTestSrcFunc(client *http.Client, numOutPartition uint8, topicName str
 	}
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "testSrc")
 	fmt.Printf("func source url is %v\n", url)
-	if err := utils.JsonPostRequest(client, url, nodeConstraint, &src, response); err != nil {
+	if err := utils.JsonPostRequest(client, url, srcInvokeConfig.NodeConstraint, &src, response); err != nil {
 		log.Error().Msgf("source request failed: %v", err)
 	} else if !response.Success {
 		log.Error().Msgf("source request failed: %s", response.Message)
 	}
-	fmt.Fprintf(os.Stderr, "source-%d invoke done\n", instanceId)
+	fmt.Fprintf(os.Stderr, "source-%d invoke done\n", srcInvokeConfig.InstanceID)
 }
 
 func invokeDumpFunc(client *http.Client) {

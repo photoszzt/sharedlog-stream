@@ -11,12 +11,18 @@ import (
 	"github.com/Jeffail/gabs/v2"
 )
 
+type SrcInvokeConfig struct {
+	TopicName       string
+	NodeConstraint  string
+	ScaleEpoch      uint64
+	NumOutPartition uint8
+	InstanceID      uint8
+	NumSrcInstance  uint8
+}
+
 func Invoke(config_file string, stat_dir string, gateway_url string,
 	baseQueryInput *QueryInput, warmup_time int, local bool,
-	invokeSourceFunc func(client *http.Client, numOutPartition uint8, topicName string,
-		nodeConstraint string,
-		instanceId uint8, numSrcInstance uint8,
-		response *FnOutput, wg *sync.WaitGroup, warmup bool),
+	invokeSourceFunc func(client *http.Client, srcInvokeConfig SrcInvokeConfig, response *FnOutput, wg *sync.WaitGroup, warmup bool),
 ) error {
 	jsonFile, err := os.Open(config_file)
 	if err != nil {
@@ -144,8 +150,15 @@ func Invoke(config_file string, stat_dir string, gateway_url string,
 	for i := uint8(0); i < numSrcInstance; i++ {
 		wg.Add(1)
 		idx := i
-		go invokeSourceFunc(client, numSrcPartition, srcTopicName, srcNodeConstraint, idx, numSrcInstance,
-			&sourceOutput[idx], &wg, false)
+		srcInvokeConfig := SrcInvokeConfig{
+			TopicName:       srcTopicName,
+			NodeConstraint:  srcNodeConstraint,
+			ScaleEpoch:      1,
+			InstanceID:      idx,
+			NumOutPartition: numSrcPartition,
+			NumSrcInstance:  numSrcInstance,
+		}
+		go invokeSourceFunc(client, srcInvokeConfig, &sourceOutput[idx], &wg, false)
 	}
 
 	time.Sleep(time.Duration(1) * time.Millisecond)

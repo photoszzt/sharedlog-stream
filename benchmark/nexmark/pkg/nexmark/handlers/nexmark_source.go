@@ -176,7 +176,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 		return common.GenErrFnOutput(err)
 	}
 	cmm, err := control_channel.NewControlChannelManager(h.env, inputConfig.AppId,
-		commtypes.SerdeFormat(inputConfig.SerdeFormat), 0)
+		commtypes.SerdeFormat(inputConfig.SerdeFormat), 0, inputConfig.ParNum)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
