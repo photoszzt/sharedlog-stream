@@ -36,6 +36,9 @@ type StreamTask struct {
 	// epoch stat
 	markEpochTime    stats.Int64Collector
 	markEpochPrepare stats.Int64Collector
+
+	// control manager flush
+	ctrlFlushTime stats.Int64Collector
 }
 
 func ExecuteApp(ctx context.Context,

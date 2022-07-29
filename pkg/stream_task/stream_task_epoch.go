@@ -127,17 +127,20 @@ func processInEpoch(
 					}
 					paused = true
 				}
-				pStart := stats.TimerBegin()
+				cmFStart := stats.TimerBegin()
 				err := cmm.FlushControlLog(dctx)
 				if err != nil {
 					return common.GenErrFnOutput(err)
 				}
+				ctrlFlushTime := stats.Elapsed(cmFStart).Microseconds()
+				prepareStart := stats.TimerBegin()
 				epochMarker, epochMarkerTags, epochMarkerTopics, err = CaptureEpochStateAndCleanup(dctx, em, args)
 				if err != nil {
 					return common.GenErrFnOutput(err)
 				}
-				prepareTime := stats.Elapsed(pStart).Microseconds()
+				prepareTime := stats.Elapsed(prepareStart).Microseconds()
 				t.markEpochPrepare.AddSample(prepareTime)
+				t.ctrlFlushTime.AddSample(ctrlFlushTime)
 				hasProcessData = false
 			}
 			// Exit routine
