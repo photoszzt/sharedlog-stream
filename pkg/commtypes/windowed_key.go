@@ -17,15 +17,6 @@ type WindowedKeySerialized struct {
 	WindowSerialized []byte `json:"ws" msg:"ws"`
 }
 
-func castToWindowedKey(value interface{}) *WindowedKey {
-	v, ok := value.(*WindowedKey)
-	if !ok {
-		vtmp := value.(WindowedKey)
-		v = &vtmp
-	}
-	return v
-}
-
 func convertToWindowedKeySer(value interface{}, keySerde Serde, windowSerde Serde) (*WindowedKeySerialized, error) {
 	if value == nil {
 		return nil, nil

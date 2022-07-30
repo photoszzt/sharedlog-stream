@@ -17,11 +17,6 @@ const (
 	CONTROL_LOG_TOPIC_NAME = "__control_log"
 )
 
-type kvPair struct {
-	val data_structure.Uint8Set
-	key []byte
-}
-
 type ControlChannelManager struct {
 	kmMu syncutils.Mutex
 	// topic -> (key -> set of substreamid)

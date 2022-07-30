@@ -102,7 +102,6 @@ func GeneralProc(ctx context.Context,
 					return
 				}
 			}
-		default:
 		}
 	}
 }

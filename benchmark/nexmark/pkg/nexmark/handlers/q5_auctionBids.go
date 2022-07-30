@@ -128,6 +128,9 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 	}
 	countWindowStore, err := store_with_changelog.NewInMemoryWindowStoreWithChangelog(
 		hopWindow, false, comparable, countMp)
+	if err != nil {
+		return nil, nil, err
+	}
 	countProc := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(
 		"countProc", countWindowStore,
 		processor.InitializerFunc(func() interface{} { return uint64(0) }),

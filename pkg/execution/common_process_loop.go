@@ -70,7 +70,7 @@ func ProcessMsgAndSeq(ctx context.Context, msg commtypes.MsgAndSeq, args process
 			if subMsg.Value == nil {
 				continue
 			}
-			meteredConsumer := args.Consumers()[0].(producer_consumer.MeteredConsumerIntr)
+			meteredConsumer := args.Consumers()[0]
 			meteredConsumer.ExtractProduceToConsumeTime(&subMsg)
 			err := extractEventTs(&subMsg, isInitialSrc)
 			if err != nil {

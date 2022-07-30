@@ -178,6 +178,9 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			FlushDuration: flushDur,
 			TimeOut:       common.SrcConsumeTimeout,
 		}).Build()
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	perMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, *ntypes.Event]().
 		MessageSerde(msgSerde).
 		StoreName("personsByIDWinTab").
@@ -189,7 +192,9 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			FlushDuration: flushDur,
 			TimeOut:       common.SrcConsumeTimeout,
 		}).Build()
-
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	aucJoinsPerFunc, perJoinsAucFunc, wsc, err := execution.SetupStreamStreamJoin(aucMp, perMp, compare, joiner, joinWindows)
 	if err != nil {
 		return common.GenErrFnOutput(err)

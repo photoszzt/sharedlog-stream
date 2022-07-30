@@ -4,12 +4,6 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 )
 
-type timeAndWinBidRange struct {
-	StartTimeMs         int64
-	EndTimeMs           int64
-	StartWinBidsForAucs uint8
-}
-
 func q6_gen_data(outputFile string) error {
 	aucs_per_seller := 10
 	bidsPerAuction := 2

@@ -52,13 +52,6 @@ func (h *q3JoinTableHandler) Call(ctx context.Context, input []byte) ([]byte, er
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *q3JoinTableHandler) process(ctx context.Context,
-	t *stream_task.StreamTask,
-	argsTmp interface{},
-) *common.FnOutput {
-	return execution.HandleJoinErrReturn(argsTmp)
-}
-
 func getInOutStreams(
 	env types.Environment,
 	input *common.QueryInput,
@@ -209,7 +202,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		if ret != nil {
 			joinMsgs, err := auctionJoinsPersons.ProcessAndReturn(ctx, ret[0])
 			if err != nil {
-				err = fmt.Errorf("aJoinP err: %v", err)
+				return nil, fmt.Errorf("aJoinP err: %v", err)
 			}
 			if joinMsgs != nil {
 				return toStream.ProcessAndReturn(ctx, joinMsgs[0])
@@ -226,7 +219,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		if ret != nil {
 			joinMsgs, err := personJoinsAuctions.ProcessAndReturn(ctx, ret[0])
 			if err != nil {
-				err = fmt.Errorf("pJoinA err: %v", err)
+				return nil, fmt.Errorf("pJoinA err: %v", err)
 			}
 			if joinMsgs != nil {
 				return toStream.ProcessAndReturn(ctx, joinMsgs[0])

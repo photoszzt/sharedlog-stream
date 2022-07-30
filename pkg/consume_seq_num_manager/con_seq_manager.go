@@ -98,6 +98,9 @@ func (cm *ConsumeSeqManager) Track(ctx context.Context, offsetMarkers map[string
 		tag := txn_data.MarkerTag(stream.TopicNameHash(), parNum)
 		off, err := stream.PushWithTag(ctx, encoded, parNum, []uint64{tag}, nil,
 			sharedlog_stream.ControlRecordMeta, commtypes.EmptyProducerId)
+		if err != nil {
+			return err
+		}
 		debug.Fprintf(os.Stderr, "append marker %d to stream %s off %x\n",
 			commtypes.EPOCH_END, stream.TopicName(), off)
 	}
@@ -119,6 +122,9 @@ func (cm *ConsumeSeqManager) TrackForTest(ctx context.Context, currentConSeqNum 
 		tag := txn_data.MarkerTag(stream.TopicNameHash(), parNum)
 		off, err := stream.PushWithTag(ctx, encoded, parNum, []uint64{tag}, nil,
 			sharedlog_stream.ControlRecordMeta, commtypes.EmptyProducerId)
+		if err != nil {
+			return err
+		}
 		debug.Fprintf(os.Stderr, "append marker %d to stream %s off %x\n",
 			commtypes.EPOCH_END, stream.TopicName(), off)
 	}

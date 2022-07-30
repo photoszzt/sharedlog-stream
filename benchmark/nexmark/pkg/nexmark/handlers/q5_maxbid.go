@@ -78,6 +78,9 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		return nil, nil, err
 	}
 	outMsgSerde, err := commtypes.GetMsgSerdeG(serdeFormat, seSerde, aucIdCountMaxSerde)
+	if err != nil {
+		return nil, nil, err
+	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	inConfig := &producer_consumer.StreamConsumerConfigG[ntypes.StartEndTime, ntypes.AuctionIdCount]{
 		Timeout:  time.Duration(20) * time.Second,
@@ -135,6 +138,9 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	}
 	maxBidStoreName := "maxBidsKVStore"
 	seSerde, err := ntypes.GetStartEndTimeSerdeG(serdeFormat)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	msgSerde, err := processor.MsgSerdeWithValueTsG(serdeFormat,
 		seSerde, commtypes.Uint64Serde{})
 	if err != nil {

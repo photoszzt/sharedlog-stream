@@ -96,6 +96,9 @@ func (h *q7BidByWin) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		return nil, nil, err
 	}
 	outMsgSerde, err := commtypes.GetMsgSerdeG(serdeFormat, seSerde, eventSerde)
+	if err != nil {
+		return nil, nil, err
+	}
 	inConfig := &producer_consumer.StreamConsumerConfigG[string, *ntypes.Event]{
 		Timeout:  common.SrcConsumeTimeout,
 		MsgSerde: inMsgSerde,

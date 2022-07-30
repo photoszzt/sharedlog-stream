@@ -97,7 +97,10 @@ func (st *InMemoryBTreeKeyValueStore) PutWithoutPushToChangelog(ctx context.Cont
 
 func (st *InMemoryBTreeKeyValueStore) PutAll(ctx context.Context, kvs []*commtypes.Message) error {
 	for _, kv := range kvs {
-		st.Put(ctx, kv.Key, kv.Value)
+		err := st.Put(ctx, kv.Key, kv.Value)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
