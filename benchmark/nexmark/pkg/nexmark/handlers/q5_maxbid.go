@@ -99,37 +99,6 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	return []producer_consumer.MeteredConsumerIntr{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
-type q5MaxBidProcessArgs struct {
-	maxBid       *processor.MeteredProcessor
-	stJoin       *processor.MeteredProcessor
-	chooseMaxCnt *processor.MeteredProcessor
-	processor.BaseExecutionContext
-}
-
-func (h *q5MaxBid) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
-	args := argsTmp.(*q5MaxBidProcessArgs)
-	// fmt.Fprintf(os.Stderr, "got msg with key: %v, val: %v, ts: %v\n", msg.Msg.Key, msg.Msg.Value, msg.Msg.Timestamp)
-	_, err := args.maxBid.ProcessAndReturn(ctx, msg)
-	if err != nil {
-		return fmt.Errorf("maxBid err: %v", err)
-	}
-	joinedOutput, err := args.stJoin.ProcessAndReturn(ctx, msg)
-	if err != nil {
-		return fmt.Errorf("joined err: %v", err)
-	}
-	filteredMx, err := args.chooseMaxCnt.ProcessAndReturn(ctx, joinedOutput[0])
-	if err != nil {
-		return fmt.Errorf("filteredMx err: %v", err)
-	}
-	for _, filtered := range filteredMx {
-		err = args.Producers()[0].Produce(ctx, filtered, args.SubstreamNum(), false)
-		if err != nil {
-			return fmt.Errorf("sink err: %v", err)
-		}
-	}
-	return nil
-}
-
 func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
@@ -197,23 +166,39 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 				v := value.(ntypes.AuctionIdCntMax)
 				return v.Count >= v.MaxCnt, nil
 			})))
-	procArgs := &q5MaxBidProcessArgs{
-		maxBid:       maxBid,
-		stJoin:       stJoin,
-		chooseMaxCnt: chooseMaxCnt,
-		BaseExecutionContext: processor.NewExecutionContext(srcs,
-			sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum),
-	}
+	ectx := processor.NewExecutionContext(srcs,
+		sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum)
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
 			args := argsTmp.(*processor.BaseExecutionContext)
-			return execution.CommonProcess(ctx, task, args, h.procMsg)
+			return execution.CommonProcess(ctx, task, args, func(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
+				// fmt.Fprintf(os.Stderr, "got msg with key: %v, val: %v, ts: %v\n", msg.Msg.Key, msg.Msg.Value, msg.Msg.Timestamp)
+				_, err := maxBid.ProcessAndReturn(ctx, msg)
+				if err != nil {
+					return fmt.Errorf("maxBid err: %v", err)
+				}
+				joinedOutput, err := stJoin.ProcessAndReturn(ctx, msg)
+				if err != nil {
+					return fmt.Errorf("joined err: %v", err)
+				}
+				filteredMx, err := chooseMaxCnt.ProcessAndReturn(ctx, joinedOutput[0])
+				if err != nil {
+					return fmt.Errorf("filteredMx err: %v", err)
+				}
+				for _, filtered := range filteredMx {
+					err = args.Producers()[0].Produce(ctx, filtered, args.SubstreamNum(), false)
+					if err != nil {
+						return fmt.Errorf("sink err: %v", err)
+					}
+				}
+				return nil
+			})
 		}).Build()
 	kvc := []store.KeyValueStoreOpWithChangelog{kvstore}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 		sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
+		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).
 		KVStoreChangelogs(kvc).FixedOutParNum(sp.ParNum).Build()
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs)
 }
