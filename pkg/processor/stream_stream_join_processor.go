@@ -5,12 +5,14 @@ import (
 	"math"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/store"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
 )
 
 type TimeTracker struct {
+	mux            sync.Mutex
 	emitIntervalMs uint64
 	streamTime     int64
 	minTime        int64
@@ -30,19 +32,25 @@ func (t *TimeTracker) SetEmitInterval(emitIntervalMs uint64) {
 }
 
 func (t *TimeTracker) AdvanceStreamTime(recordTs int64) {
+	t.mux.Lock()
 	if recordTs > t.streamTime {
 		t.streamTime = recordTs
 	}
+	t.mux.Unlock()
 }
 
 func (t *TimeTracker) UpdatedMinTime(recordTs int64) {
+	t.mux.Lock()
 	if recordTs < t.minTime {
 		t.minTime = recordTs
 	}
+	t.mux.Unlock()
 }
 
 func (t *TimeTracker) AdvanceNextTimeToEmit() {
+	t.mux.Lock()
 	t.nextTimeToEmit += t.emitIntervalMs
+	t.mux.Unlock()
 }
 
 type StreamStreamJoinProcessor struct {
@@ -114,6 +122,7 @@ func (p *StreamStreamJoinProcessor) ProcessAndReturn(ctx context.Context, msg co
 	} else {
 		timeTo = 0
 	}
+	// sharedTimeTracker is only used for outer join
 	p.sharedTimeTracker.AdvanceStreamTime(inputTs)
 
 	// TODO: emit all non-joined records which window has closed

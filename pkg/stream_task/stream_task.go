@@ -37,8 +37,7 @@ type StreamTask struct {
 	markEpochTime    stats.Int64Collector
 	markEpochPrepare stats.Int64Collector
 
-	// control manager flush
-	ctrlFlushTime stats.Int64Collector
+	flushAllTime stats.Int64Collector
 }
 
 func ExecuteApp(ctx context.Context,
@@ -273,9 +272,9 @@ func checkMonitorReturns(
 	case out := <-cmm.OutputChan():
 		if out.Valid() {
 			m := out.Value()
-			debug.Fprintf(os.Stderr, "finished prev task %s, funcName %s, meta epoch %d, input epoch %d\n",
-				m.FinishedPrevTask, args.ectx.FuncName(), m.Epoch, args.ectx.CurEpoch())
 			if m.FinishedPrevTask == args.ectx.FuncName() && m.Epoch+1 == args.ectx.CurEpoch() {
+				debug.Fprintf(os.Stderr, "finished prev task %s, funcName %s, meta epoch %d, input epoch %d\n",
+					m.FinishedPrevTask, args.ectx.FuncName(), m.Epoch, args.ectx.CurEpoch())
 				*run = true
 			}
 		} else {

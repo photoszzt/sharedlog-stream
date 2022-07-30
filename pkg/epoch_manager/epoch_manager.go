@@ -161,10 +161,10 @@ func GenEpochMarker(
 ) (commtypes.EpochMarker, error) {
 	outputRanges := make(map[string][]commtypes.ProduceRange)
 	for _, producer := range producers {
-		err := producer.Flush(ctx)
-		if err != nil {
-			return commtypes.EpochMarker{}, err
-		}
+		// err := producer.Flush(ctx)
+		// if err != nil {
+		// 	return commtypes.EpochMarker{}, err
+		// }
 		topicName := producer.TopicName()
 		parSet, ok := em.currentTopicSubstream[producer.TopicName()]
 		if ok {
@@ -181,10 +181,10 @@ func GenEpochMarker(
 	}
 	for _, kvTab := range kvTabs {
 		if !kvTab.ChangelogIsSrc() {
-			err := kvTab.FlushChangelog(ctx)
-			if err != nil {
-				return commtypes.EpochMarker{}, err
-			}
+			// err := kvTab.FlushChangelog(ctx)
+			// if err != nil {
+			// 	return commtypes.EpochMarker{}, err
+			// }
 			ranges := []commtypes.ProduceRange{
 				{
 					SubStreamNum: kvTab.SubstreamNum(),
@@ -196,10 +196,10 @@ func GenEpochMarker(
 		}
 	}
 	for _, winTab := range winTabs {
-		err := winTab.FlushChangelog(ctx)
-		if err != nil {
-			return commtypes.EpochMarker{}, err
-		}
+		// err := winTab.FlushChangelog(ctx)
+		// if err != nil {
+		// 	return commtypes.EpochMarker{}, err
+		// }
 		ranges := []commtypes.ProduceRange{
 			{
 				SubStreamNum: winTab.SubstreamNum(),

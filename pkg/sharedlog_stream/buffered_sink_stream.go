@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	SINK_BUFFER_MAX_ENTRY = 10000
+	SINK_BUFFER_MAX_ENTRY = 1024
 	SINK_BUFFER_MAX_SIZE  = 131072
 	MSG_CHAN_SIZE         = 10000
 )
@@ -32,12 +32,13 @@ type BufferedSinkStream struct {
 	bufferEntryStats stats.IntCollector
 	bufferSizeStats  stats.IntCollector
 
-	once               sync.Once
-	initialProdInEpoch uint64
-	currentProdInEpoch uint64
-	currentSize        int
-	guarantee          exactly_once_intr.GuaranteeMth
-	parNum             uint8
+	once                 sync.Once
+	initialProdInEpoch   uint64
+	currentProdInEpoch   uint64
+	sink_buffer_max_size int
+	currentSize          int
+	guarantee            exactly_once_intr.GuaranteeMth
+	parNum               uint8
 }
 
 func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8) *BufferedSinkStream {
@@ -53,14 +54,21 @@ func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8) *BufferedSinkS
 			stats.DEFAULT_COLLECT_DURATION),
 		bufferSizeStats: stats.NewIntCollector(fmt.Sprintf("%s_bufSize_%v", stream.topicName, parNum),
 			stats.DEFAULT_COLLECT_DURATION),
+		sink_buffer_max_size: SINK_BUFFER_MAX_SIZE,
 	}
+}
+
+func NewBufferedSinkStreamWithBufferSize(stream *SharedLogStream, sinkBufferSize int, parNum uint8) *BufferedSinkStream {
+	bss := NewBufferedSinkStream(stream, parNum)
+	bss.sink_buffer_max_size = sinkBufferSize
+	return bss
 }
 
 // don't mix the nolock version and goroutine safe version
 
 func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, producerId commtypes.ProducerId) error {
 	payload_size := len(payload)
-	if len(s.sinkBuffer) < SINK_BUFFER_MAX_ENTRY && s.currentSize+payload_size < SINK_BUFFER_MAX_SIZE {
+	if len(s.sinkBuffer) < SINK_BUFFER_MAX_ENTRY && s.currentSize+payload_size < s.sink_buffer_max_size {
 		s.sinkBuffer = append(s.sinkBuffer, payload)
 		s.currentSize += payload_size
 	} else {

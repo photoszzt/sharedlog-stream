@@ -127,12 +127,16 @@ func processInEpoch(
 					}
 					paused = true
 				}
-				cmFStart := stats.TimerBegin()
-				err := cmm.FlushControlLog(dctx)
+				flushStart := stats.TimerBegin()
+				err := FlushStreamBuffers(dctx, cmm, args)
 				if err != nil {
 					return common.GenErrFnOutput(err)
 				}
-				ctrlFlushTime := stats.Elapsed(cmFStart).Microseconds()
+				// err := cmm.FlushControlLog(dctx)
+				// if err != nil {
+				// 	return common.GenErrFnOutput(err)
+				// }
+				flushTime := stats.Elapsed(flushStart).Microseconds()
 				prepareStart := stats.TimerBegin()
 				epochMarker, epochMarkerTags, epochMarkerTopics, err = CaptureEpochStateAndCleanup(dctx, em, args)
 				if err != nil {
@@ -140,7 +144,7 @@ func processInEpoch(
 				}
 				prepareTime := stats.Elapsed(prepareStart).Microseconds()
 				t.markEpochPrepare.AddSample(prepareTime)
-				t.ctrlFlushTime.AddSample(ctrlFlushTime)
+				t.flushAllTime.AddSample(flushTime)
 				hasProcessData = false
 			}
 			// Exit routine
@@ -188,6 +192,34 @@ func processInEpoch(
 			}
 		}
 	}
+}
+
+func FlushStreamBuffers(ctx context.Context, cmm *control_channel.ControlChannelManager, args *StreamTaskArgs) error {
+	for _, producer := range args.ectx.Producers() {
+		err := producer.Flush(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	for _, kvTab := range args.kvChangelogs {
+		if !kvTab.ChangelogIsSrc() {
+			err := kvTab.FlushChangelog(ctx)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	for _, winTab := range args.windowStoreChangelogs {
+		err := winTab.FlushChangelog(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	err := cmm.FlushControlLog(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func CaptureEpochStateAndCleanup(ctx context.Context, em *epoch_manager.EpochManager, args *StreamTaskArgs) (commtypes.EpochMarker, []uint64, []string, error) {

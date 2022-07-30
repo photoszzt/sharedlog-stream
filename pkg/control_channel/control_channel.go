@@ -30,14 +30,16 @@ type ControlChannelManager struct {
 	msgSerde        commtypes.MessageSerdeG[string, txn_data.ControlMetadata]
 	payloadArrSerde commtypes.SerdeG[commtypes.PayloadArr]
 
-	topicStreams  map[string]*sharedlog_stream.ShardedSharedLogStream
-	controlLog    *sharedlog_stream.ShardedSharedLogStream
-	controlOutput chan ControlChannelResult
-	controlQuit   chan struct{}
-	appendCtrlLog *stats.ConcurrentInt64Collector
-	funcName      string
-	currentEpoch  uint64
-	instanceID    uint8
+	topicStreams map[string]*sharedlog_stream.ShardedSharedLogStream
+	// they are the same stream but different progress tracking
+	controlLogForRead  *sharedlog_stream.ShardedSharedLogStream // for reading events
+	controlLogForWrite *sharedlog_stream.ShardedSharedLogStream // for writing;
+	controlOutput      chan ControlChannelResult
+	controlQuit        chan struct{}
+	appendCtrlLog      *stats.ConcurrentInt64Collector
+	funcName           string
+	currentEpoch       uint64
+	instanceID         uint8
 }
 
 func (cm *ControlChannelManager) CurrentEpoch() uint64 {
@@ -50,19 +52,25 @@ func NewControlChannelManager(env types.Environment,
 	epoch uint64,
 	instanceID uint8,
 ) (*ControlChannelManager, error) {
-	log, err := sharedlog_stream.NewShardedSharedLogStream(env, app_id+CONTROL_LOG_TOPIC_NAME, 1, serdeFormat)
+	logForRead, err := sharedlog_stream.NewShardedSharedLogStream(env, CONTROL_LOG_TOPIC_NAME+"_"+app_id, 1, serdeFormat)
+	if err != nil {
+		return nil, err
+	}
+	logForWrite, err := sharedlog_stream.NewShardedSharedLogStream(env,
+		CONTROL_LOG_TOPIC_NAME+"_"+app_id, 1, serdeFormat)
 	if err != nil {
 		return nil, err
 	}
 	cm := &ControlChannelManager{
-		controlLog:      log,
-		currentEpoch:    0,
-		topicStreams:    make(map[string]*sharedlog_stream.ShardedSharedLogStream),
-		keyMappings:     make(map[string]map[string]data_structure.Uint8Set),
-		funcName:        app_id,
-		appendCtrlLog:   stats.NewConcurrentInt64Collector("append_ctrl_log", stats.DEFAULT_COLLECT_DURATION),
-		payloadArrSerde: sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG,
-		instanceID:      instanceID,
+		controlLogForRead:  logForRead,
+		controlLogForWrite: logForWrite,
+		currentEpoch:       0,
+		topicStreams:       make(map[string]*sharedlog_stream.ShardedSharedLogStream),
+		keyMappings:        make(map[string]map[string]data_structure.Uint8Set),
+		funcName:           app_id,
+		appendCtrlLog:      stats.NewConcurrentInt64Collector("append_ctrl_log", stats.DEFAULT_COLLECT_DURATION),
+		payloadArrSerde:    sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG,
+		instanceID:         instanceID,
 	}
 	ctrlMetaSerde, err := txn_data.GetControlMetadataSerdeG(serdeFormat)
 	if err != nil {
@@ -77,7 +85,7 @@ func NewControlChannelManager(env types.Environment,
 
 func (cmm *ControlChannelManager) RestoreMapping(ctx context.Context) error {
 	for {
-		rawMsg, err := cmm.controlLog.ReadNext(ctx, 0)
+		rawMsg, err := cmm.controlLogForRead.ReadNext(ctx, 0)
 		if err != nil {
 			if common_errors.IsStreamEmptyError(err) {
 				return nil
@@ -106,18 +114,18 @@ func (cmm *ControlChannelManager) appendToControlLog(ctx context.Context, cm txn
 		return err
 	}
 	if allowBuffer {
-		err = cmm.controlLog.BufPush(ctx, msg_encoded, 0, commtypes.EmptyProducerId)
+		err = cmm.controlLogForWrite.BufPush(ctx, msg_encoded, 0, commtypes.EmptyProducerId)
 		// debug.Fprintf(os.Stderr, "appendToControlLog: tp %s %v, off %x\n",
 		// 	cmm.controlLog.TopicName(), cm, off)
 	} else {
-		_, err = cmm.controlLog.Push(ctx, msg_encoded, 0, sharedlog_stream.SingleDataRecordMeta,
+		_, err = cmm.controlLogForWrite.Push(ctx, msg_encoded, 0, sharedlog_stream.SingleDataRecordMeta,
 			commtypes.EmptyProducerId)
 	}
 	return err
 }
 
 func (cmm *ControlChannelManager) FlushControlLog(ctx context.Context) error {
-	return cmm.controlLog.Flush(ctx, commtypes.EmptyProducerId)
+	return cmm.controlLogForWrite.Flush(ctx, commtypes.EmptyProducerId)
 }
 
 func (cmm *ControlChannelManager) AppendRescaleConfig(ctx context.Context,
@@ -235,7 +243,7 @@ func (cmm *ControlChannelManager) monitorControlChannel(
 		default:
 		}
 
-		rawMsg, err := cmm.controlLog.ReadNext(ctx, 0)
+		rawMsg, err := cmm.controlLogForRead.ReadNext(ctx, 0)
 		if err != nil {
 			if common_errors.IsStreamEmptyError(err) {
 				continue

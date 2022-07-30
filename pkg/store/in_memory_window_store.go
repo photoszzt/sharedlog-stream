@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/utils"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -16,18 +17,16 @@ import (
 
 type InMemoryWindowStore struct {
 	// for val comparison
-	comparable concurrent_skiplist.Comparable
-
+	comparable         concurrent_skiplist.Comparable
 	store              *concurrent_skiplist.SkipList
 	name               string
 	windowSize         int64
 	retentionPeriod    int64
-	observedStreamTime int64
+	observedStreamTime int64 // protected by mux
+	mux                sync.RWMutex
 
-	seqNum uint32
-
+	seqNum           uint32
 	retainDuplicates bool
-	open             bool
 }
 
 var _ = CoreWindowStore(&InMemoryWindowStore{})
@@ -40,7 +39,6 @@ func NewInMemoryWindowStore(name string, retentionPeriod int64, windowSize int64
 		windowSize:         windowSize,
 		retentionPeriod:    retentionPeriod,
 		retainDuplicates:   retainDuplicates,
-		open:               false,
 		observedStreamTime: 0,
 		store: concurrent_skiplist.New(concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
 			l := lhs.(int64)
@@ -70,11 +68,14 @@ func (s *InMemoryWindowStore) Name() string {
 
 func (s *InMemoryWindowStore) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error {
 	s.removeExpiredSegments()
+	s.mux.Lock()
 	if windowStartTimestamp > s.observedStreamTime {
 		s.observedStreamTime = windowStartTimestamp
 	}
+	expired := windowStartTimestamp <= s.observedStreamTime-s.retentionPeriod
+	s.mux.Unlock()
 	// debug.Fprintf(os.Stderr, "start ts: %d, observed: %d\n", windowStartTimestamp, s.observedStreamTime-s.retentionPeriod)
-	if windowStartTimestamp <= s.observedStreamTime-s.retentionPeriod {
+	if expired {
 		log.Warn().Msgf("Skipping record for expired segment.")
 	} else {
 		if !utils.IsNil(value) {
@@ -105,7 +106,10 @@ func (s *InMemoryWindowStore) PutWithoutPushToChangelog(ctx context.Context, key
 
 func (s *InMemoryWindowStore) Get(ctx context.Context, key commtypes.KeyT, windowStartTimestamp int64) (commtypes.ValueT, bool, error) {
 	s.removeExpiredSegments()
-	if windowStartTimestamp <= s.observedStreamTime-s.retentionPeriod {
+	s.mux.RLock()
+	expired := windowStartTimestamp <= s.observedStreamTime-s.retentionPeriod
+	s.mux.RUnlock()
+	if expired {
 		return nil, false, nil
 	}
 
@@ -135,7 +139,9 @@ func (s *InMemoryWindowStore) Fetch(
 	tsFrom := timeFrom.UnixMilli()
 	tsTo := timeTo.UnixMilli()
 
+	s.mux.RLock()
 	minTime := s.observedStreamTime - s.retentionPeriod + 1
+	s.mux.RUnlock()
 	if minTime < tsFrom {
 		minTime = tsFrom
 	}
@@ -188,7 +194,9 @@ func (s *InMemoryWindowStore) FetchWithKeyRange(
 		return nil
 	}
 
+	s.mux.RLock()
 	minTime := s.observedStreamTime - s.retentionPeriod + 1
+	s.mux.RUnlock()
 	if minTime < tsFrom {
 		minTime = tsFrom
 	}
@@ -229,7 +237,9 @@ func (s *InMemoryWindowStore) fetchWithKeyRange(
 
 func (s *InMemoryWindowStore) IterAll(iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error {
 	s.removeExpiredSegments()
+	s.mux.RLock()
 	minTime := s.observedStreamTime - s.retentionPeriod
+	s.mux.RUnlock()
 
 	err := s.store.IterFrom(minTime, func(kt concurrent_skiplist.KeyT, vt concurrent_skiplist.ValueT) error {
 		curT := kt.(int64)
@@ -246,7 +256,9 @@ func (s *InMemoryWindowStore) IterAll(iterFunc func(int64, commtypes.KeyT, commt
 }
 
 func (s *InMemoryWindowStore) removeExpiredSegments() {
+	s.mux.RLock()
 	minLiveTimeTmp := int64(s.observedStreamTime) - int64(s.retentionPeriod) + 1
+	s.mux.RUnlock()
 	minLiveTime := int64(0)
 
 	if minLiveTimeTmp > 0 {
@@ -271,7 +283,9 @@ func (s *InMemoryWindowStore) FetchAll(
 		return nil
 	}
 
+	s.mux.RLock()
 	minTime := s.observedStreamTime - s.retentionPeriod + 1
+	s.mux.RUnlock()
 	if minTime < tsFrom {
 		minTime = tsFrom
 	}

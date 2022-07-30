@@ -55,7 +55,7 @@ type SharedLogStream struct {
 	topicNameHash uint64
 	// current read position in forward direction
 	cursor             uint64
-	tail               uint64
+	tail               uint64 // protected by mux
 	curAppendMsgSeqNum uint64
 }
 
@@ -214,6 +214,8 @@ func (s *SharedLogStream) Push(ctx context.Context, payload []byte, parNum uint8
 }
 
 func (s *SharedLogStream) isEmpty() bool {
+	s.mux.Lock()
+	defer s.mux.Unlock()
 	return s.cursor >= s.tail
 }
 

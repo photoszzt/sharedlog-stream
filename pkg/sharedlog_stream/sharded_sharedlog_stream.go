@@ -48,6 +48,29 @@ func NewShardedSharedLogStream(env types.Environment, topicName string, numParti
 	}, nil
 }
 
+func NewShardedSharedLogStreamWithSinkBufferSize(env types.Environment, topicName string,
+	numPartitions uint8, serdeFormat commtypes.SerdeFormat, sinkBufferSize int,
+) (*ShardedSharedLogStream, error) {
+	if numPartitions == 0 {
+		panic(ErrZeroParNum)
+	}
+	streams := make([]*BufferedSinkStream, 0, numPartitions)
+	for i := uint8(0); i < numPartitions; i++ {
+		s, err := NewSharedLogStream(env, topicName, serdeFormat)
+		if err != nil {
+			return nil, err
+		}
+		buf := NewBufferedSinkStreamWithBufferSize(s, sinkBufferSize, i)
+		streams = append(streams, buf)
+	}
+	return &ShardedSharedLogStream{
+		subSharedLogStreams: streams,
+		numPartitions:       numPartitions,
+		topicName:           topicName,
+		serdeFormat:         serdeFormat,
+	}, nil
+}
+
 func (s *ShardedSharedLogStream) ExactlyOnce(gua exactly_once_intr.GuaranteeMth) {
 	for _, substream := range s.subSharedLogStreams {
 		substream.ExactlyOnce(gua)
