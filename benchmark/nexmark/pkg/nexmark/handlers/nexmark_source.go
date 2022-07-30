@@ -221,45 +221,45 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 			if out.Valid() {
 				m := out.Value()
 				debug.Fprintf(os.Stderr, "got data from control channel: %v\n", m)
-				numInstance := m.Config[h.funcName]
-				if inputConfig.ParNum >= numInstance {
-					cmm.SendQuit()
-					close(streamPusher.MsgChan)
-					wg.Wait()
-					return &common.FnOutput{
-						Success:  true,
-						Duration: time.Since(startTime).Seconds(),
-						Counts: map[string]uint64{
-							"sink":      streamPusher.GetCount(),
-							"sink_ctrl": streamPusher.NumCtrlMsgs(),
-						},
+				if m.Config != nil {
+					numInstance := m.Config[h.funcName]
+					if inputConfig.ParNum >= numInstance {
+						cmm.SendQuit()
+						close(streamPusher.MsgChan)
+						wg.Wait()
+						return &common.FnOutput{
+							Success:  true,
+							Duration: time.Since(startTime).Seconds(),
+							Counts: map[string]uint64{
+								"sink":      streamPusher.GetCount(),
+								"sink_ctrl": streamPusher.NumCtrlMsgs(),
+							},
+						}
 					}
+					numSubstreams := m.Config[stream.TopicName()]
+					flushMsgChan()
+					err = stream.ScaleSubstreams(h.env, numSubstreams)
+					if err != nil {
+						return &common.FnOutput{Success: false, Message: err.Error()}
+					}
+					// piggy back scale fence in txn marker
+					txnMarker := commtypes.EpochMarker{
+						Mark:       commtypes.SCALE_FENCE,
+						ScaleEpoch: m.Epoch,
+					}
+					msg := commtypes.Message{
+						Key:   "",
+						Value: txnMarker,
+					}
+					encoded, err := txnMarkMsgSerde.Encode(msg)
+					if err != nil {
+						return &common.FnOutput{Success: false, Message: err.Error()}
+					}
+					debug.Fprintf(os.Stderr, "updated numPartition is %d\n", numSubstreams)
+					procArgs.numPartition = stream.NumPartition()
+					streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{Payload: encoded,
+						IsControl: true, Partitions: []uint8{inputConfig.ParNum}}
 				}
-				numSubstreams := m.Config[stream.TopicName()]
-				flushMsgChan()
-
-				// err = stream.ScaleSubstreams(h.env, numSubstreams)
-				// if err != nil {
-				// 	return &common.FnOutput{Success: false, Message: err.Error()}
-				// }
-
-				// piggy back scale fence in txn marker
-				txnMarker := commtypes.EpochMarker{
-					Mark:       commtypes.SCALE_FENCE,
-					ScaleEpoch: m.Epoch,
-				}
-				msg := commtypes.Message{
-					Key:   "",
-					Value: txnMarker,
-				}
-				encoded, err := txnMarkMsgSerde.Encode(msg)
-				if err != nil {
-					return &common.FnOutput{Success: false, Message: err.Error()}
-				}
-				debug.Fprintf(os.Stderr, "updated numPartition is %d\n", numSubstreams)
-				procArgs.numPartition = stream.NumPartition()
-				streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{Payload: encoded,
-					IsControl: true, Partitions: []uint8{inputConfig.ParNum}}
 			} else {
 				cerr := out.Err()
 				cmm.SendQuit()
