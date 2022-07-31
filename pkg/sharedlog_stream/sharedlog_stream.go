@@ -360,7 +360,9 @@ func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum 
 			seqNum -= 1
 			continue
 		}
+		s.mux.Lock()
 		s.tail = logEntry.SeqNum + 1
+		s.mux.Unlock()
 		// debug.Fprintf(os.Stderr, "current tail is %d\n", s.tail)
 		break
 	}
