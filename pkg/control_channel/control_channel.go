@@ -6,7 +6,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/data_structure"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/stats"
+	// "sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils/syncutils"
 
@@ -31,7 +31,7 @@ type ControlChannelManager struct {
 	controlLogForWrite *sharedlog_stream.ShardedSharedLogStream // for writing;
 	controlOutput      chan ControlChannelResult
 	controlQuit        chan struct{}
-	appendCtrlLog      *stats.ConcurrentInt64Collector
+	// appendCtrlLog      *stats.ConcurrentInt64Collector
 	funcName           string
 	currentEpoch       uint64
 	instanceID         uint8
@@ -63,7 +63,7 @@ func NewControlChannelManager(env types.Environment,
 		topicStreams:       make(map[string]*sharedlog_stream.ShardedSharedLogStream),
 		keyMappings:        make(map[string]map[string]data_structure.Uint8Set),
 		funcName:           app_id,
-		appendCtrlLog:      stats.NewConcurrentInt64Collector("append_ctrl_log", stats.DEFAULT_COLLECT_DURATION),
+		// appendCtrlLog:      stats.NewConcurrentInt64Collector("append_ctrl_log", stats.DEFAULT_COLLECT_DURATION),
 		payloadArrSerde:    sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG,
 		instanceID:         instanceID,
 	}
@@ -161,7 +161,7 @@ func TrackAndAppendKeyMapping(
 		sub.Add(substreamId)
 		subs[string(kBytes)] = sub
 		cmm.kmMu.Unlock()
-		apStart := stats.TimerBegin()
+		// apStart := stats.TimerBegin()
 		cm := txn_data.ControlMetadata{
 			Key:         kBytes,
 			SubstreamId: substreamId,
@@ -170,8 +170,8 @@ func TrackAndAppendKeyMapping(
 			Epoch:       cmm.currentEpoch,
 		}
 		err = cmm.appendToControlLog(ctx, cm, true)
-		apElapsed := stats.Elapsed(apStart).Microseconds()
-		cmm.appendCtrlLog.AddSample(apElapsed)
+		// apElapsed := stats.Elapsed(apStart).Microseconds()
+		// cmm.appendCtrlLog.AddSample(apElapsed)
 		return err
 	} else {
 		cmm.kmMu.Unlock()
