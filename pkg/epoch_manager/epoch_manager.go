@@ -29,7 +29,9 @@ type EpochManager struct {
 	tpMapMu               syncutils.Mutex
 	currentTopicSubstream map[string]data_structure.Uint8Set
 
-	epochLog          *sharedlog_stream.SharedLogStream
+	// two different meta data class
+	epochLogForRead   *sharedlog_stream.SharedLogStream
+	epochLogForWrite  *sharedlog_stream.SharedLogStream
 	epochLogMarkerTag uint64
 	epochMngrName     string
 	commtypes.ProducerId
@@ -40,7 +42,12 @@ type EpochManager struct {
 func NewEpochManager(env types.Environment, epochMngrName string,
 	serdeFormat commtypes.SerdeFormat,
 ) (*EpochManager, error) {
-	log, err := sharedlog_stream.NewSharedLogStream(env,
+	logForRead, err := sharedlog_stream.NewSharedLogStream(env,
+		EPOCH_LOG_TOPIC_NAME+"_"+epochMngrName, serdeFormat)
+	if err != nil {
+		return nil, err
+	}
+	logForWrite, err := sharedlog_stream.NewSharedLogStream(env,
 		EPOCH_LOG_TOPIC_NAME+"_"+epochMngrName, serdeFormat)
 	if err != nil {
 		return nil, err
@@ -54,9 +61,10 @@ func NewEpochManager(env types.Environment, epochMngrName string,
 		env:                   env,
 		ProducerId:            commtypes.NewProducerId(),
 		currentTopicSubstream: make(map[string]data_structure.Uint8Set),
-		epochLog:              log,
+		epochLogForRead:       logForRead,
+		epochLogForWrite:      logForWrite,
 		epochMetaSerde:        epochMetaSerde,
-		epochLogMarkerTag:     txn_data.MarkerTag(log.TopicNameHash(), 0),
+		epochLogMarkerTag:     txn_data.MarkerTag(logForRead.TopicNameHash(), 0),
 	}, nil
 }
 
@@ -75,14 +83,14 @@ func (em *EpochManager) GetEpochManagerName() string {
 func (em *EpochManager) monitorEpochLog(ctx context.Context,
 	quit chan struct{}, errc chan error, dcancel context.CancelFunc,
 ) {
-	fenceTag := txn_data.FenceTag(em.epochLog.TopicNameHash(), 0)
+	fenceTag := txn_data.FenceTag(em.epochLogForRead.TopicNameHash(), 0)
 	for {
 		select {
 		case <-quit:
 			return
 		default:
 		}
-		rawMsg, err := em.epochLog.ReadNextWithTag(ctx, 0, fenceTag)
+		rawMsg, err := em.epochLogForRead.ReadNextWithTag(ctx, 0, fenceTag)
 		if err != nil {
 			if common_errors.IsStreamEmptyError(err) {
 				continue
@@ -130,7 +138,7 @@ func (em *EpochManager) appendToEpochLog(ctx context.Context,
 		TaskEpoch:     em.TaskEpoch,
 		TransactionID: 0,
 	}
-	return em.epochLog.PushWithTag(ctx, encoded, 0, tags, additionalTopic,
+	return em.epochLogForWrite.PushWithTag(ctx, encoded, 0, tags, additionalTopic,
 		sharedlog_stream.ControlRecordMeta, producerId)
 }
 
@@ -265,8 +273,8 @@ func (em *EpochManager) Init(ctx context.Context) (*commtypes.EpochMarker, uint6
 		Mark: commtypes.FENCE,
 	}
 	tags := []uint64{
-		sharedlog_stream.NameHashWithPartition(em.epochLog.TopicNameHash(), 0),
-		txn_data.FenceTag(em.epochLog.TopicNameHash(), 0),
+		sharedlog_stream.NameHashWithPartition(em.epochLogForWrite.TopicNameHash(), 0),
+		txn_data.FenceTag(em.epochLogForWrite.TopicNameHash(), 0),
 	}
 	_, err = em.appendToEpochLog(ctx, meta, tags, nil)
 	if err != nil {
@@ -280,7 +288,7 @@ func (em *EpochManager) Init(ctx context.Context) (*commtypes.EpochMarker, uint6
 }
 
 func (em *EpochManager) getMostRecentCommitEpoch(ctx context.Context) (*commtypes.EpochMarker, *commtypes.RawMsg, error) {
-	rawMsg, err := em.epochLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, 0, em.epochLogMarkerTag)
+	rawMsg, err := em.epochLogForWrite.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, 0, em.epochLogMarkerTag)
 	if err != nil {
 		if common_errors.IsStreamEmptyError(err) {
 			return nil, nil, nil
@@ -298,7 +306,7 @@ func (em *EpochManager) FindMostRecentEpochMetaThatHasConsumed(
 	ctx context.Context, seqNum uint64,
 ) (*commtypes.EpochMarker, error) {
 	for {
-		rawMsg, err := em.epochLog.ReadBackwardWithTag(ctx, seqNum, 0, em.epochLogMarkerTag)
+		rawMsg, err := em.epochLogForWrite.ReadBackwardWithTag(ctx, seqNum, 0, em.epochLogMarkerTag)
 		if err != nil {
 			if common_errors.IsStreamEmptyError(err) {
 				return nil, nil
