@@ -41,34 +41,6 @@ func (h *bidByAuction) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return utils.CompressData(encodedOutput), nil
 }
 
-/*
-type bidKeyedByAuctionProcessArgs struct {
-	filterBid *processor.MeteredProcessor
-	selectKey *processor.MeteredProcessor
-	groupBy   *processor.MeteredProcessor
-	processor.BaseExecutionContext
-}
-
-func (h *bidByAuction) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
-	args := argsTmp.(*bidKeyedByAuctionProcessArgs)
-	bidMsg, err := args.filterBid.ProcessAndReturn(ctx, msg)
-	if err != nil {
-		return err
-	}
-	if bidMsg != nil {
-		mappedKey, err := args.selectKey.ProcessAndReturn(ctx, bidMsg[0])
-		if err != nil {
-			return err
-		}
-		_, err = args.groupBy.ProcessAndReturn(ctx, mappedKey[0])
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-*/
-
 func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 	sp *common.QueryInput,
 ) *common.FnOutput {
@@ -93,9 +65,11 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 				})))).
 		Via(processor.NewGroupByOutputProcessor(sinks[0], &ectx))
 	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
+			argsTmp processor.ExecutionContext, gotEndMark *bool,
+		) *common.FnOutput {
 			args := argsTmp.(*processor.BaseExecutionContext)
-			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
+			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg, gotEndMark)
 		}).Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 		sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])

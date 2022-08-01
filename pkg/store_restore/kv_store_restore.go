@@ -57,8 +57,8 @@ func (kvc *KVStoreChangelog[K, V]) PutWithoutPushToChangelog(ctx context.Context
 	return kvc.kvStore.PutWithoutPushToChangelog(ctx, key, value)
 }
 
-func (kvc *KVStoreChangelog[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager, guarantee exactly_once_intr.GuaranteeMth, serdeFormat commtypes.SerdeFormat) error {
-	return kvc.changelogManager.ConfigExactlyOnce(rem, guarantee, serdeFormat)
+func (kvc *KVStoreChangelog[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager, guarantee exactly_once_intr.GuaranteeMth) error {
+	return kvc.changelogManager.ConfigExactlyOnce(rem, guarantee)
 }
 
 func (kvc *KVStoreChangelog[K, V]) Stream() sharedlog_stream.Stream {
@@ -93,37 +93,36 @@ func RestoreChangelogKVStateStore(
 		} else if err != nil {
 			return fmt.Errorf("ReadNext failed: %v", err)
 		}
-		for _, msg := range gotMsgs.Msgs {
-			seqNum := msg.LogSeqNum
-			if seqNum >= consumedOffset && kvchangelog.ChangelogIsSrc() {
-				return nil
-			}
-			if msg.MsgArr != nil {
-				for _, msg := range msg.MsgArr {
-					if msg.Key == nil && msg.Value == nil {
-						continue
-					}
-					val := msg.Value
-					if kvchangelog.ChangelogIsSrc() {
-						val = commtypes.CreateValueTimestamp(msg.Value, msg.Timestamp)
-					}
-					err = kvchangelog.PutWithoutPushToChangelog(ctx, msg.Key, val)
-					if err != nil {
-						return err
-					}
-				}
-			} else {
-				if msg.Msg.Key == nil && msg.Msg.Value == nil {
+		msgs := gotMsgs.Msgs
+		seqNum := msgs.LogSeqNum
+		if seqNum >= consumedOffset && kvchangelog.ChangelogIsSrc() {
+			return nil
+		}
+		if msgs.MsgArr != nil {
+			for _, msg := range msgs.MsgArr {
+				if msg.Key == nil && msg.Value == nil {
 					continue
 				}
-				val := msg.Msg.Value
+				val := msg.Value
 				if kvchangelog.ChangelogIsSrc() {
-					val = commtypes.CreateValueTimestamp(msg.Msg.Value, msg.Msg.Timestamp)
+					val = commtypes.CreateValueTimestamp(msg.Value, msg.Timestamp)
 				}
-				err = kvchangelog.PutWithoutPushToChangelog(ctx, msg.Msg.Key, val)
+				err = kvchangelog.PutWithoutPushToChangelog(ctx, msg.Key, val)
 				if err != nil {
 					return err
 				}
+			}
+		} else {
+			if msgs.Msg.Key == nil && msgs.Msg.Value == nil {
+				continue
+			}
+			val := msgs.Msg.Value
+			if kvchangelog.ChangelogIsSrc() {
+				val = commtypes.CreateValueTimestamp(msgs.Msg.Value, msgs.Msg.Timestamp)
+			}
+			err = kvchangelog.PutWithoutPushToChangelog(ctx, msgs.Msg.Key, val)
+			if err != nil {
+				return err
 			}
 		}
 	}

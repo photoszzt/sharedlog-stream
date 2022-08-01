@@ -72,10 +72,12 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		Via(processor.NewMeteredProcessor(
 			processor.NewFixedSubstreamOutputProcessor(sinks[0], sp.ParNum)))
 	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
+			argsTmp processor.ExecutionContext, gotEndMark *bool,
+		) *common.FnOutput {
 			args := argsTmp.(*processor.BaseExecutionContext)
-			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
-		}).Build()
+			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg, gotEndMark)
+		}).MarkFinalStage().Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).

@@ -41,34 +41,6 @@ func (h *q7BidByPrice) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return utils.CompressData(encodedOutput), nil
 }
 
-/*
-type q7BidKeyedByPriceProcessArgs struct {
-	bid        *processor.MeteredProcessor
-	bidByPrice *processor.MeteredProcessor
-	groupBy    processor.Processor
-	processor.BaseExecutionContext
-}
-
-func (h *q7BidByPrice) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
-	args := argsTmp.(*q7BidKeyedByPriceProcessArgs)
-	bidMsg, err := args.bid.ProcessAndReturn(ctx, msg)
-	if err != nil {
-		return fmt.Errorf("filter bid err: %v", err)
-	}
-	if bidMsg != nil {
-		mappedKey, err := args.bidByPrice.ProcessAndReturn(ctx, bidMsg[0])
-		if err != nil {
-			return fmt.Errorf("bid keyed by price error: %v", err)
-		}
-		err = args.groupBy.GroupByAndProduce(ctx, mappedKey[0], args.TrackParFunc())
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-*/
-
 func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInput) *common.FnOutput {
 	srcs, sinks_arr, err := getSrcSinkUint64Key(ctx, h.env, input)
 	if err != nil {
@@ -90,9 +62,11 @@ func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInpu
 			})))).
 		Via(processor.NewGroupByOutputProcessor(sinks_arr[0], &ectx))
 	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
+			argsTmp processor.ExecutionContext, gotEndMark *bool,
+		) *common.FnOutput {
 			args := argsTmp.(*processor.BaseExecutionContext)
-			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
+			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg, gotEndMark)
 		}).Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, input.InputTopicNames[0],
 		input.ParNum, input.OutputTopicNames[0])

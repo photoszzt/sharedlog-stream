@@ -70,12 +70,14 @@ func (h *q4JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	}
 	timeout := time.Duration(10) * time.Millisecond
 	auctionsConfig := &producer_consumer.StreamConsumerConfigG[uint64, *ntypes.Event]{
-		Timeout:  timeout,
-		MsgSerde: msgSerde,
+		Timeout:     timeout,
+		MsgSerde:    msgSerde,
+		SerdeFormat: serdeFormat,
 	}
 	personsConfig := &producer_consumer.StreamConsumerConfigG[uint64, *ntypes.Event]{
-		Timeout:  timeout,
-		MsgSerde: msgSerde,
+		Timeout:     timeout,
+		MsgSerde:    msgSerde,
+		SerdeFormat: serdeFormat,
 	}
 	abSerde, err := ntypes.GetAuctionBidSerdeG(serdeFormat)
 	if err != nil {
@@ -94,10 +96,16 @@ func (h *q4JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	src1 := producer_consumer.NewMeteredConsumer(
-		producer_consumer.NewShardedSharedLogStreamConsumerG(stream1, auctionsConfig), warmup)
-	src2 := producer_consumer.NewMeteredConsumer(
-		producer_consumer.NewShardedSharedLogStreamConsumerG(stream2, personsConfig), warmup)
+	consumer1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1, auctionsConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	consumer2, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream2, personsConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	src1 := producer_consumer.NewMeteredConsumer(consumer1, warmup)
+	src2 := producer_consumer.NewMeteredConsumer(consumer2, warmup)
 	sink := producer_consumer.NewConcurrentMeteredSyncProducer(
 		producer_consumer.NewShardedSharedLogStreamProducer(outputStream, outConfig), warmup)
 	src1.SetInitialSource(false)
@@ -218,8 +226,7 @@ func (h *q4JoinStreamHandler) Q4JoinStream(ctx context.Context, sp *common.Query
 	})
 	task, procArgs := execution.PrepareTaskWithJoin(
 		ctx, aJoinB, bJoinA, proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
-		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum),
-	)
+		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum), false)
 	transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName,
 		sp.InputTopicNames[0], sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,

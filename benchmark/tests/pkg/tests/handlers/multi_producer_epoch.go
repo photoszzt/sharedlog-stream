@@ -139,15 +139,19 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(
 	}
 
 	srcConfig := &producer_consumer.StreamConsumerConfigG[int, string]{
-		Timeout:  common.SrcConsumeTimeout,
-		MsgSerde: msgSerde,
+		Timeout:     common.SrcConsumeTimeout,
+		MsgSerde:    msgSerde,
+		SerdeFormat: commtypes.JSON,
 	}
 	stream1ForRead, err := sharedlog_stream.NewShardedSharedLogStream(h.env, topicName, 1, serdeFormat)
 	if err != nil {
 		panic(err)
 	}
-	src1 := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1ForRead, srcConfig)
-	err = src1.ConfigExactlyOnce(serdeFormat, exactly_once_intr.EPOCH_MARK)
+	src1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1ForRead, srcConfig)
+	if err != nil {
+		panic(err)
+	}
+	err = src1.ConfigExactlyOnce(exactly_once_intr.EPOCH_MARK)
 	if err != nil {
 		panic(err)
 	}

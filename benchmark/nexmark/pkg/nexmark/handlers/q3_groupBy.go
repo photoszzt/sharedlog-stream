@@ -68,8 +68,9 @@ func getExecutionCtx(ctx context.Context, env types.Environment, sp *common.Quer
 		return processor.BaseExecutionContext{}, fmt.Errorf("get msg serde err: %v", err)
 	}
 	inConfig := &producer_consumer.StreamConsumerConfigG[string, *ntypes.Event]{
-		Timeout:  common.SrcConsumeTimeout,
-		MsgSerde: inMsgSerde,
+		Timeout:     common.SrcConsumeTimeout,
+		MsgSerde:    inMsgSerde,
+		SerdeFormat: serdeFormat,
 	}
 	outConfig := &producer_consumer.StreamSinkConfig[uint64, *ntypes.Event]{
 		MsgSerde:      outMsgSerde,
@@ -77,7 +78,11 @@ func getExecutionCtx(ctx context.Context, env types.Environment, sp *common.Quer
 	}
 	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig), warmup)
+	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig)
+	if err != nil {
+		return processor.BaseExecutionContext{}, fmt.Errorf("get msg serde err: %v", err)
+	}
+	src := producer_consumer.NewMeteredConsumer(consumer, warmup)
 	for _, output_stream := range output_streams {
 		sink := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_stream, outConfig),
 			warmup)
@@ -115,7 +120,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[1], &ectx))
 
 	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp processor.ExecutionContext, gotEndMark *bool) *common.FnOutput {
 			args := argsTmp.(*processor.BaseExecutionContext)
 			return execution.CommonProcess(ctx, task, args,
 				func(ctx context.Context, msg commtypes.Message, _ interface{}) error {
@@ -133,7 +138,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 						}
 					}
 					return nil
-				})
+				}, gotEndMark)
 		}).Build()
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,

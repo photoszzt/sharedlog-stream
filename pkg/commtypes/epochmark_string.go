@@ -13,11 +13,12 @@ func _() {
 	_ = x[ABORT-2]
 	_ = x[SCALE_FENCE-3]
 	_ = x[FENCE-4]
+	_ = x[STREAM_END-5]
 }
 
-const _EpochMark_name = "EMPTYEPOCH_ENDABORTSCALE_FENCEFENCE"
+const _EpochMark_name = "EMPTYEPOCH_ENDABORTSCALE_FENCEFENCESTREAM_END"
 
-var _EpochMark_index = [...]uint8{0, 5, 14, 19, 30, 35}
+var _EpochMark_index = [...]uint8{0, 5, 14, 19, 30, 35, 45}
 
 func (i EpochMark) String() string {
 	if i >= EpochMark(len(_EpochMark_index)-1) {

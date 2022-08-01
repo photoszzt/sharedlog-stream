@@ -100,15 +100,19 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 	}
 
 	srcConfig := &producer_consumer.StreamConsumerConfigG[int, string]{
-		Timeout:  common.SrcConsumeTimeout,
-		MsgSerde: msgSerde,
+		Timeout:     common.SrcConsumeTimeout,
+		MsgSerde:    msgSerde,
+		SerdeFormat: commtypes.JSON,
 	}
 	stream1ForRead, err := sharedlog_stream.NewShardedSharedLogStream(h.env, topicName, 1, serdeFormat)
 	if err != nil {
 		panic(err)
 	}
-	src1 := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1ForRead, srcConfig)
-	err = src1.ConfigExactlyOnce(serdeFormat, exactly_once_intr.EPOCH_MARK)
+	src1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1ForRead, srcConfig)
+	if err != nil {
+		panic(err)
+	}
+	err = src1.ConfigExactlyOnce(exactly_once_intr.EPOCH_MARK)
 	if err != nil {
 		panic(err)
 	}
@@ -214,12 +218,11 @@ func readMsgsEpoch[KIn, VIn any](ctx context.Context, consumer *producer_consume
 		} else if err != nil {
 			return ret, err
 		}
-		for _, msgAndSeq := range gotMsgs.Msgs {
-			if msgAndSeq.MsgArr != nil {
-				ret = append(ret, msgAndSeq.MsgArr...)
-			} else {
-				ret = append(ret, msgAndSeq.Msg)
-			}
+		msgAndSeq := gotMsgs.Msgs
+		if msgAndSeq.MsgArr != nil {
+			ret = append(ret, msgAndSeq.MsgArr...)
+		} else {
+			ret = append(ret, msgAndSeq.Msg)
 		}
 	}
 }

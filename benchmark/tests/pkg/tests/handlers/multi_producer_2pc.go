@@ -199,12 +199,16 @@ func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 	}
 
 	srcConfig := &producer_consumer.StreamConsumerConfigG[int, string]{
-		Timeout:  common.SrcConsumeTimeout,
-		MsgSerde: msgSerdes,
+		Timeout:     common.SrcConsumeTimeout,
+		MsgSerde:    msgSerdes,
+		SerdeFormat: commtypes.JSON,
 	}
 
-	src1 := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1ForRead, srcConfig)
-	err = src1.ConfigExactlyOnce(commtypes.JSON, exactly_once_intr.TWO_PHASE_COMMIT)
+	src1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1ForRead, srcConfig)
+	if err != nil {
+		panic(err)
+	}
+	err = src1.ConfigExactlyOnce(exactly_once_intr.TWO_PHASE_COMMIT)
 	if err != nil {
 		panic(err)
 	}

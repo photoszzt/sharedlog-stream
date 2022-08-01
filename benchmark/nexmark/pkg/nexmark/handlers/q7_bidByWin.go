@@ -100,15 +100,20 @@ func (h *q7BidByWin) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		return nil, nil, err
 	}
 	inConfig := &producer_consumer.StreamConsumerConfigG[string, *ntypes.Event]{
-		Timeout:  common.SrcConsumeTimeout,
-		MsgSerde: inMsgSerde,
+		Timeout:     common.SrcConsumeTimeout,
+		MsgSerde:    inMsgSerde,
+		SerdeFormat: serdeFormat,
 	}
 	outConfig := &producer_consumer.StreamSinkConfig[ntypes.StartEndTime, *ntypes.Event]{
 		MsgSerde:      outMsgSerde,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig), warmup)
+	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	src := producer_consumer.NewMeteredConsumer(consumer, warmup)
 	sink := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], outConfig), warmup)
 	src.SetInitialSource(true)
 	return []producer_consumer.MeteredConsumerIntr{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
@@ -143,9 +148,11 @@ func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *com
 			})))).
 		Via(processor.NewGroupByOutputProcessor(sinks_arr[0], &ectx))
 	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
+			argsTmp processor.ExecutionContext, gotEndMark *bool,
+		) *common.FnOutput {
 			args := argsTmp.(*processor.BaseExecutionContext)
-			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
+			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg, gotEndMark)
 		}).Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 		sp.ParNum, sp.OutputTopicNames[0])

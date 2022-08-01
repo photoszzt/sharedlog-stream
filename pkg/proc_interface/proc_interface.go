@@ -9,7 +9,6 @@ import (
 
 type ProducersConsumers interface {
 	Producers() []producer_consumer.MeteredProducerIntr
-	FlushAndPushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error
 	Consumers() []producer_consumer.MeteredConsumerIntr
 	StartWarmup()
 }
@@ -30,18 +29,6 @@ func NewBaseSrcsSinks(srcs []producer_consumer.MeteredConsumerIntr,
 
 func (pa *BaseConsumersProducers) Consumers() []producer_consumer.MeteredConsumerIntr {
 	return pa.consumers
-}
-
-func (pa *BaseConsumersProducers) FlushAndPushToAllSinks(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
-	for _, sink := range pa.producers {
-		if sink.Stream().NumPartition() > parNum {
-			err := sink.Produce(ctx, msg, parNum, isControl)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 func (pa *BaseConsumersProducers) Producers() []producer_consumer.MeteredProducerIntr {

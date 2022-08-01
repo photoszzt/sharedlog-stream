@@ -56,11 +56,15 @@ func (h *q6Avg) getExecutionCtx(ctx context.Context, sp *common.QueryInput) (pro
 		return processor.BaseExecutionContext{}, fmt.Errorf("get msg serde err: %v", err)
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	src := producer_consumer.NewMeteredConsumer(
-		producer_consumer.NewShardedSharedLogStreamConsumerG(inputStream, &producer_consumer.StreamConsumerConfigG[uint64, commtypes.Change]{
-			Timeout:  common.SrcConsumeTimeout,
-			MsgSerde: inMsgSerde,
-		}), warmup)
+	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(inputStream, &producer_consumer.StreamConsumerConfigG[uint64, commtypes.Change]{
+		Timeout:     common.SrcConsumeTimeout,
+		MsgSerde:    inMsgSerde,
+		SerdeFormat: serdeFormat,
+	})
+	if err != nil {
+		return processor.BaseExecutionContext{}, err
+	}
+	src := producer_consumer.NewMeteredConsumer(consumer, warmup)
 	sink := producer_consumer.NewMeteredProducer(
 		producer_consumer.NewShardedSharedLogStreamProducer(outputStreams[0], &producer_consumer.StreamSinkConfig[uint64, float64]{
 			MsgSerde:      outMsgSerde,
@@ -163,10 +167,12 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		Via(processor.NewTableToStreamProcessor()).
 		Via(processor.NewFixedSubstreamOutputProcessor(ectx.Producers()[0], sp.ParNum))
 	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
+			argsTmp processor.ExecutionContext, gotEndMark *bool,
+		) *common.FnOutput {
 			args := argsTmp.(*processor.BaseExecutionContext)
-			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
-		}).Build()
+			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg, gotEndMark)
+		}).MarkFinalStage().Build()
 
 	kvc := []store.KeyValueStoreOpWithChangelog{kvstore}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],

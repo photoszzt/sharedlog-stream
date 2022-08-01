@@ -82,11 +82,15 @@ func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	if err != nil {
 		return nil, nil, err
 	}
-	src := producer_consumer.NewMeteredConsumer(
-		producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, &producer_consumer.StreamConsumerConfigG[uint64, *ntypes.Event]{
-			Timeout:  time.Duration(5) * time.Second,
-			MsgSerde: srcMsgSerde,
-		}), warmup)
+	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, &producer_consumer.StreamConsumerConfigG[uint64, *ntypes.Event]{
+		Timeout:     time.Duration(5) * time.Second,
+		MsgSerde:    srcMsgSerde,
+		SerdeFormat: serdeFormat,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	src := producer_consumer.NewMeteredConsumer(consumer, warmup)
 	sink := producer_consumer.NewConcurrentMeteredSyncProducer(
 		producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], &producer_consumer.StreamSinkConfig[ntypes.StartEndTime, ntypes.AuctionIdCount]{
 			MsgSerde:      sinkMsgSerde,
@@ -172,9 +176,11 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		Via(processor.NewGroupByOutputProcessor(sinks[0], &ectx))
 
 	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
+			argsTmp processor.ExecutionContext, gotEndMark *bool,
+		) *common.FnOutput {
 			args := argsTmp.(*processor.BaseExecutionContext)
-			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
+			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg, gotEndMark)
 		}).Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 		sp.ParNum, sp.OutputTopicNames[0])

@@ -74,17 +74,20 @@ func (h *q7MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		return nil, nil, err
 	}
 	inConfig := &producer_consumer.StreamConsumerConfigG[ntypes.StartEndTime, *ntypes.Event]{
-		MsgSerde: inMsgSerde,
-		Timeout:  common.SrcConsumeTimeout,
+		MsgSerde:    inMsgSerde,
+		Timeout:     common.SrcConsumeTimeout,
+		SerdeFormat: serdeFormat,
 	}
 	outConfig := &producer_consumer.StreamSinkConfig[uint64, ntypes.StartEndTime]{
 		MsgSerde:      outMsgSerde,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	src := producer_consumer.NewMeteredConsumer(
-		producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig),
-		warmup)
+	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	src := producer_consumer.NewMeteredConsumer(consumer, warmup)
 	sink := producer_consumer.NewMeteredProducer(
 		producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], outConfig),
 		warmup)
@@ -152,9 +155,11 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 			})))).
 		Via(processor.NewGroupByOutputProcessor(sinks_arr[0], &ectx))
 	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
+			argsTmp processor.ExecutionContext, gotEndMark *bool,
+		) *common.FnOutput {
 			args := argsTmp.(*processor.BaseExecutionContext)
-			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
+			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg, gotEndMark)
 		}).Build()
 	kvc := []store.KeyValueStoreOpWithChangelog{kvstore}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,

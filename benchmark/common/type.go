@@ -23,6 +23,7 @@ type QueryInput struct {
 	FlushMs          uint32          `json:"flushMs,omitempty"`
 	WarmupS          uint32          `json:"warmup,omitempty"`
 	Duration         uint32          `json:"duration,omitempty"`
+	WaitForEndMark   bool            `json:"waitEnd,omitempty"`
 	NumInPartition   uint8           `json:"numInPartition,omitempty"`
 	ParNum           uint8           `json:"ParNum,omitempty"`
 	GuaranteeMth     uint8           `json:"gua,omitempty"`

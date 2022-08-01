@@ -74,7 +74,11 @@ func createChangelogManagerAndUpdateMsgSerde[K, V any](mp *MaterializeParam[K, V
 	if err != nil {
 		return nil, nil, err
 	}
-	changelogManager := NewChangelogManager(changelog, msgSerde, mp.changelogParam.TimeOut, mp.changelogParam.FlushDuration)
+	changelogManager, err := NewChangelogManager(changelog, msgSerde, mp.changelogParam.TimeOut,
+		mp.changelogParam.FlushDuration, mp.serdeFormat)
+	if err != nil {
+		return nil, nil, err
+	}
 	return changelogManager, msgSerde, nil
 }
 
@@ -211,8 +215,8 @@ func (s *InMemoryWindowStoreWithChangelog[K, V]) ConsumeChangelog(ctx context.Co
 	return s.changelogManager.Consume(ctx, parNum)
 }
 func (s *InMemoryWindowStoreWithChangelog[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
-	guarantee exactly_once_intr.GuaranteeMth, serdeFormat commtypes.SerdeFormat) error {
-	return s.changelogManager.ConfigExactlyOnce(rem, guarantee, serdeFormat)
+	guarantee exactly_once_intr.GuaranteeMth) error {
+	return s.changelogManager.ConfigExactlyOnce(rem, guarantee)
 }
 func (s *InMemoryWindowStoreWithChangelog[K, V]) ChangelogTopicName() string {
 	return s.changelogManager.TopicName()

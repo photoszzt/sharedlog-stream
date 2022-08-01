@@ -79,19 +79,27 @@ func getSrcSink[KIn, VIn, KOut, VOut any](
 	error,
 ) {
 	src1Config := &producer_consumer.StreamConsumerConfigG[KIn, VIn]{
-		Timeout:  common.SrcConsumeTimeout,
-		MsgSerde: inMsgSerde,
+		Timeout:     common.SrcConsumeTimeout,
+		MsgSerde:    inMsgSerde,
+		SerdeFormat: commtypes.JSON,
 	}
 	src2Config := &producer_consumer.StreamConsumerConfigG[KIn, VIn]{
-		Timeout:  common.SrcConsumeTimeout,
-		MsgSerde: inMsgSerde,
+		Timeout:     common.SrcConsumeTimeout,
+		MsgSerde:    inMsgSerde,
+		SerdeFormat: commtypes.JSON,
 	}
 	outConfig := &producer_consumer.StreamSinkConfig[KOut, VOut]{
 		MsgSerde:      outMsgSerde,
 		FlushDuration: flush,
 	}
-	src1 := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1, src1Config)
-	src2 := producer_consumer.NewShardedSharedLogStreamConsumerG(stream2, src2Config)
+	src1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1, src1Config)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	src2, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream2, src2Config)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	sink := producer_consumer.NewShardedSharedLogStreamProducer(outputStream, outConfig)
 	return src1, src2, sink, nil
 }
@@ -531,19 +539,18 @@ func joinProc(ctx context.Context,
 			panic(err)
 		}
 		debug.Fprintf(os.Stderr, "joinProc: %s got %v\n", src.TopicName(), gotMsgs)
-		for _, msg := range gotMsgs.Msgs {
-			if msg.MsgArr != nil {
-				for _, subMsg := range msg.MsgArr {
-					err = runner(ctx, subMsg, sink, trackParFunc)
-					if err != nil {
-						panic(err)
-					}
-				}
-			} else {
-				err = runner(ctx, msg.Msg, sink, trackParFunc)
+		msgs := gotMsgs.Msgs
+		if msgs.MsgArr != nil {
+			for _, subMsg := range msgs.MsgArr {
+				err = runner(ctx, subMsg, sink, trackParFunc)
 				if err != nil {
 					panic(err)
 				}
+			}
+		} else {
+			err = runner(ctx, msgs.Msg, sink, trackParFunc)
+			if err != nil {
+				panic(err)
 			}
 		}
 	}

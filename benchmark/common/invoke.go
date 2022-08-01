@@ -20,11 +20,20 @@ type SrcInvokeConfig struct {
 	NumSrcInstance  uint8
 }
 
-func Invoke(config_file string, stat_dir string, gateway_url string,
-	baseQueryInput *QueryInput, warmup_time int, local bool,
+type InvokeFuncParam struct {
+	ConfigFile     string
+	StatDir        string
+	GatewayUrl     string
+	WarmupTime     int
+	Local          bool
+	WaitForEndMark bool
+}
+
+func Invoke(invokeParam InvokeFuncParam,
+	baseQueryInput *QueryInput,
 	invokeSourceFunc func(client *http.Client, srcInvokeConfig SrcInvokeConfig, response *FnOutput, wg *sync.WaitGroup, warmup bool),
 ) error {
-	jsonFile, err := os.Open(config_file)
+	jsonFile, err := os.Open(invokeParam.ConfigFile)
 	if err != nil {
 		return err
 	}
@@ -58,7 +67,7 @@ func Invoke(config_file string, stat_dir string, gateway_url string,
 		scaleConfig[funcName] = ninstance
 		funcNames = append(funcNames, funcName)
 		nodeConstraint := config["NodeConstraint"].Data().(string)
-		if local {
+		if invokeParam.Local {
 			nodeConstraint = ""
 		}
 
@@ -81,7 +90,7 @@ func Invoke(config_file string, stat_dir string, gateway_url string,
 			}
 			nconfig := &ClientNodeConfig{
 				FuncName:       funcName,
-				GatewayUrl:     gateway_url,
+				GatewayUrl:     invokeParam.GatewayUrl,
 				NumInstance:    ninstance,
 				NodeConstraint: nodeConstraint,
 			}
@@ -102,6 +111,7 @@ func Invoke(config_file string, stat_dir string, gateway_url string,
 					OutputTopicNames: outputTopicNames,
 					NumInPartition:   numInSubs,
 					NumOutPartitions: numOutPartitions,
+					WaitForEndMark:   invokeParam.WaitForEndMark,
 					ScaleEpoch:       1,
 				}
 			}
@@ -134,7 +144,8 @@ func Invoke(config_file string, stat_dir string, gateway_url string,
 		Bootstrap:   true,
 	}
 	var scaleResponse FnOutput
-	InvokeConfigScale(client, &scaleConfigInput, gateway_url, &scaleResponse, "scale", local)
+	InvokeConfigScale(client, &scaleConfigInput, invokeParam.GatewayUrl,
+		&scaleResponse, "scale", invokeParam.Local)
 
 	numSrcPartition := uint8(streamParam[srcTopicName].Data().(float64))
 
@@ -184,8 +195,7 @@ func Invoke(config_file string, stat_dir string, gateway_url string,
 		idx := i
 		if sourceOutput[idx].Success {
 			ProcessThroughputLat(fmt.Sprintf("source-%d", idx),
-				stat_dir,
-				sourceOutput[idx].Latencies, sourceOutput[idx].Counts,
+				invokeParam.StatDir, sourceOutput[idx].Latencies, sourceOutput[idx].Counts,
 				sourceOutput[idx].Duration, srcNum, &srcEndToEnd)
 		} else {
 			fmt.Fprintf(os.Stderr, "source-%d failed\n", idx)
@@ -204,8 +214,7 @@ func Invoke(config_file string, stat_dir string, gateway_url string,
 		for j := uint8(0); j < uint8(len(output)); j++ {
 			if output[j].Success {
 				ProcessThroughputLat(fmt.Sprintf("%s-%d", funcName, j),
-					stat_dir,
-					output[j].Latencies, output[j].Counts, output[j].Duration,
+					invokeParam.StatDir, output[j].Latencies, output[j].Counts, output[j].Duration,
 					num, &endToEnd)
 			} else {
 				fmt.Fprintf(os.Stderr, "%s-%d failed, msg %s\n", funcName, j, output[j].Message)

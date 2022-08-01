@@ -16,6 +16,7 @@ type PayloadToPush struct {
 	Payload    []byte
 	Partitions []uint8
 	IsControl  bool
+	Mark       commtypes.EpochMark
 }
 
 type StreamPush struct {
@@ -96,16 +97,30 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup, pr
 				h.FlushTimer = time.Now()
 			}
 			for _, i := range msg.Partitions {
-				scale_fence_tag := txn_data.ScaleFenceTag(h.Stream.TopicNameHash(), i)
-				_, err := h.Stream.PushWithTag(ctx, msg.Payload, i, []uint64{scale_fence_tag}, nil,
-					StreamEntryMeta(true, false), producerId)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "[ERROR] push err: %v\n", err)
-					h.MsgErrChan <- err
-					return
+				if msg.Mark == commtypes.SCALE_FENCE {
+					scale_fence_tag := txn_data.ScaleFenceTag(h.Stream.TopicNameHash(), i)
+					nameHashTag := NameHashWithPartition(h.Stream.TopicNameHash(), i)
+					_, err := h.Stream.PushWithTag(ctx, msg.Payload, i, []uint64{nameHashTag, scale_fence_tag}, nil,
+						StreamEntryMeta(true, false), producerId)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "[ERROR] push err: %v\n", err)
+						h.MsgErrChan <- err
+						return
+					}
+					h.produceCount += 1
+					h.ctrlCount += 1
+				} else if msg.Mark == commtypes.STREAM_END {
+					tag := NameHashWithPartition(h.Stream.TopicNameHash(), i)
+					fmt.Fprintf(os.Stderr, "generate stream end mark with tag: %x\n", tag)
+					_, err := h.Stream.Push(ctx, msg.Payload, i, StreamEntryMeta(true, false), producerId)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "[ERROR] push err: %v\n", err)
+						h.MsgErrChan <- err
+						return
+					}
+					h.produceCount += 1
+					h.ctrlCount += 1
 				}
-				h.produceCount += 1
-				h.ctrlCount += 1
 			}
 		} else {
 			if h.BufPush {

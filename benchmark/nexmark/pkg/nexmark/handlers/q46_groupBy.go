@@ -67,7 +67,9 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[1], &ectx))
 
 	task := stream_task.NewStreamTaskBuilder().AppProcessFunc(
-		func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
+		func(ctx context.Context, task *stream_task.StreamTask,
+			argsTmp processor.ExecutionContext, gotEndMark *bool,
+		) *common.FnOutput {
 			args := argsTmp.(*processor.BaseExecutionContext)
 			return execution.CommonProcess(ctx, task, args,
 				func(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
@@ -84,7 +86,7 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 						}
 					}
 					return nil
-				})
+				}, gotEndMark)
 		}).Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName, sp.InputTopicNames[0], sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,

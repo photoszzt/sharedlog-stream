@@ -104,16 +104,21 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	if err != nil {
 		return nil, nil, err
 	}
-	src1 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumerG(stream1,
-		&producer_consumer.StreamConsumerConfigG[uint64, *ntypes.Event]{
-			Timeout:  timeout,
-			MsgSerde: inMsgSerde,
-		}), warmup)
-	src2 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumerG(stream2,
-		&producer_consumer.StreamConsumerConfigG[uint64, *ntypes.Event]{
-			Timeout:  timeout,
-			MsgSerde: inMsgSerde,
-		}), warmup)
+	inConfig := &producer_consumer.StreamConsumerConfigG[uint64, *ntypes.Event]{
+		Timeout:     timeout,
+		MsgSerde:    inMsgSerde,
+		SerdeFormat: serdeFormat,
+	}
+	consumer1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1, inConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	consumer2, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream2, inConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	src1 := producer_consumer.NewMeteredConsumer(consumer1, warmup)
+	src2 := producer_consumer.NewMeteredConsumer(consumer2, warmup)
 	src1.SetInitialSource(false)
 	src2.SetInitialSource(false)
 	sink := producer_consumer.NewConcurrentMeteredSyncProducer(producer_consumer.NewShardedSharedLogStreamProducer(outputStream,
@@ -229,7 +234,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	})
 	task, procArgs := execution.PrepareTaskWithJoin(ctx, aJoinP, pJoinA,
 		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
-		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum))
+		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum), true)
 	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
@@ -238,15 +243,22 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	cm1, err := store_with_changelog.NewChangelogManagerForSrc(
+		srcs[0].Stream().(*sharedlog_stream.ShardedSharedLogStream),
+		inMsgSerde, common.SrcConsumeTimeout, serdeFormat)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	cm2, err := store_with_changelog.NewChangelogManagerForSrc(
+		srcs[1].Stream().(*sharedlog_stream.ShardedSharedLogStream),
+		inMsgSerde, common.SrcConsumeTimeout, serdeFormat)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+
 	kvchangelogs := []store.KeyValueStoreOpWithChangelog{
-		store_restore.NewKVStoreChangelog(kvtabs.tab1,
-			store_with_changelog.NewChangelogManagerForSrc(
-				srcs[0].Stream().(*sharedlog_stream.ShardedSharedLogStream),
-				inMsgSerde, common.SrcConsumeTimeout)),
-		store_restore.NewKVStoreChangelog(kvtabs.tab2,
-			store_with_changelog.NewChangelogManagerForSrc(
-				srcs[1].Stream().(*sharedlog_stream.ShardedSharedLogStream),
-				inMsgSerde, common.SrcConsumeTimeout)),
+		store_restore.NewKVStoreChangelog(kvtabs.tab1, cm1),
+		store_restore.NewKVStoreChangelog(kvtabs.tab2, cm2),
 	}
 	transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,

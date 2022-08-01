@@ -3,6 +3,7 @@ package producer_consumer
 import (
 	"context"
 	"fmt"
+	"os"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
@@ -14,32 +15,41 @@ import (
 )
 
 type ScaleEpochAndBytes struct {
-	Payload    []uint8
+	Payload    []byte
 	ScaleEpoch uint64
 }
 
+type StartTimeAndBytes struct {
+	EpochMarkEncoded []byte
+	StartTime        int64
+}
+
 type StreamConsumerConfigG[K, V any] struct {
-	MsgSerde commtypes.MessageSerdeG[K, V]
-	Timeout  time.Duration
+	MsgSerde    commtypes.MessageSerdeG[K, V]
+	Timeout     time.Duration
+	SerdeFormat commtypes.SerdeFormat
 }
 
 type StreamConsumerConfig struct {
-	MsgSerde commtypes.MessageSerde
-	Timeout  time.Duration
+	MsgSerde    commtypes.MessageSerde
+	Timeout     time.Duration
+	SerdeFormat commtypes.SerdeFormat
 }
 
 type ShardedSharedLogStreamConsumer[K, V any] struct {
 	// syncutils.Mutex
 
-	msgSerde        commtypes.MessageSerdeG[K, V]
-	payloadArrSerde commtypes.SerdeG[commtypes.PayloadArr]
-	stream          *sharedlog_stream.ShardedSharedLogStream
-	tac             *TransactionAwareConsumer
-	emc             *EpochMarkConsumer
-	name            string
-	timeout         time.Duration
-	guarantee       exactly_once_intr.GuaranteeMth
-	initialSource   bool
+	msgSerde         commtypes.MessageSerdeG[K, V]
+	epochMarkerSerde commtypes.SerdeG[commtypes.EpochMarker]
+	payloadArrSerde  commtypes.SerdeG[commtypes.PayloadArr]
+	stream           *sharedlog_stream.ShardedSharedLogStream
+	tac              *TransactionAwareConsumer
+	emc              *EpochMarkConsumer
+	name             string
+	timeout          time.Duration
+	guarantee        exactly_once_intr.GuaranteeMth
+	initialSource    bool
+	serdeFormat      commtypes.SerdeFormat
 
 	currentSeqNum uint64
 }
@@ -48,16 +58,22 @@ var _ = Consumer(&ShardedSharedLogStreamConsumer[int, string]{})
 
 func NewShardedSharedLogStreamConsumerG[K, V any](stream *sharedlog_stream.ShardedSharedLogStream,
 	config *StreamConsumerConfigG[K, V],
-) *ShardedSharedLogStreamConsumer[K, V] {
+) (*ShardedSharedLogStreamConsumer[K, V], error) {
 	// debug.Fprintf(os.Stderr, "%s timeout: %v\n", stream.TopicName(), config.Timeout)
-	return &ShardedSharedLogStreamConsumer[K, V]{
-		stream:          stream,
-		timeout:         config.Timeout,
-		msgSerde:        config.MsgSerde,
-		name:            "src",
-		payloadArrSerde: sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG,
-		guarantee:       exactly_once_intr.AT_LEAST_ONCE,
+	epochMarkSerde, err := commtypes.GetEpochMarkerSerdeG(config.SerdeFormat)
+	if err != nil {
+		return nil, err
 	}
+	return &ShardedSharedLogStreamConsumer[K, V]{
+		epochMarkerSerde: epochMarkSerde,
+		stream:           stream,
+		timeout:          config.Timeout,
+		msgSerde:         config.MsgSerde,
+		name:             "src",
+		payloadArrSerde:  sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG,
+		guarantee:        exactly_once_intr.AT_LEAST_ONCE,
+		serdeFormat:      config.SerdeFormat,
+	}, nil
 }
 
 func (s *ShardedSharedLogStreamConsumer[K, V]) SetInitialSource(initial bool) {
@@ -68,16 +84,16 @@ func (s *ShardedSharedLogStreamConsumer[K, V]) IsInitialSource() bool {
 }
 
 func (s *ShardedSharedLogStreamConsumer[K, V]) ConfigExactlyOnce(
-	serdeFormat commtypes.SerdeFormat, guarantee exactly_once_intr.GuaranteeMth,
+	guarantee exactly_once_intr.GuaranteeMth,
 ) error {
 	debug.Assert(guarantee == exactly_once_intr.TWO_PHASE_COMMIT || guarantee == exactly_once_intr.EPOCH_MARK,
 		"configure exactly once should specify 2pc or epoch mark")
 	s.guarantee = guarantee
 	var err error = nil
 	if s.guarantee == exactly_once_intr.TWO_PHASE_COMMIT {
-		s.tac, err = NewTransactionAwareConsumer(s.stream, serdeFormat)
+		s.tac, err = NewTransactionAwareConsumer(s.stream, s.serdeFormat)
 	} else if s.guarantee == exactly_once_intr.EPOCH_MARK {
-		s.emc, err = NewEpochMarkConsumer(s.stream, serdeFormat)
+		s.emc, err = NewEpochMarkConsumer(s.stream, s.serdeFormat)
 	}
 	return err
 }
@@ -112,7 +128,25 @@ func (s *ShardedSharedLogStreamConsumer[K, V]) readNext(ctx context.Context, par
 	} else if s.guarantee == exactly_once_intr.EPOCH_MARK {
 		return s.emc.ReadNext(ctx, parNum)
 	} else {
-		return s.stream.ReadNext(ctx, parNum)
+		rawMsg, err := s.stream.ReadNext(ctx, parNum)
+		if err != nil {
+			return nil, err
+		}
+		if rawMsg.IsControl {
+			epochMark, err := s.epochMarkerSerde.Decode(rawMsg.Payload)
+			if err != nil {
+				return nil, err
+			}
+			debug.Fprintf(os.Stderr, "%+v\n", epochMark)
+			if epochMark.Mark == commtypes.SCALE_FENCE {
+				rawMsg.Mark = epochMark.Mark
+				rawMsg.ScaleEpoch = epochMark.ScaleEpoch
+			} else if epochMark.Mark == commtypes.STREAM_END {
+				rawMsg.Mark = epochMark.Mark
+				rawMsg.StartTime = epochMark.StartTime
+			}
+		}
+		return rawMsg, err
 	}
 }
 
@@ -126,8 +160,6 @@ func (s *ShardedSharedLogStreamConsumer[K, V]) CurrentConsumedSeqNum() uint64 {
 
 func (s *ShardedSharedLogStreamConsumer[K, V]) Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
 	startTime := time.Now()
-	var msgs []commtypes.MsgAndSeq
-	totalLen := uint32(0)
 L:
 	for {
 		select {
@@ -155,36 +187,55 @@ L:
 		}
 
 		if rawMsg.IsControl {
-			msgs = append(msgs, commtypes.MsgAndSeq{
-				Msg: commtypes.Message{
-					Key: txn_data.SCALE_FENCE_KEY,
-					Value: ScaleEpochAndBytes{
-						ScaleEpoch: rawMsg.ScaleEpoch,
-						Payload:    rawMsg.Payload,
+			if rawMsg.Mark == commtypes.SCALE_FENCE {
+				msgs := &commtypes.MsgAndSeq{
+					Msg: commtypes.Message{
+						Key: txn_data.SCALE_FENCE_KEY,
+						Value: ScaleEpochAndBytes{
+							ScaleEpoch: rawMsg.ScaleEpoch,
+							Payload:    rawMsg.Payload,
+						},
 					},
-				},
-				MsgArr:    nil,
-				MsgSeqNum: rawMsg.MsgSeqNum,
-				LogSeqNum: rawMsg.LogSeqNum,
-				IsControl: true,
-			})
-			totalLen += 1
-			continue
+					MsgArr:    nil,
+					MsgSeqNum: rawMsg.MsgSeqNum,
+					LogSeqNum: rawMsg.LogSeqNum,
+					IsControl: true,
+				}
+				return &commtypes.MsgAndSeqs{Msgs: msgs, TotalLen: 1}, nil
+			} else if rawMsg.Mark == commtypes.STREAM_END {
+				// debug.Fprintf(os.Stderr, "got stream end in consume %s %d\n", s.stream.TopicName(), parNum)
+				msgs := &commtypes.MsgAndSeq{
+					Msg: commtypes.Message{
+						Key: commtypes.END_OF_STREAM_KEY,
+						Value: StartTimeAndBytes{
+							StartTime:        rawMsg.StartTime,
+							EpochMarkEncoded: rawMsg.Payload,
+						},
+					},
+					MsgArr:    nil,
+					MsgSeqNum: rawMsg.MsgSeqNum,
+					LogSeqNum: rawMsg.LogSeqNum,
+					IsControl: true,
+				}
+				return &commtypes.MsgAndSeqs{Msgs: msgs, TotalLen: 1}, nil
+			} else {
+				return nil, fmt.Errorf("unrecognized mark")
+			}
 		} else if len(rawMsg.Payload) == 0 {
 			continue
-		}
-		msgAndSeq, err := commtypes.DecodeRawMsgG(rawMsg, s.msgSerde, s.payloadArrSerde)
-		if err != nil {
-			return nil, fmt.Errorf("fail to decode raw msg: %v", err)
-		}
-		if msgAndSeq.MsgArr != nil {
-			totalLen += uint32(len(msgAndSeq.MsgArr))
 		} else {
-			totalLen += 1
+			totalLen := uint32(0)
+			msgAndSeq, err := commtypes.DecodeRawMsgG(rawMsg, s.msgSerde, s.payloadArrSerde)
+			if err != nil {
+				return nil, fmt.Errorf("fail to decode raw msg: %v", err)
+			}
+			if msgAndSeq.MsgArr != nil {
+				totalLen += uint32(len(msgAndSeq.MsgArr))
+			} else {
+				totalLen += 1
+			}
+			return &commtypes.MsgAndSeqs{Msgs: msgAndSeq, TotalLen: totalLen}, nil
 		}
-		msgs = append(msgs, *msgAndSeq)
-
-		return &commtypes.MsgAndSeqs{Msgs: msgs, TotalLen: totalLen}, nil
 	}
 	return nil, common_errors.ErrStreamSourceTimeout
 }

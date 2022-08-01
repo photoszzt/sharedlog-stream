@@ -86,8 +86,8 @@ func (s *MeteredConsumer[K, V]) TopicName() string               { return s.cons
 func (s *MeteredConsumer[K, V]) Name() string                    { return s.consumer.Name() }
 func (s *MeteredConsumer[K, V]) SetName(name string)             { s.consumer.SetName(name) }
 func (s *MeteredConsumer[K, V]) Stream() sharedlog_stream.Stream { return s.consumer.Stream() }
-func (s *MeteredConsumer[K, V]) ConfigExactlyOnce(serdeFormat commtypes.SerdeFormat, guarantee exactly_once_intr.GuaranteeMth) error {
-	return s.consumer.ConfigExactlyOnce(serdeFormat, guarantee)
+func (s *MeteredConsumer[K, V]) ConfigExactlyOnce(guarantee exactly_once_intr.GuaranteeMth) error {
+	return s.consumer.ConfigExactlyOnce(guarantee)
 }
 func (s *MeteredConsumer[K, V]) SetInitialSource(initial bool) { s.consumer.SetInitialSource(initial) }
 func (s *MeteredConsumer[K, V]) IsInitialSource() bool         { return s.consumer.IsInitialSource() }

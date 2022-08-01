@@ -83,15 +83,19 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	inConfig := &producer_consumer.StreamConsumerConfigG[ntypes.StartEndTime, ntypes.AuctionIdCount]{
-		Timeout:  time.Duration(20) * time.Second,
-		MsgSerde: inMsgSerde,
+		Timeout:     time.Duration(20) * time.Second,
+		MsgSerde:    inMsgSerde,
+		SerdeFormat: serdeFormat,
 	}
 	outConfig := &producer_consumer.StreamSinkConfig[ntypes.StartEndTime, ntypes.AuctionIdCntMax]{
 		MsgSerde:      outMsgSerde,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
-	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig),
-		warmup)
+	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	src := producer_consumer.NewMeteredConsumer(consumer, warmup)
 	sink := producer_consumer.NewConcurrentMeteredSyncProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], outConfig),
 		warmup)
 	src.SetInitialSource(false)
@@ -169,7 +173,9 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	ectx := processor.NewExecutionContext(srcs,
 		sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum)
 	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
+			argsTmp processor.ExecutionContext, gotEndMark *bool,
+		) *common.FnOutput {
 			args := argsTmp.(*processor.BaseExecutionContext)
 			return execution.CommonProcess(ctx, task, args, func(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
 				// fmt.Fprintf(os.Stderr, "got msg with key: %v, val: %v, ts: %v\n", msg.Msg.Key, msg.Msg.Value, msg.Msg.Timestamp)
@@ -192,8 +198,8 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 					}
 				}
 				return nil
-			})
-		}).Build()
+			}, gotEndMark)
+		}).MarkFinalStage().Build()
 	kvc := []store.KeyValueStoreOpWithChangelog{kvstore}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 		sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])

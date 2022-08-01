@@ -19,37 +19,48 @@ type ChangelogManager[K, V any] struct {
 }
 
 func NewChangelogManagerForSrc[K, V any](stream *sharedlog_stream.ShardedSharedLogStream,
-	msgSerde commtypes.MessageSerdeG[K, V], timeout time.Duration,
-) *ChangelogManager[K, V] {
-	return &ChangelogManager[K, V]{
-		restoreConsumer: producer_consumer.NewShardedSharedLogStreamConsumerG(stream,
-			&producer_consumer.StreamConsumerConfigG[K, V]{
-				MsgSerde: msgSerde,
-				Timeout:  timeout,
-			}),
-		producer:       nil,
-		changelogIsSrc: true,
+	msgSerde commtypes.MessageSerdeG[K, V], timeout time.Duration, serdeFormat commtypes.SerdeFormat,
+) (*ChangelogManager[K, V], error) {
+	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream,
+		&producer_consumer.StreamConsumerConfigG[K, V]{
+			MsgSerde:    msgSerde,
+			Timeout:     timeout,
+			SerdeFormat: serdeFormat,
+		})
+	if err != nil {
+		return nil, err
 	}
+	return &ChangelogManager[K, V]{
+		restoreConsumer: consumer,
+		producer:        nil,
+		changelogIsSrc:  true,
+	}, nil
 }
 
 func NewChangelogManager[K, V any](stream *sharedlog_stream.ShardedSharedLogStream,
 	msgSerde commtypes.MessageSerdeG[K, V],
 	timeout time.Duration,
 	flushDuration time.Duration,
-) *ChangelogManager[K, V] {
+	serdeFormat commtypes.SerdeFormat,
+) (*ChangelogManager[K, V], error) {
+	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream,
+		&producer_consumer.StreamConsumerConfigG[K, V]{
+			MsgSerde:    msgSerde,
+			Timeout:     timeout,
+			SerdeFormat: serdeFormat,
+		})
+	if err != nil {
+		return nil, err
+	}
 	return &ChangelogManager[K, V]{
-		restoreConsumer: producer_consumer.NewShardedSharedLogStreamConsumerG(stream,
-			&producer_consumer.StreamConsumerConfigG[K, V]{
-				MsgSerde: msgSerde,
-				Timeout:  timeout,
-			}),
+		restoreConsumer: consumer,
 		producer: producer_consumer.NewShardedSharedLogStreamProducer(stream,
 			&producer_consumer.StreamSinkConfig[K, V]{
 				MsgSerde:      msgSerde,
 				FlushDuration: flushDuration,
 			}),
 		changelogIsSrc: false,
-	}
+	}, nil
 }
 
 func (cm *ChangelogManager[K, V]) ChangelogIsSrc() bool {
@@ -67,11 +78,10 @@ func (cm *ChangelogManager[K, V]) NumPartition() uint8 {
 func (cm *ChangelogManager[K, V]) ConfigExactlyOnce(
 	rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	guarantee exactly_once_intr.GuaranteeMth,
-	serdeFormat commtypes.SerdeFormat,
 ) error {
 	if !cm.changelogIsSrc {
 		cm.producer.ConfigExactlyOnce(rem, guarantee)
-		return cm.restoreConsumer.ConfigExactlyOnce(serdeFormat, guarantee)
+		return cm.restoreConsumer.ConfigExactlyOnce(guarantee)
 	}
 	return nil
 }

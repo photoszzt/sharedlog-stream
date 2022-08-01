@@ -109,17 +109,26 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 
 	timeout := time.Duration(10) * time.Millisecond
 	warmup := time.Duration(sp.WarmupS) * time.Second
-
-	src1 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumerG(stream1,
+	consumer1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1,
 		&producer_consumer.StreamConsumerConfigG[uint64, *ntypes.Event]{
-			Timeout:  timeout,
-			MsgSerde: msgSerde,
-		}), warmup)
-	src2 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumerG(stream2,
+			Timeout:     timeout,
+			MsgSerde:    msgSerde,
+			SerdeFormat: serdeFormat,
+		})
+	if err != nil {
+		return nil, nil, err
+	}
+	consumer2, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream2,
 		&producer_consumer.StreamConsumerConfigG[uint64, *ntypes.Event]{
-			Timeout:  timeout,
-			MsgSerde: msgSerde,
-		}), warmup)
+			Timeout:     timeout,
+			MsgSerde:    msgSerde,
+			SerdeFormat: serdeFormat,
+		})
+	if err != nil {
+		return nil, nil, err
+	}
+	src1 := producer_consumer.NewMeteredConsumer(consumer1, warmup)
+	src2 := producer_consumer.NewMeteredConsumer(consumer2, warmup)
 	sink := producer_consumer.NewConcurrentMeteredSyncProducer(producer_consumer.NewShardedSharedLogStreamProducer(outputStream,
 		&producer_consumer.StreamSinkConfig[uint64, ntypes.PersonTime]{
 			MsgSerde:      outMsgSerde,
@@ -203,8 +212,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		execution.JoinWorkerFunc(aucJoinsPerFunc),
 		execution.JoinWorkerFunc(perJoinsAucFunc),
 		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
-		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum),
-	)
+		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum), true)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, fmt.Sprintf("%s-%d", h.funcName, sp.ParNum))).
 		WindowStoreChangelogs(wsc).FixedOutParNum(sp.ParNum).Build()

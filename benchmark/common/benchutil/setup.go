@@ -58,10 +58,14 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 	if err != nil {
 		return err
 	}
-	src := producer_consumer.NewShardedSharedLogStreamConsumerG(log, &producer_consumer.StreamConsumerConfigG[interface{}, interface{}]{
-		MsgSerde: args.MsgSerde,
-		Timeout:  common.SrcConsumeTimeout,
+	src, err := producer_consumer.NewShardedSharedLogStreamConsumerG(log, &producer_consumer.StreamConsumerConfigG[interface{}, interface{}]{
+		MsgSerde:    args.MsgSerde,
+		Timeout:     common.SrcConsumeTimeout,
+		SerdeFormat: args.SerdeFormat,
 	})
+	if err != nil {
+		return err
+	}
 	for i := uint8(0); i < args.NumPartitions; i++ {
 		outFilePath := path.Join(args.OutputDir, fmt.Sprintf("%s-%d.txt", args.TopicName, i))
 		outFile, err := os.Create(outFilePath)
@@ -82,22 +86,21 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 			if err != nil {
 				return err
 			}
-			for _, msgAndSeq := range msgAndSeqs.Msgs {
-				if msgAndSeq.IsControl {
-					continue
-				}
-				if msgAndSeq.MsgArr != nil {
-					for _, msg := range msgAndSeq.MsgArr {
-						err = outputMsg(msg, outFile)
-						if err != nil {
-							return err
-						}
-					}
-				} else {
-					err = outputMsg(msgAndSeq.Msg, outFile)
+			msgAndSeq := msgAndSeqs.Msgs
+			if msgAndSeq.IsControl {
+				continue
+			}
+			if msgAndSeq.MsgArr != nil {
+				for _, msg := range msgAndSeq.MsgArr {
+					err = outputMsg(msg, outFile)
 					if err != nil {
 						return err
 					}
+				}
+			} else {
+				err = outputMsg(msgAndSeq.Msg, outFile)
+				if err != nil {
+					return err
 				}
 			}
 		}
@@ -138,5 +141,5 @@ func UpdateStreamTaskArgs(sp *common.QueryInput, argsBuilder stream_task.SetGuar
 		CommitEveryMs(sp.CommitEveryMs).
 		FlushEveryMs(sp.FlushMs).
 		Duration(sp.Duration).
-		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat))
+		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).WaitEndMark(sp.WaitForEndMark)
 }

@@ -16,40 +16,68 @@ import (
 )
 
 func CommonProcess(ctx context.Context, t *stream_task.StreamTask, ectx *processor.BaseExecutionContext,
-	procMsg proc_interface.ProcessMsgFunc,
+	procMsg proc_interface.ProcessMsgFunc, gotEndMark *bool,
 ) *common.FnOutput {
 	if t.HandleErrFunc != nil {
 		if err := t.HandleErrFunc(); err != nil {
 			return common.GenErrFnOutput(err)
 		}
 	}
-	isInitialSrc := ectx.Consumers()[0].IsInitialSource()
-	gotMsgs, err := ectx.Consumers()[0].Consume(ctx, ectx.SubstreamNum())
+	consumer := ectx.Consumers()[0]
+	isInitialSrc := consumer.IsInitialSource()
+	gotMsgs, err := consumer.Consume(ctx, ectx.SubstreamNum())
 	if err != nil {
+		// debug.Fprintf(os.Stderr, "consume %s %d error %v\n",
+		// 	consumer.TopicName(), ectx.SubstreamNum(), err)
 		if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
+			// count := consumer.GetCount()
+			// debug.Fprintf(os.Stderr, "consume %s %d timeout, count %d\n",
+			// 	consumer.TopicName(), ectx.SubstreamNum(), count)
 			return &common.FnOutput{Success: true, Message: err.Error()}
 		}
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	for _, msg := range gotMsgs.Msgs {
-		if msg.MsgArr == nil && msg.Msg.Key == nil && msg.Msg.Value == nil {
-			continue
-		}
-		if msg.IsControl {
-			ret_err := HandleScaleEpochAndBytes(ctx, msg, ectx)
+	msgs := gotMsgs.Msgs
+	if msgs.MsgArr == nil && msgs.Msg.Key == nil && msgs.Msg.Value == nil {
+		return nil
+	}
+	if msgs.IsControl {
+		key := msgs.Msg.Key.(string)
+		if key == txn_data.SCALE_FENCE_KEY {
+			ret_err := HandleScaleEpochAndBytes(ctx, msgs, ectx)
 			if ret_err != nil {
 				return ret_err
 			}
-			continue
+			ectx.Consumers()[0].RecordCurrentConsumedSeqNum(msgs.LogSeqNum)
+			return nil
+		} else if key == commtypes.END_OF_STREAM_KEY {
+			v := msgs.Msg.Value.(producer_consumer.StartTimeAndBytes)
+			msgToPush := commtypes.Message{Key: msgs.Msg.Key, Value: v.EpochMarkEncoded}
+			for _, sink := range ectx.Producers() {
+				if sink.Stream().NumPartition() > ectx.SubstreamNum() {
+					// debug.Fprintf(os.Stderr, "produce stream end mark to %s %d\n",
+					// 	sink.Stream().TopicName(), ectx.SubstreamNum())
+					err := sink.Produce(ctx, msgToPush, ectx.SubstreamNum(), true)
+					if err != nil {
+						return &common.FnOutput{Success: false, Message: err.Error()}
+					}
+				}
+			}
+			t.SetEndDuration(v.StartTime)
+			*gotEndMark = true
+			return nil
+		} else {
+			return &common.FnOutput{Success: false, Message: fmt.Sprintf("unrecognized key: %v", key)}
 		}
+	} else {
 		// err = proc(t, msg)
-		ectx.Consumers()[0].RecordCurrentConsumedSeqNum(msg.LogSeqNum)
-		err = ProcessMsgAndSeq(ctx, msg, ectx, procMsg, isInitialSrc)
+		ectx.Consumers()[0].RecordCurrentConsumedSeqNum(msgs.LogSeqNum)
+		err = ProcessMsgAndSeq(ctx, msgs, ectx, procMsg, isInitialSrc)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
+		return nil
 	}
-	return nil
 }
 
 func extractEventTs(msg *commtypes.Message, isInitialSrc bool) error {
@@ -62,12 +90,12 @@ func extractEventTs(msg *commtypes.Message, isInitialSrc bool) error {
 	return nil
 }
 
-func ProcessMsgAndSeq(ctx context.Context, msg commtypes.MsgAndSeq, args processor.ExecutionContext,
+func ProcessMsgAndSeq(ctx context.Context, msg *commtypes.MsgAndSeq, args processor.ExecutionContext,
 	procMsg proc_interface.ProcessMsgFunc, isInitialSrc bool,
 ) error {
 	if msg.MsgArr != nil {
 		for _, subMsg := range msg.MsgArr {
-			if subMsg.Value == nil {
+			if subMsg.Key == nil && subMsg.Value == nil {
 				continue
 			}
 			meteredConsumer := args.Consumers()[0]
@@ -91,17 +119,21 @@ func ProcessMsgAndSeq(ctx context.Context, msg commtypes.MsgAndSeq, args process
 	return procMsg(ctx, msg.Msg, args)
 }
 
-func HandleScaleEpochAndBytes(ctx context.Context, msg commtypes.MsgAndSeq,
+func HandleScaleEpochAndBytes(ctx context.Context, msg *commtypes.MsgAndSeq,
 	args processor.ExecutionContext,
 ) *common.FnOutput {
 	v := msg.Msg.Value.(producer_consumer.ScaleEpochAndBytes)
-	err := args.FlushAndPushToAllSinks(ctx, commtypes.Message{Key: txn_data.SCALE_FENCE_KEY,
-		Value: v.Payload}, args.SubstreamNum(), true)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+	msgToPush := commtypes.Message{Key: msg.Msg.Key, Value: v.Payload}
+	for _, sink := range args.Producers() {
+		if sink.Stream().NumPartition() > args.SubstreamNum() {
+			err := sink.Produce(ctx, msgToPush, args.SubstreamNum(), true)
+			if err != nil {
+				return &common.FnOutput{Success: false, Message: err.Error()}
+			}
+		}
 	}
 	if args.CurEpoch() < v.ScaleEpoch {
-		err = args.RecordFinishFunc()(ctx, args.FuncName(), args.SubstreamNum())
+		err := args.RecordFinishFunc()(ctx, args.FuncName(), args.SubstreamNum())
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}

@@ -30,8 +30,11 @@ func NewKeyValueStoreWithChangelog[K, V any](mp *MaterializeParam[K, V],
 	if err != nil {
 		return nil, err
 	}
-	changelogManager := NewChangelogManager(changelog, mp.msgSerde, mp.changelogParam.TimeOut,
-		mp.changelogParam.FlushDuration)
+	changelogManager, err := NewChangelogManager(changelog, mp.msgSerde, mp.changelogParam.TimeOut,
+		mp.changelogParam.FlushDuration, mp.serdeFormat)
+	if err != nil {
+		return nil, err
+	}
 	return &KeyValueStoreWithChangelog[K, V]{
 		kvstore:          store,
 		trackFunc:        exactly_once_intr.DefaultTrackProdSubstreamFunc,
@@ -68,9 +71,9 @@ func (st *KeyValueStoreWithChangelog[K, V]) FlushChangelog(ctx context.Context) 
 	return st.changelogManager.Flush(ctx)
 }
 func (st *KeyValueStoreWithChangelog[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
-	guarantee exactly_once_intr.GuaranteeMth, serdeFormat commtypes.SerdeFormat,
+	guarantee exactly_once_intr.GuaranteeMth,
 ) error {
-	return st.changelogManager.ConfigExactlyOnce(rem, guarantee, serdeFormat)
+	return st.changelogManager.ConfigExactlyOnce(rem, guarantee)
 }
 
 func (st *KeyValueStoreWithChangelog[K, V]) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {

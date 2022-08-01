@@ -16,7 +16,7 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 	debug.Assert(len(args.ectx.Consumers()) >= 1, "Srcs should be filled")
 	debug.Assert(args.env != nil, "env should be filled")
 	debug.Assert(args.ectx != nil, "program args should be filled")
-	latencies := stats.NewInt64Collector("latPerIter", stats.DEFAULT_COLLECT_DURATION)
+	// latencies := stats.NewInt64Collector("latPerIter", stats.DEFAULT_COLLECT_DURATION)
 	cm, err := consume_seq_num_manager.NewConsumeSeqManager(args.serdeFormat)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
@@ -53,11 +53,13 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 	}
 	hasUntrackedConsume := false
 
-	debug.Fprintf(os.Stderr, "warmup time: %v, flush every: %v\n", args.warmup, args.flushEvery)
+	debug.Fprintf(os.Stderr, "warmup time: %v, flush every: %v, waitEndMark: %v\n",
+		args.warmup, args.flushEvery, args.waitEndMark)
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
 	warmupCheck.StartWarmup()
 	commitTimer := time.Now()
 	flushTimer := time.Now()
+	gotEndMark := false
 	for {
 		timeSinceLastTrack := time.Since(commitTimer)
 		if timeSinceLastTrack >= args.trackEveryForAtLeastOnce {
@@ -79,11 +81,11 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 			flushTimer = time.Now()
 		}
 		warmupCheck.Check()
-		if args.duration != 0 && warmupCheck.ElapsedSinceInitial() >= args.duration {
+		if (!args.waitEndMark && args.duration != 0 && warmupCheck.ElapsedSinceInitial() >= args.duration) || gotEndMark {
 			break
 		}
-		procStart := time.Now()
-		ret := t.appProcessFunc(ctx, t, args.ectx)
+		// procStart := time.Now()
+		ret := t.appProcessFunc(ctx, t, args.ectx, &gotEndMark)
 		if ret != nil {
 			if ret.Success {
 				continue
@@ -93,14 +95,15 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 		if !hasUntrackedConsume {
 			hasUntrackedConsume = true
 		}
-		if warmupCheck.AfterWarmup() {
-			elapsed := time.Since(procStart)
-			latencies.AddSample(elapsed.Microseconds())
-		}
+		// if warmupCheck.AfterWarmup() {
+		// 	elapsed := time.Since(procStart)
+		// 	latencies.AddSample(elapsed.Microseconds())
+		// }
 	}
 	pauseTrackFlush(ctx, t, args, cm, hasUntrackedConsume)
 	ret := &common.FnOutput{Success: true}
-	updateReturnMetric(ret, &warmupCheck)
+	updateReturnMetric(ret, &warmupCheck,
+		args.waitEndMark, t.GetEndDuration(), args.ectx.SubstreamNum())
 	return ret
 }
 

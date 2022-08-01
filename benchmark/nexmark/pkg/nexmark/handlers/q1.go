@@ -70,10 +70,10 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 		Via(processor.NewMeteredProcessor(
 			processor.NewFixedSubstreamOutputProcessor(sinks[0], sp.ParNum)))
 	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp processor.ExecutionContext, gotEndMark *bool) *common.FnOutput {
 			args := argsTmp.(*processor.BaseExecutionContext)
-			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg)
-		}).Build()
+			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg, gotEndMark)
+		}).MarkFinalStage().Build()
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,
 			fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
@@ -82,32 +82,3 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 		Build()
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs)
 }
-
-/*
-type query1ProcessArgs struct {
-	filterBid *processor.MeteredProcessor
-	q1Map     *processor.MeteredProcessor
-	processor.BaseExecutionContext
-}
-
-func (h *query1Handler) procMsg(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
-	args := argsTmp.(*query1ProcessArgs)
-	bidMsg, err := args.filterBid.ProcessAndReturn(ctx, msg)
-	if err != nil {
-		return err
-	}
-	if bidMsg != nil {
-		filtered, err := args.q1Map.ProcessAndReturn(ctx, bidMsg[0])
-		if err != nil {
-			return err
-		}
-		if filtered != nil {
-			err = args.Producers()[0].Produce(ctx, filtered[0], args.SubstreamNum(), false)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-*/

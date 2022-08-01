@@ -96,18 +96,19 @@ func processInEpoch(
 	hasProcessData := false
 	init := false
 	paused := false
-	latencies := stats.NewInt64Collector("latPerIter", stats.DEFAULT_COLLECT_DURATION)
+	// latencies := stats.NewInt64Collector("latPerIter", stats.DEFAULT_COLLECT_DURATION)
 	markTimer := time.Now()
 	var once sync.Once
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
-	debug.Fprintf(os.Stderr, "commit every(ms): %d\n", args.commitEvery)
+	debug.Fprintf(os.Stderr, "commit every(ms): %v, waitEndMark: %v\n", args.commitEvery, args.waitEndMark)
+	gotEndMark := false
 	for {
 		ret := checkMonitorReturns(dctx, dcancel, args, cmm, em, &run)
 		if ret != nil {
 			return ret
 		}
 		if run {
-			procStart := time.Now()
+			// procStart := time.Now()
 			once.Do(func() {
 				warmupCheck.StartWarmup()
 			})
@@ -116,11 +117,7 @@ func processInEpoch(
 			cur_elapsed := warmupCheck.ElapsedSinceInitial()
 			timeout := args.duration != 0 && cur_elapsed >= args.duration
 			shouldMarkByTime := (args.commitEvery != 0 && timeSinceLastMark > args.commitEvery)
-			var epochMarker commtypes.EpochMarker
-			epochMarker.Mark = commtypes.EMPTY
-			var epochMarkerTags []uint64 = nil
-			var epochMarkerTopics []string = nil
-			if (shouldMarkByTime || timeout) && hasProcessData {
+			if (shouldMarkByTime || timeout || gotEndMark) && hasProcessData {
 				if t.pauseFunc != nil {
 					if ret := t.pauseFunc(); ret != nil {
 						return ret
@@ -132,17 +129,20 @@ func processInEpoch(
 				if err != nil {
 					return common.GenErrFnOutput(err)
 				}
-				// err := cmm.FlushControlLog(dctx)
-				// if err != nil {
-				// 	return common.GenErrFnOutput(err)
-				// }
 				flushTime := stats.Elapsed(flushStart).Microseconds()
 				prepareStart := stats.TimerBegin()
-				epochMarker, epochMarkerTags, epochMarkerTopics, err = CaptureEpochStateAndCleanup(dctx, em, args)
+				epochMarker, epochMarkerTags, epochMarkerTopics, err := CaptureEpochStateAndCleanup(dctx, em, args)
 				if err != nil {
 					return common.GenErrFnOutput(err)
 				}
 				prepareTime := stats.Elapsed(prepareStart).Microseconds()
+				mStart := stats.TimerBegin()
+				err = em.MarkEpoch(dctx, epochMarker, epochMarkerTags, epochMarkerTopics)
+				if err != nil {
+					return common.GenErrFnOutput(err)
+				}
+				mElapsed := stats.Elapsed(mStart).Microseconds()
+				t.markEpochTime.AddSample(mElapsed)
 				t.markEpochPrepare.AddSample(prepareTime)
 				t.flushAllTime.AddSample(flushTime)
 				hasProcessData = false
@@ -150,11 +150,12 @@ func processInEpoch(
 			// Exit routine
 			cur_elapsed = warmupCheck.ElapsedSinceInitial()
 			timeout = args.duration != 0 && cur_elapsed >= args.duration
-			if timeout {
-				elapsed := time.Since(procStart)
-				latencies.AddSample(elapsed.Microseconds())
+			if (!args.waitEndMark && timeout) || gotEndMark {
+				// elapsed := time.Since(procStart)
+				// latencies.AddSample(elapsed.Microseconds())
 				ret := &common.FnOutput{Success: true}
-				updateReturnMetric(ret, &warmupCheck)
+				updateReturnMetric(ret, &warmupCheck,
+					args.waitEndMark, t.GetEndDuration(), args.ectx.SubstreamNum())
 				return ret
 			}
 
@@ -164,18 +165,9 @@ func processInEpoch(
 				if err != nil {
 					return common.GenErrFnOutput(err)
 				}
-				if epochMarker.Mark != commtypes.EMPTY {
-					mStart := stats.TimerBegin()
-					err = em.MarkEpoch(dctx, epochMarker, epochMarkerTags, epochMarkerTopics)
-					if err != nil {
-						return common.GenErrFnOutput(err)
-					}
-					mElapsed := stats.Elapsed(mStart).Microseconds()
-					t.markEpochTime.AddSample(mElapsed)
-				}
 				markTimer = time.Now()
 			}
-			ret := t.appProcessFunc(dctx, t, args.ectx)
+			ret := t.appProcessFunc(dctx, t, args.ectx, &gotEndMark)
 			if ret != nil {
 				if ret.Success {
 					// consume timeout but not sure whether there's more data is coming; continue to process
@@ -186,10 +178,10 @@ func processInEpoch(
 			if !hasProcessData {
 				hasProcessData = true
 			}
-			if warmupCheck.AfterWarmup() {
-				elapsed := time.Since(procStart)
-				latencies.AddSample(elapsed.Microseconds())
-			}
+			// if warmupCheck.AfterWarmup() {
+			// 	elapsed := time.Since(procStart)
+			// 	latencies.AddSample(elapsed.Microseconds())
+			// }
 		}
 	}
 }

@@ -36,6 +36,7 @@ var (
 	FLAGS_flush_ms        int
 	FLAGS_dump_dir        string
 	FLAGS_test_src        string
+	FLAGS_waitForEndMark  bool
 )
 
 func getSerdeFormat(fmtStr string) commtypes.SerdeFormat {
@@ -66,6 +67,7 @@ func invokeSourceFunc(client *http.Client, srcInvokeConfig common.SrcInvokeConfi
 	nexmarkConfig.ParNum = srcInvokeConfig.InstanceID
 	nexmarkConfig.NumSrcInstance = srcInvokeConfig.NumSrcInstance
 	nexmarkConfig.FlushMs = uint32(FLAGS_flush_ms)
+	nexmarkConfig.WaitForEndMark = FLAGS_waitForEndMark
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "source")
 	fmt.Printf("func source url is %v\n", url)
 	if err := utils.JsonPostRequest(client, url, srcInvokeConfig.NodeConstraint, nexmarkConfig, response); err != nil {
@@ -154,6 +156,7 @@ func main() {
 
 	flag.StringVar(&FLAGS_guarantee, "guarantee", "alo", "alo(at least once), 2pc(two phase commit) or epoch(epoch marking)")
 	flag.BoolVar(&FLAGS_local, "local", false, "local mode without setting node constraint")
+	flag.BoolVar(&FLAGS_waitForEndMark, "waitForLast", false, "wait for the final mark of input; used in measuring throughput")
 
 	flag.Parse()
 
@@ -164,6 +167,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "expected guarantee is alo, 2pc and epoch")
 		return
 	}
+	fmt.Fprintf(os.Stderr, "wait for last: %v\n", FLAGS_waitForEndMark)
 	switch FLAGS_app_name {
 	case "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "windowedAvg":
 		var invokeSourceFunc_ invokeSource
@@ -172,9 +176,16 @@ func main() {
 		} else {
 			invokeSourceFunc_ = invokeSourceFunc
 		}
-		err := common.Invoke(FLAGS_workload_config, FLAGS_stat_dir, FLAGS_faas_gateway,
-			NewQueryInput(uint8(common.StringToSerdeFormat(FLAGS_serdeFormat))),
-			FLAGS_warmup_time, FLAGS_local, invokeSourceFunc_)
+		invokeFuncParam := common.InvokeFuncParam{
+			ConfigFile:     FLAGS_workload_config,
+			StatDir:        FLAGS_stat_dir,
+			GatewayUrl:     FLAGS_faas_gateway,
+			WarmupTime:     FLAGS_warmup_time,
+			Local:          FLAGS_local,
+			WaitForEndMark: FLAGS_waitForEndMark,
+		}
+		err := common.Invoke(invokeFuncParam,
+			NewQueryInput(uint8(common.StringToSerdeFormat(FLAGS_serdeFormat))), invokeSourceFunc_)
 		if err != nil {
 			panic(err)
 		}

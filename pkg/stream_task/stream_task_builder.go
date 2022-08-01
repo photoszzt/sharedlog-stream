@@ -19,6 +19,7 @@ type BuildStreamTask interface {
 	PauseFunc(p func() *common.FnOutput) BuildStreamTask
 	ResumeFunc(r func(task *StreamTask)) BuildStreamTask
 	HandleErrFunc(he func() error) BuildStreamTask
+	MarkFinalStage() BuildStreamTask
 }
 
 func NewStreamTaskBuilder() SetAppProcessFunc {
@@ -35,6 +36,7 @@ func NewStreamTaskBuilder() SetAppProcessFunc {
 			markEpochTime:    stats.NewInt64Collector("markEpochTime", stats.DEFAULT_COLLECT_DURATION),
 			markEpochPrepare: stats.NewInt64Collector("markEpochPrepare", stats.DEFAULT_COLLECT_DURATION),
 			flushAllTime:     stats.NewInt64Collector("flushAllStream", stats.DEFAULT_COLLECT_DURATION),
+			isFinalStage:     false,
 		},
 	}
 }
@@ -61,5 +63,10 @@ func (b *StreamTaskBuilder) InitFunc(i func(task *StreamTask)) BuildStreamTask {
 }
 func (b *StreamTaskBuilder) HandleErrFunc(he func() error) BuildStreamTask {
 	b.task.HandleErrFunc = he
+	return b
+}
+
+func (b *StreamTaskBuilder) MarkFinalStage() BuildStreamTask {
+	b.task.isFinalStage = true
 	return b
 }

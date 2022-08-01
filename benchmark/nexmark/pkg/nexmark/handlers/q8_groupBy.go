@@ -65,15 +65,20 @@ func (h *q8GroupByHandler) getExecutionCtx(ctx context.Context, sp *common.Query
 		return processor.BaseExecutionContext{}, fmt.Errorf("get msg serde err: %v", err)
 	}
 	inConfig := &producer_consumer.StreamConsumerConfigG[string, *ntypes.Event]{
-		Timeout:  common.SrcConsumeTimeout,
-		MsgSerde: msgSerde,
+		Timeout:     common.SrcConsumeTimeout,
+		MsgSerde:    msgSerde,
+		SerdeFormat: serdeFormat,
 	}
 	outConfig := &producer_consumer.StreamSinkConfig[uint64, *ntypes.Event]{
 		MsgSerde:      outMsgSerde,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
-	src := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig), time.Duration(sp.WarmupS)*time.Second)
+	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig)
+	if err != nil {
+		return processor.BaseExecutionContext{}, err
+	}
+	src := producer_consumer.NewMeteredConsumer(consumer, time.Duration(sp.WarmupS)*time.Second)
 	src.SetInitialSource(true)
 	for _, output_stream := range output_streams {
 		sink := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_stream, outConfig), time.Duration(sp.WarmupS)*time.Second)
@@ -108,7 +113,9 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[1], &ectx))
 
 	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp interface{}) *common.FnOutput {
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
+			argsTmp processor.ExecutionContext, gotEndMark *bool,
+		) *common.FnOutput {
 			args := argsTmp.(*processor.BaseExecutionContext)
 			return execution.CommonProcess(ctx, task, args,
 				func(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
@@ -125,7 +132,7 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 						}
 					}
 					return nil
-				})
+				}, gotEndMark)
 		}).Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d",
 		h.funcName, sp.InputTopicNames[0], sp.ParNum)

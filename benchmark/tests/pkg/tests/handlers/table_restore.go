@@ -174,12 +174,17 @@ func (h *tableRestoreHandler) testRestoreKVTable(ctx context.Context) {
 			return 1
 		}
 	})
+	changelogSerde, err := commtypes.GetMsgSerdeG[int, strTs](commtypes.JSON, commtypes.IntSerdeG{}, strTsJSONSerdeG{})
+	if err != nil {
+		panic(err)
+	}
+	changelogManager, err := store_with_changelog.NewChangelogManagerForSrc(changelog,
+		changelogSerde, common.SrcConsumeTimeout, commtypes.JSON)
+	if err != nil {
+		panic(err)
+	}
 	err = store_restore.RestoreChangelogKVStateStore(ctx,
-		store_restore.NewKVStoreChangelog(kvstore,
-			store_with_changelog.NewChangelogManagerForSrc[int, strTs](changelog, commtypes.MessageJSONSerdeG[int, strTs]{
-				KeySerde: commtypes.IntSerdeG{},
-				ValSerde: strTsJSONSerdeG{},
-			}, common.SrcConsumeTimeout)), offset, 0)
+		store_restore.NewKVStoreChangelog(kvstore, changelogManager), offset, 0)
 	if err != nil {
 		panic(err)
 	}

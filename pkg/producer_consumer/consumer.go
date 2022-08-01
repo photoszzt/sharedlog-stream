@@ -15,7 +15,7 @@ type Consumer interface {
 	Name() string
 	SetName(string)
 	Stream() sharedlog_stream.Stream
-	ConfigExactlyOnce(serdeFormat commtypes.SerdeFormat, guarantee exactly_once_intr.GuaranteeMth) error
+	ConfigExactlyOnce(guarantee exactly_once_intr.GuaranteeMth) error
 	SetInitialSource(initial bool)
 	IsInitialSource() bool
 	// Lock()

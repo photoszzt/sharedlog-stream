@@ -34,23 +34,8 @@ type StreamTaskArgs struct {
 	serdeFormat    commtypes.SerdeFormat
 	fixedOutParNum int16
 	guarantee      exactly_once_intr.GuaranteeMth
+	waitEndMark    bool
 }
-
-// func (s *StreamTaskArgs) LockProducerConsumer() {
-// 	s.ectx.LockProducerConsumer()
-// }
-//
-// func (s *StreamTaskArgs) UnlockProducerConsumer() {
-// 	s.ectx.UnlockProducerConsumer()
-// }
-//
-// func (s *StreamTaskArgs) LockProducer() {
-// 	s.ectx.LockProducer()
-// }
-//
-// func (s *StreamTaskArgs) UnlockProducer() {
-// 	s.ectx.UnlockProducer()
-// }
 
 type StreamTaskArgsBuilder struct {
 	stArgs *StreamTaskArgs
@@ -105,6 +90,7 @@ type BuildStreamTaskArgs interface {
 	WindowStoreChangelogs([]store.WindowStoreOpWithChangelog) BuildStreamTaskArgs
 	KVStoreChangelogs([]store.KeyValueStoreOpWithChangelog) BuildStreamTaskArgs
 	FixedOutParNum(uint8) BuildStreamTaskArgs
+	WaitEndMark(bool) BuildStreamTaskArgs
 }
 
 func (args *StreamTaskArgsBuilder) Guarantee(gua exactly_once_intr.GuaranteeMth) SetAppID {
@@ -153,6 +139,11 @@ func (args *StreamTaskArgsBuilder) KVStoreChangelogs(kvchangelogs []store.KeyVal
 
 func (args *StreamTaskArgsBuilder) FixedOutParNum(fixedOutParNum uint8) BuildStreamTaskArgs {
 	args.stArgs.fixedOutParNum = int16(fixedOutParNum)
+	return args
+}
+
+func (args *StreamTaskArgsBuilder) WaitEndMark(waitEndMark bool) BuildStreamTaskArgs {
+	args.stArgs.waitEndMark = waitEndMark
 	return args
 }
 

@@ -2,6 +2,10 @@ package commtypes
 
 import "fmt"
 
+const (
+	END_OF_STREAM_KEY = "__end_stream"
+)
+
 type Punctuate struct{}
 
 type MessageSerde interface {
@@ -64,6 +68,7 @@ type RawMsg struct {
 	MsgSeqNum  uint64
 	LogSeqNum  uint64
 	ScaleEpoch uint64
+	StartTime  int64
 
 	ProdId ProducerId
 
@@ -81,7 +86,7 @@ type MsgAndSeq struct {
 }
 
 type MsgAndSeqs struct {
-	Msgs     []MsgAndSeq
+	Msgs     *MsgAndSeq
 	TotalLen uint32
 }
 
@@ -155,17 +160,15 @@ func DecodeRawMsgG[K, V any](rawMsg *RawMsg, msgSerde MessageSerdeG[K, V],
 }
 
 func ApplyFuncToMsgSeqs(msgSeqs *MsgAndSeqs, callback func(msg *Message) error) error {
-	for _, msgSeq := range msgSeqs.Msgs {
-		if msgSeq.MsgArr != nil {
-			for _, msg := range msgSeq.MsgArr {
-				if err := callback(&msg); err != nil {
-					return err
-				}
-			}
-		} else {
-			if err := callback(&msgSeq.Msg); err != nil {
+	if msgSeqs.Msgs.MsgArr != nil {
+		for _, msg := range msgSeqs.Msgs.MsgArr {
+			if err := callback(&msg); err != nil {
 				return err
 			}
+		}
+	} else {
+		if err := callback(&msgSeqs.Msgs.Msg); err != nil {
+			return err
 		}
 	}
 	return nil

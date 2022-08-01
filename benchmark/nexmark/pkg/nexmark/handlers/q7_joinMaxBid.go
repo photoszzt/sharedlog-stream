@@ -83,17 +83,27 @@ func (h *q7JoinMaxBid) getSrcSink(
 	}
 	timeout := time.Duration(10) * time.Millisecond
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	src1 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumerG(stream1,
+	consumer1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1,
 		&producer_consumer.StreamConsumerConfigG[uint64, *ntypes.Event]{
-			MsgSerde: inMsgSerde1,
-			Timeout:  timeout,
-		}), warmup)
-	src1.SetName("bidByPriceSrc")
-	src2 := producer_consumer.NewMeteredConsumer(producer_consumer.NewShardedSharedLogStreamConsumerG(stream2,
+			MsgSerde:    inMsgSerde1,
+			Timeout:     timeout,
+			SerdeFormat: serdeFormat,
+		})
+	if err != nil {
+		return nil, nil, err
+	}
+	consumer2, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream2,
 		&producer_consumer.StreamConsumerConfigG[uint64, ntypes.StartEndTime]{
-			MsgSerde: inMsgSerde2,
-			Timeout:  timeout,
-		}), warmup)
+			MsgSerde:    inMsgSerde2,
+			Timeout:     timeout,
+			SerdeFormat: serdeFormat,
+		})
+	if err != nil {
+		return nil, nil, err
+	}
+	src1 := producer_consumer.NewMeteredConsumer(consumer1, warmup)
+	src1.SetName("bidByPriceSrc")
+	src2 := producer_consumer.NewMeteredConsumer(consumer2, warmup)
 	src2.SetName("maxBidsWithWinSrc")
 	sink := producer_consumer.NewConcurrentMeteredSyncProducer(producer_consumer.NewShardedSharedLogStreamProducer(outputStream,
 		&producer_consumer.StreamSinkConfig[uint64, ntypes.BidAndMax]{
@@ -225,8 +235,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	}
 	task, procArgs := execution.PrepareTaskWithJoin(
 		ctx, bJoinM, mJoinB, proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
-		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum),
-	)
+		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum), true)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs,
 			fmt.Sprintf("%s-%d", h.funcName, sp.ParNum))).

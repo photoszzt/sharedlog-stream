@@ -2,6 +2,7 @@ package producer_consumer
 
 import (
 	"context"
+	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	eo_intr "sharedlog-stream/pkg/exactly_once_intr"
@@ -18,23 +19,33 @@ type StreamSinkConfig[K, V any] struct {
 
 type ShardedSharedLogStreamProducer[K, V any] struct {
 	// syncutils.Mutex
-	msgSerde  commtypes.MessageSerdeG[K, V]
-	eom       eo_intr.ReadOnlyExactlyOnceManager
-	stream    *sharedlog_stream.ShardedSharedLogStream
-	name      string
-	bufPush   bool
-	guarantee eo_intr.GuaranteeMth
+	msgSerde      commtypes.MessageSerdeG[K, V]
+	eom           eo_intr.ReadOnlyExactlyOnceManager
+	stream        *sharedlog_stream.ShardedSharedLogStream
+	name          string
+	bufPush       bool
+	guarantee     eo_intr.GuaranteeMth
+	isFinalOutput bool
 }
 
 var _ = Producer(&ShardedSharedLogStreamProducer[int, string]{})
 
 func NewShardedSharedLogStreamProducer[K, V any](stream *sharedlog_stream.ShardedSharedLogStream, config *StreamSinkConfig[K, V]) *ShardedSharedLogStreamProducer[K, V] {
 	return &ShardedSharedLogStreamProducer[K, V]{
-		msgSerde: config.MsgSerde,
-		stream:   stream,
-		bufPush:  utils.CheckBufPush(),
-		name:     "sink",
+		msgSerde:      config.MsgSerde,
+		stream:        stream,
+		bufPush:       utils.CheckBufPush(),
+		name:          "sink",
+		isFinalOutput: false,
 	}
+}
+
+func (sls *ShardedSharedLogStreamProducer[K, V]) MarkFinalOutput() {
+	sls.isFinalOutput = true
+}
+
+func (sls *ShardedSharedLogStreamProducer[K, V]) IsFinalOutput() bool {
+	return sls.isFinalOutput
 }
 
 func (sls *ShardedSharedLogStreamProducer[K, V]) ResetInitialProd() {
@@ -75,19 +86,31 @@ func (sls *ShardedSharedLogStreamProducer[K, V]) Produce(ctx context.Context, ms
 	if utils.IsNil(msg.Key) && utils.IsNil(msg.Value) {
 		return nil
 	}
-	ctrl, ok := msg.Key.(string)
-	if ok && ctrl == txn_data.SCALE_FENCE_KEY {
-		debug.Assert(isControl, "scale fence msg should be a control msg")
+	if isControl {
 		if sls.bufPush {
 			err := sls.flush(ctx)
 			if err != nil {
 				return err
 			}
 		}
-		scale_fence_tag := txn_data.ScaleFenceTag(sls.Stream().TopicNameHash(), parNum)
-		_, err := sls.pushWithTag(ctx, msg.Value.([]byte), parNum, []uint64{scale_fence_tag},
-			nil, sharedlog_stream.StreamEntryMeta(isControl, false))
-		return err
+	}
+	ctrl, ok := msg.Key.(string)
+	if ok {
+		if ctrl == txn_data.SCALE_FENCE_KEY {
+			debug.Assert(isControl, "scale fence msg should be a control msg")
+			scale_fence_tag := txn_data.ScaleFenceTag(sls.Stream().TopicNameHash(), parNum)
+			nameTag := sharedlog_stream.NameHashWithPartition(sls.Stream().TopicNameHash(), parNum)
+			_, err := sls.pushWithTag(ctx, msg.Value.([]byte), parNum, []uint64{scale_fence_tag, nameTag},
+				nil, sharedlog_stream.StreamEntryMeta(isControl, false))
+			return err
+		}
+		if ctrl == commtypes.END_OF_STREAM_KEY {
+			debug.Assert(isControl, "end of stream should be a control msg")
+			off, err := sls.push(ctx, msg.Value.([]byte), parNum,
+				sharedlog_stream.StreamEntryMeta(isControl, false))
+			debug.Fprintf(os.Stderr, "Producer: push end of stream to %s %d at 0x%x\n", sls.Stream().TopicName(), parNum, off)
+			return err
+		}
 	}
 	bytes, err := sls.msgSerde.Encode(msg)
 	if err != nil {

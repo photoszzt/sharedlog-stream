@@ -114,6 +114,7 @@ func processWithTransaction(
 	init := false
 	var once sync.Once
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
+	gotEndMark := false
 	for {
 		ret := checkMonitorReturns(dctx, dcancel, args, cmm, tm, &run)
 		if ret != nil {
@@ -133,7 +134,7 @@ func processWithTransaction(
 			// 	shouldCommitByTime, timeSinceTranStart, cur_elapsed)
 
 			// should commit
-			if (shouldCommitByTime || timeout) && hasLiveTransaction {
+			if (shouldCommitByTime || timeout || gotEndMark) && hasLiveTransaction {
 				err_out := commitTransaction(ctx, t, tm, cmm, args, &hasLiveTransaction,
 					&trackConsumePar, &paused)
 				if err_out != nil {
@@ -145,8 +146,7 @@ func processWithTransaction(
 
 			// Exit routine
 			cur_elapsed = warmupCheck.ElapsedSinceInitial()
-			timeout = args.duration != 0 && cur_elapsed >= args.duration
-			if timeout {
+			if (!args.waitEndMark && args.duration != 0 && cur_elapsed >= args.duration) || gotEndMark {
 				if err := tm.Close(); err != nil {
 					debug.Fprintf(os.Stderr, "[ERROR] close transaction manager: %v\n", err)
 					return &common.FnOutput{Success: false, Message: fmt.Sprintf("close transaction manager: %v\n", err)}
@@ -156,7 +156,8 @@ func processWithTransaction(
 				ret := &common.FnOutput{
 					Success: true,
 				}
-				updateReturnMetric(ret, &warmupCheck)
+				updateReturnMetric(ret, &warmupCheck,
+					args.waitEndMark, t.GetEndDuration(), args.ectx.SubstreamNum())
 				return ret
 			}
 
@@ -168,7 +169,7 @@ func processWithTransaction(
 			}
 			debug.Assert(hasLiveTransaction, "after start new transaction. there should be a live transaction\n")
 
-			ret := t.appProcessFunc(ctx, t, args.ectx)
+			ret := t.appProcessFunc(ctx, t, args.ectx, &gotEndMark)
 			if ret != nil {
 				if ret.Success {
 					// consume timeout but not sure whether there's more data is coming; continue to process

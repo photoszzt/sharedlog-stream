@@ -6,9 +6,11 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
 	"sharedlog-stream/pkg/bits"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils/syncutils"
@@ -91,13 +93,13 @@ func (e *StreamLogEntry) BelongsToTopic(topicName string) bool {
 }
 
 func decodeStreamLogEntry(logEntry *types.LogEntry) *StreamLogEntry {
-	streamLogEntry := &StreamLogEntry{}
+	streamLogEntry := StreamLogEntry{}
 	_, err := streamLogEntry.UnmarshalMsg(logEntry.Data)
 	if err != nil {
 		panic(err)
 	}
 	streamLogEntry.seqNum = logEntry.SeqNum
-	return streamLogEntry
+	return &streamLogEntry
 }
 
 func NewSharedLogStream(env types.Environment, topicName string, serdeFormat commtypes.SerdeFormat) (*SharedLogStream, error) {
@@ -280,7 +282,7 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 		}
 		streamLogEntry := decodeStreamLogEntry(logEntry)
 		isControl := bits.Has(bits.Bits(streamLogEntry.Meta), Control)
-		if streamLogEntry.BelongsToTopic(s.topicName) || bits.Has(bits.Bits(streamLogEntry.Meta), Control) {
+		if streamLogEntry.BelongsToTopic(s.topicName) || isControl {
 			isPayloadArr := bits.Has(bits.Bits(streamLogEntry.Meta), PayloadArr)
 			s.cursor = streamLogEntry.seqNum + 1
 			return &commtypes.RawMsg{
@@ -344,7 +346,7 @@ func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum 
 	seqNum := tailSeqNum
 	// debug.Fprintf(os.Stderr, "find tail for topic: %s, par: %d\n", s.topicName, parNum)
 	for seqNum >= s.cursor {
-		// debug.Fprintf(os.Stderr, "current sequence number: 0x%x, tail: 0x%x, tag: %x\n", seqNum, s.tail, tag)
+		debug.Fprintf(os.Stderr, "%s (%d): 0x%x, tail: 0x%x, tag: %x\n", seqNum, s.tail, tag)
 		logEntry, err := s.readPrevWithTimeout(ctx, tag, seqNum)
 		if err != nil {
 			return err
@@ -363,7 +365,7 @@ func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum 
 		s.mux.Lock()
 		s.tail = logEntry.SeqNum + 1
 		s.mux.Unlock()
-		// debug.Fprintf(os.Stderr, "current tail is %d\n", s.tail)
+		debug.Fprintf(os.Stderr, "%s(%d) current tail is %x\n", s.topicName, parNum, s.tail)
 		break
 	}
 	return nil

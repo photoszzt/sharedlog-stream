@@ -96,6 +96,10 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 				rawMsg.Mark = commtypes.EPOCH_END
 			} else if epochMark.Mark == commtypes.SCALE_FENCE {
 				rawMsg.ScaleEpoch = epochMark.ScaleEpoch
+				rawMsg.Mark = epochMark.Mark
+			} else if epochMark.Mark == commtypes.STREAM_END {
+				rawMsg.Mark = epochMark.Mark
+				rawMsg.StartTime = epochMark.StartTime
 			}
 		}
 
@@ -124,8 +128,12 @@ func (emc *EpochMarkConsumer) checkMsgQueue(msgQueue *deque.Deque, parNum uint8)
 				return nil
 			}
 		}
-		if frontMsg.ScaleEpoch != 0 {
+		if frontMsg.Mark == commtypes.SCALE_FENCE && frontMsg.ScaleEpoch != 0 {
 			msgQueue.PopFront()
+			return frontMsg
+		}
+		if frontMsg.Mark == commtypes.STREAM_END {
+			frontMsg := msgQueue.PopFront().(*commtypes.RawMsg)
 			return frontMsg
 		}
 		msgStatus := emc.checkMsgStatus(frontMsg, parNum)

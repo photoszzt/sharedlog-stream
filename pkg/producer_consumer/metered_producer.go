@@ -33,8 +33,7 @@ type ConcurrentMeteredSink[K, V any] struct {
 	ctrlCount       uint64
 	warmup          stats.WarmupGoroutineSafe
 
-	measure       bool
-	isFinalOutput bool
+	measure bool
 }
 
 var _ = MeteredProducerIntr(&ConcurrentMeteredSink[int, string]{})
@@ -47,9 +46,8 @@ func NewConcurrentMeteredSyncProducer[K, V any](sink *ShardedSharedLogStreamProd
 			stats.DEFAULT_COLLECT_DURATION),
 		produceTp: stats.NewConcurrentThroughputCounter(sink_name,
 			stats.DEFAULT_COLLECT_DURATION),
-		measure:       checkMeasureSink(),
-		isFinalOutput: false,
-		warmup:        stats.NewWarmupGoroutineSafeChecker(warmup),
+		measure: checkMeasureSink(),
+		warmup:  stats.NewWarmupGoroutineSafeChecker(warmup),
 		// eventTimeLatencies: make([]int, 0),
 		eventTimeSample: stats.NewConcurrentInt64Collector(sink_name+"_ets",
 			stats.DEFAULT_COLLECT_DURATION),
@@ -57,11 +55,11 @@ func NewConcurrentMeteredSyncProducer[K, V any](sink *ShardedSharedLogStreamProd
 }
 
 func (s *ConcurrentMeteredSink[K, V]) MarkFinalOutput() {
-	s.isFinalOutput = true
+	s.producer.MarkFinalOutput()
 }
 
 func (s *ConcurrentMeteredSink[K, V]) IsFinalOutput() bool {
-	return s.isFinalOutput
+	return s.producer.IsFinalOutput()
 }
 
 func (s *ConcurrentMeteredSink[K, V]) StartWarmup() {
@@ -83,7 +81,7 @@ func (s *ConcurrentMeteredSink[K, V]) InitFlushTimer() {}
 func (s *ConcurrentMeteredSink[K, V]) Produce(ctx context.Context, msg commtypes.Message,
 	parNum uint8, isControl bool,
 ) error {
-	if s.isFinalOutput {
+	if s.IsFinalOutput() {
 		procStart := time.Now()
 		ts, err := extractEventTs(&msg)
 		if err != nil {
@@ -163,7 +161,6 @@ type MeteredProducer[K, V any] struct {
 	warmup          stats.Warmup
 	ctrlCount       uint64
 	measure         bool
-	isFinalOutput   bool
 }
 
 func NewMeteredProducer[K, V any](sink *ShardedSharedLogStreamProducer[K, V], warmup time.Duration) *MeteredProducer[K, V] {
@@ -175,7 +172,6 @@ func NewMeteredProducer[K, V any](sink *ShardedSharedLogStreamProducer[K, V], wa
 		produceTp:       stats.NewThroughputCounter(sink_name, stats.DEFAULT_COLLECT_DURATION),
 		eventTimeSample: stats.NewInt64Collector(sink_name+"_ets", stats.DEFAULT_COLLECT_DURATION),
 		measure:         checkMeasureSink(),
-		isFinalOutput:   false,
 		warmup:          stats.NewWarmupChecker(warmup),
 	}
 }
@@ -183,11 +179,11 @@ func NewMeteredProducer[K, V any](sink *ShardedSharedLogStreamProducer[K, V], wa
 func (s *MeteredProducer[K, V]) InitFlushTimer() {}
 
 func (s *MeteredProducer[K, V]) MarkFinalOutput() {
-	s.isFinalOutput = true
+	s.producer.MarkFinalOutput()
 }
 
 func (s *MeteredProducer[K, V]) IsFinalOutput() bool {
-	return s.isFinalOutput
+	return s.producer.IsFinalOutput()
 }
 
 func (s *MeteredProducer[K, V]) StartWarmup() {
@@ -197,7 +193,7 @@ func (s *MeteredProducer[K, V]) StartWarmup() {
 }
 
 func (s *MeteredProducer[K, V]) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
-	if s.isFinalOutput {
+	if s.IsFinalOutput() {
 		procStart := time.Now()
 		ts, err := extractEventTs(&msg)
 		if err != nil {

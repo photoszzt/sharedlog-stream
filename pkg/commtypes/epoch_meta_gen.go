@@ -190,6 +190,12 @@ func (z *EpochMarker) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "ScaleEpoch")
 				return
 			}
+		case "startTime":
+			z.StartTime, err = dc.ReadInt64()
+			if err != nil {
+				err = msgp.WrapError(err, "StartTime")
+				return
+			}
 		case "mark":
 			{
 				var zb0006 uint8
@@ -214,8 +220,8 @@ func (z *EpochMarker) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *EpochMarker) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
-	zb0001Len := uint32(4)
-	var zb0001Mask uint8 /* 4 bits */
+	zb0001Len := uint32(5)
+	var zb0001Mask uint8 /* 5 bits */
 	if z.ConSeqNums == nil {
 		zb0001Len--
 		zb0001Mask |= 0x1
@@ -228,9 +234,13 @@ func (z *EpochMarker) EncodeMsg(en *msgp.Writer) (err error) {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if z.Mark == 0 {
+	if z.StartTime == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x8
+	}
+	if z.Mark == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x10
 	}
 	// variable map header, size zb0001Len
 	err = en.Append(0x80 | uint8(zb0001Len))
@@ -334,6 +344,18 @@ func (z *EpochMarker) EncodeMsg(en *msgp.Writer) (err error) {
 		}
 	}
 	if (zb0001Mask & 0x8) == 0 { // if not empty
+		// write "startTime"
+		err = en.Append(0xa9, 0x73, 0x74, 0x61, 0x72, 0x74, 0x54, 0x69, 0x6d, 0x65)
+		if err != nil {
+			return
+		}
+		err = en.WriteInt64(z.StartTime)
+		if err != nil {
+			err = msgp.WrapError(err, "StartTime")
+			return
+		}
+	}
+	if (zb0001Mask & 0x10) == 0 { // if not empty
 		// write "mark"
 		err = en.Append(0xa4, 0x6d, 0x61, 0x72, 0x6b)
 		if err != nil {
@@ -352,8 +374,8 @@ func (z *EpochMarker) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *EpochMarker) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(4)
-	var zb0001Mask uint8 /* 4 bits */
+	zb0001Len := uint32(5)
+	var zb0001Mask uint8 /* 5 bits */
 	if z.ConSeqNums == nil {
 		zb0001Len--
 		zb0001Mask |= 0x1
@@ -366,9 +388,13 @@ func (z *EpochMarker) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if z.Mark == 0 {
+	if z.StartTime == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x8
+	}
+	if z.Mark == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x10
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -411,6 +437,11 @@ func (z *EpochMarker) MarshalMsg(b []byte) (o []byte, err error) {
 		o = msgp.AppendUint64(o, z.ScaleEpoch)
 	}
 	if (zb0001Mask & 0x8) == 0 { // if not empty
+		// string "startTime"
+		o = append(o, 0xa9, 0x73, 0x74, 0x61, 0x72, 0x74, 0x54, 0x69, 0x6d, 0x65)
+		o = msgp.AppendInt64(o, z.StartTime)
+	}
+	if (zb0001Mask & 0x10) == 0 { // if not empty
 		// string "mark"
 		o = append(o, 0xa4, 0x6d, 0x61, 0x72, 0x6b)
 		o = msgp.AppendUint8(o, uint8(z.Mark))
@@ -550,6 +581,12 @@ func (z *EpochMarker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "ScaleEpoch")
 				return
 			}
+		case "startTime":
+			z.StartTime, bts, err = msgp.ReadInt64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "StartTime")
+				return
+			}
 		case "mark":
 			{
 				var zb0006 uint8
@@ -588,7 +625,7 @@ func (z *EpochMarker) Msgsize() (s int) {
 			s += msgp.StringPrefixSize + len(za0003) + msgp.ArrayHeaderSize + (len(za0004) * (10 + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint8Size))
 		}
 	}
-	s += 7 + msgp.Uint64Size + 5 + msgp.Uint8Size
+	s += 7 + msgp.Uint64Size + 10 + msgp.Int64Size + 5 + msgp.Uint8Size
 	return
 }
 

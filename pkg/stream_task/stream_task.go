@@ -8,13 +8,15 @@ import (
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/transaction"
+	"time"
 )
 
-type ProcessFunc func(ctx context.Context, task *StreamTask, args interface{}) *common.FnOutput
+type ProcessFunc func(ctx context.Context, task *StreamTask, args processor.ExecutionContext, gotEndMark *bool) *common.FnOutput
 
 type StreamTask struct {
 	appProcessFunc ProcessFunc
@@ -37,6 +39,16 @@ type StreamTask struct {
 	markEpochPrepare stats.Int64Collector
 
 	flushAllTime stats.Int64Collector
+	isFinalStage bool
+	endDuration  time.Duration
+}
+
+func (t *StreamTask) SetEndDuration(startTimeMs int64) {
+	t.endDuration = time.Since(time.UnixMilli(startTimeMs))
+}
+
+func (t *StreamTask) GetEndDuration() time.Duration {
+	return t.endDuration
 }
 
 func ExecuteApp(ctx context.Context,
@@ -65,13 +77,13 @@ func ExecuteApp(ctx context.Context,
 	if ret != nil && ret.Success {
 		for _, src := range streamTaskArgs.ectx.Consumers() {
 			ret.Counts[src.Name()] = src.GetCount()
-			fmt.Fprintf(os.Stderr, "src %s msgCnt %d\n", src.Name(), src.GetCount())
+			fmt.Fprintf(os.Stderr, "%s msgCnt %d\n", src.Name(), src.GetCount())
 		}
 		for _, sink := range streamTaskArgs.ectx.Producers() {
 			sink.PrintRemainingStats()
 			ret.Counts[sink.Name()] = sink.GetCount()
 			ret.Counts[sink.Name()+"_ctrl"] = sink.NumCtrlMsg()
-			fmt.Fprintf(os.Stderr, "sink %s msgCnt %d, ctrlCnt %d\n", sink.Name(), sink.GetCount(), sink.NumCtrlMsg())
+			fmt.Fprintf(os.Stderr, "%s msgCnt %d, ctrlCnt %d\n", sink.Name(), sink.GetCount(), sink.NumCtrlMsg())
 			// if sink.IsFinalOutput() {
 			// ret.Latencies["eventTimeLatency_"+sink.Name()] = sink.GetEventTimeLatency()
 			// }
@@ -104,10 +116,17 @@ func flushStreams(ctx context.Context, t *StreamTask,
 	return nil
 }
 
-func updateReturnMetric(ret *common.FnOutput, warmupChecker *stats.Warmup) {
+func updateReturnMetric(ret *common.FnOutput, warmupChecker *stats.Warmup,
+	waitForEndMark bool, endDuration time.Duration, instanceID uint8,
+) {
 	ret.Latencies = make(map[string][]int)
 	ret.Counts = make(map[string]uint64)
-	ret.Duration = warmupChecker.ElapsedAfterWarmup().Seconds()
+	if waitForEndMark {
+		ret.Duration = endDuration.Seconds()
+	} else {
+		ret.Duration = warmupChecker.ElapsedAfterWarmup().Seconds()
+	}
+	fmt.Fprintf(os.Stderr, "duration: %f s\n", ret.Duration)
 }
 
 // for key value table, it's possible that the changelog is the source stream of the task
@@ -164,13 +183,13 @@ func restoreStateStore(ctx context.Context, args *StreamTaskArgs, offsetMap map[
 
 func configChangelogExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager, args *StreamTaskArgs) error {
 	for _, kvchangelog := range args.kvChangelogs {
-		err := kvchangelog.ConfigureExactlyOnce(rem, args.guarantee, args.serdeFormat)
+		err := kvchangelog.ConfigureExactlyOnce(rem, args.guarantee)
 		if err != nil {
 			return err
 		}
 	}
 	for _, wschangelog := range args.windowStoreChangelogs {
-		err := wschangelog.ConfigureExactlyOnce(rem, args.guarantee, args.serdeFormat)
+		err := wschangelog.ConfigureExactlyOnce(rem, args.guarantee)
 		if err != nil {
 			return err
 		}
@@ -233,7 +252,7 @@ func trackStreamAndConfigureExactlyOnce(args *StreamTaskArgs,
 	debug.Assert(args.ectx != nil, "program args should be filled")
 	for _, src := range args.ectx.Consumers() {
 		if !src.IsInitialSource() {
-			err := src.ConfigExactlyOnce(args.serdeFormat, args.guarantee)
+			err := src.ConfigExactlyOnce(args.guarantee)
 			if err != nil {
 				return err
 			}
