@@ -13,6 +13,7 @@ import (
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils/syncutils"
+	"time"
 
 	"cs.utexas.edu/zjia/faas/protocol"
 	"cs.utexas.edu/zjia/faas/types"
@@ -93,6 +94,7 @@ func (em *EpochManager) monitorEpochLog(ctx context.Context,
 		rawMsg, err := em.epochLogForRead.ReadNextWithTag(ctx, 0, fenceTag)
 		if err != nil {
 			if common_errors.IsStreamEmptyError(err) {
+				time.Sleep(time.Duration(1) * time.Second)
 				continue
 			}
 			errc <- err

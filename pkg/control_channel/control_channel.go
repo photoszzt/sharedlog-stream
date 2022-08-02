@@ -6,6 +6,8 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/data_structure"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"time"
+
 	// "sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils/syncutils"
@@ -32,9 +34,9 @@ type ControlChannelManager struct {
 	controlOutput      chan ControlChannelResult
 	controlQuit        chan struct{}
 	// appendCtrlLog      *stats.ConcurrentInt64Collector
-	funcName           string
-	currentEpoch       uint64
-	instanceID         uint8
+	funcName     string
+	currentEpoch uint64
+	instanceID   uint8
 }
 
 func (cm *ControlChannelManager) CurrentEpoch() uint64 {
@@ -64,8 +66,8 @@ func NewControlChannelManager(env types.Environment,
 		keyMappings:        make(map[string]map[string]data_structure.Uint8Set),
 		funcName:           app_id,
 		// appendCtrlLog:      stats.NewConcurrentInt64Collector("append_ctrl_log", stats.DEFAULT_COLLECT_DURATION),
-		payloadArrSerde:    sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG,
-		instanceID:         instanceID,
+		payloadArrSerde: sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG,
+		instanceID:      instanceID,
 	}
 	ctrlMetaSerde, err := txn_data.GetControlMetadataSerdeG(serdeFormat)
 	if err != nil {
@@ -241,6 +243,7 @@ func (cmm *ControlChannelManager) monitorControlChannel(
 		rawMsg, err := cmm.controlLogForRead.ReadNext(ctx, 0)
 		if err != nil {
 			if common_errors.IsStreamEmptyError(err) {
+				time.Sleep(time.Duration(100) * time.Millisecond)
 				continue
 			}
 			output <- ControlChannelErr(err)
