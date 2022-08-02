@@ -2,7 +2,6 @@ package producer_consumer
 
 import (
 	"context"
-	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	eo_intr "sharedlog-stream/pkg/exactly_once_intr"
@@ -106,9 +105,9 @@ func (sls *ShardedSharedLogStreamProducer[K, V]) Produce(ctx context.Context, ms
 		}
 		if ctrl == commtypes.END_OF_STREAM_KEY {
 			debug.Assert(isControl, "end of stream should be a control msg")
-			off, err := sls.push(ctx, msg.Value.([]byte), parNum,
+			_, err := sls.push(ctx, msg.Value.([]byte), parNum,
 				sharedlog_stream.StreamEntryMeta(isControl, false))
-			debug.Fprintf(os.Stderr, "Producer: push end of stream to %s %d at 0x%x\n", sls.Stream().TopicName(), parNum, off)
+			// debug.Fprintf(os.Stderr, "Producer: push end of stream to %s %d at 0x%x\n", sls.Stream().TopicName(), parNum, off)
 			return err
 		}
 	}

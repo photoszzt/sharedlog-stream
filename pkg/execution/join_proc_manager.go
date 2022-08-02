@@ -22,7 +22,8 @@ type JoinProcManager struct {
 func NewJoinProcManager() *JoinProcManager {
 	out := make(chan *common.FnOutput, 1)
 	return &JoinProcManager{
-		out: out,
+		out:        out,
+		gotEndMark: syncutils.AtomicBool(0),
 	}
 }
 

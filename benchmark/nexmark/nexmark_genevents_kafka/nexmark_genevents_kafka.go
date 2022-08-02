@@ -56,10 +56,6 @@ func main() {
 	flag.IntVar(&FLAGS_flushms, "flushms", 100, "flush inverval in ms")
 	flag.Parse()
 
-	fmt.Fprintf(os.Stderr, "duration: %d, events_nm: %d, serde: %s, nPar: %d, sourceInstances: %d, tps: %d, port: %d, flushMs: %d\n",
-		FLAGS_duration, FLAGS_events_num, FLAGS_serdeFormat, FLAGS_numPartition,
-		FLAGS_srcInstance, FLAGS_tps, FLAGS_port, FLAGS_flushms)
-
 	var serdeFormat commtypes.SerdeFormat
 	var valueEncoder commtypes.Encoder
 	if FLAGS_serdeFormat == "json" {
@@ -83,6 +79,9 @@ func main() {
 			panic(err)
 		}
 	}
+	fmt.Fprintf(os.Stderr, "duration: %d, events_nm: %d, serde: %s, nPar: %d, sourceInstances: %d, tps: %d, port: %d, flushMs: %d, instanceID: %d\n",
+		FLAGS_duration, FLAGS_events_num, FLAGS_serdeFormat, FLAGS_numPartition,
+		FLAGS_srcInstance, FLAGS_tps, FLAGS_port, FLAGS_flushms, instanceId)
 
 	ctx := context.Background()
 
@@ -110,13 +109,14 @@ func main() {
 	}
 	defer p.Close()
 	duration := time.Duration(FLAGS_duration) * time.Second
-	events_num := int32(FLAGS_events_num)
 	num_par := int32(FLAGS_numPartition)
 	parNum := instanceId % int(num_par)
 
 	handler := func(w http.ResponseWriter, req *http.Request) {
 		generatorConfig := generator.NewGeneratorConfig(nexmarkConfig, time.Now().UnixMilli(), 1, uint64(nexmarkConfig.NumEvents), 1)
 		eventGenerator := generator.NewSimpleNexmarkGenerator(generatorConfig, instanceId)
+		eventsPerGen := uint64(FLAGS_events_num) / uint64(generatorConfig.Configuration.NumEventGenerators)
+		fmt.Fprintf(os.Stderr, "eventsPerGen: %d, duration: %v\n", eventsPerGen, duration)
 		channel_url_cache := make(map[uint32]*generator.ChannelUrl)
 
 		idx := int32(0)
@@ -128,7 +128,7 @@ func main() {
 			elapsed := time.Since(start)
 			// fmt.Fprintf(os.Stderr, "elapsed: %v, idx: %v\n", elapsed, idx)
 			if (duration != 0 && elapsed >= duration) ||
-				(events_num != 0 && idx >= events_num) {
+				(eventsPerGen != 0 && idx >= int32(eventsPerGen)) {
 				break
 			}
 			nextEvent, err := eventGenerator.NextEvent(ctx, channel_url_cache)

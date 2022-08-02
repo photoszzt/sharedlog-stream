@@ -3,7 +3,6 @@ package producer_consumer
 import (
 	"context"
 	"fmt"
-	"os"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
@@ -137,7 +136,7 @@ func (s *ShardedSharedLogStreamConsumer[K, V]) readNext(ctx context.Context, par
 			if err != nil {
 				return nil, err
 			}
-			debug.Fprintf(os.Stderr, "%+v\n", epochMark)
+			// debug.Fprintf(os.Stderr, "%+v\n", epochMark)
 			if epochMark.Mark == commtypes.SCALE_FENCE {
 				rawMsg.Mark = epochMark.Mark
 				rawMsg.ScaleEpoch = epochMark.ScaleEpoch
