@@ -14,7 +14,7 @@ type ControlMetadata struct {
 	// key of msg
 	Key []byte `json:"k,omitempty" msgp:"k,omitempty"`
 
-	Epoch uint64 `json:"ep,omitempty" msgp:"ep,omitempty"`
+	Epoch uint16 `json:"ep,omitempty" msgp:"ep,omitempty"`
 	// old instance id
 	InstanceId uint8 `json:"iid,omitempty" msgp:"iid,omitempty"`
 

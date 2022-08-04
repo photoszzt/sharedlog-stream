@@ -15,7 +15,7 @@ import (
 
 type ScaleEpochAndBytes struct {
 	Payload    []byte
-	ScaleEpoch uint64
+	ScaleEpoch uint16
 }
 
 type StartTimeAndBytes struct {

@@ -19,10 +19,10 @@ type QueryInput struct {
 	OutputTopicNames []string        `json:"outputTopicName,omitempty"`
 	InputTopicNames  []string        `json:"inputTopicName,omitempty"`
 	CommitEveryMs    uint64          `json:"commEveryMs,omitempty"`
-	ScaleEpoch       uint64          `json:"epoch"`
 	FlushMs          uint32          `json:"flushMs,omitempty"`
 	WarmupS          uint32          `json:"warmup,omitempty"`
 	Duration         uint32          `json:"duration,omitempty"`
+	ScaleEpoch       uint16          `json:"epoch"`
 	WaitForEndMark   bool            `json:"waitEnd,omitempty"`
 	NumInPartition   uint8           `json:"numInPartition,omitempty"`
 	ParNum           uint8           `json:"ParNum,omitempty"`
@@ -35,7 +35,7 @@ type ConfigScaleInput struct {
 	Config      map[string]uint8 `json:"sg,omitempty"`
 	AppId       string           `json:"aid,omitempty"`
 	FuncNames   []string         `json:"fns,omitempty"`
-	ScaleEpoch  uint64           `json:"epoch,omitempty"`
+	ScaleEpoch  uint16           `json:"epoch,omitempty"`
 	SerdeFormat uint8            `json:"serdeFormat,omitempty"`
 	Bootstrap   bool             `json:"bs,omitempty"`
 }

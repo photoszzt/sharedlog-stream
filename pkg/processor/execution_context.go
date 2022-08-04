@@ -21,7 +21,7 @@ func NewExecutionContext(
 	consumers []producer_consumer.MeteredConsumerIntr,
 	producers []producer_consumer.MeteredProducerIntr,
 	funcName string,
-	curEpoch uint64,
+	curEpoch uint16,
 	parNum uint8,
 ) BaseExecutionContext {
 	return BaseExecutionContext{

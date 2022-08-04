@@ -65,13 +65,13 @@ var EmptyRawMsg = RawMsg{Payload: nil, MsgSeqNum: 0, LogSeqNum: 0}
 type RawMsg struct {
 	Payload []byte
 
-	MsgSeqNum  uint64
-	LogSeqNum  uint64
-	ScaleEpoch uint64
-	StartTime  int64
+	MsgSeqNum uint64
+	LogSeqNum uint64
+	StartTime int64
 
 	ProdId ProducerId
 
+	ScaleEpoch   uint16
 	IsControl    bool
 	IsPayloadArr bool
 	Mark         EpochMark

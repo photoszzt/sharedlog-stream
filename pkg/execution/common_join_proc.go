@@ -58,7 +58,7 @@ func (c *CommonJoinProcArgs) FuncName() string {
 	return c.arg1.FuncName()
 }
 
-func (c *CommonJoinProcArgs) CurEpoch() uint64 {
+func (c *CommonJoinProcArgs) CurEpoch() uint16 {
 	return c.arg1.CurEpoch()
 }
 

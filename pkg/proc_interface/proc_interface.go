@@ -46,7 +46,7 @@ func (pa *BaseConsumersProducers) StartWarmup() {
 
 type ProcArgs interface {
 	SubstreamNum() uint8
-	CurEpoch() uint64
+	CurEpoch() uint16
 	FuncName() string
 	RecordFinishFunc() exactly_once_intr.RecordPrevInstanceFinishFunc
 	SetRecordFinishFunc(recordFinishFunc exactly_once_intr.RecordPrevInstanceFinishFunc)
@@ -63,7 +63,7 @@ type SetFuncName interface {
 }
 
 type SetCurEpoch interface {
-	CurEpoch(uint64) SetSubstreamNum
+	CurEpoch(uint16) SetSubstreamNum
 }
 
 type SetSubstreamNum interface {
@@ -86,7 +86,7 @@ func (b *BaseProcArgsBuilder) FuncName(funcName string) SetCurEpoch {
 	b.bp.funcName = funcName
 	return b
 }
-func (b *BaseProcArgsBuilder) CurEpoch(curEpoch uint64) SetSubstreamNum {
+func (b *BaseProcArgsBuilder) CurEpoch(curEpoch uint16) SetSubstreamNum {
 	b.bp.curEpoch = curEpoch
 	return b
 }
@@ -116,11 +116,11 @@ type BaseProcArgs struct {
 	recordFinishFunc exactly_once_intr.RecordPrevInstanceFinishFunc
 	trackParFunc     exactly_once_intr.TrackProdSubStreamFunc
 	funcName         string
-	curEpoch         uint64
+	curEpoch         uint16
 	parNum           uint8
 }
 
-func NewBaseProcArgs(funcName string, curEpoch uint64, parNum uint8) BaseProcArgs {
+func NewBaseProcArgs(funcName string, curEpoch uint16, parNum uint8) BaseProcArgs {
 	return BaseProcArgs{
 		recordFinishFunc: exactly_once_intr.DefaultRecordPrevInstanceFinishFunc,
 		trackParFunc:     exactly_once_intr.DefaultTrackProdSubstreamFunc,
@@ -138,7 +138,7 @@ func (pa *BaseProcArgs) FuncName() string {
 	return pa.funcName
 }
 
-func (pa *BaseProcArgs) CurEpoch() uint64 {
+func (pa *BaseProcArgs) CurEpoch() uint16 {
 	return pa.curEpoch
 }
 

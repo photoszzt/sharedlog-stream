@@ -35,8 +35,8 @@ func (p ProduceRange) String() string {
 type EpochMarker struct {
 	ConSeqNums   map[string]uint64         `json:"ConSeqNum,omitempty" msg:"ConSeqNum,omitempty"`
 	OutputRanges map[string][]ProduceRange `json:"outRng,omitempty" msg:"outRng,omitempty"`
-	ScaleEpoch   uint64                    `json:"sepoch,omitempty" msg:"sepoch,omitempty"`
 	StartTime    int64                     `json:"startTime,omitempty" msg:"startTime,omitempty"`
+	ScaleEpoch   uint16                    `json:"sepoch,omitempty" msg:"sepoch,omitempty"`
 	Mark         EpochMark                 `json:"mark,omitempty" msg:"mark,omitempty"`
 }
 

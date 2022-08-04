@@ -35,18 +35,18 @@ type ControlChannelManager struct {
 	controlQuit        chan struct{}
 	// appendCtrlLog      *stats.ConcurrentInt64Collector
 	funcName     string
-	currentEpoch uint64
+	currentEpoch uint16
 	instanceID   uint8
 }
 
-func (cm *ControlChannelManager) CurrentEpoch() uint64 {
+func (cm *ControlChannelManager) CurrentEpoch() uint16 {
 	return cm.currentEpoch
 }
 
 func NewControlChannelManager(env types.Environment,
 	app_id string,
 	serdeFormat commtypes.SerdeFormat,
-	epoch uint64,
+	epoch uint16,
 	instanceID uint8,
 ) (*ControlChannelManager, error) {
 	logForRead, err := sharedlog_stream.NewShardedSharedLogStream(env, CONTROL_LOG_TOPIC_NAME+"_"+app_id, 1, serdeFormat)
@@ -61,7 +61,7 @@ func NewControlChannelManager(env types.Environment,
 	cm := &ControlChannelManager{
 		controlLogForRead:  logForRead,
 		controlLogForWrite: logForWrite,
-		currentEpoch:       0,
+		currentEpoch:       epoch,
 		topicStreams:       make(map[string]*sharedlog_stream.ShardedSharedLogStream),
 		keyMappings:        make(map[string]map[string]data_structure.Uint8Set),
 		funcName:           app_id,
@@ -94,8 +94,7 @@ func (cmm *ControlChannelManager) RestoreMapping(ctx context.Context) error {
 			return err
 		}
 		ctrlMeta := msg.Value.(txn_data.ControlMetadata)
-		if ctrlMeta.Config == nil {
-			cmm.currentEpoch = ctrlMeta.Epoch
+		if ctrlMeta.Topic != "" {
 			cmm.updateKeyMapping(&ctrlMeta)
 		}
 	}
@@ -185,7 +184,7 @@ func (cmm *ControlChannelManager) RecordPrevInstanceFinish(
 	ctx context.Context,
 	funcName string,
 	instanceID uint8,
-	epoch uint64,
+	epoch uint16,
 ) error {
 	cm := txn_data.ControlMetadata{
 		FinishedPrevTask: funcName,
