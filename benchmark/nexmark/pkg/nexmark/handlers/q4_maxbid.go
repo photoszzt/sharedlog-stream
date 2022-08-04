@@ -130,10 +130,10 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	compare := func(a, b treemap.Key) int {
+	compare := func(a, b treemap.Key) bool {
 		ka := a.(ntypes.AuctionIdCategory)
 		kb := b.(ntypes.AuctionIdCategory)
-		return ntypes.CompareAuctionIdCategory(&ka, &kb)
+		return ntypes.CompareAuctionIdCategory(&ka, &kb) < 0
 	}
 	kvstore, err := store_with_changelog.CreateInMemKVTableWithChangelog(mp, compare)
 	if err != nil {

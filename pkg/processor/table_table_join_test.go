@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/treemap"
+	"sharedlog-stream/pkg/store"
 	"testing"
 )
 
@@ -15,19 +15,8 @@ func getJoinTable(t *testing.T) (
 	func(ctx context.Context, m commtypes.Message) []commtypes.Message,
 	func(ctx context.Context, m commtypes.Message) []commtypes.Message,
 ) {
-	compare := func(a, b treemap.Key) int {
-		valA := a.(int)
-		valB := b.(int)
-		if valA < valB {
-			return -1
-		} else if valA == valB {
-			return 0
-		} else {
-			return 1
-		}
-	}
-	toTab1, tab1 := ToInMemKVTable("tab1", compare)
-	toTab2, tab2 := ToInMemKVTable("tab2", compare)
+	toTab1, tab1 := ToInMemKVTable("tab1", store.IntLess)
+	toTab2, tab2 := ToInMemKVTable("tab2", store.IntLess)
 	joiner := ValueJoinerWithKeyFunc(
 		func(readOnlyKey interface{},
 			leftValue interface{}, rightValue interface{},

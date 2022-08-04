@@ -4,7 +4,6 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/treemap"
 
 	"github.com/rs/zerolog/log"
 )
@@ -82,7 +81,7 @@ func MsgSerdeWithValueTsG[K any](serdeFormat commtypes.SerdeFormat, keySerde com
 	return commtypes.GetMsgSerdeG(serdeFormat, keySerde, valueTsSerde)
 }
 
-func ToInMemKVTable(storeName string, compare func(a, b treemap.Key) int) (
+func ToInMemKVTable(storeName string, compare store.KVStoreLessFunc) (
 	*MeteredProcessor, store.CoreKeyValueStore,
 ) {
 	s := store.NewInMemoryKeyValueStore(storeName, compare)

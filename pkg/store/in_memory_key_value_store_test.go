@@ -2,22 +2,11 @@ package store
 
 import (
 	"context"
-	"sharedlog-stream/pkg/treemap"
 	"testing"
 )
 
 func getKeyValueStore() CoreKeyValueStore {
-	store := NewInMemoryKeyValueStore("test1", func(a, b treemap.Key) int {
-		ka := a.(int)
-		kb := b.(int)
-		if ka < kb {
-			return -1
-		} else if ka == kb {
-			return 0
-		} else {
-			return 1
-		}
-	})
+	store := NewInMemoryKeyValueStore("test1", IntLess)
 	return store
 }
 

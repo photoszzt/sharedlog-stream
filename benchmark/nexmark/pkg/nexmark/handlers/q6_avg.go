@@ -119,7 +119,7 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	kvstore, err := store_with_changelog.CreateInMemKVTableWithChangelog(mp, store.Uint64KeyKVStoreCompare)
+	kvstore, err := store_with_changelog.CreateInMemKVTableWithChangelog(mp, store.Uint64Less)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

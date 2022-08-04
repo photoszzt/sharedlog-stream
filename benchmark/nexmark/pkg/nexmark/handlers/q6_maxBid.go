@@ -134,10 +134,10 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	compare := func(a, b treemap.Key) int {
+	compare := func(a, b treemap.Key) bool {
 		ka := a.(ntypes.AuctionIdSeller)
 		kb := b.(ntypes.AuctionIdSeller)
-		return ntypes.CompareAuctionIDSeller(&ka, &kb)
+		return ntypes.CompareAuctionIDSeller(&ka, &kb) < 0
 	}
 	kvstore, err := store_with_changelog.CreateInMemKVTableWithChangelog(
 		mp, compare)

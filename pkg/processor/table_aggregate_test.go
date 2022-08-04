@@ -30,8 +30,8 @@ var (
 func TestAggBasic(t *testing.T) {
 	ctx := context.Background()
 	pc := NewProcessorChains()
-	srcTable := store.NewInMemoryKeyValueStore("srcTab", store.StringKeyKVStoreCompare)
-	st := store.NewInMemoryKeyValueStore("aggTab", store.StringKeyKVStoreCompare)
+	srcTable := store.NewInMemoryKeyValueStore("srcTab", store.StringLess)
+	st := store.NewInMemoryKeyValueStore("aggTab", store.StringLess)
 	pc.
 		Via(NewTableSourceProcessorWithTable(srcTable)).
 		Via(NewTableGroupByMapProcessor("noOpGroupBy",
@@ -88,8 +88,8 @@ func TestAggBasic(t *testing.T) {
 func TestAggRepartition(t *testing.T) {
 	ctx := context.Background()
 	pc := NewProcessorChains()
-	srcTable := store.NewInMemoryKeyValueStore("srcTab", store.StringKeyKVStoreCompare)
-	st := store.NewInMemoryKeyValueStore("aggTab", store.StringKeyKVStoreCompare)
+	srcTable := store.NewInMemoryKeyValueStore("srcTab", store.StringLess)
+	st := store.NewInMemoryKeyValueStore("aggTab", store.StringLess)
 	pc.
 		Via(NewTableSourceProcessorWithTable(srcTable)).
 		Via(NewTableGroupByMapProcessor("groupBy", MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
@@ -147,8 +147,8 @@ func TestAggRepartition(t *testing.T) {
 
 func TestCount(t *testing.T) {
 	pc := NewProcessorChains()
-	srcTable := store.NewInMemoryKeyValueStore("srcTab", store.StringKeyKVStoreCompare)
-	st := store.NewInMemoryKeyValueStore("aggTab", store.StringKeyKVStoreCompare)
+	srcTable := store.NewInMemoryKeyValueStore("srcTab", store.StringLess)
+	st := store.NewInMemoryKeyValueStore("aggTab", store.StringLess)
 	pc.
 		Via(NewTableSourceProcessorWithTable(srcTable)).
 		Via(NewTableGroupByMapProcessor("groupBy", MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
@@ -204,8 +204,8 @@ func TestCount(t *testing.T) {
 
 func TestRemoveOldBeforeAddNew(t *testing.T) {
 	pc := NewProcessorChains()
-	srcTable := store.NewInMemoryKeyValueStore("srcTab", store.StringKeyKVStoreCompare)
-	st := store.NewInMemoryKeyValueStore("aggTab", store.StringKeyKVStoreCompare)
+	srcTable := store.NewInMemoryKeyValueStore("srcTab", store.StringLess)
+	st := store.NewInMemoryKeyValueStore("aggTab", store.StringLess)
 	pc.
 		Via(NewTableSourceProcessorWithTable(srcTable)).
 		Via(NewTableGroupByMapProcessor("groupBy", MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {

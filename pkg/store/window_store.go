@@ -23,9 +23,30 @@ type CoreWindowStore interface {
 	OnlyUpdateInMemWinStore
 }
 
+type CoreWindowStoreG[K, V any] interface {
+	StateStore
+	Put(ctx context.Context, key K, value V, windowStartTimestamp int64) error
+	Get(ctx context.Context, key K, windowStartTimestamp int64) (V, bool, error)
+	Fetch(ctx context.Context, key K, timeFrom time.Time, timeTo time.Time,
+		iterFunc func(int64 /* ts */, K, V) error) error
+	FetchWithKeyRange(ctx context.Context, keyFrom K,
+		keyTo K, timeFrom time.Time, timeTo time.Time,
+		iterFunc func(int64, K, V) error) error
+	FetchAll(ctx context.Context, timeFrom time.Time, timeTo time.Time,
+		iterFunc func(int64, K, V) error) error
+	IterAll(iterFunc func(int64, K, V) error) error
+	TableType() TABLE_TYPE
+	UpdateTrackParFunc
+}
+
 type WindowStoreBackedByChangelog interface {
 	CoreWindowStore
 	WindowStoreOpWithChangelog
+}
+
+type WindowStoreBackedByChangelogG[K, V any] interface {
+	CoreWindowStoreG[K, V]
+	WindowStoreOpWithChangelogG[K, V]
 }
 
 type OnlyUpdateInMemWinStore interface {
@@ -33,10 +54,23 @@ type OnlyUpdateInMemWinStore interface {
 		key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error
 }
 
+type OnlyUpdateInMemWinStoreG[K, V any] interface {
+	PutWithoutPushToChangelog(ctx context.Context,
+		key K, value V, windowStartTimestamp int64) error
+}
+
 type WindowStoreOpWithChangelog interface {
 	StoreBackedByChangelog
 	UpdateTrackParFunc
 	OnlyUpdateInMemWinStore
+	ProduceRangeRecording
+	SubstreamNum() uint8
+}
+
+type WindowStoreOpWithChangelogG[K, V any] interface {
+	StoreBackedByChangelog
+	UpdateTrackParFunc
+	OnlyUpdateInMemWinStoreG[K, V]
 	ProduceRangeRecording
 	SubstreamNum() uint8
 }

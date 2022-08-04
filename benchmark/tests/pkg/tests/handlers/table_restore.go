@@ -163,16 +163,10 @@ func (h *tableRestoreHandler) testRestoreKVTable(ctx context.Context) {
 	if offset, err = h.pushToLog(ctx, 3, "three", 0, msgSerde, changelog); err != nil {
 		panic(err)
 	}
-	kvstore := store.NewInMemoryKeyValueStore("test1", func(a, b treemap.Key) int {
+	kvstore := store.NewInMemoryKeyValueStore("test1", func(a, b treemap.Key) bool {
 		ka := a.(int)
 		kb := b.(int)
-		if ka < kb {
-			return -1
-		} else if ka == kb {
-			return 0
-		} else {
-			return 1
-		}
+		return ka < kb
 	})
 	changelogSerde, err := commtypes.GetMsgSerdeG[int, strTs](commtypes.JSON, commtypes.IntSerdeG{}, strTsJSONSerdeG{})
 	if err != nil {

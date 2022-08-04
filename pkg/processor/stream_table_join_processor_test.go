@@ -6,22 +6,11 @@ import (
 	"reflect"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/treemap"
 	"testing"
 )
 
 func getJoinProcessor() *StreamTableJoinProcessor {
-	store := store.NewInMemoryKeyValueStore("test1", func(a, b treemap.Key) int {
-		vala := a.(int)
-		valb := b.(int)
-		if vala > valb {
-			return 1
-		} else if vala == valb {
-			return 0
-		} else {
-			return -1
-		}
-	})
+	store := store.NewInMemoryKeyValueStore("test1", store.IntLess)
 	joinProc := NewStreamTableJoinProcessor(store, ValueJoinerWithKeyFunc(
 		func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
 			lv := leftValue.(int)
@@ -37,17 +26,7 @@ func getJoinProcessor() *StreamTableJoinProcessor {
 }
 
 func getJoinProcessorWithStr() *StreamTableJoinProcessor {
-	store := store.NewInMemoryKeyValueStore("test1", func(a, b treemap.Key) int {
-		vala := a.(int)
-		valb := b.(int)
-		if vala > valb {
-			return 1
-		} else if vala == valb {
-			return 0
-		} else {
-			return -1
-		}
-	})
+	store := store.NewInMemoryKeyValueStore("test1", store.IntLess)
 	joinProc := NewStreamTableJoinProcessor(store, ValueJoinerWithKeyFunc(
 		func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
 			lv := leftValue.(string)
