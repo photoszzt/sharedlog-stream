@@ -31,7 +31,14 @@ func SetupStreamStreamJoin[K, VLeft, VRight any](
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	leftJoinRight, rightJoinLeft := configureStreamStreamJoinProcessor(leftTab, rightTab, joiner, jw)
+	sharedTimeTracker := processor.NewTimeTracker()
+	leftJoinRight := processor.NewMeteredProcessor(
+		processor.NewStreamStreamJoinProcessor("leftJoinRight", rightTab, jw, joiner, false, true, sharedTimeTracker),
+	)
+	rightJoinLeft := processor.NewMeteredProcessor(
+		processor.NewStreamStreamJoinProcessor("rightJoinLeft", leftTab, jw,
+			processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker),
+	)
 	leftJoinRightFunc := func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 		// debug.Fprintf(os.Stderr, "before toLeft\n")
 		rets, err := toLeftTab.ProcessAndReturn(ctx, msg)
@@ -56,20 +63,4 @@ func SetupStreamStreamJoin[K, VLeft, VRight any](
 	}
 	wsc := []store.WindowStoreOpWithChangelog{leftTab, rightTab}
 	return leftJoinRightFunc, rightJoinLeftFunc, wsc, nil
-}
-
-func configureStreamStreamJoinProcessor(leftTab store.CoreWindowStore,
-	rightTab store.CoreWindowStore,
-	joiner processor.ValueJoinerWithKeyTsFunc,
-	jw *processor.JoinWindows,
-) (*processor.MeteredProcessor, *processor.MeteredProcessor) {
-	sharedTimeTracker := processor.NewTimeTracker()
-	leftJoinRight := processor.NewMeteredProcessor(
-		processor.NewStreamStreamJoinProcessor("leftJoinRight", rightTab, jw, joiner, false, true, sharedTimeTracker),
-	)
-	rightJoinLeft := processor.NewMeteredProcessor(
-		processor.NewStreamStreamJoinProcessor("rightJoinLeft", leftTab, jw,
-			processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker),
-	)
-	return leftJoinRight, rightJoinLeft
 }
