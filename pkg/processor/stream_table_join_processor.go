@@ -46,3 +46,43 @@ func (p *StreamTableJoinProcessor) ProcessAndReturn(ctx context.Context, msg com
 	}
 	return nil, nil
 }
+
+type StreamTableJoinProcessorG[K, V1, V2, VR any] struct {
+	store    store.CoreKeyValueStoreG[K, *commtypes.ValueTimestamp]
+	joiner   ValueJoinerWithKeyG[K, V1, V2, VR]
+	name     string
+	leftJoin bool
+}
+
+var _ = Processor(&StreamTableJoinProcessorG[int, string, string, string]{})
+
+func NewStreamTableJoinProcessorG[K, V1, V2, VR any](store store.CoreKeyValueStoreG[K, *commtypes.ValueTimestamp],
+	joiner ValueJoinerWithKeyG[K, V1, V2, VR]) *StreamTableJoinProcessorG[K, V1, V2, VR] {
+	return &StreamTableJoinProcessorG[K, V1, V2, VR]{
+		joiner:   joiner,
+		store:    store,
+		leftJoin: false,
+	}
+}
+
+func (p *StreamTableJoinProcessorG[K, V1, V2, VR]) Name() string {
+	return p.name
+}
+
+func (p *StreamTableJoinProcessorG[K, V1, V2, VR]) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
+	if msg.Key == nil || msg.Value == nil {
+		log.Warn().Msgf("Skipping record due to null join key or value. key=%v, val=%v", msg.Key, msg.Value)
+		return nil, nil
+	}
+	key := msg.Key.(K)
+	valAgg, ok, err := p.store.Get(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	if p.leftJoin || ok {
+		joined := p.joiner.Apply(key, msg.Value.(V1), valAgg.Value.(V2))
+		newMsg := commtypes.Message{Key: msg.Key, Value: joined, Timestamp: msg.Timestamp}
+		return []commtypes.Message{newMsg}, nil
+	}
+	return nil, nil
+}

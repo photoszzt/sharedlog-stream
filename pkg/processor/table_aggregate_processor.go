@@ -90,3 +90,85 @@ func (p *TableAggregateProcessor) ProcessAndReturn(ctx context.Context, msg comm
 	}
 	return []commtypes.Message{{Key: msg.Key, Value: change, Timestamp: newTs}}, nil
 }
+
+type TableAggregateProcessorG[K, V, VA any] struct {
+	store       store.CoreKeyValueStoreG[K, *commtypes.ValueTimestamp]
+	initializer InitializerG[VA]
+	add         AggregatorG[K, V, VA]
+	remove      AggregatorG[K, V, VA]
+	name        string
+}
+
+var _ = Processor(&TableAggregateProcessor{})
+
+func NewTableAggregateProcessorG[K, V, VA any](name string,
+	store store.CoreKeyValueStoreG[K, *commtypes.ValueTimestamp],
+	initializer InitializerG[VA],
+	add AggregatorG[K, V, VA],
+	remove AggregatorG[K, V, VA],
+) *TableAggregateProcessorG[K, V, VA] {
+	return &TableAggregateProcessorG[K, V, VA]{
+		initializer: initializer,
+		add:         add,
+		remove:      remove,
+		name:        name,
+		store:       store,
+	}
+}
+
+func (p *TableAggregateProcessorG[K, V, VA]) Name() string {
+	return p.name
+}
+
+func (p *TableAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
+	if utils.IsNil(msg.Key) {
+		return nil, fmt.Errorf("msg key for table aggregate should not be nil")
+	}
+	key := msg.Key.(K)
+	oldAggTs, ok, err := p.store.Get(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	var oldAgg VA
+	if ok {
+		oldAgg = oldAggTs.Value.(VA)
+	}
+	newTs := msg.Timestamp
+	var intermediateAgg VA
+
+	// first try to remove the old val
+	msgVal := msg.Value.(commtypes.Change)
+	if !utils.IsNil(msgVal.OldVal) && !utils.IsNil(oldAgg) {
+		intermediateAgg = p.remove.Apply(key, msgVal.OldVal.(V), oldAgg)
+		newTs = utils.MaxInt64(msg.Timestamp, oldAggTs.Timestamp)
+	} else {
+		intermediateAgg = oldAgg
+	}
+
+	// then try to add the new val
+	var newAgg VA
+	if !utils.IsNil(msgVal.NewVal) {
+		var initAgg VA
+		if utils.IsNil(intermediateAgg) {
+			initAgg = p.initializer.Apply()
+		} else {
+			initAgg = intermediateAgg
+		}
+		newAgg = p.add.Apply(key, msgVal.NewVal.(V), initAgg)
+		if !utils.IsNil(oldAggTs) {
+			newTs = utils.MaxInt64(msg.Timestamp, oldAggTs.Timestamp)
+		}
+	} else {
+		newAgg = intermediateAgg
+	}
+
+	err = p.store.Put(ctx, key, commtypes.CreateValueTimestamp(newAgg, newTs))
+	if err != nil {
+		return nil, err
+	}
+	change := commtypes.Change{
+		NewVal: newAgg,
+		OldVal: oldAgg,
+	}
+	return []commtypes.Message{{Key: msg.Key, Value: change, Timestamp: newTs}}, nil
+}
