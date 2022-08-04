@@ -4,10 +4,10 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/treemap"
 )
 
 type KeyValueStoreWithChangelog[K, V any] struct {
@@ -198,8 +198,26 @@ func (st *KeyValueStoreWithChangelog[K, V]) SubstreamNum() uint8 {
 }
 
 func CreateInMemKVTableWithChangelog[K, V any](mp *MaterializeParam[K, V],
-	compare func(a, b treemap.Key) int,
+	compare store.KVStoreLessFunc,
 ) (*KeyValueStoreWithChangelog[K, V], error) {
 	s := store.NewInMemoryKeyValueStore(mp.storeName, compare)
 	return NewKeyValueStoreWithChangelog(mp, s, false)
+}
+
+func CreateInMemBTreeKVTableWithChangelog[K, V any](mp *MaterializeParam[K, V],
+) (*KeyValueStoreWithChangelog[K, V], error) {
+	s := store.NewInMemoryBTreeKeyValueStore(mp.storeName)
+	return NewKeyValueStoreWithChangelog(mp, s, false)
+}
+
+func ToInMemKVTableWithChangelog[K, V any](mp *MaterializeParam[K, V],
+	compare store.KVStoreLessFunc,
+) (*processor.MeteredProcessor, *KeyValueStoreWithChangelog[K, V], error) {
+	s := store.NewInMemoryKeyValueStore(mp.storeName, compare)
+	storeWithlog, err := NewKeyValueStoreWithChangelog(mp, s, false)
+	if err != nil {
+		return nil, nil, err
+	}
+	toTableProc := processor.NewMeteredProcessor(processor.NewTableSourceProcessorWithTable(storeWithlog))
+	return toTableProc, storeWithlog, nil
 }

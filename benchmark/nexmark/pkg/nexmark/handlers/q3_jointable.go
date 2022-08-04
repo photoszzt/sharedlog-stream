@@ -16,10 +16,8 @@ import (
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
-	"sharedlog-stream/pkg/treemap"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -130,37 +128,6 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	return []producer_consumer.MeteredConsumerIntr{src1, src2}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
-type kvtables struct {
-	toTab1 *processor.MeteredProcessor
-	tab1   store.CoreKeyValueStore
-	toTab2 *processor.MeteredProcessor
-	tab2   store.CoreKeyValueStore
-}
-
-func (h *q3JoinTableHandler) setupTables(ctx context.Context,
-	srcs []producer_consumer.MeteredConsumerIntr,
-	serdeFormat commtypes.SerdeFormat,
-) (*kvtables, error) {
-	aucTabName := "auctionsBySellerIDStore"
-	perTabName := "personsByIDStore"
-	compare := func(a, b treemap.Key) int {
-		valA := a.(uint64)
-		valB := b.(uint64)
-		if valA < valB {
-			return -1
-		} else if valA == valB {
-			return 0
-		} else {
-			return 1
-		}
-	}
-	toAuctionsTable, auctionsStore := processor.ToInMemKVTable(
-		aucTabName, compare)
-	toPersonsTable, personsStore := processor.ToInMemKVTable(
-		perTabName, compare)
-	return &kvtables{toAuctionsTable, auctionsStore, toPersonsTable, personsStore}, nil
-}
-
 func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
@@ -172,10 +139,15 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		"expected only one output stream")
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
 
-	kvtabs, err := h.setupTables(ctx, srcs, serdeFormat)
+	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
+	}
+	storeMsgSerde, err := processor.MsgSerdeWithValueTsG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
+	if err != nil {
+		return common.GenErrFnOutput(err)
 	}
 	joiner := processor.ValueJoinerWithKeyFunc(
 		func(_ interface{}, _ interface{}, rightVal interface{}) interface{} {
@@ -189,80 +161,67 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			// debug.Fprintf(os.Stderr, "join outputs: %v\n", ncsi)
 			return ncsi
 		})
+	mpAuc, err := store_with_changelog.NewMaterializeParamBuilder[uint64, *commtypes.ValueTimestamp]().
+		MessageSerde(storeMsgSerde).
+		StoreName("auctionsBySellerIDStore").
+		ParNum(sp.ParNum).
+		SerdeFormat(serdeFormat).
+		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
+			Env:           h.env,
+			NumPartition:  sp.NumInPartition,
+			FlushDuration: flushDur,
+			TimeOut:       common.SrcConsumeTimeout,
+		}).Build()
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	mpPer, err := store_with_changelog.NewMaterializeParamBuilder[uint64, *commtypes.ValueTimestamp]().
+		MessageSerde(storeMsgSerde).
+		StoreName("personsByIDStore").
+		ParNum(sp.ParNum).
+		SerdeFormat(serdeFormat).
+		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
+			Env:           h.env,
+			NumPartition:  sp.NumInPartition,
+			FlushDuration: flushDur,
+			TimeOut:       common.SrcConsumeTimeout,
+		}).Build()
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	aucJoinsPerFunc, perJoinsAucFunc, kvc, err := execution.SetupTableTableJoin(
+		mpAuc, mpPer, store.Uint64Less, joiner)
 
-	auctionJoinsPersons := processor.NewMeteredProcessor(
-		processor.NewTableTableJoinProcessor("auctionJoinsPersons", kvtabs.tab2, joiner))
-
-	personJoinsAuctions := processor.NewMeteredProcessor(
-		processor.NewTableTableJoinProcessor("personJoinsAuctions", kvtabs.tab1,
-			processor.ReverseValueJoinerWithKey(joiner)))
 	toStream := processor.NewTableToStreamProcessor()
 
 	aJoinP := execution.JoinWorkerFunc(func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		// msg is auction
-		ret, err := kvtabs.toTab1.ProcessAndReturn(ctx, m)
+		ret, err := aucJoinsPerFunc(ctx, m)
 		if err != nil {
-			return nil, fmt.Errorf("ToTabA err: %v", err)
+			return nil, err
 		}
 		if ret != nil {
-			joinMsgs, err := auctionJoinsPersons.ProcessAndReturn(ctx, ret[0])
-			if err != nil {
-				return nil, fmt.Errorf("aJoinP err: %v", err)
-			}
-			if joinMsgs != nil {
-				return toStream.ProcessAndReturn(ctx, joinMsgs[0])
-			}
+			return toStream.ProcessAndReturn(ctx, ret[0])
 		}
 		return nil, nil
 	})
 	pJoinA := execution.JoinWorkerFunc(func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
 		// msg is person
-		ret, err := kvtabs.toTab2.ProcessAndReturn(ctx, m)
+		ret, err := perJoinsAucFunc(ctx, m)
 		if err != nil {
 			return nil, fmt.Errorf("ToTabP err: %v", err)
 		}
 		if ret != nil {
-			joinMsgs, err := personJoinsAuctions.ProcessAndReturn(ctx, ret[0])
-			if err != nil {
-				return nil, fmt.Errorf("pJoinA err: %v", err)
-			}
-			if joinMsgs != nil {
-				return toStream.ProcessAndReturn(ctx, joinMsgs[0])
-			}
+			return toStream.ProcessAndReturn(ctx, ret[0])
 		}
 		return nil, nil
 	})
 	task, procArgs := execution.PrepareTaskWithJoin(ctx, aJoinP, pJoinA,
 		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum), true)
-	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
-	inMsgSerde, err := commtypes.GetMsgSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
-	cm1, err := store_with_changelog.NewChangelogManagerForSrc(
-		srcs[0].Stream().(*sharedlog_stream.ShardedSharedLogStream),
-		inMsgSerde, common.SrcConsumeTimeout, serdeFormat)
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
-	cm2, err := store_with_changelog.NewChangelogManagerForSrc(
-		srcs[1].Stream().(*sharedlog_stream.ShardedSharedLogStream),
-		inMsgSerde, common.SrcConsumeTimeout, serdeFormat)
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
-
-	kvchangelogs := []store.KeyValueStoreOpWithChangelog{
-		store_restore.NewKVStoreChangelog(kvtabs.tab1, cm1),
-		store_restore.NewKVStoreChangelog(kvtabs.tab2, cm2),
-	}
 	transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
-		KVStoreChangelogs(kvchangelogs).FixedOutParNum(sp.ParNum).Build()
+		KVStoreChangelogs(kvc).FixedOutParNum(sp.ParNum).Build()
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs)
 }
