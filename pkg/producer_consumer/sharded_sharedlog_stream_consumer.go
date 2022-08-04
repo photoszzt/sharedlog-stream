@@ -137,11 +137,10 @@ func (s *ShardedSharedLogStreamConsumer[K, V]) readNext(ctx context.Context, par
 				return nil, err
 			}
 			// debug.Fprintf(os.Stderr, "%+v\n", epochMark)
+			rawMsg.Mark = epochMark.Mark
 			if epochMark.Mark == commtypes.SCALE_FENCE {
-				rawMsg.Mark = epochMark.Mark
 				rawMsg.ScaleEpoch = epochMark.ScaleEpoch
 			} else if epochMark.Mark == commtypes.STREAM_END {
-				rawMsg.Mark = epochMark.Mark
 				rawMsg.StartTime = epochMark.StartTime
 			}
 		}
@@ -217,8 +216,8 @@ L:
 					IsControl: true,
 				}
 				return &commtypes.MsgAndSeqs{Msgs: msgs, TotalLen: 1}, nil
-			} else {
-				return nil, fmt.Errorf("unrecognized mark")
+			} else if rawMsg.Mark != commtypes.ABORT && rawMsg.Mark != commtypes.EPOCH_END {
+				return nil, fmt.Errorf("unrecognized mark: %v", rawMsg.Mark)
 			}
 		} else if len(rawMsg.Payload) == 0 {
 			continue

@@ -129,6 +129,7 @@ func (em *EpochManager) StartMonitorLog(
 func (em *EpochManager) appendToEpochLog(ctx context.Context,
 	meta commtypes.EpochMarker, tags []uint64, additionalTopic []string,
 ) (uint64, error) {
+	debug.Assert(meta.Mark != commtypes.EMPTY, "mark should not be empty")
 	encoded, err := em.epochMetaSerde.Encode(meta)
 	if err != nil {
 		return 0, err
