@@ -105,7 +105,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) PutIfAbsent(ctx context.Context, ke
 		}
 		return optional.Empty[V](), nil
 	}
-	return optional.Of[V](origVal), nil
+	return optional.Of(origVal), nil
 }
 
 func (st *KeyValueStoreWithChangelogG[K, V]) PutAll(ctx context.Context, entries []*commtypes.Message) error {
