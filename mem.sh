@@ -13,5 +13,5 @@ fi
 APP_NAME=$1
 GUA=${2:-alo}
 ./bin/nexmark_client -app_name $APP_NAME -wconfig ./workload_config/4_ins/${APP_NAME}.json \
-    -guarantee $GUA -duration 60 -comm_everyMS 5 -flushms 5 -tab_type mem -serde json \
-    -stat_dir ./${APP_NAME}_stats -tps 4000 -events_num 120000 -local true 
+    -guarantee $GUA -duration 30 -comm_everyMS 100 -flushms 100 -tab_type mem -serde msgp \
+    -stat_dir ./${APP_NAME}_stats -tps 100 -events_num 3000 -waitForLast=true -local=true
