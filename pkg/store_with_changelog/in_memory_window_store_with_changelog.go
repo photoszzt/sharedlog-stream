@@ -21,7 +21,7 @@ type InMemoryWindowStoreWithChangelog[K, V any] struct {
 	changelogManager *ChangelogManager[commtypes.KeyAndWindowStartTsG[K], V]
 	// changeLogProduce stats.ConcurrentInt64Collector
 	// storePutLatency stats.ConcurrentInt64Collector
-	trackFuncLat *stats.ConcurrentInt64Collector
+	trackFuncLat *stats.ConcurrentStatsCollector[int64]
 	parNum       uint8
 }
 
@@ -47,7 +47,7 @@ func NewInMemoryWindowStoreWithChangelog[K, V any](
 		changelogManager: changelogManager,
 		// changeLogProduce: stats.NewConcurrentInt64Collector(mp.storeName+"-clProd", stats.DEFAULT_COLLECT_DURATION),
 		// storePutLatency: stats.NewConcurrentInt64Collector(mp.storeName+"-storePutLatency", stats.DEFAULT_COLLECT_DURATION),
-		trackFuncLat: stats.NewConcurrentInt64Collector(mp.storeName+"-trackFuncLat", stats.DEFAULT_COLLECT_DURATION),
+		trackFuncLat: stats.NewConcurrentStatsCollector[int64](mp.storeName+"-trackFuncLat", stats.DEFAULT_COLLECT_DURATION),
 	}, nil
 }
 

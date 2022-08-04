@@ -28,7 +28,7 @@ func joinProcLoop(
 	defer wg.Done()
 	// debug.Fprintf(os.Stderr, "[id=%s, ts=%d] joinProc start running\n",
 	// 	id, time.Now().UnixMilli())
-	lockAcqTime := stats.NewInt64Collector(fmt.Sprintf("%s_lockAcq", id), stats.DEFAULT_COLLECT_DURATION)
+	lockAcqTime := stats.NewStatsCollector[int64](fmt.Sprintf("%s_lockAcq", id), stats.DEFAULT_COLLECT_DURATION)
 	for {
 		select {
 		case <-ctx.Done():
@@ -54,9 +54,9 @@ func joinProcLoop(
 				// debug.Fprintf(os.Stderr, "%s done sending msg\n", id)
 				// return
 				jm.runLock.Unlock()
-				count := consumer.GetCount()
-				debug.Fprintf(os.Stderr, "consume %s %d timeout, count %d\n",
-					consumer.TopicName(), procArgs.SubstreamNum(), count)
+				// count := consumer.GetCount()
+				// debug.Fprintf(os.Stderr, "consume %s %d timeout, count %d\n",
+				// 	consumer.TopicName(), procArgs.SubstreamNum(), count)
 				continue
 			}
 			fmt.Fprintf(os.Stderr, "[ERROR] consume: %v, out chan len: %d\n", err, len(jm.out))

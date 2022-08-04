@@ -29,8 +29,8 @@ type BufferedSinkStream struct {
 	payloadArrSerde commtypes.SerdeG[commtypes.PayloadArr]
 	Stream          *SharedLogStream
 
-	bufferEntryStats stats.IntCollector
-	bufferSizeStats  stats.IntCollector
+	bufferEntryStats stats.StatsCollector[int]
+	bufferSizeStats  stats.StatsCollector[int]
 
 	once                 sync.Once
 	initialProdInEpoch   uint64
@@ -50,9 +50,9 @@ func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8) *BufferedSinkS
 		currentSize:     0,
 		once:            sync.Once{},
 		guarantee:       exactly_once_intr.AT_LEAST_ONCE,
-		bufferEntryStats: stats.NewIntCollector(fmt.Sprintf("%s_bufEntry_%v", stream.topicName, parNum),
+		bufferEntryStats: stats.NewStatsCollector[int](fmt.Sprintf("%s_bufEntry_%v", stream.topicName, parNum),
 			stats.DEFAULT_COLLECT_DURATION),
-		bufferSizeStats: stats.NewIntCollector(fmt.Sprintf("%s_bufSize_%v", stream.topicName, parNum),
+		bufferSizeStats: stats.NewStatsCollector[int](fmt.Sprintf("%s_bufSize_%v", stream.topicName, parNum),
 			stats.DEFAULT_COLLECT_DURATION),
 		sink_buffer_max_size: SINK_BUFFER_MAX_SIZE,
 	}

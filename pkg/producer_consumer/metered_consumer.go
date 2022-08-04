@@ -13,8 +13,8 @@ import (
 
 type MeteredConsumer[K, V any] struct {
 	consumer  *ShardedSharedLogStreamConsumer[K, V]
-	latencies stats.Int64Collector
-	pToCLat   stats.Int64Collector
+	latencies stats.StatsCollector[int64]
+	pToCLat   stats.StatsCollector[int64]
 	consumeTp stats.ThroughputCounter
 
 	measure bool
@@ -35,8 +35,8 @@ func NewMeteredConsumer[K, V any](src *ShardedSharedLogStreamConsumer[K, V], war
 	src_name := fmt.Sprintf("%s_src", src.TopicName())
 	return &MeteredConsumer[K, V]{
 		consumer:  src,
-		latencies: stats.NewInt64Collector(src_name, stats.DEFAULT_COLLECT_DURATION),
-		pToCLat:   stats.NewInt64Collector("procTo"+src_name, stats.DEFAULT_COLLECT_DURATION),
+		latencies: stats.NewStatsCollector[int64](src_name, stats.DEFAULT_COLLECT_DURATION),
+		pToCLat:   stats.NewStatsCollector[int64]("procTo"+src_name, stats.DEFAULT_COLLECT_DURATION),
 		consumeTp: stats.NewThroughputCounter(src_name, stats.DEFAULT_COLLECT_DURATION),
 		measure:   checkMeasureSource(),
 	}

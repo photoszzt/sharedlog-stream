@@ -1,6 +1,10 @@
 package stats
 
-import "sort"
+import (
+	"sort"
+
+	"golang.org/x/exp/constraints"
+)
 
 type SortableSlice interface {
 	sort.Interface
@@ -9,6 +13,10 @@ type SortableSlice interface {
 
 func P(t SortableSlice, percent float64) interface{} {
 	return t.At(int(float64(t.Len())*percent+0.5) - 1)
+}
+
+func POf[E constraints.Ordered](t []E, percent float64) E {
+	return t[(int(float64(len(t))*percent+0.5) - 1)]
 }
 
 type IntSlice []int

@@ -8,13 +8,13 @@ import (
 
 type MeteredProcessor struct {
 	proc      Processor
-	latencies *stats.ConcurrentInt64Collector
+	latencies *stats.ConcurrentStatsCollector[int64]
 }
 
 func NewMeteredProcessor(proc Processor) *MeteredProcessor {
 	return &MeteredProcessor{
 		proc:      proc,
-		latencies: stats.NewConcurrentInt64Collector(proc.Name(), stats.DEFAULT_COLLECT_DURATION),
+		latencies: stats.NewConcurrentStatsCollector[int64](proc.Name(), stats.DEFAULT_COLLECT_DURATION),
 	}
 }
 

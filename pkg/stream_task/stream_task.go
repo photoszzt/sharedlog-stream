@@ -29,16 +29,16 @@ type StreamTask struct {
 	initFunc      func(task *StreamTask)
 	HandleErrFunc func() error
 
-	flushForALO stats.Int64Collector
+	flushForALO stats.StatsCollector[int64]
 	// 2pc stat
-	commitTrTime stats.Int64Collector
-	beginTrTime  stats.Int64Collector
+	commitTrTime stats.StatsCollector[int64]
+	beginTrTime  stats.StatsCollector[int64]
 
 	// epoch stat
-	markEpochTime    stats.Int64Collector
-	markEpochPrepare stats.Int64Collector
+	markEpochTime    stats.StatsCollector[int64]
+	markEpochPrepare stats.StatsCollector[int64]
 
-	flushAllTime stats.Int64Collector
+	flushAllTime stats.StatsCollector[int64]
 	isFinalStage bool
 	endDuration  time.Duration
 }

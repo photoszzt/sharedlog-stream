@@ -28,8 +28,8 @@ type ConcurrentMeteredSink[K, V any] struct {
 	producer *ShardedSharedLogStreamProducer[K, V]
 
 	produceTp       *stats.ConcurrentThroughputCounter
-	lat             *stats.ConcurrentInt64Collector
-	eventTimeSample *stats.ConcurrentInt64Collector
+	lat             *stats.ConcurrentStatsCollector[int64]
+	eventTimeSample *stats.ConcurrentStatsCollector[int64]
 	ctrlCount       uint64
 	warmup          stats.WarmupGoroutineSafe
 
@@ -42,14 +42,14 @@ func NewConcurrentMeteredSyncProducer[K, V any](sink *ShardedSharedLogStreamProd
 	sink_name := fmt.Sprintf("%s_sink", sink.TopicName())
 	return &ConcurrentMeteredSink[K, V]{
 		producer: sink,
-		lat: stats.NewConcurrentInt64Collector(sink_name,
+		lat: stats.NewConcurrentStatsCollector[int64](sink_name,
 			stats.DEFAULT_COLLECT_DURATION),
 		produceTp: stats.NewConcurrentThroughputCounter(sink_name,
 			stats.DEFAULT_COLLECT_DURATION),
 		measure: checkMeasureSink(),
 		warmup:  stats.NewWarmupGoroutineSafeChecker(warmup),
 		// eventTimeLatencies: make([]int, 0),
-		eventTimeSample: stats.NewConcurrentInt64Collector(sink_name+"_ets",
+		eventTimeSample: stats.NewConcurrentStatsCollector[int64](sink_name+"_ets",
 			stats.DEFAULT_COLLECT_DURATION),
 	}
 }
@@ -155,8 +155,8 @@ func (s *ConcurrentMeteredSink[K, V]) NumCtrlMsg() uint64 {
 
 type MeteredProducer[K, V any] struct {
 	producer        *ShardedSharedLogStreamProducer[K, V]
-	latencies       stats.Int64Collector
-	eventTimeSample stats.Int64Collector
+	latencies       stats.StatsCollector[int64]
+	eventTimeSample stats.StatsCollector[int64]
 	produceTp       stats.ThroughputCounter
 	warmup          stats.Warmup
 	ctrlCount       uint64
@@ -168,9 +168,9 @@ func NewMeteredProducer[K, V any](sink *ShardedSharedLogStreamProducer[K, V], wa
 	return &MeteredProducer[K, V]{
 		producer: sink,
 		// eventTimeLatencies: make([]int, 0),
-		latencies:       stats.NewInt64Collector(sink_name, stats.DEFAULT_COLLECT_DURATION),
+		latencies:       stats.NewStatsCollector[int64](sink_name, stats.DEFAULT_COLLECT_DURATION),
 		produceTp:       stats.NewThroughputCounter(sink_name, stats.DEFAULT_COLLECT_DURATION),
-		eventTimeSample: stats.NewInt64Collector(sink_name+"_ets", stats.DEFAULT_COLLECT_DURATION),
+		eventTimeSample: stats.NewStatsCollector[int64](sink_name+"_ets", stats.DEFAULT_COLLECT_DURATION),
 		measure:         checkMeasureSink(),
 		warmup:          stats.NewWarmupChecker(warmup),
 	}

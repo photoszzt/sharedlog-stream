@@ -16,7 +16,7 @@ type KeyValueStoreWithChangelogG[K, V any] struct {
 	msgSerde         commtypes.MessageSerdeG[K, V]
 	trackFunc        exactly_once_intr.TrackProdSubStreamFunc
 	changelogManager *ChangelogManager[K, V]
-	changelogProduce *stats.ConcurrentInt64Collector
+	changelogProduce *stats.ConcurrentStatsCollector[int64]
 	use_bytes        bool
 	parNum           uint8
 }
@@ -42,7 +42,7 @@ func NewKeyValueStoreWithChangelogG[K, V any](mp *MaterializeParam[K, V],
 		msgSerde:         mp.msgSerde,
 		changelogManager: changelogManager,
 		parNum:           mp.ParNum(),
-		changelogProduce: stats.NewConcurrentInt64Collector(mp.storeName+"-clProd",
+		changelogProduce: stats.NewConcurrentStatsCollector[int64](mp.storeName+"-clProd",
 			stats.DEFAULT_COLLECT_DURATION),
 	}, nil
 }

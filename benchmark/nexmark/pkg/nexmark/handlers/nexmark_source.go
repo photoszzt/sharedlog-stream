@@ -57,7 +57,7 @@ type nexmarkSrcProcArgs struct {
 	channel_url_cache map[uint32]*generator.ChannelUrl
 	eventGenerator    *generator.NexmarkGenerator
 	msgChan           chan sharedlog_stream.PayloadToPush
-	latencies         stats.Int64Collector
+	latencies         stats.StatsCollector[int64]
 	idx               int
 	waitForEndMark    bool
 	numPartition      uint8
@@ -197,7 +197,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 		msgSerde:          msgSerde,
 		eventGenerator:    eventGenerator,
 		idx:               0,
-		latencies: stats.NewInt64Collector(fmt.Sprintf("srcGen_%d", inputConfig.ParNum),
+		latencies: stats.NewStatsCollector[int64](fmt.Sprintf("srcGen_%d", inputConfig.ParNum),
 			stats.DEFAULT_COLLECT_DURATION),
 		msgChan:      streamPusher.MsgChan,
 		numPartition: stream.NumPartition(),

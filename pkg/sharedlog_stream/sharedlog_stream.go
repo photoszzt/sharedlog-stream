@@ -6,11 +6,9 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"os"
 	"sharedlog-stream/pkg/bits"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils/syncutils"
@@ -346,7 +344,6 @@ func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum 
 	seqNum := tailSeqNum
 	// debug.Fprintf(os.Stderr, "find tail for topic: %s, par: %d\n", s.topicName, parNum)
 	for seqNum >= s.cursor {
-		debug.Fprintf(os.Stderr, "%s (%d): 0x%x, tail: 0x%x, tag: %x\n", seqNum, s.tail, tag)
 		logEntry, err := s.readPrevWithTimeout(ctx, tag, seqNum)
 		if err != nil {
 			return err
@@ -365,7 +362,7 @@ func (s *SharedLogStream) findLastEntryBackward(ctx context.Context, tailSeqNum 
 		s.mux.Lock()
 		s.tail = logEntry.SeqNum + 1
 		s.mux.Unlock()
-		debug.Fprintf(os.Stderr, "%s(%d) current tail is %x\n", s.topicName, parNum, s.tail)
+		// debug.Fprintf(os.Stderr, "%s(%d) current tail is %x\n", s.topicName, parNum, s.tail)
 		break
 	}
 	return nil

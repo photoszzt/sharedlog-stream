@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/pkg/utils/syncutils"
-	"sort"
 	"time"
+
+	"golang.org/x/exp/constraints"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -17,92 +19,46 @@ func LatStart() time.Time {
 	return time.Now()
 }
 
-type ConcurrentInt64Collector struct {
+type ConcurrentStatsCollector[E constraints.Ordered] struct {
 	mu syncutils.Mutex
-	Int64Collector
+	StatsCollector[E]
 }
 
-func NewConcurrentInt64Collector(tag string, duration time.Duration) *ConcurrentInt64Collector {
-	return &ConcurrentInt64Collector{
-		Int64Collector: NewInt64Collector(tag, duration),
+func NewConcurrentStatsCollector[E constraints.Ordered](tag string, duration time.Duration) *ConcurrentStatsCollector[E] {
+	return &ConcurrentStatsCollector[E]{
+		StatsCollector: NewStatsCollector[E](tag, duration),
 	}
 }
 
-func (c *ConcurrentInt64Collector) PrintRemainingStats() {
-	c.Int64Collector.PrintRemainingStats()
+func (c *ConcurrentStatsCollector[E]) PrintRemainingStats() {
+	c.StatsCollector.PrintRemainingStats()
 }
 
-type ConcurrentIntCollector struct {
-	mu syncutils.Mutex
-	IntCollector
-}
-
-func NewConcurrentIntCollector(tag string, duration time.Duration) *ConcurrentIntCollector {
-	return &ConcurrentIntCollector{
-		IntCollector: NewIntCollector(tag, duration),
-	}
-}
-
-func (c *ConcurrentIntCollector) PrintRemainingStats() {
-	c.IntCollector.PrintRemainingStats()
-}
-
-type Int64Collector struct {
+type StatsCollector[E constraints.Ordered] struct {
 	tag                string
-	data               []int64
+	data               []E
 	report_timer       ReportTimer
 	min_report_samples uint32
 }
 
-func NewInt64Collector(tag string, reportInterval time.Duration) Int64Collector {
-	return Int64Collector{
-		data:               make([]int64, 0, 128),
+func NewStatsCollector[E constraints.Ordered](tag string, reportInterval time.Duration) StatsCollector[E] {
+	return StatsCollector[E]{
+		data:               make([]E, 0, 128),
 		report_timer:       NewReportTimer(reportInterval),
 		tag:                tag,
 		min_report_samples: DEFAULT_MIN_REPORT_SAMPLES,
 	}
 }
 
-func (c *Int64Collector) PrintRemainingStats() {
+func (c *StatsCollector[E]) PrintRemainingStats() {
 	if len(c.data) > 0 {
-		il := Int64Slice(c.data)
-		sort.Sort(il)
-		p50 := P(il, 0.5)
-		p90 := P(il, 0.9)
-		p99 := P(il, 0.99)
+		slices.Sort(c.data)
+		p50 := POf(c.data, 0.5)
+		p90 := POf(c.data, 0.9)
+		p99 := POf(c.data, 0.99)
 		duration := c.report_timer.Mark()
-		fmt.Fprintf(os.Stderr, "%s stats (%d samples): dur=%v, p50=%d, p90=%d, p99=%d\n",
+		fmt.Fprintf(os.Stderr, "%s stats (%d samples): dur=%v, p50=%v, p90=%v, p99=%v\n",
 			c.tag, len(c.data), duration, p50, p90, p99)
-		c.data = make([]int64, 0)
-	}
-}
-
-type IntCollector struct {
-	tag                string
-	data               []int
-	report_timer       ReportTimer
-	min_report_samples uint32
-}
-
-func NewIntCollector(tag string, reportInterval time.Duration) IntCollector {
-	return IntCollector{
-		data:               make([]int, 0, 128),
-		report_timer:       NewReportTimer(reportInterval),
-		tag:                tag,
-		min_report_samples: DEFAULT_MIN_REPORT_SAMPLES,
-	}
-}
-
-func (c *IntCollector) PrintRemainingStats() {
-	if len(c.data) > 0 {
-		il := IntSlice(c.data)
-		sort.Sort(il)
-		p50 := P(il, 0.5)
-		p90 := P(il, 0.9)
-		p99 := P(il, 0.99)
-		duration := c.report_timer.Mark()
-		fmt.Fprintf(os.Stderr, "%s stats (%d samples): dur=%v, p50=%d, p90=%d, p99=%d\n",
-			c.tag, len(c.data), duration, p50, p90, p99)
-		c.data = make([]int, 0)
+		c.data = make([]E, 0)
 	}
 }

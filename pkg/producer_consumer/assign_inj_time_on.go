@@ -22,7 +22,7 @@ func assignInjTime(msg *commtypes.Message) {
 	}
 }
 
-func extractProduceToConsumeTime(msg *commtypes.Message, isInitialSrc bool, collector *stats.Int64Collector) {
+func extractProduceToConsumeTime(msg *commtypes.Message, isInitialSrc bool, collector *stats.StatsCollector[int64]) {
 	if !isInitialSrc {
 		ts := msg.ExtractInjectTimeMs()
 		dur := time.Now().UnixMilli() - ts

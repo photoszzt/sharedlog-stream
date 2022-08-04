@@ -104,7 +104,7 @@ func processWithTransaction(
 
 	run := false
 
-	latencies := stats.NewInt64Collector("latPerIter", stats.DEFAULT_COLLECT_DURATION)
+	latencies := stats.NewStatsCollector[int64]("latPerIter", stats.DEFAULT_COLLECT_DURATION)
 	hasLiveTransaction := false
 	trackConsumePar := false
 	paused := false

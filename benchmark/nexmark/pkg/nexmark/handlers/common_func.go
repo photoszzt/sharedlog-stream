@@ -149,7 +149,7 @@ func PrepareProcessByTwoGeneralProc(
 		return nil
 	}
 
-	pauseTime := stats.NewInt64Collector("2proc_pause_us", stats.DEFAULT_COLLECT_DURATION)
+	pauseTime := stats.NewStatsCollector[int64]("2proc_pause_us", stats.DEFAULT_COLLECT_DURATION)
 
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp processor.ExecutionContext, gotEndMark *bool) *common.FnOutput {

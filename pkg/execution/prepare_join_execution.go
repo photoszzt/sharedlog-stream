@@ -36,8 +36,8 @@ func PrepareTaskWithJoin(
 	lctx := context.WithValue(ctx, commtypes.CTXID{}, "left")
 	rctx := context.WithValue(ctx, commtypes.CTXID{}, "right")
 
-	pauseTime := stats.NewInt64Collector("join_pause_us", stats.DEFAULT_COLLECT_DURATION)
-	resumeTime := stats.NewInt64Collector("join_resume_us", stats.DEFAULT_COLLECT_DURATION)
+	pauseTime := stats.NewStatsCollector[int64]("join_pause_us", stats.DEFAULT_COLLECT_DURATION)
+	resumeTime := stats.NewStatsCollector[int64]("join_resume_us", stats.DEFAULT_COLLECT_DURATION)
 
 	taskBuilder := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
