@@ -17,7 +17,6 @@ type KeyValueStoreWithChangelogG[K, V any] struct {
 	trackFunc        exactly_once_intr.TrackProdSubStreamFunc
 	changelogManager *ChangelogManager[K, V]
 	changelogProduce *stats.ConcurrentStatsCollector[int64]
-	use_bytes        bool
 	parNum           uint8
 }
 

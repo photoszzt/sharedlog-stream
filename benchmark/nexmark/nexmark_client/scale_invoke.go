@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"time"
@@ -13,13 +12,7 @@ import (
 func scale(format string, local bool) {
 	serdeFormat := common.StringToSerdeFormat(format)
 
-	jsonFile, err := os.Open(FLAGS_scale_config)
-	if err != nil {
-		panic(err)
-	}
-	defer jsonFile.Close()
-
-	byteVal, err := ioutil.ReadAll(jsonFile)
+	byteVal, err := os.ReadFile(FLAGS_scale_config)
 	if err != nil {
 		panic(err)
 	}

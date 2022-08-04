@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	nexmarkutils "sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/utils"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 
@@ -55,7 +55,7 @@ func (h *testEventSource) eventGeneration(ctx context.Context, sp *common.TestSo
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	events_byte, err := utils.ReadFileContent(sp.FileName)
+	events_byte, err := os.ReadFile(sp.FileName)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

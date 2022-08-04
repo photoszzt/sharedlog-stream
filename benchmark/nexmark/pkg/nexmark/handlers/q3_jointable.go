@@ -191,6 +191,9 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	}
 	aucJoinsPerFunc, perJoinsAucFunc, kvc, err := execution.SetupTableTableJoin(
 		mpAuc, mpPer, store.Uint64Less, joiner)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 
 	toStream := processor.NewTableToStreamProcessor()
 

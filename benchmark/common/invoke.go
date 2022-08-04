@@ -2,7 +2,6 @@ package common
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"sync"
@@ -33,13 +32,7 @@ func Invoke(invokeParam InvokeFuncParam,
 	baseQueryInput *QueryInput,
 	invokeSourceFunc func(client *http.Client, srcInvokeConfig SrcInvokeConfig, response *FnOutput, wg *sync.WaitGroup, warmup bool),
 ) error {
-	jsonFile, err := os.Open(invokeParam.ConfigFile)
-	if err != nil {
-		return err
-	}
-	defer jsonFile.Close()
-
-	byteVal, err := ioutil.ReadAll(jsonFile)
+	byteVal, err := os.ReadFile(invokeParam.ConfigFile)
 	if err != nil {
 		return err
 	}

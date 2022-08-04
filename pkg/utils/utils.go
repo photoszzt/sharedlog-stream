@@ -2,7 +2,6 @@ package utils
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"strconv"
@@ -125,16 +124,6 @@ func CheckBufPush() bool {
 		bufPush = true
 	}
 	return bufPush
-}
-
-func ReadFileContent(fname string) ([]byte, error) {
-	jsonFile, err := os.Open(fname)
-	if err != nil {
-		return nil, err
-	}
-	defer jsonFile.Close()
-
-	return ioutil.ReadAll(jsonFile)
 }
 
 func IsNil(i interface{}) bool {

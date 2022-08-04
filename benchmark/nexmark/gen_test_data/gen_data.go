@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
-	"sharedlog-stream/pkg/utils"
 )
 
 var (
@@ -50,7 +49,10 @@ func main() {
 	var specs []byte
 	var err error
 	if FLAGS_spec != "" {
-		specs, err = utils.ReadFileContent(FLAGS_spec)
+		specs, err = os.ReadFile(FLAGS_spec)
+		if err != nil {
+			panic(err)
+		}
 	}
 	if FLAGS_app_name == "q5" && specs != nil {
 		err = q5_gen_data(specs, FLAGS_outputFile)

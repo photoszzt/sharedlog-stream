@@ -59,6 +59,9 @@ func (h *q4Avg) getExecutionCtx(ctx context.Context, sp *common.QueryInput,
 		MsgSerde:    inMsgSerde,
 		SerdeFormat: serdeFormat,
 	})
+	if err != nil {
+		return processor.BaseExecutionContext{}, err
+	}
 	src := producer_consumer.NewMeteredConsumer(consumer, warmup)
 	sink := producer_consumer.NewMeteredProducer(
 		producer_consumer.NewShardedSharedLogStreamProducer(outputStreams[0], &producer_consumer.StreamSinkConfig[uint64, float64]{

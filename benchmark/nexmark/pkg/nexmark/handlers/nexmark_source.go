@@ -59,7 +59,6 @@ type nexmarkSrcProcArgs struct {
 	msgChan           chan sharedlog_stream.PayloadToPush
 	latencies         stats.StatsCollector[int64]
 	idx               int
-	waitForEndMark    bool
 	numPartition      uint8
 	parNum            uint8
 }
