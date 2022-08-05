@@ -100,9 +100,10 @@ func processWithTransaction(
 
 	dctx, dcancel := context.WithCancel(ctx)
 	tm.StartMonitorLog(dctx, dcancel)
-	cmm.StartMonitorControlChannel(dctx)
+	cmm.RestoreMappingAndWaitForPrevTask(dctx, args.ectx.FuncName(), args.ectx.CurEpoch())
+	// cmm.StartMonitorControlChannel(dctx)
 
-	run := false
+	// run := false
 
 	latencies := stats.NewStatsCollector[int64]("latPerIter", stats.DEFAULT_COLLECT_DURATION)
 	hasLiveTransaction := false
@@ -116,77 +117,75 @@ func processWithTransaction(
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
 	gotEndMark := false
 	for {
-		ret := checkMonitorReturns(dctx, dcancel, args, cmm, tm, &run)
+		ret := checkMonitorReturns(dctx, dcancel, args, cmm, tm)
 		if ret != nil {
 			return ret
 		}
-		if run {
-			procStart := time.Now()
-			once.Do(func() {
-				warmupCheck.StartWarmup()
-			})
-			warmupCheck.Check()
-			timeSinceTranStart := time.Since(commitTimer)
-			cur_elapsed := warmupCheck.ElapsedSinceInitial()
-			timeout := args.duration != 0 && cur_elapsed >= args.duration
-			shouldCommitByTime := (args.commitEvery != 0 && timeSinceTranStart > args.commitEvery)
-			// debug.Fprintf(os.Stderr, "shouldCommitByTime: %v, timeSinceTranStart: %v, cur_elapsed: %v\n",
-			// 	shouldCommitByTime, timeSinceTranStart, cur_elapsed)
+		procStart := time.Now()
+		once.Do(func() {
+			warmupCheck.StartWarmup()
+		})
+		warmupCheck.Check()
+		timeSinceTranStart := time.Since(commitTimer)
+		cur_elapsed := warmupCheck.ElapsedSinceInitial()
+		timeout := args.duration != 0 && cur_elapsed >= args.duration
+		shouldCommitByTime := (args.commitEvery != 0 && timeSinceTranStart > args.commitEvery)
+		// debug.Fprintf(os.Stderr, "shouldCommitByTime: %v, timeSinceTranStart: %v, cur_elapsed: %v\n",
+		// 	shouldCommitByTime, timeSinceTranStart, cur_elapsed)
 
-			// should commit
-			if (shouldCommitByTime || timeout || gotEndMark) && hasLiveTransaction {
-				err_out := commitTransaction(ctx, t, tm, cmm, args, &hasLiveTransaction,
-					&trackConsumePar, &paused)
-				if err_out != nil {
-					return err_out
-				}
-				debug.Assert(!hasLiveTransaction, "after commit. there should be no live transaction\n")
-				// debug.Fprintf(os.Stderr, "transaction committed\n")
+		// should commit
+		if (shouldCommitByTime || timeout || gotEndMark) && hasLiveTransaction {
+			err_out := commitTransaction(ctx, t, tm, cmm, args, &hasLiveTransaction,
+				&trackConsumePar, &paused)
+			if err_out != nil {
+				return err_out
 			}
+			debug.Assert(!hasLiveTransaction, "after commit. there should be no live transaction\n")
+			// debug.Fprintf(os.Stderr, "transaction committed\n")
+		}
 
-			// Exit routine
-			cur_elapsed = warmupCheck.ElapsedSinceInitial()
-			if (!args.waitEndMark && args.duration != 0 && cur_elapsed >= args.duration) || gotEndMark {
-				if err := tm.Close(); err != nil {
-					debug.Fprintf(os.Stderr, "[ERROR] close transaction manager: %v\n", err)
-					return &common.FnOutput{Success: false, Message: fmt.Sprintf("close transaction manager: %v\n", err)}
-				}
-				elapsed := time.Since(procStart)
-				latencies.AddSample(elapsed.Microseconds())
-				ret := &common.FnOutput{
-					Success: true,
-				}
-				updateReturnMetric(ret, &warmupCheck,
-					args.waitEndMark, t.GetEndDuration(), args.ectx.SubstreamNum())
-				return ret
+		// Exit routine
+		cur_elapsed = warmupCheck.ElapsedSinceInitial()
+		if (!args.waitEndMark && args.duration != 0 && cur_elapsed >= args.duration) || gotEndMark {
+			if err := tm.Close(); err != nil {
+				debug.Fprintf(os.Stderr, "[ERROR] close transaction manager: %v\n", err)
+				return &common.FnOutput{Success: false, Message: fmt.Sprintf("close transaction manager: %v\n", err)}
 			}
-
-			// begin new transaction
-			err := startNewTransaction(ctx, t, args, tm, &hasLiveTransaction,
-				&trackConsumePar, &init, &paused, &commitTimer)
-			if err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
+			elapsed := time.Since(procStart)
+			latencies.AddSample(elapsed.Microseconds())
+			ret := &common.FnOutput{
+				Success: true,
 			}
-			debug.Assert(hasLiveTransaction, "after start new transaction. there should be a live transaction\n")
+			updateReturnMetric(ret, &warmupCheck,
+				args.waitEndMark, t.GetEndDuration(), args.ectx.SubstreamNum())
+			return ret
+		}
 
-			ret := t.appProcessFunc(ctx, t, args.ectx, &gotEndMark)
-			if ret != nil {
-				if ret.Success {
-					// consume timeout but not sure whether there's more data is coming; continue to process
-					continue
-				} else {
-					if hasLiveTransaction {
-						if err := tm.AbortTransaction(ctx); err != nil {
-							return &common.FnOutput{Success: false, Message: fmt.Sprintf("abort failed: %v\n", err)}
-						}
+		// begin new transaction
+		err := startNewTransaction(ctx, t, args, tm, &hasLiveTransaction,
+			&trackConsumePar, &init, &paused, &commitTimer)
+		if err != nil {
+			return &common.FnOutput{Success: false, Message: err.Error()}
+		}
+		debug.Assert(hasLiveTransaction, "after start new transaction. there should be a live transaction\n")
+
+		app_ret := t.appProcessFunc(ctx, t, args.ectx, &gotEndMark)
+		if app_ret != nil {
+			if app_ret.Success {
+				// consume timeout but not sure whether there's more data is coming; continue to process
+				continue
+			} else {
+				if hasLiveTransaction {
+					if err := tm.AbortTransaction(ctx); err != nil {
+						return &common.FnOutput{Success: false, Message: fmt.Sprintf("abort failed: %v\n", err)}
 					}
 				}
-				return ret
 			}
-			if warmupCheck.AfterWarmup() {
-				elapsed := time.Since(procStart)
-				latencies.AddSample(elapsed.Microseconds())
-			}
+			return ret
+		}
+		if warmupCheck.AfterWarmup() {
+			elapsed := time.Since(procStart)
+			latencies.AddSample(elapsed.Microseconds())
 		}
 	}
 }

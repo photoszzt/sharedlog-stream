@@ -12,7 +12,8 @@ type ControlMetadata struct {
 	FinishedPrevTask string `json:"fpt,omitempty" msgp:"fpt,omitempty"`
 
 	// key of msg
-	Key []byte `json:"k,omitempty" msgp:"k,omitempty"`
+	Key  []byte `json:"k,omitempty" msgp:"k,omitempty"`
+	Hash uint64 `json:"h,omitempty" msgp:"h,omitempty"`
 
 	Epoch uint16 `json:"ep,omitempty" msgp:"ep,omitempty"`
 	// old instance id

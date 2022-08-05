@@ -90,9 +90,12 @@ func processInEpoch(
 
 	dctx, dcancel := context.WithCancel(ctx)
 	em.StartMonitorLog(dctx, dcancel)
-	cmm.StartMonitorControlChannel(dctx)
+	err = cmm.RestoreMappingAndWaitForPrevTask(dctx, args.ectx.FuncName(), args.ectx.CurEpoch())
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 
-	run := false
+	// run := false
 	hasProcessData := false
 	init := false
 	paused := false
@@ -103,86 +106,84 @@ func processInEpoch(
 	debug.Fprintf(os.Stderr, "commit every(ms): %v, waitEndMark: %v\n", args.commitEvery, args.waitEndMark)
 	gotEndMark := false
 	for {
-		ret := checkMonitorReturns(dctx, dcancel, args, cmm, em, &run)
+		ret := checkMonitorReturns(dctx, dcancel, args, cmm, em)
 		if ret != nil {
 			return ret
 		}
-		if run {
-			// procStart := time.Now()
-			once.Do(func() {
-				warmupCheck.StartWarmup()
-			})
-			warmupCheck.Check()
-			timeSinceLastMark := time.Since(markTimer)
-			cur_elapsed := warmupCheck.ElapsedSinceInitial()
-			timeout := args.duration != 0 && cur_elapsed >= args.duration
-			shouldMarkByTime := (args.commitEvery != 0 && timeSinceLastMark > args.commitEvery)
-			if (shouldMarkByTime || timeout || gotEndMark) && hasProcessData {
-				if t.pauseFunc != nil {
-					if ret := t.pauseFunc(); ret != nil {
-						return ret
-					}
-					paused = true
+		// procStart := time.Now()
+		once.Do(func() {
+			warmupCheck.StartWarmup()
+		})
+		warmupCheck.Check()
+		timeSinceLastMark := time.Since(markTimer)
+		cur_elapsed := warmupCheck.ElapsedSinceInitial()
+		timeout := args.duration != 0 && cur_elapsed >= args.duration
+		shouldMarkByTime := (args.commitEvery != 0 && timeSinceLastMark > args.commitEvery)
+		if (shouldMarkByTime || timeout || gotEndMark) && hasProcessData {
+			if t.pauseFunc != nil {
+				if ret := t.pauseFunc(); ret != nil {
+					return ret
 				}
-				flushStart := stats.TimerBegin()
-				err := FlushStreamBuffers(dctx, cmm, args)
-				if err != nil {
-					return common.GenErrFnOutput(err)
-				}
-				flushTime := stats.Elapsed(flushStart).Microseconds()
-				prepareStart := stats.TimerBegin()
-				epochMarker, epochMarkerTags, epochMarkerTopics, err := CaptureEpochStateAndCleanup(dctx, em, args)
-				if err != nil {
-					return common.GenErrFnOutput(err)
-				}
-				prepareTime := stats.Elapsed(prepareStart).Microseconds()
-				mStart := stats.TimerBegin()
-				err = em.MarkEpoch(dctx, epochMarker, epochMarkerTags, epochMarkerTopics)
-				if err != nil {
-					return common.GenErrFnOutput(err)
-				}
-				mElapsed := stats.Elapsed(mStart).Microseconds()
-				t.markEpochTime.AddSample(mElapsed)
-				t.markEpochPrepare.AddSample(prepareTime)
-				t.flushAllTime.AddSample(flushTime)
-				hasProcessData = false
+				paused = true
 			}
-			// Exit routine
-			cur_elapsed = warmupCheck.ElapsedSinceInitial()
-			timeout = args.duration != 0 && cur_elapsed >= args.duration
-			if (!args.waitEndMark && timeout) || gotEndMark {
-				// elapsed := time.Since(procStart)
-				// latencies.AddSample(elapsed.Microseconds())
-				ret := &common.FnOutput{Success: true}
-				updateReturnMetric(ret, &warmupCheck,
-					args.waitEndMark, t.GetEndDuration(), args.ectx.SubstreamNum())
-				return ret
+			flushStart := stats.TimerBegin()
+			err := FlushStreamBuffers(dctx, cmm, args)
+			if err != nil {
+				return common.GenErrFnOutput(err)
 			}
-
-			// init
-			if !hasProcessData {
-				err := initAfterMarkOrCommit(dctx, t, args, em, &init, &paused)
-				if err != nil {
-					return common.GenErrFnOutput(err)
-				}
-				markTimer = time.Now()
+			flushTime := stats.Elapsed(flushStart).Microseconds()
+			prepareStart := stats.TimerBegin()
+			epochMarker, epochMarkerTags, epochMarkerTopics, err := CaptureEpochStateAndCleanup(dctx, em, args)
+			if err != nil {
+				return common.GenErrFnOutput(err)
 			}
-			ret := t.appProcessFunc(dctx, t, args.ectx, &gotEndMark)
-			if ret != nil {
-				if ret.Success {
-					// consume timeout but not sure whether there's more data is coming; continue to process
-					continue
-				}
-				return ret
+			prepareTime := stats.Elapsed(prepareStart).Microseconds()
+			mStart := stats.TimerBegin()
+			err = em.MarkEpoch(dctx, epochMarker, epochMarkerTags, epochMarkerTopics)
+			if err != nil {
+				return common.GenErrFnOutput(err)
 			}
-			if !hasProcessData {
-				hasProcessData = true
-			}
-			// if warmupCheck.AfterWarmup() {
-			// 	elapsed := time.Since(procStart)
-			// 	latencies.AddSample(elapsed.Microseconds())
-			// }
+			mElapsed := stats.Elapsed(mStart).Microseconds()
+			t.markEpochTime.AddSample(mElapsed)
+			t.markEpochPrepare.AddSample(prepareTime)
+			t.flushAllTime.AddSample(flushTime)
+			hasProcessData = false
 		}
+		// Exit routine
+		cur_elapsed = warmupCheck.ElapsedSinceInitial()
+		timeout = args.duration != 0 && cur_elapsed >= args.duration
+		if (!args.waitEndMark && timeout) || gotEndMark {
+			// elapsed := time.Since(procStart)
+			// latencies.AddSample(elapsed.Microseconds())
+			ret := &common.FnOutput{Success: true}
+			updateReturnMetric(ret, &warmupCheck,
+				args.waitEndMark, t.GetEndDuration(), args.ectx.SubstreamNum())
+			return ret
+		}
+
+		// init
+		if !hasProcessData {
+			err := initAfterMarkOrCommit(dctx, t, args, em, &init, &paused)
+			if err != nil {
+				return common.GenErrFnOutput(err)
+			}
+			markTimer = time.Now()
+		}
+		app_ret := t.appProcessFunc(dctx, t, args.ectx, &gotEndMark)
+		if app_ret != nil {
+			if app_ret.Success {
+				// consume timeout but not sure whether there's more data is coming; continue to process
+				continue
+			}
+			return ret
+		}
+		if !hasProcessData {
+			hasProcessData = true
+		}
+		// if warmupCheck.AfterWarmup() {
+		// 	elapsed := time.Since(procStart)
+		// 	latencies.AddSample(elapsed.Microseconds())
+		// }
 	}
 }
 

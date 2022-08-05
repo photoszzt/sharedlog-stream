@@ -2,10 +2,14 @@ package control_channel
 
 import (
 	"context"
+	"os"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/data_structure"
+	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/utils"
 	"time"
 
 	// "sharedlog-stream/pkg/stats"
@@ -80,12 +84,13 @@ func NewControlChannelManager(env types.Environment,
 	return cm, nil
 }
 
-func (cmm *ControlChannelManager) RestoreMapping(ctx context.Context) error {
+func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(ctx context.Context, funcName string, curEpoch uint16) error {
 	for {
 		rawMsg, err := cmm.controlLogForRead.ReadNext(ctx, 0)
 		if err != nil {
 			if common_errors.IsStreamEmptyError(err) {
-				return nil
+				time.Sleep(time.Duration(100) * time.Millisecond)
+				continue
 			}
 			return err
 		}
@@ -96,6 +101,10 @@ func (cmm *ControlChannelManager) RestoreMapping(ctx context.Context) error {
 		ctrlMeta := msg.Value.(txn_data.ControlMetadata)
 		if ctrlMeta.Topic != "" {
 			cmm.updateKeyMapping(&ctrlMeta)
+		} else if ctrlMeta.FinishedPrevTask == funcName && ctrlMeta.Epoch+1 == curEpoch {
+			debug.Fprintf(os.Stderr, "finished prev task %s, funcName %s, meta epoch %d, input epoch %d\n",
+				ctrlMeta.FinishedPrevTask, funcName, ctrlMeta.Epoch, curEpoch)
+			return nil
 		}
 	}
 }
@@ -163,8 +172,10 @@ func TrackAndAppendKeyMapping(
 		subs[string(kBytes)] = sub
 		cmm.kmMu.Unlock()
 		// apStart := stats.TimerBegin()
+		hash := hashfuncs.NameHash(utils.GetStringValue(key))
 		cm := txn_data.ControlMetadata{
 			Key:         kBytes,
+			Hash:        hash,
 			SubstreamId: substreamId,
 			Topic:       topic,
 			InstanceId:  cmm.instanceID,
