@@ -49,13 +49,14 @@ func (st *InMemoryBTreeKeyValueStoreG[K, V]) Get(ctx context.Context, key K) (V,
 	return ret.val, exists, nil
 }
 
-func (st *InMemoryBTreeKeyValueStoreG[K, V]) Put(ctx context.Context, key K, value V) error {
+func (st *InMemoryBTreeKeyValueStoreG[K, V]) Put(ctx context.Context, key K, value optional.Optional[V]) error {
 	st.mux.Lock()
 	defer st.mux.Unlock()
-	if utils.IsNil(value) {
+	v, ok := value.Get()
+	if !ok {
 		st.store.Delete(kvPairG[K, V]{key: key})
 	} else {
-		st.store.ReplaceOrInsert(kvPairG[K, V]{key: key, val: value})
+		st.store.ReplaceOrInsert(kvPairG[K, V]{key: key, val: v})
 	}
 	return nil
 }
@@ -72,12 +73,17 @@ func (st *InMemoryBTreeKeyValueStoreG[K, V]) PutIfAbsent(ctx context.Context, ke
 }
 
 func (st *InMemoryBTreeKeyValueStoreG[K, V]) PutWithoutPushToChangelog(ctx context.Context, key K, value V) error {
-	return st.Put(ctx, key, value)
+	return st.Put(ctx, key, optional.Of(value))
 }
 
 func (st *InMemoryBTreeKeyValueStoreG[K, V]) PutAll(ctx context.Context, kvs []*commtypes.Message) error {
 	for _, kv := range kvs {
-		err := st.Put(ctx, kv.Key.(K), kv.Value.(V))
+		var err error
+		if utils.IsNil(kv.Value) {
+			err = st.Put(ctx, kv.Key.(K), optional.Empty[V]())
+		} else {
+			err = st.Put(ctx, kv.Key.(K), optional.Of(kv.Value.(V)))
+		}
 		if err != nil {
 			return err
 		}
@@ -98,10 +104,15 @@ func (st *InMemoryBTreeKeyValueStoreG[K, V]) ApproximateNumEntries() (uint64, er
 	return uint64(st.store.Len()), nil
 }
 
-func (st *InMemoryBTreeKeyValueStoreG[K, V]) Range(ctx context.Context, from K, to K, iterFunc func(K, V) error) error {
+func (st *InMemoryBTreeKeyValueStoreG[K, V]) Range(ctx context.Context,
+	from optional.Optional[K], to optional.Optional[K],
+	iterFunc func(K, V) error,
+) error {
 	st.mux.Lock()
 	defer st.mux.Unlock()
-	if utils.IsNil(from) && utils.IsNil(to) {
+	f, okF := from.Get()
+	t, okT := to.Get()
+	if !okF && !okT {
 		st.store.Ascend(btree.ItemIteratorG[kvPairG[K, V]](func(kv kvPairG[K, V]) bool {
 			err := iterFunc(kv.key, kv.val)
 			if err != nil {
@@ -110,8 +121,8 @@ func (st *InMemoryBTreeKeyValueStoreG[K, V]) Range(ctx context.Context, from K, 
 			}
 			return true
 		}))
-	} else if utils.IsNil(from) && !utils.IsNil(to) {
-		st.store.AscendLessThan(kvPairG[K, V]{key: to},
+	} else if !okF && okT {
+		st.store.AscendLessThan(kvPairG[K, V]{key: t},
 			btree.ItemIteratorG[kvPairG[K, V]](func(kv kvPairG[K, V]) bool {
 				err := iterFunc(kv.key, kv.val)
 				if err != nil {
@@ -120,8 +131,8 @@ func (st *InMemoryBTreeKeyValueStoreG[K, V]) Range(ctx context.Context, from K, 
 				}
 				return true
 			}))
-	} else if !utils.IsNil(from) && utils.IsNil(to) {
-		st.store.AscendGreaterOrEqual(kvPairG[K, V]{key: from},
+	} else if okF && !okT {
+		st.store.AscendGreaterOrEqual(kvPairG[K, V]{key: f},
 			btree.ItemIteratorG[kvPairG[K, V]](func(kv kvPairG[K, V]) bool {
 				err := iterFunc(kv.key, kv.val)
 				if err != nil {
@@ -131,7 +142,7 @@ func (st *InMemoryBTreeKeyValueStoreG[K, V]) Range(ctx context.Context, from K, 
 				return true
 			}))
 	} else {
-		st.store.AscendRange(kvPairG[K, V]{key: from}, kvPairG[K, V]{key: to},
+		st.store.AscendRange(kvPairG[K, V]{key: f}, kvPairG[K, V]{key: t},
 			btree.ItemIteratorG[kvPairG[K, V]](func(kv kvPairG[K, V]) bool {
 				err := iterFunc(kv.key, kv.val)
 				if err != nil {

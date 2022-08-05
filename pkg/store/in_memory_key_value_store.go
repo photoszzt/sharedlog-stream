@@ -11,7 +11,7 @@ import (
 )
 
 type InMemoryKeyValueStore struct {
-	mux   sync.Mutex
+	mux   sync.RWMutex
 	store *treemap.TreeMap
 	name  string
 }
@@ -50,8 +50,8 @@ func (st *InMemoryKeyValueStore) Name() string {
 }
 
 func (st *InMemoryKeyValueStore) Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error) {
-	st.mux.Lock()
-	defer st.mux.Unlock()
+	st.mux.RLock()
+	defer st.mux.RUnlock()
 	val, ok := st.store.Get(key)
 	return val, ok, nil
 }

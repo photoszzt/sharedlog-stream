@@ -50,6 +50,17 @@ func (a Uint64Item) Less(than btree.Item) bool {
 	return a < other
 }
 
+type IntItem int
+
+func (a IntItem) Less(than btree.Item) bool {
+	other, ok := than.(IntItem)
+	if !ok {
+		kvItem := than.(kvPair)
+		other = kvItem.key.(IntItem)
+	}
+	return a < other
+}
+
 var _ = CoreKeyValueStore(&InMemoryBTreeKeyValueStore{})
 
 func NewInMemoryBTreeKeyValueStore(name string) *InMemoryBTreeKeyValueStore {

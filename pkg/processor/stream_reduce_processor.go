@@ -102,7 +102,7 @@ func (p *StreamReduceProcessorG[K, V]) ProcessAndReturn(ctx context.Context, msg
 		newAgg = msg.Value
 		newTs = msg.Timestamp
 	}
-	err = p.store.Put(ctx, key, commtypes.CreateValueTimestamp(newAgg, newTs))
+	err = p.store.Put(ctx, key, commtypes.CreateValueTimestampOptional(newAgg, newTs))
 	if err != nil {
 		return nil, err
 	}

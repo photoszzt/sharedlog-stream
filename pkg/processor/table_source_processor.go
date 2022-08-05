@@ -137,7 +137,7 @@ func (p *TableSourceProcessorG[K, V]) ProcessAndReturn(ctx context.Context, msg 
 		} else {
 			oldVal = nil
 		}
-		err = p.store.Put(ctx, key, commtypes.CreateValueTimestamp(msg.Value, msg.Timestamp))
+		err = p.store.Put(ctx, key, commtypes.CreateValueTimestampOptional(msg.Value, msg.Timestamp))
 		if err != nil {
 			return nil, err
 		}

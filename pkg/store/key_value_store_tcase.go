@@ -4,6 +4,8 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"testing"
+
+	"4d63.com/optional"
 )
 
 func checkMapEqual(t testing.TB, expected map[int]string, got map[int]string) {
@@ -55,6 +57,37 @@ func ShouldNotIncludeDeletedFromRangeResult(ctx context.Context, store CoreKeyVa
 	checkMapEqual(t, expected, ret)
 }
 
+func ShouldNotIncludeDeletedFromRangeResultG(ctx context.Context, store CoreKeyValueStoreG[int, string], t testing.TB) {
+	checkErr(store.Put(ctx, 0, optional.Of("zero")), t)
+	checkErr(store.Put(ctx, 1, optional.Of("one")), t)
+	checkErr(store.Put(ctx, 2, optional.Of("two")), t)
+	checkErr(store.Delete(ctx, 0), t)
+	checkErr(store.Delete(ctx, 1), t)
+
+	expected := make(map[int]string)
+	expected[2] = "two"
+
+	val2, ok, err := store.Get(ctx, 2)
+	if err != nil {
+		t.Fatalf("fail to get 2: %v", err)
+	}
+	if !ok {
+		t.Fatal("2 should be in the map")
+	}
+	if val2 != "two" {
+		t.Fatalf("expected two, got %s", val2)
+	}
+	ret := make(map[int]string)
+	err = store.Range(ctx, optional.Empty[int](), optional.Empty[int](), func(kt int, vt string) error {
+		ret[kt] = vt
+		return nil
+	})
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	checkMapEqual(t, expected, ret)
+}
+
 func ShouldDeleteIfSerializedValueIsNull(ctx context.Context, store CoreKeyValueStore, t testing.TB) {
 	checkErr(store.Put(ctx, 0, "zero"), t)
 	checkErr(store.Put(ctx, 1, "one"), t)
@@ -77,6 +110,36 @@ func ShouldDeleteIfSerializedValueIsNull(ctx context.Context, store CoreKeyValue
 	ret := make(map[int]string)
 	err = store.Range(ctx, nil, nil, func(kt commtypes.KeyT, vt commtypes.ValueT) error {
 		ret[kt.(int)] = vt.(string)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	checkMapEqual(t, expected, ret)
+}
+
+func ShouldDeleteIfSerializedValueIsNullG(ctx context.Context, store CoreKeyValueStoreG[int, string], t testing.TB) {
+	checkErr(store.Put(ctx, 0, optional.Of("zero")), t)
+	checkErr(store.Put(ctx, 1, optional.Of("one")), t)
+	checkErr(store.Put(ctx, 2, optional.Of("two")), t)
+	checkErr(store.Put(ctx, 0, optional.Empty[string]()), t)
+	checkErr(store.Put(ctx, 1, optional.Empty[string]()), t)
+	expected := make(map[int]string)
+	expected[2] = "two"
+
+	val2, ok, err := store.Get(ctx, 2)
+	if err != nil {
+		t.Fatalf("fail to get 2: %v", err)
+	}
+	if !ok {
+		t.Fatal("2 should be in the map")
+	}
+	if val2 != "two" {
+		t.Fatalf("expected two, got %s", val2)
+	}
+	ret := make(map[int]string)
+	err = store.Range(ctx, optional.Empty[int](), optional.Empty[int](), func(kt int, vt string) error {
+		ret[kt] = vt
 		return nil
 	})
 	if err != nil {

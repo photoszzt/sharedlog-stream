@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"sharedlog-stream/pkg/utils"
+
+	"4d63.com/optional"
 )
 
 type ValueTimestamp struct {
@@ -27,6 +29,17 @@ func CreateValueTimestamp(val interface{}, ts int64) *ValueTimestamp {
 			Value:     val,
 			Timestamp: ts,
 		}
+	}
+}
+
+func CreateValueTimestampOptional(val interface{}, ts int64) optional.Optional[*ValueTimestamp] {
+	if val == nil {
+		return optional.Empty[*ValueTimestamp]()
+	} else {
+		return optional.Of(&ValueTimestamp{
+			Value:     val,
+			Timestamp: ts,
+		})
 	}
 }
 
