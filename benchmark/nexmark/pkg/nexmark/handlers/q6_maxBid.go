@@ -15,7 +15,6 @@ import (
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
-	"sharedlog-stream/pkg/treemap"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -134,30 +133,28 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	compare := func(a, b treemap.Key) bool {
-		ka := a.(ntypes.AuctionIdSeller)
-		kb := b.(ntypes.AuctionIdSeller)
-		return ntypes.CompareAuctionIDSeller(&ka, &kb) < 0
+	compare := func(a, b ntypes.AuctionIdSeller) bool {
+		return ntypes.CompareAuctionIDSeller(a, b) < 0
 	}
-	kvstore, err := store_with_changelog.CreateInMemKVTableWithChangelog(
-		mp, compare)
+	kvstore, err := store_with_changelog.CreateInMemorySkipmapKVTableWithChangelogG(
+		mp, store.LessFunc[ntypes.AuctionIdSeller](compare))
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	ectx.Via(processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor("maxBid", kvstore,
-		processor.InitializerFunc(func() interface{} { return nil }),
-		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
-			v := value.(*ntypes.AuctionBid)
-			if aggregate == nil {
-				return ntypes.PriceTime{Price: v.BidPrice, DateTime: v.BidDateTime}
-			}
-			agg := aggregate.(ntypes.PriceTime)
-			if v.BidPrice > agg.Price {
-				return ntypes.PriceTime{Price: v.BidPrice, DateTime: v.BidDateTime}
-			} else {
-				return agg
-			}
-		})))).
+	ectx.Via(processor.NewMeteredProcessor(
+		processor.NewStreamAggregateProcessorG[ntypes.AuctionIdSeller, *ntypes.AuctionBid, *ntypes.PriceTime]("maxBid", kvstore,
+			processor.InitializerFuncG[*ntypes.PriceTime](func() *ntypes.PriceTime { return nil }),
+			processor.AggregatorFuncG[ntypes.AuctionIdSeller, *ntypes.AuctionBid, *ntypes.PriceTime](
+				func(key ntypes.AuctionIdSeller, v *ntypes.AuctionBid, agg *ntypes.PriceTime) *ntypes.PriceTime {
+					if agg == nil {
+						return &ntypes.PriceTime{Price: v.BidPrice, DateTime: v.BidDateTime}
+					}
+					if v.BidPrice > agg.Price {
+						return &ntypes.PriceTime{Price: v.BidPrice, DateTime: v.BidDateTime}
+					} else {
+						return agg
+					}
+				})))).
 		Via(processor.NewMeteredProcessor(processor.NewTableGroupByMapProcessor("changeKey",
 			processor.MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
 				return key.(ntypes.AuctionIdSeller).Seller, value, nil

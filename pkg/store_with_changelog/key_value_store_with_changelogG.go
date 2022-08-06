@@ -4,6 +4,7 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
@@ -98,8 +99,8 @@ func (st *KeyValueStoreWithChangelogG[K, V]) Put(ctx context.Context, key K, val
 	return err
 }
 
-func (st *KeyValueStoreWithChangelogG[K, V]) PutWithoutPushToChangelog(ctx context.Context, key K, value V) error {
-	return st.kvstore.Put(ctx, key, optional.Of(value))
+func (st *KeyValueStoreWithChangelogG[K, V]) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
+	return st.kvstore.PutWithoutPushToChangelog(ctx, key, value)
 }
 
 func (st *KeyValueStoreWithChangelogG[K, V]) PutIfAbsent(ctx context.Context, key K, value V) (optional.Optional[V], error) {
@@ -190,4 +191,22 @@ func CreateInMemBTreeKVTableWithChangelogG[K, V any](mp *MaterializeParam[K, V],
 ) (*KeyValueStoreWithChangelogG[K, V], error) {
 	s := store.NewInMemoryBTreeKeyValueStoreG[K, V](mp.storeName, less)
 	return NewKeyValueStoreWithChangelogG[K, V](mp, s)
+}
+
+func CreateInMemorySkipmapKVTableWithChangelogG[K, V any](mp *MaterializeParam[K, V], less store.LessFunc[K],
+) (*KeyValueStoreWithChangelogG[K, V], error) {
+	s := store.NewInMemorySkipmapKeyValueStoreG[K, V](mp.storeName, less)
+	return NewKeyValueStoreWithChangelogG[K, V](mp, s)
+}
+
+func ToInMemSkipmapKVTableWithChangelog[K, V any](mp *MaterializeParam[K, *commtypes.ValueTimestamp],
+	less store.LessFunc[K],
+) (*processor.MeteredProcessor, *KeyValueStoreWithChangelogG[K, *commtypes.ValueTimestamp], error) {
+	s := store.NewInMemorySkipmapKeyValueStoreG[K, *commtypes.ValueTimestamp](mp.storeName, less)
+	storeWithlog, err := NewKeyValueStoreWithChangelogG[K, *commtypes.ValueTimestamp](mp, s)
+	if err != nil {
+		return nil, nil, err
+	}
+	toTableProc := processor.NewMeteredProcessor(processor.NewTableSourceProcessorWithTableG[K, V](storeWithlog))
+	return toTableProc, storeWithlog, nil
 }

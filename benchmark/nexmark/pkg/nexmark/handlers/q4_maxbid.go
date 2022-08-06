@@ -15,7 +15,6 @@ import (
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
-	"sharedlog-stream/pkg/treemap"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -111,8 +110,12 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
+	bpSerde, err := ntypes.GetBidPriceSerde(serdeFormat)
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: err.Error()}
+	}
 	msgSerde, err := processor.MsgSerdeWithValueTsG(serdeFormat,
-		aicSerde, commtypes.Uint64Serde{})
+		aicSerde, bpSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -130,32 +133,31 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	compare := func(a, b treemap.Key) bool {
-		ka := a.(ntypes.AuctionIdCategory)
-		kb := b.(ntypes.AuctionIdCategory)
-		return ntypes.CompareAuctionIdCategory(&ka, &kb) < 0
+	compare := func(a, b ntypes.AuctionIdCategory) bool {
+		return ntypes.CompareAuctionIdCategory(&a, &b) < 0
 	}
-	kvstore, err := store_with_changelog.CreateInMemKVTableWithChangelog(mp, compare)
+	kvstore, err := store_with_changelog.CreateInMemorySkipmapKVTableWithChangelogG(mp,
+		store.LessFunc[ntypes.AuctionIdCategory](compare))
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	ectx.Via(processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor("maxBid", kvstore,
-		processor.InitializerFunc(func() interface{} { return nil }),
-		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
-			v := value.(*ntypes.AuctionBid)
-			if aggregate == nil {
-				return v.BidPrice
-			}
-			agg := aggregate.(uint64)
-			if v.BidPrice > agg {
-				return v.BidPrice
-			} else {
-				return agg
-			}
-		})))).
+	ectx.Via(processor.NewMeteredProcessor(
+		processor.NewStreamAggregateProcessorG[ntypes.AuctionIdCategory, *ntypes.AuctionBid, *ntypes.BidPrice]("maxBid", kvstore,
+			processor.InitializerFuncG[*ntypes.BidPrice](func() *ntypes.BidPrice { return nil }),
+			processor.AggregatorFuncG[ntypes.AuctionIdCategory, *ntypes.AuctionBid, *ntypes.BidPrice](
+				func(key ntypes.AuctionIdCategory, value *ntypes.AuctionBid, aggregate *ntypes.BidPrice) *ntypes.BidPrice {
+					if aggregate == nil {
+						return &ntypes.BidPrice{Price: value.BidPrice}
+					}
+					if value.BidPrice > aggregate.Price {
+						return &ntypes.BidPrice{Price: value.BidPrice}
+					} else {
+						return aggregate
+					}
+				})))).
 		Via(processor.NewMeteredProcessor(processor.NewTableGroupByMapProcessor("changeKey",
 			processor.MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
-				return key.(ntypes.AuctionIdCategory).Category, value, nil
+				return key.(ntypes.AuctionIdCategory).Category, value.(*ntypes.BidPrice).Price, nil
 			})))).
 		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[0], &ectx))
 

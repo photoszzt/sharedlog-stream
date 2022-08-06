@@ -14,7 +14,7 @@ type AuctionIdSeller struct {
 	Seller uint64 `json:"seller,omitempty" msg:"seller,omitempty"`
 }
 
-func CompareAuctionIDSeller(a, b *AuctionIdSeller) int {
+func CompareAuctionIDSeller(a, b AuctionIdSeller) int {
 	if a.AucId < b.AucId {
 		return -1
 	} else if a.AucId == b.AucId {

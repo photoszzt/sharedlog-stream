@@ -6,6 +6,8 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/utils"
+
+	"4d63.com/optional"
 )
 
 type TableAggregateProcessor struct {
@@ -129,32 +131,34 @@ func (p *TableAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Contex
 	if err != nil {
 		return nil, err
 	}
-	var oldAgg VA
+	oldAgg := optional.Empty[VA]()
 	if ok {
-		oldAgg = oldAggTs.Value.(VA)
+		oldAgg = optional.Of(oldAggTs.Value.(VA))
 	}
 	newTs := msg.Timestamp
-	var intermediateAgg VA
+	intermediateAgg := optional.Empty[VA]()
 
 	// first try to remove the old val
 	msgVal := msg.Value.(commtypes.Change)
-	if !utils.IsNil(msgVal.OldVal) && !utils.IsNil(oldAgg) {
-		intermediateAgg = p.remove.Apply(key, msgVal.OldVal.(V), oldAgg)
+	oldAggUnwrap, hasOldAgg := oldAgg.Get()
+	if !utils.IsNil(msgVal.OldVal) && hasOldAgg {
+		intermediateAgg = optional.Of(p.remove.Apply(key, msgVal.OldVal.(V), oldAggUnwrap))
 		newTs = utils.MaxInt64(msg.Timestamp, oldAggTs.Timestamp)
 	} else {
 		intermediateAgg = oldAgg
 	}
 
 	// then try to add the new val
-	var newAgg VA
+	newAgg := optional.Empty[VA]()
 	if !utils.IsNil(msgVal.NewVal) {
 		var initAgg VA
-		if utils.IsNil(intermediateAgg) {
-			initAgg = p.initializer.Apply()
+		midAgg, hasMidAgg := intermediateAgg.Get()
+		if hasMidAgg {
+			initAgg = midAgg
 		} else {
-			initAgg = intermediateAgg
+			initAgg = p.initializer.Apply()
 		}
-		newAgg = p.add.Apply(key, msgVal.NewVal.(V), initAgg)
+		newAgg = optional.Of(p.add.Apply(key, msgVal.NewVal.(V), initAgg))
 		if !utils.IsNil(oldAggTs) {
 			newTs = utils.MaxInt64(msg.Timestamp, oldAggTs.Timestamp)
 		}
@@ -166,9 +170,19 @@ func (p *TableAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Contex
 	if err != nil {
 		return nil, err
 	}
+	var newA interface{}
+	var oldA interface{}
+	newA, hasNewAgg := newAgg.Get()
+	oldA, hasOldA := oldAgg.Get()
+	if !hasNewAgg {
+		newA = nil
+	}
+	if !hasOldA {
+		oldA = nil
+	}
 	change := commtypes.Change{
-		NewVal: newAgg,
-		OldVal: oldAgg,
+		NewVal: newA,
+		OldVal: oldA,
 	}
 	return []commtypes.Message{{Key: msg.Key, Value: change, Timestamp: newTs}}, nil
 }

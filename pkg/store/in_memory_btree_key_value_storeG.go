@@ -26,8 +26,6 @@ type InMemoryBTreeKeyValueStoreG[K, V any] struct {
 
 var _ = CoreKeyValueStoreG[int, int](&InMemoryBTreeKeyValueStoreG[int, int]{})
 
-type LessFunc[K any] func(k1, k2 K) bool
-
 func NewInMemoryBTreeKeyValueStoreG[K, V any](name string, lessFunc LessFunc[K]) *InMemoryBTreeKeyValueStoreG[K, V] {
 	return &InMemoryBTreeKeyValueStoreG[K, V]{
 		name: name,
@@ -72,8 +70,12 @@ func (st *InMemoryBTreeKeyValueStoreG[K, V]) PutIfAbsent(ctx context.Context, ke
 	return optional.Of(originalKV.val), nil
 }
 
-func (st *InMemoryBTreeKeyValueStoreG[K, V]) PutWithoutPushToChangelog(ctx context.Context, key K, value V) error {
-	return st.Put(ctx, key, optional.Of(value))
+func (st *InMemoryBTreeKeyValueStoreG[K, V]) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
+	if utils.IsNil(value) {
+		return st.Put(ctx, key.(K), optional.Empty[V]())
+	} else {
+		return st.Put(ctx, key.(K), optional.Of(value.(V)))
+	}
 }
 
 func (st *InMemoryBTreeKeyValueStoreG[K, V]) PutAll(ctx context.Context, kvs []*commtypes.Message) error {

@@ -3,6 +3,9 @@ package commtypes
 import (
 	"encoding/json"
 	"fmt"
+	"sharedlog-stream/pkg/utils"
+
+	"4d63.com/optional"
 )
 
 type ValueTimestampJSONSerdeG struct {
@@ -71,5 +74,28 @@ func GetValueTsSerdeG(serdeFormat SerdeFormat, valSerde Serde) (SerdeG[*ValueTim
 		}, nil
 	} else {
 		return nil, fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat)
+	}
+}
+
+func CreateValueTimestampOptional[V any](val optional.Optional[V], ts int64) optional.Optional[*ValueTimestamp] {
+	v, hasV := val.Get()
+	if hasV {
+		return optional.Of(&ValueTimestamp{
+			Value:     v,
+			Timestamp: ts,
+		})
+	} else {
+		return optional.Empty[*ValueTimestamp]()
+	}
+}
+
+func CreateValueTimestampOptionalWithIntrVal(val interface{}, ts int64) optional.Optional[*ValueTimestamp] {
+	if utils.IsNil(val) {
+		return optional.Empty[*ValueTimestamp]()
+	} else {
+		return optional.Of(&ValueTimestamp{
+			Value:     val,
+			Timestamp: ts,
+		})
 	}
 }

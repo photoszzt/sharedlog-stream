@@ -118,41 +118,29 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	kvstore, err := store_with_changelog.CreateInMemKVTableWithChangelog(mp, store.Uint64Less)
+	kvstore, err := store_with_changelog.CreateInMemorySkipmapKVTableWithChangelogG(mp, store.Uint64LessFunc)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
 	ectx.
 		Via(processor.NewMeteredProcessor(
-			processor.NewTableAggregateProcessor("sumCount", kvstore,
-				processor.InitializerFunc(func() interface{} {
+			processor.NewTableAggregateProcessorG[uint64, uint64, *ntypes.SumAndCount]("sumCount", kvstore,
+				processor.InitializerFuncG[*ntypes.SumAndCount](func() *ntypes.SumAndCount {
 					return &ntypes.SumAndCount{
 						Sum:   0,
 						Count: 0,
 					}
 				}),
-				processor.AggregatorFunc(func(_, value, aggregate interface{}) interface{} {
-					if value != nil {
-						val := value.(uint64)
-						agg := aggregate.(*ntypes.SumAndCount)
-						return &ntypes.SumAndCount{
-							Sum:   agg.Sum + val,
-							Count: agg.Count + 1,
-						}
-					} else {
-						return aggregate
+				processor.AggregatorFuncG[uint64, uint64, *ntypes.SumAndCount](func(_ uint64, val uint64, agg *ntypes.SumAndCount) *ntypes.SumAndCount {
+					return &ntypes.SumAndCount{
+						Sum:   agg.Sum + val,
+						Count: agg.Count + 1,
 					}
 				}),
-				processor.AggregatorFunc(func(_, value, aggregate interface{}) interface{} {
-					if value != nil {
-						val := value.(uint64)
-						agg := aggregate.(*ntypes.SumAndCount)
-						return &ntypes.SumAndCount{
-							Sum:   agg.Sum - val,
-							Count: agg.Count - 1,
-						}
-					} else {
-						return aggregate
+				processor.AggregatorFuncG[uint64, uint64, *ntypes.SumAndCount](func(_ uint64, val uint64, agg *ntypes.SumAndCount) *ntypes.SumAndCount {
+					return &ntypes.SumAndCount{
+						Sum:   agg.Sum - val,
+						Count: agg.Count - 1,
 					}
 				}),
 			))).

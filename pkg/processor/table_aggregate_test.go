@@ -19,16 +19,26 @@ func toStringAgg(sep string) AggregatorFunc {
 	})
 }
 
+func toStringAggG(sep string) AggregatorFuncG[string, string, string] {
+	return AggregatorFuncG[string, string, string](func(key string, value string, aggregate string) string {
+		return aggregate + sep + value
+	})
+}
+
 var (
-	TOSTRING_ADDER   = toStringAgg("+")
-	TOSTRING_REMOVER = toStringAgg("-")
-	STRING_INIT      = InitializerFunc(func() interface{} {
+	TOSTRING_ADDER     = toStringAgg("+")
+	TOSTRING_REMOVER   = toStringAgg("-")
+	TOSTRING_ADDER_G   = toStringAggG("+")
+	TOSTRING_REMOVER_G = toStringAggG("-")
+	STRING_INIT        = InitializerFunc(func() interface{} {
+		return "0"
+	})
+	STRING_INIT_G = InitializerFuncG[string](func() string {
 		return "0"
 	})
 )
 
-func TestAggBasic(t *testing.T) {
-	ctx := context.Background()
+func TestAggBasicWithInMemKVTable(t *testing.T) {
 	pc := NewProcessorChains()
 	srcTable := store.NewInMemoryKeyValueStore("srcTab", store.StringLess)
 	st := store.NewInMemoryKeyValueStore("aggTab", store.StringLess)
@@ -40,6 +50,26 @@ func TestAggBasic(t *testing.T) {
 			}))).
 		Via(NewTableAggregateProcessor("agg", st, STRING_INIT, TOSTRING_ADDER, TOSTRING_REMOVER)).
 		Via(NewTableToStreamProcessor())
+	testAggBasic(t, &pc)
+}
+
+func TestAggBasicWithInMemSkipmapTable(t *testing.T) {
+	pc := NewProcessorChains()
+	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, *commtypes.ValueTimestamp]("srcTab", store.StringLessFunc)
+	st := store.NewInMemorySkipmapKeyValueStoreG[string, *commtypes.ValueTimestamp]("aggTab", store.StringLessFunc)
+	pc.
+		Via(NewTableSourceProcessorWithTableG[string, string](srcTable)).
+		Via(NewTableGroupByMapProcessor("noOpGroupBy",
+			MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
+				return key, value, nil
+			}))).
+		Via(NewTableAggregateProcessorG[string, string, string]("agg", st, STRING_INIT_G, TOSTRING_ADDER_G, TOSTRING_REMOVER_G)).
+		Via(NewTableToStreamProcessor())
+	testAggBasic(t, &pc)
+}
+
+func testAggBasic(t *testing.T, pc *ProcessorChains) {
+	ctx := context.Background()
 	inputMsgs := []commtypes.Message{
 		{Key: "A", Value: "1", Timestamp: 10},
 		{Key: "B", Value: "2", Timestamp: 15},
@@ -85,8 +115,7 @@ func TestAggBasic(t *testing.T) {
 	}
 }
 
-func TestAggRepartition(t *testing.T) {
-	ctx := context.Background()
+func TestAggRepartitionWithInMemKVStore(t *testing.T) {
 	pc := NewProcessorChains()
 	srcTable := store.NewInMemoryKeyValueStore("srcTab", store.StringLess)
 	st := store.NewInMemoryKeyValueStore("aggTab", store.StringLess)
@@ -104,6 +133,32 @@ func TestAggRepartition(t *testing.T) {
 		}))).
 		Via(NewTableAggregateProcessor("agg", st, STRING_INIT, TOSTRING_ADDER, TOSTRING_REMOVER)).
 		Via(NewTableToStreamProcessor())
+	testAggRepartition(t, &pc)
+}
+
+func TestAggRepartitionWithInMemSkipmapKVStore(t *testing.T) {
+	pc := NewProcessorChains()
+	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, *commtypes.ValueTimestamp]("srcTab", store.StringLessFunc)
+	st := store.NewInMemorySkipmapKeyValueStoreG[string, *commtypes.ValueTimestamp]("aggTab", store.StringLessFunc)
+	pc.
+		Via(NewTableSourceProcessorWithTableG[string, string](srcTable)).
+		Via(NewTableGroupByMapProcessor("groupBy", MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
+			k := key.(string)
+			if k == "null" {
+				return nil, value, nil
+			} else if k == "NULL" {
+				return nil, nil, nil
+			} else {
+				return value, value, nil
+			}
+		}))).
+		Via(NewTableAggregateProcessorG[string, string, string]("agg", st, STRING_INIT_G, TOSTRING_ADDER_G, TOSTRING_REMOVER_G)).
+		Via(NewTableToStreamProcessor())
+	testAggRepartition(t, &pc)
+}
+
+func testAggRepartition(t *testing.T, pc *ProcessorChains) {
+	ctx := context.Background()
 	inputMsgs := []commtypes.Message{
 		{Key: "A", Value: "1", Timestamp: 10},
 		{Key: "A", Value: nil, Timestamp: 15},
@@ -139,13 +194,13 @@ func TestAggRepartition(t *testing.T) {
 		}
 		fmt.Fprintf(os.Stderr, "Got output: \n")
 		for _, outMsg := range outMsgs {
-			fmt.Fprintf(os.Stderr, "\tgot k %s, val %s, ts %d\n", outMsg.Key, outMsg.Value, outMsg.Timestamp)
+			fmt.Fprintf(os.Stderr, "\tgot k %s, val %v, ts %d\n", outMsg.Key, outMsg.Value, outMsg.Timestamp)
 		}
 		t.Fatalf("should equal.")
 	}
 }
 
-func TestCount(t *testing.T) {
+func TestCountWithInMemKVStore(t *testing.T) {
 	pc := NewProcessorChains()
 	srcTable := store.NewInMemoryKeyValueStore("srcTab", store.StringLess)
 	st := store.NewInMemoryKeyValueStore("aggTab", store.StringLess)
@@ -165,6 +220,31 @@ func TestCount(t *testing.T) {
 				return agg - 1
 			}))).
 		Via(NewTableToStreamProcessor())
+	testCount(t, &pc)
+}
+
+func TestCountWithInMemSkipmapKVStore(t *testing.T) {
+	pc := NewProcessorChains()
+	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, *commtypes.ValueTimestamp]("srcTab", store.StringLessFunc)
+	st := store.NewInMemorySkipmapKeyValueStoreG[string, *commtypes.ValueTimestamp]("aggTab", store.StringLessFunc)
+	pc.
+		Via(NewTableSourceProcessorWithTableG[string, string](srcTable)).
+		Via(NewTableGroupByMapProcessor("groupBy", MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
+			return value, value, nil
+		}))).
+		Via(NewTableAggregateProcessorG[string, string, uint64]("count", st,
+			InitializerFuncG[uint64](func() uint64 { return uint64(0) }),
+			AggregatorFuncG[string, string, uint64](func(key string, value string, aggregate uint64) uint64 {
+				return aggregate + 1
+			}),
+			AggregatorFuncG[string, string, uint64](func(key string, value string, aggregate uint64) uint64 {
+				return aggregate - 1
+			}))).
+		Via(NewTableToStreamProcessor())
+	testCount(t, &pc)
+}
+
+func testCount(t *testing.T, pc *ProcessorChains) {
 	inputMsgs := []commtypes.Message{
 		{Key: "A", Value: "green", Timestamp: 10},
 		{Key: "B", Value: "green", Timestamp: 9},
@@ -192,17 +272,17 @@ func TestCount(t *testing.T) {
 	if !reflect.DeepEqual(expected_out, outMsgs) {
 		fmt.Fprintf(os.Stderr, "Expected output: \n")
 		for _, expected := range expected_out {
-			fmt.Fprintf(os.Stderr, "\tgot k %s, val %s, ts %d\n", expected.Key, expected.Value, expected.Timestamp)
+			fmt.Fprintf(os.Stderr, "\tgot k %s, val %d, ts %d\n", expected.Key, expected.Value, expected.Timestamp)
 		}
 		fmt.Fprintf(os.Stderr, "Got output: \n")
 		for _, outMsg := range outMsgs {
-			fmt.Fprintf(os.Stderr, "\tgot k %s, val %s, ts %d\n", outMsg.Key, outMsg.Value, outMsg.Timestamp)
+			fmt.Fprintf(os.Stderr, "\tgot k %s, val %#+v, ts %#+v\n", outMsg.Key, outMsg.Value, outMsg.Timestamp)
 		}
 		t.Fatalf("should equal.")
 	}
 }
 
-func TestRemoveOldBeforeAddNew(t *testing.T) {
+func TestRemoveOldBeforeAddNewWithInMemKVStore(t *testing.T) {
 	pc := NewProcessorChains()
 	srcTable := store.NewInMemoryKeyValueStore("srcTab", store.StringLess)
 	st := store.NewInMemoryKeyValueStore("aggTab", store.StringLess)
@@ -225,6 +305,32 @@ func TestRemoveOldBeforeAddNew(t *testing.T) {
 				return strings.ReplaceAll(agg, val, "")
 			}))).
 		Via(NewTableToStreamProcessor())
+	testRemoveOldBeforeAddNew(t, &pc)
+}
+
+func TestRemoveOldBeforeAddNewWithInMemSkipmapKVStore(t *testing.T) {
+	pc := NewProcessorChains()
+	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, *commtypes.ValueTimestamp]("srcTab", store.StringLessFunc)
+	st := store.NewInMemorySkipmapKeyValueStoreG[string, *commtypes.ValueTimestamp]("aggTab", store.StringLessFunc)
+	pc.
+		Via(NewTableSourceProcessorWithTableG[string, string](srcTable)).
+		Via(NewTableGroupByMapProcessor("groupBy", MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
+			k := key.(string)
+			return string(k[0]), string(k[1]), nil
+		}))).
+		Via(NewTableAggregateProcessorG[string, string, string]("agg", st,
+			InitializerFuncG[string](func() string { return "" }),
+			AggregatorFuncG[string, string, string](func(key string, value string, aggregate string) string {
+				return aggregate + value
+			}),
+			AggregatorFuncG[string, string, string](func(key string, value string, aggregate string) string {
+				return strings.ReplaceAll(aggregate, value, "")
+			}))).
+		Via(NewTableToStreamProcessor())
+	testRemoveOldBeforeAddNew(t, &pc)
+}
+
+func testRemoveOldBeforeAddNew(t *testing.T, pc *ProcessorChains) {
 	inputMsgs := []commtypes.Message{
 		{Key: "11", Value: "A", Timestamp: 10},
 		{Key: "12", Value: "B", Timestamp: 8},

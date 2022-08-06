@@ -16,7 +16,6 @@ import (
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
-	"sharedlog-stream/pkg/treemap"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -133,37 +132,35 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	compare := func(a, b treemap.Key) bool {
-		ka := a.(ntypes.StartEndTime)
-		kb := b.(ntypes.StartEndTime)
-		return ntypes.CompareStartEndTime(&ka, &kb) < 0
+	compare := func(a, b ntypes.StartEndTime) bool {
+		return ntypes.CompareStartEndTime(a, b) < 0
 	}
-	kvstore, err := store_with_changelog.CreateInMemKVTableWithChangelog(mp, compare)
+	kvstore, err := store_with_changelog.CreateInMemorySkipmapKVTableWithChangelogG(mp, compare)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	maxBid := processor.NewMeteredProcessor(processor.NewStreamAggregateProcessor("maxBid",
-		kvstore, processor.InitializerFunc(func() interface{} {
-			return uint64(0)
-		}), processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
-			v := value.(ntypes.AuctionIdCount)
-			agg := aggregate.(uint64)
-			if v.Count > agg {
-				return v.Count
-			}
-			return agg
-		})))
-	stJoin := processor.NewMeteredProcessor(processor.NewStreamTableJoinProcessor(kvstore,
-		processor.ValueJoinerWithKeyFunc(
-			func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
-				lv := leftValue.(ntypes.AuctionIdCount)
-				rv := rightValue.(uint64)
-				return ntypes.AuctionIdCntMax{
-					AucId:  lv.AucId,
-					Count:  lv.Count,
-					MaxCnt: rv,
-				}
-			})))
+	maxBid := processor.NewMeteredProcessor(
+		processor.NewStreamAggregateProcessorG[ntypes.StartEndTime, ntypes.AuctionIdCount, uint64]("maxBid",
+			kvstore, processor.InitializerFuncG[uint64](func() uint64 {
+				return uint64(0)
+			}),
+			processor.AggregatorFuncG[ntypes.StartEndTime, ntypes.AuctionIdCount, uint64](
+				func(key ntypes.StartEndTime, v ntypes.AuctionIdCount, agg uint64) uint64 {
+					if v.Count > agg {
+						return v.Count
+					}
+					return agg
+				})))
+	stJoin := processor.NewMeteredProcessor(
+		processor.NewStreamTableJoinProcessorG[ntypes.StartEndTime, ntypes.AuctionIdCount, uint64, ntypes.AuctionIdCntMax](kvstore,
+			processor.ValueJoinerWithKeyFuncG[ntypes.StartEndTime, ntypes.AuctionIdCount, uint64, ntypes.AuctionIdCntMax](
+				func(readOnlyKey ntypes.StartEndTime, lv ntypes.AuctionIdCount, rv uint64) ntypes.AuctionIdCntMax {
+					return ntypes.AuctionIdCntMax{
+						AucId:  lv.AucId,
+						Count:  lv.Count,
+						MaxCnt: rv,
+					}
+				})))
 	chooseMaxCnt := processor.NewMeteredProcessor(
 		processor.NewStreamFilterProcessor("chooseMaxCnt",
 			processor.PredicateFunc(func(key, value interface{}) (bool, error) {

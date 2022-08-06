@@ -22,7 +22,7 @@ func (se StartEndTime) Stringer() string {
 	return fmt.Sprintf("StartEndTime: {StartTsMs: %d, EndTsMs: %d}", se.StartTimeMs, se.EndTimeMs)
 }
 
-func CompareStartEndTime(a, b *StartEndTime) int {
+func CompareStartEndTime(a, b StartEndTime) int {
 	if a.StartTimeMs < b.StartTimeMs {
 		return -1
 	} else { // a.st >= b.st

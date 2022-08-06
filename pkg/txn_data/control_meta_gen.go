@@ -72,6 +72,12 @@ func (z *ControlMetadata) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Key")
 				return
 			}
+		case "Hash":
+			z.Hash, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "Hash")
+				return
+			}
 		case "Epoch":
 			z.Epoch, err = dc.ReadUint16()
 			if err != nil {
@@ -103,9 +109,9 @@ func (z *ControlMetadata) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *ControlMetadata) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 7
+	// map header, size 8
 	// write "Config"
-	err = en.Append(0x87, 0xa6, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67)
+	err = en.Append(0x88, 0xa6, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67)
 	if err != nil {
 		return
 	}
@@ -156,6 +162,16 @@ func (z *ControlMetadata) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Key")
 		return
 	}
+	// write "Hash"
+	err = en.Append(0xa4, 0x48, 0x61, 0x73, 0x68)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.Hash)
+	if err != nil {
+		err = msgp.WrapError(err, "Hash")
+		return
+	}
 	// write "Epoch"
 	err = en.Append(0xa5, 0x45, 0x70, 0x6f, 0x63, 0x68)
 	if err != nil {
@@ -192,9 +208,9 @@ func (z *ControlMetadata) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *ControlMetadata) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 7
+	// map header, size 8
 	// string "Config"
-	o = append(o, 0x87, 0xa6, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67)
+	o = append(o, 0x88, 0xa6, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67)
 	o = msgp.AppendMapHeader(o, uint32(len(z.Config)))
 	for za0001, za0002 := range z.Config {
 		o = msgp.AppendString(o, za0001)
@@ -209,6 +225,9 @@ func (z *ControlMetadata) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "Key"
 	o = append(o, 0xa3, 0x4b, 0x65, 0x79)
 	o = msgp.AppendBytes(o, z.Key)
+	// string "Hash"
+	o = append(o, 0xa4, 0x48, 0x61, 0x73, 0x68)
+	o = msgp.AppendUint64(o, z.Hash)
 	// string "Epoch"
 	o = append(o, 0xa5, 0x45, 0x70, 0x6f, 0x63, 0x68)
 	o = msgp.AppendUint16(o, z.Epoch)
@@ -287,6 +306,12 @@ func (z *ControlMetadata) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Key")
 				return
 			}
+		case "Hash":
+			z.Hash, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Hash")
+				return
+			}
 		case "Epoch":
 			z.Epoch, bts, err = msgp.ReadUint16Bytes(bts)
 			if err != nil {
@@ -326,6 +351,6 @@ func (z *ControlMetadata) Msgsize() (s int) {
 			s += msgp.StringPrefixSize + len(za0001) + msgp.Uint8Size
 		}
 	}
-	s += 6 + msgp.StringPrefixSize + len(z.Topic) + 17 + msgp.StringPrefixSize + len(z.FinishedPrevTask) + 4 + msgp.BytesPrefixSize + len(z.Key) + 6 + msgp.Uint16Size + 11 + msgp.Uint8Size + 12 + msgp.Uint8Size
+	s += 6 + msgp.StringPrefixSize + len(z.Topic) + 17 + msgp.StringPrefixSize + len(z.FinishedPrevTask) + 4 + msgp.BytesPrefixSize + len(z.Key) + 5 + msgp.Uint64Size + 6 + msgp.Uint16Size + 11 + msgp.Uint8Size + 12 + msgp.Uint8Size
 	return
 }

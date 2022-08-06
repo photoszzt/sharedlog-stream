@@ -149,14 +149,13 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	joiner := processor.ValueJoinerWithKeyFunc(
-		func(_ interface{}, _ interface{}, rightVal interface{}) interface{} {
-			event := rightVal.(*ntypes.Event)
+	joiner := processor.ValueJoinerWithKeyFuncG[uint64, *ntypes.Event, *ntypes.Event, ntypes.NameCityStateId](
+		func(_ uint64, _ *ntypes.Event, rightVal *ntypes.Event) ntypes.NameCityStateId {
 			ncsi := ntypes.NameCityStateId{
-				Name:  event.NewPerson.Name,
-				City:  event.NewPerson.City,
-				State: event.NewPerson.State,
-				ID:    event.NewPerson.ID,
+				Name:  rightVal.NewPerson.Name,
+				City:  rightVal.NewPerson.City,
+				State: rightVal.NewPerson.State,
+				ID:    rightVal.NewPerson.ID,
 			}
 			// debug.Fprintf(os.Stderr, "join outputs: %v\n", ncsi)
 			return ncsi
@@ -189,8 +188,8 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	aucJoinsPerFunc, perJoinsAucFunc, kvc, err := execution.SetupTableTableJoin(
-		mpAuc, mpPer, store.Uint64Less, joiner)
+	aucJoinsPerFunc, perJoinsAucFunc, kvc, err := execution.SetupTableTableJoinWithSkipmap(
+		mpAuc, mpPer, store.Uint64LessFunc, joiner)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

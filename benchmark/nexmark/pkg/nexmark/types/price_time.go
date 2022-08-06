@@ -14,7 +14,7 @@ type PriceTime struct {
 	DateTime int64  `json:"dateTime" msg:"dateTime"` // unix timestamp in ms
 }
 
-func ComparePriceTime(a, b *PriceTime) int {
+func ComparePriceTime(a, b PriceTime) int {
 	if a.Price < b.Price {
 		return -1
 	} else if a.Price == b.Price {

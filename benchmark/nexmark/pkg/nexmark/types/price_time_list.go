@@ -16,7 +16,7 @@ func (t PriceTimeSlice) Len() int {
 }
 
 func (t PriceTimeSlice) Less(i, j int) bool {
-	return ComparePriceTime(&t[i], &t[j]) < 0
+	return ComparePriceTime(t[i], t[j]) < 0
 }
 
 func (t PriceTimeSlice) Swap(i, j int) {

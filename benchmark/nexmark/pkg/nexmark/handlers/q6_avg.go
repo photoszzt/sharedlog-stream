@@ -15,10 +15,10 @@ import (
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
-	"sort"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
+	"golang.org/x/exp/slices"
 )
 
 type q6Avg struct {
@@ -119,40 +119,42 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	kvstore, err := store_with_changelog.CreateInMemKVTableWithChangelog(mp, store.Uint64Less)
+	kvstore, err := store_with_changelog.CreateInMemorySkipmapKVTableWithChangelogG(mp, store.Uint64LessFunc)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
 	maxSize := 10
 	ectx.
 		Via(processor.NewMeteredProcessor(
-			processor.NewTableAggregateProcessor("q6Agg", kvstore,
-				processor.InitializerFunc(func() interface{} {
+			processor.NewTableAggregateProcessorG[uint64, ntypes.PriceTime, ntypes.PriceTimeList]("q6Agg", kvstore,
+				processor.InitializerFuncG[ntypes.PriceTimeList](func() ntypes.PriceTimeList {
 					return ntypes.PriceTimeList{
 						PTList: make([]ntypes.PriceTime, 0),
 					}
 				}),
-				processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
-					agg := aggregate.(ntypes.PriceTimeList)
-					agg.PTList = append(agg.PTList, value.(ntypes.PriceTime))
-					sort.Sort(agg.PTList)
-					// debug.Fprintf(os.Stderr, "[ADD] agg before delete: %v\n", agg.PTList)
-					if len(agg.PTList) > maxSize {
-						agg.PTList = ntypes.Delete(agg.PTList, 0, 1)
-					}
-					// debug.Fprintf(os.Stderr, "[ADD] agg after delete: %v\n", agg.PTList)
-					return agg
-				}),
-				processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
-					agg := aggregate.(ntypes.PriceTimeList)
-					if len(agg.PTList) > 0 {
-						// debug.Fprintf(os.Stderr, "[RM] element to delete: %+v\n", value)
-						val := ntypes.CastToPriceTimePtr(value)
-						agg.PTList = ntypes.RemoveMatching(agg.PTList, val)
-						// debug.Fprintf(os.Stderr, "[RM] after delete agg: %v\n", agg)
-					}
-					return agg
-				}),
+				processor.AggregatorFuncG[uint64, ntypes.PriceTime, ntypes.PriceTimeList](
+					func(key uint64, value ntypes.PriceTime, aggregate ntypes.PriceTimeList) ntypes.PriceTimeList {
+						aggregate.PTList = append(aggregate.PTList, value)
+						slices.SortFunc(aggregate.PTList, store.LessFunc[ntypes.PriceTime](func(a, b ntypes.PriceTime) bool {
+							return ntypes.ComparePriceTime(a, b) < 0
+						}))
+						// debug.Fprintf(os.Stderr, "[ADD] agg before delete: %v\n", agg.PTList)
+						if len(aggregate.PTList) > maxSize {
+							aggregate.PTList = ntypes.Delete(aggregate.PTList, 0, 1)
+						}
+						// debug.Fprintf(os.Stderr, "[ADD] agg after delete: %v\n", agg.PTList)
+						return aggregate
+					}),
+				processor.AggregatorFuncG[uint64, ntypes.PriceTime, ntypes.PriceTimeList](
+					func(key uint64, value ntypes.PriceTime, agg ntypes.PriceTimeList) ntypes.PriceTimeList {
+						if len(agg.PTList) > 0 {
+							// debug.Fprintf(os.Stderr, "[RM] element to delete: %+v\n", value)
+							val := ntypes.CastToPriceTimePtr(value)
+							agg.PTList = ntypes.RemoveMatching(agg.PTList, val)
+							// debug.Fprintf(os.Stderr, "[RM] after delete agg: %v\n", agg)
+						}
+						return agg
+					}),
 			))).
 		Via(processor.NewMeteredProcessor(processor.NewTableMapValuesProcessor("avg",
 			processor.ValueMapperWithKeyFunc(func(key, value interface{}) (interface{}, error) {

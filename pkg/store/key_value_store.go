@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
+	"strings"
 
 	"4d63.com/optional"
 )
@@ -34,15 +35,11 @@ type CoreKeyValueStoreG[K, V any] interface {
 	Delete(ctx context.Context, key K) error
 	TableType() TABLE_TYPE
 	UpdateTrackParFunc
-	OnlyUpdateInMemStoreG[K, V]
+	OnlyUpdateInMemStore
 }
 
 type OnlyUpdateInMemStore interface {
 	PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error
-}
-
-type OnlyUpdateInMemStoreG[K, V any] interface {
-	PutWithoutPushToChangelog(ctx context.Context, key K, value V) error
 }
 
 type KeyValueStoreOpWithChangelog interface {
@@ -54,15 +51,6 @@ type KeyValueStoreOpWithChangelog interface {
 	SubstreamNum() uint8
 }
 
-type KeyValueStoreOpWithChangelogG[K, V any] interface {
-	StoreBackedByChangelog
-	UpdateTrackParFunc
-	ChangelogIsSrc() bool
-	OnlyUpdateInMemStoreG[K, V]
-	ProduceRangeRecording
-	SubstreamNum() uint8
-}
-
 type KeyValueStoreBackedByChangelog interface {
 	CoreKeyValueStore
 	KeyValueStoreOpWithChangelog
@@ -70,7 +58,21 @@ type KeyValueStoreBackedByChangelog interface {
 
 type KeyValueStoreBackedByChangelogG[K, V any] interface {
 	CoreKeyValueStoreG[K, V]
-	KeyValueStoreOpWithChangelogG[K, V]
+	KeyValueStoreOpWithChangelog
+}
+
+type LessFunc[K any] func(k1, k2 K) bool
+
+func IntLessFunc(k1, k2 int) bool {
+	return k1 < k2
+}
+
+func Uint64LessFunc(k1, k2 uint64) bool {
+	return k1 < k2
+}
+
+func StringLessFunc(k1, k2 string) bool {
+	return strings.Compare(k1, k2) < 0
 }
 
 type Segment interface {

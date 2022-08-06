@@ -18,15 +18,20 @@ require (
 )
 
 require (
-	4d63.com/optional v0.2.0 
+	github.com/zhangyunhao116/fastrand v0.2.1 // indirect
+	github.com/zhangyunhao116/skipmap v0.9.1 // indirect
+)
+
+require (
+	4d63.com/optional v0.2.0
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
 	github.com/philhofer/fwd v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/sasha-s/go-deadlock v0.3.1 
-	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e 
+	github.com/sasha-s/go-deadlock v0.3.1
+	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e
 	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3 // indirect
 	golang.org/x/sys v0.0.0-20211019181941-9d821ace8654 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
