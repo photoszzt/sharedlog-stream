@@ -1,3 +1,10 @@
 bin
 /dump/
 .vscode/*.log
+q1_stats/
+q3_stats/
+q4_stats/
+q5_stats/
+q6_stats/
+q7_stats/
+q8_stats/
