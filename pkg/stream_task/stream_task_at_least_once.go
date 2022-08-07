@@ -85,7 +85,7 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 			break
 		}
 		// procStart := time.Now()
-		ret := t.appProcessFunc(ctx, t, args.ectx, &gotEndMark)
+		ret, ctrlMsg := t.appProcessFunc(ctx, t, args.ectx)
 		if ret != nil {
 			if ret.Success {
 				continue
@@ -94,6 +94,18 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 		}
 		if !hasUntrackedConsume {
 			hasUntrackedConsume = true
+		}
+		if ctrlMsg != nil {
+			if t.pauseFunc != nil {
+				t.pauseFunc()
+			}
+			if ret_err := flushStreams(ctx, t, args); ret_err != nil {
+				return common.GenErrFnOutput(ret_err)
+			}
+			if ret_err := track(ctx, cm, args.ectx.Consumers(), args.ectx.SubstreamNum(), &hasUntrackedConsume, &commitTimer); ret_err != nil {
+				return ret_err
+			}
+			return handleCtrlMsg(ctx, ctrlMsg, t, args, &warmupCheck)
 		}
 		// if warmupCheck.AfterWarmup() {
 		// 	elapsed := time.Since(procStart)

@@ -28,6 +28,7 @@ type MeteredConsumerIntr interface {
 	Consumer
 	StartWarmup()
 	GetCount() uint64
+	NumCtrlMsg() uint32
 	InnerSource() Consumer
 	ExtractProduceToConsumeTime(msg *commtypes.Message)
 }

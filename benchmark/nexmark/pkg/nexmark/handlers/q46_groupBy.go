@@ -9,7 +9,6 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/stream_task"
 
@@ -68,10 +67,10 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 
 	task := stream_task.NewStreamTaskBuilder().AppProcessFunc(
 		func(ctx context.Context, task *stream_task.StreamTask,
-			argsTmp processor.ExecutionContext, gotEndMark *bool,
-		) *common.FnOutput {
+			argsTmp processor.ExecutionContext,
+		) (*common.FnOutput, *commtypes.MsgAndSeq) {
 			args := argsTmp.(*processor.BaseExecutionContext)
-			return execution.CommonProcess(ctx, task, args,
+			return stream_task.CommonProcess(ctx, task, args,
 				func(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
 					event := msg.Value.(*ntypes.Event)
 					if event.Etype == ntypes.AUCTION {
@@ -86,7 +85,7 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 						}
 					}
 					return nil
-				}, gotEndMark)
+				})
 		}).Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName, sp.InputTopicNames[0], sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,

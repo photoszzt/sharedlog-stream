@@ -1,7 +1,10 @@
 package stream_task
 
 import (
+	"context"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/stats"
 )
 
@@ -9,12 +12,9 @@ type StreamTaskBuilder struct {
 	task *StreamTask
 }
 
-type SetAppProcessFunc interface {
-	AppProcessFunc(process ProcessFunc) BuildStreamTask
-}
-
 type BuildStreamTask interface {
 	Build() *StreamTask
+	AppProcessFunc(process ProcessFunc) BuildStreamTask
 	InitFunc(i func(task *StreamTask)) BuildStreamTask
 	PauseFunc(p func() *common.FnOutput) BuildStreamTask
 	ResumeFunc(r func(task *StreamTask)) BuildStreamTask
@@ -22,14 +22,17 @@ type BuildStreamTask interface {
 	MarkFinalStage() BuildStreamTask
 }
 
-func NewStreamTaskBuilder() SetAppProcessFunc {
+func NewStreamTaskBuilder() BuildStreamTask {
 	return &StreamTaskBuilder{
 		task: &StreamTask{
-			pauseFunc:        nil,
-			resumeFunc:       nil,
-			initFunc:         nil,
-			HandleErrFunc:    nil,
-			appProcessFunc:   nil,
+			pauseFunc:     nil,
+			resumeFunc:    nil,
+			initFunc:      nil,
+			HandleErrFunc: nil,
+			appProcessFunc: func(ctx context.Context, task *StreamTask, argsTmp processor.ExecutionContext) (*common.FnOutput, *commtypes.MsgAndSeq) {
+				args := argsTmp.(*processor.BaseExecutionContext)
+				return CommonProcess(ctx, task, args, processor.ProcessMsg)
+			},
 			flushForALO:      stats.NewStatsCollector[int64]("flushForALO", stats.DEFAULT_COLLECT_DURATION),
 			commitTrTime:     stats.NewStatsCollector[int64]("commitTrTime", stats.DEFAULT_COLLECT_DURATION),
 			beginTrTime:      stats.NewStatsCollector[int64]("beginTrTime", stats.DEFAULT_COLLECT_DURATION),

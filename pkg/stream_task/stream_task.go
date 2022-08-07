@@ -5,18 +5,22 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/common_errors"
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/processor"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/txn_data"
 	"time"
 )
 
-type ProcessFunc func(ctx context.Context, task *StreamTask, args processor.ExecutionContext, gotEndMark *bool) *common.FnOutput
+type ProcessFunc func(ctx context.Context, task *StreamTask, args processor.ExecutionContext) (*common.FnOutput, *commtypes.MsgAndSeq)
 
 type StreamTask struct {
 	appProcessFunc ProcessFunc
@@ -77,19 +81,56 @@ func ExecuteApp(ctx context.Context,
 	if ret != nil && ret.Success {
 		for _, src := range streamTaskArgs.ectx.Consumers() {
 			ret.Counts[src.Name()] = src.GetCount()
-			fmt.Fprintf(os.Stderr, "%s msgCnt %d\n", src.Name(), src.GetCount())
+			ret.Counts[src.Name()+"_ctrl"] = uint64(src.NumCtrlMsg())
+			fmt.Fprintf(os.Stderr, "%s msgCnt %d, ctrlCnt %d\n",
+				src.Name(), src.GetCount(), src.NumCtrlMsg())
 		}
 		for _, sink := range streamTaskArgs.ectx.Producers() {
 			sink.PrintRemainingStats()
 			ret.Counts[sink.Name()] = sink.GetCount()
-			ret.Counts[sink.Name()+"_ctrl"] = sink.NumCtrlMsg()
-			fmt.Fprintf(os.Stderr, "%s msgCnt %d, ctrlCnt %d\n", sink.Name(), sink.GetCount(), sink.NumCtrlMsg())
+			ret.Counts[sink.Name()+"_ctrl"] = uint64(sink.NumCtrlMsg())
+			fmt.Fprintf(os.Stderr, "%s msgCnt %d, ctrlCnt %d\n",
+				sink.Name(), sink.GetCount(), sink.NumCtrlMsg())
 			// if sink.IsFinalOutput() {
 			// ret.Latencies["eventTimeLatency_"+sink.Name()] = sink.GetEventTimeLatency()
 			// }
 		}
 	}
 	return ret
+}
+
+func handleCtrlMsg(ctx context.Context, ctrlMsg *commtypes.MsgAndSeq,
+	t *StreamTask, args *StreamTaskArgs, warmupCheck *stats.Warmup,
+) *common.FnOutput {
+	key := ctrlMsg.Msg.Key
+	if key == txn_data.SCALE_FENCE_KEY {
+		ret := HandleScaleEpochAndBytes(ctx, ctrlMsg, args.ectx)
+		if ret.Success {
+			updateReturnMetric(ret, warmupCheck,
+				args.waitEndMark, t.GetEndDuration(), args.ectx.SubstreamNum())
+		}
+		return ret
+	} else if key == commtypes.END_OF_STREAM_KEY {
+		v := ctrlMsg.Msg.Value.(producer_consumer.StartTimeAndBytes)
+		msgToPush := commtypes.Message{Key: ctrlMsg.Msg.Key, Value: v.EpochMarkEncoded}
+		for _, sink := range args.ectx.Producers() {
+			if sink.Stream().NumPartition() > args.ectx.SubstreamNum() {
+				// debug.Fprintf(os.Stderr, "produce stream end mark to %s %d\n",
+				// 	sink.Stream().TopicName(), ectx.SubstreamNum())
+				err := sink.Produce(ctx, msgToPush, args.ectx.SubstreamNum(), true)
+				if err != nil {
+					return &common.FnOutput{Success: false, Message: err.Error()}
+				}
+			}
+		}
+		t.SetEndDuration(v.StartTime)
+		ret := &common.FnOutput{Success: true}
+		updateReturnMetric(ret, warmupCheck,
+			args.waitEndMark, t.GetEndDuration(), args.ectx.SubstreamNum())
+		return ret
+	} else {
+		return &common.FnOutput{Success: false, Message: "unexpected ctrl msg"}
+	}
 }
 
 func flushStreams(ctx context.Context, t *StreamTask,
@@ -345,4 +386,28 @@ func initAfterMarkOrCommit(ctx context.Context, t *StreamTask, args *StreamTaskA
 		*init = true
 	}
 	return nil
+}
+
+func HandleScaleEpochAndBytes(ctx context.Context, msg *commtypes.MsgAndSeq,
+	args processor.ExecutionContext,
+) *common.FnOutput {
+	v := msg.Msg.Value.(producer_consumer.ScaleEpochAndBytes)
+	msgToPush := commtypes.Message{Key: msg.Msg.Key, Value: v.Payload}
+	for _, sink := range args.Producers() {
+		if sink.Stream().NumPartition() > args.SubstreamNum() {
+			err := sink.Produce(ctx, msgToPush, args.SubstreamNum(), true)
+			if err != nil {
+				return &common.FnOutput{Success: false, Message: err.Error()}
+			}
+		}
+	}
+	err := args.RecordFinishFunc()(ctx, args.FuncName(), args.SubstreamNum())
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: err.Error()}
+	}
+	return &common.FnOutput{
+		Success: true,
+		Message: fmt.Sprintf("%s-%d epoch %d exit", args.FuncName(), args.SubstreamNum(), args.CurEpoch()),
+		Err:     common_errors.ErrShouldExitForScale,
+	}
 }

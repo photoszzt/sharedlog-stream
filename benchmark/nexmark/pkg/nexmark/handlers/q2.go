@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/stream_task"
@@ -71,13 +70,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 			processor.PredicateFunc(filterFunc)))).
 		Via(processor.NewMeteredProcessor(
 			processor.NewFixedSubstreamOutputProcessor(sinks[0], sp.ParNum)))
-	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
-			argsTmp processor.ExecutionContext, gotEndMark *bool,
-		) *common.FnOutput {
-			args := argsTmp.(*processor.BaseExecutionContext)
-			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg, gotEndMark)
-		}).MarkFinalStage().Build()
+	task := stream_task.NewStreamTaskBuilder().MarkFinalStage().Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).

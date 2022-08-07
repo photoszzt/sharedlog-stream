@@ -30,8 +30,8 @@ type ConcurrentMeteredSink[K, V any] struct {
 	produceTp       *stats.ConcurrentThroughputCounter
 	lat             *stats.ConcurrentStatsCollector[int64]
 	eventTimeSample *stats.ConcurrentStatsCollector[int64]
-	ctrlCount       uint64
 	warmup          stats.WarmupGoroutineSafe
+	ctrlCount       uint32
 
 	measure bool
 }
@@ -98,7 +98,7 @@ func (s *ConcurrentMeteredSink[K, V]) Produce(ctx context.Context, msg commtypes
 	assignInjTime(&msg)
 	s.produceTp.Tick(1)
 	if isControl {
-		atomic.AddUint64(&s.ctrlCount, 1)
+		atomic.AddUint32(&s.ctrlCount, 1)
 	}
 	// if s.measure {
 	// 	s.warmup.Check()
@@ -149,8 +149,8 @@ func (s *ConcurrentMeteredSink[K, V]) PrintRemainingStats() {
 	s.lat.PrintRemainingStats()
 	s.eventTimeSample.PrintRemainingStats()
 }
-func (s *ConcurrentMeteredSink[K, V]) NumCtrlMsg() uint64 {
-	return atomic.LoadUint64(&s.ctrlCount)
+func (s *ConcurrentMeteredSink[K, V]) NumCtrlMsg() uint32 {
+	return atomic.LoadUint32(&s.ctrlCount)
 }
 
 type MeteredProducer[K, V any] struct {
@@ -159,7 +159,7 @@ type MeteredProducer[K, V any] struct {
 	eventTimeSample stats.StatsCollector[int64]
 	produceTp       stats.ThroughputCounter
 	warmup          stats.Warmup
-	ctrlCount       uint64
+	ctrlCount       uint32
 	measure         bool
 }
 
@@ -284,6 +284,6 @@ func (s *MeteredProducer[K, V]) GetCount() uint64 {
 	return s.produceTp.GetCount()
 }
 
-func (s *MeteredProducer[K, V]) NumCtrlMsg() uint64 {
+func (s *MeteredProducer[K, V]) NumCtrlMsg() uint32 {
 	return s.ctrlCount
 }

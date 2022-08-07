@@ -152,13 +152,16 @@ func PrepareProcessByTwoGeneralProc(
 	pauseTime := stats.NewStatsCollector[int64]("2proc_pause_us", stats.DEFAULT_COLLECT_DURATION)
 
 	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, argsTmp processor.ExecutionContext, gotEndMark *bool) *common.FnOutput {
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
+			argsTmp processor.ExecutionContext,
+		) (*common.FnOutput, *commtypes.MsgAndSeq) {
 			args := argsTmp.(*processor.BaseExecutionContext)
-			return execution.CommonProcess(ctx, task, args, func(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
-				func1Manager.MsgChan() <- msg
-				func2Manager.MsgChan() <- msg
-				return nil
-			}, gotEndMark)
+			return stream_task.CommonProcess(ctx, task, args,
+				func(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
+					func1Manager.MsgChan() <- msg
+					func2Manager.MsgChan() <- msg
+					return nil
+				})
 		}).
 		InitFunc(func(task *stream_task.StreamTask) {
 			func1Manager.LaunchProc(ctx, ectx, &wg)

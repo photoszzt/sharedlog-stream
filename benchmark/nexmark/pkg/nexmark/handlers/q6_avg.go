@@ -9,7 +9,6 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store"
@@ -168,13 +167,7 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 			})))).
 		Via(processor.NewTableToStreamProcessor()).
 		Via(processor.NewFixedSubstreamOutputProcessor(ectx.Producers()[0], sp.ParNum))
-	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
-			argsTmp processor.ExecutionContext, gotEndMark *bool,
-		) *common.FnOutput {
-			args := argsTmp.(*processor.BaseExecutionContext)
-			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg, gotEndMark)
-		}).MarkFinalStage().Build()
+	task := stream_task.NewStreamTaskBuilder().MarkFinalStage().Build()
 
 	kvc := []store.KeyValueStoreOpWithChangelog{kvstore}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],

@@ -126,26 +126,16 @@ func processInEpoch(
 				}
 				paused = true
 			}
-			flushStart := stats.TimerBegin()
+			flushAllStart := stats.TimerBegin()
 			err := FlushStreamBuffers(dctx, cmm, args)
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}
-			flushTime := stats.Elapsed(flushStart).Microseconds()
-			prepareStart := stats.TimerBegin()
-			epochMarker, epochMarkerTags, epochMarkerTopics, err := CaptureEpochStateAndCleanup(dctx, em, args)
+			flushTime := stats.Elapsed(flushAllStart).Microseconds()
+			err = markEpoch(dctx, em, t, args)
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}
-			prepareTime := stats.Elapsed(prepareStart).Microseconds()
-			mStart := stats.TimerBegin()
-			err = em.MarkEpoch(dctx, epochMarker, epochMarkerTags, epochMarkerTopics)
-			if err != nil {
-				return common.GenErrFnOutput(err)
-			}
-			mElapsed := stats.Elapsed(mStart).Microseconds()
-			t.markEpochTime.AddSample(mElapsed)
-			t.markEpochPrepare.AddSample(prepareTime)
 			t.flushAllTime.AddSample(flushTime)
 			hasProcessData = false
 		}
@@ -169,9 +159,10 @@ func processInEpoch(
 			}
 			markTimer = time.Now()
 		}
-		app_ret := t.appProcessFunc(dctx, t, args.ectx, &gotEndMark)
+		app_ret, ctrlMsg := t.appProcessFunc(dctx, t, args.ectx)
 		if app_ret != nil {
 			if app_ret.Success {
+				debug.Assert(ctrlMsg == nil, "when timeout, ctrlMsg should not be returned")
 				// consume timeout but not sure whether there's more data is coming; continue to process
 				continue
 			}
@@ -180,11 +171,51 @@ func processInEpoch(
 		if !hasProcessData {
 			hasProcessData = true
 		}
+		if ctrlMsg != nil {
+			if t.pauseFunc != nil {
+				if ret := t.pauseFunc(); ret != nil {
+					return ret
+				}
+				paused = true
+			}
+			flushAllStart := stats.TimerBegin()
+			err := FlushStreamBuffers(dctx, cmm, args)
+			if err != nil {
+				return common.GenErrFnOutput(err)
+			}
+			flushTime := stats.Elapsed(flushAllStart).Microseconds()
+			err = markEpoch(dctx, em, t, args)
+			if err != nil {
+				return common.GenErrFnOutput(err)
+			}
+			t.flushAllTime.AddSample(flushTime)
+			return handleCtrlMsg(dctx, ctrlMsg, t, args, &warmupCheck)
+		}
 		// if warmupCheck.AfterWarmup() {
 		// 	elapsed := time.Since(procStart)
 		// 	latencies.AddSample(elapsed.Microseconds())
 		// }
 	}
+}
+
+func markEpoch(ctx context.Context, em *epoch_manager.EpochManager,
+	t *StreamTask, args *StreamTaskArgs,
+) error {
+	prepareStart := stats.TimerBegin()
+	epochMarker, epochMarkerTags, epochMarkerTopics, err := CaptureEpochStateAndCleanup(ctx, em, args)
+	if err != nil {
+		return err
+	}
+	prepareTime := stats.Elapsed(prepareStart).Microseconds()
+	mStart := stats.TimerBegin()
+	err = em.MarkEpoch(ctx, epochMarker, epochMarkerTags, epochMarkerTopics)
+	if err != nil {
+		return err
+	}
+	mElapsed := stats.Elapsed(mStart).Microseconds()
+	t.markEpochTime.AddSample(mElapsed)
+	t.markEpochPrepare.AddSample(prepareTime)
+	return nil
 }
 
 func FlushStreamBuffers(ctx context.Context, cmm *control_channel.ControlChannelManager, args *StreamTaskArgs) error {

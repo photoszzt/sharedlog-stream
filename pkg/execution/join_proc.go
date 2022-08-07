@@ -74,35 +74,51 @@ func joinProcLoop(
 		if msgs.IsControl {
 			key := msgs.Msg.Key.(string)
 			if key == txn_data.SCALE_FENCE_KEY {
-				ret_err := HandleScaleEpochAndBytes(ctx, msgs, procArgs)
-				if ret_err != nil {
-					fmt.Fprintf(os.Stderr, "[SCALE_EPOCH] out: %v, out chan len: %d\n", ret_err, len(jm.out))
-					jm.out <- ret_err
+				v := msgs.Msg.Value.(producer_consumer.ScaleEpochAndBytes)
+				if procArgs.CurEpoch() < v.ScaleEpoch {
+					procArgs.Consumers()[0].RecordCurrentConsumedSeqNum(msgs.LogSeqNum)
+					jm.gotScaleFence.Set(true)
+					jm.ctrlMsg = msgs
 					jm.runLock.Unlock()
 					return
+				} else {
+					jm.runLock.Unlock()
+					continue
 				}
-				procArgs.Consumers()[0].RecordCurrentConsumedSeqNum(msgs.LogSeqNum)
-				jm.runLock.Unlock()
-				continue
+				/*
+					ret_err := HandleScaleEpochAndBytes(ctx, msgs, procArgs)
+					if ret_err != nil {
+						fmt.Fprintf(os.Stderr, "[SCALE_EPOCH] out: %v, out chan len: %d\n", ret_err, len(jm.out))
+						jm.out <- ret_err
+						jm.runLock.Unlock()
+						return
+					}
+					procArgs.Consumers()[0].RecordCurrentConsumedSeqNum(msgs.LogSeqNum)
+					jm.runLock.Unlock()
+					continue
+				*/
 			} else if key == commtypes.END_OF_STREAM_KEY {
-				v := msgs.Msg.Value.(producer_consumer.StartTimeAndBytes)
-				msgToPush := commtypes.Message{Key: msgs.Msg.Key, Value: v.EpochMarkEncoded}
-				for _, sink := range procArgs.Producers() {
-					if sink.Stream().NumPartition() > procArgs.SubstreamNum() {
-						// debug.Fprintf(os.Stderr, "produce stream end mark to %s %d\n",
-						// 	sink.Stream().TopicName(), procArgs.SubstreamNum())
-						err := sink.Produce(ctx, msgToPush, procArgs.SubstreamNum(), true)
-						if err != nil {
-							jm.out <- &common.FnOutput{Success: false, Message: err.Error()}
-							jm.runLock.Unlock()
-							return
+				/*
+					v := msgs.Msg.Value.(producer_consumer.StartTimeAndBytes)
+					msgToPush := commtypes.Message{Key: msgs.Msg.Key, Value: v.EpochMarkEncoded}
+					for _, sink := range procArgs.Producers() {
+						if sink.Stream().NumPartition() > procArgs.SubstreamNum() {
+							// debug.Fprintf(os.Stderr, "produce stream end mark to %s %d\n",
+							// 	sink.Stream().TopicName(), procArgs.SubstreamNum())
+							err := sink.Produce(ctx, msgToPush, procArgs.SubstreamNum(), true)
+							if err != nil {
+								jm.out <- &common.FnOutput{Success: false, Message: err.Error()}
+								jm.runLock.Unlock()
+								return
+							}
 						}
 					}
-				}
-				jm.startTimeMs = v.StartTime
+					jm.startTimeMs = v.StartTime
+				*/
 				jm.gotEndMark.Set(true)
 				// fmt.Fprintf(os.Stderr, "[id=%s] %s %d ends, start time: %d\n",
 				// 	id, consumer.TopicName(), procArgs.SubstreamNum(), jm.startTimeMs)
+				jm.ctrlMsg = msgs
 				jm.runLock.Unlock()
 				return
 			} else {

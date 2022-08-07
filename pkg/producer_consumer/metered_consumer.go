@@ -16,6 +16,7 @@ type MeteredConsumer[K, V any] struct {
 	latencies stats.StatsCollector[int64]
 	pToCLat   stats.StatsCollector[int64]
 	consumeTp stats.ThroughputCounter
+	ctrlCount uint32
 
 	measure bool
 }
@@ -39,6 +40,7 @@ func NewMeteredConsumer[K, V any](src *ShardedSharedLogStreamConsumer[K, V], war
 		pToCLat:   stats.NewStatsCollector[int64]("procTo"+src_name, stats.DEFAULT_COLLECT_DURATION),
 		consumeTp: stats.NewThroughputCounter(src_name, stats.DEFAULT_COLLECT_DURATION),
 		measure:   checkMeasureSource(),
+		ctrlCount: 0,
 	}
 }
 
@@ -61,6 +63,9 @@ func (s *MeteredConsumer[K, V]) Consume(ctx context.Context, parNum uint8) (*com
 		// debug.Fprintf(os.Stderr, "[ERROR] src out err: %v\n", err)
 		return msgs, err
 	}
+	if msgs.Msgs.IsControl {
+		s.ctrlCount += 1
+	}
 	s.latencies.AddSample(elapsed)
 	s.consumeTp.Tick(uint64(msgs.TotalLen))
 	// debug.Fprintf(os.Stderr, "%s consumed %d\n", s.TopicName(), s.consumeTp.GetCount())
@@ -73,6 +78,10 @@ func (s *MeteredConsumer[K, V]) ExtractProduceToConsumeTime(msg *commtypes.Messa
 
 func (s *MeteredConsumer[K, V]) GetCount() uint64 {
 	return s.consumeTp.GetCount()
+}
+
+func (s *MeteredConsumer[K, V]) NumCtrlMsg() uint32 {
+	return s.ctrlCount
 }
 
 func (s *MeteredConsumer[K, V]) InnerSource() Consumer {

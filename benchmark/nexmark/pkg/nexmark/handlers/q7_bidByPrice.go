@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/stream_task"
 
@@ -61,13 +60,7 @@ func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInpu
 				return event.Bid.Price, nil
 			})))).
 		Via(processor.NewGroupByOutputProcessor(sinks_arr[0], &ectx))
-	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
-			argsTmp processor.ExecutionContext, gotEndMark *bool,
-		) *common.FnOutput {
-			args := argsTmp.(*processor.BaseExecutionContext)
-			return execution.CommonProcess(ctx, task, args, processor.ProcessMsg, gotEndMark)
-		}).Build()
+	task := stream_task.NewStreamTaskBuilder().Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, input.InputTopicNames[0],
 		input.ParNum, input.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(input,

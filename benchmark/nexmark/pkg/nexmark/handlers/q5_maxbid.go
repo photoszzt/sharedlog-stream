@@ -10,7 +10,6 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store"
@@ -171,10 +170,10 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum)
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
-			argsTmp processor.ExecutionContext, gotEndMark *bool,
-		) *common.FnOutput {
+			argsTmp processor.ExecutionContext,
+		) (*common.FnOutput, *commtypes.MsgAndSeq) {
 			args := argsTmp.(*processor.BaseExecutionContext)
-			return execution.CommonProcess(ctx, task, args, func(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
+			return stream_task.CommonProcess(ctx, task, args, func(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
 				// fmt.Fprintf(os.Stderr, "got msg with key: %v, val: %v, ts: %v\n", msg.Msg.Key, msg.Msg.Value, msg.Msg.Timestamp)
 				_, err := maxBid.ProcessAndReturn(ctx, msg)
 				if err != nil {
@@ -195,7 +194,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 					}
 				}
 				return nil
-			}, gotEndMark)
+			})
 		}).MarkFinalStage().Build()
 	kvc := []store.KeyValueStoreOpWithChangelog{kvstore}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,

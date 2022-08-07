@@ -12,11 +12,13 @@ import (
 type JoinWorkerFunc func(c context.Context, m commtypes.Message) ([]commtypes.Message, error)
 
 type JoinProcManager struct {
-	runLock     syncutils.Mutex
-	out         chan *common.FnOutput
-	done        chan struct{}
-	gotEndMark  syncutils.AtomicBool
-	startTimeMs int64
+	runLock       syncutils.Mutex
+	out           chan *common.FnOutput
+	done          chan struct{}
+	ctrlMsg       *commtypes.MsgAndSeq
+	gotEndMark    syncutils.AtomicBool
+	gotScaleFence syncutils.AtomicBool
+	startTimeMs   int64
 }
 
 func NewJoinProcManager() *JoinProcManager {
@@ -33,6 +35,10 @@ func (jm *JoinProcManager) Out() <-chan *common.FnOutput {
 
 func (jm *JoinProcManager) GotEndMark() bool {
 	return jm.gotEndMark.Get()
+}
+
+func (jm *JoinProcManager) GotScaleFence() bool {
+	return jm.gotScaleFence.Get()
 }
 
 func (jm *JoinProcManager) StreamStartTime() int64 {

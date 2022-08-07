@@ -41,15 +41,18 @@ func PrepareTaskWithJoin(
 
 	taskBuilder := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
-			argsTmp processor.ExecutionContext, gotEndMark *bool,
-		) *common.FnOutput {
+			argsTmp processor.ExecutionContext,
+		) (*common.FnOutput, *commtypes.MsgAndSeq) {
 			if leftManager.GotEndMark() && rightManager.GotEndMark() {
 				debug.Fprintf(os.Stderr, "join proc got end mark\n")
-				*gotEndMark = true
-				leftStartTime := leftManager.StreamStartTime()
-				task.SetEndDuration(leftStartTime)
+				// leftStartTime := leftManager.StreamStartTime()
+				// task.SetEndDuration(leftStartTime)
+				return nil, leftManager.ctrlMsg
+			} else if leftManager.GotScaleFence() && rightManager.GotScaleFence() {
+				debug.Fprintf(os.Stderr, "join proc got scale fence\n")
+				return nil, leftManager.ctrlMsg
 			}
-			return HandleJoinErrReturn(argsTmp)
+			return HandleJoinErrReturn(argsTmp), nil
 		}).
 		InitFunc(func(task *stream_task.StreamTask) {
 			// debug.Fprintf(os.Stderr, "init ts=%d launch join proc loops\n", time.Now().UnixMilli())

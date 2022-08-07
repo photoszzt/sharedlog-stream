@@ -32,6 +32,6 @@ type MeteredProducerIntr interface {
 	StartWarmup()
 	// GetEventTimeLatency() []int
 	GetCount() uint64
-	NumCtrlMsg() uint64
+	NumCtrlMsg() uint32
 	PrintRemainingStats()
 }
