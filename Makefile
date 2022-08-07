@@ -15,6 +15,7 @@ nexmark_gen_data_by_spec:
 	GO111MODULE=on go build -o bin/nexmark_gen_data_by_spec ./benchmark/nexmark/gen_test_data
 
 .PHONY: dump_stream
+dump_stream:
 	mkdir -p ./bin
 	GO111MODULE=on go build -o bin/dump_stream ./benchmark/nexmark/dump_stream
 
