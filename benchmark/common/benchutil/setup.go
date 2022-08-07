@@ -8,11 +8,9 @@ import (
 	"path"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
-	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
-	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream_task"
 	"sync"
@@ -20,7 +18,6 @@ import (
 
 	"cs.utexas.edu/zjia/faas/types"
 	"github.com/rs/zerolog/log"
-	"golang.org/x/xerrors"
 )
 
 type DumpOutputStreamConfig struct {
@@ -58,14 +55,11 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 	if err != nil {
 		return err
 	}
-	src, err := producer_consumer.NewShardedSharedLogStreamConsumerG(log, &producer_consumer.StreamConsumerConfigG[interface{}, interface{}]{
-		MsgSerde:    args.MsgSerde,
-		Timeout:     common.SrcConsumeTimeout,
-		SerdeFormat: args.SerdeFormat,
-	})
+	epochMarkerSerde, err := commtypes.GetEpochMarkerSerdeG(args.SerdeFormat)
 	if err != nil {
 		return err
 	}
+	payloadArrSerde := sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG
 	for i := uint8(0); i < args.NumPartitions; i++ {
 		outFilePath := path.Join(args.OutputDir, fmt.Sprintf("%s-%d.txt", args.TopicName, i))
 		outFile, err := os.Create(outFilePath)
@@ -79,28 +73,42 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 		}
 		for {
 			// fmt.Fprintf(os.Stderr, "before read next\n")
-			msgAndSeqs, err := src.Consume(ctx, i)
-			if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
-				break
-			}
+			rawMsg, err := log.ReadNext(ctx, i)
 			if err != nil {
 				return err
 			}
-			msgAndSeq := msgAndSeqs.Msgs
-			if msgAndSeq.IsControl {
-				continue
-			}
-			if msgAndSeq.MsgArr != nil {
-				for _, msg := range msgAndSeq.MsgArr {
-					err = outputMsg(msg, outFile)
+			if rawMsg.IsControl {
+				epochMark, err := epochMarkerSerde.Decode(rawMsg.Payload)
+				if err != nil {
+					return err
+				}
+				outStr := fmt.Sprintf("%+v", epochMark)
+				fmt.Fprint(os.Stderr, outStr)
+				writted, err := outFile.WriteString(outStr)
+				if err != nil {
+					return err
+				}
+				if writted != len(outStr) {
+					panic("written is smaller than expected")
+				}
+
+			} else {
+				msgAndSeq, err := commtypes.DecodeRawMsgG(rawMsg, args.MsgSerde, payloadArrSerde)
+				if err != nil {
+					return err
+				}
+				if msgAndSeq.MsgArr != nil {
+					for _, msg := range msgAndSeq.MsgArr {
+						err = outputMsg(msg, outFile)
+						if err != nil {
+							return err
+						}
+					}
+				} else {
+					err = outputMsg(msgAndSeq.Msg, outFile)
 					if err != nil {
 						return err
 					}
-				}
-			} else {
-				err = outputMsg(msgAndSeq.Msg, outFile)
-				if err != nil {
-					return err
 				}
 			}
 		}

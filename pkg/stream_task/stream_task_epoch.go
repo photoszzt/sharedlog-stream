@@ -2,6 +2,7 @@ package stream_task
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/commtypes"
@@ -104,7 +105,6 @@ func processInEpoch(
 	var once sync.Once
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
 	debug.Fprintf(os.Stderr, "commit every(ms): %v, waitEndMark: %v\n", args.commitEvery, args.waitEndMark)
-	gotEndMark := false
 	for {
 		ret := checkMonitorReturns(dctx, dcancel, args, cmm, em)
 		if ret != nil {
@@ -119,7 +119,7 @@ func processInEpoch(
 		cur_elapsed := warmupCheck.ElapsedSinceInitial()
 		timeout := args.duration != 0 && cur_elapsed >= args.duration
 		shouldMarkByTime := (args.commitEvery != 0 && timeSinceLastMark > args.commitEvery)
-		if (shouldMarkByTime || timeout || gotEndMark) && hasProcessData {
+		if (shouldMarkByTime || timeout) && hasProcessData {
 			if t.pauseFunc != nil {
 				if ret := t.pauseFunc(); ret != nil {
 					return ret
@@ -142,7 +142,8 @@ func processInEpoch(
 		// Exit routine
 		cur_elapsed = warmupCheck.ElapsedSinceInitial()
 		timeout = args.duration != 0 && cur_elapsed >= args.duration
-		if (!args.waitEndMark && timeout) || gotEndMark {
+		if !args.waitEndMark && timeout {
+			fmt.Fprintf(os.Stderr, "exit due to timeout\n")
 			// elapsed := time.Since(procStart)
 			// latencies.AddSample(elapsed.Microseconds())
 			ret := &common.FnOutput{Success: true}
@@ -172,6 +173,7 @@ func processInEpoch(
 			hasProcessData = true
 		}
 		if ctrlMsg != nil {
+			fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
 			if t.pauseFunc != nil {
 				if ret := t.pauseFunc(); ret != nil {
 					return ret

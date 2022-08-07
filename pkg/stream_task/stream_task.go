@@ -351,7 +351,7 @@ func checkMonitorReturns(
 	case merr := <-lm.ErrChan():
 		debug.Fprintf(os.Stderr, "got monitor error chan\n")
 		lm.SendQuit()
-		cmm.SendQuit()
+		// cmm.SendQuit()
 		if merr != nil {
 			debug.Fprintf(os.Stderr, "[ERROR] control channel manager: %v", merr)
 			dcancel()

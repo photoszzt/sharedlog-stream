@@ -49,6 +49,23 @@ type DumpInput struct {
 	SerdeFormat   uint8  `json:"serdeFormat"`
 }
 
+type StreamParam struct {
+	TopicName     string `json:"tp"`
+	KeySerde      string `json:"keySerde"`
+	ValueSerde    string `json:"valSerde"`
+	NumPartitions uint8  `json:"numPartitions"`
+}
+
+type StreamParams struct {
+	StreamParams []StreamParam `json:"streamParams"`
+}
+
+type DumpStreams struct {
+	DumpDir      string        `json:"dumpDir"`
+	StreamParams []StreamParam `json:"streamParams"`
+	SerdeFormat  uint8         `json:"serdeFormat"`
+}
+
 type TestSourceInput struct {
 	FileName    string `json:"fname"`
 	SerdeFormat uint8  `json:"serdeFormat"`

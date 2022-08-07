@@ -99,31 +99,33 @@ func invokeTestSrcFunc(client *http.Client, srcInvokeConfig common.SrcInvokeConf
 
 func invokeDumpFunc(client *http.Client) {
 	serdeFormat := getSerdeFormat(FLAGS_serdeFormat)
-	dumpInput := common.DumpInput{
+	dumpInput := common.DumpStreams{
 		DumpDir:     FLAGS_dump_dir,
 		SerdeFormat: uint8(serdeFormat),
 	}
-	dumpInput.TopicName = fmt.Sprintf("%s_out", FLAGS_app_name)
+	streamParam := common.StreamParam{}
+	streamParam.TopicName = fmt.Sprintf("%s_out", FLAGS_app_name)
 	switch FLAGS_app_name {
 	case "q1", "q2":
-		dumpInput.KeySerde = "String"
-		dumpInput.ValueSerde = "Event"
+		streamParam.KeySerde = "String"
+		streamParam.ValueSerde = "Event"
 	case "q3":
-		dumpInput.KeySerde = "Uint64"
-		dumpInput.ValueSerde = "NameCityStateId"
+		streamParam.KeySerde = "Uint64"
+		streamParam.ValueSerde = "NameCityStateId"
 	case "q4", "q6":
-		dumpInput.KeySerde = "Uint64"
-		dumpInput.ValueSerde = "Float64"
+		streamParam.KeySerde = "Uint64"
+		streamParam.ValueSerde = "Float64"
 	case "q5":
-		dumpInput.KeySerde = "StartEndTime"
-		dumpInput.ValueSerde = "AuctionIdCntMax"
+		streamParam.KeySerde = "StartEndTime"
+		streamParam.ValueSerde = "AuctionIdCntMax"
 	case "q7":
-		dumpInput.KeySerde = "Uint64"
-		dumpInput.ValueSerde = "BidAndMax"
+		streamParam.KeySerde = "Uint64"
+		streamParam.ValueSerde = "BidAndMax"
 	case "q8":
-		dumpInput.KeySerde = "Uint64"
-		dumpInput.ValueSerde = "PersonTime"
+		streamParam.KeySerde = "Uint64"
+		streamParam.ValueSerde = "PersonTime"
 	}
+	dumpInput.StreamParams = []common.StreamParam{streamParam}
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "dump")
 	fmt.Printf("func source url is %v\n", url)
 	var response common.FnOutput

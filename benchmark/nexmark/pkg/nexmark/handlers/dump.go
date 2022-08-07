@@ -22,7 +22,7 @@ func NewDump(env types.Environment) types.FuncHandler {
 }
 
 func (h *dump) Call(ctx context.Context, input []byte) ([]byte, error) {
-	di := &common.DumpInput{}
+	di := &common.DumpStreams{}
 	err := json.Unmarshal(input, di)
 	if err != nil {
 		return nil, err
@@ -35,30 +35,32 @@ func (h *dump) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return utils.CompressData(encodedOutput), nil
 }
 
-func (h *dump) process(ctx context.Context, di *common.DumpInput) *common.FnOutput {
+func (h *dump) process(ctx context.Context, di *common.DumpStreams) *common.FnOutput {
 	serdeFormat := commtypes.SerdeFormat(di.SerdeFormat)
-	keySerde, err := GetSerdeFromString(di.KeySerde, serdeFormat)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	valSerde, err := GetSerdeFromString(di.ValueSerde, serdeFormat)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	msgSerde, err := commtypes.GetMsgSerdeG[interface{}, interface{}](serdeFormat, keySerde, valSerde)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
+	for _, streamParam := range di.StreamParams {
+		keySerde, err := GetSerdeFromString(streamParam.KeySerde, serdeFormat)
+		if err != nil {
+			return &common.FnOutput{Success: false, Message: err.Error()}
+		}
+		valSerde, err := GetSerdeFromString(streamParam.ValueSerde, serdeFormat)
+		if err != nil {
+			return &common.FnOutput{Success: false, Message: err.Error()}
+		}
+		msgSerde, err := commtypes.GetMsgSerdeG[interface{}, interface{}](serdeFormat, keySerde, valSerde)
+		if err != nil {
+			return &common.FnOutput{Success: false, Message: err.Error()}
+		}
 
-	err = benchutil.DumpOutputStream(ctx, h.env, benchutil.DumpOutputStreamConfig{
-		OutputDir:     di.DumpDir,
-		TopicName:     di.TopicName,
-		SerdeFormat:   serdeFormat,
-		NumPartitions: 1,
-		MsgSerde:      msgSerde,
-	})
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		err = benchutil.DumpOutputStream(ctx, h.env, benchutil.DumpOutputStreamConfig{
+			OutputDir:     di.DumpDir,
+			TopicName:     streamParam.TopicName,
+			SerdeFormat:   serdeFormat,
+			NumPartitions: streamParam.NumPartitions,
+			MsgSerde:      msgSerde,
+		})
+		if err != nil {
+			return &common.FnOutput{Success: false, Message: err.Error()}
+		}
 	}
 	return &common.FnOutput{
 		Success: true,

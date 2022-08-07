@@ -1,8 +1,9 @@
 GO_FILES?=$$(find . -name '*.go' |grep -v deps)
 
-default: lat_tp_handler_debug lat_tp_handler sharedlog_bench_client \
-	nexmark_kafka_test_src kafka_consume_bench kafka_produce_bench nexmark nexmark_stats nexmark_debug \
-	nexmark_gen_data_by_spec nexmark_client nexmark_genevents_kafka tests_debug tests_client
+default: lat_tp_handler_debug lat_tp_handler sharedlog_bench_client dump_stream \
+	nexmark_kafka_test_src kafka_consume_bench kafka_produce_bench nexmark \
+	nexmark_stats nexmark_debug nexmark_gen_data_by_spec nexmark_client \
+	nexmark_genevents_kafka tests_debug tests_client
 
 .PHONY: golangci-lint
 golangci-lint:
@@ -12,6 +13,10 @@ golangci-lint:
 nexmark_gen_data_by_spec:
 	mkdir -p ./bin
 	GO111MODULE=on go build -o bin/nexmark_gen_data_by_spec ./benchmark/nexmark/gen_test_data
+
+.PHONY: dump_stream
+	mkdir -p ./bin
+	GO111MODULE=on go build -o bin/dump_stream ./benchmark/nexmark/dump_stream
 
 .PHONY: nexmark
 nexmark:
