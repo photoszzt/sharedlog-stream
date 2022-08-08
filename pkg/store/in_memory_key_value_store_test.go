@@ -22,10 +22,10 @@ func getSkipmapKeyValueStoreG() CoreKeyValueStoreG[int, string] {
 	return store
 }
 
-func getBtreeKeyValueStore() CoreKeyValueStore {
-	store := NewInMemoryBTreeKeyValueStore("test1")
-	return store
-}
+// func getBtreeKeyValueStore() CoreKeyValueStore {
+// 	store := NewInMemoryBTreeKeyValueStore("test1")
+// 	return store
+// }
 
 func TestShouldNotIncludeDeletedFromRangeResult(t *testing.T) {
 	ctx := context.Background()

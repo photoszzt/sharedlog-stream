@@ -57,7 +57,7 @@ func Invoke(invokeParam InvokeFuncParam,
 		funcName := config["funcName"].Data().(string)
 		outputTopicNamesTmp := config["OutputTopicName"].Data().([]interface{})
 		inputTopicNamesTmp, ok := config["InputTopicNames"]
-		numSrcProducerTmp, _ := config["NumSrcProducer"]
+		numSrcProducerTmp := config["NumSrcProducer"]
 		scaleConfig[funcName] = ninstance
 		funcNames = append(funcNames, funcName)
 		nodeConstraint := config["NodeConstraint"].Data().(string)

@@ -136,7 +136,7 @@ func (p *TableAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Contex
 		oldAgg = optional.Of(oldAggTs.Value.(VA))
 	}
 	newTs := msg.Timestamp
-	intermediateAgg := optional.Empty[VA]()
+	var intermediateAgg optional.Optional[VA]
 
 	// first try to remove the old val
 	msgVal := msg.Value.(commtypes.Change)
@@ -149,7 +149,7 @@ func (p *TableAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Contex
 	}
 
 	// then try to add the new val
-	newAgg := optional.Empty[VA]()
+	var newAgg optional.Optional[VA]
 	if !utils.IsNil(msgVal.NewVal) {
 		var initAgg VA
 		midAgg, hasMidAgg := intermediateAgg.Get()

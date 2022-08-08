@@ -19,7 +19,7 @@ require (
 
 require (
 	github.com/zhangyunhao116/fastrand v0.2.1 // indirect
-	github.com/zhangyunhao116/skipmap v0.9.1 // indirect
+	github.com/zhangyunhao116/skipmap v0.9.1 
 )
 
 require (

@@ -101,7 +101,10 @@ func processWithTransaction(
 
 	dctx, dcancel := context.WithCancel(ctx)
 	tm.StartMonitorLog(dctx, dcancel)
-	cmm.RestoreMappingAndWaitForPrevTask(dctx, args.ectx.FuncName(), args.ectx.CurEpoch())
+	err = cmm.RestoreMappingAndWaitForPrevTask(dctx, args.ectx.FuncName(), args.ectx.CurEpoch())
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	// cmm.StartMonitorControlChannel(dctx)
 
 	// run := false
