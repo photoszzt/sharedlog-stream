@@ -88,7 +88,7 @@ func (h *q7JoinMaxBid) getSrcSink(
 			MsgSerde:    inMsgSerde1,
 			Timeout:     timeout,
 			SerdeFormat: serdeFormat,
-		}, sp.NumSubstreamProducer[0])
+		}, sp.NumSubstreamProducer[0], sp.ParNum)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -97,7 +97,7 @@ func (h *q7JoinMaxBid) getSrcSink(
 			MsgSerde:    inMsgSerde2,
 			Timeout:     timeout,
 			SerdeFormat: serdeFormat,
-		}, sp.NumSubstreamProducer[1])
+		}, sp.NumSubstreamProducer[1], sp.ParNum)
 	if err != nil {
 		return nil, nil, err
 	}

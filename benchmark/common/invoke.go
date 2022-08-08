@@ -192,9 +192,13 @@ func Invoke(invokeParam InvokeFuncParam,
 
 	srcNum := make(map[string]uint64)
 	srcEndToEnd := float64(0)
+	maxDuration := float64(0)
 	for i := uint8(0); i < numSrcInstance; i++ {
 		idx := i
 		if sourceOutput[idx].Success {
+			if maxDuration < sourceOutput[idx].Duration {
+				maxDuration = sourceOutput[idx].Duration
+			}
 			ProcessThroughputLat(fmt.Sprintf("source-%d", idx),
 				invokeParam.StatDir, sourceOutput[idx].Latencies, sourceOutput[idx].Counts,
 				sourceOutput[idx].Duration, srcNum, &srcEndToEnd)
@@ -203,8 +207,9 @@ func Invoke(invokeParam InvokeFuncParam,
 		}
 	}
 	if len(srcNum) != 0 {
-		fmt.Fprintf(os.Stderr, "source outputs %v events, time %v s, throughput %v (event/s)\n\n",
-			srcNum["e2e"], srcEndToEnd, float64(srcNum["e2e"])/srcEndToEnd)
+		for k, v := range srcNum {
+			fmt.Fprintf(os.Stderr, "%s processed %v events, duration: %v, tp: %f\n", k, v, maxDuration, float64(v)/maxDuration)
+		}
 	}
 
 	for _, node := range cliNodes {
@@ -212,8 +217,12 @@ func Invoke(invokeParam InvokeFuncParam,
 		output := outputMap[funcName]
 		num := make(map[string]uint64)
 		endToEnd := float64(0)
+		maxDuration := float64(0)
 		for j := uint8(0); j < uint8(len(output)); j++ {
 			if output[j].Success {
+				if maxDuration < output[j].Duration {
+					maxDuration = output[j].Duration
+				}
 				ProcessThroughputLat(fmt.Sprintf("%s-%d", funcName, j),
 					invokeParam.StatDir, output[j].Latencies, output[j].Counts, output[j].Duration,
 					num, &endToEnd)
@@ -223,7 +232,7 @@ func Invoke(invokeParam InvokeFuncParam,
 		}
 		if len(num) != 0 {
 			for k, v := range num {
-				fmt.Fprintf(os.Stderr, "%s processed %v events\n", k, v)
+				fmt.Fprintf(os.Stderr, "%s processed %v events, duration: %v\n", k, v, maxDuration)
 			}
 			fmt.Fprintf(os.Stderr, "\n")
 		}

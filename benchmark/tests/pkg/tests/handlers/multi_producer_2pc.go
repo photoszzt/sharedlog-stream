@@ -204,7 +204,7 @@ func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 		SerdeFormat: commtypes.JSON,
 	}
 
-	src1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1ForRead, srcConfig, 1)
+	src1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1ForRead, srcConfig, 1, 0)
 	if err != nil {
 		panic(err)
 	}

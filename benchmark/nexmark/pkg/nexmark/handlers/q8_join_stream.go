@@ -114,7 +114,7 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 			Timeout:     timeout,
 			MsgSerde:    msgSerde,
 			SerdeFormat: serdeFormat,
-		}, sp.NumSubstreamProducer[0])
+		}, sp.NumSubstreamProducer[0], sp.ParNum)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -123,7 +123,7 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 			Timeout:     timeout,
 			MsgSerde:    msgSerde,
 			SerdeFormat: serdeFormat,
-		}, sp.NumSubstreamProducer[1])
+		}, sp.NumSubstreamProducer[1], sp.ParNum)
 	if err != nil {
 		return nil, nil, err
 	}

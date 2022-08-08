@@ -92,11 +92,11 @@ func getSrcSink[KIn, VIn, KOut, VOut any](
 		MsgSerde:      outMsgSerde,
 		FlushDuration: flush,
 	}
-	src1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1, src1Config, 1)
+	src1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1, src1Config, 1, 0)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	src2, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream2, src2Config, 1)
+	src2, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream2, src2Config, 1, 0)
 	if err != nil {
 		return nil, nil, nil, err
 	}

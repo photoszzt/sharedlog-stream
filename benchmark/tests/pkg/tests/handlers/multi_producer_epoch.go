@@ -147,7 +147,7 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(
 	if err != nil {
 		panic(err)
 	}
-	src1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1ForRead, srcConfig, 1)
+	src1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1ForRead, srcConfig, 1, 0)
 	if err != nil {
 		panic(err)
 	}

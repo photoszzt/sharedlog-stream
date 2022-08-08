@@ -19,14 +19,15 @@ type ChangelogManager[K, V any] struct {
 }
 
 func NewChangelogManagerForSrc[K, V any](stream *sharedlog_stream.ShardedSharedLogStream,
-	msgSerde commtypes.MessageSerdeG[K, V], timeout time.Duration, serdeFormat commtypes.SerdeFormat,
+	msgSerde commtypes.MessageSerdeG[K, V], timeout time.Duration,
+	serdeFormat commtypes.SerdeFormat, instanceId uint8,
 ) (*ChangelogManager[K, V], error) {
 	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream,
 		&producer_consumer.StreamConsumerConfigG[K, V]{
 			MsgSerde:    msgSerde,
 			Timeout:     timeout,
 			SerdeFormat: serdeFormat,
-		}, 1)
+		}, 1, instanceId)
 	if err != nil {
 		return nil, err
 	}
@@ -42,13 +43,14 @@ func NewChangelogManager[K, V any](stream *sharedlog_stream.ShardedSharedLogStre
 	timeout time.Duration,
 	flushDuration time.Duration,
 	serdeFormat commtypes.SerdeFormat,
+	instanceId uint8,
 ) (*ChangelogManager[K, V], error) {
 	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream,
 		&producer_consumer.StreamConsumerConfigG[K, V]{
 			MsgSerde:    msgSerde,
 			Timeout:     timeout,
 			SerdeFormat: serdeFormat,
-		}, 1)
+		}, 1, instanceId)
 	if err != nil {
 		return nil, err
 	}

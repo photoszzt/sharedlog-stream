@@ -307,6 +307,7 @@ func genEndMark(startTime time.Time, parNum uint8,
 	marker := commtypes.EpochMarker{
 		Mark:      commtypes.STREAM_END,
 		StartTime: startTime.UnixMilli(),
+		ProdIndex: parNum,
 	}
 	encoded, err := epochMarkerSerde.Encode(marker)
 	if err != nil {

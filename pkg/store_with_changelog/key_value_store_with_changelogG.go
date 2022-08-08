@@ -33,7 +33,7 @@ func NewKeyValueStoreWithChangelogG[K, V any](mp *MaterializeParam[K, V],
 		return nil, err
 	}
 	changelogManager, err := NewChangelogManager(changelog, mp.msgSerde, mp.changelogParam.TimeOut,
-		mp.changelogParam.FlushDuration, mp.serdeFormat)
+		mp.changelogParam.FlushDuration, mp.serdeFormat, mp.parNum)
 	if err != nil {
 		return nil, err
 	}

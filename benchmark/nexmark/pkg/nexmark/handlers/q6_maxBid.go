@@ -86,7 +86,7 @@ func (h *q6MaxBid) getExecutionCtx(ctx context.Context, sp *common.QueryInput) (
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(inputStream,
-		inputConfig, sp.NumSubstreamProducer[0])
+		inputConfig, sp.NumSubstreamProducer[0], sp.ParNum)
 	if err != nil {
 		return processor.BaseExecutionContext{}, err
 	}

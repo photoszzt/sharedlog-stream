@@ -57,7 +57,7 @@ func (h *q4Avg) getExecutionCtx(ctx context.Context, sp *common.QueryInput,
 		Timeout:     common.SrcConsumeTimeout,
 		MsgSerde:    inMsgSerde,
 		SerdeFormat: serdeFormat,
-	}, sp.NumSubstreamProducer[0])
+	}, sp.NumSubstreamProducer[0], sp.ParNum)
 	if err != nil {
 		return processor.BaseExecutionContext{}, err
 	}

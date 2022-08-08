@@ -107,11 +107,11 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 		MsgSerde:    inMsgSerde,
 		SerdeFormat: serdeFormat,
 	}
-	consumer1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1, inConfig, sp.NumSubstreamProducer[0])
+	consumer1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1, inConfig, sp.NumSubstreamProducer[0], sp.ParNum)
 	if err != nil {
 		return nil, nil, err
 	}
-	consumer2, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream2, inConfig, sp.NumSubstreamProducer[1])
+	consumer2, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream2, inConfig, sp.NumSubstreamProducer[1], sp.ParNum)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -77,7 +77,7 @@ func getExecutionCtx(ctx context.Context, env types.Environment, sp *common.Quer
 	}
 	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig, sp.NumSubstreamProducer[0])
+	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig, sp.NumSubstreamProducer[0], sp.ParNum)
 	if err != nil {
 		return processor.BaseExecutionContext{}, fmt.Errorf("get msg serde err: %v", err)
 	}

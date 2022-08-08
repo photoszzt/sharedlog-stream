@@ -85,7 +85,7 @@ func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		Timeout:     time.Duration(5) * time.Second,
 		MsgSerde:    srcMsgSerde,
 		SerdeFormat: serdeFormat,
-	}, sp.NumSubstreamProducer[0])
+	}, sp.NumSubstreamProducer[0], sp.ParNum)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -173,7 +173,7 @@ func (h *tableRestoreHandler) testRestoreKVTable(ctx context.Context) {
 		panic(err)
 	}
 	changelogManager, err := store_with_changelog.NewChangelogManagerForSrc(changelog,
-		changelogSerde, common.SrcConsumeTimeout, commtypes.JSON)
+		changelogSerde, common.SrcConsumeTimeout, commtypes.JSON, 0)
 	if err != nil {
 		panic(err)
 	}

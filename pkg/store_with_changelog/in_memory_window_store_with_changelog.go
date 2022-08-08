@@ -75,7 +75,7 @@ func createChangelogManagerAndUpdateMsgSerde[K, V any](mp *MaterializeParam[K, V
 		return nil, nil, err
 	}
 	changelogManager, err := NewChangelogManager(changelog, msgSerde, mp.changelogParam.TimeOut,
-		mp.changelogParam.FlushDuration, mp.serdeFormat)
+		mp.changelogParam.FlushDuration, mp.serdeFormat, mp.parNum)
 	if err != nil {
 		return nil, nil, err
 	}

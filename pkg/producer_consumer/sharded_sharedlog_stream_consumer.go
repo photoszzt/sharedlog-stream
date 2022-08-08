@@ -3,6 +3,7 @@ package producer_consumer
 import (
 	"context"
 	"fmt"
+	"os"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/data_structure"
@@ -56,7 +57,7 @@ type ShardedSharedLogStreamConsumer[K, V any] struct {
 var _ = Consumer(&ShardedSharedLogStreamConsumer[int, string]{})
 
 func NewShardedSharedLogStreamConsumerG[K, V any](stream *sharedlog_stream.ShardedSharedLogStream,
-	config *StreamConsumerConfigG[K, V], numSrcProducer uint8,
+	config *StreamConsumerConfigG[K, V], numSrcProducer uint8, instanceId uint8,
 ) (*ShardedSharedLogStreamConsumer[K, V], error) {
 	// debug.Fprintf(os.Stderr, "%s timeout: %v\n", stream.TopicName(), config.Timeout)
 	epochMarkSerde, err := commtypes.GetEpochMarkerSerdeG(config.SerdeFormat)
@@ -64,8 +65,12 @@ func NewShardedSharedLogStreamConsumerG[K, V any](stream *sharedlog_stream.Shard
 		return nil, err
 	}
 	notEnded := make(data_structure.Uint8Set)
-	for i := uint8(0); i < numSrcProducer; i++ {
-		notEnded.Add(i)
+	if numSrcProducer != 1 {
+		for i := uint8(0); i < numSrcProducer; i++ {
+			notEnded.Add(i)
+		}
+	} else {
+		notEnded.Add(instanceId)
 	}
 	return &ShardedSharedLogStreamConsumer[K, V]{
 		epochMarkerSerde: epochMarkSerde,
@@ -94,6 +99,7 @@ func (s *ShardedSharedLogStreamConsumer[K, V]) NumSubstreamProducer() uint8 {
 
 func (s *ShardedSharedLogStreamConsumer[K, V]) SrcProducerEnd(prodIdx uint8) {
 	s.producerNotEnd.Remove(prodIdx)
+	debug.Fprintf(os.Stderr, "%d producer ended, %v remain\n", prodIdx, s.producerNotEnd)
 }
 
 func (s *ShardedSharedLogStreamConsumer[K, V]) AllProducerEnded() bool {
