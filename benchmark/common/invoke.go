@@ -210,6 +210,7 @@ func Invoke(invokeParam InvokeFuncParam,
 		for k, v := range srcNum {
 			fmt.Fprintf(os.Stderr, "%s processed %v events, duration: %v, tp: %f\n", k, v, maxDuration, float64(v)/maxDuration)
 		}
+		fmt.Fprintf(os.Stderr, "\n")
 	}
 
 	for _, node := range cliNodes {
