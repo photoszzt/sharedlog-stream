@@ -127,20 +127,18 @@ func handleCtrlMsg(ctx context.Context, ctrlMsg *commtypes.MsgAndSeq,
 		}
 		msgToPush := commtypes.Message{Key: ctrlMsg.Msg.Key, Value: encoded}
 		for _, sink := range args.ectx.Producers() {
-			if sink.Stream().NumPartition() > args.ectx.SubstreamNum() {
-				if args.fixedOutParNum > 0 {
-					// debug.Fprintf(os.Stderr, "produce stream end mark to %s %d\n",
-					// 	sink.Stream().TopicName(), ectx.SubstreamNum())
-					err := sink.Produce(ctx, msgToPush, args.ectx.SubstreamNum(), true)
+			if args.fixedOutParNum >= 0 {
+				// debug.Fprintf(os.Stderr, "produce stream end mark to %s %d\n",
+				// 	sink.Stream().TopicName(), ectx.SubstreamNum())
+				err := sink.Produce(ctx, msgToPush, args.ectx.SubstreamNum(), true)
+				if err != nil {
+					return &common.FnOutput{Success: false, Message: err.Error()}
+				}
+			} else {
+				for par := uint8(0); par < sink.Stream().NumPartition(); par++ {
+					err := sink.Produce(ctx, msgToPush, par, true)
 					if err != nil {
 						return &common.FnOutput{Success: false, Message: err.Error()}
-					}
-				} else {
-					for par := uint8(0); par < sink.Stream().NumPartition(); par++ {
-						err := sink.Produce(ctx, msgToPush, par, true)
-						if err != nil {
-							return &common.FnOutput{Success: false, Message: err.Error()}
-						}
 					}
 				}
 			}

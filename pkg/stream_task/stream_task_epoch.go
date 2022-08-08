@@ -104,7 +104,8 @@ func processInEpoch(
 	markTimer := time.Now()
 	var once sync.Once
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
-	debug.Fprintf(os.Stderr, "commit every(ms): %v, waitEndMark: %v\n", args.commitEvery, args.waitEndMark)
+	debug.Fprintf(os.Stderr, "commit every(ms): %v, waitEndMark: %v, fixed output parNum: %d\n",
+		args.commitEvery, args.waitEndMark, args.fixedOutParNum)
 	for {
 		ret := checkMonitorReturns(dctx, dcancel, args, cmm, em)
 		if ret != nil {
