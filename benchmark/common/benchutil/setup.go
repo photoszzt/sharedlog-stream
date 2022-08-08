@@ -8,6 +8,7 @@ import (
 	"path"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
@@ -18,6 +19,7 @@ import (
 
 	"cs.utexas.edu/zjia/faas/types"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/xerrors"
 )
 
 type DumpOutputStreamConfig struct {
@@ -63,11 +65,6 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 	for i := uint8(0); i < args.NumPartitions; i++ {
 		outFilePath := path.Join(args.OutputDir, fmt.Sprintf("%s-%d.txt", args.TopicName, i))
 		outFile, err := os.Create(outFilePath)
-		defer func() {
-			if err := outFile.Close(); err != nil {
-				panic(err)
-			}
-		}()
 		if err != nil {
 			return err
 		}
@@ -75,6 +72,9 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 			// fmt.Fprintf(os.Stderr, "before read next\n")
 			rawMsg, err := log.ReadNext(ctx, i)
 			if err != nil {
+				if xerrors.Is(err, common_errors.ErrStreamEmpty) {
+					break
+				}
 				return err
 			}
 			if rawMsg.IsControl {
@@ -82,7 +82,7 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 				if err != nil {
 					return err
 				}
-				outStr := fmt.Sprintf("%+v", epochMark)
+				outStr := fmt.Sprintf("%+v\n", epochMark)
 				fmt.Fprint(os.Stderr, outStr)
 				writted, err := outFile.WriteString(outStr)
 				if err != nil {
@@ -111,6 +111,9 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 					}
 				}
 			}
+		}
+		if err := outFile.Close(); err != nil {
+			print(err)
 		}
 	}
 	return nil

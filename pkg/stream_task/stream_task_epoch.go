@@ -173,7 +173,7 @@ func processInEpoch(
 			hasProcessData = true
 		}
 		if ctrlMsg != nil {
-			fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
+			// fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
 			if t.pauseFunc != nil {
 				if ret := t.pauseFunc(); ret != nil {
 					return ret

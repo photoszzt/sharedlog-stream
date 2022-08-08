@@ -74,6 +74,7 @@ type RawMsg struct {
 	ScaleEpoch   uint16
 	IsControl    bool
 	IsPayloadArr bool
+	ProdIdx      uint8
 	Mark         EpochMark
 }
 

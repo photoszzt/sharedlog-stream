@@ -186,8 +186,8 @@ func main() {
 			Local:          FLAGS_local,
 			WaitForEndMark: FLAGS_waitForEndMark,
 		}
-		err := common.Invoke(invokeFuncParam,
-			NewQueryInput(uint8(common.StringToSerdeFormat(FLAGS_serdeFormat))), invokeSourceFunc_)
+		serdeFormat := uint8(common.StringToSerdeFormat(FLAGS_serdeFormat))
+		err := common.Invoke(invokeFuncParam, NewQueryInput(serdeFormat), invokeSourceFunc_)
 		if err != nil {
 			panic(err)
 		}

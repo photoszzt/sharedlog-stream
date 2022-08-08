@@ -52,11 +52,12 @@ func Invoke(invokeParam InvokeFuncParam,
 	funcNames := make([]string, 0)
 	for _, child := range funcParam {
 		config := child.ChildrenMap()
-		fmt.Fprintf(os.Stderr, "config: %v\n", config)
+		fmt.Fprintf(os.Stderr, "config: %+v\n", config)
 		ninstance := uint8(config["NumInstance"].Data().(float64))
 		funcName := config["funcName"].Data().(string)
 		outputTopicNamesTmp := config["OutputTopicName"].Data().([]interface{})
 		inputTopicNamesTmp, ok := config["InputTopicNames"]
+		numSrcProducerTmp, _ := config["NumSrcProducer"]
 		scaleConfig[funcName] = ninstance
 		funcNames = append(funcNames, funcName)
 		nodeConstraint := config["NodeConstraint"].Data().(string)
@@ -71,11 +72,17 @@ func Invoke(invokeParam InvokeFuncParam,
 			srcNodeConstraint = nodeConstraint
 		} else {
 			inputTopicNamesIntf := inputTopicNamesTmp.Data().([]interface{})
+			numSrcProducerIntf := numSrcProducerTmp.Data().([]interface{})
+			numSrcProducer := make([]uint8, len(numSrcProducerIntf))
 			inputTopicNames := make([]string, len(inputTopicNamesIntf))
 			outputTopicNames := make([]string, len(outputTopicNamesTmp))
 			numOutPartitions := make([]uint8, len(outputTopicNamesTmp))
+
 			for i, v := range inputTopicNamesIntf {
 				inputTopicNames[i] = v.(string)
+			}
+			for i, v := range numSrcProducerIntf {
+				numSrcProducer[i] = uint8(v.(float64))
 			}
 			for i, v := range outputTopicNamesTmp {
 				outputTopicNames[i] = v.(string)
@@ -91,21 +98,22 @@ func Invoke(invokeParam InvokeFuncParam,
 			for i := uint8(0); i < ninstance; i++ {
 				numInSubs := uint8(streamParam[inputTopicNames[0]].Data().(float64))
 				inParams[i] = &QueryInput{
-					Duration:         baseQueryInput.Duration,
-					GuaranteeMth:     baseQueryInput.GuaranteeMth,
-					CommitEveryMs:    baseQueryInput.CommitEveryMs,
-					SerdeFormat:      baseQueryInput.SerdeFormat,
-					AppId:            baseQueryInput.AppId,
-					TableType:        baseQueryInput.TableType,
-					MongoAddr:        baseQueryInput.MongoAddr,
-					FlushMs:          baseQueryInput.FlushMs,
-					WarmupS:          baseQueryInput.WarmupS,
-					InputTopicNames:  inputTopicNames,
-					OutputTopicNames: outputTopicNames,
-					NumInPartition:   numInSubs,
-					NumOutPartitions: numOutPartitions,
-					WaitForEndMark:   invokeParam.WaitForEndMark,
-					ScaleEpoch:       1,
+					Duration:             baseQueryInput.Duration,
+					GuaranteeMth:         baseQueryInput.GuaranteeMth,
+					CommitEveryMs:        baseQueryInput.CommitEveryMs,
+					SerdeFormat:          baseQueryInput.SerdeFormat,
+					AppId:                baseQueryInput.AppId,
+					TableType:            baseQueryInput.TableType,
+					MongoAddr:            baseQueryInput.MongoAddr,
+					FlushMs:              baseQueryInput.FlushMs,
+					WarmupS:              baseQueryInput.WarmupS,
+					InputTopicNames:      inputTopicNames,
+					OutputTopicNames:     outputTopicNames,
+					NumSubstreamProducer: numSrcProducer,
+					NumInPartition:       numInSubs,
+					NumOutPartitions:     numOutPartitions,
+					WaitForEndMark:       invokeParam.WaitForEndMark,
+					ScaleEpoch:           1,
 				}
 			}
 			node := NewClientNode(nconfig)

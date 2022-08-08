@@ -47,6 +47,18 @@ func NewMeteredConsumer[K, V any](src *ShardedSharedLogStreamConsumer[K, V], war
 func (s *MeteredConsumer[K, V]) StartWarmup() {
 }
 
+func (s *MeteredConsumer[K, V]) NumSubstreamProducer() uint8 {
+	return s.consumer.numSrcProducer
+}
+
+func (s *MeteredConsumer[K, V]) SrcProducerEnd(prodIdx uint8) {
+	s.consumer.SrcProducerEnd(prodIdx)
+}
+
+func (s *MeteredConsumer[K, V]) AllProducerEnded() bool {
+	return s.consumer.AllProducerEnded()
+}
+
 func (s *MeteredConsumer[K, V]) RecordCurrentConsumedSeqNum(seqNum uint64) {
 	s.consumer.RecordCurrentConsumedSeqNum(seqNum)
 }

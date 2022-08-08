@@ -73,7 +73,7 @@ func (h *q8GroupByHandler) getExecutionCtx(ctx context.Context, sp *common.Query
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
 	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
-	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig)
+	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig, sp.NumSubstreamProducer[0])
 	if err != nil {
 		return processor.BaseExecutionContext{}, err
 	}

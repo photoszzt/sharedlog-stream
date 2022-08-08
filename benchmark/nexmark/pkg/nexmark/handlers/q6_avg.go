@@ -55,11 +55,12 @@ func (h *q6Avg) getExecutionCtx(ctx context.Context, sp *common.QueryInput) (pro
 		return processor.BaseExecutionContext{}, fmt.Errorf("get msg serde err: %v", err)
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(inputStream, &producer_consumer.StreamConsumerConfigG[uint64, commtypes.Change]{
-		Timeout:     common.SrcConsumeTimeout,
-		MsgSerde:    inMsgSerde,
-		SerdeFormat: serdeFormat,
-	})
+	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(inputStream,
+		&producer_consumer.StreamConsumerConfigG[uint64, commtypes.Change]{
+			Timeout:     common.SrcConsumeTimeout,
+			MsgSerde:    inMsgSerde,
+			SerdeFormat: serdeFormat,
+		}, sp.NumSubstreamProducer[0])
 	if err != nil {
 		return processor.BaseExecutionContext{}, err
 	}

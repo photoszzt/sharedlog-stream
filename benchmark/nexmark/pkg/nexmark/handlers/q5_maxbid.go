@@ -89,7 +89,8 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		MsgSerde:      outMsgSerde,
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 	}
-	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig)
+	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream,
+		inConfig, sp.NumSubstreamProducer[0])
 	if err != nil {
 		return nil, nil, err
 	}

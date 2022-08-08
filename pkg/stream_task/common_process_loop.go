@@ -43,10 +43,6 @@ func CommonProcess(ctx context.Context, t *StreamTask, ectx *processor.BaseExecu
 	if msgs.IsControl {
 		key := msgs.Msg.Key.(string)
 		if key == txn_data.SCALE_FENCE_KEY {
-			// ret_err := HandleScaleEpochAndBytes(ctx, msgs, ectx)
-			// if ret_err != nil {
-			// 	return ret_err
-			// }
 			v := msgs.Msg.Value.(producer_consumer.ScaleEpochAndBytes)
 			if ectx.CurEpoch() < v.ScaleEpoch {
 				ectx.Consumers()[0].RecordCurrentConsumedSeqNum(msgs.LogSeqNum)
@@ -54,22 +50,13 @@ func CommonProcess(ctx context.Context, t *StreamTask, ectx *processor.BaseExecu
 			}
 			return nil, nil
 		} else if key == commtypes.END_OF_STREAM_KEY {
-			/*
-					v := msgs.Msg.Value.(producer_consumer.StartTimeAndBytes)
-					msgToPush := commtypes.Message{Key: msgs.Msg.Key, Value: v.EpochMarkEncoded}
-					for _, sink := range ectx.Producers() {
-						if sink.Stream().NumPartition() > ectx.SubstreamNum() {
-							// debug.Fprintf(os.Stderr, "produce stream end mark to %s %d\n",
-							// 	sink.Stream().TopicName(), ectx.SubstreamNum())
-							err := sink.Produce(ctx, msgToPush, ectx.SubstreamNum(), true)
-							if err != nil {
-								return &common.FnOutput{Success: false, Message: err.Error()}
-							}
-						}
-					}
-				t.SetEndDuration(v.StartTime)
-			*/
-			return nil, msgs
+			v := msgs.Msg.Value.(producer_consumer.StartTimeAndProdIdx)
+			consumer.SrcProducerEnd(v.ProdIdx)
+			if consumer.AllProducerEnded() {
+				return nil, msgs
+			} else {
+				return nil, nil
+			}
 		} else {
 			return &common.FnOutput{Success: false, Message: fmt.Sprintf("unrecognized key: %v", key)}, nil
 		}

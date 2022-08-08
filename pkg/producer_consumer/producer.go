@@ -9,6 +9,7 @@ import (
 
 type Producer interface {
 	Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error
+	ProduceCtrlMsg(ctx context.Context, msg commtypes.Message, parNums []uint8) error
 	TopicName() string
 	Name() string
 	SetName(string)

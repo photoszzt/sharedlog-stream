@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/data_structure"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -18,9 +19,9 @@ type ScaleEpochAndBytes struct {
 	ScaleEpoch uint16
 }
 
-type StartTimeAndBytes struct {
-	EpochMarkEncoded []byte
-	StartTime        int64
+type StartTimeAndProdIdx struct {
+	StartTime int64
+	ProdIdx   uint8
 }
 
 type StreamConsumerConfigG[K, V any] struct {
@@ -36,32 +37,35 @@ type StreamConsumerConfig struct {
 }
 
 type ShardedSharedLogStreamConsumer[K, V any] struct {
-	// syncutils.Mutex
-
-	msgSerde         commtypes.MessageSerdeG[K, V]
 	epochMarkerSerde commtypes.SerdeG[commtypes.EpochMarker]
 	payloadArrSerde  commtypes.SerdeG[commtypes.PayloadArr]
+	msgSerde         commtypes.MessageSerdeG[K, V]
+	producerNotEnd   data_structure.Uint8Set
 	stream           *sharedlog_stream.ShardedSharedLogStream
 	tac              *TransactionAwareConsumer
 	emc              *EpochMarkConsumer
 	name             string
+	currentSeqNum    uint64
 	timeout          time.Duration
 	guarantee        exactly_once_intr.GuaranteeMth
 	initialSource    bool
 	serdeFormat      commtypes.SerdeFormat
-
-	currentSeqNum uint64
+	numSrcProducer   uint8
 }
 
 var _ = Consumer(&ShardedSharedLogStreamConsumer[int, string]{})
 
 func NewShardedSharedLogStreamConsumerG[K, V any](stream *sharedlog_stream.ShardedSharedLogStream,
-	config *StreamConsumerConfigG[K, V],
+	config *StreamConsumerConfigG[K, V], numSrcProducer uint8,
 ) (*ShardedSharedLogStreamConsumer[K, V], error) {
 	// debug.Fprintf(os.Stderr, "%s timeout: %v\n", stream.TopicName(), config.Timeout)
 	epochMarkSerde, err := commtypes.GetEpochMarkerSerdeG(config.SerdeFormat)
 	if err != nil {
 		return nil, err
+	}
+	notEnded := make(data_structure.Uint8Set)
+	for i := uint8(0); i < numSrcProducer; i++ {
+		notEnded.Add(i)
 	}
 	return &ShardedSharedLogStreamConsumer[K, V]{
 		epochMarkerSerde: epochMarkSerde,
@@ -72,6 +76,8 @@ func NewShardedSharedLogStreamConsumerG[K, V any](stream *sharedlog_stream.Shard
 		payloadArrSerde:  sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG,
 		guarantee:        exactly_once_intr.AT_LEAST_ONCE,
 		serdeFormat:      config.SerdeFormat,
+		numSrcProducer:   numSrcProducer,
+		producerNotEnd:   notEnded,
 	}, nil
 }
 
@@ -80,6 +86,18 @@ func (s *ShardedSharedLogStreamConsumer[K, V]) SetInitialSource(initial bool) {
 }
 func (s *ShardedSharedLogStreamConsumer[K, V]) IsInitialSource() bool {
 	return s.initialSource
+}
+
+func (s *ShardedSharedLogStreamConsumer[K, V]) NumSubstreamProducer() uint8 {
+	return s.numSrcProducer
+}
+
+func (s *ShardedSharedLogStreamConsumer[K, V]) SrcProducerEnd(prodIdx uint8) {
+	s.producerNotEnd.Remove(prodIdx)
+}
+
+func (s *ShardedSharedLogStreamConsumer[K, V]) AllProducerEnded() bool {
+	return len(s.producerNotEnd) == 0
 }
 
 func (s *ShardedSharedLogStreamConsumer[K, V]) ConfigExactlyOnce(
@@ -142,6 +160,7 @@ func (s *ShardedSharedLogStreamConsumer[K, V]) readNext(ctx context.Context, par
 				rawMsg.ScaleEpoch = epochMark.ScaleEpoch
 			} else if epochMark.Mark == commtypes.STREAM_END {
 				rawMsg.StartTime = epochMark.StartTime
+				rawMsg.ProdIdx = epochMark.ProdIndex
 			}
 		}
 		return rawMsg, err
@@ -204,11 +223,8 @@ L:
 				// debug.Fprintf(os.Stderr, "got stream end in consume %s %d\n", s.stream.TopicName(), parNum)
 				msgs := &commtypes.MsgAndSeq{
 					Msg: commtypes.Message{
-						Key: commtypes.END_OF_STREAM_KEY,
-						Value: StartTimeAndBytes{
-							StartTime:        rawMsg.StartTime,
-							EpochMarkEncoded: rawMsg.Payload,
-						},
+						Key:   commtypes.END_OF_STREAM_KEY,
+						Value: StartTimeAndProdIdx{StartTime: rawMsg.StartTime, ProdIdx: rawMsg.ProdIdx},
 					},
 					MsgArr:    nil,
 					MsgSeqNum: rawMsg.MsgSeqNum,

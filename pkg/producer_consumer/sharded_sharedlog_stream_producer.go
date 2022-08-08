@@ -2,6 +2,7 @@ package producer_consumer
 
 import (
 	"context"
+	"fmt"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	eo_intr "sharedlog-stream/pkg/exactly_once_intr"
@@ -81,6 +82,46 @@ func (sls *ShardedSharedLogStreamProducer[K, V]) ConfigExactlyOnce(
 	sls.eom = eos
 }
 
+func (sls *ShardedSharedLogStreamProducer[K, V]) ProduceCtrlMsg(ctx context.Context, msg commtypes.Message, parNums []uint8) error {
+	if utils.IsNil(msg.Key) && utils.IsNil(msg.Value) {
+		return nil
+	}
+	if sls.bufPush {
+		err := sls.flush(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	ctrl, ok := msg.Key.(string)
+	if ok {
+		if ctrl == txn_data.SCALE_FENCE_KEY {
+			for _, parNum := range parNums {
+				scale_fence_tag := txn_data.ScaleFenceTag(sls.Stream().TopicNameHash(), parNum)
+				nameTag := sharedlog_stream.NameHashWithPartition(sls.Stream().TopicNameHash(), parNum)
+				_, err := sls.pushWithTag(ctx, msg.Value.([]byte), parNum, []uint64{scale_fence_tag, nameTag},
+					nil, sharedlog_stream.ControlRecordMeta)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		} else if ctrl == commtypes.END_OF_STREAM_KEY {
+			for _, parNum := range parNums {
+				_, err := sls.push(ctx, msg.Value.([]byte), parNum, sharedlog_stream.ControlRecordMeta)
+				// debug.Fprintf(os.Stderr, "Producer: push end of stream to %s %d at 0x%x\n", sls.Stream().TopicName(), parNum, off)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		} else {
+			return fmt.Errorf("unknown control message with key: %s", ctrl)
+		}
+	} else {
+		return fmt.Errorf("unknown control message with key: %v", msg.Key)
+	}
+}
+
 func (sls *ShardedSharedLogStreamProducer[K, V]) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
 	if utils.IsNil(msg.Key) && utils.IsNil(msg.Value) {
 		return nil
@@ -100,13 +141,11 @@ func (sls *ShardedSharedLogStreamProducer[K, V]) Produce(ctx context.Context, ms
 			scale_fence_tag := txn_data.ScaleFenceTag(sls.Stream().TopicNameHash(), parNum)
 			nameTag := sharedlog_stream.NameHashWithPartition(sls.Stream().TopicNameHash(), parNum)
 			_, err := sls.pushWithTag(ctx, msg.Value.([]byte), parNum, []uint64{scale_fence_tag, nameTag},
-				nil, sharedlog_stream.StreamEntryMeta(isControl, false))
+				nil, sharedlog_stream.ControlRecordMeta)
 			return err
-		}
-		if ctrl == commtypes.END_OF_STREAM_KEY {
+		} else if ctrl == commtypes.END_OF_STREAM_KEY {
 			debug.Assert(isControl, "end of stream should be a control msg")
-			_, err := sls.push(ctx, msg.Value.([]byte), parNum,
-				sharedlog_stream.StreamEntryMeta(isControl, false))
+			_, err := sls.push(ctx, msg.Value.([]byte), parNum, sharedlog_stream.ControlRecordMeta)
 			// debug.Fprintf(os.Stderr, "Producer: push end of stream to %s %d at 0x%x\n", sls.Stream().TopicName(), parNum, off)
 			return err
 		}

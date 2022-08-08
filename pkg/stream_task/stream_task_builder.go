@@ -30,8 +30,7 @@ func NewStreamTaskBuilder() BuildStreamTask {
 			initFunc:      nil,
 			HandleErrFunc: nil,
 			appProcessFunc: func(ctx context.Context, task *StreamTask, argsTmp processor.ExecutionContext) (*common.FnOutput, *commtypes.MsgAndSeq) {
-				args := argsTmp.(*processor.BaseExecutionContext)
-				return CommonProcess(ctx, task, args, processor.ProcessMsg)
+				return CommonProcess(ctx, task, argsTmp.(*processor.BaseExecutionContext), processor.ProcessMsg)
 			},
 			flushForALO:      stats.NewStatsCollector[int64]("flushForALO", stats.DEFAULT_COLLECT_DURATION),
 			commitTrTime:     stats.NewStatsCollector[int64]("commitTrTime", stats.DEFAULT_COLLECT_DURATION),

@@ -115,19 +115,26 @@ func joinProcLoop(
 					}
 					jm.startTimeMs = v.StartTime
 				*/
-				jm.gotEndMark.Set(true)
-				// fmt.Fprintf(os.Stderr, "[id=%s] %s %d ends, start time: %d\n",
-				// 	id, consumer.TopicName(), procArgs.SubstreamNum(), jm.startTimeMs)
-				jm.ctrlMsg = msgs
-				jm.runLock.Unlock()
-				return
+				v := msgs.Msg.Value.(producer_consumer.StartTimeAndProdIdx)
+				consumer.SrcProducerEnd(v.ProdIdx)
+				if consumer.AllProducerEnded() {
+					jm.gotEndMark.Set(true)
+					// fmt.Fprintf(os.Stderr, "[id=%s] %s %d ends, start time: %d\n",
+					// 	id, consumer.TopicName(), procArgs.SubstreamNum(), jm.startTimeMs)
+					jm.ctrlMsg = msgs
+					jm.runLock.Unlock()
+					return
+				} else {
+					jm.runLock.Unlock()
+					continue
+				}
 			} else {
 				jm.out <- &common.FnOutput{Success: false, Message: fmt.Sprintf("unrecognized key: %v", key)}
 				jm.runLock.Unlock()
 				return
 			}
 		}
-		procArgs.Consumers()[0].RecordCurrentConsumedSeqNum(msgs.LogSeqNum)
+		consumer.RecordCurrentConsumedSeqNum(msgs.LogSeqNum)
 
 		if msgs.MsgArr != nil {
 			// debug.Fprintf(os.Stderr, "[id=%s] got msgarr\n", id)
@@ -135,7 +142,7 @@ func joinProcLoop(
 				if subMsg.Key == nil && subMsg.Value == nil {
 					continue
 				}
-				procArgs.Consumers()[0].ExtractProduceToConsumeTime(&subMsg)
+				consumer.ExtractProduceToConsumeTime(&subMsg)
 				// debug.Fprintf(os.Stderr, "[id=%s] before proc msg with sink1\n", id)
 				err = procMsgWithSink(ctx, subMsg, procArgs, id)
 				if err != nil {
@@ -152,7 +159,7 @@ func joinProcLoop(
 				jm.runLock.Unlock()
 				continue
 			}
-			procArgs.Consumers()[0].ExtractProduceToConsumeTime(&msgs.Msg)
+			consumer.ExtractProduceToConsumeTime(&msgs.Msg)
 			err = procMsgWithSink(ctx, msgs.Msg, procArgs, id)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink2: %v, out chan len: %d\n", id, err, len(jm.out))

@@ -37,6 +37,7 @@ type EpochMarker struct {
 	OutputRanges map[string][]ProduceRange `json:"outRng,omitempty" msg:"outRng,omitempty"`
 	StartTime    int64                     `json:"startTime,omitempty" msg:"startTime,omitempty"`
 	ScaleEpoch   uint16                    `json:"sepoch,omitempty" msg:"sepoch,omitempty"`
+	ProdIndex    uint8                     `json:"prodIndex,omitempty" msg:"prodIndex,omitempty"`
 	Mark         EpochMark                 `json:"mark,omitempty" msg:"mark,omitempty"`
 }
 

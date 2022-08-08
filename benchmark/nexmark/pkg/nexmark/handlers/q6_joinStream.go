@@ -91,11 +91,13 @@ func (h *q6JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 		MsgSerde:      outMsgSerde,
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	consumer1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1, src1Config)
+	consumer1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1,
+		src1Config, sp.NumSubstreamProducer[0])
 	if err != nil {
 		return nil, nil, err
 	}
-	consumer2, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream2, src2Config)
+	consumer2, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream2,
+		src2Config, sp.NumSubstreamProducer[1])
 	if err != nil {
 		return nil, nil, err
 	}

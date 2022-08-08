@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/transaction"
@@ -202,19 +201,41 @@ func processWithTransaction(
 				}
 				return ret
 			} else if key == commtypes.END_OF_STREAM_KEY {
-				v := ctrlMsg.Msg.Value.(producer_consumer.StartTimeAndBytes)
-				msgToPush := commtypes.Message{Key: ctrlMsg.Msg.Key, Value: v.EpochMarkEncoded}
+				startTime := ctrlMsg.Msg.Value.(int64)
+				epochMarkerSerde, err := commtypes.GetEpochMarkerSerdeG(args.serdeFormat)
+				if err != nil {
+					return common.GenErrFnOutput(err)
+				}
+				epochMarker := commtypes.EpochMarker{
+					StartTime: startTime,
+					Mark:      commtypes.STREAM_END,
+					ProdIndex: args.ectx.SubstreamNum(),
+				}
+				encoded, err := epochMarkerSerde.Encode(epochMarker)
+				if err != nil {
+					return common.GenErrFnOutput(err)
+				}
+				msgToPush := commtypes.Message{Key: ctrlMsg.Msg.Key, Value: encoded}
 				for _, sink := range args.ectx.Producers() {
 					if sink.Stream().NumPartition() > args.ectx.SubstreamNum() {
-						// debug.Fprintf(os.Stderr, "produce stream end mark to %s %d\n",
-						// 	sink.Stream().TopicName(), ectx.SubstreamNum())
-						err := sink.Produce(ctx, msgToPush, args.ectx.SubstreamNum(), true)
-						if err != nil {
-							return &common.FnOutput{Success: false, Message: err.Error()}
+						if args.fixedOutParNum > 0 {
+							// debug.Fprintf(os.Stderr, "produce stream end mark to %s %d\n",
+							// 	sink.Stream().TopicName(), ectx.SubstreamNum())
+							err := sink.Produce(ctx, msgToPush, args.ectx.SubstreamNum(), true)
+							if err != nil {
+								return &common.FnOutput{Success: false, Message: err.Error()}
+							}
+						} else {
+							for par := uint8(0); par < sink.Stream().NumPartition(); par++ {
+								err := sink.Produce(ctx, msgToPush, par, true)
+								if err != nil {
+									return &common.FnOutput{Success: false, Message: err.Error()}
+								}
+							}
 						}
 					}
 				}
-				t.SetEndDuration(v.StartTime)
+				t.SetEndDuration(startTime)
 				if err := tm.Close(); err != nil {
 					debug.Fprintf(os.Stderr, "[ERROR] close transaction manager: %v\n", err)
 					return &common.FnOutput{Success: false, Message: fmt.Sprintf("close transaction manager: %v\n", err)}

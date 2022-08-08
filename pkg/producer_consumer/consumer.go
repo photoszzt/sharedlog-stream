@@ -14,14 +14,15 @@ type Consumer interface {
 	TopicName() string
 	Name() string
 	SetName(string)
+	NumSubstreamProducer() uint8
 	Stream() sharedlog_stream.Stream
 	ConfigExactlyOnce(guarantee exactly_once_intr.GuaranteeMth) error
 	SetInitialSource(initial bool)
 	IsInitialSource() bool
-	// Lock()
-	// Unlock()
 	RecordCurrentConsumedSeqNum(seqNum uint64)
 	CurrentConsumedSeqNum() uint64
+	SrcProducerEnd(prodIdx uint8)
+	AllProducerEnded() bool
 }
 
 type MeteredConsumerIntr interface {

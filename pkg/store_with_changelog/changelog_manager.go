@@ -26,7 +26,7 @@ func NewChangelogManagerForSrc[K, V any](stream *sharedlog_stream.ShardedSharedL
 			MsgSerde:    msgSerde,
 			Timeout:     timeout,
 			SerdeFormat: serdeFormat,
-		})
+		}, 1)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +48,7 @@ func NewChangelogManager[K, V any](stream *sharedlog_stream.ShardedSharedLogStre
 			MsgSerde:    msgSerde,
 			Timeout:     timeout,
 			SerdeFormat: serdeFormat,
-		})
+		}, 1)
 	if err != nil {
 		return nil, err
 	}

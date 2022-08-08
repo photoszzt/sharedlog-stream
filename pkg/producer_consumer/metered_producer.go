@@ -125,6 +125,10 @@ func (s *ConcurrentMeteredSink[K, V]) Produce(ctx context.Context, msg commtypes
 	return err
 }
 
+func (s *ConcurrentMeteredSink[K, V]) ProduceCtrlMsg(ctx context.Context, msg commtypes.Message, parNums []uint8) error {
+	return s.producer.ProduceCtrlMsg(ctx, msg, parNums)
+}
+
 func (s *ConcurrentMeteredSink[K, V]) TopicName() string               { return s.producer.TopicName() }
 func (s *ConcurrentMeteredSink[K, V]) Name() string                    { return s.producer.Name() }
 func (s *ConcurrentMeteredSink[K, V]) SetName(name string)             { s.producer.SetName(name) }
@@ -192,8 +196,12 @@ func (s *MeteredProducer[K, V]) StartWarmup() {
 	}
 }
 
+func (s *MeteredProducer[K, V]) ProduceCtrlMsg(ctx context.Context, msg commtypes.Message, parNums []uint8) error {
+	return s.producer.ProduceCtrlMsg(ctx, msg, parNums)
+}
+
 func (s *MeteredProducer[K, V]) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
-	if s.IsFinalOutput() {
+	if s.IsFinalOutput() && !isControl {
 		procStart := time.Now()
 		ts, err := extractEventTs(&msg)
 		if err != nil {
