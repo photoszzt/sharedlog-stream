@@ -66,7 +66,7 @@ func SetupTableTableJoinWithSkipmap[K, VLeft, VRight, VR any](
 	joiner processor.ValueJoinerWithKeyFuncG[K, VLeft, VRight, VR],
 ) (proc_interface.ProcessAndReturnFunc,
 	proc_interface.ProcessAndReturnFunc,
-	[]store.KeyValueStoreOpWithChangelog,
+	map[string]store.KeyValueStoreOpWithChangelog,
 	error,
 ) {
 	toLeftTab, leftTab, err := store_with_changelog.ToInMemSkipmapKVTableWithChangelog[K, VLeft](mpLeft, less)
@@ -105,6 +105,6 @@ func SetupTableTableJoinWithSkipmap[K, VLeft, VRight, VR any](
 			return nil, nil
 		}
 	}
-	kvc := []store.KeyValueStoreOpWithChangelog{leftTab, rightTab}
+	kvc := map[string]store.KeyValueStoreOpWithChangelog{leftTab.Stream().TopicName(): leftTab, rightTab.Stream().TopicName(): rightTab}
 	return leftJoinRightFunc, rightJoinLeftFunc, kvc, nil
 }

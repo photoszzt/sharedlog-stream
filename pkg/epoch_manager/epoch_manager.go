@@ -167,8 +167,8 @@ func GenEpochMarker(
 	em *EpochManager,
 	consumers []producer_consumer.MeteredConsumerIntr,
 	producers []producer_consumer.MeteredProducerIntr,
-	kvTabs []store.KeyValueStoreOpWithChangelog,
-	winTabs []store.WindowStoreOpWithChangelog,
+	kvTabs map[string]store.KeyValueStoreOpWithChangelog,
+	winTabs map[string]store.WindowStoreOpWithChangelog,
 ) (commtypes.EpochMarker, error) {
 	outputRanges := make(map[string][]commtypes.ProduceRange)
 	for _, producer := range producers {
@@ -327,7 +327,7 @@ func (em *EpochManager) FindMostRecentEpochMetaThatHasConsumed(
 }
 
 func CleanupState(em *EpochManager, producers []producer_consumer.MeteredProducerIntr,
-	kvTabs []store.KeyValueStoreOpWithChangelog, winTabs []store.WindowStoreOpWithChangelog,
+	kvTabs map[string]store.KeyValueStoreOpWithChangelog, winTabs map[string]store.WindowStoreOpWithChangelog,
 ) {
 	em.currentTopicSubstream = make(map[string]data_structure.Uint8Set)
 	for _, producer := range producers {

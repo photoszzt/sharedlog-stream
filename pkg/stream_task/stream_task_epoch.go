@@ -83,7 +83,6 @@ func processInEpoch(
 ) *common.FnOutput {
 	err := trackStreamAndConfigureExactlyOnce(args, em,
 		func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {
-			cmm.TrackStream(name, stream)
 		})
 	if err != nil {
 		return common.GenErrFnOutput(err)
@@ -91,11 +90,11 @@ func processInEpoch(
 
 	dctx, dcancel := context.WithCancel(ctx)
 	em.StartMonitorLog(dctx, dcancel)
-	err = cmm.RestoreMappingAndWaitForPrevTask(dctx, args.ectx.FuncName(), args.ectx.CurEpoch())
+	err = cmm.RestoreMappingAndWaitForPrevTask(
+		dctx, args.ectx.FuncName(), args.ectx.CurEpoch(), args.kvChangelogs, args.windowStoreChangelogs)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-
 	// run := false
 	hasProcessData := false
 	init := false
@@ -262,7 +261,8 @@ func CaptureEpochStateAndCleanup(ctx context.Context, em *epoch_manager.EpochMan
 
 func CaptureEpochStateAndCleanupExplicit(ctx context.Context, em *epoch_manager.EpochManager,
 	consumers []producer_consumer.MeteredConsumerIntr, producers []producer_consumer.MeteredProducerIntr,
-	kvChangelogs []store.KeyValueStoreOpWithChangelog, windowStoreChangelogs []store.WindowStoreOpWithChangelog,
+	kvChangelogs map[string]store.KeyValueStoreOpWithChangelog,
+	windowStoreChangelogs map[string]store.WindowStoreOpWithChangelog,
 ) (commtypes.EpochMarker, []uint64, []string, error) {
 	epochMarker, err := epoch_manager.GenEpochMarker(ctx, em, consumers, producers,
 		kvChangelogs, windowStoreChangelogs)

@@ -18,7 +18,7 @@ func SetupStreamStreamJoin[K, VLeft, VRight any](
 	jw *processor.JoinWindows,
 ) (proc_interface.ProcessAndReturnFunc,
 	proc_interface.ProcessAndReturnFunc,
-	[]store.WindowStoreOpWithChangelog,
+	map[string]store.WindowStoreOpWithChangelog,
 	error,
 ) {
 	toLeftTab, leftTab, err := store_with_changelog.ToInMemWindowTableWithChangelog(
@@ -61,6 +61,8 @@ func SetupStreamStreamJoin[K, VLeft, VRight any](
 		// debug.Fprintf(os.Stderr, "after rightJoinLeft\n")
 		return msgs, err
 	}
-	wsc := []store.WindowStoreOpWithChangelog{leftTab, rightTab}
+	wsc := map[string]store.WindowStoreOpWithChangelog{
+		leftTab.ChangelogTopicName():  leftTab,
+		rightTab.ChangelogTopicName(): rightTab}
 	return leftJoinRightFunc, rightJoinLeftFunc, wsc, nil
 }

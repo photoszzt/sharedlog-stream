@@ -93,7 +93,6 @@ func processWithTransaction(
 	err := trackStreamAndConfigureExactlyOnce(args, tm,
 		func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {
 			tm.RecordTopicStreams(name, stream)
-			cmm.TrackStream(name, stream)
 		})
 	if err != nil {
 		return common.GenErrFnOutput(err)
@@ -101,7 +100,8 @@ func processWithTransaction(
 
 	dctx, dcancel := context.WithCancel(ctx)
 	tm.StartMonitorLog(dctx, dcancel)
-	err = cmm.RestoreMappingAndWaitForPrevTask(dctx, args.ectx.FuncName(), args.ectx.CurEpoch())
+	err = cmm.RestoreMappingAndWaitForPrevTask(dctx, args.ectx.FuncName(), args.ectx.CurEpoch(),
+		args.kvChangelogs, args.windowStoreChangelogs)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

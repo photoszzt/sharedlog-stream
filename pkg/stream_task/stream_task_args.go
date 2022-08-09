@@ -18,8 +18,8 @@ type StreamTaskArgs struct {
 	appId           string
 	transactionalId string
 
-	windowStoreChangelogs []store.WindowStoreOpWithChangelog
-	kvChangelogs          []store.KeyValueStoreOpWithChangelog
+	windowStoreChangelogs map[string]store.WindowStoreOpWithChangelog
+	kvChangelogs          map[string]store.KeyValueStoreOpWithChangelog
 
 	warmup time.Duration
 
@@ -87,8 +87,8 @@ type SetSerdeFormat interface {
 
 type BuildStreamTaskArgs interface {
 	Build() *StreamTaskArgs
-	WindowStoreChangelogs([]store.WindowStoreOpWithChangelog) BuildStreamTaskArgs
-	KVStoreChangelogs([]store.KeyValueStoreOpWithChangelog) BuildStreamTaskArgs
+	WindowStoreChangelogs(map[string]store.WindowStoreOpWithChangelog) BuildStreamTaskArgs
+	KVStoreChangelogs(map[string]store.KeyValueStoreOpWithChangelog) BuildStreamTaskArgs
 	FixedOutParNum(uint8) BuildStreamTaskArgs
 	WaitEndMark(bool) BuildStreamTaskArgs
 }
@@ -127,12 +127,12 @@ func (args *StreamTaskArgsBuilder) SerdeFormat(serdeFormat commtypes.SerdeFormat
 	return args
 }
 
-func (args *StreamTaskArgsBuilder) WindowStoreChangelogs(wschangelogs []store.WindowStoreOpWithChangelog) BuildStreamTaskArgs {
+func (args *StreamTaskArgsBuilder) WindowStoreChangelogs(wschangelogs map[string]store.WindowStoreOpWithChangelog) BuildStreamTaskArgs {
 	args.stArgs.windowStoreChangelogs = wschangelogs
 	return args
 }
 
-func (args *StreamTaskArgsBuilder) KVStoreChangelogs(kvchangelogs []store.KeyValueStoreOpWithChangelog) BuildStreamTaskArgs {
+func (args *StreamTaskArgsBuilder) KVStoreChangelogs(kvchangelogs map[string]store.KeyValueStoreOpWithChangelog) BuildStreamTaskArgs {
 	args.stArgs.kvChangelogs = kvchangelogs
 	return args
 }

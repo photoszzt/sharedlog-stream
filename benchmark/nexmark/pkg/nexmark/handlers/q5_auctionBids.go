@@ -100,7 +100,7 @@ func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput,
 }
 
 func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInput,
-) (*processor.MeteredProcessor, []store.WindowStoreOpWithChangelog, error) {
+) (*processor.MeteredProcessor, map[string]store.WindowStoreOpWithChangelog, error) {
 	hopWindow, err := processor.NewTimeWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
 	if err != nil {
 		return nil, nil, err
@@ -141,7 +141,7 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 			val := aggregate.(uint64)
 			return val + 1
 		}), hopWindow))
-	wsc := []store.WindowStoreOpWithChangelog{countWindowStore}
+	wsc := map[string]store.WindowStoreOpWithChangelog{countWindowStore.ChangelogTopicName(): countWindowStore}
 	return countProc, wsc, nil
 }
 
