@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sync"
 
 	"cs.utexas.edu/zjia/faas/types"
 	"golang.org/x/xerrors"
@@ -16,6 +17,7 @@ type PartitionFunc func(interface{}) uint32
 type ShardedSharedLogStream struct {
 	topicName string
 
+	mux                 sync.RWMutex // this mux is for modify number of entries of subSharedLogStreams
 	subSharedLogStreams []*BufferedSinkStream
 	numPartitions       uint8
 	serdeFormat         commtypes.SerdeFormat
@@ -95,6 +97,8 @@ func (s *ShardedSharedLogStream) ScaleSubstreams(env types.Environment, scaleTo 
 	if scaleTo == 0 {
 		return fmt.Errorf("updated number of substreams should be larger and equal to one")
 	}
+	s.mux.Lock()
+	defer s.mux.Unlock()
 	if scaleTo > s.numPartitions {
 		numAdd := scaleTo - s.numPartitions
 		for i := uint8(0); i < numAdd; i++ {
@@ -111,16 +115,22 @@ func (s *ShardedSharedLogStream) ScaleSubstreams(env types.Environment, scaleTo 
 }
 
 func (s *ShardedSharedLogStream) NumPartition() uint8 {
+	s.mux.RLock()
+	defer s.mux.RUnlock()
 	return s.numPartitions
 }
 
 func (s *ShardedSharedLogStream) Push(ctx context.Context, payload []byte, parNum uint8,
 	meta LogEntryMeta, producerId commtypes.ProducerId,
 ) (uint64, error) {
+	s.mux.RLock()
+	defer s.mux.RUnlock()
 	return s.subSharedLogStreams[parNum].Stream.Push(ctx, payload, parNum, meta, producerId)
 }
 
 func (s *ShardedSharedLogStream) BufPush(ctx context.Context, payload []byte, parNum uint8, producerId commtypes.ProducerId) error {
+	s.mux.RLock()
+	defer s.mux.RUnlock()
 	// idTmp := ctx.Value(commtypes.CTXID{})
 	// id := ""
 	// if idTmp != nil {
@@ -133,6 +143,8 @@ func (s *ShardedSharedLogStream) BufPush(ctx context.Context, payload []byte, pa
 }
 
 func (s *ShardedSharedLogStream) Flush(ctx context.Context, producerId commtypes.ProducerId) error {
+	s.mux.RLock()
+	defer s.mux.RUnlock()
 	// idTmp := ctx.Value(commtypes.CTXID{})
 	// id := ""
 	// if idTmp != nil {
@@ -150,10 +162,14 @@ func (s *ShardedSharedLogStream) Flush(ctx context.Context, producerId commtypes
 }
 
 func (s *ShardedSharedLogStream) BufPushNoLock(ctx context.Context, payload []byte, parNum uint8, producerId commtypes.ProducerId) error {
+	s.mux.RLock()
+	defer s.mux.RUnlock()
 	return s.subSharedLogStreams[parNum].BufPushNoLock(ctx, payload, producerId)
 }
 
 func (s *ShardedSharedLogStream) FlushNoLock(ctx context.Context, producerId commtypes.ProducerId) error {
+	s.mux.RLock()
+	defer s.mux.RUnlock()
 	for i := uint8(0); i < s.numPartitions; i++ {
 		if err := s.subSharedLogStreams[i].FlushNoLock(ctx, producerId); err != nil {
 			return err
@@ -165,11 +181,15 @@ func (s *ShardedSharedLogStream) FlushNoLock(ctx context.Context, producerId com
 func (s *ShardedSharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNum uint8, tags []uint64,
 	additionalTopic []string, meta LogEntryMeta, producerId commtypes.ProducerId,
 ) (uint64, error) {
+	s.mux.RLock()
+	defer s.mux.RUnlock()
 	return s.subSharedLogStreams[parNum].Stream.PushWithTag(ctx, payload, parNum, tags,
 		additionalTopic, meta, producerId)
 }
 
 func (s *ShardedSharedLogStream) ReadNext(ctx context.Context, parNumber uint8) (*commtypes.RawMsg, error) {
+	s.mux.RLock()
+	defer s.mux.RUnlock()
 	if parNumber < s.numPartitions {
 		par := parNumber
 		shard := s.subSharedLogStreams[par]
@@ -182,6 +202,8 @@ func (s *ShardedSharedLogStream) ReadNext(ctx context.Context, parNumber uint8) 
 func (s *ShardedSharedLogStream) ReadNextWithTag(
 	ctx context.Context, parNumber uint8, tag uint64,
 ) (*commtypes.RawMsg, error) {
+	s.mux.RLock()
+	defer s.mux.RUnlock()
 	if parNumber < s.numPartitions {
 		par := parNumber
 		shard := s.subSharedLogStreams[par]
@@ -192,6 +214,8 @@ func (s *ShardedSharedLogStream) ReadNextWithTag(
 }
 
 func (s *ShardedSharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum uint64, parNum uint8, tag uint64) (*commtypes.RawMsg, error) {
+	s.mux.RLock()
+	defer s.mux.RUnlock()
 	if parNum < s.numPartitions {
 		par := parNum
 		shard := s.subSharedLogStreams[par]
@@ -211,5 +235,7 @@ func (s *ShardedSharedLogStream) TopicNameHash() uint64 {
 
 // not threadsafe
 func (s *ShardedSharedLogStream) SetCursor(cursor uint64, parNum uint8) {
+	s.mux.RLock()
+	defer s.mux.RUnlock()
 	s.subSharedLogStreams[parNum].Stream.cursor = cursor
 }
