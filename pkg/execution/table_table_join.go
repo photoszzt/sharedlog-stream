@@ -7,6 +7,7 @@ import (
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
+	"sharedlog-stream/pkg/utils"
 )
 
 func SetupTableTableJoin[K, VLeft, VRight any](
@@ -83,16 +84,25 @@ func SetupTableTableJoinWithSkipmap[K, VLeft, VRight, VR any](
 	rightJoinLeft := processor.NewMeteredProcessor(
 		processor.NewTableTableJoinProcessorG[K, VRight, VLeft, VR]("rightJoinLeft", leftTab,
 			processor.ReverseValueJoinerWithKeyG(joiner)))
+	nullKeyFilter := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterNullKey",
+		processor.PredicateFunc(func(key interface{}, value interface{}) (bool, error) {
+			return !utils.IsNil(key), nil
+		})))
 	leftJoinRightFunc := func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 		ret, err := toLeftTab.ProcessAndReturn(ctx, msg)
 		if err != nil {
 			return nil, err
 		}
 		if ret != nil {
-			return leftJoinRight.ProcessAndReturn(ctx, ret[0])
-		} else {
-			return nil, nil
+			msgs, err := leftJoinRight.ProcessAndReturn(ctx, ret[0])
+			if err != nil {
+				return nil, err
+			}
+			if msgs != nil {
+				return nullKeyFilter.ProcessAndReturn(ctx, msgs[0])
+			}
 		}
+		return nil, nil
 	}
 	rightJoinLeftFunc := func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 		ret, err := toRightTab.ProcessAndReturn(ctx, msg)
@@ -100,10 +110,15 @@ func SetupTableTableJoinWithSkipmap[K, VLeft, VRight, VR any](
 			return nil, err
 		}
 		if ret != nil {
-			return rightJoinLeft.ProcessAndReturn(ctx, ret[0])
-		} else {
-			return nil, nil
+			msgs, err := rightJoinLeft.ProcessAndReturn(ctx, ret[0])
+			if err != nil {
+				return nil, err
+			}
+			if msgs != nil {
+				return nullKeyFilter.ProcessAndReturn(ctx, msgs[0])
+			}
 		}
+		return nil, nil
 	}
 	kvc := map[string]store.KeyValueStoreOpWithChangelog{leftTab.Stream().TopicName(): leftTab, rightTab.Stream().TopicName(): rightTab}
 	return leftJoinRightFunc, rightJoinLeftFunc, kvc, nil

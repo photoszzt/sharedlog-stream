@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
+	"sharedlog-stream/pkg/utils"
 )
 
 func SetupStreamStreamJoin[K, VLeft, VRight any](
@@ -39,6 +40,10 @@ func SetupStreamStreamJoin[K, VLeft, VRight any](
 		processor.NewStreamStreamJoinProcessor("rightJoinLeft", leftTab, jw,
 			processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker),
 	)
+	nullKeyFilter := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterNullKey",
+		processor.PredicateFunc(func(key interface{}, value interface{}) (bool, error) {
+			return !utils.IsNil(key), nil
+		})))
 	leftJoinRightFunc := func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 		// debug.Fprintf(os.Stderr, "before toLeft\n")
 		rets, err := toLeftTab.ProcessAndReturn(ctx, msg)
@@ -48,7 +53,15 @@ func SetupStreamStreamJoin[K, VLeft, VRight any](
 		// debug.Fprintf(os.Stderr, "after toLeft\n")
 		msgs, err := leftJoinRight.ProcessAndReturn(ctx, rets[0])
 		// debug.Fprintf(os.Stderr, "after leftJoinRight\n")
-		return msgs, err
+		out := make([]commtypes.Message, 0, len(msgs))
+		for _, msg := range msgs {
+			ret, err := nullKeyFilter.ProcessAndReturn(ctx, msg)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, ret...)
+		}
+		return out, err
 	}
 	rightJoinLeftFunc := func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 		// debug.Fprintf(os.Stderr, "before toRight\n")
@@ -59,7 +72,15 @@ func SetupStreamStreamJoin[K, VLeft, VRight any](
 		// debug.Fprintf(os.Stderr, "after toRight\n")
 		msgs, err := rightJoinLeft.ProcessAndReturn(ctx, rets[0])
 		// debug.Fprintf(os.Stderr, "after rightJoinLeft\n")
-		return msgs, err
+		out := make([]commtypes.Message, 0, len(msgs))
+		for _, msg := range msgs {
+			ret, err := nullKeyFilter.ProcessAndReturn(ctx, msg)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, ret...)
+		}
+		return out, err
 	}
 	wsc := map[string]store.WindowStoreOpWithChangelog{
 		leftTab.ChangelogTopicName():  leftTab,
