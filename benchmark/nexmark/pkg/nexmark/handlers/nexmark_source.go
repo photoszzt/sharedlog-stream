@@ -270,15 +270,26 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 			}
 			break
 		}
-		if (duration != 0 && time.Since(startTime) >= duration) ||
-			(eventsPerGen != 0 && procArgs.idx == int(eventsPerGen)) {
-			if inputConfig.WaitForEndMark {
-				ret_err := genEndMark(startTime, inputConfig.ParNum, epochMarkerSerde, streamPusher)
-				if ret_err != nil {
-					return ret_err
+		if eventsPerGen != 0 {
+			if procArgs.idx == int(eventsPerGen) {
+				if inputConfig.WaitForEndMark {
+					ret_err := genEndMark(startTime, inputConfig.ParNum, epochMarkerSerde, streamPusher)
+					if ret_err != nil {
+						return ret_err
+					}
 				}
+				break
 			}
-			break
+		} else {
+			if duration != 0 && time.Since(startTime) >= duration {
+				if inputConfig.WaitForEndMark {
+					ret_err := genEndMark(startTime, inputConfig.ParNum, epochMarkerSerde, streamPusher)
+					if ret_err != nil {
+						return ret_err
+					}
+				}
+				break
+			}
 		}
 		fnout := h.process(dctx, procArgs)
 		if fnout != nil && !fnout.Success {
