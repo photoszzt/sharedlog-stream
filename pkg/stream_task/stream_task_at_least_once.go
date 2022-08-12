@@ -61,12 +61,6 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 	flushTimer := time.Now()
 	gotEndMark := false
 	for {
-		timeSinceLastTrack := time.Since(commitTimer)
-		if timeSinceLastTrack >= args.trackEveryForAtLeastOnce {
-			if ret_err := track(ctx, cm, args.ectx.Consumers(), args.ectx.SubstreamNum(), &hasUntrackedConsume, &commitTimer); ret_err != nil {
-				return ret_err
-			}
-		}
 		timeSinceLastFlush := time.Since(flushTimer)
 		if timeSinceLastFlush >= args.flushEvery {
 			if t.pauseFunc != nil {
@@ -79,6 +73,12 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 				t.resumeFunc(t)
 			}
 			flushTimer = time.Now()
+		}
+		timeSinceLastTrack := time.Since(commitTimer)
+		if timeSinceLastTrack >= args.trackEveryForAtLeastOnce {
+			if ret_err := track(ctx, cm, args.ectx.Consumers(), args.ectx.SubstreamNum(), &hasUntrackedConsume, &commitTimer); ret_err != nil {
+				return ret_err
+			}
 		}
 		warmupCheck.Check()
 		if (!args.waitEndMark && args.duration != 0 && warmupCheck.ElapsedSinceInitial() >= args.duration) || gotEndMark {

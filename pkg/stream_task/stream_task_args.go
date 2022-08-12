@@ -12,29 +12,23 @@ import (
 )
 
 type StreamTaskArgs struct {
-	ectx processor.ExecutionContext
-	env  types.Environment
-
-	appId           string
-	transactionalId string
-
+	ectx                  processor.ExecutionContext
+	env                   types.Environment
 	windowStoreChangelogs map[string]store.WindowStoreOpWithChangelog
 	kvChangelogs          map[string]store.KeyValueStoreOpWithChangelog
-
-	warmup time.Duration
-
+	appId                 string
+	transactionalId       string
+	warmup                time.Duration
 	// exactly once: commitEvery overwrites flushEvery
 	commitEvery time.Duration
-
 	// for at least once
 	flushEvery               time.Duration
 	trackEveryForAtLeastOnce time.Duration
-
-	duration       time.Duration
-	serdeFormat    commtypes.SerdeFormat
-	fixedOutParNum int16
-	guarantee      exactly_once_intr.GuaranteeMth
-	waitEndMark    bool
+	duration                 time.Duration
+	fixedOutParNum           int16
+	serdeFormat              commtypes.SerdeFormat
+	guarantee                exactly_once_intr.GuaranteeMth
+	waitEndMark              bool
 }
 
 type StreamTaskArgsBuilder struct {
