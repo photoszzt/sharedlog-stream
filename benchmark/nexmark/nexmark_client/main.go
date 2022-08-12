@@ -34,6 +34,7 @@ var (
 	FLAGS_warmup_time     int
 	FLAGS_local           bool
 	FLAGS_flush_ms        int
+	FLAGS_src_flush_ms    int
 	FLAGS_dump_dir        string
 	FLAGS_test_src        string
 	FLAGS_waitForEndMark  bool
@@ -66,7 +67,7 @@ func invokeSourceFunc(client *http.Client, srcInvokeConfig common.SrcInvokeConfi
 	nexmarkConfig.NumOutPartition = srcInvokeConfig.NumOutPartition
 	nexmarkConfig.ParNum = srcInvokeConfig.InstanceID
 	nexmarkConfig.NumSrcInstance = srcInvokeConfig.NumSrcInstance
-	nexmarkConfig.FlushMs = uint32(FLAGS_flush_ms)
+	nexmarkConfig.FlushMs = uint32(FLAGS_src_flush_ms)
 	nexmarkConfig.WaitForEndMark = FLAGS_waitForEndMark
 	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "source")
 	fmt.Printf("func source url is %v\n", url)
@@ -153,6 +154,7 @@ func main() {
 	flag.IntVar(&FLAGS_tps, "tps", 10000000, "tps param for nexmark")
 	flag.IntVar(&FLAGS_warmup_time, "warmup_time", 0, "warmup time")
 	flag.IntVar(&FLAGS_flush_ms, "flushms", 10, "flush the buffer every ms; for exactly once, please see commit_everyMs and commit_niter. They determine the flush interval. ")
+	flag.IntVar(&FLAGS_src_flush_ms, "src_flushms", 5, "src flush ms")
 
 	flag.Uint64Var(&FLAGS_commit_everyMs, "comm_everyMS", 10, "commit a transaction every (ms)")
 
