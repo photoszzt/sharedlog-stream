@@ -53,9 +53,16 @@ type FlushCallbackFunc[K comparable, V any] func(entries []LRUElement[K, V])
 
 func NewCache[K comparable, V any](flushCallback FlushCallbackFunc[K, V]) *Cache[K, V] {
 	return &Cache[K, V]{
-		cache:     make(map[K]*genericlist.Element[LRUElement[K, V]]),
-		dirtyKeys: linkedhashset.New[K](),
-		orderList: genericlist.New[LRUElement[K, V]](),
+		cache:            make(map[K]*genericlist.Element[LRUElement[K, V]]),
+		dirtyKeys:        linkedhashset.New[K](),
+		orderList:        genericlist.New[LRUElement[K, V]](),
+		flushCallback:    flushCallback,
+		hitRatio:         stats.NewStatsCollector[float64]("cache_hit_ratio", stats.DEFAULT_COLLECT_DURATION),
+		currentSizeBytes: 0,
+		numReadHits:      0,
+		numReadMisses:    0,
+		numOverwrites:    0,
+		numFlushes:       0,
 	}
 }
 
