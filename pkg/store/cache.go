@@ -185,15 +185,15 @@ func (c *Cache[K, V]) flushLockHeld(evicted *genericlist.Element[LRUElement[K, V
 	if c.dirtyKeys.Len() == 0 {
 		return
 	}
-	entries := make([]LRUElement[K, V], c.dirtyKeys.Len())
-	deleted := make([]K, c.dirtyKeys.Len())
+	entries := make([]LRUElement[K, V], 0, c.dirtyKeys.Len())
+	deleted := make([]K, 0, c.dirtyKeys.Len())
 	if evicted != nil {
 		entries = append(entries, evicted.Value)
 		c.dirtyKeys.Remove(evicted.Value.key)
 	}
 	c.dirtyKeys.IterateCb(func(key K) bool {
 		element := c.getInternalLockHeld(key)
-		if element != nil {
+		if element == nil {
 			fmt.Fprintf(os.Stderr, "key=%v found in dirty key set, but entry is nil\n", key)
 			return false
 		}

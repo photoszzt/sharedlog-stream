@@ -159,9 +159,23 @@ func TestShouldFlushDirtEntriesOnEviction(t *testing.T) {
 	cache.put(2, LRUEntry[int]{value: optional.Of(30), isDirty: true})
 	cache.evict()
 	if len(flushed) != 2 {
-		t.Errorf("expected 2, got %d", len(flushed))
+		t.Errorf("expected 2, got %d, flushed contains: %+v", len(flushed), flushed)
 	}
 	if flushed[0].key != 0 {
 		t.Errorf("expected 0, got %d", flushed[0].key)
+	}
+	v, _ := flushed[0].entry.value.Get()
+	if v != 10 {
+		t.Errorf("expected 10, got %d", v)
+	}
+	if flushed[1].key != 2 {
+		t.Errorf("expected 2, got %d", flushed[1].key)
+	}
+	v, _ = flushed[1].entry.value.Get()
+	if v != 30 {
+		t.Errorf("expected 30, got %d", v)
+	}
+	if cache.flushes() != 1 {
+		t.Errorf("expected 1, got %d", cache.flushes())
 	}
 }
