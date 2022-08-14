@@ -32,6 +32,29 @@ type QueryInput struct {
 	TableType            uint8           `json:"tabT,omitempty"`
 }
 
+func (q *QueryInput) Clone() QueryInput {
+	return QueryInput{
+		TestParams:           q.TestParams,
+		AppId:                q.AppId,
+		MongoAddr:            q.MongoAddr,
+		NumOutPartitions:     q.NumOutPartitions,
+		NumSubstreamProducer: q.NumSubstreamProducer,
+		OutputTopicNames:     q.OutputTopicNames,
+		InputTopicNames:      q.InputTopicNames,
+		CommitEveryMs:        q.CommitEveryMs,
+		FlushMs:              q.FlushMs,
+		WarmupS:              q.WarmupS,
+		Duration:             q.Duration,
+		ScaleEpoch:           q.ScaleEpoch,
+		WaitForEndMark:       q.WaitForEndMark,
+		NumInPartition:       q.NumInPartition,
+		ParNum:               q.ParNum,
+		GuaranteeMth:         q.GuaranteeMth,
+		SerdeFormat:          q.SerdeFormat,
+		TableType:            q.TableType,
+	}
+}
+
 type ConfigScaleInput struct {
 	Config      map[string]uint8 `json:"sg,omitempty"`
 	AppId       string           `json:"aid,omitempty"`

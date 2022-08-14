@@ -19,6 +19,17 @@ type SrcInvokeConfig struct {
 	NumSrcInstance  uint8
 }
 
+func (c *SrcInvokeConfig) Clone() SrcInvokeConfig {
+	return SrcInvokeConfig{
+		TopicName:       c.TopicName,
+		NodeConstraint:  c.NodeConstraint,
+		ScaleEpoch:      c.ScaleEpoch,
+		NumOutPartition: c.NumOutPartition,
+		InstanceID:      c.InstanceID,
+		NumSrcInstance:  c.NumSrcInstance,
+	}
+}
+
 type InvokeFuncParam struct {
 	ConfigFile     string
 	StatDir        string
@@ -28,25 +39,21 @@ type InvokeFuncParam struct {
 	WaitForEndMark bool
 }
 
-func Invoke(invokeParam InvokeFuncParam,
-	baseQueryInput *QueryInput,
-	invokeSourceFunc func(client *http.Client, srcInvokeConfig SrcInvokeConfig, response *FnOutput, wg *sync.WaitGroup, warmup bool),
-) error {
+func parseInvokeParam(invokeParam InvokeFuncParam, baseQueryInput *QueryInput,
+) (SrcInvokeConfig, []*ClientNode, map[string][]*QueryInput, ConfigScaleInput, error) {
 	byteVal, err := os.ReadFile(invokeParam.ConfigFile)
 	if err != nil {
-		return err
+		return SrcInvokeConfig{}, nil, nil, ConfigScaleInput{}, err
 	}
 	jsonParsed, err := gabs.ParseJSON(byteVal)
 	if err != nil {
-		return err
+		return SrcInvokeConfig{}, nil, nil, ConfigScaleInput{}, err
 	}
 	funcParam := jsonParsed.S("FuncParam").Children()
 	streamParam := jsonParsed.S("StreamParam").ChildrenMap()
 
 	var cliNodes []*ClientNode
-	var numSrcInstance uint8
-	var srcTopicName string
-	var srcNodeConstraint string
+	var srcInvokeConfig SrcInvokeConfig
 	scaleConfig := make(map[string]uint8)
 	inParamsMap := make(map[string][]*QueryInput)
 	funcNames := make([]string, 0)
@@ -67,9 +74,9 @@ func Invoke(invokeParam InvokeFuncParam,
 
 		if !ok {
 			// this is source config
-			numSrcInstance = ninstance
-			srcTopicName = outputTopicNamesTmp[0].(string)
-			srcNodeConstraint = nodeConstraint
+			srcInvokeConfig.NumSrcInstance = ninstance
+			srcInvokeConfig.TopicName = outputTopicNamesTmp[0].(string)
+			srcInvokeConfig.NodeConstraint = nodeConstraint
 		} else {
 			inputTopicNamesIntf := inputTopicNamesTmp.Data().([]interface{})
 			numSrcProducerIntf := numSrcProducerTmp.Data().([]interface{})
@@ -97,24 +104,15 @@ func Invoke(invokeParam InvokeFuncParam,
 			inParams := make([]*QueryInput, ninstance)
 			for i := uint8(0); i < ninstance; i++ {
 				numInSubs := uint8(streamParam[inputTopicNames[0]].Data().(float64))
-				inParams[i] = &QueryInput{
-					Duration:             baseQueryInput.Duration,
-					GuaranteeMth:         baseQueryInput.GuaranteeMth,
-					CommitEveryMs:        baseQueryInput.CommitEveryMs,
-					SerdeFormat:          baseQueryInput.SerdeFormat,
-					AppId:                baseQueryInput.AppId,
-					TableType:            baseQueryInput.TableType,
-					MongoAddr:            baseQueryInput.MongoAddr,
-					FlushMs:              baseQueryInput.FlushMs,
-					WarmupS:              baseQueryInput.WarmupS,
-					InputTopicNames:      inputTopicNames,
-					OutputTopicNames:     outputTopicNames,
-					NumSubstreamProducer: numSrcProducer,
-					NumInPartition:       numInSubs,
-					NumOutPartitions:     numOutPartitions,
-					WaitForEndMark:       invokeParam.WaitForEndMark,
-					ScaleEpoch:           1,
-				}
+				baseClone := baseQueryInput.Clone()
+				baseClone.InputTopicNames = inputTopicNames
+				baseClone.OutputTopicNames = outputTopicNames
+				baseClone.NumSubstreamProducer = numSrcProducer
+				baseClone.NumInPartition = numInSubs
+				baseClone.NumOutPartitions = numOutPartitions
+				baseClone.WaitForEndMark = invokeParam.WaitForEndMark
+				baseClone.ScaleEpoch = 1
+				inParams[i] = &baseClone
 			}
 			node := NewClientNode(nconfig)
 			cliNodes = append(cliNodes, node)
@@ -124,6 +122,28 @@ func Invoke(invokeParam InvokeFuncParam,
 	for tp, subs := range streamParam {
 		scaleConfig[tp] = uint8(subs.Data().(float64))
 	}
+	srcInvokeConfig.NumOutPartition = uint8(streamParam[srcInvokeConfig.TopicName].Data().(float64))
+	configScaleInput := ConfigScaleInput{
+		Config:      scaleConfig,
+		FuncNames:   funcNames,
+		SerdeFormat: baseQueryInput.SerdeFormat,
+		AppId:       baseQueryInput.AppId,
+	}
+	return srcInvokeConfig, cliNodes, inParamsMap, configScaleInput, nil
+}
+
+func Invoke(invokeParam InvokeFuncParam,
+	baseQueryInput *QueryInput,
+	invokeSourceFunc func(client *http.Client, srcInvokeConfig SrcInvokeConfig, response *FnOutput, wg *sync.WaitGroup, warmup bool),
+) error {
+	srcInvokeConfig, cliNodes, inParamsMap, configScaleInput, err := parseInvokeParam(invokeParam, baseQueryInput)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "srcInvokeConfig: %+v\n", srcInvokeConfig)
+	fmt.Fprintf(os.Stderr, "cliNodes: %+v\n", cliNodes)
+	fmt.Fprintf(os.Stderr, "inParamsMap: %+v\n", inParamsMap)
+	fmt.Fprintf(os.Stderr, "configScaleInput: %+v\n", configScaleInput)
 
 	timeout := time.Duration(baseQueryInput.Duration*4) * time.Second
 	if baseQueryInput.Duration == 0 {
@@ -135,42 +155,28 @@ func Invoke(invokeParam InvokeFuncParam,
 		},
 		Timeout: timeout,
 	}
-
-	scaleConfigInput := ConfigScaleInput{
-		Config:      scaleConfig,
-		FuncNames:   funcNames,
-		AppId:       baseQueryInput.AppId,
-		ScaleEpoch:  1,
-		SerdeFormat: baseQueryInput.SerdeFormat,
-		Bootstrap:   true,
-	}
+	configScaleInput.Bootstrap = true
+	configScaleInput.ScaleEpoch = 1
 	var scaleResponse FnOutput
-	InvokeConfigScale(client, &scaleConfigInput, invokeParam.GatewayUrl,
+	InvokeConfigScale(client, &configScaleInput, invokeParam.GatewayUrl,
 		&scaleResponse, "scale", invokeParam.Local)
 
-	numSrcPartition := uint8(streamParam[srcTopicName].Data().(float64))
-
-	fmt.Fprintf(os.Stderr, "src instance: %d\n", numSrcInstance)
+	fmt.Fprintf(os.Stderr, "src instance: %d\n", srcInvokeConfig.NumSrcInstance)
 	var wg sync.WaitGroup
 
-	sourceOutput := make([]FnOutput, numSrcInstance)
+	sourceOutput := make([]FnOutput, srcInvokeConfig.NumSrcInstance)
 	outputMap := make(map[string][]FnOutput)
 	for _, node := range cliNodes {
 		outputMap[node.Name()] = make([]FnOutput, len(inParamsMap[node.Name()]))
 	}
 
-	for i := uint8(0); i < numSrcInstance; i++ {
+	for i := uint8(0); i < srcInvokeConfig.NumSrcInstance; i++ {
 		wg.Add(1)
 		idx := i
-		srcInvokeConfig := SrcInvokeConfig{
-			TopicName:       srcTopicName,
-			NodeConstraint:  srcNodeConstraint,
-			ScaleEpoch:      1,
-			InstanceID:      idx,
-			NumOutPartition: numSrcPartition,
-			NumSrcInstance:  numSrcInstance,
-		}
-		go invokeSourceFunc(client, srcInvokeConfig, &sourceOutput[idx], &wg, false)
+		srcInvokeConfigCpy := srcInvokeConfig.Clone()
+		srcInvokeConfigCpy.ScaleEpoch = 1
+		srcInvokeConfigCpy.InstanceID = idx
+		go invokeSourceFunc(client, srcInvokeConfigCpy, &sourceOutput[idx], &wg, false)
 	}
 
 	time.Sleep(time.Duration(1) * time.Millisecond)
@@ -193,7 +199,7 @@ func Invoke(invokeParam InvokeFuncParam,
 	srcNum := make(map[string]uint64)
 	srcEndToEnd := float64(0)
 	maxDuration := float64(0)
-	for i := uint8(0); i < numSrcInstance; i++ {
+	for i := uint8(0); i < srcInvokeConfig.NumSrcInstance; i++ {
 		idx := i
 		if sourceOutput[idx].Success {
 			if maxDuration < sourceOutput[idx].Duration {
