@@ -7,7 +7,7 @@ import (
 	"math/rand"
 	"time"
 
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 )
 
 const (
@@ -28,7 +28,7 @@ type ChannelUrl struct {
 	url     string
 }
 
-func NextBid(ctx context.Context, eventId uint64, random *rand.Rand, timestamp int64, config *GeneratorConfig, bidUrlCache map[uint32]*ChannelUrl) (*types.Bid, error) {
+func NextBid(ctx context.Context, eventId uint64, random *rand.Rand, timestamp int64, config *GeneratorConfig, bidUrlCache map[uint32]*ChannelUrl) (*ntypes.Bid, error) {
 	auction := uint64(0)
 	if random.Intn(int(config.Configuration.HotAuctionRatio)) > 0 {
 		auction = LastBase0AuctionId(config, eventId) / uint64(HOT_AUCTION_RATIO) * uint64(HOT_AUCTION_RATIO)
@@ -74,7 +74,7 @@ func NextBid(ctx context.Context, eventId uint64, random *rand.Rand, timestamp i
 
 	currentSize := 8 + 8 + 8 + 8
 	extra := NextExtra(random, uint32(currentSize), config.Configuration.AvgBidByteSize)
-	return &types.Bid{
+	return &ntypes.Bid{
 		Auction:  auction,
 		Bidder:   bidder,
 		Price:    price,

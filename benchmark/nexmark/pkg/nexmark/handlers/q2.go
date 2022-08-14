@@ -7,12 +7,11 @@ import (
 
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/stream_task"
 
-	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
+	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -40,7 +39,7 @@ func (h *query2Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	if err != nil {
 		panic(err)
 	}
-	return utils.CompressData(encodedOutput), nil
+	return common.CompressData(encodedOutput), nil
 }
 
 func filterFunc(_ interface{}, value interface{}) (bool, error) {

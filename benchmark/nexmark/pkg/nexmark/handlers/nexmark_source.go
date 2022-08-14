@@ -15,11 +15,10 @@ import (
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/utils"
 
-	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
 
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/generator"
-	nexmarkutils "sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -49,7 +48,7 @@ func (h *nexmarkSourceHandler) Call(ctx context.Context, input []byte) ([]byte, 
 	if err != nil {
 		panic(err)
 	}
-	return nexmarkutils.CompressData(encodedOutput), nil
+	return common.CompressData(encodedOutput), nil
 }
 
 type nexmarkSrcProcArgs struct {

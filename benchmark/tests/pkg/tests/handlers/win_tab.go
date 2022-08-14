@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sharedlog-stream/benchmark/common"
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/benchmark/tests/pkg/tests"
 	"sharedlog-stream/benchmark/tests/pkg/tests/test_types"
 	"sharedlog-stream/pkg/commtypes"
@@ -74,7 +73,7 @@ func (wt *winTabTestsHandler) Call(ctx context.Context, input []byte) ([]byte, e
 	if err != nil {
 		panic(err)
 	}
-	return utils.CompressData(encodedOutput), nil
+	return common.CompressData(encodedOutput), nil
 }
 
 func (wt *winTabTestsHandler) WinTests(ctx context.Context, sp *test_types.TestInput) *common.FnOutput {

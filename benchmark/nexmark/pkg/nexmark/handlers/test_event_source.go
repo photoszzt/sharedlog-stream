@@ -6,11 +6,10 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
-	nexmarkutils "sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/sharedlog_stream"
 
-	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
+	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -38,7 +37,7 @@ func (h *testEventSource) Call(ctx context.Context, input []byte) ([]byte, error
 	if err != nil {
 		panic(err)
 	}
-	return nexmarkutils.CompressData(encodedOutput), nil
+	return common.CompressData(encodedOutput), nil
 }
 
 func (h *testEventSource) eventGeneration(ctx context.Context, sp *common.TestSourceInput) *common.FnOutput {

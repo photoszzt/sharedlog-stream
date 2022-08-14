@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"os"
 	"sharedlog-stream/benchmark/common/kafka_utils"
-	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
+	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"

@@ -14,7 +14,7 @@ import (
 
 	"sharedlog-stream/pkg/commtypes"
 
-	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
+	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/rs/zerolog"

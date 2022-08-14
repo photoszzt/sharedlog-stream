@@ -1,0 +1,48 @@
+package benchutil
+
+import (
+	"context"
+	"fmt"
+	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/stream_task"
+	"time"
+
+	"cs.utexas.edu/zjia/faas/types"
+)
+
+func UpdateStreamTaskArgs(sp *common.QueryInput, argsBuilder stream_task.SetGuarantee) stream_task.BuildStreamTaskArgs {
+	debug.Assert(sp.AppId != "", "app id should not be empty")
+	return argsBuilder.Guarantee(exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)).
+		AppID(sp.AppId).
+		Warmup(time.Duration(sp.WarmupS) * time.Second).
+		CommitEveryMs(sp.CommitEveryMs).
+		FlushEveryMs(sp.FlushMs).
+		Duration(sp.Duration).
+		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).WaitEndMark(sp.WaitForEndMark)
+}
+
+func GetShardedInputOutputStreams(ctx context.Context,
+	env types.Environment,
+	input *common.QueryInput,
+) (*sharedlog_stream.ShardedSharedLogStream, []*sharedlog_stream.ShardedSharedLogStream, error) {
+	inputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[0], input.NumInPartition,
+		commtypes.SerdeFormat(input.SerdeFormat))
+	if err != nil {
+		return nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
+
+	}
+	var output_streams []*sharedlog_stream.ShardedSharedLogStream
+	for idx, name := range input.OutputTopicNames {
+		outputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, name, input.NumOutPartitions[idx],
+			commtypes.SerdeFormat(input.SerdeFormat))
+		if err != nil {
+			return nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
+		}
+		output_streams = append(output_streams, outputStream)
+	}
+	return inputStream, output_streams, nil
+}

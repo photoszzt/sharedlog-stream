@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"sharedlog-stream/benchmark/common"
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/control_channel"
 
@@ -32,7 +31,7 @@ func (h *ConfigScaleHandler) Call(ctx context.Context, input []byte) ([]byte, er
 	if err != nil {
 		panic(err)
 	}
-	return utils.CompressData(encodedOutput), nil
+	return common.CompressData(encodedOutput), nil
 }
 
 func (h *ConfigScaleHandler) ConfigScale(ctx context.Context, input *common.ConfigScaleInput) *common.FnOutput {

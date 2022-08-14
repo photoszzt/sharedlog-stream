@@ -14,7 +14,6 @@ const (
 type QueryInput struct {
 	TestParams           map[string]bool `json:"testParams,omitempty"`
 	AppId                string          `json:"aid"`
-	MongoAddr            string          `json:"mongoAddr,omitempty"`
 	NumOutPartitions     []uint8         `json:"numOutPartition,omitempty"`
 	NumSubstreamProducer []uint8         `json:"numSubstreamProducer,omitempty"`
 	OutputTopicNames     []string        `json:"outputTopicName,omitempty"`
@@ -36,7 +35,6 @@ func (q *QueryInput) Clone() QueryInput {
 	return QueryInput{
 		TestParams:           q.TestParams,
 		AppId:                q.AppId,
-		MongoAddr:            q.MongoAddr,
 		NumOutPartitions:     q.NumOutPartitions,
 		NumSubstreamProducer: q.NumSubstreamProducer,
 		OutputTopicNames:     q.OutputTopicNames,
@@ -62,6 +60,17 @@ type ConfigScaleInput struct {
 	ScaleEpoch  uint16           `json:"epoch,omitempty"`
 	SerdeFormat uint8            `json:"serdeFormat,omitempty"`
 	Bootstrap   bool             `json:"bs,omitempty"`
+}
+
+func (c *ConfigScaleInput) Clone() ConfigScaleInput {
+	return ConfigScaleInput{
+		Config:      c.Config,
+		AppId:       c.AppId,
+		FuncNames:   c.FuncNames,
+		ScaleEpoch:  c.ScaleEpoch,
+		SerdeFormat: c.SerdeFormat,
+		Bootstrap:   c.Bootstrap,
+	}
 }
 
 type DumpInput struct {

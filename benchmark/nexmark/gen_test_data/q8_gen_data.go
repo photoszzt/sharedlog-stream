@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
+	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 )
 
 type q8AucSpec struct {

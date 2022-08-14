@@ -9,10 +9,7 @@ import (
 	"time"
 
 	"sharedlog-stream/benchmark/common"
-	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
-	"sharedlog-stream/pkg/commtypes"
-
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 
 	"github.com/rs/zerolog/log"
 )
@@ -27,9 +24,6 @@ var (
 	FLAGS_workload_config string
 	FLAGS_guarantee       string
 	FLAGS_commit_everyMs  uint64
-	FLAGS_scale_config    string
-	FLAGS_table_type      string
-	FLAGS_mongo_addr      string
 	FLAGS_stat_dir        string
 	FLAGS_warmup_time     int
 	FLAGS_local           bool
@@ -40,57 +34,20 @@ var (
 	FLAGS_waitForEndMark  bool
 )
 
-func getSerdeFormat(fmtStr string) commtypes.SerdeFormat {
-	var serdeFormat commtypes.SerdeFormat
-	if FLAGS_serdeFormat == "json" {
-		serdeFormat = commtypes.JSON
-	} else if FLAGS_serdeFormat == "msgp" {
-		serdeFormat = commtypes.MSGP
-	} else {
-		log.Error().Msgf("serde format is not recognized; default back to JSON")
-		serdeFormat = commtypes.JSON
-	}
-	return serdeFormat
-}
-
 type invokeSource func(client *http.Client, srcInvokeConfig common.SrcInvokeConfig, response *common.FnOutput, wg *sync.WaitGroup, warmup bool)
-
-func invokeSourceFunc(client *http.Client, srcInvokeConfig common.SrcInvokeConfig, response *common.FnOutput, wg *sync.WaitGroup, warmup bool,
-) {
-	defer wg.Done()
-	serdeFormat := getSerdeFormat(FLAGS_serdeFormat)
-	nexmarkConfig := ntypes.NewNexMarkConfigInput(srcInvokeConfig.TopicName, serdeFormat)
-	nexmarkConfig.Duration = uint32(FLAGS_duration)
-	nexmarkConfig.EventsNum = uint64(FLAGS_events_num)
-	nexmarkConfig.FirstEventRate = uint32(FLAGS_tps)
-	nexmarkConfig.NextEventRate = uint32(FLAGS_tps)
-	nexmarkConfig.NumOutPartition = srcInvokeConfig.NumOutPartition
-	nexmarkConfig.ParNum = srcInvokeConfig.InstanceID
-	nexmarkConfig.NumSrcInstance = srcInvokeConfig.NumSrcInstance
-	nexmarkConfig.FlushMs = uint32(FLAGS_src_flush_ms)
-	nexmarkConfig.WaitForEndMark = FLAGS_waitForEndMark
-	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "source")
-	fmt.Printf("func source url is %v\n", url)
-	if err := utils.JsonPostRequest(client, url, srcInvokeConfig.NodeConstraint, nexmarkConfig, response); err != nil {
-		log.Error().Msgf("source request failed: %v", err)
-	} else if !response.Success {
-		log.Error().Msgf("source request failed: %s", response.Message)
-	}
-	fmt.Fprintf(os.Stderr, "source-%d invoke done\n", srcInvokeConfig.InstanceID)
-}
 
 func invokeTestSrcFunc(client *http.Client, srcInvokeConfig common.SrcInvokeConfig,
 	response *common.FnOutput, wg *sync.WaitGroup, warmup bool,
 ) {
 	defer wg.Done()
-	serdeFormat := getSerdeFormat(FLAGS_serdeFormat)
+	serdeFormat := common.GetSerdeFormat(FLAGS_serdeFormat)
 	src := common.TestSourceInput{
 		FileName:    FLAGS_test_src,
 		SerdeFormat: uint8(serdeFormat),
 	}
-	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "testSrc")
+	url := common.BuildFunctionUrl(FLAGS_faas_gateway, "testSrc")
 	fmt.Printf("func source url is %v\n", url)
-	if err := utils.JsonPostRequest(client, url, srcInvokeConfig.NodeConstraint, &src, response); err != nil {
+	if err := common.JsonPostRequest(client, url, srcInvokeConfig.NodeConstraint, &src, response); err != nil {
 		log.Error().Msgf("source request failed: %v", err)
 	} else if !response.Success {
 		log.Error().Msgf("source request failed: %s", response.Message)
@@ -99,7 +56,7 @@ func invokeTestSrcFunc(client *http.Client, srcInvokeConfig common.SrcInvokeConf
 }
 
 func invokeDumpFunc(client *http.Client) {
-	serdeFormat := getSerdeFormat(FLAGS_serdeFormat)
+	serdeFormat := common.GetSerdeFormat(FLAGS_serdeFormat)
 	dumpInput := common.DumpStreams{
 		DumpDir:     FLAGS_dump_dir,
 		SerdeFormat: uint8(serdeFormat),
@@ -127,10 +84,10 @@ func invokeDumpFunc(client *http.Client) {
 		streamParam.ValueSerde = "PersonTime"
 	}
 	dumpInput.StreamParams = []common.StreamParam{streamParam}
-	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, "dump")
+	url := common.BuildFunctionUrl(FLAGS_faas_gateway, "dump")
 	fmt.Printf("func source url is %v\n", url)
 	var response common.FnOutput
-	if err := utils.JsonPostRequest(client, url, "", &dumpInput, &response); err != nil {
+	if err := common.JsonPostRequest(client, url, "", &dumpInput, &response); err != nil {
 		log.Error().Msgf("dump request failed: %v", err)
 	} else if !response.Success {
 		log.Error().Msgf("dump request failed: %s", response.Message)
@@ -143,8 +100,6 @@ func main() {
 	flag.StringVar(&FLAGS_app_name, "app_name", "q1", "")
 	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
 	flag.StringVar(&FLAGS_workload_config, "wconfig", "./wconfig.json", "path to a json file that stores workload config")
-	flag.StringVar(&FLAGS_table_type, "tab_type", "mem", "either \"mem\" or \"mongodb\"")
-	flag.StringVar(&FLAGS_mongo_addr, "mongo_addr", "", "mongodb address")
 	flag.StringVar(&FLAGS_stat_dir, "stat_dir", "", "stats dir to dump")
 	flag.StringVar(&FLAGS_dump_dir, "dumpdir", "", "output dir for dumps")
 	flag.StringVar(&FLAGS_test_src, "testsrc", "", "test event source file")
@@ -174,11 +129,21 @@ func main() {
 	fmt.Fprintf(os.Stderr, "wait for last: %v\n", FLAGS_waitForEndMark)
 	switch FLAGS_app_name {
 	case "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "windowedAvg":
+		serdeFormat := common.StringToSerdeFormat(FLAGS_serdeFormat)
+		gp := ntypes.GeneratorParams{
+			EventsNum:      uint64(FLAGS_events_num),
+			SerdeFormat:    serdeFormat,
+			FaasGateway:    FLAGS_faas_gateway,
+			Duration:       uint32(FLAGS_duration),
+			Tps:            uint32(FLAGS_tps),
+			FlushMs:        uint32(FLAGS_src_flush_ms),
+			WaitForEndMark: FLAGS_waitForEndMark,
+		}
 		var invokeSourceFunc_ invokeSource
 		if FLAGS_test_src != "" {
 			invokeSourceFunc_ = invokeTestSrcFunc
 		} else {
-			invokeSourceFunc_ = invokeSourceFunc
+			invokeSourceFunc_ = gp.InvokeSourceFunc
 		}
 		invokeFuncParam := common.InvokeFuncParam{
 			ConfigFile:     FLAGS_workload_config,
@@ -188,8 +153,7 @@ func main() {
 			Local:          FLAGS_local,
 			WaitForEndMark: FLAGS_waitForEndMark,
 		}
-		serdeFormat := uint8(common.StringToSerdeFormat(FLAGS_serdeFormat))
-		err := common.Invoke(invokeFuncParam, NewQueryInput(serdeFormat), invokeSourceFunc_)
+		err := common.Invoke(invokeFuncParam, NewQueryInput(serdeFormat), common.InvokeSrcFunc(invokeSourceFunc_))
 		if err != nil {
 			panic(err)
 		}
@@ -206,8 +170,6 @@ func main() {
 			}
 			invokeDumpFunc(client)
 		}
-	case "scale":
-		scale(FLAGS_serdeFormat, FLAGS_local)
 	default:
 		panic("unrecognized app")
 	}

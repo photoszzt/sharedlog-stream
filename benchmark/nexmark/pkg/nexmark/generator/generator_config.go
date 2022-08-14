@@ -3,7 +3,7 @@ package generator
 import (
 	"math"
 
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark"
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/utils"
 )
 
@@ -14,7 +14,7 @@ const (
 )
 
 type GeneratorConfig struct {
-	Configuration     *nexmark.NexMarkConfig
+	Configuration     *ntypes.NexMarkConfig
 	InterEventDelayUs []float64
 	EventPerEpoch     uint64
 	MaxEvents         uint64
@@ -29,7 +29,7 @@ type GeneratorConfig struct {
 	PersonProportion  uint32
 }
 
-func NewGeneratorConfig(configuration *nexmark.NexMarkConfig, baseTime int64 /* millisecond */, firstEventId uint64,
+func NewGeneratorConfig(configuration *ntypes.NexMarkConfig, baseTime int64 /* millisecond */, firstEventId uint64,
 	maxEventsOrZero uint64, firstEventNumber uint64) *GeneratorConfig {
 	g := new(GeneratorConfig)
 	g.AuctionProportion = configuration.AuctionProportion

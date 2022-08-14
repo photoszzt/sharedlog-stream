@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"sharedlog-stream/benchmark/common"
 	datatype "sharedlog-stream/benchmark/lat_tp/pkg/data_type"
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/consume_seq_num_manager"
@@ -37,7 +36,7 @@ func (h *sharedlogConsumeBenchHandler) Call(ctx context.Context, input []byte) (
 	if err != nil {
 		panic(err)
 	}
-	return utils.CompressData(encodedOutput), nil
+	return common.CompressData(encodedOutput), nil
 }
 
 func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context, sp *common.BenchSourceParam) *common.FnOutput {

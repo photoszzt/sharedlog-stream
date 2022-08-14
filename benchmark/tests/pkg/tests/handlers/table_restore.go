@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/benchmark/tests/pkg/tests/test_types"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
@@ -42,7 +41,7 @@ func (h *tableRestoreHandler) Call(ctx context.Context, input []byte) ([]byte, e
 	if err != nil {
 		panic(err)
 	}
-	return utils.CompressData(encodedOutput), nil
+	return common.CompressData(encodedOutput), nil
 }
 
 func (h *tableRestoreHandler) tests(ctx context.Context, sp *test_types.TestInput) *common.FnOutput {

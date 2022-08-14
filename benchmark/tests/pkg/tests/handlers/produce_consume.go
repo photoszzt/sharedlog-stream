@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/benchmark/tests/pkg/tests/test_types"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
@@ -35,7 +34,7 @@ func (h *produceConsumeHandler) Call(ctx context.Context, input []byte) ([]byte,
 	if err != nil {
 		panic(err)
 	}
-	return utils.CompressData(encodedOutput), nil
+	return common.CompressData(encodedOutput), nil
 }
 
 func (h *produceConsumeHandler) tests(ctx context.Context, sp *test_types.TestInput) *common.FnOutput {

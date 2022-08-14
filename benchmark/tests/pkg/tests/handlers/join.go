@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/benchmark/tests/pkg/tests/test_types"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
@@ -46,7 +45,7 @@ func (h *joinHandler) Call(ctx context.Context, input []byte) ([]byte, error) {
 	if err != nil {
 		panic(err)
 	}
-	return utils.CompressData(encodedOutput), nil
+	return common.CompressData(encodedOutput), nil
 }
 
 func (h *joinHandler) tests(ctx context.Context, sp *test_types.TestInput) *common.FnOutput {

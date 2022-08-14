@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"time"
 
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/debug"
 )
 
@@ -19,13 +19,13 @@ type NexmarkGenerator struct {
 }
 
 type NextEvent struct {
-	Event              *types.Event
+	Event              *ntypes.Event
 	WallclockTimestamp int64
 	EventTimestamp     int64
 	Watermark          int64
 }
 
-func NewNextEvent(wallclockTimestamp, eventTimestamp int64, event *types.Event, watermark int64) *NextEvent {
+func NewNextEvent(wallclockTimestamp, eventTimestamp int64, event *ntypes.Event, watermark int64) *NextEvent {
 	return &NextEvent{
 		WallclockTimestamp: wallclockTimestamp,
 		EventTimestamp:     eventTimestamp,
@@ -81,18 +81,18 @@ func (ng *NexmarkGenerator) NextEvent(ctx context.Context, bidUrlCache map[uint3
 	wallclockTimestamp := ng.WallclockBaseTime + (int64(eventTimestamp) - int64(ng.Config.BaseTime))
 	newEventId := ng.GetNextEventId()
 	rem := newEventId % uint64(ng.Config.TotalProportion)
-	var event *types.Event
+	var event *ntypes.Event
 	if rem < uint64(ng.Config.PersonProportion) {
-		event = types.NewPersonEvent(
+		event = ntypes.NewPersonEvent(
 			NextPerson(newEventId, ng.Random, adjustedEventTimestamp, ng.Config))
 	} else if rem < uint64(ng.Config.PersonProportion)+uint64(ng.Config.AuctionProportion) {
-		event = types.NewAuctionEvnet(NextAuction(ng.EventsCountSoFar, newEventId, ng.Random, adjustedEventTimestamp, ng.Config))
+		event = ntypes.NewAuctionEvnet(NextAuction(ng.EventsCountSoFar, newEventId, ng.Random, adjustedEventTimestamp, ng.Config))
 	} else {
 		bidEvent, err := NextBid(ctx, newEventId, ng.Random, adjustedEventTimestamp, ng.Config, bidUrlCache)
 		if err != nil {
 			return nil, err
 		}
-		event = types.NewBidEvent(bidEvent)
+		event = ntypes.NewBidEvent(bidEvent)
 	}
 	ng.EventsCountSoFar += 1
 	return NewNextEvent(wallclockTimestamp, adjustedEventTimestamp, event, watermark), nil

@@ -6,8 +6,7 @@ import (
 	"fmt"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
-	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
@@ -47,7 +46,7 @@ func (h *q3JoinTableHandler) Call(ctx context.Context, input []byte) ([]byte, er
 		panic(err)
 	}
 	// fmt.Printf("query 3 output: %v\n", encodedOutput)
-	return utils.CompressData(encodedOutput), nil
+	return common.CompressData(encodedOutput), nil
 }
 
 func getInOutStreams(

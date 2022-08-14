@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
+	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"strconv"
 	"strings"
 )

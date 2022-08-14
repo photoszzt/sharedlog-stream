@@ -3,7 +3,7 @@ package generator
 import (
 	"math/rand"
 
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/utils"
 )
 
@@ -15,7 +15,7 @@ const (
 
 func NextAuction(eventsCountSoFar uint64,
 	eventId uint64, random *rand.Rand, timestamp int64,
-	config *GeneratorConfig) *types.Auction {
+	config *GeneratorConfig) *ntypes.Auction {
 	id := LastBase0AuctionId(config, eventId) + FIRST_AUCTION_ID
 	seller := uint64(0)
 	// Here P(auction will be for a hot seller) = 1 - 1/hotSellersRatio.
@@ -33,7 +33,7 @@ func NextAuction(eventsCountSoFar uint64,
 	reserve := initialBid + NextPrice(random)
 	currentSize := 8 + len(name) + len(desc) + 8 + 8 + 8 + 8 + 8
 	extra := NextExtra(random, uint32(currentSize), config.Configuration.AvgAuctionByteSize)
-	return &types.Auction{
+	return &ntypes.Auction{
 		ID:          id,
 		ItemName:    name,
 		Description: desc,

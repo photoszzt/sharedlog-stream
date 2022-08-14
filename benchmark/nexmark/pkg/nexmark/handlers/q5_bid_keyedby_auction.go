@@ -6,8 +6,7 @@ import (
 	"fmt"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
-	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/stream_task"
 
@@ -37,7 +36,7 @@ func (h *bidByAuction) Call(ctx context.Context, input []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return utils.CompressData(encodedOutput), nil
+	return common.CompressData(encodedOutput), nil
 }
 
 func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,

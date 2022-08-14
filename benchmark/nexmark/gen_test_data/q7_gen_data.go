@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"math/rand"
-	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
+	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 )
 
 type q7BidsSpec struct {

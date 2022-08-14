@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"strings"
 
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/utils"
 )
 
@@ -20,7 +20,7 @@ var (
 	LAST_NAMES  = [9]string{"Shultz", "Abrams", "Spencer", "White", "Bartels", "Walton", "Smith", "Jones", "Noris"}
 )
 
-func NextPerson(nextEventId uint64, random *rand.Rand, timestamp int64, config *GeneratorConfig) *types.Person {
+func NextPerson(nextEventId uint64, random *rand.Rand, timestamp int64, config *GeneratorConfig) *ntypes.Person {
 	id := LastBase0PersonId(config, nextEventId) + FIRST_PERSON_ID
 	name := nextPersonName(random)
 	email := nextEmail(random)
@@ -29,7 +29,7 @@ func NextPerson(nextEventId uint64, random *rand.Rand, timestamp int64, config *
 	city := nextUSCity(random)
 	currentSize := 8 + len(name) + len(email) + len(creditCard) + len(city) + len(state)
 	extra := NextExtra(random, uint32(currentSize), config.Configuration.AvgPersonByteSize)
-	return &types.Person{
+	return &ntypes.Person{
 		ID:           id,
 		Name:         name,
 		EmailAddress: email,

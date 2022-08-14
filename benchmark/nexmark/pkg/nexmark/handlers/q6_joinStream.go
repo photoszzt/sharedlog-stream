@@ -6,8 +6,7 @@ import (
 	"fmt"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
-	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
-	nutils "sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
+	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/execution"
@@ -45,7 +44,7 @@ func (h *q6JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, e
 	if err != nil {
 		panic(err)
 	}
-	return nutils.CompressData(encodedOutput), nil
+	return common.CompressData(encodedOutput), nil
 }
 
 func (h *q6JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,

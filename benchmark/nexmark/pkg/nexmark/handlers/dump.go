@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"sharedlog-stream/benchmark/common"
-	"sharedlog-stream/benchmark/common/benchutil"
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -32,7 +30,7 @@ func (h *dump) Call(ctx context.Context, input []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return utils.CompressData(encodedOutput), nil
+	return common.CompressData(encodedOutput), nil
 }
 
 func (h *dump) process(ctx context.Context, di *common.DumpStreams) *common.FnOutput {
@@ -51,7 +49,7 @@ func (h *dump) process(ctx context.Context, di *common.DumpStreams) *common.FnOu
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
 
-		err = benchutil.DumpOutputStream(ctx, h.env, benchutil.DumpOutputStreamConfig{
+		err = common.DumpOutputStream(ctx, h.env, common.DumpOutputStreamConfig{
 			OutputDir:     di.DumpDir,
 			TopicName:     streamParam.TopicName,
 			SerdeFormat:   serdeFormat,

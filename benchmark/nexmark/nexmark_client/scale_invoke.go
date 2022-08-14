@@ -4,15 +4,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
-	"time"
-
 	"sharedlog-stream/benchmark/common"
+	"time"
 )
 
-func scale(format string, local bool) {
+func scale(format string, local bool, scaleConfigFile string) {
 	serdeFormat := common.StringToSerdeFormat(format)
 
-	byteVal, err := os.ReadFile(FLAGS_scale_config)
+	byteVal, err := os.ReadFile(scaleConfigFile)
 	if err != nil {
 		panic(err)
 	}

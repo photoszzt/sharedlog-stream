@@ -1,7 +1,7 @@
 package main
 
 import (
-	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/types"
+	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 )
 
 func q6_gen_data(outputFile string) error {

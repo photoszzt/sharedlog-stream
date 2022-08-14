@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sync"
 
 	"github.com/rs/zerolog/log"
@@ -54,10 +53,10 @@ func (n *ClientNode) Invoke(client *http.Client, response *FnOutput, wg *sync.Wa
 	defer wg.Done()
 
 	fmt.Fprintf(os.Stderr, "func name is %v\n", n.config.FuncName)
-	url := utils.BuildFunctionUrl(n.config.GatewayUrl, n.config.FuncName)
+	url := BuildFunctionUrl(n.config.GatewayUrl, n.config.FuncName)
 	fmt.Fprintf(os.Stderr, "func url is %s\n", url)
 
-	if err := utils.JsonPostRequest(client, url, n.config.NodeConstraint, queryInput, response); err != nil {
+	if err := JsonPostRequest(client, url, n.config.NodeConstraint, queryInput, response); err != nil {
 		log.Error().Msgf("%v request failed: %v", n.config.FuncName, err)
 	} else if !response.Success {
 		log.Error().Msgf("%v request failed with failed message: %v", n.config.FuncName, response.Message)

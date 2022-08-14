@@ -7,7 +7,6 @@ import (
 	"os"
 	"sharedlog-stream/benchmark/common"
 	datatype "sharedlog-stream/benchmark/lat_tp/pkg/data_type"
-	nexmarkutils "sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/utils"
@@ -40,7 +39,7 @@ func (h *sharedlogProduceBenchHandler) Call(ctx context.Context, input []byte) (
 	if err != nil {
 		panic(err)
 	}
-	return nexmarkutils.CompressData(encodedOutput), nil
+	return common.CompressData(encodedOutput), nil
 }
 
 func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context, sp *common.BenchSourceParam) *common.FnOutput {

@@ -4,7 +4,6 @@ import (
 	"flag"
 	"net/http"
 	"sharedlog-stream/benchmark/common"
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/utils"
 	"sharedlog-stream/benchmark/tests/pkg/tests/test_types"
 	"time"
 
@@ -25,8 +24,8 @@ func invokeTest(client *http.Client,
 		TestName:  testName,
 		TopicName: topicName,
 	}
-	url := utils.BuildFunctionUrl(FLAGS_faas_gateway, FLAGS_test_app)
-	if err := utils.JsonPostRequest(client, url, "", ti, response); err != nil {
+	url := common.BuildFunctionUrl(FLAGS_faas_gateway, FLAGS_test_app)
+	if err := common.JsonPostRequest(client, url, "", ti, response); err != nil {
 		log.Error().Msgf("%s request failed: %v", testName, err)
 	} else if !response.Success {
 		log.Error().Msgf("%s request failed: %s", testName, response.Message)
