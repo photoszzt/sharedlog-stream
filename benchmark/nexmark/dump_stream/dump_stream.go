@@ -53,7 +53,7 @@ func main() {
 		Transport: &http.Transport{
 			IdleConnTimeout: 30 * time.Second,
 		},
-		Timeout: time.Duration(10) * time.Second,
+		Timeout: time.Duration(120) * time.Second,
 	}
 	url := common.BuildFunctionUrl(FLAGS_faas_gateway, "dump")
 	fmt.Printf("func source url is %v\n", url)

@@ -20,7 +20,7 @@
         },
         {
             "tp": "q4_aucIDCat",
-            "keySerde": "AuctionIdCatetory",
+            "keySerde": "AuctionIdCategory",
             "valSerde": "AuctionBid",
             "numPartitions": 4
         },

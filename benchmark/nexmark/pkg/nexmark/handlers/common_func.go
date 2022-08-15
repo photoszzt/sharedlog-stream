@@ -107,8 +107,24 @@ func GetSerdeFromString(serdeStr string, serdeFormat commtypes.SerdeFormat) (com
 	switch serdeStr {
 	case "StartEndTime":
 		return ntypes.GetStartEndTimeSerde(serdeFormat)
+	case "AuctionIdCount":
+		return ntypes.NewAuctionIdCountSerde(serdeFormat)
 	case "AuctionIdCntMax":
 		return ntypes.GetAuctionIdCntMaxSerde(serdeFormat)
+	case "AuctionIdCategory":
+		return ntypes.GetAuctionIdCategorySerde(serdeFormat)
+	case "AuctionBid":
+		return ntypes.GetAuctionBidSerde(serdeFormat)
+	case "AuctionIdSeller":
+		return ntypes.GetAuctionIDSellerSerde(serdeFormat)
+	case "ChangeUint64":
+		return commtypes.GetChangeSerde(serdeFormat, commtypes.Uint64Serde{})
+	case "ChangePriceTime":
+		ptSerde, err := ntypes.GetPriceTimeSerde(serdeFormat)
+		if err != nil {
+			return nil, err
+		}
+		return commtypes.GetChangeSerde(serdeFormat, ptSerde)
 	case "BidAndMax":
 		return ntypes.GetBidAndMaxSerde(serdeFormat)
 	case "Event":
@@ -121,6 +137,8 @@ func GetSerdeFromString(serdeStr string, serdeFormat commtypes.SerdeFormat) (com
 		return commtypes.StringSerde{}, nil
 	case "PersonTime":
 		return ntypes.GetPersonTimeSerde(serdeFormat)
+	case "PriceTime":
+		return ntypes.GetPriceTimeSerde(serdeFormat)
 	case "NameCityStateId":
 		return ntypes.GetNameCityStateIdSerde(serdeFormat)
 	default:

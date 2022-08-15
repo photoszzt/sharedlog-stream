@@ -52,7 +52,7 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 					return err
 				}
 				outStr := fmt.Sprintf("%+v\n", epochMark)
-				fmt.Fprint(os.Stderr, outStr)
+				// fmt.Fprint(os.Stderr, outStr)
 				writted, err := outFile.WriteString(outStr)
 				if err != nil {
 					return err
@@ -60,7 +60,6 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 				if writted != len(outStr) {
 					panic("written is smaller than expected")
 				}
-
 			} else {
 				msgAndSeq, err := commtypes.DecodeRawMsgG(rawMsg, args.MsgSerde, payloadArrSerde)
 				if err != nil {
@@ -90,7 +89,7 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 
 func outputMsg(msg commtypes.Message, outFile *os.File) error {
 	outStr := fmt.Sprintf("%v : %v, ts %d\n", msg.Key, msg.Value, msg.Timestamp)
-	fmt.Fprint(os.Stderr, outStr)
+	// fmt.Fprint(os.Stderr, outStr)
 	writted, err := outFile.WriteString(outStr)
 	if err != nil {
 		return err

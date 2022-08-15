@@ -130,7 +130,7 @@ func (emc *EpochMarkConsumer) checkMsgQueue(msgQueue *deque.Deque, parNum uint8)
 			}
 		}
 		if frontMsg.Mark == commtypes.SCALE_FENCE && frontMsg.ScaleEpoch != 0 {
-			msgQueue.PopFront()
+			frontMsg := msgQueue.PopFront().(*commtypes.RawMsg)
 			return frontMsg
 		}
 		if frontMsg.Mark == commtypes.STREAM_END {

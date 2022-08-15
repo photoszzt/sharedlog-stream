@@ -72,6 +72,7 @@ func NewShardedSharedLogStreamConsumerG[K, V any](stream *sharedlog_stream.Shard
 	} else {
 		notEnded.Add(instanceId)
 	}
+	fmt.Fprintf(os.Stderr, "%s notEnded: %v\n", stream.TopicName(), notEnded)
 	return &ShardedSharedLogStreamConsumer[K, V]{
 		epochMarkerSerde: epochMarkSerde,
 		stream:           stream,

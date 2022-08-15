@@ -100,7 +100,7 @@ func DecodeRawMsg(rawMsg *RawMsg, msgSerde MessageSerde,
 			return nil, fmt.Errorf("fail to decode payload arr: %v", err)
 		}
 		payloadArr := payloadArrTmp.(PayloadArr)
-		var msgArr []Message
+		msgArr := make([]Message, 0, len(payloadArr.Payloads))
 		for _, payload := range payloadArr.Payloads {
 			msgTmp, err := msgSerde.Decode(payload)
 			if err != nil {
@@ -135,7 +135,7 @@ func DecodeRawMsgG[K, V any](rawMsg *RawMsg, msgSerde MessageSerdeG[K, V],
 		if err != nil {
 			return nil, fmt.Errorf("fail to decode payload arr: %v", err)
 		}
-		var msgArr []Message
+		msgArr := make([]Message, 0, len(payloadArr.Payloads))
 		for _, payload := range payloadArr.Payloads {
 			msg, err := msgSerde.Decode(payload)
 			if err != nil {
