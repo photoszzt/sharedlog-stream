@@ -3,12 +3,14 @@ package store_restore
 import (
 	"context"
 	"fmt"
+	"os"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
+	"time"
 
 	"golang.org/x/xerrors"
 )
@@ -83,12 +85,20 @@ func RestoreChangelogKVStateStore(
 	consumedOffset uint64,
 	parNum uint8,
 ) error {
+	count := 0
+	restoreKVStart := time.Now()
 	for {
 		gotMsgs, err := kvchangelog.ConsumeChangelog(ctx, parNum)
 		// nothing to restore
 		if common_errors.IsStreamEmptyError(err) {
+			elapsed := time.Since(restoreKVStart)
+			fmt.Fprintf(os.Stderr, "%s(%d) restore, count: %d, elapsed: %v\n",
+				kvchangelog.ChangelogTopicName(), parNum, count, elapsed)
 			return nil
 		} else if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
+			elapsed := time.Since(restoreKVStart)
+			fmt.Fprintf(os.Stderr, "%s(%d) restore, count: %d, elapsed: %v\n",
+				kvchangelog.ChangelogTopicName(), parNum, count, elapsed)
 			return nil
 		} else if err != nil {
 			return fmt.Errorf("ReadNext failed: %v", err)
@@ -103,6 +113,7 @@ func RestoreChangelogKVStateStore(
 				if msg.Key == nil && msg.Value == nil {
 					continue
 				}
+				count += 1
 				val := msg.Value
 				if kvchangelog.ChangelogIsSrc() {
 					val = commtypes.CreateValueTimestamp(msg.Value, msg.Timestamp)
@@ -117,6 +128,7 @@ func RestoreChangelogKVStateStore(
 				continue
 			}
 			val := msgs.Msg.Value
+			count += 1
 			if kvchangelog.ChangelogIsSrc() {
 				val = commtypes.CreateValueTimestamp(msgs.Msg.Value, msgs.Msg.Timestamp)
 			}

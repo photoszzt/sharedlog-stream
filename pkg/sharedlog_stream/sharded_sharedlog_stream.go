@@ -125,7 +125,7 @@ func (s *ShardedSharedLogStream) Push(ctx context.Context, payload []byte, parNu
 ) (uint64, error) {
 	s.mux.RLock()
 	defer s.mux.RUnlock()
-	return s.subSharedLogStreams[parNum].Stream.Push(ctx, payload, parNum, meta, producerId)
+	return s.subSharedLogStreams[parNum].Push(ctx, payload, parNum, meta, producerId)
 }
 
 func (s *ShardedSharedLogStream) BufPush(ctx context.Context, payload []byte, parNum uint8, producerId commtypes.ProducerId) error {
@@ -183,7 +183,7 @@ func (s *ShardedSharedLogStream) PushWithTag(ctx context.Context, payload []byte
 ) (uint64, error) {
 	s.mux.RLock()
 	defer s.mux.RUnlock()
-	return s.subSharedLogStreams[parNum].Stream.PushWithTag(ctx, payload, parNum, tags,
+	return s.subSharedLogStreams[parNum].PushWithTag(ctx, payload, parNum, tags,
 		additionalTopic, meta, producerId)
 }
 

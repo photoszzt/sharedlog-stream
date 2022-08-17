@@ -13,6 +13,7 @@ var (
 	ErrShouldExitForScale       = xerrors.New("should exit")
 	ErrUnrecognizedSerdeFormat  = xerrors.New("Unrecognized serde format")
 	ErrFailToGetOutputSubstream = xerrors.New("Fail to get output substream")
+	ErrReturnDueToTest          = xerrors.New("return due to test")
 )
 
 func IsStreamEmptyError(err error) bool {

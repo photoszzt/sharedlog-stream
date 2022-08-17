@@ -3,6 +3,7 @@ package producer_consumer
 import (
 	"context"
 	"fmt"
+	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	eo_intr "sharedlog-stream/pkg/exactly_once_intr"
@@ -124,6 +125,7 @@ func (sls *ShardedSharedLogStreamProducer[K, V]) ProduceCtrlMsg(ctx context.Cont
 
 func (sls *ShardedSharedLogStreamProducer[K, V]) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
 	if utils.IsNil(msg.Key) && utils.IsNil(msg.Value) {
+		fmt.Fprintf(os.Stderr, "[WARN] Produce got nil message\n")
 		return nil
 	}
 	if isControl {

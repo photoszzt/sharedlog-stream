@@ -1,6 +1,7 @@
 package common
 
 import (
+	"sharedlog-stream/pkg/commtypes"
 	"time"
 )
 
@@ -12,23 +13,23 @@ const (
 )
 
 type QueryInput struct {
-	TestParams           map[string]bool `json:"testParams,omitempty"`
-	AppId                string          `json:"aid"`
-	NumOutPartitions     []uint8         `json:"numOutPartition,omitempty"`
-	NumSubstreamProducer []uint8         `json:"numSubstreamProducer,omitempty"`
-	OutputTopicNames     []string        `json:"outputTopicName,omitempty"`
-	InputTopicNames      []string        `json:"inputTopicName,omitempty"`
-	CommitEveryMs        uint64          `json:"commEveryMs,omitempty"`
-	FlushMs              uint32          `json:"flushMs,omitempty"`
-	WarmupS              uint32          `json:"warmup,omitempty"`
-	Duration             uint32          `json:"duration,omitempty"`
-	ScaleEpoch           uint16          `json:"epoch"`
-	WaitForEndMark       bool            `json:"waitEnd,omitempty"`
-	NumInPartition       uint8           `json:"numInPartition,omitempty"`
-	ParNum               uint8           `json:"ParNum,omitempty"`
-	GuaranteeMth         uint8           `json:"gua,omitempty"`
-	SerdeFormat          uint8           `json:"serdeFormat,omitempty"`
-	TableType            uint8           `json:"tabT,omitempty"`
+	TestParams           map[string]commtypes.FailParam `json:"testParams,omitempty"`
+	AppId                string                         `json:"aid"`
+	NumOutPartitions     []uint8                        `json:"numOutPartition,omitempty"`
+	NumSubstreamProducer []uint8                        `json:"numSubstreamProducer,omitempty"`
+	OutputTopicNames     []string                       `json:"outputTopicName,omitempty"`
+	InputTopicNames      []string                       `json:"inputTopicName,omitempty"`
+	CommitEveryMs        uint64                         `json:"commEveryMs,omitempty"`
+	FlushMs              uint32                         `json:"flushMs,omitempty"`
+	WarmupS              uint32                         `json:"warmup,omitempty"`
+	Duration             uint32                         `json:"duration,omitempty"`
+	ScaleEpoch           uint16                         `json:"epoch"`
+	WaitForEndMark       bool                           `json:"waitEnd,omitempty"`
+	NumInPartition       uint8                          `json:"numInPartition,omitempty"`
+	ParNum               uint8                          `json:"ParNum,omitempty"`
+	GuaranteeMth         uint8                          `json:"gua,omitempty"`
+	SerdeFormat          uint8                          `json:"serdeFormat,omitempty"`
+	TableType            uint8                          `json:"tabT,omitempty"`
 }
 
 func (q *QueryInput) Clone() QueryInput {

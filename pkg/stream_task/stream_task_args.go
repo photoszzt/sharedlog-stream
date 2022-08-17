@@ -16,15 +16,15 @@ type StreamTaskArgs struct {
 	env                   types.Environment
 	windowStoreChangelogs map[string]store.WindowStoreOpWithChangelog
 	kvChangelogs          map[string]store.KeyValueStoreOpWithChangelog
+	testParams            map[string]commtypes.FailParam
 	appId                 string
 	transactionalId       string
-	warmup                time.Duration
-	// exactly once: commitEvery overwrites flushEvery
-	commitEvery time.Duration
-	// for at least once
-	flushEvery               time.Duration
+	flushEvery            time.Duration
+	// exactly once: commitEvery overwrites flushEvery if commitEvery < flushEvery
+	commitEvery              time.Duration
 	trackEveryForAtLeastOnce time.Duration
 	duration                 time.Duration
+	warmup                   time.Duration
 	fixedOutParNum           int16
 	serdeFormat              commtypes.SerdeFormat
 	guarantee                exactly_once_intr.GuaranteeMth
@@ -85,6 +85,7 @@ type BuildStreamTaskArgs interface {
 	KVStoreChangelogs(map[string]store.KeyValueStoreOpWithChangelog) BuildStreamTaskArgs
 	FixedOutParNum(uint8) BuildStreamTaskArgs
 	WaitEndMark(bool) BuildStreamTaskArgs
+	TestParams(map[string]commtypes.FailParam) BuildStreamTaskArgs
 }
 
 func (args *StreamTaskArgsBuilder) Guarantee(gua exactly_once_intr.GuaranteeMth) SetAppID {
@@ -138,6 +139,11 @@ func (args *StreamTaskArgsBuilder) FixedOutParNum(fixedOutParNum uint8) BuildStr
 
 func (args *StreamTaskArgsBuilder) WaitEndMark(waitEndMark bool) BuildStreamTaskArgs {
 	args.stArgs.waitEndMark = waitEndMark
+	return args
+}
+
+func (args *StreamTaskArgsBuilder) TestParams(testParams map[string]commtypes.FailParam) BuildStreamTaskArgs {
+	args.stArgs.testParams = testParams
 	return args
 }
 

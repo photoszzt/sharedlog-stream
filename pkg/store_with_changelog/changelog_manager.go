@@ -16,6 +16,7 @@ type ChangelogManager[K, V any] struct {
 	restoreConsumer *producer_consumer.ShardedSharedLogStreamConsumer[K, V]
 	producer        *producer_consumer.ShardedSharedLogStreamProducer[K, V]
 	changelogIsSrc  bool
+	numProduced     uint32
 }
 
 func NewChangelogManagerForSrc[K, V any](stream *sharedlog_stream.ShardedSharedLogStream,
@@ -62,6 +63,7 @@ func NewChangelogManager[K, V any](stream *sharedlog_stream.ShardedSharedLogStre
 				FlushDuration: flushDuration,
 			}),
 		changelogIsSrc: false,
+		numProduced:    0,
 	}, nil
 }
 
@@ -95,15 +97,21 @@ func (cm *ChangelogManager[K, V]) Stream() sharedlog_stream.Stream {
 // when changelog is src, there's nothing to flush
 func (cm *ChangelogManager[K, V]) Flush(ctx context.Context) error {
 	if !cm.changelogIsSrc {
+		// debug.Fprintf(os.Stderr, "flushing changelog manager, current produce: %d\n", cm.numProduced)
 		return cm.producer.Flush(ctx)
 	}
 	return nil
 }
 func (cm *ChangelogManager[K, V]) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
 	if !cm.changelogIsSrc {
+		cm.numProduced += 1
 		return cm.producer.Produce(ctx, msg, parNum, isControl)
 	}
 	return nil
+}
+
+func (cm *ChangelogManager[K, V]) ProduceCount() uint32 {
+	return cm.numProduced
 }
 
 func (cm *ChangelogManager[K, V]) Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {

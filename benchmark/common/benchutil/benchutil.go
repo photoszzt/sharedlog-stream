@@ -16,13 +16,17 @@ import (
 
 func UpdateStreamTaskArgs(sp *common.QueryInput, argsBuilder stream_task.SetGuarantee) stream_task.BuildStreamTaskArgs {
 	debug.Assert(sp.AppId != "", "app id should not be empty")
-	return argsBuilder.Guarantee(exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)).
+	ret := argsBuilder.Guarantee(exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)).
 		AppID(sp.AppId).
 		Warmup(time.Duration(sp.WarmupS) * time.Second).
 		CommitEveryMs(sp.CommitEveryMs).
 		FlushEveryMs(sp.FlushMs).
 		Duration(sp.Duration).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).WaitEndMark(sp.WaitForEndMark)
+	if sp.TestParams != nil {
+		ret.TestParams(sp.TestParams)
+	}
+	return ret
 }
 
 func GetShardedInputOutputStreams(ctx context.Context,

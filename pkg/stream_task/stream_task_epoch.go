@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
@@ -25,12 +26,20 @@ func SetupManagersForEpoch(ctx context.Context,
 	if err != nil {
 		return nil, nil, err
 	}
+	initEmStart := time.Now()
 	recentMeta, metaSeqNum, err := em.Init(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
+	initEmElapsed := time.Since(initEmStart)
+	fmt.Fprintf(os.Stderr, "Init EpochManager took %v\n", initEmElapsed)
+	err = configChangelogExactlyOnce(em, args)
+	if err != nil {
+		return nil, nil, err
+	}
 	if recentMeta != nil {
-		debug.Fprint(os.Stderr, "start restore\n")
+		fmt.Fprint(os.Stderr, "start restore\n")
+		restoreBeg := time.Now()
 		offsetMap := recentMeta.ConSeqNums
 		if len(offsetMap) == 0 {
 			// the last commit doesn't consume anything
@@ -44,16 +53,13 @@ func SetupManagersForEpoch(ctx context.Context,
 				offsetMap = meta.ConSeqNums
 			}
 		}
-		err = configChangelogExactlyOnce(em, args)
-		if err != nil {
-			return nil, nil, err
-		}
 		err = restoreStateStore(ctx, args, offsetMap)
 		if err != nil {
 			return nil, nil, err
 		}
 		setOffsetOnStream(offsetMap, args)
-		debug.Fprintf(os.Stderr, "down restore\n")
+		restoreElapsed := time.Since(restoreBeg)
+		fmt.Fprintf(os.Stderr, "down restore, elapsed: %v\n", restoreElapsed)
 	}
 	cmm, err := control_channel.NewControlChannelManager(args.env, args.appId,
 		args.serdeFormat, args.ectx.CurEpoch(), args.ectx.SubstreamNum())
@@ -105,6 +111,15 @@ func processInEpoch(
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
 	debug.Fprintf(os.Stderr, "commit every(ms): %v, waitEndMark: %v, fixed output parNum: %d\n",
 		args.commitEvery, args.waitEndMark, args.fixedOutParNum)
+	testForFail := false
+	var failAfter time.Duration
+	failParam, ok := args.testParams[args.ectx.FuncName()]
+	if ok && failParam.InstanceId == args.ectx.SubstreamNum() {
+		testForFail = true
+		failAfter = time.Duration(failParam.FailAfterS) * time.Second
+		fmt.Fprintf(os.Stderr, "%s(%d) will fail after %v\n",
+			args.ectx.FuncName(), args.ectx.SubstreamNum(), failAfter)
+	}
 	for {
 		ret := checkMonitorReturns(dctx, dcancel, args, cmm, em)
 		if ret != nil {
@@ -142,13 +157,16 @@ func processInEpoch(
 		// Exit routine
 		cur_elapsed = warmupCheck.ElapsedSinceInitial()
 		timeout = args.duration != 0 && cur_elapsed >= args.duration
-		if !args.waitEndMark && timeout {
+		if (!args.waitEndMark && timeout) || (testForFail && cur_elapsed >= failAfter) {
 			fmt.Fprintf(os.Stderr, "exit due to timeout\n")
 			// elapsed := time.Since(procStart)
 			// latencies.AddSample(elapsed.Microseconds())
 			ret := &common.FnOutput{Success: true}
+			if testForFail {
+				ret = &common.FnOutput{Success: true, Message: common_errors.ErrReturnDueToTest.Error()}
+			}
 			updateReturnMetric(ret, &warmupCheck,
-				args.waitEndMark, t.GetEndDuration(), args.ectx.SubstreamNum())
+				false, t.GetEndDuration(), args.ectx.SubstreamNum())
 			return ret
 		}
 

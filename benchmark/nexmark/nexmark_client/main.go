@@ -31,6 +31,7 @@ var (
 	FLAGS_src_flush_ms    int
 	FLAGS_dump_dir        string
 	FLAGS_test_src        string
+	FLAGS_fail_spec       string
 	FLAGS_waitForEndMark  bool
 )
 
@@ -103,6 +104,7 @@ func main() {
 	flag.StringVar(&FLAGS_stat_dir, "stat_dir", "", "stats dir to dump")
 	flag.StringVar(&FLAGS_dump_dir, "dumpdir", "", "output dir for dumps")
 	flag.StringVar(&FLAGS_test_src, "testsrc", "", "test event source file")
+	flag.StringVar(&FLAGS_fail_spec, "fail_spec", "", "fail spec")
 
 	flag.IntVar(&FLAGS_duration, "duration", 60, "")
 	flag.IntVar(&FLAGS_events_num, "events_num", 100000000, "events.num param for nexmark")

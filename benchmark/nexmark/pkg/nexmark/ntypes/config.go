@@ -1,13 +1,6 @@
 package ntypes
 
 type NexMarkConfig struct {
-	/// Number of events to generate. If zero, generate as many as possible without overflowing
-	/// internal counters etc.
-	NumEvents uint32 `json:"numEvents"`
-
-	/// Number of event generators to use. Each generates events in its own timeline.
-	NumEventGenerators uint32 `json:"numEventGenerators"`
-
 	/// Shape of event rate curve.
 	RateShape RateShape `json:"rateShape"`
 
@@ -16,6 +9,16 @@ type NexMarkConfig struct {
 
 	/// Next overall event rate in `RateUnit`
 	NextEventRate uint64 `json:"nextEventRate"`
+
+	/// Length of occasional delay to impose on events (in seconds).
+	OccasionalDelaySec uint64 `json:"occasionalDelaySec"`
+
+	/// Number of events in out-of-order groups. 1 implies no out-of-order events. 1000 implies every
+	/// 1000 events per generator are emitted in pseudo-random order.
+	OutOfOrderGroupSize uint64 `json:"outOfOrderGroupSize"`
+
+	/// Probability that an event will be delayed by delayS.
+	ProbDelayedEvent float64 `json:"probDelayedEvent"`
 
 	/// Unit for rates
 	RateUnit RateUnit `json:"rateUnit"`
@@ -30,14 +33,12 @@ type NexMarkConfig struct {
 	/// Timeout for stream pipelines to stop in seconds
 	StreamTimeout uint32 `json:"streamTimeout"`
 
-	/// If true, and in streaming mode, generate events only when they are due according to their
-	/// timestamp.
-	IsRateLimited bool `json:"isRateLimited"`
+	/// Number of events to generate. If zero, generate as many as possible without overflowing
+	/// internal counters etc.
+	NumEvents uint32 `json:"numEvents"`
 
-	/// If true, use wallclock time as event time. Otherwise, use a deterministic time in the past so
-	/// that multiple runs will see exactly the same event streams and should thus have exactly the
-	/// same results.
-	UseWallclockEventTime bool `json:"useWallclockEventTime"`
+	/// Number of event generators to use. Each generates events in its own timeline.
+	NumEventGenerators uint32 `json:"numEventGenerators"`
 
 	/// Person Proportion.
 	PersonProportion uint32 `json:"personProportion"`
@@ -81,15 +82,14 @@ type NexMarkConfig struct {
 	/// Maximum number of people to consider as active for placing auctions or bids.
 	NumActivePeople uint32 `json:"numActivePeople"`
 
-	/// Length of occasional delay to impose on events (in seconds).
-	OccasionalDelaySec uint64 `json:"occasionalDelaySec"`
+	/// If true, and in streaming mode, generate events only when they are due according to their
+	/// timestamp.
+	IsRateLimited bool `json:"isRateLimited"`
 
-	/// Probability that an event will be delayed by delayS.
-	ProbDelayedEvent float64 `json:"probDelayedEvent"`
-
-	/// Number of events in out-of-order groups. 1 implies no out-of-order events. 1000 implies every
-	/// 1000 events per generator are emitted in pseudo-random order.
-	OutOfOrderGroupSize uint64 `json:"outOfOrderGroupSize"`
+	/// If true, use wallclock time as event time. Otherwise, use a deterministic time in the past so
+	/// that multiple runs will see exactly the same event streams and should thus have exactly the
+	/// same results.
+	UseWallclockEventTime bool `json:"useWallclockEventTime"`
 }
 
 func NewNexMarkConfig() *NexMarkConfig {

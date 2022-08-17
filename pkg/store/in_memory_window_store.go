@@ -100,8 +100,8 @@ func (s *InMemoryWindowStore) Put(ctx context.Context, key commtypes.KeyT, value
 	return nil
 }
 
-func (s *InMemoryWindowStore) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error {
-	return s.Put(ctx, key, value, windowStartTimestamp)
+func (s *InMemoryWindowStore) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
+	panic("not implemented")
 }
 
 func (s *InMemoryWindowStore) Get(ctx context.Context, key commtypes.KeyT, windowStartTimestamp int64) (commtypes.ValueT, bool, error) {

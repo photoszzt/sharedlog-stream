@@ -51,7 +51,7 @@ type WindowStoreBackedByChangelogG[K, V any] interface {
 
 type OnlyUpdateInMemWinStore interface {
 	PutWithoutPushToChangelog(ctx context.Context,
-		key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error
+		key commtypes.KeyT, value commtypes.ValueT) error
 }
 
 type OnlyUpdateInMemWinStoreG[K, V any] interface {

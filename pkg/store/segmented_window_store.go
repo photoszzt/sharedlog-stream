@@ -82,8 +82,10 @@ func (rws *SegmentedWindowStore) Put(ctx context.Context, key commtypes.KeyT, va
 	return nil
 }
 
-func (rws *SegmentedWindowStore) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error {
-	return rws.Put(ctx, key, value, windowStartTimestamp)
+func (rws *SegmentedWindowStore) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
+	k := key.([]byte)
+	v := value.([]byte)
+	return rws.bytesStore.Put(ctx, k, v)
 }
 
 func (rws *SegmentedWindowStore) Get(ctx context.Context, key commtypes.KeyT, windowStartTimestamp int64) (commtypes.ValueT, bool, error) {

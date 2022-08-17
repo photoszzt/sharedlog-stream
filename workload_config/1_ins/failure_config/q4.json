@@ -1,7 +1,7 @@
 {
     "fail_spec": {
         "q4JoinStream": {
-            "FailAfterS": 30,
+            "FailAfterS": 60,
             "InstanceId": 0
         }
     }

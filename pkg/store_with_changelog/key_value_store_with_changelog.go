@@ -115,7 +115,7 @@ func (st *KeyValueStoreWithChangelog[K, V]) Put(ctx context.Context, key commtyp
 }
 
 func (st *KeyValueStoreWithChangelog[K, V]) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
-	return st.kvstore.Put(ctx, key, value)
+	return st.kvstore.PutWithoutPushToChangelog(ctx, key, value)
 }
 
 func (st *KeyValueStoreWithChangelog[K, V]) PutIfAbsent(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) (commtypes.ValueT, error) {

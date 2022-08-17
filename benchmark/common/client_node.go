@@ -4,7 +4,11 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sharedlog-stream/pkg/common_errors"
+	"sharedlog-stream/pkg/debug"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog/log"
 )
@@ -56,36 +60,66 @@ func (n *ClientNode) Invoke(client *http.Client, response *FnOutput, wg *sync.Wa
 	url := BuildFunctionUrl(n.config.GatewayUrl, n.config.FuncName)
 	fmt.Fprintf(os.Stderr, "func url is %s\n", url)
 
-	if err := JsonPostRequest(client, url, n.config.NodeConstraint, queryInput, response); err != nil {
-		log.Error().Msgf("%v request failed: %v", n.config.FuncName, err)
-	} else if !response.Success {
-		log.Error().Msgf("%v request failed with failed message: %v", n.config.FuncName, response.Message)
-	}
-	fmt.Fprintf(os.Stderr, "%s-%d call done\n", n.config.FuncName, queryInput.ParNum)
-	/*
-		i := 0
-		startTime := time.Now()
-		for {
-			if i != 0 {
-				// remove the test error on retry
-				if queryInput.TestParams != nil {
-					queryInput.TestParams = nil
-				}
+	// if err := JsonPostRequest(client, url, n.config.NodeConstraint, queryInput, response); err != nil {
+	// 	log.Error().Msgf("%v request failed: %v", n.config.FuncName, err)
+	// } else if !response.Success {
+	// 	log.Error().Msgf("%v request failed with failed message: %v", n.config.FuncName, response.Message)
+	// }
+	i := 0
+	startTime := time.Now()
+	responses := make([]*FnOutput, 0, 2)
+	for {
+		var r FnOutput
+		if i != 0 {
+			// remove the test error on retry
+			if queryInput.TestParams != nil {
+				queryInput.TestParams = nil
 			}
-			if err := utils.JsonPostRequest(client, url, queryInput, response); err != nil {
-				log.Error().Msgf("%v request failed: %v", n.config.FuncName, err)
-			} else if !response.Success {
-				log.Error().Msgf("%v request failed with failed message: %v", n.config.FuncName, response.Message)
-			} else {
-				if response.Success && response.Message != "" {
-					if time.Since(startTime) >= time.Duration(queryInput.Duration)*time.Second {
-						break
-					}
-					continue
+		}
+		err := JsonPostRequest(client, url, n.config.NodeConstraint, queryInput, &r)
+		if err != nil {
+			log.Error().Msgf("%v request failed: %v", n.config.FuncName, err)
+			*response = r
+			fmt.Fprintf(os.Stderr, "%s-%d call done\n", n.config.FuncName, queryInput.ParNum)
+			return
+		}
+		if !r.Success {
+			log.Error().Msgf("%v request failed with failed message: %v", n.config.FuncName, response.Message)
+			*response = r
+			fmt.Fprintf(os.Stderr, "%s-%d call done\n", n.config.FuncName, queryInput.ParNum)
+			return
+		} else {
+			responses = append(responses, &r)
+			debug.Fprintf(os.Stderr, "%s-%d msg: %s\n",
+				n.config.FuncName, queryInput.ParNum, r.Message)
+			if strings.Compare(r.Message, common_errors.ErrReturnDueToTest.Error()) == 0 {
+				fmt.Fprintf(os.Stderr, "got test error and restart the failed instance now\n")
+				if time.Since(startTime) >= time.Duration(queryInput.Duration)*time.Second {
+					break
 				}
+				i += 1
+				continue
+			} else {
 				break
 			}
-			i += 1
 		}
-	*/
+	}
+	if len(responses) != 0 {
+		finalResponse := FnOutput{
+			Success:   true,
+			Counts:    make(map[string]uint64),
+			Latencies: make(map[string][]int),
+		}
+		for _, res := range responses {
+			for s, n := range res.Counts {
+				finalResponse.Counts[s] += n
+			}
+			for s, l := range res.Latencies {
+				finalResponse.Latencies[s] = append(finalResponse.Latencies[s], l...)
+			}
+			finalResponse.Duration += res.Duration
+		}
+		*response = finalResponse
+	}
+	fmt.Fprintf(os.Stderr, "%s-%d call done\n", n.config.FuncName, queryInput.ParNum)
 }

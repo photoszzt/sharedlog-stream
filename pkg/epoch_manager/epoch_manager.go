@@ -237,6 +237,7 @@ func (em *EpochManager) GenTagsAndTopicsForEpochMarker() ([]uint64, []string) {
 	// debug.Fprintf(os.Stderr, "marker with tag: 0x%x\n", em.epochLogMarkerTag)
 	var additionalTopic []string
 	for tp, parSet := range em.currentTopicSubstream {
+		// debug.Fprintf(os.Stderr, "tpSubstream tp: %s, parSet: %v\n", tp, parSet)
 		additionalTopic = append(additionalTopic, tp)
 		nameHash := hashfuncs.NameHash(tp)
 		for sub := range parSet {

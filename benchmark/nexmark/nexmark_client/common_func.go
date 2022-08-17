@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
@@ -18,6 +19,18 @@ func NewQueryInput(serdeFormat commtypes.SerdeFormat) *common.QueryInput {
 	} else if FLAGS_guarantee == "epoch" {
 		guarantee = exactly_once_intr.EPOCH_MARK
 	}
+	var failSpec commtypes.FailSpec
+	if FLAGS_fail_spec != "" {
+		specBytes, err := os.ReadFile(FLAGS_fail_spec)
+		if err != nil {
+			panic(err)
+		}
+		err = json.Unmarshal(specBytes, &failSpec)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Fprintf(os.Stderr, "Fail spec is %+v\n", failSpec)
+	}
 	return &common.QueryInput{
 		Duration:      uint32(FLAGS_duration),
 		GuaranteeMth:  uint8(guarantee),
@@ -27,5 +40,6 @@ func NewQueryInput(serdeFormat commtypes.SerdeFormat) *common.QueryInput {
 		TableType:     uint8(table_type),
 		FlushMs:       uint32(FLAGS_flush_ms),
 		WarmupS:       uint32(FLAGS_warmup_time),
+		TestParams:    failSpec.FailSpec,
 	}
 }

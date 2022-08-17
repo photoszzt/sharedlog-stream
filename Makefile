@@ -40,7 +40,7 @@ nexmark_client:
 	GO111MODULE=on go build -o bin/nexmark_client ./benchmark/nexmark/nexmark_client
 
 .PHONY: nexmark_scale
-nexmark_client:
+nexmark_scale:
 	mkdir -p ./bin
 	GO111MODULE=on go build -o bin/nexmark_scale ./benchmark/nexmark/nexmark_scale
 

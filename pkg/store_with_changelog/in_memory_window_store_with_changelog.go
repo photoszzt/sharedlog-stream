@@ -154,9 +154,10 @@ func (st *InMemoryWindowStoreWithChangelog[K, V]) Put(ctx context.Context,
 }
 
 func (st *InMemoryWindowStoreWithChangelog[K, V]) PutWithoutPushToChangelog(ctx context.Context,
-	key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64,
+	key commtypes.KeyT, value commtypes.ValueT,
 ) error {
-	return st.windowStore.Put(ctx, key, value, windowStartTimestamp)
+	keyTs := key.(commtypes.KeyAndWindowStartTsG[K])
+	return st.windowStore.Put(ctx, keyTs.Key, value, keyTs.WindowStartTs)
 }
 
 func (st *InMemoryWindowStoreWithChangelog[K, V]) Get(ctx context.Context, key commtypes.KeyT, windowStartTimestamp int64) (commtypes.ValueT, bool, error) {

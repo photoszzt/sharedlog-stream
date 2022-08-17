@@ -120,6 +120,6 @@ func SetupTableTableJoinWithSkipmap[K, VLeft, VRight, VR any](
 		}
 		return nil, nil
 	}
-	kvc := map[string]store.KeyValueStoreOpWithChangelog{leftTab.Stream().TopicName(): leftTab, rightTab.Stream().TopicName(): rightTab}
+	kvc := map[string]store.KeyValueStoreOpWithChangelog{leftTab.ChangelogTopicName(): leftTab, rightTab.ChangelogTopicName(): rightTab}
 	return leftJoinRightFunc, rightJoinLeftFunc, kvc, nil
 }

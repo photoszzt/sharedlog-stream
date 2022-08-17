@@ -64,8 +64,10 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 		// debug.Fprintf(os.Stderr, "\tIsControl: %v\n", rawMsg.IsControl)
 		// debug.Fprintf(os.Stderr, "\tIsPayloadArr: %v\n", rawMsg.IsPayloadArr)
 
-		// debug.Fprintf(os.Stderr, "%s RawMsg: Payload %v, LogSeq 0x%x, MsgSeqNum 0x%x, IsControl: %v, IsPayloadArr: %v\n",
-		// 	emc.stream.TopicName(), string(rawMsg.Payload), rawMsg.LogSeqNum, rawMsg.MsgSeqNum, rawMsg.IsControl, rawMsg.IsPayloadArr)
+		// if !rawMsg.IsControl {
+		// 	debug.Fprintf(os.Stderr, "%s RawMsg: Payload %v, LogSeq 0x%x, MsgSeqNum 0x%x, IsControl: %v, IsPayloadArr: %v\n",
+		// 		emc.stream.TopicName(), string(rawMsg.Payload), rawMsg.LogSeqNum, rawMsg.MsgSeqNum, rawMsg.IsControl, rawMsg.IsPayloadArr)
+		// }
 
 		// control entry's msgseqnum is written for the epoch log;
 		// reading from the normal stream, we don't count this entry as a duplicate one
@@ -82,6 +84,7 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 			if err != nil {
 				return nil, err
 			}
+			// debug.Fprintf(os.Stderr, "%+v\n", epochMark)
 			if epochMark.Mark == commtypes.EPOCH_END {
 				// debug.Fprintf(os.Stderr, "%+v\n", epochMark)
 				ranges, ok := emc.marked[rawMsg.ProdId]
