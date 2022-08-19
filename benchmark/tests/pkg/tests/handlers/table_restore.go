@@ -8,12 +8,12 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/tests/pkg/tests/test_types"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/data_structure/treemap"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/store_with_changelog"
-	"sharedlog-stream/pkg/treemap"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
