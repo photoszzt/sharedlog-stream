@@ -15,42 +15,11 @@ func getStreamJoinMem(joinWindows *JoinWindows, t *testing.T) (
 	func(ctx context.Context, m commtypes.Message) []commtypes.Message,
 	func(ctx context.Context, m commtypes.Message) []commtypes.Message,
 ) {
-	compare := store.CompareFunc(func(lhs, rhs interface{}) int {
-		l, ok := lhs.(int)
-		if ok {
-			r := rhs.(int)
-			if l < r {
-				return -1
-			} else if l == r {
-				return 0
-			} else {
-				return 1
-			}
-		} else {
-			lv := lhs.(store.VersionedKey)
-			rv := rhs.(store.VersionedKey)
-			lvk := lv.Key.(int)
-			rvk := rv.Key.(int)
-			if lvk < rvk {
-				return -1
-			} else if lvk == rvk {
-				if lv.Version < rv.Version {
-					return -1
-				} else if lv.Version == rv.Version {
-					return 0
-				} else {
-					return 1
-				}
-			} else {
-				return 1
-			}
-		}
-	})
-	toWinTab1, winTab1, err := ToInMemWindowTable("tab1", joinWindows, compare)
+	toWinTab1, winTab1, err := ToInMemWindowTable("tab1", joinWindows, store.IntIntrCompare)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	toWinTab2, winTab2, err := ToInMemWindowTable("tab2", joinWindows, compare)
+	toWinTab2, winTab2, err := ToInMemWindowTable("tab2", joinWindows, store.IntIntrCompare)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -89,6 +58,55 @@ func getStreamJoinMem(joinWindows *JoinWindows, t *testing.T) (
 	return oneJoinTwo, twoJoinOne
 }
 
+func getSkipMapStreamJoinMem(joinWindows *JoinWindows, t *testing.T) (
+	func(ctx context.Context, m commtypes.Message) []commtypes.Message,
+	func(ctx context.Context, m commtypes.Message) []commtypes.Message,
+) {
+	toWinTab1, winTab1, err := ToInMemSkipMapWindowTable[int, string]("tab1", joinWindows, store.IntegerCompare[int])
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	toWinTab2, winTab2, err := ToInMemSkipMapWindowTable[int, string]("tab2", joinWindows, store.IntegerCompare[int])
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	joiner := ValueJoinerWithKeyTsFuncG[int, string, string, string](
+		func(readOnlyKey int,
+			leftValue string, rightValue string, leftTs int64, rightTs int64,
+		) string {
+			debug.Fprintf(os.Stderr, "left val: %v, ts: %d, right val: %v, ts: %d\n", leftValue, leftTs, rightValue, rightTs)
+			return fmt.Sprintf("%s+%s", leftValue, rightValue)
+		})
+	sharedTimeTracker := NewTimeTracker()
+	oneJoinTwoProc := NewStreamStreamJoinProcessorG[int, string, string, string](
+		"oneJoinTwo", winTab2, joinWindows, joiner, false, true, sharedTimeTracker)
+	twoJoinOneProc := NewStreamStreamJoinProcessorG[int, string, string, string](
+		"twoJoinOne", winTab1, joinWindows, ReverseValueJoinerWithKeyTsG(joiner), false, false, sharedTimeTracker)
+	oneJoinTwo := func(ctx context.Context, m commtypes.Message) []commtypes.Message {
+		_, err := toWinTab1.ProcessAndReturn(ctx, m)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		joinedMsgs, err := oneJoinTwoProc.ProcessAndReturn(ctx, m)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		return joinedMsgs
+	}
+	twoJoinOne := func(ctx context.Context, m commtypes.Message) []commtypes.Message {
+		_, err := toWinTab2.ProcessAndReturn(ctx, m)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		joinedMsgs, err := twoJoinOneProc.ProcessAndReturn(ctx, m)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+		return joinedMsgs
+	}
+	return oneJoinTwo, twoJoinOne
+}
+
 func TestStreamStreamJoinMem(t *testing.T) {
 	ctx := context.Background()
 	joinWindows, err := NewJoinWindowsWithGrace(time.Duration(50)*time.Millisecond,
@@ -100,6 +118,17 @@ func TestStreamStreamJoinMem(t *testing.T) {
 	StreamStreamJoin(ctx, oneJoinTwo, twoJoinOne, t)
 }
 
+func TestSkipMapStreamStreamJoinMem(t *testing.T) {
+	ctx := context.Background()
+	joinWindows, err := NewJoinWindowsWithGrace(time.Duration(50)*time.Millisecond,
+		time.Duration(50)*time.Millisecond)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	oneJoinTwo, twoJoinOne := getSkipMapStreamJoinMem(joinWindows, t)
+	StreamStreamJoin(ctx, oneJoinTwo, twoJoinOne, t)
+}
+
 func TestWindowingMem(t *testing.T) {
 	ctx := context.Background()
 	joinWindows, err := NewJoinWindowsWithGrace(time.Duration(100)*time.Millisecond, time.Duration(100)*time.Millisecond)
@@ -107,6 +136,16 @@ func TestWindowingMem(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 	oneJoinTwo, twoJoinOne := getStreamJoinMem(joinWindows, t)
+	Windowing(ctx, oneJoinTwo, twoJoinOne, t)
+}
+
+func TestSkipMapWindowingMem(t *testing.T) {
+	ctx := context.Background()
+	joinWindows, err := NewJoinWindowsWithGrace(time.Duration(100)*time.Millisecond, time.Duration(100)*time.Millisecond)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	oneJoinTwo, twoJoinOne := getSkipMapStreamJoinMem(joinWindows, t)
 	Windowing(ctx, oneJoinTwo, twoJoinOne, t)
 }
 
@@ -126,6 +165,22 @@ func TestAsymmetricWindowingAfterMem(t *testing.T) {
 	AsymmetricWindowingAfter(ctx, oneJoinTwo, twoJoinOne, t)
 }
 
+func TestSkipMapAsymmetricWindowingAfterMem(t *testing.T) {
+	ctx := context.Background()
+	joinWindows, err := NewJoinWindowsNoGrace(time.Duration(0) * time.Millisecond)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	joinWindows, err = joinWindows.After(time.Duration(100) * time.Millisecond)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	debug.Fprintf(os.Stderr, "join windows: before %d, after %d, grace %d\n", joinWindows.beforeMs,
+		joinWindows.afterMs, joinWindows.graceMs)
+	oneJoinTwo, twoJoinOne := getSkipMapStreamJoinMem(joinWindows, t)
+	AsymmetricWindowingAfter(ctx, oneJoinTwo, twoJoinOne, t)
+}
+
 func TestAsymmetricWindowingBeforeMem(t *testing.T) {
 	ctx := context.Background()
 	joinWindows, err := NewJoinWindowsWithGrace(time.Duration(0)*time.Millisecond,
@@ -140,5 +195,22 @@ func TestAsymmetricWindowingBeforeMem(t *testing.T) {
 	debug.Fprintf(os.Stderr, "join windows: before %d, after %d, grace %d\n", joinWindows.beforeMs,
 		joinWindows.afterMs, joinWindows.graceMs)
 	oneJoinTwo, twoJoinOne := getStreamJoinMem(joinWindows, t)
+	AsymmetricWindowingBefore(ctx, oneJoinTwo, twoJoinOne, t)
+}
+
+func TestSkipMapAsymmetricWindowingBeforeMem(t *testing.T) {
+	ctx := context.Background()
+	joinWindows, err := NewJoinWindowsWithGrace(time.Duration(0)*time.Millisecond,
+		time.Duration(86400000)*time.Millisecond)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	joinWindows, err = joinWindows.Before(time.Duration(100) * time.Millisecond)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	debug.Fprintf(os.Stderr, "join windows: before %d, after %d, grace %d\n", joinWindows.beforeMs,
+		joinWindows.afterMs, joinWindows.graceMs)
+	oneJoinTwo, twoJoinOne := getSkipMapStreamJoinMem(joinWindows, t)
 	AsymmetricWindowingBefore(ctx, oneJoinTwo, twoJoinOne, t)
 }

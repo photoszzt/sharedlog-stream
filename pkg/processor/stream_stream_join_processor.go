@@ -168,16 +168,16 @@ type StreamStreamJoinProcessorG[K, V, VO, VR any] struct {
 
 var _ = Processor(&StreamStreamJoinProcessor{})
 
-func NewStreamStreamJoinProcessorG[K, V, VO, VR any](
+func NewStreamStreamJoinProcessorG[K, V1, V2, VR any](
 	name string,
-	otherWindowStore store.CoreWindowStoreG[K, VO],
+	otherWindowStore store.CoreWindowStoreG[K, V2],
 	jw *JoinWindows,
-	joiner ValueJoinerWithKeyTsG[K, V, VO, VR],
+	joiner ValueJoinerWithKeyTsG[K, V1, V2, VR],
 	outer bool,
 	isLeftSide bool,
 	stk *TimeTracker,
-) *StreamStreamJoinProcessorG[K, V, VO, VR] {
-	ssjp := &StreamStreamJoinProcessorG[K, V, VO, VR]{
+) *StreamStreamJoinProcessorG[K, V1, V2, VR] {
+	ssjp := &StreamStreamJoinProcessorG[K, V1, V2, VR]{
 		isLeftSide:        isLeftSide,
 		outer:             outer,
 		otherWindowStore:  otherWindowStore,
@@ -196,11 +196,11 @@ func NewStreamStreamJoinProcessorG[K, V, VO, VR any](
 	return ssjp
 }
 
-func (p *StreamStreamJoinProcessorG[K, V, VO, VR]) Name() string {
+func (p *StreamStreamJoinProcessorG[K, V1, V2, VR]) Name() string {
 	return p.name
 }
 
-func (p *StreamStreamJoinProcessorG[K, V, VO, VR]) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
+func (p *StreamStreamJoinProcessorG[K, V1, V2, VR]) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	if msg.Key == nil || msg.Value == nil {
 		log.Warn().Msgf("skipping record due to null key or value. key=%v, val=%v", msg.Key, msg.Value)
 		return nil, nil
@@ -235,10 +235,10 @@ func (p *StreamStreamJoinProcessorG[K, V, VO, VR]) ProcessAndReturn(ctx context.
 	msgs := make([]commtypes.Message, 0)
 	err := p.otherWindowStore.Fetch(ctx, msg.Key.(K),
 		time.Unix(int64(timeFromSec), int64(timeFromNs)),
-		time.Unix(int64(timeToSec), int64(timeToNs)), func(otherRecordTs int64, kt K, vt VO) error {
+		time.Unix(int64(timeToSec), int64(timeToNs)), func(otherRecordTs int64, kt K, vt V2) error {
 			var newTs int64
 			// needOuterJoin = false
-			newVal := p.joiner.Apply(kt, msg.Value.(V), vt, msg.Timestamp, otherRecordTs)
+			newVal := p.joiner.Apply(kt, msg.Value.(V1), vt, msg.Timestamp, otherRecordTs)
 			if inputTs > otherRecordTs {
 				newTs = inputTs
 			} else {

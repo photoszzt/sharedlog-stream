@@ -79,8 +79,20 @@ func ToInMemWindowTable(
 	store := store.NewInMemoryWindowStore(
 		storeName,
 		joinWindow.MaxSize()+joinWindow.GracePeriodMs(),
-		joinWindow.MaxSize(),
-		true, compare)
+		joinWindow.MaxSize(), true, compare)
 	toTableProc := NewMeteredProcessor(NewStoreToWindowTableProcessor(store))
+	return toTableProc, store, nil
+}
+
+func ToInMemSkipMapWindowTable[K, V any](
+	storeName string,
+	joinWindow *JoinWindows,
+	compare store.CompareFuncG[K],
+) (*MeteredProcessor, store.CoreWindowStoreG[K, V], error) {
+	store := store.NewInMemorySkipMapWindowStore[K, V](
+		storeName,
+		joinWindow.MaxSize()+joinWindow.GracePeriodMs(),
+		joinWindow.MaxSize(), true, compare)
+	toTableProc := NewMeteredProcessor(NewStoreToWindowTableProcessorG[K, V](store))
 	return toTableProc, store, nil
 }
