@@ -126,7 +126,7 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 	if err != nil {
 		return nil, nil, err
 	}
-	countWindowStore, err := store_with_changelog.NewInMemoryWindowStoreWithChangelog(
+	countWindowStore, err := store_with_changelog.CreateInMemWindowStoreWithChangelog(
 		hopWindow, false, store.Uint64IntrCompare, countMp)
 	if err != nil {
 		return nil, nil, err

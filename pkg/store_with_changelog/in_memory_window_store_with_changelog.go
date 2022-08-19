@@ -15,7 +15,7 @@ import (
 type InMemoryWindowStoreWithChangelog[K, V any] struct {
 	msgSerde         commtypes.MessageSerdeG[commtypes.KeyAndWindowStartTsG[K], V]
 	originKeySerde   commtypes.SerdeG[K]
-	windowStore      *store.InMemoryWindowStore
+	windowStore      store.CoreWindowStore
 	trackFunc        exactly_once_intr.TrackProdSubStreamFunc
 	changelogManager *ChangelogManager[commtypes.KeyAndWindowStartTsG[K], V]
 	// changeLogProduce stats.ConcurrentInt64Collector
@@ -27,9 +27,7 @@ type InMemoryWindowStoreWithChangelog[K, V any] struct {
 var _ = store.WindowStoreBackedByChangelog(&InMemoryWindowStoreWithChangelog[int, string]{})
 
 func NewInMemoryWindowStoreWithChangelog[K, V any](
-	winDefs processor.EnumerableWindowDefinition,
-	retainDuplicates bool,
-	comparable store.CompareFunc,
+	winStore store.CoreWindowStore,
 	mp *MaterializeParam[K, V],
 ) (*InMemoryWindowStoreWithChangelog[K, V], error) {
 	changelogManager, msgSerde, err := createChangelogManagerAndUpdateMsgSerde(mp)
@@ -37,8 +35,7 @@ func NewInMemoryWindowStoreWithChangelog[K, V any](
 		return nil, err
 	}
 	return &InMemoryWindowStoreWithChangelog[K, V]{
-		windowStore: store.NewInMemoryWindowStore(mp.storeName,
-			winDefs.MaxSize()+winDefs.GracePeriodMs(), winDefs.MaxSize(), retainDuplicates, comparable),
+		windowStore:      winStore,
 		msgSerde:         msgSerde,
 		originKeySerde:   mp.msgSerde.GetKeySerdeG(),
 		parNum:           mp.ParNum(),
@@ -48,6 +45,17 @@ func NewInMemoryWindowStoreWithChangelog[K, V any](
 		// storePutLatency: stats.NewConcurrentInt64Collector(mp.storeName+"-storePutLatency", stats.DEFAULT_COLLECT_DURATION),
 		trackFuncLat: stats.NewConcurrentStatsCollector[int64](mp.storeName+"-trackFuncLat", stats.DEFAULT_COLLECT_DURATION),
 	}, nil
+}
+
+func CreateInMemWindowStoreWithChangelog[K, V any](
+	winDefs processor.EnumerableWindowDefinition,
+	retainDuplicates bool,
+	comparable store.CompareFunc,
+	mp *MaterializeParam[K, V],
+) (*InMemoryWindowStoreWithChangelog[K, V], error) {
+	winStore := store.NewInMemoryWindowStore(mp.storeName,
+		winDefs.MaxSize()+winDefs.GracePeriodMs(), winDefs.MaxSize(), retainDuplicates, comparable)
+	return NewInMemoryWindowStoreWithChangelog(winStore, mp)
 }
 
 func createChangelogManagerAndUpdateMsgSerde[K, V any](mp *MaterializeParam[K, V]) (*ChangelogManager[commtypes.KeyAndWindowStartTsG[K], V], commtypes.MessageSerdeG[commtypes.KeyAndWindowStartTsG[K], V], error) {
@@ -239,12 +247,13 @@ func (s *InMemoryWindowStoreWithChangelog[K, V]) SubstreamNum() uint8 {
 }
 
 func ToInMemWindowTableWithChangelog[K, V any](
-	mp *MaterializeParam[K, V],
 	joinWindow *processor.JoinWindows,
+	retainDuplicates bool,
 	comparable store.CompareFunc,
+	mp *MaterializeParam[K, V],
 ) (*processor.MeteredProcessor, *InMemoryWindowStoreWithChangelog[K, V], error) {
-	tabWithLog, err := NewInMemoryWindowStoreWithChangelog(
-		joinWindow, true, comparable, mp)
+	tabWithLog, err := CreateInMemWindowStoreWithChangelog(
+		joinWindow, retainDuplicates, comparable, mp)
 	if err != nil {
 		return nil, nil, err
 	}
