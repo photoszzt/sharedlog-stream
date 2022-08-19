@@ -3,7 +3,6 @@ package processor
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/utils"
 )
@@ -44,7 +43,7 @@ func (p *StoreToWindowTableProcessor) ProcessAndReturn(ctx context.Context, msg 
 func ToInMemWindowTable(
 	storeName string,
 	joinWindow *JoinWindows,
-	compare concurrent_skiplist.CompareFunc,
+	compare store.CompareFunc,
 ) (*MeteredProcessor, store.CoreWindowStore, error) {
 	store := store.NewInMemoryWindowStore(
 		storeName,

@@ -12,6 +12,11 @@ type VersionedKey struct {
 	Version uint32
 }
 
+type VersionedKeyG[K any] struct {
+	Key     K
+	Version uint32
+}
+
 /*
 type versionedKeySerialized struct {
 	key     []byte `msgp:"k,omitempty",json:"k,omitempty"`

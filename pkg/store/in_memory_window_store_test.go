@@ -2,19 +2,12 @@ package store
 
 import (
 	"context"
-	"sharedlog-stream/pkg/concurrent_skiplist"
 	"testing"
 )
 
 func getWindowStore(retainDuplicates bool) *InMemoryWindowStore {
-	if !retainDuplicates {
-		store := NewInMemoryWindowStore("test1", TEST_RETENTION_PERIOD, TEST_WINDOW_SIZE, retainDuplicates,
-			concurrent_skiplist.CompareFunc(CompareNoDup))
-		return store
-	}
-	store := NewInMemoryWindowStore("test1", TEST_RETENTION_PERIOD, TEST_WINDOW_SIZE, retainDuplicates,
-		concurrent_skiplist.CompareFunc(CompareWithDup))
-	return store
+	return NewInMemoryWindowStore("test1", TEST_RETENTION_PERIOD, TEST_WINDOW_SIZE, retainDuplicates,
+		Uint32IntrCompare)
 }
 
 func TestGetAndRange(t *testing.T) {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -30,7 +29,7 @@ var _ = store.WindowStoreBackedByChangelog(&InMemoryWindowStoreWithChangelog[int
 func NewInMemoryWindowStoreWithChangelog[K, V any](
 	winDefs processor.EnumerableWindowDefinition,
 	retainDuplicates bool,
-	comparable concurrent_skiplist.Comparable,
+	comparable store.CompareFunc,
 	mp *MaterializeParam[K, V],
 ) (*InMemoryWindowStoreWithChangelog[K, V], error) {
 	changelogManager, msgSerde, err := createChangelogManagerAndUpdateMsgSerde(mp)
@@ -85,7 +84,7 @@ func createChangelogManagerAndUpdateMsgSerde[K, V any](mp *MaterializeParam[K, V
 func NewInMemoryWindowStoreWithChangelogForTest[K, V any](
 	retentionPeriod int64, windowSize int64,
 	retainDuplicates bool,
-	comparable concurrent_skiplist.Comparable,
+	comparable store.CompareFunc,
 	mp *MaterializeParam[K, V],
 ) (*InMemoryWindowStoreWithChangelog[K, V], error) {
 	changelogManager, msgSerde, err := createChangelogManagerAndUpdateMsgSerde(mp)
@@ -242,7 +241,7 @@ func (s *InMemoryWindowStoreWithChangelog[K, V]) SubstreamNum() uint8 {
 func ToInMemWindowTableWithChangelog[K, V any](
 	mp *MaterializeParam[K, V],
 	joinWindow *processor.JoinWindows,
-	comparable concurrent_skiplist.Comparable,
+	comparable store.CompareFunc,
 ) (*processor.MeteredProcessor, *InMemoryWindowStoreWithChangelog[K, V], error) {
 	tabWithLog, err := NewInMemoryWindowStoreWithChangelog(
 		joinWindow, true, comparable, mp)

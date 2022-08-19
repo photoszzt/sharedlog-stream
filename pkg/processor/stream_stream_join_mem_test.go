@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/store"
 	"testing"
@@ -16,7 +15,7 @@ func getStreamJoinMem(joinWindows *JoinWindows, t *testing.T) (
 	func(ctx context.Context, m commtypes.Message) []commtypes.Message,
 	func(ctx context.Context, m commtypes.Message) []commtypes.Message,
 ) {
-	compare := concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
+	compare := store.CompareFunc(func(lhs, rhs interface{}) int {
 		l, ok := lhs.(int)
 		if ok {
 			r := rhs.(int)

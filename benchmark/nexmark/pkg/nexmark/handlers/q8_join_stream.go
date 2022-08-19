@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/proc_interface"
@@ -48,38 +47,6 @@ func (h *q8JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, e
 	}
 	// fmt.Printf("query 3 output: %v\n", encodedOutput)
 	return common.CompressData(encodedOutput), nil
-}
-
-func q8CompareFunc(lhs, rhs interface{}) int {
-	l, ok := lhs.(uint64)
-	if ok {
-		r := rhs.(uint64)
-		if l < r {
-			return -1
-		} else if l == r {
-			return 0
-		} else {
-			return 1
-		}
-	} else {
-		lv := lhs.(store.VersionedKey)
-		rv := rhs.(store.VersionedKey)
-		lvk := lv.Key.(uint64)
-		rvk := rv.Key.(uint64)
-		if lvk < rvk {
-			return -1
-		} else if lvk == rvk {
-			if lv.Version < rv.Version {
-				return -1
-			} else if lv.Version == rv.Version {
-				return 0
-			} else {
-				return 1
-			}
-		} else {
-			return 1
-		}
-	}
 }
 
 func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
@@ -151,7 +118,6 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	compare := concurrent_skiplist.CompareFunc(q8CompareFunc)
 	windowSizeMs := int64(10 * 1000)
 	joiner := processor.ValueJoinerWithKeyTsFunc(func(readOnlyKey interface{},
 		leftValue interface{}, rightValue interface{}, leftTs int64, rightTs int64) interface{} {
@@ -203,7 +169,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	aucJoinsPerFunc, perJoinsAucFunc, wsc, err := execution.SetupStreamStreamJoin(aucMp, perMp, compare, joiner, joinWindows)
+	aucJoinsPerFunc, perJoinsAucFunc, wsc, err := execution.SetupStreamStreamJoin(aucMp, perMp, store.Uint64IntrCompare, joiner, joinWindows)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

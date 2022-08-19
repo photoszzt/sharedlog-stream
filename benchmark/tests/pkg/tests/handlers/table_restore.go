@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/tests/pkg/tests/test_types"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
@@ -238,7 +237,7 @@ func (h *tableRestoreHandler) testRestoreWindowTable(ctx context.Context) {
 		panic(err)
 	}
 	wstore, err := store_with_changelog.NewInMemoryWindowStoreWithChangelogForTest(store.TEST_RETENTION_PERIOD, store.TEST_WINDOW_SIZE, false,
-		concurrent_skiplist.CompareFunc(store.CompareNoDup), mp)
+		store.Uint32IntrCompare, mp)
 	if err != nil {
 		panic(err)
 	}
@@ -262,7 +261,7 @@ func (h *tableRestoreHandler) testRestoreWindowTable(ctx context.Context) {
 		panic(err)
 	}
 	wstore2, err := store_with_changelog.NewInMemoryWindowStoreWithChangelogForTest(store.TEST_RETENTION_PERIOD, store.TEST_WINDOW_SIZE, false,
-		concurrent_skiplist.CompareFunc(store.CompareNoDup), mp)
+		store.Uint32IntrCompare, mp)
 	if err != nil {
 		panic(err)
 	}

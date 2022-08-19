@@ -3,7 +3,6 @@ package execution
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/store"
@@ -14,7 +13,7 @@ import (
 func SetupStreamStreamJoin[K, VLeft, VRight any](
 	mpLeft *store_with_changelog.MaterializeParam[K, VLeft],
 	mpRight *store_with_changelog.MaterializeParam[K, VRight],
-	compare concurrent_skiplist.CompareFunc,
+	compare store.CompareFunc,
 	joiner processor.ValueJoinerWithKeyTsFunc,
 	jw *processor.JoinWindows,
 ) (proc_interface.ProcessAndReturnFunc,

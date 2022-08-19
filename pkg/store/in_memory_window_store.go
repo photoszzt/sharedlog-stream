@@ -18,6 +18,7 @@ import (
 type InMemoryWindowStore struct {
 	// for val comparison
 	comparable         concurrent_skiplist.Comparable
+	comparableForDup   concurrent_skiplist.Comparable
 	store              *concurrent_skiplist.SkipList
 	name               string
 	windowSize         int64
@@ -32,7 +33,7 @@ type InMemoryWindowStore struct {
 var _ = CoreWindowStore(&InMemoryWindowStore{})
 
 func NewInMemoryWindowStore(name string, retentionPeriod int64, windowSize int64, retainDuplicates bool,
-	compare concurrent_skiplist.Comparable,
+	compare CompareFunc,
 ) *InMemoryWindowStore {
 	return &InMemoryWindowStore{
 		name:               name,
@@ -40,25 +41,18 @@ func NewInMemoryWindowStore(name string, retentionPeriod int64, windowSize int64
 		retentionPeriod:    retentionPeriod,
 		retainDuplicates:   retainDuplicates,
 		observedStreamTime: 0,
-		store: concurrent_skiplist.New(concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
-			l := lhs.(int64)
-			r := rhs.(int64)
-			if l < r {
-				return -1
-			} else if l == r {
-				return 0
-			} else {
-				return 1
-			}
-		})),
-		comparable: compare,
+		store:              concurrent_skiplist.New(CompareFunc(Int64IntrCompare)),
+		comparable:         CompareFunc(compare),
+		comparableForDup: CompareFunc(func(lhs, rhs interface{}) int {
+			return CompareIntrWithVersionedKey(lhs, rhs, compare)
+		}),
 	}
 }
 
-func (st *InMemoryWindowStore) updateSeqnumForDups() {
-	if st.retainDuplicates {
-		atomic.CompareAndSwapUint32(&st.seqNum, math.MaxUint32, 0)
-		atomic.AddUint32(&st.seqNum, 1)
+func updateSeqnumForDups(retainDuplicates bool, seqNum *uint32) {
+	if retainDuplicates {
+		atomic.CompareAndSwapUint32(seqNum, math.MaxUint32, 0)
+		atomic.AddUint32(seqNum, 1)
 	}
 }
 
@@ -79,15 +73,17 @@ func (s *InMemoryWindowStore) Put(ctx context.Context, key commtypes.KeyT, value
 		log.Warn().Msgf("Skipping record for expired segment.")
 	} else {
 		if !utils.IsNil(value) {
-			s.updateSeqnumForDups()
+			updateSeqnumForDups(s.retainDuplicates, &s.seqNum)
 			k := key
+			cmp := s.comparable
 			if s.retainDuplicates {
 				k = VersionedKey{
 					Version: atomic.LoadUint32(&s.seqNum),
 					Key:     k,
 				}
+				cmp = s.comparableForDup
 			}
-			s.store.SetIfAbsent(windowStartTimestamp, concurrent_skiplist.New(s.comparable))
+			s.store.SetIfAbsent(windowStartTimestamp, concurrent_skiplist.New(cmp))
 			s.store.Get(windowStartTimestamp).Value().(*concurrent_skiplist.SkipList).Set(k, value)
 		} else if !s.retainDuplicates {
 			// Skip if value is null and duplicates are allowed since this delete is a no-op

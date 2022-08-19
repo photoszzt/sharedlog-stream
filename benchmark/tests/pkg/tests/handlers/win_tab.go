@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/benchmark/tests/pkg/tests"
 	"sharedlog-stream/benchmark/tests/pkg/tests/test_types"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"time"
@@ -32,11 +31,13 @@ func getWindowStoreWithChangelog(env types.Environment, retainDuplicates bool) *
 		ValSerde: commtypes.StringSerdeG{},
 	}
 	storeName := "test1"
-	var compareFunc concurrent_skiplist.CompareFunc
+	var compareFunc store.CompareFunc
 	if !retainDuplicates {
-		compareFunc = store.CompareNoDup
+		compareFunc = store.Uint32IntrCompare
 	} else {
-		compareFunc = store.CompareWithDup
+		compareFunc = store.CompareFunc(func(a, b interface{}) int {
+			return store.CompareIntrWithVersionedKey(a, b, store.Uint32IntrCompare)
+		})
 	}
 	mp, err := store_with_changelog.NewMaterializeParamBuilder[uint32, string]().
 		MessageSerde(msgSerde).

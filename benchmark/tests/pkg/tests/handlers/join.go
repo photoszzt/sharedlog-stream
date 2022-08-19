@@ -11,7 +11,6 @@ import (
 	"sharedlog-stream/benchmark/tests/pkg/tests/test_types"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/processor"
@@ -103,191 +102,6 @@ func getSrcSink[KIn, VIn, KOut, VOut any](
 	return src1, src2, sink, nil
 }
 
-/*
-func (h *joinHandler) testStreamStreamJoinMongoDB(ctx context.Context) {
-	debug.Fprint(os.Stderr, "############## stream stream join mongodb\n")
-	srcStream1, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "src1Mongo", 1, commtypes.JSON)
-	if err != nil {
-		panic(err)
-	}
-	srcStream2, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "src2Mongo", 1, commtypes.JSON)
-	if err != nil {
-		panic(err)
-	}
-	sinkStream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "sinkMongo", 1, commtypes.JSON)
-	if err != nil {
-		panic(err)
-	}
-	kSerde := commtypes.IntSerde{}
-	vSerde := strTsJSONSerde{}
-	inMsgSerde, err := commtypes.GetMsgSerde(commtypes.JSON, kSerde, vSerde)
-	if err != nil {
-		panic(err)
-	}
-	outMsgSerde, err := commtypes.GetMsgSerde(commtypes.JSON, kSerde, commtypes.StringSerde{})
-	if err != nil {
-		panic(err)
-	}
-	src1, src2, sink, err := h.getSrcSink(ctx, common.FlushDuration, inMsgSerde,
-		outMsgSerde, srcStream1, srcStream2, sinkStream)
-	if err != nil {
-		panic(err)
-	}
-	joinWindows, err := processor.NewJoinWindowsWithGrace(time.Duration(50)*time.Millisecond,
-		time.Duration(50)*time.Millisecond)
-	if err != nil {
-		panic(err)
-	}
-	mongoAddr := "mongodb://localhost:27017"
-
-	payloadArrSerde := sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDE
-	client, err := store.InitMongoDBClient(ctx, mongoAddr)
-	if err != nil {
-		panic(err)
-	}
-	toWinTab1, winTab1, err := processor.ToMongoDBWindowTable(ctx, "tab1Mongo", client, joinWindows, kSerde, vSerde)
-	if err != nil {
-		panic(err)
-	}
-	toWinTab2, winTab2, err := processor.ToMongoDBWindowTable(ctx, "tab2Mongo", client, joinWindows, kSerde, vSerde)
-	if err != nil {
-		panic(err)
-	}
-	joiner := processor.ValueJoinerWithKeyTsFunc(
-		func(readOnlyKey interface{},
-			leftValue interface{}, rightValue interface{}, leftTs int64, rightTs int64,
-		) interface{} {
-			debug.Fprintf(os.Stderr, "left val: %v, ts: %d, right val: %v, ts: %d\n", leftValue, leftTs, rightValue, rightTs)
-			return fmt.Sprintf("%s+%s", leftValue.(strTs).Val, rightValue.(strTs).Val)
-		})
-	sharedTimeTracker := processor.NewTimeTracker()
-	oneJoinTwoProc := processor.NewStreamStreamJoinProcessor("oneJoinTwo", winTab2, joinWindows, joiner, false, true, sharedTimeTracker)
-	twoJoinOneProc := processor.NewStreamStreamJoinProcessor("twoJoinOne", winTab1, joinWindows, processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker)
-	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *producer_consumer.ShardedSharedLogStreamProducer,
-		trackParFunc exactly_once_intr.TrackProdSubStreamFunc,
-	) error {
-		_, err := toWinTab1.ProcessAndReturn(ctx, m)
-		if err != nil {
-			return err
-		}
-		joinedMsgs, err := oneJoinTwoProc.ProcessAndReturn(ctx, m)
-		if err != nil {
-			return err
-		}
-		return pushMsgsToSink(ctx, sink, joinedMsgs, trackParFunc)
-	}
-	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *producer_consumer.ShardedSharedLogStreamProducer,
-		trackParFunc exactly_once_intr.TrackProdSubStreamFunc,
-	) error {
-		_, err := toWinTab2.ProcessAndReturn(ctx, m)
-		if err != nil {
-			return err
-		}
-		joinedMsgs, err := twoJoinOneProc.ProcessAndReturn(ctx, m)
-		if err != nil {
-			return err
-		}
-		return pushMsgsToSink(ctx, sink, joinedMsgs, trackParFunc)
-	}
-	builder := stream_task.NewStreamTaskArgsBuilder(h.env, nil, "joinTestMongo")
-	streamTaskArgs := benchutil.UpdateStreamTaskArgs(&common.QueryInput{}, builder).Build()
-
-	tm, err := stream_task.SetupTransactionManager(ctx, streamTaskArgs)
-	if err != nil {
-		panic(err)
-	}
-	debug.Fprintf(os.Stderr, "task id: %x, task epoch: %d\n", tm.GetCurrentTaskId(), tm.GetCurrentEpoch())
-	trackParFunc := func(ctx context.Context,
-		key interface{},
-		keySerde commtypes.Serde,
-		topicName string,
-		substreamId uint8,
-	) error {
-		err := tm.AddTopicSubstream(ctx, topicName, substreamId)
-		if err != nil {
-			return err
-		}
-		return err
-	}
-	expected_keys := []int{0, 1, 2, 3}
-
-	tm.RecordTopicStreams(src1.TopicName(), srcStream1)
-
-	if err = tm.BeginTransaction(ctx); err != nil {
-		panic(err)
-	}
-	if err = tm.AddTopicSubstream(ctx, srcStream1.TopicName(), 0); err != nil {
-		panic(err)
-	}
-	for i := 0; i < 2; i++ {
-		err := pushMsgToStream(ctx, expected_keys[i],
-			&strTs{Val: fmt.Sprintf("A%d", expected_keys[i]), Ts: 0},
-			inMsgSerde, srcStream1, tm.GetProducerId())
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	if err = tm.CommitTransaction(ctx, nil, nil); err != nil {
-		panic(err)
-	}
-
-
-	tm.RecordTopicStreams(src2.TopicName(), srcStream2)
-	if err = tm.BeginTransaction(ctx); err != nil {
-		panic(err)
-	}
-	if err = tm.AddTopicSubstream(ctx, srcStream2.TopicName(), 0); err != nil {
-		panic(err)
-	}
-	for i := 0; i < 2; i++ {
-		err := pushMsgToStream(ctx, expected_keys[i],
-			&strTs{Val: fmt.Sprintf("a%d", expected_keys[i]), Ts: 0},
-			inMsgSerde, srcStream2, tm.GetProducerId())
-		if err != nil {
-			panic(err)
-		}
-	}
-	if err = tm.CommitTransaction(ctx, nil, nil); err != nil {
-		panic(err)
-	}
-
-	tm.RecordTopicStreams(src1.TopicName(), srcStream1)
-	tm.RecordTopicStreams(src2.TopicName(), srcStream2)
-	tm.RecordTopicStreams(sinkStream.TopicName(), sinkStream)
-	if err = tm.BeginTransaction(ctx); err != nil {
-		panic(err)
-	}
-	if err = tm.AddTopicSubstream(ctx, sinkStream.TopicName(), 0); err != nil {
-		panic(err)
-	}
-	if err = tm.AddTopicSubstream(ctx, srcStream1.TopicName(), 0); err != nil {
-		panic(err)
-	}
-	if err = tm.AddTopicSubstream(ctx, srcStream2.TopicName(), 0); err != nil {
-		panic(err)
-	}
-	joinProc(ctx, src1, sink, trackParFunc, oneJoinTwo)
-	joinProc(ctx, src2, sink, trackParFunc, twoJoinOne)
-	if err = tm.CommitTransaction(ctx, nil, nil); err != nil {
-		panic(err)
-	}
-	tm.RecordTopicStreams(sinkStream.TopicName(), sinkStream)
-	got, err := readMsgs(ctx, outMsgSerde, payloadArrSerde, commtypes.JSON, sinkStream)
-	if err != nil {
-		panic(err)
-	}
-	expected_join := []commtypes.Message{
-		{Key: 0, Value: "A0+a0", Timestamp: 0},
-		{Key: 1, Value: "A1+a1", Timestamp: 0},
-	}
-	if !reflect.DeepEqual(expected_join, got) {
-		panic(fmt.Sprintf("should equal. expected: %v, got: %v", expected_join, got))
-	}
-
-}
-*/
-
 func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	srcStream1, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "src1", 1, commtypes.JSON)
 	if err != nil {
@@ -315,47 +129,16 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		panic(err)
 	}
 
-	compare := concurrent_skiplist.CompareFunc(func(lhs, rhs interface{}) int {
-		l, ok := lhs.(int)
-		if ok {
-			r := rhs.(int)
-			if l < r {
-				return -1
-			} else if l == r {
-				return 0
-			} else {
-				return 1
-			}
-		} else {
-			lv := lhs.(store.VersionedKey)
-			rv := rhs.(store.VersionedKey)
-			lvk := lv.Key.(int)
-			rvk := rv.Key.(int)
-			if lvk < rvk {
-				return -1
-			} else if lvk == rvk {
-				if lv.Version < rv.Version {
-					return -1
-				} else if lv.Version == rv.Version {
-					return 0
-				} else {
-					return 1
-				}
-			} else {
-				return 1
-			}
-		}
-	})
 	joinWindows, err := processor.NewJoinWindowsWithGrace(time.Duration(50)*time.Millisecond,
 		time.Duration(50)*time.Millisecond)
 	if err != nil {
 		panic(err)
 	}
-	toWinTab1, winTab1, err := processor.ToInMemWindowTable("tab1", joinWindows, compare)
+	toWinTab1, winTab1, err := processor.ToInMemWindowTable("tab1", joinWindows, store.IntIntrCompare)
 	if err != nil {
 		panic(err)
 	}
-	toWinTab2, winTab2, err := processor.ToInMemWindowTable("tab2", joinWindows, compare)
+	toWinTab2, winTab2, err := processor.ToInMemWindowTable("tab2", joinWindows, store.IntIntrCompare)
 	if err != nil {
 		panic(err)
 	}

@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/concurrent_skiplist"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
@@ -115,7 +114,6 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 		return nil, nil, err
 	}
 	countStoreName := "auctionBidsCountStore"
-	comparable := concurrent_skiplist.CompareFunc(concurrent_skiplist.Uint64KeyCompare)
 	countMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, *commtypes.ValueTimestamp]().
 		MessageSerde(msgSerde).StoreName(countStoreName).ParNum(sp.ParNum).
 		SerdeFormat(serdeFormat).
@@ -129,7 +127,7 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 		return nil, nil, err
 	}
 	countWindowStore, err := store_with_changelog.NewInMemoryWindowStoreWithChangelog(
-		hopWindow, false, comparable, countMp)
+		hopWindow, false, store.Uint64IntrCompare, countMp)
 	if err != nil {
 		return nil, nil, err
 	}
