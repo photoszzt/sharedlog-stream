@@ -22,12 +22,12 @@ func SetupStreamStreamJoin[K, VLeft, VRight any](
 	error,
 ) {
 	toLeftTab, leftTab, err := store_with_changelog.ToInMemWindowTableWithChangelog(
-		mpLeft, jw, compare)
+		jw, true, compare, mpLeft)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	toRightTab, rightTab, err := store_with_changelog.ToInMemWindowTableWithChangelog(
-		mpRight, jw, compare)
+		jw, true, compare, mpRight)
 	if err != nil {
 		return nil, nil, nil, err
 	}

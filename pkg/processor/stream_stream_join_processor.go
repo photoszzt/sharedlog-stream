@@ -153,3 +153,104 @@ func (p *StreamStreamJoinProcessor) ProcessAndReturn(ctx context.Context, msg co
 		}
 	*/
 }
+
+type StreamStreamJoinProcessorG[K, V, VO, VR any] struct {
+	otherWindowStore  store.CoreWindowStoreG[K, VO]
+	joiner            ValueJoinerWithKeyTsG[K, V, VO, VR]
+	sharedTimeTracker *TimeTracker
+	name              string
+	joinAfterMs       int64
+	joinGraceMs       int64
+	joinBeforeMs      int64
+	outer             bool
+	isLeftSide        bool
+}
+
+var _ = Processor(&StreamStreamJoinProcessor{})
+
+func NewStreamStreamJoinProcessorG[K, V, VO, VR any](
+	name string,
+	otherWindowStore store.CoreWindowStoreG[K, VO],
+	jw *JoinWindows,
+	joiner ValueJoinerWithKeyTsG[K, V, VO, VR],
+	outer bool,
+	isLeftSide bool,
+	stk *TimeTracker,
+) *StreamStreamJoinProcessorG[K, V, VO, VR] {
+	ssjp := &StreamStreamJoinProcessorG[K, V, VO, VR]{
+		isLeftSide:        isLeftSide,
+		outer:             outer,
+		otherWindowStore:  otherWindowStore,
+		joiner:            joiner,
+		joinGraceMs:       jw.GracePeriodMs(),
+		sharedTimeTracker: stk,
+		name:              name,
+	}
+	if isLeftSide {
+		ssjp.joinBeforeMs = jw.beforeMs
+		ssjp.joinAfterMs = jw.afterMs
+	} else {
+		ssjp.joinBeforeMs = jw.afterMs
+		ssjp.joinAfterMs = jw.beforeMs
+	}
+	return ssjp
+}
+
+func (p *StreamStreamJoinProcessorG[K, V, VO, VR]) Name() string {
+	return p.name
+}
+
+func (p *StreamStreamJoinProcessorG[K, V, VO, VR]) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
+	if msg.Key == nil || msg.Value == nil {
+		log.Warn().Msgf("skipping record due to null key or value. key=%v, val=%v", msg.Key, msg.Value)
+		return nil, nil
+	}
+
+	// needOuterJoin := p.outer
+	inputTs := msg.Timestamp
+	// debug.Fprintf(os.Stderr, "input ts: %v\n", inputTs)
+	var timeFrom uint64
+	var timeTo uint64
+	timeFromTmp := int64(inputTs) - int64(p.joinBeforeMs)
+	if timeFromTmp < 0 {
+		timeFrom = 0
+	} else {
+		timeFrom = uint64(timeFromTmp)
+	}
+	timeToTmp := inputTs + int64(p.joinAfterMs)
+	if timeToTmp > 0 {
+		timeTo = uint64(timeToTmp)
+	} else {
+		timeTo = 0
+	}
+	// sharedTimeTracker is only used for outer join
+	p.sharedTimeTracker.AdvanceStreamTime(inputTs)
+
+	// TODO: emit all non-joined records which window has closed
+	timeFromSec := timeFrom / 1000
+	timeFromNs := (timeFrom - timeFromSec*1000) * 1000000
+
+	timeToSec := timeTo / 1000
+	timeToNs := (timeTo - timeToSec*1000) * 1000000
+	msgs := make([]commtypes.Message, 0)
+	err := p.otherWindowStore.Fetch(ctx, msg.Key.(K),
+		time.Unix(int64(timeFromSec), int64(timeFromNs)),
+		time.Unix(int64(timeToSec), int64(timeToNs)), func(otherRecordTs int64, kt K, vt VO) error {
+			var newTs int64
+			// needOuterJoin = false
+			newVal := p.joiner.Apply(kt, msg.Value.(V), vt, msg.Timestamp, otherRecordTs)
+			if inputTs > otherRecordTs {
+				newTs = inputTs
+			} else {
+				newTs = otherRecordTs
+			}
+			msgs = append(msgs, commtypes.Message{Key: msg.Key, Value: newVal, Timestamp: newTs})
+			return nil
+		})
+	return msgs, err
+	/*
+		if needOuterJoin {
+			// TODO
+		}
+	*/
+}
