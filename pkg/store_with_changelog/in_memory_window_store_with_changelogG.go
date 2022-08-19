@@ -25,7 +25,7 @@ type InMemoryWindowStoreWithChangelogG[K, V any] struct {
 	parNum       uint8
 }
 
-var _ = store.WindowStoreBackedByChangelog(&InMemoryWindowStoreWithChangelog[int, string]{})
+var _ = store.WindowStoreBackedByChangelogG[int, string](&InMemoryWindowStoreWithChangelogG[int, string]{})
 
 func NewInMemoryWindowStoreWithChangelogG[K, V any](
 	windowStore store.CoreWindowStoreG[K, V],

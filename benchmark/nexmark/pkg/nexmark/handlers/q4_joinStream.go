@@ -123,19 +123,18 @@ func (h *q4JoinStreamHandler) Q4JoinStream(ctx context.Context, sp *common.Query
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	joiner := processor.ValueJoinerWithKeyTsFunc(func(_readOnlyKey, value1, value2 interface{}, _leftTs, otherTs int64) interface{} {
-		leftE := value1.(*ntypes.Event)
-		auc := leftE.NewAuction
-		rightE := value2.(*ntypes.Event)
-		bid := rightE.Bid
-		return &ntypes.AuctionBid{
-			BidDateTime: bid.DateTime,
-			BidPrice:    bid.Price,
-			AucDateTime: auc.DateTime,
-			AucExpires:  auc.Expires,
-			AucCategory: auc.Category,
-		}
-	})
+	joiner := processor.ValueJoinerWithKeyTsFuncG[uint64, *ntypes.Event, *ntypes.Event, *ntypes.AuctionBid](
+		func(_readOnlyKey uint64, value1 *ntypes.Event, value2 *ntypes.Event, _leftTs, otherTs int64) *ntypes.AuctionBid {
+			auc := value1.NewAuction
+			bid := value2.Bid
+			return &ntypes.AuctionBid{
+				BidDateTime: bid.DateTime,
+				BidPrice:    bid.Price,
+				AucDateTime: auc.DateTime,
+				AucExpires:  auc.Expires,
+				AucCategory: auc.Category,
+			}
+		})
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
 	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
@@ -170,8 +169,8 @@ func (h *q4JoinStreamHandler) Q4JoinStream(ctx context.Context, sp *common.Query
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	aucJoinBidsFunc, bidsJoinAucFunc, wsc, err := execution.SetupStreamStreamJoin(
-		aucMp, bidMp, store.Uint64IntrCompare, joiner, jw)
+	aucJoinBidsFunc, bidsJoinAucFunc, wsc, err := execution.SetupSkipMapStreamStreamJoin(
+		aucMp, bidMp, store.IntegerCompare[uint64], joiner, jw)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

@@ -125,20 +125,19 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	joiner := processor.ValueJoinerWithKeyTsFunc(func(readOnlyKey, value1, value2 interface{},
-		leftTs, otherTs int64) interface{} {
-		// fmt.Fprintf(os.Stderr, "val1: %v, val2: %v\n", value1, value2)
-		lv := value1.(*ntypes.Event)
-		rv := value2.(ntypes.StartEndTime)
-		return ntypes.BidAndMax{
-			Price:    lv.Bid.Price,
-			Auction:  lv.Bid.Auction,
-			Bidder:   lv.Bid.Bidder,
-			BidTs:    lv.Bid.DateTime,
-			WStartMs: rv.StartTimeMs,
-			WEndMs:   rv.EndTimeMs,
-		}
-	})
+	joiner := processor.ValueJoinerWithKeyTsFuncG[uint64, *ntypes.Event, ntypes.StartEndTime, ntypes.BidAndMax](
+		func(readOnlyKey uint64, value1 *ntypes.Event, value2 ntypes.StartEndTime,
+			leftTs, otherTs int64) ntypes.BidAndMax {
+			// fmt.Fprintf(os.Stderr, "val1: %v, val2: %v\n", value1, value2)
+			return ntypes.BidAndMax{
+				Price:    value1.Bid.Price,
+				Auction:  value1.Bid.Auction,
+				Bidder:   value1.Bid.Bidder,
+				BidTs:    value1.Bid.DateTime,
+				WStartMs: value2.StartTimeMs,
+				WEndMs:   value2.EndTimeMs,
+			}
+		})
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
 	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
@@ -185,8 +184,8 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	bJoinMaxBFunc, maxBJoinBFunc, wsc, err := execution.SetupStreamStreamJoin(bMp, maxBMp,
-		store.Uint64IntrCompare, joiner, jw)
+	bJoinMaxBFunc, maxBJoinBFunc, wsc, err := execution.SetupSkipMapStreamStreamJoin(bMp, maxBMp,
+		store.IntegerCompare[uint64], joiner, jw)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

@@ -119,18 +119,19 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	windowSizeMs := int64(10 * 1000)
-	joiner := processor.ValueJoinerWithKeyTsFunc(func(readOnlyKey interface{},
-		leftValue interface{}, rightValue interface{}, leftTs int64, rightTs int64) interface{} {
-		// fmt.Fprint(os.Stderr, "get into joiner\n")
-		rv := rightValue.(*ntypes.Event)
-		ts := rv.NewPerson.DateTime
-		windowStart := (utils.MaxInt64(0, ts-windowSizeMs+windowSizeMs) / windowSizeMs) * windowSizeMs
-		return ntypes.PersonTime{
-			ID:        rv.NewPerson.ID,
-			Name:      rv.NewPerson.Name,
-			StartTime: windowStart,
-		}
-	})
+	joiner := processor.ValueJoinerWithKeyTsFuncG[uint64, *ntypes.Event, *ntypes.Event, ntypes.PersonTime](
+		func(readOnlyKey uint64, leftValue *ntypes.Event, rightValue *ntypes.Event,
+			leftTs int64, rightTs int64,
+		) ntypes.PersonTime {
+			// fmt.Fprint(os.Stderr, "get into joiner\n")
+			ts := rightValue.NewPerson.DateTime
+			windowStart := (utils.MaxInt64(0, ts-windowSizeMs+windowSizeMs) / windowSizeMs) * windowSizeMs
+			return ntypes.PersonTime{
+				ID:        rightValue.NewPerson.ID,
+				Name:      rightValue.NewPerson.Name,
+				StartTime: windowStart,
+			}
+		})
 	format := commtypes.SerdeFormat(sp.SerdeFormat)
 	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
 	eventSerde, err := ntypes.GetEventSerdeG(format)
@@ -169,7 +170,8 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	aucJoinsPerFunc, perJoinsAucFunc, wsc, err := execution.SetupStreamStreamJoin(aucMp, perMp, store.Uint64IntrCompare, joiner, joinWindows)
+	aucJoinsPerFunc, perJoinsAucFunc, wsc, err := execution.SetupSkipMapStreamStreamJoin(
+		aucMp, perMp, store.IntegerCompare[uint64], joiner, joinWindows)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

@@ -48,7 +48,7 @@ type WindowStoreBackedByChangelog interface {
 
 type WindowStoreBackedByChangelogG[K, V any] interface {
 	CoreWindowStoreG[K, V]
-	WindowStoreOpWithChangelogG[K, V]
+	WindowStoreOpWithChangelog
 }
 
 type OnlyUpdateInMemWinStore interface {
@@ -56,23 +56,10 @@ type OnlyUpdateInMemWinStore interface {
 		key commtypes.KeyT, value commtypes.ValueT) error
 }
 
-type OnlyUpdateInMemWinStoreG[K, V any] interface {
-	PutWithoutPushToChangelog(ctx context.Context,
-		key K, value V, windowStartTimestamp int64) error
-}
-
 type WindowStoreOpWithChangelog interface {
 	StoreBackedByChangelog
 	UpdateTrackParFunc
 	OnlyUpdateInMemWinStore
-	ProduceRangeRecording
-	SubstreamNum() uint8
-}
-
-type WindowStoreOpWithChangelogG[K, V any] interface {
-	StoreBackedByChangelog
-	UpdateTrackParFunc
-	OnlyUpdateInMemWinStoreG[K, V]
 	ProduceRangeRecording
 	SubstreamNum() uint8
 }
