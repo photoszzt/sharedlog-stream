@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/concurrent_skiplist"
+	"sharedlog-stream/pkg/data_structure/concurrent_skiplist"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/utils"
 	"sync"
