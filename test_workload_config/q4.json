@@ -6,7 +6,7 @@
             "OutputTopicName": [
                 "nexmark_src"
             ],
-            "NodeConstraint": "1,2,3,4"
+            "NodeConstraint": "1"
         },
         {
             "funcName": "q46GroupBy",
@@ -18,7 +18,8 @@
                 "q46_aucsByID",
                 "q46_bidsByAucID"
             ],
-            "NodeConstraint": "5,6,7,8"
+            "NodeConstraint": "2",
+            "NumSrcProducer": [1]
         },
         {
             "funcName": "q4JoinStream",
@@ -30,7 +31,8 @@
             "OutputTopicName": [
                 "q4_aucIDCat"
             ],
-            "NodeConstraint": "5,6,7,8"
+            "NodeConstraint": "2",
+            "NumSrcProducer": [1, 1]
         },
         {
             "funcName": "q4MaxBid",
@@ -41,7 +43,8 @@
             "OutputTopicName": [
                 "q4_maxBids"
             ],
-            "NodeConstraint": "5,6,7,8"
+            "NodeConstraint": "2",
+            "NumSrcProducer": [1]
         },
         {
             "funcName": "q4Avg",
@@ -52,7 +55,8 @@
             "OutputTopicName": [
                 "q4_out"
             ],
-            "NodeConstraint": "5,6,7,8"
+            "NodeConstraint": "2",
+            "NumSrcProducer": [1]
         }
     ],
     "StreamParam": {
