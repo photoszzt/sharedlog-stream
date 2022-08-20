@@ -67,11 +67,11 @@ func SetupManagersForEpoch(ctx context.Context,
 		return nil, nil, err
 	}
 	trackParFunc := exactly_once_intr.TrackProdSubStreamFunc(
-		func(ctx context.Context, key interface{}, keySerde commtypes.Encoder,
+		func(ctx context.Context, kBytes []byte,
 			topicName string, substreamId uint8,
 		) error {
 			_ = em.AddTopicSubstream(ctx, topicName, substreamId)
-			return control_channel.TrackAndAppendKeyMapping(ctx, cmm, key, keySerde, substreamId, topicName)
+			return control_channel.TrackAndAppendKeyMapping(ctx, cmm, kBytes, substreamId, topicName)
 		})
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
 		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, cmm.CurrentEpoch())

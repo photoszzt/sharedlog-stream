@@ -62,8 +62,10 @@ func invokeDumpFunc(client *http.Client) {
 		DumpDir:     FLAGS_dump_dir,
 		SerdeFormat: uint8(serdeFormat),
 	}
-	streamParam := common.StreamParam{}
-	streamParam.TopicName = fmt.Sprintf("%s_out", FLAGS_app_name)
+	streamParam := common.StreamParam{
+		TopicName:     fmt.Sprintf("%s_out", FLAGS_app_name),
+		NumPartitions: 1,
+	}
 	switch FLAGS_app_name {
 	case "q1", "q2":
 		streamParam.KeySerde = "String"

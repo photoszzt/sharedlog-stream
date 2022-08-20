@@ -47,8 +47,7 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 	setOffsetOnStream(offsetMap, streamTaskArgs)
 	debug.Fprintf(os.Stderr, "down restore\n")
 	trackParFunc := func(ctx context.Context,
-		key interface{},
-		keySerde commtypes.Encoder,
+		kBytes []byte,
 		topicName string,
 		substreamId uint8,
 	) error {
@@ -56,7 +55,7 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 		if err != nil {
 			return err
 		}
-		err = control_channel.TrackAndAppendKeyMapping(ctx, cmm, key, keySerde, substreamId, topicName)
+		err = control_channel.TrackAndAppendKeyMapping(ctx, cmm, kBytes, substreamId, topicName)
 		return err
 	}
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {

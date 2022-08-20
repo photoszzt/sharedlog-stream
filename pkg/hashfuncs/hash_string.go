@@ -1,14 +1,13 @@
 package hashfuncs
 
 import (
-	"hash/fnv"
 	"unsafe"
+
+	"github.com/cespare/xxhash/v2"
 )
 
 func NameHash(name string) uint64 {
-	h := fnv.New64a()
-	h.Write([]byte(name))
-	return h.Sum64()
+	return xxhash.Sum64String(name)
 }
 
 type stringStruct struct {

@@ -5,6 +5,7 @@ go 1.18
 require (
 	cs.utexas.edu/zjia/faas v0.0.0
 	github.com/Jeffail/gabs/v2 v2.6.1
+	github.com/cespare/xxhash/v2 v2.1.2
 	github.com/confluentinc/confluent-kafka-go v1.8.2
 	github.com/gammazero/deque v0.1.1
 	github.com/google/btree v1.1.2

@@ -42,10 +42,9 @@ func (h *query1Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	return common.CompressData(encodedOutput), nil
 }
 
-func q1mapFunc(_ interface{}, value interface{}) (interface{}, error) {
-	event := value.(*ntypes.Event)
-	event.Bid.Price = uint64(event.Bid.Price * 908 / 1000.0)
-	return event, nil
+func q1mapFunc(_ string, value *ntypes.Event) (*ntypes.Event, error) {
+	value.Bid.Price = uint64(value.Bid.Price * 908 / 1000.0)
+	return value, nil
 }
 
 func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -62,9 +61,11 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum))
 	ectx.
 		Via(processor.NewMeteredProcessor(
-			processor.NewStreamFilterProcessor("filterBid", processor.PredicateFunc(only_bid)))).
+			processor.NewStreamFilterProcessorG[string, *ntypes.Event]("filterBid",
+				processor.PredicateFuncG[string, *ntypes.Event](only_bid)))).
 		Via(processor.NewMeteredProcessor(
-			processor.NewStreamMapValuesProcessor("mapBid", processor.ValueMapperWithKeyFunc(q1mapFunc)))).
+			processor.NewStreamMapValuesProcessorG[string, *ntypes.Event, *ntypes.Event](
+				"mapBid", processor.ValueMapperWithKeyFuncG[string, *ntypes.Event, *ntypes.Event](q1mapFunc)))).
 		Via(processor.NewMeteredProcessor(
 			processor.NewFixedSubstreamOutputProcessor(sinks[0], sp.ParNum)))
 	task := stream_task.NewStreamTaskBuilder().MarkFinalStage().Build()

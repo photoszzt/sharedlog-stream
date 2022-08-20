@@ -32,8 +32,7 @@ func getProduceTransactionManager(
 		panic(err)
 	}
 	trackParFunc1 := func(ctx context.Context,
-		key interface{},
-		keySerde commtypes.Encoder,
+		kBytes []byte,
 		topicName string,
 		substreamId uint8,
 	) error {

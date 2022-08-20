@@ -11,7 +11,6 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
-	"sharedlog-stream/pkg/utils"
 	"sync"
 	"time"
 
@@ -236,15 +235,10 @@ func (cmm *ControlChannelManager) AppendRescaleConfig(ctx context.Context,
 func TrackAndAppendKeyMapping(
 	ctx context.Context,
 	cmm *ControlChannelManager,
-	key interface{},
-	keySerde commtypes.Encoder,
+	kBytes []byte,
 	substreamId uint8,
 	topic string,
 ) error {
-	kBytes, err := keySerde.Encode(key)
-	if err != nil {
-		return err
-	}
 	cmm.kmMu.Lock()
 	subs, ok := cmm.keyMappings[topic]
 	if !ok {
@@ -253,7 +247,8 @@ func TrackAndAppendKeyMapping(
 	}
 	_, hasKey := subs[string(kBytes)]
 	if !hasKey {
-		hash := hashfuncs.NameHash(utils.GetStringValue(key))
+		hasher := hashfuncs.ByteSliceHasher{}
+		hash := hasher.HashSum64(kBytes)
 		subs[string(kBytes)] = keyMeta{
 			substream: substreamId,
 			hash:      hash,
@@ -268,7 +263,7 @@ func TrackAndAppendKeyMapping(
 			InstanceId:  cmm.instanceID,
 			Epoch:       cmm.currentEpoch,
 		}
-		err = cmm.appendToControlLog(ctx, cm, true)
+		err := cmm.appendToControlLog(ctx, cm, true)
 		// apElapsed := stats.Elapsed(apStart).Microseconds()
 		// cmm.appendCtrlLog.AddSample(apElapsed)
 		return err

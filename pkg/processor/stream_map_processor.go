@@ -66,11 +66,7 @@ func NewStreamMapProcessorG[K, V, KR, VR any](name string, mapper MapperG[K, V, 
 		name:   name,
 	}
 }
-
-func (p *StreamMapProcessorG[K, V, KR, VR]) Name() string {
-	return p.name
-}
-
+func (p *StreamMapProcessorG[K, V, KR, VR]) Name() string { return p.name }
 func (p *StreamMapProcessorG[K, V, KR, VR]) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	newK, newV, err := p.mapper.Map(msg.Key.(K), msg.Value.(V))
 	if err != nil {

@@ -90,3 +90,28 @@ func (p *StreamFilterNotProcessor) ProcessAndReturn(ctx context.Context, msg com
 	}
 	return nil, nil
 }
+
+type StreamFilterNotProcessorG[K, V any] struct {
+	pred PredicateG[K, V]
+	name string
+}
+
+var _ = Processor(&StreamFilterNotProcessorG[int, int]{})
+
+func NewStreamFilterNotProcessorG(name string, pred Predicate) *StreamFilterNotProcessor {
+	return &StreamFilterNotProcessor{
+		pred: pred,
+	}
+}
+
+func (p *StreamFilterNotProcessorG[K, V]) Name() string { return p.name }
+func (p *StreamFilterNotProcessorG[K, V]) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
+	ok, err := p.pred.Assert(msg.Key.(K), msg.Value.(V))
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return []commtypes.Message{msg}, nil
+	}
+	return nil, nil
+}

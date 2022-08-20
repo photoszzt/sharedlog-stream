@@ -6,14 +6,14 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/producer_consumer"
-	"sharedlog-stream/pkg/utils"
 )
 
 type GroupByOutputProcessor struct {
 	producer producer_consumer.MeteredProducerIntr
 	ectx     ExecutionContext
 	// cHash    *hash.ConsistentHash
-	name string
+	name            string
+	byteSliceHasher hashfuncs.ByteSliceHasher
 }
 
 func NewGroupByOutputProcessor(producer producer_consumer.MeteredProducerIntr,
@@ -21,9 +21,10 @@ func NewGroupByOutputProcessor(producer producer_consumer.MeteredProducerIntr,
 	// numPartition := producer.Stream().NumPartition()
 	g := GroupByOutputProcessor{
 		// cHash:    hash.NewConsistentHash(),
-		producer: producer,
-		name:     "to" + producer.TopicName(),
-		ectx:     ectx,
+		producer:        producer,
+		name:            "to" + producer.TopicName(),
+		ectx:            ectx,
+		byteSliceHasher: hashfuncs.ByteSliceHasher{},
 	}
 	// for i := uint8(0); i < numPartition; i++ {
 	// 	g.cHash.Add(i)
@@ -41,10 +42,13 @@ func (g *GroupByOutputProcessor) ProcessAndReturn(ctx context.Context, msg commt
 	// if !ok {
 	// 	return nil, common_errors.ErrFailToGetOutputSubstream
 	// }
-
-	hash := hashfuncs.NameHash(utils.GetStringValue(msg.Key))
+	kBytes, err := g.producer.KeyEncoder().Encode(msg.Key)
+	if err != nil {
+		return nil, err
+	}
+	hash := g.byteSliceHasher.HashSum64(kBytes)
 	par := uint8(hash % uint64(g.producer.Stream().NumPartition()))
-	err := g.ectx.TrackParFunc()(ctx, msg.Key, g.producer.KeyEncoder(), g.producer.TopicName(), par)
+	err = g.ectx.TrackParFunc()(ctx, kBytes, g.producer.TopicName(), par)
 	if err != nil {
 		return nil, fmt.Errorf("track substream failed: %v", err)
 	}

@@ -187,8 +187,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		panic(err)
 	}
 	trackParFunc := func(ctx context.Context,
-		key interface{},
-		keySerde commtypes.Encoder,
+		kBytes []byte,
 		topicName string,
 		substreamId uint8,
 	) error {
@@ -303,8 +302,7 @@ func joinProc(ctx context.Context,
 	src *producer_consumer.ShardedSharedLogStreamConsumer[int, strTs],
 	sink *producer_consumer.ShardedSharedLogStreamProducer[int, string],
 	trackParFunc func(ctx context.Context,
-		key interface{},
-		keyEncoder commtypes.Encoder,
+		kBytes []byte,
 		topicName string,
 		substreamId uint8,
 	) error,
@@ -398,7 +396,11 @@ func pushMsgsToSink(ctx context.Context, sink producer_consumer.Producer,
 ) error {
 	for _, msg := range msgs {
 		key := msg.Key.(int)
-		err := trackParFunc(ctx, key, sink.KeyEncoder(), sink.TopicName(), 0)
+		kBytes, err := sink.KeyEncoder().Encode(key)
+		if err != nil {
+			return err
+		}
+		err = trackParFunc(ctx, kBytes, sink.TopicName(), 0)
 		if err != nil {
 			return fmt.Errorf("add topic partition failed: %v", err)
 		}

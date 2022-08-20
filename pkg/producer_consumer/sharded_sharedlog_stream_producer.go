@@ -135,21 +135,21 @@ func (sls *ShardedSharedLogStreamProducer[K, V]) Produce(ctx context.Context, ms
 				return err
 			}
 		}
-	}
-	ctrl, ok := msg.Key.(string)
-	if ok {
-		if ctrl == txn_data.SCALE_FENCE_KEY {
-			debug.Assert(isControl, "scale fence msg should be a control msg")
-			scale_fence_tag := txn_data.ScaleFenceTag(sls.Stream().TopicNameHash(), parNum)
-			nameTag := sharedlog_stream.NameHashWithPartition(sls.Stream().TopicNameHash(), parNum)
-			_, err := sls.pushWithTag(ctx, msg.Value.([]byte), parNum, []uint64{scale_fence_tag, nameTag},
-				nil, sharedlog_stream.ControlRecordMeta)
-			return err
-		} else if ctrl == commtypes.END_OF_STREAM_KEY {
-			debug.Assert(isControl, "end of stream should be a control msg")
-			_, err := sls.push(ctx, msg.Value.([]byte), parNum, sharedlog_stream.ControlRecordMeta)
-			// debug.Fprintf(os.Stderr, "Producer: push end of stream to %s %d at 0x%x\n", sls.Stream().TopicName(), parNum, off)
-			return err
+		ctrl, ok := msg.Key.(string)
+		if ok {
+			if ctrl == txn_data.SCALE_FENCE_KEY {
+				debug.Assert(isControl, "scale fence msg should be a control msg")
+				scale_fence_tag := txn_data.ScaleFenceTag(sls.Stream().TopicNameHash(), parNum)
+				nameTag := sharedlog_stream.NameHashWithPartition(sls.Stream().TopicNameHash(), parNum)
+				_, err := sls.pushWithTag(ctx, msg.Value.([]byte), parNum, []uint64{scale_fence_tag, nameTag},
+					nil, sharedlog_stream.ControlRecordMeta)
+				return err
+			} else if ctrl == commtypes.END_OF_STREAM_KEY {
+				debug.Assert(isControl, "end of stream should be a control msg")
+				_, err := sls.push(ctx, msg.Value.([]byte), parNum, sharedlog_stream.ControlRecordMeta)
+				// debug.Fprintf(os.Stderr, "Producer: push end of stream to %s %d at 0x%x\n", sls.Stream().TopicName(), parNum, off)
+				return err
+			}
 		}
 	}
 	bytes, err := sls.msgSerde.Encode(msg)

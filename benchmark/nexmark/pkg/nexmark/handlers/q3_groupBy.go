@@ -100,21 +100,19 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	ectx.Producers()[1].SetName("perSink")
 	aucBySellerChain := processor.NewProcessorChains()
 	aucBySellerChain.
-		Via(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessor(
-			"auctionsBySellerIDMap",
-			processor.SelectKeyFunc(func(_, value interface{}) (interface{}, error) {
-				event := value.(*ntypes.Event)
-				return event.NewAuction.Seller, nil
-			})))).
+		Via(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64](
+			"auctionsBySellerIDMap", processor.SelectKeyFuncG[string, *ntypes.Event, uint64](
+				func(_ string, value *ntypes.Event) (uint64, error) {
+					return value.NewAuction.Seller, nil
+				})))).
 		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[0], &ectx))
 	personsByIDChain := processor.NewProcessorChains()
 	personsByIDChain.
-		Via(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessor(
-			"personsByIDMap",
-			processor.SelectKeyFunc(func(_, value interface{}) (interface{}, error) {
-				event := value.(*ntypes.Event)
-				return event.NewPerson.ID, nil
-			})))).
+		Via(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64](
+			"personsByIDMap", processor.SelectKeyFuncG[string, *ntypes.Event, uint64](
+				func(_ string, value *ntypes.Event) (uint64, error) {
+					return value.NewPerson.ID, nil
+				})))).
 		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[1], &ectx))
 
 	task := stream_task.NewStreamTaskBuilder().

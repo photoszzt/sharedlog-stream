@@ -31,8 +31,7 @@ func getEpochManager(ctx context.Context, env types.Environment,
 		return nil, nil, err
 	}
 	trackParFunc := exactly_once_intr.TrackProdSubStreamFunc(
-		func(ctx context.Context, key interface{}, keySerde commtypes.Encoder,
-			topicName string, substreamId uint8,
+		func(ctx context.Context, kBytes []byte, topicName string, substreamId uint8,
 		) error {
 			_ = em.AddTopicSubstream(ctx, topicName, substreamId)
 			return nil
@@ -187,22 +186,10 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 		panic(err)
 	}
 	expected_msgs = []commtypes.Message{
-		{
-			Key:   3,
-			Value: "tm1_c",
-		},
-		{
-			Key:   4,
-			Value: "tm1_d",
-		},
-		{
-			Key:   5,
-			Value: "tm1_e",
-		},
-		{
-			Key:   6,
-			Value: "tm1_f",
-		},
+		{Key: 3, Value: "tm1_c"},
+		{Key: 4, Value: "tm1_d"},
+		{Key: 5, Value: "tm1_e"},
+		{Key: 6, Value: "tm1_f"},
 	}
 	if !reflect.DeepEqual(expected_msgs, got) {
 		panic(fmt.Sprintf("should equal. expected: %v, got: %v", expected_msgs, got))

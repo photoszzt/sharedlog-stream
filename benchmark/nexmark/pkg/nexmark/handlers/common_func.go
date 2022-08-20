@@ -21,9 +21,8 @@ import (
 	"cs.utexas.edu/zjia/faas/types"
 )
 
-func only_bid(key interface{}, value interface{}) (bool, error) {
-	event := value.(*ntypes.Event)
-	return event.Etype == ntypes.BID, nil
+func only_bid(key string, value *ntypes.Event) (bool, error) {
+	return value.Etype == ntypes.BID, nil
 }
 
 func getSrcSink(ctx context.Context, env types.Environment, sp *common.QueryInput,

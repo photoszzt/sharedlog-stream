@@ -88,12 +88,11 @@ func (st *KeyValueStoreWithChangelog[K, V]) Put(ctx context.Context, key commtyp
 	if err != nil {
 		return err
 	}
-	err = st.trackFunc(ctx, key.(K), commtypes.EncoderFunc(func(i interface{}) ([]byte, error) {
-		if i == nil {
-			return nil, nil
-		}
-		return st.msgSerde.EncodeKey(i.(K))
-	}), st.changelogManager.TopicName(), st.parNum)
+	kBytes, err := st.msgSerde.EncodeKey(key.(K))
+	if err != nil {
+		return err
+	}
+	err = st.trackFunc(ctx, kBytes, st.changelogManager.TopicName(), st.parNum)
 	if err != nil {
 		return err
 	}

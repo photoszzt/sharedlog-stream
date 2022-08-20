@@ -42,9 +42,8 @@ func (h *query2Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	return common.CompressData(encodedOutput), nil
 }
 
-func filterFunc(_ interface{}, value interface{}) (bool, error) {
-	event := value.(*ntypes.Event)
-	return event.Etype == ntypes.BID && event.Bid.Auction%123 == 0, nil
+func filterFunc(_ string, value *ntypes.Event) (bool, error) {
+	return value.Etype == ntypes.BID && value.Bid.Auction%123 == 0, nil
 }
 
 /*
@@ -65,8 +64,8 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 	ectx := processor.NewExecutionContextFromComponents(srcsSinks, proc_interface.NewBaseProcArgs(h.funcName,
 		sp.ScaleEpoch, sp.ParNum))
 	ectx.Via(processor.NewMeteredProcessor(
-		processor.NewStreamFilterProcessor("q2Filter",
-			processor.PredicateFunc(filterFunc)))).
+		processor.NewStreamFilterProcessorG[string, *ntypes.Event]("q2Filter",
+			processor.PredicateFuncG[string, *ntypes.Event](filterFunc)))).
 		Via(processor.NewMeteredProcessor(
 			processor.NewFixedSubstreamOutputProcessor(sinks[0], sp.ParNum)))
 	task := stream_task.NewStreamTaskBuilder().MarkFinalStage().Build()
