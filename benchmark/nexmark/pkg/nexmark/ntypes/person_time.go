@@ -17,6 +17,10 @@ type PersonTime struct {
 	StartTime int64  `json:"startTime" msg:"startTime"`
 }
 
+func SizeOfPersonTime(k PersonTime) int64 {
+	return 16 + int64(len(k.Name))
+}
+
 var _ = fmt.Stringer(PersonTime{})
 
 func (pt PersonTime) String() string {

@@ -12,6 +12,10 @@ type BidPrice struct {
 	Price uint64 `json:"price" msg:"price"`
 }
 
+func SizeOfBidPrice(k BidPrice) int64 {
+	return 8
+}
+
 type BidPriceJSONSerde struct{}
 type BidPriceMsgpSerde struct{}
 

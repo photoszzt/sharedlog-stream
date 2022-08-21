@@ -14,6 +14,10 @@ type PriceTime struct {
 	DateTime int64  `json:"dateTime" msg:"dateTime"` // unix timestamp in ms
 }
 
+func SizeOfPriceTime(k PriceTime) int64 {
+	return 16
+}
+
 func ComparePriceTime(a, b PriceTime) int {
 	if a.Price < b.Price {
 		return -1

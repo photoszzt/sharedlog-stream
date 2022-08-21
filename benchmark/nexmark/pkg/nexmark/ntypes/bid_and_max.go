@@ -18,6 +18,10 @@ type BidAndMax struct {
 	WEndMs   int64  `json:"wEndMs" msg:"wEndMs"`
 }
 
+func SizeOfBidAndMax(k BidAndMax) int64 {
+	return 48
+}
+
 var _ = fmt.Stringer(BidAndMax{})
 
 func (bm BidAndMax) String() string {

@@ -16,6 +16,10 @@ type AuctionIdCount struct {
 	Count uint64 `json:"cnt,omitempty" msg:"cnt,omitempty"`
 }
 
+func SizeOfAuctionIdCount(k AuctionIdCount) int64 {
+	return 16
+}
+
 var _ = fmt.Stringer(AuctionIdCount{})
 
 func (aic AuctionIdCount) String() string {

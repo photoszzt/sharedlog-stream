@@ -16,6 +16,10 @@ type StartEndTime struct {
 	EndTimeMs   int64 `json:"eTs" msg:"eTs"`
 }
 
+func SizeOfStartEndTime(k StartEndTime) int64 {
+	return 16
+}
+
 var _ = fmt.Stringer(StartEndTime{})
 
 func (se StartEndTime) Stringer() string {

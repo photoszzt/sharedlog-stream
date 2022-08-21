@@ -40,6 +40,10 @@ type PriceTimeList struct {
 	PTList PriceTimeSlice `json:"ptList" msg:"ptList"`
 }
 
+func SizeOfPriceTimeList(ptl PriceTimeList) int64 {
+	return int64(16 * len(ptl.PTList))
+}
+
 var _ = fmt.Stringer(PriceTimeList{})
 
 func (ptl PriceTimeList) String() string {

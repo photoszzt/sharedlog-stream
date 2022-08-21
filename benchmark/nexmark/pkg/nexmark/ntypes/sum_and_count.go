@@ -20,6 +20,14 @@ func (sc SumAndCount) String() string {
 	return fmt.Sprintf("SumAndCount: {Sum: %d, Count: %d}", sc.Sum, sc.Count)
 }
 
+func SizeOfSumAndCount(k SumAndCount) int64 {
+	return 16
+}
+
+func SizeOfSumAndCountPtr(k *SumAndCount) int64 {
+	return 16
+}
+
 type SumAndCountJSONSerde struct{}
 
 var _ = commtypes.Serde(SumAndCountJSONSerde{})

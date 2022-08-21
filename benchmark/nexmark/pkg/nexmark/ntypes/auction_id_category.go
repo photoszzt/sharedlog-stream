@@ -14,6 +14,10 @@ type AuctionIdCategory struct {
 	Category uint64 `json:"cat,omitempty" msg:"cat,omitempty"`
 }
 
+func SizeOfAuctionIdCategory(k AuctionIdCategory) int64 {
+	return 16
+}
+
 var _ = fmt.Stringer(AuctionIdCategory{})
 
 func (aic AuctionIdCategory) String() string {

@@ -18,6 +18,10 @@ type AuctionBid struct {
 	AucSeller   uint64 `json:"aucSeller,omitempty" msg:"aucSeller,omitempty"`
 }
 
+func SizeOfAuctionBid(k *AuctionBid) int64 {
+	return 48
+}
+
 var _ = fmt.Stringer(AuctionBid{})
 
 func (ab AuctionBid) String() string {

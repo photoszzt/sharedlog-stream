@@ -14,6 +14,10 @@ type AuctionIdSeller struct {
 	Seller uint64 `json:"seller,omitempty" msg:"seller,omitempty"`
 }
 
+func SizeOfAuctionIdSeller(k AuctionIdSeller) int64 {
+	return 16
+}
+
 func CompareAuctionIDSeller(a, b AuctionIdSeller) int {
 	if a.AucId < b.AucId {
 		return -1

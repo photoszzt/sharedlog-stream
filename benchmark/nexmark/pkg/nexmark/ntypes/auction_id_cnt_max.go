@@ -15,6 +15,10 @@ type AuctionIdCntMax struct {
 	MaxCnt uint64 `json:"maxCnt" msg:"maxCnt"`
 }
 
+func SizeOfAuctionIdCntMax(k AuctionIdCntMax) int64 {
+	return 24
+}
+
 var _ = fmt.Stringer(AuctionIdCntMax{})
 
 func (aicm AuctionIdCntMax) String() string {
