@@ -2,9 +2,7 @@ package store
 
 import (
 	"context"
-	"fmt"
 	"math"
-	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sync"
@@ -238,17 +236,17 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) fetchWithKeyRangeWithDuplicates(ctx 
 	keyFrom VersionedKeyG[K], keyTo VersionedKeyG[K], timeFrom int64, timeTo int64,
 	iterFunc func(int64, K, V) error,
 ) error {
-	fmt.Fprintf(os.Stderr, "keyFrom: %+v, keyTo: %+v, timeFrom: %v, timeTo: %v\n",
-		keyFrom, keyTo, timeFrom, timeTo)
+	// fmt.Fprintf(os.Stderr, "keyFrom: %+v, keyTo: %+v, timeFrom: %v, timeTo: %v\n",
+	// 	keyFrom, keyTo, timeFrom, timeTo)
 	s.storeWithDup.RangeFrom(timeFrom, func(ts int64, kvmap *skipmap.FuncMap[VersionedKeyG[K], V]) bool {
 		if ts > timeTo {
 			return false
 		} else if ts < timeFrom {
 			return true
 		}
-		fmt.Fprintf(os.Stderr, "current ts: %v\n", ts)
+		// fmt.Fprintf(os.Stderr, "current ts: %v\n", ts)
 		kvmap.RangeFrom(keyFrom, func(k VersionedKeyG[K], v V) bool {
-			fmt.Fprintf(os.Stderr, "current key: %+v\n", k)
+			// fmt.Fprintf(os.Stderr, "current key: %+v\n", k)
 			if s.compareFuncWithVersionedKey(k, keyTo) <= 0 {
 				err := iterFunc(ts, k.Key, v)
 				if err != nil {
