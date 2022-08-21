@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/pkg/stats"
 	"sync"
 	"sync/atomic"
+	"unsafe"
 
 	"4d63.com/optional"
 )
@@ -41,6 +42,7 @@ type Cache[K comparable, V any] struct {
 	dirtyKeys     *linkedhashset.LinkedHashSet[K]              // protected by mux
 	orderList     *genericlist.List[LRUElement[K, V]]          // protected by mux
 	hitRatio      stats.StatsCollector[float64]
+	elementSize   uint64
 
 	currentSizeBytes uint64
 	numReadHits      uint64
@@ -52,12 +54,16 @@ type Cache[K comparable, V any] struct {
 type FlushCallbackFunc[K comparable, V any] func(entries []LRUElement[K, V])
 
 func NewCache[K comparable, V any](flushCallback FlushCallbackFunc[K, V]) *Cache[K, V] {
+	var k K
+	var v V
+	elementSizeApprox := uint64(unsafe.Sizeof(k) + unsafe.Sizeof(v))
 	return &Cache[K, V]{
 		cache:            make(map[K]*genericlist.Element[LRUElement[K, V]]),
 		dirtyKeys:        linkedhashset.New[K](),
 		orderList:        genericlist.New[LRUElement[K, V]](),
 		flushCallback:    flushCallback,
 		hitRatio:         stats.NewStatsCollector[float64]("cache_hit_ratio", stats.DEFAULT_COLLECT_DURATION),
+		elementSize:      elementSizeApprox,
 		currentSizeBytes: 0,
 		numReadHits:      0,
 		numReadMisses:    0,
@@ -90,23 +96,26 @@ func (c *Cache[K, V]) first() LRUEntry[V] {
 
 func (c *Cache[K, V]) last() LRUEntry[V] {
 	c.mux.Lock()
-	defer c.mux.Unlock()
-	return c.orderList.Back().Value.entry
+	ret := c.orderList.Back().Value.entry
+	c.mux.Unlock()
+	return ret
 }
 
 func (c *Cache[K, V]) head() *genericlist.Element[LRUElement[K, V]] {
 	c.mux.Lock()
-	defer c.mux.Unlock()
-	return c.orderList.Front()
+	ret := c.orderList.Front()
+	c.mux.Unlock()
+	return ret
 }
 
 func (c *Cache[K, V]) tail() *genericlist.Element[LRUElement[K, V]] {
 	c.mux.Lock()
-	defer c.mux.Unlock()
-	return c.orderList.Back()
+	ret := c.orderList.Back()
+	c.mux.Unlock()
+	return ret
 }
 
-func (c *Cache[K, V]) Len() int {
+func (c *Cache[K, V]) len() int {
 	return len(c.cache)
 }
 
@@ -129,12 +138,13 @@ func (c *Cache[K, V]) updateLRULockHeld(element *genericlist.Element[LRUElement[
 
 func (c *Cache[K, V]) get(key K) (LRUEntry[V], bool /* found */) {
 	c.mux.Lock()
-	defer c.mux.Unlock()
 	element := c.getInternalLockHeld(key)
 	if element != nil {
 		c.updateLRULockHeld(element)
+		c.mux.Unlock()
 		return element.Value.entry, true
 	} else {
+		c.mux.Unlock()
 		return LRUEntry[V]{}, false
 	}
 }
@@ -144,7 +154,6 @@ func (c *Cache[K, V]) put(key K, value LRUEntry[V]) error {
 		return fmt.Errorf("Attempting to put a clean entrty for key[%v] into cache when it already contains a dirty entry for the same key", key)
 	}
 	c.mux.Lock()
-	defer c.mux.Unlock()
 	element := c.cache[key]
 	if element != nil {
 		atomic.AddUint64(&c.numOverwrites, 1)
@@ -158,12 +167,12 @@ func (c *Cache[K, V]) put(key K, value LRUEntry[V]) error {
 		c.dirtyKeys.Remove(key)
 		c.dirtyKeys.Add(key)
 	}
+	c.mux.Unlock()
 	return nil
 }
 
 func (c *Cache[K, V]) evict() {
 	c.mux.Lock()
-	defer c.mux.Unlock()
 	element := c.orderList.Back()
 	if element != nil {
 		c.orderList.Remove(element)
@@ -172,12 +181,13 @@ func (c *Cache[K, V]) evict() {
 			c.flushLockHeld(element)
 		}
 	}
+	c.mux.Unlock()
 }
 
 func (c *Cache[K, V]) flush(element *genericlist.Element[LRUElement[K, V]]) {
 	c.mux.Lock()
-	defer c.mux.Unlock()
 	c.flushLockHeld(nil)
+	c.mux.Unlock()
 }
 
 func (c *Cache[K, V]) flushLockHeld(evicted *genericlist.Element[LRUElement[K, V]]) {
@@ -225,14 +235,18 @@ func (c *Cache[K, V]) deleteLockHeld(key K) (LRUEntry[V], bool) {
 
 func (c *Cache[K, V]) delete(key K) (LRUEntry[V], bool) {
 	c.mux.Lock()
-	defer c.mux.Unlock()
-	return c.deleteLockHeld(key)
+	entry, ok := c.deleteLockHeld(key)
+	c.mux.Unlock()
+	return entry, ok
 }
 
-func (c *Cache[K, V]) putIfAbsent(key K, value LRUEntry[V]) (LRUEntry[V], bool) {
+func (c *Cache[K, V]) putIfAbsent(key K, value LRUEntry[V]) (LRUEntry[V], bool, error) {
 	originalValue, found := c.get(key)
 	if !found {
-		c.put(key, value)
+		err := c.put(key, value)
+		if err != nil {
+			return LRUEntry[V]{}, false, err
+		}
 	}
-	return originalValue, found
+	return originalValue, found, nil
 }

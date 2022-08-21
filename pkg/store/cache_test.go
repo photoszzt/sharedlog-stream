@@ -17,7 +17,10 @@ func TestShouldKeepTrackOfMostRecentlyAndLeastRecentlyUsed(t *testing.T) {
 	}
 	cache := NewCache(func(entries []LRUElement[string, string]) {})
 	for _, msg := range toInsert {
-		cache.put(msg.Key.(string), LRUEntry[string]{value: optional.Of(msg.Value.(string)), isDirty: true})
+		err := cache.put(msg.Key.(string), LRUEntry[string]{value: optional.Of(msg.Value.(string)), isDirty: true})
+		if err != nil {
+			t.Fatal(err)
+		}
 		head := cache.first()
 		tail := cache.last()
 		headV, _ := head.Value().Get()
@@ -89,8 +92,14 @@ func TestShouldPutIfAbsent(t *testing.T) {
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	cache.putIfAbsent(0, LRUEntry[int]{value: optional.Of(20), isDirty: false})
-	cache.putIfAbsent(1, LRUEntry[int]{value: optional.Of(30), isDirty: false})
+	_, _, err = cache.putIfAbsent(0, LRUEntry[int]{value: optional.Of(20), isDirty: false})
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+	_, _, err = cache.putIfAbsent(1, LRUEntry[int]{value: optional.Of(30), isDirty: false})
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
 	entry, found := cache.get(0)
 	if !found {
 		t.Errorf("expected found, got not found")
@@ -111,7 +120,10 @@ func TestShouldPutIfAbsent(t *testing.T) {
 
 func TestShouldDeleteAndUpdateSize(t *testing.T) {
 	cache := NewCache(func(entries []LRUElement[int, int]) {})
-	cache.put(0, LRUEntry[int]{value: optional.Of(10), isDirty: false})
+	err := cache.put(0, LRUEntry[int]{value: optional.Of(10), isDirty: false})
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
 	deleted, found := cache.delete(0)
 	if !found {
 		t.Errorf("expected found, got not found")
@@ -124,9 +136,18 @@ func TestShouldDeleteAndUpdateSize(t *testing.T) {
 
 func TestShouldOverwriteAll(t *testing.T) {
 	cache := NewCache(func(entries []LRUElement[int, int]) {})
-	cache.put(0, LRUEntry[int]{value: optional.Of(0), isDirty: false})
-	cache.put(0, LRUEntry[int]{value: optional.Of(1), isDirty: false})
-	cache.put(0, LRUEntry[int]{value: optional.Of(2), isDirty: false})
+	err := cache.put(0, LRUEntry[int]{value: optional.Of(0), isDirty: false})
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+	err = cache.put(0, LRUEntry[int]{value: optional.Of(1), isDirty: false})
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+	err = cache.put(0, LRUEntry[int]{value: optional.Of(2), isDirty: false})
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
 	entry, _ := cache.get(0)
 	v, _ := entry.Value().Get()
 	if v != 2 {
@@ -139,9 +160,18 @@ func TestShouldOverwriteAll(t *testing.T) {
 
 func TestShouldEvictEldestEntry(t *testing.T) {
 	cache := NewCache(func(entries []LRUElement[int, int]) {})
-	cache.put(0, LRUEntry[int]{value: optional.Of(10), isDirty: false})
-	cache.put(1, LRUEntry[int]{value: optional.Of(20), isDirty: false})
-	cache.put(2, LRUEntry[int]{value: optional.Of(30), isDirty: false})
+	err := cache.put(0, LRUEntry[int]{value: optional.Of(10), isDirty: false})
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+	err = cache.put(1, LRUEntry[int]{value: optional.Of(20), isDirty: false})
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+	err = cache.put(2, LRUEntry[int]{value: optional.Of(30), isDirty: false})
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
 	cache.evict()
 	_, found := cache.get(0)
 	if found {
@@ -154,9 +184,18 @@ func TestShouldFlushDirtEntriesOnEviction(t *testing.T) {
 	cache := NewCache(func(entries []LRUElement[int, int]) {
 		flushed = append(flushed, entries...)
 	})
-	cache.put(0, LRUEntry[int]{value: optional.Of(10), isDirty: true})
-	cache.put(1, LRUEntry[int]{value: optional.Of(20), isDirty: false})
-	cache.put(2, LRUEntry[int]{value: optional.Of(30), isDirty: true})
+	err := cache.put(0, LRUEntry[int]{value: optional.Of(10), isDirty: true})
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+	err = cache.put(1, LRUEntry[int]{value: optional.Of(20), isDirty: false})
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+	err = cache.put(2, LRUEntry[int]{value: optional.Of(30), isDirty: true})
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
 	cache.evict()
 	if len(flushed) != 2 {
 		t.Errorf("expected 2, got %d, flushed contains: %+v", len(flushed), flushed)

@@ -87,7 +87,10 @@ func (c *CachingKeyValueStoreG[K, V]) getInternal(ctx context.Context, key K) (o
 			return optional.Optional[V]{}, nil
 		}
 		retV := optional.Of(v)
-		c.cache.put(key, LRUEntry[V]{value: retV})
+		err = c.cache.put(key, LRUEntry[V]{value: retV})
+		if err != nil {
+			return optional.Empty[V](), err
+		}
 		return retV, nil
 	}
 }

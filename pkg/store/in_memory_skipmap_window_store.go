@@ -154,7 +154,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Fetch(ctx context.Context, key K, ti
 			Version: math.MaxUint32,
 			Key:     key,
 		}
-		s.fetchWithKeyRangeWithDuplicates(ctx, keyFrom, keyTo, tsFrom, tsTo, iterFunc)
+		return s.fetchWithKeyRangeWithDuplicates(ctx, keyFrom, keyTo, tsFrom, tsTo, iterFunc)
 	} else {
 		s.storeNoDup.RangeFrom(tsFrom, func(ts int64, kvmap *skipmap.FuncMap[K, V]) bool {
 			if ts > tsTo {
@@ -171,8 +171,8 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Fetch(ctx context.Context, key K, ti
 			}
 			return true
 		})
+		return nil
 	}
-	return nil
 }
 func (s *InMemorySkipMapWindowStoreG[K, V]) FetchWithKeyRange(ctx context.Context, keyFrom K,
 	keyTo K, timeFrom time.Time, timeTo time.Time,
@@ -207,7 +207,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) FetchWithKeyRange(ctx context.Contex
 			Version: math.MaxUint32,
 			Key:     keyTo,
 		}
-		s.fetchWithKeyRangeWithDuplicates(ctx, kFrom, kTo, tsFrom, tsTo, iterFunc)
+		return s.fetchWithKeyRangeWithDuplicates(ctx, kFrom, kTo, tsFrom, tsTo, iterFunc)
 	} else {
 		s.storeNoDup.RangeFrom(tsFrom, func(ts int64, kvmap *skipmap.FuncMap[K, V]) bool {
 			if ts > tsTo {
@@ -218,18 +218,15 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) FetchWithKeyRange(ctx context.Contex
 			kvmap.RangeFrom(keyFrom, func(k K, v V) bool {
 				if s.compareFunc(k, keyTo) <= 0 {
 					err := iterFunc(ts, k, v)
-					if err != nil {
-						return false
-					}
-					return true
+					return err == nil
 				} else {
 					return false
 				}
 			})
 			return true
 		})
+		return nil
 	}
-	return nil
 }
 
 func (s *InMemorySkipMapWindowStoreG[K, V]) fetchWithKeyRangeWithDuplicates(ctx context.Context,
@@ -249,10 +246,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) fetchWithKeyRangeWithDuplicates(ctx 
 			// fmt.Fprintf(os.Stderr, "current key: %+v\n", k)
 			if s.compareFuncWithVersionedKey(k, keyTo) <= 0 {
 				err := iterFunc(ts, k.Key, v)
-				if err != nil {
-					return false
-				}
-				return true
+				return err == nil
 			} else {
 				return false
 			}
@@ -293,10 +287,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) FetchAll(ctx context.Context, timeFr
 			} else {
 				kvmap.Range(func(k VersionedKeyG[K], v V) bool {
 					err := iterFunc(ts, k.Key, v)
-					if err != nil {
-						return false
-					}
-					return true
+					return err == nil
 				})
 				return true
 			}
@@ -310,10 +301,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) FetchAll(ctx context.Context, timeFr
 			} else {
 				kvmap.Range(func(k K, v V) bool {
 					err := iterFunc(ts, k, v)
-					if err != nil {
-						return false
-					}
-					return true
+					return err == nil
 				})
 				return true
 			}
@@ -334,10 +322,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) IterAll(iterFunc func(int64, K, V) e
 			}
 			kvmap.Range(func(k VersionedKeyG[K], v V) bool {
 				err := iterFunc(ts, k.Key, v)
-				if err != nil {
-					return false
-				}
-				return true
+				return err == nil
 			})
 			return true
 		})
@@ -348,10 +333,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) IterAll(iterFunc func(int64, K, V) e
 			}
 			kvmap.Range(func(k K, v V) bool {
 				err := iterFunc(ts, k, v)
-				if err != nil {
-					return false
-				}
-				return true
+				return err == nil
 			})
 			return true
 		})
