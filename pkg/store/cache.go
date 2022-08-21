@@ -35,15 +35,14 @@ func (lruE *LRUEntry[V]) Value() optional.Optional[V] {
 }
 
 type Cache[K comparable, V any] struct {
-	mux           sync.Mutex
-	flushCallback func(entries []LRUElement[K, V])
-	cache         map[K]*genericlist.Element[LRUElement[K, V]] // protected by mux
-	dirtyKeys     *linkedhashset.LinkedHashSet[K]              // protected by mux
-	orderList     *genericlist.List[LRUElement[K, V]]          // protected by mux
-	hitRatio      stats.StatsCollector[float64]
-	sizeOfKey     func(K) int64
-	sizeOfVal     func(V) int64
-
+	mux              sync.Mutex
+	sizeOfKey        func(K) int64
+	cache            map[K]*genericlist.Element[LRUElement[K, V]] // protected by mux
+	dirtyKeys        *linkedhashset.LinkedHashSet[K]              // protected by mux
+	orderList        *genericlist.List[LRUElement[K, V]]          // protected by mux
+	flushCallback    func(entries []LRUElement[K, V])
+	sizeOfVal        func(V) int64
+	hitRatio         stats.StatsCollector[float64]
 	currentSizeBytes int64
 	numReadHits      uint64
 	numReadMisses    uint64
@@ -90,8 +89,9 @@ func (c *Cache[K, V]) flushes() uint64 {
 
 func (c *Cache[K, V]) first() LRUEntry[V] {
 	c.mux.Lock()
-	defer c.mux.Unlock()
-	return c.orderList.Front().Value.entry
+	ret := c.orderList.Front().Value.entry
+	c.mux.Unlock()
+	return ret
 }
 
 func (c *Cache[K, V]) last() LRUEntry[V] {

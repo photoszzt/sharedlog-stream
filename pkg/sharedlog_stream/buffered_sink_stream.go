@@ -96,8 +96,9 @@ func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, 
 
 func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload []byte, producerId commtypes.ProducerId) error {
 	s.mux.Lock()
-	defer s.mux.Unlock()
-	return s.BufPushNoLock(ctx, payload, producerId)
+	err := s.BufPushNoLock(ctx, payload, producerId)
+	s.mux.Unlock()
+	return err
 }
 
 func (s *BufferedSinkStream) updateProdSeqNum(seqNum uint64) {
@@ -113,12 +114,13 @@ func (s *BufferedSinkStream) Push(ctx context.Context, payload []byte, parNum ui
 	meta LogEntryMeta, producerId commtypes.ProducerId,
 ) (uint64, error) {
 	s.mux.Lock()
-	defer s.mux.Unlock()
 	seqNum, err := s.Stream.Push(ctx, payload, parNum, meta, producerId)
 	if err != nil {
+		s.mux.Unlock()
 		return 0, err
 	}
 	s.updateProdSeqNum(seqNum)
+	s.mux.Unlock()
 	return seqNum, nil
 }
 
@@ -126,12 +128,13 @@ func (s *BufferedSinkStream) PushWithTag(ctx context.Context, payload []byte, pa
 	additionalTopic []string, meta LogEntryMeta, producerId commtypes.ProducerId,
 ) (uint64, error) {
 	s.mux.Lock()
-	defer s.mux.Unlock()
 	seqNum, err := s.Stream.PushWithTag(ctx, payload, parNum, tags, additionalTopic, meta, producerId)
 	if err != nil {
+		s.mux.Unlock()
 		return 0, err
 	}
 	s.updateProdSeqNum(seqNum)
+	s.mux.Unlock()
 	return seqNum, nil
 }
 
@@ -179,6 +182,7 @@ func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId commtyp
 
 func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context, producerId commtypes.ProducerId) error {
 	s.mux.Lock()
-	defer s.mux.Unlock()
-	return s.FlushNoLock(ctx, producerId)
+	err := s.FlushNoLock(ctx, producerId)
+	s.mux.Unlock()
+	return err
 }

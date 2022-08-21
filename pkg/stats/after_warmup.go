@@ -97,18 +97,21 @@ func (w *WarmupGoroutineSafe) StartWarmup() {
 
 func (w *WarmupGoroutineSafe) GetStartTime() time.Time {
 	w.Lock()
-	defer w.Unlock()
-	return w.initial
+	ret := w.initial
+	w.Unlock()
+	return ret
 }
 
 func (w *WarmupGoroutineSafe) ElapsedAfterWarmup() time.Duration {
 	w.Lock()
-	defer w.Unlock()
-	return time.Since(w.afterWarmupStart)
+	ret := time.Since(w.afterWarmupStart)
+	w.Unlock()
+	return ret
 }
 
 func (w *WarmupGoroutineSafe) ElapsedSinceInitial() time.Duration {
 	w.Lock()
-	defer w.Unlock()
-	return time.Since(w.initial)
+	ret := time.Since(w.initial)
+	w.Unlock()
+	return ret
 }

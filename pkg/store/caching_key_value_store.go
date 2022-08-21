@@ -34,13 +34,14 @@ func NewCachingKeyValueStoreG[K comparable, V any](name string,
 func (c *CachingKeyValueStoreG[K, V]) Name() string { return c.name }
 func (c *CachingKeyValueStoreG[K, V]) Get(ctx context.Context, key K) (V, bool, error) {
 	c.mux.Lock()
-	defer c.mux.Unlock()
 	var retV V
 	v, err := c.getInternal(ctx, key)
 	if err != nil {
+		c.mux.Unlock()
 		return retV, false, err
 	}
 	retV, ok := v.Get()
+	c.mux.Unlock()
 	return retV, ok, nil
 }
 
@@ -52,8 +53,9 @@ func (c *CachingKeyValueStoreG[K, V]) ApproximateNumEntries() (uint64, error) {
 }
 func (c *CachingKeyValueStoreG[K, V]) Put(ctx context.Context, key K, value optional.Optional[V]) error {
 	c.mux.Lock()
-	defer c.mux.Unlock()
-	return c.putInternal(key, value)
+	err := c.putInternal(key, value)
+	c.mux.Unlock()
+	return err
 }
 
 func (c *CachingKeyValueStoreG[K, V]) putInternal(key K, value optional.Optional[V]) error {
@@ -62,17 +64,19 @@ func (c *CachingKeyValueStoreG[K, V]) putInternal(key K, value optional.Optional
 
 func (c *CachingKeyValueStoreG[K, V]) PutIfAbsent(ctx context.Context, key K, value V) (optional.Optional[V], error) {
 	c.mux.Lock()
-	defer c.mux.Unlock()
 	opV, err := c.getInternal(ctx, key)
 	if err != nil {
+		c.mux.Unlock()
 		return optional.Optional[V]{}, err
 	}
 	if !opV.IsPresent() {
 		err = c.putInternal(key, optional.Of(value))
 		if err != nil {
+			c.mux.Unlock()
 			return optional.Optional[V]{}, err
 		}
 	}
+	c.mux.Unlock()
 	return opV, nil
 }
 
@@ -107,12 +111,14 @@ func (c *CachingKeyValueStoreG[K, V]) PutAll(ctx context.Context, msgs []*commty
 }
 func (c *CachingKeyValueStoreG[K, V]) Delete(ctx context.Context, key K) error {
 	c.mux.Lock()
-	defer c.mux.Unlock()
 	_, err := c.getInternal(ctx, key)
 	if err != nil {
+		c.mux.Unlock()
 		return err
 	}
-	return c.cache.put(key, LRUEntry[V]{value: optional.Empty[V]()})
+	err = c.cache.put(key, LRUEntry[V]{value: optional.Empty[V]()})
+	c.mux.Unlock()
+	return err
 }
 func (c *CachingKeyValueStoreG[K, V]) TableType() TABLE_TYPE                                    { return IN_MEM }
 func (c *CachingKeyValueStoreG[K, V]) SetTrackParFunc(exactly_once_intr.TrackProdSubStreamFunc) {}
