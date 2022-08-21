@@ -24,19 +24,16 @@ const (
 )
 
 type EpochManager struct {
-	epochMetaSerde commtypes.SerdeG[commtypes.EpochMarker]
-	env            types.Environment
-
+	epochMetaSerde        commtypes.SerdeG[commtypes.EpochMarker]
+	env                   types.Environment
 	currentTopicSubstream *skipmap.StringMap[*skipset.Uint32Set]
-
-	// two different meta data class
-	epochLogForRead   *sharedlog_stream.SharedLogStream
-	epochLogForWrite  *sharedlog_stream.SharedLogStream
-	epochLogMarkerTag uint64
-	epochMngrName     string
+	epochLogForRead       *sharedlog_stream.SharedLogStream
+	epochLogForWrite      *sharedlog_stream.SharedLogStream
+	errChan               chan error
+	quitChan              chan struct{}
+	epochMngrName         string
 	commtypes.ProducerId
-	errChan  chan error
-	quitChan chan struct{}
+	epochLogMarkerTag uint64
 }
 
 func NewEpochManager(env types.Environment, epochMngrName string,

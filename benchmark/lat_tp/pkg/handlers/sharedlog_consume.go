@@ -44,11 +44,7 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	cm, err := consume_seq_num_manager.NewConsumeSeqManager(commtypes.MSGP)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	err = cm.CreateOffsetTopic(h.env, sp.TopicName, sp.NumOutPartition, commtypes.SerdeFormat(sp.SerdeFormat))
+	cm, err := consume_seq_num_manager.NewConsumeSeqManager(h.env, commtypes.MSGP, "sharedlogConsumeBench")
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -154,7 +150,7 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 
 func commitConsumeSeq(ctx context.Context,
 	cm *consume_seq_num_manager.ConsumeSeqManager, topicName string, off uint64) error {
-	return cm.TrackForTest(ctx, map[string]uint64{topicName: off}, 0)
+	return cm.Track(ctx, map[string]uint64{topicName: off})
 }
 
 func (h *sharedlogConsumeBenchHandler) runLoop(ctx context.Context,

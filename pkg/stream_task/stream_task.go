@@ -294,15 +294,17 @@ func getOffsetMap(ctx context.Context,
 func setOffsetOnStream(offsetMap map[string]uint64,
 	args *StreamTaskArgs,
 ) {
-	for _, src := range args.ectx.Consumers() {
-		inputTopicName := src.TopicName()
-		offset := offsetMap[inputTopicName]
-		resetTo := offset + 1
-		if offset == 0 {
-			resetTo = offset
+	if offsetMap != nil {
+		for _, src := range args.ectx.Consumers() {
+			inputTopicName := src.TopicName()
+			offset := offsetMap[inputTopicName]
+			resetTo := offset + 1
+			if offset == 0 {
+				resetTo = offset
+			}
+			debug.Fprintf(os.Stderr, "offset restores to %x\n", resetTo)
+			src.SetCursor(resetTo, args.ectx.SubstreamNum())
 		}
-		debug.Fprintf(os.Stderr, "offset restores to %x\n", resetTo)
-		src.SetCursor(resetTo, args.ectx.SubstreamNum())
 	}
 }
 

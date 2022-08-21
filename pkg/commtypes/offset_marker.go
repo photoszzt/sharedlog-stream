@@ -8,8 +8,7 @@ import (
 )
 
 type OffsetMarker struct {
-	Offset uint64    `json:"offset" msg:"offset"`
-	Mark   EpochMark `json:"mark" msg:"mark"`
+	ConSeqNums map[string]uint64 `json:"offset" msg:"offset"`
 }
 
 type OffsetMarkerJSONSerde struct{}

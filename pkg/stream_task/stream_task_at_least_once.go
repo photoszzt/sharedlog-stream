@@ -17,29 +17,16 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 	debug.Assert(args.env != nil, "env should be filled")
 	debug.Assert(args.ectx != nil, "program args should be filled")
 	// latencies := stats.NewInt64Collector("latPerIter", stats.DEFAULT_COLLECT_DURATION)
-	cm, err := consume_seq_num_manager.NewConsumeSeqManager(args.serdeFormat)
+	cm, err := consume_seq_num_manager.NewConsumeSeqManager(args.env, args.serdeFormat, args.transactionalId)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	debug.Fprint(os.Stderr, "start restore\n")
-	offsetMap := make(map[string]uint64)
-	for _, src := range args.ectx.Consumers() {
-		inputTopicName := src.TopicName()
-		err = cm.CreateOffsetTopic(args.env, inputTopicName, src.Stream().NumPartition(), args.serdeFormat)
-		if err != nil {
+	offsetMap, err := cm.FindLastConsumedSeqNum(ctx)
+	if err != nil {
+		if !common_errors.IsStreamEmptyError(err) {
 			return common.GenErrFnOutput(err)
 		}
-		offset, err := cm.FindLastConsumedSeqNum(ctx, inputTopicName, args.ectx.SubstreamNum())
-		if err != nil {
-			if !common_errors.IsStreamEmptyError(err) {
-				return common.GenErrFnOutput(err)
-			}
-		}
-		offsetMap[inputTopicName] = offset
-		// debug.Fprintf(os.Stderr, "offset restores to %x\n", offset)
-		// if offset != 0 {
-		// 	src.SetCursor(offset+1, args.ectx.SubstreamNum())
-		// }
 	}
 	err = restoreStateStore(ctx, args, offsetMap)
 	if err != nil {
@@ -63,14 +50,8 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 	for {
 		timeSinceLastFlush := time.Since(flushTimer)
 		if timeSinceLastFlush >= args.flushEvery {
-			if t.pauseFunc != nil {
-				t.pauseFunc()
-			}
 			if ret_err := flushStreams(ctx, t, args); ret_err != nil {
 				return common.GenErrFnOutput(ret_err)
-			}
-			if t.resumeFunc != nil {
-				t.resumeFunc(t)
 			}
 			flushTimer = time.Now()
 		}
@@ -124,7 +105,7 @@ func track(ctx context.Context, cm *consume_seq_num_manager.ConsumeSeqManager,
 	hasUncommitted *bool, commitTimer *time.Time,
 ) *common.FnOutput {
 	markers := consume_seq_num_manager.CollectOffsetMarker(consumers)
-	err := cm.Track(ctx, markers, substreamNum)
+	err := cm.Track(ctx, markers)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -145,7 +126,7 @@ func pauseTrackFlush(ctx context.Context, t *StreamTask, args *StreamTaskArgs, c
 			}
 		}
 		markers := consume_seq_num_manager.CollectOffsetMarker(args.ectx.Consumers())
-		err := cm.Track(ctx, markers, args.ectx.SubstreamNum())
+		err := cm.Track(ctx, markers)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
