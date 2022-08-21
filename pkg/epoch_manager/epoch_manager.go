@@ -5,18 +5,18 @@ import (
 	"math"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/data_structure"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/txn_data"
-	"sharedlog-stream/pkg/utils/syncutils"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/protocol"
 	"cs.utexas.edu/zjia/faas/types"
+	"github.com/zhangyunhao116/skipmap"
+	"github.com/zhangyunhao116/skipset"
 )
 
 const (
@@ -27,8 +27,7 @@ type EpochManager struct {
 	epochMetaSerde commtypes.SerdeG[commtypes.EpochMarker]
 	env            types.Environment
 
-	tpMapMu               syncutils.Mutex
-	currentTopicSubstream map[string]data_structure.Uint8Set
+	currentTopicSubstream *skipmap.StringMap[*skipset.Uint32Set]
 
 	// two different meta data class
 	epochLogForRead   *sharedlog_stream.SharedLogStream
@@ -61,7 +60,7 @@ func NewEpochManager(env types.Environment, epochMngrName string,
 		epochMngrName:         epochMngrName,
 		env:                   env,
 		ProducerId:            commtypes.NewProducerId(),
-		currentTopicSubstream: make(map[string]data_structure.Uint8Set),
+		currentTopicSubstream: skipmap.NewString[*skipset.Uint32Set](),
 		epochLogForRead:       logForRead,
 		epochLogForWrite:      logForWrite,
 		epochMetaSerde:        epochMetaSerde,
@@ -94,7 +93,7 @@ func (em *EpochManager) monitorEpochLog(ctx context.Context,
 		rawMsg, err := em.epochLogForRead.ReadNextWithTag(ctx, 0, fenceTag)
 		if err != nil {
 			if common_errors.IsStreamEmptyError(err) {
-				time.Sleep(time.Duration(1) * time.Second)
+				time.Sleep(time.Duration(2) * time.Second)
 				continue
 			}
 			errc <- err
@@ -148,17 +147,8 @@ func (em *EpochManager) appendToEpochLog(ctx context.Context,
 func (em *EpochManager) AddTopicSubstream(ctx context.Context,
 	topic string, substreamNum uint8,
 ) error {
-	em.tpMapMu.Lock()
-	defer em.tpMapMu.Unlock()
-	parSet, ok := em.currentTopicSubstream[topic]
-	if !ok {
-		parSet = make(map[uint8]struct{})
-	}
-	_, ok = parSet[substreamNum]
-	if !ok {
-		parSet[substreamNum] = struct{}{}
-	}
-	em.currentTopicSubstream[topic] = parSet
+	parSet, _ := em.currentTopicSubstream.LoadOrStore(topic, skipset.NewUint32())
+	parSet.Add(uint32(substreamNum))
 	return nil
 }
 
@@ -177,16 +167,17 @@ func GenEpochMarker(
 		// 	return commtypes.EpochMarker{}, err
 		// }
 		topicName := producer.TopicName()
-		parSet, ok := em.currentTopicSubstream[producer.TopicName()]
+		parSet, ok := em.currentTopicSubstream.Load(producer.TopicName())
 		if ok {
 			ranges := make([]commtypes.ProduceRange, 0, 4)
-			for subNum := range parSet {
+			parSet.Range(func(par uint32) bool {
 				ranges = append(ranges, commtypes.ProduceRange{
-					SubStreamNum: subNum,
-					Start:        producer.GetInitialProdSeqNum(subNum),
-					End:          producer.GetCurrentProdSeqNum(subNum),
+					SubStreamNum: uint8(par),
+					Start:        producer.GetInitialProdSeqNum(uint8(par)),
+					End:          producer.GetCurrentProdSeqNum(uint8(par)),
 				})
-			}
+				return true
+			})
 			outputRanges[topicName] = ranges
 		}
 	}
@@ -236,16 +227,18 @@ func (em *EpochManager) GenTagsAndTopicsForEpochMarker() ([]uint64, []string) {
 	tags := []uint64{em.epochLogMarkerTag}
 	// debug.Fprintf(os.Stderr, "marker with tag: 0x%x\n", em.epochLogMarkerTag)
 	var additionalTopic []string
-	for tp, parSet := range em.currentTopicSubstream {
+	em.currentTopicSubstream.Range(func(tp string, parSet *skipset.Uint32Set) bool {
 		// debug.Fprintf(os.Stderr, "tpSubstream tp: %s, parSet: %v\n", tp, parSet)
 		additionalTopic = append(additionalTopic, tp)
 		nameHash := hashfuncs.NameHash(tp)
-		for sub := range parSet {
-			tag := sharedlog_stream.NameHashWithPartition(nameHash, sub)
+		parSet.Range(func(sub uint32) bool {
+			tag := sharedlog_stream.NameHashWithPartition(nameHash, uint8(sub))
 			// debug.Fprintf(os.Stderr, "marker with tag: 0x%x\n", tag)
 			tags = append(tags, tag)
-		}
-	}
+			return true
+		})
+		return true
+	})
 	return tags, additionalTopic
 }
 
@@ -330,7 +323,7 @@ func (em *EpochManager) FindMostRecentEpochMetaThatHasConsumed(
 func CleanupState(em *EpochManager, producers []producer_consumer.MeteredProducerIntr,
 	kvTabs map[string]store.KeyValueStoreOpWithChangelog, winTabs map[string]store.WindowStoreOpWithChangelog,
 ) {
-	em.currentTopicSubstream = make(map[string]data_structure.Uint8Set)
+	em.currentTopicSubstream = skipmap.NewString[*skipset.Uint32Set]()
 	for _, producer := range producers {
 		producer.ResetInitialProd()
 	}

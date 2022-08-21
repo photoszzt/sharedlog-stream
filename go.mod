@@ -19,7 +19,10 @@ require (
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
 )
 
-require github.com/zhangyunhao116/fastrand v0.2.1 // indirect
+require (
+	github.com/zhangyunhao116/fastrand v0.2.1 // indirect
+	github.com/zhangyunhao116/skipset v0.12.1 // indirect
+)
 
 require (
 	4d63.com/optional v0.2.0

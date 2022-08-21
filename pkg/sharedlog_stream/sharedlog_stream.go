@@ -48,7 +48,7 @@ var ControlRecordMeta = StreamEntryMeta(true, false)
 var ArrRecordMeta = StreamEntryMeta(false, true)
 
 type SharedLogStream struct {
-	mux syncutils.Mutex
+	mux syncutils.RWMutex
 	env types.Environment
 	// txnMarkerSerde commtypes.Serde
 	topicName     string
@@ -214,9 +214,10 @@ func (s *SharedLogStream) Push(ctx context.Context, payload []byte, parNum uint8
 }
 
 func (s *SharedLogStream) isEmpty() bool {
-	s.mux.Lock()
-	defer s.mux.Unlock()
-	return s.cursor >= s.tail
+	s.mux.RLock()
+	ret := s.cursor >= s.tail
+	s.mux.RUnlock()
+	return ret
 }
 
 func (s *SharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum uint64, parNum uint8, tag uint64) (*commtypes.RawMsg, error) {
@@ -319,7 +320,7 @@ func (s *SharedLogStream) readPrevWithTimeout(ctx context.Context, tag uint64, s
 			if idx >= maxRetryTimes {
 				return logEntry, nil
 			}
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(100 * time.Microsecond)
 		}
 	}
 }
