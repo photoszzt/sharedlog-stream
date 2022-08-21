@@ -21,10 +21,12 @@ var _ CoreKeyValueStoreG[int, int] = (*CachingKeyValueStoreG[int, int])(nil)
 func NewCachingKeyValueStoreG[K comparable, V any](name string,
 	store CoreKeyValueStoreG[K, V],
 	flushCallback FlushCallbackFunc[K, V],
+	sizeOfK func(K) int64,
+	sizeOfV func(V) int64,
 ) *CachingKeyValueStoreG[K, V] {
 	return &CachingKeyValueStoreG[K, V]{
 		name:         name,
-		cache:        NewCache(flushCallback),
+		cache:        NewCache(flushCallback, sizeOfK, sizeOfV),
 		wrappedStore: store,
 	}
 }

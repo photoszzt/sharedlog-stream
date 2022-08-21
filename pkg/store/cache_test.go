@@ -15,7 +15,8 @@ func TestShouldKeepTrackOfMostRecentlyAndLeastRecentlyUsed(t *testing.T) {
 		{Key: "K4", Value: "V4"},
 		{Key: "K5", Value: "V5"},
 	}
-	cache := NewCache(func(entries []LRUElement[string, string]) {})
+	cache := NewCache(func(entries []LRUElement[string, string]) {},
+		func(k string) int64 { return int64(len(k)) }, func(v string) int64 { return int64(len(v)) })
 	for _, msg := range toInsert {
 		err := cache.put(msg.Key.(string), LRUEntry[string]{value: optional.Of(msg.Value.(string)), isDirty: true})
 		if err != nil {
@@ -47,7 +48,7 @@ func TestShouldKeepTrackOfMostRecentlyAndLeastRecentlyUsed(t *testing.T) {
 }
 
 func TestShouldPutGet(t *testing.T) {
-	cache := NewCache(func(entries []LRUElement[int, int]) {})
+	cache := NewCache(func(entries []LRUElement[int, int]) {}, func(k int) int64 { return 4 }, func(v int) int64 { return 4 })
 	err := cache.put(0, LRUEntry[int]{value: optional.Of(10), isDirty: false})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
@@ -87,7 +88,7 @@ func TestShouldPutGet(t *testing.T) {
 }
 
 func TestShouldPutIfAbsent(t *testing.T) {
-	cache := NewCache(func(entries []LRUElement[int, int]) {})
+	cache := NewCache(func(entries []LRUElement[int, int]) {}, func(k int) int64 { return 4 }, func(v int) int64 { return 4 })
 	err := cache.put(0, LRUEntry[int]{value: optional.Of(10), isDirty: false})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
@@ -119,7 +120,7 @@ func TestShouldPutIfAbsent(t *testing.T) {
 }
 
 func TestShouldDeleteAndUpdateSize(t *testing.T) {
-	cache := NewCache(func(entries []LRUElement[int, int]) {})
+	cache := NewCache(func(entries []LRUElement[int, int]) {}, func(k int) int64 { return 4 }, func(v int) int64 { return 4 })
 	err := cache.put(0, LRUEntry[int]{value: optional.Of(10), isDirty: false})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
@@ -135,7 +136,7 @@ func TestShouldDeleteAndUpdateSize(t *testing.T) {
 }
 
 func TestShouldOverwriteAll(t *testing.T) {
-	cache := NewCache(func(entries []LRUElement[int, int]) {})
+	cache := NewCache(func(entries []LRUElement[int, int]) {}, func(k int) int64 { return 4 }, func(v int) int64 { return 4 })
 	err := cache.put(0, LRUEntry[int]{value: optional.Of(0), isDirty: false})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
@@ -159,7 +160,7 @@ func TestShouldOverwriteAll(t *testing.T) {
 }
 
 func TestShouldEvictEldestEntry(t *testing.T) {
-	cache := NewCache(func(entries []LRUElement[int, int]) {})
+	cache := NewCache(func(entries []LRUElement[int, int]) {}, func(k int) int64 { return 4 }, func(v int) int64 { return 4 })
 	err := cache.put(0, LRUEntry[int]{value: optional.Of(10), isDirty: false})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
@@ -183,7 +184,7 @@ func TestShouldFlushDirtEntriesOnEviction(t *testing.T) {
 	flushed := make([]LRUElement[int, int], 0)
 	cache := NewCache(func(entries []LRUElement[int, int]) {
 		flushed = append(flushed, entries...)
-	})
+	}, func(k int) int64 { return 4 }, func(v int) int64 { return 4 })
 	err := cache.put(0, LRUEntry[int]{value: optional.Of(10), isDirty: true})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
@@ -216,5 +217,29 @@ func TestShouldFlushDirtEntriesOnEviction(t *testing.T) {
 	}
 	if cache.flushes() != 1 {
 		t.Errorf("expected 1, got %d", cache.flushes())
+	}
+}
+
+func TestShouldRemoveDeletedValuesOnFlush(t *testing.T) {
+	cache := NewCache(func(entries []LRUElement[int, int]) {},
+		func(k int) int64 { return 4 }, func(v int) int64 { return 4 })
+	err := cache.put(0, LRUEntry[int]{value: optional.Empty[int](), isDirty: true})
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+	err = cache.put(1, LRUEntry[int]{value: optional.Of(20), isDirty: true})
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+	cache.flush(nil)
+	if cache.len() != 1 {
+		t.Errorf("expected 1, got %d", cache.len())
+	}
+	ret, ok := cache.get(1)
+	if !ok {
+		t.Errorf("expected found, got not found")
+	}
+	if !ret.value.IsPresent() {
+		t.Errorf("expected present, got not present")
 	}
 }

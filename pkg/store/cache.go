@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/pkg/stats"
 	"sync"
 	"sync/atomic"
-	"unsafe"
 
 	"4d63.com/optional"
 )
@@ -42,9 +41,10 @@ type Cache[K comparable, V any] struct {
 	dirtyKeys     *linkedhashset.LinkedHashSet[K]              // protected by mux
 	orderList     *genericlist.List[LRUElement[K, V]]          // protected by mux
 	hitRatio      stats.StatsCollector[float64]
-	elementSize   uint64
+	sizeOfKey     func(K) int64
+	sizeOfVal     func(V) int64
 
-	currentSizeBytes uint64
+	currentSizeBytes int64
 	numReadHits      uint64
 	numReadMisses    uint64
 	numOverwrites    uint64
@@ -53,17 +53,17 @@ type Cache[K comparable, V any] struct {
 
 type FlushCallbackFunc[K comparable, V any] func(entries []LRUElement[K, V])
 
-func NewCache[K comparable, V any](flushCallback FlushCallbackFunc[K, V]) *Cache[K, V] {
-	var k K
-	var v V
-	elementSizeApprox := uint64(unsafe.Sizeof(k) + unsafe.Sizeof(v))
+func NewCache[K comparable, V any](flushCallback FlushCallbackFunc[K, V],
+	sizeOfKey func(k K) int64, sizeOfVal func(v V) int64,
+) *Cache[K, V] {
 	return &Cache[K, V]{
 		cache:            make(map[K]*genericlist.Element[LRUElement[K, V]]),
 		dirtyKeys:        linkedhashset.New[K](),
 		orderList:        genericlist.New[LRUElement[K, V]](),
 		flushCallback:    flushCallback,
 		hitRatio:         stats.NewStatsCollector[float64]("cache_hit_ratio", stats.DEFAULT_COLLECT_DURATION),
-		elementSize:      elementSizeApprox,
+		sizeOfKey:        sizeOfKey,
+		sizeOfVal:        sizeOfVal,
 		currentSizeBytes: 0,
 		numReadHits:      0,
 		numReadMisses:    0,
@@ -153,14 +153,22 @@ func (c *Cache[K, V]) put(key K, value LRUEntry[V]) error {
 	if !value.IsDirty() && c.dirtyKeys.Contains(key) {
 		return fmt.Errorf("Attempting to put a clean entrty for key[%v] into cache when it already contains a dirty entry for the same key", key)
 	}
+	kSize := c.sizeOfKey(key)
 	c.mux.Lock()
 	element := c.cache[key]
 	if element != nil {
 		atomic.AddUint64(&c.numOverwrites, 1)
+		v, exists := element.Value.entry.Value().Get()
+		vSize := int64(0)
+		if exists {
+			vSize = c.sizeOfVal(v)
+		}
+		totSize := kSize + vSize
+		atomic.AddInt64(&c.currentSizeBytes, int64(-1)*totSize)
 		element.Value.entry = value
 		c.updateLRULockHeld(element)
 	} else {
-		element := c.orderList.PushFront(LRUElement[K, V]{key: key, entry: value})
+		element = c.orderList.PushFront(LRUElement[K, V]{key: key, entry: value})
 		c.cache[key] = element
 	}
 	if value.isDirty {
@@ -168,6 +176,12 @@ func (c *Cache[K, V]) put(key K, value LRUEntry[V]) error {
 		c.dirtyKeys.Add(key)
 	}
 	c.mux.Unlock()
+	v, exists := element.Value.entry.Value().Get()
+	vSize := int64(0)
+	if exists {
+		vSize = c.sizeOfVal(v)
+	}
+	atomic.AddInt64(&c.currentSizeBytes, kSize+vSize)
 	return nil
 }
 
@@ -175,6 +189,13 @@ func (c *Cache[K, V]) evict() {
 	c.mux.Lock()
 	element := c.orderList.Back()
 	if element != nil {
+		kSize := c.sizeOfKey(element.Value.key)
+		v, exists := element.Value.entry.Value().Get()
+		vSize := int64(0)
+		if exists {
+			vSize = c.sizeOfVal(v)
+		}
+		atomic.AddInt64(&c.currentSizeBytes, int64(-kSize-vSize))
 		c.orderList.Remove(element)
 		delete(c.cache, element.Value.key)
 		if element.Value.entry.isDirty {
