@@ -9,11 +9,11 @@ import (
 )
 
 type GroupByOutputProcessor struct {
-	producer producer_consumer.MeteredProducerIntr
-	ectx     ExecutionContext
-	// cHash    *hash.ConsistentHash
-	name            string
 	byteSliceHasher hashfuncs.ByteSliceHasher
+	producer        producer_consumer.MeteredProducerIntr
+	ectx            ExecutionContext
+	// cHash    *hash.ConsistentHash
+	name string
 }
 
 func NewGroupByOutputProcessor(producer producer_consumer.MeteredProducerIntr,
