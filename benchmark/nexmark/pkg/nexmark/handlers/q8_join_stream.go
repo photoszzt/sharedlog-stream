@@ -73,7 +73,7 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 		return nil, nil, err
 	}
 
-	timeout := time.Duration(4) * time.Millisecond
+	timeout := time.Duration(10) * time.Millisecond
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	consumer1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1,
 		&producer_consumer.StreamConsumerConfigG[uint64, *ntypes.Event]{
