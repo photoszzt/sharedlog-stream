@@ -80,7 +80,7 @@ func (h *q7JoinMaxBid) getSrcSink(
 	if err != nil {
 		return nil, nil, err
 	}
-	timeout := time.Duration(10) * time.Millisecond
+	timeout := time.Duration(4) * time.Millisecond
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	consumer1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1,
 		&producer_consumer.StreamConsumerConfigG[uint64, *ntypes.Event]{

@@ -67,7 +67,7 @@ func (h *q4JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	if err != nil {
 		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
-	timeout := time.Duration(10) * time.Millisecond
+	timeout := time.Duration(4) * time.Millisecond
 	auctionsConfig := &producer_consumer.StreamConsumerConfigG[uint64, *ntypes.Event]{
 		Timeout:     timeout,
 		MsgSerde:    msgSerde,

@@ -91,7 +91,7 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
 	}
 
-	timeout := time.Duration(10) * time.Millisecond
+	timeout := time.Duration(4) * time.Millisecond
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	ncsiSerde, err := ntypes.GetNameCityStateIdSerdeG(serdeFormat)
 	if err != nil {
