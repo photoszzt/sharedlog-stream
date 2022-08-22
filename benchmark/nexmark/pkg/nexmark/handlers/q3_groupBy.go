@@ -14,6 +14,7 @@ import (
 	"sharedlog-stream/pkg/stream_task"
 	"time"
 
+	"4d63.com/optional"
 	"cs.utexas.edu/zjia/faas/types"
 )
 
@@ -102,7 +103,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	aucBySellerChain.
 		Via(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64](
 			"auctionsBySellerIDMap", processor.SelectKeyFuncG[string, *ntypes.Event, uint64](
-				func(_ string, value *ntypes.Event) (uint64, error) {
+				func(_ optional.Optional[string], value *ntypes.Event) (uint64, error) {
 					return value.NewAuction.Seller, nil
 				})))).
 		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[0], &ectx))
@@ -110,7 +111,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	personsByIDChain.
 		Via(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64](
 			"personsByIDMap", processor.SelectKeyFuncG[string, *ntypes.Event, uint64](
-				func(_ string, value *ntypes.Event) (uint64, error) {
+				func(_ optional.Optional[string], value *ntypes.Event) (uint64, error) {
 					return value.NewPerson.ID, nil
 				})))).
 		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[1], &ectx))
