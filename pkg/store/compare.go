@@ -1,6 +1,10 @@
 package store
 
-import "golang.org/x/exp/constraints"
+import (
+	"strings"
+
+	"golang.org/x/exp/constraints"
+)
 
 type CompareFunc func(lhs, rhs interface{}) int
 
@@ -40,6 +44,10 @@ func IntegerCompare[K constraints.Integer](l, r K) int {
 	} else {
 		return 1
 	}
+}
+
+func StringCompare(lhs, rhs string) int {
+	return strings.Compare(lhs, rhs)
 }
 
 func CompareIntrWithVersionedKey(lhs, rhs interface{}, baseCompare CompareFunc) int {

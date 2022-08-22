@@ -5,7 +5,6 @@ import (
 	"os"
 	"sharedlog-stream/pkg/data_structure/genericlist"
 	"sharedlog-stream/pkg/data_structure/linkedhashset"
-	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stats"
 	"sync"
 	"sync/atomic"
@@ -132,11 +131,11 @@ func (c *Cache[K, V]) len() int {
 	return len(c.cache)
 }
 
-func (c *Cache[K, V]) elementValueSize(element *genericlist.Element[LRUElement[K, V]]) int64 {
+func elementValueSize[K, V any](element *genericlist.Element[LRUElement[K, V]], sizeOfVal func(V) int64) int64 {
 	v, exists := element.Value.entry.Value().Get()
 	vSize := int64(0)
 	if exists {
-		vSize = c.sizeOfVal(v)
+		vSize = sizeOfVal(v)
 	}
 	return vSize + 3*ptrSize
 }
@@ -180,7 +179,7 @@ func (c *Cache[K, V]) put(key K, value LRUEntry[V]) error {
 	element := c.cache[key]
 	if element != nil {
 		atomic.AddUint64(&c.numOverwrites, 1)
-		totSize := kSize + c.elementValueSize(element)
+		totSize := kSize + elementValueSize(element, c.sizeOfVal)
 		atomic.AddInt64(&c.currentSizeBytes, int64(-1)*totSize)
 		element.Value.entry = value
 		c.updateLRULockHeld(element)
@@ -193,20 +192,22 @@ func (c *Cache[K, V]) put(key K, value LRUEntry[V]) error {
 		c.dirtyKeys.Add(key)
 	}
 	c.mux.Unlock()
-	totSize := kSize + c.elementValueSize(element)
+	totSize := kSize + elementValueSize(element, c.sizeOfVal)
 	atomic.AddInt64(&c.currentSizeBytes, totSize)
 	return nil
 }
 
 func (c *Cache[K, V]) maybeEvict() {
-	numEvicted := 0
-	// fmt.Fprintf(os.Stderr, "Cache size: %v, maxCacheBytes: %v\n", c.currentSizeBytes, c.maxCacheBytes)
-	for c.currentSizeBytes > c.maxCacheBytes {
+	numEvicted := uint32(0)
+	fmt.Fprintf(os.Stderr, "Cache size: %v, maxCacheBytes: %v\n", c.currentSizeBytes, c.maxCacheBytes)
+	for atomic.LoadInt64(&c.currentSizeBytes) > c.maxCacheBytes {
 		c.evict()
-		numEvicted += 1
+		atomic.AddUint32(&numEvicted, 1)
 		atomic.AddUint64(&c.numEvicts, 1)
 	}
-	debug.Fprintf(os.Stderr, "Evicted %v elements from cache\n", numEvicted)
+	if atomic.LoadUint32(&numEvicted) > 0 {
+		fmt.Fprintf(os.Stderr, "Evicted %v elements from cache\n", numEvicted)
+	}
 }
 
 func (c *Cache[K, V]) PutMaybeEvict(key K, value LRUEntry[V]) error {
@@ -232,7 +233,7 @@ func (c *Cache[K, V]) evict() {
 	element := c.orderList.Back()
 	if element != nil {
 		kSize := c.sizeOfKey(element.Value.key)
-		totSize := kSize + c.elementValueSize(element)
+		totSize := kSize + elementValueSize(element, c.sizeOfVal)
 		atomic.AddInt64(&c.currentSizeBytes, int64(-totSize))
 		c.orderList.Remove(element)
 		delete(c.cache, element.Value.key)
