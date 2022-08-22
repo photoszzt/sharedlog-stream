@@ -10,6 +10,7 @@ import (
 type MessageSerdeG[K, V any] interface {
 	SerdeG[Message]
 	EncodeAndRtnKVBin(value Message) ([]byte, []byte /* kEnc */, []byte /* vEnc */, error)
+	EncodeWithKVBytes(kBytes []byte, vBytes []byte, inj int64, ts int64) ([]byte, error)
 	EncodeKey(key K) ([]byte, error)
 	EncodeVal(key V) ([]byte, error)
 	DecodeVal(value []byte) (V, error)
@@ -122,6 +123,16 @@ func (s MessageMsgpSerdeG[K, V]) EncodeAndRtnKVBin(value Message) ([]byte, []byt
 	return msgEnc, msgSer.KeyEnc, msgSer.ValueEnc, err
 }
 
+func (s MessageMsgpSerdeG[K, V]) EncodeWithKVBytes(kBytes []byte, vBytes []byte, inj int64, ts int64) ([]byte, error) {
+	msgSer := &MessageSerialized{
+		KeyEnc:    kBytes,
+		ValueEnc:  vBytes,
+		InjT:      inj,
+		Timestamp: ts,
+	}
+	return msgSer.MarshalMsg(nil)
+}
+
 func (s MessageMsgpSerdeG[K, V]) Decode(value []byte) (Message, error) {
 	msgSer := MessageSerialized{}
 	_, err := msgSer.UnmarshalMsg(value)
@@ -159,6 +170,16 @@ func (s MessageJSONSerdeG[K, V]) EncodeAndRtnKVBin(value Message) ([]byte, []byt
 	}
 	msgEnc, err := json.Marshal(msgSer)
 	return msgEnc, msgSer.KeyEnc, msgSer.ValueEnc, err
+}
+
+func (s MessageJSONSerdeG[K, V]) EncodeWithKVBytes(kBytes []byte, vBytes []byte, inj int64, ts int64) ([]byte, error) {
+	msgSer := &MessageSerialized{
+		KeyEnc:    kBytes,
+		ValueEnc:  vBytes,
+		InjT:      inj,
+		Timestamp: ts,
+	}
+	return msgSer.MarshalMsg(nil)
 }
 
 func (s MessageJSONSerdeG[K, V]) EncodeKey(key K) ([]byte, error) {

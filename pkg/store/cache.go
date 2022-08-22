@@ -5,11 +5,17 @@ import (
 	"os"
 	"sharedlog-stream/pkg/data_structure/genericlist"
 	"sharedlog-stream/pkg/data_structure/linkedhashset"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stats"
 	"sync"
 	"sync/atomic"
+	"unsafe"
 
 	"4d63.com/optional"
+)
+
+var (
+	ptrSize = int64(unsafe.Sizeof((*int)(nil)))
 )
 
 type LRUEntry[V any] struct {
@@ -40,20 +46,22 @@ type Cache[K comparable, V any] struct {
 	cache            map[K]*genericlist.Element[LRUElement[K, V]] // protected by mux
 	dirtyKeys        *linkedhashset.LinkedHashSet[K]              // protected by mux
 	orderList        *genericlist.List[LRUElement[K, V]]          // protected by mux
-	flushCallback    func(entries []LRUElement[K, V])
+	flushCallback    FlushCallbackFunc[K, V]
 	sizeOfVal        func(V) int64
 	hitRatio         stats.StatsCollector[float64]
 	currentSizeBytes int64
+	maxCacheBytes    int64
 	numReadHits      uint64
 	numReadMisses    uint64
 	numOverwrites    uint64
 	numFlushes       uint64
+	numEvicts        uint64
 }
 
-type FlushCallbackFunc[K comparable, V any] func(entries []LRUElement[K, V])
+type FlushCallbackFunc[K comparable, V any] func(entries []LRUElement[K, V]) error
 
 func NewCache[K comparable, V any](flushCallback FlushCallbackFunc[K, V],
-	sizeOfKey func(k K) int64, sizeOfVal func(v V) int64,
+	sizeOfKey func(k K) int64, sizeOfVal func(v V) int64, maxCacheBytes int64,
 ) *Cache[K, V] {
 	return &Cache[K, V]{
 		cache:            make(map[K]*genericlist.Element[LRUElement[K, V]]),
@@ -63,6 +71,7 @@ func NewCache[K comparable, V any](flushCallback FlushCallbackFunc[K, V],
 		hitRatio:         stats.NewStatsCollector[float64]("cache_hit_ratio", stats.DEFAULT_COLLECT_DURATION),
 		sizeOfKey:        sizeOfKey,
 		sizeOfVal:        sizeOfVal,
+		maxCacheBytes:    maxCacheBytes,
 		currentSizeBytes: 0,
 		numReadHits:      0,
 		numReadMisses:    0,
@@ -85,6 +94,10 @@ func (c *Cache[K, V]) overwrites() uint64 {
 
 func (c *Cache[K, V]) flushes() uint64 {
 	return atomic.LoadUint64(&c.numFlushes)
+}
+
+func (c *Cache[K, V]) evicts() uint64 {
+	return atomic.LoadUint64(&c.numEvicts)
 }
 
 func (c *Cache[K, V]) first() LRUEntry[V] {
@@ -117,6 +130,15 @@ func (c *Cache[K, V]) tail() *genericlist.Element[LRUElement[K, V]] {
 
 func (c *Cache[K, V]) len() int {
 	return len(c.cache)
+}
+
+func (c *Cache[K, V]) elementValueSize(element *genericlist.Element[LRUElement[K, V]]) int64 {
+	v, exists := element.Value.entry.Value().Get()
+	vSize := int64(0)
+	if exists {
+		vSize = c.sizeOfVal(v)
+	}
+	return vSize + 3*ptrSize
 }
 
 func (c *Cache[K, V]) getInternalLockHeld(key K) *genericlist.Element[LRUElement[K, V]] {
@@ -158,12 +180,7 @@ func (c *Cache[K, V]) put(key K, value LRUEntry[V]) error {
 	element := c.cache[key]
 	if element != nil {
 		atomic.AddUint64(&c.numOverwrites, 1)
-		v, exists := element.Value.entry.Value().Get()
-		vSize := int64(0)
-		if exists {
-			vSize = c.sizeOfVal(v)
-		}
-		totSize := kSize + vSize
+		totSize := kSize + c.elementValueSize(element)
 		atomic.AddInt64(&c.currentSizeBytes, int64(-1)*totSize)
 		element.Value.entry = value
 		c.updateLRULockHeld(element)
@@ -176,13 +193,38 @@ func (c *Cache[K, V]) put(key K, value LRUEntry[V]) error {
 		c.dirtyKeys.Add(key)
 	}
 	c.mux.Unlock()
-	v, exists := element.Value.entry.Value().Get()
-	vSize := int64(0)
-	if exists {
-		vSize = c.sizeOfVal(v)
-	}
-	atomic.AddInt64(&c.currentSizeBytes, kSize+vSize)
+	totSize := kSize + c.elementValueSize(element)
+	atomic.AddInt64(&c.currentSizeBytes, totSize)
 	return nil
+}
+
+func (c *Cache[K, V]) maybeEvict() {
+	numEvicted := 0
+	// fmt.Fprintf(os.Stderr, "Cache size: %v, maxCacheBytes: %v\n", c.currentSizeBytes, c.maxCacheBytes)
+	for c.currentSizeBytes > c.maxCacheBytes {
+		c.evict()
+		numEvicted += 1
+		atomic.AddUint64(&c.numEvicts, 1)
+	}
+	debug.Fprintf(os.Stderr, "Evicted %v elements from cache\n", numEvicted)
+}
+
+func (c *Cache[K, V]) PutMaybeEvict(key K, value LRUEntry[V]) error {
+	err := c.put(key, value)
+	if err != nil {
+		return err
+	}
+	c.maybeEvict()
+	return nil
+}
+
+func (c *Cache[K, V]) PutIfAbsentMaybeEvict(key K, value LRUEntry[V]) (LRUEntry[V], bool, error) {
+	ret, ok, err := c.putIfAbsent(key, value)
+	if err != nil {
+		return LRUEntry[V]{}, false, err
+	}
+	c.maybeEvict()
+	return ret, ok, nil
 }
 
 func (c *Cache[K, V]) evict() {
@@ -190,12 +232,8 @@ func (c *Cache[K, V]) evict() {
 	element := c.orderList.Back()
 	if element != nil {
 		kSize := c.sizeOfKey(element.Value.key)
-		v, exists := element.Value.entry.Value().Get()
-		vSize := int64(0)
-		if exists {
-			vSize = c.sizeOfVal(v)
-		}
-		atomic.AddInt64(&c.currentSizeBytes, int64(-kSize-vSize))
+		totSize := kSize + c.elementValueSize(element)
+		atomic.AddInt64(&c.currentSizeBytes, int64(-totSize))
 		c.orderList.Remove(element)
 		delete(c.cache, element.Value.key)
 		if element.Value.entry.isDirty {
@@ -205,16 +243,17 @@ func (c *Cache[K, V]) evict() {
 	c.mux.Unlock()
 }
 
-func (c *Cache[K, V]) flush(element *genericlist.Element[LRUElement[K, V]]) {
+func (c *Cache[K, V]) flush(element *genericlist.Element[LRUElement[K, V]]) error {
 	c.mux.Lock()
-	c.flushLockHeld(nil)
+	err := c.flushLockHeld(nil)
 	c.mux.Unlock()
+	return err
 }
 
-func (c *Cache[K, V]) flushLockHeld(evicted *genericlist.Element[LRUElement[K, V]]) {
+func (c *Cache[K, V]) flushLockHeld(evicted *genericlist.Element[LRUElement[K, V]]) error {
 	atomic.AddUint64(&c.numFlushes, 1)
 	if c.dirtyKeys.Len() == 0 {
-		return
+		return nil
 	}
 	entries := make([]LRUElement[K, V], 0, c.dirtyKeys.Len())
 	deleted := make([]K, 0, c.dirtyKeys.Len())
@@ -236,10 +275,14 @@ func (c *Cache[K, V]) flushLockHeld(evicted *genericlist.Element[LRUElement[K, V
 		return true
 	})
 	c.dirtyKeys.Clear()
-	c.flushCallback(entries)
+	err := c.flushCallback(entries)
+	if err != nil {
+		return err
+	}
 	for _, k := range deleted {
 		c.deleteLockHeld(k)
 	}
+	return nil
 }
 
 func (c *Cache[K, V]) deleteLockHeld(key K) (LRUEntry[V], bool) {

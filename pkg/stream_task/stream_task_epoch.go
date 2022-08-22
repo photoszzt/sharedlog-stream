@@ -247,14 +247,14 @@ func FlushStreamBuffers(ctx context.Context, cmm *control_channel.ControlChannel
 	}
 	for _, kvTab := range args.kvChangelogs {
 		if !kvTab.ChangelogIsSrc() {
-			err := kvTab.FlushChangelog(ctx)
+			err := kvTab.Flush(ctx)
 			if err != nil {
 				return err
 			}
 		}
 	}
 	for _, winTab := range args.windowStoreChangelogs {
-		err := winTab.FlushChangelog(ctx)
+		err := winTab.Flush(ctx)
 		if err != nil {
 			return err
 		}

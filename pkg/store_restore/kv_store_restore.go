@@ -48,7 +48,7 @@ func (kvc *KVStoreChangelog[K, V]) ConsumeChangelog(ctx context.Context, parNum 
 	return kvc.changelogManager.Consume(ctx, parNum)
 }
 
-func (kvc *KVStoreChangelog[K, V]) FlushChangelog(ctx context.Context) error {
+func (kvc *KVStoreChangelog[K, V]) Flush(ctx context.Context) error {
 	if !kvc.changelogManager.ChangelogIsSrc() {
 		return kvc.changelogManager.Flush(ctx)
 	}

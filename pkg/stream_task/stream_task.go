@@ -165,12 +165,12 @@ func flushStreams(ctx context.Context, t *StreamTask,
 		}
 	}
 	for _, kvchangelog := range args.kvChangelogs {
-		if err := kvchangelog.FlushChangelog(ctx); err != nil {
+		if err := kvchangelog.Flush(ctx); err != nil {
 			return err
 		}
 	}
 	for _, wschangelog := range args.windowStoreChangelogs {
-		if err := wschangelog.FlushChangelog(ctx); err != nil {
+		if err := wschangelog.Flush(ctx); err != nil {
 			return err
 		}
 	}

@@ -164,7 +164,7 @@ func (st *InMemoryBTreeKeyValueStoreG[K, V]) TableType() TABLE_TYPE {
 func (st *InMemoryBTreeKeyValueStoreG[K, V]) SetTrackParFunc(exactly_once_intr.TrackProdSubStreamFunc) {
 }
 
-func (st *InMemoryBTreeKeyValueStoreG[K, V]) FlushChangelog(ctx context.Context) error {
+func (st *InMemoryBTreeKeyValueStoreG[K, V]) Flush(ctx context.Context) error {
 	return nil
 }
 

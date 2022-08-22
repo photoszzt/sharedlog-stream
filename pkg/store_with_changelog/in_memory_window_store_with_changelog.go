@@ -118,7 +118,7 @@ func (st *InMemoryWindowStoreWithChangelog[K, V]) ChangelogManager() *ChangelogM
 	return st.changelogManager
 }
 
-func (st *InMemoryWindowStoreWithChangelog[K, V]) FlushChangelog(ctx context.Context) error {
+func (st *InMemoryWindowStoreWithChangelog[K, V]) Flush(ctx context.Context) error {
 	return st.changelogManager.Flush(ctx)
 }
 

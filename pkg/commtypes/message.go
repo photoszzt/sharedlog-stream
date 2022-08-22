@@ -17,6 +17,13 @@ type MessageSerde interface {
 	DecodeVal(value []byte) (interface{}, error)
 }
 
+type MessageG[K, V any] struct {
+	Key       K
+	Value     V
+	Timestamp int64
+	InjT      int64
+}
+
 type Message struct {
 	Key       interface{}
 	Value     interface{}

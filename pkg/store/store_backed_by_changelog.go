@@ -8,7 +8,7 @@ import (
 )
 
 type StoreBackedByChangelog interface {
-	FlushChangelog(ctx context.Context) error
+	Flush(ctx context.Context) error
 	ConsumeChangelog(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error)
 	ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 		guarantee exactly_once_intr.GuaranteeMth) error

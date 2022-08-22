@@ -56,7 +56,7 @@ func (st *InMemoryWindowStoreWithChangelogG[K, V]) ChangelogManager() *Changelog
 	return st.changelogManager
 }
 
-func (st *InMemoryWindowStoreWithChangelogG[K, V]) FlushChangelog(ctx context.Context) error {
+func (st *InMemoryWindowStoreWithChangelogG[K, V]) Flush(ctx context.Context) error {
 	return st.changelogManager.Flush(ctx)
 }
 
@@ -111,6 +111,12 @@ func (st *InMemoryWindowStoreWithChangelogG[K, V]) PutWithoutPushToChangelog(ctx
 ) error {
 	keyTs := key.(commtypes.KeyAndWindowStartTsG[K])
 	return st.windowStore.Put(ctx, keyTs.Key, optional.Of(value.(V)), keyTs.WindowStartTs)
+}
+
+func (st *InMemoryWindowStoreWithChangelogG[K, V]) PutWithoutPushToChangelogG(ctx context.Context,
+	key K, value optional.Optional[V], windowStartTs int64,
+) error {
+	return st.windowStore.Put(ctx, key, value, windowStartTs)
 }
 
 func (st *InMemoryWindowStoreWithChangelogG[K, V]) Get(ctx context.Context, key K, windowStartTimestamp int64) (V, bool, error) {

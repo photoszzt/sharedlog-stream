@@ -34,12 +34,17 @@ type CoreKeyValueStoreG[K, V any] interface {
 	PutAll(context.Context, []*commtypes.Message) error
 	Delete(ctx context.Context, key K) error
 	TableType() TABLE_TYPE
+	Flush(ctx context.Context) error
 	UpdateTrackParFunc
 	OnlyUpdateInMemStore
 }
 
 type OnlyUpdateInMemStore interface {
 	PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error
+}
+
+type OnlyUpdateInMemStoreG[K, V any] interface {
+	PutWithoutPushToChangelogG(ctx context.Context, key K, value V) error
 }
 
 type KeyValueStoreOpWithChangelog interface {

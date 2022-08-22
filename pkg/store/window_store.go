@@ -38,7 +38,9 @@ type CoreWindowStoreG[K, V any] interface {
 		iterFunc func(int64, K, V) error) error
 	IterAll(iterFunc func(int64, K, V) error) error
 	TableType() TABLE_TYPE
+	Flush(ctx context.Context) error
 	UpdateTrackParFunc
+	OnlyUpdateInMemWinStoreG[K, V]
 }
 
 type WindowStoreBackedByChangelog interface {
@@ -54,6 +56,11 @@ type WindowStoreBackedByChangelogG[K, V any] interface {
 type OnlyUpdateInMemWinStore interface {
 	PutWithoutPushToChangelog(ctx context.Context,
 		key commtypes.KeyT, value commtypes.ValueT) error
+}
+
+type OnlyUpdateInMemWinStoreG[K, V any] interface {
+	PutWithoutPushToChangelogG(ctx context.Context,
+		key K, value optional.Optional[V], windowStartTs int64) error
 }
 
 type WindowStoreOpWithChangelog interface {
