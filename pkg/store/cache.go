@@ -22,9 +22,12 @@ type LRUEntry[V any] struct {
 	isDirty bool
 }
 
-type LRUElement[K, V any] struct {
-	key   K
-	entry LRUEntry[V]
+func DirtyEntry[V any](v optional.Optional[V]) LRUEntry[V] {
+	return LRUEntry[V]{isDirty: true, value: v}
+}
+
+func CleanEntry[V any](v optional.Optional[V]) LRUEntry[V] {
+	return LRUEntry[V]{isDirty: false, value: v}
 }
 
 func (lruE *LRUEntry[V]) MarkClean() {
@@ -37,6 +40,19 @@ func (lruE *LRUEntry[V]) IsDirty() bool {
 
 func (lruE *LRUEntry[V]) Value() optional.Optional[V] {
 	return lruE.value
+}
+
+type LRUElement[K, V any] struct {
+	key   K
+	entry LRUEntry[V]
+}
+
+func (e *LRUElement[K, V]) Key() K {
+	return e.key
+}
+
+func (e *LRUElement[K, V]) Entry() LRUEntry[V] {
+	return e.entry
 }
 
 type Cache[K comparable, V any] struct {
@@ -249,6 +265,10 @@ func (c *Cache[K, V]) flush(element *genericlist.Element[LRUElement[K, V]]) erro
 	err := c.flushLockHeld(nil)
 	c.mux.Unlock()
 	return err
+}
+
+func (c *Cache[K, V]) Flush() error {
+	return c.flush(nil)
 }
 
 func (c *Cache[K, V]) flushLockHeld(evicted *genericlist.Element[LRUElement[K, V]]) error {

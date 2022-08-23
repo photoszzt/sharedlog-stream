@@ -116,7 +116,7 @@ func (p *StreamAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Conte
 		newTs = msg.Timestamp
 	}
 	newAgg := p.aggregator.Apply(key, msg.Value.(V), oldAgg)
-	err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional[VA](optional.Of(newAgg), newTs))
+	err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(optional.Of(newAgg), newTs))
 	if err != nil {
 		return nil, err
 	}

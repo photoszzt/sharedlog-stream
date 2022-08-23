@@ -14,6 +14,14 @@ type KeyAndWindowStartTsG[K any] struct {
 	WindowStartTs int64
 }
 
+type KeyAndWindowStartTsGSize[K any] struct {
+	KeySizeFunc func(K) int64
+}
+
+func (s KeyAndWindowStartTsGSize[K]) SizeOfKeyAndWindowStartTs(v KeyAndWindowStartTsG[K]) int64 {
+	return 8 + s.KeySizeFunc(v.Key)
+}
+
 func (kwTs KeyAndWindowStartTsG[K]) String() string {
 	return fmt.Sprintf("KeyAndWindowStartTs: {Key: %v, WindowStartTs: %d}", kwTs.Key, kwTs.WindowStartTs)
 }

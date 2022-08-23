@@ -18,6 +18,10 @@ import (
 	"cs.utexas.edu/zjia/faas/types"
 )
 
+const (
+	q4SizePerStore = 5 * 1024 * 1024
+)
+
 type q4MaxBid struct {
 	env      types.Environment
 	funcName string
@@ -139,6 +143,11 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	sizeOfVTs := commtypes.ValueTimestampGSize[*ntypes.BidPrice]{
+		ValSizeFunc: ntypes.SizeOfBidPricePtrIn,
+	}
+	cacheStore := store.NewCachingKeyValueStoreG[ntypes.AuctionIdCategory, commtypes.ValueTimestampG[*ntypes.BidPrice]](
+		ctx, kvstore, ntypes.SizeOfAuctionIdCategory, sizeOfVTs.SizeOfValueTimestamp, q4SizePerStore)
 	// store.NewCachingKeyValueStoreG[ntypes.AuctionIdCategory](ctx, mp.StoreName(), kvstoreWithChangelog,
 	// 	ntypes.SizeOfAuctionIdCategory, commtypes.SizeOfValueTimestamp)
 	ectx.Via(processor.NewMeteredProcessor(
@@ -163,7 +172,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 
 	task := stream_task.NewStreamTaskBuilder().Build()
 
-	kvc := map[string]store.KeyValueStoreOpWithChangelog{kvstore.ChangelogTopicName(): kvstore}
+	kvc := map[string]store.KeyValueStoreOpWithChangelog{kvstore.ChangelogTopicName(): cacheStore}
 	builder := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,
 		fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 			sp.ParNum, sp.OutputTopicNames[0]))

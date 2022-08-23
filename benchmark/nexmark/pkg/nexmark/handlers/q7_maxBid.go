@@ -24,6 +24,10 @@ type q7MaxBid struct {
 	funcName string
 }
 
+const (
+	Q7SizePerStore = 5 * 1024 * 1024
+)
+
 func NewQ7MaxBid(env types.Environment, funcName string) types.FuncHandler {
 	return &q7MaxBid{
 		env:      env,
@@ -130,10 +134,15 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	sizeOfVTs := commtypes.ValueTimestampGSize[uint64]{
+		ValSizeFunc: commtypes.SizeOfUint64,
+	}
+	cacheStore := store.NewCachingKeyValueStoreG[ntypes.StartEndTime, commtypes.ValueTimestampG[uint64]](
+		ctx, kvstore, ntypes.SizeOfStartEndTime, sizeOfVTs.SizeOfValueTimestamp, Q7SizePerStore)
 
 	ectx.Via(processor.NewMeteredProcessor(
 		processor.NewStreamAggregateProcessorG[ntypes.StartEndTime, *ntypes.Event, uint64]("maxBid",
-			kvstore, processor.InitializerFuncG[uint64](func() uint64 {
+			cacheStore, processor.InitializerFuncG[uint64](func() uint64 {
 				return uint64(0)
 			}),
 			processor.AggregatorFuncG[ntypes.StartEndTime, *ntypes.Event, uint64](
@@ -150,7 +159,7 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 			})))).
 		Via(processor.NewGroupByOutputProcessor(sinks_arr[0], &ectx))
 	task := stream_task.NewStreamTaskBuilder().Build()
-	kvc := map[string]store.KeyValueStoreOpWithChangelog{kvstore.ChangelogTopicName(): kvstore}
+	kvc := map[string]store.KeyValueStoreOpWithChangelog{kvstore.ChangelogTopicName(): cacheStore}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 		sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,

@@ -16,6 +16,10 @@ func SizeOfBidPrice(k BidPrice) int64 {
 	return 8
 }
 
+func SizeOfBidPricePtrIn(k *BidPrice) int64 {
+	return 8
+}
+
 type BidPriceJSONSerde struct{}
 type BidPriceMsgpSerde struct{}
 

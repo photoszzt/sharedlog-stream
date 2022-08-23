@@ -140,6 +140,11 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	sizeOfVTs := commtypes.ValueTimestampGSize[*ntypes.PriceTime]{
+		ValSizeFunc: ntypes.SizeOfPriceTimePtrIn,
+	}
+	cacheStore := store.NewCachingKeyValueStoreG[ntypes.AuctionIdSeller, commtypes.ValueTimestampG[*ntypes.PriceTime]](
+		ctx, kvstore, ntypes.SizeOfAuctionIdSeller, sizeOfVTs.SizeOfValueTimestamp, q4SizePerStore)
 	ectx.Via(processor.NewMeteredProcessor(
 		processor.NewStreamAggregateProcessorG[ntypes.AuctionIdSeller, *ntypes.AuctionBid, *ntypes.PriceTime]("maxBid", kvstore,
 			processor.InitializerFuncG[*ntypes.PriceTime](func() *ntypes.PriceTime { return nil }),
@@ -160,7 +165,7 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 			})))).
 		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[0], &ectx))
 	task := stream_task.NewStreamTaskBuilder().Build()
-	kvc := map[string]store.KeyValueStoreOpWithChangelog{kvstore.ChangelogTopicName(): kvstore}
+	kvc := map[string]store.KeyValueStoreOpWithChangelog{kvstore.ChangelogTopicName(): cacheStore}
 	builder := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,
 		fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 			sp.ParNum, sp.OutputTopicNames[0]))

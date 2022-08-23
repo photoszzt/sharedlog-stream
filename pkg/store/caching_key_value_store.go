@@ -4,26 +4,28 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/sharedlog_stream"
 
 	"4d63.com/optional"
 )
 
 type CachingKeyValueStoreG[K comparable, V any] struct {
 	cache        *Cache[K, V]
-	wrappedStore CoreKeyValueStoreG[K, V]
+	wrappedStore KeyValueStoreBackedByChangelogG[K, V]
 	name         string
 }
 
 var _ CoreKeyValueStoreG[int, int] = (*CachingKeyValueStoreG[int, int])(nil)
+var _ KeyValueStoreBackedByChangelogG[int, int] = (*CachingKeyValueStoreG[int, int])(nil)
 
-func NewCachingKeyValueStoreG[K comparable, V any](ctx context.Context, name string,
-	store CoreKeyValueStoreG[K, V],
+func NewCachingKeyValueStoreG[K comparable, V any](ctx context.Context,
+	store KeyValueStoreBackedByChangelogG[K, V],
 	sizeOfK func(K) int64,
 	sizeOfV func(V) int64,
 	maxCacheBytes int64,
 ) *CachingKeyValueStoreG[K, V] {
 	return &CachingKeyValueStoreG[K, V]{
-		name: name,
+		name: store.Name(),
 		cache: NewCache(func(entries []LRUElement[K, V]) error {
 			for _, entry := range entries {
 				err := store.Put(ctx, entry.key, entry.entry.value)
@@ -114,4 +116,36 @@ func (c *CachingKeyValueStoreG[K, V]) PutWithoutPushToChangelog(ctx context.Cont
 func (c *CachingKeyValueStoreG[K, V]) Flush(ctx context.Context) error {
 	c.cache.flush(nil)
 	return c.wrappedStore.Flush(ctx)
+}
+func (c *CachingKeyValueStoreG[K, V]) ChangelogIsSrc() bool {
+	return c.wrappedStore.ChangelogIsSrc()
+}
+func (c *CachingKeyValueStoreG[K, V]) ChangelogTopicName() string {
+	return c.wrappedStore.ChangelogTopicName()
+}
+
+func (c *CachingKeyValueStoreG[K, V]) ConsumeChangelog(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
+	return c.wrappedStore.ConsumeChangelog(ctx, parNum)
+}
+func (c *CachingKeyValueStoreG[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
+	guarantee exactly_once_intr.GuaranteeMth,
+) error {
+	return c.wrappedStore.ConfigureExactlyOnce(rem, guarantee)
+}
+func (c *CachingKeyValueStoreG[K, V]) Stream() sharedlog_stream.Stream {
+	return c.wrappedStore.Stream()
+}
+
+func (c *CachingKeyValueStoreG[K, V]) GetInitialProdSeqNum() uint64 {
+	return c.wrappedStore.GetInitialProdSeqNum()
+}
+func (c *CachingKeyValueStoreG[K, V]) GetCurrentProdSeqNum() uint64 {
+	return c.wrappedStore.GetCurrentProdSeqNum()
+}
+func (c *CachingKeyValueStoreG[K, V]) ResetInitialProd() {
+	c.wrappedStore.ResetInitialProd()
+}
+
+func (c *CachingKeyValueStoreG[K, V]) SubstreamNum() uint8 {
+	return c.wrappedStore.SubstreamNum()
 }

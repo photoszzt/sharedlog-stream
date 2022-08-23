@@ -19,6 +19,10 @@ import (
 	"cs.utexas.edu/zjia/faas/types"
 )
 
+const (
+	q5SizePerStore = 5 * 1024 * 1024
+)
+
 type q5MaxBid struct {
 	env      types.Environment
 	funcName string
@@ -117,7 +121,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	mp, err := store_with_changelog.NewMaterializeParamBuilder[ntypes.StartEndTime, commtypes.ValueTimestamp]().
+	mp, err := store_with_changelog.NewMaterializeParamBuilder[ntypes.StartEndTime, commtypes.ValueTimestampG[uint64]]().
 		MessageSerde(msgSerde).
 		StoreName(maxBidStoreName).
 		ParNum(sp.ParNum).
@@ -138,6 +142,11 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	sizeOfVTs := commtypes.ValueTimestampGSize[uint64]{
+		ValSizeFunc: commtypes.SizeOfUint64,
+	}
+	cacheStore := store.NewCachingKeyValueStoreG[ntypes.StartEndTime, commtypes.ValueTimestampG[uint64]](
+		ctx, kvstore, ntypes.SizeOfStartEndTime, sizeOfVTs.SizeOfValueTimestamp, q5SizePerStore)
 	maxBid := processor.NewMeteredProcessor(
 		processor.NewStreamAggregateProcessorG[ntypes.StartEndTime, ntypes.AuctionIdCount, uint64]("maxBid",
 			kvstore, processor.InitializerFuncG[uint64](func() uint64 {
@@ -196,7 +205,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 				return nil
 			})
 		}).MarkFinalStage().Build()
-	kvc := map[string]store.KeyValueStoreOpWithChangelog{kvstore.ChangelogTopicName(): kvstore}
+	kvc := map[string]store.KeyValueStoreOpWithChangelog{kvstore.ChangelogTopicName(): cacheStore}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 		sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,

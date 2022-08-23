@@ -137,6 +137,24 @@ func valTsSerToValueTsG[V any](vtsSer *ValueTimestampSerialized, valSerde SerdeG
 	}, nil
 }
 
+type OptionalValTsG[V any] struct {
+	Val       optional.Optional[V]
+	Timestamp int64
+}
+
+type OptionalValTsGSize[V any] struct {
+	ValSizeFunc func(V) int64
+}
+
+func (s OptionalValTsGSize[V]) SizeOfOptionalValTsG(vOp OptionalValTsG[V]) int64 {
+	v, ok := vOp.Val.Get()
+	if ok {
+		return 8 + s.ValSizeFunc(v)
+	} else {
+		return 8
+	}
+}
+
 type ValueTimestampG[V any] struct {
 	Value     V
 	Timestamp int64

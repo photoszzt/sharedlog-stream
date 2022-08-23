@@ -70,11 +70,11 @@ func SetupTableTableJoinWithSkipmap[K, VLeft, VRight, VR any](
 	map[string]store.KeyValueStoreOpWithChangelog,
 	error,
 ) {
-	toLeftTab, leftTab, err := store_with_changelog.ToInMemSkipmapKVTableWithChangelog[K, VLeft](mpLeft, less)
+	toLeftTab, leftTab, err := store_with_changelog.ToInMemSkipmapKVTableWithChangelog(mpLeft, less)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	toRightTab, rightTab, err := store_with_changelog.ToInMemSkipmapKVTableWithChangelog[K, VRight](mpRight, less)
+	toRightTab, rightTab, err := store_with_changelog.ToInMemSkipmapKVTableWithChangelog(mpRight, less)
 	if err != nil {
 		return nil, nil, nil, err
 	}

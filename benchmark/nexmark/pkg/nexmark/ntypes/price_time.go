@@ -18,6 +18,10 @@ func SizeOfPriceTime(k PriceTime) int64 {
 	return 16
 }
 
+func SizeOfPriceTimePtrIn(k *PriceTime) int64 {
+	return 16
+}
+
 func ComparePriceTime(a, b PriceTime) int {
 	if a.Price < b.Price {
 		return -1

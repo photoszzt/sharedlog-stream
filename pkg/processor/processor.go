@@ -10,3 +10,8 @@ type Processor interface {
 	// Process processes the stream commtypes.Message.
 	ProcessAndReturn(context.Context, commtypes.Message) ([]commtypes.Message, error)
 }
+
+type CachedProcessor interface {
+	Processor
+	Flush(ctx context.Context) error
+}

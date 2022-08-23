@@ -5,6 +5,7 @@ import (
 	"math"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -351,15 +352,20 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Flush(ctx context.Context) error { r
 func (s *InMemorySkipMapWindowStoreG[K, V]) ConsumeChangelog(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
 	panic("not supported")
 }
-
-func (s *InMemorySkipMapWindowStoreG[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager, guarantee exactly_once_intr.GuaranteeMth, serdeFormat commtypes.SerdeFormat) error {
+func (s *InMemorySkipMapWindowStoreG[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
+	guarantee exactly_once_intr.GuaranteeMth,
+) error {
 	panic("not supported")
 }
 
 func (s *InMemorySkipMapWindowStoreG[K, V]) ChangelogTopicName() string {
 	panic("not supported")
 }
-
+func (s *InMemorySkipMapWindowStoreG[K, V]) GetInitialProdSeqNum() uint64    { panic("not supported") }
+func (s *InMemorySkipMapWindowStoreG[K, V]) GetCurrentProdSeqNum() uint64    { panic("not supported") }
+func (s *InMemorySkipMapWindowStoreG[K, V]) ResetInitialProd()               { panic("not supported") }
+func (s *InMemorySkipMapWindowStoreG[K, V]) Stream() sharedlog_stream.Stream { panic("not supported") }
+func (s *InMemorySkipMapWindowStoreG[K, V]) SubstreamNum() uint8             { panic("not supported") }
 func (s *InMemorySkipMapWindowStoreG[K, V]) removeExpiredSegments() {
 	s.mux.RLock()
 	minLiveTimeTmp := int64(s.observedStreamTime) - int64(s.retentionPeriod) + 1
