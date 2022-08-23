@@ -26,10 +26,12 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 	if err != nil {
 		return err
 	}
-	epochMarkerSerde, err := commtypes.GetEpochMarkerSerdeG(args.SerdeFormat)
-	if err != nil {
-		return err
-	}
+	/*
+		epochMarkerSerde, err := commtypes.GetEpochMarkerSerdeG(args.SerdeFormat)
+		if err != nil {
+			return err
+		}
+	*/
 	payloadArrSerde := sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG
 	for i := uint8(0); i < args.NumPartitions; i++ {
 		outFilePath := path.Join(args.OutputDir, fmt.Sprintf("%s-%d.txt", args.TopicName, i))
@@ -47,19 +49,21 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 				return err
 			}
 			if rawMsg.IsControl {
-				epochMark, err := epochMarkerSerde.Decode(rawMsg.Payload)
-				if err != nil {
-					return err
-				}
-				outStr := fmt.Sprintf("%+v\n", epochMark)
-				// fmt.Fprint(os.Stderr, outStr)
-				writted, err := outFile.WriteString(outStr)
-				if err != nil {
-					return err
-				}
-				if writted != len(outStr) {
-					panic("written is smaller than expected")
-				}
+				/*
+					epochMark, err := epochMarkerSerde.Decode(rawMsg.Payload)
+					if err != nil {
+						return err
+					}
+					outStr := fmt.Sprintf("%+v\n", epochMark)
+					// fmt.Fprint(os.Stderr, outStr)
+					writted, err := outFile.WriteString(outStr)
+					if err != nil {
+						return err
+					}
+					if writted != len(outStr) {
+						panic("written is smaller than expected")
+					}
+				*/
 			} else {
 				msgAndSeq, err := commtypes.DecodeRawMsgG(rawMsg, args.MsgSerde, payloadArrSerde)
 				if err != nil {

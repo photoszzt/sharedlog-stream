@@ -59,7 +59,7 @@ func (p *StreamReduceProcessor) ProcessAndReturn(ctx context.Context, msg commty
 }
 
 type StreamReduceProcessorG[K, V any] struct {
-	store   store.CoreKeyValueStoreG[K, *commtypes.ValueTimestamp]
+	store   store.CoreKeyValueStoreG[K, commtypes.ValueTimestamp]
 	reducer ReducerG[V]
 	name    string
 }
@@ -67,7 +67,7 @@ type StreamReduceProcessorG[K, V any] struct {
 var _ = Processor(&StreamReduceProcessor{})
 
 func NewStreamReduceProcessorG[K, V any](name string, reducer ReducerG[V],
-	store store.CoreKeyValueStoreG[K, *commtypes.ValueTimestamp]) *StreamReduceProcessorG[K, V] {
+	store store.CoreKeyValueStoreG[K, commtypes.ValueTimestamp]) *StreamReduceProcessorG[K, V] {
 	return &StreamReduceProcessorG[K, V]{
 		reducer: reducer,
 		store:   store,

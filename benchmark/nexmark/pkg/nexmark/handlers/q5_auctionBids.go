@@ -114,7 +114,7 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 		return nil, nil, err
 	}
 	countStoreName := "auctionBidsCountStore"
-	countMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, *commtypes.ValueTimestamp]().
+	countMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestamp]().
 		MessageSerde(msgSerde).StoreName(countStoreName).ParNum(sp.ParNum).
 		SerdeFormat(serdeFormat).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
@@ -126,16 +126,16 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 	if err != nil {
 		return nil, nil, err
 	}
-	countWindowStore, err := store_with_changelog.CreateInMemWindowStoreWithChangelog(
-		hopWindow, false, store.Uint64IntrCompare, countMp)
+	countWindowStore, err := store_with_changelog.CreateInMemSkipMapWindowTableWithChangelogG(
+		hopWindow, false, store.IntegerCompare[uint64], countMp)
 	if err != nil {
 		return nil, nil, err
 	}
-	countProc := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessor(
+	countProc := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessorG[uint64, *ntypes.Event, uint64](
 		"countProc", countWindowStore,
-		processor.InitializerFunc(func() interface{} { return uint64(0) }),
-		processor.AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
-			val := aggregate.(uint64)
+		processor.InitializerFuncG[uint64](func() uint64 { return uint64(0) }),
+		processor.AggregatorFuncG[uint64, *ntypes.Event, uint64](func(key uint64, value *ntypes.Event, aggregate uint64) uint64 {
+			val := aggregate
 			return val + 1
 		}), hopWindow))
 	wsc := map[string]store.WindowStoreOpWithChangelog{countWindowStore.ChangelogTopicName(): countWindowStore}

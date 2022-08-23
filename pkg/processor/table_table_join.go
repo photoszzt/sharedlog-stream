@@ -64,7 +64,7 @@ func (p *TableTableJoinProcessor) ProcessAndReturn(ctx context.Context, msg comm
 }
 
 type TableTableJoinProcessorG[K, V1, V2, VR any] struct {
-	store             store.CoreKeyValueStoreG[K, *commtypes.ValueTimestamp]
+	store             store.CoreKeyValueStoreG[K, commtypes.ValueTimestamp]
 	joiner            ValueJoinerWithKeyG[K, V1, V2, VR]
 	streamTimeTracker commtypes.StreamTimeTracker
 	name              string
@@ -72,7 +72,7 @@ type TableTableJoinProcessorG[K, V1, V2, VR any] struct {
 
 var _ = Processor(&StreamTableJoinProcessorG[int, string, string, string]{})
 
-func NewTableTableJoinProcessorG[K, V1, V2, VR any](name string, store store.CoreKeyValueStoreG[K, *commtypes.ValueTimestamp],
+func NewTableTableJoinProcessorG[K, V1, V2, VR any](name string, store store.CoreKeyValueStoreG[K, commtypes.ValueTimestamp],
 	joiner ValueJoinerWithKeyG[K, V1, V2, VR]) *TableTableJoinProcessorG[K, V1, V2, VR] {
 	return &TableTableJoinProcessorG[K, V1, V2, VR]{
 		joiner:            joiner,

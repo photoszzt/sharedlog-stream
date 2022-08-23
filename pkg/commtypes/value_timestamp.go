@@ -80,7 +80,7 @@ func convertToValueTsSer(value interface{}, valSerde Serde) (*ValueTimestampSeri
 	}, nil
 }
 
-func valTsToValueTsSer(value *ValueTimestamp, valSerde Serde) (*ValueTimestampSerialized, error) {
+func valTsToValueTsSer(value ValueTimestamp, valSerde Serde) (*ValueTimestampSerialized, error) {
 	var enc []byte
 	var err error
 	if !utils.IsNil(value.Value) {
@@ -110,16 +110,16 @@ func decodeToValueTs(vtsSer *ValueTimestampSerialized, valSerde Serde) (interfac
 	}, nil
 }
 
-func valTsSerToValueTs(vtsSer *ValueTimestampSerialized, valSerde Serde) (*ValueTimestamp, error) {
+func valTsSerToValueTs(vtsSer *ValueTimestampSerialized, valSerde Serde) (ValueTimestamp, error) {
 	var v interface{}
 	var err error
 	if vtsSer.ValueSerialized != nil {
 		v, err = valSerde.Decode(vtsSer.ValueSerialized)
 		if err != nil {
-			return nil, err
+			return ValueTimestamp{}, err
 		}
 	}
-	return &ValueTimestamp{
+	return ValueTimestamp{
 		Timestamp: vtsSer.Timestamp,
 		Value:     v,
 	}, nil

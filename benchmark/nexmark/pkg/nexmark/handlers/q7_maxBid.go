@@ -109,7 +109,7 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	mp, err := store_with_changelog.NewMaterializeParamBuilder[ntypes.StartEndTime, *commtypes.ValueTimestamp]().
+	mp, err := store_with_changelog.NewMaterializeParamBuilder[ntypes.StartEndTime, commtypes.ValueTimestamp]().
 		MessageSerde(msgSerde).
 		StoreName(maxBidByWinStoreName).
 		ParNum(sp.ParNum).

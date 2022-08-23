@@ -73,7 +73,7 @@ func MsgSerdeWithValueTs(serdeFormat commtypes.SerdeFormat, keySerde commtypes.S
 	return commtypes.GetMsgSerde(serdeFormat, keySerde, valueTsSerde)
 }
 
-func MsgSerdeWithValueTsG[K any](serdeFormat commtypes.SerdeFormat, keySerde commtypes.SerdeG[K], valSerde commtypes.Serde) (commtypes.MessageSerdeG[K, *commtypes.ValueTimestamp], error) {
+func MsgSerdeWithValueTsG[K any](serdeFormat commtypes.SerdeFormat, keySerde commtypes.SerdeG[K], valSerde commtypes.Serde) (commtypes.MessageSerdeG[K, commtypes.ValueTimestamp], error) {
 	valueTsSerde, err := commtypes.GetValueTsSerdeG(serdeFormat, valSerde)
 	if err != nil {
 		return nil, err
@@ -90,7 +90,7 @@ func ToInMemKVTable(storeName string, compare store.KVStoreLessFunc) (
 }
 
 type TableSourceProcessorG[K, V any] struct {
-	store store.CoreKeyValueStoreG[K, *commtypes.ValueTimestamp]
+	store store.CoreKeyValueStoreG[K, commtypes.ValueTimestamp]
 	name  string
 }
 
@@ -102,7 +102,7 @@ func NewTableSourceProcessorG[K, V any]() *TableSourceProcessorG[K, V] {
 	}
 }
 
-func NewTableSourceProcessorWithTableG[K, V any](tab store.CoreKeyValueStoreG[K, *commtypes.ValueTimestamp]) *TableSourceProcessorG[K, V] {
+func NewTableSourceProcessorWithTableG[K, V any](tab store.CoreKeyValueStoreG[K, commtypes.ValueTimestamp]) *TableSourceProcessorG[K, V] {
 	return &TableSourceProcessorG[K, V]{
 		name:  "toTable",
 		store: tab,

@@ -117,7 +117,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	mp, err := store_with_changelog.NewMaterializeParamBuilder[ntypes.AuctionIdCategory, *commtypes.ValueTimestamp]().
+	mp, err := store_with_changelog.NewMaterializeParamBuilder[ntypes.AuctionIdCategory, commtypes.ValueTimestamp]().
 		MessageSerde(msgSerde).
 		StoreName(maxBidStoreName).
 		ParNum(sp.ParNum).
@@ -139,6 +139,8 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	// store.NewCachingKeyValueStoreG[ntypes.AuctionIdCategory](ctx, mp.StoreName(), kvstoreWithChangelog,
+	// 	ntypes.SizeOfAuctionIdCategory, commtypes.SizeOfValueTimestamp)
 	ectx.Via(processor.NewMeteredProcessor(
 		processor.NewStreamAggregateProcessorG[ntypes.AuctionIdCategory, *ntypes.AuctionBid, *ntypes.BidPrice]("maxBid", kvstore,
 			processor.InitializerFuncG[*ntypes.BidPrice](func() *ntypes.BidPrice { return nil }),

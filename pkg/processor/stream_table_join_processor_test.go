@@ -28,7 +28,7 @@ func getJoinProcessor() *StreamTableJoinProcessor {
 }
 
 func getSkipMapJoinProcessor() *StreamTableJoinProcessorG[int, int, int, string] {
-	store := store.NewInMemorySkipmapKeyValueStoreG[int, *commtypes.ValueTimestamp]("test1", store.IntLessFunc)
+	store := store.NewInMemorySkipmapKeyValueStoreG[int, commtypes.ValueTimestamp]("test1", store.IntLessFunc)
 	joinProc := NewStreamTableJoinProcessorG[int, int, int, string](store, ValueJoinerWithKeyFuncG[int, int, int, string](
 		func(readOnlyKey int, leftValue int, rightValue int) string {
 			return fmt.Sprintf("%d+%d", leftValue, rightValue)
@@ -54,7 +54,7 @@ func getJoinProcessorWithStr() *StreamTableJoinProcessor {
 }
 
 func getSkipMapJoinProcessorWithStr() *StreamTableJoinProcessorG[int, string, string, string] {
-	store := store.NewInMemorySkipmapKeyValueStoreG[int, *commtypes.ValueTimestamp]("test1", store.IntLessFunc)
+	store := store.NewInMemorySkipmapKeyValueStoreG[int, commtypes.ValueTimestamp]("test1", store.IntLessFunc)
 	joinProc := NewStreamTableJoinProcessorG[int, string, string, string](store, ValueJoinerWithKeyFuncG[int, string, string, string](
 		func(readOnlyKey int, leftValue string, rightValue string) string {
 			return fmt.Sprintf("%s+%s", leftValue, rightValue)
@@ -147,7 +147,7 @@ func putSecond(t *testing.T, ctx context.Context, joinProc *StreamTableJoinProce
 
 func putSecondG(t *testing.T, ctx context.Context, joinProc *StreamTableJoinProcessorG[int, string, string, string]) {
 	for i := 0; i < 2; i++ {
-		err := joinProc.store.Put(ctx, i, optional.Empty[*commtypes.ValueTimestamp]())
+		err := joinProc.store.Put(ctx, i, optional.Empty[commtypes.ValueTimestamp]())
 		if err != nil {
 			t.Errorf("fail to put val to store: %v", err)
 		}

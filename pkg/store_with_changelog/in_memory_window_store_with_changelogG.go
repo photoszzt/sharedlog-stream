@@ -208,7 +208,7 @@ func ToInMemSkipMapWindowTableWithChangelogG[K, V any](
 }
 
 func CreateInMemSkipMapWindowTableWithChangelogG[K, V any](
-	joinWindow *processor.JoinWindows,
+	joinWindow processor.EnumerableWindowDefinition,
 	retainDuplicates bool,
 	comparable store.CompareFuncG[K],
 	mp *MaterializeParam[K, V],

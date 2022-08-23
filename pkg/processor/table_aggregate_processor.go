@@ -94,7 +94,7 @@ func (p *TableAggregateProcessor) ProcessAndReturn(ctx context.Context, msg comm
 }
 
 type TableAggregateProcessorG[K, V, VA any] struct {
-	store       store.CoreKeyValueStoreG[K, *commtypes.ValueTimestamp]
+	store       store.CoreKeyValueStoreG[K, commtypes.ValueTimestamp]
 	initializer InitializerG[VA]
 	add         AggregatorG[K, V, VA]
 	remove      AggregatorG[K, V, VA]
@@ -104,7 +104,7 @@ type TableAggregateProcessorG[K, V, VA any] struct {
 var _ = Processor(&TableAggregateProcessor{})
 
 func NewTableAggregateProcessorG[K, V, VA any](name string,
-	store store.CoreKeyValueStoreG[K, *commtypes.ValueTimestamp],
+	store store.CoreKeyValueStoreG[K, commtypes.ValueTimestamp],
 	initializer InitializerG[VA],
 	add AggregatorG[K, V, VA],
 	remove AggregatorG[K, V, VA],

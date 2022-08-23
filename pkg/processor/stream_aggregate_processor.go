@@ -68,7 +68,7 @@ func (p *StreamAggregateProcessor) ProcessAndReturn(ctx context.Context, msg com
 }
 
 type StreamAggregateProcessorG[K, V, VA any] struct {
-	store       store.CoreKeyValueStoreG[K, *commtypes.ValueTimestamp]
+	store       store.CoreKeyValueStoreG[K, commtypes.ValueTimestamp]
 	initializer InitializerG[VA]
 	aggregator  AggregatorG[K, V, VA]
 	name        string
@@ -76,7 +76,7 @@ type StreamAggregateProcessorG[K, V, VA any] struct {
 
 var _ = Processor(&StreamAggregateProcessorG[int, int, int]{})
 
-func NewStreamAggregateProcessorG[K, V, VA any](name string, store store.CoreKeyValueStoreG[K, *commtypes.ValueTimestamp],
+func NewStreamAggregateProcessorG[K, V, VA any](name string, store store.CoreKeyValueStoreG[K, commtypes.ValueTimestamp],
 	initializer InitializerG[VA], aggregator AggregatorG[K, V, VA],
 ) *StreamAggregateProcessorG[K, V, VA] {
 	return &StreamAggregateProcessorG[K, V, VA]{

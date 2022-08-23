@@ -104,7 +104,7 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	mp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, *commtypes.ValueTimestamp]().
+	mp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestamp]().
 		MessageSerde(storeMsgSerde).
 		StoreName(aggStoreName).
 		ParNum(sp.ParNum).

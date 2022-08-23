@@ -117,7 +117,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	mp, err := store_with_changelog.NewMaterializeParamBuilder[ntypes.StartEndTime, *commtypes.ValueTimestamp]().
+	mp, err := store_with_changelog.NewMaterializeParamBuilder[ntypes.StartEndTime, commtypes.ValueTimestamp]().
 		MessageSerde(msgSerde).
 		StoreName(maxBidStoreName).
 		ParNum(sp.ParNum).
