@@ -61,8 +61,8 @@ func SetupTableTableJoin[K, VLeft, VRight any](
 }
 
 func SetupTableTableJoinWithSkipmap[K, VLeft, VRight, VR any](
-	mpLeft *store_with_changelog.MaterializeParam[K, commtypes.ValueTimestamp],
-	mpRight *store_with_changelog.MaterializeParam[K, commtypes.ValueTimestamp],
+	mpLeft *store_with_changelog.MaterializeParam[K, commtypes.ValueTimestampG[VLeft]],
+	mpRight *store_with_changelog.MaterializeParam[K, commtypes.ValueTimestampG[VRight]],
 	less store.LessFunc[K],
 	joiner processor.ValueJoinerWithKeyFuncG[K, VLeft, VRight, VR],
 ) (proc_interface.ProcessAndReturnFunc,

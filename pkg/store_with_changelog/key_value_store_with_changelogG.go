@@ -198,11 +198,11 @@ func CreateInMemorySkipmapKVTableWithChangelogG[K, V any](mp *MaterializeParam[K
 	return NewKeyValueStoreWithChangelogG[K, V](mp, s)
 }
 
-func ToInMemSkipmapKVTableWithChangelog[K, V any](mp *MaterializeParam[K, commtypes.ValueTimestamp],
+func ToInMemSkipmapKVTableWithChangelog[K, V any](mp *MaterializeParam[K, commtypes.ValueTimestampG[V]],
 	less store.LessFunc[K],
-) (*processor.MeteredProcessor, *KeyValueStoreWithChangelogG[K, commtypes.ValueTimestamp], error) {
-	s := store.NewInMemorySkipmapKeyValueStoreG[K, commtypes.ValueTimestamp](mp.storeName, less)
-	storeWithlog, err := NewKeyValueStoreWithChangelogG[K, commtypes.ValueTimestamp](mp, s)
+) (*processor.MeteredProcessor, *KeyValueStoreWithChangelogG[K, commtypes.ValueTimestampG[V]], error) {
+	s := store.NewInMemorySkipmapKeyValueStoreG[K, commtypes.ValueTimestampG[V]](mp.storeName, less)
+	storeWithlog, err := NewKeyValueStoreWithChangelogG[K, commtypes.ValueTimestampG[V]](mp, s)
 	if err != nil {
 		return nil, nil, err
 	}

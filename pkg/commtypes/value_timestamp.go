@@ -13,6 +13,14 @@ type ValueTimestamp struct {
 	Timestamp int64
 }
 
+type ValueTimestampSize struct {
+	ValSizeFunc func(interface{}) int64
+}
+
+func (s ValueTimestampSize) SizeOfValueTimestamp(v ValueTimestamp) int64 {
+	return 8 + s.ValSizeFunc(v.Value)
+}
+
 var _ = fmt.Stringer(ValueTimestamp{})
 
 func (vts ValueTimestamp) String() string {

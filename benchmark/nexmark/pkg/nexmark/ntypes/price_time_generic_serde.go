@@ -6,44 +6,44 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 )
 
-type PriceTimeJSONSerdeG struct{}
+type PriceTimePtrJSONSerdeG struct{}
 
-var _ = commtypes.SerdeG[PriceTime](PriceTimeJSONSerdeG{})
+var _ = commtypes.SerdeG[*PriceTime](PriceTimePtrJSONSerdeG{})
 
-func (s PriceTimeJSONSerdeG) Encode(value PriceTime) ([]byte, error) {
+func (s PriceTimePtrJSONSerdeG) Encode(value *PriceTime) ([]byte, error) {
 	return json.Marshal(&value)
 }
 
-func (s PriceTimeJSONSerdeG) Decode(value []byte) (PriceTime, error) {
+func (s PriceTimePtrJSONSerdeG) Decode(value []byte) (*PriceTime, error) {
 	pt := PriceTime{}
 	if err := json.Unmarshal(value, &pt); err != nil {
-		return PriceTime{}, err
+		return nil, err
 	}
-	return pt, nil
+	return &pt, nil
 }
 
-type PriceTimeMsgpSerdeG struct{}
+type PriceTimePtrMsgpSerdeG struct{}
 
-var _ = commtypes.SerdeG[PriceTime](PriceTimeMsgpSerdeG{})
+var _ = commtypes.SerdeG[*PriceTime](PriceTimePtrMsgpSerdeG{})
 
-func (s PriceTimeMsgpSerdeG) Encode(value PriceTime) ([]byte, error) {
+func (s PriceTimePtrMsgpSerdeG) Encode(value *PriceTime) ([]byte, error) {
 	return value.MarshalMsg(nil)
 }
 
-func (s PriceTimeMsgpSerdeG) Decode(value []byte) (PriceTime, error) {
+func (s PriceTimePtrMsgpSerdeG) Decode(value []byte) (*PriceTime, error) {
 	pt := PriceTime{}
 	if _, err := pt.UnmarshalMsg(value); err != nil {
-		return PriceTime{}, err
+		return nil, err
 	}
-	return pt, nil
+	return &pt, nil
 }
 
-func GetPriceTimeSerdeG(serdeFormat commtypes.SerdeFormat) (commtypes.SerdeG[PriceTime], error) {
+func GetPriceTimeSerdeG(serdeFormat commtypes.SerdeFormat) (commtypes.SerdeG[*PriceTime], error) {
 	switch serdeFormat {
 	case commtypes.JSON:
-		return PriceTimeJSONSerdeG{}, nil
+		return PriceTimePtrJSONSerdeG{}, nil
 	case commtypes.MSGP:
-		return PriceTimeMsgpSerdeG{}, nil
+		return PriceTimePtrMsgpSerdeG{}, nil
 	default:
 		return nil, common_errors.ErrUnrecognizedSerdeFormat
 	}

@@ -112,8 +112,8 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	msgSerde, err := processor.MsgSerdeWithValueTsG(serdeFormat,
-		seSerde, commtypes.Uint64Serde{})
+	msgSerde, err := processor.MsgSerdeWithValueTsG[ntypes.StartEndTime, uint64](serdeFormat,
+		seSerde, commtypes.Uint64SerdeG{})
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

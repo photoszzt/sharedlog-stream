@@ -55,8 +55,8 @@ func TestAggBasicWithInMemKVTable(t *testing.T) {
 
 func TestAggBasicWithInMemSkipmapTable(t *testing.T) {
 	pc := NewProcessorChains()
-	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestamp]("srcTab", store.StringLessFunc)
-	st := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestamp]("aggTab", store.StringLessFunc)
+	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("srcTab", store.StringLessFunc)
+	st := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("aggTab", store.StringLessFunc)
 	pc.
 		Via(NewTableSourceProcessorWithTableG[string, string](srcTable)).
 		Via(NewTableGroupByMapProcessor("noOpGroupBy",
@@ -138,8 +138,8 @@ func TestAggRepartitionWithInMemKVStore(t *testing.T) {
 
 func TestAggRepartitionWithInMemSkipmapKVStore(t *testing.T) {
 	pc := NewProcessorChains()
-	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestamp]("srcTab", store.StringLessFunc)
-	st := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestamp]("aggTab", store.StringLessFunc)
+	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("srcTab", store.StringLessFunc)
+	st := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("aggTab", store.StringLessFunc)
 	pc.
 		Via(NewTableSourceProcessorWithTableG[string, string](srcTable)).
 		Via(NewTableGroupByMapProcessor("groupBy", MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
@@ -225,8 +225,8 @@ func TestCountWithInMemKVStore(t *testing.T) {
 
 func TestCountWithInMemSkipmapKVStore(t *testing.T) {
 	pc := NewProcessorChains()
-	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestamp]("srcTab", store.StringLessFunc)
-	st := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestamp]("aggTab", store.StringLessFunc)
+	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("srcTab", store.StringLessFunc)
+	st := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[uint64]]("aggTab", store.StringLessFunc)
 	pc.
 		Via(NewTableSourceProcessorWithTableG[string, string](srcTable)).
 		Via(NewTableGroupByMapProcessor("groupBy", MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
@@ -310,8 +310,8 @@ func TestRemoveOldBeforeAddNewWithInMemKVStore(t *testing.T) {
 
 func TestRemoveOldBeforeAddNewWithInMemSkipmapKVStore(t *testing.T) {
 	pc := NewProcessorChains()
-	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestamp]("srcTab", store.StringLessFunc)
-	st := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestamp]("aggTab", store.StringLessFunc)
+	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("srcTab", store.StringLessFunc)
+	st := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("aggTab", store.StringLessFunc)
 	pc.
 		Via(NewTableSourceProcessorWithTableG[string, string](srcTable)).
 		Via(NewTableGroupByMapProcessor("groupBy", MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {

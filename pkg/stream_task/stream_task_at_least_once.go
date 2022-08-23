@@ -109,9 +109,6 @@ func track(ctx context.Context, cm *consume_seq_num_manager.ConsumeSeqManager,
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
 	*hasUncommitted = false
 	*commitTimer = time.Now()
 	return nil

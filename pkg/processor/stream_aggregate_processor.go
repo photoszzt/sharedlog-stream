@@ -6,6 +6,7 @@ import (
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/utils"
 
+	"4d63.com/optional"
 	"github.com/rs/zerolog/log"
 )
 
@@ -68,7 +69,7 @@ func (p *StreamAggregateProcessor) ProcessAndReturn(ctx context.Context, msg com
 }
 
 type StreamAggregateProcessorG[K, V, VA any] struct {
-	store       store.CoreKeyValueStoreG[K, commtypes.ValueTimestamp]
+	store       store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[VA]]
 	initializer InitializerG[VA]
 	aggregator  AggregatorG[K, V, VA]
 	name        string
@@ -76,7 +77,7 @@ type StreamAggregateProcessorG[K, V, VA any] struct {
 
 var _ = Processor(&StreamAggregateProcessorG[int, int, int]{})
 
-func NewStreamAggregateProcessorG[K, V, VA any](name string, store store.CoreKeyValueStoreG[K, commtypes.ValueTimestamp],
+func NewStreamAggregateProcessorG[K, V, VA any](name string, store store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[VA]],
 	initializer InitializerG[VA], aggregator AggregatorG[K, V, VA],
 ) *StreamAggregateProcessorG[K, V, VA] {
 	return &StreamAggregateProcessorG[K, V, VA]{
@@ -104,7 +105,7 @@ func (p *StreamAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Conte
 	var oldAgg VA
 	var newTs int64
 	if ok {
-		oldAgg = oldAggTs.Value.(VA)
+		oldAgg = oldAggTs.Value
 		if msg.Timestamp > oldAggTs.Timestamp {
 			newTs = msg.Timestamp
 		} else {
@@ -115,7 +116,7 @@ func (p *StreamAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Conte
 		newTs = msg.Timestamp
 	}
 	newAgg := p.aggregator.Apply(key, msg.Value.(V), oldAgg)
-	err = p.store.Put(ctx, key, commtypes.CreateValueTimestampOptionalWithIntrVal(newAgg, newTs))
+	err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional[VA](optional.Of(newAgg), newTs))
 	if err != nil {
 		return nil, err
 	}

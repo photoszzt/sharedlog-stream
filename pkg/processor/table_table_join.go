@@ -64,7 +64,7 @@ func (p *TableTableJoinProcessor) ProcessAndReturn(ctx context.Context, msg comm
 }
 
 type TableTableJoinProcessorG[K, V1, V2, VR any] struct {
-	store             store.CoreKeyValueStoreG[K, commtypes.ValueTimestamp]
+	store             store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[V2]]
 	joiner            ValueJoinerWithKeyG[K, V1, V2, VR]
 	streamTimeTracker commtypes.StreamTimeTracker
 	name              string
@@ -72,7 +72,7 @@ type TableTableJoinProcessorG[K, V1, V2, VR any] struct {
 
 var _ = Processor(&StreamTableJoinProcessorG[int, string, string, string]{})
 
-func NewTableTableJoinProcessorG[K, V1, V2, VR any](name string, store store.CoreKeyValueStoreG[K, commtypes.ValueTimestamp],
+func NewTableTableJoinProcessorG[K, V1, V2, VR any](name string, store store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[V2]],
 	joiner ValueJoinerWithKeyG[K, V1, V2, VR]) *TableTableJoinProcessorG[K, V1, V2, VR] {
 	return &TableTableJoinProcessorG[K, V1, V2, VR]{
 		joiner:            joiner,
@@ -97,9 +97,6 @@ func (p *TableTableJoinProcessorG[K, V1, V2, VR]) ProcessAndReturn(ctx context.C
 		return nil, fmt.Errorf("get err: %v", err)
 	}
 	if ok {
-		if rvTs.Value == nil {
-			return nil, nil
-		}
 		ts := msg.Timestamp
 		if ts < rvTs.Timestamp {
 			ts = rvTs.Timestamp
@@ -108,10 +105,10 @@ func (p *TableTableJoinProcessorG[K, V1, V2, VR]) ProcessAndReturn(ctx context.C
 		var oldVal interface{}
 		change := commtypes.CastToChangePtr(msg.Value)
 		if change.NewVal != nil {
-			newVal = p.joiner.Apply(key, change.NewVal.(V1), rvTs.Value.(V2))
+			newVal = p.joiner.Apply(key, change.NewVal.(V1), rvTs.Value)
 		}
 		if change.OldVal != nil {
-			oldVal = p.joiner.Apply(key, change.OldVal.(V1), rvTs.Value.(V2))
+			oldVal = p.joiner.Apply(key, change.OldVal.(V1), rvTs.Value)
 		}
 		return []commtypes.Message{{Key: msg.Key, Value: commtypes.Change{NewVal: newVal, OldVal: oldVal}, Timestamp: ts}}, nil
 	}

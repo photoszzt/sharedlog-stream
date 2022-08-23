@@ -96,7 +96,7 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	}
 	aggStoreName := "q6AggKVStore"
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	ptlSerde, err := ntypes.GetPriceTimeListSerde(serdeFormat)
+	ptlSerde, err := ntypes.GetPriceTimeListSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -104,7 +104,7 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	mp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestamp]().
+	mp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestampG[ntypes.PriceTimeList]]().
 		MessageSerde(storeMsgSerde).
 		StoreName(aggStoreName).
 		ParNum(sp.ParNum).

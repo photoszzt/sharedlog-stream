@@ -73,8 +73,10 @@ func MsgSerdeWithValueTs(serdeFormat commtypes.SerdeFormat, keySerde commtypes.S
 	return commtypes.GetMsgSerde(serdeFormat, keySerde, valueTsSerde)
 }
 
-func MsgSerdeWithValueTsG[K any](serdeFormat commtypes.SerdeFormat, keySerde commtypes.SerdeG[K], valSerde commtypes.Serde) (commtypes.MessageSerdeG[K, commtypes.ValueTimestamp], error) {
-	valueTsSerde, err := commtypes.GetValueTsSerdeG(serdeFormat, valSerde)
+func MsgSerdeWithValueTsG[K, V any](serdeFormat commtypes.SerdeFormat,
+	keySerde commtypes.SerdeG[K], valSerde commtypes.SerdeG[V],
+) (commtypes.MessageSerdeG[K, commtypes.ValueTimestampG[V]], error) {
+	valueTsSerde, err := commtypes.GetValueTsGSerdeG(serdeFormat, valSerde)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +92,7 @@ func ToInMemKVTable(storeName string, compare store.KVStoreLessFunc) (
 }
 
 type TableSourceProcessorG[K, V any] struct {
-	store store.CoreKeyValueStoreG[K, commtypes.ValueTimestamp]
+	store store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[V]]
 	name  string
 }
 
@@ -102,7 +104,7 @@ func NewTableSourceProcessorG[K, V any]() *TableSourceProcessorG[K, V] {
 	}
 }
 
-func NewTableSourceProcessorWithTableG[K, V any](tab store.CoreKeyValueStoreG[K, commtypes.ValueTimestamp]) *TableSourceProcessorG[K, V] {
+func NewTableSourceProcessorWithTableG[K, V any](tab store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[V]]) *TableSourceProcessorG[K, V] {
 	return &TableSourceProcessorG[K, V]{
 		name:  "toTable",
 		store: tab,
@@ -121,23 +123,20 @@ func (p *TableSourceProcessorG[K, V]) ProcessAndReturn(ctx context.Context, msg 
 	if p.store != nil {
 		var oldVal interface{}
 		key := msg.Key.(K)
-		v, ok, err := p.store.Get(ctx, key)
+		oldValTs, ok, err := p.store.Get(ctx, key)
 		if err != nil {
 			return nil, err
 		}
 		if ok {
-			oldValTs := commtypes.CastToValTsPtr(v)
-			if oldValTs != nil {
-				oldVal = oldValTs.Value.(V)
-				if msg.Timestamp < oldValTs.Timestamp {
-					log.Warn().Msgf("Detected out-of-order table update for %s, old Ts=[%v] new Ts=[%v].",
-						p.store.Name(), oldValTs.Timestamp, msg.Timestamp)
-				}
+			oldVal = oldValTs.Value
+			if msg.Timestamp < oldValTs.Timestamp {
+				log.Warn().Msgf("Detected out-of-order table update for %s, old Ts=[%v] new Ts=[%v].",
+					p.store.Name(), oldValTs.Timestamp, msg.Timestamp)
 			}
 		} else {
 			oldVal = nil
 		}
-		err = p.store.Put(ctx, key, commtypes.CreateValueTimestampOptionalWithIntrVal(msg.Value, msg.Timestamp))
+		err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptionalWithIntrVal[V](msg.Value, msg.Timestamp))
 		if err != nil {
 			return nil, err
 		}

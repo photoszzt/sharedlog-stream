@@ -106,7 +106,7 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	}
 	maxBidStoreName := "q6MaxBidKVStore"
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	ptSerde, err := ntypes.GetPriceTimeSerde(serdeFormat)
+	ptSerde, err := ntypes.GetPriceTimeSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -118,7 +118,7 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	mp, err := store_with_changelog.NewMaterializeParamBuilder[ntypes.AuctionIdSeller, commtypes.ValueTimestamp]().
+	mp, err := store_with_changelog.NewMaterializeParamBuilder[ntypes.AuctionIdSeller, commtypes.ValueTimestampG[*ntypes.PriceTime]]().
 		MessageSerde(msgSerde).
 		StoreName(maxBidStoreName).
 		ParNum(sp.ParNum).

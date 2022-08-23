@@ -108,13 +108,13 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 		return nil, nil, err
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	msgSerde, err := processor.MsgSerdeWithValueTsG[uint64](serdeFormat,
-		commtypes.Uint64SerdeG{}, commtypes.Uint64Serde{})
+	msgSerde, err := processor.MsgSerdeWithValueTsG[uint64, uint64](serdeFormat,
+		commtypes.Uint64SerdeG{}, commtypes.Uint64SerdeG{})
 	if err != nil {
 		return nil, nil, err
 	}
 	countStoreName := "auctionBidsCountStore"
-	countMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestamp]().
+	countMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestampG[uint64]]().
 		MessageSerde(msgSerde).StoreName(countStoreName).ParNum(sp.ParNum).
 		SerdeFormat(serdeFormat).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{

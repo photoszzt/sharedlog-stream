@@ -48,7 +48,7 @@ func (p *StreamTableJoinProcessor) ProcessAndReturn(ctx context.Context, msg com
 }
 
 type StreamTableJoinProcessorG[K, V1, V2, VR any] struct {
-	store    store.CoreKeyValueStoreG[K, commtypes.ValueTimestamp]
+	store    store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[V2]]
 	joiner   ValueJoinerWithKeyG[K, V1, V2, VR]
 	name     string
 	leftJoin bool
@@ -56,7 +56,7 @@ type StreamTableJoinProcessorG[K, V1, V2, VR any] struct {
 
 var _ = Processor(&StreamTableJoinProcessorG[int, string, string, string]{})
 
-func NewStreamTableJoinProcessorG[K, V1, V2, VR any](store store.CoreKeyValueStoreG[K, commtypes.ValueTimestamp],
+func NewStreamTableJoinProcessorG[K, V1, V2, VR any](store store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[V2]],
 	joiner ValueJoinerWithKeyG[K, V1, V2, VR]) *StreamTableJoinProcessorG[K, V1, V2, VR] {
 	return &StreamTableJoinProcessorG[K, V1, V2, VR]{
 		joiner:   joiner,
@@ -80,7 +80,7 @@ func (p *StreamTableJoinProcessorG[K, V1, V2, VR]) ProcessAndReturn(ctx context.
 		return nil, err
 	}
 	if p.leftJoin || ok {
-		joined := p.joiner.Apply(key, msg.Value.(V1), valAgg.Value.(V2))
+		joined := p.joiner.Apply(key, msg.Value.(V1), valAgg.Value)
 		newMsg := commtypes.Message{Key: msg.Key, Value: joined, Timestamp: msg.Timestamp}
 		return []commtypes.Message{newMsg}, nil
 	}

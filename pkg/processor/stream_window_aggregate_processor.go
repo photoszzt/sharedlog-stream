@@ -99,7 +99,7 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(ctx context.Context, m
 }
 
 type StreamWindowAggregateProcessorG[K, V, VA any] struct {
-	store              store.CoreWindowStoreG[K, commtypes.ValueTimestamp]
+	store              store.CoreWindowStoreG[K, commtypes.ValueTimestampG[VA]]
 	initializer        InitializerG[VA]
 	aggregator         AggregatorG[K, V, VA]
 	windows            EnumerableWindowDefinition
@@ -110,7 +110,7 @@ type StreamWindowAggregateProcessorG[K, V, VA any] struct {
 var _ = Processor(&StreamWindowAggregateProcessor{})
 
 func NewStreamWindowAggregateProcessorG[K, V, VA any](name string,
-	store store.CoreWindowStoreG[K, commtypes.ValueTimestamp],
+	store store.CoreWindowStoreG[K, commtypes.ValueTimestampG[VA]],
 	initializer InitializerG[VA], aggregator AggregatorG[K, V, VA],
 	windows EnumerableWindowDefinition,
 ) *StreamWindowAggregateProcessorG[K, V, VA] {
@@ -155,7 +155,7 @@ func (p *StreamWindowAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context
 				return nil, fmt.Errorf("win agg get err %v", err)
 			}
 			if exists {
-				oldAgg = oldAggTs.Value.(VA)
+				oldAgg = oldAggTs.Value
 				if msg.Timestamp > oldAggTs.Timestamp {
 					newTs = msg.Timestamp
 				} else {
@@ -167,7 +167,7 @@ func (p *StreamWindowAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context
 			}
 			newAgg := p.aggregator.Apply(key, msg.Value.(V), oldAgg)
 			newAggOp := optional.Of(newAgg)
-			err = p.store.Put(ctx, key, commtypes.CreateValueTimestampOptional(newAggOp, newTs), windowStart)
+			err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(newAggOp, newTs), windowStart)
 			if err != nil {
 				return nil, fmt.Errorf("win agg put err %v", err)
 			}

@@ -93,7 +93,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	}
 	sumCountStoreName := "q4SumCountKVStore"
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	scSerde, err := ntypes.GetSumAndCountSerde(serdeFormat)
+	scSerde, err := ntypes.GetSumAndCountSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -102,7 +102,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	mp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestamp]().
+	mp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestampG[ntypes.SumAndCount]]().
 		MessageSerde(storeMsgSerde).
 		StoreName(sumCountStoreName).
 		ParNum(sp.ParNum).
@@ -122,21 +122,21 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	}
 	ectx.
 		Via(processor.NewMeteredProcessor(
-			processor.NewTableAggregateProcessorG[uint64, uint64, *ntypes.SumAndCount]("sumCount", kvstore,
-				processor.InitializerFuncG[*ntypes.SumAndCount](func() *ntypes.SumAndCount {
-					return &ntypes.SumAndCount{
+			processor.NewTableAggregateProcessorG[uint64, uint64, ntypes.SumAndCount]("sumCount", kvstore,
+				processor.InitializerFuncG[ntypes.SumAndCount](func() ntypes.SumAndCount {
+					return ntypes.SumAndCount{
 						Sum:   0,
 						Count: 0,
 					}
 				}),
-				processor.AggregatorFuncG[uint64, uint64, *ntypes.SumAndCount](func(_ uint64, val uint64, agg *ntypes.SumAndCount) *ntypes.SumAndCount {
-					return &ntypes.SumAndCount{
+				processor.AggregatorFuncG[uint64, uint64, ntypes.SumAndCount](func(_ uint64, val uint64, agg ntypes.SumAndCount) ntypes.SumAndCount {
+					return ntypes.SumAndCount{
 						Sum:   agg.Sum + val,
 						Count: agg.Count + 1,
 					}
 				}),
-				processor.AggregatorFuncG[uint64, uint64, *ntypes.SumAndCount](func(_ uint64, val uint64, agg *ntypes.SumAndCount) *ntypes.SumAndCount {
-					return &ntypes.SumAndCount{
+				processor.AggregatorFuncG[uint64, uint64, ntypes.SumAndCount](func(_ uint64, val uint64, agg ntypes.SumAndCount) ntypes.SumAndCount {
+					return ntypes.SumAndCount{
 						Sum:   agg.Sum - val,
 						Count: agg.Count - 1,
 					}
@@ -144,7 +144,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 			))).
 		Via(processor.NewMeteredProcessor(processor.NewTableMapValuesProcessor("calcAvg",
 			processor.ValueMapperWithKeyFunc(func(_, value interface{}) (interface{}, error) {
-				sc := value.(*ntypes.SumAndCount)
+				sc := value.(ntypes.SumAndCount)
 				return float64(sc.Sum) / float64(sc.Count), nil
 			}),
 		))).

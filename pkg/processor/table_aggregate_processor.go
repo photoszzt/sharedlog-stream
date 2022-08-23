@@ -94,7 +94,7 @@ func (p *TableAggregateProcessor) ProcessAndReturn(ctx context.Context, msg comm
 }
 
 type TableAggregateProcessorG[K, V, VA any] struct {
-	store       store.CoreKeyValueStoreG[K, commtypes.ValueTimestamp]
+	store       store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[VA]]
 	initializer InitializerG[VA]
 	add         AggregatorG[K, V, VA]
 	remove      AggregatorG[K, V, VA]
@@ -104,7 +104,7 @@ type TableAggregateProcessorG[K, V, VA any] struct {
 var _ = Processor(&TableAggregateProcessor{})
 
 func NewTableAggregateProcessorG[K, V, VA any](name string,
-	store store.CoreKeyValueStoreG[K, commtypes.ValueTimestamp],
+	store store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[VA]],
 	initializer InitializerG[VA],
 	add AggregatorG[K, V, VA],
 	remove AggregatorG[K, V, VA],
@@ -133,7 +133,7 @@ func (p *TableAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Contex
 	}
 	oldAgg := optional.Empty[VA]()
 	if ok {
-		oldAgg = optional.Of(oldAggTs.Value.(VA))
+		oldAgg = optional.Of(oldAggTs.Value)
 	}
 	newTs := msg.Timestamp
 	var intermediateAgg optional.Optional[VA]
@@ -166,7 +166,7 @@ func (p *TableAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Contex
 		newAgg = intermediateAgg
 	}
 
-	err = p.store.Put(ctx, key, commtypes.CreateValueTimestampOptional(newAgg, newTs))
+	err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(newAgg, newTs))
 	if err != nil {
 		return nil, err
 	}

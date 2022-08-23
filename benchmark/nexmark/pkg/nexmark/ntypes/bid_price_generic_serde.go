@@ -9,35 +9,35 @@ import (
 type BidPriceJSONSerdeG struct{}
 type BidPriceMsgpSerdeG struct{}
 
-var _ = commtypes.SerdeG[BidPrice](BidPriceJSONSerdeG{})
+var _ = commtypes.SerdeG[*BidPrice](BidPriceJSONSerdeG{})
 
-func (s BidPriceJSONSerdeG) Encode(value BidPrice) ([]byte, error) {
+func (s BidPriceJSONSerdeG) Encode(value *BidPrice) ([]byte, error) {
 	return json.Marshal(&value)
 }
 
-func (s BidPriceJSONSerdeG) Decode(value []byte) (BidPrice, error) {
+func (s BidPriceJSONSerdeG) Decode(value []byte) (*BidPrice, error) {
 	bp := BidPrice{}
 	if err := json.Unmarshal(value, &bp); err != nil {
-		return BidPrice{}, err
+		return nil, err
 	}
-	return bp, nil
+	return &bp, nil
 }
 
-var _ = commtypes.SerdeG[BidPrice](BidPriceMsgpSerdeG{})
+var _ = commtypes.SerdeG[*BidPrice](BidPriceMsgpSerdeG{})
 
-func (s BidPriceMsgpSerdeG) Encode(value BidPrice) ([]byte, error) {
+func (s BidPriceMsgpSerdeG) Encode(value *BidPrice) ([]byte, error) {
 	return value.MarshalMsg(nil)
 }
 
-func (s BidPriceMsgpSerdeG) Decode(value []byte) (BidPrice, error) {
+func (s BidPriceMsgpSerdeG) Decode(value []byte) (*BidPrice, error) {
 	bp := BidPrice{}
 	if _, err := bp.UnmarshalMsg(value); err != nil {
-		return BidPrice{}, err
+		return nil, err
 	}
-	return bp, nil
+	return &bp, nil
 }
 
-func GetBidPriceSerdeG(serdeFormat commtypes.SerdeFormat) (commtypes.SerdeG[BidPrice], error) {
+func GetBidPriceSerdeG(serdeFormat commtypes.SerdeFormat) (commtypes.SerdeG[*BidPrice], error) {
 	if serdeFormat == commtypes.JSON {
 		return BidPriceJSONSerdeG{}, nil
 	} else if serdeFormat == commtypes.MSGP {

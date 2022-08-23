@@ -140,7 +140,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
 
-	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
+	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -159,7 +159,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			// debug.Fprintf(os.Stderr, "join outputs: %v\n", ncsi)
 			return ncsi
 		})
-	mpAuc, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestamp]().
+	mpAuc, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestampG[*ntypes.Event]]().
 		MessageSerde(storeMsgSerde).
 		StoreName("auctionsBySellerIDStore").
 		ParNum(sp.ParNum).
@@ -173,7 +173,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	mpPer, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestamp]().
+	mpPer, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestampG[*ntypes.Event]]().
 		MessageSerde(storeMsgSerde).
 		StoreName("personsByIDStore").
 		ParNum(sp.ParNum).
