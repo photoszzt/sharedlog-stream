@@ -9,21 +9,19 @@ require (
 	github.com/confluentinc/confluent-kafka-go v1.8.2
 	github.com/gammazero/deque v0.1.1
 	github.com/google/btree v1.1.2
+	github.com/joho/godotenv v1.4.0
 	github.com/rs/zerolog v1.26.1
 	github.com/spaolacci/murmur3 v1.1.0
 	github.com/stretchr/testify v1.7.1
 	github.com/tinylib/msgp v1.1.6
 	github.com/zhangyunhao116/skipmap v0.0.0
+	github.com/zhangyunhao116/skipset v0.12.1
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/tools v0.1.10
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
 )
 
-require (
-	github.com/joho/godotenv v1.4.0 // indirect
-	github.com/zhangyunhao116/fastrand v0.2.1 // indirect
-	github.com/zhangyunhao116/skipset v0.12.1 // indirect
-)
+require github.com/zhangyunhao116/fastrand v0.2.1 // indirect
 
 require (
 	4d63.com/optional v0.2.0
@@ -45,4 +43,4 @@ replace cs.utexas.edu/zjia/faas => ../boki/worker/golang
 
 replace cs.utexas.edu/zjia/faas/slib => ../boki/faas/slib
 
-replace github.com/zhangyunhao116/skipmap v0.0.0 => github.com/photoszzt/skipmap v0.0.0-20220818193111-0136ec8de741
+replace github.com/zhangyunhao116/skipmap v0.0.0 => github.com/photoszzt/skipmap v0.0.0-20220824160709-b60acf7319b0
