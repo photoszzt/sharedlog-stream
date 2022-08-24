@@ -19,6 +19,8 @@ import (
 	"sharedlog-stream/pkg/stream_task"
 
 	"cs.utexas.edu/zjia/faas/types"
+	"github.com/joho/godotenv"
+	"github.com/rs/zerolog/log"
 )
 
 func only_bid(key string, value *ntypes.Event) (bool, error) {
@@ -204,4 +206,23 @@ func PrepareProcessByTwoGeneralProc(
 			return nil
 		}).HandleErrFunc(handleErrFunc).Build()
 	return task
+}
+
+type EnvConfig struct {
+	useCache bool
+}
+
+func checkEnvConfig() EnvConfig {
+	envMap, err := godotenv.Read()
+	if err != nil {
+		log.Error().Msgf("failed to read env file: %v", err)
+	}
+	useCacheStr := envMap["USE_CACHE"]
+	useCache := false
+	if useCacheStr == "true" {
+		useCache = true
+	}
+	return EnvConfig{
+		useCache: useCache,
+	}
 }

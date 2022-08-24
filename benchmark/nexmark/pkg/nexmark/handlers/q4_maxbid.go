@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
@@ -25,12 +26,16 @@ const (
 type q4MaxBid struct {
 	env      types.Environment
 	funcName string
+	useCache bool
 }
 
 func NewQ4MaxBid(env types.Environment, funcName string) *q4MaxBid {
+	envConfig := checkEnvConfig()
+	fmt.Fprintf(os.Stderr, "Q4MaxBid useCache: %v\n", envConfig.useCache)
 	return &q4MaxBid{
 		env:      env,
 		funcName: funcName,
+		useCache: envConfig.useCache,
 	}
 }
 
@@ -138,21 +143,25 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	compare := func(a, b ntypes.AuctionIdCategory) bool {
 		return ntypes.CompareAuctionIdCategory(&a, &b) < 0
 	}
+	var aggStore store.KeyValueStoreBackedByChangelogG[ntypes.AuctionIdCategory, commtypes.ValueTimestampG[*ntypes.BidPrice]]
 	kvstore, err := store_with_changelog.CreateInMemorySkipmapKVTableWithChangelogG(mp,
 		store.LessFunc[ntypes.AuctionIdCategory](compare))
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	sizeOfVTs := commtypes.ValueTimestampGSize[*ntypes.BidPrice]{
-		ValSizeFunc: ntypes.SizeOfBidPricePtrIn,
+	if h.useCache {
+		sizeOfVTs := commtypes.ValueTimestampGSize[*ntypes.BidPrice]{
+			ValSizeFunc: ntypes.SizeOfBidPricePtrIn,
+		}
+		cacheStore := store.NewCachingKeyValueStoreG[ntypes.AuctionIdCategory, commtypes.ValueTimestampG[*ntypes.BidPrice]](
+			ctx, kvstore, ntypes.SizeOfAuctionIdCategory, sizeOfVTs.SizeOfValueTimestamp, q4SizePerStore)
+		aggStore = cacheStore
+	} else {
+		aggStore = kvstore
 	}
-	cacheStore := store.NewCachingKeyValueStoreG[ntypes.AuctionIdCategory, commtypes.ValueTimestampG[*ntypes.BidPrice]](
-		ctx, kvstore, ntypes.SizeOfAuctionIdCategory, sizeOfVTs.SizeOfValueTimestamp, q4SizePerStore)
-	// store.NewCachingKeyValueStoreG[ntypes.AuctionIdCategory](ctx, mp.StoreName(), kvstoreWithChangelog,
-	// 	ntypes.SizeOfAuctionIdCategory, commtypes.SizeOfValueTimestamp)
-	ectx.Via(processor.NewMeteredProcessor(
-		processor.NewStreamAggregateProcessorG[ntypes.AuctionIdCategory, *ntypes.AuctionBid, *ntypes.BidPrice]("maxBid", kvstore,
-			processor.InitializerFuncG[*ntypes.BidPrice](func() *ntypes.BidPrice { return nil }),
+	chain := ectx.Via(processor.NewMeteredProcessor(
+		processor.NewStreamAggregateProcessorG[ntypes.AuctionIdCategory, *ntypes.AuctionBid, *ntypes.BidPrice]("maxBid",
+			aggStore, processor.InitializerFuncG[*ntypes.BidPrice](func() *ntypes.BidPrice { return nil }),
 			processor.AggregatorFuncG[ntypes.AuctionIdCategory, *ntypes.AuctionBid, *ntypes.BidPrice](
 				func(key ntypes.AuctionIdCategory, value *ntypes.AuctionBid, aggregate *ntypes.BidPrice) *ntypes.BidPrice {
 					if aggregate == nil {
@@ -167,12 +176,19 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		Via(processor.NewMeteredProcessor(processor.NewTableGroupByMapProcessor("changeKey",
 			processor.MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
 				return key.(ntypes.AuctionIdCategory).Category, value.(*ntypes.BidPrice).Price, nil
-			})))).
-		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[0], &ectx))
-
+			}))))
+	if h.useCache {
+		cs := commtypes.ChangeSizeG[uint64]{
+			ValSizeFunc: commtypes.SizeOfUint64,
+		}
+		chain.Via(processor.NewGroupByOutputProcessorWithCache(ctx, ectx.Producers()[0],
+			commtypes.SizeOfUint64, cs.SizeOfChange, q4SizePerStore, &ectx))
+	} else {
+		chain.Via(processor.NewGroupByOutputProcessor(ectx.Producers()[0], &ectx))
+	}
 	task := stream_task.NewStreamTaskBuilder().Build()
 
-	kvc := map[string]store.KeyValueStoreOpWithChangelog{kvstore.ChangelogTopicName(): cacheStore}
+	kvc := map[string]store.KeyValueStoreOpWithChangelog{kvstore.ChangelogTopicName(): aggStore}
 	builder := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,
 		fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 			sp.ParNum, sp.OutputTopicNames[0]))

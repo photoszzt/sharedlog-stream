@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
@@ -26,12 +27,16 @@ const (
 type q5MaxBid struct {
 	env      types.Environment
 	funcName string
+	useCache bool
 }
 
 func NewQ5MaxBid(env types.Environment, funcName string) types.FuncHandler {
+	envConfig := checkEnvConfig()
+	fmt.Fprintf(os.Stderr, "Q5MaxBid useCache: %v\n", envConfig.useCache)
 	return &q5MaxBid{
 		env:      env,
 		funcName: funcName,
+		useCache: envConfig.useCache,
 	}
 }
 
@@ -138,18 +143,24 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	compare := func(a, b ntypes.StartEndTime) bool {
 		return ntypes.CompareStartEndTime(a, b) < 0
 	}
+	var aggStore store.KeyValueStoreBackedByChangelogG[ntypes.StartEndTime, commtypes.ValueTimestampG[uint64]]
 	kvstore, err := store_with_changelog.CreateInMemorySkipmapKVTableWithChangelogG(mp, compare)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	sizeOfVTs := commtypes.ValueTimestampGSize[uint64]{
-		ValSizeFunc: commtypes.SizeOfUint64,
+	if h.useCache {
+		sizeOfVTs := commtypes.ValueTimestampGSize[uint64]{
+			ValSizeFunc: commtypes.SizeOfUint64,
+		}
+		cacheStore := store.NewCachingKeyValueStoreG[ntypes.StartEndTime, commtypes.ValueTimestampG[uint64]](
+			ctx, kvstore, ntypes.SizeOfStartEndTime, sizeOfVTs.SizeOfValueTimestamp, q5SizePerStore)
+		aggStore = cacheStore
+	} else {
+		aggStore = kvstore
 	}
-	cacheStore := store.NewCachingKeyValueStoreG[ntypes.StartEndTime, commtypes.ValueTimestampG[uint64]](
-		ctx, kvstore, ntypes.SizeOfStartEndTime, sizeOfVTs.SizeOfValueTimestamp, q5SizePerStore)
 	maxBid := processor.NewMeteredProcessor(
 		processor.NewStreamAggregateProcessorG[ntypes.StartEndTime, ntypes.AuctionIdCount, uint64]("maxBid",
-			kvstore, processor.InitializerFuncG[uint64](func() uint64 {
+			aggStore, processor.InitializerFuncG[uint64](func() uint64 {
 				return uint64(0)
 			}),
 			processor.AggregatorFuncG[ntypes.StartEndTime, ntypes.AuctionIdCount, uint64](
@@ -205,7 +216,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 				return nil
 			})
 		}).MarkFinalStage().Build()
-	kvc := map[string]store.KeyValueStoreOpWithChangelog{kvstore.ChangelogTopicName(): cacheStore}
+	kvc := map[string]store.KeyValueStoreOpWithChangelog{kvstore.ChangelogTopicName(): aggStore}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 		sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,

@@ -139,7 +139,7 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 			KeySizeFunc: commtypes.SizeOfUint64,
 		}
 		cacheStore := store.NewCachingWindowStoreG[uint64, commtypes.ValueTimestampG[uint64]](
-			ctx, countWindowStore, sizeOfKeyTs.SizeOfKeyAndWindowStartTs, sizeOfVTs.SizeOfValueTimestamp, Q5SizePerStore)
+			ctx, countWindowStore, sizeOfKeyTs.SizeOfKeyAndWindowStartTs, sizeOfVTs.SizeOfValueTimestamp, q5SizePerStore)
 	*/
 	countProc := processor.NewMeteredProcessor(processor.NewStreamWindowAggregateProcessorG[uint64, *ntypes.Event, uint64](
 		"countProc", countWindowStore,

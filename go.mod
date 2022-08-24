@@ -20,6 +20,7 @@ require (
 )
 
 require (
+	github.com/joho/godotenv v1.4.0 // indirect
 	github.com/zhangyunhao116/fastrand v0.2.1 // indirect
 	github.com/zhangyunhao116/skipset v0.12.1 // indirect
 )

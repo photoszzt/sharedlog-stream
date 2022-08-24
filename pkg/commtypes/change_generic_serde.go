@@ -5,6 +5,14 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 )
 
+type ChangeSizeG[V any] struct {
+	ValSizeFunc func(v V) int64
+}
+
+func (cs ChangeSizeG[V]) SizeOfChange(c Change) int64 {
+	return cs.ValSizeFunc(c.NewVal.(V)) + cs.ValSizeFunc(c.OldVal.(V))
+}
+
 type ChangeJSONSerdeG struct {
 	ValJSONSerde Serde
 }
