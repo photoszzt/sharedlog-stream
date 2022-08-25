@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
@@ -19,8 +20,6 @@ import (
 	"sharedlog-stream/pkg/stream_task"
 
 	"cs.utexas.edu/zjia/faas/types"
-	"github.com/joho/godotenv"
-	"github.com/rs/zerolog/log"
 )
 
 func only_bid(key string, value *ntypes.Event) (bool, error) {
@@ -213,13 +212,10 @@ type EnvConfig struct {
 }
 
 func checkEnvConfig() EnvConfig {
-	envMap, err := godotenv.Read()
-	if err != nil {
-		log.Error().Msgf("failed to read env file: %v", err)
-	}
-	useCacheStr := envMap["USE_CACHE"]
+	useCacheStr := os.Getenv("USE_CACHE")
+	fmt.Fprintf(os.Stderr, "use cache: %s\n", useCacheStr)
 	useCache := false
-	if useCacheStr == "true" {
+	if useCacheStr == "true" || useCacheStr == "1" {
 		useCache = true
 	}
 	return EnvConfig{

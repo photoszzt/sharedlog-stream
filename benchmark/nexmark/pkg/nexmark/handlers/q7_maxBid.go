@@ -167,9 +167,12 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 			processor.MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
 				return value, key, nil
 			}))))
+	cachedProcessors := make([]processor.CachedProcessor, 0, 1)
 	if h.useCache {
-		chain.Via(processor.NewGroupByOutputProcessorWithCache(
-			ctx, sinks_arr[0], commtypes.SizeOfUint64, ntypes.SizeOfStartEndTime, Q7SizePerStore, &ectx))
+		p := processor.NewGroupByOutputProcessorWithCache(
+			ctx, sinks_arr[0], commtypes.SizeOfUint64, ntypes.SizeOfStartEndTime, Q7SizePerStore, &ectx)
+		chain.Via(p)
+		cachedProcessors = append(cachedProcessors, p)
 	} else {
 		chain.Via(processor.NewGroupByOutputProcessor(sinks_arr[0], &ectx))
 	}
@@ -179,6 +182,6 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 		sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).
-		KVStoreChangelogs(kvc).Build()
+		KVStoreChangelogs(kvc).CachedProcessors(cachedProcessors).Build()
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs)
 }

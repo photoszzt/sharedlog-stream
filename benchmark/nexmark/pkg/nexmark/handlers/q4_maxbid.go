@@ -177,12 +177,15 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 			processor.MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
 				return key.(ntypes.AuctionIdCategory).Category, value.(*ntypes.BidPrice).Price, nil
 			}))))
+	cachedProcessors := make([]processor.CachedProcessor, 0, 1)
 	if h.useCache {
 		cs := commtypes.ChangeSizeG[uint64]{
 			ValSizeFunc: commtypes.SizeOfUint64,
 		}
-		chain.Via(processor.NewGroupByOutputProcessorWithCache(ctx, ectx.Producers()[0],
-			commtypes.SizeOfUint64, cs.SizeOfChange, q4SizePerStore, &ectx))
+		cp := processor.NewGroupByOutputProcessorWithCache(ctx, ectx.Producers()[0],
+			commtypes.SizeOfUint64, cs.SizeOfChange, q4SizePerStore, &ectx)
+		chain = chain.Via(cp)
+		cachedProcessors = append(cachedProcessors, cp)
 	} else {
 		chain.Via(processor.NewGroupByOutputProcessor(ectx.Producers()[0], &ectx))
 	}
@@ -193,6 +196,6 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 			sp.ParNum, sp.OutputTopicNames[0]))
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp, builder).
-		KVStoreChangelogs(kvc).Build()
+		KVStoreChangelogs(kvc).CachedProcessors(cachedProcessors).Build()
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs)
 }

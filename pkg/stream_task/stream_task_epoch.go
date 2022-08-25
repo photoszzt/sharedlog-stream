@@ -239,8 +239,8 @@ func markEpoch(ctx context.Context, em *epoch_manager.EpochManager,
 }
 
 func FlushStreamBuffers(ctx context.Context, cmm *control_channel.ControlChannelManager, args *StreamTaskArgs) error {
-	for _, producer := range args.ectx.Producers() {
-		err := producer.Flush(ctx)
+	for _, cachedProcessor := range args.cachedProcessors {
+		err := cachedProcessor.Flush(ctx)
 		if err != nil {
 			return err
 		}
@@ -255,6 +255,12 @@ func FlushStreamBuffers(ctx context.Context, cmm *control_channel.ControlChannel
 	}
 	for _, winTab := range args.windowStoreChangelogs {
 		err := winTab.Flush(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	for _, producer := range args.ectx.Producers() {
+		err := producer.Flush(ctx)
 		if err != nil {
 			return err
 		}
