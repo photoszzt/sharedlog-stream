@@ -16,6 +16,7 @@ type TableAggregateProcessor struct {
 	add         Aggregator
 	remove      Aggregator
 	name        string
+	BaseProcessor
 }
 
 var _ = Processor(&TableAggregateProcessor{})
@@ -26,13 +27,16 @@ func NewTableAggregateProcessor(name string,
 	add Aggregator,
 	remove Aggregator,
 ) *TableAggregateProcessor {
-	return &TableAggregateProcessor{
-		initializer: initializer,
-		add:         add,
-		remove:      remove,
-		name:        name,
-		store:       store,
+	p := &TableAggregateProcessor{
+		initializer:   initializer,
+		add:           add,
+		remove:        remove,
+		name:          name,
+		store:         store,
+		BaseProcessor: BaseProcessor{},
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *TableAggregateProcessor) Name() string {
@@ -99,9 +103,10 @@ type TableAggregateProcessorG[K, V, VA any] struct {
 	add         AggregatorG[K, V, VA]
 	remove      AggregatorG[K, V, VA]
 	name        string
+	BaseProcessor
 }
 
-var _ = Processor(&TableAggregateProcessor{})
+var _ = Processor(&TableAggregateProcessorG[int, int, int]{})
 
 func NewTableAggregateProcessorG[K, V, VA any](name string,
 	store store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[VA]],
@@ -109,13 +114,15 @@ func NewTableAggregateProcessorG[K, V, VA any](name string,
 	add AggregatorG[K, V, VA],
 	remove AggregatorG[K, V, VA],
 ) *TableAggregateProcessorG[K, V, VA] {
-	return &TableAggregateProcessorG[K, V, VA]{
+	p := &TableAggregateProcessorG[K, V, VA]{
 		initializer: initializer,
 		add:         add,
 		remove:      remove,
 		name:        name,
 		store:       store,
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *TableAggregateProcessorG[K, V, VA]) Name() string {

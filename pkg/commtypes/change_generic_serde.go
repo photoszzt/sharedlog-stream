@@ -3,6 +3,7 @@ package commtypes
 import (
 	"encoding/json"
 	"sharedlog-stream/pkg/common_errors"
+	"sharedlog-stream/pkg/utils"
 )
 
 type ChangeSizeG[V any] struct {
@@ -10,7 +11,14 @@ type ChangeSizeG[V any] struct {
 }
 
 func (cs ChangeSizeG[V]) SizeOfChange(c Change) int64 {
-	return cs.ValSizeFunc(c.NewVal.(V)) + cs.ValSizeFunc(c.OldVal.(V))
+	total := int64(0)
+	if !utils.IsNil(c.NewVal) {
+		total += cs.ValSizeFunc(c.NewVal.(V))
+	}
+	if !utils.IsNil(c.OldVal) {
+		total += cs.ValSizeFunc(c.OldVal.(V))
+	}
+	return total
 }
 
 type ChangeJSONSerdeG struct {

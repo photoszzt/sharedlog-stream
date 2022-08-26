@@ -58,11 +58,12 @@ type StreamStreamJoinProcessor struct {
 	joiner            ValueJoinerWithKeyTs
 	sharedTimeTracker *TimeTracker
 	name              string
-	joinAfterMs       int64
-	joinGraceMs       int64
-	joinBeforeMs      int64
-	outer             bool
-	isLeftSide        bool
+	BaseProcessor
+	joinAfterMs  int64
+	joinGraceMs  int64
+	joinBeforeMs int64
+	outer        bool
+	isLeftSide   bool
 }
 
 var _ = Processor(&StreamStreamJoinProcessor{})
@@ -84,6 +85,7 @@ func NewStreamStreamJoinProcessor(
 		joinGraceMs:       jw.GracePeriodMs(),
 		sharedTimeTracker: stk,
 		name:              name,
+		BaseProcessor:     BaseProcessor{},
 	}
 	if isLeftSide {
 		ssjp.joinBeforeMs = jw.beforeMs
@@ -92,6 +94,7 @@ func NewStreamStreamJoinProcessor(
 		ssjp.joinBeforeMs = jw.afterMs
 		ssjp.joinAfterMs = jw.beforeMs
 	}
+	ssjp.BaseProcessor.ProcessingFunc = ssjp.ProcessAndReturn
 	return ssjp
 }
 
@@ -159,11 +162,12 @@ type StreamStreamJoinProcessorG[K, V, VO, VR any] struct {
 	joiner            ValueJoinerWithKeyTsG[K, V, VO, VR]
 	sharedTimeTracker *TimeTracker
 	name              string
-	joinAfterMs       int64
-	joinGraceMs       int64
-	joinBeforeMs      int64
-	outer             bool
-	isLeftSide        bool
+	BaseProcessor
+	joinAfterMs  int64
+	joinGraceMs  int64
+	joinBeforeMs int64
+	outer        bool
+	isLeftSide   bool
 }
 
 var _ = Processor(&StreamStreamJoinProcessor{})
@@ -193,6 +197,7 @@ func NewStreamStreamJoinProcessorG[K, V1, V2, VR any](
 		ssjp.joinBeforeMs = jw.afterMs
 		ssjp.joinAfterMs = jw.beforeMs
 	}
+	ssjp.BaseProcessor.ProcessingFunc = ssjp.ProcessAndReturn
 	return ssjp
 }
 

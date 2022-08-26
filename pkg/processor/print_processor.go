@@ -8,15 +8,24 @@ import (
 )
 
 type PrintProcessor struct {
+	BaseProcessor
 }
 
-var _ Processor = PrintProcessor{}
+func NewPrintProcessor() Processor {
+	p := &PrintProcessor{
+		BaseProcessor: BaseProcessor{},
+	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
+}
 
-func (p PrintProcessor) Name() string {
+var _ Processor = &PrintProcessor{}
+
+func (p *PrintProcessor) Name() string {
 	return "PrintProcessor"
 }
 
-func (p PrintProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
+func (p *PrintProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
 	fmt.Fprintf(os.Stderr, "msg: %v\n", msg)
 	return []commtypes.Message{msg}, nil
 }

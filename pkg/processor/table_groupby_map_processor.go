@@ -10,15 +10,18 @@ import (
 type TableGroupByMapProcessor struct {
 	mapper Mapper
 	name   string
+	BaseProcessor
 }
 
 var _ = Processor(&TableGroupByMapProcessor{})
 
 func NewTableGroupByMapProcessor(name string, mapper Mapper) *TableGroupByMapProcessor {
-	return &TableGroupByMapProcessor{
+	p := &TableGroupByMapProcessor{
 		mapper: mapper,
 		name:   name,
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *TableGroupByMapProcessor) Name() string {
@@ -76,15 +79,19 @@ func (p *TableGroupByMapProcessor) ProcessAndReturn(ctx context.Context, msg com
 type TableGroupByMapProcessorG[K, V, KR, VR any] struct {
 	mapper MapperG[K, V, KR, VR]
 	name   string
+	BaseProcessor
 }
 
 var _ = Processor(&TableGroupByMapProcessorG[int, string, int, string]{})
 
 func NewTableGroupByMapProcessorG[K, V, KR, VR any](name string, mapper MapperG[K, V, KR, VR]) *TableGroupByMapProcessorG[K, V, KR, VR] {
-	return &TableGroupByMapProcessorG[K, V, KR, VR]{
-		mapper: mapper,
-		name:   name,
+	p := &TableGroupByMapProcessorG[K, V, KR, VR]{
+		mapper:        mapper,
+		name:          name,
+		BaseProcessor: BaseProcessor{},
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *TableGroupByMapProcessorG[K, V, KR, VR]) Name() string {

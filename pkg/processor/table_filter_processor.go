@@ -7,21 +7,24 @@ import (
 )
 
 type TableFilterProcessor struct {
-	pred      Predicate
-	store     store.CoreKeyValueStore
-	name      string
+	pred  Predicate
+	store store.CoreKeyValueStore
+	name  string
+	BaseProcessor
 	filterNot bool
 }
 
 var _ = Processor(&TableFilterProcessor{})
 
 func NewTableFilterProcessor(name string, pred Predicate, filterNot bool) *TableFilterProcessor {
-	return &TableFilterProcessor{
+	p := &TableFilterProcessor{
 		pred:      pred,
 		filterNot: filterNot,
 		store:     nil,
 		name:      name,
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func NewTableFilterProcessorQuriable(name string, pred Predicate, filterNot bool, store store.CoreKeyValueStore) *TableFilterProcessor {

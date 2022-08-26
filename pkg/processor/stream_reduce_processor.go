@@ -12,16 +12,19 @@ type StreamReduceProcessor struct {
 	store   store.CoreKeyValueStore
 	reducer Reducer
 	name    string
+	BaseProcessor
 }
 
 var _ = Processor(&StreamReduceProcessor{})
 
 func NewStreamReduceProcessor(name string, reducer Reducer, store store.CoreKeyValueStore) *StreamReduceProcessor {
-	return &StreamReduceProcessor{
+	p := &StreamReduceProcessor{
 		reducer: reducer,
 		store:   store,
 		name:    name,
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *StreamReduceProcessor) Name() string {

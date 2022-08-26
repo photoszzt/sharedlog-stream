@@ -10,14 +10,18 @@ type TableMapValuesProcessor struct {
 	valueMapperWithKey ValueMapperWithKey
 	store              store.CoreKeyValueStore
 	name               string
+	BaseProcessor
 }
 
 func NewTableMapValuesProcessor(name string, mapper ValueMapperWithKey) Processor {
-	return &TableMapValuesProcessor{
+	p := &TableMapValuesProcessor{
 		valueMapperWithKey: mapper,
 		name:               name,
 		store:              nil,
+		BaseProcessor:      BaseProcessor{},
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func NewTableMapValuesProcessorQueriable(name string, mapper ValueMapperWithKey, store store.CoreKeyValueStore) Processor {

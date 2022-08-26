@@ -15,17 +15,21 @@ type StreamAggregateProcessor struct {
 	initializer Initializer
 	aggregator  Aggregator
 	name        string
+	BaseProcessor
 }
 
 var _ = Processor(&StreamAggregateProcessor{})
 
 func NewStreamAggregateProcessor(name string, store store.CoreKeyValueStore, initializer Initializer, aggregator Aggregator) *StreamAggregateProcessor {
-	return &StreamAggregateProcessor{
-		initializer: initializer,
-		aggregator:  aggregator,
-		store:       store,
-		name:        name,
+	p := &StreamAggregateProcessor{
+		initializer:   initializer,
+		aggregator:    aggregator,
+		store:         store,
+		name:          name,
+		BaseProcessor: BaseProcessor{},
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *StreamAggregateProcessor) Name() string {
@@ -73,6 +77,7 @@ type StreamAggregateProcessorG[K, V, VA any] struct {
 	initializer InitializerG[VA]
 	aggregator  AggregatorG[K, V, VA]
 	name        string
+	BaseProcessor
 }
 
 var _ = Processor(&StreamAggregateProcessorG[int, int, int]{})
@@ -80,12 +85,15 @@ var _ = Processor(&StreamAggregateProcessorG[int, int, int]{})
 func NewStreamAggregateProcessorG[K, V, VA any](name string, store store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[VA]],
 	initializer InitializerG[VA], aggregator AggregatorG[K, V, VA],
 ) *StreamAggregateProcessorG[K, V, VA] {
-	return &StreamAggregateProcessorG[K, V, VA]{
-		initializer: initializer,
-		aggregator:  aggregator,
-		store:       store,
-		name:        name,
+	p := &StreamAggregateProcessorG[K, V, VA]{
+		initializer:   initializer,
+		aggregator:    aggregator,
+		store:         store,
+		name:          name,
+		BaseProcessor: BaseProcessor{},
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *StreamAggregateProcessorG[K, V, VA]) Name() string {

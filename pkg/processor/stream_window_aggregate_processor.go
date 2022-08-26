@@ -11,11 +11,12 @@ import (
 )
 
 type StreamWindowAggregateProcessor struct {
-	store              store.CoreWindowStore
-	initializer        Initializer
-	aggregator         Aggregator
-	windows            EnumerableWindowDefinition
-	name               string
+	store       store.CoreWindowStore
+	initializer Initializer
+	aggregator  Aggregator
+	windows     EnumerableWindowDefinition
+	name        string
+	BaseProcessor
 	observedStreamTime int64
 }
 
@@ -24,13 +25,16 @@ var _ = Processor(&StreamWindowAggregateProcessor{})
 func NewStreamWindowAggregateProcessor(name string, store store.CoreWindowStore, initializer Initializer,
 	aggregator Aggregator, windows EnumerableWindowDefinition,
 ) *StreamWindowAggregateProcessor {
-	return &StreamWindowAggregateProcessor{
+	p := &StreamWindowAggregateProcessor{
 		initializer:        initializer,
 		aggregator:         aggregator,
 		observedStreamTime: 0,
 		store:              store,
 		windows:            windows,
+		BaseProcessor:      BaseProcessor{},
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *StreamWindowAggregateProcessor) Name() string {
@@ -99,28 +103,32 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(ctx context.Context, m
 }
 
 type StreamWindowAggregateProcessorG[K, V, VA any] struct {
-	store              store.CoreWindowStoreG[K, commtypes.ValueTimestampG[VA]]
-	initializer        InitializerG[VA]
-	aggregator         AggregatorG[K, V, VA]
-	windows            EnumerableWindowDefinition
-	name               string
+	store       store.CoreWindowStoreG[K, commtypes.ValueTimestampG[VA]]
+	initializer InitializerG[VA]
+	aggregator  AggregatorG[K, V, VA]
+	windows     EnumerableWindowDefinition
+	name        string
+	BaseProcessor
 	observedStreamTime int64
 }
 
-var _ = Processor(&StreamWindowAggregateProcessor{})
+var _ = Processor(&StreamWindowAggregateProcessorG[int, int, int]{})
 
 func NewStreamWindowAggregateProcessorG[K, V, VA any](name string,
 	store store.CoreWindowStoreG[K, commtypes.ValueTimestampG[VA]],
 	initializer InitializerG[VA], aggregator AggregatorG[K, V, VA],
 	windows EnumerableWindowDefinition,
 ) *StreamWindowAggregateProcessorG[K, V, VA] {
-	return &StreamWindowAggregateProcessorG[K, V, VA]{
+	p := &StreamWindowAggregateProcessorG[K, V, VA]{
 		initializer:        initializer,
 		aggregator:         aggregator,
 		observedStreamTime: 0,
 		store:              store,
 		windows:            windows,
+		BaseProcessor:      BaseProcessor{},
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *StreamWindowAggregateProcessorG[K, V, VA]) Name() string {

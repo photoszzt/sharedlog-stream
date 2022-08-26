@@ -18,6 +18,7 @@ type GroupByOutputProcessor struct {
 	ectx            ExecutionContext
 	// cHash    *hash.ConsistentHash
 	name string
+	BaseProcessor
 }
 
 func NewGroupByOutputProcessor(producer producer_consumer.MeteredProducerIntr,
@@ -33,6 +34,7 @@ func NewGroupByOutputProcessor(producer producer_consumer.MeteredProducerIntr,
 	// for i := uint8(0); i < numPartition; i++ {
 	// 	g.cHash.Add(i)
 	// }
+	g.BaseProcessor.ProcessingFunc = g.ProcessAndReturn
 	return &g
 }
 
@@ -60,6 +62,67 @@ func (g *GroupByOutputProcessor) ProcessAndReturn(ctx context.Context, msg commt
 	return nil, err
 }
 
+type GroupByOutputProcessorG[KIn, VIn any] struct {
+	byteSliceHasher hashfuncs.ByteSliceHasher
+	producer        producer_consumer.MeteredProducerIntr
+	ectx            ExecutionContext
+	// cHash    *hash.ConsistentHash
+	name string
+	BaseProcessorG[KIn, VIn, any, any]
+}
+
+func NewGroupByOutputProcessorG[KIn, VIn any](producer producer_consumer.MeteredProducerIntr,
+	ectx ExecutionContext) *GroupByOutputProcessorG[KIn, VIn] {
+	// numPartition := producer.Stream().NumPartition()
+	g := GroupByOutputProcessorG[KIn, VIn]{
+		// cHash:    hash.NewConsistentHash(),
+		producer:        producer,
+		name:            "to" + producer.TopicName(),
+		ectx:            ectx,
+		byteSliceHasher: hashfuncs.ByteSliceHasher{},
+	}
+	// for i := uint8(0); i < numPartition; i++ {
+	// 	g.cHash.Add(i)
+	// }
+	g.BaseProcessorG.ProcessingFuncG = g.ProcessAndReturn
+	return &g
+}
+
+func (g *GroupByOutputProcessorG[KIn, VIn]) Name() string {
+	return g.name
+}
+
+func (g *GroupByOutputProcessorG[KIn, VIn]) ProcessAndReturn(ctx context.Context, msg commtypes.MessageG[optional.Optional[KIn], optional.Optional[VIn]],
+) ([]commtypes.MessageG[optional.Optional[any], optional.Optional[any]], error) {
+	// parTmp, ok := g.cHash.Get(msg.Key)
+	// if !ok {
+	// 	return nil, common_errors.ErrFailToGetOutputSubstream
+	// }
+	kBytes, err := g.producer.KeyEncoder().Encode(msg.Key)
+	if err != nil {
+		return nil, err
+	}
+	hash := g.byteSliceHasher.HashSum64(kBytes)
+	par := uint8(hash % uint64(g.producer.Stream().NumPartition()))
+	err = g.ectx.TrackParFunc()(ctx, kBytes, g.producer.TopicName(), par)
+	if err != nil {
+		return nil, fmt.Errorf("track substream failed: %v", err)
+	}
+	var k interface{}
+	var v interface{}
+	var ok bool
+	k, ok = msg.Key.Get()
+	if !ok {
+		k = nil
+	}
+	v, ok = msg.Value.Get()
+	if !ok {
+		v = nil
+	}
+	err = g.producer.Produce(ctx, commtypes.Message{Key: k, Value: v, Timestamp: msg.Timestamp}, par, false)
+	return nil, err
+}
+
 type GroupByOutputProcessorWithCache[K comparable, V any] struct {
 	byteSliceHasher hashfuncs.ByteSliceHasher
 	producer        producer_consumer.MeteredProducerIntr
@@ -67,6 +130,7 @@ type GroupByOutputProcessorWithCache[K comparable, V any] struct {
 	cache           *store.Cache[K, commtypes.OptionalValTsG[V]]
 	// cHash    *hash.ConsistentHash
 	name string
+	BaseProcessor
 }
 
 var _ = CachedProcessor(&GroupByOutputProcessorWithCache[int, int]{})
@@ -123,6 +187,7 @@ func NewGroupByOutputProcessorWithCache[K comparable, V any](
 	// for i := uint8(0); i < numPartition; i++ {
 	// 	g.cHash.Add(i)
 	// }
+	g.BaseProcessor.ProcessingFunc = g.ProcessAndReturn
 	return &g
 }
 

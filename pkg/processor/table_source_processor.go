@@ -11,21 +11,28 @@ import (
 type TableSourceProcessor struct {
 	store store.CoreKeyValueStore
 	name  string
+	BaseProcessor
 }
 
 var _ = Processor(&TableSourceProcessor{})
 
 func NewTableSourceProcessor() *TableSourceProcessor {
-	return &TableSourceProcessor{
-		name: "toTable",
+	p := &TableSourceProcessor{
+		name:          "toTable",
+		BaseProcessor: BaseProcessor{},
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func NewTableSourceProcessorWithTable(tab store.CoreKeyValueStore) *TableSourceProcessor {
-	return &TableSourceProcessor{
-		name:  "toTable",
-		store: tab,
+	p := &TableSourceProcessor{
+		name:          "toTable",
+		store:         tab,
+		BaseProcessor: BaseProcessor{},
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *TableSourceProcessor) Name() string {
@@ -94,21 +101,28 @@ func ToInMemKVTable(storeName string, compare store.KVStoreLessFunc) (
 type TableSourceProcessorG[K, V any] struct {
 	store store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[V]]
 	name  string
+	BaseProcessor
 }
 
 var _ = Processor(&TableSourceProcessorG[int, int]{})
 
 func NewTableSourceProcessorG[K, V any]() *TableSourceProcessorG[K, V] {
-	return &TableSourceProcessorG[K, V]{
-		name: "toTable",
+	p := &TableSourceProcessorG[K, V]{
+		name:          "toTable",
+		BaseProcessor: BaseProcessor{},
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func NewTableSourceProcessorWithTableG[K, V any](tab store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[V]]) *TableSourceProcessorG[K, V] {
-	return &TableSourceProcessorG[K, V]{
-		name:  "toTable",
-		store: tab,
+	p := &TableSourceProcessorG[K, V]{
+		name:          "toTable",
+		store:         tab,
+		BaseProcessor: BaseProcessor{},
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *TableSourceProcessorG[K, V]) Name() string {

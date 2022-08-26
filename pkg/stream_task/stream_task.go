@@ -159,8 +159,9 @@ func flushStreams(ctx context.Context, t *StreamTask,
 	args *StreamTaskArgs,
 ) error {
 	pStart := stats.TimerBegin()
-	for _, sink := range args.ectx.Producers() {
-		if err := sink.Flush(ctx); err != nil {
+	for _, cachedProcessor := range args.cachedProcessors {
+		err := cachedProcessor.Flush(ctx)
+		if err != nil {
 			return err
 		}
 	}
@@ -171,6 +172,11 @@ func flushStreams(ctx context.Context, t *StreamTask,
 	}
 	for _, wschangelog := range args.windowStoreChangelogs {
 		if err := wschangelog.Flush(ctx); err != nil {
+			return err
+		}
+	}
+	for _, sink := range args.ectx.Producers() {
+		if err := sink.Flush(ctx); err != nil {
 			return err
 		}
 	}

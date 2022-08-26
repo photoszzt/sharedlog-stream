@@ -33,15 +33,19 @@ func (fn MapperFuncG[K, V, KR, VR]) Map(key K, value V) (KR /* key */, VR /* val
 type StreamMapProcessor struct {
 	mapper Mapper
 	name   string
+	BaseProcessor
 }
 
 var _ = Processor(&StreamMapProcessor{})
 
 func NewStreamMapProcessor(name string, mapper Mapper) *StreamMapProcessor {
-	return &StreamMapProcessor{
-		mapper: mapper,
-		name:   name,
+	p := &StreamMapProcessor{
+		mapper:        mapper,
+		name:          name,
+		BaseProcessor: BaseProcessor{},
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *StreamMapProcessor) Name() string {
@@ -59,15 +63,19 @@ func (p *StreamMapProcessor) ProcessAndReturn(ctx context.Context, msg commtypes
 type StreamMapProcessorG[K, V, KR, VR any] struct {
 	mapper MapperG[K, V, KR, VR]
 	name   string
+	BaseProcessor
 }
 
 var _ = Processor(&StreamMapProcessorG[int, int, string, string]{})
 
 func NewStreamMapProcessorG[K, V, KR, VR any](name string, mapper MapperG[K, V, KR, VR]) *StreamMapProcessorG[K, V, KR, VR] {
-	return &StreamMapProcessorG[K, V, KR, VR]{
-		mapper: mapper,
-		name:   name,
+	p := &StreamMapProcessorG[K, V, KR, VR]{
+		mapper:        mapper,
+		name:          name,
+		BaseProcessor: BaseProcessor{},
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 func (p *StreamMapProcessorG[K, V, KR, VR]) Name() string { return p.name }
 func (p *StreamMapProcessorG[K, V, KR, VR]) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
@@ -103,15 +111,19 @@ func (fn ValueMapperWithKeyFuncG[K, V, VR]) MapValue(key K, value V) (VR, error)
 type StreamMapValuesProcessor struct {
 	valueMapperWithKey ValueMapperWithKey
 	name               string
+	BaseProcessor
 }
 
 var _ = Processor(&StreamMapValuesProcessor{})
 
 func NewStreamMapValuesProcessor(name string, mapper ValueMapperWithKey) *StreamMapValuesProcessor {
-	return &StreamMapValuesProcessor{
+	p := &StreamMapValuesProcessor{
 		valueMapperWithKey: mapper,
 		name:               name,
+		BaseProcessor:      BaseProcessor{},
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *StreamMapValuesProcessor) Name() string {
@@ -129,15 +141,18 @@ func (p *StreamMapValuesProcessor) ProcessAndReturn(ctx context.Context, msg com
 type StreamMapValuesProcessorG[K, V, VR any] struct {
 	valueMapperWithKey ValueMapperWithKeyG[K, V, VR]
 	name               string
+	BaseProcessor
 }
 
 var _ = Processor(&StreamMapValuesProcessorG[int, string, string]{})
 
 func NewStreamMapValuesProcessorG[K, V, VR any](name string, mapper ValueMapperWithKeyG[K, V, VR]) *StreamMapValuesProcessorG[K, V, VR] {
-	return &StreamMapValuesProcessorG[K, V, VR]{
+	p := &StreamMapValuesProcessorG[K, V, VR]{
 		valueMapperWithKey: mapper,
 		name:               name,
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *StreamMapValuesProcessorG[K, V, VR]) Name() string {
@@ -177,13 +192,16 @@ func (fn SelectKeyFuncG[K, V, KR]) SelectKey(key optional.Optional[K], value V) 
 type StreamSelectKeyProcessor struct {
 	selectKey SelectKeyMapper
 	name      string
+	BaseProcessor
 }
 
 func NewStreamSelectKeyProcessor(name string, keySelector SelectKeyMapper) Processor {
-	return &StreamSelectKeyProcessor{
+	p := &StreamSelectKeyProcessor{
 		name:      name,
 		selectKey: keySelector,
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *StreamSelectKeyProcessor) Name() string {
@@ -201,13 +219,16 @@ func (p *StreamSelectKeyProcessor) ProcessAndReturn(ctx context.Context, msg com
 type StreamSelectKeyProcessorG[K, V, KR any] struct {
 	selectKey SelectKeyMapperG[K, V, KR]
 	name      string
+	BaseProcessor
 }
 
 func NewStreamSelectKeyProcessorG[K, V, KR any](name string, keySelector SelectKeyMapperG[K, V, KR]) Processor {
-	return &StreamSelectKeyProcessorG[K, V, KR]{
+	p := &StreamSelectKeyProcessorG[K, V, KR]{
 		name:      name,
 		selectKey: keySelector,
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *StreamSelectKeyProcessorG[K, V, KR]) Name() string {

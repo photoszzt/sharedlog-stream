@@ -8,15 +8,18 @@ import (
 type StreamFilterProcessor struct {
 	pred Predicate
 	name string
+	BaseProcessor
 }
 
 var _ = Processor(&StreamFilterProcessor{})
 
 func NewStreamFilterProcessor(name string, pred Predicate) *StreamFilterProcessor {
-	return &StreamFilterProcessor{
+	p := &StreamFilterProcessor{
 		pred: pred,
 		name: name,
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *StreamFilterProcessor) Name() string {
@@ -37,15 +40,19 @@ func (p *StreamFilterProcessor) ProcessAndReturn(ctx context.Context, msg commty
 type StreamFilterProcessorG[K, V any] struct {
 	pred PredicateG[K, V]
 	name string
+	BaseProcessor
 }
 
 var _ = Processor(&StreamFilterProcessorG[int, int]{})
 
 func NewStreamFilterProcessorG[K, V any](name string, pred PredicateG[K, V]) *StreamFilterProcessorG[K, V] {
-	return &StreamFilterProcessorG[K, V]{
-		pred: pred,
-		name: name,
+	p := &StreamFilterProcessorG[K, V]{
+		pred:          pred,
+		name:          name,
+		BaseProcessor: BaseProcessor{},
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *StreamFilterProcessorG[K, V]) Name() string {
@@ -66,14 +73,17 @@ func (p *StreamFilterProcessorG[K, V]) ProcessAndReturn(ctx context.Context, msg
 type StreamFilterNotProcessor struct {
 	pred Predicate
 	name string
+	BaseProcessor
 }
 
 var _ = Processor(&StreamFilterNotProcessor{})
 
 func NewStreamFilterNotProcessor(name string, pred Predicate) *StreamFilterNotProcessor {
-	return &StreamFilterNotProcessor{
+	p := &StreamFilterNotProcessor{
 		pred: pred,
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *StreamFilterNotProcessor) Name() string {
@@ -94,14 +104,19 @@ func (p *StreamFilterNotProcessor) ProcessAndReturn(ctx context.Context, msg com
 type StreamFilterNotProcessorG[K, V any] struct {
 	pred PredicateG[K, V]
 	name string
+	BaseProcessor
 }
 
 var _ = Processor(&StreamFilterNotProcessorG[int, int]{})
 
 func NewStreamFilterNotProcessorG(name string, pred Predicate) *StreamFilterNotProcessor {
-	return &StreamFilterNotProcessor{
-		pred: pred,
+	p := &StreamFilterNotProcessor{
+		pred:          pred,
+		name:          name,
+		BaseProcessor: BaseProcessor{},
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *StreamFilterNotProcessorG[K, V]) Name() string { return p.name }

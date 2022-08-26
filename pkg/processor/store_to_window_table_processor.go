@@ -10,18 +10,22 @@ import (
 )
 
 type StoreToWindowTableProcessor struct {
-	store      store.CoreWindowStore
-	name       string
+	store store.CoreWindowStore
+	name  string
+	BaseProcessor
 	observedTs int64
 }
 
 var _ = Processor(&StoreToWindowTableProcessor{})
 
 func NewStoreToWindowTableProcessor(store store.CoreWindowStore) *StoreToWindowTableProcessor {
-	return &StoreToWindowTableProcessor{
-		store: store,
-		name:  "StoreTo" + store.Name(),
+	p := &StoreToWindowTableProcessor{
+		store:         store,
+		name:          "StoreTo" + store.Name(),
+		BaseProcessor: BaseProcessor{},
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *StoreToWindowTableProcessor) Name() string {
@@ -42,18 +46,22 @@ func (p *StoreToWindowTableProcessor) ProcessAndReturn(ctx context.Context, msg 
 }
 
 type StoreToWindowTableProcessorG[K, V any] struct {
-	store      store.CoreWindowStoreG[K, V]
-	name       string
+	store store.CoreWindowStoreG[K, V]
+	name  string
+	BaseProcessor
 	observedTs int64
 }
 
 var _ = Processor(&StoreToWindowTableProcessor{})
 
 func NewStoreToWindowTableProcessorG[K, V any](store store.CoreWindowStoreG[K, V]) *StoreToWindowTableProcessorG[K, V] {
-	return &StoreToWindowTableProcessorG[K, V]{
-		store: store,
-		name:  "StoreTo" + store.Name(),
+	p := &StoreToWindowTableProcessorG[K, V]{
+		store:         store,
+		name:          "StoreTo" + store.Name(),
+		BaseProcessor: BaseProcessor{},
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *StoreToWindowTableProcessorG[K, V]) Name() string { return p.name }

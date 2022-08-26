@@ -9,20 +9,23 @@ import (
 )
 
 type StreamTableJoinProcessor struct {
-	store    store.CoreKeyValueStore
-	joiner   ValueJoinerWithKey
-	name     string
+	store  store.CoreKeyValueStore
+	joiner ValueJoinerWithKey
+	name   string
+	BaseProcessor
 	leftJoin bool
 }
 
 var _ = Processor(&StreamTableJoinProcessor{})
 
 func NewStreamTableJoinProcessor(store store.CoreKeyValueStore, joiner ValueJoinerWithKey) *StreamTableJoinProcessor {
-	return &StreamTableJoinProcessor{
+	p := &StreamTableJoinProcessor{
 		joiner:   joiner,
 		store:    store,
 		leftJoin: false,
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *StreamTableJoinProcessor) Name() string {
@@ -48,9 +51,10 @@ func (p *StreamTableJoinProcessor) ProcessAndReturn(ctx context.Context, msg com
 }
 
 type StreamTableJoinProcessorG[K, V1, V2, VR any] struct {
-	store    store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[V2]]
-	joiner   ValueJoinerWithKeyG[K, V1, V2, VR]
-	name     string
+	store  store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[V2]]
+	joiner ValueJoinerWithKeyG[K, V1, V2, VR]
+	name   string
+	BaseProcessor
 	leftJoin bool
 }
 
@@ -58,11 +62,13 @@ var _ = Processor(&StreamTableJoinProcessorG[int, string, string, string]{})
 
 func NewStreamTableJoinProcessorG[K, V1, V2, VR any](store store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[V2]],
 	joiner ValueJoinerWithKeyG[K, V1, V2, VR]) *StreamTableJoinProcessorG[K, V1, V2, VR] {
-	return &StreamTableJoinProcessorG[K, V1, V2, VR]{
+	p := &StreamTableJoinProcessorG[K, V1, V2, VR]{
 		joiner:   joiner,
 		store:    store,
 		leftJoin: false,
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *StreamTableJoinProcessorG[K, V1, V2, VR]) Name() string {

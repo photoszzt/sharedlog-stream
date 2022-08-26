@@ -8,18 +8,21 @@ import (
 type TableToStreamProcessor struct {
 	valueMapperWithKey ValueMapperWithKey
 	name               string
+	BaseProcessor
 }
 
 var _ = Processor(&TableToStreamProcessor{})
 
 func NewTableToStreamProcessor() *TableToStreamProcessor {
-	return &TableToStreamProcessor{
+	p := &TableToStreamProcessor{
 		name: "toStream",
 		valueMapperWithKey: ValueMapperWithKeyFunc(func(key, value interface{}) (interface{}, error) {
 			val := commtypes.CastToChangePtr(value)
 			return val.NewVal, nil
 		}),
 	}
+	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	return p
 }
 
 func (p *TableToStreamProcessor) Name() string {
