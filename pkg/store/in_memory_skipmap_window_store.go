@@ -5,12 +5,12 @@ import (
 	"math"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"4d63.com/optional"
 	"github.com/rs/zerolog/log"
 	"github.com/zhangyunhao116/skipmap"
 )
@@ -62,7 +62,7 @@ func NewInMemorySkipMapWindowStore[K, V any](name string, retentionPeriod int64,
 }
 
 func (s *InMemorySkipMapWindowStoreG[K, V]) Name() string { return s.name }
-func (s *InMemorySkipMapWindowStoreG[K, V]) Put(ctx context.Context, key K, value optional.Optional[V], windowStartTimestamp int64) error {
+func (s *InMemorySkipMapWindowStoreG[K, V]) Put(ctx context.Context, key K, value optional.Option[V], windowStartTimestamp int64) error {
 	s.removeExpiredSegments()
 	s.mux.Lock()
 	if windowStartTimestamp > s.observedStreamTime {
@@ -74,7 +74,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Put(ctx context.Context, key K, valu
 	if expired {
 		log.Warn().Msgf("Skipping record for expired segment.")
 	} else {
-		val, exists := value.Get()
+		val, exists := value.Take()
 		if exists {
 			updateSeqnumForDups(s.retainDuplicates, &s.seqNum)
 			if s.retainDuplicates {
@@ -345,7 +345,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) IterAll(iterFunc func(int64, K, V) e
 func (s *InMemorySkipMapWindowStoreG[K, V]) TableType() TABLE_TYPE { return IN_MEM }
 func (s *InMemorySkipMapWindowStoreG[K, V]) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 }
-func (s *InMemorySkipMapWindowStoreG[K, V]) PutWithoutPushToChangelogG(ctx context.Context, key K, value optional.Optional[V], windowStartTs int64) error {
+func (s *InMemorySkipMapWindowStoreG[K, V]) PutWithoutPushToChangelogG(ctx context.Context, key K, value optional.Option[V], windowStartTs int64) error {
 	return s.Put(ctx, key, value, windowStartTs)
 }
 func (s *InMemorySkipMapWindowStoreG[K, V]) Flush(ctx context.Context) error { return nil }

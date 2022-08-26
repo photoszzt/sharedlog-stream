@@ -5,12 +5,11 @@ import (
 	"os"
 	"sharedlog-stream/pkg/data_structure/genericlist"
 	"sharedlog-stream/pkg/data_structure/linkedhashset"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/stats"
 	"sync"
 	"sync/atomic"
 	"unsafe"
-
-	"4d63.com/optional"
 )
 
 var (
@@ -18,15 +17,15 @@ var (
 )
 
 type LRUEntry[V any] struct {
-	value   optional.Optional[V]
+	value   optional.Option[V]
 	isDirty bool
 }
 
-func DirtyEntry[V any](v optional.Optional[V]) LRUEntry[V] {
+func DirtyEntry[V any](v optional.Option[V]) LRUEntry[V] {
 	return LRUEntry[V]{isDirty: true, value: v}
 }
 
-func CleanEntry[V any](v optional.Optional[V]) LRUEntry[V] {
+func CleanEntry[V any](v optional.Option[V]) LRUEntry[V] {
 	return LRUEntry[V]{isDirty: false, value: v}
 }
 
@@ -38,7 +37,7 @@ func (lruE *LRUEntry[V]) IsDirty() bool {
 	return lruE.isDirty
 }
 
-func (lruE *LRUEntry[V]) Value() optional.Optional[V] {
+func (lruE *LRUEntry[V]) Value() optional.Option[V] {
 	return lruE.value
 }
 
@@ -148,7 +147,7 @@ func (c *Cache[K, V]) len() int {
 }
 
 func elementValueSize[K, V any](element *genericlist.Element[LRUElement[K, V]], sizeOfVal func(V) int64) int64 {
-	v, exists := element.Value.entry.Value().Get()
+	v, exists := element.Value.entry.Value().Take()
 	vSize := int64(0)
 	if exists {
 		vSize = sizeOfVal(v)
@@ -290,7 +289,7 @@ func (c *Cache[K, V]) flushLockHeld(evicted *genericlist.Element[LRUElement[K, V
 		}
 		entries = append(entries, c.cache[key].Value)
 		element.Value.entry.MarkClean()
-		if !element.Value.entry.value.IsPresent() {
+		if element.Value.entry.value.IsNone() {
 			deleted = append(deleted, key)
 		}
 		return true

@@ -3,8 +3,7 @@ package processor
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
-
-	"4d63.com/optional"
+	"sharedlog-stream/pkg/optional"
 )
 
 type Processor interface {
@@ -20,7 +19,7 @@ type CachedProcessor interface {
 }
 
 type IProcessG[KIn, VIn any] interface {
-	Process(ctx context.Context, msg commtypes.MessageG[optional.Optional[KIn], optional.Optional[VIn]]) error
+	Process(ctx context.Context, msg commtypes.MessageG[optional.Option[KIn], optional.Option[VIn]]) error
 }
 
 type IProcess interface {
@@ -30,8 +29,8 @@ type IProcess interface {
 type ProcessorG[KIn, VIn, KOut, VOut any] interface {
 	Name() string
 	ProcessAndReturn(ctx context.Context,
-		msg commtypes.MessageG[optional.Optional[KIn], optional.Optional[VIn]],
-	) ([]commtypes.MessageG[optional.Optional[KOut], optional.Optional[VOut]], error)
+		msg commtypes.MessageG[optional.Option[KIn], optional.Option[VIn]],
+	) ([]commtypes.MessageG[optional.Option[KOut], optional.Option[VOut]], error)
 	IProcessG[KIn, VIn]
 }
 
@@ -41,13 +40,13 @@ type CachedProcessorG[KIn, VIn, KOut, VOut any] interface {
 }
 
 type BaseProcessorG[KIn, VIn, KOut, VOut any] struct {
-	ProcessingFuncG func(ctx context.Context, msg commtypes.MessageG[optional.Optional[KIn],
-		optional.Optional[VIn]]) ([]commtypes.MessageG[optional.Optional[KOut], optional.Optional[VOut]], error)
+	ProcessingFuncG func(ctx context.Context, msg commtypes.MessageG[optional.Option[KIn],
+		optional.Option[VIn]]) ([]commtypes.MessageG[optional.Option[KOut], optional.Option[VOut]], error)
 	nextProcessors []IProcessG[KOut, VOut]
 }
 
 func (b *BaseProcessorG[KIn, VIn, KOut, VOut]) Process(ctx context.Context,
-	msg commtypes.MessageG[optional.Optional[KIn], optional.Optional[VIn]],
+	msg commtypes.MessageG[optional.Option[KIn], optional.Option[VIn]],
 ) error {
 	result, err := b.ProcessingFuncG(ctx, msg)
 	if err != nil {

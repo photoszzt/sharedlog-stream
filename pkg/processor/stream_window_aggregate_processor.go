@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/store"
 
-	"4d63.com/optional"
 	"github.com/rs/zerolog/log"
 )
 
@@ -174,7 +174,7 @@ func (p *StreamWindowAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context
 				newTs = msg.Timestamp
 			}
 			newAgg := p.aggregator.Apply(key, msg.Value.(V), oldAgg)
-			newAggOp := optional.Of(newAgg)
+			newAggOp := optional.Some(newAgg)
 			err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(newAggOp, newTs), windowStart)
 			if err != nil {
 				return nil, fmt.Errorf("win agg put err %v", err)

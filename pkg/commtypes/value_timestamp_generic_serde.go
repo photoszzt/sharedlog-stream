@@ -3,9 +3,8 @@ package commtypes
 import (
 	"encoding/json"
 	"fmt"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/utils"
-
-	"4d63.com/optional"
 )
 
 type ValueTimestampJSONSerdeG struct {
@@ -77,34 +76,34 @@ func GetValueTsSerdeG(serdeFormat SerdeFormat, valSerde Serde) (SerdeG[ValueTime
 	}
 }
 
-func CreateValueTimestampOptional[V any](val optional.Optional[V], ts int64) optional.Optional[ValueTimestamp] {
-	v, hasV := val.Get()
+func CreateValueTimestampOptional[V any](val optional.Option[V], ts int64) optional.Option[ValueTimestamp] {
+	v, hasV := val.Take()
 	if hasV {
-		return optional.Of(ValueTimestamp{
+		return optional.Some(ValueTimestamp{
 			Value:     v,
 			Timestamp: ts,
 		})
 	} else {
-		return optional.Empty[ValueTimestamp]()
+		return optional.None[ValueTimestamp]()
 	}
 }
 
-func CreateValueTimestampOptionalWithIntrVal(val interface{}, ts int64) optional.Optional[ValueTimestamp] {
+func CreateValueTimestampOptionalWithIntrVal(val interface{}, ts int64) optional.Option[ValueTimestamp] {
 	if utils.IsNil(val) {
-		return optional.Empty[ValueTimestamp]()
+		return optional.None[ValueTimestamp]()
 	} else {
-		return optional.Of(ValueTimestamp{
+		return optional.Some(ValueTimestamp{
 			Value:     val,
 			Timestamp: ts,
 		})
 	}
 }
 
-func CreateValueTimestampGOptionalWithIntrVal[V any](val interface{}, ts int64) optional.Optional[ValueTimestampG[V]] {
+func CreateValueTimestampGOptionalWithIntrVal[V any](val interface{}, ts int64) optional.Option[ValueTimestampG[V]] {
 	if utils.IsNil(val) {
-		return optional.Empty[ValueTimestampG[V]]()
+		return optional.None[ValueTimestampG[V]]()
 	} else {
-		return optional.Of(ValueTimestampG[V]{
+		return optional.Some(ValueTimestampG[V]{
 			Value:     val.(V),
 			Timestamp: ts,
 		})
@@ -138,7 +137,7 @@ func valTsSerToValueTsG[V any](vtsSer *ValueTimestampSerialized, valSerde SerdeG
 }
 
 type OptionalValTsG[V any] struct {
-	Val       optional.Optional[V]
+	Val       optional.Option[V]
 	Timestamp int64
 }
 
@@ -147,7 +146,7 @@ type OptionalValTsGSize[V any] struct {
 }
 
 func (s OptionalValTsGSize[V]) SizeOfOptionalValTsG(vOp OptionalValTsG[V]) int64 {
-	v, ok := vOp.Val.Get()
+	v, ok := vOp.Val.Take()
 	if ok {
 		return 8 + s.ValSizeFunc(v)
 	} else {
@@ -221,15 +220,15 @@ func (s ValueTimestampGMsgpSerdeG[V]) Decode(value []byte) (ValueTimestampG[V], 
 	return valTsSerToValueTsG(&vs, s.ValMsgpSerde)
 }
 
-func CreateValueTimestampGOptional[V any](val optional.Optional[V], ts int64) optional.Optional[ValueTimestampG[V]] {
-	v, hasV := val.Get()
+func CreateValueTimestampGOptional[V any](val optional.Option[V], ts int64) optional.Option[ValueTimestampG[V]] {
+	v, hasV := val.Take()
 	if hasV {
-		return optional.Of(ValueTimestampG[V]{
+		return optional.Some(ValueTimestampG[V]{
 			Value:     v,
 			Timestamp: ts,
 		})
 	} else {
-		return optional.Empty[ValueTimestampG[V]]()
+		return optional.None[ValueTimestampG[V]]()
 	}
 }
 

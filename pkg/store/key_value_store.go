@@ -3,9 +3,8 @@ package store
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/optional"
 	"strings"
-
-	"4d63.com/optional"
 )
 
 type CoreKeyValueStore interface {
@@ -26,11 +25,11 @@ type CoreKeyValueStore interface {
 type CoreKeyValueStoreG[K, V any] interface {
 	StateStore
 	Get(ctx context.Context, key K) (V, bool, error)
-	Range(ctx context.Context, from optional.Optional[K], to optional.Optional[K],
+	Range(ctx context.Context, from optional.Option[K], to optional.Option[K],
 		iterFunc func(K, V) error) error
 	ApproximateNumEntries() (uint64, error)
-	Put(ctx context.Context, key K, value optional.Optional[V]) error
-	PutIfAbsent(ctx context.Context, key K, value V) (optional.Optional[V], error)
+	Put(ctx context.Context, key K, value optional.Option[V]) error
+	PutIfAbsent(ctx context.Context, key K, value V) (optional.Option[V], error)
 	PutAll(context.Context, []*commtypes.Message) error
 	Delete(ctx context.Context, key K) error
 	TableType() TABLE_TYPE

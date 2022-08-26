@@ -3,9 +3,9 @@ package store
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
-	"time"
+	"sharedlog-stream/pkg/optional"
 
-	"4d63.com/optional"
+	"time"
 )
 
 type CoreWindowStore interface {
@@ -27,7 +27,7 @@ type CoreWindowStore interface {
 
 type CoreWindowStoreG[K, V any] interface {
 	StateStore
-	Put(ctx context.Context, key K, value optional.Optional[V], windowStartTimestamp int64) error
+	Put(ctx context.Context, key K, value optional.Option[V], windowStartTimestamp int64) error
 	Get(ctx context.Context, key K, windowStartTimestamp int64) (V, bool, error)
 	Fetch(ctx context.Context, key K, timeFrom time.Time, timeTo time.Time,
 		iterFunc func(int64 /* ts */, K, V) error) error
@@ -60,7 +60,7 @@ type OnlyUpdateInMemWinStore interface {
 
 type OnlyUpdateInMemWinStoreG[K, V any] interface {
 	PutWithoutPushToChangelogG(ctx context.Context,
-		key K, value optional.Optional[V], windowStartTs int64) error
+		key K, value optional.Option[V], windowStartTs int64) error
 }
 
 type WindowStoreOpWithChangelog interface {

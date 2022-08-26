@@ -6,10 +6,10 @@ import (
 	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/utils"
 	"sync"
 
-	"4d63.com/optional"
 	"github.com/google/btree"
 )
 
@@ -47,10 +47,10 @@ func (st *InMemoryBTreeKeyValueStoreG[K, V]) Get(ctx context.Context, key K) (V,
 	return ret.val, exists, nil
 }
 
-func (st *InMemoryBTreeKeyValueStoreG[K, V]) Put(ctx context.Context, key K, value optional.Optional[V]) error {
+func (st *InMemoryBTreeKeyValueStoreG[K, V]) Put(ctx context.Context, key K, value optional.Option[V]) error {
 	st.mux.Lock()
 	defer st.mux.Unlock()
-	v, ok := value.Get()
+	v, ok := value.Take()
 	if !ok {
 		st.store.Delete(kvPairG[K, V]{key: key})
 	} else {
@@ -59,22 +59,22 @@ func (st *InMemoryBTreeKeyValueStoreG[K, V]) Put(ctx context.Context, key K, val
 	return nil
 }
 
-func (st *InMemoryBTreeKeyValueStoreG[K, V]) PutIfAbsent(ctx context.Context, key K, value V) (optional.Optional[V], error) {
+func (st *InMemoryBTreeKeyValueStoreG[K, V]) PutIfAbsent(ctx context.Context, key K, value V) (optional.Option[V], error) {
 	st.mux.Lock()
 	defer st.mux.Unlock()
 	originalKV, exists := st.store.Get(kvPairG[K, V]{key: key})
 	if !exists {
 		st.store.ReplaceOrInsert(kvPairG[K, V]{key: key, val: value})
-		return optional.Empty[V](), nil
+		return optional.None[V](), nil
 	}
-	return optional.Of(originalKV.val), nil
+	return optional.Some(originalKV.val), nil
 }
 
 func (st *InMemoryBTreeKeyValueStoreG[K, V]) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
 	if utils.IsNil(value) {
-		return st.Put(ctx, key.(K), optional.Empty[V]())
+		return st.Put(ctx, key.(K), optional.None[V]())
 	} else {
-		return st.Put(ctx, key.(K), optional.Of(value.(V)))
+		return st.Put(ctx, key.(K), optional.Some(value.(V)))
 	}
 }
 
@@ -82,9 +82,9 @@ func (st *InMemoryBTreeKeyValueStoreG[K, V]) PutAll(ctx context.Context, kvs []*
 	for _, kv := range kvs {
 		var err error
 		if utils.IsNil(kv.Value) {
-			err = st.Put(ctx, kv.Key.(K), optional.Empty[V]())
+			err = st.Put(ctx, kv.Key.(K), optional.None[V]())
 		} else {
-			err = st.Put(ctx, kv.Key.(K), optional.Of(kv.Value.(V)))
+			err = st.Put(ctx, kv.Key.(K), optional.Some(kv.Value.(V)))
 		}
 		if err != nil {
 			return err
@@ -107,13 +107,13 @@ func (st *InMemoryBTreeKeyValueStoreG[K, V]) ApproximateNumEntries() (uint64, er
 }
 
 func (st *InMemoryBTreeKeyValueStoreG[K, V]) Range(ctx context.Context,
-	from optional.Optional[K], to optional.Optional[K],
+	from optional.Option[K], to optional.Option[K],
 	iterFunc func(K, V) error,
 ) error {
 	st.mux.Lock()
 	defer st.mux.Unlock()
-	f, okF := from.Get()
-	t, okT := to.Get()
+	f, okF := from.Take()
+	t, okT := to.Take()
 	if !okF && !okT {
 		st.store.Ascend(btree.ItemIteratorG[kvPairG[K, V]](func(kv kvPairG[K, V]) bool {
 			err := iterFunc(kv.key, kv.val)

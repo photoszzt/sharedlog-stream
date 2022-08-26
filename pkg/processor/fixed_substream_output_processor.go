@@ -3,9 +3,8 @@ package processor
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/producer_consumer"
-
-	"4d63.com/optional"
 )
 
 type FixedSubstreamOutputProcessor struct {
@@ -66,16 +65,16 @@ func (p *FixedSubstreamOutputProcessorG[KIn, VIn]) Name() string {
 }
 
 func (p *FixedSubstreamOutputProcessorG[KIn, VIn]) ProcessAndReturn(ctx context.Context,
-	msg commtypes.MessageG[optional.Optional[KIn], optional.Optional[VIn]],
-) ([]commtypes.MessageG[optional.Optional[any], optional.Optional[any]], error) {
+	msg commtypes.MessageG[optional.Option[KIn], optional.Option[VIn]],
+) ([]commtypes.MessageG[optional.Option[any], optional.Option[any]], error) {
 	var k interface{}
 	var v interface{}
 	var ok bool
-	k, ok = msg.Key.Get()
+	k, ok = msg.Key.Take()
 	if !ok {
 		k = nil
 	}
-	v, ok = msg.Value.Get()
+	v, ok = msg.Value.Take()
 	if !ok {
 		v = nil
 	}

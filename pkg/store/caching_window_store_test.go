@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/optional"
 	"strconv"
 	"testing"
 	"time"
-
-	"4d63.com/optional"
 )
 
 const (
@@ -31,7 +30,7 @@ func getCachingWindowStore(ctx context.Context) *CachingWindowStoreG[string, str
 func TestShouldPutFetchFromCache(t *testing.T) {
 	ctx := context.Background()
 	cachingStore := getCachingWindowStore(ctx)
-	err := cachingStore.Put(ctx, "key1", optional.Of("val1"), defaultTs)
+	err := cachingStore.Put(ctx, "key1", optional.Some("val1"), defaultTs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,23 +49,23 @@ func TestShouldPutFetchFromCache(t *testing.T) {
 func TestShouldPutFetchRangeFromCacheForNullKeyFrom(t *testing.T) {
 	ctx := context.Background()
 	cachingStore := getCachingWindowStore(ctx)
-	err := cachingStore.Put(ctx, "a", optional.Of("a"), defaultTs)
+	err := cachingStore.Put(ctx, "a", optional.Some("a"), defaultTs)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = cachingStore.Put(ctx, "b", optional.Of("b"), defaultTs)
+	err = cachingStore.Put(ctx, "b", optional.Some("b"), defaultTs)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = cachingStore.Put(ctx, "c", optional.Of("c"), defaultTs+10)
+	err = cachingStore.Put(ctx, "c", optional.Some("c"), defaultTs+10)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = cachingStore.Put(ctx, "d", optional.Of("d"), defaultTs+20)
+	err = cachingStore.Put(ctx, "d", optional.Some("d"), defaultTs+20)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = cachingStore.Put(ctx, "e", optional.Of("e"), defaultTs+20)
+	err = cachingStore.Put(ctx, "e", optional.Some("e"), defaultTs+20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +107,7 @@ func addItemToCache(ctx context.Context, cache *CachingWindowStoreG[string, stri
 	for cacheSize < maxCacheSize {
 		key := strconv.Itoa(i)
 		fmt.Fprintf(os.Stderr, "adding key %s to cache\n", key)
-		err := cache.Put(ctx, key, optional.Of(key), defaultTs)
+		err := cache.Put(ctx, key, optional.Some(key), defaultTs)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -149,7 +148,7 @@ func TestShouldFlushEvictedItemsIntoUnderlyingStore(t *testing.T) {
 func TestShouldFlushDirtyItemsWhenFlushedCalled(t *testing.T) {
 	ctx := context.Background()
 	cachingStore := getCachingWindowStore(ctx)
-	cachingStore.Put(ctx, "1", optional.Of("a"), defaultTs)
+	cachingStore.Put(ctx, "1", optional.Some("a"), defaultTs)
 	cachingStore.Flush(ctx)
 	got, ok, err := cachingStore.wrappedStore.Get(ctx, "1", defaultTs)
 	if err != nil {

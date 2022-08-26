@@ -4,13 +4,12 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/utils"
-
-	"4d63.com/optional"
 )
 
 type KeyValueStoreWithChangelogG[K, V any] struct {
@@ -65,9 +64,9 @@ func (st *KeyValueStoreWithChangelogG[K, V]) ConfigureExactlyOnce(rem exactly_on
 	return st.changelogManager.ConfigExactlyOnce(rem, guarantee)
 }
 
-func (st *KeyValueStoreWithChangelogG[K, V]) Put(ctx context.Context, key K, value optional.Optional[V]) error {
+func (st *KeyValueStoreWithChangelogG[K, V]) Put(ctx context.Context, key K, value optional.Option[V]) error {
 	var msg commtypes.Message
-	v, ok := value.Get()
+	v, ok := value.Take()
 	if ok {
 		msg = commtypes.Message{
 			Key:   key,
@@ -102,28 +101,28 @@ func (st *KeyValueStoreWithChangelogG[K, V]) PutWithoutPushToChangelog(ctx conte
 	return st.kvstore.PutWithoutPushToChangelog(ctx, key, value)
 }
 
-func (st *KeyValueStoreWithChangelogG[K, V]) PutIfAbsent(ctx context.Context, key K, value V) (optional.Optional[V], error) {
+func (st *KeyValueStoreWithChangelogG[K, V]) PutIfAbsent(ctx context.Context, key K, value V) (optional.Option[V], error) {
 	origVal, exists, err := st.kvstore.Get(ctx, key)
 	if err != nil {
-		return optional.Empty[V](), err
+		return optional.None[V](), err
 	}
 	if !exists {
-		err := st.Put(ctx, key, optional.Of(value))
+		err := st.Put(ctx, key, optional.Some(value))
 		if err != nil {
-			return optional.Empty[V](), err
+			return optional.None[V](), err
 		}
-		return optional.Empty[V](), nil
+		return optional.None[V](), nil
 	}
-	return optional.Of(origVal), nil
+	return optional.Some(origVal), nil
 }
 
 func (st *KeyValueStoreWithChangelogG[K, V]) PutAll(ctx context.Context, entries []*commtypes.Message) error {
 	for _, msg := range entries {
 		var err error
 		if utils.IsNil(msg.Value) {
-			err = st.Put(ctx, msg.Key.(K), optional.Empty[V]())
+			err = st.Put(ctx, msg.Key.(K), optional.None[V]())
 		} else {
-			err = st.Put(ctx, msg.Key.(K), optional.Of(msg.Value.(V)))
+			err = st.Put(ctx, msg.Key.(K), optional.Some(msg.Value.(V)))
 		}
 		if err != nil {
 			return err
@@ -148,7 +147,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) ApproximateNumEntries() (uint64, er
 	return st.kvstore.ApproximateNumEntries()
 }
 
-func (st *KeyValueStoreWithChangelogG[K, V]) Range(ctx context.Context, from optional.Optional[K], to optional.Optional[K], iterFunc func(K, V) error) error {
+func (st *KeyValueStoreWithChangelogG[K, V]) Range(ctx context.Context, from optional.Option[K], to optional.Option[K], iterFunc func(K, V) error) error {
 	return st.kvstore.Range(ctx, from, to, iterFunc)
 }
 

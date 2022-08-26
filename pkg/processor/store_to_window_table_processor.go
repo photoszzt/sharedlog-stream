@@ -3,10 +3,9 @@ package processor
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/utils"
-
-	"4d63.com/optional"
 )
 
 type StoreToWindowTableProcessor struct {
@@ -70,7 +69,7 @@ func (p *StoreToWindowTableProcessorG[K, V]) ProcessAndReturn(ctx context.Contex
 		p.observedTs = msg.Timestamp
 	}
 	if !utils.IsNil(msg.Key) {
-		err := p.store.Put(ctx, msg.Key.(K), optional.Of(msg.Value.(V)), p.observedTs)
+		err := p.store.Put(ctx, msg.Key.(K), optional.Some(msg.Value.(V)), p.observedTs)
 		if err != nil {
 			return nil, err
 		}

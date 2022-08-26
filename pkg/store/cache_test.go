@@ -2,9 +2,8 @@ package store
 
 import (
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/optional"
 	"testing"
-
-	"4d63.com/optional"
 )
 
 func TestShouldKeepTrackOfMostRecentlyAndLeastRecentlyUsed(t *testing.T) {
@@ -18,14 +17,14 @@ func TestShouldKeepTrackOfMostRecentlyAndLeastRecentlyUsed(t *testing.T) {
 	cache := NewCache(func(entries []LRUElement[string, string]) error { return nil },
 		func(k string) int64 { return int64(len(k)) }, func(v string) int64 { return int64(len(v)) }, 4096)
 	for _, msg := range toInsert {
-		err := cache.put(msg.Key.(string), LRUEntry[string]{value: optional.Of(msg.Value.(string)), isDirty: true})
+		err := cache.put(msg.Key.(string), LRUEntry[string]{value: optional.Some(msg.Value.(string)), isDirty: true})
 		if err != nil {
 			t.Fatal(err)
 		}
 		head := cache.first()
 		tail := cache.last()
-		headV, _ := head.Value().Get()
-		tailV, _ := tail.Value().Get()
+		headV, _ := head.Value().Take()
+		tailV, _ := tail.Value().Take()
 		if headV != msg.Value.(string) {
 			t.Errorf("expected %s, got %s", msg.Value.(string), headV)
 		}
@@ -50,15 +49,15 @@ func TestShouldKeepTrackOfMostRecentlyAndLeastRecentlyUsed(t *testing.T) {
 func TestShouldPutGet(t *testing.T) {
 	cache := NewCache(func(entries []LRUElement[int, int]) error { return nil },
 		commtypes.SizeOfInt, commtypes.SizeOfInt, 2048)
-	err := cache.put(0, LRUEntry[int]{value: optional.Of(10), isDirty: false})
+	err := cache.put(0, LRUEntry[int]{value: optional.Some(10), isDirty: false})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	err = cache.put(1, LRUEntry[int]{value: optional.Of(11), isDirty: false})
+	err = cache.put(1, LRUEntry[int]{value: optional.Some(11), isDirty: false})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	err = cache.put(2, LRUEntry[int]{value: optional.Of(12), isDirty: false})
+	err = cache.put(2, LRUEntry[int]{value: optional.Some(12), isDirty: false})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
@@ -66,7 +65,7 @@ func TestShouldPutGet(t *testing.T) {
 	if !found {
 		t.Errorf("expected found, got not found")
 	}
-	v, _ := entry.Value().Get()
+	v, _ := entry.Value().Take()
 	if v != 10 {
 		t.Errorf("expected 10, got %d", v)
 	}
@@ -74,7 +73,7 @@ func TestShouldPutGet(t *testing.T) {
 	if !found {
 		t.Errorf("expected found, got not found")
 	}
-	v, _ = entry.Value().Get()
+	v, _ = entry.Value().Take()
 	if v != 11 {
 		t.Errorf("expected 10, got %d", v)
 	}
@@ -82,7 +81,7 @@ func TestShouldPutGet(t *testing.T) {
 	if !found {
 		t.Errorf("expected found, got not found")
 	}
-	v, _ = entry.Value().Get()
+	v, _ = entry.Value().Take()
 	if v != 12 {
 		t.Errorf("expected 10, got %d", v)
 	}
@@ -91,15 +90,15 @@ func TestShouldPutGet(t *testing.T) {
 func TestShouldPutIfAbsent(t *testing.T) {
 	cache := NewCache(func(entries []LRUElement[int, int]) error { return nil },
 		commtypes.SizeOfInt, commtypes.SizeOfInt, 2048)
-	err := cache.put(0, LRUEntry[int]{value: optional.Of(10), isDirty: false})
+	err := cache.put(0, LRUEntry[int]{value: optional.Some(10), isDirty: false})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	_, _, err = cache.putIfAbsent(0, LRUEntry[int]{value: optional.Of(20), isDirty: false})
+	_, _, err = cache.putIfAbsent(0, LRUEntry[int]{value: optional.Some(20), isDirty: false})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	_, _, err = cache.putIfAbsent(1, LRUEntry[int]{value: optional.Of(30), isDirty: false})
+	_, _, err = cache.putIfAbsent(1, LRUEntry[int]{value: optional.Some(30), isDirty: false})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
@@ -107,7 +106,7 @@ func TestShouldPutIfAbsent(t *testing.T) {
 	if !found {
 		t.Errorf("expected found, got not found")
 	}
-	v, _ := entry.Value().Get()
+	v, _ := entry.Value().Take()
 	if v != 10 {
 		t.Errorf("expected 11, got %d", v)
 	}
@@ -115,7 +114,7 @@ func TestShouldPutIfAbsent(t *testing.T) {
 	if !found {
 		t.Errorf("expected found, got not found")
 	}
-	v, _ = entry.Value().Get()
+	v, _ = entry.Value().Take()
 	if v != 30 {
 		t.Errorf("expected 11, got %d", v)
 	}
@@ -124,7 +123,7 @@ func TestShouldPutIfAbsent(t *testing.T) {
 func TestShouldDeleteAndUpdateSize(t *testing.T) {
 	cache := NewCache(func(entries []LRUElement[int, int]) error { return nil },
 		commtypes.SizeOfInt, commtypes.SizeOfInt, 2048)
-	err := cache.put(0, LRUEntry[int]{value: optional.Of(10), isDirty: false})
+	err := cache.put(0, LRUEntry[int]{value: optional.Some(10), isDirty: false})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
@@ -132,7 +131,7 @@ func TestShouldDeleteAndUpdateSize(t *testing.T) {
 	if !found {
 		t.Errorf("expected found, got not found")
 	}
-	dVal, _ := deleted.Value().Get()
+	dVal, _ := deleted.Value().Take()
 	if dVal != 10 {
 		t.Errorf("expected 10, got %d", dVal)
 	}
@@ -141,20 +140,20 @@ func TestShouldDeleteAndUpdateSize(t *testing.T) {
 func TestShouldOverwriteAll(t *testing.T) {
 	cache := NewCache(func(entries []LRUElement[int, int]) error { return nil },
 		func(k int) int64 { return 4 }, func(v int) int64 { return 4 }, 2048)
-	err := cache.put(0, LRUEntry[int]{value: optional.Of(0), isDirty: false})
+	err := cache.put(0, LRUEntry[int]{value: optional.Some(0), isDirty: false})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	err = cache.put(0, LRUEntry[int]{value: optional.Of(1), isDirty: false})
+	err = cache.put(0, LRUEntry[int]{value: optional.Some(1), isDirty: false})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	err = cache.put(0, LRUEntry[int]{value: optional.Of(2), isDirty: false})
+	err = cache.put(0, LRUEntry[int]{value: optional.Some(2), isDirty: false})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
 	entry, _ := cache.get(0)
-	v, _ := entry.Value().Get()
+	v, _ := entry.Value().Take()
 	if v != 2 {
 		t.Errorf("expected 2, got %d", v)
 	}
@@ -166,15 +165,15 @@ func TestShouldOverwriteAll(t *testing.T) {
 func TestShouldEvictEldestEntry(t *testing.T) {
 	cache := NewCache(func(entries []LRUElement[int, int]) error { return nil },
 		commtypes.SizeOfInt, commtypes.SizeOfInt, 2048)
-	err := cache.put(0, LRUEntry[int]{value: optional.Of(10), isDirty: false})
+	err := cache.put(0, LRUEntry[int]{value: optional.Some(10), isDirty: false})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	err = cache.put(1, LRUEntry[int]{value: optional.Of(20), isDirty: false})
+	err = cache.put(1, LRUEntry[int]{value: optional.Some(20), isDirty: false})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	err = cache.put(2, LRUEntry[int]{value: optional.Of(30), isDirty: false})
+	err = cache.put(2, LRUEntry[int]{value: optional.Some(30), isDirty: false})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
@@ -191,15 +190,15 @@ func TestShouldFlushDirtEntriesOnEviction(t *testing.T) {
 		flushed = append(flushed, entries...)
 		return nil
 	}, func(k int) int64 { return 4 }, func(v int) int64 { return 4 }, 2048)
-	err := cache.put(0, LRUEntry[int]{value: optional.Of(10), isDirty: true})
+	err := cache.put(0, LRUEntry[int]{value: optional.Some(10), isDirty: true})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	err = cache.put(1, LRUEntry[int]{value: optional.Of(20), isDirty: false})
+	err = cache.put(1, LRUEntry[int]{value: optional.Some(20), isDirty: false})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	err = cache.put(2, LRUEntry[int]{value: optional.Of(30), isDirty: true})
+	err = cache.put(2, LRUEntry[int]{value: optional.Some(30), isDirty: true})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
@@ -210,14 +209,14 @@ func TestShouldFlushDirtEntriesOnEviction(t *testing.T) {
 	if flushed[0].key != 0 {
 		t.Errorf("expected 0, got %d", flushed[0].key)
 	}
-	v, _ := flushed[0].entry.value.Get()
+	v, _ := flushed[0].entry.value.Take()
 	if v != 10 {
 		t.Errorf("expected 10, got %d", v)
 	}
 	if flushed[1].key != 2 {
 		t.Errorf("expected 2, got %d", flushed[1].key)
 	}
-	v, _ = flushed[1].entry.value.Get()
+	v, _ = flushed[1].entry.value.Take()
 	if v != 30 {
 		t.Errorf("expected 30, got %d", v)
 	}
@@ -229,11 +228,11 @@ func TestShouldFlushDirtEntriesOnEviction(t *testing.T) {
 func TestShouldRemoveDeletedValuesOnFlush(t *testing.T) {
 	cache := NewCache(func(entries []LRUElement[int, int]) error { return nil },
 		func(k int) int64 { return 4 }, func(v int) int64 { return 4 }, 2048)
-	err := cache.put(0, LRUEntry[int]{value: optional.Empty[int](), isDirty: true})
+	err := cache.put(0, LRUEntry[int]{value: optional.None[int](), isDirty: true})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	err = cache.put(1, LRUEntry[int]{value: optional.Of(20), isDirty: true})
+	err = cache.put(1, LRUEntry[int]{value: optional.Some(20), isDirty: true})
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
@@ -245,7 +244,7 @@ func TestShouldRemoveDeletedValuesOnFlush(t *testing.T) {
 	if !ok {
 		t.Errorf("expected found, got not found")
 	}
-	if !ret.value.IsPresent() {
+	if ret.value.IsNone() {
 		t.Errorf("expected present, got not present")
 	}
 }
@@ -262,7 +261,7 @@ func TestBasicPutGet(t *testing.T) {
 	cache := NewCache(func(entries []LRUElement[string, string]) error { return nil },
 		commtypes.SizeOfString, commtypes.SizeOfString, size)
 	for _, msg := range toInsert {
-		err := cache.PutMaybeEvict(msg.Key, LRUEntry[string]{value: optional.Of(msg.Value), isDirty: true})
+		err := cache.PutMaybeEvict(msg.Key, LRUEntry[string]{value: optional.Some(msg.Value), isDirty: true})
 		if err != nil {
 			t.Errorf("expected nil, got %v", err)
 		}
@@ -273,7 +272,7 @@ func TestBasicPutGet(t *testing.T) {
 		if !ok {
 			t.Errorf("expected found, got not found")
 		}
-		v, _ := entry.Value().Get()
+		v, _ := entry.Value().Take()
 		if v != msg.Value {
 			t.Errorf("expected %s, got %s", msg.Value, v)
 		}
@@ -296,7 +295,7 @@ func TestEvic(t *testing.T) {
 	received := make([]commtypes.MessageG[string, string], 0, 5)
 	cache := NewCache(func(entries []LRUElement[string, string]) error {
 		for _, entry := range entries {
-			v, ok := entry.entry.value.Get()
+			v, ok := entry.entry.value.Take()
 			if !ok {
 				t.Errorf("expected present, got not present")
 			}
@@ -305,7 +304,7 @@ func TestEvic(t *testing.T) {
 		return nil
 	}, commtypes.SizeOfString, commtypes.SizeOfString, size)
 	for _, msg := range toInsert {
-		err := cache.PutMaybeEvict(msg.Key, LRUEntry[string]{value: optional.Of(msg.Value), isDirty: true})
+		err := cache.PutMaybeEvict(msg.Key, LRUEntry[string]{value: optional.Some(msg.Value), isDirty: true})
 		if err != nil {
 			t.Errorf("expected nil, got %v", err)
 		}

@@ -9,10 +9,9 @@ require (
 	github.com/confluentinc/confluent-kafka-go v1.8.2
 	github.com/gammazero/deque v0.1.1
 	github.com/google/btree v1.1.2
-	github.com/joho/godotenv v1.4.0
 	github.com/rs/zerolog v1.26.1
 	github.com/spaolacci/murmur3 v1.1.0
-	github.com/stretchr/testify v1.7.1
+	github.com/stretchr/testify v1.8.0
 	github.com/tinylib/msgp v1.1.6
 	github.com/zhangyunhao116/skipmap v0.0.0
 	github.com/zhangyunhao116/skipset v0.12.1
@@ -24,7 +23,6 @@ require (
 require github.com/zhangyunhao116/fastrand v0.2.1 // indirect
 
 require (
-	4d63.com/optional v0.2.0
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
@@ -36,7 +34,7 @@ require (
 	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3 // indirect
 	golang.org/x/sys v0.0.0-20211019181941-9d821ace8654 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 replace cs.utexas.edu/zjia/faas => ../boki/worker/golang

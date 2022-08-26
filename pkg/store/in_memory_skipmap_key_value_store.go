@@ -6,9 +6,9 @@ import (
 	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/utils"
 
-	"4d63.com/optional"
 	"github.com/zhangyunhao116/skipmap"
 )
 
@@ -37,8 +37,8 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) Get(ctx context.Context, key K) (
 	return ret, exists, nil
 }
 
-func (st *InMemorySkipmapKeyValueStoreG[K, V]) Put(ctx context.Context, key K, value optional.Optional[V]) error {
-	v, ok := value.Get()
+func (st *InMemorySkipmapKeyValueStoreG[K, V]) Put(ctx context.Context, key K, value optional.Option[V]) error {
+	v, ok := value.Take()
 	if !ok {
 		st.store.Delete(key)
 	} else {
@@ -47,20 +47,20 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) Put(ctx context.Context, key K, v
 	return nil
 }
 
-func (st *InMemorySkipmapKeyValueStoreG[K, V]) PutIfAbsent(ctx context.Context, key K, value V) (optional.Optional[V], error) {
+func (st *InMemorySkipmapKeyValueStoreG[K, V]) PutIfAbsent(ctx context.Context, key K, value V) (optional.Option[V], error) {
 	val, loaded := st.store.LoadOrStore(key, value)
 	if loaded {
-		return optional.Of(val), nil
+		return optional.Some(val), nil
 	} else {
-		return optional.Empty[V](), nil
+		return optional.None[V](), nil
 	}
 }
 
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
 	if utils.IsNil(value) {
-		return st.Put(ctx, key.(K), optional.Empty[V]())
+		return st.Put(ctx, key.(K), optional.None[V]())
 	} else {
-		return st.Put(ctx, key.(K), optional.Of(value.(V)))
+		return st.Put(ctx, key.(K), optional.Some(value.(V)))
 	}
 }
 
@@ -68,9 +68,9 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) PutAll(ctx context.Context, kvs [
 	for _, kv := range kvs {
 		var err error
 		if utils.IsNil(kv.Value) {
-			err = st.Put(ctx, kv.Key.(K), optional.Empty[V]())
+			err = st.Put(ctx, kv.Key.(K), optional.None[V]())
 		} else {
-			err = st.Put(ctx, kv.Key.(K), optional.Of(kv.Value.(V)))
+			err = st.Put(ctx, kv.Key.(K), optional.Some(kv.Value.(V)))
 		}
 		if err != nil {
 			return err
@@ -89,11 +89,11 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) ApproximateNumEntries() (uint64, 
 }
 
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) Range(ctx context.Context,
-	from optional.Optional[K], to optional.Optional[K],
+	from optional.Option[K], to optional.Option[K],
 	iterFunc func(K, V) error,
 ) error {
-	f, okF := from.Get()
-	t, okT := to.Get()
+	f, okF := from.Take()
+	t, okT := to.Take()
 	_ = f
 	_ = t
 	if !okF && !okT {

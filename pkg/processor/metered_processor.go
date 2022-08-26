@@ -3,9 +3,8 @@ package processor
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/stats"
-
-	"4d63.com/optional"
 )
 
 type MeteredProcessor struct {
@@ -47,8 +46,8 @@ type MeteredProcessorG[KIn, VIn, KOut, VOut any] struct {
 
 func (p *MeteredProcessorG[KIn, VIn, KOut, VOut]) Name() string { return p.proc.Name() }
 func (p *MeteredProcessorG[KIn, VIn, KOut, VOut]) ProcessAndReturn(ctx context.Context,
-	msg commtypes.MessageG[optional.Optional[KIn], optional.Optional[VIn]],
-) ([]commtypes.MessageG[optional.Optional[KOut], optional.Optional[VOut]], error) {
+	msg commtypes.MessageG[optional.Option[KIn], optional.Option[VIn]],
+) ([]commtypes.MessageG[optional.Option[KOut], optional.Option[VOut]], error) {
 	procStart := stats.TimerBegin()
 	msgs, err := p.proc.ProcessAndReturn(ctx, msg)
 	elapsed := stats.Elapsed(procStart).Microseconds()
@@ -57,7 +56,7 @@ func (p *MeteredProcessorG[KIn, VIn, KOut, VOut]) ProcessAndReturn(ctx context.C
 }
 
 func (p *MeteredProcessorG[KIn, VIn, KOut, VOut]) Process(ctx context.Context,
-	msg commtypes.MessageG[optional.Optional[KIn], optional.Optional[VIn]],
+	msg commtypes.MessageG[optional.Option[KIn], optional.Option[VIn]],
 ) error {
 	return p.proc.Process(ctx, msg)
 }

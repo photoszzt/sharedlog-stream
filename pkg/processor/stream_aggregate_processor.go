@@ -3,10 +3,10 @@ package processor
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/utils"
 
-	"4d63.com/optional"
 	"github.com/rs/zerolog/log"
 )
 
@@ -124,7 +124,7 @@ func (p *StreamAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Conte
 		newTs = msg.Timestamp
 	}
 	newAgg := p.aggregator.Apply(key, msg.Value.(V), oldAgg)
-	err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(optional.Of(newAgg), newTs))
+	err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(optional.Some(newAgg), newTs))
 	if err != nil {
 		return nil, err
 	}

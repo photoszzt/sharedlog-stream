@@ -4,13 +4,12 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
 	"time"
-
-	"4d63.com/optional"
 )
 
 type InMemoryWindowStoreWithChangelogG[K, V any] struct {
@@ -61,14 +60,14 @@ func (st *InMemoryWindowStoreWithChangelogG[K, V]) Flush(ctx context.Context) er
 }
 
 func (st *InMemoryWindowStoreWithChangelogG[K, V]) Put(ctx context.Context,
-	key K, value optional.Optional[V], windowStartTimestamp int64,
+	key K, value optional.Option[V], windowStartTimestamp int64,
 ) error {
 	keyTs := commtypes.KeyAndWindowStartTsG[K]{
 		Key:           key,
 		WindowStartTs: windowStartTimestamp,
 	}
 	var msg commtypes.Message
-	v, ok := value.Get()
+	v, ok := value.Take()
 	if ok {
 		msg = commtypes.Message{
 			Key:   keyTs,
@@ -110,11 +109,11 @@ func (st *InMemoryWindowStoreWithChangelogG[K, V]) PutWithoutPushToChangelog(ctx
 	key commtypes.KeyT, value commtypes.ValueT,
 ) error {
 	keyTs := key.(commtypes.KeyAndWindowStartTsG[K])
-	return st.windowStore.Put(ctx, keyTs.Key, optional.Of(value.(V)), keyTs.WindowStartTs)
+	return st.windowStore.Put(ctx, keyTs.Key, optional.Some(value.(V)), keyTs.WindowStartTs)
 }
 
 func (st *InMemoryWindowStoreWithChangelogG[K, V]) PutWithoutPushToChangelogG(ctx context.Context,
-	key K, value optional.Optional[V], windowStartTs int64,
+	key K, value optional.Option[V], windowStartTs int64,
 ) error {
 	return st.windowStore.Put(ctx, key, value, windowStartTs)
 }

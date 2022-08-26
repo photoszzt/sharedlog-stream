@@ -4,15 +4,15 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/sharedlog_stream"
-
-	"4d63.com/optional"
 )
 
 type CachingKeyValueStoreG[K comparable, V any] struct {
-	cache        *Cache[K, V]
-	wrappedStore KeyValueStoreBackedByChangelogG[K, V]
-	name         string
+	wrappedStore      KeyValueStoreBackedByChangelogG[K, V]
+	cache             *Cache[K, V]
+	flushCallbackFunc func(msg commtypes.MessageG[K, commtypes.Change])
+	name              string
 }
 
 var _ CoreKeyValueStoreG[int, int] = (*CachingKeyValueStoreG[int, int])(nil)
@@ -28,6 +28,7 @@ func NewCachingKeyValueStoreG[K comparable, V any](ctx context.Context,
 		name: store.Name(),
 		cache: NewCache(func(entries []LRUElement[K, V]) error {
 			for _, entry := range entries {
+				// newVal, ok := entry.entry.value.Get()
 				err := store.Put(ctx, entry.key, entry.entry.value)
 				if err != nil {
 					return err
@@ -43,60 +44,60 @@ func (c *CachingKeyValueStoreG[K, V]) Name() string { return c.name }
 func (c *CachingKeyValueStoreG[K, V]) Get(ctx context.Context, key K) (V, bool, error) {
 	entry, found := c.cache.get(key)
 	if found {
-		v, ok := entry.value.Get()
+		v, ok := entry.value.Take()
 		return v, ok, nil
 	} else {
 		return c.wrappedStore.Get(ctx, key)
 	}
 }
-func (c *CachingKeyValueStoreG[K, V]) Range(ctx context.Context, from optional.Optional[K], to optional.Optional[K], iterFunc func(K, V) error) error {
+func (c *CachingKeyValueStoreG[K, V]) Range(ctx context.Context, from optional.Option[K], to optional.Option[K], iterFunc func(K, V) error) error {
 	panic("not implemented")
 }
 func (c *CachingKeyValueStoreG[K, V]) ApproximateNumEntries() (uint64, error) {
 	panic("not implemented")
 }
-func (c *CachingKeyValueStoreG[K, V]) Put(ctx context.Context, key K, value optional.Optional[V]) error {
+func (c *CachingKeyValueStoreG[K, V]) Put(ctx context.Context, key K, value optional.Option[V]) error {
 	return c.putInternal(key, value)
 }
 
-func (c *CachingKeyValueStoreG[K, V]) putInternal(key K, value optional.Optional[V]) error {
+func (c *CachingKeyValueStoreG[K, V]) putInternal(key K, value optional.Option[V]) error {
 	return c.cache.PutMaybeEvict(key, LRUEntry[V]{value: value, isDirty: true})
 }
 
-func (c *CachingKeyValueStoreG[K, V]) PutIfAbsent(ctx context.Context, key K, value V) (optional.Optional[V], error) {
+func (c *CachingKeyValueStoreG[K, V]) PutIfAbsent(ctx context.Context, key K, value V) (optional.Option[V], error) {
 	opV, err := c.getInternal(ctx, key)
 	if err != nil {
-		return optional.Optional[V]{}, err
+		return optional.Option[V]{}, err
 	}
-	if !opV.IsPresent() {
-		err = c.putInternal(key, optional.Of(value))
+	if opV.IsNone() {
+		err = c.putInternal(key, optional.Some(value))
 		if err != nil {
-			return optional.Optional[V]{}, err
+			return optional.Option[V]{}, err
 		}
 	}
 	return opV, nil
 }
 
-func (c *CachingKeyValueStoreG[K, V]) getInternal(ctx context.Context, key K) (optional.Optional[V], error) {
+func (c *CachingKeyValueStoreG[K, V]) getInternal(ctx context.Context, key K) (optional.Option[V], error) {
 	entry, found := c.cache.get(key)
 	if found {
 		return entry.value, nil
 	} else {
 		v, found, err := c.wrappedStore.Get(ctx, key)
 		if err != nil {
-			return optional.Optional[V]{}, err
+			return optional.Option[V]{}, err
 		}
 		if !found {
-			return optional.Optional[V]{}, nil
+			return optional.Option[V]{}, nil
 		}
-		retV := optional.Of(v)
+		retV := optional.Some(v)
 		return retV, nil
 	}
 }
 
 func (c *CachingKeyValueStoreG[K, V]) PutAll(ctx context.Context, msgs []*commtypes.Message) error {
 	for _, msg := range msgs {
-		err := c.Put(ctx, msg.Key.(K), optional.Of(msg.Value.(V)))
+		err := c.Put(ctx, msg.Key.(K), optional.Some(msg.Value.(V)))
 		if err != nil {
 			return err
 		}
@@ -104,7 +105,7 @@ func (c *CachingKeyValueStoreG[K, V]) PutAll(ctx context.Context, msgs []*commty
 	return nil
 }
 func (c *CachingKeyValueStoreG[K, V]) Delete(ctx context.Context, key K) error {
-	return c.cache.put(key, LRUEntry[V]{value: optional.Empty[V]()})
+	return c.cache.put(key, LRUEntry[V]{value: optional.None[V]()})
 }
 func (c *CachingKeyValueStoreG[K, V]) TableType() TABLE_TYPE { return IN_MEM }
 func (c *CachingKeyValueStoreG[K, V]) SetTrackParFunc(f exactly_once_intr.TrackProdSubStreamFunc) {

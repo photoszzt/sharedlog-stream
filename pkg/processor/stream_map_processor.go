@@ -3,9 +3,8 @@ package processor
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/utils"
-
-	"4d63.com/optional"
 )
 
 type Mapper interface {
@@ -179,13 +178,13 @@ func (fn SelectKeyFunc) SelectKey(key, value interface{}) (interface{}, error) {
 }
 
 type SelectKeyMapperG[K, V, KR any] interface {
-	SelectKey(key optional.Optional[K], value V) (KR, error)
+	SelectKey(key optional.Option[K], value V) (KR, error)
 }
-type SelectKeyFuncG[K, V, KR any] func(key optional.Optional[K], value V) (KR, error)
+type SelectKeyFuncG[K, V, KR any] func(key optional.Option[K], value V) (KR, error)
 
 var _ = SelectKeyMapperG[int, int, string](SelectKeyFuncG[int, int, string](nil))
 
-func (fn SelectKeyFuncG[K, V, KR]) SelectKey(key optional.Optional[K], value V) (KR, error) {
+func (fn SelectKeyFuncG[K, V, KR]) SelectKey(key optional.Option[K], value V) (KR, error) {
 	return fn(key, value)
 }
 
@@ -236,9 +235,9 @@ func (p *StreamSelectKeyProcessorG[K, V, KR]) Name() string {
 }
 
 func (p *StreamSelectKeyProcessorG[K, V, KR]) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	k := optional.Empty[K]()
+	k := optional.None[K]()
 	if !utils.IsNil(msg.Key) {
-		k = optional.Of(msg.Key.(K))
+		k = optional.Some(msg.Key.(K))
 	}
 	newKey, err := p.selectKey.SelectKey(k, msg.Value.(V))
 	if err != nil {

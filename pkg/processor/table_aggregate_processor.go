@@ -4,10 +4,9 @@ import (
 	"context"
 	"fmt"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/utils"
-
-	"4d63.com/optional"
 )
 
 type TableAggregateProcessor struct {
@@ -138,34 +137,34 @@ func (p *TableAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Contex
 	if err != nil {
 		return nil, err
 	}
-	oldAgg := optional.Empty[VA]()
+	oldAgg := optional.None[VA]()
 	if ok {
-		oldAgg = optional.Of(oldAggTs.Value)
+		oldAgg = optional.Some(oldAggTs.Value)
 	}
 	newTs := msg.Timestamp
-	var intermediateAgg optional.Optional[VA]
+	var intermediateAgg optional.Option[VA]
 
 	// first try to remove the old val
 	msgVal := msg.Value.(commtypes.Change)
-	oldAggUnwrap, hasOldAgg := oldAgg.Get()
+	oldAggUnwrap, hasOldAgg := oldAgg.Take()
 	if !utils.IsNil(msgVal.OldVal) && hasOldAgg {
-		intermediateAgg = optional.Of(p.remove.Apply(key, msgVal.OldVal.(V), oldAggUnwrap))
+		intermediateAgg = optional.Some(p.remove.Apply(key, msgVal.OldVal.(V), oldAggUnwrap))
 		newTs = utils.MaxInt64(msg.Timestamp, oldAggTs.Timestamp)
 	} else {
 		intermediateAgg = oldAgg
 	}
 
 	// then try to add the new val
-	var newAgg optional.Optional[VA]
+	var newAgg optional.Option[VA]
 	if !utils.IsNil(msgVal.NewVal) {
 		var initAgg VA
-		midAgg, hasMidAgg := intermediateAgg.Get()
+		midAgg, hasMidAgg := intermediateAgg.Take()
 		if hasMidAgg {
 			initAgg = midAgg
 		} else {
 			initAgg = p.initializer.Apply()
 		}
-		newAgg = optional.Of(p.add.Apply(key, msgVal.NewVal.(V), initAgg))
+		newAgg = optional.Some(p.add.Apply(key, msgVal.NewVal.(V), initAgg))
 		if !utils.IsNil(oldAggTs) {
 			newTs = utils.MaxInt64(msg.Timestamp, oldAggTs.Timestamp)
 		}
@@ -179,8 +178,8 @@ func (p *TableAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Contex
 	}
 	var newA interface{}
 	var oldA interface{}
-	newA, hasNewAgg := newAgg.Get()
-	oldA, hasOldA := oldAgg.Get()
+	newA, hasNewAgg := newAgg.Take()
+	oldA, hasOldA := oldAgg.Take()
 	if !hasNewAgg {
 		newA = nil
 	}

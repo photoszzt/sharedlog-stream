@@ -3,9 +3,8 @@ package store
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/optional"
 	"testing"
-
-	"4d63.com/optional"
 )
 
 func checkMapEqual(t testing.TB, expected map[int]string, got map[int]string) {
@@ -58,9 +57,9 @@ func ShouldNotIncludeDeletedFromRangeResult(ctx context.Context, store CoreKeyVa
 }
 
 func ShouldNotIncludeDeletedFromRangeResultG(ctx context.Context, store CoreKeyValueStoreG[int, string], t testing.TB) {
-	checkErr(store.Put(ctx, 0, optional.Of("zero")), t)
-	checkErr(store.Put(ctx, 1, optional.Of("one")), t)
-	checkErr(store.Put(ctx, 2, optional.Of("two")), t)
+	checkErr(store.Put(ctx, 0, optional.Some("zero")), t)
+	checkErr(store.Put(ctx, 1, optional.Some("one")), t)
+	checkErr(store.Put(ctx, 2, optional.Some("two")), t)
 	checkErr(store.Delete(ctx, 0), t)
 	checkErr(store.Delete(ctx, 1), t)
 
@@ -78,7 +77,7 @@ func ShouldNotIncludeDeletedFromRangeResultG(ctx context.Context, store CoreKeyV
 		t.Fatalf("expected two, got %s", val2)
 	}
 	ret := make(map[int]string)
-	err = store.Range(ctx, optional.Empty[int](), optional.Empty[int](), func(kt int, vt string) error {
+	err = store.Range(ctx, optional.None[int](), optional.None[int](), func(kt int, vt string) error {
 		ret[kt] = vt
 		return nil
 	})
@@ -119,11 +118,11 @@ func ShouldDeleteIfSerializedValueIsNull(ctx context.Context, store CoreKeyValue
 }
 
 func ShouldDeleteIfSerializedValueIsNullG(ctx context.Context, store CoreKeyValueStoreG[int, string], t testing.TB) {
-	checkErr(store.Put(ctx, 0, optional.Of("zero")), t)
-	checkErr(store.Put(ctx, 1, optional.Of("one")), t)
-	checkErr(store.Put(ctx, 2, optional.Of("two")), t)
-	checkErr(store.Put(ctx, 0, optional.Empty[string]()), t)
-	checkErr(store.Put(ctx, 1, optional.Empty[string]()), t)
+	checkErr(store.Put(ctx, 0, optional.Some("zero")), t)
+	checkErr(store.Put(ctx, 1, optional.Some("one")), t)
+	checkErr(store.Put(ctx, 2, optional.Some("two")), t)
+	checkErr(store.Put(ctx, 0, optional.None[string]()), t)
+	checkErr(store.Put(ctx, 1, optional.None[string]()), t)
 	expected := make(map[int]string)
 	expected[2] = "two"
 
@@ -138,7 +137,7 @@ func ShouldDeleteIfSerializedValueIsNullG(ctx context.Context, store CoreKeyValu
 		t.Fatalf("expected two, got %s", val2)
 	}
 	ret := make(map[int]string)
-	err = store.Range(ctx, optional.Empty[int](), optional.Empty[int](), func(kt int, vt string) error {
+	err = store.Range(ctx, optional.None[int](), optional.None[int](), func(kt int, vt string) error {
 		ret[kt] = vt
 		return nil
 	})

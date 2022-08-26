@@ -4,10 +4,9 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"time"
-
-	"4d63.com/optional"
 )
 
 // If the entry is expired, it's
@@ -44,7 +43,7 @@ func NewCachingWindowStoreG[K comparable, V any](ctx context.Context,
 
 func (c *CachingWindowStoreG[K, V]) Name() string { return c.wrappedStore.Name() }
 func (c *CachingWindowStoreG[K, V]) Put(ctx context.Context, key K,
-	value optional.Optional[V], windowStartTimestamp int64,
+	value optional.Option[V], windowStartTimestamp int64,
 ) error {
 	err := c.cache.PutMaybeEvict(commtypes.KeyAndWindowStartTsG[K]{Key: key, WindowStartTs: windowStartTimestamp},
 		LRUEntry[V]{value: value, isDirty: true})
@@ -55,20 +54,20 @@ func (c *CachingWindowStoreG[K, V]) Put(ctx context.Context, key K,
 	return err
 }
 func (c *CachingWindowStoreG[K, V]) PutWithoutPushToChangelogG(ctx context.Context,
-	key K, value optional.Optional[V], windowStartTs int64,
+	key K, value optional.Option[V], windowStartTs int64,
 ) error {
 	return c.wrappedStore.PutWithoutPushToChangelogG(ctx, key, value, windowStartTs)
 }
 func (c *CachingWindowStoreG[K, V]) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
 	keyTs := key.(commtypes.KeyAndWindowStartTsG[K])
-	return c.wrappedStore.PutWithoutPushToChangelogG(ctx, keyTs.Key, optional.Of(value.(V)), keyTs.WindowStartTs)
+	return c.wrappedStore.PutWithoutPushToChangelogG(ctx, keyTs.Key, optional.Some(value.(V)), keyTs.WindowStartTs)
 }
 func (c *CachingWindowStoreG[K, V]) Get(ctx context.Context, key K,
 	windowStartTimestamp int64,
 ) (V, bool, error) {
 	entry, found := c.cache.get(commtypes.KeyAndWindowStartTsG[K]{Key: key, WindowStartTs: windowStartTimestamp})
 	if found {
-		v, ok := entry.value.Get()
+		v, ok := entry.value.Take()
 		return v, ok, nil
 	} else {
 		return c.wrappedStore.Get(ctx, key, windowStartTimestamp)

@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/hashfuncs"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/utils"
-
-	"4d63.com/optional"
 )
 
 type GroupByOutputProcessor struct {
@@ -92,8 +91,8 @@ func (g *GroupByOutputProcessorG[KIn, VIn]) Name() string {
 	return g.name
 }
 
-func (g *GroupByOutputProcessorG[KIn, VIn]) ProcessAndReturn(ctx context.Context, msg commtypes.MessageG[optional.Optional[KIn], optional.Optional[VIn]],
-) ([]commtypes.MessageG[optional.Optional[any], optional.Optional[any]], error) {
+func (g *GroupByOutputProcessorG[KIn, VIn]) ProcessAndReturn(ctx context.Context, msg commtypes.MessageG[optional.Option[KIn], optional.Option[VIn]],
+) ([]commtypes.MessageG[optional.Option[any], optional.Option[any]], error) {
 	// parTmp, ok := g.cHash.Get(msg.Key)
 	// if !ok {
 	// 	return nil, common_errors.ErrFailToGetOutputSubstream
@@ -111,11 +110,11 @@ func (g *GroupByOutputProcessorG[KIn, VIn]) ProcessAndReturn(ctx context.Context
 	var k interface{}
 	var v interface{}
 	var ok bool
-	k, ok = msg.Key.Get()
+	k, ok = msg.Key.Take()
 	if !ok {
 		k = nil
 	}
-	v, ok = msg.Value.Get()
+	v, ok = msg.Value.Take()
 	if !ok {
 		v = nil
 	}
@@ -166,11 +165,11 @@ func NewGroupByOutputProcessorWithCache[K comparable, V any](
 			}
 			var v interface{}
 			entry := element.Entry()
-			vOpTs, ok := entry.Value().Get()
+			vOpTs, ok := entry.Value().Take()
 			if !ok {
 				return fmt.Errorf("value is not set")
 			}
-			v, ok = vOpTs.Val.Get()
+			v, ok = vOpTs.Val.Take()
 			if !ok {
 				v = nil
 			}
@@ -197,12 +196,12 @@ func (g *GroupByOutputProcessorWithCache[K, V]) Name() string {
 
 func (g *GroupByOutputProcessorWithCache[K, V]) ProcessAndReturn(ctx context.Context, msg commtypes.Message,
 ) ([]commtypes.Message, error) {
-	vOp := optional.Empty[V]()
+	vOp := optional.None[V]()
 	if !utils.IsNil(msg.Value) {
-		vOp = optional.Of(msg.Value.(V))
+		vOp = optional.Some(msg.Value.(V))
 	}
 	err := g.cache.PutMaybeEvict(msg.Key.(K),
-		store.DirtyEntry(optional.Of(commtypes.OptionalValTsG[V]{Val: vOp, Timestamp: msg.Timestamp})))
+		store.DirtyEntry(optional.Some(commtypes.OptionalValTsG[V]{Val: vOp, Timestamp: msg.Timestamp})))
 	return nil, err
 }
 

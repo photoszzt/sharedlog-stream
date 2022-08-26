@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"reflect"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/store"
 	"testing"
-
-	"4d63.com/optional"
 )
 
 func getJoinProcessor() *StreamTableJoinProcessor {
@@ -79,7 +78,7 @@ func TestSkipMapJoinOnlyIfMatchFound(t *testing.T) {
 	ctx := context.Background()
 	joinProc := getSkipMapJoinProcessor()
 	for i := 0; i < 2; i++ {
-		err := joinProc.store.Put(ctx, i, commtypes.CreateValueTimestampGOptional(optional.Of(i), int64(i)))
+		err := joinProc.store.Put(ctx, i, commtypes.CreateValueTimestampGOptional(optional.Some(i), int64(i)))
 		if err != nil {
 			t.Errorf("fail to put val to store: %v", err)
 		}
@@ -126,7 +125,7 @@ func TestSkipMapShouldClearTableEntryOnNullValueUpdate(t *testing.T) {
 	joinProc := getSkipMapJoinProcessorWithStr()
 	ctx := context.Background()
 	for i := 0; i < 4; i++ {
-		err := joinProc.store.Put(ctx, i, commtypes.CreateValueTimestampGOptional(optional.Of(fmt.Sprintf("Y%d", i)), int64(i)))
+		err := joinProc.store.Put(ctx, i, commtypes.CreateValueTimestampGOptional(optional.Some(fmt.Sprintf("Y%d", i)), int64(i)))
 		if err != nil {
 			t.Errorf("fail to put val to store: %v", err)
 		}
@@ -147,7 +146,7 @@ func putSecond(t *testing.T, ctx context.Context, joinProc *StreamTableJoinProce
 
 func putSecondG(t *testing.T, ctx context.Context, joinProc *StreamTableJoinProcessorG[int, string, string, string]) {
 	for i := 0; i < 2; i++ {
-		err := joinProc.store.Put(ctx, i, optional.Empty[commtypes.ValueTimestampG[string]]())
+		err := joinProc.store.Put(ctx, i, optional.None[commtypes.ValueTimestampG[string]]())
 		if err != nil {
 			t.Errorf("fail to put val to store: %v", err)
 		}
