@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	q4SizePerStore = 5 * 1024 * 1024
+	q4SizePerStore = 10 * 1024 * 1024
 )
 
 type q4MaxBid struct {
