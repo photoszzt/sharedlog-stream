@@ -19,7 +19,6 @@ type StreamTaskArgs struct {
 	testParams            map[string]commtypes.FailParam
 	appId                 string
 	transactionalId       string
-	cachedProcessors      []processor.CachedProcessor
 	flushEvery            time.Duration
 	// exactly once: commitEvery overwrites flushEvery if commitEvery < flushEvery
 	commitEvery              time.Duration
@@ -87,7 +86,6 @@ type BuildStreamTaskArgs interface {
 	FixedOutParNum(uint8) BuildStreamTaskArgs
 	WaitEndMark(bool) BuildStreamTaskArgs
 	TestParams(map[string]commtypes.FailParam) BuildStreamTaskArgs
-	CachedProcessors([]processor.CachedProcessor) BuildStreamTaskArgs
 }
 
 func (args *StreamTaskArgsBuilder) Guarantee(gua exactly_once_intr.GuaranteeMth) SetAppID {
@@ -146,11 +144,6 @@ func (args *StreamTaskArgsBuilder) WaitEndMark(waitEndMark bool) BuildStreamTask
 
 func (args *StreamTaskArgsBuilder) TestParams(testParams map[string]commtypes.FailParam) BuildStreamTaskArgs {
 	args.stArgs.testParams = testParams
-	return args
-}
-
-func (args *StreamTaskArgsBuilder) CachedProcessors(cachedProcessors []processor.CachedProcessor) BuildStreamTaskArgs {
-	args.stArgs.cachedProcessors = cachedProcessors
 	return args
 }
 
