@@ -235,18 +235,10 @@ func markEpoch(ctx context.Context, em *epoch_manager.EpochManager,
 }
 
 func FlushStreamBuffers(ctx context.Context, cmm *control_channel.ControlChannelManager, args *StreamTaskArgs) error {
-	for _, cachedProcessor := range args.cachedProcessors {
-		err := cachedProcessor.Flush(ctx)
+	for _, kvTab := range args.kvChangelogs {
+		err := kvTab.Flush(ctx)
 		if err != nil {
 			return err
-		}
-	}
-	for _, kvTab := range args.kvChangelogs {
-		if !kvTab.ChangelogIsSrc() {
-			err := kvTab.Flush(ctx)
-			if err != nil {
-				return err
-			}
 		}
 	}
 	for _, winTab := range args.windowStoreChangelogs {

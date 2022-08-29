@@ -186,11 +186,12 @@ func (c *Cache[K, V]) get(key K) (LRUEntry[V], bool /* found */) {
 }
 
 func (c *Cache[K, V]) put(key K, value LRUEntry[V]) error {
+	c.mux.Lock()
 	if !value.IsDirty() && c.dirtyKeys.Contains(key) {
+		c.mux.Unlock()
 		return fmt.Errorf("Attempting to put a clean entrty for key[%v] into cache when it already contains a dirty entry for the same key", key)
 	}
 	kSize := c.sizeOfKey(key)
-	c.mux.Lock()
 	element := c.cache[key]
 	if element != nil {
 		atomic.AddUint64(&c.numOverwrites, 1)
@@ -214,7 +215,6 @@ func (c *Cache[K, V]) put(key K, value LRUEntry[V]) error {
 
 func (c *Cache[K, V]) maybeEvict() {
 	numEvicted := uint32(0)
-	fmt.Fprintf(os.Stderr, "Cache size: %v, maxCacheBytes: %v\n", c.currentSizeBytes, c.maxCacheBytes)
 	for atomic.LoadInt64(&c.currentSizeBytes) > c.maxCacheBytes {
 		c.evict()
 		atomic.AddUint32(&numEvicted, 1)

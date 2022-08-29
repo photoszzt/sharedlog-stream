@@ -93,6 +93,7 @@ func NewStreamAggregateProcessorG[K, V, VA any](
 		aggregator:  aggregator,
 		store:       store,
 		name:        name,
+		useCache:    useCache,
 	}
 	p.BaseProcessorG.ProcessingFuncG = p.ProcessAndReturn
 	if useCache {

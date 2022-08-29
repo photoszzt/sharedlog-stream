@@ -36,28 +36,30 @@ func NewCachingKeyValueStoreG[K comparable, V any](ctx context.Context,
 			if err != nil {
 				return err
 			}
-			var change commtypes.ChangeG[V]
-			if ok {
-				change = commtypes.ChangeG[V]{
-					OldVal: optional.Some(oldVal),
-					NewVal: newVal,
+			if newVal.IsSome() || ok {
+				var change commtypes.ChangeG[V]
+				if ok {
+					change = commtypes.ChangeG[V]{
+						OldVal: optional.Some(oldVal),
+						NewVal: newVal,
+					}
+				} else {
+					change = commtypes.ChangeG[V]{
+						OldVal: optional.None[V](),
+						NewVal: newVal,
+					}
 				}
-			} else {
-				change = commtypes.ChangeG[V]{
-					OldVal: optional.None[V](),
-					NewVal: newVal,
+				err = c.wrappedStore.Put(ctx, entry.key, entry.entry.value)
+				if err != nil {
+					return err
 				}
-			}
-			err = store.Put(ctx, entry.key, entry.entry.value)
-			if err != nil {
-				return err
-			}
-			err = c.flushCallbackFunc(ctx, commtypes.MessageG[K, commtypes.ChangeG[V]]{
-				Key:   optional.Some(entry.key),
-				Value: optional.Some(change),
-			})
-			if err != nil {
-				return err
+				err = c.flushCallbackFunc(ctx, commtypes.MessageG[K, commtypes.ChangeG[V]]{
+					Key:   optional.Some(entry.key),
+					Value: optional.Some(change),
+				})
+				if err != nil {
+					return err
+				}
 			}
 		}
 		return nil
