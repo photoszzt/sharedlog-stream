@@ -55,11 +55,13 @@ func (b *BaseProcessorG[KIn, VIn, KOut, VOut]) Process(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	for _, nextProcessor := range b.nextProcessors {
-		for _, nextMsg := range result {
-			err = nextProcessor.Process(ctx, nextMsg)
-			if err != nil {
-				return err
+	if result != nil {
+		for _, nextProcessor := range b.nextProcessors {
+			for _, nextMsg := range result {
+				err = nextProcessor.Process(ctx, nextMsg)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}

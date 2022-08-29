@@ -8,11 +8,9 @@ import (
 type ExecutionContext interface {
 	proc_interface.ProcArgs
 	proc_interface.ProducersConsumers
-	ProcessorChainIntr
 }
 
 type BaseExecutionContext struct {
-	ProcessorChains
 	proc_interface.BaseConsumersProducers
 	proc_interface.BaseProcArgs
 }
@@ -27,7 +25,6 @@ func NewExecutionContext(
 	return BaseExecutionContext{
 		BaseProcArgs:           proc_interface.NewBaseProcArgs(funcName, curEpoch, parNum),
 		BaseConsumersProducers: proc_interface.NewBaseSrcsSinks(consumers, producers),
-		ProcessorChains:        NewProcessorChains(),
 	}
 }
 
@@ -38,6 +35,5 @@ func NewExecutionContextFromComponents(
 	return BaseExecutionContext{
 		BaseProcArgs:           procArgs,
 		BaseConsumersProducers: consumersProducers,
-		ProcessorChains:        NewProcessorChains(),
 	}
 }

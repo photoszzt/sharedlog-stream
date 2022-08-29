@@ -57,13 +57,6 @@ func (c *CommonJoinProcArgs[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR])
 	return c.arg1.SubstreamNum()
 }
 
-func (c *CommonJoinProcArgs[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR]) Processors() []processor.Processor {
-	var proc []processor.Processor
-	proc = append(proc, c.arg1.Processors()...)
-	proc = append(proc, c.arg2.Processors()...)
-	return proc
-}
-
 func (c *CommonJoinProcArgs[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR]) RunChains(ctx context.Context, initMsg commtypes.Message) ([]commtypes.Message, error) {
 	panic("not implemented")
 }

@@ -49,9 +49,11 @@ func (pc *ProcessorChains) RunChains(ctx context.Context, initMsg commtypes.Mess
 	return lastMsgs, nil
 }
 
+/*
 func ProcessMsg(ctx context.Context, initMsg commtypes.Message, argsTmp interface{}) error {
 	args := argsTmp.(ExecutionContext)
 	// the last processor is a output function
 	_, err := args.RunChains(ctx, initMsg)
 	return err
 }
+*/
