@@ -60,6 +60,7 @@ func NewChangelogManager[K, V any](stream *sharedlog_stream.ShardedSharedLogStre
 		producer: producer_consumer.NewShardedSharedLogStreamProducer(stream,
 			&producer_consumer.StreamSinkConfig{
 				FlushDuration: flushDuration,
+				Format:        serdeFormat,
 			}),
 		changelogIsSrc: false,
 		msgSerde:       msgSerde,
