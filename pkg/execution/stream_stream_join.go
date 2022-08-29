@@ -134,10 +134,10 @@ func SetupStreamStreamJoinG[K, VLeft, VRight, VR any](
 	rightJoinLeft := processor.NewMeteredProcessorG[K, VRight, K, VR](
 		processor.NewStreamStreamJoinProcessorG[K, VRight, VLeft, VR]("rightJoinLeft", leftTab, jw,
 			processor.ReverseValueJoinerWithKeyTsG(joiner), false, false, sharedTimeTracker))
-	nullKeyFilter := processor.NewMeteredProcessorG(processor.NewStreamFilterProcessorG[K, VR]("filterNullKey",
+	nullKeyFilter := processor.NewStreamFilterProcessorG[K, VR]("filterNullKey",
 		processor.PredicateFuncG[K, VR](func(key optional.Option[K], value optional.Option[VR]) (bool, error) {
 			return !utils.IsNil(key), nil
-		})))
+		}))
 	leftJoinRightFunc = func(ctx context.Context, msg commtypes.MessageG[K, VLeft]) ([]commtypes.MessageG[K, VR], error) {
 		// debug.Fprintf(os.Stderr, "before toLeft\n")
 		rets, err := toLeftTab.ProcessAndReturn(ctx, msg)

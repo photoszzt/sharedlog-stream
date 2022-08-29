@@ -72,14 +72,14 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 	ectx := processor.NewExecutionContextFromComponents(proc_interface.NewBaseSrcsSinks(srcs, sinks),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum))
 
-	filterProc := processor.NewMeteredProcessorG(
+	filterProc :=
 		processor.NewStreamFilterProcessorG[string, *ntypes.Event]("filterBid",
-			processor.PredicateFuncG[string, *ntypes.Event](only_bid)))
-	mapProc := processor.NewMeteredProcessorG[string, *ntypes.Event, string, *ntypes.Event](
+			processor.PredicateFuncG[string, *ntypes.Event](only_bid))
+	mapProc :=
 		processor.NewStreamMapValuesProcessorG[string, *ntypes.Event, *ntypes.Event](
-			"mapBid", processor.ValueMapperWithKeyFuncG[string, *ntypes.Event, *ntypes.Event](q1mapFunc)))
-	outProc := processor.NewMeteredProcessorG[string, *ntypes.Event, any, any](
-		processor.NewFixedSubstreamOutputProcessorG(sinks[0], sp.ParNum, msgSerde))
+			"mapBid", processor.ValueMapperWithKeyFuncG[string, *ntypes.Event, *ntypes.Event](q1mapFunc))
+	outProc :=
+		processor.NewFixedSubstreamOutputProcessorG(sinks[0], sp.ParNum, msgSerde)
 	filterProc.NextProcessor(mapProc)
 	mapProc.NextProcessor(outProc)
 	task := stream_task.NewStreamTaskBuilder().MarkFinalStage().

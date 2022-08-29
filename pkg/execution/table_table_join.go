@@ -86,10 +86,10 @@ func SetupTableTableJoinWithSkipmap[K, VLeft, VRight, VR any](
 	rightJoinLeft := processor.NewMeteredProcessorG(
 		processor.NewTableTableJoinProcessorG[K, VRight, VLeft, VR]("rightJoinLeft", leftTab,
 			processor.ReverseValueJoinerWithKeyG(joiner)))
-	nullKeyFilter := processor.NewMeteredProcessorG(processor.NewStreamFilterProcessorG[K, commtypes.ChangeG[VR]]("filterNullKey",
+	nullKeyFilter := processor.NewStreamFilterProcessorG[K, commtypes.ChangeG[VR]]("filterNullKey",
 		processor.PredicateFuncG[K, commtypes.ChangeG[VR]](func(key optional.Option[K], value optional.Option[commtypes.ChangeG[VR]]) (bool, error) {
 			return key.IsSome(), nil
-		})))
+		}))
 	leftJoinRightFunc := func(ctx context.Context, msg commtypes.MessageG[K, VLeft]) ([]commtypes.MessageG[K, commtypes.ChangeG[VR]], error) {
 		ret, err := toLeftTab.ProcessAndReturn(ctx, msg)
 		if err != nil {

@@ -164,13 +164,12 @@ func (h *q4JoinStreamHandler) Q4JoinStream(ctx context.Context, sp *common.Query
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	getValidBid := processor.NewMeteredProcessorG(
-		processor.NewStreamFilterProcessorG[uint64, *ntypes.AuctionBid]("getValidBid",
-			processor.PredicateFuncG[uint64, *ntypes.AuctionBid](
-				func(key optional.Option[uint64], value optional.Option[*ntypes.AuctionBid]) (bool, error) {
-					ab := value.Unwrap()
-					return ab.BidDateTime >= ab.AucDateTime && ab.BidDateTime <= ab.AucExpires, nil
-				})))
+	getValidBid := processor.NewStreamFilterProcessorG[uint64, *ntypes.AuctionBid]("getValidBid",
+		processor.PredicateFuncG[uint64, *ntypes.AuctionBid](
+			func(key optional.Option[uint64], value optional.Option[*ntypes.AuctionBid]) (bool, error) {
+				ab := value.Unwrap()
+				return ab.BidDateTime >= ab.AucDateTime && ab.BidDateTime <= ab.AucExpires, nil
+			}))
 
 	filterAndGroupMsg := func(ctx context.Context, msgs []commtypes.MessageG[uint64, *ntypes.AuctionBid]) (
 		[]commtypes.MessageG[ntypes.AuctionIdCategory, *ntypes.AuctionBid], error,

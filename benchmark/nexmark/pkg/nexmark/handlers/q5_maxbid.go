@@ -186,6 +186,8 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		}))
 	outProc := processor.NewFixedSubstreamOutputProcessorG(sinks_arr[0],
 		ectx.SubstreamNum(), outMsgSerde)
+	stJoin.NextProcessor(chooseMaxCnt)
+	chooseMaxCnt.NextProcessor(outProc)
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
 			argsTmp processor.ExecutionContext,
@@ -198,21 +200,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 					if err != nil {
 						return fmt.Errorf("maxBid err: %v", err)
 					}
-					joinedOutput, err := stJoin.ProcessAndReturn(ctx, msg)
-					if err != nil {
-						return fmt.Errorf("joined err: %v", err)
-					}
-					filteredMx, err := chooseMaxCnt.ProcessAndReturn(ctx, joinedOutput[0])
-					if err != nil {
-						return fmt.Errorf("filteredMx err: %v", err)
-					}
-					for _, filtered := range filteredMx {
-						_, err := outProc.ProcessAndReturn(ctx, filtered)
-						if err != nil {
-							return fmt.Errorf("sink err: %v", err)
-						}
-					}
-					return nil
+					return stJoin.Process(ctx, msg)
 				}, inMsgSerde)
 		}).MarkFinalStage().Build()
 	kvc := map[string]store.KeyValueStoreOpWithChangelog{kvstore.ChangelogTopicName(): aggStore}

@@ -68,9 +68,8 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 	}
 	ectx := processor.NewExecutionContextFromComponents(srcsSinks, proc_interface.NewBaseProcArgs(h.funcName,
 		sp.ScaleEpoch, sp.ParNum))
-	filterProc := processor.NewMeteredProcessorG(
-		processor.NewStreamFilterProcessorG[string, *ntypes.Event]("q2Filter",
-			processor.PredicateFuncG[string, *ntypes.Event](filterFunc)))
+	filterProc := processor.NewStreamFilterProcessorG[string, *ntypes.Event]("q2Filter",
+		processor.PredicateFuncG[string, *ntypes.Event](filterFunc))
 	outProc := processor.NewFixedSubstreamOutputProcessorG(sinks[0], sp.ParNum, msgSerde)
 	filterProc.NextProcessor(outProc)
 	task := stream_task.NewStreamTaskBuilder().MarkFinalStage().

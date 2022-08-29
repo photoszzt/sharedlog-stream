@@ -166,14 +166,13 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 						return aggregate
 					}
 				}), h.useCache))
-	groupByProc := processor.NewMeteredProcessorG(
-		processor.NewTableGroupByMapProcessorG[ntypes.AuctionIdCategory, uint64, uint64, uint64]("changeKey",
-			processor.MapperFuncG[ntypes.AuctionIdCategory, uint64, uint64, uint64](
-				func(key optional.Option[ntypes.AuctionIdCategory], value optional.Option[uint64]) (uint64, uint64, error) {
-					k := key.Unwrap()
-					v := value.Unwrap()
-					return k.Category, v, nil
-				})))
+	groupByProc := processor.NewTableGroupByMapProcessorG[ntypes.AuctionIdCategory, uint64, uint64, uint64]("changeKey",
+		processor.MapperFuncG[ntypes.AuctionIdCategory, uint64, uint64, uint64](
+			func(key optional.Option[ntypes.AuctionIdCategory], value optional.Option[uint64]) (uint64, uint64, error) {
+				k := key.Unwrap()
+				v := value.Unwrap()
+				return k.Category, v, nil
+			}))
 	sinkProc := processor.NewGroupByOutputProcessorG(ectx.Producers()[0], &ectx, outMsgSerde)
 	aggProc.NextProcessor(groupByProc)
 	groupByProc.NextProcessor(sinkProc)

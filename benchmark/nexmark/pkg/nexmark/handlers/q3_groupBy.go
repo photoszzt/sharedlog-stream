@@ -100,20 +100,18 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	ectx.Consumers()[0].SetInitialSource(true)
 	ectx.Producers()[0].SetName("aucSink")
 	ectx.Producers()[1].SetName("perSink")
-	aucBySellerProc := processor.NewMeteredProcessorG(
-		processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64](
-			"auctionsBySellerIDMap", processor.SelectKeyFuncG[string, *ntypes.Event, uint64](
-				func(_ optional.Option[string], value optional.Option[*ntypes.Event]) (uint64, error) {
-					return value.Unwrap().NewAuction.Seller, nil
-				})))
+	aucBySellerProc := processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64](
+		"auctionsBySellerIDMap", processor.SelectKeyFuncG[string, *ntypes.Event, uint64](
+			func(_ optional.Option[string], value optional.Option[*ntypes.Event]) (uint64, error) {
+				return value.Unwrap().NewAuction.Seller, nil
+			}))
 	grouBySellerProc := processor.NewGroupByOutputProcessorG(ectx.Producers()[0], &ectx, outMsgSerde)
 	aucBySellerProc.NextProcessor(grouBySellerProc)
-	perByIDProc := processor.NewMeteredProcessorG(
-		processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64](
-			"personsByIDMap", processor.SelectKeyFuncG[string, *ntypes.Event, uint64](
-				func(_ optional.Option[string], value optional.Option[*ntypes.Event]) (uint64, error) {
-					return value.Unwrap().NewPerson.ID, nil
-				})))
+	perByIDProc := processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64](
+		"personsByIDMap", processor.SelectKeyFuncG[string, *ntypes.Event, uint64](
+			func(_ optional.Option[string], value optional.Option[*ntypes.Event]) (uint64, error) {
+				return value.Unwrap().NewPerson.ID, nil
+			}))
 	groupByPerIDProc := processor.NewGroupByOutputProcessorG(ectx.Producers()[1], &ectx, outMsgSerde)
 	perByIDProc.NextProcessor(groupByPerIDProc)
 

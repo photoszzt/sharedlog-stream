@@ -147,12 +147,11 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 					})
 				}),
 		))
-	mapValProc := processor.NewMeteredProcessorG(processor.NewTableMapValuesProcessorG[uint64, ntypes.SumAndCount, float64]("calcAvg",
+	mapValProc := processor.NewTableMapValuesProcessorG[uint64, ntypes.SumAndCount, float64]("calcAvg",
 		processor.ValueMapperWithKeyFuncG[uint64, ntypes.SumAndCount, float64](func(_ optional.Option[uint64], value optional.Option[ntypes.SumAndCount]) (float64, error) {
 			sc := value.Unwrap()
 			return float64(sc.Sum) / float64(sc.Count), nil
-		}),
-	))
+		}))
 	tabToStrProc := processor.NewTableToStreamProcessorG[uint64, float64]()
 	outProc := processor.NewFixedSubstreamOutputProcessorG(ectx.Producers()[0], sp.ParNum, outMsgSerde)
 	tabAggProc.NextProcessor(mapValProc)

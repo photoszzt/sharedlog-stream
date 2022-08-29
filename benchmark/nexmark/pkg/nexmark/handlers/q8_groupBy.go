@@ -94,21 +94,21 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	aucBySellerIdProc := processor.NewMeteredProcessorG(processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64]("auctionsBySellerIDMap",
+	aucBySellerIdProc := processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64]("auctionsBySellerIDMap",
 		processor.SelectKeyFuncG[string, *ntypes.Event, uint64](
 			func(key optional.Option[string], value optional.Option[*ntypes.Event]) (uint64, error) {
 				v := value.Unwrap()
 				return v.NewAuction.Seller, nil
-			})))
+			}))
 	groupBySellerIDProc := processor.NewGroupByOutputProcessorG(ectx.Producers()[0], &ectx, outMsgSerde)
 	aucBySellerIdProc.NextProcessor(groupBySellerIDProc)
 
-	perByIDProc := processor.NewMeteredProcessorG(processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64]("personsByIDMap",
+	perByIDProc := processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64]("personsByIDMap",
 		processor.SelectKeyFuncG[string, *ntypes.Event, uint64](
 			func(key optional.Option[string], value optional.Option[*ntypes.Event]) (uint64, error) {
 				v := value.Unwrap()
 				return v.NewPerson.ID, nil
-			})))
+			}))
 	groupByPerIDProc := processor.NewGroupByOutputProcessorG(ectx.Producers()[1], &ectx, outMsgSerde)
 	perByIDProc.NextProcessor(groupByPerIDProc)
 
