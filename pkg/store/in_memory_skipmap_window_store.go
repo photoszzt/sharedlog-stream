@@ -349,7 +349,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) PutWithoutPushToChangelogG(ctx conte
 	return s.Put(ctx, key, value, windowStartTs)
 }
 func (s *InMemorySkipMapWindowStoreG[K, V]) Flush(ctx context.Context) error { return nil }
-func (s *InMemorySkipMapWindowStoreG[K, V]) ConsumeChangelog(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
+func (s *InMemorySkipMapWindowStoreG[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8) (int, error) {
 	panic("not supported")
 }
 func (s *InMemorySkipMapWindowStoreG[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,

@@ -17,6 +17,14 @@ type MessageSerialized struct {
 	Timestamp int64  `msg:"ts,omitempty" json:"ts,omitempty"`
 }
 
+func (m *MessageSerialized) UpdateInjectTime(ts int64) {
+	m.InjT = ts
+}
+
+func (m *MessageSerialized) ExtractInjectTimeMs() int64 {
+	return m.InjT
+}
+
 func convertToMsgSer(value interface{}, keySerde Serde, valSerde Serde) (*MessageSerialized, error) {
 	if value == nil {
 		return nil, nil
@@ -135,7 +143,7 @@ func (s MessageMsgpSerde) Decode(value []byte) (interface{}, error) {
 	msgSer := MessageSerialized{}
 	_, err := msgSer.UnmarshalMsg(value)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] fail to unmarshal this msg: %v", string(value))
+		fmt.Fprintf(os.Stderr, "[ERROR] fail to unmarshal this msg3: %v", string(value))
 		return nil, fmt.Errorf("fail to unmarshal msg: %v", err)
 	}
 	return decodeToMsg(&msgSer, s.keySerde, s.valSerde)

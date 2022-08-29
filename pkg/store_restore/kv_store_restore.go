@@ -44,8 +44,43 @@ func (kvc *KVStoreChangelog[K, V]) ChangelogTopicName() string {
 	return kvc.changelogManager.TopicName()
 }
 
-func (kvc *KVStoreChangelog[K, V]) ConsumeChangelog(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
-	return kvc.changelogManager.Consume(ctx, parNum)
+func (kvc *KVStoreChangelog[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8, cutoff uint64) (int, error) {
+	msgSeq, err := kvc.changelogManager.Consume(ctx, parNum)
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	seqNum := msgSeq.LogSeqNum
+	if seqNum >= cutoff && kvc.ChangelogIsSrc() {
+		return 0, common_errors.ErrReachCutoffPos
+	}
+	if msgSeq.MsgArr != nil {
+		for _, msg := range msgSeq.MsgArr {
+			if msg.Key.IsNone() && msg.Value.IsNone() {
+				continue
+			}
+			count += 1
+			k := msg.Key.Unwrap()
+			v := msg.Value.Unwrap()
+			err = kvc.PutWithoutPushToChangelog(ctx, k, v)
+			if err != nil {
+				return 0, err
+			}
+		}
+	} else {
+		msg := msgSeq.Msg
+		if msg.Key.IsNone() && msg.Value.IsNone() {
+			return 0, nil
+		}
+		count += 1
+		k := msg.Key.Unwrap()
+		v := msg.Value.Unwrap()
+		err = kvc.PutWithoutPushToChangelog(ctx, k, v)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return count, nil
 }
 
 func (kvc *KVStoreChangelog[K, V]) Flush(ctx context.Context) error {
@@ -88,7 +123,7 @@ func RestoreChangelogKVStateStore(
 	count := 0
 	restoreKVStart := time.Now()
 	for {
-		gotMsgs, err := kvchangelog.ConsumeChangelog(ctx, parNum)
+		subC, err := kvchangelog.ConsumeOneLogEntry(ctx, parNum, consumedOffset)
 		// nothing to restore
 		if common_errors.IsStreamEmptyError(err) {
 			elapsed := time.Since(restoreKVStart)
@@ -100,42 +135,14 @@ func RestoreChangelogKVStateStore(
 			fmt.Fprintf(os.Stderr, "%s(%d) restore, count: %d, elapsed: %v\n",
 				kvchangelog.ChangelogTopicName(), parNum, count, elapsed)
 			return nil
+		} else if xerrors.Is(err, common_errors.ErrReachCutoffPos) {
+			elapsed := time.Since(restoreKVStart)
+			fmt.Fprintf(os.Stderr, "%s(%d) restore, count: %d, elapsed: %v\n",
+				kvchangelog.ChangelogTopicName(), parNum, count, elapsed)
+			return nil
 		} else if err != nil {
 			return fmt.Errorf("ReadNext failed: %v", err)
 		}
-		msgs := gotMsgs.Msgs
-		seqNum := msgs.LogSeqNum
-		if seqNum >= consumedOffset && kvchangelog.ChangelogIsSrc() {
-			return nil
-		}
-		if msgs.MsgArr != nil {
-			for _, msg := range msgs.MsgArr {
-				if msg.Key == nil && msg.Value == nil {
-					continue
-				}
-				count += 1
-				val := msg.Value
-				if kvchangelog.ChangelogIsSrc() {
-					val = commtypes.CreateValueTimestamp(msg.Value, msg.Timestamp)
-				}
-				err = kvchangelog.PutWithoutPushToChangelog(ctx, msg.Key, val)
-				if err != nil {
-					return err
-				}
-			}
-		} else {
-			if msgs.Msg.Key == nil && msgs.Msg.Value == nil {
-				continue
-			}
-			val := msgs.Msg.Value
-			count += 1
-			if kvchangelog.ChangelogIsSrc() {
-				val = commtypes.CreateValueTimestamp(msgs.Msg.Value, msgs.Msg.Timestamp)
-			}
-			err = kvchangelog.PutWithoutPushToChangelog(ctx, msgs.Msg.Key, val)
-			if err != nil {
-				return err
-			}
-		}
+		count += subC
 	}
 }

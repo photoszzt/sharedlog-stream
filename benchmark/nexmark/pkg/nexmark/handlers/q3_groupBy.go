@@ -54,30 +54,18 @@ func getExecutionCtx(ctx context.Context, env types.Environment, sp *common.Quer
 	debug.Assert(len(output_streams) == 2, "expected 2 output streams")
 	var sinks []producer_consumer.MeteredProducerIntr
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
-	if err != nil {
-		return processor.BaseExecutionContext{}, fmt.Errorf("get event serde err: %v", err)
-	}
-	inMsgSerde, err := commtypes.GetMsgSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
-	if err != nil {
-		return processor.BaseExecutionContext{}, fmt.Errorf("get msg serde err: %v", err)
-	}
-	outMsgSerde, err := commtypes.GetMsgSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
-	if err != nil {
-		return processor.BaseExecutionContext{}, fmt.Errorf("get msg serde err: %v", err)
-	}
-	inConfig := &producer_consumer.StreamConsumerConfigG[string, *ntypes.Event]{
+	inConfig := &producer_consumer.StreamConsumerConfig{
 		Timeout:     common.SrcConsumeTimeout,
-		MsgSerde:    inMsgSerde,
 		SerdeFormat: serdeFormat,
 	}
-	outConfig := &producer_consumer.StreamSinkConfig[uint64, *ntypes.Event]{
-		MsgSerde:      outMsgSerde,
+	outConfig := &producer_consumer.StreamSinkConfig{
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+		Format:        serdeFormat,
 	}
 	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig, sp.NumSubstreamProducer[0], sp.ParNum)
+	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, inConfig,
+		sp.NumSubstreamProducer[0], sp.ParNum)
 	if err != nil {
 		return processor.BaseExecutionContext{}, fmt.Errorf("get msg serde err: %v", err)
 	}
@@ -87,11 +75,24 @@ func getExecutionCtx(ctx context.Context, env types.Environment, sp *common.Quer
 			warmup)
 		sinks = append(sinks, sink)
 	}
-	return processor.NewExecutionContext([]producer_consumer.MeteredConsumerIntr{src}, sinks,
+	return processor.NewExecutionContext([]*producer_consumer.MeteredConsumer{src}, sinks,
 		funcName, sp.ScaleEpoch, sp.ParNum), nil
 }
 
 func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: fmt.Sprintf("get event serde err: %v", err)}
+	}
+	inMsgSerde, err := commtypes.GetMsgGSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: fmt.Sprintf("get msg serde err: %v", err)}
+	}
+	outMsgSerde, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: fmt.Sprintf("get msg serde err: %v", err)}
+	}
 	ectx, err := getExecutionCtx(ctx, h.env, sp, h.funcName)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
@@ -99,45 +100,45 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	ectx.Consumers()[0].SetInitialSource(true)
 	ectx.Producers()[0].SetName("aucSink")
 	ectx.Producers()[1].SetName("perSink")
-	aucBySellerChain := processor.NewProcessorChains()
-	aucBySellerChain.
-		Via(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64](
+	aucBySellerProc := processor.NewMeteredProcessorG(
+		processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64](
 			"auctionsBySellerIDMap", processor.SelectKeyFuncG[string, *ntypes.Event, uint64](
-				func(_ optional.Option[string], value *ntypes.Event) (uint64, error) {
-					return value.NewAuction.Seller, nil
-				})))).
-		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[0], &ectx))
-	personsByIDChain := processor.NewProcessorChains()
-	personsByIDChain.
-		Via(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64](
+				func(_ optional.Option[string], value optional.Option[*ntypes.Event]) (uint64, error) {
+					return value.Unwrap().NewAuction.Seller, nil
+				})))
+	grouBySellerProc := processor.NewGroupByOutputProcessorG(ectx.Producers()[0], &ectx, outMsgSerde)
+	aucBySellerProc.NextProcessor(grouBySellerProc)
+	perByIDProc := processor.NewMeteredProcessorG(
+		processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64](
 			"personsByIDMap", processor.SelectKeyFuncG[string, *ntypes.Event, uint64](
-				func(_ optional.Option[string], value *ntypes.Event) (uint64, error) {
-					return value.NewPerson.ID, nil
-				})))).
-		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[1], &ectx))
+				func(_ optional.Option[string], value optional.Option[*ntypes.Event]) (uint64, error) {
+					return value.Unwrap().NewPerson.ID, nil
+				})))
+	groupByPerIDProc := processor.NewGroupByOutputProcessorG(ectx.Producers()[1], &ectx, outMsgSerde)
+	perByIDProc.NextProcessor(groupByPerIDProc)
 
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
 			argsTmp processor.ExecutionContext,
-		) (*common.FnOutput, *commtypes.MsgAndSeq) {
+		) (*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq]) {
 			args := argsTmp.(*processor.BaseExecutionContext)
 			return stream_task.CommonProcess(ctx, task, args,
-				func(ctx context.Context, msg commtypes.Message, _ interface{}) error {
-					event := msg.Value.(*ntypes.Event)
+				func(ctx context.Context, msg commtypes.MessageG[string, *ntypes.Event], _ interface{}) error {
+					event := msg.Value.Unwrap()
 					if event.Etype == ntypes.PERSON && ((event.NewPerson.State == "OR") ||
 						event.NewPerson.State == "ID" || event.NewPerson.State == "CA") {
-						_, err := personsByIDChain.RunChains(ctx, msg)
+						err = perByIDProc.Process(ctx, msg)
 						if err != nil {
 							return err
 						}
 					} else if event.Etype == ntypes.AUCTION && event.NewAuction.Category == 10 {
-						_, err := aucBySellerChain.RunChains(ctx, msg)
+						err = aucBySellerProc.Process(ctx, msg)
 						if err != nil {
 							return err
 						}
 					}
 					return nil
-				})
+				}, inMsgSerde)
 		}).Build()
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,

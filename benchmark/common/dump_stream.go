@@ -14,7 +14,7 @@ import (
 )
 
 type DumpOutputStreamConfig struct {
-	MsgSerde      commtypes.MessageSerdeG[interface{}, interface{}]
+	MsgSerde      commtypes.MessageSerde
 	OutputDir     string
 	TopicName     string
 	SerdeFormat   commtypes.SerdeFormat
@@ -32,7 +32,7 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 			return err
 		}
 	*/
-	payloadArrSerde := sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG
+	payloadArrSerde := sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDE
 	for i := uint8(0); i < args.NumPartitions; i++ {
 		outFilePath := path.Join(args.OutputDir, fmt.Sprintf("%s-%d.txt", args.TopicName, i))
 		outFile, err := os.Create(outFilePath)
@@ -65,7 +65,7 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 					}
 				*/
 			} else {
-				msgAndSeq, err := commtypes.DecodeRawMsgG(rawMsg, args.MsgSerde, payloadArrSerde)
+				msgAndSeq, err := commtypes.DecodeRawMsg(rawMsg, args.MsgSerde, payloadArrSerde)
 				if err != nil {
 					return err
 				}

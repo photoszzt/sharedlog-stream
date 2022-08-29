@@ -40,18 +40,18 @@ func (p *StreamFilterProcessor) ProcessAndReturn(ctx context.Context, msg commty
 type StreamFilterProcessorG[K, V any] struct {
 	pred PredicateG[K, V]
 	name string
-	BaseProcessor
+	BaseProcessorG[K, V, K, V]
 }
 
-var _ = Processor(&StreamFilterProcessorG[int, int]{})
+var _ = ProcessorG[int, int, int, int](&StreamFilterProcessorG[int, int]{})
 
-func NewStreamFilterProcessorG[K, V any](name string, pred PredicateG[K, V]) *StreamFilterProcessorG[K, V] {
+func NewStreamFilterProcessorG[K, V any](name string, pred PredicateG[K, V]) ProcessorG[K, V, K, V] {
 	p := &StreamFilterProcessorG[K, V]{
-		pred:          pred,
-		name:          name,
-		BaseProcessor: BaseProcessor{},
+		pred:           pred,
+		name:           name,
+		BaseProcessorG: BaseProcessorG[K, V, K, V]{},
 	}
-	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	p.BaseProcessorG.ProcessingFuncG = p.ProcessAndReturn
 	return p
 }
 
@@ -59,13 +59,13 @@ func (p *StreamFilterProcessorG[K, V]) Name() string {
 	return p.name
 }
 
-func (p *StreamFilterProcessorG[K, V]) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	ok, err := p.pred.Assert(msg.Key.(K), msg.Value.(V))
+func (p *StreamFilterProcessorG[K, V]) ProcessAndReturn(ctx context.Context, msg commtypes.MessageG[K, V]) ([]commtypes.MessageG[K, V], error) {
+	ok, err := p.pred.Assert(msg.Key, msg.Value)
 	if err != nil {
 		return nil, err
 	}
 	if ok {
-		return []commtypes.Message{msg}, nil
+		return []commtypes.MessageG[K, V]{msg}, nil
 	}
 	return nil, nil
 }
@@ -104,10 +104,10 @@ func (p *StreamFilterNotProcessor) ProcessAndReturn(ctx context.Context, msg com
 type StreamFilterNotProcessorG[K, V any] struct {
 	pred PredicateG[K, V]
 	name string
-	BaseProcessor
+	BaseProcessorG[K, V, K, V]
 }
 
-var _ = Processor(&StreamFilterNotProcessorG[int, int]{})
+var _ = ProcessorG[int, int, int, int](&StreamFilterNotProcessorG[int, int]{})
 
 func NewStreamFilterNotProcessorG(name string, pred Predicate) *StreamFilterNotProcessor {
 	p := &StreamFilterNotProcessor{
@@ -120,13 +120,13 @@ func NewStreamFilterNotProcessorG(name string, pred Predicate) *StreamFilterNotP
 }
 
 func (p *StreamFilterNotProcessorG[K, V]) Name() string { return p.name }
-func (p *StreamFilterNotProcessorG[K, V]) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	ok, err := p.pred.Assert(msg.Key.(K), msg.Value.(V))
+func (p *StreamFilterNotProcessorG[K, V]) ProcessAndReturn(ctx context.Context, msg commtypes.MessageG[K, V]) ([]commtypes.MessageG[K, V], error) {
+	ok, err := p.pred.Assert(msg.Key, msg.Value)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
-		return []commtypes.Message{msg}, nil
+		return []commtypes.MessageG[K, V]{msg}, nil
 	}
 	return nil, nil
 }

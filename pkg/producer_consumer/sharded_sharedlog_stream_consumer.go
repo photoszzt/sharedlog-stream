@@ -10,7 +10,6 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/txn_data"
 	"sync/atomic"
 	"time"
 )
@@ -25,40 +24,42 @@ type StartTimeAndProdIdx struct {
 	ProdIdx   uint8
 }
 
+/*
 type StreamConsumerConfigG[K, V any] struct {
-	MsgSerde    commtypes.MessageSerdeG[K, V]
+	// MsgSerde    commtypes.MessageSerdeG
 	Timeout     time.Duration
 	SerdeFormat commtypes.SerdeFormat
 }
+*/
 
 type StreamConsumerConfig struct {
-	MsgSerde    commtypes.MessageSerde
+	// MsgSerde    commtypes.MessageSerde
 	Timeout     time.Duration
 	SerdeFormat commtypes.SerdeFormat
 }
 
-type ShardedSharedLogStreamConsumer[K, V any] struct {
+type ShardedSharedLogStreamConsumer struct {
 	epochMarkerSerde commtypes.SerdeG[commtypes.EpochMarker]
 	payloadArrSerde  commtypes.SerdeG[commtypes.PayloadArr]
-	msgSerde         commtypes.MessageSerdeG[K, V]
-	producerNotEnd   data_structure.Uint8Set
-	stream           *sharedlog_stream.ShardedSharedLogStream
-	tac              *TransactionAwareConsumer
-	emc              *EpochMarkConsumer
-	name             string
-	currentSeqNum    uint64
-	timeout          time.Duration
-	guarantee        exactly_once_intr.GuaranteeMth
-	initialSource    bool
-	serdeFormat      commtypes.SerdeFormat
-	numSrcProducer   uint8
+	// msgSerde         commtypes.MessageSerdeG
+	producerNotEnd data_structure.Uint8Set
+	stream         *sharedlog_stream.ShardedSharedLogStream
+	tac            *TransactionAwareConsumer
+	emc            *EpochMarkConsumer
+	name           string
+	currentSeqNum  uint64
+	timeout        time.Duration
+	guarantee      exactly_once_intr.GuaranteeMth
+	initialSource  bool
+	serdeFormat    commtypes.SerdeFormat
+	numSrcProducer uint8
 }
 
-var _ = Consumer(&ShardedSharedLogStreamConsumer[int, string]{})
+var _ = Consumer(&ShardedSharedLogStreamConsumer{})
 
-func NewShardedSharedLogStreamConsumerG[K, V any](stream *sharedlog_stream.ShardedSharedLogStream,
-	config *StreamConsumerConfigG[K, V], numSrcProducer uint8, instanceId uint8,
-) (*ShardedSharedLogStreamConsumer[K, V], error) {
+func NewShardedSharedLogStreamConsumer(stream *sharedlog_stream.ShardedSharedLogStream,
+	config *StreamConsumerConfig, numSrcProducer uint8, instanceId uint8,
+) (*ShardedSharedLogStreamConsumer, error) {
 	// debug.Fprintf(os.Stderr, "%s timeout: %v\n", stream.TopicName(), config.Timeout)
 	epochMarkSerde, err := commtypes.GetEpochMarkerSerdeG(config.SerdeFormat)
 	if err != nil {
@@ -73,41 +74,41 @@ func NewShardedSharedLogStreamConsumerG[K, V any](stream *sharedlog_stream.Shard
 		notEnded.Add(instanceId)
 	}
 	fmt.Fprintf(os.Stderr, "%s notEnded: %v\n", stream.TopicName(), notEnded)
-	return &ShardedSharedLogStreamConsumer[K, V]{
+	return &ShardedSharedLogStreamConsumer{
 		epochMarkerSerde: epochMarkSerde,
 		stream:           stream,
 		timeout:          config.Timeout,
-		msgSerde:         config.MsgSerde,
-		name:             "src",
-		payloadArrSerde:  sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG,
-		guarantee:        exactly_once_intr.AT_LEAST_ONCE,
-		serdeFormat:      config.SerdeFormat,
-		numSrcProducer:   numSrcProducer,
-		producerNotEnd:   notEnded,
+		// msgSerde:         config.MsgSerde,
+		name:            "src",
+		payloadArrSerde: sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG,
+		guarantee:       exactly_once_intr.AT_LEAST_ONCE,
+		serdeFormat:     config.SerdeFormat,
+		numSrcProducer:  numSrcProducer,
+		producerNotEnd:  notEnded,
 	}, nil
 }
 
-func (s *ShardedSharedLogStreamConsumer[K, V]) SetInitialSource(initial bool) {
+func (s *ShardedSharedLogStreamConsumer) SetInitialSource(initial bool) {
 	s.initialSource = initial
 }
-func (s *ShardedSharedLogStreamConsumer[K, V]) IsInitialSource() bool {
+func (s *ShardedSharedLogStreamConsumer) IsInitialSource() bool {
 	return s.initialSource
 }
 
-func (s *ShardedSharedLogStreamConsumer[K, V]) NumSubstreamProducer() uint8 {
+func (s *ShardedSharedLogStreamConsumer) NumSubstreamProducer() uint8 {
 	return s.numSrcProducer
 }
 
-func (s *ShardedSharedLogStreamConsumer[K, V]) SrcProducerEnd(prodIdx uint8) {
+func (s *ShardedSharedLogStreamConsumer) SrcProducerEnd(prodIdx uint8) {
 	s.producerNotEnd.Remove(prodIdx)
 	debug.Fprintf(os.Stderr, "%d producer ended, %v remain\n", prodIdx, s.producerNotEnd)
 }
 
-func (s *ShardedSharedLogStreamConsumer[K, V]) AllProducerEnded() bool {
+func (s *ShardedSharedLogStreamConsumer) AllProducerEnded() bool {
 	return len(s.producerNotEnd) == 0
 }
 
-func (s *ShardedSharedLogStreamConsumer[K, V]) ConfigExactlyOnce(
+func (s *ShardedSharedLogStreamConsumer) ConfigExactlyOnce(
 	guarantee exactly_once_intr.GuaranteeMth,
 ) error {
 	debug.Assert(guarantee == exactly_once_intr.TWO_PHASE_COMMIT || guarantee == exactly_once_intr.EPOCH_MARK,
@@ -122,31 +123,27 @@ func (s *ShardedSharedLogStreamConsumer[K, V]) ConfigExactlyOnce(
 	return err
 }
 
-func (s *ShardedSharedLogStreamConsumer[K, V]) Stream() sharedlog_stream.Stream {
+func (s *ShardedSharedLogStreamConsumer) Stream() sharedlog_stream.Stream {
 	return s.stream
 }
 
-func (s *ShardedSharedLogStreamConsumer[K, V]) SetName(name string) {
+func (s *ShardedSharedLogStreamConsumer) SetName(name string) {
 	s.name = name
 }
 
-func (s *ShardedSharedLogStreamConsumer[K, V]) Name() string {
+func (s *ShardedSharedLogStreamConsumer) Name() string {
 	return s.name
 }
 
-func (s *ShardedSharedLogStreamConsumer[K, V]) MsgSerde() commtypes.MessageSerdeG[K, V] {
-	return s.msgSerde
-}
-
-func (s *ShardedSharedLogStreamConsumer[K, V]) TopicName() string {
+func (s *ShardedSharedLogStreamConsumer) TopicName() string {
 	return s.stream.TopicName()
 }
 
-func (s *ShardedSharedLogStreamConsumer[K, V]) SetCursor(cursor uint64, parNum uint8) {
+func (s *ShardedSharedLogStreamConsumer) SetCursor(cursor uint64, parNum uint8) {
 	s.stream.SetCursor(cursor, parNum)
 }
 
-func (s *ShardedSharedLogStreamConsumer[K, V]) readNext(ctx context.Context, parNum uint8) (*commtypes.RawMsg, error) {
+func (s *ShardedSharedLogStreamConsumer) readNext(ctx context.Context, parNum uint8) (*commtypes.RawMsg, error) {
 	if s.guarantee == exactly_once_intr.TWO_PHASE_COMMIT {
 		return s.tac.ReadNext(ctx, parNum)
 	} else if s.guarantee == exactly_once_intr.EPOCH_MARK {
@@ -174,15 +171,84 @@ func (s *ShardedSharedLogStreamConsumer[K, V]) readNext(ctx context.Context, par
 	}
 }
 
-func (s *ShardedSharedLogStreamConsumer[K, V]) RecordCurrentConsumedSeqNum(seqNum uint64) {
+func (s *ShardedSharedLogStreamConsumer) RecordCurrentConsumedSeqNum(seqNum uint64) {
 	atomic.StoreUint64(&s.currentSeqNum, seqNum)
 }
 
-func (s *ShardedSharedLogStreamConsumer[K, V]) CurrentConsumedSeqNum() uint64 {
+func (s *ShardedSharedLogStreamConsumer) CurrentConsumedSeqNum() uint64 {
 	return atomic.LoadUint64(&s.currentSeqNum)
 }
+func (s *ShardedSharedLogStreamConsumer) Consume(ctx context.Context, parNum uint8) (commtypes.RawMsgAndSeq, error) {
+	startTime := time.Now()
+L:
+	for {
+		select {
+		case <-ctx.Done():
+			break L
+		default:
+		}
+		duration := time.Since(startTime)
+		// debug.Fprintf(os.Stderr, "consume dur: %v\n", duration)
+		if s.timeout != 0 && duration >= s.timeout {
+			break
+		}
+		rawMsg, err := s.readNext(ctx, parNum)
+		if err != nil {
+			if common_errors.IsStreamEmptyError(err) {
+				// debug.Fprintf(os.Stderr, "stream is empty\n")
+				time.Sleep(time.Duration(100) * time.Microsecond)
+				continue
+			} else if common_errors.IsStreamTimeoutError(err) {
+				// debug.Fprintf(os.Stderr, "stream time out\n")
+				continue
+			} else {
+				return commtypes.RawMsgAndSeq{}, err
+			}
+		}
+		if len(rawMsg.Payload) == 0 {
+			continue
+		}
+		if rawMsg.IsControl {
+			return commtypes.RawMsgAndSeq{
+				Payload:    rawMsg.Payload,
+				PayloadArr: nil,
+				MsgSeqNum:  rawMsg.MsgSeqNum,
+				LogSeqNum:  rawMsg.LogSeqNum,
+				IsControl:  true,
+				StartTime:  rawMsg.StartTime,
+				Mark:       rawMsg.Mark,
+				ScaleEpoch: rawMsg.ScaleEpoch,
+				ProdIdx:    rawMsg.ProdIdx,
+			}, nil
+		} else {
+			if rawMsg.IsPayloadArr {
+				payloadArr, err := s.payloadArrSerde.Decode(rawMsg.Payload)
+				if err != nil {
+					return commtypes.RawMsgAndSeq{}, fmt.Errorf("fail to decode payload arr: %v", err)
+				}
+				return commtypes.RawMsgAndSeq{
+					Payload:    nil,
+					PayloadArr: payloadArr.Payloads,
+					MsgSeqNum:  rawMsg.MsgSeqNum,
+					LogSeqNum:  rawMsg.LogSeqNum,
+					IsControl:  false,
+				}, nil
+			} else {
+				return commtypes.RawMsgAndSeq{
+					Payload:    rawMsg.Payload,
+					PayloadArr: nil,
+					MsgSeqNum:  rawMsg.MsgSeqNum,
+					LogSeqNum:  rawMsg.LogSeqNum,
+					IsControl:  false,
+				}, nil
+			}
+		}
+	}
+	return commtypes.RawMsgAndSeq{}, common_errors.ErrStreamSourceTimeout
+}
 
-func (s *ShardedSharedLogStreamConsumer[K, V]) Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
+/*
+func (s *ShardedSharedLogStreamConsumer) Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
 	startTime := time.Now()
 L:
 	for {
@@ -260,3 +326,4 @@ L:
 	}
 	return nil, common_errors.ErrStreamSourceTimeout
 }
+*/

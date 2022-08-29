@@ -484,7 +484,7 @@ func CreateOffsetTopicAndGetOffset(ctx context.Context, tm *TransactionManager,
 	return offset, nil
 }
 
-func CollectOffsetRecords(consumers []producer_consumer.MeteredConsumerIntr) map[string]txn_data.OffsetRecord {
+func CollectOffsetRecords(consumers []*producer_consumer.MeteredConsumer) map[string]txn_data.OffsetRecord {
 	ret := make(map[string]txn_data.OffsetRecord)
 	for _, consumer := range consumers {
 		topic := consumer.TopicName()

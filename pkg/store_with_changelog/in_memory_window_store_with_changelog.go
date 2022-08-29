@@ -5,15 +5,18 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 type InMemoryWindowStoreWithChangelog[K, V any] struct {
-	msgSerde         commtypes.MessageSerdeG[commtypes.KeyAndWindowStartTsG[K], V]
+	msgSerde         commtypes.MessageGSerdeG[commtypes.KeyAndWindowStartTsG[K], V]
 	originKeySerde   commtypes.SerdeG[K]
 	windowStore      store.CoreWindowStore
 	trackFunc        exactly_once_intr.TrackProdSubStreamFunc
@@ -58,7 +61,10 @@ func CreateInMemWindowStoreWithChangelog[K, V any](
 	return NewInMemoryWindowStoreWithChangelog(winStore, mp)
 }
 
-func createChangelogManagerAndUpdateMsgSerde[K, V any](mp *MaterializeParam[K, V]) (*ChangelogManager[commtypes.KeyAndWindowStartTsG[K], V], commtypes.MessageSerdeG[commtypes.KeyAndWindowStartTsG[K], V], error) {
+func createChangelogManagerAndUpdateMsgSerde[K, V any](mp *MaterializeParam[K, V]) (
+	*ChangelogManager[commtypes.KeyAndWindowStartTsG[K], V],
+	commtypes.MessageGSerdeG[commtypes.KeyAndWindowStartTsG[K], V], error,
+) {
 	changelog, err := CreateChangelog(mp.changelogParam.Env,
 		mp.storeName, mp.changelogParam.NumPartition,
 		mp.serdeFormat)
@@ -77,7 +83,7 @@ func createChangelogManagerAndUpdateMsgSerde[K, V any](mp *MaterializeParam[K, V
 	} else {
 		return nil, nil, common_errors.ErrUnrecognizedSerdeFormat
 	}
-	msgSerde, err := commtypes.GetMsgSerdeG(mp.serdeFormat, keyAndWindowStartTsSerde, mp.msgSerde.GetValSerdeG())
+	msgSerde, err := commtypes.GetMsgGSerdeG(mp.serdeFormat, keyAndWindowStartTsSerde, mp.msgSerde.GetValSerdeG())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -129,34 +135,44 @@ func (st *InMemoryWindowStoreWithChangelog[K, V]) Put(ctx context.Context,
 		Key:           key.(K),
 		WindowStartTs: windowStartTimestamp,
 	}
-	msg := commtypes.Message{
-		Key:   keyTs,
-		Value: value,
+	msg := commtypes.MessageG[commtypes.KeyAndWindowStartTsG[K], V]{
+		Key:   optional.Some(keyTs),
+		Value: optional.Some(value.(V)),
 	}
-	// pStart := stats.TimerBegin()
-	err := st.changelogManager.Produce(ctx, msg, st.parNum, false)
-	// elapsed := stats.Elapsed(pStart).Microseconds()
-	// st.changeLogProduce.AddSample(elapsed)
+	msgSerOp, err := commtypes.MsgGToMsgSer(msg, st.msgSerde.GetKeySerdeG(), st.msgSerde.GetValSerdeG())
 	if err != nil {
 		return err
 	}
-	tStart := stats.TimerBegin()
-	kBytes, err := st.originKeySerde.Encode(key.(K))
-	if err != nil {
-		return err
-	}
-	err = st.trackFunc(ctx, kBytes, st.changelogManager.TopicName(), st.parNum)
-	if err != nil {
-		return err
-	}
-	tElapsed := stats.Elapsed(tStart).Microseconds()
-	st.trackFuncLat.AddSample(tElapsed)
+	msgSer, ok := msgSerOp.Take()
+	if ok {
+		// pStart := stats.TimerBegin()
+		err = st.changelogManager.Produce(ctx, msgSer, st.parNum)
+		// elapsed := stats.Elapsed(pStart).Microseconds()
+		// st.changeLogProduce.AddSample(elapsed)
+		if err != nil {
+			return err
+		}
+		tStart := stats.TimerBegin()
+		kBytes, err := st.originKeySerde.Encode(key.(K))
+		if err != nil {
+			return err
+		}
+		err = st.trackFunc(ctx, kBytes, st.changelogManager.TopicName(), st.parNum)
+		if err != nil {
+			return err
+		}
+		tElapsed := stats.Elapsed(tStart).Microseconds()
+		st.trackFuncLat.AddSample(tElapsed)
 
-	// putStart := stats.TimerBegin()
-	err = st.windowStore.Put(ctx, key, value, windowStartTimestamp)
-	// elapsed := stats.Elapsed(putStart).Microseconds()
-	// st.storePutLatency.AddSample(elapsed)
-	return err
+		// putStart := stats.TimerBegin()
+		err = st.windowStore.Put(ctx, key, value, windowStartTimestamp)
+		// elapsed := stats.Elapsed(putStart).Microseconds()
+		// st.storePutLatency.AddSample(elapsed)
+		return err
+	} else {
+		log.Warn().Msgf("get empty key and value")
+		return nil
+	}
 }
 
 func (st *InMemoryWindowStoreWithChangelog[K, V]) PutWithoutPushToChangelog(ctx context.Context,
@@ -218,8 +234,37 @@ func (s *InMemoryWindowStoreWithChangelog[K, V]) TableType() store.TABLE_TYPE {
 func (s *InMemoryWindowStoreWithChangelog[K, V]) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 	s.trackFunc = trackParFunc
 }
-func (s *InMemoryWindowStoreWithChangelog[K, V]) ConsumeChangelog(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
-	return s.changelogManager.Consume(ctx, parNum)
+func (s *InMemoryWindowStoreWithChangelog[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8) (int, error) {
+	msgSeq, err := s.changelogManager.Consume(ctx, parNum)
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	if msgSeq.MsgArr != nil {
+		for _, msg := range msgSeq.MsgArr {
+			if msg.Key.IsNone() && msg.Value.IsNone() {
+				continue
+			}
+			count += 1
+			k := msg.Key.Unwrap()
+			err := s.PutWithoutPushToChangelog(ctx, k.Key, msg.Value)
+			if err != nil {
+				return 0, err
+			}
+		}
+	} else {
+		msg := msgSeq.Msg
+		if msg.Key.IsNone() && msg.Value.IsNone() {
+			return 0, nil
+		}
+		count += 1
+		k := msg.Key.Unwrap()
+		err := s.PutWithoutPushToChangelog(ctx, k.Key, msg.Value)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return count, nil
 }
 func (s *InMemoryWindowStoreWithChangelog[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	guarantee exactly_once_intr.GuaranteeMth) error {

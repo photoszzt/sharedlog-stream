@@ -4,7 +4,6 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/optional"
-	"sharedlog-stream/pkg/utils"
 )
 
 type Mapper interface {
@@ -19,13 +18,13 @@ func (fn MapperFunc) Map(key, value interface{}) (interface{} /* key */, interfa
 }
 
 type MapperG[K, V, KR, VR any] interface {
-	Map(key K, value V) (KR /* key */, VR /* value */, error)
+	Map(key optional.Option[K], value optional.Option[V]) (KR /* key */, VR /* value */, error)
 }
-type MapperFuncG[K, V, KR, VR any] func(key K, value V) (KR /* key */, VR /* value */, error)
+type MapperFuncG[K, V, KR, VR any] func(key optional.Option[K], value optional.Option[V]) (KR /* key */, VR /* value */, error)
 
 var _ = (MapperG[int, int, int, int])(MapperFuncG[int, int, int, int](nil))
 
-func (fn MapperFuncG[K, V, KR, VR]) Map(key K, value V) (KR /* key */, VR /* value */, error) {
+func (fn MapperFuncG[K, V, KR, VR]) Map(key optional.Option[K], value optional.Option[V]) (KR /* key */, VR /* value */, error) {
 	return fn(key, value)
 }
 
@@ -62,27 +61,27 @@ func (p *StreamMapProcessor) ProcessAndReturn(ctx context.Context, msg commtypes
 type StreamMapProcessorG[K, V, KR, VR any] struct {
 	mapper MapperG[K, V, KR, VR]
 	name   string
-	BaseProcessor
+	BaseProcessorG[K, V, KR, VR]
 }
 
-var _ = Processor(&StreamMapProcessorG[int, int, string, string]{})
+var _ = ProcessorG[int, int, string, string](&StreamMapProcessorG[int, int, string, string]{})
 
-func NewStreamMapProcessorG[K, V, KR, VR any](name string, mapper MapperG[K, V, KR, VR]) *StreamMapProcessorG[K, V, KR, VR] {
+func NewStreamMapProcessorG[K, V, KR, VR any](name string, mapper MapperG[K, V, KR, VR]) ProcessorG[K, V, KR, VR] {
 	p := &StreamMapProcessorG[K, V, KR, VR]{
-		mapper:        mapper,
-		name:          name,
-		BaseProcessor: BaseProcessor{},
+		mapper:         mapper,
+		name:           name,
+		BaseProcessorG: BaseProcessorG[K, V, KR, VR]{},
 	}
-	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	p.BaseProcessorG.ProcessingFuncG = p.ProcessAndReturn
 	return p
 }
 func (p *StreamMapProcessorG[K, V, KR, VR]) Name() string { return p.name }
-func (p *StreamMapProcessorG[K, V, KR, VR]) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	newK, newV, err := p.mapper.Map(msg.Key.(K), msg.Value.(V))
+func (p *StreamMapProcessorG[K, V, KR, VR]) ProcessAndReturn(ctx context.Context, msg commtypes.MessageG[K, V]) ([]commtypes.MessageG[KR, VR], error) {
+	newK, newV, err := p.mapper.Map(msg.Key, msg.Value)
 	if err != nil {
 		return nil, err
 	}
-	return []commtypes.Message{{Key: newK, Value: newV, Timestamp: msg.Timestamp}}, nil
+	return []commtypes.MessageG[KR, VR]{{Key: optional.Some(newK), Value: optional.Some(newV), Timestamp: msg.Timestamp}}, nil
 }
 
 type ValueMapperWithKey interface {
@@ -97,13 +96,13 @@ func (fn ValueMapperWithKeyFunc) MapValue(key interface{}, value interface{}) (i
 }
 
 type ValueMapperWithKeyG[K, V, VR any] interface {
-	MapValue(key K, value V) (VR, error)
+	MapValue(key optional.Option[K], value optional.Option[V]) (VR, error)
 }
-type ValueMapperWithKeyFuncG[K, V, VR any] func(key K, value V) (VR, error)
+type ValueMapperWithKeyFuncG[K, V, VR any] func(key optional.Option[K], value optional.Option[V]) (VR, error)
 
 var _ = ValueMapperWithKeyG[int, int, string](ValueMapperWithKeyFuncG[int, int, string](nil))
 
-func (fn ValueMapperWithKeyFuncG[K, V, VR]) MapValue(key K, value V) (VR, error) {
+func (fn ValueMapperWithKeyFuncG[K, V, VR]) MapValue(key optional.Option[K], value optional.Option[V]) (VR, error) {
 	return fn(key, value)
 }
 
@@ -140,17 +139,17 @@ func (p *StreamMapValuesProcessor) ProcessAndReturn(ctx context.Context, msg com
 type StreamMapValuesProcessorG[K, V, VR any] struct {
 	valueMapperWithKey ValueMapperWithKeyG[K, V, VR]
 	name               string
-	BaseProcessor
+	BaseProcessorG[K, V, K, VR]
 }
 
-var _ = Processor(&StreamMapValuesProcessorG[int, string, string]{})
+var _ = ProcessorG[int, string, int, string](&StreamMapValuesProcessorG[int, string, string]{})
 
 func NewStreamMapValuesProcessorG[K, V, VR any](name string, mapper ValueMapperWithKeyG[K, V, VR]) *StreamMapValuesProcessorG[K, V, VR] {
 	p := &StreamMapValuesProcessorG[K, V, VR]{
 		valueMapperWithKey: mapper,
 		name:               name,
 	}
-	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	p.BaseProcessorG.ProcessingFuncG = p.ProcessAndReturn
 	return p
 }
 
@@ -158,12 +157,12 @@ func (p *StreamMapValuesProcessorG[K, V, VR]) Name() string {
 	return p.name
 }
 
-func (p *StreamMapValuesProcessorG[K, V, VR]) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	newV, err := p.valueMapperWithKey.MapValue(msg.Key.(K), msg.Value.(V))
+func (p *StreamMapValuesProcessorG[K, V, VR]) ProcessAndReturn(ctx context.Context, msg commtypes.MessageG[K, V]) ([]commtypes.MessageG[K, VR], error) {
+	newV, err := p.valueMapperWithKey.MapValue(msg.Key, msg.Value)
 	if err != nil {
 		return nil, err
 	}
-	return []commtypes.Message{{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp}}, nil
+	return []commtypes.MessageG[K, VR]{{Key: msg.Key, Value: optional.Some(newV), Timestamp: msg.Timestamp}}, nil
 }
 
 type SelectKeyMapper interface {
@@ -178,13 +177,13 @@ func (fn SelectKeyFunc) SelectKey(key, value interface{}) (interface{}, error) {
 }
 
 type SelectKeyMapperG[K, V, KR any] interface {
-	SelectKey(key optional.Option[K], value V) (KR, error)
+	SelectKey(key optional.Option[K], value optional.Option[V]) (KR, error)
 }
-type SelectKeyFuncG[K, V, KR any] func(key optional.Option[K], value V) (KR, error)
+type SelectKeyFuncG[K, V, KR any] func(key optional.Option[K], value optional.Option[V]) (KR, error)
 
 var _ = SelectKeyMapperG[int, int, string](SelectKeyFuncG[int, int, string](nil))
 
-func (fn SelectKeyFuncG[K, V, KR]) SelectKey(key optional.Option[K], value V) (KR, error) {
+func (fn SelectKeyFuncG[K, V, KR]) SelectKey(key optional.Option[K], value optional.Option[V]) (KR, error) {
 	return fn(key, value)
 }
 
@@ -218,15 +217,15 @@ func (p *StreamSelectKeyProcessor) ProcessAndReturn(ctx context.Context, msg com
 type StreamSelectKeyProcessorG[K, V, KR any] struct {
 	selectKey SelectKeyMapperG[K, V, KR]
 	name      string
-	BaseProcessor
+	BaseProcessorG[K, V, KR, V]
 }
 
-func NewStreamSelectKeyProcessorG[K, V, KR any](name string, keySelector SelectKeyMapperG[K, V, KR]) Processor {
+func NewStreamSelectKeyProcessorG[K, V, KR any](name string, keySelector SelectKeyMapperG[K, V, KR]) ProcessorG[K, V, KR, V] {
 	p := &StreamSelectKeyProcessorG[K, V, KR]{
 		name:      name,
 		selectKey: keySelector,
 	}
-	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	p.BaseProcessorG.ProcessingFuncG = p.ProcessAndReturn
 	return p
 }
 
@@ -234,14 +233,10 @@ func (p *StreamSelectKeyProcessorG[K, V, KR]) Name() string {
 	return p.name
 }
 
-func (p *StreamSelectKeyProcessorG[K, V, KR]) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	k := optional.None[K]()
-	if !utils.IsNil(msg.Key) {
-		k = optional.Some(msg.Key.(K))
-	}
-	newKey, err := p.selectKey.SelectKey(k, msg.Value.(V))
+func (p *StreamSelectKeyProcessorG[K, V, KR]) ProcessAndReturn(ctx context.Context, msg commtypes.MessageG[K, V]) ([]commtypes.MessageG[KR, V], error) {
+	newKey, err := p.selectKey.SelectKey(msg.Key, msg.Value)
 	if err != nil {
 		return nil, err
 	}
-	return []commtypes.Message{{Key: newKey, Value: msg.Value, Timestamp: msg.Timestamp}}, nil
+	return []commtypes.MessageG[KR, V]{{Key: optional.Some(newKey), Value: msg.Value, Timestamp: msg.Timestamp}}, nil
 }

@@ -65,6 +65,7 @@ type OnlyUpdateInMemWinStoreG[K, V any] interface {
 
 type WindowStoreOpWithChangelog interface {
 	StoreBackedByChangelog
+	RestoreWindowStateStore
 	UpdateTrackParFunc
 	OnlyUpdateInMemWinStore
 	ProduceRangeRecording

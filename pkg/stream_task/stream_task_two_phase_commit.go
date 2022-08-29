@@ -11,7 +11,6 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/transaction"
-	"sharedlog-stream/pkg/txn_data"
 	"sync"
 	"time"
 )
@@ -170,7 +169,7 @@ func processWithTransaction(
 		}
 		debug.Assert(hasLiveTransaction, "after start new transaction. there should be a live transaction\n")
 
-		app_ret, ctrlMsg := t.appProcessFunc(ctx, t, args.ectx)
+		app_ret, ctrlMsgOp := t.appProcessFunc(ctx, t, args.ectx)
 		if app_ret != nil {
 			if app_ret.Success {
 				// consume timeout but not sure whether there's more data is coming; continue to process
@@ -184,14 +183,14 @@ func processWithTransaction(
 			}
 			return ret
 		}
-		if ctrlMsg != nil {
+		ctrlMsg, ok := ctrlMsgOp.Take()
+		if ok {
 			err_out := commitTransaction(ctx, t, tm, cmm, args, &hasLiveTransaction,
 				&trackConsumePar, &paused)
 			if err_out != nil {
 				return err_out
 			}
-			key := ctrlMsg.Msg.Key
-			if key == txn_data.SCALE_FENCE_KEY {
+			if ctrlMsg.Mark == commtypes.SCALE_FENCE {
 				ret := HandleScaleEpochAndBytes(dctx, ctrlMsg, args.ectx)
 				if err := tm.Close(); err != nil {
 					debug.Fprintf(os.Stderr, "[ERROR] close transaction manager: %v\n", err)
@@ -202,14 +201,13 @@ func processWithTransaction(
 						args.waitEndMark, t.GetEndDuration(), args.ectx.SubstreamNum())
 				}
 				return ret
-			} else if key == commtypes.END_OF_STREAM_KEY {
-				startTime := ctrlMsg.Msg.Value.(int64)
+			} else if ctrlMsg.Mark == commtypes.STREAM_END {
 				epochMarkerSerde, err := commtypes.GetEpochMarkerSerdeG(args.serdeFormat)
 				if err != nil {
 					return common.GenErrFnOutput(err)
 				}
 				epochMarker := commtypes.EpochMarker{
-					StartTime: startTime,
+					StartTime: ctrlMsg.StartTime,
 					Mark:      commtypes.STREAM_END,
 					ProdIndex: args.ectx.SubstreamNum(),
 				}
@@ -217,27 +215,29 @@ func processWithTransaction(
 				if err != nil {
 					return common.GenErrFnOutput(err)
 				}
-				msgToPush := commtypes.Message{Key: ctrlMsg.Msg.Key, Value: encoded}
+				ctrlMsg.Payload = encoded
 				for _, sink := range args.ectx.Producers() {
 					if sink.Stream().NumPartition() > args.ectx.SubstreamNum() {
 						if args.fixedOutParNum > 0 {
 							// debug.Fprintf(os.Stderr, "produce stream end mark to %s %d\n",
 							// 	sink.Stream().TopicName(), ectx.SubstreamNum())
-							err := sink.Produce(ctx, msgToPush, args.ectx.SubstreamNum(), true)
+							_, err := sink.ProduceCtrlMsg(ctx, ctrlMsg, []uint8{args.ectx.SubstreamNum()})
 							if err != nil {
 								return &common.FnOutput{Success: false, Message: err.Error()}
 							}
 						} else {
+							parNums := make([]uint8, 0, sink.Stream().NumPartition())
 							for par := uint8(0); par < sink.Stream().NumPartition(); par++ {
-								err := sink.Produce(ctx, msgToPush, par, true)
-								if err != nil {
-									return &common.FnOutput{Success: false, Message: err.Error()}
-								}
+								parNums = append(parNums, par)
+							}
+							_, err := sink.ProduceCtrlMsg(ctx, ctrlMsg, parNums)
+							if err != nil {
+								return &common.FnOutput{Success: false, Message: err.Error()}
 							}
 						}
 					}
 				}
-				t.SetEndDuration(startTime)
+				t.SetEndDuration(ctrlMsg.StartTime)
 				if err := tm.Close(); err != nil {
 					debug.Fprintf(os.Stderr, "[ERROR] close transaction manager: %v\n", err)
 					return &common.FnOutput{Success: false, Message: fmt.Sprintf("close transaction manager: %v\n", err)}

@@ -1,5 +1,7 @@
 package processor
 
+import "sharedlog-stream/pkg/optional"
+
 var _ = (Predicate)(PredicateFunc(nil))
 
 type PredicateFunc func(key interface{}, value interface{}) (bool, error)
@@ -13,11 +15,11 @@ func (fn PredicateFunc) Assert(key interface{}, value interface{}) (bool, error)
 }
 
 type PredicateG[K, V any] interface {
-	Assert(key K, value V) (bool, error)
+	Assert(key optional.Option[K], value optional.Option[V]) (bool, error)
 }
 
-type PredicateFuncG[K, V any] func(key K, value V) (bool, error)
+type PredicateFuncG[K, V any] func(key optional.Option[K], value optional.Option[V]) (bool, error)
 
-func (fn PredicateFuncG[K, V]) Assert(key K, value V) (bool, error) {
+func (fn PredicateFuncG[K, V]) Assert(key optional.Option[K], value optional.Option[V]) (bool, error) {
 	return fn(key, value)
 }

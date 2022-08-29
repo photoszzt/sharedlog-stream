@@ -26,8 +26,6 @@ func NewInMemorySkipmapKeyValueStoreG[K, V any](name string, lessFunc LessFunc[K
 	}
 }
 
-var _ = CoreKeyValueStoreG[int, int](&InMemorySkipmapKeyValueStoreG[int, int]{})
-
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) Name() string {
 	return st.name
 }
@@ -126,6 +124,5 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) Flush(ctx context.Context) error 
 	return nil
 }
 
-func (st *InMemorySkipmapKeyValueStoreG[K, V]) ConsumeChangelog(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
-	return nil, nil
+func (st *InMemorySkipmapKeyValueStoreG[K, V]) SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[V]]) error) {
 }

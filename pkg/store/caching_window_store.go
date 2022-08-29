@@ -100,8 +100,8 @@ func (c *CachingWindowStoreG[K, V]) TableType() TABLE_TYPE { return IN_MEM }
 func (c *CachingWindowStoreG[K, V]) SetTrackParFunc(f exactly_once_intr.TrackProdSubStreamFunc) {
 	c.wrappedStore.SetTrackParFunc(f)
 }
-func (s *CachingWindowStoreG[K, V]) ConsumeChangelog(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
-	return s.wrappedStore.ConsumeChangelog(ctx, parNum)
+func (s *CachingWindowStoreG[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8) (int, error) {
+	return s.wrappedStore.ConsumeOneLogEntry(ctx, parNum)
 }
 func (s *CachingWindowStoreG[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	guarantee exactly_once_intr.GuaranteeMth,

@@ -5,7 +5,7 @@ import (
 )
 
 type MaterializeParam[K, V any] struct {
-	msgSerde       commtypes.MessageSerdeG[K, V]
+	msgSerde       commtypes.MessageGSerdeG[K, V]
 	storeName      string
 	changelogParam commtypes.CreateChangelogManagerParam
 	parNum         uint8
@@ -24,10 +24,6 @@ func (m *MaterializeParam[K, V]) SerdeFormat() commtypes.SerdeFormat {
 	return m.serdeFormat
 }
 
-func (m *MaterializeParam[K, V]) MessageSerde() commtypes.MessageSerdeG[K, V] {
-	return m.msgSerde
-}
-
 type MaterializeParamBuilder[K, V any] struct {
 	mp *MaterializeParam[K, V]
 }
@@ -40,7 +36,7 @@ func NewMaterializeParamBuilder[K, V any]() SetMessageSerde[K, V] {
 }
 
 type SetMessageSerde[K, V any] interface {
-	MessageSerde(kvmsgserdes commtypes.MessageSerdeG[K, V]) SetStoreName[K, V]
+	MessageSerde(kvmsgserdes commtypes.MessageGSerdeG[K, V]) SetStoreName[K, V]
 }
 
 type SetStoreName[K, V any] interface {
@@ -63,7 +59,7 @@ type BuildMaterializeParam[K, V any] interface {
 	Build() (*MaterializeParam[K, V], error)
 }
 
-func (mb *MaterializeParamBuilder[K, V]) MessageSerde(msgSerde commtypes.MessageSerdeG[K, V]) SetStoreName[K, V] {
+func (mb *MaterializeParamBuilder[K, V]) MessageSerde(msgSerde commtypes.MessageGSerdeG[K, V]) SetStoreName[K, V] {
 	mb.mp.msgSerde = msgSerde
 	return mb
 }

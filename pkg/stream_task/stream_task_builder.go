@@ -1,10 +1,7 @@
 package stream_task
 
 import (
-	"context"
 	"sharedlog-stream/benchmark/common"
-	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/stats"
 )
 
@@ -25,13 +22,10 @@ type BuildStreamTask interface {
 func NewStreamTaskBuilder() BuildStreamTask {
 	return &StreamTaskBuilder{
 		task: &StreamTask{
-			pauseFunc:     nil,
-			resumeFunc:    nil,
-			initFunc:      nil,
-			HandleErrFunc: nil,
-			appProcessFunc: func(ctx context.Context, task *StreamTask, argsTmp processor.ExecutionContext) (*common.FnOutput, *commtypes.MsgAndSeq) {
-				return CommonProcess(ctx, task, argsTmp.(*processor.BaseExecutionContext), processor.ProcessMsg)
-			},
+			pauseFunc:        nil,
+			resumeFunc:       nil,
+			initFunc:         nil,
+			HandleErrFunc:    nil,
 			flushForALO:      stats.NewStatsCollector[int64]("flushForALO", stats.DEFAULT_COLLECT_DURATION),
 			commitTrTime:     stats.NewStatsCollector[int64]("commitTrTime", stats.DEFAULT_COLLECT_DURATION),
 			beginTrTime:      stats.NewStatsCollector[int64]("beginTrTime", stats.DEFAULT_COLLECT_DURATION),

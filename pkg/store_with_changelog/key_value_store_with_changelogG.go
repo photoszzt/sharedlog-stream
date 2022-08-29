@@ -14,7 +14,7 @@ import (
 
 type KeyValueStoreWithChangelogG[K, V any] struct {
 	kvstore          store.CoreKeyValueStoreG[K, V]
-	msgSerde         commtypes.MessageSerdeG[K, V]
+	msgSerde         commtypes.MessageGSerdeG[K, V]
 	trackFunc        exactly_once_intr.TrackProdSubStreamFunc
 	changelogManager *ChangelogManager[K, V]
 	changelogProduce *stats.ConcurrentStatsCollector[int64]
@@ -65,36 +65,32 @@ func (st *KeyValueStoreWithChangelogG[K, V]) ConfigureExactlyOnce(rem exactly_on
 }
 
 func (st *KeyValueStoreWithChangelogG[K, V]) Put(ctx context.Context, key K, value optional.Option[V]) error {
-	var msg commtypes.Message
-	v, ok := value.Take()
-	if ok {
-		msg = commtypes.Message{
-			Key:   key,
-			Value: v,
-		}
-	} else {
-		msg = commtypes.Message{
-			Key:   key,
-			Value: nil,
-		}
+	msg := commtypes.MessageG[K, V]{
+		Key:   optional.Some(key),
+		Value: value,
 	}
 	pStart := stats.TimerBegin()
-	err := st.changelogManager.Produce(ctx, msg, st.parNum, false)
-	elapsed := stats.Elapsed(pStart).Microseconds()
-	st.changelogProduce.AddSample(elapsed)
+	msgSerOp, err := commtypes.MsgGToMsgSer(msg, st.msgSerde.GetKeySerdeG(), st.msgSerde.GetValSerdeG())
 	if err != nil {
 		return err
 	}
-	kBytes, err := st.msgSerde.EncodeKey(msg.Key.(K))
-	if err != nil {
+	msgSer, ok := msgSerOp.Take()
+	if ok {
+		err := st.changelogManager.Produce(ctx, msgSer, st.parNum)
+		elapsed := stats.Elapsed(pStart).Microseconds()
+		st.changelogProduce.AddSample(elapsed)
+		if err != nil {
+			return err
+		}
+		err = st.trackFunc(ctx, msgSer.KeyEnc, st.changelogManager.TopicName(), st.parNum)
+		if err != nil {
+			return err
+		}
+		err = st.kvstore.Put(ctx, key, value)
 		return err
+	} else {
+		return nil
 	}
-	err = st.trackFunc(ctx, kBytes, st.changelogManager.TopicName(), st.parNum)
-	if err != nil {
-		return err
-	}
-	err = st.kvstore.Put(ctx, key, value)
-	return err
 }
 
 func (st *KeyValueStoreWithChangelogG[K, V]) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
@@ -132,15 +128,24 @@ func (st *KeyValueStoreWithChangelogG[K, V]) PutAll(ctx context.Context, entries
 }
 
 func (st *KeyValueStoreWithChangelogG[K, V]) Delete(ctx context.Context, key K) error {
-	msg := commtypes.Message{
-		Key:   key,
-		Value: nil,
+	msg := commtypes.MessageG[K, V]{
+		Key:   optional.Some(key),
+		Value: optional.None[V](),
 	}
-	err := st.changelogManager.Produce(ctx, msg, st.parNum, false)
+	msgSerOp, err := commtypes.MsgGToMsgSer(msg, st.msgSerde.GetKeySerdeG(), st.msgSerde.GetValSerdeG())
 	if err != nil {
 		return err
 	}
-	return st.kvstore.Delete(ctx, key)
+	msgSer, ok := msgSerOp.Take()
+	if ok {
+		err := st.changelogManager.Produce(ctx, msgSer, st.parNum)
+		if err != nil {
+			return err
+		}
+		return st.kvstore.Delete(ctx, key)
+	} else {
+		return nil
+	}
 }
 
 func (st *KeyValueStoreWithChangelogG[K, V]) ApproximateNumEntries() (uint64, error) {
@@ -158,8 +163,39 @@ func (st *KeyValueStoreWithChangelogG[K, V]) TableType() store.TABLE_TYPE {
 func (st *KeyValueStoreWithChangelogG[K, V]) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 	st.trackFunc = trackParFunc
 }
-func (st *KeyValueStoreWithChangelogG[K, V]) ConsumeChangelog(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
-	return st.changelogManager.Consume(ctx, parNum)
+func (st *KeyValueStoreWithChangelogG[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8, cutoff uint64) (int, error) {
+	msgSeq, err := st.changelogManager.Consume(ctx, parNum)
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	if msgSeq.MsgArr != nil {
+		for _, msg := range msgSeq.MsgArr {
+			if msg.Key.IsNone() && msg.Value.IsNone() {
+				continue
+			}
+			count += 1
+			k := msg.Key.Unwrap()
+			v := msg.Value.Unwrap()
+			err = st.PutWithoutPushToChangelog(ctx, k, v)
+			if err != nil {
+				return 0, err
+			}
+		}
+	} else {
+		msg := msgSeq.Msg
+		if msg.Key.IsNone() && msg.Value.IsNone() {
+			return 0, nil
+		}
+		count += 1
+		k := msg.Key.Unwrap()
+		v := msg.Value.Unwrap()
+		err = st.PutWithoutPushToChangelog(ctx, k, v)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return count, nil
 }
 func (st *KeyValueStoreWithChangelogG[K, V]) ChangelogTopicName() string {
 	return st.changelogManager.TopicName()
@@ -184,6 +220,9 @@ func (st *KeyValueStoreWithChangelogG[K, V]) ResetInitialProd() {
 func (st *KeyValueStoreWithChangelogG[K, V]) SubstreamNum() uint8 {
 	return st.parNum
 }
+func (st *KeyValueStoreWithChangelogG[K, V]) SetFlushCallback(
+	func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[V]]) error) {
+}
 
 func CreateInMemBTreeKVTableWithChangelogG[K, V any](mp *MaterializeParam[K, V], less store.LessFunc[K],
 ) (*KeyValueStoreWithChangelogG[K, V], error) {
@@ -199,12 +238,15 @@ func CreateInMemorySkipmapKVTableWithChangelogG[K, V any](mp *MaterializeParam[K
 
 func ToInMemSkipmapKVTableWithChangelog[K, V any](mp *MaterializeParam[K, commtypes.ValueTimestampG[V]],
 	less store.LessFunc[K],
-) (*processor.MeteredProcessor, *KeyValueStoreWithChangelogG[K, commtypes.ValueTimestampG[V]], error) {
+) (*processor.MeteredProcessorG[K, V, K, commtypes.ChangeG[V]],
+	*KeyValueStoreWithChangelogG[K, commtypes.ValueTimestampG[V]], error,
+) {
 	s := store.NewInMemorySkipmapKeyValueStoreG[K, commtypes.ValueTimestampG[V]](mp.storeName, less)
 	storeWithlog, err := NewKeyValueStoreWithChangelogG[K, commtypes.ValueTimestampG[V]](mp, s)
 	if err != nil {
 		return nil, nil, err
 	}
-	toTableProc := processor.NewMeteredProcessor(processor.NewTableSourceProcessorWithTableG[K, V](storeWithlog))
+	toTableProc := processor.NewMeteredProcessorG[K, V, K, commtypes.ChangeG[V]](
+		processor.NewTableSourceProcessorWithTableG[K, V](storeWithlog))
 	return toTableProc, storeWithlog, nil
 }

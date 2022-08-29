@@ -83,7 +83,7 @@ func TestSkipMapJoinOnlyIfMatchFound(t *testing.T) {
 			t.Errorf("fail to put val to store: %v", err)
 		}
 	}
-	JoinOnlyIfMatchFound(t, ctx, joinProc)
+	JoinOnlyIfMatchFoundG(t, ctx, joinProc)
 }
 
 func JoinOnlyIfMatchFound(t *testing.T, ctx context.Context, joinProc Processor) {
@@ -96,6 +96,27 @@ func JoinOnlyIfMatchFound(t *testing.T, ctx context.Context, joinProc Processor)
 			expected_join_val := fmt.Sprintf("%d+%d", i, i)
 			if msgs[0].Key != i && msgs[0].Value != expected_join_val {
 				t.Errorf("expected join val: %s, got %s", expected_join_val, msgs[0].Value)
+			}
+		}
+		if i == 3 || i == 4 {
+			// debug.Fprintf(os.Stderr, "msgs: %v", msgs)
+			if len(msgs) != 0 {
+				t.Error("should return no value")
+			}
+		}
+	}
+}
+
+func JoinOnlyIfMatchFoundG(t *testing.T, ctx context.Context, joinProc ProcessorG[int, int, int, string]) {
+	for i := 0; i < 4; i++ {
+		msgs, err := joinProc.ProcessAndReturn(ctx, commtypes.MessageG[int, int]{Key: optional.Some(i), Value: optional.Some(i), Timestamp: int64(i)})
+		if err != nil {
+			t.Errorf("fail to join: %v", err)
+		}
+		if i == 0 || i == 1 {
+			expected_join_val := fmt.Sprintf("%d+%d", i, i)
+			if msgs[0].Key.Unwrap() != i && msgs[0].Value.Unwrap() != expected_join_val {
+				t.Errorf("expected join val: %s, got %s", expected_join_val, msgs[0].Value.Unwrap())
 			}
 		}
 		if i == 3 || i == 4 {
@@ -130,9 +151,9 @@ func TestSkipMapShouldClearTableEntryOnNullValueUpdate(t *testing.T) {
 			t.Errorf("fail to put val to store: %v", err)
 		}
 	}
-	ShouldClearTableEntryOnNullValueUpdatePart1(t, ctx, joinProc)
+	ShouldClearTableEntryOnNullValueUpdatePart1G(t, ctx, joinProc)
 	putSecondG(t, ctx, joinProc)
-	ShouldClearTableEntryOnNullValueUpdatePart2(t, ctx, joinProc)
+	ShouldClearTableEntryOnNullValueUpdatePart2G(t, ctx, joinProc)
 }
 
 func putSecond(t *testing.T, ctx context.Context, joinProc *StreamTableJoinProcessor) {
@@ -174,6 +195,27 @@ func ShouldClearTableEntryOnNullValueUpdatePart1(t *testing.T, ctx context.Conte
 	}
 }
 
+func ShouldClearTableEntryOnNullValueUpdatePart1G(t *testing.T, ctx context.Context, joinProc ProcessorG[int, string, int, string]) {
+	got_msgs := make([]commtypes.MessageG[int, string], 0)
+	for i := 0; i < 4; i++ {
+		msgs, err := joinProc.ProcessAndReturn(ctx,
+			commtypes.MessageG[int, string]{Key: optional.Some(i), Value: optional.Some(fmt.Sprintf("X%d", i)), Timestamp: int64(i)})
+		if err != nil {
+			t.Errorf("fail to join: %v", err)
+		}
+		got_msgs = append(got_msgs, msgs...)
+	}
+	expected_msgs := []commtypes.MessageG[int, string]{
+		{Key: optional.Some(0), Value: optional.Some("X0+Y0"), Timestamp: 0},
+		{Key: optional.Some(1), Value: optional.Some("X1+Y1"), Timestamp: 1},
+		{Key: optional.Some(2), Value: optional.Some("X2+Y2"), Timestamp: 2},
+		{Key: optional.Some(3), Value: optional.Some("X3+Y3"), Timestamp: 3},
+	}
+	if !reflect.DeepEqual(expected_msgs, got_msgs) {
+		t.Fatal("should equal")
+	}
+}
+
 func ShouldClearTableEntryOnNullValueUpdatePart2(t *testing.T, ctx context.Context, joinProc Processor) {
 	got_msgs := make([]commtypes.Message, 0)
 	for i := 0; i < 4; i++ {
@@ -185,8 +227,27 @@ func ShouldClearTableEntryOnNullValueUpdatePart2(t *testing.T, ctx context.Conte
 		got_msgs = append(got_msgs, msgs...)
 	}
 	expected_msgs := []commtypes.Message{
-		{Key: 2, Value: "XX2+Y2", Timestamp: 2},
-		{Key: 3, Value: "XX3+Y3", Timestamp: 3},
+		{Key: optional.Some(2), Value: optional.Some("XX2+Y2"), Timestamp: 2},
+		{Key: optional.Some(3), Value: optional.Some("XX3+Y3"), Timestamp: 3},
+	}
+	if !reflect.DeepEqual(expected_msgs, got_msgs) {
+		t.Fatal("should equal")
+	}
+}
+
+func ShouldClearTableEntryOnNullValueUpdatePart2G(t *testing.T, ctx context.Context, joinProc ProcessorG[int, string, int, string]) {
+	got_msgs := make([]commtypes.MessageG[int, string], 0)
+	for i := 0; i < 4; i++ {
+		msgs, err := joinProc.ProcessAndReturn(ctx,
+			commtypes.MessageG[int, string]{Key: optional.Some(i), Value: optional.Some(fmt.Sprintf("XX%d", i)), Timestamp: int64(i)})
+		if err != nil {
+			t.Errorf("fail to join: %v", err)
+		}
+		got_msgs = append(got_msgs, msgs...)
+	}
+	expected_msgs := []commtypes.Message{
+		{Key: optional.Some(2), Value: optional.Some("XX2+Y2"), Timestamp: 2},
+		{Key: optional.Some(3), Value: optional.Some("XX3+Y3"), Timestamp: 3},
 	}
 	if !reflect.DeepEqual(expected_msgs, got_msgs) {
 		t.Fatal("should equal")

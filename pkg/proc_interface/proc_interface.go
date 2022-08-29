@@ -9,16 +9,16 @@ import (
 
 type ProducersConsumers interface {
 	Producers() []producer_consumer.MeteredProducerIntr
-	Consumers() []producer_consumer.MeteredConsumerIntr
+	Consumers() []*producer_consumer.MeteredConsumer
 	StartWarmup()
 }
 
 type BaseConsumersProducers struct {
-	consumers []producer_consumer.MeteredConsumerIntr
+	consumers []*producer_consumer.MeteredConsumer
 	producers []producer_consumer.MeteredProducerIntr
 }
 
-func NewBaseSrcsSinks(srcs []producer_consumer.MeteredConsumerIntr,
+func NewBaseSrcsSinks(srcs []*producer_consumer.MeteredConsumer,
 	sinks []producer_consumer.MeteredProducerIntr,
 ) BaseConsumersProducers {
 	return BaseConsumersProducers{
@@ -27,7 +27,7 @@ func NewBaseSrcsSinks(srcs []producer_consumer.MeteredConsumerIntr,
 	}
 }
 
-func (pa *BaseConsumersProducers) Consumers() []producer_consumer.MeteredConsumerIntr {
+func (pa *BaseConsumersProducers) Consumers() []*producer_consumer.MeteredConsumer {
 	return pa.consumers
 }
 
@@ -158,6 +158,6 @@ func (pa *BaseProcArgs) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProd
 	pa.trackParFunc = trackParFunc
 }
 
-type ProcessMsgFunc func(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error
+type ProcessMsgFunc[K, V any] func(ctx context.Context, msg commtypes.MessageG[K, V], argsTmp interface{}) error
 
-type ProcessAndReturnFunc func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error)
+type ProcessAndReturnFunc[KI, VI, KO, VO any] func(ctx context.Context, msg commtypes.MessageG[KI, VI]) ([]commtypes.MessageG[KO, VO], error)

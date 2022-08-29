@@ -7,100 +7,74 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
-	"sync"
 	"time"
 
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/execution"
-	"sharedlog-stream/pkg/proc_interface"
-	"sharedlog-stream/pkg/processor"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/producer_consumer"
-	"sharedlog-stream/pkg/stats"
-	"sharedlog-stream/pkg/stream_task"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
 
-func only_bid(key string, value *ntypes.Event) (bool, error) {
-	return value.Etype == ntypes.BID, nil
+func only_bid(key optional.Option[string], value optional.Option[*ntypes.Event]) (bool, error) {
+	v := value.Unwrap()
+	return v.Etype == ntypes.BID, nil
 }
 
 func getSrcSink(ctx context.Context, env types.Environment, sp *common.QueryInput,
-) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
+) ([]*producer_consumer.MeteredConsumer, []producer_consumer.MeteredProducerIntr, error) {
 	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, env, sp)
 	if err != nil {
 		return nil, nil, err
 	}
 	debug.Assert(len(output_streams) == 1, "expected only one output stream")
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
-	if err != nil {
-		return nil, nil, err
-	}
-	msgSerde, err := commtypes.GetMsgSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
-	if err != nil {
-		return nil, nil, fmt.Errorf("get msg serde failed: %v", err)
-	}
-	inConfig := &producer_consumer.StreamConsumerConfigG[string, *ntypes.Event]{
+	inConfig := &producer_consumer.StreamConsumerConfig{
 		Timeout:     common.SrcConsumeTimeout,
-		MsgSerde:    msgSerde,
 		SerdeFormat: serdeFormat,
 	}
-	outConfig := &producer_consumer.StreamSinkConfig[string, *ntypes.Event]{
-		MsgSerde:      msgSerde,
+	outConfig := &producer_consumer.StreamSinkConfig{
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+		Format:        serdeFormat,
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig, sp.NumSubstreamProducer[0], sp.ParNum)
+	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, inConfig, sp.NumSubstreamProducer[0], sp.ParNum)
 	if err != nil {
 		return nil, nil, err
 	}
 	src := producer_consumer.NewMeteredConsumer(consumer, warmup)
 	sink := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], outConfig), warmup)
-	return []producer_consumer.MeteredConsumerIntr{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
+	return []*producer_consumer.MeteredConsumer{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
 func getSrcSinkUint64Key(
 	ctx context.Context,
 	env types.Environment,
 	sp *common.QueryInput,
-) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
+) ([]*producer_consumer.MeteredConsumer, []producer_consumer.MeteredProducerIntr, error) {
 	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, env, sp)
 	if err != nil {
 		return nil, nil, err
 	}
 	debug.Assert(len(output_streams) == 1, "expected only one output stream")
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
-	if err != nil {
-		return nil, nil, err
-	}
-	inMsgSerde, err := commtypes.GetMsgSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
-	if err != nil {
-		return nil, nil, err
-	}
-	outMsgSerde, err := commtypes.GetMsgSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
-	if err != nil {
-		return nil, nil, err
-	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	inConfig := &producer_consumer.StreamConsumerConfigG[string, *ntypes.Event]{
+	inConfig := &producer_consumer.StreamConsumerConfig{
 		Timeout:     common.SrcConsumeTimeout,
-		MsgSerde:    inMsgSerde,
 		SerdeFormat: serdeFormat,
 	}
-	outConfig := &producer_consumer.StreamSinkConfig[uint64, *ntypes.Event]{
-		MsgSerde:      outMsgSerde,
+	outConfig := &producer_consumer.StreamSinkConfig{
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+		Format:        serdeFormat,
 	}
-	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig, sp.NumSubstreamProducer[0], sp.ParNum)
+	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, inConfig, sp.NumSubstreamProducer[0], sp.ParNum)
 	if err != nil {
 		return nil, nil, err
 	}
 	src := producer_consumer.NewMeteredConsumer(consumer, warmup)
 	sink := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], outConfig), warmup)
-	return []producer_consumer.MeteredConsumerIntr{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
+	return []*producer_consumer.MeteredConsumer{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
 func GetSerdeFromString(serdeStr string, serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
@@ -146,6 +120,7 @@ func GetSerdeFromString(serdeStr string, serdeFormat commtypes.SerdeFormat) (com
 	}
 }
 
+/*
 func PrepareProcessByTwoGeneralProc(
 	ctx context.Context,
 	func1 execution.GeneralProcFunc,
@@ -206,6 +181,7 @@ func PrepareProcessByTwoGeneralProc(
 		}).HandleErrFunc(handleErrFunc).Build()
 	return task
 }
+*/
 
 type EnvConfig struct {
 	useCache bool

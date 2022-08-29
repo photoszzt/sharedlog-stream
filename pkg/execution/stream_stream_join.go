@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/store"
@@ -10,6 +11,7 @@ import (
 	"sharedlog-stream/pkg/utils"
 )
 
+/*
 func SetupStreamStreamJoin[K, VLeft, VRight any](
 	mpLeft *store_with_changelog.MaterializeParam[K, VLeft],
 	mpRight *store_with_changelog.MaterializeParam[K, VRight],
@@ -86,6 +88,7 @@ func SetupStreamStreamJoin[K, VLeft, VRight any](
 		rightTab.ChangelogTopicName(): rightTab}
 	return leftJoinRightFunc, rightJoinLeftFunc, wsc, nil
 }
+*/
 
 func CreateSkipMapWinTablePair[K, VLeft, VRight any](
 	mpLeft *store_with_changelog.MaterializeParam[K, VLeft],
@@ -93,9 +96,9 @@ func CreateSkipMapWinTablePair[K, VLeft, VRight any](
 	compare store.CompareFuncG[K],
 	jw *processor.JoinWindows,
 ) (
-	toLeftTab *processor.MeteredProcessor,
+	toLeftTab *processor.MeteredProcessorG[K, VLeft, K, VLeft],
 	leftTab *store_with_changelog.InMemoryWindowStoreWithChangelogG[K, VLeft],
-	toRightTab *processor.MeteredProcessor,
+	toRightTab *processor.MeteredProcessorG[K, VRight, K, VRight],
 	rightTab *store_with_changelog.InMemoryWindowStoreWithChangelogG[K, VRight],
 	err error,
 ) {
@@ -113,29 +116,29 @@ func CreateSkipMapWinTablePair[K, VLeft, VRight any](
 }
 
 func SetupStreamStreamJoinG[K, VLeft, VRight, VR any](
-	toLeftTab *processor.MeteredProcessor,
+	toLeftTab *processor.MeteredProcessorG[K, VLeft, K, VLeft],
 	leftTab store.WindowStoreBackedByChangelogG[K, VLeft],
-	toRightTab *processor.MeteredProcessor,
+	toRightTab *processor.MeteredProcessorG[K, VRight, K, VRight],
 	rightTab store.WindowStoreBackedByChangelogG[K, VRight],
 	joiner processor.ValueJoinerWithKeyTsFuncG[K, VLeft, VRight, VR],
 	jw *processor.JoinWindows,
-) (leftJoinRightFunc proc_interface.ProcessAndReturnFunc,
-	rightJoinLeftFunc proc_interface.ProcessAndReturnFunc,
+) (leftJoinRightFunc proc_interface.ProcessAndReturnFunc[K, VLeft, K, VR],
+	rightJoinLeftFunc proc_interface.ProcessAndReturnFunc[K, VRight, K, VR],
 	wsc map[string]store.WindowStoreOpWithChangelog,
 	err error,
 ) {
 	sharedTimeTracker := processor.NewTimeTracker()
-	leftJoinRight := processor.NewMeteredProcessor(
+	leftJoinRight := processor.NewMeteredProcessorG[K, VLeft, K, VR](
 		processor.NewStreamStreamJoinProcessorG[K, VLeft, VRight, VR]("leftJoinRight", rightTab, jw,
 			joiner, false, true, sharedTimeTracker))
-	rightJoinLeft := processor.NewMeteredProcessor(
+	rightJoinLeft := processor.NewMeteredProcessorG[K, VRight, K, VR](
 		processor.NewStreamStreamJoinProcessorG[K, VRight, VLeft, VR]("rightJoinLeft", leftTab, jw,
 			processor.ReverseValueJoinerWithKeyTsG(joiner), false, false, sharedTimeTracker))
-	nullKeyFilter := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterNullKey",
-		processor.PredicateFunc(func(key interface{}, value interface{}) (bool, error) {
+	nullKeyFilter := processor.NewMeteredProcessorG(processor.NewStreamFilterProcessorG[K, VR]("filterNullKey",
+		processor.PredicateFuncG[K, VR](func(key optional.Option[K], value optional.Option[VR]) (bool, error) {
 			return !utils.IsNil(key), nil
 		})))
-	leftJoinRightFunc = func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
+	leftJoinRightFunc = func(ctx context.Context, msg commtypes.MessageG[K, VLeft]) ([]commtypes.MessageG[K, VR], error) {
 		// debug.Fprintf(os.Stderr, "before toLeft\n")
 		rets, err := toLeftTab.ProcessAndReturn(ctx, msg)
 		if err != nil {
@@ -144,7 +147,7 @@ func SetupStreamStreamJoinG[K, VLeft, VRight, VR any](
 		// debug.Fprintf(os.Stderr, "after toLeft\n")
 		msgs, err := leftJoinRight.ProcessAndReturn(ctx, rets[0])
 		// debug.Fprintf(os.Stderr, "after leftJoinRight\n")
-		out := make([]commtypes.Message, 0, len(msgs))
+		out := make([]commtypes.MessageG[K, VR], 0, len(msgs))
 		for _, msg := range msgs {
 			ret, err := nullKeyFilter.ProcessAndReturn(ctx, msg)
 			if err != nil {
@@ -154,7 +157,7 @@ func SetupStreamStreamJoinG[K, VLeft, VRight, VR any](
 		}
 		return out, err
 	}
-	rightJoinLeftFunc = func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
+	rightJoinLeftFunc = func(ctx context.Context, msg commtypes.MessageG[K, VRight]) ([]commtypes.MessageG[K, VR], error) {
 		// debug.Fprintf(os.Stderr, "before toRight\n")
 		rets, err := toRightTab.ProcessAndReturn(ctx, msg)
 		if err != nil {
@@ -163,7 +166,7 @@ func SetupStreamStreamJoinG[K, VLeft, VRight, VR any](
 		// debug.Fprintf(os.Stderr, "after toRight\n")
 		msgs, err := rightJoinLeft.ProcessAndReturn(ctx, rets[0])
 		// debug.Fprintf(os.Stderr, "after rightJoinLeft\n")
-		out := make([]commtypes.Message, 0, len(msgs))
+		out := make([]commtypes.MessageG[K, VR], 0, len(msgs))
 		for _, msg := range msgs {
 			ret, err := nullKeyFilter.ProcessAndReturn(ctx, msg)
 			if err != nil {
@@ -185,8 +188,8 @@ func SetupSkipMapStreamStreamJoin[K, VLeft, VRight, VR any](
 	compare store.CompareFuncG[K],
 	joiner processor.ValueJoinerWithKeyTsFuncG[K, VLeft, VRight, VR],
 	jw *processor.JoinWindows,
-) (proc_interface.ProcessAndReturnFunc,
-	proc_interface.ProcessAndReturnFunc,
+) (proc_interface.ProcessAndReturnFunc[K, VLeft, K, VR],
+	proc_interface.ProcessAndReturnFunc[K, VRight, K, VR],
 	map[string]store.WindowStoreOpWithChangelog,
 	error,
 ) {

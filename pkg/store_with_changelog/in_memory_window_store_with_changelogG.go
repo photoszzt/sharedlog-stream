@@ -10,10 +10,12 @@ import (
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 type InMemoryWindowStoreWithChangelogG[K, V any] struct {
-	msgSerde         commtypes.MessageSerdeG[commtypes.KeyAndWindowStartTsG[K], V]
+	msgSerde         commtypes.MessageGSerdeG[commtypes.KeyAndWindowStartTsG[K], V]
 	originKeySerde   commtypes.SerdeG[K]
 	windowStore      store.CoreWindowStoreG[K, V]
 	trackFunc        exactly_once_intr.TrackProdSubStreamFunc
@@ -66,43 +68,44 @@ func (st *InMemoryWindowStoreWithChangelogG[K, V]) Put(ctx context.Context,
 		Key:           key,
 		WindowStartTs: windowStartTimestamp,
 	}
-	var msg commtypes.Message
-	v, ok := value.Take()
+	msg := commtypes.MessageG[commtypes.KeyAndWindowStartTsG[K], V]{
+		Key:   optional.Some(keyTs),
+		Value: value,
+	}
+	msgSerOp, err := commtypes.MsgGToMsgSer(msg, st.msgSerde.GetKeySerdeG(), st.msgSerde.GetValSerdeG())
+	if err != nil {
+		return err
+	}
+	msgSer, ok := msgSerOp.Take()
 	if ok {
-		msg = commtypes.Message{
-			Key:   keyTs,
-			Value: v,
+		// pStart := stats.TimerBegin()
+		err := st.changelogManager.Produce(ctx, msgSer, st.parNum)
+		// elapsed := stats.Elapsed(pStart).Microseconds()
+		// st.changeLogProduce.AddSample(elapsed)
+		if err != nil {
+			return err
 		}
-	} else {
-		msg = commtypes.Message{
-			Key:   keyTs,
-			Value: nil,
+		tStart := stats.TimerBegin()
+		kBytes, err := st.originKeySerde.Encode(key)
+		if err != nil {
+			return err
 		}
-	}
-	// pStart := stats.TimerBegin()
-	err := st.changelogManager.Produce(ctx, msg, st.parNum, false)
-	// elapsed := stats.Elapsed(pStart).Microseconds()
-	// st.changeLogProduce.AddSample(elapsed)
-	if err != nil {
-		return err
-	}
-	tStart := stats.TimerBegin()
-	kBytes, err := st.originKeySerde.Encode(key)
-	if err != nil {
-		return err
-	}
-	err = st.trackFunc(ctx, kBytes, st.changelogManager.TopicName(), st.parNum)
-	if err != nil {
-		return err
-	}
-	tElapsed := stats.Elapsed(tStart).Microseconds()
-	st.trackFuncLat.AddSample(tElapsed)
+		err = st.trackFunc(ctx, kBytes, st.changelogManager.TopicName(), st.parNum)
+		if err != nil {
+			return err
+		}
+		tElapsed := stats.Elapsed(tStart).Microseconds()
+		st.trackFuncLat.AddSample(tElapsed)
 
-	// putStart := stats.TimerBegin()
-	err = st.windowStore.Put(ctx, key, value, windowStartTimestamp)
-	// elapsed := stats.Elapsed(putStart).Microseconds()
-	// st.storePutLatency.AddSample(elapsed)
-	return err
+		// putStart := stats.TimerBegin()
+		err = st.windowStore.Put(ctx, key, value, windowStartTimestamp)
+		// elapsed := stats.Elapsed(putStart).Microseconds()
+		// st.storePutLatency.AddSample(elapsed)
+		return err
+	} else {
+		log.Warn().Msgf("get empty key and value")
+		return nil
+	}
 }
 
 func (st *InMemoryWindowStoreWithChangelogG[K, V]) PutWithoutPushToChangelog(ctx context.Context,
@@ -163,8 +166,37 @@ func (s *InMemoryWindowStoreWithChangelogG[K, V]) TableType() store.TABLE_TYPE {
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 	s.trackFunc = trackParFunc
 }
-func (s *InMemoryWindowStoreWithChangelogG[K, V]) ConsumeChangelog(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
-	return s.changelogManager.Consume(ctx, parNum)
+func (s *InMemoryWindowStoreWithChangelogG[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8) (int, error) {
+	msgSeq, err := s.changelogManager.Consume(ctx, parNum)
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	if msgSeq.MsgArr != nil {
+		for _, msg := range msgSeq.MsgArr {
+			if msg.Key.IsNone() && msg.Value.IsNone() {
+				continue
+			}
+			count += 1
+			k := msg.Key.Unwrap()
+			err := s.PutWithoutPushToChangelogG(ctx, k.Key, msg.Value, k.WindowStartTs)
+			if err != nil {
+				return 0, err
+			}
+		}
+	} else {
+		msg := msgSeq.Msg
+		if msg.Key.IsNone() && msg.Value.IsNone() {
+			return 0, nil
+		}
+		count += 1
+		k := msg.Key.Unwrap()
+		err := s.PutWithoutPushToChangelogG(ctx, k.Key, msg.Value, k.WindowStartTs)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return count, nil
 }
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	guarantee exactly_once_intr.GuaranteeMth) error {
@@ -195,14 +227,14 @@ func ToInMemSkipMapWindowTableWithChangelogG[K, V any](
 	retainDuplicates bool,
 	comparable store.CompareFuncG[K],
 	mp *MaterializeParam[K, V],
-) (*processor.MeteredProcessor, *InMemoryWindowStoreWithChangelogG[K, V], error) {
+) (*processor.MeteredProcessorG[K, V, K, V], *InMemoryWindowStoreWithChangelogG[K, V], error) {
 	winTab := store.NewInMemorySkipMapWindowStore[K, V](mp.storeName,
 		joinWindow.MaxSize()+joinWindow.GracePeriodMs(), joinWindow.MaxSize(), retainDuplicates, comparable)
 	tabWithLog, err := NewInMemoryWindowStoreWithChangelogG[K, V](winTab, mp)
 	if err != nil {
 		return nil, nil, err
 	}
-	toTableProc := processor.NewMeteredProcessor(processor.NewStoreToWindowTableProcessorG[K, V](tabWithLog))
+	toTableProc := processor.NewMeteredProcessorG[K, V, K, V](processor.NewStoreToWindowTableProcessorG[K, V](tabWithLog))
 	return toTableProc, tabWithLog, nil
 }
 

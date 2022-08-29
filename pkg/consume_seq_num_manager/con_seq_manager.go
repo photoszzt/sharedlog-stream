@@ -56,7 +56,7 @@ func (cm *ConsumeSeqManager) FindLastConsumedSeqNum(ctx context.Context) (map[st
 	return mark.ConSeqNums, nil
 }
 
-func CollectOffsetMarker(consumers []producer_consumer.MeteredConsumerIntr) map[string]uint64 {
+func CollectOffsetMarker(consumers []*producer_consumer.MeteredConsumer) map[string]uint64 {
 	ret := make(map[string]uint64)
 	for _, consumer := range consumers {
 		topic := consumer.TopicName()

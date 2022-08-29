@@ -108,26 +108,23 @@ type StreamWindowAggregateProcessorG[K, V, VA any] struct {
 	aggregator  AggregatorG[K, V, VA]
 	windows     EnumerableWindowDefinition
 	name        string
-	BaseProcessor
+	BaseProcessorG[K, V, commtypes.WindowedKeyG[K], commtypes.ChangeG[VA]]
 	observedStreamTime int64
 }
-
-var _ = Processor(&StreamWindowAggregateProcessorG[int, int, int]{})
 
 func NewStreamWindowAggregateProcessorG[K, V, VA any](name string,
 	store store.CoreWindowStoreG[K, commtypes.ValueTimestampG[VA]],
 	initializer InitializerG[VA], aggregator AggregatorG[K, V, VA],
 	windows EnumerableWindowDefinition,
-) *StreamWindowAggregateProcessorG[K, V, VA] {
+) ProcessorG[K, V, commtypes.WindowedKeyG[K], commtypes.ChangeG[VA]] {
 	p := &StreamWindowAggregateProcessorG[K, V, VA]{
 		initializer:        initializer,
 		aggregator:         aggregator,
 		observedStreamTime: 0,
 		store:              store,
 		windows:            windows,
-		BaseProcessor:      BaseProcessor{},
 	}
-	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	p.BaseProcessorG.ProcessingFuncG = p.ProcessAndReturn
 	return p
 }
 
@@ -135,8 +132,10 @@ func (p *StreamWindowAggregateProcessorG[K, V, VA]) Name() string {
 	return p.name
 }
 
-func (p *StreamWindowAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	if msg.Key == nil {
+func (p *StreamWindowAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Context, msg commtypes.MessageG[K, V]) (
+	[]commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[VA]], error,
+) {
+	if msg.Key.IsNone() {
 		log.Warn().Msgf("skipping record due to null key. key=%v, val=%v", msg.Key, msg.Value)
 		return nil, nil
 	}
@@ -145,25 +144,26 @@ func (p *StreamWindowAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context
 	if p.observedStreamTime < ts {
 		p.observedStreamTime = ts
 	}
+	msgKey := msg.Key.Unwrap()
+	msgVal := msg.Value.Unwrap()
 	closeTime := p.observedStreamTime - p.windows.GracePeriodMs()
 	matchedWindows, keys, err := p.windows.WindowsFor(ts)
 	if err != nil {
 		return nil, fmt.Errorf("windows for err %v", err)
 	}
-	newMsgs := make([]commtypes.Message, 0)
+	newMsgs := make([]commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[VA]], 0)
 	for _, windowStart := range keys {
 		window := matchedWindows[windowStart]
 		windowEnd := window.End()
 		if windowEnd > closeTime {
-			var oldAgg VA
+			var oldAgg optional.Option[VA]
 			var newTs int64
-			key := msg.Key.(K)
-			oldAggTs, exists, err := p.store.Get(ctx, key, windowStart)
+			oldAggTs, exists, err := p.store.Get(ctx, msgKey, windowStart)
 			if err != nil {
 				return nil, fmt.Errorf("win agg get err %v", err)
 			}
 			if exists {
-				oldAgg = oldAggTs.Value
+				oldAgg = optional.Some(oldAggTs.Value)
 				if msg.Timestamp > oldAggTs.Timestamp {
 					newTs = msg.Timestamp
 				} else {
@@ -173,15 +173,14 @@ func (p *StreamWindowAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context
 				oldAgg = p.initializer.Apply()
 				newTs = msg.Timestamp
 			}
-			newAgg := p.aggregator.Apply(key, msg.Value.(V), oldAgg)
-			newAggOp := optional.Some(newAgg)
-			err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(newAggOp, newTs), windowStart)
+			newAgg := p.aggregator.Apply(msgKey, msgVal, oldAgg)
+			err = p.store.Put(ctx, msgKey, commtypes.CreateValueTimestampGOptional(newAgg, newTs), windowStart)
 			if err != nil {
 				return nil, fmt.Errorf("win agg put err %v", err)
 			}
-			newMsgs = append(newMsgs, commtypes.Message{
-				Key:       &commtypes.WindowedKey{Key: msg.Key, Window: window},
-				Value:     commtypes.Change{NewVal: newAgg, OldVal: oldAgg},
+			newMsgs = append(newMsgs, commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[VA]]{
+				Key:       optional.Some(commtypes.WindowedKeyG[K]{Key: msgKey, Window: window}),
+				Value:     optional.Some(commtypes.ChangeG[VA]{NewVal: newAgg, OldVal: oldAgg}),
 				Timestamp: newTs,
 			})
 		} else {

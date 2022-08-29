@@ -36,6 +36,7 @@ type CoreKeyValueStoreG[K, V any] interface {
 	Flush(ctx context.Context) error
 	UpdateTrackParFunc
 	OnlyUpdateInMemStore
+	CachedStateStore[K, V]
 }
 
 type OnlyUpdateInMemStore interface {
@@ -48,6 +49,7 @@ type OnlyUpdateInMemStoreG[K, V any] interface {
 
 type KeyValueStoreOpWithChangelog interface {
 	StoreBackedByChangelog
+	RestoreKVStore
 	UpdateTrackParFunc
 	ChangelogIsSrc() bool
 	OnlyUpdateInMemStore

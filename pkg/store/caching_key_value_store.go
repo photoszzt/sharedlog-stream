@@ -11,12 +11,13 @@ import (
 type CachingKeyValueStoreG[K comparable, V any] struct {
 	wrappedStore      KeyValueStoreBackedByChangelogG[K, V]
 	cache             *Cache[K, V]
-	flushCallbackFunc func(msg commtypes.MessageG[K, commtypes.Change])
+	flushCallbackFunc func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[V]]) error
 	name              string
 }
 
 var _ CoreKeyValueStoreG[int, int] = (*CachingKeyValueStoreG[int, int])(nil)
 var _ KeyValueStoreBackedByChangelogG[int, int] = (*CachingKeyValueStoreG[int, int])(nil)
+var _ CachedStateStore[int, int] = (*CachingKeyValueStoreG[int, int])(nil)
 
 func NewCachingKeyValueStoreG[K comparable, V any](ctx context.Context,
 	store KeyValueStoreBackedByChangelogG[K, V],
@@ -24,20 +25,44 @@ func NewCachingKeyValueStoreG[K comparable, V any](ctx context.Context,
 	sizeOfV func(V) int64,
 	maxCacheBytes int64,
 ) *CachingKeyValueStoreG[K, V] {
-	return &CachingKeyValueStoreG[K, V]{
-		name: store.Name(),
-		cache: NewCache(func(entries []LRUElement[K, V]) error {
-			for _, entry := range entries {
-				// newVal, ok := entry.entry.value.Get()
-				err := store.Put(ctx, entry.key, entry.entry.value)
-				if err != nil {
-					return err
-				}
-			}
-			return nil
-		}, sizeOfK, sizeOfV, maxCacheBytes),
+	c := &CachingKeyValueStoreG[K, V]{
+		name:         store.Name(),
 		wrappedStore: store,
 	}
+	c.cache = NewCache(func(entries []LRUElement[K, V]) error {
+		for _, entry := range entries {
+			newVal := entry.entry.value
+			oldVal, ok, err := store.Get(ctx, entry.key)
+			if err != nil {
+				return err
+			}
+			var change commtypes.ChangeG[V]
+			if ok {
+				change = commtypes.ChangeG[V]{
+					OldVal: optional.Some(oldVal),
+					NewVal: newVal,
+				}
+			} else {
+				change = commtypes.ChangeG[V]{
+					OldVal: optional.None[V](),
+					NewVal: newVal,
+				}
+			}
+			err = store.Put(ctx, entry.key, entry.entry.value)
+			if err != nil {
+				return err
+			}
+			err = c.flushCallbackFunc(ctx, commtypes.MessageG[K, commtypes.ChangeG[V]]{
+				Key:   optional.Some(entry.key),
+				Value: optional.Some(change),
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}, sizeOfK, sizeOfV, maxCacheBytes)
+	return c
 }
 
 func (c *CachingKeyValueStoreG[K, V]) Name() string { return c.name }
@@ -49,6 +74,9 @@ func (c *CachingKeyValueStoreG[K, V]) Get(ctx context.Context, key K) (V, bool, 
 	} else {
 		return c.wrappedStore.Get(ctx, key)
 	}
+}
+func (c *CachingKeyValueStoreG[K, V]) SetFlushCallback(flushCallbackFunc func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[V]]) error) {
+	c.flushCallbackFunc = flushCallbackFunc
 }
 func (c *CachingKeyValueStoreG[K, V]) Range(ctx context.Context, from optional.Option[K], to optional.Option[K], iterFunc func(K, V) error) error {
 	panic("not implemented")
@@ -125,8 +153,8 @@ func (c *CachingKeyValueStoreG[K, V]) ChangelogTopicName() string {
 	return c.wrappedStore.ChangelogTopicName()
 }
 
-func (c *CachingKeyValueStoreG[K, V]) ConsumeChangelog(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
-	return c.wrappedStore.ConsumeChangelog(ctx, parNum)
+func (c *CachingKeyValueStoreG[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8, cutoff uint64) (int, error) {
+	return c.wrappedStore.ConsumeOneLogEntry(ctx, parNum, cutoff)
 }
 func (c *CachingKeyValueStoreG[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	guarantee exactly_once_intr.GuaranteeMth,

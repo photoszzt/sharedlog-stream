@@ -13,19 +13,19 @@ import (
 
 // a changelog substream has only one producer. Each store would only produce to one substream.
 type ChangelogManager[K, V any] struct {
-	restoreConsumer *producer_consumer.ShardedSharedLogStreamConsumer[K, V]
-	producer        *producer_consumer.ShardedSharedLogStreamProducer[K, V]
+	restoreConsumer *producer_consumer.ShardedSharedLogStreamConsumer
+	producer        *producer_consumer.ShardedSharedLogStreamProducer
+	msgSerde        commtypes.MessageGSerdeG[K, V]
 	changelogIsSrc  bool
 	numProduced     uint32
 }
 
 func NewChangelogManagerForSrc[K, V any](stream *sharedlog_stream.ShardedSharedLogStream,
-	msgSerde commtypes.MessageSerdeG[K, V], timeout time.Duration,
+	msgSerde commtypes.MessageGSerdeG[K, V], timeout time.Duration,
 	serdeFormat commtypes.SerdeFormat, instanceId uint8,
 ) (*ChangelogManager[K, V], error) {
-	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream,
-		&producer_consumer.StreamConsumerConfigG[K, V]{
-			MsgSerde:    msgSerde,
+	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumer(stream,
+		&producer_consumer.StreamConsumerConfig{
 			Timeout:     timeout,
 			SerdeFormat: serdeFormat,
 		}, 1, instanceId)
@@ -36,19 +36,19 @@ func NewChangelogManagerForSrc[K, V any](stream *sharedlog_stream.ShardedSharedL
 		restoreConsumer: consumer,
 		producer:        nil,
 		changelogIsSrc:  true,
+		msgSerde:        msgSerde,
 	}, nil
 }
 
 func NewChangelogManager[K, V any](stream *sharedlog_stream.ShardedSharedLogStream,
-	msgSerde commtypes.MessageSerdeG[K, V],
+	msgSerde commtypes.MessageGSerdeG[K, V],
 	timeout time.Duration,
 	flushDuration time.Duration,
 	serdeFormat commtypes.SerdeFormat,
 	instanceId uint8,
 ) (*ChangelogManager[K, V], error) {
-	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream,
-		&producer_consumer.StreamConsumerConfigG[K, V]{
-			MsgSerde:    msgSerde,
+	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumer(stream,
+		&producer_consumer.StreamConsumerConfig{
 			Timeout:     timeout,
 			SerdeFormat: serdeFormat,
 		}, 1, instanceId)
@@ -58,11 +58,11 @@ func NewChangelogManager[K, V any](stream *sharedlog_stream.ShardedSharedLogStre
 	return &ChangelogManager[K, V]{
 		restoreConsumer: consumer,
 		producer: producer_consumer.NewShardedSharedLogStreamProducer(stream,
-			&producer_consumer.StreamSinkConfig[K, V]{
-				MsgSerde:      msgSerde,
+			&producer_consumer.StreamSinkConfig{
 				FlushDuration: flushDuration,
 			}),
 		changelogIsSrc: false,
+		msgSerde:       msgSerde,
 		numProduced:    0,
 	}, nil
 }
@@ -102,10 +102,10 @@ func (cm *ChangelogManager[K, V]) Flush(ctx context.Context) error {
 	}
 	return nil
 }
-func (cm *ChangelogManager[K, V]) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
+func (cm *ChangelogManager[K, V]) Produce(ctx context.Context, msgSer commtypes.MessageSerialized, parNum uint8) error {
 	if !cm.changelogIsSrc {
 		cm.numProduced += 1
-		return cm.producer.Produce(ctx, msg, parNum, isControl)
+		return cm.producer.ProduceData(ctx, msgSer, parNum)
 	}
 	return nil
 }
@@ -114,8 +114,12 @@ func (cm *ChangelogManager[K, V]) ProduceCount() uint32 {
 	return cm.numProduced
 }
 
-func (cm *ChangelogManager[K, V]) Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
-	return cm.restoreConsumer.Consume(ctx, parNum)
+func (cm *ChangelogManager[K, V]) Consume(ctx context.Context, parNum uint8) (commtypes.MsgAndSeqG[K, V], error) {
+	rawMsg, err := cm.restoreConsumer.Consume(ctx, parNum)
+	if err != nil {
+		return commtypes.MsgAndSeqG[K, V]{}, err
+	}
+	return commtypes.DecodeRawMsgSeqG(rawMsg, cm.msgSerde)
 }
 
 func CreateChangelog(env types.Environment, tabName string,

@@ -3,6 +3,7 @@ package processor
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/optional"
 )
 
 type TableToStreamProcessor struct {
@@ -35,4 +36,34 @@ func (p *TableToStreamProcessor) ProcessAndReturn(ctx context.Context, msg commt
 		return nil, err
 	}
 	return []commtypes.Message{{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp}}, nil
+}
+
+type TableToStreamProcessorG[K, V any] struct {
+	valueMapperWithKey ValueMapperWithKeyG[K, commtypes.ChangeG[V], V]
+	name               string
+	BaseProcessorG[K, commtypes.ChangeG[V], K, V]
+}
+
+func NewTableToStreamProcessorG[K, V any]() ProcessorG[K, commtypes.ChangeG[V], K, V] {
+	p := &TableToStreamProcessorG[K, V]{
+		name: "toStream",
+		valueMapperWithKey: ValueMapperWithKeyFuncG[K, commtypes.ChangeG[V], V](func(key optional.Option[K], value optional.Option[commtypes.ChangeG[V]]) (V, error) {
+			c := value.Unwrap()
+			return c.NewVal.Unwrap(), nil
+		}),
+	}
+	p.BaseProcessorG.ProcessingFuncG = p.ProcessAndReturn
+	return p
+}
+
+func (p *TableToStreamProcessorG[K, V]) Name() string {
+	return p.name
+}
+
+func (p *TableToStreamProcessorG[K, V]) ProcessAndReturn(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[V]]) ([]commtypes.MessageG[K, V], error) {
+	newV, err := p.valueMapperWithKey.MapValue(msg.Key, msg.Value)
+	if err != nil {
+		return nil, err
+	}
+	return []commtypes.MessageG[K, V]{{Key: msg.Key, Value: optional.Some(newV), Timestamp: msg.Timestamp}}, nil
 }

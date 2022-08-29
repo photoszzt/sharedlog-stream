@@ -4,6 +4,7 @@ package commtypes
 import (
 	"encoding/binary"
 	"math"
+	"sharedlog-stream/pkg/optional"
 
 	"golang.org/x/xerrors"
 )
@@ -549,7 +550,6 @@ type Uint16SerdeG struct {
 var _ = Serde(Uint16Serde{})
 var _ = SerdeG[uint16](Uint16SerdeG{})
 
-//
 type Int16Encoder struct{}
 type Int16EncoderG struct{}
 
@@ -674,7 +674,6 @@ type Uint8SerdeG struct {
 var _ = Serde(Uint8Serde{})
 var _ = SerdeG[uint8](Uint8SerdeG{})
 
-//
 type Int8Encoder struct{}
 type Int8EncoderG struct{}
 
@@ -786,3 +785,34 @@ type StringSerdeG struct {
 
 var _ = Serde(StringSerde{})
 var _ = SerdeG[string](StringSerdeG{})
+
+type OptionalValSerde[V any] struct {
+	valSerde SerdeG[V]
+}
+
+func NewOptionalValSerde[V any](valSerde SerdeG[V]) SerdeG[optional.Option[V]] {
+	return OptionalValSerde[V]{valSerde: valSerde}
+}
+
+var _ = SerdeG[optional.Option[int]](OptionalValSerde[int]{})
+
+func (s OptionalValSerde[V]) Encode(value optional.Option[V]) ([]byte, error) {
+	v, ok := value.Take()
+	if ok {
+		return s.valSerde.Encode(v)
+	} else {
+		return nil, nil
+	}
+}
+
+func (s OptionalValSerde[V]) Decode(val []byte) (optional.Option[V], error) {
+	if val == nil {
+		return optional.None[V](), nil
+	} else {
+		v, err := s.valSerde.Decode(val)
+		if err != nil {
+			return optional.None[V](), err
+		}
+		return optional.Some(v), nil
+	}
+}

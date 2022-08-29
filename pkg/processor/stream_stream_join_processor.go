@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/store"
 	"sync"
 	"time"
@@ -162,7 +163,7 @@ type StreamStreamJoinProcessorG[K, V, VO, VR any] struct {
 	joiner            ValueJoinerWithKeyTsG[K, V, VO, VR]
 	sharedTimeTracker *TimeTracker
 	name              string
-	BaseProcessor
+	BaseProcessorG[K, V, K, VR]
 	joinAfterMs  int64
 	joinGraceMs  int64
 	joinBeforeMs int64
@@ -197,7 +198,7 @@ func NewStreamStreamJoinProcessorG[K, V1, V2, VR any](
 		ssjp.joinBeforeMs = jw.afterMs
 		ssjp.joinAfterMs = jw.beforeMs
 	}
-	ssjp.BaseProcessor.ProcessingFunc = ssjp.ProcessAndReturn
+	ssjp.BaseProcessorG.ProcessingFuncG = ssjp.ProcessAndReturn
 	return ssjp
 }
 
@@ -205,8 +206,10 @@ func (p *StreamStreamJoinProcessorG[K, V1, V2, VR]) Name() string {
 	return p.name
 }
 
-func (p *StreamStreamJoinProcessorG[K, V1, V2, VR]) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	if msg.Key == nil || msg.Value == nil {
+func (p *StreamStreamJoinProcessorG[K, V1, V2, VR]) ProcessAndReturn(
+	ctx context.Context, msg commtypes.MessageG[K, V1],
+) ([]commtypes.MessageG[K, VR], error) {
+	if msg.Key.IsNone() || msg.Value.IsNone() {
 		log.Warn().Msgf("skipping record due to null key or value. key=%v, val=%v", msg.Key, msg.Value)
 		return nil, nil
 	}
@@ -237,19 +240,21 @@ func (p *StreamStreamJoinProcessorG[K, V1, V2, VR]) ProcessAndReturn(ctx context
 
 	timeToSec := timeTo / 1000
 	timeToNs := (timeTo - timeToSec*1000) * 1000000
-	msgs := make([]commtypes.Message, 0)
-	err := p.otherWindowStore.Fetch(ctx, msg.Key.(K),
+	msgs := make([]commtypes.MessageG[K, VR], 0, 2)
+	key := msg.Key.Unwrap()
+	msgVal := msg.Value.Unwrap()
+	err := p.otherWindowStore.Fetch(ctx, key,
 		time.Unix(int64(timeFromSec), int64(timeFromNs)),
 		time.Unix(int64(timeToSec), int64(timeToNs)), func(otherRecordTs int64, kt K, vt V2) error {
 			var newTs int64
 			// needOuterJoin = false
-			newVal := p.joiner.Apply(kt, msg.Value.(V1), vt, msg.Timestamp, otherRecordTs)
+			newVal := p.joiner.Apply(kt, msgVal, vt, msg.Timestamp, otherRecordTs)
 			if inputTs > otherRecordTs {
 				newTs = inputTs
 			} else {
 				newTs = otherRecordTs
 			}
-			msgs = append(msgs, commtypes.Message{Key: msg.Key, Value: newVal, Timestamp: newTs})
+			msgs = append(msgs, commtypes.MessageG[K, VR]{Key: msg.Key, Value: optional.Some(newVal), Timestamp: newTs})
 			return nil
 		})
 	return msgs, err

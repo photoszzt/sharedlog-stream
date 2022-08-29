@@ -18,7 +18,7 @@ type BaseExecutionContext struct {
 }
 
 func NewExecutionContext(
-	consumers []producer_consumer.MeteredConsumerIntr,
+	consumers []*producer_consumer.MeteredConsumer,
 	producers []producer_consumer.MeteredProducerIntr,
 	funcName string,
 	curEpoch uint16,

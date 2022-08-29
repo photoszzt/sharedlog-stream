@@ -76,41 +76,26 @@ func getInOutStreams(
 }
 
 func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
-) ([]producer_consumer.MeteredConsumerIntr, []producer_consumer.MeteredProducerIntr, error) {
+) ([]*producer_consumer.MeteredConsumer, []producer_consumer.MeteredProducerIntr, error) {
 	stream1, stream2, outputStream, err := getInOutStreams(h.env, sp)
 	if err != nil {
 		return nil, nil, err
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
-	if err != nil {
-		return nil, nil, fmt.Errorf("get event serde err: %v", err)
-	}
-	inMsgSerde, err := commtypes.GetMsgSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
-	if err != nil {
-		return nil, nil, fmt.Errorf("get msg serde err: %v", err)
-	}
 
 	timeout := time.Duration(4) * time.Millisecond
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	ncsiSerde, err := ntypes.GetNameCityStateIdSerdeG(serdeFormat)
-	if err != nil {
-		return nil, nil, err
-	}
-	outMsgSerde, err := commtypes.GetMsgSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, ncsiSerde)
-	if err != nil {
-		return nil, nil, err
-	}
-	inConfig := &producer_consumer.StreamConsumerConfigG[uint64, *ntypes.Event]{
+	inConfig := &producer_consumer.StreamConsumerConfig{
 		Timeout:     timeout,
-		MsgSerde:    inMsgSerde,
 		SerdeFormat: serdeFormat,
 	}
-	consumer1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1, inConfig, sp.NumSubstreamProducer[0], sp.ParNum)
+	consumer1, err := producer_consumer.NewShardedSharedLogStreamConsumer(stream1, inConfig,
+		sp.NumSubstreamProducer[0], sp.ParNum)
 	if err != nil {
 		return nil, nil, err
 	}
-	consumer2, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream2, inConfig, sp.NumSubstreamProducer[1], sp.ParNum)
+	consumer2, err := producer_consumer.NewShardedSharedLogStreamConsumer(stream2, inConfig,
+		sp.NumSubstreamProducer[1], sp.ParNum)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -119,15 +104,33 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	src1.SetInitialSource(false)
 	src2.SetInitialSource(false)
 	sink := producer_consumer.NewConcurrentMeteredSyncProducer(producer_consumer.NewShardedSharedLogStreamProducer(outputStream,
-		&producer_consumer.StreamSinkConfig[uint64, ntypes.NameCityStateId]{
-			MsgSerde:      outMsgSerde,
+		&producer_consumer.StreamSinkConfig{
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+			Format:        serdeFormat,
 		}), warmup)
 	sink.MarkFinalOutput()
-	return []producer_consumer.MeteredConsumerIntr{src1, src2}, []producer_consumer.MeteredProducerIntr{sink}, nil
+	return []*producer_consumer.MeteredConsumer{src1, src2}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
 func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: fmt.Sprintf("get event serde err: %v", err)}
+	}
+	inMsgSerde, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: fmt.Sprintf("get msg serde err: %v", err)}
+	}
+	ncsiSerde, err := ntypes.GetNameCityStateIdSerdeG(serdeFormat)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	outMsgSerde, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, ncsiSerde)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+
 	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: fmt.Sprintf("getSrcSink err: %v\n", err)}
@@ -137,13 +140,8 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	debug.Assert(len(sp.NumOutPartitions) == 1 && len(sp.OutputTopicNames) == 1,
 		"expected only one output stream")
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
 
-	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
 	storeMsgSerde, err := processor.MsgSerdeWithValueTsG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
@@ -193,33 +191,40 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		return common.GenErrFnOutput(err)
 	}
 
-	toStream := processor.NewTableToStreamProcessor()
+	toStream := processor.NewTableToStreamProcessorG[uint64, ntypes.NameCityStateId]()
 
-	aJoinP := execution.JoinWorkerFunc(func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
-		// msg is auction
-		ret, err := aucJoinsPerFunc(ctx, m)
-		if err != nil {
-			return nil, err
-		}
-		if ret != nil {
-			return toStream.ProcessAndReturn(ctx, ret[0])
-		}
-		return nil, nil
-	})
-	pJoinA := execution.JoinWorkerFunc(func(ctx context.Context, m commtypes.Message) ([]commtypes.Message, error) {
-		// msg is person
-		ret, err := perJoinsAucFunc(ctx, m)
-		if err != nil {
-			return nil, fmt.Errorf("ToTabP err: %v", err)
-		}
-		if ret != nil {
-			return toStream.ProcessAndReturn(ctx, ret[0])
-		}
-		return nil, nil
-	})
+	aJoinP := execution.JoinWorkerFunc[uint64, *ntypes.Event, uint64, ntypes.NameCityStateId](
+		func(ctx context.Context, m commtypes.MessageG[uint64, *ntypes.Event]) (
+			[]commtypes.MessageG[uint64, ntypes.NameCityStateId], error,
+		) {
+			// msg is auction
+			ret, err := aucJoinsPerFunc(ctx, m)
+			if err != nil {
+				return nil, err
+			}
+			if ret != nil {
+				return toStream.ProcessAndReturn(ctx, ret[0])
+			}
+			return nil, nil
+		})
+	pJoinA := execution.JoinWorkerFunc[uint64, *ntypes.Event, uint64, ntypes.NameCityStateId](
+		func(ctx context.Context, m commtypes.MessageG[uint64, *ntypes.Event]) (
+			[]commtypes.MessageG[uint64, ntypes.NameCityStateId], error,
+		) {
+			// msg is person
+			ret, err := perJoinsAucFunc(ctx, m)
+			if err != nil {
+				return nil, fmt.Errorf("ToTabP err: %v", err)
+			}
+			if ret != nil {
+				return toStream.ProcessAndReturn(ctx, ret[0])
+			}
+			return nil, nil
+		})
 	task, procArgs := execution.PrepareTaskWithJoin(ctx, aJoinP, pJoinA,
 		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
-		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum), true)
+		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum),
+		true, inMsgSerde, outMsgSerde, inMsgSerde, outMsgSerde)
 	transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).

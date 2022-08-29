@@ -21,11 +21,11 @@ func checkMeasureSink() bool {
 	return measure
 }
 
-type ConcurrentMeteredSink[K, V any] struct {
+type ConcurrentMeteredSink struct {
 	// mu syncutils.Mutex
 	// eventTimeLatencies []int
 
-	producer *ShardedSharedLogStreamProducer[K, V]
+	producer *ShardedSharedLogStreamProducer
 
 	produceTp       *stats.ConcurrentThroughputCounter
 	lat             *stats.ConcurrentStatsCollector[int64]
@@ -36,11 +36,11 @@ type ConcurrentMeteredSink[K, V any] struct {
 	measure bool
 }
 
-var _ = MeteredProducerIntr(&ConcurrentMeteredSink[int, string]{})
+var _ = MeteredProducerIntr(&ConcurrentMeteredSink{})
 
-func NewConcurrentMeteredSyncProducer[K, V any](sink *ShardedSharedLogStreamProducer[K, V], warmup time.Duration) *ConcurrentMeteredSink[K, V] {
+func NewConcurrentMeteredSyncProducer(sink *ShardedSharedLogStreamProducer, warmup time.Duration) *ConcurrentMeteredSink {
 	sink_name := fmt.Sprintf("%s_sink", sink.TopicName())
-	return &ConcurrentMeteredSink[K, V]{
+	return &ConcurrentMeteredSink{
 		producer: sink,
 		lat: stats.NewConcurrentStatsCollector[int64](sink_name,
 			stats.DEFAULT_COLLECT_DURATION),
@@ -54,39 +54,34 @@ func NewConcurrentMeteredSyncProducer[K, V any](sink *ShardedSharedLogStreamProd
 	}
 }
 
-func (s *ConcurrentMeteredSink[K, V]) MarkFinalOutput() {
+func (s *ConcurrentMeteredSink) MarkFinalOutput() {
 	s.producer.MarkFinalOutput()
 }
 
-func (s *ConcurrentMeteredSink[K, V]) IsFinalOutput() bool {
+func (s *ConcurrentMeteredSink) IsFinalOutput() bool {
 	return s.producer.IsFinalOutput()
 }
 
-func (s *ConcurrentMeteredSink[K, V]) StartWarmup() {
+func (s *ConcurrentMeteredSink) StartWarmup() {
 	if s.measure {
 		s.warmup.StartWarmup()
 	}
 }
 
-// func (s *ConcurrentMeteredSink[K, V]) GetEventTimeLatency() []int {
+// func (s *ConcurrentMeteredSink) GetEventTimeLatency() []int {
 // 	return s.eventTimeLatencies
 // }
 
-func (s *ConcurrentMeteredSink[K, V]) GetCount() uint64 {
+func (s *ConcurrentMeteredSink) GetCount() uint64 {
 	return s.produceTp.GetCount()
 }
 
-func (s *ConcurrentMeteredSink[K, V]) InitFlushTimer() {}
+func (s *ConcurrentMeteredSink) InitFlushTimer() {}
 
-func (s *ConcurrentMeteredSink[K, V]) Produce(ctx context.Context, msg commtypes.Message,
-	parNum uint8, isControl bool,
-) error {
+func (s *ConcurrentMeteredSink) ProduceData(ctx context.Context, msgSer commtypes.MessageSerialized, parNum uint8) error {
 	if s.IsFinalOutput() {
 		procStart := time.Now()
-		ts, err := extractEventTs(&msg)
-		if err != nil {
-			return err
-		}
+		ts := msgSer.Timestamp
 		if ts != 0 {
 			els := procStart.UnixMilli() - ts
 			// s.mu.Lock()
@@ -95,11 +90,8 @@ func (s *ConcurrentMeteredSink[K, V]) Produce(ctx context.Context, msg commtypes
 			s.eventTimeSample.AddSample(els)
 		}
 	}
-	assignInjTime(&msg)
+	assignInjTime(&msgSer)
 	s.produceTp.Tick(1)
-	if isControl {
-		atomic.AddUint32(&s.ctrlCount, 1)
-	}
 	// if s.measure {
 	// 	s.warmup.Check()
 	// 	if s.warmup.AfterWarmup() {
@@ -119,46 +111,45 @@ func (s *ConcurrentMeteredSink[K, V]) Produce(ctx context.Context, msg commtypes
 	// 	}
 	// }
 	procStart := stats.TimerBegin()
-	err := s.producer.Produce(ctx, msg, parNum, isControl)
+	err := s.producer.ProduceData(ctx, msgSer, parNum)
 	elapsed := stats.Elapsed(procStart).Microseconds()
 	s.lat.AddSample(elapsed)
 	return err
 }
 
-func (s *ConcurrentMeteredSink[K, V]) ProduceCtrlMsg(ctx context.Context, msg commtypes.Message, parNums []uint8) error {
+func (s *ConcurrentMeteredSink) ProduceCtrlMsg(ctx context.Context, msg commtypes.RawMsgAndSeq, parNums []uint8) (int, error) {
 	return s.producer.ProduceCtrlMsg(ctx, msg, parNums)
 }
 
-func (s *ConcurrentMeteredSink[K, V]) TopicName() string               { return s.producer.TopicName() }
-func (s *ConcurrentMeteredSink[K, V]) Name() string                    { return s.producer.Name() }
-func (s *ConcurrentMeteredSink[K, V]) SetName(name string)             { s.producer.SetName(name) }
-func (s *ConcurrentMeteredSink[K, V]) KeyEncoder() commtypes.Encoder   { return s.producer.KeyEncoder() }
-func (s *ConcurrentMeteredSink[K, V]) Flush(ctx context.Context) error { return s.producer.Flush(ctx) }
-func (s *ConcurrentMeteredSink[K, V]) ConfigExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
+func (s *ConcurrentMeteredSink) TopicName() string               { return s.producer.TopicName() }
+func (s *ConcurrentMeteredSink) Name() string                    { return s.producer.Name() }
+func (s *ConcurrentMeteredSink) SetName(name string)             { s.producer.SetName(name) }
+func (s *ConcurrentMeteredSink) Flush(ctx context.Context) error { return s.producer.Flush(ctx) }
+func (s *ConcurrentMeteredSink) ConfigExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	guarantee exactly_once_intr.GuaranteeMth,
 ) {
 	s.producer.ConfigExactlyOnce(rem, guarantee)
 }
-func (s *ConcurrentMeteredSink[K, V]) Stream() sharedlog_stream.Stream {
+func (s *ConcurrentMeteredSink) Stream() sharedlog_stream.Stream {
 	return s.producer.Stream()
 }
-func (s *ConcurrentMeteredSink[K, V]) GetInitialProdSeqNum(substreamNum uint8) uint64 {
+func (s *ConcurrentMeteredSink) GetInitialProdSeqNum(substreamNum uint8) uint64 {
 	return s.producer.GetInitialProdSeqNum(substreamNum)
 }
-func (s *ConcurrentMeteredSink[K, V]) GetCurrentProdSeqNum(substreamNum uint8) uint64 {
+func (s *ConcurrentMeteredSink) GetCurrentProdSeqNum(substreamNum uint8) uint64 {
 	return s.producer.GetCurrentProdSeqNum(substreamNum)
 }
-func (s *ConcurrentMeteredSink[K, V]) ResetInitialProd() { s.producer.ResetInitialProd() }
-func (s *ConcurrentMeteredSink[K, V]) PrintRemainingStats() {
+func (s *ConcurrentMeteredSink) ResetInitialProd() { s.producer.ResetInitialProd() }
+func (s *ConcurrentMeteredSink) PrintRemainingStats() {
 	s.lat.PrintRemainingStats()
 	s.eventTimeSample.PrintRemainingStats()
 }
-func (s *ConcurrentMeteredSink[K, V]) NumCtrlMsg() uint32 {
+func (s *ConcurrentMeteredSink) NumCtrlMsg() uint32 {
 	return atomic.LoadUint32(&s.ctrlCount)
 }
 
-type MeteredProducer[K, V any] struct {
-	producer        *ShardedSharedLogStreamProducer[K, V]
+type MeteredProducer struct {
+	producer        *ShardedSharedLogStreamProducer
 	latencies       stats.StatsCollector[int64]
 	eventTimeSample stats.StatsCollector[int64]
 	produceTp       stats.ThroughputCounter
@@ -167,9 +158,9 @@ type MeteredProducer[K, V any] struct {
 	measure         bool
 }
 
-func NewMeteredProducer[K, V any](sink *ShardedSharedLogStreamProducer[K, V], warmup time.Duration) *MeteredProducer[K, V] {
+func NewMeteredProducer(sink *ShardedSharedLogStreamProducer, warmup time.Duration) *MeteredProducer {
 	sink_name := fmt.Sprintf("%s_sink", sink.TopicName())
-	return &MeteredProducer[K, V]{
+	return &MeteredProducer{
 		producer: sink,
 		// eventTimeLatencies: make([]int, 0),
 		latencies:       stats.NewStatsCollector[int64](sink_name, stats.DEFAULT_COLLECT_DURATION),
@@ -180,34 +171,33 @@ func NewMeteredProducer[K, V any](sink *ShardedSharedLogStreamProducer[K, V], wa
 	}
 }
 
-func (s *MeteredProducer[K, V]) InitFlushTimer() {}
+func (s *MeteredProducer) InitFlushTimer() {}
 
-func (s *MeteredProducer[K, V]) MarkFinalOutput() {
+func (s *MeteredProducer) MarkFinalOutput() {
 	s.producer.MarkFinalOutput()
 }
 
-func (s *MeteredProducer[K, V]) IsFinalOutput() bool {
+func (s *MeteredProducer) IsFinalOutput() bool {
 	return s.producer.IsFinalOutput()
 }
 
-func (s *MeteredProducer[K, V]) StartWarmup() {
+func (s *MeteredProducer) StartWarmup() {
 	if s.measure {
 		s.warmup.StartWarmup()
 	}
 }
 
-func (s *MeteredProducer[K, V]) ProduceCtrlMsg(ctx context.Context, msg commtypes.Message, parNums []uint8) error {
-	return s.producer.ProduceCtrlMsg(ctx, msg, parNums)
+func (s *MeteredProducer) ProduceCtrlMsg(ctx context.Context, msg commtypes.RawMsgAndSeq, parNums []uint8) (int, error) {
+	ctrlCnt, err := s.producer.ProduceCtrlMsg(ctx, msg, parNums)
+	s.ctrlCount += uint32(ctrlCnt)
+	return ctrlCnt, err
 }
 
-func (s *MeteredProducer[K, V]) Produce(ctx context.Context, msg commtypes.Message, parNum uint8, isControl bool) error {
-	if s.IsFinalOutput() && !isControl {
+func (s *MeteredProducer) ProduceData(ctx context.Context, msg commtypes.MessageSerialized, parNum uint8) error {
+	if s.IsFinalOutput() {
 		procStart := time.Now()
-		ts, err := extractEventTs(&msg)
-		if err != nil {
-			return err
-		}
-		if ts != 0 {
+		ts := msg.Timestamp
+		if msg.Timestamp != 0 {
 			els := procStart.UnixMilli() - ts
 			// s.eventTimeLatencies = append(s.eventTimeLatencies, els)
 			s.eventTimeSample.AddSample(els)
@@ -215,9 +205,6 @@ func (s *MeteredProducer[K, V]) Produce(ctx context.Context, msg commtypes.Messa
 	}
 	assignInjTime(&msg)
 	s.produceTp.Tick(1)
-	if isControl {
-		s.ctrlCount += 1
-	}
 
 	// if s.measure {
 	// 	s.warmup.Check()
@@ -236,62 +223,46 @@ func (s *MeteredProducer[K, V]) Produce(ctx context.Context, msg commtypes.Messa
 	// 	}
 	// }
 	procStart := stats.TimerBegin()
-	err := s.producer.Produce(ctx, msg, parNum, isControl)
+	err := s.producer.ProduceData(ctx, msg, parNum)
 	elapsed := stats.Elapsed(procStart).Microseconds()
 	s.latencies.AddSample(elapsed)
 	return err
 }
 
-func (s *MeteredProducer[K, V]) TopicName() string               { return s.producer.TopicName() }
-func (s *MeteredProducer[K, V]) Name() string                    { return s.producer.Name() }
-func (s *MeteredProducer[K, V]) SetName(name string)             { s.producer.SetName(name) }
-func (s *MeteredProducer[K, V]) KeyEncoder() commtypes.Encoder   { return s.producer.KeyEncoder() }
-func (s *MeteredProducer[K, V]) Flush(ctx context.Context) error { return s.producer.Flush(ctx) }
-func (s *MeteredProducer[K, V]) ConfigExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
+func (s *MeteredProducer) TopicName() string               { return s.producer.TopicName() }
+func (s *MeteredProducer) Name() string                    { return s.producer.Name() }
+func (s *MeteredProducer) SetName(name string)             { s.producer.SetName(name) }
+func (s *MeteredProducer) Flush(ctx context.Context) error { return s.producer.Flush(ctx) }
+func (s *MeteredProducer) ConfigExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	guarantee exactly_once_intr.GuaranteeMth,
 ) {
 	s.producer.ConfigExactlyOnce(rem, guarantee)
 }
-func (s *MeteredProducer[K, V]) Stream() sharedlog_stream.Stream {
+func (s *MeteredProducer) Stream() sharedlog_stream.Stream {
 	return s.producer.Stream()
 }
-func (s *MeteredProducer[K, V]) GetInitialProdSeqNum(substreamNum uint8) uint64 {
+func (s *MeteredProducer) GetInitialProdSeqNum(substreamNum uint8) uint64 {
 	return s.producer.GetInitialProdSeqNum(substreamNum)
 }
-func (s *MeteredProducer[K, V]) GetCurrentProdSeqNum(substreamNum uint8) uint64 {
+func (s *MeteredProducer) GetCurrentProdSeqNum(substreamNum uint8) uint64 {
 	return s.producer.GetCurrentProdSeqNum(substreamNum)
 }
-func (s *MeteredProducer[K, V]) ResetInitialProd() {
+func (s *MeteredProducer) ResetInitialProd() {
 	s.producer.ResetInitialProd()
 }
-func (s *MeteredProducer[K, V]) PrintRemainingStats() {
+func (s *MeteredProducer) PrintRemainingStats() {
 	s.latencies.PrintRemainingStats()
 	s.eventTimeSample.PrintRemainingStats()
 }
 
-func extractEventTs(msg *commtypes.Message) (int64, error) {
-	ts := msg.Timestamp
-	if ts == 0 {
-		et, ok := msg.Value.(commtypes.EventTimeExtractor)
-		if ok {
-			extractTs, err := et.ExtractEventTime()
-			if err != nil {
-				return 0, err
-			}
-			ts = extractTs
-		}
-	}
-	return ts, nil
-}
-
-// func (s *MeteredProducer[K, V]) GetEventTimeLatency() []int {
+// func (s *MeteredProducer) GetEventTimeLatency() []int {
 // 	return s.eventTimeLatencies
 // }
 
-func (s *MeteredProducer[K, V]) GetCount() uint64 {
+func (s *MeteredProducer) GetCount() uint64 {
 	return s.produceTp.GetCount()
 }
 
-func (s *MeteredProducer[K, V]) NumCtrlMsg() uint32 {
+func (s *MeteredProducer) NumCtrlMsg() uint32 {
 	return s.ctrlCount
 }

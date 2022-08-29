@@ -15,14 +15,20 @@ func MsgIsScaleFence(msg *commtypes.Message) bool {
 	return ok && ctrl == txn_data.SCALE_FENCE_KEY
 }
 
-func assignInjTime(msg *commtypes.Message) {
+func assignInjTime(msg *commtypes.MessageSerialized) {
 	nowMs := time.Now().UnixMilli()
-	if !MsgIsScaleFence(msg) {
-		msg.UpdateInjectTime(nowMs)
-	}
+	msg.UpdateInjectTime(nowMs)
 }
 
 func extractProduceToConsumeTime(msg *commtypes.Message, isInitialSrc bool, collector *stats.StatsCollector[int64]) {
+	if !isInitialSrc {
+		ts := msg.ExtractInjectTimeMs()
+		dur := time.Now().UnixMilli() - ts
+		collector.AddSample(dur)
+	}
+}
+
+func extractProduceToConsumeTimeMsgG[K, V any](msg *commtypes.MessageG[K, V], isInitialSrc bool, collector *stats.StatsCollector[int64]) {
 	if !isInitialSrc {
 		ts := msg.ExtractInjectTimeMs()
 		dur := time.Now().UnixMilli() - ts

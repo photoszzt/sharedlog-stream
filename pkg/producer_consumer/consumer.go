@@ -9,7 +9,7 @@ import (
 
 type Consumer interface {
 	// Consume gets the next commtypes.Message from the source
-	Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error)
+	Consume(ctx context.Context, parNum uint8) (commtypes.RawMsgAndSeq, error)
 	SetCursor(cursor uint64, parNum uint8)
 	TopicName() string
 	Name() string
@@ -30,6 +30,4 @@ type MeteredConsumerIntr interface {
 	StartWarmup()
 	GetCount() uint64
 	NumCtrlMsg() uint32
-	InnerSource() Consumer
-	ExtractProduceToConsumeTime(msg *commtypes.Message)
 }

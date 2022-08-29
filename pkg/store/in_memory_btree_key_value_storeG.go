@@ -168,6 +168,5 @@ func (st *InMemoryBTreeKeyValueStoreG[K, V]) Flush(ctx context.Context) error {
 	return nil
 }
 
-func (st *InMemoryBTreeKeyValueStoreG[K, V]) ConsumeChangelog(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
-	return nil, nil
+func (st *InMemoryBTreeKeyValueStoreG[K, V]) SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[V]]) error) {
 }

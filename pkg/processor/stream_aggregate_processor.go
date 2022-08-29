@@ -77,22 +77,50 @@ type StreamAggregateProcessorG[K, V, VA any] struct {
 	initializer InitializerG[VA]
 	aggregator  AggregatorG[K, V, VA]
 	name        string
-	BaseProcessor
+	BaseProcessorG[K, V, K, commtypes.ChangeG[VA]]
+	useCache bool
 }
 
-var _ = Processor(&StreamAggregateProcessorG[int, int, int]{})
+var _ = ProcessorG[int, int, int, commtypes.ChangeG[int]](&StreamAggregateProcessorG[int, int, int]{})
 
-func NewStreamAggregateProcessorG[K, V, VA any](name string, store store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[VA]],
+func NewStreamAggregateProcessorG[K, V, VA any](
+	name string, store store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[VA]],
 	initializer InitializerG[VA], aggregator AggregatorG[K, V, VA],
-) *StreamAggregateProcessorG[K, V, VA] {
+	useCache bool,
+) ProcessorG[K, V, K, commtypes.ChangeG[VA]] {
 	p := &StreamAggregateProcessorG[K, V, VA]{
-		initializer:   initializer,
-		aggregator:    aggregator,
-		store:         store,
-		name:          name,
-		BaseProcessor: BaseProcessor{},
+		initializer: initializer,
+		aggregator:  aggregator,
+		store:       store,
+		name:        name,
 	}
-	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	p.BaseProcessorG.ProcessingFuncG = p.ProcessAndReturn
+	if useCache {
+		store.SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[commtypes.ValueTimestampG[VA]]]) error {
+			change := msg.Value.Unwrap()
+			newValTs := change.NewVal.Unwrap()
+			ts := newValTs.Timestamp
+			oldVal := optional.Map(change.OldVal, func(oldVal commtypes.ValueTimestampG[VA]) VA {
+				return oldVal.Value
+			})
+			v := commtypes.ChangeG[VA]{
+				NewVal: optional.Some(newValTs.Value),
+				OldVal: oldVal,
+			}
+			msgForNext := commtypes.MessageG[K, commtypes.ChangeG[VA]]{
+				Key:       msg.Key,
+				Value:     optional.Some(v),
+				Timestamp: ts,
+			}
+			for _, nextProcessor := range p.nextProcessors {
+				err := nextProcessor.Process(ctx, msgForNext)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
 	return p
 }
 
@@ -100,20 +128,22 @@ func (p *StreamAggregateProcessorG[K, V, VA]) Name() string {
 	return p.name
 }
 
-func (p *StreamAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	if utils.IsNil(msg.Key) || utils.IsNil(msg.Value) {
+func (p *StreamAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Context,
+	msg commtypes.MessageG[K, V],
+) ([]commtypes.MessageG[K, commtypes.ChangeG[VA]], error) {
+	if msg.Key.IsNone() || msg.Value.IsNone() {
 		log.Warn().Msgf("skipping record due to null key or value. key=%v, val=%v", msg.Key, msg.Value)
 		return nil, nil
 	}
-	key := msg.Key.(K)
+	key := msg.Key.Unwrap()
 	oldAggTs, ok, err := p.store.Get(ctx, key)
 	if err != nil {
 		return nil, err
 	}
-	var oldAgg VA
+	var oldAgg optional.Option[VA]
 	var newTs int64
 	if ok {
-		oldAgg = oldAggTs.Value
+		oldAgg = optional.Some(oldAggTs.Value)
 		if msg.Timestamp > oldAggTs.Timestamp {
 			newTs = msg.Timestamp
 		} else {
@@ -123,15 +153,21 @@ func (p *StreamAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Conte
 		oldAgg = p.initializer.Apply()
 		newTs = msg.Timestamp
 	}
-	newAgg := p.aggregator.Apply(key, msg.Value.(V), oldAgg)
-	err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(optional.Some(newAgg), newTs))
+	msgVal := msg.Value.Unwrap()
+	newAgg := p.aggregator.Apply(key, msgVal, oldAgg)
+	err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(newAgg, newTs))
 	if err != nil {
 		return nil, err
 	}
-	change := commtypes.Change{
+	change := commtypes.ChangeG[VA]{
 		NewVal: newAgg,
 		OldVal: oldAgg,
 	}
 	// debug.Fprintf(os.Stderr, "StreamAgg key %v, oldVal %v, newVal %v\n", msg.Key, oldAgg, newAgg)
-	return []commtypes.Message{{Key: msg.Key, Value: change, Timestamp: newTs}}, nil
+	if p.useCache {
+		return nil, nil
+	} else {
+		return []commtypes.MessageG[K, commtypes.ChangeG[VA]]{{
+			Key: msg.Key, Value: optional.Some(change), Timestamp: newTs}}, nil
+	}
 }

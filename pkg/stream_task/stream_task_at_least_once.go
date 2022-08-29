@@ -66,7 +66,7 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 			break
 		}
 		// procStart := time.Now()
-		ret, ctrlMsg := t.appProcessFunc(ctx, t, args.ectx)
+		ret, ctrlRawMsgOp := t.appProcessFunc(ctx, t, args.ectx)
 		if ret != nil {
 			if ret.Success {
 				continue
@@ -76,7 +76,8 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 		if !hasUntrackedConsume {
 			hasUntrackedConsume = true
 		}
-		if ctrlMsg != nil {
+		ctrlRawMsg, ok := ctrlRawMsgOp.Take()
+		if ok {
 			if t.pauseFunc != nil {
 				t.pauseFunc()
 			}
@@ -86,7 +87,7 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 			if ret_err := track(ctx, cm, args.ectx.Consumers(), args.ectx.SubstreamNum(), &hasUntrackedConsume, &commitTimer); ret_err != nil {
 				return ret_err
 			}
-			return handleCtrlMsg(ctx, ctrlMsg, t, args, &warmupCheck)
+			return handleCtrlMsg(ctx, ctrlRawMsg, t, args, &warmupCheck)
 		}
 		// if warmupCheck.AfterWarmup() {
 		// 	elapsed := time.Since(procStart)
@@ -101,7 +102,7 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 }
 
 func track(ctx context.Context, cm *consume_seq_num_manager.ConsumeSeqManager,
-	consumers []producer_consumer.MeteredConsumerIntr, substreamNum uint8,
+	consumers []*producer_consumer.MeteredConsumer, substreamNum uint8,
 	hasUncommitted *bool, commitTimer *time.Time,
 ) *common.FnOutput {
 	markers := consume_seq_num_manager.CollectOffsetMarker(consumers)

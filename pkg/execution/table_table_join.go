@@ -3,13 +3,14 @@ package execution
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
-	"sharedlog-stream/pkg/utils"
 )
 
+/*
 func SetupTableTableJoin[K, VLeft, VRight any](
 	mpLeft *store_with_changelog.MaterializeParam[K, VLeft],
 	mpRight *store_with_changelog.MaterializeParam[K, VRight],
@@ -59,14 +60,15 @@ func SetupTableTableJoin[K, VLeft, VRight any](
 	kvc := []store.KeyValueStoreOpWithChangelog{leftTab, rightTab}
 	return leftJoinRightFunc, rightJoinLeftFunc, kvc, nil
 }
+*/
 
 func SetupTableTableJoinWithSkipmap[K, VLeft, VRight, VR any](
 	mpLeft *store_with_changelog.MaterializeParam[K, commtypes.ValueTimestampG[VLeft]],
 	mpRight *store_with_changelog.MaterializeParam[K, commtypes.ValueTimestampG[VRight]],
 	less store.LessFunc[K],
 	joiner processor.ValueJoinerWithKeyFuncG[K, VLeft, VRight, VR],
-) (proc_interface.ProcessAndReturnFunc,
-	proc_interface.ProcessAndReturnFunc,
+) (proc_interface.ProcessAndReturnFunc[K, VLeft, K, commtypes.ChangeG[VR]],
+	proc_interface.ProcessAndReturnFunc[K, VRight, K, commtypes.ChangeG[VR]],
 	map[string]store.KeyValueStoreOpWithChangelog,
 	error,
 ) {
@@ -79,16 +81,16 @@ func SetupTableTableJoinWithSkipmap[K, VLeft, VRight, VR any](
 		return nil, nil, nil, err
 	}
 
-	leftJoinRight := processor.NewMeteredProcessor(
+	leftJoinRight := processor.NewMeteredProcessorG(
 		processor.NewTableTableJoinProcessorG[K, VLeft, VRight, VR]("leftJoinRight", rightTab, joiner))
-	rightJoinLeft := processor.NewMeteredProcessor(
+	rightJoinLeft := processor.NewMeteredProcessorG(
 		processor.NewTableTableJoinProcessorG[K, VRight, VLeft, VR]("rightJoinLeft", leftTab,
 			processor.ReverseValueJoinerWithKeyG(joiner)))
-	nullKeyFilter := processor.NewMeteredProcessor(processor.NewStreamFilterProcessor("filterNullKey",
-		processor.PredicateFunc(func(key interface{}, value interface{}) (bool, error) {
-			return !utils.IsNil(key), nil
+	nullKeyFilter := processor.NewMeteredProcessorG(processor.NewStreamFilterProcessorG[K, commtypes.ChangeG[VR]]("filterNullKey",
+		processor.PredicateFuncG[K, commtypes.ChangeG[VR]](func(key optional.Option[K], value optional.Option[commtypes.ChangeG[VR]]) (bool, error) {
+			return key.IsSome(), nil
 		})))
-	leftJoinRightFunc := func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
+	leftJoinRightFunc := func(ctx context.Context, msg commtypes.MessageG[K, VLeft]) ([]commtypes.MessageG[K, commtypes.ChangeG[VR]], error) {
 		ret, err := toLeftTab.ProcessAndReturn(ctx, msg)
 		if err != nil {
 			return nil, err
@@ -104,7 +106,7 @@ func SetupTableTableJoinWithSkipmap[K, VLeft, VRight, VR any](
 		}
 		return nil, nil
 	}
-	rightJoinLeftFunc := func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
+	rightJoinLeftFunc := func(ctx context.Context, msg commtypes.MessageG[K, VRight]) ([]commtypes.MessageG[K, commtypes.ChangeG[VR]], error) {
 		ret, err := toRightTab.ProcessAndReturn(ctx, msg)
 		if err != nil {
 			return nil, err

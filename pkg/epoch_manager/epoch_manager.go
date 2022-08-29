@@ -152,7 +152,7 @@ func (em *EpochManager) AddTopicSubstream(ctx context.Context,
 func GenEpochMarker(
 	ctx context.Context,
 	em *EpochManager,
-	consumers []producer_consumer.MeteredConsumerIntr,
+	consumers []*producer_consumer.MeteredConsumer,
 	producers []producer_consumer.MeteredProducerIntr,
 	kvTabs map[string]store.KeyValueStoreOpWithChangelog,
 	winTabs map[string]store.WindowStoreOpWithChangelog,

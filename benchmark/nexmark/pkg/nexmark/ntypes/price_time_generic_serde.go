@@ -8,37 +8,37 @@ import (
 
 type PriceTimePtrJSONSerdeG struct{}
 
-var _ = commtypes.SerdeG[*PriceTime](PriceTimePtrJSONSerdeG{})
+var _ = commtypes.SerdeG[PriceTime](PriceTimePtrJSONSerdeG{})
 
-func (s PriceTimePtrJSONSerdeG) Encode(value *PriceTime) ([]byte, error) {
+func (s PriceTimePtrJSONSerdeG) Encode(value PriceTime) ([]byte, error) {
 	return json.Marshal(&value)
 }
 
-func (s PriceTimePtrJSONSerdeG) Decode(value []byte) (*PriceTime, error) {
+func (s PriceTimePtrJSONSerdeG) Decode(value []byte) (PriceTime, error) {
 	pt := PriceTime{}
 	if err := json.Unmarshal(value, &pt); err != nil {
-		return nil, err
+		return PriceTime{}, err
 	}
-	return &pt, nil
+	return pt, nil
 }
 
 type PriceTimePtrMsgpSerdeG struct{}
 
-var _ = commtypes.SerdeG[*PriceTime](PriceTimePtrMsgpSerdeG{})
+var _ = commtypes.SerdeG[PriceTime](PriceTimePtrMsgpSerdeG{})
 
-func (s PriceTimePtrMsgpSerdeG) Encode(value *PriceTime) ([]byte, error) {
+func (s PriceTimePtrMsgpSerdeG) Encode(value PriceTime) ([]byte, error) {
 	return value.MarshalMsg(nil)
 }
 
-func (s PriceTimePtrMsgpSerdeG) Decode(value []byte) (*PriceTime, error) {
+func (s PriceTimePtrMsgpSerdeG) Decode(value []byte) (PriceTime, error) {
 	pt := PriceTime{}
 	if _, err := pt.UnmarshalMsg(value); err != nil {
-		return nil, err
+		return PriceTime{}, err
 	}
-	return &pt, nil
+	return pt, nil
 }
 
-func GetPriceTimeSerdeG(serdeFormat commtypes.SerdeFormat) (commtypes.SerdeG[*PriceTime], error) {
+func GetPriceTimeSerdeG(serdeFormat commtypes.SerdeFormat) (commtypes.SerdeG[PriceTime], error) {
 	switch serdeFormat {
 	case commtypes.JSON:
 		return PriceTimePtrJSONSerdeG{}, nil

@@ -91,7 +91,7 @@ func processInEpoch(
 		func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {
 		})
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return common.GenErrFnOutput(fmt.Errorf("trackStreamAndConfigExactlyOnce: %v", err))
 	}
 
 	dctx, dcancel := context.WithCancel(ctx)
@@ -158,7 +158,6 @@ func processInEpoch(
 		cur_elapsed = warmupCheck.ElapsedSinceInitial()
 		timeout = args.duration != 0 && cur_elapsed >= args.duration
 		if (!args.waitEndMark && timeout) || (testForFail && cur_elapsed >= failAfter) {
-			fmt.Fprintf(os.Stderr, "exit due to timeout\n")
 			// elapsed := time.Since(procStart)
 			// latencies.AddSample(elapsed.Microseconds())
 			ret := &common.FnOutput{Success: true}
@@ -178,10 +177,10 @@ func processInEpoch(
 			}
 			markTimer = time.Now()
 		}
-		app_ret, ctrlMsg := t.appProcessFunc(dctx, t, args.ectx)
+		app_ret, ctrlRawMsgOp := t.appProcessFunc(dctx, t, args.ectx)
 		if app_ret != nil {
 			if app_ret.Success {
-				debug.Assert(ctrlMsg == nil, "when timeout, ctrlMsg should not be returned")
+				debug.Assert(ctrlRawMsgOp.IsNone(), "when timeout, ctrlMsg should not be returned")
 				// consume timeout but not sure whether there's more data is coming; continue to process
 				continue
 			}
@@ -190,8 +189,9 @@ func processInEpoch(
 		if !hasProcessData {
 			hasProcessData = true
 		}
-		if ctrlMsg != nil {
-			// fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
+		ctrlRawMsg, ok := ctrlRawMsgOp.Take()
+		if ok {
+			fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
 			if t.pauseFunc != nil {
 				if ret := t.pauseFunc(); ret != nil {
 					return ret
@@ -209,12 +209,8 @@ func processInEpoch(
 				return common.GenErrFnOutput(err)
 			}
 			t.flushAllTime.AddSample(flushTime)
-			return handleCtrlMsg(dctx, ctrlMsg, t, args, &warmupCheck)
+			return handleCtrlMsg(dctx, ctrlRawMsg, t, args, &warmupCheck)
 		}
-		// if warmupCheck.AfterWarmup() {
-		// 	elapsed := time.Since(procStart)
-		// 	latencies.AddSample(elapsed.Microseconds())
-		// }
 	}
 }
 
@@ -284,7 +280,7 @@ func CaptureEpochStateAndCleanup(ctx context.Context, em *epoch_manager.EpochMan
 }
 
 func CaptureEpochStateAndCleanupExplicit(ctx context.Context, em *epoch_manager.EpochManager,
-	consumers []producer_consumer.MeteredConsumerIntr, producers []producer_consumer.MeteredProducerIntr,
+	consumers []*producer_consumer.MeteredConsumer, producers []producer_consumer.MeteredProducerIntr,
 	kvChangelogs map[string]store.KeyValueStoreOpWithChangelog,
 	windowStoreChangelogs map[string]store.WindowStoreOpWithChangelog,
 ) (commtypes.EpochMarker, []uint64, []string, error) {

@@ -251,30 +251,31 @@ func TestShouldRemoveDeletedValuesOnFlush(t *testing.T) {
 
 func TestBasicPutGet(t *testing.T) {
 	toInsert := []commtypes.MessageG[string, string]{
-		{Key: "K1", Value: "V1"},
-		{Key: "K2", Value: "V2"},
-		{Key: "K3", Value: "V3"},
-		{Key: "K4", Value: "V4"},
-		{Key: "K5", Value: "V5"},
+		{Key: optional.Some("K1"), Value: optional.Some("V1")},
+		{Key: optional.Some("K2"), Value: optional.Some("V2")},
+		{Key: optional.Some("K3"), Value: optional.Some("V3")},
+		{Key: optional.Some("K4"), Value: optional.Some("V4")},
+		{Key: optional.Some("K5"), Value: optional.Some("V5")},
 	}
 	size := 5 * (4 + 3*ptrSize)
 	cache := NewCache(func(entries []LRUElement[string, string]) error { return nil },
 		commtypes.SizeOfString, commtypes.SizeOfString, size)
 	for _, msg := range toInsert {
-		err := cache.PutMaybeEvict(msg.Key, LRUEntry[string]{value: optional.Some(msg.Value), isDirty: true})
+		err := cache.PutMaybeEvict(msg.Key.Unwrap(), LRUEntry[string]{value: msg.Value, isDirty: true})
 		if err != nil {
 			t.Errorf("expected nil, got %v", err)
 		}
 	}
 
 	for _, msg := range toInsert {
-		entry, ok := cache.get(msg.Key)
+		entry, ok := cache.get(msg.Key.Unwrap())
 		if !ok {
 			t.Errorf("expected found, got not found")
 		}
 		v, _ := entry.Value().Take()
-		if v != msg.Value {
-			t.Errorf("expected %s, got %s", msg.Value, v)
+		expVal := msg.Value.Unwrap()
+		if v != expVal {
+			t.Errorf("expected %s, got %s", expVal, v)
 		}
 		if !entry.IsDirty() {
 			t.Error("expected dirty, got clean")
@@ -284,13 +285,13 @@ func TestBasicPutGet(t *testing.T) {
 
 func TestEvic(t *testing.T) {
 	toInsert := []commtypes.MessageG[string, string]{
-		{Key: "K1", Value: "V1"},
-		{Key: "K2", Value: "V2"},
-		{Key: "K3", Value: "V3"},
-		{Key: "K4", Value: "V4"},
-		{Key: "K5", Value: "V5"},
+		{Key: optional.Some("K1"), Value: optional.Some("V1")},
+		{Key: optional.Some("K2"), Value: optional.Some("V2")},
+		{Key: optional.Some("K3"), Value: optional.Some("V3")},
+		{Key: optional.Some("K4"), Value: optional.Some("V4")},
+		{Key: optional.Some("K5"), Value: optional.Some("V5")},
 	}
-	expected := []commtypes.MessageG[string, string]{{Key: "K1", Value: "V1"}}
+	expected := []commtypes.MessageG[string, string]{{Key: optional.Some("K1"), Value: optional.Some("V1")}}
 	size := 4 + 3*ptrSize
 	received := make([]commtypes.MessageG[string, string], 0, 5)
 	cache := NewCache(func(entries []LRUElement[string, string]) error {
@@ -299,22 +300,26 @@ func TestEvic(t *testing.T) {
 			if !ok {
 				t.Errorf("expected present, got not present")
 			}
-			received = append(received, commtypes.MessageG[string, string]{Key: entry.key, Value: v})
+			received = append(received, commtypes.MessageG[string, string]{Key: optional.Some(entry.key), Value: optional.Some(v)})
 		}
 		return nil
 	}, commtypes.SizeOfString, commtypes.SizeOfString, size)
 	for _, msg := range toInsert {
-		err := cache.PutMaybeEvict(msg.Key, LRUEntry[string]{value: optional.Some(msg.Value), isDirty: true})
+		err := cache.PutMaybeEvict(msg.Key.Unwrap(), LRUEntry[string]{value: msg.Value, isDirty: true})
 		if err != nil {
 			t.Errorf("expected nil, got %v", err)
 		}
 	}
 	for idx, expect := range expected {
-		if received[idx].Key != expect.Key {
-			t.Errorf("expected %s, got %s", expect.Key, received[idx].Key)
+		recKey := received[idx].Key.Unwrap()
+		expKey := expect.Key.Unwrap()
+		if recKey != expKey {
+			t.Errorf("expected %s, got %s", expKey, recKey)
 		}
-		if received[idx].Value != expect.Value {
-			t.Errorf("expected %s, got %s", expect.Value, received[idx].Value)
+		recVal := received[idx].Value.Unwrap()
+		expVal := expected[idx].Value.Unwrap()
+		if recVal != expVal {
+			t.Errorf("expected %s, got %s", expVal, recVal)
 		}
 	}
 	if cache.evicts() != 4 {

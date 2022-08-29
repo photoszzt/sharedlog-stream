@@ -14,6 +14,7 @@ var (
 	ErrUnrecognizedSerdeFormat  = xerrors.New("Unrecognized serde format")
 	ErrFailToGetOutputSubstream = xerrors.New("Fail to get output substream")
 	ErrReturnDueToTest          = xerrors.New("return due to test")
+	ErrReachCutoffPos           = xerrors.New("reach cutoff pos")
 )
 
 func IsStreamEmptyError(err error) bool {

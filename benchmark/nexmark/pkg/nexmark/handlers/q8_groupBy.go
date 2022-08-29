@@ -51,29 +51,16 @@ func (h *q8GroupByHandler) getExecutionCtx(ctx context.Context, sp *common.Query
 		return processor.BaseExecutionContext{}, err
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
-	if err != nil {
-		return processor.BaseExecutionContext{}, fmt.Errorf("get event serde err: %v", err)
-	}
-	msgSerde, err := commtypes.GetMsgSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
-	if err != nil {
-		return processor.BaseExecutionContext{}, fmt.Errorf("get msg serde err: %v", err)
-	}
-	outMsgSerde, err := commtypes.GetMsgSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
-	if err != nil {
-		return processor.BaseExecutionContext{}, fmt.Errorf("get msg serde err: %v", err)
-	}
-	inConfig := &producer_consumer.StreamConsumerConfigG[string, *ntypes.Event]{
+	inConfig := &producer_consumer.StreamConsumerConfig{
 		Timeout:     common.SrcConsumeTimeout,
-		MsgSerde:    msgSerde,
 		SerdeFormat: serdeFormat,
 	}
-	outConfig := &producer_consumer.StreamSinkConfig[uint64, *ntypes.Event]{
-		MsgSerde:      outMsgSerde,
+	outConfig := &producer_consumer.StreamSinkConfig{
 		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+		Format:        serdeFormat,
 	}
 	// fmt.Fprintf(os.Stderr, "output to %v\n", output_stream.TopicName())
-	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(input_stream, inConfig, sp.NumSubstreamProducer[0], sp.ParNum)
+	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumer(input_stream, inConfig, sp.NumSubstreamProducer[0], sp.ParNum)
 	if err != nil {
 		return processor.BaseExecutionContext{}, err
 	}
@@ -85,51 +72,67 @@ func (h *q8GroupByHandler) getExecutionCtx(ctx context.Context, sp *common.Query
 	}
 	sinks[0].SetName("auctionsBySellerIDSink")
 	sinks[1].SetName("personsByIDSink")
-	return processor.NewExecutionContext([]producer_consumer.MeteredConsumerIntr{src}, sinks,
+	return processor.NewExecutionContext([]*producer_consumer.MeteredConsumer{src}, sinks,
 		h.funcName, sp.ScaleEpoch, sp.ParNum), nil
 }
 
 func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
+	if err != nil {
+		return &common.FnOutput{Message: fmt.Sprintf("get event serde err: %v", err), Success: false}
+	}
+	msgSerde, err := commtypes.GetMsgGSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	ectx, err := h.getExecutionCtx(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	aucBySellerChain := processor.NewProcessorChains()
-	aucBySellerChain.
-		Via(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64]("auctionsBySellerIDMap",
-			processor.SelectKeyFuncG[string, *ntypes.Event, uint64](func(key optional.Option[string], value *ntypes.Event) (uint64, error) {
-				return value.NewAuction.Seller, nil
-			})))).
-		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[0], &ectx))
-	personsByIDChain := processor.NewProcessorChains()
-	personsByIDChain.
-		Via(processor.NewMeteredProcessor(processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64]("personsByIDMap",
-			processor.SelectKeyFuncG[string, *ntypes.Event, uint64](func(key optional.Option[string], value *ntypes.Event) (uint64, error) {
-				return value.NewPerson.ID, nil
-			})))).
-		Via(processor.NewGroupByOutputProcessor(ectx.Producers()[1], &ectx))
+	outMsgSerde, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	aucBySellerIdProc := processor.NewMeteredProcessorG(processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64]("auctionsBySellerIDMap",
+		processor.SelectKeyFuncG[string, *ntypes.Event, uint64](
+			func(key optional.Option[string], value optional.Option[*ntypes.Event]) (uint64, error) {
+				v := value.Unwrap()
+				return v.NewAuction.Seller, nil
+			})))
+	groupBySellerIDProc := processor.NewGroupByOutputProcessorG(ectx.Producers()[0], &ectx, outMsgSerde)
+	aucBySellerIdProc.NextProcessor(groupBySellerIDProc)
+
+	perByIDProc := processor.NewMeteredProcessorG(processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64]("personsByIDMap",
+		processor.SelectKeyFuncG[string, *ntypes.Event, uint64](
+			func(key optional.Option[string], value optional.Option[*ntypes.Event]) (uint64, error) {
+				v := value.Unwrap()
+				return v.NewPerson.ID, nil
+			})))
+	groupByPerIDProc := processor.NewGroupByOutputProcessorG(ectx.Producers()[1], &ectx, outMsgSerde)
+	perByIDProc.NextProcessor(groupByPerIDProc)
 
 	task := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
 			argsTmp processor.ExecutionContext,
-		) (*common.FnOutput, *commtypes.MsgAndSeq) {
+		) (*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq]) {
 			args := argsTmp.(*processor.BaseExecutionContext)
 			return stream_task.CommonProcess(ctx, task, args,
-				func(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
-					event := msg.Value.(*ntypes.Event)
+				func(ctx context.Context, msg commtypes.MessageG[string, *ntypes.Event], argsTmp interface{}) error {
+					event := msg.Value.Unwrap()
 					if event.Etype == ntypes.AUCTION {
-						_, err := aucBySellerChain.RunChains(ctx, msg)
+						err := aucBySellerIdProc.Process(ctx, msg)
 						if err != nil {
 							return err
 						}
 					} else if event.Etype == ntypes.PERSON {
-						_, err := personsByIDChain.RunChains(ctx, msg)
+						err := perByIDProc.Process(ctx, msg)
 						if err != nil {
 							return err
 						}
 					}
 					return nil
-				})
+				}, msgSerde)
 		}).Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d",
 		h.funcName, sp.InputTopicNames[0], sp.ParNum)

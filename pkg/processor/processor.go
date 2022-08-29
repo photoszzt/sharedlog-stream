@@ -3,7 +3,6 @@ package processor
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/optional"
 )
 
 type Processor interface {
@@ -11,6 +10,7 @@ type Processor interface {
 	// Process processes the stream commtypes.Message.
 	ProcessAndReturn(context.Context, commtypes.Message) ([]commtypes.Message, error)
 	IProcess
+	NextProcessor(nextProcessor IProcess)
 }
 
 type CachedProcessor interface {
@@ -19,7 +19,7 @@ type CachedProcessor interface {
 }
 
 type IProcessG[KIn, VIn any] interface {
-	Process(ctx context.Context, msg commtypes.MessageG[optional.Option[KIn], optional.Option[VIn]]) error
+	Process(ctx context.Context, msg commtypes.MessageG[KIn, VIn]) error
 }
 
 type IProcess interface {
@@ -28,10 +28,9 @@ type IProcess interface {
 
 type ProcessorG[KIn, VIn, KOut, VOut any] interface {
 	Name() string
-	ProcessAndReturn(ctx context.Context,
-		msg commtypes.MessageG[optional.Option[KIn], optional.Option[VIn]],
-	) ([]commtypes.MessageG[optional.Option[KOut], optional.Option[VOut]], error)
+	ProcessAndReturn(ctx context.Context, msg commtypes.MessageG[KIn, VIn]) ([]commtypes.MessageG[KOut, VOut], error)
 	IProcessG[KIn, VIn]
+	NextProcessor(nextProcessor IProcessG[KOut, VOut])
 }
 
 type CachedProcessorG[KIn, VIn, KOut, VOut any] interface {
@@ -40,13 +39,17 @@ type CachedProcessorG[KIn, VIn, KOut, VOut any] interface {
 }
 
 type BaseProcessorG[KIn, VIn, KOut, VOut any] struct {
-	ProcessingFuncG func(ctx context.Context, msg commtypes.MessageG[optional.Option[KIn],
-		optional.Option[VIn]]) ([]commtypes.MessageG[optional.Option[KOut], optional.Option[VOut]], error)
+	ProcessingFuncG func(ctx context.Context, msg commtypes.MessageG[KIn,
+		VIn]) ([]commtypes.MessageG[KOut, VOut], error)
 	nextProcessors []IProcessG[KOut, VOut]
 }
 
+func (b *BaseProcessorG[KIn, VIn, KOut, VOut]) NextProcessor(nextProcessor IProcessG[KOut, VOut]) {
+	b.nextProcessors = append(b.nextProcessors, nextProcessor)
+}
+
 func (b *BaseProcessorG[KIn, VIn, KOut, VOut]) Process(ctx context.Context,
-	msg commtypes.MessageG[optional.Option[KIn], optional.Option[VIn]],
+	msg commtypes.MessageG[KIn, VIn],
 ) error {
 	result, err := b.ProcessingFuncG(ctx, msg)
 	if err != nil {
@@ -66,6 +69,10 @@ func (b *BaseProcessorG[KIn, VIn, KOut, VOut]) Process(ctx context.Context,
 type BaseProcessor struct {
 	ProcessingFunc func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error)
 	nextProcessors []IProcess
+}
+
+func (b *BaseProcessor) NextProcessor(nextProcessor IProcess) {
+	b.nextProcessors = append(b.nextProcessors, nextProcessor)
 }
 
 func (b *BaseProcessor) Process(ctx context.Context, msg commtypes.Message) error {

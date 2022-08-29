@@ -6,11 +6,11 @@ import (
 	"sharedlog-stream/pkg/utils"
 )
 
-type ChangeSizeG[V any] struct {
+type ChangeSize[V any] struct {
 	ValSizeFunc func(v V) int64
 }
 
-func (cs ChangeSizeG[V]) SizeOfChange(c Change) int64 {
+func (cs ChangeSize[V]) SizeOfChange(c Change) int64 {
 	total := int64(0)
 	if !utils.IsNil(c.NewVal) {
 		total += cs.ValSizeFunc(c.NewVal.(V))

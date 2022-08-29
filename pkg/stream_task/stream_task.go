@@ -10,17 +10,17 @@ import (
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/transaction"
-	"sharedlog-stream/pkg/txn_data"
 	"time"
 )
 
-type ProcessFunc func(ctx context.Context, task *StreamTask, args processor.ExecutionContext) (*common.FnOutput, *commtypes.MsgAndSeq)
+type ProcessFunc func(ctx context.Context, task *StreamTask,
+	args processor.ExecutionContext) (*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq])
 
 type StreamTask struct {
 	appProcessFunc ProcessFunc
@@ -101,25 +101,23 @@ func ExecuteApp(ctx context.Context,
 	return ret
 }
 
-func handleCtrlMsg(ctx context.Context, ctrlMsg *commtypes.MsgAndSeq,
+func handleCtrlMsg(ctx context.Context, ctrlRawMsg commtypes.RawMsgAndSeq,
 	t *StreamTask, args *StreamTaskArgs, warmupCheck *stats.Warmup,
 ) *common.FnOutput {
-	key := ctrlMsg.Msg.Key
-	if key == txn_data.SCALE_FENCE_KEY {
-		ret := HandleScaleEpochAndBytes(ctx, ctrlMsg, args.ectx)
+	if ctrlRawMsg.Mark == commtypes.SCALE_FENCE {
+		ret := HandleScaleEpochAndBytes(ctx, ctrlRawMsg, args.ectx)
 		if ret.Success {
 			updateReturnMetric(ret, warmupCheck,
 				args.waitEndMark, t.GetEndDuration(), args.ectx.SubstreamNum())
 		}
 		return ret
-	} else if key == commtypes.END_OF_STREAM_KEY {
-		st := ctrlMsg.Msg.Value.(producer_consumer.StartTimeAndProdIdx)
+	} else if ctrlRawMsg.Mark == commtypes.STREAM_END {
 		epochMarkerSerde, err := commtypes.GetEpochMarkerSerdeG(args.serdeFormat)
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}
 		epochMarker := commtypes.EpochMarker{
-			StartTime: st.StartTime,
+			StartTime: ctrlRawMsg.StartTime,
 			Mark:      commtypes.STREAM_END,
 			ProdIndex: args.ectx.SubstreamNum(),
 		}
@@ -127,25 +125,27 @@ func handleCtrlMsg(ctx context.Context, ctrlMsg *commtypes.MsgAndSeq,
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}
-		msgToPush := commtypes.Message{Key: ctrlMsg.Msg.Key, Value: encoded}
+		ctrlRawMsg.Payload = encoded
 		for _, sink := range args.ectx.Producers() {
 			if args.fixedOutParNum >= 0 {
 				// debug.Fprintf(os.Stderr, "produce stream end mark to %s %d\n",
 				// 	sink.Stream().TopicName(), ectx.SubstreamNum())
-				err := sink.Produce(ctx, msgToPush, args.ectx.SubstreamNum(), true)
+				_, err := sink.ProduceCtrlMsg(ctx, ctrlRawMsg, []uint8{args.ectx.SubstreamNum()})
 				if err != nil {
 					return &common.FnOutput{Success: false, Message: err.Error()}
 				}
 			} else {
+				parNums := make([]uint8, 0, sink.Stream().NumPartition())
 				for par := uint8(0); par < sink.Stream().NumPartition(); par++ {
-					err := sink.Produce(ctx, msgToPush, par, true)
-					if err != nil {
-						return &common.FnOutput{Success: false, Message: err.Error()}
-					}
+					parNums = append(parNums, par)
+				}
+				_, err := sink.ProduceCtrlMsg(ctx, ctrlRawMsg, parNums)
+				if err != nil {
+					return &common.FnOutput{Success: false, Message: err.Error()}
 				}
 			}
 		}
-		t.SetEndDuration(st.StartTime)
+		t.SetEndDuration(ctrlRawMsg.StartTime)
 		ret := &common.FnOutput{Success: true}
 		updateReturnMetric(ret, warmupCheck,
 			args.waitEndMark, t.GetEndDuration(), args.ectx.SubstreamNum())
@@ -418,14 +418,12 @@ func initAfterMarkOrCommit(ctx context.Context, t *StreamTask, args *StreamTaskA
 	return nil
 }
 
-func HandleScaleEpochAndBytes(ctx context.Context, msg *commtypes.MsgAndSeq,
+func HandleScaleEpochAndBytes(ctx context.Context, msg commtypes.RawMsgAndSeq,
 	args processor.ExecutionContext,
 ) *common.FnOutput {
-	v := msg.Msg.Value.(producer_consumer.ScaleEpochAndBytes)
-	msgToPush := commtypes.Message{Key: msg.Msg.Key, Value: v.Payload}
 	for _, sink := range args.Producers() {
 		if sink.Stream().NumPartition() > args.SubstreamNum() {
-			err := sink.Produce(ctx, msgToPush, args.SubstreamNum(), true)
+			_, err := sink.ProduceCtrlMsg(ctx, msg, []uint8{args.SubstreamNum()})
 			if err != nil {
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}

@@ -7,6 +7,8 @@ import (
 
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
+	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/stream_task"
@@ -42,9 +44,10 @@ func (h *query1Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	return common.CompressData(encodedOutput), nil
 }
 
-func q1mapFunc(_ string, value *ntypes.Event) (*ntypes.Event, error) {
-	value.Bid.Price = uint64(value.Bid.Price * 908 / 1000.0)
-	return value, nil
+func q1mapFunc(_ optional.Option[string], value optional.Option[*ntypes.Event]) (*ntypes.Event, error) {
+	v := value.Unwrap()
+	v.Bid.Price = uint64(v.Bid.Price * 908 / 1000.0)
+	return v, nil
 }
 
 func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -55,20 +58,38 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 			Message: err.Error(),
 		}
 	}
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	msgSerde, err := commtypes.GetMsgGSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	srcs[0].SetInitialSource(true)
 	sinks[0].MarkFinalOutput()
 	ectx := processor.NewExecutionContextFromComponents(proc_interface.NewBaseSrcsSinks(srcs, sinks),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum))
-	ectx.
-		Via(processor.NewMeteredProcessor(
-			processor.NewStreamFilterProcessorG[string, *ntypes.Event]("filterBid",
-				processor.PredicateFuncG[string, *ntypes.Event](only_bid)))).
-		Via(processor.NewMeteredProcessor(
-			processor.NewStreamMapValuesProcessorG[string, *ntypes.Event, *ntypes.Event](
-				"mapBid", processor.ValueMapperWithKeyFuncG[string, *ntypes.Event, *ntypes.Event](q1mapFunc)))).
-		Via(processor.NewMeteredProcessor(
-			processor.NewFixedSubstreamOutputProcessor(sinks[0], sp.ParNum)))
-	task := stream_task.NewStreamTaskBuilder().MarkFinalStage().Build()
+
+	filterProc := processor.NewMeteredProcessorG(
+		processor.NewStreamFilterProcessorG[string, *ntypes.Event]("filterBid",
+			processor.PredicateFuncG[string, *ntypes.Event](only_bid)))
+	mapProc := processor.NewMeteredProcessorG[string, *ntypes.Event, string, *ntypes.Event](
+		processor.NewStreamMapValuesProcessorG[string, *ntypes.Event, *ntypes.Event](
+			"mapBid", processor.ValueMapperWithKeyFuncG[string, *ntypes.Event, *ntypes.Event](q1mapFunc)))
+	outProc := processor.NewMeteredProcessorG[string, *ntypes.Event, any, any](
+		processor.NewFixedSubstreamOutputProcessorG(sinks[0], sp.ParNum, msgSerde))
+	filterProc.NextProcessor(mapProc)
+	mapProc.NextProcessor(outProc)
+	task := stream_task.NewStreamTaskBuilder().MarkFinalStage().
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, args processor.ExecutionContext) (*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq]) {
+			return stream_task.CommonProcess(ctx, task, args.(*processor.BaseExecutionContext),
+				func(ctx context.Context, msg commtypes.MessageG[string, *ntypes.Event], argsTmp interface{}) error {
+					return filterProc.Process(ctx, msg)
+				}, msgSerde)
+		}).
+		Build()
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,
 			fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],

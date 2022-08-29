@@ -7,10 +7,10 @@ import (
 	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
-	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
@@ -49,81 +49,42 @@ func (h *q6MaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return common.CompressData(encodedOutput), nil
 }
 
-func (h *q6MaxBid) getExecutionCtx(ctx context.Context, sp *common.QueryInput) (processor.BaseExecutionContext, error) {
-	inputStream, outputStreams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
-	if err != nil {
-		return processor.BaseExecutionContext{}, err
-	}
+func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	abSerde, err := ntypes.GetAuctionBidSerdeG(serdeFormat)
 	if err != nil {
-		return processor.BaseExecutionContext{}, err
+		return common.GenErrFnOutput(err)
 	}
 	asSerde, err := ntypes.GetAuctionIDSellerSerdeG(serdeFormat)
 	if err != nil {
-		return processor.BaseExecutionContext{}, err
+		return common.GenErrFnOutput(err)
 	}
-	inMsgSerde, err := commtypes.GetMsgSerdeG(serdeFormat, asSerde, abSerde)
+	inMsgSerde, err := commtypes.GetMsgGSerdeG(serdeFormat, asSerde, abSerde)
 	if err != nil {
-		return processor.BaseExecutionContext{}, err
+		return common.GenErrFnOutput(err)
 	}
-	inputConfig := &producer_consumer.StreamConsumerConfigG[ntypes.AuctionIdSeller, *ntypes.AuctionBid]{
-		Timeout:     common.SrcConsumeTimeout,
-		MsgSerde:    inMsgSerde,
-		SerdeFormat: serdeFormat,
-	}
-	ptSerde, err := ntypes.GetPriceTimeSerde(serdeFormat)
-	if err != nil {
-		return processor.BaseExecutionContext{}, err
-	}
-	changeSerde, err := commtypes.GetChangeSerdeG(serdeFormat, ptSerde)
-	if err != nil {
-		return processor.BaseExecutionContext{}, err
-	}
-	outMsgSerde, err := commtypes.GetMsgSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, changeSerde)
-	if err != nil {
-		return processor.BaseExecutionContext{}, fmt.Errorf("get msg serde err: %v", err)
-	}
-	outConfig := &producer_consumer.StreamSinkConfig[uint64, commtypes.Change]{
-		MsgSerde:      outMsgSerde,
-		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
-	}
-	warmup := time.Duration(sp.WarmupS) * time.Second
-	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumerG(inputStream,
-		inputConfig, sp.NumSubstreamProducer[0], sp.ParNum)
-	if err != nil {
-		return processor.BaseExecutionContext{}, err
-	}
-	src := producer_consumer.NewMeteredConsumer(consumer, warmup)
-	sink := producer_consumer.NewMeteredProducer(
-		producer_consumer.NewShardedSharedLogStreamProducer(outputStreams[0], outConfig),
-		warmup)
-	src.SetInitialSource(false)
-	ectx := processor.NewExecutionContext([]producer_consumer.MeteredConsumerIntr{src},
-		[]producer_consumer.MeteredProducerIntr{sink}, h.funcName, sp.ScaleEpoch, sp.ParNum)
-	return ectx, nil
-}
-
-func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	ectx, err := h.getExecutionCtx(ctx, sp)
-	if err != nil {
-		panic(err)
-	}
-	maxBidStoreName := "q6MaxBidKVStore"
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	ptSerde, err := ntypes.GetPriceTimeSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	asSerde, err := ntypes.GetAuctionIDSellerSerdeG(serdeFormat)
+	changeSerde, err := commtypes.GetChangeGSerdeG(serdeFormat, ptSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	outMsgSerde, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, changeSerde)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	ectx, err := getExecutionCtxSingleSrcSinkMiddle(ctx, h.env, h.funcName, sp)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	maxBidStoreName := "q6MaxBidKVStore"
 	msgSerde, err := processor.MsgSerdeWithValueTsG(serdeFormat, asSerde, ptSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	mp, err := store_with_changelog.NewMaterializeParamBuilder[ntypes.AuctionIdSeller, commtypes.ValueTimestampG[*ntypes.PriceTime]]().
+	mp, err := store_with_changelog.NewMaterializeParamBuilder[ntypes.AuctionIdSeller, commtypes.ValueTimestampG[ntypes.PriceTime]]().
 		MessageSerde(msgSerde).
 		StoreName(maxBidStoreName).
 		ParNum(sp.ParNum).
@@ -140,59 +101,62 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	compare := func(a, b ntypes.AuctionIdSeller) bool {
 		return ntypes.CompareAuctionIDSeller(a, b) < 0
 	}
-	var aggStore store.KeyValueStoreBackedByChangelogG[ntypes.AuctionIdSeller, commtypes.ValueTimestampG[*ntypes.PriceTime]]
+	var aggStore store.KeyValueStoreBackedByChangelogG[ntypes.AuctionIdSeller, commtypes.ValueTimestampG[ntypes.PriceTime]]
 	kvstore, err := store_with_changelog.CreateInMemorySkipmapKVTableWithChangelogG(
 		mp, store.LessFunc[ntypes.AuctionIdSeller](compare))
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
 	if h.useCache {
-		sizeOfVTs := commtypes.ValueTimestampGSize[*ntypes.PriceTime]{
-			ValSizeFunc: ntypes.SizeOfPriceTimePtrIn,
+		sizeOfVTs := commtypes.ValueTimestampGSize[ntypes.PriceTime]{
+			ValSizeFunc: ntypes.SizeOfPriceTime,
 		}
-		cacheStore := store.NewCachingKeyValueStoreG[ntypes.AuctionIdSeller, commtypes.ValueTimestampG[*ntypes.PriceTime]](
+		cacheStore := store.NewCachingKeyValueStoreG[ntypes.AuctionIdSeller, commtypes.ValueTimestampG[ntypes.PriceTime]](
 			ctx, kvstore, ntypes.SizeOfAuctionIdSeller, sizeOfVTs.SizeOfValueTimestamp, q4SizePerStore)
 		aggStore = cacheStore
 	} else {
 		aggStore = kvstore
 	}
-	chain := ectx.Via(processor.NewMeteredProcessor(
-		processor.NewStreamAggregateProcessorG[ntypes.AuctionIdSeller, *ntypes.AuctionBid, *ntypes.PriceTime]("maxBid",
+	aggProc := processor.NewMeteredProcessorG(
+		processor.NewStreamAggregateProcessorG[ntypes.AuctionIdSeller, *ntypes.AuctionBid, ntypes.PriceTime]("maxBid",
 			aggStore,
-			processor.InitializerFuncG[*ntypes.PriceTime](func() *ntypes.PriceTime { return nil }),
-			processor.AggregatorFuncG[ntypes.AuctionIdSeller, *ntypes.AuctionBid, *ntypes.PriceTime](
-				func(key ntypes.AuctionIdSeller, v *ntypes.AuctionBid, agg *ntypes.PriceTime) *ntypes.PriceTime {
-					if agg == nil {
-						return &ntypes.PriceTime{Price: v.BidPrice, DateTime: v.BidDateTime}
+			processor.InitializerFuncG[ntypes.PriceTime](func() optional.Option[ntypes.PriceTime] { return optional.None[ntypes.PriceTime]() }),
+			processor.AggregatorFuncG[ntypes.AuctionIdSeller, *ntypes.AuctionBid, ntypes.PriceTime](
+				func(key ntypes.AuctionIdSeller, v *ntypes.AuctionBid, agg optional.Option[ntypes.PriceTime]) optional.Option[ntypes.PriceTime] {
+					if agg.IsNone() {
+						return optional.Some(ntypes.PriceTime{Price: v.BidPrice, DateTime: v.BidDateTime})
 					}
-					if v.BidPrice > agg.Price {
-						return &ntypes.PriceTime{Price: v.BidPrice, DateTime: v.BidDateTime}
+					aggVal := agg.Unwrap()
+					if v.BidPrice > aggVal.Price {
+						return optional.Some(ntypes.PriceTime{Price: v.BidPrice, DateTime: v.BidDateTime})
 					} else {
 						return agg
 					}
-				})))).
-		Via(processor.NewMeteredProcessor(processor.NewTableGroupByMapProcessor("changeKey",
-			processor.MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
-				return key.(ntypes.AuctionIdSeller).Seller, value, nil
-			}))))
-	cachedProcessors := make([]processor.CachedProcessor, 0, 1)
-	if h.useCache {
-		cs := commtypes.ChangeSizeG[*ntypes.PriceTime]{
-			ValSizeFunc: ntypes.SizeOfPriceTimePtrIn,
-		}
-		cp := processor.NewGroupByOutputProcessorWithCache(ctx, ectx.Producers()[0],
-			commtypes.SizeOfUint64, cs.SizeOfChange, q4SizePerStore, &ectx)
-		cachedProcessors = append(cachedProcessors, cp)
-		chain.Via(cp)
-	} else {
-		chain.Via(processor.NewGroupByOutputProcessor(ectx.Producers()[0], &ectx))
-	}
-	task := stream_task.NewStreamTaskBuilder().Build()
+				}), h.useCache))
+	groupByProc := processor.NewTableGroupByMapProcessorG[ntypes.AuctionIdSeller, ntypes.PriceTime, uint64, ntypes.PriceTime]("changeKey",
+		processor.MapperFuncG[ntypes.AuctionIdSeller, ntypes.PriceTime, uint64, ntypes.PriceTime](
+			func(key optional.Option[ntypes.AuctionIdSeller], value optional.Option[ntypes.PriceTime]) (uint64, ntypes.PriceTime, error) {
+				k := key.Unwrap()
+				return k.Seller, value.Unwrap(), nil
+			}))
+	sinkProc := processor.NewGroupByOutputProcessorG(ectx.Producers()[0], &ectx, outMsgSerde)
+	aggProc.NextProcessor(groupByProc)
+	groupByProc.NextProcessor(sinkProc)
+	task := stream_task.NewStreamTaskBuilder().
+		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, args processor.ExecutionContext) (
+			*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq],
+		) {
+			return stream_task.CommonProcess(ctx, task, args.(*processor.BaseExecutionContext),
+				func(ctx context.Context, msg commtypes.MessageG[ntypes.AuctionIdSeller, *ntypes.AuctionBid], argsTmp interface{}) error {
+					return aggProc.Process(ctx, msg)
+				}, inMsgSerde)
+		}).
+		Build()
 	kvc := map[string]store.KeyValueStoreOpWithChangelog{kvstore.ChangelogTopicName(): aggStore}
 	builder := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,
 		fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 			sp.ParNum, sp.OutputTopicNames[0]))
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp, builder).
-		KVStoreChangelogs(kvc).CachedProcessors(cachedProcessors).Build()
+		KVStoreChangelogs(kvc).Build()
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs)
 }

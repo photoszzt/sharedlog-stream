@@ -3,7 +3,6 @@ package processor
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/utils"
 )
@@ -47,7 +46,7 @@ func (p *StoreToWindowTableProcessor) ProcessAndReturn(ctx context.Context, msg 
 type StoreToWindowTableProcessorG[K, V any] struct {
 	store store.CoreWindowStoreG[K, V]
 	name  string
-	BaseProcessor
+	BaseProcessorG[K, V, K, V]
 	observedTs int64
 }
 
@@ -55,26 +54,29 @@ var _ = Processor(&StoreToWindowTableProcessor{})
 
 func NewStoreToWindowTableProcessorG[K, V any](store store.CoreWindowStoreG[K, V]) *StoreToWindowTableProcessorG[K, V] {
 	p := &StoreToWindowTableProcessorG[K, V]{
-		store:         store,
-		name:          "StoreTo" + store.Name(),
-		BaseProcessor: BaseProcessor{},
+		store:          store,
+		name:           "StoreTo" + store.Name(),
+		BaseProcessorG: BaseProcessorG[K, V, K, V]{},
 	}
-	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	p.BaseProcessorG.ProcessingFuncG = p.ProcessAndReturn
 	return p
 }
 
 func (p *StoreToWindowTableProcessorG[K, V]) Name() string { return p.name }
-func (p *StoreToWindowTableProcessorG[K, V]) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
+func (p *StoreToWindowTableProcessorG[K, V]) ProcessAndReturn(ctx context.Context,
+	msg commtypes.MessageG[K, V],
+) ([]commtypes.MessageG[K, V], error) {
 	if msg.Timestamp > p.observedTs {
 		p.observedTs = msg.Timestamp
 	}
-	if !utils.IsNil(msg.Key) {
-		err := p.store.Put(ctx, msg.Key.(K), optional.Some(msg.Value.(V)), p.observedTs)
+	key, ok := msg.Key.Take()
+	if ok {
+		err := p.store.Put(ctx, key, msg.Value, p.observedTs)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return []commtypes.Message{msg}, nil
+	return []commtypes.MessageG[K, V]{msg}, nil
 }
 
 // for test
@@ -95,11 +97,11 @@ func ToInMemSkipMapWindowTable[K, V any](
 	storeName string,
 	joinWindow *JoinWindows,
 	compare store.CompareFuncG[K],
-) (*MeteredProcessor, store.CoreWindowStoreG[K, V], error) {
+) (*MeteredProcessorG[K, V, K, V], store.CoreWindowStoreG[K, V], error) {
 	store := store.NewInMemorySkipMapWindowStore[K, V](
 		storeName,
 		joinWindow.MaxSize()+joinWindow.GracePeriodMs(),
 		joinWindow.MaxSize(), true, compare)
-	toTableProc := NewMeteredProcessor(NewStoreToWindowTableProcessorG[K, V](store))
+	toTableProc := NewMeteredProcessorG[K, V, K, V](NewStoreToWindowTableProcessorG[K, V](store))
 	return toTableProc, store, nil
 }

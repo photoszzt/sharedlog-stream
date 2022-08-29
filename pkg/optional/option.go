@@ -23,6 +23,19 @@ type Option[T any] struct {
 	exists *struct{}
 }
 
+type OptionSize[T any] struct {
+	ValSizeFunc func(v T) int64
+}
+
+func (o OptionSize[T]) SizeOfOption(vOp Option[T]) int64 {
+	v, ok := vOp.Take()
+	if ok {
+		return o.ValSizeFunc(v)
+	} else {
+		return 0
+	}
+}
+
 // Some is a function to make a Option type instance with the actual value.
 func Some[T any](value T) Option[T] {
 	return Option[T]{

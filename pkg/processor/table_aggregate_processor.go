@@ -102,17 +102,17 @@ type TableAggregateProcessorG[K, V, VA any] struct {
 	add         AggregatorG[K, V, VA]
 	remove      AggregatorG[K, V, VA]
 	name        string
-	BaseProcessor
+	BaseProcessorG[K, commtypes.ChangeG[V], K, commtypes.ChangeG[VA]]
 }
 
-var _ = Processor(&TableAggregateProcessorG[int, int, int]{})
+var _ = ProcessorG[int, commtypes.ChangeG[int], int, commtypes.ChangeG[int]](&TableAggregateProcessorG[int, int, int]{})
 
 func NewTableAggregateProcessorG[K, V, VA any](name string,
 	store store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[VA]],
 	initializer InitializerG[VA],
 	add AggregatorG[K, V, VA],
 	remove AggregatorG[K, V, VA],
-) *TableAggregateProcessorG[K, V, VA] {
+) ProcessorG[K, commtypes.ChangeG[V], K, commtypes.ChangeG[VA]] {
 	p := &TableAggregateProcessorG[K, V, VA]{
 		initializer: initializer,
 		add:         add,
@@ -120,7 +120,7 @@ func NewTableAggregateProcessorG[K, V, VA any](name string,
 		name:        name,
 		store:       store,
 	}
-	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	p.BaseProcessorG.ProcessingFuncG = p.ProcessAndReturn
 	return p
 }
 
@@ -128,11 +128,13 @@ func (p *TableAggregateProcessorG[K, V, VA]) Name() string {
 	return p.name
 }
 
-func (p *TableAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-	if utils.IsNil(msg.Key) {
+func (p *TableAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[V]]) (
+	[]commtypes.MessageG[K, commtypes.ChangeG[VA]], error,
+) {
+	if msg.Key.IsNone() {
 		return nil, fmt.Errorf("msg key for table aggregate should not be nil")
 	}
-	key := msg.Key.(K)
+	key := msg.Key.Unwrap()
 	oldAggTs, ok, err := p.store.Get(ctx, key)
 	if err != nil {
 		return nil, err
@@ -145,10 +147,10 @@ func (p *TableAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Contex
 	var intermediateAgg optional.Option[VA]
 
 	// first try to remove the old val
-	msgVal := msg.Value.(commtypes.Change)
-	oldAggUnwrap, hasOldAgg := oldAgg.Take()
-	if !utils.IsNil(msgVal.OldVal) && hasOldAgg {
-		intermediateAgg = optional.Some(p.remove.Apply(key, msgVal.OldVal.(V), oldAggUnwrap))
+	msgVal := msg.Value.Unwrap()
+	msgOldVal, hasMsgOldVal := msgVal.OldVal.Take()
+	if hasMsgOldVal && oldAgg.IsSome() {
+		intermediateAgg = p.remove.Apply(key, msgOldVal, oldAgg)
 		newTs = utils.MaxInt64(msg.Timestamp, oldAggTs.Timestamp)
 	} else {
 		intermediateAgg = oldAgg
@@ -156,15 +158,15 @@ func (p *TableAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Contex
 
 	// then try to add the new val
 	var newAgg optional.Option[VA]
-	if !utils.IsNil(msgVal.NewVal) {
-		var initAgg VA
-		midAgg, hasMidAgg := intermediateAgg.Take()
-		if hasMidAgg {
-			initAgg = midAgg
+	msgNewVal, hasMsgNewVal := msgVal.NewVal.Take()
+	if hasMsgNewVal {
+		var initAgg optional.Option[VA]
+		if intermediateAgg.IsSome() {
+			initAgg = intermediateAgg
 		} else {
 			initAgg = p.initializer.Apply()
 		}
-		newAgg = optional.Some(p.add.Apply(key, msgVal.NewVal.(V), initAgg))
+		newAgg = p.add.Apply(key, msgNewVal, initAgg)
 		if !utils.IsNil(oldAggTs) {
 			newTs = utils.MaxInt64(msg.Timestamp, oldAggTs.Timestamp)
 		}
@@ -176,19 +178,9 @@ func (p *TableAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Contex
 	if err != nil {
 		return nil, err
 	}
-	var newA interface{}
-	var oldA interface{}
-	newA, hasNewAgg := newAgg.Take()
-	oldA, hasOldA := oldAgg.Take()
-	if !hasNewAgg {
-		newA = nil
-	}
-	if !hasOldA {
-		oldA = nil
-	}
-	change := commtypes.Change{
-		NewVal: newA,
-		OldVal: oldA,
-	}
-	return []commtypes.Message{{Key: msg.Key, Value: change, Timestamp: newTs}}, nil
+	change := optional.Some(commtypes.ChangeG[VA]{
+		NewVal: newAgg,
+		OldVal: oldAgg,
+	})
+	return []commtypes.MessageG[K, commtypes.ChangeG[VA]]{{Key: msg.Key, Value: change, Timestamp: newTs}}, nil
 }
