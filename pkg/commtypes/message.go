@@ -2,7 +2,6 @@ package commtypes
 
 import (
 	"fmt"
-	"os"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/utils"
 )
@@ -258,10 +257,8 @@ func DecodeRawMsgSeqG[K, V any](rawMsg RawMsgAndSeq, msgSerde MessageGSerdeG[K, 
 	if rawMsg.PayloadArr != nil {
 		msgArr := make([]MessageG[K, V], 0, len(rawMsg.PayloadArr))
 		for _, payload := range rawMsg.PayloadArr {
-			fmt.Fprintf(os.Stderr, "payload is %v\n", string(payload))
 			msg, err := msgSerde.Decode(payload)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "fail to decode msg: %s\n", string(payload))
 				return MsgAndSeqG[K, V]{}, fmt.Errorf("fail to decode msg 1: %v, serde: %+v", err, msgSerde)
 			}
 			msgArr = append(msgArr, msg)
