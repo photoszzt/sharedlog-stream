@@ -159,12 +159,6 @@ func flushStreams(ctx context.Context, t *StreamTask,
 	args *StreamTaskArgs,
 ) error {
 	pStart := stats.TimerBegin()
-	for _, cachedProcessor := range args.cachedProcessors {
-		err := cachedProcessor.Flush(ctx)
-		if err != nil {
-			return err
-		}
-	}
 	for _, kvchangelog := range args.kvChangelogs {
 		if err := kvchangelog.Flush(ctx); err != nil {
 			return err
