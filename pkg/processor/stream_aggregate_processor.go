@@ -99,13 +99,21 @@ func NewStreamAggregateProcessorG[K, V, VA any](
 	if useCache {
 		store.SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[commtypes.ValueTimestampG[VA]]]) error {
 			change := msg.Value.Unwrap()
-			newValTs := change.NewVal.Unwrap()
-			ts := newValTs.Timestamp
 			oldVal := optional.Map(change.OldVal, func(oldVal commtypes.ValueTimestampG[VA]) VA {
 				return oldVal.Value
 			})
+			newVal := optional.Map(change.NewVal, func(newVal commtypes.ValueTimestampG[VA]) VA {
+				return newVal.Value
+			})
+			ts := int64(0)
+			if change.NewVal.IsSome() {
+				newValTs := change.NewVal.Unwrap()
+				ts = newValTs.Timestamp
+			} else {
+				ts = msg.Timestamp
+			}
 			v := commtypes.ChangeG[VA]{
-				NewVal: optional.Some(newValTs.Value),
+				NewVal: newVal,
 				OldVal: oldVal,
 			}
 			msgForNext := commtypes.MessageG[K, commtypes.ChangeG[VA]]{
@@ -156,7 +164,7 @@ func (p *StreamAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Conte
 	}
 	msgVal := msg.Value.Unwrap()
 	newAgg := p.aggregator.Apply(key, msgVal, oldAgg)
-	err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(newAgg, newTs))
+	err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(newAgg, newTs), newTs)
 	if err != nil {
 		return nil, err
 	}

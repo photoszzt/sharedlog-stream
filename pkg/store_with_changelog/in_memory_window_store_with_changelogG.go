@@ -62,7 +62,7 @@ func (st *InMemoryWindowStoreWithChangelogG[K, V]) Flush(ctx context.Context) er
 }
 
 func (st *InMemoryWindowStoreWithChangelogG[K, V]) Put(ctx context.Context,
-	key K, value optional.Option[V], windowStartTimestamp int64,
+	key K, value optional.Option[V], windowStartTimestamp int64, currentStreamTime int64,
 ) error {
 	keyTs := commtypes.KeyAndWindowStartTsG[K]{
 		Key:           key,
@@ -98,7 +98,7 @@ func (st *InMemoryWindowStoreWithChangelogG[K, V]) Put(ctx context.Context,
 		st.trackFuncLat.AddSample(tElapsed)
 
 		// putStart := stats.TimerBegin()
-		err = st.windowStore.Put(ctx, key, value, windowStartTimestamp)
+		err = st.windowStore.Put(ctx, key, value, windowStartTimestamp, currentStreamTime)
 		// elapsed := stats.Elapsed(putStart).Microseconds()
 		// st.storePutLatency.AddSample(elapsed)
 		return err
@@ -112,13 +112,13 @@ func (st *InMemoryWindowStoreWithChangelogG[K, V]) PutWithoutPushToChangelog(ctx
 	key commtypes.KeyT, value commtypes.ValueT,
 ) error {
 	keyTs := key.(commtypes.KeyAndWindowStartTsG[K])
-	return st.windowStore.Put(ctx, keyTs.Key, optional.Some(value.(V)), keyTs.WindowStartTs)
+	return st.windowStore.Put(ctx, keyTs.Key, optional.Some(value.(V)), keyTs.WindowStartTs, 0)
 }
 
 func (st *InMemoryWindowStoreWithChangelogG[K, V]) PutWithoutPushToChangelogG(ctx context.Context,
 	key K, value optional.Option[V], windowStartTs int64,
 ) error {
-	return st.windowStore.Put(ctx, key, value, windowStartTs)
+	return st.windowStore.Put(ctx, key, value, windowStartTs, 0)
 }
 
 func (st *InMemoryWindowStoreWithChangelogG[K, V]) Get(ctx context.Context, key K, windowStartTimestamp int64) (V, bool, error) {

@@ -28,48 +28,48 @@ func assertFetchG(ctx context.Context, store CoreWindowStoreG[uint32, string],
 }
 
 func putFirstBatchG(ctx context.Context, store CoreWindowStoreG[uint32, string], startTime int64) error {
-	err := store.Put(ctx, uint32(0), optional.Some("zero"), startTime)
+	err := store.Put(ctx, uint32(0), optional.Some("zero"), startTime, 0)
 	if err != nil {
 		return err
 	}
-	err = store.Put(ctx, uint32(1), optional.Some("one"), startTime+1)
+	err = store.Put(ctx, uint32(1), optional.Some("one"), startTime+1, 0)
 	if err != nil {
 		return err
 	}
-	err = store.Put(ctx, uint32(2), optional.Some("two"), startTime+2)
+	err = store.Put(ctx, uint32(2), optional.Some("two"), startTime+2, 0)
 	if err != nil {
 		return err
 	}
-	err = store.Put(ctx, uint32(4), optional.Some("four"), startTime+4)
+	err = store.Put(ctx, uint32(4), optional.Some("four"), startTime+4, 0)
 	if err != nil {
 		return err
 	}
-	err = store.Put(ctx, uint32(5), optional.Some("five"), startTime+5)
+	err = store.Put(ctx, uint32(5), optional.Some("five"), startTime+5, 0)
 	return err
 }
 
 func putSecondBatchG(ctx context.Context, store CoreWindowStoreG[uint32, string], startTime int64) error {
-	err := store.Put(ctx, uint32(2), optional.Some("two+1"), startTime+3)
+	err := store.Put(ctx, uint32(2), optional.Some("two+1"), startTime+3, 0)
 	if err != nil {
 		return err
 	}
-	err = store.Put(ctx, uint32(2), optional.Some("two+2"), startTime+4)
+	err = store.Put(ctx, uint32(2), optional.Some("two+2"), startTime+4, 0)
 	if err != nil {
 		return err
 	}
-	err = store.Put(ctx, uint32(2), optional.Some("two+3"), startTime+5)
+	err = store.Put(ctx, uint32(2), optional.Some("two+3"), startTime+5, 0)
 	if err != nil {
 		return err
 	}
-	err = store.Put(ctx, uint32(2), optional.Some("two+4"), startTime+6)
+	err = store.Put(ctx, uint32(2), optional.Some("two+4"), startTime+6, 0)
 	if err != nil {
 		return err
 	}
-	err = store.Put(ctx, uint32(2), optional.Some("two+5"), startTime+7)
+	err = store.Put(ctx, uint32(2), optional.Some("two+5"), startTime+7, 0)
 	if err != nil {
 		return err
 	}
-	err = store.Put(ctx, uint32(2), optional.Some("two+6"), startTime+8)
+	err = store.Put(ctx, uint32(2), optional.Some("two+6"), startTime+8, 0)
 	return err
 }
 
@@ -430,37 +430,37 @@ func GetAndRangeTestG(ctx context.Context, store CoreWindowStoreG[uint32, string
 
 func ShouldGetAllNonDeletedMsgsTestG(ctx context.Context, store CoreWindowStoreG[uint32, string], t testing.TB) {
 	startTime := TEST_SEGMENT_INTERVAL - 4
-	err := store.Put(ctx, uint32(0), optional.Some("zero"), startTime)
+	err := store.Put(ctx, uint32(0), optional.Some("zero"), startTime, 0)
 	if err != nil {
 		t.Fatalf("put err: %v", err)
 	}
 
-	err = store.Put(ctx, uint32(1), optional.Some("one"), startTime+1)
+	err = store.Put(ctx, uint32(1), optional.Some("one"), startTime+1, 0)
 	if err != nil {
 		t.Fatalf("put err: %v", err)
 	}
 
-	err = store.Put(ctx, uint32(2), optional.Some("two"), startTime+2)
+	err = store.Put(ctx, uint32(2), optional.Some("two"), startTime+2, 0)
 	if err != nil {
 		t.Fatalf("put err: %v", err)
 	}
 
-	err = store.Put(ctx, uint32(3), optional.Some("three"), startTime+3)
+	err = store.Put(ctx, uint32(3), optional.Some("three"), startTime+3, 0)
 	if err != nil {
 		t.Fatalf("put err: %v", err)
 	}
 
-	err = store.Put(ctx, uint32(4), optional.Some("four"), startTime+4)
+	err = store.Put(ctx, uint32(4), optional.Some("four"), startTime+4, 0)
 	if err != nil {
 		t.Fatalf("put err: %v", err)
 	}
 
-	err = store.Put(ctx, uint32(1), optional.None[string](), startTime+1)
+	err = store.Put(ctx, uint32(1), optional.None[string](), startTime+1, 0)
 	if err != nil {
 		t.Fatalf("put err: %v", err)
 	}
 
-	err = store.Put(ctx, uint32(3), optional.None[string](), startTime+3)
+	err = store.Put(ctx, uint32(3), optional.None[string](), startTime+3, 0)
 	if err != nil {
 		t.Fatalf("put err: %v", err)
 	}
@@ -496,31 +496,31 @@ func ShouldGetAllNonDeletedMsgsTestG(ctx context.Context, store CoreWindowStoreG
 
 func ExpirationTestG(ctx context.Context, store CoreWindowStoreG[uint32, string], t testing.TB) {
 	currentTime := int64(0)
-	err := store.Put(ctx, uint32(1), optional.Some("one"), int64(currentTime))
+	err := store.Put(ctx, uint32(1), optional.Some("one"), int64(currentTime), 0)
 	if err != nil {
 		t.Fatalf("put err: %v", err)
 	}
 	currentTime += TEST_RETENTION_PERIOD / 4
-	err = store.Put(ctx, uint32(1), optional.Some("two"), int64(currentTime))
-	if err != nil {
-		t.Fatalf("put err: %v", err)
-	}
-
-	currentTime += TEST_RETENTION_PERIOD / 4
-	err = store.Put(ctx, uint32(1), optional.Some("three"), int64(currentTime))
+	err = store.Put(ctx, uint32(1), optional.Some("two"), int64(currentTime), 0)
 	if err != nil {
 		t.Fatalf("put err: %v", err)
 	}
 
 	currentTime += TEST_RETENTION_PERIOD / 4
-	err = store.Put(ctx, uint32(1), optional.Some("four"), int64(currentTime))
+	err = store.Put(ctx, uint32(1), optional.Some("three"), int64(currentTime), 0)
+	if err != nil {
+		t.Fatalf("put err: %v", err)
+	}
+
+	currentTime += TEST_RETENTION_PERIOD / 4
+	err = store.Put(ctx, uint32(1), optional.Some("four"), int64(currentTime), 0)
 	if err != nil {
 		t.Fatalf("put err: %v", err)
 	}
 
 	// increase current time to the full RETENTION_PERIOD to expire first record
 	currentTime += TEST_RETENTION_PERIOD / 4
-	err = store.Put(ctx, uint32(1), optional.Some("five"), int64(currentTime))
+	err = store.Put(ctx, uint32(1), optional.Some("five"), int64(currentTime), 0)
 	if err != nil {
 		t.Fatalf("put err: %v", err)
 	}
@@ -575,7 +575,7 @@ func ExpirationTestG(ctx context.Context, store CoreWindowStoreG[uint32, string]
 	}
 
 	currentTime += TEST_RETENTION_PERIOD / 4
-	err = store.Put(ctx, uint32(1), optional.Some("six"), int64(currentTime))
+	err = store.Put(ctx, uint32(1), optional.Some("six"), int64(currentTime), 0)
 	if err != nil {
 		t.Fatalf("put err: %v", err)
 	}
@@ -660,23 +660,23 @@ func ShouldGetAllTestG(ctx context.Context, store CoreWindowStoreG[uint32, strin
 }
 
 func outOfOrderPutG(ctx context.Context, store CoreWindowStoreG[uint32, string], startTime int64) error {
-	err := store.Put(ctx, uint32(4), optional.Some("four"), startTime+4)
+	err := store.Put(ctx, uint32(4), optional.Some("four"), startTime+4, 0)
 	if err != nil {
 		return err
 	}
-	err = store.Put(ctx, uint32(0), optional.Some("zero"), startTime)
+	err = store.Put(ctx, uint32(0), optional.Some("zero"), startTime, 0)
 	if err != nil {
 		return err
 	}
-	err = store.Put(ctx, uint32(2), optional.Some("two"), startTime+2)
+	err = store.Put(ctx, uint32(2), optional.Some("two"), startTime+2, 0)
 	if err != nil {
 		return err
 	}
-	err = store.Put(ctx, uint32(3), optional.Some("three"), startTime+3)
+	err = store.Put(ctx, uint32(3), optional.Some("three"), startTime+3, 0)
 	if err != nil {
 		return err
 	}
-	err = store.Put(ctx, uint32(1), optional.Some("one"), startTime+1)
+	err = store.Put(ctx, uint32(1), optional.Some("one"), startTime+1, 0)
 	if err != nil {
 		return err
 	}
@@ -1683,7 +1683,7 @@ func PutSameKeyTsTest(ctx context.Context, store CoreWindowStore, t testing.TB) 
 
 func PutSameKeyTsTestG(ctx context.Context, store CoreWindowStoreG[uint32, string], t testing.TB) {
 	startTime := TEST_SEGMENT_INTERVAL - 4
-	err := store.Put(ctx, uint32(0), optional.Some("zero"), startTime)
+	err := store.Put(ctx, uint32(0), optional.Some("zero"), startTime, 0)
 	if err != nil {
 		t.Fatalf("fail to put err: %v", err)
 	}
@@ -1703,17 +1703,17 @@ func PutSameKeyTsTestG(ctx context.Context, store CoreWindowStoreG[uint32, strin
 	}
 	checkSlice(ref_msgs, msgs, t)
 
-	err = store.Put(ctx, uint32(0), optional.Some("zero"), startTime)
+	err = store.Put(ctx, uint32(0), optional.Some("zero"), startTime, 0)
 	if err != nil {
 		t.Fatalf("fail to put err: %v", err)
 	}
 
-	err = store.Put(ctx, uint32(0), optional.Some("zero+"), startTime)
+	err = store.Put(ctx, uint32(0), optional.Some("zero+"), startTime, 0)
 	if err != nil {
 		t.Fatalf("fail to put err: %v", err)
 	}
 
-	err = store.Put(ctx, uint32(0), optional.Some("zero++"), startTime)
+	err = store.Put(ctx, uint32(0), optional.Some("zero++"), startTime, 0)
 	if err != nil {
 		t.Fatalf("fail to put err: %v", err)
 	}
@@ -1788,31 +1788,31 @@ func PutSameKeyTsTestG(ctx context.Context, store CoreWindowStoreG[uint32, strin
 
 func FetchDuplicatesG(ctx context.Context, store CoreWindowStoreG[uint32, string], t testing.TB) {
 	currentTime := 0
-	err := store.Put(ctx, uint32(1), optional.Some("one"), int64(currentTime))
+	err := store.Put(ctx, uint32(1), optional.Some("one"), int64(currentTime), 0)
 	if err != nil {
 		t.Fatalf("fail to put err: %v", err)
 	}
-	err = store.Put(ctx, uint32(1), optional.Some("one-2"), int64(currentTime))
-	if err != nil {
-		t.Fatalf("fail to put err: %v", err)
-	}
-
-	currentTime += int(TEST_WINDOW_SIZE) * 10
-	err = store.Put(ctx, uint32(1), optional.Some("two"), int64(currentTime))
-	if err != nil {
-		t.Fatalf("fail to put err: %v", err)
-	}
-	err = store.Put(ctx, uint32(1), optional.Some("two-2"), int64(currentTime))
+	err = store.Put(ctx, uint32(1), optional.Some("one-2"), int64(currentTime), 0)
 	if err != nil {
 		t.Fatalf("fail to put err: %v", err)
 	}
 
 	currentTime += int(TEST_WINDOW_SIZE) * 10
-	err = store.Put(ctx, uint32(1), optional.Some("three"), int64(currentTime))
+	err = store.Put(ctx, uint32(1), optional.Some("two"), int64(currentTime), 0)
 	if err != nil {
 		t.Fatalf("fail to put err: %v", err)
 	}
-	err = store.Put(ctx, uint32(1), optional.Some("three-2"), int64(currentTime))
+	err = store.Put(ctx, uint32(1), optional.Some("two-2"), int64(currentTime), 0)
+	if err != nil {
+		t.Fatalf("fail to put err: %v", err)
+	}
+
+	currentTime += int(TEST_WINDOW_SIZE) * 10
+	err = store.Put(ctx, uint32(1), optional.Some("three"), int64(currentTime), 0)
+	if err != nil {
+		t.Fatalf("fail to put err: %v", err)
+	}
+	err = store.Put(ctx, uint32(1), optional.Some("three-2"), int64(currentTime), 0)
 	if err != nil {
 		t.Fatalf("fail to put err: %v", err)
 	}

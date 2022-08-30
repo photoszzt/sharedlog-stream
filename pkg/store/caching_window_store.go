@@ -30,7 +30,7 @@ func NewCachingWindowStoreG[K comparable, V any](ctx context.Context,
 	return &CachingWindowStoreG[K, V]{
 		cache: NewCache(func(entries []LRUElement[commtypes.KeyAndWindowStartTsG[K], V]) error {
 			for _, entry := range entries {
-				err := store.Put(ctx, entry.key.Key, entry.entry.value, entry.key.WindowStartTs)
+				err := store.Put(ctx, entry.key.Key, entry.entry.value, entry.key.WindowStartTs, entry.entry.currentStreamTime)
 				if err != nil {
 					return err
 				}
@@ -43,10 +43,10 @@ func NewCachingWindowStoreG[K comparable, V any](ctx context.Context,
 
 func (c *CachingWindowStoreG[K, V]) Name() string { return c.wrappedStore.Name() }
 func (c *CachingWindowStoreG[K, V]) Put(ctx context.Context, key K,
-	value optional.Option[V], windowStartTimestamp int64,
+	value optional.Option[V], windowStartTimestamp int64, currentStreamTime int64,
 ) error {
 	err := c.cache.PutMaybeEvict(commtypes.KeyAndWindowStartTsG[K]{Key: key, WindowStartTs: windowStartTimestamp},
-		LRUEntry[V]{value: value, isDirty: true})
+		LRUEntry[V]{value: value, isDirty: true, currentStreamTime: currentStreamTime})
 	if err != nil {
 		return err
 	}

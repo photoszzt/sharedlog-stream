@@ -17,8 +17,9 @@ var (
 )
 
 type LRUEntry[V any] struct {
-	value   optional.Option[V]
-	isDirty bool
+	value             optional.Option[V]
+	currentStreamTime int64
+	isDirty           bool
 }
 
 func DirtyEntry[V any](v optional.Option[V]) LRUEntry[V] {

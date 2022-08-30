@@ -47,7 +47,7 @@ func (st *InMemoryBTreeKeyValueStoreG[K, V]) Get(ctx context.Context, key K) (V,
 	return ret.val, exists, nil
 }
 
-func (st *InMemoryBTreeKeyValueStoreG[K, V]) Put(ctx context.Context, key K, value optional.Option[V]) error {
+func (st *InMemoryBTreeKeyValueStoreG[K, V]) Put(ctx context.Context, key K, value optional.Option[V], currentStreamTime int64) error {
 	st.mux.Lock()
 	defer st.mux.Unlock()
 	v, ok := value.Take()
@@ -59,7 +59,7 @@ func (st *InMemoryBTreeKeyValueStoreG[K, V]) Put(ctx context.Context, key K, val
 	return nil
 }
 
-func (st *InMemoryBTreeKeyValueStoreG[K, V]) PutIfAbsent(ctx context.Context, key K, value V) (optional.Option[V], error) {
+func (st *InMemoryBTreeKeyValueStoreG[K, V]) PutIfAbsent(ctx context.Context, key K, value V, currentStreamTime int64) (optional.Option[V], error) {
 	st.mux.Lock()
 	defer st.mux.Unlock()
 	originalKV, exists := st.store.Get(kvPairG[K, V]{key: key})
@@ -72,19 +72,23 @@ func (st *InMemoryBTreeKeyValueStoreG[K, V]) PutIfAbsent(ctx context.Context, ke
 
 func (st *InMemoryBTreeKeyValueStoreG[K, V]) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
 	if utils.IsNil(value) {
-		return st.Put(ctx, key.(K), optional.None[V]())
+		return st.Put(ctx, key.(K), optional.None[V](), 0)
 	} else {
-		return st.Put(ctx, key.(K), optional.Some(value.(V)))
+		return st.Put(ctx, key.(K), optional.Some(value.(V)), 0)
 	}
 }
 
 func (st *InMemoryBTreeKeyValueStoreG[K, V]) PutAll(ctx context.Context, kvs []*commtypes.Message) error {
+	maxTs := int64(0)
 	for _, kv := range kvs {
+		if kv.Timestamp > maxTs {
+			maxTs = kv.Timestamp
+		}
 		var err error
 		if utils.IsNil(kv.Value) {
-			err = st.Put(ctx, kv.Key.(K), optional.None[V]())
+			err = st.Put(ctx, kv.Key.(K), optional.None[V](), maxTs)
 		} else {
-			err = st.Put(ctx, kv.Key.(K), optional.Some(kv.Value.(V)))
+			err = st.Put(ctx, kv.Key.(K), optional.Some(kv.Value.(V)), maxTs)
 		}
 		if err != nil {
 			return err

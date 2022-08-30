@@ -103,6 +103,7 @@ type TableSourceProcessorG[K, V any] struct {
 	store store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[V]]
 	name  string
 	BaseProcessorG[K, V, K, commtypes.ChangeG[V]]
+	observedStreamTime int64
 }
 
 var _ = ProcessorG[int, int, int, commtypes.ChangeG[int]](&TableSourceProcessorG[int, int]{})
@@ -137,6 +138,9 @@ func (p *TableSourceProcessorG[K, V]) ProcessAndReturn(ctx context.Context, msg 
 		log.Warn().Msgf("Skipping record due to null key")
 		return nil, nil
 	}
+	if msg.Timestamp > p.observedStreamTime {
+		p.observedStreamTime = msg.Timestamp
+	}
 	if p.store != nil {
 		oldVal := optional.None[V]()
 		key := msg.Key.Unwrap()
@@ -151,7 +155,7 @@ func (p *TableSourceProcessorG[K, V]) ProcessAndReturn(ctx context.Context, msg 
 					p.store.Name(), oldValTs.Timestamp, msg.Timestamp)
 			}
 		}
-		err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(msg.Value, msg.Timestamp))
+		err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(msg.Value, msg.Timestamp), p.observedStreamTime)
 		if err != nil {
 			return nil, err
 		}

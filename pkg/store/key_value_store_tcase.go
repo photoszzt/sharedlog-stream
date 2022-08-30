@@ -57,9 +57,9 @@ func ShouldNotIncludeDeletedFromRangeResult(ctx context.Context, store CoreKeyVa
 }
 
 func ShouldNotIncludeDeletedFromRangeResultG(ctx context.Context, store CoreKeyValueStoreG[int, string], t testing.TB) {
-	checkErr(store.Put(ctx, 0, optional.Some("zero")), t)
-	checkErr(store.Put(ctx, 1, optional.Some("one")), t)
-	checkErr(store.Put(ctx, 2, optional.Some("two")), t)
+	checkErr(store.Put(ctx, 0, optional.Some("zero"), 0), t)
+	checkErr(store.Put(ctx, 1, optional.Some("one"), 0), t)
+	checkErr(store.Put(ctx, 2, optional.Some("two"), 0), t)
 	checkErr(store.Delete(ctx, 0), t)
 	checkErr(store.Delete(ctx, 1), t)
 
@@ -118,11 +118,11 @@ func ShouldDeleteIfSerializedValueIsNull(ctx context.Context, store CoreKeyValue
 }
 
 func ShouldDeleteIfSerializedValueIsNullG(ctx context.Context, store CoreKeyValueStoreG[int, string], t testing.TB) {
-	checkErr(store.Put(ctx, 0, optional.Some("zero")), t)
-	checkErr(store.Put(ctx, 1, optional.Some("one")), t)
-	checkErr(store.Put(ctx, 2, optional.Some("two")), t)
-	checkErr(store.Put(ctx, 0, optional.None[string]()), t)
-	checkErr(store.Put(ctx, 1, optional.None[string]()), t)
+	checkErr(store.Put(ctx, 0, optional.Some("zero"), 0), t)
+	checkErr(store.Put(ctx, 1, optional.Some("one"), 0), t)
+	checkErr(store.Put(ctx, 2, optional.Some("two"), 0), t)
+	checkErr(store.Put(ctx, 0, optional.None[string](), 0), t)
+	checkErr(store.Put(ctx, 1, optional.None[string](), 0), t)
 	expected := make(map[int]string)
 	expected[2] = "two"
 

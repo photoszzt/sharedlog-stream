@@ -174,7 +174,7 @@ func (p *TableAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Contex
 		newAgg = intermediateAgg
 	}
 
-	err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(newAgg, newTs))
+	err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(newAgg, newTs), newTs)
 	if err != nil {
 		return nil, err
 	}

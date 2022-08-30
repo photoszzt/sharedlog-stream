@@ -64,7 +64,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) ConfigureExactlyOnce(rem exactly_on
 	return st.changelogManager.ConfigExactlyOnce(rem, guarantee)
 }
 
-func (st *KeyValueStoreWithChangelogG[K, V]) Put(ctx context.Context, key K, value optional.Option[V]) error {
+func (st *KeyValueStoreWithChangelogG[K, V]) Put(ctx context.Context, key K, value optional.Option[V], currentStreamTime int64) error {
 	msg := commtypes.MessageG[K, V]{
 		Key:   optional.Some(key),
 		Value: value,
@@ -86,7 +86,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) Put(ctx context.Context, key K, val
 		if err != nil {
 			return err
 		}
-		err = st.kvstore.Put(ctx, key, value)
+		err = st.kvstore.Put(ctx, key, value, currentStreamTime)
 		return err
 	} else {
 		return nil
@@ -97,13 +97,13 @@ func (st *KeyValueStoreWithChangelogG[K, V]) PutWithoutPushToChangelog(ctx conte
 	return st.kvstore.PutWithoutPushToChangelog(ctx, key, value)
 }
 
-func (st *KeyValueStoreWithChangelogG[K, V]) PutIfAbsent(ctx context.Context, key K, value V) (optional.Option[V], error) {
+func (st *KeyValueStoreWithChangelogG[K, V]) PutIfAbsent(ctx context.Context, key K, value V, currentStreamTime int64) (optional.Option[V], error) {
 	origVal, exists, err := st.kvstore.Get(ctx, key)
 	if err != nil {
 		return optional.None[V](), err
 	}
 	if !exists {
-		err := st.Put(ctx, key, optional.Some(value))
+		err := st.Put(ctx, key, optional.Some(value), currentStreamTime)
 		if err != nil {
 			return optional.None[V](), err
 		}
@@ -113,12 +113,16 @@ func (st *KeyValueStoreWithChangelogG[K, V]) PutIfAbsent(ctx context.Context, ke
 }
 
 func (st *KeyValueStoreWithChangelogG[K, V]) PutAll(ctx context.Context, entries []*commtypes.Message) error {
+	maxTs := int64(0)
 	for _, msg := range entries {
+		if msg.Timestamp > maxTs {
+			maxTs = msg.Timestamp
+		}
 		var err error
 		if utils.IsNil(msg.Value) {
-			err = st.Put(ctx, msg.Key.(K), optional.None[V]())
+			err = st.Put(ctx, msg.Key.(K), optional.None[V](), maxTs)
 		} else {
-			err = st.Put(ctx, msg.Key.(K), optional.Some(msg.Value.(V)))
+			err = st.Put(ctx, msg.Key.(K), optional.Some(msg.Value.(V)), maxTs)
 		}
 		if err != nil {
 			return err

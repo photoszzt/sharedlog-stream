@@ -62,7 +62,7 @@ func NewInMemorySkipMapWindowStore[K, V any](name string, retentionPeriod int64,
 }
 
 func (s *InMemorySkipMapWindowStoreG[K, V]) Name() string { return s.name }
-func (s *InMemorySkipMapWindowStoreG[K, V]) Put(ctx context.Context, key K, value optional.Option[V], windowStartTimestamp int64) error {
+func (s *InMemorySkipMapWindowStoreG[K, V]) Put(ctx context.Context, key K, value optional.Option[V], windowStartTimestamp int64, currentStreamTime int64) error {
 	s.removeExpiredSegments()
 	s.mux.Lock()
 	if windowStartTimestamp > s.observedStreamTime {
@@ -346,7 +346,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) TableType() TABLE_TYPE { return IN_M
 func (s *InMemorySkipMapWindowStoreG[K, V]) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 }
 func (s *InMemorySkipMapWindowStoreG[K, V]) PutWithoutPushToChangelogG(ctx context.Context, key K, value optional.Option[V], windowStartTs int64) error {
-	return s.Put(ctx, key, value, windowStartTs)
+	return s.Put(ctx, key, value, windowStartTs, 0)
 }
 func (s *InMemorySkipMapWindowStoreG[K, V]) Flush(ctx context.Context) error { return nil }
 func (s *InMemorySkipMapWindowStoreG[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8) (int, error) {

@@ -71,7 +71,7 @@ func (p *StoreToWindowTableProcessorG[K, V]) ProcessAndReturn(ctx context.Contex
 	}
 	key, ok := msg.Key.Take()
 	if ok {
-		err := p.store.Put(ctx, key, msg.Value, p.observedTs)
+		err := p.store.Put(ctx, key, msg.Value, p.observedTs, p.observedTs)
 		if err != nil {
 			return nil, err
 		}

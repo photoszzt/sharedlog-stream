@@ -49,13 +49,14 @@ func NewCachingKeyValueStoreG[K comparable, V any](ctx context.Context,
 						NewVal: newVal,
 					}
 				}
-				err = c.wrappedStore.Put(ctx, entry.key, entry.entry.value)
+				err = c.wrappedStore.Put(ctx, entry.key, entry.entry.value, entry.entry.currentStreamTime)
 				if err != nil {
 					return err
 				}
 				err = c.flushCallbackFunc(ctx, commtypes.MessageG[K, commtypes.ChangeG[V]]{
-					Key:   optional.Some(entry.key),
-					Value: optional.Some(change),
+					Key:       optional.Some(entry.key),
+					Value:     optional.Some(change),
+					Timestamp: entry.entry.currentStreamTime,
 				})
 				if err != nil {
 					return err
@@ -86,21 +87,21 @@ func (c *CachingKeyValueStoreG[K, V]) Range(ctx context.Context, from optional.O
 func (c *CachingKeyValueStoreG[K, V]) ApproximateNumEntries() (uint64, error) {
 	panic("not implemented")
 }
-func (c *CachingKeyValueStoreG[K, V]) Put(ctx context.Context, key K, value optional.Option[V]) error {
-	return c.putInternal(key, value)
+func (c *CachingKeyValueStoreG[K, V]) Put(ctx context.Context, key K, value optional.Option[V], currentStreamTime int64) error {
+	return c.putInternal(key, value, currentStreamTime)
 }
 
-func (c *CachingKeyValueStoreG[K, V]) putInternal(key K, value optional.Option[V]) error {
-	return c.cache.PutMaybeEvict(key, LRUEntry[V]{value: value, isDirty: true})
+func (c *CachingKeyValueStoreG[K, V]) putInternal(key K, value optional.Option[V], currentStreamTime int64) error {
+	return c.cache.PutMaybeEvict(key, LRUEntry[V]{value: value, isDirty: true, currentStreamTime: currentStreamTime})
 }
 
-func (c *CachingKeyValueStoreG[K, V]) PutIfAbsent(ctx context.Context, key K, value V) (optional.Option[V], error) {
+func (c *CachingKeyValueStoreG[K, V]) PutIfAbsent(ctx context.Context, key K, value V, currentStreamTime int64) (optional.Option[V], error) {
 	opV, err := c.getInternal(ctx, key)
 	if err != nil {
 		return optional.Option[V]{}, err
 	}
 	if opV.IsNone() {
-		err = c.putInternal(key, optional.Some(value))
+		err = c.putInternal(key, optional.Some(value), currentStreamTime)
 		if err != nil {
 			return optional.Option[V]{}, err
 		}
@@ -126,8 +127,12 @@ func (c *CachingKeyValueStoreG[K, V]) getInternal(ctx context.Context, key K) (o
 }
 
 func (c *CachingKeyValueStoreG[K, V]) PutAll(ctx context.Context, msgs []*commtypes.Message) error {
+	maxTs := int64(0)
 	for _, msg := range msgs {
-		err := c.Put(ctx, msg.Key.(K), optional.Some(msg.Value.(V)))
+		if msg.Timestamp > maxTs {
+			maxTs = msg.Timestamp
+		}
+		err := c.Put(ctx, msg.Key.(K), optional.Some(msg.Value.(V)), maxTs)
 		if err != nil {
 			return err
 		}

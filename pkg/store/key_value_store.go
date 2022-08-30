@@ -28,8 +28,8 @@ type CoreKeyValueStoreG[K, V any] interface {
 	Range(ctx context.Context, from optional.Option[K], to optional.Option[K],
 		iterFunc func(K, V) error) error
 	ApproximateNumEntries() (uint64, error)
-	Put(ctx context.Context, key K, value optional.Option[V]) error
-	PutIfAbsent(ctx context.Context, key K, value V) (optional.Option[V], error)
+	Put(ctx context.Context, key K, value optional.Option[V], currentStreamTime int64) error
+	PutIfAbsent(ctx context.Context, key K, value V, currentStreamTime int64) (optional.Option[V], error)
 	PutAll(context.Context, []*commtypes.Message) error
 	Delete(ctx context.Context, key K) error
 	TableType() TABLE_TYPE

@@ -30,7 +30,7 @@ func getCachingWindowStore(ctx context.Context) *CachingWindowStoreG[string, str
 func TestShouldPutFetchFromCache(t *testing.T) {
 	ctx := context.Background()
 	cachingStore := getCachingWindowStore(ctx)
-	err := cachingStore.Put(ctx, "key1", optional.Some("val1"), defaultTs)
+	err := cachingStore.Put(ctx, "key1", optional.Some("val1"), defaultTs, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,23 +49,23 @@ func TestShouldPutFetchFromCache(t *testing.T) {
 func TestShouldPutFetchRangeFromCacheForNullKeyFrom(t *testing.T) {
 	ctx := context.Background()
 	cachingStore := getCachingWindowStore(ctx)
-	err := cachingStore.Put(ctx, "a", optional.Some("a"), defaultTs)
+	err := cachingStore.Put(ctx, "a", optional.Some("a"), defaultTs, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = cachingStore.Put(ctx, "b", optional.Some("b"), defaultTs)
+	err = cachingStore.Put(ctx, "b", optional.Some("b"), defaultTs, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = cachingStore.Put(ctx, "c", optional.Some("c"), defaultTs+10)
+	err = cachingStore.Put(ctx, "c", optional.Some("c"), defaultTs+10, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = cachingStore.Put(ctx, "d", optional.Some("d"), defaultTs+20)
+	err = cachingStore.Put(ctx, "d", optional.Some("d"), defaultTs+20, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = cachingStore.Put(ctx, "e", optional.Some("e"), defaultTs+20)
+	err = cachingStore.Put(ctx, "e", optional.Some("e"), defaultTs+20, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func addItemToCache(ctx context.Context, cache *CachingWindowStoreG[string, stri
 	for cacheSize < maxCacheSize {
 		key := strconv.Itoa(i)
 		fmt.Fprintf(os.Stderr, "adding key %s to cache\n", key)
-		err := cache.Put(ctx, key, optional.Some(key), defaultTs)
+		err := cache.Put(ctx, key, optional.Some(key), defaultTs, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -148,7 +148,7 @@ func TestShouldFlushEvictedItemsIntoUnderlyingStore(t *testing.T) {
 func TestShouldFlushDirtyItemsWhenFlushedCalled(t *testing.T) {
 	ctx := context.Background()
 	cachingStore := getCachingWindowStore(ctx)
-	cachingStore.Put(ctx, "1", optional.Some("a"), defaultTs)
+	cachingStore.Put(ctx, "1", optional.Some("a"), defaultTs, 0)
 	cachingStore.Flush(ctx)
 	got, ok, err := cachingStore.wrappedStore.Get(ctx, "1", defaultTs)
 	if err != nil {
