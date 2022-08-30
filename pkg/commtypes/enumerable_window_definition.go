@@ -1,12 +1,9 @@
-package processor
+package commtypes
 
 import (
-	"sharedlog-stream/pkg/commtypes"
-
 	"golang.org/x/xerrors"
 )
 
-//
 // The window specification for windows that can be enumerated for a single event based on its time.
 //
 // Grace period defines how long to wait on out-of-order events. That is, windows will continue to accept new records until {@code stream_time >= window_end + grace_period}.
@@ -14,7 +11,6 @@ import (
 //
 // Window state is stored until it is no longer needed, measured from the beginning of the window. To assist the store in not discarding window state too soon, this definition
 // also includes a maxSize(), indicating the longest span windows can have between their start and end. This does not need to include the grace period.
-//
 type EnumerableWindowDefinition interface {
 	/**
 	 * List all possible windows that contain the provided timestamp,
@@ -23,7 +19,7 @@ type EnumerableWindowDefinition interface {
 	 * @param timestamp the timestamp window should get created for
 	 * @return a map of windowStartTimestamp -> Window entries
 	 */
-	WindowsFor(timestamp int64) (map[int64]commtypes.Window, []int64, error)
+	WindowsFor(timestamp int64) (map[int64]Window, []int64, error)
 	/**
 	 * Return an upper bound on the size of windows in milliseconds.
 	 * Used to determine the lower bound on store retention time.

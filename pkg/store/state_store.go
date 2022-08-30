@@ -23,3 +23,7 @@ type ProduceRangeRecording interface {
 type CachedStateStore[K, V any] interface {
 	SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[V]]) error)
 }
+
+type CachedWindowStateStore[K, V any] interface {
+	SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]) error)
+}

@@ -221,9 +221,11 @@ func (s *InMemoryWindowStoreWithChangelogG[K, V]) ResetInitialProd() {
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) SubstreamNum() uint8 {
 	return s.parNum
 }
+func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]) error) {
+}
 
 func ToInMemSkipMapWindowTableWithChangelogG[K, V any](
-	joinWindow *processor.JoinWindows,
+	joinWindow *commtypes.JoinWindows,
 	retainDuplicates bool,
 	comparable store.CompareFuncG[K],
 	mp *MaterializeParam[K, V],
@@ -239,7 +241,7 @@ func ToInMemSkipMapWindowTableWithChangelogG[K, V any](
 }
 
 func CreateInMemSkipMapWindowTableWithChangelogG[K, V any](
-	joinWindow processor.EnumerableWindowDefinition,
+	joinWindow commtypes.EnumerableWindowDefinition,
 	retainDuplicates bool,
 	comparable store.CompareFuncG[K],
 	mp *MaterializeParam[K, V],

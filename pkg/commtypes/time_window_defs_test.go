@@ -1,4 +1,4 @@
-package processor
+package commtypes
 
 import (
 	"sharedlog-stream/pkg/utils"

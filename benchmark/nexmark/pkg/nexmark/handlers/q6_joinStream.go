@@ -115,7 +115,7 @@ func (h *q6JoinStreamHandler) Q6JoinStream(ctx context.Context, sp *common.Query
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: fmt.Sprintf("getSrcSink err: %v\n", err)}
 	}
-	jw, err := processor.NewJoinWindowsNoGrace(auctionDurationUpper)
+	jw, err := commtypes.NewJoinWindowsNoGrace(auctionDurationUpper)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

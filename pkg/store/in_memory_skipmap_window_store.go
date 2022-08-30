@@ -396,3 +396,6 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) removeExpiredSegments() {
 		})
 	}
 }
+
+func (s *InMemorySkipMapWindowStoreG[K, V]) SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]) error) {
+}

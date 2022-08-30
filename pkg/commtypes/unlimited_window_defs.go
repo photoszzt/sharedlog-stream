@@ -1,8 +1,7 @@
-package processor
+package commtypes
 
 import (
 	"math"
-	"sharedlog-stream/pkg/commtypes"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -48,8 +47,8 @@ func (w *UnlimitedWindows) GracePeriodMs() int64 {
 	return 0
 }
 
-func (w *UnlimitedWindows) WindowsFor(timestamp int64) (map[int64]commtypes.Window, []int64, error) {
-	windows := make(map[int64]commtypes.Window)
+func (w *UnlimitedWindows) WindowsFor(timestamp int64) (map[int64]Window, []int64, error) {
+	windows := make(map[int64]Window)
 	keys := make([]int64, 0)
 	if timestamp >= w.startMs {
 		windows[w.startMs] = NewUnlimitedWindow(w.startMs)

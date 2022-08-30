@@ -41,6 +41,7 @@ type CoreWindowStoreG[K, V any] interface {
 	Flush(ctx context.Context) error
 	UpdateTrackParFunc
 	OnlyUpdateInMemWinStoreG[K, V]
+	CachedWindowStateStore[K, V]
 }
 
 type WindowStoreBackedByChangelog interface {

@@ -1,36 +1,35 @@
 //go:generate msgp
 //msgp:ignore TimeWindowJSONSerde TimeWindowMsgpSerde
-package processor
+package commtypes
 
 import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"sharedlog-stream/pkg/commtypes"
 
 	"github.com/rs/zerolog/log"
 	"golang.org/x/xerrors"
 )
 
 type TimeWindow struct {
-	commtypes.BaseWindow
+	BaseWindow
 }
 
 var (
-	_              = commtypes.Window(&TimeWindow{})
+	_              = Window(&TimeWindow{})
 	notATimeWindow = xerrors.New("The window is not a TimeWindow")
 )
 
 func NewTimeWindow(startMs int64, endMs int64) (*TimeWindow, error) {
 	if startMs == endMs {
-		return nil, commtypes.WindowEndNotLargerStart
+		return nil, WindowEndNotLargerStart
 	}
 	return &TimeWindow{
-		commtypes.NewBaseWindow(startMs, endMs),
+		NewBaseWindow(startMs, endMs),
 	}, nil
 }
 
-func (w *TimeWindow) Overlap(other commtypes.Window) (bool, error) {
+func (w *TimeWindow) Overlap(other Window) (bool, error) {
 	_, ok := other.(*TimeWindow)
 	if !ok {
 		return false, notATimeWindow
@@ -78,12 +77,12 @@ func TimeWindowForSize(startMs int64, windowSize int64) (*TimeWindow, error) {
 	return NewTimeWindow(startMs, endMs)
 }
 
-func GetTimeWindowSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
-	var twSerde commtypes.Serde
-	if serdeFormat == commtypes.JSON {
+func GetTimeWindowSerde(serdeFormat SerdeFormat) (Serde, error) {
+	var twSerde Serde
+	if serdeFormat == JSON {
 		twSerde = TimeWindowJSONSerde{}
 		return twSerde, nil
-	} else if serdeFormat == commtypes.MSGP {
+	} else if serdeFormat == MSGP {
 		twSerde = TimeWindowMsgpSerde{}
 		return twSerde, nil
 	} else {

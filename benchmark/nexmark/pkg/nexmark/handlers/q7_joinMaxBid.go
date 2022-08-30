@@ -121,7 +121,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
-	jw, err := processor.NewJoinWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
+	jw, err := commtypes.NewJoinWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

@@ -20,7 +20,7 @@ const (
 func getCachingWindowStore(ctx context.Context) *CachingWindowStoreG[string, string] {
 	underlyingStore := NewInMemorySkipMapWindowStore[string, string]("test1", 50, windowSize,
 		false, StringCompare)
-	cachingStore := NewCachingWindowStoreG[string, string](ctx, underlyingStore,
+	cachingStore := NewCachingWindowStoreG[string, string](ctx, windowSize, underlyingStore,
 		func(k commtypes.KeyAndWindowStartTsG[string]) int64 {
 			return int64(len(k.Key) + 8)
 		}, commtypes.SizeOfString, maxCacheSize)

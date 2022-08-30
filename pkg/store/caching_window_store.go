@@ -14,44 +14,78 @@ import (
 // the wrapped store might have already advanced. If the retension time is long, it
 // would generate an entry in the changelog that is not needed.
 type CachingWindowStoreG[K comparable, V any] struct {
-	cache        *Cache[commtypes.KeyAndWindowStartTsG[K], V]
-	wrappedStore WindowStoreBackedByChangelogG[K, V]
+	cache             *Cache[commtypes.KeyAndWindowStartTsG[K], V]
+	wrappedStore      WindowStoreBackedByChangelogG[K, V]
+	flushCallbackFunc func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]) error
 }
 
 var _ = CoreWindowStoreG[int, int](&CachingWindowStoreG[int, int]{})
 var _ = WindowStoreBackedByChangelogG[int, int](&CachingWindowStoreG[int, int]{})
 
 func NewCachingWindowStoreG[K comparable, V any](ctx context.Context,
+	windowSize int64,
 	store WindowStoreBackedByChangelogG[K, V],
 	sizeOfK func(commtypes.KeyAndWindowStartTsG[K]) int64,
 	sizeOfV func(V) int64,
 	maxCacheBytes int64,
 ) *CachingWindowStoreG[K, V] {
-	return &CachingWindowStoreG[K, V]{
-		cache: NewCache(func(entries []LRUElement[commtypes.KeyAndWindowStartTsG[K], V]) error {
-			for _, entry := range entries {
-				err := store.Put(ctx, entry.key.Key, entry.entry.value, entry.key.WindowStartTs, entry.entry.currentStreamTime)
+	c := &CachingWindowStoreG[K, V]{
+		wrappedStore: store,
+	}
+	c.cache = NewCache(func(entries []LRUElement[commtypes.KeyAndWindowStartTsG[K], V]) error {
+		for _, entry := range entries {
+			newVal := entry.entry.value
+			kTs := entry.key
+			oldVal, ok, err := store.Get(ctx, kTs.Key, kTs.WindowStartTs)
+			if err != nil {
+				return err
+			}
+			if newVal.IsSome() || ok {
+				var change commtypes.ChangeG[V]
+				if ok {
+					change = commtypes.ChangeG[V]{
+						OldVal: optional.Some(oldVal),
+						NewVal: newVal,
+					}
+				} else {
+					change = commtypes.ChangeG[V]{
+						OldVal: optional.None[V](),
+						NewVal: newVal,
+					}
+				}
+				err = store.Put(ctx, entry.key.Key, entry.entry.value, entry.key.WindowStartTs, entry.entry.currentStreamTime)
+				if err != nil {
+					return err
+				}
+				t, err := commtypes.NewTimeWindow(kTs.WindowStartTs, kTs.WindowStartTs+windowSize)
+				if err != nil {
+					return err
+				}
+				k := commtypes.WindowedKeyG[K]{
+					Key:    kTs.Key,
+					Window: t,
+				}
+				err = c.flushCallbackFunc(ctx, commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]{
+					Key:       optional.Some(k),
+					Value:     optional.Some(change),
+					Timestamp: entry.entry.currentStreamTime,
+				})
 				if err != nil {
 					return err
 				}
 			}
-			return nil
-		}, sizeOfK, sizeOfV, maxCacheBytes),
-		wrappedStore: store,
-	}
+		}
+		return nil
+	}, sizeOfK, sizeOfV, maxCacheBytes)
+	return c
 }
 
 func (c *CachingWindowStoreG[K, V]) Name() string { return c.wrappedStore.Name() }
 func (c *CachingWindowStoreG[K, V]) Put(ctx context.Context, key K,
 	value optional.Option[V], windowStartTimestamp int64, currentStreamTime int64,
 ) error {
-	err := c.cache.PutMaybeEvict(commtypes.KeyAndWindowStartTsG[K]{Key: key, WindowStartTs: windowStartTimestamp},
+	return c.cache.PutMaybeEvict(commtypes.KeyAndWindowStartTsG[K]{Key: key, WindowStartTs: windowStartTimestamp},
 		LRUEntry[V]{value: value, isDirty: true, currentStreamTime: currentStreamTime})
-	if err != nil {
-		return err
-	}
-	err = c.wrappedStore.PutWithoutPushToChangelogG(ctx, key, value, windowStartTimestamp)
-	return err
 }
 func (c *CachingWindowStoreG[K, V]) PutWithoutPushToChangelogG(ctx context.Context,
 	key K, value optional.Option[V], windowStartTs int64,
@@ -76,21 +110,21 @@ func (c *CachingWindowStoreG[K, V]) Get(ctx context.Context, key K,
 func (c *CachingWindowStoreG[K, V]) Fetch(ctx context.Context, key K, timeFrom time.Time, timeTo time.Time,
 	iterFunc func(int64 /* ts */, K, V) error,
 ) error {
-	return c.wrappedStore.Fetch(ctx, key, timeFrom, timeTo, iterFunc)
+	panic("not implemented")
 }
 func (c *CachingWindowStoreG[K, V]) FetchWithKeyRange(ctx context.Context, keyFrom K,
 	keyTo K, timeFrom time.Time, timeTo time.Time,
 	iterFunc func(int64, K, V) error,
 ) error {
-	return c.wrappedStore.FetchWithKeyRange(ctx, keyFrom, keyTo, timeFrom, timeTo, iterFunc)
+	panic("not implemented")
 }
 func (c *CachingWindowStoreG[K, V]) FetchAll(ctx context.Context, timeFrom time.Time, timeTo time.Time,
 	iterFunc func(int64, K, V) error,
 ) error {
-	return c.wrappedStore.FetchAll(ctx, timeFrom, timeTo, iterFunc)
+	panic("not implemented")
 }
 func (c *CachingWindowStoreG[K, V]) IterAll(iterFunc func(int64, K, V) error) error {
-	return c.wrappedStore.IterAll(iterFunc)
+	panic("not implemented")
 }
 func (c *CachingWindowStoreG[K, V]) Flush(ctx context.Context) error {
 	c.cache.flush(nil)
@@ -121,3 +155,6 @@ func (s *CachingWindowStoreG[K, V]) GetCurrentProdSeqNum() uint64 {
 func (s *CachingWindowStoreG[K, V]) ResetInitialProd()               { s.wrappedStore.ResetInitialProd() }
 func (s *CachingWindowStoreG[K, V]) Stream() sharedlog_stream.Stream { return s.wrappedStore.Stream() }
 func (s *CachingWindowStoreG[K, V]) SubstreamNum() uint8             { return s.wrappedStore.SubstreamNum() }
+func (s *CachingWindowStoreG[K, V]) SetFlushCallback(f func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]) error) {
+	s.flushCallbackFunc = f
+}

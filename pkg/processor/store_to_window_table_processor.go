@@ -82,7 +82,7 @@ func (p *StoreToWindowTableProcessorG[K, V]) ProcessAndReturn(ctx context.Contex
 // for test
 func ToInMemWindowTable(
 	storeName string,
-	joinWindow *JoinWindows,
+	joinWindow *commtypes.JoinWindows,
 	compare store.CompareFunc,
 ) (*MeteredProcessor, store.CoreWindowStore, error) {
 	store := store.NewInMemoryWindowStore(
@@ -95,7 +95,7 @@ func ToInMemWindowTable(
 
 func ToInMemSkipMapWindowTable[K, V any](
 	storeName string,
-	joinWindow *JoinWindows,
+	joinWindow *commtypes.JoinWindows,
 	compare store.CompareFuncG[K],
 ) (*MeteredProcessorG[K, V, K, V], store.CoreWindowStoreG[K, V], error) {
 	store := store.NewInMemorySkipMapWindowStore[K, V](

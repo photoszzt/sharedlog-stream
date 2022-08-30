@@ -1,7 +1,6 @@
-package processor
+package commtypes
 
 import (
-	"sharedlog-stream/pkg/commtypes"
 	"time"
 
 	"golang.org/x/xerrors"
@@ -89,7 +88,15 @@ func (w *JoinWindows) After(timeDifference time.Duration) (*JoinWindows, error) 
 	return getJoinWindows(w.beforeMs, timeDifferenceMs, w.graceMs)
 }
 
-func (w *JoinWindows) WindowsFor(timestamp int64) (map[int64]commtypes.Window, []int64, error) {
+func (w *JoinWindows) BeforeMs() int64 {
+	return w.beforeMs
+}
+
+func (w *JoinWindows) AfterMs() int64 {
+	return w.afterMs
+}
+
+func (w *JoinWindows) WindowsFor(timestamp int64) (map[int64]Window, []int64, error) {
 	return nil, nil, xerrors.New("WindowsFor is not supported by JoinWindows")
 }
 

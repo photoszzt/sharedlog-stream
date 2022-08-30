@@ -125,7 +125,7 @@ func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *com
 	}
 	ectx := processor.NewExecutionContext(srcs, sinks_arr,
 		h.funcName, sp.ScaleEpoch, sp.ParNum)
-	tw, err := processor.NewTimeWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(2)*time.Second)
+	tw, err := commtypes.NewTimeWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(2)*time.Second)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

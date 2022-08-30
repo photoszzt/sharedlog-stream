@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
@@ -23,12 +24,16 @@ import (
 type q5AuctionBids struct {
 	env      types.Environment
 	funcName string
+	useCache bool
 }
 
 func NewQ5AuctionBids(env types.Environment, funcName string) *q5AuctionBids {
+	envConfig := checkEnvConfig()
+	fmt.Fprintf(os.Stderr, "Q5AuctionBids useCache: %v\n", envConfig.useCache)
 	return &q5AuctionBids{
 		env:      env,
 		funcName: funcName,
+		useCache: envConfig.useCache,
 	}
 }
 
@@ -77,7 +82,7 @@ func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput,
 func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInput,
 ) (*processor.MeteredProcessorG[uint64, *ntypes.Event, commtypes.WindowedKeyG[uint64], commtypes.ChangeG[uint64]],
 	map[string]store.WindowStoreOpWithChangelog, error) {
-	hopWindow, err := processor.NewTimeWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
+	hopWindow, err := commtypes.NewTimeWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -109,7 +114,8 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 	if err != nil {
 		return nil, nil, err
 	}
-	/*
+	var aggStore store.WindowStoreBackedByChangelogG[uint64, commtypes.ValueTimestampG[uint64]]
+	if h.useCache {
 		sizeOfVTs := commtypes.ValueTimestampGSize[uint64]{
 			ValSizeFunc: commtypes.SizeOfUint64,
 		}
@@ -117,16 +123,19 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 			KeySizeFunc: commtypes.SizeOfUint64,
 		}
 		cacheStore := store.NewCachingWindowStoreG[uint64, commtypes.ValueTimestampG[uint64]](
-			ctx, countWindowStore, sizeOfKeyTs.SizeOfKeyAndWindowStartTs, sizeOfVTs.SizeOfValueTimestamp, q5SizePerStore)
-	*/
+			ctx, hopWindow.SizeMs, countWindowStore, sizeOfKeyTs.SizeOfKeyAndWindowStartTs, sizeOfVTs.SizeOfValueTimestamp, q5SizePerStore)
+		aggStore = cacheStore
+	} else {
+		aggStore = countWindowStore
+	}
 	countProc := processor.NewMeteredProcessorG(processor.NewStreamWindowAggregateProcessorG[uint64, *ntypes.Event, uint64](
-		"countProc", countWindowStore,
+		"countProc", aggStore,
 		processor.InitializerFuncG[uint64](func() optional.Option[uint64] { return optional.Some(uint64(0)) }),
 		processor.AggregatorFuncG[uint64, *ntypes.Event, uint64](func(key uint64, value *ntypes.Event, aggregate optional.Option[uint64]) optional.Option[uint64] {
 			val := aggregate.Unwrap()
 			return optional.Some(val + 1)
-		}), hopWindow))
-	wsc := map[string]store.WindowStoreOpWithChangelog{countWindowStore.ChangelogTopicName(): countWindowStore}
+		}), hopWindow, h.useCache))
+	wsc := map[string]store.WindowStoreOpWithChangelog{countWindowStore.ChangelogTopicName(): aggStore}
 	return countProc, wsc, nil
 }
 

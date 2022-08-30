@@ -72,7 +72,7 @@ var _ = Processor(&StreamStreamJoinProcessor{})
 func NewStreamStreamJoinProcessor(
 	name string,
 	otherWindowStore store.CoreWindowStore,
-	jw *JoinWindows,
+	jw *commtypes.JoinWindows,
 	joiner ValueJoinerWithKeyTs,
 	outer bool,
 	isLeftSide bool,
@@ -89,11 +89,11 @@ func NewStreamStreamJoinProcessor(
 		BaseProcessor:     BaseProcessor{},
 	}
 	if isLeftSide {
-		ssjp.joinBeforeMs = jw.beforeMs
-		ssjp.joinAfterMs = jw.afterMs
+		ssjp.joinBeforeMs = jw.BeforeMs()
+		ssjp.joinAfterMs = jw.AfterMs()
 	} else {
-		ssjp.joinBeforeMs = jw.afterMs
-		ssjp.joinAfterMs = jw.beforeMs
+		ssjp.joinBeforeMs = jw.AfterMs()
+		ssjp.joinAfterMs = jw.BeforeMs()
 	}
 	ssjp.BaseProcessor.ProcessingFunc = ssjp.ProcessAndReturn
 	return ssjp
@@ -176,7 +176,7 @@ var _ = Processor(&StreamStreamJoinProcessor{})
 func NewStreamStreamJoinProcessorG[K, V1, V2, VR any](
 	name string,
 	otherWindowStore store.CoreWindowStoreG[K, V2],
-	jw *JoinWindows,
+	jw *commtypes.JoinWindows,
 	joiner ValueJoinerWithKeyTsG[K, V1, V2, VR],
 	outer bool,
 	isLeftSide bool,
@@ -192,11 +192,11 @@ func NewStreamStreamJoinProcessorG[K, V1, V2, VR any](
 		name:              name,
 	}
 	if isLeftSide {
-		ssjp.joinBeforeMs = jw.beforeMs
-		ssjp.joinAfterMs = jw.afterMs
+		ssjp.joinBeforeMs = jw.BeforeMs()
+		ssjp.joinAfterMs = jw.AfterMs()
 	} else {
-		ssjp.joinBeforeMs = jw.afterMs
-		ssjp.joinAfterMs = jw.beforeMs
+		ssjp.joinBeforeMs = jw.AfterMs()
+		ssjp.joinAfterMs = jw.BeforeMs()
 	}
 	ssjp.BaseProcessorG.ProcessingFuncG = ssjp.ProcessAndReturn
 	return ssjp

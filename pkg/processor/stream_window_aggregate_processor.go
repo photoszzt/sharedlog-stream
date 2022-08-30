@@ -14,7 +14,7 @@ type StreamWindowAggregateProcessor struct {
 	store       store.CoreWindowStore
 	initializer Initializer
 	aggregator  Aggregator
-	windows     EnumerableWindowDefinition
+	windows     commtypes.EnumerableWindowDefinition
 	name        string
 	BaseProcessor
 	observedStreamTime int64
@@ -23,7 +23,7 @@ type StreamWindowAggregateProcessor struct {
 var _ = Processor(&StreamWindowAggregateProcessor{})
 
 func NewStreamWindowAggregateProcessor(name string, store store.CoreWindowStore, initializer Initializer,
-	aggregator Aggregator, windows EnumerableWindowDefinition,
+	aggregator Aggregator, windows commtypes.EnumerableWindowDefinition,
 ) *StreamWindowAggregateProcessor {
 	p := &StreamWindowAggregateProcessor{
 		initializer:        initializer,
@@ -106,16 +106,18 @@ type StreamWindowAggregateProcessorG[K, V, VA any] struct {
 	store       store.CoreWindowStoreG[K, commtypes.ValueTimestampG[VA]]
 	initializer InitializerG[VA]
 	aggregator  AggregatorG[K, V, VA]
-	windows     EnumerableWindowDefinition
+	windows     commtypes.EnumerableWindowDefinition
 	name        string
 	BaseProcessorG[K, V, commtypes.WindowedKeyG[K], commtypes.ChangeG[VA]]
 	observedStreamTime int64
+	useCache           bool
 }
 
 func NewStreamWindowAggregateProcessorG[K, V, VA any](name string,
 	store store.CoreWindowStoreG[K, commtypes.ValueTimestampG[VA]],
 	initializer InitializerG[VA], aggregator AggregatorG[K, V, VA],
-	windows EnumerableWindowDefinition,
+	windows commtypes.EnumerableWindowDefinition,
+	useCache bool,
 ) ProcessorG[K, V, commtypes.WindowedKeyG[K], commtypes.ChangeG[VA]] {
 	p := &StreamWindowAggregateProcessorG[K, V, VA]{
 		initializer:        initializer,
@@ -123,8 +125,43 @@ func NewStreamWindowAggregateProcessorG[K, V, VA any](name string,
 		observedStreamTime: 0,
 		store:              store,
 		windows:            windows,
+		useCache:           useCache,
 	}
 	p.BaseProcessorG.ProcessingFuncG = p.ProcessAndReturn
+	if useCache {
+		store.SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[commtypes.ValueTimestampG[VA]]]) error {
+			change := msg.Value.Unwrap()
+			oldVal := optional.Map(change.OldVal, func(oldVal commtypes.ValueTimestampG[VA]) VA {
+				return oldVal.Value
+			})
+			newVal := optional.Map(change.NewVal, func(newVal commtypes.ValueTimestampG[VA]) VA {
+				return newVal.Value
+			})
+			ts := int64(0)
+			if change.NewVal.IsSome() {
+				newValTs := change.NewVal.Unwrap()
+				ts = newValTs.Timestamp
+			} else {
+				ts = msg.Timestamp
+			}
+			v := commtypes.ChangeG[VA]{
+				NewVal: newVal,
+				OldVal: oldVal,
+			}
+			msgForNext := commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[VA]]{
+				Key:       msg.Key,
+				Value:     optional.Some(v),
+				Timestamp: ts,
+			}
+			for _, nextProcessor := range p.nextProcessors {
+				err := nextProcessor.Process(ctx, msgForNext)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
 	return p
 }
 
@@ -189,5 +226,9 @@ func (p *StreamWindowAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context
 				Int64("timestamp", msg.Timestamp).Msg("Skipping record for expired window. ")
 		}
 	}
-	return newMsgs, nil
+	if p.useCache {
+		return nil, nil
+	} else {
+		return newMsgs, nil
+	}
 }

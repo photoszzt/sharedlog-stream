@@ -3,7 +3,6 @@ package store_test
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/store"
 	"testing"
 )
@@ -17,30 +16,30 @@ const (
 func getSerde() (commtypes.Serde, commtypes.Serde) {
 	kSerde := commtypes.WindowedKeyJSONSerde{
 		KeyJSONSerde:    commtypes.StringSerde{},
-		WindowJSONSerde: processor.TimeWindowJSONSerde{},
+		WindowJSONSerde: commtypes.TimeWindowJSONSerde{},
 	}
 	vSerde := commtypes.IntSerde{}
 	return kSerde, vSerde
 }
 
-func getWindows(t testing.TB) []*processor.TimeWindow {
-	windows := make([]*processor.TimeWindow, 0)
-	w, err := processor.TimeWindowForSize(10, windowSizeForTimeWindow)
+func getWindows(t testing.TB) []*commtypes.TimeWindow {
+	windows := make([]*commtypes.TimeWindow, 0)
+	w, err := commtypes.TimeWindowForSize(10, windowSizeForTimeWindow)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 	windows = append(windows, w)
-	w, err = processor.TimeWindowForSize(500, windowSizeForTimeWindow)
+	w, err = commtypes.TimeWindowForSize(500, windowSizeForTimeWindow)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 	windows = append(windows, w)
-	w, err = processor.TimeWindowForSize(1_000, windowSizeForTimeWindow)
+	w, err = commtypes.TimeWindowForSize(1_000, windowSizeForTimeWindow)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 	windows = append(windows, w)
-	w, err = processor.TimeWindowForSize(60_000, windowSizeForTimeWindow)
+	w, err = commtypes.TimeWindowForSize(60_000, windowSizeForTimeWindow)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -58,7 +57,7 @@ func getNextSegmentWindow(t testing.TB) *processor.TimeWindow {
 }
 */
 
-func putKV(ctx context.Context, key string, window *processor.TimeWindow, value int, kSerde commtypes.Serde,
+func putKV(ctx context.Context, key string, window *commtypes.TimeWindow, value int, kSerde commtypes.Serde,
 	vSerde commtypes.Serde, byteStore store.SegmentedBytesStore, t testing.TB,
 ) {
 	wk := commtypes.WindowedKey{
@@ -100,7 +99,7 @@ func ShouldPutAndFetch(ctx context.Context, byteStore store.SegmentedBytesStore,
 	}
 	kv := make([]*KeyValue, 0)
 	err = byteStore.Fetch(ctx, kBytes, 1, 999, func(i int64, kt []byte, vt []byte) error {
-		w, err := processor.NewTimeWindow(i, i+windowSizeForTimeWindow)
+		w, err := commtypes.NewTimeWindow(i, i+windowSizeForTimeWindow)
 		if err != nil {
 			return err
 		}

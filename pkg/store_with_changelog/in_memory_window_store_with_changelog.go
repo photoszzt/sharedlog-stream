@@ -51,7 +51,7 @@ func NewInMemoryWindowStoreWithChangelog[K, V any](
 }
 
 func CreateInMemWindowStoreWithChangelog[K, V any](
-	winDefs processor.EnumerableWindowDefinition,
+	winDefs commtypes.EnumerableWindowDefinition,
 	retainDuplicates bool,
 	comparable store.CompareFunc,
 	mp *MaterializeParam[K, V],
@@ -291,7 +291,7 @@ func (s *InMemoryWindowStoreWithChangelog[K, V]) SubstreamNum() uint8 {
 }
 
 func ToInMemWindowTableWithChangelog[K, V any](
-	joinWindow *processor.JoinWindows,
+	joinWindow *commtypes.JoinWindows,
 	retainDuplicates bool,
 	comparable store.CompareFunc,
 	mp *MaterializeParam[K, V],
