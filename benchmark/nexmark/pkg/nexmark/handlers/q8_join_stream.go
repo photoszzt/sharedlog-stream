@@ -165,12 +165,13 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	msgSerdePair := execution.NewMsgSerdePair(msgSerde, outMsgSerde)
 	task, procArgs := execution.PrepareTaskWithJoin(ctx,
 		execution.JoinWorkerFunc[uint64, *ntypes.Event, uint64, ntypes.PersonTime](aucJoinsPerFunc),
 		execution.JoinWorkerFunc[uint64, *ntypes.Event, uint64, ntypes.PersonTime](perJoinsAucFunc),
 		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum), true,
-		msgSerde, outMsgSerde, msgSerde, outMsgSerde)
+		msgSerdePair, msgSerdePair)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, fmt.Sprintf("%s-%d", h.funcName, sp.ParNum))).
 		WindowStoreChangelogs(wsc).FixedOutParNum(sp.ParNum).Build()

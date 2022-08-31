@@ -13,20 +13,22 @@ import (
 type JoinWorkerFunc[KIn, VIn, KOut, VOut any] func(c context.Context, m commtypes.MessageG[KIn, VIn]) ([]commtypes.MessageG[KOut, VOut], error)
 
 type JoinProcManager struct {
-	runLock       syncutils.Mutex
-	out           chan *common.FnOutput
-	done          chan struct{}
-	ctrlMsg       optional.Option[commtypes.RawMsgAndSeq]
-	gotEndMark    syncutils.AtomicBool
-	gotScaleFence syncutils.AtomicBool
-	startTimeMs   int64
+	runLock         syncutils.Mutex
+	out             chan *common.FnOutput
+	done            chan struct{}
+	flushAndCollect chan struct{}
+	ctrlMsg         optional.Option[commtypes.RawMsgAndSeq]
+	gotEndMark      syncutils.AtomicBool
+	gotScaleFence   syncutils.AtomicBool
+	startTimeMs     int64
 }
 
 func NewJoinProcManager() *JoinProcManager {
 	out := make(chan *common.FnOutput, 1)
 	return &JoinProcManager{
-		out:        out,
-		gotEndMark: syncutils.AtomicBool(0),
+		out:             out,
+		flushAndCollect: make(chan struct{}),
+		gotEndMark:      syncutils.AtomicBool(0),
 	}
 }
 
@@ -60,12 +62,11 @@ func LaunchJoinProcLoop[KIn, VIn, KOut, VOut any](
 	task *stream_task.StreamTask,
 	procArgs *JoinProcArgs[KIn, VIn, KOut, VOut],
 	wg *sync.WaitGroup,
-	inMsgSerde commtypes.MessageGSerdeG[KIn, VIn],
-	outMsgSerde commtypes.MessageGSerdeG[KOut, VOut],
+	msgSerdePair MsgSerdePair[KIn, VIn, KOut, VOut],
 ) {
 	jm.done = make(chan struct{})
 	wg.Add(1)
-	go joinProcLoop(ctx, jm, task, procArgs, wg, inMsgSerde, outMsgSerde)
+	go joinProcLoop(ctx, jm, task, procArgs, wg, msgSerdePair)
 }
 
 func (jm *JoinProcManager) RequestToTerminate() {

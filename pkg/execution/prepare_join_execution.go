@@ -14,6 +14,20 @@ import (
 	"sync"
 )
 
+type MsgSerdePair[KI, VI, KO, VO any] struct {
+	inMsgSerde  commtypes.MessageGSerdeG[KI, VI]
+	outMsgSerde commtypes.MessageGSerdeG[KO, VO]
+}
+
+func NewMsgSerdePair[KI, VI, KO, VO any](inMsgSerde commtypes.MessageGSerdeG[KI, VI],
+	outMsgSerde commtypes.MessageGSerdeG[KO, VO],
+) MsgSerdePair[KI, VI, KO, VO] {
+	return MsgSerdePair[KI, VI, KO, VO]{
+		inMsgSerde:  inMsgSerde,
+		outMsgSerde: outMsgSerde,
+	}
+}
+
 func PrepareTaskWithJoin[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR any](
 	ctx context.Context,
 	leftJoinWorker JoinWorkerFunc[KInL, VInL, KOutL, VOutL],
@@ -21,10 +35,8 @@ func PrepareTaskWithJoin[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR any]
 	allConsumersProducers proc_interface.BaseConsumersProducers,
 	baseProcArgs proc_interface.BaseProcArgs,
 	isFinalStage bool,
-	inMsgSerdeLeft commtypes.MessageGSerdeG[KInL, VInL],
-	outMsgSerdeLeft commtypes.MessageGSerdeG[KOutL, VOutL],
-	inMsgSerdeRight commtypes.MessageGSerdeG[KInR, VInR],
-	outMsgSerdeRight commtypes.MessageGSerdeG[KOutR, VOutR],
+	leftMsgPair MsgSerdePair[KInL, VInL, KOutL, VOutL],
+	rightMsgPair MsgSerdePair[KInR, VInR, KOutR, VOutR],
 ) (*stream_task.StreamTask, *CommonJoinProcArgs[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR]) {
 	joinProcLeft, joinProcRight := CreateJoinProcArgsPair(
 		leftJoinWorker, rightJoinWorker,
@@ -83,8 +95,8 @@ func PrepareTaskWithJoin[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR any]
 		}).
 		InitFunc(func(task *stream_task.StreamTask) {
 			// debug.Fprintf(os.Stderr, "init ts=%d launch join proc loops\n", time.Now().UnixMilli())
-			LaunchJoinProcLoop(lctx, leftManager, task, joinProcLeft, &wg, inMsgSerdeLeft, outMsgSerdeLeft)
-			LaunchJoinProcLoop(rctx, rightManager, task, joinProcRight, &wg, inMsgSerdeRight, outMsgSerdeRight)
+			LaunchJoinProcLoop(lctx, leftManager, task, joinProcLeft, &wg, leftMsgPair)
+			LaunchJoinProcLoop(rctx, rightManager, task, joinProcRight, &wg, rightMsgPair)
 			// debug.Fprintf(os.Stderr, "init ts=%d done invoke join proc loops\n", time.Now().UnixMilli())
 		}).
 		PauseFunc(func() *common.FnOutput {

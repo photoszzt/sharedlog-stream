@@ -220,10 +220,12 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 			}
 			return outMsgs, nil
 		})
+	msgPairLeft := execution.NewMsgSerdePair(inMsgSerde1, outMsgSerde)
+	msgPairRight := execution.NewMsgSerdePair(inMsgSerde2, outMsgSerde)
 	task, procArgs := execution.PrepareTaskWithJoin(
 		ctx, bJoinM, mJoinB, proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum), true,
-		inMsgSerde1, outMsgSerde, inMsgSerde2, outMsgSerde)
+		msgPairLeft, msgPairRight)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs,
 			fmt.Sprintf("%s-%d", h.funcName, sp.ParNum))).

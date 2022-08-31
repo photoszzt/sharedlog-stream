@@ -67,10 +67,10 @@ func SetupTableTableJoinWithSkipmap[K, VLeft, VRight, VR any](
 	mpRight *store_with_changelog.MaterializeParam[K, commtypes.ValueTimestampG[VRight]],
 	less store.LessFunc[K],
 	joiner processor.ValueJoinerWithKeyFuncG[K, VLeft, VRight, VR],
-) (proc_interface.ProcessAndReturnFunc[K, VLeft, K, commtypes.ChangeG[VR]],
-	proc_interface.ProcessAndReturnFunc[K, VRight, K, commtypes.ChangeG[VR]],
-	map[string]store.KeyValueStoreOpWithChangelog,
-	error,
+) (leftJoinRightFunc proc_interface.ProcessAndReturnFunc[K, VLeft, K, commtypes.ChangeG[VR]],
+	rightJoinLeftFunc proc_interface.ProcessAndReturnFunc[K, VRight, K, commtypes.ChangeG[VR]],
+	kvc map[string]store.KeyValueStoreOpWithChangelog,
+	err error,
 ) {
 	toLeftTab, leftTab, err := store_with_changelog.ToInMemSkipmapKVTableWithChangelog(mpLeft, less)
 	if err != nil {
@@ -90,7 +90,7 @@ func SetupTableTableJoinWithSkipmap[K, VLeft, VRight, VR any](
 		processor.PredicateFuncG[K, commtypes.ChangeG[VR]](func(key optional.Option[K], value optional.Option[commtypes.ChangeG[VR]]) (bool, error) {
 			return key.IsSome(), nil
 		}))
-	leftJoinRightFunc := func(ctx context.Context, msg commtypes.MessageG[K, VLeft]) ([]commtypes.MessageG[K, commtypes.ChangeG[VR]], error) {
+	leftJoinRightFunc = func(ctx context.Context, msg commtypes.MessageG[K, VLeft]) ([]commtypes.MessageG[K, commtypes.ChangeG[VR]], error) {
 		ret, err := toLeftTab.ProcessAndReturn(ctx, msg)
 		if err != nil {
 			return nil, err
@@ -106,7 +106,7 @@ func SetupTableTableJoinWithSkipmap[K, VLeft, VRight, VR any](
 		}
 		return nil, nil
 	}
-	rightJoinLeftFunc := func(ctx context.Context, msg commtypes.MessageG[K, VRight]) ([]commtypes.MessageG[K, commtypes.ChangeG[VR]], error) {
+	rightJoinLeftFunc = func(ctx context.Context, msg commtypes.MessageG[K, VRight]) ([]commtypes.MessageG[K, commtypes.ChangeG[VR]], error) {
 		ret, err := toRightTab.ProcessAndReturn(ctx, msg)
 		if err != nil {
 			return nil, err
@@ -122,6 +122,8 @@ func SetupTableTableJoinWithSkipmap[K, VLeft, VRight, VR any](
 		}
 		return nil, nil
 	}
-	kvc := map[string]store.KeyValueStoreOpWithChangelog{leftTab.ChangelogTopicName(): leftTab, rightTab.ChangelogTopicName(): rightTab}
+	// leftKVC = map[string]store.KeyValueStoreOpWithChangelog{leftTab.ChangelogTopicName(): leftTab}
+	// rightKVC = map[string]store.KeyValueStoreOpWithChangelog{rightTab.ChangelogTopicName(): rightTab}
+	kvc = map[string]store.KeyValueStoreOpWithChangelog{leftTab.ChangelogTopicName(): leftTab, rightTab.ChangelogTopicName(): rightTab}
 	return leftJoinRightFunc, rightJoinLeftFunc, kvc, nil
 }

@@ -4,11 +4,14 @@ import (
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
+	"sharedlog-stream/pkg/store"
 )
 
 type JoinProcArgs[KIn, VIn, KOut, VOut any] struct {
 	runner JoinWorkerFunc[KIn, VIn, KOut, VOut]
 	processor.BaseExecutionContext
+	kvc []store.KeyValueStoreOpWithChangelog
+	wsc []store.WindowStoreOpWithChangelog
 }
 
 // var _ = proc_interface.ProcArgsWithSink(&JoinProcArgs{})

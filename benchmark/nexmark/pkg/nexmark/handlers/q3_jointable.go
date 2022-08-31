@@ -221,10 +221,11 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			}
 			return nil, nil
 		})
+	msgSerdePair := execution.NewMsgSerdePair(inMsgSerde, outMsgSerde)
 	task, procArgs := execution.PrepareTaskWithJoin(ctx, aJoinP, pJoinA,
 		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum),
-		true, inMsgSerde, outMsgSerde, inMsgSerde, outMsgSerde)
+		true, msgSerdePair, msgSerdePair)
 	transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).

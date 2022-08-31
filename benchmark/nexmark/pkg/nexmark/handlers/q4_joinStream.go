@@ -220,10 +220,11 @@ func (h *q4JoinStreamHandler) Q4JoinStream(ctx context.Context, sp *common.Query
 			// debug.Fprintf(os.Stderr, "after right filter and group\n")
 			return msgs, err
 		})
+	msgSerdePair := execution.NewMsgSerdePair(msgSerde, outMsgSerde)
 	task, procArgs := execution.PrepareTaskWithJoin(
 		ctx, aJoinB, bJoinA, proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum), false,
-		msgSerde, outMsgSerde, msgSerde, outMsgSerde)
+		msgSerdePair, msgSerdePair)
 	transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName,
 		sp.InputTopicNames[0], sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,

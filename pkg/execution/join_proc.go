@@ -13,6 +13,7 @@ import (
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/stream_task"
 	"sync"
+	"time"
 
 	"golang.org/x/xerrors"
 )
@@ -23,14 +24,14 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 	task *stream_task.StreamTask,
 	procArgs *JoinProcArgs[KIn, VIn, KOut, VOut],
 	wg *sync.WaitGroup,
-	inMsgSerde commtypes.MessageGSerdeG[KIn, VIn],
-	outMsgSerde commtypes.MessageGSerdeG[KOut, VOut],
+	msgSerdePair MsgSerdePair[KIn, VIn, KOut, VOut],
 ) {
 	id := ctx.Value(commtypes.CTXID{}).(string)
 	defer wg.Done()
 	// debug.Fprintf(os.Stderr, "[id=%s, ts=%d] joinProc start running\n",
 	// 	id, time.Now().UnixMilli())
 	lockAcqTime := stats.NewStatsCollector[int64](fmt.Sprintf("%s_lockAcq", id), stats.DEFAULT_COLLECT_DURATION)
+	jWStart := time.Now()
 	for {
 		select {
 		case <-ctx.Done():
@@ -39,6 +40,13 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 			// debug.Fprintf(os.Stderr, "[id=%s, ts=%d] got done msg\n",
 			// 	id, time.Now().UnixMilli())
 			return
+		case <-jm.flushAndCollect:
+			for _, sink := range procArgs.Producers() {
+				if err := sink.Flush(ctx); err != nil {
+					jm.out <- &common.FnOutput{Success: false, Message: err.Error()}
+					return
+				}
+			}
 		default:
 		}
 		lSt := stats.TimerBegin()
@@ -81,6 +89,8 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 				}
 			} else if rawMsgSeq.Mark == commtypes.STREAM_END {
 				consumer.SrcProducerEnd(rawMsgSeq.ProdIdx)
+				elapsed := time.Since(jWStart)
+				fmt.Fprintf(os.Stderr, "[id=%s] joinProc done, elapsed %v\n", id, elapsed)
 				if consumer.AllProducerEnded() {
 					jm.gotEndMark.Set(true)
 					// fmt.Fprintf(os.Stderr, "[id=%s] %s %d ends, start time: %d\n",
@@ -99,7 +109,7 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 				return
 			}
 		}
-		msgs, err := commtypes.DecodeRawMsgSeqG(rawMsgSeq, inMsgSerde)
+		msgs, err := commtypes.DecodeRawMsgSeqG(rawMsgSeq, msgSerdePair.inMsgSerde)
 		if err != nil {
 			jm.out <- &common.FnOutput{Success: false, Message: err.Error()}
 			jm.runLock.Unlock()
@@ -111,49 +121,6 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 		}
 		consumer.RecordCurrentConsumedSeqNum(rawMsgSeq.LogSeqNum)
 		// debug.Fprintf(os.Stderr, "[id=%s] after consume\n", id)
-		/*
-			msgs := gotMsgs.Msgs
-			if msgs.MsgArr == nil && msgs.Msg.Value == nil && msgs.Msg.Key == nil {
-				jm.runLock.Unlock()
-				continue
-			}
-			if msgs.IsControl {
-				key := msgs.Msg.Key.(string)
-				if key == txn_data.SCALE_FENCE_KEY {
-					v := msgs.Msg.Value.(producer_consumer.ScaleEpochAndBytes)
-					if procArgs.CurEpoch() < v.ScaleEpoch {
-						procArgs.Consumers()[0].RecordCurrentConsumedSeqNum(msgs.LogSeqNum)
-						jm.gotScaleFence.Set(true)
-						jm.ctrlMsg = msgs
-						jm.runLock.Unlock()
-						return
-					} else {
-						jm.runLock.Unlock()
-						continue
-					}
-				} else if key == commtypes.END_OF_STREAM_KEY {
-					v := msgs.Msg.Value.(producer_consumer.StartTimeAndProdIdx)
-					consumer.SrcProducerEnd(v.ProdIdx)
-					if consumer.AllProducerEnded() {
-						jm.gotEndMark.Set(true)
-						// fmt.Fprintf(os.Stderr, "[id=%s] %s %d ends, start time: %d\n",
-						// 	id, consumer.TopicName(), procArgs.SubstreamNum(), jm.startTimeMs)
-						jm.ctrlMsg = msgs
-						jm.runLock.Unlock()
-						return
-					} else {
-						jm.runLock.Unlock()
-						continue
-					}
-				} else {
-					jm.out <- &common.FnOutput{Success: false, Message: fmt.Sprintf("unrecognized key: %v", key)}
-					jm.runLock.Unlock()
-					return
-				}
-			}
-			consumer.RecordCurrentConsumedSeqNum(msgs.LogSeqNum)
-		*/
-
 		if msgs.MsgArr != nil {
 			// debug.Fprintf(os.Stderr, "[id=%s] got msgarr\n", id)
 			for _, subMsg := range msgs.MsgArr {
@@ -162,7 +129,7 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 				}
 				producer_consumer.ExtractProduceToConsumeTimeMsgG(consumer, &subMsg)
 				// debug.Fprintf(os.Stderr, "[id=%s] before proc msg with sink1\n", id)
-				err = procMsgWithSink(ctx, subMsg, outMsgSerde, procArgs, id)
+				err = procMsgWithSink(ctx, subMsg, msgSerdePair.outMsgSerde, procArgs, id)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink: %v, out chan len: %d\n", id, err, len(jm.out))
 					jm.out <- &common.FnOutput{Success: false, Message: err.Error()}
@@ -178,7 +145,7 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 				continue
 			}
 			producer_consumer.ExtractProduceToConsumeTimeMsgG(consumer, &msgs.Msg)
-			err = procMsgWithSink(ctx, msgs.Msg, outMsgSerde, procArgs, id)
+			err = procMsgWithSink(ctx, msgs.Msg, msgSerdePair.outMsgSerde, procArgs, id)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink2: %v, out chan len: %d\n", id, err, len(jm.out))
 				jm.out <- &common.FnOutput{Success: false, Message: err.Error()}
