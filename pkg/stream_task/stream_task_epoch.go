@@ -142,7 +142,11 @@ func processInEpoch(
 				paused = true
 			}
 			flushAllStart := stats.TimerBegin()
-			err := FlushStreamBuffers(dctx, cmm, args)
+			err := flushStreams(dctx, args)
+			if err != nil {
+				return common.GenErrFnOutput(err)
+			}
+			err = cmm.FlushControlLog(ctx)
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}
@@ -199,7 +203,11 @@ func processInEpoch(
 				paused = true
 			}
 			flushAllStart := stats.TimerBegin()
-			err := FlushStreamBuffers(dctx, cmm, args)
+			err := flushStreams(dctx, args)
+			if err != nil {
+				return common.GenErrFnOutput(err)
+			}
+			err = cmm.FlushControlLog(ctx)
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}
@@ -231,32 +239,6 @@ func markEpoch(ctx context.Context, em *epoch_manager.EpochManager,
 	mElapsed := stats.Elapsed(mStart).Microseconds()
 	t.markEpochTime.AddSample(mElapsed)
 	t.markEpochPrepare.AddSample(prepareTime)
-	return nil
-}
-
-func FlushStreamBuffers(ctx context.Context, cmm *control_channel.ControlChannelManager, args *StreamTaskArgs) error {
-	for _, kvTab := range args.kvChangelogs {
-		err := kvTab.Flush(ctx)
-		if err != nil {
-			return err
-		}
-	}
-	for _, winTab := range args.windowStoreChangelogs {
-		err := winTab.Flush(ctx)
-		if err != nil {
-			return err
-		}
-	}
-	for _, producer := range args.ectx.Producers() {
-		err := producer.Flush(ctx)
-		if err != nil {
-			return err
-		}
-	}
-	err := cmm.FlushControlLog(ctx)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 

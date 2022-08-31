@@ -50,16 +50,22 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 	for {
 		timeSinceLastFlush := time.Since(flushTimer)
 		if timeSinceLastFlush >= args.flushEvery {
-			if ret_err := flushStreams(ctx, t, args); ret_err != nil {
+			flushAllStart := stats.TimerBegin()
+			ret_err := flushStreams(ctx, args)
+			if ret_err != nil {
 				return common.GenErrFnOutput(ret_err)
 			}
+			flushTime := stats.Elapsed(flushAllStart).Microseconds()
+			t.flushAllTime.AddSample(flushTime)
 			flushTimer = time.Now()
 		}
 		timeSinceLastTrack := time.Since(commitTimer)
 		if timeSinceLastTrack >= args.trackEveryForAtLeastOnce {
-			if ret_err := track(ctx, cm, args.ectx.Consumers(), args.ectx.SubstreamNum(), &hasUntrackedConsume, &commitTimer); ret_err != nil {
+			if ret_err := track(ctx, cm, args.ectx.Consumers(), args.ectx.SubstreamNum()); ret_err != nil {
 				return ret_err
 			}
+			hasUntrackedConsume = false
+			commitTimer = time.Now()
 		}
 		warmupCheck.Check()
 		if (!args.waitEndMark && args.duration != 0 && warmupCheck.ElapsedSinceInitial() >= args.duration) || gotEndMark {
@@ -81,10 +87,13 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 			if t.pauseFunc != nil {
 				t.pauseFunc()
 			}
-			if ret_err := flushStreams(ctx, t, args); ret_err != nil {
+			flushAllStart := stats.TimerBegin()
+			if ret_err := flushStreams(ctx, args); ret_err != nil {
 				return common.GenErrFnOutput(ret_err)
 			}
-			if ret_err := track(ctx, cm, args.ectx.Consumers(), args.ectx.SubstreamNum(), &hasUntrackedConsume, &commitTimer); ret_err != nil {
+			flushTime := stats.Elapsed(flushAllStart).Microseconds()
+			t.flushAllTime.AddSample(flushTime)
+			if ret_err := track(ctx, cm, args.ectx.Consumers(), args.ectx.SubstreamNum()); ret_err != nil {
 				return ret_err
 			}
 			return handleCtrlMsg(ctx, ctrlRawMsg, t, args, &warmupCheck)
@@ -103,15 +112,12 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 
 func track(ctx context.Context, cm *consume_seq_num_manager.ConsumeSeqManager,
 	consumers []*producer_consumer.MeteredConsumer, substreamNum uint8,
-	hasUncommitted *bool, commitTimer *time.Time,
 ) *common.FnOutput {
 	markers := consume_seq_num_manager.CollectOffsetMarker(consumers)
 	err := cm.Track(ctx, markers)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	*hasUncommitted = false
-	*commitTimer = time.Now()
 	return nil
 }
 
@@ -135,7 +141,7 @@ func pauseTrackFlush(ctx context.Context, t *StreamTask, args *StreamTaskArgs, c
 			return ret
 		}
 	}
-	err := flushStreams(ctx, t, args)
+	err := flushStreams(ctx, args)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

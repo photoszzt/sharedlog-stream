@@ -33,7 +33,6 @@ type StreamTask struct {
 	initFunc      func(task *StreamTask)
 	HandleErrFunc func() error
 
-	flushForALO stats.StatsCollector[int64]
 	// 2pc stat
 	commitTrTime stats.StatsCollector[int64]
 	beginTrTime  stats.StatsCollector[int64]
@@ -93,9 +92,9 @@ func ExecuteApp(ctx context.Context,
 			ret.Counts[sink.Name()+"_data"] = sink.GetCount() - uint64(sink.NumCtrlMsg())
 			fmt.Fprintf(os.Stderr, "%s msgCnt %d, ctrlCnt %d\n",
 				sink.Name(), sink.GetCount(), sink.NumCtrlMsg())
-			// if sink.IsFinalOutput() {
-			// ret.Latencies["eventTimeLatency_"+sink.Name()] = sink.GetEventTimeLatency()
-			// }
+			if sink.IsFinalOutput() {
+				ret.Latencies["eventTimeLatency_"+sink.Name()] = sink.GetEventTimeLatency()
+			}
 		}
 	}
 	return ret
@@ -155,10 +154,9 @@ func handleCtrlMsg(ctx context.Context, ctrlRawMsg commtypes.RawMsgAndSeq,
 	}
 }
 
-func flushStreams(ctx context.Context, t *StreamTask,
+func flushStreams(ctx context.Context,
 	args *StreamTaskArgs,
 ) error {
-	pStart := stats.TimerBegin()
 	for _, kvchangelog := range args.kvChangelogs {
 		if err := kvchangelog.Flush(ctx); err != nil {
 			return err
@@ -174,8 +172,6 @@ func flushStreams(ctx context.Context, t *StreamTask,
 			return err
 		}
 	}
-	elapsed := stats.Elapsed(pStart)
-	t.flushForALO.AddSample(elapsed.Microseconds())
 	return nil
 }
 
@@ -302,7 +298,7 @@ func setOffsetOnStream(offsetMap map[string]uint64,
 			if offset == 0 {
 				resetTo = offset
 			}
-			debug.Fprintf(os.Stderr, "offset restores to %x\n", resetTo)
+			debug.Fprintf(os.Stderr, "%s offset restores to %x\n", src.TopicName(), resetTo)
 			src.SetCursor(resetTo, args.ectx.SubstreamNum())
 		}
 	}

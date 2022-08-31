@@ -26,7 +26,6 @@ func NewStreamTaskBuilder() BuildStreamTask {
 			resumeFunc:       nil,
 			initFunc:         nil,
 			HandleErrFunc:    nil,
-			flushForALO:      stats.NewStatsCollector[int64]("flushForALO", stats.DEFAULT_COLLECT_DURATION),
 			commitTrTime:     stats.NewStatsCollector[int64]("commitTrTime", stats.DEFAULT_COLLECT_DURATION),
 			beginTrTime:      stats.NewStatsCollector[int64]("beginTrTime", stats.DEFAULT_COLLECT_DURATION),
 			markEpochTime:    stats.NewStatsCollector[int64]("markEpochTime", stats.DEFAULT_COLLECT_DURATION),
