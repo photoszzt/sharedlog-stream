@@ -113,7 +113,9 @@ func (s *ConcurrentMeteredSink) ProduceData(ctx context.Context, msgSer commtype
 }
 
 func (s *ConcurrentMeteredSink) ProduceCtrlMsg(ctx context.Context, msg commtypes.RawMsgAndSeq, parNums []uint8) (int, error) {
-	return s.producer.ProduceCtrlMsg(ctx, msg, parNums)
+	c, err := s.producer.ProduceCtrlMsg(ctx, msg, parNums)
+	atomic.AddUint32(&s.ctrlCount, uint32(c))
+	return c, err
 }
 
 func (s *ConcurrentMeteredSink) TopicName() string               { return s.producer.TopicName() }
