@@ -117,6 +117,7 @@ func (n *ClientNode) Invoke(client *http.Client, response *FnOutput, wg *sync.Wa
 			for s, l := range res.Latencies {
 				finalResponse.Latencies[s] = append(finalResponse.Latencies[s], l...)
 			}
+			finalResponse.Duration = res.Duration // the last one
 		}
 		*response = finalResponse
 	}
