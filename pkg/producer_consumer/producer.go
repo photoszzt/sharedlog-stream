@@ -30,5 +30,5 @@ type MeteredProducerIntr interface {
 	GetEventTimeLatency() []int
 	GetCount() uint64
 	NumCtrlMsg() uint32
-	PrintRemainingStats()
+	OutputRemainingStats()
 }

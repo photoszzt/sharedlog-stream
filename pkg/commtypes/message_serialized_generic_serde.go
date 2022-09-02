@@ -258,7 +258,6 @@ func (s MessageGMsgpSerdeG[K, V]) Decode(value []byte) (MessageG[K, V], error) {
 	_, err := msgSer.UnmarshalMsg(value)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] fail to unmarshal this msg2: %v\n", string(value))
-		panic(err)
 		return MessageG[K, V]{}, fmt.Errorf("fail to unmarshal msg: %v", err)
 	}
 	return MsgSerToMsgG(&msgSer, s.keySerde, s.valSerde)

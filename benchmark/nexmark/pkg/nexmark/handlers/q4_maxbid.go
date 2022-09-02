@@ -74,9 +74,12 @@ func getExecutionCtxSingleSrcSinkMiddle(ctx context.Context, env types.Environme
 		return processor.BaseExecutionContext{}, err
 	}
 	src := producer_consumer.NewMeteredConsumer(consumer, warmup)
-	sink := producer_consumer.NewMeteredProducer(
+	sink, err := producer_consumer.NewMeteredProducer(
 		producer_consumer.NewShardedSharedLogStreamProducer(outputStreams[0], outConfig),
 		warmup)
+	if err != nil {
+		return processor.BaseExecutionContext{}, err
+	}
 	src.SetInitialSource(false)
 	ectx := processor.NewExecutionContext([]*producer_consumer.MeteredConsumer{src},
 		[]producer_consumer.MeteredProducerIntr{sink}, funcName, sp.ScaleEpoch, sp.ParNum)

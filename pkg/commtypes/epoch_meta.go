@@ -29,7 +29,7 @@ type ProduceRange struct {
 var _ = fmt.Stringer(ProduceRange{})
 
 func (p ProduceRange) String() string {
-	return fmt.Sprintf("ProduceRange: {Start: %d, End: %d}", p.Start, p.End)
+	return fmt.Sprintf("ProduceRange: {Start: 0x%x, End: 0x%x}", p.Start, p.End)
 }
 
 type EpochMarker struct {

@@ -44,7 +44,10 @@ func getSrcSink(ctx context.Context, env types.Environment, sp *common.QueryInpu
 		return nil, nil, err
 	}
 	src := producer_consumer.NewMeteredConsumer(consumer, warmup)
-	sink := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], outConfig), warmup)
+	sink, err := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], outConfig), warmup)
+	if err != nil {
+		return nil, nil, err
+	}
 	return []*producer_consumer.MeteredConsumer{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
@@ -73,7 +76,10 @@ func getSrcSinkUint64Key(
 		return nil, nil, err
 	}
 	src := producer_consumer.NewMeteredConsumer(consumer, warmup)
-	sink := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], outConfig), warmup)
+	sink, err := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], outConfig), warmup)
+	if err != nil {
+		return nil, nil, err
+	}
 	return []*producer_consumer.MeteredConsumer{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 

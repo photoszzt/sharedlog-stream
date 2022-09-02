@@ -50,12 +50,15 @@ func (h *q4Avg) getExecutionCtx(ctx context.Context, sp *common.QueryInput,
 		return processor.BaseExecutionContext{}, err
 	}
 	src := producer_consumer.NewMeteredConsumer(consumer, warmup)
-	sink := producer_consumer.NewMeteredProducer(
+	sink, err := producer_consumer.NewMeteredProducer(
 		producer_consumer.NewShardedSharedLogStreamProducer(outputStreams[0],
 			&producer_consumer.StreamSinkConfig{
 				FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 				Format:        serdeFormat,
 			}), warmup)
+	if err != nil {
+		return processor.BaseExecutionContext{}, err
+	}
 	sink.MarkFinalOutput()
 	ectx := processor.NewExecutionContext([]*producer_consumer.MeteredConsumer{src},
 		[]producer_consumer.MeteredProducerIntr{sink}, h.funcName, sp.ScaleEpoch, sp.ParNum)

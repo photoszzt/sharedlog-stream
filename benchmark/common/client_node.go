@@ -110,15 +110,13 @@ func (n *ClientNode) Invoke(client *http.Client, response *FnOutput, wg *sync.Wa
 			Counts:    make(map[string]uint64),
 			Latencies: make(map[string][]int),
 		}
-		for idx, res := range responses {
+		for _, res := range responses {
 			for s, n := range res.Counts {
 				finalResponse.Counts[s] += n
 			}
 			for s, l := range res.Latencies {
 				finalResponse.Latencies[s] = append(finalResponse.Latencies[s], l...)
 			}
-			fmt.Fprintf(os.Stderr, "%d response duration: %v\n", idx, res.Duration)
-			finalResponse.Duration += res.Duration
 		}
 		*response = finalResponse
 	}

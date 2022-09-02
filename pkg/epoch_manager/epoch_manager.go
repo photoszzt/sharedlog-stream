@@ -137,8 +137,14 @@ func (em *EpochManager) appendToEpochLog(ctx context.Context,
 		TaskEpoch:     em.TaskEpoch,
 		TransactionID: 0,
 	}
-	return em.epochLogForWrite.PushWithTag(ctx, encoded, 0, tags, additionalTopic,
+	off, err := em.epochLogForWrite.PushWithTag(ctx, encoded, 0, tags, additionalTopic,
 		sharedlog_stream.ControlRecordMeta, producerId)
+	// debug.Fprintf(os.Stderr, "epochOff: 0x%x, output range: %v, consume: ", off, meta.OutputRanges)
+	// for s, c := range meta.ConSeqNums {
+	// 	debug.Fprintf(os.Stderr, "%s:0x%x", s, c)
+	// }
+	// debug.Fprint(os.Stderr, "\n")
+	return off, err
 }
 
 func (em *EpochManager) AddTopicSubstream(ctx context.Context,

@@ -69,12 +69,15 @@ func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		return nil, nil, err
 	}
 	src := producer_consumer.NewMeteredConsumer(consumer, warmup)
-	sink := producer_consumer.NewConcurrentMeteredSyncProducer(
+	sink, err := producer_consumer.NewConcurrentMeteredSyncProducer(
 		producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0],
 			&producer_consumer.StreamSinkConfig{
 				FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 				Format:        serdeFormat,
 			}), warmup)
+	if err != nil {
+		return nil, nil, err
+	}
 	src.SetInitialSource(false)
 	return []*producer_consumer.MeteredConsumer{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }

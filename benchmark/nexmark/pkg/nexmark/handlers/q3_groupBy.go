@@ -71,8 +71,11 @@ func getExecutionCtx(ctx context.Context, env types.Environment, sp *common.Quer
 	}
 	src := producer_consumer.NewMeteredConsumer(consumer, warmup)
 	for _, output_stream := range output_streams {
-		sink := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_stream, outConfig),
+		sink, err := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_stream, outConfig),
 			warmup)
+		if err != nil {
+			return processor.BaseExecutionContext{}, err
+		}
 		sinks = append(sinks, sink)
 	}
 	return processor.NewExecutionContext([]*producer_consumer.MeteredConsumer{src}, sinks,

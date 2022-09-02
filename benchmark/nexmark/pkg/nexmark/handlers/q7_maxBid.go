@@ -78,9 +78,12 @@ func (h *q7MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 		return nil, nil, err
 	}
 	src := producer_consumer.NewMeteredConsumer(consumer, warmup)
-	sink := producer_consumer.NewMeteredProducer(
+	sink, err := producer_consumer.NewMeteredProducer(
 		producer_consumer.NewShardedSharedLogStreamProducer(output_streams[0], outConfig),
 		warmup)
+	if err != nil {
+		return nil, nil, err
+	}
 	src.SetInitialSource(false)
 	return []*producer_consumer.MeteredConsumer{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }

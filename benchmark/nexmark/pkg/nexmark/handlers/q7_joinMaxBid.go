@@ -79,11 +79,14 @@ func (h *q7JoinMaxBid) getSrcSink(
 	src1.SetName("bidByPriceSrc")
 	src2 := producer_consumer.NewMeteredConsumer(consumer2, warmup)
 	src2.SetName("maxBidsWithWinSrc")
-	sink := producer_consumer.NewConcurrentMeteredSyncProducer(producer_consumer.NewShardedSharedLogStreamProducer(outputStream,
+	sink, err := producer_consumer.NewConcurrentMeteredSyncProducer(producer_consumer.NewShardedSharedLogStreamProducer(outputStream,
 		&producer_consumer.StreamSinkConfig{
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 			Format:        serdeFormat,
 		}), warmup)
+	if err != nil {
+		return nil, nil, err
+	}
 	src1.SetInitialSource(false)
 	src2.SetInitialSource(false)
 	sink.MarkFinalOutput()

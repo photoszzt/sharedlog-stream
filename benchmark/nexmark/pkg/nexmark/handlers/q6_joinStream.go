@@ -80,8 +80,11 @@ func (h *q6JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	}
 	src1 := producer_consumer.NewMeteredConsumer(consumer1, warmup)
 	src2 := producer_consumer.NewMeteredConsumer(consumer2, warmup)
-	sink := producer_consumer.NewConcurrentMeteredSyncProducer(
+	sink, err := producer_consumer.NewConcurrentMeteredSyncProducer(
 		producer_consumer.NewShardedSharedLogStreamProducer(outputStream, outConfig), warmup)
+	if err != nil {
+		return nil, nil, err
+	}
 	src1.SetInitialSource(false)
 	src2.SetInitialSource(false)
 	src1.SetName("aucsByIDSrc")

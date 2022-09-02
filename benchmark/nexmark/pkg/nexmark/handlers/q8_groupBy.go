@@ -67,7 +67,10 @@ func (h *q8GroupByHandler) getExecutionCtx(ctx context.Context, sp *common.Query
 	src := producer_consumer.NewMeteredConsumer(consumer, time.Duration(sp.WarmupS)*time.Second)
 	src.SetInitialSource(true)
 	for _, output_stream := range output_streams {
-		sink := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_stream, outConfig), time.Duration(sp.WarmupS)*time.Second)
+		sink, err := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(output_stream, outConfig), time.Duration(sp.WarmupS)*time.Second)
+		if err != nil {
+			return processor.BaseExecutionContext{}, err
+		}
 		sinks = append(sinks, sink)
 	}
 	sinks[0].SetName("auctionsBySellerIDSink")

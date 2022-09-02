@@ -95,6 +95,7 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 					jm.gotEndMark.Set(true)
 					// fmt.Fprintf(os.Stderr, "[id=%s] %s %d ends, start time: %d\n",
 					// 	id, consumer.TopicName(), procArgs.SubstreamNum(), jm.startTimeMs)
+					// fmt.Fprintf(os.Stderr, "[id=%s] %s(%d) ends, elapsed: %v\n", id, consumer.TopicName(), procArgs.SubstreamNum(), elapsed)
 					jm.ctrlMsg = optional.Some(rawMsgSeq)
 					jm.runLock.Unlock()
 					return

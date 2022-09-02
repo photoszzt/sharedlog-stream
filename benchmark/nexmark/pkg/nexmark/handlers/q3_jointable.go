@@ -103,11 +103,14 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	src2 := producer_consumer.NewMeteredConsumer(consumer2, warmup)
 	src1.SetInitialSource(false)
 	src2.SetInitialSource(false)
-	sink := producer_consumer.NewConcurrentMeteredSyncProducer(producer_consumer.NewShardedSharedLogStreamProducer(outputStream,
+	sink, err := producer_consumer.NewConcurrentMeteredSyncProducer(producer_consumer.NewShardedSharedLogStreamProducer(outputStream,
 		&producer_consumer.StreamSinkConfig{
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 			Format:        serdeFormat,
 		}), warmup)
+	if err != nil {
+		return nil, nil, err
+	}
 	sink.MarkFinalOutput()
 	return []*producer_consumer.MeteredConsumer{src1, src2}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }

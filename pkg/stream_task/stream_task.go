@@ -86,7 +86,7 @@ func ExecuteApp(ctx context.Context,
 				src.Name(), src.GetCount(), src.NumCtrlMsg())
 		}
 		for _, sink := range streamTaskArgs.ectx.Producers() {
-			sink.PrintRemainingStats()
+			sink.OutputRemainingStats()
 			ret.Counts[sink.Name()] = sink.GetCount()
 			ret.Counts[sink.Name()+"_ctrl"] = uint64(sink.NumCtrlMsg())
 			ret.Counts[sink.Name()+"_data"] = sink.GetCount() - uint64(sink.NumCtrlMsg())

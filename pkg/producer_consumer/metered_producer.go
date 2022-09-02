@@ -22,6 +22,14 @@ func checkMeasureSink() bool {
 	return measure
 }
 
+func getStatsDir() string {
+	stats_dir := os.Getenv("STATS_DIR")
+	if stats_dir == "" {
+		stats_dir = "/tmp/stats"
+	}
+	return stats_dir
+}
+
 type ConcurrentMeteredSink struct {
 	mu syncutils.Mutex
 
@@ -36,8 +44,13 @@ type ConcurrentMeteredSink struct {
 
 var _ = MeteredProducerIntr(&ConcurrentMeteredSink{})
 
-func NewConcurrentMeteredSyncProducer(sink *ShardedSharedLogStreamProducer, warmup time.Duration) *ConcurrentMeteredSink {
+func NewConcurrentMeteredSyncProducer(sink *ShardedSharedLogStreamProducer, warmup time.Duration) (*ConcurrentMeteredSink, error) {
 	sink_name := fmt.Sprintf("%s_sink", sink.TopicName())
+	// stats_dir := getStatsDir()
+	// err := os.MkdirAll(stats_dir, 0755)
+	// if err != nil {
+	// 	return nil, err
+	// }
 	return &ConcurrentMeteredSink{
 		producer: sink,
 		lat: stats.NewConcurrentStatsCollector[int64](sink_name,
@@ -47,7 +60,7 @@ func NewConcurrentMeteredSyncProducer(sink *ShardedSharedLogStreamProducer, warm
 		measure:            checkMeasureSink(),
 		warmup:             stats.NewWarmupGoroutineSafeChecker(warmup),
 		eventTimeLatencies: make([]int, 0, 1024),
-	}
+	}, nil
 }
 
 func (s *ConcurrentMeteredSink) MarkFinalOutput() {
@@ -137,9 +150,8 @@ func (s *ConcurrentMeteredSink) GetCurrentProdSeqNum(substreamNum uint8) uint64 
 	return s.producer.GetCurrentProdSeqNum(substreamNum)
 }
 func (s *ConcurrentMeteredSink) ResetInitialProd() { s.producer.ResetInitialProd() }
-func (s *ConcurrentMeteredSink) PrintRemainingStats() {
+func (s *ConcurrentMeteredSink) OutputRemainingStats() {
 	s.lat.PrintRemainingStats()
-	// s.eventTimeSample.PrintRemainingStats()
 }
 func (s *ConcurrentMeteredSink) GetEventTimeLatency() []int {
 	s.mu.Lock()
@@ -152,27 +164,43 @@ func (s *ConcurrentMeteredSink) NumCtrlMsg() uint32 {
 }
 
 type MeteredProducer struct {
-	producer  *ShardedSharedLogStreamProducer
-	latencies stats.StatsCollector[int64]
+	producer *ShardedSharedLogStreamProducer
 	// eventTimeSample stats.StatsCollector[int64]
+	// stFile             *os.File
+	// statsChan          chan string
 	eventTimeLatencies []int
+	latencies          stats.StatsCollector[int64]
 	produceTp          stats.ThroughputCounter
 	warmup             stats.Warmup
 	ctrlCount          uint32
 	measure            bool
 }
 
-func NewMeteredProducer(sink *ShardedSharedLogStreamProducer, warmup time.Duration) *MeteredProducer {
+func NewMeteredProducer(sink *ShardedSharedLogStreamProducer, warmup time.Duration) (*MeteredProducer, error) {
 	sink_name := fmt.Sprintf("%s_sink", sink.TopicName())
+	/*
+		stats_dir := getStatsDir()
+		err := os.MkdirAll(stats_dir, 0755)
+		if err != nil {
+			return nil, err
+		}
+		statsFilePath := filepath.Join(stats_dir, sink_name)
+		stFile, err := os.Create(statsFilePath)
+		if err != nil {
+			return nil, err
+		}
+		statsChan := make(chan string, 256)
+	*/
 	return &MeteredProducer{
 		producer:           sink,
-		eventTimeLatencies: make([]int, 0),
+		eventTimeLatencies: make([]int, 0, 1024),
 		latencies:          stats.NewStatsCollector[int64](sink_name, stats.DEFAULT_COLLECT_DURATION),
 		produceTp:          stats.NewThroughputCounter(sink_name, stats.DEFAULT_COLLECT_DURATION),
 		// eventTimeSample: stats.NewStatsCollector[int64](sink_name+"_ets", stats.DEFAULT_COLLECT_DURATION),
 		measure: checkMeasureSink(),
 		warmup:  stats.NewWarmupChecker(warmup),
-	}
+		// stFile:  stFile,
+	}, nil
 }
 
 func (s *MeteredProducer) InitFlushTimer() {}
@@ -204,7 +232,12 @@ func (s *MeteredProducer) ProduceData(ctx context.Context, msg commtypes.Message
 		if msg.Timestamp != 0 {
 			els := procStart.UnixMilli() - ts
 			s.eventTimeLatencies = append(s.eventTimeLatencies, int(els))
-			// s.eventTimeSample.AddSample(els)
+			// if len(s.eventTimeLatencies) < cap(s.eventTimeLatencies) {
+			// 	s.eventTimeLatencies = append(s.eventTimeLatencies, int(els))
+			// 	// s.eventTimeSample.AddSample(els)
+			// } else {
+			// 	data := fmt.Sprintf("%v", s.eventTimeLatencies)
+			// }
 		}
 	}
 	assignInjTime(&msg)
@@ -254,7 +287,7 @@ func (s *MeteredProducer) GetCurrentProdSeqNum(substreamNum uint8) uint64 {
 func (s *MeteredProducer) ResetInitialProd() {
 	s.producer.ResetInitialProd()
 }
-func (s *MeteredProducer) PrintRemainingStats() {
+func (s *MeteredProducer) OutputRemainingStats() {
 	s.latencies.PrintRemainingStats()
 	// s.eventTimeSample.PrintRemainingStats()
 }
