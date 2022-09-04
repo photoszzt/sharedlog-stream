@@ -60,8 +60,8 @@ func main() {
 	flag.StringVar(&FLAGS_scale_config, "scconfig", "./scconfig.json", "path to a json file that stores scale config")
 	flag.StringVar(&FLAGS_stat_dir, "stat_dir", "", "stats dir to dump")
 
-	flag.IntVar(&FLAGS_durBeforeScale, "duration before scale", 60, "")
-	flag.IntVar(&FLAGS_durAfterScale, "duration before scale", 60, "")
+	flag.IntVar(&FLAGS_durBeforeScale, "durBF", 60, "duration before scale")
+	flag.IntVar(&FLAGS_durAfterScale, "durAF", 60, "duration after scale")
 	flag.IntVar(&FLAGS_tps, "tps", 10000000, "tps param for nexmark")
 	flag.IntVar(&FLAGS_flush_ms, "flushms", 10, "flush the buffer every ms; for exactly once, please see commit_everyMs and commit_niter. They determine the flush interval. ")
 	flag.IntVar(&FLAGS_src_flush_ms, "src_flushms", 5, "src flush ms")
