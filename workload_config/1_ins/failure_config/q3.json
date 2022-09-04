@@ -1,0 +1,8 @@
+{
+    "fail_spec": {
+        "q3JoinTable": {
+            "FailAfterS": 20,
+            "InstanceId": 0
+        }
+    }
+}
