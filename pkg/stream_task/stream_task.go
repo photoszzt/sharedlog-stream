@@ -190,6 +190,21 @@ func flushStreams(ctx context.Context,
 	return nil
 }
 
+func createSnapshot(args *StreamTaskArgs) (commtypes.TableSnapshots, error) {
+	ts := commtypes.TableSnapshots{
+		TabMaps: make(map[string][][]byte),
+	}
+	for _, kvchangelog := range args.kvChangelogs {
+		snap := kvchangelog.Snapshot()
+		ts.TabMaps[kvchangelog.ChangelogTopicName()] = snap
+	}
+	for _, wschangelog := range args.windowStoreChangelogs {
+		snap := wschangelog.Snapshot()
+		ts.TabMaps[wschangelog.ChangelogTopicName()] = snap
+	}
+	return ts, nil
+}
+
 func updateReturnMetric(ret *common.FnOutput, warmupChecker *stats.Warmup,
 	waitForEndMark bool, endDuration time.Duration, instanceID uint8,
 ) {

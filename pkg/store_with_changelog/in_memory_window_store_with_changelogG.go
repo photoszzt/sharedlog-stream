@@ -36,6 +36,10 @@ func NewInMemoryWindowStoreWithChangelogG[K, V any](
 	if err != nil {
 		return nil, err
 	}
+	err = windowStore.SetKVSerde(mp.serdeFormat, msgSerde.GetKeySerdeG(), msgSerde.GetValSerdeG())
+	if err != nil {
+		return nil, err
+	}
 	return &InMemoryWindowStoreWithChangelogG[K, V]{
 		windowStore:      windowStore,
 		msgSerde:         msgSerde,
@@ -222,6 +226,14 @@ func (s *InMemoryWindowStoreWithChangelogG[K, V]) SubstreamNum() uint8 {
 	return s.parNum
 }
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]) error) {
+}
+func (s *InMemoryWindowStoreWithChangelogG[K, V]) Snapshot() [][]byte {
+	return s.windowStore.Snapshot()
+}
+func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeFormat,
+	keySerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]], valSerde commtypes.SerdeG[V],
+) error {
+	return nil
 }
 
 func ToInMemSkipMapWindowTableWithChangelogG[K, V any](

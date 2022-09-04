@@ -36,6 +36,10 @@ func NewKeyValueStoreWithChangelogG[K, V any](mp *MaterializeParam[K, V],
 	if err != nil {
 		return nil, err
 	}
+	err = store.SetKVSerde(mp.serdeFormat, mp.msgSerde.GetKeySerdeG(), mp.msgSerde.GetValSerdeG())
+	if err != nil {
+		return nil, err
+	}
 	return &KeyValueStoreWithChangelogG[K, V]{
 		kvstore:          store,
 		trackFunc:        exactly_once_intr.DefaultTrackProdSubstreamFunc,
@@ -45,6 +49,10 @@ func NewKeyValueStoreWithChangelogG[K, V any](mp *MaterializeParam[K, V],
 		changelogProduce: stats.NewConcurrentStatsCollector[int64](mp.storeName+"-clProd",
 			stats.DEFAULT_COLLECT_DURATION),
 	}, nil
+}
+
+func (st *KeyValueStoreWithChangelogG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeFormat, keySerde commtypes.SerdeG[K], valSerde commtypes.SerdeG[V]) error {
+	return nil
 }
 
 func (st *KeyValueStoreWithChangelogG[K, V]) Name() string {
@@ -227,12 +235,17 @@ func (st *KeyValueStoreWithChangelogG[K, V]) SubstreamNum() uint8 {
 func (st *KeyValueStoreWithChangelogG[K, V]) SetFlushCallback(
 	func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[V]]) error) {
 }
+func (st *KeyValueStoreWithChangelogG[K, V]) Snapshot() [][]byte {
+	return st.kvstore.Snapshot()
+}
 
+/*
 func CreateInMemBTreeKVTableWithChangelogG[K, V any](mp *MaterializeParam[K, V], less store.LessFunc[K],
 ) (*KeyValueStoreWithChangelogG[K, V], error) {
 	s := store.NewInMemoryBTreeKeyValueStoreG[K, V](mp.storeName, less)
 	return NewKeyValueStoreWithChangelogG[K, V](mp, s)
 }
+*/
 
 func CreateInMemorySkipmapKVTableWithChangelogG[K, V any](mp *MaterializeParam[K, V], less store.LessFunc[K],
 ) (*KeyValueStoreWithChangelogG[K, V], error) {

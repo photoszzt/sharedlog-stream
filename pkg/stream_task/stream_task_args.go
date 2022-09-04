@@ -22,6 +22,7 @@ type StreamTaskArgs struct {
 	flushEvery            time.Duration
 	// exactly once: commitEvery overwrites flushEvery if commitEvery < flushEvery
 	commitEvery              time.Duration
+	snapshotEvery            time.Duration
 	trackEveryForAtLeastOnce time.Duration
 	duration                 time.Duration
 	warmup                   time.Duration
@@ -86,6 +87,7 @@ type BuildStreamTaskArgs interface {
 	FixedOutParNum(uint8) BuildStreamTaskArgs
 	WaitEndMark(bool) BuildStreamTaskArgs
 	TestParams(map[string]commtypes.FailParam) BuildStreamTaskArgs
+	SnapshotEveryS(uint32) BuildStreamTaskArgs
 }
 
 func (args *StreamTaskArgsBuilder) Guarantee(gua exactly_once_intr.GuaranteeMth) SetAppID {
@@ -105,6 +107,11 @@ func (args *StreamTaskArgsBuilder) Warmup(warmup time.Duration) SetCommitEvery {
 
 func (args *StreamTaskArgsBuilder) CommitEveryMs(commitEveryMs uint64) SetFlushEveryMs {
 	args.stArgs.commitEvery = time.Duration(commitEveryMs) * time.Millisecond
+	return args
+}
+
+func (args *StreamTaskArgsBuilder) SnapshotEveryS(snapshotEveryS uint32) BuildStreamTaskArgs {
+	args.stArgs.snapshotEvery = time.Duration(snapshotEveryS) * time.Second
 	return args
 }
 

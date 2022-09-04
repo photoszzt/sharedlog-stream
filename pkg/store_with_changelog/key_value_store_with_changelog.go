@@ -52,6 +52,10 @@ func (st *KeyValueStoreWithChangelog[K, V]) Name() string {
 	return st.kvstore.Name()
 }
 
+func (st *KeyValueStoreWithChangelog[K, V]) Snapshot() [][]byte {
+	panic("not implemented")
+}
+
 func (st *KeyValueStoreWithChangelog[K, V]) Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error) {
 	if st.use_bytes {
 		keyBytes, err := st.msgSerde.EncodeKey(key.(K))
@@ -252,11 +256,13 @@ func CreateInMemKVTableWithChangelog[K, V any](mp *MaterializeParam[K, V],
 	return NewKeyValueStoreWithChangelog(mp, s, false)
 }
 
+/*
 func CreateInMemBTreeKVTableWithChangelog[K, V any](mp *MaterializeParam[K, V],
 ) (*KeyValueStoreWithChangelog[K, V], error) {
 	s := store.NewInMemoryBTreeKeyValueStore(mp.storeName)
 	return NewKeyValueStoreWithChangelog(mp, s, false)
 }
+*/
 
 func ToInMemKVTableWithChangelog[K, V any](mp *MaterializeParam[K, V],
 	compare store.KVStoreLessFunc,

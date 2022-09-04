@@ -247,10 +247,9 @@ func (em *EpochManager) GenTagsAndTopicsForEpochMarker() ([]uint64, []string) {
 
 func (em *EpochManager) MarkEpoch(ctx context.Context,
 	epochMeta commtypes.EpochMarker, tags []uint64, additionalTopic []string,
-) error {
+) (uint64, error) {
 	// debug.Fprintf(os.Stderr, "epochMeta to push: %+v\n", epochMeta)
-	_, err := em.appendToEpochLog(ctx, epochMeta, tags, additionalTopic)
-	return err
+	return em.appendToEpochLog(ctx, epochMeta, tags, additionalTopic)
 }
 
 func (em *EpochManager) Init(ctx context.Context) (*commtypes.EpochMarker, uint64, error) {

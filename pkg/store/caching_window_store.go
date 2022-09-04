@@ -158,3 +158,11 @@ func (s *CachingWindowStoreG[K, V]) SubstreamNum() uint8             { return s.
 func (s *CachingWindowStoreG[K, V]) SetFlushCallback(f func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]) error) {
 	s.flushCallbackFunc = f
 }
+func (s *CachingWindowStoreG[K, V]) Snapshot() [][]byte {
+	return s.wrappedStore.Snapshot()
+}
+func (s *CachingWindowStoreG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeFormat,
+	keySerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]], valSerde commtypes.SerdeG[V],
+) error {
+	return nil
+}

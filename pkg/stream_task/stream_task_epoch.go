@@ -19,6 +19,20 @@ import (
 	"time"
 )
 
+var (
+	CREATE_SNAPSHOT = checkCreateSnapshot()
+)
+
+func checkCreateSnapshot() bool {
+	createSnapshotStr := os.Getenv("CREATE_SNAPSHOT")
+	createSnapshot := false
+	if createSnapshotStr == "true" || createSnapshotStr == "1" {
+		createSnapshot = true
+	}
+	fmt.Fprintf(os.Stderr, "env str: %s, create snapshot: %v\n", createSnapshotStr, createSnapshot)
+	return createSnapshot
+}
+
 func SetupManagersForEpoch(ctx context.Context,
 	args *StreamTaskArgs,
 ) (*epoch_manager.EpochManager, *control_channel.ControlChannelManager, error) {
@@ -107,6 +121,11 @@ func processInEpoch(
 	paused := false
 	// latencies := stats.NewInt64Collector("latPerIter", stats.DEFAULT_COLLECT_DURATION)
 	markTimer := time.Now()
+	snapshotTimer := time.Now()
+	tabSnapshotSerde, err := commtypes.GetTableSnapshotsSerde(args.serdeFormat)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	var once sync.Once
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
 	debug.Fprintf(os.Stderr, "commit every(ms): %v, waitEndMark: %v, fixed output parNum: %d\n",
@@ -151,9 +170,16 @@ func processInEpoch(
 				return common.GenErrFnOutput(err)
 			}
 			flushTime := stats.Elapsed(flushAllStart).Microseconds()
-			err = markEpoch(dctx, em, t, args)
+			logOff, err := markEpoch(dctx, em, t, args)
 			if err != nil {
 				return common.GenErrFnOutput(err)
+			}
+			if CREATE_SNAPSHOT && args.snapshotEvery != 0 && time.Since(snapshotTimer) > args.snapshotEvery {
+				err := createSnapshotAndSetAuxData(dctx, logOff, args, tabSnapshotSerde)
+				if err != nil {
+					return common.GenErrFnOutput(err)
+				}
+				snapshotTimer = time.Now()
 			}
 			t.flushAllTime.AddSample(flushTime)
 			hasProcessData = false
@@ -212,9 +238,15 @@ func processInEpoch(
 				return common.GenErrFnOutput(err)
 			}
 			flushTime := stats.Elapsed(flushAllStart).Microseconds()
-			err = markEpoch(dctx, em, t, args)
+			logOff, err := markEpoch(dctx, em, t, args)
 			if err != nil {
 				return common.GenErrFnOutput(err)
+			}
+			if CREATE_SNAPSHOT {
+				err := createSnapshotAndSetAuxData(dctx, logOff, args, tabSnapshotSerde)
+				if err != nil {
+					return common.GenErrFnOutput(err)
+				}
 			}
 			t.flushAllTime.AddSample(flushTime)
 			return handleCtrlMsg(dctx, ctrlRawMsg, t, args, &warmupCheck)
@@ -222,24 +254,38 @@ func processInEpoch(
 	}
 }
 
-func markEpoch(ctx context.Context, em *epoch_manager.EpochManager,
-	t *StreamTask, args *StreamTaskArgs,
+func createSnapshotAndSetAuxData(ctx context.Context, logOff uint64, args *StreamTaskArgs,
+	tabSnapshotSerde commtypes.SerdeG[commtypes.TableSnapshots],
 ) error {
-	prepareStart := stats.TimerBegin()
-	epochMarker, epochMarkerTags, epochMarkerTopics, err := CaptureEpochStateAndCleanup(ctx, em, args)
+	snapshot, err := createSnapshot(args)
 	if err != nil {
 		return err
 	}
-	prepareTime := stats.Elapsed(prepareStart).Microseconds()
-	mStart := stats.TimerBegin()
-	err = em.MarkEpoch(ctx, epochMarker, epochMarkerTags, epochMarkerTopics)
+	tenc, err := tabSnapshotSerde.Encode(snapshot)
 	if err != nil {
 		return err
+	}
+	return args.env.SharedLogSetAuxData(ctx, logOff, tenc)
+}
+
+func markEpoch(ctx context.Context, em *epoch_manager.EpochManager,
+	t *StreamTask, args *StreamTaskArgs,
+) (uint64, error) {
+	prepareStart := stats.TimerBegin()
+	epochMarker, epochMarkerTags, epochMarkerTopics, err := CaptureEpochStateAndCleanup(ctx, em, args)
+	if err != nil {
+		return 0, err
+	}
+	prepareTime := stats.Elapsed(prepareStart).Microseconds()
+	mStart := stats.TimerBegin()
+	logOff, err := em.MarkEpoch(ctx, epochMarker, epochMarkerTags, epochMarkerTopics)
+	if err != nil {
+		return 0, err
 	}
 	mElapsed := stats.Elapsed(mStart).Microseconds()
 	t.markEpochTime.AddSample(mElapsed)
 	t.markEpochPrepare.AddSample(prepareTime)
-	return nil
+	return logOff, nil
 }
 
 func CaptureEpochStateAndCleanup(ctx context.Context, em *epoch_manager.EpochManager, args *StreamTaskArgs) (commtypes.EpochMarker, []uint64, []string, error) {

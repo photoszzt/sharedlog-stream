@@ -9,12 +9,14 @@ import (
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/utils"
 
+	"github.com/rs/zerolog/log"
 	"github.com/zhangyunhao116/skipmap"
 )
 
 type InMemorySkipmapKeyValueStoreG[K, V any] struct {
-	store *skipmap.FuncMap[K, V]
-	name  string
+	store       *skipmap.FuncMap[K, V]
+	kvPairSerde commtypes.SerdeG[commtypes.KeyValuePair[K, V]]
+	name        string
 }
 
 var _ = CoreKeyValueStoreG[int, int](&InMemorySkipmapKeyValueStoreG[int, int]{})
@@ -24,6 +26,12 @@ func NewInMemorySkipmapKeyValueStoreG[K, V any](name string, lessFunc LessFunc[K
 		name:  name,
 		store: skipmap.NewFunc[K, V](lessFunc),
 	}
+}
+
+func (st *InMemorySkipmapKeyValueStoreG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeFormat, keySerde commtypes.SerdeG[K], valSerde commtypes.SerdeG[V]) error {
+	var err error
+	st.kvPairSerde, err = commtypes.GetKeyValuePairSerdeG(serdeFormat, keySerde, valSerde)
+	return err
 }
 
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) Name() string {
@@ -115,6 +123,25 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) Range(ctx context.Context,
 		panic("not implemented")
 	}
 	return nil
+}
+
+// not thread-safe
+func (st *InMemorySkipmapKeyValueStoreG[K, V]) Snapshot() [][]byte {
+	out := make([][]byte, 0, st.store.Len())
+	st.store.Range(func(key K, value V) bool {
+		p := commtypes.KeyValuePair[K, V]{
+			Key:   key,
+			Value: value,
+		}
+		penc, err := st.kvPairSerde.Encode(p)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to encode key-value pair")
+			return false
+		}
+		out = append(out, penc)
+		return true
+	})
+	return out
 }
 
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) TableType() TABLE_TYPE {

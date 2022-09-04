@@ -68,6 +68,9 @@ func NewCachingKeyValueStoreG[K comparable, V any](ctx context.Context,
 	return c
 }
 
+func (c *CachingKeyValueStoreG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeFormat, keySerde commtypes.SerdeG[K], valSerde commtypes.SerdeG[V]) error {
+	return c.wrappedStore.SetKVSerde(serdeFormat, keySerde, valSerde)
+}
 func (c *CachingKeyValueStoreG[K, V]) Name() string { return c.name }
 func (c *CachingKeyValueStoreG[K, V]) Get(ctx context.Context, key K) (V, bool, error) {
 	entry, found := c.cache.get(key)
@@ -184,4 +187,8 @@ func (c *CachingKeyValueStoreG[K, V]) ResetInitialProd() {
 
 func (c *CachingKeyValueStoreG[K, V]) SubstreamNum() uint8 {
 	return c.wrappedStore.SubstreamNum()
+}
+
+func (c *CachingKeyValueStoreG[K, V]) Snapshot() [][]byte {
+	return c.wrappedStore.Snapshot()
 }

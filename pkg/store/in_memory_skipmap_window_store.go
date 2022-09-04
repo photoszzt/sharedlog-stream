@@ -21,6 +21,7 @@ type InMemorySkipMapWindowStoreG[K, V any] struct {
 	storeWithDup                *skipmap.Int64Map[*skipmap.FuncMap[VersionedKeyG[K], V]]
 	compareFunc                 CompareFuncG[K]
 	compareFuncWithVersionedKey CompareFuncG[VersionedKeyG[K]]
+	kvPairSerdeG                commtypes.SerdeG[commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]]
 	name                        string
 	windowSize                  int64
 	retentionPeriod             int64
@@ -59,6 +60,13 @@ func NewInMemorySkipMapWindowStore[K, V any](name string, retentionPeriod int64,
 			compareFunc:        compareFunc,
 		}
 	}
+}
+func (s *InMemorySkipMapWindowStoreG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeFormat,
+	keySerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]], valSerde commtypes.SerdeG[V],
+) error {
+	var err error
+	s.kvPairSerdeG, err = commtypes.GetKeyValuePairSerdeG(serdeFormat, keySerde, valSerde)
+	return err
 }
 
 func (s *InMemorySkipMapWindowStoreG[K, V]) Name() string { return s.name }
@@ -340,6 +348,53 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) IterAll(iterFunc func(int64, K, V) e
 		})
 	}
 	return nil
+}
+
+// not thread-safe
+func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot() [][]byte {
+	l := 0
+	if s.retainDuplicates {
+		l = s.storeWithDup.Len()
+	} else {
+		l = s.storeNoDup.Len()
+	}
+	out := make([][]byte, 0, l)
+	if s.retainDuplicates {
+		s.storeWithDup.Range(func(ts int64, kvmap *skipmap.FuncMap[VersionedKeyG[K], V]) bool {
+			kvmap.Range(func(k VersionedKeyG[K], v V) bool {
+				p := commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]{
+					Key:   commtypes.KeyAndWindowStartTsG[K]{Key: k.Key, WindowStartTs: ts},
+					Value: v,
+				}
+				penc, err := s.kvPairSerdeG.Encode(p)
+				if err != nil {
+					log.Error().Err(err).Msg("failed to encode key-value pair")
+					return false
+				}
+				out = append(out, penc)
+				return true
+			})
+			return true
+		})
+	} else {
+		s.storeNoDup.Range(func(ts int64, kvmap *skipmap.FuncMap[K, V]) bool {
+			kvmap.Range(func(k K, v V) bool {
+				p := commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]{
+					Key:   commtypes.KeyAndWindowStartTsG[K]{Key: k, WindowStartTs: ts},
+					Value: v,
+				}
+				penc, err := s.kvPairSerdeG.Encode(p)
+				if err != nil {
+					log.Error().Err(err).Msg("failed to encode key-value pair")
+					return false
+				}
+				out = append(out, penc)
+				return true
+			})
+			return true
+		})
+	}
+	return out
 }
 
 func (s *InMemorySkipMapWindowStoreG[K, V]) TableType() TABLE_TYPE { return IN_MEM }

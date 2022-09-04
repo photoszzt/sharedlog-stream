@@ -120,6 +120,10 @@ func (st *InMemoryWindowStoreWithChangelog[K, V]) Name() string {
 	return st.windowStore.Name()
 }
 
+func (st *InMemoryWindowStoreWithChangelog[K, V]) Snapshot() [][]byte {
+	panic("not implemented")
+}
+
 func (st *InMemoryWindowStoreWithChangelog[K, V]) ChangelogManager() *ChangelogManager[commtypes.KeyAndWindowStartTsG[K], V] {
 	return st.changelogManager
 }
