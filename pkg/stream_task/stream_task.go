@@ -28,11 +28,11 @@ var (
 
 func checkParallelRestore() bool {
 	parallelRestore_str := os.Getenv("PARALLEL_RESTORE")
-	fmt.Fprintf(os.Stderr, "parallel restore: %s\n", parallelRestore_str)
 	parallelRestore := false
 	if parallelRestore_str == "true" || parallelRestore_str == "1" {
 		parallelRestore = true
 	}
+	fmt.Fprintf(os.Stderr, "parallel restore str: %s, %v\n", parallelRestore_str, parallelRestore)
 	return parallelRestore
 }
 
