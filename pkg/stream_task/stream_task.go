@@ -14,10 +14,26 @@ import (
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
+	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/transaction"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
+
+var (
+	PARALLEL_RESTORE = checkParallelRestore()
+)
+
+func checkParallelRestore() bool {
+	parallelRestore_str := os.Getenv("PARALLEL_RESTORE")
+	parallelRestore := false
+	if parallelRestore_str == "true" || parallelRestore_str == "1" {
+		parallelRestore = true
+	}
+	return parallelRestore
+}
 
 type ProcessFunc func(ctx context.Context, task *StreamTask,
 	args processor.ExecutionContext) (*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq])
@@ -193,21 +209,43 @@ func updateReturnMetric(ret *common.FnOutput, warmupChecker *stats.Warmup,
 func restoreKVStore(ctx context.Context,
 	args *StreamTaskArgs, offsetMap map[string]uint64,
 ) error {
-	for _, kvchangelog := range args.kvChangelogs {
-		topic := kvchangelog.ChangelogTopicName()
-		offset := uint64(0)
-		ok := false
-		if kvchangelog.ChangelogIsSrc() {
-			offset, ok = offsetMap[topic]
-			if !ok {
-				continue
+	substreamNum := args.ectx.SubstreamNum()
+	if PARALLEL_RESTORE {
+		g, ectx := errgroup.WithContext(ctx)
+		for _, kvchangelog := range args.kvChangelogs {
+			kvc := kvchangelog
+			g.Go(func() error {
+				return restoreOneKVStore(ectx, kvc, substreamNum, offsetMap)
+			})
+		}
+		return g.Wait()
+	} else {
+		for _, kvchangelog := range args.kvChangelogs {
+			err := restoreOneKVStore(ctx, kvchangelog, substreamNum, offsetMap)
+			if err != nil {
+				return err
 			}
 		}
-		err := store_restore.RestoreChangelogKVStateStore(ctx, kvchangelog,
-			offset, args.ectx.SubstreamNum())
-		if err != nil {
-			return fmt.Errorf("RestoreKVStateStore failed: %v", err)
+		return nil
+	}
+}
+
+func restoreOneKVStore(ctx context.Context, kvchangelog store.KeyValueStoreOpWithChangelog,
+	substreamNum uint8, offsetMap map[string]uint64,
+) error {
+	topic := kvchangelog.ChangelogTopicName()
+	offset := uint64(0)
+	ok := false
+	if kvchangelog.ChangelogIsSrc() {
+		offset, ok = offsetMap[topic]
+		if !ok {
+			return nil
 		}
+	}
+	err := store_restore.RestoreChangelogKVStateStore(ctx, kvchangelog,
+		offset, substreamNum)
+	if err != nil {
+		return fmt.Errorf("RestoreKVStateStore failed: %v", err)
 	}
 	return nil
 }
@@ -215,13 +253,25 @@ func restoreKVStore(ctx context.Context,
 func restoreChangelogBackedWindowStore(ctx context.Context,
 	args *StreamTaskArgs,
 ) error {
-	for _, wschangelog := range args.windowStoreChangelogs {
-		err := store_restore.RestoreChangelogWindowStateStore(ctx, wschangelog, args.ectx.SubstreamNum())
-		if err != nil {
-			return fmt.Errorf("RestoreWindowStateStore failed: %v", err)
+	substreamNum := args.ectx.SubstreamNum()
+	if PARALLEL_RESTORE {
+		g, ectx := errgroup.WithContext(ctx)
+		for _, wschangelog := range args.windowStoreChangelogs {
+			wsc := wschangelog
+			g.Go(func() error {
+				return store_restore.RestoreChangelogWindowStateStore(ectx, wsc, substreamNum)
+			})
 		}
+		return g.Wait()
+	} else {
+		for _, wschangelog := range args.windowStoreChangelogs {
+			err := store_restore.RestoreChangelogWindowStateStore(ctx, wschangelog, substreamNum)
+			if err != nil {
+				return fmt.Errorf("RestoreWindowStateStore failed: %v", err)
+			}
+		}
+		return nil
 	}
-	return nil
 }
 
 func restoreStateStore(ctx context.Context, args *StreamTaskArgs, offsetMap map[string]uint64) error {
