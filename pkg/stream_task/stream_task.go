@@ -98,6 +98,7 @@ func ExecuteApp(ctx context.Context,
 		for _, src := range streamTaskArgs.ectx.Consumers() {
 			ret.Counts[src.Name()] = src.GetCount()
 			ret.Counts[src.Name()+"_ctrl"] = uint64(src.NumCtrlMsg())
+			ret.Counts[src.Name()+"_data"] = src.GetCount() - uint64(src.NumCtrlMsg())
 			fmt.Fprintf(os.Stderr, "%s msgCnt %d, ctrlCnt %d\n",
 				src.Name(), src.GetCount(), src.NumCtrlMsg())
 		}
