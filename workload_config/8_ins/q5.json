@@ -11,21 +11,24 @@
             "NumInstance": 8,
             "InputTopicNames": ["nexmark_src"],
             "OutputTopicName": ["bids"],
-            "NodeConstraint": "5,6,7,8"
+            "NodeConstraint": "5,6,7,8",
+            "NumSrcProducer": [1]
         },
         {
             "funcName": "q5aucbids",
             "NumInstance": 8,
             "InputTopicNames": ["bids"],
             "OutputTopicName": ["aucBids"],
-            "NodeConstraint": "5,6,7,8"
+            "NodeConstraint": "5,6,7,8",
+            "NumSrcProducer": [8]
         },
         {
             "funcName": "q5maxbid",
             "NumInstance": 8,
             "InputTopicNames": ["aucBids"],
             "OutputTopicName": ["q5_out"],
-            "NodeConstraint": "5,6,7,8"
+            "NodeConstraint": "5,6,7,8",
+            "NumSrcProducer": [8]
         }
     ],
     "StreamParam": {

@@ -18,7 +18,8 @@
                 "q46_aucsByID",
                 "q46_bidsByAucID"
             ],
-            "NodeConstraint": "5,6,7,8"
+            "NodeConstraint": "5,6,7,8",
+            "NumSrcProducer": [1]
         },
         {
             "funcName": "q4JoinStream",
@@ -30,7 +31,8 @@
             "OutputTopicName": [
                 "q4_aucIDCat"
             ],
-            "NodeConstraint": "5,6,7,8"
+            "NodeConstraint": "5,6,7,8",
+            "NumSrcProducer": [2, 2]
         },
         {
             "funcName": "q4MaxBid",
@@ -41,7 +43,8 @@
             "OutputTopicName": [
                 "q4_maxBids"
             ],
-            "NodeConstraint": "5,6,7,8"
+            "NodeConstraint": "5,6,7,8",
+            "NumSrcProducer": [1]
         },
         {
             "funcName": "q4Avg",
@@ -52,7 +55,8 @@
             "OutputTopicName": [
                 "q4_out"
             ],
-            "NodeConstraint": "5,6,7,8"
+            "NodeConstraint": "5,6,7,8",
+            "NumSrcProducer": [2]
         }
     ],
     "StreamParam": {
