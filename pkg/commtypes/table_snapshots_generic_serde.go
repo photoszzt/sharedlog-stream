@@ -3,13 +3,10 @@ package commtypes
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"sharedlog-stream/pkg/common_errors"
-	"sharedlog-stream/pkg/debug"
 )
 
 func GetTableSnapshotsSerde(serdeFormat SerdeFormat) (SerdeG[TableSnapshots], error) {
-	debug.Fprintf(os.Stderr, "serdeFormat for table snapshots serde: %v\n", serdeFormat)
 	switch serdeFormat {
 	case JSON:
 		return TableSnapshotsJSONSerde{}, nil
