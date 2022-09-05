@@ -2,14 +2,17 @@
     "fail_spec": {
         "q6JoinStream": {
             "FailAfterS": 20,
+            "FailTimes": 1,
             "InstanceId": 0
         },
         "q6MaxBid": {
             "FailAfterS": 25,
+            "FailTimes": 1,
             "InstanceId": 0
         },
         "q6Avg": {
             "FailAfterS": 30,
+            "FailTimes": 1,
             "InstanceId": 0
         }
     }

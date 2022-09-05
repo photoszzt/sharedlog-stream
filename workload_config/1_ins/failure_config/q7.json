@@ -2,10 +2,12 @@
     "fail_spec": {
         "q7MaxBid": {
             "FailAfterS": 20,
+            "FailTimes": 1,
             "InstanceId": 0
         },
         "q7JoinMaxBid": {
             "FailAfterS": 25,
+            "FailTimes": 1,
             "InstanceId": 0
         }
     }

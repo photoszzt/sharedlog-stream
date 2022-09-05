@@ -3,7 +3,7 @@
         "q8JoinStream": {
             "FailAfterS": 20,
             "InstanceId": 0,
-            "FailTimes": 4
+            "FailTimes": 1
         }
     }
 }

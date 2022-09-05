@@ -2,14 +2,17 @@
     "fail_spec": {
         "q4JoinStream": {
             "FailAfterS": 20,
+            "FailTimes": 1,
             "InstanceId": 0
         },
         "q4MaxBid": {
             "FailAfterS": 25,
+            "FailTimes": 1,
             "InstanceId": 0
         },
         "q4Avg": {
             "FailAfterS": 30,
+            "FailTimes": 1,
             "InstanceId": 0
         }
     }

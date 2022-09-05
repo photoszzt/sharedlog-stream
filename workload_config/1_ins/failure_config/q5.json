@@ -2,10 +2,12 @@
     "fail_spec": {
         "q5aucbids": {
             "FailAfterS": 20,
+            "FailTimes": 1,
             "InstanceId": 0
         },
         "q5maxbid": {
             "FailAfterS": 25,
+            "FailTimes": 1,
             "InstanceId": 0
         }
     }
