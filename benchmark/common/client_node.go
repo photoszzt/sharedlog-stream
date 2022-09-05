@@ -68,12 +68,19 @@ func (n *ClientNode) Invoke(client *http.Client, response *FnOutput, wg *sync.Wa
 	i := 0
 	startTime := time.Now()
 	responses := make([]*FnOutput, 0, 2)
+	failTimes := uint8(0)
+	if queryInput.TestParams != nil {
+		failTimes = queryInput.TestParams[n.config.FuncName].FailTimes
+	}
 	for {
 		var r FnOutput
 		if i != 0 {
 			// remove the test error on retry
 			if queryInput.TestParams != nil {
-				queryInput.TestParams = nil
+				failTimes -= 1
+				if failTimes == 0 {
+					queryInput.TestParams = nil
+				}
 			}
 		}
 		err := JsonPostRequest(client, url, n.config.NodeConstraint, queryInput, &r)
