@@ -212,6 +212,7 @@ L:
 			return commtypes.RawMsgAndSeq{
 				Payload:    rawMsg.Payload,
 				PayloadArr: nil,
+				AuxData:    rawMsg.AuxData,
 				MsgSeqNum:  rawMsg.MsgSeqNum,
 				LogSeqNum:  rawMsg.LogSeqNum,
 				IsControl:  true,
@@ -229,6 +230,7 @@ L:
 				return commtypes.RawMsgAndSeq{
 					Payload:    nil,
 					PayloadArr: payloadArr.Payloads,
+					AuxData:    rawMsg.AuxData,
 					MsgSeqNum:  rawMsg.MsgSeqNum,
 					LogSeqNum:  rawMsg.LogSeqNum,
 					IsControl:  false,
@@ -237,6 +239,7 @@ L:
 				return commtypes.RawMsgAndSeq{
 					Payload:    rawMsg.Payload,
 					PayloadArr: nil,
+					AuxData:    rawMsg.AuxData,
 					MsgSeqNum:  rawMsg.MsgSeqNum,
 					LogSeqNum:  rawMsg.LogSeqNum,
 					IsControl:  false,

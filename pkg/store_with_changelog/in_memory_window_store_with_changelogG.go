@@ -230,6 +230,9 @@ func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetFlushCallback(func(ctx cont
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) Snapshot() [][]byte {
 	return s.windowStore.Snapshot()
 }
+func (s *InMemoryWindowStoreWithChangelogG[K, V]) RestoreFromSnapshot(ctx context.Context, snapshot [][]byte) error {
+	return s.windowStore.RestoreFromSnapshot(ctx, snapshot)
+}
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeFormat,
 	keySerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]], valSerde commtypes.SerdeG[V],
 ) error {

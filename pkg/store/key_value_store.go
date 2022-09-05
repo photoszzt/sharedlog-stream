@@ -35,6 +35,7 @@ type CoreKeyValueStoreG[K, V any] interface {
 	TableType() TABLE_TYPE
 	Flush(ctx context.Context) error
 	Snapshot() [][]byte
+	RestoreFromSnapshot(snapshot [][]byte) error
 	SetKVSerde(serdeFormat commtypes.SerdeFormat, keySerde commtypes.SerdeG[K], valSerde commtypes.SerdeG[V]) error
 	UpdateTrackParFunc
 	OnlyUpdateInMemStore
@@ -58,6 +59,7 @@ type KeyValueStoreOpWithChangelog interface {
 	ProduceRangeRecording
 	SubstreamNum() uint8
 	Snapshot() [][]byte
+	RestoreFromSnapshot(snapshot [][]byte) error
 }
 
 type KeyValueStoreBackedByChangelog interface {

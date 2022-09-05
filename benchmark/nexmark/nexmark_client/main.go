@@ -24,6 +24,7 @@ var (
 	FLAGS_workload_config string
 	FLAGS_guarantee       string
 	FLAGS_commit_everyMs  uint64
+	FLAGS_snapshot_everyS uint
 	FLAGS_stat_dir        string
 	FLAGS_warmup_time     int
 	FLAGS_local           bool
@@ -114,6 +115,7 @@ func main() {
 	flag.IntVar(&FLAGS_warmup_time, "warmup_time", 0, "warmup time")
 	flag.IntVar(&FLAGS_flush_ms, "flushms", 10, "flush the buffer every ms; for exactly once, please see commit_everyMs and commit_niter. They determine the flush interval. ")
 	flag.IntVar(&FLAGS_src_flush_ms, "src_flushms", 5, "src flush ms")
+	flag.UintVar(&FLAGS_snapshot_everyS, "snapshot_everyS", 0, "snapshot every s")
 
 	flag.Uint64Var(&FLAGS_commit_everyMs, "comm_everyMS", 10, "commit a transaction every (ms)")
 

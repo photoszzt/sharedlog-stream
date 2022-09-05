@@ -115,6 +115,10 @@ func (cm *ChangelogManager[K, V]) ProduceCount() uint32 {
 	return cm.numProduced
 }
 
+func (cm *ChangelogManager[K, V]) SetChangelogConsumeCursor(seqNum uint64, parNum uint8) {
+	cm.restoreConsumer.SetCursor(seqNum, parNum)
+}
+
 func (cm *ChangelogManager[K, V]) Consume(ctx context.Context, parNum uint8) (commtypes.MsgAndSeqG[K, V], error) {
 	rawMsg, err := cm.restoreConsumer.Consume(ctx, parNum)
 	if err != nil {

@@ -26,6 +26,9 @@ func UpdateStreamTaskArgs(sp *common.QueryInput, argsBuilder stream_task.SetGuar
 	if sp.TestParams != nil {
 		ret.TestParams(sp.TestParams)
 	}
+	if sp.SnapEveryS != 0 {
+		ret.SnapshotEveryS(sp.SnapEveryS)
+	}
 	return ret
 }
 

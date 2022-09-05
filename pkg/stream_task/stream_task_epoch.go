@@ -34,14 +34,14 @@ func checkCreateSnapshot() bool {
 }
 
 func SetupManagersForEpoch(ctx context.Context,
-	args *StreamTaskArgs,
+	args *StreamTaskArgs, rs *RedisSnapshotStore,
 ) (*epoch_manager.EpochManager, *control_channel.ControlChannelManager, error) {
 	em, err := epoch_manager.NewEpochManager(args.env, args.transactionalId, args.serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
 	initEmStart := time.Now()
-	recentMeta, metaSeqNum, err := em.Init(ctx)
+	recentMeta, rawMetaMsg, err := em.Init(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -51,20 +51,77 @@ func SetupManagersForEpoch(ctx context.Context,
 	if err != nil {
 		return nil, nil, err
 	}
+	snapshotSerde, err := commtypes.GetTableSnapshotsSerde(args.serdeFormat)
+	if err != nil {
+		return nil, nil, err
+	}
 	if recentMeta != nil {
 		fmt.Fprint(os.Stderr, "start restore\n")
 		restoreBeg := time.Now()
 		offsetMap := recentMeta.ConSeqNums
+		auxData := rawMetaMsg.AuxData
+		auxMetaSeq := rawMetaMsg.LogSeqNum
 		if len(offsetMap) == 0 {
 			// the last commit doesn't consume anything
-			meta, err := em.FindMostRecentEpochMetaThatHasConsumed(ctx, metaSeqNum)
+			var meta *commtypes.EpochMarker
+			var rawMsg *commtypes.RawMsg
+			meta, rawMsg, err = em.FindLastEpochMetaThatHasConsumed(ctx, rawMetaMsg.LogSeqNum)
 			if err != nil {
 				return nil, nil, err
+			}
+			if len(auxData) == 0 && len(rawMsg.AuxData) != 0 {
+				auxData = rawMsg.AuxData
+				auxMetaSeq = rawMsg.LogSeqNum
 			}
 			if meta == nil {
 				panic("consumed sequnce number must be recorded in epoch meta")
 			} else {
 				offsetMap = meta.ConSeqNums
+			}
+		}
+		if CREATE_SNAPSHOT {
+			if len(auxData) == 0 {
+				debug.Fprintf(os.Stderr, "read back for snapshot from 0x%x\n", rawMetaMsg.LogSeqNum)
+				auxData, auxMetaSeq, err = em.FindLastEpochMetaWithAuxData(ctx, rawMetaMsg.LogSeqNum)
+				if err != nil {
+					return nil, nil, fmt.Errorf("[ERR] FindLastEpochMetaWithAuxData: %v", err)
+				}
+			}
+			if len(auxData) > 0 {
+				uint16Serde := commtypes.Uint16SerdeG{}
+				ret, err := uint16Serde.Decode(auxData)
+				if err != nil {
+					return nil, nil, fmt.Errorf("[ERR] Decode: %v", err)
+				}
+				if ret == 1 {
+					snapshotBin, err := rs.GetSnapshot(ctx, auxMetaSeq)
+					if err != nil {
+						return nil, nil, fmt.Errorf("[ERR] GetSnapshot: %v", err)
+					}
+					tabMaps, err := snapshotSerde.Decode(snapshotBin)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "failed to decode snapshot: auxData len: %d, %v\n", len(auxData), err)
+						return nil, nil, fmt.Errorf("[ERR] Decode snapshot: %v", err)
+					}
+					for kvchTp, kvchangelog := range args.kvChangelogs {
+						snap := tabMaps.TabMaps[kvchTp]
+						err = kvchangelog.RestoreFromSnapshot(snap)
+						if err != nil {
+							return nil, nil, fmt.Errorf("[ERR] restore kv from snapshot: %v", err)
+						}
+						kvchangelog.Stream().SetCursor(auxMetaSeq, kvchangelog.SubstreamNum())
+					}
+					for wscTp, wsc := range args.windowStoreChangelogs {
+						snap := tabMaps.TabMaps[wscTp]
+						err = wsc.RestoreFromSnapshot(ctx, snap)
+						if err != nil {
+							return nil, nil, fmt.Errorf("[ERR] restore window table from snapshot: %v", err)
+						}
+						wsc.Stream().SetCursor(auxMetaSeq, wsc.SubstreamNum())
+					}
+				}
+			} else {
+				fmt.Fprintf(os.Stderr, "no snapshot found\n")
 			}
 		}
 		err = restoreStateStore(ctx, args, offsetMap)
@@ -100,6 +157,7 @@ func processInEpoch(
 	em *epoch_manager.EpochManager,
 	cmm *control_channel.ControlChannelManager,
 	args *StreamTaskArgs,
+	rs *RedisSnapshotStore,
 ) *common.FnOutput {
 	err := trackStreamAndConfigureExactlyOnce(args, em,
 		func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {
@@ -128,8 +186,8 @@ func processInEpoch(
 	}
 	var once sync.Once
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
-	debug.Fprintf(os.Stderr, "commit every(ms): %v, waitEndMark: %v, fixed output parNum: %d\n",
-		args.commitEvery, args.waitEndMark, args.fixedOutParNum)
+	debug.Fprintf(os.Stderr, "commit every(ms): %v, waitEndMark: %v, fixed output parNum: %d, snapshot every(s): %v\n",
+		args.commitEvery, args.waitEndMark, args.fixedOutParNum, args.snapshotEvery)
 	testForFail := false
 	var failAfter time.Duration
 	failParam, ok := args.testParams[args.ectx.FuncName()]
@@ -175,7 +233,7 @@ func processInEpoch(
 				return common.GenErrFnOutput(err)
 			}
 			if CREATE_SNAPSHOT && args.snapshotEvery != 0 && time.Since(snapshotTimer) > args.snapshotEvery {
-				err := createSnapshotAndSetAuxData(dctx, logOff, args, tabSnapshotSerde)
+				err := createSnapshotAndSetAuxData(dctx, rs, logOff, args, tabSnapshotSerde)
 				if err != nil {
 					return common.GenErrFnOutput(err)
 				}
@@ -243,7 +301,7 @@ func processInEpoch(
 				return common.GenErrFnOutput(err)
 			}
 			if CREATE_SNAPSHOT {
-				err := createSnapshotAndSetAuxData(dctx, logOff, args, tabSnapshotSerde)
+				err := createSnapshotAndSetAuxData(dctx, rs, logOff, args, tabSnapshotSerde)
 				if err != nil {
 					return common.GenErrFnOutput(err)
 				}
@@ -254,7 +312,7 @@ func processInEpoch(
 	}
 }
 
-func createSnapshotAndSetAuxData(ctx context.Context, logOff uint64, args *StreamTaskArgs,
+func createSnapshotAndSetAuxData(ctx context.Context, rs *RedisSnapshotStore, logOff uint64, args *StreamTaskArgs,
 	tabSnapshotSerde commtypes.SerdeG[commtypes.TableSnapshots],
 ) error {
 	snapshot, err := createSnapshot(args)
@@ -265,7 +323,7 @@ func createSnapshotAndSetAuxData(ctx context.Context, logOff uint64, args *Strea
 	if err != nil {
 		return err
 	}
-	return args.env.SharedLogSetAuxData(ctx, logOff, tenc)
+	return rs.StoreSnapshot(ctx, args.env, tenc, logOff)
 }
 
 func markEpoch(ctx context.Context, em *epoch_manager.EpochManager,

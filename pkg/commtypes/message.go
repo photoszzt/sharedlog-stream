@@ -130,6 +130,7 @@ var EmptyRawMsg = RawMsg{Payload: nil, MsgSeqNum: 0, LogSeqNum: 0}
 
 type RawMsg struct {
 	Payload []byte
+	AuxData []byte
 
 	MsgSeqNum uint64
 	LogSeqNum uint64
@@ -155,6 +156,7 @@ type MsgAndSeq struct {
 type RawMsgAndSeq struct {
 	Payload    []byte
 	PayloadArr [][]byte
+	AuxData    []byte
 	MsgSeqNum  uint64
 	LogSeqNum  uint64
 	StartTime  int64

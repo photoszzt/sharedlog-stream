@@ -238,6 +238,9 @@ func (st *KeyValueStoreWithChangelogG[K, V]) SetFlushCallback(
 func (st *KeyValueStoreWithChangelogG[K, V]) Snapshot() [][]byte {
 	return st.kvstore.Snapshot()
 }
+func (st *KeyValueStoreWithChangelogG[K, V]) RestoreFromSnapshot(snapshot [][]byte) error {
+	return st.kvstore.RestoreFromSnapshot(snapshot)
+}
 
 /*
 func CreateInMemBTreeKVTableWithChangelogG[K, V any](mp *MaterializeParam[K, V], less store.LessFunc[K],

@@ -126,11 +126,7 @@ func (emc *EpochMarkConsumer) checkMsgQueue(msgQueue *deque.Deque, parNum uint8)
 			produce.SubStreamNum = parNum
 			ranges[parNum] = produce
 			msgQueue.PopFront()
-			if msgQueue.Len() > 0 {
-				frontMsg = msgQueue.Front().(*commtypes.RawMsg)
-			} else {
-				return nil
-			}
+			return frontMsg
 		}
 		if frontMsg.Mark == commtypes.SCALE_FENCE && frontMsg.ScaleEpoch != 0 {
 			frontMsg := msgQueue.PopFront().(*commtypes.RawMsg)

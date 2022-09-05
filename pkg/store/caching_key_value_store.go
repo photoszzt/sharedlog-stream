@@ -192,3 +192,6 @@ func (c *CachingKeyValueStoreG[K, V]) SubstreamNum() uint8 {
 func (c *CachingKeyValueStoreG[K, V]) Snapshot() [][]byte {
 	return c.wrappedStore.Snapshot()
 }
+func (c *CachingKeyValueStoreG[K, V]) RestoreFromSnapshot(snapshot [][]byte) error {
+	return c.wrappedStore.RestoreFromSnapshot(snapshot)
+}

@@ -56,6 +56,10 @@ func (st *KeyValueStoreWithChangelog[K, V]) Snapshot() [][]byte {
 	panic("not implemented")
 }
 
+func (st *KeyValueStoreWithChangelog[K, V]) RestoreFromSnapshot(snapshot [][]byte) error {
+	panic("not implemented")
+}
+
 func (st *KeyValueStoreWithChangelog[K, V]) Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error) {
 	if st.use_bytes {
 		keyBytes, err := st.msgSerde.EncodeKey(key.(K))

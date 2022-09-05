@@ -43,6 +43,7 @@ type CoreWindowStoreG[K, V any] interface {
 	SetKVSerde(serdeFormat commtypes.SerdeFormat,
 		keySerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]], valSerde commtypes.SerdeG[V],
 	) error
+	RestoreFromSnapshot(ctx context.Context, snapshot [][]byte) error
 	UpdateTrackParFunc
 	OnlyUpdateInMemWinStoreG[K, V]
 	CachedWindowStateStore[K, V]
@@ -76,4 +77,5 @@ type WindowStoreOpWithChangelog interface {
 	ProduceRangeRecording
 	SubstreamNum() uint8
 	Snapshot() [][]byte
+	RestoreFromSnapshot(ctx context.Context, snapshot [][]byte) error
 }

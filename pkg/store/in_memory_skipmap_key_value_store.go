@@ -144,6 +144,18 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) Snapshot() [][]byte {
 	return out
 }
 
+func (st *InMemorySkipmapKeyValueStoreG[K, V]) RestoreFromSnapshot(snapshot [][]byte) error {
+	for _, kv := range snapshot {
+		p, err := st.kvPairSerde.Decode(kv)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to decode key-value pair")
+			return err
+		}
+		st.store.Store(p.Key, p.Value)
+	}
+	return nil
+}
+
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) TableType() TABLE_TYPE {
 	return IN_MEM
 }

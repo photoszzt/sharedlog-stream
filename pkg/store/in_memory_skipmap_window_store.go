@@ -397,6 +397,21 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot() [][]byte {
 	return out
 }
 
+func (s *InMemorySkipMapWindowStoreG[K, V]) RestoreFromSnapshot(ctx context.Context, snapshot [][]byte) error {
+	for _, penc := range snapshot {
+		p, err := s.kvPairSerdeG.Decode(penc)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to decode key-value pair")
+			return err
+		}
+		err = s.Put(ctx, p.Key.Key, optional.Some(p.Value), p.Key.WindowStartTs, 0)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *InMemorySkipMapWindowStoreG[K, V]) TableType() TABLE_TYPE { return IN_MEM }
 func (s *InMemorySkipMapWindowStoreG[K, V]) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 }

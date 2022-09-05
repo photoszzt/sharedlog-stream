@@ -84,12 +84,13 @@ func ExecuteApp(ctx context.Context,
 		debug.Fprint(os.Stderr, "begin transaction processing\n")
 		ret = processWithTransaction(ctx, t, tm, cmm, streamTaskArgs)
 	} else if streamTaskArgs.guarantee == exactly_once_intr.EPOCH_MARK {
-		em, cmm, err := SetupManagersForEpoch(ctx, streamTaskArgs)
+		rs := NewRedisSnapshotStore()
+		em, cmm, err := SetupManagersForEpoch(ctx, streamTaskArgs, &rs)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
 		debug.Fprint(os.Stderr, "begin epoch processing\n")
-		ret = processInEpoch(ctx, t, em, cmm, streamTaskArgs)
+		ret = processInEpoch(ctx, t, em, cmm, streamTaskArgs, &rs)
 		fmt.Fprintf(os.Stderr, "epoch ret: %v\n", ret)
 	} else {
 		ret = process(ctx, t, streamTaskArgs)

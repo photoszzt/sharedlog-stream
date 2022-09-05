@@ -22,6 +22,7 @@ type QueryInput struct {
 	CommitEveryMs        uint64                         `json:"commEveryMs,omitempty"`
 	FlushMs              uint32                         `json:"flushMs,omitempty"`
 	WarmupS              uint32                         `json:"warmup,omitempty"`
+	SnapEveryS           uint32                         `json:"snapEveryS,omitempty"`
 	Duration             uint32                         `json:"duration,omitempty"`
 	ScaleEpoch           uint16                         `json:"epoch"`
 	WaitForEndMark       bool                           `json:"waitEnd,omitempty"`
@@ -43,6 +44,7 @@ func (q *QueryInput) Clone() QueryInput {
 		CommitEveryMs:        q.CommitEveryMs,
 		FlushMs:              q.FlushMs,
 		WarmupS:              q.WarmupS,
+		SnapEveryS:           q.SnapEveryS,
 		Duration:             q.Duration,
 		ScaleEpoch:           q.ScaleEpoch,
 		WaitForEndMark:       q.WaitForEndMark,

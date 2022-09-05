@@ -20,7 +20,11 @@ require (
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
 )
 
-require github.com/zhangyunhao116/fastrand v0.2.1 // indirect
+require (
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
+	github.com/go-redis/redis/v9 v9.0.0-beta.2 // indirect
+	github.com/zhangyunhao116/fastrand v0.2.1 // indirect
+)
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -32,7 +36,7 @@ require (
 	github.com/sasha-s/go-deadlock v0.3.1
 	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e
 	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3 // indirect
-	golang.org/x/sys v0.0.0-20211019181941-9d821ace8654 // indirect
+	golang.org/x/sys v0.0.0-20220422013727-9388b58f7150 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

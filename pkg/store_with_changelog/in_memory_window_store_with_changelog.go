@@ -123,7 +123,9 @@ func (st *InMemoryWindowStoreWithChangelog[K, V]) Name() string {
 func (st *InMemoryWindowStoreWithChangelog[K, V]) Snapshot() [][]byte {
 	panic("not implemented")
 }
-
+func (st *InMemoryWindowStoreWithChangelog[K, V]) RestoreFromSnapshot(ctx context.Context, snapshot [][]byte) error {
+	panic("not implemented")
+}
 func (st *InMemoryWindowStoreWithChangelog[K, V]) ChangelogManager() *ChangelogManager[commtypes.KeyAndWindowStartTsG[K], V] {
 	return st.changelogManager
 }

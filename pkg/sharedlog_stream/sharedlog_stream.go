@@ -72,7 +72,6 @@ type StreamLogEntry struct {
 	TransactionID uint64   `msg:"trid,omitempty"`
 	TaskEpoch     uint16   `msg:"te,omitempty"`
 	Meta          uint8    `msg:"meta,omitempty"`
-	seqNum        uint64   `msg:"-"`
 }
 
 func (e *StreamLogEntry) BelongsToTopic(topicName string) bool {
@@ -96,7 +95,6 @@ func decodeStreamLogEntry(logEntry *types.LogEntry) *StreamLogEntry {
 	if err != nil {
 		panic(err)
 	}
-	streamLogEntry.seqNum = logEntry.SeqNum
 	return &streamLogEntry
 }
 
@@ -239,8 +237,9 @@ func (s *SharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum ui
 			isPayloadArr := bits.Has(bits.Bits(streamLogEntry.Meta), PayloadArr)
 			return &commtypes.RawMsg{
 				Payload:      streamLogEntry.Payload,
+				AuxData:      logEntry.AuxData,
 				MsgSeqNum:    streamLogEntry.MsgSeqNum,
-				LogSeqNum:    streamLogEntry.seqNum,
+				LogSeqNum:    logEntry.SeqNum,
 				IsControl:    isControl,
 				IsPayloadArr: isPayloadArr,
 			}, nil
@@ -283,11 +282,12 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 		isControl := bits.Has(bits.Bits(streamLogEntry.Meta), Control)
 		if streamLogEntry.BelongsToTopic(s.topicName) || isControl {
 			isPayloadArr := bits.Has(bits.Bits(streamLogEntry.Meta), PayloadArr)
-			s.cursor = streamLogEntry.seqNum + 1
+			s.cursor = logEntry.SeqNum + 1
 			return &commtypes.RawMsg{
 				Payload:      streamLogEntry.Payload,
+				AuxData:      logEntry.AuxData,
 				MsgSeqNum:    streamLogEntry.MsgSeqNum,
-				LogSeqNum:    streamLogEntry.seqNum,
+				LogSeqNum:    logEntry.SeqNum,
 				IsControl:    isControl,
 				IsPayloadArr: isPayloadArr,
 				ProdId: commtypes.ProducerId{

@@ -252,10 +252,10 @@ func (em *EpochManager) MarkEpoch(ctx context.Context,
 	return em.appendToEpochLog(ctx, epochMeta, tags, additionalTopic)
 }
 
-func (em *EpochManager) Init(ctx context.Context) (*commtypes.EpochMarker, uint64, error) {
+func (em *EpochManager) Init(ctx context.Context) (*commtypes.EpochMarker, *commtypes.RawMsg, error) {
 	recentMeta, metaMsg, err := em.getMostRecentCommitEpoch(ctx)
 	if err != nil {
-		return nil, 0, err
+		return nil, nil, err
 	}
 	if recentMeta == nil {
 		em.InitTaskId(em.env)
@@ -277,12 +277,12 @@ func (em *EpochManager) Init(ctx context.Context) (*commtypes.EpochMarker, uint6
 	}
 	_, err = em.appendToEpochLog(ctx, meta, tags, nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, nil, err
 	}
 	if recentMeta != nil {
-		return recentMeta, metaMsg.LogSeqNum, nil
+		return recentMeta, metaMsg, nil
 	} else {
-		return recentMeta, 0, nil
+		return recentMeta, nil, nil
 	}
 }
 
@@ -301,24 +301,43 @@ func (em *EpochManager) getMostRecentCommitEpoch(ctx context.Context) (*commtype
 	return &meta, rawMsg, nil
 }
 
-func (em *EpochManager) FindMostRecentEpochMetaThatHasConsumed(
+func (em *EpochManager) FindLastEpochMetaThatHasConsumed(
 	ctx context.Context, seqNum uint64,
-) (*commtypes.EpochMarker, error) {
+) (meta *commtypes.EpochMarker, rawMsg *commtypes.RawMsg, err error) {
+	tailSeqNum := seqNum
 	for {
-		rawMsg, err := em.epochLogForWrite.ReadBackwardWithTag(ctx, seqNum, 0, em.epochLogMarkerTag)
+		rawMsg, err := em.epochLogForWrite.ReadBackwardWithTag(ctx, tailSeqNum, 0, em.epochLogMarkerTag)
 		if err != nil {
 			if common_errors.IsStreamEmptyError(err) {
-				return nil, nil
+				return nil, nil, nil
 			}
-			return nil, err
+			return nil, nil, err
 		}
 		meta, err := em.epochMetaSerde.Decode(rawMsg.Payload)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		if meta.ConSeqNums != nil && len(meta.ConSeqNums) != 0 {
-			return &meta, nil
+		if len(meta.ConSeqNums) != 0 {
+			return &meta, rawMsg, nil
 		}
+		tailSeqNum = rawMsg.LogSeqNum - 1
+	}
+}
+
+func (em *EpochManager) FindLastEpochMetaWithAuxData(ctx context.Context, seqNum uint64) (auxData []byte, metaSeqNum uint64, err error) {
+	tailSeqNum := seqNum
+	for {
+		rawMsg, err := em.epochLogForWrite.ReadBackwardWithTag(ctx, tailSeqNum, 0, em.epochLogMarkerTag)
+		if err != nil {
+			if common_errors.IsStreamEmptyError(err) {
+				return nil, 0, nil
+			}
+			return nil, 0, err
+		}
+		if len(rawMsg.AuxData) != 0 {
+			return rawMsg.AuxData, rawMsg.LogSeqNum, nil
+		}
+		tailSeqNum = rawMsg.LogSeqNum - 1
 	}
 }
 

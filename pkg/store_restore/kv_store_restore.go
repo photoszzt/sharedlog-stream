@@ -47,6 +47,9 @@ func (kvc *KVStoreChangelog[K, V]) ChangelogTopicName() string {
 func (kvc *KVStoreChangelog[K, V]) Snapshot() [][]byte {
 	panic("not implemented")
 }
+func (kvc *KVStoreChangelog[K, V]) RestoreFromSnapshot(snapshot [][]byte) error {
+	panic("not implemented")
+}
 
 func (kvc *KVStoreChangelog[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8, cutoff uint64) (int, error) {
 	msgSeq, err := kvc.changelogManager.Consume(ctx, parNum)
