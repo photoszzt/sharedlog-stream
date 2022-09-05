@@ -70,6 +70,7 @@ func (n *ClientNode) Invoke(client *http.Client, response *FnOutput, wg *sync.Wa
 	responses := make([]*FnOutput, 0, 2)
 	failTimes := uint8(0)
 	if queryInput.TestParams != nil {
+		fmt.Fprintf(os.Stderr, "test params is %+v, func Name: %s\n", queryInput.TestParams, n.config.FuncName)
 		failTimes = queryInput.TestParams[n.config.FuncName].FailTimes
 	}
 	for {
