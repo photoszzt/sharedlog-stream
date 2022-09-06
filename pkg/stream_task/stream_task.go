@@ -121,7 +121,7 @@ func handleCtrlMsg(ctx context.Context, ctrlRawMsg commtypes.RawMsgAndSeq,
 	t *StreamTask, args *StreamTaskArgs, warmupCheck *stats.Warmup,
 ) *common.FnOutput {
 	if ctrlRawMsg.Mark == commtypes.SCALE_FENCE {
-		ret := HandleScaleEpochAndBytes(ctx, ctrlRawMsg, args.ectx)
+		ret := handleScaleEpochAndBytes(ctx, ctrlRawMsg, args.ectx)
 		if ret.Success {
 			updateReturnMetric(ret, warmupCheck,
 				args.waitEndMark, t.GetEndDuration(), args.ectx.SubstreamNum())
@@ -474,15 +474,13 @@ func initAfterMarkOrCommit(ctx context.Context, t *StreamTask, args *StreamTaskA
 	return nil
 }
 
-func HandleScaleEpochAndBytes(ctx context.Context, msg commtypes.RawMsgAndSeq,
+func handleScaleEpochAndBytes(ctx context.Context, msg commtypes.RawMsgAndSeq,
 	args processor.ExecutionContext,
 ) *common.FnOutput {
 	for _, sink := range args.Producers() {
-		if sink.Stream().NumPartition() > args.SubstreamNum() {
-			_, err := sink.ProduceCtrlMsg(ctx, msg, []uint8{args.SubstreamNum()})
-			if err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
-			}
+		_, err := sink.ProduceCtrlMsg(ctx, msg, []uint8{args.SubstreamNum()})
+		if err != nil {
+			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
 	}
 	err := args.RecordFinishFunc()(ctx, args.FuncName(), args.SubstreamNum())

@@ -54,64 +54,6 @@ type ProcArgs interface {
 	SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc)
 }
 
-type BaseProcArgsBuilder struct {
-	bp *BaseProcArgs
-}
-
-type SetFuncName interface {
-	FuncName(string) SetCurEpoch
-}
-
-type SetCurEpoch interface {
-	CurEpoch(uint16) SetSubstreamNum
-}
-
-type SetSubstreamNum interface {
-	SubstreamNum(uint8) BuildProcArgs
-}
-
-type BuildProcArgs interface {
-	Build() ProcArgs
-	TrackParFunc(exactly_once_intr.TrackProdSubStreamFunc) BuildProcArgs
-	RecordFinishFunc(exactly_once_intr.RecordPrevInstanceFinishFunc) BuildProcArgs
-}
-
-func NewBaseProcArgsBuilder() SetFuncName {
-	return &BaseProcArgsBuilder{
-		bp: &BaseProcArgs{},
-	}
-}
-
-func (b *BaseProcArgsBuilder) FuncName(funcName string) SetCurEpoch {
-	b.bp.funcName = funcName
-	return b
-}
-func (b *BaseProcArgsBuilder) CurEpoch(curEpoch uint16) SetSubstreamNum {
-	b.bp.curEpoch = curEpoch
-	return b
-}
-func (b *BaseProcArgsBuilder) SubstreamNum(parNum uint8) BuildProcArgs {
-	b.bp.parNum = parNum
-	return b
-}
-func (b *BaseProcArgsBuilder) Build() ProcArgs {
-	if b.bp.trackParFunc == nil {
-		b.bp.trackParFunc = exactly_once_intr.DefaultTrackProdSubstreamFunc
-	}
-	if b.bp.recordFinishFunc == nil {
-		b.bp.recordFinishFunc = exactly_once_intr.DefaultRecordPrevInstanceFinishFunc
-	}
-	return b.bp
-}
-func (b *BaseProcArgsBuilder) TrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) BuildProcArgs {
-	b.bp.trackParFunc = trackParFunc
-	return b
-}
-func (b *BaseProcArgsBuilder) RecordFinishFunc(recordFinishFunc exactly_once_intr.RecordPrevInstanceFinishFunc) BuildProcArgs {
-	b.bp.recordFinishFunc = recordFinishFunc
-	return b
-}
-
 type BaseProcArgs struct {
 	recordFinishFunc exactly_once_intr.RecordPrevInstanceFinishFunc
 	trackParFunc     exactly_once_intr.TrackProdSubStreamFunc

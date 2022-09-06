@@ -112,17 +112,18 @@ func main() {
 		&scaleResponse, "scale", invokeFuncParam.Local)
 
 	var wg sync.WaitGroup
-	beforeScaleEventsNum := FLAGS_tps * FLAGS_durBeforeScale
+	totTime := FLAGS_durBeforeScale + FLAGS_durAfterScale
+	eventsNum := FLAGS_tps * totTime
 	gp := ntypes.GeneratorParams{
-		EventsNum:      uint64(beforeScaleEventsNum),
+		EventsNum:      uint64(eventsNum),
 		SerdeFormat:    serdeFormat,
 		FaasGateway:    FLAGS_faas_gateway,
-		Duration:       uint32(FLAGS_durBeforeScale),
+		Duration:       uint32(totTime),
 		Tps:            uint32(FLAGS_tps),
 		FlushMs:        uint32(FLAGS_src_flush_ms),
 		WaitForEndMark: FLAGS_waitForEndMark,
 	}
-	beforeScaleSourceOutput := common.InvokeSrc(&wg, client, srcInvokeConfig, gp.InvokeSourceFunc, scaleEpoch)
+	srcOutput := common.InvokeSrc(&wg, client, srcInvokeConfig, gp.InvokeSourceFunc, scaleEpoch)
 	beforeScaleOutput := common.InvokeFunctions(&wg, client, cliNodes, inParamsMap, scaleEpoch)
 
 	time.Sleep(time.Duration(FLAGS_durBeforeScale) * time.Second)
@@ -148,7 +149,7 @@ func main() {
 		&scaleOut2, "scale", invokeFuncParam.Local)
 	afterScaleOutput := common.InvokeFunctions(&wg, client, cliNodesForScale, inParamsMapForScale, scaleEpoch)
 	wg.Wait()
-	common.ParseSrcOutput(beforeScaleSourceOutput, FLAGS_stat_dir)
+	common.ParseSrcOutput(srcOutput, FLAGS_stat_dir)
 	common.ParseFunctionOutputs(beforeScaleOutput, FLAGS_stat_dir)
 	fmt.Fprintf(os.Stderr, "after scale\n")
 	common.ParseFunctionOutputs(afterScaleOutput, FLAGS_stat_dir)

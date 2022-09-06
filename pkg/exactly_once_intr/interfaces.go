@@ -3,7 +3,9 @@ package exactly_once_intr
 
 import (
 	"context"
+	"os"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/debug"
 )
 
 type GuaranteeMth uint8
@@ -50,5 +52,6 @@ type RecordPrevInstanceFinishFunc func(ctx context.Context, appId string, instan
 func DefaultRecordPrevInstanceFinishFunc(ctx context.Context,
 	appId string, instanceId uint8,
 ) error {
+	debug.Fprintf(os.Stderr, "Running empty default record finish func\n")
 	return nil
 }

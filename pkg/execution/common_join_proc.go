@@ -1,11 +1,8 @@
 package execution
 
 import (
-	"context"
-	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/proc_interface"
-	"sharedlog-stream/pkg/processor"
 )
 
 type CommonJoinProcArgs[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR any] struct {
@@ -55,12 +52,4 @@ func (c *CommonJoinProcArgs[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR])
 
 func (c *CommonJoinProcArgs[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR]) SubstreamNum() uint8 {
 	return c.arg1.SubstreamNum()
-}
-
-func (c *CommonJoinProcArgs[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR]) RunChains(ctx context.Context, initMsg commtypes.Message) ([]commtypes.Message, error) {
-	panic("not implemented")
-}
-
-func (c *CommonJoinProcArgs[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR]) Via(proc processor.Processor) processor.ProcessorChainIntr {
-	panic("not implemented")
 }

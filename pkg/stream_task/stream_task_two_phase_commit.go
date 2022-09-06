@@ -58,7 +58,7 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 		return err
 	}
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
-		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, cmm.CurrentEpoch())
+		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID)
 	}
 	updateFuncs(streamTaskArgs, trackParFunc, recordFinish)
 	return tm, cmm, nil
@@ -98,7 +98,7 @@ func processWithTransaction(
 
 	dctx, dcancel := context.WithCancel(ctx)
 	tm.StartMonitorLog(dctx, dcancel)
-	err = cmm.RestoreMappingAndWaitForPrevTask(dctx, args.ectx.FuncName(), args.ectx.CurEpoch(),
+	err = cmm.RestoreMappingAndWaitForPrevTask(dctx, args.ectx.FuncName(),
 		args.kvChangelogs, args.windowStoreChangelogs)
 	if err != nil {
 		return common.GenErrFnOutput(err)
@@ -191,7 +191,7 @@ func processWithTransaction(
 				return err_out
 			}
 			if ctrlMsg.Mark == commtypes.SCALE_FENCE {
-				ret := HandleScaleEpochAndBytes(dctx, ctrlMsg, args.ectx)
+				ret := handleScaleEpochAndBytes(dctx, ctrlMsg, args.ectx)
 				if err := tm.Close(); err != nil {
 					debug.Fprintf(os.Stderr, "[ERROR] close transaction manager: %v\n", err)
 					return &common.FnOutput{Success: false, Message: fmt.Sprintf("close transaction manager: %v\n", err)}

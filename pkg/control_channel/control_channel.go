@@ -2,12 +2,14 @@ package control_channel
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/data_structure"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hashfuncs"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
@@ -35,7 +37,7 @@ type ControlChannelManager struct {
 	// topic -> (key -> set of substreamid)
 	keyMappings map[string]map[string]keyMeta
 
-	msgSerde        commtypes.MessageSerdeG[string, txn_data.ControlMetadata]
+	msgSerde        commtypes.MessageGSerdeG[string, txn_data.ControlMetadata]
 	payloadArrSerde commtypes.SerdeG[commtypes.PayloadArr]
 
 	// they are the same stream but different progress tracking
@@ -82,7 +84,7 @@ func NewControlChannelManager(env types.Environment,
 	if err != nil {
 		return nil, err
 	}
-	cm.msgSerde, err = commtypes.GetMsgSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, ctrlMetaSerde)
+	cm.msgSerde, err = commtypes.GetMsgGSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, ctrlMetaSerde)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +98,7 @@ type restoreWork struct {
 }
 
 func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
-	ctx context.Context, funcName string, curEpoch uint16, kvchangelog map[string]store.KeyValueStoreOpWithChangelog,
+	ctx context.Context, funcName string, kvchangelog map[string]store.KeyValueStoreOpWithChangelog,
 	wschangelog map[string]store.WindowStoreOpWithChangelog,
 ) error {
 	extraParToRestoreKV := make(map[string]data_structure.Uint8Set)
@@ -151,7 +153,10 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 			wg.Wait()
 			return err
 		}
-		ctrlMeta := msg.Value.(txn_data.ControlMetadata)
+		ctrlMeta, ok := msg.Value.Take()
+		if !ok {
+			continue
+		}
 		if ctrlMeta.Topic != "" {
 			cmm.updateKeyMapping(&ctrlMeta)
 			kvc, hasKVC := kvchangelog[ctrlMeta.Topic]
@@ -183,25 +188,28 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 					}
 				}
 			}
-		} else if ctrlMeta.FinishedPrevTask == funcName && ctrlMeta.Epoch+1 == curEpoch {
-			debug.Fprintf(os.Stderr, "finished prev task %s, funcName %s, meta epoch %d, input epoch %d\n",
-				ctrlMeta.FinishedPrevTask, funcName, ctrlMeta.Epoch, curEpoch)
-			close(workChan)
-			wg.Wait()
-			select {
-			case err := <-errChan:
-				if err != nil {
-					return err
+		} else if ctrlMeta.FinishedPrevTask != "" {
+			fmt.Fprintf(os.Stderr, "finished prev task %s, funcName %s, meta epoch %d, input epoch %d\n",
+				ctrlMeta.FinishedPrevTask, funcName, ctrlMeta.Epoch, cmm.currentEpoch)
+			if ctrlMeta.FinishedPrevTask == funcName && ctrlMeta.Epoch+1 == cmm.currentEpoch {
+				close(workChan)
+				wg.Wait()
+				select {
+				case err := <-errChan:
+					if err != nil {
+						return err
+					}
+				default:
 				}
-			default:
+				return nil
 			}
-			return nil
 		}
 	}
 }
 
 func (cmm *ControlChannelManager) appendToControlLog(ctx context.Context, cm txn_data.ControlMetadata, allowBuffer bool) error {
-	msg_encoded, err := cmm.msgSerde.Encode(commtypes.Message{Key: "", Value: cm})
+	msg_encoded, err := cmm.msgSerde.Encode(commtypes.MessageG[string, txn_data.ControlMetadata]{
+		Key: optional.None[string](), Value: optional.Some(cm)})
 	if err != nil {
 		return err
 	}
@@ -277,12 +285,12 @@ func (cmm *ControlChannelManager) RecordPrevInstanceFinish(
 	ctx context.Context,
 	funcName string,
 	instanceID uint8,
-	epoch uint16,
 ) error {
+	debug.Fprintf(os.Stderr, "%s(%d) epoch %d finished\n", funcName, instanceID, cmm.currentEpoch)
 	cm := txn_data.ControlMetadata{
 		FinishedPrevTask: funcName,
 		InstanceId:       instanceID,
-		Epoch:            epoch,
+		Epoch:            cmm.currentEpoch,
 	}
 	err := cmm.appendToControlLog(ctx, cm, false)
 	return err
@@ -346,8 +354,8 @@ func (cmm *ControlChannelManager) monitorControlChannel(
 					output <- ControlChannelErr(err)
 					break
 				}
-				ctrlMeta := msg.Value.(txn_data.ControlMetadata)
-				if ctrlMeta.Key == nil {
+				ctrlMeta, ok := msg.Value.Take()
+				if ok && ctrlMeta.Key == nil {
 					output <- ControlChannelVal(&ctrlMeta)
 				}
 			}
