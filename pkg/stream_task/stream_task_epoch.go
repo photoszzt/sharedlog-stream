@@ -51,10 +51,6 @@ func SetupManagersForEpoch(ctx context.Context,
 	if err != nil {
 		return nil, nil, err
 	}
-	snapshotSerde, err := commtypes.GetTableSnapshotsSerde(args.serdeFormat)
-	if err != nil {
-		return nil, nil, err
-	}
 	if recentMeta != nil {
 		fmt.Fprint(os.Stderr, "start restore\n")
 		restoreBeg := time.Now()
@@ -87,41 +83,9 @@ func SetupManagersForEpoch(ctx context.Context,
 					return nil, nil, fmt.Errorf("[ERR] FindLastEpochMetaWithAuxData: %v", err)
 				}
 			}
-			if len(auxData) > 0 {
-				uint16Serde := commtypes.Uint16SerdeG{}
-				ret, err := uint16Serde.Decode(auxData)
-				if err != nil {
-					return nil, nil, fmt.Errorf("[ERR] Decode: %v", err)
-				}
-				if ret == 1 {
-					snapshotBin, err := rs.GetSnapshot(ctx, auxMetaSeq)
-					if err != nil {
-						return nil, nil, fmt.Errorf("[ERR] GetSnapshot: %v", err)
-					}
-					tabMaps, err := snapshotSerde.Decode(snapshotBin)
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "failed to decode snapshot: auxData len: %d, %v\n", len(auxData), err)
-						return nil, nil, fmt.Errorf("[ERR] Decode snapshot: %v", err)
-					}
-					for kvchTp, kvchangelog := range args.kvChangelogs {
-						snap := tabMaps.TabMaps[kvchTp]
-						err = kvchangelog.RestoreFromSnapshot(snap)
-						if err != nil {
-							return nil, nil, fmt.Errorf("[ERR] restore kv from snapshot: %v", err)
-						}
-						kvchangelog.Stream().SetCursor(auxMetaSeq, kvchangelog.SubstreamNum())
-					}
-					for wscTp, wsc := range args.windowStoreChangelogs {
-						snap := tabMaps.TabMaps[wscTp]
-						err = wsc.RestoreFromSnapshot(ctx, snap)
-						if err != nil {
-							return nil, nil, fmt.Errorf("[ERR] restore window table from snapshot: %v", err)
-						}
-						wsc.Stream().SetCursor(auxMetaSeq, wsc.SubstreamNum())
-					}
-				}
-			} else {
-				fmt.Fprintf(os.Stderr, "no snapshot found\n")
+			err = loadSnapshot(ctx, args, auxData, auxMetaSeq, rs)
+			if err != nil {
+				return nil, nil, err
 			}
 		}
 		err = restoreStateStore(ctx, args, offsetMap)
@@ -149,6 +113,54 @@ func SetupManagersForEpoch(ctx context.Context,
 	}
 	updateFuncs(args, trackParFunc, recordFinish)
 	return em, cmm, nil
+}
+
+func loadSnapshot(ctx context.Context,
+	args *StreamTaskArgs, auxData []byte, auxMetaSeq uint64, rs *RedisSnapshotStore,
+) error {
+	snapshotSerde, err := commtypes.GetTableSnapshotsSerde(args.serdeFormat)
+	if err != nil {
+		return err
+	}
+	if len(auxData) > 0 {
+		uint16Serde := commtypes.Uint16SerdeG{}
+		ret, err := uint16Serde.Decode(auxData)
+		if err != nil {
+			return fmt.Errorf("[ERR] Decode: %v", err)
+		}
+		if ret == 1 {
+			snapshotBin, err := rs.GetSnapshot(ctx, auxMetaSeq)
+			if err != nil {
+				return fmt.Errorf("[ERR] GetSnapshot: %v", err)
+			}
+			if len(snapshotBin) > 0 {
+				tabMaps, err := snapshotSerde.Decode(snapshotBin)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "failed to decode snapshot: auxData len: %d, %v\n", len(auxData), err)
+					return fmt.Errorf("[ERR] Decode snapshot: %v", err)
+				}
+				for kvchTp, kvchangelog := range args.kvChangelogs {
+					snap := tabMaps.TabMaps[kvchTp]
+					err = kvchangelog.RestoreFromSnapshot(snap)
+					if err != nil {
+						return fmt.Errorf("[ERR] restore kv from snapshot: %v", err)
+					}
+					kvchangelog.Stream().SetCursor(auxMetaSeq, kvchangelog.SubstreamNum())
+				}
+				for wscTp, wsc := range args.windowStoreChangelogs {
+					snap := tabMaps.TabMaps[wscTp]
+					err = wsc.RestoreFromSnapshot(ctx, snap)
+					if err != nil {
+						return fmt.Errorf("[ERR] restore window table from snapshot: %v", err)
+					}
+					wsc.Stream().SetCursor(auxMetaSeq, wsc.SubstreamNum())
+				}
+			}
+		}
+	} else {
+		fmt.Fprintf(os.Stderr, "no snapshot found\n")
+	}
+	return nil
 }
 
 func processInEpoch(
@@ -186,7 +198,7 @@ func processInEpoch(
 	}
 	var once sync.Once
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
-	debug.Fprintf(os.Stderr, "commit every(ms): %v, waitEndMark: %v, fixed output parNum: %d, snapshot every(s): %v\n",
+	fmt.Fprintf(os.Stderr, "commit every(ms): %v, waitEndMark: %v, fixed output parNum: %d, snapshot every(s): %v\n",
 		args.commitEvery, args.waitEndMark, args.fixedOutParNum, args.snapshotEvery)
 	testForFail := false
 	var failAfter time.Duration
@@ -323,6 +335,7 @@ func createSnapshotAndSetAuxData(ctx context.Context, rs *RedisSnapshotStore, lo
 	if err != nil {
 		return err
 	}
+	fmt.Fprintf(os.Stderr, "snapshot at 0x%x\n", logOff)
 	return rs.StoreSnapshot(ctx, args.env, tenc, logOff)
 }
 
