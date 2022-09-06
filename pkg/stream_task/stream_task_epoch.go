@@ -109,7 +109,7 @@ func SetupManagersForEpoch(ctx context.Context,
 			return control_channel.TrackAndAppendKeyMapping(ctx, cmm, kBytes, substreamId, topicName)
 		})
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
-		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, cmm.CurrentEpoch())
+		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID)
 	}
 	updateFuncs(args, trackParFunc, recordFinish)
 	return em, cmm, nil
@@ -180,11 +180,13 @@ func processInEpoch(
 
 	dctx, dcancel := context.WithCancel(ctx)
 	em.StartMonitorLog(dctx, dcancel)
+	debug.Fprintf(os.Stderr, "start restore mapping")
 	err = cmm.RestoreMappingAndWaitForPrevTask(
-		dctx, args.ectx.FuncName(), args.ectx.CurEpoch(), args.kvChangelogs, args.windowStoreChangelogs)
+		dctx, args.ectx.FuncName(), args.kvChangelogs, args.windowStoreChangelogs)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	snapshotTime := make([]int64, 0, 8)
 	// run := false
 	hasProcessData := false
 	init := false
@@ -245,10 +247,13 @@ func processInEpoch(
 				return common.GenErrFnOutput(err)
 			}
 			if CREATE_SNAPSHOT && args.snapshotEvery != 0 && time.Since(snapshotTimer) > args.snapshotEvery {
+				snStart := time.Now()
 				err := createSnapshotAndSetAuxData(dctx, rs, logOff, args, tabSnapshotSerde)
 				if err != nil {
 					return common.GenErrFnOutput(err)
 				}
+				elapsed := time.Since(snStart)
+				snapshotTime = append(snapshotTime, elapsed.Microseconds())
 				snapshotTimer = time.Now()
 			}
 			t.flushAllTime.AddSample(flushTime)
@@ -313,10 +318,14 @@ func processInEpoch(
 				return common.GenErrFnOutput(err)
 			}
 			if CREATE_SNAPSHOT {
+				snStart := time.Now()
 				err := createSnapshotAndSetAuxData(dctx, rs, logOff, args, tabSnapshotSerde)
 				if err != nil {
 					return common.GenErrFnOutput(err)
 				}
+				elapsed := time.Since(snStart)
+				snapshotTime = append(snapshotTime, elapsed.Microseconds())
+				fmt.Fprintf(os.Stderr, "snapshot time: %v\n", snapshotTime)
 			}
 			t.flushAllTime.AddSample(flushTime)
 			return handleCtrlMsg(dctx, ctrlRawMsg, t, args, &warmupCheck)
