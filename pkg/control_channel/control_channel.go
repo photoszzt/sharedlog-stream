@@ -285,12 +285,13 @@ func (cmm *ControlChannelManager) RecordPrevInstanceFinish(
 	ctx context.Context,
 	funcName string,
 	instanceID uint8,
+	epoch uint16,
 ) error {
 	debug.Fprintf(os.Stderr, "%s(%d) epoch %d finished\n", funcName, instanceID, cmm.currentEpoch)
 	cm := txn_data.ControlMetadata{
 		FinishedPrevTask: funcName,
 		InstanceId:       instanceID,
-		Epoch:            cmm.currentEpoch,
+		Epoch:            epoch,
 	}
 	err := cmm.appendToControlLog(ctx, cm, false)
 	return err

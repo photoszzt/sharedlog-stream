@@ -109,7 +109,7 @@ func SetupManagersForEpoch(ctx context.Context,
 			return control_channel.TrackAndAppendKeyMapping(ctx, cmm, kBytes, substreamId, topicName)
 		})
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
-		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID)
+		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, args.ectx.CurEpoch())
 	}
 	updateFuncs(args, trackParFunc, recordFinish)
 	return em, cmm, nil

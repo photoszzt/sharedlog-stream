@@ -55,7 +55,7 @@ func (h *ConfigScaleHandler) ConfigScale(ctx context.Context, input *common.Conf
 		for _, fn := range input.FuncNames {
 			ins := input.Config[fn]
 			for i := uint8(0); i < ins; i++ {
-				err = cmm.RecordPrevInstanceFinish(ctx, fn, i)
+				err = cmm.RecordPrevInstanceFinish(ctx, fn, i, 0)
 				if err != nil {
 					return &common.FnOutput{Success: false, Message: err.Error()}
 				}

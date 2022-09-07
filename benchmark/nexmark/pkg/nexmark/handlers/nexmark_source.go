@@ -56,10 +56,9 @@ type nexmarkSrcProcArgs struct {
 	channel_url_cache map[uint32]*generator.ChannelUrl
 	eventGenerator    *generator.NexmarkGenerator
 	msgChan           chan sharedlog_stream.PayloadToPush
+	parNumArr         []uint8
 	latencies         stats.StatsCollector[int64]
 	idx               int
-	numPartition      uint8
-	parNum            uint8
 }
 
 func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProcArgs) *common.FnOutput {
@@ -83,7 +82,9 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 	}
 	// fmt.Fprintf(os.Stderr, "msg: %v\n", string(msgEncoded))
 	args.idx += 1
+	idx := args.idx % len(args.parNumArr)
 	// parNum := args.idx
+	parNum := args.parNumArr[idx]
 
 	nowMs := time.Now().UnixMilli()
 	wtsMs := nextEvent.WallclockTimestamp
@@ -91,10 +92,25 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 		// fmt.Fprintf(os.Stderr, "sleep %v ms to generate event\n", wtsSec-now)
 		time.Sleep(time.Duration(wtsMs-nowMs) * time.Millisecond)
 	}
-	args.msgChan <- sharedlog_stream.PayloadToPush{Payload: msgEncoded, Partitions: []uint8{uint8(args.parNum)}, IsControl: false}
+	args.msgChan <- sharedlog_stream.PayloadToPush{Payload: msgEncoded, Partitions: []uint8{parNum}, IsControl: false}
 	elapsed := stats.Elapsed(procStart).Microseconds()
 	args.latencies.AddSample(elapsed)
 	return nil
+}
+
+func getSubstreamIdx(parNum uint8, numPartition uint8, numGenerator uint8) []uint8 {
+	if numPartition > numGenerator {
+		numSubStreamPerGen := numPartition / numGenerator
+		substreamIdx := make([]uint8, 0, numSubStreamPerGen)
+		startIdx := parNum * numSubStreamPerGen
+		endIdx := startIdx + numSubStreamPerGen
+		for i := startIdx; i < endIdx; i++ {
+			substreamIdx = append(substreamIdx, i)
+		}
+		return substreamIdx
+	} else {
+		return []uint8{parNum % numPartition}
+	}
 }
 
 func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig *ntypes.NexMarkConfigInput) *common.FnOutput {
@@ -155,6 +171,8 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	fmt.Fprintf(os.Stderr, "\tProbDelayedEvent     : %v\n", generatorConfig.Configuration.ProbDelayedEvent)
 	fmt.Fprintf(os.Stderr, "\tOutOfOrderGroupSize  : %v\n", generatorConfig.Configuration.OutOfOrderGroupSize)
 	eventsPerGen := inputConfig.EventsNum / uint64(generatorConfig.Configuration.NumEventGenerators)
+	substreamIdxOut := getSubstreamIdx(inputConfig.ParNum, inputConfig.NumOutPartition, uint8(generatorConfig.Configuration.NumEventGenerators))
+	fmt.Fprintf(os.Stderr, "generate events to %v\n", substreamIdxOut)
 	eventGenerator := generator.NewSimpleNexmarkGenerator(generatorConfig, int(inputConfig.ParNum))
 	duration := time.Duration(inputConfig.Duration) * time.Second
 	debug.Fprintf(os.Stderr, "Events per gen: %v, duration: %v\n", eventsPerGen, duration)
@@ -197,9 +215,8 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 		idx:               0,
 		latencies: stats.NewStatsCollector[int64](fmt.Sprintf("srcGen_%d", inputConfig.ParNum),
 			stats.DEFAULT_COLLECT_DURATION),
-		msgChan:      streamPusher.MsgChan,
-		numPartition: stream.NumPartition(),
-		parNum:       inputConfig.ParNum % stream.NumPartition(),
+		msgChan:   streamPusher.MsgChan,
+		parNumArr: substreamIdxOut,
 	}
 	wg.Add(1)
 	go streamPusher.AsyncStreamPush(dctx, &wg, commtypes.EmptyProducerId)
@@ -245,8 +262,10 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 					if err != nil {
 						return &common.FnOutput{Success: false, Message: err.Error()}
 					}
-					debug.Fprintf(os.Stderr, "updated numPartition is %d\n", numSubstreams)
-					procArgs.numPartition = stream.NumPartition()
+					procArgs.parNumArr = getSubstreamIdx(inputConfig.ParNum, numSubstreams,
+						uint8(generatorConfig.Configuration.NumEventGenerators))
+					debug.Fprintf(os.Stderr, "updated numPartition is %d, generate events to %v\n",
+						numSubstreams, procArgs.parNumArr)
 					streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{Payload: encoded,
 						IsControl: true, Partitions: []uint8{inputConfig.ParNum}, Mark: commtypes.SCALE_FENCE}
 				}
@@ -262,33 +281,35 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 		}
 		if !eventGenerator.HasNext() {
 			if inputConfig.WaitForEndMark {
-				ret_err := genEndMark(startTime, inputConfig.ParNum, epochMarkerSerde, streamPusher)
-				if ret_err != nil {
-					return ret_err
+				for _, par := range procArgs.parNumArr {
+					ret_err := genEndMark(startTime, par, epochMarkerSerde, streamPusher)
+					if ret_err != nil {
+						return ret_err
+					}
 				}
 			}
 			break
 		}
-		if eventsPerGen != 0 {
-			if procArgs.idx == int(eventsPerGen) {
-				if inputConfig.WaitForEndMark {
-					ret_err := genEndMark(startTime, inputConfig.ParNum, epochMarkerSerde, streamPusher)
+		if procArgs.idx == int(eventsPerGen) {
+			if inputConfig.WaitForEndMark {
+				for _, par := range procArgs.parNumArr {
+					ret_err := genEndMark(startTime, par, epochMarkerSerde, streamPusher)
 					if ret_err != nil {
 						return ret_err
 					}
 				}
-				break
 			}
-		} else {
-			if duration != 0 && time.Since(startTime) >= duration {
-				if inputConfig.WaitForEndMark {
-					ret_err := genEndMark(startTime, inputConfig.ParNum, epochMarkerSerde, streamPusher)
+			break
+		} else if duration != 0 && time.Since(startTime) >= duration {
+			if inputConfig.WaitForEndMark {
+				for _, par := range procArgs.parNumArr {
+					ret_err := genEndMark(startTime, par, epochMarkerSerde, streamPusher)
 					if ret_err != nil {
 						return ret_err
 					}
 				}
-				break
 			}
+			break
 		}
 		fnout := h.process(dctx, procArgs)
 		if fnout != nil && !fnout.Success {

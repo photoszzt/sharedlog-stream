@@ -58,7 +58,7 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 		return err
 	}
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
-		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID)
+		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, streamTaskArgs.ectx.CurEpoch())
 	}
 	updateFuncs(streamTaskArgs, trackParFunc, recordFinish)
 	return tm, cmm, nil
