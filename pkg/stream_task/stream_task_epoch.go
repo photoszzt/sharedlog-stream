@@ -76,6 +76,7 @@ func SetupManagersForEpoch(ctx context.Context,
 			}
 		}
 		if CREATE_SNAPSHOT {
+			loadSnapBeg := time.Now()
 			if len(auxData) == 0 {
 				debug.Fprintf(os.Stderr, "read back for snapshot from 0x%x\n", rawMetaMsg.LogSeqNum)
 				auxData, auxMetaSeq, err = em.FindLastEpochMetaWithAuxData(ctx, rawMetaMsg.LogSeqNum)
@@ -87,11 +88,16 @@ func SetupManagersForEpoch(ctx context.Context,
 			if err != nil {
 				return nil, nil, err
 			}
+			loadSnapElapsed := time.Since(loadSnapBeg)
+			fmt.Fprintf(os.Stderr, "load snapshot took %v\n", loadSnapElapsed)
 		}
+		restoreSsBeg := time.Now()
 		err = restoreStateStore(ctx, args, offsetMap)
 		if err != nil {
 			return nil, nil, err
 		}
+		restoreStateStoreElapsed := time.Since(restoreSsBeg)
+		fmt.Fprintf(os.Stderr, "restore state store took %v\n", restoreStateStoreElapsed)
 		setOffsetOnStream(offsetMap, args)
 		restoreElapsed := time.Since(restoreBeg)
 		fmt.Fprintf(os.Stderr, "down restore, elapsed: %v\n", restoreElapsed)
