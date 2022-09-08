@@ -8,15 +8,17 @@ import (
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/utils"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/zhangyunhao116/skipmap"
 )
 
 type InMemorySkipmapKeyValueStoreG[K, V any] struct {
-	store       *skipmap.FuncMap[K, V]
-	kvPairSerde commtypes.SerdeG[commtypes.KeyValuePair[K, V]]
-	name        string
+	store            *skipmap.FuncMap[K, V]
+	kvPairSerde      commtypes.SerdeG[commtypes.KeyValuePair[K, V]]
+	snapshotCallback func(ctx context.Context, logOff uint64, snapshot []commtypes.KeyValuePair[K, V])
+	name             string
 }
 
 var _ = CoreKeyValueStoreG[int, int](&InMemorySkipmapKeyValueStoreG[int, int]{})
@@ -127,21 +129,30 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) Range(ctx context.Context,
 
 // not thread-safe
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) Snapshot() [][]byte {
-	out := make([][]byte, 0, st.store.Len())
+	cpyBeg := time.Now()
+	out := make([]commtypes.KeyValuePair[K, V], 0, st.store.Len())
 	st.store.Range(func(key K, value V) bool {
 		p := commtypes.KeyValuePair[K, V]{
 			Key:   key,
 			Value: value,
 		}
-		penc, err := st.kvPairSerde.Encode(p)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to encode key-value pair")
-			return false
-		}
-		out = append(out, penc)
+		out = append(out, p)
 		return true
 	})
-	return out
+	cpyElapsed := time.Since(cpyBeg)
+	serBeg := time.Now()
+	outBin := make([][]byte, 0, len(out))
+	for _, kv := range out {
+		kvEnc, err := st.kvPairSerde.Encode(kv)
+		if err != nil {
+			continue
+		}
+		outBin = append(outBin, kvEnc)
+	}
+	serElapsed := time.Since(serBeg)
+	fmt.Fprintf(os.Stderr, "%s snapshot: copy elapsed %d, ser elapsed %d\n",
+		st.name, cpyElapsed.Microseconds(), serElapsed.Microseconds())
+	return outBin
 }
 
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) RestoreFromSnapshot(snapshot [][]byte) error {

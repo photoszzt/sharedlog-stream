@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"math"
+	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/optional"
@@ -358,43 +360,60 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot() [][]byte {
 	} else {
 		l = s.storeNoDup.Len()
 	}
-	out := make([][]byte, 0, l)
+	outBin := make([][]byte, 0, l)
+	out := make([]commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V], 0, l)
 	if s.retainDuplicates {
+		cpyBeg := time.Now()
 		s.storeWithDup.Range(func(ts int64, kvmap *skipmap.FuncMap[VersionedKeyG[K], V]) bool {
 			kvmap.Range(func(k VersionedKeyG[K], v V) bool {
 				p := commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]{
 					Key:   commtypes.KeyAndWindowStartTsG[K]{Key: k.Key, WindowStartTs: ts},
 					Value: v,
 				}
-				penc, err := s.kvPairSerdeG.Encode(p)
-				if err != nil {
-					log.Error().Err(err).Msg("failed to encode key-value pair")
-					return false
-				}
-				out = append(out, penc)
+				out = append(out, p)
 				return true
 			})
 			return true
 		})
+		cpyElapsed := time.Since(cpyBeg)
+		serBeg := time.Now()
+		for _, kv := range out {
+			kvenc, err := s.kvPairSerdeG.Encode(kv)
+			if err != nil {
+				continue
+			}
+			outBin = append(outBin, kvenc)
+		}
+		serElapsed := time.Since(serBeg)
+		fmt.Fprintf(os.Stderr, "%s snapshot: copy elapsed %d, ser elapsed %d\n",
+			s.name, cpyElapsed.Microseconds(), serElapsed.Microseconds())
 	} else {
+		cpyBeg := time.Now()
 		s.storeNoDup.Range(func(ts int64, kvmap *skipmap.FuncMap[K, V]) bool {
 			kvmap.Range(func(k K, v V) bool {
 				p := commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]{
 					Key:   commtypes.KeyAndWindowStartTsG[K]{Key: k, WindowStartTs: ts},
 					Value: v,
 				}
-				penc, err := s.kvPairSerdeG.Encode(p)
-				if err != nil {
-					log.Error().Err(err).Msg("failed to encode key-value pair")
-					return false
-				}
-				out = append(out, penc)
+				out = append(out, p)
 				return true
 			})
 			return true
 		})
+		cpyElapsed := time.Since(cpyBeg)
+		serBeg := time.Now()
+		for _, kv := range out {
+			kvenc, err := s.kvPairSerdeG.Encode(kv)
+			if err != nil {
+				continue
+			}
+			outBin = append(outBin, kvenc)
+		}
+		serElapsed := time.Since(serBeg)
+		fmt.Fprintf(os.Stderr, "%s snapshot: copy elapsed %d, ser elapsed %d\n",
+			s.name, cpyElapsed.Microseconds(), serElapsed.Microseconds())
 	}
-	return out
+	return outBin
 }
 
 func (s *InMemorySkipMapWindowStoreG[K, V]) RestoreFromSnapshot(ctx context.Context, snapshot [][]byte) error {
