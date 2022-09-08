@@ -187,6 +187,7 @@ func processInEpoch(
 		return common.GenErrFnOutput(err)
 	}
 	snapshotTime := make([]int64, 0, 8)
+	snapshotSize := make([]int, 0, 8)
 	// run := false
 	hasProcessData := false
 	init := false
@@ -248,12 +249,13 @@ func processInEpoch(
 			}
 			if CREATE_SNAPSHOT && args.snapshotEvery != 0 && time.Since(snapshotTimer) > args.snapshotEvery {
 				snStart := time.Now()
-				err := createSnapshotAndSetAuxData(dctx, rs, logOff, args, tabSnapshotSerde)
+				size, err := createSnapshotAndSetAuxData(dctx, rs, logOff, args, tabSnapshotSerde)
 				if err != nil {
 					return common.GenErrFnOutput(err)
 				}
 				elapsed := time.Since(snStart)
 				snapshotTime = append(snapshotTime, elapsed.Microseconds())
+				snapshotSize = append(snapshotSize, size)
 				snapshotTimer = time.Now()
 			}
 			t.flushAllTime.AddSample(flushTime)
@@ -319,13 +321,15 @@ func processInEpoch(
 			}
 			if CREATE_SNAPSHOT {
 				snStart := time.Now()
-				err := createSnapshotAndSetAuxData(dctx, rs, logOff, args, tabSnapshotSerde)
+				size, err := createSnapshotAndSetAuxData(dctx, rs, logOff, args, tabSnapshotSerde)
 				if err != nil {
 					return common.GenErrFnOutput(err)
 				}
 				elapsed := time.Since(snStart)
 				snapshotTime = append(snapshotTime, elapsed.Microseconds())
+				snapshotSize = append(snapshotSize, size)
 				fmt.Fprintf(os.Stderr, "snapshot time: %v\n", snapshotTime)
+				fmt.Fprintf(os.Stderr, "snapshot size: %v\n", snapshotSize)
 			}
 			t.flushAllTime.AddSample(flushTime)
 			return handleCtrlMsg(dctx, ctrlRawMsg, t, args, &warmupCheck)
@@ -335,17 +339,19 @@ func processInEpoch(
 
 func createSnapshotAndSetAuxData(ctx context.Context, rs *RedisSnapshotStore, logOff uint64, args *StreamTaskArgs,
 	tabSnapshotSerde commtypes.SerdeG[commtypes.TableSnapshots],
-) error {
+) (int, error) {
 	snapshot, err := createSnapshot(args)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	tenc, err := tabSnapshotSerde.Encode(snapshot)
 	if err != nil {
-		return err
+		return 0, err
 	}
+	size := len(tenc)
 	fmt.Fprintf(os.Stderr, "snapshot at 0x%x\n", logOff)
-	return rs.StoreSnapshot(ctx, args.env, tenc, logOff)
+	err = rs.StoreSnapshot(ctx, args.env, tenc, logOff)
+	return size, err
 }
 
 func markEpoch(ctx context.Context, em *epoch_manager.EpochManager,
