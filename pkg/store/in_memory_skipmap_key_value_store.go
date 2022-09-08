@@ -14,6 +14,8 @@ import (
 	"github.com/zhangyunhao116/skipmap"
 )
 
+type KVSnapshotCallback[K, V any] func(ctx context.Context, logOff uint64, snapshot []commtypes.KeyValuePair[K, V])
+
 type InMemorySkipmapKeyValueStoreG[K, V any] struct {
 	store            *skipmap.FuncMap[K, V]
 	kvPairSerde      commtypes.SerdeG[commtypes.KeyValuePair[K, V]]
@@ -28,6 +30,10 @@ func NewInMemorySkipmapKeyValueStoreG[K, V any](name string, lessFunc LessFunc[K
 		name:  name,
 		store: skipmap.NewFunc[K, V](lessFunc),
 	}
+}
+
+func (st *InMemorySkipmapKeyValueStoreG[K, V]) SetSnapshotCallback(f KVSnapshotCallback[K, V]) {
+	st.snapshotCallback = f
 }
 
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeFormat, keySerde commtypes.SerdeG[K], valSerde commtypes.SerdeG[V]) error {

@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+/*
 func getStreamJoinMem(joinWindows *commtypes.JoinWindows, t *testing.T) (
 	func(ctx context.Context, m commtypes.Message) []commtypes.Message,
 	func(ctx context.Context, m commtypes.Message) []commtypes.Message,
@@ -57,6 +58,7 @@ func getStreamJoinMem(joinWindows *commtypes.JoinWindows, t *testing.T) (
 	}
 	return oneJoinTwo, twoJoinOne
 }
+*/
 
 func getSkipMapStreamJoinMem(joinWindows *commtypes.JoinWindows, t *testing.T) (
 	func(ctx context.Context, m commtypes.MessageG[int, string]) []commtypes.MessageG[int, string],
@@ -107,16 +109,16 @@ func getSkipMapStreamJoinMem(joinWindows *commtypes.JoinWindows, t *testing.T) (
 	return oneJoinTwo, twoJoinOne
 }
 
-func TestStreamStreamJoinMem(t *testing.T) {
-	ctx := context.Background()
-	joinWindows, err := commtypes.NewJoinWindowsWithGrace(time.Duration(50)*time.Millisecond,
-		time.Duration(50)*time.Millisecond)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	oneJoinTwo, twoJoinOne := getStreamJoinMem(joinWindows, t)
-	StreamStreamJoin(ctx, oneJoinTwo, twoJoinOne, t)
-}
+// func TestStreamStreamJoinMem(t *testing.T) {
+// 	ctx := context.Background()
+// 	joinWindows, err := commtypes.NewJoinWindowsWithGrace(time.Duration(50)*time.Millisecond,
+// 		time.Duration(50)*time.Millisecond)
+// 	if err != nil {
+// 		t.Fatal(err.Error())
+// 	}
+// 	oneJoinTwo, twoJoinOne := getStreamJoinMem(joinWindows, t)
+// 	StreamStreamJoin(ctx, oneJoinTwo, twoJoinOne, t)
+// }
 
 func TestSkipMapStreamStreamJoinMem(t *testing.T) {
 	ctx := context.Background()
@@ -130,28 +132,28 @@ func TestSkipMapStreamStreamJoinMem(t *testing.T) {
 		ret := oneJoinTwo(ctx, commtypes.MessageToMessageG[int, string](m))
 		var retMsgs []commtypes.Message
 		for _, msg := range ret {
-			retMsgs = append(retMsgs, commtypes.MessageGToMessage[int, string](msg))
+			retMsgs = append(retMsgs, commtypes.MessageGToMessage(msg))
 		}
 		return retMsgs
 	}, func(ctx context.Context, m commtypes.Message) []commtypes.Message {
 		ret := twoJoinOne(ctx, commtypes.MessageToMessageG[int, string](m))
 		var retMsgs []commtypes.Message
 		for _, msg := range ret {
-			retMsgs = append(retMsgs, commtypes.MessageGToMessage[int, string](msg))
+			retMsgs = append(retMsgs, commtypes.MessageGToMessage(msg))
 		}
 		return retMsgs
 	}, t)
 }
 
-func TestWindowingMem(t *testing.T) {
-	ctx := context.Background()
-	joinWindows, err := commtypes.NewJoinWindowsWithGrace(time.Duration(100)*time.Millisecond, time.Duration(100)*time.Millisecond)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	oneJoinTwo, twoJoinOne := getStreamJoinMem(joinWindows, t)
-	Windowing(ctx, oneJoinTwo, twoJoinOne, t)
-}
+// func TestWindowingMem(t *testing.T) {
+// 	ctx := context.Background()
+// 	joinWindows, err := commtypes.NewJoinWindowsWithGrace(time.Duration(100)*time.Millisecond, time.Duration(100)*time.Millisecond)
+// 	if err != nil {
+// 		t.Fatal(err.Error())
+// 	}
+// 	oneJoinTwo, twoJoinOne := getStreamJoinMem(joinWindows, t)
+// 	Windowing(ctx, oneJoinTwo, twoJoinOne, t)
+// }
 
 func TestSkipMapWindowingMem(t *testing.T) {
 	ctx := context.Background()
@@ -164,32 +166,32 @@ func TestSkipMapWindowingMem(t *testing.T) {
 		ret := oneJoinTwo(ctx, commtypes.MessageToMessageG[int, string](m))
 		var retMsgs []commtypes.Message
 		for _, msg := range ret {
-			retMsgs = append(retMsgs, commtypes.MessageGToMessage[int, string](msg))
+			retMsgs = append(retMsgs, commtypes.MessageGToMessage(msg))
 		}
 		return retMsgs
 	}, func(ctx context.Context, m commtypes.Message) []commtypes.Message {
 		ret := twoJoinOne(ctx, commtypes.MessageToMessageG[int, string](m))
 		var retMsgs []commtypes.Message
 		for _, msg := range ret {
-			retMsgs = append(retMsgs, commtypes.MessageGToMessage[int, string](msg))
+			retMsgs = append(retMsgs, commtypes.MessageGToMessage(msg))
 		}
 		return retMsgs
 	}, t)
 }
 
-func TestAsymmetricWindowingAfterMem(t *testing.T) {
-	ctx := context.Background()
-	joinWindows, err := commtypes.NewJoinWindowsNoGrace(time.Duration(0) * time.Millisecond)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	joinWindows, err = joinWindows.After(time.Duration(100) * time.Millisecond)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	oneJoinTwo, twoJoinOne := getStreamJoinMem(joinWindows, t)
-	AsymmetricWindowingAfter(ctx, oneJoinTwo, twoJoinOne, t)
-}
+// func TestAsymmetricWindowingAfterMem(t *testing.T) {
+// 	ctx := context.Background()
+// 	joinWindows, err := commtypes.NewJoinWindowsNoGrace(time.Duration(0) * time.Millisecond)
+// 	if err != nil {
+// 		t.Fatal(err.Error())
+// 	}
+// 	joinWindows, err = joinWindows.After(time.Duration(100) * time.Millisecond)
+// 	if err != nil {
+// 		t.Fatal(err.Error())
+// 	}
+// 	oneJoinTwo, twoJoinOne := getStreamJoinMem(joinWindows, t)
+// 	AsymmetricWindowingAfter(ctx, oneJoinTwo, twoJoinOne, t)
+// }
 
 func TestSkipMapAsymmetricWindowingAfterMem(t *testing.T) {
 	ctx := context.Background()
@@ -206,33 +208,33 @@ func TestSkipMapAsymmetricWindowingAfterMem(t *testing.T) {
 		ret := oneJoinTwo(ctx, commtypes.MessageToMessageG[int, string](m))
 		var retMsgs []commtypes.Message
 		for _, msg := range ret {
-			retMsgs = append(retMsgs, commtypes.MessageGToMessage[int, string](msg))
+			retMsgs = append(retMsgs, commtypes.MessageGToMessage(msg))
 		}
 		return retMsgs
 	}, func(ctx context.Context, m commtypes.Message) []commtypes.Message {
 		ret := twoJoinOne(ctx, commtypes.MessageToMessageG[int, string](m))
 		var retMsgs []commtypes.Message
 		for _, msg := range ret {
-			retMsgs = append(retMsgs, commtypes.MessageGToMessage[int, string](msg))
+			retMsgs = append(retMsgs, commtypes.MessageGToMessage(msg))
 		}
 		return retMsgs
 	}, t)
 }
 
-func TestAsymmetricWindowingBeforeMem(t *testing.T) {
-	ctx := context.Background()
-	joinWindows, err := commtypes.NewJoinWindowsWithGrace(time.Duration(0)*time.Millisecond,
-		time.Duration(86400000)*time.Millisecond)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	joinWindows, err = joinWindows.Before(time.Duration(100) * time.Millisecond)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	oneJoinTwo, twoJoinOne := getStreamJoinMem(joinWindows, t)
-	AsymmetricWindowingBefore(ctx, oneJoinTwo, twoJoinOne, t)
-}
+// func TestAsymmetricWindowingBeforeMem(t *testing.T) {
+// 	ctx := context.Background()
+// 	joinWindows, err := commtypes.NewJoinWindowsWithGrace(time.Duration(0)*time.Millisecond,
+// 		time.Duration(86400000)*time.Millisecond)
+// 	if err != nil {
+// 		t.Fatal(err.Error())
+// 	}
+// 	joinWindows, err = joinWindows.Before(time.Duration(100) * time.Millisecond)
+// 	if err != nil {
+// 		t.Fatal(err.Error())
+// 	}
+// 	oneJoinTwo, twoJoinOne := getStreamJoinMem(joinWindows, t)
+// 	AsymmetricWindowingBefore(ctx, oneJoinTwo, twoJoinOne, t)
+// }
 
 func TestSkipMapAsymmetricWindowingBeforeMem(t *testing.T) {
 	ctx := context.Background()
@@ -250,14 +252,14 @@ func TestSkipMapAsymmetricWindowingBeforeMem(t *testing.T) {
 		ret := oneJoinTwo(ctx, commtypes.MessageToMessageG[int, string](m))
 		var retMsgs []commtypes.Message
 		for _, msg := range ret {
-			retMsgs = append(retMsgs, commtypes.MessageGToMessage[int, string](msg))
+			retMsgs = append(retMsgs, commtypes.MessageGToMessage(msg))
 		}
 		return retMsgs
 	}, func(ctx context.Context, m commtypes.Message) []commtypes.Message {
 		ret := twoJoinOne(ctx, commtypes.MessageToMessageG[int, string](m))
 		var retMsgs []commtypes.Message
 		for _, msg := range ret {
-			retMsgs = append(retMsgs, commtypes.MessageGToMessage[int, string](msg))
+			retMsgs = append(retMsgs, commtypes.MessageGToMessage(msg))
 		}
 		return retMsgs
 	}, t)

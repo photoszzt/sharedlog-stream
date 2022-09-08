@@ -17,6 +17,13 @@ import (
 	"github.com/zhangyunhao116/skipmap"
 )
 
+func updateSeqnumForDups(retainDuplicates bool, seqNum *uint32) {
+	if retainDuplicates {
+		atomic.CompareAndSwapUint32(seqNum, math.MaxUint32, 0)
+		atomic.AddUint32(seqNum, 1)
+	}
+}
+
 type InMemorySkipMapWindowStoreG[K, V any] struct {
 	mux                         sync.RWMutex
 	storeNoDup                  *skipmap.Int64Map[*skipmap.FuncMap[K, V]]

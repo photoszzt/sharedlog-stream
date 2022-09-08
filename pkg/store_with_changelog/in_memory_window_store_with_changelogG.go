@@ -2,6 +2,7 @@ package store_with_changelog
 
 import (
 	"context"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/optional"
@@ -24,6 +25,40 @@ type InMemoryWindowStoreWithChangelogG[K, V any] struct {
 	// storePutLatency stats.ConcurrentInt64Collector
 	trackFuncLat *stats.ConcurrentStatsCollector[int64]
 	parNum       uint8
+}
+
+func createChangelogManagerAndUpdateMsgSerde[K, V any](mp *MaterializeParam[K, V]) (
+	*ChangelogManager[commtypes.KeyAndWindowStartTsG[K], V],
+	commtypes.MessageGSerdeG[commtypes.KeyAndWindowStartTsG[K], V], error,
+) {
+	changelog, err := CreateChangelog(mp.changelogParam.Env,
+		mp.storeName, mp.changelogParam.NumPartition,
+		mp.serdeFormat)
+	if err != nil {
+		return nil, nil, err
+	}
+	var keyAndWindowStartTsSerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]]
+	if mp.serdeFormat == commtypes.JSON {
+		keyAndWindowStartTsSerde = commtypes.KeyAndWindowStartTsJSONSerdeG[K]{
+			KeyJSONSerde: mp.msgSerde.GetKeySerdeG(),
+		}
+	} else if mp.serdeFormat == commtypes.MSGP {
+		keyAndWindowStartTsSerde = commtypes.KeyAndWindowStartTsMsgpSerdeG[K]{
+			KeyMsgpSerde: mp.msgSerde.GetKeySerdeG(),
+		}
+	} else {
+		return nil, nil, common_errors.ErrUnrecognizedSerdeFormat
+	}
+	msgSerde, err := commtypes.GetMsgGSerdeG(mp.serdeFormat, keyAndWindowStartTsSerde, mp.msgSerde.GetValSerdeG())
+	if err != nil {
+		return nil, nil, err
+	}
+	changelogManager, err := NewChangelogManager(changelog, msgSerde, mp.changelogParam.TimeOut,
+		mp.changelogParam.FlushDuration, mp.serdeFormat, mp.parNum)
+	if err != nil {
+		return nil, nil, err
+	}
+	return changelogManager, msgSerde, nil
 }
 
 var _ = store.WindowStoreBackedByChangelogG[int, string](&InMemoryWindowStoreWithChangelogG[int, string]{})
