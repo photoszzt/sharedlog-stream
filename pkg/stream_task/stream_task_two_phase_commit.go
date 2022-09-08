@@ -191,7 +191,7 @@ func processWithTransaction(
 				return err_out
 			}
 			if ctrlMsg.Mark == commtypes.SCALE_FENCE {
-				ret := handleScaleEpochAndBytes(dctx, ctrlMsg, args.ectx)
+				ret := handleScaleEpochAndBytes(dctx, ctrlMsg, args)
 				if err := tm.Close(); err != nil {
 					debug.Fprintf(os.Stderr, "[ERROR] close transaction manager: %v\n", err)
 					return &common.FnOutput{Success: false, Message: fmt.Sprintf("close transaction manager: %v\n", err)}

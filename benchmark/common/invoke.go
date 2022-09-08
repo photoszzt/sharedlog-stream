@@ -12,6 +12,7 @@ import (
 
 type SrcInvokeConfig struct {
 	TopicName       string
+	AppId           string
 	NodeConstraint  string
 	ScaleEpoch      uint16
 	NumOutPartition uint8
@@ -22,6 +23,7 @@ type SrcInvokeConfig struct {
 func (c *SrcInvokeConfig) Clone() SrcInvokeConfig {
 	return SrcInvokeConfig{
 		TopicName:       c.TopicName,
+		AppId:           c.AppId,
 		NodeConstraint:  c.NodeConstraint,
 		ScaleEpoch:      c.ScaleEpoch,
 		NumOutPartition: c.NumOutPartition,
@@ -77,6 +79,7 @@ func ParseInvokeParam(invokeParam InvokeFuncParam, baseQueryInput *QueryInput,
 			srcInvokeConfig.NumSrcInstance = ninstance
 			srcInvokeConfig.TopicName = outputTopicNamesTmp[0].(string)
 			srcInvokeConfig.NodeConstraint = nodeConstraint
+			srcInvokeConfig.AppId = baseQueryInput.AppId
 		} else {
 			inputTopicNamesIntf := inputTopicNamesTmp.Data().([]interface{})
 			numSrcProducerIntf := numSrcProducerTmp.Data().([]interface{})

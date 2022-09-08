@@ -121,7 +121,7 @@ func handleCtrlMsg(ctx context.Context, ctrlRawMsg commtypes.RawMsgAndSeq,
 	t *StreamTask, args *StreamTaskArgs, warmupCheck *stats.Warmup,
 ) *common.FnOutput {
 	if ctrlRawMsg.Mark == commtypes.SCALE_FENCE {
-		ret := handleScaleEpochAndBytes(ctx, ctrlRawMsg, args.ectx)
+		ret := handleScaleEpochAndBytes(ctx, ctrlRawMsg, args)
 		if ret.Success {
 			updateReturnMetric(ret, warmupCheck,
 				args.waitEndMark, t.GetEndDuration(), args.ectx.SubstreamNum())
@@ -475,21 +475,37 @@ func initAfterMarkOrCommit(ctx context.Context, t *StreamTask, args *StreamTaskA
 }
 
 func handleScaleEpochAndBytes(ctx context.Context, msg commtypes.RawMsgAndSeq,
-	args processor.ExecutionContext,
+	args *StreamTaskArgs,
 ) *common.FnOutput {
-	for _, sink := range args.Producers() {
-		_, err := sink.ProduceCtrlMsg(ctx, msg, []uint8{args.SubstreamNum()})
-		if err != nil {
-			return &common.FnOutput{Success: false, Message: err.Error()}
+	for _, sink := range args.ectx.Producers() {
+		if args.fixedOutParNum >= 0 {
+			_, err := sink.ProduceCtrlMsg(ctx, msg, []uint8{args.ectx.SubstreamNum()})
+			if err != nil {
+				return &common.FnOutput{Success: false, Message: err.Error()}
+			}
+			debug.Fprintf(os.Stderr, "forward scale fence to %s(%d)\n",
+				sink.TopicName(), args.fixedOutParNum)
+		} else {
+			parNums := make([]uint8, 0, sink.Stream().NumPartition())
+			for par := uint8(0); par < sink.Stream().NumPartition(); par++ {
+				parNums = append(parNums, par)
+			}
+			_, err := sink.ProduceCtrlMsg(ctx, msg, parNums)
+			if err != nil {
+				return &common.FnOutput{Success: false, Message: err.Error()}
+			}
+			debug.Fprintf(os.Stderr, "forward scale fence to %s(%v)\n",
+				sink.TopicName(), parNums)
 		}
 	}
-	err := args.RecordFinishFunc()(ctx, args.FuncName(), args.SubstreamNum())
+	err := args.ectx.RecordFinishFunc()(ctx, args.ectx.FuncName(), args.ectx.SubstreamNum())
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	return &common.FnOutput{
 		Success: true,
-		Message: fmt.Sprintf("%s-%d epoch %d exit", args.FuncName(), args.SubstreamNum(), args.CurEpoch()),
-		Err:     common_errors.ErrShouldExitForScale,
+		Message: fmt.Sprintf("%s-%d epoch %d exit",
+			args.ectx.FuncName(), args.ectx.SubstreamNum(), args.ectx.CurEpoch()),
+		Err: common_errors.ErrShouldExitForScale,
 	}
 }

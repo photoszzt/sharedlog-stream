@@ -58,6 +58,12 @@ func (s *MeteredConsumer) SrcProducerEnd(prodIdx uint8) {
 func (s *MeteredConsumer) AllProducerEnded() bool {
 	return s.consumer.AllProducerEnded()
 }
+func (s *MeteredConsumer) SrcProducerGotScaleFence(prodIdx uint8) {
+	s.consumer.SrcProducerGotScaleFence(prodIdx)
+}
+func (s *MeteredConsumer) AllProducerScaleFenced() bool {
+	return s.consumer.AllProducerScaleFenced()
+}
 
 func (s *MeteredConsumer) RecordCurrentConsumedSeqNum(seqNum uint64) {
 	s.consumer.RecordCurrentConsumedSeqNum(seqNum)

@@ -232,7 +232,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 			if out.Valid() {
 				m := out.Value()
 				debug.Fprintf(os.Stderr, "got data from control channel: %v\n", m)
-				if m.Config != nil {
+				if len(m.Config) != 0 {
 					numInstance := m.Config[h.funcName]
 					if inputConfig.ParNum >= numInstance {
 						cmm.SendQuit()

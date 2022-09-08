@@ -75,14 +75,24 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 			jm.runLock.Unlock()
 			return
 		}
+		// fmt.Fprintf(os.Stderr, "read 0x%x from %s(%d)\n", rawMsgSeq.LogSeqNum,
+		// 	consumer.TopicName(), procArgs.SubstreamNum())
 		if rawMsgSeq.IsControl {
+			procArgs.Consumers()[0].RecordCurrentConsumedSeqNum(rawMsgSeq.LogSeqNum)
 			if rawMsgSeq.Mark == commtypes.SCALE_FENCE {
+				// fmt.Fprintf(os.Stderr, "%s,%s(%d) scale fence, cur epoch %d, got epoch %d\n",
+				// 	id, consumer.TopicName(), procArgs.SubstreamNum(), procArgs.CurEpoch(), rawMsgSeq.ScaleEpoch)
 				if procArgs.CurEpoch() < rawMsgSeq.ScaleEpoch {
-					procArgs.Consumers()[0].RecordCurrentConsumedSeqNum(rawMsgSeq.LogSeqNum)
-					jm.gotScaleFence.Set(true)
-					jm.ctrlMsg = optional.Some(rawMsgSeq)
-					jm.runLock.Unlock()
-					return
+					consumer.SrcProducerGotScaleFence(rawMsgSeq.ProdIdx)
+					if consumer.AllProducerScaleFenced() {
+						jm.gotScaleFence.Set(true)
+						jm.ctrlMsg = optional.Some(rawMsgSeq)
+						jm.runLock.Unlock()
+						return
+					} else {
+						jm.runLock.Unlock()
+						continue
+					}
 				} else {
 					jm.runLock.Unlock()
 					continue

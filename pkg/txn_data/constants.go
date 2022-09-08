@@ -15,6 +15,7 @@ const (
 	Fence
 	MarkLowBits
 	ScaleFenceLowBits
+	CtrlMetaLowBits
 )
 
 const (
@@ -39,4 +40,9 @@ func ScaleFenceTag(nameHash uint64, parNum uint8) uint64 {
 func MarkerTag(nameHash uint64, par uint8) uint64 {
 	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
 	return nameHash&mask + uint64(par)<<LogTagReserveBits + MarkLowBits
+}
+
+func CtrlMetaTag(nameHash uint64, par uint8) uint64 {
+	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
+	return nameHash&mask + uint64(par)<<LogTagReserveBits + CtrlMetaLowBits
 }

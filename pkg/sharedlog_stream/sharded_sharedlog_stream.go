@@ -252,3 +252,10 @@ func (s *ShardedSharedLogStream) SetCursor(cursor uint64, parNum uint8) {
 	s.subSharedLogStreams[parNum].Stream.cursor = cursor
 	s.mux.RUnlock()
 }
+
+func (s *ShardedSharedLogStream) GetCuror(parNum uint8) uint64 {
+	s.mux.RLock()
+	cur := s.subSharedLogStreams[parNum].Stream.cursor
+	s.mux.RUnlock()
+	return cur
+}

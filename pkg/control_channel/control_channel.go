@@ -2,14 +2,10 @@ package control_channel
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/data_structure"
-	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hashfuncs"
-	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
@@ -37,7 +33,7 @@ type ControlChannelManager struct {
 	// topic -> (key -> set of substreamid)
 	keyMappings map[string]map[string]keyMeta
 
-	msgSerde        commtypes.MessageGSerdeG[string, txn_data.ControlMetadata]
+	ctrlMetaSerde   commtypes.SerdeG[txn_data.ControlMetadata]
 	payloadArrSerde commtypes.SerdeG[commtypes.PayloadArr]
 
 	// they are the same stream but different progress tracking
@@ -47,6 +43,8 @@ type ControlChannelManager struct {
 	controlQuit        chan struct{}
 	// appendCtrlLog      *stats.ConcurrentInt64Collector
 	funcName     string
+	ctrlMetaTag  uint64
+	ctrlLogTag   uint64
 	currentEpoch uint16
 	instanceID   uint8
 }
@@ -79,15 +77,15 @@ func NewControlChannelManager(env types.Environment,
 		// appendCtrlLog:      stats.NewConcurrentInt64Collector("append_ctrl_log", stats.DEFAULT_COLLECT_DURATION),
 		payloadArrSerde: sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG,
 		instanceID:      instanceID,
+		ctrlMetaTag:     txn_data.CtrlMetaTag(logForRead.TopicNameHash(), 0),
+		ctrlLogTag:      sharedlog_stream.NameHashWithPartition(logForRead.TopicNameHash(), 0),
 	}
+	// fmt.Fprintf(os.Stderr, "ctrllog name: %s, tag: 0x%x\n", logForRead.TopicName(), cm.ctrlMetaTag)
 	ctrlMetaSerde, err := txn_data.GetControlMetadataSerdeG(serdeFormat)
 	if err != nil {
 		return nil, err
 	}
-	cm.msgSerde, err = commtypes.GetMsgGSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, ctrlMetaSerde)
-	if err != nil {
-		return nil, err
-	}
+	cm.ctrlMetaSerde = ctrlMetaSerde
 	return cm, nil
 }
 
@@ -147,15 +145,11 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 			wg.Wait()
 			return err
 		}
-		msg, err := cmm.msgSerde.Decode(rawMsg.Payload)
+		ctrlMeta, err := cmm.ctrlMetaSerde.Decode(rawMsg.Payload)
 		if err != nil {
 			close(workChan)
 			wg.Wait()
 			return err
-		}
-		ctrlMeta, ok := msg.Value.Take()
-		if !ok {
-			continue
 		}
 		if ctrlMeta.Topic != "" {
 			cmm.updateKeyMapping(&ctrlMeta)
@@ -189,8 +183,8 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 				}
 			}
 		} else if ctrlMeta.FinishedPrevTask != "" {
-			fmt.Fprintf(os.Stderr, "finished prev task %s, funcName %s, meta epoch %d, input epoch %d\n",
-				ctrlMeta.FinishedPrevTask, funcName, ctrlMeta.Epoch, cmm.currentEpoch)
+			// fmt.Fprintf(os.Stderr, "finished prev task %s, funcName %s, meta epoch %d, input epoch %d\n",
+			// 	ctrlMeta.FinishedPrevTask, funcName, ctrlMeta.Epoch, cmm.currentEpoch)
 			if ctrlMeta.FinishedPrevTask == funcName && ctrlMeta.Epoch+1 == cmm.currentEpoch {
 				close(workChan)
 				wg.Wait()
@@ -208,8 +202,7 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 }
 
 func (cmm *ControlChannelManager) appendToControlLog(ctx context.Context, cm txn_data.ControlMetadata, allowBuffer bool) error {
-	msg_encoded, err := cmm.msgSerde.Encode(commtypes.MessageG[string, txn_data.ControlMetadata]{
-		Key: optional.None[string](), Value: optional.Some(cm)})
+	msg_encoded, err := cmm.ctrlMetaSerde.Encode(cm)
 	if err != nil {
 		return err
 	}
@@ -218,8 +211,14 @@ func (cmm *ControlChannelManager) appendToControlLog(ctx context.Context, cm txn
 		// debug.Fprintf(os.Stderr, "appendToControlLog: tp %s %v, off %x\n",
 		// 	cmm.controlLog.TopicName(), cm, off)
 	} else {
-		_, err = cmm.controlLogForWrite.Push(ctx, msg_encoded, 0, sharedlog_stream.SingleDataRecordMeta,
-			commtypes.EmptyProducerId)
+		err = cmm.controlLogForWrite.Flush(ctx, commtypes.EmptyProducerId)
+		if err != nil {
+			return err
+		}
+		// var off uint64
+		_, err = cmm.controlLogForWrite.PushWithTag(ctx, msg_encoded, 0, []uint64{cmm.ctrlMetaTag, cmm.ctrlLogTag}, nil,
+			sharedlog_stream.SingleDataRecordMeta, commtypes.EmptyProducerId)
+		// debug.Fprintf(os.Stderr, "appendToControlLog: cm %+v, tag 0x%x, off 0x%x\n", cm, cmm.ctrlMetaTag, off)
 	}
 	return err
 }
@@ -287,7 +286,7 @@ func (cmm *ControlChannelManager) RecordPrevInstanceFinish(
 	instanceID uint8,
 	epoch uint16,
 ) error {
-	debug.Fprintf(os.Stderr, "%s(%d) epoch %d finished\n", funcName, instanceID, cmm.currentEpoch)
+	// debug.Fprintf(os.Stderr, "%s(%d) epoch %d finished\n", funcName, instanceID, epoch)
 	cm := txn_data.ControlMetadata{
 		FinishedPrevTask: funcName,
 		InstanceId:       instanceID,
@@ -316,7 +315,7 @@ func (cmm *ControlChannelManager) updateKeyMapping(ctrlMeta *txn_data.ControlMet
 
 func (cmm *ControlChannelManager) StartMonitorControlChannel(ctx context.Context) {
 	cmm.controlQuit = make(chan struct{})
-	cmm.controlOutput = make(chan ControlChannelResult, 1)
+	cmm.controlOutput = make(chan ControlChannelResult, 10)
 	go cmm.monitorControlChannel(ctx, cmm.controlQuit, cmm.controlOutput)
 }
 
@@ -333,6 +332,8 @@ func (cmm *ControlChannelManager) monitorControlChannel(
 	quit <-chan struct{},
 	output chan<- ControlChannelResult,
 ) {
+	// fmt.Fprintf(os.Stderr, "start monitoring control channel from %s 0x%x with tag 0x%x\n",
+	// 	cmm.controlLogForRead.TopicName(), cmm.controlLogForRead.GetCuror(0), cmm.ctrlMetaTag)
 	for {
 		select {
 		case <-quit:
@@ -340,26 +341,24 @@ func (cmm *ControlChannelManager) monitorControlChannel(
 		default:
 		}
 
-		rawMsg, err := cmm.controlLogForRead.ReadNext(ctx, 0)
+		rawMsg, err := cmm.controlLogForRead.ReadNextWithTag(ctx, 0, cmm.ctrlMetaTag)
 		if err != nil {
 			if common_errors.IsStreamEmptyError(err) {
-				time.Sleep(time.Duration(100) * time.Millisecond)
+				time.Sleep(time.Duration(1) * time.Millisecond)
 				continue
 			}
 			output <- ControlChannelErr(err)
 			break
-		} else {
-			if !rawMsg.IsPayloadArr {
-				msg, err := cmm.msgSerde.Decode(rawMsg.Payload)
-				if err != nil {
-					output <- ControlChannelErr(err)
-					break
-				}
-				ctrlMeta, ok := msg.Value.Take()
-				if ok && ctrlMeta.Key == nil {
-					output <- ControlChannelVal(&ctrlMeta)
-				}
+		}
+		// fmt.Fprintf(os.Stderr, "read control message from 0x%x\n", rawMsg.LogSeqNum)
+		if !rawMsg.IsPayloadArr {
+			ctrlMeta, err := cmm.ctrlMetaSerde.Decode(rawMsg.Payload)
+			if err != nil {
+				output <- ControlChannelErr(err)
+				break
 			}
+			// fmt.Fprintf(os.Stderr, "monitorControlChannel: %+v\n", ctrlMeta)
+			output <- ControlChannelVal(&ctrlMeta)
 		}
 	}
 }

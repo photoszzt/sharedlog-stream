@@ -42,17 +42,18 @@ type ShardedSharedLogStreamConsumer struct {
 	epochMarkerSerde commtypes.SerdeG[commtypes.EpochMarker]
 	payloadArrSerde  commtypes.SerdeG[commtypes.PayloadArr]
 	// msgSerde         commtypes.MessageSerdeG
-	producerNotEnd data_structure.Uint8Set
-	stream         *sharedlog_stream.ShardedSharedLogStream
-	tac            *TransactionAwareConsumer
-	emc            *EpochMarkConsumer
-	name           string
-	currentSeqNum  uint64
-	timeout        time.Duration
-	guarantee      exactly_once_intr.GuaranteeMth
-	initialSource  bool
-	serdeFormat    commtypes.SerdeFormat
-	numSrcProducer uint8
+	producerNotEnd        data_structure.Uint8Set
+	producerNotScaleFence data_structure.Uint8Set
+	stream                *sharedlog_stream.ShardedSharedLogStream
+	tac                   *TransactionAwareConsumer
+	emc                   *EpochMarkConsumer
+	name                  string
+	currentSeqNum         uint64
+	timeout               time.Duration
+	guarantee             exactly_once_intr.GuaranteeMth
+	initialSource         bool
+	serdeFormat           commtypes.SerdeFormat
+	numSrcProducer        uint8
 }
 
 var _ = Consumer(&ShardedSharedLogStreamConsumer{})
@@ -66,12 +67,15 @@ func NewShardedSharedLogStreamConsumer(stream *sharedlog_stream.ShardedSharedLog
 		return nil, err
 	}
 	notEnded := make(data_structure.Uint8Set)
+	notScaleFenced := make(data_structure.Uint8Set)
 	if numSrcProducer != 1 {
 		for i := uint8(0); i < numSrcProducer; i++ {
 			notEnded.Add(i)
+			notScaleFenced.Add(i)
 		}
 	} else {
 		notEnded.Add(instanceId)
+		notScaleFenced.Add(instanceId)
 	}
 	fmt.Fprintf(os.Stderr, "%s notEnded: %v\n", stream.TopicName(), notEnded)
 	return &ShardedSharedLogStreamConsumer{
@@ -79,12 +83,13 @@ func NewShardedSharedLogStreamConsumer(stream *sharedlog_stream.ShardedSharedLog
 		stream:           stream,
 		timeout:          config.Timeout,
 		// msgSerde:         config.MsgSerde,
-		name:            "src",
-		payloadArrSerde: sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG,
-		guarantee:       exactly_once_intr.AT_LEAST_ONCE,
-		serdeFormat:     config.SerdeFormat,
-		numSrcProducer:  numSrcProducer,
-		producerNotEnd:  notEnded,
+		name:                  "src",
+		payloadArrSerde:       sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG,
+		guarantee:             exactly_once_intr.AT_LEAST_ONCE,
+		serdeFormat:           config.SerdeFormat,
+		numSrcProducer:        numSrcProducer,
+		producerNotEnd:        notEnded,
+		producerNotScaleFence: notScaleFenced,
 	}, nil
 }
 
@@ -104,8 +109,17 @@ func (s *ShardedSharedLogStreamConsumer) SrcProducerEnd(prodIdx uint8) {
 	debug.Fprintf(os.Stderr, "%d producer ended, %v remain\n", prodIdx, s.producerNotEnd)
 }
 
+func (s *ShardedSharedLogStreamConsumer) SrcProducerGotScaleFence(prodIdx uint8) {
+	s.producerNotScaleFence.Remove(prodIdx)
+	debug.Fprintf(os.Stderr, "%d producer got scale fence, %v remain\n", prodIdx, s.producerNotScaleFence)
+}
+
 func (s *ShardedSharedLogStreamConsumer) AllProducerEnded() bool {
 	return len(s.producerNotEnd) == 0
+}
+
+func (s *ShardedSharedLogStreamConsumer) AllProducerScaleFenced() bool {
+	return len(s.producerNotScaleFence) == 0
 }
 
 func (s *ShardedSharedLogStreamConsumer) ConfigExactlyOnce(

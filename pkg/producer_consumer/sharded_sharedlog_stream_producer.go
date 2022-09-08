@@ -103,6 +103,7 @@ func (sls *ShardedSharedLogStreamProducer) ProduceCtrlMsg(ctx context.Context, m
 			if err != nil {
 				return 0, err
 			}
+			// fmt.Fprintf(os.Stderr, "produce scale fence %s(%d): offset 0x%x\n", sls.TopicName(), parNum, off)
 		}
 		return len(parNums), nil
 	} else if msg.Mark == commtypes.STREAM_END {
