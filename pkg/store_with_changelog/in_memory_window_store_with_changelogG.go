@@ -262,8 +262,14 @@ func (s *InMemoryWindowStoreWithChangelogG[K, V]) SubstreamNum() uint8 {
 }
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]) error) {
 }
-func (s *InMemoryWindowStoreWithChangelogG[K, V]) Snapshot() [][]byte {
-	return s.windowStore.Snapshot()
+func (s *InMemoryWindowStoreWithChangelogG[K, V]) Snapshot(logOff uint64) {
+	s.windowStore.Snapshot(logOff)
+}
+func (s *InMemoryWindowStoreWithChangelogG[K, V]) WaitForAllSnapshot() error {
+	return s.windowStore.WaitForAllSnapshot()
+}
+func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetWinSnapshotCallback(ctx context.Context, f store.WinSnapshotCallback[K, V]) {
+	s.windowStore.SetWinSnapshotCallback(ctx, f)
 }
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) RestoreFromSnapshot(ctx context.Context, snapshot [][]byte) error {
 	return s.windowStore.RestoreFromSnapshot(ctx, snapshot)
@@ -272,6 +278,9 @@ func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetKVSerde(serdeFormat commtyp
 	keySerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]], valSerde commtypes.SerdeG[V],
 ) error {
 	return nil
+}
+func (s *InMemoryWindowStoreWithChangelogG[K, V]) GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]] {
+	return s.windowStore.GetKVSerde()
 }
 
 func ToInMemSkipMapWindowTableWithChangelogG[K, V any](

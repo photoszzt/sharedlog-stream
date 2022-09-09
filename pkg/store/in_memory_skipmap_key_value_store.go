@@ -8,18 +8,20 @@ import (
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/utils"
-	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/zhangyunhao116/skipmap"
+	"golang.org/x/sync/errgroup"
 )
 
-type KVSnapshotCallback[K, V any] func(ctx context.Context, logOff uint64, snapshot []commtypes.KeyValuePair[K, V])
+type KVSnapshotCallback[K, V any] func(ctx context.Context, logOff uint64, snapshot []commtypes.KeyValuePair[K, V]) error
 
 type InMemorySkipmapKeyValueStoreG[K, V any] struct {
 	store            *skipmap.FuncMap[K, V]
+	bgCtx            context.Context
+	bgErrG           *errgroup.Group
 	kvPairSerde      commtypes.SerdeG[commtypes.KeyValuePair[K, V]]
-	snapshotCallback func(ctx context.Context, logOff uint64, snapshot []commtypes.KeyValuePair[K, V])
+	snapshotCallback KVSnapshotCallback[K, V]
 	name             string
 }
 
@@ -32,14 +34,22 @@ func NewInMemorySkipmapKeyValueStoreG[K, V any](name string, lessFunc LessFunc[K
 	}
 }
 
-func (st *InMemorySkipmapKeyValueStoreG[K, V]) SetSnapshotCallback(f KVSnapshotCallback[K, V]) {
+func (st *InMemorySkipmapKeyValueStoreG[K, V]) SetSnapshotCallback(ctx context.Context, f KVSnapshotCallback[K, V]) {
+	st.bgErrG, st.bgCtx = errgroup.WithContext(ctx)
 	st.snapshotCallback = f
+}
+func (st *InMemorySkipmapKeyValueStoreG[K, V]) WaitForAllSnapshot() error {
+	return st.bgErrG.Wait()
 }
 
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeFormat, keySerde commtypes.SerdeG[K], valSerde commtypes.SerdeG[V]) error {
 	var err error
 	st.kvPairSerde, err = commtypes.GetKeyValuePairSerdeG(serdeFormat, keySerde, valSerde)
 	return err
+}
+
+func (st *InMemorySkipmapKeyValueStoreG[K, V]) GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[K, V]] {
+	return st.kvPairSerde
 }
 
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) Name() string {
@@ -134,8 +144,8 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) Range(ctx context.Context,
 }
 
 // not thread-safe
-func (st *InMemorySkipmapKeyValueStoreG[K, V]) Snapshot() [][]byte {
-	cpyBeg := time.Now()
+func (st *InMemorySkipmapKeyValueStoreG[K, V]) Snapshot(logOff uint64) {
+	// cpyBeg := time.Now()
 	out := make([]commtypes.KeyValuePair[K, V], 0, st.store.Len())
 	st.store.Range(func(key K, value V) bool {
 		p := commtypes.KeyValuePair[K, V]{
@@ -145,20 +155,23 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) Snapshot() [][]byte {
 		out = append(out, p)
 		return true
 	})
-	cpyElapsed := time.Since(cpyBeg)
-	serBeg := time.Now()
-	outBin := make([][]byte, 0, len(out))
-	for _, kv := range out {
-		kvEnc, err := st.kvPairSerde.Encode(kv)
-		if err != nil {
-			continue
-		}
-		outBin = append(outBin, kvEnc)
-	}
-	serElapsed := time.Since(serBeg)
-	fmt.Fprintf(os.Stderr, "%s snapshot: copy elapsed %d, ser elapsed %d\n",
-		st.name, cpyElapsed.Microseconds(), serElapsed.Microseconds())
-	return outBin
+	st.bgErrG.Go(func() error {
+		return st.snapshotCallback(st.bgCtx, logOff, out)
+	})
+	// cpyElapsed := time.Since(cpyBeg)
+	// serBeg := time.Now()
+	// outBin := make([][]byte, 0, len(out))
+	// for _, kv := range out {
+	// 	kvEnc, err := st.kvPairSerde.Encode(kv)
+	// 	if err != nil {
+	// 		continue
+	// 	}
+	// 	outBin = append(outBin, kvEnc)
+	// }
+	// serElapsed := time.Since(serBeg)
+	// fmt.Fprintf(os.Stderr, "%s snapshot: copy elapsed %d, ser elapsed %d\n",
+	// 	st.name, cpyElapsed.Microseconds(), serElapsed.Microseconds())
+	// return outBin
 }
 
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) RestoreFromSnapshot(snapshot [][]byte) error {

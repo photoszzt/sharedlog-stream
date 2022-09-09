@@ -71,6 +71,9 @@ func NewCachingKeyValueStoreG[K comparable, V any](ctx context.Context,
 func (c *CachingKeyValueStoreG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeFormat, keySerde commtypes.SerdeG[K], valSerde commtypes.SerdeG[V]) error {
 	return c.wrappedStore.SetKVSerde(serdeFormat, keySerde, valSerde)
 }
+func (c *CachingKeyValueStoreG[K, V]) GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[K, V]] {
+	return c.wrappedStore.GetKVSerde()
+}
 func (c *CachingKeyValueStoreG[K, V]) Name() string { return c.name }
 func (c *CachingKeyValueStoreG[K, V]) Get(ctx context.Context, key K) (V, bool, error) {
 	entry, found := c.cache.get(key)
@@ -189,8 +192,14 @@ func (c *CachingKeyValueStoreG[K, V]) SubstreamNum() uint8 {
 	return c.wrappedStore.SubstreamNum()
 }
 
-func (c *CachingKeyValueStoreG[K, V]) Snapshot() [][]byte {
-	return c.wrappedStore.Snapshot()
+func (c *CachingKeyValueStoreG[K, V]) Snapshot(logOff uint64) {
+	c.wrappedStore.Snapshot(logOff)
+}
+func (c *CachingKeyValueStoreG[K, V]) WaitForAllSnapshot() error {
+	return c.wrappedStore.WaitForAllSnapshot()
+}
+func (c *CachingKeyValueStoreG[K, V]) SetSnapshotCallback(ctx context.Context, f KVSnapshotCallback[K, V]) {
+	c.wrappedStore.SetSnapshotCallback(ctx, f)
 }
 func (c *CachingKeyValueStoreG[K, V]) RestoreFromSnapshot(snapshot [][]byte) error {
 	return c.wrappedStore.RestoreFromSnapshot(snapshot)

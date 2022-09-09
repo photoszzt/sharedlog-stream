@@ -39,10 +39,13 @@ type CoreWindowStoreG[K, V any] interface {
 	IterAll(iterFunc func(int64, K, V) error) error
 	TableType() TABLE_TYPE
 	Flush(ctx context.Context) error
-	Snapshot() [][]byte
+	Snapshot(logOff uint64)
+	SetWinSnapshotCallback(ctx context.Context, f WinSnapshotCallback[K, V])
+	WaitForAllSnapshot() error
 	SetKVSerde(serdeFormat commtypes.SerdeFormat,
 		keySerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]], valSerde commtypes.SerdeG[V],
 	) error
+	GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]]
 	RestoreFromSnapshot(ctx context.Context, snapshot [][]byte) error
 	UpdateTrackParFunc
 	OnlyUpdateInMemWinStoreG[K, V]
@@ -76,6 +79,7 @@ type WindowStoreOpWithChangelog interface {
 	OnlyUpdateInMemWinStore
 	ProduceRangeRecording
 	SubstreamNum() uint8
-	Snapshot() [][]byte
+	Snapshot(logOff uint64)
+	WaitForAllSnapshot() error
 	RestoreFromSnapshot(ctx context.Context, snapshot [][]byte) error
 }

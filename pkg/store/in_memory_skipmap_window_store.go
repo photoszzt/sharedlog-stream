@@ -2,9 +2,7 @@ package store
 
 import (
 	"context"
-	"fmt"
 	"math"
-	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/optional"
@@ -15,6 +13,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"github.com/zhangyunhao116/skipmap"
+	"golang.org/x/sync/errgroup"
 )
 
 func updateSeqnumForDups(retainDuplicates bool, seqNum *uint32) {
@@ -24,6 +23,9 @@ func updateSeqnumForDups(retainDuplicates bool, seqNum *uint32) {
 	}
 }
 
+type WinSnapshotCallback[K, V any] func(ctx context.Context, logOff uint64,
+	snapshot []commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]) error
+
 type InMemorySkipMapWindowStoreG[K, V any] struct {
 	mux                         sync.RWMutex
 	storeNoDup                  *skipmap.Int64Map[*skipmap.FuncMap[K, V]]
@@ -31,6 +33,9 @@ type InMemorySkipMapWindowStoreG[K, V any] struct {
 	compareFunc                 CompareFuncG[K]
 	compareFuncWithVersionedKey CompareFuncG[VersionedKeyG[K]]
 	kvPairSerdeG                commtypes.SerdeG[commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]]
+	snapshotCallback            WinSnapshotCallback[K, V]
+	bgErrG                      *errgroup.Group
+	bgCtx                       context.Context
 	name                        string
 	windowSize                  int64
 	retentionPeriod             int64
@@ -70,12 +75,21 @@ func NewInMemorySkipMapWindowStore[K, V any](name string, retentionPeriod int64,
 		}
 	}
 }
+
+func (s *InMemorySkipMapWindowStoreG[K, V]) SetWinSnapshotCallback(ctx context.Context, f WinSnapshotCallback[K, V]) {
+	s.bgErrG, s.bgCtx = errgroup.WithContext(ctx)
+	s.snapshotCallback = f
+}
+
 func (s *InMemorySkipMapWindowStoreG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeFormat,
 	keySerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]], valSerde commtypes.SerdeG[V],
 ) error {
 	var err error
 	s.kvPairSerdeG, err = commtypes.GetKeyValuePairSerdeG(serdeFormat, keySerde, valSerde)
 	return err
+}
+func (s *InMemorySkipMapWindowStoreG[K, V]) GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]] {
+	return s.kvPairSerdeG
 }
 
 func (s *InMemorySkipMapWindowStoreG[K, V]) Name() string { return s.name }
@@ -359,18 +373,22 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) IterAll(iterFunc func(int64, K, V) e
 	return nil
 }
 
+func (s *InMemorySkipMapWindowStoreG[K, V]) WaitForAllSnapshot() error {
+	return s.bgErrG.Wait()
+}
+
 // not thread-safe
-func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot() [][]byte {
+func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot(logOff uint64) {
 	l := 0
 	if s.retainDuplicates {
 		l = s.storeWithDup.Len()
 	} else {
 		l = s.storeNoDup.Len()
 	}
-	outBin := make([][]byte, 0, l)
+	// outBin := make([][]byte, 0, l)
 	out := make([]commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V], 0, l)
 	if s.retainDuplicates {
-		cpyBeg := time.Now()
+		// cpyBeg := time.Now()
 		s.storeWithDup.Range(func(ts int64, kvmap *skipmap.FuncMap[VersionedKeyG[K], V]) bool {
 			kvmap.Range(func(k VersionedKeyG[K], v V) bool {
 				p := commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]{
@@ -382,20 +400,23 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot() [][]byte {
 			})
 			return true
 		})
-		cpyElapsed := time.Since(cpyBeg)
-		serBeg := time.Now()
-		for _, kv := range out {
-			kvenc, err := s.kvPairSerdeG.Encode(kv)
-			if err != nil {
-				continue
-			}
-			outBin = append(outBin, kvenc)
-		}
-		serElapsed := time.Since(serBeg)
-		fmt.Fprintf(os.Stderr, "%s snapshot: copy elapsed %d, ser elapsed %d\n",
-			s.name, cpyElapsed.Microseconds(), serElapsed.Microseconds())
+		s.bgErrG.Go(func() error {
+			return s.snapshotCallback(s.bgCtx, logOff, out)
+		})
+		// cpyElapsed := time.Since(cpyBeg)
+		// serBeg := time.Now()
+		// for _, kv := range out {
+		// 	kvenc, err := s.kvPairSerdeG.Encode(kv)
+		// 	if err != nil {
+		// 		continue
+		// 	}
+		// 	outBin = append(outBin, kvenc)
+		// }
+		// serElapsed := time.Since(serBeg)
+		// fmt.Fprintf(os.Stderr, "%s snapshot: copy elapsed %d, ser elapsed %d\n",
+		// 	s.name, cpyElapsed.Microseconds(), serElapsed.Microseconds())
 	} else {
-		cpyBeg := time.Now()
+		// cpyBeg := time.Now()
 		s.storeNoDup.Range(func(ts int64, kvmap *skipmap.FuncMap[K, V]) bool {
 			kvmap.Range(func(k K, v V) bool {
 				p := commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]{
@@ -407,20 +428,22 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot() [][]byte {
 			})
 			return true
 		})
-		cpyElapsed := time.Since(cpyBeg)
-		serBeg := time.Now()
-		for _, kv := range out {
-			kvenc, err := s.kvPairSerdeG.Encode(kv)
-			if err != nil {
-				continue
-			}
-			outBin = append(outBin, kvenc)
-		}
-		serElapsed := time.Since(serBeg)
-		fmt.Fprintf(os.Stderr, "%s snapshot: copy elapsed %d, ser elapsed %d\n",
-			s.name, cpyElapsed.Microseconds(), serElapsed.Microseconds())
+		// cpyElapsed := time.Since(cpyBeg)
+		s.bgErrG.Go(func() error {
+			return s.snapshotCallback(s.bgCtx, logOff, out)
+		})
+		// serBeg := time.Now()
+		// for _, kv := range out {
+		// 	kvenc, err := s.kvPairSerdeG.Encode(kv)
+		// 	if err != nil {
+		// 		continue
+		// 	}
+		// 	outBin = append(outBin, kvenc)
+		// }
+		// serElapsed := time.Since(serBeg)
+		// fmt.Fprintf(os.Stderr, "%s snapshot: copy elapsed %d, ser elapsed %d\n",
+		// 	s.name, cpyElapsed.Microseconds(), serElapsed.Microseconds())
 	}
-	return outBin
 }
 
 func (s *InMemorySkipMapWindowStoreG[K, V]) RestoreFromSnapshot(ctx context.Context, snapshot [][]byte) error {

@@ -9,6 +9,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/epoch_manager"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
@@ -19,6 +20,7 @@ import (
 	"sharedlog-stream/pkg/transaction"
 	"time"
 
+	"cs.utexas.edu/zjia/faas/types"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -71,9 +73,18 @@ func (t *StreamTask) GetEndDuration() time.Duration {
 	return t.endDuration
 }
 
+type SetupSnapshotCallbackFunc func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
+	em *epoch_manager.EpochManager, rs *RedisSnapshotStore) error
+
+func EmptySetupSnapshotCallback(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
+	em *epoch_manager.EpochManager, rs *RedisSnapshotStore) error {
+	return nil
+}
+
 func ExecuteApp(ctx context.Context,
 	t *StreamTask,
 	streamTaskArgs *StreamTaskArgs,
+	setupSnapshotCallback SetupSnapshotCallbackFunc,
 ) *common.FnOutput {
 	var ret *common.FnOutput
 	if streamTaskArgs.guarantee == exactly_once_intr.TWO_PHASE_COMMIT {
@@ -85,7 +96,7 @@ func ExecuteApp(ctx context.Context,
 		ret = processWithTransaction(ctx, t, tm, cmm, streamTaskArgs)
 	} else if streamTaskArgs.guarantee == exactly_once_intr.EPOCH_MARK {
 		rs := NewRedisSnapshotStore()
-		em, cmm, err := SetupManagersForEpoch(ctx, streamTaskArgs, &rs)
+		em, cmm, err := SetupManagersForEpoch(ctx, streamTaskArgs, &rs, setupSnapshotCallback)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
@@ -192,19 +203,13 @@ func flushStreams(ctx context.Context,
 	return nil
 }
 
-func createSnapshot(args *StreamTaskArgs) (commtypes.TableSnapshots, error) {
-	ts := commtypes.TableSnapshots{
-		TabMaps: make(map[string][][]byte),
-	}
+func createSnapshot(args *StreamTaskArgs, logOff uint64) {
 	for _, kvchangelog := range args.kvChangelogs {
-		snap := kvchangelog.Snapshot()
-		ts.TabMaps[kvchangelog.ChangelogTopicName()] = snap
+		kvchangelog.Snapshot(logOff)
 	}
 	for _, wschangelog := range args.windowStoreChangelogs {
-		snap := wschangelog.Snapshot()
-		ts.TabMaps[wschangelog.ChangelogTopicName()] = snap
+		wschangelog.Snapshot(logOff)
 	}
-	return ts, nil
 }
 
 func updateReturnMetric(ret *common.FnOutput, warmupChecker *stats.Warmup,

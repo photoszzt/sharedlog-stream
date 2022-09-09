@@ -1,6 +1,9 @@
 package commtypes
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"sharedlog-stream/pkg/common_errors"
+)
 
 type PayloadArrJSONSerdeG struct{}
 
@@ -31,4 +34,15 @@ func (s PayloadArrMsgpSerdeG) Decode(value []byte) (PayloadArr, error) {
 		return PayloadArr{}, err
 	}
 	return val, nil
+}
+
+func GetPayloadArrSerdeG(serdeFormat SerdeFormat) (SerdeG[PayloadArr], error) {
+	switch serdeFormat {
+	case JSON:
+		return PayloadArrJSONSerdeG{}, nil
+	case MSGP:
+		return PayloadArrMsgpSerdeG{}, nil
+	default:
+		return nil, common_errors.ErrUnrecognizedSerdeFormat
+	}
 }

@@ -10,6 +10,7 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/epoch_manager"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
@@ -83,21 +84,24 @@ func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput,
 }
 
 func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInput,
-) (*processor.MeteredProcessorG[uint64, *ntypes.Event, commtypes.WindowedKeyG[uint64], commtypes.ChangeG[uint64]],
-	map[string]store.WindowStoreOpWithChangelog, error) {
+) (countProc *processor.MeteredProcessorG[uint64, *ntypes.Event, commtypes.WindowedKeyG[uint64], commtypes.ChangeG[uint64]],
+	wsc map[string]store.WindowStoreOpWithChangelog,
+	setSnapCallbackFunc stream_task.SetupSnapshotCallbackFunc,
+	err error,
+) {
 	hopWindow, err := commtypes.NewTimeWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	hopWindow, err = hopWindow.AdvanceBy(time.Duration(2) * time.Second)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	msgSerde, err := processor.MsgSerdeWithValueTsG[uint64, uint64](serdeFormat,
 		commtypes.Uint64SerdeG{}, commtypes.Uint64SerdeG{})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	countStoreName := "auctionBidsCountStore"
 	countMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestampG[uint64]]().
@@ -110,12 +114,12 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 		}).Build()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	countWindowStore, err := store_with_changelog.CreateInMemSkipMapWindowTableWithChangelogG(
 		hopWindow, false, store.IntegerCompare[uint64], countMp)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	var aggStore store.WindowStoreBackedByChangelogG[uint64, commtypes.ValueTimestampG[uint64]]
 	if h.useCache {
@@ -131,15 +135,23 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 	} else {
 		aggStore = countWindowStore
 	}
-	countProc := processor.NewMeteredProcessorG(processor.NewStreamWindowAggregateProcessorG[uint64, *ntypes.Event, uint64](
+	countProc = processor.NewMeteredProcessorG(processor.NewStreamWindowAggregateProcessorG[uint64, *ntypes.Event, uint64](
 		"countProc", aggStore,
 		processor.InitializerFuncG[uint64](func() optional.Option[uint64] { return optional.Some(uint64(0)) }),
 		processor.AggregatorFuncG[uint64, *ntypes.Event, uint64](func(key uint64, value *ntypes.Event, aggregate optional.Option[uint64]) optional.Option[uint64] {
 			val := aggregate.Unwrap()
 			return optional.Some(val + 1)
 		}), hopWindow, h.useCache))
-	wsc := map[string]store.WindowStoreOpWithChangelog{countWindowStore.ChangelogTopicName(): aggStore}
-	return countProc, wsc, nil
+	wsc = map[string]store.WindowStoreOpWithChangelog{countWindowStore.ChangelogTopicName(): aggStore}
+	setSnapCallbackFunc = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat, em *epoch_manager.EpochManager, rs *stream_task.RedisSnapshotStore) error {
+		payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
+		if err != nil {
+			return err
+		}
+		stream_task.SetWinStoreSnapshot(ctx, env, em, rs, aggStore, payloadSerde)
+		return nil
+	})
+	return countProc, wsc, setSnapCallbackFunc, nil
 }
 
 func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -174,7 +186,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	}
 	ectx := processor.NewExecutionContext(srcs,
 		sinks, h.funcName, sp.ScaleEpoch, sp.ParNum)
-	countProc, wsc, err := h.getCountAggProc(ctx, sp)
+	countProc, wsc, setSnapCallbackFunc, err := h.getCountAggProc(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -214,5 +226,5 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	builder := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp, builder).
 		WindowStoreChangelogs(wsc).Build()
-	return stream_task.ExecuteApp(ctx, task, streamTaskArgs)
+	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, setSnapCallbackFunc)
 }

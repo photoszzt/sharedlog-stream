@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/epoch_manager"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
@@ -178,5 +179,16 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		KVStoreChangelogs(kvc).
 		FixedOutParNum(sp.ParNum).
 		Build()
-	return stream_task.ExecuteApp(ctx, task, streamTaskArgs)
+	return stream_task.ExecuteApp(ctx, task, streamTaskArgs,
+		func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
+			em *epoch_manager.EpochManager, rs *stream_task.RedisSnapshotStore,
+		) error {
+			payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
+			if err != nil {
+				return err
+			}
+			stream_task.SetKVStoreSnapshot[uint64, commtypes.ValueTimestampG[ntypes.SumAndCount]](ctx, env, em,
+				rs, kvstore, payloadSerde)
+			return nil
+		})
 }

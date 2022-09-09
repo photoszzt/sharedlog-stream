@@ -55,6 +55,10 @@ func (st *KeyValueStoreWithChangelogG[K, V]) SetKVSerde(serdeFormat commtypes.Se
 	return nil
 }
 
+func (st *KeyValueStoreWithChangelogG[K, V]) GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[K, V]] {
+	return st.kvstore.GetKVSerde()
+}
+
 func (st *KeyValueStoreWithChangelogG[K, V]) Name() string {
 	return st.kvstore.Name()
 }
@@ -235,8 +239,14 @@ func (st *KeyValueStoreWithChangelogG[K, V]) SubstreamNum() uint8 {
 func (st *KeyValueStoreWithChangelogG[K, V]) SetFlushCallback(
 	func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[V]]) error) {
 }
-func (st *KeyValueStoreWithChangelogG[K, V]) Snapshot() [][]byte {
-	return st.kvstore.Snapshot()
+func (st *KeyValueStoreWithChangelogG[K, V]) Snapshot(logOff uint64) {
+	st.kvstore.Snapshot(logOff)
+}
+func (st *KeyValueStoreWithChangelogG[K, V]) SetSnapshotCallback(ctx context.Context, f store.KVSnapshotCallback[K, V]) {
+	st.kvstore.SetSnapshotCallback(ctx, f)
+}
+func (st *KeyValueStoreWithChangelogG[K, V]) WaitForAllSnapshot() error {
+	return st.kvstore.WaitForAllSnapshot()
 }
 func (st *KeyValueStoreWithChangelogG[K, V]) RestoreFromSnapshot(snapshot [][]byte) error {
 	return st.kvstore.RestoreFromSnapshot(snapshot)

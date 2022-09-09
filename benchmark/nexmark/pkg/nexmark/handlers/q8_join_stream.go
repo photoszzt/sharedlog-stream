@@ -163,7 +163,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	aucJoinsPerFunc, perJoinsAucFunc, wsc, err := execution.SetupSkipMapStreamStreamJoin(
+	aucJoinsPerFunc, perJoinsAucFunc, wsc, setupSnapCallbackFunc, err := execution.SetupSkipMapStreamStreamJoin(
 		aucMp, perMp, store.IntegerCompare[uint64], joiner, joinWindows)
 	if err != nil {
 		return common.GenErrFnOutput(err)
@@ -178,5 +178,5 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, fmt.Sprintf("%s-%d", h.funcName, sp.ParNum))).
 		WindowStoreChangelogs(wsc).FixedOutParNum(sp.ParNum).Build()
-	return stream_task.ExecuteApp(ctx, task, streamTaskArgs)
+	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, setupSnapCallbackFunc)
 }

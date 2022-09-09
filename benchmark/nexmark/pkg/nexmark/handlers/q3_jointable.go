@@ -188,7 +188,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	aucJoinsPerFunc, perJoinsAucFunc, kvc, err := execution.SetupTableTableJoinWithSkipmap(
+	aucJoinsPerFunc, perJoinsAucFunc, kvc, setupSnapFunc, err := execution.SetupTableTableJoinWithSkipmap(
 		mpAuc, mpPer, store.Uint64LessFunc, joiner)
 	if err != nil {
 		return common.GenErrFnOutput(err)
@@ -233,5 +233,5 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
 		KVStoreChangelogs(kvc).FixedOutParNum(sp.ParNum).Build()
-	return stream_task.ExecuteApp(ctx, task, streamTaskArgs)
+	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, setupSnapFunc)
 }

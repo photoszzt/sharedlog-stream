@@ -170,7 +170,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	bJoinMaxBFunc, maxBJoinBFunc, wsc, err := execution.SetupSkipMapStreamStreamJoin(bMp, maxBMp,
+	bJoinMaxBFunc, maxBJoinBFunc, wsc, setupSnapCallbackFunc, err := execution.SetupSkipMapStreamStreamJoin(bMp, maxBMp,
 		store.IntegerCompare[uint64], joiner, jw)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
@@ -233,5 +233,5 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs,
 			fmt.Sprintf("%s-%d", h.funcName, sp.ParNum))).
 		WindowStoreChangelogs(wsc).FixedOutParNum(sp.ParNum).Build()
-	return stream_task.ExecuteApp(ctx, task, streamTaskArgs)
+	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, setupSnapCallbackFunc)
 }

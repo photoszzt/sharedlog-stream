@@ -17,6 +17,8 @@ import (
 	"sharedlog-stream/pkg/store"
 	"sync"
 	"time"
+
+	"cs.utexas.edu/zjia/faas/types"
 )
 
 var (
@@ -33,8 +35,58 @@ func checkCreateSnapshot() bool {
 	return createSnapshot
 }
 
+func SetKVStoreSnapshot[K, V any](ctx context.Context, env types.Environment,
+	em *epoch_manager.EpochManager, rs *RedisSnapshotStore,
+	kvstore store.KeyValueStoreBackedByChangelogG[K, V], payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
+) {
+	kvstore.SetSnapshotCallback(ctx, func(ctx context.Context, logOff uint64, snapshot []commtypes.KeyValuePair[K, V]) error {
+		kvPairSerdeG := kvstore.GetKVSerde()
+		outBin := make([][]byte, 0, len(snapshot))
+		for _, kv := range snapshot {
+			bin, err := kvPairSerdeG.Encode(kv)
+			if err != nil {
+				return err
+			}
+			outBin = append(outBin, bin)
+		}
+		out, err := payloadSerde.Encode(commtypes.PayloadArr{
+			Payloads: outBin,
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "snapshot size: %d\n", len(out))
+		return rs.StoreSnapshot(ctx, env, out, kvstore.ChangelogTopicName(), logOff)
+	})
+}
+
+func SetWinStoreSnapshot[K, V any](ctx context.Context, env types.Environment,
+	em *epoch_manager.EpochManager, rs *RedisSnapshotStore,
+	winStore store.WindowStoreBackedByChangelogG[K, V], payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
+) {
+	winStore.SetWinSnapshotCallback(ctx, func(ctx context.Context, logOff uint64, snapshot []commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]) error {
+		kvPairSerdeG := winStore.GetKVSerde()
+		outBin := make([][]byte, 0, len(snapshot))
+		for _, kv := range snapshot {
+			bin, err := kvPairSerdeG.Encode(kv)
+			if err != nil {
+				return err
+			}
+			outBin = append(outBin, bin)
+		}
+		out, err := payloadSerde.Encode(commtypes.PayloadArr{
+			Payloads: outBin,
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "snapshot size: %d\n", len(out))
+		return rs.StoreSnapshot(ctx, env, out, winStore.ChangelogTopicName(), logOff)
+	})
+}
+
 func SetupManagersForEpoch(ctx context.Context,
-	args *StreamTaskArgs, rs *RedisSnapshotStore,
+	args *StreamTaskArgs, rs *RedisSnapshotStore, setupSnapshotCallback SetupSnapshotCallbackFunc,
 ) (*epoch_manager.EpochManager, *control_channel.ControlChannelManager, error) {
 	em, err := epoch_manager.NewEpochManager(args.env, args.transactionalId, args.serdeFormat)
 	if err != nil {
@@ -48,6 +100,10 @@ func SetupManagersForEpoch(ctx context.Context,
 	initEmElapsed := time.Since(initEmStart)
 	fmt.Fprintf(os.Stderr, "Init EpochManager took %v\n", initEmElapsed)
 	err = configChangelogExactlyOnce(em, args)
+	if err != nil {
+		return nil, nil, err
+	}
+	err = setupSnapshotCallback(ctx, args.env, args.serdeFormat, em, rs)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -124,10 +180,6 @@ func SetupManagersForEpoch(ctx context.Context,
 func loadSnapshot(ctx context.Context,
 	args *StreamTaskArgs, auxData []byte, auxMetaSeq uint64, rs *RedisSnapshotStore,
 ) error {
-	snapshotSerde, err := commtypes.GetTableSnapshotsSerde(args.serdeFormat)
-	if err != nil {
-		return err
-	}
 	if len(auxData) > 0 {
 		uint16Serde := commtypes.Uint16SerdeG{}
 		ret, err := uint16Serde.Decode(auxData)
@@ -135,31 +187,42 @@ func loadSnapshot(ctx context.Context,
 			return fmt.Errorf("[ERR] Decode: %v", err)
 		}
 		if ret == 1 {
-			snapshotBin, err := rs.GetSnapshot(ctx, auxMetaSeq)
+			payloadSerde, err := commtypes.GetPayloadArrSerdeG(args.serdeFormat)
 			if err != nil {
-				return fmt.Errorf("[ERR] GetSnapshot: %v", err)
+				return err
 			}
-			if len(snapshotBin) > 0 {
-				tabMaps, err := snapshotSerde.Decode(snapshotBin)
+			for kvchTp, kvchangelog := range args.kvChangelogs {
+				snapArr, err := rs.GetSnapshot(ctx, kvchTp, auxMetaSeq)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "failed to decode snapshot: auxData len: %d, %v\n", len(auxData), err)
-					return fmt.Errorf("[ERR] Decode snapshot: %v", err)
+					return err
 				}
-				for kvchTp, kvchangelog := range args.kvChangelogs {
-					snap := tabMaps.TabMaps[kvchTp]
-					err = kvchangelog.RestoreFromSnapshot(snap)
+				if snapArr != nil {
+					payloadArr, err := payloadSerde.Decode(snapArr)
+					if err != nil {
+						return err
+					}
+					err = kvchangelog.RestoreFromSnapshot(payloadArr.Payloads)
 					if err != nil {
 						return fmt.Errorf("[ERR] restore kv from snapshot: %v", err)
 					}
-					kvchangelog.Stream().SetCursor(auxMetaSeq, kvchangelog.SubstreamNum())
+					kvchangelog.Stream().SetCursor(auxMetaSeq+1, kvchangelog.SubstreamNum())
 				}
-				for wscTp, wsc := range args.windowStoreChangelogs {
-					snap := tabMaps.TabMaps[wscTp]
-					err = wsc.RestoreFromSnapshot(ctx, snap)
+			}
+			for wscTp, wsc := range args.windowStoreChangelogs {
+				snapArr, err := rs.GetSnapshot(ctx, wscTp, auxMetaSeq)
+				if err != nil {
+					return err
+				}
+				if snapArr != nil {
+					payloadArr, err := payloadSerde.Decode(snapArr)
+					if err != nil {
+						return err
+					}
+					err = wsc.RestoreFromSnapshot(ctx, payloadArr.Payloads)
 					if err != nil {
 						return fmt.Errorf("[ERR] restore window table from snapshot: %v", err)
 					}
-					wsc.Stream().SetCursor(auxMetaSeq, wsc.SubstreamNum())
+					wsc.Stream().SetCursor(auxMetaSeq+1, wsc.SubstreamNum())
 				}
 			}
 		}
@@ -193,7 +256,6 @@ func processInEpoch(
 		return common.GenErrFnOutput(err)
 	}
 	snapshotTime := make([]int64, 0, 8)
-	snapshotSize := make([]int, 0, 8)
 	// run := false
 	hasProcessData := false
 	init := false
@@ -201,10 +263,6 @@ func processInEpoch(
 	// latencies := stats.NewInt64Collector("latPerIter", stats.DEFAULT_COLLECT_DURATION)
 	markTimer := time.Now()
 	snapshotTimer := time.Now()
-	tabSnapshotSerde, err := commtypes.GetTableSnapshotsSerde(args.serdeFormat)
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
 	var once sync.Once
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
 	fmt.Fprintf(os.Stderr, "commit every(ms): %v, waitEndMark: %v, fixed output parNum: %d, snapshot every(s): %v\n",
@@ -255,13 +313,9 @@ func processInEpoch(
 			}
 			if CREATE_SNAPSHOT && args.snapshotEvery != 0 && time.Since(snapshotTimer) > args.snapshotEvery {
 				snStart := time.Now()
-				size, err := createSnapshotAndSetAuxData(dctx, rs, logOff, args, tabSnapshotSerde)
-				if err != nil {
-					return common.GenErrFnOutput(err)
-				}
+				createSnapshot(args, logOff)
 				elapsed := time.Since(snStart)
 				snapshotTime = append(snapshotTime, elapsed.Microseconds())
-				snapshotSize = append(snapshotSize, size)
 				snapshotTimer = time.Now()
 			}
 			t.flushAllTime.AddSample(flushTime)
@@ -325,39 +379,29 @@ func processInEpoch(
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}
-			if CREATE_SNAPSHOT {
+			if CREATE_SNAPSHOT && args.snapshotEvery != 0 {
 				snStart := time.Now()
-				size, err := createSnapshotAndSetAuxData(dctx, rs, logOff, args, tabSnapshotSerde)
-				if err != nil {
-					return common.GenErrFnOutput(err)
-				}
+				createSnapshot(args, logOff)
 				elapsed := time.Since(snStart)
 				snapshotTime = append(snapshotTime, elapsed.Microseconds())
-				snapshotSize = append(snapshotSize, size)
+				for _, kv := range args.kvChangelogs {
+					err = kv.WaitForAllSnapshot()
+					if err != nil {
+						return common.GenErrFnOutput(err)
+					}
+				}
+				for _, wsc := range args.windowStoreChangelogs {
+					err = wsc.WaitForAllSnapshot()
+					if err != nil {
+						return common.GenErrFnOutput(err)
+					}
+				}
 				fmt.Fprintf(os.Stderr, "snapshot time: %v\n", snapshotTime)
-				fmt.Fprintf(os.Stderr, "snapshot size: %v\n", snapshotSize)
 			}
 			t.flushAllTime.AddSample(flushTime)
 			return handleCtrlMsg(dctx, ctrlRawMsg, t, args, &warmupCheck)
 		}
 	}
-}
-
-func createSnapshotAndSetAuxData(ctx context.Context, rs *RedisSnapshotStore, logOff uint64, args *StreamTaskArgs,
-	tabSnapshotSerde commtypes.SerdeG[commtypes.TableSnapshots],
-) (int, error) {
-	snapshot, err := createSnapshot(args)
-	if err != nil {
-		return 0, err
-	}
-	tenc, err := tabSnapshotSerde.Encode(snapshot)
-	if err != nil {
-		return 0, err
-	}
-	size := len(tenc)
-	fmt.Fprintf(os.Stderr, "snapshot at 0x%x\n", logOff)
-	err = rs.StoreSnapshot(ctx, args.env, tenc, logOff)
-	return size, err
 }
 
 func markEpoch(ctx context.Context, em *epoch_manager.EpochManager,

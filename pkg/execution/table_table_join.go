@@ -3,11 +3,15 @@ package execution
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/epoch_manager"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
+	"sharedlog-stream/pkg/stream_task"
+
+	"cs.utexas.edu/zjia/faas/types"
 )
 
 /*
@@ -70,15 +74,16 @@ func SetupTableTableJoinWithSkipmap[K, VLeft, VRight, VR any](
 ) (leftJoinRightFunc proc_interface.ProcessAndReturnFunc[K, VLeft, K, commtypes.ChangeG[VR]],
 	rightJoinLeftFunc proc_interface.ProcessAndReturnFunc[K, VRight, K, commtypes.ChangeG[VR]],
 	kvc map[string]store.KeyValueStoreOpWithChangelog,
+	setupSnapFunc stream_task.SetupSnapshotCallbackFunc,
 	err error,
 ) {
 	toLeftTab, leftTab, err := store_with_changelog.ToInMemSkipmapKVTableWithChangelog(mpLeft, less)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	toRightTab, rightTab, err := store_with_changelog.ToInMemSkipmapKVTableWithChangelog(mpRight, less)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	leftJoinRight := processor.NewMeteredProcessorG(
@@ -125,5 +130,16 @@ func SetupTableTableJoinWithSkipmap[K, VLeft, VRight, VR any](
 	// leftKVC = map[string]store.KeyValueStoreOpWithChangelog{leftTab.ChangelogTopicName(): leftTab}
 	// rightKVC = map[string]store.KeyValueStoreOpWithChangelog{rightTab.ChangelogTopicName(): rightTab}
 	kvc = map[string]store.KeyValueStoreOpWithChangelog{leftTab.ChangelogTopicName(): leftTab, rightTab.ChangelogTopicName(): rightTab}
-	return leftJoinRightFunc, rightJoinLeftFunc, kvc, nil
+	setupSnapFunc = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
+		em *epoch_manager.EpochManager, rs *stream_task.RedisSnapshotStore,
+	) error {
+		payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
+		if err != nil {
+			return err
+		}
+		stream_task.SetKVStoreSnapshot[K, commtypes.ValueTimestampG[VLeft]](ctx, env, em, rs, leftTab, payloadSerde)
+		stream_task.SetKVStoreSnapshot[K, commtypes.ValueTimestampG[VRight]](ctx, env, em, rs, rightTab, payloadSerde)
+		return nil
+	})
+	return leftJoinRightFunc, rightJoinLeftFunc, kvc, setupSnapFunc, nil
 }

@@ -3,12 +3,16 @@ package execution
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/epoch_manager"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
+	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/utils"
+
+	"cs.utexas.edu/zjia/faas/types"
 )
 
 /*
@@ -125,6 +129,7 @@ func SetupStreamStreamJoinG[K, VLeft, VRight, VR any](
 ) (leftJoinRightFunc proc_interface.ProcessAndReturnFunc[K, VLeft, K, VR],
 	rightJoinLeftFunc proc_interface.ProcessAndReturnFunc[K, VRight, K, VR],
 	wsc map[string]store.WindowStoreOpWithChangelog,
+	setupSnapFunc stream_task.SetupSnapshotCallbackFunc,
 	err error,
 ) {
 	sharedTimeTracker := processor.NewTimeTracker()
@@ -179,7 +184,16 @@ func SetupStreamStreamJoinG[K, VLeft, VRight, VR any](
 	wsc = map[string]store.WindowStoreOpWithChangelog{
 		leftTab.ChangelogTopicName():  leftTab,
 		rightTab.ChangelogTopicName(): rightTab}
-	return leftJoinRightFunc, rightJoinLeftFunc, wsc, nil
+	setupSnapFunc = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat, em *epoch_manager.EpochManager, rs *stream_task.RedisSnapshotStore) error {
+		payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
+		if err != nil {
+			return err
+		}
+		stream_task.SetWinStoreSnapshot(ctx, env, em, rs, leftTab, payloadSerde)
+		stream_task.SetWinStoreSnapshot(ctx, env, em, rs, rightTab, payloadSerde)
+		return nil
+	})
+	return leftJoinRightFunc, rightJoinLeftFunc, wsc, setupSnapFunc, nil
 }
 
 func SetupSkipMapStreamStreamJoin[K, VLeft, VRight, VR any](
@@ -191,12 +205,13 @@ func SetupSkipMapStreamStreamJoin[K, VLeft, VRight, VR any](
 ) (proc_interface.ProcessAndReturnFunc[K, VLeft, K, VR],
 	proc_interface.ProcessAndReturnFunc[K, VRight, K, VR],
 	map[string]store.WindowStoreOpWithChangelog,
+	stream_task.SetupSnapshotCallbackFunc,
 	error,
 ) {
 	toLeftTab, leftTab, toRightTab, rightTab, err := CreateSkipMapWinTablePair(
 		mpLeft, mpRight, compare, jw)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	return SetupStreamStreamJoinG[K, VLeft, VRight](toLeftTab, leftTab, toRightTab, rightTab, joiner, jw)
 }

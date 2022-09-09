@@ -160,7 +160,7 @@ func (h *q6JoinStreamHandler) Q6JoinStream(ctx context.Context, sp *common.Query
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	aucJoinBidsFunc, bidsJoinAucFunc, wsc, err := execution.SetupSkipMapStreamStreamJoin(
+	aucJoinBidsFunc, bidsJoinAucFunc, wsc, setupSnapCallbackFunc, err := execution.SetupSkipMapStreamStreamJoin(
 		aucMp, bidMp, store.IntegerCompare[uint64], joiner, jw)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
@@ -223,5 +223,5 @@ func (h *q6JoinStreamHandler) Q6JoinStream(ctx context.Context, sp *common.Query
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
 		WindowStoreChangelogs(wsc).FixedOutParNum(sp.ParNum).Build()
-	return stream_task.ExecuteApp(ctx, task, streamTaskArgs)
+	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, setupSnapCallbackFunc)
 }

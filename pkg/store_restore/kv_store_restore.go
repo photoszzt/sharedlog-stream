@@ -5,16 +5,13 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/pkg/common_errors"
-	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/exactly_once_intr"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/store_with_changelog"
 	"time"
 
 	"golang.org/x/xerrors"
 )
 
+/*
 type KVStoreChangelog[K, V any] struct {
 	kvStore          store.CoreKeyValueStore
 	changelogManager *store_with_changelog.ChangelogManager[K, V]
@@ -120,6 +117,7 @@ func (kvc *KVStoreChangelog[K, V]) ResetInitialProd() {
 func (kvc *KVStoreChangelog[K, V]) SubstreamNum() uint8 {
 	panic("not supported")
 }
+*/
 
 func RestoreChangelogKVStateStore(
 	ctx context.Context,

@@ -2,9 +2,9 @@ package stream_task
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sharedlog-stream/pkg/commtypes"
-	"strconv"
 
 	"cs.utexas.edu/zjia/faas/types"
 	"github.com/go-redis/redis/v9"
@@ -32,7 +32,9 @@ func NewRedisSnapshotStore() RedisSnapshotStore {
 	}
 }
 
-func (rs *RedisSnapshotStore) StoreSnapshot(ctx context.Context, env types.Environment, snapshot []byte, logOff uint64) error {
+func (rs *RedisSnapshotStore) StoreSnapshot(ctx context.Context, env types.Environment,
+	snapshot []byte, changelogTpName string, logOff uint64,
+) error {
 	var uint64Serde commtypes.Uint16Serde
 	hasData := uint16(1)
 	enc, err := uint64Serde.Encode(hasData)
@@ -43,9 +45,9 @@ func (rs *RedisSnapshotStore) StoreSnapshot(ctx context.Context, env types.Envir
 	if err != nil {
 		return err
 	}
-	return rs.rdb.Set(ctx, strconv.FormatUint(logOff, 10), snapshot, 0).Err()
+	return rs.rdb.Set(ctx, fmt.Sprintf("%s_%d", changelogTpName, logOff), snapshot, 0).Err()
 }
 
-func (rs *RedisSnapshotStore) GetSnapshot(ctx context.Context, logOff uint64) ([]byte, error) {
-	return rs.rdb.Get(ctx, strconv.FormatUint(logOff, 10)).Bytes()
+func (rs *RedisSnapshotStore) GetSnapshot(ctx context.Context, changelogTpName string, logOff uint64) ([]byte, error) {
+	return rs.rdb.Get(ctx, fmt.Sprintf("%s_%d", changelogTpName, logOff)).Bytes()
 }
