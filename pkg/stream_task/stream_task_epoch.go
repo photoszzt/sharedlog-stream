@@ -324,6 +324,23 @@ func processInEpoch(
 		// Exit routine
 		cur_elapsed = warmupCheck.ElapsedSinceInitial()
 		timeout = args.duration != 0 && cur_elapsed >= args.duration
+		if !args.waitEndMark && timeout {
+			if CREATE_SNAPSHOT && args.snapshotEvery != 0 {
+				for _, kv := range args.kvChangelogs {
+					err = kv.WaitForAllSnapshot()
+					if err != nil {
+						return common.GenErrFnOutput(err)
+					}
+				}
+				for _, wsc := range args.windowStoreChangelogs {
+					err = wsc.WaitForAllSnapshot()
+					if err != nil {
+						return common.GenErrFnOutput(err)
+					}
+				}
+				fmt.Fprintf(os.Stderr, "snapshot time: %v\n", snapshotTime)
+			}
+		}
 		if (!args.waitEndMark && timeout) || (testForFail && cur_elapsed >= failAfter) {
 			// elapsed := time.Since(procStart)
 			// latencies.AddSample(elapsed.Microseconds())
