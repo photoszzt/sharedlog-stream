@@ -20,11 +20,13 @@ var (
 	FLAGS_durBeforeScale  int
 	FLAGS_durAfterScale   int
 	FLAGS_tps             int
+	FLAGS_events_num      int
 	FLAGS_serdeFormat     string
 	FLAGS_workload_config string
 	FLAGS_scale_config    string
 	FLAGS_guarantee       string
 	FLAGS_commit_everyMs  uint64
+	FLAGS_snapshot_everyS uint
 	FLAGS_stat_dir        string
 	FLAGS_local           bool
 	FLAGS_flush_ms        int
@@ -49,6 +51,7 @@ func NewQueryInput(serdeFormat commtypes.SerdeFormat, duration uint32) *common.Q
 		TableType:     uint8(table_type),
 		FlushMs:       uint32(FLAGS_flush_ms),
 		WarmupS:       0,
+		SnapEveryS:    uint32(FLAGS_snapshot_everyS),
 	}
 }
 
@@ -65,6 +68,8 @@ func main() {
 	flag.IntVar(&FLAGS_tps, "tps", 10000000, "tps param for nexmark")
 	flag.IntVar(&FLAGS_flush_ms, "flushms", 10, "flush the buffer every ms; for exactly once, please see commit_everyMs and commit_niter. They determine the flush interval. ")
 	flag.IntVar(&FLAGS_src_flush_ms, "src_flushms", 5, "src flush ms")
+	flag.IntVar(&FLAGS_events_num, "events_num", 1000000, "events num")
+	flag.UintVar(&FLAGS_snapshot_everyS, "snapshot_everyS", 0, "snapshot every s")
 
 	flag.Uint64Var(&FLAGS_commit_everyMs, "comm_everyMS", 10, "commit a transaction every (ms)")
 
@@ -113,9 +118,8 @@ func main() {
 
 	var wg sync.WaitGroup
 	totTime := FLAGS_durBeforeScale + FLAGS_durAfterScale
-	eventsNum := FLAGS_tps * totTime
 	gp := ntypes.GeneratorParams{
-		EventsNum:      uint64(eventsNum),
+		EventsNum:      uint64(FLAGS_events_num),
 		SerdeFormat:    serdeFormat,
 		FaasGateway:    FLAGS_faas_gateway,
 		Duration:       uint32(totTime),
