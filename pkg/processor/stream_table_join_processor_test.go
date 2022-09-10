@@ -10,21 +10,21 @@ import (
 	"testing"
 )
 
-func getJoinProcessor() *StreamTableJoinProcessor {
-	store := store.NewInMemoryKeyValueStore("test1", store.IntLess)
-	joinProc := NewStreamTableJoinProcessor(store, ValueJoinerWithKeyFunc(
-		func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
-			lv := leftValue.(int)
-			if rightValue != nil {
-				rv := rightValue.(int)
-				return fmt.Sprintf("%d+%d", lv, rv)
-			} else {
-				return nil
-			}
-		},
-	))
-	return joinProc
-}
+// func getJoinProcessor() *StreamTableJoinProcessor {
+// 	store := store.NewInMemoryKeyValueStore("test1", store.IntLess)
+// 	joinProc := NewStreamTableJoinProcessor(store, ValueJoinerWithKeyFunc(
+// 		func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
+// 			lv := leftValue.(int)
+// 			if rightValue != nil {
+// 				rv := rightValue.(int)
+// 				return fmt.Sprintf("%d+%d", lv, rv)
+// 			} else {
+// 				return nil
+// 			}
+// 		},
+// 	))
+// 	return joinProc
+// }
 
 func getSkipMapJoinProcessor() *StreamTableJoinProcessorG[int, int, int, string] {
 	store := store.NewInMemorySkipmapKeyValueStoreG[int, commtypes.ValueTimestampG[int]]("test1", store.IntLessFunc)
@@ -36,21 +36,21 @@ func getSkipMapJoinProcessor() *StreamTableJoinProcessorG[int, int, int, string]
 	return joinProc
 }
 
-func getJoinProcessorWithStr() *StreamTableJoinProcessor {
-	store := store.NewInMemoryKeyValueStore("test1", store.IntLess)
-	joinProc := NewStreamTableJoinProcessor(store, ValueJoinerWithKeyFunc(
-		func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
-			lv := leftValue.(string)
-			if rightValue != nil {
-				rv := rightValue.(string)
-				return fmt.Sprintf("%s+%s", lv, rv)
-			} else {
-				return nil
-			}
-		},
-	))
-	return joinProc
-}
+// func getJoinProcessorWithStr() *StreamTableJoinProcessor {
+// 	store := store.NewInMemoryKeyValueStore("test1", store.IntLess)
+// 	joinProc := NewStreamTableJoinProcessor(store, ValueJoinerWithKeyFunc(
+// 		func(readOnlyKey interface{}, leftValue interface{}, rightValue interface{}) interface{} {
+// 			lv := leftValue.(string)
+// 			if rightValue != nil {
+// 				rv := rightValue.(string)
+// 				return fmt.Sprintf("%s+%s", lv, rv)
+// 			} else {
+// 				return nil
+// 			}
+// 		},
+// 	))
+// 	return joinProc
+// }
 
 func getSkipMapJoinProcessorWithStr() *StreamTableJoinProcessorG[int, string, string, string] {
 	store := store.NewInMemorySkipmapKeyValueStoreG[int, commtypes.ValueTimestampG[string]]("test1", store.IntLessFunc)
@@ -62,6 +62,7 @@ func getSkipMapJoinProcessorWithStr() *StreamTableJoinProcessorG[int, string, st
 	return joinProc
 }
 
+/*
 func TestJoinOnlyIfMatchFound(t *testing.T) {
 	ctx := context.Background()
 	joinProc := getJoinProcessor()
@@ -73,6 +74,7 @@ func TestJoinOnlyIfMatchFound(t *testing.T) {
 	}
 	JoinOnlyIfMatchFound(t, ctx, joinProc)
 }
+*/
 
 func TestSkipMapJoinOnlyIfMatchFound(t *testing.T) {
 	ctx := context.Background()
@@ -128,6 +130,7 @@ func JoinOnlyIfMatchFoundG(t *testing.T, ctx context.Context, joinProc Processor
 	}
 }
 
+/*
 func TestShouldClearTableEntryOnNullValueUpdate(t *testing.T) {
 	joinProc := getJoinProcessorWithStr()
 	ctx := context.Background()
@@ -141,6 +144,7 @@ func TestShouldClearTableEntryOnNullValueUpdate(t *testing.T) {
 	putSecond(t, ctx, joinProc)
 	ShouldClearTableEntryOnNullValueUpdatePart2(t, ctx, joinProc)
 }
+*/
 
 func TestSkipMapShouldClearTableEntryOnNullValueUpdate(t *testing.T) {
 	joinProc := getSkipMapJoinProcessorWithStr()

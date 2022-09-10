@@ -1,16 +1,6 @@
 package processor
 
-import (
-	"context"
-	"fmt"
-	"os"
-	"reflect"
-	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/store"
-	"testing"
-)
-
+/*
 func getJoinTable(t *testing.T) (
 	func(ctx context.Context, m commtypes.Message) []commtypes.Message,
 	func(ctx context.Context, m commtypes.Message) []commtypes.Message,
@@ -66,7 +56,9 @@ func getJoinTable(t *testing.T) (
 	}
 	return oneJoinTwoFunc, twoJoinOneFunc
 }
+*/
 
+/*
 func TestTableTableInnerJoin(t *testing.T) {
 	ctx := context.Background()
 	oneJoinTwo, twoJoinOne := getJoinTable(t)
@@ -211,3 +203,4 @@ func TestTableTableInnerJoin(t *testing.T) {
 		t.Fatalf("should equal. expected: %v, got: %v", expected_join, got)
 	}
 }
+*/

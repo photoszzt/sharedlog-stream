@@ -5,10 +5,12 @@ import (
 	"testing"
 )
 
+/*
 func getKeyValueStore() CoreKeyValueStore {
 	store := NewInMemoryKeyValueStore("test1", IntLess)
 	return store
 }
+*/
 
 /*
 func getBtreeKeyValueStoreG() CoreKeyValueStoreG[int, string] {
@@ -31,8 +33,8 @@ func getSkipmapKeyValueStoreG() CoreKeyValueStoreG[int, string] {
 
 func TestShouldNotIncludeDeletedFromRangeResult(t *testing.T) {
 	ctx := context.Background()
-	store := getKeyValueStore()
-	ShouldNotIncludeDeletedFromRangeResult(ctx, store, t)
+	// store := getKeyValueStore()
+	// ShouldNotIncludeDeletedFromRangeResult(ctx, store, t)
 	// btreeStoreG := getBtreeKeyValueStoreG()
 	// ShouldNotIncludeDeletedFromRangeResultG(ctx, btreeStoreG, t)
 	// btreeStore := getBtreeKeyValueStore()
@@ -43,8 +45,8 @@ func TestShouldNotIncludeDeletedFromRangeResult(t *testing.T) {
 
 func TestShouldDeleteIfSerializedValueIsNull(t *testing.T) {
 	ctx := context.Background()
-	store := getKeyValueStore()
-	ShouldDeleteIfSerializedValueIsNull(ctx, store, t)
+	// store := getKeyValueStore()
+	// ShouldDeleteIfSerializedValueIsNull(ctx, store, t)
 	// btreeStore := getBtreeKeyValueStore()
 	// ShouldDeleteIfSerializedValueIsNull(ctx, btreeStore, t)
 	// btreeStoreG := getBtreeKeyValueStoreG()

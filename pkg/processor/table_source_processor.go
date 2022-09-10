@@ -91,6 +91,7 @@ func MsgSerdeWithValueTsG[K, V any](serdeFormat commtypes.SerdeFormat,
 	return commtypes.GetMsgGSerdeG(serdeFormat, keySerde, valueTsSerde)
 }
 
+/*
 func ToInMemKVTable(storeName string, compare store.KVStoreLessFunc) (
 	*MeteredProcessor, store.CoreKeyValueStore,
 ) {
@@ -98,6 +99,7 @@ func ToInMemKVTable(storeName string, compare store.KVStoreLessFunc) (
 	toTableProc := NewMeteredProcessor(NewTableSourceProcessorWithTable(s))
 	return toTableProc, s
 }
+*/
 
 type TableSourceProcessorG[K, V any] struct {
 	store store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[V]]

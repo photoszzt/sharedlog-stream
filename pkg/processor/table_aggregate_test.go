@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/store"
-	"strings"
 	"testing"
 )
 
@@ -39,6 +38,7 @@ var (
 	})
 )
 
+/*
 func TestAggBasicWithInMemKVTable(t *testing.T) {
 	pc := NewProcessorChains()
 	srcTable := store.NewInMemoryKeyValueStore("srcTab", store.StringLess)
@@ -55,6 +55,7 @@ func TestAggBasicWithInMemKVTable(t *testing.T) {
 		return pc.RunChains(ctx, msg)
 	})
 }
+*/
 
 func TestAggBasicWithInMemSkipmapTable(t *testing.T) {
 	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("srcTab", store.StringLessFunc)
@@ -145,6 +146,7 @@ func testAggBasic(t *testing.T, procFunc func(ctx context.Context, msg commtypes
 	}
 }
 
+/*
 func TestAggRepartitionWithInMemKVStore(t *testing.T) {
 	pc := NewProcessorChains()
 	srcTable := store.NewInMemoryKeyValueStore("srcTab", store.StringLess)
@@ -167,6 +169,7 @@ func TestAggRepartitionWithInMemKVStore(t *testing.T) {
 		return pc.RunChains(ctx, msg)
 	})
 }
+*/
 
 func TestAggRepartitionWithInMemSkipmapKVStore(t *testing.T) {
 	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("srcTab", store.StringLessFunc)
@@ -261,6 +264,7 @@ func testAggRepartition(t *testing.T, procFunc func(ctx context.Context, msg com
 	}
 }
 
+/*
 func TestCountWithInMemKVStore(t *testing.T) {
 	pc := NewProcessorChains()
 	srcTable := store.NewInMemoryKeyValueStore("srcTab", store.StringLess)
@@ -283,6 +287,7 @@ func TestCountWithInMemKVStore(t *testing.T) {
 		Via(NewTableToStreamProcessor())
 	testCount(t, &pc)
 }
+*/
 
 /*
 func TestCountWithInMemSkipmapKVStore(t *testing.T) {
@@ -345,6 +350,7 @@ func testCount(t *testing.T, pc *ProcessorChains) {
 	}
 }
 
+/*
 func TestRemoveOldBeforeAddNewWithInMemKVStore(t *testing.T) {
 	pc := NewProcessorChains()
 	srcTable := store.NewInMemoryKeyValueStore("srcTab", store.StringLess)
@@ -370,6 +376,7 @@ func TestRemoveOldBeforeAddNewWithInMemKVStore(t *testing.T) {
 		Via(NewTableToStreamProcessor())
 	testRemoveOldBeforeAddNew(t, &pc)
 }
+*/
 
 /*
 func TestRemoveOldBeforeAddNewWithInMemSkipmapKVStore(t *testing.T) {
