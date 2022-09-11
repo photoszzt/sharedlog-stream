@@ -17,23 +17,25 @@ func RestoreChangelogWindowStateStore(
 	parNum uint8,
 ) error {
 	count := 0
+	numLogEntry := 0
 	restoreStart := time.Now()
 	for {
 		subC, err := wschangelog.ConsumeOneLogEntry(ctx, parNum)
 		// nothing to restore
 		if common_errors.IsStreamEmptyError(err) {
 			elapsed := time.Since(restoreStart)
-			fmt.Fprintf(os.Stderr, "%s(%d) restore, count: %d, elapsed: %v\n",
-				wschangelog.ChangelogTopicName(), parNum, count, elapsed)
+			fmt.Fprintf(os.Stderr, "%s(%d) restore, count: %d, numLogEntry: %d, elapsed: %v\n",
+				wschangelog.ChangelogTopicName(), parNum, count, numLogEntry, elapsed)
 			return nil
 		} else if xerrors.Is(err, common_errors.ErrStreamSourceTimeout) {
 			elapsed := time.Since(restoreStart)
-			fmt.Fprintf(os.Stderr, "%s(%d) restore, count: %d, elapsed: %v\n",
-				wschangelog.ChangelogTopicName(), parNum, count, elapsed)
+			fmt.Fprintf(os.Stderr, "%s(%d) restore, count: %d, numLogEntry: %d, elapsed: %v\n",
+				wschangelog.ChangelogTopicName(), parNum, count, numLogEntry, elapsed)
 			return nil
 		} else if err != nil {
 			return fmt.Errorf("ReadNext failed: %v", err)
 		}
 		count += subC
+		numLogEntry += 1
 	}
 }
