@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
@@ -154,7 +155,9 @@ func main() {
 	afterScaleOutput := common.InvokeFunctions(&wg, client, cliNodesForScale, inParamsMapForScale, scaleEpoch)
 	wg.Wait()
 	common.ParseSrcOutput(srcOutput, FLAGS_stat_dir)
-	common.ParseFunctionOutputs(beforeScaleOutput, FLAGS_stat_dir)
+	statsBeforeScale := path.Join(FLAGS_stat_dir, "beforeScale")
+	statsAfterScale := path.Join(FLAGS_stat_dir, "afterScale")
+	common.ParseFunctionOutputs(beforeScaleOutput, statsBeforeScale)
 	fmt.Fprintf(os.Stderr, "after scale\n")
-	common.ParseFunctionOutputs(afterScaleOutput, FLAGS_stat_dir)
+	common.ParseFunctionOutputs(afterScaleOutput, statsAfterScale)
 }
