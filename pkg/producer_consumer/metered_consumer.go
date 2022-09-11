@@ -12,13 +12,12 @@ import (
 )
 
 type MeteredConsumer struct {
-	consumer  *ShardedSharedLogStreamConsumer
-	latencies stats.StatsCollector[int64]
-	pToCLat   stats.StatsCollector[int64]
-	consumeTp stats.ThroughputCounter
-	ctrlCount uint32
-
-	measure bool
+	consumer    *ShardedSharedLogStreamConsumer
+	latencies   stats.StatsCollector[int64]
+	pToCLat     stats.StatsCollector[int64]
+	consumeTp   stats.ThroughputCounter
+	numLogEntry uint64
+	ctrlCount   uint32
 }
 
 func checkMeasureSource() bool {
@@ -39,7 +38,6 @@ func NewMeteredConsumer(src *ShardedSharedLogStreamConsumer, warmup time.Duratio
 		latencies: stats.NewStatsCollector[int64](src_name, stats.DEFAULT_COLLECT_DURATION),
 		pToCLat:   stats.NewStatsCollector[int64]("procTo"+src_name, stats.DEFAULT_COLLECT_DURATION),
 		consumeTp: stats.NewThroughputCounter(src_name, stats.DEFAULT_COLLECT_DURATION),
-		measure:   checkMeasureSource(),
 		ctrlCount: 0,
 	}
 }
@@ -90,6 +88,7 @@ func (s *MeteredConsumer) Consume(ctx context.Context, parNum uint8) (commtypes.
 	} else {
 		s.consumeTp.Tick(1)
 	}
+	s.numLogEntry += 1
 	// debug.Fprintf(os.Stderr, "%s consumed %d\n", s.TopicName(), s.consumeTp.GetCount())
 	return rawMsgSeq, err
 }
@@ -104,6 +103,10 @@ func ExtractProduceToConsumeTimeMsgG[K, V any](s *MeteredConsumer, msg *commtype
 
 func (s *MeteredConsumer) GetCount() uint64 {
 	return s.consumeTp.GetCount()
+}
+
+func (s *MeteredConsumer) NumLogEntry() uint64 {
+	return s.numLogEntry
 }
 
 func (s *MeteredConsumer) NumCtrlMsg() uint32 {
