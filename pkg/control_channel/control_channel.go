@@ -9,7 +9,6 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
-	"sync"
 	"time"
 
 	// "sharedlog-stream/pkg/stats"
@@ -17,6 +16,7 @@ import (
 	"sharedlog-stream/pkg/utils/syncutils"
 
 	"cs.utexas.edu/zjia/faas/types"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -29,24 +29,21 @@ type keyMeta struct {
 }
 
 type ControlChannelManager struct {
-	kmMu syncutils.Mutex
-	// topic -> (key -> set of substreamid)
-	keyMappings map[string]map[string]keyMeta
-
-	ctrlMetaSerde   commtypes.SerdeG[txn_data.ControlMetadata]
-	payloadArrSerde commtypes.SerdeG[commtypes.PayloadArr]
-
-	// they are the same stream but different progress tracking
-	controlLogForRead  *sharedlog_stream.ShardedSharedLogStream // for reading events
-	controlLogForWrite *sharedlog_stream.ShardedSharedLogStream // for writing;
+	kmMu               syncutils.Mutex
+	payloadArrSerde    commtypes.SerdeG[commtypes.PayloadArr]
+	ctrlMetaSerde      commtypes.SerdeG[txn_data.ControlMetadata]
 	controlOutput      chan ControlChannelResult
+	controlLogForRead  *sharedlog_stream.ShardedSharedLogStream
+	controlLogForWrite *sharedlog_stream.ShardedSharedLogStream
+	// topic -> (key -> set of substreamid)
+	keyMappings        map[string]map[string]keyMeta // protected by kmMu
 	controlQuit        chan struct{}
-	// appendCtrlLog      *stats.ConcurrentInt64Collector
-	funcName     string
-	ctrlMetaTag  uint64
-	ctrlLogTag   uint64
-	currentEpoch uint16
-	instanceID   uint8
+	funcName           string
+	currentKeyMappings []txn_data.KeyMaping
+	ctrlMetaTag        uint64
+	ctrlLogTag         uint64
+	currentEpoch       uint16
+	instanceID         uint8
 }
 
 func (cm *ControlChannelManager) CurrentEpoch() uint16 {
@@ -75,10 +72,11 @@ func NewControlChannelManager(env types.Environment,
 		keyMappings:        make(map[string]map[string]keyMeta),
 		funcName:           app_id,
 		// appendCtrlLog:      stats.NewConcurrentInt64Collector("append_ctrl_log", stats.DEFAULT_COLLECT_DURATION),
-		payloadArrSerde: sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG,
-		instanceID:      instanceID,
-		ctrlMetaTag:     txn_data.CtrlMetaTag(logForRead.TopicNameHash(), 0),
-		ctrlLogTag:      sharedlog_stream.NameHashWithPartition(logForRead.TopicNameHash(), 0),
+		payloadArrSerde:    sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG,
+		instanceID:         instanceID,
+		ctrlMetaTag:        txn_data.CtrlMetaTag(logForRead.TopicNameHash(), 0),
+		ctrlLogTag:         sharedlog_stream.NameHashWithPartition(logForRead.TopicNameHash(), 0),
+		currentKeyMappings: make([]txn_data.KeyMaping, 0, 16),
 	}
 	// fmt.Fprintf(os.Stderr, "ctrllog name: %s, tag: 0x%x\n", logForRead.TopicName(), cm.ctrlMetaTag)
 	ctrlMetaSerde, err := txn_data.GetControlMetadataSerdeG(serdeFormat)
@@ -108,31 +106,22 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 	for _, wsc := range wschangelog {
 		size += int(wsc.Stream().NumPartition())
 	}
-	var wg sync.WaitGroup
-	workChan := make(chan restoreWork, size)
-	errChan := make(chan error, 1)
-	if size > 0 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for work := range workChan {
-				if work.isKV {
-					kvc := kvchangelog[work.topic]
-					err := store_restore.RestoreChangelogKVStateStore(ctx, kvc, 0, work.parNum)
-					if err != nil {
-						errChan <- err
-						return
-					}
-				} else {
-					wsc := wschangelog[work.topic]
-					err := store_restore.RestoreChangelogWindowStateStore(ctx, wsc, work.parNum)
-					if err != nil {
-						errChan <- err
-						return
-					}
-				}
+	bgGrp, bgCtx := errgroup.WithContext(ctx)
+	restoreFunc := func(work restoreWork) error {
+		if work.isKV {
+			kvc := kvchangelog[work.topic]
+			err := store_restore.RestoreChangelogKVStateStore(bgCtx, kvc, 0, work.parNum)
+			if err != nil {
+				return err
 			}
-		}()
+		} else {
+			wsc := wschangelog[work.topic]
+			err := store_restore.RestoreChangelogWindowStateStore(bgCtx, wsc, work.parNum)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 	for {
 		rawMsg, err := cmm.controlLogForRead.ReadNext(ctx, 0)
@@ -141,61 +130,73 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 				time.Sleep(time.Duration(100) * time.Millisecond)
 				continue
 			}
-			close(workChan)
-			wg.Wait()
+			bgErr := bgGrp.Wait()
+			if bgErr != nil {
+				return bgErr
+			}
 			return err
 		}
 		ctrlMeta, err := cmm.ctrlMetaSerde.Decode(rawMsg.Payload)
 		if err != nil {
-			close(workChan)
-			wg.Wait()
+			bgErr := bgGrp.Wait()
+			if bgErr != nil {
+				return bgErr
+			}
 			return err
 		}
-		if ctrlMeta.Topic != "" {
-			cmm.updateKeyMapping(&ctrlMeta)
-			kvc, hasKVC := kvchangelog[ctrlMeta.Topic]
-			wsc, hasWSC := wschangelog[ctrlMeta.Topic]
-			if hasKVC {
-				par := uint8(ctrlMeta.Hash % uint64(kvc.Stream().NumPartition()))
-				if par != cmm.instanceID {
-					pars, ok := extraParToRestoreKV[ctrlMeta.Topic]
-					if !ok {
-						pars = data_structure.NewUint8Set()
-					}
-					if !pars.Has(par) {
-						workChan <- restoreWork{topic: ctrlMeta.Topic, isKV: true, parNum: par}
-						pars.Add(par)
-						extraParToRestoreKV[ctrlMeta.Topic] = pars
-					}
-				}
-			} else if hasWSC {
-				par := uint8(ctrlMeta.Hash % uint64(wsc.Stream().NumPartition()))
-				if par != cmm.instanceID {
-					pars, ok := extraParToRestoreWS[ctrlMeta.Topic]
-					if !ok {
-						pars = data_structure.NewUint8Set()
-					}
-					if !pars.Has(par) {
-						workChan <- restoreWork{topic: ctrlMeta.Topic, isKV: false, parNum: par}
-						pars.Add(par)
-						extraParToRestoreWS[ctrlMeta.Topic] = pars
-					}
-				}
-			}
-		} else if ctrlMeta.FinishedPrevTask != "" {
+		if ctrlMeta.FinishedPrevTask != "" {
 			// fmt.Fprintf(os.Stderr, "finished prev task %s, funcName %s, meta epoch %d, input epoch %d\n",
 			// 	ctrlMeta.FinishedPrevTask, funcName, ctrlMeta.Epoch, cmm.currentEpoch)
 			if ctrlMeta.FinishedPrevTask == funcName && ctrlMeta.Epoch+1 == cmm.currentEpoch {
-				close(workChan)
-				wg.Wait()
-				select {
-				case err := <-errChan:
-					if err != nil {
-						return err
-					}
-				default:
+				// fmt.Fprintf(os.Stderr, "waiting bg to finish\n")
+				err = bgGrp.Wait()
+				if err != nil {
+					return err
 				}
 				return nil
+			}
+		} else {
+			if len(ctrlMeta.KeyMaps) != 0 {
+				cmm.updateKeyMapping(&ctrlMeta)
+				for _, km := range ctrlMeta.KeyMaps {
+					kvc, hasKVC := kvchangelog[km.Topic]
+					wsc, hasWSC := wschangelog[km.Topic]
+					if hasKVC {
+						par := uint8(km.Hash % uint64(kvc.Stream().NumPartition()))
+						if par != cmm.instanceID {
+							pars, ok := extraParToRestoreKV[km.Topic]
+							if !ok {
+								pars = data_structure.NewUint8Set()
+							}
+							if !pars.Has(km.SubstreamId) {
+								// fmt.Fprintf(os.Stderr, "restore %s par %d\n", km.Topic, km.SubstreamId)
+								w := restoreWork{topic: km.Topic, isKV: true, parNum: km.SubstreamId}
+								bgGrp.Go(func() error {
+									return restoreFunc(w)
+								})
+								pars.Add(km.SubstreamId)
+								extraParToRestoreKV[km.Topic] = pars
+							}
+						}
+					} else if hasWSC {
+						par := uint8(km.Hash % uint64(wsc.Stream().NumPartition()))
+						if par != cmm.instanceID {
+							pars, ok := extraParToRestoreWS[km.Topic]
+							if !ok {
+								pars = data_structure.NewUint8Set()
+							}
+							if !pars.Has(km.SubstreamId) {
+								// fmt.Fprintf(os.Stderr, "restore %s par %d\n", km.Topic, km.SubstreamId)
+								w := restoreWork{topic: km.Topic, isKV: false, parNum: km.SubstreamId}
+								bgGrp.Go(func() error {
+									return restoreFunc(w)
+								})
+								pars.Add(km.SubstreamId)
+								extraParToRestoreWS[km.Topic] = pars
+							}
+						}
+					}
+				}
 			}
 		}
 	}
@@ -224,7 +225,19 @@ func (cmm *ControlChannelManager) appendToControlLog(ctx context.Context, cm txn
 }
 
 func (cmm *ControlChannelManager) FlushControlLog(ctx context.Context) error {
-	return cmm.controlLogForWrite.Flush(ctx, commtypes.EmptyProducerId)
+	if len(cmm.currentKeyMappings) > 0 {
+		cm := txn_data.ControlMetadata{
+			KeyMaps:    cmm.currentKeyMappings,
+			InstanceId: cmm.instanceID,
+			Epoch:      cmm.currentEpoch,
+		}
+		err := cmm.appendToControlLog(ctx, cm, false)
+		if err != nil {
+			return err
+		}
+		cmm.currentKeyMappings = make([]txn_data.KeyMaping, 0, 16)
+	}
+	return nil
 }
 
 func (cmm *ControlChannelManager) AppendRescaleConfig(ctx context.Context,
@@ -245,7 +258,7 @@ func TrackAndAppendKeyMapping(
 	kBytes []byte,
 	substreamId uint8,
 	topic string,
-) error {
+) {
 	cmm.kmMu.Lock()
 	subs, ok := cmm.keyMappings[topic]
 	if !ok {
@@ -262,21 +275,17 @@ func TrackAndAppendKeyMapping(
 		}
 		cmm.kmMu.Unlock()
 		// apStart := stats.TimerBegin()
-		cm := txn_data.ControlMetadata{
+		km := txn_data.KeyMaping{
 			Key:         kBytes,
 			Hash:        hash,
 			SubstreamId: substreamId,
 			Topic:       topic,
-			InstanceId:  cmm.instanceID,
-			Epoch:       cmm.currentEpoch,
 		}
-		err := cmm.appendToControlLog(ctx, cm, true)
+		cmm.currentKeyMappings = append(cmm.currentKeyMappings, km)
 		// apElapsed := stats.Elapsed(apStart).Microseconds()
 		// cmm.appendCtrlLog.AddSample(apElapsed)
-		return err
 	} else {
 		cmm.kmMu.Unlock()
-		return nil
 	}
 }
 
@@ -298,16 +307,18 @@ func (cmm *ControlChannelManager) RecordPrevInstanceFinish(
 
 func (cmm *ControlChannelManager) updateKeyMapping(ctrlMeta *txn_data.ControlMetadata) {
 	cmm.kmMu.Lock()
-	subs, ok := cmm.keyMappings[ctrlMeta.Topic]
-	if !ok {
-		subs = make(map[string]keyMeta)
-		cmm.keyMappings[ctrlMeta.Topic] = subs
-	}
-	_, hasKey := subs[string(ctrlMeta.Key)]
-	if !hasKey {
-		subs[string(ctrlMeta.Key)] = keyMeta{
-			substream: ctrlMeta.SubstreamId,
-			hash:      ctrlMeta.Hash,
+	for _, km := range ctrlMeta.KeyMaps {
+		subs, ok := cmm.keyMappings[km.Topic]
+		if !ok {
+			subs = make(map[string]keyMeta)
+			cmm.keyMappings[km.Topic] = subs
+		}
+		_, hasKey := subs[string(km.Key)]
+		if !hasKey {
+			subs[string(km.Key)] = keyMeta{
+				substream: km.SubstreamId,
+				hash:      km.Hash,
+			}
 		}
 	}
 	cmm.kmMu.Unlock()

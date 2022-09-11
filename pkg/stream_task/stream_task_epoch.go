@@ -168,7 +168,8 @@ func SetupManagersForEpoch(ctx context.Context,
 			topicName string, substreamId uint8,
 		) error {
 			_ = em.AddTopicSubstream(ctx, topicName, substreamId)
-			return control_channel.TrackAndAppendKeyMapping(ctx, cmm, kBytes, substreamId, topicName)
+			control_channel.TrackAndAppendKeyMapping(ctx, cmm, kBytes, substreamId, topicName)
+			return nil
 		})
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
 		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, args.ectx.CurEpoch())
@@ -299,10 +300,6 @@ func processInEpoch(
 			}
 			flushAllStart := stats.TimerBegin()
 			err := flushStreams(dctx, args)
-			if err != nil {
-				return common.GenErrFnOutput(err)
-			}
-			err = cmm.FlushControlLog(ctx)
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}

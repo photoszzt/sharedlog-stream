@@ -482,14 +482,28 @@ func initAfterMarkOrCommit(ctx context.Context, t *StreamTask, args *StreamTaskA
 func handleScaleEpochAndBytes(ctx context.Context, msg commtypes.RawMsgAndSeq,
 	args *StreamTaskArgs,
 ) *common.FnOutput {
+	epochMarkerSerde, err := commtypes.GetEpochMarkerSerdeG(args.serdeFormat)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	epochMarker := commtypes.EpochMarker{
+		ScaleEpoch: msg.ScaleEpoch,
+		Mark:       commtypes.SCALE_FENCE,
+		ProdIndex:  args.ectx.SubstreamNum(),
+	}
+	encoded, err := epochMarkerSerde.Encode(epochMarker)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	msg.Payload = encoded
 	for _, sink := range args.ectx.Producers() {
 		if args.fixedOutParNum >= 0 {
 			_, err := sink.ProduceCtrlMsg(ctx, msg, []uint8{args.ectx.SubstreamNum()})
 			if err != nil {
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
-			debug.Fprintf(os.Stderr, "forward scale fence to %s(%d)\n",
-				sink.TopicName(), args.fixedOutParNum)
+			debug.Fprintf(os.Stderr, "%d forward scale fence to %s(%d)\n",
+				args.ectx.SubstreamNum(), sink.TopicName(), args.fixedOutParNum)
 		} else {
 			parNums := make([]uint8, 0, sink.Stream().NumPartition())
 			for par := uint8(0); par < sink.Stream().NumPartition(); par++ {
@@ -499,11 +513,11 @@ func handleScaleEpochAndBytes(ctx context.Context, msg commtypes.RawMsgAndSeq,
 			if err != nil {
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
-			debug.Fprintf(os.Stderr, "forward scale fence to %s(%v)\n",
-				sink.TopicName(), parNums)
+			debug.Fprintf(os.Stderr, "%d forward scale fence to %s(%v)\n",
+				args.ectx.SubstreamNum(), sink.TopicName(), parNums)
 		}
 	}
-	err := args.ectx.RecordFinishFunc()(ctx, args.ectx.FuncName(), args.ectx.SubstreamNum())
+	err = args.ectx.RecordFinishFunc()(ctx, args.ectx.FuncName(), args.ectx.SubstreamNum())
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

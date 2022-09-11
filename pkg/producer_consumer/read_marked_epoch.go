@@ -100,6 +100,7 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 			} else if epochMark.Mark == commtypes.SCALE_FENCE {
 				rawMsg.ScaleEpoch = epochMark.ScaleEpoch
 				rawMsg.Mark = epochMark.Mark
+				rawMsg.ProdIdx = epochMark.ProdIndex
 			} else if epochMark.Mark == commtypes.STREAM_END {
 				rawMsg.Mark = epochMark.Mark
 				rawMsg.StartTime = epochMark.StartTime

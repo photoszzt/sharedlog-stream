@@ -54,8 +54,8 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 		if err != nil {
 			return err
 		}
-		err = control_channel.TrackAndAppendKeyMapping(ctx, cmm, kBytes, substreamId, topicName)
-		return err
+		control_channel.TrackAndAppendKeyMapping(ctx, cmm, kBytes, substreamId, topicName)
+		return nil
 	}
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
 		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, streamTaskArgs.ectx.CurEpoch())
@@ -304,14 +304,9 @@ func commitTransaction(ctx context.Context,
 		}
 		*paused = true
 	}
-	err := cmm.FlushControlLog(ctx)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] flush control log failed: %v\n", err)
-		return &common.FnOutput{Success: false, Message: fmt.Sprintf("flush control log failed: %v\n", err)}
-	}
 	cBeg := stats.TimerBegin()
 	offsetRecords := transaction.CollectOffsetRecords(args.ectx.Consumers())
-	err = tm.AppendConsumedSeqNum(ctx, offsetRecords, args.ectx.SubstreamNum())
+	err := tm.AppendConsumedSeqNum(ctx, offsetRecords, args.ectx.SubstreamNum())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] append offset failed: %v\n", err)
 		return &common.FnOutput{Success: false, Message: fmt.Sprintf("append offset failed: %v\n", err)}
