@@ -91,6 +91,7 @@ func main() {
 		Local:          FLAGS_local,
 		WaitForEndMark: FLAGS_waitForEndMark,
 	}
+	totTime := FLAGS_durBeforeScale + FLAGS_durAfterScale
 	baseQueryInput := NewQueryInput(serdeFormat, uint32(FLAGS_durBeforeScale))
 	srcInvokeConfig, cliNodes, inParamsMap, configScaleInput, err := common.ParseInvokeParam(
 		invokeFuncParam, baseQueryInput)
@@ -98,7 +99,7 @@ func main() {
 		panic(err)
 	}
 
-	timeout := time.Duration(baseQueryInput.Duration*4) * time.Second
+	timeout := time.Duration(totTime*4) * time.Second
 	if baseQueryInput.Duration == 0 {
 		timeout = time.Duration(900) * time.Second
 	}
@@ -117,7 +118,6 @@ func main() {
 		&scaleResponse, "scale", invokeFuncParam.Local)
 
 	var wg sync.WaitGroup
-	totTime := FLAGS_durBeforeScale + FLAGS_durAfterScale
 	gp := ntypes.GeneratorParams{
 		EventsNum:      uint64(FLAGS_events_num),
 		SerdeFormat:    serdeFormat,
