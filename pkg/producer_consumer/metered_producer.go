@@ -60,7 +60,8 @@ func NewConcurrentMeteredSyncProducer(sink *ShardedSharedLogStreamProducer, warm
 			stats.DEFAULT_COLLECT_DURATION),
 		measure:            checkMeasureSink(),
 		warmup:             stats.NewWarmupGoroutineSafeChecker(warmup),
-		eventTimeLatencies: make([]int, 0, 1024),
+		eventTimeLatencies: make([]int, 0, 4096),
+		eventTs:            make([]int64, 0, 4096),
 	}, nil
 }
 
@@ -203,12 +204,13 @@ func NewMeteredProducer(sink *ShardedSharedLogStreamProducer, warmup time.Durati
 	*/
 	return &MeteredProducer{
 		producer:           sink,
-		eventTimeLatencies: make([]int, 0, 1024),
+		eventTimeLatencies: make([]int, 0, 4096),
 		latencies:          stats.NewStatsCollector[int64](sink_name, stats.DEFAULT_COLLECT_DURATION),
 		produceTp:          stats.NewThroughputCounter(sink_name, stats.DEFAULT_COLLECT_DURATION),
 		// eventTimeSample: stats.NewStatsCollector[int64](sink_name+"_ets", stats.DEFAULT_COLLECT_DURATION),
 		measure: checkMeasureSink(),
 		warmup:  stats.NewWarmupChecker(warmup),
+		eventTs: make([]int64, 0, 4096),
 		// stFile:  stFile,
 	}, nil
 }

@@ -14,11 +14,12 @@ import (
 type benchStats struct {
 	Latencies map[string][]int
 	Counts    map[string]uint64
+	EventTs   []int64
 	Duration  float64
 }
 
 func ProcessThroughputLat(name string, stat_dir string, latencies map[string][]int,
-	counts map[string]uint64, duration float64,
+	counts map[string]uint64, eventTs []int64, duration float64,
 	num map[string]uint64, endToEnd *float64,
 ) {
 	path := path.Join(stat_dir, fmt.Sprintf("%s.json", name))
@@ -29,6 +30,7 @@ func ProcessThroughputLat(name string, stat_dir string, latencies map[string][]i
 		Latencies: latencies,
 		Counts:    counts,
 		Duration:  duration,
+		EventTs:   eventTs,
 	}
 	stBytes, err := json.Marshal(st)
 	if err != nil {

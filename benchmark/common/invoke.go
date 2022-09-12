@@ -185,7 +185,7 @@ func ParseSrcOutput(sourceOutput []FnOutput, statsDir string) {
 			}
 			ProcessThroughputLat(fmt.Sprintf("source-%d", idx),
 				statsDir, sourceOutput[idx].Latencies, sourceOutput[idx].Counts,
-				sourceOutput[idx].Duration, srcNum, &srcEndToEnd)
+				sourceOutput[idx].EventTs, sourceOutput[idx].Duration, srcNum, &srcEndToEnd)
 		} else {
 			fmt.Fprintf(os.Stderr, "source-%d failed\n", idx)
 		}
@@ -209,7 +209,7 @@ func ParseFunctionOutputs(outputMap map[string][]FnOutput, statDir string) {
 					maxDuration = output[j].Duration
 				}
 				ProcessThroughputLat(fmt.Sprintf("%s-%d", funcName, j),
-					statDir, output[j].Latencies, output[j].Counts, output[j].Duration,
+					statDir, output[j].Latencies, output[j].Counts, output[j].EventTs, output[j].Duration,
 					num, &endToEnd)
 			} else {
 				fmt.Fprintf(os.Stderr, "%s-%d failed, msg %s\n", funcName, j, output[j].Message)
