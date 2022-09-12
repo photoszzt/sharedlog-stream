@@ -36,7 +36,8 @@ type ConcurrentMeteredSink struct {
 	producer           *ShardedSharedLogStreamProducer
 	produceTp          *stats.ConcurrentThroughputCounter
 	lat                *stats.ConcurrentStatsCollector[int64]
-	eventTimeLatencies []int // protected by mu
+	eventTimeLatencies []int   // protected by mu
+	eventTs            []int64 // protected by mu
 	warmup             stats.WarmupGoroutineSafe
 	ctrlCount          uint32
 	measure            bool
@@ -92,9 +93,11 @@ func (s *ConcurrentMeteredSink) ProduceData(ctx context.Context, msgSer commtype
 		procStart := time.Now()
 		ts := msgSer.Timestamp
 		if ts != 0 {
-			els := int(procStart.UnixMilli() - ts)
+			curTs := procStart.UnixMilli()
+			els := int(curTs - ts)
 			s.mu.Lock()
 			s.eventTimeLatencies = append(s.eventTimeLatencies, els)
+			s.eventTs = append(s.eventTs, ts)
 			s.mu.Unlock()
 		}
 	}
@@ -159,6 +162,12 @@ func (s *ConcurrentMeteredSink) GetEventTimeLatency() []int {
 	s.mu.Unlock()
 	return ret
 }
+func (s *ConcurrentMeteredSink) GetEventTs() []int64 {
+	s.mu.Lock()
+	ret := s.eventTs
+	s.mu.Unlock()
+	return ret
+}
 func (s *ConcurrentMeteredSink) NumCtrlMsg() uint32 {
 	return atomic.LoadUint32(&s.ctrlCount)
 }
@@ -169,6 +178,7 @@ type MeteredProducer struct {
 	// stFile             *os.File
 	// statsChan          chan string
 	eventTimeLatencies []int
+	eventTs            []int64
 	latencies          stats.StatsCollector[int64]
 	produceTp          stats.ThroughputCounter
 	warmup             stats.Warmup
@@ -230,8 +240,10 @@ func (s *MeteredProducer) ProduceData(ctx context.Context, msg commtypes.Message
 		procStart := time.Now()
 		ts := msg.Timestamp
 		if msg.Timestamp != 0 {
-			els := procStart.UnixMilli() - ts
+			curTs := procStart.UnixMilli()
+			els := curTs - ts
 			s.eventTimeLatencies = append(s.eventTimeLatencies, int(els))
+			s.eventTs = append(s.eventTs, curTs)
 			// if len(s.eventTimeLatencies) < cap(s.eventTimeLatencies) {
 			// 	s.eventTimeLatencies = append(s.eventTimeLatencies, int(els))
 			// 	// s.eventTimeSample.AddSample(els)
@@ -294,6 +306,9 @@ func (s *MeteredProducer) OutputRemainingStats() {
 
 func (s *MeteredProducer) GetEventTimeLatency() []int {
 	return s.eventTimeLatencies
+}
+func (s *MeteredProducer) GetEventTs() []int64 {
+	return s.eventTs
 }
 
 func (s *MeteredProducer) GetCount() uint64 {

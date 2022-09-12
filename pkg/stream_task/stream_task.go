@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
-	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
@@ -123,6 +122,7 @@ func ExecuteApp(ctx context.Context,
 				sink.Name(), sink.GetCount(), sink.NumCtrlMsg())
 			if sink.IsFinalOutput() {
 				ret.Latencies["eventTimeLatency_"+sink.Name()] = sink.GetEventTimeLatency()
+				ret.EventTs = sink.GetEventTs()
 			}
 		}
 	}
@@ -526,6 +526,5 @@ func handleScaleEpochAndBytes(ctx context.Context, msg commtypes.RawMsgAndSeq,
 		Success: true,
 		Message: fmt.Sprintf("%s-%d epoch %d exit",
 			args.ectx.FuncName(), args.ectx.SubstreamNum(), args.ectx.CurEpoch()),
-		Err: common_errors.ErrShouldExitForScale,
 	}
 }

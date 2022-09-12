@@ -4,8 +4,8 @@ package txn_data
 
 type ControlMetadata struct {
 	Config           map[string]uint8       `json:"sg,omitempty" msgp:"sg,omitempty"`
-	FinishedPrevTask string                 `json:"fpt,omitempty" msgp:"fpt,omitempty"`
 	KeyMaps          map[string][]KeyMaping `json:"km,omitempty" msgp:"km,omitempty"`
+	FinishedPrevTask string                 `json:"fpt,omitempty" msgp:"fpt,omitempty"`
 	Epoch            uint16                 `json:"ep,omitempty" msgp:"ep,omitempty"`
 	InstanceId       uint8                  `json:"iid,omitempty" msgp:"iid,omitempty"`
 }

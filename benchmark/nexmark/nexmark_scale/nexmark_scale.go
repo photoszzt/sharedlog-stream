@@ -132,7 +132,8 @@ func main() {
 	beforeScaleOutput := common.InvokeFunctions(&wg, client, cliNodes, inParamsMap, scaleEpoch)
 
 	time.Sleep(time.Duration(FLAGS_durBeforeScale) * time.Second)
-
+	scaleAt := time.Now()
+	fmt.Fprintf(os.Stderr, "scale at %d\n", scaleAt.UnixMilli())
 	invokeFuncParamScale := common.InvokeFuncParam{
 		ConfigFile:     FLAGS_scale_config,
 		StatDir:        FLAGS_stat_dir,

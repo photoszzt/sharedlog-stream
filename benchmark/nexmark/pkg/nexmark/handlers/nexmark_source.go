@@ -222,6 +222,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	go streamPusher.AsyncStreamPush(dctx, &wg, commtypes.EmptyProducerId)
 	streamPusher.InitFlushTimer(time.Duration(inputConfig.FlushMs) * time.Millisecond)
 	startTime := time.Now()
+	fmt.Fprintf(os.Stderr, "StartTs: %d\n", startTime.UnixMilli())
 	for {
 		select {
 		case merr := <-streamPusher.MsgErrChan:

@@ -110,8 +110,8 @@ type TestSourceInput struct {
 type FnOutput struct {
 	Latencies map[string][]int  `json:"latencies,omitempty"`
 	Counts    map[string]uint64 `json:"counts,omitempty"`
-	Err       error             `json:"-"`
 	Message   string            `json:"message,omitempty"`
+	EventTs   []int64           `json:"eventTs,omitempty"`
 	Duration  float64           `json:"duration,omitempty"`
 	Success   bool              `json:"success,omitempty"`
 }
