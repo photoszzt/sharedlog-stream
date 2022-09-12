@@ -8,12 +8,14 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"time"
 
+	"cs.utexas.edu/zjia/faas/protocol"
 	"cs.utexas.edu/zjia/faas/types"
 )
 
 // a changelog substream has only one producer. Each store would only produce to one substream.
 type ChangelogManager[K, V any] struct {
 	msgSerde         commtypes.MessageGSerdeG[K, V]
+	epochMetaSerde   commtypes.SerdeG[commtypes.EpochMarker]
 	producer         *producer_consumer.ShardedSharedLogStreamProducer
 	restoreConsumers []*producer_consumer.ShardedSharedLogStreamConsumer
 	numProduced      uint32
@@ -62,7 +64,12 @@ func NewChangelogManager[K, V any](stream *sharedlog_stream.ShardedSharedLogStre
 		}
 		consumers[i] = consumer
 	}
+	epochMetaSerde, err := commtypes.GetEpochMarkerSerdeG(serdeFormat)
+	if err != nil {
+		return nil, err
+	}
 	return &ChangelogManager[K, V]{
+		epochMetaSerde:   epochMetaSerde,
 		restoreConsumers: consumers,
 		producer: producer_consumer.NewShardedSharedLogStreamProducer(stream,
 			&producer_consumer.StreamSinkConfig{
@@ -121,6 +128,23 @@ func (cm *ChangelogManager[K, V]) Produce(ctx context.Context, msgSer commtypes.
 		return cm.producer.ProduceData(ctx, msgSer, parNum)
 	}
 	return nil
+}
+
+func (cm *ChangelogManager[K, V]) FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error) {
+	stream := cm.restoreConsumers[parNum].Stream()
+	tag := sharedlog_stream.NameHashWithPartition(stream.TopicNameHash(), parNum)
+	tailSeqNum := protocol.MaxLogSeqnum
+	for {
+		rawMsg, err := stream.ReadBackwardWithTag(ctx, tailSeqNum, parNum, tag)
+		if err != nil {
+			return nil, 0, err
+		}
+		if rawMsg.IsControl && len(rawMsg.AuxData) != 0 {
+			return rawMsg.AuxData, rawMsg.LogSeqNum, nil
+		} else {
+			tailSeqNum = rawMsg.LogSeqNum - 1
+		}
+	}
 }
 
 func (cm *ChangelogManager[K, V]) ProduceCount() uint32 {

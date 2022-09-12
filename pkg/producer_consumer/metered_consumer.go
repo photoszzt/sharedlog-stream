@@ -79,7 +79,7 @@ func (s *MeteredConsumer) Consume(ctx context.Context, parNum uint8) (commtypes.
 		// debug.Fprintf(os.Stderr, "[ERROR] src out err: %v\n", err)
 		return rawMsgSeq, err
 	}
-	if rawMsgSeq.IsControl {
+	if rawMsgSeq.IsControl && rawMsgSeq.Mark != commtypes.EPOCH_END {
 		s.ctrlCount += 1
 	}
 	s.latencies.AddSample(elapsed)

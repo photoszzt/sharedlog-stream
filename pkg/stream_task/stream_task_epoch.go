@@ -384,7 +384,7 @@ func processInEpoch(
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}
-			err = cmm.FlushControlLog(ctx)
+			err = cmm.FlushKeyMapping(ctx)
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}
