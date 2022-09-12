@@ -136,7 +136,7 @@ func handleCtrlMsg(ctx context.Context, ctrlRawMsg commtypes.RawMsgAndSeq,
 		ret := handleScaleEpochAndBytes(ctx, ctrlRawMsg, args)
 		if ret.Success {
 			updateReturnMetric(ret, warmupCheck,
-				args.waitEndMark, t.GetEndDuration(), args.ectx.SubstreamNum())
+				false, t.GetEndDuration(), args.ectx.SubstreamNum())
 		}
 		return ret
 	} else if ctrlRawMsg.Mark == commtypes.STREAM_END {

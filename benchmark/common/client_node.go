@@ -117,6 +117,7 @@ func (n *ClientNode) Invoke(client *http.Client, response *FnOutput, wg *sync.Wa
 			Success:   true,
 			Counts:    make(map[string]uint64),
 			Latencies: make(map[string][]int),
+			EventTs:   make([]int64, 0),
 		}
 		for _, res := range responses {
 			for s, n := range res.Counts {
@@ -125,6 +126,7 @@ func (n *ClientNode) Invoke(client *http.Client, response *FnOutput, wg *sync.Wa
 			for s, l := range res.Latencies {
 				finalResponse.Latencies[s] = append(finalResponse.Latencies[s], l...)
 			}
+			finalResponse.EventTs = append(finalResponse.EventTs, res.EventTs...)
 			finalResponse.Duration = res.Duration // the last one
 		}
 		*response = finalResponse
