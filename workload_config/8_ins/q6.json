@@ -1,7 +1,7 @@
 {
     "FuncParam": [
         {
-            "funcName": "nexmark_src",
+            "funcName": "source",
             "NumInstance": 8,
             "OutputTopicName": [
                 "nexmark_src"

@@ -1,10 +1,10 @@
 {
     "FuncParam": [
         {
-            "funcName": "nexmark_src",
+            "funcName": "source",
             "NumInstance": 1,
             "OutputTopicName": ["nexmark_src"],
-            "NodeConstraint": "1
+            "NodeConstraint": "1"
         },
         {
             "funcName": "query1",
