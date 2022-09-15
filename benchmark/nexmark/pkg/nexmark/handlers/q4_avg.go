@@ -12,6 +12,7 @@ import (
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
+	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
@@ -117,7 +118,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 			Env:           h.env,
 			NumPartition:  sp.NumInPartition,
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
-			TimeOut:       common.SrcConsumeTimeout,
+			TimeOut:       time.Duration(4) * time.Millisecond,
 		}).Build()
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
@@ -181,7 +182,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		Build()
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs,
 		func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
-			em *epoch_manager.EpochManager, rs *stream_task.RedisSnapshotStore,
+			em *epoch_manager.EpochManager, rs *snapshot_store.RedisSnapshotStore,
 		) error {
 			payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
 			if err != nil {

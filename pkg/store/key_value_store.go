@@ -64,6 +64,7 @@ type KeyValueStoreOpWithChangelog interface {
 	Snapshot(logOff uint64)
 	WaitForAllSnapshot() error
 	RestoreFromSnapshot(snapshot [][]byte) error
+	FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error)
 }
 
 type KeyValueStoreBackedByChangelog interface {

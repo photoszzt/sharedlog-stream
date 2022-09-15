@@ -12,6 +12,7 @@ import (
 	"sharedlog-stream/pkg/epoch_manager"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
+	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
@@ -159,7 +160,9 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 			sp.ParNum, sp.OutputTopicNames[0]))
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp, builder).
 		KVStoreChangelogs(kvc).Build()
-	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat, em *epoch_manager.EpochManager, rs *stream_task.RedisSnapshotStore) error {
+	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, func(ctx context.Context, env types.Environment,
+		serdeFormat commtypes.SerdeFormat, em *epoch_manager.EpochManager, rs *snapshot_store.RedisSnapshotStore,
+	) error {
 		payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
 		if err != nil {
 			return err

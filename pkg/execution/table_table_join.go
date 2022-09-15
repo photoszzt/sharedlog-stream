@@ -7,6 +7,7 @@ import (
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
+	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
@@ -131,7 +132,7 @@ func SetupTableTableJoinWithSkipmap[K, VLeft, VRight, VR any](
 	// rightKVC = map[string]store.KeyValueStoreOpWithChangelog{rightTab.ChangelogTopicName(): rightTab}
 	kvc = map[string]store.KeyValueStoreOpWithChangelog{leftTab.ChangelogTopicName(): leftTab, rightTab.ChangelogTopicName(): rightTab}
 	setupSnapFunc = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
-		em *epoch_manager.EpochManager, rs *stream_task.RedisSnapshotStore,
+		em *epoch_manager.EpochManager, rs *snapshot_store.RedisSnapshotStore,
 	) error {
 		payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
 		if err != nil {

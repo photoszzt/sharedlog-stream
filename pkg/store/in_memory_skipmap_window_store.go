@@ -485,6 +485,9 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) GetCurrentProdSeqNum() uint64    { p
 func (s *InMemorySkipMapWindowStoreG[K, V]) ResetInitialProd()               { panic("not supported") }
 func (s *InMemorySkipMapWindowStoreG[K, V]) Stream() sharedlog_stream.Stream { panic("not supported") }
 func (s *InMemorySkipMapWindowStoreG[K, V]) SubstreamNum() uint8             { panic("not supported") }
+func (s *InMemorySkipMapWindowStoreG[K, V]) FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error) {
+	panic("not supported")
+}
 func (s *InMemorySkipMapWindowStoreG[K, V]) removeExpiredSegments() {
 	s.mux.RLock()
 	minLiveTimeTmp := int64(s.observedStreamTime) - int64(s.retentionPeriod) + 1

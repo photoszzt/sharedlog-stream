@@ -3,11 +3,13 @@ package control_channel
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/data_structure"
 	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
 	"time"
@@ -33,6 +35,8 @@ type ControlChannelManager struct {
 	// kmMu               syncutils.Mutex
 	payloadArrSerde    commtypes.SerdeG[commtypes.PayloadArr]
 	ctrlMetaSerde      commtypes.SerdeG[txn_data.ControlMetadata]
+	uint16SerdeG       commtypes.SerdeG[uint16]
+	payloadArrSerdeG   commtypes.SerdeG[commtypes.PayloadArr]
 	controlOutput      chan ControlChannelResult
 	controlLogForRead  *sharedlog_stream.ShardedSharedLogStream
 	controlLogForWrite *sharedlog_stream.ShardedSharedLogStream
@@ -66,7 +70,13 @@ func NewControlChannelManager(env types.Environment,
 	if err != nil {
 		return nil, err
 	}
+	payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
+	if err != nil {
+		return nil, err
+	}
 	cm := &ControlChannelManager{
+		uint16SerdeG:       commtypes.Uint16SerdeG{},
+		payloadArrSerdeG:   payloadSerde,
 		controlLogForRead:  logForRead,
 		controlLogForWrite: logForWrite,
 		currentEpoch:       epoch,
@@ -94,9 +104,86 @@ type restoreWork struct {
 	parNum uint8
 }
 
+func (cmm *ControlChannelManager) loadAndDecodeSnapshot(
+	ctx context.Context, topic string,
+	rs *snapshot_store.RedisSnapshotStore,
+	auxData []byte, metaSeqNum uint64,
+) ([][]byte, error) {
+	ret, err := cmm.uint16SerdeG.Decode(auxData)
+	if err != nil {
+		return nil, fmt.Errorf("[ERR] Decode: %v", err)
+	}
+	if ret == 1 {
+		snapArr, err := rs.GetSnapshot(ctx, topic, metaSeqNum)
+		if err != nil {
+			return nil, err
+		}
+		if len(snapArr) > 0 {
+			payloadArr, err := cmm.payloadArrSerde.Decode(snapArr)
+			if err != nil {
+				return nil, err
+			}
+			return payloadArr.Payloads, nil
+		}
+	}
+	return nil, nil
+}
+
+func (cmm *ControlChannelManager) loadSnapshotToKV(
+	ctx context.Context,
+	work restoreWork,
+	kvc store.KeyValueStoreOpWithChangelog,
+	rs *snapshot_store.RedisSnapshotStore,
+) error {
+	auxData, metaSeqNum, err := kvc.FindLastEpochMetaWithAuxData(ctx, work.parNum)
+	if err != nil {
+		return err
+	}
+	payloads, err := cmm.loadAndDecodeSnapshot(ctx, work.topic, rs, auxData, metaSeqNum)
+	if err != nil {
+		return err
+	}
+	if len(payloads) > 0 {
+		err = kvc.RestoreFromSnapshot(payloads)
+		if err != nil {
+			return err
+		}
+		kvc.Stream().SetCursor(metaSeqNum+1, kvc.SubstreamNum())
+	}
+	return nil
+}
+
+func (cmm *ControlChannelManager) loadSnapshotToWinStore(
+	ctx context.Context,
+	work restoreWork,
+	wsc store.WindowStoreOpWithChangelog,
+	rs *snapshot_store.RedisSnapshotStore,
+) error {
+	auxData, metaSeqNum, err := wsc.FindLastEpochMetaWithAuxData(ctx, work.parNum)
+	if err != nil {
+		return err
+	}
+	payloads, err := cmm.loadAndDecodeSnapshot(ctx, work.topic, rs, auxData, metaSeqNum)
+	if err != nil {
+		return err
+	}
+	if len(payloads) > 0 {
+		err = wsc.RestoreFromSnapshot(ctx, payloads)
+		if err != nil {
+			return err
+		}
+		wsc.Stream().SetCursor(metaSeqNum+1, wsc.SubstreamNum())
+	}
+	return nil
+}
+
 func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
-	ctx context.Context, funcName string, kvchangelog map[string]store.KeyValueStoreOpWithChangelog,
+	ctx context.Context, funcName string,
+	createSnapshot bool,
+	serdeFormat commtypes.SerdeFormat,
+	kvchangelog map[string]store.KeyValueStoreOpWithChangelog,
 	wschangelog map[string]store.WindowStoreOpWithChangelog,
+	rs *snapshot_store.RedisSnapshotStore,
 ) error {
 	extraParToRestoreKV := make(map[string]data_structure.Uint8Set)
 	extraParToRestoreWS := make(map[string]data_structure.Uint8Set)
@@ -111,12 +198,24 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 	restoreFunc := func(work restoreWork) error {
 		if work.isKV {
 			kvc := kvchangelog[work.topic]
+			if createSnapshot {
+				err := cmm.loadSnapshotToKV(bgCtx, work, kvc, rs)
+				if err != nil {
+					return err
+				}
+			}
 			err := store_restore.RestoreChangelogKVStateStore(bgCtx, kvc, 0, work.parNum)
 			if err != nil {
 				return err
 			}
 		} else {
 			wsc := wschangelog[work.topic]
+			if createSnapshot {
+				err := cmm.loadSnapshotToWinStore(bgCtx, work, wsc, rs)
+				if err != nil {
+					return err
+				}
+			}
 			err := store_restore.RestoreChangelogWindowStateStore(bgCtx, wsc, work.parNum)
 			if err != nil {
 				return err
@@ -164,8 +263,10 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 					wsc, hasWSC := wschangelog[tp]
 					if hasKVC {
 						for _, km := range kms {
+							// compute the new key assignment
 							par := uint8(km.Hash % uint64(kvc.Stream().NumPartition()))
-							if par != cmm.instanceID {
+							// if this key is managed by this node
+							if par == cmm.instanceID {
 								pars, ok := extraParToRestoreKV[tp]
 								if !ok {
 									pars = data_structure.NewUint8Set()
@@ -184,7 +285,7 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 					} else if hasWSC {
 						for _, km := range kms {
 							par := uint8(km.Hash % uint64(wsc.Stream().NumPartition()))
-							if par != cmm.instanceID {
+							if par == cmm.instanceID {
 								pars, ok := extraParToRestoreWS[tp]
 								if !ok {
 									pars = data_structure.NewUint8Set()

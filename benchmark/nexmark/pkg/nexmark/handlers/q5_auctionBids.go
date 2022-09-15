@@ -14,6 +14,7 @@ import (
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
+	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
@@ -143,7 +144,10 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 			return optional.Some(val + 1)
 		}), hopWindow, h.useCache))
 	wsc = map[string]store.WindowStoreOpWithChangelog{countWindowStore.ChangelogTopicName(): aggStore}
-	setSnapCallbackFunc = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat, em *epoch_manager.EpochManager, rs *stream_task.RedisSnapshotStore) error {
+	setSnapCallbackFunc = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment,
+		serdeFormat commtypes.SerdeFormat, em *epoch_manager.EpochManager,
+		rs *snapshot_store.RedisSnapshotStore,
+	) error {
 		payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
 		if err != nil {
 			return err

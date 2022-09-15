@@ -13,6 +13,7 @@ import (
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
 	"sync"
@@ -36,7 +37,7 @@ func checkCreateSnapshot() bool {
 }
 
 func SetKVStoreSnapshot[K, V any](ctx context.Context, env types.Environment,
-	em *epoch_manager.EpochManager, rs *RedisSnapshotStore,
+	em *epoch_manager.EpochManager, rs *snapshot_store.RedisSnapshotStore,
 	kvstore store.KeyValueStoreBackedByChangelogG[K, V], payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
 ) {
 	kvstore.SetSnapshotCallback(ctx, func(ctx context.Context, logOff uint64, snapshot []commtypes.KeyValuePair[K, V]) error {
@@ -61,7 +62,7 @@ func SetKVStoreSnapshot[K, V any](ctx context.Context, env types.Environment,
 }
 
 func SetWinStoreSnapshot[K, V any](ctx context.Context, env types.Environment,
-	em *epoch_manager.EpochManager, rs *RedisSnapshotStore,
+	em *epoch_manager.EpochManager, rs *snapshot_store.RedisSnapshotStore,
 	winStore store.WindowStoreBackedByChangelogG[K, V], payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
 ) {
 	winStore.SetWinSnapshotCallback(ctx, func(ctx context.Context, logOff uint64, snapshot []commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]) error {
@@ -86,7 +87,7 @@ func SetWinStoreSnapshot[K, V any](ctx context.Context, env types.Environment,
 }
 
 func SetupManagersForEpoch(ctx context.Context,
-	args *StreamTaskArgs, rs *RedisSnapshotStore, setupSnapshotCallback SetupSnapshotCallbackFunc,
+	args *StreamTaskArgs, rs *snapshot_store.RedisSnapshotStore, setupSnapshotCallback SetupSnapshotCallbackFunc,
 ) (*epoch_manager.EpochManager, *control_channel.ControlChannelManager, error) {
 	em, err := epoch_manager.NewEpochManager(args.env, args.transactionalId, args.serdeFormat)
 	if err != nil {
@@ -179,7 +180,7 @@ func SetupManagersForEpoch(ctx context.Context,
 }
 
 func loadSnapshot(ctx context.Context,
-	args *StreamTaskArgs, auxData []byte, auxMetaSeq uint64, rs *RedisSnapshotStore,
+	args *StreamTaskArgs, auxData []byte, auxMetaSeq uint64, rs *snapshot_store.RedisSnapshotStore,
 ) error {
 	if len(auxData) > 0 {
 		uint16Serde := commtypes.Uint16SerdeG{}
@@ -197,7 +198,7 @@ func loadSnapshot(ctx context.Context,
 				if err != nil {
 					return err
 				}
-				if snapArr != nil {
+				if len(snapArr) > 0 {
 					payloadArr, err := payloadSerde.Decode(snapArr)
 					if err != nil {
 						return err
@@ -239,7 +240,7 @@ func processInEpoch(
 	em *epoch_manager.EpochManager,
 	cmm *control_channel.ControlChannelManager,
 	args *StreamTaskArgs,
-	rs *RedisSnapshotStore,
+	rs *snapshot_store.RedisSnapshotStore,
 ) *common.FnOutput {
 	err := trackStreamAndConfigureExactlyOnce(args, em,
 		func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {
@@ -252,7 +253,8 @@ func processInEpoch(
 	em.StartMonitorLog(dctx, dcancel)
 	debug.Fprintf(os.Stderr, "start restore mapping")
 	err = cmm.RestoreMappingAndWaitForPrevTask(
-		dctx, args.ectx.FuncName(), args.kvChangelogs, args.windowStoreChangelogs)
+		dctx, args.ectx.FuncName(), CREATE_SNAPSHOT, args.serdeFormat,
+		args.kvChangelogs, args.windowStoreChangelogs, rs)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

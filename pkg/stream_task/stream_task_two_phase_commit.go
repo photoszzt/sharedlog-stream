@@ -9,6 +9,7 @@ import (
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/transaction"
 	"sync"
@@ -87,6 +88,7 @@ func processWithTransaction(
 	tm *transaction.TransactionManager,
 	cmm *control_channel.ControlChannelManager,
 	args *StreamTaskArgs,
+	rs *snapshot_store.RedisSnapshotStore,
 ) *common.FnOutput {
 	err := trackStreamAndConfigureExactlyOnce(args, tm,
 		func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {
@@ -99,7 +101,8 @@ func processWithTransaction(
 	dctx, dcancel := context.WithCancel(ctx)
 	tm.StartMonitorLog(dctx, dcancel)
 	err = cmm.RestoreMappingAndWaitForPrevTask(dctx, args.ectx.FuncName(),
-		args.kvChangelogs, args.windowStoreChangelogs)
+		CREATE_SNAPSHOT, args.serdeFormat,
+		args.kvChangelogs, args.windowStoreChangelogs, rs)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

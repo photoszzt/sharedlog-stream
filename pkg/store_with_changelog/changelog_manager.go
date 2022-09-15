@@ -122,7 +122,7 @@ func (cm *ChangelogManager[K, V]) Flush(ctx context.Context) error {
 	}
 	return nil
 }
-func (cm *ChangelogManager[K, V]) Produce(ctx context.Context, msgSer commtypes.MessageSerialized, parNum uint8) error {
+func (cm *ChangelogManager[K, V]) produce(ctx context.Context, msgSer commtypes.MessageSerialized, parNum uint8) error {
 	if !cm.changelogIsSrc {
 		cm.numProduced += 1
 		return cm.producer.ProduceData(ctx, msgSer, parNum)
@@ -130,7 +130,7 @@ func (cm *ChangelogManager[K, V]) Produce(ctx context.Context, msgSer commtypes.
 	return nil
 }
 
-func (cm *ChangelogManager[K, V]) FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error) {
+func (cm *ChangelogManager[K, V]) findLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error) {
 	stream := cm.restoreConsumers[parNum].Stream()
 	tag := sharedlog_stream.NameHashWithPartition(stream.TopicNameHash(), parNum)
 	tailSeqNum := protocol.MaxLogSeqnum

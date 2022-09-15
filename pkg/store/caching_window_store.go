@@ -179,3 +179,7 @@ func (s *CachingWindowStoreG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeFormat
 func (s *CachingWindowStoreG[K, V]) GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]] {
 	return s.wrappedStore.GetKVSerde()
 }
+
+func (s *CachingWindowStoreG[K, V]) FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error) {
+	return s.wrappedStore.FindLastEpochMetaWithAuxData(ctx, parNum)
+}

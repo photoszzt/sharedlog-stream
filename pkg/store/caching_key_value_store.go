@@ -204,3 +204,6 @@ func (c *CachingKeyValueStoreG[K, V]) SetSnapshotCallback(ctx context.Context, f
 func (c *CachingKeyValueStoreG[K, V]) RestoreFromSnapshot(snapshot [][]byte) error {
 	return c.wrappedStore.RestoreFromSnapshot(snapshot)
 }
+func (c *CachingKeyValueStoreG[K, V]) FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error) {
+	return c.wrappedStore.FindLastEpochMetaWithAuxData(ctx, parNum)
+}

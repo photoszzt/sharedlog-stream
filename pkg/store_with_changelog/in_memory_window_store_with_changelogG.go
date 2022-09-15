@@ -118,7 +118,7 @@ func (st *InMemoryWindowStoreWithChangelogG[K, V]) Put(ctx context.Context,
 	msgSer, ok := msgSerOp.Take()
 	if ok {
 		// pStart := stats.TimerBegin()
-		err := st.changelogManager.Produce(ctx, msgSer, st.parNum)
+		err := st.changelogManager.produce(ctx, msgSer, st.parNum)
 		// elapsed := stats.Elapsed(pStart).Microseconds()
 		// st.changeLogProduce.AddSample(elapsed)
 		if err != nil {
@@ -281,6 +281,9 @@ func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetKVSerde(serdeFormat commtyp
 }
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]] {
 	return s.windowStore.GetKVSerde()
+}
+func (s *InMemoryWindowStoreWithChangelogG[K, V]) FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error) {
+	return s.changelogManager.findLastEpochMetaWithAuxData(ctx, parNum)
 }
 
 func ToInMemSkipMapWindowTableWithChangelogG[K, V any](

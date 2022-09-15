@@ -13,6 +13,7 @@ import (
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
@@ -73,10 +74,10 @@ func (t *StreamTask) GetEndDuration() time.Duration {
 }
 
 type SetupSnapshotCallbackFunc func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
-	em *epoch_manager.EpochManager, rs *RedisSnapshotStore) error
+	em *epoch_manager.EpochManager, rs *snapshot_store.RedisSnapshotStore) error
 
 func EmptySetupSnapshotCallback(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
-	em *epoch_manager.EpochManager, rs *RedisSnapshotStore) error {
+	em *epoch_manager.EpochManager, rs *snapshot_store.RedisSnapshotStore) error {
 	return nil
 }
 
@@ -87,14 +88,15 @@ func ExecuteApp(ctx context.Context,
 ) *common.FnOutput {
 	var ret *common.FnOutput
 	if streamTaskArgs.guarantee == exactly_once_intr.TWO_PHASE_COMMIT {
+		rs := snapshot_store.NewRedisSnapshotStore(CREATE_SNAPSHOT)
 		tm, cmm, err := setupManagersFor2pc(ctx, t, streamTaskArgs)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
 		debug.Fprint(os.Stderr, "begin transaction processing\n")
-		ret = processWithTransaction(ctx, t, tm, cmm, streamTaskArgs)
+		ret = processWithTransaction(ctx, t, tm, cmm, streamTaskArgs, &rs)
 	} else if streamTaskArgs.guarantee == exactly_once_intr.EPOCH_MARK {
-		rs := NewRedisSnapshotStore()
+		rs := snapshot_store.NewRedisSnapshotStore(CREATE_SNAPSHOT)
 		em, cmm, err := SetupManagersForEpoch(ctx, streamTaskArgs, &rs, setupSnapshotCallback)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}

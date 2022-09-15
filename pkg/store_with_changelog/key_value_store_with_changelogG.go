@@ -88,7 +88,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) Put(ctx context.Context, key K, val
 	}
 	msgSer, ok := msgSerOp.Take()
 	if ok {
-		err := st.changelogManager.Produce(ctx, msgSer, st.parNum)
+		err := st.changelogManager.produce(ctx, msgSer, st.parNum)
 		elapsed := stats.Elapsed(pStart).Microseconds()
 		st.changelogProduce.AddSample(elapsed)
 		if err != nil {
@@ -154,7 +154,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) Delete(ctx context.Context, key K) 
 	}
 	msgSer, ok := msgSerOp.Take()
 	if ok {
-		err := st.changelogManager.Produce(ctx, msgSer, st.parNum)
+		err := st.changelogManager.produce(ctx, msgSer, st.parNum)
 		if err != nil {
 			return err
 		}
@@ -250,6 +250,9 @@ func (st *KeyValueStoreWithChangelogG[K, V]) WaitForAllSnapshot() error {
 }
 func (st *KeyValueStoreWithChangelogG[K, V]) RestoreFromSnapshot(snapshot [][]byte) error {
 	return st.kvstore.RestoreFromSnapshot(snapshot)
+}
+func (st *KeyValueStoreWithChangelogG[K, V]) FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error) {
+	return st.changelogManager.findLastEpochMetaWithAuxData(ctx, parNum)
 }
 
 /*

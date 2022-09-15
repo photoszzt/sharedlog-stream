@@ -1,4 +1,4 @@
-package stream_task
+package snapshot_store
 
 import (
 	"context"
@@ -18,8 +18,8 @@ type RedisSnapshotStore struct {
 	rdb *redis.Client
 }
 
-func NewRedisSnapshotStore() RedisSnapshotStore {
-	if CREATE_SNAPSHOT {
+func NewRedisSnapshotStore(createSnapshot bool) RedisSnapshotStore {
+	if createSnapshot {
 		return RedisSnapshotStore{
 			rdb: redis.NewClient(&redis.Options{
 				Addr:     getRedisAddr(),
