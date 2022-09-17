@@ -40,6 +40,19 @@ func CreateProducer(broker string, flushMs int) (*kafka.Producer, error) {
 	})
 }
 
+func CreateProducerNoBatching(broker string) (*kafka.Producer, error) {
+	return kafka.NewProducer(&kafka.ConfigMap{
+		"bootstrap.servers":                     broker,
+		"go.produce.channel.size":               100000,
+		"go.events.channel.size":                100000,
+		"acks":                                  "all",
+		"batch.size":                            0,
+		"linger.ms":                             0,
+		"max.in.flight.requests.per.connection": 5,
+		// "statistics.interval.ms":                5000,
+	})
+}
+
 func FlushAndWait(p *kafka.Producer, replies *int32) {
 	remaining := p.Flush(30 * 1000)
 	for remaining != 0 {
