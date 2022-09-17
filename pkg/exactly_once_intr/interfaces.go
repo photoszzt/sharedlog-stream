@@ -11,9 +11,10 @@ import (
 type GuaranteeMth uint8
 
 const (
-	AT_LEAST_ONCE    GuaranteeMth = 0
-	TWO_PHASE_COMMIT GuaranteeMth = 1
-	EPOCH_MARK       GuaranteeMth = 2
+	NO_GUARANTEE GuaranteeMth = iota
+	AT_LEAST_ONCE
+	TWO_PHASE_COMMIT
+	EPOCH_MARK
 )
 
 type ReadOnlyExactlyOnceManager interface {

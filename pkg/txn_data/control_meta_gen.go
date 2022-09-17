@@ -54,12 +54,6 @@ func (z *ControlMetadata) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 				z.Config[za0001] = za0002
 			}
-		case "FinishedPrevTask":
-			z.FinishedPrevTask, err = dc.ReadString()
-			if err != nil {
-				err = msgp.WrapError(err, "FinishedPrevTask")
-				return
-			}
 		case "KeyMaps":
 			var zb0003 uint32
 			zb0003, err = dc.ReadMapHeader()
@@ -138,6 +132,12 @@ func (z *ControlMetadata) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 				z.KeyMaps[za0003] = za0004
 			}
+		case "FinishedPrevTask":
+			z.FinishedPrevTask, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "FinishedPrevTask")
+				return
+			}
 		case "Epoch":
 			z.Epoch, err = dc.ReadUint16()
 			if err != nil {
@@ -185,16 +185,6 @@ func (z *ControlMetadata) EncodeMsg(en *msgp.Writer) (err error) {
 			err = msgp.WrapError(err, "Config", za0001)
 			return
 		}
-	}
-	// write "FinishedPrevTask"
-	err = en.Append(0xb0, 0x46, 0x69, 0x6e, 0x69, 0x73, 0x68, 0x65, 0x64, 0x50, 0x72, 0x65, 0x76, 0x54, 0x61, 0x73, 0x6b)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.FinishedPrevTask)
-	if err != nil {
-		err = msgp.WrapError(err, "FinishedPrevTask")
-		return
 	}
 	// write "KeyMaps"
 	err = en.Append(0xa7, 0x4b, 0x65, 0x79, 0x4d, 0x61, 0x70, 0x73)
@@ -251,6 +241,16 @@ func (z *ControlMetadata) EncodeMsg(en *msgp.Writer) (err error) {
 			}
 		}
 	}
+	// write "FinishedPrevTask"
+	err = en.Append(0xb0, 0x46, 0x69, 0x6e, 0x69, 0x73, 0x68, 0x65, 0x64, 0x50, 0x72, 0x65, 0x76, 0x54, 0x61, 0x73, 0x6b)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.FinishedPrevTask)
+	if err != nil {
+		err = msgp.WrapError(err, "FinishedPrevTask")
+		return
+	}
 	// write "Epoch"
 	err = en.Append(0xa5, 0x45, 0x70, 0x6f, 0x63, 0x68)
 	if err != nil {
@@ -285,9 +285,6 @@ func (z *ControlMetadata) MarshalMsg(b []byte) (o []byte, err error) {
 		o = msgp.AppendString(o, za0001)
 		o = msgp.AppendUint8(o, za0002)
 	}
-	// string "FinishedPrevTask"
-	o = append(o, 0xb0, 0x46, 0x69, 0x6e, 0x69, 0x73, 0x68, 0x65, 0x64, 0x50, 0x72, 0x65, 0x76, 0x54, 0x61, 0x73, 0x6b)
-	o = msgp.AppendString(o, z.FinishedPrevTask)
 	// string "KeyMaps"
 	o = append(o, 0xa7, 0x4b, 0x65, 0x79, 0x4d, 0x61, 0x70, 0x73)
 	o = msgp.AppendMapHeader(o, uint32(len(z.KeyMaps)))
@@ -307,6 +304,9 @@ func (z *ControlMetadata) MarshalMsg(b []byte) (o []byte, err error) {
 			o = msgp.AppendUint8(o, za0004[za0005].SubstreamId)
 		}
 	}
+	// string "FinishedPrevTask"
+	o = append(o, 0xb0, 0x46, 0x69, 0x6e, 0x69, 0x73, 0x68, 0x65, 0x64, 0x50, 0x72, 0x65, 0x76, 0x54, 0x61, 0x73, 0x6b)
+	o = msgp.AppendString(o, z.FinishedPrevTask)
 	// string "Epoch"
 	o = append(o, 0xa5, 0x45, 0x70, 0x6f, 0x63, 0x68)
 	o = msgp.AppendUint16(o, z.Epoch)
@@ -363,12 +363,6 @@ func (z *ControlMetadata) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 				z.Config[za0001] = za0002
-			}
-		case "FinishedPrevTask":
-			z.FinishedPrevTask, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "FinishedPrevTask")
-				return
 			}
 		case "KeyMaps":
 			var zb0003 uint32
@@ -448,6 +442,12 @@ func (z *ControlMetadata) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				z.KeyMaps[za0003] = za0004
 			}
+		case "FinishedPrevTask":
+			z.FinishedPrevTask, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "FinishedPrevTask")
+				return
+			}
 		case "Epoch":
 			z.Epoch, bts, err = msgp.ReadUint16Bytes(bts)
 			if err != nil {
@@ -481,7 +481,7 @@ func (z *ControlMetadata) Msgsize() (s int) {
 			s += msgp.StringPrefixSize + len(za0001) + msgp.Uint8Size
 		}
 	}
-	s += 17 + msgp.StringPrefixSize + len(z.FinishedPrevTask) + 8 + msgp.MapHeaderSize
+	s += 8 + msgp.MapHeaderSize
 	if z.KeyMaps != nil {
 		for za0003, za0004 := range z.KeyMaps {
 			_ = za0004
@@ -491,7 +491,7 @@ func (z *ControlMetadata) Msgsize() (s int) {
 			}
 		}
 	}
-	s += 6 + msgp.Uint16Size + 11 + msgp.Uint8Size
+	s += 17 + msgp.StringPrefixSize + len(z.FinishedPrevTask) + 6 + msgp.Uint16Size + 11 + msgp.Uint8Size
 	return
 }
 

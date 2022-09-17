@@ -8,14 +8,15 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[AT_LEAST_ONCE-0]
-	_ = x[TWO_PHASE_COMMIT-1]
-	_ = x[EPOCH_MARK-2]
+	_ = x[NO_GUARANTEE-0]
+	_ = x[AT_LEAST_ONCE-1]
+	_ = x[TWO_PHASE_COMMIT-2]
+	_ = x[EPOCH_MARK-3]
 }
 
-const _GuaranteeMth_name = "AT_LEAST_ONCETWO_PHASE_COMMITEPOCH_MARK"
+const _GuaranteeMth_name = "NO_GUARANTEEAT_LEAST_ONCETWO_PHASE_COMMITEPOCH_MARK"
 
-var _GuaranteeMth_index = [...]uint8{0, 13, 29, 39}
+var _GuaranteeMth_index = [...]uint8{0, 12, 25, 41, 51}
 
 func (i GuaranteeMth) String() string {
 	if i >= GuaranteeMth(len(_GuaranteeMth_index)-1) {

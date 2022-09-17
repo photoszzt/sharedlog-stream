@@ -176,6 +176,7 @@ func (s *ShardedSharedLogStreamConsumer) readNext(ctx context.Context, parNum ui
 			rawMsg.Mark = epochMark.Mark
 			if epochMark.Mark == commtypes.SCALE_FENCE {
 				rawMsg.ScaleEpoch = epochMark.ScaleEpoch
+				rawMsg.ProdIdx = epochMark.ProdIndex
 			} else if epochMark.Mark == commtypes.STREAM_END {
 				rawMsg.StartTime = epochMark.StartTime
 				rawMsg.ProdIdx = epochMark.ProdIndex

@@ -119,7 +119,7 @@ func main() {
 
 	flag.Uint64Var(&FLAGS_commit_everyMs, "comm_everyMS", 10, "commit a transaction every (ms)")
 
-	flag.StringVar(&FLAGS_guarantee, "guarantee", "alo", "alo(at least once), 2pc(two phase commit) or epoch(epoch marking)")
+	flag.StringVar(&FLAGS_guarantee, "guarantee", "alo", "none(no protocol), alo(at least once), 2pc(two phase commit) or epoch(epoch marking)")
 	flag.BoolVar(&FLAGS_local, "local", false, "local mode without setting node constraint")
 	flag.BoolVar(&FLAGS_waitForEndMark, "waitForLast", false, "wait for the final mark of input; used in measuring throughput")
 
@@ -128,8 +128,8 @@ func main() {
 	if FLAGS_stat_dir == "" {
 		panic("should specify non empty stats dir")
 	}
-	if FLAGS_guarantee != "alo" && FLAGS_guarantee != "2pc" && FLAGS_guarantee != "epoch" {
-		fmt.Fprintf(os.Stderr, "expected guarantee is alo, 2pc and epoch")
+	if FLAGS_guarantee != "alo" && FLAGS_guarantee != "2pc" && FLAGS_guarantee != "epoch" && FLAGS_guarantee != "none" {
+		fmt.Fprintf(os.Stderr, "expected guarantee is none, alo, 2pc and epoch")
 		return
 	}
 	fmt.Fprintf(os.Stderr, "wait for last: %v\n", FLAGS_waitForEndMark)

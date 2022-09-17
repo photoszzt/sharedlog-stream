@@ -18,6 +18,8 @@ func NewQueryInput(serdeFormat commtypes.SerdeFormat) *common.QueryInput {
 		guarantee = exactly_once_intr.TWO_PHASE_COMMIT
 	} else if FLAGS_guarantee == "epoch" {
 		guarantee = exactly_once_intr.EPOCH_MARK
+	} else if FLAGS_guarantee == "none" {
+		guarantee = exactly_once_intr.NO_GUARANTEE
 	}
 	var failSpec commtypes.FailSpec
 	if FLAGS_fail_spec != "" {

@@ -64,7 +64,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Fail to subscribe to topic: %s\n", err)
 		os.Exit(1)
 	}
-	commitEvery := time.Duration(5) * time.Second
+	commitEvery := time.Duration(100) * time.Millisecond
 	duration := time.Duration(FLAGS_duration) * time.Second
 	handleConsume := func(w http.ResponseWriter, req *http.Request) {
 		var ptSerde datatype.PayloadTsMsgpSerde

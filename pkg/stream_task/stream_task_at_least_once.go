@@ -85,7 +85,9 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 		ctrlRawMsg, ok := ctrlRawMsgOp.Take()
 		if ok {
 			if t.pauseFunc != nil {
-				t.pauseFunc()
+				if ret := t.pauseFunc(); ret != nil {
+					return ret
+				}
 			}
 			flushAllStart := stats.TimerBegin()
 			if ret_err := flushStreams(ctx, args); ret_err != nil {

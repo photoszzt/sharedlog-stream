@@ -104,8 +104,11 @@ func ExecuteApp(ctx context.Context,
 		debug.Fprint(os.Stderr, "begin epoch processing\n")
 		ret = processInEpoch(ctx, t, em, cmm, streamTaskArgs, &rs)
 		fmt.Fprintf(os.Stderr, "epoch ret: %v\n", ret)
-	} else {
+	} else if streamTaskArgs.guarantee == exactly_once_intr.AT_LEAST_ONCE {
 		ret = process(ctx, t, streamTaskArgs)
+	} else {
+		debug.Fprintf(os.Stderr, "begin processing without guarantee\n")
+		ret = processNoProto(ctx, t, streamTaskArgs)
 	}
 	if ret != nil && ret.Success {
 		for _, src := range streamTaskArgs.ectx.Consumers() {
