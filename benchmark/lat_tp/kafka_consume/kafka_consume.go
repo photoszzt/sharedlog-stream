@@ -88,10 +88,7 @@ func main() {
 		for {
 			select {
 			case <-commitTimer.C:
-				_, err := c.Commit()
-				if err != nil {
-					panic(err)
-				}
+				_, _ = c.Commit()
 				hasUncommitted = false
 			default:
 			}
@@ -116,6 +113,9 @@ func main() {
 				lat := nowTs - pt.Ts
 				prod_to_con_lat = append(prod_to_con_lat, lat)
 				idx += 1
+			case kafka.Error:
+				fmt.Fprintf(os.Stderr, "%% Error: %v\n", e)
+				break
 			}
 		}
 		if hasUncommitted {
