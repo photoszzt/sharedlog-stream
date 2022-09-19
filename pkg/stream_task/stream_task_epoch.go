@@ -295,6 +295,7 @@ func processInEpoch(
 		timeout := args.duration != 0 && cur_elapsed >= args.duration
 		shouldMarkByTime := (args.commitEvery != 0 && timeSinceLastMark > args.commitEvery)
 		if (shouldMarkByTime || timeout) && hasProcessData {
+			markBegin := time.Now()
 			if t.pauseFunc != nil {
 				if ret := t.pauseFunc(); ret != nil {
 					return ret
@@ -307,7 +308,6 @@ func processInEpoch(
 				return common.GenErrFnOutput(err)
 			}
 			flushTime := stats.Elapsed(flushAllStart).Microseconds()
-			markBegin := time.Now()
 			logOff, err := markEpoch(dctx, em, t, args)
 			if err != nil {
 				return common.GenErrFnOutput(err)
@@ -380,6 +380,7 @@ func processInEpoch(
 		ctrlRawMsg, ok := ctrlRawMsgOp.Take()
 		if ok {
 			fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
+			markBegin := time.Now()
 			if t.pauseFunc != nil {
 				if ret := t.pauseFunc(); ret != nil {
 					return ret
@@ -396,7 +397,6 @@ func processInEpoch(
 				return common.GenErrFnOutput(err)
 			}
 			flushTime := stats.Elapsed(flushAllStart).Microseconds()
-			markBegin := time.Now()
 			logOff, err := markEpoch(dctx, em, t, args)
 			if err != nil {
 				return common.GenErrFnOutput(err)
