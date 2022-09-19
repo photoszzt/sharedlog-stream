@@ -22,7 +22,6 @@ var (
 	FLAGS_outTopicName string
 	FLAGS_duration     int
 	FLAGS_events_num   int
-	FLAGS_flushms      int
 )
 
 func init() {
@@ -40,7 +39,6 @@ func main() {
 	flag.StringVar(&FLAGS_inTopicName, "inTopicName", "src", "topic name")
 	flag.StringVar(&FLAGS_outTopicName, "outTopicName", "src", "topic name")
 	flag.IntVar(&FLAGS_duration, "duration", 80, "")
-	flag.IntVar(&FLAGS_flushms, "flushms", 0, "flush interval in ms")
 	flag.Parse()
 
 	ctx := context.Background()
@@ -67,7 +65,7 @@ func main() {
 	}
 
 	err = consumer.Subscribe(FLAGS_inTopicName, func(c *kafka.Consumer, e kafka.Event) error {
-		return kafka_utils.GroupRebalance(FLAGS_broker, FLAGS_flushms, producers, c, e)
+		return kafka_utils.GroupRebalance(FLAGS_broker, producers, c, e)
 	})
 	commitEvery := time.Duration(100) * time.Millisecond
 	duration := time.Duration(FLAGS_duration) * time.Second

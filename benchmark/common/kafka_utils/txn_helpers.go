@@ -11,15 +11,17 @@ import (
 
 // CreateTransactionalProducer creates a transactional producer for the given
 // input partition.
-func CreateTransactionalProducer(broker string, flushMs int,
+func CreateTransactionalProducerNoBatching(broker string,
 	toppar kafka.TopicPartition,
 ) (*kafka.Producer, error) {
 	producerConfig := &kafka.ConfigMap{
-		"client.id":         fmt.Sprintf("txn-p%d", toppar.Partition),
-		"bootstrap.servers": broker,
-		"transactional.id":  fmt.Sprintf("tran-p%d", int(toppar.Partition)),
-		"linger.ms":         flushMs,
-		"batch.size":        131072,
+		"client.id":          fmt.Sprintf("txn-p%d", toppar.Partition),
+		"bootstrap.servers":  broker,
+		"transactional.id":   fmt.Sprintf("tran-p%d", int(toppar.Partition)),
+		"acks":               "all",
+		"batch.num.messages": 1,
+		"batch.size":         1,
+		"linger.ms":          0,
 
 		"max.in.flight.requests.per.connection": 5,
 	}
@@ -82,7 +84,7 @@ func DestroyTransactionalProducer(producer *kafka.Producer) error {
 // For each assigned partition a transactional producer is created, this is
 // required to guarantee per-partition offset commit state prior to
 // KIP-447 being supported.
-func GroupRebalance(broker string, flushMs int, producers map[int32]*kafka.Producer,
+func GroupRebalance(broker string, producers map[int32]*kafka.Producer,
 	consumer *kafka.Consumer, event kafka.Event,
 ) error {
 	fmt.Fprintf(os.Stderr, "Processor: rebalance event %v", event)
@@ -91,7 +93,7 @@ func GroupRebalance(broker string, flushMs int, producers map[int32]*kafka.Produ
 	case kafka.AssignedPartitions:
 		// Create a producer per input partition.
 		for _, tp := range e.Partitions {
-			p, err := CreateTransactionalProducer(broker, flushMs, tp)
+			p, err := CreateTransactionalProducerNoBatching(broker, tp)
 			if err != nil {
 				return err
 			}
