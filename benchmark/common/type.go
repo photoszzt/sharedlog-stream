@@ -141,3 +141,10 @@ type BenchSourceParam struct {
 	SerdeFormat     uint8  `json:"serdeFormat"`
 	NumOutPartition uint8  `json:"numOutPar,omitempty"`
 }
+
+type TranProcessBenchParam struct {
+	InTopicName  string `json:"inTopicName"`
+	OutTopicName string `json:"outTopicName"`
+	SerdeFormat  uint8  `json:"serdeFormat"`
+	NumPartition uint8  `json:"numPartition"`
+}

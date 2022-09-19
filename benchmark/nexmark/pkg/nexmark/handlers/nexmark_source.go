@@ -114,7 +114,7 @@ func getSubstreamIdx(parNum uint8, numPartition uint8, numGenerator uint8) []uin
 }
 
 func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig *ntypes.NexMarkConfigInput) *common.FnOutput {
-	stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, inputConfig.TopicName, inputConfig.NumOutPartition,
+	stream, err := sharedlog_stream.NewSizableShardedSharedLogStream(h.env, inputConfig.TopicName, inputConfig.NumOutPartition,
 		commtypes.SerdeFormat(inputConfig.SerdeFormat))
 	if err != nil {
 		return &common.FnOutput{
@@ -351,7 +351,7 @@ func genEndMark(startTime time.Time, parNum uint8,
 	return nil
 }
 
-func (h *nexmarkSourceHandler) flush(ctx context.Context, stream *sharedlog_stream.ShardedSharedLogStream) {
+func (h *nexmarkSourceHandler) flush(ctx context.Context, stream *sharedlog_stream.SizableShardedSharedLogStream) {
 	if h.bufPush {
 		err := stream.Flush(ctx, commtypes.EmptyProducerId)
 		if err != nil {

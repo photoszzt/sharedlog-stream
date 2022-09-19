@@ -3,7 +3,7 @@ GO_FILES?=$$(find . -name '*.go' |grep -v deps)
 default: lat_tp_handler_debug lat_tp_handler sharedlog_bench_client dump_stream \
 	nexmark_kafka_test_src kafka_consume_bench kafka_produce_bench nexmark \
 	nexmark_stats nexmark_debug nexmark_gen_data_by_spec nexmark_client \
-	nexmark_genevents_kafka nexmark_scale
+	nexmark_genevents_kafka nexmark_scale kafka_tran_process
 
 .PHONY: golangci-lint
 golangci-lint:
@@ -73,6 +73,11 @@ kafka_produce_bench:
 kafka_consume_bench:
 	mkdir -p ./bin
 	GO111MODULE=on go build -o bin/kafka_consume_bench ./benchmark/lat_tp/kafka_consume
+
+.PHONY: kafka_tran_process
+kafka_tran_process:
+	mkdir -p ./bin
+	GO111MODULE=on go build -o bin/kafka_tran_process ./benchmark/protocol_lat/kafka_transaction_process
 
 .PHONY: lat_tp_handler
 lat_tp_handler:

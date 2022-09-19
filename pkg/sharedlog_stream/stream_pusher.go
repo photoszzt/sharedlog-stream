@@ -23,14 +23,14 @@ type StreamPush struct {
 	FlushTimer    time.Time
 	MsgChan       chan PayloadToPush
 	MsgErrChan    chan error
-	Stream        *ShardedSharedLogStream
+	Stream        *SizableShardedSharedLogStream
 	produceCount  uint64
 	ctrlCount     uint64
 	FlushDuration time.Duration
 	BufPush       bool
 }
 
-func NewStreamPush(stream *ShardedSharedLogStream) *StreamPush {
+func NewStreamPush(stream *SizableShardedSharedLogStream) *StreamPush {
 	return &StreamPush{
 		MsgChan:      make(chan PayloadToPush, MSG_CHAN_SIZE),
 		MsgErrChan:   make(chan error, 1),

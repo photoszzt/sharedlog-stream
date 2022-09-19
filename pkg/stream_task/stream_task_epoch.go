@@ -279,6 +279,7 @@ func processInEpoch(
 		fmt.Fprintf(os.Stderr, "%s(%d) will fail after %v\n",
 			args.ectx.FuncName(), args.ectx.SubstreamNum(), failAfter)
 	}
+	epochMarkTime := make([]int64, 0, 1024)
 	for {
 		ret := checkMonitorReturns(dctx, dcancel, args, cmm, em)
 		if ret != nil {
@@ -306,6 +307,7 @@ func processInEpoch(
 				return common.GenErrFnOutput(err)
 			}
 			flushTime := stats.Elapsed(flushAllStart).Microseconds()
+			markBegin := time.Now()
 			logOff, err := markEpoch(dctx, em, t, args)
 			if err != nil {
 				return common.GenErrFnOutput(err)
@@ -317,6 +319,8 @@ func processInEpoch(
 				snapshotTime = append(snapshotTime, elapsed.Microseconds())
 				snapshotTimer = time.Now()
 			}
+			markElapsed := time.Since(markBegin)
+			epochMarkTime = append(epochMarkTime, markElapsed.Microseconds())
 			t.flushAllTime.AddSample(flushTime)
 			hasProcessData = false
 		}
@@ -347,6 +351,7 @@ func processInEpoch(
 			if testForFail {
 				ret = &common.FnOutput{Success: true, Message: common_errors.ErrReturnDueToTest.Error()}
 			}
+			fmt.Fprintf(os.Stderr, "{epoch mark time: %v}\n", epochMarkTime)
 			updateReturnMetric(ret, &warmupCheck,
 				false, t.GetEndDuration(), args.ectx.SubstreamNum())
 			return ret
@@ -391,6 +396,7 @@ func processInEpoch(
 				return common.GenErrFnOutput(err)
 			}
 			flushTime := stats.Elapsed(flushAllStart).Microseconds()
+			markBegin := time.Now()
 			logOff, err := markEpoch(dctx, em, t, args)
 			if err != nil {
 				return common.GenErrFnOutput(err)
@@ -414,7 +420,10 @@ func processInEpoch(
 				}
 				fmt.Fprintf(os.Stderr, "snapshot time: %v\n", snapshotTime)
 			}
+			markElapsed := time.Since(markBegin)
+			epochMarkTime = append(epochMarkTime, markElapsed.Microseconds())
 			t.flushAllTime.AddSample(flushTime)
+			fmt.Fprintf(os.Stderr, "{epoch mark time: %v}\n", epochMarkTime)
 			return handleCtrlMsg(dctx, ctrlRawMsg, t, args, &warmupCheck)
 		}
 	}

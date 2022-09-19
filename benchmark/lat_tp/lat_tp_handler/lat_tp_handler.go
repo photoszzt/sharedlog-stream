@@ -32,6 +32,8 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewSharedlogProduceBenchHandler(env), nil
 	case "consume":
 		return handlers.NewSharedlogConsumeBenchHandler(env), nil
+	case "tranDataGen":
+		return handlers.NewSharedlogTranDataGenHandler(env), nil
 	default:
 		return nil, fmt.Errorf("unknown function name %v", funcName)
 	}
