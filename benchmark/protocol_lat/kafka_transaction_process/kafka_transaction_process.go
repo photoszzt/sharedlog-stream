@@ -37,7 +37,7 @@ func main() {
 	flag.StringVar(&FLAGS_broker, "broker", "127.0.0.1", "")
 	flag.IntVar(&FLAGS_events_num, "events_num", 100000000, "number of events")
 	flag.StringVar(&FLAGS_inTopicName, "inTopicName", "src", "topic name")
-	flag.StringVar(&FLAGS_outTopicName, "outTopicName", "src", "topic name")
+	flag.StringVar(&FLAGS_outTopicName, "outTopicName", "out", "topic name")
 	flag.IntVar(&FLAGS_duration, "duration", 80, "")
 	flag.Parse()
 
@@ -113,9 +113,8 @@ func main() {
 		consumer.Close()
 		for _, producer := range producers {
 			producer.AbortTransaction(nil)
-			producer.Close()
 		}
-		fmt.Fprintf(os.Stderr, "\n%v\n", commitTimes)
+		fmt.Fprintf(os.Stderr, "\n{commitTimes: %v}\n", commitTimes)
 		ts := stats.Int64Slice(commitTimes)
 		sort.Sort(ts)
 		fmt.Fprintf(os.Stderr, "p50: %d, p99: %d\n",
