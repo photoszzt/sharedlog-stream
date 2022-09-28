@@ -78,8 +78,7 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 				fmt.Fprintf(os.Stderr, "got a duplicate entry; continue\n")
 				continue
 			}
-		}
-		if rawMsg.IsControl {
+		} else {
 			epochMark, err := emc.epochMarkerSerde.Decode(rawMsg.Payload)
 			if err != nil {
 				return nil, err
@@ -122,7 +121,7 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 func (emc *EpochMarkConsumer) checkMsgQueue(msgQueue *deque.Deque, parNum uint8) *commtypes.RawMsg {
 	if msgQueue.Len() > 0 {
 		frontMsg := msgQueue.Front().(*commtypes.RawMsg)
-		for frontMsg.IsControl && frontMsg.Mark == commtypes.EPOCH_END {
+		if frontMsg.IsControl && frontMsg.Mark == commtypes.EPOCH_END {
 			ranges := emc.marked[frontMsg.ProdId]
 			produce := commtypes.ProduceRangeWithEnd{ProduceRange: commtypes.ProduceRange{Start: 0, SubStreamNum: parNum}, End: 0}
 			ranges[parNum] = produce
