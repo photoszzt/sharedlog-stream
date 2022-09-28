@@ -17,6 +17,7 @@ type MeteredConsumer struct {
 	pToCLat     stats.StatsCollector[int64]
 	consumeTp   stats.ThroughputCounter
 	numLogEntry uint64
+	numEpoch    uint64
 	ctrlCount   uint32
 }
 
@@ -79,8 +80,14 @@ func (s *MeteredConsumer) Consume(ctx context.Context, parNum uint8) (commtypes.
 		// debug.Fprintf(os.Stderr, "[ERROR] src out err: %v\n", err)
 		return rawMsgSeq, err
 	}
-	if rawMsgSeq.IsControl && rawMsgSeq.Mark != commtypes.EPOCH_END {
-		s.ctrlCount += 1
+	if rawMsgSeq.IsControl {
+		if rawMsgSeq.Mark == commtypes.EPOCH_END {
+			s.numEpoch += 1
+		} else {
+			s.ctrlCount += 1
+		}
+	} else {
+		s.numLogEntry += 1
 	}
 	s.latencies.AddSample(elapsed)
 	if rawMsgSeq.PayloadArr != nil {
@@ -88,7 +95,6 @@ func (s *MeteredConsumer) Consume(ctx context.Context, parNum uint8) (commtypes.
 	} else {
 		s.consumeTp.Tick(1)
 	}
-	s.numLogEntry += 1
 	// debug.Fprintf(os.Stderr, "%s consumed %d\n", s.TopicName(), s.consumeTp.GetCount())
 	return rawMsgSeq, err
 }
@@ -111,6 +117,10 @@ func (s *MeteredConsumer) NumLogEntry() uint64 {
 
 func (s *MeteredConsumer) NumCtrlMsg() uint32 {
 	return s.ctrlCount
+}
+
+func (s *MeteredConsumer) NumEpoch() uint64 {
+	return s.numEpoch
 }
 
 func (s *MeteredConsumer) InnerSource() Consumer {

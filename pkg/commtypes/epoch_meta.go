@@ -22,14 +22,18 @@ const (
 
 type ProduceRange struct {
 	Start        uint64 `json:"s" msg:"s"`
-	End          uint64 `json:"e" msg:"e"`
 	SubStreamNum uint8  `json:"sNum" msg:"sNum"`
+}
+
+type ProduceRangeWithEnd struct {
+	End uint64
+	ProduceRange
 }
 
 var _ = fmt.Stringer(ProduceRange{})
 
 func (p ProduceRange) String() string {
-	return fmt.Sprintf("ProduceRange: {Start: 0x%x, End: 0x%x}", p.Start, p.End)
+	return fmt.Sprintf("ProduceRange: {Start: 0x%x, SubStreamNum: %d}", p.Start, p.SubStreamNum)
 }
 
 type EpochMarker struct {

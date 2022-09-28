@@ -177,7 +177,6 @@ func GenEpochMarker(
 				ranges = append(ranges, commtypes.ProduceRange{
 					SubStreamNum: uint8(par),
 					Start:        producer.GetInitialProdSeqNum(uint8(par)),
-					End:          producer.GetCurrentProdSeqNum(uint8(par)),
 				})
 				return true
 			})
@@ -194,7 +193,6 @@ func GenEpochMarker(
 				{
 					SubStreamNum: kvTab.SubstreamNum(),
 					Start:        kvTab.GetInitialProdSeqNum(),
-					End:          kvTab.GetCurrentProdSeqNum(),
 				},
 			}
 			outputRanges[kvTab.ChangelogTopicName()] = ranges
@@ -209,7 +207,6 @@ func GenEpochMarker(
 			{
 				SubStreamNum: winTab.SubstreamNum(),
 				Start:        winTab.GetInitialProdSeqNum(),
-				End:          winTab.GetCurrentProdSeqNum(),
 			},
 		}
 		outputRanges[winTab.ChangelogTopicName()] = ranges

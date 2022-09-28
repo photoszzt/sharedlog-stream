@@ -98,6 +98,7 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup, pr
 			}
 			for _, i := range msg.Partitions {
 				if msg.Mark == commtypes.SCALE_FENCE {
+					fmt.Fprintf(os.Stderr, "generate scale fence for partition %d\n", i)
 					scale_fence_tag := txn_data.ScaleFenceTag(h.Stream.TopicNameHash(), i)
 					nameHashTag := NameHashWithPartition(h.Stream.TopicNameHash(), i)
 					_, err := h.Stream.PushWithTag(ctx, msg.Payload, i, []uint64{nameHashTag, scale_fence_tag}, nil,

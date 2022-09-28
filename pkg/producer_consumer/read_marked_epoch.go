@@ -21,7 +21,7 @@ const (
 type EpochMarkConsumer struct {
 	epochMarkerSerde commtypes.SerdeG[commtypes.EpochMarker]
 	stream           *sharedlog_stream.ShardedSharedLogStream
-	marked           map[commtypes.ProducerId]map[uint8]commtypes.ProduceRange
+	marked           map[commtypes.ProducerId]map[uint8]commtypes.ProduceRangeWithEnd
 	curReadMsgSeqNum map[commtypes.ProducerId]uint64
 	msgBuffer        []*deque.Deque
 }
@@ -36,7 +36,7 @@ func NewEpochMarkConsumer(stream *sharedlog_stream.ShardedSharedLogStream,
 	return &EpochMarkConsumer{
 		epochMarkerSerde: epochMarkSerde,
 		stream:           stream,
-		marked:           make(map[commtypes.ProducerId]map[uint8]commtypes.ProduceRange),
+		marked:           make(map[commtypes.ProducerId]map[uint8]commtypes.ProduceRangeWithEnd),
 		msgBuffer:        make([]*deque.Deque, stream.NumPartition()),
 		curReadMsgSeqNum: make(map[commtypes.ProducerId]uint64),
 	}, nil
@@ -89,11 +89,14 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 				// debug.Fprintf(os.Stderr, "%+v\n", epochMark)
 				ranges, ok := emc.marked[rawMsg.ProdId]
 				if !ok {
-					ranges = make(map[uint8]commtypes.ProduceRange)
+					ranges = make(map[uint8]commtypes.ProduceRangeWithEnd)
 				}
 				markRanges := epochMark.OutputRanges[emc.stream.TopicName()]
 				for _, r := range markRanges {
-					ranges[r.SubStreamNum] = r
+					ranges[r.SubStreamNum] = commtypes.ProduceRangeWithEnd{
+						ProduceRange: r,
+						End:          rawMsg.LogSeqNum,
+					}
 				}
 				emc.marked[rawMsg.ProdId] = ranges
 				rawMsg.Mark = commtypes.EPOCH_END
@@ -121,10 +124,7 @@ func (emc *EpochMarkConsumer) checkMsgQueue(msgQueue *deque.Deque, parNum uint8)
 		frontMsg := msgQueue.Front().(*commtypes.RawMsg)
 		for frontMsg.IsControl && frontMsg.Mark == commtypes.EPOCH_END {
 			ranges := emc.marked[frontMsg.ProdId]
-			produce := commtypes.ProduceRange{}
-			produce.Start = 0
-			produce.End = 0
-			produce.SubStreamNum = parNum
+			produce := commtypes.ProduceRangeWithEnd{ProduceRange: commtypes.ProduceRange{Start: 0, SubStreamNum: parNum}, End: 0}
 			ranges[parNum] = produce
 			msgQueue.PopFront()
 			return frontMsg

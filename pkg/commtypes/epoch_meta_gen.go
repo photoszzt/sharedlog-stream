@@ -161,12 +161,6 @@ func (z *EpochMarker) DecodeMsg(dc *msgp.Reader) (err error) {
 								err = msgp.WrapError(err, "OutputRanges", za0003, za0005, "Start")
 								return
 							}
-						case "e":
-							za0004[za0005].End, err = dc.ReadUint64()
-							if err != nil {
-								err = msgp.WrapError(err, "OutputRanges", za0003, za0005, "End")
-								return
-							}
 						case "sNum":
 							za0004[za0005].SubStreamNum, err = dc.ReadUint8()
 							if err != nil {
@@ -307,25 +301,15 @@ func (z *EpochMarker) EncodeMsg(en *msgp.Writer) (err error) {
 				return
 			}
 			for za0005 := range za0004 {
-				// map header, size 3
+				// map header, size 2
 				// write "s"
-				err = en.Append(0x83, 0xa1, 0x73)
+				err = en.Append(0x82, 0xa1, 0x73)
 				if err != nil {
 					return
 				}
 				err = en.WriteUint64(za0004[za0005].Start)
 				if err != nil {
 					err = msgp.WrapError(err, "OutputRanges", za0003, za0005, "Start")
-					return
-				}
-				// write "e"
-				err = en.Append(0xa1, 0x65)
-				if err != nil {
-					return
-				}
-				err = en.WriteUint64(za0004[za0005].End)
-				if err != nil {
-					err = msgp.WrapError(err, "OutputRanges", za0003, za0005, "End")
 					return
 				}
 				// write "sNum"
@@ -444,13 +428,10 @@ func (z *EpochMarker) MarshalMsg(b []byte) (o []byte, err error) {
 			o = msgp.AppendString(o, za0003)
 			o = msgp.AppendArrayHeader(o, uint32(len(za0004)))
 			for za0005 := range za0004 {
-				// map header, size 3
+				// map header, size 2
 				// string "s"
-				o = append(o, 0x83, 0xa1, 0x73)
+				o = append(o, 0x82, 0xa1, 0x73)
 				o = msgp.AppendUint64(o, za0004[za0005].Start)
-				// string "e"
-				o = append(o, 0xa1, 0x65)
-				o = msgp.AppendUint64(o, za0004[za0005].End)
 				// string "sNum"
 				o = append(o, 0xa4, 0x73, 0x4e, 0x75, 0x6d)
 				o = msgp.AppendUint8(o, za0004[za0005].SubStreamNum)
@@ -583,12 +564,6 @@ func (z *EpochMarker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 								err = msgp.WrapError(err, "OutputRanges", za0003, za0005, "Start")
 								return
 							}
-						case "e":
-							za0004[za0005].End, bts, err = msgp.ReadUint64Bytes(bts)
-							if err != nil {
-								err = msgp.WrapError(err, "OutputRanges", za0003, za0005, "End")
-								return
-							}
 						case "sNum":
 							za0004[za0005].SubStreamNum, bts, err = msgp.ReadUint8Bytes(bts)
 							if err != nil {
@@ -659,7 +634,7 @@ func (z *EpochMarker) Msgsize() (s int) {
 	if z.OutputRanges != nil {
 		for za0003, za0004 := range z.OutputRanges {
 			_ = za0004
-			s += msgp.StringPrefixSize + len(za0003) + msgp.ArrayHeaderSize + (len(za0004) * (10 + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint8Size))
+			s += msgp.StringPrefixSize + len(za0003) + msgp.ArrayHeaderSize + (len(za0004) * (8 + msgp.Uint64Size + msgp.Uint8Size))
 		}
 	}
 	s += 10 + msgp.Int64Size + 7 + msgp.Uint16Size + 10 + msgp.Uint8Size + 5 + msgp.Uint8Size
@@ -856,12 +831,6 @@ func (z *ProduceRange) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Start")
 				return
 			}
-		case "e":
-			z.End, err = dc.ReadUint64()
-			if err != nil {
-				err = msgp.WrapError(err, "End")
-				return
-			}
 		case "sNum":
 			z.SubStreamNum, err = dc.ReadUint8()
 			if err != nil {
@@ -881,25 +850,15 @@ func (z *ProduceRange) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z ProduceRange) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 3
+	// map header, size 2
 	// write "s"
-	err = en.Append(0x83, 0xa1, 0x73)
+	err = en.Append(0x82, 0xa1, 0x73)
 	if err != nil {
 		return
 	}
 	err = en.WriteUint64(z.Start)
 	if err != nil {
 		err = msgp.WrapError(err, "Start")
-		return
-	}
-	// write "e"
-	err = en.Append(0xa1, 0x65)
-	if err != nil {
-		return
-	}
-	err = en.WriteUint64(z.End)
-	if err != nil {
-		err = msgp.WrapError(err, "End")
 		return
 	}
 	// write "sNum"
@@ -918,13 +877,10 @@ func (z ProduceRange) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z ProduceRange) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 3
+	// map header, size 2
 	// string "s"
-	o = append(o, 0x83, 0xa1, 0x73)
+	o = append(o, 0x82, 0xa1, 0x73)
 	o = msgp.AppendUint64(o, z.Start)
-	// string "e"
-	o = append(o, 0xa1, 0x65)
-	o = msgp.AppendUint64(o, z.End)
 	// string "sNum"
 	o = append(o, 0xa4, 0x73, 0x4e, 0x75, 0x6d)
 	o = msgp.AppendUint8(o, z.SubStreamNum)
@@ -955,12 +911,6 @@ func (z *ProduceRange) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Start")
 				return
 			}
-		case "e":
-			z.End, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "End")
-				return
-			}
 		case "sNum":
 			z.SubStreamNum, bts, err = msgp.ReadUint8Bytes(bts)
 			if err != nil {
@@ -981,6 +931,6 @@ func (z *ProduceRange) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z ProduceRange) Msgsize() (s int) {
-	s = 1 + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 5 + msgp.Uint8Size
+	s = 1 + 2 + msgp.Uint64Size + 5 + msgp.Uint8Size
 	return
 }

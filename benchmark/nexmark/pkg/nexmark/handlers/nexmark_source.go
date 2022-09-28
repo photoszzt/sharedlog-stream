@@ -233,7 +233,8 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 			if out.Valid() {
 				m := out.Value()
 				debug.Fprintf(os.Stderr, "got data from control channel: %+v\n", m)
-				if len(m.Config) != 0 {
+				// don't need to send scale fence on the initial deployment
+				if len(m.Config) != 0 && m.Epoch != 1 {
 					numInstance := m.Config[h.funcName]
 					if inputConfig.ParNum >= numInstance {
 						fmt.Fprintf(os.Stderr, "funcName: %s, parNum %v >= numInstance %v, quit\n", h.funcName, inputConfig.ParNum, numInstance)
