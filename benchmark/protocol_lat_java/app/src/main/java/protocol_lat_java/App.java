@@ -20,6 +20,7 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -31,12 +32,11 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.TopicConfig;
 
 import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpExchange;
-
-import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
 
 public class App {
     private static final String CONSUMER_GROUP_ID = "bench";
@@ -68,7 +68,9 @@ public class App {
         KafkaProducer<String, byte[]> producer = createKafkaProducer(bootstrapServer);
         consumer.subscribe(Collections.singleton(INPUT_TOPIC));
         Admin admin = createAdminClient(bootstrapServer);
-        CreateTopicsResult crt = admin.createTopics(Collections.singleton(new NewTopic(OUTPUT_TOPIC, 1, (short) 3)));
+        NewTopic topic = new NewTopic(OUTPUT_TOPIC, 1, (short) 3);
+        topic = topic.configs(Collections.singletonMap(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3"));
+        CreateTopicsResult crt = admin.createTopics(Collections.singleton(topic));
         try {
             crt.all().wait();
         } catch (InterruptedException e1) {
@@ -143,7 +145,7 @@ public class App {
 
     private static KafkaConsumer<String, byte[]> createKafkaConsumer(String boostrapServer) {
         final Properties props = new Properties();
-        props.put(BOOTSTRAP_SERVERS_CONFIG, boostrapServer);
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, boostrapServer);
         props.put(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false");
         props.put(ConsumerConfig.GROUP_ID_CONFIG, CONSUMER_GROUP_ID);
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
@@ -171,7 +173,7 @@ public class App {
 
     private static Admin createAdminClient(String boostrapServer) {
         Properties props = new Properties();
-        props.put(BOOTSTRAP_SERVERS_CONFIG, boostrapServer);
+        props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, boostrapServer);
         return Admin.create(props);
     }
 

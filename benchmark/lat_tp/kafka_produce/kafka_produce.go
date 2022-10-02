@@ -21,7 +21,6 @@ var (
 	FLAGS_events_num   int
 	FLAGS_duration     int
 	FLAGS_tps          int
-	FLAGS_flushms      int
 	FLAGS_payloadFile  string
 )
 
@@ -42,7 +41,6 @@ func main() {
 	flag.IntVar(&FLAGS_numPartition, "npar", 1, "number of partition")
 	flag.StringVar(&FLAGS_payloadFile, "payload", "", "payload file name")
 	flag.IntVar(&FLAGS_tps, "tps", 1000, "events per second")
-	flag.IntVar(&FLAGS_flushms, "flushms", 0, "flush interval in ms")
 	flag.Parse()
 
 	fmt.Fprintf(os.Stderr, "duration: %d, events_num: %d, broker: %s, topicName: %s, nPar: %d, payload: %s\n",
