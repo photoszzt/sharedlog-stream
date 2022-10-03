@@ -1,0 +1,23 @@
+# https://taskfile.dev
+
+version: '3'
+
+tasks:
+  default:
+    cmds:
+      - task --list
+
+  kafka-produce:
+    cmds:
+      - java -cp ./benchmark/lat_tp/kafka_produce_java/app/build/libs/app-uber.jar
+        kafka_produce_java.App {{.CLI_ARGS}}
+
+  kafka-consume:
+    cmds:
+      - java -cp ./benchmark/lat_tp/kafka_consume_java/app/build/libs/app-uber.jar
+        kafka_consume_java.App {{.CLI_ARGS}}
+
+  kafka-tran:
+    cmds:
+      - java -cp ./benchmark/protocol_lat_java/app/build/libs/app-uber.jar
+        protocol_lat_java.App {{.CLI_ARGS}}
