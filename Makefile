@@ -98,3 +98,10 @@ sharedlog_bench_client:
 download-book:
 	mkdir -p data
 	wget -O data/books.dat https://raw.githubusercontent.com/mayconbordin/storm-applications/master/data/books.dat
+
+.PHONY: java
+java:
+	cd ./benchmark/lat_tp/kafka_consume_java && gradle uberJar && cd -
+	cd ./benchmark/lat_tp/kafka_produce_java && gradle uberJar && cd -
+	cd ./benchmark/protocol_lat_java && gradle uberJar && cd -
+	
