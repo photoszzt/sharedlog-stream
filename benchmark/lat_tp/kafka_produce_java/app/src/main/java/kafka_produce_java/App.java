@@ -10,10 +10,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.DefaultParser;
@@ -26,11 +31,14 @@ import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.config.TopicConfig;
 
 import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpExchange;
+import org.apache.kafka.common.serialization.Serde;
 
 public class App {
     private static final Option BOOTSTRAP_SERVER = new Option("b", "bootstrap-server", true, "Kafka bootstrap server");
@@ -80,21 +88,42 @@ public class App {
         } catch (InterruptedException e1) {
             e1.printStackTrace();
         }
+        MsgpPOJOSerde<PayloadTs> payloadSerde = new MsgpPOJOSerde<>();
+        payloadSerde.setClass(PayloadTs.class);
+        KafkaProducer<String, byte[]> k = createKafkaProducer(bootstrapServer);
         final CountDownLatch latch = new CountDownLatch(1);
         Runnable r = () -> {
-            ArrayList<Long> latencies = new ArrayList<Long>(2048);
-            long start = System.currentTimeMillis();
+            Instant start = Instant.now();
             long startNano = System.nanoTime();
-            double next = (double)System.currentTimeMillis();
+            Instant next = Instant.now();
             int idx = 0;
+            ArrayList<Future<RecordMetadata>> sent = new ArrayList<>(1024);
+
             while(true) {
                 if ((System.nanoTime() - startNano > durNano) || (events != 0 && idx >= events)) {
                     break;
                 }
-                next = next + timeGapUs/1000.0;
-
+                next = next.plus(timeGapUs, ChronoUnit.MICROS);
+                long ts = ChronoUnit.MICROS.between(Instant.EPOCH, Instant.now());
+                PayloadTs payload = new PayloadTs(ts, content);
+                byte[] encoded = payloadSerde.serialize(TOPIC_NAME, payload);
+                Instant now = Instant.now();
+                if (next.isAfter(now)) {
+                    Duration toSleep = Duration.between(now, next);
+                    long nanoToSleep = toSleep.getNano();
+                    try {
+                        TimeUnit.NANOSECONDS.sleep(nanoToSleep);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+                k.send(new ProducerRecord<>(TOPIC_NAME, encoded));
+                idx += 1;
             }
-
+            k.flush();
+            Duration totalTime = Duration.between(start, Instant.now());
+            System.out.println("produce " + idx + " events, time: " + totalTime + ", throughput: " +
+                    (double)idx / totalTime.getSeconds());
             latch.countDown();
         };
         Thread t = new Thread(r);
