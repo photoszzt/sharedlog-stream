@@ -9,3 +9,5 @@
 
 rootProject.name = 'kafka_produce_java'
 include('app')
+include 'data_serde'
+

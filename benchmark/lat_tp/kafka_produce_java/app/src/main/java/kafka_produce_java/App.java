@@ -12,7 +12,6 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.time.temporal.TemporalUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Properties;
@@ -97,8 +96,6 @@ public class App {
             long startNano = System.nanoTime();
             Instant next = Instant.now();
             int idx = 0;
-            ArrayList<Future<RecordMetadata>> sent = new ArrayList<>(1024);
-
             while(true) {
                 if ((System.nanoTime() - startNano > durNano) || (events != 0 && idx >= events)) {
                     break;
@@ -121,7 +118,7 @@ public class App {
                 idx += 1;
             }
             k.flush();
-            Duration totalTime = Duration.between(start, Instant.now());
+            Duration totalTime = Duration.of(System.nanoTime() - startNano, ChronoUnit.NANOS);
             System.out.println("produce " + idx + " events, time: " + totalTime + ", throughput: " +
                     (double)idx / totalTime.getSeconds());
             latch.countDown();
