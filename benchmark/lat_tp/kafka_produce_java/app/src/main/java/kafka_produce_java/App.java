@@ -12,15 +12,15 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Future;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
@@ -31,13 +31,12 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.config.TopicConfig;
 
 import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpExchange;
-import org.apache.kafka.common.serialization.Serde;
 
 public class App {
     private static final Option BOOTSTRAP_SERVER = new Option("b", "bootstrap-server", true, "Kafka bootstrap server");
@@ -49,12 +48,12 @@ public class App {
     private static final String TOPIC_NAME = "src";
 
     public static void main(String[] args) throws ParseException, IOException {
+        Options options = getOptions();
         if (args == null || args.length == 0) {
-            System.out.println(
-                    "Usage: java -jar kafka-produce-java.jar -b <bootstrap-server> -ev <events-num> -d <duration> -p <payload-file> -t <tps>");
+            HelpFormatter formatter = new HelpFormatter();
+            formatter.printHelp("java -cp app-uber.jar", options);
             System.exit(1);
         }
-        Options options = getOptions();
         DefaultParser parser = new DefaultParser();
         CommandLine line = parser.parse(options, args, true);
         String bootstrapServer = line.getOptionValue(BOOTSTRAP_SERVER.getOpt());
@@ -82,21 +81,22 @@ public class App {
         NewTopic topic = new NewTopic(TOPIC_NAME, 1, (short) 3);
         topic = topic.configs(Collections.singletonMap(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3"));
         CreateTopicsResult crt = admin.createTopics(Collections.singleton(topic));
+        KafkaFuture<Void> f = crt.all();
         try {
-            crt.all().wait();
-        } catch (InterruptedException e1) {
+            f.get();
+        } catch (InterruptedException | ExecutionException e1) {
             e1.printStackTrace();
         }
-        MsgpPOJOSerde<PayloadTs> payloadSerde = new MsgpPOJOSerde<>();
-        payloadSerde.setClass(PayloadTs.class);
+
         KafkaProducer<String, byte[]> k = createKafkaProducer(bootstrapServer);
         final CountDownLatch latch = new CountDownLatch(1);
         Runnable r = () -> {
-            Instant start = Instant.now();
+            MsgpPOJOSerde<PayloadTs> payloadSerde = new MsgpPOJOSerde<>();
+            payloadSerde.setClass(PayloadTs.class);
             long startNano = System.nanoTime();
             Instant next = Instant.now();
             int idx = 0;
-            while(true) {
+            while (true) {
                 if ((System.nanoTime() - startNano > durNano) || (events != 0 && idx >= events)) {
                     break;
                 }
@@ -120,7 +120,8 @@ public class App {
             k.flush();
             Duration totalTime = Duration.of(System.nanoTime() - startNano, ChronoUnit.NANOS);
             System.out.println("produce " + idx + " events, time: " + totalTime + ", throughput: " +
-                    (double)idx / totalTime.getSeconds());
+                    (double) idx / totalTime.getSeconds());
+            payloadSerde.close();
             latch.countDown();
         };
         Thread t = new Thread(r);
@@ -155,7 +156,8 @@ public class App {
         props.put(ProducerConfig.BATCH_SIZE_CONFIG, 0);
         props.put(ProducerConfig.LINGER_MS_CONFIG, 0);
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5);
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+                "org.apache.kafka.common.serialization.StringSerializer");
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
                 "org.apache.kafka.common.serialization.ByteArraySerializer");
         return new KafkaProducer<>(props);

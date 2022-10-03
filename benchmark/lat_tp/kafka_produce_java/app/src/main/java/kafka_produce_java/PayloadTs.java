@@ -6,8 +6,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Objects;
 
 public class PayloadTs {
-    private long ts;
-    private byte[] payload;
+    public long ts;
+    public byte[] payload;
 
     @JsonCreator
     public PayloadTs(@JsonProperty("ts") long ts,

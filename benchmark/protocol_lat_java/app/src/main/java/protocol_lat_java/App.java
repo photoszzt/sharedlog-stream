@@ -16,6 +16,7 @@ import java.util.concurrent.CountDownLatch;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
@@ -47,12 +48,12 @@ public class App {
     private static final Option DURATION = new Option("dur", "duration", true, "Duration of the test");
 
     public static void main(String[] args) throws ParseException, IOException {
+        Options options = getOptions();
         if (args == null || args.length == 0) {
-            System.out.println(
-                    "Usage: java -jar protocol-lat-java.jar -b <bootstrap-server> -p <port> -ev <events-num> -dur <duration>");
+            HelpFormatter formatter = new HelpFormatter();
+            formatter.printHelp("java -jar protocol-lat-java.jar", options);
             System.exit(1);
         }
-        Options options = getOptions();
         DefaultParser parser = new DefaultParser();
         CommandLine line = parser.parse(options, args, true);
         String portStr = line.getOptionValue(PORT.getOpt());
