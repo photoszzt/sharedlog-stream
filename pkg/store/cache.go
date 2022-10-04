@@ -221,9 +221,9 @@ func (c *Cache[K, V]) maybeEvict() {
 		atomic.AddUint32(&numEvicted, 1)
 		atomic.AddUint64(&c.numEvicts, 1)
 	}
-	if atomic.LoadUint32(&numEvicted) > 0 {
-		fmt.Fprintf(os.Stderr, "Evicted %v elements from cache\n", numEvicted)
-	}
+	// if atomic.LoadUint32(&numEvicted) > 0 {
+	// 	// fmt.Fprintf(os.Stderr, "Evicted %v elements from cache\n", numEvicted)
+	// }
 }
 
 func (c *Cache[K, V]) PutMaybeEvict(key K, value LRUEntry[V]) error {
