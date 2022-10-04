@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.DefaultParser;
@@ -32,6 +33,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 
@@ -72,9 +74,10 @@ public class App {
         NewTopic topic = new NewTopic(OUTPUT_TOPIC, 1, (short) 3);
         topic = topic.configs(Collections.singletonMap(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3"));
         CreateTopicsResult crt = admin.createTopics(Collections.singleton(topic));
+        KafkaFuture<Void> future = crt.all();
         try {
-            crt.all().wait();
-        } catch (InterruptedException e1) {
+            future.get();
+        } catch (InterruptedException | ExecutionException e1) {
             e1.printStackTrace();
         }
         final CountDownLatch latch = new CountDownLatch(1);
@@ -115,6 +118,10 @@ public class App {
                 producer.abortTransaction();
                 producer.close();
                 System.out.println("\nCommitTime: " + latencies + "\n");
+                Collections.sort(latencies);
+                System.out.println("p50: " + P(latencies, 0.5) +
+                        " p90: " + P(latencies, 0.9) + 
+                        " p99: " + P(latencies, 0.99));
             } catch (KafkaException e) {
                 producer.abortTransaction();
             }
@@ -142,6 +149,10 @@ public class App {
         });
         server.setExecutor(null);
         server.start();
+    }
+
+    private static long P(ArrayList<Long> arr, double percent) {
+        return arr.get((int) (((double) arr.size()) * percent + 0.5) - 1);
     }
 
     private static KafkaConsumer<String, byte[]> createKafkaConsumer(String boostrapServer) {
