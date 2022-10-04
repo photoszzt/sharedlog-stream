@@ -101,13 +101,13 @@ public class App {
                     break;
                 }
                 next = next.plus(timeGapUs, ChronoUnit.MICROS);
-                long ts = ChronoUnit.MICROS.between(Instant.EPOCH, Instant.now());
+                long ts = ChronoUnit.MICROS.between(Instant.EPOCH, next);
                 PayloadTs payload = new PayloadTs(ts, content);
                 byte[] encoded = payloadSerde.serialize(TOPIC_NAME, payload);
                 Instant now = Instant.now();
                 if (next.isAfter(now)) {
                     Duration toSleep = Duration.between(now, next);
-                    long nanoToSleep = toSleep.getNano();
+                    long nanoToSleep = toSleep.toNanos();
                     try {
                         TimeUnit.NANOSECONDS.sleep(nanoToSleep);
                     } catch (InterruptedException e) {
