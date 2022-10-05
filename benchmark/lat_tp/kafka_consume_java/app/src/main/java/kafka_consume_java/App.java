@@ -32,6 +32,7 @@ public class App {
     private static final Option BOOTSTRAP_SERVER = new Option("b", "bootstrap-server", true, "Kafka bootstrap server");
     private static final Option EVENTS_NUM = new Option("ev", "events-num", true, "Number of events to produce");
     private static final Option DURATION = new Option("d", "duration", true, "Duration of the test in seconds");
+    private static final Option WARMUP_EVENTS = new Option("we", "warmup-events", true, "Number of warmup events");
     private static final String TOPIC_NAME = "src";
 
     public static void main(String[] args) throws ParseException, IOException {
@@ -46,6 +47,8 @@ public class App {
         String bootstrapServer = line.getOptionValue(BOOTSTRAP_SERVER.getOpt());
         String eventsNumStr = line.getOptionValue(EVENTS_NUM.getOpt());
         String durString = line.getOptionValue(DURATION.getOpt());
+        String warmEventsString = line.getOptionValue(WARMUP_EVENTS.getOpt());
+        int warmEvents = Integer.parseInt(warmEventsString);
         Duration dur = Duration.ofSeconds(Long.parseLong(durString));
         long durNano = dur.toNanos();
         long events = Long.parseLong(eventsNumStr);
@@ -58,15 +61,24 @@ public class App {
             payloadSerde.setClass(PayloadTs.class);
             int idx = 0;
             ArrayList<Long> prodToConLat = new ArrayList<>(2048);
+            long rest = events;
+            long consumedInWarmup = 0;
+            if (warmEvents > 0) {
+                System.out.println("Warming up...");
+                consumedInWarmup = runLoop(warmEvents, consumer, commitEveryNano);
+                rest = events - consumedInWarmup;
+                System.out.println(warmEventsString + " warmup events consumed");
+            }
             long startNano = System.nanoTime();
             long commitTimer = System.nanoTime();
             boolean hasUncommited = false;
             while (true) {
                 if (System.nanoTime() - commitTimer >= commitEveryNano) {
                     consumer.commitSync();
+                    commitTimer = System.nanoTime();
                     hasUncommited = false;
                 }
-                if ((durNano > 0 && System.nanoTime() - startNano > durNano) || (events > 0 && idx >= events)) {
+                if ((durNano > 0 && System.nanoTime() - startNano > durNano) || (rest > 0 && idx >= rest)) {
                     break;
                 }
                 ConsumerRecords<String, byte[]> cr = consumer.poll(Duration.ofMillis(5));
@@ -88,9 +100,9 @@ public class App {
             System.out.println("\n" + prodToConLat);
             Collections.sort(prodToConLat);
 
-            System.out.println("consumed " + idx + " events, time: " + totalTime + ", throughput: " +
+            System.out.println("consumed " + (idx + consumedInWarmup) + " events, time: " + totalTime + ", throughput: " +
                     (double) idx / ((double) totalTime.toNanos() / 1_000_000_000) + ", p50: " +
-                    P(prodToConLat, 0.5) + ", p99: " + P(prodToConLat, 0.99));
+                    P(prodToConLat, 0.5) + " us, p99: " + P(prodToConLat, 0.99) + " us");
             System.out.println("done consume");
             payloadSerde.close();
             latch.countDown();
@@ -120,6 +132,28 @@ public class App {
         server.start();
     }
 
+    private static int runLoop(int warmEvents,
+            KafkaConsumer<String, byte[]> consumer, long commitEveryNano ) {
+        int idx = 0;
+        long commitTimer = System.nanoTime();
+        boolean hasUncommited = false;
+        while (idx < warmEvents) {
+            if (hasUncommited && System.nanoTime() - commitTimer >= commitEveryNano) {
+                consumer.commitSync();
+                commitTimer = System.nanoTime();
+                hasUncommited = false;
+            }
+            ConsumerRecords<String, byte[]> cr = consumer.poll(Duration.ofMillis(5));
+            for (ConsumerRecord<String, byte[]> c : cr.records(TOPIC_NAME)) {
+                idx += 1;
+            }
+        }
+        if (hasUncommited) {
+            consumer.commitSync();
+        }
+        return idx;
+    }
+
     private static long P(ArrayList<Long> arr, double percent) {
         return arr.get((int) (((double) arr.size()) * percent + 0.5) - 1);
     }
@@ -142,6 +176,7 @@ public class App {
         options.addOption(BOOTSTRAP_SERVER);
         options.addOption(EVENTS_NUM);
         options.addOption(DURATION);
+        options.addOption(WARMUP_EVENTS);
         return options;
     }
 }
