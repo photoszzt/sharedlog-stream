@@ -97,7 +97,7 @@ public class App {
                 consumer.commitSync();
             }
             Duration totalTime = Duration.of(System.nanoTime() - startNano, ChronoUnit.NANOS);
-            System.out.println("\n" + prodToConLat);
+            System.out.println("\n" + prodToConLat + "\n");
             Collections.sort(prodToConLat);
 
             System.out.println("consumed " + (idx + consumedInWarmup) + " events, time: " + totalTime + ", throughput: " +
