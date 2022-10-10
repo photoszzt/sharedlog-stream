@@ -11,7 +11,6 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/txn_data"
-	"time"
 
 	"cs.utexas.edu/zjia/faas/protocol"
 	"cs.utexas.edu/zjia/faas/types"
@@ -27,11 +26,10 @@ type EpochManager struct {
 	epochMetaSerde        commtypes.SerdeG[commtypes.EpochMarker]
 	env                   types.Environment
 	currentTopicSubstream *skipmap.StringMap[*skipset.Uint32Set]
-	epochLogForRead       *sharedlog_stream.SharedLogStream
-	epochLogForWrite      *sharedlog_stream.SharedLogStream
-	errChan               chan error
-	quitChan              chan struct{}
-	epochMngrName         string
+	epochLog              *sharedlog_stream.SharedLogStream
+	// errChan               chan error
+	// quitChan      chan struct{}
+	epochMngrName string
 	commtypes.ProducerId
 	epochLogMarkerTag uint64
 }
@@ -39,12 +37,7 @@ type EpochManager struct {
 func NewEpochManager(env types.Environment, epochMngrName string,
 	serdeFormat commtypes.SerdeFormat,
 ) (*EpochManager, error) {
-	logForRead, err := sharedlog_stream.NewSharedLogStream(env,
-		EPOCH_LOG_TOPIC_NAME+"_"+epochMngrName, serdeFormat)
-	if err != nil {
-		return nil, err
-	}
-	logForWrite, err := sharedlog_stream.NewSharedLogStream(env,
+	log, err := sharedlog_stream.NewSharedLogStream(env,
 		EPOCH_LOG_TOPIC_NAME+"_"+epochMngrName, serdeFormat)
 	if err != nil {
 		return nil, err
@@ -58,13 +51,13 @@ func NewEpochManager(env types.Environment, epochMngrName string,
 		env:                   env,
 		ProducerId:            commtypes.NewProducerId(),
 		currentTopicSubstream: skipmap.NewString[*skipset.Uint32Set](),
-		epochLogForRead:       logForRead,
-		epochLogForWrite:      logForWrite,
+		epochLog:              log,
 		epochMetaSerde:        epochMetaSerde,
-		epochLogMarkerTag:     txn_data.MarkerTag(logForRead.TopicNameHash(), 0),
+		epochLogMarkerTag:     txn_data.MarkerTag(log.TopicNameHash(), 0),
 	}, nil
 }
 
+/*
 func (em *EpochManager) SendQuit() {
 	em.quitChan <- struct{}{}
 }
@@ -72,11 +65,13 @@ func (em *EpochManager) SendQuit() {
 func (em *EpochManager) ErrChan() chan error {
 	return em.errChan
 }
+*/
 
 func (em *EpochManager) GetEpochManagerName() string {
 	return em.epochMngrName
 }
 
+/*
 func (em *EpochManager) monitorEpochLog(ctx context.Context,
 	quit chan struct{}, errc chan error, dcancel context.CancelFunc,
 ) {
@@ -121,6 +116,7 @@ func (em *EpochManager) StartMonitorLog(
 	em.errChan = make(chan error, 1)
 	go em.monitorEpochLog(ctx, em.quitChan, em.errChan, dcancel)
 }
+*/
 
 func (em *EpochManager) appendToEpochLog(ctx context.Context,
 	meta commtypes.EpochMarker, tags []uint64, additionalTopic []string,
@@ -137,7 +133,7 @@ func (em *EpochManager) appendToEpochLog(ctx context.Context,
 		TaskEpoch:     em.TaskEpoch,
 		TransactionID: 0,
 	}
-	off, err := em.epochLogForWrite.PushWithTag(ctx, encoded, 0, tags, additionalTopic,
+	off, err := em.epochLog.PushWithTag(ctx, encoded, 0, tags, additionalTopic,
 		sharedlog_stream.ControlRecordMeta, producerId)
 	// debug.Fprintf(os.Stderr, "epochOff: 0x%x, output range: %v, consume: ", off, meta.OutputRanges)
 	// for s, c := range meta.ConSeqNums {
@@ -269,8 +265,8 @@ func (em *EpochManager) Init(ctx context.Context) (*commtypes.EpochMarker, *comm
 		Mark: commtypes.FENCE,
 	}
 	tags := []uint64{
-		sharedlog_stream.NameHashWithPartition(em.epochLogForWrite.TopicNameHash(), 0),
-		txn_data.FenceTag(em.epochLogForWrite.TopicNameHash(), 0),
+		sharedlog_stream.NameHashWithPartition(em.epochLog.TopicNameHash(), 0),
+		txn_data.FenceTag(em.epochLog.TopicNameHash(), 0),
 	}
 	_, err = em.appendToEpochLog(ctx, meta, tags, nil)
 	if err != nil {
@@ -284,7 +280,7 @@ func (em *EpochManager) Init(ctx context.Context) (*commtypes.EpochMarker, *comm
 }
 
 func (em *EpochManager) getMostRecentCommitEpoch(ctx context.Context) (*commtypes.EpochMarker, *commtypes.RawMsg, error) {
-	rawMsg, err := em.epochLogForWrite.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, 0, em.epochLogMarkerTag)
+	rawMsg, err := em.epochLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, 0, em.epochLogMarkerTag)
 	if err != nil {
 		if common_errors.IsStreamEmptyError(err) {
 			return nil, nil, nil
@@ -303,7 +299,7 @@ func (em *EpochManager) FindLastEpochMetaThatHasConsumed(
 ) (meta *commtypes.EpochMarker, rawMsg *commtypes.RawMsg, err error) {
 	tailSeqNum := seqNum
 	for {
-		rawMsg, err := em.epochLogForWrite.ReadBackwardWithTag(ctx, tailSeqNum, 0, em.epochLogMarkerTag)
+		rawMsg, err := em.epochLog.ReadBackwardWithTag(ctx, tailSeqNum, 0, em.epochLogMarkerTag)
 		if err != nil {
 			if common_errors.IsStreamEmptyError(err) {
 				return nil, nil, nil
@@ -324,7 +320,7 @@ func (em *EpochManager) FindLastEpochMetaThatHasConsumed(
 func (em *EpochManager) FindLastEpochMetaWithAuxData(ctx context.Context, seqNum uint64) (auxData []byte, metaSeqNum uint64, err error) {
 	tailSeqNum := seqNum
 	for {
-		rawMsg, err := em.epochLogForWrite.ReadBackwardWithTag(ctx, tailSeqNum, 0, em.epochLogMarkerTag)
+		rawMsg, err := em.epochLog.ReadBackwardWithTag(ctx, tailSeqNum, 0, em.epochLogMarkerTag)
 		if err != nil {
 			if common_errors.IsStreamEmptyError(err) {
 				return nil, 0, nil

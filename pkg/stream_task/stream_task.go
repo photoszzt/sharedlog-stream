@@ -6,7 +6,6 @@ import (
 	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/epoch_manager"
 	"sharedlog-stream/pkg/exactly_once_intr"
@@ -409,53 +408,6 @@ func trackStreamAndConfigureExactlyOnce(args *StreamTaskArgs,
 	}
 	for _, winchangelog := range args.windowStoreChangelogs {
 		trackStream(winchangelog.ChangelogTopicName(), winchangelog.Stream().(*sharedlog_stream.ShardedSharedLogStream))
-	}
-	return nil
-}
-
-func checkMonitorReturns(
-	dctx context.Context,
-	dcancel context.CancelFunc,
-	args *StreamTaskArgs,
-	cmm *control_channel.ControlChannelManager,
-	lm exactly_once_intr.ExactlyOnceManagerLogMonitor,
-	// run *bool,
-) *common.FnOutput {
-	select {
-	case <-dctx.Done():
-		return &common.FnOutput{Success: true, Message: "exit due to ctx cancel"}
-	// case out := <-cmm.OutputChan():
-	// 	if out.Valid() {
-	// 		m := out.Value()
-	// 		if m.FinishedPrevTask == args.ectx.FuncName() && m.Epoch+1 == args.ectx.CurEpoch() {
-	// 			debug.Fprintf(os.Stderr, "finished prev task %s, funcName %s, meta epoch %d, input epoch %d\n",
-	// 				m.FinishedPrevTask, args.ectx.FuncName(), m.Epoch, args.ectx.CurEpoch())
-	// 			*run = true
-	// 		}
-	// 	} else {
-	// 		cerr := out.Err()
-	// 		debug.Fprintf(os.Stderr, "got control error chan\n")
-	// 		lm.SendQuit()
-	// 		cmm.SendQuit()
-	// 		if cerr != nil {
-	// 			debug.Fprintf(os.Stderr, "[ERROR] control channel manager: %v", cerr)
-	// 			dcancel()
-	// 			return &common.FnOutput{
-	// 				Success: false,
-	// 				Message: fmt.Sprintf("control channel manager failed: %v", cerr),
-	// 			}
-	// 		}
-	// 	}
-	case merr := <-lm.ErrChan():
-		debug.Fprintf(os.Stderr, "got monitor error chan\n")
-		lm.SendQuit()
-		// cmm.SendQuit()
-		if merr != nil {
-			debug.Fprintf(os.Stderr, "[ERROR] control channel manager: %v", merr)
-			dcancel()
-			return &common.FnOutput{Success: false, Message: fmt.Sprintf("monitor failed: %v", merr)}
-		}
-	default:
 	}
 	return nil
 }

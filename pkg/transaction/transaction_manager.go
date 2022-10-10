@@ -30,26 +30,23 @@ const (
 // only one stream task and only one goroutine could update it
 type TransactionManager struct {
 	tpMapMu               syncutils.Mutex
-	currentTopicSubstream map[string]map[uint8]struct{}
-
-	backgroundJobCtx    context.Context
-	txnMdSerde          commtypes.SerdeG[txn_data.TxnMetadata]
-	topicPartitionSerde commtypes.SerdeG[txn_data.TopicPartition]
-	txnMarkerSerde      commtypes.SerdeG[commtypes.EpochMarker]
-	offsetRecordSerde   commtypes.SerdeG[txn_data.OffsetRecord]
-	env                 types.Environment
-	transactionLog      *sharedlog_stream.SharedLogStream
-	topicStreams        map[string]*sharedlog_stream.ShardedSharedLogStream
-	backgroundJobErrg   *errgroup.Group
-
+	env                   types.Environment
+	backgroundJobCtx      context.Context
+	txnMdSerde            commtypes.SerdeG[txn_data.TxnMetadata]
+	topicPartitionSerde   commtypes.SerdeG[txn_data.TopicPartition]
+	txnMarkerSerde        commtypes.SerdeG[commtypes.EpochMarker]
+	offsetRecordSerde     commtypes.SerdeG[txn_data.OffsetRecord]
+	transactionLog        *sharedlog_stream.SharedLogStream
+	currentTopicSubstream map[string]map[uint8]struct{} // protected by tpMapMu
+	topicStreams          map[string]*sharedlog_stream.ShardedSharedLogStream
+	backgroundJobErrg     *errgroup.Group
+	// errChan               chan error
+	// quitChan              chan struct{}
 	TransactionalId string
-	transactionID   uint64
 	commtypes.ProducerId
-	serdeFormat commtypes.SerdeFormat
-
+	transactionID uint64
+	serdeFormat   commtypes.SerdeFormat
 	currentStatus txn_data.TransactionState
-	errChan       chan error
-	quitChan      chan struct{}
 }
 
 func NewTransactionManager(ctx context.Context,
@@ -279,6 +276,7 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) error {
 	return nil
 }
 
+/*
 // monitoring entry with fence tag
 func (tc *TransactionManager) monitorTransactionLog(ctx context.Context,
 	quit chan struct{}, errc chan error, dcancel context.CancelFunc,
@@ -331,6 +329,7 @@ func (tc *TransactionManager) SendQuit() {
 func (tc *TransactionManager) ErrChan() chan error {
 	return tc.errChan
 }
+*/
 
 func (tc *TransactionManager) appendToTransactionLog(ctx context.Context,
 	tm txn_data.TxnMetadata, tags []uint64,

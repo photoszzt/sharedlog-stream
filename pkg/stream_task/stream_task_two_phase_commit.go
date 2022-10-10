@@ -99,7 +99,8 @@ func processWithTransaction(
 	}
 
 	dctx, dcancel := context.WithCancel(ctx)
-	tm.StartMonitorLog(dctx, dcancel)
+	defer dcancel()
+	// tm.StartMonitorLog(dctx, dcancel)
 	err = cmm.RestoreMappingAndWaitForPrevTask(dctx, args.ectx.FuncName(),
 		CREATE_SNAPSHOT, args.serdeFormat,
 		args.kvChangelogs, args.windowStoreChangelogs, rs)
@@ -122,10 +123,17 @@ func processWithTransaction(
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
 	gotEndMark := false
 	for {
-		ret := checkMonitorReturns(dctx, dcancel, args, cmm, tm)
-		if ret != nil {
-			return ret
+		select {
+		case <-dctx.Done():
+			return &common.FnOutput{Success: true, Message: "exit due to ctx cancel"}
+		default:
 		}
+		/*
+			ret := checkMonitorReturns(dctx, dcancel, args, cmm, tm)
+			if ret != nil {
+				return ret
+			}
+		*/
 		procStart := time.Now()
 		once.Do(func() {
 			warmupCheck.StartWarmup()
@@ -184,7 +192,7 @@ func processWithTransaction(
 					}
 				}
 			}
-			return ret
+			return app_ret
 		}
 		ctrlMsg, ok := ctrlMsgOp.Take()
 		if ok {

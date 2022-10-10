@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	kBlockingReadTimeout = 1 * time.Second
+	kBlockingReadTimeout = 50 * time.Millisecond
 )
 
 type LogEntryMeta uint8
@@ -30,6 +30,7 @@ type LogEntryMeta uint8
 const (
 	Control bits.Bits = 1 << iota
 	PayloadArr
+	SyncToRecent
 )
 
 func StreamEntryMeta(isControl bool, payloadIsArr bool) LogEntryMeta {
@@ -40,6 +41,12 @@ func StreamEntryMeta(isControl bool, payloadIsArr bool) LogEntryMeta {
 	if payloadIsArr {
 		meta = bits.Set(meta, PayloadArr)
 	}
+	return LogEntryMeta(meta)
+}
+
+func SyncToRecentMeta() LogEntryMeta {
+	var meta bits.Bits
+	meta = bits.Set(meta, SyncToRecent)
 	return LogEntryMeta(meta)
 }
 
@@ -251,6 +258,51 @@ func (s *SharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum ui
 func (s *SharedLogStream) ReadNext(ctx context.Context, parNum uint8) (*commtypes.RawMsg, error) {
 	tag := NameHashWithPartition(s.topicNameHash, parNum)
 	return s.ReadNextWithTag(ctx, parNum, tag)
+}
+
+// here the maxSeqNum is the seqNum of the most recent appended log entry
+func (s *SharedLogStream) ReadNextWithTagUntil(ctx context.Context, parNum uint8, tag uint64, maxSeqNum uint64) ([]commtypes.RawMsg, error) {
+	if s.tail < maxSeqNum {
+		s.mux.Lock()
+		s.tail = maxSeqNum + 1
+		s.mux.Unlock()
+	}
+	seqNum := s.cursor
+	logEntries := make([]commtypes.RawMsg, 0, 3)
+	for seqNum <= maxSeqNum {
+		newCtx, cancel := context.WithTimeout(ctx, kBlockingReadTimeout)
+		defer cancel()
+		logEntry, err := s.env.SharedLogReadNextBlock(newCtx, tag, seqNum)
+		// debug.Fprintf(os.Stderr, "after read next block\n")
+		if err != nil {
+			return nil, err
+		}
+		if logEntry == nil {
+			return nil, common_errors.ErrStreamEmpty
+		}
+		streamLogEntry := decodeStreamLogEntry(logEntry)
+		isControl := bits.Has(bits.Bits(streamLogEntry.Meta), Control)
+		if streamLogEntry.BelongsToTopic(s.topicName) || isControl {
+			isPayloadArr := bits.Has(bits.Bits(streamLogEntry.Meta), PayloadArr)
+			s.cursor = logEntry.SeqNum + 1
+			logEntries = append(logEntries, commtypes.RawMsg{
+				Payload:      streamLogEntry.Payload,
+				AuxData:      logEntry.AuxData,
+				MsgSeqNum:    streamLogEntry.MsgSeqNum,
+				LogSeqNum:    logEntry.SeqNum,
+				IsControl:    isControl,
+				IsPayloadArr: isPayloadArr,
+				ProdId: commtypes.ProducerId{
+					TaskId:        streamLogEntry.TaskId,
+					TaskEpoch:     streamLogEntry.TaskEpoch,
+					TransactionID: streamLogEntry.TransactionID,
+				},
+			})
+		}
+		seqNum = logEntry.SeqNum + 1
+		s.cursor = seqNum
+	}
+	return logEntries, nil
 }
 
 func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag uint64) (*commtypes.RawMsg, error) {

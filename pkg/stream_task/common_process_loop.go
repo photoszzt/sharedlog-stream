@@ -97,6 +97,7 @@ func CommonProcess[K, V any](ctx context.Context, t *StreamTask, ectx *processor
 	// }
 }
 
+/*
 func extractEventTs(msg *commtypes.Message, isInitialSrc bool) error {
 	if isInitialSrc {
 		err := msg.ExtractEventTimeFromVal()
@@ -106,6 +107,7 @@ func extractEventTs(msg *commtypes.Message, isInitialSrc bool) error {
 	// debug.Fprintf(os.Stderr, "msg k %v, v %v, ts %d\n", msg.Key, msg.Value, msg.Timestamp)
 	return nil
 }
+*/
 
 func ProcessMsgAndSeq[K, V any](ctx context.Context, msg commtypes.MsgAndSeqG[K, V], args processor.ExecutionContext,
 	procMsg proc_interface.ProcessMsgFunc[K, V], isInitialSrc bool,
