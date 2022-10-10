@@ -115,7 +115,6 @@ func main() {
 				idx += 1
 			case kafka.Error:
 				fmt.Fprintf(os.Stderr, "%% Error: %v\n", e)
-				break
 			}
 		}
 		if hasUncommitted {

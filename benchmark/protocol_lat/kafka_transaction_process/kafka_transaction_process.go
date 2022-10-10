@@ -49,13 +49,11 @@ func main() {
 	}
 
 	consumerConfig := &kafka.ConfigMap{
-		"client.id":              "processor",
-		"bootstrap.servers":      FLAGS_broker,
-		"group.id":               "bench",
-		"auto.offset.reset":      "earliest",
-		"enable.auto.commit":     false,
-		"fetch.wait.max.ms":      5,
-		"fetch.error.backoff.ms": 5,
+		"client.id":          "processor",
+		"bootstrap.servers":  FLAGS_broker,
+		"group.id":           "bench",
+		"auto.offset.reset":  "earliest",
+		"enable.auto.commit": false,
 	}
 	producers := make(map[int32]*kafka.Producer)
 
@@ -65,7 +63,7 @@ func main() {
 	}
 
 	err = consumer.Subscribe(FLAGS_inTopicName, func(c *kafka.Consumer, e kafka.Event) error {
-		return kafka_utils.GroupRebalance(FLAGS_broker, producers, c, e)
+		return kafka_utils.GroupRebalance(FLAGS_broker, &producers, c, e)
 	})
 	commitEvery := time.Duration(100) * time.Millisecond
 	duration := time.Duration(FLAGS_duration) * time.Second
@@ -79,7 +77,7 @@ func main() {
 			select {
 			case <-commitTimer.C:
 				cBeg := time.Now()
-				err = kafka_utils.CommitTransactionForInputPartition(producers, consumer, FLAGS_inTopicName, 0)
+				err = kafka_utils.CommitTransactionForInputPartition(ctx, producers, consumer, FLAGS_inTopicName, 0)
 				cElapsed := time.Since(cBeg)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Failed to commit transaction: %s", err)
@@ -98,21 +96,26 @@ func main() {
 			}
 			switch ev := ev.(type) {
 			case *kafka.Message:
-				producers[0].Produce(&kafka.Message{
+				err = producers[0].Produce(&kafka.Message{
 					TopicPartition: kafka.TopicPartition{
 						Topic:     &FLAGS_outTopicName,
 						Partition: kafka.PartitionAny,
 					},
 					Value: ev.Value,
 				}, nil)
+				if err != nil {
+					panic(err)
+				}
 			case kafka.Error:
 				fmt.Fprintf(os.Stderr, "%% Error: %v\n", ev)
-				break
 			}
 		}
 		consumer.Close()
 		for _, producer := range producers {
-			producer.AbortTransaction(nil)
+			err = producer.AbortTransaction(ctx)
+			if err != nil {
+				panic(err)
+			}
 		}
 		fmt.Fprintf(os.Stderr, "\n{commitTimes: %v}\n", commitTimes)
 		ts := stats.Int64Slice(commitTimes)

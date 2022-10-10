@@ -934,3 +934,211 @@ func (z ProduceRange) Msgsize() (s int) {
 	s = 1 + 2 + msgp.Uint64Size + 5 + msgp.Uint8Size
 	return
 }
+
+// DecodeMsg implements msgp.Decodable
+func (z *ProduceRangeWithEnd) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "End":
+			z.End, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "End")
+				return
+			}
+		case "ProduceRange":
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "ProduceRange")
+				return
+			}
+			for zb0002 > 0 {
+				zb0002--
+				field, err = dc.ReadMapKeyPtr()
+				if err != nil {
+					err = msgp.WrapError(err, "ProduceRange")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "s":
+					z.ProduceRange.Start, err = dc.ReadUint64()
+					if err != nil {
+						err = msgp.WrapError(err, "ProduceRange", "Start")
+						return
+					}
+				case "sNum":
+					z.ProduceRange.SubStreamNum, err = dc.ReadUint8()
+					if err != nil {
+						err = msgp.WrapError(err, "ProduceRange", "SubStreamNum")
+						return
+					}
+				default:
+					err = dc.Skip()
+					if err != nil {
+						err = msgp.WrapError(err, "ProduceRange")
+						return
+					}
+				}
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *ProduceRangeWithEnd) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 2
+	// write "End"
+	err = en.Append(0x82, 0xa3, 0x45, 0x6e, 0x64)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.End)
+	if err != nil {
+		err = msgp.WrapError(err, "End")
+		return
+	}
+	// write "ProduceRange"
+	err = en.Append(0xac, 0x50, 0x72, 0x6f, 0x64, 0x75, 0x63, 0x65, 0x52, 0x61, 0x6e, 0x67, 0x65)
+	if err != nil {
+		return
+	}
+	// map header, size 2
+	// write "s"
+	err = en.Append(0x82, 0xa1, 0x73)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.ProduceRange.Start)
+	if err != nil {
+		err = msgp.WrapError(err, "ProduceRange", "Start")
+		return
+	}
+	// write "sNum"
+	err = en.Append(0xa4, 0x73, 0x4e, 0x75, 0x6d)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint8(z.ProduceRange.SubStreamNum)
+	if err != nil {
+		err = msgp.WrapError(err, "ProduceRange", "SubStreamNum")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *ProduceRangeWithEnd) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 2
+	// string "End"
+	o = append(o, 0x82, 0xa3, 0x45, 0x6e, 0x64)
+	o = msgp.AppendUint64(o, z.End)
+	// string "ProduceRange"
+	o = append(o, 0xac, 0x50, 0x72, 0x6f, 0x64, 0x75, 0x63, 0x65, 0x52, 0x61, 0x6e, 0x67, 0x65)
+	// map header, size 2
+	// string "s"
+	o = append(o, 0x82, 0xa1, 0x73)
+	o = msgp.AppendUint64(o, z.ProduceRange.Start)
+	// string "sNum"
+	o = append(o, 0xa4, 0x73, 0x4e, 0x75, 0x6d)
+	o = msgp.AppendUint8(o, z.ProduceRange.SubStreamNum)
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *ProduceRangeWithEnd) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "End":
+			z.End, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "End")
+				return
+			}
+		case "ProduceRange":
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "ProduceRange")
+				return
+			}
+			for zb0002 > 0 {
+				zb0002--
+				field, bts, err = msgp.ReadMapKeyZC(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "ProduceRange")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "s":
+					z.ProduceRange.Start, bts, err = msgp.ReadUint64Bytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "ProduceRange", "Start")
+						return
+					}
+				case "sNum":
+					z.ProduceRange.SubStreamNum, bts, err = msgp.ReadUint8Bytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "ProduceRange", "SubStreamNum")
+						return
+					}
+				default:
+					bts, err = msgp.Skip(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "ProduceRange")
+						return
+					}
+				}
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *ProduceRangeWithEnd) Msgsize() (s int) {
+	s = 1 + 4 + msgp.Uint64Size + 13 + 1 + 2 + msgp.Uint64Size + 5 + msgp.Uint8Size
+	return
+}

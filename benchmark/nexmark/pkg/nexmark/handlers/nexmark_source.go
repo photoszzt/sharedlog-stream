@@ -11,6 +11,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/utils"
@@ -52,7 +53,7 @@ func (h *nexmarkSourceHandler) Call(ctx context.Context, input []byte) ([]byte, 
 }
 
 type nexmarkSrcProcArgs struct {
-	msgSerde          commtypes.MessageSerdeG[string, *ntypes.Event]
+	msgSerde          commtypes.MessageGSerdeG[string, *ntypes.Event]
 	channel_url_cache map[uint32]*generator.ChannelUrl
 	eventGenerator    *generator.NexmarkGenerator
 	msgChan           chan sharedlog_stream.PayloadToPush
@@ -72,9 +73,9 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 	}
 
 	// fmt.Fprintf(os.Stderr, "gen event with ts: %v\n", nextEvent.EventTimestamp)
-	msg := commtypes.Message{
-		Key:   nil,
-		Value: nextEvent.Event,
+	msg := commtypes.MessageG[string, *ntypes.Event]{
+		Key:   optional.None[string](),
+		Value: optional.Some(nextEvent.Event),
 	}
 	msgEncoded, err := args.msgSerde.Encode(msg)
 	if err != nil {
@@ -181,7 +182,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	msgSerde, err := commtypes.GetMsgSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
+	msgSerde, err := commtypes.GetMsgGSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

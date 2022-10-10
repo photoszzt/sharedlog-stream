@@ -3,7 +3,6 @@ package producer_consumer
 import (
 	"context"
 	"fmt"
-	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -21,6 +20,7 @@ type MeteredConsumer struct {
 	ctrlCount   uint32
 }
 
+/*
 func checkMeasureSource() bool {
 	measure_str := os.Getenv("MEASURE_SRC")
 	measure := false
@@ -29,6 +29,7 @@ func checkMeasureSource() bool {
 	}
 	return measure
 }
+*/
 
 var _ = MeteredConsumerIntr(&MeteredConsumer{})
 

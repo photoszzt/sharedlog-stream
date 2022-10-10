@@ -78,13 +78,16 @@ func TestShouldPutFetchRangeFromCacheForNullKeyFrom(t *testing.T) {
 	expected_val := []string{"a", "b", "c", "d"}
 	got_key := []commtypes.KeyAndWindowStartTsG[string]{}
 	got_val := []string{}
-	cachingStore.FetchWithKeyRange(ctx, "", "d",
+	err = cachingStore.FetchWithKeyRange(ctx, "", "d",
 		time.UnixMilli(defaultTs), time.UnixMilli(defaultTs+20),
 		func(ts int64, key string, value string) error {
 			got_key = append(got_key, commtypes.KeyAndWindowStartTsG[string]{Key: key, WindowStartTs: ts})
 			got_val = append(got_val, value)
 			return nil
 		})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(got_key) != len(expected_key) {
 		t.Fatalf("expected: %v, got: %v", expected_key, got_key)
 	}
@@ -125,12 +128,15 @@ func TestShouldFlushEvictedItemsIntoUnderlyingStore(t *testing.T) {
 	fmt.Fprintf(os.Stderr, "added %d items to cache\n", added-1)
 	got_key := []commtypes.KeyAndWindowStartTsG[string]{}
 	got_val := []string{}
-	cachingStore.Fetch(ctx, "0", time.UnixMilli(defaultTs),
+	err := cachingStore.Fetch(ctx, "0", time.UnixMilli(defaultTs),
 		time.UnixMilli(defaultTs), func(ts int64, key string, value string) error {
 			got_key = append(got_key, commtypes.KeyAndWindowStartTsG[string]{Key: key, WindowStartTs: ts})
 			got_val = append(got_val, value)
 			return nil
 		})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(got_key) != 1 {
 		t.Errorf("expected to find 1 key, got %d", len(got_key))
 	}
@@ -148,8 +154,14 @@ func TestShouldFlushEvictedItemsIntoUnderlyingStore(t *testing.T) {
 func TestShouldFlushDirtyItemsWhenFlushedCalled(t *testing.T) {
 	ctx := context.Background()
 	cachingStore := getCachingWindowStore(ctx)
-	cachingStore.Put(ctx, "1", optional.Some("a"), defaultTs, 0)
-	cachingStore.Flush(ctx)
+	err := cachingStore.Put(ctx, "1", optional.Some("a"), defaultTs, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = cachingStore.Flush(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
 	got, ok, err := cachingStore.wrappedStore.Get(ctx, "1", defaultTs)
 	if err != nil {
 		t.Fatal(err)

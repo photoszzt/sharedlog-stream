@@ -27,7 +27,7 @@ type ReadOnlyExactlyOnceManager interface {
 type ExactlyOnceManagerLogMonitor interface {
 	ErrChan() chan error
 	SendQuit()
-	StartMonitorLog(ctx context.Context, cancel context.CancelFunc)
+	// StartMonitorLog(ctx context.Context, cancel context.CancelFunc)
 }
 
 type TopicSubstreamTracker interface {

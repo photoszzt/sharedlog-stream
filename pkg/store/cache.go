@@ -129,6 +129,7 @@ func (c *Cache[K, V]) last() LRUEntry[V] {
 	return ret
 }
 
+/*
 func (c *Cache[K, V]) head() *genericlist.Element[LRUElement[K, V]] {
 	c.mux.Lock()
 	ret := c.orderList.Front()
@@ -142,6 +143,7 @@ func (c *Cache[K, V]) tail() *genericlist.Element[LRUElement[K, V]] {
 	c.mux.Unlock()
 	return ret
 }
+*/
 
 func (c *Cache[K, V]) len() int {
 	return len(c.cache)
@@ -214,16 +216,20 @@ func (c *Cache[K, V]) put(key K, value LRUEntry[V]) error {
 	return nil
 }
 
-func (c *Cache[K, V]) maybeEvict() {
+func (c *Cache[K, V]) maybeEvict() error {
 	numEvicted := uint32(0)
 	for atomic.LoadInt64(&c.currentSizeBytes) > c.maxCacheBytes {
-		c.evict()
+		err := c.evict()
+		if err != nil {
+			return err
+		}
 		atomic.AddUint32(&numEvicted, 1)
 		atomic.AddUint64(&c.numEvicts, 1)
 	}
 	// if atomic.LoadUint32(&numEvicted) > 0 {
 	// 	// fmt.Fprintf(os.Stderr, "Evicted %v elements from cache\n", numEvicted)
 	// }
+	return nil
 }
 
 func (c *Cache[K, V]) PutMaybeEvict(key K, value LRUEntry[V]) error {
@@ -231,8 +237,7 @@ func (c *Cache[K, V]) PutMaybeEvict(key K, value LRUEntry[V]) error {
 	if err != nil {
 		return err
 	}
-	c.maybeEvict()
-	return nil
+	return c.maybeEvict()
 }
 
 func (c *Cache[K, V]) PutIfAbsentMaybeEvict(key K, value LRUEntry[V]) (LRUEntry[V], bool, error) {
@@ -240,11 +245,14 @@ func (c *Cache[K, V]) PutIfAbsentMaybeEvict(key K, value LRUEntry[V]) (LRUEntry[
 	if err != nil {
 		return LRUEntry[V]{}, false, err
 	}
-	c.maybeEvict()
+	err = c.maybeEvict()
+	if err != nil {
+		return LRUEntry[V]{}, false, err
+	}
 	return ret, ok, nil
 }
 
-func (c *Cache[K, V]) evict() {
+func (c *Cache[K, V]) evict() error {
 	c.mux.Lock()
 	element := c.orderList.Back()
 	if element != nil {
@@ -254,10 +262,15 @@ func (c *Cache[K, V]) evict() {
 		c.orderList.Remove(element)
 		delete(c.cache, element.Value.key)
 		if element.Value.entry.isDirty {
-			c.flushLockHeld(element)
+			err := c.flushLockHeld(element)
+			if err != nil {
+				c.mux.Unlock()
+				return err
+			}
 		}
 	}
 	c.mux.Unlock()
+	return nil
 }
 
 func (c *Cache[K, V]) flush(element *genericlist.Element[LRUElement[K, V]]) error {

@@ -84,7 +84,7 @@ func DestroyTransactionalProducer(producer *kafka.Producer) error {
 // For each assigned partition a transactional producer is created, this is
 // required to guarantee per-partition offset commit state prior to
 // KIP-447 being supported.
-func GroupRebalance(broker string, producers map[int32]*kafka.Producer,
+func GroupRebalance(broker string, producers *map[int32]*kafka.Producer,
 	consumer *kafka.Consumer, event kafka.Event,
 ) error {
 	fmt.Fprintf(os.Stderr, "Processor: rebalance event %v", event)
@@ -97,7 +97,7 @@ func GroupRebalance(broker string, producers map[int32]*kafka.Producer,
 			if err != nil {
 				return err
 			}
-			producers[tp.Partition] = p
+			(*producers)[tp.Partition] = p
 		}
 
 		err := consumer.Assign(e.Partitions)
@@ -108,7 +108,7 @@ func GroupRebalance(broker string, producers map[int32]*kafka.Producer,
 	case kafka.RevokedPartitions:
 		// Abort any current transactions and close the
 		// per-partition producers.
-		for _, producer := range producers {
+		for _, producer := range *producers {
 			err := DestroyTransactionalProducer(producer)
 			if err != nil {
 				return err
@@ -116,7 +116,7 @@ func GroupRebalance(broker string, producers map[int32]*kafka.Producer,
 		}
 
 		// Clear producer and intersection states
-		producers = make(map[int32]*kafka.Producer)
+		*producers = make(map[int32]*kafka.Producer)
 
 		err := consumer.Unassign()
 		if err != nil {
@@ -167,7 +167,7 @@ func GetConsumerPosition(consumer *kafka.Consumer, topic string, partition int32
 // commitTransactionForInputPartition sends the consumer offsets for
 // the given input partition and commits the current transaction.
 // A new transaction will be started when done.
-func CommitTransactionForInputPartition(producers map[int32]*kafka.Producer,
+func CommitTransactionForInputPartition(ctx context.Context, producers map[int32]*kafka.Producer,
 	consumer *kafka.Consumer, inputTopic string, partition int32,
 ) error {
 	producer, found := producers[partition]
@@ -184,13 +184,13 @@ func CommitTransactionForInputPartition(producers map[int32]*kafka.Producer,
 		return fmt.Errorf("Failed to get consumer group metadata: %v", err)
 	}
 
-	err = producer.SendOffsetsToTransaction(nil, position, consumerMetadata)
+	err = producer.SendOffsetsToTransaction(ctx, position, consumerMetadata)
 	if err != nil {
 		fmt.Fprintf(os.Stderr,
 			"Processor: Failed to send offsets to transaction for input partition %v: %s: aborting transaction",
 			partition, err)
 
-		err = producer.AbortTransaction(nil)
+		err = producer.AbortTransaction(ctx)
 		if err != nil {
 			panic(err)
 		}
@@ -201,13 +201,13 @@ func CommitTransactionForInputPartition(producers map[int32]*kafka.Producer,
 			panic(err)
 		}
 	} else {
-		err = producer.CommitTransaction(nil)
+		err = producer.CommitTransaction(ctx)
 		if err != nil {
 			fmt.Fprintf(os.Stderr,
 				"Processor: Failed to commit transaction for input partition %v: %s",
 				partition, err)
 
-			err = producer.AbortTransaction(nil)
+			err = producer.AbortTransaction(ctx)
 			if err != nil {
 				panic(err)
 			}

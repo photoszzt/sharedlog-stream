@@ -177,7 +177,10 @@ func TestShouldEvictEldestEntry(t *testing.T) {
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	cache.evict()
+	err = cache.evict()
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
 	_, found := cache.get(0)
 	if found {
 		t.Errorf("expected not found, got found")
@@ -202,7 +205,10 @@ func TestShouldFlushDirtEntriesOnEviction(t *testing.T) {
 	if err != nil {
 		t.Errorf("expected nil, got %v", err)
 	}
-	cache.evict()
+	err = cache.evict()
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
 	if len(flushed) != 2 {
 		t.Errorf("expected 2, got %d, flushed contains: %+v", len(flushed), flushed)
 	}

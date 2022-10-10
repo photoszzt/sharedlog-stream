@@ -287,9 +287,7 @@ func TestCountWithInMemKVStore(t *testing.T) {
 		Via(NewTableToStreamProcessor())
 	testCount(t, &pc)
 }
-*/
 
-/*
 func TestCountWithInMemSkipmapKVStore(t *testing.T) {
 	pc := NewProcessorChains()
 	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("srcTab", store.StringLessFunc)
@@ -310,7 +308,6 @@ func TestCountWithInMemSkipmapKVStore(t *testing.T) {
 		Via(NewTableToStreamProcessor())
 	testCount(t, &pc)
 }
-*/
 
 func testCount(t *testing.T, pc *ProcessorChains) {
 	inputMsgs := []commtypes.Message{
@@ -349,6 +346,7 @@ func testCount(t *testing.T, pc *ProcessorChains) {
 		t.Fatalf("should equal.")
 	}
 }
+*/
 
 /*
 func TestRemoveOldBeforeAddNewWithInMemKVStore(t *testing.T) {
@@ -376,9 +374,7 @@ func TestRemoveOldBeforeAddNewWithInMemKVStore(t *testing.T) {
 		Via(NewTableToStreamProcessor())
 	testRemoveOldBeforeAddNew(t, &pc)
 }
-*/
 
-/*
 func TestRemoveOldBeforeAddNewWithInMemSkipmapKVStore(t *testing.T) {
 	pc := NewProcessorChains()
 	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("srcTab", store.StringLessFunc)
@@ -400,7 +396,6 @@ func TestRemoveOldBeforeAddNewWithInMemSkipmapKVStore(t *testing.T) {
 		Via(NewTableToStreamProcessor())
 	testRemoveOldBeforeAddNew(t, &pc)
 }
-*/
 
 func testRemoveOldBeforeAddNew(t *testing.T, pc *ProcessorChains) {
 	inputMsgs := []commtypes.Message{
@@ -437,3 +432,4 @@ func testRemoveOldBeforeAddNew(t *testing.T, pc *ProcessorChains) {
 		t.Fatalf("should equal.")
 	}
 }
+*/

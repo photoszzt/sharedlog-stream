@@ -160,6 +160,7 @@ func TestSkipMapShouldClearTableEntryOnNullValueUpdate(t *testing.T) {
 	ShouldClearTableEntryOnNullValueUpdatePart2G(t, ctx, joinProc)
 }
 
+/*
 func putSecond(t *testing.T, ctx context.Context, joinProc *StreamTableJoinProcessor) {
 	for i := 0; i < 2; i++ {
 		err := joinProc.store.Put(ctx, i, nil)
@@ -168,6 +169,7 @@ func putSecond(t *testing.T, ctx context.Context, joinProc *StreamTableJoinProce
 		}
 	}
 }
+*/
 
 func putSecondG(t *testing.T, ctx context.Context, joinProc *StreamTableJoinProcessorG[int, string, string, string]) {
 	for i := 0; i < 2; i++ {
