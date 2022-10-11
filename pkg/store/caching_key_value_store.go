@@ -6,6 +6,7 @@ import (
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/txn_data"
 )
 
 type CachingKeyValueStoreG[K comparable, V any] struct {
@@ -181,9 +182,6 @@ func (c *CachingKeyValueStoreG[K, V]) Stream() sharedlog_stream.Stream {
 func (c *CachingKeyValueStoreG[K, V]) GetInitialProdSeqNum() uint64 {
 	return c.wrappedStore.GetInitialProdSeqNum()
 }
-func (c *CachingKeyValueStoreG[K, V]) GetCurrentProdSeqNum() uint64 {
-	return c.wrappedStore.GetCurrentProdSeqNum()
-}
 func (c *CachingKeyValueStoreG[K, V]) ResetInitialProd() {
 	c.wrappedStore.ResetInitialProd()
 }
@@ -206,4 +204,7 @@ func (c *CachingKeyValueStoreG[K, V]) RestoreFromSnapshot(snapshot [][]byte) err
 }
 func (c *CachingKeyValueStoreG[K, V]) FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error) {
 	return c.wrappedStore.FindLastEpochMetaWithAuxData(ctx, parNum)
+}
+func (c *CachingKeyValueStoreG[K, V]) BuildKeyMeta(ctx context.Context, kms map[string][]txn_data.KeyMaping) {
+	c.wrappedStore.BuildKeyMeta(ctx, kms)
 }

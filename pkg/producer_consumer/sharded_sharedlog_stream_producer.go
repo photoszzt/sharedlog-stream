@@ -61,10 +61,6 @@ func (sls *ShardedSharedLogStreamProducer) GetInitialProdSeqNum(substreamNum uin
 	return sls.stream.GetInitialProdSeqNum(substreamNum)
 }
 
-func (sls *ShardedSharedLogStreamProducer) GetCurrentProdSeqNum(substreamNum uint8) uint64 {
-	return sls.stream.GetCurrentProdSeqNum(substreamNum)
-}
-
 // this method is not goroutine safe
 func (sls *ShardedSharedLogStreamProducer) SetName(name string) {
 	sls.name = name

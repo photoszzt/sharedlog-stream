@@ -4,6 +4,7 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/optional"
+	"sharedlog-stream/pkg/txn_data"
 	"strings"
 )
 
@@ -64,6 +65,7 @@ type KeyValueStoreOpWithChangelog interface {
 	Snapshot(logOff uint64)
 	WaitForAllSnapshot() error
 	RestoreFromSnapshot(snapshot [][]byte) error
+	BuildKeyMeta(ctx context.Context, kms map[string][]txn_data.KeyMaping)
 	FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error)
 }
 

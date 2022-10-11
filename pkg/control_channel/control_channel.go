@@ -1,13 +1,11 @@
 package control_channel
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/data_structure"
-	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/store"
@@ -18,7 +16,6 @@ import (
 	"sharedlog-stream/pkg/txn_data"
 
 	"cs.utexas.edu/zjia/faas/types"
-	"github.com/zhangyunhao116/skipmap"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -32,7 +29,6 @@ type keyMeta struct {
 }
 
 type ControlChannelManager struct {
-	// kmMu               syncutils.Mutex
 	payloadArrSerde    commtypes.SerdeG[commtypes.PayloadArr]
 	ctrlMetaSerde      commtypes.SerdeG[txn_data.ControlMetadata]
 	uint16SerdeG       commtypes.SerdeG[uint16]
@@ -40,9 +36,8 @@ type ControlChannelManager struct {
 	controlOutput      chan ControlChannelResult
 	controlLogForRead  *sharedlog_stream.ShardedSharedLogStream
 	controlLogForWrite *sharedlog_stream.ShardedSharedLogStream
-	// topic -> (key -> set of substreamid)
-	// keyMappings  map[string]map[string]keyMeta // protected by kmMu
-	keyMappings  *skipmap.StringMap[*skipmap.FuncMap[[]byte, keyMeta]]
+	// key mapping have seen so far
+	// keyMappings  *skipmap.StringMap[*skipmap.FuncMap[[]byte, keyMeta]]
 	controlQuit  chan struct{}
 	funcName     string
 	ctrlMetaTag  uint64
@@ -80,10 +75,8 @@ func NewControlChannelManager(env types.Environment,
 		controlLogForRead:  logForRead,
 		controlLogForWrite: logForWrite,
 		currentEpoch:       epoch,
-		// keyMappings:        make(map[string]map[string]keyMeta),
-		keyMappings: skipmap.NewString[*skipmap.FuncMap[[]byte, keyMeta]](),
-		funcName:    app_id,
-		// appendCtrlLog:      stats.NewConcurrentInt64Collector("append_ctrl_log", stats.DEFAULT_COLLECT_DURATION),
+		// keyMappings:        skipmap.NewString[*skipmap.FuncMap[[]byte, keyMeta]](),
+		funcName:        app_id,
 		payloadArrSerde: sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG,
 		instanceID:      instanceID,
 		ctrlMetaTag:     txn_data.CtrlMetaTag(logForRead.TopicNameHash(), 0),
@@ -177,6 +170,40 @@ func (cmm *ControlChannelManager) loadSnapshotToWinStore(
 	return nil
 }
 
+func (cmm *ControlChannelManager) restoreFunc(
+	bgCtx context.Context, createSnapshot bool, work restoreWork,
+	kvchangelog map[string]store.KeyValueStoreOpWithChangelog,
+	wschangelog map[string]store.WindowStoreOpWithChangelog,
+	rs *snapshot_store.RedisSnapshotStore,
+) error {
+	if work.isKV {
+		kvc := kvchangelog[work.topic]
+		if createSnapshot {
+			err := cmm.loadSnapshotToKV(bgCtx, work, kvc, rs)
+			if err != nil {
+				return err
+			}
+		}
+		err := store_restore.RestoreChangelogKVStateStore(bgCtx, kvc, 0, work.parNum)
+		if err != nil {
+			return err
+		}
+	} else {
+		wsc := wschangelog[work.topic]
+		if createSnapshot {
+			err := cmm.loadSnapshotToWinStore(bgCtx, work, wsc, rs)
+			if err != nil {
+				return err
+			}
+		}
+		err := store_restore.RestoreChangelogWindowStateStore(bgCtx, wsc, work.parNum)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 	ctx context.Context, funcName string,
 	createSnapshot bool,
@@ -187,42 +214,7 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 ) error {
 	extraParToRestoreKV := make(map[string]data_structure.Uint8Set)
 	extraParToRestoreWS := make(map[string]data_structure.Uint8Set)
-	size := 0
-	for _, kvc := range kvchangelog {
-		size += int(kvc.Stream().NumPartition())
-	}
-	for _, wsc := range wschangelog {
-		size += int(wsc.Stream().NumPartition())
-	}
 	bgGrp, bgCtx := errgroup.WithContext(ctx)
-	restoreFunc := func(work restoreWork) error {
-		if work.isKV {
-			kvc := kvchangelog[work.topic]
-			if createSnapshot {
-				err := cmm.loadSnapshotToKV(bgCtx, work, kvc, rs)
-				if err != nil {
-					return err
-				}
-			}
-			err := store_restore.RestoreChangelogKVStateStore(bgCtx, kvc, 0, work.parNum)
-			if err != nil {
-				return err
-			}
-		} else {
-			wsc := wschangelog[work.topic]
-			if createSnapshot {
-				err := cmm.loadSnapshotToWinStore(bgCtx, work, wsc, rs)
-				if err != nil {
-					return err
-				}
-			}
-			err := store_restore.RestoreChangelogWindowStateStore(bgCtx, wsc, work.parNum)
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	}
 	for {
 		rawMsg, err := cmm.controlLogForRead.ReadNext(ctx, 0)
 		if err != nil {
@@ -257,7 +249,7 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 			}
 		} else {
 			if len(ctrlMeta.KeyMaps) != 0 {
-				cmm.updateKeyMapping(&ctrlMeta)
+				// cmm.updateKeyMapping(&ctrlMeta)
 				for tp, kms := range ctrlMeta.KeyMaps {
 					kvc, hasKVC := kvchangelog[tp]
 					wsc, hasWSC := wschangelog[tp]
@@ -266,7 +258,7 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 							// compute the new key assignment
 							par := uint8(km.Hash % uint64(kvc.Stream().NumPartition()))
 							// if this key is managed by this node
-							if par == cmm.instanceID {
+							if par == cmm.instanceID && km.SubstreamId != cmm.instanceID {
 								pars, ok := extraParToRestoreKV[tp]
 								if !ok {
 									pars = data_structure.NewUint8Set()
@@ -275,7 +267,7 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 									// fmt.Fprintf(os.Stderr, "restore %s par %d\n", km.Topic, km.SubstreamId)
 									w := restoreWork{topic: tp, isKV: true, parNum: km.SubstreamId}
 									bgGrp.Go(func() error {
-										return restoreFunc(w)
+										return cmm.restoreFunc(bgCtx, createSnapshot, w, kvchangelog, wschangelog, rs)
 									})
 									pars.Add(km.SubstreamId)
 									extraParToRestoreKV[tp] = pars
@@ -285,7 +277,7 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 					} else if hasWSC {
 						for _, km := range kms {
 							par := uint8(km.Hash % uint64(wsc.Stream().NumPartition()))
-							if par == cmm.instanceID {
+							if par == cmm.instanceID && km.SubstreamId != cmm.instanceID {
 								pars, ok := extraParToRestoreWS[tp]
 								if !ok {
 									pars = data_structure.NewUint8Set()
@@ -294,7 +286,7 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 									// fmt.Fprintf(os.Stderr, "restore %s par %d\n", km.Topic, km.SubstreamId)
 									w := restoreWork{topic: tp, isKV: false, parNum: km.SubstreamId}
 									bgGrp.Go(func() error {
-										return restoreFunc(w)
+										return cmm.restoreFunc(bgCtx, createSnapshot, w, kvchangelog, wschangelog, rs)
 									})
 									pars.Add(km.SubstreamId)
 									extraParToRestoreWS[tp] = pars
@@ -308,56 +300,20 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 	}
 }
 
-func (cmm *ControlChannelManager) appendToControlLog(ctx context.Context, cm txn_data.ControlMetadata, allowBuffer bool) error {
+func (cmm *ControlChannelManager) appendToControlLog(ctx context.Context, cm txn_data.ControlMetadata) error {
 	msg_encoded, err := cmm.ctrlMetaSerde.Encode(cm)
 	if err != nil {
 		return err
 	}
-	if allowBuffer {
-		err = cmm.controlLogForWrite.BufPush(ctx, msg_encoded, 0, commtypes.EmptyProducerId)
-		// debug.Fprintf(os.Stderr, "appendToControlLog: tp %s %v, off %x\n",
-		// 	cmm.controlLog.TopicName(), cm, off)
-	} else {
-		err = cmm.controlLogForWrite.Flush(ctx, commtypes.EmptyProducerId)
-		if err != nil {
-			return err
-		}
-		// var off uint64
-		_, err = cmm.controlLogForWrite.PushWithTag(ctx, msg_encoded, 0, []uint64{cmm.ctrlMetaTag, cmm.ctrlLogTag}, nil,
-			sharedlog_stream.SingleDataRecordMeta, commtypes.EmptyProducerId)
-		// debug.Fprintf(os.Stderr, "appendToControlLog: cm %+v, tag 0x%x, off 0x%x\n", cm, cmm.ctrlMetaTag, off)
-	}
+	// var off uint64
+	_, err = cmm.controlLogForWrite.PushWithTag(ctx, msg_encoded, 0, []uint64{cmm.ctrlMetaTag, cmm.ctrlLogTag}, nil,
+		sharedlog_stream.SingleDataRecordMeta, commtypes.EmptyProducerId)
+	// debug.Fprintf(os.Stderr, "appendToControlLog: cm %+v, tag 0x%x, off 0x%x\n", cm, cmm.ctrlMetaTag, off)
 	return err
 }
 
+/*
 func (cmm *ControlChannelManager) FlushKeyMapping(ctx context.Context) error {
-	/*
-		if len(cmm.keyMappings) > 0 {
-			kms := make(map[string][]txn_data.KeyMaping, len(cmm.keyMappings))
-			for k, v := range cmm.keyMappings {
-				km, ok := kms[k]
-				if !ok {
-					km = make([]txn_data.KeyMaping, 0)
-				}
-				for kBytes, meta := range v {
-					km = append(km, txn_data.KeyMaping{
-						Key:         []byte(kBytes),
-						Hash:        meta.hash,
-						SubstreamId: meta.substream,
-					})
-				}
-			}
-			cm := txn_data.ControlMetadata{
-				KeyMaps:    kms,
-				InstanceId: cmm.instanceID,
-				Epoch:      cmm.currentEpoch,
-			}
-			err := cmm.appendToControlLog(ctx, cm, false)
-			if err != nil {
-				return err
-			}
-		}
-	*/
 	if cmm.keyMappings.Len() > 0 {
 		kms := make(map[string][]txn_data.KeyMaping, cmm.keyMappings.Len())
 		cmm.keyMappings.Range(func(key string, value *skipmap.FuncMap[[]byte, keyMeta]) bool {
@@ -380,12 +336,22 @@ func (cmm *ControlChannelManager) FlushKeyMapping(ctx context.Context) error {
 			InstanceId: cmm.instanceID,
 			Epoch:      cmm.currentEpoch,
 		}
-		err := cmm.appendToControlLog(ctx, cm, false)
+		err := cmm.appendToControlLog(ctx, cm)
 		if err != nil {
 			return err
 		}
 	}
 	return nil
+}
+*/
+
+func (cmm *ControlChannelManager) OutputKeyMapping(ctx context.Context, kms map[string][]txn_data.KeyMaping) error {
+	cm := txn_data.ControlMetadata{
+		KeyMaps:    kms,
+		InstanceId: cmm.instanceID,
+		Epoch:      cmm.currentEpoch,
+	}
+	return cmm.appendToControlLog(ctx, cm)
 }
 
 func (cmm *ControlChannelManager) AppendRescaleConfig(ctx context.Context,
@@ -396,10 +362,11 @@ func (cmm *ControlChannelManager) AppendRescaleConfig(ctx context.Context,
 		Config: config,
 		Epoch:  cmm.currentEpoch,
 	}
-	err := cmm.appendToControlLog(ctx, cm, false)
+	err := cmm.appendToControlLog(ctx, cm)
 	return err
 }
 
+/*
 func TrackAndAppendKeyMapping(
 	ctx context.Context,
 	cmm *ControlChannelManager,
@@ -407,26 +374,6 @@ func TrackAndAppendKeyMapping(
 	substreamId uint8,
 	topic string,
 ) {
-	/*
-		cmm.kmMu.Lock()
-		subs, ok := cmm.keyMappings[topic]
-		if !ok {
-			subs = make(map[string]keyMeta)
-			cmm.keyMappings[topic] = subs
-		}
-		_, hasKey := subs[string(kBytes)]
-		if !hasKey {
-			hasher := hashfuncs.ByteSliceHasher{}
-			hash := hasher.HashSum64(kBytes)
-			subs[string(kBytes)] = keyMeta{
-				substream: substreamId,
-				hash:      hash,
-			}
-			cmm.kmMu.Unlock()
-		} else {
-			cmm.kmMu.Unlock()
-		}
-	*/
 	subs, _ := cmm.keyMappings.LoadOrStore(topic, skipmap.NewFunc[[]byte, keyMeta](func(a, b []byte) bool {
 		return bytes.Compare(a, b) < 0
 	}))
@@ -439,6 +386,7 @@ func TrackAndAppendKeyMapping(
 		}
 	})
 }
+*/
 
 func (cmm *ControlChannelManager) RecordPrevInstanceFinish(
 	ctx context.Context,
@@ -452,31 +400,12 @@ func (cmm *ControlChannelManager) RecordPrevInstanceFinish(
 		InstanceId:       instanceID,
 		Epoch:            epoch,
 	}
-	err := cmm.appendToControlLog(ctx, cm, false)
+	err := cmm.appendToControlLog(ctx, cm)
 	return err
 }
 
+/*
 func (cmm *ControlChannelManager) updateKeyMapping(ctrlMeta *txn_data.ControlMetadata) {
-	/*
-		cmm.kmMu.Lock()
-		for tp, kms := range ctrlMeta.KeyMaps {
-			subs, ok := cmm.keyMappings[tp]
-			if !ok {
-				subs = make(map[string]keyMeta)
-				cmm.keyMappings[tp] = subs
-			}
-			for _, km := range kms {
-				_, hasKey := subs[string(km.Key)]
-				if !hasKey {
-					subs[string(km.Key)] = keyMeta{
-						substream: km.SubstreamId,
-						hash:      km.Hash,
-					}
-				}
-			}
-		}
-		cmm.kmMu.Unlock()
-	*/
 	for tp, kms := range ctrlMeta.KeyMaps {
 		subs, _ := cmm.keyMappings.LoadOrStore(tp, skipmap.NewFunc[[]byte, keyMeta](func(a, b []byte) bool {
 			return bytes.Compare(a, b) < 0
@@ -493,6 +422,7 @@ func (cmm *ControlChannelManager) updateKeyMapping(ctrlMeta *txn_data.ControlMet
 		}
 	}
 }
+*/
 
 func (cmm *ControlChannelManager) StartMonitorControlChannel(ctx context.Context) {
 	cmm.controlQuit = make(chan struct{})

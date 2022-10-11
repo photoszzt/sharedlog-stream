@@ -15,6 +15,7 @@ import (
 	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
+	"sharedlog-stream/pkg/txn_data"
 	"sync"
 	"time"
 
@@ -168,7 +169,7 @@ func SetupManagersForEpoch(ctx context.Context,
 			topicName string, substreamId uint8,
 		) error {
 			_ = em.AddTopicSubstream(ctx, topicName, substreamId)
-			control_channel.TrackAndAppendKeyMapping(ctx, cmm, kBytes, substreamId, topicName)
+			// control_channel.TrackAndAppendKeyMapping(ctx, cmm, kBytes, substreamId, topicName)
 			return nil
 		})
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
@@ -303,16 +304,19 @@ func processInEpoch(
 				}
 				paused = true
 			}
+
 			flushAllStart := stats.TimerBegin()
 			err := flushStreams(dctx, args)
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}
 			flushTime := stats.Elapsed(flushAllStart).Microseconds()
-			logOff, err := markEpoch(dctx, em, t, args)
+
+			logOff, shouldExit, err := markEpoch(dctx, em, t, args)
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}
+
 			if CREATE_SNAPSHOT && args.snapshotEvery != 0 && time.Since(snapshotTimer) > args.snapshotEvery {
 				snStart := time.Now()
 				createSnapshot(args, logOff)
@@ -323,6 +327,16 @@ func processInEpoch(
 			markElapsed := time.Since(markBegin)
 			epochMarkTime = append(epochMarkTime, markElapsed.Microseconds())
 			t.flushAllTime.AddSample(flushTime)
+			if shouldExit {
+				ret := &common.FnOutput{Success: true}
+				if testForFail {
+					ret = &common.FnOutput{Success: true, Message: common_errors.ErrReturnDueToTest.Error()}
+				}
+				fmt.Fprintf(os.Stderr, "{epoch mark time: %v}\n", epochMarkTime)
+				updateReturnMetric(ret, &warmupCheck,
+					false, t.GetEndDuration(), args.ectx.SubstreamNum())
+				return ret
+			}
 			hasProcessData = false
 		}
 		// Exit routine
@@ -346,8 +360,6 @@ func processInEpoch(
 			}
 		}
 		if (!args.waitEndMark && timeout) || (testForFail && cur_elapsed >= failAfter) {
-			// elapsed := time.Since(procStart)
-			// latencies.AddSample(elapsed.Microseconds())
 			ret := &common.FnOutput{Success: true}
 			if testForFail {
 				ret = &common.FnOutput{Success: true, Message: common_errors.ErrReturnDueToTest.Error()}
@@ -393,12 +405,12 @@ func processInEpoch(
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}
-			err = cmm.FlushKeyMapping(ctx)
+			err = getKeyMappingAndFlush(ctx, args, cmm)
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}
 			flushTime := stats.Elapsed(flushAllStart).Microseconds()
-			logOff, err := markEpoch(dctx, em, t, args)
+			logOff, _, err := markEpoch(dctx, em, t, args)
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}
@@ -430,26 +442,51 @@ func processInEpoch(
 	}
 }
 
+func getKeyMappingAndFlush(ctx context.Context, args *StreamTaskArgs, cmm *control_channel.ControlChannelManager) error {
+	kms := make(map[string][]txn_data.KeyMaping)
+	for _, kv := range args.kvChangelogs {
+		kv.BuildKeyMeta(ctx, kms)
+	}
+	for _, wsc := range args.windowStoreChangelogs {
+		wsc.BuildKeyMeta(kms)
+	}
+	if len(kms) > 0 {
+		return cmm.OutputKeyMapping(ctx, kms)
+	}
+	return nil
+}
+
 func markEpoch(ctx context.Context, em *epoch_manager.EpochManager,
 	t *StreamTask, args *StreamTaskArgs,
-) (uint64, error) {
+) (logOff uint64, shouldExit bool, err error) {
+	rawMsgs, err := em.SyncToRecent(ctx)
+	if err != nil {
+		return 0, false, err
+	}
+	for _, rawMsg := range rawMsgs {
+		if rawMsg.Mark == commtypes.FENCE {
+			if rawMsg.ProdId.TaskId == em.TaskId && rawMsg.ProdId.TaskEpoch > em.GetCurrentEpoch() {
+				return 0, true, nil
+			}
+		}
+	}
 	prepareStart := stats.TimerBegin()
 	epochMarker, err := epoch_manager.GenEpochMarker(ctx, em, args.ectx.Consumers(), args.ectx.Producers(),
 		args.kvChangelogs, args.windowStoreChangelogs)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 	epochMarkerTags, epochMarkerTopics := em.GenTagsAndTopicsForEpochMarker()
 	epoch_manager.CleanupState(em, args.ectx.Producers(), args.kvChangelogs, args.windowStoreChangelogs)
 	prepareTime := stats.Elapsed(prepareStart).Microseconds()
 
 	mStart := stats.TimerBegin()
-	logOff, err := em.MarkEpoch(ctx, epochMarker, epochMarkerTags, epochMarkerTopics)
+	logOff, err = em.MarkEpoch(ctx, epochMarker, epochMarkerTags, epochMarkerTopics)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 	mElapsed := stats.Elapsed(mStart).Microseconds()
 	t.markEpochTime.AddSample(mElapsed)
 	t.markEpochPrepare.AddSample(prepareTime)
-	return logOff, nil
+	return logOff, false, nil
 }

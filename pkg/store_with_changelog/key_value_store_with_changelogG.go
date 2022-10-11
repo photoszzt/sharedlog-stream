@@ -4,11 +4,13 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
+	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
 )
 
@@ -103,6 +105,24 @@ func (st *KeyValueStoreWithChangelogG[K, V]) Put(ctx context.Context, key K, val
 	} else {
 		return nil
 	}
+}
+
+func (st *KeyValueStoreWithChangelogG[K, V]) BuildKeyMeta(ctx context.Context, kms map[string][]txn_data.KeyMaping) {
+	kms[st.changelogManager.TopicName()] = make([]txn_data.KeyMaping, 0)
+	hasher := hashfuncs.ByteSliceHasher{}
+	st.kvstore.Range(ctx, optional.None[K](), optional.None[K](), func(k K, v V) error {
+		kBytes, err := st.msgSerde.GetKeySerdeG().Encode(k)
+		if err != nil {
+			return err
+		}
+		hash := hasher.HashSum64(kBytes)
+		kms[st.changelogManager.TopicName()] = append(kms[st.changelogManager.TopicName()], txn_data.KeyMaping{
+			Key:         kBytes,
+			SubstreamId: st.parNum,
+			Hash:        hash,
+		})
+		return nil
+	})
 }
 
 func (st *KeyValueStoreWithChangelogG[K, V]) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
@@ -227,9 +247,6 @@ func (st *KeyValueStoreWithChangelogG[K, V]) Stream() sharedlog_stream.Stream {
 func (st *KeyValueStoreWithChangelogG[K, V]) GetInitialProdSeqNum() uint64 {
 	return st.changelogManager.producer.GetInitialProdSeqNum(st.parNum)
 }
-func (st *KeyValueStoreWithChangelogG[K, V]) GetCurrentProdSeqNum() uint64 {
-	return st.changelogManager.producer.GetCurrentProdSeqNum(st.parNum)
-}
 func (st *KeyValueStoreWithChangelogG[K, V]) ResetInitialProd() {
 	st.changelogManager.producer.ResetInitialProd()
 }
@@ -254,14 +271,6 @@ func (st *KeyValueStoreWithChangelogG[K, V]) RestoreFromSnapshot(snapshot [][]by
 func (st *KeyValueStoreWithChangelogG[K, V]) FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error) {
 	return st.changelogManager.findLastEpochMetaWithAuxData(ctx, parNum)
 }
-
-/*
-func CreateInMemBTreeKVTableWithChangelogG[K, V any](mp *MaterializeParam[K, V], less store.LessFunc[K],
-) (*KeyValueStoreWithChangelogG[K, V], error) {
-	s := store.NewInMemoryBTreeKeyValueStoreG[K, V](mp.storeName, less)
-	return NewKeyValueStoreWithChangelogG[K, V](mp, s)
-}
-*/
 
 func CreateInMemorySkipmapKVTableWithChangelogG[K, V any](mp *MaterializeParam[K, V], less store.LessFunc[K],
 ) (*KeyValueStoreWithChangelogG[K, V], error) {

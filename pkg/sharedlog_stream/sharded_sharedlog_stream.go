@@ -251,10 +251,6 @@ func (s *ShardedSharedLogStream) GetInitialProdSeqNum(substreamNum uint8) uint64
 	return s.subSharedLogStreams[substreamNum].GetInitialProdSeqNum()
 }
 
-func (s *ShardedSharedLogStream) GetCurrentProdSeqNum(substreamNum uint8) uint64 {
-	return s.subSharedLogStreams[substreamNum].GetCurrentProdSeqNum()
-}
-
 func (s *SizableShardedSharedLogStream) ScaleSubstreams(env types.Environment, scaleTo uint8) error {
 	if scaleTo == 0 {
 		return fmt.Errorf("updated number of substreams should be larger and equal to one")

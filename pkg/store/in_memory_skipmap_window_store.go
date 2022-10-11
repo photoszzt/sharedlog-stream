@@ -7,6 +7,7 @@ import (
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/txn_data"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -520,4 +521,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) removeExpiredSegments() {
 }
 
 func (s *InMemorySkipMapWindowStoreG[K, V]) SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]) error) {
+}
+
+func (s *InMemorySkipMapWindowStoreG[K, V]) BuildKeyMeta(kms map[string][]txn_data.KeyMaping) {
 }

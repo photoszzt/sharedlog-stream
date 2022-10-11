@@ -55,7 +55,7 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 		if err != nil {
 			return err
 		}
-		control_channel.TrackAndAppendKeyMapping(ctx, cmm, kBytes, substreamId, topicName)
+		// control_channel.TrackAndAppendKeyMapping(ctx, cmm, kBytes, substreamId, topicName)
 		return nil
 	}
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {

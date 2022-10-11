@@ -18,7 +18,6 @@ type Producer interface {
 		guarantee exactly_once_intr.GuaranteeMth)
 	Stream() sharedlog_stream.Stream
 	GetInitialProdSeqNum(substreamNum uint8) uint64
-	GetCurrentProdSeqNum(substreamNum uint8) uint64
 	ResetInitialProd()
 }
 

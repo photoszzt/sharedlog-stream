@@ -150,9 +150,6 @@ func (s *ConcurrentMeteredSink) Stream() sharedlog_stream.Stream {
 func (s *ConcurrentMeteredSink) GetInitialProdSeqNum(substreamNum uint8) uint64 {
 	return s.producer.GetInitialProdSeqNum(substreamNum)
 }
-func (s *ConcurrentMeteredSink) GetCurrentProdSeqNum(substreamNum uint8) uint64 {
-	return s.producer.GetCurrentProdSeqNum(substreamNum)
-}
 func (s *ConcurrentMeteredSink) ResetInitialProd() { s.producer.ResetInitialProd() }
 func (s *ConcurrentMeteredSink) OutputRemainingStats() {
 	s.lat.PrintRemainingStats()
@@ -294,9 +291,6 @@ func (s *MeteredProducer) Stream() sharedlog_stream.Stream {
 }
 func (s *MeteredProducer) GetInitialProdSeqNum(substreamNum uint8) uint64 {
 	return s.producer.GetInitialProdSeqNum(substreamNum)
-}
-func (s *MeteredProducer) GetCurrentProdSeqNum(substreamNum uint8) uint64 {
-	return s.producer.GetCurrentProdSeqNum(substreamNum)
 }
 func (s *MeteredProducer) ResetInitialProd() {
 	s.producer.ResetInitialProd()

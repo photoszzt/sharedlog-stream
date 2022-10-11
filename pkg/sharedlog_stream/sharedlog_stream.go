@@ -142,26 +142,21 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context,
 	payload []byte, parNum uint8, tags []uint64, additionalTopicNames []string,
 	meta LogEntryMeta, producerId commtypes.ProducerId,
 ) (uint64, error) {
-	if len(payload) == 0 {
-		return 0, common_errors.ErrEmptyPayload
-	}
 	topics := []string{s.topicName}
 	if additionalTopicNames != nil {
 		topics = append(topics, additionalTopicNames...)
 	}
 	logEntry := &StreamLogEntry{
-		TopicName: topics,
-		Payload:   payload,
-		Meta:      uint8(meta),
+		TopicName:     topics,
+		Payload:       payload,
+		Meta:          uint8(meta),
+		TaskId:        producerId.TaskId,
+		TaskEpoch:     producerId.TaskEpoch,
+		TransactionID: producerId.TransactionID,
 	}
-	// if s.inTransaction {
 	// TODO: need to deal with sequence number overflow
 	atomic.AddUint64(&s.curAppendMsgSeqNum, 1)
 	logEntry.MsgSeqNum = s.curAppendMsgSeqNum
-	logEntry.TaskEpoch = producerId.TaskEpoch
-	logEntry.TaskId = producerId.TaskId
-	logEntry.TransactionID = producerId.TransactionID
-	// }
 	encoded, err := logEntry.MarshalMsg(nil)
 	if err != nil {
 		return 0, err

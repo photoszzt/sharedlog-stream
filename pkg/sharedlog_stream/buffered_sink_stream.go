@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	SINK_BUFFER_MAX_ENTRY = 2048
+	SINK_BUFFER_MAX_ENTRY = 10000
 	SINK_BUFFER_MAX_SIZE  = 131072
 	MSG_CHAN_SIZE         = 10000
 )
@@ -34,7 +34,6 @@ type BufferedSinkStream struct {
 
 	once                 sync.Once
 	initialProdInEpoch   uint64
-	currentProdInEpoch   uint64
 	sink_buffer_max_size int
 	currentSize          int
 	guarantee            exactly_once_intr.GuaranteeMth
@@ -96,9 +95,34 @@ func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, 
 
 func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload []byte, producerId commtypes.ProducerId) error {
 	s.mux.Lock()
-	err := s.BufPushNoLock(ctx, payload, producerId)
-	s.mux.Unlock()
-	return err
+	payload_size := len(payload)
+	if len(s.sinkBuffer) < SINK_BUFFER_MAX_ENTRY && s.currentSize+payload_size < s.sink_buffer_max_size {
+		s.sinkBuffer = append(s.sinkBuffer, payload)
+		s.currentSize += payload_size
+		s.mux.Unlock()
+	} else {
+		s.bufferEntryStats.AddSample(len(s.sinkBuffer))
+		s.bufferSizeStats.AddSample(s.currentSize)
+		payloadArr := commtypes.PayloadArr{
+			Payloads: s.sinkBuffer,
+		}
+		payloads, err := s.payloadArrSerde.Encode(payloadArr)
+		if err != nil {
+			s.mux.Unlock()
+			return err
+		}
+		seqNum, err := s.Stream.Push(ctx, payloads, s.parNum, ArrRecordMeta, producerId)
+		if err != nil {
+			s.mux.Unlock()
+			return err
+		}
+		s.updateProdSeqNum(seqNum)
+		s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
+		s.sinkBuffer = append(s.sinkBuffer, payload)
+		s.currentSize = payload_size
+		s.mux.Unlock()
+	}
+	return nil
 }
 
 func (s *BufferedSinkStream) updateProdSeqNum(seqNum uint64) {
@@ -106,35 +130,30 @@ func (s *BufferedSinkStream) updateProdSeqNum(seqNum uint64) {
 		s.once.Do(func() {
 			s.initialProdInEpoch = seqNum
 		})
-		s.currentProdInEpoch = seqNum
 	}
 }
 
 func (s *BufferedSinkStream) Push(ctx context.Context, payload []byte, parNum uint8,
 	meta LogEntryMeta, producerId commtypes.ProducerId,
 ) (uint64, error) {
-	s.mux.Lock()
 	seqNum, err := s.Stream.Push(ctx, payload, parNum, meta, producerId)
 	if err != nil {
 		s.mux.Unlock()
 		return 0, err
 	}
 	s.updateProdSeqNum(seqNum)
-	s.mux.Unlock()
 	return seqNum, nil
 }
 
 func (s *BufferedSinkStream) PushWithTag(ctx context.Context, payload []byte, parNum uint8, tags []uint64,
 	additionalTopic []string, meta LogEntryMeta, producerId commtypes.ProducerId,
 ) (uint64, error) {
-	s.mux.Lock()
 	seqNum, err := s.Stream.PushWithTag(ctx, payload, parNum, tags, additionalTopic, meta, producerId)
 	if err != nil {
 		s.mux.Unlock()
 		return 0, err
 	}
 	s.updateProdSeqNum(seqNum)
-	s.mux.Unlock()
 	return seqNum, nil
 }
 
@@ -150,10 +169,6 @@ func (s *BufferedSinkStream) ResetInitialProd() {
 
 func (s *BufferedSinkStream) GetInitialProdSeqNum() uint64 {
 	return s.initialProdInEpoch
-}
-
-func (s *BufferedSinkStream) GetCurrentProdSeqNum() uint64 {
-	return s.currentProdInEpoch
 }
 
 func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId commtypes.ProducerId) error {
@@ -182,7 +197,30 @@ func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId commtyp
 
 func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context, producerId commtypes.ProducerId) error {
 	s.mux.Lock()
-	err := s.FlushNoLock(ctx, producerId)
-	s.mux.Unlock()
-	return err
+	if len(s.sinkBuffer) != 0 {
+		s.bufferEntryStats.AddSample(len(s.sinkBuffer))
+		s.bufferSizeStats.AddSample(s.currentSize)
+		payloadArr := commtypes.PayloadArr{
+			Payloads: s.sinkBuffer,
+		}
+		payloads, err := s.payloadArrSerde.Encode(payloadArr)
+		if err != nil {
+			s.mux.Unlock()
+			return err
+		}
+		seqNum, err := s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
+		if err != nil {
+			s.mux.Unlock()
+			return err
+		}
+		s.updateProdSeqNum(seqNum)
+		s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
+		s.currentSize = 0
+		s.mux.Unlock()
+	} else {
+		s.mux.Unlock()
+	}
+	debug.Assert(len(s.sinkBuffer) == 0 && s.currentSize == 0,
+		"sink buffer should be empty after flush")
+	return nil
 }

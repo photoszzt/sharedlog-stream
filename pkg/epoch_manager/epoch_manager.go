@@ -27,9 +27,7 @@ type EpochManager struct {
 	env                   types.Environment
 	currentTopicSubstream *skipmap.StringMap[*skipset.Uint32Set]
 	epochLog              *sharedlog_stream.SharedLogStream
-	// errChan               chan error
-	// quitChan      chan struct{}
-	epochMngrName string
+	epochMngrName         string
 	commtypes.ProducerId
 	epochLogMarkerTag uint64
 }
@@ -57,66 +55,9 @@ func NewEpochManager(env types.Environment, epochMngrName string,
 	}, nil
 }
 
-/*
-func (em *EpochManager) SendQuit() {
-	em.quitChan <- struct{}{}
-}
-
-func (em *EpochManager) ErrChan() chan error {
-	return em.errChan
-}
-*/
-
 func (em *EpochManager) GetEpochManagerName() string {
 	return em.epochMngrName
 }
-
-/*
-func (em *EpochManager) monitorEpochLog(ctx context.Context,
-	quit chan struct{}, errc chan error, dcancel context.CancelFunc,
-) {
-	fenceTag := txn_data.FenceTag(em.epochLogForRead.TopicNameHash(), 0)
-	for {
-		select {
-		case <-quit:
-			return
-		default:
-		}
-		rawMsg, err := em.epochLogForRead.ReadNextWithTag(ctx, 0, fenceTag)
-		if err != nil {
-			if common_errors.IsStreamEmptyError(err) {
-				time.Sleep(time.Duration(2) * time.Second)
-				continue
-			}
-			errc <- err
-			return
-		} else {
-			epochMeta, err := em.epochMetaSerde.Decode(rawMsg.Payload)
-			if err != nil {
-				errc <- err
-				return
-			}
-			if epochMeta.Mark != commtypes.FENCE {
-				panic("mark should be fence")
-			}
-			if rawMsg.ProdId.TaskId == em.TaskId && rawMsg.ProdId.TaskEpoch > em.GetCurrentEpoch() {
-				// I'm the zoombie
-				dcancel()
-				errc <- nil
-				return
-			}
-		}
-	}
-}
-
-func (em *EpochManager) StartMonitorLog(
-	ctx context.Context, dcancel context.CancelFunc,
-) {
-	em.quitChan = make(chan struct{})
-	em.errChan = make(chan error, 1)
-	go em.monitorEpochLog(ctx, em.quitChan, em.errChan, dcancel)
-}
-*/
 
 func (em *EpochManager) appendToEpochLog(ctx context.Context,
 	meta commtypes.EpochMarker, tags []uint64, additionalTopic []string,
@@ -141,6 +82,27 @@ func (em *EpochManager) appendToEpochLog(ctx context.Context,
 	// }
 	// debug.Fprint(os.Stderr, "\n")
 	return off, err
+}
+
+func (em *EpochManager) SyncToRecent(ctx context.Context) ([]commtypes.RawMsg, error) {
+	meta := sharedlog_stream.SyncToRecentMeta()
+	// making the empty entry with the fence tag so that the fence record or the
+	// empty entry will be read and skipping the progress marker entries.
+	tags := []uint64{
+		sharedlog_stream.NameHashWithPartition(em.epochLog.TopicNameHash(), 0),
+		txn_data.FenceTag(em.epochLog.TopicNameHash(), 0),
+	}
+	producerId := commtypes.ProducerId{
+		TaskId:        em.TaskId,
+		TaskEpoch:     em.TaskEpoch,
+		TransactionID: 0,
+	}
+	off, err := em.epochLog.PushWithTag(ctx, nil, 0, tags, nil,
+		meta, producerId)
+	if err != nil {
+		return nil, err
+	}
+	return em.epochLog.ReadNextWithTagUntil(ctx, 0, tags[1], off)
 }
 
 func (em *EpochManager) AddTopicSubstream(ctx context.Context,

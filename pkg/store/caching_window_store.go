@@ -6,6 +6,7 @@ import (
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/txn_data"
 	"time"
 )
 
@@ -149,9 +150,6 @@ func (s *CachingWindowStoreG[K, V]) ChangelogTopicName() string {
 func (s *CachingWindowStoreG[K, V]) GetInitialProdSeqNum() uint64 {
 	return s.wrappedStore.GetInitialProdSeqNum()
 }
-func (s *CachingWindowStoreG[K, V]) GetCurrentProdSeqNum() uint64 {
-	return s.wrappedStore.GetCurrentProdSeqNum()
-}
 func (s *CachingWindowStoreG[K, V]) ResetInitialProd()               { s.wrappedStore.ResetInitialProd() }
 func (s *CachingWindowStoreG[K, V]) Stream() sharedlog_stream.Stream { return s.wrappedStore.Stream() }
 func (s *CachingWindowStoreG[K, V]) SubstreamNum() uint8             { return s.wrappedStore.SubstreamNum() }
@@ -182,4 +180,7 @@ func (s *CachingWindowStoreG[K, V]) GetKVSerde() commtypes.SerdeG[commtypes.KeyV
 
 func (s *CachingWindowStoreG[K, V]) FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error) {
 	return s.wrappedStore.FindLastEpochMetaWithAuxData(ctx, parNum)
+}
+func (s *CachingWindowStoreG[K, V]) BuildKeyMeta(kms map[string][]txn_data.KeyMaping) {
+	s.wrappedStore.BuildKeyMeta(kms)
 }

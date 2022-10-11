@@ -16,7 +16,6 @@ type UpdateTrackParFunc interface {
 
 type ProduceRangeRecording interface {
 	GetInitialProdSeqNum() uint64
-	GetCurrentProdSeqNum() uint64
 	ResetInitialProd()
 }
 

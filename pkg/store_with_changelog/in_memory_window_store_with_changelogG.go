@@ -5,11 +5,13 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
+	"sharedlog-stream/pkg/txn_data"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -147,6 +149,24 @@ func (st *InMemoryWindowStoreWithChangelogG[K, V]) Put(ctx context.Context,
 	}
 }
 
+func (st *InMemoryWindowStoreWithChangelogG[K, V]) BuildKeyMeta(kms map[string][]txn_data.KeyMaping) {
+	kms[st.changelogManager.TopicName()] = make([]txn_data.KeyMaping, 0)
+	hasher := hashfuncs.ByteSliceHasher{}
+	st.windowStore.IterAll(func(ts int64, key K, value V) error {
+		kBytes, err := st.originKeySerde.Encode(key)
+		if err != nil {
+			return err
+		}
+		hash := hasher.HashSum64(kBytes)
+		kms[st.changelogManager.TopicName()] = append(kms[st.changelogManager.TopicName()], txn_data.KeyMaping{
+			Key:         kBytes,
+			SubstreamId: st.parNum,
+			Hash:        hash,
+		})
+		return nil
+	})
+}
+
 func (st *InMemoryWindowStoreWithChangelogG[K, V]) PutWithoutPushToChangelog(ctx context.Context,
 	key commtypes.KeyT, value commtypes.ValueT,
 ) error {
@@ -250,9 +270,6 @@ func (s *InMemoryWindowStoreWithChangelogG[K, V]) Stream() sharedlog_stream.Stre
 
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) GetInitialProdSeqNum() uint64 {
 	return s.changelogManager.producer.GetInitialProdSeqNum(s.parNum)
-}
-func (s *InMemoryWindowStoreWithChangelogG[K, V]) GetCurrentProdSeqNum() uint64 {
-	return s.changelogManager.producer.GetCurrentProdSeqNum(s.parNum)
 }
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) ResetInitialProd() {
 	s.changelogManager.producer.ResetInitialProd()
