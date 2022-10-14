@@ -108,14 +108,14 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 			func(_ optional.Option[string], value optional.Option[*ntypes.Event]) (uint64, error) {
 				return value.Unwrap().NewAuction.Seller, nil
 			}))
-	grouBySellerProc := processor.NewGroupByOutputProcessorG(ectx.Producers()[0], &ectx, outMsgSerde)
+	grouBySellerProc := processor.NewGroupByOutputProcessorG("aucProc", ectx.Producers()[0], &ectx, outMsgSerde)
 	aucBySellerProc.NextProcessor(grouBySellerProc)
 	perByIDProc := processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64](
 		"personsByIDMap", processor.SelectKeyFuncG[string, *ntypes.Event, uint64](
 			func(_ optional.Option[string], value optional.Option[*ntypes.Event]) (uint64, error) {
 				return value.Unwrap().NewPerson.ID, nil
 			}))
-	groupByPerIDProc := processor.NewGroupByOutputProcessorG(ectx.Producers()[1], &ectx, outMsgSerde)
+	groupByPerIDProc := processor.NewGroupByOutputProcessorG("perProc", ectx.Producers()[1], &ectx, outMsgSerde)
 	perByIDProc.NextProcessor(groupByPerIDProc)
 
 	task := stream_task.NewStreamTaskBuilder().

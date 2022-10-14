@@ -172,7 +172,7 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 			) {
 				return value.Unwrap(), key.Unwrap(), nil
 			}))
-	sinkProc := processor.NewGroupByOutputProcessorG(sinks_arr[0], &ectx, outMsgSerde)
+	sinkProc := processor.NewGroupByOutputProcessorG("topo2Proc", sinks_arr[0], &ectx, outMsgSerde)
 	aggProc.NextProcessor(toStreamProc)
 	toStreamProc.NextProcessor(mapProc)
 	mapProc.NextProcessor(sinkProc)

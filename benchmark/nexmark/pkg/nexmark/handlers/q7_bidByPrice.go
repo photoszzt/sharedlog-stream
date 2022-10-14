@@ -74,7 +74,7 @@ func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInpu
 				event := value.Unwrap()
 				return event.Bid.Price, nil
 			}))
-	outProc := processor.NewGroupByOutputProcessorG(sinks_arr[0], &ectx, outMsgSerde)
+	outProc := processor.NewGroupByOutputProcessorG("bidByPriceProc", sinks_arr[0], &ectx, outMsgSerde)
 	filterProc.NextProcessor(selectKey)
 	selectKey.NextProcessor(outProc)
 	task := stream_task.NewStreamTaskBuilder().

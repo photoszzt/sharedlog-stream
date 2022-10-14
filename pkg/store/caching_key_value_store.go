@@ -55,9 +55,9 @@ func NewCachingKeyValueStoreG[K comparable, V any](ctx context.Context,
 					return err
 				}
 				err = c.flushCallbackFunc(ctx, commtypes.MessageG[K, commtypes.ChangeG[V]]{
-					Key:       optional.Some(entry.key),
-					Value:     optional.Some(change),
-					Timestamp: entry.entry.currentStreamTime,
+					Key:         optional.Some(entry.key),
+					Value:       optional.Some(change),
+					TimestampMs: entry.entry.currentStreamTime,
 				})
 				if err != nil {
 					return err

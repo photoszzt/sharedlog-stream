@@ -189,7 +189,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			v := value.Unwrap()
 			return v.Count >= v.MaxCnt, nil
 		}))
-	outProc := processor.NewFixedSubstreamOutputProcessorG(sinks_arr[0],
+	outProc := processor.NewFixedSubstreamOutputProcessorG("subG3Proc", sinks_arr[0],
 		ectx.SubstreamNum(), outMsgSerde)
 	stJoin.NextProcessor(chooseMaxCnt)
 	chooseMaxCnt.NextProcessor(outProc)

@@ -76,7 +76,7 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 				event := value.Unwrap()
 				return event.Bid.Auction, nil
 			}))
-	outProc := processor.NewGroupByOutputProcessorG(sinks[0], &ectx, outMsgSerde)
+	outProc := processor.NewGroupByOutputProcessorG("topo1Proc", sinks[0], &ectx, outMsgSerde)
 	filterProc.NextProcessor(mapProc)
 	mapProc.NextProcessor(outProc)
 	task := stream_task.NewStreamTaskBuilder().

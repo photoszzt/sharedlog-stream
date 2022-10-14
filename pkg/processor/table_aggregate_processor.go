@@ -143,7 +143,7 @@ func (p *TableAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Contex
 	if ok {
 		oldAgg = optional.Some(oldAggTs.Value)
 	}
-	newTs := msg.Timestamp
+	newTs := msg.TimestampMs
 	var intermediateAgg optional.Option[VA]
 
 	// first try to remove the old val
@@ -151,7 +151,7 @@ func (p *TableAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Contex
 	msgOldVal, hasMsgOldVal := msgVal.OldVal.Take()
 	if hasMsgOldVal && oldAgg.IsSome() {
 		intermediateAgg = p.remove.Apply(key, msgOldVal, oldAgg)
-		newTs = utils.MaxInt64(msg.Timestamp, oldAggTs.Timestamp)
+		newTs = utils.MaxInt64(msg.TimestampMs, oldAggTs.Timestamp)
 	} else {
 		intermediateAgg = oldAgg
 	}
@@ -168,7 +168,7 @@ func (p *TableAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Contex
 		}
 		newAgg = p.add.Apply(key, msgNewVal, initAgg)
 		if !utils.IsNil(oldAggTs) {
-			newTs = utils.MaxInt64(msg.Timestamp, oldAggTs.Timestamp)
+			newTs = utils.MaxInt64(msg.TimestampMs, oldAggTs.Timestamp)
 		}
 	} else {
 		newAgg = intermediateAgg
@@ -182,5 +182,6 @@ func (p *TableAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Contex
 		NewVal: newAgg,
 		OldVal: oldAgg,
 	})
-	return []commtypes.MessageG[K, commtypes.ChangeG[VA]]{{Key: msg.Key, Value: change, Timestamp: newTs}}, nil
+	return []commtypes.MessageG[K, commtypes.ChangeG[VA]]{{Key: msg.Key, Value: change,
+		TimestampMs: newTs, StartProcTime: msg.StartProcTime}}, nil
 }

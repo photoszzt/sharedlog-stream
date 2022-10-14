@@ -82,10 +82,10 @@ func MsgSerToMsgG[K, V any](msgSer *MessageSerialized, keySerde SerdeG[K], valSe
 		val = optional.Some(v)
 	}
 	msg := MessageG[K, V]{
-		Key:       key,
-		Value:     val,
-		InjT:      msgSer.InjT,
-		Timestamp: msgSer.Timestamp,
+		Key:         key,
+		Value:       val,
+		InjTMs:      msgSer.InjTMs,
+		TimestampMs: msgSer.TimestampMs,
 	}
 	return msg, nil
 }
@@ -114,10 +114,10 @@ func MsgGToMsgSer[K, V any](value MessageG[K, V], keySerde SerdeG[K], valSerde S
 		return optional.None[MessageSerialized](), nil
 	}
 	msg := optional.Some(MessageSerialized{
-		KeyEnc:    kenc,
-		ValueEnc:  venc,
-		InjT:      value.InjT,
-		Timestamp: value.Timestamp,
+		KeyEnc:      kenc,
+		ValueEnc:    venc,
+		InjTMs:      value.InjTMs,
+		TimestampMs: value.TimestampMs,
 	})
 	return msg, nil
 }
@@ -151,10 +151,10 @@ func (s MessageGMsgpSerdeG[K, V]) Decode(value []byte) (MessageG[K, V], error) {
 }
 func (s MessageGMsgpSerdeG[K, V]) EncodeWithKVBytes(kBytes []byte, vBytes []byte, inj int64, ts int64) ([]byte, error) {
 	msgSer := &MessageSerialized{
-		KeyEnc:    kBytes,
-		ValueEnc:  vBytes,
-		InjT:      inj,
-		Timestamp: ts,
+		KeyEnc:      kBytes,
+		ValueEnc:    vBytes,
+		InjTMs:      inj,
+		TimestampMs: ts,
 	}
 	return msgSer.MarshalMsg(nil)
 }
@@ -192,10 +192,10 @@ func (s MessageGJSONSerdeG[K, V]) Decode(value []byte) (MessageG[K, V], error) {
 }
 func (s MessageGJSONSerdeG[K, V]) EncodeWithKVBytes(kBytes []byte, vBytes []byte, inj int64, ts int64) ([]byte, error) {
 	msgSer := &MessageSerialized{
-		KeyEnc:    kBytes,
-		ValueEnc:  vBytes,
-		InjT:      inj,
-		Timestamp: ts,
+		KeyEnc:      kBytes,
+		ValueEnc:    vBytes,
+		InjTMs:      inj,
+		TimestampMs: ts,
 	}
 	return msgSer.MarshalMsg(nil)
 }

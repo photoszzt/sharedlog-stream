@@ -111,7 +111,7 @@ func JoinOnlyIfMatchFound(t *testing.T, ctx context.Context, joinProc Processor)
 
 func JoinOnlyIfMatchFoundG(t *testing.T, ctx context.Context, joinProc ProcessorG[int, int, int, string]) {
 	for i := 0; i < 4; i++ {
-		msgs, err := joinProc.ProcessAndReturn(ctx, commtypes.MessageG[int, int]{Key: optional.Some(i), Value: optional.Some(i), Timestamp: int64(i)})
+		msgs, err := joinProc.ProcessAndReturn(ctx, commtypes.MessageG[int, int]{Key: optional.Some(i), Value: optional.Some(i), TimestampMs: int64(i)})
 		if err != nil {
 			t.Errorf("fail to join: %v", err)
 		}
@@ -205,17 +205,17 @@ func ShouldClearTableEntryOnNullValueUpdatePart1G(t *testing.T, ctx context.Cont
 	got_msgs := make([]commtypes.MessageG[int, string], 0)
 	for i := 0; i < 4; i++ {
 		msgs, err := joinProc.ProcessAndReturn(ctx,
-			commtypes.MessageG[int, string]{Key: optional.Some(i), Value: optional.Some(fmt.Sprintf("X%d", i)), Timestamp: int64(i)})
+			commtypes.MessageG[int, string]{Key: optional.Some(i), Value: optional.Some(fmt.Sprintf("X%d", i)), TimestampMs: int64(i)})
 		if err != nil {
 			t.Errorf("fail to join: %v", err)
 		}
 		got_msgs = append(got_msgs, msgs...)
 	}
 	expected_msgs := []commtypes.MessageG[int, string]{
-		{Key: optional.Some(0), Value: optional.Some("X0+Y0"), Timestamp: 0},
-		{Key: optional.Some(1), Value: optional.Some("X1+Y1"), Timestamp: 1},
-		{Key: optional.Some(2), Value: optional.Some("X2+Y2"), Timestamp: 2},
-		{Key: optional.Some(3), Value: optional.Some("X3+Y3"), Timestamp: 3},
+		{Key: optional.Some(0), Value: optional.Some("X0+Y0"), TimestampMs: 0},
+		{Key: optional.Some(1), Value: optional.Some("X1+Y1"), TimestampMs: 1},
+		{Key: optional.Some(2), Value: optional.Some("X2+Y2"), TimestampMs: 2},
+		{Key: optional.Some(3), Value: optional.Some("X3+Y3"), TimestampMs: 3},
 	}
 	if !reflect.DeepEqual(expected_msgs, got_msgs) {
 		t.Fatal("should equal")
@@ -245,7 +245,7 @@ func ShouldClearTableEntryOnNullValueUpdatePart2G(t *testing.T, ctx context.Cont
 	got_msgs := make([]commtypes.MessageG[int, string], 0)
 	for i := 0; i < 4; i++ {
 		msgs, err := joinProc.ProcessAndReturn(ctx,
-			commtypes.MessageG[int, string]{Key: optional.Some(i), Value: optional.Some(fmt.Sprintf("XX%d", i)), Timestamp: int64(i)})
+			commtypes.MessageG[int, string]{Key: optional.Some(i), Value: optional.Some(fmt.Sprintf("XX%d", i)), TimestampMs: int64(i)})
 		if err != nil {
 			t.Errorf("fail to join: %v", err)
 		}

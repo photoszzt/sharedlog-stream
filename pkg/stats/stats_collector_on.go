@@ -29,3 +29,17 @@ func (c *StatsCollector[E]) AddSample(sample E) {
 		c.data = make([]E, 0, c.min_report_samples)
 	}
 }
+
+func (c *ConcurrentPrintLogStatsCollector[E]) AddSample(sample E) {
+	c.mu.Lock()
+	c.AddSample(sample)
+	c.mu.Unlock()
+}
+
+func (c *PrintLogStatsCollector[E]) AddSample(sample E) {
+	if len(c.data) >= cap(c.data) {
+		fmt.Fprintf(os.Stderr, "%s: %v\n", c.tag, c.data)
+		c.data = make([]E, 0, cap(c.data))
+	}
+	c.data = append(c.data, sample)
+}

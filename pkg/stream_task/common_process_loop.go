@@ -9,6 +9,7 @@ import (
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
+	"time"
 
 	"golang.org/x/xerrors"
 )
@@ -63,32 +64,8 @@ func CommonProcess[K, V any](ctx context.Context, t *StreamTask, ectx *processor
 	if msgs.MsgArr == nil && msgs.Msg.Key.IsNone() && msgs.Msg.Value.IsNone() {
 		return nil, optional.None[commtypes.RawMsgAndSeq]()
 	}
-	/*
-		if msgs.IsControl {
-			key := msgs.Msg.Key.(string)
-			if key == txn_data.SCALE_FENCE_KEY {
-				v := msgs.Msg.Value.(producer_consumer.ScaleEpochAndBytes)
-				if ectx.CurEpoch() < v.ScaleEpoch {
-					ectx.Consumers()[0].RecordCurrentConsumedSeqNum(msgs.LogSeqNum)
-					return nil, msgs
-				}
-				return nil, nil
-			} else if key == commtypes.END_OF_STREAM_KEY {
-				v := msgs.Msg.Value.(producer_consumer.StartTimeAndProdIdx)
-				consumer.SrcProducerEnd(v.ProdIdx)
-				if consumer.AllProducerEnded() {
-					return nil, msgs
-				} else {
-					return nil, nil
-				}
-			} else {
-				return &common.FnOutput{Success: false, Message: fmt.Sprintf("unrecognized key: %v", key)}, nil
-			}
-		} else {
-	*/
-	// err = proc(t, msg)
 	ectx.Consumers()[0].RecordCurrentConsumedSeqNum(msgs.LogSeqNum)
-	err = ProcessMsgAndSeq(ctx, msgs, ectx, procMsg, isInitialSrc)
+	err = processMsgAndSeq(ctx, msgs, ectx, procMsg, isInitialSrc)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()},
 			optional.None[commtypes.RawMsgAndSeq]()
@@ -97,19 +74,9 @@ func CommonProcess[K, V any](ctx context.Context, t *StreamTask, ectx *processor
 	// }
 }
 
-/*
-func extractEventTs(msg *commtypes.Message, isInitialSrc bool) error {
-	if isInitialSrc {
-		err := msg.ExtractEventTimeFromVal()
-		// debug.Fprintf(os.Stderr, "msg k %v, v %v, ts %d\n", msg.Key, msg.Value, msg.Timestamp)
-		return err
-	}
-	// debug.Fprintf(os.Stderr, "msg k %v, v %v, ts %d\n", msg.Key, msg.Value, msg.Timestamp)
-	return nil
-}
-*/
-
-func ProcessMsgAndSeq[K, V any](ctx context.Context, msg commtypes.MsgAndSeqG[K, V], args processor.ExecutionContext,
+func processMsgAndSeq[K, V any](ctx context.Context,
+	msg commtypes.MsgAndSeqG[K, V],
+	args processor.ExecutionContext,
 	procMsg proc_interface.ProcessMsgFunc[K, V], isInitialSrc bool,
 ) error {
 	meteredConsumer := args.Consumers()[0]
@@ -125,19 +92,24 @@ func ProcessMsgAndSeq[K, V any](ctx context.Context, msg commtypes.MsgAndSeqG[K,
 					return err
 				}
 			}
+			subMsg.StartProcTime = time.Now()
 			err := procMsg(ctx, subMsg, args)
 			if err != nil {
 				return err
 			}
 		}
 		return nil
-	}
-	if isInitialSrc {
-		err := msg.Msg.ExtractEventTimeFromVal()
-		if err != nil {
-			return err
+	} else {
+		if isInitialSrc {
+			err := msg.Msg.ExtractEventTimeFromVal()
+			if err != nil {
+				return err
+			}
 		}
+		producer_consumer.ExtractProduceToConsumeTimeMsgG(meteredConsumer, &msg.Msg)
+		msg.Msg.StartProcTime = time.Now()
+		err := procMsg(ctx, msg.Msg, args)
+
+		return err
 	}
-	producer_consumer.ExtractProduceToConsumeTimeMsgG(meteredConsumer, &msg.Msg)
-	return procMsg(ctx, msg.Msg, args)
 }

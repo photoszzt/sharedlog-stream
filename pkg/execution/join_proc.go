@@ -31,6 +31,7 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 	// debug.Fprintf(os.Stderr, "[id=%s, ts=%d] joinProc start running\n",
 	// 	id, time.Now().UnixMilli())
 	lockAcqTime := stats.NewStatsCollector[int64](fmt.Sprintf("%s_lockAcq", id), stats.DEFAULT_COLLECT_DURATION)
+	procTimeStats := stats.NewPrintLogStatsCollector[int64](fmt.Sprintf("%s_proc", id))
 	jWStart := time.Now()
 	for {
 		select {
@@ -141,9 +142,10 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 				if subMsg.Key.IsNone() && subMsg.Value.IsNone() {
 					continue
 				}
+				subMsg.StartProcTime = time.Now()
 				producer_consumer.ExtractProduceToConsumeTimeMsgG(consumer, &subMsg)
 				// debug.Fprintf(os.Stderr, "[id=%s] before proc msg with sink1\n", id)
-				err = procMsgWithSink(ctx, subMsg, msgSerdePair.outMsgSerde, procArgs, id)
+				err = procMsgWithSink(ctx, subMsg, msgSerdePair.outMsgSerde, procArgs, id, &procTimeStats)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink: %v, out chan len: %d\n", id, err, len(jm.out))
 					jm.out <- &common.FnOutput{Success: false, Message: err.Error()}
@@ -158,8 +160,9 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 				jm.runLock.Unlock()
 				continue
 			}
+			msgs.Msg.StartProcTime = time.Now()
 			producer_consumer.ExtractProduceToConsumeTimeMsgG(consumer, &msgs.Msg)
-			err = procMsgWithSink(ctx, msgs.Msg, msgSerdePair.outMsgSerde, procArgs, id)
+			err = procMsgWithSink(ctx, msgs.Msg, msgSerdePair.outMsgSerde, procArgs, id, &procTimeStats)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink2: %v, out chan len: %d\n", id, err, len(jm.out))
 				jm.out <- &common.FnOutput{Success: false, Message: err.Error()}
@@ -177,6 +180,7 @@ func procMsgWithSink[KIn, VIn, KOut, VOut any](ctx context.Context,
 	msg commtypes.MessageG[KIn, VIn],
 	outMsgSerde commtypes.MessageGSerdeG[KOut, VOut],
 	procArgs *JoinProcArgs[KIn, VIn, KOut, VOut], id string,
+	procTimeStats *stats.PrintLogStatsCollector[int64],
 ) error {
 	// st := msg.Value.(commtypes.EventTimeExtractor)
 	// ts, err := st.ExtractEventTime()
@@ -194,6 +198,8 @@ func procMsgWithSink[KIn, VIn, KOut, VOut any](ctx context.Context,
 	}
 	// debug.Fprintf(os.Stderr, "[id=%s] after runner\n", id)
 	for _, msg := range msgs {
+		procTime := time.Since(msg.StartProcTime)
+		procTimeStats.AddSample(procTime.Microseconds())
 		// debug.Fprintf(os.Stderr, "k %v, v %v, ts %d\n", msg.Key, msg.Value, msg.Timestamp)
 		msgSerOp, err := commtypes.MsgGToMsgSer(msg, outMsgSerde.GetKeySerdeG(), outMsgSerde.GetValSerdeG())
 		if err != nil {

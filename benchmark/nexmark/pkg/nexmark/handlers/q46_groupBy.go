@@ -68,7 +68,7 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 				event := value.Unwrap()
 				return event.NewAuction.ID, nil
 			}))
-	groupByAucIDProc := processor.NewGroupByOutputProcessorG(ectx.Producers()[0], &ectx, outMsgSerde)
+	groupByAucIDProc := processor.NewGroupByOutputProcessorG("aucProc", ectx.Producers()[0], &ectx, outMsgSerde)
 	aucByIDProc.NextProcessor(groupByAucIDProc)
 
 	bidsByAucIDProc := processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64]("bidsByAuctionIDMap",
@@ -76,7 +76,7 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 			event := value.Unwrap()
 			return event.Bid.Auction, nil
 		}))
-	grouByAucIDProc := processor.NewGroupByOutputProcessorG(ectx.Producers()[1], &ectx, outMsgSerde)
+	grouByAucIDProc := processor.NewGroupByOutputProcessorG("bidProc", ectx.Producers()[1], &ectx, outMsgSerde)
 	bidsByAucIDProc.NextProcessor(grouByAucIDProc)
 
 	task := stream_task.NewStreamTaskBuilder().AppProcessFunc(

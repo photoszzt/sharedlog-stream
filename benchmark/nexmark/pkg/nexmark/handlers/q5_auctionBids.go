@@ -210,7 +210,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 				}
 				return newKey, newVal, nil
 			}))
-	outProc := processor.NewGroupByOutputProcessorG(sinks[0], &ectx, sinkMsgSerde)
+	outProc := processor.NewGroupByOutputProcessorG("topo2Proc", sinks[0], &ectx, sinkMsgSerde)
 	countProc.NextProcessor(tabToStreamProc)
 	tabToStreamProc.NextProcessor(mapProc)
 	mapProc.NextProcessor(outProc)

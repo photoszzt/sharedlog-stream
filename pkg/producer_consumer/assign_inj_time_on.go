@@ -20,7 +20,7 @@ func assignInjTime(msg *commtypes.MessageSerialized) {
 	msg.UpdateInjectTime(nowMs)
 }
 
-func extractProduceToConsumeTime(msg *commtypes.Message, isInitialSrc bool, collector *stats.StatsCollector[int64]) {
+func extractProduceToConsumeTime(msg *commtypes.Message, isInitialSrc bool, collector *stats.PrintLogStatsCollector[int64]) {
 	if !isInitialSrc {
 		ts := msg.ExtractInjectTimeMs()
 		dur := time.Now().UnixMilli() - ts
@@ -28,7 +28,7 @@ func extractProduceToConsumeTime(msg *commtypes.Message, isInitialSrc bool, coll
 	}
 }
 
-func extractProduceToConsumeTimeMsgG[K, V any](msg *commtypes.MessageG[K, V], isInitialSrc bool, collector *stats.StatsCollector[int64]) {
+func extractProduceToConsumeTimeMsgG[K, V any](msg *commtypes.MessageG[K, V], isInitialSrc bool, collector *stats.PrintLogStatsCollector[int64]) {
 	if !isInitialSrc {
 		ts := msg.ExtractInjectTimeMs()
 		dur := time.Now().UnixMilli() - ts

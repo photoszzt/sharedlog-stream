@@ -191,7 +191,7 @@ func (h *q4JoinStreamHandler) Q4JoinStream(ctx context.Context, sp *common.Query
 					Category: v.AucCategory,
 				}
 				newMsg := commtypes.MessageG[ntypes.AuctionIdCategory, *ntypes.AuctionBid]{
-					Key: optional.Some(aic), Value: validBid[0].Value, Timestamp: validBid[0].Timestamp}
+					Key: optional.Some(aic), Value: validBid[0].Value, TimestampMs: validBid[0].TimestampMs}
 				newMsgs = append(newMsgs, newMsg)
 			}
 		}

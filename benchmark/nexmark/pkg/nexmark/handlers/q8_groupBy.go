@@ -103,7 +103,7 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 				v := value.Unwrap()
 				return v.NewAuction.Seller, nil
 			}))
-	groupBySellerIDProc := processor.NewGroupByOutputProcessorG(ectx.Producers()[0], &ectx, outMsgSerde)
+	groupBySellerIDProc := processor.NewGroupByOutputProcessorG("aucProc", ectx.Producers()[0], &ectx, outMsgSerde)
 	aucBySellerIdProc.NextProcessor(groupBySellerIDProc)
 
 	perByIDProc := processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64]("personsByIDMap",
@@ -112,7 +112,7 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 				v := value.Unwrap()
 				return v.NewPerson.ID, nil
 			}))
-	groupByPerIDProc := processor.NewGroupByOutputProcessorG(ectx.Producers()[1], &ectx, outMsgSerde)
+	groupByPerIDProc := processor.NewGroupByOutputProcessorG("perProc", ectx.Producers()[1], &ectx, outMsgSerde)
 	perByIDProc.NextProcessor(groupByPerIDProc)
 
 	task := stream_task.NewStreamTaskBuilder().

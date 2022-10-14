@@ -65,5 +65,6 @@ func (p *TableToStreamProcessorG[K, V]) ProcessAndReturn(ctx context.Context, ms
 	if err != nil {
 		return nil, err
 	}
-	return []commtypes.MessageG[K, V]{{Key: msg.Key, Value: optional.Some(newV), Timestamp: msg.Timestamp}}, nil
+	return []commtypes.MessageG[K, V]{{Key: msg.Key, Value: optional.Some(newV),
+		TimestampMs: msg.TimestampMs, StartProcTime: msg.StartProcTime}}, nil
 }

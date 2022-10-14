@@ -81,7 +81,8 @@ func (p *StreamMapProcessorG[K, V, KR, VR]) ProcessAndReturn(ctx context.Context
 	if err != nil {
 		return nil, err
 	}
-	return []commtypes.MessageG[KR, VR]{{Key: optional.Some(newK), Value: optional.Some(newV), Timestamp: msg.Timestamp}}, nil
+	return []commtypes.MessageG[KR, VR]{{Key: optional.Some(newK), Value: optional.Some(newV),
+		TimestampMs: msg.TimestampMs, StartProcTime: msg.StartProcTime}}, nil
 }
 
 type ValueMapperWithKey interface {
@@ -162,7 +163,8 @@ func (p *StreamMapValuesProcessorG[K, V, VR]) ProcessAndReturn(ctx context.Conte
 	if err != nil {
 		return nil, err
 	}
-	return []commtypes.MessageG[K, VR]{{Key: msg.Key, Value: optional.Some(newV), Timestamp: msg.Timestamp}}, nil
+	return []commtypes.MessageG[K, VR]{{Key: msg.Key, Value: optional.Some(newV),
+		TimestampMs: msg.TimestampMs, StartProcTime: msg.StartProcTime}}, nil
 }
 
 type SelectKeyMapper interface {
@@ -211,7 +213,8 @@ func (p *StreamSelectKeyProcessor) ProcessAndReturn(ctx context.Context, msg com
 	if err != nil {
 		return nil, err
 	}
-	return []commtypes.Message{{Key: newKey, Value: msg.Value, Timestamp: msg.Timestamp}}, nil
+	return []commtypes.Message{{Key: newKey, Value: msg.Value,
+		Timestamp: msg.Timestamp}}, nil
 }
 
 type StreamSelectKeyProcessorG[K, V, KR any] struct {
@@ -238,5 +241,6 @@ func (p *StreamSelectKeyProcessorG[K, V, KR]) ProcessAndReturn(ctx context.Conte
 	if err != nil {
 		return nil, err
 	}
-	return []commtypes.MessageG[KR, V]{{Key: optional.Some(newKey), Value: msg.Value, Timestamp: msg.Timestamp}}, nil
+	return []commtypes.MessageG[KR, V]{{Key: optional.Some(newKey), Value: msg.Value,
+		TimestampMs: msg.TimestampMs, StartProcTime: msg.StartProcTime}}, nil
 }

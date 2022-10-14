@@ -66,8 +66,8 @@ func (p *StoreToWindowTableProcessorG[K, V]) Name() string { return p.name }
 func (p *StoreToWindowTableProcessorG[K, V]) ProcessAndReturn(ctx context.Context,
 	msg commtypes.MessageG[K, V],
 ) ([]commtypes.MessageG[K, V], error) {
-	if msg.Timestamp > p.observedTs {
-		p.observedTs = msg.Timestamp
+	if msg.TimestampMs > p.observedTs {
+		p.observedTs = msg.TimestampMs
 	}
 	key, ok := msg.Key.Take()
 	if ok {

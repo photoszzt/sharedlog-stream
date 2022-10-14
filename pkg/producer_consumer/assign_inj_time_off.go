@@ -11,9 +11,9 @@ import (
 func assignInjTime(msg *commtypes.MessageSerialized) error {
 	return nil
 }
-func extractProduceToConsumeTime(msgSeqs *commtypes.Message, isInitialSrc bool, collector *stats.StatsCollector[int64]) error {
+func extractProduceToConsumeTime(msgSeqs *commtypes.Message, isInitialSrc bool, collector *stats.PrintLogStatsCollector[int64]) error {
 	return nil
 }
 
-func extractProduceToConsumeTimeMsgG[K, V any](msg *commtypes.MessageG[K, V], isInitialSrc bool, collector *stats.StatsCollector[int64]) {
+func extractProduceToConsumeTimeMsgG[K, V any](msg *commtypes.MessageG[K, V], isInitialSrc bool, collector *stats.PrintLogStatsCollector[int64]) {
 }

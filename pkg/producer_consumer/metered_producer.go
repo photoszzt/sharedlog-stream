@@ -92,7 +92,7 @@ func (s *ConcurrentMeteredSink) InitFlushTimer() {}
 func (s *ConcurrentMeteredSink) ProduceData(ctx context.Context, msgSer commtypes.MessageSerialized, parNum uint8) error {
 	if s.IsFinalOutput() {
 		procStart := time.Now()
-		ts := msgSer.Timestamp
+		ts := msgSer.TimestampMs
 		if ts != 0 {
 			curTs := procStart.UnixMilli()
 			els := int(curTs - ts)
@@ -237,8 +237,8 @@ func (s *MeteredProducer) ProduceCtrlMsg(ctx context.Context, msg commtypes.RawM
 func (s *MeteredProducer) ProduceData(ctx context.Context, msg commtypes.MessageSerialized, parNum uint8) error {
 	if s.IsFinalOutput() {
 		procStart := time.Now()
-		ts := msg.Timestamp
-		if msg.Timestamp != 0 {
+		ts := msg.TimestampMs
+		if msg.TimestampMs != 0 {
 			curTs := procStart.UnixMilli()
 			els := curTs - ts
 			s.eventTimeLatencies = append(s.eventTimeLatencies, int(els))

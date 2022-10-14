@@ -171,7 +171,7 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 				return float64(sum) / float64(l), nil
 			}))
 	tabToStreamProc := processor.NewTableToStreamProcessorG[uint64, float64]()
-	sinkProc := processor.NewFixedSubstreamOutputProcessorG(ectx.Producers()[0], sp.ParNum, outMsgSerde)
+	sinkProc := processor.NewFixedSubstreamOutputProcessorG("subG3Proc", ectx.Producers()[0], sp.ParNum, outMsgSerde)
 	tabAggProc.NextProcessor(tabMapValProc)
 	tabMapValProc.NextProcessor(tabToStreamProc)
 	tabToStreamProc.NextProcessor(sinkProc)

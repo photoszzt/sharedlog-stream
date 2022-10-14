@@ -132,7 +132,8 @@ func (p *TableMapValuesProcessorG[K, V, VR]) ProcessAndReturn(ctx context.Contex
 			OldVal: oldV,
 			NewVal: newV,
 		}),
-		Timestamp: msg.Timestamp,
+		TimestampMs:   msg.TimestampMs,
+		StartProcTime: msg.StartProcTime,
 	}
 	if err != nil {
 		return nil, err

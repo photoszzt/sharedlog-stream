@@ -110,16 +110,17 @@ func NewStreamAggregateProcessorG[K, V, VA any](
 				newValTs := change.NewVal.Unwrap()
 				ts = newValTs.Timestamp
 			} else {
-				ts = msg.Timestamp
+				ts = msg.TimestampMs
 			}
 			v := commtypes.ChangeG[VA]{
 				NewVal: newVal,
 				OldVal: oldVal,
 			}
 			msgForNext := commtypes.MessageG[K, commtypes.ChangeG[VA]]{
-				Key:       msg.Key,
-				Value:     optional.Some(v),
-				Timestamp: ts,
+				Key:           msg.Key,
+				Value:         optional.Some(v),
+				TimestampMs:   ts,
+				StartProcTime: msg.StartProcTime,
 			}
 			for _, nextProcessor := range p.nextProcessors {
 				err := nextProcessor.Process(ctx, msgForNext)
@@ -153,14 +154,14 @@ func (p *StreamAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Conte
 	var newTs int64
 	if ok {
 		oldAgg = optional.Some(oldAggTs.Value)
-		if msg.Timestamp > oldAggTs.Timestamp {
-			newTs = msg.Timestamp
+		if msg.TimestampMs > oldAggTs.Timestamp {
+			newTs = msg.TimestampMs
 		} else {
 			newTs = oldAggTs.Timestamp
 		}
 	} else {
 		oldAgg = p.initializer.Apply()
-		newTs = msg.Timestamp
+		newTs = msg.TimestampMs
 	}
 	msgVal := msg.Value.Unwrap()
 	newAgg := p.aggregator.Apply(key, msgVal, oldAgg)
@@ -177,6 +178,7 @@ func (p *StreamAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Conte
 		return nil, nil
 	} else {
 		return []commtypes.MessageG[K, commtypes.ChangeG[VA]]{{
-			Key: msg.Key, Value: optional.Some(change), Timestamp: newTs}}, nil
+			Key: msg.Key, Value: optional.Some(change), TimestampMs: newTs,
+			StartProcTime: msg.StartProcTime}}, nil
 	}
 }

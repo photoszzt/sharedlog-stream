@@ -6,6 +6,8 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/producer_consumer"
+	"sharedlog-stream/pkg/stats"
+	"time"
 )
 
 type GroupByOutputProcessorG[KIn, VIn any] struct {
@@ -16,9 +18,10 @@ type GroupByOutputProcessorG[KIn, VIn any] struct {
 	name       string
 	msgGSerdeG commtypes.MessageGSerdeG[KIn, VIn]
 	BaseProcessorG[KIn, VIn, any, any]
+	procTimeStats stats.PrintLogStatsCollector[int64]
 }
 
-func NewGroupByOutputProcessorG[KIn, VIn any](producer producer_consumer.MeteredProducerIntr,
+func NewGroupByOutputProcessorG[KIn, VIn any](procTimeTag string, producer producer_consumer.MeteredProducerIntr,
 	ectx ExecutionContext, msgGSerdeG commtypes.MessageGSerdeG[KIn, VIn],
 ) *GroupByOutputProcessorG[KIn, VIn] {
 	// numPartition := producer.Stream().NumPartition()
@@ -29,6 +32,7 @@ func NewGroupByOutputProcessorG[KIn, VIn any](producer producer_consumer.Metered
 		ectx:            ectx,
 		byteSliceHasher: hashfuncs.ByteSliceHasher{},
 		msgGSerdeG:      msgGSerdeG,
+		procTimeStats:   stats.NewPrintLogStatsCollector[int64](procTimeTag),
 	}
 	// for i := uint8(0); i < numPartition; i++ {
 	// 	g.cHash.Add(i)
@@ -47,6 +51,8 @@ func (g *GroupByOutputProcessorG[KIn, VIn]) ProcessAndReturn(ctx context.Context
 	// if !ok {
 	// 	return nil, common_errors.ErrFailToGetOutputSubstream
 	// }
+	procTime := time.Since(msg.StartProcTime)
+	g.procTimeStats.AddSample(procTime.Microseconds())
 	msgSerOp, err := commtypes.MsgGToMsgSer(msg, g.msgGSerdeG.GetKeySerdeG(), g.msgGSerdeG.GetValSerdeG())
 	if err != nil {
 		return nil, err

@@ -70,7 +70,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		sp.ScaleEpoch, sp.ParNum))
 	filterProc := processor.NewStreamFilterProcessorG[string, *ntypes.Event]("q2Filter",
 		processor.PredicateFuncG[string, *ntypes.Event](filterFunc))
-	outProc := processor.NewFixedSubstreamOutputProcessorG(sinks[0], sp.ParNum, msgSerde)
+	outProc := processor.NewFixedSubstreamOutputProcessorG("subG1Proc", sinks[0], sp.ParNum, msgSerde)
 	filterProc.NextProcessor(outProc)
 	task := stream_task.NewStreamTaskBuilder().MarkFinalStage().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, args processor.ExecutionContext) (*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq]) {

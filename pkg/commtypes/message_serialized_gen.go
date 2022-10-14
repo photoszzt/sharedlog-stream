@@ -37,15 +37,15 @@ func (z *MessageSerialized) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 		case "injT":
-			z.InjT, err = dc.ReadInt64()
+			z.InjTMs, err = dc.ReadInt64()
 			if err != nil {
-				err = msgp.WrapError(err, "InjT")
+				err = msgp.WrapError(err, "InjTMs")
 				return
 			}
 		case "ts":
-			z.Timestamp, err = dc.ReadInt64()
+			z.TimestampMs, err = dc.ReadInt64()
 			if err != nil {
-				err = msgp.WrapError(err, "Timestamp")
+				err = msgp.WrapError(err, "TimestampMs")
 				return
 			}
 		default:
@@ -72,7 +72,7 @@ func (z *MessageSerialized) EncodeMsg(en *msgp.Writer) (err error) {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if z.Timestamp == 0 {
+	if z.TimestampMs == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
@@ -113,9 +113,9 @@ func (z *MessageSerialized) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteInt64(z.InjT)
+	err = en.WriteInt64(z.InjTMs)
 	if err != nil {
-		err = msgp.WrapError(err, "InjT")
+		err = msgp.WrapError(err, "InjTMs")
 		return
 	}
 	if (zb0001Mask & 0x8) == 0 { // if not empty
@@ -124,9 +124,9 @@ func (z *MessageSerialized) EncodeMsg(en *msgp.Writer) (err error) {
 		if err != nil {
 			return
 		}
-		err = en.WriteInt64(z.Timestamp)
+		err = en.WriteInt64(z.TimestampMs)
 		if err != nil {
-			err = msgp.WrapError(err, "Timestamp")
+			err = msgp.WrapError(err, "TimestampMs")
 			return
 		}
 	}
@@ -147,7 +147,7 @@ func (z *MessageSerialized) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if z.Timestamp == 0 {
+	if z.TimestampMs == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
@@ -168,11 +168,11 @@ func (z *MessageSerialized) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// string "injT"
 	o = append(o, 0xa4, 0x69, 0x6e, 0x6a, 0x54)
-	o = msgp.AppendInt64(o, z.InjT)
+	o = msgp.AppendInt64(o, z.InjTMs)
 	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// string "ts"
 		o = append(o, 0xa2, 0x74, 0x73)
-		o = msgp.AppendInt64(o, z.Timestamp)
+		o = msgp.AppendInt64(o, z.TimestampMs)
 	}
 	return
 }
@@ -208,15 +208,15 @@ func (z *MessageSerialized) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "injT":
-			z.InjT, bts, err = msgp.ReadInt64Bytes(bts)
+			z.InjTMs, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "InjT")
+				err = msgp.WrapError(err, "InjTMs")
 				return
 			}
 		case "ts":
-			z.Timestamp, bts, err = msgp.ReadInt64Bytes(bts)
+			z.TimestampMs, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "Timestamp")
+				err = msgp.WrapError(err, "TimestampMs")
 				return
 			}
 		default:

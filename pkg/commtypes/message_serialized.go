@@ -11,18 +11,18 @@ import (
 )
 
 type MessageSerialized struct {
-	KeyEnc    []byte `json:"key,omitempty" msg:"key,omitempty"`
-	ValueEnc  []byte `json:"val,omitempty" msg:"val,omitempty"`
-	InjT      int64  `msg:"injT" json:"injT"`
-	Timestamp int64  `msg:"ts,omitempty" json:"ts,omitempty"`
+	KeyEnc      []byte `json:"key,omitempty" msg:"key,omitempty"`
+	ValueEnc    []byte `json:"val,omitempty" msg:"val,omitempty"`
+	InjTMs      int64  `msg:"injT" json:"injT"`
+	TimestampMs int64  `msg:"ts,omitempty" json:"ts,omitempty"`
 }
 
 func (m *MessageSerialized) UpdateInjectTime(ts int64) {
-	m.InjT = ts
+	m.InjTMs = ts
 }
 
 func (m *MessageSerialized) ExtractInjectTimeMs() int64 {
-	return m.InjT
+	return m.InjTMs
 }
 
 func convertToMsgSer(value interface{}, keySerde Serde, valSerde Serde) (*MessageSerialized, error) {
@@ -58,10 +58,10 @@ func convertToMsgSer(value interface{}, keySerde Serde, valSerde Serde) (*Messag
 		return nil, nil
 	}
 	msg := &MessageSerialized{
-		KeyEnc:    kenc,
-		ValueEnc:  venc,
-		InjT:      v.InjT,
-		Timestamp: v.Timestamp,
+		KeyEnc:      kenc,
+		ValueEnc:    venc,
+		InjTMs:      v.InjT,
+		TimestampMs: v.Timestamp,
 	}
 	return msg, nil
 }
@@ -85,8 +85,8 @@ func decodeToMsg(msgSer *MessageSerialized, keySerde Serde, valSerde Serde) (int
 	msg := Message{
 		Key:       key,
 		Value:     val,
-		InjT:      msgSer.InjT,
-		Timestamp: msgSer.Timestamp,
+		InjT:      msgSer.InjTMs,
+		Timestamp: msgSer.TimestampMs,
 	}
 	return msg, nil
 }

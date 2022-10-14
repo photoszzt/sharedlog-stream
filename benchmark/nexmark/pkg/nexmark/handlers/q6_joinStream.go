@@ -190,7 +190,7 @@ func (h *q6JoinStreamHandler) Q6JoinStream(ctx context.Context, sp *common.Query
 					Seller: v.AucSeller,
 				}
 				newMsg := commtypes.MessageG[ntypes.AuctionIdSeller, *ntypes.AuctionBid]{
-					Key: optional.Some(aic), Value: validBid[0].Value, Timestamp: validBid[0].Timestamp}
+					Key: optional.Some(aic), Value: validBid[0].Value, TimestampMs: validBid[0].TimestampMs}
 				newMsgs = append(newMsgs, newMsg)
 			}
 		}

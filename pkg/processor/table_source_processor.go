@@ -140,8 +140,8 @@ func (p *TableSourceProcessorG[K, V]) ProcessAndReturn(ctx context.Context, msg 
 		log.Warn().Msgf("Skipping record due to null key")
 		return nil, nil
 	}
-	if msg.Timestamp > p.observedStreamTime {
-		p.observedStreamTime = msg.Timestamp
+	if msg.TimestampMs > p.observedStreamTime {
+		p.observedStreamTime = msg.TimestampMs
 	}
 	if p.store != nil {
 		oldVal := optional.None[V]()
@@ -152,23 +152,25 @@ func (p *TableSourceProcessorG[K, V]) ProcessAndReturn(ctx context.Context, msg 
 		}
 		if ok {
 			oldVal = optional.Some(oldValTs.Value)
-			if msg.Timestamp < oldValTs.Timestamp {
+			if msg.TimestampMs < oldValTs.Timestamp {
 				log.Warn().Msgf("Detected out-of-order table update for %s, old Ts=[%v] new Ts=[%v].",
-					p.store.Name(), oldValTs.Timestamp, msg.Timestamp)
+					p.store.Name(), oldValTs.Timestamp, msg.TimestampMs)
 			}
 		}
-		err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(msg.Value, msg.Timestamp), p.observedStreamTime)
+		err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(msg.Value, msg.TimestampMs), p.observedStreamTime)
 		if err != nil {
 			return nil, err
 		}
 		return []commtypes.MessageG[K, commtypes.ChangeG[V]]{{
-			Key:       msg.Key,
-			Value:     optional.Some(commtypes.ChangeG[V]{NewVal: msg.Value, OldVal: oldVal}),
-			Timestamp: msg.Timestamp}}, nil
+			Key:           msg.Key,
+			Value:         optional.Some(commtypes.ChangeG[V]{NewVal: msg.Value, OldVal: oldVal}),
+			TimestampMs:   msg.TimestampMs,
+			StartProcTime: msg.StartProcTime}}, nil
 	} else {
 		return []commtypes.MessageG[K, commtypes.ChangeG[V]]{{
-			Key:       msg.Key,
-			Value:     optional.Some(commtypes.ChangeG[V]{NewVal: msg.Value, OldVal: optional.None[V]()}),
-			Timestamp: msg.Timestamp}}, nil
+			Key:           msg.Key,
+			Value:         optional.Some(commtypes.ChangeG[V]{NewVal: msg.Value, OldVal: optional.None[V]()}),
+			TimestampMs:   msg.TimestampMs,
+			StartProcTime: msg.StartProcTime}}, nil
 	}
 }

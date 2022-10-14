@@ -19,6 +19,11 @@ func LatStart() time.Time {
 	return time.Now()
 }
 
+type ConcurrentPrintLogStatsCollector[E constraints.Ordered] struct {
+	mu syncutils.Mutex
+	PrintLogStatsCollector[E]
+}
+
 type ConcurrentStatsCollector[E constraints.Ordered] struct {
 	mu syncutils.Mutex
 	StatsCollector[E]
@@ -30,8 +35,18 @@ func NewConcurrentStatsCollector[E constraints.Ordered](tag string, duration tim
 	}
 }
 
+func NewConcurrentPrintLogStatsCollector[E constraints.Ordered](tag string) *ConcurrentPrintLogStatsCollector[E] {
+	return &ConcurrentPrintLogStatsCollector[E]{
+		PrintLogStatsCollector: NewPrintLogStatsCollector[E](tag),
+	}
+}
+
 func (c *ConcurrentStatsCollector[E]) PrintRemainingStats() {
 	c.StatsCollector.PrintRemainingStats()
+}
+
+func (c *ConcurrentPrintLogStatsCollector[E]) PrintRemainingStats() {
+	c.PrintLogStatsCollector.PrintRemainingStats()
 }
 
 type StatsCollector[E constraints.Ordered] struct {
@@ -41,12 +56,30 @@ type StatsCollector[E constraints.Ordered] struct {
 	min_report_samples uint32
 }
 
+type PrintLogStatsCollector[E constraints.Ordered] struct {
+	tag  string
+	data []E
+}
+
 func NewStatsCollector[E constraints.Ordered](tag string, reportInterval time.Duration) StatsCollector[E] {
 	return StatsCollector[E]{
 		data:               make([]E, 0, 128),
 		report_timer:       NewReportTimer(reportInterval),
 		tag:                tag,
 		min_report_samples: DEFAULT_MIN_REPORT_SAMPLES,
+	}
+}
+
+func NewPrintLogStatsCollector[E constraints.Ordered](tag string) PrintLogStatsCollector[E] {
+	return PrintLogStatsCollector[E]{
+		data: make([]E, 0, 1024),
+		tag:  tag,
+	}
+}
+
+func (c *PrintLogStatsCollector[E]) PrintRemainingStats() {
+	if len(c.data) > 0 {
+		fmt.Fprintf(os.Stderr, "%s: %v\n", c.tag, c.data)
 	}
 }
 

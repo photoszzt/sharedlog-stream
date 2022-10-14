@@ -215,7 +215,7 @@ func (p *StreamStreamJoinProcessorG[K, V1, V2, VR]) ProcessAndReturn(
 	}
 
 	// needOuterJoin := p.outer
-	inputTs := msg.Timestamp
+	inputTs := msg.TimestampMs
 	// debug.Fprintf(os.Stderr, "input ts: %v\n", inputTs)
 	var timeFrom uint64
 	var timeTo uint64
@@ -248,13 +248,14 @@ func (p *StreamStreamJoinProcessorG[K, V1, V2, VR]) ProcessAndReturn(
 		time.Unix(int64(timeToSec), int64(timeToNs)), func(otherRecordTs int64, kt K, vt V2) error {
 			var newTs int64
 			// needOuterJoin = false
-			newVal := p.joiner.Apply(kt, msgVal, vt, msg.Timestamp, otherRecordTs)
+			newVal := p.joiner.Apply(kt, msgVal, vt, msg.TimestampMs, otherRecordTs)
 			if inputTs > otherRecordTs {
 				newTs = inputTs
 			} else {
 				newTs = otherRecordTs
 			}
-			msgs = append(msgs, commtypes.MessageG[K, VR]{Key: msg.Key, Value: optional.Some(newVal), Timestamp: newTs})
+			msgs = append(msgs, commtypes.MessageG[K, VR]{Key: msg.Key, Value: optional.Some(newVal),
+				TimestampMs: newTs, StartProcTime: msg.StartProcTime})
 			return nil
 		})
 	return msgs, err

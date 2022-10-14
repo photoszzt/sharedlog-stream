@@ -13,7 +13,7 @@ import (
 type MeteredConsumer struct {
 	consumer    *ShardedSharedLogStreamConsumer
 	latencies   stats.StatsCollector[int64]
-	pToCLat     stats.StatsCollector[int64]
+	pToCLat     stats.PrintLogStatsCollector[int64]
 	consumeTp   stats.ThroughputCounter
 	numLogEntry uint64
 	numEpoch    uint64
@@ -38,7 +38,7 @@ func NewMeteredConsumer(src *ShardedSharedLogStreamConsumer, warmup time.Duratio
 	return &MeteredConsumer{
 		consumer:  src,
 		latencies: stats.NewStatsCollector[int64](src_name, stats.DEFAULT_COLLECT_DURATION),
-		pToCLat:   stats.NewStatsCollector[int64]("procTo"+src_name, stats.DEFAULT_COLLECT_DURATION),
+		pToCLat:   stats.NewPrintLogStatsCollector[int64]("procTo" + src_name),
 		consumeTp: stats.NewThroughputCounter(src_name, stats.DEFAULT_COLLECT_DURATION),
 		ctrlCount: 0,
 	}

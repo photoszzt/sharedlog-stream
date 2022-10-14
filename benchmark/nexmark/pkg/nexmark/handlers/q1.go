@@ -79,7 +79,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 		processor.NewStreamMapValuesProcessorG[string, *ntypes.Event, *ntypes.Event](
 			"mapBid", processor.ValueMapperWithKeyFuncG[string, *ntypes.Event, *ntypes.Event](q1mapFunc))
 	outProc :=
-		processor.NewFixedSubstreamOutputProcessorG(sinks[0], sp.ParNum, msgSerde)
+		processor.NewFixedSubstreamOutputProcessorG("subG1Proc", sinks[0], sp.ParNum, msgSerde)
 	filterProc.NextProcessor(mapProc)
 	mapProc.NextProcessor(outProc)
 	task := stream_task.NewStreamTaskBuilder().MarkFinalStage().

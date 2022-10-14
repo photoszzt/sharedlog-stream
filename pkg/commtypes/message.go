@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/utils"
+	"time"
 )
 
 const (
@@ -22,35 +23,36 @@ type MessageSerde interface {
 }
 
 type MessageG[K, V any] struct {
-	Key       optional.Option[K]
-	Value     optional.Option[V]
-	Timestamp int64
-	InjT      int64
+	StartProcTime time.Time
+	Key           optional.Option[K]
+	Value         optional.Option[V]
+	TimestampMs   int64
+	InjTMs        int64
 }
 
 var _ = fmt.Stringer(Message{})
 
 func (m MessageG[K, V]) String() string {
-	return fmt.Sprintf("Msg: {Key: %v, Value: %v, Ts: %d, InjectTs: %d}", m.Key, m.Value, m.Timestamp, m.InjT)
+	return fmt.Sprintf("Msg: {Key: %v, Value: %v, Ts: %d, InjectTs: %d}", m.Key, m.Value, m.TimestampMs, m.InjTMs)
 }
 
 func (m *MessageG[K, V]) UpdateInjectTime(ts int64) {
-	m.InjT = ts
+	m.InjTMs = ts
 }
 
 func (m MessageG[K, V]) ExtractInjectTimeMs() int64 {
-	return m.InjT
+	return m.InjTMs
 }
 
 func (m MessageG[K, V]) ExtractEventTime() (int64, error) {
-	return m.Timestamp, nil
+	return m.TimestampMs, nil
 }
 
 func (m *MessageG[K, V]) ExtractEventTimeFromVal() error {
 	msg := Message{Value: m.Value.Unwrap()}
 	v := msg.Value.(EventTimeExtractor)
 	var err error
-	m.Timestamp, err = v.ExtractEventTime()
+	m.TimestampMs, err = v.ExtractEventTime()
 	if err != nil {
 		return err
 	}
@@ -73,7 +75,7 @@ func MessageToMessageG[K, V any](msg Message) MessageG[K, V] {
 	if !utils.IsNil(msg.Value) {
 		v = optional.Some(msg.Value.(V))
 	}
-	return MessageG[K, V]{Key: k, Value: v, Timestamp: msg.Timestamp, InjT: msg.InjT}
+	return MessageG[K, V]{Key: k, Value: v, TimestampMs: msg.Timestamp, InjTMs: msg.InjT}
 }
 
 func MessageGToMessage[K, V any](msgG MessageG[K, V]) Message {
@@ -87,7 +89,7 @@ func MessageGToMessage[K, V any](msgG MessageG[K, V]) Message {
 	if !ok {
 		v = nil
 	}
-	return Message{Key: k, Value: v, Timestamp: msgG.Timestamp, InjT: msgG.InjT}
+	return Message{Key: k, Value: v, Timestamp: msgG.TimestampMs, InjT: msgG.InjTMs}
 }
 
 var _ = fmt.Stringer(Message{})

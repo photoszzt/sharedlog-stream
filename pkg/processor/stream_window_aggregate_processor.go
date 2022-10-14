@@ -142,16 +142,17 @@ func NewStreamWindowAggregateProcessorG[K, V, VA any](name string,
 				newValTs := change.NewVal.Unwrap()
 				ts = newValTs.Timestamp
 			} else {
-				ts = msg.Timestamp
+				ts = msg.TimestampMs
 			}
 			v := commtypes.ChangeG[VA]{
 				NewVal: newVal,
 				OldVal: oldVal,
 			}
 			msgForNext := commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[VA]]{
-				Key:       msg.Key,
-				Value:     optional.Some(v),
-				Timestamp: ts,
+				Key:           msg.Key,
+				Value:         optional.Some(v),
+				TimestampMs:   ts,
+				StartProcTime: msg.StartProcTime,
 			}
 			for _, nextProcessor := range p.nextProcessors {
 				err := nextProcessor.Process(ctx, msgForNext)
@@ -177,7 +178,7 @@ func (p *StreamWindowAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context
 		return nil, nil
 	}
 	// debug.Fprintf(os.Stderr, "stream window agg msg k %v, v %v, ts %d\n", msg.Key, msg.Value, msg.Timestamp)
-	ts := msg.Timestamp
+	ts := msg.TimestampMs
 	if p.observedStreamTime < ts {
 		p.observedStreamTime = ts
 	}
@@ -201,14 +202,14 @@ func (p *StreamWindowAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context
 			}
 			if exists {
 				oldAgg = optional.Some(oldAggTs.Value)
-				if msg.Timestamp > oldAggTs.Timestamp {
-					newTs = msg.Timestamp
+				if msg.TimestampMs > oldAggTs.Timestamp {
+					newTs = msg.TimestampMs
 				} else {
 					newTs = oldAggTs.Timestamp
 				}
 			} else {
 				oldAgg = p.initializer.Apply()
-				newTs = msg.Timestamp
+				newTs = msg.TimestampMs
 			}
 			newAgg := p.aggregator.Apply(msgKey, msgVal, oldAgg)
 			err = p.store.Put(ctx, msgKey, commtypes.CreateValueTimestampGOptional(newAgg, newTs), windowStart, newTs)
@@ -216,14 +217,15 @@ func (p *StreamWindowAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context
 				return nil, fmt.Errorf("win agg put err %v", err)
 			}
 			newMsgs = append(newMsgs, commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[VA]]{
-				Key:       optional.Some(commtypes.WindowedKeyG[K]{Key: msgKey, Window: window}),
-				Value:     optional.Some(commtypes.ChangeG[VA]{NewVal: newAgg, OldVal: oldAgg}),
-				Timestamp: newTs,
+				Key:           optional.Some(commtypes.WindowedKeyG[K]{Key: msgKey, Window: window}),
+				Value:         optional.Some(commtypes.ChangeG[VA]{NewVal: newAgg, OldVal: oldAgg}),
+				TimestampMs:   newTs,
+				StartProcTime: msg.StartProcTime,
 			})
 		} else {
 			log.Warn().Interface("key", msg.Key).
 				Interface("value", msg.Value).
-				Int64("timestamp", msg.Timestamp).Msg("Skipping record for expired window. ")
+				Int64("timestamp", msg.TimestampMs).Msg("Skipping record for expired window. ")
 		}
 	}
 	if p.useCache {

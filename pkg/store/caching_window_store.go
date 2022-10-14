@@ -67,9 +67,9 @@ func NewCachingWindowStoreG[K comparable, V any](ctx context.Context,
 					Window: t,
 				}
 				err = c.flushCallbackFunc(ctx, commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]{
-					Key:       optional.Some(k),
-					Value:     optional.Some(change),
-					Timestamp: entry.entry.currentStreamTime,
+					Key:         optional.Some(k),
+					Value:       optional.Some(change),
+					TimestampMs: entry.entry.currentStreamTime,
 				})
 				if err != nil {
 					return err

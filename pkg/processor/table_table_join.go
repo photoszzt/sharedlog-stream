@@ -108,7 +108,7 @@ func (p *TableTableJoinProcessorG[K, V1, V2, VR]) ProcessAndReturn(ctx context.C
 		return nil, fmt.Errorf("get err: %v", err)
 	}
 	if ok {
-		ts := msg.Timestamp
+		ts := msg.TimestampMs
 		if ts < rvTs.Timestamp {
 			ts = rvTs.Timestamp
 		}
@@ -126,8 +126,10 @@ func (p *TableTableJoinProcessorG[K, V1, V2, VR]) ProcessAndReturn(ctx context.C
 			oldValOp = optional.Some(oldVal)
 		}
 		return []commtypes.MessageG[K, commtypes.ChangeG[VR]]{{
-			Key:   msg.Key,
-			Value: optional.Some(commtypes.ChangeG[VR]{NewVal: newValOp, OldVal: oldValOp}), Timestamp: ts}}, nil
+			Key:           msg.Key,
+			Value:         optional.Some(commtypes.ChangeG[VR]{NewVal: newValOp, OldVal: oldValOp}),
+			TimestampMs:   ts,
+			StartProcTime: msg.StartProcTime}}, nil
 	}
 	return nil, nil
 }

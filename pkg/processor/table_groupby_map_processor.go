@@ -127,16 +127,18 @@ func (p *TableGroupByMapProcessorG[K, V, KR, VR]) ProcessAndReturn(ctx context.C
 	var outMsgs []commtypes.MessageG[KR, commtypes.ChangeG[VR]]
 	if oldKeyOp.IsSome() && oldValOp.IsSome() {
 		outMsgs = append(outMsgs, commtypes.MessageG[KR, commtypes.ChangeG[VR]]{
-			Key:       oldKeyOp,
-			Value:     optional.Some(commtypes.ChangeG[VR]{NewVal: optional.None[VR](), OldVal: oldValOp}),
-			Timestamp: msg.Timestamp,
+			Key:           oldKeyOp,
+			Value:         optional.Some(commtypes.ChangeG[VR]{NewVal: optional.None[VR](), OldVal: oldValOp}),
+			TimestampMs:   msg.TimestampMs,
+			StartProcTime: msg.StartProcTime,
 		})
 	}
 	if newKOp.IsSome() && newVOp.IsSome() {
 		outMsgs = append(outMsgs, commtypes.MessageG[KR, commtypes.ChangeG[VR]]{
-			Key:       newKOp,
-			Value:     optional.Some(commtypes.ChangeG[VR]{NewVal: newVOp, OldVal: optional.None[VR]()}),
-			Timestamp: msg.Timestamp,
+			Key:           newKOp,
+			Value:         optional.Some(commtypes.ChangeG[VR]{NewVal: newVOp, OldVal: optional.None[VR]()}),
+			TimestampMs:   msg.TimestampMs,
+			StartProcTime: msg.StartProcTime,
 		})
 	}
 	return outMsgs, nil

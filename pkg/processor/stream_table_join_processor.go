@@ -90,7 +90,8 @@ func (p *StreamTableJoinProcessorG[K, V1, V2, VR]) ProcessAndReturn(ctx context.
 	}
 	if p.leftJoin || ok {
 		joined := p.joiner.Apply(key, msgVal, valAgg.Value)
-		newMsg := commtypes.MessageG[K, VR]{Key: msg.Key, Value: optional.Some(joined), Timestamp: msg.Timestamp}
+		newMsg := commtypes.MessageG[K, VR]{Key: msg.Key, Value: optional.Some(joined),
+			TimestampMs: msg.TimestampMs, StartProcTime: msg.StartProcTime}
 		return []commtypes.MessageG[K, VR]{newMsg}, nil
 	}
 	return nil, nil

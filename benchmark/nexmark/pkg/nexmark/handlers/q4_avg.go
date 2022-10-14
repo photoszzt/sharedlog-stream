@@ -158,7 +158,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 			return float64(sc.Sum) / float64(sc.Count), nil
 		}))
 	tabToStrProc := processor.NewTableToStreamProcessorG[uint64, float64]()
-	outProc := processor.NewFixedSubstreamOutputProcessorG(ectx.Producers()[0], sp.ParNum, outMsgSerde)
+	outProc := processor.NewFixedSubstreamOutputProcessorG("subG4Proc", ectx.Producers()[0], sp.ParNum, outMsgSerde)
 	tabAggProc.NextProcessor(mapValProc)
 	mapValProc.NextProcessor(tabToStrProc)
 	tabToStrProc.NextProcessor(outProc)
