@@ -174,9 +174,11 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		execution.JoinWorkerFunc[uint64, *ntypes.Event, uint64, ntypes.PersonTime](perJoinsAucFunc),
 		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum), true,
-		msgSerdePair, msgSerdePair)
+		msgSerdePair, msgSerdePair, "subG2")
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, fmt.Sprintf("%s-%d", h.funcName, sp.ParNum))).
 		WindowStoreChangelogs(wsc).FixedOutParNum(sp.ParNum).Build()
-	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, setupSnapCallbackFunc)
+	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, setupSnapCallbackFunc, func() {
+		procArgs.OutputRemainingStats()
+	})
 }

@@ -191,5 +191,5 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 			stream_task.SetKVStoreSnapshot[uint64, commtypes.ValueTimestampG[ntypes.SumAndCount]](ctx, env, em,
 				rs, kvstore, payloadSerde)
 			return nil
-		})
+		}, func() { outProc.OutputRemainingStats() })
 }

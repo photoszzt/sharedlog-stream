@@ -84,6 +84,7 @@ func ExecuteApp(ctx context.Context,
 	t *StreamTask,
 	streamTaskArgs *StreamTaskArgs,
 	setupSnapshotCallback SetupSnapshotCallbackFunc,
+	outputRemainingStats func(),
 ) *common.FnOutput {
 	var ret *common.FnOutput
 	if streamTaskArgs.guarantee == exactly_once_intr.TWO_PHASE_COMMIT {
@@ -110,17 +111,19 @@ func ExecuteApp(ctx context.Context,
 		ret = processNoProto(ctx, t, streamTaskArgs)
 	}
 	if ret != nil && ret.Success {
+		outputRemainingStats()
 		for _, src := range streamTaskArgs.ectx.Consumers() {
+			src.OutputRemainingStats()
 			ret.Counts[src.Name()] = src.GetCount()
 			ret.Counts[src.Name()+"_ctrl"] = uint64(src.NumCtrlMsg())
 			ret.Counts[src.Name()+"_epoch"] = uint64(src.NumEpoch())
 			ret.Counts[src.Name()+"_data"] = src.GetCount() - uint64(src.NumCtrlMsg()) - uint64(src.NumEpoch())
 			ret.Counts[src.Name()+"_logEntry"] = src.NumLogEntry()
-			fmt.Fprintf(os.Stderr, "%s msgCnt %d, ctrlCnt %d\n",
-				src.Name(), src.GetCount(), src.NumCtrlMsg())
+			fmt.Fprintf(os.Stderr, "%s msgCnt %d, ctrlCnt %d, epochCnt %d, logEntry %d\n",
+				src.Name(), src.GetCount(), src.NumCtrlMsg(), src.NumEpoch(), src.NumLogEntry())
 		}
 		for _, sink := range streamTaskArgs.ectx.Producers() {
-			sink.OutputRemainingStats()
+			// sink.OutputRemainingStats()
 			ret.Counts[sink.Name()] = sink.GetCount()
 			// ret.Counts[sink.Name()+"_ctrl"] = uint64(sink.NumCtrlMsg())
 			fmt.Fprintf(os.Stderr, "%s msgCnt %d, ctrlCnt %d\n",

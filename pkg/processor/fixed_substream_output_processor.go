@@ -35,6 +35,10 @@ func NewFixedSubstreamOutputProcessorG[KIn, VIn any](processTimeTag string,
 	return r
 }
 
+func (p *FixedSubstreamOutputProcessorG[KIn, VIn]) OutputRemainingStats() {
+	p.procTimeStats.PrintRemainingStats()
+}
+
 func (p *FixedSubstreamOutputProcessorG[KIn, VIn]) Name() string {
 	return p.name
 }

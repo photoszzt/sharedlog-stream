@@ -210,7 +210,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 				}
 				return newKey, newVal, nil
 			}))
-	outProc := processor.NewGroupByOutputProcessorG("topo2Proc", sinks[0], &ectx, sinkMsgSerde)
+	outProc := processor.NewGroupByOutputProcessorG("subG2Proc", sinks[0], &ectx, sinkMsgSerde)
 	countProc.NextProcessor(tabToStreamProc)
 	tabToStreamProc.NextProcessor(mapProc)
 	mapProc.NextProcessor(outProc)
@@ -230,5 +230,5 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	builder := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp, builder).
 		WindowStoreChangelogs(wsc).Build()
-	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, setSnapCallbackFunc)
+	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, setSnapCallbackFunc, func() { outProc.OutputRemainingStats() })
 }

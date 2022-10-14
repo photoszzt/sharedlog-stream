@@ -205,5 +205,5 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		stream_task.SetKVStoreSnapshot[uint64, commtypes.ValueTimestampG[ntypes.PriceTimeList]](ctx, env, em, rs,
 			kvstore, payloadSerde)
 		return nil
-	})
+	}, func() { sinkProc.OutputRemainingStats() })
 }

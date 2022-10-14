@@ -178,7 +178,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 				v := value.Unwrap()
 				return k.Category, v, nil
 			}))
-	sinkProc := processor.NewGroupByOutputProcessorG("topo3Proc", ectx.Producers()[0], &ectx, outMsgSerde)
+	sinkProc := processor.NewGroupByOutputProcessorG("subG3Proc", ectx.Producers()[0], &ectx, outMsgSerde)
 	aggProc.NextProcessor(groupByProc)
 	groupByProc.NextProcessor(sinkProc)
 	task := stream_task.NewStreamTaskBuilder().
@@ -208,5 +208,5 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		}
 		stream_task.SetKVStoreSnapshot(ctx, env, em, rs, aggStore, payloadSerde)
 		return nil
-	})
+	}, func() { sinkProc.OutputRemainingStats() })
 }

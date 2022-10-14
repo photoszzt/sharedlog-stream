@@ -172,7 +172,7 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 			) {
 				return value.Unwrap(), key.Unwrap(), nil
 			}))
-	sinkProc := processor.NewGroupByOutputProcessorG("topo2Proc", sinks_arr[0], &ectx, outMsgSerde)
+	sinkProc := processor.NewGroupByOutputProcessorG("subG2Proc", sinks_arr[0], &ectx, outMsgSerde)
 	aggProc.NextProcessor(toStreamProc)
 	toStreamProc.NextProcessor(mapProc)
 	mapProc.NextProcessor(sinkProc)
@@ -200,5 +200,5 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 		}
 		stream_task.SetKVStoreSnapshot(ctx, env, em, rs, aggStore, payloadSerde)
 		return nil
-	})
+	}, func() { sinkProc.OutputRemainingStats() })
 }

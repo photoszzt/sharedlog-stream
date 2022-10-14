@@ -23,6 +23,11 @@ func NewCommonJoinProcArgs[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR an
 	}
 }
 
+func (c *CommonJoinProcArgs[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR]) OutputRemainingStats() {
+	c.arg1.procLat.PrintRemainingStats()
+	c.arg2.procLat.PrintRemainingStats()
+}
+
 func (c *CommonJoinProcArgs[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR]) SetRecordFinishFunc(recordFinishFunc exactly_once_intr.RecordPrevInstanceFinishFunc) {
 	c.arg1.SetRecordFinishFunc(recordFinishFunc)
 	c.arg2.SetRecordFinishFunc(recordFinishFunc)

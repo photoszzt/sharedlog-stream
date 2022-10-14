@@ -37,11 +37,12 @@ func PrepareTaskWithJoin[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR any]
 	isFinalStage bool,
 	leftMsgPair MsgSerdePair[KInL, VInL, KOutL, VOutL],
 	rightMsgPair MsgSerdePair[KInR, VInR, KOutR, VOutR],
+	stageTag string,
 ) (*stream_task.StreamTask, *CommonJoinProcArgs[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR]) {
 	joinProcLeft, joinProcRight := CreateJoinProcArgsPair(
 		leftJoinWorker, rightJoinWorker,
 		allConsumersProducers.Consumers(),
-		allConsumersProducers.Producers(), baseProcArgs)
+		allConsumersProducers.Producers(), baseProcArgs, stageTag)
 	var wg sync.WaitGroup
 	leftManager := NewJoinProcManager()
 	rightManager := NewJoinProcManager()

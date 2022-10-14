@@ -76,7 +76,7 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 				event := value.Unwrap()
 				return event.Bid.Auction, nil
 			}))
-	outProc := processor.NewGroupByOutputProcessorG("topo1Proc", sinks[0], &ectx, outMsgSerde)
+	outProc := processor.NewGroupByOutputProcessorG("subG1Proc", sinks[0], &ectx, outMsgSerde)
 	filterProc.NextProcessor(mapProc)
 	mapProc.NextProcessor(outProc)
 	task := stream_task.NewStreamTaskBuilder().
@@ -93,5 +93,5 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 		sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
 	builder := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp, builder).Build()
-	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, stream_task.EmptySetupSnapshotCallback)
+	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, stream_task.EmptySetupSnapshotCallback, func() { outProc.OutputRemainingStats() })
 }

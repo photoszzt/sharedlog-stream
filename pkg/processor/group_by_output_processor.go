@@ -41,6 +41,10 @@ func NewGroupByOutputProcessorG[KIn, VIn any](procTimeTag string, producer produ
 	return &g
 }
 
+func (g *GroupByOutputProcessorG[KIn, VIn]) OutputRemainingStats() {
+	g.procTimeStats.PrintRemainingStats()
+}
+
 func (g *GroupByOutputProcessorG[KIn, VIn]) Name() string {
 	return g.name
 }

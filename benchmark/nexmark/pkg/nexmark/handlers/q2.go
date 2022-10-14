@@ -85,5 +85,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).
 		FixedOutParNum(sp.ParNum).
 		Build()
-	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, stream_task.EmptySetupSnapshotCallback)
+	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, stream_task.EmptySetupSnapshotCallback, func() {
+		outProc.OutputRemainingStats()
+	})
 }

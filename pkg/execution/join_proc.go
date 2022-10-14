@@ -10,7 +10,6 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/producer_consumer"
-	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/stream_task"
 	"sync"
 	"time"
@@ -30,8 +29,7 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 	defer wg.Done()
 	// debug.Fprintf(os.Stderr, "[id=%s, ts=%d] joinProc start running\n",
 	// 	id, time.Now().UnixMilli())
-	lockAcqTime := stats.NewStatsCollector[int64](fmt.Sprintf("%s_lockAcq", id), stats.DEFAULT_COLLECT_DURATION)
-	procTimeStats := stats.NewPrintLogStatsCollector[int64](fmt.Sprintf("%s_proc", id))
+	// lockAcqTime := stats.NewStatsCollector[int64](fmt.Sprintf("%s_lockAcq", id), stats.DEFAULT_COLLECT_DURATION)
 	jWStart := time.Now()
 	for {
 		select {
@@ -50,10 +48,10 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 			}
 		default:
 		}
-		lSt := stats.TimerBegin()
+		// lSt := stats.TimerBegin()
 		jm.runLock.Lock()
-		lelapsed := stats.Elapsed(lSt).Microseconds()
-		lockAcqTime.AddSample(lelapsed)
+		// lelapsed := stats.Elapsed(lSt).Microseconds()
+		// lockAcqTime.AddSample(lelapsed)
 		// debug.Fprintf(os.Stderr, "[id=%s] before consume, stream name %s\n", id, procArgs.Consumers()[0].Stream().TopicName())
 		consumer := procArgs.Consumers()[0]
 		rawMsgSeq, err := consumer.Consume(ctx, procArgs.SubstreamNum())
@@ -145,7 +143,7 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 				subMsg.StartProcTime = time.Now()
 				producer_consumer.ExtractProduceToConsumeTimeMsgG(consumer, &subMsg)
 				// debug.Fprintf(os.Stderr, "[id=%s] before proc msg with sink1\n", id)
-				err = procMsgWithSink(ctx, subMsg, msgSerdePair.outMsgSerde, procArgs, id, &procTimeStats)
+				err = procMsgWithSink(ctx, subMsg, msgSerdePair.outMsgSerde, procArgs, id)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink: %v, out chan len: %d\n", id, err, len(jm.out))
 					jm.out <- &common.FnOutput{Success: false, Message: err.Error()}
@@ -162,7 +160,7 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 			}
 			msgs.Msg.StartProcTime = time.Now()
 			producer_consumer.ExtractProduceToConsumeTimeMsgG(consumer, &msgs.Msg)
-			err = procMsgWithSink(ctx, msgs.Msg, msgSerdePair.outMsgSerde, procArgs, id, &procTimeStats)
+			err = procMsgWithSink(ctx, msgs.Msg, msgSerdePair.outMsgSerde, procArgs, id)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink2: %v, out chan len: %d\n", id, err, len(jm.out))
 				jm.out <- &common.FnOutput{Success: false, Message: err.Error()}
@@ -180,7 +178,6 @@ func procMsgWithSink[KIn, VIn, KOut, VOut any](ctx context.Context,
 	msg commtypes.MessageG[KIn, VIn],
 	outMsgSerde commtypes.MessageGSerdeG[KOut, VOut],
 	procArgs *JoinProcArgs[KIn, VIn, KOut, VOut], id string,
-	procTimeStats *stats.PrintLogStatsCollector[int64],
 ) error {
 	// st := msg.Value.(commtypes.EventTimeExtractor)
 	// ts, err := st.ExtractEventTime()
@@ -199,7 +196,7 @@ func procMsgWithSink[KIn, VIn, KOut, VOut any](ctx context.Context,
 	// debug.Fprintf(os.Stderr, "[id=%s] after runner\n", id)
 	for _, msg := range msgs {
 		procTime := time.Since(msg.StartProcTime)
-		procTimeStats.AddSample(procTime.Microseconds())
+		procArgs.procLat.AddSample(procTime.Microseconds())
 		// debug.Fprintf(os.Stderr, "k %v, v %v, ts %d\n", msg.Key, msg.Value, msg.Timestamp)
 		msgSerOp, err := commtypes.MsgGToMsgSer(msg, outMsgSerde.GetKeySerdeG(), outMsgSerde.GetValSerdeG())
 		if err != nil {

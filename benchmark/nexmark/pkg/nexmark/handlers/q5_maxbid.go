@@ -224,5 +224,5 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		}
 		stream_task.SetKVStoreSnapshot(ctx, env, em, rs, aggStore, payloadSerde)
 		return nil
-	})
+	}, func() { outProc.OutputRemainingStats() })
 }

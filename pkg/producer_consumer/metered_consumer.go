@@ -11,8 +11,8 @@ import (
 )
 
 type MeteredConsumer struct {
-	consumer    *ShardedSharedLogStreamConsumer
-	latencies   stats.StatsCollector[int64]
+	consumer *ShardedSharedLogStreamConsumer
+	// latencies   stats.StatsCollector[int64]
 	pToCLat     stats.PrintLogStatsCollector[int64]
 	consumeTp   stats.ThroughputCounter
 	numLogEntry uint64
@@ -36,8 +36,8 @@ var _ = MeteredConsumerIntr(&MeteredConsumer{})
 func NewMeteredConsumer(src *ShardedSharedLogStreamConsumer, warmup time.Duration) *MeteredConsumer {
 	src_name := fmt.Sprintf("%s_src", src.TopicName())
 	return &MeteredConsumer{
-		consumer:  src,
-		latencies: stats.NewStatsCollector[int64](src_name, stats.DEFAULT_COLLECT_DURATION),
+		consumer: src,
+		// latencies: stats.NewStatsCollector[int64](src_name, stats.DEFAULT_COLLECT_DURATION),
 		pToCLat:   stats.NewPrintLogStatsCollector[int64]("procTo" + src_name),
 		consumeTp: stats.NewThroughputCounter(src_name, stats.DEFAULT_COLLECT_DURATION),
 		ctrlCount: 0,
@@ -74,9 +74,9 @@ func (s *MeteredConsumer) CurrentConsumedSeqNum() uint64 {
 }
 
 func (s *MeteredConsumer) Consume(ctx context.Context, parNum uint8) (commtypes.RawMsgAndSeq, error) {
-	procStart := stats.TimerBegin()
+	// procStart := stats.TimerBegin()
 	rawMsgSeq, err := s.consumer.Consume(ctx, parNum)
-	elapsed := stats.Elapsed(procStart).Microseconds()
+	// elapsed := stats.Elapsed(procStart).Microseconds()
 	if err != nil {
 		// debug.Fprintf(os.Stderr, "[ERROR] src out err: %v\n", err)
 		return rawMsgSeq, err
@@ -90,7 +90,7 @@ func (s *MeteredConsumer) Consume(ctx context.Context, parNum uint8) (commtypes.
 	} else {
 		s.numLogEntry += 1
 	}
-	s.latencies.AddSample(elapsed)
+	// s.latencies.AddSample(elapsed)
 	if rawMsgSeq.PayloadArr != nil {
 		s.consumeTp.Tick(uint64(len(rawMsgSeq.PayloadArr)))
 	} else {
@@ -106,6 +106,10 @@ func ExtractProduceToConsumeTime(s *MeteredConsumer, msg *commtypes.Message) {
 
 func ExtractProduceToConsumeTimeMsgG[K, V any](s *MeteredConsumer, msg *commtypes.MessageG[K, V]) {
 	extractProduceToConsumeTimeMsgG(msg, s.IsInitialSource(), &s.pToCLat)
+}
+
+func (s *MeteredConsumer) OutputRemainingStats() {
+	s.pToCLat.PrintRemainingStats()
 }
 
 func (s *MeteredConsumer) GetCount() uint64 {
