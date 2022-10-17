@@ -11,7 +11,6 @@ import (
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/txn_data"
-	"sharedlog-stream/pkg/utils"
 )
 
 type KeyValueStoreWithChangelogG[K, V any] struct {
@@ -78,7 +77,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) ConfigureExactlyOnce(rem exactly_on
 	return st.changelogManager.ConfigExactlyOnce(rem, guarantee)
 }
 
-func (st *KeyValueStoreWithChangelogG[K, V]) Put(ctx context.Context, key K, value optional.Option[V], currentStreamTime int64) error {
+func (st *KeyValueStoreWithChangelogG[K, V]) Put(ctx context.Context, key K, value optional.Option[V], tm store.TimeMeta) error {
 	msg := commtypes.MessageG[K, V]{
 		Key:   optional.Some(key),
 		Value: value,
@@ -100,7 +99,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) Put(ctx context.Context, key K, val
 		if err != nil {
 			return err
 		}
-		err = st.kvstore.Put(ctx, key, value, currentStreamTime)
+		err = st.kvstore.Put(ctx, key, value, tm)
 		return err
 	} else {
 		return nil
@@ -129,13 +128,13 @@ func (st *KeyValueStoreWithChangelogG[K, V]) PutWithoutPushToChangelog(ctx conte
 	return st.kvstore.PutWithoutPushToChangelog(ctx, key, value)
 }
 
-func (st *KeyValueStoreWithChangelogG[K, V]) PutIfAbsent(ctx context.Context, key K, value V, currentStreamTime int64) (optional.Option[V], error) {
+func (st *KeyValueStoreWithChangelogG[K, V]) PutIfAbsent(ctx context.Context, key K, value V, tm store.TimeMeta) (optional.Option[V], error) {
 	origVal, exists, err := st.kvstore.Get(ctx, key)
 	if err != nil {
 		return optional.None[V](), err
 	}
 	if !exists {
-		err := st.Put(ctx, key, optional.Some(value), currentStreamTime)
+		err := st.Put(ctx, key, optional.Some(value), tm)
 		if err != nil {
 			return optional.None[V](), err
 		}
@@ -144,6 +143,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) PutIfAbsent(ctx context.Context, ke
 	return optional.Some(origVal), nil
 }
 
+/*
 func (st *KeyValueStoreWithChangelogG[K, V]) PutAll(ctx context.Context, entries []*commtypes.Message) error {
 	maxTs := int64(0)
 	for _, msg := range entries {
@@ -162,6 +162,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) PutAll(ctx context.Context, entries
 	}
 	return nil
 }
+*/
 
 func (st *KeyValueStoreWithChangelogG[K, V]) Delete(ctx context.Context, key K) error {
 	msg := commtypes.MessageG[K, V]{

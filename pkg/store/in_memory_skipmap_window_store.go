@@ -94,7 +94,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) GetKVSerde() commtypes.SerdeG[commty
 }
 
 func (s *InMemorySkipMapWindowStoreG[K, V]) Name() string { return s.name }
-func (s *InMemorySkipMapWindowStoreG[K, V]) Put(ctx context.Context, key K, value optional.Option[V], windowStartTimestamp int64, currentStreamTime int64) error {
+func (s *InMemorySkipMapWindowStoreG[K, V]) Put(ctx context.Context, key K, value optional.Option[V], windowStartTimestamp int64, tm TimeMeta) error {
 	s.removeExpiredSegments()
 	s.mux.Lock()
 	if windowStartTimestamp > s.observedStreamTime {
@@ -454,7 +454,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) RestoreFromSnapshot(ctx context.Cont
 			log.Error().Err(err).Msg("failed to decode key-value pair")
 			return err
 		}
-		err = s.Put(ctx, p.Key.Key, optional.Some(p.Value), p.Key.WindowStartTs, 0)
+		err = s.Put(ctx, p.Key.Key, optional.Some(p.Value), p.Key.WindowStartTs, TimeMeta{RecordTsMs: 0})
 		if err != nil {
 			return err
 		}
@@ -466,7 +466,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) TableType() TABLE_TYPE { return IN_M
 func (s *InMemorySkipMapWindowStoreG[K, V]) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 }
 func (s *InMemorySkipMapWindowStoreG[K, V]) PutWithoutPushToChangelogG(ctx context.Context, key K, value optional.Option[V], windowStartTs int64) error {
-	return s.Put(ctx, key, value, windowStartTs, 0)
+	return s.Put(ctx, key, value, windowStartTs, TimeMeta{RecordTsMs: 0})
 }
 func (s *InMemorySkipMapWindowStoreG[K, V]) Flush(ctx context.Context) error { return nil }
 func (s *InMemorySkipMapWindowStoreG[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8) (int, error) {

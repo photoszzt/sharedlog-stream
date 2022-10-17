@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+/*
 type TableTableJoinProcessor struct {
 	store             store.CoreKeyValueStore
 	joiner            ValueJoinerWithKey
@@ -67,6 +68,7 @@ func (p *TableTableJoinProcessor) ProcessAndReturn(ctx context.Context, msg comm
 	}
 	return nil, nil
 }
+*/
 
 type TableTableJoinProcessorG[K, V1, V2, VR any] struct {
 	store             store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[V2]]

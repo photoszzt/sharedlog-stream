@@ -28,7 +28,7 @@ type CoreWindowStore interface {
 
 type CoreWindowStoreG[K, V any] interface {
 	StateStore
-	Put(ctx context.Context, key K, value optional.Option[V], windowStartTimestamp int64, currentStreamTime int64) error
+	Put(ctx context.Context, key K, value optional.Option[V], windowStartTimestamp int64, tm TimeMeta) error
 	Get(ctx context.Context, key K, windowStartTimestamp int64) (V, bool, error)
 	Fetch(ctx context.Context, key K, timeFrom time.Time, timeTo time.Time,
 		iterFunc func(int64 /* ts */, K, V) error) error

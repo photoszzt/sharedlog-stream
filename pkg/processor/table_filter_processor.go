@@ -1,11 +1,6 @@
 package processor
 
-import (
-	"context"
-	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/store"
-)
-
+/*
 type TableFilterProcessor struct {
 	pred  Predicate
 	store store.CoreKeyValueStore
@@ -83,3 +78,4 @@ func (p *TableFilterProcessor) ProcessAndReturn(ctx context.Context, msg commtyp
 		Timestamp: msg.Timestamp,
 	}}, nil
 }
+*/

@@ -6,8 +6,15 @@ import (
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/txn_data"
 	"strings"
+	"time"
 )
 
+type TimeMeta struct {
+	StartProcTs time.Time
+	RecordTsMs  int64
+}
+
+/*
 type CoreKeyValueStore interface {
 	StateStore
 	Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error)
@@ -22,6 +29,7 @@ type CoreKeyValueStore interface {
 	UpdateTrackParFunc
 	OnlyUpdateInMemStore
 }
+*/
 
 type CoreKeyValueStoreG[K, V any] interface {
 	StateStore
@@ -29,9 +37,9 @@ type CoreKeyValueStoreG[K, V any] interface {
 	Range(ctx context.Context, from optional.Option[K], to optional.Option[K],
 		iterFunc func(K, V) error) error
 	ApproximateNumEntries() (uint64, error)
-	Put(ctx context.Context, key K, value optional.Option[V], currentStreamTime int64) error
-	PutIfAbsent(ctx context.Context, key K, value V, currentStreamTime int64) (optional.Option[V], error)
-	PutAll(context.Context, []*commtypes.Message) error
+	Put(ctx context.Context, key K, value optional.Option[V], tm TimeMeta) error
+	PutIfAbsent(ctx context.Context, key K, value V, tm TimeMeta) (optional.Option[V], error)
+	// PutAll(context.Context, []*commtypes.Message) error
 	Delete(ctx context.Context, key K) error
 	TableType() TABLE_TYPE
 	Flush(ctx context.Context) error
@@ -69,10 +77,12 @@ type KeyValueStoreOpWithChangelog interface {
 	FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error)
 }
 
+/*
 type KeyValueStoreBackedByChangelog interface {
 	CoreKeyValueStore
 	KeyValueStoreOpWithChangelog
 }
+*/
 
 type KeyValueStoreBackedByChangelogG[K, V any] interface {
 	CoreKeyValueStoreG[K, V]

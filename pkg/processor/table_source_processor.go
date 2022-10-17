@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+/*
 type TableSourceProcessor struct {
 	store store.CoreKeyValueStore
 	name  string
@@ -72,6 +73,7 @@ func (p *TableSourceProcessor) ProcessAndReturn(ctx context.Context, msg commtyp
 		return []commtypes.Message{{Key: msg.Key, Value: commtypes.Change{NewVal: msg.Value, OldVal: nil}, Timestamp: msg.Timestamp}}, nil
 	}
 }
+*/
 
 func MsgSerdeWithValueTs(serdeFormat commtypes.SerdeFormat, keySerde commtypes.Serde, valSerde commtypes.Serde) (commtypes.MessageSerde, error) {
 	valueTsSerde, err := commtypes.GetValueTsSerde(serdeFormat, valSerde)
@@ -157,7 +159,8 @@ func (p *TableSourceProcessorG[K, V]) ProcessAndReturn(ctx context.Context, msg 
 					p.store.Name(), oldValTs.Timestamp, msg.TimestampMs)
 			}
 		}
-		err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(msg.Value, msg.TimestampMs), p.observedStreamTime)
+		err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(msg.Value, msg.TimestampMs),
+			store.TimeMeta{RecordTsMs: p.observedStreamTime, StartProcTs: msg.StartProcTime})
 		if err != nil {
 			return nil, err
 		}

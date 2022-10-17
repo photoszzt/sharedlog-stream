@@ -9,6 +9,7 @@ import (
 	"sharedlog-stream/pkg/utils"
 )
 
+/*
 type TableAggregateProcessor struct {
 	store       store.CoreKeyValueStore
 	initializer Initializer
@@ -95,6 +96,7 @@ func (p *TableAggregateProcessor) ProcessAndReturn(ctx context.Context, msg comm
 	}
 	return []commtypes.Message{{Key: msg.Key, Value: change, Timestamp: newTs}}, nil
 }
+*/
 
 type TableAggregateProcessorG[K, V, VA any] struct {
 	store       store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[VA]]
@@ -174,7 +176,8 @@ func (p *TableAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Contex
 		newAgg = intermediateAgg
 	}
 
-	err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(newAgg, newTs), newTs)
+	err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(newAgg, newTs),
+		store.TimeMeta{RecordTsMs: newTs, StartProcTs: msg.StartProcTime})
 	if err != nil {
 		return nil, err
 	}

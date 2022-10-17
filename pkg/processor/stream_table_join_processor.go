@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+/*
 type StreamTableJoinProcessor struct {
 	store  store.CoreKeyValueStore
 	joiner ValueJoinerWithKey
@@ -50,6 +51,7 @@ func (p *StreamTableJoinProcessor) ProcessAndReturn(ctx context.Context, msg com
 	}
 	return nil, nil
 }
+*/
 
 type StreamTableJoinProcessorG[K, V1, V2, VR any] struct {
 	store  store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[V2]]

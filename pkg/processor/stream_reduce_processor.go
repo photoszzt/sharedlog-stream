@@ -1,13 +1,6 @@
 package processor
 
-import (
-	"context"
-	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/store"
-
-	"github.com/rs/zerolog/log"
-)
-
+/*
 type StreamReduceProcessor struct {
 	store   store.CoreKeyValueStore
 	reducer Reducer
@@ -111,3 +104,5 @@ func (p *StreamReduceProcessorG[K, V]) ProcessAndReturn(ctx context.Context, msg
 	}
 	return []commtypes.Message{{Key: msg.Key, Value: newAgg, Timestamp: newTs}}, nil
 }
+
+*/

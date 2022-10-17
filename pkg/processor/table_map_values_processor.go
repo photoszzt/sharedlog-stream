@@ -4,9 +4,9 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/optional"
-	"sharedlog-stream/pkg/store"
 )
 
+/*
 type TableMapValuesProcessor struct {
 	valueMapperWithKey ValueMapperWithKey
 	store              store.CoreKeyValueStore
@@ -82,6 +82,7 @@ func (p *TableMapValuesProcessor) ProcessAndReturn(ctx context.Context, msg comm
 	}
 	return []commtypes.Message{newMsg}, nil
 }
+*/
 
 type TableMapValuesProcessorG[K, V, VR any] struct {
 	valueMapperWithKey ValueMapperWithKeyG[K, V, VR]

@@ -54,7 +54,7 @@ func NewCachingWindowStoreG[K comparable, V any](ctx context.Context,
 						NewVal: newVal,
 					}
 				}
-				err = store.Put(ctx, entry.key.Key, entry.entry.value, entry.key.WindowStartTs, entry.entry.currentStreamTime)
+				err = store.Put(ctx, entry.key.Key, entry.entry.value, entry.key.WindowStartTs, entry.entry.tm)
 				if err != nil {
 					return err
 				}
@@ -67,9 +67,10 @@ func NewCachingWindowStoreG[K comparable, V any](ctx context.Context,
 					Window: t,
 				}
 				err = c.flushCallbackFunc(ctx, commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]{
-					Key:         optional.Some(k),
-					Value:       optional.Some(change),
-					TimestampMs: entry.entry.currentStreamTime,
+					Key:           optional.Some(k),
+					Value:         optional.Some(change),
+					TimestampMs:   entry.entry.tm.RecordTsMs,
+					StartProcTime: entry.entry.tm.StartProcTs,
 				})
 				if err != nil {
 					return err
@@ -83,10 +84,10 @@ func NewCachingWindowStoreG[K comparable, V any](ctx context.Context,
 
 func (c *CachingWindowStoreG[K, V]) Name() string { return c.wrappedStore.Name() }
 func (c *CachingWindowStoreG[K, V]) Put(ctx context.Context, key K,
-	value optional.Option[V], windowStartTimestamp int64, currentStreamTime int64,
+	value optional.Option[V], windowStartTimestamp int64, tm TimeMeta,
 ) error {
 	return c.cache.PutMaybeEvict(commtypes.KeyAndWindowStartTsG[K]{Key: key, WindowStartTs: windowStartTimestamp},
-		LRUEntry[V]{value: value, isDirty: true, currentStreamTime: currentStreamTime})
+		LRUEntry[V]{value: value, isDirty: true, tm: tm})
 }
 func (c *CachingWindowStoreG[K, V]) PutWithoutPushToChangelogG(ctx context.Context,
 	key K, value optional.Option[V], windowStartTs int64,

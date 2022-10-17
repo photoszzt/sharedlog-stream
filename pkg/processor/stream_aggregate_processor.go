@@ -5,11 +5,11 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/utils"
 
 	"github.com/rs/zerolog/log"
 )
 
+/*
 type StreamAggregateProcessor struct {
 	store       store.CoreKeyValueStore
 	initializer Initializer
@@ -71,6 +71,7 @@ func (p *StreamAggregateProcessor) ProcessAndReturn(ctx context.Context, msg com
 	// debug.Fprintf(os.Stderr, "StreamAgg key %v, oldVal %v, newVal %v\n", msg.Key, oldAgg, newAgg)
 	return []commtypes.Message{{Key: msg.Key, Value: change, Timestamp: newTs}}, nil
 }
+*/
 
 type StreamAggregateProcessorG[K, V, VA any] struct {
 	store       store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[VA]]
@@ -165,7 +166,8 @@ func (p *StreamAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Conte
 	}
 	msgVal := msg.Value.Unwrap()
 	newAgg := p.aggregator.Apply(key, msgVal, oldAgg)
-	err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(newAgg, newTs), newTs)
+	err = p.store.Put(ctx, key, commtypes.CreateValueTimestampGOptional(newAgg, newTs),
+		store.TimeMeta{RecordTsMs: newTs, StartProcTs: msg.StartProcTime})
 	if err != nil {
 		return nil, err
 	}

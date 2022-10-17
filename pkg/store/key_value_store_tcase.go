@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/optional"
 	"testing"
 )
@@ -25,6 +24,7 @@ func checkErr(err error, t testing.TB) {
 	}
 }
 
+/*
 func ShouldNotIncludeDeletedFromRangeResult(ctx context.Context, store CoreKeyValueStore, t testing.TB) {
 	checkErr(store.Put(ctx, 0, "zero"), t)
 	checkErr(store.Put(ctx, 1, "one"), t)
@@ -55,11 +55,12 @@ func ShouldNotIncludeDeletedFromRangeResult(ctx context.Context, store CoreKeyVa
 	}
 	checkMapEqual(t, expected, ret)
 }
+*/
 
 func ShouldNotIncludeDeletedFromRangeResultG(ctx context.Context, store CoreKeyValueStoreG[int, string], t testing.TB) {
-	checkErr(store.Put(ctx, 0, optional.Some("zero"), 0), t)
-	checkErr(store.Put(ctx, 1, optional.Some("one"), 0), t)
-	checkErr(store.Put(ctx, 2, optional.Some("two"), 0), t)
+	checkErr(store.Put(ctx, 0, optional.Some("zero"), TimeMeta{RecordTsMs: 0}), t)
+	checkErr(store.Put(ctx, 1, optional.Some("one"), TimeMeta{RecordTsMs: 0}), t)
+	checkErr(store.Put(ctx, 2, optional.Some("two"), TimeMeta{RecordTsMs: 0}), t)
 	checkErr(store.Delete(ctx, 0), t)
 	checkErr(store.Delete(ctx, 1), t)
 
@@ -87,6 +88,7 @@ func ShouldNotIncludeDeletedFromRangeResultG(ctx context.Context, store CoreKeyV
 	checkMapEqual(t, expected, ret)
 }
 
+/*
 func ShouldDeleteIfSerializedValueIsNull(ctx context.Context, store CoreKeyValueStore, t testing.TB) {
 	checkErr(store.Put(ctx, 0, "zero"), t)
 	checkErr(store.Put(ctx, 1, "one"), t)
@@ -116,13 +118,14 @@ func ShouldDeleteIfSerializedValueIsNull(ctx context.Context, store CoreKeyValue
 	}
 	checkMapEqual(t, expected, ret)
 }
+*/
 
 func ShouldDeleteIfSerializedValueIsNullG(ctx context.Context, store CoreKeyValueStoreG[int, string], t testing.TB) {
-	checkErr(store.Put(ctx, 0, optional.Some("zero"), 0), t)
-	checkErr(store.Put(ctx, 1, optional.Some("one"), 0), t)
-	checkErr(store.Put(ctx, 2, optional.Some("two"), 0), t)
-	checkErr(store.Put(ctx, 0, optional.None[string](), 0), t)
-	checkErr(store.Put(ctx, 1, optional.None[string](), 0), t)
+	checkErr(store.Put(ctx, 0, optional.Some("zero"), TimeMeta{RecordTsMs: 0}), t)
+	checkErr(store.Put(ctx, 1, optional.Some("one"), TimeMeta{RecordTsMs: 0}), t)
+	checkErr(store.Put(ctx, 2, optional.Some("two"), TimeMeta{RecordTsMs: 0}), t)
+	checkErr(store.Put(ctx, 0, optional.None[string](), TimeMeta{RecordTsMs: 0}), t)
+	checkErr(store.Put(ctx, 1, optional.None[string](), TimeMeta{RecordTsMs: 0}), t)
 	expected := make(map[int]string)
 	expected[2] = "two"
 
@@ -153,6 +156,7 @@ func checkExists(expected bool, exists bool, t testing.TB) {
 	}
 }
 
+/*
 func checkGet(ctx context.Context, store CoreKeyValueStore, t testing.TB, key int, expected string) {
 	ret, exists, err := store.Get(ctx, key)
 	checkErr(err, t)
@@ -207,3 +211,4 @@ func PutGetRange(ctx context.Context, store CoreKeyValueStore, t testing.TB) {
 	}
 	checkMapEqual(t, expected, ret_range)
 }
+*/

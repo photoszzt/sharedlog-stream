@@ -61,7 +61,7 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) Get(ctx context.Context, key K) (
 	return ret, exists, nil
 }
 
-func (st *InMemorySkipmapKeyValueStoreG[K, V]) Put(ctx context.Context, key K, value optional.Option[V], currentStreamTime int64) error {
+func (st *InMemorySkipmapKeyValueStoreG[K, V]) Put(ctx context.Context, key K, value optional.Option[V], tm TimeMeta) error {
 	v, ok := value.Take()
 	if !ok {
 		st.store.Delete(key)
@@ -71,7 +71,7 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) Put(ctx context.Context, key K, v
 	return nil
 }
 
-func (st *InMemorySkipmapKeyValueStoreG[K, V]) PutIfAbsent(ctx context.Context, key K, value V, currentStreamTime int64) (optional.Option[V], error) {
+func (st *InMemorySkipmapKeyValueStoreG[K, V]) PutIfAbsent(ctx context.Context, key K, value V, tm TimeMeta) (optional.Option[V], error) {
 	val, loaded := st.store.LoadOrStore(key, value)
 	if loaded {
 		return optional.Some(val), nil
@@ -82,12 +82,13 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) PutIfAbsent(ctx context.Context, 
 
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
 	if utils.IsNil(value) {
-		return st.Put(ctx, key.(K), optional.None[V](), 0)
+		return st.Put(ctx, key.(K), optional.None[V](), TimeMeta{RecordTsMs: 0})
 	} else {
-		return st.Put(ctx, key.(K), optional.Some(value.(V)), 0)
+		return st.Put(ctx, key.(K), optional.Some(value.(V)), TimeMeta{RecordTsMs: 0})
 	}
 }
 
+/*
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) PutAll(ctx context.Context, kvs []*commtypes.Message) error {
 	maxTs := int64(0)
 	for _, kv := range kvs {
@@ -106,6 +107,7 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) PutAll(ctx context.Context, kvs [
 	}
 	return nil
 }
+*/
 
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) Delete(ctx context.Context, key K) error {
 	st.store.Delete(key)
