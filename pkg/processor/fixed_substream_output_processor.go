@@ -47,7 +47,7 @@ func (p *FixedSubstreamOutputProcessorG[KIn, VIn]) ProcessAndReturn(ctx context.
 	msg commtypes.MessageG[KIn, VIn],
 ) ([]commtypes.MessageG[any, any], error) {
 	procTime := time.Since(msg.StartProcTime)
-	p.procTimeStats.AddSample(procTime.Microseconds())
+	p.procTimeStats.AddSample(procTime.Nanoseconds())
 	msgSerOp, err := commtypes.MsgGToMsgSer(msg, p.msgGSerdeG.GetKeySerdeG(), p.msgGSerdeG.GetValSerdeG())
 	if err != nil {
 		return nil, err

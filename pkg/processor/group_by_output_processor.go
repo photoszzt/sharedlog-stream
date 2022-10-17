@@ -56,7 +56,7 @@ func (g *GroupByOutputProcessorG[KIn, VIn]) ProcessAndReturn(ctx context.Context
 	// 	return nil, common_errors.ErrFailToGetOutputSubstream
 	// }
 	procTime := time.Since(msg.StartProcTime)
-	g.procTimeStats.AddSample(procTime.Microseconds())
+	g.procTimeStats.AddSample(procTime.Nanoseconds())
 	msgSerOp, err := commtypes.MsgGToMsgSer(msg, g.msgGSerdeG.GetKeySerdeG(), g.msgGSerdeG.GetValSerdeG())
 	if err != nil {
 		return nil, err

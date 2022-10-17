@@ -196,7 +196,7 @@ func procMsgWithSink[KIn, VIn, KOut, VOut any](ctx context.Context,
 	// debug.Fprintf(os.Stderr, "[id=%s] after runner\n", id)
 	for _, msg := range msgs {
 		procTime := time.Since(msg.StartProcTime)
-		procArgs.procLat.AddSample(procTime.Microseconds())
+		procArgs.procLat.AddSample(procTime.Nanoseconds())
 		// debug.Fprintf(os.Stderr, "k %v, v %v, ts %d\n", msg.Key, msg.Value, msg.Timestamp)
 		msgSerOp, err := commtypes.MsgGToMsgSer(msg, outMsgSerde.GetKeySerdeG(), outMsgSerde.GetValSerdeG())
 		if err != nil {
