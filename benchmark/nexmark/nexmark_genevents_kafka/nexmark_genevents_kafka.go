@@ -22,16 +22,17 @@ import (
 )
 
 var (
-	FLAGS_events_num    int
-	FLAGS_duration      int
-	FLAGS_broker        string
-	FLAGS_stream_prefix string
-	FLAGS_serdeFormat   string
-	FLAGS_numPartition  int
-	FLAGS_tps           int
-	FLAGS_srcInstance   int
-	FLAGS_port          int
-	FLAGS_flushms       int
+	FLAGS_events_num      int
+	FLAGS_duration        int
+	FLAGS_broker          string
+	FLAGS_stream_prefix   string
+	FLAGS_serdeFormat     string
+	FLAGS_numPartition    int
+	FLAGS_tps             int
+	FLAGS_srcInstance     int
+	FLAGS_port            int
+	FLAGS_flushms         int
+	FLAGS_disableBatching bool
 )
 
 func init() {
@@ -54,6 +55,7 @@ func main() {
 	flag.IntVar(&FLAGS_srcInstance, "srcIns", 1, "number of source instance")
 	flag.IntVar(&FLAGS_port, "port", 8080, "port to listen")
 	flag.IntVar(&FLAGS_flushms, "flushms", 100, "flush inverval in ms")
+	flag.BoolVar(&FLAGS_disableBatching, "disableBatching", false, "disable batching")
 	flag.Parse()
 
 	var serdeFormat commtypes.SerdeFormat
@@ -103,9 +105,17 @@ func main() {
 		log.Fatal().Msgf("Failed to convert to nexmark configuration: %s", err)
 	}
 
-	p, err := kafka_utils.CreateProducer(FLAGS_broker, FLAGS_flushms)
-	if err != nil {
-		log.Fatal().Msgf("Failed to create producer: %s\n", err)
+	var p *kafka.Producer
+	if FLAGS_disableBatching {
+		p, err = kafka_utils.CreateProducerNoBatching(FLAGS_broker)
+		if err != nil {
+			log.Fatal().Msgf("Failed to create producer: %s\n", err)
+		}
+	} else {
+		p, err = kafka_utils.CreateProducer(FLAGS_broker, FLAGS_flushms)
+		if err != nil {
+			log.Fatal().Msgf("Failed to create producer: %s\n", err)
+		}
 	}
 	defer p.Close()
 	duration := time.Duration(FLAGS_duration) * time.Second
