@@ -56,11 +56,11 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 		return nil, nil, err
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	timeout := time.Duration(4) * time.Millisecond
+	// timeout := common.SrcConsumeTimeout
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	consumer1, err := producer_consumer.NewShardedSharedLogStreamConsumer(stream1,
 		&producer_consumer.StreamConsumerConfig{
-			Timeout:     timeout,
+			Timeout:     common.SrcConsumeTimeout,
 			SerdeFormat: serdeFormat,
 		}, sp.NumSubstreamProducer[0], sp.ParNum)
 	if err != nil {
@@ -68,7 +68,7 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	}
 	consumer2, err := producer_consumer.NewShardedSharedLogStreamConsumer(stream2,
 		&producer_consumer.StreamConsumerConfig{
-			Timeout:     timeout,
+			Timeout:     common.SrcConsumeTimeout,
 			SerdeFormat: serdeFormat,
 		}, sp.NumSubstreamProducer[1], sp.ParNum)
 	if err != nil {

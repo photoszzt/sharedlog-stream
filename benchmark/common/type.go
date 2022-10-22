@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	SrcConsumeTimeout = 4 * time.Millisecond
+	SrcConsumeTimeout = 2 * time.Millisecond
 	ClientRetryTimes  = 100
 	CommitDuration    = time.Duration(100) * time.Millisecond
 	FlushDuration     = time.Duration(100) * time.Millisecond
