@@ -59,7 +59,7 @@ type StreamTask struct {
 	markEpochTime    stats.StatsCollector[int64]
 	markEpochPrepare stats.StatsCollector[int64]
 
-	flushAllTime   stats.StatsCollector[int64]
+	flushAllTime   stats.PrintLogStatsCollector[int64]
 	isFinalStage   bool
 	epochMarkTimes uint32
 	endDuration    time.Duration

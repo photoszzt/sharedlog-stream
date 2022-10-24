@@ -335,6 +335,7 @@ func processInEpoch(
 				}
 				fmt.Fprintf(os.Stderr, "{epoch mark time: %v}\n", epochMarkTime)
 				fmt.Fprintf(os.Stderr, "epoch_mark_times: %d\n", t.epochMarkTimes)
+				t.flushAllTime.PrintRemainingStats()
 				updateReturnMetric(ret, &warmupCheck,
 					false, t.GetEndDuration(), args.ectx.SubstreamNum())
 				return ret
@@ -367,6 +368,8 @@ func processInEpoch(
 				ret = &common.FnOutput{Success: true, Message: common_errors.ErrReturnDueToTest.Error()}
 			}
 			fmt.Fprintf(os.Stderr, "{epoch mark time: %v}\n", epochMarkTime)
+			fmt.Fprintf(os.Stderr, "epoch_mark_times: %d\n", t.epochMarkTimes)
+			t.flushAllTime.PrintRemainingStats()
 			updateReturnMetric(ret, &warmupCheck,
 				false, t.GetEndDuration(), args.ectx.SubstreamNum())
 			return ret
@@ -440,6 +443,7 @@ func processInEpoch(
 			t.flushAllTime.AddSample(flushTime)
 			fmt.Fprintf(os.Stderr, "{epoch mark time: %v}\n", epochMarkTime)
 			fmt.Fprintf(os.Stderr, "epoch_mark_times: %d\n", t.epochMarkTimes)
+			t.flushAllTime.PrintRemainingStats()
 			return handleCtrlMsg(dctx, ctrlRawMsg, t, args, &warmupCheck)
 		}
 	}

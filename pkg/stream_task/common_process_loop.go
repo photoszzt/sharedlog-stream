@@ -86,8 +86,10 @@ func processMsgAndSeq[K, V any](ctx context.Context,
 			if subMsg.Key.IsNone() && subMsg.Value.IsNone() {
 				continue
 			}
-			batchTime := beforeInjToStreamTs - subMsg.InjTMs
-			meteredConsumer.CollectBatchTime(batchTime)
+			if !isInitialSrc {
+				batchTime := beforeInjToStreamTs - subMsg.InjTMs
+				meteredConsumer.CollectBatchTime(batchTime)
+			}
 			producer_consumer.ExtractProduceToConsumeTimeMsgG(meteredConsumer, &subMsg)
 			if isInitialSrc {
 				err := subMsg.ExtractEventTimeFromVal()

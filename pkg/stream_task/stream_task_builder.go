@@ -30,7 +30,7 @@ func NewStreamTaskBuilder() BuildStreamTask {
 			beginTrTime:      stats.NewStatsCollector[int64]("beginTrTime", stats.DEFAULT_COLLECT_DURATION),
 			markEpochTime:    stats.NewStatsCollector[int64]("markEpochTime", stats.DEFAULT_COLLECT_DURATION),
 			markEpochPrepare: stats.NewStatsCollector[int64]("markEpochPrepare", stats.DEFAULT_COLLECT_DURATION),
-			flushAllTime:     stats.NewStatsCollector[int64]("flushAllStream", stats.DEFAULT_COLLECT_DURATION),
+			flushAllTime:     stats.NewPrintLogStatsCollector[int64]("flushAllStream"),
 			epochMarkTimes:   0,
 			isFinalStage:     false,
 		},
