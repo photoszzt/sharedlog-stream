@@ -65,7 +65,7 @@ func CommonProcess[K, V any](ctx context.Context, t *StreamTask, ectx *processor
 		return nil, optional.None[commtypes.RawMsgAndSeq]()
 	}
 	ectx.Consumers()[0].RecordCurrentConsumedSeqNum(msgs.LogSeqNum)
-	err = processMsgAndSeq(ctx, msgs, ectx, procMsg, isInitialSrc)
+	err = processMsgAndSeq(ctx, msgs, ectx, procMsg, isInitialSrc, rawMsgSeq.InjTsMs)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()},
 			optional.None[commtypes.RawMsgAndSeq]()
@@ -78,6 +78,7 @@ func processMsgAndSeq[K, V any](ctx context.Context,
 	msg commtypes.MsgAndSeqG[K, V],
 	args processor.ExecutionContext,
 	procMsg proc_interface.ProcessMsgFunc[K, V], isInitialSrc bool,
+	beforeInjToStreamTs int64,
 ) error {
 	meteredConsumer := args.Consumers()[0]
 	if msg.MsgArr != nil {
@@ -85,6 +86,8 @@ func processMsgAndSeq[K, V any](ctx context.Context,
 			if subMsg.Key.IsNone() && subMsg.Value.IsNone() {
 				continue
 			}
+			batchTime := beforeInjToStreamTs - subMsg.InjTMs
+			meteredConsumer.CollectBatchTime(batchTime)
 			producer_consumer.ExtractProduceToConsumeTimeMsgG(meteredConsumer, &subMsg)
 			if isInitialSrc {
 				err := subMsg.ExtractEventTimeFromVal()

@@ -101,6 +101,12 @@ func (z *StreamLogEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Payload")
 				return
 			}
+		case "injTsMs":
+			z.InjTsMs, err = dc.ReadInt64()
+			if err != nil {
+				err = msgp.WrapError(err, "InjTsMs")
+				return
+			}
 		case "tid":
 			z.TaskId, err = dc.ReadUint64()
 			if err != nil {
@@ -145,31 +151,35 @@ func (z *StreamLogEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
-	zb0001Len := uint32(7)
-	var zb0001Mask uint8 /* 7 bits */
+	zb0001Len := uint32(8)
+	var zb0001Mask uint8 /* 8 bits */
 	if z.Payload == nil {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if z.TaskId == 0 {
+	if z.InjTsMs == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if z.MsgSeqNum == 0 {
+	if z.TaskId == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if z.TransactionID == 0 {
+	if z.MsgSeqNum == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
-	if z.TaskEpoch == 0 {
+	if z.TransactionID == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x20
 	}
-	if z.Meta == 0 {
+	if z.TaskEpoch == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x40
+	}
+	if z.Meta == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x80
 	}
 	// variable map header, size zb0001Len
 	err = en.Append(0x80 | uint8(zb0001Len))
@@ -209,6 +219,18 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 		}
 	}
 	if (zb0001Mask & 0x4) == 0 { // if not empty
+		// write "injTsMs"
+		err = en.Append(0xa7, 0x69, 0x6e, 0x6a, 0x54, 0x73, 0x4d, 0x73)
+		if err != nil {
+			return
+		}
+		err = en.WriteInt64(z.InjTsMs)
+		if err != nil {
+			err = msgp.WrapError(err, "InjTsMs")
+			return
+		}
+	}
+	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// write "tid"
 		err = en.Append(0xa3, 0x74, 0x69, 0x64)
 		if err != nil {
@@ -220,7 +242,7 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
-	if (zb0001Mask & 0x8) == 0 { // if not empty
+	if (zb0001Mask & 0x10) == 0 { // if not empty
 		// write "mseq"
 		err = en.Append(0xa4, 0x6d, 0x73, 0x65, 0x71)
 		if err != nil {
@@ -232,7 +254,7 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
-	if (zb0001Mask & 0x10) == 0 { // if not empty
+	if (zb0001Mask & 0x20) == 0 { // if not empty
 		// write "trid"
 		err = en.Append(0xa4, 0x74, 0x72, 0x69, 0x64)
 		if err != nil {
@@ -244,7 +266,7 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
-	if (zb0001Mask & 0x20) == 0 { // if not empty
+	if (zb0001Mask & 0x40) == 0 { // if not empty
 		// write "te"
 		err = en.Append(0xa2, 0x74, 0x65)
 		if err != nil {
@@ -256,7 +278,7 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
-	if (zb0001Mask & 0x40) == 0 { // if not empty
+	if (zb0001Mask & 0x80) == 0 { // if not empty
 		// write "meta"
 		err = en.Append(0xa4, 0x6d, 0x65, 0x74, 0x61)
 		if err != nil {
@@ -275,31 +297,35 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *StreamLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(7)
-	var zb0001Mask uint8 /* 7 bits */
+	zb0001Len := uint32(8)
+	var zb0001Mask uint8 /* 8 bits */
 	if z.Payload == nil {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if z.TaskId == 0 {
+	if z.InjTsMs == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if z.MsgSeqNum == 0 {
+	if z.TaskId == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if z.TransactionID == 0 {
+	if z.MsgSeqNum == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x10
 	}
-	if z.TaskEpoch == 0 {
+	if z.TransactionID == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x20
 	}
-	if z.Meta == 0 {
+	if z.TaskEpoch == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x40
+	}
+	if z.Meta == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x80
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -318,26 +344,31 @@ func (z *StreamLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 		o = msgp.AppendBytes(o, z.Payload)
 	}
 	if (zb0001Mask & 0x4) == 0 { // if not empty
+		// string "injTsMs"
+		o = append(o, 0xa7, 0x69, 0x6e, 0x6a, 0x54, 0x73, 0x4d, 0x73)
+		o = msgp.AppendInt64(o, z.InjTsMs)
+	}
+	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// string "tid"
 		o = append(o, 0xa3, 0x74, 0x69, 0x64)
 		o = msgp.AppendUint64(o, z.TaskId)
 	}
-	if (zb0001Mask & 0x8) == 0 { // if not empty
+	if (zb0001Mask & 0x10) == 0 { // if not empty
 		// string "mseq"
 		o = append(o, 0xa4, 0x6d, 0x73, 0x65, 0x71)
 		o = msgp.AppendUint64(o, z.MsgSeqNum)
 	}
-	if (zb0001Mask & 0x10) == 0 { // if not empty
+	if (zb0001Mask & 0x20) == 0 { // if not empty
 		// string "trid"
 		o = append(o, 0xa4, 0x74, 0x72, 0x69, 0x64)
 		o = msgp.AppendUint64(o, z.TransactionID)
 	}
-	if (zb0001Mask & 0x20) == 0 { // if not empty
+	if (zb0001Mask & 0x40) == 0 { // if not empty
 		// string "te"
 		o = append(o, 0xa2, 0x74, 0x65)
 		o = msgp.AppendUint16(o, z.TaskEpoch)
 	}
-	if (zb0001Mask & 0x40) == 0 { // if not empty
+	if (zb0001Mask & 0x80) == 0 { // if not empty
 		// string "meta"
 		o = append(o, 0xa4, 0x6d, 0x65, 0x74, 0x61)
 		o = msgp.AppendUint8(o, z.Meta)
@@ -388,6 +419,12 @@ func (z *StreamLogEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Payload")
 				return
 			}
+		case "injTsMs":
+			z.InjTsMs, bts, err = msgp.ReadInt64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "InjTsMs")
+				return
+			}
 		case "tid":
 			z.TaskId, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
@@ -436,6 +473,6 @@ func (z *StreamLogEntry) Msgsize() (s int) {
 	for za0001 := range z.TopicName {
 		s += msgp.StringPrefixSize + len(z.TopicName[za0001])
 	}
-	s += 8 + msgp.BytesPrefixSize + len(z.Payload) + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 3 + msgp.Uint16Size + 5 + msgp.Uint8Size
+	s += 8 + msgp.BytesPrefixSize + len(z.Payload) + 8 + msgp.Int64Size + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 3 + msgp.Uint16Size + 5 + msgp.Uint8Size
 	return
 }

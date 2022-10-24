@@ -74,6 +74,7 @@ func NameHashWithPartition(nameHash uint64, par uint8) uint64 {
 type StreamLogEntry struct {
 	TopicName     []string `msg:"topicName"`
 	Payload       []byte   `msg:"payload,omitempty"`
+	InjTsMs       int64    `msg:"injTsMs,omitempty"`
 	TaskId        uint64   `msg:"tid,omitempty"`
 	MsgSeqNum     uint64   `msg:"mseq,omitempty"`
 	TransactionID uint64   `msg:"trid,omitempty"`
@@ -146,6 +147,7 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context,
 	if additionalTopicNames != nil {
 		topics = append(topics, additionalTopicNames...)
 	}
+	nowMs := time.Now().UnixMilli()
 	logEntry := &StreamLogEntry{
 		TopicName:     topics,
 		Payload:       payload,
@@ -153,6 +155,7 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context,
 		TaskId:        producerId.TaskId,
 		TaskEpoch:     producerId.TaskEpoch,
 		TransactionID: producerId.TransactionID,
+		InjTsMs:       nowMs,
 	}
 	// TODO: need to deal with sequence number overflow
 	atomic.AddUint64(&s.curAppendMsgSeqNum, 1)
@@ -292,6 +295,7 @@ func (s *SharedLogStream) ReadNextWithTagUntil(ctx context.Context, parNum uint8
 					TaskEpoch:     streamLogEntry.TaskEpoch,
 					TransactionID: streamLogEntry.TransactionID,
 				},
+				InjTsMs: streamLogEntry.InjTsMs,
 			})
 		}
 		seqNum = logEntry.SeqNum + 1
@@ -342,6 +346,7 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 					TaskEpoch:     streamLogEntry.TaskEpoch,
 					TransactionID: streamLogEntry.TransactionID,
 				},
+				InjTsMs: streamLogEntry.InjTsMs,
 			}, nil
 		}
 		seqNumInSharedLog = logEntry.SeqNum + 1

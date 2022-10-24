@@ -83,7 +83,6 @@ func NewShardedSharedLogStreamConsumer(stream *sharedlog_stream.ShardedSharedLog
 		stream:           stream,
 		timeout:          config.Timeout,
 		// msgSerde:         config.MsgSerde,
-		name:                  "src",
 		payloadArrSerde:       sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG,
 		guarantee:             exactly_once_intr.AT_LEAST_ONCE,
 		serdeFormat:           config.SerdeFormat,
@@ -132,7 +131,7 @@ func (s *ShardedSharedLogStreamConsumer) ConfigExactlyOnce(
 	if s.guarantee == exactly_once_intr.TWO_PHASE_COMMIT {
 		s.tac, err = NewTransactionAwareConsumer(s.stream, s.serdeFormat)
 	} else if s.guarantee == exactly_once_intr.EPOCH_MARK {
-		s.emc, err = NewEpochMarkConsumer(s.stream, s.serdeFormat)
+		s.emc, err = NewEpochMarkConsumer(s.TopicName(), s.stream, s.serdeFormat)
 	}
 	return err
 }
@@ -249,6 +248,7 @@ L:
 					MsgSeqNum:  rawMsg.MsgSeqNum,
 					LogSeqNum:  rawMsg.LogSeqNum,
 					IsControl:  false,
+					InjTsMs:    rawMsg.InjTsMs,
 				}, nil
 			} else {
 				return commtypes.RawMsgAndSeq{
@@ -258,6 +258,7 @@ L:
 					MsgSeqNum:  rawMsg.MsgSeqNum,
 					LogSeqNum:  rawMsg.LogSeqNum,
 					IsControl:  false,
+					InjTsMs:    rawMsg.InjTsMs,
 				}, nil
 			}
 		}

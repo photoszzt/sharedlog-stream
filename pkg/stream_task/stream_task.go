@@ -59,9 +59,10 @@ type StreamTask struct {
 	markEpochTime    stats.StatsCollector[int64]
 	markEpochPrepare stats.StatsCollector[int64]
 
-	flushAllTime stats.StatsCollector[int64]
-	isFinalStage bool
-	endDuration  time.Duration
+	flushAllTime   stats.StatsCollector[int64]
+	isFinalStage   bool
+	epochMarkTimes uint32
+	endDuration    time.Duration
 }
 
 func (t *StreamTask) SetEndDuration(startTimeMs int64) {

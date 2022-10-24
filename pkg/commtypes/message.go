@@ -136,6 +136,7 @@ type RawMsg struct {
 
 	MsgSeqNum uint64
 	LogSeqNum uint64
+	InjTsMs   int64
 	StartTime int64
 
 	ProdId ProducerId
@@ -159,6 +160,7 @@ type RawMsgAndSeq struct {
 	Payload    []byte
 	PayloadArr [][]byte
 	AuxData    []byte
+	InjTsMs    int64
 	MsgSeqNum  uint64
 	LogSeqNum  uint64
 	StartTime  int64

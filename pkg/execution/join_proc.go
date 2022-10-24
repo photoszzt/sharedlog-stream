@@ -142,6 +142,8 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 				}
 				subMsg.StartProcTime = time.Now()
 				producer_consumer.ExtractProduceToConsumeTimeMsgG(consumer, &subMsg)
+				batchTime := rawMsgSeq.InjTsMs - subMsg.InjTMs
+				consumer.CollectBatchTime(batchTime)
 				// debug.Fprintf(os.Stderr, "[id=%s] before proc msg with sink1\n", id)
 				err = procMsgWithSink(ctx, subMsg, msgSerdePair.outMsgSerde, procArgs, id)
 				if err != nil {

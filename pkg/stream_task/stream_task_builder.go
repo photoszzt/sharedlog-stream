@@ -31,6 +31,7 @@ func NewStreamTaskBuilder() BuildStreamTask {
 			markEpochTime:    stats.NewStatsCollector[int64]("markEpochTime", stats.DEFAULT_COLLECT_DURATION),
 			markEpochPrepare: stats.NewStatsCollector[int64]("markEpochPrepare", stats.DEFAULT_COLLECT_DURATION),
 			flushAllTime:     stats.NewStatsCollector[int64]("flushAllStream", stats.DEFAULT_COLLECT_DURATION),
+			epochMarkTimes:   0,
 			isFinalStage:     false,
 		},
 	}
