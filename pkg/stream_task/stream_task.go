@@ -40,29 +40,22 @@ func checkParallelRestore() bool {
 type ProcessFunc func(ctx context.Context, task *StreamTask,
 	args processor.ExecutionContext) (*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq])
 
+// in case the task consumes multiple streams, the task consumes from the same substream number
+// and the substreams must have the same number of substreams.
 type StreamTask struct {
-	appProcessFunc ProcessFunc
-
-	// in case the task consumes multiple streams, the task consumes from the same substream number
-	// and the substreams must have the same number of substreams.
-
-	pauseFunc     func() *common.FnOutput
-	resumeFunc    func(task *StreamTask)
-	initFunc      func(task *StreamTask)
-	HandleErrFunc func() error
-
-	// 2pc stat
-	commitTrTime stats.StatsCollector[int64]
-	beginTrTime  stats.StatsCollector[int64]
-
-	// epoch stat
+	appProcessFunc   ProcessFunc
+	pauseFunc        func() *common.FnOutput
+	resumeFunc       func(task *StreamTask)
+	initFunc         func(task *StreamTask)
+	HandleErrFunc    func() error
+	flushAllTime     stats.PrintLogStatsCollector[int64]
 	markEpochTime    stats.StatsCollector[int64]
 	markEpochPrepare stats.StatsCollector[int64]
-
-	flushAllTime   stats.PrintLogStatsCollector[int64]
-	isFinalStage   bool
-	epochMarkTimes uint32
-	endDuration    time.Duration
+	beginTrTime      stats.StatsCollector[int64]
+	commitTrTime     stats.StatsCollector[int64]
+	endDuration      time.Duration
+	epochMarkTimes   uint32
+	isFinalStage     bool
 }
 
 func (t *StreamTask) SetEndDuration(startTimeMs int64) {
