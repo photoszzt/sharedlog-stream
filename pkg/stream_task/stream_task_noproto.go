@@ -28,12 +28,15 @@ func processNoProto(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *c
 		timeSinceLastFlush := time.Since(flushTimer)
 		if timeSinceLastFlush >= args.flushEvery {
 			flushAllStart := stats.TimerBegin()
-			ret_err := flushStreams(ctx, args)
+			f, ret_err := flushStreams(ctx, args)
 			if ret_err != nil {
 				return common.GenErrFnOutput(ret_err)
 			}
 			flushTime := stats.Elapsed(flushAllStart).Microseconds()
-			t.flushAllTime.AddSample(flushTime)
+			t.flushStageTime.AddSample(flushTime)
+			if f > 0 {
+				t.flushAtLeastOne.AddSample(flushTime)
+			}
 			flushTimer = time.Now()
 		}
 		warmupCheck.Check()
@@ -55,11 +58,15 @@ func processNoProto(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *c
 				}
 			}
 			flushAllStart := stats.TimerBegin()
-			if ret_err := flushStreams(ctx, args); ret_err != nil {
+			f, ret_err := flushStreams(ctx, args)
+			if ret_err != nil {
 				return common.GenErrFnOutput(ret_err)
 			}
 			flushTime := stats.Elapsed(flushAllStart).Microseconds()
-			t.flushAllTime.AddSample(flushTime)
+			t.flushStageTime.AddSample(flushTime)
+			if f > 0 {
+				t.flushAtLeastOne.AddSample(flushTime)
+			}
 			return handleCtrlMsg(ctx, ctrlRawMsg, t, args, &warmupCheck)
 		}
 	}
@@ -68,7 +75,7 @@ func processNoProto(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *c
 			return ret
 		}
 	}
-	err := flushStreams(ctx, args)
+	_, err := flushStreams(ctx, args)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

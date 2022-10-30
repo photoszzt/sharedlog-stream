@@ -468,7 +468,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) SetTrackParFunc(trackParFunc exactly
 func (s *InMemorySkipMapWindowStoreG[K, V]) PutWithoutPushToChangelogG(ctx context.Context, key K, value optional.Option[V], windowStartTs int64) error {
 	return s.Put(ctx, key, value, windowStartTs, TimeMeta{RecordTsMs: 0})
 }
-func (s *InMemorySkipMapWindowStoreG[K, V]) Flush(ctx context.Context) error { return nil }
+func (s *InMemorySkipMapWindowStoreG[K, V]) Flush(ctx context.Context) (uint32, error) { return 0, nil }
 func (s *InMemorySkipMapWindowStoreG[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8) (int, error) {
 	panic("not supported")
 }

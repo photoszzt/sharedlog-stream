@@ -85,7 +85,7 @@ func (sls *ShardedSharedLogStreamProducer) ConfigExactlyOnce(
 
 func (sls *ShardedSharedLogStreamProducer) ProduceCtrlMsg(ctx context.Context, msg commtypes.RawMsgAndSeq, parNums []uint8) (int, error) {
 	if sls.bufPush {
-		err := sls.flush(ctx)
+		_, err := sls.flush(ctx)
 		if err != nil {
 			return 0, err
 		}
@@ -133,14 +133,11 @@ func (sls *ShardedSharedLogStreamProducer) ProduceData(ctx context.Context, msgS
 }
 
 func (s *ShardedSharedLogStreamProducer) TopicName() string { return s.stream.TopicName() }
-func (s *ShardedSharedLogStreamProducer) Flush(ctx context.Context) error {
+func (s *ShardedSharedLogStreamProducer) Flush(ctx context.Context) (uint32, error) {
 	if s.bufPush {
-		err := s.flush(ctx)
-		if err != nil {
-			return err
-		}
+		return s.flush(ctx)
 	}
-	return nil
+	return 0, nil
 }
 func (s *ShardedSharedLogStreamProducer) FlushNoLock(ctx context.Context) error {
 	if s.bufPush {
@@ -160,7 +157,7 @@ func FlushNoLock(ctx context.Context, stream *sharedlog_stream.ShardedSharedLogS
 	}
 }
 
-func (s *ShardedSharedLogStreamProducer) flush(ctx context.Context) error {
+func (s *ShardedSharedLogStreamProducer) flush(ctx context.Context) (uint32, error) {
 	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK {
 		return s.stream.Flush(ctx, s.eom.GetProducerId())
 	} else {

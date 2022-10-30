@@ -159,7 +159,7 @@ func (c *CachingKeyValueStoreG[K, V]) SetTrackParFunc(f exactly_once_intr.TrackP
 func (c *CachingKeyValueStoreG[K, V]) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
 	return c.wrappedStore.PutWithoutPushToChangelog(ctx, key, value)
 }
-func (c *CachingKeyValueStoreG[K, V]) Flush(ctx context.Context) error {
+func (c *CachingKeyValueStoreG[K, V]) Flush(ctx context.Context) (uint32, error) {
 	c.cache.flush(nil)
 	return c.wrappedStore.Flush(ctx)
 }

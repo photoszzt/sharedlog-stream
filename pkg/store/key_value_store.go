@@ -42,7 +42,7 @@ type CoreKeyValueStoreG[K, V any] interface {
 	// PutAll(context.Context, []*commtypes.Message) error
 	Delete(ctx context.Context, key K) error
 	TableType() TABLE_TYPE
-	Flush(ctx context.Context) error
+	Flush(ctx context.Context) (uint32, error)
 	Snapshot(logOff uint64)
 	SetSnapshotCallback(ctx context.Context, f KVSnapshotCallback[K, V])
 	WaitForAllSnapshot() error

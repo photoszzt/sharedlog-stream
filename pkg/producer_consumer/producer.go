@@ -13,7 +13,7 @@ type Producer interface {
 	TopicName() string
 	Name() string
 	SetName(string)
-	Flush(ctx context.Context) error
+	Flush(ctx context.Context) (uint32, error)
 	ConfigExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 		guarantee exactly_once_intr.GuaranteeMth)
 	Stream() sharedlog_stream.Stream

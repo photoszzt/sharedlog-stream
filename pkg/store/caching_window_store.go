@@ -128,7 +128,7 @@ func (c *CachingWindowStoreG[K, V]) FetchAll(ctx context.Context, timeFrom time.
 func (c *CachingWindowStoreG[K, V]) IterAll(iterFunc func(int64, K, V) error) error {
 	panic("not implemented")
 }
-func (c *CachingWindowStoreG[K, V]) Flush(ctx context.Context) error {
+func (c *CachingWindowStoreG[K, V]) Flush(ctx context.Context) (uint32, error) {
 	c.cache.flush(nil)
 	return c.wrappedStore.Flush(ctx)
 }

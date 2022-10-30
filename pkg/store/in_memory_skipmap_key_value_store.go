@@ -195,8 +195,8 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) TableType() TABLE_TYPE {
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) SetTrackParFunc(exactly_once_intr.TrackProdSubStreamFunc) {
 }
 
-func (st *InMemorySkipmapKeyValueStoreG[K, V]) Flush(ctx context.Context) error {
-	return nil
+func (st *InMemorySkipmapKeyValueStoreG[K, V]) Flush(ctx context.Context) (uint32, error) {
+	return 0, nil
 }
 
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[V]]) error) {

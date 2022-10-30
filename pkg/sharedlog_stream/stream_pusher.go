@@ -50,29 +50,31 @@ func (h *StreamPush) InitFlushTimer(duration time.Duration) {
 }
 
 // msgchan has to close and async pusher has to stop first before calling this function
-func (h *StreamPush) Flush(ctx context.Context, producerId commtypes.ProducerId) error {
+func (h *StreamPush) Flush(ctx context.Context, producerId commtypes.ProducerId) (uint32, error) {
 	if h.BufPush {
-		err := h.Stream.Flush(ctx, producerId)
+		f, err := h.Stream.Flush(ctx, producerId)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		h.FlushTimer = time.Now()
 		debug.Fprintf(os.Stderr, "F: stream flushed\n")
+		return f, nil
 	}
-	return nil
+	return 0, nil
 }
 
 // msgchan has to close and async pusher has to stop first before calling this function
-func (h *StreamPush) FlushNoLock(ctx context.Context, producerId commtypes.ProducerId) error {
+func (h *StreamPush) FlushNoLock(ctx context.Context, producerId commtypes.ProducerId) (uint32, error) {
 	if h.BufPush {
-		err := h.Stream.FlushNoLock(ctx, producerId)
+		f, err := h.Stream.FlushNoLock(ctx, producerId)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		h.FlushTimer = time.Now()
 		debug.Fprintf(os.Stderr, "FOL: stream flushed\n")
+		return f, nil
 	}
-	return nil
+	return 0, nil
 }
 
 func (h *StreamPush) GetCount() uint64 {
@@ -88,7 +90,7 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup, pr
 	for msg := range h.MsgChan {
 		if msg.IsControl {
 			if h.BufPush {
-				err := h.Stream.Flush(ctx, producerId)
+				_, err := h.Stream.Flush(ctx, producerId)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] flush err: %v\n", err)
 					h.MsgErrChan <- err
@@ -128,7 +130,7 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup, pr
 				timeSinceLastFlush := time.Since(h.FlushTimer)
 				if timeSinceLastFlush >= h.FlushDuration {
 					// debug.Fprintf(os.Stderr, "flush timer: %v\n", timeSinceLastFlush)
-					err := h.Stream.Flush(ctx, producerId)
+					_, err := h.Stream.Flush(ctx, producerId)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "[ERROR] flush err: %v\n", err)
 						h.MsgErrChan <- err
@@ -163,7 +165,7 @@ func (h *StreamPush) AsyncStreamPushNoTick(ctx context.Context, wg *sync.WaitGro
 	for msg := range h.MsgChan {
 		if msg.IsControl {
 			if h.BufPush {
-				err := h.Stream.Flush(ctx, producerId)
+				_, err := h.Stream.Flush(ctx, producerId)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] flush err: %v\n", err)
 					h.MsgErrChan <- err

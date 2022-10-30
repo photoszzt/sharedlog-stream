@@ -39,7 +39,7 @@ type CoreWindowStoreG[K, V any] interface {
 		iterFunc func(int64, K, V) error) error
 	IterAll(iterFunc func(int64, K, V) error) error
 	TableType() TABLE_TYPE
-	Flush(ctx context.Context) error
+	Flush(ctx context.Context) (uint32, error)
 	Snapshot(logOff uint64)
 	SetWinSnapshotCallback(ctx context.Context, f WinSnapshotCallback[K, V])
 	WaitForAllSnapshot() error

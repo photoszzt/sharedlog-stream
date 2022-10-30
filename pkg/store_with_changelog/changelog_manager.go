@@ -115,12 +115,12 @@ func (cm *ChangelogManager[K, V]) Stream() sharedlog_stream.Stream {
 }
 
 // when changelog is src, there's nothing to flush
-func (cm *ChangelogManager[K, V]) Flush(ctx context.Context) error {
+func (cm *ChangelogManager[K, V]) Flush(ctx context.Context) (uint32, error) {
 	if !cm.changelogIsSrc {
 		// debug.Fprintf(os.Stderr, "flushing changelog manager, current produce: %d\n", cm.numProduced)
 		return cm.producer.Flush(ctx)
 	}
-	return nil
+	return 0, nil
 }
 func (cm *ChangelogManager[K, V]) produce(ctx context.Context, msgSer commtypes.MessageSerialized, parNum uint8) error {
 	if !cm.changelogIsSrc {

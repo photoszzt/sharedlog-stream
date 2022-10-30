@@ -98,7 +98,7 @@ func (st *InMemoryWindowStoreWithChangelogG[K, V]) ChangelogManager() *Changelog
 	return st.changelogManager
 }
 
-func (st *InMemoryWindowStoreWithChangelogG[K, V]) Flush(ctx context.Context) error {
+func (st *InMemoryWindowStoreWithChangelogG[K, V]) Flush(ctx context.Context) (uint32, error) {
 	return st.changelogManager.Flush(ctx)
 }
 

@@ -9,6 +9,7 @@ import (
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/utils/syncutils"
 	"sync"
+	"time"
 )
 
 const (
@@ -29,6 +30,7 @@ type BufferedSinkStream struct {
 	payloadArrSerde commtypes.SerdeG[commtypes.PayloadArr]
 	Stream          *SharedLogStream
 
+	flushBufferStats stats.PrintLogStatsCollector[int64]
 	bufferEntryStats stats.StatsCollector[int]
 	bufferSizeStats  stats.StatsCollector[int]
 
@@ -53,6 +55,7 @@ func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8) *BufferedSinkS
 			stats.DEFAULT_COLLECT_DURATION),
 		bufferSizeStats: stats.NewStatsCollector[int](fmt.Sprintf("%s_bufSize_%v", stream.topicName, parNum),
 			stats.DEFAULT_COLLECT_DURATION),
+		flushBufferStats:     stats.NewPrintLogStatsCollector[int64](fmt.Sprintf("%s_flushBuf_%v", stream.topicName, parNum)),
 		sink_buffer_max_size: SINK_BUFFER_MAX_SIZE,
 	}
 }
@@ -171,56 +174,68 @@ func (s *BufferedSinkStream) GetInitialProdSeqNum() uint64 {
 	return s.initialProdInEpoch
 }
 
-func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId commtypes.ProducerId) error {
+func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId commtypes.ProducerId) (uint32, error) {
 	if len(s.sinkBuffer) != 0 {
 		s.bufferEntryStats.AddSample(len(s.sinkBuffer))
 		s.bufferSizeStats.AddSample(s.currentSize)
+		tBeg := time.Now()
 		payloadArr := commtypes.PayloadArr{
 			Payloads: s.sinkBuffer,
 		}
 		payloads, err := s.payloadArrSerde.Encode(payloadArr)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		seqNum, err := s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		s.updateProdSeqNum(seqNum)
 		s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
 		s.currentSize = 0
+		debug.Assert(len(s.sinkBuffer) == 0 && s.currentSize == 0,
+			"sink buffer should be empty after flush")
+		flushElapsed := time.Since(tBeg).Microseconds()
+		s.flushBufferStats.AddSample(flushElapsed)
+		return 1, nil
 	}
 	debug.Assert(len(s.sinkBuffer) == 0 && s.currentSize == 0,
 		"sink buffer should be empty after flush")
-	return nil
+	return 0, nil
 }
 
-func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context, producerId commtypes.ProducerId) error {
+func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context, producerId commtypes.ProducerId) (uint32, error) {
 	s.mux.Lock()
 	if len(s.sinkBuffer) != 0 {
 		s.bufferEntryStats.AddSample(len(s.sinkBuffer))
 		s.bufferSizeStats.AddSample(s.currentSize)
+		tBeg := time.Now()
 		payloadArr := commtypes.PayloadArr{
 			Payloads: s.sinkBuffer,
 		}
 		payloads, err := s.payloadArrSerde.Encode(payloadArr)
 		if err != nil {
 			s.mux.Unlock()
-			return err
+			return 0, err
 		}
 		seqNum, err := s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
 		if err != nil {
 			s.mux.Unlock()
-			return err
+			return 0, err
 		}
 		s.updateProdSeqNum(seqNum)
 		s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
 		s.currentSize = 0
 		s.mux.Unlock()
+		debug.Assert(len(s.sinkBuffer) == 0 && s.currentSize == 0,
+			"sink buffer should be empty after flush")
+		flushElapsed := time.Since(tBeg).Microseconds()
+		s.flushBufferStats.AddSample(flushElapsed)
+		return 1, nil
 	} else {
 		s.mux.Unlock()
+		debug.Assert(len(s.sinkBuffer) == 0 && s.currentSize == 0,
+			"sink buffer should be empty after flush")
+		return 0, nil
 	}
-	debug.Assert(len(s.sinkBuffer) == 0 && s.currentSize == 0,
-		"sink buffer should be empty after flush")
-	return nil
 }

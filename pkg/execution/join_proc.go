@@ -41,7 +41,7 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 			return
 		case <-jm.flushAndCollect:
 			for _, sink := range procArgs.Producers() {
-				if err := sink.Flush(ctx); err != nil {
+				if _, err := sink.Flush(ctx); err != nil {
 					jm.out <- &common.FnOutput{Success: false, Message: err.Error()}
 					return
 				}

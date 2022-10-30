@@ -259,6 +259,8 @@ func processInEpoch(
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	execIntrMs := stats.NewPrintLogStatsCollector[int64]("execIntrMs")
+	thisAndLastCmtMs := stats.NewPrintLogStatsCollector[int64]("thisAndLastCmtMs")
 	snapshotTime := make([]int64, 0, 8)
 	// run := false
 	hasProcessData := false
@@ -295,8 +297,9 @@ func processInEpoch(
 		timeSinceLastMark := time.Since(markTimer)
 		cur_elapsed := warmupCheck.ElapsedSinceInitial()
 		timeout := args.duration != 0 && cur_elapsed >= args.duration
-		shouldMarkByTime := (args.commitEvery != 0 && timeSinceLastMark > args.commitEvery)
+		shouldMarkByTime := args.commitEvery != 0 && timeSinceLastMark >= args.commitEvery
 		if (shouldMarkByTime || timeout) && hasProcessData {
+			execIntrMs.AddSample(timeSinceLastMark.Milliseconds())
 			markBegin := time.Now()
 			if t.pauseFunc != nil {
 				if ret := t.pauseFunc(); ret != nil {
@@ -306,7 +309,7 @@ func processInEpoch(
 			}
 
 			flushAllStart := stats.TimerBegin()
-			err := flushStreams(dctx, args)
+			f, err := flushStreams(dctx, args)
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}
@@ -326,7 +329,10 @@ func processInEpoch(
 			}
 			markElapsed := time.Since(markBegin)
 			epochMarkTime = append(epochMarkTime, markElapsed.Microseconds())
-			t.flushAllTime.AddSample(flushTime)
+			t.flushStageTime.AddSample(flushTime)
+			if f > 0 {
+				t.flushAtLeastOne.AddSample(flushTime)
+			}
 			t.epochMarkTimes += 1
 			if shouldExit {
 				ret := &common.FnOutput{Success: true}
@@ -335,7 +341,9 @@ func processInEpoch(
 				}
 				fmt.Fprintf(os.Stderr, "{epoch mark time: %v}\n", epochMarkTime)
 				fmt.Fprintf(os.Stderr, "epoch_mark_times: %d\n", t.epochMarkTimes)
-				t.flushAllTime.PrintRemainingStats()
+				t.flushStageTime.PrintRemainingStats()
+				execIntrMs.PrintRemainingStats()
+				thisAndLastCmtMs.PrintRemainingStats()
 				updateReturnMetric(ret, &warmupCheck,
 					false, t.GetEndDuration(), args.ectx.SubstreamNum())
 				return ret
@@ -369,7 +377,9 @@ func processInEpoch(
 			}
 			fmt.Fprintf(os.Stderr, "{epoch mark time: %v}\n", epochMarkTime)
 			fmt.Fprintf(os.Stderr, "epoch_mark_times: %d\n", t.epochMarkTimes)
-			t.flushAllTime.PrintRemainingStats()
+			t.flushStageTime.PrintRemainingStats()
+			execIntrMs.PrintRemainingStats()
+			thisAndLastCmtMs.PrintRemainingStats()
 			updateReturnMetric(ret, &warmupCheck,
 				false, t.GetEndDuration(), args.ectx.SubstreamNum())
 			return ret
@@ -381,6 +391,8 @@ func processInEpoch(
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}
+			btwThisLastCmt := time.Since(markTimer)
+			thisAndLastCmtMs.AddSample(btwThisLastCmt.Milliseconds())
 			markTimer = time.Now()
 		}
 		app_ret, ctrlRawMsgOp := t.appProcessFunc(dctx, t, args.ectx)
@@ -406,7 +418,7 @@ func processInEpoch(
 				paused = true
 			}
 			flushAllStart := stats.TimerBegin()
-			err := flushStreams(dctx, args)
+			f, err := flushStreams(dctx, args)
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}
@@ -440,10 +452,16 @@ func processInEpoch(
 			}
 			markElapsed := time.Since(markBegin)
 			epochMarkTime = append(epochMarkTime, markElapsed.Microseconds())
-			t.flushAllTime.AddSample(flushTime)
+			t.flushStageTime.AddSample(flushTime)
+			if f > 0 {
+				t.flushAtLeastOne.AddSample(flushTime)
+			}
 			fmt.Fprintf(os.Stderr, "{epoch mark time: %v}\n", epochMarkTime)
 			fmt.Fprintf(os.Stderr, "epoch_mark_times: %d\n", t.epochMarkTimes)
-			t.flushAllTime.PrintRemainingStats()
+			t.flushStageTime.PrintRemainingStats()
+			t.flushAtLeastOne.PrintRemainingStats()
+			execIntrMs.PrintRemainingStats()
+			thisAndLastCmtMs.PrintRemainingStats()
 			return handleCtrlMsg(dctx, ctrlRawMsg, t, args, &warmupCheck)
 		}
 	}

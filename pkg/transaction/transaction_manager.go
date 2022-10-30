@@ -360,7 +360,7 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 	producerId := tc.GetProducerId()
 	for topic, partitions := range tc.currentTopicSubstream {
 		stream := tc.topicStreams[topic]
-		err := stream.Flush(ctx, producerId)
+		_, err := stream.Flush(ctx, producerId)
 		if err != nil {
 			return err
 		}

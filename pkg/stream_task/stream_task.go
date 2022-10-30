@@ -48,7 +48,8 @@ type StreamTask struct {
 	resumeFunc       func(task *StreamTask)
 	initFunc         func(task *StreamTask)
 	HandleErrFunc    func() error
-	flushAllTime     stats.PrintLogStatsCollector[int64]
+	flushStageTime   stats.PrintLogStatsCollector[int64]
+	flushAtLeastOne  stats.PrintLogStatsCollector[int64]
 	markEpochTime    stats.StatsCollector[int64]
 	markEpochPrepare stats.StatsCollector[int64]
 	beginTrTime      stats.StatsCollector[int64]
@@ -187,23 +188,30 @@ func handleCtrlMsg(ctx context.Context, ctrlRawMsg commtypes.RawMsgAndSeq,
 
 func flushStreams(ctx context.Context,
 	args *StreamTaskArgs,
-) error {
+) (uint32, error) {
+	flushed := uint32(0)
 	for _, kvchangelog := range args.kvChangelogs {
-		if err := kvchangelog.Flush(ctx); err != nil {
-			return err
+		f, err := kvchangelog.Flush(ctx)
+		if err != nil {
+			return 0, err
 		}
+		flushed += f
 	}
 	for _, wschangelog := range args.windowStoreChangelogs {
-		if err := wschangelog.Flush(ctx); err != nil {
-			return err
+		f, err := wschangelog.Flush(ctx)
+		if err != nil {
+			return 0, err
 		}
+		flushed += f
 	}
 	for _, sink := range args.ectx.Producers() {
-		if err := sink.Flush(ctx); err != nil {
-			return err
+		f, err := sink.Flush(ctx)
+		if err != nil {
+			return 0, err
 		}
+		flushed += f
 	}
-	return nil
+	return flushed, nil
 }
 
 func createSnapshot(args *StreamTaskArgs, logOff uint64) {

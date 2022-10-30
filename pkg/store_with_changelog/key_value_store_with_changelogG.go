@@ -68,7 +68,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) Get(ctx context.Context, key K) (V,
 	return st.kvstore.Get(ctx, key)
 }
 
-func (st *KeyValueStoreWithChangelogG[K, V]) Flush(ctx context.Context) error {
+func (st *KeyValueStoreWithChangelogG[K, V]) Flush(ctx context.Context) (uint32, error) {
 	return st.changelogManager.Flush(ctx)
 }
 func (st *KeyValueStoreWithChangelogG[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,

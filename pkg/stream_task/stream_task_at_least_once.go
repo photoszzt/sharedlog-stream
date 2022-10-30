@@ -51,12 +51,15 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 		timeSinceLastFlush := time.Since(flushTimer)
 		if timeSinceLastFlush >= args.flushEvery {
 			flushAllStart := stats.TimerBegin()
-			ret_err := flushStreams(ctx, args)
+			f, ret_err := flushStreams(ctx, args)
 			if ret_err != nil {
 				return common.GenErrFnOutput(ret_err)
 			}
 			flushTime := stats.Elapsed(flushAllStart).Microseconds()
-			t.flushAllTime.AddSample(flushTime)
+			t.flushStageTime.AddSample(flushTime)
+			if f > 0 {
+				t.flushAtLeastOne.AddSample(flushTime)
+			}
 			flushTimer = time.Now()
 		}
 		timeSinceLastTrack := time.Since(commitTimer)
@@ -90,11 +93,15 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 				}
 			}
 			flushAllStart := stats.TimerBegin()
-			if ret_err := flushStreams(ctx, args); ret_err != nil {
+			f, ret_err := flushStreams(ctx, args)
+			if ret_err != nil {
 				return common.GenErrFnOutput(ret_err)
 			}
 			flushTime := stats.Elapsed(flushAllStart).Microseconds()
-			t.flushAllTime.AddSample(flushTime)
+			t.flushStageTime.AddSample(flushTime)
+			if f > 0 {
+				t.flushAtLeastOne.AddSample(flushTime)
+			}
 			if ret_err := track(ctx, cm, args.ectx.Consumers(), args.ectx.SubstreamNum()); ret_err != nil {
 				return ret_err
 			}
@@ -143,7 +150,7 @@ func pauseTrackFlush(ctx context.Context, t *StreamTask, args *StreamTaskArgs, c
 			return ret
 		}
 	}
-	err := flushStreams(ctx, args)
+	_, err := flushStreams(ctx, args)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

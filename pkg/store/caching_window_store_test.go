@@ -158,7 +158,7 @@ func TestShouldFlushDirtyItemsWhenFlushedCalled(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = cachingStore.Flush(ctx)
+	_, err = cachingStore.Flush(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
