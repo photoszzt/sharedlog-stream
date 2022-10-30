@@ -83,6 +83,14 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewQ8GroupByHandler(env, funcName), nil
 	case "scale":
 		return configscale.NewConfigScaleHandler(env), nil
+	case "emptyInit":
+		return handlers.NewInitEmptyQuery(env, funcName), nil
+	case "subG2Empty":
+		return handlers.NewSubG2Empty(env, funcName), nil
+	case "subG3Empty":
+		return handlers.NewSubG3Empty(env, funcName), nil
+	case "lastEmpty":
+		return handlers.NewLastEmptyQuery(env, funcName), nil
 	default:
 		return nil, fmt.Errorf("unknown function name %v", funcName)
 	}
