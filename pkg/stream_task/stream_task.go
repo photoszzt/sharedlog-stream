@@ -43,20 +43,20 @@ type ProcessFunc func(ctx context.Context, task *StreamTask,
 // in case the task consumes multiple streams, the task consumes from the same substream number
 // and the substreams must have the same number of substreams.
 type StreamTask struct {
-	appProcessFunc   ProcessFunc
-	pauseFunc        func() *common.FnOutput
-	resumeFunc       func(task *StreamTask)
-	initFunc         func(task *StreamTask)
-	HandleErrFunc    func() error
-	flushStageTime   stats.PrintLogStatsCollector[int64]
-	flushAtLeastOne  stats.PrintLogStatsCollector[int64]
-	markEpochTime    stats.StatsCollector[int64]
-	markEpochPrepare stats.StatsCollector[int64]
-	beginTrTime      stats.StatsCollector[int64]
-	commitTrTime     stats.StatsCollector[int64]
-	endDuration      time.Duration
-	epochMarkTimes   uint32
-	isFinalStage     bool
+	appProcessFunc  ProcessFunc
+	pauseFunc       func() *common.FnOutput
+	resumeFunc      func(task *StreamTask)
+	initFunc        func(task *StreamTask)
+	HandleErrFunc   func() error
+	flushStageTime  stats.PrintLogStatsCollector[int64]
+	flushAtLeastOne stats.PrintLogStatsCollector[int64]
+	// markEpochTime    stats.StatsCollector[int64]
+	// markEpochPrepare stats.StatsCollector[int64]
+	beginTrTime    stats.StatsCollector[int64]
+	commitTrTime   stats.StatsCollector[int64]
+	endDuration    time.Duration
+	epochMarkTimes uint32
+	isFinalStage   bool
 }
 
 func (t *StreamTask) SetEndDuration(startTimeMs int64) {

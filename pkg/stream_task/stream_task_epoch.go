@@ -261,6 +261,7 @@ func processInEpoch(
 	}
 	execIntrMs := stats.NewPrintLogStatsCollector[int64]("execIntrMs")
 	thisAndLastCmtMs := stats.NewPrintLogStatsCollector[int64]("thisAndLastCmtMs")
+	markPartUs := stats.NewPrintLogStatsCollector[int64]("markPartUs")
 	snapshotTime := make([]int64, 0, 8)
 	// run := false
 	hasProcessData := false
@@ -315,6 +316,7 @@ func processInEpoch(
 			}
 			flushTime := stats.Elapsed(flushAllStart).Microseconds()
 
+			mPartBeg := time.Now()
 			logOff, shouldExit, err := markEpoch(dctx, em, t, args)
 			if err != nil {
 				return common.GenErrFnOutput(err)
@@ -328,8 +330,10 @@ func processInEpoch(
 				snapshotTimer = time.Now()
 			}
 			markElapsed := time.Since(markBegin)
+			mPartElapsed := time.Since(mPartBeg)
 			epochMarkTime = append(epochMarkTime, markElapsed.Microseconds())
 			t.flushStageTime.AddSample(flushTime)
+			markPartUs.AddSample(mPartElapsed.Microseconds())
 			if f > 0 {
 				t.flushAtLeastOne.AddSample(flushTime)
 			}
@@ -427,6 +431,7 @@ func processInEpoch(
 				return common.GenErrFnOutput(err)
 			}
 			flushTime := stats.Elapsed(flushAllStart).Microseconds()
+			mPartBeg := time.Now()
 			logOff, _, err := markEpoch(dctx, em, t, args)
 			if err != nil {
 				return common.GenErrFnOutput(err)
@@ -451,7 +456,9 @@ func processInEpoch(
 				fmt.Fprintf(os.Stderr, "snapshot time: %v\n", snapshotTime)
 			}
 			markElapsed := time.Since(markBegin)
+			mPartElapsed := time.Since(mPartBeg)
 			epochMarkTime = append(epochMarkTime, markElapsed.Microseconds())
+			markPartUs.AddSample(mPartElapsed.Microseconds())
 			t.flushStageTime.AddSample(flushTime)
 			if f > 0 {
 				t.flushAtLeastOne.AddSample(flushTime)
@@ -460,6 +467,7 @@ func processInEpoch(
 			fmt.Fprintf(os.Stderr, "epoch_mark_times: %d\n", t.epochMarkTimes)
 			t.flushStageTime.PrintRemainingStats()
 			t.flushAtLeastOne.PrintRemainingStats()
+			markPartUs.PrintRemainingStats()
 			execIntrMs.PrintRemainingStats()
 			thisAndLastCmtMs.PrintRemainingStats()
 			return handleCtrlMsg(dctx, ctrlRawMsg, t, args, &warmupCheck)
@@ -495,7 +503,7 @@ func markEpoch(ctx context.Context, em *epoch_manager.EpochManager,
 			}
 		}
 	}
-	prepareStart := stats.TimerBegin()
+	// prepareStart := stats.TimerBegin()
 	epochMarker, err := epoch_manager.GenEpochMarker(ctx, em, args.ectx.Consumers(), args.ectx.Producers(),
 		args.kvChangelogs, args.windowStoreChangelogs)
 	if err != nil {
@@ -503,15 +511,15 @@ func markEpoch(ctx context.Context, em *epoch_manager.EpochManager,
 	}
 	epochMarkerTags, epochMarkerTopics := em.GenTagsAndTopicsForEpochMarker()
 	epoch_manager.CleanupState(em, args.ectx.Producers(), args.kvChangelogs, args.windowStoreChangelogs)
-	prepareTime := stats.Elapsed(prepareStart).Microseconds()
+	// prepareTime := stats.Elapsed(prepareStart).Microseconds()
 
-	mStart := stats.TimerBegin()
+	// mStart := stats.TimerBegin()
 	logOff, err = em.MarkEpoch(ctx, epochMarker, epochMarkerTags, epochMarkerTopics)
 	if err != nil {
 		return 0, false, err
 	}
-	mElapsed := stats.Elapsed(mStart).Microseconds()
-	t.markEpochTime.AddSample(mElapsed)
-	t.markEpochPrepare.AddSample(prepareTime)
+	// mElapsed := stats.Elapsed(mStart).Microseconds()
+	// t.markEpochTime.AddSample(mElapsed)
+	// t.markEpochPrepare.AddSample(prepareTime)
 	return logOff, false, nil
 }

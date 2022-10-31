@@ -22,18 +22,18 @@ type BuildStreamTask interface {
 func NewStreamTaskBuilder() BuildStreamTask {
 	return &StreamTaskBuilder{
 		task: &StreamTask{
-			pauseFunc:        nil,
-			resumeFunc:       nil,
-			initFunc:         nil,
-			HandleErrFunc:    nil,
-			commitTrTime:     stats.NewStatsCollector[int64]("commitTrTime", stats.DEFAULT_COLLECT_DURATION),
-			beginTrTime:      stats.NewStatsCollector[int64]("beginTrTime", stats.DEFAULT_COLLECT_DURATION),
-			markEpochTime:    stats.NewStatsCollector[int64]("markEpochTime", stats.DEFAULT_COLLECT_DURATION),
-			markEpochPrepare: stats.NewStatsCollector[int64]("markEpochPrepare", stats.DEFAULT_COLLECT_DURATION),
-			flushStageTime:   stats.NewPrintLogStatsCollector[int64]("flushStage"),
-			flushAtLeastOne:  stats.NewPrintLogStatsCollector[int64]("flushAtLeastOne"),
-			epochMarkTimes:   0,
-			isFinalStage:     false,
+			pauseFunc:     nil,
+			resumeFunc:    nil,
+			initFunc:      nil,
+			HandleErrFunc: nil,
+			commitTrTime:  stats.NewStatsCollector[int64]("commitTrTime", stats.DEFAULT_COLLECT_DURATION),
+			beginTrTime:   stats.NewStatsCollector[int64]("beginTrTime", stats.DEFAULT_COLLECT_DURATION),
+			// markEpochTime:    stats.NewStatsCollector[int64]("markEpochTime", stats.DEFAULT_COLLECT_DURATION),
+			// markEpochPrepare: stats.NewStatsCollector[int64]("markEpochPrepare", stats.DEFAULT_COLLECT_DURATION),
+			flushStageTime:  stats.NewPrintLogStatsCollector[int64]("flushStage"),
+			flushAtLeastOne: stats.NewPrintLogStatsCollector[int64]("flushAtLeastOne"),
+			epochMarkTimes:  0,
+			isFinalStage:    false,
 		},
 	}
 }
