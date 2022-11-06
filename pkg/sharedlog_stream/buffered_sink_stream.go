@@ -141,7 +141,6 @@ func (s *BufferedSinkStream) Push(ctx context.Context, payload []byte, parNum ui
 ) (uint64, error) {
 	seqNum, err := s.Stream.Push(ctx, payload, parNum, meta, producerId)
 	if err != nil {
-		s.mux.Unlock()
 		return 0, err
 	}
 	s.updateProdSeqNum(seqNum)
@@ -153,7 +152,6 @@ func (s *BufferedSinkStream) PushWithTag(ctx context.Context, payload []byte, pa
 ) (uint64, error) {
 	seqNum, err := s.Stream.PushWithTag(ctx, payload, parNum, tags, additionalTopic, meta, producerId)
 	if err != nil {
-		s.mux.Unlock()
 		return 0, err
 	}
 	s.updateProdSeqNum(seqNum)
