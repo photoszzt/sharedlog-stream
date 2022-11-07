@@ -116,7 +116,7 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		SerdeFormat(serdeFormat).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
 			Env:           h.env,
-			NumPartition:  sp.NumInPartition,
+			NumPartition:  sp.NumChangelogPartition,
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 			TimeOut:       common.SrcConsumeTimeout,
 		}).Build()

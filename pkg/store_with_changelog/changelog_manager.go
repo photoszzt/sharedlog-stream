@@ -18,31 +18,12 @@ type ChangelogManager[K, V any] struct {
 	epochMetaSerde   commtypes.SerdeG[commtypes.EpochMarker]
 	producer         *producer_consumer.ShardedSharedLogStreamProducer
 	restoreConsumers []*producer_consumer.ShardedSharedLogStreamConsumer
+	timeout          time.Duration
 	numProduced      uint32
 	changelogIsSrc   bool
+	serdeFormat      commtypes.SerdeFormat
+	instanceId       uint8
 }
-
-/*
-func NewChangelogManagerForSrc[K, V any](stream *sharedlog_stream.ShardedSharedLogStream,
-	msgSerde commtypes.MessageGSerdeG[K, V], timeout time.Duration,
-	serdeFormat commtypes.SerdeFormat, instanceId uint8,
-) (*ChangelogManager[K, V], error) {
-	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumer(stream,
-		&producer_consumer.StreamConsumerConfig{
-			Timeout:     timeout,
-			SerdeFormat: serdeFormat,
-		}, 1, instanceId)
-	if err != nil {
-		return nil, err
-	}
-	return &ChangelogManager[K, V]{
-		restoreConsumer: consumer,
-		producer:        nil,
-		changelogIsSrc:  true,
-		msgSerde:        msgSerde,
-	}, nil
-}
-*/
 
 func NewChangelogManager[K, V any](stream *sharedlog_stream.ShardedSharedLogStream,
 	msgSerde commtypes.MessageGSerdeG[K, V],
@@ -79,6 +60,9 @@ func NewChangelogManager[K, V any](stream *sharedlog_stream.ShardedSharedLogStre
 		changelogIsSrc: false,
 		msgSerde:       msgSerde,
 		numProduced:    0,
+		timeout:        timeout,
+		serdeFormat:    serdeFormat,
+		instanceId:     instanceId,
 	}, nil
 }
 
@@ -131,6 +115,27 @@ func (cm *ChangelogManager[K, V]) produce(ctx context.Context, msgSer commtypes.
 }
 
 func (cm *ChangelogManager[K, V]) findLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error) {
+	// in this case, previous changelog has more substreams than current changelog
+	if int(parNum) >= len(cm.restoreConsumers) {
+		consumers := make([]*producer_consumer.ShardedSharedLogStreamConsumer, parNum+1)
+		curLen := len(cm.restoreConsumers)
+		for i := 0; i < curLen; i++ {
+			consumers[i] = cm.restoreConsumers[i]
+		}
+		for i := uint8(curLen); i < parNum+1; i++ {
+			consumer, err := producer_consumer.NewShardedSharedLogStreamConsumer(
+				cm.producer.Stream().(*sharedlog_stream.ShardedSharedLogStream),
+				&producer_consumer.StreamConsumerConfig{
+					Timeout:     cm.timeout,
+					SerdeFormat: cm.serdeFormat,
+				}, 1, cm.instanceId)
+			if err != nil {
+				return nil, 0, err
+			}
+			consumers[i] = consumer
+		}
+		cm.restoreConsumers = consumers
+	}
 	stream := cm.restoreConsumers[parNum].Stream()
 	tag := sharedlog_stream.NameHashWithPartition(stream.TopicNameHash(), parNum)
 	tailSeqNum := protocol.MaxLogSeqnum

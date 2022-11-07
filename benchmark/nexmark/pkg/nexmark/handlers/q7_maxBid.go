@@ -126,7 +126,7 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 		SerdeFormat(serdeFormat).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
 			Env:           h.env,
-			NumPartition:  sp.NumInPartition,
+			NumPartition:  sp.NumChangelogPartition,
 			TimeOut:       common.SrcConsumeTimeout,
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 		}).Build()

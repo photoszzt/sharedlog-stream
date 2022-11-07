@@ -142,7 +142,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		SerdeFormat(format).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
 			Env:           h.env,
-			NumPartition:  sp.NumInPartition,
+			NumPartition:  sp.NumChangelogPartition,
 			FlushDuration: flushDur,
 			TimeOut:       common.SrcConsumeTimeout,
 		}).Build()
@@ -156,7 +156,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		SerdeFormat(format).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
 			Env:           h.env,
-			NumPartition:  sp.NumInPartition,
+			NumPartition:  sp.NumChangelogPartition,
 			FlushDuration: flushDur,
 			TimeOut:       common.SrcConsumeTimeout,
 		}).Build()

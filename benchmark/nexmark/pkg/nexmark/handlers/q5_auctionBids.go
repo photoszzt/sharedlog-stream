@@ -110,7 +110,7 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 		SerdeFormat(serdeFormat).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
 			Env:           h.env,
-			NumPartition:  sp.NumInPartition,
+			NumPartition:  sp.NumChangelogPartition,
 			TimeOut:       common.SrcConsumeTimeout,
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 		}).Build()

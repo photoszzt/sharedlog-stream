@@ -59,6 +59,11 @@ func ParseInvokeParam(invokeParam InvokeFuncParam, baseQueryInput *QueryInput,
 	scaleConfig := make(map[string]uint8)
 	inParamsMap := make(map[string][]*QueryInput)
 	funcNames := make([]string, 0)
+	changelogTmp, hasChangelog := streamParam["changelog"]
+	changelog := uint8(0)
+	if hasChangelog {
+		changelog = uint8(changelogTmp.Data().(float64))
+	}
 	for _, child := range funcParam {
 		config := child.ChildrenMap()
 		fmt.Fprintf(os.Stderr, "config: %+v\n", config)
@@ -114,6 +119,9 @@ func ParseInvokeParam(invokeParam InvokeFuncParam, baseQueryInput *QueryInput,
 				baseClone.NumInPartition = numInSubs
 				baseClone.NumOutPartitions = numOutPartitions
 				baseClone.WaitForEndMark = invokeParam.WaitForEndMark
+				if hasChangelog {
+					baseClone.NumChangelogPartition = changelog
+				}
 				inParams[i] = &baseClone
 			}
 			node := NewClientNode(nconfig)

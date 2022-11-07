@@ -13,24 +13,25 @@ const (
 )
 
 type QueryInput struct {
-	TestParams           map[string]commtypes.FailParam `json:"testParams,omitempty"`
-	AppId                string                         `json:"aid"`
-	NumOutPartitions     []uint8                        `json:"numOutPartition,omitempty"`
-	NumSubstreamProducer []uint8                        `json:"numSubstreamProducer,omitempty"`
-	OutputTopicNames     []string                       `json:"outputTopicName,omitempty"`
-	InputTopicNames      []string                       `json:"inputTopicName,omitempty"`
-	CommitEveryMs        uint64                         `json:"commEveryMs,omitempty"`
-	FlushMs              uint32                         `json:"flushMs,omitempty"`
-	WarmupS              uint32                         `json:"warmup,omitempty"`
-	SnapEveryS           uint32                         `json:"snapEveryS,omitempty"`
-	Duration             uint32                         `json:"duration,omitempty"`
-	ScaleEpoch           uint16                         `json:"epoch"`
-	WaitForEndMark       bool                           `json:"waitEnd,omitempty"`
-	NumInPartition       uint8                          `json:"numInPartition,omitempty"`
-	ParNum               uint8                          `json:"ParNum,omitempty"`
-	GuaranteeMth         uint8                          `json:"gua,omitempty"`
-	SerdeFormat          uint8                          `json:"serdeFormat,omitempty"`
-	TableType            uint8                          `json:"tabT,omitempty"`
+	TestParams            map[string]commtypes.FailParam `json:"testParams,omitempty"`
+	AppId                 string                         `json:"aid"`
+	NumOutPartitions      []uint8                        `json:"numOutPartition,omitempty"`
+	NumSubstreamProducer  []uint8                        `json:"numSubstreamProducer,omitempty"`
+	OutputTopicNames      []string                       `json:"outputTopicName,omitempty"`
+	InputTopicNames       []string                       `json:"inputTopicName,omitempty"`
+	CommitEveryMs         uint64                         `json:"commEveryMs,omitempty"`
+	FlushMs               uint32                         `json:"flushMs,omitempty"`
+	WarmupS               uint32                         `json:"warmup,omitempty"`
+	SnapEveryS            uint32                         `json:"snapEveryS,omitempty"`
+	Duration              uint32                         `json:"duration,omitempty"`
+	ScaleEpoch            uint16                         `json:"epoch"`
+	WaitForEndMark        bool                           `json:"waitEnd,omitempty"`
+	NumChangelogPartition uint8                          `json:"numChangelogPartition,omitempty"`
+	NumInPartition        uint8                          `json:"numInPartition,omitempty"`
+	ParNum                uint8                          `json:"ParNum,omitempty"`
+	GuaranteeMth          uint8                          `json:"gua,omitempty"`
+	SerdeFormat           uint8                          `json:"serdeFormat,omitempty"`
+	TableType             uint8                          `json:"tabT,omitempty"`
 }
 
 func (q *QueryInput) Clone() QueryInput {
@@ -143,8 +144,11 @@ type BenchSourceParam struct {
 }
 
 type TranProcessBenchParam struct {
-	InTopicName  string `json:"inTopicName"`
-	OutTopicName string `json:"outTopicName"`
-	SerdeFormat  uint8  `json:"serdeFormat"`
-	NumPartition uint8  `json:"numPartition"`
+	InTopicName   string `json:"inTopicName"`
+	OutTopicName  string `json:"outTopicName"`
+	SerdeFormat   uint8  `json:"serdeFormat"`
+	NumPartition  uint8  `json:"numPartition"`
+	Duration      uint32 `json:"duration,omitempty"`
+	CommitEveryMs uint64 `json:"commEveryMs,omitempty"`
+	FlushMs       uint32 `json:"flushMs,omitempty"`
 }

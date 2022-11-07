@@ -167,7 +167,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		SerdeFormat(serdeFormat).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
 			Env:           h.env,
-			NumPartition:  sp.NumInPartition,
+			NumPartition:  sp.NumChangelogPartition,
 			FlushDuration: flushDur,
 			TimeOut:       common.SrcConsumeTimeout,
 		}).Build()
@@ -181,7 +181,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		SerdeFormat(serdeFormat).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
 			Env:           h.env,
-			NumPartition:  sp.NumInPartition,
+			NumPartition:  sp.NumChangelogPartition,
 			FlushDuration: flushDur,
 			TimeOut:       common.SrcConsumeTimeout,
 		}).Build()

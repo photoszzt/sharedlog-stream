@@ -141,7 +141,7 @@ func (h *q6JoinStreamHandler) Q6JoinStream(ctx context.Context, sp *common.Query
 		ParNum(sp.ParNum).SerdeFormat(serdeFormat).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
 			Env:           h.env,
-			NumPartition:  sp.NumInPartition,
+			NumPartition:  sp.NumChangelogPartition,
 			TimeOut:       common.SrcConsumeTimeout,
 			FlushDuration: flushDur,
 		}).Build()
@@ -153,7 +153,7 @@ func (h *q6JoinStreamHandler) Q6JoinStream(ctx context.Context, sp *common.Query
 		ParNum(sp.ParNum).SerdeFormat(serdeFormat).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
 			Env:           h.env,
-			NumPartition:  sp.NumInPartition,
+			NumPartition:  sp.NumChangelogPartition,
 			TimeOut:       common.SrcConsumeTimeout,
 			FlushDuration: flushDur,
 		}).Build()

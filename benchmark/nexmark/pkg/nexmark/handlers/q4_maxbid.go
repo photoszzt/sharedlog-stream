@@ -130,7 +130,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
 			Env:           h.env,
-			NumPartition:  sp.NumInPartition,
+			NumPartition:  sp.NumChangelogPartition,
 			TimeOut:       common.SrcConsumeTimeout,
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 		}).Build()

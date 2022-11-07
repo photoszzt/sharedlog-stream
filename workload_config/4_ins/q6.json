@@ -65,6 +65,7 @@
         "q46_bidsByAucID": 4,
         "q6_aucIDSeller": 4,
         "q6_maxBids": 4,
+        "changelog": 4,
         "q6_out": 4
     }
 }
