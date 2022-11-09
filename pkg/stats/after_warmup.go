@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/utils/syncutils"
 	"sync/atomic"
 	"time"
@@ -51,6 +52,7 @@ func (w *Warmup) ElapsedAfterWarmup() time.Duration {
 }
 
 func (w *Warmup) ElapsedSinceInitial() time.Duration {
+	debug.Assert(!w.initial.IsZero(), "Warmup not started")
 	return time.Since(w.initial)
 }
 

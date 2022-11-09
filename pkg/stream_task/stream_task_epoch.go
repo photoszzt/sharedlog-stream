@@ -296,10 +296,8 @@ func processInEpoch(
 		})
 		warmupCheck.Check()
 		timeSinceLastMark := time.Since(markTimer)
-		cur_elapsed := warmupCheck.ElapsedSinceInitial()
-		timeout := args.duration != 0 && cur_elapsed >= args.duration
 		shouldMarkByTime := args.commitEvery != 0 && timeSinceLastMark >= args.commitEvery
-		if (shouldMarkByTime || timeout) && hasProcessData {
+		if shouldMarkByTime && hasProcessData {
 			execIntrMs.AddSample(timeSinceLastMark.Milliseconds())
 			markBegin := time.Now()
 			if t.pauseFunc != nil {
@@ -355,33 +353,18 @@ func processInEpoch(
 			hasProcessData = false
 		}
 		// Exit routine
-		cur_elapsed = warmupCheck.ElapsedSinceInitial()
-		timeout = args.duration != 0 && cur_elapsed >= args.duration
-		if !args.waitEndMark && timeout {
-			if CREATE_SNAPSHOT && args.snapshotEvery != 0 {
-				for _, kv := range args.kvChangelogs {
-					err = kv.WaitForAllSnapshot()
-					if err != nil {
-						return common.GenErrFnOutput(err)
-					}
-				}
-				for _, wsc := range args.windowStoreChangelogs {
-					err = wsc.WaitForAllSnapshot()
-					if err != nil {
-						return common.GenErrFnOutput(err)
-					}
-				}
-				fmt.Fprintf(os.Stderr, "snapshot time: %v\n", snapshotTime)
-			}
-		}
+		cur_elapsed := warmupCheck.ElapsedSinceInitial()
+		timeout := args.duration != 0 && cur_elapsed >= args.duration
 		if (!args.waitEndMark && timeout) || (testForFail && cur_elapsed >= failAfter) {
+			r := finalMark(dctx, t, args, em, cmm, snapshotTime, epochMarkTime, &markPartUs)
+			if r != nil {
+				return r
+			}
 			ret := &common.FnOutput{Success: true}
 			if testForFail {
 				ret = &common.FnOutput{Success: true, Message: common_errors.ErrReturnDueToTest.Error()}
 			}
-			fmt.Fprintf(os.Stderr, "{epoch mark time: %v}\n", epochMarkTime)
-			fmt.Fprintf(os.Stderr, "epoch_mark_times: %d\n", t.epochMarkTimes)
-			t.flushStageTime.PrintRemainingStats()
+			markPartUs.PrintRemainingStats()
 			execIntrMs.PrintRemainingStats()
 			thisAndLastCmtMs.PrintRemainingStats()
 			updateReturnMetric(ret, &warmupCheck,
@@ -414,65 +397,75 @@ func processInEpoch(
 		ctrlRawMsg, ok := ctrlRawMsgOp.Take()
 		if ok {
 			fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
-			markBegin := time.Now()
-			if t.pauseFunc != nil {
-				if ret := t.pauseFunc(); ret != nil {
-					return ret
-				}
-				paused = true
+			r := finalMark(dctx, t, args, em, cmm, snapshotTime, epochMarkTime, &markPartUs)
+			if r != nil {
+				return r
 			}
-			flushAllStart := stats.TimerBegin()
-			f, err := flushStreams(dctx, args)
-			if err != nil {
-				return common.GenErrFnOutput(err)
-			}
-			err = getKeyMappingAndFlush(ctx, args, cmm)
-			if err != nil {
-				return common.GenErrFnOutput(err)
-			}
-			flushTime := stats.Elapsed(flushAllStart).Microseconds()
-			mPartBeg := time.Now()
-			logOff, _, err := markEpoch(dctx, em, t, args)
-			if err != nil {
-				return common.GenErrFnOutput(err)
-			}
-			if CREATE_SNAPSHOT && args.snapshotEvery != 0 {
-				snStart := time.Now()
-				createSnapshot(args, logOff)
-				elapsed := time.Since(snStart)
-				snapshotTime = append(snapshotTime, elapsed.Microseconds())
-				for _, kv := range args.kvChangelogs {
-					err = kv.WaitForAllSnapshot()
-					if err != nil {
-						return common.GenErrFnOutput(err)
-					}
-				}
-				for _, wsc := range args.windowStoreChangelogs {
-					err = wsc.WaitForAllSnapshot()
-					if err != nil {
-						return common.GenErrFnOutput(err)
-					}
-				}
-				fmt.Fprintf(os.Stderr, "snapshot time: %v\n", snapshotTime)
-			}
-			markElapsed := time.Since(markBegin)
-			mPartElapsed := time.Since(mPartBeg)
-			epochMarkTime = append(epochMarkTime, markElapsed.Microseconds())
-			markPartUs.AddSample(mPartElapsed.Microseconds())
-			t.flushStageTime.AddSample(flushTime)
-			if f > 0 {
-				t.flushAtLeastOne.AddSample(flushTime)
-			}
-			fmt.Fprintf(os.Stderr, "{epoch mark time: %v}\n", epochMarkTime)
-			fmt.Fprintf(os.Stderr, "epoch_mark_times: %d\n", t.epochMarkTimes)
-			t.flushStageTime.PrintRemainingStats()
-			t.flushAtLeastOne.PrintRemainingStats()
 			markPartUs.PrintRemainingStats()
 			execIntrMs.PrintRemainingStats()
 			thisAndLastCmtMs.PrintRemainingStats()
 			return handleCtrlMsg(dctx, ctrlRawMsg, t, args, &warmupCheck)
 		}
 	}
+}
+
+func finalMark(dctx context.Context, t *StreamTask, args *StreamTaskArgs,
+	em *epoch_manager.EpochManager, cmm *control_channel.ControlChannelManager,
+	snapshotTime []int64, epochMarkTime []int64, markPartUs *stats.PrintLogStatsCollector[int64],
+) *common.FnOutput {
+	markBegin := time.Now()
+	if t.pauseFunc != nil {
+		if ret := t.pauseFunc(); ret != nil {
+			return ret
+		}
+	}
+	flushAllStart := stats.TimerBegin()
+	f, err := flushStreams(dctx, args)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	err = getKeyMappingAndFlush(dctx, args, cmm)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	flushTime := stats.Elapsed(flushAllStart).Microseconds()
+	mPartBeg := time.Now()
+	logOff, _, err := markEpoch(dctx, em, t, args)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	if CREATE_SNAPSHOT && args.snapshotEvery != 0 {
+		snStart := time.Now()
+		createSnapshot(args, logOff)
+		elapsed := time.Since(snStart)
+		snapshotTime = append(snapshotTime, elapsed.Microseconds())
+		for _, kv := range args.kvChangelogs {
+			err = kv.WaitForAllSnapshot()
+			if err != nil {
+				return common.GenErrFnOutput(err)
+			}
+		}
+		for _, wsc := range args.windowStoreChangelogs {
+			err = wsc.WaitForAllSnapshot()
+			if err != nil {
+				return common.GenErrFnOutput(err)
+			}
+		}
+		fmt.Fprintf(os.Stderr, "snapshot time: %v\n", snapshotTime)
+	}
+	markElapsed := time.Since(markBegin)
+	mPartElapsed := time.Since(mPartBeg)
+	epochMarkTime = append(epochMarkTime, markElapsed.Microseconds())
+	markPartUs.AddSample(mPartElapsed.Microseconds())
+	t.flushStageTime.AddSample(flushTime)
+	if f > 0 {
+		t.flushAtLeastOne.AddSample(flushTime)
+	}
+	fmt.Fprintf(os.Stderr, "{epoch mark time: %v}\n", epochMarkTime)
+	fmt.Fprintf(os.Stderr, "epoch_mark_times: %d\n", t.epochMarkTimes)
+	t.flushStageTime.PrintRemainingStats()
+	t.flushAtLeastOne.PrintRemainingStats()
+	return nil
 }
 
 func getKeyMappingAndFlush(ctx context.Context, args *StreamTaskArgs, cmm *control_channel.ControlChannelManager) error {
