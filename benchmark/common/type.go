@@ -146,9 +146,9 @@ type BenchSourceParam struct {
 type TranProcessBenchParam struct {
 	InTopicName   string `json:"inTopicName"`
 	OutTopicName  string `json:"outTopicName"`
-	SerdeFormat   uint8  `json:"serdeFormat"`
-	NumPartition  uint8  `json:"numPartition"`
 	Duration      uint32 `json:"duration,omitempty"`
 	CommitEveryMs uint64 `json:"commEveryMs,omitempty"`
 	FlushMs       uint32 `json:"flushMs,omitempty"`
+	SerdeFormat   uint8  `json:"serdeFormat"`
+	NumPartition  uint8  `json:"numPartition"`
 }
