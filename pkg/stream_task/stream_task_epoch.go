@@ -56,7 +56,7 @@ func SetKVStoreSnapshot[K, V any](ctx context.Context, env types.Environment,
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "snapshot size: %d\n", len(out))
+		fmt.Fprintf(os.Stderr, "kv snapshot size: %d\n", len(out))
 		return rs.StoreSnapshot(ctx, env, out, kvstore.ChangelogTopicName(), logOff)
 	})
 }
@@ -81,7 +81,7 @@ func SetWinStoreSnapshot[K, V any](ctx context.Context, env types.Environment,
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "snapshot size: %d\n", len(out))
+		fmt.Fprintf(os.Stderr, "win snapshot size: %d\n", len(out))
 		return rs.StoreSnapshot(ctx, env, out, winStore.ChangelogTopicName(), logOff)
 	})
 }
@@ -259,9 +259,9 @@ func processInEpoch(
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	execIntrMs := stats.NewPrintLogStatsCollector[int64]("execIntrMs")
-	thisAndLastCmtMs := stats.NewPrintLogStatsCollector[int64]("thisAndLastCmtMs")
-	markPartUs := stats.NewPrintLogStatsCollector[int64]("markPartUs")
+	// execIntrMs := stats.NewPrintLogStatsCollector[int64]("execIntrMs")
+	// thisAndLastCmtMs := stats.NewPrintLogStatsCollector[int64]("thisAndLastCmtMs")
+	// markPartUs := stats.NewPrintLogStatsCollector[int64]("markPartUs")
 	snapshotTime := make([]int64, 0, 8)
 	// run := false
 	hasProcessData := false
@@ -298,7 +298,7 @@ func processInEpoch(
 		timeSinceLastMark := time.Since(markTimer)
 		shouldMarkByTime := args.commitEvery != 0 && timeSinceLastMark >= args.commitEvery
 		if shouldMarkByTime && hasProcessData {
-			execIntrMs.AddSample(timeSinceLastMark.Milliseconds())
+			// execIntrMs.AddSample(timeSinceLastMark.Milliseconds())
 			markBegin := time.Now()
 			if t.pauseFunc != nil {
 				if ret := t.pauseFunc(); ret != nil {
@@ -314,7 +314,7 @@ func processInEpoch(
 			}
 			flushTime := stats.Elapsed(flushAllStart).Microseconds()
 
-			mPartBeg := time.Now()
+			// mPartBeg := time.Now()
 			logOff, shouldExit, err := markEpoch(dctx, em, t, args)
 			if err != nil {
 				return common.GenErrFnOutput(err)
@@ -328,10 +328,10 @@ func processInEpoch(
 				snapshotTimer = time.Now()
 			}
 			markElapsed := time.Since(markBegin)
-			mPartElapsed := time.Since(mPartBeg)
+			// mPartElapsed := time.Since(mPartBeg)
 			epochMarkTime = append(epochMarkTime, markElapsed.Microseconds())
 			t.flushStageTime.AddSample(flushTime)
-			markPartUs.AddSample(mPartElapsed.Microseconds())
+			// markPartUs.AddSample(mPartElapsed.Microseconds())
 			if f > 0 {
 				t.flushAtLeastOne.AddSample(flushTime)
 			}
@@ -344,19 +344,22 @@ func processInEpoch(
 				fmt.Fprintf(os.Stderr, "{epoch mark time: %v}\n", epochMarkTime)
 				fmt.Fprintf(os.Stderr, "epoch_mark_times: %d\n", t.epochMarkTimes)
 				t.flushStageTime.PrintRemainingStats()
-				execIntrMs.PrintRemainingStats()
-				thisAndLastCmtMs.PrintRemainingStats()
+				// execIntrMs.PrintRemainingStats()
+				// thisAndLastCmtMs.PrintRemainingStats()
 				updateReturnMetric(ret, &warmupCheck,
 					false, t.GetEndDuration(), args.ectx.SubstreamNum())
 				return ret
 			}
 			hasProcessData = false
+			// btwThisLastCmt := time.Since(markTimer)
+			// thisAndLastCmtMs.AddSample(btwThisLastCmt.Milliseconds())
+			markTimer = time.Now()
 		}
 		// Exit routine
 		cur_elapsed := warmupCheck.ElapsedSinceInitial()
 		timeout := args.duration != 0 && cur_elapsed >= args.duration
 		if (!args.waitEndMark && timeout) || (testForFail && cur_elapsed >= failAfter) {
-			r := finalMark(dctx, t, args, em, cmm, snapshotTime, epochMarkTime, &markPartUs)
+			r := finalMark(dctx, t, args, em, cmm, snapshotTime, epochMarkTime)
 			if r != nil {
 				return r
 			}
@@ -364,9 +367,9 @@ func processInEpoch(
 			if testForFail {
 				ret = &common.FnOutput{Success: true, Message: common_errors.ErrReturnDueToTest.Error()}
 			}
-			markPartUs.PrintRemainingStats()
-			execIntrMs.PrintRemainingStats()
-			thisAndLastCmtMs.PrintRemainingStats()
+			// markPartUs.PrintRemainingStats()
+			// execIntrMs.PrintRemainingStats()
+			// thisAndLastCmtMs.PrintRemainingStats()
 			updateReturnMetric(ret, &warmupCheck,
 				false, t.GetEndDuration(), args.ectx.SubstreamNum())
 			return ret
@@ -378,9 +381,6 @@ func processInEpoch(
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}
-			btwThisLastCmt := time.Since(markTimer)
-			thisAndLastCmtMs.AddSample(btwThisLastCmt.Milliseconds())
-			markTimer = time.Now()
 		}
 		app_ret, ctrlRawMsgOp := t.appProcessFunc(dctx, t, args.ectx)
 		if app_ret != nil {
@@ -397,13 +397,13 @@ func processInEpoch(
 		ctrlRawMsg, ok := ctrlRawMsgOp.Take()
 		if ok {
 			fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
-			r := finalMark(dctx, t, args, em, cmm, snapshotTime, epochMarkTime, &markPartUs)
+			r := finalMark(dctx, t, args, em, cmm, snapshotTime, epochMarkTime)
 			if r != nil {
 				return r
 			}
-			markPartUs.PrintRemainingStats()
-			execIntrMs.PrintRemainingStats()
-			thisAndLastCmtMs.PrintRemainingStats()
+			// markPartUs.PrintRemainingStats()
+			// execIntrMs.PrintRemainingStats()
+			// thisAndLastCmtMs.PrintRemainingStats()
 			return handleCtrlMsg(dctx, ctrlRawMsg, t, args, &warmupCheck)
 		}
 	}
@@ -411,7 +411,8 @@ func processInEpoch(
 
 func finalMark(dctx context.Context, t *StreamTask, args *StreamTaskArgs,
 	em *epoch_manager.EpochManager, cmm *control_channel.ControlChannelManager,
-	snapshotTime []int64, epochMarkTime []int64, markPartUs *stats.PrintLogStatsCollector[int64],
+	snapshotTime []int64, epochMarkTime []int64,
+	// markPartUs *stats.PrintLogStatsCollector[int64],
 ) *common.FnOutput {
 	markBegin := time.Now()
 	if t.pauseFunc != nil {
@@ -429,7 +430,7 @@ func finalMark(dctx context.Context, t *StreamTask, args *StreamTaskArgs,
 		return common.GenErrFnOutput(err)
 	}
 	flushTime := stats.Elapsed(flushAllStart).Microseconds()
-	mPartBeg := time.Now()
+	// mPartBeg := time.Now()
 	logOff, _, err := markEpoch(dctx, em, t, args)
 	if err != nil {
 		return common.GenErrFnOutput(err)
@@ -454,9 +455,9 @@ func finalMark(dctx context.Context, t *StreamTask, args *StreamTaskArgs,
 		fmt.Fprintf(os.Stderr, "snapshot time: %v\n", snapshotTime)
 	}
 	markElapsed := time.Since(markBegin)
-	mPartElapsed := time.Since(mPartBeg)
+	// mPartElapsed := time.Since(mPartBeg)
 	epochMarkTime = append(epochMarkTime, markElapsed.Microseconds())
-	markPartUs.AddSample(mPartElapsed.Microseconds())
+	// markPartUs.AddSample(mPartElapsed.Microseconds())
 	t.flushStageTime.AddSample(flushTime)
 	if f > 0 {
 		t.flushAtLeastOne.AddSample(flushTime)
