@@ -13,12 +13,12 @@ import (
 type MeteredConsumer struct {
 	consumer *ShardedSharedLogStreamConsumer
 	// latencies   stats.StatsCollector[int64]
-	pToCLat      stats.PrintLogStatsCollector[int64]
-	msgBatchTime stats.PrintLogStatsCollector[int64]
-	consumeTp    stats.ThroughputCounter
-	numLogEntry  uint64
-	numEpoch     uint64
-	ctrlCount    uint32
+	pToCLat stats.PrintLogStatsCollector[int64]
+	// msgBatchTime stats.PrintLogStatsCollector[int64]
+	consumeTp   stats.ThroughputCounter
+	numLogEntry uint64
+	numEpoch    uint64
+	ctrlCount   uint32
 }
 
 /*
@@ -40,10 +40,10 @@ func NewMeteredConsumer(src *ShardedSharedLogStreamConsumer, warmup time.Duratio
 	return &MeteredConsumer{
 		consumer: src,
 		// latencies: stats.NewStatsCollector[int64](src_name, stats.DEFAULT_COLLECT_DURATION),
-		pToCLat:      stats.NewPrintLogStatsCollector[int64]("procTo" + src_name),
-		msgBatchTime: stats.NewPrintLogStatsCollector[int64]("msgBatchTime" + src_name),
-		consumeTp:    stats.NewThroughputCounter(src_name, stats.DEFAULT_COLLECT_DURATION),
-		ctrlCount:    0,
+		pToCLat: stats.NewPrintLogStatsCollector[int64]("procTo" + src_name),
+		// msgBatchTime: stats.NewPrintLogStatsCollector[int64]("msgBatchTime" + src_name),
+		// consumeTp: stats.NewThroughputCounter(src_name, stats.DEFAULT_COLLECT_DURATION),
+		ctrlCount: 0,
 	}
 }
 
@@ -72,9 +72,9 @@ func (s *MeteredConsumer) RecordCurrentConsumedSeqNum(seqNum uint64) {
 	s.consumer.RecordCurrentConsumedSeqNum(seqNum)
 }
 
-func (s *MeteredConsumer) CollectBatchTime(durMs int64) {
-	s.msgBatchTime.AddSample(durMs)
-}
+// func (s *MeteredConsumer) CollectBatchTime(durMs int64) {
+// 	s.msgBatchTime.AddSample(durMs)
+// }
 
 func (s *MeteredConsumer) CurrentConsumedSeqNum() uint64 {
 	return s.consumer.CurrentConsumedSeqNum()
@@ -120,7 +120,7 @@ func (s *MeteredConsumer) OutputRemainingStats() {
 	if s.consumer.emc != nil {
 		s.consumer.emc.OutputRemainingStats()
 	}
-	s.msgBatchTime.PrintRemainingStats()
+	// s.msgBatchTime.PrintRemainingStats()
 }
 
 func (s *MeteredConsumer) GetCount() uint64 {

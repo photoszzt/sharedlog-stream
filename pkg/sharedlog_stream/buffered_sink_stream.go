@@ -66,6 +66,12 @@ func NewBufferedSinkStreamWithBufferSize(stream *SharedLogStream, sinkBufferSize
 	return bss
 }
 
+func (s *BufferedSinkStream) OutputRemainingStats() {
+	s.bufferEntryStats.PrintRemainingStats()
+	s.bufferSizeStats.PrintRemainingStats()
+	s.flushBufferStats.PrintRemainingStats()
+}
+
 // don't mix the nolock version and goroutine safe version
 
 func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, producerId commtypes.ProducerId) error {

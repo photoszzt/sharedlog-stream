@@ -240,6 +240,12 @@ func NewShardedSharedLogStreamWithSinkBufferSize(env types.Environment, topicNam
 	}, nil
 }
 
+func (s *ShardedSharedLogStream) OutputRemainingStats() {
+	for _, shard := range s.subSharedLogStreams {
+		shard.OutputRemainingStats()
+	}
+}
+
 func (s *ShardedSharedLogStream) ExactlyOnce(gua exactly_once_intr.GuaranteeMth) {
 	for _, substream := range s.subSharedLogStreams {
 		substream.ExactlyOnce(gua)

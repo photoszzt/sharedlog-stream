@@ -251,7 +251,6 @@ func processInEpoch(
 
 	dctx, dcancel := context.WithCancel(ctx)
 	defer dcancel()
-	// em.StartMonitorLog(dctx, dcancel)
 	debug.Fprintf(os.Stderr, "start restore mapping")
 	err = cmm.RestoreMappingAndWaitForPrevTask(
 		dctx, args.ectx.FuncName(), CREATE_SNAPSHOT, args.serdeFormat,
@@ -263,7 +262,6 @@ func processInEpoch(
 	// thisAndLastCmtMs := stats.NewPrintLogStatsCollector[int64]("thisAndLastCmtMs")
 	// markPartUs := stats.NewPrintLogStatsCollector[int64]("markPartUs")
 	snapshotTime := make([]int64, 0, 8)
-	// run := false
 	hasProcessData := false
 	init := false
 	paused := false
@@ -376,7 +374,7 @@ func processInEpoch(
 		}
 
 		// init
-		if !hasProcessData {
+		if !hasProcessData && (!init || paused) {
 			err := initAfterMarkOrCommit(dctx, t, args, em, &init, &paused)
 			if err != nil {
 				return common.GenErrFnOutput(err)

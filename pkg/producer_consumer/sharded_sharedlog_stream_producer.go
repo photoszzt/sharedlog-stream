@@ -49,6 +49,10 @@ func (sls *ShardedSharedLogStreamProducer) MarkFinalOutput() {
 	sls.isFinalOutput = true
 }
 
+func (sls *ShardedSharedLogStreamProducer) OutputRemainingStats() {
+	sls.stream.OutputRemainingStats()
+}
+
 func (sls *ShardedSharedLogStreamProducer) IsFinalOutput() bool {
 	return sls.isFinalOutput
 }

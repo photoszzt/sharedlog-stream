@@ -155,6 +155,7 @@ func (s *ConcurrentMeteredSink) GetInitialProdSeqNum(substreamNum uint8) uint64 
 func (s *ConcurrentMeteredSink) ResetInitialProd() { s.producer.ResetInitialProd() }
 func (s *ConcurrentMeteredSink) OutputRemainingStats() {
 	s.lat.PrintRemainingStats()
+	s.producer.OutputRemainingStats()
 }
 func (s *ConcurrentMeteredSink) GetEventTimeLatency() []int {
 	s.mu.Lock()
@@ -300,6 +301,7 @@ func (s *MeteredProducer) ResetInitialProd() {
 func (s *MeteredProducer) OutputRemainingStats() {
 	s.latencies.PrintRemainingStats()
 	// s.eventTimeSample.PrintRemainingStats()
+	s.producer.OutputRemainingStats()
 }
 
 func (s *MeteredProducer) GetEventTimeLatency() []int {
