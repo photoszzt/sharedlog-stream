@@ -282,6 +282,7 @@ func processInEpoch(
 			args.ectx.FuncName(), args.ectx.SubstreamNum(), failAfter)
 	}
 	epochMarkTime := make([]int64, 0, 1024)
+	var timeoutPrintOnce sync.Once
 	for {
 		select {
 		case <-dctx.Done():
@@ -356,6 +357,15 @@ func processInEpoch(
 		// Exit routine
 		cur_elapsed := warmupCheck.ElapsedSinceInitial()
 		timeout := args.duration != 0 && cur_elapsed >= args.duration
+		if timeout {
+			timeoutPrintOnce.Do(func() {
+				fmt.Fprintf(os.Stderr, "timeout after %v\n", cur_elapsed)
+				for _, src := range args.ectx.Consumers() {
+					fmt.Fprintf(os.Stderr, "%s msgCnt %d, ctrlCnt %d, epochCnt %d, logEntry %d\n",
+						src.Name(), src.GetCount(), src.NumCtrlMsg(), src.NumEpoch(), src.NumLogEntry())
+				}
+			})
+		}
 		if (!args.waitEndMark && timeout) || (testForFail && cur_elapsed >= failAfter) {
 			r := finalMark(dctx, t, args, em, cmm, snapshotTime, epochMarkTime)
 			if r != nil {
