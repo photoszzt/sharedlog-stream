@@ -130,23 +130,28 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 	}
 }
 
+func (emc *EpochMarkConsumer) checkMsg(msgQueue *deque.Deque, parNum uint8, frontMsg *commtypes.RawMsg) *commtypes.RawMsg {
+	if frontMsg.IsControl && frontMsg.Mark == commtypes.EPOCH_END {
+		ranges := emc.marked[frontMsg.ProdId]
+		produce := commtypes.ProduceRangeWithEnd{ProduceRange: commtypes.ProduceRange{Start: 0, SubStreamNum: parNum}, End: 0}
+		ranges[parNum] = produce
+		msgQueue.PopFront()
+		return frontMsg
+	}
+	if (frontMsg.Mark == commtypes.SCALE_FENCE && frontMsg.ScaleEpoch != 0) || frontMsg.Mark == commtypes.STREAM_END {
+		msgQueue.PopFront()
+		return frontMsg
+	}
+	return nil
+}
+
 func (emc *EpochMarkConsumer) checkMsgQueue(msgQueue *deque.Deque, parNum uint8) *commtypes.RawMsg {
 	if msgQueue.Len() > 0 {
 		frontMsg := msgQueue.Front().(*commtypes.RawMsg)
-		if frontMsg.IsControl && frontMsg.Mark == commtypes.EPOCH_END {
-			ranges := emc.marked[frontMsg.ProdId]
-			produce := commtypes.ProduceRangeWithEnd{ProduceRange: commtypes.ProduceRange{Start: 0, SubStreamNum: parNum}, End: 0}
-			ranges[parNum] = produce
-			msgQueue.PopFront()
-			return frontMsg
-		}
-		if frontMsg.Mark == commtypes.SCALE_FENCE && frontMsg.ScaleEpoch != 0 {
-			frontMsg := msgQueue.PopFront().(*commtypes.RawMsg)
-			return frontMsg
-		}
-		if frontMsg.Mark == commtypes.STREAM_END {
-			frontMsg := msgQueue.PopFront().(*commtypes.RawMsg)
-			return frontMsg
+		fmt.Fprintf(os.Stderr, "frontMsg: %+v\n", frontMsg)
+		readyMsg := emc.checkMsg(msgQueue, parNum, frontMsg)
+		if readyMsg != nil {
+			return readyMsg
 		}
 		msgStatus := emc.checkMsgStatus(frontMsg, parNum)
 		if msgStatus == MARKED {
@@ -154,10 +159,19 @@ func (emc *EpochMarkConsumer) checkMsgQueue(msgQueue *deque.Deque, parNum uint8)
 			return frontMsg
 		}
 		for msgStatus == SHOULD_DROP {
-			msgQueue.PopFront()
+			frontMsg = msgQueue.PopFront().(*commtypes.RawMsg)
+			fmt.Fprintf(os.Stderr, "drop msg: %+v\n", frontMsg)
 			if msgQueue.Len() > 0 {
 				frontMsg = msgQueue.Front().(*commtypes.RawMsg)
+				readyMsg := emc.checkMsg(msgQueue, parNum, frontMsg)
+				if readyMsg != nil {
+					return readyMsg
+				}
 				msgStatus = emc.checkMsgStatus(frontMsg, parNum)
+				if msgStatus == MARKED {
+					msgQueue.PopFront()
+					return frontMsg
+				}
 			} else {
 				return nil
 			}
@@ -169,10 +183,12 @@ func (emc *EpochMarkConsumer) checkMsgQueue(msgQueue *deque.Deque, parNum uint8)
 func (emc *EpochMarkConsumer) checkMsgStatus(rawMsg *commtypes.RawMsg, parNum uint8) MsgStatus {
 	ranges, ok := emc.marked[rawMsg.ProdId]
 	if !ok {
+		fmt.Fprintf(os.Stderr, "no ranges for prodid %+v\n", rawMsg.ProdId)
 		return NOT_MARK
 	}
 	markedRange := ranges[parNum]
 	if markedRange.Start == 0 && markedRange.End == 0 {
+		fmt.Fprintf(os.Stderr, "no marked range for prodid %+v, parnum %d\n", rawMsg.ProdId, parNum)
 		return NOT_MARK
 	}
 	if rawMsg.LogSeqNum < markedRange.Start {

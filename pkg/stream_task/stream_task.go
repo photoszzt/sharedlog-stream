@@ -170,6 +170,8 @@ func handleCtrlMsg(ctx context.Context, ctrlRawMsg commtypes.RawMsgAndSeq,
 				for par := uint8(0); par < sink.Stream().NumPartition(); par++ {
 					parNums = append(parNums, par)
 				}
+				fmt.Fprintf(os.Stderr, "produce stream end mark to %s %v\n",
+					sink.TopicName(), parNums)
 				_, err := sink.ProduceCtrlMsg(ctx, ctrlRawMsg, parNums)
 				if err != nil {
 					return &common.FnOutput{Success: false, Message: err.Error()}
