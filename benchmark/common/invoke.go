@@ -247,7 +247,7 @@ func Invoke(invokeParam InvokeFuncParam,
 	fmt.Fprintf(os.Stderr, "inParamsMap: %+v\n", inParamsMap)
 	fmt.Fprintf(os.Stderr, "configScaleInput: %+v\n", configScaleInput)
 
-	timeout := time.Duration(baseQueryInput.Duration*4) * time.Second
+	timeout := time.Duration(baseQueryInput.Duration*2) * time.Second
 	if baseQueryInput.Duration == 0 {
 		timeout = time.Duration(900) * time.Second
 	}
