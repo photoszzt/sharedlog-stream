@@ -149,8 +149,8 @@ type RawMsg struct {
 }
 
 func (r *RawMsg) FormatMsgMeta() string {
-	return fmt.Sprintf("MsgSeqNum: 0x%x, LogSeqNum: 0x%x, ProdId: %+v, ScaleEpoch: %d, IsControl: %t, IsPayloadArr: %t, ProdIdx: %d, Mark: %d",
-		r.MsgSeqNum, r.LogSeqNum, r.ProdId, r.ScaleEpoch, r.IsControl, r.IsPayloadArr, r.ProdIdx, r.Mark)
+	return fmt.Sprintf("MsgSeqNum: 0x%x, LogSeqNum: 0x%x, ProdId: %s, ScaleEpoch: %d, IsControl: %t, IsPayloadArr: %t, ProdIdx: %d, Mark: %v",
+		r.MsgSeqNum, r.LogSeqNum, r.ProdId.String(), r.ScaleEpoch, r.IsControl, r.IsPayloadArr, r.ProdIdx, r.Mark)
 }
 
 type MsgAndSeq struct {
