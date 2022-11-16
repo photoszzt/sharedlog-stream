@@ -164,6 +164,7 @@ func main() {
 			panic(err)
 		}
 		if FLAGS_dump_dir != "" {
+			fmt.Fprintf(os.Stderr, "dumping log\n")
 			err = os.MkdirAll(FLAGS_dump_dir, 0750)
 			if err != nil {
 				panic(err)
