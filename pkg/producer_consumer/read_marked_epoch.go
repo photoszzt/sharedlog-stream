@@ -95,7 +95,7 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 			if err != nil {
 				return nil, err
 			}
-			// debug.Fprintf(os.Stderr, "%+v\n", epochMark)
+			fmt.Fprintf(os.Stderr, "%+v, logSeq: 0x%x\n", epochMark, rawMsg.LogSeqNum)
 			if epochMark.Mark == commtypes.EPOCH_END {
 				// debug.Fprintf(os.Stderr, "%+v\n", epochMark)
 				ranges, ok := emc.marked[rawMsg.ProdId]
@@ -183,12 +183,12 @@ func (emc *EpochMarkConsumer) checkMsgQueue(msgQueue *deque.Deque, parNum uint8)
 func (emc *EpochMarkConsumer) checkMsgStatus(rawMsg *commtypes.RawMsg, parNum uint8) MsgStatus {
 	ranges, ok := emc.marked[rawMsg.ProdId]
 	if !ok {
-		fmt.Fprintf(os.Stderr, "no ranges for prodid %+v\n", rawMsg.ProdId)
+		// fmt.Fprintf(os.Stderr, "no ranges for rawMsg %+v\n", rawMsg.FormatMsgMeta())
 		return NOT_MARK
 	}
 	markedRange := ranges[parNum]
 	if markedRange.Start == 0 && markedRange.End == 0 {
-		fmt.Fprintf(os.Stderr, "no marked range for prodid %+v, parnum %d\n", rawMsg.ProdId, parNum)
+		fmt.Fprintf(os.Stderr, "no marked range for rawMsg %+v, parnum %d\n", rawMsg.FormatMsgMeta(), parNum)
 		return NOT_MARK
 	}
 	if rawMsg.LogSeqNum < markedRange.Start {
