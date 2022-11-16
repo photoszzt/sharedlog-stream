@@ -148,8 +148,7 @@ func (emc *EpochMarkConsumer) checkMsg(msgQueue *deque.Deque, parNum uint8, fron
 func (emc *EpochMarkConsumer) checkMsgQueue(msgQueue *deque.Deque, parNum uint8) *commtypes.RawMsg {
 	if msgQueue.Len() > 0 {
 		frontMsg := msgQueue.Front().(*commtypes.RawMsg)
-		fmt.Fprintf(os.Stderr, "frontMsg: IsCtrl: %v, mark: %+v, prodId: %v, prodIdx: %v\n",
-			frontMsg.IsControl, frontMsg.Mark, frontMsg.ProdId, frontMsg.ProdIdx)
+		fmt.Fprintf(os.Stderr, "frontMsgMeta: %s\n", frontMsg.FormatMsgMeta())
 		readyMsg := emc.checkMsg(msgQueue, parNum, frontMsg)
 		if readyMsg != nil {
 			return readyMsg
@@ -161,8 +160,7 @@ func (emc *EpochMarkConsumer) checkMsgQueue(msgQueue *deque.Deque, parNum uint8)
 		}
 		for msgStatus == SHOULD_DROP {
 			frontMsg = msgQueue.PopFront().(*commtypes.RawMsg)
-			fmt.Fprintf(os.Stderr, "drop msg: isCtrl: %v, mark: %v, prodId: %v, prodIdx: %v\n",
-				frontMsg.IsControl, frontMsg.Mark, frontMsg.ProdId, frontMsg.ProdIdx)
+			fmt.Fprintf(os.Stderr, "drop msg: %s\n", frontMsg.FormatMsgMeta())
 			if msgQueue.Len() > 0 {
 				frontMsg = msgQueue.Front().(*commtypes.RawMsg)
 				readyMsg := emc.checkMsg(msgQueue, parNum, frontMsg)
