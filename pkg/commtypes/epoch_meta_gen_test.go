@@ -461,8 +461,8 @@ func BenchmarkDecodeProduceRange(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshalProduceRangeWithEnd(t *testing.T) {
-	v := ProduceRangeWithEnd{}
+func TestMarshalUnmarshalSeqRange(t *testing.T) {
+	v := SeqRange{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -484,8 +484,8 @@ func TestMarshalUnmarshalProduceRangeWithEnd(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgProduceRangeWithEnd(b *testing.B) {
-	v := ProduceRangeWithEnd{}
+func BenchmarkMarshalMsgSeqRange(b *testing.B) {
+	v := SeqRange{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -493,8 +493,8 @@ func BenchmarkMarshalMsgProduceRangeWithEnd(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgProduceRangeWithEnd(b *testing.B) {
-	v := ProduceRangeWithEnd{}
+func BenchmarkAppendMsgSeqRange(b *testing.B) {
+	v := SeqRange{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -505,8 +505,8 @@ func BenchmarkAppendMsgProduceRangeWithEnd(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshalProduceRangeWithEnd(b *testing.B) {
-	v := ProduceRangeWithEnd{}
+func BenchmarkUnmarshalSeqRange(b *testing.B) {
+	v := SeqRange{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -519,17 +519,17 @@ func BenchmarkUnmarshalProduceRangeWithEnd(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodeProduceRangeWithEnd(t *testing.T) {
-	v := ProduceRangeWithEnd{}
+func TestEncodeDecodeSeqRange(t *testing.T) {
+	v := SeqRange{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodeProduceRangeWithEnd Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeSeqRange Msgsize() is inaccurate")
 	}
 
-	vn := ProduceRangeWithEnd{}
+	vn := SeqRange{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -543,8 +543,8 @@ func TestEncodeDecodeProduceRangeWithEnd(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodeProduceRangeWithEnd(b *testing.B) {
-	v := ProduceRangeWithEnd{}
+func BenchmarkEncodeSeqRange(b *testing.B) {
+	v := SeqRange{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -557,8 +557,8 @@ func BenchmarkEncodeProduceRangeWithEnd(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodeProduceRangeWithEnd(b *testing.B) {
-	v := ProduceRangeWithEnd{}
+func BenchmarkDecodeSeqRange(b *testing.B) {
+	v := SeqRange{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))

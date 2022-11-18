@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"time"
@@ -23,9 +24,9 @@ const (
 type EpochMarkConsumer struct {
 	epochMarkerSerde commtypes.SerdeG[commtypes.EpochMarker]
 	stream           *sharedlog_stream.ShardedSharedLogStream
-	marked           map[commtypes.ProducerId]map[uint8]commtypes.ProduceRangeWithEnd
+	marked           map[commtypes.ProducerId]map[uint8]commtypes.SeqRangeSet
 	curReadMsgSeqNum map[commtypes.ProducerId]uint64
-	msgBuffer        []*deque.Deque
+	msgBuffer        []*deque.Deque[*commtypes.RawMsg]
 	streamTime       stats.PrintLogStatsCollector[int64]
 }
 
@@ -38,11 +39,15 @@ func NewEpochMarkConsumer(
 	if err != nil {
 		return nil, err
 	}
+	msgBuffer := make([]*deque.Deque[*commtypes.RawMsg], stream.NumPartition())
+	for i := uint8(0); i < stream.NumPartition(); i++ {
+		msgBuffer[i] = deque.New[*commtypes.RawMsg]()
+	}
 	return &EpochMarkConsumer{
 		epochMarkerSerde: epochMarkSerde,
 		stream:           stream,
-		marked:           make(map[commtypes.ProducerId]map[uint8]commtypes.ProduceRangeWithEnd),
-		msgBuffer:        make([]*deque.Deque, stream.NumPartition()),
+		marked:           make(map[commtypes.ProducerId]map[uint8]commtypes.SeqRangeSet),
+		msgBuffer:        msgBuffer,
 		curReadMsgSeqNum: make(map[commtypes.ProducerId]uint64),
 		streamTime:       stats.NewPrintLogStatsCollector[int64]("streamTime" + srcName),
 	}, nil
@@ -53,9 +58,6 @@ func (emc *EpochMarkConsumer) OutputRemainingStats() {
 }
 
 func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*commtypes.RawMsg, error) {
-	if emc.msgBuffer[parNum] == nil {
-		emc.msgBuffer[parNum] = deque.New()
-	}
 	msgQueue := emc.msgBuffer[parNum]
 	if msgQueue.Len() != 0 {
 		retMsg := emc.checkMsgQueue(msgQueue, parNum)
@@ -90,27 +92,32 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 				fmt.Fprintf(os.Stderr, "got a duplicate entry; continue\n")
 				continue
 			}
+			// fmt.Fprintf(os.Stderr, "appending normalMsg logSeq: 0x%x\n", rawMsg.LogSeqNum)
 		} else {
 			epochMark, err := emc.epochMarkerSerde.Decode(rawMsg.Payload)
 			if err != nil {
 				return nil, err
 			}
-			fmt.Fprintf(os.Stderr, "%+v, logSeq: 0x%x\n", epochMark, rawMsg.LogSeqNum)
+			// fmt.Fprintf(os.Stderr, "appending %+v, logSeq: 0x%x\n", epochMark, rawMsg.LogSeqNum)
 			if epochMark.Mark == commtypes.EPOCH_END {
 				// debug.Fprintf(os.Stderr, "%+v\n", epochMark)
 				ranges, ok := emc.marked[rawMsg.ProdId]
 				if !ok {
-					ranges = make(map[uint8]commtypes.ProduceRangeWithEnd)
+					ranges = make(map[uint8]commtypes.SeqRangeSet)
 				}
 				markRanges := epochMark.OutputRanges[emc.stream.TopicName()]
 				for _, r := range markRanges {
-					ranges[r.SubStreamNum] = commtypes.ProduceRangeWithEnd{
-						ProduceRange: r,
-						End:          rawMsg.LogSeqNum,
+					if _, ok := ranges[r.SubStreamNum]; !ok {
+						ranges[r.SubStreamNum] = commtypes.NewSeqRangeSet()
 					}
+					ranges[r.SubStreamNum].Add(commtypes.SeqRange{
+						Start: r.Start,
+						End:   rawMsg.LogSeqNum,
+					})
 				}
 				emc.marked[rawMsg.ProdId] = ranges
 				rawMsg.Mark = commtypes.EPOCH_END
+				rawMsg.MarkRanges = markRanges
 			} else if epochMark.Mark == commtypes.SCALE_FENCE {
 				rawMsg.ScaleEpoch = epochMark.ScaleEpoch
 				rawMsg.Mark = epochMark.Mark
@@ -130,11 +137,15 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 	}
 }
 
-func (emc *EpochMarkConsumer) checkMsg(msgQueue *deque.Deque, parNum uint8, frontMsg *commtypes.RawMsg) *commtypes.RawMsg {
+func (emc *EpochMarkConsumer) checkMsg(msgQueue *deque.Deque[*commtypes.RawMsg], parNum uint8, frontMsg *commtypes.RawMsg) *commtypes.RawMsg {
 	if frontMsg.IsControl && frontMsg.Mark == commtypes.EPOCH_END {
 		ranges := emc.marked[frontMsg.ProdId]
-		produce := commtypes.ProduceRangeWithEnd{ProduceRange: commtypes.ProduceRange{Start: 0, SubStreamNum: parNum}, End: 0}
-		ranges[parNum] = produce
+		for _, r := range frontMsg.MarkRanges {
+			ranges[parNum].Remove(commtypes.SeqRange{
+				Start: r.Start,
+				End:   frontMsg.LogSeqNum,
+			})
+		}
 		msgQueue.PopFront()
 		return frontMsg
 	}
@@ -145,37 +156,48 @@ func (emc *EpochMarkConsumer) checkMsg(msgQueue *deque.Deque, parNum uint8, fron
 	return nil
 }
 
-func (emc *EpochMarkConsumer) checkMsgQueue(msgQueue *deque.Deque, parNum uint8) *commtypes.RawMsg {
+func (emc *EpochMarkConsumer) checkMsgQueue(msgQueue *deque.Deque[*commtypes.RawMsg], parNum uint8) *commtypes.RawMsg {
 	if msgQueue.Len() > 0 {
-		frontMsg := msgQueue.Front().(*commtypes.RawMsg)
-		fmt.Fprintf(os.Stderr, "frontMsgMeta: %s\n", frontMsg.FormatMsgMeta())
+		frontMsg := msgQueue.Front()
+		// fmt.Fprintf(os.Stderr, "frontMsgMeta: %s\n", frontMsg.FormatMsgMeta())
 		readyMsg := emc.checkMsg(msgQueue, parNum, frontMsg)
 		if readyMsg != nil {
+			// fmt.Fprintf(os.Stderr, "returnMsg1: %s\n", readyMsg.FormatMsgMeta())
 			return readyMsg
 		}
 		msgStatus := emc.checkMsgStatus(frontMsg, parNum)
 		if msgStatus == MARKED {
 			msgQueue.PopFront()
+			// fmt.Fprintf(os.Stderr, "returnMsg2: %s\n", frontMsg.FormatMsgMeta())
 			return frontMsg
 		}
-		for msgStatus == SHOULD_DROP {
-			frontMsg = msgQueue.PopFront().(*commtypes.RawMsg)
-			fmt.Fprintf(os.Stderr, "drop msg: %s\n", frontMsg.FormatMsgMeta())
-			if msgQueue.Len() > 0 {
-				frontMsg = msgQueue.Front().(*commtypes.RawMsg)
-				readyMsg := emc.checkMsg(msgQueue, parNum, frontMsg)
-				if readyMsg != nil {
-					return readyMsg
-				}
-				msgStatus = emc.checkMsgStatus(frontMsg, parNum)
-				if msgStatus == MARKED {
-					msgQueue.PopFront()
-					return frontMsg
-				}
-			} else {
-				return nil
-			}
+		if msgStatus == SHOULD_DROP {
+			frontMsg = msgQueue.PopFront()
+			fmt.Fprintf(os.Stderr, "dropMsg: %s\n", frontMsg.FormatMsgMeta())
+			return nil
 		}
+		/*
+			for msgStatus == SHOULD_DROP {
+				frontMsg = msgQueue.PopFront()
+				fmt.Fprintf(os.Stderr, "drop msg: %s\n", frontMsg.FormatMsgMeta())
+				if msgQueue.Len() > 0 {
+					frontMsg = msgQueue.Front()
+					readyMsg := emc.checkMsg(msgQueue, parNum, frontMsg)
+					if readyMsg != nil {
+						fmt.Fprintf(os.Stderr, "returnMsg3: %s\n", readyMsg.FormatMsgMeta())
+						return readyMsg
+					}
+					msgStatus = emc.checkMsgStatus(frontMsg, parNum)
+					if msgStatus == MARKED {
+						msgQueue.PopFront()
+						fmt.Fprintf(os.Stderr, "returnMsg4: %s\n", frontMsg.FormatMsgMeta())
+						return frontMsg
+					}
+				} else {
+					return nil
+				}
+			}
+		*/
 	}
 	return nil
 }
@@ -187,16 +209,25 @@ func (emc *EpochMarkConsumer) checkMsgStatus(rawMsg *commtypes.RawMsg, parNum ui
 		return NOT_MARK
 	}
 	markedRange := ranges[parNum]
-	if markedRange.Start == 0 && markedRange.End == 0 {
-		fmt.Fprintf(os.Stderr, "no marked range for rawMsg %+v, parnum %d\n", rawMsg.FormatMsgMeta(), parNum)
-		return NOT_MARK
+	minStart := optional.None[uint64]()
+	for r := range markedRange {
+		if minStart.IsNone() {
+			minStart = optional.Some(r.Start)
+		} else {
+			if r.Start < minStart.Unwrap() {
+				minStart = optional.Some(r.Start)
+			}
+		}
+		if rawMsg.LogSeqNum >= r.Start && rawMsg.LogSeqNum <= r.End {
+			return MARKED
+		}
 	}
-	if rawMsg.LogSeqNum < markedRange.Start {
+	mStart := minStart.Unwrap()
+	if rawMsg.LogSeqNum < mStart {
+		fmt.Fprintf(os.Stderr, "rawMsg logSeq %#x < markedRange start %#x, parnum %d\n",
+			rawMsg.LogSeqNum, mStart, parNum)
 		return SHOULD_DROP
-	} else if rawMsg.LogSeqNum >= markedRange.Start && rawMsg.LogSeqNum <= markedRange.End {
-		return MARKED
 	} else {
-		// the entry is after this marker;
 		return NOT_MARK
 	}
 }

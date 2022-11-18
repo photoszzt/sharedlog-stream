@@ -52,6 +52,10 @@ func NewStreamTaskArgsBuilder(env types.Environment,
 	}
 }
 
+func (args *StreamTaskArgs) ExecutionContext() processor.ExecutionContext {
+	return args.ectx
+}
+
 type SetGuarantee interface {
 	Guarantee(gua exactly_once_intr.GuaranteeMth) SetAppID
 }

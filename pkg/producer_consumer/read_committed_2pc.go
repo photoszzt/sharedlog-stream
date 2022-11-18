@@ -17,7 +17,7 @@ type TransactionAwareConsumer struct {
 	aborted          map[commtypes.ProducerId]struct{}
 	// check whether producer produces duplicate records
 	curReadMsgSeqNum map[commtypes.ProducerId]uint64
-	msgBuffer        []*deque.Deque
+	msgBuffer        []*deque.Deque[*commtypes.RawMsg]
 }
 
 func NewTransactionAwareConsumer(stream *sharedlog_stream.ShardedSharedLogStream,
@@ -27,8 +27,12 @@ func NewTransactionAwareConsumer(stream *sharedlog_stream.ShardedSharedLogStream
 	if err != nil {
 		return nil, err
 	}
+	msgBuffer := make([]*deque.Deque[*commtypes.RawMsg], stream.NumPartition())
+	for i := uint8(0); i < stream.NumPartition(); i++ {
+		msgBuffer[i] = deque.New[*commtypes.RawMsg]()
+	}
 	return &TransactionAwareConsumer{
-		msgBuffer:        make([]*deque.Deque, stream.NumPartition()),
+		msgBuffer:        msgBuffer,
 		stream:           stream,
 		epochMarkerSerde: epochMarkerSerde,
 		committed:        make(map[commtypes.ProducerId]struct{}),
@@ -37,15 +41,15 @@ func NewTransactionAwareConsumer(stream *sharedlog_stream.ShardedSharedLogStream
 	}, nil
 }
 
-func (tac *TransactionAwareConsumer) checkMsgQueue(msgQueue *deque.Deque, parNum uint8) *commtypes.RawMsg {
+func (tac *TransactionAwareConsumer) checkMsgQueue(msgQueue *deque.Deque[*commtypes.RawMsg], parNum uint8) *commtypes.RawMsg {
 	if msgQueue.Len() > 0 {
-		frontMsg := msgQueue.Front().(*commtypes.RawMsg)
+		frontMsg := msgQueue.Front()
 		if frontMsg.IsControl && frontMsg.Mark == commtypes.EPOCH_END {
 			delete(tac.committed, frontMsg.ProdId)
 			debug.Fprintf(os.Stderr, "remove commit mark 0x%x\n", frontMsg.LogSeqNum)
 			msgQueue.PopFront()
 			if msgQueue.Len() > 0 {
-				frontMsg = msgQueue.Front().(*commtypes.RawMsg)
+				frontMsg = msgQueue.Front()
 			} else {
 				return nil
 			}
@@ -53,7 +57,7 @@ func (tac *TransactionAwareConsumer) checkMsgQueue(msgQueue *deque.Deque, parNum
 			delete(tac.committed, frontMsg.ProdId)
 			msgQueue.PopFront()
 			if msgQueue.Len() > 0 {
-				frontMsg = msgQueue.Front().(*commtypes.RawMsg)
+				frontMsg = msgQueue.Front()
 			} else {
 				return nil
 			}
@@ -69,17 +73,13 @@ func (tac *TransactionAwareConsumer) checkMsgQueue(msgQueue *deque.Deque, parNum
 		}
 		for tac.HasAborted(frontMsg.ProdId) {
 			msgQueue.PopFront()
-			frontMsg = msgQueue.Front().(*commtypes.RawMsg)
+			frontMsg = msgQueue.Front()
 		}
 	}
 	return nil
 }
 
 func (tac *TransactionAwareConsumer) ReadNext(ctx context.Context, parNum uint8) (*commtypes.RawMsg, error) {
-	if tac.msgBuffer[parNum] == nil {
-		tac.msgBuffer[parNum] = deque.New()
-	}
-
 	msgQueue := tac.msgBuffer[parNum]
 	debug.Fprintf(os.Stderr, "reading from sub %d, msg queue len: %d\n", parNum, msgQueue.Len())
 	if msgQueue.Len() != 0 {

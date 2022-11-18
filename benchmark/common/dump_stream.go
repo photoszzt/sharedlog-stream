@@ -26,12 +26,10 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 	if err != nil {
 		return err
 	}
-	/*
-		epochMarkerSerde, err := commtypes.GetEpochMarkerSerdeG(args.SerdeFormat)
-		if err != nil {
-			return err
-		}
-	*/
+	epochMarkerSerde, err := commtypes.GetEpochMarkerSerdeG(args.SerdeFormat)
+	if err != nil {
+		return err
+	}
 	payloadArrSerde := sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDE
 	for i := uint8(0); i < args.NumPartitions; i++ {
 		outFilePath := path.Join(args.OutputDir, fmt.Sprintf("%s-%d.txt", args.TopicName, i))
@@ -49,21 +47,19 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 				return err
 			}
 			if rawMsg.IsControl {
-				/*
-					epochMark, err := epochMarkerSerde.Decode(rawMsg.Payload)
-					if err != nil {
-						return err
-					}
-					outStr := fmt.Sprintf("%+v\n", epochMark)
-					// fmt.Fprint(os.Stderr, outStr)
-					writted, err := outFile.WriteString(outStr)
-					if err != nil {
-						return err
-					}
-					if writted != len(outStr) {
-						panic("written is smaller than expected")
-					}
-				*/
+				epochMark, err := epochMarkerSerde.Decode(rawMsg.Payload)
+				if err != nil {
+					return err
+				}
+				outStr := fmt.Sprintf("%+v, logSeq: %#x, prodId: %v\n", epochMark, rawMsg.LogSeqNum, rawMsg.ProdId)
+				// fmt.Fprint(os.Stderr, outStr)
+				writted, err := outFile.WriteString(outStr)
+				if err != nil {
+					return err
+				}
+				if writted != len(outStr) {
+					panic("written is smaller than expected")
+				}
 			} else {
 				msgAndSeq, err := commtypes.DecodeRawMsg(rawMsg, args.MsgSerde, payloadArrSerde)
 				if err != nil {
@@ -71,13 +67,13 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 				}
 				if msgAndSeq.MsgArr != nil {
 					for _, msg := range msgAndSeq.MsgArr {
-						err = outputMsg(msg, outFile)
+						err = outputMsg(msg, rawMsg.LogSeqNum, rawMsg.ProdId, outFile)
 						if err != nil {
 							return err
 						}
 					}
 				} else {
-					err = outputMsg(msgAndSeq.Msg, outFile)
+					err = outputMsg(msgAndSeq.Msg, rawMsg.LogSeqNum, rawMsg.ProdId, outFile)
 					if err != nil {
 						return err
 					}
@@ -91,8 +87,9 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 	return nil
 }
 
-func outputMsg(msg commtypes.Message, outFile *os.File) error {
-	outStr := fmt.Sprintf("%v : %v, ts %d\n", msg.Key, msg.Value, msg.Timestamp)
+func outputMsg(msg commtypes.Message, logSeqNum uint64, prodId commtypes.ProducerId, outFile *os.File) error {
+	outStr := fmt.Sprintf("%v : %v, ts %#x, logSeq %#x, prodId %v\n",
+		msg.Key, msg.Value, msg.Timestamp, logSeqNum, prodId)
 	// fmt.Fprint(os.Stderr, outStr)
 	writted, err := outFile.WriteString(outStr)
 	if err != nil {

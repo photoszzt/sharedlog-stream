@@ -12,7 +12,6 @@ import (
 	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils/syncutils"
-	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -147,6 +146,7 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context,
 	if additionalTopicNames != nil {
 		topics = append(topics, additionalTopicNames...)
 	}
+	s.mux.Lock()
 	nowMs := time.Now().UnixMilli()
 	logEntry := &StreamLogEntry{
 		TopicName:     topics,
@@ -158,14 +158,13 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context,
 		InjTsMs:       nowMs,
 	}
 	// TODO: need to deal with sequence number overflow
-	atomic.AddUint64(&s.curAppendMsgSeqNum, 1)
+	s.curAppendMsgSeqNum += 1
 	logEntry.MsgSeqNum = s.curAppendMsgSeqNum
 	encoded, err := logEntry.MarshalMsg(nil)
 	if err != nil {
 		return 0, err
 	}
 
-	s.mux.Lock()
 	seqNum, err := s.env.SharedLogAppend(ctx, tags, encoded)
 	if err != nil {
 		return 0, err

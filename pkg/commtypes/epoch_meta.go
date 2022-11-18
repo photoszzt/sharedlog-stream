@@ -25,9 +25,32 @@ type ProduceRange struct {
 	SubStreamNum uint8  `json:"sNum" msg:"sNum"`
 }
 
-type ProduceRangeWithEnd struct {
-	End uint64
-	ProduceRange
+type SeqRange struct {
+	End   uint64
+	Start uint64
+}
+
+func (s SeqRange) String() string {
+	return fmt.Sprintf("SeqRange: {Start: %#x, End: %#x}", s.Start, s.End)
+}
+
+type SeqRangeSet map[SeqRange]struct{}
+
+func NewSeqRangeSet() SeqRangeSet {
+	return make(map[SeqRange]struct{})
+}
+
+func (s SeqRangeSet) Add(val SeqRange) {
+	s[val] = struct{}{}
+}
+
+func (s SeqRangeSet) Remove(val SeqRange) {
+	delete(s, val)
+}
+
+func (s SeqRangeSet) Has(val SeqRange) bool {
+	_, ok := s[val]
+	return ok
 }
 
 var _ = fmt.Stringer(ProduceRange{})

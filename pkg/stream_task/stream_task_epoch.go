@@ -507,12 +507,11 @@ func markEpoch(ctx context.Context, em *epoch_manager.EpochManager,
 	}
 	// prepareStart := stats.TimerBegin()
 	epochMarker, err := epoch_manager.GenEpochMarker(ctx, em, args.ectx.Consumers(), args.ectx.Producers(),
-		args.kvChangelogs, args.windowStoreChangelogs)
+		args.kvChangelogs, args.windowStoreChangelogs, args.ectx.SubstreamNum())
 	if err != nil {
 		return 0, false, err
 	}
 	epochMarkerTags, epochMarkerTopics := em.GenTagsAndTopicsForEpochMarker()
-	epoch_manager.CleanupState(em, args.ectx.Producers(), args.kvChangelogs, args.windowStoreChangelogs)
 	// prepareTime := stats.Elapsed(prepareStart).Microseconds()
 
 	// mStart := stats.TimerBegin()
@@ -520,6 +519,7 @@ func markEpoch(ctx context.Context, em *epoch_manager.EpochManager,
 	if err != nil {
 		return 0, false, err
 	}
+	epoch_manager.CleanupState(em, args.ectx.Producers(), args.kvChangelogs, args.windowStoreChangelogs)
 	// mElapsed := stats.Elapsed(mStart).Microseconds()
 	// t.markEpochTime.AddSample(mElapsed)
 	// t.markEpochPrepare.AddSample(prepareTime)

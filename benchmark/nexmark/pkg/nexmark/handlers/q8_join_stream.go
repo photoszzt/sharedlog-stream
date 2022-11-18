@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
@@ -40,6 +41,7 @@ func (h *q8JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, e
 	if err != nil {
 		return nil, err
 	}
+	fmt.Fprintf(os.Stderr, "inputParam: %+v\n", parsedInput)
 	output := h.Query8JoinStream(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {

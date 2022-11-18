@@ -120,6 +120,7 @@ func GenEpochMarker(
 	producers []producer_consumer.MeteredProducerIntr,
 	kvTabs map[string]store.KeyValueStoreOpWithChangelog,
 	winTabs map[string]store.WindowStoreOpWithChangelog,
+	prodIdx uint8,
 ) (commtypes.EpochMarker, error) {
 	outputRanges := make(map[string][]commtypes.ProduceRange)
 	for _, producer := range producers {
@@ -177,6 +178,7 @@ func GenEpochMarker(
 		Mark:         commtypes.EPOCH_END,
 		ConSeqNums:   consumeSeqNums,
 		OutputRanges: outputRanges,
+		ProdIndex:    prodIdx,
 	}
 	return epochMeta, nil
 }

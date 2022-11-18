@@ -3,12 +3,12 @@ package sharedlog_stream
 import (
 	"context"
 	"fmt"
+	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/utils/syncutils"
-	"sync"
 	"time"
 )
 
@@ -34,22 +34,21 @@ type BufferedSinkStream struct {
 	bufferEntryStats stats.StatsCollector[int]
 	bufferSizeStats  stats.StatsCollector[int]
 
-	once                 sync.Once
 	initialProdInEpoch   uint64
 	sink_buffer_max_size int
 	currentSize          int
+	initProdIsSet        bool
 	guarantee            exactly_once_intr.GuaranteeMth
 	parNum               uint8
 }
 
 func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8) *BufferedSinkStream {
-	return &BufferedSinkStream{
+	s := &BufferedSinkStream{
 		sinkBuffer:      make([][]byte, 0, SINK_BUFFER_MAX_ENTRY),
 		payloadArrSerde: DEFAULT_PAYLOAD_ARR_SERDEG,
 		parNum:          parNum,
 		Stream:          stream,
 		currentSize:     0,
-		once:            sync.Once{},
 		guarantee:       exactly_once_intr.AT_LEAST_ONCE,
 		bufferEntryStats: stats.NewStatsCollector[int](fmt.Sprintf("%s_bufEntry_%v", stream.topicName, parNum),
 			stats.DEFAULT_COLLECT_DURATION),
@@ -57,7 +56,9 @@ func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8) *BufferedSinkS
 			stats.DEFAULT_COLLECT_DURATION),
 		flushBufferStats:     stats.NewPrintLogStatsCollector[int64](fmt.Sprintf("%s_flushBuf_%v", stream.topicName, parNum)),
 		sink_buffer_max_size: SINK_BUFFER_MAX_SIZE,
+		initProdIsSet:        false,
 	}
+	return s
 }
 
 func NewBufferedSinkStreamWithBufferSize(stream *SharedLogStream, sinkBufferSize int, parNum uint8) *BufferedSinkStream {
@@ -136,9 +137,11 @@ func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload [
 
 func (s *BufferedSinkStream) updateProdSeqNum(seqNum uint64) {
 	if s.guarantee == exactly_once_intr.EPOCH_MARK {
-		s.once.Do(func() {
+		if !s.initProdIsSet {
 			s.initialProdInEpoch = seqNum
-		})
+			debug.Fprintf(os.Stderr, "update initial prod in epoch: %#x\n", s.initialProdInEpoch)
+			s.initProdIsSet = true
+		}
 	}
 }
 
@@ -170,7 +173,9 @@ func (s *BufferedSinkStream) ExactlyOnce(gua exactly_once_intr.GuaranteeMth) {
 
 func (s *BufferedSinkStream) ResetInitialProd() {
 	if s.guarantee == exactly_once_intr.EPOCH_MARK {
-		s.once = sync.Once{}
+		s.mux.Lock()
+		s.initProdIsSet = false
+		s.mux.Unlock()
 	}
 }
 

@@ -7,7 +7,7 @@ require (
 	github.com/Jeffail/gabs/v2 v2.6.1
 	github.com/cespare/xxhash/v2 v2.1.2
 	github.com/confluentinc/confluent-kafka-go v1.8.2
-	github.com/gammazero/deque v0.1.1
+	github.com/gammazero/deque v0.2.1
 	github.com/google/btree v1.1.2
 	github.com/rs/zerolog v1.26.1
 	github.com/spaolacci/murmur3 v1.1.0

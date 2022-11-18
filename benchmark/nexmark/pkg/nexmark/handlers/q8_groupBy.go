@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
@@ -35,6 +37,7 @@ func (h *q8GroupByHandler) Call(ctx context.Context, input []byte) ([]byte, erro
 	if err != nil {
 		return nil, err
 	}
+	fmt.Fprintf(os.Stderr, "inputParam: %+v\n", parsedInput)
 	output := h.Q8GroupBy(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -75,8 +78,10 @@ func (h *q8GroupByHandler) getExecutionCtx(ctx context.Context, sp *common.Query
 	}
 	sinks[0].SetName("auctionsBySellerIDSink")
 	sinks[1].SetName("personsByIDSink")
-	return processor.NewExecutionContext([]*producer_consumer.MeteredConsumer{src}, sinks,
+	ectx, err := processor.NewExecutionContext([]*producer_consumer.MeteredConsumer{src}, sinks,
 		h.funcName, sp.ScaleEpoch, sp.ParNum), nil
+	debug.Assert(ectx.SubstreamNum() == sp.ParNum, "substream num mismatch")
+	return ectx, err
 }
 
 func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput) *common.FnOutput {

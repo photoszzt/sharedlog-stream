@@ -17,7 +17,7 @@ type ProducerId struct {
 var _ = fmt.Stringer(&ProducerId{})
 
 func (p *ProducerId) String() string {
-	return fmt.Sprintf("ProducerId: {TaskId: 0x%x, TransactionId: 0x%x, TaskEpoch: 0x%x}",
+	return fmt.Sprintf("ProducerId: {TaskId: %#x, TransactionId: %#x, TaskEpoch: %#x}",
 		p.TaskId, p.TransactionID, p.TaskEpoch)
 }
 

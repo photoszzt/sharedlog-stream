@@ -63,31 +63,86 @@ func invokeDumpFunc(client *http.Client) {
 		DumpDir:     FLAGS_dump_dir,
 		SerdeFormat: uint8(serdeFormat),
 	}
-	streamParam := common.StreamParam{
-		TopicName:     fmt.Sprintf("%s_out", FLAGS_app_name),
-		NumPartitions: 1,
-	}
 	switch FLAGS_app_name {
 	case "q1", "q2":
-		streamParam.KeySerde = "String"
-		streamParam.ValueSerde = "Event"
+		dumpInput.StreamParams = []common.StreamParam{
+			{
+				TopicName:     fmt.Sprintf("%s_out", FLAGS_app_name),
+				NumPartitions: 4,
+				KeySerde:      "String",
+				ValueSerde:    "Event",
+			},
+		}
 	case "q3":
-		streamParam.KeySerde = "Uint64"
-		streamParam.ValueSerde = "NameCityStateId"
+		dumpInput.StreamParams = []common.StreamParam{
+			{
+				TopicName:     fmt.Sprintf("%s_out", FLAGS_app_name),
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "NameCityStateId",
+			},
+		}
 	case "q4", "q6":
-		streamParam.KeySerde = "Uint64"
-		streamParam.ValueSerde = "Float64"
+		dumpInput.StreamParams = []common.StreamParam{
+			{
+				TopicName:     fmt.Sprintf("%s_out", FLAGS_app_name),
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "Float64",
+			},
+		}
 	case "q5":
-		streamParam.KeySerde = "StartEndTime"
-		streamParam.ValueSerde = "AuctionIdCntMax"
+		dumpInput.StreamParams = []common.StreamParam{
+			{
+				TopicName:     fmt.Sprintf("%s_out", FLAGS_app_name),
+				NumPartitions: 4,
+				KeySerde:      "StartEndTime",
+				ValueSerde:    "AuctionIdCntMax",
+			},
+			{
+				TopicName:     "bids",
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "Event",
+			},
+			{
+				TopicName:     "aucBids",
+				NumPartitions: 4,
+				KeySerde:      "StartEndTime",
+				ValueSerde:    "AuctionIdCount",
+			},
+		}
 	case "q7":
-		streamParam.KeySerde = "Uint64"
-		streamParam.ValueSerde = "BidAndMax"
+		dumpInput.StreamParams = []common.StreamParam{
+			{
+				TopicName:     fmt.Sprintf("%s_out", FLAGS_app_name),
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "BidAndMax",
+			},
+		}
 	case "q8":
-		streamParam.KeySerde = "Uint64"
-		streamParam.ValueSerde = "PersonTime"
+		dumpInput.StreamParams = []common.StreamParam{
+			{
+				TopicName:     fmt.Sprintf("%s_out", FLAGS_app_name),
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "PersonTime",
+			},
+			{
+				TopicName:     "q8_aucsBySellerID_out",
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "Event",
+			},
+			{
+				TopicName:     "q8_personsByID_out",
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "Event",
+			},
+		}
 	}
-	dumpInput.StreamParams = []common.StreamParam{streamParam}
 	url := common.BuildFunctionUrl(FLAGS_faas_gateway, "dump")
 	fmt.Printf("func source url is %v\n", url)
 	var response common.FnOutput
