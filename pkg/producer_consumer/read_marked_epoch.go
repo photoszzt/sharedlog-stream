@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/data_structure"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
@@ -25,7 +26,7 @@ type EpochMarkConsumer struct {
 	epochMarkerSerde commtypes.SerdeG[commtypes.EpochMarker]
 	stream           *sharedlog_stream.ShardedSharedLogStream
 	marked           map[commtypes.ProducerId]map[uint8]commtypes.SeqRangeSet
-	curReadMsgSeqNum map[commtypes.ProducerId]uint64
+	curReadMsgSeqNum map[commtypes.ProducerId]data_structure.Uint64Set
 	msgBuffer        []*deque.Deque[*commtypes.RawMsg]
 	streamTime       stats.PrintLogStatsCollector[int64]
 }
@@ -48,7 +49,7 @@ func NewEpochMarkConsumer(
 		stream:           stream,
 		marked:           make(map[commtypes.ProducerId]map[uint8]commtypes.SeqRangeSet),
 		msgBuffer:        msgBuffer,
-		curReadMsgSeqNum: make(map[commtypes.ProducerId]uint64),
+		curReadMsgSeqNum: make(map[commtypes.ProducerId]data_structure.Uint64Set),
 		streamTime:       stats.NewPrintLogStatsCollector[int64]("streamTime" + srcName),
 	}, nil
 }
@@ -232,14 +233,18 @@ func (emc *EpochMarkConsumer) checkMsgStatus(rawMsg *commtypes.RawMsg, parNum ui
 	}
 }
 
-func shouldIgnoreThisMsg(curReadMsgSeqNum map[commtypes.ProducerId]uint64, rawMsg *commtypes.RawMsg) bool {
+func shouldIgnoreThisMsg(curReadMsgSeqNum map[commtypes.ProducerId]data_structure.Uint64Set, rawMsg *commtypes.RawMsg) bool {
 	prodId := rawMsg.ProdId
-	msgSeqNum, ok := curReadMsgSeqNum[prodId]
-	if ok && msgSeqNum == rawMsg.MsgSeqNum {
+	msgSeqNumSet, ok := curReadMsgSeqNum[prodId]
+	if ok && msgSeqNumSet != nil && msgSeqNumSet.Has(rawMsg.MsgSeqNum) {
 
 		return true
 	}
 
-	curReadMsgSeqNum[prodId] = rawMsg.MsgSeqNum
+	if msgSeqNumSet == nil {
+		msgSeqNumSet = data_structure.NewUint64Set()
+		curReadMsgSeqNum[prodId] = msgSeqNumSet
+	}
+	curReadMsgSeqNum[prodId].Add(rawMsg.MsgSeqNum)
 	return false
 }

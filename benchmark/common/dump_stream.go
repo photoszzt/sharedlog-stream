@@ -51,7 +51,8 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 				if err != nil {
 					return err
 				}
-				outStr := fmt.Sprintf("%+v, logSeq: %#x, prodId: %v\n", epochMark, rawMsg.LogSeqNum, rawMsg.ProdId)
+				outStr := fmt.Sprintf("%+v, logSeq: %#x, prodId: %s\n",
+					epochMark, rawMsg.LogSeqNum, rawMsg.ProdId.String())
 				// fmt.Fprint(os.Stderr, outStr)
 				writted, err := outFile.WriteString(outStr)
 				if err != nil {
@@ -88,8 +89,8 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 }
 
 func outputMsg(msg commtypes.Message, logSeqNum uint64, prodId commtypes.ProducerId, outFile *os.File) error {
-	outStr := fmt.Sprintf("%v : %v, ts %#x, logSeq %#x, prodId %v\n",
-		msg.Key, msg.Value, msg.Timestamp, logSeqNum, prodId)
+	outStr := fmt.Sprintf("%v : %v, ts %#x, logSeq %#x, prodId %s\n",
+		msg.Key, msg.Value, msg.Timestamp, logSeqNum, prodId.String())
 	// fmt.Fprint(os.Stderr, outStr)
 	writted, err := outFile.WriteString(outStr)
 	if err != nil {

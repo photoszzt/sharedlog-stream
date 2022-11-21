@@ -195,21 +195,21 @@ func flushStreams(ctx context.Context,
 	for _, kvchangelog := range args.kvChangelogs {
 		f, err := kvchangelog.Flush(ctx)
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("kv flush: %v", err)
 		}
 		flushed += f
 	}
 	for _, wschangelog := range args.windowStoreChangelogs {
 		f, err := wschangelog.Flush(ctx)
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("ws flush: %v", err)
 		}
 		flushed += f
 	}
 	for _, sink := range args.ectx.Producers() {
 		f, err := sink.Flush(ctx)
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("sink flush: %v", err)
 		}
 		flushed += f
 	}

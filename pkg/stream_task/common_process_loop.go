@@ -2,6 +2,7 @@ package stream_task
 
 import (
 	"context"
+	"fmt"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
@@ -19,7 +20,7 @@ func CommonProcess[K, V any](ctx context.Context, t *StreamTask, ectx *processor
 ) (*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq]) {
 	if t.HandleErrFunc != nil {
 		if err := t.HandleErrFunc(); err != nil {
-			return common.GenErrFnOutput(err), optional.None[commtypes.RawMsgAndSeq]()
+			return common.GenErrFnOutput(fmt.Errorf("handleErrFunc: %v", err)), optional.None[commtypes.RawMsgAndSeq]()
 		}
 	}
 	consumer := ectx.Consumers()[0]
@@ -35,7 +36,7 @@ func CommonProcess[K, V any](ctx context.Context, t *StreamTask, ectx *processor
 			return &common.FnOutput{Success: true, Message: err.Error()},
 				optional.None[commtypes.RawMsgAndSeq]()
 		}
-		return &common.FnOutput{Success: false, Message: err.Error()},
+		return common.GenErrFnOutput(fmt.Errorf("Consume: %v", err)),
 			optional.None[commtypes.RawMsgAndSeq]()
 	}
 	if rawMsgSeq.IsControl {
@@ -67,7 +68,7 @@ func CommonProcess[K, V any](ctx context.Context, t *StreamTask, ectx *processor
 	ectx.Consumers()[0].RecordCurrentConsumedSeqNum(msgs.LogSeqNum)
 	err = processMsgAndSeq(ctx, msgs, ectx, procMsg, isInitialSrc, rawMsgSeq.InjTsMs)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()},
+		return common.GenErrFnOutput(fmt.Errorf("processMsgAndSeq: %v", err)),
 			optional.None[commtypes.RawMsgAndSeq]()
 	}
 	return nil, optional.None[commtypes.RawMsgAndSeq]()
@@ -94,13 +95,13 @@ func processMsgAndSeq[K, V any](ctx context.Context,
 			if isInitialSrc {
 				err := subMsg.ExtractEventTimeFromVal()
 				if err != nil {
-					return err
+					return fmt.Errorf("ExtractEventTimeFromVal: %v", err)
 				}
 			}
 			subMsg.StartProcTime = time.Now()
 			err := procMsg(ctx, subMsg, args)
 			if err != nil {
-				return err
+				return fmt.Errorf("procMsg: %v", err)
 			}
 		}
 		return nil
@@ -108,13 +109,12 @@ func processMsgAndSeq[K, V any](ctx context.Context,
 		if isInitialSrc {
 			err := msg.Msg.ExtractEventTimeFromVal()
 			if err != nil {
-				return err
+				return fmt.Errorf("ExtractEventTimeFromVal: %v", err)
 			}
 		}
 		producer_consumer.ExtractProduceToConsumeTimeMsgG(meteredConsumer, &msg.Msg)
 		msg.Msg.StartProcTime = time.Now()
 		err := procMsg(ctx, msg.Msg, args)
-
-		return err
+		return fmt.Errorf("procMsg: %v", err)
 	}
 }

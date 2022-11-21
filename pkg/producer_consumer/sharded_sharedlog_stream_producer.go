@@ -45,6 +45,10 @@ func NewShardedSharedLogStreamProducer(stream *sharedlog_stream.ShardedSharedLog
 	}
 }
 
+func (sls *ShardedSharedLogStreamProducer) SetLastMarkerSeq(lastMarkerSeq uint64) {
+	sls.stream.SetLastMarkerSeq(lastMarkerSeq)
+}
+
 func (sls *ShardedSharedLogStreamProducer) MarkFinalOutput() {
 	sls.isFinalOutput = true
 }
@@ -143,17 +147,14 @@ func (s *ShardedSharedLogStreamProducer) Flush(ctx context.Context) (uint32, err
 	}
 	return 0, nil
 }
-func (s *ShardedSharedLogStreamProducer) FlushNoLock(ctx context.Context) error {
+func (s *ShardedSharedLogStreamProducer) FlushNoLock(ctx context.Context) (uint32, error) {
 	if s.bufPush {
-		err := FlushNoLock(ctx, s.stream, s.guarantee, s.eom.GetProducerId())
-		if err != nil {
-			return err
-		}
+		return flushNoLock(ctx, s.stream, s.guarantee, s.eom.GetProducerId())
 	}
-	return nil
+	return 0, nil
 }
 
-func FlushNoLock(ctx context.Context, stream *sharedlog_stream.ShardedSharedLogStream, guarantee eo_intr.GuaranteeMth, producerId commtypes.ProducerId) error {
+func flushNoLock(ctx context.Context, stream *sharedlog_stream.ShardedSharedLogStream, guarantee eo_intr.GuaranteeMth, producerId commtypes.ProducerId) (uint32, error) {
 	if guarantee == eo_intr.TWO_PHASE_COMMIT || guarantee == eo_intr.EPOCH_MARK {
 		return stream.FlushNoLock(ctx, producerId)
 	} else {

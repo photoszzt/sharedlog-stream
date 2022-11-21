@@ -188,6 +188,9 @@ func (c *CachingKeyValueStoreG[K, V]) GetInitialProdSeqNum() uint64 {
 func (c *CachingKeyValueStoreG[K, V]) ResetInitialProd() {
 	c.wrappedStore.ResetInitialProd()
 }
+func (c *CachingKeyValueStoreG[K, V]) SetLastMarkerSeq(lastMarkerSeq uint64) {
+	c.wrappedStore.SetLastMarkerSeq(lastMarkerSeq)
+}
 
 func (c *CachingKeyValueStoreG[K, V]) SubstreamNum() uint8 {
 	return c.wrappedStore.SubstreamNum()

@@ -45,6 +45,12 @@ func NewSizableShardedSharedLogStream(env types.Environment, topicName string, n
 	}, nil
 }
 
+func (s *SizableShardedSharedLogStream) SetLastMarkerSeq(lastMarkerSeq uint64) {
+	for _, stream := range s.subSharedLogStreams {
+		stream.SetLastMarkerSeq(lastMarkerSeq)
+	}
+}
+
 func (s *SizableShardedSharedLogStream) NumPartition() uint8 {
 	s.mux.RLock()
 	ret := s.numPartitions
@@ -217,27 +223,10 @@ func NewShardedSharedLogStream(env types.Environment, topicName string, numParti
 	}, nil
 }
 
-func NewShardedSharedLogStreamWithSinkBufferSize(env types.Environment, topicName string,
-	numPartitions uint8, serdeFormat commtypes.SerdeFormat, sinkBufferSize int,
-) (*ShardedSharedLogStream, error) {
-	if numPartitions == 0 {
-		panic(ErrZeroParNum)
+func (s *ShardedSharedLogStream) SetLastMarkerSeq(lastMarkerSeq uint64) {
+	for _, stream := range s.subSharedLogStreams {
+		stream.SetLastMarkerSeq(lastMarkerSeq)
 	}
-	streams := make([]*BufferedSinkStream, 0, numPartitions)
-	for i := uint8(0); i < numPartitions; i++ {
-		s, err := NewSharedLogStream(env, topicName, serdeFormat)
-		if err != nil {
-			return nil, err
-		}
-		buf := NewBufferedSinkStreamWithBufferSize(s, sinkBufferSize, i)
-		streams = append(streams, buf)
-	}
-	return &ShardedSharedLogStream{
-		subSharedLogStreams: streams,
-		numPartitions:       numPartitions,
-		topicName:           topicName,
-		serdeFormat:         serdeFormat,
-	}, nil
 }
 
 func (s *ShardedSharedLogStream) OutputRemainingStats() {
@@ -332,16 +321,16 @@ func (s *ShardedSharedLogStream) BufPushNoLock(ctx context.Context, payload []by
 	return err
 }
 
-func (s *ShardedSharedLogStream) FlushNoLock(ctx context.Context, producerId commtypes.ProducerId) error {
+func (s *ShardedSharedLogStream) FlushNoLock(ctx context.Context, producerId commtypes.ProducerId) (uint32, error) {
 	flushed := uint32(0)
 	for i := uint8(0); i < s.numPartitions; i++ {
 		f, err := s.subSharedLogStreams[i].FlushNoLock(ctx, producerId)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		flushed += f
 	}
-	return nil
+	return flushed, nil
 }
 
 func (s *ShardedSharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNum uint8, tags []uint64,

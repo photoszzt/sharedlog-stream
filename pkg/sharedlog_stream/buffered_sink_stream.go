@@ -35,6 +35,7 @@ type BufferedSinkStream struct {
 	bufferSizeStats  stats.StatsCollector[int]
 
 	initialProdInEpoch   uint64
+	lastMarkerSeq        uint64
 	sink_buffer_max_size int
 	currentSize          int
 	initProdIsSet        bool
@@ -57,20 +58,19 @@ func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8) *BufferedSinkS
 		flushBufferStats:     stats.NewPrintLogStatsCollector[int64](fmt.Sprintf("%s_flushBuf_%v", stream.topicName, parNum)),
 		sink_buffer_max_size: SINK_BUFFER_MAX_SIZE,
 		initProdIsSet:        false,
+		lastMarkerSeq:        0,
 	}
 	return s
-}
-
-func NewBufferedSinkStreamWithBufferSize(stream *SharedLogStream, sinkBufferSize int, parNum uint8) *BufferedSinkStream {
-	bss := NewBufferedSinkStream(stream, parNum)
-	bss.sink_buffer_max_size = sinkBufferSize
-	return bss
 }
 
 func (s *BufferedSinkStream) OutputRemainingStats() {
 	s.bufferEntryStats.PrintRemainingStats()
 	s.bufferSizeStats.PrintRemainingStats()
 	s.flushBufferStats.PrintRemainingStats()
+}
+
+func (s *BufferedSinkStream) SetLastMarkerSeq(seq uint64) {
+	s.lastMarkerSeq = seq
 }
 
 // don't mix the nolock version and goroutine safe version
@@ -91,11 +91,14 @@ func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, 
 		if err != nil {
 			return err
 		}
-		seqNum, err := s.Stream.Push(ctx, payloads, s.parNum, ArrRecordMeta, producerId)
+		_, err = s.Stream.Push(ctx, payloads, s.parNum, ArrRecordMeta, producerId)
 		if err != nil {
 			return err
 		}
-		s.updateProdSeqNum(seqNum)
+		err = s.updateProdSeqNum(ctx, producerId)
+		if err != nil {
+			return err
+		}
 		s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
 		s.sinkBuffer = append(s.sinkBuffer, payload)
 		s.currentSize = payload_size
@@ -121,12 +124,16 @@ func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload [
 			s.mux.Unlock()
 			return err
 		}
-		seqNum, err := s.Stream.Push(ctx, payloads, s.parNum, ArrRecordMeta, producerId)
+		_, err = s.Stream.Push(ctx, payloads, s.parNum, ArrRecordMeta, producerId)
 		if err != nil {
 			s.mux.Unlock()
 			return err
 		}
-		s.updateProdSeqNum(seqNum)
+		err = s.updateProdSeqNum(ctx, producerId)
+		if err != nil {
+			s.mux.Unlock()
+			return err
+		}
 		s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
 		s.sinkBuffer = append(s.sinkBuffer, payload)
 		s.currentSize = payload_size
@@ -135,14 +142,21 @@ func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload [
 	return nil
 }
 
-func (s *BufferedSinkStream) updateProdSeqNum(seqNum uint64) {
+func (s *BufferedSinkStream) updateProdSeqNum(ctx context.Context, prodId commtypes.ProducerId) error {
 	if s.guarantee == exactly_once_intr.EPOCH_MARK {
 		if !s.initProdIsSet {
-			s.initialProdInEpoch = seqNum
+			tags := NameHashWithPartition(s.Stream.topicNameHash, s.parNum)
+			r, err := s.Stream.ReadFromSeqNumWithTag(ctx, s.lastMarkerSeq, s.parNum, tags, prodId)
+			if err != nil {
+				return fmt.Errorf("ReadFromSeqNumWithTag: %v, lastMarkerSeq: %#x, parNum: %d, prodId: %s",
+					err, s.lastMarkerSeq, s.parNum, prodId.String())
+			}
+			s.initialProdInEpoch = r.LogSeqNum
 			debug.Fprintf(os.Stderr, "update initial prod in epoch: %#x\n", s.initialProdInEpoch)
 			s.initProdIsSet = true
 		}
 	}
+	return nil
 }
 
 func (s *BufferedSinkStream) Push(ctx context.Context, payload []byte, parNum uint8,
@@ -152,7 +166,10 @@ func (s *BufferedSinkStream) Push(ctx context.Context, payload []byte, parNum ui
 	if err != nil {
 		return 0, err
 	}
-	s.updateProdSeqNum(seqNum)
+	err = s.updateProdSeqNum(ctx, producerId)
+	if err != nil {
+		return 0, err
+	}
 	return seqNum, nil
 }
 
@@ -163,7 +180,10 @@ func (s *BufferedSinkStream) PushWithTag(ctx context.Context, payload []byte, pa
 	if err != nil {
 		return 0, err
 	}
-	s.updateProdSeqNum(seqNum)
+	err = s.updateProdSeqNum(ctx, producerId)
+	if err != nil {
+		return 0, err
+	}
 	return seqNum, nil
 }
 
@@ -195,11 +215,16 @@ func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId commtyp
 		if err != nil {
 			return 0, err
 		}
-		seqNum, err := s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
+		_, err = s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
 		if err != nil {
 			return 0, err
 		}
-		s.updateProdSeqNum(seqNum)
+		// debug.Fprintf(os.Stderr, "FlushNoLock %s[%d] logEntry %#x prodId %s\n",
+		// 	s.Stream.topicName, s.parNum, n, producerId.String())
+		err = s.updateProdSeqNum(ctx, producerId)
+		if err != nil {
+			return 0, err
+		}
 		s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
 		s.currentSize = 0
 		debug.Assert(len(s.sinkBuffer) == 0 && s.currentSize == 0,
@@ -227,12 +252,18 @@ func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context, producerId 
 			s.mux.Unlock()
 			return 0, err
 		}
-		seqNum, err := s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
+		_, err = s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
 		if err != nil {
 			s.mux.Unlock()
 			return 0, err
 		}
-		s.updateProdSeqNum(seqNum)
+		// debug.Fprintf(os.Stderr, "Flush %s[%d] logEntry %#x prodId %s\n",
+		// 	s.Stream.topicName, s.parNum, n, producerId.String())
+		err = s.updateProdSeqNum(ctx, producerId)
+		if err != nil {
+			s.mux.Unlock()
+			return 0, err
+		}
 		s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
 		s.currentSize = 0
 		s.mux.Unlock()

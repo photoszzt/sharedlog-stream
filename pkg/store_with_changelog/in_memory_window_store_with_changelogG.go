@@ -274,6 +274,9 @@ func (s *InMemoryWindowStoreWithChangelogG[K, V]) GetInitialProdSeqNum() uint64 
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) ResetInitialProd() {
 	s.changelogManager.producer.ResetInitialProd()
 }
+func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetLastMarkerSeq(lastMarkerSeq uint64) {
+	s.changelogManager.producer.SetLastMarkerSeq(lastMarkerSeq)
+}
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) SubstreamNum() uint8 {
 	return s.parNum
 }

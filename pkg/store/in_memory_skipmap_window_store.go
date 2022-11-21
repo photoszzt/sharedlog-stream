@@ -482,7 +482,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) ChangelogTopicName() string {
 	panic("not supported")
 }
 func (s *InMemorySkipMapWindowStoreG[K, V]) GetInitialProdSeqNum() uint64    { panic("not supported") }
-func (s *InMemorySkipMapWindowStoreG[K, V]) GetCurrentProdSeqNum() uint64    { panic("not supported") }
+func (s *InMemorySkipMapWindowStoreG[K, V]) SetLastMarkerSeq(seq uint64)     { panic("not supported") }
 func (s *InMemorySkipMapWindowStoreG[K, V]) ResetInitialProd()               { panic("not supported") }
 func (s *InMemorySkipMapWindowStoreG[K, V]) Stream() sharedlog_stream.Stream { panic("not supported") }
 func (s *InMemorySkipMapWindowStoreG[K, V]) SubstreamNum() uint8             { panic("not supported") }

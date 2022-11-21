@@ -251,6 +251,9 @@ func (st *KeyValueStoreWithChangelogG[K, V]) GetInitialProdSeqNum() uint64 {
 func (st *KeyValueStoreWithChangelogG[K, V]) ResetInitialProd() {
 	st.changelogManager.producer.ResetInitialProd()
 }
+func (st *KeyValueStoreWithChangelogG[K, V]) SetLastMarkerSeq(lastMarkerSeq uint64) {
+	st.changelogManager.producer.SetLastMarkerSeq(lastMarkerSeq)
+}
 func (st *KeyValueStoreWithChangelogG[K, V]) SubstreamNum() uint8 {
 	return st.parNum
 }

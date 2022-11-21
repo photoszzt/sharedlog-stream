@@ -19,6 +19,7 @@ type Producer interface {
 	Stream() sharedlog_stream.Stream
 	GetInitialProdSeqNum(substreamNum uint8) uint64
 	ResetInitialProd()
+	SetLastMarkerSeq(lastMarkerSeq uint64)
 }
 
 type MeteredProducerIntr interface {

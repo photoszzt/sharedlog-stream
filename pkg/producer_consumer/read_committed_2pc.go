@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/data_structure"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
 
@@ -16,7 +17,7 @@ type TransactionAwareConsumer struct {
 	committed        map[commtypes.ProducerId]struct{}
 	aborted          map[commtypes.ProducerId]struct{}
 	// check whether producer produces duplicate records
-	curReadMsgSeqNum map[commtypes.ProducerId]uint64
+	curReadMsgSeqNum map[commtypes.ProducerId]data_structure.Uint64Set
 	msgBuffer        []*deque.Deque[*commtypes.RawMsg]
 }
 
@@ -37,7 +38,7 @@ func NewTransactionAwareConsumer(stream *sharedlog_stream.ShardedSharedLogStream
 		epochMarkerSerde: epochMarkerSerde,
 		committed:        make(map[commtypes.ProducerId]struct{}),
 		aborted:          make(map[commtypes.ProducerId]struct{}),
-		curReadMsgSeqNum: make(map[commtypes.ProducerId]uint64),
+		curReadMsgSeqNum: make(map[commtypes.ProducerId]data_structure.Uint64Set),
 	}, nil
 }
 

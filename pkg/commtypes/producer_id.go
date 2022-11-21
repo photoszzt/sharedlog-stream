@@ -15,9 +15,20 @@ type ProducerId struct {
 }
 
 var _ = fmt.Stringer(&ProducerId{})
+var _ = fmt.GoStringer(&ProducerId{})
 
 func (p *ProducerId) String() string {
-	return fmt.Sprintf("ProducerId: {TaskId: %#x, TransactionId: %#x, TaskEpoch: %#x}",
+	if p.TransactionID == 0 {
+		return fmt.Sprintf("ProducerId: {TaskId: %#x, TaskEpoch: %#x}",
+			p.TaskId, p.TaskEpoch)
+	} else {
+		return fmt.Sprintf("ProducerId: {TaskId: %#x, TranID: %#x, TaskEpoch: %#x}",
+			p.TaskId, p.TransactionID, p.TaskEpoch)
+	}
+}
+
+func (p *ProducerId) GoString() string {
+	return fmt.Sprintf("ProducerId: {TaskId: %#x, TransactionID: %#x, TaskEpoch: %#x}",
 		p.TaskId, p.TransactionID, p.TaskEpoch)
 }
 

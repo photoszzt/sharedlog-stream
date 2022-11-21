@@ -151,7 +151,11 @@ func (s *CachingWindowStoreG[K, V]) ChangelogTopicName() string {
 func (s *CachingWindowStoreG[K, V]) GetInitialProdSeqNum() uint64 {
 	return s.wrappedStore.GetInitialProdSeqNum()
 }
-func (s *CachingWindowStoreG[K, V]) ResetInitialProd()               { s.wrappedStore.ResetInitialProd() }
+func (s *CachingWindowStoreG[K, V]) ResetInitialProd() { s.wrappedStore.ResetInitialProd() }
+
+func (s *CachingWindowStoreG[K, V]) SetLastMarkerSeq(lastMarkerSeq uint64) {
+	s.wrappedStore.SetLastMarkerSeq(lastMarkerSeq)
+}
 func (s *CachingWindowStoreG[K, V]) Stream() sharedlog_stream.Stream { return s.wrappedStore.Stream() }
 func (s *CachingWindowStoreG[K, V]) SubstreamNum() uint8             { return s.wrappedStore.SubstreamNum() }
 func (s *CachingWindowStoreG[K, V]) SetFlushCallback(f func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]) error) {

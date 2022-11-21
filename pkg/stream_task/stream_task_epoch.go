@@ -99,7 +99,8 @@ func SetupManagersForEpoch(ctx context.Context,
 		return nil, nil, err
 	}
 	initEmElapsed := time.Since(initEmStart)
-	fmt.Fprintf(os.Stderr, "Init EpochManager took %v\n", initEmElapsed)
+	fmt.Fprintf(os.Stderr, "[%d] Init EpochManager took %v, task epoch %#x, task id %#x\n",
+		args.ectx.SubstreamNum(), initEmElapsed, em.GetCurrentEpoch(), em.GetCurrentTaskId())
 	err = configChangelogExactlyOnce(em, args)
 	if err != nil {
 		return nil, nil, err
@@ -108,6 +109,7 @@ func SetupManagersForEpoch(ctx context.Context,
 	if err != nil {
 		return nil, nil, err
 	}
+	lastMark := uint64(0)
 	if recentMeta != nil {
 		fmt.Fprint(os.Stderr, "start restore\n")
 		restoreBeg := time.Now()
@@ -148,6 +150,7 @@ func SetupManagersForEpoch(ctx context.Context,
 			loadSnapElapsed := time.Since(loadSnapBeg)
 			fmt.Fprintf(os.Stderr, "load snapshot took %v\n", loadSnapElapsed)
 		}
+		lastMark = auxMetaSeq
 		restoreSsBeg := time.Now()
 		err = restoreStateStore(ctx, args, offsetMap)
 		if err != nil {
@@ -158,6 +161,15 @@ func SetupManagersForEpoch(ctx context.Context,
 		setOffsetOnStream(offsetMap, args)
 		restoreElapsed := time.Since(restoreBeg)
 		fmt.Fprintf(os.Stderr, "down restore, elapsed: %v\n", restoreElapsed)
+	}
+	for _, p := range args.ectx.Producers() {
+		p.SetLastMarkerSeq(lastMark)
+	}
+	for _, kvs := range args.kvChangelogs {
+		kvs.SetLastMarkerSeq(lastMark)
+	}
+	for _, ws := range args.windowStoreChangelogs {
+		ws.SetLastMarkerSeq(lastMark)
 	}
 	cmm, err := control_channel.NewControlChannelManager(args.env, args.appId,
 		args.serdeFormat, args.ectx.CurEpoch(), args.ectx.SubstreamNum())
@@ -256,7 +268,7 @@ func processInEpoch(
 		dctx, args.ectx.FuncName(), CREATE_SNAPSHOT, args.serdeFormat,
 		args.kvChangelogs, args.windowStoreChangelogs, rs)
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return common.GenErrFnOutput(fmt.Errorf("RestoreMappingAndWaitForPrevTask: %v", err))
 	}
 	// execIntrMs := stats.NewPrintLogStatsCollector[int64]("execIntrMs")
 	// thisAndLastCmtMs := stats.NewPrintLogStatsCollector[int64]("thisAndLastCmtMs")
@@ -309,14 +321,23 @@ func processInEpoch(
 			flushAllStart := stats.TimerBegin()
 			f, err := flushStreams(dctx, args)
 			if err != nil {
-				return common.GenErrFnOutput(err)
+				return common.GenErrFnOutput(fmt.Errorf("flushStreams: %v", err))
 			}
 			flushTime := stats.Elapsed(flushAllStart).Microseconds()
 
 			// mPartBeg := time.Now()
 			logOff, shouldExit, err := markEpoch(dctx, em, t, args)
 			if err != nil {
-				return common.GenErrFnOutput(err)
+				return common.GenErrFnOutput(fmt.Errorf("markEpoch: %v", err))
+			}
+			for _, p := range args.ectx.Producers() {
+				p.SetLastMarkerSeq(logOff)
+			}
+			for _, kvs := range args.kvChangelogs {
+				kvs.SetLastMarkerSeq(logOff)
+			}
+			for _, ws := range args.windowStoreChangelogs {
+				ws.SetLastMarkerSeq(logOff)
 			}
 
 			if CREATE_SNAPSHOT && args.snapshotEvery != 0 && time.Since(snapshotTimer) > args.snapshotEvery {
@@ -387,7 +408,7 @@ func processInEpoch(
 		if !hasProcessData && (!init || paused) {
 			err := initAfterMarkOrCommit(dctx, t, args, em, &init, &paused)
 			if err != nil {
-				return common.GenErrFnOutput(err)
+				return common.GenErrFnOutput(fmt.Errorf("initAfterMarkOrCommit: %v", err))
 			}
 		}
 		app_ret, ctrlRawMsgOp := t.appProcessFunc(dctx, t, args.ectx)
@@ -431,17 +452,17 @@ func finalMark(dctx context.Context, t *StreamTask, args *StreamTaskArgs,
 	flushAllStart := stats.TimerBegin()
 	f, err := flushStreams(dctx, args)
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return common.GenErrFnOutput(fmt.Errorf("flushStreams failed: %v", err))
 	}
 	err = getKeyMappingAndFlush(dctx, args, cmm)
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return common.GenErrFnOutput(fmt.Errorf("getKeyMappingAndFlush: %v", err))
 	}
 	flushTime := stats.Elapsed(flushAllStart).Microseconds()
 	// mPartBeg := time.Now()
 	logOff, _, err := markEpoch(dctx, em, t, args)
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return common.GenErrFnOutput(fmt.Errorf("markEpoch failed: %v", err))
 	}
 	if CREATE_SNAPSHOT && args.snapshotEvery != 0 {
 		snStart := time.Now()
@@ -451,13 +472,13 @@ func finalMark(dctx context.Context, t *StreamTask, args *StreamTaskArgs,
 		for _, kv := range args.kvChangelogs {
 			err = kv.WaitForAllSnapshot()
 			if err != nil {
-				return common.GenErrFnOutput(err)
+				return common.GenErrFnOutput(fmt.Errorf("KV WaitForAllSnapshot failed: %v", err))
 			}
 		}
 		for _, wsc := range args.windowStoreChangelogs {
 			err = wsc.WaitForAllSnapshot()
 			if err != nil {
-				return common.GenErrFnOutput(err)
+				return common.GenErrFnOutput(fmt.Errorf("Win WaitForAllSnapshot failed: %v", err))
 			}
 		}
 		fmt.Fprintf(os.Stderr, "snapshot time: %v\n", snapshotTime)
@@ -496,11 +517,12 @@ func markEpoch(ctx context.Context, em *epoch_manager.EpochManager,
 ) (logOff uint64, shouldExit bool, err error) {
 	rawMsgs, err := em.SyncToRecent(ctx)
 	if err != nil {
-		return 0, false, err
+		return 0, false, fmt.Errorf("SyncToRecent: %v", err)
 	}
 	for _, rawMsg := range rawMsgs {
 		if rawMsg.Mark == commtypes.FENCE {
-			if rawMsg.ProdId.TaskId == em.TaskId && rawMsg.ProdId.TaskEpoch > em.GetCurrentEpoch() {
+			if (rawMsg.ProdId.TaskId == em.GetCurrentTaskId() && rawMsg.ProdId.TaskEpoch > em.GetCurrentEpoch()) ||
+				rawMsg.ProdId.TaskId != em.GetCurrentTaskId() {
 				return 0, true, nil
 			}
 		}
@@ -509,7 +531,7 @@ func markEpoch(ctx context.Context, em *epoch_manager.EpochManager,
 	epochMarker, err := epoch_manager.GenEpochMarker(ctx, em, args.ectx.Consumers(), args.ectx.Producers(),
 		args.kvChangelogs, args.windowStoreChangelogs, args.ectx.SubstreamNum())
 	if err != nil {
-		return 0, false, err
+		return 0, false, fmt.Errorf("GenEpochMarker: %v", err)
 	}
 	epochMarkerTags, epochMarkerTopics := em.GenTagsAndTopicsForEpochMarker()
 	// prepareTime := stats.Elapsed(prepareStart).Microseconds()
@@ -517,7 +539,7 @@ func markEpoch(ctx context.Context, em *epoch_manager.EpochManager,
 	// mStart := stats.TimerBegin()
 	logOff, err = em.MarkEpoch(ctx, epochMarker, epochMarkerTags, epochMarkerTopics)
 	if err != nil {
-		return 0, false, err
+		return 0, false, fmt.Errorf("MarkEpoch: %v", err)
 	}
 	epoch_manager.CleanupState(em, args.ectx.Producers(), args.kvChangelogs, args.windowStoreChangelogs)
 	// mElapsed := stats.Elapsed(mStart).Microseconds()

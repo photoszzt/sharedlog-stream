@@ -79,6 +79,10 @@ func (s *ConcurrentMeteredSink) StartWarmup() {
 	}
 }
 
+func (s *ConcurrentMeteredSink) SetLastMarkerSeq(lastMarkerSeq uint64) {
+	s.producer.SetLastMarkerSeq(lastMarkerSeq)
+}
+
 // func (s *ConcurrentMeteredSink) GetEventTimeLatency() []int {
 // 	return s.eventTimeLatencies
 // }
@@ -215,6 +219,10 @@ func NewMeteredProducer(sink *ShardedSharedLogStreamProducer, warmup time.Durati
 	}, nil
 }
 
+func (s *MeteredProducer) SetLastMarkerSeq(seq uint64) {
+	s.producer.SetLastMarkerSeq(seq)
+}
+
 func (s *MeteredProducer) InitFlushTimer() {}
 
 func (s *MeteredProducer) MarkFinalOutput() {
@@ -280,10 +288,12 @@ func (s *MeteredProducer) ProduceData(ctx context.Context, msg commtypes.Message
 	return err
 }
 
-func (s *MeteredProducer) TopicName() string                         { return s.producer.TopicName() }
-func (s *MeteredProducer) Name() string                              { return s.producer.Name() }
-func (s *MeteredProducer) SetName(name string)                       { s.producer.SetName(name) }
-func (s *MeteredProducer) Flush(ctx context.Context) (uint32, error) { return s.producer.Flush(ctx) }
+func (s *MeteredProducer) TopicName() string   { return s.producer.TopicName() }
+func (s *MeteredProducer) Name() string        { return s.producer.Name() }
+func (s *MeteredProducer) SetName(name string) { s.producer.SetName(name) }
+func (s *MeteredProducer) Flush(ctx context.Context) (uint32, error) {
+	return s.producer.FlushNoLock(ctx)
+}
 func (s *MeteredProducer) ConfigExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	guarantee exactly_once_intr.GuaranteeMth,
 ) {

@@ -6,12 +6,14 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
 	"sharedlog-stream/pkg/bits"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils/syncutils"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -146,7 +148,6 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context,
 	if additionalTopicNames != nil {
 		topics = append(topics, additionalTopicNames...)
 	}
-	s.mux.Lock()
 	nowMs := time.Now().UnixMilli()
 	logEntry := &StreamLogEntry{
 		TopicName:     topics,
@@ -158,13 +159,14 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context,
 		InjTsMs:       nowMs,
 	}
 	// TODO: need to deal with sequence number overflow
-	s.curAppendMsgSeqNum += 1
+	atomic.AddUint64(&s.curAppendMsgSeqNum, 1)
 	logEntry.MsgSeqNum = s.curAppendMsgSeqNum
 	encoded, err := logEntry.MarshalMsg(nil)
 	if err != nil {
 		return 0, err
 	}
 
+	s.mux.Lock()
 	seqNum, err := s.env.SharedLogAppend(ctx, tags, encoded)
 	if err != nil {
 		return 0, err
@@ -246,6 +248,11 @@ func (s *SharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum ui
 				LogSeqNum:    logEntry.SeqNum,
 				IsControl:    isControl,
 				IsPayloadArr: isPayloadArr,
+				ProdId: commtypes.ProducerId{
+					TaskId:        streamLogEntry.TaskId,
+					TaskEpoch:     streamLogEntry.TaskEpoch,
+					TransactionID: streamLogEntry.TransactionID,
+				},
 			}, nil
 		}
 	}
@@ -275,7 +282,7 @@ func (s *SharedLogStream) ReadNextWithTagUntil(ctx context.Context, parNum uint8
 			return nil, err
 		}
 		if logEntry == nil {
-			return nil, common_errors.ErrStreamEmpty
+			return logEntries, nil
 		}
 		streamLogEntry := decodeStreamLogEntry(logEntry)
 		isControl := bits.Has(bits.Bits(streamLogEntry.Meta), Control)
@@ -301,6 +308,50 @@ func (s *SharedLogStream) ReadNextWithTagUntil(ctx context.Context, parNum uint8
 		s.cursor = seqNum
 	}
 	return logEntries, nil
+}
+
+// ReadNextWithTag reads the log entry with the given tag from seqNum produced by prodId
+func (s *SharedLogStream) ReadFromSeqNumWithTag(ctx context.Context, from uint64, parNum uint8, tag uint64, prodId commtypes.ProducerId) (*commtypes.RawMsg, error) {
+	// fmt.Fprintf(os.Stderr, "ReadFromSeqNumWithTag %s[%d] tag %#x, from %#x, prodId %s\n",
+	// 	s.topicName, parNum, tag, from, prodId.String())
+	for {
+		newCtx, cancel := context.WithTimeout(ctx, kBlockingReadTimeout)
+		defer cancel()
+		logEntry, err := s.env.SharedLogReadNextBlock(newCtx, tag, from)
+		if err != nil {
+			return nil, err
+		}
+		if logEntry == nil {
+			fmt.Fprintf(os.Stderr, "ReadFromSeqNumWithTag %s[%d] tag %#x, from %#x, prodId %s, logEntry is nil\n",
+				s.topicName, parNum, tag, from, prodId.String())
+			return nil, common_errors.ErrStreamEmpty
+		}
+		streamLogEntry := decodeStreamLogEntry(logEntry)
+		// fmt.Fprintf(os.Stderr, "logEntry %#x, tp %v, taskId %#x, taskEpoch %#x\n",
+		// 	logEntry.SeqNum, streamLogEntry.TopicName, streamLogEntry.TaskId, streamLogEntry.TaskEpoch)
+		if streamLogEntry.BelongsToTopic(s.topicName) &&
+			streamLogEntry.TaskId == prodId.TaskId &&
+			streamLogEntry.TaskEpoch == prodId.TaskEpoch {
+
+			isPayloadArr := bits.Has(bits.Bits(streamLogEntry.Meta), PayloadArr)
+			isControl := bits.Has(bits.Bits(streamLogEntry.Meta), Control)
+			return &commtypes.RawMsg{
+				Payload:      streamLogEntry.Payload,
+				AuxData:      logEntry.AuxData,
+				MsgSeqNum:    streamLogEntry.MsgSeqNum,
+				LogSeqNum:    logEntry.SeqNum,
+				IsControl:    isControl,
+				IsPayloadArr: isPayloadArr,
+				ProdId: commtypes.ProducerId{
+					TaskId:        streamLogEntry.TaskId,
+					TaskEpoch:     streamLogEntry.TaskEpoch,
+					TransactionID: streamLogEntry.TransactionID,
+				},
+				InjTsMs: streamLogEntry.InjTsMs,
+			}, nil
+		}
+		from = logEntry.SeqNum + 1
+	}
 }
 
 func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag uint64) (*commtypes.RawMsg, error) {

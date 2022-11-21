@@ -2,10 +2,12 @@ package epoch_manager
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -28,8 +30,8 @@ type EpochManager struct {
 	currentTopicSubstream *skipmap.StringMap[*skipset.Uint32Set]
 	epochLog              *sharedlog_stream.SharedLogStream
 	epochMngrName         string
-	commtypes.ProducerId
-	epochLogMarkerTag uint64
+	prodId                commtypes.ProducerId
+	epochLogMarkerTag     uint64
 }
 
 func NewEpochManager(env types.Environment, epochMngrName string,
@@ -47,7 +49,7 @@ func NewEpochManager(env types.Environment, epochMngrName string,
 	return &EpochManager{
 		epochMngrName:         epochMngrName,
 		env:                   env,
-		ProducerId:            commtypes.NewProducerId(),
+		prodId:                commtypes.NewProducerId(),
 		currentTopicSubstream: skipmap.NewString[*skipset.Uint32Set](),
 		epochLog:              log,
 		epochMetaSerde:        epochMetaSerde,
@@ -55,9 +57,15 @@ func NewEpochManager(env types.Environment, epochMngrName string,
 	}, nil
 }
 
+var _ = exactly_once_intr.ReadOnlyExactlyOnceManager(&EpochManager{})
+
 func (em *EpochManager) GetEpochManagerName() string {
 	return em.epochMngrName
 }
+func (em *EpochManager) GetCurrentEpoch() uint16             { return em.prodId.TaskEpoch }
+func (em *EpochManager) GetCurrentTaskId() uint64            { return em.prodId.TaskId }
+func (em *EpochManager) GetTransactionID() uint64            { return em.prodId.TransactionID }
+func (em *EpochManager) GetProducerId() commtypes.ProducerId { return em.prodId }
 
 func (em *EpochManager) appendToEpochLog(ctx context.Context,
 	meta commtypes.EpochMarker, tags []uint64, additionalTopic []string,
@@ -70,8 +78,8 @@ func (em *EpochManager) appendToEpochLog(ctx context.Context,
 	// debug.Fprintf(os.Stderr, "encoded epochMeta: %v\n", string(encoded))
 	debug.Assert(tags != nil, "tags should not be null")
 	producerId := commtypes.ProducerId{
-		TaskId:        em.TaskId,
-		TaskEpoch:     em.TaskEpoch,
+		TaskId:        em.prodId.TaskId,
+		TaskEpoch:     em.prodId.TaskEpoch,
 		TransactionID: 0,
 	}
 	off, err := em.epochLog.PushWithTag(ctx, encoded, 0, tags, additionalTopic,
@@ -93,14 +101,14 @@ func (em *EpochManager) SyncToRecent(ctx context.Context) ([]commtypes.RawMsg, e
 		txn_data.FenceTag(em.epochLog.TopicNameHash(), 0),
 	}
 	producerId := commtypes.ProducerId{
-		TaskId:        em.TaskId,
-		TaskEpoch:     em.TaskEpoch,
+		TaskId:        em.prodId.TaskId,
+		TaskEpoch:     em.prodId.TaskEpoch,
 		TransactionID: 0,
 	}
 	off, err := em.epochLog.PushWithTag(ctx, nil, 0, tags, nil,
 		meta, producerId)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("PushWithTag: %v", err)
 	}
 	return em.epochLog.ReadNextWithTagUntil(ctx, 0, tags[1], off)
 }
@@ -215,16 +223,17 @@ func (em *EpochManager) Init(ctx context.Context) (*commtypes.EpochMarker, *comm
 		return nil, nil, err
 	}
 	if recentMeta == nil {
-		em.InitTaskId(em.env)
-		em.TaskEpoch = 0
+		em.prodId.InitTaskId(em.env)
+		em.prodId.TaskEpoch = 0
 	} else {
-		em.TaskEpoch = metaMsg.ProdId.TaskEpoch
-		em.TaskId = metaMsg.ProdId.TaskId
+		em.prodId.TaskEpoch = metaMsg.ProdId.TaskEpoch
+		em.prodId.TaskId = metaMsg.ProdId.TaskId
 	}
 	if recentMeta != nil && metaMsg.ProdId.TaskEpoch == math.MaxUint16 {
-		em.InitTaskId(em.env)
-		em.TaskEpoch = 0
+		em.prodId.InitTaskId(em.env)
+		em.prodId.TaskEpoch = 0
 	}
+	em.prodId.TaskEpoch += 1
 	meta := commtypes.EpochMarker{
 		Mark: commtypes.FENCE,
 	}

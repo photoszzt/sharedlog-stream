@@ -17,6 +17,7 @@ type UpdateTrackParFunc interface {
 type ProduceRangeRecording interface {
 	GetInitialProdSeqNum() uint64
 	ResetInitialProd()
+	SetLastMarkerSeq(lastMarkerSeq uint64)
 }
 
 type CachedStateStore[K, V any] interface {
