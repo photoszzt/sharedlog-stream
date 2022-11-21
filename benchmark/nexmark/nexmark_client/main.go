@@ -120,6 +120,24 @@ func invokeDumpFunc(client *http.Client) {
 				KeySerde:      "Uint64",
 				ValueSerde:    "BidAndMax",
 			},
+			{
+				TopicName:     "bid_by_price",
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "Event",
+			},
+			{
+				TopicName:     "bid_by_win",
+				NumPartitions: 4,
+				KeySerde:      "StartEndTime",
+				ValueSerde:    "Event",
+			},
+			{
+				TopicName:     "max_bids",
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "StartEndTime",
+			},
 		}
 	case "q8":
 		dumpInput.StreamParams = []common.StreamParam{

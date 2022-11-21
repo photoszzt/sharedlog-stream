@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"os"
 	"sharedlog-stream/pkg/bits"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
@@ -232,7 +231,7 @@ func (s *SharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum ui
 			return nil, err
 		}
 		if logEntry == nil {
-			break
+			return nil, common_errors.ErrStreamEmpty
 		}
 		seqNum = logEntry.SeqNum
 		streamLogEntry := decodeStreamLogEntry(logEntry)
@@ -256,7 +255,6 @@ func (s *SharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum ui
 			}, nil
 		}
 	}
-	return nil, common_errors.ErrStreamEmpty
 }
 
 func (s *SharedLogStream) ReadNext(ctx context.Context, parNum uint8) (*commtypes.RawMsg, error) {
@@ -311,10 +309,12 @@ func (s *SharedLogStream) ReadNextWithTagUntil(ctx context.Context, parNum uint8
 }
 
 // ReadNextWithTag reads the log entry with the given tag from seqNum produced by prodId
-func (s *SharedLogStream) ReadFromSeqNumWithTag(ctx context.Context, from uint64, parNum uint8, tag uint64, prodId commtypes.ProducerId) (*commtypes.RawMsg, error) {
+func (s *SharedLogStream) ReadFromSeqNumWithTag(ctx context.Context, from uint64, appendedSeq uint64,
+	parNum uint8, tag uint64, prodId commtypes.ProducerId,
+) (*commtypes.RawMsg, error) {
 	// fmt.Fprintf(os.Stderr, "ReadFromSeqNumWithTag %s[%d] tag %#x, from %#x, prodId %s\n",
 	// 	s.topicName, parNum, tag, from, prodId.String())
-	for {
+	for from <= appendedSeq {
 		newCtx, cancel := context.WithTimeout(ctx, kBlockingReadTimeout)
 		defer cancel()
 		logEntry, err := s.env.SharedLogReadNextBlock(newCtx, tag, from)
@@ -322,9 +322,7 @@ func (s *SharedLogStream) ReadFromSeqNumWithTag(ctx context.Context, from uint64
 			return nil, err
 		}
 		if logEntry == nil {
-			fmt.Fprintf(os.Stderr, "ReadFromSeqNumWithTag %s[%d] tag %#x, from %#x, prodId %s, logEntry is nil\n",
-				s.topicName, parNum, tag, from, prodId.String())
-			return nil, common_errors.ErrStreamEmpty
+			continue
 		}
 		streamLogEntry := decodeStreamLogEntry(logEntry)
 		// fmt.Fprintf(os.Stderr, "logEntry %#x, tp %v, taskId %#x, taskEpoch %#x\n",
@@ -352,6 +350,7 @@ func (s *SharedLogStream) ReadFromSeqNumWithTag(ctx context.Context, from uint64
 		}
 		from = logEntry.SeqNum + 1
 	}
+	return nil, fmt.Errorf("can't find log entry %s[%d] from %#x to %#x", s.topicName, parNum, from, appendedSeq)
 }
 
 func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag uint64) (*commtypes.RawMsg, error) {
