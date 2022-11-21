@@ -91,13 +91,16 @@ func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, 
 		if err != nil {
 			return err
 		}
-		_, err = s.Stream.Push(ctx, payloads, s.parNum, ArrRecordMeta, producerId)
+		tags := []uint64{NameHashWithPartition(s.Stream.topicNameHash, s.parNum)}
+		seqNum, err := s.Stream.PushWithTag(ctx, payloads, s.parNum, tags,
+			nil, ArrRecordMeta, producerId)
 		if err != nil {
 			return err
 		}
-		err = s.updateProdSeqNum(ctx, producerId)
+		err = s.updateProdSeqNum(ctx, s.parNum, tags[0], producerId)
 		if err != nil {
-			return err
+			return fmt.Errorf("updateProdSeqNum(%s[%d]): %v, appended seqNum: %#x, prodId: %s, tag %#x",
+				s.Stream.topicName, s.parNum, err, seqNum, producerId.String(), tags[0])
 		}
 		s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
 		s.sinkBuffer = append(s.sinkBuffer, payload)
@@ -124,15 +127,18 @@ func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload [
 			s.mux.Unlock()
 			return err
 		}
-		_, err = s.Stream.Push(ctx, payloads, s.parNum, ArrRecordMeta, producerId)
+		tags := []uint64{NameHashWithPartition(s.Stream.topicNameHash, s.parNum)}
+		seqNum, err := s.Stream.PushWithTag(ctx, payloads, s.parNum, tags,
+			nil, ArrRecordMeta, producerId)
 		if err != nil {
 			s.mux.Unlock()
 			return err
 		}
-		err = s.updateProdSeqNum(ctx, producerId)
+		err = s.updateProdSeqNum(ctx, s.parNum, tags[0], producerId)
 		if err != nil {
 			s.mux.Unlock()
-			return err
+			return fmt.Errorf("updateProdSeqNum(%s[%d]): %v, appended seqNum: %#x, prodId: %s, tag %#x",
+				s.Stream.topicName, s.parNum, err, seqNum, producerId.String(), tags[0])
 		}
 		s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
 		s.sinkBuffer = append(s.sinkBuffer, payload)
@@ -142,14 +148,13 @@ func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload [
 	return nil
 }
 
-func (s *BufferedSinkStream) updateProdSeqNum(ctx context.Context, prodId commtypes.ProducerId) error {
+func (s *BufferedSinkStream) updateProdSeqNum(ctx context.Context, parNum uint8, tag uint64, prodId commtypes.ProducerId) error {
 	if s.guarantee == exactly_once_intr.EPOCH_MARK {
 		if !s.initProdIsSet {
-			tags := NameHashWithPartition(s.Stream.topicNameHash, s.parNum)
-			r, err := s.Stream.ReadFromSeqNumWithTag(ctx, s.lastMarkerSeq, s.parNum, tags, prodId)
+			r, err := s.Stream.ReadFromSeqNumWithTag(ctx, s.lastMarkerSeq, parNum, tag, prodId)
 			if err != nil {
-				return fmt.Errorf("ReadFromSeqNumWithTag: %v, lastMarkerSeq: %#x, parNum: %d, prodId: %s",
-					err, s.lastMarkerSeq, s.parNum, prodId.String())
+				return fmt.Errorf("ReadFromSeqNumWithTag: %v, lastMarkerSeq: %#x",
+					err, s.lastMarkerSeq)
 			}
 			s.initialProdInEpoch = r.LogSeqNum
 			debug.Fprintf(os.Stderr, "update initial prod in epoch: %#x\n", s.initialProdInEpoch)
@@ -166,9 +171,11 @@ func (s *BufferedSinkStream) Push(ctx context.Context, payload []byte, parNum ui
 	if err != nil {
 		return 0, err
 	}
-	err = s.updateProdSeqNum(ctx, producerId)
+	tag := NameHashWithPartition(s.Stream.topicNameHash, parNum)
+	err = s.updateProdSeqNum(ctx, parNum, tag, producerId)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("updateProdSeqNum(%s[%d]): %v, appended seqNum: %#x, prodId: %s, tag %#x",
+			s.Stream.topicName, s.parNum, err, seqNum, producerId.String(), tag)
 	}
 	return seqNum, nil
 }
@@ -180,9 +187,10 @@ func (s *BufferedSinkStream) PushWithTag(ctx context.Context, payload []byte, pa
 	if err != nil {
 		return 0, err
 	}
-	err = s.updateProdSeqNum(ctx, producerId)
+	err = s.updateProdSeqNum(ctx, parNum, tags[0], producerId)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("updateProdSeqNum(%s[%d]): %v, appended seqNum: %#x, prodId: %s, tag %#x",
+			s.Stream.topicName, s.parNum, err, seqNum, producerId.String(), tags[0])
 	}
 	return seqNum, nil
 }
@@ -215,15 +223,18 @@ func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId commtyp
 		if err != nil {
 			return 0, err
 		}
-		_, err = s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
+		tags := []uint64{NameHashWithPartition(s.Stream.topicNameHash, s.parNum)}
+		seqNum, err := s.Stream.PushWithTag(ctx, payloads, s.parNum, tags,
+			nil, StreamEntryMeta(false, true), producerId)
 		if err != nil {
 			return 0, err
 		}
 		// debug.Fprintf(os.Stderr, "FlushNoLock %s[%d] logEntry %#x prodId %s\n",
 		// 	s.Stream.topicName, s.parNum, n, producerId.String())
-		err = s.updateProdSeqNum(ctx, producerId)
+		err = s.updateProdSeqNum(ctx, s.parNum, tags[0], producerId)
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("updateProdSeqNum(%s[%d]): %v, appended seqNum: %#x, prodId: %s, tag %#x",
+				s.Stream.topicName, s.parNum, err, seqNum, producerId.String(), tags[0])
 		}
 		s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
 		s.currentSize = 0
@@ -252,17 +263,18 @@ func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context, producerId 
 			s.mux.Unlock()
 			return 0, err
 		}
-		_, err = s.Stream.Push(ctx, payloads, s.parNum, StreamEntryMeta(false, true), producerId)
+		tags := []uint64{NameHashWithPartition(s.Stream.topicNameHash, s.parNum)}
+		seqNum, err := s.Stream.PushWithTag(ctx, payloads, s.parNum,
+			tags, nil, StreamEntryMeta(false, true), producerId)
 		if err != nil {
 			s.mux.Unlock()
 			return 0, err
 		}
-		// debug.Fprintf(os.Stderr, "Flush %s[%d] logEntry %#x prodId %s\n",
-		// 	s.Stream.topicName, s.parNum, n, producerId.String())
-		err = s.updateProdSeqNum(ctx, producerId)
+		err = s.updateProdSeqNum(ctx, s.parNum, tags[0], producerId)
 		if err != nil {
 			s.mux.Unlock()
-			return 0, err
+			return 0, fmt.Errorf("updateProdSeqNum(%s[%d]): %v, appended seqNum: %#x, prodId: %s, tag %#x",
+				s.Stream.topicName, s.parNum, err, seqNum, producerId.String(), tags[0])
 		}
 		s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
 		s.currentSize = 0

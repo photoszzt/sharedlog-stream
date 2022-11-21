@@ -42,7 +42,7 @@ func NewMeteredConsumer(src *ShardedSharedLogStreamConsumer, warmup time.Duratio
 		// latencies: stats.NewStatsCollector[int64](src_name, stats.DEFAULT_COLLECT_DURATION),
 		pToCLat: stats.NewPrintLogStatsCollector[int64]("procTo" + src_name),
 		// msgBatchTime: stats.NewPrintLogStatsCollector[int64]("msgBatchTime" + src_name),
-		// consumeTp: stats.NewThroughputCounter(src_name, stats.DEFAULT_COLLECT_DURATION),
+		consumeTp: stats.NewThroughputCounter(src_name, stats.DEFAULT_COLLECT_DURATION),
 		ctrlCount: 0,
 	}
 }
