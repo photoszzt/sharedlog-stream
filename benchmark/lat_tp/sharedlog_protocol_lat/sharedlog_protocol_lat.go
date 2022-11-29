@@ -11,26 +11,31 @@ import (
 )
 
 var (
-	FLAGS_faas_gateway string
-	FLAGS_duration     int
-	FLAGS_tps          int
-	FLAGS_payload      string
-	FLAGS_flushms      int
-	FLAGS_local        bool
-	FLAGS_events_num   int
-	FLAGS_npar         int
-	FLAGS_nprod        int
-	FLAGS_serdeFormat  string
+	FLAGS_faas_gateway   string
+	FLAGS_duration       int
+	FLAGS_tps            int
+	FLAGS_payload        string
+	FLAGS_local          bool
+	FLAGS_events_num     int
+	FLAGS_npar           int
+	FLAGS_nprod          int
+	FLAGS_serdeFormat    string
+	FLAGS_commit_everyMs uint64
 )
 
 func main() {
 	flag.StringVar(&FLAGS_faas_gateway, "faas_gateway", "127.0.0.1:8081", "")
 	flag.IntVar(&FLAGS_duration, "duration", 60, "")
 	flag.IntVar(&FLAGS_events_num, "events_num", 100000000, "events.num param for nexmark")
+	flag.IntVar(&FLAGS_tps, "tps", 10000000, "tps param for nexmark")
 	flag.StringVar(&FLAGS_payload, "payload", "", "payload path")
 	flag.IntVar(&FLAGS_npar, "npar", 1, "number of partition")
 	flag.IntVar(&FLAGS_nprod, "nprod", 1, "number of producer")
 	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
+	flag.Uint64Var(&FLAGS_commit_everyMs, "comm_everyMS", 10, "commit a transaction every (ms)")
+	flag.BoolVar(&FLAGS_local, "local", false, "local mode without setting node constraint")
+
+	flag.Parse()
 
 	serdeFormat := common.StringToSerdeFormat(FLAGS_serdeFormat)
 	spProd := &common.BenchSourceParam{
@@ -41,7 +46,7 @@ func main() {
 		FileName:        FLAGS_payload,
 		NumOutPartition: uint8(FLAGS_npar),
 		Tps:             uint32(FLAGS_tps),
-		FlushMs:         uint32(FLAGS_flushms),
+		FlushMs:         uint32(FLAGS_commit_everyMs),
 	}
 	spTran := &common.TranProcessBenchParam{
 		InTopicName:   "src",
@@ -49,8 +54,8 @@ func main() {
 		SerdeFormat:   uint8(serdeFormat),
 		NumPartition:  uint8(FLAGS_npar),
 		Duration:      uint32(FLAGS_duration),
-		CommitEveryMs: uint64(FLAGS_flushms),
-		FlushMs:       uint32(FLAGS_flushms),
+		CommitEveryMs: uint64(FLAGS_commit_everyMs),
+		FlushMs:       uint32(FLAGS_commit_everyMs),
 	}
 	client := &http.Client{
 		Transport: &http.Transport{

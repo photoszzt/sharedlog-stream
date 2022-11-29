@@ -3,7 +3,7 @@ GO_FILES?=$$(find . -name '*.go' |grep -v deps)
 default: lat_tp_handler_debug lat_tp_handler sharedlog_bench_client dump_stream \
 	nexmark_kafka_test_src kafka_consume_bench kafka_produce_bench nexmark \
 	nexmark_stats nexmark_debug nexmark_gen_data_by_spec nexmark_client \
-	nexmark_genevents_kafka nexmark_scale kafka_tran_process
+	nexmark_genevents_kafka nexmark_scale kafka_tran_process sharedlog_protocol_lat
 
 .PHONY: golangci-lint
 golangci-lint:
@@ -93,6 +93,11 @@ lat_tp_handler_debug:
 sharedlog_bench_client:
 	mkdir -p ./bin
 	GO111MODULE=on go build -o bin/sharedlog_bench_client ./benchmark/lat_tp/sharedlog_bench_client
+
+.PHONY: sharedlog_protocol_lat
+sharedlog_protocol_lat:
+	mkdir -p ./bin
+	GO111MODULE=on go build -o bin/sharedlog_protocol_lat ./benchmark/lat_tp/sharedlog_protocol_lat
 
 .PHONY: download-book
 download-book:

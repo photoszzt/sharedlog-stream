@@ -387,13 +387,14 @@ func processInEpoch(
 				}
 			})
 		}
-		if (!args.waitEndMark && timeout) || (testForFail && cur_elapsed >= failAfter) {
-			r := finalMark(dctx, t, args, em, cmm, snapshotTime, epochMarkTime)
+		exitDueToFailTest := testForFail && cur_elapsed >= failAfter
+		if (!args.waitEndMark && timeout) || exitDueToFailTest {
+			r := finalMark(dctx, t, args, em, cmm, snapshotTime, epochMarkTime, exitDueToFailTest)
 			if r != nil {
 				return r
 			}
 			ret := &common.FnOutput{Success: true}
-			if testForFail {
+			if exitDueToFailTest {
 				ret = &common.FnOutput{Success: true, Message: common_errors.ErrReturnDueToTest.Error()}
 			}
 			// markPartUs.PrintRemainingStats()
@@ -426,7 +427,7 @@ func processInEpoch(
 		ctrlRawMsg, ok := ctrlRawMsgOp.Take()
 		if ok {
 			fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
-			r := finalMark(dctx, t, args, em, cmm, snapshotTime, epochMarkTime)
+			r := finalMark(dctx, t, args, em, cmm, snapshotTime, epochMarkTime, false)
 			if r != nil {
 				return r
 			}
@@ -440,7 +441,7 @@ func processInEpoch(
 
 func finalMark(dctx context.Context, t *StreamTask, args *StreamTaskArgs,
 	em *epoch_manager.EpochManager, cmm *control_channel.ControlChannelManager,
-	snapshotTime []int64, epochMarkTime []int64,
+	snapshotTime []int64, epochMarkTime []int64, exitDueToFailTest bool,
 	// markPartUs *stats.PrintLogStatsCollector[int64],
 ) *common.FnOutput {
 	markBegin := time.Now()
@@ -464,7 +465,7 @@ func finalMark(dctx context.Context, t *StreamTask, args *StreamTaskArgs,
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("markEpoch failed: %v", err))
 	}
-	if CREATE_SNAPSHOT && args.snapshotEvery != 0 {
+	if CREATE_SNAPSHOT && args.snapshotEvery != 0 && !exitDueToFailTest {
 		snStart := time.Now()
 		createSnapshot(args, logOff)
 		elapsed := time.Since(snStart)
