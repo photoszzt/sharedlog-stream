@@ -115,6 +115,10 @@ func processMsgAndSeq[K, V any](ctx context.Context,
 		producer_consumer.ExtractProduceToConsumeTimeMsgG(meteredConsumer, &msg.Msg)
 		msg.Msg.StartProcTime = time.Now()
 		err := procMsg(ctx, msg.Msg, args)
-		return fmt.Errorf("procMsg: %v", err)
+		if err != nil {
+			return fmt.Errorf("procMsg: %v", err)
+		} else {
+			return nil
+		}
 	}
 }

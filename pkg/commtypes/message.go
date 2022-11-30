@@ -2,6 +2,7 @@ package commtypes
 
 import (
 	"fmt"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/utils"
 	"time"
@@ -56,6 +57,7 @@ func (m *MessageG[K, V]) ExtractEventTimeFromVal() error {
 	if err != nil {
 		return err
 	}
+	debug.Assert(m.TimestampMs > 0, "event time must be > 0")
 	return nil
 }
 
@@ -119,6 +121,7 @@ func (m *Message) ExtractEventTimeFromVal() error {
 	if err != nil {
 		return err
 	}
+	debug.Assert(m.Timestamp > 0, "Extracted event time is not positive")
 	return nil
 }
 

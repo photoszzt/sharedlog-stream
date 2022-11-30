@@ -21,7 +21,7 @@ type sharedlogTranDataGenHandler struct {
 }
 
 func NewSharedlogTranDataGenHandler(env types.Environment) types.FuncHandler {
-	return &sharedlogProduceBenchHandler{
+	return &sharedlogTranDataGenHandler{
 		env:     env,
 		bufPush: utils.CheckBufPush(),
 	}
@@ -91,7 +91,7 @@ func (h *sharedlogTranDataGenHandler) sharedlogProduceBench(ctx context.Context,
 			Ts:      next.UnixMicro(),
 		}
 		msg := commtypes.MessageG[string, datatype.PayloadTs]{
-			Key:   optional.Some(""),
+			Key:   optional.None[string](),
 			Value: optional.Some(pt),
 		}
 		encoded, err := msgSerde.Encode(msg)

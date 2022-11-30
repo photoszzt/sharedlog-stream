@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	configscale "sharedlog-stream/benchmark/common/config_scale"
 	"sharedlog-stream/benchmark/lat_tp/pkg/handlers"
 
 	"cs.utexas.edu/zjia/faas"
@@ -36,6 +37,8 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewSharedlogTranDataGenHandler(env), nil
 	case "tranProcess":
 		return handlers.NewSharedlogTranProcessHandler(env), nil
+	case "scale":
+		return configscale.NewConfigScaleHandler(env), nil
 	default:
 		return nil, fmt.Errorf("unknown function name %v", funcName)
 	}

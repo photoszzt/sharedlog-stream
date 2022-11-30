@@ -3,7 +3,6 @@ package sharedlog_stream
 import (
 	"context"
 	"fmt"
-	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
@@ -157,7 +156,7 @@ func (s *BufferedSinkStream) updateProdSeqNum(ctx context.Context, appendedSeq u
 					err, s.lastMarkerSeq+1)
 			}
 			s.initialProdInEpoch = r.LogSeqNum
-			debug.Fprintf(os.Stderr, "update initial prod in epoch: %#x\n", s.initialProdInEpoch)
+			// debug.Fprintf(os.Stderr, "update initial prod in epoch: %#x\n", s.initialProdInEpoch)
 			s.initProdIsSet = true
 		}
 	}

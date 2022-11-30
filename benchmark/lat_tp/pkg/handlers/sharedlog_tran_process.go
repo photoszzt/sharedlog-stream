@@ -44,15 +44,15 @@ func (h *sharedlogTranProcessHandler) Call(ctx context.Context, input []byte) ([
 }
 
 func (h *sharedlogTranProcessHandler) sharedlogTranProcess(ctx context.Context, sp *common.TranProcessBenchParam) *common.FnOutput {
-	inStream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, sp.InTopicName, sp.NumPartition, commtypes.SerdeFormat(sp.SerdeFormat))
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	outStream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, sp.OutTopicName, sp.NumPartition, commtypes.SerdeFormat(sp.SerdeFormat))
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	inStream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, sp.InTopicName, sp.NumPartition, serdeFormat)
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: err.Error()}
+	}
+	outStream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, sp.OutTopicName, sp.NumPartition, serdeFormat)
+	if err != nil {
+		return &common.FnOutput{Success: false, Message: err.Error()}
+	}
 	inConfig := &producer_consumer.StreamConsumerConfig{
 		Timeout:     common.SrcConsumeTimeout,
 		SerdeFormat: serdeFormat,
@@ -72,7 +72,13 @@ func (h *sharedlogTranProcessHandler) sharedlogTranProcess(ctx context.Context, 
 	}
 	src.SetInitialSource(true)
 	sink.MarkFinalOutput()
-	msgSerde, err := commtypes.GetMsgGSerdeG[string, datatype.PayloadTs](commtypes.MSGP, commtypes.StringSerdeG{}, datatype.PayloadTsMsgpSerdeG{})
+	var payloadTsSerde commtypes.SerdeG[datatype.PayloadTs]
+	if serdeFormat == commtypes.MSGP {
+		payloadTsSerde = datatype.PayloadTsMsgpSerdeG{}
+	} else {
+		payloadTsSerde = datatype.PayloadTsJsonSerdeG{}
+	}
+	msgSerde, err := commtypes.GetMsgGSerdeG[string](commtypes.MSGP, commtypes.StringSerdeG{}, payloadTsSerde)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -91,13 +97,13 @@ func (h *sharedlogTranProcessHandler) sharedlogTranProcess(ctx context.Context, 
 		fmt.Sprintf("tranProcess-%s-%d-%s", sp.InTopicName,
 			0, sp.OutTopicName)).
 		Guarantee(exactly_once_intr.EPOCH_MARK).
-		AppID("tranProcess").
+		AppID(sp.AppId).
 		Warmup(time.Duration(0) * time.Second).
 		CommitEveryMs(sp.CommitEveryMs).
 		FlushEveryMs(sp.FlushMs).
 		Duration(sp.Duration).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
-		WaitEndMark(true).FixedOutParNum(0).Build()
+		WaitEndMark(false).FixedOutParNum(0).Build()
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, stream_task.EmptySetupSnapshotCallback,
 		func() {
 			outProc.OutputRemainingStats()

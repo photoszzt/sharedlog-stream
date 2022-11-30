@@ -2,12 +2,12 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"net/http"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sync"
 	"time"
-
-	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -56,6 +56,7 @@ func main() {
 		Duration:      uint32(FLAGS_duration),
 		CommitEveryMs: uint64(FLAGS_commit_everyMs),
 		FlushMs:       uint32(FLAGS_commit_everyMs),
+		AppId:         "protocol-lat",
 	}
 	client := &http.Client{
 		Transport: &http.Transport{
@@ -68,11 +69,35 @@ func main() {
 		defer wg.Done()
 		url := common.BuildFunctionUrl(FLAGS_faas_gateway, name)
 		if err := common.JsonPostRequest(client, url, nodeConstraint, sp, response); err != nil {
-			log.Error().Msgf("%s request failed: %v", name, err)
+			fmt.Fprintf(os.Stderr, "%s request failed: %v", name, err)
 		} else if !response.Success {
-			log.Error().Msgf("%s request failed: %s", name, response.Message)
+			fmt.Fprintf(os.Stderr, "%s request failed: %s", name, response.Message)
 		}
 	}
+	scaleParam := map[string]uint8{
+		"nexmark_src": 1,
+		"tran_out":    1,
+		"tranDataGen": 1,
+		"tranProcess": 1,
+	}
+	c := &common.ConfigScaleInput{
+		Config:      scaleParam,
+		AppId:       "protocol-lat",
+		FuncNames:   []string{"tranDataGen", "tranProcess"},
+		ScaleEpoch:  1,
+		SerdeFormat: uint8(serdeFormat),
+		Bootstrap:   true,
+	}
+	constraint := "1"
+	if FLAGS_local {
+		constraint = ""
+	}
+	var scaleResponse common.FnOutput
+	wg.Add(1)
+	go invoke("scale", &scaleResponse, c, constraint)
+	wg.Wait()
+	fmt.Fprintf(os.Stderr, "done invoke initial scale\n")
+	fmt.Fprintf(os.Stderr, "scale response: %#v\n", scaleResponse)
 	prodCons := "1"
 	if FLAGS_local {
 		prodCons = ""
@@ -88,4 +113,11 @@ func main() {
 	wg.Add(1)
 	go invoke("tranProcess", &consumeResponse, spTran, consumeCons)
 	wg.Wait()
+	fmt.Fprintf(os.Stderr, "tranDataGen: %#v\n", prodResponse)
+	if consumeResponse.Success {
+		fmt.Fprintf(os.Stderr, "tranProcess: counts: %#v, duration: %#v\n",
+			consumeResponse.Counts, consumeResponse.Duration)
+	} else {
+		fmt.Fprintf(os.Stderr, "tranProcess failed: %s\n", consumeResponse.Message)
+	}
 }

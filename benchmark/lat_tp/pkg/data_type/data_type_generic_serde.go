@@ -1,6 +1,23 @@
 package datatype
 
-import "sharedlog-stream/pkg/commtypes"
+import (
+	"encoding/json"
+	"sharedlog-stream/pkg/commtypes"
+)
+
+type PayloadTsJsonSerdeG struct{}
+
+var _ commtypes.SerdeG[PayloadTs] = PayloadTsJsonSerdeG{}
+
+func (s PayloadTsJsonSerdeG) Encode(value PayloadTs) ([]byte, error) {
+	return json.Marshal(value)
+}
+
+func (s PayloadTsJsonSerdeG) Decode(data []byte) (PayloadTs, error) {
+	var value PayloadTs
+	err := json.Unmarshal(data, &value)
+	return value, err
+}
 
 type PayloadTsMsgpSerdeG struct{}
 

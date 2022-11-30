@@ -82,12 +82,12 @@ kafka_tran_process:
 .PHONY: lat_tp_handler
 lat_tp_handler:
 	mkdir -p ./bin
-	GO111MODULE=on go build -o bin/lat_tp_handler ./benchmark/lat_tp/lat_tp_handler
+	GO111MODULE=on go build -tags stats -o bin/lat_tp_handler ./benchmark/lat_tp/lat_tp_handler
 
 .PHONY: lat_tp_handler_debug
 lat_tp_handler_debug:
 	mkdir -p ./bin
-	GO111MODULE=on go build -tags debug -o bin/lat_tp_handler_debug ./benchmark/lat_tp/lat_tp_handler
+	GO111MODULE=on go build -tags "stats,debug" -o bin/lat_tp_handler_debug ./benchmark/lat_tp/lat_tp_handler
 
 .PHONY: sharedlog_bench_client
 sharedlog_bench_client:
