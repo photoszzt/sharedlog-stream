@@ -13,10 +13,10 @@ type Processor interface {
 	NextProcessor(nextProcessor IProcess)
 }
 
-type CachedProcessor interface {
-	Processor
-	Flush(ctx context.Context) error
-}
+// type CachedProcessor interface {
+// 	Processor
+// 	Flush(ctx context.Context) error
+// }
 
 type IProcessG[KIn, VIn any] interface {
 	Process(ctx context.Context, msg commtypes.MessageG[KIn, VIn]) error
@@ -33,10 +33,10 @@ type ProcessorG[KIn, VIn, KOut, VOut any] interface {
 	NextProcessor(nextProcessor IProcessG[KOut, VOut])
 }
 
-type CachedProcessorG[KIn, VIn, KOut, VOut any] interface {
-	ProcessorG[KIn, VIn, KOut, VOut]
-	Flush(ctx context.Context) error
-}
+// type CachedProcessorG[KIn, VIn, KOut, VOut any] interface {
+// 	ProcessorG[KIn, VIn, KOut, VOut]
+// 	Flush(ctx context.Context) error
+// }
 
 type BaseProcessorG[KIn, VIn, KOut, VOut any] struct {
 	ProcessingFuncG func(ctx context.Context, msg commtypes.MessageG[KIn,

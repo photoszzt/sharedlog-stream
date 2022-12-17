@@ -11,6 +11,7 @@ import (
 	"testing"
 )
 
+/*
 func toStringAgg(sep string) AggregatorFunc {
 	return AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
 		agg := aggregate.(string)
@@ -18,6 +19,7 @@ func toStringAgg(sep string) AggregatorFunc {
 		return agg + sep + val
 	})
 }
+*/
 
 func toStringAggG(sep string) AggregatorFuncG[string, string, string] {
 	return AggregatorFuncG[string, string, string](func(key string, value string, aggregate optional.Option[string]) optional.Option[string] {
@@ -26,8 +28,8 @@ func toStringAggG(sep string) AggregatorFuncG[string, string, string] {
 }
 
 var (
-	TOSTRING_ADDER     = toStringAgg("+")
-	TOSTRING_REMOVER   = toStringAgg("-")
+	// TOSTRING_ADDER     = toStringAgg("+")
+	// TOSTRING_REMOVER   = toStringAgg("-")
 	TOSTRING_ADDER_G   = toStringAggG("+")
 	TOSTRING_REMOVER_G = toStringAggG("-")
 	STRING_INIT        = InitializerFunc(func() interface{} {

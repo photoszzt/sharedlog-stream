@@ -4,9 +4,9 @@ import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/utils"
 )
 
+/*
 type StoreToWindowTableProcessor struct {
 	store store.CoreWindowStore
 	name  string
@@ -42,6 +42,7 @@ func (p *StoreToWindowTableProcessor) ProcessAndReturn(ctx context.Context, msg 
 	}
 	return []commtypes.Message{msg}, nil
 }
+*/
 
 type StoreToWindowTableProcessorG[K, V any] struct {
 	store store.CoreWindowStoreG[K, V]
@@ -50,7 +51,7 @@ type StoreToWindowTableProcessorG[K, V any] struct {
 	observedTs int64
 }
 
-var _ = Processor(&StoreToWindowTableProcessor{})
+var _ = ProcessorG[int, int, int, int](&StoreToWindowTableProcessorG[int, int]{})
 
 func NewStoreToWindowTableProcessorG[K, V any](store store.CoreWindowStoreG[K, V]) *StoreToWindowTableProcessorG[K, V] {
 	p := &StoreToWindowTableProcessorG[K, V]{

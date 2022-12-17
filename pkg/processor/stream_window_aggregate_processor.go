@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+/*
 type StreamWindowAggregateProcessor struct {
 	store       store.CoreWindowStore
 	initializer Initializer
@@ -101,6 +102,7 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(ctx context.Context, m
 	}
 	return newMsgs, nil
 }
+*/
 
 type StreamWindowAggregateProcessorG[K, V, VA any] struct {
 	store       store.CoreWindowStoreG[K, commtypes.ValueTimestampG[VA]]

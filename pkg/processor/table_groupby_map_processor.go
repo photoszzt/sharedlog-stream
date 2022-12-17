@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/optional"
-	"sharedlog-stream/pkg/utils"
 )
 
+/*
 type TableGroupByMapProcessor struct {
 	mapper Mapper
 	name   string
@@ -76,6 +76,7 @@ func (p *TableGroupByMapProcessor) ProcessAndReturn(ctx context.Context, msg com
 	}
 	return outMsgs, nil
 }
+*/
 
 type TableGroupByMapProcessorG[K, V, KR, VR any] struct {
 	mapper MapperG[K, V, KR, VR]

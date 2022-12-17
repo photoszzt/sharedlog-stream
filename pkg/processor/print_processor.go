@@ -1,12 +1,6 @@
 package processor
 
-import (
-	"context"
-	"fmt"
-	"os"
-	"sharedlog-stream/pkg/commtypes"
-)
-
+/*
 type PrintProcessor struct {
 	BaseProcessor
 }
@@ -29,3 +23,4 @@ func (p *PrintProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.Mes
 	fmt.Fprintf(os.Stderr, "msg: %v\n", msg)
 	return []commtypes.Message{msg}, nil
 }
+*/

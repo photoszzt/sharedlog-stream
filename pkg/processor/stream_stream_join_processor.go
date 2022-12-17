@@ -54,6 +54,7 @@ func (t *TimeTracker) AdvanceNextTimeToEmit() {
 	t.mux.Unlock()
 }
 
+/*
 type StreamStreamJoinProcessor struct {
 	otherWindowStore  store.CoreWindowStore
 	joiner            ValueJoinerWithKeyTs
@@ -151,12 +152,11 @@ func (p *StreamStreamJoinProcessor) ProcessAndReturn(ctx context.Context, msg co
 			return nil
 		})
 	return msgs, err
-	/*
-		if needOuterJoin {
-			// TODO
-		}
-	*/
+		// if needOuterJoin {
+		// 	// TODO
+		// }
 }
+*/
 
 type StreamStreamJoinProcessorG[K, V, VO, VR any] struct {
 	otherWindowStore  store.CoreWindowStoreG[K, VO]
@@ -171,7 +171,7 @@ type StreamStreamJoinProcessorG[K, V, VO, VR any] struct {
 	isLeftSide   bool
 }
 
-var _ = Processor(&StreamStreamJoinProcessor{})
+var _ = ProcessorG[int, int, int, int](&StreamStreamJoinProcessorG[int, int, int, int]{})
 
 func NewStreamStreamJoinProcessorG[K, V1, V2, VR any](
 	name string,
@@ -259,9 +259,7 @@ func (p *StreamStreamJoinProcessorG[K, V1, V2, VR]) ProcessAndReturn(
 			return nil
 		})
 	return msgs, err
-	/*
-		if needOuterJoin {
-			// TODO
-		}
-	*/
+	// if needOuterJoin {
+	// 	// TODO
+	// }
 }

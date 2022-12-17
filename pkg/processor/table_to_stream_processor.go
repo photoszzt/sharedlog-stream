@@ -6,6 +6,7 @@ import (
 	"sharedlog-stream/pkg/optional"
 )
 
+/*
 type TableToStreamProcessor struct {
 	valueMapperWithKey ValueMapperWithKey
 	name               string
@@ -37,6 +38,7 @@ func (p *TableToStreamProcessor) ProcessAndReturn(ctx context.Context, msg commt
 	}
 	return []commtypes.Message{{Key: msg.Key, Value: newV, Timestamp: msg.Timestamp}}, nil
 }
+*/
 
 type TableToStreamProcessorG[K, V any] struct {
 	valueMapperWithKey ValueMapperWithKeyG[K, commtypes.ChangeG[V], V]

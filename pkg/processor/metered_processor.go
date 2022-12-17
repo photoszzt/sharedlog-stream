@@ -6,6 +6,7 @@ import (
 	"sharedlog-stream/pkg/stats"
 )
 
+/*
 type MeteredProcessor struct {
 	proc      Processor
 	latencies stats.StatsCollector[int64]
@@ -66,6 +67,7 @@ func (p *MeteredCachedProcessor) Process(ctx context.Context, msg commtypes.Mess
 func (p *MeteredCachedProcessor) NextProcessor(nextProcessor IProcess) {
 	p.proc.NextProcessor(nextProcessor)
 }
+*/
 
 type MeteredProcessorG[KIn, VIn, KOut, VOut any] struct {
 	proc      ProcessorG[KIn, VIn, KOut, VOut]

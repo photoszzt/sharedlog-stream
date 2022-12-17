@@ -5,6 +5,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 )
 
+/*
 type StreamFilterProcessor struct {
 	pred Predicate
 	name string
@@ -36,6 +37,7 @@ func (p *StreamFilterProcessor) ProcessAndReturn(ctx context.Context, msg commty
 	}
 	return nil, nil
 }
+*/
 
 type StreamFilterProcessorG[K, V any] struct {
 	pred PredicateG[K, V]
@@ -70,6 +72,7 @@ func (p *StreamFilterProcessorG[K, V]) ProcessAndReturn(ctx context.Context, msg
 	return nil, nil
 }
 
+/*
 type StreamFilterNotProcessor struct {
 	pred Predicate
 	name string
@@ -100,6 +103,7 @@ func (p *StreamFilterNotProcessor) ProcessAndReturn(ctx context.Context, msg com
 	}
 	return nil, nil
 }
+*/
 
 type StreamFilterNotProcessorG[K, V any] struct {
 	pred PredicateG[K, V]
@@ -109,13 +113,13 @@ type StreamFilterNotProcessorG[K, V any] struct {
 
 var _ = ProcessorG[int, int, int, int](&StreamFilterNotProcessorG[int, int]{})
 
-func NewStreamFilterNotProcessorG(name string, pred Predicate) *StreamFilterNotProcessor {
-	p := &StreamFilterNotProcessor{
-		pred:          pred,
-		name:          name,
-		BaseProcessor: BaseProcessor{},
+func NewStreamFilterNotProcessorG[K, V any](name string, pred PredicateG[K, V]) *StreamFilterNotProcessorG[K, V] {
+	p := &StreamFilterNotProcessorG[K, V]{
+		pred:           pred,
+		name:           name,
+		BaseProcessorG: BaseProcessorG[K, V, K, V]{},
 	}
-	p.BaseProcessor.ProcessingFunc = p.ProcessAndReturn
+	p.BaseProcessorG.ProcessingFuncG = p.ProcessAndReturn
 	return p
 }
 

@@ -1,10 +1,6 @@
 package processor
 
-import (
-	"context"
-	"sharedlog-stream/pkg/commtypes"
-)
-
+/*
 type FlatMapper interface {
 	FlatMap(commtypes.Message) ([]commtypes.Message, error)
 }
@@ -42,3 +38,4 @@ func (p *FlatMapProcessor) ProcessAndReturn(ctx context.Context, msg commtypes.M
 	}
 	return msgs, nil
 }
+*/
