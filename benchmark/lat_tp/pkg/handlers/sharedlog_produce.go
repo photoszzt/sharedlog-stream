@@ -8,21 +8,18 @@ import (
 	datatype "sharedlog-stream/benchmark/lat_tp/pkg/data_type"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/utils"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
 
 type sharedlogProduceBenchHandler struct {
-	env     types.Environment
-	bufPush bool
+	env types.Environment
 }
 
 func NewSharedlogProduceBenchHandler(env types.Environment) types.FuncHandler {
 	return &sharedlogProduceBenchHandler{
-		env:     env,
-		bufPush: utils.CheckBufPush(),
+		env: env,
 	}
 }
 
@@ -55,18 +52,6 @@ func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context
 	}
 	var ptSerde datatype.PayloadTsMsgpSerde
 	timeGapUs := time.Duration(1000000/sp.Tps) * time.Microsecond
-	// msgChan := make(chan sharedlog_stream.PayloadToPush, 100000)
-	// msgErrChan := make(chan error, 1)
-	// var wg sync.WaitGroup
-	// streamPusher := sharedlog_stream.StreamPush{
-	// 	MsgChan:    msgChan,
-	// 	MsgErrChan: msgErrChan,
-	// 	Stream:     stream,
-	// 	BufPush:    h.bufPush,
-	// }
-	// wg.Add(1)
-	// go streamPusher.AsyncStreamPush(ctx, &wg, commtypes.EmptyProducerId)
-	// streamPusher.InitFlushTimer(time.Duration(sp.FlushMs) * time.Millisecond)
 	startTime := time.Now()
 	next := time.Now()
 
@@ -104,14 +89,6 @@ func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context
 		// latencies = append(latencies, int(elapsed.Microseconds()))
 		nEmitEvent += 1
 	}
-	// close(msgChan)
-	// wg.Wait()
-	// if h.bufPush {
-	// 	err = stream.Flush(ctx, commtypes.EmptyProducerId)
-	// 	if err != nil {
-	// 		fmt.Fprintf(os.Stderr, "[Error] Flush failed: %v\n", err)
-	// 	}
-	// }
 	return &common.FnOutput{
 		Success:  true,
 		Duration: time.Since(startTime).Seconds(),
