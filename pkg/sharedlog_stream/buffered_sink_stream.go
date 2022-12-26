@@ -171,11 +171,14 @@ func (s *BufferedSinkStream) Push(ctx context.Context, payload []byte, parNum ui
 		return 0, err
 	}
 	tag := NameHashWithPartition(s.Stream.topicNameHash, parNum)
+	s.mux.Lock()
 	err = s.updateProdSeqNum(ctx, seqNum, parNum, tag, producerId)
 	if err != nil {
+		s.mux.Unlock()
 		return 0, fmt.Errorf("updateProdSeqNum(%s[%d]): %v, appended seqNum: %#x, prodId: %s, tag %#x",
 			s.Stream.topicName, s.parNum, err, seqNum, producerId.String(), tag)
 	}
+	s.mux.Unlock()
 	return seqNum, nil
 }
 
@@ -186,11 +189,15 @@ func (s *BufferedSinkStream) PushWithTag(ctx context.Context, payload []byte, pa
 	if err != nil {
 		return 0, err
 	}
+
+	s.mux.Lock()
 	err = s.updateProdSeqNum(ctx, seqNum, parNum, tags[0], producerId)
 	if err != nil {
+		s.mux.Unlock()
 		return 0, fmt.Errorf("updateProdSeqNum(%s[%d]): %v, appended seqNum: %#x, prodId: %s, tag %#x",
 			s.Stream.topicName, s.parNum, err, seqNum, producerId.String(), tags[0])
 	}
+	s.mux.Unlock()
 	return seqNum, nil
 }
 

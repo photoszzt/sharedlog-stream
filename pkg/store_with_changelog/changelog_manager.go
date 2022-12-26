@@ -109,7 +109,7 @@ func (cm *ChangelogManager[K, V]) Flush(ctx context.Context) (uint32, error) {
 func (cm *ChangelogManager[K, V]) produce(ctx context.Context, msgSer commtypes.MessageSerialized, parNum uint8) error {
 	if !cm.changelogIsSrc {
 		cm.numProduced += 1
-		return cm.producer.ProduceData(ctx, msgSer, parNum)
+		return cm.producer.ProduceDataNoLock(ctx, msgSer, parNum)
 	}
 	return nil
 }

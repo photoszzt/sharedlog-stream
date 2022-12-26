@@ -282,7 +282,7 @@ func (s *MeteredProducer) ProduceData(ctx context.Context, msg commtypes.Message
 	// 	}
 	// }
 	procStart := stats.TimerBegin()
-	err := s.producer.ProduceData(ctx, msg, parNum)
+	err := s.producer.ProduceDataNoLock(ctx, msg, parNum)
 	elapsed := stats.Elapsed(procStart).Microseconds()
 	s.latencies.AddSample(elapsed)
 	return err

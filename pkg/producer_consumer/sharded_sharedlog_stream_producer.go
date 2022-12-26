@@ -140,6 +140,22 @@ func (sls *ShardedSharedLogStreamProducer) ProduceData(ctx context.Context, msgS
 	return nil
 }
 
+func (sls *ShardedSharedLogStreamProducer) ProduceDataNoLock(ctx context.Context, msgSer commtypes.MessageSerialized, parNum uint8) error {
+	bytes, err := sls.msgSerSerde.Encode(msgSer)
+	if err != nil {
+		return err
+	}
+	if bytes != nil {
+		if sls.bufPush {
+			return sls.bufpushNoLock(ctx, bytes, parNum)
+		} else {
+			_, err := sls.push(ctx, bytes, parNum, sharedlog_stream.StreamEntryMeta(false, false))
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *ShardedSharedLogStreamProducer) TopicName() string { return s.stream.TopicName() }
 func (s *ShardedSharedLogStreamProducer) Flush(ctx context.Context) (uint32, error) {
 	if s.bufPush {
@@ -193,5 +209,13 @@ func (s *ShardedSharedLogStreamProducer) bufpush(ctx context.Context, payload []
 		return s.stream.BufPush(ctx, payload, parNum, s.eom.GetProducerId())
 	} else {
 		return s.stream.BufPush(ctx, payload, parNum, commtypes.EmptyProducerId)
+	}
+}
+
+func (s *ShardedSharedLogStreamProducer) bufpushNoLock(ctx context.Context, payload []byte, parNum uint8) error {
+	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK {
+		return s.stream.BufPushNoLock(ctx, payload, parNum, s.eom.GetProducerId())
+	} else {
+		return s.stream.BufPushNoLock(ctx, payload, parNum, commtypes.EmptyProducerId)
 	}
 }
