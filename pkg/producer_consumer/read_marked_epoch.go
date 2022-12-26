@@ -177,28 +177,6 @@ func (emc *EpochMarkConsumer) checkMsgQueue(msgQueue *deque.Deque[*commtypes.Raw
 			fmt.Fprintf(os.Stderr, "dropMsg: %s\n", frontMsg.FormatMsgMeta())
 			return nil
 		}
-		/*
-			for msgStatus == SHOULD_DROP {
-				frontMsg = msgQueue.PopFront()
-				fmt.Fprintf(os.Stderr, "drop msg: %s\n", frontMsg.FormatMsgMeta())
-				if msgQueue.Len() > 0 {
-					frontMsg = msgQueue.Front()
-					readyMsg := emc.checkMsg(msgQueue, parNum, frontMsg)
-					if readyMsg != nil {
-						fmt.Fprintf(os.Stderr, "returnMsg3: %s\n", readyMsg.FormatMsgMeta())
-						return readyMsg
-					}
-					msgStatus = emc.checkMsgStatus(frontMsg, parNum)
-					if msgStatus == MARKED {
-						msgQueue.PopFront()
-						fmt.Fprintf(os.Stderr, "returnMsg4: %s\n", frontMsg.FormatMsgMeta())
-						return frontMsg
-					}
-				} else {
-					return nil
-				}
-			}
-		*/
 	}
 	return nil
 }

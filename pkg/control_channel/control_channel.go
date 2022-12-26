@@ -36,14 +36,12 @@ type ControlChannelManager struct {
 	controlOutput      chan ControlChannelResult
 	controlLogForRead  *sharedlog_stream.ShardedSharedLogStream
 	controlLogForWrite *sharedlog_stream.ShardedSharedLogStream
-	// key mapping have seen so far
-	// keyMappings  *skipmap.StringMap[*skipmap.FuncMap[[]byte, keyMeta]]
-	controlQuit  chan struct{}
-	funcName     string
-	ctrlMetaTag  uint64
-	ctrlLogTag   uint64
-	currentEpoch uint16
-	instanceID   uint8
+	controlQuit        chan struct{}
+	funcName           string
+	ctrlMetaTag        uint64
+	ctrlLogTag         uint64
+	currentEpoch       uint16
+	instanceID         uint8
 }
 
 func (cm *ControlChannelManager) CurrentEpoch() uint16 {
@@ -312,39 +310,6 @@ func (cmm *ControlChannelManager) appendToControlLog(ctx context.Context, cm txn
 	return err
 }
 
-/*
-func (cmm *ControlChannelManager) FlushKeyMapping(ctx context.Context) error {
-	if cmm.keyMappings.Len() > 0 {
-		kms := make(map[string][]txn_data.KeyMaping, cmm.keyMappings.Len())
-		cmm.keyMappings.Range(func(key string, value *skipmap.FuncMap[[]byte, keyMeta]) bool {
-			km, ok := kms[key]
-			if !ok {
-				km = make([]txn_data.KeyMaping, 0)
-			}
-			value.Range(func(key []byte, value keyMeta) bool {
-				km = append(km, txn_data.KeyMaping{
-					Key:         key,
-					Hash:        value.hash,
-					SubstreamId: value.substream,
-				})
-				return true
-			})
-			return true
-		})
-		cm := txn_data.ControlMetadata{
-			KeyMaps:    kms,
-			InstanceId: cmm.instanceID,
-			Epoch:      cmm.currentEpoch,
-		}
-		err := cmm.appendToControlLog(ctx, cm)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-*/
-
 func (cmm *ControlChannelManager) OutputKeyMapping(ctx context.Context, kms map[string][]txn_data.KeyMaping) error {
 	cm := txn_data.ControlMetadata{
 		KeyMaps:    kms,
@@ -366,28 +331,6 @@ func (cmm *ControlChannelManager) AppendRescaleConfig(ctx context.Context,
 	return err
 }
 
-/*
-func TrackAndAppendKeyMapping(
-	ctx context.Context,
-	cmm *ControlChannelManager,
-	kBytes []byte,
-	substreamId uint8,
-	topic string,
-) {
-	subs, _ := cmm.keyMappings.LoadOrStore(topic, skipmap.NewFunc[[]byte, keyMeta](func(a, b []byte) bool {
-		return bytes.Compare(a, b) < 0
-	}))
-	subs.LoadOrStoreLazy(kBytes, func() keyMeta {
-		hasher := hashfuncs.ByteSliceHasher{}
-		hash := hasher.HashSum64(kBytes)
-		return keyMeta{
-			substream: substreamId,
-			hash:      hash,
-		}
-	})
-}
-*/
-
 func (cmm *ControlChannelManager) RecordPrevInstanceFinish(
 	ctx context.Context,
 	funcName string,
@@ -403,26 +346,6 @@ func (cmm *ControlChannelManager) RecordPrevInstanceFinish(
 	err := cmm.appendToControlLog(ctx, cm)
 	return err
 }
-
-/*
-func (cmm *ControlChannelManager) updateKeyMapping(ctrlMeta *txn_data.ControlMetadata) {
-	for tp, kms := range ctrlMeta.KeyMaps {
-		subs, _ := cmm.keyMappings.LoadOrStore(tp, skipmap.NewFunc[[]byte, keyMeta](func(a, b []byte) bool {
-			return bytes.Compare(a, b) < 0
-		}))
-		for _, km := range kms {
-			subs.LoadOrStoreLazy(km.Key, func() keyMeta {
-				hasher := hashfuncs.ByteSliceHasher{}
-				hash := hasher.HashSum64(km.Key)
-				return keyMeta{
-					substream: km.SubstreamId,
-					hash:      hash,
-				}
-			})
-		}
-	}
-}
-*/
 
 func (cmm *ControlChannelManager) StartMonitorControlChannel(ctx context.Context) {
 	cmm.controlQuit = make(chan struct{})
