@@ -8,6 +8,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.1.2
 	github.com/confluentinc/confluent-kafka-go v1.8.2
 	github.com/gammazero/deque v0.2.1
+	github.com/go-redis/redis/v9 v9.0.0-beta.2
 	github.com/google/btree v1.1.2
 	github.com/rs/zerolog v1.26.1
 	github.com/spaolacci/murmur3 v1.1.0
@@ -22,8 +23,7 @@ require (
 
 require (
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
-	github.com/go-redis/redis/v9 v9.0.0-beta.2 // indirect
-	github.com/zhangyunhao116/fastrand v0.2.1 // indirect
+	github.com/zhangyunhao116/fastrand v0.3.0 // indirect
 )
 
 require (
@@ -45,4 +45,4 @@ replace cs.utexas.edu/zjia/faas => ../boki/worker/golang
 
 replace cs.utexas.edu/zjia/faas/slib => ../boki/faas/slib
 
-replace github.com/zhangyunhao116/skipmap v0.0.0 => github.com/photoszzt/skipmap v0.0.0-20220824160709-b60acf7319b0
+replace github.com/zhangyunhao116/skipmap v0.0.0 => github.com/photoszzt/skipmap v0.0.0-20221220072452-3dc3cdf11b4c
