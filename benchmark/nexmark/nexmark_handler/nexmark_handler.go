@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"sharedlog-stream/benchmark/common"
 	configscale "sharedlog-stream/benchmark/common/config_scale"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/handlers"
 
@@ -11,22 +12,13 @@ import (
 
 	"cs.utexas.edu/zjia/faas"
 	"cs.utexas.edu/zjia/faas/types"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 type funcHandlerFactory struct {
 }
 
 func init() {
-	logLevel := os.Getenv("LOG_LEVEL")
-	if level, err := zerolog.ParseLevel(logLevel); err == nil {
-		zerolog.SetGlobalLevel(level)
-	} else {
-		zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	}
-
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	common.SetLogLevelFromEnv()
 }
 
 func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.FuncHandler, error) {

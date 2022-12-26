@@ -8,11 +8,11 @@ import (
 	"sort"
 	"time"
 
+	"sharedlog-stream/benchmark/common"
 	datatype "sharedlog-stream/benchmark/lat_tp/pkg/data_type"
 	"sharedlog-stream/pkg/stats"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	"github.com/rs/zerolog"
 )
 
 var (
@@ -25,12 +25,7 @@ var (
 )
 
 func init() {
-	logLevel := os.Getenv("LOG_LEVEL")
-	if level, err := zerolog.ParseLevel(logLevel); err == nil {
-		zerolog.SetGlobalLevel(level)
-	} else {
-		zerolog.SetGlobalLevel(zerolog.WarnLevel)
-	}
+	common.SetLogLevelFromEnv()
 }
 
 func main() {

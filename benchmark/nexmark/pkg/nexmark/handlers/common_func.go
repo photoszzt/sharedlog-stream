@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"fmt"
-	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
@@ -124,11 +123,4 @@ func GetSerdeFromString(serdeStr string, serdeFormat commtypes.SerdeFormat) (com
 	default:
 		return nil, fmt.Errorf("Unrecognized serde string %s", serdeStr)
 	}
-}
-
-func checkCacheConfig() bool {
-	useCacheStr := os.Getenv("USE_CACHE")
-	useCache := useCacheStr == "true" || useCacheStr == "1"
-	fmt.Fprintf(os.Stderr, "use cacheStr: %s, use cache: %v\n", useCacheStr, useCache)
-	return useCache
 }

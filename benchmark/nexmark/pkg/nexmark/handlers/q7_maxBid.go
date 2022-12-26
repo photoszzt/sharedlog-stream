@@ -32,7 +32,7 @@ const (
 )
 
 func NewQ7MaxBid(env types.Environment, funcName string) types.FuncHandler {
-	useCache := checkCacheConfig()
+	useCache := common.CheckCacheConfig()
 	return &q7MaxBid{
 		env:      env,
 		funcName: funcName,

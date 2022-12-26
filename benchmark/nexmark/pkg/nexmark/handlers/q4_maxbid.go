@@ -31,7 +31,7 @@ type q4MaxBid struct {
 }
 
 func NewQ4MaxBid(env types.Environment, funcName string) *q4MaxBid {
-	useCache := checkCacheConfig()
+	useCache := common.CheckCacheConfig()
 	return &q4MaxBid{
 		env:      env,
 		funcName: funcName,

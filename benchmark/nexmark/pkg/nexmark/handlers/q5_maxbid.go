@@ -32,7 +32,7 @@ type q5MaxBid struct {
 }
 
 func NewQ5MaxBid(env types.Environment, funcName string) types.FuncHandler {
-	useCache := checkCacheConfig()
+	useCache := common.CheckCacheConfig()
 	return &q5MaxBid{
 		env:      env,
 		funcName: funcName,

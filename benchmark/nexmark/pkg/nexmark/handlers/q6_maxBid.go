@@ -26,7 +26,7 @@ type q6MaxBid struct {
 }
 
 func NewQ6MaxBid(env types.Environment, funcName string) *q6MaxBid {
-	useCache := checkCacheConfig()
+	useCache := common.CheckCacheConfig()
 	return &q6MaxBid{
 		env:      env,
 		funcName: funcName,

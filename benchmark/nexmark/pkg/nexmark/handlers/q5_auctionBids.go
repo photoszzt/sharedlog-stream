@@ -28,7 +28,7 @@ type q5AuctionBids struct {
 }
 
 func NewQ5AuctionBids(env types.Environment, funcName string) *q5AuctionBids {
-	useCache := checkCacheConfig()
+	useCache := common.CheckCacheConfig()
 	return &q5AuctionBids{
 		env:      env,
 		funcName: funcName,
