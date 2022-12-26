@@ -167,7 +167,7 @@ func SetupManagersForEpoch(ctx context.Context,
 		return nil, nil, err
 	}
 	trackParFunc := exactly_once_intr.TrackProdSubStreamFunc(
-		func(ctx context.Context, kBytes []byte,
+		func(ctx context.Context,
 			topicName string, substreamId uint8,
 		) error {
 			return em.AddTopicSubstream(ctx, topicName, substreamId)

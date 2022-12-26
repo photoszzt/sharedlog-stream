@@ -35,13 +35,11 @@ type TopicSubstreamTracker interface {
 }
 
 type TrackProdSubStreamFunc func(ctx context.Context,
-	kBytes []byte,
 	topicName string,
 	substreamId uint8,
 ) error
 
 func DefaultTrackProdSubstreamFunc(ctx context.Context,
-	kBytes []byte,
 	topicName string,
 	substreamId uint8,
 ) error {

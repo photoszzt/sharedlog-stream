@@ -127,11 +127,7 @@ func (st *InMemoryWindowStoreWithChangelogG[K, V]) Put(ctx context.Context,
 			return err
 		}
 		tStart := stats.TimerBegin()
-		kBytes, err := st.originKeySerde.Encode(key)
-		if err != nil {
-			return err
-		}
-		err = st.trackFunc(ctx, kBytes, st.changelogManager.TopicName(), st.parNum)
+		err = st.trackFunc(ctx, st.changelogManager.TopicName(), st.parNum)
 		if err != nil {
 			return err
 		}

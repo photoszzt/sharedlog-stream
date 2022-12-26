@@ -65,7 +65,7 @@ func (g *GroupByOutputProcessorG[KIn, VIn]) ProcessAndReturn(ctx context.Context
 	if ok {
 		hash := g.byteSliceHasher.HashSum64(msgSer.KeyEnc)
 		par := uint8(hash % uint64(g.producer.Stream().NumPartition()))
-		err = g.ectx.TrackParFunc()(ctx, msgSer.KeyEnc, g.producer.TopicName(), par)
+		err = g.ectx.TrackParFunc()(ctx, g.producer.TopicName(), par)
 		if err != nil {
 			return nil, fmt.Errorf("track substream failed: %v", err)
 		}

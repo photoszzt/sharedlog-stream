@@ -95,7 +95,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) Put(ctx context.Context, key K, val
 		if err != nil {
 			return err
 		}
-		err = st.trackFunc(ctx, msgSer.KeyEnc, st.changelogManager.TopicName(), st.parNum)
+		err = st.trackFunc(ctx, st.changelogManager.TopicName(), st.parNum)
 		if err != nil {
 			return err
 		}

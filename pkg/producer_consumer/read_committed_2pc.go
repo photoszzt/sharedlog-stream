@@ -2,6 +2,7 @@ package producer_consumer
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/data_structure"
@@ -81,11 +82,12 @@ func (tac *TransactionAwareConsumer) checkMsgQueue(msgQueue *deque.Deque[*commty
 		}
 		if tac.HasCommited(frontMsg, parNum) {
 			msgQueue.PopFront()
-			debug.Fprintf(os.Stderr, "return msg 0x%x\n", frontMsg.LogSeqNum)
+			// fmt.Fprintf(os.Stderr, "returnMsg2: %s\n", frontMsg.FormatMsgMeta())
 			return frontMsg
 		}
 		for tac.HasAborted(frontMsg, parNum) {
 			msgQueue.PopFront()
+			fmt.Fprintf(os.Stderr, "dropMsg: %s\n", frontMsg.FormatMsgMeta())
 			frontMsg = msgQueue.Front()
 		}
 	}

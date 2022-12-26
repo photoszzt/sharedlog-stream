@@ -88,11 +88,7 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 	if err != nil {
 		return nil, nil, err
 	}
-	trackParFunc := func(ctx context.Context,
-		kBytes []byte,
-		topicName string,
-		substreamId uint8,
-	) error {
+	trackParFunc := func(ctx context.Context, topicName string, substreamId uint8) error {
 		return tm.AddTopicSubstream(ctx, topicName, substreamId)
 	}
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
