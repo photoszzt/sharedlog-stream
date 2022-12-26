@@ -126,81 +126,9 @@ func GetSerdeFromString(serdeStr string, serdeFormat commtypes.SerdeFormat) (com
 	}
 }
 
-/*
-func PrepareProcessByTwoGeneralProc(
-	ctx context.Context,
-	func1 execution.GeneralProcFunc,
-	func2 execution.GeneralProcFunc,
-	ectx *processor.BaseExecutionContext,
-	procMsg proc_interface.ProcessMsgFunc,
-) *stream_task.StreamTask {
-	var wg sync.WaitGroup
-	func1Manager := execution.NewGeneralProcManager(func1)
-	func2Manager := execution.NewGeneralProcManager(func2)
-	handleErrFunc := func() error {
-		select {
-		case aucErr := <-func1Manager.ErrChan():
-			return aucErr
-		case bidErr := <-func2Manager.ErrChan():
-			return bidErr
-		default:
-		}
-		return nil
-	}
-
-	pauseTime := stats.NewStatsCollector[int64]("2proc_pause_us", stats.DEFAULT_COLLECT_DURATION)
-
-	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
-			argsTmp processor.ExecutionContext,
-		) (*common.FnOutput, *commtypes.MsgAndSeq) {
-			args := argsTmp.(*processor.BaseExecutionContext)
-			return stream_task.CommonProcess(ctx, task, args,
-				func(ctx context.Context, msg commtypes.Message, argsTmp interface{}) error {
-					func1Manager.MsgChan() <- msg
-					func2Manager.MsgChan() <- msg
-					return nil
-				})
-		}).
-		InitFunc(func(task *stream_task.StreamTask) {
-			func1Manager.LaunchProc(ctx, ectx, &wg)
-			func2Manager.LaunchProc(ctx, ectx, &wg)
-		}).
-		PauseFunc(func() *common.FnOutput {
-			// debug.Fprintf(os.Stderr, "begin pause\n")
-			if err := handleErrFunc(); err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
-			}
-
-			pStart := stats.TimerBegin()
-			func1Manager.MsgChan() <- commtypes.Message{Key: commtypes.Punctuate{}}
-			func2Manager.MsgChan() <- commtypes.Message{Key: commtypes.Punctuate{}}
-
-			<-func1Manager.PauseChan()
-			<-func2Manager.PauseChan()
-			elapsed := stats.Elapsed(pStart)
-			pauseTime.AddSample(elapsed.Microseconds())
-
-			// sargs.LockProducer()
-			// debug.Fprintf(os.Stderr, "done pause\n")
-			return nil
-		}).HandleErrFunc(handleErrFunc).Build()
-	return task
-}
-*/
-
-type EnvConfig struct {
-	useCache bool
-}
-
-func checkEnvConfig() EnvConfig {
+func checkCacheConfig() bool {
 	useCacheStr := os.Getenv("USE_CACHE")
-	fmt.Fprintf(os.Stderr, "use cache: %s\n", useCacheStr)
-	useCache := false
-	if useCacheStr == "true" || useCacheStr == "1" {
-		useCache = true
-	}
-	return EnvConfig{
-		useCache: useCache,
-	}
+	useCache := useCacheStr == "true" || useCacheStr == "1"
+	fmt.Fprintf(os.Stderr, "use cacheStr: %s, use cache: %v\n", useCacheStr, useCache)
+	return useCache
 }

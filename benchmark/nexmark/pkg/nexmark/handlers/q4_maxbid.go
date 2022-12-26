@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
@@ -32,12 +31,11 @@ type q4MaxBid struct {
 }
 
 func NewQ4MaxBid(env types.Environment, funcName string) *q4MaxBid {
-	envConfig := checkEnvConfig()
-	fmt.Fprintf(os.Stderr, "Q4MaxBid useCache: %v\n", envConfig.useCache)
+	useCache := checkCacheConfig()
 	return &q4MaxBid{
 		env:      env,
 		funcName: funcName,
-		useCache: envConfig.useCache,
+		useCache: useCache,
 	}
 }
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
@@ -27,12 +26,11 @@ type q6MaxBid struct {
 }
 
 func NewQ6MaxBid(env types.Environment, funcName string) *q6MaxBid {
-	envConfig := checkEnvConfig()
-	fmt.Fprintf(os.Stderr, "Q6MaxBid useCache: %v\n", envConfig.useCache)
+	useCache := checkCacheConfig()
 	return &q6MaxBid{
 		env:      env,
 		funcName: funcName,
-		useCache: envConfig.useCache,
+		useCache: useCache,
 	}
 }
 

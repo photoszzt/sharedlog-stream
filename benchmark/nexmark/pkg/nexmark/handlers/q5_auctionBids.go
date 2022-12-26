@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
@@ -29,12 +28,11 @@ type q5AuctionBids struct {
 }
 
 func NewQ5AuctionBids(env types.Environment, funcName string) *q5AuctionBids {
-	envConfig := checkEnvConfig()
-	fmt.Fprintf(os.Stderr, "Q5AuctionBids useCache: %v\n", envConfig.useCache)
+	useCache := checkCacheConfig()
 	return &q5AuctionBids{
 		env:      env,
 		funcName: funcName,
-		useCache: envConfig.useCache,
+		useCache: useCache,
 	}
 }
 
