@@ -7,7 +7,6 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/epoch_manager"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
@@ -43,17 +42,20 @@ type ProcessFunc func(ctx context.Context, task *StreamTask,
 // in case the task consumes multiple streams, the task consumes from the same substream number
 // and the substreams must have the same number of substreams.
 type StreamTask struct {
-	appProcessFunc  ProcessFunc
-	pauseFunc       func() *common.FnOutput
-	resumeFunc      func(task *StreamTask)
-	initFunc        func(task *StreamTask)
-	HandleErrFunc   func() error
+	appProcessFunc ProcessFunc
+	pauseFunc      func() *common.FnOutput
+	resumeFunc     func(task *StreamTask)
+	initFunc       func(task *StreamTask)
+	HandleErrFunc  func() error
+
 	flushStageTime  stats.PrintLogStatsCollector[int64]
 	flushAtLeastOne stats.PrintLogStatsCollector[int64]
 	// markEpochTime    stats.StatsCollector[int64]
 	// markEpochPrepare stats.StatsCollector[int64]
-	beginTrTime    stats.StatsCollector[int64]
-	commitTrTime   stats.StatsCollector[int64]
+	commitTxnAPITime stats.PrintLogStatsCollector[int64]
+	sendOffsetTime   stats.PrintLogStatsCollector[int64]
+	txnCommitTime    stats.PrintLogStatsCollector[int64]
+
 	endDuration    time.Duration
 	epochMarkTimes uint32
 	isFinalStage   bool
@@ -68,10 +70,10 @@ func (t *StreamTask) GetEndDuration() time.Duration {
 }
 
 type SetupSnapshotCallbackFunc func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
-	em *epoch_manager.EpochManager, rs *snapshot_store.RedisSnapshotStore) error
+	rs *snapshot_store.RedisSnapshotStore) error
 
 func EmptySetupSnapshotCallback(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
-	em *epoch_manager.EpochManager, rs *snapshot_store.RedisSnapshotStore) error {
+	rs *snapshot_store.RedisSnapshotStore) error {
 	return nil
 }
 
@@ -84,7 +86,8 @@ func ExecuteApp(ctx context.Context,
 	var ret *common.FnOutput
 	if streamTaskArgs.guarantee == exactly_once_intr.TWO_PHASE_COMMIT {
 		rs := snapshot_store.NewRedisSnapshotStore(CREATE_SNAPSHOT)
-		tm, cmm, err := setupManagersFor2pc(ctx, t, streamTaskArgs)
+		tm, cmm, err := setupManagersFor2pc(ctx, t, streamTaskArgs,
+			&rs, setupSnapshotCallback)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
@@ -492,4 +495,59 @@ func handleScaleEpochAndBytes(ctx context.Context, msg commtypes.RawMsgAndSeq,
 		Message: fmt.Sprintf("%s-%d epoch %d exit",
 			args.ectx.FuncName(), args.ectx.SubstreamNum(), args.ectx.CurEpoch()),
 	}
+}
+
+func loadSnapshot(ctx context.Context,
+	args *StreamTaskArgs, auxData []byte, auxMetaSeq uint64, rs *snapshot_store.RedisSnapshotStore,
+) error {
+	if len(auxData) > 0 {
+		uint16Serde := commtypes.Uint16SerdeG{}
+		ret, err := uint16Serde.Decode(auxData)
+		if err != nil {
+			return fmt.Errorf("[ERR] Decode: %v", err)
+		}
+		if ret == 1 {
+			payloadSerde, err := commtypes.GetPayloadArrSerdeG(args.serdeFormat)
+			if err != nil {
+				return err
+			}
+			for kvchTp, kvchangelog := range args.kvChangelogs {
+				snapArr, err := rs.GetSnapshot(ctx, kvchTp, auxMetaSeq)
+				if err != nil {
+					return err
+				}
+				if len(snapArr) > 0 {
+					payloadArr, err := payloadSerde.Decode(snapArr)
+					if err != nil {
+						return err
+					}
+					err = kvchangelog.RestoreFromSnapshot(payloadArr.Payloads)
+					if err != nil {
+						return fmt.Errorf("[ERR] restore kv from snapshot: %v", err)
+					}
+					kvchangelog.Stream().SetCursor(auxMetaSeq+1, kvchangelog.SubstreamNum())
+				}
+			}
+			for wscTp, wsc := range args.windowStoreChangelogs {
+				snapArr, err := rs.GetSnapshot(ctx, wscTp, auxMetaSeq)
+				if err != nil {
+					return err
+				}
+				if snapArr != nil {
+					payloadArr, err := payloadSerde.Decode(snapArr)
+					if err != nil {
+						return err
+					}
+					err = wsc.RestoreFromSnapshot(ctx, payloadArr.Payloads)
+					if err != nil {
+						return fmt.Errorf("[ERR] restore window table from snapshot: %v", err)
+					}
+					wsc.Stream().SetCursor(auxMetaSeq+1, wsc.SubstreamNum())
+				}
+			}
+		}
+	} else {
+		fmt.Fprintf(os.Stderr, "no snapshot found\n")
+	}
+	return nil
 }

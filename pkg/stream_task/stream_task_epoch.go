@@ -28,16 +28,13 @@ var (
 
 func checkCreateSnapshot() bool {
 	createSnapshotStr := os.Getenv("CREATE_SNAPSHOT")
-	createSnapshot := false
-	if createSnapshotStr == "true" || createSnapshotStr == "1" {
-		createSnapshot = true
-	}
+	createSnapshot := createSnapshotStr == "true" || createSnapshotStr == "1"
 	fmt.Fprintf(os.Stderr, "env str: %s, create snapshot: %v\n", createSnapshotStr, createSnapshot)
 	return createSnapshot
 }
 
 func SetKVStoreSnapshot[K, V any](ctx context.Context, env types.Environment,
-	em *epoch_manager.EpochManager, rs *snapshot_store.RedisSnapshotStore,
+	rs *snapshot_store.RedisSnapshotStore,
 	kvstore store.KeyValueStoreBackedByChangelogG[K, V], payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
 ) {
 	kvstore.SetSnapshotCallback(ctx, func(ctx context.Context, logOff uint64, snapshot []commtypes.KeyValuePair[K, V]) error {
@@ -62,7 +59,7 @@ func SetKVStoreSnapshot[K, V any](ctx context.Context, env types.Environment,
 }
 
 func SetWinStoreSnapshot[K, V any](ctx context.Context, env types.Environment,
-	em *epoch_manager.EpochManager, rs *snapshot_store.RedisSnapshotStore,
+	rs *snapshot_store.RedisSnapshotStore,
 	winStore store.WindowStoreBackedByChangelogG[K, V], payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
 ) {
 	winStore.SetWinSnapshotCallback(ctx, func(ctx context.Context, logOff uint64, snapshot []commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]) error {
@@ -87,7 +84,8 @@ func SetWinStoreSnapshot[K, V any](ctx context.Context, env types.Environment,
 }
 
 func SetupManagersForEpoch(ctx context.Context,
-	args *StreamTaskArgs, rs *snapshot_store.RedisSnapshotStore, setupSnapshotCallback SetupSnapshotCallbackFunc,
+	args *StreamTaskArgs, rs *snapshot_store.RedisSnapshotStore,
+	setupSnapshotCallback SetupSnapshotCallbackFunc,
 ) (*epoch_manager.EpochManager, *control_channel.ControlChannelManager, error) {
 	em, err := epoch_manager.NewEpochManager(args.env, args.transactionalId, args.serdeFormat)
 	if err != nil {
@@ -105,7 +103,7 @@ func SetupManagersForEpoch(ctx context.Context,
 	if err != nil {
 		return nil, nil, err
 	}
-	err = setupSnapshotCallback(ctx, args.env, args.serdeFormat, em, rs)
+	err = setupSnapshotCallback(ctx, args.env, args.serdeFormat, rs)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -162,15 +160,7 @@ func SetupManagersForEpoch(ctx context.Context,
 		restoreElapsed := time.Since(restoreBeg)
 		fmt.Fprintf(os.Stderr, "down restore, elapsed: %v\n", restoreElapsed)
 	}
-	for _, p := range args.ectx.Producers() {
-		p.SetLastMarkerSeq(lastMark)
-	}
-	for _, kvs := range args.kvChangelogs {
-		kvs.SetLastMarkerSeq(lastMark)
-	}
-	for _, ws := range args.windowStoreChangelogs {
-		ws.SetLastMarkerSeq(lastMark)
-	}
+	setLastMarkSeq(lastMark, args)
 	cmm, err := control_channel.NewControlChannelManager(args.env, args.appId,
 		args.serdeFormat, args.ectx.CurEpoch(), args.ectx.SubstreamNum())
 	if err != nil {
@@ -180,9 +170,7 @@ func SetupManagersForEpoch(ctx context.Context,
 		func(ctx context.Context, kBytes []byte,
 			topicName string, substreamId uint8,
 		) error {
-			_ = em.AddTopicSubstream(ctx, topicName, substreamId)
-			// control_channel.TrackAndAppendKeyMapping(ctx, cmm, kBytes, substreamId, topicName)
-			return nil
+			return em.AddTopicSubstream(ctx, topicName, substreamId)
 		})
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
 		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, args.ectx.CurEpoch())
@@ -191,59 +179,16 @@ func SetupManagersForEpoch(ctx context.Context,
 	return em, cmm, nil
 }
 
-func loadSnapshot(ctx context.Context,
-	args *StreamTaskArgs, auxData []byte, auxMetaSeq uint64, rs *snapshot_store.RedisSnapshotStore,
-) error {
-	if len(auxData) > 0 {
-		uint16Serde := commtypes.Uint16SerdeG{}
-		ret, err := uint16Serde.Decode(auxData)
-		if err != nil {
-			return fmt.Errorf("[ERR] Decode: %v", err)
-		}
-		if ret == 1 {
-			payloadSerde, err := commtypes.GetPayloadArrSerdeG(args.serdeFormat)
-			if err != nil {
-				return err
-			}
-			for kvchTp, kvchangelog := range args.kvChangelogs {
-				snapArr, err := rs.GetSnapshot(ctx, kvchTp, auxMetaSeq)
-				if err != nil {
-					return err
-				}
-				if len(snapArr) > 0 {
-					payloadArr, err := payloadSerde.Decode(snapArr)
-					if err != nil {
-						return err
-					}
-					err = kvchangelog.RestoreFromSnapshot(payloadArr.Payloads)
-					if err != nil {
-						return fmt.Errorf("[ERR] restore kv from snapshot: %v", err)
-					}
-					kvchangelog.Stream().SetCursor(auxMetaSeq+1, kvchangelog.SubstreamNum())
-				}
-			}
-			for wscTp, wsc := range args.windowStoreChangelogs {
-				snapArr, err := rs.GetSnapshot(ctx, wscTp, auxMetaSeq)
-				if err != nil {
-					return err
-				}
-				if snapArr != nil {
-					payloadArr, err := payloadSerde.Decode(snapArr)
-					if err != nil {
-						return err
-					}
-					err = wsc.RestoreFromSnapshot(ctx, payloadArr.Payloads)
-					if err != nil {
-						return fmt.Errorf("[ERR] restore window table from snapshot: %v", err)
-					}
-					wsc.Stream().SetCursor(auxMetaSeq+1, wsc.SubstreamNum())
-				}
-			}
-		}
-	} else {
-		fmt.Fprintf(os.Stderr, "no snapshot found\n")
+func setLastMarkSeq(logOff uint64, args *StreamTaskArgs) {
+	for _, p := range args.ectx.Producers() {
+		p.SetLastMarkerSeq(logOff)
 	}
-	return nil
+	for _, kvs := range args.kvChangelogs {
+		kvs.SetLastMarkerSeq(logOff)
+	}
+	for _, ws := range args.windowStoreChangelogs {
+		ws.SetLastMarkerSeq(logOff)
+	}
 }
 
 func processInEpoch(
@@ -261,11 +206,9 @@ func processInEpoch(
 		return common.GenErrFnOutput(fmt.Errorf("trackStreamAndConfigExactlyOnce: %v", err))
 	}
 
-	dctx, dcancel := context.WithCancel(ctx)
-	defer dcancel()
 	debug.Fprintf(os.Stderr, "start restore mapping")
 	err = cmm.RestoreMappingAndWaitForPrevTask(
-		dctx, args.ectx.FuncName(), CREATE_SNAPSHOT, args.serdeFormat,
+		ctx, args.ectx.FuncName(), CREATE_SNAPSHOT, args.serdeFormat,
 		args.kvChangelogs, args.windowStoreChangelogs, rs)
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("RestoreMappingAndWaitForPrevTask: %v", err))
@@ -296,11 +239,6 @@ func processInEpoch(
 	epochMarkTime := make([]int64, 0, 1024)
 	var timeoutPrintOnce sync.Once
 	for {
-		select {
-		case <-dctx.Done():
-			return &common.FnOutput{Success: true, Message: "exit due to ctx cancel"}
-		default:
-		}
 		// procStart := time.Now()
 		once.Do(func() {
 			warmupCheck.StartWarmup()
@@ -319,27 +257,18 @@ func processInEpoch(
 			}
 
 			flushAllStart := stats.TimerBegin()
-			f, err := flushStreams(dctx, args)
+			f, err := flushStreams(ctx, args)
 			if err != nil {
 				return common.GenErrFnOutput(fmt.Errorf("flushStreams: %v", err))
 			}
 			flushTime := stats.Elapsed(flushAllStart).Microseconds()
 
 			// mPartBeg := time.Now()
-			logOff, shouldExit, err := markEpoch(dctx, em, t, args)
+			logOff, shouldExit, err := markEpoch(ctx, em, t, args)
 			if err != nil {
 				return common.GenErrFnOutput(fmt.Errorf("markEpoch: %v", err))
 			}
-			for _, p := range args.ectx.Producers() {
-				p.SetLastMarkerSeq(logOff)
-			}
-			for _, kvs := range args.kvChangelogs {
-				kvs.SetLastMarkerSeq(logOff)
-			}
-			for _, ws := range args.windowStoreChangelogs {
-				ws.SetLastMarkerSeq(logOff)
-			}
-
+			setLastMarkSeq(logOff, args)
 			if CREATE_SNAPSHOT && args.snapshotEvery != 0 && time.Since(snapshotTimer) > args.snapshotEvery {
 				snStart := time.Now()
 				createSnapshot(args, logOff)
@@ -389,7 +318,7 @@ func processInEpoch(
 		}
 		exitDueToFailTest := testForFail && cur_elapsed >= failAfter
 		if (!args.waitEndMark && timeout) || exitDueToFailTest {
-			r := finalMark(dctx, t, args, em, cmm, snapshotTime, epochMarkTime, exitDueToFailTest)
+			r := finalMark(ctx, t, args, em, cmm, snapshotTime, epochMarkTime, exitDueToFailTest)
 			if r != nil {
 				return r
 			}
@@ -407,12 +336,12 @@ func processInEpoch(
 
 		// init
 		if !hasProcessData && (!init || paused) {
-			err := initAfterMarkOrCommit(dctx, t, args, em, &init, &paused)
+			err := initAfterMarkOrCommit(ctx, t, args, em, &init, &paused)
 			if err != nil {
 				return common.GenErrFnOutput(fmt.Errorf("initAfterMarkOrCommit: %v", err))
 			}
 		}
-		app_ret, ctrlRawMsgOp := t.appProcessFunc(dctx, t, args.ectx)
+		app_ret, ctrlRawMsgOp := t.appProcessFunc(ctx, t, args.ectx)
 		if app_ret != nil {
 			if app_ret.Success {
 				debug.Assert(ctrlRawMsgOp.IsNone(), "when timeout, ctrlMsg should not be returned")
@@ -427,14 +356,14 @@ func processInEpoch(
 		ctrlRawMsg, ok := ctrlRawMsgOp.Take()
 		if ok {
 			fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
-			r := finalMark(dctx, t, args, em, cmm, snapshotTime, epochMarkTime, false)
+			r := finalMark(ctx, t, args, em, cmm, snapshotTime, epochMarkTime, false)
 			if r != nil {
 				return r
 			}
 			// markPartUs.PrintRemainingStats()
 			// execIntrMs.PrintRemainingStats()
 			// thisAndLastCmtMs.PrintRemainingStats()
-			return handleCtrlMsg(dctx, ctrlRawMsg, t, args, &warmupCheck)
+			return handleCtrlMsg(ctx, ctrlRawMsg, t, args, &warmupCheck)
 		}
 	}
 }

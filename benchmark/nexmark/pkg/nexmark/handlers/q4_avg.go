@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/epoch_manager"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
@@ -182,13 +181,13 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		Build()
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs,
 		func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
-			em *epoch_manager.EpochManager, rs *snapshot_store.RedisSnapshotStore,
+			rs *snapshot_store.RedisSnapshotStore,
 		) error {
 			payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
 			if err != nil {
 				return err
 			}
-			stream_task.SetKVStoreSnapshot[uint64, commtypes.ValueTimestampG[ntypes.SumAndCount]](ctx, env, em,
+			stream_task.SetKVStoreSnapshot[uint64, commtypes.ValueTimestampG[ntypes.SumAndCount]](ctx, env,
 				rs, kvstore, payloadSerde)
 			return nil
 		}, func() { outProc.OutputRemainingStats() })

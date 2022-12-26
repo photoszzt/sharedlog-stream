@@ -9,7 +9,6 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/epoch_manager"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/snapshot_store"
@@ -161,13 +160,13 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp, builder).
 		KVStoreChangelogs(kvc).Build()
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, func(ctx context.Context, env types.Environment,
-		serdeFormat commtypes.SerdeFormat, em *epoch_manager.EpochManager, rs *snapshot_store.RedisSnapshotStore,
+		serdeFormat commtypes.SerdeFormat, rs *snapshot_store.RedisSnapshotStore,
 	) error {
 		payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
 		if err != nil {
 			return err
 		}
-		stream_task.SetKVStoreSnapshot(ctx, env, em, rs, aggStore, payloadSerde)
+		stream_task.SetKVStoreSnapshot(ctx, env, rs, aggStore, payloadSerde)
 		return nil
 	}, func() { sinkProc.OutputRemainingStats() })
 }
