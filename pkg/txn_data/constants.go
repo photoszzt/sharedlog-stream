@@ -16,6 +16,8 @@ const (
 	MarkLowBits
 	ScaleFenceLowBits
 	CtrlMetaLowBits
+	AbortLowBits
+	CommitLowBits
 )
 
 const (
@@ -45,4 +47,14 @@ func MarkerTag(nameHash uint64, par uint8) uint64 {
 func CtrlMetaTag(nameHash uint64, par uint8) uint64 {
 	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
 	return nameHash&mask + uint64(par)<<LogTagReserveBits + CtrlMetaLowBits
+}
+
+func TxnAbortTag(nameHash uint64, par uint8) uint64 {
+	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
+	return nameHash&mask + uint64(par)<<LogTagReserveBits + AbortLowBits
+}
+
+func TxnCommitTag(nameHash uint64, par uint8) uint64 {
+	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
+	return nameHash&mask + uint64(par)<<LogTagReserveBits + CommitLowBits
 }

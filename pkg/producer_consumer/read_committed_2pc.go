@@ -11,11 +11,16 @@ import (
 	"github.com/gammazero/deque"
 )
 
+type LastMarkAndSeqRange struct {
+	commit   commtypes.SeqRangeSet
+	abort    commtypes.SeqRangeSet
+	lastMark uint64
+}
+
 type TransactionAwareConsumer struct {
 	epochMarkerSerde commtypes.SerdeG[commtypes.EpochMarker]
 	stream           *sharedlog_stream.ShardedSharedLogStream
-	committed        map[commtypes.ProducerId]struct{}
-	aborted          map[commtypes.ProducerId]struct{}
+	marked           map[commtypes.ProducerId]map[uint8]LastMarkAndSeqRange
 	// check whether producer produces duplicate records
 	curReadMsgSeqNum map[commtypes.ProducerId]data_structure.Uint64Set
 	msgBuffer        []*deque.Deque[*commtypes.RawMsg]
@@ -36,8 +41,7 @@ func NewTransactionAwareConsumer(stream *sharedlog_stream.ShardedSharedLogStream
 		msgBuffer:        msgBuffer,
 		stream:           stream,
 		epochMarkerSerde: epochMarkerSerde,
-		committed:        make(map[commtypes.ProducerId]struct{}),
-		aborted:          make(map[commtypes.ProducerId]struct{}),
+		marked:           make(map[commtypes.ProducerId]map[uint8]LastMarkAndSeqRange),
 		curReadMsgSeqNum: make(map[commtypes.ProducerId]data_structure.Uint64Set),
 	}, nil
 }
@@ -46,8 +50,12 @@ func (tac *TransactionAwareConsumer) checkMsgQueue(msgQueue *deque.Deque[*commty
 	if msgQueue.Len() > 0 {
 		frontMsg := msgQueue.Front()
 		if frontMsg.IsControl && frontMsg.Mark == commtypes.EPOCH_END {
-			delete(tac.committed, frontMsg.ProdId)
-			debug.Fprintf(os.Stderr, "remove commit mark 0x%x\n", frontMsg.LogSeqNum)
+			ranges := tac.marked[frontMsg.ProdId][parNum]
+			ranges.commit.Remove(commtypes.SeqRange{
+				Start: frontMsg.MarkRanges[0].Start,
+				End:   frontMsg.LogSeqNum,
+			})
+			// debug.Fprintf(os.Stderr, "remove commit mark 0x%x\n", frontMsg.LogSeqNum)
 			msgQueue.PopFront()
 			if msgQueue.Len() > 0 {
 				frontMsg = msgQueue.Front()
@@ -55,7 +63,11 @@ func (tac *TransactionAwareConsumer) checkMsgQueue(msgQueue *deque.Deque[*commty
 				return nil
 			}
 		} else if frontMsg.IsControl && frontMsg.Mark == commtypes.ABORT {
-			delete(tac.committed, frontMsg.ProdId)
+			ranges := tac.marked[frontMsg.ProdId][parNum]
+			ranges.abort.Remove(commtypes.SeqRange{
+				Start: frontMsg.MarkRanges[0].Start,
+				End:   frontMsg.LogSeqNum,
+			})
 			msgQueue.PopFront()
 			if msgQueue.Len() > 0 {
 				frontMsg = msgQueue.Front()
@@ -63,16 +75,16 @@ func (tac *TransactionAwareConsumer) checkMsgQueue(msgQueue *deque.Deque[*commty
 				return nil
 			}
 		}
-		if frontMsg.ScaleEpoch != 0 {
+		if (frontMsg.Mark == commtypes.SCALE_FENCE && frontMsg.ScaleEpoch != 0) || frontMsg.Mark == commtypes.STREAM_END {
 			msgQueue.PopFront()
 			return frontMsg
 		}
-		if tac.HasCommited(frontMsg.ProdId) {
+		if tac.HasCommited(frontMsg, parNum) {
 			msgQueue.PopFront()
 			debug.Fprintf(os.Stderr, "return msg 0x%x\n", frontMsg.LogSeqNum)
 			return frontMsg
 		}
-		for tac.HasAborted(frontMsg.ProdId) {
+		for tac.HasAborted(frontMsg, parNum) {
 			msgQueue.PopFront()
 			frontMsg = msgQueue.Front()
 		}
@@ -103,26 +115,55 @@ func (tac *TransactionAwareConsumer) ReadNext(ctx context.Context, parNum uint8)
 		// 	rawMsg.ProdId.TaskId, rawMsg.ProdId.TaskEpoch, rawMsg.ProdId.TransactionID)
 		// debug.Fprintf(os.Stderr, "\tIsControl: %v\n", rawMsg.IsControl)
 		// debug.Fprintf(os.Stderr, "\tIsPayloadArr: %v\n", rawMsg.IsPayloadArr)
-		if shouldIgnoreThisMsg(tac.curReadMsgSeqNum, rawMsg) {
-			debug.Fprintf(os.Stderr, "got a duplicate entry; continue\n")
-			continue
-		}
-		if rawMsg.IsControl {
+		if !rawMsg.IsControl {
+			if shouldIgnoreThisMsg(tac.curReadMsgSeqNum, rawMsg) {
+				debug.Fprintf(os.Stderr, "got a duplicate entry; continue\n")
+				continue
+			}
+		} else {
 			txnMark, err := tac.epochMarkerSerde.Decode(rawMsg.Payload)
 			if err != nil {
 				debug.Fprintf(os.Stderr, "[ERROR] return err2: %v\n", err)
 				return nil, err
 			}
 			if txnMark.Mark == commtypes.EPOCH_END {
-				debug.Fprintf(os.Stderr, "Got commit msg with tranid: %v\n", rawMsg.ProdId)
-				tac.committed[rawMsg.ProdId] = struct{}{}
+				// debug.Fprintf(os.Stderr, "Got commit msg with tranid: %v\n", rawMsg.ProdId)
+				rangesAndLastMark := tac.createMarkedMapIfNotExists(rawMsg.ProdId, parNum)
+				start := rangesAndLastMark[parNum].lastMark + 1
+				seqRangeTmp := rangesAndLastMark[parNum]
+				seqRangeTmp.commit.Add(commtypes.SeqRange{
+					Start: start,
+					End:   rawMsg.LogSeqNum,
+				})
+				seqRangeTmp.lastMark = rawMsg.LogSeqNum
+				rangesAndLastMark[parNum] = seqRangeTmp
 				rawMsg.Mark = commtypes.EPOCH_END
+				rawMsg.MarkRanges = []commtypes.ProduceRange{
+					{Start: start},
+				}
 			} else if txnMark.Mark == commtypes.ABORT {
 				// debug.Fprintf(os.Stderr, "Got abort msg with tranid: %v\n", rawMsg.TranId)
-				tac.aborted[rawMsg.ProdId] = struct{}{}
+				rangesAndLastMark := tac.createMarkedMapIfNotExists(rawMsg.ProdId, parNum)
+				lastMark := rangesAndLastMark[parNum].lastMark
+				seqRangeTmp := rangesAndLastMark[parNum]
+				seqRangeTmp.abort.Add(commtypes.SeqRange{
+					Start: lastMark + 1,
+					End:   rawMsg.LogSeqNum,
+				})
+				seqRangeTmp.lastMark = rawMsg.LogSeqNum
+				rangesAndLastMark[parNum] = seqRangeTmp
+				rawMsg.MarkRanges = []commtypes.ProduceRange{
+					{Start: lastMark + 1},
+				}
 				rawMsg.Mark = commtypes.ABORT
 			} else if txnMark.Mark == commtypes.SCALE_FENCE {
 				rawMsg.ScaleEpoch = txnMark.ScaleEpoch
+				rawMsg.ProdIdx = txnMark.ProdIndex
+				rawMsg.Mark = txnMark.Mark
+			} else if txnMark.Mark == commtypes.STREAM_END {
+				rawMsg.Mark = txnMark.Mark
+				rawMsg.StartTime = txnMark.StartTime
+				rawMsg.ProdIdx = txnMark.ProdIndex
 			}
 		}
 		msgQueue.PushBack(rawMsg)
@@ -134,13 +175,43 @@ func (tac *TransactionAwareConsumer) ReadNext(ctx context.Context, parNum uint8)
 	}
 }
 
-func (tac *TransactionAwareConsumer) HasCommited(tranId commtypes.ProducerId) bool {
-	// debug.Fprintf(os.Stderr, "committed has %v, tranId: %v\n", tac.committed, tranId)
-	_, ok := tac.committed[tranId]
-	return ok
+func (tac *TransactionAwareConsumer) createMarkedMapIfNotExists(prodId commtypes.ProducerId, parNum uint8) map[uint8]LastMarkAndSeqRange {
+	rangesAndLastMark, ok := tac.marked[prodId]
+	if !ok {
+		rangesAndLastMark = make(map[uint8]LastMarkAndSeqRange)
+	}
+	if _, ok := rangesAndLastMark[parNum]; !ok {
+		rangesAndLastMark[parNum] = LastMarkAndSeqRange{
+			lastMark: 0,
+			commit:   commtypes.NewSeqRangeSet(),
+			abort:    commtypes.NewSeqRangeSet(),
+		}
+	}
+	return rangesAndLastMark
 }
 
-func (tas *TransactionAwareConsumer) HasAborted(tranId commtypes.ProducerId) bool {
-	_, ok := tas.aborted[tranId]
-	return ok
+func (tac *TransactionAwareConsumer) HasCommited(rawMsg *commtypes.RawMsg, parNum uint8) bool {
+	ranges, ok := tac.marked[rawMsg.ProdId]
+	if !ok {
+		return false
+	}
+	for r := range ranges[parNum].commit {
+		if rawMsg.LogSeqNum >= r.Start && rawMsg.LogSeqNum <= r.End {
+			return true
+		}
+	}
+	return false
+}
+
+func (tac *TransactionAwareConsumer) HasAborted(rawMsg *commtypes.RawMsg, parNum uint8) bool {
+	ranges, ok := tac.marked[rawMsg.ProdId]
+	if !ok {
+		return false
+	}
+	for r := range ranges[parNum].abort {
+		if rawMsg.LogSeqNum >= r.Start && rawMsg.LogSeqNum <= r.End {
+			return true
+		}
+	}
+	return false
 }
