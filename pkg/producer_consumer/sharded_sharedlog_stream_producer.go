@@ -18,15 +18,13 @@ type StreamSinkConfig struct {
 }
 
 type ShardedSharedLogStreamProducer struct {
-	// syncutils.Mutex
-	// msgSerde      commtypes.MessageSerdeG
 	msgSerSerde   commtypes.SerdeG[commtypes.MessageSerialized]
 	eom           eo_intr.ReadOnlyExactlyOnceManager
 	stream        *sharedlog_stream.ShardedSharedLogStream
+	flushCallback eo_intr.FlushCallbackFunc
 	name          string
 	bufPush       bool
 	guarantee     eo_intr.GuaranteeMth
-	flushCallback func()
 	isFinalOutput bool
 }
 
@@ -43,7 +41,7 @@ func NewShardedSharedLogStreamProducer(stream *sharedlog_stream.ShardedSharedLog
 		bufPush:       utils.CheckBufPush(),
 		name:          "sink",
 		isFinalOutput: false,
-		flushCallback: func() {},
+		flushCallback: func(ctx context.Context) error { return nil },
 	}
 }
 
@@ -55,7 +53,7 @@ func (sls *ShardedSharedLogStreamProducer) MarkFinalOutput() {
 	sls.isFinalOutput = true
 }
 
-func (sls *ShardedSharedLogStreamProducer) SetFlushCallback(flushCallback func()) {
+func (sls *ShardedSharedLogStreamProducer) SetFlushCallback(flushCallback eo_intr.FlushCallbackFunc) {
 	sls.flushCallback = flushCallback
 }
 
@@ -139,6 +137,10 @@ func (sls *ShardedSharedLogStreamProducer) ProduceData(ctx context.Context, msgS
 		if sls.bufPush {
 			return sls.bufpush(ctx, bytes, parNum)
 		} else {
+			err = sls.flushCallback(ctx)
+			if err != nil {
+				return err
+			}
 			_, err := sls.push(ctx, bytes, parNum, sharedlog_stream.StreamEntryMeta(false, false))
 			return err
 		}
@@ -155,6 +157,10 @@ func (sls *ShardedSharedLogStreamProducer) ProduceDataNoLock(ctx context.Context
 		if sls.bufPush {
 			return sls.bufpushNoLock(ctx, bytes, parNum)
 		} else {
+			err = sls.flushCallback(ctx)
+			if err != nil {
+				return err
+			}
 			_, err := sls.push(ctx, bytes, parNum, sharedlog_stream.StreamEntryMeta(false, false))
 			return err
 		}

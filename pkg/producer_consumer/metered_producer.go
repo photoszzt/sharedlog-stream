@@ -15,19 +15,8 @@ import (
 
 func checkMeasureSink() bool {
 	measure_str := os.Getenv("MEASURE_SINK")
-	measure := false
-	if measure_str == "true" || measure_str == "1" {
-		measure = true
-	}
+	measure := measure_str == "true" || measure_str == "1"
 	return measure
-}
-
-func getStatsDir() string {
-	stats_dir := os.Getenv("STATS_DIR")
-	if stats_dir == "" {
-		stats_dir = "/tmp/stats"
-	}
-	return stats_dir
 }
 
 type ConcurrentMeteredSink struct {
@@ -177,11 +166,12 @@ func (s *ConcurrentMeteredSink) NumCtrlMsg() uint32 {
 	return atomic.LoadUint32(&s.ctrlCount)
 }
 
+func (s *ConcurrentMeteredSink) SetFlushCallback(cb exactly_once_intr.FlushCallbackFunc) {
+	s.producer.SetFlushCallback(cb)
+}
+
 type MeteredProducer struct {
-	producer *ShardedSharedLogStreamProducer
-	// eventTimeSample stats.StatsCollector[int64]
-	// stFile             *os.File
-	// statsChan          chan string
+	producer           *ShardedSharedLogStreamProducer
 	eventTimeLatencies []int
 	eventTs            []int64
 	latencies          stats.StatsCollector[int64]
@@ -193,19 +183,6 @@ type MeteredProducer struct {
 
 func NewMeteredProducer(sink *ShardedSharedLogStreamProducer, warmup time.Duration) (*MeteredProducer, error) {
 	sink_name := fmt.Sprintf("%s_sink", sink.TopicName())
-	/*
-		stats_dir := getStatsDir()
-		err := os.MkdirAll(stats_dir, 0755)
-		if err != nil {
-			return nil, err
-		}
-		statsFilePath := filepath.Join(stats_dir, sink_name)
-		stFile, err := os.Create(statsFilePath)
-		if err != nil {
-			return nil, err
-		}
-		statsChan := make(chan string, 256)
-	*/
 	return &MeteredProducer{
 		producer:           sink,
 		eventTimeLatencies: make([]int, 0, 4096),
@@ -215,7 +192,6 @@ func NewMeteredProducer(sink *ShardedSharedLogStreamProducer, warmup time.Durati
 		measure: checkMeasureSink(),
 		warmup:  stats.NewWarmupChecker(warmup),
 		eventTs: make([]int64, 0, 4096),
-		// stFile:  stFile,
 	}, nil
 }
 
@@ -227,6 +203,10 @@ func (s *MeteredProducer) InitFlushTimer() {}
 
 func (s *MeteredProducer) MarkFinalOutput() {
 	s.producer.MarkFinalOutput()
+}
+
+func (s *MeteredProducer) SetFlushCallback(cb exactly_once_intr.FlushCallbackFunc) {
+	s.producer.SetFlushCallback(cb)
 }
 
 func (s *MeteredProducer) IsFinalOutput() bool {

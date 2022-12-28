@@ -91,7 +91,10 @@ func (s *BufferedSinkStream) BufPushAutoFlushNoLock(ctx context.Context, payload
 		if err != nil {
 			return err
 		}
-		flushCallback()
+		err = flushCallback(ctx)
+		if err != nil {
+			return err
+		}
 		tags := []uint64{NameHashWithPartition(s.Stream.topicNameHash, s.parNum)}
 		seqNum, err := s.Stream.PushWithTag(ctx, payloads, s.parNum, tags,
 			nil, ArrRecordMeta, producerId)
@@ -130,7 +133,11 @@ func (s *BufferedSinkStream) BufPushAutoFlushGoroutineSafe(ctx context.Context, 
 			s.mux.Unlock()
 			return err
 		}
-		flushCallback()
+		err = flushCallback(ctx)
+		if err != nil {
+			s.mux.Unlock()
+			return err
+		}
 		tags := []uint64{NameHashWithPartition(s.Stream.topicNameHash, s.parNum)}
 		seqNum, err := s.Stream.PushWithTag(ctx, payloads, s.parNum, tags,
 			nil, ArrRecordMeta, producerId)
@@ -236,7 +243,10 @@ func (s *BufferedSinkStream) FlushNoLock(ctx context.Context,
 		if err != nil {
 			return 0, err
 		}
-		flushCallback()
+		err = flushCallback(ctx)
+		if err != nil {
+			return 0, err
+		}
 		tags := []uint64{NameHashWithPartition(s.Stream.topicNameHash, s.parNum)}
 		seqNum, err := s.Stream.PushWithTag(ctx, payloads, s.parNum, tags,
 			nil, StreamEntryMeta(false, true), producerId)
@@ -280,7 +290,11 @@ func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context,
 			return 0, err
 		}
 		tags := []uint64{NameHashWithPartition(s.Stream.topicNameHash, s.parNum)}
-		flushCallback()
+		err = flushCallback(ctx)
+		if err != nil {
+			s.mux.Unlock()
+			return 0, err
+		}
 		seqNum, err := s.Stream.PushWithTag(ctx, payloads, s.parNum,
 			tags, nil, StreamEntryMeta(false, true), producerId)
 		if err != nil {

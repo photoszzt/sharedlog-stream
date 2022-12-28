@@ -7,6 +7,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/env_config"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
@@ -21,20 +22,6 @@ import (
 	"cs.utexas.edu/zjia/faas/types"
 	"golang.org/x/sync/errgroup"
 )
-
-var (
-	PARALLEL_RESTORE = checkParallelRestore()
-)
-
-func checkParallelRestore() bool {
-	parallelRestore_str := os.Getenv("PARALLEL_RESTORE")
-	parallelRestore := false
-	if parallelRestore_str == "true" || parallelRestore_str == "1" {
-		parallelRestore = true
-	}
-	fmt.Fprintf(os.Stderr, "parallel restore str: %s, %v\n", parallelRestore_str, parallelRestore)
-	return parallelRestore
-}
 
 type ProcessFunc func(ctx context.Context, task *StreamTask,
 	args processor.ExecutionContext) (*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq])
@@ -85,7 +72,7 @@ func ExecuteApp(ctx context.Context,
 ) *common.FnOutput {
 	var ret *common.FnOutput
 	if streamTaskArgs.guarantee == exactly_once_intr.TWO_PHASE_COMMIT {
-		rs := snapshot_store.NewRedisSnapshotStore(CREATE_SNAPSHOT)
+		rs := snapshot_store.NewRedisSnapshotStore(env_config.CREATE_SNAPSHOT)
 		tm, cmm, err := setupManagersFor2pc(ctx, t, streamTaskArgs,
 			&rs, setupSnapshotCallback)
 		if err != nil {
@@ -94,7 +81,7 @@ func ExecuteApp(ctx context.Context,
 		debug.Fprint(os.Stderr, "begin transaction processing\n")
 		ret = processWithTransaction(ctx, t, tm, cmm, streamTaskArgs, &rs)
 	} else if streamTaskArgs.guarantee == exactly_once_intr.EPOCH_MARK {
-		rs := snapshot_store.NewRedisSnapshotStore(CREATE_SNAPSHOT)
+		rs := snapshot_store.NewRedisSnapshotStore(env_config.CREATE_SNAPSHOT)
 		em, cmm, err := SetupManagersForEpoch(ctx, streamTaskArgs, &rs, setupSnapshotCallback)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
@@ -187,7 +174,7 @@ func handleCtrlMsg(ctx context.Context, ctrlRawMsg commtypes.RawMsgAndSeq,
 			args.waitEndMark, t.GetEndDuration(), args.ectx.SubstreamNum())
 		return ret
 	} else {
-		return &common.FnOutput{Success: false, Message: "unexpected ctrl msg"}
+		return &common.FnOutput{Success: false, Message: fmt.Sprintf("unexpected ctrl msg with mark: %v", ctrlRawMsg.Mark)}
 	}
 }
 
@@ -247,7 +234,7 @@ func restoreKVStore(ctx context.Context,
 	args *StreamTaskArgs, offsetMap map[string]uint64,
 ) error {
 	substreamNum := args.ectx.SubstreamNum()
-	if PARALLEL_RESTORE {
+	if env_config.PARALLEL_RESTORE {
 		g, ectx := errgroup.WithContext(ctx)
 		for _, kvchangelog := range args.kvChangelogs {
 			kvc := kvchangelog
@@ -291,7 +278,7 @@ func restoreChangelogBackedWindowStore(ctx context.Context,
 	args *StreamTaskArgs,
 ) error {
 	substreamNum := args.ectx.SubstreamNum()
-	if PARALLEL_RESTORE {
+	if env_config.PARALLEL_RESTORE {
 		g, ectx := errgroup.WithContext(ctx)
 		for _, wschangelog := range args.windowStoreChangelogs {
 			wsc := wschangelog
@@ -346,25 +333,40 @@ func configChangelogExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager
 func updateFuncs(streamTaskArgs *StreamTaskArgs,
 	trackParFunc exactly_once_intr.TrackProdSubStreamFunc,
 	recordFinish exactly_once_intr.RecordPrevInstanceFinishFunc,
+	flushCallbackFunc exactly_once_intr.FlushCallbackFunc,
 ) {
 	streamTaskArgs.ectx.SetTrackParFunc(trackParFunc)
 	streamTaskArgs.ectx.SetRecordFinishFunc(recordFinish)
 	for _, kvchangelog := range streamTaskArgs.kvChangelogs {
 		kvchangelog.SetTrackParFunc(trackParFunc)
+		kvchangelog.SetFlushCallbackFunc(flushCallbackFunc)
 	}
 	for _, wschangelog := range streamTaskArgs.windowStoreChangelogs {
 		wschangelog.SetTrackParFunc(trackParFunc)
+		wschangelog.SetFlushCallbackFunc(flushCallbackFunc)
 	}
+}
+
+func createOffsetTopic(tm *transaction.TransactionManager, args *StreamTaskArgs,
+) error {
+	for _, src := range args.ectx.Consumers() {
+		inputTopicName := src.TopicName()
+		err := tm.CreateOffsetTopic(inputTopicName, uint8(src.Stream().NumPartition()))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func getOffsetMap(ctx context.Context,
 	tm *transaction.TransactionManager, args *StreamTaskArgs,
 ) (map[string]uint64, error) {
-	offsetMap := make(map[string]uint64)
+	offsetMap := make(map[string]uint64, len(args.ectx.Consumers()))
 	for _, src := range args.ectx.Consumers() {
 		inputTopicName := src.TopicName()
-		offset, err := transaction.CreateOffsetTopicAndGetOffset(ctx, tm, inputTopicName,
-			uint8(src.Stream().NumPartition()), args.ectx.SubstreamNum())
+		offset, err := transaction.GetOffset(ctx, tm, inputTopicName,
+			args.ectx.SubstreamNum())
 		if err != nil {
 			return nil, fmt.Errorf("createOffsetTopicAndGetOffset failed: %v", err)
 		}

@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/env_config"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/stats"
@@ -15,17 +16,6 @@ import (
 	"sync"
 	"time"
 )
-
-var (
-	ASYNC_SECOND_PHASE = checkAsyncSecondPhase()
-)
-
-func checkAsyncSecondPhase() bool {
-	async2ndPhaseStr := os.Getenv("ASYNC_SECOND_PHASE")
-	async2ndPhase := async2ndPhaseStr == "true" || async2ndPhaseStr == "1"
-	fmt.Fprintf(os.Stderr, "env str: %s, async2ndPhase: %v\n", async2ndPhaseStr, async2ndPhase)
-	return async2ndPhase
-}
 
 func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 	streamTaskArgs *StreamTaskArgs, rs *snapshot_store.RedisSnapshotStore,
@@ -50,6 +40,10 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 	if err != nil {
 		return nil, nil, err
 	}
+	err = createOffsetTopic(tm, streamTaskArgs)
+	if err != nil {
+		return nil, nil, err
+	}
 	if recentTxnMeta != nil {
 		debug.Fprint(os.Stderr, "start restore\n")
 		restoreBeg := time.Now()
@@ -60,7 +54,7 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 		debug.Fprintf(os.Stderr, "got offset map: %v\n", offsetMap)
 		auxData := recentCompleteTxn.AuxData
 		auxMetaSeq := recentCompleteTxn.LogSeqNum
-		if CREATE_SNAPSHOT {
+		if env_config.CREATE_SNAPSHOT {
 			loadSnapBeg := time.Now()
 			err = loadSnapshot(ctx, streamTaskArgs, auxData, auxMetaSeq, rs)
 			if err != nil {
@@ -94,7 +88,14 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
 		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, streamTaskArgs.ectx.CurEpoch())
 	}
-	updateFuncs(streamTaskArgs, trackParFunc, recordFinish)
+	flushCallbackFunc := func(ctx context.Context) error {
+		return tm.FlushCallback(ctx)
+	}
+	updateFuncs(streamTaskArgs,
+		trackParFunc, recordFinish, flushCallbackFunc)
+	for _, p := range streamTaskArgs.ectx.Producers() {
+		p.SetFlushCallback(flushCallbackFunc)
+	}
 	return tm, cmm, nil
 }
 
@@ -114,9 +115,9 @@ func processWithTransaction(
 		return common.GenErrFnOutput(err)
 	}
 
-	debug.Fprintf(os.Stderr, "start restore mapping")
+	debug.Fprintf(os.Stderr, "start restore mapping\n")
 	err = cmm.RestoreMappingAndWaitForPrevTask(ctx, args.ectx.FuncName(),
-		CREATE_SNAPSHOT, args.serdeFormat,
+		env_config.CREATE_SNAPSHOT, args.serdeFormat,
 		args.kvChangelogs, args.windowStoreChangelogs, rs)
 	if err != nil {
 		return common.GenErrFnOutput(err)
@@ -195,8 +196,8 @@ func processWithTransaction(
 			if err_out != nil {
 				return err_out
 			}
+			return handleCtrlMsg(ctx, ctrlRawMsg, t, args, &warmupCheck)
 		}
-		return handleCtrlMsg(ctx, ctrlRawMsg, t, args, &warmupCheck)
 		// if warmupCheck.AfterWarmup() {
 		// 	elapsed := time.Since(procStart)
 		// 	latencies.AddSample(elapsed.Microseconds())
@@ -262,7 +263,7 @@ func commitTransaction(ctx context.Context,
 	sendOffsetElapsed := stats.Elapsed(offsetBeg).Microseconds()
 
 	cBeg := stats.TimerBegin()
-	if ASYNC_SECOND_PHASE {
+	if env_config.ASYNC_SECOND_PHASE {
 		err = tm.CommitTransactionAsyncComplete(ctx)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[ERROR] commitAsyncComplete failed: %v\n", err)

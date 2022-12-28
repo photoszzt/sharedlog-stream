@@ -205,6 +205,9 @@ func (c *CachingKeyValueStoreG[K, V]) WaitForAllSnapshot() error {
 func (c *CachingKeyValueStoreG[K, V]) SetSnapshotCallback(ctx context.Context, f KVSnapshotCallback[K, V]) {
 	c.wrappedStore.SetSnapshotCallback(ctx, f)
 }
+func (c *CachingKeyValueStoreG[K, V]) SetFlushCallbackFunc(f exactly_once_intr.FlushCallbackFunc) {
+	c.wrappedStore.SetFlushCallbackFunc(f)
+}
 func (c *CachingKeyValueStoreG[K, V]) RestoreFromSnapshot(snapshot [][]byte) error {
 	return c.wrappedStore.RestoreFromSnapshot(snapshot)
 }

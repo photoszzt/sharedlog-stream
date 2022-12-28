@@ -20,6 +20,7 @@ type Producer interface {
 	GetInitialProdSeqNum(substreamNum uint8) uint64
 	ResetInitialProd()
 	SetLastMarkerSeq(lastMarkerSeq uint64)
+	SetFlushCallback(cb exactly_once_intr.FlushCallbackFunc)
 }
 
 type MeteredProducerIntr interface {

@@ -189,3 +189,7 @@ func (s *CachingWindowStoreG[K, V]) FindLastEpochMetaWithAuxData(ctx context.Con
 func (s *CachingWindowStoreG[K, V]) BuildKeyMeta(kms map[string][]txn_data.KeyMaping) {
 	s.wrappedStore.BuildKeyMeta(kms)
 }
+
+func (c *CachingWindowStoreG[K, V]) SetFlushCallbackFunc(f exactly_once_intr.FlushCallbackFunc) {
+	c.wrappedStore.SetFlushCallbackFunc(f)
+}

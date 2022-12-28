@@ -9,7 +9,6 @@ import (
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/txn_data"
 	"time"
@@ -23,10 +22,7 @@ type InMemoryWindowStoreWithChangelogG[K, V any] struct {
 	windowStore      store.CoreWindowStoreG[K, V]
 	trackFunc        exactly_once_intr.TrackProdSubStreamFunc
 	changelogManager *ChangelogManager[commtypes.KeyAndWindowStartTsG[K], V]
-	// changeLogProduce stats.ConcurrentInt64Collector
-	// storePutLatency stats.ConcurrentInt64Collector
-	trackFuncLat *stats.ConcurrentStatsCollector[int64]
-	parNum       uint8
+	parNum           uint8
 }
 
 func createChangelogManagerAndUpdateMsgSerde[K, V any](mp *MaterializeParam[K, V]) (
@@ -86,7 +82,7 @@ func NewInMemoryWindowStoreWithChangelogG[K, V any](
 		changelogManager: changelogManager,
 		// changeLogProduce: stats.NewConcurrentInt64Collector(mp.storeName+"-clProd", stats.DEFAULT_COLLECT_DURATION),
 		// storePutLatency: stats.NewConcurrentInt64Collector(mp.storeName+"-storePutLatency", stats.DEFAULT_COLLECT_DURATION),
-		trackFuncLat: stats.NewConcurrentStatsCollector[int64](mp.storeName+"-trackFuncLat", stats.DEFAULT_COLLECT_DURATION),
+		// trackFuncLat: stats.NewConcurrentStatsCollector[int64](mp.storeName+"-trackFuncLat", stats.DEFAULT_COLLECT_DURATION),
 	}, nil
 }
 
@@ -119,21 +115,14 @@ func (st *InMemoryWindowStoreWithChangelogG[K, V]) Put(ctx context.Context,
 	}
 	msgSer, ok := msgSerOp.Take()
 	if ok {
-		// pStart := stats.TimerBegin()
-		err := st.changelogManager.produce(ctx, msgSer, st.parNum)
-		// elapsed := stats.Elapsed(pStart).Microseconds()
-		// st.changeLogProduce.AddSample(elapsed)
-		if err != nil {
-			return err
-		}
-		tStart := stats.TimerBegin()
 		err = st.trackFunc(ctx, st.changelogManager.TopicName(), st.parNum)
 		if err != nil {
 			return err
 		}
-		tElapsed := stats.Elapsed(tStart).Microseconds()
-		st.trackFuncLat.AddSample(tElapsed)
-
+		err := st.changelogManager.produce(ctx, msgSer, st.parNum)
+		if err != nil {
+			return err
+		}
 		// putStart := stats.TimerBegin()
 		err = st.windowStore.Put(ctx, key, value, windowStartTimestamp, tm)
 		// elapsed := stats.Elapsed(putStart).Microseconds()
@@ -220,6 +209,9 @@ func (s *InMemoryWindowStoreWithChangelogG[K, V]) TableType() store.TABLE_TYPE {
 
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 	s.trackFunc = trackParFunc
+}
+func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetFlushCallbackFunc(cb exactly_once_intr.FlushCallbackFunc) {
+	s.changelogManager.producer.SetFlushCallback(cb)
 }
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8) (int, error) {
 	msgSeq, err := s.changelogManager.Consume(ctx, parNum)

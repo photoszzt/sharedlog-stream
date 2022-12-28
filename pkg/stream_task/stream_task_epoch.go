@@ -9,6 +9,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/env_config"
 	"sharedlog-stream/pkg/epoch_manager"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -21,17 +22,6 @@ import (
 
 	"cs.utexas.edu/zjia/faas/types"
 )
-
-var (
-	CREATE_SNAPSHOT = checkCreateSnapshot()
-)
-
-func checkCreateSnapshot() bool {
-	createSnapshotStr := os.Getenv("CREATE_SNAPSHOT")
-	createSnapshot := createSnapshotStr == "true" || createSnapshotStr == "1"
-	fmt.Fprintf(os.Stderr, "env str: %s, create snapshot: %v\n", createSnapshotStr, createSnapshot)
-	return createSnapshot
-}
 
 func SetKVStoreSnapshot[K, V any](ctx context.Context, env types.Environment,
 	rs *snapshot_store.RedisSnapshotStore,
@@ -132,7 +122,7 @@ func SetupManagersForEpoch(ctx context.Context,
 				offsetMap = meta.ConSeqNums
 			}
 		}
-		if CREATE_SNAPSHOT {
+		if env_config.CREATE_SNAPSHOT {
 			loadSnapBeg := time.Now()
 			if len(auxData) == 0 {
 				debug.Fprintf(os.Stderr, "read back for snapshot from 0x%x\n", rawMetaMsg.LogSeqNum)
@@ -175,7 +165,7 @@ func SetupManagersForEpoch(ctx context.Context,
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
 		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, args.ectx.CurEpoch())
 	}
-	updateFuncs(args, trackParFunc, recordFinish)
+	updateFuncs(args, trackParFunc, recordFinish, func(ctx context.Context) error { return nil })
 	return em, cmm, nil
 }
 
@@ -208,7 +198,7 @@ func processInEpoch(
 
 	debug.Fprintf(os.Stderr, "start restore mapping")
 	err = cmm.RestoreMappingAndWaitForPrevTask(
-		ctx, args.ectx.FuncName(), CREATE_SNAPSHOT, args.serdeFormat,
+		ctx, args.ectx.FuncName(), env_config.CREATE_SNAPSHOT, args.serdeFormat,
 		args.kvChangelogs, args.windowStoreChangelogs, rs)
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("RestoreMappingAndWaitForPrevTask: %v", err))
@@ -269,7 +259,7 @@ func processInEpoch(
 				return common.GenErrFnOutput(fmt.Errorf("markEpoch: %v", err))
 			}
 			setLastMarkSeq(logOff, args)
-			if CREATE_SNAPSHOT && args.snapshotEvery != 0 && time.Since(snapshotTimer) > args.snapshotEvery {
+			if env_config.CREATE_SNAPSHOT && args.snapshotEvery != 0 && time.Since(snapshotTimer) > args.snapshotEvery {
 				snStart := time.Now()
 				createSnapshot(args, logOff)
 				elapsed := time.Since(snStart)
@@ -394,7 +384,7 @@ func finalMark(dctx context.Context, t *StreamTask, args *StreamTaskArgs,
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("markEpoch failed: %v", err))
 	}
-	if CREATE_SNAPSHOT && args.snapshotEvery != 0 && !exitDueToFailTest {
+	if env_config.CREATE_SNAPSHOT && args.snapshotEvery != 0 && !exitDueToFailTest {
 		snStart := time.Now()
 		createSnapshot(args, logOff)
 		elapsed := time.Since(snStart)

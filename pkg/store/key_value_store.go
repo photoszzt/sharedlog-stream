@@ -77,13 +77,6 @@ type KeyValueStoreOpWithChangelog interface {
 	FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error)
 }
 
-/*
-type KeyValueStoreBackedByChangelog interface {
-	CoreKeyValueStore
-	KeyValueStoreOpWithChangelog
-}
-*/
-
 type KeyValueStoreBackedByChangelogG[K, V any] interface {
 	CoreKeyValueStoreG[K, V]
 	KeyValueStoreOpWithChangelog

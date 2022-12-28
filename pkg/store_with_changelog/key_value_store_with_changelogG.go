@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/txn_data"
 )
@@ -18,8 +17,8 @@ type KeyValueStoreWithChangelogG[K, V any] struct {
 	msgSerde         commtypes.MessageGSerdeG[K, V]
 	trackFunc        exactly_once_intr.TrackProdSubStreamFunc
 	changelogManager *ChangelogManager[K, V]
-	changelogProduce *stats.ConcurrentStatsCollector[int64]
-	parNum           uint8
+	// changelogProduce *stats.ConcurrentStatsCollector[int64]
+	parNum uint8
 }
 
 var _ = store.KeyValueStoreBackedByChangelogG[int, int](&KeyValueStoreWithChangelogG[int, int]{})
@@ -47,8 +46,8 @@ func NewKeyValueStoreWithChangelogG[K, V any](mp *MaterializeParam[K, V],
 		msgSerde:         mp.msgSerde,
 		changelogManager: changelogManager,
 		parNum:           mp.ParNum(),
-		changelogProduce: stats.NewConcurrentStatsCollector[int64](mp.storeName+"-clProd",
-			stats.DEFAULT_COLLECT_DURATION),
+		// changelogProduce: stats.NewConcurrentStatsCollector[int64](mp.storeName+"-clProd",
+		// 	stats.DEFAULT_COLLECT_DURATION),
 	}, nil
 }
 
@@ -82,20 +81,20 @@ func (st *KeyValueStoreWithChangelogG[K, V]) Put(ctx context.Context, key K, val
 		Key:   optional.Some(key),
 		Value: value,
 	}
-	pStart := stats.TimerBegin()
+	// pStart := stats.TimerBegin()
 	msgSerOp, err := commtypes.MsgGToMsgSer(msg, st.msgSerde.GetKeySerdeG(), st.msgSerde.GetValSerdeG())
 	if err != nil {
 		return err
 	}
 	msgSer, ok := msgSerOp.Take()
 	if ok {
-		err := st.changelogManager.produce(ctx, msgSer, st.parNum)
-		elapsed := stats.Elapsed(pStart).Microseconds()
-		st.changelogProduce.AddSample(elapsed)
+		err = st.trackFunc(ctx, st.changelogManager.TopicName(), st.parNum)
 		if err != nil {
 			return err
 		}
-		err = st.trackFunc(ctx, st.changelogManager.TopicName(), st.parNum)
+		err := st.changelogManager.produce(ctx, msgSer, st.parNum)
+		// elapsed := stats.Elapsed(pStart).Microseconds()
+		// st.changelogProduce.AddSample(elapsed)
 		if err != nil {
 			return err
 		}
@@ -143,27 +142,6 @@ func (st *KeyValueStoreWithChangelogG[K, V]) PutIfAbsent(ctx context.Context, ke
 	return optional.Some(origVal), nil
 }
 
-/*
-func (st *KeyValueStoreWithChangelogG[K, V]) PutAll(ctx context.Context, entries []*commtypes.Message) error {
-	maxTs := int64(0)
-	for _, msg := range entries {
-		if msg.Timestamp > maxTs {
-			maxTs = msg.Timestamp
-		}
-		var err error
-		if utils.IsNil(msg.Value) {
-			err = st.Put(ctx, msg.Key.(K), optional.None[V](), maxTs)
-		} else {
-			err = st.Put(ctx, msg.Key.(K), optional.Some(msg.Value.(V)), maxTs)
-		}
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-*/
-
 func (st *KeyValueStoreWithChangelogG[K, V]) Delete(ctx context.Context, key K) error {
 	msg := commtypes.MessageG[K, V]{
 		Key:   optional.Some(key),
@@ -199,6 +177,9 @@ func (st *KeyValueStoreWithChangelogG[K, V]) TableType() store.TABLE_TYPE {
 
 func (st *KeyValueStoreWithChangelogG[K, V]) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 	st.trackFunc = trackParFunc
+}
+func (st *KeyValueStoreWithChangelogG[K, V]) SetFlushCallbackFunc(cb exactly_once_intr.FlushCallbackFunc) {
+	st.changelogManager.producer.SetFlushCallback(cb)
 }
 func (st *KeyValueStoreWithChangelogG[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8, cutoff uint64) (int, error) {
 	msgSeq, err := st.changelogManager.Consume(ctx, parNum)

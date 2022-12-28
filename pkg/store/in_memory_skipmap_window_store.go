@@ -404,18 +404,6 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot(logOff uint64) {
 		s.bgErrG.Go(func() error {
 			return s.snapshotCallback(s.bgCtx, logOff, out)
 		})
-		// cpyElapsed := time.Since(cpyBeg)
-		// serBeg := time.Now()
-		// for _, kv := range out {
-		// 	kvenc, err := s.kvPairSerdeG.Encode(kv)
-		// 	if err != nil {
-		// 		continue
-		// 	}
-		// 	outBin = append(outBin, kvenc)
-		// }
-		// serElapsed := time.Since(serBeg)
-		// fmt.Fprintf(os.Stderr, "%s snapshot: copy elapsed %d, ser elapsed %d\n",
-		// 	s.name, cpyElapsed.Microseconds(), serElapsed.Microseconds())
 	} else {
 		// cpyBeg := time.Now()
 		s.storeNoDup.Range(func(ts int64, kvmap *skipmap.FuncMap[K, V]) bool {
@@ -433,17 +421,6 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot(logOff uint64) {
 		s.bgErrG.Go(func() error {
 			return s.snapshotCallback(s.bgCtx, logOff, out)
 		})
-		// serBeg := time.Now()
-		// for _, kv := range out {
-		// 	kvenc, err := s.kvPairSerdeG.Encode(kv)
-		// 	if err != nil {
-		// 		continue
-		// 	}
-		// 	outBin = append(outBin, kvenc)
-		// }
-		// serElapsed := time.Since(serBeg)
-		// fmt.Fprintf(os.Stderr, "%s snapshot: copy elapsed %d, ser elapsed %d\n",
-		// 	s.name, cpyElapsed.Microseconds(), serElapsed.Microseconds())
 	}
 }
 
@@ -522,6 +499,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) removeExpiredSegments() {
 
 func (s *InMemorySkipMapWindowStoreG[K, V]) SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]) error) {
 }
-
+func (s *InMemorySkipMapWindowStoreG[K, V]) SetFlushCallbackFunc(exactly_once_intr.FlushCallbackFunc) {
+}
 func (s *InMemorySkipMapWindowStoreG[K, V]) BuildKeyMeta(kms map[string][]txn_data.KeyMaping) {
 }

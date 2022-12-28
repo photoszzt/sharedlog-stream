@@ -12,6 +12,7 @@ type StoreBackedByChangelog interface {
 		guarantee exactly_once_intr.GuaranteeMth) error
 	ChangelogTopicName() string
 	Stream() sharedlog_stream.Stream
+	SetFlushCallbackFunc(cb exactly_once_intr.FlushCallbackFunc)
 }
 
 type RestoreKVStore interface {
