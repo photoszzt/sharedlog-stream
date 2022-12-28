@@ -73,8 +73,9 @@ func (s *BufferedSinkStream) SetLastMarkerSeq(seq uint64) {
 }
 
 // don't mix the nolock version and goroutine safe version
-
-func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, producerId commtypes.ProducerId) error {
+func (s *BufferedSinkStream) BufPushAutoFlushNoLock(ctx context.Context, payload []byte,
+	producerId commtypes.ProducerId, flushCallback exactly_once_intr.FlushCallbackFunc,
+) error {
 	// debug.Fprintf(os.Stderr, "%s(%d) bufpush payload: %d bytes\n", s.Stream.topicName, s.parNum, len(payload))
 	payload_size := len(payload)
 	if len(s.sinkBuffer) < SINK_BUFFER_MAX_ENTRY && s.currentSize+payload_size < s.sink_buffer_max_size {
@@ -90,6 +91,7 @@ func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, 
 		if err != nil {
 			return err
 		}
+		flushCallback()
 		tags := []uint64{NameHashWithPartition(s.Stream.topicNameHash, s.parNum)}
 		seqNum, err := s.Stream.PushWithTag(ctx, payloads, s.parNum, tags,
 			nil, ArrRecordMeta, producerId)
@@ -108,7 +110,9 @@ func (s *BufferedSinkStream) BufPushNoLock(ctx context.Context, payload []byte, 
 	return nil
 }
 
-func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload []byte, producerId commtypes.ProducerId) error {
+func (s *BufferedSinkStream) BufPushAutoFlushGoroutineSafe(ctx context.Context, payload []byte,
+	producerId commtypes.ProducerId, flushCallback exactly_once_intr.FlushCallbackFunc,
+) error {
 	s.mux.Lock()
 	payload_size := len(payload)
 	if len(s.sinkBuffer) < SINK_BUFFER_MAX_ENTRY && s.currentSize+payload_size < s.sink_buffer_max_size {
@@ -126,6 +130,7 @@ func (s *BufferedSinkStream) BufPushGoroutineSafe(ctx context.Context, payload [
 			s.mux.Unlock()
 			return err
 		}
+		flushCallback()
 		tags := []uint64{NameHashWithPartition(s.Stream.topicNameHash, s.parNum)}
 		seqNum, err := s.Stream.PushWithTag(ctx, payloads, s.parNum, tags,
 			nil, ArrRecordMeta, producerId)
@@ -217,7 +222,9 @@ func (s *BufferedSinkStream) GetInitialProdSeqNum() uint64 {
 	return s.initialProdInEpoch
 }
 
-func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId commtypes.ProducerId) (uint32, error) {
+func (s *BufferedSinkStream) FlushNoLock(ctx context.Context,
+	producerId commtypes.ProducerId, flushCallback exactly_once_intr.FlushCallbackFunc,
+) (uint32, error) {
 	if len(s.sinkBuffer) != 0 {
 		s.bufferEntryStats.AddSample(len(s.sinkBuffer))
 		s.bufferSizeStats.AddSample(s.currentSize)
@@ -229,6 +236,7 @@ func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId commtyp
 		if err != nil {
 			return 0, err
 		}
+		flushCallback()
 		tags := []uint64{NameHashWithPartition(s.Stream.topicNameHash, s.parNum)}
 		seqNum, err := s.Stream.PushWithTag(ctx, payloads, s.parNum, tags,
 			nil, StreamEntryMeta(false, true), producerId)
@@ -255,7 +263,9 @@ func (s *BufferedSinkStream) FlushNoLock(ctx context.Context, producerId commtyp
 	return 0, nil
 }
 
-func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context, producerId commtypes.ProducerId) (uint32, error) {
+func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context,
+	producerId commtypes.ProducerId, flushCallback exactly_once_intr.FlushCallbackFunc,
+) (uint32, error) {
 	s.mux.Lock()
 	if len(s.sinkBuffer) != 0 {
 		s.bufferEntryStats.AddSample(len(s.sinkBuffer))
@@ -270,6 +280,7 @@ func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context, producerId 
 			return 0, err
 		}
 		tags := []uint64{NameHashWithPartition(s.Stream.topicNameHash, s.parNum)}
+		flushCallback()
 		seqNum, err := s.Stream.PushWithTag(ctx, payloads, s.parNum,
 			tags, nil, StreamEntryMeta(false, true), producerId)
 		if err != nil {

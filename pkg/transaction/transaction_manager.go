@@ -291,16 +291,12 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 	producerId := tc.prodId
 	tc.currentTopicSubstream.Range(func(tp string, parSet *skipset.Uint32Set) bool {
 		stream := tc.topicStreams[tp]
-		_, err := stream.Flush(ctx, producerId)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "flush stream %s failed: %v\n", tp, err)
-			return false
-		}
+		topicNameHash := stream.TopicNameHash()
 		parSet.Range(func(par uint32) bool {
 			parNum := uint8(par)
 			g.Go(func() error {
-				tag := txn_data.MarkerTag(stream.TopicNameHash(), parNum)
-				tag2 := sharedlog_stream.NameHashWithPartition(stream.TopicNameHash(), parNum)
+				tag := txn_data.MarkerTag(topicNameHash, parNum)
+				tag2 := sharedlog_stream.NameHashWithPartition(topicNameHash, parNum)
 				off, err := stream.PushWithTag(ectx, encoded, parNum, []uint64{tag, tag2},
 					nil, sharedlog_stream.ControlRecordMeta, producerId)
 				debug.Fprintf(os.Stderr, "append marker %d to stream %s off %x tag %x\n",

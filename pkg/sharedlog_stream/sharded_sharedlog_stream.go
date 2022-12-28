@@ -67,7 +67,9 @@ func (s *SizableShardedSharedLogStream) Push(ctx context.Context, payload []byte
 	return off, err
 }
 
-func (s *SizableShardedSharedLogStream) BufPush(ctx context.Context, payload []byte, parNum uint8, producerId commtypes.ProducerId) error {
+func (s *SizableShardedSharedLogStream) BufPush(ctx context.Context, payload []byte, parNum uint8,
+	producerId commtypes.ProducerId, flushCallback exactly_once_intr.FlushCallbackFunc,
+) error {
 	// idTmp := ctx.Value(commtypes.CTXID{})
 	// id := ""
 	// if idTmp != nil {
@@ -75,13 +77,15 @@ func (s *SizableShardedSharedLogStream) BufPush(ctx context.Context, payload []b
 	// }
 	// debug.Fprintf(os.Stderr, "[id=%s] %s(%d) before bufpush\n", id, s.topicName, parNum)
 	s.mux.RLock()
-	err := s.subSharedLogStreams[parNum].BufPushGoroutineSafe(ctx, payload, producerId)
+	err := s.subSharedLogStreams[parNum].BufPushAutoFlushGoroutineSafe(ctx, payload, producerId, flushCallback)
 	s.mux.RUnlock()
 	// debug.Fprintf(os.Stderr, "[id=%s] %s(%d) after bufpush\n", id, s.topicName, parNum)
 	return err
 }
 
-func (s *SizableShardedSharedLogStream) Flush(ctx context.Context, producerId commtypes.ProducerId) (uint32, error) {
+func (s *SizableShardedSharedLogStream) Flush(ctx context.Context, producerId commtypes.ProducerId,
+	flushCallback exactly_once_intr.FlushCallbackFunc,
+) (uint32, error) {
 	// idTmp := ctx.Value(commtypes.CTXID{})
 	// id := ""
 	// if idTmp != nil {
@@ -91,7 +95,7 @@ func (s *SizableShardedSharedLogStream) Flush(ctx context.Context, producerId co
 	s.mux.RLock()
 	for i := uint8(0); i < s.numPartitions; i++ {
 		// debug.Fprintf(os.Stderr, "[id=%s] %s(%d) before flush\n", id, s.topicName, i)
-		f, err := s.subSharedLogStreams[i].FlushGoroutineSafe(ctx, producerId)
+		f, err := s.subSharedLogStreams[i].FlushGoroutineSafe(ctx, producerId, flushCallback)
 		if err != nil {
 			s.mux.RUnlock()
 			return 0, err
@@ -103,18 +107,22 @@ func (s *SizableShardedSharedLogStream) Flush(ctx context.Context, producerId co
 	return flushed, nil
 }
 
-func (s *SizableShardedSharedLogStream) BufPushNoLock(ctx context.Context, payload []byte, parNum uint8, producerId commtypes.ProducerId) error {
+func (s *SizableShardedSharedLogStream) BufPushNoLock(ctx context.Context, payload []byte,
+	parNum uint8, producerId commtypes.ProducerId, flushCallback exactly_once_intr.FlushCallbackFunc,
+) error {
 	s.mux.RLock()
-	err := s.subSharedLogStreams[parNum].BufPushNoLock(ctx, payload, producerId)
+	err := s.subSharedLogStreams[parNum].BufPushAutoFlushNoLock(ctx, payload, producerId, flushCallback)
 	s.mux.RUnlock()
 	return err
 }
 
-func (s *SizableShardedSharedLogStream) FlushNoLock(ctx context.Context, producerId commtypes.ProducerId) (uint32, error) {
+func (s *SizableShardedSharedLogStream) FlushNoLock(ctx context.Context,
+	producerId commtypes.ProducerId, flushCallback exactly_once_intr.FlushCallbackFunc,
+) (uint32, error) {
 	s.mux.RLock()
 	flushed := uint32(0)
 	for i := uint8(0); i < s.numPartitions; i++ {
-		f, err := s.subSharedLogStreams[i].FlushNoLock(ctx, producerId)
+		f, err := s.subSharedLogStreams[i].FlushNoLock(ctx, producerId, flushCallback)
 		if err != nil {
 			s.mux.RLock()
 			return 0, err
@@ -285,19 +293,23 @@ func (s *ShardedSharedLogStream) Push(ctx context.Context, payload []byte, parNu
 	return off, err
 }
 
-func (s *ShardedSharedLogStream) BufPush(ctx context.Context, payload []byte, parNum uint8, producerId commtypes.ProducerId) error {
+func (s *ShardedSharedLogStream) BufPush(ctx context.Context, payload []byte, parNum uint8,
+	producerId commtypes.ProducerId, flushCallback exactly_once_intr.FlushCallbackFunc,
+) error {
 	// idTmp := ctx.Value(commtypes.CTXID{})
 	// id := ""
 	// if idTmp != nil {
 	// 	id = idTmp.(string)
 	// }
 	// debug.Fprintf(os.Stderr, "[id=%s] %s(%d) before bufpush\n", id, s.topicName, parNum)
-	err := s.subSharedLogStreams[parNum].BufPushGoroutineSafe(ctx, payload, producerId)
+	err := s.subSharedLogStreams[parNum].BufPushAutoFlushGoroutineSafe(ctx, payload, producerId, flushCallback)
 	// debug.Fprintf(os.Stderr, "[id=%s] %s(%d) after bufpush\n", id, s.topicName, parNum)
 	return err
 }
 
-func (s *ShardedSharedLogStream) Flush(ctx context.Context, producerId commtypes.ProducerId) (uint32, error) {
+func (s *ShardedSharedLogStream) Flush(ctx context.Context,
+	producerId commtypes.ProducerId, flushCallback exactly_once_intr.FlushCallbackFunc,
+) (uint32, error) {
 	// idTmp := ctx.Value(commtypes.CTXID{})
 	// id := ""
 	// if idTmp != nil {
@@ -306,7 +318,7 @@ func (s *ShardedSharedLogStream) Flush(ctx context.Context, producerId commtypes
 	flushed := uint32(0)
 	for i := uint8(0); i < s.numPartitions; i++ {
 		// debug.Fprintf(os.Stderr, "[id=%s] %s(%d) before flush\n", id, s.topicName, i)
-		f, err := s.subSharedLogStreams[i].FlushGoroutineSafe(ctx, producerId)
+		f, err := s.subSharedLogStreams[i].FlushGoroutineSafe(ctx, producerId, flushCallback)
 		if err != nil {
 			return 0, err
 		}
@@ -316,15 +328,19 @@ func (s *ShardedSharedLogStream) Flush(ctx context.Context, producerId commtypes
 	return flushed, nil
 }
 
-func (s *ShardedSharedLogStream) BufPushNoLock(ctx context.Context, payload []byte, parNum uint8, producerId commtypes.ProducerId) error {
-	err := s.subSharedLogStreams[parNum].BufPushNoLock(ctx, payload, producerId)
+func (s *ShardedSharedLogStream) BufPushNoLock(ctx context.Context, payload []byte, parNum uint8,
+	producerId commtypes.ProducerId, flushCallback exactly_once_intr.FlushCallbackFunc,
+) error {
+	err := s.subSharedLogStreams[parNum].BufPushAutoFlushNoLock(ctx, payload, producerId, flushCallback)
 	return err
 }
 
-func (s *ShardedSharedLogStream) FlushNoLock(ctx context.Context, producerId commtypes.ProducerId) (uint32, error) {
+func (s *ShardedSharedLogStream) FlushNoLock(ctx context.Context,
+	producerId commtypes.ProducerId, flushCallback exactly_once_intr.FlushCallbackFunc,
+) (uint32, error) {
 	flushed := uint32(0)
 	for i := uint8(0); i < s.numPartitions; i++ {
-		f, err := s.subSharedLogStreams[i].FlushNoLock(ctx, producerId)
+		f, err := s.subSharedLogStreams[i].FlushNoLock(ctx, producerId, flushCallback)
 		if err != nil {
 			return 0, err
 		}

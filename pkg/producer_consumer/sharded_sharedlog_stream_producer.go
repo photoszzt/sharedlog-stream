@@ -26,6 +26,7 @@ type ShardedSharedLogStreamProducer struct {
 	name          string
 	bufPush       bool
 	guarantee     eo_intr.GuaranteeMth
+	flushCallback func()
 	isFinalOutput bool
 }
 
@@ -42,6 +43,7 @@ func NewShardedSharedLogStreamProducer(stream *sharedlog_stream.ShardedSharedLog
 		bufPush:       utils.CheckBufPush(),
 		name:          "sink",
 		isFinalOutput: false,
+		flushCallback: func() {},
 	}
 }
 
@@ -51,6 +53,10 @@ func (sls *ShardedSharedLogStreamProducer) SetLastMarkerSeq(lastMarkerSeq uint64
 
 func (sls *ShardedSharedLogStreamProducer) MarkFinalOutput() {
 	sls.isFinalOutput = true
+}
+
+func (sls *ShardedSharedLogStreamProducer) SetFlushCallback(flushCallback func()) {
+	sls.flushCallback = flushCallback
 }
 
 func (sls *ShardedSharedLogStreamProducer) OutputRemainingStats() {
@@ -165,24 +171,24 @@ func (s *ShardedSharedLogStreamProducer) Flush(ctx context.Context) (uint32, err
 }
 func (s *ShardedSharedLogStreamProducer) FlushNoLock(ctx context.Context) (uint32, error) {
 	if s.bufPush {
-		return flushNoLock(ctx, s.stream, s.guarantee, s.eom.GetProducerId())
+		return s.flushNoLock(ctx)
 	}
 	return 0, nil
 }
 
-func flushNoLock(ctx context.Context, stream *sharedlog_stream.ShardedSharedLogStream, guarantee eo_intr.GuaranteeMth, producerId commtypes.ProducerId) (uint32, error) {
-	if guarantee == eo_intr.TWO_PHASE_COMMIT || guarantee == eo_intr.EPOCH_MARK {
-		return stream.FlushNoLock(ctx, producerId)
+func (s *ShardedSharedLogStreamProducer) flushNoLock(ctx context.Context) (uint32, error) {
+	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK {
+		return s.stream.FlushNoLock(ctx, s.eom.GetProducerId(), s.flushCallback)
 	} else {
-		return stream.FlushNoLock(ctx, commtypes.EmptyProducerId)
+		return s.stream.FlushNoLock(ctx, commtypes.EmptyProducerId, s.flushCallback)
 	}
 }
 
 func (s *ShardedSharedLogStreamProducer) flush(ctx context.Context) (uint32, error) {
 	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK {
-		return s.stream.Flush(ctx, s.eom.GetProducerId())
+		return s.stream.Flush(ctx, s.eom.GetProducerId(), s.flushCallback)
 	} else {
-		return s.stream.Flush(ctx, commtypes.EmptyProducerId)
+		return s.stream.Flush(ctx, commtypes.EmptyProducerId, s.flushCallback)
 	}
 }
 
@@ -206,16 +212,16 @@ func (s *ShardedSharedLogStreamProducer) pushWithTag(ctx context.Context, payloa
 
 func (s *ShardedSharedLogStreamProducer) bufpush(ctx context.Context, payload []byte, parNum uint8) error {
 	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK {
-		return s.stream.BufPush(ctx, payload, parNum, s.eom.GetProducerId())
+		return s.stream.BufPush(ctx, payload, parNum, s.eom.GetProducerId(), s.flushCallback)
 	} else {
-		return s.stream.BufPush(ctx, payload, parNum, commtypes.EmptyProducerId)
+		return s.stream.BufPush(ctx, payload, parNum, commtypes.EmptyProducerId, s.flushCallback)
 	}
 }
 
 func (s *ShardedSharedLogStreamProducer) bufpushNoLock(ctx context.Context, payload []byte, parNum uint8) error {
 	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK {
-		return s.stream.BufPushNoLock(ctx, payload, parNum, s.eom.GetProducerId())
+		return s.stream.BufPushNoLock(ctx, payload, parNum, s.eom.GetProducerId(), s.flushCallback)
 	} else {
-		return s.stream.BufPushNoLock(ctx, payload, parNum, commtypes.EmptyProducerId)
+		return s.stream.BufPushNoLock(ctx, payload, parNum, commtypes.EmptyProducerId, s.flushCallback)
 	}
 }

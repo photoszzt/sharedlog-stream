@@ -6,6 +6,7 @@ import (
 	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
 	"sync"
@@ -50,9 +51,11 @@ func (h *StreamPush) InitFlushTimer(duration time.Duration) {
 }
 
 // msgchan has to close and async pusher has to stop first before calling this function
-func (h *StreamPush) Flush(ctx context.Context, producerId commtypes.ProducerId) (uint32, error) {
+func (h *StreamPush) Flush(ctx context.Context, producerId commtypes.ProducerId,
+	flushCallback exactly_once_intr.FlushCallbackFunc,
+) (uint32, error) {
 	if h.BufPush {
-		f, err := h.Stream.Flush(ctx, producerId)
+		f, err := h.Stream.Flush(ctx, producerId, flushCallback)
 		if err != nil {
 			return 0, err
 		}
@@ -64,9 +67,11 @@ func (h *StreamPush) Flush(ctx context.Context, producerId commtypes.ProducerId)
 }
 
 // msgchan has to close and async pusher has to stop first before calling this function
-func (h *StreamPush) FlushNoLock(ctx context.Context, producerId commtypes.ProducerId) (uint32, error) {
+func (h *StreamPush) FlushNoLock(ctx context.Context, producerId commtypes.ProducerId,
+	flushCallback exactly_once_intr.FlushCallbackFunc,
+) (uint32, error) {
 	if h.BufPush {
-		f, err := h.Stream.FlushNoLock(ctx, producerId)
+		f, err := h.Stream.FlushNoLock(ctx, producerId, flushCallback)
 		if err != nil {
 			return 0, err
 		}
@@ -85,12 +90,13 @@ func (h *StreamPush) NumCtrlMsgs() uint64 {
 	return h.ctrlCount
 }
 
-func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup, producerId commtypes.ProducerId) {
+func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
+	producerId commtypes.ProducerId, flushCallback exactly_once_intr.FlushCallbackFunc) {
 	defer wg.Done()
 	for msg := range h.MsgChan {
 		if msg.IsControl {
 			if h.BufPush {
-				_, err := h.Stream.Flush(ctx, producerId)
+				_, err := h.Stream.Flush(ctx, producerId, flushCallback)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] flush err: %v\n", err)
 					h.MsgErrChan <- err
@@ -130,7 +136,7 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup, pr
 				timeSinceLastFlush := time.Since(h.FlushTimer)
 				if timeSinceLastFlush >= h.FlushDuration {
 					// debug.Fprintf(os.Stderr, "flush timer: %v\n", timeSinceLastFlush)
-					_, err := h.Stream.Flush(ctx, producerId)
+					_, err := h.Stream.Flush(ctx, producerId, flushCallback)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "[ERROR] flush err: %v\n", err)
 						h.MsgErrChan <- err
@@ -138,7 +144,7 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup, pr
 					}
 					h.FlushTimer = time.Now()
 				}
-				err := h.Stream.BufPush(ctx, msg.Payload, uint8(msg.Partitions[0]), producerId)
+				err := h.Stream.BufPush(ctx, msg.Payload, uint8(msg.Partitions[0]), producerId, flushCallback)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] buf push err: %v\n", err)
 					h.MsgErrChan <- err
@@ -155,51 +161,6 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup, pr
 				}
 				h.produceCount += 1
 			}
-		}
-	}
-}
-
-func (h *StreamPush) AsyncStreamPushNoTick(ctx context.Context, wg *sync.WaitGroup, producerId commtypes.ProducerId,
-) {
-	defer wg.Done()
-	for msg := range h.MsgChan {
-		if msg.IsControl {
-			if h.BufPush {
-				_, err := h.Stream.Flush(ctx, producerId)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "[ERROR] flush err: %v\n", err)
-					h.MsgErrChan <- err
-					return
-				}
-			}
-			for _, i := range msg.Partitions {
-				scale_fence_tag := txn_data.ScaleFenceTag(h.Stream.TopicNameHash(), i)
-				_, err := h.Stream.PushWithTag(ctx, msg.Payload, i, []uint64{scale_fence_tag}, nil,
-					StreamEntryMeta(true, false), producerId)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "[ERROR] push err: %v\n", err)
-					h.MsgErrChan <- err
-					return
-				}
-			}
-		} else {
-			if h.BufPush {
-				err := h.Stream.BufPushNoLock(ctx, msg.Payload, uint8(msg.Partitions[0]), producerId)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "[ERROR] buf flush err: %v\n", err)
-					h.MsgErrChan <- err
-					return
-				}
-			} else {
-				debug.Assert(len(msg.Partitions) == 1, "should only have one partition")
-				_, err := h.Stream.Push(ctx, msg.Payload, uint8(msg.Partitions[0]), SingleDataRecordMeta, producerId)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "[ERROR] push err: %v\n", err)
-					h.MsgErrChan <- err
-					return
-				}
-			}
-
 		}
 	}
 }

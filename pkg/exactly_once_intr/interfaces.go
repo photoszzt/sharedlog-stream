@@ -39,6 +39,8 @@ type TrackProdSubStreamFunc func(ctx context.Context,
 	substreamId uint8,
 ) error
 
+type FlushCallbackFunc func()
+
 func DefaultTrackProdSubstreamFunc(ctx context.Context,
 	topicName string,
 	substreamId uint8,

@@ -220,7 +220,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 		parNumArr: substreamIdxOut,
 	}
 	wg.Add(1)
-	go streamPusher.AsyncStreamPush(dctx, &wg, commtypes.EmptyProducerId)
+	go streamPusher.AsyncStreamPush(dctx, &wg, commtypes.EmptyProducerId, func() {})
 	streamPusher.InitFlushTimer(time.Duration(inputConfig.FlushMs) * time.Millisecond)
 	startTime := time.Now()
 	fmt.Fprintf(os.Stderr, "StartTs: %d\n", startTime.UnixMilli())
@@ -355,7 +355,7 @@ func genEndMark(startTime time.Time, parNum uint8,
 
 func (h *nexmarkSourceHandler) flush(ctx context.Context, stream *sharedlog_stream.SizableShardedSharedLogStream) {
 	if h.bufPush {
-		_, err := stream.Flush(ctx, commtypes.EmptyProducerId)
+		_, err := stream.Flush(ctx, commtypes.EmptyProducerId, func() {})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[Error] Flush failed: %v\n", err)
 		}
