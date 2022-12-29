@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-type TransactionState uint8
+type TransactionState uint32
 
 const (
 	EMPTY = TransactionState(iota) // transaction has not existed yet

@@ -89,7 +89,7 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, streamTaskArgs.ectx.CurEpoch())
 	}
 	flushCallbackFunc := func(ctx context.Context) error {
-		return tm.FlushCallback(ctx)
+		return tm.EnsurePrevTxnFinAndAppendMeta(ctx)
 	}
 	updateFuncs(streamTaskArgs,
 		trackParFunc, recordFinish, flushCallbackFunc)
@@ -123,7 +123,7 @@ func processWithTransaction(
 		return common.GenErrFnOutput(err)
 	}
 	// latencies := stats.NewStatsCollector[int64]("latPerIter", stats.DEFAULT_COLLECT_DURATION)
-	hasLiveTransaction := false
+	hasProcessData := false
 	paused := false
 	commitTimer := time.Now()
 
@@ -146,12 +146,13 @@ func processWithTransaction(
 		// 	shouldCommitByTime, timeSinceTranStart, cur_elapsed)
 
 		// should commit
-		if (shouldCommitByTime || timeout || gotEndMark) && hasLiveTransaction {
-			err_out := commitTransaction(ctx, t, tm, cmm, args, &hasLiveTransaction, &paused)
+		if shouldCommitByTime && hasProcessData || timeout || gotEndMark {
+			err_out := commitTransaction(ctx, t, tm, args, &paused, false)
 			if err_out != nil {
 				return err_out
 			}
-			debug.Assert(!hasLiveTransaction, "after commit. there should be no live transaction\n")
+			hasProcessData = false
+			commitTimer = time.Now()
 			// debug.Fprintf(os.Stderr, "transaction committed\n")
 		}
 
@@ -167,12 +168,11 @@ func processWithTransaction(
 		}
 
 		// begin new transaction
-		err := startNewTransaction(ctx, t, args, tm, &hasLiveTransaction,
-			&init, &paused, &commitTimer)
+		err := startNewTransaction(ctx, t, args, tm, &hasProcessData,
+			&init, &paused)
 		if err != nil {
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
-		debug.Assert(hasLiveTransaction, "after start new transaction. there should be a live transaction\n")
 
 		app_ret, ctrlRawMsgOp := t.appProcessFunc(ctx, t, args.ectx)
 		if app_ret != nil {
@@ -181,7 +181,7 @@ func processWithTransaction(
 				debug.Assert(ctrlRawMsgOp.IsNone(), "when timeout, ctrlMsg should not be returned")
 				continue
 			} else {
-				if hasLiveTransaction {
+				if hasProcessData {
 					if err := tm.AbortTransaction(ctx); err != nil {
 						return &common.FnOutput{Success: false, Message: fmt.Sprintf("abort failed: %v\n", err)}
 					}
@@ -189,10 +189,13 @@ func processWithTransaction(
 				return app_ret
 			}
 		}
+		if !hasProcessData {
+			hasProcessData = true
+		}
 		ctrlRawMsg, ok := ctrlRawMsgOp.Take()
 		if ok {
-			err_out := commitTransaction(ctx, t, tm, cmm, args, &hasLiveTransaction,
-				&paused)
+			fmt.Fprintf(os.Stderr, "got ctrl msg, exp finish\n")
+			err_out := commitTransaction(ctx, t, tm, args, &paused, true)
 			if err_out != nil {
 				return err_out
 			}
@@ -207,15 +210,13 @@ func processWithTransaction(
 
 func startNewTransaction(ctx context.Context, t *StreamTask,
 	args *StreamTaskArgs, tm *transaction.TransactionManager,
-	hasLiveTransaction *bool, init *bool, paused *bool, commitTimer *time.Time,
+	hasProcessData *bool, init *bool, paused *bool,
 ) error {
-	if !*hasLiveTransaction {
+	if !*hasProcessData && (!*init || *paused) {
 		if err := tm.BeginTransaction(ctx); err != nil {
 			debug.Fprintf(os.Stderr, "[ERROR] transaction begin failed: %v", err)
 			return fmt.Errorf("transaction begin failed: %v\n", err)
 		}
-		*hasLiveTransaction = true
-		*commitTimer = time.Now()
 		debug.Fprintf(os.Stderr, "fixedOutParNum: %d\n", args.fixedOutParNum)
 		err := initAfterMarkOrCommit(ctx, t, args, tm, init, paused)
 		if err != nil {
@@ -228,10 +229,9 @@ func startNewTransaction(ctx context.Context, t *StreamTask,
 func commitTransaction(ctx context.Context,
 	t *StreamTask,
 	tm *transaction.TransactionManager,
-	cmm *control_channel.ControlChannelManager,
 	args *StreamTaskArgs,
-	hasLiveTransaction *bool,
 	paused *bool,
+	finalCommit bool,
 ) *common.FnOutput {
 	// debug.Fprintf(os.Stderr, "about to pause\n")
 	commitTxnBeg := stats.TimerBegin()
@@ -248,6 +248,11 @@ func commitTransaction(ctx context.Context,
 	}
 	flushTime := stats.Elapsed(flushAllStart).Microseconds()
 
+	err = tm.EnsurePrevTxnFin(ctx)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+
 	offsetBeg := stats.TimerBegin()
 	for _, src := range args.ectx.Consumers() {
 		if err := tm.AddTopicTrackConsumedSeqs(ctx, src.TopicName(), args.ectx.SubstreamNum()); err != nil {
@@ -263,7 +268,7 @@ func commitTransaction(ctx context.Context,
 	sendOffsetElapsed := stats.Elapsed(offsetBeg).Microseconds()
 
 	cBeg := stats.TimerBegin()
-	if env_config.ASYNC_SECOND_PHASE {
+	if env_config.ASYNC_SECOND_PHASE && !finalCommit {
 		err = tm.CommitTransactionAsyncComplete(ctx)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[ERROR] commitAsyncComplete failed: %v\n", err)
@@ -285,6 +290,5 @@ func commitTransaction(ctx context.Context,
 	if f > 0 {
 		t.flushAtLeastOne.AddSample(flushTime)
 	}
-	*hasLiveTransaction = false
 	return nil
 }

@@ -6,11 +6,14 @@ import (
 	"math"
 	"os"
 	"sync"
+	"sync/atomic"
 
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/consume_seq_num_manager/con_types"
+	"sharedlog-stream/pkg/data_structure"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/env_config"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
@@ -197,7 +200,8 @@ func (tc *TransactionManager) loadAndFixTransaction(ctx context.Context, mostRec
 
 		// the transaction is aborted but the marker might not pushed to the relevant partitions yet
 		tc.loadCurrentTopicPartitions(mostRecentTxnMetadata.TopicPartitions)
-		err := tc.completeTransaction(ctx, commtypes.ABORT, txn_data.COMPLETE_ABORT)
+		tps := tc.collectTopicSubstreams()
+		err := tc.completeTransaction(ctx, commtypes.ABORT, txn_data.COMPLETE_ABORT, tps)
 		if err != nil {
 			return err
 		}
@@ -214,7 +218,8 @@ func (tc *TransactionManager) loadAndFixTransaction(ctx context.Context, mostRec
 		// debug.Fprintf(os.Stderr, "In repair: Transition to %s to restore\n", tc.currentStatus)
 
 		tc.loadCurrentTopicPartitions(mostRecentTxnMetadata.TopicPartitions)
-		err := tc.completeTransaction(ctx, commtypes.EPOCH_END, txn_data.COMPLETE_COMMIT)
+		tps := tc.collectTopicSubstreams()
+		err := tc.completeTransaction(ctx, commtypes.EPOCH_END, txn_data.COMPLETE_COMMIT, tps)
 		if err != nil {
 			return err
 		}
@@ -286,7 +291,24 @@ func (tc *TransactionManager) appendToTransactionLog(ctx context.Context,
 	}
 }
 
-func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, marker commtypes.EpochMark) error {
+func (tc *TransactionManager) collectTopicSubstreams() map[string]data_structure.Uint32Set {
+	topicSubstreams := make(map[string]data_structure.Uint32Set)
+	tc.currentTopicSubstream.Range(func(tp string, parSet *skipset.Uint32Set) bool {
+		if _, ok := topicSubstreams[tp]; !ok {
+			topicSubstreams[tp] = data_structure.NewUint32SetSized(parSet.Len())
+		}
+		parSet.Range(func(par uint32) bool {
+			topicSubstreams[tp].Add(par)
+			return true
+		})
+		return true
+	})
+	return topicSubstreams
+}
+
+func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, marker commtypes.EpochMark,
+	topicSubstreams map[string]data_structure.Uint32Set,
+) error {
 	tm := commtypes.EpochMarker{
 		Mark: marker,
 	}
@@ -296,24 +318,22 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 	}
 	g, ectx := errgroup.WithContext(ctx)
 	producerId := tc.prodId
-	tc.currentTopicSubstream.Range(func(tp string, parSet *skipset.Uint32Set) bool {
+	for tp, parSet := range topicSubstreams {
 		stream := tc.topicStreams[tp]
 		topicNameHash := stream.TopicNameHash()
-		parSet.Range(func(par uint32) bool {
+		for par := range parSet {
 			parNum := uint8(par)
 			g.Go(func() error {
 				tag := txn_data.MarkerTag(topicNameHash, parNum)
 				tag2 := sharedlog_stream.NameHashWithPartition(topicNameHash, parNum)
 				off, err := stream.PushWithTag(ectx, encoded, parNum, []uint64{tag, tag2},
 					nil, sharedlog_stream.ControlRecordMeta, producerId)
-				debug.Fprintf(os.Stderr, "append marker %d to stream %s off %x tag %x\n",
+				debug.Fprintf(os.Stderr, "append marker %#v to stream %s off %x tag %x\n",
 					marker, stream.TopicName(), off, tag)
 				return err
 			})
-			return true
-		})
-		return true
-	})
+		}
+	}
 	return g.Wait()
 }
 
@@ -324,9 +344,9 @@ func (tc *TransactionManager) checkTopicExistsInTopicStream(topic string) bool {
 
 // this function could be called by multiple goroutine.
 func (tc *TransactionManager) AddTopicSubstream(ctx context.Context, topic string, subStreamNum uint8) error {
-	if tc.currentStatus != txn_data.BEGIN {
-		panic("should begin transaction first")
-	}
+	// if tc.currentStatus != txn_data.BEGIN {
+	// 	panic("should begin transaction first")
+	// }
 	debug.Assert(tc.checkTopicExistsInTopicStream(topic), fmt.Sprintf("topic %s's stream should be tracked", topic))
 	// debug.Fprintf(os.Stderr, "tracking topic %s par %v\n", topic, partitions)
 	parSet, loaded := tc.currentTopicSubstream.LoadOrStore(topic, skipset.NewUint32())
@@ -450,21 +470,40 @@ func (tc *TransactionManager) FindLastConsumedSeqNum(ctx context.Context, topicT
 }
 
 func (tc *TransactionManager) BeginTransaction(ctx context.Context) error {
-	if !txn_data.BEGIN.IsValidPreviousState(tc.currentStatus) {
-		debug.Fprintf(os.Stderr, "fail to transition from %v to BEGIN\n", tc.currentStatus)
-		return common_errors.ErrInvalidStateTransition
+	// if !txn_data.BEGIN.IsValidPreviousState(tc.currentStatus) {
+	// 	debug.Fprintf(os.Stderr, "fail to transition from %v to BEGIN\n", tc.currentStatus)
+	// 	return common_errors.ErrInvalidStateTransition
+	// }
+	// in the async complete case, we start the next transaction before the previous one is completed
+	if !env_config.ASYNC_SECOND_PHASE {
+		tc.currentStatus = txn_data.BEGIN
 	}
-	tc.currentStatus = txn_data.BEGIN
 	tc.hasWaitForLastTxn = false
 	return nil
 }
 
-func (tc *TransactionManager) FlushCallback(ctx context.Context) error {
-	if !tc.hasWaitForLastTxn {
+func (tc *TransactionManager) CurStatus() txn_data.TransactionState {
+	return txn_data.TransactionState(atomic.LoadUint32((*uint32)(&tc.currentStatus)))
+}
+
+func (tc *TransactionManager) EnsurePrevTxnFin(ctx context.Context) error {
+	if env_config.ASYNC_SECOND_PHASE {
 		err := tc.bgErrg.Wait()
 		if err != nil {
 			return err
 		}
+		atomic.StoreUint32((*uint32)(&tc.currentStatus), uint32(txn_data.BEGIN))
+	}
+	return nil
+}
+
+func (tc *TransactionManager) EnsurePrevTxnFinAndAppendMeta(ctx context.Context) error {
+	if env_config.ASYNC_SECOND_PHASE {
+		err := tc.bgErrg.Wait()
+		if err != nil {
+			return err
+		}
+		atomic.StoreUint32((*uint32)(&tc.currentStatus), uint32(txn_data.BEGIN))
 	}
 	if tc.addedNewTpPar {
 		tps := make([]txn_data.TopicPartition, 0, tc.currentTopicSubstream.Len())
@@ -481,7 +520,7 @@ func (tc *TransactionManager) FlushCallback(ctx context.Context) error {
 			return true
 		})
 		txnMeta := txn_data.TxnMetadata{
-			State:           tc.currentStatus,
+			State:           tc.CurStatus(),
 			TopicPartitions: tps,
 		}
 		_, err := tc.appendToTransactionLog(ctx, txnMeta, []uint64{tc.txnLogTag})
@@ -494,16 +533,17 @@ func (tc *TransactionManager) FlushCallback(ctx context.Context) error {
 }
 
 // second phase of the 2-phase commit protocol
-func (tc *TransactionManager) completeTransaction(ctx context.Context, trMark commtypes.EpochMark, trState txn_data.TransactionState) error {
-	// append txn marker to all topic partitions
-	err := tc.appendTxnMarkerToStreams(ctx, trMark)
+func (tc *TransactionManager) completeTransaction(ctx context.Context,
+	trMark commtypes.EpochMark,
+	trState txn_data.TransactionState,
+	topicSubStreams map[string]data_structure.Uint32Set,
+) error {
+	err := tc.appendTxnMarkerToStreams(ctx, trMark, topicSubStreams)
 	if err != nil {
 		return err
 	}
-	tc.currentStatus = trState
-	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 	txnMd := txn_data.TxnMetadata{
-		State: tc.currentStatus,
+		State: trState,
 	}
 	_, err = tc.appendToTransactionLog(ctx, txnMd, []uint64{tc.txnLogTag, tc.tranCompleteMarkerTag})
 	return err
@@ -525,18 +565,15 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	tps := tc.collectTopicSubstreams()
+	tc.cleanupState()
 	// second phase of the commit
-	err = tc.completeTransaction(ctx, commtypes.EPOCH_END, txn_data.COMPLETE_COMMIT)
+	err = tc.completeTransaction(ctx, commtypes.EPOCH_END, txn_data.COMPLETE_COMMIT, tps)
 	if err != nil {
 		return err
 	}
-	tc.cleanupState()
 	tc.hasWaitForLastTxn = true
 	return nil
-}
-
-func (tc *TransactionManager) WaitForBackground() error {
-	return tc.bgErrg.Wait()
 }
 
 func (tc *TransactionManager) CommitTransactionAsyncComplete(ctx context.Context) error {
@@ -555,14 +592,14 @@ func (tc *TransactionManager) CommitTransactionAsyncComplete(ctx context.Context
 	if err != nil {
 		return err
 	}
+	tps := tc.collectTopicSubstreams()
+	tc.cleanupState()
 	tc.bgErrg.Go(func() error {
 		// second phase of the commit
-		err = tc.completeTransaction(ctx, commtypes.EPOCH_END, txn_data.COMPLETE_COMMIT)
+		err = tc.completeTransaction(ctx, commtypes.EPOCH_END, txn_data.COMPLETE_COMMIT, tps)
 		if err != nil {
 			return err
 		}
-
-		tc.cleanupState()
 		tc.hasWaitForLastTxn = true
 		return nil
 	})
@@ -583,16 +620,18 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	err = tc.completeTransaction(ctx, commtypes.ABORT, txn_data.COMPLETE_ABORT)
+	tps := tc.collectTopicSubstreams()
+	tc.cleanupState()
+	err = tc.completeTransaction(ctx, commtypes.ABORT, txn_data.COMPLETE_ABORT, tps)
 	if err != nil {
 		return err
 	}
-	tc.cleanupState()
 	return nil
 }
 
 func (tc *TransactionManager) cleanupState() {
-	tc.currentStatus = txn_data.EMPTY
+	atomic.StoreUint32((*uint32)(&tc.currentStatus), uint32(txn_data.EMPTY))
 	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 	tc.currentTopicSubstream = skipmap.NewString[*skipset.Uint32Set]()
+	tc.addedNewTpPar = false
 }
