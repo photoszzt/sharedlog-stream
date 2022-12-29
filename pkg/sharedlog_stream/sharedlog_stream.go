@@ -72,14 +72,13 @@ func NameHashWithPartition(nameHash uint64, par uint8) uint64 {
 }
 
 type StreamLogEntry struct {
-	TopicName     []string `msg:"topicName"`
-	Payload       []byte   `msg:"payload,omitempty"`
-	InjTsMs       int64    `msg:"injTsMs,omitempty"`
-	TaskId        uint64   `msg:"tid,omitempty"`
-	MsgSeqNum     uint64   `msg:"mseq,omitempty"`
-	TransactionID uint64   `msg:"trid,omitempty"`
-	TaskEpoch     uint16   `msg:"te,omitempty"`
-	Meta          uint8    `msg:"meta,omitempty"`
+	TopicName []string `msg:"topicName"`
+	Payload   []byte   `msg:"payload,omitempty"`
+	InjTsMs   int64    `msg:"injTsMs,omitempty"`
+	TaskId    uint64   `msg:"tid,omitempty"`
+	MsgSeqNum uint64   `msg:"mseq,omitempty"`
+	TaskEpoch uint16   `msg:"te,omitempty"`
+	Meta      uint8    `msg:"meta,omitempty"`
 }
 
 func (e *StreamLogEntry) BelongsToTopic(topicName string) bool {
@@ -149,13 +148,12 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context,
 	}
 	nowMs := time.Now().UnixMilli()
 	logEntry := &StreamLogEntry{
-		TopicName:     topics,
-		Payload:       payload,
-		Meta:          uint8(meta),
-		TaskId:        producerId.TaskId,
-		TaskEpoch:     producerId.TaskEpoch,
-		TransactionID: producerId.TransactionID,
-		InjTsMs:       nowMs,
+		TopicName: topics,
+		Payload:   payload,
+		Meta:      uint8(meta),
+		TaskId:    producerId.TaskId,
+		TaskEpoch: producerId.TaskEpoch,
+		InjTsMs:   nowMs,
 	}
 	// TODO: need to deal with sequence number overflow
 	atomic.AddUint64(&s.curAppendMsgSeqNum, 1)
@@ -248,9 +246,8 @@ func (s *SharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum ui
 				IsControl:    isControl,
 				IsPayloadArr: isPayloadArr,
 				ProdId: commtypes.ProducerId{
-					TaskId:        streamLogEntry.TaskId,
-					TaskEpoch:     streamLogEntry.TaskEpoch,
-					TransactionID: streamLogEntry.TransactionID,
+					TaskId:    streamLogEntry.TaskId,
+					TaskEpoch: streamLogEntry.TaskEpoch,
 				},
 			}, nil
 		}
@@ -295,9 +292,8 @@ func (s *SharedLogStream) ReadNextWithTagUntil(ctx context.Context, parNum uint8
 				IsControl:    isControl,
 				IsPayloadArr: isPayloadArr,
 				ProdId: commtypes.ProducerId{
-					TaskId:        streamLogEntry.TaskId,
-					TaskEpoch:     streamLogEntry.TaskEpoch,
-					TransactionID: streamLogEntry.TransactionID,
+					TaskId:    streamLogEntry.TaskId,
+					TaskEpoch: streamLogEntry.TaskEpoch,
 				},
 				InjTsMs: streamLogEntry.InjTsMs,
 			})
@@ -341,9 +337,8 @@ func (s *SharedLogStream) ReadFromSeqNumWithTag(ctx context.Context, from uint64
 				IsControl:    isControl,
 				IsPayloadArr: isPayloadArr,
 				ProdId: commtypes.ProducerId{
-					TaskId:        streamLogEntry.TaskId,
-					TaskEpoch:     streamLogEntry.TaskEpoch,
-					TransactionID: streamLogEntry.TransactionID,
+					TaskId:    streamLogEntry.TaskId,
+					TaskEpoch: streamLogEntry.TaskEpoch,
 				},
 				InjTsMs: streamLogEntry.InjTsMs,
 			}, nil
@@ -391,9 +386,8 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 				IsControl:    isControl,
 				IsPayloadArr: isPayloadArr,
 				ProdId: commtypes.ProducerId{
-					TaskId:        streamLogEntry.TaskId,
-					TaskEpoch:     streamLogEntry.TaskEpoch,
-					TransactionID: streamLogEntry.TransactionID,
+					TaskId:    streamLogEntry.TaskId,
+					TaskEpoch: streamLogEntry.TaskEpoch,
 				},
 				InjTsMs: streamLogEntry.InjTsMs,
 			}, nil

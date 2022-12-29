@@ -35,10 +35,8 @@ type StreamTask struct {
 	initFunc       func(task *StreamTask)
 	HandleErrFunc  func() error
 
-	flushStageTime  stats.PrintLogStatsCollector[int64]
-	flushAtLeastOne stats.PrintLogStatsCollector[int64]
-	// markEpochTime    stats.StatsCollector[int64]
-	// markEpochPrepare stats.StatsCollector[int64]
+	flushStageTime   stats.PrintLogStatsCollector[int64]
+	flushAtLeastOne  stats.PrintLogStatsCollector[int64]
 	commitTxnAPITime stats.PrintLogStatsCollector[int64]
 	sendOffsetTime   stats.PrintLogStatsCollector[int64]
 	txnCommitTime    stats.PrintLogStatsCollector[int64]
@@ -174,7 +172,9 @@ func handleCtrlMsg(ctx context.Context, ctrlRawMsg commtypes.RawMsgAndSeq,
 			args.waitEndMark, t.GetEndDuration(), args.ectx.SubstreamNum())
 		return ret
 	} else {
-		return &common.FnOutput{Success: false, Message: fmt.Sprintf("unexpected ctrl msg with mark: %v", ctrlRawMsg.Mark)}
+		return &common.FnOutput{
+			Success: false,
+			Message: fmt.Sprintf("unexpected ctrl msg with mark: %v", ctrlRawMsg.Mark)}
 	}
 }
 

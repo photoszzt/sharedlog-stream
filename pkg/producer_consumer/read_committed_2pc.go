@@ -6,7 +6,6 @@ import (
 	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/data_structure"
-	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/sharedlog_stream"
 
 	"github.com/gammazero/deque"
@@ -50,19 +49,17 @@ func NewTransactionAwareConsumer(stream *sharedlog_stream.ShardedSharedLogStream
 func (tac *TransactionAwareConsumer) checkMsgQueue(msgQueue *deque.Deque[*commtypes.RawMsg], parNum uint8) *commtypes.RawMsg {
 	if msgQueue.Len() > 0 {
 		frontMsg := msgQueue.Front()
+		fmt.Fprintf(os.Stderr, "frontMsgMeta: %s\n", frontMsg.FormatMsgMeta())
 		if frontMsg.IsControl && frontMsg.Mark == commtypes.EPOCH_END {
 			ranges := tac.marked[frontMsg.ProdId][parNum]
-			ranges.commit.Remove(commtypes.SeqRange{
+			r := commtypes.SeqRange{
 				Start: frontMsg.MarkRanges[0].Start,
 				End:   frontMsg.LogSeqNum,
-			})
-			// debug.Fprintf(os.Stderr, "remove commit mark 0x%x\n", frontMsg.LogSeqNum)
-			msgQueue.PopFront()
-			if msgQueue.Len() > 0 {
-				frontMsg = msgQueue.Front()
-			} else {
-				return nil
 			}
+			ranges.commit.Remove(r)
+			// debug.Fprintf(os.Stderr, "remove commit mark %s with range %#v\n", frontMsg.FormatMsgMeta(), r)
+			msgQueue.PopFront()
+			return frontMsg
 		} else if frontMsg.IsControl && frontMsg.Mark == commtypes.ABORT {
 			ranges := tac.marked[frontMsg.ProdId][parNum]
 			ranges.abort.Remove(commtypes.SeqRange{
@@ -70,11 +67,7 @@ func (tac *TransactionAwareConsumer) checkMsgQueue(msgQueue *deque.Deque[*commty
 				End:   frontMsg.LogSeqNum,
 			})
 			msgQueue.PopFront()
-			if msgQueue.Len() > 0 {
-				frontMsg = msgQueue.Front()
-			} else {
-				return nil
-			}
+			return frontMsg
 		}
 		if (frontMsg.Mark == commtypes.SCALE_FENCE && frontMsg.ScaleEpoch != 0) || frontMsg.Mark == commtypes.STREAM_END {
 			msgQueue.PopFront()
@@ -85,10 +78,10 @@ func (tac *TransactionAwareConsumer) checkMsgQueue(msgQueue *deque.Deque[*commty
 			// fmt.Fprintf(os.Stderr, "returnMsg2: %s\n", frontMsg.FormatMsgMeta())
 			return frontMsg
 		}
-		for tac.HasAborted(frontMsg, parNum) {
+		if tac.HasAborted(frontMsg, parNum) {
 			msgQueue.PopFront()
 			fmt.Fprintf(os.Stderr, "dropMsg: %s\n", frontMsg.FormatMsgMeta())
-			frontMsg = msgQueue.Front()
+			return nil
 		}
 	}
 	return nil
@@ -96,64 +89,74 @@ func (tac *TransactionAwareConsumer) checkMsgQueue(msgQueue *deque.Deque[*commty
 
 func (tac *TransactionAwareConsumer) ReadNext(ctx context.Context, parNum uint8) (*commtypes.RawMsg, error) {
 	msgQueue := tac.msgBuffer[parNum]
-	debug.Fprintf(os.Stderr, "reading from sub %d, msg queue len: %d\n", parNum, msgQueue.Len())
+	// debug.Fprintf(os.Stderr, "reading from sub %d, msg queue len: %d\n", parNum, msgQueue.Len())
 	if msgQueue.Len() != 0 {
 		retMsg := tac.checkMsgQueue(msgQueue, parNum)
 		if retMsg != nil {
-			debug.Fprintf(os.Stderr, "return msg in check 1\n")
+			// debug.Fprintf(os.Stderr, "return msg in check 1\n")
 			return retMsg, nil
 		}
 	}
 	for {
 		rawMsg, err := tac.stream.ReadNext(ctx, parNum)
 		if err != nil {
-			debug.Fprintf(os.Stderr, "[ERROR] return err: %v\n", err)
+			// debug.Fprintf(os.Stderr, "[ERROR] return err: %v\n", err)
 			return nil, err
 		}
 		// debug.Fprintf(os.Stderr, "RawMsg\n")
 		// debug.Fprintf(os.Stderr, "\tPayload %v\n", string(rawMsg.Payload))
 		// debug.Fprintf(os.Stderr, "\tLogSeq 0x%x\n", rawMsg.LogSeqNum)
-		// debug.Fprintf(os.Stderr, "\tProdId taskId 0x%x, taskEpoch %d, tranID %d\n",
-		// 	rawMsg.ProdId.TaskId, rawMsg.ProdId.TaskEpoch, rawMsg.ProdId.TransactionID)
 		// debug.Fprintf(os.Stderr, "\tIsControl: %v\n", rawMsg.IsControl)
 		// debug.Fprintf(os.Stderr, "\tIsPayloadArr: %v\n", rawMsg.IsPayloadArr)
+
+		// debug.Fprintf(os.Stderr, "%s RawMsg: LogSeq 0x%x, MsgSeqNum 0x%x, IsControl: %#v\n",
+		// 	tac.stream.TopicName(), rawMsg.LogSeqNum, rawMsg.MsgSeqNum, rawMsg.IsControl)
 		if !rawMsg.IsControl {
 			if shouldIgnoreThisMsg(tac.curReadMsgSeqNum, rawMsg) {
-				debug.Fprintf(os.Stderr, "got a duplicate entry; continue\n")
+				fmt.Fprintf(os.Stderr, "got a duplicate entry; continue\n")
 				continue
 			}
 		} else {
 			txnMark, err := tac.epochMarkerSerde.Decode(rawMsg.Payload)
 			if err != nil {
-				debug.Fprintf(os.Stderr, "[ERROR] return err2: %v\n", err)
+				// debug.Fprintf(os.Stderr, "[ERROR] return err2: %v\n", err)
 				return nil, err
 			}
+			// if txnMark.Mark == commtypes.SCALE_FENCE || txnMark.Mark == commtypes.STREAM_END {
+			// 	debug.Fprintf(os.Stderr, "appending %+v, logSeq: 0x%x\n", txnMark, rawMsg.LogSeqNum)
+			// }
 			if txnMark.Mark == commtypes.EPOCH_END {
-				// debug.Fprintf(os.Stderr, "Got commit msg with tranid: %v\n", rawMsg.ProdId)
 				rangesAndLastMark := tac.createMarkedMapIfNotExists(rawMsg.ProdId, parNum)
 				start := rangesAndLastMark[parNum].lastMark + 1
 				seqRangeTmp := rangesAndLastMark[parNum]
-				seqRangeTmp.commit.Add(commtypes.SeqRange{
+				r := commtypes.SeqRange{
 					Start: start,
 					End:   rawMsg.LogSeqNum,
-				})
+				}
+				// debug.Fprintf(os.Stderr, "appending %+v, producer %#v, logSeq: 0x%x, range: %#v\n",
+				// 	txnMark.Mark, rawMsg.ProdId, rawMsg.LogSeqNum, r)
+				seqRangeTmp.commit.Add(r)
 				seqRangeTmp.lastMark = rawMsg.LogSeqNum
 				rangesAndLastMark[parNum] = seqRangeTmp
+				tac.marked[rawMsg.ProdId] = rangesAndLastMark
 				rawMsg.Mark = commtypes.EPOCH_END
 				rawMsg.MarkRanges = []commtypes.ProduceRange{
 					{Start: start},
 				}
 			} else if txnMark.Mark == commtypes.ABORT {
-				// debug.Fprintf(os.Stderr, "Got abort msg with tranid: %v\n", rawMsg.TranId)
 				rangesAndLastMark := tac.createMarkedMapIfNotExists(rawMsg.ProdId, parNum)
 				lastMark := rangesAndLastMark[parNum].lastMark
 				seqRangeTmp := rangesAndLastMark[parNum]
-				seqRangeTmp.abort.Add(commtypes.SeqRange{
+				r := commtypes.SeqRange{
 					Start: lastMark + 1,
 					End:   rawMsg.LogSeqNum,
-				})
+				}
+				seqRangeTmp.abort.Add(r)
+				// debug.Fprintf(os.Stderr, "appending %+v, producer %#v, logSeq: 0x%x, range: %#v\n",
+				// 	txnMark.Mark, rawMsg.ProdId, rawMsg.LogSeqNum, r)
 				seqRangeTmp.lastMark = rawMsg.LogSeqNum
 				rangesAndLastMark[parNum] = seqRangeTmp
+				tac.marked[rawMsg.ProdId] = rangesAndLastMark
 				rawMsg.MarkRanges = []commtypes.ProduceRange{
 					{Start: lastMark + 1},
 				}
@@ -171,7 +174,7 @@ func (tac *TransactionAwareConsumer) ReadNext(ctx context.Context, parNum uint8)
 		msgQueue.PushBack(rawMsg)
 		retMsg := tac.checkMsgQueue(msgQueue, parNum)
 		if retMsg != nil {
-			debug.Fprintf(os.Stderr, "return msg in check 2\n")
+			// debug.Fprintf(os.Stderr, "return msg in check 2\n")
 			return retMsg, nil
 		}
 	}
@@ -197,6 +200,7 @@ func (tac *TransactionAwareConsumer) HasCommited(rawMsg *commtypes.RawMsg, parNu
 	if !ok {
 		return false
 	}
+	// debug.Fprintf(os.Stderr, "committed ranges: %+v\n", ranges[parNum].commit)
 	for r := range ranges[parNum].commit {
 		if rawMsg.LogSeqNum >= r.Start && rawMsg.LogSeqNum <= r.End {
 			return true

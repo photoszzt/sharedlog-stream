@@ -64,7 +64,6 @@ func (em *EpochManager) GetEpochManagerName() string {
 }
 func (em *EpochManager) GetCurrentEpoch() uint16             { return em.prodId.TaskEpoch }
 func (em *EpochManager) GetCurrentTaskId() uint64            { return em.prodId.TaskId }
-func (em *EpochManager) GetTransactionID() uint64            { return em.prodId.TransactionID }
 func (em *EpochManager) GetProducerId() commtypes.ProducerId { return em.prodId }
 
 func (em *EpochManager) appendToEpochLog(ctx context.Context,
@@ -78,9 +77,8 @@ func (em *EpochManager) appendToEpochLog(ctx context.Context,
 	// debug.Fprintf(os.Stderr, "encoded epochMeta: %v\n", string(encoded))
 	debug.Assert(tags != nil, "tags should not be null")
 	producerId := commtypes.ProducerId{
-		TaskId:        em.prodId.TaskId,
-		TaskEpoch:     em.prodId.TaskEpoch,
-		TransactionID: 0,
+		TaskId:    em.prodId.TaskId,
+		TaskEpoch: em.prodId.TaskEpoch,
 	}
 	off, err := em.epochLog.PushWithTag(ctx, encoded, 0, tags, additionalTopic,
 		sharedlog_stream.ControlRecordMeta, producerId)
@@ -101,9 +99,8 @@ func (em *EpochManager) SyncToRecent(ctx context.Context) ([]commtypes.RawMsg, e
 		txn_data.FenceTag(em.epochLog.TopicNameHash(), 0),
 	}
 	producerId := commtypes.ProducerId{
-		TaskId:        em.prodId.TaskId,
-		TaskEpoch:     em.prodId.TaskEpoch,
-		TransactionID: 0,
+		TaskId:    em.prodId.TaskId,
+		TaskEpoch: em.prodId.TaskEpoch,
 	}
 	off, err := em.epochLog.PushWithTag(ctx, nil, 0, tags, nil,
 		meta, producerId)

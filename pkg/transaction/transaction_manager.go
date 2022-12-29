@@ -85,7 +85,6 @@ func NewTransactionManager(ctx context.Context,
 
 func (tm *TransactionManager) GetCurrentEpoch() uint16             { return tm.prodId.TaskEpoch }
 func (tm *TransactionManager) GetCurrentTaskId() uint64            { return tm.prodId.TaskId }
-func (tm *TransactionManager) GetTransactionID() uint64            { return tm.prodId.TransactionID }
 func (tm *TransactionManager) GetProducerId() commtypes.ProducerId { return tm.prodId }
 
 func (tc *TransactionManager) setupSerde(serdeFormat commtypes.SerdeFormat) error {
@@ -456,8 +455,6 @@ func (tc *TransactionManager) BeginTransaction(ctx context.Context) error {
 		return common_errors.ErrInvalidStateTransition
 	}
 	tc.currentStatus = txn_data.BEGIN
-
-	tc.prodId.TransactionID += 1
 	tc.hasWaitForLastTxn = false
 	return nil
 }
