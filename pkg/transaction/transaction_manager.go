@@ -326,10 +326,10 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 			g.Go(func() error {
 				tag := txn_data.MarkerTag(topicNameHash, parNum)
 				tag2 := sharedlog_stream.NameHashWithPartition(topicNameHash, parNum)
-				off, err := stream.PushWithTag(ectx, encoded, parNum, []uint64{tag, tag2},
+				_, err := stream.PushWithTag(ectx, encoded, parNum, []uint64{tag, tag2},
 					nil, sharedlog_stream.ControlRecordMeta, producerId)
-				debug.Fprintf(os.Stderr, "append marker %#v to stream %s off %x tag %x\n",
-					marker, stream.TopicName(), off, tag)
+				// debug.Fprintf(os.Stderr, "append marker %#v to stream %s off %x tag %x\n",
+				// 	marker, stream.TopicName(), off, tag)
 				return err
 			})
 		}
@@ -549,48 +549,89 @@ func (tc *TransactionManager) completeTransaction(ctx context.Context,
 	return err
 }
 
-func (tc *TransactionManager) CommitTransaction(ctx context.Context) error {
+func (tc *TransactionManager) CommitTransaction(ctx context.Context) (uint64, bool, error) {
 	if !txn_data.PREPARE_COMMIT.IsValidPreviousState(tc.currentStatus) {
 		debug.Fprintf(os.Stderr, "Fail to transition from %s to PREPARE_COMMIT\n", tc.currentStatus.String())
-		return common_errors.ErrInvalidStateTransition
+		return 0, false, common_errors.ErrInvalidStateTransition
+	}
+	rawMsgs, err := tc.SyncToRecent(ctx)
+	if err != nil {
+		return 0, false, fmt.Errorf("SyncToRecent: %v", err)
+	}
+	for _, rawMsg := range rawMsgs {
+		if rawMsg.Mark == commtypes.FENCE {
+			if (rawMsg.ProdId.TaskId == tc.GetCurrentTaskId() && rawMsg.ProdId.TaskEpoch > tc.GetCurrentEpoch()) ||
+				rawMsg.ProdId.TaskId != tc.GetCurrentTaskId() {
+				return 0, true, nil
+			}
+		}
 	}
 
 	// first phase of the commit
 	tc.currentStatus = txn_data.PREPARE_COMMIT
 	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 	txnMd := txn_data.TxnMetadata{
-		State: tc.currentStatus,
+		State: txn_data.PREPARE_COMMIT,
 	}
-	_, err := tc.appendToTransactionLog(ctx, txnMd, []uint64{tc.txnLogTag})
+	logOff, err := tc.appendToTransactionLog(ctx, txnMd, []uint64{tc.txnLogTag})
 	if err != nil {
-		return err
+		return 0, false, err
 	}
 	tps := tc.collectTopicSubstreams()
 	tc.cleanupState()
 	// second phase of the commit
 	err = tc.completeTransaction(ctx, commtypes.EPOCH_END, txn_data.COMPLETE_COMMIT, tps)
 	if err != nil {
-		return err
+		return 0, false, err
 	}
 	tc.hasWaitForLastTxn = true
-	return nil
+	return logOff, false, nil
 }
 
-func (tc *TransactionManager) CommitTransactionAsyncComplete(ctx context.Context) error {
+func (tc *TransactionManager) SyncToRecent(ctx context.Context) ([]commtypes.RawMsg, error) {
+	meta := sharedlog_stream.SyncToRecentMeta()
+	// making the empty entry with the fence tag so that the fence record or the
+	// empty entry will be read and skipping the progress marker entries.
+	tags := []uint64{
+		tc.txnLogTag,
+		txn_data.FenceTag(tc.transactionLog.TopicNameHash(), 0),
+	}
+	producerId := tc.prodId
+	off, err := tc.transactionLog.PushWithTag(ctx, nil, 0, tags, nil,
+		meta, producerId)
+	if err != nil {
+		return nil, fmt.Errorf("PushWithTag: %v", err)
+	}
+	return tc.transactionLog.ReadNextWithTagUntil(ctx, 0, tags[1], off)
+}
+
+func (tc *TransactionManager) CommitTransactionAsyncComplete(ctx context.Context) (uint64, bool, error) {
 	if !txn_data.PREPARE_COMMIT.IsValidPreviousState(tc.currentStatus) {
 		debug.Fprintf(os.Stderr, "Fail to transition from %s to PREPARE_COMMIT\n", tc.currentStatus.String())
-		return common_errors.ErrInvalidStateTransition
+		return 0, false, common_errors.ErrInvalidStateTransition
+	}
+	rawMsgs, err := tc.SyncToRecent(ctx)
+	if err != nil {
+		return 0, false, fmt.Errorf("SyncToRecent: %v", err)
+	}
+	for _, rawMsg := range rawMsgs {
+		if rawMsg.Mark == commtypes.FENCE {
+			if (rawMsg.ProdId.TaskId == tc.GetCurrentTaskId() && rawMsg.ProdId.TaskEpoch > tc.GetCurrentEpoch()) ||
+				rawMsg.ProdId.TaskId != tc.GetCurrentTaskId() {
+				return 0, true, nil
+			}
+		}
 	}
 
 	// first phase of the commit
 	tc.currentStatus = txn_data.PREPARE_COMMIT
 	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 	txnMd := txn_data.TxnMetadata{
-		State: tc.currentStatus,
+		State: txn_data.PREPARE_COMMIT,
 	}
-	_, err := tc.appendToTransactionLog(ctx, txnMd, []uint64{tc.txnLogTag})
+	logOff, err := tc.appendToTransactionLog(ctx, txnMd, []uint64{tc.txnLogTag})
 	if err != nil {
-		return err
+		return 0, false, err
 	}
 	tps := tc.collectTopicSubstreams()
 	tc.cleanupState()
@@ -603,7 +644,7 @@ func (tc *TransactionManager) CommitTransactionAsyncComplete(ctx context.Context
 		tc.hasWaitForLastTxn = true
 		return nil
 	})
-	return nil
+	return logOff, false, nil
 }
 
 func (tc *TransactionManager) AbortTransaction(ctx context.Context) error {

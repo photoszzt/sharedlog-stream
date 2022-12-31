@@ -82,13 +82,70 @@ func invokeDumpFunc(client *http.Client) {
 				ValueSerde:    "NameCityStateId",
 			},
 		}
-	case "q4", "q6":
+	case "q4":
 		dumpInput.StreamParams = []common.StreamParam{
 			{
 				TopicName:     fmt.Sprintf("%s_out", FLAGS_app_name),
 				NumPartitions: 4,
 				KeySerde:      "Uint64",
 				ValueSerde:    "Float64",
+			},
+			{
+				TopicName:     "q46_aucsByID",
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "Event",
+			},
+			{
+				TopicName:     "q46_bidsByAucID",
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "Event",
+			},
+			{
+				TopicName:     "q4_aucIDCat",
+				NumPartitions: 4,
+				KeySerde:      "AuctionIdCategory",
+				ValueSerde:    "AuctionBid",
+			},
+			{
+				TopicName:     "q4_maxBids",
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "ChangeUint64",
+			},
+		}
+	case "q6":
+		dumpInput.StreamParams = []common.StreamParam{
+			{
+				TopicName:     fmt.Sprintf("%s_out", FLAGS_app_name),
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "Float64",
+			},
+			{
+				TopicName:     "q46_aucsByID",
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "Event",
+			},
+			{
+				TopicName:     "q46_bidsByAucID",
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "Event",
+			},
+			{
+				TopicName:     "q6_aucIDSeller",
+				NumPartitions: 4,
+				KeySerde:      "AuctionIdSeller",
+				ValueSerde:    "AuctionBid",
+			},
+			{
+				TopicName:     "q6_maxBids",
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "ChangePriceTime",
 			},
 		}
 	case "q5":

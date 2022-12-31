@@ -17,7 +17,7 @@ const (
 	ScaleFenceLowBits
 	CtrlMetaLowBits
 	AbortLowBits
-	CommitLowBits
+	PreCommitLowBits
 )
 
 const (
@@ -54,7 +54,7 @@ func TxnAbortTag(nameHash uint64, par uint8) uint64 {
 	return nameHash&mask + uint64(par)<<LogTagReserveBits + AbortLowBits
 }
 
-func TxnCommitTag(nameHash uint64, par uint8) uint64 {
+func TxnPreCommitTag(nameHash uint64, par uint8) uint64 {
 	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
-	return nameHash&mask + uint64(par)<<LogTagReserveBits + CommitLowBits
+	return nameHash&mask + uint64(par)<<LogTagReserveBits + PreCommitLowBits
 }

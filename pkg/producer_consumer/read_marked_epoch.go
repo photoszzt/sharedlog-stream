@@ -215,7 +215,6 @@ func shouldIgnoreThisMsg(curReadMsgSeqNum map[commtypes.ProducerId]data_structur
 	prodId := rawMsg.ProdId
 	msgSeqNumSet, ok := curReadMsgSeqNum[prodId]
 	if ok && msgSeqNumSet != nil && msgSeqNumSet.Has(rawMsg.MsgSeqNum) {
-
 		return true
 	}
 

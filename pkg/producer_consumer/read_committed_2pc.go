@@ -49,7 +49,7 @@ func NewTransactionAwareConsumer(stream *sharedlog_stream.ShardedSharedLogStream
 func (tac *TransactionAwareConsumer) checkMsgQueue(msgQueue *deque.Deque[*commtypes.RawMsg], parNum uint8) *commtypes.RawMsg {
 	if msgQueue.Len() > 0 {
 		frontMsg := msgQueue.Front()
-		fmt.Fprintf(os.Stderr, "frontMsgMeta: %s\n", frontMsg.FormatMsgMeta())
+		// fmt.Fprintf(os.Stderr, "frontMsgMeta: %s\n", frontMsg.FormatMsgMeta())
 		if frontMsg.IsControl && frontMsg.Mark == commtypes.EPOCH_END {
 			ranges := tac.marked[frontMsg.ProdId][parNum]
 			r := commtypes.SeqRange{

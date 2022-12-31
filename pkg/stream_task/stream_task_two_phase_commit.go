@@ -126,6 +126,7 @@ func processWithTransaction(
 	hasProcessData := false
 	paused := false
 	commitTimer := time.Now()
+	snapshotTimer := time.Now()
 
 	debug.Fprintf(os.Stderr, "commit every: %v, guarantee: %v\n", args.commitEvery, args.guarantee)
 	init := false
@@ -147,7 +148,7 @@ func processWithTransaction(
 
 		// should commit
 		if shouldCommitByTime && hasProcessData || timeout || gotEndMark {
-			err_out := commitTransaction(ctx, t, tm, args, &paused, false)
+			err_out := commitTransaction(ctx, t, tm, args, &paused, false, &snapshotTimer)
 			if err_out != nil {
 				return err_out
 			}
@@ -195,7 +196,7 @@ func processWithTransaction(
 		ctrlRawMsg, ok := ctrlRawMsgOp.Take()
 		if ok {
 			fmt.Fprintf(os.Stderr, "got ctrl msg, exp finish\n")
-			err_out := commitTransaction(ctx, t, tm, args, &paused, true)
+			err_out := commitTransaction(ctx, t, tm, args, &paused, true, &snapshotTimer)
 			if err_out != nil {
 				return err_out
 			}
@@ -232,6 +233,7 @@ func commitTransaction(ctx context.Context,
 	args *StreamTaskArgs,
 	paused *bool,
 	finalCommit bool,
+	snapshotTimer *time.Time,
 ) *common.FnOutput {
 	// debug.Fprintf(os.Stderr, "about to pause\n")
 	commitTxnBeg := stats.TimerBegin()
@@ -267,19 +269,25 @@ func commitTransaction(ctx context.Context,
 	}
 	sendOffsetElapsed := stats.Elapsed(offsetBeg).Microseconds()
 
+	var logOff uint64
+	var shouldExit bool
 	cBeg := stats.TimerBegin()
 	if env_config.ASYNC_SECOND_PHASE && !finalCommit {
-		err = tm.CommitTransactionAsyncComplete(ctx)
+		logOff, shouldExit, err = tm.CommitTransactionAsyncComplete(ctx)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[ERROR] commitAsyncComplete failed: %v\n", err)
 			return common.GenErrFnOutput(fmt.Errorf("commitAsyncComplete failed: %v\n", err))
 		}
 	} else {
-		err = tm.CommitTransaction(ctx)
+		logOff, shouldExit, err = tm.CommitTransaction(ctx)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[ERROR] commit failed: %v\n", err)
 			return common.GenErrFnOutput(fmt.Errorf("commit failed: %v\n", err))
 		}
+	}
+	if env_config.CREATE_SNAPSHOT && args.snapshotEvery != 0 && time.Since(*snapshotTimer) > args.snapshotEvery {
+		createSnapshot(args, logOff)
+		*snapshotTimer = time.Now()
 	}
 	cElapsed := stats.Elapsed(cBeg).Microseconds()
 	commitTxnElapsed := stats.Elapsed(commitTxnBeg).Microseconds()
@@ -289,6 +297,14 @@ func commitTransaction(ctx context.Context,
 	t.sendOffsetTime.AddSample(sendOffsetElapsed)
 	if f > 0 {
 		t.flushAtLeastOne.AddSample(flushTime)
+	}
+	if shouldExit {
+		ret := &common.FnOutput{Success: true, Message: "exit"}
+		t.txnCommitTime.PrintRemainingStats()
+		t.commitTxnAPITime.PrintRemainingStats()
+		t.flushStageTime.PrintRemainingStats()
+		t.sendOffsetTime.PrintRemainingStats()
+		return ret
 	}
 	return nil
 }
