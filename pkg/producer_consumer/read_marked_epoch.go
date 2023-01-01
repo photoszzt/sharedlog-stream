@@ -8,8 +8,6 @@ import (
 	"sharedlog-stream/pkg/data_structure"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/stats"
-	"time"
 
 	"github.com/gammazero/deque"
 )
@@ -28,7 +26,7 @@ type EpochMarkConsumer struct {
 	marked           map[commtypes.ProducerId]map[uint8]commtypes.SeqRangeSet
 	curReadMsgSeqNum map[commtypes.ProducerId]data_structure.Uint64Set
 	msgBuffer        []*deque.Deque[*commtypes.RawMsg]
-	streamTime       stats.PrintLogStatsCollector[int64]
+	// streamTime       stats.PrintLogStatsCollector[int64]
 }
 
 func NewEpochMarkConsumer(
@@ -50,12 +48,12 @@ func NewEpochMarkConsumer(
 		marked:           make(map[commtypes.ProducerId]map[uint8]commtypes.SeqRangeSet),
 		msgBuffer:        msgBuffer,
 		curReadMsgSeqNum: make(map[commtypes.ProducerId]data_structure.Uint64Set),
-		streamTime:       stats.NewPrintLogStatsCollector[int64]("streamTime" + srcName),
+		// streamTime:       stats.NewPrintLogStatsCollector[int64]("streamTime" + srcName),
 	}, nil
 }
 
 func (emc *EpochMarkConsumer) OutputRemainingStats() {
-	emc.streamTime.PrintRemainingStats()
+	// emc.streamTime.PrintRemainingStats()
 }
 
 func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*commtypes.RawMsg, error) {
@@ -71,8 +69,9 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 		if err != nil {
 			return nil, err
 		}
-		nowMs := time.Now().UnixMilli()
-		emc.streamTime.AddSample(nowMs - rawMsg.InjTsMs)
+		// nowMs := time.Now().UnixMilli()
+		// emc.streamTime.AddSample(nowMs - rawMsg.InjTsMs)
+
 		// debug.Fprintf(os.Stderr, "RawMsg\n")
 		// debug.Fprintf(os.Stderr, "\tPayload %v\n", string(rawMsg.Payload))
 		// debug.Fprintf(os.Stderr, "\tLogSeq 0x%x\n", rawMsg.LogSeqNum)

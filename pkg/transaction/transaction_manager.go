@@ -432,7 +432,7 @@ func (tc *TransactionManager) AppendConsumedSeqNum(ctx context.Context, encodedO
 		if err != nil {
 			return err
 		}
-		debug.Fprintf(os.Stderr, "consumed offset 0x%x for %s\n", offsetRecord.Offset, offsetTopic)
+		// debug.Fprintf(os.Stderr, "consumed offset 0x%x for %s\n", offsetRecord.Offset, offsetTopic)
 	}
 	return nil
 }

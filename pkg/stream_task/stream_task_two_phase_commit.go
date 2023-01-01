@@ -132,7 +132,6 @@ func processWithTransaction(
 	init := false
 	var once sync.Once
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
-	gotEndMark := false
 	for {
 		// procStart := time.Now()
 		once.Do(func() {
@@ -147,7 +146,7 @@ func processWithTransaction(
 		// 	shouldCommitByTime, timeSinceTranStart, cur_elapsed)
 
 		// should commit
-		if shouldCommitByTime && hasProcessData || timeout || gotEndMark {
+		if shouldCommitByTime && hasProcessData || timeout {
 			err_out := commitTransaction(ctx, t, tm, args, &paused, false, &snapshotTimer)
 			if err_out != nil {
 				return err_out
@@ -159,7 +158,7 @@ func processWithTransaction(
 
 		// Exit routine
 		cur_elapsed = warmupCheck.ElapsedSinceInitial()
-		if (!args.waitEndMark && args.duration != 0 && cur_elapsed >= args.duration) || gotEndMark {
+		if !args.waitEndMark && args.duration != 0 && cur_elapsed >= args.duration {
 			// elapsed := time.Since(procStart)
 			// latencies.AddSample(elapsed.Microseconds())
 			ret := &common.FnOutput{Success: true}
