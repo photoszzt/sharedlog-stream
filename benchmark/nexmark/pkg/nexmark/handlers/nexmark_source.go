@@ -355,7 +355,7 @@ func genEndMark(startTime time.Time, parNum uint8,
 
 func (h *nexmarkSourceHandler) flush(ctx context.Context, stream *sharedlog_stream.SizableShardedSharedLogStream) {
 	if h.bufPush {
-		_, err := stream.Flush(ctx, commtypes.EmptyProducerId, func(ctx context.Context) error { return nil })
+		_, err := stream.Flush(ctx, commtypes.EmptyProducerId)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[Error] Flush failed: %v\n", err)
 		}

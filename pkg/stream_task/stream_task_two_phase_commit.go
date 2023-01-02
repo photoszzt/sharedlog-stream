@@ -128,7 +128,8 @@ func processWithTransaction(
 	commitTimer := time.Now()
 	snapshotTimer := time.Now()
 
-	debug.Fprintf(os.Stderr, "commit every: %v, guarantee: %v\n", args.commitEvery, args.guarantee)
+	fmt.Fprintf(os.Stderr, "commit every(ms): %v, waitEndMark: %v, fixed output parNum: %d, snapshot every(s): %v\n",
+		args.commitEvery, args.waitEndMark, args.fixedOutParNum, args.snapshotEvery)
 	init := false
 	var once sync.Once
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
@@ -139,28 +140,32 @@ func processWithTransaction(
 		})
 		warmupCheck.Check()
 		timeSinceTranStart := time.Since(commitTimer)
-		cur_elapsed := warmupCheck.ElapsedSinceInitial()
-		timeout := args.duration != 0 && cur_elapsed >= args.duration
 		shouldCommitByTime := (args.commitEvery != 0 && timeSinceTranStart > args.commitEvery)
 		// debug.Fprintf(os.Stderr, "shouldCommitByTime: %v, timeSinceTranStart: %v, cur_elapsed: %v\n",
 		// 	shouldCommitByTime, timeSinceTranStart, cur_elapsed)
 
 		// should commit
-		if shouldCommitByTime && hasProcessData || timeout {
+		if shouldCommitByTime && hasProcessData {
 			err_out := commitTransaction(ctx, t, tm, args, &paused, false, &snapshotTimer)
 			if err_out != nil {
+				fmt.Fprintf(os.Stderr, "commitTransaction err: %v\n", err_out.Message)
 				return err_out
 			}
 			hasProcessData = false
 			commitTimer = time.Now()
-			// debug.Fprintf(os.Stderr, "transaction committed\n")
 		}
 
 		// Exit routine
-		cur_elapsed = warmupCheck.ElapsedSinceInitial()
-		if !args.waitEndMark && args.duration != 0 && cur_elapsed >= args.duration {
+		cur_elapsed := warmupCheck.ElapsedSinceInitial()
+		timeout := args.duration != 0 && cur_elapsed >= args.duration
+		if !args.waitEndMark && timeout {
 			// elapsed := time.Since(procStart)
 			// latencies.AddSample(elapsed.Microseconds())
+			err_out := commitTransaction(ctx, t, tm, args, &paused, true, &snapshotTimer)
+			if err_out != nil {
+				fmt.Fprintf(os.Stderr, "commitTransaction err: %v\n", err_out.Message)
+				return err_out
+			}
 			ret := &common.FnOutput{Success: true}
 			updateReturnMetric(ret, &warmupCheck,
 				args.waitEndMark, t.GetEndDuration(), args.ectx.SubstreamNum())
@@ -171,6 +176,7 @@ func processWithTransaction(
 		err := startNewTransaction(ctx, t, args, tm, &hasProcessData,
 			&init, &paused)
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "startNewTransaction err: %v\n", err)
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
 
@@ -197,8 +203,10 @@ func processWithTransaction(
 			fmt.Fprintf(os.Stderr, "got ctrl msg, exp finish\n")
 			err_out := commitTransaction(ctx, t, tm, args, &paused, true, &snapshotTimer)
 			if err_out != nil {
+				fmt.Fprintf(os.Stderr, "commitTransaction err: %v\n", err_out.Message)
 				return err_out
 			}
+			fmt.Fprintf(os.Stderr, "finish final commit\n")
 			return handleCtrlMsg(ctx, ctrlRawMsg, t, args, &warmupCheck)
 		}
 		// if warmupCheck.AfterWarmup() {
@@ -213,13 +221,10 @@ func startNewTransaction(ctx context.Context, t *StreamTask,
 	hasProcessData *bool, init *bool, paused *bool,
 ) error {
 	if !*hasProcessData && (!*init || *paused) {
-		if err := tm.BeginTransaction(ctx); err != nil {
-			debug.Fprintf(os.Stderr, "[ERROR] transaction begin failed: %v", err)
-			return fmt.Errorf("transaction begin failed: %v\n", err)
-		}
-		debug.Fprintf(os.Stderr, "fixedOutParNum: %d\n", args.fixedOutParNum)
+		// debug.Fprintf(os.Stderr, "fixedOutParNum: %d\n", args.fixedOutParNum)
 		err := initAfterMarkOrCommit(ctx, t, args, tm, init, paused)
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "[ERROR] initAfterMarkOrCommit failed: %v\n", err)
 			return err
 		}
 	}
@@ -242,17 +247,21 @@ func commitTransaction(ctx context.Context,
 		}
 		*paused = true
 	}
+	// debug.Fprintf(os.Stderr, "paused\n")
+
+	err := tm.EnsurePrevTxnFinAndAppendMeta(ctx)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	// debug.Fprintf(os.Stderr, "waited prev txn fin\n")
+
 	flushAllStart := stats.TimerBegin()
 	f, err := flushStreams(ctx, args)
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("flushStreams: %v", err))
 	}
 	flushTime := stats.Elapsed(flushAllStart).Microseconds()
-
-	err = tm.EnsurePrevTxnFin(ctx)
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
+	// debug.Fprintf(os.Stderr, "flushed\n")
 
 	offsetBeg := stats.TimerBegin()
 	for _, src := range args.ectx.Consumers() {
@@ -284,6 +293,7 @@ func commitTransaction(ctx context.Context,
 			return common.GenErrFnOutput(fmt.Errorf("commit failed: %v\n", err))
 		}
 	}
+	// debug.Fprintf(os.Stderr, "committed transaction\n")
 	if env_config.CREATE_SNAPSHOT && args.snapshotEvery != 0 && time.Since(*snapshotTimer) > args.snapshotEvery {
 		createSnapshot(args, logOff)
 		*snapshotTimer = time.Now()

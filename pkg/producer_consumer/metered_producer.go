@@ -289,7 +289,7 @@ func (s *MeteredProducer) ResetInitialProd() {
 	s.producer.ResetInitialProd()
 }
 func (s *MeteredProducer) OutputRemainingStats() {
-	s.latencies.PrintRemainingStats()
+	// s.latencies.PrintRemainingStats()
 	// s.eventTimeSample.PrintRemainingStats()
 	s.producer.OutputRemainingStats()
 }

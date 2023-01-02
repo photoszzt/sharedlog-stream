@@ -22,7 +22,7 @@ dump_stream:
 .PHONY: nexmark
 nexmark:
 	mkdir -p ./bin
-	GO111MODULE=on go build -tags stats -o bin/nexmark_handler ./benchmark/nexmark/nexmark_handler
+	GO111MODULE=on go build -tags "stats,printstats" -o bin/nexmark_handler ./benchmark/nexmark/nexmark_handler
 
 .PHONY: nexmark_stats
 nexmark_stats:

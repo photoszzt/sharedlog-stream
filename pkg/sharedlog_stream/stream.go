@@ -17,8 +17,7 @@ type Stream interface {
 	TopicNameHash() uint64
 	SetCursor(cursor uint64, parNum uint8)
 	NumPartition() uint8
-	Flush(ctx context.Context, producerId commtypes.ProducerId,
-		flushCallback exactly_once_intr.FlushCallbackFunc) (uint32, error)
+	Flush(ctx context.Context, producerId commtypes.ProducerId) (uint32, error)
 	BufPush(ctx context.Context, payload []byte, parNum uint8, producerId commtypes.ProducerId,
 		flushCallback exactly_once_intr.FlushCallbackFunc) error
 }

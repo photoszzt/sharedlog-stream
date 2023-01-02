@@ -83,8 +83,8 @@ func (s *SizableShardedSharedLogStream) BufPush(ctx context.Context, payload []b
 	return err
 }
 
-func (s *SizableShardedSharedLogStream) Flush(ctx context.Context, producerId commtypes.ProducerId,
-	flushCallback exactly_once_intr.FlushCallbackFunc,
+func (s *SizableShardedSharedLogStream) Flush(ctx context.Context,
+	producerId commtypes.ProducerId,
 ) (uint32, error) {
 	// idTmp := ctx.Value(commtypes.CTXID{})
 	// id := ""
@@ -95,7 +95,7 @@ func (s *SizableShardedSharedLogStream) Flush(ctx context.Context, producerId co
 	s.mux.RLock()
 	for i := uint8(0); i < s.numPartitions; i++ {
 		// debug.Fprintf(os.Stderr, "[id=%s] %s(%d) before flush\n", id, s.topicName, i)
-		f, err := s.subSharedLogStreams[i].FlushGoroutineSafe(ctx, producerId, flushCallback)
+		f, err := s.subSharedLogStreams[i].FlushGoroutineSafe(ctx, producerId)
 		if err != nil {
 			s.mux.RUnlock()
 			return 0, err
@@ -117,12 +117,12 @@ func (s *SizableShardedSharedLogStream) BufPushNoLock(ctx context.Context, paylo
 }
 
 func (s *SizableShardedSharedLogStream) FlushNoLock(ctx context.Context,
-	producerId commtypes.ProducerId, flushCallback exactly_once_intr.FlushCallbackFunc,
+	producerId commtypes.ProducerId,
 ) (uint32, error) {
 	s.mux.RLock()
 	flushed := uint32(0)
 	for i := uint8(0); i < s.numPartitions; i++ {
-		f, err := s.subSharedLogStreams[i].FlushNoLock(ctx, producerId, flushCallback)
+		f, err := s.subSharedLogStreams[i].FlushNoLock(ctx, producerId)
 		if err != nil {
 			s.mux.RLock()
 			return 0, err
@@ -308,7 +308,7 @@ func (s *ShardedSharedLogStream) BufPush(ctx context.Context, payload []byte, pa
 }
 
 func (s *ShardedSharedLogStream) Flush(ctx context.Context,
-	producerId commtypes.ProducerId, flushCallback exactly_once_intr.FlushCallbackFunc,
+	producerId commtypes.ProducerId,
 ) (uint32, error) {
 	// idTmp := ctx.Value(commtypes.CTXID{})
 	// id := ""
@@ -318,7 +318,7 @@ func (s *ShardedSharedLogStream) Flush(ctx context.Context,
 	flushed := uint32(0)
 	for i := uint8(0); i < s.numPartitions; i++ {
 		// debug.Fprintf(os.Stderr, "[id=%s] %s(%d) before flush\n", id, s.topicName, i)
-		f, err := s.subSharedLogStreams[i].FlushGoroutineSafe(ctx, producerId, flushCallback)
+		f, err := s.subSharedLogStreams[i].FlushGoroutineSafe(ctx, producerId)
 		if err != nil {
 			return 0, err
 		}
@@ -336,11 +336,11 @@ func (s *ShardedSharedLogStream) BufPushNoLock(ctx context.Context, payload []by
 }
 
 func (s *ShardedSharedLogStream) FlushNoLock(ctx context.Context,
-	producerId commtypes.ProducerId, flushCallback exactly_once_intr.FlushCallbackFunc,
+	producerId commtypes.ProducerId,
 ) (uint32, error) {
 	flushed := uint32(0)
 	for i := uint8(0); i < s.numPartitions; i++ {
-		f, err := s.subSharedLogStreams[i].FlushNoLock(ctx, producerId, flushCallback)
+		f, err := s.subSharedLogStreams[i].FlushNoLock(ctx, producerId)
 		if err != nil {
 			return 0, err
 		}

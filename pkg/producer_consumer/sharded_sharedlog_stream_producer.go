@@ -184,17 +184,17 @@ func (s *ShardedSharedLogStreamProducer) FlushNoLock(ctx context.Context) (uint3
 
 func (s *ShardedSharedLogStreamProducer) flushNoLock(ctx context.Context) (uint32, error) {
 	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK {
-		return s.stream.FlushNoLock(ctx, s.eom.GetProducerId(), s.flushCallback)
+		return s.stream.FlushNoLock(ctx, s.eom.GetProducerId())
 	} else {
-		return s.stream.FlushNoLock(ctx, commtypes.EmptyProducerId, s.flushCallback)
+		return s.stream.FlushNoLock(ctx, commtypes.EmptyProducerId)
 	}
 }
 
 func (s *ShardedSharedLogStreamProducer) flush(ctx context.Context) (uint32, error) {
 	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK {
-		return s.stream.Flush(ctx, s.eom.GetProducerId(), s.flushCallback)
+		return s.stream.Flush(ctx, s.eom.GetProducerId())
 	} else {
-		return s.stream.Flush(ctx, commtypes.EmptyProducerId, s.flushCallback)
+		return s.stream.Flush(ctx, commtypes.EmptyProducerId)
 	}
 }
 

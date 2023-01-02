@@ -230,7 +230,7 @@ func (s *BufferedSinkStream) GetInitialProdSeqNum() uint64 {
 }
 
 func (s *BufferedSinkStream) FlushNoLock(ctx context.Context,
-	producerId commtypes.ProducerId, flushCallback exactly_once_intr.FlushCallbackFunc,
+	producerId commtypes.ProducerId,
 ) (uint32, error) {
 	if len(s.sinkBuffer) != 0 {
 		s.bufferEntryStats.AddSample(len(s.sinkBuffer))
@@ -243,7 +243,6 @@ func (s *BufferedSinkStream) FlushNoLock(ctx context.Context,
 		if err != nil {
 			return 0, err
 		}
-		err = flushCallback(ctx)
 		if err != nil {
 			return 0, err
 		}
@@ -274,7 +273,7 @@ func (s *BufferedSinkStream) FlushNoLock(ctx context.Context,
 }
 
 func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context,
-	producerId commtypes.ProducerId, flushCallback exactly_once_intr.FlushCallbackFunc,
+	producerId commtypes.ProducerId,
 ) (uint32, error) {
 	s.mux.Lock()
 	if len(s.sinkBuffer) != 0 {
@@ -290,7 +289,6 @@ func (s *BufferedSinkStream) FlushGoroutineSafe(ctx context.Context,
 			return 0, err
 		}
 		tags := []uint64{NameHashWithPartition(s.Stream.topicNameHash, s.parNum)}
-		err = flushCallback(ctx)
 		if err != nil {
 			s.mux.Unlock()
 			return 0, err

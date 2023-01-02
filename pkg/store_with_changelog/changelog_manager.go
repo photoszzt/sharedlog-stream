@@ -102,7 +102,7 @@ func (cm *ChangelogManager[K, V]) Stream() sharedlog_stream.Stream {
 func (cm *ChangelogManager[K, V]) Flush(ctx context.Context) (uint32, error) {
 	if !cm.changelogIsSrc {
 		// debug.Fprintf(os.Stderr, "flushing changelog manager, current produce: %d\n", cm.numProduced)
-		return cm.producer.Flush(ctx)
+		return cm.producer.FlushNoLock(ctx)
 	}
 	return 0, nil
 }
