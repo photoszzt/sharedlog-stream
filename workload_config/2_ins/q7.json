@@ -44,6 +44,7 @@
         "bid_by_price": 2,
         "bid_by_win": 2,
         "max_bids": 2,
+        "changelog": 2,
         "q7_out": 2
     }
 }
