@@ -449,12 +449,12 @@ func (tc *TransactionManager) FindLastConsumedSeqNum(ctx context.Context, topicT
 
 func (tc *TransactionManager) EnsurePrevTxnFinAndAppendMeta(ctx context.Context) error {
 	if env_config.ASYNC_SECOND_PHASE && atomic.LoadUint32(&tc.hasWaitForLastTxn) == 0 {
-		fmt.Fprintf(os.Stderr, "waiting for previous txn to finish\n")
+		// fmt.Fprintf(os.Stderr, "waiting for previous txn to finish\n")
 		err := tc.bgErrg.Wait()
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "previous txn finished\n")
+		// fmt.Fprintf(os.Stderr, "previous txn finished\n")
 	}
 	if tc.addedNewTpPar {
 		// debug.Fprintf(os.Stderr, "appending tp par to txn log\n")
