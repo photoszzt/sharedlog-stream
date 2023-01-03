@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"sync"
 	"sync/atomic"
 
 	"sharedlog-stream/pkg/common_errors"
@@ -34,7 +33,6 @@ const (
 // transaction manager is not goroutine safe, it's assumed to be used by
 // only one stream task and only one goroutine could update it
 type TransactionManager struct {
-	mux                   sync.Mutex
 	offsetRecordSerde     commtypes.SerdeG[txn_data.OffsetRecord]
 	env                   types.Environment
 	bgCtx                 context.Context
@@ -51,7 +49,7 @@ type TransactionManager struct {
 	txnLogTag             uint64
 	txnFenceTag           uint64
 	hasWaitForLastTxn     uint32
-	addedNewTpPar         bool // protected by mux
+	addedNewTpPar         uint32
 	serdeFormat           commtypes.SerdeFormat
 }
 
@@ -75,7 +73,7 @@ func NewTransactionManager(ctx context.Context,
 		txnFenceTag:           txn_data.FenceTag(log.TopicNameHash(), 0),
 		serdeFormat:           serdeFormat,
 		env:                   env,
-		addedNewTpPar:         false,
+		addedNewTpPar:         0,
 		hasWaitForLastTxn:     0,
 	}
 	tm.bgErrg, tm.bgCtx = errgroup.WithContext(ctx)
@@ -325,9 +323,7 @@ func (tc *TransactionManager) AddTopicSubstream(ctx context.Context, topic strin
 		parSet.Add(uint32(subStreamNum))
 	}
 	if needToAppendToLog {
-		tc.mux.Lock()
-		tc.addedNewTpPar = true
-		tc.mux.Unlock()
+		atomic.StoreUint32(&tc.addedNewTpPar, 1)
 	}
 	return nil
 }
@@ -437,16 +433,6 @@ func (tc *TransactionManager) FindLastConsumedSeqNum(ctx context.Context, topicT
 	return offsetRecord.Offset, nil
 }
 
-// func (tc *TransactionManager) EnsurePrevTxnFin(ctx context.Context) error {
-// 	if env_config.ASYNC_SECOND_PHASE && atomic.LoadUint32(&tc.hasWaitForLastTxn) == 0 {
-// 		err := tc.bgErrg.Wait()
-// 		if err != nil {
-// 			return err
-// 		}
-// 	}
-// 	return nil
-// }
-
 func (tc *TransactionManager) EnsurePrevTxnFinAndAppendMeta(ctx context.Context) error {
 	if env_config.ASYNC_SECOND_PHASE && atomic.LoadUint32(&tc.hasWaitForLastTxn) == 0 {
 		// fmt.Fprintf(os.Stderr, "waiting for previous txn to finish\n")
@@ -456,7 +442,7 @@ func (tc *TransactionManager) EnsurePrevTxnFinAndAppendMeta(ctx context.Context)
 		}
 		// fmt.Fprintf(os.Stderr, "previous txn finished\n")
 	}
-	if tc.addedNewTpPar {
+	if atomic.LoadUint32(&tc.addedNewTpPar) == 1 {
 		// debug.Fprintf(os.Stderr, "appending tp par to txn log\n")
 		tps := make([]txn_data.TopicPartition, 0, tc.currentTopicSubstream.Len())
 		tc.currentTopicSubstream.Range(func(key string, value *skipset.Uint32Set) bool {
@@ -479,7 +465,7 @@ func (tc *TransactionManager) EnsurePrevTxnFinAndAppendMeta(ctx context.Context)
 		if err != nil {
 			return err
 		}
-		tc.addedNewTpPar = false
+		atomic.StoreUint32(&tc.addedNewTpPar, 0)
 		// debug.Fprintf(os.Stderr, "done appending tp par to txn log\n")
 	}
 	return nil
@@ -626,5 +612,5 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context) error {
 func (tc *TransactionManager) cleanupState() {
 	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 	tc.currentTopicSubstream = skipmap.NewString[*skipset.Uint32Set]()
-	tc.addedNewTpPar = false
+	atomic.StoreUint32(&tc.addedNewTpPar, 0)
 }
