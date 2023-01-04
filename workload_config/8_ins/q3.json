@@ -27,6 +27,7 @@
         "nexmark_src": 8,
         "q3_aucsBySellerID_out": 8,
         "q3_personsByID_out": 8,
+        "changelog": 8,
         "q3_out": 8
     }
 }
