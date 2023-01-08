@@ -35,6 +35,7 @@
         "nexmark_src": 1,
         "bids": 1,
         "aucBids": 1,
+        "changelog": 1,
         "q5_out": 1
     }
 }

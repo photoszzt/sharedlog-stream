@@ -1,49 +1,50 @@
 {
     "FuncParam": [
         {
-            "funcName": "source",
-            "NumInstance": 1,
+            "funcName": "nexmark_src",
+            "NumInstance": 2,
             "OutputTopicName": ["nexmark_src"],
-            "NodeConstraint": "1"
+            "NodeConstraint": "1,2,3,4"
         },
         {
             "funcName": "q7BidByPrice",
-            "NumInstance": 1,
+            "NumInstance": 2,
             "InputTopicNames": ["nexmark_src"],
             "OutputTopicName": ["bid_by_price"],
-            "NodeConstraint": "2",
+            "NodeConstraint": "5,6,7,8",
             "NumSrcProducer": [1]
         },
         {
             "funcName": "q7BidByWin",
-            "NumInstance": 1,
+            "NumInstance": 2,
             "InputTopicNames": ["nexmark_src"],
             "OutputTopicName": ["bid_by_win"],
-            "NodeConstraint": "2",
+            "NodeConstraint": "5,6,7,8",
             "NumSrcProducer": [1]
         },
         {
             "funcName": "q7MaxBid",
-            "NumInstance": 1,
+            "NumInstance": 2,
             "InputTopicNames": ["bid_by_win"],
             "OutputTopicName": ["max_bids"],
-            "NodeConstraint": "2",
-            "NumSrcProducer": [1]
+            "NodeConstraint": "5,6,7,8",
+            "NumSrcProducer": [2]
         },
         {
             "funcName": "q7JoinMaxBid",
-            "NumInstance": 1,
+            "NumInstance": 2,
             "InputTopicNames": ["bid_by_price", "max_bids"],
             "OutputTopicName": ["q7_out"],
-            "NodeConstraint": "2",
-            "NumSrcProducer": [1, 1]
+            "NodeConstraint": "5,6,7,8",
+            "NumSrcProducer": [2, 2]
         }
     ],
     "StreamParam": {
-        "nexmark_src": 1,
-        "bid_by_price": 1,
-        "bid_by_win": 1,
-        "max_bids": 1,
-        "q7_out": 1
+        "nexmark_src": 2,
+        "bid_by_price": 2,
+        "bid_by_win": 2,
+        "max_bids": 2,
+        "changelog": 2,
+        "q7_out": 2
     }
 }
