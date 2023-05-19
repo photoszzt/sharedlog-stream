@@ -353,7 +353,7 @@ func createOffsetTopic(tm *transaction.TransactionManager, args *StreamTaskArgs,
 ) error {
 	for _, src := range args.ectx.Consumers() {
 		inputTopicName := src.TopicName()
-		err := tm.CreateOffsetTopic(inputTopicName, uint8(src.Stream().NumPartition()))
+		err := tm.CreateOffsetTopic(inputTopicName, uint8(src.Stream().NumPartition()), args.bufMaxSize)
 		if err != nil {
 			return err
 		}

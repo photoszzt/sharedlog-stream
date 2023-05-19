@@ -328,7 +328,7 @@ func (tc *TransactionManager) AddTopicSubstream(ctx context.Context, topic strin
 	return nil
 }
 
-func (tc *TransactionManager) CreateOffsetTopic(topicToTrack string, numPartition uint8) error {
+func (tc *TransactionManager) CreateOffsetTopic(topicToTrack string, numPartition uint8, bufMaxSize uint32) error {
 	offsetTopic := con_types.OffsetTopic(topicToTrack)
 	debug.Assert(tc.topicStreams != nil, "topic streams should be initialized")
 	_, ok := tc.topicStreams[offsetTopic]
@@ -336,7 +336,7 @@ func (tc *TransactionManager) CreateOffsetTopic(topicToTrack string, numPartitio
 		// already exists
 		return nil
 	}
-	off, err := sharedlog_stream.NewShardedSharedLogStream(tc.env, offsetTopic, numPartition, tc.serdeFormat)
+	off, err := sharedlog_stream.NewShardedSharedLogStream(tc.env, offsetTopic, numPartition, tc.serdeFormat, bufMaxSize)
 	if err != nil {
 		return err
 	}

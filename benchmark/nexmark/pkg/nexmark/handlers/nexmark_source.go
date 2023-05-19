@@ -115,8 +115,9 @@ func getSubstreamIdx(parNum uint8, numPartition uint8, numGenerator uint8) []uin
 }
 
 func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig *ntypes.NexMarkConfigInput) *common.FnOutput {
-	stream, err := sharedlog_stream.NewSizableShardedSharedLogStream(h.env, inputConfig.TopicName, inputConfig.NumOutPartition,
-		commtypes.SerdeFormat(inputConfig.SerdeFormat))
+	stream, err := sharedlog_stream.NewSizableShardedSharedLogStream(h.env, inputConfig.TopicName,
+		inputConfig.NumOutPartition,
+		commtypes.SerdeFormat(inputConfig.SerdeFormat), inputConfig.BufMaxSize)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,
@@ -191,7 +192,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	cmm, err := control_channel.NewControlChannelManager(h.env, inputConfig.AppId,
-		commtypes.SerdeFormat(inputConfig.SerdeFormat), 0, inputConfig.ParNum)
+		commtypes.SerdeFormat(inputConfig.SerdeFormat), inputConfig.BufMaxSize, 0, inputConfig.ParNum)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

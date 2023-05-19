@@ -77,8 +77,8 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 	}
 
 	cmm, err := control_channel.NewControlChannelManager(streamTaskArgs.env, streamTaskArgs.appId,
-		commtypes.SerdeFormat(streamTaskArgs.serdeFormat), streamTaskArgs.ectx.CurEpoch(),
-		streamTaskArgs.ectx.SubstreamNum())
+		commtypes.SerdeFormat(streamTaskArgs.serdeFormat), streamTaskArgs.bufMaxSize,
+		streamTaskArgs.ectx.CurEpoch(), streamTaskArgs.ectx.SubstreamNum())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -128,8 +128,8 @@ func processWithTransaction(
 	commitTimer := time.Now()
 	snapshotTimer := time.Now()
 
-	fmt.Fprintf(os.Stderr, "commit every(ms): %v, waitEndMark: %v, fixed output parNum: %d, snapshot every(s): %v\n",
-		args.commitEvery, args.waitEndMark, args.fixedOutParNum, args.snapshotEvery)
+	fmt.Fprintf(os.Stderr, "commit every(ms): %v, waitEndMark: %v, fixed output parNum: %d, snapshot every(s): %v, sinkBufSizeMax: %v\n",
+		args.commitEvery, args.waitEndMark, args.fixedOutParNum, args.snapshotEvery, args.bufMaxSize)
 	init := false
 	var once sync.Once
 	warmupCheck := stats.NewWarmupChecker(args.warmup)

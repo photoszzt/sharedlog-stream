@@ -51,15 +51,17 @@ func (cm *ControlChannelManager) CurrentEpoch() uint16 {
 func NewControlChannelManager(env types.Environment,
 	app_id string,
 	serdeFormat commtypes.SerdeFormat,
+	bufMaxSize uint32,
 	epoch uint16,
 	instanceID uint8,
 ) (*ControlChannelManager, error) {
-	logForRead, err := sharedlog_stream.NewShardedSharedLogStream(env, CONTROL_LOG_TOPIC_NAME+"_"+app_id, 1, serdeFormat)
+	logForRead, err := sharedlog_stream.NewShardedSharedLogStream(env, CONTROL_LOG_TOPIC_NAME+"_"+app_id, 1,
+		serdeFormat, bufMaxSize)
 	if err != nil {
 		return nil, err
 	}
 	logForWrite, err := sharedlog_stream.NewShardedSharedLogStream(env,
-		CONTROL_LOG_TOPIC_NAME+"_"+app_id, 1, serdeFormat)
+		CONTROL_LOG_TOPIC_NAME+"_"+app_id, 1, serdeFormat, bufMaxSize)
 	if err != nil {
 		return nil, err
 	}

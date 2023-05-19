@@ -20,10 +20,11 @@ type SizableShardedSharedLogStream struct {
 	subSharedLogStreams []*BufferedSinkStream
 	numPartitions       uint8
 	serdeFormat         commtypes.SerdeFormat
+	bufMaxSize          uint32
 }
 
 func NewSizableShardedSharedLogStream(env types.Environment, topicName string, numPartitions uint8,
-	serdeFormat commtypes.SerdeFormat,
+	serdeFormat commtypes.SerdeFormat, bufMaxSize uint32,
 ) (*SizableShardedSharedLogStream, error) {
 	if numPartitions == 0 {
 		panic(ErrZeroParNum)
@@ -34,7 +35,7 @@ func NewSizableShardedSharedLogStream(env types.Environment, topicName string, n
 		if err != nil {
 			return nil, err
 		}
-		buf := NewBufferedSinkStream(s, i)
+		buf := NewBufferedSinkStream(s, i, bufMaxSize)
 		streams = append(streams, buf)
 	}
 	return &SizableShardedSharedLogStream{
@@ -42,6 +43,7 @@ func NewSizableShardedSharedLogStream(env types.Environment, topicName string, n
 		numPartitions:       numPartitions,
 		topicName:           topicName,
 		serdeFormat:         serdeFormat,
+		bufMaxSize:          bufMaxSize,
 	}, nil
 }
 
@@ -200,6 +202,7 @@ type ShardedSharedLogStream struct {
 	topicName string
 
 	subSharedLogStreams []*BufferedSinkStream
+	bufMaxSize          uint32
 	numPartitions       uint8
 	serdeFormat         commtypes.SerdeFormat
 }
@@ -210,7 +213,9 @@ var (
 	ErrZeroParNum = xerrors.New("Shards must be positive")
 )
 
-func NewShardedSharedLogStream(env types.Environment, topicName string, numPartitions uint8, serdeFormat commtypes.SerdeFormat) (*ShardedSharedLogStream, error) {
+func NewShardedSharedLogStream(env types.Environment, topicName string, numPartitions uint8,
+	serdeFormat commtypes.SerdeFormat, bufMaxSize uint32,
+) (*ShardedSharedLogStream, error) {
 	if numPartitions == 0 {
 		panic(ErrZeroParNum)
 	}
@@ -220,7 +225,7 @@ func NewShardedSharedLogStream(env types.Environment, topicName string, numParti
 		if err != nil {
 			return nil, err
 		}
-		buf := NewBufferedSinkStream(s, i)
+		buf := NewBufferedSinkStream(s, i, bufMaxSize)
 		streams = append(streams, buf)
 	}
 	return &ShardedSharedLogStream{
@@ -228,6 +233,7 @@ func NewShardedSharedLogStream(env types.Environment, topicName string, numParti
 		numPartitions:       numPartitions,
 		topicName:           topicName,
 		serdeFormat:         serdeFormat,
+		bufMaxSize:          bufMaxSize,
 	}, nil
 }
 
@@ -272,7 +278,7 @@ func (s *SizableShardedSharedLogStream) ScaleSubstreams(env types.Environment, s
 				s.mux.Unlock()
 				return err
 			}
-			buf := NewBufferedSinkStream(subs, i+s.numPartitions)
+			buf := NewBufferedSinkStream(subs, i+s.numPartitions, s.bufMaxSize)
 			s.subSharedLogStreams = append(s.subSharedLogStreams, buf)
 		}
 	}

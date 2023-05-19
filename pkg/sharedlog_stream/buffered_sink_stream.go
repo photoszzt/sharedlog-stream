@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	SINK_BUFFER_MAX_ENTRY = 10000
+	SINK_BUFFER_MAX_ENTRY = 12800
 	SINK_BUFFER_MAX_SIZE  = 131072
 	MSG_CHAN_SIZE         = 10000
 )
@@ -42,7 +42,7 @@ type BufferedSinkStream struct {
 	parNum               uint8
 }
 
-func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8) *BufferedSinkStream {
+func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8, bufMaxSize uint32) *BufferedSinkStream {
 	s := &BufferedSinkStream{
 		sinkBuffer:      make([][]byte, 0, SINK_BUFFER_MAX_ENTRY),
 		payloadArrSerde: DEFAULT_PAYLOAD_ARR_SERDEG,
@@ -55,7 +55,7 @@ func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8) *BufferedSinkS
 		bufferSizeStats: stats.NewStatsCollector[int](fmt.Sprintf("%s_bufSize_%v", stream.topicName, parNum),
 			stats.DEFAULT_COLLECT_DURATION),
 		flushBufferStats:     stats.NewPrintLogStatsCollector[int64](fmt.Sprintf("%s_flushBuf_%v", stream.topicName, parNum)),
-		sink_buffer_max_size: SINK_BUFFER_MAX_SIZE,
+		sink_buffer_max_size: int(bufMaxSize),
 		initProdIsSet:        false,
 		lastMarkerSeq:        0,
 	}

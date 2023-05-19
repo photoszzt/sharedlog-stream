@@ -42,7 +42,8 @@ func (h *testEventSource) Call(ctx context.Context, input []byte) ([]byte, error
 
 func (h *testEventSource) eventGeneration(ctx context.Context, sp *common.TestSourceInput) *common.FnOutput {
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "nexmark_src", 1, serdeFormat)
+	stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "nexmark_src", 1, serdeFormat,
+		sharedlog_stream.SINK_BUFFER_MAX_SIZE)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

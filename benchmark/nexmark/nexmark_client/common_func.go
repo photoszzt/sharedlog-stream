@@ -44,5 +44,6 @@ func NewQueryInput(serdeFormat commtypes.SerdeFormat) *common.QueryInput {
 		WarmupS:       uint32(FLAGS_warmup_time),
 		TestParams:    failSpec.FailSpec,
 		SnapEveryS:    uint32(FLAGS_snapshot_everyS),
+		BufMaxSize:    uint32(FLAGS_buf_max_size),
 	}
 }

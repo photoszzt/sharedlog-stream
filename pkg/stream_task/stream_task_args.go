@@ -26,6 +26,7 @@ type StreamTaskArgs struct {
 	trackEveryForAtLeastOnce time.Duration
 	duration                 time.Duration
 	warmup                   time.Duration
+	bufMaxSize               uint32
 	fixedOutParNum           int16
 	serdeFormat              commtypes.SerdeFormat
 	guarantee                exactly_once_intr.GuaranteeMth
@@ -81,7 +82,11 @@ type SetDuration interface {
 }
 
 type SetSerdeFormat interface {
-	SerdeFormat(commtypes.SerdeFormat) BuildStreamTaskArgs
+	SerdeFormat(commtypes.SerdeFormat) SetBufMaxSize
+}
+
+type SetBufMaxSize interface {
+	BufMaxSize(uint32) BuildStreamTaskArgs
 }
 
 type BuildStreamTaskArgs interface {
@@ -128,8 +133,12 @@ func (args *StreamTaskArgsBuilder) Duration(duration uint32) SetSerdeFormat {
 	args.stArgs.duration = time.Duration(duration) * time.Second
 	return args
 }
-func (args *StreamTaskArgsBuilder) SerdeFormat(serdeFormat commtypes.SerdeFormat) BuildStreamTaskArgs {
+func (args *StreamTaskArgsBuilder) SerdeFormat(serdeFormat commtypes.SerdeFormat) SetBufMaxSize {
 	args.stArgs.serdeFormat = serdeFormat
+	return args
+}
+func (args *StreamTaskArgsBuilder) BufMaxSize(bufMaxSize uint32) BuildStreamTaskArgs {
+	args.stArgs.bufMaxSize = bufMaxSize
 	return args
 }
 

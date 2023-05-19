@@ -170,7 +170,9 @@ func (cm *ChangelogManager[K, V]) Consume(ctx context.Context, parNum uint8) (co
 
 func CreateChangelog(env types.Environment, tabName string,
 	numPartition uint8, serdeFormat commtypes.SerdeFormat,
+	bufMaxSize uint32,
 ) (*sharedlog_stream.ShardedSharedLogStream, error) {
 	changelog_name := tabName + "-changelog"
-	return sharedlog_stream.NewShardedSharedLogStream(env, changelog_name, numPartition, serdeFormat)
+	return sharedlog_stream.NewShardedSharedLogStream(env, changelog_name, numPartition,
+		serdeFormat, bufMaxSize)
 }

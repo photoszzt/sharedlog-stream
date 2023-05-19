@@ -152,7 +152,7 @@ func SetupManagersForEpoch(ctx context.Context,
 	}
 	setLastMarkSeq(lastMark, args)
 	cmm, err := control_channel.NewControlChannelManager(args.env, args.appId,
-		args.serdeFormat, args.ectx.CurEpoch(), args.ectx.SubstreamNum())
+		args.serdeFormat, args.bufMaxSize, args.ectx.CurEpoch(), args.ectx.SubstreamNum())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -216,8 +216,8 @@ func processInEpoch(
 	snapshotTimer := time.Now()
 	var once sync.Once
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
-	fmt.Fprintf(os.Stderr, "commit every(ms): %v, waitEndMark: %v, fixed output parNum: %d, snapshot every(s): %v\n",
-		args.commitEvery, args.waitEndMark, args.fixedOutParNum, args.snapshotEvery)
+	fmt.Fprintf(os.Stderr, "commit every(ms): %v, waitEndMark: %v, fixed output parNum: %d, snapshot every(s): %v, sink buf max: %v\n",
+		args.commitEvery, args.waitEndMark, args.fixedOutParNum, args.snapshotEvery, args.bufMaxSize)
 	testForFail := false
 	var failAfter time.Duration
 	failParam, ok := args.testParams[args.ectx.FuncName()]

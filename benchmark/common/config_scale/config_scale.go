@@ -35,8 +35,8 @@ func (h *ConfigScaleHandler) Call(ctx context.Context, input []byte) ([]byte, er
 }
 
 func (h *ConfigScaleHandler) ConfigScale(ctx context.Context, input *common.ConfigScaleInput) *common.FnOutput {
-	cmm, err := control_channel.NewControlChannelManager(h.env, input.AppId, commtypes.SerdeFormat(input.SerdeFormat),
-		input.ScaleEpoch-1, 0)
+	cmm, err := control_channel.NewControlChannelManager(h.env, input.AppId,
+		commtypes.SerdeFormat(input.SerdeFormat), input.BufMaxSize, input.ScaleEpoch-1, 0)
 	if err != nil {
 		return &common.FnOutput{
 			Success: false,

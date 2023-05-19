@@ -8,6 +8,7 @@ type MaterializeParam[K, V any] struct {
 	msgSerde       commtypes.MessageGSerdeG[K, V]
 	storeName      string
 	changelogParam commtypes.CreateChangelogManagerParam
+	bufMaxSize     uint32
 	parNum         uint8
 	serdeFormat    commtypes.SerdeFormat
 }

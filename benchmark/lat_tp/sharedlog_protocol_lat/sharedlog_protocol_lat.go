@@ -21,6 +21,7 @@ var (
 	FLAGS_nprod          int
 	FLAGS_serdeFormat    string
 	FLAGS_commit_everyMs uint64
+	FLAGS_buf_max_size   uint
 )
 
 func main() {
@@ -33,6 +34,7 @@ func main() {
 	flag.IntVar(&FLAGS_nprod, "nprod", 1, "number of producer")
 	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
 	flag.Uint64Var(&FLAGS_commit_everyMs, "comm_everyMS", 10, "commit a transaction every (ms)")
+	flag.UintVar(&FLAGS_buf_max_size, "buf_max_size", 131072, "sink buffer max size")
 	flag.BoolVar(&FLAGS_local, "local", false, "local mode without setting node constraint")
 
 	flag.Parse()
@@ -47,6 +49,7 @@ func main() {
 		NumOutPartition: uint8(FLAGS_npar),
 		Tps:             uint32(FLAGS_tps),
 		FlushMs:         uint32(FLAGS_commit_everyMs),
+		BufMaxSize:      uint32(FLAGS_buf_max_size),
 	}
 	spTran := &common.TranProcessBenchParam{
 		InTopicName:   "src",
@@ -57,6 +60,7 @@ func main() {
 		CommitEveryMs: uint64(FLAGS_commit_everyMs),
 		FlushMs:       uint32(FLAGS_commit_everyMs),
 		AppId:         "protocol-lat",
+		BufMaxSize:    uint32(FLAGS_buf_max_size),
 	}
 	client := &http.Client{
 		Transport: &http.Transport{
@@ -87,6 +91,7 @@ func main() {
 		ScaleEpoch:  1,
 		SerdeFormat: uint8(serdeFormat),
 		Bootstrap:   true,
+		BufMaxSize:  uint32(FLAGS_buf_max_size),
 	}
 	constraint := "1"
 	if FLAGS_local {

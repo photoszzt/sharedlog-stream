@@ -32,6 +32,7 @@ type NexMarkConfigInput struct {
 	BidHotRatioBidders     uint32        `json:"bid_hot_ratio_bidders"`
 	AuctionHotRatioSellers uint32        `json:"auction_hot_ratio_sellers"`
 	FlushMs                uint32        `json:"flushms"`
+	BufMaxSize             uint32        `json:"bufMaxSize"`
 	RateLimited            bool          `json:"rate_limited"`
 	WaitForEndMark         bool          `json:"waitEnd"`
 	SerdeFormat            uint8         `json:"serde_format"`
@@ -94,6 +95,7 @@ type GeneratorParams struct {
 	Duration       uint32
 	Tps            uint32
 	FlushMs        uint32
+	BufMaxSize     uint32
 	SerdeFormat    commtypes.SerdeFormat
 	WaitForEndMark bool
 }
@@ -114,6 +116,7 @@ func (gp *GeneratorParams) InvokeSourceFunc(client *http.Client,
 	nexmarkConfig.NumSrcInstance = srcInvokeConfig.NumSrcInstance
 	nexmarkConfig.FlushMs = gp.FlushMs
 	nexmarkConfig.WaitForEndMark = gp.WaitForEndMark
+	nexmarkConfig.BufMaxSize = gp.BufMaxSize
 	url := common.BuildFunctionUrl(gp.FaasGateway, "source")
 	fmt.Printf("func source url is %v\n", url)
 	if err := common.JsonPostRequest(client, url, srcInvokeConfig.NodeConstraint, nexmarkConfig, response); err != nil {

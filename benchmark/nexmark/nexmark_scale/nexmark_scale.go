@@ -33,6 +33,7 @@ var (
 	FLAGS_flush_ms        int
 	FLAGS_src_flush_ms    int
 	FLAGS_waitForEndMark  bool
+	FLAGS_buf_max_size    uint
 )
 
 func NewQueryInput(serdeFormat commtypes.SerdeFormat, duration uint32) *common.QueryInput {
@@ -53,6 +54,7 @@ func NewQueryInput(serdeFormat commtypes.SerdeFormat, duration uint32) *common.Q
 		FlushMs:       uint32(FLAGS_flush_ms),
 		WarmupS:       0,
 		SnapEveryS:    uint32(FLAGS_snapshot_everyS),
+		BufMaxSize:    uint32(FLAGS_buf_max_size),
 	}
 }
 
@@ -71,6 +73,7 @@ func main() {
 	flag.IntVar(&FLAGS_src_flush_ms, "src_flushms", 5, "src flush ms")
 	flag.IntVar(&FLAGS_events_num, "events_num", 1000000, "events num")
 	flag.UintVar(&FLAGS_snapshot_everyS, "snapshot_everyS", 0, "snapshot every s")
+	flag.UintVar(&FLAGS_buf_max_size, "buf_max_size", 131072, "sink buffer max size")
 
 	flag.Uint64Var(&FLAGS_commit_everyMs, "comm_everyMS", 10, "commit a transaction every (ms)")
 
@@ -127,6 +130,7 @@ func main() {
 		Tps:            uint32(FLAGS_tps),
 		FlushMs:        uint32(FLAGS_src_flush_ms),
 		WaitForEndMark: FLAGS_waitForEndMark,
+		BufMaxSize:     uint32(FLAGS_buf_max_size),
 	}
 	srcOutput := common.InvokeSrc(&wg, client, srcInvokeConfig, gp.InvokeSourceFunc, scaleEpoch)
 	beforeScaleOutput := common.InvokeFunctions(&wg, client, cliNodes, inParamsMap, scaleEpoch)

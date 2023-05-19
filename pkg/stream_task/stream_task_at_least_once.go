@@ -17,7 +17,8 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 	debug.Assert(args.env != nil, "env should be filled")
 	debug.Assert(args.ectx != nil, "program args should be filled")
 	// latencies := stats.NewInt64Collector("latPerIter", stats.DEFAULT_COLLECT_DURATION)
-	cm, err := consume_seq_num_manager.NewConsumeSeqManager(args.env, args.serdeFormat, args.transactionalId)
+	cm, err := consume_seq_num_manager.NewConsumeSeqManager(args.env, args.serdeFormat,
+		args.transactionalId, args.bufMaxSize)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -40,8 +41,8 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 	}
 	hasUntrackedConsume := false
 
-	debug.Fprintf(os.Stderr, "warmup time: %v, flush every: %v, waitEndMark: %v\n",
-		args.warmup, args.flushEvery, args.waitEndMark)
+	debug.Fprintf(os.Stderr, "warmup time: %v, flush every: %v, waitEndMark: %v, sinkBufMaxSize: %v\n",
+		args.warmup, args.flushEvery, args.waitEndMark, args.bufMaxSize, args.bufMaxSize)
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
 	warmupCheck.StartWarmup()
 	commitTimer := time.Now()

@@ -45,11 +45,13 @@ func (h *sharedlogTranProcessHandler) Call(ctx context.Context, input []byte) ([
 
 func (h *sharedlogTranProcessHandler) sharedlogTranProcess(ctx context.Context, sp *common.TranProcessBenchParam) *common.FnOutput {
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	inStream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, sp.InTopicName, sp.NumPartition, serdeFormat)
+	inStream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, sp.InTopicName,
+		sp.NumPartition, serdeFormat, sp.BufMaxSize)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
-	outStream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, sp.OutTopicName, sp.NumPartition, serdeFormat)
+	outStream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, sp.OutTopicName,
+		sp.NumPartition, serdeFormat, sp.BufMaxSize)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -103,6 +105,7 @@ func (h *sharedlogTranProcessHandler) sharedlogTranProcess(ctx context.Context, 
 		FlushEveryMs(sp.FlushMs).
 		Duration(sp.Duration).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
+		BufMaxSize(sp.BufMaxSize).
 		WaitEndMark(false).FixedOutParNum(0).Build()
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, stream_task.EmptySetupSnapshotCallback,
 		func() {

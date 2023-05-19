@@ -24,6 +24,7 @@ type QueryInput struct {
 	WarmupS               uint32                         `json:"warmup,omitempty"`
 	SnapEveryS            uint32                         `json:"snapEveryS,omitempty"`
 	Duration              uint32                         `json:"duration,omitempty"`
+	BufMaxSize            uint32                         `json:"bufMaxSize,omitempty"`
 	ScaleEpoch            uint16                         `json:"epoch"`
 	WaitForEndMark        bool                           `json:"waitEnd,omitempty"`
 	NumChangelogPartition uint8                          `json:"numChangelogPartition,omitempty"`
@@ -47,6 +48,7 @@ func (q *QueryInput) Clone() QueryInput {
 		WarmupS:              q.WarmupS,
 		SnapEveryS:           q.SnapEveryS,
 		Duration:             q.Duration,
+		BufMaxSize:           q.BufMaxSize,
 		ScaleEpoch:           q.ScaleEpoch,
 		WaitForEndMark:       q.WaitForEndMark,
 		NumInPartition:       q.NumInPartition,
@@ -61,6 +63,7 @@ type ConfigScaleInput struct {
 	Config      map[string]uint8 `json:"sg,omitempty"`
 	AppId       string           `json:"aid,omitempty"`
 	FuncNames   []string         `json:"fns,omitempty"`
+	BufMaxSize  uint32           `json:"bufMaxSize"`
 	ScaleEpoch  uint16           `json:"epoch,omitempty"`
 	SerdeFormat uint8            `json:"serdeFormat,omitempty"`
 	Bootstrap   bool             `json:"bs,omitempty"`
@@ -74,6 +77,7 @@ func (c *ConfigScaleInput) Clone() ConfigScaleInput {
 		ScaleEpoch:  c.ScaleEpoch,
 		SerdeFormat: c.SerdeFormat,
 		Bootstrap:   c.Bootstrap,
+		BufMaxSize:  c.BufMaxSize,
 	}
 }
 
@@ -139,6 +143,7 @@ type BenchSourceParam struct {
 	WarmUpTime      uint32 `json:"wt"`
 	WarmUpEvents    uint32 `json:"we"`
 	FlushMs         uint32 `json:"flushMs"`
+	BufMaxSize      uint32 `json:"bufMaxSize"`
 	SerdeFormat     uint8  `json:"serdeFormat"`
 	NumOutPartition uint8  `json:"numOutPar,omitempty"`
 }
@@ -149,6 +154,7 @@ type TranProcessBenchParam struct {
 	AppId         string `json:"appId"`
 	Duration      uint32 `json:"duration,omitempty"`
 	CommitEveryMs uint64 `json:"commEveryMs,omitempty"`
+	BufMaxSize    uint32 `json:"bufMaxSize,omitempty"`
 	FlushMs       uint32 `json:"flushMs,omitempty"`
 	SerdeFormat   uint8  `json:"serdeFormat"`
 	NumPartition  uint8  `json:"numPartition"`

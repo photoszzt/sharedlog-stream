@@ -25,6 +25,7 @@ var (
 	FLAGS_guarantee       string
 	FLAGS_commit_everyMs  uint64
 	FLAGS_snapshot_everyS uint
+	FLAGS_buf_max_size    uint
 	FLAGS_stat_dir        string
 	FLAGS_warmup_time     int
 	FLAGS_local           bool
@@ -246,6 +247,7 @@ func main() {
 	flag.IntVar(&FLAGS_flush_ms, "flushms", 10, "flush the buffer every ms; for exactly once, please see commit_everyMs and commit_niter. They determine the flush interval. ")
 	flag.IntVar(&FLAGS_src_flush_ms, "src_flushms", 5, "src flush ms")
 	flag.UintVar(&FLAGS_snapshot_everyS, "snapshot_everyS", 0, "snapshot every s")
+	flag.UintVar(&FLAGS_buf_max_size, "buf_max_size", 131072, "buffer max size")
 
 	flag.Uint64Var(&FLAGS_commit_everyMs, "comm_everyMS", 10, "commit a transaction every (ms)")
 
@@ -262,7 +264,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "expected guarantee is none, alo, 2pc and epoch")
 		return
 	}
-	fmt.Fprintf(os.Stderr, "wait for last: %v\n", FLAGS_waitForEndMark)
+	fmt.Fprintf(os.Stderr, "wait for last: %v, sink max_buf_size: %v\n", FLAGS_waitForEndMark, FLAGS_buf_max_size)
 	switch FLAGS_app_name {
 	case "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "windowedAvg":
 		serdeFormat := common.StringToSerdeFormat(FLAGS_serdeFormat)
@@ -274,6 +276,7 @@ func main() {
 			Tps:            uint32(FLAGS_tps),
 			FlushMs:        uint32(FLAGS_src_flush_ms),
 			WaitForEndMark: FLAGS_waitForEndMark,
+			BufMaxSize:     uint32(FLAGS_buf_max_size),
 		}
 		var invokeSourceFunc_ invokeSource
 		if FLAGS_test_src != "" {

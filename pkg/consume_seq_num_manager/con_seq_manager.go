@@ -21,13 +21,15 @@ type ConsumeSeqManager struct {
 	offsetLogMarkerTag uint64
 }
 
-func NewConsumeSeqManager(env types.Environment, serdeFormat commtypes.SerdeFormat, conSeqMngrName string) (*ConsumeSeqManager, error) {
+func NewConsumeSeqManager(env types.Environment, serdeFormat commtypes.SerdeFormat,
+	conSeqMngrName string, bufMaxSize uint32,
+) (*ConsumeSeqManager, error) {
 	offsetMarkerSerde, err := commtypes.GetOffsetMarkerSerdeG(serdeFormat)
 	if err != nil {
 		return nil, err
 	}
 	off, err := sharedlog_stream.NewShardedSharedLogStream(env,
-		CONSUMER_OFFSET_LOG_TOPIC_NAME+"_"+conSeqMngrName, 1, serdeFormat)
+		CONSUMER_OFFSET_LOG_TOPIC_NAME+"_"+conSeqMngrName, 1, serdeFormat, bufMaxSize)
 	if err != nil {
 		return nil, err
 	}

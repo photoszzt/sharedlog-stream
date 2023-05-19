@@ -31,7 +31,7 @@ func createChangelogManagerAndUpdateMsgSerde[K, V any](mp *MaterializeParam[K, V
 ) {
 	changelog, err := CreateChangelog(mp.changelogParam.Env,
 		mp.storeName, mp.changelogParam.NumPartition,
-		mp.serdeFormat)
+		mp.serdeFormat, mp.bufMaxSize)
 	if err != nil {
 		return nil, nil, err
 	}

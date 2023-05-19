@@ -27,7 +27,7 @@ func NewKeyValueStoreWithChangelogG[K, V any](mp *MaterializeParam[K, V],
 	store store.CoreKeyValueStoreG[K, V],
 ) (*KeyValueStoreWithChangelogG[K, V], error) {
 	changelog, err := CreateChangelog(mp.changelogParam.Env,
-		mp.storeName, mp.changelogParam.NumPartition, mp.serdeFormat)
+		mp.storeName, mp.changelogParam.NumPartition, mp.serdeFormat, mp.bufMaxSize)
 	if err != nil {
 		return nil, err
 	}

@@ -22,7 +22,9 @@ func UpdateStreamTaskArgs(sp *common.QueryInput, argsBuilder stream_task.SetGuar
 		CommitEveryMs(sp.CommitEveryMs).
 		FlushEveryMs(sp.FlushMs).
 		Duration(sp.Duration).
-		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).WaitEndMark(sp.WaitForEndMark)
+		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
+		BufMaxSize(sp.BufMaxSize).
+		WaitEndMark(sp.WaitForEndMark)
 	if sp.TestParams != nil {
 		ret.TestParams(sp.TestParams)
 	}
@@ -37,7 +39,7 @@ func GetShardedInputOutputStreams(ctx context.Context,
 	input *common.QueryInput,
 ) (*sharedlog_stream.ShardedSharedLogStream, []*sharedlog_stream.ShardedSharedLogStream, error) {
 	inputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[0], input.NumInPartition,
-		commtypes.SerdeFormat(input.SerdeFormat))
+		commtypes.SerdeFormat(input.SerdeFormat), input.BufMaxSize)
 	if err != nil {
 		return nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
 
@@ -45,7 +47,7 @@ func GetShardedInputOutputStreams(ctx context.Context,
 	var output_streams []*sharedlog_stream.ShardedSharedLogStream
 	for idx, name := range input.OutputTopicNames {
 		outputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, name, input.NumOutPartitions[idx],
-			commtypes.SerdeFormat(input.SerdeFormat))
+			commtypes.SerdeFormat(input.SerdeFormat), input.BufMaxSize)
 		if err != nil {
 			return nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
 		}

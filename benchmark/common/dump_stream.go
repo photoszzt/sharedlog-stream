@@ -17,12 +17,14 @@ type DumpOutputStreamConfig struct {
 	MsgSerde      commtypes.MessageSerde
 	OutputDir     string
 	TopicName     string
+	BufMaxSize    uint32
 	SerdeFormat   commtypes.SerdeFormat
 	NumPartitions uint8
 }
 
 func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutputStreamConfig) error {
-	log, err := sharedlog_stream.NewShardedSharedLogStream(env, args.TopicName, args.NumPartitions, args.SerdeFormat)
+	log, err := sharedlog_stream.NewShardedSharedLogStream(env, args.TopicName, args.NumPartitions,
+		args.SerdeFormat, args.BufMaxSize)
 	if err != nil {
 		return err
 	}

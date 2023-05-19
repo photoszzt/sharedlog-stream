@@ -118,7 +118,6 @@ func ParseInvokeParam(invokeParam InvokeFuncParam, baseQueryInput *QueryInput,
 				baseClone.NumSubstreamProducer = numSrcProducer
 				baseClone.NumInPartition = numInSubs
 				baseClone.NumOutPartitions = numOutPartitions
-				baseClone.WaitForEndMark = invokeParam.WaitForEndMark
 				if hasChangelog {
 					baseClone.NumChangelogPartition = changelog
 				}
@@ -138,6 +137,7 @@ func ParseInvokeParam(invokeParam InvokeFuncParam, baseQueryInput *QueryInput,
 		FuncNames:   funcNames,
 		SerdeFormat: baseQueryInput.SerdeFormat,
 		AppId:       baseQueryInput.AppId,
+		BufMaxSize:  baseQueryInput.BufMaxSize,
 	}
 	return srcInvokeConfig, cliNodes, inParamsMap, configScaleInput, nil
 }
