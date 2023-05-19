@@ -1,8 +1,8 @@
 {
     "FuncParam": [
         {
-            "funcName": "source",
-            "NumInstance": 1,
+            "funcName": "nexmark_src",
+            "NumInstance": 2,
             "OutputTopicName": [
                 "nexmark_src"
             ],
@@ -10,7 +10,7 @@
         },
         {
             "funcName": "q46GroupBy",
-            "NumInstance": 1,
+            "NumInstance": 2,
             "InputTopicNames": [
                 "nexmark_src"
             ],
@@ -23,7 +23,7 @@
         },
         {
             "funcName": "q4JoinStream",
-            "NumInstance": 1,
+            "NumInstance": 2,
             "InputTopicNames": [
                 "q46_aucsByID",
                 "q46_bidsByAucID"
@@ -32,11 +32,11 @@
                 "q4_aucIDCat"
             ],
             "NodeConstraint": "2",
-            "NumSrcProducer": [1, 1]
+            "NumSrcProducer": [2, 2]
         },
         {
             "funcName": "q4MaxBid",
-            "NumInstance": 1,
+            "NumInstance": 2,
             "InputTopicNames": [
                 "q4_aucIDCat"
             ],
@@ -48,7 +48,7 @@
         },
         {
             "funcName": "q4Avg",
-            "NumInstance": 1,
+            "NumInstance": 2,
             "InputTopicNames": [
                 "q4_maxBids"
             ],
@@ -56,15 +56,16 @@
                 "q4_out"
             ],
             "NodeConstraint": "2",
-            "NumSrcProducer": [1]
+            "NumSrcProducer": [2]
         }
     ],
     "StreamParam": {
-        "nexmark_src": 1,
-        "q46_aucsByID": 1,
-        "q46_bidsByAucID": 1,
-        "q4_aucIDCat": 1,
-        "q4_maxBids": 1,
-        "q4_out": 1
+        "nexmark_src": 2,
+        "q46_aucsByID": 2,
+        "q46_bidsByAucID": 2,
+        "q4_aucIDCat": 2,
+        "q4_maxBids": 2,
+        "changelog": 2,
+        "q4_out": 2
     }
 }
