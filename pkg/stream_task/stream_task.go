@@ -227,7 +227,7 @@ func updateReturnMetric(ret *common.FnOutput, warmupChecker *stats.Warmup,
 	} else {
 		ret.Duration = warmupChecker.ElapsedAfterWarmup().Seconds()
 	}
-	fmt.Fprintf(os.Stderr, "duration: %f s\n", ret.Duration)
+	fmt.Fprintf(os.Stderr, "[%d]duration: %f s, uts: %d\n", instanceID, ret.Duration, time.Now().UnixMilli())
 }
 
 // for key value table, it's possible that the changelog is the source stream of the task

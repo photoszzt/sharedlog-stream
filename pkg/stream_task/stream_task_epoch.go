@@ -203,6 +203,7 @@ func processInEpoch(
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("RestoreMappingAndWaitForPrevTask: %v", err))
 	}
+	fmt.Fprintf(os.Stderr, "restore mapping done %d\n", time.Now().UnixMilli())
 	// execIntrMs := stats.NewPrintLogStatsCollector[int64]("execIntrMs")
 	// thisAndLastCmtMs := stats.NewPrintLogStatsCollector[int64]("thisAndLastCmtMs")
 	// markPartUs := stats.NewPrintLogStatsCollector[int64]("markPartUs")
