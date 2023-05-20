@@ -475,7 +475,7 @@ func handleScaleEpochAndBytes(ctx context.Context, msg commtypes.RawMsgAndSeq,
 			if err != nil {
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
-			debug.Fprintf(os.Stderr, "%d forward scale fence to %s(%d)\n",
+			fmt.Fprintf(os.Stderr, "%d forward scale fence to %s(%d)\n",
 				args.ectx.SubstreamNum(), sink.TopicName(), args.fixedOutParNum)
 		} else {
 			parNums := make([]uint8, 0, sink.Stream().NumPartition())
@@ -486,7 +486,7 @@ func handleScaleEpochAndBytes(ctx context.Context, msg commtypes.RawMsgAndSeq,
 			if err != nil {
 				return &common.FnOutput{Success: false, Message: err.Error()}
 			}
-			debug.Fprintf(os.Stderr, "%d forward scale fence to %s(%v)\n",
+			fmt.Fprintf(os.Stderr, "%d forward scale fence to %s(%v)\n",
 				args.ectx.SubstreamNum(), sink.TopicName(), parNums)
 		}
 	}
