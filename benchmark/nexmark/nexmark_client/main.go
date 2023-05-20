@@ -247,7 +247,7 @@ func main() {
 	flag.IntVar(&FLAGS_flush_ms, "flushms", 10, "flush the buffer every ms; for exactly once, please see commit_everyMs and commit_niter. They determine the flush interval. ")
 	flag.IntVar(&FLAGS_src_flush_ms, "src_flushms", 5, "src flush ms")
 	flag.UintVar(&FLAGS_snapshot_everyS, "snapshot_everyS", 0, "snapshot every s")
-	flag.UintVar(&FLAGS_buf_max_size, "buf_max_size", 131072, "buffer max size")
+	flag.UintVar(&FLAGS_buf_max_size, "buf_max_size", 131072, "sink buffer max size")
 
 	flag.Uint64Var(&FLAGS_commit_everyMs, "comm_everyMS", 10, "commit a transaction every (ms)")
 

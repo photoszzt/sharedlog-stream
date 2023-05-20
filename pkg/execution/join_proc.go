@@ -9,7 +9,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/optional"
-	"sharedlog-stream/pkg/producer_consumer"
+	// "sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/stream_task"
 	"sync"
 	"time"
@@ -141,7 +141,7 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 					continue
 				}
 				subMsg.StartProcTime = time.Now()
-				producer_consumer.ExtractProduceToConsumeTimeMsgG(consumer, &subMsg)
+				// producer_consumer.ExtractProduceToConsumeTimeMsgG(consumer, &subMsg)
 				// batchTime := rawMsgSeq.InjTsMs - subMsg.InjTMs
 				// consumer.CollectBatchTime(batchTime)
 				// debug.Fprintf(os.Stderr, "[id=%s] before proc msg with sink1\n", id)
@@ -161,7 +161,7 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 				continue
 			}
 			msgs.Msg.StartProcTime = time.Now()
-			producer_consumer.ExtractProduceToConsumeTimeMsgG(consumer, &msgs.Msg)
+			// producer_consumer.ExtractProduceToConsumeTimeMsgG(consumer, &msgs.Msg)
 			err = procMsgWithSink(ctx, msgs.Msg, msgSerdePair.outMsgSerde, procArgs, id)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink2: %v, out chan len: %d\n", id, err, len(jm.out))

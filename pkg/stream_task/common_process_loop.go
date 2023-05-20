@@ -9,7 +9,7 @@ import (
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
-	"sharedlog-stream/pkg/producer_consumer"
+	// "sharedlog-stream/pkg/producer_consumer"
 	"time"
 
 	"golang.org/x/xerrors"
@@ -81,7 +81,7 @@ func processMsgAndSeq[K, V any](ctx context.Context,
 	procMsg proc_interface.ProcessMsgFunc[K, V], isInitialSrc bool,
 	beforeInjToStreamTs int64,
 ) error {
-	meteredConsumer := args.Consumers()[0]
+	// meteredConsumer := args.Consumers()[0]
 	if msg.MsgArr != nil {
 		for _, subMsg := range msg.MsgArr {
 			if subMsg.Key.IsNone() && subMsg.Value.IsNone() {
@@ -91,7 +91,7 @@ func processMsgAndSeq[K, V any](ctx context.Context,
 			// 	batchTime := beforeInjToStreamTs - subMsg.InjTMs
 			// 	meteredConsumer.CollectBatchTime(batchTime)
 			// }
-			producer_consumer.ExtractProduceToConsumeTimeMsgG(meteredConsumer, &subMsg)
+			// producer_consumer.ExtractProduceToConsumeTimeMsgG(meteredConsumer, &subMsg)
 			if isInitialSrc {
 				err := subMsg.ExtractEventTimeFromVal()
 				if err != nil {
@@ -112,7 +112,7 @@ func processMsgAndSeq[K, V any](ctx context.Context,
 				return fmt.Errorf("ExtractEventTimeFromVal: %v", err)
 			}
 		}
-		producer_consumer.ExtractProduceToConsumeTimeMsgG(meteredConsumer, &msg.Msg)
+		// producer_consumer.ExtractProduceToConsumeTimeMsgG(meteredConsumer, &msg.Msg)
 		msg.Msg.StartProcTime = time.Now()
 		err := procMsg(ctx, msg.Msg, args)
 		if err != nil {

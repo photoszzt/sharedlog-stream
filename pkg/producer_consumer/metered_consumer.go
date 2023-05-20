@@ -13,7 +13,7 @@ import (
 type MeteredConsumer struct {
 	consumer *ShardedSharedLogStreamConsumer
 	// latencies   stats.StatsCollector[int64]
-	pToCLat stats.PrintLogStatsCollector[int64]
+	// pToCLat stats.PrintLogStatsCollector[int64]
 	// msgBatchTime stats.PrintLogStatsCollector[int64]
 	consumeTp   stats.ThroughputCounter
 	numLogEntry uint64
@@ -40,7 +40,7 @@ func NewMeteredConsumer(src *ShardedSharedLogStreamConsumer, warmup time.Duratio
 	return &MeteredConsumer{
 		consumer: src,
 		// latencies: stats.NewStatsCollector[int64](src_name, stats.DEFAULT_COLLECT_DURATION),
-		pToCLat: stats.NewPrintLogStatsCollector[int64]("procTo" + src_name),
+		// pToCLat: stats.NewPrintLogStatsCollector[int64]("procTo" + src_name),
 		// msgBatchTime: stats.NewPrintLogStatsCollector[int64]("msgBatchTime" + src_name),
 		consumeTp: stats.NewThroughputCounter(src_name, stats.DEFAULT_COLLECT_DURATION),
 		ctrlCount: 0,
@@ -107,16 +107,16 @@ func (s *MeteredConsumer) Consume(ctx context.Context, parNum uint8) (commtypes.
 	return rawMsgSeq, err
 }
 
-func ExtractProduceToConsumeTime(s *MeteredConsumer, msg *commtypes.Message) {
-	extractProduceToConsumeTime(msg, s.IsInitialSource(), &s.pToCLat)
-}
-
-func ExtractProduceToConsumeTimeMsgG[K, V any](s *MeteredConsumer, msg *commtypes.MessageG[K, V]) {
-	extractProduceToConsumeTimeMsgG(msg, s.IsInitialSource(), &s.pToCLat)
-}
+// func ExtractProduceToConsumeTime(s *MeteredConsumer, msg *commtypes.Message) {
+// 	extractProduceToConsumeTime(msg, s.IsInitialSource(), &s.pToCLat)
+// }
+//
+// func ExtractProduceToConsumeTimeMsgG[K, V any](s *MeteredConsumer, msg *commtypes.MessageG[K, V]) {
+// 	extractProduceToConsumeTimeMsgG(msg, s.IsInitialSource(), &s.pToCLat)
+// }
 
 func (s *MeteredConsumer) OutputRemainingStats() {
-	s.pToCLat.PrintRemainingStats()
+	// s.pToCLat.PrintRemainingStats()
 	if s.consumer.emc != nil {
 		s.consumer.emc.OutputRemainingStats()
 	}
