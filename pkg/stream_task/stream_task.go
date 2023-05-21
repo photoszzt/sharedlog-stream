@@ -518,12 +518,12 @@ func loadSnapshot(ctx context.Context,
 			for kvchTp, kvchangelog := range args.kvChangelogs {
 				snapArr, err := rs.GetSnapshot(ctx, kvchTp, auxMetaSeq)
 				if err != nil {
-					return err
+					return fmt.Errorf("[ERR] RedisGetSnapshot: tp=%s, seq=%#x, err=%v", kvchTp, auxMetaSeq, err)
 				}
 				if len(snapArr) > 0 {
 					payloadArr, err := payloadSerde.Decode(snapArr)
 					if err != nil {
-						return err
+						return fmt.Errorf("[ERR] Fail to decode snapshot: %v", err)
 					}
 					err = kvchangelog.RestoreFromSnapshot(payloadArr.Payloads)
 					if err != nil {
@@ -535,12 +535,12 @@ func loadSnapshot(ctx context.Context,
 			for wscTp, wsc := range args.windowStoreChangelogs {
 				snapArr, err := rs.GetSnapshot(ctx, wscTp, auxMetaSeq)
 				if err != nil {
-					return err
+					return fmt.Errorf("[ERR] RedisGetSnapshot: tp=%s, seq=%#x, err=%v", wscTp, auxMetaSeq, err)
 				}
 				if snapArr != nil {
 					payloadArr, err := payloadSerde.Decode(snapArr)
 					if err != nil {
-						return err
+						return fmt.Errorf("[ERR] Fail to decode snapshot: %v", err)
 					}
 					err = wsc.RestoreFromSnapshot(ctx, payloadArr.Payloads)
 					if err != nil {
