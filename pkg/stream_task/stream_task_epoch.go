@@ -81,6 +81,19 @@ func SetupManagersForEpoch(ctx context.Context,
 	if err != nil {
 		return nil, nil, err
 	}
+	cmm, err := control_channel.NewControlChannelManager(args.env, args.appId,
+		args.serdeFormat, args.bufMaxSize, args.ectx.CurEpoch(), args.ectx.SubstreamNum())
+	if err != nil {
+		return nil, nil, err
+	}
+	debug.Fprintf(os.Stderr, "[%d] start restore potential mapping\n", args.ectx.SubstreamNum())
+	err = cmm.RestoreMappingAndWaitForPrevTask(
+		ctx, args.ectx.FuncName(), env_config.CREATE_SNAPSHOT, args.serdeFormat,
+		args.kvChangelogs, args.windowStoreChangelogs, rs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("RestoreMappingAndWaitForPrevTask: %v", err)
+	}
+	fmt.Fprintf(os.Stderr, "[%d] restore potential mapping done\n", args.ectx.SubstreamNum())
 	initEmStart := time.Now()
 	recentMeta, rawMetaMsg, err := em.Init(ctx)
 	if err != nil {
@@ -97,19 +110,6 @@ func SetupManagersForEpoch(ctx context.Context,
 	if err != nil {
 		return nil, nil, err
 	}
-	cmm, err := control_channel.NewControlChannelManager(args.env, args.appId,
-		args.serdeFormat, args.bufMaxSize, args.ectx.CurEpoch(), args.ectx.SubstreamNum())
-	if err != nil {
-		return nil, nil, err
-	}
-	debug.Fprintf(os.Stderr, "[%d] start restore potential mapping\n", args.ectx.SubstreamNum())
-	err = cmm.RestoreMappingAndWaitForPrevTask(
-		ctx, args.ectx.FuncName(), env_config.CREATE_SNAPSHOT, args.serdeFormat,
-		args.kvChangelogs, args.windowStoreChangelogs, rs)
-	if err != nil {
-		return nil, nil, fmt.Errorf("RestoreMappingAndWaitForPrevTask: %v", err)
-	}
-	fmt.Fprintf(os.Stderr, "[%d] restore potential mapping done\n", args.ectx.SubstreamNum())
 	lastMark := uint64(0)
 	if recentMeta != nil {
 		restoreBeg := time.Now()
@@ -145,7 +145,7 @@ func SetupManagersForEpoch(ctx context.Context,
 					return nil, nil, fmt.Errorf("[ERR] FindLastEpochMetaWithAuxData: %v", err)
 				}
 			}
-			fmt.Fprintf(os.Stderr, "[%d] auxData: %v, auxMetaSeq: %v\n", args.ectx.SubstreamNum(), auxData, auxMetaSeq)
+			fmt.Fprintf(os.Stderr, "[%d] auxData: %v, auxMetaSeq: %#x\n", args.ectx.SubstreamNum(), auxData, auxMetaSeq)
 			err = loadSnapshot(ctx, args, auxData, auxMetaSeq, rs)
 			if err != nil {
 				return nil, nil, err

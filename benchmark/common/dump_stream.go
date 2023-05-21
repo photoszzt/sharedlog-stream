@@ -53,8 +53,8 @@ func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutpu
 				if err != nil {
 					return err
 				}
-				outStr := fmt.Sprintf("%+v, logSeq: %#x, prodId: %s\n",
-					epochMark, rawMsg.LogSeqNum, rawMsg.ProdId.String())
+				outStr := fmt.Sprintf("%+v, logSeq: %#x, prodId: %s, auxData: %v\n",
+					epochMark, rawMsg.LogSeqNum, rawMsg.ProdId.String(), rawMsg.AuxData)
 				// fmt.Fprint(os.Stderr, outStr)
 				writted, err := outFile.WriteString(outStr)
 				if err != nil {

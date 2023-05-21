@@ -119,6 +119,8 @@ func (cmm *ControlChannelManager) loadAndDecodeSnapshot(
 			}
 			return payloadArr.Payloads, nil
 		}
+	} else {
+		fmt.Fprintf(os.Stderr, "no snapshot for %s, metaSeqNum %#x\n", topic, metaSeqNum)
 	}
 	return nil, nil
 }

@@ -29,6 +29,7 @@ var (
 	FLAGS_commit_everyMs  uint64
 	FLAGS_snapshot_everyS uint
 	FLAGS_stat_dir        string
+	FLAGS_dump_dir        string
 	FLAGS_local           bool
 	FLAGS_flush_ms        int
 	FLAGS_src_flush_ms    int
@@ -45,16 +46,17 @@ func NewQueryInput(serdeFormat commtypes.SerdeFormat, duration uint32) *common.Q
 		guarantee = exactly_once_intr.EPOCH_MARK
 	}
 	return &common.QueryInput{
-		Duration:      duration,
-		GuaranteeMth:  uint8(guarantee),
-		CommitEveryMs: FLAGS_commit_everyMs,
-		SerdeFormat:   uint8(serdeFormat),
-		AppId:         FLAGS_app_name,
-		TableType:     uint8(table_type),
-		FlushMs:       uint32(FLAGS_flush_ms),
-		WarmupS:       0,
-		SnapEveryS:    uint32(FLAGS_snapshot_everyS),
-		BufMaxSize:    uint32(FLAGS_buf_max_size),
+		Duration:       duration,
+		GuaranteeMth:   uint8(guarantee),
+		CommitEveryMs:  FLAGS_commit_everyMs,
+		SerdeFormat:    uint8(serdeFormat),
+		AppId:          FLAGS_app_name,
+		TableType:      uint8(table_type),
+		FlushMs:        uint32(FLAGS_flush_ms),
+		WarmupS:        0,
+		SnapEveryS:     uint32(FLAGS_snapshot_everyS),
+		BufMaxSize:     uint32(FLAGS_buf_max_size),
+		WaitForEndMark: FLAGS_waitForEndMark,
 	}
 }
 
@@ -65,6 +67,7 @@ func main() {
 	flag.StringVar(&FLAGS_workload_config, "wconfig", "./wconfig.json", "path to a json file that stores workload config")
 	flag.StringVar(&FLAGS_scale_config, "scconfig", "./scconfig.json", "path to a json file that stores scale config")
 	flag.StringVar(&FLAGS_stat_dir, "stat_dir", "", "stats dir to dump")
+	flag.StringVar(&FLAGS_dump_dir, "dumpdir", "", "output dir for dumps")
 
 	flag.IntVar(&FLAGS_durBeforeScale, "durBF", 60, "duration before scale")
 	flag.IntVar(&FLAGS_durAfterScale, "durAF", 60, "duration after scale")
@@ -86,6 +89,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "expected guarantee is alo, 2pc and epoch")
 		return
 	}
+	fmt.Fprintf(os.Stderr, "wait for last: %v, sink max_buf_size: %v\n", FLAGS_waitForEndMark, FLAGS_buf_max_size)
 	serdeFormat := common.StringToSerdeFormat(FLAGS_serdeFormat)
 	invokeFuncParam := common.InvokeFuncParam{
 		ConfigFile:     FLAGS_workload_config,
@@ -165,4 +169,19 @@ func main() {
 	common.ParseFunctionOutputs(beforeScaleOutput, statsBeforeScale)
 	fmt.Fprintf(os.Stderr, "after scale\n")
 	common.ParseFunctionOutputs(afterScaleOutput, statsAfterScale)
+	if FLAGS_dump_dir != "" {
+		fmt.Fprintf(os.Stderr, "dumping log\n")
+		err = os.MkdirAll(FLAGS_dump_dir, 0750)
+		if err != nil {
+			panic(err)
+		}
+		client := &http.Client{
+			Transport: &http.Transport{
+				IdleConnTimeout: 30 * time.Second,
+			},
+			Timeout: timeout,
+		}
+		common.InvokeDumpFunc(client, FLAGS_dump_dir, FLAGS_app_name,
+			common.GetSerdeFormat(FLAGS_serdeFormat), FLAGS_faas_gateway)
+	}
 }

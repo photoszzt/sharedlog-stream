@@ -152,8 +152,8 @@ type TranProcessBenchParam struct {
 	InTopicName   string `json:"inTopicName"`
 	OutTopicName  string `json:"outTopicName"`
 	AppId         string `json:"appId"`
-	Duration      uint32 `json:"duration,omitempty"`
 	CommitEveryMs uint64 `json:"commEveryMs,omitempty"`
+	Duration      uint32 `json:"duration,omitempty"`
 	BufMaxSize    uint32 `json:"bufMaxSize,omitempty"`
 	FlushMs       uint32 `json:"flushMs,omitempty"`
 	SerdeFormat   uint8  `json:"serdeFormat"`

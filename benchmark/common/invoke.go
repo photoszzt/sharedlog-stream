@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sharedlog-stream/pkg/commtypes"
 	"sync"
 	"time"
 
 	"github.com/Jeffail/gabs/v2"
+	"github.com/rs/zerolog/log"
 )
 
 type SrcInvokeConfig struct {
@@ -118,6 +120,7 @@ func ParseInvokeParam(invokeParam InvokeFuncParam, baseQueryInput *QueryInput,
 				baseClone.NumSubstreamProducer = numSrcProducer
 				baseClone.NumInPartition = numInSubs
 				baseClone.NumOutPartitions = numOutPartitions
+				baseClone.WaitForEndMark = invokeParam.WaitForEndMark
 				if hasChangelog {
 					baseClone.NumChangelogPartition = changelog
 				}
@@ -277,4 +280,177 @@ func Invoke(invokeParam InvokeFuncParam,
 	ParseSrcOutput(sourceOutput, invokeParam.StatDir)
 	ParseFunctionOutputs(outputMap, invokeParam.StatDir)
 	return nil
+}
+
+func InvokeDumpFunc(client *http.Client, dumpDir string,
+	app_name string, serdeFormat commtypes.SerdeFormat, faas_gateway string,
+) {
+	dumpInput := DumpStreams{
+		DumpDir:     dumpDir,
+		SerdeFormat: uint8(serdeFormat),
+	}
+	switch app_name {
+	case "q1", "q2":
+		dumpInput.StreamParams = []StreamParam{
+			{
+				TopicName:     fmt.Sprintf("%s_out", app_name),
+				NumPartitions: 4,
+				KeySerde:      "String",
+				ValueSerde:    "Event",
+			},
+		}
+	case "q3":
+		dumpInput.StreamParams = []StreamParam{
+			{
+				TopicName:     fmt.Sprintf("%s_out", app_name),
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "NameCityStateId",
+			},
+		}
+	case "q4":
+		dumpInput.StreamParams = []StreamParam{
+			{
+				TopicName:     fmt.Sprintf("%s_out", app_name),
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "Float64",
+			},
+			{
+				TopicName:     "q46_aucsByID",
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "Event",
+			},
+			{
+				TopicName:     "q46_bidsByAucID",
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "Event",
+			},
+			{
+				TopicName:     "q4_aucIDCat",
+				NumPartitions: 4,
+				KeySerde:      "AuctionIdCategory",
+				ValueSerde:    "AuctionBid",
+			},
+			{
+				TopicName:     "q4_maxBids",
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "ChangeUint64",
+			},
+		}
+	case "q6":
+		dumpInput.StreamParams = []StreamParam{
+			{
+				TopicName:     fmt.Sprintf("%s_out", app_name),
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "Float64",
+			},
+			{
+				TopicName:     "q46_aucsByID",
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "Event",
+			},
+			{
+				TopicName:     "q46_bidsByAucID",
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "Event",
+			},
+			{
+				TopicName:     "q6_aucIDSeller",
+				NumPartitions: 4,
+				KeySerde:      "AuctionIdSeller",
+				ValueSerde:    "AuctionBid",
+			},
+			{
+				TopicName:     "q6_maxBids",
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "ChangePriceTime",
+			},
+		}
+	case "q5":
+		dumpInput.StreamParams = []StreamParam{
+			{
+				TopicName:     fmt.Sprintf("%s_out", app_name),
+				NumPartitions: 4,
+				KeySerde:      "StartEndTime",
+				ValueSerde:    "AuctionIdCntMax",
+			},
+			{
+				TopicName:     "bids",
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "Event",
+			},
+			{
+				TopicName:     "aucBids",
+				NumPartitions: 4,
+				KeySerde:      "StartEndTime",
+				ValueSerde:    "AuctionIdCount",
+			},
+		}
+	case "q7":
+		dumpInput.StreamParams = []StreamParam{
+			{
+				TopicName:     fmt.Sprintf("%s_out", app_name),
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "BidAndMax",
+			},
+			{
+				TopicName:     "bid_by_price",
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "Event",
+			},
+			{
+				TopicName:     "bid_by_win",
+				NumPartitions: 4,
+				KeySerde:      "StartEndTime",
+				ValueSerde:    "Event",
+			},
+			{
+				TopicName:     "max_bids",
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "StartEndTime",
+			},
+		}
+	case "q8":
+		dumpInput.StreamParams = []StreamParam{
+			{
+				TopicName:     fmt.Sprintf("%s_out", app_name),
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "PersonTime",
+			},
+			{
+				TopicName:     "q8_aucsBySellerID_out",
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "Event",
+			},
+			{
+				TopicName:     "q8_personsByID_out",
+				NumPartitions: 4,
+				KeySerde:      "Uint64",
+				ValueSerde:    "Event",
+			},
+		}
+	}
+	url := BuildFunctionUrl(faas_gateway, "dump")
+	fmt.Printf("func source url is %v\n", url)
+	var response FnOutput
+	if err := JsonPostRequest(client, url, "", &dumpInput, &response); err != nil {
+		log.Error().Msgf("dump request failed: %v", err)
+	} else if !response.Success {
+		log.Error().Msgf("dump request failed: %s", response.Message)
+	}
+	fmt.Fprintf(os.Stderr, "%sDump invoke done\n", app_name)
 }

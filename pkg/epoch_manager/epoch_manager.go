@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
@@ -14,7 +15,6 @@ import (
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/txn_data"
 
-	"cs.utexas.edu/zjia/faas/protocol"
 	"cs.utexas.edu/zjia/faas/types"
 	"github.com/zhangyunhao116/skipmap"
 	"github.com/zhangyunhao116/skipset"
@@ -108,6 +108,26 @@ func (em *EpochManager) SyncToRecent(ctx context.Context) ([]commtypes.RawMsg, e
 		return nil, fmt.Errorf("PushWithTag: %v", err)
 	}
 	return em.epochLog.ReadNextWithTagUntil(ctx, 0, tags[1], off)
+}
+
+func (em *EpochManager) SyncToRecentNoRead(ctx context.Context) (uint64, error) {
+	meta := sharedlog_stream.SyncToRecentMeta()
+	// making the empty entry with the fence tag so that the fence record or the
+	// empty entry will be read and skipping the progress marker entries.
+	tags := []uint64{
+		sharedlog_stream.NameHashWithPartition(em.epochLog.TopicNameHash(), 0),
+		txn_data.FenceTag(em.epochLog.TopicNameHash(), 0),
+	}
+	producerId := commtypes.ProducerId{
+		TaskId:    em.prodId.TaskId,
+		TaskEpoch: em.prodId.TaskEpoch,
+	}
+	off, err := em.epochLog.PushWithTag(ctx, nil, 0, tags, nil,
+		meta, producerId)
+	if err != nil {
+		return 0, fmt.Errorf("PushWithTag: %v", err)
+	}
+	return off, nil
 }
 
 func (em *EpochManager) AddTopicSubstream(ctx context.Context,
@@ -215,7 +235,12 @@ func (em *EpochManager) MarkEpoch(ctx context.Context,
 }
 
 func (em *EpochManager) Init(ctx context.Context) (*commtypes.EpochMarker, *commtypes.RawMsg, error) {
-	recentMeta, metaMsg, err := em.getMostRecentCommitEpoch(ctx)
+	off, err := em.SyncToRecentNoRead(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	fmt.Fprintf(os.Stderr, "%s sync to recent, off: %#x\n", em.epochLog.TopicName(), off)
+	recentMeta, metaMsg, err := em.getMostRecentCommitEpoch(ctx, off)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -245,8 +270,8 @@ func (em *EpochManager) Init(ctx context.Context) (*commtypes.EpochMarker, *comm
 	return recentMeta, metaMsg, nil
 }
 
-func (em *EpochManager) getMostRecentCommitEpoch(ctx context.Context) (*commtypes.EpochMarker, *commtypes.RawMsg, error) {
-	rawMsg, err := em.epochLog.ReadBackwardWithTag(ctx, protocol.MaxLogSeqnum, 0, em.epochLogMarkerTag)
+func (em *EpochManager) getMostRecentCommitEpoch(ctx context.Context, recentOff uint64) (*commtypes.EpochMarker, *commtypes.RawMsg, error) {
+	rawMsg, err := em.epochLog.ReadBackwardWithTag(ctx, recentOff, 0, em.epochLogMarkerTag)
 	if err != nil {
 		if common_errors.IsStreamEmptyError(err) {
 			return nil, nil, nil

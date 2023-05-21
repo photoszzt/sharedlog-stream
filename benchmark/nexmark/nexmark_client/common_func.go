@@ -34,16 +34,17 @@ func NewQueryInput(serdeFormat commtypes.SerdeFormat) *common.QueryInput {
 		fmt.Fprintf(os.Stderr, "Fail spec is %+v\n", failSpec)
 	}
 	return &common.QueryInput{
-		Duration:      uint32(FLAGS_duration),
-		GuaranteeMth:  uint8(guarantee),
-		CommitEveryMs: FLAGS_commit_everyMs,
-		SerdeFormat:   uint8(serdeFormat),
-		AppId:         FLAGS_app_name,
-		TableType:     uint8(table_type),
-		FlushMs:       uint32(FLAGS_flush_ms),
-		WarmupS:       uint32(FLAGS_warmup_time),
-		TestParams:    failSpec.FailSpec,
-		SnapEveryS:    uint32(FLAGS_snapshot_everyS),
-		BufMaxSize:    uint32(FLAGS_buf_max_size),
+		Duration:       uint32(FLAGS_duration),
+		GuaranteeMth:   uint8(guarantee),
+		CommitEveryMs:  FLAGS_commit_everyMs,
+		SerdeFormat:    uint8(serdeFormat),
+		AppId:          FLAGS_app_name,
+		TableType:      uint8(table_type),
+		FlushMs:        uint32(FLAGS_flush_ms),
+		WarmupS:        uint32(FLAGS_warmup_time),
+		TestParams:     failSpec.FailSpec,
+		SnapEveryS:     uint32(FLAGS_snapshot_everyS),
+		BufMaxSize:     uint32(FLAGS_buf_max_size),
+		WaitForEndMark: FLAGS_waitForEndMark,
 	}
 }

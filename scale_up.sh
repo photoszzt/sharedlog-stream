@@ -12,8 +12,11 @@ fi
 
 APP_NAME=$1
 GUA=${2:-alo}
+PWD=$(pwd)
+DUMP_DIR=${3:-$PWD/dump/q8_scaleup}
+mkdir -p $DUMP_DIR
 ./bin/nexmark_scale -app_name $APP_NAME -wconfig ./workload_config/4node/2_ins/${APP_NAME}.json \
     -scconfig ./scale_to_src_unchanged/2_to_4_ins/${APP_NAME}.json \
-    -guarantee $GUA -durBF 5 -durAF 90 -comm_everyMS 100 -src_flushms 100 -flushms 100 -serde msgp \
+    -guarantee $GUA -durBF 11 -durAF 10 -comm_everyMS 100 -src_flushms 100 -flushms 100 -serde msgp \
     -stat_dir ./${APP_NAME}_stats -tps 1000 -events_num 95000 -waitForLast=true -local=true \
-    -snapshot_everyS 10
+    -snapshot_everyS 10 -dumpdir $DUMP_DIR
