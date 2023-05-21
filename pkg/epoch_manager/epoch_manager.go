@@ -242,11 +242,7 @@ func (em *EpochManager) Init(ctx context.Context) (*commtypes.EpochMarker, *comm
 	if err != nil {
 		return nil, nil, err
 	}
-	if recentMeta != nil {
-		return recentMeta, metaMsg, nil
-	} else {
-		return recentMeta, nil, nil
-	}
+	return recentMeta, metaMsg, nil
 }
 
 func (em *EpochManager) getMostRecentCommitEpoch(ctx context.Context) (*commtypes.EpochMarker, *commtypes.RawMsg, error) {

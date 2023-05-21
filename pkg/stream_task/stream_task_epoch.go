@@ -87,8 +87,8 @@ func SetupManagersForEpoch(ctx context.Context,
 		return nil, nil, err
 	}
 	initEmElapsed := time.Since(initEmStart)
-	fmt.Fprintf(os.Stderr, "[%d] Init EpochManager took %v, task epoch %#x, task id %#x, most recent epoch: %#x\n",
-		args.ectx.SubstreamNum(), initEmElapsed, em.GetCurrentEpoch(), em.GetCurrentTaskId(), rawMetaMsg.LogSeqNum)
+	fmt.Fprintf(os.Stderr, "[%d] Init EpochManager took %v, task epoch %#x, task id %#x\n",
+		args.ectx.SubstreamNum(), initEmElapsed, em.GetCurrentEpoch(), em.GetCurrentTaskId())
 	err = configChangelogExactlyOnce(em, args)
 	if err != nil {
 		return nil, nil, err
@@ -112,11 +112,12 @@ func SetupManagersForEpoch(ctx context.Context,
 	fmt.Fprintf(os.Stderr, "[%d] restore potential mapping done\n", args.ectx.SubstreamNum())
 	lastMark := uint64(0)
 	if recentMeta != nil {
-		fmt.Fprintf(os.Stderr, "[%d] start restore\n", args.ectx.SubstreamNum())
 		restoreBeg := time.Now()
 		offsetMap := recentMeta.ConSeqNums
 		auxData := rawMetaMsg.AuxData
 		auxMetaSeq := rawMetaMsg.LogSeqNum
+		fmt.Fprintf(os.Stderr, "[%d] start restore, recent AuxData: %v, recent auxMetaSeq: %#x\n",
+			args.ectx.SubstreamNum(), auxData, auxMetaSeq)
 		if len(offsetMap) == 0 {
 			// the last commit doesn't consume anything
 			var meta *commtypes.EpochMarker
@@ -392,7 +393,7 @@ func finalMark(dctx context.Context, t *StreamTask, args *StreamTaskArgs,
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("markEpoch failed: %v", err))
 	}
-	fmt.Fprintf(os.Stderr, "final mark seqNum: %#x\n", logOff)
+	fmt.Fprintf(os.Stderr, "[%d] final mark seqNum: %#x\n", args.ectx.SubstreamNum(), logOff)
 	if env_config.CREATE_SNAPSHOT && args.snapshotEvery != 0 && !exitDueToFailTest {
 		snStart := time.Now()
 		createSnapshot(args, logOff)
@@ -424,8 +425,8 @@ func finalMark(dctx context.Context, t *StreamTask, args *StreamTaskArgs,
 	if f > 0 {
 		t.flushAtLeastOne.AddSample(flushTime)
 	}
-	fmt.Fprintf(os.Stderr, "{epoch mark time: %v}\n", epochMarkTime)
-	fmt.Fprintf(os.Stderr, "epoch_mark_times: %d\n", t.epochMarkTimes)
+	fmt.Fprintf(os.Stderr, "[%d] {epoch mark time: %v}\n", args.ectx.SubstreamNum(), epochMarkTime)
+	fmt.Fprintf(os.Stderr, "[%d] epoch_mark_times: %d\n", args.ectx.SubstreamNum(), t.epochMarkTimes)
 	t.flushStageTime.PrintRemainingStats()
 	t.flushAtLeastOne.PrintRemainingStats()
 	return nil
