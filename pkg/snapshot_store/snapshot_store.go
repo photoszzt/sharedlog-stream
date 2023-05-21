@@ -52,13 +52,15 @@ func (rs *RedisSnapshotStore) StoreSnapshot(ctx context.Context, env types.Envir
 	if err != nil {
 		return err
 	}
-	key := fmt.Sprintf("%s_%d", changelogTpName, logOff)
+	key := fmt.Sprintf("%s_%#x", changelogTpName, logOff)
 	idx := hashfuncs.NameHash(key) % uint64(len(rs.rdb_arr))
-	return rs.rdb_arr[idx].Set(ctx, key, snapshot, time.Duration(13)*time.Second).Err()
+	fmt.Fprintf(os.Stderr, "store snapshot key: %s at redis[%d]\n", key, idx)
+	return rs.rdb_arr[idx].Set(ctx, key, snapshot, time.Duration(60)*time.Second).Err()
 }
 
 func (rs *RedisSnapshotStore) GetSnapshot(ctx context.Context, changelogTpName string, logOff uint64) ([]byte, error) {
-	key := fmt.Sprintf("%s_%d", changelogTpName, logOff)
+	key := fmt.Sprintf("%s_%#x", changelogTpName, logOff)
 	idx := hashfuncs.NameHash(key) % uint64(len(rs.rdb_arr))
+	fmt.Fprintf(os.Stderr, "get snapshot key: %s at redis[%d]\n", key, idx)
 	return rs.rdb_arr[idx].Get(ctx, key).Bytes()
 }
