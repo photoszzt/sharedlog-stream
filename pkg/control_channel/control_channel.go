@@ -269,7 +269,7 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 						for _, km := range kms {
 							// compute the new key assignment
 							par := uint8(km.Hash % uint64(kvc.Stream().NumPartition()))
-							// if this key is managed by this node
+							// if this key is managed by this task and it was managed by another task in the previous configuration
 							if par == cmm.instanceID && km.SubstreamId != cmm.instanceID {
 								pars, ok := extraParToRestoreKV[tp]
 								if !ok {
