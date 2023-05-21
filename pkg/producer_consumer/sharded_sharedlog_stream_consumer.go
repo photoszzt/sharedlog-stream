@@ -77,7 +77,7 @@ func NewShardedSharedLogStreamConsumer(stream *sharedlog_stream.ShardedSharedLog
 		notEnded.Add(instanceId)
 		notScaleFenced.Add(instanceId)
 	}
-	fmt.Fprintf(os.Stderr, "%s notEnded: %v\n", stream.TopicName(), notEnded)
+	fmt.Fprintf(os.Stderr, "%s notEnded: %v, notScaleFence: %v\n", stream.TopicName(), notEnded, notScaleFenced)
 	return &ShardedSharedLogStreamConsumer{
 		epochMarkerSerde: epochMarkSerde,
 		stream:           stream,
@@ -105,12 +105,12 @@ func (s *ShardedSharedLogStreamConsumer) NumSubstreamProducer() uint8 {
 
 func (s *ShardedSharedLogStreamConsumer) SrcProducerEnd(prodIdx uint8) {
 	s.producerNotEnd.Remove(prodIdx)
-	debug.Fprintf(os.Stderr, "%d producer ended, %v remain\n", prodIdx, s.producerNotEnd)
+	fmt.Fprintf(os.Stderr, "%d producer ended, %v remain\n", prodIdx, s.producerNotEnd)
 }
 
 func (s *ShardedSharedLogStreamConsumer) SrcProducerGotScaleFence(prodIdx uint8) {
 	s.producerNotScaleFence.Remove(prodIdx)
-	debug.Fprintf(os.Stderr, "%d producer got scale fence, %v remain\n", prodIdx, s.producerNotScaleFence)
+	fmt.Fprintf(os.Stderr, "%d producer got scale fence, %v remain\n", prodIdx, s.producerNotScaleFence)
 }
 
 func (s *ShardedSharedLogStreamConsumer) AllProducerEnded() bool {

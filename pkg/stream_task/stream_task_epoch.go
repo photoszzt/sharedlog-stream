@@ -309,6 +309,7 @@ func processInEpoch(
 		// Exit routine
 		cur_elapsed := warmupCheck.ElapsedSinceInitial()
 		timeout := args.duration != 0 && cur_elapsed >= args.duration
+		lastTimeoutCheck := time.Now()
 		if timeout {
 			timeoutPrintOnce.Do(func() {
 				fmt.Fprintf(os.Stderr, "timeout after %v\n", cur_elapsed)
@@ -317,6 +318,14 @@ func processInEpoch(
 						src.Name(), src.GetCount(), src.NumCtrlMsg(), src.NumEpoch(), src.NumLogEntry())
 				}
 			})
+			if time.Since(lastTimeoutCheck) > 20*time.Second {
+				fmt.Fprintf(os.Stderr, "timeout after %v\n", cur_elapsed)
+				for _, src := range args.ectx.Consumers() {
+					fmt.Fprintf(os.Stderr, "%s msgCnt %d, ctrlCnt %d, epochCnt %d, logEntry %d\n",
+						src.Name(), src.GetCount(), src.NumCtrlMsg(), src.NumEpoch(), src.NumLogEntry())
+				}
+				lastTimeoutCheck = time.Now()
+			}
 		}
 		exitDueToFailTest := testForFail && cur_elapsed >= failAfter
 		if (!args.waitEndMark && timeout) || exitDueToFailTest {
