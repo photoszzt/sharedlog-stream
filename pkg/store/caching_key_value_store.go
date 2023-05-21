@@ -170,8 +170,8 @@ func (c *CachingKeyValueStoreG[K, V]) ChangelogTopicName() string {
 	return c.wrappedStore.ChangelogTopicName()
 }
 
-func (c *CachingKeyValueStoreG[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8, cutoff uint64) (int, error) {
-	return c.wrappedStore.ConsumeOneLogEntry(ctx, parNum, cutoff)
+func (c *CachingKeyValueStoreG[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8) (int, error) {
+	return c.wrappedStore.ConsumeOneLogEntry(ctx, parNum)
 }
 func (c *CachingKeyValueStoreG[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	guarantee exactly_once_intr.GuaranteeMth,

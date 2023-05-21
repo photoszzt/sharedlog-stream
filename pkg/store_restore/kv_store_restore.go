@@ -129,7 +129,7 @@ func RestoreChangelogKVStateStore(
 	numLogEntry := 0
 	restoreKVStart := time.Now()
 	for {
-		subC, err := kvchangelog.ConsumeOneLogEntry(ctx, parNum, consumedOffset)
+		subC, err := kvchangelog.ConsumeOneLogEntry(ctx, parNum)
 		// nothing to restore
 		if common_errors.IsStreamEmptyError(err) {
 			elapsed := time.Since(restoreKVStart)

@@ -181,7 +181,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) SetTrackParFunc(trackParFunc exactl
 func (st *KeyValueStoreWithChangelogG[K, V]) SetFlushCallbackFunc(cb exactly_once_intr.FlushCallbackFunc) {
 	st.changelogManager.producer.SetFlushCallback(cb)
 }
-func (st *KeyValueStoreWithChangelogG[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8, cutoff uint64) (int, error) {
+func (st *KeyValueStoreWithChangelogG[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8) (int, error) {
 	msgSeq, err := st.changelogManager.Consume(ctx, parNum)
 	if err != nil {
 		return 0, err

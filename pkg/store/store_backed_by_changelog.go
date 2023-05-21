@@ -16,7 +16,7 @@ type StoreBackedByChangelog interface {
 }
 
 type RestoreKVStore interface {
-	ConsumeOneLogEntry(ctx context.Context, parNum uint8, consumedOffset uint64) (int, error)
+	ConsumeOneLogEntry(ctx context.Context, parNum uint8) (int, error)
 }
 
 type RestoreWindowStateStore interface {

@@ -43,7 +43,7 @@ func SetKVStoreSnapshot[K, V any](ctx context.Context, env types.Environment,
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "kv snapshot size: %d\n", len(out))
+		fmt.Fprintf(os.Stderr, "kv snapshot size: %d, store snapshot at %x\n", len(out), logOff)
 		return rs.StoreSnapshot(ctx, env, out, kvstore.ChangelogTopicName(), logOff)
 	})
 }
@@ -68,7 +68,7 @@ func SetWinStoreSnapshot[K, V any](ctx context.Context, env types.Environment,
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "win snapshot size: %d\n", len(out))
+		fmt.Fprintf(os.Stderr, "win snapshot size: %d, store snapshot at %x\n", len(out), logOff)
 		return rs.StoreSnapshot(ctx, env, out, winStore.ChangelogTopicName(), logOff)
 	})
 }
@@ -87,8 +87,8 @@ func SetupManagersForEpoch(ctx context.Context,
 		return nil, nil, err
 	}
 	initEmElapsed := time.Since(initEmStart)
-	fmt.Fprintf(os.Stderr, "[%d] Init EpochManager took %v, task epoch %#x, task id %#x\n",
-		args.ectx.SubstreamNum(), initEmElapsed, em.GetCurrentEpoch(), em.GetCurrentTaskId())
+	fmt.Fprintf(os.Stderr, "[%d] Init EpochManager took %v, task epoch %#x, task id %#x, most recent epoch: %#x\n",
+		args.ectx.SubstreamNum(), initEmElapsed, em.GetCurrentEpoch(), em.GetCurrentTaskId(), rawMetaMsg.LogSeqNum)
 	err = configChangelogExactlyOnce(em, args)
 	if err != nil {
 		return nil, nil, err
@@ -97,9 +97,22 @@ func SetupManagersForEpoch(ctx context.Context,
 	if err != nil {
 		return nil, nil, err
 	}
+	cmm, err := control_channel.NewControlChannelManager(args.env, args.appId,
+		args.serdeFormat, args.bufMaxSize, args.ectx.CurEpoch(), args.ectx.SubstreamNum())
+	if err != nil {
+		return nil, nil, err
+	}
+	debug.Fprintf(os.Stderr, "[%d] start restore potential mapping\n", args.ectx.SubstreamNum())
+	err = cmm.RestoreMappingAndWaitForPrevTask(
+		ctx, args.ectx.FuncName(), env_config.CREATE_SNAPSHOT, args.serdeFormat,
+		args.kvChangelogs, args.windowStoreChangelogs, rs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("RestoreMappingAndWaitForPrevTask: %v", err)
+	}
+	fmt.Fprintf(os.Stderr, "[%d] restore potential mapping done\n", args.ectx.SubstreamNum())
 	lastMark := uint64(0)
 	if recentMeta != nil {
-		fmt.Fprint(os.Stderr, "start restore\n")
+		fmt.Fprintf(os.Stderr, "[%d] start restore\n", args.ectx.SubstreamNum())
 		restoreBeg := time.Now()
 		offsetMap := recentMeta.ConSeqNums
 		auxData := rawMetaMsg.AuxData
@@ -125,18 +138,19 @@ func SetupManagersForEpoch(ctx context.Context,
 		if env_config.CREATE_SNAPSHOT {
 			loadSnapBeg := time.Now()
 			if len(auxData) == 0 {
-				debug.Fprintf(os.Stderr, "read back for snapshot from 0x%x\n", rawMetaMsg.LogSeqNum)
+				fmt.Fprintf(os.Stderr, "[%d] read back for snapshot from 0x%x\n", args.ectx.SubstreamNum(), rawMetaMsg.LogSeqNum)
 				auxData, auxMetaSeq, err = em.FindLastEpochMetaWithAuxData(ctx, rawMetaMsg.LogSeqNum)
 				if err != nil {
 					return nil, nil, fmt.Errorf("[ERR] FindLastEpochMetaWithAuxData: %v", err)
 				}
 			}
+			fmt.Fprintf(os.Stderr, "[%d] auxData: %v, auxMetaSeq: %v\n", args.ectx.SubstreamNum(), auxData, auxMetaSeq)
 			err = loadSnapshot(ctx, args, auxData, auxMetaSeq, rs)
 			if err != nil {
 				return nil, nil, err
 			}
 			loadSnapElapsed := time.Since(loadSnapBeg)
-			fmt.Fprintf(os.Stderr, "load snapshot took %v\n", loadSnapElapsed)
+			fmt.Fprintf(os.Stderr, "[%d] load snapshot took %v\n", args.ectx.SubstreamNum(), loadSnapElapsed)
 		}
 		lastMark = auxMetaSeq
 		restoreSsBeg := time.Now()
@@ -145,17 +159,12 @@ func SetupManagersForEpoch(ctx context.Context,
 			return nil, nil, err
 		}
 		restoreStateStoreElapsed := time.Since(restoreSsBeg)
-		fmt.Fprintf(os.Stderr, "restore state store took %v\n", restoreStateStoreElapsed)
 		setOffsetOnStream(offsetMap, args)
 		restoreElapsed := time.Since(restoreBeg)
-		fmt.Fprintf(os.Stderr, "down restore, elapsed: %v\n", restoreElapsed)
+		fmt.Fprintf(os.Stderr, "restore state store took %v, down restore, elapsed: %v, ts: %d\n",
+			restoreStateStoreElapsed, restoreElapsed, time.Now().UnixMilli())
 	}
 	setLastMarkSeq(lastMark, args)
-	cmm, err := control_channel.NewControlChannelManager(args.env, args.appId,
-		args.serdeFormat, args.bufMaxSize, args.ectx.CurEpoch(), args.ectx.SubstreamNum())
-	if err != nil {
-		return nil, nil, err
-	}
 	trackParFunc := exactly_once_intr.TrackProdSubStreamFunc(
 		func(ctx context.Context,
 			topicName string, substreamId uint8,
@@ -196,14 +205,15 @@ func processInEpoch(
 		return common.GenErrFnOutput(fmt.Errorf("trackStreamAndConfigExactlyOnce: %v", err))
 	}
 
-	debug.Fprintf(os.Stderr, "start restore mapping")
-	err = cmm.RestoreMappingAndWaitForPrevTask(
-		ctx, args.ectx.FuncName(), env_config.CREATE_SNAPSHOT, args.serdeFormat,
-		args.kvChangelogs, args.windowStoreChangelogs, rs)
-	if err != nil {
-		return common.GenErrFnOutput(fmt.Errorf("RestoreMappingAndWaitForPrevTask: %v", err))
-	}
-	fmt.Fprintf(os.Stderr, "restore mapping done %d\n", time.Now().UnixMilli())
+	// debug.Fprintf(os.Stderr, "start restore mapping")
+	// err = cmm.RestoreMappingAndWaitForPrevTask(
+	// 	ctx, args.ectx.FuncName(), env_config.CREATE_SNAPSHOT, args.serdeFormat,
+	// 	args.kvChangelogs, args.windowStoreChangelogs, rs)
+	// if err != nil {
+	// 	return common.GenErrFnOutput(fmt.Errorf("RestoreMappingAndWaitForPrevTask: %v", err))
+	// }
+	// fmt.Fprintf(os.Stderr, "[%d] restore mapping done %d\n", args.ectx.SubstreamNum(), time.Now().UnixMilli())
+
 	// execIntrMs := stats.NewPrintLogStatsCollector[int64]("execIntrMs")
 	// thisAndLastCmtMs := stats.NewPrintLogStatsCollector[int64]("thisAndLastCmtMs")
 	// markPartUs := stats.NewPrintLogStatsCollector[int64]("markPartUs")
@@ -375,21 +385,17 @@ func finalMark(dctx context.Context, t *StreamTask, args *StreamTaskArgs,
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("flushStreams failed: %v", err))
 	}
-	err = getKeyMappingAndFlush(dctx, args, cmm)
-	if err != nil {
-		return common.GenErrFnOutput(fmt.Errorf("getKeyMappingAndFlush: %v", err))
-	}
+	kms := getKeyMapping(dctx, args)
 	flushTime := stats.Elapsed(flushAllStart).Microseconds()
 	// mPartBeg := time.Now()
 	logOff, _, err := markEpoch(dctx, em, t, args)
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("markEpoch failed: %v", err))
 	}
+	fmt.Fprintf(os.Stderr, "final mark seqNum: %#x\n", logOff)
 	if env_config.CREATE_SNAPSHOT && args.snapshotEvery != 0 && !exitDueToFailTest {
 		snStart := time.Now()
 		createSnapshot(args, logOff)
-		elapsed := time.Since(snStart)
-		snapshotTime = append(snapshotTime, elapsed.Microseconds())
 		for _, kv := range args.kvChangelogs {
 			err = kv.WaitForAllSnapshot()
 			if err != nil {
@@ -402,7 +408,13 @@ func finalMark(dctx context.Context, t *StreamTask, args *StreamTaskArgs,
 				return common.GenErrFnOutput(fmt.Errorf("Win WaitForAllSnapshot failed: %v", err))
 			}
 		}
-		fmt.Fprintf(os.Stderr, "snapshot time: %v\n", snapshotTime)
+		elapsed := time.Since(snStart)
+		snapshotTime = append(snapshotTime, elapsed.Microseconds())
+		fmt.Fprintf(os.Stderr, "final snapshot time: %v\n", snapshotTime)
+	}
+	err = cmm.OutputKeyMapping(dctx, kms)
+	if err != nil {
+		return common.GenErrFnOutput(fmt.Errorf("OutputKeyMapping failed: %v", err))
 	}
 	markElapsed := time.Since(markBegin)
 	// mPartElapsed := time.Since(mPartBeg)
@@ -419,7 +431,7 @@ func finalMark(dctx context.Context, t *StreamTask, args *StreamTaskArgs,
 	return nil
 }
 
-func getKeyMappingAndFlush(ctx context.Context, args *StreamTaskArgs, cmm *control_channel.ControlChannelManager) error {
+func getKeyMapping(ctx context.Context, args *StreamTaskArgs) map[string][]txn_data.KeyMaping {
 	kms := make(map[string][]txn_data.KeyMaping)
 	for _, kv := range args.kvChangelogs {
 		kv.BuildKeyMeta(ctx, kms)
@@ -427,10 +439,7 @@ func getKeyMappingAndFlush(ctx context.Context, args *StreamTaskArgs, cmm *contr
 	for _, wsc := range args.windowStoreChangelogs {
 		wsc.BuildKeyMeta(kms)
 	}
-	if len(kms) > 0 {
-		return cmm.OutputKeyMapping(ctx, kms)
-	}
-	return nil
+	return kms
 }
 
 func markEpoch(ctx context.Context, em *epoch_manager.EpochManager,

@@ -3,6 +3,7 @@ package control_channel
 import (
 	"context"
 	"fmt"
+	"os"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/data_structure"
@@ -181,24 +182,24 @@ func (cmm *ControlChannelManager) restoreFunc(
 		if createSnapshot {
 			err := cmm.loadSnapshotToKV(bgCtx, work, kvc, rs)
 			if err != nil {
-				return err
+				return fmt.Errorf("cmmLoadSnapshotToKV: %v", err)
 			}
 		}
 		err := store_restore.RestoreChangelogKVStateStore(bgCtx, kvc, 0, work.parNum)
 		if err != nil {
-			return err
+			return fmt.Errorf("cmmRestoreChangelogKVStateStore: %v", err)
 		}
 	} else {
 		wsc := wschangelog[work.topic]
 		if createSnapshot {
 			err := cmm.loadSnapshotToWinStore(bgCtx, work, wsc, rs)
 			if err != nil {
-				return err
+				return fmt.Errorf("cmmLoadSnapshotToWinStore: %v", err)
 			}
 		}
 		err := store_restore.RestoreChangelogWindowStateStore(bgCtx, wsc, work.parNum)
 		if err != nil {
-			return err
+			return fmt.Errorf("cmmRestoreChangelogWindowStateStore: %v", err)
 		}
 	}
 	return nil
@@ -224,17 +225,17 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 			}
 			bgErr := bgGrp.Wait()
 			if bgErr != nil {
-				return bgErr
+				return fmt.Errorf("wait bg1: %v", bgErr)
 			}
-			return err
+			return fmt.Errorf("ReadNext CtrlLog: %v", err)
 		}
 		ctrlMeta, err := cmm.ctrlMetaSerde.Decode(rawMsg.Payload)
 		if err != nil {
 			bgErr := bgGrp.Wait()
 			if bgErr != nil {
-				return bgErr
+				return fmt.Errorf("wait bg2: %v", bgErr)
 			}
-			return err
+			return fmt.Errorf("ctrlMetaSerde err: %v", err)
 		}
 		if ctrlMeta.FinishedPrevTask != "" {
 			// fmt.Fprintf(os.Stderr, "finished prev task %s, funcName %s, meta epoch %d, input epoch %d\n",
@@ -243,7 +244,7 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 				// fmt.Fprintf(os.Stderr, "waiting bg to finish\n")
 				err = bgGrp.Wait()
 				if err != nil {
-					return err
+					return fmt.Errorf("wait bg3: %v", err)
 				}
 				return nil
 			}
@@ -264,7 +265,7 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 									pars = data_structure.NewUint8Set()
 								}
 								if !pars.Has(km.SubstreamId) {
-									// fmt.Fprintf(os.Stderr, "restore %s par %d\n", km.Topic, km.SubstreamId)
+									fmt.Fprintf(os.Stderr, "[%d] restore par %d\n", cmm.instanceID, km.SubstreamId)
 									w := restoreWork{topic: tp, isKV: true, parNum: km.SubstreamId}
 									bgGrp.Go(func() error {
 										return cmm.restoreFunc(bgCtx, createSnapshot, w, kvchangelog, wschangelog, rs)
@@ -283,7 +284,7 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 									pars = data_structure.NewUint8Set()
 								}
 								if !pars.Has(km.SubstreamId) {
-									// fmt.Fprintf(os.Stderr, "restore %s par %d\n", km.Topic, km.SubstreamId)
+									fmt.Fprintf(os.Stderr, "[%d] restore par %d\n", cmm.instanceID, km.SubstreamId)
 									w := restoreWork{topic: tp, isKV: false, parNum: km.SubstreamId}
 									bgGrp.Go(func() error {
 										return cmm.restoreFunc(bgCtx, createSnapshot, w, kvchangelog, wschangelog, rs)
