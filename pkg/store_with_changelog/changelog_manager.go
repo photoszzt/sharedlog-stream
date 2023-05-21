@@ -2,6 +2,7 @@ package store_with_changelog
 
 import (
 	"context"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/producer_consumer"
@@ -10,6 +11,7 @@ import (
 
 	"cs.utexas.edu/zjia/faas/protocol"
 	"cs.utexas.edu/zjia/faas/types"
+	"golang.org/x/xerrors"
 )
 
 // a changelog substream has only one producer. Each store would only produce to one substream.
@@ -141,6 +143,9 @@ func (cm *ChangelogManager[K, V]) findLastEpochMetaWithAuxData(ctx context.Conte
 	tailSeqNum := protocol.MaxLogSeqnum
 	for {
 		rawMsg, err := stream.ReadBackwardWithTag(ctx, tailSeqNum, parNum, tag)
+		if xerrors.Is(err, common_errors.ErrStreamEmpty) {
+			return nil, 0, nil
+		}
 		if err != nil {
 			return nil, 0, err
 		}

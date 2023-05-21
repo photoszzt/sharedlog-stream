@@ -110,12 +110,13 @@ func (cmm *ControlChannelManager) loadAndDecodeSnapshot(
 	if ret == 1 {
 		snapArr, err := rs.GetSnapshot(ctx, topic, metaSeqNum)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("[ERR] RedisGetSnapshot: topic=%s, seq=%#x, err=%v",
+				topic, metaSeqNum, err)
 		}
 		if len(snapArr) > 0 {
 			payloadArr, err := cmm.payloadArrSerde.Decode(snapArr)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("[ERR] Decode snap: %v", err)
 			}
 			return payloadArr.Payloads, nil
 		}
@@ -134,6 +135,10 @@ func (cmm *ControlChannelManager) loadSnapshotToKV(
 	auxData, metaSeqNum, err := kvc.FindLastEpochMetaWithAuxData(ctx, work.parNum)
 	if err != nil {
 		return err
+	}
+	// no snapshot
+	if auxData == nil {
+		return nil
 	}
 	payloads, err := cmm.loadAndDecodeSnapshot(ctx, work.topic, rs, auxData, metaSeqNum)
 	if err != nil {
@@ -158,6 +163,10 @@ func (cmm *ControlChannelManager) loadSnapshotToWinStore(
 	auxData, metaSeqNum, err := wsc.FindLastEpochMetaWithAuxData(ctx, work.parNum)
 	if err != nil {
 		return err
+	}
+	// no snapshot
+	if auxData == nil {
+		return nil
 	}
 	payloads, err := cmm.loadAndDecodeSnapshot(ctx, work.topic, rs, auxData, metaSeqNum)
 	if err != nil {
