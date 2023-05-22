@@ -3,6 +3,7 @@ package sharedlog_stream
 import (
 	"context"
 	"fmt"
+	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
@@ -43,6 +44,7 @@ type BufferedSinkStream struct {
 }
 
 func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8, bufMaxSize uint32) *BufferedSinkStream {
+	fmt.Fprintf(os.Stderr, "new buffered sink stream %s[%d] with bufMaxSize %d\n", stream.topicName, parNum, bufMaxSize)
 	s := &BufferedSinkStream{
 		sinkBuffer:      make([][]byte, 0, SINK_BUFFER_MAX_ENTRY),
 		payloadArrSerde: DEFAULT_PAYLOAD_ARR_SERDEG,
@@ -54,7 +56,7 @@ func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8, bufMaxSize uin
 			stats.DEFAULT_COLLECT_DURATION),
 		bufferSizeStats: stats.NewStatsCollector[int](fmt.Sprintf("%s_bufSize_%v", stream.topicName, parNum),
 			stats.DEFAULT_COLLECT_DURATION),
-		// flushBufferStats:     stats.NewPrintLogStatsCollector[int64](fmt.Sprintf("%s_flushBuf_%v", stream.topicName, parNum)),
+		flushBufferStats:     stats.NewPrintLogStatsCollector[int64](fmt.Sprintf("%s_flushBuf_%v", stream.topicName, parNum)),
 		sink_buffer_max_size: int(bufMaxSize),
 		initProdIsSet:        false,
 		lastMarkerSeq:        0,
