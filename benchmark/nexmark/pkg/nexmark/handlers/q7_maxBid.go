@@ -126,7 +126,7 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 			NumPartition:  sp.NumChangelogPartition,
 			TimeOut:       common.SrcConsumeTimeout,
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
-		}).Build()
+		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

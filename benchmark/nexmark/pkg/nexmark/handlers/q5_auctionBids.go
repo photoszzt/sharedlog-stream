@@ -110,7 +110,7 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 			NumPartition:  sp.NumChangelogPartition,
 			TimeOut:       common.SrcConsumeTimeout,
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
-		}).Build()
+		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
 		return nil, nil, nil, err
 	}

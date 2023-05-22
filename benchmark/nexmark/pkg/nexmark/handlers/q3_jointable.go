@@ -170,7 +170,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			NumPartition:  sp.NumChangelogPartition,
 			FlushDuration: flushDur,
 			TimeOut:       common.SrcConsumeTimeout,
-		}).Build()
+		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -184,7 +184,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			NumPartition:  sp.NumChangelogPartition,
 			FlushDuration: flushDur,
 			TimeOut:       common.SrcConsumeTimeout,
-		}).Build()
+		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

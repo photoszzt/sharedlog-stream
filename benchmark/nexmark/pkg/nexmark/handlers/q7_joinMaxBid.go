@@ -152,7 +152,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 			NumPartition:  sp.NumChangelogPartition,
 			FlushDuration: flushDur,
 			TimeOut:       common.SrcConsumeTimeout,
-		}).Build()
+		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
@@ -166,7 +166,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 			NumPartition:  sp.NumChangelogPartition,
 			FlushDuration: flushDur,
 			TimeOut:       common.SrcConsumeTimeout,
-		}).Build()
+		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

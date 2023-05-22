@@ -93,7 +93,7 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 			NumPartition:  sp.NumChangelogPartition,
 			TimeOut:       common.SrcConsumeTimeout,
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
-		}).Build()
+		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

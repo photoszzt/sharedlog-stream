@@ -147,7 +147,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			NumPartition:  sp.NumChangelogPartition,
 			FlushDuration: flushDur,
 			TimeOut:       common.SrcConsumeTimeout,
-		}).Build()
+		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -161,7 +161,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			NumPartition:  sp.NumChangelogPartition,
 			FlushDuration: flushDur,
 			TimeOut:       common.SrcConsumeTimeout,
-		}).Build()
+		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

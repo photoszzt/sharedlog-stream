@@ -249,8 +249,8 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 			return fmt.Errorf("ctrlMetaSerde err: %v", err)
 		}
 		if ctrlMeta.FinishedPrevTask != "" {
-			// fmt.Fprintf(os.Stderr, "finished prev task %s, funcName %s, meta epoch %d, input epoch %d\n",
-			// 	ctrlMeta.FinishedPrevTask, funcName, ctrlMeta.Epoch, cmm.currentEpoch)
+			fmt.Fprintf(os.Stderr, "finished prev task %s, funcName %s, meta epoch %d, input epoch %d\n",
+				ctrlMeta.FinishedPrevTask, funcName, ctrlMeta.Epoch, cmm.currentEpoch)
 			if ctrlMeta.FinishedPrevTask == funcName && ctrlMeta.Epoch+1 == cmm.currentEpoch {
 				// fmt.Fprintf(os.Stderr, "waiting bg to finish\n")
 				err = bgGrp.Wait()

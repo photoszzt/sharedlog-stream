@@ -118,7 +118,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 			NumPartition:  sp.NumChangelogPartition,
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 			TimeOut:       time.Duration(4) * time.Millisecond,
-		}).Build()
+		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}

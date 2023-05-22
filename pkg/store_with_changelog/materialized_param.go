@@ -53,7 +53,11 @@ type SetSerdeFormat[K, V any] interface {
 }
 
 type SetCreateChangelogManagerParam[K, V any] interface {
-	ChangelogManagerParam(streamParam commtypes.CreateChangelogManagerParam) BuildMaterializeParam[K, V]
+	ChangelogManagerParam(streamParam commtypes.CreateChangelogManagerParam) SetBufMaxSize[K, V]
+}
+
+type SetBufMaxSize[K, V any] interface {
+	BufMaxSize(bufMaxSize uint32) BuildMaterializeParam[K, V]
 }
 
 type BuildMaterializeParam[K, V any] interface {
@@ -80,8 +84,13 @@ func (mb *MaterializeParamBuilder[K, V]) SerdeFormat(serdeFormat commtypes.Serde
 	return mb
 }
 
-func (mb *MaterializeParamBuilder[K, V]) ChangelogManagerParam(changelogParam commtypes.CreateChangelogManagerParam) BuildMaterializeParam[K, V] {
+func (mb *MaterializeParamBuilder[K, V]) ChangelogManagerParam(changelogParam commtypes.CreateChangelogManagerParam) SetBufMaxSize[K, V] {
 	mb.mp.changelogParam = changelogParam
+	return mb
+}
+
+func (mb *MaterializeParamBuilder[K, V]) BufMaxSize(bufMaxSize uint32) BuildMaterializeParam[K, V] {
+	mb.mp.bufMaxSize = bufMaxSize
 	return mb
 }
 
