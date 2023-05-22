@@ -107,10 +107,7 @@ func main() {
 		panic(err)
 	}
 
-	timeout := time.Duration(totTime*4) * time.Second
-	if baseQueryInput.Duration == 0 {
-		timeout = time.Duration(900) * time.Second
-	}
+	timeout := time.Duration(300) * time.Second
 	client := &http.Client{
 		Transport: &http.Transport{
 			IdleConnTimeout: 30 * time.Second,

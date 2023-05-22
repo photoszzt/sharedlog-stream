@@ -54,7 +54,7 @@ func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8, bufMaxSize uin
 			stats.DEFAULT_COLLECT_DURATION),
 		bufferSizeStats: stats.NewStatsCollector[int](fmt.Sprintf("%s_bufSize_%v", stream.topicName, parNum),
 			stats.DEFAULT_COLLECT_DURATION),
-		flushBufferStats:     stats.NewPrintLogStatsCollector[int64](fmt.Sprintf("%s_flushBuf_%v", stream.topicName, parNum)),
+		// flushBufferStats:     stats.NewPrintLogStatsCollector[int64](fmt.Sprintf("%s_flushBuf_%v", stream.topicName, parNum)),
 		sink_buffer_max_size: int(bufMaxSize),
 		initProdIsSet:        false,
 		lastMarkerSeq:        0,
@@ -65,7 +65,7 @@ func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8, bufMaxSize uin
 func (s *BufferedSinkStream) OutputRemainingStats() {
 	s.bufferEntryStats.PrintRemainingStats()
 	s.bufferSizeStats.PrintRemainingStats()
-	s.flushBufferStats.PrintRemainingStats()
+	// s.flushBufferStats.PrintRemainingStats()
 }
 
 func (s *BufferedSinkStream) SetLastMarkerSeq(seq uint64) {

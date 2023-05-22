@@ -6,8 +6,6 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/producer_consumer"
-	"sharedlog-stream/pkg/stats"
-	"time"
 )
 
 type GroupByOutputProcessorG[KIn, VIn any] struct {
@@ -18,7 +16,7 @@ type GroupByOutputProcessorG[KIn, VIn any] struct {
 	name       string
 	msgGSerdeG commtypes.MessageGSerdeG[KIn, VIn]
 	BaseProcessorG[KIn, VIn, any, any]
-	procTimeStats stats.PrintLogStatsCollector[int64]
+	// procTimeStats stats.PrintLogStatsCollector[int64]
 }
 
 func NewGroupByOutputProcessorG[KIn, VIn any](procTimeTag string, producer producer_consumer.MeteredProducerIntr,
@@ -32,7 +30,7 @@ func NewGroupByOutputProcessorG[KIn, VIn any](procTimeTag string, producer produ
 		ectx:            ectx,
 		byteSliceHasher: hashfuncs.ByteSliceHasher{},
 		msgGSerdeG:      msgGSerdeG,
-		procTimeStats:   stats.NewPrintLogStatsCollector[int64](procTimeTag),
+		// procTimeStats:   stats.NewPrintLogStatsCollector[int64](procTimeTag),
 	}
 	// for i := uint8(0); i < numPartition; i++ {
 	// 	g.cHash.Add(i)
@@ -42,7 +40,7 @@ func NewGroupByOutputProcessorG[KIn, VIn any](procTimeTag string, producer produ
 }
 
 func (g *GroupByOutputProcessorG[KIn, VIn]) OutputRemainingStats() {
-	g.procTimeStats.PrintRemainingStats()
+	// g.procTimeStats.PrintRemainingStats()
 }
 
 func (g *GroupByOutputProcessorG[KIn, VIn]) Name() string {
@@ -55,8 +53,8 @@ func (g *GroupByOutputProcessorG[KIn, VIn]) ProcessAndReturn(ctx context.Context
 	// if !ok {
 	// 	return nil, common_errors.ErrFailToGetOutputSubstream
 	// }
-	procTime := time.Since(msg.StartProcTime)
-	g.procTimeStats.AddSample(procTime.Nanoseconds())
+	// procTime := time.Since(msg.StartProcTime)
+	// g.procTimeStats.AddSample(procTime.Nanoseconds())
 	msgSerOp, err := commtypes.MsgGToMsgSer(msg, g.msgGSerdeG.GetKeySerdeG(), g.msgGSerdeG.GetValSerdeG())
 	if err != nil {
 		return nil, err
