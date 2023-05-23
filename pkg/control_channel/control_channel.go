@@ -256,14 +256,6 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 				ins := prevInstances[funcName]
 				ins.Remove(ctrlMeta.InstanceId)
 				prevInstances[funcName] = ins
-				if ctrlMeta.InstanceId == cmm.instanceID {
-					// fmt.Fprintf(os.Stderr, "waiting bg to finish\n")
-					err = bgGrp.Wait()
-					if err != nil {
-						return fmt.Errorf("wait bg3: %v", err)
-					}
-					return nil
-				}
 				if len(ins) == 0 {
 					// fmt.Fprintf(os.Stderr, "waiting bg to finish\n")
 					err = bgGrp.Wait()
