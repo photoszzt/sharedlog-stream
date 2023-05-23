@@ -165,7 +165,8 @@ func SetupManagersForEpoch(ctx context.Context,
 		fmt.Fprintf(os.Stderr, "restore state store took %v, restore elapsed: %v\n",
 			restoreStateStoreElapsed, restoreElapsed)
 	}
-	fmt.Fprintf(os.Stderr, "[%d] down restore ts: %d\n", args.ectx.SubstreamNum(), time.Now().UnixMilli())
+	fmt.Fprintf(os.Stderr, "[%d] %s down restore, epoch: %d ts: %d\n",
+		args.ectx.SubstreamNum(), args.ectx.FuncName(), args.ectx.CurEpoch(), time.Now().UnixMilli())
 	setLastMarkSeq(lastMark, args)
 	trackParFunc := exactly_once_intr.TrackProdSubStreamFunc(
 		func(ctx context.Context,
@@ -427,6 +428,8 @@ func finalMark(dctx context.Context, t *StreamTask, args *StreamTaskArgs,
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("OutputKeyMapping failed: %v", err))
 	}
+	fmt.Fprintf(os.Stderr, "[%d] %s final mark, epoch %d, ts %d\n",
+		args.ectx.SubstreamNum(), args.ectx.FuncName(), cmm.CurrentEpoch(), time.Now().UnixMilli())
 	markElapsed := time.Since(markBegin)
 	// mPartElapsed := time.Since(mPartBeg)
 	epochMarkTime = append(epochMarkTime, markElapsed.Microseconds())
