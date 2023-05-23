@@ -227,6 +227,7 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 	extraParToRestoreKV := make(map[string]data_structure.Uint8Set)
 	extraParToRestoreWS := make(map[string]data_structure.Uint8Set)
 	bgGrp, bgCtx := errgroup.WithContext(ctx)
+	prevInstances := make(map[string]data_structure.Uint8Set)
 	for {
 		rawMsg, err := cmm.controlLogForRead.ReadNext(ctx, 0)
 		if err != nil {
@@ -249,60 +250,87 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 			return fmt.Errorf("ctrlMetaSerde err: %v", err)
 		}
 		if ctrlMeta.FinishedPrevTask != "" {
-			fmt.Fprintf(os.Stderr, "finished prev task %s, funcName %s, meta epoch %d, input epoch %d\n",
-				ctrlMeta.FinishedPrevTask, funcName, ctrlMeta.Epoch, cmm.currentEpoch)
+			fmt.Fprintf(os.Stderr, "[%d] finished prev task %s, funcName %s, meta epoch %d, current epoch %d, cmm instance %d, remain instances: %v\n",
+				ctrlMeta.InstanceId, ctrlMeta.FinishedPrevTask, funcName, ctrlMeta.Epoch, cmm.currentEpoch, cmm.instanceID, prevInstances[funcName])
 			if ctrlMeta.FinishedPrevTask == funcName && ctrlMeta.Epoch+1 == cmm.currentEpoch {
-				// fmt.Fprintf(os.Stderr, "waiting bg to finish\n")
-				err = bgGrp.Wait()
-				if err != nil {
-					return fmt.Errorf("wait bg3: %v", err)
+				ins := prevInstances[funcName]
+				ins.Remove(ctrlMeta.InstanceId)
+				prevInstances[funcName] = ins
+				if ctrlMeta.InstanceId == cmm.instanceID {
+					// fmt.Fprintf(os.Stderr, "waiting bg to finish\n")
+					err = bgGrp.Wait()
+					if err != nil {
+						return fmt.Errorf("wait bg3: %v", err)
+					}
+					return nil
 				}
-				return nil
+				if len(ins) == 0 {
+					// fmt.Fprintf(os.Stderr, "waiting bg to finish\n")
+					err = bgGrp.Wait()
+					if err != nil {
+						return fmt.Errorf("wait bg3: %v", err)
+					}
+					return nil
+				}
 			}
-		} else {
-			if len(ctrlMeta.KeyMaps) != 0 {
-				// cmm.updateKeyMapping(&ctrlMeta)
-				for tp, kms := range ctrlMeta.KeyMaps {
-					kvc, hasKVC := kvchangelog[tp]
-					wsc, hasWSC := wschangelog[tp]
-					if hasKVC {
-						for _, km := range kms {
-							// compute the new key assignment
-							par := uint8(km.Hash % uint64(kvc.Stream().NumPartition()))
-							// if this key is managed by this task and it was managed by another task in the previous configuration
-							if par == cmm.instanceID && km.SubstreamId != cmm.instanceID {
-								pars, ok := extraParToRestoreKV[tp]
-								if !ok {
-									pars = data_structure.NewUint8Set()
-								}
-								if !pars.Has(km.SubstreamId) {
-									fmt.Fprintf(os.Stderr, "[%d] restore par %d\n", cmm.instanceID, km.SubstreamId)
-									w := restoreWork{topic: tp, isKV: true, parNum: km.SubstreamId}
-									bgGrp.Go(func() error {
-										return cmm.restoreFunc(bgCtx, createSnapshot, w, kvchangelog, wschangelog, rs)
-									})
-									pars.Add(km.SubstreamId)
-									extraParToRestoreKV[tp] = pars
-								}
+		} else if len(ctrlMeta.Config) != 0 {
+			// fmt.Fprintf(os.Stderr, "[%d] scale config: %v, epoch: %d, input epoch: %d\n", cmm.instanceID,
+			// 	ctrlMeta.Config, ctrlMeta.Epoch, cmm.currentEpoch)
+			if ctrlMeta.Epoch+1 == cmm.currentEpoch {
+				for tp, numins := range ctrlMeta.Config {
+					ins, ok := prevInstances[tp]
+					if !ok {
+						ins = data_structure.NewUint8Set()
+					}
+					for i := uint8(0); i < numins; i++ {
+						ins.Add(i)
+					}
+					prevInstances[tp] = ins
+				}
+				fmt.Fprintf(os.Stderr, "[%d] prevInstances: %v\n", cmm.instanceID, prevInstances)
+			}
+		} else if len(ctrlMeta.KeyMaps) != 0 {
+			// cmm.updateKeyMapping(&ctrlMeta)
+			for tp, kms := range ctrlMeta.KeyMaps {
+				kvc, hasKVC := kvchangelog[tp]
+				wsc, hasWSC := wschangelog[tp]
+				if hasKVC {
+					for _, km := range kms {
+						// compute the new key assignment
+						par := uint8(km.Hash % uint64(kvc.Stream().NumPartition()))
+						// if this key is managed by this task and it was managed by another task in the previous configuration
+						if par == cmm.instanceID && km.SubstreamId != cmm.instanceID {
+							pars, ok := extraParToRestoreKV[tp]
+							if !ok {
+								pars = data_structure.NewUint8Set()
+							}
+							if !pars.Has(km.SubstreamId) {
+								fmt.Fprintf(os.Stderr, "[%d] restore par %d\n", cmm.instanceID, km.SubstreamId)
+								w := restoreWork{topic: tp, isKV: true, parNum: km.SubstreamId}
+								bgGrp.Go(func() error {
+									return cmm.restoreFunc(bgCtx, createSnapshot, w, kvchangelog, wschangelog, rs)
+								})
+								pars.Add(km.SubstreamId)
+								extraParToRestoreKV[tp] = pars
 							}
 						}
-					} else if hasWSC {
-						for _, km := range kms {
-							par := uint8(km.Hash % uint64(wsc.Stream().NumPartition()))
-							if par == cmm.instanceID && km.SubstreamId != cmm.instanceID {
-								pars, ok := extraParToRestoreWS[tp]
-								if !ok {
-									pars = data_structure.NewUint8Set()
-								}
-								if !pars.Has(km.SubstreamId) {
-									fmt.Fprintf(os.Stderr, "[%d] restore par %d\n", cmm.instanceID, km.SubstreamId)
-									w := restoreWork{topic: tp, isKV: false, parNum: km.SubstreamId}
-									bgGrp.Go(func() error {
-										return cmm.restoreFunc(bgCtx, createSnapshot, w, kvchangelog, wschangelog, rs)
-									})
-									pars.Add(km.SubstreamId)
-									extraParToRestoreWS[tp] = pars
-								}
+					}
+				} else if hasWSC {
+					for _, km := range kms {
+						par := uint8(km.Hash % uint64(wsc.Stream().NumPartition()))
+						if par == cmm.instanceID && km.SubstreamId != cmm.instanceID {
+							pars, ok := extraParToRestoreWS[tp]
+							if !ok {
+								pars = data_structure.NewUint8Set()
+							}
+							if !pars.Has(km.SubstreamId) {
+								fmt.Fprintf(os.Stderr, "[%d] restore par %d\n", cmm.instanceID, km.SubstreamId)
+								w := restoreWork{topic: tp, isKV: false, parNum: km.SubstreamId}
+								bgGrp.Go(func() error {
+									return cmm.restoreFunc(bgCtx, createSnapshot, w, kvchangelog, wschangelog, rs)
+								})
+								pars.Add(km.SubstreamId)
+								extraParToRestoreWS[tp] = pars
 							}
 						}
 					}
