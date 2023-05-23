@@ -162,9 +162,10 @@ func SetupManagersForEpoch(ctx context.Context,
 		restoreStateStoreElapsed := time.Since(restoreSsBeg)
 		setOffsetOnStream(offsetMap, args)
 		restoreElapsed := time.Since(restoreBeg)
-		fmt.Fprintf(os.Stderr, "restore state store took %v, down restore, elapsed: %v, ts: %d\n",
-			restoreStateStoreElapsed, restoreElapsed, time.Now().UnixMilli())
+		fmt.Fprintf(os.Stderr, "restore state store took %v, restore elapsed: %v\n",
+			restoreStateStoreElapsed, restoreElapsed)
 	}
+	fmt.Fprintf(os.Stderr, "[%d] down restore ts: %d\n", args.ectx.SubstreamNum(), time.Now().UnixMilli())
 	setLastMarkSeq(lastMark, args)
 	trackParFunc := exactly_once_intr.TrackProdSubStreamFunc(
 		func(ctx context.Context,
