@@ -186,8 +186,8 @@ func (s *CachingWindowStoreG[K, V]) GetKVSerde() commtypes.SerdeG[commtypes.KeyV
 func (s *CachingWindowStoreG[K, V]) FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error) {
 	return s.wrappedStore.FindLastEpochMetaWithAuxData(ctx, parNum)
 }
-func (s *CachingWindowStoreG[K, V]) BuildKeyMeta(kms map[string][]txn_data.KeyMaping) {
-	s.wrappedStore.BuildKeyMeta(kms)
+func (s *CachingWindowStoreG[K, V]) BuildKeyMeta(kms map[string][]txn_data.KeyMaping) error {
+	return s.wrappedStore.BuildKeyMeta(kms)
 }
 
 func (c *CachingWindowStoreG[K, V]) SetFlushCallbackFunc(f exactly_once_intr.FlushCallbackFunc) {

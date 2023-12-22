@@ -78,6 +78,7 @@ func ExecuteApp(ctx context.Context,
 		}
 		debug.Fprint(os.Stderr, "begin transaction processing\n")
 		ret = processWithTransaction(ctx, t, tm, cmm, streamTaskArgs, &rs)
+		debug.Fprintf(os.Stderr, "2pc ret: %v\n", ret)
 	} else if streamTaskArgs.guarantee == exactly_once_intr.EPOCH_MARK {
 		rs := snapshot_store.NewRedisSnapshotStore(env_config.CREATE_SNAPSHOT)
 		em, cmm, err := SetupManagersForEpoch(ctx, streamTaskArgs, &rs, setupSnapshotCallback)
@@ -86,12 +87,22 @@ func ExecuteApp(ctx context.Context,
 		}
 		debug.Fprint(os.Stderr, "begin epoch processing\n")
 		ret = processInEpoch(ctx, t, em, cmm, streamTaskArgs, &rs)
-		fmt.Fprintf(os.Stderr, "epoch ret: %v\n", ret)
+		debug.Fprintf(os.Stderr, "epoch ret: %v\n", ret)
 	} else if streamTaskArgs.guarantee == exactly_once_intr.AT_LEAST_ONCE {
+		debug.Fprint(os.Stderr, "begin at least once epoch processing\n")
 		ret = process(ctx, t, streamTaskArgs)
-	} else {
+		debug.Fprintf(os.Stderr, "at least once return: %v\n", ret)
+	} else if streamTaskArgs.guarantee == exactly_once_intr.NO_GUARANTEE {
 		debug.Fprintf(os.Stderr, "begin processing without guarantee\n")
 		ret = processNoProto(ctx, t, streamTaskArgs)
+		debug.Fprintf(os.Stderr, "unsafe ret: %v\n", ret)
+	} else if streamTaskArgs.guarantee == exactly_once_intr.ALIGN_EPOCH {
+		debug.Fprintf(os.Stderr, "begin align checkpoint processing\n")
+		// TODO: unimplemented
+		return &common.FnOutput{Success: false, Message: "unimplemented"}
+	} else {
+		fmt.Fprintf(os.Stderr, "unrecognized guarantee: %v\n", streamTaskArgs.guarantee)
+		return &common.FnOutput{Success: false, Message: "unrecognized guarantee"}
 	}
 	if ret != nil && ret.Success {
 		outputRemainingStats()

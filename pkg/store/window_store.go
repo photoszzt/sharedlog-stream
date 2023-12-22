@@ -83,6 +83,6 @@ type WindowStoreOpWithChangelog interface {
 	Snapshot(logOff uint64)
 	WaitForAllSnapshot() error
 	RestoreFromSnapshot(ctx context.Context, snapshot [][]byte) error
-	BuildKeyMeta(kms map[string][]txn_data.KeyMaping)
+	BuildKeyMeta(kms map[string][]txn_data.KeyMaping) error
 	FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error)
 }

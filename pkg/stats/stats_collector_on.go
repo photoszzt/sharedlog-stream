@@ -32,6 +32,6 @@ func (c *StatsCollector[E]) AddSample(sample E) {
 
 func (c *ConcurrentPrintLogStatsCollector[E]) AddSample(sample E) {
 	c.mu.Lock()
-	c.AddSample(sample)
+	c.PrintLogStatsCollector.AddSample(sample)
 	c.mu.Unlock()
 }

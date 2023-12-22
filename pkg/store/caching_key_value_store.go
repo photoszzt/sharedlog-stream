@@ -214,6 +214,6 @@ func (c *CachingKeyValueStoreG[K, V]) RestoreFromSnapshot(snapshot [][]byte) err
 func (c *CachingKeyValueStoreG[K, V]) FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error) {
 	return c.wrappedStore.FindLastEpochMetaWithAuxData(ctx, parNum)
 }
-func (c *CachingKeyValueStoreG[K, V]) BuildKeyMeta(ctx context.Context, kms map[string][]txn_data.KeyMaping) {
-	c.wrappedStore.BuildKeyMeta(ctx, kms)
+func (c *CachingKeyValueStoreG[K, V]) BuildKeyMeta(ctx context.Context, kms map[string][]txn_data.KeyMaping) error {
+	return c.wrappedStore.BuildKeyMeta(ctx, kms)
 }

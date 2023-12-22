@@ -105,10 +105,10 @@ func (st *KeyValueStoreWithChangelogG[K, V]) Put(ctx context.Context, key K, val
 	}
 }
 
-func (st *KeyValueStoreWithChangelogG[K, V]) BuildKeyMeta(ctx context.Context, kms map[string][]txn_data.KeyMaping) {
+func (st *KeyValueStoreWithChangelogG[K, V]) BuildKeyMeta(ctx context.Context, kms map[string][]txn_data.KeyMaping) error {
 	kms[st.changelogManager.TopicName()] = make([]txn_data.KeyMaping, 0)
 	hasher := hashfuncs.ByteSliceHasher{}
-	st.kvstore.Range(ctx, optional.None[K](), optional.None[K](), func(k K, v V) error {
+	return st.kvstore.Range(ctx, optional.None[K](), optional.None[K](), func(k K, v V) error {
 		kBytes, err := st.msgSerde.GetKeySerdeG().Encode(k)
 		if err != nil {
 			return err

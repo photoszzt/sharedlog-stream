@@ -42,7 +42,7 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 	hasUntrackedConsume := false
 
 	debug.Fprintf(os.Stderr, "warmup time: %v, flush every: %v, waitEndMark: %v, sinkBufMaxSize: %v\n",
-		args.warmup, args.flushEvery, args.waitEndMark, args.bufMaxSize, args.bufMaxSize)
+		args.warmup, args.flushEvery, args.waitEndMark, args.bufMaxSize)
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
 	warmupCheck.StartWarmup()
 	commitTimer := time.Now()

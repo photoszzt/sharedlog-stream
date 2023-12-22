@@ -7,7 +7,7 @@ default: lat_tp_handler_debug lat_tp_handler sharedlog_bench_client dump_stream 
 
 .PHONY: golangci-lint
 golangci-lint:
-	@golangci-lint -E goimports run ./...
+	@golangci-lint -E goimports run --build-tags "debug,stats" ./...
 
 .PHONY: nexmark_gen_data_by_spec
 nexmark_gen_data_by_spec:

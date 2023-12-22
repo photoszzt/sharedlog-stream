@@ -208,15 +208,6 @@ func processInEpoch(
 		return common.GenErrFnOutput(fmt.Errorf("trackStreamAndConfigExactlyOnce: %v", err))
 	}
 
-	// debug.Fprintf(os.Stderr, "start restore mapping")
-	// err = cmm.RestoreMappingAndWaitForPrevTask(
-	// 	ctx, args.ectx.FuncName(), env_config.CREATE_SNAPSHOT, args.serdeFormat,
-	// 	args.kvChangelogs, args.windowStoreChangelogs, rs)
-	// if err != nil {
-	// 	return common.GenErrFnOutput(fmt.Errorf("RestoreMappingAndWaitForPrevTask: %v", err))
-	// }
-	// fmt.Fprintf(os.Stderr, "[%d] restore mapping done %d\n", args.ectx.SubstreamNum(), time.Now().UnixMilli())
-
 	// execIntrMs := stats.NewPrintLogStatsCollector[int64]("execIntrMs")
 	// thisAndLastCmtMs := stats.NewPrintLogStatsCollector[int64]("thisAndLastCmtMs")
 	// markPartUs := stats.NewPrintLogStatsCollector[int64]("markPartUs")
@@ -326,7 +317,6 @@ func processInEpoch(
 					fmt.Fprintf(os.Stderr, "%s msgCnt %d, ctrlCnt %d, epochCnt %d, logEntry %d\n",
 						src.Name(), src.GetCount(), src.NumCtrlMsg(), src.NumEpoch(), src.NumLogEntry())
 				}
-				lastTimeoutCheck = time.Now()
 			}
 		}
 		exitDueToFailTest := testForFail && cur_elapsed >= failAfter
@@ -397,7 +387,10 @@ func finalMark(dctx context.Context, t *StreamTask, args *StreamTaskArgs,
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("flushStreams failed: %v", err))
 	}
-	kms := getKeyMapping(dctx, args)
+	kms, err := getKeyMapping(dctx, args)
+	if err != nil {
+		return common.GenErrFnOutput(fmt.Errorf("getKeyMapping failed: %v", err))
+	}
 	flushTime := stats.Elapsed(flushAllStart).Microseconds()
 	// mPartBeg := time.Now()
 	logOff, _, err := markEpoch(dctx, em, t, args)
@@ -445,15 +438,21 @@ func finalMark(dctx context.Context, t *StreamTask, args *StreamTaskArgs,
 	return nil
 }
 
-func getKeyMapping(ctx context.Context, args *StreamTaskArgs) map[string][]txn_data.KeyMaping {
+func getKeyMapping(ctx context.Context, args *StreamTaskArgs) (map[string][]txn_data.KeyMaping, error) {
 	kms := make(map[string][]txn_data.KeyMaping)
 	for _, kv := range args.kvChangelogs {
-		kv.BuildKeyMeta(ctx, kms)
+		err := kv.BuildKeyMeta(ctx, kms)
+		if err != nil {
+			return nil, err
+		}
 	}
 	for _, wsc := range args.windowStoreChangelogs {
-		wsc.BuildKeyMeta(kms)
+		err := wsc.BuildKeyMeta(kms)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return kms
+	return kms, nil
 }
 
 func markEpoch(ctx context.Context, em *epoch_manager.EpochManager,

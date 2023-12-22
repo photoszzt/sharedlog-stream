@@ -14,23 +14,6 @@ type TimeMeta struct {
 	RecordTsMs  int64
 }
 
-/*
-type CoreKeyValueStore interface {
-	StateStore
-	Get(ctx context.Context, key commtypes.KeyT) (commtypes.ValueT, bool, error)
-	Range(ctx context.Context, from commtypes.KeyT, to commtypes.KeyT,
-		iterFunc func(commtypes.KeyT, commtypes.ValueT) error) error
-	ApproximateNumEntries() (uint64, error)
-	Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error
-	PutIfAbsent(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) (commtypes.ValueT, error)
-	PutAll(context.Context, []*commtypes.Message) error
-	Delete(ctx context.Context, key commtypes.KeyT) error
-	TableType() TABLE_TYPE
-	UpdateTrackParFunc
-	OnlyUpdateInMemStore
-}
-*/
-
 type CoreKeyValueStoreG[K, V any] interface {
 	StateStore
 	Get(ctx context.Context, key K) (V, bool, error)
@@ -73,7 +56,7 @@ type KeyValueStoreOpWithChangelog interface {
 	Snapshot(logOff uint64)
 	WaitForAllSnapshot() error
 	RestoreFromSnapshot(snapshot [][]byte) error
-	BuildKeyMeta(ctx context.Context, kms map[string][]txn_data.KeyMaping)
+	BuildKeyMeta(ctx context.Context, kms map[string][]txn_data.KeyMaping) error
 	FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error)
 }
 

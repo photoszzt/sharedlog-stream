@@ -134,10 +134,10 @@ func (st *InMemoryWindowStoreWithChangelogG[K, V]) Put(ctx context.Context,
 	}
 }
 
-func (st *InMemoryWindowStoreWithChangelogG[K, V]) BuildKeyMeta(kms map[string][]txn_data.KeyMaping) {
+func (st *InMemoryWindowStoreWithChangelogG[K, V]) BuildKeyMeta(kms map[string][]txn_data.KeyMaping) error {
 	kms[st.changelogManager.TopicName()] = make([]txn_data.KeyMaping, 0)
 	hasher := hashfuncs.ByteSliceHasher{}
-	st.windowStore.IterAll(func(ts int64, key K, value V) error {
+	return st.windowStore.IterAll(func(ts int64, key K, value V) error {
 		kBytes, err := st.originKeySerde.Encode(key)
 		if err != nil {
 			return err

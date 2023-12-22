@@ -501,5 +501,6 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) SetFlushCallback(func(ctx context.Co
 }
 func (s *InMemorySkipMapWindowStoreG[K, V]) SetFlushCallbackFunc(exactly_once_intr.FlushCallbackFunc) {
 }
-func (s *InMemorySkipMapWindowStoreG[K, V]) BuildKeyMeta(kms map[string][]txn_data.KeyMaping) {
+func (s *InMemorySkipMapWindowStoreG[K, V]) BuildKeyMeta(kms map[string][]txn_data.KeyMaping) error {
+	panic("not supported")
 }

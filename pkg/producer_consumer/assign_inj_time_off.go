@@ -8,9 +8,9 @@ import (
 	"sharedlog-stream/pkg/stats"
 )
 
-func assignInjTime(msg *commtypes.MessageSerialized) error {
-	return nil
+func assignInjTime(msg *commtypes.MessageSerialized) {
 }
+
 func extractProduceToConsumeTime(msgSeqs *commtypes.Message, isInitialSrc bool, collector *stats.PrintLogStatsCollector[int64]) error {
 	return nil
 }
