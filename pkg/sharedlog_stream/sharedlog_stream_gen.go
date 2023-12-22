@@ -147,6 +147,7 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(7)
 	var zb0001Mask uint8 /* 7 bits */
+	_ = zb0001Mask
 	if z.Payload == nil {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -277,6 +278,7 @@ func (z *StreamLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(7)
 	var zb0001Mask uint8 /* 7 bits */
+	_ = zb0001Mask
 	if z.Payload == nil {
 		zb0001Len--
 		zb0001Mask |= 0x2

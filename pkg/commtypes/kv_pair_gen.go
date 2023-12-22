@@ -52,6 +52,7 @@ func (z *KeyValueSerrialized) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
 	var zb0001Mask uint8 /* 2 bits */
+	_ = zb0001Mask
 	if z.KeyEnc == nil {
 		zb0001Len--
 		zb0001Mask |= 0x1
@@ -101,6 +102,7 @@ func (z *KeyValueSerrialized) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
 	var zb0001Mask uint8 /* 2 bits */
+	_ = zb0001Mask
 	if z.KeyEnc == nil {
 		zb0001Len--
 		zb0001Mask |= 0x1
@@ -240,6 +242,7 @@ func (z KeyValueSers) EncodeMsg(en *msgp.Writer) (err error) {
 		// omitempty: check for empty values
 		zb0001Len := uint32(2)
 		var zb0001Mask uint8 /* 2 bits */
+		_ = zb0001Mask
 		if z[zb0004].KeyEnc == nil {
 			zb0001Len--
 			zb0001Mask |= 0x1
@@ -292,6 +295,7 @@ func (z KeyValueSers) MarshalMsg(b []byte) (o []byte, err error) {
 		// omitempty: check for empty values
 		zb0001Len := uint32(2)
 		var zb0001Mask uint8 /* 2 bits */
+		_ = zb0001Mask
 		if z[zb0004].KeyEnc == nil {
 			zb0001Len--
 			zb0001Mask |= 0x1

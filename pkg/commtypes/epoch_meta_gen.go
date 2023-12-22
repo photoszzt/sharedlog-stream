@@ -222,6 +222,7 @@ func (z *EpochMarker) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(6)
 	var zb0001Mask uint8 /* 6 bits */
+	_ = zb0001Mask
 	if z.ConSeqNums == nil {
 		zb0001Len--
 		zb0001Mask |= 0x1
@@ -382,6 +383,7 @@ func (z *EpochMarker) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(6)
 	var zb0001Mask uint8 /* 6 bits */
+	_ = zb0001Mask
 	if z.ConSeqNums == nil {
 		zb0001Len--
 		zb0001Mask |= 0x1

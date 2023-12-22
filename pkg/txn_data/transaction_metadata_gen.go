@@ -9,8 +9,8 @@ import (
 // DecodeMsg implements msgp.Decodable
 func (z *TransactionState) DecodeMsg(dc *msgp.Reader) (err error) {
 	{
-		var zb0001 uint8
-		zb0001, err = dc.ReadUint8()
+		var zb0001 uint32
+		zb0001, err = dc.ReadUint32()
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -22,7 +22,7 @@ func (z *TransactionState) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z TransactionState) EncodeMsg(en *msgp.Writer) (err error) {
-	err = en.WriteUint8(uint8(z))
+	err = en.WriteUint32(uint32(z))
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -33,15 +33,15 @@ func (z TransactionState) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z TransactionState) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendUint8(o, uint8(z))
+	o = msgp.AppendUint32(o, uint32(z))
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *TransactionState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	{
-		var zb0001 uint8
-		zb0001, bts, err = msgp.ReadUint8Bytes(bts)
+		var zb0001 uint32
+		zb0001, bts, err = msgp.ReadUint32Bytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
@@ -54,7 +54,7 @@ func (z *TransactionState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z TransactionState) Msgsize() (s int) {
-	s = msgp.Uint8Size
+	s = msgp.Uint32Size
 	return
 }
 
@@ -97,8 +97,8 @@ func (z *TxnMetadata) DecodeMsg(dc *msgp.Reader) (err error) {
 			}
 		case "st":
 			{
-				var zb0003 uint8
-				zb0003, err = dc.ReadUint8()
+				var zb0003 uint32
+				zb0003, err = dc.ReadUint32()
 				if err != nil {
 					err = msgp.WrapError(err, "State")
 					return
@@ -121,6 +121,7 @@ func (z *TxnMetadata) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
 	var zb0001Mask uint8 /* 2 bits */
+	_ = zb0001Mask
 	if z.TopicPartitions == nil {
 		zb0001Len--
 		zb0001Mask |= 0x1
@@ -162,7 +163,7 @@ func (z *TxnMetadata) EncodeMsg(en *msgp.Writer) (err error) {
 		if err != nil {
 			return
 		}
-		err = en.WriteUint8(uint8(z.State))
+		err = en.WriteUint32(uint32(z.State))
 		if err != nil {
 			err = msgp.WrapError(err, "State")
 			return
@@ -177,6 +178,7 @@ func (z *TxnMetadata) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
 	var zb0001Mask uint8 /* 2 bits */
+	_ = zb0001Mask
 	if z.TopicPartitions == nil {
 		zb0001Len--
 		zb0001Mask |= 0x1
@@ -205,7 +207,7 @@ func (z *TxnMetadata) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x2) == 0 { // if not empty
 		// string "st"
 		o = append(o, 0xa2, 0x73, 0x74)
-		o = msgp.AppendUint8(o, uint8(z.State))
+		o = msgp.AppendUint32(o, uint32(z.State))
 	}
 	return
 }
@@ -249,8 +251,8 @@ func (z *TxnMetadata) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		case "st":
 			{
-				var zb0003 uint8
-				zb0003, bts, err = msgp.ReadUint8Bytes(bts)
+				var zb0003 uint32
+				zb0003, bts, err = msgp.ReadUint32Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "State")
 					return
@@ -275,6 +277,6 @@ func (z *TxnMetadata) Msgsize() (s int) {
 	for za0001 := range z.TopicPartitions {
 		s += z.TopicPartitions[za0001].Msgsize()
 	}
-	s += 3 + msgp.Uint8Size
+	s += 3 + msgp.Uint32Size
 	return
 }

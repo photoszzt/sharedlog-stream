@@ -737,6 +737,7 @@ func (z *Event) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(4)
 	var zb0001Mask uint8 /* 4 bits */
+	_ = zb0001Mask
 	if z.NewPerson == nil {
 		zb0001Len--
 		zb0001Mask |= 0x1
@@ -833,6 +834,7 @@ func (z *Event) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(4)
 	var zb0001Mask uint8 /* 4 bits */
+	_ = zb0001Mask
 	if z.NewPerson == nil {
 		zb0001Len--
 		zb0001Mask |= 0x1

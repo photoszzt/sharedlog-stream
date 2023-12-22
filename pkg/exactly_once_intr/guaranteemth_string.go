@@ -12,11 +12,12 @@ func _() {
 	_ = x[AT_LEAST_ONCE-1]
 	_ = x[TWO_PHASE_COMMIT-2]
 	_ = x[EPOCH_MARK-3]
+	_ = x[ALIGN_EPOCH-4]
 }
 
-const _GuaranteeMth_name = "NO_GUARANTEEAT_LEAST_ONCETWO_PHASE_COMMITEPOCH_MARK"
+const _GuaranteeMth_name = "NO_GUARANTEEAT_LEAST_ONCETWO_PHASE_COMMITEPOCH_MARKALIGN_EPOCH"
 
-var _GuaranteeMth_index = [...]uint8{0, 12, 25, 41, 51}
+var _GuaranteeMth_index = [...]uint8{0, 12, 25, 41, 51, 62}
 
 func (i GuaranteeMth) String() string {
 	if i >= GuaranteeMth(len(_GuaranteeMth_index)-1) {

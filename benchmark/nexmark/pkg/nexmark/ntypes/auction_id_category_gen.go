@@ -52,6 +52,7 @@ func (z AuctionIdCategory) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
 	var zb0001Mask uint8 /* 2 bits */
+	_ = zb0001Mask
 	if z.AucId == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x1
@@ -101,6 +102,7 @@ func (z AuctionIdCategory) MarshalMsg(b []byte) (o []byte, err error) {
 	// omitempty: check for empty values
 	zb0001Len := uint32(2)
 	var zb0001Mask uint8 /* 2 bits */
+	_ = zb0001Mask
 	if z.AucId == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x1
