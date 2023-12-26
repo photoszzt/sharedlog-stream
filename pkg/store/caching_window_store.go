@@ -66,14 +66,16 @@ func NewCachingWindowStoreG[K comparable, V any](ctx context.Context,
 					Key:    kTs.Key,
 					Window: t,
 				}
-				err = c.flushCallbackFunc(ctx, commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]{
-					Key:           optional.Some(k),
-					Value:         optional.Some(change),
-					TimestampMs:   entry.entry.tm.RecordTsMs,
-					StartProcTime: entry.entry.tm.StartProcTs,
-				})
-				if err != nil {
-					return err
+				if c.flushCallbackFunc != nil {
+					err = c.flushCallbackFunc(ctx, commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]{
+						Key:           optional.Some(k),
+						Value:         optional.Some(change),
+						TimestampMs:   entry.entry.tm.RecordTsMs,
+						StartProcTime: entry.entry.tm.StartProcTs,
+					})
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}

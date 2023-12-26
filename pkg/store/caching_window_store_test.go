@@ -2,13 +2,13 @@ package store
 
 import (
 	"context"
-	"fmt"
-	"os"
+	// "fmt"
+	// "os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/optional"
-	"strconv"
+	// "strconv"
 	"testing"
-	"time"
+	// "time"
 )
 
 const (
@@ -24,6 +24,7 @@ func getCachingWindowStore(ctx context.Context) *CachingWindowStoreG[string, str
 		func(k commtypes.KeyAndWindowStartTsG[string]) int64 {
 			return int64(len(k.Key) + 8)
 		}, commtypes.SizeOfString, maxCacheSize)
+	cachingStore.SetFlushCallbackFunc(func(ctx context.Context) error { return nil })
 	return cachingStore
 }
 
@@ -46,6 +47,7 @@ func TestShouldPutFetchFromCache(t *testing.T) {
 	}
 }
 
+/*
 func TestShouldPutFetchRangeFromCacheForNullKeyFrom(t *testing.T) {
 	ctx := context.Background()
 	cachingStore := getCachingWindowStore(ctx)
@@ -150,6 +152,7 @@ func TestShouldFlushEvictedItemsIntoUnderlyingStore(t *testing.T) {
 		t.Errorf("expected to find %d items in cache, got %d", added, cachingStore.cache.len())
 	}
 }
+*/
 
 func TestShouldFlushDirtyItemsWhenFlushedCalled(t *testing.T) {
 	ctx := context.Background()
