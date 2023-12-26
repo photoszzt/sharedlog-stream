@@ -191,6 +191,23 @@ func handleCtrlMsg(ctx context.Context, ctrlRawMsg commtypes.RawMsgAndSeq,
 	}
 }
 
+func timedFlushStreams(ctx context.Context,
+	t *StreamTask,
+	args *StreamTaskArgs,
+) *common.FnOutput {
+	flushAllStart := stats.TimerBegin()
+	f, ret_err := flushStreams(ctx, args)
+	if ret_err != nil {
+		return common.GenErrFnOutput(ret_err)
+	}
+	flushTime := stats.Elapsed(flushAllStart).Microseconds()
+	t.flushStageTime.AddSample(flushTime)
+	if f > 0 {
+		t.flushAtLeastOne.AddSample(flushTime)
+	}
+	return nil
+}
+
 func flushStreams(ctx context.Context,
 	args *StreamTaskArgs,
 ) (uint32, error) {
