@@ -50,29 +50,6 @@ func StringCompare(lhs, rhs string) int {
 	return strings.Compare(lhs, rhs)
 }
 
-func CompareIntrWithVersionedKey(lhs, rhs interface{}, baseCompare CompareFunc) int {
-	lv, ok := lhs.(VersionedKey)
-	if ok {
-		rv := rhs.(VersionedKey)
-		lvk := lv.Key
-		rvk := rv.Key
-		kCompare := baseCompare(lvk, rvk)
-		if kCompare == 0 {
-			if lv.Version < rv.Version {
-				return -1
-			} else if lv.Version == rv.Version {
-				return 0
-			} else {
-				return 1
-			}
-		} else {
-			return kCompare
-		}
-	} else {
-		return baseCompare(lhs, rhs)
-	}
-}
-
 func CompareWithVersionedKey[K any](lv, rv VersionedKeyG[K], baseCompare CompareFuncG[K]) int {
 	lvk := lv.Key
 	rvk := rv.Key
