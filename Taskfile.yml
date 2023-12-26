@@ -21,3 +21,11 @@ tasks:
     cmds:
       - java -cp ./benchmark/protocol_lat_java/app/build/libs/app-uber.jar
         protocol_lat_java.App {{.CLI_ARGS}}
+
+  install_deps:
+    cmds:
+      - which golangci-lint || { curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | 
+        sh -s -- -b $(go env GOPATH)/bin v1.55.2; }
+      - which stringer || go install golang.org/x/tools/cmd/stringer@latest
+      - which goimports || go install golang.org/x/tools/cmd/goimports@latest
+      - which msgp || go install github.com/tinylib/msgp@latest
