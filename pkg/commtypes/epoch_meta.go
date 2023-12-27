@@ -18,6 +18,7 @@ const (
 	SCALE_FENCE
 	FENCE
 	STREAM_END
+	CHKPT_MARK
 )
 
 type ProduceRange struct {
