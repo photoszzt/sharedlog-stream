@@ -295,18 +295,3 @@ func DecodeRawMsgSeqG[K, V any](rawMsg RawMsgAndSeq, msgSerde MessageGSerdeG[K, 
 		}, nil
 	}
 }
-
-func ApplyFuncToMsgSeqs(msgSeqs *MsgAndSeqs, callback func(msg *Message) error) error {
-	if msgSeqs.Msgs.MsgArr != nil {
-		for _, msg := range msgSeqs.Msgs.MsgArr {
-			if err := callback(&msg); err != nil {
-				return err
-			}
-		}
-	} else {
-		if err := callback(&msgSeqs.Msgs.Msg); err != nil {
-			return err
-		}
-	}
-	return nil
-}
