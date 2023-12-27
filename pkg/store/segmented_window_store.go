@@ -5,42 +5,47 @@ import (
 	"math"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/optional"
+	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils/syncutils"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
-type SegmentedWindowStore struct {
+type SegmentedWindowStoreG[K, V any] struct {
 	seqNumMu         syncutils.Mutex
 	bytesStore       SegmentedBytesStore
-	valSerde         commtypes.Serde
-	keySerde         commtypes.Serde
+	keySerde         commtypes.SerdeG[K]
+	valSerde         commtypes.SerdeG[V]
 	windowKeySchema  *WindowKeySchema
+	snapshotCallback WinSnapshotCallback[K, V]
+	bgErrG           *errgroup.Group
+	bgCtx            context.Context
 	windowSize       int64
 	seqNum           uint32
 	retainDuplicates bool
 }
 
-var _ = CoreWindowStore(&SegmentedWindowStore{})
+var _ = CoreWindowStoreG[int, int](&SegmentedWindowStoreG[int, int]{})
 
-func NewSegmentedWindowStore(
+func NewSegmentedWindowStore[K, V any](
 	bytesStore SegmentedBytesStore,
 	retainDuplicates bool,
 	windowSize int64,
-	keySerde commtypes.Serde,
-	valSerde commtypes.Serde,
-) *SegmentedWindowStore {
-	return &SegmentedWindowStore{
+	keySerde commtypes.SerdeG[K],
+	valSerde commtypes.SerdeG[V],
+) *SegmentedWindowStoreG[K, V] {
+	return &SegmentedWindowStoreG[K, V]{
 		bytesStore:       bytesStore,
 		retainDuplicates: retainDuplicates,
 		windowSize:       windowSize,
 		seqNum:           0,
 		windowKeySchema:  &WindowKeySchema{},
-		keySerde:         keySerde,
-		valSerde:         valSerde,
 	}
 }
 
-func (rws *SegmentedWindowStore) updateSeqnumForDups() {
+func (rws *SegmentedWindowStoreG[K, V]) updateSeqnumForDups() {
 	if rws.retainDuplicates {
 		rws.seqNumMu.Lock()
 		defer rws.seqNumMu.Unlock()
@@ -51,18 +56,15 @@ func (rws *SegmentedWindowStore) updateSeqnumForDups() {
 	}
 }
 
-func (rws *SegmentedWindowStore) Name() string { return rws.bytesStore.Name() }
+func (rws *SegmentedWindowStoreG[K, V]) Name() string { return rws.bytesStore.Name() }
 
-func (rws *SegmentedWindowStore) Put(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT, windowStartTimestamp int64) error {
-	if !(value == nil && rws.retainDuplicates) {
+func (rws *SegmentedWindowStoreG[K, V]) Put(ctx context.Context, key K, value optional.Option[V], windowStartTimestamp int64, tm TimeMeta) error {
+	if !(value.IsNone() && rws.retainDuplicates) {
 		rws.updateSeqnumForDups()
 		var err error
-		kBytes, ok := key.([]byte)
-		if !ok {
-			kBytes, err = rws.keySerde.Encode(key)
-			if err != nil {
-				return err
-			}
+		kBytes, err := rws.keySerde.Encode(key)
+		if err != nil {
+			return err
 		}
 		rws.seqNumMu.Lock()
 		defer rws.seqNumMu.Unlock()
@@ -70,9 +72,10 @@ func (rws *SegmentedWindowStore) Put(ctx context.Context, key commtypes.KeyT, va
 		if err != nil {
 			return err
 		}
-		vBytes, ok := value.([]byte)
-		if !ok {
-			vBytes, err = rws.valSerde.Encode(value)
+		var vBytes []byte
+		v, ok := value.Take()
+		if ok {
+			vBytes, err = rws.valSerde.Encode(v)
 			if err != nil {
 				return err
 			}
@@ -82,53 +85,62 @@ func (rws *SegmentedWindowStore) Put(ctx context.Context, key commtypes.KeyT, va
 	return nil
 }
 
-func (rws *SegmentedWindowStore) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
-	k := key.([]byte)
-	v := value.([]byte)
-	return rws.bytesStore.Put(ctx, k, v)
+func (rws *SegmentedWindowStoreG[K, V]) PutWithoutPushToChangelogG(ctx context.Context, key K, value optional.Option[V], windowStartTs int64) error {
+	kBytes, err := rws.keySerde.Encode(key)
+	if err != nil {
+		return err
+	}
+	k, err := rws.windowKeySchema.ToStoreKeyBinary(kBytes, windowStartTs, rws.seqNum)
+	if err != nil {
+		return err
+	}
+	var vBytes []byte
+	v, ok := value.Take()
+	if ok {
+		vBytes, err = rws.valSerde.Encode(v)
+		if err != nil {
+			return err
+		}
+	}
+	return rws.bytesStore.Put(ctx, k, vBytes)
 }
 
-func (rws *SegmentedWindowStore) Get(ctx context.Context, key commtypes.KeyT, windowStartTimestamp int64) (commtypes.ValueT, bool, error) {
+func (rws *SegmentedWindowStoreG[K, V]) Get(ctx context.Context, key K, windowStartTimestamp int64) (V, bool, error) {
+	var v V
 	var err error
-	kBytes, ok := key.([]byte)
-	if !ok {
-		kBytes, err = rws.keySerde.Encode(key)
-		if err != nil {
-			return nil, false, err
-		}
+	kBytes, err := rws.keySerde.Encode(key)
+	if err != nil {
+		return v, false, err
 	}
 	rws.seqNumMu.Lock()
 	defer rws.seqNumMu.Unlock()
 	k, err := rws.windowKeySchema.ToStoreKeyBinary(kBytes, windowStartTimestamp, rws.seqNum)
 	if err != nil {
-		return nil, false, err
+		return v, false, err
 	}
 	valBytes, ok, err := rws.bytesStore.Get(ctx, k)
 	if err != nil {
-		return nil, false, err
+		return v, false, err
 	}
 	if ok {
 		val, err := rws.valSerde.Decode(valBytes)
 		if err != nil {
-			return nil, false, err
+			return v, false, err
 		}
 		return val, ok, err
 	}
-	return nil, false, nil
+	return v, false, nil
 }
 
-func (rws *SegmentedWindowStore) Fetch(ctx context.Context, key commtypes.KeyT, timeFrom time.Time, timeTo time.Time,
-	iterFunc func(int64 /* ts */, commtypes.KeyT, commtypes.ValueT) error,
+func (rws *SegmentedWindowStoreG[K, V]) Fetch(ctx context.Context, key K, timeFrom time.Time, timeTo time.Time,
+	iterFunc func(int64 /* ts */, K, V) error,
 ) error {
 	tsFrom := timeFrom.UnixMilli()
 	tsTo := timeTo.UnixMilli()
 	var err error
-	kBytes, ok := key.([]byte)
-	if !ok {
-		kBytes, err = rws.keySerde.Encode(key)
-		if err != nil {
-			return err
-		}
+	kBytes, err := rws.keySerde.Encode(key)
+	if err != nil {
+		return err
 	}
 	return rws.bytesStore.Fetch(ctx, kBytes, tsFrom, tsTo, func(ts int64, kBytes, vBytes []byte) error {
 		k, err := rws.keySerde.Decode(kBytes)
@@ -143,25 +155,19 @@ func (rws *SegmentedWindowStore) Fetch(ctx context.Context, key commtypes.KeyT, 
 	})
 }
 
-func (rws *SegmentedWindowStore) FetchWithKeyRange(ctx context.Context, keyFrom commtypes.KeyT, keyTo commtypes.KeyT, timeFrom time.Time, timeTo time.Time,
-	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
+func (rws *SegmentedWindowStoreG[K, V]) FetchWithKeyRange(ctx context.Context, keyFrom K, keyTo K, timeFrom time.Time, timeTo time.Time,
+	iterFunc func(int64, K, V) error,
 ) error {
 	tsFrom := timeFrom.UnixMilli()
 	tsTo := timeTo.UnixMilli()
 	var err error
-	kFromBytes, ok := keyFrom.([]byte)
-	if !ok {
-		kFromBytes, err = rws.keySerde.Encode(keyFrom)
-		if err != nil {
-			return err
-		}
+	kFromBytes, err := rws.keySerde.Encode(keyFrom)
+	if err != nil {
+		return err
 	}
-	kToBytes, ok := keyTo.([]byte)
-	if !ok {
-		kToBytes, err = rws.keySerde.Encode(keyTo)
-		if err != nil {
-			return err
-		}
+	kToBytes, err := rws.keySerde.Encode(keyTo)
+	if err != nil {
+		return err
 	}
 	return rws.bytesStore.FetchWithKeyRange(ctx, kFromBytes, kToBytes, tsFrom, tsTo,
 		func(ts int64, kBytes, vBytes []byte) error {
@@ -177,8 +183,8 @@ func (rws *SegmentedWindowStore) FetchWithKeyRange(ctx context.Context, keyFrom 
 		})
 }
 
-func (rws *SegmentedWindowStore) FetchAll(ctx context.Context, timeFrom time.Time, timeTo time.Time,
-	iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error,
+func (rws *SegmentedWindowStoreG[K, V]) FetchAll(ctx context.Context, timeFrom time.Time, timeTo time.Time,
+	iterFunc func(int64, K, V) error,
 ) error {
 	tsFrom := timeFrom.UnixMilli()
 	tsTo := timeTo.UnixMilli()
@@ -195,47 +201,78 @@ func (rws *SegmentedWindowStore) FetchAll(ctx context.Context, timeFrom time.Tim
 	})
 }
 
-func (rws *SegmentedWindowStore) IterAll(iterFunc func(int64, commtypes.KeyT, commtypes.ValueT) error) error {
+func (rws *SegmentedWindowStoreG[K, V]) IterAll(iterFunc func(int64, K, V) error) error {
 	panic("not implemented")
 }
 
-func (rws *SegmentedWindowStore) DropDatabase(ctx context.Context) error {
+func (rws *SegmentedWindowStoreG[K, V]) DropDatabase(ctx context.Context) error {
 	return rws.bytesStore.DropDatabase(ctx)
 }
 
-func (rws *SegmentedWindowStore) TableType() TABLE_TYPE {
+func (rws *SegmentedWindowStoreG[K, V]) TableType() TABLE_TYPE {
 	return rws.bytesStore.TableType()
 }
 
-func (rws *SegmentedWindowStore) StartTransaction(ctx context.Context) error {
+func (rws *SegmentedWindowStoreG[K, V]) StartTransaction(ctx context.Context) error {
 	return rws.bytesStore.StartTransaction(ctx)
 }
-func (rws *SegmentedWindowStore) CommitTransaction(ctx context.Context, taskRepr string,
+func (rws *SegmentedWindowStoreG[K, V]) CommitTransaction(ctx context.Context, taskRepr string,
 	transactionID uint64,
 ) error {
 	return rws.bytesStore.CommitTransaction(ctx, taskRepr, transactionID)
 }
-func (rws *SegmentedWindowStore) AbortTransaction(ctx context.Context) error {
+func (rws *SegmentedWindowStoreG[K, V]) AbortTransaction(ctx context.Context) error {
 	return rws.bytesStore.AbortTransaction(ctx)
 }
 
-func (rws *SegmentedWindowStore) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
+func (rws *SegmentedWindowStoreG[K, V]) GetTransactionID(ctx context.Context, taskRepr string) (uint64, bool, error) {
 	return rws.bytesStore.GetTransactionID(ctx, taskRepr)
 }
 
-func (rws *SegmentedWindowStore) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
+func (rws *SegmentedWindowStoreG[K, V]) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 }
-func (rws *SegmentedWindowStore) FlushChangelog(ctx context.Context) error {
+func (rws *SegmentedWindowStoreG[K, V]) FlushChangelog(ctx context.Context) error {
 	return nil
 }
-func (rws *SegmentedWindowStore) ConsumeChangelog(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
+func (rws *SegmentedWindowStoreG[K, V]) ConsumeChangelog(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
 	return nil, nil
 }
 
-func (rws *SegmentedWindowStore) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager, guarantee exactly_once_intr.GuaranteeMth, serdeFormat commtypes.SerdeFormat) error {
+func (rws *SegmentedWindowStoreG[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager, guarantee exactly_once_intr.GuaranteeMth, serdeFormat commtypes.SerdeFormat) error {
 	panic("not supported")
 }
 
-func (rws *SegmentedWindowStore) ChangelogTopicName() string {
+func (rws *SegmentedWindowStoreG[K, V]) ChangelogTopicName() string {
 	panic("not supported")
+}
+func (s *SegmentedWindowStoreG[K, V]) Flush(ctx context.Context) (uint32, error) {
+	return 0, nil
+}
+func (s *SegmentedWindowStoreG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeFormat,
+	keySerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]], valSerde commtypes.SerdeG[V],
+) error {
+	panic("not supported")
+}
+func (s *SegmentedWindowStoreG[K, V]) GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]] {
+	panic("not supported")
+}
+func (s *SegmentedWindowStoreG[K, V]) RestoreFromSnapshot(ctx context.Context, snapshot [][]byte) error {
+	panic("not implemented")
+}
+func (s *SegmentedWindowStoreG[K, V]) SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]) error) {
+}
+func (s *SegmentedWindowStoreG[K, V]) SetFlushCallbackFunc(exactly_once_intr.FlushCallbackFunc) {
+}
+func (s *SegmentedWindowStoreG[K, V]) BuildKeyMeta(kms map[string][]txn_data.KeyMaping) error {
+	panic("not supported")
+}
+func (s *SegmentedWindowStoreG[K, V]) SetWinSnapshotCallback(ctx context.Context, f WinSnapshotCallback[K, V]) {
+	s.bgErrG, s.bgCtx = errgroup.WithContext(ctx)
+	s.snapshotCallback = f
+}
+func (s *SegmentedWindowStoreG[K, V]) Snapshot(logOff uint64) {
+	panic("not implemented")
+}
+func (s *SegmentedWindowStoreG[K, V]) WaitForAllSnapshot() error {
+	return s.bgErrG.Wait()
 }
