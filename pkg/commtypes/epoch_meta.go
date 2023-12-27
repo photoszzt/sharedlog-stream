@@ -4,9 +4,7 @@
 package commtypes
 
 import (
-	"encoding/json"
 	"fmt"
-	"sharedlog-stream/pkg/common_errors"
 )
 
 type EpochMark uint8
@@ -67,53 +65,4 @@ type EpochMarker struct {
 	ScaleEpoch   uint16                    `json:"sepoch,omitempty" msg:"sepoch,omitempty"`
 	ProdIndex    uint8                     `json:"prodIndex,omitempty" msg:"prodIndex,omitempty"`
 	Mark         EpochMark                 `json:"mark,omitempty" msg:"mark,omitempty"`
-}
-
-type EpochMarkerJSONSerde struct{}
-
-var _ = Serde(EpochMarkerJSONSerde{})
-
-func (s EpochMarkerJSONSerde) Encode(value interface{}) ([]byte, error) {
-	if value == nil {
-		return nil, nil
-	}
-	em := value.(*EpochMarker)
-	return json.Marshal(em)
-}
-func (s EpochMarkerJSONSerde) Decode(value []byte) (interface{}, error) {
-	em := EpochMarker{}
-	if err := json.Unmarshal(value, &em); err != nil {
-		return nil, err
-	}
-	return em, nil
-}
-
-type EpochMarkerMsgpSerde struct{}
-
-var _ = Serde(EpochMarkerMsgpSerde{})
-
-func (s EpochMarkerMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	if value == nil {
-		return nil, nil
-	}
-	em := value.(*EpochMarker)
-	return em.MarshalMsg(nil)
-}
-
-func (s EpochMarkerMsgpSerde) Decode(value []byte) (interface{}, error) {
-	em := EpochMarker{}
-	if _, err := em.UnmarshalMsg(value); err != nil {
-		return EpochMarker{}, err
-	}
-	return em, nil
-}
-
-func GetEpochMarkerSerde(serdeFormat SerdeFormat) (Serde, error) {
-	if serdeFormat == JSON {
-		return EpochMarkerJSONSerde{}, nil
-	} else if serdeFormat == MSGP {
-		return EpochMarkerMsgpSerde{}, nil
-	} else {
-		return nil, common_errors.ErrUnrecognizedSerdeFormat
-	}
 }
