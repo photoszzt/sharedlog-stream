@@ -3,6 +3,7 @@ package processor
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/optional"
@@ -119,11 +120,20 @@ func shouldClearTableEntryOnNullValueUpdatePart2G(t *testing.T, ctx context.Cont
 		}
 		got_msgs = append(got_msgs, msgs...)
 	}
-	expected_msgs := []commtypes.Message{
-		{Key: optional.Some(2), Value: optional.Some("XX2+Y2"), Timestamp: 2},
-		{Key: optional.Some(3), Value: optional.Some("XX3+Y3"), Timestamp: 3},
+	expected_msgs := []commtypes.MessageG[int, string]{
+		{Key: optional.Some(2), Value: optional.Some("XX2+Y2"), TimestampMs: 2},
+		{Key: optional.Some(3), Value: optional.Some("XX3+Y3"), TimestampMs: 3},
 	}
 	if !reflect.DeepEqual(expected_msgs, got_msgs) {
+		fmt.Fprintf(os.Stderr, "Expected output: \n")
+		for _, expected := range expected_msgs {
+			fmt.Fprintf(os.Stderr, "\tgot k %v, val %v, ts %d\n", expected.Key, expected.Value, expected.TimestampMs)
+		}
+		fmt.Fprintf(os.Stderr, "Got output: \n")
+		for _, outMsg := range got_msgs {
+			fmt.Fprintf(os.Stderr, "\tgot k %v, val %v, ts %d\n",
+				outMsg.Key, outMsg.Value, outMsg.TimestampMs)
+		}
 		t.Fatal("should equal")
 	}
 }

@@ -11,17 +11,13 @@ import (
 	"testing"
 )
 
-/*
-func toStringAgg(sep string) AggregatorFunc {
-	return AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
-		agg := aggregate.(string)
-		val := value.(string)
-		return agg + sep + val
+func toStringAggG(sep string) AggregatorFuncG[string, string, string] {
+	return AggregatorFuncG[string, string, string](func(key string, value string, aggregate optional.Option[string]) optional.Option[string] {
+		return optional.Some(aggregate.Unwrap() + sep + value)
 	})
 }
-*/
 
-func toStringAggG(sep string) AggregatorFuncG[string, string, string] {
+func toOpStringAggG(sep string) AggregatorFuncG[string, string, string] {
 	return AggregatorFuncG[string, string, string](func(key string, value string, aggregate optional.Option[string]) optional.Option[string] {
 		return optional.Some(aggregate.Unwrap() + sep + value)
 	})
@@ -32,6 +28,8 @@ var (
 	// TOSTRING_REMOVER   = toStringAgg("-")
 	TOSTRING_ADDER_G   = toStringAggG("+")
 	TOSTRING_REMOVER_G = toStringAggG("-")
+	TOOPSTR_ADDER_G    = toOpStringAggG("+")
+	TOOPSTR_REMOVER_G  = toOpStringAggG("-")
 	STRING_INIT        = InitializerFunc(func() interface{} {
 		return "0"
 	})
@@ -40,25 +38,6 @@ var (
 	})
 )
 
-/*
-func TestAggBasicWithInMemKVTable(t *testing.T) {
-	pc := NewProcessorChains()
-	srcTable := store.NewInMemoryKeyValueStore("srcTab", store.StringLess)
-	st := store.NewInMemoryKeyValueStore("aggTab", store.StringLess)
-	pc.
-		Via(NewTableSourceProcessorWithTable(srcTable)).
-		Via(NewTableGroupByMapProcessor("noOpGroupBy",
-			MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
-				return key, value, nil
-			}))).
-		Via(NewTableAggregateProcessor("agg", st, STRING_INIT, TOSTRING_ADDER, TOSTRING_REMOVER)).
-		Via(NewTableToStreamProcessor())
-	testAggBasic(t, func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-		return pc.RunChains(ctx, msg)
-	})
-}
-*/
-
 func TestAggBasicWithInMemSkipmapTable(t *testing.T) {
 	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("srcTab", store.StringLessFunc)
 	st := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("aggTab", store.StringLessFunc)
@@ -66,8 +45,8 @@ func TestAggBasicWithInMemSkipmapTable(t *testing.T) {
 	srcProc := ProcessorG[string, string, string, commtypes.ChangeG[string]](NewTableSourceProcessorWithTableG[string, string](srcTable))
 	groupByProc := NewTableGroupByMapProcessorG[string, string, string, string]("noOpGroupBy",
 		MapperFuncG[string, string, string, string](
-			func(key optional.Option[string], value optional.Option[string]) (string, string, error) {
-				return key.Unwrap(), value.Unwrap(), nil
+			func(key optional.Option[string], value optional.Option[string]) (optional.Option[string], optional.Option[string], error) {
+				return key, value, nil
 			}))
 	tabAggProc := NewTableAggregateProcessorG[string, string, string]("agg", st, STRING_INIT_G, TOSTRING_ADDER_G, TOSTRING_REMOVER_G)
 	toStreamProc := NewTableToStreamProcessorG[string, string]()
@@ -148,45 +127,20 @@ func testAggBasic(t *testing.T, procFunc func(ctx context.Context, msg commtypes
 	}
 }
 
-/*
-func TestAggRepartitionWithInMemKVStore(t *testing.T) {
-	pc := NewProcessorChains()
-	srcTable := store.NewInMemoryKeyValueStore("srcTab", store.StringLess)
-	st := store.NewInMemoryKeyValueStore("aggTab", store.StringLess)
-	pc.
-		Via(NewTableSourceProcessorWithTable(srcTable)).
-		Via(NewTableGroupByMapProcessor("groupBy", MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
-			k := key.(string)
-			if k == "null" {
-				return nil, value, nil
-			} else if k == "NULL" {
-				return nil, nil, nil
-			} else {
-				return value, value, nil
-			}
-		}))).
-		Via(NewTableAggregateProcessor("agg", st, STRING_INIT, TOSTRING_ADDER, TOSTRING_REMOVER)).
-		Via(NewTableToStreamProcessor())
-	testAggRepartition(t, func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-		return pc.RunChains(ctx, msg)
-	})
-}
-*/
-
 func TestAggRepartitionWithInMemSkipmapKVStore(t *testing.T) {
 	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("srcTab", store.StringLessFunc)
 	st := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("aggTab", store.StringLessFunc)
 	srcProc := NewTableSourceProcessorWithTableG[string, string](srcTable)
 	groupByProc := NewTableGroupByMapProcessorG[string, string, string, string]("groupBy",
 		MapperFuncG[string, string, string, string](
-			func(key optional.Option[string], value optional.Option[string]) (string, string, error) {
+			func(key optional.Option[string], value optional.Option[string]) (optional.Option[string], optional.Option[string], error) {
 				k := key.Unwrap()
 				if k == "null" {
-					return "", value.Unwrap(), nil
+					return optional.None[string](), value, nil
 				} else if k == "NULL" {
-					return "", "", nil
+					return optional.None[string](), optional.None[string](), nil
 				} else {
-					return value.Unwrap(), value.Unwrap(), nil
+					return value, value, nil
 				}
 			}))
 	tabAggProc := NewTableAggregateProcessorG[string, string, string]("agg", st, STRING_INIT_G, TOSTRING_ADDER_G, TOSTRING_REMOVER_G)
