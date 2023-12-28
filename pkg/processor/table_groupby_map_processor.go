@@ -105,39 +105,36 @@ func (p *TableGroupByMapProcessorG[K, V, KR, VR]) ProcessAndReturn(ctx context.C
 		return nil, fmt.Errorf("msg key for the grouping table should not be nil")
 	}
 	change := msg.Value.Unwrap()
-	newKOp := optional.None[KR]()
-	newVOp := optional.None[VR]()
+	newK := optional.None[KR]()
+	newV := optional.None[VR]()
+	var err error
 	if change.NewVal.IsSome() {
-		newK, newV, err := p.mapper.Map(msg.Key, change.NewVal)
+		newK, newV, err = p.mapper.Map(msg.Key, change.NewVal)
 		if err != nil {
 			return nil, err
 		}
-		newKOp = optional.Some(newK)
-		newVOp = optional.Some(newV)
 	}
-	oldValOp := optional.None[VR]()
-	oldKeyOp := optional.None[KR]()
+	oldV := optional.None[VR]()
+	oldK := optional.None[KR]()
 	if change.OldVal.IsSome() {
-		oldK, oldV, err := p.mapper.Map(msg.Key, change.OldVal)
+		oldK, oldV, err = p.mapper.Map(msg.Key, change.OldVal)
 		if err != nil {
 			return nil, err
 		}
-		oldValOp = optional.Some(oldV)
-		oldKeyOp = optional.Some(oldK)
 	}
 	var outMsgs []commtypes.MessageG[KR, commtypes.ChangeG[VR]]
-	if oldKeyOp.IsSome() && oldValOp.IsSome() {
+	if oldK.IsSome() && oldV.IsSome() {
 		outMsgs = append(outMsgs, commtypes.MessageG[KR, commtypes.ChangeG[VR]]{
-			Key:           oldKeyOp,
-			Value:         optional.Some(commtypes.ChangeG[VR]{NewVal: optional.None[VR](), OldVal: oldValOp}),
+			Key:           oldK,
+			Value:         optional.Some(commtypes.ChangeG[VR]{NewVal: optional.None[VR](), OldVal: oldV}),
 			TimestampMs:   msg.TimestampMs,
 			StartProcTime: msg.StartProcTime,
 		})
 	}
-	if newKOp.IsSome() && newVOp.IsSome() {
+	if newK.IsSome() && newV.IsSome() {
 		outMsgs = append(outMsgs, commtypes.MessageG[KR, commtypes.ChangeG[VR]]{
-			Key:           newKOp,
-			Value:         optional.Some(commtypes.ChangeG[VR]{NewVal: newVOp, OldVal: optional.None[VR]()}),
+			Key:           newK,
+			Value:         optional.Some(commtypes.ChangeG[VR]{NewVal: newV, OldVal: optional.None[VR]()}),
 			TimestampMs:   msg.TimestampMs,
 			StartProcTime: msg.StartProcTime,
 		})

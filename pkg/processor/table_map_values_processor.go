@@ -104,15 +104,15 @@ func (p *TableMapValuesProcessorG[K, V, VR]) Name() string {
 }
 
 func (p *TableMapValuesProcessorG[K, V, VR]) computeValue(key optional.Option[K], value optional.Option[V]) (optional.Option[VR], error) {
-	newValOp := optional.None[VR]()
+	newVal := optional.None[VR]()
+	var err error
 	if value.IsSome() {
-		newVal, err := p.valueMapperWithKey.MapValue(key, value)
+		newVal, err = p.valueMapperWithKey.MapValue(key, value)
 		if err != nil {
-			return newValOp, err
+			return newVal, err
 		}
-		newValOp = optional.Some(newVal)
 	}
-	return newValOp, nil
+	return newVal, nil
 }
 
 func (p *TableMapValuesProcessorG[K, V, VR]) ProcessAndReturn(ctx context.Context,

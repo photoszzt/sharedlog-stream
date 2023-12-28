@@ -18,13 +18,13 @@ import (
 // }
 
 type MapperG[K, V, KR, VR any] interface {
-	Map(key optional.Option[K], value optional.Option[V]) (KR /* key */, VR /* value */, error)
+	Map(key optional.Option[K], value optional.Option[V]) (optional.Option[KR] /* key */, optional.Option[VR] /* value */, error)
 }
-type MapperFuncG[K, V, KR, VR any] func(key optional.Option[K], value optional.Option[V]) (KR /* key */, VR /* value */, error)
+type MapperFuncG[K, V, KR, VR any] func(key optional.Option[K], value optional.Option[V]) (optional.Option[KR] /* key */, optional.Option[VR] /* value */, error)
 
 var _ = (MapperG[int, int, int, int])(MapperFuncG[int, int, int, int](nil))
 
-func (fn MapperFuncG[K, V, KR, VR]) Map(key optional.Option[K], value optional.Option[V]) (KR /* key */, VR /* value */, error) {
+func (fn MapperFuncG[K, V, KR, VR]) Map(key optional.Option[K], value optional.Option[V]) (optional.Option[KR] /* key */, optional.Option[VR] /* value */, error) {
 	return fn(key, value)
 }
 
@@ -83,7 +83,7 @@ func (p *StreamMapProcessorG[K, V, KR, VR]) ProcessAndReturn(ctx context.Context
 	if err != nil {
 		return nil, err
 	}
-	return []commtypes.MessageG[KR, VR]{{Key: optional.Some(newK), Value: optional.Some(newV),
+	return []commtypes.MessageG[KR, VR]{{Key: newK, Value: newV,
 		TimestampMs: msg.TimestampMs, StartProcTime: msg.StartProcTime}}, nil
 }
 
@@ -99,13 +99,13 @@ func (p *StreamMapProcessorG[K, V, KR, VR]) ProcessAndReturn(ctx context.Context
 // }
 
 type ValueMapperWithKeyG[K, V, VR any] interface {
-	MapValue(key optional.Option[K], value optional.Option[V]) (VR, error)
+	MapValue(key optional.Option[K], value optional.Option[V]) (optional.Option[VR], error)
 }
-type ValueMapperWithKeyFuncG[K, V, VR any] func(key optional.Option[K], value optional.Option[V]) (VR, error)
+type ValueMapperWithKeyFuncG[K, V, VR any] func(key optional.Option[K], value optional.Option[V]) (optional.Option[VR], error)
 
 var _ = ValueMapperWithKeyG[int, int, string](ValueMapperWithKeyFuncG[int, int, string](nil))
 
-func (fn ValueMapperWithKeyFuncG[K, V, VR]) MapValue(key optional.Option[K], value optional.Option[V]) (VR, error) {
+func (fn ValueMapperWithKeyFuncG[K, V, VR]) MapValue(key optional.Option[K], value optional.Option[V]) (optional.Option[VR], error) {
 	return fn(key, value)
 }
 
@@ -167,7 +167,7 @@ func (p *StreamMapValuesProcessorG[K, V, VR]) ProcessAndReturn(ctx context.Conte
 	if err != nil {
 		return nil, err
 	}
-	return []commtypes.MessageG[K, VR]{{Key: msg.Key, Value: optional.Some(newV),
+	return []commtypes.MessageG[K, VR]{{Key: msg.Key, Value: newV,
 		TimestampMs: msg.TimestampMs, StartProcTime: msg.StartProcTime}}, nil
 }
 
@@ -185,13 +185,13 @@ func (fn SelectKeyFunc) SelectKey(key, value interface{}) (interface{}, error) {
 */
 
 type SelectKeyMapperG[K, V, KR any] interface {
-	SelectKey(key optional.Option[K], value optional.Option[V]) (KR, error)
+	SelectKey(key optional.Option[K], value optional.Option[V]) (optional.Option[KR], error)
 }
-type SelectKeyFuncG[K, V, KR any] func(key optional.Option[K], value optional.Option[V]) (KR, error)
+type SelectKeyFuncG[K, V, KR any] func(key optional.Option[K], value optional.Option[V]) (optional.Option[KR], error)
 
 var _ = SelectKeyMapperG[int, int, string](SelectKeyFuncG[int, int, string](nil))
 
-func (fn SelectKeyFuncG[K, V, KR]) SelectKey(key optional.Option[K], value optional.Option[V]) (KR, error) {
+func (fn SelectKeyFuncG[K, V, KR]) SelectKey(key optional.Option[K], value optional.Option[V]) (optional.Option[KR], error) {
 	return fn(key, value)
 }
 
@@ -249,6 +249,6 @@ func (p *StreamSelectKeyProcessorG[K, V, KR]) ProcessAndReturn(ctx context.Conte
 	if err != nil {
 		return nil, err
 	}
-	return []commtypes.MessageG[KR, V]{{Key: optional.Some(newKey), Value: msg.Value,
+	return []commtypes.MessageG[KR, V]{{Key: newKey, Value: msg.Value,
 		TimestampMs: msg.TimestampMs, StartProcTime: msg.StartProcTime}}, nil
 }

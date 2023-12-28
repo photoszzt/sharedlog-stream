@@ -2,10 +2,6 @@ package processor
 
 import "sharedlog-stream/pkg/optional"
 
-// type Aggregator interface {
-// 	Apply(key interface{}, value interface{}, aggregate interface{}) interface{}
-// }
-
 type AggregatorG[K, V, VA any] interface {
 	Apply(key K, value V, aggregate optional.Option[VA]) optional.Option[VA]
 }

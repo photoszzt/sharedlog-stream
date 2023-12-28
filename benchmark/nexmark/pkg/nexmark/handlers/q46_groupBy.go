@@ -64,17 +64,17 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 	ectx.Producers()[1].SetName("bidsByAucIDSink")
 	aucByIDProc := processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64]("auctionsByIDMap",
 		processor.SelectKeyFuncG[string, *ntypes.Event, uint64](
-			func(key optional.Option[string], value optional.Option[*ntypes.Event]) (uint64, error) {
+			func(key optional.Option[string], value optional.Option[*ntypes.Event]) (optional.Option[uint64], error) {
 				event := value.Unwrap()
-				return event.NewAuction.ID, nil
+				return optional.Some(event.NewAuction.ID), nil
 			}))
 	groupByAucIDProc := processor.NewGroupByOutputProcessorG("aucProc", ectx.Producers()[0], &ectx, outMsgSerde)
 	aucByIDProc.NextProcessor(groupByAucIDProc)
 
 	bidsByAucIDProc := processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64]("bidsByAuctionIDMap",
-		processor.SelectKeyFuncG[string, *ntypes.Event, uint64](func(_ optional.Option[string], value optional.Option[*ntypes.Event]) (uint64, error) {
+		processor.SelectKeyFuncG[string, *ntypes.Event, uint64](func(_ optional.Option[string], value optional.Option[*ntypes.Event]) (optional.Option[uint64], error) {
 			event := value.Unwrap()
-			return event.Bid.Auction, nil
+			return optional.Some(event.Bid.Auction), nil
 		}))
 	groupBidByAucIDProc := processor.NewGroupByOutputProcessorG("bidProc", ectx.Producers()[1], &ectx, outMsgSerde)
 	bidsByAucIDProc.NextProcessor(groupBidByAucIDProc)

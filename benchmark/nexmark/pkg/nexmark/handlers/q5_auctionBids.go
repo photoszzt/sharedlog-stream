@@ -194,7 +194,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	tabToStreamProc := processor.NewTableToStreamProcessorG[commtypes.WindowedKeyG[uint64], uint64]()
 	mapProc := processor.NewStreamMapProcessorG[commtypes.WindowedKeyG[uint64], uint64, ntypes.StartEndTime, ntypes.AuctionIdCount]("groupByAuction",
 		processor.MapperFuncG[commtypes.WindowedKeyG[uint64], uint64, ntypes.StartEndTime, ntypes.AuctionIdCount](
-			func(key optional.Option[commtypes.WindowedKeyG[uint64]], value optional.Option[uint64]) (ntypes.StartEndTime, ntypes.AuctionIdCount, error) {
+			func(key optional.Option[commtypes.WindowedKeyG[uint64]], value optional.Option[uint64]) (optional.Option[ntypes.StartEndTime], optional.Option[ntypes.AuctionIdCount], error) {
 				k := key.Unwrap()
 				v := value.Unwrap()
 				newKey := ntypes.StartEndTime{
@@ -205,7 +205,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 					AucId: k.Key,
 					Count: v,
 				}
-				return newKey, newVal, nil
+				return optional.Some(newKey), optional.Some(newVal), nil
 			}))
 	outProc := processor.NewGroupByOutputProcessorG("subG2Proc", sinks[0], &ectx, sinkMsgSerde)
 	countProc.NextProcessor(tabToStreamProc)

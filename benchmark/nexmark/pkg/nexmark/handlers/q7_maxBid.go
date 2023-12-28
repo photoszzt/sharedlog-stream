@@ -165,9 +165,9 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 	mapProc := processor.NewStreamMapProcessorG[ntypes.StartEndTime, uint64, uint64, ntypes.StartEndTime]("remapKV",
 		processor.MapperFuncG[ntypes.StartEndTime, uint64, uint64, ntypes.StartEndTime](
 			func(key optional.Option[ntypes.StartEndTime], value optional.Option[uint64]) (
-				uint64, ntypes.StartEndTime, error,
+				optional.Option[uint64], optional.Option[ntypes.StartEndTime], error,
 			) {
-				return value.Unwrap(), key.Unwrap(), nil
+				return value, key, nil
 			}))
 	sinkProc := processor.NewGroupByOutputProcessorG("subG2Proc", sinks_arr[0], &ectx, outMsgSerde)
 	aggProc.NextProcessor(toStreamProc)

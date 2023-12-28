@@ -160,14 +160,14 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		))
 	tabMapValProc := processor.NewTableMapValuesProcessorG[uint64, ntypes.PriceTimeList, float64]("avg",
 		processor.ValueMapperWithKeyFuncG[uint64, ntypes.PriceTimeList, float64](
-			func(key optional.Option[uint64], value optional.Option[ntypes.PriceTimeList]) (float64, error) {
+			func(key optional.Option[uint64], value optional.Option[ntypes.PriceTimeList]) (optional.Option[float64], error) {
 				pt := value.Unwrap()
 				sum := uint64(0)
 				l := len(pt.PTList)
 				for _, p := range pt.PTList {
 					sum += p.Price
 				}
-				return float64(sum) / float64(l), nil
+				return optional.Some(float64(sum) / float64(l)), nil
 			}))
 	tabToStreamProc := processor.NewTableToStreamProcessorG[uint64, float64]()
 	sinkProc := processor.NewFixedSubstreamOutputProcessorG("subG4Proc", ectx.Producers()[0], sp.ParNum, outMsgSerde)

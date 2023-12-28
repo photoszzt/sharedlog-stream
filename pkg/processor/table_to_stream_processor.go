@@ -49,9 +49,9 @@ type TableToStreamProcessorG[K, V any] struct {
 func NewTableToStreamProcessorG[K, V any]() ProcessorG[K, commtypes.ChangeG[V], K, V] {
 	p := &TableToStreamProcessorG[K, V]{
 		name: "toStream",
-		valueMapperWithKey: ValueMapperWithKeyFuncG[K, commtypes.ChangeG[V], V](func(key optional.Option[K], value optional.Option[commtypes.ChangeG[V]]) (V, error) {
+		valueMapperWithKey: ValueMapperWithKeyFuncG[K, commtypes.ChangeG[V], V](func(key optional.Option[K], value optional.Option[commtypes.ChangeG[V]]) (optional.Option[V], error) {
 			c := value.Unwrap()
-			return c.NewVal.Unwrap(), nil
+			return c.NewVal, nil
 		}),
 	}
 	p.BaseProcessorG.ProcessingFuncG = p.ProcessAndReturn
@@ -67,6 +67,6 @@ func (p *TableToStreamProcessorG[K, V]) ProcessAndReturn(ctx context.Context, ms
 	if err != nil {
 		return nil, err
 	}
-	return []commtypes.MessageG[K, V]{{Key: msg.Key, Value: optional.Some(newV),
+	return []commtypes.MessageG[K, V]{{Key: msg.Key, Value: newV,
 		TimestampMs: msg.TimestampMs, StartProcTime: msg.StartProcTime}}, nil
 }

@@ -134,9 +134,9 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 				}), h.useCache))
 	groupByProc := processor.NewTableGroupByMapProcessorG[ntypes.AuctionIdSeller, ntypes.PriceTime, uint64, ntypes.PriceTime]("changeKey",
 		processor.MapperFuncG[ntypes.AuctionIdSeller, ntypes.PriceTime, uint64, ntypes.PriceTime](
-			func(key optional.Option[ntypes.AuctionIdSeller], value optional.Option[ntypes.PriceTime]) (uint64, ntypes.PriceTime, error) {
+			func(key optional.Option[ntypes.AuctionIdSeller], value optional.Option[ntypes.PriceTime]) (optional.Option[uint64], optional.Option[ntypes.PriceTime], error) {
 				k := key.Unwrap()
-				return k.Seller, value.Unwrap(), nil
+				return optional.Some(k.Seller), value, nil
 			}))
 	sinkProc := processor.NewGroupByOutputProcessorG("subG3Proc", ectx.Producers()[0], &ectx, outMsgSerde)
 	aggProc.NextProcessor(groupByProc)

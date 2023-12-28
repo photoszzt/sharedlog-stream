@@ -140,7 +140,7 @@ func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *com
 			}))
 	selectProc := processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, ntypes.StartEndTime]("bidByWin",
 		processor.SelectKeyFuncG[string, *ntypes.Event, ntypes.StartEndTime](
-			func(key optional.Option[string], value optional.Option[*ntypes.Event]) (ntypes.StartEndTime, error) {
+			func(key optional.Option[string], value optional.Option[*ntypes.Event]) (optional.Option[ntypes.StartEndTime], error) {
 				event := value.Unwrap()
 				ts := event.Bid.DateTime
 				windowStart := utils.MaxInt64(0, ts-tw.SizeMs+tw.AdvanceMs) / tw.AdvanceMs * tw.AdvanceMs
@@ -148,7 +148,7 @@ func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *com
 				debug.Assert(windowStart >= 0, "window start should be >= 0")
 				debug.Assert(wEnd > 0, "window end should be > 0")
 				win := ntypes.StartEndTime{StartTimeMs: windowStart, EndTimeMs: wEnd}
-				return win, nil
+				return optional.Some(win), nil
 			}))
 	outProc := processor.NewGroupByOutputProcessorG("bidByWinProc", sinks_arr[0], &ectx, outMsgSerde)
 	filterProc.NextProcessor(selectProc)

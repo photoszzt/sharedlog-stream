@@ -44,10 +44,10 @@ func (h *query1Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	return common.CompressData(encodedOutput), nil
 }
 
-func q1mapFunc(_ optional.Option[string], value optional.Option[*ntypes.Event]) (*ntypes.Event, error) {
+func q1mapFunc(_ optional.Option[string], value optional.Option[*ntypes.Event]) (optional.Option[*ntypes.Event], error) {
 	v := value.Unwrap()
 	v.Bid.Price = uint64(v.Bid.Price * 908 / 1000.0)
-	return v, nil
+	return optional.Some(v), nil
 }
 
 func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *common.FnOutput {

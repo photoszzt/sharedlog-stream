@@ -70,9 +70,9 @@ func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInpu
 			}))
 	selectKey := processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64]("bidKeyedByPrice",
 		processor.SelectKeyFuncG[string, *ntypes.Event, uint64](
-			func(key optional.Option[string], value optional.Option[*ntypes.Event]) (uint64, error) {
+			func(key optional.Option[string], value optional.Option[*ntypes.Event]) (optional.Option[uint64], error) {
 				event := value.Unwrap()
-				return event.Bid.Price, nil
+				return optional.Some(event.Bid.Price), nil
 			}))
 	outProc := processor.NewGroupByOutputProcessorG("bidByPriceProc", sinks_arr[0], &ectx, outMsgSerde)
 	filterProc.NextProcessor(selectKey)

@@ -72,9 +72,9 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 
 	mapProc := processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64]("selectKey",
 		processor.SelectKeyFuncG[string, *ntypes.Event, uint64](
-			func(key optional.Option[string], value optional.Option[*ntypes.Event]) (uint64, error) {
+			func(key optional.Option[string], value optional.Option[*ntypes.Event]) (optional.Option[uint64], error) {
 				event := value.Unwrap()
-				return event.Bid.Auction, nil
+				return optional.Some(event.Bid.Auction), nil
 			}))
 	outProc := processor.NewGroupByOutputProcessorG("subG1Proc", sinks[0], &ectx, outMsgSerde)
 	filterProc.NextProcessor(mapProc)
