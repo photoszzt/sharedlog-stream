@@ -39,46 +39,56 @@ var (
 	})
 )
 
+type funcs[K, V, VAgg any] struct {
+	srcProc      ProcessorG[K, V, K, commtypes.ChangeG[V]]
+	groupByProc  ProcessorG[K, commtypes.ChangeG[V], K, commtypes.ChangeG[V]]
+	tabAggProc   ProcessorG[K, commtypes.ChangeG[V], K, commtypes.ChangeG[VAgg]]
+	toStreamProc ProcessorG[K, commtypes.ChangeG[VAgg], K, VAgg]
+}
+
+func (f funcs[K, V, VAgg]) TestFunc(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
+	msgG := commtypes.MessageToMessageG[K, V](msg)
+	srcRet, err := f.srcProc.ProcessAndReturn(ctx, msgG)
+	if err != nil {
+		return nil, err
+	}
+	gRets, err := f.groupByProc.ProcessAndReturn(ctx, srcRet[0])
+	if err != nil {
+		return nil, err
+	}
+	var retMsgs []commtypes.Message
+	for _, msg := range gRets {
+		tabAgg, err := f.tabAggProc.ProcessAndReturn(ctx, msg)
+		if err != nil {
+			return nil, err
+		}
+		if tabAgg != nil {
+			ret, err := f.toStreamProc.ProcessAndReturn(ctx, tabAgg[0])
+			if err != nil {
+				return nil, err
+			}
+			for _, msg := range ret {
+				retMsgs = append(retMsgs, commtypes.MessageGToMessage(msg))
+			}
+		}
+	}
+	return retMsgs, nil
+}
+
 func TestAggBasicWithInMemSkipmapTable(t *testing.T) {
 	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("srcTab", store.StringLessFunc)
 	st := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("aggTab", store.StringLessFunc)
 
-	srcProc := ProcessorG[string, string, string, commtypes.ChangeG[string]](NewTableSourceProcessorWithTableG[string, string](srcTable))
-	groupByProc := NewTableGroupByMapProcessorG[string, string, string, string]("noOpGroupBy",
+	var f funcs[string, string, string]
+	f.srcProc = ProcessorG[string, string, string, commtypes.ChangeG[string]](NewTableSourceProcessorWithTableG[string, string](srcTable))
+	f.groupByProc = NewTableGroupByMapProcessorG[string, string, string, string]("noOpGroupBy",
 		MapperFuncG[string, string, string, string](
 			func(key optional.Option[string], value optional.Option[string]) (optional.Option[string], optional.Option[string], error) {
 				return key, value, nil
 			}))
-	tabAggProc := NewTableAggregateProcessorG[string, string, string]("agg", st, STRING_INIT_G, TOSTRING_ADDER_G, TOSTRING_REMOVER_G)
-	toStreamProc := NewTableToStreamProcessorG[string, string]()
-	testAggBasic(t, func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-		msgG := commtypes.MessageToMessageG[string, string](msg)
-		srcRet, err := srcProc.ProcessAndReturn(ctx, msgG)
-		if err != nil {
-			return nil, err
-		}
-		gRets, err := groupByProc.ProcessAndReturn(ctx, srcRet[0])
-		if err != nil {
-			return nil, err
-		}
-		var retMsgs []commtypes.Message
-		for _, msg := range gRets {
-			tabAgg, err := tabAggProc.ProcessAndReturn(ctx, msg)
-			if err != nil {
-				return nil, err
-			}
-			if tabAgg != nil {
-				ret, err := toStreamProc.ProcessAndReturn(ctx, tabAgg[0])
-				if err != nil {
-					return nil, err
-				}
-				for _, msg := range ret {
-					retMsgs = append(retMsgs, commtypes.MessageGToMessage(msg))
-				}
-			}
-		}
-		return retMsgs, nil
-	})
+	f.tabAggProc = NewTableAggregateProcessorG[string, string, string]("agg", st, STRING_INIT_G, TOSTRING_ADDER_G, TOSTRING_REMOVER_G)
+	f.toStreamProc = NewTableToStreamProcessorG[string, string]()
+	testAggBasic(t, f.TestFunc)
 }
 
 func testAggBasic(t *testing.T, procFunc func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error)) {
@@ -131,8 +141,9 @@ func testAggBasic(t *testing.T, procFunc func(ctx context.Context, msg commtypes
 func TestAggRepartitionWithInMemSkipmapKVStore(t *testing.T) {
 	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("srcTab", store.StringLessFunc)
 	st := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("aggTab", store.StringLessFunc)
-	srcProc := NewTableSourceProcessorWithTableG[string, string](srcTable)
-	groupByProc := NewTableGroupByMapProcessorG[string, string, string, string]("groupBy",
+	var f funcs[string, string, string]
+	f.srcProc = NewTableSourceProcessorWithTableG[string, string](srcTable)
+	f.groupByProc = NewTableGroupByMapProcessorG[string, string, string, string]("groupBy",
 		MapperFuncG[string, string, string, string](
 			func(key, value optional.Option[string]) (optional.Option[string], optional.Option[string], error) {
 				k := key.Unwrap()
@@ -144,38 +155,9 @@ func TestAggRepartitionWithInMemSkipmapKVStore(t *testing.T) {
 					return value, value, nil
 				}
 			}))
-	tabAggProc := NewTableAggregateProcessorG[string, string, string]("agg", st, STRING_INIT_G, TOSTRING_ADDER_G, TOSTRING_REMOVER_G)
-	toStreamProc := NewTableToStreamProcessorG[string, string]()
-	srcProc.NextProcessor(groupByProc)
-	groupByProc.NextProcessor(tabAggProc)
-	testAggRepartition(t, func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-		msgG := commtypes.MessageToMessageG[string, string](msg)
-		srcRet, err := srcProc.ProcessAndReturn(ctx, msgG)
-		if err != nil {
-			return nil, err
-		}
-		gRets, err := groupByProc.ProcessAndReturn(ctx, srcRet[0])
-		if err != nil {
-			return nil, err
-		}
-		var retMsgs []commtypes.Message
-		for _, msg := range gRets {
-			tabAgg, err := tabAggProc.ProcessAndReturn(ctx, msg)
-			if err != nil {
-				return nil, err
-			}
-			if tabAgg != nil {
-				ret, err := toStreamProc.ProcessAndReturn(ctx, tabAgg[0])
-				if err != nil {
-					return nil, err
-				}
-				for _, msg := range ret {
-					retMsgs = append(retMsgs, commtypes.MessageGToMessage(msg))
-				}
-			}
-		}
-		return retMsgs, nil
-	})
+	f.tabAggProc = NewTableAggregateProcessorG[string, string, string]("agg", st, STRING_INIT_G, TOSTRING_ADDER_G, TOSTRING_REMOVER_G)
+	f.toStreamProc = NewTableToStreamProcessorG[string, string]()
+	testAggRepartition(t, f.TestFunc)
 }
 
 func testAggRepartition(t *testing.T, procFunc func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error)) {
@@ -226,13 +208,14 @@ func TestCountWithInMemSkipmapKVStore(t *testing.T) {
 		"srcTab", store.StringLessFunc)
 	st := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[uint64]](
 		"aggTab", store.StringLessFunc)
-	srcProc := ProcessorG[string, string, string, commtypes.ChangeG[string]](
+	var f funcs[string, string, uint64]
+	f.srcProc = ProcessorG[string, string, string, commtypes.ChangeG[string]](
 		NewTableSourceProcessorWithTableG[string, string](srcTable))
-	groupByProc := NewTableGroupByMapProcessorG[string, string, string, string]("groupBy",
+	f.groupByProc = NewTableGroupByMapProcessorG[string, string, string, string]("groupBy",
 		MapperFuncG[string, string, string, string](func(key, value optional.Option[string]) (optional.Option[string], optional.Option[string], error) {
 			return value, value, nil
 		}))
-	tabAggProc := NewTableAggregateProcessorG[string, string, uint64]("count", st,
+	f.tabAggProc = NewTableAggregateProcessorG[string, string, uint64]("count", st,
 		InitializerFuncG[uint64](func() optional.Option[uint64] { return optional.Some(uint64(0)) }),
 		AggregatorFuncG[string, string, uint64](func(key, value string, aggregate optional.Option[uint64]) optional.Option[uint64] {
 			return optional.Some(aggregate.Unwrap() + 1)
@@ -240,38 +223,8 @@ func TestCountWithInMemSkipmapKVStore(t *testing.T) {
 		AggregatorFuncG[string, string, uint64](func(key, value string, aggregate optional.Option[uint64]) optional.Option[uint64] {
 			return optional.Some(aggregate.Unwrap() - 1)
 		}))
-	toStreamProc := NewTableToStreamProcessorG[string, uint64]()
-	srcProc.NextProcessor(groupByProc)
-	groupByProc.NextProcessor(tabAggProc)
-	tabAggProc.NextProcessor(toStreamProc)
-	testCount(t, func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-		msgG := commtypes.MessageToMessageG[string, string](msg)
-		srcRet, err := srcProc.ProcessAndReturn(ctx, msgG)
-		if err != nil {
-			return nil, err
-		}
-		gRets, err := groupByProc.ProcessAndReturn(ctx, srcRet[0])
-		if err != nil {
-			return nil, err
-		}
-		var retMsgs []commtypes.Message
-		for _, msg := range gRets {
-			tabAgg, err := tabAggProc.ProcessAndReturn(ctx, msg)
-			if err != nil {
-				return nil, err
-			}
-			if tabAgg != nil {
-				ret, err := toStreamProc.ProcessAndReturn(ctx, tabAgg[0])
-				if err != nil {
-					return nil, err
-				}
-				for _, msg := range ret {
-					retMsgs = append(retMsgs, commtypes.MessageGToMessage(msg))
-				}
-			}
-		}
-		return retMsgs, nil
-	})
+	f.toStreamProc = NewTableToStreamProcessorG[string, uint64]()
+	testCount(t, f.TestFunc)
 }
 
 func testCount(
@@ -316,15 +269,18 @@ func testCount(
 }
 
 func TestRemoveOldBeforeAddNewWithInMemSkipmapKVStore(t *testing.T) {
-	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("srcTab", store.StringLessFunc)
-	st := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("aggTab", store.StringLessFunc)
-	srcProc := NewTableSourceProcessorWithTableG[string, string](srcTable)
-	groupByProc := NewTableGroupByMapProcessorG[string, string, string, string]("groupBy",
+	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]](
+		"srcTab", store.StringLessFunc)
+	st := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]](
+		"aggTab", store.StringLessFunc)
+	var f funcs[string, string, string]
+	f.srcProc = NewTableSourceProcessorWithTableG[string, string](srcTable)
+	f.groupByProc = NewTableGroupByMapProcessorG[string, string, string, string]("groupBy",
 		MapperFuncG[string, string, string, string](func(key, value optional.Option[string]) (optional.Option[string], optional.Option[string], error) {
 			k := key.Unwrap()
 			return optional.Some(string(k[0])), optional.Some(string(k[1])), nil
 		}))
-	tabAggProc := NewTableAggregateProcessorG[string, string, string]("agg", st,
+	f.tabAggProc = NewTableAggregateProcessorG[string, string, string]("agg", st,
 		InitializerFuncG[string](func() optional.Option[string] { return optional.Some("") }),
 		AggregatorFuncG[string, string, string](func(key, value string, aggregate optional.Option[string]) optional.Option[string] {
 			return optional.Some(aggregate.Unwrap() + value)
@@ -332,38 +288,8 @@ func TestRemoveOldBeforeAddNewWithInMemSkipmapKVStore(t *testing.T) {
 		AggregatorFuncG[string, string, string](func(key, value string, aggregate optional.Option[string]) optional.Option[string] {
 			return optional.Some(strings.ReplaceAll(aggregate.Unwrap(), value, ""))
 		}))
-	toStreamProc := NewTableToStreamProcessorG[string, string]()
-	srcProc.NextProcessor(groupByProc)
-	groupByProc.NextProcessor(tabAggProc)
-	tabAggProc.NextProcessor(toStreamProc)
-	testRemoveOldBeforeAddNew(t, func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
-		msgG := commtypes.MessageToMessageG[string, string](msg)
-		srcRet, err := srcProc.ProcessAndReturn(ctx, msgG)
-		if err != nil {
-			return nil, err
-		}
-		gRets, err := groupByProc.ProcessAndReturn(ctx, srcRet[0])
-		if err != nil {
-			return nil, err
-		}
-		var retMsgs []commtypes.Message
-		for _, msg := range gRets {
-			tabAgg, err := tabAggProc.ProcessAndReturn(ctx, msg)
-			if err != nil {
-				return nil, err
-			}
-			if tabAgg != nil {
-				ret, err := toStreamProc.ProcessAndReturn(ctx, tabAgg[0])
-				if err != nil {
-					return nil, err
-				}
-				for _, msg := range ret {
-					retMsgs = append(retMsgs, commtypes.MessageGToMessage(msg))
-				}
-			}
-		}
-		return retMsgs, nil
-	})
+	f.toStreamProc = NewTableToStreamProcessorG[string, string]()
+	testRemoveOldBeforeAddNew(t, f.TestFunc)
 }
 
 func testRemoveOldBeforeAddNew(t *testing.T, procFunc func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error)) {
