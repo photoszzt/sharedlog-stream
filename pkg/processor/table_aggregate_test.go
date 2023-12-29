@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/store"
+	"strings"
 	"testing"
 )
 
@@ -133,7 +134,7 @@ func TestAggRepartitionWithInMemSkipmapKVStore(t *testing.T) {
 	srcProc := NewTableSourceProcessorWithTableG[string, string](srcTable)
 	groupByProc := NewTableGroupByMapProcessorG[string, string, string, string]("groupBy",
 		MapperFuncG[string, string, string, string](
-			func(key optional.Option[string], value optional.Option[string]) (optional.Option[string], optional.Option[string], error) {
+			func(key, value optional.Option[string]) (optional.Option[string], optional.Option[string], error) {
 				k := key.Unwrap()
 				if k == "null" {
 					return optional.None[string](), value, nil
@@ -220,52 +221,63 @@ func testAggRepartition(t *testing.T, procFunc func(ctx context.Context, msg com
 	}
 }
 
-/*
-func TestCountWithInMemKVStore(t *testing.T) {
-	pc := NewProcessorChains()
-	srcTable := store.NewInMemoryKeyValueStore("srcTab", store.StringLess)
-	st := store.NewInMemoryKeyValueStore("aggTab", store.StringLess)
-	pc.
-		Via(NewTableSourceProcessorWithTable(srcTable)).
-		Via(NewTableGroupByMapProcessor("groupBy", MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
-			return value, value, nil
-		}))).
-		Via(NewTableAggregateProcessor("count", st,
-			InitializerFunc(func() interface{} { return uint64(0) }),
-			AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
-				agg := aggregate.(uint64)
-				return agg + 1
-			}),
-			AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
-				agg := aggregate.(uint64)
-				return agg - 1
-			}))).
-		Via(NewTableToStreamProcessor())
-	testCount(t, &pc)
-}
-
 func TestCountWithInMemSkipmapKVStore(t *testing.T) {
-	pc := NewProcessorChains()
-	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("srcTab", store.StringLessFunc)
-	st := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[uint64]]("aggTab", store.StringLessFunc)
-	pc.
-		Via(NewTableSourceProcessorWithTableG[string, string](srcTable)).
-		Via(NewTableGroupByMapProcessor("groupBy", MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
+	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]](
+		"srcTab", store.StringLessFunc)
+	st := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[uint64]](
+		"aggTab", store.StringLessFunc)
+	srcProc := ProcessorG[string, string, string, commtypes.ChangeG[string]](
+		NewTableSourceProcessorWithTableG[string, string](srcTable))
+	groupByProc := NewTableGroupByMapProcessorG[string, string, string, string]("groupBy",
+		MapperFuncG[string, string, string, string](func(key, value optional.Option[string]) (optional.Option[string], optional.Option[string], error) {
 			return value, value, nil
-		}))).
-		Via(NewTableAggregateProcessorG[string, string, uint64]("count", st,
-			InitializerFuncG[uint64](func() uint64 { return uint64(0) }),
-			AggregatorFuncG[string, string, uint64](func(key string, value string, aggregate uint64) uint64 {
-				return aggregate + 1
-			}),
-			AggregatorFuncG[string, string, uint64](func(key string, value string, aggregate uint64) uint64 {
-				return aggregate - 1
-			}))).
-		Via(NewTableToStreamProcessor())
-	testCount(t, &pc)
+		}))
+	tabAggProc := NewTableAggregateProcessorG[string, string, uint64]("count", st,
+		InitializerFuncG[uint64](func() optional.Option[uint64] { return optional.Some(uint64(0)) }),
+		AggregatorFuncG[string, string, uint64](func(key, value string, aggregate optional.Option[uint64]) optional.Option[uint64] {
+			return optional.Some(aggregate.Unwrap() + 1)
+		}),
+		AggregatorFuncG[string, string, uint64](func(key, value string, aggregate optional.Option[uint64]) optional.Option[uint64] {
+			return optional.Some(aggregate.Unwrap() - 1)
+		}))
+	toStreamProc := NewTableToStreamProcessorG[string, uint64]()
+	srcProc.NextProcessor(groupByProc)
+	groupByProc.NextProcessor(tabAggProc)
+	tabAggProc.NextProcessor(toStreamProc)
+	testCount(t, func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
+		msgG := commtypes.MessageToMessageG[string, string](msg)
+		srcRet, err := srcProc.ProcessAndReturn(ctx, msgG)
+		if err != nil {
+			return nil, err
+		}
+		gRets, err := groupByProc.ProcessAndReturn(ctx, srcRet[0])
+		if err != nil {
+			return nil, err
+		}
+		var retMsgs []commtypes.Message
+		for _, msg := range gRets {
+			tabAgg, err := tabAggProc.ProcessAndReturn(ctx, msg)
+			if err != nil {
+				return nil, err
+			}
+			if tabAgg != nil {
+				ret, err := toStreamProc.ProcessAndReturn(ctx, tabAgg[0])
+				if err != nil {
+					return nil, err
+				}
+				for _, msg := range ret {
+					retMsgs = append(retMsgs, commtypes.MessageGToMessage(msg))
+				}
+			}
+		}
+		return retMsgs, nil
+	})
 }
 
-func testCount(t *testing.T, pc *ProcessorChains) {
+func testCount(
+	t *testing.T,
+	procFunc func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error),
+) {
 	inputMsgs := []commtypes.Message{
 		{Key: "A", Value: "green", Timestamp: 10},
 		{Key: "B", Value: "green", Timestamp: 9},
@@ -276,7 +288,7 @@ func testCount(t *testing.T, pc *ProcessorChains) {
 	ctx := context.Background()
 	var outMsgs []commtypes.Message
 	for _, inMsg := range inputMsgs {
-		out, err := pc.RunChains(ctx, inMsg)
+		out, err := procFunc(ctx, inMsg)
 		if err != nil {
 			t.Fatalf("err: %v", err)
 		}
@@ -302,58 +314,59 @@ func testCount(t *testing.T, pc *ProcessorChains) {
 		t.Fatalf("should equal.")
 	}
 }
-*/
-
-/*
-func TestRemoveOldBeforeAddNewWithInMemKVStore(t *testing.T) {
-	pc := NewProcessorChains()
-	srcTable := store.NewInMemoryKeyValueStore("srcTab", store.StringLess)
-	st := store.NewInMemoryKeyValueStore("aggTab", store.StringLess)
-	pc.
-		Via(NewTableSourceProcessorWithTable(srcTable)).
-		Via(NewTableGroupByMapProcessor("groupBy", MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
-			k := key.(string)
-			return string(k[0]), string(k[1]), nil
-		}))).
-		Via(NewTableAggregateProcessor("agg", st,
-			InitializerFunc(func() interface{} { return "" }),
-			AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
-				agg := aggregate.(string)
-				val := value.(string)
-				return agg + val
-			}),
-			AggregatorFunc(func(key, value, aggregate interface{}) interface{} {
-				agg := aggregate.(string)
-				val := value.(string)
-				return strings.ReplaceAll(agg, val, "")
-			}))).
-		Via(NewTableToStreamProcessor())
-	testRemoveOldBeforeAddNew(t, &pc)
-}
 
 func TestRemoveOldBeforeAddNewWithInMemSkipmapKVStore(t *testing.T) {
-	pc := NewProcessorChains()
 	srcTable := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("srcTab", store.StringLessFunc)
 	st := store.NewInMemorySkipmapKeyValueStoreG[string, commtypes.ValueTimestampG[string]]("aggTab", store.StringLessFunc)
-	pc.
-		Via(NewTableSourceProcessorWithTableG[string, string](srcTable)).
-		Via(NewTableGroupByMapProcessor("groupBy", MapperFunc(func(key, value interface{}) (interface{}, interface{}, error) {
-			k := key.(string)
-			return string(k[0]), string(k[1]), nil
-		}))).
-		Via(NewTableAggregateProcessorG[string, string, string]("agg", st,
-			InitializerFuncG[string](func() string { return "" }),
-			AggregatorFuncG[string, string, string](func(key string, value string, aggregate string) string {
-				return aggregate + value
-			}),
-			AggregatorFuncG[string, string, string](func(key string, value string, aggregate string) string {
-				return strings.ReplaceAll(aggregate, value, "")
-			}))).
-		Via(NewTableToStreamProcessor())
-	testRemoveOldBeforeAddNew(t, &pc)
+	srcProc := NewTableSourceProcessorWithTableG[string, string](srcTable)
+	groupByProc := NewTableGroupByMapProcessorG[string, string, string, string]("groupBy",
+		MapperFuncG[string, string, string, string](func(key, value optional.Option[string]) (optional.Option[string], optional.Option[string], error) {
+			k := key.Unwrap()
+			return optional.Some(string(k[0])), optional.Some(string(k[1])), nil
+		}))
+	tabAggProc := NewTableAggregateProcessorG[string, string, string]("agg", st,
+		InitializerFuncG[string](func() optional.Option[string] { return optional.Some("") }),
+		AggregatorFuncG[string, string, string](func(key, value string, aggregate optional.Option[string]) optional.Option[string] {
+			return optional.Some(aggregate.Unwrap() + value)
+		}),
+		AggregatorFuncG[string, string, string](func(key, value string, aggregate optional.Option[string]) optional.Option[string] {
+			return optional.Some(strings.ReplaceAll(aggregate.Unwrap(), value, ""))
+		}))
+	toStreamProc := NewTableToStreamProcessorG[string, string]()
+	srcProc.NextProcessor(groupByProc)
+	groupByProc.NextProcessor(tabAggProc)
+	tabAggProc.NextProcessor(toStreamProc)
+	testRemoveOldBeforeAddNew(t, func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error) {
+		msgG := commtypes.MessageToMessageG[string, string](msg)
+		srcRet, err := srcProc.ProcessAndReturn(ctx, msgG)
+		if err != nil {
+			return nil, err
+		}
+		gRets, err := groupByProc.ProcessAndReturn(ctx, srcRet[0])
+		if err != nil {
+			return nil, err
+		}
+		var retMsgs []commtypes.Message
+		for _, msg := range gRets {
+			tabAgg, err := tabAggProc.ProcessAndReturn(ctx, msg)
+			if err != nil {
+				return nil, err
+			}
+			if tabAgg != nil {
+				ret, err := toStreamProc.ProcessAndReturn(ctx, tabAgg[0])
+				if err != nil {
+					return nil, err
+				}
+				for _, msg := range ret {
+					retMsgs = append(retMsgs, commtypes.MessageGToMessage(msg))
+				}
+			}
+		}
+		return retMsgs, nil
+	})
 }
 
-func testRemoveOldBeforeAddNew(t *testing.T, pc *ProcessorChains) {
+func testRemoveOldBeforeAddNew(t *testing.T, procFunc func(ctx context.Context, msg commtypes.Message) ([]commtypes.Message, error)) {
 	inputMsgs := []commtypes.Message{
 		{Key: "11", Value: "A", Timestamp: 10},
 		{Key: "12", Value: "B", Timestamp: 8},
@@ -363,7 +376,7 @@ func testRemoveOldBeforeAddNew(t *testing.T, pc *ProcessorChains) {
 	ctx := context.Background()
 	var outMsgs []commtypes.Message
 	for _, inMsg := range inputMsgs {
-		out, err := pc.RunChains(ctx, inMsg)
+		out, err := procFunc(ctx, inMsg)
 		if err != nil {
 			t.Fatalf("err: %v", err)
 		}
@@ -388,4 +401,3 @@ func testRemoveOldBeforeAddNew(t *testing.T, pc *ProcessorChains) {
 		t.Fatalf("should equal.")
 	}
 }
-*/
