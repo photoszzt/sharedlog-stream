@@ -11,23 +11,18 @@ const (
 )
 
 const (
-	Begin = iota
-	Fence
+	Fence = iota
 	MarkLowBits
 	ScaleFenceLowBits
 	CtrlMetaLowBits
 	AbortLowBits
 	PreCommitLowBits
+	ChkptLowBits
 )
 
 const (
 	SCALE_FENCE_KEY = "__scale_fence"
 )
-
-func BeginTag(nameHash uint64, parNum uint8) uint64 {
-	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
-	return nameHash&mask + uint64(parNum)<<LogTagReserveBits + Begin
-}
 
 func FenceTag(nameHash uint64, parNum uint8) uint64 {
 	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
@@ -57,4 +52,9 @@ func TxnAbortTag(nameHash uint64, par uint8) uint64 {
 func TxnPreCommitTag(nameHash uint64, par uint8) uint64 {
 	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
 	return nameHash&mask + uint64(par)<<LogTagReserveBits + PreCommitLowBits
+}
+
+func ChkptTag(nameHash uint64, par uint8) uint64 {
+	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
+	return nameHash&mask + uint64(par)<<LogTagReserveBits + ChkptLowBits
 }
