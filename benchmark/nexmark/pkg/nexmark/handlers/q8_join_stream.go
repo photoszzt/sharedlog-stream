@@ -11,6 +11,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
@@ -125,15 +126,15 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	joiner := processor.ValueJoinerWithKeyTsFuncG[uint64, *ntypes.Event, *ntypes.Event, ntypes.PersonTime](
 		func(readOnlyKey uint64, leftValue *ntypes.Event, rightValue *ntypes.Event,
 			leftTs int64, rightTs int64,
-		) ntypes.PersonTime {
+		) optional.Option[ntypes.PersonTime] {
 			// fmt.Fprint(os.Stderr, "get into joiner\n")
 			ts := rightValue.NewPerson.DateTime
 			windowStart := (utils.MaxInt64(0, ts-windowSizeMs+windowSizeMs) / windowSizeMs) * windowSizeMs
-			return ntypes.PersonTime{
+			return optional.Some(ntypes.PersonTime{
 				ID:        rightValue.NewPerson.ID,
 				Name:      rightValue.NewPerson.Name,
 				StartTime: windowStart,
-			}
+			})
 		})
 	format := commtypes.SerdeFormat(sp.SerdeFormat)
 	flushDur := time.Duration(sp.FlushMs) * time.Millisecond

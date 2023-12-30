@@ -4,7 +4,6 @@ import (
 	"context"
 	"math"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/store"
 	"sync"
 	"time"
@@ -254,7 +253,7 @@ func (p *StreamStreamJoinProcessorG[K, V1, V2, VR]) ProcessAndReturn(
 			} else {
 				newTs = otherRecordTs
 			}
-			msgs = append(msgs, commtypes.MessageG[K, VR]{Key: msg.Key, Value: optional.Some(newVal),
+			msgs = append(msgs, commtypes.MessageG[K, VR]{Key: msg.Key, Value: newVal,
 				TimestampMs: newTs, StartProcTime: msg.StartProcTime})
 			return nil
 		})

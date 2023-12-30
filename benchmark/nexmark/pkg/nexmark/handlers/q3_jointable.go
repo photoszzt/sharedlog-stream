@@ -10,6 +10,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/execution"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
@@ -150,7 +151,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		return common.GenErrFnOutput(err)
 	}
 	joiner := processor.ValueJoinerWithKeyFuncG[uint64, *ntypes.Event, *ntypes.Event, ntypes.NameCityStateId](
-		func(_ uint64, _ *ntypes.Event, rightVal *ntypes.Event) ntypes.NameCityStateId {
+		func(_ uint64, _ *ntypes.Event, rightVal *ntypes.Event) optional.Option[ntypes.NameCityStateId] {
 			ncsi := ntypes.NameCityStateId{
 				Name:  rightVal.NewPerson.Name,
 				City:  rightVal.NewPerson.City,
@@ -158,7 +159,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 				ID:    rightVal.NewPerson.ID,
 			}
 			// debug.Fprintf(os.Stderr, "join outputs: %v\n", ncsi)
-			return ncsi
+			return optional.Some(ncsi)
 		})
 	mpAuc, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestampG[*ntypes.Event]]().
 		MessageSerde(storeMsgSerde).

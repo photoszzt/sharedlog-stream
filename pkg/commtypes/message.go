@@ -80,6 +80,14 @@ func MessageToMessageG[K, V any](msg Message) MessageG[K, V] {
 	return MessageG[K, V]{Key: k, Value: v, TimestampMs: msg.Timestamp, InjTMs: msg.InjT}
 }
 
+func MsgArrToMsgGArr[K, V any](arr []Message) []MessageG[K, V] {
+	msgs := make([]MessageG[K, V], 0)
+	for _, msg := range arr {
+		msgs = append(msgs, MessageToMessageG[K, V](msg))
+	}
+	return msgs
+}
+
 func MessageGToMessage[K, V any](msgG MessageG[K, V]) Message {
 	var k interface{}
 	var v interface{}

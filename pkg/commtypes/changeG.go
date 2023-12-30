@@ -11,6 +11,27 @@ type ChangeG[V any] struct {
 	OldVal optional.Option[V]
 }
 
+func NewChangeOnlyNewValG[V any](newVal V) ChangeG[V] {
+	return ChangeG[V]{
+		NewVal: optional.Some(newVal),
+		OldVal: optional.None[V](),
+	}
+}
+
+func NewChangeOnlyOldValG[V any](oldVal V) ChangeG[V] {
+	return ChangeG[V]{
+		NewVal: optional.None[V](),
+		OldVal: optional.Some(oldVal),
+	}
+}
+
+func NewChangeG[V any](newVal, oldVal V) ChangeG[V] {
+	return ChangeG[V]{
+		NewVal: optional.Some(newVal),
+		OldVal: optional.Some(oldVal),
+	}
+}
+
 type ChangeGJSONSerdeG[V any] struct {
 	ValJSONSerde SerdeG[V]
 }

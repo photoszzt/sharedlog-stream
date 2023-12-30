@@ -3,7 +3,6 @@ package processor
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/store"
 
 	"github.com/rs/zerolog/log"
@@ -48,7 +47,7 @@ func (p *StreamTableJoinProcessorG[K, V1, V2, VR]) ProcessAndReturn(ctx context.
 	}
 	if p.leftJoin || ok {
 		joined := p.joiner.Apply(key, msgVal, valAgg.Value)
-		newMsg := commtypes.MessageG[K, VR]{Key: msg.Key, Value: optional.Some(joined),
+		newMsg := commtypes.MessageG[K, VR]{Key: msg.Key, Value: joined,
 			TimestampMs: msg.TimestampMs, StartProcTime: msg.StartProcTime}
 		return []commtypes.MessageG[K, VR]{newMsg}, nil
 	}

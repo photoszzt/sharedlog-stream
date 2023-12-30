@@ -6,6 +6,7 @@ import (
 	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/store"
 	"testing"
 	"time"
@@ -75,9 +76,9 @@ func getSkipMapStreamJoinMem(joinWindows *commtypes.JoinWindows, t *testing.T) (
 	joiner := ValueJoinerWithKeyTsFuncG[int, string, string, string](
 		func(readOnlyKey int,
 			leftValue string, rightValue string, leftTs int64, rightTs int64,
-		) string {
+		) optional.Option[string] {
 			debug.Fprintf(os.Stderr, "left val: %v, ts: %d, right val: %v, ts: %d\n", leftValue, leftTs, rightValue, rightTs)
-			return fmt.Sprintf("%s+%s", leftValue, rightValue)
+			return optional.Some(fmt.Sprintf("%s+%s", leftValue, rightValue))
 		})
 	sharedTimeTracker := NewTimeTracker()
 	oneJoinTwoProc := NewStreamStreamJoinProcessorG[int, string, string, string](

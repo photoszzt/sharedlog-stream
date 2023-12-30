@@ -174,12 +174,12 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	stJoin := processor.NewMeteredProcessorG[ntypes.StartEndTime, ntypes.AuctionIdCount, ntypes.StartEndTime, ntypes.AuctionIdCntMax](
 		processor.NewStreamTableJoinProcessorG[ntypes.StartEndTime, ntypes.AuctionIdCount, uint64, ntypes.AuctionIdCntMax](aggStore,
 			processor.ValueJoinerWithKeyFuncG[ntypes.StartEndTime, ntypes.AuctionIdCount, uint64, ntypes.AuctionIdCntMax](
-				func(readOnlyKey ntypes.StartEndTime, lv ntypes.AuctionIdCount, rv uint64) ntypes.AuctionIdCntMax {
-					return ntypes.AuctionIdCntMax{
+				func(readOnlyKey ntypes.StartEndTime, lv ntypes.AuctionIdCount, rv uint64) optional.Option[ntypes.AuctionIdCntMax] {
+					return optional.Some(ntypes.AuctionIdCntMax{
 						AucId:  lv.AucId,
 						Count:  lv.Count,
 						MaxCnt: rv,
-					}
+					})
 				})))
 	chooseMaxCnt := processor.NewStreamFilterProcessorG[ntypes.StartEndTime, ntypes.AuctionIdCntMax]("chooseMaxCnt",
 		processor.PredicateFuncG[ntypes.StartEndTime, ntypes.AuctionIdCntMax](func(key optional.Option[ntypes.StartEndTime], value optional.Option[ntypes.AuctionIdCntMax]) (bool, error) {

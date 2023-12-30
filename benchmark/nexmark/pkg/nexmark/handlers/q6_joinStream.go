@@ -123,17 +123,17 @@ func (h *q6JoinStreamHandler) Q6JoinStream(ctx context.Context, sp *common.Query
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	joiner := processor.ValueJoinerWithKeyTsFuncG[uint64, *ntypes.Event, *ntypes.Event, *ntypes.AuctionBid](
-		func(readOnlyKey uint64, value1 *ntypes.Event, value2 *ntypes.Event, leftTs, otherTs int64) *ntypes.AuctionBid {
+		func(readOnlyKey uint64, value1 *ntypes.Event, value2 *ntypes.Event, leftTs, otherTs int64) optional.Option[*ntypes.AuctionBid] {
 			auc := value1.NewAuction
 			bid := value2.Bid
-			return &ntypes.AuctionBid{
+			return optional.Some(&ntypes.AuctionBid{
 				BidDateTime: bid.DateTime,
 				BidPrice:    bid.Price,
 				AucDateTime: auc.DateTime,
 				AucExpires:  auc.Expires,
 				AucSeller:   auc.Seller,
 				AucCategory: auc.Category,
-			}
+			})
 		})
 	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
 	aucMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, *ntypes.Event]().

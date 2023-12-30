@@ -1,5 +1,7 @@
 package processor
 
+import "sharedlog-stream/pkg/optional"
+
 /*
 type ValueJoiner interface {
 	Apply(value1 interface{}, value2 interface{}) interface{}
@@ -35,12 +37,12 @@ func (fn ValueJoinerWithKeyFunc) Apply(readOnlyKey interface{}, value1 interface
 */
 
 type ValueJoinerWithKeyG[K, V1, V2, VR any] interface {
-	Apply(readOnlyKey K, value1 V1, value2 V2) VR
+	Apply(readOnlyKey K, value1 V1, value2 V2) optional.Option[VR]
 }
 
-type ValueJoinerWithKeyFuncG[K, V1, V2, VR any] func(readOnlyKey K, value1 V1, value2 V2) VR
+type ValueJoinerWithKeyFuncG[K, V1, V2, VR any] func(readOnlyKey K, value1 V1, value2 V2) optional.Option[VR]
 
-func (fn ValueJoinerWithKeyFuncG[K, V1, V2, VR]) Apply(readOnlyKey K, value1 V1, value2 V2) VR {
+func (fn ValueJoinerWithKeyFuncG[K, V1, V2, VR]) Apply(readOnlyKey K, value1 V1, value2 V2) optional.Option[VR] {
 	return fn(readOnlyKey, value1, value2)
 }
 
@@ -51,7 +53,7 @@ func (fn ValueJoinerWithKeyFuncG[K, V1, V2, VR]) Apply(readOnlyKey K, value1 V1,
 // }
 
 func ReverseValueJoinerWithKeyG[K, V1, V2, VR any](f ValueJoinerWithKeyFuncG[K, V1, V2, VR]) ValueJoinerWithKeyFuncG[K, V2, V1, VR] {
-	return func(readOnlyKey K, value2 V2, value1 V1) VR {
+	return func(readOnlyKey K, value2 V2, value1 V1) optional.Option[VR] {
 		return f(readOnlyKey, value1, value2)
 	}
 }
@@ -73,20 +75,20 @@ func (fn ValueJoinerWithKeyTsFunc) Apply(readOnlyKey interface{}, value1 interfa
 */
 
 type ValueJoinerWithKeyTsG[K, V1, V2, VR any] interface {
-	Apply(readOnlyKey K, value1 V1, value2 V2, leftTs int64, otherTs int64) VR
+	Apply(readOnlyKey K, value1 V1, value2 V2, leftTs int64, otherTs int64) optional.Option[VR]
 }
 
 type ValueJoinerWithKeyTsFuncG[K, V1, V2, VR any] func(readOnlyKey K, value1 V1, value2 V2,
-	leftTs int64, otherTs int64) VR
+	leftTs int64, otherTs int64) optional.Option[VR]
 
 func (fn ValueJoinerWithKeyTsFuncG[K, V1, V2, VR]) Apply(readOnlyKey K, value1 V1, value2 V2,
 	leftTs int64, otherTs int64,
-) VR {
+) optional.Option[VR] {
 	return fn(readOnlyKey, value1, value2, leftTs, otherTs)
 }
 
 func ReverseValueJoinerWithKeyTsG[K, V1, V2, VR any](f ValueJoinerWithKeyTsFuncG[K, V1, V2, VR]) ValueJoinerWithKeyTsFuncG[K, V2, V1, VR] {
-	return func(readOnlyKey K, value2 V2, value1 V1, leftTs, otherTs int64) VR {
+	return func(readOnlyKey K, value2 V2, value1 V1, leftTs, otherTs int64) optional.Option[VR] {
 		return f(readOnlyKey, value1, value2, otherTs, leftTs)
 	}
 }

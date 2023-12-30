@@ -114,22 +114,20 @@ func (p *TableTableJoinProcessorG[K, V1, V2, VR]) ProcessAndReturn(ctx context.C
 		if ts < rvTs.Timestamp {
 			ts = rvTs.Timestamp
 		}
-		newValOp := optional.None[VR]()
-		oldValOp := optional.None[VR]()
+		newVal := optional.None[VR]()
+		oldVal := optional.None[VR]()
 		change := msg.Value.Unwrap()
 		msgNewVal, hasMsgNewVal := change.NewVal.Take()
 		if hasMsgNewVal {
-			newVal := p.joiner.Apply(key, msgNewVal, rvTs.Value)
-			newValOp = optional.Some(newVal)
+			newVal = p.joiner.Apply(key, msgNewVal, rvTs.Value)
 		}
 		msgOldVal, hasMsgOldVal := change.OldVal.Take()
 		if hasMsgOldVal {
-			oldVal := p.joiner.Apply(key, msgOldVal, rvTs.Value)
-			oldValOp = optional.Some(oldVal)
+			oldVal = p.joiner.Apply(key, msgOldVal, rvTs.Value)
 		}
 		return []commtypes.MessageG[K, commtypes.ChangeG[VR]]{{
 			Key:           msg.Key,
-			Value:         optional.Some(commtypes.ChangeG[VR]{NewVal: newValOp, OldVal: oldValOp}),
+			Value:         optional.Some(commtypes.ChangeG[VR]{NewVal: newVal, OldVal: oldVal}),
 			TimestampMs:   ts,
 			StartProcTime: msg.StartProcTime}}, nil
 	}

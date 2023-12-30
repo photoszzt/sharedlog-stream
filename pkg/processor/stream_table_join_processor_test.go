@@ -14,8 +14,8 @@ import (
 func getSkipMapJoinProcessor() *StreamTableJoinProcessorG[int, int, int, string] {
 	store := store.NewInMemorySkipmapKeyValueStoreG[int, commtypes.ValueTimestampG[int]]("test1", store.IntLessFunc)
 	joinProc := NewStreamTableJoinProcessorG[int, int, int, string](store, ValueJoinerWithKeyFuncG[int, int, int, string](
-		func(readOnlyKey int, leftValue int, rightValue int) string {
-			return fmt.Sprintf("%d+%d", leftValue, rightValue)
+		func(readOnlyKey int, leftValue int, rightValue int) optional.Option[string] {
+			return optional.Some(fmt.Sprintf("%d+%d", leftValue, rightValue))
 		},
 	))
 	return joinProc
@@ -24,8 +24,8 @@ func getSkipMapJoinProcessor() *StreamTableJoinProcessorG[int, int, int, string]
 func getSkipMapJoinProcessorWithStr() *StreamTableJoinProcessorG[int, string, string, string] {
 	store := store.NewInMemorySkipmapKeyValueStoreG[int, commtypes.ValueTimestampG[string]]("test1", store.IntLessFunc)
 	joinProc := NewStreamTableJoinProcessorG[int, string, string, string](store, ValueJoinerWithKeyFuncG[int, string, string, string](
-		func(readOnlyKey int, leftValue string, rightValue string) string {
-			return fmt.Sprintf("%s+%s", leftValue, rightValue)
+		func(readOnlyKey int, leftValue string, rightValue string) optional.Option[string] {
+			return optional.Some(fmt.Sprintf("%s+%s", leftValue, rightValue))
 		},
 	))
 	return joinProc

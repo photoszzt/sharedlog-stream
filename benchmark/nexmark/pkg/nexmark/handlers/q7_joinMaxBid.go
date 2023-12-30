@@ -130,16 +130,16 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	}
 	joiner := processor.ValueJoinerWithKeyTsFuncG[uint64, *ntypes.Event, ntypes.StartEndTime, ntypes.BidAndMax](
 		func(readOnlyKey uint64, value1 *ntypes.Event, value2 ntypes.StartEndTime,
-			leftTs, otherTs int64) ntypes.BidAndMax {
+			leftTs, otherTs int64) optional.Option[ntypes.BidAndMax] {
 			// fmt.Fprintf(os.Stderr, "val1: %v, val2: %v\n", value1, value2)
-			return ntypes.BidAndMax{
+			return optional.Some(ntypes.BidAndMax{
 				Price:    value1.Bid.Price,
 				Auction:  value1.Bid.Auction,
 				Bidder:   value1.Bid.Bidder,
 				BidTs:    value1.Bid.DateTime,
 				WStartMs: value2.StartTimeMs,
 				WEndMs:   value2.EndTimeMs,
-			}
+			})
 		})
 	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
 	bMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, *ntypes.Event]().
