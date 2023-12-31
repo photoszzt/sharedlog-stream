@@ -123,6 +123,18 @@ func (sls *ShardedSharedLogStreamProducer) ProduceCtrlMsg(ctx context.Context, m
 			}
 		}
 		return len(parNums), nil
+	} else if msg.Mark == commtypes.CHKPT_MARK {
+		for _, parNum := range parNums {
+			chkpt_tag := txn_data.ChkptTag(sls.Stream().TopicNameHash(), parNum)
+			nameTag := sharedlog_stream.NameHashWithPartition(sls.Stream().TopicNameHash(), parNum)
+			_, err := sls.pushWithTag(ctx, msg.Payload, parNum, []uint64{chkpt_tag, nameTag},
+				nil, sharedlog_stream.ControlRecordMeta)
+			if err != nil {
+				return 0, err
+			}
+			// fmt.Fprintf(os.Stderr, "produce scale fence %s(%d): offset 0x%x\n", sls.TopicName(), parNum, off)
+		}
+		return len(parNums), nil
 	} else {
 		return 0, fmt.Errorf("unknown control message with mark: %s", msg.Mark)
 	}

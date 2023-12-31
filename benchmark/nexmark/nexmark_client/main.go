@@ -79,7 +79,7 @@ func main() {
 
 	flag.Uint64Var(&FLAGS_commit_everyMs, "comm_everyMS", 10, "commit a transaction every (ms)")
 
-	flag.StringVar(&FLAGS_guarantee, "guarantee", "alo", "none(no protocol), alo(at least once), 2pc(two phase commit) or epoch(epoch marking)")
+	flag.StringVar(&FLAGS_guarantee, "guarantee", "alo", "none(no protocol), alo(at least once epoch), align_chkpt(aligned checkpoint), 2pc(two phase commit) or epoch(epoch marking)")
 	flag.BoolVar(&FLAGS_local, "local", false, "local mode without setting node constraint")
 	flag.BoolVar(&FLAGS_waitForEndMark, "waitForLast", false, "wait for the final mark of input; used in measuring throughput")
 
@@ -88,7 +88,9 @@ func main() {
 	if FLAGS_stat_dir == "" {
 		panic("should specify non empty stats dir")
 	}
-	if FLAGS_guarantee != "alo" && FLAGS_guarantee != "2pc" && FLAGS_guarantee != "epoch" && FLAGS_guarantee != "none" {
+	if FLAGS_guarantee != "alo" && FLAGS_guarantee != "2pc" &&
+		FLAGS_guarantee != "epoch" && FLAGS_guarantee != "none" &&
+		FLAGS_guarantee != "align_chkpt" {
 		fmt.Fprintf(os.Stderr, "expected guarantee is none, alo, 2pc and epoch")
 		return
 	}
@@ -96,6 +98,7 @@ func main() {
 	switch FLAGS_app_name {
 	case "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "windowedAvg":
 		serdeFormat := common.StringToSerdeFormat(FLAGS_serdeFormat)
+		baseQueryInput := NewQueryInput(serdeFormat)
 		gp := ntypes.GeneratorParams{
 			EventsNum:      uint64(FLAGS_events_num),
 			SerdeFormat:    serdeFormat,
@@ -103,8 +106,10 @@ func main() {
 			Duration:       uint32(FLAGS_duration),
 			Tps:            uint32(FLAGS_tps),
 			FlushMs:        uint32(FLAGS_src_flush_ms),
+			CommitMs:       uint32(FLAGS_commit_everyMs),
 			WaitForEndMark: FLAGS_waitForEndMark,
 			BufMaxSize:     uint32(FLAGS_buf_max_size),
+			GuaranteeMth:   baseQueryInput.GuaranteeMth,
 		}
 		var invokeSourceFunc_ invokeSource
 		if FLAGS_test_src != "" {
@@ -120,7 +125,7 @@ func main() {
 			Local:          FLAGS_local,
 			WaitForEndMark: FLAGS_waitForEndMark,
 		}
-		err := common.Invoke(invokeFuncParam, NewQueryInput(serdeFormat), common.InvokeSrcFunc(invokeSourceFunc_))
+		err := common.Invoke(invokeFuncParam, baseQueryInput, common.InvokeSrcFunc(invokeSourceFunc_))
 		if err != nil {
 			panic(err)
 		}

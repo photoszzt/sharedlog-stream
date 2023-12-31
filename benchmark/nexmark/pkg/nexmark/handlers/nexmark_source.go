@@ -236,7 +236,7 @@ func (h *nexmarkSourceHandler) succRet(startTime time.Time) *common.FnOutput {
 	}
 }
 
-func (h *nexmarkSourceHandler) propagateMarker(m *txn_data.ControlMetadata, procArgs *nexmarkSrcProcArgs, parNum uint8) *common.FnOutput {
+func (h *nexmarkSourceHandler) propagateScaleFence(m *txn_data.ControlMetadata, procArgs *nexmarkSrcProcArgs, parNum uint8) *common.FnOutput {
 	numSubstreams := m.Config[h.streamPusher.Stream.TopicName()]
 	for len(h.streamPusher.MsgChan) > 0 {
 		time.Sleep(time.Duration(100) * time.Microsecond)
@@ -264,6 +264,10 @@ func (h *nexmarkSourceHandler) propagateMarker(m *txn_data.ControlMetadata, proc
 }
 
 func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig *ntypes.NexMarkConfigInput) *common.FnOutput {
+	dctx, dcancel := context.WithCancel(ctx)
+	defer dcancel()
+	var wg sync.WaitGroup
+
 	fn_out := h.getStreamPublisher(inputConfig)
 	if fn_out != nil {
 		return fn_out
@@ -281,11 +285,8 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	dctx, dcancel := context.WithCancel(ctx)
-	defer dcancel()
 	cmm.StartMonitorControlChannel(dctx)
 
-	var wg sync.WaitGroup
 	procArgs := h.getProcArgs(inputConfig)
 	wg.Add(1)
 	go h.streamPusher.AsyncStreamPush(dctx, &wg, commtypes.EmptyProducerId, func(ctx context.Context) error { return nil })
@@ -309,7 +310,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 						h.stop(dctx, &wg, cmm)
 						return h.succRet(startTime)
 					}
-					fn_out = h.propagateMarker(m, procArgs, inputConfig.ParNum)
+					fn_out = h.propagateScaleFence(m, procArgs, inputConfig.ParNum)
 					if fn_out != nil {
 						return fn_out
 					}
@@ -324,7 +325,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 		if !procArgs.eventGenerator.HasNext() || procArgs.idx == int(h.eventsPerGen) || h.duration != 0 && time.Since(startTime) >= h.duration {
 			if inputConfig.WaitForEndMark {
 				for _, par := range procArgs.parNumArr {
-					ret_err := genEndMark(startTime, par, h.epochMarkerSerde, h.streamPusher)
+					ret_err := h.genEndMark(startTime, par)
 					if ret_err != nil {
 						return ret_err
 					}
@@ -342,9 +343,21 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	return h.succRet(startTime)
 }
 
-func genEndMark(startTime time.Time, parNum uint8,
-	epochMarkerSerde commtypes.SerdeG[commtypes.EpochMarker],
-	streamPusher *sharedlog_stream.StreamPush,
+func (h *nexmarkSourceHandler) genChkpt(parNum uint8) *common.FnOutput {
+	marker := commtypes.EpochMarker{
+		Mark:      commtypes.CHKPT_MARK,
+		ProdIndex: parNum,
+	}
+	encoded, err := h.epochMarkerSerde.Encode(marker)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	h.streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{Payload: encoded,
+		IsControl: true, Partitions: []uint8{parNum}, Mark: commtypes.STREAM_END}
+	return nil
+}
+
+func (h *nexmarkSourceHandler) genEndMark(startTime time.Time, parNum uint8,
 ) *common.FnOutput {
 	// debug.Fprintf(os.Stderr, "generator exhausted, stop\n")
 	marker := commtypes.EpochMarker{
@@ -352,11 +365,11 @@ func genEndMark(startTime time.Time, parNum uint8,
 		StartTime: startTime.UnixMilli(),
 		ProdIndex: parNum,
 	}
-	encoded, err := epochMarkerSerde.Encode(marker)
+	encoded, err := h.epochMarkerSerde.Encode(marker)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{Payload: encoded,
+	h.streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{Payload: encoded,
 		IsControl: true, Partitions: []uint8{parNum}, Mark: commtypes.STREAM_END}
 	return nil
 }

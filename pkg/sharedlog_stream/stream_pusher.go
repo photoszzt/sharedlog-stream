@@ -127,6 +127,18 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
 					}
 					h.produceCount += 1
 					h.ctrlCount += 1
+				} else if msg.Mark == commtypes.CHKPT_MARK {
+					chkpt_tag := txn_data.ChkptTag(h.Stream.TopicNameHash(), i)
+					nameHashTag := NameHashWithPartition(h.Stream.TopicNameHash(), i)
+					_, err := h.Stream.PushWithTag(ctx, msg.Payload, i, []uint64{nameHashTag, chkpt_tag}, nil,
+						ControlRecordMeta, producerId)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "[ERROR] push err: %v\n", err)
+						h.MsgErrChan <- err
+						return
+					}
+					h.produceCount += 1
+					h.ctrlCount += 1
 				}
 			}
 		} else {

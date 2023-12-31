@@ -141,6 +141,11 @@ func handleCtrlMsg(ctx context.Context, ctrlRawMsg commtypes.RawMsgAndSeq,
 				false, t.GetEndDuration(), args.ectx.SubstreamNum())
 		}
 		return ret
+	} else if ctrlRawMsg.Mark == commtypes.CHKPT_MARK {
+		ret := &common.FnOutput{Success: true}
+		if args.guarantee == exactly_once_intr.ALIGN_EPOCH {
+		}
+		return ret
 	} else if ctrlRawMsg.Mark == commtypes.STREAM_END {
 		epochMarkerSerde, err := commtypes.GetEpochMarkerSerdeG(args.serdeFormat)
 		if err != nil {

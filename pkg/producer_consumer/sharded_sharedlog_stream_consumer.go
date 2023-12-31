@@ -173,12 +173,11 @@ func (s *ShardedSharedLogStreamConsumer) readNext(ctx context.Context, parNum ui
 			}
 			// debug.Fprintf(os.Stderr, "%+v\n", epochMark)
 			rawMsg.Mark = epochMark.Mark
+			rawMsg.ProdIdx = epochMark.ProdIndex
 			if epochMark.Mark == commtypes.SCALE_FENCE {
 				rawMsg.ScaleEpoch = epochMark.ScaleEpoch
-				rawMsg.ProdIdx = epochMark.ProdIndex
 			} else if epochMark.Mark == commtypes.STREAM_END {
 				rawMsg.StartTime = epochMark.StartTime
-				rawMsg.ProdIdx = epochMark.ProdIndex
 			}
 		}
 		return rawMsg, err

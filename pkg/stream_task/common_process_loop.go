@@ -56,6 +56,8 @@ func CommonProcess[K, V any](ctx context.Context, t *StreamTask, ectx *processor
 			}
 		} else if rawMsgSeq.Mark == commtypes.EPOCH_END {
 			return nil, optional.None[commtypes.RawMsgAndSeq]()
+		} else if rawMsgSeq.Mark == commtypes.CHKPT_MARK {
+			return nil, optional.None[commtypes.RawMsgAndSeq]()
 		}
 	}
 	msgs, err := commtypes.DecodeRawMsgSeqG(rawMsgSeq, inMsgSerde)
