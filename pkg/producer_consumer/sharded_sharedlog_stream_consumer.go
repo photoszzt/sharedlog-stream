@@ -47,6 +47,7 @@ type ShardedSharedLogStreamConsumer struct {
 	stream                *sharedlog_stream.ShardedSharedLogStream
 	tac                   *TransactionAwareConsumer
 	emc                   *EpochMarkConsumer
+	ndc                   *NoDupConsumer
 	name                  string
 	currentSeqNum         uint64
 	timeout               time.Duration
@@ -124,13 +125,15 @@ func (s *ShardedSharedLogStreamConsumer) AllProducerScaleFenced() bool {
 func (s *ShardedSharedLogStreamConsumer) ConfigExactlyOnce(
 	guarantee exactly_once_intr.GuaranteeMth,
 ) {
-	debug.Assert(guarantee == exactly_once_intr.TWO_PHASE_COMMIT || guarantee == exactly_once_intr.EPOCH_MARK,
-		"configure exactly once should specify 2pc or epoch mark")
+	debug.Assert(guarantee == exactly_once_intr.TWO_PHASE_COMMIT || guarantee == exactly_once_intr.EPOCH_MARK || guarantee == exactly_once_intr.ALIGN_CHKPT,
+		"configure exactly once should specify 2pc or epoch mark or align checkpoint")
 	s.guarantee = guarantee
 	if s.guarantee == exactly_once_intr.TWO_PHASE_COMMIT {
 		s.tac = NewTransactionAwareConsumer(s.stream, s.epochMarkerSerde)
 	} else if s.guarantee == exactly_once_intr.EPOCH_MARK {
 		s.emc = NewEpochMarkConsumer(s.TopicName(), s.stream, s.epochMarkerSerde)
+	} else if s.guarantee == exactly_once_intr.ALIGN_CHKPT {
+		s.ndc = NewNoDupConsumer(s.stream, s.epochMarkerSerde)
 	}
 }
 
@@ -159,6 +162,8 @@ func (s *ShardedSharedLogStreamConsumer) readNext(ctx context.Context, parNum ui
 		return s.tac.ReadNext(ctx, parNum)
 	} else if s.guarantee == exactly_once_intr.EPOCH_MARK {
 		return s.emc.ReadNext(ctx, parNum)
+	} else if s.guarantee == exactly_once_intr.ALIGN_CHKPT {
+		return s.ndc.ReadNext(ctx, parNum)
 	} else {
 		rawMsg, err := s.stream.ReadNext(ctx, parNum)
 		if err != nil {
