@@ -96,7 +96,7 @@ func ExecuteApp(ctx context.Context,
 		debug.Fprintf(os.Stderr, "begin processing without guarantee\n")
 		ret = processNoProto(ctx, t, streamTaskArgs)
 		debug.Fprintf(os.Stderr, "unsafe ret: %v\n", ret)
-	} else if streamTaskArgs.guarantee == exactly_once_intr.ALIGN_EPOCH {
+	} else if streamTaskArgs.guarantee == exactly_once_intr.ALIGN_CHKPT {
 		debug.Fprintf(os.Stderr, "begin align checkpoint processing\n")
 		// TODO: unimplemented
 		return &common.FnOutput{Success: false, Message: "unimplemented"}
@@ -143,7 +143,7 @@ func handleCtrlMsg(ctx context.Context, ctrlRawMsg commtypes.RawMsgAndSeq,
 		return ret
 	} else if ctrlRawMsg.Mark == commtypes.CHKPT_MARK {
 		ret := &common.FnOutput{Success: true}
-		if args.guarantee == exactly_once_intr.ALIGN_EPOCH {
+		if args.guarantee == exactly_once_intr.ALIGN_CHKPT {
 		}
 		return ret
 	} else if ctrlRawMsg.Mark == commtypes.STREAM_END {

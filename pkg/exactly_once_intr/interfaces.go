@@ -15,7 +15,7 @@ const (
 	AT_LEAST_ONCE
 	TWO_PHASE_COMMIT
 	EPOCH_MARK
-	ALIGN_EPOCH
+	ALIGN_CHKPT
 )
 
 type ReadOnlyExactlyOnceManager interface {
