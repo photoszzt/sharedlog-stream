@@ -9,7 +9,7 @@ import (
 type StoreBackedByChangelog interface {
 	Flush(ctx context.Context) (uint32, error)
 	ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
-		guarantee exactly_once_intr.GuaranteeMth) error
+		guarantee exactly_once_intr.GuaranteeMth)
 	ChangelogTopicName() string
 	Stream() sharedlog_stream.Stream
 	SetFlushCallbackFunc(cb exactly_once_intr.FlushCallbackFunc)

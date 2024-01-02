@@ -70,10 +70,11 @@ func (st *KeyValueStoreWithChangelogG[K, V]) Get(ctx context.Context, key K) (V,
 func (st *KeyValueStoreWithChangelogG[K, V]) Flush(ctx context.Context) (uint32, error) {
 	return st.changelogManager.Flush(ctx)
 }
-func (st *KeyValueStoreWithChangelogG[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
+func (st *KeyValueStoreWithChangelogG[K, V]) ConfigureExactlyOnce(
+	rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	guarantee exactly_once_intr.GuaranteeMth,
-) error {
-	return st.changelogManager.ConfigExactlyOnce(rem, guarantee)
+) {
+	st.changelogManager.ConfigExactlyOnce(rem, guarantee)
 }
 
 func (st *KeyValueStoreWithChangelogG[K, V]) Put(ctx context.Context, key K, value optional.Option[V], tm store.TimeMeta) error {

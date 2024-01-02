@@ -32,24 +32,20 @@ type EpochMarkConsumer struct {
 func NewEpochMarkConsumer(
 	srcName string,
 	stream *sharedlog_stream.ShardedSharedLogStream,
-	serdeFormat commtypes.SerdeFormat,
-) (*EpochMarkConsumer, error) {
-	epochMarkSerde, err := commtypes.GetEpochMarkerSerdeG(serdeFormat)
-	if err != nil {
-		return nil, err
-	}
+	epochMarkerSerde commtypes.SerdeG[commtypes.EpochMarker],
+) *EpochMarkConsumer {
 	msgBuffer := make([]*deque.Deque[*commtypes.RawMsg], stream.NumPartition())
 	for i := uint8(0); i < stream.NumPartition(); i++ {
 		msgBuffer[i] = deque.New[*commtypes.RawMsg]()
 	}
 	return &EpochMarkConsumer{
-		epochMarkerSerde: epochMarkSerde,
+		epochMarkerSerde: epochMarkerSerde,
 		stream:           stream,
 		marked:           make(map[commtypes.ProducerId]map[uint8]commtypes.SeqRangeSet),
 		msgBuffer:        msgBuffer,
 		curReadMsgSeqNum: make(map[commtypes.ProducerId]data_structure.Uint64Set),
 		// streamTime:       stats.NewPrintLogStatsCollector[int64]("streamTime" + srcName),
-	}, nil
+	}
 }
 
 func (emc *EpochMarkConsumer) OutputRemainingStats() {

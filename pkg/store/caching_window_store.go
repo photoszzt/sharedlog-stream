@@ -143,8 +143,8 @@ func (s *CachingWindowStoreG[K, V]) ConsumeOneLogEntry(ctx context.Context, parN
 }
 func (s *CachingWindowStoreG[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	guarantee exactly_once_intr.GuaranteeMth,
-) error {
-	return s.wrappedStore.ConfigureExactlyOnce(rem, guarantee)
+) {
+	s.wrappedStore.ConfigureExactlyOnce(rem, guarantee)
 }
 
 func (s *CachingWindowStoreG[K, V]) ChangelogTopicName() string {

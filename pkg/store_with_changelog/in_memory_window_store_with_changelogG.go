@@ -245,9 +245,11 @@ func (s *InMemoryWindowStoreWithChangelogG[K, V]) ConsumeOneLogEntry(ctx context
 	}
 	return count, nil
 }
-func (s *InMemoryWindowStoreWithChangelogG[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
-	guarantee exactly_once_intr.GuaranteeMth) error {
-	return s.changelogManager.ConfigExactlyOnce(rem, guarantee)
+func (s *InMemoryWindowStoreWithChangelogG[K, V]) ConfigureExactlyOnce(
+	rem exactly_once_intr.ReadOnlyExactlyOnceManager,
+	guarantee exactly_once_intr.GuaranteeMth,
+) {
+	s.changelogManager.ConfigExactlyOnce(rem, guarantee)
 }
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) ChangelogTopicName() string {
 	return s.changelogManager.TopicName()

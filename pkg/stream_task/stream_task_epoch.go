@@ -102,10 +102,7 @@ func SetupManagersForEpoch(ctx context.Context,
 	initEmElapsed := time.Since(initEmStart)
 	fmt.Fprintf(os.Stderr, "[%d] Init EpochManager took %v, task epoch %#x, task id %#x\n",
 		args.ectx.SubstreamNum(), initEmElapsed, em.GetCurrentEpoch(), em.GetCurrentTaskId())
-	err = configChangelogExactlyOnce(em, args)
-	if err != nil {
-		return nil, nil, err
-	}
+	configChangelogExactlyOnce(em, args)
 	err = setupSnapshotCallback(ctx, args.env, args.serdeFormat, rs)
 	if err != nil {
 		return nil, nil, err
@@ -201,12 +198,8 @@ func processInEpoch(
 	args *StreamTaskArgs,
 	rs *snapshot_store.RedisSnapshotStore,
 ) *common.FnOutput {
-	err := trackStreamAndConfigureExactlyOnce(args, em,
-		func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {
-		})
-	if err != nil {
-		return common.GenErrFnOutput(fmt.Errorf("trackStreamAndConfigExactlyOnce: %v", err))
-	}
+	trackStreamAndConfigureExactlyOnce(args, em,
+		func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {})
 
 	// execIntrMs := stats.NewPrintLogStatsCollector[int64]("execIntrMs")
 	// thisAndLastCmtMs := stats.NewPrintLogStatsCollector[int64]("thisAndLastCmtMs")

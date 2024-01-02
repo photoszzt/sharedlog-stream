@@ -83,17 +83,13 @@ func (cm *ChangelogManager[K, V]) NumPartition() uint8 {
 func (cm *ChangelogManager[K, V]) ConfigExactlyOnce(
 	rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	guarantee exactly_once_intr.GuaranteeMth,
-) error {
+) {
 	if !cm.changelogIsSrc {
 		cm.producer.ConfigExactlyOnce(rem, guarantee)
 		for _, c := range cm.restoreConsumers {
-			err := c.ConfigExactlyOnce(guarantee)
-			if err != nil {
-				return nil
-			}
+			c.ConfigExactlyOnce(guarantee)
 		}
 	}
-	return nil
 }
 
 func (cm *ChangelogManager[K, V]) Stream() sharedlog_stream.Stream {

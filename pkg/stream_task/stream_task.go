@@ -349,20 +349,16 @@ func restoreStateStore(ctx context.Context, args *StreamTaskArgs, offsetMap map[
 	return nil
 }
 
-func configChangelogExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager, args *StreamTaskArgs) error {
+func configChangelogExactlyOnce(
+	rem exactly_once_intr.ReadOnlyExactlyOnceManager,
+	args *StreamTaskArgs,
+) {
 	for _, kvchangelog := range args.kvChangelogs {
-		err := kvchangelog.ConfigureExactlyOnce(rem, args.guarantee)
-		if err != nil {
-			return err
-		}
+		kvchangelog.ConfigureExactlyOnce(rem, args.guarantee)
 	}
 	for _, wschangelog := range args.windowStoreChangelogs {
-		err := wschangelog.ConfigureExactlyOnce(rem, args.guarantee)
-		if err != nil {
-			return err
-		}
+		wschangelog.ConfigureExactlyOnce(rem, args.guarantee)
 	}
-	return nil
 }
 
 func updateFuncs(streamTaskArgs *StreamTaskArgs,
@@ -431,16 +427,13 @@ func setOffsetOnStream(offsetMap map[string]uint64,
 func trackStreamAndConfigureExactlyOnce(args *StreamTaskArgs,
 	rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	trackStream func(name string, stream *sharedlog_stream.ShardedSharedLogStream),
-) error {
+) {
 	debug.Assert(len(args.ectx.Consumers()) >= 1, "Srcs should be filled")
 	debug.Assert(args.env != nil, "env should be filled")
 	debug.Assert(args.ectx != nil, "program args should be filled")
 	for _, src := range args.ectx.Consumers() {
 		if !src.IsInitialSource() {
-			err := src.ConfigExactlyOnce(args.guarantee)
-			if err != nil {
-				return err
-			}
+			src.ConfigExactlyOnce(args.guarantee)
 		}
 		trackStream(src.TopicName(),
 			src.Stream().(*sharedlog_stream.ShardedSharedLogStream))
@@ -456,7 +449,6 @@ func trackStreamAndConfigureExactlyOnce(args *StreamTaskArgs,
 	for _, winchangelog := range args.windowStoreChangelogs {
 		trackStream(winchangelog.ChangelogTopicName(), winchangelog.Stream().(*sharedlog_stream.ShardedSharedLogStream))
 	}
-	return nil
 }
 
 func initAfterMarkOrCommit(ctx context.Context, t *StreamTask, args *StreamTaskArgs,

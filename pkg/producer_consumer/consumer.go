@@ -16,7 +16,7 @@ type Consumer interface {
 	SetName(string)
 	NumSubstreamProducer() uint8
 	Stream() sharedlog_stream.Stream
-	ConfigExactlyOnce(guarantee exactly_once_intr.GuaranteeMth) error
+	ConfigExactlyOnce(guarantee exactly_once_intr.GuaranteeMth)
 	SetInitialSource(initial bool)
 	IsInitialSource() bool
 	RecordCurrentConsumedSeqNum(seqNum uint64)

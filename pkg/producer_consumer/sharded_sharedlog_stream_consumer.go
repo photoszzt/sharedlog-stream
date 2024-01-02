@@ -123,17 +123,15 @@ func (s *ShardedSharedLogStreamConsumer) AllProducerScaleFenced() bool {
 
 func (s *ShardedSharedLogStreamConsumer) ConfigExactlyOnce(
 	guarantee exactly_once_intr.GuaranteeMth,
-) error {
+) {
 	debug.Assert(guarantee == exactly_once_intr.TWO_PHASE_COMMIT || guarantee == exactly_once_intr.EPOCH_MARK,
 		"configure exactly once should specify 2pc or epoch mark")
 	s.guarantee = guarantee
-	var err error = nil
 	if s.guarantee == exactly_once_intr.TWO_PHASE_COMMIT {
-		s.tac, err = NewTransactionAwareConsumer(s.stream, s.serdeFormat)
+		s.tac = NewTransactionAwareConsumer(s.stream, s.epochMarkerSerde)
 	} else if s.guarantee == exactly_once_intr.EPOCH_MARK {
-		s.emc, err = NewEpochMarkConsumer(s.TopicName(), s.stream, s.serdeFormat)
+		s.emc = NewEpochMarkConsumer(s.TopicName(), s.stream, s.epochMarkerSerde)
 	}
-	return err
 }
 
 func (s *ShardedSharedLogStreamConsumer) Stream() sharedlog_stream.Stream {

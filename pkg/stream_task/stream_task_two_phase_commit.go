@@ -31,10 +31,7 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 	if err != nil {
 		return nil, nil, fmt.Errorf("InitTransaction failed: %v", err)
 	}
-	err = configChangelogExactlyOnce(tm, streamTaskArgs)
-	if err != nil {
-		return nil, nil, err
-	}
+	configChangelogExactlyOnce(tm, streamTaskArgs)
 	err = setupSnapshotCallback(ctx, streamTaskArgs.env,
 		streamTaskArgs.serdeFormat, rs)
 	if err != nil {
@@ -107,16 +104,12 @@ func processWithTransaction(
 	args *StreamTaskArgs,
 	rs *snapshot_store.RedisSnapshotStore,
 ) *common.FnOutput {
-	err := trackStreamAndConfigureExactlyOnce(args, tm,
+	trackStreamAndConfigureExactlyOnce(args, tm,
 		func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {
 			tm.RecordTopicStreams(name, stream)
 		})
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
-
 	debug.Fprintf(os.Stderr, "start restore mapping\n")
-	err = cmm.RestoreMappingAndWaitForPrevTask(ctx, args.ectx.FuncName(),
+	err := cmm.RestoreMappingAndWaitForPrevTask(ctx, args.ectx.FuncName(),
 		env_config.CREATE_SNAPSHOT, args.serdeFormat,
 		args.kvChangelogs, args.windowStoreChangelogs, rs)
 	if err != nil {

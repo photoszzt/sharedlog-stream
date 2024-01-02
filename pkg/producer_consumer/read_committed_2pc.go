@@ -27,12 +27,8 @@ type TransactionAwareConsumer struct {
 }
 
 func NewTransactionAwareConsumer(stream *sharedlog_stream.ShardedSharedLogStream,
-	serdeFormat commtypes.SerdeFormat,
-) (*TransactionAwareConsumer, error) {
-	epochMarkerSerde, err := commtypes.GetEpochMarkerSerdeG(serdeFormat)
-	if err != nil {
-		return nil, err
-	}
+	epochMarkerSerde commtypes.SerdeG[commtypes.EpochMarker],
+) *TransactionAwareConsumer {
 	msgBuffer := make([]*deque.Deque[*commtypes.RawMsg], stream.NumPartition())
 	for i := uint8(0); i < stream.NumPartition(); i++ {
 		msgBuffer[i] = deque.New[*commtypes.RawMsg]()
@@ -43,7 +39,7 @@ func NewTransactionAwareConsumer(stream *sharedlog_stream.ShardedSharedLogStream
 		epochMarkerSerde: epochMarkerSerde,
 		marked:           make(map[commtypes.ProducerId]map[uint8]LastMarkAndSeqRange),
 		curReadMsgSeqNum: make(map[commtypes.ProducerId]data_structure.Uint64Set),
-	}, nil
+	}
 }
 
 func (tac *TransactionAwareConsumer) checkMsgQueue(msgQueue *deque.Deque[*commtypes.RawMsg], parNum uint8) *commtypes.RawMsg {
