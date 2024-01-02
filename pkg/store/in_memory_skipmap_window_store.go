@@ -449,9 +449,10 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Flush(ctx context.Context) (uint32, 
 func (s *InMemorySkipMapWindowStoreG[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8) (int, error) {
 	panic("not supported")
 }
-func (s *InMemorySkipMapWindowStoreG[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
+func (s *InMemorySkipMapWindowStoreG[K, V]) ConfigureExactlyOnce(
+	rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	guarantee exactly_once_intr.GuaranteeMth,
-) error {
+) {
 	panic("not supported")
 }
 
