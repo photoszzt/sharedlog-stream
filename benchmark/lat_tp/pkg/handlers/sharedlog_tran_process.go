@@ -20,7 +20,8 @@ import (
 )
 
 type sharedlogTranProcessHandler struct {
-	env types.Environment
+	env      types.Environment
+	msgSerde commtypes.MessageGSerdeG[string, datatype.PayloadTs]
 }
 
 func NewSharedlogTranProcessHandler(env types.Environment) types.FuncHandler {
@@ -43,17 +44,18 @@ func (h *sharedlogTranProcessHandler) Call(ctx context.Context, input []byte) ([
 	return common.CompressData(encodedOutput), nil
 }
 
-func (h *sharedlogTranProcessHandler) sharedlogTranProcess(ctx context.Context, sp *common.TranProcessBenchParam) *common.FnOutput {
+func (h *sharedlogTranProcessHandler) getSrcSink(sp *common.TranProcessBenchParam,
+) ([]*producer_consumer.MeteredConsumer, []producer_consumer.MeteredProducerIntr, *common.FnOutput) {
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	inStream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, sp.InTopicName,
 		sp.NumPartition, serdeFormat, sp.BufMaxSize)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return nil, nil, common.GenErrFnOutput(err)
 	}
 	outStream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, sp.OutTopicName,
 		sp.NumPartition, serdeFormat, sp.BufMaxSize)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return nil, nil, common.GenErrFnOutput(err)
 	}
 	inConfig := &producer_consumer.StreamConsumerConfig{
 		Timeout:     common.SrcConsumeTimeout,
@@ -65,35 +67,52 @@ func (h *sharedlogTranProcessHandler) sharedlogTranProcess(ctx context.Context, 
 	}
 	consumer, err := producer_consumer.NewShardedSharedLogStreamConsumer(inStream, inConfig, 1, 0)
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return nil, nil, common.GenErrFnOutput(err)
 	}
 	src := producer_consumer.NewMeteredConsumer(consumer, 0)
 	sink, err := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(outStream, outConfig), 0)
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return nil, nil, common.GenErrFnOutput(err)
 	}
-	src.SetInitialSource(true)
-	sink.MarkFinalOutput()
+	return []*producer_consumer.MeteredConsumer{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
+}
+
+func (h *sharedlogTranProcessHandler) getMsgSerde(sf uint8) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sf)
 	var payloadTsSerde commtypes.SerdeG[datatype.PayloadTs]
+	var err error
 	if serdeFormat == commtypes.MSGP {
 		payloadTsSerde = datatype.PayloadTsMsgpSerdeG{}
 	} else {
 		payloadTsSerde = datatype.PayloadTsJsonSerdeG{}
 	}
-	msgSerde, err := commtypes.GetMsgGSerdeG[string](commtypes.MSGP, commtypes.StringSerdeG{}, payloadTsSerde)
+	h.msgSerde, err = commtypes.GetMsgGSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, payloadTsSerde)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
-	srcs, sinks := []*producer_consumer.MeteredConsumer{src}, []producer_consumer.MeteredProducerIntr{sink}
+	return nil
+}
+
+func (h *sharedlogTranProcessHandler) sharedlogTranProcess(ctx context.Context, sp *common.TranProcessBenchParam) *common.FnOutput {
+	srcs, sinks, fn_out := h.getSrcSink(sp)
+	if fn_out != nil {
+		return fn_out
+	}
+	srcs[0].SetInitialSource(true)
+	sinks[0].MarkFinalOutput()
+	fn_out = h.getMsgSerde(sp.SerdeFormat)
+	if fn_out != nil {
+		return fn_out
+	}
 	ectx := processor.NewExecutionContextFromComponents(proc_interface.NewBaseSrcsSinks(srcs, sinks),
 		proc_interface.NewBaseProcArgs("tranProcess", 1, 0))
-	outProc := processor.NewFixedSubstreamOutputProcessorG("subG1", sinks[0], 0, msgSerde)
+	outProc := processor.NewFixedSubstreamOutputProcessorG("subG1", sinks[0], 0, h.msgSerde)
 	task := stream_task.NewStreamTaskBuilder().MarkFinalStage().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, args processor.ExecutionContext) (*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq]) {
 			return stream_task.CommonProcess(ctx, task, &ectx,
 				func(ctx context.Context, msg commtypes.MessageG[string, datatype.PayloadTs], argsTmp interface{}) error {
 					return outProc.Process(ctx, msg)
-				}, msgSerde)
+				}, h.msgSerde)
 		}).Build()
 	streamTaskArgs := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,
 		fmt.Sprintf("tranProcess-%s-%d-%s", sp.InTopicName,

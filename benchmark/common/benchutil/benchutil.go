@@ -38,16 +38,16 @@ func GetShardedInputOutputStreams(ctx context.Context,
 	env types.Environment,
 	input *common.QueryInput,
 ) (*sharedlog_stream.ShardedSharedLogStream, []*sharedlog_stream.ShardedSharedLogStream, error) {
+	serdeFormat := commtypes.SerdeFormat(input.SerdeFormat)
 	inputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[0], input.NumInPartition,
-		commtypes.SerdeFormat(input.SerdeFormat), input.BufMaxSize)
+		serdeFormat, input.BufMaxSize)
 	if err != nil {
 		return nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
-
 	}
 	var output_streams []*sharedlog_stream.ShardedSharedLogStream
 	for idx, name := range input.OutputTopicNames {
 		outputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, name, input.NumOutPartitions[idx],
-			commtypes.SerdeFormat(input.SerdeFormat), input.BufMaxSize)
+			serdeFormat, input.BufMaxSize)
 		if err != nil {
 			return nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
 		}

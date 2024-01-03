@@ -43,11 +43,11 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 	stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, sp.TopicName, sp.NumOutPartition,
 		commtypes.SerdeFormat(sp.SerdeFormat), sp.BufMaxSize)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	cm, err := consume_seq_num_manager.NewConsumeSeqManager(h.env, commtypes.MSGP, "sharedlogConsumeBench", sp.BufMaxSize)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 
 	// warmup
@@ -77,7 +77,7 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 		case <-commitTimer.C:
 			err = commitConsumeSeq(ctx, cm, sp.TopicName, off)
 			if err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
+				return common.GenErrFnOutput(err)
 			}
 			hasUncommitted = false
 		default:
@@ -95,7 +95,7 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 				// debug.Fprintf(os.Stderr, "stream time out\n")
 				continue
 			} else {
-				return &common.FnOutput{Success: false, Message: err.Error()}
+				return common.GenErrFnOutput(err)
 			}
 		}
 
@@ -110,13 +110,13 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 		if rawMsg.IsPayloadArr {
 			payloadArrTmp, err := paSerde.Decode(rawMsg.Payload)
 			if err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
+				return common.GenErrFnOutput(err)
 			}
 			payloadArr := payloadArrTmp.(commtypes.PayloadArr)
 			for _, pBytes := range payloadArr.Payloads {
 				ptTmp, err := ptSerde.Decode(pBytes)
 				if err != nil {
-					return &common.FnOutput{Success: false, Message: err.Error()}
+					return common.GenErrFnOutput(err)
 				}
 				pt := ptTmp.(datatype.PayloadTs)
 				now := time.Now().UnixMicro()
@@ -127,7 +127,7 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 		} else {
 			ptTmp, err := ptSerde.Decode(rawMsg.Payload)
 			if err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
+				return common.GenErrFnOutput(err)
 			}
 			pt := ptTmp.(datatype.PayloadTs)
 			now := time.Now().UnixMicro()
@@ -139,7 +139,7 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 	if hasUncommitted {
 		err := commitConsumeSeq(ctx, cm, stream.TopicName(), off)
 		if err != nil {
-			return &common.FnOutput{Success: false, Message: err.Error()}
+			return common.GenErrFnOutput(err)
 		}
 	}
 	return &common.FnOutput{
@@ -150,7 +150,8 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 }
 
 func commitConsumeSeq(ctx context.Context,
-	cm *consume_seq_num_manager.ConsumeSeqManager, topicName string, off uint64) error {
+	cm *consume_seq_num_manager.ConsumeSeqManager, topicName string, off uint64,
+) error {
 	return cm.Track(ctx, map[string]uint64{topicName: off})
 }
 

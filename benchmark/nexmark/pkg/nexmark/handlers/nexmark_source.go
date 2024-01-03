@@ -5,22 +5,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"sync"
-	"time"
-
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/generator"
+	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
-
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
-	"sharedlog-stream/pkg/commtypes"
-
-	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/generator"
+	"sync"
+	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -258,8 +256,12 @@ func (h *nexmarkSourceHandler) propagateScaleFence(m *txn_data.ControlMetadata, 
 		uint8(h.generatorConfig.Configuration.NumEventGenerators))
 	debug.Fprintf(os.Stderr, "updated numPartition is %d, generate events to %v\n",
 		numSubstreams, procArgs.parNumArr)
-	h.streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{Payload: encoded,
-		IsControl: true, Partitions: []uint8{parNum}, Mark: commtypes.SCALE_FENCE}
+	h.streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{
+		Payload:    encoded,
+		IsControl:  true,
+		Partitions: []uint8{parNum},
+		Mark:       commtypes.SCALE_FENCE,
+	}
 	return nil
 }
 
@@ -267,6 +269,8 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	dctx, dcancel := context.WithCancel(ctx)
 	defer dcancel()
 	var wg sync.WaitGroup
+	var t *time.Ticker
+	guarantee := exactly_once_intr.GuaranteeMth(inputConfig.GuaranteeMth)
 
 	fn_out := h.getStreamPublisher(inputConfig)
 	if fn_out != nil {
@@ -293,6 +297,10 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	h.streamPusher.InitFlushTimer(time.Duration(inputConfig.FlushMs) * time.Millisecond)
 	startTime := time.Now()
 	fmt.Fprintf(os.Stderr, "StartTs: %d\n", startTime.UnixMilli())
+
+	if guarantee == exactly_once_intr.ALIGN_CHKPT {
+		t = time.NewTicker(time.Duration(inputConfig.CommitEveryMs) * time.Millisecond)
+	}
 	for {
 		select {
 		case merr := <-h.streamPusher.MsgErrChan:
@@ -321,6 +329,16 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 				return common.GenErrFnOutput(fmt.Errorf("control channel manager failed: %v", cerr))
 			}
 		default:
+		}
+		if guarantee == exactly_once_intr.ALIGN_CHKPT {
+			select {
+			case <-t.C:
+				fn_out = h.genChkpt(inputConfig.ParNum)
+				if fn_out != nil {
+					return fn_out
+				}
+			default:
+			}
 		}
 		if !procArgs.eventGenerator.HasNext() || procArgs.idx == int(h.eventsPerGen) || h.duration != 0 && time.Since(startTime) >= h.duration {
 			if inputConfig.WaitForEndMark {
@@ -352,8 +370,10 @@ func (h *nexmarkSourceHandler) genChkpt(parNum uint8) *common.FnOutput {
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	h.streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{Payload: encoded,
-		IsControl: true, Partitions: []uint8{parNum}, Mark: commtypes.STREAM_END}
+	h.streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{
+		Payload:   encoded,
+		IsControl: true, Partitions: []uint8{parNum}, Mark: commtypes.STREAM_END,
+	}
 	return nil
 }
 
@@ -369,8 +389,10 @@ func (h *nexmarkSourceHandler) genEndMark(startTime time.Time, parNum uint8,
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	h.streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{Payload: encoded,
-		IsControl: true, Partitions: []uint8{parNum}, Mark: commtypes.STREAM_END}
+	h.streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{
+		Payload:   encoded,
+		IsControl: true, Partitions: []uint8{parNum}, Mark: commtypes.STREAM_END,
+	}
 	return nil
 }
 

@@ -40,7 +40,7 @@ func (h *sharedlogProduceBenchHandler) Call(ctx context.Context, input []byte) (
 func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context, sp *common.BenchSourceParam) *common.FnOutput {
 	content, err := os.ReadFile(sp.FileName)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	// latencies := make([]int, 0, 128)
 	numEvents := sp.NumEvents
@@ -49,7 +49,7 @@ func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context
 	stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, sp.TopicName,
 		sp.NumOutPartition, commtypes.SerdeFormat(sp.SerdeFormat), sp.BufMaxSize)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	var ptSerde datatype.PayloadTsMsgpSerde
 	timeGapUs := time.Duration(1000000/sp.Tps) * time.Microsecond
@@ -74,7 +74,7 @@ func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context
 		}
 		encoded, err := ptSerde.Encode(&pt)
 		if err != nil {
-			return &common.FnOutput{Success: false, Message: err.Error()}
+			return common.GenErrFnOutput(err)
 		}
 		now := time.Now()
 		if next.After(now) {
@@ -83,7 +83,7 @@ func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context
 		_, err = stream.Push(ctx, encoded, uint8(parNum), sharedlog_stream.StreamEntryMeta(false, false),
 			commtypes.EmptyProducerId)
 		if err != nil {
-			return &common.FnOutput{Success: false, Message: err.Error()}
+			return common.GenErrFnOutput(err)
 		}
 		// streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{Payload: encoded, Partitions: []uint8{uint8(parNum)}, IsControl: false}
 		// elapsed := time.Since(procStart)
