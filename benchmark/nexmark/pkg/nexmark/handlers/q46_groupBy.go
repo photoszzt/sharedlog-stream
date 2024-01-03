@@ -16,8 +16,10 @@ import (
 )
 
 type q46GroupByHandler struct {
-	env      types.Environment
-	funcName string
+	env         types.Environment
+	funcName    string
+	inMsgSerde  commtypes.MessageGSerdeG[string, *ntypes.Event]
+	outMsgSerde commtypes.MessageGSerdeG[uint64, *ntypes.Event]
 }
 
 func NewQ46GroupByHandler(env types.Environment, funcName string) types.FuncHandler {
@@ -41,23 +43,31 @@ func (h *q46GroupByHandler) Call(ctx context.Context, input []byte) ([]byte, err
 	return common.CompressData(encodedOutput), nil
 }
 
-func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+func (h *q46GroupByHandler) setupSerde(sf uint8) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sf)
 	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: fmt.Sprintf("get event serde err: %v", err)}
+		return common.GenErrFnOutput(fmt.Errorf("get event serde err: %v", err))
 	}
-	inMsgSerde, err := commtypes.GetMsgGSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
+	h.inMsgSerde, err = commtypes.GetMsgGSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: fmt.Sprintf("get msg serde err: %v", err)}
+		return common.GenErrFnOutput(fmt.Errorf("get msg serde err: %v", err))
 	}
-	outMsgSerde, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
+	h.outMsgSerde, err = commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: fmt.Sprintf("get msg serde err: %v", err)}
+		return common.GenErrFnOutput(fmt.Errorf("get msg serde err: %v", err))
+	}
+	return nil
+}
+
+func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	fn_out := h.setupSerde(sp.SerdeFormat)
+	if fn_out != nil {
+		return fn_out
 	}
 	ectx, err := getExecutionCtx(ctx, h.env, sp, h.funcName)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	ectx.Consumers()[0].SetInitialSource(true)
 	ectx.Producers()[0].SetName("aucsByIDSink")
@@ -68,7 +78,7 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 				event := value.Unwrap()
 				return optional.Some(event.NewAuction.ID), nil
 			}))
-	groupByAucIDProc := processor.NewGroupByOutputProcessorG("aucProc", ectx.Producers()[0], &ectx, outMsgSerde)
+	groupByAucIDProc := processor.NewGroupByOutputProcessorG("aucProc", ectx.Producers()[0], &ectx, h.outMsgSerde)
 	aucByIDProc.NextProcessor(groupByAucIDProc)
 
 	bidsByAucIDProc := processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64]("bidsByAuctionIDMap",
@@ -76,7 +86,7 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 			event := value.Unwrap()
 			return optional.Some(event.Bid.Auction), nil
 		}))
-	groupBidByAucIDProc := processor.NewGroupByOutputProcessorG("bidProc", ectx.Producers()[1], &ectx, outMsgSerde)
+	groupBidByAucIDProc := processor.NewGroupByOutputProcessorG("bidProc", ectx.Producers()[1], &ectx, h.outMsgSerde)
 	bidsByAucIDProc.NextProcessor(groupBidByAucIDProc)
 
 	task := stream_task.NewStreamTaskBuilder().AppProcessFunc(
@@ -99,7 +109,7 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 						}
 					}
 					return nil
-				}, inMsgSerde)
+				}, h.inMsgSerde)
 		}).Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName, sp.InputTopicNames[0], sp.ParNum)
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,

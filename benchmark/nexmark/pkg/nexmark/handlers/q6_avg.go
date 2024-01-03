@@ -22,8 +22,11 @@ import (
 )
 
 type q6Avg struct {
-	env      types.Environment
-	funcName string
+	env           types.Environment
+	funcName      string
+	inMsgSerde    commtypes.MessageGSerdeG[uint64, commtypes.ChangeG[ntypes.PriceTime]]
+	outMsgSerde   commtypes.MessageGSerdeG[uint64, float64]
+	storeMsgSerde commtypes.MessageGSerdeG[uint64, commtypes.ValueTimestampG[ntypes.PriceTimeList]]
 }
 
 func NewQ6Avg(env types.Environment, funcName string) *q6Avg {
@@ -77,8 +80,7 @@ func (h *q6Avg) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return common.CompressData(encodedOutput), nil
 }
 
-func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+func (h *q6Avg) setupSerde(serdeFormat commtypes.SerdeFormat) *common.FnOutput {
 	ptSerde, err := ntypes.GetPriceTimeSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
@@ -87,29 +89,38 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	inMsgSerde, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, changeSerde)
+	h.inMsgSerde, err = commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, changeSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	outMsgSerde, err := commtypes.GetMsgGSerdeG[uint64, float64](serdeFormat, commtypes.Uint64SerdeG{}, commtypes.Float64SerdeG{})
+	h.outMsgSerde, err = commtypes.GetMsgGSerdeG[uint64, float64](serdeFormat, commtypes.Uint64SerdeG{}, commtypes.Float64SerdeG{})
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	ectx, err := h.getExecutionCtx(ctx, sp)
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
-	aggStoreName := "q6AggKVStore"
 	ptlSerde, err := ntypes.GetPriceTimeListSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	storeMsgSerde, err := processor.MsgSerdeWithValueTsG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, ptlSerde)
+	h.storeMsgSerde, err = processor.MsgSerdeWithValueTsG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, ptlSerde)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	return nil
+}
+
+func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	fn_out := h.setupSerde(serdeFormat)
+	if fn_out != nil {
+		return fn_out
+	}
+	aggStoreName := "q6AggKVStore"
+	ectx, err := h.getExecutionCtx(ctx, sp)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
 	mp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestampG[ntypes.PriceTimeList]]().
-		MessageSerde(storeMsgSerde).
+		MessageSerde(h.storeMsgSerde).
 		StoreName(aggStoreName).
 		ParNum(sp.ParNum).
 		SerdeFormat(serdeFormat).
@@ -170,7 +181,7 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 				return optional.Some(float64(sum) / float64(l)), nil
 			}))
 	tabToStreamProc := processor.NewTableToStreamProcessorG[uint64, float64]()
-	sinkProc := processor.NewFixedSubstreamOutputProcessorG("subG4Proc", ectx.Producers()[0], sp.ParNum, outMsgSerde)
+	sinkProc := processor.NewFixedSubstreamOutputProcessorG("subG4Proc", ectx.Producers()[0], sp.ParNum, h.outMsgSerde)
 	tabAggProc.NextProcessor(tabMapValProc)
 	tabMapValProc.NextProcessor(tabToStreamProc)
 	tabToStreamProc.NextProcessor(sinkProc)
@@ -181,7 +192,7 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 			return stream_task.CommonProcess(ctx, task, args.(*processor.BaseExecutionContext),
 				func(ctx context.Context, msg commtypes.MessageG[uint64, commtypes.ChangeG[ntypes.PriceTime]], argsTmp interface{}) error {
 					return tabAggProc.Process(ctx, msg)
-				}, inMsgSerde)
+				}, h.inMsgSerde)
 		}).
 		Build()
 

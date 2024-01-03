@@ -24,8 +24,11 @@ import (
 )
 
 type q3JoinTableHandler struct {
-	env      types.Environment
-	funcName string
+	env           types.Environment
+	funcName      string
+	inMsgSerde    commtypes.MessageGSerdeG[uint64, *ntypes.Event]
+	outMsgSerde   commtypes.MessageGSerdeG[uint64, ntypes.NameCityStateId]
+	storeMsgSerde commtypes.MessageGSerdeG[uint64, commtypes.ValueTimestampG[*ntypes.Event]]
 }
 
 func NewQ3JoinTableHandler(env types.Environment, funcName string) types.FuncHandler {
@@ -116,28 +119,39 @@ func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInp
 	return []*producer_consumer.MeteredConsumer{src1, src2}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
-func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+func (h *q3JoinTableHandler) setupSerde(serdeFormat commtypes.SerdeFormat) *common.FnOutput {
 	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: fmt.Sprintf("get event serde err: %v", err)}
+		return common.GenErrFnOutput(fmt.Errorf("get event serde err: %v", err))
 	}
-	inMsgSerde, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
+	h.inMsgSerde, err = commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: fmt.Sprintf("get msg serde err: %v", err)}
+		return common.GenErrFnOutput(fmt.Errorf("get msg serde err: %v", err))
 	}
 	ncsiSerde, err := ntypes.GetNameCityStateIdSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	outMsgSerde, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, ncsiSerde)
+	h.outMsgSerde, err = commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, ncsiSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	h.storeMsgSerde, err = processor.MsgSerdeWithValueTsG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	return nil
+}
 
+func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	fn_out := h.setupSerde(serdeFormat)
+	if fn_out != nil {
+		return fn_out
+	}
 	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: fmt.Sprintf("getSrcSink err: %v\n", err)}
+		return common.GenErrFnOutput(fmt.Errorf("getSrcSink err: %v\n", err))
 	}
 	srcs[0].SetName("auctionsSrc")
 	srcs[1].SetName("personsSrc")
@@ -146,10 +160,6 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
 	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
 
-	storeMsgSerde, err := processor.MsgSerdeWithValueTsG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
 	joiner := processor.ValueJoinerWithKeyFuncG[uint64, *ntypes.Event, *ntypes.Event, ntypes.NameCityStateId](
 		func(_ uint64, _ *ntypes.Event, rightVal *ntypes.Event) optional.Option[ntypes.NameCityStateId] {
 			ncsi := ntypes.NameCityStateId{
@@ -162,7 +172,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			return optional.Some(ncsi)
 		})
 	mpAuc, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestampG[*ntypes.Event]]().
-		MessageSerde(storeMsgSerde).
+		MessageSerde(h.storeMsgSerde).
 		StoreName("auctionsBySellerIDStore").
 		ParNum(sp.ParNum).
 		SerdeFormat(serdeFormat).
@@ -176,7 +186,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		return common.GenErrFnOutput(err)
 	}
 	mpPer, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestampG[*ntypes.Event]]().
-		MessageSerde(storeMsgSerde).
+		MessageSerde(h.storeMsgSerde).
 		StoreName("personsByIDStore").
 		ParNum(sp.ParNum).
 		SerdeFormat(serdeFormat).
@@ -225,7 +235,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			}
 			return nil, nil
 		})
-	msgSerdePair := execution.NewMsgSerdePair(inMsgSerde, outMsgSerde)
+	msgSerdePair := execution.NewMsgSerdePair(h.inMsgSerde, h.outMsgSerde)
 	task, procArgs := execution.PrepareTaskWithJoin(ctx, aJoinP, pJoinA,
 		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum),

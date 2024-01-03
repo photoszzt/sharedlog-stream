@@ -21,7 +21,9 @@ import (
 type q3GroupByHandler struct {
 	env types.Environment
 
-	funcName string
+	funcName    string
+	inMsgSerde  commtypes.MessageGSerdeG[string, *ntypes.Event]
+	outMsgSerde commtypes.MessageGSerdeG[uint64, *ntypes.Event]
 }
 
 func NewQ3GroupByHandler(env types.Environment, funcName string) types.FuncHandler {
@@ -82,23 +84,31 @@ func getExecutionCtx(ctx context.Context, env types.Environment, sp *common.Quer
 		funcName, sp.ScaleEpoch, sp.ParNum), nil
 }
 
-func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+func (h *q3GroupByHandler) setupSerde(sf uint8) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sf)
 	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: fmt.Sprintf("get event serde err: %v", err)}
+		return common.GenErrFnOutput(fmt.Errorf("get event serde err: %v", err))
 	}
-	inMsgSerde, err := commtypes.GetMsgGSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
+	h.inMsgSerde, err = commtypes.GetMsgGSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: fmt.Sprintf("get msg serde err: %v", err)}
+		return common.GenErrFnOutput(fmt.Errorf("get msg serde err: %v", err))
 	}
-	outMsgSerde, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
+	h.outMsgSerde, err = commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: fmt.Sprintf("get msg serde err: %v", err)}
+		return common.GenErrFnOutput(fmt.Errorf("get msg serde err: %v", err))
+	}
+	return nil
+}
+
+func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	fn_out := h.setupSerde(sp.SerdeFormat)
+	if fn_out != nil {
+		return fn_out
 	}
 	ectx, err := getExecutionCtx(ctx, h.env, sp, h.funcName)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	ectx.Consumers()[0].SetInitialSource(true)
 	ectx.Producers()[0].SetName("aucSink")
@@ -108,14 +118,14 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 			func(_ optional.Option[string], value optional.Option[*ntypes.Event]) (optional.Option[uint64], error) {
 				return optional.Some(value.Unwrap().NewAuction.Seller), nil
 			}))
-	grouBySellerProc := processor.NewGroupByOutputProcessorG("aucProc", ectx.Producers()[0], &ectx, outMsgSerde)
+	grouBySellerProc := processor.NewGroupByOutputProcessorG("aucProc", ectx.Producers()[0], &ectx, h.outMsgSerde)
 	aucBySellerProc.NextProcessor(grouBySellerProc)
 	perByIDProc := processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64](
 		"personsByIDMap", processor.SelectKeyFuncG[string, *ntypes.Event, uint64](
 			func(_ optional.Option[string], value optional.Option[*ntypes.Event]) (optional.Option[uint64], error) {
 				return optional.Some(value.Unwrap().NewPerson.ID), nil
 			}))
-	groupByPerIDProc := processor.NewGroupByOutputProcessorG("perProc", ectx.Producers()[1], &ectx, outMsgSerde)
+	groupByPerIDProc := processor.NewGroupByOutputProcessorG("perProc", ectx.Producers()[1], &ectx, h.outMsgSerde)
 	perByIDProc.NextProcessor(groupByPerIDProc)
 
 	task := stream_task.NewStreamTaskBuilder().
@@ -139,7 +149,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 						}
 					}
 					return nil
-				}, inMsgSerde)
+				}, h.inMsgSerde)
 		}).Build()
 	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,

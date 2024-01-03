@@ -25,9 +25,12 @@ const (
 )
 
 type q4MaxBid struct {
-	env      types.Environment
-	funcName string
-	useCache bool
+	env         types.Environment
+	funcName    string
+	useCache    bool
+	inMsgSerde  commtypes.MessageGSerdeG[ntypes.AuctionIdCategory, *ntypes.AuctionBid]
+	outMsgSerde commtypes.MessageGSerdeG[uint64, commtypes.ChangeG[uint64]]
+	msgSerde    commtypes.MessageGSerdeG[ntypes.AuctionIdCategory, commtypes.ValueTimestampG[uint64]]
 }
 
 func NewQ4MaxBid(env types.Environment, funcName string) *q4MaxBid {
@@ -85,10 +88,10 @@ func getExecutionCtxSingleSrcSinkMiddle(ctx context.Context, env types.Environme
 	return ectx, nil
 }
 
-func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+func (h *q4MaxBid) setupSerde(serdeFormat commtypes.SerdeFormat) *common.FnOutput {
 	var abSerde commtypes.SerdeG[*ntypes.AuctionBid]
 	var aicSerde commtypes.SerdeG[ntypes.AuctionIdCategory]
+	var err error
 	if serdeFormat == commtypes.JSON {
 		abSerde = ntypes.AuctionBidJSONSerdeG{}
 		aicSerde = ntypes.AuctionIdCategoryJSONSerdeG{}
@@ -98,7 +101,8 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	} else {
 		return common.GenErrFnOutput(fmt.Errorf("unrecognized format: %v", serdeFormat))
 	}
-	inMsgSerde, err := commtypes.GetMsgGSerdeG(serdeFormat, aicSerde, abSerde)
+
+	h.inMsgSerde, err = commtypes.GetMsgGSerdeG(serdeFormat, aicSerde, abSerde)
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("get msg serde err: %v", err))
 	}
@@ -106,25 +110,34 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	outMsgSerde, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, changeSerde)
+	h.outMsgSerde, err = commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, changeSerde)
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("get msg serde err: %v", err))
 	}
-	ectx, err := getExecutionCtxSingleSrcSinkMiddle(ctx, h.env, h.funcName, sp)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	maxBidStoreName := "q4MaxBidKVStore"
-	msgSerde, err := processor.MsgSerdeWithValueTsG[ntypes.AuctionIdCategory, uint64](serdeFormat,
+	h.msgSerde, err = processor.MsgSerdeWithValueTsG[ntypes.AuctionIdCategory, uint64](serdeFormat,
 		aicSerde, commtypes.Uint64SerdeG{})
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	return nil
+}
+
+func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	fn_out := h.setupSerde(serdeFormat)
+	if fn_out != nil {
+		return fn_out
+	}
+	ectx, err := getExecutionCtxSingleSrcSinkMiddle(ctx, h.env, h.funcName, sp)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	maxBidStoreName := "q4MaxBidKVStore"
 	mp, err := store_with_changelog.NewMaterializeParamBuilder[ntypes.AuctionIdCategory, commtypes.ValueTimestampG[uint64]]().
-		MessageSerde(msgSerde).
+		MessageSerde(h.msgSerde).
 		StoreName(maxBidStoreName).
 		ParNum(sp.ParNum).
-		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
+		SerdeFormat(serdeFormat).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
 			Env:           h.env,
 			NumPartition:  sp.NumChangelogPartition,
@@ -132,7 +145,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	compare := func(a, b ntypes.AuctionIdCategory) bool {
 		return ntypes.CompareAuctionIdCategory(&a, &b) < 0
@@ -175,7 +188,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 				v := value.Unwrap()
 				return optional.Some(k.Category), optional.Some(v), nil
 			}))
-	sinkProc := processor.NewGroupByOutputProcessorG("subG3Proc", ectx.Producers()[0], &ectx, outMsgSerde)
+	sinkProc := processor.NewGroupByOutputProcessorG("subG3Proc", ectx.Producers()[0], &ectx, h.outMsgSerde)
 	aggProc.NextProcessor(groupByProc)
 	groupByProc.NextProcessor(sinkProc)
 	task := stream_task.NewStreamTaskBuilder().
@@ -185,7 +198,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 			return stream_task.CommonProcess(ctx, task, args.(*processor.BaseExecutionContext),
 				func(ctx context.Context, msg commtypes.MessageG[ntypes.AuctionIdCategory, *ntypes.AuctionBid], argsTmp interface{}) error {
 					return aggProc.Process(ctx, msg)
-				}, inMsgSerde)
+				}, h.inMsgSerde)
 		}).
 		Build()
 

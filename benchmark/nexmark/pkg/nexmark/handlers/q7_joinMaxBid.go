@@ -23,8 +23,11 @@ import (
 )
 
 type q7JoinMaxBid struct {
-	env      types.Environment
-	funcName string
+	env         types.Environment
+	funcName    string
+	inMsgSerde1 commtypes.MessageGSerdeG[uint64, *ntypes.Event]
+	inMsgSerde2 commtypes.MessageGSerdeG[uint64, ntypes.StartEndTime]
+	outMsgSerde commtypes.MessageGSerdeG[uint64, ntypes.BidAndMax]
 }
 
 func NewQ7JoinMaxBid(env types.Environment, funcName string) types.FuncHandler {
@@ -93,8 +96,7 @@ func (h *q7JoinMaxBid) getSrcSink(
 	return []*producer_consumer.MeteredConsumer{src1, src2}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
-func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+func (h *q7JoinMaxBid) setupSerde(serdeFormat commtypes.SerdeFormat) *common.FnOutput {
 	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("get event serde err: %v", err))
@@ -103,11 +105,11 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	inMsgSerde1, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
+	h.inMsgSerde1, err = commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("get msg serde err: %v", err))
 	}
-	inMsgSerde2, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, seSerde)
+	h.inMsgSerde2, err = commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, seSerde)
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("get msg serde err: %v", err))
 	}
@@ -115,22 +117,32 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	outMsgSerde, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, bmSerde)
+	h.outMsgSerde, err = commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, bmSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	return nil
+}
+
+func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	fn_out := h.setupSerde(serdeFormat)
+	if fn_out != nil {
+		return fn_out
+	}
 	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
 	jw, err := commtypes.NewJoinWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	joiner := processor.ValueJoinerWithKeyTsFuncG[uint64, *ntypes.Event, ntypes.StartEndTime, ntypes.BidAndMax](
 		func(readOnlyKey uint64, value1 *ntypes.Event, value2 ntypes.StartEndTime,
-			leftTs, otherTs int64) optional.Option[ntypes.BidAndMax] {
+			leftTs, otherTs int64,
+		) optional.Option[ntypes.BidAndMax] {
 			// fmt.Fprintf(os.Stderr, "val1: %v, val2: %v\n", value1, value2)
 			return optional.Some(ntypes.BidAndMax{
 				Price:    value1.Bid.Price,
@@ -143,7 +155,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		})
 	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
 	bMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, *ntypes.Event]().
-		MessageSerde(inMsgSerde1).
+		MessageSerde(h.inMsgSerde1).
 		StoreName("bidByPriceTab").
 		ParNum(sp.ParNum).
 		SerdeFormat(serdeFormat).
@@ -154,10 +166,10 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 			TimeOut:       common.SrcConsumeTimeout,
 		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	maxBMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, ntypes.StartEndTime]().
-		MessageSerde(inMsgSerde2).
+		MessageSerde(h.inMsgSerde2).
 		StoreName("maxBidByPriceTab").
 		ParNum(sp.ParNum).
 		SerdeFormat(serdeFormat).
@@ -168,12 +180,12 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 			TimeOut:       common.SrcConsumeTimeout,
 		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	bJoinMaxBFunc, maxBJoinBFunc, wsc, setupSnapCallbackFunc, err := execution.SetupSkipMapStreamStreamJoin(bMp, maxBMp,
 		store.IntegerCompare[uint64], joiner, jw)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 
 	filter := processor.NewStreamFilterProcessorG[uint64, ntypes.BidAndMax](
@@ -223,8 +235,8 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 			}
 			return outMsgs, nil
 		})
-	msgPairLeft := execution.NewMsgSerdePair(inMsgSerde1, outMsgSerde)
-	msgPairRight := execution.NewMsgSerdePair(inMsgSerde2, outMsgSerde)
+	msgPairLeft := execution.NewMsgSerdePair(h.inMsgSerde1, h.outMsgSerde)
+	msgPairRight := execution.NewMsgSerdePair(h.inMsgSerde2, h.outMsgSerde)
 	task, procArgs := execution.PrepareTaskWithJoin(
 		ctx, bJoinM, mJoinB, proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum), true,

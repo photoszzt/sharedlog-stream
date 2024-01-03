@@ -26,8 +26,10 @@ const (
 )
 
 type q4JoinStreamHandler struct {
-	env      types.Environment
-	funcName string
+	env         types.Environment
+	funcName    string
+	msgSerde    commtypes.MessageGSerdeG[uint64, *ntypes.Event]
+	outMsgSerde commtypes.MessageGSerdeG[ntypes.AuctionIdCategory, *ntypes.AuctionBid]
 }
 
 func NewQ4JoinStreamHandler(env types.Environment, funcName string) types.FuncHandler {
@@ -95,13 +97,12 @@ func (h *q4JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	return []*producer_consumer.MeteredConsumer{src1, src2}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
-func (h *q4JoinStreamHandler) Q4JoinStream(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+func (h *q4JoinStreamHandler) setupSerde(serdeFormat commtypes.SerdeFormat) *common.FnOutput {
 	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	msgSerde, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
+	h.msgSerde, err = commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -113,17 +114,26 @@ func (h *q4JoinStreamHandler) Q4JoinStream(ctx context.Context, sp *common.Query
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	outMsgSerde, err := commtypes.GetMsgGSerdeG(serdeFormat, aicSerde, abSerde)
+	h.outMsgSerde, err = commtypes.GetMsgGSerdeG(serdeFormat, aicSerde, abSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	return nil
+}
+
+func (h *q4JoinStreamHandler) Q4JoinStream(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	fn_out := h.setupSerde(serdeFormat)
+	if fn_out != nil {
+		return fn_out
+	}
 	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: fmt.Sprintf("getSrcSink err: %v\n", err)}
+		return common.GenErrFnOutput(fmt.Errorf("getSrcSink err: %v\n", err))
 	}
 	jw, err := commtypes.NewJoinWindowsNoGrace(auctionDurationUpper)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	joiner := processor.ValueJoinerWithKeyTsFuncG[uint64, *ntypes.Event, *ntypes.Event, *ntypes.AuctionBid](
 		func(_readOnlyKey uint64, value1 *ntypes.Event, value2 *ntypes.Event, _leftTs, otherTs int64) optional.Option[*ntypes.AuctionBid] {
@@ -139,7 +149,7 @@ func (h *q4JoinStreamHandler) Q4JoinStream(ctx context.Context, sp *common.Query
 		})
 	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
 	aucMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, *ntypes.Event]().
-		MessageSerde(msgSerde).StoreName("auctionsByIDStore").
+		MessageSerde(h.msgSerde).StoreName("auctionsByIDStore").
 		ParNum(sp.ParNum).SerdeFormat(serdeFormat).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
 			Env:           h.env,
@@ -151,7 +161,7 @@ func (h *q4JoinStreamHandler) Q4JoinStream(ctx context.Context, sp *common.Query
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	bidMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, *ntypes.Event]().
-		MessageSerde(msgSerde).StoreName("bidsByAuctionIDStore").
+		MessageSerde(h.msgSerde).StoreName("bidsByAuctionIDStore").
 		ParNum(sp.ParNum).SerdeFormat(serdeFormat).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
 			Env:           h.env,
@@ -226,7 +236,7 @@ func (h *q4JoinStreamHandler) Q4JoinStream(ctx context.Context, sp *common.Query
 			// debug.Fprintf(os.Stderr, "after right filter and group\n")
 			return msgs, err
 		})
-	msgSerdePair := execution.NewMsgSerdePair(msgSerde, outMsgSerde)
+	msgSerdePair := execution.NewMsgSerdePair(h.msgSerde, h.outMsgSerde)
 	task, procArgs := execution.PrepareTaskWithJoin(
 		ctx, aJoinB, bJoinA, proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum), false,

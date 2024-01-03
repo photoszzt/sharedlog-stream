@@ -23,7 +23,10 @@ import (
 type q4Avg struct {
 	env types.Environment
 
-	funcName string
+	funcName      string
+	inMsgSerde    commtypes.MessageGSerdeG[uint64, commtypes.ChangeG[uint64]]
+	outMsgSerde   commtypes.MessageGSerdeG[uint64, float64]
+	storeMsgSerde commtypes.MessageGSerdeG[uint64, commtypes.ValueTimestampG[ntypes.SumAndCount]]
 }
 
 func NewQ4Avg(env types.Environment, funcName string) *q4Avg {
@@ -80,36 +83,44 @@ func (h *q4Avg) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return common.CompressData(encodedOutput), nil
 }
 
-func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+func (h *q4Avg) setupSerde(serdeFormat commtypes.SerdeFormat) *common.FnOutput {
 	changeSerde, err := commtypes.GetChangeGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{})
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	inMsgSerde, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, changeSerde)
+	h.inMsgSerde, err = commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, changeSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	outMsgSerde, err := commtypes.GetMsgGSerdeG[uint64, float64](serdeFormat, commtypes.Uint64SerdeG{}, commtypes.Float64SerdeG{})
+	h.outMsgSerde, err = commtypes.GetMsgGSerdeG[uint64, float64](serdeFormat, commtypes.Uint64SerdeG{}, commtypes.Float64SerdeG{})
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	ectx, err := h.getExecutionCtx(ctx, sp)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	sumCountStoreName := "q4SumCountKVStore"
 	scSerde, err := ntypes.GetSumAndCountSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	storeMsgSerde, err := processor.MsgSerdeWithValueTsG[uint64](serdeFormat, commtypes.Uint64SerdeG{},
+	h.storeMsgSerde, err = processor.MsgSerdeWithValueTsG[uint64](serdeFormat, commtypes.Uint64SerdeG{},
 		scSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	return nil
+}
+
+func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	fn_out := h.setupSerde(serdeFormat)
+	if fn_out != nil {
+		return fn_out
+	}
+	ectx, err := h.getExecutionCtx(ctx, sp)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	sumCountStoreName := "q4SumCountKVStore"
 	mp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestampG[ntypes.SumAndCount]]().
-		MessageSerde(storeMsgSerde).
+		MessageSerde(h.storeMsgSerde).
 		StoreName(sumCountStoreName).
 		ParNum(sp.ParNum).
 		SerdeFormat(serdeFormat).
@@ -157,7 +168,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 			return optional.Some(float64(sc.Sum) / float64(sc.Count)), nil
 		}))
 	tabToStrProc := processor.NewTableToStreamProcessorG[uint64, float64]()
-	outProc := processor.NewFixedSubstreamOutputProcessorG("subG4Proc", ectx.Producers()[0], sp.ParNum, outMsgSerde)
+	outProc := processor.NewFixedSubstreamOutputProcessorG("subG4Proc", ectx.Producers()[0], sp.ParNum, h.outMsgSerde)
 	tabAggProc.NextProcessor(mapValProc)
 	mapValProc.NextProcessor(tabToStrProc)
 	tabToStrProc.NextProcessor(outProc)
@@ -168,7 +179,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 			return stream_task.CommonProcess(ctx, task, args.(*processor.BaseExecutionContext),
 				func(ctx context.Context, msg commtypes.MessageG[uint64, commtypes.ChangeG[uint64]], argsTmp interface{}) error {
 					return tabAggProc.Process(ctx, msg)
-				}, inMsgSerde)
+				}, h.inMsgSerde)
 		}).
 		Build()
 	kvc := map[string]store.KeyValueStoreOpWithChangelog{kvstore.ChangelogTopicName(): kvstore}

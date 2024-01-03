@@ -25,8 +25,10 @@ import (
 )
 
 type q8JoinStreamHandler struct {
-	env      types.Environment
-	funcName string
+	env         types.Environment
+	funcName    string
+	msgSerde    commtypes.MessageGSerdeG[uint64, *ntypes.Event]
+	outMsgSerde commtypes.MessageGSerdeG[uint64, ntypes.PersonTime]
 }
 
 func NewQ8JoinStreamHandler(env types.Environment, funcName string) types.FuncHandler {
@@ -95,14 +97,13 @@ func (h *q8JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	return []*producer_consumer.MeteredConsumer{src1, src2}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
-func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+func (h *q8JoinStreamHandler) setupSerde(sf uint8) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sf)
 	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	msgSerde, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
+	h.msgSerde, err = commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -110,17 +111,26 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	outMsgSerde, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, ptSerde)
+	h.outMsgSerde, err = commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, ptSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	return nil
+}
+
+func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
+	fn_out := h.setupSerde(sp.SerdeFormat)
+	if fn_out != nil {
+		return fn_out
+	}
 	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: fmt.Sprintf("getSrcSink err: %v\n", err)}
+		return common.GenErrFnOutput(fmt.Errorf("getSrcSink err: %v\n", err))
 	}
 	joinWindows, err := commtypes.NewJoinWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	windowSizeMs := int64(10 * 1000)
 	joiner := processor.ValueJoinerWithKeyTsFuncG[uint64, *ntypes.Event, *ntypes.Event, ntypes.PersonTime](
@@ -139,7 +149,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	format := commtypes.SerdeFormat(sp.SerdeFormat)
 	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
 	aucMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, *ntypes.Event]().
-		MessageSerde(msgSerde).
+		MessageSerde(h.msgSerde).
 		StoreName("auctionsBySellerIDWinTab").
 		ParNum(sp.ParNum).
 		SerdeFormat(format).
@@ -153,7 +163,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		return common.GenErrFnOutput(err)
 	}
 	perMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, *ntypes.Event]().
-		MessageSerde(msgSerde).
+		MessageSerde(h.msgSerde).
 		StoreName("personsByIDWinTab").
 		ParNum(sp.ParNum).
 		SerdeFormat(format).
@@ -171,7 +181,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	msgSerdePair := execution.NewMsgSerdePair(msgSerde, outMsgSerde)
+	msgSerdePair := execution.NewMsgSerdePair(h.msgSerde, h.outMsgSerde)
 	task, procArgs := execution.PrepareTaskWithJoin(ctx,
 		execution.JoinWorkerFunc[uint64, *ntypes.Event, uint64, ntypes.PersonTime](aucJoinsPerFunc),
 		execution.JoinWorkerFunc[uint64, *ntypes.Event, uint64, ntypes.PersonTime](perJoinsAucFunc),

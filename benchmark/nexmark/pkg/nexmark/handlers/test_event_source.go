@@ -45,24 +45,24 @@ func (h *testEventSource) eventGeneration(ctx context.Context, sp *common.TestSo
 	stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "nexmark_src", 1, serdeFormat,
 		sharedlog_stream.SINK_BUFFER_MAX_SIZE)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	eventSerde, err := ntypes.GetEventSerde(serdeFormat)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	msgSerde, err := commtypes.GetMsgSerde(serdeFormat, commtypes.StringSerde{}, eventSerde)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	events_byte, err := os.ReadFile(sp.FileName)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	events := ntypes.Events{}
 	err = json.Unmarshal(events_byte, &events)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	for _, event := range events.EventsArr {
 		msg := commtypes.Message{

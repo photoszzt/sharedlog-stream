@@ -16,8 +16,10 @@ import (
 )
 
 type q7BidByPrice struct {
-	env      types.Environment
-	funcName string
+	env         types.Environment
+	funcName    string
+	inMsgSerde  commtypes.MessageGSerdeG[string, *ntypes.Event]
+	outMsgSerde commtypes.MessageGSerdeG[uint64, *ntypes.Event]
 }
 
 func NewQ7BidByPriceHandler(env types.Environment, funcName string) types.FuncHandler {
@@ -41,19 +43,27 @@ func (h *q7BidByPrice) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return common.CompressData(encodedOutput), nil
 }
 
-func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInput) *common.FnOutput {
-	serdeFormat := commtypes.SerdeFormat(input.SerdeFormat)
+func (h *q7BidByPrice) setupSerde(serdeFormat commtypes.SerdeFormat) *common.FnOutput {
 	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	inMsgSerde, err := commtypes.GetMsgGSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
+	h.inMsgSerde, err = commtypes.GetMsgGSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	outMsgSerde, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
+	h.outMsgSerde, err = commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
+	}
+	return nil
+}
+
+func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInput) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(input.SerdeFormat)
+	fn_out := h.setupSerde(serdeFormat)
+	if fn_out != nil {
+		return fn_out
 	}
 	srcs, sinks_arr, err := getSrcSinkUint64Key(ctx, h.env, input)
 	if err != nil {
@@ -74,7 +84,7 @@ func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInpu
 				event := value.Unwrap()
 				return optional.Some(event.Bid.Price), nil
 			}))
-	outProc := processor.NewGroupByOutputProcessorG("bidByPriceProc", sinks_arr[0], &ectx, outMsgSerde)
+	outProc := processor.NewGroupByOutputProcessorG("bidByPriceProc", sinks_arr[0], &ectx, h.outMsgSerde)
 	filterProc.NextProcessor(selectKey)
 	selectKey.NextProcessor(outProc)
 	task := stream_task.NewStreamTaskBuilder().
@@ -84,7 +94,7 @@ func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInpu
 			return stream_task.CommonProcess(ctx, task, args.(*processor.BaseExecutionContext),
 				func(ctx context.Context, msg commtypes.MessageG[string, *ntypes.Event], argsTmp interface{}) error {
 					return filterProc.Process(ctx, msg)
-				}, inMsgSerde)
+				}, h.inMsgSerde)
 		}).
 		Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, input.InputTopicNames[0],

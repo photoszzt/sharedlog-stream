@@ -26,9 +26,12 @@ const (
 )
 
 type q5MaxBid struct {
-	env      types.Environment
-	funcName string
-	useCache bool
+	env         types.Environment
+	funcName    string
+	useCache    bool
+	inMsgSerde  commtypes.MessageGSerdeG[ntypes.StartEndTime, ntypes.AuctionIdCount]
+	outMsgSerde commtypes.MessageGSerdeG[ntypes.StartEndTime, ntypes.AuctionIdCntMax]
+	msgSerde    commtypes.MessageGSerdeG[ntypes.StartEndTime, commtypes.ValueTimestampG[uint64]]
 }
 
 func NewQ5MaxBid(env types.Environment, funcName string) types.FuncHandler {
@@ -88,11 +91,11 @@ func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	return []*producer_consumer.MeteredConsumer{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
-func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+func (h *q5MaxBid) setupSerde(serdeFormat commtypes.SerdeFormat) *common.FnOutput {
 	var seSerde commtypes.SerdeG[ntypes.StartEndTime]
 	var aucIdCountSerde commtypes.SerdeG[ntypes.AuctionIdCount]
 	var aucIdCountMaxSerde commtypes.SerdeG[ntypes.AuctionIdCntMax]
+	var err error
 	if serdeFormat == commtypes.JSON {
 		seSerde = ntypes.StartEndTimeJSONSerdeG{}
 		aucIdCountSerde = ntypes.AuctionIdCountJSONSerdeG{}
@@ -104,30 +107,39 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		aucIdCountMaxSerde = ntypes.AuctionIdCntMaxMsgpSerdeG{}
 	} else {
 		return common.GenErrFnOutput(
-			fmt.Errorf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat))
+			fmt.Errorf("serde format should be either json or msgp; but %v is given", serdeFormat))
 	}
-	inMsgSerde, err := commtypes.GetMsgGSerdeG(serdeFormat, seSerde, aucIdCountSerde)
+	h.inMsgSerde, err = commtypes.GetMsgGSerdeG(serdeFormat, seSerde, aucIdCountSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	outMsgSerde, err := commtypes.GetMsgGSerdeG(serdeFormat, seSerde, aucIdCountMaxSerde)
+	h.outMsgSerde, err = commtypes.GetMsgGSerdeG(serdeFormat, seSerde, aucIdCountMaxSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
-	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	ectx := processor.NewExecutionContext(srcs,
-		sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum)
-	maxBidStoreName := "maxBidsKVStore"
-	msgSerde, err := processor.MsgSerdeWithValueTsG[ntypes.StartEndTime, uint64](serdeFormat,
+	h.msgSerde, err = processor.MsgSerdeWithValueTsG[ntypes.StartEndTime, uint64](serdeFormat,
 		seSerde, commtypes.Uint64SerdeG{})
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	return nil
+}
+
+func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	fn_out := h.setupSerde(serdeFormat)
+	if fn_out != nil {
+		return fn_out
+	}
+	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	ectx := processor.NewExecutionContext(srcs,
+		sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum)
+	maxBidStoreName := "maxBidsKVStore"
 	mp, err := store_with_changelog.NewMaterializeParamBuilder[ntypes.StartEndTime, commtypes.ValueTimestampG[uint64]]().
-		MessageSerde(msgSerde).
+		MessageSerde(h.msgSerde).
 		StoreName(maxBidStoreName).
 		ParNum(sp.ParNum).
 		SerdeFormat(serdeFormat).
@@ -187,7 +199,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			return v.Count >= v.MaxCnt, nil
 		}))
 	outProc := processor.NewFixedSubstreamOutputProcessorG("subG3Proc", sinks_arr[0],
-		ectx.SubstreamNum(), outMsgSerde)
+		ectx.SubstreamNum(), h.outMsgSerde)
 	stJoin.NextProcessor(chooseMaxCnt)
 	chooseMaxCnt.NextProcessor(outProc)
 	task := stream_task.NewStreamTaskBuilder().
@@ -203,7 +215,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 						return fmt.Errorf("maxBid err: %v", err)
 					}
 					return stJoin.Process(ctx, msg)
-				}, inMsgSerde)
+				}, h.inMsgSerde)
 		}).MarkFinalStage().Build()
 	kvc := map[string]store.KeyValueStoreOpWithChangelog{kvstore.ChangelogTopicName(): aggStore}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,

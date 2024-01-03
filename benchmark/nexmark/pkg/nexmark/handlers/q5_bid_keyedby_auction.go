@@ -59,7 +59,7 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 	}
 	srcs, sinks, err := getSrcSinkUint64Key(ctx, h.env, sp)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	srcs[0].SetInitialSource(true)
 	ectx := processor.NewExecutionContext(srcs,

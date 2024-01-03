@@ -183,13 +183,13 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	}
 	srcs, sinks, err := h.getSrcSink(ctx, sp)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	ectx := processor.NewExecutionContext(srcs,
 		sinks, h.funcName, sp.ScaleEpoch, sp.ParNum)
 	countProc, wsc, setSnapCallbackFunc, err := h.getCountAggProc(ctx, sp)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	tabToStreamProc := processor.NewTableToStreamProcessorG[commtypes.WindowedKeyG[uint64], uint64]()
 	mapProc := processor.NewStreamMapProcessorG[commtypes.WindowedKeyG[uint64], uint64, ntypes.StartEndTime, ntypes.AuctionIdCount]("groupByAuction",

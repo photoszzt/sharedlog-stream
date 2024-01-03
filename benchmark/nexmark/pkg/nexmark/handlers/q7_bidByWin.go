@@ -20,8 +20,10 @@ import (
 )
 
 type q7BidByWin struct {
-	env      types.Environment
-	funcName string
+	env         types.Environment
+	funcName    string
+	inMsgSerde  commtypes.MessageGSerdeG[string, *ntypes.Event]
+	outMsgSerde commtypes.MessageGSerdeG[ntypes.StartEndTime, *ntypes.Event]
 }
 
 func NewQ7BidByWin(env types.Environment, funcName string) types.FuncHandler {
@@ -104,13 +106,12 @@ func (h *q7BidByWin) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	return []*producer_consumer.MeteredConsumer{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
-func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+func (h *q7BidByWin) setupSerde(serdeFormat commtypes.SerdeFormat) *common.FnOutput {
 	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	inMsgSerde, err := commtypes.GetMsgGSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
+	h.inMsgSerde, err = commtypes.GetMsgGSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -118,19 +119,28 @@ func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *com
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	outMsgSerde, err := commtypes.GetMsgGSerdeG(serdeFormat, seSerde, eventSerde)
+	h.outMsgSerde, err = commtypes.GetMsgGSerdeG(serdeFormat, seSerde, eventSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	return nil
+}
+
+func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	fn_out := h.setupSerde(serdeFormat)
+	if fn_out != nil {
+		return fn_out
+	}
 	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	ectx := processor.NewExecutionContext(srcs, sinks_arr,
 		h.funcName, sp.ScaleEpoch, sp.ParNum)
 	tw, err := commtypes.NewTimeWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(2)*time.Second)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	filterProc := processor.NewStreamFilterProcessorG[string, *ntypes.Event]("filterBids",
 		processor.PredicateFuncG[string, *ntypes.Event](
@@ -150,7 +160,7 @@ func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *com
 				win := ntypes.StartEndTime{StartTimeMs: windowStart, EndTimeMs: wEnd}
 				return optional.Some(win), nil
 			}))
-	outProc := processor.NewGroupByOutputProcessorG("bidByWinProc", sinks_arr[0], &ectx, outMsgSerde)
+	outProc := processor.NewGroupByOutputProcessorG("bidByWinProc", sinks_arr[0], &ectx, h.outMsgSerde)
 	filterProc.NextProcessor(selectProc)
 	selectProc.NextProcessor(outProc)
 	task := stream_task.NewStreamTaskBuilder().
@@ -160,7 +170,7 @@ func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *com
 			return stream_task.CommonProcess(ctx, task, args.(*processor.BaseExecutionContext),
 				func(ctx context.Context, msg commtypes.MessageG[string, *ntypes.Event], argsTmp interface{}) error {
 					return filterProc.Process(ctx, msg)
-				}, inMsgSerde)
+				}, h.inMsgSerde)
 		}).
 		Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],

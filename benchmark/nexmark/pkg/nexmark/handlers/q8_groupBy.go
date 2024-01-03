@@ -20,8 +20,10 @@ import (
 )
 
 type q8GroupByHandler struct {
-	env      types.Environment
-	funcName string
+	env         types.Environment
+	funcName    string
+	msgSerde    commtypes.MessageGSerdeG[string, *ntypes.Event]
+	outMsgSerde commtypes.MessageGSerdeG[uint64, *ntypes.Event]
 }
 
 func NewQ8GroupByHandler(env types.Environment, funcName string) types.FuncHandler {
@@ -84,23 +86,31 @@ func (h *q8GroupByHandler) getExecutionCtx(ctx context.Context, sp *common.Query
 	return ectx, err
 }
 
-func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+func (h *q8GroupByHandler) setupSerde(sf uint8) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sf)
 	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
 	if err != nil {
 		return &common.FnOutput{Message: fmt.Sprintf("get event serde err: %v", err), Success: false}
 	}
-	msgSerde, err := commtypes.GetMsgGSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
+	h.msgSerde, err = commtypes.GetMsgGSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
+	}
+	h.outMsgSerde, err = commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	return nil
+}
+
+func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	fn_out := h.setupSerde(sp.SerdeFormat)
+	if fn_out != nil {
+		return fn_out
 	}
 	ectx, err := h.getExecutionCtx(ctx, sp)
 	if err != nil {
 		return &common.FnOutput{Success: false, Message: err.Error()}
-	}
-	outMsgSerde, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
-	if err != nil {
-		return common.GenErrFnOutput(err)
 	}
 	aucBySellerIdProc := processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64]("auctionsBySellerIDMap",
 		processor.SelectKeyFuncG[string, *ntypes.Event, uint64](
@@ -108,7 +118,7 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 				v := value.Unwrap()
 				return optional.Some(v.NewAuction.Seller), nil
 			}))
-	groupBySellerIDProc := processor.NewGroupByOutputProcessorG("aucProc", ectx.Producers()[0], &ectx, outMsgSerde)
+	groupBySellerIDProc := processor.NewGroupByOutputProcessorG("aucProc", ectx.Producers()[0], &ectx, h.outMsgSerde)
 	aucBySellerIdProc.NextProcessor(groupBySellerIDProc)
 
 	perByIDProc := processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64]("personsByIDMap",
@@ -117,7 +127,7 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 				v := value.Unwrap()
 				return optional.Some(v.NewPerson.ID), nil
 			}))
-	groupByPerIDProc := processor.NewGroupByOutputProcessorG("perProc", ectx.Producers()[1], &ectx, outMsgSerde)
+	groupByPerIDProc := processor.NewGroupByOutputProcessorG("perProc", ectx.Producers()[1], &ectx, h.outMsgSerde)
 	perByIDProc.NextProcessor(groupByPerIDProc)
 
 	task := stream_task.NewStreamTaskBuilder().
@@ -140,7 +150,7 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 						}
 					}
 					return nil
-				}, msgSerde)
+				}, h.msgSerde)
 		}).Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d",
 		h.funcName, sp.InputTopicNames[0], sp.ParNum)

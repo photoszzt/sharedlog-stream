@@ -22,9 +22,12 @@ import (
 )
 
 type q7MaxBid struct {
-	env      types.Environment
-	funcName string
-	useCache bool
+	env         types.Environment
+	funcName    string
+	useCache    bool
+	inMsgSerde  commtypes.MessageGSerdeG[ntypes.StartEndTime, *ntypes.Event]
+	outMsgSerde commtypes.MessageGSerdeG[uint64, ntypes.StartEndTime]
+	msgSerde    commtypes.MessageGSerdeG[ntypes.StartEndTime, commtypes.ValueTimestampG[uint64]]
 }
 
 const (
@@ -87,8 +90,7 @@ func (h *q7MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 	return []*producer_consumer.MeteredConsumer{src}, []producer_consumer.MeteredProducerIntr{sink}, nil
 }
 
-func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+func (h *q7MaxBid) setupSerde(serdeFormat commtypes.SerdeFormat) *common.FnOutput {
 	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
@@ -97,13 +99,26 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	inMsgSerde, err := commtypes.GetMsgGSerdeG(serdeFormat, seSerde, eventSerde)
+	h.inMsgSerde, err = commtypes.GetMsgGSerdeG(serdeFormat, seSerde, eventSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	outMsgSerde, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, seSerde)
+	h.outMsgSerde, err = commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, seSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
+	}
+	h.msgSerde, err = processor.MsgSerdeWithValueTsG[ntypes.StartEndTime, uint64](serdeFormat, seSerde, commtypes.Uint64SerdeG{})
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	return nil
+}
+
+func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	fn_out := h.setupSerde(serdeFormat)
+	if fn_out != nil {
+		return fn_out
 	}
 	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
@@ -112,12 +127,8 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 	ectx := processor.NewExecutionContext(srcs, sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum)
 
 	maxBidByWinStoreName := "maxBidByWinKVStore"
-	msgSerde, err := processor.MsgSerdeWithValueTsG[ntypes.StartEndTime, uint64](serdeFormat, seSerde, commtypes.Uint64SerdeG{})
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
 	mp, err := store_with_changelog.NewMaterializeParamBuilder[ntypes.StartEndTime, commtypes.ValueTimestampG[uint64]]().
-		MessageSerde(msgSerde).
+		MessageSerde(h.msgSerde).
 		StoreName(maxBidByWinStoreName).
 		ParNum(sp.ParNum).
 		SerdeFormat(serdeFormat).
@@ -169,7 +180,7 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 			) {
 				return value, key, nil
 			}))
-	sinkProc := processor.NewGroupByOutputProcessorG("subG2Proc", sinks_arr[0], &ectx, outMsgSerde)
+	sinkProc := processor.NewGroupByOutputProcessorG("subG2Proc", sinks_arr[0], &ectx, h.outMsgSerde)
 	aggProc.NextProcessor(toStreamProc)
 	toStreamProc.NextProcessor(mapProc)
 	mapProc.NextProcessor(sinkProc)
@@ -180,7 +191,7 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 			return stream_task.CommonProcess(ctx, task, args.(*processor.BaseExecutionContext),
 				func(ctx context.Context, msg commtypes.MessageG[ntypes.StartEndTime, *ntypes.Event], argsTmp interface{}) error {
 					return aggProc.Process(ctx, msg)
-				}, inMsgSerde)
+				}, h.inMsgSerde)
 		}).
 		Build()
 	kvc := map[string]store.KeyValueStoreOpWithChangelog{kvstore.ChangelogTopicName(): aggStore}
@@ -190,7 +201,8 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).
 		KVStoreChangelogs(kvc).Build()
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, func(ctx context.Context, env types.Environment,
-		serdeFormat commtypes.SerdeFormat, rs *snapshot_store.RedisSnapshotStore) error {
+		serdeFormat commtypes.SerdeFormat, rs *snapshot_store.RedisSnapshotStore,
+	) error {
 		payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
 		if err != nil {
 			return err
