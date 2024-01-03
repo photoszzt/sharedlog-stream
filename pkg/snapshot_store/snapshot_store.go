@@ -39,6 +39,30 @@ func NewRedisSnapshotStore(createSnapshot bool) RedisSnapshotStore {
 	}
 }
 
+func (rs *RedisSnapshotStore) StoreAlignChkpt(ctx context.Context, snapshot []byte, tpName string, logOff uint64) error {
+	idx := hashfuncs.NameHash(tpName) % uint64(len(rs.rdb_arr))
+	err := rs.rdb_arr[idx].Set(ctx, tpName, logOff, 0).Err()
+	if err != nil {
+		return err
+	}
+	key := fmt.Sprintf("%s_%#x", tpName, logOff)
+	idx = hashfuncs.NameHash(key) % uint64(len(rs.rdb_arr))
+	fmt.Fprintf(os.Stderr, "store snapshot key: %s at redis[%d]\n", key, idx)
+	return rs.rdb_arr[idx].Set(ctx, key, snapshot, 0).Err()
+}
+
+func (rs *RedisSnapshotStore) GetAlignChkpt(ctx context.Context, tpName string) ([]byte, error) {
+	idx := hashfuncs.NameHash(tpName) % uint64(len(rs.rdb_arr))
+	logOff, err := rs.rdb_arr[idx].Get(ctx, tpName).Uint64()
+	if err != nil {
+		return nil, err
+	}
+	key := fmt.Sprintf("%s_%#x", tpName, logOff)
+	idx = hashfuncs.NameHash(key) % uint64(len(rs.rdb_arr))
+	fmt.Fprintf(os.Stderr, "get snapshot key: %s at redis[%d]\n", key, idx)
+	return rs.rdb_arr[idx].Get(ctx, key).Bytes()
+}
+
 func (rs *RedisSnapshotStore) StoreSnapshot(ctx context.Context, env types.Environment,
 	snapshot []byte, changelogTpName string, logOff uint64,
 ) error {

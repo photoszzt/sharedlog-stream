@@ -58,7 +58,8 @@ type SetupSnapshotCallbackFunc func(ctx context.Context, env types.Environment, 
 	rs *snapshot_store.RedisSnapshotStore) error
 
 func EmptySetupSnapshotCallback(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
-	rs *snapshot_store.RedisSnapshotStore) error {
+	rs *snapshot_store.RedisSnapshotStore,
+) error {
 	return nil
 }
 
@@ -86,7 +87,7 @@ func ExecuteApp(ctx context.Context,
 			return &common.FnOutput{Success: false, Message: err.Error()}
 		}
 		debug.Fprint(os.Stderr, "begin epoch processing\n")
-		ret = processInEpoch(ctx, t, em, cmm, streamTaskArgs, &rs)
+		ret = processInEpoch(ctx, t, em, cmm, streamTaskArgs)
 		debug.Fprintf(os.Stderr, "epoch ret: %v\n", ret)
 	} else if streamTaskArgs.guarantee == exactly_once_intr.AT_LEAST_ONCE {
 		debug.Fprint(os.Stderr, "begin at least once epoch processing\n")
@@ -97,9 +98,9 @@ func ExecuteApp(ctx context.Context,
 		ret = processNoProto(ctx, t, streamTaskArgs)
 		debug.Fprintf(os.Stderr, "unsafe ret: %v\n", ret)
 	} else if streamTaskArgs.guarantee == exactly_once_intr.ALIGN_CHKPT {
+		_ = snapshot_store.NewRedisSnapshotStore(true)
 		debug.Fprintf(os.Stderr, "begin align checkpoint processing\n")
-		// TODO: unimplemented
-		return &common.FnOutput{Success: false, Message: "unimplemented"}
+		ret = processAlignChkpt(ctx, t, streamTaskArgs)
 	} else {
 		fmt.Fprintf(os.Stderr, "unrecognized guarantee: %v\n", streamTaskArgs.guarantee)
 		return &common.FnOutput{Success: false, Message: "unrecognized guarantee"}
@@ -192,7 +193,8 @@ func handleCtrlMsg(ctx context.Context, ctrlRawMsg commtypes.RawMsgAndSeq,
 	} else {
 		return &common.FnOutput{
 			Success: false,
-			Message: fmt.Sprintf("unexpected ctrl msg with mark: %v", ctrlRawMsg.Mark)}
+			Message: fmt.Sprintf("unexpected ctrl msg with mark: %v", ctrlRawMsg.Mark),
+		}
 	}
 }
 

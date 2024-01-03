@@ -7,7 +7,6 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stats"
-	"time"
 )
 
 func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.FnOutput {
@@ -23,17 +22,8 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 		args.warmup, args.flushEvery, args.waitEndMark)
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
 	warmupCheck.StartWarmup()
-	flushTimer := time.Now()
 	gotEndMark := false
 	for {
-		timeSinceLastFlush := time.Since(flushTimer)
-		if timeSinceLastFlush >= args.flushEvery {
-			ret_err := timedFlushStreams(ctx, t, args)
-			if ret_err != nil {
-				return ret_err
-			}
-			flushTimer = time.Now()
-		}
 		warmupCheck.Check()
 		if (!args.waitEndMark && args.duration != 0 && warmupCheck.ElapsedSinceInitial() >= args.duration) || gotEndMark {
 			break
@@ -48,6 +38,11 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 		ctrlRawMsg, ok := ctrlRawMsgOp.Take()
 		if ok {
 			fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
+			if t.pauseFunc != nil {
+				if ret := t.pauseFunc(); ret != nil {
+					return ret
+				}
+			}
 			if t.pauseFunc != nil {
 				if ret := t.pauseFunc(); ret != nil {
 					return ret

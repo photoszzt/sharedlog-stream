@@ -196,7 +196,6 @@ func processInEpoch(
 	em *epoch_manager.EpochManager,
 	cmm *control_channel.ControlChannelManager,
 	args *StreamTaskArgs,
-	rs *snapshot_store.RedisSnapshotStore,
 ) *common.FnOutput {
 	trackStreamAndConfigureExactlyOnce(args, em,
 		func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {})
