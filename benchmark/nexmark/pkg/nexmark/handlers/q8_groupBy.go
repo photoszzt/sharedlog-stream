@@ -154,9 +154,12 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 		}).Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d",
 		h.funcName, sp.InputTopicNames[0], sp.ParNum)
-	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).
 		Build()
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, stream_task.EmptySetupSnapshotCallback,
 		func() {
 			groupByPerIDProc.OutputRemainingStats()

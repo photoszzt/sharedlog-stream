@@ -102,6 +102,9 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 		sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
 	builder := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)
-	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp, builder).Build()
+	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp, builder).Build()
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, stream_task.EmptySetupSnapshotCallback, func() { outProc.OutputRemainingStats() })
 }

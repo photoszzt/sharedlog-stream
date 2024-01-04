@@ -254,9 +254,12 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum),
 		true, msgSerdePair, msgSerdePair, "subG2")
 	transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
-	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
 		KVStoreChangelogs(kvc).FixedOutParNum(sp.ParNum).Build()
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, setupSnapFunc, func() {
 		procArgs.OutputRemainingStats()
 	})

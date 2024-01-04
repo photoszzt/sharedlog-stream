@@ -112,8 +112,11 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 				}, h.inMsgSerde)
 		}).Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName, sp.InputTopicNames[0], sp.ParNum)
-	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).Build()
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, stream_task.EmptySetupSnapshotCallback, func() {
 		groupByAucIDProc.OutputRemainingStats()
 		groupBidByAucIDProc.OutputRemainingStats()

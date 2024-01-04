@@ -286,45 +286,42 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 			for tp, kms := range ctrlMeta.KeyMaps {
 				kvc, hasKVC := kvchangelog[tp]
 				wsc, hasWSC := wschangelog[tp]
+				var pars data_structure.Uint8Set
+				var parNum uint8
+				var ok bool
+				var isKV bool
 				if hasKVC {
+					pars, ok = extraParToRestoreKV[tp]
+					parNum = kvc.Stream().NumPartition()
+					isKV = true
+				} else if hasWSC {
+					pars, ok = extraParToRestoreWS[tp]
+					parNum = wsc.Stream().NumPartition()
+					isKV = false
+				}
+				if hasKVC || hasWSC {
+					if !ok {
+						pars = data_structure.NewUint8Set()
+					}
 					for _, km := range kms {
 						// compute the new key assignment
-						par := uint8(km.Hash % uint64(kvc.Stream().NumPartition()))
+						par := uint8(km.Hash % uint64(parNum))
 						// if this key is managed by this task and it was managed by another task in the previous configuration
 						if par == cmm.instanceID && km.SubstreamId != cmm.instanceID {
-							pars, ok := extraParToRestoreKV[tp]
-							if !ok {
-								pars = data_structure.NewUint8Set()
-							}
 							if !pars.Has(km.SubstreamId) {
 								fmt.Fprintf(os.Stderr, "[%d] restore par %d\n", cmm.instanceID, km.SubstreamId)
-								w := restoreWork{topic: tp, isKV: true, parNum: km.SubstreamId}
+								w := restoreWork{topic: tp, isKV: isKV, parNum: km.SubstreamId}
 								bgGrp.Go(func() error {
 									return cmm.restoreFunc(bgCtx, createSnapshot, w, kvchangelog, wschangelog, rs)
 								})
 								pars.Add(km.SubstreamId)
-								extraParToRestoreKV[tp] = pars
 							}
 						}
 					}
-				} else if hasWSC {
-					for _, km := range kms {
-						par := uint8(km.Hash % uint64(wsc.Stream().NumPartition()))
-						if par == cmm.instanceID && km.SubstreamId != cmm.instanceID {
-							pars, ok := extraParToRestoreWS[tp]
-							if !ok {
-								pars = data_structure.NewUint8Set()
-							}
-							if !pars.Has(km.SubstreamId) {
-								fmt.Fprintf(os.Stderr, "[%d] restore par %d\n", cmm.instanceID, km.SubstreamId)
-								w := restoreWork{topic: tp, isKV: false, parNum: km.SubstreamId}
-								bgGrp.Go(func() error {
-									return cmm.restoreFunc(bgCtx, createSnapshot, w, kvchangelog, wschangelog, rs)
-								})
-								pars.Add(km.SubstreamId)
-								extraParToRestoreWS[tp] = pars
-							}
-						}
+					if hasKVC {
+						extraParToRestoreKV[tp] = pars
+					} else {
+						extraParToRestoreWS[tp] = pars
 					}
 				}
 			}

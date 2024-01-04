@@ -31,6 +31,7 @@ type StreamTaskArgs struct {
 	serdeFormat              commtypes.SerdeFormat
 	guarantee                exactly_once_intr.GuaranteeMth
 	waitEndMark              bool
+	epochMarkerSerde         commtypes.SerdeG[commtypes.EpochMarker]
 }
 
 type StreamTaskArgsBuilder struct {
@@ -90,7 +91,7 @@ type SetBufMaxSize interface {
 }
 
 type BuildStreamTaskArgs interface {
-	Build() *StreamTaskArgs
+	Build() (*StreamTaskArgs, error)
 	WindowStoreChangelogs(map[string]store.WindowStoreOpWithChangelog) BuildStreamTaskArgs
 	KVStoreChangelogs(map[string]store.KeyValueStoreOpWithChangelog) BuildStreamTaskArgs
 	FixedOutParNum(uint8) BuildStreamTaskArgs
@@ -133,10 +134,12 @@ func (args *StreamTaskArgsBuilder) Duration(duration uint32) SetSerdeFormat {
 	args.stArgs.duration = time.Duration(duration) * time.Second
 	return args
 }
+
 func (args *StreamTaskArgsBuilder) SerdeFormat(serdeFormat commtypes.SerdeFormat) SetBufMaxSize {
 	args.stArgs.serdeFormat = serdeFormat
 	return args
 }
+
 func (args *StreamTaskArgsBuilder) BufMaxSize(bufMaxSize uint32) BuildStreamTaskArgs {
 	args.stArgs.bufMaxSize = bufMaxSize
 	return args
@@ -167,6 +170,11 @@ func (args *StreamTaskArgsBuilder) TestParams(testParams map[string]commtypes.Fa
 	return args
 }
 
-func (args *StreamTaskArgsBuilder) Build() *StreamTaskArgs {
-	return args.stArgs
+func (args *StreamTaskArgsBuilder) Build() (*StreamTaskArgs, error) {
+	var err error
+	args.stArgs.epochMarkerSerde, err = commtypes.GetEpochMarkerSerdeG(args.stArgs.serdeFormat)
+	if err != nil {
+		return nil, err
+	}
+	return args.stArgs, nil
 }

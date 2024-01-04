@@ -238,7 +238,10 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 		sp.ParNum, sp.OutputTopicNames[0])
 	builder := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)
-	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp, builder).
+	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp, builder).
 		WindowStoreChangelogs(wsc).Build()
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, setSnapCallbackFunc, func() { outProc.OutputRemainingStats() })
 }

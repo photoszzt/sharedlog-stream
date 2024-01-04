@@ -151,9 +151,12 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 					return nil
 				}, h.inMsgSerde)
 		}).Build()
-	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,
 			fmt.Sprintf("%s-%s-%d", h.funcName, sp.InputTopicNames[0], sp.ParNum))).Build()
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, stream_task.EmptySetupSnapshotCallback, func() {
 		grouBySellerProc.OutputRemainingStats()
 		groupByPerIDProc.OutputRemainingStats()

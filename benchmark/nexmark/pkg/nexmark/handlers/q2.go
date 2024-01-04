@@ -69,7 +69,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 	}
 	srcs, sinks, err := getSrcSink(ctx, h.env, sp)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	srcs[0].SetInitialSource(true)
 	sinks[0].MarkFinalOutput()
@@ -89,10 +89,13 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 		}).
 		Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
-	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).
 		FixedOutParNum(sp.ParNum).
 		Build()
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, stream_task.EmptySetupSnapshotCallback, func() {
 		outProc.OutputRemainingStats()
 	})

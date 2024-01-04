@@ -199,11 +199,14 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	kvc := map[string]store.KeyValueStoreOpWithChangelog{kvstore.ChangelogTopicName(): kvstore}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 		sp.ParNum, sp.OutputTopicNames[0])
-	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).
-		KVStoreChangelogs(kvc).
 		FixedOutParNum(sp.ParNum).
+		KVStoreChangelogs(kvc).
 		Build()
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, func(ctx context.Context,
 		env types.Environment, serdeFormat commtypes.SerdeFormat, rs *snapshot_store.RedisSnapshotStore,
 	) error {

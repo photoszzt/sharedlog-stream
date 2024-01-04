@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/env_config"
@@ -142,48 +143,22 @@ func handleCtrlMsg(ctx context.Context, ctrlRawMsg commtypes.RawMsgAndSeq,
 				false, t.GetEndDuration(), args.ectx.SubstreamNum())
 		}
 		return ret
-	} else if ctrlRawMsg.Mark == commtypes.CHKPT_MARK {
-		ret := &common.FnOutput{Success: true}
-		if args.guarantee == exactly_once_intr.ALIGN_CHKPT {
-		}
-		return ret
+	} else if ctrlRawMsg.Mark == commtypes.CHKPT_MARK && args.guarantee != exactly_once_intr.ALIGN_CHKPT {
+		return common.GenErrFnOutput(common_errors.ErrChkptMarkerInvalidGuarantee)
 	} else if ctrlRawMsg.Mark == commtypes.STREAM_END {
-		epochMarkerSerde, err := commtypes.GetEpochMarkerSerdeG(args.serdeFormat)
-		if err != nil {
-			return common.GenErrFnOutput(err)
-		}
 		epochMarker := commtypes.EpochMarker{
 			StartTime: ctrlRawMsg.StartTime,
 			Mark:      commtypes.STREAM_END,
 			ProdIndex: args.ectx.SubstreamNum(),
 		}
-		encoded, err := epochMarkerSerde.Encode(epochMarker)
+		encoded, err := args.epochMarkerSerde.Encode(epochMarker)
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}
 		ctrlRawMsg.Payload = encoded
-		for _, sink := range args.ectx.Producers() {
-			if args.fixedOutParNum >= 0 {
-				// debug.Fprintf(os.Stderr, "produce stream end mark to %s %d\n",
-				// 	sink.Stream().TopicName(), ectx.SubstreamNum())
-				_, err := sink.ProduceCtrlMsg(ctx, ctrlRawMsg, []uint8{args.ectx.SubstreamNum()})
-				if err != nil {
-					return &common.FnOutput{Success: false, Message: err.Error()}
-				}
-				fmt.Fprintf(os.Stderr, "%d produce stream end mark to %s %v\n",
-					args.ectx.SubstreamNum(), sink.TopicName(), args.fixedOutParNum)
-			} else {
-				parNums := make([]uint8, 0, sink.Stream().NumPartition())
-				for par := uint8(0); par < sink.Stream().NumPartition(); par++ {
-					parNums = append(parNums, par)
-				}
-				_, err := sink.ProduceCtrlMsg(ctx, ctrlRawMsg, parNums)
-				if err != nil {
-					return &common.FnOutput{Success: false, Message: err.Error()}
-				}
-				fmt.Fprintf(os.Stderr, "%d produce stream end mark to %s %v\n",
-					args.ectx.SubstreamNum(), sink.TopicName(), parNums)
-			}
+		fn_out := forwardMsg(ctx, ctrlRawMsg, args, "stream end mark")
+		if fn_out != nil {
+			return fn_out
 		}
 		t.SetEndDuration(ctrlRawMsg.StartTime)
 		ret := &common.FnOutput{Success: true}
@@ -191,10 +166,8 @@ func handleCtrlMsg(ctx context.Context, ctrlRawMsg commtypes.RawMsgAndSeq,
 			args.waitEndMark, t.GetEndDuration(), args.ectx.SubstreamNum())
 		return ret
 	} else {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("unexpected ctrl msg with mark: %v", ctrlRawMsg.Mark),
-		}
+		return common.GenErrFnOutput(
+			fmt.Errorf("unexpected ctrl msg with mark: %v", ctrlRawMsg.Mark))
 	}
 }
 
@@ -479,31 +452,20 @@ func initAfterMarkOrCommit(ctx context.Context, t *StreamTask, args *StreamTaskA
 	return nil
 }
 
-func handleScaleEpochAndBytes(ctx context.Context, msg commtypes.RawMsgAndSeq,
+func forwardMsg(
+	ctx context.Context,
+	msg commtypes.RawMsgAndSeq,
 	args *StreamTaskArgs,
+	name string,
 ) *common.FnOutput {
-	epochMarkerSerde, err := commtypes.GetEpochMarkerSerdeG(args.serdeFormat)
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
-	epochMarker := commtypes.EpochMarker{
-		ScaleEpoch: msg.ScaleEpoch,
-		Mark:       commtypes.SCALE_FENCE,
-		ProdIndex:  args.ectx.SubstreamNum(),
-	}
-	encoded, err := epochMarkerSerde.Encode(epochMarker)
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
-	msg.Payload = encoded
 	for _, sink := range args.ectx.Producers() {
 		if args.fixedOutParNum >= 0 {
 			_, err := sink.ProduceCtrlMsg(ctx, msg, []uint8{args.ectx.SubstreamNum()})
 			if err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
+				return common.GenErrFnOutput(err)
 			}
-			fmt.Fprintf(os.Stderr, "%d forward scale fence to %s(%d)\n",
-				args.ectx.SubstreamNum(), sink.TopicName(), args.fixedOutParNum)
+			fmt.Fprintf(os.Stderr, "%d forward %s to %s(%d)\n",
+				args.ectx.SubstreamNum(), name, sink.TopicName(), args.fixedOutParNum)
 		} else {
 			parNums := make([]uint8, 0, sink.Stream().NumPartition())
 			for par := uint8(0); par < sink.Stream().NumPartition(); par++ {
@@ -511,15 +473,35 @@ func handleScaleEpochAndBytes(ctx context.Context, msg commtypes.RawMsgAndSeq,
 			}
 			_, err := sink.ProduceCtrlMsg(ctx, msg, parNums)
 			if err != nil {
-				return &common.FnOutput{Success: false, Message: err.Error()}
+				return common.GenErrFnOutput(err)
 			}
-			fmt.Fprintf(os.Stderr, "%d forward scale fence to %s(%v)\n",
-				args.ectx.SubstreamNum(), sink.TopicName(), parNums)
+			fmt.Fprintf(os.Stderr, "%d forward %s to %s(%v)\n",
+				args.ectx.SubstreamNum(), name, sink.TopicName(), parNums)
 		}
+	}
+	return nil
+}
+
+func handleScaleEpochAndBytes(ctx context.Context, msg commtypes.RawMsgAndSeq,
+	args *StreamTaskArgs,
+) *common.FnOutput {
+	epochMarker := commtypes.EpochMarker{
+		ScaleEpoch: msg.ScaleEpoch,
+		Mark:       commtypes.SCALE_FENCE,
+		ProdIndex:  args.ectx.SubstreamNum(),
+	}
+	encoded, err := args.epochMarkerSerde.Encode(epochMarker)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	msg.Payload = encoded
+	fn_out := forwardMsg(ctx, msg, args, "scale fence")
+	if fn_out != nil {
+		return fn_out
 	}
 	err = args.ectx.RecordFinishFunc()(ctx, args.ectx.FuncName(), args.ectx.SubstreamNum())
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	return &common.FnOutput{
 		Success: true,

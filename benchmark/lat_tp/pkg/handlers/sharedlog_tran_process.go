@@ -114,7 +114,7 @@ func (h *sharedlogTranProcessHandler) sharedlogTranProcess(ctx context.Context, 
 					return outProc.Process(ctx, msg)
 				}, h.msgSerde)
 		}).Build()
-	streamTaskArgs := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,
+	streamTaskArgs, err := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,
 		fmt.Sprintf("tranProcess-%s-%d-%s", sp.InTopicName,
 			0, sp.OutTopicName)).
 		Guarantee(exactly_once_intr.EPOCH_MARK).
@@ -126,6 +126,9 @@ func (h *sharedlogTranProcessHandler) sharedlogTranProcess(ctx context.Context, 
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
 		BufMaxSize(sp.BufMaxSize).
 		WaitEndMark(false).FixedOutParNum(0).Build()
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, stream_task.EmptySetupSnapshotCallback,
 		func() {
 			outProc.OutputRemainingStats()

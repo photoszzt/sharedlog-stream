@@ -255,10 +255,15 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		ctx, bJoinM, mJoinB, proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum), true,
 		msgPairLeft, msgPairRight, "subG2")
-	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs,
 			fmt.Sprintf("%s-%d", h.funcName, sp.ParNum))).
-		WindowStoreChangelogs(wsc).FixedOutParNum(sp.ParNum).Build()
+		FixedOutParNum(sp.ParNum).
+		WindowStoreChangelogs(wsc).
+		Build()
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, setupSnapCallbackFunc,
 		func() { procArgs.OutputRemainingStats() })
 }

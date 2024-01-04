@@ -208,9 +208,12 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 	kvc := map[string]store.KeyValueStoreOpWithChangelog{aggStore.ChangelogTopicName(): aggStore}
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
 		sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
-	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).
 		KVStoreChangelogs(kvc).Build()
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, func(ctx context.Context, env types.Environment,
 		serdeFormat commtypes.SerdeFormat, rs *snapshot_store.RedisSnapshotStore,
 	) error {

@@ -99,8 +99,11 @@ func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInpu
 		Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, input.InputTopicNames[0],
 		input.ParNum, input.OutputTopicNames[0])
-	streamTaskArgs := benchutil.UpdateStreamTaskArgs(input,
+	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(input,
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).Build()
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, stream_task.EmptySetupSnapshotCallback,
 		func() { outProc.OutputRemainingStats() })
 }

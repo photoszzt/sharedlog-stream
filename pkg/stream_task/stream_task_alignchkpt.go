@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/stats"
 )
@@ -43,16 +44,13 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 					return ret
 				}
 			}
-			if t.pauseFunc != nil {
-				if ret := t.pauseFunc(); ret != nil {
-					return ret
-				}
-			}
 			ret_err := timedFlushStreams(ctx, t, args)
 			if ret_err != nil {
 				return ret_err
 			}
-			return handleCtrlMsg(ctx, ctrlRawMsg, t, args, &warmupCheck)
+			if ctrlRawMsg.Mark != commtypes.CHKPT_MARK {
+				return handleCtrlMsg(ctx, ctrlRawMsg, t, args, &warmupCheck)
+			}
 		}
 	}
 	if t.pauseFunc != nil {

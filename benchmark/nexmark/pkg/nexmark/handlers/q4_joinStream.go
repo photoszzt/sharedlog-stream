@@ -258,8 +258,11 @@ func (h *q4JoinStreamHandler) Q4JoinStream(ctx context.Context, sp *common.Query
 		msgSerdePair, msgSerdePair, "subG2")
 	transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName,
 		sp.InputTopicNames[0], sp.ParNum)
-	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
 		WindowStoreChangelogs(wsc).FixedOutParNum(sp.ParNum).Build()
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, setSnapFunc, func() { procArgs.OutputRemainingStats() })
 }

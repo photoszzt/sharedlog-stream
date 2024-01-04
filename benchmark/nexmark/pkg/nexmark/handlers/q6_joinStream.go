@@ -247,8 +247,13 @@ func (h *q6JoinStreamHandler) Q6JoinStream(ctx context.Context, sp *common.Query
 		msgSerdePair, msgSerdePair, "subG2")
 	transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName,
 		sp.InputTopicNames[0], sp.ParNum)
-	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
-		WindowStoreChangelogs(wsc).FixedOutParNum(sp.ParNum).Build()
+		FixedOutParNum(sp.ParNum).
+		WindowStoreChangelogs(wsc).
+		Build()
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, setupSnapCallbackFunc, func() { procArgs.OutputRemainingStats() })
 }

@@ -79,12 +79,15 @@ func emptyFunc(ctx context.Context, sp *common.QueryInput,
 				}, msgSerde)
 		}).
 		Build()
-	streamTaskArgs := benchutil.UpdateStreamTaskArgs(sp,
+	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(env, &ectx,
 			fmt.Sprintf("%s-%s-%d-%s", funcName, sp.InputTopicNames[0],
 				sp.ParNum, sp.OutputTopicNames[0]))).
 		FixedOutParNum(sp.ParNum).
 		Build()
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, stream_task.EmptySetupSnapshotCallback,
 		func() {
 			outProc.OutputRemainingStats()

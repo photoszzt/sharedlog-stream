@@ -127,9 +127,10 @@ func SetupTableTableJoinWithSkipmap[K, VLeft, VRight, VR any](
 		}
 		return nil, nil
 	}
-	// leftKVC = map[string]store.KeyValueStoreOpWithChangelog{leftTab.ChangelogTopicName(): leftTab}
-	// rightKVC = map[string]store.KeyValueStoreOpWithChangelog{rightTab.ChangelogTopicName(): rightTab}
-	kvc = map[string]store.KeyValueStoreOpWithChangelog{leftTab.ChangelogTopicName(): leftTab, rightTab.ChangelogTopicName(): rightTab}
+	kvc = map[string]store.KeyValueStoreOpWithChangelog{
+		leftTab.ChangelogTopicName():  leftTab,
+		rightTab.ChangelogTopicName(): rightTab,
+	}
 	setupSnapFunc = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
 		rs *snapshot_store.RedisSnapshotStore,
 	) error {
