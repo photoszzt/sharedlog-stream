@@ -43,19 +43,23 @@ type OnlyUpdateInMemStoreG[K, V any] interface {
 	PutWithoutPushToChangelogG(ctx context.Context, key K, value V) error
 }
 
-type KeyValueStoreOpWithChangelog interface {
-	StoreBackedByChangelog
-	RestoreFromChangelog
-	UpdateTrackParFunc
-	ChangelogIsSrc() bool
+type KeyValueStoreOp interface {
 	OnlyUpdateInMemStore
-	ProduceRangeRecording
-	SubstreamNum() uint8
 	Snapshot(logOff uint64)
 	WaitForAllSnapshot() error
 	RestoreFromSnapshot(snapshot [][]byte) error
 	BuildKeyMeta(ctx context.Context, kms map[string][]txn_data.KeyMaping) error
+}
+
+type KeyValueStoreOpWithChangelog interface {
+	StoreBackedByChangelog
+	RestoreFromChangelog
+	ChangelogIsSrc() bool
+	UpdateTrackParFunc
+	ProduceRangeRecording
 	FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error)
+	SubstreamNum() uint8
+	KeyValueStoreOp
 }
 
 type KeyValueStoreBackedByChangelogG[K, V any] interface {

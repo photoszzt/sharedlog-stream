@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
@@ -12,7 +11,6 @@ import (
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
-	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
@@ -166,9 +164,18 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 		return &common.FnOutput{Success: false, Message: err.Error()}
 	}
 	ectx := processor.NewExecutionContext(srcs, sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum)
-	aggStore, fn_out := h.setupAggStore(ctx, sp)
-	if fn_out != nil {
-		return fn_out
+	aggStore, builder, snapfunc, err := getKVStoreAndStreamArgs(ctx, h.env, sp,
+		&KVStoreStreamArgsParam[ntypes.StartEndTime, uint64]{
+			StoreName: "q7MaxBidByWinKVStore",
+			FuncName:  h.funcName,
+			MsgSerde:  h.msgSerde,
+			Compare:   compareStartEndTime,
+			SizeofK:   ntypes.SizeOfStartEndTime,
+			SizeofV:   commtypes.SizeOfUint64,
+			UseCache:  h.useCache,
+		}, &ectx)
+	if err != nil {
+		return common.GenErrFnOutput(err)
 	}
 	aggProc := processor.NewMeteredProcessorG(
 		processor.NewStreamAggregateProcessorG[ntypes.StartEndTime, *ntypes.Event, uint64]("maxBid",
@@ -205,23 +212,9 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 				}, h.inMsgSerde)
 		}).
 		Build()
-	kvc := map[string]store.KeyValueStoreOpWithChangelog{aggStore.ChangelogTopicName(): aggStore}
-	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
-		sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
-	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).
-		KVStoreChangelogs(kvc).Build()
+	streamTaskArgs, err := builder.Build()
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, func(ctx context.Context, env types.Environment,
-		serdeFormat commtypes.SerdeFormat, rs *snapshot_store.RedisSnapshotStore,
-	) error {
-		payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
-		if err != nil {
-			return err
-		}
-		stream_task.SetKVStoreWithChangelogSnapshot[ntypes.StartEndTime, commtypes.ValueTimestampG[uint64]](ctx, env, rs, aggStore, payloadSerde)
-		return nil
-	}, func() { sinkProc.OutputRemainingStats() })
+	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, snapfunc, func() { sinkProc.OutputRemainingStats() })
 }

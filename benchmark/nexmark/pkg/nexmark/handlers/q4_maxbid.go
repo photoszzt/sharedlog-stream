@@ -11,9 +11,6 @@ import (
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
-	"sharedlog-stream/pkg/snapshot_store"
-	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
 	"time"
 
@@ -122,48 +119,6 @@ func (h *q4MaxBid) setupSerde(serdeFormat commtypes.SerdeFormat) *common.FnOutpu
 	return nil
 }
 
-func (h *q4MaxBid) setupAggStore(ctx context.Context, sp *common.QueryInput) (
-	store.CachedKeyValueStoreBackedByChangelogG[ntypes.AuctionIdCategory, commtypes.ValueTimestampG[uint64]],
-	*common.FnOutput,
-) {
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	maxBidStoreName := "q4MaxBidKVStore"
-	mp, err := store_with_changelog.NewMaterializeParamBuilder[ntypes.AuctionIdCategory, commtypes.ValueTimestampG[uint64]]().
-		MessageSerde(h.msgSerde).
-		StoreName(maxBidStoreName).
-		ParNum(sp.ParNum).
-		SerdeFormat(serdeFormat).
-		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
-			Env:           h.env,
-			NumPartition:  sp.NumChangelogPartition,
-			TimeOut:       common.SrcConsumeTimeout,
-			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
-		}).BufMaxSize(sp.BufMaxSize).Build()
-	if err != nil {
-		return nil, common.GenErrFnOutput(err)
-	}
-	compare := func(a, b ntypes.AuctionIdCategory) bool {
-		return ntypes.CompareAuctionIdCategory(&a, &b) < 0
-	}
-	var aggStore store.CachedKeyValueStoreBackedByChangelogG[ntypes.AuctionIdCategory, commtypes.ValueTimestampG[uint64]]
-	kvstore, err := store_with_changelog.CreateInMemorySkipmapKVTableWithChangelogG(mp,
-		store.LessFunc[ntypes.AuctionIdCategory](compare))
-	if err != nil {
-		return nil, common.GenErrFnOutput(err)
-	}
-	if h.useCache {
-		sizeOfVTs := commtypes.ValueTimestampGSize[uint64]{
-			ValSizeFunc: commtypes.SizeOfUint64,
-		}
-		cacheStore := store.NewCachingKeyValueStoreG[ntypes.AuctionIdCategory, commtypes.ValueTimestampG[uint64]](
-			ctx, kvstore, ntypes.SizeOfAuctionIdCategory, sizeOfVTs.SizeOfValueTimestamp, q4SizePerStore)
-		aggStore = cacheStore
-	} else {
-		aggStore = kvstore
-	}
-	return aggStore, nil
-}
-
 func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	fn_out := h.setupSerde(serdeFormat)
@@ -174,9 +129,22 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	aggStore, fn_out := h.setupAggStore(ctx, sp)
-	if fn_out != nil {
-		return fn_out
+	compare := func(a, b ntypes.AuctionIdCategory) bool {
+		return ntypes.CompareAuctionIdCategory(&a, &b) < 0
+	}
+	aggStore, builder, snapfunc, err := getKVStoreAndStreamArgs(ctx, h.env, sp,
+		&KVStoreStreamArgsParam[ntypes.AuctionIdCategory, uint64]{
+			StoreName: "q4MaxBidKVStore",
+			FuncName:  h.funcName,
+			MsgSerde:  h.msgSerde,
+			Compare:   compare,
+			SizeofK:   ntypes.SizeOfAuctionIdCategory,
+			SizeofV:   commtypes.SizeOfUint64,
+			UseCache:  h.useCache,
+		},
+		&ectx)
+	if err != nil {
+		return common.GenErrFnOutput(err)
 	}
 	aggProc := processor.NewMeteredProcessorG(
 		processor.NewStreamAggregateProcessorG[ntypes.AuctionIdCategory, *ntypes.AuctionBid, uint64]("maxBid",
@@ -213,25 +181,10 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 				}, h.inMsgSerde)
 		}).
 		Build()
-
-	kvc := map[string]store.KeyValueStoreOpWithChangelog{aggStore.ChangelogTopicName(): aggStore}
-	builder := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,
-		fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
-			sp.ParNum, sp.OutputTopicNames[0]))
-	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp, builder).
-		KVStoreChangelogs(kvc).Build()
+	streamTaskArgs, err := builder.Build()
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	return stream_task.ExecuteApp(ctx, task, streamTaskArgs, func(ctx context.Context,
-		env types.Environment, serdeFormat commtypes.SerdeFormat,
-		rs *snapshot_store.RedisSnapshotStore,
-	) error {
-		payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
-		if err != nil {
-			return err
-		}
-		stream_task.SetKVStoreWithChangelogSnapshot[ntypes.AuctionIdCategory, commtypes.ValueTimestampG[uint64]](ctx, env, rs, aggStore, payloadSerde)
-		return nil
-	}, func() { sinkProc.OutputRemainingStats() })
+	return stream_task.ExecuteApp(ctx, task, streamTaskArgs,
+		snapfunc, func() { sinkProc.OutputRemainingStats() })
 }

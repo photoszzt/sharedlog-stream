@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
@@ -11,9 +10,7 @@ import (
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
-	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
 	"time"
 
@@ -108,33 +105,6 @@ func (h *q4Avg) setupSerde(serdeFormat commtypes.SerdeFormat) *common.FnOutput {
 	return nil
 }
 
-func (h *q4Avg) setupAggStore(sp *common.QueryInput) (
-	*store_with_changelog.KeyValueStoreWithChangelogG[uint64, commtypes.ValueTimestampG[ntypes.SumAndCount]],
-	*common.FnOutput,
-) {
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	sumCountStoreName := "q4SumCountKVStore"
-	mp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestampG[ntypes.SumAndCount]]().
-		MessageSerde(h.storeMsgSerde).
-		StoreName(sumCountStoreName).
-		ParNum(sp.ParNum).
-		SerdeFormat(serdeFormat).
-		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
-			Env:           h.env,
-			NumPartition:  sp.NumChangelogPartition,
-			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
-			TimeOut:       time.Duration(4) * time.Millisecond,
-		}).BufMaxSize(sp.BufMaxSize).Build()
-	if err != nil {
-		return nil, common.GenErrFnOutput(err)
-	}
-	kvstore, err := store_with_changelog.CreateInMemorySkipmapKVTableWithChangelogG(mp, store.Uint64LessFunc)
-	if err != nil {
-		return nil, common.GenErrFnOutput(err)
-	}
-	return kvstore, nil
-}
-
 func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	fn_out := h.setupSerde(serdeFormat)
@@ -145,9 +115,20 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	kvstore, fn_out := h.setupAggStore(sp)
-	if fn_out != nil {
-		return fn_out
+	kvstore, builder, snapfunc, err := getKVStoreAndStreamArgs[uint64, ntypes.SumAndCount](
+		ctx, h.env, sp,
+		&KVStoreStreamArgsParam[uint64, ntypes.SumAndCount]{
+			StoreName: "q4SumCountKVStore",
+			FuncName:  h.funcName,
+			MsgSerde:  h.storeMsgSerde,
+			Compare:   store.Uint64LessFunc,
+			SizeofK:   nil,
+			SizeofV:   nil,
+			UseCache:  false,
+		},
+		&ectx)
+	if err != nil {
+		return common.GenErrFnOutput(err)
 	}
 	tabAggProc := processor.NewMeteredProcessorG(
 		processor.NewTableAggregateProcessorG[uint64, uint64, ntypes.SumAndCount]("sumCount", kvstore,
@@ -194,27 +175,12 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 				}, h.inMsgSerde)
 		}).
 		Build()
-	kvc := map[string]store.KeyValueStoreOpWithChangelog{kvstore.ChangelogTopicName(): kvstore}
-	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
-		sp.ParNum, sp.OutputTopicNames[0])
-	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).
-		KVStoreChangelogs(kvc).
+	streamTaskArgs, err := builder.
 		FixedOutParNum(sp.ParNum).
 		Build()
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
 	return stream_task.ExecuteApp(ctx, task, streamTaskArgs,
-		func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
-			rs *snapshot_store.RedisSnapshotStore,
-		) error {
-			payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
-			if err != nil {
-				return err
-			}
-			stream_task.SetKVStoreWithChangelogSnapshot[uint64, commtypes.ValueTimestampG[ntypes.SumAndCount]](ctx, env,
-				rs, kvstore, payloadSerde)
-			return nil
-		}, func() { outProc.OutputRemainingStats() })
+		snapfunc, func() { outProc.OutputRemainingStats() })
 }
