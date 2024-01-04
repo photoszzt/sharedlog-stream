@@ -15,10 +15,6 @@ type StoreBackedByChangelog interface {
 	SetFlushCallbackFunc(cb exactly_once_intr.FlushCallbackFunc)
 }
 
-type RestoreKVStore interface {
-	ConsumeOneLogEntry(ctx context.Context, parNum uint8) (int, error)
-}
-
-type RestoreWindowStateStore interface {
+type RestoreFromChangelog interface {
 	ConsumeOneLogEntry(ctx context.Context, parNum uint8) (int, error)
 }

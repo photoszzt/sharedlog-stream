@@ -114,11 +114,11 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	if fn_out != nil {
 		return fn_out
 	}
-	aggStoreName := "q6AggKVStore"
 	ectx, err := h.getExecutionCtx(ctx, sp)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	aggStoreName := "q6AggKVStore"
 	mp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestampG[ntypes.PriceTimeList]]().
 		MessageSerde(h.storeMsgSerde).
 		StoreName(aggStoreName).
@@ -211,7 +211,7 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		if err != nil {
 			return err
 		}
-		stream_task.SetKVStoreSnapshot[uint64, commtypes.ValueTimestampG[ntypes.PriceTimeList]](ctx, env, rs,
+		stream_task.SetKVStoreWithChangelogSnapshot[uint64, commtypes.ValueTimestampG[ntypes.PriceTimeList]](ctx, env, rs,
 			kvstore, payloadSerde)
 		return nil
 	}, func() { sinkProc.OutputRemainingStats() })

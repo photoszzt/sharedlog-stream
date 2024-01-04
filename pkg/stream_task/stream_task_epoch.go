@@ -23,9 +23,12 @@ import (
 	"cs.utexas.edu/zjia/faas/types"
 )
 
-func SetKVStoreSnapshot[K, V any](ctx context.Context, env types.Environment,
+func SetKVStoreWithChangelogSnapshot[K, V any](
+	ctx context.Context,
+	env types.Environment,
 	rs *snapshot_store.RedisSnapshotStore,
-	kvstore store.KeyValueStoreBackedByChangelogG[K, V], payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
+	kvstore store.KeyValueStoreBackedByChangelogG[K, V],
+	payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
 ) {
 	kvstore.SetSnapshotCallback(ctx, func(ctx context.Context, logOff uint64, snapshot []commtypes.KeyValuePair[K, V]) error {
 		kvPairSerdeG := kvstore.GetKVSerde()
@@ -48,9 +51,12 @@ func SetKVStoreSnapshot[K, V any](ctx context.Context, env types.Environment,
 	})
 }
 
-func SetWinStoreSnapshot[K, V any](ctx context.Context, env types.Environment,
+func SetWinStoreWithChangelogSnapshot[K, V any](
+	ctx context.Context,
+	env types.Environment,
 	rs *snapshot_store.RedisSnapshotStore,
-	winStore store.WindowStoreBackedByChangelogG[K, V], payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
+	winStore store.WindowStoreBackedByChangelogG[K, V],
+	payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
 ) {
 	winStore.SetWinSnapshotCallback(ctx, func(ctx context.Context, logOff uint64, snapshot []commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]) error {
 		kvPairSerdeG := winStore.GetKVSerde()

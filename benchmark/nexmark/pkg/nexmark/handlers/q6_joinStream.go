@@ -118,19 +118,17 @@ func (h *q6JoinStreamHandler) setupSerde(serdeFormat commtypes.SerdeFormat) *com
 	return nil
 }
 
-func (h *q6JoinStreamHandler) Q6JoinStream(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+func (h *q6JoinStreamHandler) setupJoin(sp *common.QueryInput) (
+	proc_interface.ProcessAndReturnFunc[uint64, *ntypes.Event, uint64, *ntypes.AuctionBid],
+	proc_interface.ProcessAndReturnFunc[uint64, *ntypes.Event, uint64, *ntypes.AuctionBid],
+	map[string]store.WindowStoreOpWithChangelog,
+	stream_task.SetupSnapshotCallbackFunc,
+	*common.FnOutput,
+) {
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	fn_out := h.setupSerde(serdeFormat)
-	if fn_out != nil {
-		return fn_out
-	}
-	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
-	if err != nil {
-		return common.GenErrFnOutput(fmt.Errorf("getSrcSink err: %v\n", err))
-	}
 	jw, err := commtypes.NewJoinWindowsNoGrace(auctionDurationUpper)
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return nil, nil, nil, nil, common.GenErrFnOutput(err)
 	}
 	joiner := processor.ValueJoinerWithKeyTsFuncG[uint64, *ntypes.Event, *ntypes.Event, *ntypes.AuctionBid](
 		func(readOnlyKey uint64, value1 *ntypes.Event, value2 *ntypes.Event, leftTs, otherTs int64) optional.Option[*ntypes.AuctionBid] {
@@ -156,7 +154,7 @@ func (h *q6JoinStreamHandler) Q6JoinStream(ctx context.Context, sp *common.Query
 			FlushDuration: flushDur,
 		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return nil, nil, nil, nil, common.GenErrFnOutput(err)
 	}
 	bidMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, *ntypes.Event]().
 		MessageSerde(h.msgSerde).StoreName("bidsByAuctionIDStore").
@@ -168,14 +166,30 @@ func (h *q6JoinStreamHandler) Q6JoinStream(ctx context.Context, sp *common.Query
 			FlushDuration: flushDur,
 		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return nil, nil, nil, nil, common.GenErrFnOutput(err)
 	}
-	aucJoinBidsFunc, bidsJoinAucFunc, wsc, setupSnapCallbackFunc, err := execution.SetupSkipMapStreamStreamJoin(
+	aucJoinBidsFunc, bidsJoinAucFunc, wsc, setupSnapCallbackFunc, err := execution.SetupSkipMapWithChangelogStreamStreamJoin(
 		aucMp, bidMp, store.IntegerCompare[uint64], joiner, jw)
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return nil, nil, nil, nil, common.GenErrFnOutput(err)
 	}
+	return aucJoinBidsFunc, bidsJoinAucFunc, wsc, setupSnapCallbackFunc, nil
+}
 
+func (h *q6JoinStreamHandler) Q6JoinStream(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	fn_out := h.setupSerde(serdeFormat)
+	if fn_out != nil {
+		return fn_out
+	}
+	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
+	if err != nil {
+		return common.GenErrFnOutput(fmt.Errorf("getSrcSink err: %v\n", err))
+	}
+	aucJoinBidsFunc, bidsJoinAucFunc, wsc, setupSnapCallbackFunc, fn_out := h.setupJoin(sp)
+	if fn_out != nil {
+		return fn_out
+	}
 	getValidBid := processor.NewMeteredProcessorG(
 		processor.NewStreamFilterProcessorG[uint64, *ntypes.AuctionBid]("getValidBid",
 			processor.PredicateFuncG[uint64, *ntypes.AuctionBid](

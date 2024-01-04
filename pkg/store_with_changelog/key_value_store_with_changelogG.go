@@ -70,6 +70,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) Get(ctx context.Context, key K) (V,
 func (st *KeyValueStoreWithChangelogG[K, V]) Flush(ctx context.Context) (uint32, error) {
 	return st.changelogManager.Flush(ctx)
 }
+
 func (st *KeyValueStoreWithChangelogG[K, V]) ConfigureExactlyOnce(
 	rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	guarantee exactly_once_intr.GuaranteeMth,
@@ -179,9 +180,11 @@ func (st *KeyValueStoreWithChangelogG[K, V]) TableType() store.TABLE_TYPE {
 func (st *KeyValueStoreWithChangelogG[K, V]) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 	st.trackFunc = trackParFunc
 }
+
 func (st *KeyValueStoreWithChangelogG[K, V]) SetFlushCallbackFunc(cb exactly_once_intr.FlushCallbackFunc) {
 	st.changelogManager.producer.SetFlushCallback(cb)
 }
+
 func (st *KeyValueStoreWithChangelogG[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8) (int, error) {
 	msgSeq, err := st.changelogManager.Consume(ctx, parNum)
 	if err != nil {
@@ -216,9 +219,11 @@ func (st *KeyValueStoreWithChangelogG[K, V]) ConsumeOneLogEntry(ctx context.Cont
 	}
 	return count, nil
 }
+
 func (st *KeyValueStoreWithChangelogG[K, V]) ChangelogTopicName() string {
 	return st.changelogManager.TopicName()
 }
+
 func (st *KeyValueStoreWithChangelogG[K, V]) ChangelogIsSrc() bool {
 	return false
 }
@@ -230,30 +235,39 @@ func (st *KeyValueStoreWithChangelogG[K, V]) Stream() sharedlog_stream.Stream {
 func (st *KeyValueStoreWithChangelogG[K, V]) GetInitialProdSeqNum() uint64 {
 	return st.changelogManager.producer.GetInitialProdSeqNum(st.parNum)
 }
+
 func (st *KeyValueStoreWithChangelogG[K, V]) ResetInitialProd() {
 	st.changelogManager.producer.ResetInitialProd()
 }
+
 func (st *KeyValueStoreWithChangelogG[K, V]) SetLastMarkerSeq(lastMarkerSeq uint64) {
 	st.changelogManager.producer.SetLastMarkerSeq(lastMarkerSeq)
 }
+
 func (st *KeyValueStoreWithChangelogG[K, V]) SubstreamNum() uint8 {
 	return st.parNum
 }
+
 func (st *KeyValueStoreWithChangelogG[K, V]) SetFlushCallback(
 	func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[V]]) error) {
 }
+
 func (st *KeyValueStoreWithChangelogG[K, V]) Snapshot(logOff uint64) {
 	st.kvstore.Snapshot(logOff)
 }
+
 func (st *KeyValueStoreWithChangelogG[K, V]) SetSnapshotCallback(ctx context.Context, f store.KVSnapshotCallback[K, V]) {
 	st.kvstore.SetSnapshotCallback(ctx, f)
 }
+
 func (st *KeyValueStoreWithChangelogG[K, V]) WaitForAllSnapshot() error {
 	return st.kvstore.WaitForAllSnapshot()
 }
+
 func (st *KeyValueStoreWithChangelogG[K, V]) RestoreFromSnapshot(snapshot [][]byte) error {
 	return st.kvstore.RestoreFromSnapshot(snapshot)
 }
+
 func (st *KeyValueStoreWithChangelogG[K, V]) FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error) {
 	return st.changelogManager.findLastEpochMetaWithAuxData(ctx, parNum)
 }

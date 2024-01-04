@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/utils"
 
@@ -38,6 +37,7 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) SetSnapshotCallback(ctx context.C
 	st.bgErrG, st.bgCtx = errgroup.WithContext(ctx)
 	st.snapshotCallback = f
 }
+
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) WaitForAllSnapshot() error {
 	return st.bgErrG.Wait()
 }
@@ -192,12 +192,6 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) TableType() TABLE_TYPE {
 	return IN_MEM
 }
 
-func (st *InMemorySkipmapKeyValueStoreG[K, V]) SetTrackParFunc(exactly_once_intr.TrackProdSubStreamFunc) {
-}
-
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) Flush(ctx context.Context) (uint32, error) {
 	return 0, nil
-}
-
-func (st *InMemorySkipmapKeyValueStoreG[K, V]) SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[V]]) error) {
 }

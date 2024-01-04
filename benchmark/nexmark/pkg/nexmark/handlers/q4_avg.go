@@ -108,16 +108,11 @@ func (h *q4Avg) setupSerde(serdeFormat commtypes.SerdeFormat) *common.FnOutput {
 	return nil
 }
 
-func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+func (h *q4Avg) setupAggStore(sp *common.QueryInput) (
+	*store_with_changelog.KeyValueStoreWithChangelogG[uint64, commtypes.ValueTimestampG[ntypes.SumAndCount]],
+	*common.FnOutput,
+) {
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	fn_out := h.setupSerde(serdeFormat)
-	if fn_out != nil {
-		return fn_out
-	}
-	ectx, err := h.getExecutionCtx(ctx, sp)
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
 	sumCountStoreName := "q4SumCountKVStore"
 	mp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestampG[ntypes.SumAndCount]]().
 		MessageSerde(h.storeMsgSerde).
@@ -131,11 +126,28 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 			TimeOut:       time.Duration(4) * time.Millisecond,
 		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return nil, common.GenErrFnOutput(err)
 	}
 	kvstore, err := store_with_changelog.CreateInMemorySkipmapKVTableWithChangelogG(mp, store.Uint64LessFunc)
 	if err != nil {
+		return nil, common.GenErrFnOutput(err)
+	}
+	return kvstore, nil
+}
+
+func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	fn_out := h.setupSerde(serdeFormat)
+	if fn_out != nil {
+		return fn_out
+	}
+	ectx, err := h.getExecutionCtx(ctx, sp)
+	if err != nil {
 		return common.GenErrFnOutput(err)
+	}
+	kvstore, fn_out := h.setupAggStore(sp)
+	if fn_out != nil {
+		return fn_out
 	}
 	tabAggProc := processor.NewMeteredProcessorG(
 		processor.NewTableAggregateProcessorG[uint64, uint64, ntypes.SumAndCount]("sumCount", kvstore,
@@ -198,7 +210,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 			if err != nil {
 				return err
 			}
-			stream_task.SetKVStoreSnapshot[uint64, commtypes.ValueTimestampG[ntypes.SumAndCount]](ctx, env,
+			stream_task.SetKVStoreWithChangelogSnapshot[uint64, commtypes.ValueTimestampG[ntypes.SumAndCount]](ctx, env,
 				rs, kvstore, payloadSerde)
 			return nil
 		}, func() { outProc.OutputRemainingStats() })

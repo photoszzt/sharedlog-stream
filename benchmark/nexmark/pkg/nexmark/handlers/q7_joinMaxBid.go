@@ -124,20 +124,17 @@ func (h *q7JoinMaxBid) setupSerde(serdeFormat commtypes.SerdeFormat) *common.FnO
 	return nil
 }
 
-func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+func (h *q7JoinMaxBid) setupJoin(sp *common.QueryInput) (
+	proc_interface.ProcessAndReturnFunc[uint64, *ntypes.Event, uint64, ntypes.BidAndMax],
+	proc_interface.ProcessAndReturnFunc[uint64, ntypes.StartEndTime, uint64, ntypes.BidAndMax],
+	map[string]store.WindowStoreOpWithChangelog,
+	stream_task.SetupSnapshotCallbackFunc,
+	*common.FnOutput,
+) {
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	fn_out := h.setupSerde(serdeFormat)
-	if fn_out != nil {
-		return fn_out
-	}
-	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
-	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
 	jw, err := commtypes.NewJoinWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return nil, nil, nil, nil, common.GenErrFnOutput(err)
 	}
 	joiner := processor.ValueJoinerWithKeyTsFuncG[uint64, *ntypes.Event, ntypes.StartEndTime, ntypes.BidAndMax](
 		func(readOnlyKey uint64, value1 *ntypes.Event, value2 ntypes.StartEndTime,
@@ -166,7 +163,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 			TimeOut:       common.SrcConsumeTimeout,
 		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return nil, nil, nil, nil, common.GenErrFnOutput(err)
 	}
 	maxBMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, ntypes.StartEndTime]().
 		MessageSerde(h.inMsgSerde2).
@@ -180,14 +177,31 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 			TimeOut:       common.SrcConsumeTimeout,
 		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return nil, nil, nil, nil, common.GenErrFnOutput(err)
 	}
-	bJoinMaxBFunc, maxBJoinBFunc, wsc, setupSnapCallbackFunc, err := execution.SetupSkipMapStreamStreamJoin(bMp, maxBMp,
+	bJoinMaxBFunc, maxBJoinBFunc, wsc, setupSnapCallbackFunc, err := execution.SetupSkipMapWithChangelogStreamStreamJoin(bMp, maxBMp,
 		store.IntegerCompare[uint64], joiner, jw)
+	if err != nil {
+		return nil, nil, nil, nil, common.GenErrFnOutput(err)
+	}
+	return bJoinMaxBFunc, maxBJoinBFunc, wsc, setupSnapCallbackFunc, nil
+}
+
+func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	fn_out := h.setupSerde(serdeFormat)
+	if fn_out != nil {
+		return fn_out
+	}
+	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-
+	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
+	bJoinMaxBFunc, maxBJoinBFunc, wsc, setupSnapCallbackFunc, fn_out := h.setupJoin(sp)
+	if fn_out != nil {
+		return fn_out
+	}
 	filter := processor.NewStreamFilterProcessorG[uint64, ntypes.BidAndMax](
 		"filter", processor.PredicateFuncG[uint64, ntypes.BidAndMax](
 			func(key optional.Option[uint64], value optional.Option[ntypes.BidAndMax]) (bool, error) {

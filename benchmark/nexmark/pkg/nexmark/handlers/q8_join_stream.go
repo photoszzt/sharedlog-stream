@@ -118,19 +118,16 @@ func (h *q8JoinStreamHandler) setupSerde(sf uint8) *common.FnOutput {
 	return nil
 }
 
-func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
-	fn_out := h.setupSerde(sp.SerdeFormat)
-	if fn_out != nil {
-		return fn_out
-	}
-	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
-	if err != nil {
-		return common.GenErrFnOutput(fmt.Errorf("getSrcSink err: %v\n", err))
-	}
+func (h *q8JoinStreamHandler) setupJoin(sp *common.QueryInput) (
+	proc_interface.ProcessAndReturnFunc[uint64, *ntypes.Event, uint64, ntypes.PersonTime],
+	proc_interface.ProcessAndReturnFunc[uint64, *ntypes.Event, uint64, ntypes.PersonTime],
+	map[string]store.WindowStoreOpWithChangelog,
+	stream_task.SetupSnapshotCallbackFunc,
+	*common.FnOutput,
+) {
 	joinWindows, err := commtypes.NewJoinWindowsWithGrace(time.Duration(10)*time.Second, time.Duration(5)*time.Second)
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return nil, nil, nil, nil, common.GenErrFnOutput(err)
 	}
 	windowSizeMs := int64(10 * 1000)
 	joiner := processor.ValueJoinerWithKeyTsFuncG[uint64, *ntypes.Event, *ntypes.Event, ntypes.PersonTime](
@@ -160,7 +157,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			TimeOut:       common.SrcConsumeTimeout,
 		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return nil, nil, nil, nil, common.GenErrFnOutput(err)
 	}
 	perMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, *ntypes.Event]().
 		MessageSerde(h.msgSerde).
@@ -174,12 +171,29 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 			TimeOut:       common.SrcConsumeTimeout,
 		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return nil, nil, nil, nil, common.GenErrFnOutput(err)
 	}
-	aucJoinsPerFunc, perJoinsAucFunc, wsc, setupSnapCallbackFunc, err := execution.SetupSkipMapStreamStreamJoin(
+	aucJoinsPerFunc, perJoinsAucFunc, wsc, setupSnapCallbackFunc, err := execution.SetupSkipMapWithChangelogStreamStreamJoin(
 		aucMp, perMp, store.IntegerCompare[uint64], joiner, joinWindows)
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return nil, nil, nil, nil, common.GenErrFnOutput(err)
+	}
+	return aucJoinsPerFunc, perJoinsAucFunc, wsc, setupSnapCallbackFunc, nil
+}
+
+func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
+	fn_out := h.setupSerde(sp.SerdeFormat)
+	if fn_out != nil {
+		return fn_out
+	}
+	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
+	if err != nil {
+		return common.GenErrFnOutput(fmt.Errorf("getSrcSink err: %v\n", err))
+	}
+	aucJoinsPerFunc, perJoinsAucFunc, wsc, setupSnapCallbackFunc, fn_out := h.setupJoin(sp)
+	if fn_out != nil {
+		return fn_out
 	}
 	msgSerdePair := execution.NewMsgSerdePair(h.msgSerde, h.outMsgSerde)
 	task, procArgs := execution.PrepareTaskWithJoin(ctx,

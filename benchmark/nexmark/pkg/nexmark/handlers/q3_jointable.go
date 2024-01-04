@@ -143,23 +143,15 @@ func (h *q3JoinTableHandler) setupSerde(serdeFormat commtypes.SerdeFormat) *comm
 	return nil
 }
 
-func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+func (h *q3JoinTableHandler) setupQ3Join(sp *common.QueryInput) (
+	proc_interface.ProcessAndReturnFunc[uint64, *ntypes.Event, uint64, commtypes.ChangeG[ntypes.NameCityStateId]],
+	proc_interface.ProcessAndReturnFunc[uint64, *ntypes.Event, uint64, commtypes.ChangeG[ntypes.NameCityStateId]],
+	map[string]store.KeyValueStoreOpWithChangelog,
+	stream_task.SetupSnapshotCallbackFunc,
+	*common.FnOutput,
+) {
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	fn_out := h.setupSerde(serdeFormat)
-	if fn_out != nil {
-		return fn_out
-	}
-	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
-	if err != nil {
-		return common.GenErrFnOutput(fmt.Errorf("getSrcSink err: %v\n", err))
-	}
-	srcs[0].SetName("auctionsSrc")
-	srcs[1].SetName("personsSrc")
-	debug.Assert(len(sp.NumOutPartitions) == 1 && len(sp.OutputTopicNames) == 1,
-		"expected only one output stream")
-	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
 	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
-
 	joiner := processor.ValueJoinerWithKeyFuncG[uint64, *ntypes.Event, *ntypes.Event, ntypes.NameCityStateId](
 		func(_ uint64, _ *ntypes.Event, rightVal *ntypes.Event) optional.Option[ntypes.NameCityStateId] {
 			ncsi := ntypes.NameCityStateId{
@@ -183,7 +175,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			TimeOut:       common.SrcConsumeTimeout,
 		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return nil, nil, nil, nil, common.GenErrFnOutput(err)
 	}
 	mpPer, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestampG[*ntypes.Event]]().
 		MessageSerde(h.storeMsgSerde).
@@ -197,14 +189,35 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 			TimeOut:       common.SrcConsumeTimeout,
 		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return nil, nil, nil, nil, common.GenErrFnOutput(err)
 	}
 	aucJoinsPerFunc, perJoinsAucFunc, kvc, setupSnapFunc, err := execution.SetupTableTableJoinWithSkipmap(
 		mpAuc, mpPer, store.Uint64LessFunc, joiner)
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return nil, nil, nil, nil, common.GenErrFnOutput(err)
 	}
+	return aucJoinsPerFunc, perJoinsAucFunc, kvc, setupSnapFunc, nil
+}
 
+func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	fn_out := h.setupSerde(serdeFormat)
+	if fn_out != nil {
+		return fn_out
+	}
+	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
+	if err != nil {
+		return common.GenErrFnOutput(fmt.Errorf("getSrcSink err: %v\n", err))
+	}
+	srcs[0].SetName("auctionsSrc")
+	srcs[1].SetName("personsSrc")
+	debug.Assert(len(sp.NumOutPartitions) == 1 && len(sp.OutputTopicNames) == 1,
+		"expected only one output stream")
+	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
+	aucJoinsPerFunc, perJoinsAucFunc, kvc, setupSnapFunc, fn_out := h.setupQ3Join(sp)
+	if fn_out != nil {
+		return fn_out
+	}
 	toStream := processor.NewTableToStreamProcessorG[uint64, ntypes.NameCityStateId]()
 
 	aJoinP := execution.JoinWorkerFunc[uint64, *ntypes.Event, uint64, ntypes.NameCityStateId](

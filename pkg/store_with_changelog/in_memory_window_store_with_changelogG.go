@@ -210,9 +210,11 @@ func (s *InMemoryWindowStoreWithChangelogG[K, V]) TableType() store.TABLE_TYPE {
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 	s.trackFunc = trackParFunc
 }
+
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetFlushCallbackFunc(cb exactly_once_intr.FlushCallbackFunc) {
 	s.changelogManager.producer.SetFlushCallback(cb)
 }
+
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8) (int, error) {
 	msgSeq, err := s.changelogManager.Consume(ctx, parNum)
 	if err != nil {
@@ -245,15 +247,18 @@ func (s *InMemoryWindowStoreWithChangelogG[K, V]) ConsumeOneLogEntry(ctx context
 	}
 	return count, nil
 }
+
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) ConfigureExactlyOnce(
 	rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	guarantee exactly_once_intr.GuaranteeMth,
 ) {
 	s.changelogManager.ConfigExactlyOnce(rem, guarantee)
 }
+
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) ChangelogTopicName() string {
 	return s.changelogManager.TopicName()
 }
+
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) Stream() sharedlog_stream.Stream {
 	return s.changelogManager.Stream()
 }
@@ -261,37 +266,48 @@ func (s *InMemoryWindowStoreWithChangelogG[K, V]) Stream() sharedlog_stream.Stre
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) GetInitialProdSeqNum() uint64 {
 	return s.changelogManager.producer.GetInitialProdSeqNum(s.parNum)
 }
+
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) ResetInitialProd() {
 	s.changelogManager.producer.ResetInitialProd()
 }
+
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetLastMarkerSeq(lastMarkerSeq uint64) {
 	s.changelogManager.producer.SetLastMarkerSeq(lastMarkerSeq)
 }
+
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) SubstreamNum() uint8 {
 	return s.parNum
 }
+
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]) error) {
 }
+
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) Snapshot(logOff uint64) {
 	s.windowStore.Snapshot(logOff)
 }
+
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) WaitForAllSnapshot() error {
 	return s.windowStore.WaitForAllSnapshot()
 }
+
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetWinSnapshotCallback(ctx context.Context, f store.WinSnapshotCallback[K, V]) {
 	s.windowStore.SetWinSnapshotCallback(ctx, f)
 }
+
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) RestoreFromSnapshot(ctx context.Context, snapshot [][]byte) error {
 	return s.windowStore.RestoreFromSnapshot(ctx, snapshot)
 }
+
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeFormat,
 	keySerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]], valSerde commtypes.SerdeG[V],
 ) error {
 	return nil
 }
+
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]] {
 	return s.windowStore.GetKVSerde()
 }
+
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error) {
 	return s.changelogManager.findLastEpochMetaWithAuxData(ctx, parNum)
 }

@@ -137,8 +137,8 @@ func SetupTableTableJoinWithSkipmap[K, VLeft, VRight, VR any](
 		if err != nil {
 			return err
 		}
-		stream_task.SetKVStoreSnapshot[K, commtypes.ValueTimestampG[VLeft]](ctx, env, rs, leftTab, payloadSerde)
-		stream_task.SetKVStoreSnapshot[K, commtypes.ValueTimestampG[VRight]](ctx, env, rs, rightTab, payloadSerde)
+		stream_task.SetKVStoreWithChangelogSnapshot[K, commtypes.ValueTimestampG[VLeft]](ctx, env, rs, leftTab, payloadSerde)
+		stream_task.SetKVStoreWithChangelogSnapshot[K, commtypes.ValueTimestampG[VRight]](ctx, env, rs, rightTab, payloadSerde)
 		return nil
 	})
 	return leftJoinRightFunc, rightJoinLeftFunc, kvc, setupSnapFunc, nil

@@ -16,8 +16,10 @@ import (
 )
 
 type bidByAuction struct {
-	env      types.Environment
-	funcName string
+	env         types.Environment
+	funcName    string
+	inMsgSerde  commtypes.MessageGSerdeG[string, *ntypes.Event]
+	outMsgSerde commtypes.MessageGSerdeG[uint64, *ntypes.Event]
 }
 
 func NewBidByAuctionHandler(env types.Environment, funcName string) types.FuncHandler {
@@ -41,21 +43,29 @@ func (h *bidByAuction) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return common.CompressData(encodedOutput), nil
 }
 
-func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
-	sp *common.QueryInput,
-) *common.FnOutput {
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+func (h *bidByAuction) setupSerde(sf uint8) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sf)
 	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	inMsgSerde, err := commtypes.GetMsgGSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
+	h.inMsgSerde, err = commtypes.GetMsgGSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	outMsgSerde, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
+	h.outMsgSerde, err = commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
+	}
+	return nil
+}
+
+func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
+	sp *common.QueryInput,
+) *common.FnOutput {
+	fn_out := h.setupSerde(sp.SerdeFormat)
+	if fn_out != nil {
+		return fn_out
 	}
 	srcs, sinks, err := getSrcSinkUint64Key(ctx, h.env, sp)
 	if err != nil {
@@ -76,7 +86,7 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 				event := value.Unwrap()
 				return optional.Some(event.Bid.Auction), nil
 			}))
-	outProc := processor.NewGroupByOutputProcessorG("subG1Proc", sinks[0], &ectx, outMsgSerde)
+	outProc := processor.NewGroupByOutputProcessorG("subG1Proc", sinks[0], &ectx, h.outMsgSerde)
 	filterProc.NextProcessor(mapProc)
 	mapProc.NextProcessor(outProc)
 	task := stream_task.NewStreamTaskBuilder().
@@ -86,7 +96,7 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 			return stream_task.CommonProcess(ctx, task, args.(*processor.BaseExecutionContext),
 				func(ctx context.Context, msg commtypes.MessageG[string, *ntypes.Event], argsTmp interface{}) error {
 					return filterProc.Process(ctx, msg)
-				}, inMsgSerde)
+				}, h.inMsgSerde)
 		}).
 		Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,

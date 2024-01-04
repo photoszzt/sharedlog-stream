@@ -105,7 +105,7 @@ func (p *StreamWindowAggregateProcessor) ProcessAndReturn(ctx context.Context, m
 */
 
 type StreamWindowAggregateProcessorG[K, V, VA any] struct {
-	store       store.CoreWindowStoreG[K, commtypes.ValueTimestampG[VA]]
+	store       store.CachedWindowStateStore[K, commtypes.ValueTimestampG[VA]]
 	initializer InitializerG[VA]
 	aggregator  AggregatorG[K, V, VA]
 	windows     commtypes.EnumerableWindowDefinition
@@ -116,7 +116,7 @@ type StreamWindowAggregateProcessorG[K, V, VA any] struct {
 }
 
 func NewStreamWindowAggregateProcessorG[K, V, VA any](name string,
-	store store.CoreWindowStoreG[K, commtypes.ValueTimestampG[VA]],
+	store store.CachedWindowStateStore[K, commtypes.ValueTimestampG[VA]],
 	initializer InitializerG[VA], aggregator AggregatorG[K, V, VA],
 	windows commtypes.EnumerableWindowDefinition,
 	useCache bool,

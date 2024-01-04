@@ -119,17 +119,40 @@ func CreateSkipMapWinTablePair[K, VLeft, VRight any](
 	return toLeftTab, leftTab, toRightTab, rightTab, nil
 }
 
+func SetupWinStoreWithChanglogSnap[K, VLeft, VRight any](
+	leftTab store.WindowStoreBackedByChangelogG[K, VLeft],
+	rightTab store.WindowStoreBackedByChangelogG[K, VRight],
+) (
+	wsc map[string]store.WindowStoreOpWithChangelog,
+	setupSnapFunc stream_task.SetupSnapshotCallbackFunc,
+) {
+	wsc = map[string]store.WindowStoreOpWithChangelog{
+		leftTab.ChangelogTopicName():  leftTab,
+		rightTab.ChangelogTopicName(): rightTab,
+	}
+	setupSnapFunc = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment,
+		serdeFormat commtypes.SerdeFormat, rs *snapshot_store.RedisSnapshotStore,
+	) error {
+		payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
+		if err != nil {
+			return err
+		}
+		stream_task.SetWinStoreWithChangelogSnapshot(ctx, env, rs, leftTab, payloadSerde)
+		stream_task.SetWinStoreWithChangelogSnapshot(ctx, env, rs, rightTab, payloadSerde)
+		return nil
+	})
+	return wsc, setupSnapFunc
+}
+
 func SetupStreamStreamJoinG[K, VLeft, VRight, VR any](
 	toLeftTab *processor.MeteredProcessorG[K, VLeft, K, VLeft],
-	leftTab store.WindowStoreBackedByChangelogG[K, VLeft],
+	leftTab store.CoreWindowStoreG[K, VLeft],
 	toRightTab *processor.MeteredProcessorG[K, VRight, K, VRight],
-	rightTab store.WindowStoreBackedByChangelogG[K, VRight],
+	rightTab store.CoreWindowStoreG[K, VRight],
 	joiner processor.ValueJoinerWithKeyTsFuncG[K, VLeft, VRight, VR],
 	jw *commtypes.JoinWindows,
 ) (leftJoinRightFunc proc_interface.ProcessAndReturnFunc[K, VLeft, K, VR],
 	rightJoinLeftFunc proc_interface.ProcessAndReturnFunc[K, VRight, K, VR],
-	wsc map[string]store.WindowStoreOpWithChangelog,
-	setupSnapFunc stream_task.SetupSnapshotCallbackFunc,
 	err error,
 ) {
 	sharedTimeTracker := processor.NewTimeTracker()
@@ -181,23 +204,10 @@ func SetupStreamStreamJoinG[K, VLeft, VRight, VR any](
 		}
 		return out, err
 	}
-	wsc = map[string]store.WindowStoreOpWithChangelog{
-		leftTab.ChangelogTopicName():  leftTab,
-		rightTab.ChangelogTopicName(): rightTab}
-	setupSnapFunc = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment,
-		serdeFormat commtypes.SerdeFormat, rs *snapshot_store.RedisSnapshotStore) error {
-		payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
-		if err != nil {
-			return err
-		}
-		stream_task.SetWinStoreSnapshot(ctx, env, rs, leftTab, payloadSerde)
-		stream_task.SetWinStoreSnapshot(ctx, env, rs, rightTab, payloadSerde)
-		return nil
-	})
-	return leftJoinRightFunc, rightJoinLeftFunc, wsc, setupSnapFunc, nil
+	return leftJoinRightFunc, rightJoinLeftFunc, nil
 }
 
-func SetupSkipMapStreamStreamJoin[K, VLeft, VRight, VR any](
+func SetupSkipMapWithChangelogStreamStreamJoin[K, VLeft, VRight, VR any](
 	mpLeft *store_with_changelog.MaterializeParam[K, VLeft],
 	mpRight *store_with_changelog.MaterializeParam[K, VRight],
 	compare store.CompareFuncG[K],
@@ -214,5 +224,10 @@ func SetupSkipMapStreamStreamJoin[K, VLeft, VRight, VR any](
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	return SetupStreamStreamJoinG[K, VLeft, VRight](toLeftTab, leftTab, toRightTab, rightTab, joiner, jw)
+	lJoinR, rJoinL, err := SetupStreamStreamJoinG[K, VLeft, VRight](toLeftTab, leftTab, toRightTab, rightTab, joiner, jw)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	wsc, setupSnapFunc := SetupWinStoreWithChanglogSnap[K, VLeft, VRight](leftTab, rightTab)
+	return lJoinR, rJoinL, wsc, setupSnapFunc, nil
 }

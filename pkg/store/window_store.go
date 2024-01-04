@@ -5,7 +5,6 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/txn_data"
-
 	"time"
 )
 
@@ -48,9 +47,7 @@ type CoreWindowStoreG[K, V any] interface {
 	) error
 	GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]]
 	RestoreFromSnapshot(ctx context.Context, snapshot [][]byte) error
-	UpdateTrackParFunc
 	OnlyUpdateInMemWinStoreG[K, V]
-	CachedWindowStateStore[K, V]
 }
 
 type WindowStoreBackedByChangelog interface {
@@ -60,6 +57,11 @@ type WindowStoreBackedByChangelog interface {
 
 type WindowStoreBackedByChangelogG[K, V any] interface {
 	CoreWindowStoreG[K, V]
+	WindowStoreOpWithChangelog
+}
+
+type CachedWindowStoreBackedByChangelogG[K, V any] interface {
+	CachedWindowStateStore[K, V]
 	WindowStoreOpWithChangelog
 }
 
@@ -75,7 +77,7 @@ type OnlyUpdateInMemWinStoreG[K, V any] interface {
 
 type WindowStoreOpWithChangelog interface {
 	StoreBackedByChangelog
-	RestoreWindowStateStore
+	RestoreFromChangelog
 	UpdateTrackParFunc
 	OnlyUpdateInMemWinStore
 	ProduceRangeRecording

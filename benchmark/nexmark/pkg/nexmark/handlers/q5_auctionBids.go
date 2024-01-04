@@ -22,9 +22,12 @@ import (
 )
 
 type q5AuctionBids struct {
-	env      types.Environment
-	funcName string
-	useCache bool
+	env          types.Environment
+	funcName     string
+	useCache     bool
+	srcMsgSerde  commtypes.MessageGSerdeG[uint64, *ntypes.Event]
+	sinkMsgSerde commtypes.MessageGSerdeG[ntypes.StartEndTime, ntypes.AuctionIdCount]
+	msgSerde     commtypes.MessageGSerdeG[uint64, commtypes.ValueTimestampG[uint64]]
 }
 
 func NewQ5AuctionBids(env types.Environment, funcName string) *q5AuctionBids {
@@ -96,14 +99,10 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 		return nil, nil, nil, err
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	msgSerde, err := processor.MsgSerdeWithValueTsG[uint64, uint64](serdeFormat,
-		commtypes.Uint64SerdeG{}, commtypes.Uint64SerdeG{})
-	if err != nil {
-		return nil, nil, nil, err
-	}
 	countStoreName := "auctionBidsCountStore"
 	countMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestampG[uint64]]().
-		MessageSerde(msgSerde).StoreName(countStoreName).ParNum(sp.ParNum).
+		MessageSerde(h.msgSerde).
+		StoreName(countStoreName).ParNum(sp.ParNum).
 		SerdeFormat(serdeFormat).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
 			Env:           h.env,
@@ -119,7 +118,7 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	var aggStore store.WindowStoreBackedByChangelogG[uint64, commtypes.ValueTimestampG[uint64]]
+	var aggStore store.CachedWindowStoreBackedByChangelogG[uint64, commtypes.ValueTimestampG[uint64]]
 	if h.useCache {
 		sizeOfVTs := commtypes.ValueTimestampGSize[uint64]{
 			ValSizeFunc: commtypes.SizeOfUint64,
@@ -149,14 +148,14 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 		if err != nil {
 			return err
 		}
-		stream_task.SetWinStoreSnapshot(ctx, env, rs, aggStore, payloadSerde)
+		stream_task.SetWinStoreWithChangelogSnapshot(ctx, env, rs, aggStore.(store.WindowStoreBackedByChangelogG[uint64, commtypes.ValueTimestampG[uint64]]), payloadSerde)
 		return nil
 	})
 	return countProc, wsc, setSnapCallbackFunc, nil
 }
 
-func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+func (h *q5AuctionBids) setupSerde(sf uint8) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sf)
 	var seSerde commtypes.SerdeG[ntypes.StartEndTime]
 	var aucIdCountSerde commtypes.SerdeG[ntypes.AuctionIdCount]
 	if serdeFormat == commtypes.JSON {
@@ -166,20 +165,34 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 		seSerde = ntypes.StartEndTimeMsgpSerdeG{}
 		aucIdCountSerde = ntypes.AuctionIdCountMsgpSerdeG{}
 	} else {
-		return common.GenErrFnOutput(fmt.Errorf("serde format should be either json or msgp; but %v is given", sp.SerdeFormat))
+		return common.GenErrFnOutput(fmt.Errorf("serde format should be either json or msgp; but %v is given", sf))
 	}
 
 	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	srcMsgSerde, err := commtypes.GetMsgGSerdeG[uint64](serdeFormat, commtypes.Uint64SerdeG{}, eventSerde)
+	h.srcMsgSerde, err = commtypes.GetMsgGSerdeG[uint64](serdeFormat,
+		commtypes.Uint64SerdeG{}, eventSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	sinkMsgSerde, err := commtypes.GetMsgGSerdeG(serdeFormat, seSerde, aucIdCountSerde)
+	h.sinkMsgSerde, err = commtypes.GetMsgGSerdeG(serdeFormat, seSerde, aucIdCountSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
+	}
+	h.msgSerde, err = processor.MsgSerdeWithValueTsG[uint64, uint64](serdeFormat,
+		commtypes.Uint64SerdeG{}, commtypes.Uint64SerdeG{})
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	return nil
+}
+
+func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	fn_out := h.setupSerde(sp.SerdeFormat)
+	if fn_out != nil {
+		return nil
 	}
 	srcs, sinks, err := h.getSrcSink(ctx, sp)
 	if err != nil {
@@ -207,7 +220,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 				}
 				return optional.Some(newKey), optional.Some(newVal), nil
 			}))
-	outProc := processor.NewGroupByOutputProcessorG("subG2Proc", sinks[0], &ectx, sinkMsgSerde)
+	outProc := processor.NewGroupByOutputProcessorG("subG2Proc", sinks[0], &ectx, h.sinkMsgSerde)
 	countProc.NextProcessor(tabToStreamProc)
 	tabToStreamProc.NextProcessor(mapProc)
 	mapProc.NextProcessor(outProc)
@@ -219,7 +232,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 			return stream_task.CommonProcess(ctx, task, args.(*processor.BaseExecutionContext),
 				func(ctx context.Context, msg commtypes.MessageG[uint64, *ntypes.Event], argsTmp interface{}) error {
 					return countProc.Process(ctx, msg)
-				}, srcMsgSerde)
+				}, h.srcMsgSerde)
 		}).
 		Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],

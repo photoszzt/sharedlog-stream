@@ -10,7 +10,7 @@ import (
 )
 
 type StreamAggregateProcessorG[K, V, VA any] struct {
-	store       store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[VA]]
+	store       store.CachedKeyValueStore[K, commtypes.ValueTimestampG[VA]]
 	initializer InitializerG[VA]
 	aggregator  AggregatorG[K, V, VA]
 	name        string
@@ -21,7 +21,7 @@ type StreamAggregateProcessorG[K, V, VA any] struct {
 var _ = ProcessorG[int, int, int, commtypes.ChangeG[int]](&StreamAggregateProcessorG[int, int, int]{})
 
 func NewStreamAggregateProcessorG[K, V, VA any](
-	name string, store store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[VA]],
+	name string, store store.CachedKeyValueStore[K, commtypes.ValueTimestampG[VA]],
 	initializer InitializerG[VA], aggregator AggregatorG[K, V, VA],
 	useCache bool,
 ) ProcessorG[K, V, K, commtypes.ChangeG[VA]] {
@@ -117,6 +117,7 @@ func (p *StreamAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Conte
 	} else {
 		return []commtypes.MessageG[K, commtypes.ChangeG[VA]]{{
 			Key: msg.Key, Value: optional.Some(change), TimestampMs: newTs,
-			StartProcTime: msg.StartProcTime}}, nil
+			StartProcTime: msg.StartProcTime,
+		}}, nil
 	}
 }

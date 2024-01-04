@@ -83,16 +83,10 @@ func (h *q6MaxBid) setupSerde(serdeFormat commtypes.SerdeFormat) *common.FnOutpu
 	return nil
 }
 
-func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	fn_out := h.setupSerde(serdeFormat)
-	if fn_out != nil {
-		return fn_out
-	}
-	ectx, err := getExecutionCtxSingleSrcSinkMiddle(ctx, h.env, h.funcName, sp)
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
+func (h *q6MaxBid) setupAggStore(ctx context.Context, sp *common.QueryInput) (
+	store.CachedKeyValueStoreBackedByChangelogG[ntypes.AuctionIdSeller, commtypes.ValueTimestampG[ntypes.PriceTime]],
+	*common.FnOutput,
+) {
 	maxBidStoreName := "q6MaxBidKVStore"
 	mp, err := store_with_changelog.NewMaterializeParamBuilder[ntypes.AuctionIdSeller, commtypes.ValueTimestampG[ntypes.PriceTime]]().
 		MessageSerde(h.msgSerde).
@@ -106,16 +100,16 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
 		}).BufMaxSize(sp.BufMaxSize).Build()
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return nil, common.GenErrFnOutput(err)
 	}
 	compare := func(a, b ntypes.AuctionIdSeller) bool {
 		return ntypes.CompareAuctionIDSeller(a, b) < 0
 	}
-	var aggStore store.KeyValueStoreBackedByChangelogG[ntypes.AuctionIdSeller, commtypes.ValueTimestampG[ntypes.PriceTime]]
+	var aggStore store.CachedKeyValueStoreBackedByChangelogG[ntypes.AuctionIdSeller, commtypes.ValueTimestampG[ntypes.PriceTime]]
 	kvstore, err := store_with_changelog.CreateInMemorySkipmapKVTableWithChangelogG(
 		mp, store.LessFunc[ntypes.AuctionIdSeller](compare))
 	if err != nil {
-		return common.GenErrFnOutput(err)
+		return nil, common.GenErrFnOutput(err)
 	}
 	if h.useCache {
 		sizeOfVTs := commtypes.ValueTimestampGSize[ntypes.PriceTime]{
@@ -126,6 +120,23 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		aggStore = cacheStore
 	} else {
 		aggStore = kvstore
+	}
+	return aggStore, nil
+}
+
+func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	fn_out := h.setupSerde(serdeFormat)
+	if fn_out != nil {
+		return fn_out
+	}
+	ectx, err := getExecutionCtxSingleSrcSinkMiddle(ctx, h.env, h.funcName, sp)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	aggStore, fn_out := h.setupAggStore(ctx, sp)
+	if fn_out != nil {
+		return fn_out
 	}
 	aggProc := processor.NewMeteredProcessorG(
 		processor.NewStreamAggregateProcessorG[ntypes.AuctionIdSeller, *ntypes.AuctionBid, ntypes.PriceTime]("maxBid",
@@ -162,7 +173,7 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 				}, h.inMsgSerde)
 		}).
 		Build()
-	kvc := map[string]store.KeyValueStoreOpWithChangelog{kvstore.ChangelogTopicName(): aggStore}
+	kvc := map[string]store.KeyValueStoreOpWithChangelog{aggStore.ChangelogTopicName(): aggStore}
 	builder := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,
 		fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 			sp.ParNum, sp.OutputTopicNames[0]))
@@ -175,7 +186,7 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 		if err != nil {
 			return err
 		}
-		stream_task.SetKVStoreSnapshot(ctx, env, rs, aggStore, payloadSerde)
+		stream_task.SetKVStoreWithChangelogSnapshot[ntypes.AuctionIdSeller, commtypes.ValueTimestampG[ntypes.PriceTime]](ctx, env, rs, aggStore, payloadSerde)
 		return nil
 	}, func() { sinkProc.OutputRemainingStats() })
 }

@@ -32,9 +32,7 @@ type CoreKeyValueStoreG[K, V any] interface {
 	RestoreFromSnapshot(snapshot [][]byte) error
 	SetKVSerde(serdeFormat commtypes.SerdeFormat, keySerde commtypes.SerdeG[K], valSerde commtypes.SerdeG[V]) error
 	GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[K, V]]
-	UpdateTrackParFunc
 	OnlyUpdateInMemStore
-	CachedStateStore[K, V]
 }
 
 type OnlyUpdateInMemStore interface {
@@ -47,7 +45,7 @@ type OnlyUpdateInMemStoreG[K, V any] interface {
 
 type KeyValueStoreOpWithChangelog interface {
 	StoreBackedByChangelog
-	RestoreKVStore
+	RestoreFromChangelog
 	UpdateTrackParFunc
 	ChangelogIsSrc() bool
 	OnlyUpdateInMemStore
@@ -62,6 +60,11 @@ type KeyValueStoreOpWithChangelog interface {
 
 type KeyValueStoreBackedByChangelogG[K, V any] interface {
 	CoreKeyValueStoreG[K, V]
+	KeyValueStoreOpWithChangelog
+}
+
+type CachedKeyValueStoreBackedByChangelogG[K, V any] interface {
+	CachedKeyValueStore[K, V]
 	KeyValueStoreOpWithChangelog
 }
 
