@@ -133,6 +133,44 @@ func ExecuteApp(ctx context.Context,
 	return ret
 }
 
+func encodeKVSnapshot[K, V any](
+	kvstore store.CoreKeyValueStoreG[K, V],
+	snapshot []commtypes.KeyValuePair[K, V],
+	payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
+) ([]byte, error) {
+	kvPairSerdeG := kvstore.GetKVSerde()
+	outBin := make([][]byte, 0, len(snapshot))
+	for _, kv := range snapshot {
+		bin, err := kvPairSerdeG.Encode(kv)
+		if err != nil {
+			return nil, err
+		}
+		outBin = append(outBin, bin)
+	}
+	return payloadSerde.Encode(commtypes.PayloadArr{
+		Payloads: outBin,
+	})
+}
+
+func encodeWinSnapshot[K, V any](
+	winStore store.CoreWindowStoreG[K, V],
+	snapshot []commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V],
+	payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
+) ([]byte, error) {
+	kvPairSerdeG := winStore.GetKVSerde()
+	outBin := make([][]byte, 0, len(snapshot))
+	for _, kv := range snapshot {
+		bin, err := kvPairSerdeG.Encode(kv)
+		if err != nil {
+			return nil, err
+		}
+		outBin = append(outBin, bin)
+	}
+	return payloadSerde.Encode(commtypes.PayloadArr{
+		Payloads: outBin,
+	})
+}
+
 func handleCtrlMsg(ctx context.Context, ctrlRawMsg commtypes.RawMsgAndSeq,
 	t *StreamTask, args *StreamTaskArgs, warmupCheck *stats.Warmup,
 ) *common.FnOutput {
@@ -216,12 +254,12 @@ func flushStreams(ctx context.Context,
 	return flushed, nil
 }
 
-func createSnapshot(args *StreamTaskArgs, logOff uint64) {
+func createSnapshot(args *StreamTaskArgs, tplogOff []commtypes.TpLogOff) {
 	for _, kvchangelog := range args.kvChangelogs {
-		kvchangelog.Snapshot(logOff)
+		kvchangelog.Snapshot(tplogOff)
 	}
 	for _, wschangelog := range args.windowStoreChangelogs {
-		wschangelog.Snapshot(logOff)
+		wschangelog.Snapshot(tplogOff)
 	}
 }
 

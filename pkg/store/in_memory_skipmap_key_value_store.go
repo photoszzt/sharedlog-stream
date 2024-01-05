@@ -13,7 +13,9 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type KVSnapshotCallback[K, V any] func(ctx context.Context, logOff uint64, snapshot []commtypes.KeyValuePair[K, V]) error
+type (
+	KVSnapshotCallback[K, V any] func(ctx context.Context, tpLogOff []commtypes.TpLogOff, snapshot []commtypes.KeyValuePair[K, V]) error
+)
 
 type InMemorySkipmapKeyValueStoreG[K, V any] struct {
 	store            *skipmap.FuncMap[K, V]
@@ -28,8 +30,9 @@ var _ = CoreKeyValueStoreG[int, int](&InMemorySkipmapKeyValueStoreG[int, int]{})
 
 func NewInMemorySkipmapKeyValueStoreG[K, V any](name string, lessFunc LessFunc[K]) *InMemorySkipmapKeyValueStoreG[K, V] {
 	return &InMemorySkipmapKeyValueStoreG[K, V]{
-		name:  name,
-		store: skipmap.NewFunc[K, V](lessFunc),
+		name:             name,
+		store:            skipmap.NewFunc[K, V](lessFunc),
+		snapshotCallback: nil,
 	}
 }
 
@@ -146,7 +149,7 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) Range(ctx context.Context,
 }
 
 // not thread-safe
-func (st *InMemorySkipmapKeyValueStoreG[K, V]) Snapshot(logOff uint64) {
+func (st *InMemorySkipmapKeyValueStoreG[K, V]) Snapshot(tpLogOff []commtypes.TpLogOff) {
 	// cpyBeg := time.Now()
 	out := make([]commtypes.KeyValuePair[K, V], 0, st.store.Len())
 	st.store.Range(func(key K, value V) bool {
@@ -158,22 +161,8 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) Snapshot(logOff uint64) {
 		return true
 	})
 	st.bgErrG.Go(func() error {
-		return st.snapshotCallback(st.bgCtx, logOff, out)
+		return st.snapshotCallback(st.bgCtx, tpLogOff, out)
 	})
-	// cpyElapsed := time.Since(cpyBeg)
-	// serBeg := time.Now()
-	// outBin := make([][]byte, 0, len(out))
-	// for _, kv := range out {
-	// 	kvEnc, err := st.kvPairSerde.Encode(kv)
-	// 	if err != nil {
-	// 		continue
-	// 	}
-	// 	outBin = append(outBin, kvEnc)
-	// }
-	// serElapsed := time.Since(serBeg)
-	// fmt.Fprintf(os.Stderr, "%s snapshot: copy elapsed %d, ser elapsed %d\n",
-	// 	st.name, cpyElapsed.Microseconds(), serElapsed.Microseconds())
-	// return outBin
 }
 
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) RestoreFromSnapshot(snapshot [][]byte) error {

@@ -30,25 +30,15 @@ func SetKVStoreWithChangelogSnapshot[K, V any](
 	kvstore store.KeyValueStoreBackedByChangelogG[K, V],
 	payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
 ) {
-	kvstore.SetSnapshotCallback(ctx, func(ctx context.Context, logOff uint64, snapshot []commtypes.KeyValuePair[K, V]) error {
-		kvPairSerdeG := kvstore.GetKVSerde()
-		outBin := make([][]byte, 0, len(snapshot))
-		for _, kv := range snapshot {
-			bin, err := kvPairSerdeG.Encode(kv)
+	kvstore.SetSnapshotCallback(ctx,
+		func(ctx context.Context, tpLogoff []commtypes.TpLogOff, snapshot []commtypes.KeyValuePair[K, V]) error {
+			out, err := encodeKVSnapshot[K, V](kvstore, snapshot, payloadSerde)
 			if err != nil {
 				return err
 			}
-			outBin = append(outBin, bin)
-		}
-		out, err := payloadSerde.Encode(commtypes.PayloadArr{
-			Payloads: outBin,
+			fmt.Fprintf(os.Stderr, "kv snapshot size: %d, store snapshot at %x\n", len(out), tpLogoff[0].LogOff)
+			return rs.StoreSnapshot(ctx, env, out, kvstore.ChangelogTopicName(), tpLogoff[0].LogOff)
 		})
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(os.Stderr, "kv snapshot size: %d, store snapshot at %x\n", len(out), logOff)
-		return rs.StoreSnapshot(ctx, env, out, kvstore.ChangelogTopicName(), logOff)
-	})
 }
 
 func SetWinStoreWithChangelogSnapshot[K, V any](
@@ -58,25 +48,17 @@ func SetWinStoreWithChangelogSnapshot[K, V any](
 	winStore store.WindowStoreBackedByChangelogG[K, V],
 	payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
 ) {
-	winStore.SetWinSnapshotCallback(ctx, func(ctx context.Context, logOff uint64, snapshot []commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]) error {
-		kvPairSerdeG := winStore.GetKVSerde()
-		outBin := make([][]byte, 0, len(snapshot))
-		for _, kv := range snapshot {
-			bin, err := kvPairSerdeG.Encode(kv)
+	winStore.SetWinSnapshotCallback(ctx,
+		func(ctx context.Context, tpLogOff []commtypes.TpLogOff,
+			snapshot []commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V],
+		) error {
+			out, err := encodeWinSnapshot[K, V](winStore, snapshot, payloadSerde)
 			if err != nil {
 				return err
 			}
-			outBin = append(outBin, bin)
-		}
-		out, err := payloadSerde.Encode(commtypes.PayloadArr{
-			Payloads: outBin,
+			fmt.Fprintf(os.Stderr, "win snapshot size: %d, store snapshot at %x\n", len(out), tpLogOff[0].LogOff)
+			return rs.StoreSnapshot(ctx, env, out, winStore.ChangelogTopicName(), tpLogOff[0].LogOff)
 		})
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(os.Stderr, "win snapshot size: %d, store snapshot at %x\n", len(out), logOff)
-		return rs.StoreSnapshot(ctx, env, out, winStore.ChangelogTopicName(), logOff)
-	})
 }
 
 func SetupManagersForEpoch(ctx context.Context,
@@ -264,7 +246,7 @@ func processInEpoch(
 			setLastMarkSeq(logOff, args)
 			if env_config.CREATE_SNAPSHOT && args.snapshotEvery != 0 && time.Since(snapshotTimer) > args.snapshotEvery {
 				snStart := time.Now()
-				createSnapshot(args, logOff)
+				createSnapshot(args, []commtypes.TpLogOff{{LogOff: logOff}})
 				elapsed := time.Since(snStart)
 				snapshotTime = append(snapshotTime, elapsed.Microseconds())
 				snapshotTimer = time.Now()
@@ -385,11 +367,11 @@ func finalMark(dctx context.Context, t *StreamTask, args *StreamTaskArgs,
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("flushStreams failed: %v", err))
 	}
+	flushTime := stats.Elapsed(flushAllStart).Microseconds()
 	kms, err := getKeyMapping(dctx, args)
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("getKeyMapping failed: %v", err))
 	}
-	flushTime := stats.Elapsed(flushAllStart).Microseconds()
 	// mPartBeg := time.Now()
 	logOff, _, err := markEpoch(dctx, em, t, args)
 	if err != nil {
@@ -398,7 +380,7 @@ func finalMark(dctx context.Context, t *StreamTask, args *StreamTaskArgs,
 	fmt.Fprintf(os.Stderr, "[%d] final mark seqNum: %#x\n", args.ectx.SubstreamNum(), logOff)
 	if env_config.CREATE_SNAPSHOT && args.snapshotEvery != 0 && !exitDueToFailTest {
 		snStart := time.Now()
-		createSnapshot(args, logOff)
+		createSnapshot(args, []commtypes.TpLogOff{{LogOff: logOff}})
 		for _, kv := range args.kvChangelogs {
 			err = kv.WaitForAllSnapshot()
 			if err != nil {

@@ -26,7 +26,7 @@ type CoreKeyValueStoreG[K, V any] interface {
 	Delete(ctx context.Context, key K) error
 	TableType() TABLE_TYPE
 	Flush(ctx context.Context) (uint32, error)
-	Snapshot(logOff uint64)
+	Snapshot([]commtypes.TpLogOff)
 	SetSnapshotCallback(ctx context.Context, f KVSnapshotCallback[K, V])
 	WaitForAllSnapshot() error
 	RestoreFromSnapshot(snapshot [][]byte) error
@@ -45,7 +45,7 @@ type OnlyUpdateInMemStoreG[K, V any] interface {
 
 type KeyValueStoreOp interface {
 	OnlyUpdateInMemStore
-	Snapshot(logOff uint64)
+	Snapshot([]commtypes.TpLogOff)
 	WaitForAllSnapshot() error
 	RestoreFromSnapshot(snapshot [][]byte) error
 	BuildKeyMeta(ctx context.Context, kms map[string][]txn_data.KeyMaping) error

@@ -212,8 +212,8 @@ func (c *CachingKeyValueStoreG[K, V]) SubstreamNum() uint8 {
 	return c.wrappedStore.SubstreamNum()
 }
 
-func (c *CachingKeyValueStoreG[K, V]) Snapshot(logOff uint64) {
-	c.wrappedStore.Snapshot(logOff)
+func (c *CachingKeyValueStoreG[K, V]) Snapshot(tpLogOff []commtypes.TpLogOff) {
+	c.wrappedStore.Snapshot(tpLogOff)
 }
 
 func (c *CachingKeyValueStoreG[K, V]) WaitForAllSnapshot() error {

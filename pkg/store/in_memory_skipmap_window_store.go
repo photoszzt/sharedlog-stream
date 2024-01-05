@@ -24,7 +24,7 @@ func updateSeqnumForDups(retainDuplicates bool, seqNum *uint32) {
 	}
 }
 
-type WinSnapshotCallback[K, V any] func(ctx context.Context, logOff uint64,
+type WinSnapshotCallback[K, V any] func(ctx context.Context, tplogOff []commtypes.TpLogOff,
 	snapshot []commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]) error
 
 type InMemorySkipMapWindowStoreG[K, V any] struct {
@@ -89,6 +89,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) SetKVSerde(serdeFormat commtypes.Ser
 	s.kvPairSerdeG, err = commtypes.GetKeyValuePairSerdeG(serdeFormat, keySerde, valSerde)
 	return err
 }
+
 func (s *InMemorySkipMapWindowStoreG[K, V]) GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]] {
 	return s.kvPairSerdeG
 }
@@ -157,9 +158,11 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Get(ctx context.Context, key K, wind
 		return v, exists, nil
 	}
 }
+
 func (s *InMemorySkipMapWindowStoreG[K, V]) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
 	panic("not implement")
 }
+
 func (s *InMemorySkipMapWindowStoreG[K, V]) Fetch(ctx context.Context, key K, timeFrom time.Time, timeTo time.Time,
 	iterFunc func(int64 /* ts */, K, V) error,
 ) error {
@@ -207,6 +210,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Fetch(ctx context.Context, key K, ti
 		return nil
 	}
 }
+
 func (s *InMemorySkipMapWindowStoreG[K, V]) FetchWithKeyRange(ctx context.Context, keyFrom K,
 	keyTo K, timeFrom time.Time, timeTo time.Time,
 	iterFunc func(int64, K, V) error,
@@ -379,7 +383,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) WaitForAllSnapshot() error {
 }
 
 // not thread-safe
-func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot(logOff uint64) {
+func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot(tpLogoff []commtypes.TpLogOff) {
 	l := 0
 	if s.retainDuplicates {
 		l = s.storeWithDup.Len()
@@ -402,7 +406,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot(logOff uint64) {
 			return true
 		})
 		s.bgErrG.Go(func() error {
-			return s.snapshotCallback(s.bgCtx, logOff, out)
+			return s.snapshotCallback(s.bgCtx, tpLogoff, out)
 		})
 	} else {
 		// cpyBeg := time.Now()
@@ -419,7 +423,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot(logOff uint64) {
 		})
 		// cpyElapsed := time.Since(cpyBeg)
 		s.bgErrG.Go(func() error {
-			return s.snapshotCallback(s.bgCtx, logOff, out)
+			return s.snapshotCallback(s.bgCtx, tpLogoff, out)
 		})
 	}
 }
@@ -442,6 +446,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) RestoreFromSnapshot(ctx context.Cont
 func (s *InMemorySkipMapWindowStoreG[K, V]) TableType() TABLE_TYPE { return IN_MEM }
 func (s *InMemorySkipMapWindowStoreG[K, V]) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 }
+
 func (s *InMemorySkipMapWindowStoreG[K, V]) PutWithoutPushToChangelogG(ctx context.Context, key K, value optional.Option[V], windowStartTs int64) error {
 	return s.Put(ctx, key, value, windowStartTs, TimeMeta{RecordTsMs: 0})
 }
@@ -449,6 +454,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Flush(ctx context.Context) (uint32, 
 func (s *InMemorySkipMapWindowStoreG[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8) (int, error) {
 	panic("not supported")
 }
+
 func (s *InMemorySkipMapWindowStoreG[K, V]) ConfigureExactlyOnce(
 	rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	guarantee exactly_once_intr.GuaranteeMth,
@@ -467,6 +473,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) SubstreamNum() uint8             { p
 func (s *InMemorySkipMapWindowStoreG[K, V]) FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error) {
 	panic("not supported")
 }
+
 func (s *InMemorySkipMapWindowStoreG[K, V]) removeExpiredSegments() {
 	s.mux.RLock()
 	minLiveTimeTmp := int64(s.observedStreamTime) - int64(s.retentionPeriod) + 1
@@ -500,8 +507,10 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) removeExpiredSegments() {
 
 func (s *InMemorySkipMapWindowStoreG[K, V]) SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]) error) {
 }
+
 func (s *InMemorySkipMapWindowStoreG[K, V]) SetFlushCallbackFunc(exactly_once_intr.FlushCallbackFunc) {
 }
+
 func (s *InMemorySkipMapWindowStoreG[K, V]) BuildKeyMeta(kms map[string][]txn_data.KeyMaping) error {
 	panic("not supported")
 }

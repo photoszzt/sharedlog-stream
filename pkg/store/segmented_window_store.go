@@ -216,11 +216,13 @@ func (rws *SegmentedWindowStoreG[K, V]) TableType() TABLE_TYPE {
 func (rws *SegmentedWindowStoreG[K, V]) StartTransaction(ctx context.Context) error {
 	return rws.bytesStore.StartTransaction(ctx)
 }
+
 func (rws *SegmentedWindowStoreG[K, V]) CommitTransaction(ctx context.Context, taskRepr string,
 	transactionID uint64,
 ) error {
 	return rws.bytesStore.CommitTransaction(ctx, taskRepr, transactionID)
 }
+
 func (rws *SegmentedWindowStoreG[K, V]) AbortTransaction(ctx context.Context) error {
 	return rws.bytesStore.AbortTransaction(ctx)
 }
@@ -231,9 +233,11 @@ func (rws *SegmentedWindowStoreG[K, V]) GetTransactionID(ctx context.Context, ta
 
 func (rws *SegmentedWindowStoreG[K, V]) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 }
+
 func (rws *SegmentedWindowStoreG[K, V]) FlushChangelog(ctx context.Context) error {
 	return nil
 }
+
 func (rws *SegmentedWindowStoreG[K, V]) ConsumeChangelog(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqs, error) {
 	return nil, nil
 }
@@ -245,34 +249,44 @@ func (rws *SegmentedWindowStoreG[K, V]) ConfigureExactlyOnce(rem exactly_once_in
 func (rws *SegmentedWindowStoreG[K, V]) ChangelogTopicName() string {
 	panic("not supported")
 }
+
 func (s *SegmentedWindowStoreG[K, V]) Flush(ctx context.Context) (uint32, error) {
 	return 0, nil
 }
+
 func (s *SegmentedWindowStoreG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeFormat,
 	keySerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]], valSerde commtypes.SerdeG[V],
 ) error {
 	panic("not supported")
 }
+
 func (s *SegmentedWindowStoreG[K, V]) GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]] {
 	panic("not supported")
 }
+
 func (s *SegmentedWindowStoreG[K, V]) RestoreFromSnapshot(ctx context.Context, snapshot [][]byte) error {
 	panic("not implemented")
 }
+
 func (s *SegmentedWindowStoreG[K, V]) SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]) error) {
 }
+
 func (s *SegmentedWindowStoreG[K, V]) SetFlushCallbackFunc(exactly_once_intr.FlushCallbackFunc) {
 }
+
 func (s *SegmentedWindowStoreG[K, V]) BuildKeyMeta(kms map[string][]txn_data.KeyMaping) error {
 	panic("not supported")
 }
+
 func (s *SegmentedWindowStoreG[K, V]) SetWinSnapshotCallback(ctx context.Context, f WinSnapshotCallback[K, V]) {
 	s.bgErrG, s.bgCtx = errgroup.WithContext(ctx)
 	s.snapshotCallback = f
 }
-func (s *SegmentedWindowStoreG[K, V]) Snapshot(logOff uint64) {
+
+func (s *SegmentedWindowStoreG[K, V]) Snapshot(tplogoff []commtypes.TpLogOff) {
 	panic("not implemented")
 }
+
 func (s *SegmentedWindowStoreG[K, V]) WaitForAllSnapshot() error {
 	return s.bgErrG.Wait()
 }

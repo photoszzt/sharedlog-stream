@@ -20,8 +20,10 @@ type CachingWindowStoreG[K comparable, V any] struct {
 	flushCallbackFunc func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]) error
 }
 
-var _ = CoreWindowStoreG[int, int](&CachingWindowStoreG[int, int]{})
-var _ = WindowStoreBackedByChangelogG[int, int](&CachingWindowStoreG[int, int]{})
+var (
+	_ = CoreWindowStoreG[int, int](&CachingWindowStoreG[int, int]{})
+	_ = WindowStoreBackedByChangelogG[int, int](&CachingWindowStoreG[int, int]{})
+)
 
 func NewCachingWindowStoreG[K comparable, V any](ctx context.Context,
 	windowSize int64,
@@ -91,15 +93,18 @@ func (c *CachingWindowStoreG[K, V]) Put(ctx context.Context, key K,
 	return c.cache.PutMaybeEvict(commtypes.KeyAndWindowStartTsG[K]{Key: key, WindowStartTs: windowStartTimestamp},
 		LRUEntry[V]{value: value, isDirty: true, tm: tm})
 }
+
 func (c *CachingWindowStoreG[K, V]) PutWithoutPushToChangelogG(ctx context.Context,
 	key K, value optional.Option[V], windowStartTs int64,
 ) error {
 	return c.wrappedStore.PutWithoutPushToChangelogG(ctx, key, value, windowStartTs)
 }
+
 func (c *CachingWindowStoreG[K, V]) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
 	keyTs := key.(commtypes.KeyAndWindowStartTsG[K])
 	return c.wrappedStore.PutWithoutPushToChangelogG(ctx, keyTs.Key, optional.Some(value.(V)), keyTs.WindowStartTs)
 }
+
 func (c *CachingWindowStoreG[K, V]) Get(ctx context.Context, key K,
 	windowStartTimestamp int64,
 ) (V, bool, error) {
@@ -111,25 +116,30 @@ func (c *CachingWindowStoreG[K, V]) Get(ctx context.Context, key K,
 		return c.wrappedStore.Get(ctx, key, windowStartTimestamp)
 	}
 }
+
 func (c *CachingWindowStoreG[K, V]) Fetch(ctx context.Context, key K, timeFrom time.Time, timeTo time.Time,
 	iterFunc func(int64 /* ts */, K, V) error,
 ) error {
 	panic("not implemented")
 }
+
 func (c *CachingWindowStoreG[K, V]) FetchWithKeyRange(ctx context.Context, keyFrom K,
 	keyTo K, timeFrom time.Time, timeTo time.Time,
 	iterFunc func(int64, K, V) error,
 ) error {
 	panic("not implemented")
 }
+
 func (c *CachingWindowStoreG[K, V]) FetchAll(ctx context.Context, timeFrom time.Time, timeTo time.Time,
 	iterFunc func(int64, K, V) error,
 ) error {
 	panic("not implemented")
 }
+
 func (c *CachingWindowStoreG[K, V]) IterAll(iterFunc func(int64, K, V) error) error {
 	panic("not implemented")
 }
+
 func (c *CachingWindowStoreG[K, V]) Flush(ctx context.Context) (uint32, error) {
 	c.cache.flush(nil)
 	return c.wrappedStore.Flush(ctx)
@@ -138,9 +148,11 @@ func (c *CachingWindowStoreG[K, V]) TableType() TABLE_TYPE { return IN_MEM }
 func (c *CachingWindowStoreG[K, V]) SetTrackParFunc(f exactly_once_intr.TrackProdSubStreamFunc) {
 	c.wrappedStore.SetTrackParFunc(f)
 }
+
 func (s *CachingWindowStoreG[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8) (int, error) {
 	return s.wrappedStore.ConsumeOneLogEntry(ctx, parNum)
 }
+
 func (s *CachingWindowStoreG[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	guarantee exactly_once_intr.GuaranteeMth,
 ) {
@@ -150,6 +162,7 @@ func (s *CachingWindowStoreG[K, V]) ConfigureExactlyOnce(rem exactly_once_intr.R
 func (s *CachingWindowStoreG[K, V]) ChangelogTopicName() string {
 	return s.wrappedStore.ChangelogTopicName()
 }
+
 func (s *CachingWindowStoreG[K, V]) GetInitialProdSeqNum() uint64 {
 	return s.wrappedStore.GetInitialProdSeqNum()
 }
@@ -163,18 +176,23 @@ func (s *CachingWindowStoreG[K, V]) SubstreamNum() uint8             { return s.
 func (s *CachingWindowStoreG[K, V]) SetFlushCallback(f func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]) error) {
 	s.flushCallbackFunc = f
 }
-func (s *CachingWindowStoreG[K, V]) Snapshot(logOff uint64) {
-	s.wrappedStore.Snapshot(logOff)
+
+func (s *CachingWindowStoreG[K, V]) Snapshot(tplogoff []commtypes.TpLogOff) {
+	s.wrappedStore.Snapshot(tplogoff)
 }
+
 func (s *CachingWindowStoreG[K, V]) WaitForAllSnapshot() error {
 	return s.wrappedStore.WaitForAllSnapshot()
 }
+
 func (s *CachingWindowStoreG[K, V]) SetWinSnapshotCallback(ctx context.Context, f WinSnapshotCallback[K, V]) {
 	s.wrappedStore.SetWinSnapshotCallback(ctx, f)
 }
+
 func (s *CachingWindowStoreG[K, V]) RestoreFromSnapshot(ctx context.Context, snapshot [][]byte) error {
 	return s.wrappedStore.RestoreFromSnapshot(ctx, snapshot)
 }
+
 func (s *CachingWindowStoreG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeFormat,
 	keySerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]], valSerde commtypes.SerdeG[V],
 ) error {
@@ -188,6 +206,7 @@ func (s *CachingWindowStoreG[K, V]) GetKVSerde() commtypes.SerdeG[commtypes.KeyV
 func (s *CachingWindowStoreG[K, V]) FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error) {
 	return s.wrappedStore.FindLastEpochMetaWithAuxData(ctx, parNum)
 }
+
 func (s *CachingWindowStoreG[K, V]) BuildKeyMeta(kms map[string][]txn_data.KeyMaping) error {
 	return s.wrappedStore.BuildKeyMeta(kms)
 }

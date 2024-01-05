@@ -11,8 +11,6 @@ import (
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
-	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
 	"time"
 
@@ -110,47 +108,6 @@ func (h *q7MaxBid) setupSerde(serdeFormat commtypes.SerdeFormat) *common.FnOutpu
 		return common.GenErrFnOutput(err)
 	}
 	return nil
-}
-
-func (h *q7MaxBid) setupAggStore(ctx context.Context, sp *common.QueryInput) (
-	store.CachedKeyValueStoreBackedByChangelogG[ntypes.StartEndTime, commtypes.ValueTimestampG[uint64]],
-	*common.FnOutput,
-) {
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	maxBidByWinStoreName := "maxBidByWinKVStore"
-	mp, err := store_with_changelog.NewMaterializeParamBuilder[ntypes.StartEndTime, commtypes.ValueTimestampG[uint64]]().
-		MessageSerde(h.msgSerde).
-		StoreName(maxBidByWinStoreName).
-		ParNum(sp.ParNum).
-		SerdeFormat(serdeFormat).
-		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
-			Env:           h.env,
-			NumPartition:  sp.NumChangelogPartition,
-			TimeOut:       common.SrcConsumeTimeout,
-			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
-		}).BufMaxSize(sp.BufMaxSize).Build()
-	if err != nil {
-		return nil, common.GenErrFnOutput(err)
-	}
-	compare := func(a, b ntypes.StartEndTime) bool {
-		return ntypes.CompareStartEndTime(a, b) < 0
-	}
-	var aggStore store.CachedKeyValueStoreBackedByChangelogG[ntypes.StartEndTime, commtypes.ValueTimestampG[uint64]]
-	kvstore, err := store_with_changelog.CreateInMemorySkipmapKVTableWithChangelogG(mp, compare)
-	if err != nil {
-		return nil, common.GenErrFnOutput(err)
-	}
-	if h.useCache {
-		sizeOfVTs := commtypes.ValueTimestampGSize[uint64]{
-			ValSizeFunc: commtypes.SizeOfUint64,
-		}
-		cacheStore := store.NewCachingKeyValueStoreG[ntypes.StartEndTime, commtypes.ValueTimestampG[uint64]](
-			ctx, kvstore, ntypes.SizeOfStartEndTime, sizeOfVTs.SizeOfValueTimestamp, Q7SizePerStore)
-		aggStore = cacheStore
-	} else {
-		aggStore = kvstore
-	}
-	return aggStore, nil
 }
 
 func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *common.FnOutput {

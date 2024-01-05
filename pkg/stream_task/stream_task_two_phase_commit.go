@@ -288,7 +288,7 @@ func commitTransaction(ctx context.Context,
 	}
 	// debug.Fprintf(os.Stderr, "committed transaction\n")
 	if env_config.CREATE_SNAPSHOT && args.snapshotEvery != 0 && time.Since(*snapshotTimer) > args.snapshotEvery {
-		createSnapshot(args, logOff)
+		createSnapshot(args, []commtypes.TpLogOff{{LogOff: logOff}})
 		*snapshotTimer = time.Now()
 	}
 	cElapsed := stats.Elapsed(cBeg).Microseconds()
