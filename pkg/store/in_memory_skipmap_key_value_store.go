@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/optional"
+	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
 
 	"github.com/rs/zerolog/log"
@@ -22,11 +24,16 @@ type InMemorySkipmapKeyValueStoreG[K, V any] struct {
 	bgCtx            context.Context
 	bgErrG           *errgroup.Group
 	kvPairSerde      commtypes.SerdeG[commtypes.KeyValuePair[K, V]]
+	keySerde         commtypes.SerdeG[K]
 	snapshotCallback KVSnapshotCallback[K, V]
 	name             string
+	insId            uint8
 }
 
-var _ = CoreKeyValueStoreG[int, int](&InMemorySkipmapKeyValueStoreG[int, int]{})
+var (
+	_ = CoreKeyValueStoreG[int, int](&InMemorySkipmapKeyValueStoreG[int, int]{})
+	_ = CachedKeyValueStore[int, int](&InMemorySkipmapKeyValueStoreG[int, int]{})
+)
 
 func NewInMemorySkipmapKeyValueStoreG[K, V any](name string, lessFunc LessFunc[K]) *InMemorySkipmapKeyValueStoreG[K, V] {
 	return &InMemorySkipmapKeyValueStoreG[K, V]{
@@ -47,6 +54,7 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) WaitForAllSnapshot() error {
 
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeFormat, keySerde commtypes.SerdeG[K], valSerde commtypes.SerdeG[V]) error {
 	var err error
+	st.keySerde = keySerde
 	st.kvPairSerde, err = commtypes.GetKeyValuePairSerdeG(serdeFormat, keySerde, valSerde)
 	return err
 }
@@ -183,4 +191,34 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) TableType() TABLE_TYPE {
 
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) Flush(ctx context.Context) (uint32, error) {
 	return 0, nil
+}
+
+func (st *InMemorySkipmapKeyValueStoreG[K, V]) SetFlushCallback(
+	func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[V]]) error) {
+}
+
+func (st *InMemorySkipmapKeyValueStoreG[K, V]) BuildKeyMeta(ctx context.Context, kms map[string][]txn_data.KeyMaping) error {
+	kms[st.Name()] = make([]txn_data.KeyMaping, 0)
+	hasher := hashfuncs.ByteSliceHasher{}
+	return st.Range(ctx, optional.None[K](), optional.None[K](), func(k K, v V) error {
+		kBytes, err := st.keySerde.Encode(k)
+		if err != nil {
+			return err
+		}
+		hash := hasher.HashSum64(kBytes)
+		kms[st.Name()] = append(kms[st.Name()], txn_data.KeyMaping{
+			Key:         kBytes,
+			Hash:        hash,
+			SubstreamId: st.insId,
+		})
+		return nil
+	})
+}
+
+func (st *InMemorySkipmapKeyValueStoreG[K, V]) SetInstanceId(id uint8) {
+	st.insId = id
+}
+
+func (st *InMemorySkipmapKeyValueStoreG[K, V]) GetInstanceId() uint8 {
+	return st.insId
 }

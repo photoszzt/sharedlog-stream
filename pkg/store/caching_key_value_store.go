@@ -239,3 +239,11 @@ func (c *CachingKeyValueStoreG[K, V]) FindLastEpochMetaWithAuxData(ctx context.C
 func (c *CachingKeyValueStoreG[K, V]) BuildKeyMeta(ctx context.Context, kms map[string][]txn_data.KeyMaping) error {
 	return c.wrappedStore.BuildKeyMeta(ctx, kms)
 }
+
+func (c *CachingKeyValueStoreG[K, V]) SetInstanceId(id uint8) {
+	c.wrappedStore.SetInstanceId(id)
+}
+
+func (c *CachingKeyValueStoreG[K, V]) GetInstanceId() uint8 {
+	return c.wrappedStore.GetInstanceId()
+}

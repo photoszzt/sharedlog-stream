@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
@@ -45,61 +46,87 @@ func getKVStoreAndStreamArgs[K comparable, V any](
 	sp *common.QueryInput,
 	p *KVStoreStreamArgsParam[K, V],
 	ectx *processor.BaseExecutionContext,
-) (store.CachedKeyValueStore[K, commtypes.ValueTimestampG[V]],
-	stream_task.BuildStreamTaskArgs,
-	stream_task.SetupSnapshotCallbackFunc,
-	error,
+) (cachedStore store.CachedKeyValueStore[K, commtypes.ValueTimestampG[V]],
+	builder stream_task.BuildStreamTaskArgs,
+	f stream_task.SetupSnapshotCallbackFunc,
+	err error,
 ) {
-	mp, err := store_with_changelog.NewMaterializeParamBuilder[K, commtypes.ValueTimestampG[V]]().
-		MessageSerde(p.MsgSerde).
-		StoreName(p.StoreName).
-		ParNum(sp.ParNum).
-		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
-		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
-			Env:           env,
-			NumPartition:  sp.NumChangelogPartition,
-			TimeOut:       common.SrcConsumeTimeout,
-			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
-		}).
-		BufMaxSize(sp.BufMaxSize).
-		Build()
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	var aggStore store.CachedKeyValueStoreBackedByChangelogG[K, commtypes.ValueTimestampG[V]]
-	kvstore, err := store_with_changelog.CreateInMemorySkipmapKVTableWithChangelogG(mp, p.Compare)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	if p.UseCache {
-		sizeOfVTs := commtypes.ValueTimestampGSize[V]{
-			ValSizeFunc: p.SizeofV,
-		}
-		cacheStore := store.NewCachingKeyValueStoreG[K, commtypes.ValueTimestampG[V]](
-			ctx, kvstore, p.SizeofK, sizeOfVTs.SizeOfValueTimestamp, q5SizePerStore)
-		aggStore = cacheStore
-	} else {
-		aggStore = kvstore
-	}
-	kvc := map[string]store.KeyValueStoreOpWithChangelog{
-		aggStore.ChangelogTopicName(): aggStore,
-	}
-	builder := benchutil.UpdateStreamTaskArgs(sp, stream_task.NewStreamTaskArgsBuilder(env, ectx,
+	builder = benchutil.UpdateStreamTaskArgs(sp, stream_task.NewStreamTaskArgsBuilder(env, ectx,
 		fmt.Sprintf("%s-%s-%d-%s", p.FuncName, sp.InputTopicNames[0],
-			sp.ParNum, sp.OutputTopicNames[0]))).KVStoreChangelogs(kvc)
-	f := func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
-		rs *snapshot_store.RedisSnapshotStore,
-	) error {
-		payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
+			sp.ParNum, sp.OutputTopicNames[0])))
+	gua := exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	if gua == exactly_once_intr.ALIGN_CHKPT {
+		st := store.NewInMemorySkipmapKeyValueStoreG[K, commtypes.ValueTimestampG[V]](p.StoreName, p.Compare)
+		st.SetInstanceId(sp.ParNum)
+		err := st.SetKVSerde(serdeFormat, p.MsgSerde.GetKeySerdeG(), p.MsgSerde.GetValSerdeG())
 		if err != nil {
-			return err
+			return nil, nil, nil, err
 		}
-		stream_task.SetKVStoreWithChangelogSnapshot[K, commtypes.ValueTimestampG[V]](
-			ctx, env,
-			rs, aggStore, payloadSerde)
-		return nil
+		builder.KVStoreOps([]store.KeyValueStoreOp{st})
+		f = func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
+			rs *snapshot_store.RedisSnapshotStore,
+		) error {
+			payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
+			if err != nil {
+				return err
+			}
+			stream_task.SetKVStoreChkpt[K, commtypes.ValueTimestampG[V]](
+				ctx,
+				rs, cachedStore, payloadSerde)
+			return nil
+		}
+		return st, builder, f, nil
+	} else {
+		mp, err := store_with_changelog.NewMaterializeParamBuilder[K, commtypes.ValueTimestampG[V]]().
+			MessageSerde(p.MsgSerde).
+			StoreName(p.StoreName).
+			ParNum(sp.ParNum).
+			SerdeFormat(serdeFormat).
+			ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
+				Env:           env,
+				NumPartition:  sp.NumChangelogPartition,
+				TimeOut:       common.SrcConsumeTimeout,
+				FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+			}).
+			BufMaxSize(sp.BufMaxSize).
+			Build()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		var aggStore store.CachedKeyValueStoreBackedByChangelogG[K, commtypes.ValueTimestampG[V]]
+		kvstore, err := store_with_changelog.CreateInMemorySkipmapKVTableWithChangelogG(mp, p.Compare)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		if p.UseCache {
+			sizeOfVTs := commtypes.ValueTimestampGSize[V]{
+				ValSizeFunc: p.SizeofV,
+			}
+			cacheStore := store.NewCachingKeyValueStoreG[K, commtypes.ValueTimestampG[V]](
+				ctx, kvstore, p.SizeofK, sizeOfVTs.SizeOfValueTimestamp, q5SizePerStore)
+			aggStore = cacheStore
+		} else {
+			aggStore = kvstore
+		}
+		kvc := map[string]store.KeyValueStoreOpWithChangelog{
+			aggStore.ChangelogTopicName(): aggStore,
+		}
+		builder = builder.KVStoreChangelogs(kvc)
+		f = func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
+			rs *snapshot_store.RedisSnapshotStore,
+		) error {
+			payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
+			if err != nil {
+				return err
+			}
+			stream_task.SetKVStoreWithChangelogSnapshot[K, commtypes.ValueTimestampG[V]](
+				ctx, env,
+				rs, aggStore, payloadSerde)
+			return nil
+		}
+		return aggStore, builder, f, nil
 	}
-	return aggStore, builder, f, nil
 }
 
 func getSrcSink(ctx context.Context, env types.Environment, sp *common.QueryInput,

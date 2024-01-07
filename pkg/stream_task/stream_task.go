@@ -263,6 +263,15 @@ func createSnapshot(args *StreamTaskArgs, tplogOff []commtypes.TpLogOff) {
 	}
 }
 
+func createChkpt(args *StreamTaskArgs, tplogOff []commtypes.TpLogOff) {
+	for _, kv := range args.kvs {
+		kv.Snapshot(tplogOff)
+	}
+	for _, wsc := range args.wscs {
+		wsc.Snapshot(tplogOff)
+	}
+}
+
 func updateReturnMetric(ret *common.FnOutput, warmupChecker *stats.Warmup,
 	waitForEndMark bool, endDuration time.Duration, instanceID uint8,
 ) {

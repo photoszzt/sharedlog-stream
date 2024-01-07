@@ -16,6 +16,8 @@ type StreamTaskArgs struct {
 	env                   types.Environment
 	windowStoreChangelogs map[string]store.WindowStoreOpWithChangelog
 	kvChangelogs          map[string]store.KeyValueStoreOpWithChangelog
+	kvs                   []store.KeyValueStoreOp
+	wscs                  []store.WindowStoreOp
 	testParams            map[string]commtypes.FailParam
 	appId                 string
 	transactionalId       string
@@ -94,6 +96,8 @@ type BuildStreamTaskArgs interface {
 	Build() (*StreamTaskArgs, error)
 	WindowStoreChangelogs(map[string]store.WindowStoreOpWithChangelog) BuildStreamTaskArgs
 	KVStoreChangelogs(map[string]store.KeyValueStoreOpWithChangelog) BuildStreamTaskArgs
+	WindowStoreOps([]store.WindowStoreOp) BuildStreamTaskArgs
+	KVStoreOps([]store.KeyValueStoreOp) BuildStreamTaskArgs
 	FixedOutParNum(uint8) BuildStreamTaskArgs
 	WaitEndMark(bool) BuildStreamTaskArgs
 	TestParams(map[string]commtypes.FailParam) BuildStreamTaskArgs
@@ -167,6 +171,16 @@ func (args *StreamTaskArgsBuilder) WaitEndMark(waitEndMark bool) BuildStreamTask
 
 func (args *StreamTaskArgsBuilder) TestParams(testParams map[string]commtypes.FailParam) BuildStreamTaskArgs {
 	args.stArgs.testParams = testParams
+	return args
+}
+
+func (args *StreamTaskArgsBuilder) KVStoreOps(kvs []store.KeyValueStoreOp) BuildStreamTaskArgs {
+	args.stArgs.kvs = kvs
+	return args
+}
+
+func (args *StreamTaskArgsBuilder) WindowStoreOps(wscs []store.WindowStoreOp) BuildStreamTaskArgs {
+	args.stArgs.wscs = wscs
 	return args
 }
 

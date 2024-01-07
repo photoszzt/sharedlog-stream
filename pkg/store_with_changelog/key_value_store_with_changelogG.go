@@ -18,7 +18,6 @@ type KeyValueStoreWithChangelogG[K, V any] struct {
 	trackFunc        exactly_once_intr.TrackProdSubStreamFunc
 	changelogManager *ChangelogManager[K, V]
 	// changelogProduce *stats.ConcurrentStatsCollector[int64]
-	parNum uint8
 }
 
 var _ = store.KeyValueStoreBackedByChangelogG[int, int](&KeyValueStoreWithChangelogG[int, int]{})
@@ -40,12 +39,12 @@ func NewKeyValueStoreWithChangelogG[K, V any](mp *MaterializeParam[K, V],
 	if err != nil {
 		return nil, err
 	}
+	store.SetInstanceId(mp.ParNum())
 	return &KeyValueStoreWithChangelogG[K, V]{
 		kvstore:          store,
 		trackFunc:        exactly_once_intr.DefaultTrackProdSubstreamFunc,
 		msgSerde:         mp.msgSerde,
 		changelogManager: changelogManager,
-		parNum:           mp.ParNum(),
 		// changelogProduce: stats.NewConcurrentStatsCollector[int64](mp.storeName+"-clProd",
 		// 	stats.DEFAULT_COLLECT_DURATION),
 	}, nil
@@ -89,22 +88,21 @@ func (st *KeyValueStoreWithChangelogG[K, V]) Put(ctx context.Context, key K, val
 		return err
 	}
 	msgSer, ok := msgSerOp.Take()
-	if ok {
-		err = st.trackFunc(ctx, st.changelogManager.TopicName(), st.parNum)
-		if err != nil {
-			return err
-		}
-		err := st.changelogManager.produce(ctx, msgSer, st.parNum)
-		// elapsed := stats.Elapsed(pStart).Microseconds()
-		// st.changelogProduce.AddSample(elapsed)
-		if err != nil {
-			return err
-		}
-		err = st.kvstore.Put(ctx, key, value, tm)
-		return err
-	} else {
+	if !ok {
 		return nil
 	}
+	err = st.trackFunc(ctx, st.changelogManager.TopicName(), st.kvstore.GetInstanceId())
+	if err != nil {
+		return err
+	}
+	err = st.changelogManager.produce(ctx, msgSer, st.kvstore.GetInstanceId())
+	// elapsed := stats.Elapsed(pStart).Microseconds()
+	// st.changelogProduce.AddSample(elapsed)
+	if err != nil {
+		return err
+	}
+	err = st.kvstore.Put(ctx, key, value, tm)
+	return err
 }
 
 func (st *KeyValueStoreWithChangelogG[K, V]) BuildKeyMeta(ctx context.Context, kms map[string][]txn_data.KeyMaping) error {
@@ -118,7 +116,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) BuildKeyMeta(ctx context.Context, k
 		hash := hasher.HashSum64(kBytes)
 		kms[st.changelogManager.TopicName()] = append(kms[st.changelogManager.TopicName()], txn_data.KeyMaping{
 			Key:         kBytes,
-			SubstreamId: st.parNum,
+			SubstreamId: st.kvstore.GetInstanceId(),
 			Hash:        hash,
 		})
 		return nil
@@ -155,7 +153,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) Delete(ctx context.Context, key K) 
 	}
 	msgSer, ok := msgSerOp.Take()
 	if ok {
-		err := st.changelogManager.produce(ctx, msgSer, st.parNum)
+		err := st.changelogManager.produce(ctx, msgSer, st.kvstore.GetInstanceId())
 		if err != nil {
 			return err
 		}
@@ -233,7 +231,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) Stream() sharedlog_stream.Stream {
 }
 
 func (st *KeyValueStoreWithChangelogG[K, V]) GetInitialProdSeqNum() uint64 {
-	return st.changelogManager.producer.GetInitialProdSeqNum(st.parNum)
+	return st.changelogManager.producer.GetInitialProdSeqNum(st.kvstore.GetInstanceId())
 }
 
 func (st *KeyValueStoreWithChangelogG[K, V]) ResetInitialProd() {
@@ -245,7 +243,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) SetLastMarkerSeq(lastMarkerSeq uint
 }
 
 func (st *KeyValueStoreWithChangelogG[K, V]) SubstreamNum() uint8 {
-	return st.parNum
+	return st.kvstore.GetInstanceId()
 }
 
 func (st *KeyValueStoreWithChangelogG[K, V]) SetFlushCallback(
@@ -270,6 +268,14 @@ func (st *KeyValueStoreWithChangelogG[K, V]) RestoreFromSnapshot(snapshot [][]by
 
 func (st *KeyValueStoreWithChangelogG[K, V]) FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error) {
 	return st.changelogManager.findLastEpochMetaWithAuxData(ctx, parNum)
+}
+
+func (st *KeyValueStoreWithChangelogG[K, V]) SetInstanceId(id uint8) {
+	st.kvstore.SetInstanceId(id)
+}
+
+func (st *KeyValueStoreWithChangelogG[K, V]) GetInstanceId() uint8 {
+	return st.kvstore.GetInstanceId()
 }
 
 func CreateInMemorySkipmapKVTableWithChangelogG[K, V any](mp *MaterializeParam[K, V], less store.LessFunc[K],

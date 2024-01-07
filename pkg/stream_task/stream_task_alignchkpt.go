@@ -7,8 +7,46 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/stats"
+	"sharedlog-stream/pkg/store"
 )
+
+func SetKVStoreChkpt[K, V any](
+	ctx context.Context,
+	rs *snapshot_store.RedisSnapshotStore,
+	kvstore store.CoreKeyValueStoreG[K, V],
+	payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
+) {
+	kvstore.SetSnapshotCallback(ctx,
+		func(ctx context.Context, tpLogoff []commtypes.TpLogOff, snapshot []commtypes.KeyValuePair[K, V]) error {
+			out, err := encodeKVSnapshot[K, V](kvstore, snapshot, payloadSerde)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(os.Stderr, "kv snapshot size: %d, store snapshot at %x\n", len(out), tpLogoff[0].LogOff)
+			return rs.StoreAlignChkpt(ctx, out, tpLogoff)
+		})
+}
+
+func SetWinStoreChkpt[K, V any](
+	ctx context.Context,
+	rs *snapshot_store.RedisSnapshotStore,
+	winStore store.CoreWindowStoreG[K, V],
+	payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
+) {
+	winStore.SetWinSnapshotCallback(ctx,
+		func(ctx context.Context, tpLogOff []commtypes.TpLogOff,
+			snapshot []commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V],
+		) error {
+			out, err := encodeWinSnapshot[K, V](winStore, snapshot, payloadSerde)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(os.Stderr, "win snapshot size: %d, store snapshot at %x\n", len(out), tpLogOff[0].LogOff)
+			return rs.StoreAlignChkpt(ctx, out, tpLogOff)
+		})
+}
 
 func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.FnOutput {
 	debug.Assert(len(args.ectx.Consumers()) >= 1, "Srcs should be filled")
@@ -39,16 +77,15 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 		ctrlRawMsg, ok := ctrlRawMsgOp.Take()
 		if ok {
 			fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
-			if t.pauseFunc != nil {
-				if ret := t.pauseFunc(); ret != nil {
-					return ret
-				}
-			}
-			ret_err := timedFlushStreams(ctx, t, args)
-			if ret_err != nil {
-				return ret_err
-			}
 			if ctrlRawMsg.Mark != commtypes.CHKPT_MARK {
+				if t.pauseFunc != nil {
+					if ret := t.pauseFunc(); ret != nil {
+						return ret
+					}
+				}
+				if ret_err := timedFlushStreams(ctx, t, args); ret_err != nil {
+					return ret_err
+				}
 				return handleCtrlMsg(ctx, ctrlRawMsg, t, args, &warmupCheck)
 			}
 		}
@@ -58,8 +95,7 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 			return ret
 		}
 	}
-	ret_err := timedFlushStreams(ctx, t, args)
-	if ret_err != nil {
+	if ret_err := timedFlushStreams(ctx, t, args); ret_err != nil {
 		return ret_err
 	}
 	ret := &common.FnOutput{Success: true}

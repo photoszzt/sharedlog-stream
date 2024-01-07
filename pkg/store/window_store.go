@@ -75,16 +75,20 @@ type OnlyUpdateInMemWinStoreG[K, V any] interface {
 		key K, value optional.Option[V], windowStartTs int64) error
 }
 
-type WindowStoreOpWithChangelog interface {
-	StoreBackedByChangelog
-	RestoreFromChangelog
-	UpdateTrackParFunc
+type WindowStoreOp interface {
 	OnlyUpdateInMemWinStore
-	ProduceRangeRecording
-	SubstreamNum() uint8
 	Snapshot(tplogOff []commtypes.TpLogOff)
 	WaitForAllSnapshot() error
 	RestoreFromSnapshot(ctx context.Context, snapshot [][]byte) error
 	BuildKeyMeta(kms map[string][]txn_data.KeyMaping) error
+}
+
+type WindowStoreOpWithChangelog interface {
+	StoreBackedByChangelog
+	RestoreFromChangelog
+	UpdateTrackParFunc
+	ProduceRangeRecording
+	SubstreamNum() uint8
 	FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error)
+	WindowStoreOp
 }

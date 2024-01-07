@@ -32,6 +32,8 @@ type CoreKeyValueStoreG[K, V any] interface {
 	RestoreFromSnapshot(snapshot [][]byte) error
 	SetKVSerde(serdeFormat commtypes.SerdeFormat, keySerde commtypes.SerdeG[K], valSerde commtypes.SerdeG[V]) error
 	GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[K, V]]
+	SetInstanceId(uint8)
+	GetInstanceId() uint8
 	OnlyUpdateInMemStore
 }
 
