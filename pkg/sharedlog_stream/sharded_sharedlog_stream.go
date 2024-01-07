@@ -147,32 +147,30 @@ func (s *SizableShardedSharedLogStream) PushWithTag(ctx context.Context, payload
 
 func (s *SizableShardedSharedLogStream) ReadNext(ctx context.Context, parNumber uint8) (*commtypes.RawMsg, error) {
 	s.mux.RLock()
-	if parNumber < s.numPartitions {
-		par := parNumber
-		shard := s.subSharedLogStreams[par]
-		msg, err := shard.Stream.ReadNext(ctx, parNumber)
-		s.mux.RUnlock()
-		return msg, err
-	} else {
+	if parNumber >= s.numPartitions {
 		s.mux.RUnlock()
 		return nil, xerrors.Errorf("Invalid partition number: %d", parNumber)
 	}
+	par := parNumber
+	shard := s.subSharedLogStreams[par]
+	msg, err := shard.Stream.ReadNext(ctx, parNumber)
+	s.mux.RUnlock()
+	return msg, err
 }
 
 func (s *SizableShardedSharedLogStream) ReadNextWithTag(
 	ctx context.Context, parNumber uint8, tag uint64,
 ) (*commtypes.RawMsg, error) {
 	s.mux.RLock()
-	if parNumber < s.numPartitions {
-		par := parNumber
-		shard := s.subSharedLogStreams[par]
-		msg, err := shard.Stream.ReadNextWithTag(ctx, parNumber, tag)
-		s.mux.RUnlock()
-		return msg, err
-	} else {
+	if parNumber >= s.numPartitions {
 		s.mux.RUnlock()
 		return nil, xerrors.Errorf("Invalid partition number: %d", parNumber)
 	}
+	par := parNumber
+	shard := s.subSharedLogStreams[par]
+	msg, err := shard.Stream.ReadNextWithTag(ctx, parNumber, tag)
+	s.mux.RUnlock()
+	return msg, err
 }
 
 func (s *SizableShardedSharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum uint64, parNum uint8, tag uint64) (*commtypes.RawMsg, error) {
@@ -209,9 +207,7 @@ type ShardedSharedLogStream struct {
 
 var _ = Stream(&ShardedSharedLogStream{})
 
-var (
-	ErrZeroParNum = xerrors.New("Shards must be positive")
-)
+var ErrZeroParNum = xerrors.New("Shards must be positive")
 
 func NewShardedSharedLogStream(env types.Environment, topicName string, numPartitions uint8,
 	serdeFormat commtypes.SerdeFormat, bufMaxSize uint32,
@@ -364,38 +360,35 @@ func (s *ShardedSharedLogStream) PushWithTag(ctx context.Context, payload []byte
 }
 
 func (s *ShardedSharedLogStream) ReadNext(ctx context.Context, parNumber uint8) (*commtypes.RawMsg, error) {
-	if parNumber < s.numPartitions {
-		par := parNumber
-		shard := s.subSharedLogStreams[par]
-		msg, err := shard.Stream.ReadNext(ctx, parNumber)
-		return msg, err
-	} else {
+	if parNumber >= s.numPartitions {
 		return nil, xerrors.Errorf("Invalid partition number: %d", parNumber)
 	}
+	par := parNumber
+	shard := s.subSharedLogStreams[par]
+	msg, err := shard.Stream.ReadNext(ctx, parNumber)
+	return msg, err
 }
 
 func (s *ShardedSharedLogStream) ReadNextWithTag(
 	ctx context.Context, parNumber uint8, tag uint64,
 ) (*commtypes.RawMsg, error) {
-	if parNumber < s.numPartitions {
-		par := parNumber
-		shard := s.subSharedLogStreams[par]
-		msg, err := shard.Stream.ReadNextWithTag(ctx, parNumber, tag)
-		return msg, err
-	} else {
+	if parNumber >= s.numPartitions {
 		return nil, xerrors.Errorf("Invalid partition number: %d", parNumber)
 	}
+	par := parNumber
+	shard := s.subSharedLogStreams[par]
+	msg, err := shard.Stream.ReadNextWithTag(ctx, parNumber, tag)
+	return msg, err
 }
 
 func (s *ShardedSharedLogStream) ReadBackwardWithTag(ctx context.Context, tailSeqNum uint64, parNum uint8, tag uint64) (*commtypes.RawMsg, error) {
-	if parNum < s.numPartitions {
-		par := parNum
-		shard := s.subSharedLogStreams[par]
-		msg, err := shard.Stream.ReadBackwardWithTag(ctx, tailSeqNum, parNum, tag)
-		return msg, err
-	} else {
+	if parNum >= s.numPartitions {
 		return nil, xerrors.Errorf("Invalid partition number: %d", parNum)
 	}
+	par := parNum
+	shard := s.subSharedLogStreams[par]
+	msg, err := shard.Stream.ReadBackwardWithTag(ctx, tailSeqNum, parNum, tag)
+	return msg, err
 }
 
 func (s *ShardedSharedLogStream) TopicName() string {
