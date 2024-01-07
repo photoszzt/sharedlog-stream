@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/utils/syncutils"
 	"sync"
+	"sync/atomic"
 )
 
 type JoinWorkerFunc[KIn, VIn, KOut, VOut any] func(c context.Context, m commtypes.MessageG[KIn, VIn]) ([]commtypes.MessageG[KOut, VOut], error)
@@ -18,18 +19,20 @@ type JoinProcManager struct {
 	done            chan struct{}
 	flushAndCollect chan struct{}
 	ctrlMsg         optional.Option[commtypes.RawMsgAndSeq]
-	gotEndMark      syncutils.AtomicBool
-	gotScaleFence   syncutils.AtomicBool
+	gotEndMark      atomic.Bool
+	gotScaleFence   atomic.Bool
 	startTimeMs     int64
 }
 
 func NewJoinProcManager() *JoinProcManager {
 	out := make(chan *common.FnOutput, 1)
-	return &JoinProcManager{
+	p := &JoinProcManager{
 		out:             out,
 		flushAndCollect: make(chan struct{}),
-		gotEndMark:      syncutils.AtomicBool(0),
 	}
+	p.gotEndMark.Store(false)
+	p.gotScaleFence.Store(false)
+	return p
 }
 
 func (jm *JoinProcManager) Out() <-chan *common.FnOutput {
@@ -37,11 +40,11 @@ func (jm *JoinProcManager) Out() <-chan *common.FnOutput {
 }
 
 func (jm *JoinProcManager) GotEndMark() bool {
-	return jm.gotEndMark.Get()
+	return jm.gotEndMark.Load()
 }
 
 func (jm *JoinProcManager) GotScaleFence() bool {
-	return jm.gotScaleFence.Get()
+	return jm.gotScaleFence.Load()
 }
 
 func (jm *JoinProcManager) StreamStartTime() int64 {

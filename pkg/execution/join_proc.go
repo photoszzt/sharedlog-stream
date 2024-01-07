@@ -85,7 +85,7 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 				if procArgs.CurEpoch() < rawMsgSeq.ScaleEpoch {
 					consumer.SrcProducerGotScaleFence(rawMsgSeq.ProdIdx)
 					if consumer.AllProducerScaleFenced() {
-						jm.gotScaleFence.Set(true)
+						jm.gotScaleFence.Store(true)
 						jm.ctrlMsg = optional.Some(rawMsgSeq)
 						jm.runLock.Unlock()
 						return
@@ -102,7 +102,7 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 				elapsed := time.Since(jWStart)
 				fmt.Fprintf(os.Stderr, "[id=%s] joinProc done, elapsed %v\n", id, elapsed)
 				if consumer.AllProducerEnded() {
-					jm.gotEndMark.Set(true)
+					jm.gotEndMark.Store(true)
 					// fmt.Fprintf(os.Stderr, "[id=%s] %s %d ends, start time: %d\n",
 					// 	id, consumer.TopicName(), procArgs.SubstreamNum(), jm.startTimeMs)
 					// fmt.Fprintf(os.Stderr, "[id=%s] %s(%d) ends, elapsed: %v\n", id, consumer.TopicName(), procArgs.SubstreamNum(), elapsed)
@@ -120,8 +120,10 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 				jm.runLock.Unlock()
 				continue
 			} else {
-				jm.out <- &common.FnOutput{Success: false,
-					Message: fmt.Sprintf("unrecognized mark: %v", rawMsgSeq.Mark)}
+				jm.out <- &common.FnOutput{
+					Success: false,
+					Message: fmt.Sprintf("unrecognized mark: %v", rawMsgSeq.Mark),
+				}
 				jm.runLock.Unlock()
 				return
 			}
