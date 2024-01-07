@@ -38,15 +38,15 @@ func (h *dump) process(ctx context.Context, di *common.DumpStreams) *common.FnOu
 	for _, streamParam := range di.StreamParams {
 		keySerde, err := GetSerdeFromString(streamParam.KeySerde, serdeFormat)
 		if err != nil {
-			return &common.FnOutput{Success: false, Message: err.Error()}
+			return common.GenErrFnOutput(err)
 		}
 		valSerde, err := GetSerdeFromString(streamParam.ValueSerde, serdeFormat)
 		if err != nil {
-			return &common.FnOutput{Success: false, Message: err.Error()}
+			return common.GenErrFnOutput(err)
 		}
 		msgSerde, err := commtypes.GetMsgSerde(serdeFormat, keySerde, valSerde)
 		if err != nil {
-			return &common.FnOutput{Success: false, Message: err.Error()}
+			return common.GenErrFnOutput(err)
 		}
 
 		err = common.DumpOutputStream(ctx, h.env, common.DumpOutputStreamConfig{
@@ -57,7 +57,7 @@ func (h *dump) process(ctx context.Context, di *common.DumpStreams) *common.FnOu
 			MsgSerde:      msgSerde,
 		})
 		if err != nil {
-			return &common.FnOutput{Success: false, Message: err.Error()}
+			return common.GenErrFnOutput(err)
 		}
 	}
 	return &common.FnOutput{

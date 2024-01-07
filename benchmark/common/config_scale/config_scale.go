@@ -38,18 +38,12 @@ func (h *ConfigScaleHandler) ConfigScale(ctx context.Context, input *common.Conf
 	cmm, err := control_channel.NewControlChannelManager(h.env, input.AppId,
 		commtypes.SerdeFormat(input.SerdeFormat), input.BufMaxSize, input.ScaleEpoch-1, 0)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return common.GenErrFnOutput(err)
 	}
 	// append rescale config will add one to epoch; so subtract one when set up the cmm
 	err = cmm.AppendRescaleConfig(ctx, input.Config)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return common.GenErrFnOutput(err)
 	}
 	if input.Bootstrap {
 		for _, fn := range input.FuncNames {
@@ -57,7 +51,7 @@ func (h *ConfigScaleHandler) ConfigScale(ctx context.Context, input *common.Conf
 			for i := uint8(0); i < ins; i++ {
 				err = cmm.RecordPrevInstanceFinish(ctx, fn, i, 0)
 				if err != nil {
-					return &common.FnOutput{Success: false, Message: err.Error()}
+					return common.GenErrFnOutput(err)
 				}
 			}
 		}

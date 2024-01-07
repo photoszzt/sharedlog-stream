@@ -43,7 +43,7 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 		case <-jm.flushAndCollect:
 			for _, sink := range procArgs.Producers() {
 				if _, err := sink.Flush(ctx); err != nil {
-					jm.out <- &common.FnOutput{Success: false, Message: err.Error()}
+					jm.out <- common.GenErrFnOutput(err)
 					return
 				}
 			}
@@ -70,7 +70,7 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 				continue
 			}
 			fmt.Fprintf(os.Stderr, "[ERROR] consume: %v, out chan len: %d\n", err, len(jm.out))
-			jm.out <- &common.FnOutput{Success: false, Message: err.Error()}
+			jm.out <- common.GenErrFnOutput(err)
 			fmt.Fprintf(os.Stderr, "%s done sending msg2\n", id)
 			jm.runLock.Unlock()
 			return
@@ -120,17 +120,15 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 				jm.runLock.Unlock()
 				continue
 			} else {
-				jm.out <- &common.FnOutput{
-					Success: false,
-					Message: fmt.Sprintf("unrecognized mark: %v", rawMsgSeq.Mark),
-				}
+				jm.out <- common.GenErrFnOutput(
+					fmt.Errorf("unrecognized mark: %v", rawMsgSeq.Mark))
 				jm.runLock.Unlock()
 				return
 			}
 		}
 		msgs, err := commtypes.DecodeRawMsgSeqG(rawMsgSeq, msgSerdePair.inMsgSerde)
 		if err != nil {
-			jm.out <- &common.FnOutput{Success: false, Message: err.Error()}
+			jm.out <- common.GenErrFnOutput(err)
 			jm.runLock.Unlock()
 			return
 		}
@@ -154,7 +152,7 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 				err = procMsgWithSink(ctx, subMsg, msgSerdePair.outMsgSerde, procArgs, id)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink: %v, out chan len: %d\n", id, err, len(jm.out))
-					jm.out <- &common.FnOutput{Success: false, Message: err.Error()}
+					jm.out <- common.GenErrFnOutput(err)
 					fmt.Fprintf(os.Stderr, "%s done send msg3\n", id)
 					jm.runLock.Unlock()
 					return
@@ -171,7 +169,7 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 			err = procMsgWithSink(ctx, msgs.Msg, msgSerdePair.outMsgSerde, procArgs, id)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "[ERROR] %s progMsgWithSink2: %v, out chan len: %d\n", id, err, len(jm.out))
-				jm.out <- &common.FnOutput{Success: false, Message: err.Error()}
+				jm.out <- common.GenErrFnOutput(err)
 				fmt.Fprintf(os.Stderr, "[id=%s] done send msg4\n", id)
 				jm.runLock.Unlock()
 				return

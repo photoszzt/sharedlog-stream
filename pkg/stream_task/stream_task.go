@@ -76,7 +76,7 @@ func ExecuteApp(ctx context.Context,
 		tm, cmm, err := setupManagersFor2pc(ctx, t, streamTaskArgs,
 			&rs, setupSnapshotCallback)
 		if err != nil {
-			return &common.FnOutput{Success: false, Message: err.Error()}
+			return common.GenErrFnOutput(err)
 		}
 		debug.Fprint(os.Stderr, "begin transaction processing\n")
 		ret = processWithTransaction(ctx, t, tm, cmm, streamTaskArgs, &rs)
@@ -85,7 +85,7 @@ func ExecuteApp(ctx context.Context,
 		rs := snapshot_store.NewRedisSnapshotStore(env_config.CREATE_SNAPSHOT)
 		em, cmm, err := SetupManagersForEpoch(ctx, streamTaskArgs, &rs, setupSnapshotCallback)
 		if err != nil {
-			return &common.FnOutput{Success: false, Message: err.Error()}
+			return common.GenErrFnOutput(err)
 		}
 		debug.Fprint(os.Stderr, "begin epoch processing\n")
 		ret = processInEpoch(ctx, t, em, cmm, streamTaskArgs)

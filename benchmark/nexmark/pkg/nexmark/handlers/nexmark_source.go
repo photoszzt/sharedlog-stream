@@ -70,10 +70,7 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 	procStart := stats.TimerBegin()
 	nextEvent, err := args.eventGenerator.NextEvent(ctx, args.channel_url_cache)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: fmt.Sprintf("next event failed: %v\n", err),
-		}
+		return common.GenErrFnOutput(fmt.Errorf("next event failed: %v\n", err))
 	}
 
 	// fmt.Fprintf(os.Stderr, "gen event with ts: %v\n", nextEvent.EventTimestamp)
@@ -83,7 +80,7 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 	}
 	msgEncoded, err := h.msgSerde.Encode(msg)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: fmt.Sprintf("msg serialization failed: %v", err)}
+		return common.GenErrFnOutput(fmt.Errorf("msg serialization failed: %v", err))
 	}
 	// fmt.Fprintf(os.Stderr, "msg: %v\n", string(msgEncoded))
 	args.idx += 1

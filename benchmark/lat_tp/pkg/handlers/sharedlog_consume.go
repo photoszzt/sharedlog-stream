@@ -59,7 +59,7 @@ func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context
 		idx_consumed, err := h.runLoop(ctx, stream,
 			time.Duration(sp.WarmUpTime)*time.Second, int(sp.WarmUpEvents), cm)
 		if err != nil {
-			return &common.FnOutput{Success: false, Message: err.Error()}
+			return common.GenErrFnOutput(err)
 		}
 		rest = sp.NumEvents - uint32(idx_consumed)
 		warmup_dur = time.Since(warm_start)

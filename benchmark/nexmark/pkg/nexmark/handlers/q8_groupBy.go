@@ -110,7 +110,7 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 	}
 	ectx, err := h.getExecutionCtx(ctx, sp)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	aucBySellerIdProc := processor.NewStreamSelectKeyProcessorG[string, *ntypes.Event, uint64]("auctionsBySellerIDMap",
 		processor.SelectKeyFuncG[string, *ntypes.Event, uint64](

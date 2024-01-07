@@ -62,7 +62,7 @@ func CommonProcess[K, V any](ctx context.Context, t *StreamTask, ectx *processor
 	}
 	msgs, err := commtypes.DecodeRawMsgSeqG(rawMsgSeq, inMsgSerde)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()},
+		return common.GenErrFnOutput(err),
 			optional.None[commtypes.RawMsgAndSeq]()
 	}
 	if msgs.MsgArr == nil && msgs.Msg.Key.IsNone() && msgs.Msg.Value.IsNone() {

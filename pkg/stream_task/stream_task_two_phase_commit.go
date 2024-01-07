@@ -170,7 +170,7 @@ func processWithTransaction(
 			&init, &paused)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "startNewTransaction err: %v\n", err)
-			return &common.FnOutput{Success: false, Message: err.Error()}
+			return common.GenErrFnOutput(err)
 		}
 
 		app_ret, ctrlRawMsgOp := t.appProcessFunc(ctx, t, args.ectx)
@@ -182,7 +182,7 @@ func processWithTransaction(
 			} else {
 				if hasProcessData {
 					if err := tm.AbortTransaction(ctx); err != nil {
-						return &common.FnOutput{Success: false, Message: fmt.Sprintf("abort failed: %v\n", err)}
+						return common.GenErrFnOutput(fmt.Errorf("abort failed: %v\n", err))
 					}
 				}
 				return app_ret

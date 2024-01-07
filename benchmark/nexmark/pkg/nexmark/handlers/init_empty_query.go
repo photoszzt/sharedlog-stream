@@ -48,10 +48,7 @@ func emptyFunc(ctx context.Context, sp *common.QueryInput,
 ) *common.FnOutput {
 	srcs, sinks, err := getSrcSink(ctx, env, sp)
 	if err != nil {
-		return &common.FnOutput{
-			Success: false,
-			Message: err.Error(),
-		}
+		return common.GenErrFnOutput(err)
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)

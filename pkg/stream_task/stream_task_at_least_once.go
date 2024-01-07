@@ -20,14 +20,12 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 	cm, err := consume_seq_num_manager.NewConsumeSeqManager(args.env, args.serdeFormat,
 		args.transactionalId, args.bufMaxSize)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	debug.Fprint(os.Stderr, "start restore\n")
 	offsetMap, err := cm.FindLastConsumedSeqNum(ctx)
-	if err != nil {
-		if !common_errors.IsStreamEmptyError(err) {
-			return common.GenErrFnOutput(err)
-		}
+	if err != nil && !common_errors.IsStreamEmptyError(err) {
+		return common.GenErrFnOutput(err)
 	}
 	err = restoreStateStore(ctx, args, offsetMap)
 	if err != nil {
@@ -114,7 +112,7 @@ func track(ctx context.Context, cm *consume_seq_num_manager.ConsumeSeqManager,
 	markers := consume_seq_num_manager.CollectOffsetMarker(consumers)
 	err := cm.Track(ctx, markers)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	return nil
 }
@@ -130,7 +128,7 @@ func pauseTrackFlush(ctx context.Context, t *StreamTask, args *StreamTaskArgs, c
 		markers := consume_seq_num_manager.CollectOffsetMarker(args.ectx.Consumers())
 		err := cm.Track(ctx, markers)
 		if err != nil {
-			return &common.FnOutput{Success: false, Message: err.Error()}
+			return common.GenErrFnOutput(err)
 		}
 		alreadyPaused = true
 	}

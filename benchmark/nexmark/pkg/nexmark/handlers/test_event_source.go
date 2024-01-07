@@ -71,12 +71,12 @@ func (h *testEventSource) eventGeneration(ctx context.Context, sp *common.TestSo
 		}
 		msgEncoded, err := msgSerde.Encode(&msg)
 		if err != nil {
-			return &common.FnOutput{Success: false, Message: fmt.Sprintf("msg serialization failed: %v", err)}
+			return common.GenErrFnOutput(fmt.Errorf("msg serialization failed: %v", err))
 		}
 		_, err = stream.Push(ctx, msgEncoded, 0, sharedlog_stream.SingleDataRecordMeta,
 			commtypes.EmptyProducerId)
 		if err != nil {
-			return &common.FnOutput{Success: false, Message: err.Error()}
+			return common.GenErrFnOutput(err)
 		}
 	}
 	return &common.FnOutput{Success: true}
