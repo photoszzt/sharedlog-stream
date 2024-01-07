@@ -67,7 +67,7 @@ func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInpu
 	}
 	srcs, sinks_arr, err := getSrcSinkUint64Key(ctx, h.env, input)
 	if err != nil {
-		return &common.FnOutput{Success: false, Message: err.Error()}
+		return common.GenErrFnOutput(err)
 	}
 	srcs[0].SetInitialSource(true)
 	ectx := processor.NewExecutionContext(srcs, sinks_arr, h.funcName,

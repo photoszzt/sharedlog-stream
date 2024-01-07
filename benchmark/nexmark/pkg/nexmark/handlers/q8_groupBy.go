@@ -90,7 +90,7 @@ func (h *q8GroupByHandler) setupSerde(sf uint8) *common.FnOutput {
 	serdeFormat := commtypes.SerdeFormat(sf)
 	eventSerde, err := ntypes.GetEventSerdeG(serdeFormat)
 	if err != nil {
-		return &common.FnOutput{Message: fmt.Sprintf("get event serde err: %v", err), Success: false}
+		return common.GenErrFnOutput(fmt.Errorf("get event serde err: %v", err))
 	}
 	h.msgSerde, err = commtypes.GetMsgGSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, eventSerde)
 	if err != nil {
