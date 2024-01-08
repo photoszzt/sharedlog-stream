@@ -43,11 +43,17 @@ type CoreWindowStoreG[K, V any] interface {
 	SetWinSnapshotCallback(ctx context.Context, f WinSnapshotCallback[K, V])
 	WaitForAllSnapshot() error
 	SetKVSerde(serdeFormat commtypes.SerdeFormat,
-		keySerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]], valSerde commtypes.SerdeG[V],
+		keySerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]],
+		origKeySerde commtypes.SerdeG[K],
+		valSerde commtypes.SerdeG[V],
 	) error
 	GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]]
 	RestoreFromSnapshot(ctx context.Context, snapshot [][]byte) error
 	OnlyUpdateInMemWinStoreG[K, V]
+	BuildKeyMeta(kms map[string][]txn_data.KeyMaping) error
+	OnlyUpdateInMemStore
+	SetInstanceId(uint8)
+	GetInstanceId() uint8
 }
 
 type WindowStoreBackedByChangelog interface {

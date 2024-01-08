@@ -12,9 +12,7 @@ import (
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
-	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
 	"time"
 
@@ -99,63 +97,25 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	countStoreName := "q5AuctionBidsCountStore"
-	countMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestampG[uint64]]().
-		MessageSerde(h.msgSerde).
-		StoreName(countStoreName).ParNum(sp.ParNum).
-		SerdeFormat(serdeFormat).
-		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
-			Env:           h.env,
-			NumPartition:  sp.NumChangelogPartition,
-			TimeOut:       common.SrcConsumeTimeout,
-			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
-		}).BufMaxSize(sp.BufMaxSize).Build()
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	countWindowStore, err := store_with_changelog.CreateInMemSkipMapWindowTableWithChangelogG(
-		hopWindow, false, store.IntegerCompare[uint64], countMp)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	var aggStore store.CachedWindowStoreBackedByChangelogG[uint64, commtypes.ValueTimestampG[uint64]]
-	if h.useCache {
-		sizeOfVTs := commtypes.ValueTimestampGSize[uint64]{
-			ValSizeFunc: commtypes.SizeOfUint64,
-		}
-		sizeOfKeyTs := commtypes.KeyAndWindowStartTsGSize[uint64]{
-			KeySizeFunc: commtypes.SizeOfUint64,
-		}
-		cacheStore := store.NewCachingWindowStoreG[uint64, commtypes.ValueTimestampG[uint64]](
-			ctx, hopWindow.SizeMs, countWindowStore, sizeOfKeyTs.SizeOfKeyAndWindowStartTs, sizeOfVTs.SizeOfValueTimestamp, q5SizePerStore)
-		aggStore = cacheStore
-	} else {
-		aggStore = countWindowStore
-	}
+	var cachedStore store.CachedWindowStateStore[uint64, commtypes.ValueTimestampG[uint64]]
+	cachedStore, builder, setSnapCallbackFunc, err = getWinStoreAndStreamArgs(
+		ctx, h.env, sp, &WinStoreStreamArgsParam[uint64, uint64]{
+			StoreName:  "q5AuctionBidsCountStore",
+			FuncName:   h.funcName,
+			MsgSerde:   h.msgSerde,
+			SizeOfK:    commtypes.SizeOfUint64,
+			SizeOfV:    commtypes.SizeOfUint64,
+			CmpFunc:    store.IntegerCompare[uint64],
+			JoinWindow: hopWindow,
+			UseCache:   h.useCache,
+		}, ectx)
 	countProc = processor.NewMeteredProcessorG(processor.NewStreamWindowAggregateProcessorG[uint64, *ntypes.Event, uint64](
-		"countProc", aggStore,
+		"countProc", cachedStore,
 		processor.InitializerFuncG[uint64](func() optional.Option[uint64] { return optional.Some(uint64(0)) }),
 		processor.AggregatorFuncG[uint64, *ntypes.Event, uint64](func(key uint64, value *ntypes.Event, aggregate optional.Option[uint64]) optional.Option[uint64] {
 			val := aggregate.Unwrap()
 			return optional.Some(val + 1)
 		}), hopWindow, h.useCache))
-	wsc := map[string]store.WindowStoreOpWithChangelog{countWindowStore.ChangelogTopicName(): aggStore}
-	setSnapCallbackFunc = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment,
-		serdeFormat commtypes.SerdeFormat,
-		rs *snapshot_store.RedisSnapshotStore,
-	) error {
-		payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
-		if err != nil {
-			return err
-		}
-		stream_task.SetWinStoreWithChangelogSnapshot[uint64, commtypes.ValueTimestampG[uint64]](ctx, env, rs, aggStore, payloadSerde)
-		return nil
-	})
-	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
-		sp.ParNum, sp.OutputTopicNames[0])
-	builder = benchutil.UpdateStreamTaskArgs(sp, stream_task.NewStreamTaskArgsBuilder(h.env, ectx, transactionalID)).
-		WindowStoreChangelogs(wsc)
 	return countProc, builder, setSnapCallbackFunc, nil
 }
 

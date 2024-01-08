@@ -69,7 +69,8 @@ func NewInMemoryWindowStoreWithChangelogG[K, V any](
 	if err != nil {
 		return nil, err
 	}
-	err = windowStore.SetKVSerde(mp.serdeFormat, msgSerde.GetKeySerdeG(), msgSerde.GetValSerdeG())
+	err = windowStore.SetKVSerde(mp.serdeFormat,
+		msgSerde.GetKeySerdeG(), mp.msgSerde.GetKeySerdeG(), msgSerde.GetValSerdeG())
 	if err != nil {
 		return nil, err
 	}
@@ -299,7 +300,9 @@ func (s *InMemoryWindowStoreWithChangelogG[K, V]) RestoreFromSnapshot(ctx contex
 }
 
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeFormat,
-	keySerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]], valSerde commtypes.SerdeG[V],
+	keySerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]],
+	origSerde commtypes.SerdeG[K],
+	valSerde commtypes.SerdeG[V],
 ) error {
 	return nil
 }
@@ -310,6 +313,14 @@ func (s *InMemoryWindowStoreWithChangelogG[K, V]) GetKVSerde() commtypes.SerdeG[
 
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error) {
 	return s.changelogManager.findLastEpochMetaWithAuxData(ctx, parNum)
+}
+
+func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetInstanceId(id uint8) {
+	s.windowStore.SetInstanceId(id)
+}
+
+func (s *InMemoryWindowStoreWithChangelogG[K, V]) GetInstanceId() uint8 {
+	return s.windowStore.GetInstanceId()
 }
 
 func ToInMemSkipMapWindowTableWithChangelogG[K, V any](
@@ -331,10 +342,10 @@ func ToInMemSkipMapWindowTableWithChangelogG[K, V any](
 func CreateInMemSkipMapWindowTableWithChangelogG[K, V any](
 	joinWindow commtypes.EnumerableWindowDefinition,
 	retainDuplicates bool,
-	comparable store.CompareFuncG[K],
+	cmpFunc store.CompareFuncG[K],
 	mp *MaterializeParam[K, V],
 ) (*InMemoryWindowStoreWithChangelogG[K, V], error) {
 	winTab := store.NewInMemorySkipMapWindowStore[K, V](mp.storeName,
-		joinWindow.MaxSize()+joinWindow.GracePeriodMs(), joinWindow.MaxSize(), retainDuplicates, comparable)
+		joinWindow.MaxSize()+joinWindow.GracePeriodMs(), joinWindow.MaxSize(), retainDuplicates, cmpFunc)
 	return NewInMemoryWindowStoreWithChangelogG[K, V](winTab, mp)
 }

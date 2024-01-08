@@ -7,6 +7,7 @@ import (
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/txn_data"
+	"sharedlog-stream/pkg/utils"
 	"sharedlog-stream/pkg/utils/syncutils"
 	"time"
 
@@ -25,6 +26,7 @@ type SegmentedWindowStoreG[K, V any] struct {
 	windowSize       int64
 	seqNum           uint32
 	retainDuplicates bool
+	insId            uint8
 }
 
 var _ = CoreWindowStoreG[int, int](&SegmentedWindowStoreG[int, int]{})
@@ -103,6 +105,17 @@ func (rws *SegmentedWindowStoreG[K, V]) PutWithoutPushToChangelogG(ctx context.C
 		}
 	}
 	return rws.bytesStore.Put(ctx, k, vBytes)
+}
+
+func (rws *SegmentedWindowStoreG[K, V]) PutWithoutPushToChangelog(
+	ctx context.Context, key commtypes.KeyT, value commtypes.ValueT,
+) error {
+	keyTs := key.(commtypes.KeyAndWindowStartTsG[K])
+	if utils.IsNil(value) {
+		return rws.Put(ctx, keyTs.Key, optional.None[V](), keyTs.WindowStartTs, TimeMeta{RecordTsMs: 0})
+	} else {
+		return rws.Put(ctx, key.(K), optional.Some(value.(V)), keyTs.WindowStartTs, TimeMeta{RecordTsMs: 0})
+	}
 }
 
 func (rws *SegmentedWindowStoreG[K, V]) Get(ctx context.Context, key K, windowStartTimestamp int64) (V, bool, error) {
@@ -255,7 +268,9 @@ func (s *SegmentedWindowStoreG[K, V]) Flush(ctx context.Context) (uint32, error)
 }
 
 func (s *SegmentedWindowStoreG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeFormat,
-	keySerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]], valSerde commtypes.SerdeG[V],
+	keySerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]],
+	origKeySerde commtypes.SerdeG[K],
+	valSerde commtypes.SerdeG[V],
 ) error {
 	panic("not supported")
 }
@@ -289,4 +304,12 @@ func (s *SegmentedWindowStoreG[K, V]) Snapshot(tplogoff []commtypes.TpLogOff) {
 
 func (s *SegmentedWindowStoreG[K, V]) WaitForAllSnapshot() error {
 	return s.bgErrG.Wait()
+}
+
+func (s *SegmentedWindowStoreG[K, V]) SetInstanceId(id uint8) {
+	s.insId = id
+}
+
+func (s *SegmentedWindowStoreG[K, V]) GetInstanceId() uint8 {
+	return s.insId
 }

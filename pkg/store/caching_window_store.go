@@ -194,7 +194,9 @@ func (s *CachingWindowStoreG[K, V]) RestoreFromSnapshot(ctx context.Context, sna
 }
 
 func (s *CachingWindowStoreG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeFormat,
-	keySerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]], valSerde commtypes.SerdeG[V],
+	keySerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]],
+	origKeySerde commtypes.SerdeG[K],
+	valSerde commtypes.SerdeG[V],
 ) error {
 	return nil
 }
@@ -213,4 +215,12 @@ func (s *CachingWindowStoreG[K, V]) BuildKeyMeta(kms map[string][]txn_data.KeyMa
 
 func (c *CachingWindowStoreG[K, V]) SetFlushCallbackFunc(f exactly_once_intr.FlushCallbackFunc) {
 	c.wrappedStore.SetFlushCallbackFunc(f)
+}
+
+func (c *CachingWindowStoreG[K, V]) SetInstanceId(id uint8) {
+	c.wrappedStore.SetInstanceId(id)
+}
+
+func (c *CachingWindowStoreG[K, V]) GetInstanceId() uint8 {
+	return c.wrappedStore.GetInstanceId()
 }

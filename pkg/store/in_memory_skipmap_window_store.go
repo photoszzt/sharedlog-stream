@@ -5,9 +5,11 @@ import (
 	"math"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
+	"sharedlog-stream/pkg/utils"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -34,6 +36,7 @@ type InMemorySkipMapWindowStoreG[K, V any] struct {
 	compareFunc                 CompareFuncG[K]
 	compareFuncWithVersionedKey CompareFuncG[VersionedKeyG[K]]
 	kvPairSerdeG                commtypes.SerdeG[commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]]
+	keySerdeG                   commtypes.SerdeG[K]
 	snapshotCallback            WinSnapshotCallback[K, V]
 	bgErrG                      *errgroup.Group
 	bgCtx                       context.Context
@@ -43,6 +46,7 @@ type InMemorySkipMapWindowStoreG[K, V any] struct {
 	observedStreamTime          int64 // protected by mux
 	seqNum                      uint32
 	retainDuplicates            bool
+	insId                       uint8
 }
 
 var _ = CoreWindowStoreG[int, int](&InMemorySkipMapWindowStoreG[int, int]{})
@@ -83,9 +87,12 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) SetWinSnapshotCallback(ctx context.C
 }
 
 func (s *InMemorySkipMapWindowStoreG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeFormat,
-	keySerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]], valSerde commtypes.SerdeG[V],
+	keySerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]],
+	origKeySerde commtypes.SerdeG[K],
+	valSerde commtypes.SerdeG[V],
 ) error {
 	var err error
+	s.keySerdeG = origKeySerde
 	s.kvPairSerdeG, err = commtypes.GetKeyValuePairSerdeG(serdeFormat, keySerde, valSerde)
 	return err
 }
@@ -159,8 +166,15 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Get(ctx context.Context, key K, wind
 	}
 }
 
-func (s *InMemorySkipMapWindowStoreG[K, V]) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
-	panic("not implement")
+func (s *InMemorySkipMapWindowStoreG[K, V]) PutWithoutPushToChangelog(
+	ctx context.Context, key commtypes.KeyT, value commtypes.ValueT,
+) error {
+	keyTs := key.(commtypes.KeyAndWindowStartTsG[K])
+	if utils.IsNil(value) {
+		return s.Put(ctx, keyTs.Key, optional.None[V](), keyTs.WindowStartTs, TimeMeta{RecordTsMs: 0})
+	} else {
+		return s.Put(ctx, key.(K), optional.Some(value.(V)), keyTs.WindowStartTs, TimeMeta{RecordTsMs: 0})
+	}
 }
 
 func (s *InMemorySkipMapWindowStoreG[K, V]) Fetch(ctx context.Context, key K, timeFrom time.Time, timeTo time.Time,
@@ -512,5 +526,27 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) SetFlushCallbackFunc(exactly_once_in
 }
 
 func (s *InMemorySkipMapWindowStoreG[K, V]) BuildKeyMeta(kms map[string][]txn_data.KeyMaping) error {
-	panic("not supported")
+	kms[s.Name()] = make([]txn_data.KeyMaping, 0)
+	hasher := hashfuncs.ByteSliceHasher{}
+	return s.IterAll(func(ts int64, key K, value V) error {
+		kBytes, err := s.keySerdeG.Encode(key)
+		if err != nil {
+			return err
+		}
+		hash := hasher.HashSum64(kBytes)
+		kms[s.Name()] = append(kms[s.Name()], txn_data.KeyMaping{
+			Key:         kBytes,
+			SubstreamId: s.insId,
+			Hash:        hash,
+		})
+		return nil
+	})
+}
+
+func (s *InMemorySkipMapWindowStoreG[K, V]) SetInstanceId(id uint8) {
+	s.insId = id
+}
+
+func (s *InMemorySkipMapWindowStoreG[K, V]) GetInstanceId() uint8 {
+	return s.insId
 }
