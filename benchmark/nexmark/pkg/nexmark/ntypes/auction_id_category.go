@@ -40,6 +40,10 @@ func CompareAuctionIdCategory(a, b *AuctionIdCategory) int {
 	}
 }
 
+func AuctionIdCategoryLess(a, b AuctionIdCategory) bool {
+	return CompareAuctionIdCategory(&a, &b) < 0
+}
+
 type AuctionIdCategoryJSONSerde struct{}
 
 var _ = commtypes.Serde(AuctionIdCategoryJSONSerde{})

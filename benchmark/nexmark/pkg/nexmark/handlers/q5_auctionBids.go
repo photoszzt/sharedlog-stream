@@ -97,8 +97,8 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	var cachedStore store.CachedWindowStateStore[uint64, commtypes.ValueTimestampG[uint64]]
-	cachedStore, builder, setSnapCallbackFunc, err = getWinStoreAndStreamArgs(
+	useCache := benchutil.UseCache(h.useCache, sp.GuaranteeMth)
+	cachedStore, builder, setSnapCallbackFunc, err := getWinStoreAndStreamArgs(
 		ctx, h.env, sp, &WinStoreStreamArgsParam[uint64, uint64]{
 			StoreName:  "q5AuctionBidsCountStore",
 			FuncName:   h.funcName,
@@ -107,15 +107,18 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 			SizeOfV:    commtypes.SizeOfUint64,
 			CmpFunc:    store.IntegerCompare[uint64],
 			JoinWindow: hopWindow,
-			UseCache:   h.useCache,
+			UseCache:   useCache,
 		}, ectx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	countProc = processor.NewMeteredProcessorG(processor.NewStreamWindowAggregateProcessorG[uint64, *ntypes.Event, uint64](
 		"countProc", cachedStore,
 		processor.InitializerFuncG[uint64](func() optional.Option[uint64] { return optional.Some(uint64(0)) }),
 		processor.AggregatorFuncG[uint64, *ntypes.Event, uint64](func(key uint64, value *ntypes.Event, aggregate optional.Option[uint64]) optional.Option[uint64] {
 			val := aggregate.Unwrap()
 			return optional.Some(val + 1)
-		}), hopWindow, h.useCache))
+		}), hopWindow, useCache))
 	return countProc, builder, setSnapCallbackFunc, nil
 }
 

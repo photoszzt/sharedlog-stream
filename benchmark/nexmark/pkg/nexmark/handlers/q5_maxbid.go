@@ -134,6 +134,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	}
 	ectx := processor.NewExecutionContext(srcs,
 		sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum)
+	useCache := benchutil.UseCache(h.useCache, sp.GuaranteeMth)
 	aggStore, builder, snapfunc, err := getKVStoreAndStreamArgs(ctx, h.env, sp,
 		&KVStoreStreamArgsParam[ntypes.StartEndTime, uint64]{
 			StoreName: "q5MaxBidKVStore",
@@ -142,7 +143,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 			Compare:   compareStartEndTime,
 			SizeofK:   ntypes.SizeOfStartEndTime,
 			SizeofV:   commtypes.SizeOfUint64,
-			UseCache:  h.useCache,
+			UseCache:  useCache,
 		},
 		&ectx)
 	if err != nil {
@@ -160,7 +161,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 						return optional.Some(v.Count)
 					}
 					return agg
-				}), h.useCache))
+				}), useCache))
 	stJoin := processor.NewMeteredProcessorG[ntypes.StartEndTime, ntypes.AuctionIdCount, ntypes.StartEndTime, ntypes.AuctionIdCntMax](
 		processor.NewStreamTableJoinProcessorG[ntypes.StartEndTime, ntypes.AuctionIdCount, uint64, ntypes.AuctionIdCntMax](aggStore,
 			processor.ValueJoinerWithKeyFuncG[ntypes.StartEndTime, ntypes.AuctionIdCount, uint64, ntypes.AuctionIdCntMax](

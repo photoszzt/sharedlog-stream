@@ -121,6 +121,7 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 		return common.GenErrFnOutput(err)
 	}
 	ectx := processor.NewExecutionContext(srcs, sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum)
+	useCache := benchutil.UseCache(h.useCache, sp.GuaranteeMth)
 	aggStore, builder, snapfunc, err := getKVStoreAndStreamArgs(ctx, h.env, sp,
 		&KVStoreStreamArgsParam[ntypes.StartEndTime, uint64]{
 			StoreName: "q7MaxBidByWinKVStore",
@@ -129,7 +130,7 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 			Compare:   compareStartEndTime,
 			SizeofK:   ntypes.SizeOfStartEndTime,
 			SizeofV:   commtypes.SizeOfUint64,
-			UseCache:  h.useCache,
+			UseCache:  useCache,
 		}, &ectx)
 	if err != nil {
 		return common.GenErrFnOutput(err)
@@ -146,7 +147,7 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 						return optional.Some(v.Bid.Price)
 					}
 					return agg
-				}), h.useCache))
+				}), useCache))
 	toStreamProc := processor.NewTableToStreamProcessorG[ntypes.StartEndTime, uint64]()
 	mapProc := processor.NewStreamMapProcessorG[ntypes.StartEndTime, uint64, uint64, ntypes.StartEndTime]("remapKV",
 		processor.MapperFuncG[ntypes.StartEndTime, uint64, uint64, ntypes.StartEndTime](

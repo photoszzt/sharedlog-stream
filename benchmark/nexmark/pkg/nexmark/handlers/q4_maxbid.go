@@ -129,18 +129,16 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	compare := func(a, b ntypes.AuctionIdCategory) bool {
-		return ntypes.CompareAuctionIdCategory(&a, &b) < 0
-	}
+	useCache := benchutil.UseCache(h.useCache, sp.GuaranteeMth)
 	aggStore, builder, snapfunc, err := getKVStoreAndStreamArgs(ctx, h.env, sp,
 		&KVStoreStreamArgsParam[ntypes.AuctionIdCategory, uint64]{
 			StoreName: "q4MaxBidKVStore",
 			FuncName:  h.funcName,
 			MsgSerde:  h.msgSerde,
-			Compare:   compare,
+			Compare:   ntypes.AuctionIdCategoryLess,
 			SizeofK:   ntypes.SizeOfAuctionIdCategory,
 			SizeofV:   commtypes.SizeOfUint64,
-			UseCache:  h.useCache,
+			UseCache:  useCache,
 		},
 		&ectx)
 	if err != nil {
@@ -160,7 +158,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 					} else {
 						return aggregate
 					}
-				}), h.useCache))
+				}), useCache))
 	groupByProc := processor.NewTableGroupByMapProcessorG[ntypes.AuctionIdCategory, uint64, uint64, uint64]("changeKey",
 		processor.MapperFuncG[ntypes.AuctionIdCategory, uint64, uint64, uint64](
 			func(key optional.Option[ntypes.AuctionIdCategory], value optional.Option[uint64]) (optional.Option[uint64], optional.Option[uint64], error) {

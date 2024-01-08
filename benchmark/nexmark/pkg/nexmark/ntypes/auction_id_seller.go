@@ -34,6 +34,10 @@ func CompareAuctionIDSeller(a, b AuctionIdSeller) int {
 	}
 }
 
+func AuctionIdSellerLess(a, b AuctionIdSeller) bool {
+	return CompareAuctionIDSeller(a, b) < 0
+}
+
 var _ = fmt.Stringer(AuctionIdSeller{})
 
 func (aic AuctionIdSeller) String() string {

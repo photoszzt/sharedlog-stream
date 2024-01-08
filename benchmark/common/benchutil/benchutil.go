@@ -55,3 +55,12 @@ func GetShardedInputOutputStreams(ctx context.Context,
 	}
 	return inputStream, output_streams, nil
 }
+
+func UseCache(useCache bool, gua uint8) bool {
+	c := useCache
+	g := exactly_once_intr.GuaranteeMth(gua)
+	if g == exactly_once_intr.ALIGN_CHKPT {
+		c = false
+	}
+	return c
+}
