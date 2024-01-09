@@ -2,7 +2,6 @@ package store_with_changelog
 
 import (
 	"context"
-	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/hashfuncs"
@@ -35,17 +34,9 @@ func createChangelogManagerAndUpdateMsgSerde[K, V any](mp *MaterializeParam[K, V
 	if err != nil {
 		return nil, nil, err
 	}
-	var keyAndWindowStartTsSerde commtypes.SerdeG[commtypes.KeyAndWindowStartTsG[K]]
-	if mp.serdeFormat == commtypes.JSON {
-		keyAndWindowStartTsSerde = commtypes.KeyAndWindowStartTsJSONSerdeG[K]{
-			KeyJSONSerde: mp.msgSerde.GetKeySerdeG(),
-		}
-	} else if mp.serdeFormat == commtypes.MSGP {
-		keyAndWindowStartTsSerde = commtypes.KeyAndWindowStartTsMsgpSerdeG[K]{
-			KeyMsgpSerde: mp.msgSerde.GetKeySerdeG(),
-		}
-	} else {
-		return nil, nil, common_errors.ErrUnrecognizedSerdeFormat
+	keyAndWindowStartTsSerde, err := commtypes.GetKeyAndWindowStartTsSerdeG(mp.serdeFormat, mp.msgSerde.GetKeySerdeG())
+	if err != nil {
+		return nil, nil, err
 	}
 	msgSerde, err := commtypes.GetMsgGSerdeG(mp.serdeFormat, keyAndWindowStartTsSerde, mp.msgSerde.GetValSerdeG())
 	if err != nil {

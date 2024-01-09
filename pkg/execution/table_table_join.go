@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
@@ -66,24 +67,104 @@ func SetupTableTableJoin[K, VLeft, VRight any](
 }
 */
 
-func SetupTableTableJoinWithSkipmap[K, VLeft, VRight, VR any](
+func ToInMemSkipmapKVTable[K comparable, V any](
+	storeName string,
+	less store.LessFunc[K],
+	parNum uint8,
+	serdeFormat commtypes.SerdeFormat,
+	msgSerde commtypes.MessageGSerdeG[K, commtypes.ValueTimestampG[V]],
+	gua exactly_once_intr.GuaranteeMth,
+) (*processor.MeteredProcessorG[K, V, K, commtypes.ChangeG[V]],
+	store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[V]], error,
+) {
+	s, err := GetInMemorySkipMapKVStore(
+		&KVStoreParam[K, V]{
+			Compare: less,
+			CommonStoreParam: CommonStoreParam[K, V]{
+				StoreName: storeName,
+			},
+		}, parNum, serdeFormat, msgSerde)
+	if err != nil {
+		return nil, nil, err
+	}
+	toTableProc := processor.NewMeteredProcessorG[K, V, K, commtypes.ChangeG[V]](
+		processor.NewTableSourceProcessorWithTableG[K, V](s))
+	return toTableProc, s, nil
+}
+
+func SetupTableTableJoinWithSkipmap[K comparable, VLeft, VRight, VR any](
 	mpLeft *store_with_changelog.MaterializeParam[K, commtypes.ValueTimestampG[VLeft]],
 	mpRight *store_with_changelog.MaterializeParam[K, commtypes.ValueTimestampG[VRight]],
 	less store.LessFunc[K],
 	joiner processor.ValueJoinerWithKeyFuncG[K, VLeft, VRight, VR],
-) (leftJoinRightFunc proc_interface.ProcessAndReturnFunc[K, VLeft, K, commtypes.ChangeG[VR]],
+	gua exactly_once_intr.GuaranteeMth,
+) (
+	leftJoinRightFunc proc_interface.ProcessAndReturnFunc[K, VLeft, K, commtypes.ChangeG[VR]],
 	rightJoinLeftFunc proc_interface.ProcessAndReturnFunc[K, VRight, K, commtypes.ChangeG[VR]],
-	kvc map[string]store.KeyValueStoreOpWithChangelog,
+	kvos *store.KVStoreOps,
 	setupSnapFunc stream_task.SetupSnapshotCallbackFunc,
 	err error,
 ) {
-	toLeftTab, leftTab, err := store_with_changelog.ToInMemSkipmapKVTableWithChangelog(mpLeft, less)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-	toRightTab, rightTab, err := store_with_changelog.ToInMemSkipmapKVTableWithChangelog(mpRight, less)
-	if err != nil {
-		return nil, nil, nil, nil, err
+	var toLeftTab *processor.MeteredProcessorG[K, VLeft, K, commtypes.ChangeG[VLeft]]
+	var toRightTab *processor.MeteredProcessorG[K, VRight, K, commtypes.ChangeG[VRight]]
+	var leftTab store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[VLeft]]
+	var rightTab store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[VRight]]
+
+	if gua == exactly_once_intr.ALIGN_CHKPT {
+		toLeftTab, leftTab, err = ToInMemSkipmapKVTable(mpLeft.StoreName(), less,
+			mpLeft.ParNum(), mpLeft.SerdeFormat(), mpLeft.MessageSerde(), gua)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+		toRightTab, rightTab, err = ToInMemSkipmapKVTable(mpRight.StoreName(), less,
+			mpRight.ParNum(), mpRight.SerdeFormat(), mpRight.MessageSerde(), gua)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+		kvos = &store.KVStoreOps{
+			Kvo: []store.KeyValueStoreOp{leftTab, rightTab},
+		}
+		setupSnapFunc = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
+			rs *snapshot_store.RedisSnapshotStore,
+		) error {
+			payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
+			if err != nil {
+				return err
+			}
+			stream_task.SetKVStoreChkpt[K, commtypes.ValueTimestampG[VLeft]](ctx, rs, leftTab, payloadSerde)
+			stream_task.SetKVStoreChkpt[K, commtypes.ValueTimestampG[VRight]](ctx, rs, rightTab, payloadSerde)
+			return nil
+		})
+	} else {
+		var leftTabCl *store_with_changelog.KeyValueStoreWithChangelogG[K, commtypes.ValueTimestampG[VLeft]]
+		var rightTabCl *store_with_changelog.KeyValueStoreWithChangelogG[K, commtypes.ValueTimestampG[VRight]]
+		toLeftTab, leftTabCl, err = store_with_changelog.ToInMemSkipmapKVTableWithChangelog(mpLeft, less)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+		toRightTab, rightTabCl, err = store_with_changelog.ToInMemSkipmapKVTableWithChangelog(mpRight, less)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+		kvos = &store.KVStoreOps{
+			Kvc: map[string]store.KeyValueStoreOpWithChangelog{
+				leftTabCl.ChangelogTopicName():  leftTabCl,
+				rightTabCl.ChangelogTopicName(): rightTabCl,
+			},
+		}
+		setupSnapFunc = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
+			rs *snapshot_store.RedisSnapshotStore,
+		) error {
+			payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
+			if err != nil {
+				return err
+			}
+			stream_task.SetKVStoreWithChangelogSnapshot[K, commtypes.ValueTimestampG[VLeft]](ctx, env, rs, leftTabCl, payloadSerde)
+			stream_task.SetKVStoreWithChangelogSnapshot[K, commtypes.ValueTimestampG[VRight]](ctx, env, rs, rightTabCl, payloadSerde)
+			return nil
+		})
+		leftTab = leftTabCl
+		rightTab = rightTabCl
 	}
 
 	leftJoinRight := processor.NewMeteredProcessorG(
@@ -127,20 +208,5 @@ func SetupTableTableJoinWithSkipmap[K, VLeft, VRight, VR any](
 		}
 		return nil, nil
 	}
-	kvc = map[string]store.KeyValueStoreOpWithChangelog{
-		leftTab.ChangelogTopicName():  leftTab,
-		rightTab.ChangelogTopicName(): rightTab,
-	}
-	setupSnapFunc = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
-		rs *snapshot_store.RedisSnapshotStore,
-	) error {
-		payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
-		if err != nil {
-			return err
-		}
-		stream_task.SetKVStoreWithChangelogSnapshot[K, commtypes.ValueTimestampG[VLeft]](ctx, env, rs, leftTab, payloadSerde)
-		stream_task.SetKVStoreWithChangelogSnapshot[K, commtypes.ValueTimestampG[VRight]](ctx, env, rs, rightTab, payloadSerde)
-		return nil
-	})
-	return leftJoinRightFunc, rightJoinLeftFunc, kvc, setupSnapFunc, nil
+	return leftJoinRightFunc, rightJoinLeftFunc, kvos, setupSnapFunc, nil
 }

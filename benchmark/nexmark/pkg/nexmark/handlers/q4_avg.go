@@ -7,6 +7,8 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
@@ -115,18 +117,20 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	kvstore, builder, snapfunc, err := getKVStoreAndStreamArgs[uint64, ntypes.SumAndCount](
+	kvstore, builder, snapfunc, err := setupKVStoreForAgg[uint64, ntypes.SumAndCount](
 		ctx, h.env, sp,
-		&KVStoreStreamArgsParam[uint64, ntypes.SumAndCount]{
-			StoreName: "q4SumCountKVStore",
-			FuncName:  h.funcName,
-			MsgSerde:  h.storeMsgSerde,
-			Compare:   store.Uint64LessFunc,
-			SizeofK:   nil,
-			SizeofV:   nil,
-			UseCache:  false,
+		&execution.KVStoreParam[uint64, ntypes.SumAndCount]{
+			Compare: store.Uint64LessFunc,
+			CommonStoreParam: execution.CommonStoreParam[uint64, ntypes.SumAndCount]{
+				StoreName:     "q4SumCountKVStore",
+				SizeOfK:       nil,
+				SizeOfV:       nil,
+				MaxCacheBytes: q4SizePerStore,
+				UseCache:      false,
+				GuaranteeMth:  exactly_once_intr.GuaranteeMth(sp.GuaranteeMth),
+			},
 		},
-		&ectx)
+		&ectx, h.storeMsgSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

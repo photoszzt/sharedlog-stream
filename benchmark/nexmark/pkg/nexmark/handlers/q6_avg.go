@@ -7,6 +7,7 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
@@ -115,17 +116,17 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	kvstore, builder, snapfunc, err := getKVStoreAndStreamArgs(ctx, h.env, sp,
-		&KVStoreStreamArgsParam[uint64, ntypes.PriceTimeList]{
-			StoreName: "q6AggKVStore",
-			FuncName:  h.funcName,
-			MsgSerde:  h.storeMsgSerde,
-			Compare:   store.Uint64LessFunc,
-			SizeofK:   nil,
-			SizeofV:   nil,
-			UseCache:  false,
-		},
-		&ectx)
+	kvstore, builder, snapfunc, err := setupKVStoreForAgg(ctx, h.env, sp,
+		&execution.KVStoreParam[uint64, ntypes.PriceTimeList]{
+			Compare: store.Uint64LessFunc,
+			CommonStoreParam: execution.CommonStoreParam[uint64, ntypes.PriceTimeList]{
+				StoreName:     "q6AggKVStore",
+				SizeOfK:       nil,
+				SizeOfV:       nil,
+				MaxCacheBytes: q5SizePerStore,
+				UseCache:      false,
+			},
+		}, &ectx, h.storeMsgSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

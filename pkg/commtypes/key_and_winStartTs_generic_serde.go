@@ -3,6 +3,7 @@ package commtypes
 import (
 	"encoding/json"
 	"fmt"
+	"sharedlog-stream/pkg/common_errors"
 )
 
 type KeyAndWindowStartTsJSONSerdeG[K any] struct {
@@ -97,4 +98,18 @@ func (s KeyAndWindowStartTsMsgpSerdeG[K]) Decode(value []byte) (KeyAndWindowStar
 		return KeyAndWindowStartTsG[K]{}, err
 	}
 	return serToKeyAndWindowStartTs(&val, s.KeyMsgpSerde)
+}
+
+func GetKeyAndWindowStartTsSerdeG[K any](serdeFormat SerdeFormat, keySerde SerdeG[K]) (SerdeG[KeyAndWindowStartTsG[K]], error) {
+	if serdeFormat == JSON {
+		return KeyAndWindowStartTsJSONSerdeG[K]{
+			KeyJSONSerde: keySerde,
+		}, nil
+	} else if serdeFormat == MSGP {
+		return KeyAndWindowStartTsMsgpSerdeG[K]{
+			KeyMsgpSerde: keySerde,
+		}, nil
+	} else {
+		return nil, common_errors.ErrUnrecognizedSerdeFormat
+	}
 }

@@ -6,17 +6,16 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
-	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/utils"
 	"time"
@@ -121,7 +120,7 @@ func (h *q8JoinStreamHandler) setupSerde(sf uint8) *common.FnOutput {
 func (h *q8JoinStreamHandler) setupJoin(sp *common.QueryInput) (
 	proc_interface.ProcessAndReturnFunc[uint64, *ntypes.Event, uint64, ntypes.PersonTime],
 	proc_interface.ProcessAndReturnFunc[uint64, *ntypes.Event, uint64, ntypes.PersonTime],
-	map[string]store.WindowStoreOpWithChangelog,
+	*store.WinStoreOps,
 	stream_task.SetupSnapshotCallbackFunc,
 	*common.FnOutput,
 ) {
@@ -143,42 +142,23 @@ func (h *q8JoinStreamHandler) setupJoin(sp *common.QueryInput) (
 				StartTime: windowStart,
 			})
 		})
-	format := commtypes.SerdeFormat(sp.SerdeFormat)
-	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
-	aucMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, *ntypes.Event]().
-		MessageSerde(h.msgSerde).
-		StoreName("auctionsBySellerIDWinTab").
-		ParNum(sp.ParNum).
-		SerdeFormat(format).
-		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
-			Env:           h.env,
-			NumPartition:  sp.NumChangelogPartition,
-			FlushDuration: flushDur,
-			TimeOut:       common.SrcConsumeTimeout,
-		}).BufMaxSize(sp.BufMaxSize).Build()
+	aucMp, err := getMaterializedParam[uint64, *ntypes.Event](
+		"q8AuctionsBySellerIDWinTab", h.msgSerde, h.env, sp)
 	if err != nil {
 		return nil, nil, nil, nil, common.GenErrFnOutput(err)
 	}
-	perMp, err := store_with_changelog.NewMaterializeParamBuilder[uint64, *ntypes.Event]().
-		MessageSerde(h.msgSerde).
-		StoreName("personsByIDWinTab").
-		ParNum(sp.ParNum).
-		SerdeFormat(format).
-		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
-			Env:           h.env,
-			NumPartition:  sp.NumChangelogPartition,
-			FlushDuration: flushDur,
-			TimeOut:       common.SrcConsumeTimeout,
-		}).BufMaxSize(sp.BufMaxSize).Build()
+	perMp, err := getMaterializedParam[uint64, *ntypes.Event](
+		"q8PersonsByIDWinTab", h.msgSerde, h.env, sp)
 	if err != nil {
 		return nil, nil, nil, nil, common.GenErrFnOutput(err)
 	}
-	aucJoinsPerFunc, perJoinsAucFunc, wsc, setupSnapCallbackFunc, err := execution.SetupSkipMapWithChangelogStreamStreamJoin(
-		aucMp, perMp, store.IntegerCompare[uint64], joiner, joinWindows)
+	aucJoinsPerFunc, perJoinsAucFunc, wsos, setupSnapCallbackFunc, err := execution.SetupSkipMapStreamStreamJoin(
+		aucMp, perMp, store.IntegerCompare[uint64], joiner, joinWindows,
+		exactly_once_intr.GuaranteeMth(sp.GuaranteeMth))
 	if err != nil {
 		return nil, nil, nil, nil, common.GenErrFnOutput(err)
 	}
-	return aucJoinsPerFunc, perJoinsAucFunc, wsc, setupSnapCallbackFunc, nil
+	return aucJoinsPerFunc, perJoinsAucFunc, wsos, setupSnapCallbackFunc, nil
 }
 
 func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -191,7 +171,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("getSrcSink err: %v\n", err))
 	}
-	aucJoinsPerFunc, perJoinsAucFunc, wsc, setupSnapCallbackFunc, fn_out := h.setupJoin(sp)
+	aucJoinsPerFunc, perJoinsAucFunc, wsos, setupSnapCallbackFunc, fn_out := h.setupJoin(sp)
 	if fn_out != nil {
 		return fn_out
 	}
@@ -202,10 +182,11 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum), true,
 		msgSerdePair, msgSerdePair, "subG2")
-	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, fmt.Sprintf("%s-%d", h.funcName, sp.ParNum))).
+	builder := streamArgsBuilderForJoin(h.env, procArgs, sp)
+	builder = execution.StreamArgsSetWinStore(wsos, builder,
+		exactly_once_intr.GuaranteeMth(sp.GuaranteeMth))
+	streamTaskArgs, err := builder.
 		FixedOutParNum(sp.ParNum).
-		WindowStoreChangelogs(wsc).
 		Build()
 	if err != nil {
 		return common.GenErrFnOutput(err)

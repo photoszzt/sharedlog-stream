@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"sharedlog-stream/benchmark/common"
-	"sharedlog-stream/benchmark/common/benchutil"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/proc_interface"
@@ -16,7 +16,6 @@ import (
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
-	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
 	"time"
 
@@ -146,12 +145,10 @@ func (h *q3JoinTableHandler) setupSerde(serdeFormat commtypes.SerdeFormat) *comm
 func (h *q3JoinTableHandler) setupQ3Join(sp *common.QueryInput) (
 	proc_interface.ProcessAndReturnFunc[uint64, *ntypes.Event, uint64, commtypes.ChangeG[ntypes.NameCityStateId]],
 	proc_interface.ProcessAndReturnFunc[uint64, *ntypes.Event, uint64, commtypes.ChangeG[ntypes.NameCityStateId]],
-	map[string]store.KeyValueStoreOpWithChangelog,
+	*store.KVStoreOps,
 	stream_task.SetupSnapshotCallbackFunc,
-	*common.FnOutput,
+	error,
 ) {
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	flushDur := time.Duration(sp.FlushMs) * time.Millisecond
 	joiner := processor.ValueJoinerWithKeyFuncG[uint64, *ntypes.Event, *ntypes.Event, ntypes.NameCityStateId](
 		func(_ uint64, _ *ntypes.Event, rightVal *ntypes.Event) optional.Option[ntypes.NameCityStateId] {
 			ncsi := ntypes.NameCityStateId{
@@ -163,40 +160,16 @@ func (h *q3JoinTableHandler) setupQ3Join(sp *common.QueryInput) (
 			// debug.Fprintf(os.Stderr, "join outputs: %v\n", ncsi)
 			return optional.Some(ncsi)
 		})
-	mpAuc, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestampG[*ntypes.Event]]().
-		MessageSerde(h.storeMsgSerde).
-		StoreName("auctionsBySellerIDStore").
-		ParNum(sp.ParNum).
-		SerdeFormat(serdeFormat).
-		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
-			Env:           h.env,
-			NumPartition:  sp.NumChangelogPartition,
-			FlushDuration: flushDur,
-			TimeOut:       common.SrcConsumeTimeout,
-		}).BufMaxSize(sp.BufMaxSize).Build()
+	mpAuc, err := getMaterializedParam[uint64, commtypes.ValueTimestampG[*ntypes.Event]]("q3AuctionsBySellerIDStore", h.storeMsgSerde, h.env, sp)
 	if err != nil {
-		return nil, nil, nil, nil, common.GenErrFnOutput(err)
+		return nil, nil, nil, nil, err
 	}
-	mpPer, err := store_with_changelog.NewMaterializeParamBuilder[uint64, commtypes.ValueTimestampG[*ntypes.Event]]().
-		MessageSerde(h.storeMsgSerde).
-		StoreName("personsByIDStore").
-		ParNum(sp.ParNum).
-		SerdeFormat(serdeFormat).
-		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
-			Env:           h.env,
-			NumPartition:  sp.NumChangelogPartition,
-			FlushDuration: flushDur,
-			TimeOut:       common.SrcConsumeTimeout,
-		}).BufMaxSize(sp.BufMaxSize).Build()
+	mpPer, err := getMaterializedParam[uint64, commtypes.ValueTimestampG[*ntypes.Event]]("q3PersonsByIDStore", h.storeMsgSerde, h.env, sp)
 	if err != nil {
-		return nil, nil, nil, nil, common.GenErrFnOutput(err)
+		return nil, nil, nil, nil, err
 	}
-	aucJoinsPerFunc, perJoinsAucFunc, kvc, setupSnapFunc, err := execution.SetupTableTableJoinWithSkipmap(
-		mpAuc, mpPer, store.Uint64LessFunc, joiner)
-	if err != nil {
-		return nil, nil, nil, nil, common.GenErrFnOutput(err)
-	}
-	return aucJoinsPerFunc, perJoinsAucFunc, kvc, setupSnapFunc, nil
+	return execution.SetupTableTableJoinWithSkipmap(
+		mpAuc, mpPer, store.Uint64LessFunc, joiner, exactly_once_intr.GuaranteeMth(sp.GuaranteeMth))
 }
 
 func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.QueryInput) *common.FnOutput {
@@ -214,9 +187,9 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	debug.Assert(len(sp.NumOutPartitions) == 1 && len(sp.OutputTopicNames) == 1,
 		"expected only one output stream")
 	debug.Assert(sp.ScaleEpoch != 0, "scale epoch should start from 1")
-	aucJoinsPerFunc, perJoinsAucFunc, kvc, setupSnapFunc, fn_out := h.setupQ3Join(sp)
-	if fn_out != nil {
-		return fn_out
+	aucJoinsPerFunc, perJoinsAucFunc, kvos, setupSnapFunc, err := h.setupQ3Join(sp)
+	if err != nil {
+		return common.GenErrFnOutput(err)
 	}
 	toStream := processor.NewTableToStreamProcessorG[uint64, ntypes.NameCityStateId]()
 
@@ -253,10 +226,11 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum),
 		true, msgSerdePair, msgSerdePair, "subG2")
-	transactionalID := fmt.Sprintf("%s-%d", h.funcName, sp.ParNum)
-	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(h.env, procArgs, transactionalID)).
-		KVStoreChangelogs(kvc).FixedOutParNum(sp.ParNum).Build()
+	builder := streamArgsBuilderForJoin(h.env, procArgs, sp)
+	builder = execution.StreamArgsSetKVStore(kvos, builder, exactly_once_intr.GuaranteeMth(sp.GuaranteeMth))
+	streamTaskArgs, err := builder.
+		FixedOutParNum(sp.ParNum).
+		Build()
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

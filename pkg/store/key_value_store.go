@@ -34,6 +34,7 @@ type CoreKeyValueStoreG[K, V any] interface {
 	GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[K, V]]
 	SetInstanceId(uint8)
 	GetInstanceId() uint8
+	BuildKeyMeta(ctx context.Context, kms map[string][]txn_data.KeyMaping) error
 	OnlyUpdateInMemStore
 }
 
@@ -62,6 +63,11 @@ type KeyValueStoreOpWithChangelog interface {
 	FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error)
 	SubstreamNum() uint8
 	KeyValueStoreOp
+}
+
+type KVStoreOps struct {
+	Kvo []KeyValueStoreOp
+	Kvc map[string]KeyValueStoreOpWithChangelog
 }
 
 type KeyValueStoreBackedByChangelogG[K, V any] interface {

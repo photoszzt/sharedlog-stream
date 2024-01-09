@@ -9,10 +9,10 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
-	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
@@ -30,199 +30,93 @@ func compareStartEndTime(a, b ntypes.StartEndTime) bool {
 	return ntypes.CompareStartEndTime(a, b) < 0
 }
 
-type KVStoreStreamArgsParam[K comparable, V any] struct {
-	StoreName string
-	FuncName  string
-	MsgSerde  commtypes.MessageGSerdeG[K, commtypes.ValueTimestampG[V]]
-	Compare   store.LessFunc[K]
-	SizeofK   func(K) int64
-	SizeofV   func(V) int64
-	UseCache  bool
-}
-
-type WinStoreStreamArgsParam[K, V any] struct {
-	StoreName  string
-	FuncName   string
-	MsgSerde   commtypes.MessageGSerdeG[K, commtypes.ValueTimestampG[V]]
-	SizeOfK    func(K) int64
-	SizeOfV    func(V) int64
-	CmpFunc    store.CompareFuncG[K]
-	JoinWindow commtypes.EnumerableWindowDefinition
-	UseCache   bool
-}
-
-func getWinStoreAndStreamArgs[K comparable, V any](
-	ctx context.Context,
+func getMaterializedParam[K, V any](storeName string,
+	kvMsgSerde commtypes.MessageGSerdeG[K, V],
 	env types.Environment,
 	sp *common.QueryInput,
-	p *WinStoreStreamArgsParam[K, V],
+) (*store_with_changelog.MaterializeParam[K, V], error) {
+	return store_with_changelog.NewMaterializeParamBuilder[K, V]().
+		MessageSerde(kvMsgSerde).
+		StoreName(storeName).
+		ParNum(sp.ParNum).
+		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
+		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
+			Env:           env,
+			NumPartition:  sp.NumChangelogPartition,
+			TimeOut:       common.SrcConsumeTimeout,
+			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+		}).BufMaxSize(sp.BufMaxSize).Build()
+}
+
+func streamArgsBuilder(
+	env types.Environment,
 	ectx *processor.BaseExecutionContext,
-) (cachedStore store.CachedWindowStateStore[K, commtypes.ValueTimestampG[V]],
-	builder stream_task.BuildStreamTaskArgs,
-	f stream_task.SetupSnapshotCallbackFunc,
-	err error,
-) {
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	gua := exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)
-	transactionalID := fmt.Sprintf("%s-%s-%d-%s", p.FuncName, sp.InputTopicNames[0],
+	sp *common.QueryInput,
+) stream_task.BuildStreamTaskArgs {
+	transactionalID := fmt.Sprintf("%s-%s-%d-%s", ectx.FuncName(), sp.InputTopicNames[0],
 		sp.ParNum, sp.OutputTopicNames[0])
-	builder = benchutil.UpdateStreamTaskArgs(sp,
+	return benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(env, ectx, transactionalID))
-	if gua == exactly_once_intr.ALIGN_CHKPT {
-		cachedStore = store.NewInMemorySkipMapWindowStore[K, commtypes.ValueTimestampG[V]](p.StoreName,
-			p.JoinWindow.MaxSize()+p.JoinWindow.GracePeriodMs(), p.JoinWindow.MaxSize(), false, p.CmpFunc)
-		builder = builder.WindowStoreOps([]store.WindowStoreOp{cachedStore})
-		f = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment,
-			serdeFormat commtypes.SerdeFormat,
-			rs *snapshot_store.RedisSnapshotStore,
-		) error {
-			payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
-			if err != nil {
-				return err
-			}
-			stream_task.SetWinStoreChkpt[K, commtypes.ValueTimestampG[V]](ctx, rs, cachedStore, payloadSerde)
-			return nil
-		})
-	} else {
-		countMp, err := store_with_changelog.NewMaterializeParamBuilder[K, commtypes.ValueTimestampG[V]]().
-			MessageSerde(p.MsgSerde).
-			StoreName(p.StoreName).ParNum(sp.ParNum).
-			SerdeFormat(serdeFormat).
-			ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
-				Env:           env,
-				NumPartition:  sp.NumChangelogPartition,
-				TimeOut:       common.SrcConsumeTimeout,
-				FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
-			}).BufMaxSize(sp.BufMaxSize).Build()
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		countWindowStore, err := store_with_changelog.CreateInMemSkipMapWindowTableWithChangelogG(
-			p.JoinWindow, false, p.CmpFunc, countMp)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		var aggStore store.CachedWindowStoreBackedByChangelogG[K, commtypes.ValueTimestampG[V]]
-		if p.UseCache {
-			sizeOfVTs := commtypes.ValueTimestampGSize[V]{
-				ValSizeFunc: p.SizeOfV,
-			}
-			sizeOfKeyTs := commtypes.KeyAndWindowStartTsGSize[K]{
-				KeySizeFunc: p.SizeOfK,
-			}
-			cacheStore := store.NewCachingWindowStoreG[K, commtypes.ValueTimestampG[V]](
-				ctx, p.JoinWindow.MaxSize(), countWindowStore,
-				sizeOfKeyTs.SizeOfKeyAndWindowStartTs,
-				sizeOfVTs.SizeOfValueTimestamp, q5SizePerStore)
-			aggStore = cacheStore
-		} else {
-			aggStore = countWindowStore
-		}
-		cachedStore = aggStore
-		wsc := map[string]store.WindowStoreOpWithChangelog{countWindowStore.ChangelogTopicName(): aggStore}
-		f = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment,
-			serdeFormat commtypes.SerdeFormat,
-			rs *snapshot_store.RedisSnapshotStore,
-		) error {
-			payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
-			if err != nil {
-				return err
-			}
-			stream_task.SetWinStoreWithChangelogSnapshot[K, commtypes.ValueTimestampG[V]](ctx, env, rs, aggStore, payloadSerde)
-			return nil
-		})
-		builder = builder.WindowStoreChangelogs(wsc)
-	}
-	return cachedStore, builder, f, nil
 }
 
-func getKVStoreAndStreamArgs[K comparable, V any](
+func streamArgsBuilderForJoin(
+	env types.Environment,
+	ectx processor.ExecutionContext,
+	sp *common.QueryInput,
+) stream_task.BuildStreamTaskArgs {
+	transactionalID := fmt.Sprintf("%s-%d", ectx.FuncName(), sp.ParNum)
+	return benchutil.UpdateStreamTaskArgs(sp,
+		stream_task.NewStreamTaskArgsBuilder(env, ectx, transactionalID))
+}
+
+func setupKVStoreForAgg[K comparable, V any](
 	ctx context.Context,
 	env types.Environment,
 	sp *common.QueryInput,
-	p *KVStoreStreamArgsParam[K, V],
+	p *execution.KVStoreParam[K, V],
 	ectx *processor.BaseExecutionContext,
-) (cachedStore store.CachedKeyValueStore[K, commtypes.ValueTimestampG[V]],
-	builder stream_task.BuildStreamTaskArgs,
-	f stream_task.SetupSnapshotCallbackFunc,
-	err error,
+	msgSerde commtypes.MessageGSerdeG[K, commtypes.ValueTimestampG[V]],
+) (
+	store.CachedKeyValueStore[K, commtypes.ValueTimestampG[V]],
+	stream_task.BuildStreamTaskArgs,
+	stream_task.SetupSnapshotCallbackFunc,
+	error,
 ) {
-	builder = benchutil.UpdateStreamTaskArgs(sp, stream_task.NewStreamTaskArgsBuilder(env, ectx,
-		fmt.Sprintf("%s-%s-%d-%s", p.FuncName, sp.InputTopicNames[0],
-			sp.ParNum, sp.OutputTopicNames[0])))
-	gua := exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)
-	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	if gua == exactly_once_intr.ALIGN_CHKPT {
-		st := store.NewInMemorySkipmapKeyValueStoreG[K, commtypes.ValueTimestampG[V]](p.StoreName, p.Compare)
-		st.SetInstanceId(sp.ParNum)
-		err := st.SetKVSerde(serdeFormat, p.MsgSerde.GetKeySerdeG(), p.MsgSerde.GetValSerdeG())
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		builder.KVStoreOps([]store.KeyValueStoreOp{st})
-		f = func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
-			rs *snapshot_store.RedisSnapshotStore,
-		) error {
-			payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
-			if err != nil {
-				return err
-			}
-			stream_task.SetKVStoreChkpt[K, commtypes.ValueTimestampG[V]](
-				ctx,
-				rs, cachedStore, payloadSerde)
-			return nil
-		}
-		return st, builder, f, nil
-	} else {
-		mp, err := store_with_changelog.NewMaterializeParamBuilder[K, commtypes.ValueTimestampG[V]]().
-			MessageSerde(p.MsgSerde).
-			StoreName(p.StoreName).
-			ParNum(sp.ParNum).
-			SerdeFormat(serdeFormat).
-			ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
-				Env:           env,
-				NumPartition:  sp.NumChangelogPartition,
-				TimeOut:       common.SrcConsumeTimeout,
-				FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
-			}).
-			BufMaxSize(sp.BufMaxSize).
-			Build()
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		var aggStore store.CachedKeyValueStoreBackedByChangelogG[K, commtypes.ValueTimestampG[V]]
-		kvstore, err := store_with_changelog.CreateInMemorySkipmapKVTableWithChangelogG(mp, p.Compare)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		if p.UseCache {
-			sizeOfVTs := commtypes.ValueTimestampGSize[V]{
-				ValSizeFunc: p.SizeofV,
-			}
-			cacheStore := store.NewCachingKeyValueStoreG[K, commtypes.ValueTimestampG[V]](
-				ctx, kvstore, p.SizeofK, sizeOfVTs.SizeOfValueTimestamp, q5SizePerStore)
-			aggStore = cacheStore
-		} else {
-			aggStore = kvstore
-		}
-		kvc := map[string]store.KeyValueStoreOpWithChangelog{
-			aggStore.ChangelogTopicName(): aggStore,
-		}
-		builder = builder.KVStoreChangelogs(kvc)
-		f = func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
-			rs *snapshot_store.RedisSnapshotStore,
-		) error {
-			payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
-			if err != nil {
-				return err
-			}
-			stream_task.SetKVStoreWithChangelogSnapshot[K, commtypes.ValueTimestampG[V]](
-				ctx, env,
-				rs, aggStore, payloadSerde)
-			return nil
-		}
-		return aggStore, builder, f, nil
+	p.CommonStoreParam.GuaranteeMth = exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)
+	mp, err := getMaterializedParam[K, commtypes.ValueTimestampG[V]](
+		p.StoreName, msgSerde, env, sp)
+	if err != nil {
+		return nil, nil, nil, err
 	}
+	store, kvos, f, err := execution.GetKVStore(ctx, p, mp)
+	builder := streamArgsBuilder(env, ectx, sp)
+	builder = execution.StreamArgsSetKVStore(kvos, builder, p.GuaranteeMth)
+	return store, builder, f, nil
+}
+
+func setupWinStoreForAgg[K comparable, V any](
+	ctx context.Context,
+	env types.Environment,
+	sp *common.QueryInput,
+	p *execution.WinStoreParam[K, V],
+	ectx *processor.BaseExecutionContext,
+	msgSerde commtypes.MessageGSerdeG[K, commtypes.ValueTimestampG[V]],
+) (
+	store.CachedWindowStateStore[K, commtypes.ValueTimestampG[V]],
+	stream_task.BuildStreamTaskArgs,
+	stream_task.SetupSnapshotCallbackFunc,
+	error,
+) {
+	p.CommonStoreParam.GuaranteeMth = exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)
+	mp, err := getMaterializedParam[K, commtypes.ValueTimestampG[V]](
+		p.StoreName, msgSerde, env, sp)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	store, wsos, f, err := execution.GetWinStore(ctx, p, mp)
+	builder := streamArgsBuilder(env, ectx, sp)
+	builder = execution.StreamArgsSetWinStore(wsos, builder, p.GuaranteeMth)
+	return store, builder, f, nil
 }
 
 func getSrcSink(ctx context.Context, env types.Environment, sp *common.QueryInput,

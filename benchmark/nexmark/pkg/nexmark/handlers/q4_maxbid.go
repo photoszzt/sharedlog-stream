@@ -8,6 +8,8 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
@@ -129,18 +131,19 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	useCache := benchutil.UseCache(h.useCache, sp.GuaranteeMth)
-	aggStore, builder, snapfunc, err := getKVStoreAndStreamArgs(ctx, h.env, sp,
-		&KVStoreStreamArgsParam[ntypes.AuctionIdCategory, uint64]{
-			StoreName: "q4MaxBidKVStore",
-			FuncName:  h.funcName,
-			MsgSerde:  h.msgSerde,
-			Compare:   ntypes.AuctionIdCategoryLess,
-			SizeofK:   ntypes.SizeOfAuctionIdCategory,
-			SizeofV:   commtypes.SizeOfUint64,
-			UseCache:  useCache,
+	useCache := benchutil.UseCache(h.useCache, exactly_once_intr.GuaranteeMth(sp.GuaranteeMth))
+	aggStore, builder, snapfunc, err := setupKVStoreForAgg(ctx, h.env, sp,
+		&execution.KVStoreParam[ntypes.AuctionIdCategory, uint64]{
+			Compare: ntypes.AuctionIdCategoryLess,
+			CommonStoreParam: execution.CommonStoreParam[ntypes.AuctionIdCategory, uint64]{
+				StoreName:     "q4MaxBidKVStore",
+				SizeOfK:       ntypes.SizeOfAuctionIdCategory,
+				SizeOfV:       commtypes.SizeOfUint64,
+				MaxCacheBytes: q4SizePerStore,
+				UseCache:      useCache,
+			},
 		},
-		&ectx)
+		&ectx, h.msgSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

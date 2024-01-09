@@ -98,3 +98,8 @@ type WindowStoreOpWithChangelog interface {
 	FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error)
 	WindowStoreOp
 }
+
+type WinStoreOps struct {
+	Wsos []WindowStoreOp
+	Wsc  map[string]WindowStoreOpWithChangelog
+}

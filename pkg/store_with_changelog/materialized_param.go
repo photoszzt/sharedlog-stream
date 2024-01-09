@@ -21,6 +21,10 @@ func (m *MaterializeParam[K, V]) ParNum() uint8 {
 	return m.parNum
 }
 
+func (m *MaterializeParam[K, V]) MessageSerde() commtypes.MessageGSerdeG[K, V] {
+	return m.msgSerde
+}
+
 func (m *MaterializeParam[K, V]) SerdeFormat() commtypes.SerdeFormat {
 	return m.serdeFormat
 }

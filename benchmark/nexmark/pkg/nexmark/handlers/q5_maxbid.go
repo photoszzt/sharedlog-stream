@@ -9,6 +9,8 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
@@ -134,18 +136,19 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	}
 	ectx := processor.NewExecutionContext(srcs,
 		sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum)
-	useCache := benchutil.UseCache(h.useCache, sp.GuaranteeMth)
-	aggStore, builder, snapfunc, err := getKVStoreAndStreamArgs(ctx, h.env, sp,
-		&KVStoreStreamArgsParam[ntypes.StartEndTime, uint64]{
-			StoreName: "q5MaxBidKVStore",
-			FuncName:  h.funcName,
-			MsgSerde:  h.msgSerde,
-			Compare:   compareStartEndTime,
-			SizeofK:   ntypes.SizeOfStartEndTime,
-			SizeofV:   commtypes.SizeOfUint64,
-			UseCache:  useCache,
-		},
-		&ectx)
+	gua := exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)
+	useCache := benchutil.UseCache(h.useCache, gua)
+	aggStore, builder, snapfunc, err := setupKVStoreForAgg(ctx, h.env, sp,
+		&execution.KVStoreParam[ntypes.StartEndTime, uint64]{
+			Compare: compareStartEndTime,
+			CommonStoreParam: execution.CommonStoreParam[ntypes.StartEndTime, uint64]{
+				StoreName:     "q5MaxBidKVStore",
+				SizeOfK:       ntypes.SizeOfStartEndTime,
+				SizeOfV:       commtypes.SizeOfUint64,
+				MaxCacheBytes: q5SizePerStore,
+				UseCache:      useCache,
+			},
+		}, &ectx, h.msgSerde)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
