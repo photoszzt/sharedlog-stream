@@ -107,6 +107,7 @@ func setupWinStoreForAgg[K comparable, V any](
 	stream_task.SetupSnapshotCallbackFunc,
 	error,
 ) {
+	p.RetainDuplicates = false
 	p.CommonStoreParam.GuaranteeMth = exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)
 	mp, err := getMaterializedParam[K, commtypes.ValueTimestampG[V]](
 		p.StoreName, msgSerde, env, sp)

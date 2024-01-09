@@ -71,7 +71,6 @@ func GetWinStore[K comparable, V any](
 	err error,
 ) {
 	if p.GuaranteeMth == exactly_once_intr.ALIGN_CHKPT {
-		p.RetainDuplicates = false
 		cachedStore, err = GetInMemorySkipMapWindowStore(p, mp.ParNum(), mp.SerdeFormat(), mp.MessageSerde())
 		if err != nil {
 			return nil, nil, nil, err
