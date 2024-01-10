@@ -67,17 +67,16 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 		if (!args.waitEndMark && args.duration != 0 && warmupCheck.ElapsedSinceInitial() >= args.duration) || gotEndMark {
 			break
 		}
-		ret, ctrlRawMsgOp := t.appProcessFunc(ctx, t, args.ectx)
+		ret, ctrlRawMsgArr := t.appProcessFunc(ctx, t, args.ectx)
 		if ret != nil {
 			if ret.Success {
 				continue
 			}
 			return ret
 		}
-		ctrlRawMsg, ok := ctrlRawMsgOp.Take()
-		if ok {
+		if ctrlRawMsgArr != nil {
 			fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
-			if ctrlRawMsg.Mark != commtypes.CHKPT_MARK {
+			if ctrlRawMsgArr[0].Mark != commtypes.CHKPT_MARK {
 				if t.pauseFunc != nil {
 					if ret := t.pauseFunc(); ret != nil {
 						return ret
@@ -86,7 +85,7 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 				if ret_err := timedFlushStreams(ctx, t, args); ret_err != nil {
 					return ret_err
 				}
-				return handleCtrlMsg(ctx, ctrlRawMsg, t, args, &warmupCheck)
+				return handleCtrlMsg(ctx, ctrlRawMsgArr[0], t, args, &warmupCheck)
 			}
 		}
 	}

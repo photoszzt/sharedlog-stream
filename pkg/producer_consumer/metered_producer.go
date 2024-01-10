@@ -122,7 +122,7 @@ func (s *ConcurrentMeteredSink) ProduceData(ctx context.Context, msgSer commtype
 	return err
 }
 
-func (s *ConcurrentMeteredSink) ProduceCtrlMsg(ctx context.Context, msg commtypes.RawMsgAndSeq, parNums []uint8) (int, error) {
+func (s *ConcurrentMeteredSink) ProduceCtrlMsg(ctx context.Context, msg *commtypes.RawMsgAndSeq, parNums []uint8) (int, error) {
 	c, err := s.producer.ProduceCtrlMsg(ctx, msg, parNums)
 	atomic.AddUint32(&s.ctrlCount, uint32(c))
 	return c, err
@@ -134,14 +134,17 @@ func (s *ConcurrentMeteredSink) SetName(name string) { s.producer.SetName(name) 
 func (s *ConcurrentMeteredSink) Flush(ctx context.Context) (uint32, error) {
 	return s.producer.Flush(ctx)
 }
+
 func (s *ConcurrentMeteredSink) ConfigExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	guarantee exactly_once_intr.GuaranteeMth,
 ) {
 	s.producer.ConfigExactlyOnce(rem, guarantee)
 }
+
 func (s *ConcurrentMeteredSink) Stream() sharedlog_stream.Stream {
 	return s.producer.Stream()
 }
+
 func (s *ConcurrentMeteredSink) GetInitialProdSeqNum(substreamNum uint8) uint64 {
 	return s.producer.GetInitialProdSeqNum(substreamNum)
 }
@@ -150,18 +153,21 @@ func (s *ConcurrentMeteredSink) OutputRemainingStats() {
 	s.lat.PrintRemainingStats()
 	s.producer.OutputRemainingStats()
 }
+
 func (s *ConcurrentMeteredSink) GetEventTimeLatency() []int {
 	s.mu.Lock()
 	ret := s.eventTimeLatencies
 	s.mu.Unlock()
 	return ret
 }
+
 func (s *ConcurrentMeteredSink) GetEventTs() []int64 {
 	s.mu.Lock()
 	ret := s.eventTs
 	s.mu.Unlock()
 	return ret
 }
+
 func (s *ConcurrentMeteredSink) NumCtrlMsg() uint32 {
 	return atomic.LoadUint32(&s.ctrlCount)
 }
@@ -219,7 +225,7 @@ func (s *MeteredProducer) StartWarmup() {
 	}
 }
 
-func (s *MeteredProducer) ProduceCtrlMsg(ctx context.Context, msg commtypes.RawMsgAndSeq, parNums []uint8) (int, error) {
+func (s *MeteredProducer) ProduceCtrlMsg(ctx context.Context, msg *commtypes.RawMsgAndSeq, parNums []uint8) (int, error) {
 	ctrlCnt, err := s.producer.ProduceCtrlMsg(ctx, msg, parNums)
 	s.ctrlCount += uint32(ctrlCnt)
 	return ctrlCnt, err
@@ -274,20 +280,25 @@ func (s *MeteredProducer) SetName(name string) { s.producer.SetName(name) }
 func (s *MeteredProducer) Flush(ctx context.Context) (uint32, error) {
 	return s.producer.FlushNoLock(ctx)
 }
+
 func (s *MeteredProducer) ConfigExactlyOnce(rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	guarantee exactly_once_intr.GuaranteeMth,
 ) {
 	s.producer.ConfigExactlyOnce(rem, guarantee)
 }
+
 func (s *MeteredProducer) Stream() sharedlog_stream.Stream {
 	return s.producer.Stream()
 }
+
 func (s *MeteredProducer) GetInitialProdSeqNum(substreamNum uint8) uint64 {
 	return s.producer.GetInitialProdSeqNum(substreamNum)
 }
+
 func (s *MeteredProducer) ResetInitialProd() {
 	s.producer.ResetInitialProd()
 }
+
 func (s *MeteredProducer) OutputRemainingStats() {
 	// s.latencies.PrintRemainingStats()
 	// s.eventTimeSample.PrintRemainingStats()
@@ -297,6 +308,7 @@ func (s *MeteredProducer) OutputRemainingStats() {
 func (s *MeteredProducer) GetEventTimeLatency() []int {
 	return s.eventTimeLatencies
 }
+
 func (s *MeteredProducer) GetEventTs() []int64 {
 	return s.eventTs
 }

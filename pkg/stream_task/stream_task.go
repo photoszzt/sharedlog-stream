@@ -10,7 +10,6 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/env_config"
 	"sharedlog-stream/pkg/exactly_once_intr"
-	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/snapshot_store"
@@ -25,7 +24,7 @@ import (
 )
 
 type ProcessFunc func(ctx context.Context, task *StreamTask,
-	args processor.ExecutionContext) (*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq])
+	args processor.ExecutionContext) (*common.FnOutput, []*commtypes.RawMsgAndSeq)
 
 // in case the task consumes multiple streams, the task consumes from the same substream number
 // and the substreams must have the same number of substreams.
@@ -171,7 +170,7 @@ func encodeWinSnapshot[K, V any](
 	})
 }
 
-func handleCtrlMsg(ctx context.Context, ctrlRawMsg commtypes.RawMsgAndSeq,
+func handleCtrlMsg(ctx context.Context, ctrlRawMsg *commtypes.RawMsgAndSeq,
 	t *StreamTask, args *StreamTaskArgs, warmupCheck *stats.Warmup,
 ) *common.FnOutput {
 	if ctrlRawMsg.Mark == commtypes.SCALE_FENCE {
@@ -194,7 +193,7 @@ func handleCtrlMsg(ctx context.Context, ctrlRawMsg commtypes.RawMsgAndSeq,
 			return common.GenErrFnOutput(err)
 		}
 		ctrlRawMsg.Payload = encoded
-		fn_out := forwardMsg(ctx, ctrlRawMsg, args, "stream end mark")
+		fn_out := forwardCtrlMsg(ctx, ctrlRawMsg, args, "stream end mark")
 		if fn_out != nil {
 			return fn_out
 		}
@@ -499,9 +498,9 @@ func initAfterMarkOrCommit(ctx context.Context, t *StreamTask, args *StreamTaskA
 	return nil
 }
 
-func forwardMsg(
+func forwardCtrlMsg(
 	ctx context.Context,
-	msg commtypes.RawMsgAndSeq,
+	msg *commtypes.RawMsgAndSeq,
 	args *StreamTaskArgs,
 	name string,
 ) *common.FnOutput {
@@ -529,7 +528,7 @@ func forwardMsg(
 	return nil
 }
 
-func handleScaleEpochAndBytes(ctx context.Context, msg commtypes.RawMsgAndSeq,
+func handleScaleEpochAndBytes(ctx context.Context, msg *commtypes.RawMsgAndSeq,
 	args *StreamTaskArgs,
 ) *common.FnOutput {
 	epochMarker := commtypes.EpochMarker{
@@ -542,7 +541,7 @@ func handleScaleEpochAndBytes(ctx context.Context, msg commtypes.RawMsgAndSeq,
 		return common.GenErrFnOutput(err)
 	}
 	msg.Payload = encoded
-	fn_out := forwardMsg(ctx, msg, args, "scale fence")
+	fn_out := forwardCtrlMsg(ctx, msg, args, "scale fence")
 	if fn_out != nil {
 		return fn_out
 	}

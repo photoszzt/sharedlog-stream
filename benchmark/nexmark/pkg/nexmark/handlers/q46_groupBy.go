@@ -90,27 +90,23 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 	bidsByAucIDProc.NextProcessor(groupBidByAucIDProc)
 
 	task := stream_task.NewStreamTaskBuilder().AppProcessFunc(
-		func(ctx context.Context, task *stream_task.StreamTask,
-			argsTmp processor.ExecutionContext,
-		) (*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq]) {
-			args := argsTmp.(*processor.BaseExecutionContext)
-			return stream_task.CommonProcess(ctx, task, args,
-				func(ctx context.Context, msg commtypes.MessageG[string, *ntypes.Event], argsTmp interface{}) error {
-					event := msg.Value.Unwrap()
-					if event.Etype == ntypes.AUCTION {
-						err := aucByIDProc.Process(ctx, msg)
-						if err != nil {
-							return err
-						}
-					} else if event.Etype == ntypes.BID {
-						err := bidsByAucIDProc.Process(ctx, msg)
-						if err != nil {
-							return err
-						}
+		stream_task.CommonAppProcessFunc(
+			func(ctx context.Context, msg commtypes.MessageG[string, *ntypes.Event]) error {
+				event := msg.Value.Unwrap()
+				if event.Etype == ntypes.AUCTION {
+					err := aucByIDProc.Process(ctx, msg)
+					if err != nil {
+						return err
 					}
-					return nil
-				}, h.inMsgSerde)
-		}).Build()
+				} else if event.Etype == ntypes.BID {
+					err := bidsByAucIDProc.Process(ctx, msg)
+					if err != nil {
+						return err
+					}
+				}
+				return nil
+			}, h.inMsgSerde)).
+		Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName, sp.InputTopicNames[0], sp.ParNum)
 	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).Build()

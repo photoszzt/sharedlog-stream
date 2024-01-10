@@ -6,7 +6,6 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/stats"
@@ -82,17 +81,20 @@ func PrepareTaskWithJoin[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR any]
 	taskBuilder := stream_task.NewStreamTaskBuilder().
 		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
 			argsTmp processor.ExecutionContext,
-		) (*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq]) {
+		) (*common.FnOutput, []*commtypes.RawMsgAndSeq) {
 			if leftManager.GotEndMark() && rightManager.GotEndMark() {
 				debug.Fprintf(os.Stderr, "join proc got end mark\n")
 				// leftStartTime := leftManager.StreamStartTime()
 				// task.SetEndDuration(leftStartTime)
-				return nil, leftManager.ctrlMsg
+				return nil, []*commtypes.RawMsgAndSeq{leftManager.ctrlMsg}
 			} else if leftManager.GotScaleFence() && rightManager.GotScaleFence() {
 				debug.Fprintf(os.Stderr, "join proc got scale fence\n")
-				return nil, leftManager.ctrlMsg
+				return nil, []*commtypes.RawMsgAndSeq{leftManager.ctrlMsg}
+			} else if leftManager.GotChkptMark() && rightManager.GotChkptMark() {
+				debug.Fprintf(os.Stderr, "join proc got all checkpt mark\n")
+				return nil, []*commtypes.RawMsgAndSeq{leftManager.ctrlMsg, rightManager.ctrlMsg}
 			}
-			return handleJoinErrReturn(), optional.None[commtypes.RawMsgAndSeq]()
+			return handleJoinErrReturn(), nil
 		}).
 		InitFunc(func(task *stream_task.StreamTask) {
 			// debug.Fprintf(os.Stderr, "init ts=%d launch join proc loops\n", time.Now().UnixMilli())

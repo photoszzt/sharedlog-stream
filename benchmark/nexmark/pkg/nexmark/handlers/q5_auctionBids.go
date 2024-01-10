@@ -197,14 +197,7 @@ func (h *q5AuctionBids) processQ5AuctionBids(ctx context.Context, sp *common.Que
 	mapProc.NextProcessor(outProc)
 
 	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, args processor.ExecutionContext) (
-			*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq],
-		) {
-			return stream_task.CommonProcess(ctx, task, args.(*processor.BaseExecutionContext),
-				func(ctx context.Context, msg commtypes.MessageG[uint64, *ntypes.Event], argsTmp interface{}) error {
-					return countProc.Process(ctx, msg)
-				}, h.srcMsgSerde)
-		}).
+		AppProcessFunc(stream_task.CommonAppProcessFunc(countProc.Process, h.srcMsgSerde)).
 		Build()
 	streamTaskArgs, err := builder.Build()
 	if err != nil {

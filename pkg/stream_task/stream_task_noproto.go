@@ -38,15 +38,14 @@ func processNoProto(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *c
 		if (!args.waitEndMark && args.duration != 0 && warmupCheck.ElapsedSinceInitial() >= args.duration) || gotEndMark {
 			break
 		}
-		ret, ctrlRawMsgOp := t.appProcessFunc(ctx, t, args.ectx)
+		ret, ctrlRawMsgArr := t.appProcessFunc(ctx, t, args.ectx)
 		if ret != nil {
 			if ret.Success {
 				continue
 			}
 			return ret
 		}
-		ctrlRawMsg, ok := ctrlRawMsgOp.Take()
-		if ok {
+		if ctrlRawMsgArr != nil {
 			fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
 			if t.pauseFunc != nil {
 				if ret := t.pauseFunc(); ret != nil {
@@ -57,7 +56,7 @@ func processNoProto(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *c
 			if ret_err != nil {
 				return ret_err
 			}
-			return handleCtrlMsg(ctx, ctrlRawMsg, t, args, &warmupCheck)
+			return handleCtrlMsg(ctx, ctrlRawMsgArr[0], t, args, &warmupCheck)
 		}
 	}
 	if t.pauseFunc != nil {

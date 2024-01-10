@@ -131,27 +131,23 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 	perByIDProc.NextProcessor(groupByPerIDProc)
 
 	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
-			argsTmp processor.ExecutionContext,
-		) (*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq]) {
-			args := argsTmp.(*processor.BaseExecutionContext)
-			return stream_task.CommonProcess(ctx, task, args,
-				func(ctx context.Context, msg commtypes.MessageG[string, *ntypes.Event], argsTmp interface{}) error {
-					event := msg.Value.Unwrap()
-					if event.Etype == ntypes.AUCTION {
-						err := aucBySellerIdProc.Process(ctx, msg)
-						if err != nil {
-							return err
-						}
-					} else if event.Etype == ntypes.PERSON {
-						err := perByIDProc.Process(ctx, msg)
-						if err != nil {
-							return err
-						}
+		AppProcessFunc(stream_task.CommonAppProcessFunc(
+			func(ctx context.Context, msg commtypes.MessageG[string, *ntypes.Event]) error {
+				event := msg.Value.Unwrap()
+				if event.Etype == ntypes.AUCTION {
+					err := aucBySellerIdProc.Process(ctx, msg)
+					if err != nil {
+						return err
 					}
-					return nil
-				}, h.msgSerde)
-		}).Build()
+				} else if event.Etype == ntypes.PERSON {
+					err := perByIDProc.Process(ctx, msg)
+					if err != nil {
+						return err
+					}
+				}
+				return nil
+			}, h.msgSerde)).
+		Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d",
 		h.funcName, sp.InputTopicNames[0], sp.ParNum)
 	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,

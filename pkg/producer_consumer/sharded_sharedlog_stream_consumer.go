@@ -194,7 +194,8 @@ func (s *ShardedSharedLogStreamConsumer) RecordCurrentConsumedSeqNum(seqNum uint
 func (s *ShardedSharedLogStreamConsumer) CurrentConsumedSeqNum() uint64 {
 	return atomic.LoadUint64(&s.currentSeqNum)
 }
-func (s *ShardedSharedLogStreamConsumer) Consume(ctx context.Context, parNum uint8) (commtypes.RawMsgAndSeq, error) {
+
+func (s *ShardedSharedLogStreamConsumer) Consume(ctx context.Context, parNum uint8) (*commtypes.RawMsgAndSeq, error) {
 	startTime := time.Now()
 L:
 	for {
@@ -218,14 +219,14 @@ L:
 				// debug.Fprintf(os.Stderr, "stream time out\n")
 				continue
 			} else {
-				return commtypes.RawMsgAndSeq{}, err
+				return nil, err
 			}
 		}
 		if len(rawMsg.Payload) == 0 {
 			continue
 		}
 		if rawMsg.IsControl {
-			return commtypes.RawMsgAndSeq{
+			return &commtypes.RawMsgAndSeq{
 				Payload:    rawMsg.Payload,
 				PayloadArr: nil,
 				AuxData:    rawMsg.AuxData,
@@ -241,9 +242,9 @@ L:
 			if rawMsg.IsPayloadArr {
 				payloadArr, err := s.payloadArrSerde.Decode(rawMsg.Payload)
 				if err != nil {
-					return commtypes.RawMsgAndSeq{}, fmt.Errorf("fail to decode payload arr: %v", err)
+					return nil, fmt.Errorf("fail to decode payload arr: %v", err)
 				}
-				return commtypes.RawMsgAndSeq{
+				return &commtypes.RawMsgAndSeq{
 					Payload:    nil,
 					PayloadArr: payloadArr.Payloads,
 					AuxData:    rawMsg.AuxData,
@@ -253,7 +254,7 @@ L:
 					InjTsMs:    rawMsg.InjTsMs,
 				}, nil
 			} else {
-				return commtypes.RawMsgAndSeq{
+				return &commtypes.RawMsgAndSeq{
 					Payload:    rawMsg.Payload,
 					PayloadArr: nil,
 					AuxData:    rawMsg.AuxData,
@@ -265,5 +266,5 @@ L:
 			}
 		}
 	}
-	return commtypes.RawMsgAndSeq{}, common_errors.ErrStreamSourceTimeout
+	return nil, common_errors.ErrStreamSourceTimeout
 }

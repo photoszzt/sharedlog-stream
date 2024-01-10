@@ -8,7 +8,6 @@ import (
 	datatype "sharedlog-stream/benchmark/lat_tp/pkg/data_type"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
-	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
@@ -108,12 +107,8 @@ func (h *sharedlogTranProcessHandler) sharedlogTranProcess(ctx context.Context, 
 		proc_interface.NewBaseProcArgs("tranProcess", 1, 0))
 	outProc := processor.NewFixedSubstreamOutputProcessorG("subG1", sinks[0], 0, h.msgSerde)
 	task := stream_task.NewStreamTaskBuilder().MarkFinalStage().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, args processor.ExecutionContext) (*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq]) {
-			return stream_task.CommonProcess(ctx, task, &ectx,
-				func(ctx context.Context, msg commtypes.MessageG[string, datatype.PayloadTs], argsTmp interface{}) error {
-					return outProc.Process(ctx, msg)
-				}, h.msgSerde)
-		}).Build()
+		AppProcessFunc(stream_task.CommonAppProcessFunc(outProc.Process, h.msgSerde)).
+		Build()
 	streamTaskArgs, err := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,
 		fmt.Sprintf("tranProcess-%s-%d-%s", sp.InTopicName,
 			0, sp.OutTopicName)).

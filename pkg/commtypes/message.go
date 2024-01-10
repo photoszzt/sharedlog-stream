@@ -277,7 +277,7 @@ func DecodeRawMsgG[K, V any](rawMsg *RawMsg, msgSerde MessageGSerdeG[K, V],
 	}
 }
 
-func DecodeRawMsgSeqG[K, V any](rawMsg RawMsgAndSeq, msgSerde MessageGSerdeG[K, V]) (MsgAndSeqG[K, V], error) {
+func DecodeRawMsgSeqG[K, V any](rawMsg *RawMsgAndSeq, msgSerde MessageGSerdeG[K, V]) (MsgAndSeqG[K, V], error) {
 	if rawMsg.PayloadArr != nil {
 		msgArr := make([]MessageG[K, V], 0, len(rawMsg.PayloadArr))
 		for _, payload := range rawMsg.PayloadArr {
@@ -287,8 +287,13 @@ func DecodeRawMsgSeqG[K, V any](rawMsg RawMsgAndSeq, msgSerde MessageGSerdeG[K, 
 			}
 			msgArr = append(msgArr, msg)
 		}
-		return MsgAndSeqG[K, V]{MsgArr: msgArr, Msg: MessageG[K, V]{},
-			MsgSeqNum: rawMsg.MsgSeqNum, LogSeqNum: rawMsg.LogSeqNum}, nil
+		return MsgAndSeqG[K, V]{
+			MsgArr:    msgArr,
+			Msg:       MessageG[K, V]{},
+			MsgSeqNum: rawMsg.MsgSeqNum,
+			LogSeqNum: rawMsg.LogSeqNum,
+			IsControl: false,
+		}, nil
 	} else {
 		msg, err := msgSerde.Decode(rawMsg.Payload)
 		if err != nil {

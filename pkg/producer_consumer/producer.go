@@ -9,7 +9,7 @@ import (
 
 type Producer interface {
 	ProduceData(ctx context.Context, msgSer commtypes.MessageSerialized, parNum uint8) error
-	ProduceCtrlMsg(ctx context.Context, msg commtypes.RawMsgAndSeq, parNums []uint8) (int, error)
+	ProduceCtrlMsg(ctx context.Context, msg *commtypes.RawMsgAndSeq, parNums []uint8) (int, error)
 	TopicName() string
 	Name() string
 	SetName(string)

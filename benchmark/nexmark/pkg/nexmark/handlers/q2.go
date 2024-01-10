@@ -81,12 +81,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 	outProc := processor.NewFixedSubstreamOutputProcessorG("subG1Proc", sinks[0], sp.ParNum, h.msgSerde)
 	filterProc.NextProcessor(outProc)
 	task := stream_task.NewStreamTaskBuilder().MarkFinalStage().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, args processor.ExecutionContext) (*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq]) {
-			return stream_task.CommonProcess(ctx, task, args.(*processor.BaseExecutionContext),
-				func(ctx context.Context, msg commtypes.MessageG[string, *ntypes.Event], argsTmp interface{}) error {
-					return filterProc.Process(ctx, msg)
-				}, h.msgSerde)
-		}).
+		AppProcessFunc(stream_task.CommonAppProcessFunc[string, *ntypes.Event](filterProc.Process, h.msgSerde)).
 		Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,

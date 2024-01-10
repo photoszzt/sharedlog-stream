@@ -173,11 +173,11 @@ func processWithTransaction(
 			return common.GenErrFnOutput(err)
 		}
 
-		app_ret, ctrlRawMsgOp := t.appProcessFunc(ctx, t, args.ectx)
+		app_ret, ctrlRawMsgArr := t.appProcessFunc(ctx, t, args.ectx)
 		if app_ret != nil {
 			if app_ret.Success {
 				// consume timeout but not sure whether there's more data is coming; continue to process
-				debug.Assert(ctrlRawMsgOp.IsNone(), "when timeout, ctrlMsg should not be returned")
+				debug.Assert(ctrlRawMsgArr == nil, "when timeout, ctrlMsg should not be returned")
 				continue
 			} else {
 				if hasProcessData {
@@ -191,8 +191,7 @@ func processWithTransaction(
 		if !hasProcessData {
 			hasProcessData = true
 		}
-		ctrlRawMsg, ok := ctrlRawMsgOp.Take()
-		if ok {
+		if ctrlRawMsgArr != nil {
 			fmt.Fprintf(os.Stderr, "got ctrl msg, exp finish\n")
 			err_out := commitTransaction(ctx, t, tm, args, &paused, true, &snapshotTimer)
 			if err_out != nil {
@@ -200,7 +199,7 @@ func processWithTransaction(
 				return err_out
 			}
 			fmt.Fprintf(os.Stderr, "finish final commit\n")
-			return handleCtrlMsg(ctx, ctrlRawMsg, t, args, &warmupCheck)
+			return handleCtrlMsg(ctx, ctrlRawMsgArr[0], t, args, &warmupCheck)
 		}
 		// if warmupCheck.AfterWarmup() {
 		// 	elapsed := time.Since(procStart)

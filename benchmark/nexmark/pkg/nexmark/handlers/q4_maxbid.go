@@ -173,14 +173,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	aggProc.NextProcessor(groupByProc)
 	groupByProc.NextProcessor(sinkProc)
 	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, args processor.ExecutionContext) (
-			*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq],
-		) {
-			return stream_task.CommonProcess(ctx, task, args.(*processor.BaseExecutionContext),
-				func(ctx context.Context, msg commtypes.MessageG[ntypes.AuctionIdCategory, *ntypes.AuctionBid], argsTmp interface{}) error {
-					return aggProc.Process(ctx, msg)
-				}, h.inMsgSerde)
-		}).
+		AppProcessFunc(stream_task.CommonAppProcessFunc(aggProc.Process, h.inMsgSerde)).
 		Build()
 	streamTaskArgs, err := builder.Build()
 	if err != nil {

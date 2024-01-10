@@ -95,7 +95,7 @@ func (sls *ShardedSharedLogStreamProducer) ConfigExactlyOnce(
 	sls.eom = eos
 }
 
-func (sls *ShardedSharedLogStreamProducer) ProduceCtrlMsg(ctx context.Context, msg commtypes.RawMsgAndSeq, parNums []uint8) (int, error) {
+func (sls *ShardedSharedLogStreamProducer) ProduceCtrlMsg(ctx context.Context, msg *commtypes.RawMsgAndSeq, parNums []uint8) (int, error) {
 	if sls.bufPush {
 		_, err := sls.flush(ctx)
 		if err != nil {

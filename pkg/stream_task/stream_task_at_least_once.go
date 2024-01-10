@@ -68,7 +68,7 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 			break
 		}
 		// procStart := time.Now()
-		ret, ctrlRawMsgOp := t.appProcessFunc(ctx, t, args.ectx)
+		ret, ctrlRawMsgArr := t.appProcessFunc(ctx, t, args.ectx)
 		if ret != nil {
 			if ret.Success {
 				continue
@@ -78,8 +78,8 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 		if !hasUntrackedConsume {
 			hasUntrackedConsume = true
 		}
-		ctrlRawMsg, ok := ctrlRawMsgOp.Take()
-		if ok {
+		if ctrlRawMsgArr != nil {
+			ctrlRawMsg := ctrlRawMsgArr[0]
 			if t.pauseFunc != nil {
 				if ret := t.pauseFunc(); ret != nil {
 					return ret

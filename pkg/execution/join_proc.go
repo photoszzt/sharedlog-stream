@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/optional"
 
 	// "sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/stream_task"
@@ -86,7 +85,7 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 					consumer.SrcProducerGotScaleFence(rawMsgSeq.ProdIdx)
 					if consumer.AllProducerScaleFenced() {
 						jm.gotScaleFence.Store(true)
-						jm.ctrlMsg = optional.Some(rawMsgSeq)
+						jm.ctrlMsg = rawMsgSeq
 						jm.runLock.Unlock()
 						return
 					} else {
@@ -106,7 +105,7 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 					// fmt.Fprintf(os.Stderr, "[id=%s] %s %d ends, start time: %d\n",
 					// 	id, consumer.TopicName(), procArgs.SubstreamNum(), jm.startTimeMs)
 					// fmt.Fprintf(os.Stderr, "[id=%s] %s(%d) ends, elapsed: %v\n", id, consumer.TopicName(), procArgs.SubstreamNum(), elapsed)
-					jm.ctrlMsg = optional.Some(rawMsgSeq)
+					jm.ctrlMsg = rawMsgSeq
 					jm.runLock.Unlock()
 					return
 				} else {

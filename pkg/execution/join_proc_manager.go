@@ -4,7 +4,6 @@ import (
 	"context"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/utils/syncutils"
 	"sync"
@@ -18,7 +17,7 @@ type JoinProcManager struct {
 	out             chan *common.FnOutput
 	done            chan struct{}
 	flushAndCollect chan struct{}
-	ctrlMsg         optional.Option[commtypes.RawMsgAndSeq]
+	ctrlMsg         *commtypes.RawMsgAndSeq
 	gotEndMark      atomic.Bool
 	gotScaleFence   atomic.Bool
 	startTimeMs     int64

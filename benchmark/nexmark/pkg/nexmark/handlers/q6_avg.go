@@ -178,15 +178,9 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	tabAggProc.NextProcessor(tabMapValProc)
 	tabMapValProc.NextProcessor(tabToStreamProc)
 	tabToStreamProc.NextProcessor(sinkProc)
-	task := stream_task.NewStreamTaskBuilder().MarkFinalStage().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, args processor.ExecutionContext) (
-			*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq],
-		) {
-			return stream_task.CommonProcess(ctx, task, args.(*processor.BaseExecutionContext),
-				func(ctx context.Context, msg commtypes.MessageG[uint64, commtypes.ChangeG[ntypes.PriceTime]], argsTmp interface{}) error {
-					return tabAggProc.Process(ctx, msg)
-				}, h.inMsgSerde)
-		}).
+	task := stream_task.NewStreamTaskBuilder().
+		MarkFinalStage().
+		AppProcessFunc(stream_task.CommonAppProcessFunc(tabAggProc.Process, h.inMsgSerde)).
 		Build()
 	streamTaskArgs, err := builder.
 		FixedOutParNum(sp.ParNum).

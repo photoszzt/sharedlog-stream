@@ -88,14 +88,7 @@ func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInpu
 	filterProc.NextProcessor(selectKey)
 	selectKey.NextProcessor(outProc)
 	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, args processor.ExecutionContext) (
-			*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq],
-		) {
-			return stream_task.CommonProcess(ctx, task, args.(*processor.BaseExecutionContext),
-				func(ctx context.Context, msg commtypes.MessageG[string, *ntypes.Event], argsTmp interface{}) error {
-					return filterProc.Process(ctx, msg)
-				}, h.inMsgSerde)
-		}).
+		AppProcessFunc(stream_task.CommonAppProcessFunc(filterProc.Process, h.inMsgSerde)).
 		Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, input.InputTopicNames[0],
 		input.ParNum, input.OutputTopicNames[0])

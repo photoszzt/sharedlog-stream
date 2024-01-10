@@ -324,10 +324,10 @@ func processInEpoch(
 				return common.GenErrFnOutput(fmt.Errorf("initAfterMarkOrCommit: %v", err))
 			}
 		}
-		app_ret, ctrlRawMsgOp := t.appProcessFunc(ctx, t, args.ectx)
+		app_ret, ctrlRawMsgArr := t.appProcessFunc(ctx, t, args.ectx)
 		if app_ret != nil {
 			if app_ret.Success {
-				debug.Assert(ctrlRawMsgOp.IsNone(), "when timeout, ctrlMsg should not be returned")
+				debug.Assert(ctrlRawMsgArr == nil, "when timeout, ctrlMsg should not be returned")
 				// consume timeout but not sure whether there's more data is coming; continue to process
 				continue
 			}
@@ -336,8 +336,8 @@ func processInEpoch(
 		if !hasProcessData {
 			hasProcessData = true
 		}
-		ctrlRawMsg, ok := ctrlRawMsgOp.Take()
-		if ok {
+		if ctrlRawMsgArr != nil {
+			ctrlRawMsg := ctrlRawMsgArr[0]
 			fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
 			r := finalMark(ctx, t, args, em, cmm, snapshotTime, epochMarkTime, false)
 			if r != nil {

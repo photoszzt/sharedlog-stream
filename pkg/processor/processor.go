@@ -26,6 +26,14 @@ type IProcess interface {
 	Process(ctx context.Context, msg commtypes.Message) error
 }
 
+type IProcessFuncG[KIn, VIn any] func(ctx context.Context, msg commtypes.MessageG[KIn, VIn]) error
+
+func (fn IProcessFuncG[KIn, VIn]) Process(ctx context.Context, msg commtypes.MessageG[KIn, VIn]) error {
+	return fn(ctx, msg)
+}
+
+var _ IProcessG[int, int] = IProcessG[int, int](IProcessFuncG[int, int](nil))
+
 type ProcessorG[KIn, VIn, KOut, VOut any] interface {
 	Name() string
 	ProcessAndReturn(ctx context.Context, msg commtypes.MessageG[KIn, VIn]) ([]commtypes.MessageG[KOut, VOut], error)

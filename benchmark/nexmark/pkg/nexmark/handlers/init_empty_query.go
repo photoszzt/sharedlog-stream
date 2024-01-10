@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/stream_task"
@@ -69,12 +68,7 @@ func emptyFunc(ctx context.Context, sp *common.QueryInput,
 		proc_interface.NewBaseProcArgs(funcName, sp.ScaleEpoch, sp.ParNum))
 	outProc := processor.NewFixedSubstreamOutputProcessorG(subGraphTag, sinks[0], sp.ParNum, msgSerde)
 	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask, args processor.ExecutionContext) (*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq]) {
-			return stream_task.CommonProcess(ctx, task, args.(*processor.BaseExecutionContext),
-				func(ctx context.Context, msg commtypes.MessageG[string, *ntypes.Event], argsTmp interface{}) error {
-					return outProc.Process(ctx, msg)
-				}, msgSerde)
-		}).
+		AppProcessFunc(stream_task.CommonAppProcessFunc(outProc.Process, msgSerde)).
 		Build()
 	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
 		stream_task.NewStreamTaskArgsBuilder(env, &ectx,

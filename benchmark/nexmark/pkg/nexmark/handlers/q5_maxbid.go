@@ -185,20 +185,18 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	stJoin.NextProcessor(chooseMaxCnt)
 	chooseMaxCnt.NextProcessor(outProc)
 	task := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
-			argsTmp processor.ExecutionContext,
-		) (*common.FnOutput, optional.Option[commtypes.RawMsgAndSeq]) {
-			args := argsTmp.(*processor.BaseExecutionContext)
-			return stream_task.CommonProcess(ctx, task, args,
-				func(ctx context.Context, msg commtypes.MessageG[ntypes.StartEndTime, ntypes.AuctionIdCount], argsTmp interface{}) error {
-					// fmt.Fprintf(os.Stderr, "got msg with key: %v, val: %v, ts: %v\n", msg.Msg.Key, msg.Msg.Value, msg.Msg.Timestamp)
-					_, err := maxBid.ProcessAndReturn(ctx, msg)
-					if err != nil {
-						return fmt.Errorf("maxBid err: %v", err)
-					}
-					return stJoin.Process(ctx, msg)
-				}, h.inMsgSerde)
-		}).MarkFinalStage().Build()
+		AppProcessFunc(stream_task.CommonAppProcessFunc(
+			func(ctx context.Context, msg commtypes.MessageG[ntypes.StartEndTime, ntypes.AuctionIdCount]) error {
+				// fmt.Fprintf(os.Stderr, "got msg with key: %v, val: %v, ts: %v\n", msg.Msg.Key, msg.Msg.Value, msg.Msg.Timestamp)
+				_, err := maxBid.ProcessAndReturn(ctx, msg)
+				if err != nil {
+					return fmt.Errorf("maxBid err: %v", err)
+				}
+				return stJoin.Process(ctx, msg)
+			},
+			h.inMsgSerde)).
+		MarkFinalStage().
+		Build()
 	streamTaskArgs, err := builder.
 		FixedOutParNum(sp.ParNum).
 		Build()
