@@ -95,6 +95,8 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 				return nil, err
 			}
 			// fmt.Fprintf(os.Stderr, "appending %+v, logSeq: 0x%x\n", epochMark, rawMsg.LogSeqNum)
+			rawMsg.Mark = epochMark.Mark
+			rawMsg.ProdIdx = epochMark.ProdIndex
 			if epochMark.Mark == commtypes.EPOCH_END {
 				// debug.Fprintf(os.Stderr, "%+v\n", epochMark)
 				ranges, ok := emc.marked[rawMsg.ProdId]
@@ -112,16 +114,13 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 					})
 				}
 				emc.marked[rawMsg.ProdId] = ranges
-				rawMsg.Mark = commtypes.EPOCH_END
 				rawMsg.MarkRanges = markRanges
 			} else if epochMark.Mark == commtypes.SCALE_FENCE {
 				rawMsg.ScaleEpoch = epochMark.ScaleEpoch
-				rawMsg.Mark = epochMark.Mark
-				rawMsg.ProdIdx = epochMark.ProdIndex
 			} else if epochMark.Mark == commtypes.STREAM_END {
-				rawMsg.Mark = epochMark.Mark
 				rawMsg.StartTime = epochMark.StartTime
-				rawMsg.ProdIdx = epochMark.ProdIndex
+			} else if epochMark.Mark == commtypes.CHKPT_MARK {
+				panic("checkpoint mark should not appear in epoch mark protocol")
 			}
 		}
 

@@ -65,6 +65,9 @@ func (tac *TransactionAwareConsumer) checkMsgQueue(msgQueue *deque.Deque[*commty
 			msgQueue.PopFront()
 			return frontMsg
 		}
+		if frontMsg.Mark == commtypes.CHKPT_MARK {
+			panic("checkpoint mark should not appear in 2pc protocol")
+		}
 		if (frontMsg.Mark == commtypes.SCALE_FENCE && frontMsg.ScaleEpoch != 0) || frontMsg.Mark == commtypes.STREAM_END {
 			msgQueue.PopFront()
 			return frontMsg
