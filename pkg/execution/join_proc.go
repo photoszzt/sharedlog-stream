@@ -116,8 +116,10 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 				jm.runLock.Unlock()
 				continue
 			} else if rawMsgSeq.Mark == commtypes.CHKPT_MARK {
+				jm.gotChkptMark.Store(true)
+				jm.ctrlMsg = rawMsgSeq
 				jm.runLock.Unlock()
-				continue
+				return
 			} else {
 				jm.out <- common.GenErrFnOutput(
 					fmt.Errorf("unrecognized mark: %v", rawMsgSeq.Mark))

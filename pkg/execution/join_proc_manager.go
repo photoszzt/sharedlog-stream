@@ -20,6 +20,7 @@ type JoinProcManager struct {
 	ctrlMsg         *commtypes.RawMsgAndSeq
 	gotEndMark      atomic.Bool
 	gotScaleFence   atomic.Bool
+	gotChkptMark    atomic.Bool
 	startTimeMs     int64
 }
 
@@ -44,6 +45,10 @@ func (jm *JoinProcManager) GotEndMark() bool {
 
 func (jm *JoinProcManager) GotScaleFence() bool {
 	return jm.gotScaleFence.Load()
+}
+
+func (jm *JoinProcManager) GotChkptMark() bool {
+	return jm.gotChkptMark.Load()
 }
 
 func (jm *JoinProcManager) StreamStartTime() int64 {
