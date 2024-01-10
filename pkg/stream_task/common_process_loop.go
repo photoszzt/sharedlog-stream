@@ -82,7 +82,7 @@ func CommonProcess[K, V any](ctx context.Context, t *StreamTask, ectx *processor
 }
 
 func processMsgAndSeq[K, V any](ctx context.Context,
-	msg commtypes.MsgAndSeqG[K, V],
+	msg *commtypes.MsgAndSeqG[K, V],
 	args processor.ExecutionContext,
 	procMsg proc_interface.ProcessMsgFunc[K, V], isInitialSrc bool,
 	beforeInjToStreamTs int64,

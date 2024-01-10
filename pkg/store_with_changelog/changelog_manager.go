@@ -104,6 +104,7 @@ func (cm *ChangelogManager[K, V]) Flush(ctx context.Context) (uint32, error) {
 	}
 	return 0, nil
 }
+
 func (cm *ChangelogManager[K, V]) produce(ctx context.Context, msgSer commtypes.MessageSerialized, parNum uint8) error {
 	if !cm.changelogIsSrc {
 		cm.numProduced += 1
@@ -161,10 +162,10 @@ func (cm *ChangelogManager[K, V]) SetChangelogConsumeCursor(seqNum uint64, parNu
 	cm.restoreConsumers[parNum].SetCursor(seqNum, parNum)
 }
 
-func (cm *ChangelogManager[K, V]) Consume(ctx context.Context, parNum uint8) (commtypes.MsgAndSeqG[K, V], error) {
+func (cm *ChangelogManager[K, V]) Consume(ctx context.Context, parNum uint8) (*commtypes.MsgAndSeqG[K, V], error) {
 	rawMsg, err := cm.restoreConsumers[parNum].Consume(ctx, parNum)
 	if err != nil {
-		return commtypes.MsgAndSeqG[K, V]{}, err
+		return nil, err
 	}
 	return commtypes.DecodeRawMsgSeqG(rawMsg, cm.msgSerde)
 }
