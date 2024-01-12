@@ -16,11 +16,23 @@ func SetKVStoreChkpt[K, V any](
 	ctx context.Context,
 	rs *snapshot_store.RedisSnapshotStore,
 	kvstore store.CoreKeyValueStoreG[K, V],
-	payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
+	chkptSerde commtypes.SerdeG[commtypes.Checkpoint],
 ) {
 	kvstore.SetSnapshotCallback(ctx,
-		func(ctx context.Context, tpLogoff []commtypes.TpLogOff, snapshot []commtypes.KeyValuePair[K, V]) error {
-			out, err := encodeKVSnapshot[K, V](kvstore, snapshot, payloadSerde)
+		func(ctx context.Context, tpLogoff []commtypes.TpLogOff, unprocessed [][]uint64, snapshot []commtypes.KeyValuePair[K, V]) error {
+			kvPairSerdeG := kvstore.GetKVSerde()
+			outBin := make([][]byte, 0, len(snapshot))
+			for _, kv := range snapshot {
+				bin, err := kvPairSerdeG.Encode(kv)
+				if err != nil {
+					return err
+				}
+				outBin = append(outBin, bin)
+			}
+			out, err := chkptSerde.Encode(commtypes.Checkpoint{
+				Kvarr:       outBin,
+				Unprocessed: unprocessed,
+			})
 			if err != nil {
 				return err
 			}
@@ -87,6 +99,17 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 				}
 				return handleCtrlMsg(ctx, ctrlRawMsgArr[0], t, args, &warmupCheck)
 			}
+			tpLogOff := make([]commtypes.TpLogOff, 0, len(ctrlRawMsgArr))
+			unprocessed := make([][]uint64, 0, len(ctrlRawMsgArr))
+			for idx, c := range args.ectx.Consumers() {
+				tlo := commtypes.TpLogOff{
+					Tp:     c.Stream().TopicName(),
+					LogOff: ctrlRawMsgArr[idx].FirstChkptMarkSeq,
+				}
+				tpLogOff = append(tpLogOff, tlo)
+				unprocessed = append(unprocessed, ctrlRawMsgArr[idx].UnprocessSeq)
+			}
+			createChkpt(args, tpLogOff, unprocessed)
 		}
 	}
 	if t.pauseFunc != nil {

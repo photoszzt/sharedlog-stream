@@ -62,13 +62,13 @@ func GetKVStore[K comparable, V any](
 		f = func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
 			rs *snapshot_store.RedisSnapshotStore,
 		) error {
-			payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
+			chkptSerde, err := commtypes.GetCheckpointSerdeG(serdeFormat)
 			if err != nil {
 				return err
 			}
 			stream_task.SetKVStoreChkpt[K, commtypes.ValueTimestampG[V]](
 				ctx,
-				rs, cachedStore, payloadSerde)
+				rs, cachedStore, chkptSerde)
 			return nil
 		}
 		kvos = &store.KVStoreOps{

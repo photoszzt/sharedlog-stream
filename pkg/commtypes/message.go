@@ -145,7 +145,9 @@ type RawMsg struct {
 	Payload []byte
 	AuxData []byte
 
-	MarkRanges []ProduceRange
+	MarkRanges        []ProduceRange
+	UnprocessSeq      []uint64
+	FirstChkptMarkSeq uint64
 
 	MsgSeqNum uint64
 	LogSeqNum uint64
@@ -175,17 +177,19 @@ type MsgAndSeq struct {
 }
 
 type RawMsgAndSeq struct {
-	Payload    []byte
-	PayloadArr [][]byte
-	AuxData    []byte
-	InjTsMs    int64
-	MsgSeqNum  uint64
-	LogSeqNum  uint64
-	StartTime  int64
-	ScaleEpoch uint16
-	IsControl  bool
-	Mark       EpochMark
-	ProdIdx    uint8
+	Payload           []byte
+	PayloadArr        [][]byte
+	AuxData           []byte
+	InjTsMs           int64
+	MsgSeqNum         uint64
+	LogSeqNum         uint64
+	StartTime         int64
+	UnprocessSeq      []uint64
+	FirstChkptMarkSeq uint64
+	ScaleEpoch        uint16
+	IsControl         bool
+	Mark              EpochMark
+	ProdIdx           uint8
 }
 
 type ControlParam struct {

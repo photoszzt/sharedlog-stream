@@ -255,16 +255,16 @@ func flushStreams(ctx context.Context,
 
 func createSnapshot(args *StreamTaskArgs, tplogOff []commtypes.TpLogOff) {
 	for _, kvchangelog := range args.kvChangelogs {
-		kvchangelog.Snapshot(tplogOff)
+		kvchangelog.Snapshot(tplogOff, nil)
 	}
 	for _, wschangelog := range args.windowStoreChangelogs {
 		wschangelog.Snapshot(tplogOff)
 	}
 }
 
-func createChkpt(args *StreamTaskArgs, tplogOff []commtypes.TpLogOff) {
+func createChkpt(args *StreamTaskArgs, tplogOff []commtypes.TpLogOff, unprocessed [][]uint64) {
 	for _, kv := range args.kvs {
-		kv.Snapshot(tplogOff)
+		kv.Snapshot(tplogOff, unprocessed)
 	}
 	for _, wsc := range args.wscs {
 		wsc.Snapshot(tplogOff)

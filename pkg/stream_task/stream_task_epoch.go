@@ -31,7 +31,7 @@ func SetKVStoreWithChangelogSnapshot[K, V any](
 	payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
 ) {
 	kvstore.SetSnapshotCallback(ctx,
-		func(ctx context.Context, tpLogoff []commtypes.TpLogOff, snapshot []commtypes.KeyValuePair[K, V]) error {
+		func(ctx context.Context, tpLogoff []commtypes.TpLogOff, unprocessed [][]uint64, snapshot []commtypes.KeyValuePair[K, V]) error {
 			out, err := encodeKVSnapshot[K, V](kvstore, snapshot, payloadSerde)
 			if err != nil {
 				return err

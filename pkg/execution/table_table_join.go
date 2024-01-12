@@ -127,12 +127,12 @@ func SetupTableTableJoinWithSkipmap[K comparable, VLeft, VRight, VR any](
 		setupSnapFunc = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
 			rs *snapshot_store.RedisSnapshotStore,
 		) error {
-			payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
+			chkptSerde, err := commtypes.GetCheckpointSerdeG(serdeFormat)
 			if err != nil {
 				return err
 			}
-			stream_task.SetKVStoreChkpt[K, commtypes.ValueTimestampG[VLeft]](ctx, rs, leftTab, payloadSerde)
-			stream_task.SetKVStoreChkpt[K, commtypes.ValueTimestampG[VRight]](ctx, rs, rightTab, payloadSerde)
+			stream_task.SetKVStoreChkpt[K, commtypes.ValueTimestampG[VLeft]](ctx, rs, leftTab, chkptSerde)
+			stream_task.SetKVStoreChkpt[K, commtypes.ValueTimestampG[VRight]](ctx, rs, rightTab, chkptSerde)
 			return nil
 		})
 	} else {

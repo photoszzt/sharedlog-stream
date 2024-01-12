@@ -36,6 +36,7 @@ func (s PayloadArrMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	val := value.(*PayloadArr)
 	return val.MarshalMsg(nil)
 }
+
 func (s PayloadArrMsgpSerde) Decode(value []byte) (interface{}, error) {
 	val := PayloadArr{}
 	if _, err := val.UnmarshalMsg(value); err != nil {

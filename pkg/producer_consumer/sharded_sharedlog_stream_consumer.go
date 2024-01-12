@@ -47,7 +47,7 @@ type ShardedSharedLogStreamConsumer struct {
 	stream                *sharedlog_stream.ShardedSharedLogStream
 	tac                   *TransactionAwareConsumer
 	emc                   *EpochMarkConsumer
-	ndc                   *NoDupConsumer
+	acc                   *AlignChkptConsumer
 	name                  string
 	currentSeqNum         uint64
 	timeout               time.Duration
@@ -55,6 +55,7 @@ type ShardedSharedLogStreamConsumer struct {
 	initialSource         bool
 	serdeFormat           commtypes.SerdeFormat
 	numSrcProducer        uint8
+	instanceId            uint8
 }
 
 var _ = Consumer(&ShardedSharedLogStreamConsumer{})
@@ -96,6 +97,7 @@ func NewShardedSharedLogStreamConsumer(stream *sharedlog_stream.ShardedSharedLog
 func (s *ShardedSharedLogStreamConsumer) SetInitialSource(initial bool) {
 	s.initialSource = initial
 }
+
 func (s *ShardedSharedLogStreamConsumer) IsInitialSource() bool {
 	return s.initialSource
 }
@@ -133,7 +135,8 @@ func (s *ShardedSharedLogStreamConsumer) ConfigExactlyOnce(
 	} else if s.guarantee == exactly_once_intr.EPOCH_MARK {
 		s.emc = NewEpochMarkConsumer(s.TopicName(), s.stream, s.epochMarkerSerde)
 	} else if s.guarantee == exactly_once_intr.ALIGN_CHKPT {
-		s.ndc = NewNoDupConsumer(s.stream, s.epochMarkerSerde)
+		s.acc = NewAlignChkptConsumer(s.stream, s.epochMarkerSerde,
+			s.numSrcProducer, s.instanceId)
 	}
 }
 
@@ -163,7 +166,7 @@ func (s *ShardedSharedLogStreamConsumer) readNext(ctx context.Context, parNum ui
 	} else if s.guarantee == exactly_once_intr.EPOCH_MARK {
 		return s.emc.ReadNext(ctx, parNum)
 	} else if s.guarantee == exactly_once_intr.ALIGN_CHKPT {
-		return s.ndc.ReadNext(ctx, parNum)
+		return s.acc.ReadNext(ctx, parNum)
 	} else {
 		rawMsg, err := s.stream.ReadNext(ctx, parNum)
 		if err != nil {

@@ -28,6 +28,7 @@ var _ = SerdeG[PayloadArr](PayloadArrMsgpSerdeG{})
 func (s PayloadArrMsgpSerdeG) Encode(value PayloadArr) ([]byte, error) {
 	return value.MarshalMsg(nil)
 }
+
 func (s PayloadArrMsgpSerdeG) Decode(value []byte) (PayloadArr, error) {
 	val := PayloadArr{}
 	if _, err := val.UnmarshalMsg(value); err != nil {
