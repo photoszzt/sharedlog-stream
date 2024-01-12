@@ -24,7 +24,6 @@ func processNoProto(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *c
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
 	warmupCheck.StartWarmup()
 	flushTimer := time.Now()
-	gotEndMark := false
 	for {
 		timeSinceLastFlush := time.Since(flushTimer)
 		if timeSinceLastFlush >= args.flushEvery {
@@ -35,7 +34,7 @@ func processNoProto(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *c
 			flushTimer = time.Now()
 		}
 		warmupCheck.Check()
-		if (!args.waitEndMark && args.duration != 0 && warmupCheck.ElapsedSinceInitial() >= args.duration) || gotEndMark {
+		if !args.waitEndMark && args.duration != 0 && warmupCheck.ElapsedSinceInitial() >= args.duration {
 			break
 		}
 		ret, ctrlRawMsgArr := t.appProcessFunc(ctx, t, args.ectx)
