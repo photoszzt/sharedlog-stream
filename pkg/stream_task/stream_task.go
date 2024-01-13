@@ -193,9 +193,9 @@ func handleCtrlMsg(ctx context.Context, ctrlRawMsg *commtypes.RawMsgAndSeq,
 			return common.GenErrFnOutput(err)
 		}
 		ctrlRawMsg.Payload = encoded
-		fn_out := forwardCtrlMsg(ctx, ctrlRawMsg, args, "stream end mark")
-		if fn_out != nil {
-			return fn_out
+		err = forwardCtrlMsg(ctx, ctrlRawMsg, args, "stream end mark")
+		if err != nil {
+			return common.GenErrFnOutput(err)
 		}
 		t.SetEndDuration(ctrlRawMsg.StartTime)
 		ret := &common.FnOutput{Success: true}
@@ -519,12 +519,12 @@ func forwardCtrlMsg(
 	msg *commtypes.RawMsgAndSeq,
 	args *StreamTaskArgs,
 	name string,
-) *common.FnOutput {
+) error {
 	for _, sink := range args.ectx.Producers() {
 		if args.fixedOutParNum >= 0 {
 			_, err := sink.ProduceCtrlMsg(ctx, msg, []uint8{args.ectx.SubstreamNum()})
 			if err != nil {
-				return common.GenErrFnOutput(err)
+				return err
 			}
 			fmt.Fprintf(os.Stderr, "%d forward %s to %s(%d)\n",
 				args.ectx.SubstreamNum(), name, sink.TopicName(), args.fixedOutParNum)
@@ -535,7 +535,7 @@ func forwardCtrlMsg(
 			}
 			_, err := sink.ProduceCtrlMsg(ctx, msg, parNums)
 			if err != nil {
-				return common.GenErrFnOutput(err)
+				return err
 			}
 			fmt.Fprintf(os.Stderr, "%d forward %s to %s(%v)\n",
 				args.ectx.SubstreamNum(), name, sink.TopicName(), parNums)
@@ -557,9 +557,9 @@ func handleScaleEpochAndBytes(ctx context.Context, msg *commtypes.RawMsgAndSeq,
 		return common.GenErrFnOutput(err)
 	}
 	msg.Payload = encoded
-	fn_out := forwardCtrlMsg(ctx, msg, args, "scale fence")
-	if fn_out != nil {
-		return fn_out
+	err = forwardCtrlMsg(ctx, msg, args, "scale fence")
+	if err != nil {
+		return common.GenErrFnOutput(err)
 	}
 	err = args.ectx.RecordFinishFunc()(ctx, args.ectx.FuncName(), args.ectx.SubstreamNum())
 	if err != nil {

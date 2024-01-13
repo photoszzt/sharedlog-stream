@@ -118,12 +118,15 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 			if ctrlRawMsgArr[0].Mark != commtypes.CHKPT_MARK {
 				return handleCtrlMsg(ctx, ctrlRawMsgArr[0], t, args, &warmupCheck)
 			}
-			checkpt(ctx, t, args, ctrlRawMsgArr)
+			err := checkpt(ctx, t, args, ctrlRawMsgArr)
+			if err != nil {
+				return common.GenErrFnOutput(err)
+			}
 		}
 	}
 }
 
-func checkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs, ctrlRawMsgArr []*commtypes.RawMsgAndSeq) {
+func checkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs, ctrlRawMsgArr []*commtypes.RawMsgAndSeq) error {
 	var tpLogOff []commtypes.TpLogOff
 	var chkptMeta []commtypes.ChkptMetaData
 	for idx, c := range args.ectx.Consumers() {
@@ -138,4 +141,15 @@ func checkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs, ctrlRawMs
 		})
 	}
 	createChkpt(args, tpLogOff, chkptMeta)
+	epochMarker := commtypes.EpochMarker{
+		StartTime: ctrlRawMsgArr[0].StartTime,
+		Mark:      commtypes.CHKPT_MARK,
+		ProdIndex: args.ectx.SubstreamNum(),
+	}
+	encoded, err := args.epochMarkerSerde.Encode(epochMarker)
+	if err != nil {
+		return err
+	}
+	ctrlRawMsgArr[0].Payload = encoded
+	return forwardCtrlMsg(ctx, ctrlRawMsgArr[0], args, "chkpt mark")
 }
