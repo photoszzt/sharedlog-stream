@@ -250,7 +250,9 @@ func (st *KeyValueStoreWithChangelogG[K, V]) SetFlushCallback(
 	func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[V]]) error) {
 }
 
-func (st *KeyValueStoreWithChangelogG[K, V]) Snapshot(tpLogoff []commtypes.TpLogOff, unprocessed [][]uint64) {
+func (st *KeyValueStoreWithChangelogG[K, V]) Snapshot(
+	tpLogoff []commtypes.TpLogOff, unprocessed []commtypes.ChkptMetaData,
+) {
 	st.kvstore.Snapshot(tpLogoff, unprocessed)
 }
 

@@ -26,7 +26,10 @@ func updateSeqnumForDups(retainDuplicates bool, seqNum *uint32) {
 	}
 }
 
-type WinSnapshotCallback[K, V any] func(ctx context.Context, tplogOff []commtypes.TpLogOff,
+type WinSnapshotCallback[K, V any] func(
+	ctx context.Context,
+	tplogOff []commtypes.TpLogOff,
+	chkptMeta []commtypes.ChkptMetaData,
 	snapshot []commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]) error
 
 type InMemorySkipMapWindowStoreG[K, V any] struct {
@@ -397,7 +400,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) WaitForAllSnapshot() error {
 }
 
 // not thread-safe
-func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot(tpLogoff []commtypes.TpLogOff) {
+func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot(tpLogoff []commtypes.TpLogOff, chkptMeta []commtypes.ChkptMetaData) {
 	l := 0
 	if s.retainDuplicates {
 		l = s.storeWithDup.Len()
@@ -420,7 +423,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot(tpLogoff []commtypes.TpLogO
 			return true
 		})
 		s.bgErrG.Go(func() error {
-			return s.snapshotCallback(s.bgCtx, tpLogoff, out)
+			return s.snapshotCallback(s.bgCtx, tpLogoff, chkptMeta, out)
 		})
 	} else {
 		// cpyBeg := time.Now()
@@ -437,7 +440,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot(tpLogoff []commtypes.TpLogO
 		})
 		// cpyElapsed := time.Since(cpyBeg)
 		s.bgErrG.Go(func() error {
-			return s.snapshotCallback(s.bgCtx, tpLogoff, out)
+			return s.snapshotCallback(s.bgCtx, tpLogoff, chkptMeta, out)
 		})
 	}
 }

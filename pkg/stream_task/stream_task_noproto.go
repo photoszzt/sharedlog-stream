@@ -46,25 +46,13 @@ func processNoProto(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *c
 		}
 		if ctrlRawMsgArr != nil {
 			fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
-			if t.pauseFunc != nil {
-				if ret := t.pauseFunc(); ret != nil {
-					return ret
-				}
-			}
-			ret_err := timedFlushStreams(ctx, t, args)
-			if ret_err != nil {
+			if ret_err := pauseTimedFlushStreams(ctx, t, args); ret_err != nil {
 				return ret_err
 			}
 			return handleCtrlMsg(ctx, ctrlRawMsgArr[0], t, args, &warmupCheck)
 		}
 	}
-	if t.pauseFunc != nil {
-		if ret := t.pauseFunc(); ret != nil {
-			return ret
-		}
-	}
-	ret_err := timedFlushStreams(ctx, t, args)
-	if ret_err != nil {
+	if ret_err := pauseTimedFlushStreams(ctx, t, args); ret_err != nil {
 		return ret_err
 	}
 	ret := &common.FnOutput{Success: true}

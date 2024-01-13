@@ -208,7 +208,8 @@ func handleCtrlMsg(ctx context.Context, ctrlRawMsg *commtypes.RawMsgAndSeq,
 	}
 }
 
-func timedFlushStreams(ctx context.Context,
+func timedFlushStreams(
+	ctx context.Context,
 	t *StreamTask,
 	args *StreamTaskArgs,
 ) *common.FnOutput {
@@ -223,6 +224,19 @@ func timedFlushStreams(ctx context.Context,
 		t.flushAtLeastOne.AddSample(flushTime)
 	}
 	return nil
+}
+
+func pauseTimedFlushStreams(
+	ctx context.Context,
+	t *StreamTask,
+	args *StreamTaskArgs,
+) *common.FnOutput {
+	if t.pauseFunc != nil {
+		if ret := t.pauseFunc(); ret != nil {
+			return ret
+		}
+	}
+	return timedFlushStreams(ctx, t, args)
 }
 
 func flushStreams(ctx context.Context,
@@ -258,16 +272,18 @@ func createSnapshot(args *StreamTaskArgs, tplogOff []commtypes.TpLogOff) {
 		kvchangelog.Snapshot(tplogOff, nil)
 	}
 	for _, wschangelog := range args.windowStoreChangelogs {
-		wschangelog.Snapshot(tplogOff)
+		wschangelog.Snapshot(tplogOff, nil)
 	}
 }
 
-func createChkpt(args *StreamTaskArgs, tplogOff []commtypes.TpLogOff, unprocessed [][]uint64) {
+func createChkpt(args *StreamTaskArgs, tplogOff []commtypes.TpLogOff,
+	chkptMeta []commtypes.ChkptMetaData,
+) {
 	for _, kv := range args.kvs {
-		kv.Snapshot(tplogOff, unprocessed)
+		kv.Snapshot(tplogOff, chkptMeta)
 	}
 	for _, wsc := range args.wscs {
-		wsc.Snapshot(tplogOff)
+		wsc.Snapshot(tplogOff, chkptMeta)
 	}
 }
 

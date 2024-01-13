@@ -80,11 +80,11 @@ func GetWinStore[K comparable, V any](
 				serdeFormat commtypes.SerdeFormat,
 				rs *snapshot_store.RedisSnapshotStore,
 			) error {
-				payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
+				chkptSerde, err := commtypes.GetCheckpointSerdeG(serdeFormat)
 				if err != nil {
 					return err
 				}
-				stream_task.SetWinStoreChkpt[K, commtypes.ValueTimestampG[V]](ctx, rs, cachedStore, payloadSerde)
+				stream_task.SetWinStoreChkpt[K, commtypes.ValueTimestampG[V]](ctx, rs, cachedStore, chkptSerde)
 				return nil
 			})
 		wsos = &store.WinStoreOps{

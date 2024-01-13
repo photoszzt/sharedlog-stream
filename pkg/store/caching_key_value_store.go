@@ -212,7 +212,7 @@ func (c *CachingKeyValueStoreG[K, V]) SubstreamNum() uint8 {
 	return c.wrappedStore.SubstreamNum()
 }
 
-func (c *CachingKeyValueStoreG[K, V]) Snapshot(tpLogOff []commtypes.TpLogOff, unprocessed [][]uint64) {
+func (c *CachingKeyValueStoreG[K, V]) Snapshot(tpLogOff []commtypes.TpLogOff, unprocessed []commtypes.ChkptMetaData) {
 	c.wrappedStore.Snapshot(tpLogOff, unprocessed)
 }
 

@@ -7,9 +7,15 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 )
 
+type ChkptMetaData struct {
+	Unprocessed []uint64 `json:"up,omitempty" msg:"up,omitempty"`
+	// stores the last marker seqnumber for align checkpoint
+	LastChkptMarker uint64 `json:"lcpm,omitempty" msg:"lcpm,omitempty"`
+}
+
 type Checkpoint struct {
-	Kvarr       [][]byte   `json:"kvarr,omitempty" msg:"kvarr,omitempty"`
-	Unprocessed [][]uint64 `json:"up,omitempty" msg:"up,omitempty"`
+	KvArr     [][]byte        `json:"kvarr,omitempty" msg:"kvarr,omitempty"`
+	ChkptMeta []ChkptMetaData `json:"chkptm,omitempty" msg:"chkptm,omitempty"`
 }
 
 type (

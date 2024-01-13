@@ -177,8 +177,8 @@ func (s *CachingWindowStoreG[K, V]) SetFlushCallback(f func(ctx context.Context,
 	s.flushCallbackFunc = f
 }
 
-func (s *CachingWindowStoreG[K, V]) Snapshot(tplogoff []commtypes.TpLogOff) {
-	s.wrappedStore.Snapshot(tplogoff)
+func (s *CachingWindowStoreG[K, V]) Snapshot(tplogoff []commtypes.TpLogOff, chkptMeta []commtypes.ChkptMetaData) {
+	s.wrappedStore.Snapshot(tplogoff, chkptMeta)
 }
 
 func (s *CachingWindowStoreG[K, V]) WaitForAllSnapshot() error {

@@ -12,6 +12,16 @@ import (
 	"sharedlog-stream/pkg/store"
 )
 
+// when restoring the checkpoint, it's reading from
+// the sequence number of the checkpoint marker.
+// the source stream's record between the checkpoint marker
+// and its current tail should be ignored.
+//
+// ┌───┬────┐  ┌───┐  ┌────┬────────┐  ┌───┐  ┌───┬────────┐
+// │   │    ├──┤ A ├──┤    │disgard ├──┤ B ├──┤   │disgard │
+// └───┴────┘  └───┘  └────┴────────┘  └───┘  └───┴────────┘
+//  marker              marker                   marker
+
 func SetKVStoreChkpt[K, V any](
 	ctx context.Context,
 	rs *snapshot_store.RedisSnapshotStore,
@@ -19,7 +29,11 @@ func SetKVStoreChkpt[K, V any](
 	chkptSerde commtypes.SerdeG[commtypes.Checkpoint],
 ) {
 	kvstore.SetSnapshotCallback(ctx,
-		func(ctx context.Context, tpLogoff []commtypes.TpLogOff, unprocessed [][]uint64, snapshot []commtypes.KeyValuePair[K, V]) error {
+		func(ctx context.Context,
+			tpLogoff []commtypes.TpLogOff,
+			chkptMeta []commtypes.ChkptMetaData,
+			snapshot []commtypes.KeyValuePair[K, V],
+		) error {
 			kvPairSerdeG := kvstore.GetKVSerde()
 			outBin := make([][]byte, 0, len(snapshot))
 			for _, kv := range snapshot {
@@ -30,8 +44,8 @@ func SetKVStoreChkpt[K, V any](
 				outBin = append(outBin, bin)
 			}
 			out, err := chkptSerde.Encode(commtypes.Checkpoint{
-				Kvarr:       outBin,
-				Unprocessed: unprocessed,
+				KvArr:     outBin,
+				ChkptMeta: chkptMeta,
 			})
 			if err != nil {
 				return err
@@ -45,13 +59,27 @@ func SetWinStoreChkpt[K, V any](
 	ctx context.Context,
 	rs *snapshot_store.RedisSnapshotStore,
 	winStore store.CoreWindowStoreG[K, V],
-	payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
+	chkptSerde commtypes.SerdeG[commtypes.Checkpoint],
 ) {
 	winStore.SetWinSnapshotCallback(ctx,
-		func(ctx context.Context, tpLogOff []commtypes.TpLogOff,
+		func(ctx context.Context,
+			tpLogOff []commtypes.TpLogOff,
+			chkptMeta []commtypes.ChkptMetaData,
 			snapshot []commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V],
 		) error {
-			out, err := encodeWinSnapshot[K, V](winStore, snapshot, payloadSerde)
+			kvPairSerdeG := winStore.GetKVSerde()
+			outBin := make([][]byte, 0, len(snapshot))
+			for _, kv := range snapshot {
+				bin, err := kvPairSerdeG.Encode(kv)
+				if err != nil {
+					return err
+				}
+				outBin = append(outBin, bin)
+			}
+			out, err := chkptSerde.Encode(commtypes.Checkpoint{
+				KvArr:     outBin,
+				ChkptMeta: chkptMeta,
+			})
 			if err != nil {
 				return err
 			}
@@ -73,12 +101,8 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 		args.warmup, args.flushEvery, args.waitEndMark)
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
 	warmupCheck.StartWarmup()
-	gotEndMark := false
 	for {
 		warmupCheck.Check()
-		if (!args.waitEndMark && args.duration != 0 && warmupCheck.ElapsedSinceInitial() >= args.duration) || gotEndMark {
-			break
-		}
 		ret, ctrlRawMsgArr := t.appProcessFunc(ctx, t, args.ectx)
 		if ret != nil {
 			if ret.Success {
@@ -88,40 +112,30 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 		}
 		if ctrlRawMsgArr != nil {
 			fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
+			if ret_err := pauseTimedFlushStreams(ctx, t, args); ret_err != nil {
+				return ret_err
+			}
 			if ctrlRawMsgArr[0].Mark != commtypes.CHKPT_MARK {
-				if t.pauseFunc != nil {
-					if ret := t.pauseFunc(); ret != nil {
-						return ret
-					}
-				}
-				if ret_err := timedFlushStreams(ctx, t, args); ret_err != nil {
-					return ret_err
-				}
 				return handleCtrlMsg(ctx, ctrlRawMsgArr[0], t, args, &warmupCheck)
 			}
-			tpLogOff := make([]commtypes.TpLogOff, 0, len(ctrlRawMsgArr))
-			unprocessed := make([][]uint64, 0, len(ctrlRawMsgArr))
-			for idx, c := range args.ectx.Consumers() {
-				tlo := commtypes.TpLogOff{
-					Tp:     c.Stream().TopicName(),
-					LogOff: ctrlRawMsgArr[idx].FirstChkptMarkSeq,
-				}
-				tpLogOff = append(tpLogOff, tlo)
-				unprocessed = append(unprocessed, ctrlRawMsgArr[idx].UnprocessSeq)
-			}
-			createChkpt(args, tpLogOff, unprocessed)
+			checkpt(ctx, t, args, ctrlRawMsgArr)
 		}
 	}
-	if t.pauseFunc != nil {
-		if ret := t.pauseFunc(); ret != nil {
-			return ret
+}
+
+func checkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs, ctrlRawMsgArr []*commtypes.RawMsgAndSeq) {
+	var tpLogOff []commtypes.TpLogOff
+	var chkptMeta []commtypes.ChkptMetaData
+	for idx, c := range args.ectx.Consumers() {
+		tlo := commtypes.TpLogOff{
+			Tp:     c.Stream().TopicName(),
+			LogOff: ctrlRawMsgArr[idx].FirstChkptMarkSeq,
 		}
+		tpLogOff = append(tpLogOff, tlo)
+		chkptMeta = append(chkptMeta, commtypes.ChkptMetaData{
+			Unprocessed:     ctrlRawMsgArr[idx].UnprocessSeq,
+			LastChkptMarker: ctrlRawMsgArr[idx].LogSeqNum,
+		})
 	}
-	if ret_err := timedFlushStreams(ctx, t, args); ret_err != nil {
-		return ret_err
-	}
-	ret := &common.FnOutput{Success: true}
-	updateReturnMetric(ret, &warmupCheck,
-		args.waitEndMark, t.GetEndDuration(), args.ectx.SubstreamNum())
-	return ret
+	createChkpt(args, tpLogOff, chkptMeta)
 }

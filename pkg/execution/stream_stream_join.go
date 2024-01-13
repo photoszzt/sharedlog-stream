@@ -146,12 +146,12 @@ func SetupWinStore[K, VLeft, VRight any](
 	setupSnapFunc := stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment,
 		serdeFormat commtypes.SerdeFormat, rs *snapshot_store.RedisSnapshotStore,
 	) error {
-		payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
+		chkptSerde, err := commtypes.GetCheckpointSerdeG(serdeFormat)
 		if err != nil {
 			return err
 		}
-		stream_task.SetWinStoreChkpt(ctx, rs, leftTab, payloadSerde)
-		stream_task.SetWinStoreChkpt(ctx, rs, rightTab, payloadSerde)
+		stream_task.SetWinStoreChkpt(ctx, rs, leftTab, chkptSerde)
+		stream_task.SetWinStoreChkpt(ctx, rs, rightTab, chkptSerde)
 		return nil
 	})
 	return &store.WinStoreOps{

@@ -124,17 +124,19 @@ func SetupTableTableJoinWithSkipmap[K comparable, VLeft, VRight, VR any](
 		kvos = &store.KVStoreOps{
 			Kvo: []store.KeyValueStoreOp{leftTab, rightTab},
 		}
-		setupSnapFunc = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
-			rs *snapshot_store.RedisSnapshotStore,
-		) error {
-			chkptSerde, err := commtypes.GetCheckpointSerdeG(serdeFormat)
-			if err != nil {
-				return err
-			}
-			stream_task.SetKVStoreChkpt[K, commtypes.ValueTimestampG[VLeft]](ctx, rs, leftTab, chkptSerde)
-			stream_task.SetKVStoreChkpt[K, commtypes.ValueTimestampG[VRight]](ctx, rs, rightTab, chkptSerde)
-			return nil
-		})
+		setupSnapFunc = stream_task.SetupSnapshotCallbackFunc(
+			func(ctx context.Context, env types.Environment,
+				serdeFormat commtypes.SerdeFormat,
+				rs *snapshot_store.RedisSnapshotStore,
+			) error {
+				chkptSerde, err := commtypes.GetCheckpointSerdeG(serdeFormat)
+				if err != nil {
+					return err
+				}
+				stream_task.SetKVStoreChkpt[K, commtypes.ValueTimestampG[VLeft]](ctx, rs, leftTab, chkptSerde)
+				stream_task.SetKVStoreChkpt[K, commtypes.ValueTimestampG[VRight]](ctx, rs, rightTab, chkptSerde)
+				return nil
+			})
 	} else {
 		var leftTabCl *store_with_changelog.KeyValueStoreWithChangelogG[K, commtypes.ValueTimestampG[VLeft]]
 		var rightTabCl *store_with_changelog.KeyValueStoreWithChangelogG[K, commtypes.ValueTimestampG[VRight]]
@@ -159,8 +161,10 @@ func SetupTableTableJoinWithSkipmap[K comparable, VLeft, VRight, VR any](
 			if err != nil {
 				return err
 			}
-			stream_task.SetKVStoreWithChangelogSnapshot[K, commtypes.ValueTimestampG[VLeft]](ctx, env, rs, leftTabCl, payloadSerde)
-			stream_task.SetKVStoreWithChangelogSnapshot[K, commtypes.ValueTimestampG[VRight]](ctx, env, rs, rightTabCl, payloadSerde)
+			stream_task.SetKVStoreWithChangelogSnapshot[K, commtypes.ValueTimestampG[VLeft]](
+				ctx, env, rs, leftTabCl, payloadSerde)
+			stream_task.SetKVStoreWithChangelogSnapshot[K, commtypes.ValueTimestampG[VRight]](
+				ctx, env, rs, rightTabCl, payloadSerde)
 			return nil
 		})
 		leftTab = leftTabCl

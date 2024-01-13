@@ -16,7 +16,10 @@ import (
 )
 
 type (
-	KVSnapshotCallback[K, V any] func(ctx context.Context, tpLogOff []commtypes.TpLogOff, unprocessed [][]uint64, snapshot []commtypes.KeyValuePair[K, V]) error
+	KVSnapshotCallback[K, V any] func(ctx context.Context,
+		tpLogOff []commtypes.TpLogOff,
+		chkptMeta []commtypes.ChkptMetaData,
+		snapshot []commtypes.KeyValuePair[K, V]) error
 )
 
 type InMemorySkipmapKeyValueStoreG[K, V any] struct {
@@ -157,7 +160,9 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) Range(ctx context.Context,
 }
 
 // not thread-safe
-func (st *InMemorySkipmapKeyValueStoreG[K, V]) Snapshot(tpLogOff []commtypes.TpLogOff, unprocessed [][]uint64) {
+func (st *InMemorySkipmapKeyValueStoreG[K, V]) Snapshot(
+	tpLogOff []commtypes.TpLogOff, unprocessed []commtypes.ChkptMetaData,
+) {
 	// cpyBeg := time.Now()
 	out := make([]commtypes.KeyValuePair[K, V], 0, st.store.Len())
 	st.store.Range(func(key K, value V) bool {

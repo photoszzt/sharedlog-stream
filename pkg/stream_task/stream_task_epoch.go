@@ -31,7 +31,11 @@ func SetKVStoreWithChangelogSnapshot[K, V any](
 	payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
 ) {
 	kvstore.SetSnapshotCallback(ctx,
-		func(ctx context.Context, tpLogoff []commtypes.TpLogOff, unprocessed [][]uint64, snapshot []commtypes.KeyValuePair[K, V]) error {
+		func(ctx context.Context,
+			tpLogoff []commtypes.TpLogOff,
+			unprocessed []commtypes.ChkptMetaData,
+			snapshot []commtypes.KeyValuePair[K, V],
+		) error {
 			out, err := encodeKVSnapshot[K, V](kvstore, snapshot, payloadSerde)
 			if err != nil {
 				return err
@@ -50,6 +54,7 @@ func SetWinStoreWithChangelogSnapshot[K, V any](
 ) {
 	winStore.SetWinSnapshotCallback(ctx,
 		func(ctx context.Context, tpLogOff []commtypes.TpLogOff,
+			chkptMeta []commtypes.ChkptMetaData,
 			snapshot []commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V],
 		) error {
 			out, err := encodeWinSnapshot[K, V](winStore, snapshot, payloadSerde)

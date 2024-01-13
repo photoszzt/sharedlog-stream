@@ -80,13 +80,7 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 		}
 		if ctrlRawMsgArr != nil {
 			ctrlRawMsg := ctrlRawMsgArr[0]
-			if t.pauseFunc != nil {
-				if ret := t.pauseFunc(); ret != nil {
-					return ret
-				}
-			}
-			ret_err := timedFlushStreams(ctx, t, args)
-			if ret_err != nil {
+			if ret_err := pauseTimedFlushStreams(ctx, t, args); ret_err != nil {
 				return ret_err
 			}
 			if ret_err := track(ctx, cm, args.ectx.Consumers(), args.ectx.SubstreamNum()); ret_err != nil {
