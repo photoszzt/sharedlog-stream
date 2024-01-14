@@ -89,6 +89,9 @@ func setupKVStoreForAgg[K comparable, V any](
 		return nil, nil, nil, err
 	}
 	store, kvos, f, err := execution.GetKVStore(ctx, p, mp)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	builder := streamArgsBuilder(env, ectx, sp)
 	builder = execution.StreamArgsSetKVStore(kvos, builder, p.GuaranteeMth)
 	return store, builder, f, nil
@@ -115,6 +118,9 @@ func setupWinStoreForAgg[K comparable, V any](
 		return nil, nil, nil, err
 	}
 	store, wsos, f, err := execution.GetWinStore(ctx, p, mp)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	builder := streamArgsBuilder(env, ectx, sp)
 	builder = execution.StreamArgsSetWinStore(wsos, builder, p.GuaranteeMth)
 	return store, builder, f, nil
