@@ -11,7 +11,6 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
@@ -266,9 +265,6 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	dctx, dcancel := context.WithCancel(ctx)
 	defer dcancel()
 	var wg sync.WaitGroup
-	var t *time.Ticker
-	guarantee := exactly_once_intr.GuaranteeMth(inputConfig.GuaranteeMth)
-
 	fn_out := h.getStreamPublisher(inputConfig)
 	if fn_out != nil {
 		return fn_out
@@ -295,9 +291,6 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	startTime := time.Now()
 	fmt.Fprintf(os.Stderr, "StartTs: %d\n", startTime.UnixMilli())
 
-	if guarantee == exactly_once_intr.ALIGN_CHKPT {
-		t = time.NewTicker(time.Duration(inputConfig.CommitEveryMs) * time.Millisecond)
-	}
 	for {
 		select {
 		case merr := <-h.streamPusher.MsgErrChan:
@@ -327,16 +320,6 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 			}
 		default:
 		}
-		if guarantee == exactly_once_intr.ALIGN_CHKPT {
-			select {
-			case <-t.C:
-				fn_out = h.genChkpt(inputConfig.ParNum)
-				if fn_out != nil {
-					return fn_out
-				}
-			default:
-			}
-		}
 		if !procArgs.eventGenerator.HasNext() || procArgs.idx == int(h.eventsPerGen) || h.duration != 0 && time.Since(startTime) >= h.duration {
 			if inputConfig.WaitForEndMark {
 				for _, par := range procArgs.parNumArr {
@@ -356,22 +339,6 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	}
 	h.stop(dctx, &wg, cmm)
 	return h.succRet(startTime)
-}
-
-func (h *nexmarkSourceHandler) genChkpt(parNum uint8) *common.FnOutput {
-	marker := commtypes.EpochMarker{
-		Mark:      commtypes.CHKPT_MARK,
-		ProdIndex: parNum,
-	}
-	encoded, err := h.epochMarkerSerde.Encode(marker)
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
-	h.streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{
-		Payload:   encoded,
-		IsControl: true, Partitions: []uint8{parNum}, Mark: commtypes.STREAM_END,
-	}
-	return nil
 }
 
 func (h *nexmarkSourceHandler) genEndMark(startTime time.Time, parNum uint8,

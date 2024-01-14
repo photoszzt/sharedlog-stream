@@ -3,10 +3,11 @@ package main
 import (
 	"fmt"
 	"os"
-
 	"sharedlog-stream/benchmark/common"
-	configscale "sharedlog-stream/benchmark/common/config_scale"
+	"sharedlog-stream/benchmark/common/chkpt_manager"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/handlers"
+
+	configscale "sharedlog-stream/benchmark/common/config_scale"
 
 	// _ "net/http/pprof"
 
@@ -14,8 +15,7 @@ import (
 	"cs.utexas.edu/zjia/faas/types"
 )
 
-type funcHandlerFactory struct {
-}
+type funcHandlerFactory struct{}
 
 func init() {
 	common.SetLogLevelFromEnv()
@@ -83,6 +83,8 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewSubG3Empty(env, funcName), nil
 	case "lastEmpty":
 		return handlers.NewLastEmptyQuery(env, funcName), nil
+	case "jobManager":
+		return chkpt_manager.NewChkptManager(env), nil
 	default:
 		return nil, fmt.Errorf("unknown function name %v", funcName)
 	}

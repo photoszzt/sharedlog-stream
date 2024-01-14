@@ -81,6 +81,17 @@ func (c *ConfigScaleInput) Clone() ConfigScaleInput {
 	}
 }
 
+type ChkptMngrInput struct {
+	SrcTopicName string `json:"srcTpName"`
+	// final stage's output partition and partition number
+	FinalOutputTopicNames []string `json:"outTpNames"`
+	FinalNumOutPartitions []uint8  `json:"numOutParts"`
+	ChkptEveryMs          uint64   `json:"chkptEveryMs"`
+	SrcNumPart            uint8    `json:"srcNumPart"`
+	GuaranteeMth          uint8    `json:"gua"`
+	SerdeFormat           uint8    `json:"serde_format"`
+}
+
 type DumpInput struct {
 	DumpDir       string `json:"dumpDir"`
 	TopicName     string `json:"tp"`
