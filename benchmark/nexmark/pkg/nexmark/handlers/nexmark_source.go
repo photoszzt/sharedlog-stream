@@ -11,6 +11,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
@@ -93,7 +94,11 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 		// fmt.Fprintf(os.Stderr, "sleep %v ms to generate event\n", wtsSec-now)
 		time.Sleep(time.Duration(wtsMs-nowMs) * time.Millisecond)
 	}
-	args.msgChan <- sharedlog_stream.PayloadToPush{Payload: msgEncoded, Partitions: []uint8{parNum}, IsControl: false}
+	args.msgChan <- sharedlog_stream.PayloadToPush{
+		Payload:    msgEncoded,
+		Partitions: []uint8{parNum},
+		IsControl:  false,
+	}
 	elapsed := stats.Elapsed(procStart).Microseconds()
 	args.latencies.AddSample(elapsed)
 	return nil
@@ -265,6 +270,7 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	dctx, dcancel := context.WithCancel(ctx)
 	defer dcancel()
 	var wg sync.WaitGroup
+	var once sync.Once
 	fn_out := h.getStreamPublisher(inputConfig)
 	if fn_out != nil {
 		return fn_out
@@ -290,6 +296,8 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	h.streamPusher.InitFlushTimer(time.Duration(inputConfig.FlushMs) * time.Millisecond)
 	startTime := time.Now()
 	fmt.Fprintf(os.Stderr, "StartTs: %d\n", startTime.UnixMilli())
+	commitEveryMs := time.Duration(inputConfig.CommitEveryMs) * time.Millisecond
+	gua := exactly_once_intr.GuaranteeMth(inputConfig.GuaranteeMth)
 
 	for {
 		select {
@@ -319,6 +327,14 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 				return common.GenErrFnOutput(fmt.Errorf("control channel manager failed: %v", cerr))
 			}
 		default:
+		}
+		if gua == exactly_once_intr.ALIGN_CHKPT && time.Since(startTime) >= commitEveryMs {
+			once.Do(func() {
+				err := h.genFirstChkpt(inputConfig.ParNum)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "gen first chkpt failed: %v\n", err)
+				}
+			})
 		}
 		if !procArgs.eventGenerator.HasNext() || procArgs.idx == int(h.eventsPerGen) || h.duration != 0 && time.Since(startTime) >= h.duration {
 			if inputConfig.WaitForEndMark {
@@ -354,8 +370,29 @@ func (h *nexmarkSourceHandler) genEndMark(startTime time.Time, parNum uint8,
 		return common.GenErrFnOutput(err)
 	}
 	h.streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{
-		Payload:   encoded,
-		IsControl: true, Partitions: []uint8{parNum}, Mark: commtypes.STREAM_END,
+		Payload:    encoded,
+		IsControl:  true,
+		Partitions: []uint8{parNum},
+		Mark:       commtypes.STREAM_END,
+	}
+	return nil
+}
+
+func (h *nexmarkSourceHandler) genFirstChkpt(parNum uint8) error {
+	marker := commtypes.EpochMarker{
+		Mark:      commtypes.CHKPT_MARK,
+		StartTime: 1,
+		ProdIndex: parNum,
+	}
+	encoded, err := h.epochMarkerSerde.Encode(marker)
+	if err != nil {
+		return err
+	}
+	h.streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{
+		Payload:    encoded,
+		IsControl:  true,
+		Partitions: []uint8{parNum},
+		Mark:       commtypes.CHKPT_MARK,
 	}
 	return nil
 }

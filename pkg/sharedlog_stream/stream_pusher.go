@@ -89,8 +89,10 @@ func (h *StreamPush) NumCtrlMsgs() uint64 {
 }
 
 func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
-	producerId commtypes.ProducerId, flushCallback exactly_once_intr.FlushCallbackFunc) {
+	producerId commtypes.ProducerId, flushCallback exactly_once_intr.FlushCallbackFunc,
+) {
 	defer wg.Done()
+	tpNameHash := h.Stream.TopicNameHash()
 	for msg := range h.MsgChan {
 		if msg.IsControl {
 			if h.BufPush {
@@ -105,8 +107,8 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
 			for _, i := range msg.Partitions {
 				if msg.Mark == commtypes.SCALE_FENCE {
 					fmt.Fprintf(os.Stderr, "generate scale fence for partition %d\n", i)
-					scale_fence_tag := txn_data.ScaleFenceTag(h.Stream.TopicNameHash(), i)
-					nameHashTag := NameHashWithPartition(h.Stream.TopicNameHash(), i)
+					scale_fence_tag := txn_data.ScaleFenceTag(tpNameHash, i)
+					nameHashTag := NameHashWithPartition(tpNameHash, i)
 					_, err := h.Stream.PushWithTag(ctx, msg.Payload, i, []uint64{nameHashTag, scale_fence_tag}, nil,
 						StreamEntryMeta(true, false), producerId)
 					if err != nil {
@@ -117,7 +119,7 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
 					h.produceCount += 1
 					h.ctrlCount += 1
 				} else if msg.Mark == commtypes.STREAM_END {
-					tag := NameHashWithPartition(h.Stream.TopicNameHash(), i)
+					tag := NameHashWithPartition(tpNameHash, i)
 					fmt.Fprintf(os.Stderr, "generate stream end mark with tag: %x\n", tag)
 					_, err := h.Stream.Push(ctx, msg.Payload, i, StreamEntryMeta(true, false), producerId)
 					if err != nil {
@@ -128,8 +130,8 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
 					h.produceCount += 1
 					h.ctrlCount += 1
 				} else if msg.Mark == commtypes.CHKPT_MARK {
-					chkpt_tag := txn_data.ChkptTag(h.Stream.TopicNameHash(), i)
-					nameHashTag := NameHashWithPartition(h.Stream.TopicNameHash(), i)
+					chkpt_tag := txn_data.ChkptTag(tpNameHash, i)
+					nameHashTag := NameHashWithPartition(tpNameHash, i)
 					_, err := h.Stream.PushWithTag(ctx, msg.Payload, i, []uint64{nameHashTag, chkpt_tag}, nil,
 						ControlRecordMeta, producerId)
 					if err != nil {

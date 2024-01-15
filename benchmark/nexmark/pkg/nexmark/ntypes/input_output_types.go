@@ -32,12 +32,14 @@ type NexMarkConfigInput struct {
 	AuctionHotRatioSellers uint32        `json:"auction_hot_ratio_sellers"`
 	FlushMs                uint32        `json:"flushms"`
 	BufMaxSize             uint32        `json:"bufMaxSize"`
+	CommitEveryMs          uint32        `json:"commEveryMs,omitempty"`
 	RateLimited            bool          `json:"rate_limited"`
 	WaitForEndMark         bool          `json:"waitEnd"`
 	SerdeFormat            uint8         `json:"serde_format"`
 	NumOutPartition        uint8         `json:"numOutPar,omitempty"`
 	ParNum                 uint8         `json:"parNum,omitempty"`
 	NumSrcInstance         uint8         `json:"nSrcIns,omitempty"`
+	GuaranteeMth           uint8         `json:"gua,omitempty"`
 }
 
 func NewNexMarkConfigInput(topicName string, serdeFormat commtypes.SerdeFormat) *NexMarkConfigInput {
