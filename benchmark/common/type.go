@@ -87,6 +87,7 @@ type ChkptMngrInput struct {
 	FinalOutputTopicNames []string `json:"outTpNames"`
 	FinalNumOutPartitions []uint8  `json:"numOutParts"`
 	ChkptEveryMs          uint64   `json:"chkptEveryMs"`
+	BufMaxSize            uint32   `json:"bufMaxSize"`
 	SrcNumPart            uint8    `json:"srcNumPart"`
 	GuaranteeMth          uint8    `json:"gua"`
 	SerdeFormat           uint8    `json:"serde_format"`
