@@ -36,6 +36,7 @@
             "InputTopicNames": ["bid_by_price", "max_bids"],
             "OutputTopicName": ["q7_out"],
             "NodeConstraint": "2",
+            "Final": true,
             "NumSrcProducer": [1, 1]
         }
     ],

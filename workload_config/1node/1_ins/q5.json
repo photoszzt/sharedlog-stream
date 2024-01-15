@@ -28,6 +28,7 @@
             "InputTopicNames": ["aucBids"],
             "OutputTopicName": ["q5_out"],
             "NodeConstraint": "2",
+            "Final": true,
             "NumSrcProducer": [1]
         }
     ],

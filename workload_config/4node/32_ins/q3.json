@@ -18,6 +18,7 @@
             "NumInstance": 32,
             "InputTopicNames": ["q3_aucsBySellerID_out", "q3_personsByID_out"],
             "OutputTopicName": ["q3_out"],
+            "Final": true,
             "NodeConstraint": "5,6,7,8"
         }
     ],

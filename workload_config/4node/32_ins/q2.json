@@ -11,6 +11,7 @@
             "NumInstance": 32,
             "InputTopicNames": ["nexmark_src"],
             "OutputTopicName": ["q2_out"],
+            "Final": true,
             "NodeConstraint": "5,6,7,8"
         }
     ],

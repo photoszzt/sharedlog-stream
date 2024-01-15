@@ -20,6 +20,7 @@
             "InputTopicNames": ["q3_aucsBySellerID_out", "q3_personsByID_out"],
             "OutputTopicName": ["q3_out"],
             "NodeConstraint": "5,6,7,8",
+            "Final": true,
             "NumSrcProducer": [8, 8]
         }
     ],

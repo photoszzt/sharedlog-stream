@@ -32,6 +32,7 @@
             "NumInstance": 32,
             "InputTopicNames": ["bid_by_price", "max_bids"],
             "OutputTopicName": ["q7_out"],
+            "Final": true,
             "NodeConstraint": "5,6,7,8"
         }
     ],

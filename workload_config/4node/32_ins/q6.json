@@ -21,37 +21,38 @@
             "NodeConstraint": "5,6,7,8"
         },
         {
-            "funcName": "q4JoinStream",
+            "funcName": "q6JoinStream",
             "NumInstance": 32,
             "InputTopicNames": [
                 "q46_aucsByID",
                 "q46_bidsByAucID"
             ],
             "OutputTopicName": [
-                "q4_aucIDCat"
+                "q6_aucIDSeller"
             ],
             "NodeConstraint": "5,6,7,8"
         },
         {
-            "funcName": "q4MaxBid",
+            "funcName": "q6MaxBid",
             "NumInstance": 32,
             "InputTopicNames": [
-                "q4_aucIDCat"
+                "q6_aucIDSeller"
             ],
             "OutputTopicName": [
-                "q4_maxBids"
+                "q6_maxBids"
             ],
             "NodeConstraint": "5,6,7,8"
         },
         {
-            "funcName": "q4Avg",
+            "funcName": "q6Avg",
             "NumInstance": 32,
             "InputTopicNames": [
-                "q4_maxBids"
+                "q6_maxBids"
             ],
             "OutputTopicName": [
-                "q4_out"
+                "q6_out"
             ],
+            "Final": true,
             "NodeConstraint": "5,6,7,8"
         }
     ],
@@ -59,8 +60,8 @@
         "nexmark_src": 32,
         "q46_aucsByID": 32,
         "q46_bidsByAucID": 32,
-        "q4_aucIDCat": 32,
-        "q4_maxBids": 32,
-        "q4_out": 32
+        "q6_aucIDSeller": 32,
+        "q6_maxBids": 32,
+        "q6_out": 32
     }
 }

@@ -4,14 +4,14 @@
             "funcName": "nexmark_src",
             "NumInstance": 2,
             "OutputTopicName": ["nexmark_src"],
-            "NodeConstraint": "1,2,3,4"
+            "NodeConstraint": "1"
         },
         {
             "funcName": "q7BidByPrice",
             "NumInstance": 2,
             "InputTopicNames": ["nexmark_src"],
             "OutputTopicName": ["bid_by_price"],
-            "NodeConstraint": "5,6,7,8",
+            "NodeConstraint": "2",
             "NumSrcProducer": [1]
         },
         {
@@ -19,7 +19,7 @@
             "NumInstance": 2,
             "InputTopicNames": ["nexmark_src"],
             "OutputTopicName": ["bid_by_win"],
-            "NodeConstraint": "5,6,7,8",
+            "NodeConstraint": "2",
             "NumSrcProducer": [1]
         },
         {
@@ -27,7 +27,7 @@
             "NumInstance": 2,
             "InputTopicNames": ["bid_by_win"],
             "OutputTopicName": ["max_bids"],
-            "NodeConstraint": "5,6,7,8",
+            "NodeConstraint": "2",
             "NumSrcProducer": [2]
         },
         {
@@ -35,7 +35,8 @@
             "NumInstance": 2,
             "InputTopicNames": ["bid_by_price", "max_bids"],
             "OutputTopicName": ["q7_out"],
-            "NodeConstraint": "5,6,7,8",
+            "NodeConstraint": "2",
+            "Final": true,
             "NumSrcProducer": [2, 2]
         }
     ],

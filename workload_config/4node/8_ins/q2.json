@@ -12,6 +12,7 @@
             "InputTopicNames": ["nexmark_src"],
             "OutputTopicName": ["q2_out"],
             "NodeConstraint": "5,6,7,8",
+            "Final": true,
             "NumSrcProducer": [1]
         }
     ],

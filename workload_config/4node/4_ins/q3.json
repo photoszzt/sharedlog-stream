@@ -20,7 +20,8 @@
             "InputTopicNames": ["q3_aucsBySellerID_out", "q3_personsByID_out"],
             "OutputTopicName": ["q3_out"],
             "NodeConstraint": "5,6,7,8",
-            "NumSrcProducer": [4, 4]
+            "NumSrcProducer": [4, 4],
+            "Final": true
         }
     ],
     "StreamParam": {

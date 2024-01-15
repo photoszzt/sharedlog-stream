@@ -7,31 +7,25 @@
             "NodeConstraint": "1,2,3,4"
         },
         {
-            "funcName": "q5bidkeyedbyauction",
+            "funcName": "q3GroupBy",
             "NumInstance": 16,
             "InputTopicNames": ["nexmark_src"],
-            "OutputTopicName": ["bids"],
+            "OutputTopicName": ["q3_aucsBySellerID_out", "q3_personsByID_out"],
             "NodeConstraint": "5,6,7,8"
         },
         {
-            "funcName": "q5aucbids",
+            "funcName": "q3JoinTable",
             "NumInstance": 16,
-            "InputTopicNames": ["bids"],
-            "OutputTopicName": ["aucBids"],
-            "NodeConstraint": "5,6,7,8"
-        },
-        {
-            "funcName": "q5maxbid",
-            "NumInstance": 16,
-            "InputTopicNames": ["aucBids"],
-            "OutputTopicName": ["q5_out"],
+            "InputTopicNames": ["q3_aucsBySellerID_out", "q3_personsByID_out"],
+            "OutputTopicName": ["q3_out"],
+            "Final": true,
             "NodeConstraint": "5,6,7,8"
         }
     ],
     "StreamParam": {
         "nexmark_src": 16,
-        "bids": 16,
-        "aucBids": 16,
-        "q5_out": 16
+        "q3_aucsBySellerID_out": 16,
+        "q3_personsByID_out": 16,
+        "q3_out": 16
     }
 }

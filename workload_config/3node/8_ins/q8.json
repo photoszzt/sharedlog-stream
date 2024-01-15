@@ -19,6 +19,7 @@
             "NumInstance": 8,
             "InputTopicNames": ["q8_aucsBySellerID_out", "q8_personsByID_out"],
             "OutputTopicName": ["q8_out"],
+            "Final": true,
             "NodeConstraint": "5,6,7",
             "NumSrcProducer": [8, 8]
         }
