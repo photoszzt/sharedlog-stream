@@ -110,6 +110,7 @@ func (gp *GeneratorParams) InvokeSourceFunc(client *http.Client,
 ) {
 	defer wg.Done()
 	nexmarkConfig := NewNexMarkConfigInput(srcInvokeConfig.TopicName, gp.SerdeFormat)
+	nexmarkConfig.FinalOutTpNames = srcInvokeConfig.FinalTpNames
 	nexmarkConfig.Duration = gp.Duration
 	nexmarkConfig.AppId = srcInvokeConfig.AppId
 	nexmarkConfig.EventsNum = gp.EventsNum

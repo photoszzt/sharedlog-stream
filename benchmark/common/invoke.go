@@ -25,6 +25,7 @@ type SrcInvokeConfig struct {
 
 func (c *SrcInvokeConfig) Clone() SrcInvokeConfig {
 	return SrcInvokeConfig{
+		FinalTpNames:    c.FinalTpNames,
 		TopicName:       c.TopicName,
 		AppId:           c.AppId,
 		NodeConstraint:  c.NodeConstraint,

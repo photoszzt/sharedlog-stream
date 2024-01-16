@@ -20,6 +20,8 @@ func NewQueryInput(serdeFormat commtypes.SerdeFormat) *common.QueryInput {
 		guarantee = exactly_once_intr.EPOCH_MARK
 	} else if FLAGS_guarantee == "none" {
 		guarantee = exactly_once_intr.NO_GUARANTEE
+	} else if FLAGS_guarantee == "align_chkpt" {
+		guarantee = exactly_once_intr.ALIGN_CHKPT
 	}
 	var failSpec commtypes.FailSpec
 	if FLAGS_fail_spec != "" {

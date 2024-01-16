@@ -424,8 +424,7 @@ func (h *nexmarkSourceHandler) genFirstChkpt(ctx context.Context,
 		Partitions: []uint8{parNum},
 		Mark:       commtypes.CHKPT_MARK,
 	}
-	h.rcm.ResetCheckPointCount(ctx, finalOutputTopicNames)
-	return nil
+	return h.rcm.ResetCheckPointCount(ctx, finalOutputTopicNames)
 }
 
 func (h *nexmarkSourceHandler) flush(ctx context.Context, stream *sharedlog_stream.SizableShardedSharedLogStream) {
