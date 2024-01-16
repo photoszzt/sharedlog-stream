@@ -83,7 +83,7 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewSubG3Empty(env, funcName), nil
 	case "lastEmpty":
 		return handlers.NewLastEmptyQuery(env, funcName), nil
-	case "chkptManager":
+	case "chkptmngr":
 		return chkpt_manager.NewChkptManager(env), nil
 	default:
 		return nil, fmt.Errorf("unknown function name %v", funcName)
