@@ -199,7 +199,7 @@ func processWithTransaction(
 				return err_out
 			}
 			fmt.Fprintf(os.Stderr, "finish final commit\n")
-			return handleCtrlMsg(ctx, ctrlRawMsgArr[0], t, args, &warmupCheck)
+			return handleCtrlMsg(ctx, ctrlRawMsgArr, t, args, &warmupCheck)
 		}
 		// if warmupCheck.AfterWarmup() {
 		// 	elapsed := time.Since(procStart)

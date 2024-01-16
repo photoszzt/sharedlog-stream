@@ -170,21 +170,25 @@ func encodeWinSnapshot[K, V any](
 	})
 }
 
-func handleCtrlMsg(ctx context.Context, ctrlRawMsg *commtypes.RawMsgAndSeq,
-	t *StreamTask, args *StreamTaskArgs, warmupCheck *stats.Warmup,
+func handleCtrlMsg(
+	ctx context.Context,
+	ctrlRawMsgArr []*commtypes.RawMsgAndSeq,
+	t *StreamTask,
+	args *StreamTaskArgs,
+	warmupCheck *stats.Warmup,
 ) *common.FnOutput {
-	if ctrlRawMsg.Mark == commtypes.SCALE_FENCE {
-		ret := handleScaleEpochAndBytes(ctx, ctrlRawMsg, args)
+	if ctrlRawMsgArr[0].Mark == commtypes.SCALE_FENCE {
+		ret := handleScaleEpochAndBytes(ctx, ctrlRawMsgArr[0], args)
 		if ret.Success {
 			updateReturnMetric(ret, warmupCheck,
 				false, t.GetEndDuration(), args.ectx.SubstreamNum())
 		}
 		return ret
-	} else if ctrlRawMsg.Mark == commtypes.CHKPT_MARK && args.guarantee != exactly_once_intr.ALIGN_CHKPT {
+	} else if ctrlRawMsgArr[0].Mark == commtypes.CHKPT_MARK && args.guarantee != exactly_once_intr.ALIGN_CHKPT {
 		return common.GenErrFnOutput(common_errors.ErrChkptMarkerInvalidGuarantee)
-	} else if ctrlRawMsg.Mark == commtypes.STREAM_END {
+	} else if ctrlRawMsgArr[0].Mark == commtypes.STREAM_END {
 		epochMarker := commtypes.EpochMarker{
-			StartTime: ctrlRawMsg.StartTime,
+			StartTime: ctrlRawMsgArr[0].StartTime,
 			Mark:      commtypes.STREAM_END,
 			ProdIndex: args.ectx.SubstreamNum(),
 		}
@@ -192,19 +196,44 @@ func handleCtrlMsg(ctx context.Context, ctrlRawMsg *commtypes.RawMsgAndSeq,
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}
-		ctrlRawMsg.Payload = encoded
-		err = forwardCtrlMsg(ctx, ctrlRawMsg, args, "stream end mark")
+		ctrlRawMsgArr[0].Payload = encoded
+		err = forwardCtrlMsg(ctx, ctrlRawMsgArr[0], args, "stream end mark")
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}
-		t.SetEndDuration(ctrlRawMsg.StartTime)
+		if args.guarantee == exactly_once_intr.ALIGN_CHKPT {
+			var tpLogOff []commtypes.TpLogOff
+			// use the last stream end marker seqnum here as this is the end of a stream
+			// there's no record after this record.
+			for idx, c := range args.ectx.Consumers() {
+				tpLogOff = append(tpLogOff, commtypes.TpLogOff{
+					Tp:     c.Stream().TopicName(),
+					LogOff: ctrlRawMsgArr[idx].LogSeqNum,
+				})
+			}
+			// the last checkpoint will be wait here.
+			createChkpt(args, tpLogOff, nil)
+			for _, kv := range args.kvs {
+				err = kv.WaitForAllSnapshot()
+				if err != nil {
+					return common.GenErrFnOutput(fmt.Errorf("KV WaitForAllSnapshot failed: %v", err))
+				}
+			}
+			for _, wsc := range args.wscs {
+				err = wsc.WaitForAllSnapshot()
+				if err != nil {
+					return common.GenErrFnOutput(fmt.Errorf("Win WaitForAllSnapshot failed: %v", err))
+				}
+			}
+		}
+		t.SetEndDuration(ctrlRawMsgArr[0].StartTime)
 		ret := &common.FnOutput{Success: true}
 		updateReturnMetric(ret, warmupCheck,
 			args.waitEndMark, t.GetEndDuration(), args.ectx.SubstreamNum())
 		return ret
 	} else {
 		return common.GenErrFnOutput(
-			fmt.Errorf("unexpected ctrl msg with mark: %v", ctrlRawMsg.Mark))
+			fmt.Errorf("unexpected ctrl msg with mark: %v", ctrlRawMsgArr[0].Mark))
 	}
 }
 

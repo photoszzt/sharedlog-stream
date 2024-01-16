@@ -342,7 +342,6 @@ func processInEpoch(
 			hasProcessData = true
 		}
 		if ctrlRawMsgArr != nil {
-			ctrlRawMsg := ctrlRawMsgArr[0]
 			fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
 			r := finalMark(ctx, t, args, em, cmm, snapshotTime, epochMarkTime, false)
 			if r != nil {
@@ -351,7 +350,7 @@ func processInEpoch(
 			// markPartUs.PrintRemainingStats()
 			// execIntrMs.PrintRemainingStats()
 			// thisAndLastCmtMs.PrintRemainingStats()
-			return handleCtrlMsg(ctx, ctrlRawMsg, t, args, &warmupCheck)
+			return handleCtrlMsg(ctx, ctrlRawMsgArr, t, args, &warmupCheck)
 		}
 	}
 }

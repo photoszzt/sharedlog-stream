@@ -156,7 +156,7 @@ func main() {
 	scaleEpoch += 1
 	configScaleInput2.ScaleEpoch = scaleEpoch
 	var scaleOut2 common.FnOutput
-	common.InvokeConfigScale(client, &configScaleInput2, invokeFuncParam.GatewayUrl,
+	common.InvokeConfigScale(client, configScaleInput2, invokeFuncParam.GatewayUrl,
 		&scaleOut2, "scale", invokeFuncParam.Local)
 	afterScaleOutput := common.InvokeFunctions(&wg, client, cliNodesForScale, inParamsMapForScale, scaleEpoch)
 	wg.Wait()

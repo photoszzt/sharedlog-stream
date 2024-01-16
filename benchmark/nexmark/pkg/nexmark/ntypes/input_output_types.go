@@ -18,6 +18,7 @@ type NexMarkConfigInput struct {
 	AppId                  string        `json:"aid"`
 	EventsNum              uint64        `json:"events_num"`
 	RatePeriod             time.Duration `json:"rate_period"`
+	FinalOutTpNames        []string      `json:"finOutTpNs,omitempty"`
 	BidAvgSize             uint32        `json:"bid_avg_size"`
 	FirstEventRate         uint32        `json:"first_event_rate"`
 	NextEventRate          uint32        `json:"next_event_rate"`

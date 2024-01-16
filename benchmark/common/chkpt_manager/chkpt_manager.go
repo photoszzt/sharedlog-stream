@@ -4,34 +4,36 @@ import (
 	"context"
 	"encoding/json"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/checkpt"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/txn_data"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
-	"github.com/go-redis/redis/v9"
 )
 
 type ChkptManagerHandler struct {
 	env              types.Environment
-	rdb_arr          []*redis.Client
+	rcm              checkpt.RedisChkptManager
 	epochMarkerSerde commtypes.SerdeG[commtypes.EpochMarker]
 	srcStream        *sharedlog_stream.ShardedSharedLogStream
 }
 
 func NewChkptManager(env types.Environment) types.FuncHandler {
 	return &ChkptManagerHandler{
-		env:     env,
-		rdb_arr: snapshot_store.GetRedisClients(),
+		env: env,
 	}
 }
 
 func (h *ChkptManagerHandler) Call(ctx context.Context, input []byte) ([]byte, error) {
 	parsedInput := &common.ChkptMngrInput{}
 	err := json.Unmarshal(input, parsedInput)
+	if err != nil {
+		return nil, err
+	}
+	h.rcm, err = checkpt.NewRedisChkptManager(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -66,10 +68,10 @@ func (h *ChkptManagerHandler) genChkpt(ctx context.Context, input *common.ChkptM
 }
 
 func (h *ChkptManagerHandler) Chkpt(ctx context.Context, input *common.ChkptMngrInput) *common.FnOutput {
-	var t *time.Ticker
 	var err error
 	guarantee := exactly_once_intr.GuaranteeMth(input.GuaranteeMth)
 	serdeFormat := commtypes.SerdeFormat(input.SerdeFormat)
+	chkptEveryMs := time.Duration(input.ChkptEveryMs) * time.Millisecond
 	h.epochMarkerSerde, err = commtypes.GetEpochMarkerSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
@@ -82,16 +84,40 @@ func (h *ChkptManagerHandler) Chkpt(ctx context.Context, input *common.ChkptMngr
 		return common.GenErrFnOutput(err)
 	}
 	if guarantee == exactly_once_intr.ALIGN_CHKPT {
-		t = time.NewTicker(time.Duration(input.ChkptEveryMs) * time.Millisecond)
+		err = h.rcm.WaitForChkptFinish(ctx, input.FinalOutputTopicNames, input.FinalNumOutPartitions)
+		if err != nil {
+			return common.GenErrFnOutput(err)
+		}
+		now := time.Now()
 		for {
-			select {
-			case <-t.C:
-				err := h.genChkpt(ctx, input)
+			req, err := h.rcm.GetReqChkMngrEnd(ctx)
+			if err != nil {
+				return common.GenErrFnOutput(err)
+			}
+			if req == 1 {
+				err = h.rcm.SetChkMngrEnded(ctx)
 				if err != nil {
 					return common.GenErrFnOutput(err)
 				}
-			default:
+				break
 			}
+			elapsed := time.Since(now)
+			if elapsed < chkptEveryMs {
+				time.Sleep(chkptEveryMs - elapsed)
+			}
+			err = h.rcm.ResetCheckPointCount(ctx, input.FinalOutputTopicNames)
+			if err != nil {
+				return common.GenErrFnOutput(err)
+			}
+			err = h.genChkpt(ctx, input)
+			if err != nil {
+				return common.GenErrFnOutput(err)
+			}
+			err = h.rcm.WaitForChkptFinish(ctx, input.FinalOutputTopicNames, input.FinalNumOutPartitions)
+			if err != nil {
+				return common.GenErrFnOutput(err)
+			}
+			now = time.Now()
 		}
 	}
 	return nil

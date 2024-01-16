@@ -49,7 +49,7 @@ func processNoProto(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *c
 			if ret_err := pauseTimedFlushStreams(ctx, t, args); ret_err != nil {
 				return ret_err
 			}
-			return handleCtrlMsg(ctx, ctrlRawMsgArr[0], t, args, &warmupCheck)
+			return handleCtrlMsg(ctx, ctrlRawMsgArr, t, args, &warmupCheck)
 		}
 	}
 	if ret_err := pauseTimedFlushStreams(ctx, t, args); ret_err != nil {

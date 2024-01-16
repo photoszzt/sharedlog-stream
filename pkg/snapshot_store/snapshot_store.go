@@ -6,6 +6,7 @@ import (
 	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/hashfuncs"
+	"sharedlog-stream/pkg/redis_client"
 	"strings"
 	"time"
 
@@ -13,31 +14,13 @@ import (
 	"github.com/go-redis/redis/v9"
 )
 
-func getRedisAddr() []string {
-	raw_addr := os.Getenv("REDIS_ADDR")
-	return strings.Split(raw_addr, ",")
-}
-
-func GetRedisClients() []*redis.Client {
-	addr_arr := getRedisAddr()
-	rdb_arr := make([]*redis.Client, len(addr_arr))
-	for i := 0; i < len(addr_arr); i++ {
-		rdb_arr[i] = redis.NewClient(&redis.Options{
-			Addr:     addr_arr[i],
-			Password: "", // no password set
-			DB:       0,  // use default DB
-		})
-	}
-	return rdb_arr
-}
-
 type RedisSnapshotStore struct {
 	rdb_arr []*redis.Client
 }
 
 func NewRedisSnapshotStore(createSnapshot bool) RedisSnapshotStore {
 	if createSnapshot {
-		return RedisSnapshotStore{rdb_arr: GetRedisClients()}
+		return RedisSnapshotStore{rdb_arr: redis_client.GetRedisClients()}
 	} else {
 		return RedisSnapshotStore{}
 	}

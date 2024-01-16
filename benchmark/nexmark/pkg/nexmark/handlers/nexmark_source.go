@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/generator"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
+	"sharedlog-stream/pkg/checkpt"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
@@ -32,6 +33,7 @@ type nexmarkSourceHandler struct {
 	eventsPerGen     uint64
 	duration         time.Duration
 	streamPusher     *sharedlog_stream.StreamPush
+	rcm              checkpt.RedisChkptManager
 	bufPush          bool
 }
 
@@ -46,6 +48,10 @@ func NewNexmarkSource(env types.Environment, funcName string) types.FuncHandler 
 func (h *nexmarkSourceHandler) Call(ctx context.Context, input []byte) ([]byte, error) {
 	inputConfig := &ntypes.NexMarkConfigInput{}
 	err := json.Unmarshal(input, inputConfig)
+	if err != nil {
+		return nil, err
+	}
+	h.rcm, err = checkpt.NewRedisChkptManager(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -266,11 +272,12 @@ func (h *nexmarkSourceHandler) propagateScaleFence(m *txn_data.ControlMetadata, 
 	return nil
 }
 
-func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig *ntypes.NexMarkConfigInput) *common.FnOutput {
+func (h *nexmarkSourceHandler) eventGeneration(
+	ctx context.Context, inputConfig *ntypes.NexMarkConfigInput,
+) *common.FnOutput {
 	dctx, dcancel := context.WithCancel(ctx)
 	defer dcancel()
 	var wg sync.WaitGroup
-	var once sync.Once
 	fn_out := h.getStreamPublisher(inputConfig)
 	if fn_out != nil {
 		return fn_out
@@ -298,6 +305,22 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 	fmt.Fprintf(os.Stderr, "StartTs: %d\n", startTime.UnixMilli())
 	commitEveryMs := time.Duration(inputConfig.CommitEveryMs) * time.Millisecond
 	gua := exactly_once_intr.GuaranteeMth(inputConfig.GuaranteeMth)
+	if gua == exactly_once_intr.ALIGN_CHKPT {
+		for {
+			if time.Since(startTime) >= commitEveryMs {
+				err := h.genFirstChkpt(ctx, inputConfig.FinalOutTpNames, inputConfig.ParNum)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "gen first chkpt failed: %v\n", err)
+				}
+				break
+			}
+			fn_out = h.process(dctx, procArgs)
+			if fn_out != nil && !fn_out.Success {
+				h.stop(dctx, &wg, cmm)
+				return fn_out
+			}
+		}
+	}
 
 	for {
 		select {
@@ -328,20 +351,25 @@ func (h *nexmarkSourceHandler) eventGeneration(ctx context.Context, inputConfig 
 			}
 		default:
 		}
-		if gua == exactly_once_intr.ALIGN_CHKPT && time.Since(startTime) >= commitEveryMs {
-			once.Do(func() {
-				err := h.genFirstChkpt(inputConfig.ParNum)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "gen first chkpt failed: %v\n", err)
-				}
-			})
-		}
 		if !procArgs.eventGenerator.HasNext() || procArgs.idx == int(h.eventsPerGen) || h.duration != 0 && time.Since(startTime) >= h.duration {
 			if inputConfig.WaitForEndMark {
+				err = h.rcm.ReqChkMngrEnd(ctx)
+				if err != nil {
+					return common.GenErrFnOutput(err)
+				}
 				for _, par := range procArgs.parNumArr {
 					ret_err := h.genEndMark(startTime, par)
 					if ret_err != nil {
 						return ret_err
+					}
+				}
+				for {
+					got, err := h.rcm.GetChkMngrEnded(ctx)
+					if err != nil {
+						return common.GenErrFnOutput(err)
+					}
+					if got == 1 {
+						break
 					}
 				}
 			}
@@ -378,7 +406,9 @@ func (h *nexmarkSourceHandler) genEndMark(startTime time.Time, parNum uint8,
 	return nil
 }
 
-func (h *nexmarkSourceHandler) genFirstChkpt(parNum uint8) error {
+func (h *nexmarkSourceHandler) genFirstChkpt(ctx context.Context,
+	finalOutputTopicNames []string, parNum uint8,
+) error {
 	marker := commtypes.EpochMarker{
 		Mark:      commtypes.CHKPT_MARK,
 		StartTime: 1,
@@ -394,6 +424,7 @@ func (h *nexmarkSourceHandler) genFirstChkpt(parNum uint8) error {
 		Partitions: []uint8{parNum},
 		Mark:       commtypes.CHKPT_MARK,
 	}
+	h.rcm.ResetCheckPointCount(ctx, finalOutputTopicNames)
 	return nil
 }
 

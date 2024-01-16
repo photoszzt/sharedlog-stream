@@ -79,14 +79,13 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 			hasUntrackedConsume = true
 		}
 		if ctrlRawMsgArr != nil {
-			ctrlRawMsg := ctrlRawMsgArr[0]
 			if ret_err := pauseTimedFlushStreams(ctx, t, args); ret_err != nil {
 				return ret_err
 			}
 			if ret_err := track(ctx, cm, args.ectx.Consumers(), args.ectx.SubstreamNum()); ret_err != nil {
 				return ret_err
 			}
-			return handleCtrlMsg(ctx, ctrlRawMsg, t, args, &warmupCheck)
+			return handleCtrlMsg(ctx, ctrlRawMsgArr, t, args, &warmupCheck)
 		}
 		// if warmupCheck.AfterWarmup() {
 		// 	elapsed := time.Since(procStart)

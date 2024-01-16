@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/checkpt"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/snapshot_store"
@@ -89,6 +90,7 @@ func SetWinStoreChkpt[K, V any](
 }
 
 func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.FnOutput {
+	var finalOutTpNames []string
 	debug.Assert(len(args.ectx.Consumers()) >= 1, "Srcs should be filled")
 	debug.Assert(args.env != nil, "env should be filled")
 	debug.Assert(args.ectx != nil, "program args should be filled")
@@ -96,11 +98,17 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 	if t.initFunc != nil {
 		t.initFunc(t)
 	}
-
+	rcm, err := checkpt.NewRedisChkptManager(ctx)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
 	debug.Fprintf(os.Stderr, "warmup time: %v, flush every: %v, waitEndMark: %v\n",
 		args.warmup, args.flushEvery, args.waitEndMark)
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
 	warmupCheck.StartWarmup()
+	for _, tp := range args.ectx.Producers() {
+		finalOutTpNames = append(finalOutTpNames, tp.TopicName())
+	}
 	for {
 		warmupCheck.Check()
 		ret, ctrlRawMsgArr := t.appProcessFunc(ctx, t, args.ectx)
@@ -116,9 +124,9 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 				return ret_err
 			}
 			if ctrlRawMsgArr[0].Mark != commtypes.CHKPT_MARK {
-				return handleCtrlMsg(ctx, ctrlRawMsgArr[0], t, args, &warmupCheck)
+				return handleCtrlMsg(ctx, ctrlRawMsgArr, t, args, &warmupCheck)
 			}
-			err := checkpt(ctx, t, args, ctrlRawMsgArr)
+			err := checkpoint(ctx, t, args, ctrlRawMsgArr, &rcm, finalOutTpNames)
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}
@@ -126,7 +134,14 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 	}
 }
 
-func checkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs, ctrlRawMsgArr []*commtypes.RawMsgAndSeq) error {
+func checkpoint(
+	ctx context.Context,
+	t *StreamTask,
+	args *StreamTaskArgs,
+	ctrlRawMsgArr []*commtypes.RawMsgAndSeq,
+	rcm *checkpt.RedisChkptManager,
+	finalOutTpNames []string,
+) error {
 	var tpLogOff []commtypes.TpLogOff
 	var chkptMeta []commtypes.ChkptMetaData
 	for idx, c := range args.ectx.Consumers() {
@@ -140,7 +155,6 @@ func checkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs, ctrlRawMs
 			LastChkptMarker: ctrlRawMsgArr[idx].LogSeqNum,
 		})
 	}
-	createChkpt(args, tpLogOff, chkptMeta)
 	epochMarker := commtypes.EpochMarker{
 		StartTime: ctrlRawMsgArr[0].StartTime,
 		Mark:      commtypes.CHKPT_MARK,
@@ -151,5 +165,16 @@ func checkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs, ctrlRawMs
 		return err
 	}
 	ctrlRawMsgArr[0].Payload = encoded
-	return forwardCtrlMsg(ctx, ctrlRawMsgArr[0], args, "chkpt mark")
+	err = forwardCtrlMsg(ctx, ctrlRawMsgArr[0], args, "chkpt mark")
+	if err != nil {
+		return err
+	}
+	createChkpt(args, tpLogOff, chkptMeta)
+	if t.isFinalStage {
+		err = rcm.FinishChkpt(ctx, finalOutTpNames)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

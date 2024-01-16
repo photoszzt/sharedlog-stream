@@ -84,12 +84,10 @@ func PrepareTaskWithJoin[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR any]
 		) (*common.FnOutput, []*commtypes.RawMsgAndSeq) {
 			if leftManager.GotEndMark() && rightManager.GotEndMark() {
 				debug.Fprintf(os.Stderr, "join proc got end mark\n")
-				// leftStartTime := leftManager.StreamStartTime()
-				// task.SetEndDuration(leftStartTime)
-				return nil, []*commtypes.RawMsgAndSeq{leftManager.ctrlMsg}
+				return nil, []*commtypes.RawMsgAndSeq{leftManager.ctrlMsg, rightManager.ctrlMsg}
 			} else if leftManager.GotScaleFence() && rightManager.GotScaleFence() {
 				debug.Fprintf(os.Stderr, "join proc got scale fence\n")
-				return nil, []*commtypes.RawMsgAndSeq{leftManager.ctrlMsg}
+				return nil, []*commtypes.RawMsgAndSeq{leftManager.ctrlMsg, rightManager.ctrlMsg}
 			} else if leftManager.GotChkptMark() && rightManager.GotChkptMark() {
 				debug.Fprintf(os.Stderr, "join proc got all checkpt mark\n")
 				return nil, []*commtypes.RawMsgAndSeq{leftManager.ctrlMsg, rightManager.ctrlMsg}

@@ -13,6 +13,7 @@ import (
 )
 
 type SrcInvokeConfig struct {
+	FinalTpNames    []string
 	TopicName       string
 	AppId           string
 	NodeConstraint  string
@@ -44,14 +45,14 @@ type InvokeFuncParam struct {
 }
 
 func ParseInvokeParam(invokeParam InvokeFuncParam, baseQueryInput *QueryInput,
-) (SrcInvokeConfig, []*ClientNode, map[string][]*QueryInput, ConfigScaleInput, error) {
+) (*SrcInvokeConfig, []*ClientNode, map[string][]*QueryInput, *ConfigScaleInput, error) {
 	byteVal, err := os.ReadFile(invokeParam.ConfigFile)
 	if err != nil {
-		return SrcInvokeConfig{}, nil, nil, ConfigScaleInput{}, err
+		return nil, nil, nil, nil, err
 	}
 	jsonParsed, err := gabs.ParseJSON(byteVal)
 	if err != nil {
-		return SrcInvokeConfig{}, nil, nil, ConfigScaleInput{}, err
+		return nil, nil, nil, nil, err
 	}
 	funcParam := jsonParsed.S("FuncParam").Children()
 	streamParam := jsonParsed.S("StreamParam").ChildrenMap()
@@ -73,6 +74,7 @@ func ParseInvokeParam(invokeParam InvokeFuncParam, baseQueryInput *QueryInput,
 		funcName := config["funcName"].Data().(string)
 		outputTopicNamesTmp := config["OutputTopicName"].Data().([]interface{})
 		inputTopicNamesTmp, ok := config["InputTopicNames"]
+		_, hasFinal := config["Final"]
 		numSrcProducerTmp := config["NumSrcProducer"]
 		scaleConfig[funcName] = ninstance
 		funcNames = append(funcNames, funcName)
@@ -104,6 +106,9 @@ func ParseInvokeParam(invokeParam InvokeFuncParam, baseQueryInput *QueryInput,
 			for i, v := range outputTopicNamesTmp {
 				outputTopicNames[i] = v.(string)
 				numOutPartitions[i] = uint8(streamParam[outputTopicNames[i]].Data().(float64))
+			}
+			if hasFinal {
+				srcInvokeConfig.FinalTpNames = outputTopicNames
 			}
 			nconfig := &ClientNodeConfig{
 				FuncName:       funcName,
@@ -142,11 +147,11 @@ func ParseInvokeParam(invokeParam InvokeFuncParam, baseQueryInput *QueryInput,
 		AppId:       baseQueryInput.AppId,
 		BufMaxSize:  baseQueryInput.BufMaxSize,
 	}
-	return srcInvokeConfig, cliNodes, inParamsMap, configScaleInput, nil
+	return &srcInvokeConfig, cliNodes, inParamsMap, &configScaleInput, nil
 }
 
 func InvokeSrc(wg *sync.WaitGroup, client *http.Client,
-	srcInvokeConfig SrcInvokeConfig,
+	srcInvokeConfig *SrcInvokeConfig,
 	invokeSourceFunc InvokeSrcFunc,
 	scaleEpoch uint16,
 ) []FnOutput {
@@ -263,7 +268,7 @@ func Invoke(invokeParam InvokeFuncParam,
 	configScaleInput.Bootstrap = true
 	configScaleInput.ScaleEpoch = 1
 	var scaleResponse FnOutput
-	InvokeConfigScale(client, &configScaleInput, invokeParam.GatewayUrl,
+	InvokeConfigScale(client, configScaleInput, invokeParam.GatewayUrl,
 		&scaleResponse, "scale", invokeParam.Local)
 
 	fmt.Fprintf(os.Stderr, "src instance: %d\n", srcInvokeConfig.NumSrcInstance)
