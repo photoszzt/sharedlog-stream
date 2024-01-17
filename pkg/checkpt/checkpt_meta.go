@@ -22,7 +22,15 @@ func NewRedisChkptManager(ctx context.Context) (RedisChkptManager, error) {
 	rcm := RedisChkptManager{
 		rds: redis_client.GetRedisClients(),
 	}
-	err := rcm.rds[CHKPT_META_NODE].Set(ctx, REQ_CHKMNGR_ENDED, 0, 0).Err()
+	var err error
+	for {
+		err := rcm.rds[CHKPT_META_NODE].Ping(ctx).Err()
+		if err == nil {
+			break
+		}
+		time.Sleep(time.Duration(100) * time.Millisecond)
+	}
+	err = rcm.rds[CHKPT_META_NODE].Set(ctx, REQ_CHKMNGR_ENDED, 0, 0).Err()
 	if err != nil {
 		return RedisChkptManager{}, err
 	}
