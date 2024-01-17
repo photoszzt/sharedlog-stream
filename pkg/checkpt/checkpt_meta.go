@@ -15,14 +15,12 @@ const (
 )
 
 type RedisChkptManager struct {
-	rds         []*redis.Client
-	streamEnded bool
+	rds []*redis.Client
 }
 
 func NewRedisChkptManager(ctx context.Context) (RedisChkptManager, error) {
 	rcm := RedisChkptManager{
-		rds:         redis_client.GetRedisClients(),
-		streamEnded: false,
+		rds: redis_client.GetRedisClients(),
 	}
 	err := rcm.rds[CHKPT_META_NODE].Set(ctx, REQ_CHKMNGR_ENDED, 0, 0).Err()
 	if err != nil {
