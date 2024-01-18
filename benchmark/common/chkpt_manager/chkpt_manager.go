@@ -70,20 +70,20 @@ func (h *ChkptManagerHandler) genChkpt(ctx context.Context, input *common.ChkptM
 func (h *ChkptManagerHandler) Chkpt(ctx context.Context, input *common.ChkptMngrInput) *common.FnOutput {
 	var err error
 	guarantee := exactly_once_intr.GuaranteeMth(input.GuaranteeMth)
-	serdeFormat := commtypes.SerdeFormat(input.SerdeFormat)
-	chkptEveryMs := time.Duration(input.ChkptEveryMs) * time.Millisecond
-	h.epochMarkerSerde, err = commtypes.GetEpochMarkerSerdeG(serdeFormat)
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
-	h.srcStream, err = sharedlog_stream.NewShardedSharedLogStream(h.env,
-		input.SrcTopicName,
-		input.SrcNumPart,
-		serdeFormat, input.BufMaxSize)
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
 	if guarantee == exactly_once_intr.ALIGN_CHKPT {
+		serdeFormat := commtypes.SerdeFormat(input.SerdeFormat)
+		chkptEveryMs := time.Duration(input.ChkptEveryMs) * time.Millisecond
+		h.epochMarkerSerde, err = commtypes.GetEpochMarkerSerdeG(serdeFormat)
+		if err != nil {
+			return common.GenErrFnOutput(err)
+		}
+		h.srcStream, err = sharedlog_stream.NewShardedSharedLogStream(h.env,
+			input.SrcTopicName,
+			input.SrcNumPart,
+			serdeFormat, input.BufMaxSize)
+		if err != nil {
+			return common.GenErrFnOutput(err)
+		}
 		err = h.rcm.WaitForChkptFinish(ctx, input.FinalOutputTopicNames, input.FinalNumOutPartitions)
 		if err != nil {
 			return common.GenErrFnOutput(err)
