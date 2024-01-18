@@ -353,9 +353,11 @@ func (h *nexmarkSourceHandler) eventGeneration(
 		}
 		if !procArgs.eventGenerator.HasNext() || procArgs.idx == int(h.eventsPerGen) || h.duration != 0 && time.Since(startTime) >= h.duration {
 			if inputConfig.WaitForEndMark {
-				err = h.rcm.ReqChkMngrEnd(ctx)
-				if err != nil {
-					return common.GenErrFnOutput(err)
+				if gua == exactly_once_intr.ALIGN_CHKPT {
+					err = h.rcm.ReqChkMngrEnd(ctx)
+					if err != nil {
+						return common.GenErrFnOutput(err)
+					}
 				}
 				for _, par := range procArgs.parNumArr {
 					ret_err := h.genEndMark(startTime, par)
@@ -363,13 +365,15 @@ func (h *nexmarkSourceHandler) eventGeneration(
 						return ret_err
 					}
 				}
-				for {
-					got, err := h.rcm.GetChkMngrEnded(ctx)
-					if err != nil {
-						return common.GenErrFnOutput(err)
-					}
-					if got == 1 {
-						break
+				if gua == exactly_once_intr.ALIGN_CHKPT {
+					for {
+						got, err := h.rcm.GetChkMngrEnded(ctx)
+						if err != nil {
+							return common.GenErrFnOutput(err)
+						}
+						if got == 1 {
+							break
+						}
 					}
 				}
 			}
