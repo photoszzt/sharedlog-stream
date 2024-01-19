@@ -171,6 +171,21 @@ func (h *nexmarkSourceHandler) setupGeneratorConfig(inputConfig *ntypes.NexMarkC
 	fmt.Fprintf(os.Stderr, "\tOccasionalDelaySec   : %v\n", generatorConfig.Configuration.OccasionalDelaySec)
 	fmt.Fprintf(os.Stderr, "\tProbDelayedEvent     : %v\n", generatorConfig.Configuration.ProbDelayedEvent)
 	fmt.Fprintf(os.Stderr, "\tOutOfOrderGroupSize  : %v\n", generatorConfig.Configuration.OutOfOrderGroupSize)
+
+	fmt.Fprintf(os.Stderr, "Input config: \n")
+	fmt.Fprintf(os.Stderr, "\tSrcTopicName   : %v\n", inputConfig.TopicName)
+	fmt.Fprintf(os.Stderr, "\tAppId          : %v\n", inputConfig.AppId)
+	fmt.Fprintf(os.Stderr, "\tFinalOutTpNames: %v\n", inputConfig.FinalOutTpNames)
+	fmt.Fprintf(os.Stderr, "\tDuration(s)    : %v\n", inputConfig.Duration)
+	fmt.Fprintf(os.Stderr, "\tFlushMs        : %v\n", inputConfig.FlushMs)
+	fmt.Fprintf(os.Stderr, "\tBufMaxSize     : %v\n", inputConfig.BufMaxSize)
+	fmt.Fprintf(os.Stderr, "\tCommitEveryMs  : %v\n", inputConfig.CommitEveryMs)
+	fmt.Fprintf(os.Stderr, "\tWaitForEndMark : %v\n", inputConfig.WaitForEndMark)
+	fmt.Fprintf(os.Stderr, "\tSerdeFormat    : %v\n", commtypes.SerdeFormat(inputConfig.SerdeFormat).String())
+	fmt.Fprintf(os.Stderr, "\tNumOutPartition: %v\n", inputConfig.NumOutPartition)
+	fmt.Fprintf(os.Stderr, "\tParNum         : %v\n", inputConfig.ParNum)
+	fmt.Fprintf(os.Stderr, "\tNumSrcInstance : %v\n", inputConfig.NumSrcInstance)
+	fmt.Fprintf(os.Stderr, "\tGuarantee      : %v\n", exactly_once_intr.GuaranteeMth(inputConfig.GuaranteeMth).String())
 	h.generatorConfig = generatorConfig
 	h.eventsPerGen = inputConfig.EventsNum / uint64(h.generatorConfig.Configuration.NumEventGenerators)
 	h.duration = time.Duration(inputConfig.Duration) * time.Second

@@ -12,29 +12,30 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// entry with slashes is assigned to NexMarkConfig
 type NexMarkConfigInput struct {
 	TopicName              string        `json:"topic_name"`
-	RateShape              string        `json:"rate_shape"`
+	RateShape              string        `json:"rate_shape"` //
 	AppId                  string        `json:"aid"`
-	EventsNum              uint64        `json:"events_num"`
-	RatePeriod             time.Duration `json:"rate_period"`
+	EventsNum              uint64        `json:"events_num"`  //
+	RatePeriod             time.Duration `json:"rate_period"` //
 	FinalOutTpNames        []string      `json:"finOutTpNs,omitempty"`
-	BidAvgSize             uint32        `json:"bid_avg_size"`
-	FirstEventRate         uint32        `json:"first_event_rate"`
-	NextEventRate          uint32        `json:"next_event_rate"`
-	PersonAvgSize          uint32        `json:"person_avg_size"`
-	AuctionAvgSize         uint32        `json:"auction_avg_size"`
+	BidAvgSize             uint32        `json:"bid_avg_size"`     //
+	FirstEventRate         uint32        `json:"first_event_rate"` //
+	NextEventRate          uint32        `json:"next_event_rate"`  //
+	PersonAvgSize          uint32        `json:"person_avg_size"`  //
+	AuctionAvgSize         uint32        `json:"auction_avg_size"` //
 	Duration               uint32        `json:"duration"`
-	PersonProportion       uint32        `json:"person_proportion"`
-	AuctionProportion      uint32        `json:"auction_proportion"`
-	BidProportion          uint32        `json:"bid_proportion"`
-	BidHotRatioAuctions    uint32        `json:"bid_hot_ratio_auctions"`
-	BidHotRatioBidders     uint32        `json:"bid_hot_ratio_bidders"`
-	AuctionHotRatioSellers uint32        `json:"auction_hot_ratio_sellers"`
+	PersonProportion       uint32        `json:"person_proportion"`         //
+	AuctionProportion      uint32        `json:"auction_proportion"`        //
+	BidProportion          uint32        `json:"bid_proportion"`            //
+	BidHotRatioAuctions    uint32        `json:"bid_hot_ratio_auctions"`    //
+	BidHotRatioBidders     uint32        `json:"bid_hot_ratio_bidders"`     //
+	AuctionHotRatioSellers uint32        `json:"auction_hot_ratio_sellers"` //
 	FlushMs                uint32        `json:"flushms"`
 	BufMaxSize             uint32        `json:"bufMaxSize"`
 	CommitEveryMs          uint32        `json:"commEveryMs,omitempty"`
-	RateLimited            bool          `json:"rate_limited"`
+	RateLimited            bool          `json:"rate_limited"` //
 	WaitForEndMark         bool          `json:"waitEnd"`
 	SerdeFormat            uint8         `json:"serde_format"`
 	NumOutPartition        uint8         `json:"numOutPar,omitempty"`
