@@ -123,6 +123,7 @@ func (gp *GeneratorParams) InvokeSourceFunc(client *http.Client,
 	nexmarkConfig.FlushMs = gp.FlushMs
 	nexmarkConfig.WaitForEndMark = gp.WaitForEndMark
 	nexmarkConfig.BufMaxSize = gp.BufMaxSize
+	nexmarkConfig.GuaranteeMth = gp.GuaranteeMth
 	url := common.BuildFunctionUrl(gp.FaasGateway, "source")
 	fmt.Printf("func source url is %v\n", url)
 	if err := common.JsonPostRequest(client, url, srcInvokeConfig.NodeConstraint, nexmarkConfig, response); err != nil {
