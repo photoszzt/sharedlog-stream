@@ -96,10 +96,6 @@ func SetupManagersForEpoch(ctx context.Context,
 	fmt.Fprintf(os.Stderr, "[%d] Init EpochManager took %v, task epoch %#x, task id %#x\n",
 		args.ectx.SubstreamNum(), initEmElapsed, em.GetCurrentEpoch(), em.GetCurrentTaskId())
 	configChangelogExactlyOnce(em, args)
-	err = setupSnapshotCallback(ctx, args.env, args.serdeFormat, rs)
-	if err != nil {
-		return nil, nil, err
-	}
 	lastMark := uint64(0)
 	if recentMeta != nil {
 		restoreBeg := time.Now()

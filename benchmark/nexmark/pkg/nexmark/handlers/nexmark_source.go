@@ -390,6 +390,7 @@ func (h *nexmarkSourceHandler) eventGeneration(
 							break
 						}
 					}
+					fmt.Fprintf(os.Stderr, "[%v] chkmngr has terminated\n", inputConfig.ParNum)
 				}
 			}
 			break
@@ -401,6 +402,7 @@ func (h *nexmarkSourceHandler) eventGeneration(
 		}
 	}
 	h.stop(dctx, &wg, cmm)
+	fmt.Fprintf(os.Stderr, "[%v] all stopped\n", inputConfig.ParNum)
 	return h.succRet(startTime)
 }
 

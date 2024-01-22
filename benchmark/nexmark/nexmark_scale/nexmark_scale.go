@@ -101,7 +101,7 @@ func main() {
 	}
 	totTime := FLAGS_durBeforeScale + FLAGS_durAfterScale
 	baseQueryInput := NewQueryInput(serdeFormat, uint32(FLAGS_durBeforeScale))
-	srcInvokeConfig, cliNodes, inParamsMap, configScaleInput, err := common.ParseInvokeParam(
+	srcInvokeConfig, cliNodes, inParamsMap, configScaleInput, _, err := common.ParseInvokeParam(
 		invokeFuncParam, baseQueryInput)
 	if err != nil {
 		panic(err)
@@ -148,7 +148,7 @@ func main() {
 		WaitForEndMark: FLAGS_waitForEndMark,
 	}
 	baseQueryInputForScale := NewQueryInput(serdeFormat, uint32(FLAGS_durAfterScale))
-	_, cliNodesForScale, inParamsMapForScale, configScaleInput2, err := common.ParseInvokeParam(
+	_, cliNodesForScale, inParamsMapForScale, configScaleInput2, _, err := common.ParseInvokeParam(
 		invokeFuncParamScale, baseQueryInputForScale)
 	if err != nil {
 		panic(err)

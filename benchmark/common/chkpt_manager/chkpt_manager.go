@@ -3,6 +3,8 @@ package chkpt_manager
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/checkpt"
 	"sharedlog-stream/pkg/commtypes"
@@ -37,12 +39,24 @@ func (h *ChkptManagerHandler) Call(ctx context.Context, input []byte) ([]byte, e
 	if err != nil {
 		return nil, err
 	}
+	PrintChkptMngrInput(parsedInput)
 	output := h.Chkpt(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
 		panic(err)
 	}
 	return common.CompressData(encodedOutput), nil
+}
+
+func PrintChkptMngrInput(c *common.ChkptMngrInput) {
+	fmt.Fprintf(os.Stderr, "ChkptMngrInput:\n")
+	fmt.Fprintf(os.Stderr, "\tSrcTopicName         : %v\n", c.SrcTopicName)
+	fmt.Fprintf(os.Stderr, "\tFinalOutputTopicNames: %v\n", c.FinalOutputTopicNames)
+	fmt.Fprintf(os.Stderr, "\tFinalNumOutPartitions: %v\n", c.FinalNumOutPartitions)
+	fmt.Fprintf(os.Stderr, "\tBufMaxSize           : %v\n", c.BufMaxSize)
+	fmt.Fprintf(os.Stderr, "\tSrcNumPart           : %v\n", c.SrcNumPart)
+	fmt.Fprintf(os.Stderr, "\tGuarantee            : %v\n", exactly_once_intr.GuaranteeMth(c.GuaranteeMth).String())
+	fmt.Fprintf(os.Stderr, "\tSerdeFormat          : %v\n", commtypes.SerdeFormat(c.SerdeFormat).String())
 }
 
 func (h *ChkptManagerHandler) genChkpt(ctx context.Context, input *common.ChkptMngrInput) error {
@@ -70,6 +84,8 @@ func (h *ChkptManagerHandler) genChkpt(ctx context.Context, input *common.ChkptM
 func (h *ChkptManagerHandler) Chkpt(ctx context.Context, input *common.ChkptMngrInput) *common.FnOutput {
 	var err error
 	guarantee := exactly_once_intr.GuaranteeMth(input.GuaranteeMth)
+
+	fmt.Fprintf(os.Stderr, "")
 	if guarantee == exactly_once_intr.ALIGN_CHKPT {
 		serdeFormat := commtypes.SerdeFormat(input.SerdeFormat)
 		chkptEveryMs := time.Duration(input.ChkptEveryMs) * time.Millisecond

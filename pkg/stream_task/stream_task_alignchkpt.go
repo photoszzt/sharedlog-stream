@@ -91,9 +91,7 @@ func SetWinStoreChkpt[K, V any](
 
 func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.FnOutput {
 	var finalOutTpNames []string
-	debug.Assert(len(args.ectx.Consumers()) >= 1, "Srcs should be filled")
-	debug.Assert(args.env != nil, "env should be filled")
-	debug.Assert(args.ectx != nil, "program args should be filled")
+	prodConsumerExactlyOnce(args)
 	args.ectx.StartWarmup()
 	if t.initFunc != nil {
 		t.initFunc(t)
@@ -119,11 +117,11 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 			return ret
 		}
 		if ctrlRawMsgArr != nil {
-			fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
 			if ret_err := pauseTimedFlushStreams(ctx, t, args); ret_err != nil {
 				return ret_err
 			}
 			if ctrlRawMsgArr[0].Mark != commtypes.CHKPT_MARK {
+				fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
 				return handleCtrlMsg(ctx, ctrlRawMsgArr, t, args, &warmupCheck)
 			}
 			err := checkpoint(ctx, t, args, ctrlRawMsgArr, &rcm, finalOutTpNames)

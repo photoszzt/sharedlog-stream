@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/txn_data"
@@ -52,6 +53,7 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) SetSnapshotCallback(ctx context.C
 }
 
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) WaitForAllSnapshot() error {
+	debug.Assert(st.bgErrG != nil, "snapshot callback is not set")
 	return st.bgErrG.Wait()
 }
 
@@ -163,6 +165,7 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) Range(ctx context.Context,
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) Snapshot(
 	tpLogOff []commtypes.TpLogOff, unprocessed []commtypes.ChkptMetaData,
 ) {
+	debug.Assert(st.bgErrG != nil, "snapshot callback is not set")
 	// cpyBeg := time.Now()
 	out := make([]commtypes.KeyValuePair[K, V], 0, st.store.Len())
 	st.store.Range(func(key K, value V) bool {

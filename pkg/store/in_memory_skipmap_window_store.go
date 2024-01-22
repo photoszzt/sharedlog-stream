@@ -397,6 +397,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) IterAll(iterFunc func(int64, K, V) e
 }
 
 func (s *InMemorySkipMapWindowStoreG[K, V]) WaitForAllSnapshot() error {
+	debug.Assert(s.bgErrG != nil, "bgErr should not be nil")
 	return s.bgErrG.Wait()
 }
 

@@ -3,6 +3,7 @@ package checkpt
 import (
 	"context"
 	"sharedlog-stream/pkg/redis_client"
+	"strconv"
 	"time"
 
 	"github.com/go-redis/redis/v9"
@@ -69,8 +70,12 @@ func (c *RedisChkptManager) WaitForChkptFinish(
 		}
 		for idx, cmd := range cmds {
 			parNum := finalNumOutPartition[idx]
-			gotPar := cmd.(*redis.IntCmd).Val()
-			if gotPar != int64(parNum) {
+			gotParStr := cmd.(*redis.StringCmd).Val()
+			gotPar, err := strconv.Atoi(gotParStr)
+			if err != nil {
+				return err
+			}
+			if gotPar != int(parNum) {
 				allFinished = false
 				break
 			}

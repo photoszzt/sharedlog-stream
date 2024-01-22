@@ -7,6 +7,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/env_config"
 	"sharedlog-stream/pkg/exactly_once_intr"
@@ -70,18 +71,31 @@ func ExecuteApp(ctx context.Context,
 	outputRemainingStats func(),
 ) *common.FnOutput {
 	var ret *common.FnOutput
+	var rs snapshot_store.RedisSnapshotStore
+	if streamTaskArgs.guarantee == exactly_once_intr.TWO_PHASE_COMMIT ||
+		streamTaskArgs.guarantee == exactly_once_intr.EPOCH_MARK ||
+		streamTaskArgs.guarantee == exactly_once_intr.AT_LEAST_ONCE ||
+		streamTaskArgs.guarantee == exactly_once_intr.ALIGN_CHKPT {
+		create := env_config.CREATE_SNAPSHOT
+		if streamTaskArgs.guarantee == exactly_once_intr.ALIGN_CHKPT {
+			create = true
+		}
+		rs = snapshot_store.NewRedisSnapshotStore(create)
+		err := setupSnapshotCallback(ctx, streamTaskArgs.env, streamTaskArgs.serdeFormat, &rs)
+		if err != nil {
+			return common.GenErrFnOutput(err)
+		}
+	}
 	if streamTaskArgs.guarantee == exactly_once_intr.TWO_PHASE_COMMIT {
-		rs := snapshot_store.NewRedisSnapshotStore(env_config.CREATE_SNAPSHOT)
 		tm, cmm, err := setupManagersFor2pc(ctx, t, streamTaskArgs,
 			&rs, setupSnapshotCallback)
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}
 		debug.Fprint(os.Stderr, "begin transaction processing\n")
-		ret = processWithTransaction(ctx, t, tm, cmm, streamTaskArgs, &rs)
+		ret = processWithTransaction(ctx, t, tm, cmm, streamTaskArgs)
 		debug.Fprintf(os.Stderr, "2pc ret: %v\n", ret)
 	} else if streamTaskArgs.guarantee == exactly_once_intr.EPOCH_MARK {
-		rs := snapshot_store.NewRedisSnapshotStore(env_config.CREATE_SNAPSHOT)
 		em, cmm, err := SetupManagersForEpoch(ctx, streamTaskArgs, &rs, setupSnapshotCallback)
 		if err != nil {
 			return common.GenErrFnOutput(err)
@@ -98,9 +112,26 @@ func ExecuteApp(ctx context.Context,
 		ret = processNoProto(ctx, t, streamTaskArgs)
 		debug.Fprintf(os.Stderr, "unsafe ret: %v\n", ret)
 	} else if streamTaskArgs.guarantee == exactly_once_intr.ALIGN_CHKPT {
-		_ = snapshot_store.NewRedisSnapshotStore(true)
 		debug.Fprintf(os.Stderr, "begin align checkpoint processing\n")
+		cmm, err := control_channel.NewControlChannelManager(streamTaskArgs.env,
+			streamTaskArgs.appId,
+			streamTaskArgs.serdeFormat, streamTaskArgs.bufMaxSize,
+			streamTaskArgs.ectx.CurEpoch(), streamTaskArgs.ectx.SubstreamNum())
+		if err != nil {
+			return common.GenErrFnOutput(err)
+		}
+		err = cmm.RestoreMappingAndWaitForPrevTask(
+			ctx, streamTaskArgs.ectx.FuncName(), env_config.CREATE_SNAPSHOT, streamTaskArgs.serdeFormat,
+			streamTaskArgs.kvChangelogs, streamTaskArgs.windowStoreChangelogs, &rs)
+		if err != nil {
+			return common.GenErrFnOutput(err)
+		}
+		recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
+			return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, streamTaskArgs.ectx.CurEpoch())
+		}
+		streamTaskArgs.ectx.SetRecordFinishFunc(recordFinish)
 		ret = processAlignChkpt(ctx, t, streamTaskArgs)
+		debug.Fprintf(os.Stderr, "align chkpt ret: %v\n", ret)
 	} else {
 		fmt.Fprintf(os.Stderr, "unrecognized guarantee: %v\n", streamTaskArgs.guarantee)
 		return &common.FnOutput{Success: false, Message: "unrecognized guarantee"}
@@ -487,6 +518,20 @@ func setOffsetOnStream(offsetMap map[string]uint64,
 			debug.Fprintf(os.Stderr, "%s offset restores to %x\n", src.TopicName(), resetTo)
 			src.SetCursor(resetTo, args.ectx.SubstreamNum())
 		}
+	}
+}
+
+func prodConsumerExactlyOnce(args *StreamTaskArgs) {
+	debug.Assert(len(args.ectx.Consumers()) >= 1, "Srcs should be filled")
+	debug.Assert(args.env != nil, "env should be filled")
+	debug.Assert(args.ectx != nil, "program args should be filled")
+	for _, src := range args.ectx.Consumers() {
+		if !src.IsInitialSource() {
+			src.ConfigExactlyOnce(args.guarantee)
+		}
+	}
+	for _, sink := range args.ectx.Producers() {
+		sink.ConfigExactlyOnce(nil, args.guarantee)
 	}
 }
 

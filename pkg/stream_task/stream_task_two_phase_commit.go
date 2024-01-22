@@ -32,11 +32,6 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 		return nil, nil, fmt.Errorf("InitTransaction failed: %v", err)
 	}
 	configChangelogExactlyOnce(tm, streamTaskArgs)
-	err = setupSnapshotCallback(ctx, streamTaskArgs.env,
-		streamTaskArgs.serdeFormat, rs)
-	if err != nil {
-		return nil, nil, err
-	}
 	err = createOffsetTopic(tm, streamTaskArgs)
 	if err != nil {
 		return nil, nil, err
@@ -79,6 +74,12 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 	if err != nil {
 		return nil, nil, err
 	}
+	err = cmm.RestoreMappingAndWaitForPrevTask(ctx, streamTaskArgs.ectx.FuncName(),
+		env_config.CREATE_SNAPSHOT, streamTaskArgs.serdeFormat,
+		streamTaskArgs.kvChangelogs, streamTaskArgs.windowStoreChangelogs, rs)
+	if err != nil {
+		return nil, nil, err
+	}
 	trackParFunc := func(ctx context.Context, topicName string, substreamId uint8) error {
 		return tm.AddTopicSubstream(ctx, topicName, substreamId)
 	}
@@ -102,19 +103,11 @@ func processWithTransaction(
 	tm *transaction.TransactionManager,
 	cmm *control_channel.ControlChannelManager,
 	args *StreamTaskArgs,
-	rs *snapshot_store.RedisSnapshotStore,
 ) *common.FnOutput {
 	trackStreamAndConfigureExactlyOnce(args, tm,
 		func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {
 			tm.RecordTopicStreams(name, stream)
 		})
-	debug.Fprintf(os.Stderr, "start restore mapping\n")
-	err := cmm.RestoreMappingAndWaitForPrevTask(ctx, args.ectx.FuncName(),
-		env_config.CREATE_SNAPSHOT, args.serdeFormat,
-		args.kvChangelogs, args.windowStoreChangelogs, rs)
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
 	// latencies := stats.NewStatsCollector[int64]("latPerIter", stats.DEFAULT_COLLECT_DURATION)
 	hasProcessData := false
 	paused := false
