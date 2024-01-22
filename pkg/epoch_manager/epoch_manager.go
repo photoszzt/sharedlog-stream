@@ -10,6 +10,7 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/hashfuncs"
+	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
@@ -141,14 +142,12 @@ func (em *EpochManager) AddTopicSubstream(
 func GenEpochMarker(
 	ctx context.Context,
 	em *EpochManager,
-	consumers []*producer_consumer.MeteredConsumer,
-	producers []producer_consumer.MeteredProducerIntr,
+	ectx processor.ExecutionContext,
 	kvTabs map[string]store.KeyValueStoreOpWithChangelog,
 	winTabs map[string]store.WindowStoreOpWithChangelog,
-	prodIdx uint8,
 ) (commtypes.EpochMarker, error) {
 	outputRanges := make(map[string][]commtypes.ProduceRange)
-	for _, producer := range producers {
+	for _, producer := range ectx.Producers() {
 		// err := producer.Flush(ctx)
 		// if err != nil {
 		// 	return commtypes.EpochMarker{}, err
@@ -196,14 +195,14 @@ func GenEpochMarker(
 		outputRanges[winTab.ChangelogTopicName()] = ranges
 	}
 	consumeSeqNums := make(map[string]uint64)
-	for _, consumer := range consumers {
+	for _, consumer := range ectx.Consumers() {
 		consumeSeqNums[consumer.TopicName()] = consumer.CurrentConsumedSeqNum()
 	}
 	epochMeta := commtypes.EpochMarker{
 		Mark:         commtypes.EPOCH_END,
 		ConSeqNums:   consumeSeqNums,
 		OutputRanges: outputRanges,
-		ProdIndex:    prodIdx,
+		ProdIndex:    ectx.SubstreamNum(),
 	}
 	return epochMeta, nil
 }

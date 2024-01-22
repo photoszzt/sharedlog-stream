@@ -96,12 +96,17 @@ func ExecuteApp(ctx context.Context,
 		ret = processWithTransaction(ctx, t, tm, cmm, streamTaskArgs)
 		debug.Fprintf(os.Stderr, "2pc ret: %v\n", ret)
 	} else if streamTaskArgs.guarantee == exactly_once_intr.EPOCH_MARK {
-		em, cmm, err := SetupManagersForEpoch(ctx, streamTaskArgs, &rs, setupSnapshotCallback)
+		meta := epochProcessMeta{
+			t:    t,
+			args: streamTaskArgs,
+		}
+		var err error
+		meta.em, meta.cmm, err = SetupManagersForEpoch(ctx, streamTaskArgs, &rs)
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}
 		debug.Fprint(os.Stderr, "begin epoch processing\n")
-		ret = processInEpoch(ctx, t, em, cmm, streamTaskArgs)
+		ret = processInEpoch(ctx, &meta)
 		debug.Fprintf(os.Stderr, "epoch ret: %v\n", ret)
 	} else if streamTaskArgs.guarantee == exactly_once_intr.AT_LEAST_ONCE {
 		debug.Fprint(os.Stderr, "begin at least once epoch processing\n")
@@ -562,7 +567,20 @@ func trackStreamAndConfigureExactlyOnce(args *StreamTaskArgs,
 	}
 }
 
-func initAfterMarkOrCommit(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
+func resumeAndInit(t *StreamTask, args *StreamTaskArgs, init *bool, paused *bool) {
+	if *paused && t.resumeFunc != nil {
+		t.resumeFunc(t)
+		*paused = false
+	}
+	if !*init {
+		args.ectx.StartWarmup()
+		if t.initFunc != nil {
+			t.initFunc(t)
+		}
+		*init = true
+	}
+}
+
 func initAfterMarkOrCommit(t *StreamTask, args *StreamTaskArgs,
 	tracker exactly_once_intr.TopicSubstreamTracker, init *bool, paused *bool,
 ) error {
@@ -575,17 +593,7 @@ func initAfterMarkOrCommit(t *StreamTask, args *StreamTaskArgs,
 			return fmt.Errorf("track topic partition failed: %v\n", err)
 		}
 	}
-	if *paused && t.resumeFunc != nil {
-		t.resumeFunc(t)
-		*paused = false
-	}
-	if !*init {
-		args.ectx.StartWarmup()
-		if t.initFunc != nil {
-			t.initFunc(t)
-		}
-		*init = true
-	}
+	resumeAndInit(t, args, init, paused)
 	return nil
 }
 
