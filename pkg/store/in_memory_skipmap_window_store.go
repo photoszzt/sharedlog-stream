@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/optional"
@@ -401,6 +402,8 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) WaitForAllSnapshot() error {
 
 // not thread-safe
 func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot(tpLogoff []commtypes.TpLogOff, chkptMeta []commtypes.ChkptMetaData) {
+	debug.Assert(s.bgErrG != nil, "bgErr should not be nil")
+	debug.Assert(s.snapshotCallback != nil, "snapshotCallback should not be nil")
 	l := 0
 	if s.retainDuplicates {
 		l = s.storeWithDup.Len()
