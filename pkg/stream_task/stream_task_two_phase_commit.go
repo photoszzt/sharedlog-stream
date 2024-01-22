@@ -80,8 +80,8 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 	if err != nil {
 		return nil, nil, err
 	}
-	trackParFunc := func(ctx context.Context, topicName string, substreamId uint8) error {
-		return tm.AddTopicSubstream(ctx, topicName, substreamId)
+	trackParFunc := func(topicName string, substreamId uint8) error {
+		return tm.AddTopicSubstream(topicName, substreamId)
 	}
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
 		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, streamTaskArgs.ectx.CurEpoch())
@@ -207,7 +207,7 @@ func startNewTransaction(ctx context.Context, t *StreamTask,
 ) error {
 	if !*hasProcessData && (!*init || *paused) {
 		// debug.Fprintf(os.Stderr, "fixedOutParNum: %d\n", args.fixedOutParNum)
-		err := initAfterMarkOrCommit(ctx, t, args, tm, init, paused)
+		err := initAfterMarkOrCommit(t, args, tm, init, paused)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[ERROR] initAfterMarkOrCommit failed: %v\n", err)
 			return err
@@ -250,7 +250,7 @@ func commitTransaction(ctx context.Context,
 
 	offsetBeg := stats.TimerBegin()
 	for _, src := range args.ectx.Consumers() {
-		if err := tm.AddTopicTrackConsumedSeqs(ctx, src.TopicName(), args.ectx.SubstreamNum()); err != nil {
+		if err := tm.AddTopicTrackConsumedSeqs(src.TopicName(), args.ectx.SubstreamNum()); err != nil {
 			return common.GenErrFnOutput(err)
 		}
 	}

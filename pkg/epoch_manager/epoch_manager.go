@@ -130,7 +130,7 @@ func (em *EpochManager) SyncToRecentNoRead(ctx context.Context) (uint64, error) 
 	return off, nil
 }
 
-func (em *EpochManager) AddTopicSubstream(ctx context.Context,
+func (em *EpochManager) AddTopicSubstream(
 	topic string, substreamNum uint8,
 ) error {
 	parSet, _ := em.currentTopicSubstream.LoadOrStore(topic, skipset.NewUint32())

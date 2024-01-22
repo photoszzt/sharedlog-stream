@@ -563,13 +563,14 @@ func trackStreamAndConfigureExactlyOnce(args *StreamTaskArgs,
 }
 
 func initAfterMarkOrCommit(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
+func initAfterMarkOrCommit(t *StreamTask, args *StreamTaskArgs,
 	tracker exactly_once_intr.TopicSubstreamTracker, init *bool, paused *bool,
 ) error {
 	if args.fixedOutParNum != -1 {
 		sinks := args.ectx.Producers()
 		debug.Assert(len(sinks) == 1, "fixed out param is only usable when there's only one output stream")
 		// debug.Fprintf(os.Stderr, "%s tracking substream %d\n", sinks[0].TopicName(), args.fixedOutParNum)
-		if err := tracker.AddTopicSubstream(ctx, sinks[0].TopicName(), uint8(args.fixedOutParNum)); err != nil {
+		if err := tracker.AddTopicSubstream(sinks[0].TopicName(), uint8(args.fixedOutParNum)); err != nil {
 			debug.Fprintf(os.Stderr, "[ERROR] track topic partition failed: %v\n", err)
 			return fmt.Errorf("track topic partition failed: %v\n", err)
 		}

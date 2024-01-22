@@ -11,7 +11,6 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/env_config"
 	"sharedlog-stream/pkg/epoch_manager"
-	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/stats"
@@ -154,12 +153,11 @@ func SetupManagersForEpoch(ctx context.Context,
 	fmt.Fprintf(os.Stderr, "[%d] %s down restore, epoch: %d ts: %d\n",
 		args.ectx.SubstreamNum(), args.ectx.FuncName(), args.ectx.CurEpoch(), time.Now().UnixMilli())
 	setLastMarkSeq(lastMark, args)
-	trackParFunc := exactly_once_intr.TrackProdSubStreamFunc(
-		func(ctx context.Context,
-			topicName string, substreamId uint8,
-		) error {
-			return em.AddTopicSubstream(ctx, topicName, substreamId)
-		})
+	trackParFunc := func(
+		topicName string, substreamId uint8,
+	) error {
+		return em.AddTopicSubstream(topicName, substreamId)
+	}
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
 		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, args.ectx.CurEpoch())
 	}
@@ -320,7 +318,7 @@ func processInEpoch(
 
 		// init
 		if !hasProcessData && (!init || paused) {
-			err := initAfterMarkOrCommit(ctx, t, args, em, &init, &paused)
+			err := initAfterMarkOrCommit(t, args, em, &init, &paused)
 			if err != nil {
 				return common.GenErrFnOutput(fmt.Errorf("initAfterMarkOrCommit: %v", err))
 			}

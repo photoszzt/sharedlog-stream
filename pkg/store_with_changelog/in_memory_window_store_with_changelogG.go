@@ -107,7 +107,7 @@ func (st *InMemoryWindowStoreWithChangelogG[K, V]) Put(ctx context.Context,
 	}
 	msgSer, ok := msgSerOp.Take()
 	if ok {
-		err = st.trackFunc(ctx, st.changelogManager.TopicName(), st.parNum)
+		err = st.trackFunc(st.changelogManager.TopicName(), st.parNum)
 		if err != nil {
 			return err
 		}
