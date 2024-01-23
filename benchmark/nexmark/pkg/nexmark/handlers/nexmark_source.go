@@ -373,14 +373,6 @@ func (h *nexmarkSourceHandler) eventGeneration(
 					if err != nil {
 						return common.GenErrFnOutput(err)
 					}
-				}
-				for _, par := range procArgs.parNumArr {
-					ret_err := h.genEndMark(startTime, par)
-					if ret_err != nil {
-						return ret_err
-					}
-				}
-				if gua == exactly_once_intr.ALIGN_CHKPT {
 					for {
 						got, err := h.rcm.GetChkMngrEnded(ctx)
 						if err != nil {
@@ -391,6 +383,12 @@ func (h *nexmarkSourceHandler) eventGeneration(
 						}
 					}
 					fmt.Fprintf(os.Stderr, "[%v] chkmngr has terminated\n", inputConfig.ParNum)
+				}
+				for _, par := range procArgs.parNumArr {
+					ret_err := h.genEndMark(startTime, par)
+					if ret_err != nil {
+						return ret_err
+					}
 				}
 			}
 			break

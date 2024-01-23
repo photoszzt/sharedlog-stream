@@ -204,7 +204,7 @@ func checkForTimeout(
 
 func pausedFlushMark(
 	ctx context.Context, meta *epochProcessMeta,
-	snapshotTime []int64, epochMarkTime []int64, snapshotTimer *time.Time,
+	snapshotTime *[]int64, epochMarkTime *[]int64, snapshotTimer *time.Time,
 	paused *bool,
 ) (bool, *common.FnOutput) {
 	markBegin := time.Now()
@@ -232,12 +232,12 @@ func pausedFlushMark(
 		snStart := time.Now()
 		createSnapshot(meta.args, []commtypes.TpLogOff{{LogOff: logOff}})
 		elapsed := time.Since(snStart)
-		snapshotTime = append(snapshotTime, elapsed.Microseconds())
+		*snapshotTime = append(*snapshotTime, elapsed.Microseconds())
 		*snapshotTimer = time.Now()
 	}
 	markElapsed := time.Since(markBegin)
 	// mPartElapsed := time.Since(mPartBeg)
-	epochMarkTime = append(epochMarkTime, markElapsed.Microseconds())
+	*epochMarkTime = append(*epochMarkTime, markElapsed.Microseconds())
 	meta.t.flushStageTime.AddSample(flushTime)
 	// markPartUs.AddSample(mPartElapsed.Microseconds())
 	if f > 0 {
@@ -296,7 +296,7 @@ func processInEpoch(
 		shouldMarkByTime := meta.args.commitEvery != 0 && timeSinceLastMark >= meta.args.commitEvery
 		if shouldMarkByTime && hasProcessData {
 			// execIntrMs.AddSample(timeSinceLastMark.Milliseconds())
-			shouldExit, fn_out := pausedFlushMark(ctx, meta, snapshotTime, epochMarkTime, &snapshotTimer, &paused)
+			shouldExit, fn_out := pausedFlushMark(ctx, meta, &snapshotTime, &epochMarkTime, &snapshotTimer, &paused)
 			if fn_out != nil {
 				return fn_out
 			}

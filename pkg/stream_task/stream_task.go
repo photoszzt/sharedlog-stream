@@ -97,6 +97,8 @@ func ExecuteApp(ctx context.Context,
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}
+		prodId := meta.tm.GetProducerId()
+		fmt.Fprintf(os.Stderr, "[%d] prodId: %s\n", meta.args.ectx.SubstreamNum(), prodId.String())
 		debug.Fprint(os.Stderr, "begin transaction processing\n")
 		ret = processWithTransaction(ctx, &meta)
 		debug.Fprintf(os.Stderr, "2pc ret: %v\n", ret)
@@ -110,6 +112,8 @@ func ExecuteApp(ctx context.Context,
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}
+		prodId := meta.em.GetProducerId()
+		fmt.Fprintf(os.Stderr, "[%d] prodId: %s\n", meta.args.ectx.SubstreamNum(), prodId.String())
 		debug.Fprint(os.Stderr, "begin epoch processing\n")
 		ret = processInEpoch(ctx, &meta)
 		debug.Fprintf(os.Stderr, "epoch ret: %v\n", ret)
@@ -531,7 +535,9 @@ func setOffsetOnStream(offsetMap map[string]uint64,
 	}
 }
 
-func prodConsumerExactlyOnce(args *StreamTaskArgs) {
+func prodConsumerExactlyOnce(args *StreamTaskArgs,
+	rem exactly_once_intr.ReadOnlyExactlyOnceManager,
+) {
 	debug.Assert(len(args.ectx.Consumers()) >= 1, "Srcs should be filled")
 	debug.Assert(args.env != nil, "env should be filled")
 	debug.Assert(args.ectx != nil, "program args should be filled")
@@ -541,7 +547,7 @@ func prodConsumerExactlyOnce(args *StreamTaskArgs) {
 		}
 	}
 	for _, sink := range args.ectx.Producers() {
-		sink.ConfigExactlyOnce(nil, args.guarantee)
+		sink.ConfigExactlyOnce(rem, args.guarantee)
 	}
 }
 

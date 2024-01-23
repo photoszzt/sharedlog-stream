@@ -258,9 +258,10 @@ func (em *EpochManager) Init(ctx context.Context) (*commtypes.EpochMarker, *comm
 	meta := commtypes.EpochMarker{
 		Mark: commtypes.FENCE,
 	}
+	elHash := em.epochLog.TopicNameHash()
 	tags := []uint64{
-		sharedlog_stream.NameHashWithPartition(em.epochLog.TopicNameHash(), 0),
-		txn_data.FenceTag(em.epochLog.TopicNameHash(), 0),
+		sharedlog_stream.NameHashWithPartition(elHash, 0),
+		txn_data.FenceTag(elHash, 0),
 	}
 	_, err = em.appendToEpochLog(ctx, meta, tags, nil)
 	if err != nil {

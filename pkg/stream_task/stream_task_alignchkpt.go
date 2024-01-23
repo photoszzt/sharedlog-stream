@@ -11,6 +11,8 @@ import (
 	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
+
+	"cs.utexas.edu/zjia/faas/types"
 )
 
 // when restoring the checkpoint, it's reading from
@@ -89,15 +91,40 @@ func SetWinStoreChkpt[K, V any](
 		})
 }
 
+type ChkptMngr struct {
+	prodId commtypes.ProducerId
+	rcm    checkpt.RedisChkptManager
+}
+
+func NewChkptMngr(ctx context.Context, env types.Environment) (*ChkptMngr, error) {
+	var err error
+	ckptm := ChkptMngr{
+		prodId: commtypes.NewProducerId(),
+	}
+	ckptm.prodId.InitTaskId(env)
+	ckptm.prodId.TaskEpoch = 1
+	ckptm.rcm, err = checkpt.NewRedisChkptManager(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &ckptm, nil
+}
+
+func (em *ChkptMngr) GetCurrentEpoch() uint16             { return em.prodId.TaskEpoch }
+func (em *ChkptMngr) GetCurrentTaskId() uint64            { return em.prodId.TaskId }
+func (em *ChkptMngr) GetProducerId() commtypes.ProducerId { return em.prodId }
+
 func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.FnOutput {
 	init := false
 	paused := false
 	var finalOutTpNames []string
-	prodConsumerExactlyOnce(args)
-	rcm, err := checkpt.NewRedisChkptManager(ctx)
+	chkptMngr, err := NewChkptMngr(ctx, args.env)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	prodId := chkptMngr.GetProducerId()
+	fmt.Fprintf(os.Stderr, "[%d] prodId: %s\n", args.ectx.SubstreamNum(), prodId.String())
+	prodConsumerExactlyOnce(args, chkptMngr)
 	debug.Fprintf(os.Stderr, "warmup time: %v, flush every: %v, waitEndMark: %v\n",
 		args.warmup, args.flushEvery, args.waitEndMark)
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
@@ -133,7 +160,7 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 				debug.Fprintf(os.Stderr, "Get chkpt mark with logseq %x and %x\n",
 					ctrlRawMsgArr[0].LogSeqNum, ctrlRawMsgArr[1].LogSeqNum)
 			}
-			err := checkpoint(ctx, t, args, ctrlRawMsgArr, &rcm, finalOutTpNames)
+			err := checkpoint(ctx, t, args, ctrlRawMsgArr, &chkptMngr.rcm, finalOutTpNames)
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}

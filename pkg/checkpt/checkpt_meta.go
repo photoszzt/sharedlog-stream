@@ -2,6 +2,8 @@ package checkpt
 
 import (
 	"context"
+	"os"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/redis_client"
 	"strconv"
 	"time"
@@ -12,7 +14,7 @@ import (
 const (
 	CHKPT_META_NODE   = 0
 	REQ_CHKMNGR_ENDED = "req_chkmngr_ended"
-	CHKPT_MNGR_ENDED  = "stream_ended"
+	CHKPT_MNGR_ENDED  = "chkmngr_ended"
 )
 
 type RedisChkptManager struct {
@@ -25,7 +27,7 @@ func NewRedisChkptManager(ctx context.Context) (RedisChkptManager, error) {
 	}
 	var err error
 	for {
-		err := rcm.rds[CHKPT_META_NODE].Ping(ctx).Err()
+		err = rcm.rds[CHKPT_META_NODE].Ping(ctx).Err()
 		if err == nil {
 			break
 		}
@@ -98,6 +100,7 @@ func (c *RedisChkptManager) FinishChkpt(ctx context.Context, finalOutParNames []
 }
 
 func (c *RedisChkptManager) ReqChkMngrEnd(ctx context.Context) error {
+	debug.Fprintf(os.Stderr, "set %s to 1\n", REQ_CHKMNGR_ENDED)
 	return c.rds[CHKPT_META_NODE].Set(ctx, REQ_CHKMNGR_ENDED, 1, 0).Err()
 }
 
@@ -106,6 +109,7 @@ func (c *RedisChkptManager) GetReqChkMngrEnd(ctx context.Context) (int, error) {
 }
 
 func (c *RedisChkptManager) SetChkMngrEnded(ctx context.Context) error {
+	debug.Fprintf(os.Stderr, "set %s to 1\n", CHKPT_MNGR_ENDED)
 	return c.rds[CHKPT_META_NODE].Set(ctx, CHKPT_MNGR_ENDED, 1, 0).Err()
 }
 

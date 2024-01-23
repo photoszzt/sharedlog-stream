@@ -230,16 +230,19 @@ L:
 		}
 		if rawMsg.IsControl {
 			return &commtypes.RawMsgAndSeq{
-				Payload:    rawMsg.Payload,
-				PayloadArr: nil,
-				AuxData:    rawMsg.AuxData,
-				MsgSeqNum:  rawMsg.MsgSeqNum,
-				LogSeqNum:  rawMsg.LogSeqNum,
-				IsControl:  true,
-				StartTime:  rawMsg.StartTime,
-				Mark:       rawMsg.Mark,
-				ScaleEpoch: rawMsg.ScaleEpoch,
-				ProdIdx:    rawMsg.ProdIdx,
+				Payload:           rawMsg.Payload,
+				PayloadArr:        nil,
+				AuxData:           rawMsg.AuxData,
+				MsgSeqNum:         rawMsg.MsgSeqNum,
+				LogSeqNum:         rawMsg.LogSeqNum,
+				IsControl:         true,
+				StartTime:         rawMsg.StartTime,
+				Mark:              rawMsg.Mark,
+				ScaleEpoch:        rawMsg.ScaleEpoch,
+				ProdIdx:           rawMsg.ProdIdx,
+				FirstChkptMarkSeq: rawMsg.FirstChkptMarkSeq,
+				UnprocessSeq:      rawMsg.UnprocessSeq,
+				InjTsMs:           rawMsg.InjTsMs,
 			}, nil
 		} else {
 			if rawMsg.IsPayloadArr {
@@ -255,6 +258,7 @@ L:
 					LogSeqNum:  rawMsg.LogSeqNum,
 					IsControl:  false,
 					InjTsMs:    rawMsg.InjTsMs,
+					ProdIdx:    rawMsg.ProdIdx,
 				}, nil
 			} else {
 				return &commtypes.RawMsgAndSeq{
@@ -265,6 +269,7 @@ L:
 					LogSeqNum:  rawMsg.LogSeqNum,
 					IsControl:  false,
 					InjTsMs:    rawMsg.InjTsMs,
+					ProdIdx:    rawMsg.ProdIdx,
 				}, nil
 			}
 		}

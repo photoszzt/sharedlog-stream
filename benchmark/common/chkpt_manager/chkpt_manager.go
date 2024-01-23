@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/checkpt"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
@@ -85,7 +86,6 @@ func (h *ChkptManagerHandler) Chkpt(ctx context.Context, input *common.ChkptMngr
 	var err error
 	guarantee := exactly_once_intr.GuaranteeMth(input.GuaranteeMth)
 
-	fmt.Fprintf(os.Stderr, "")
 	if guarantee == exactly_once_intr.ALIGN_CHKPT {
 		serdeFormat := commtypes.SerdeFormat(input.SerdeFormat)
 		chkptEveryMs := time.Duration(input.ChkptEveryMs) * time.Millisecond
@@ -100,16 +100,20 @@ func (h *ChkptManagerHandler) Chkpt(ctx context.Context, input *common.ChkptMngr
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}
+		// debug.Fprintf(os.Stderr, "waiting for the first checkpt done")
 		err = h.rcm.WaitForChkptFinish(ctx, input.FinalOutputTopicNames, input.FinalNumOutPartitions)
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}
+		// debug.Fprintf(os.Stderr, "first checkpt is done\n")
 		now := time.Now()
 		for {
 			req, err := h.rcm.GetReqChkMngrEnd(ctx)
 			if err != nil {
+				debug.Fprintf(os.Stderr, "GetReqChkMngrEnd err: %v\n", err)
 				return common.GenErrFnOutput(err)
 			}
+			// debug.Fprintf(os.Stderr, "got req_chkmngr_end: %v\n", req)
 			if req == 1 {
 				err = h.rcm.SetChkMngrEnded(ctx)
 				if err != nil {
@@ -119,22 +123,32 @@ func (h *ChkptManagerHandler) Chkpt(ctx context.Context, input *common.ChkptMngr
 			}
 			elapsed := time.Since(now)
 			if elapsed < chkptEveryMs {
-				time.Sleep(chkptEveryMs - elapsed)
+				diff := chkptEveryMs - elapsed
+				// debug.Fprintf(os.Stderr, "about to sleep for %v\n", diff)
+				time.Sleep(diff)
 			}
+			// debug.Fprintf(os.Stderr, "after sleep\n")
 			err = h.rcm.ResetCheckPointCount(ctx, input.FinalOutputTopicNames)
 			if err != nil {
+				debug.Fprintf(os.Stderr, "reset chkpt count err: %v\n", err)
 				return common.GenErrFnOutput(err)
 			}
+			// debug.Fprintf(os.Stderr, "after reset chkpt count\n")
 			err = h.genChkpt(ctx, input)
 			if err != nil {
+				debug.Fprintf(os.Stderr, "gen chkpt err: %v\n", err)
 				return common.GenErrFnOutput(err)
 			}
+			// debug.Fprintf(os.Stderr, "after genChkpt\n")
 			err = h.rcm.WaitForChkptFinish(ctx, input.FinalOutputTopicNames, input.FinalNumOutPartitions)
 			if err != nil {
+				debug.Fprintf(os.Stderr, "wait for chkpt finish err: %v\n", err)
 				return common.GenErrFnOutput(err)
 			}
+			// debug.Fprintf(os.Stderr, "after wait for chkpt finish\n")
 			now = time.Now()
 		}
 	}
-	return nil
+	debug.Fprintf(os.Stderr, "chkptmngr exits with success\n")
+	return &common.FnOutput{Success: true}
 }
