@@ -87,13 +87,18 @@ func ExecuteApp(ctx context.Context,
 		}
 	}
 	if streamTaskArgs.guarantee == exactly_once_intr.TWO_PHASE_COMMIT {
-		tm, cmm, err := setupManagersFor2pc(ctx, t, streamTaskArgs,
+		meta := txnProcessMeta{
+			t:    t,
+			args: streamTaskArgs,
+		}
+		var err error
+		meta.tm, meta.cmm, err = setupManagersFor2pc(ctx, t, streamTaskArgs,
 			&rs, setupSnapshotCallback)
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}
 		debug.Fprint(os.Stderr, "begin transaction processing\n")
-		ret = processWithTransaction(ctx, t, tm, cmm, streamTaskArgs)
+		ret = processWithTransaction(ctx, &meta)
 		debug.Fprintf(os.Stderr, "2pc ret: %v\n", ret)
 	} else if streamTaskArgs.guarantee == exactly_once_intr.EPOCH_MARK {
 		meta := epochProcessMeta{
