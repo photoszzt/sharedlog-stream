@@ -286,7 +286,7 @@ func Invoke(invokeParam InvokeFuncParam,
 
 	timeout := time.Duration(baseQueryInput.Duration+120) * time.Second
 	if baseQueryInput.Duration == 0 {
-		timeout = time.Duration(900) * time.Second
+		timeout = time.Duration(240) * time.Second
 	}
 	client := &http.Client{
 		Transport: &http.Transport{
