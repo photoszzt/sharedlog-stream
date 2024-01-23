@@ -6,6 +6,7 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/proc_interface"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/stats"
@@ -79,48 +80,63 @@ func PrepareTaskWithJoin[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR any]
 	}
 
 	taskBuilder := stream_task.NewStreamTaskBuilder().
-		AppProcessFunc(func(ctx context.Context, task *stream_task.StreamTask,
-			argsTmp processor.ExecutionContext,
-		) (*common.FnOutput, []*commtypes.RawMsgAndSeq) {
-			if leftManager.GotEndMark() && rightManager.GotEndMark() {
-				debug.Fprintf(os.Stderr, "join proc got end mark\n")
-				return nil, []*commtypes.RawMsgAndSeq{leftManager.ctrlMsg, rightManager.ctrlMsg}
-			} else if leftManager.GotScaleFence() && rightManager.GotScaleFence() {
-				debug.Fprintf(os.Stderr, "join proc got scale fence\n")
-				return nil, []*commtypes.RawMsgAndSeq{leftManager.ctrlMsg, rightManager.ctrlMsg}
-			} else if leftManager.GotChkptMark() && rightManager.GotChkptMark() {
-				debug.Fprintf(os.Stderr, "join proc got all checkpt mark\n")
-				return nil, []*commtypes.RawMsgAndSeq{leftManager.ctrlMsg, rightManager.ctrlMsg}
-			}
-			return handleJoinErrReturn(), nil
-		}).
-		InitFunc(func(task *stream_task.StreamTask) {
-			// debug.Fprintf(os.Stderr, "init ts=%d launch join proc loops\n", time.Now().UnixMilli())
-			LaunchJoinProcLoop(lctx, leftManager, task, joinProcLeft, &wg, leftMsgPair)
-			LaunchJoinProcLoop(rctx, rightManager, task, joinProcRight, &wg, rightMsgPair)
-			// debug.Fprintf(os.Stderr, "init ts=%d done invoke join proc loops\n", time.Now().UnixMilli())
-		}).
-		PauseFunc(func() *common.FnOutput {
-			// debug.Fprintf(os.Stderr, "in pause func\n")
-			if ret := handleJoinErrReturn(); ret != nil {
-				return ret
-			}
-			pStart := stats.TimerBegin()
-			leftManager.LockRunlock()
-			rightManager.LockRunlock()
-			elapsed := stats.Elapsed(pStart)
-			pauseTime.AddSample(elapsed.Microseconds())
-			return nil
-		}).
-		ResumeFunc(func(task *stream_task.StreamTask) {
-			// debug.Fprintf(os.Stderr, "in resume func\n")
-			rStart := stats.TimerBegin()
-			leftManager.UnlockRunlock()
-			rightManager.UnlockRunlock()
-			elapsed := stats.Elapsed(rStart)
-			resumeTime.AddSample(elapsed.Microseconds())
-			// debug.Fprintf(os.Stderr, "done resume func\n")
-		})
+		AppProcessFunc(
+			func(ctx context.Context, task *stream_task.StreamTask,
+				argsTmp processor.ExecutionContext,
+			) (*common.FnOutput, []*commtypes.RawMsgAndSeq) {
+				if leftManager.GotEndMark() && rightManager.GotEndMark() {
+					debug.Fprintf(os.Stderr, "join proc got end mark\n")
+					return nil, []*commtypes.RawMsgAndSeq{leftManager.ctrlMsg, rightManager.ctrlMsg}
+				} else if leftManager.GotScaleFence() && rightManager.GotScaleFence() {
+					debug.Fprintf(os.Stderr, "join proc got scale fence\n")
+					return nil, []*commtypes.RawMsgAndSeq{leftManager.ctrlMsg, rightManager.ctrlMsg}
+				} else if leftManager.GotChkptMark() && rightManager.GotChkptMark() {
+					debug.Fprintf(os.Stderr, "join proc got all checkpt mark\n")
+					return nil, []*commtypes.RawMsgAndSeq{leftManager.ctrlMsg, rightManager.ctrlMsg}
+				}
+				return handleJoinErrReturn(), nil
+			}).
+		InitFunc(
+			func(task *stream_task.StreamTask) {
+				// debug.Fprintf(os.Stderr, "init ts=%d launch join proc loops\n", time.Now().UnixMilli())
+				LaunchJoinProcLoop(lctx, leftManager, task, joinProcLeft, &wg, leftMsgPair)
+				LaunchJoinProcLoop(rctx, rightManager, task, joinProcRight, &wg, rightMsgPair)
+				// debug.Fprintf(os.Stderr, "init ts=%d done invoke join proc loops\n", time.Now().UnixMilli())
+			}).
+		PauseFunc(
+			func(gua exactly_once_intr.GuaranteeMth) *common.FnOutput {
+				// debug.Fprintf(os.Stderr, "in pause func\n")
+				if ret := handleJoinErrReturn(); ret != nil {
+					return ret
+				}
+				pStart := stats.TimerBegin()
+				if gua != exactly_once_intr.ALIGN_CHKPT {
+					leftManager.LockRunlock()
+					rightManager.LockRunlock()
+				}
+				elapsed := stats.Elapsed(pStart)
+				pauseTime.AddSample(elapsed.Microseconds())
+				return nil
+			}).
+		ResumeFunc(
+			func(task *stream_task.StreamTask, gua exactly_once_intr.GuaranteeMth) {
+				// debug.Fprintf(os.Stderr, "in resume func\n")
+				rStart := stats.TimerBegin()
+				if gua == exactly_once_intr.ALIGN_CHKPT {
+					leftManager.gotChkptMark.Store(false)
+					rightManager.gotChkptMark.Store(false)
+					leftManager.ctrlMsg = nil
+					rightManager.ctrlMsg = nil
+					LaunchJoinProcLoop(lctx, leftManager, task, joinProcLeft, &wg, leftMsgPair)
+					LaunchJoinProcLoop(rctx, rightManager, task, joinProcRight, &wg, rightMsgPair)
+				} else {
+					leftManager.UnlockRunlock()
+					rightManager.UnlockRunlock()
+				}
+				elapsed := stats.Elapsed(rStart)
+				resumeTime.AddSample(elapsed.Microseconds())
+				// debug.Fprintf(os.Stderr, "done resume func\n")
+			})
 	if isFinalStage {
 		return taskBuilder.MarkFinalStage().Build(), procArgs
 	} else {

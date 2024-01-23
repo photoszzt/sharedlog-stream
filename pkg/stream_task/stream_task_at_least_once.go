@@ -114,7 +114,7 @@ func pauseTrackFlush(ctx context.Context, t *StreamTask, args *StreamTaskArgs, c
 	alreadyPaused := false
 	if hasUncommitted {
 		if t.pauseFunc != nil {
-			if ret := t.pauseFunc(); ret != nil {
+			if ret := t.pauseFunc(args.guarantee); ret != nil {
 				return ret
 			}
 		}
@@ -126,7 +126,7 @@ func pauseTrackFlush(ctx context.Context, t *StreamTask, args *StreamTaskArgs, c
 		alreadyPaused = true
 	}
 	if !alreadyPaused && t.pauseFunc != nil {
-		if ret := t.pauseFunc(); ret != nil {
+		if ret := t.pauseFunc(args.guarantee); ret != nil {
 			return ret
 		}
 	}

@@ -2,6 +2,7 @@ package stream_task
 
 import (
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/stats"
 )
 
@@ -9,12 +10,17 @@ type StreamTaskBuilder struct {
 	task *StreamTask
 }
 
+type (
+	ResumeFuncType func(task *StreamTask, gua exactly_once_intr.GuaranteeMth)
+	PauseFuncType  func(gua exactly_once_intr.GuaranteeMth) *common.FnOutput
+)
+
 type BuildStreamTask interface {
 	Build() *StreamTask
 	AppProcessFunc(process ProcessFunc) BuildStreamTask
 	InitFunc(i func(task *StreamTask)) BuildStreamTask
-	PauseFunc(p func() *common.FnOutput) BuildStreamTask
-	ResumeFunc(r func(task *StreamTask)) BuildStreamTask
+	PauseFunc(p PauseFuncType) BuildStreamTask
+	ResumeFunc(r ResumeFuncType) BuildStreamTask
 	HandleErrFunc(he func() error) BuildStreamTask
 	MarkFinalStage() BuildStreamTask
 }
@@ -48,18 +54,22 @@ func (b *StreamTaskBuilder) AppProcessFunc(process ProcessFunc) BuildStreamTask 
 func (b *StreamTaskBuilder) Build() *StreamTask {
 	return b.task
 }
-func (b *StreamTaskBuilder) PauseFunc(p func() *common.FnOutput) BuildStreamTask {
+
+func (b *StreamTaskBuilder) PauseFunc(p PauseFuncType) BuildStreamTask {
 	b.task.pauseFunc = p
 	return b
 }
-func (b *StreamTaskBuilder) ResumeFunc(r func(task *StreamTask)) BuildStreamTask {
+
+func (b *StreamTaskBuilder) ResumeFunc(r ResumeFuncType) BuildStreamTask {
 	b.task.resumeFunc = r
 	return b
 }
+
 func (b *StreamTaskBuilder) InitFunc(i func(task *StreamTask)) BuildStreamTask {
 	b.task.initFunc = i
 	return b
 }
+
 func (b *StreamTaskBuilder) HandleErrFunc(he func() error) BuildStreamTask {
 	b.task.HandleErrFunc = he
 	return b

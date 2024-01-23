@@ -209,7 +209,7 @@ func pausedFlushMark(
 ) (bool, *common.FnOutput) {
 	markBegin := time.Now()
 	if meta.t.pauseFunc != nil {
-		if ret := meta.t.pauseFunc(); ret != nil {
+		if ret := meta.t.pauseFunc(meta.args.guarantee); ret != nil {
 			return false, ret
 		}
 		*paused = true
@@ -380,7 +380,7 @@ func finalMark(
 ) *common.FnOutput {
 	markBegin := time.Now()
 	if meta.t.pauseFunc != nil {
-		if ret := meta.t.pauseFunc(); ret != nil {
+		if ret := meta.t.pauseFunc(meta.args.guarantee); ret != nil {
 			return ret
 		}
 	}

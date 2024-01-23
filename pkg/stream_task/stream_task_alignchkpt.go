@@ -90,12 +90,10 @@ func SetWinStoreChkpt[K, V any](
 }
 
 func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.FnOutput {
+	init := false
+	paused := false
 	var finalOutTpNames []string
 	prodConsumerExactlyOnce(args)
-	args.ectx.StartWarmup()
-	if t.initFunc != nil {
-		t.initFunc(t)
-	}
 	rcm, err := checkpt.NewRedisChkptManager(ctx)
 	if err != nil {
 		return common.GenErrFnOutput(err)
@@ -109,6 +107,9 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 	}
 	for {
 		warmupCheck.Check()
+		if !init || paused {
+			resumeAndInit(t, args, &init, &paused)
+		}
 		ret, ctrlRawMsgArr := t.appProcessFunc(ctx, t, args.ectx)
 		if ret != nil {
 			if ret.Success {
@@ -120,9 +121,17 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 			if ret_err := pauseTimedFlushStreams(ctx, t, args); ret_err != nil {
 				return ret_err
 			}
+			paused = true
 			if ctrlRawMsgArr[0].Mark != commtypes.CHKPT_MARK {
 				fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
 				return handleCtrlMsg(ctx, ctrlRawMsgArr, t, args, &warmupCheck)
+			}
+			if len(ctrlRawMsgArr) == 1 {
+				debug.Fprintf(os.Stderr, "Get chkpt mark with logseq %x\n",
+					ctrlRawMsgArr[0].LogSeqNum)
+			} else {
+				debug.Fprintf(os.Stderr, "Get chkpt mark with logseq %x and %x\n",
+					ctrlRawMsgArr[0].LogSeqNum, ctrlRawMsgArr[1].LogSeqNum)
 			}
 			err := checkpoint(ctx, t, args, ctrlRawMsgArr, &rcm, finalOutTpNames)
 			if err != nil {

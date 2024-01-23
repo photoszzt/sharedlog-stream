@@ -21,15 +21,17 @@ type JoinProcManager struct {
 	gotEndMark      atomic.Bool
 	gotScaleFence   atomic.Bool
 	gotChkptMark    atomic.Bool
-	startTimeMs     int64
 }
 
 func NewJoinProcManager() *JoinProcManager {
 	out := make(chan *common.FnOutput, 1)
 	p := &JoinProcManager{
 		out:             out,
+		done:            make(chan struct{}),
 		flushAndCollect: make(chan struct{}),
+		ctrlMsg:         nil,
 	}
+	p.gotChkptMark.Store(false)
 	p.gotEndMark.Store(false)
 	p.gotScaleFence.Store(false)
 	return p
@@ -51,10 +53,6 @@ func (jm *JoinProcManager) GotChkptMark() bool {
 	return jm.gotChkptMark.Load()
 }
 
-func (jm *JoinProcManager) StreamStartTime() int64 {
-	return jm.startTimeMs
-}
-
 func (jm *JoinProcManager) LockRunlock() {
 	jm.runLock.Lock()
 }
@@ -71,7 +69,6 @@ func LaunchJoinProcLoop[KIn, VIn, KOut, VOut any](
 	wg *sync.WaitGroup,
 	msgSerdePair MsgSerdePair[KIn, VIn, KOut, VOut],
 ) {
-	jm.done = make(chan struct{})
 	wg.Add(1)
 	go joinProcLoop(ctx, jm, task, procArgs, wg, msgSerdePair)
 }

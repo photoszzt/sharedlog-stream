@@ -31,8 +31,8 @@ type ProcessFunc func(ctx context.Context, task *StreamTask,
 // and the substreams must have the same number of substreams.
 type StreamTask struct {
 	appProcessFunc ProcessFunc
-	pauseFunc      func() *common.FnOutput
-	resumeFunc     func(task *StreamTask)
+	pauseFunc      PauseFuncType
+	resumeFunc     ResumeFuncType
 	initFunc       func(task *StreamTask)
 	HandleErrFunc  func() error
 
@@ -302,7 +302,7 @@ func pauseTimedFlushStreams(
 	args *StreamTaskArgs,
 ) *common.FnOutput {
 	if t.pauseFunc != nil {
-		if ret := t.pauseFunc(); ret != nil {
+		if ret := t.pauseFunc(args.guarantee); ret != nil {
 			return ret
 		}
 	}
@@ -574,7 +574,7 @@ func trackStreamAndConfigureExactlyOnce(args *StreamTaskArgs,
 
 func resumeAndInit(t *StreamTask, args *StreamTaskArgs, init *bool, paused *bool) {
 	if *paused && t.resumeFunc != nil {
-		t.resumeFunc(t)
+		t.resumeFunc(t, args.guarantee)
 		*paused = false
 	}
 	if !*init {
