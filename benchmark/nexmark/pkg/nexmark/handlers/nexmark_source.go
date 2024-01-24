@@ -327,6 +327,7 @@ func (h *nexmarkSourceHandler) eventGeneration(
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "gen first chkpt failed: %v\n", err)
 				}
+				fmt.Fprintf(os.Stderr, "gen first chkpt\n")
 				break
 			}
 			fn_out = h.process(dctx, procArgs)

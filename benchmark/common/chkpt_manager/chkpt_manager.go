@@ -100,17 +100,20 @@ func (h *ChkptManagerHandler) Chkpt(ctx context.Context, input *common.ChkptMngr
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}
-		// debug.Fprintf(os.Stderr, "waiting for the first checkpt done")
-		err = h.rcm.WaitForChkptFinish(ctx, input.FinalOutputTopicNames, input.FinalNumOutPartitions)
+		debug.Fprintf(os.Stderr, "waiting for the first checkpt done\n")
+		should_exit, err := h.rcm.WaitForChkptFinish(ctx, input.FinalOutputTopicNames, input.FinalNumOutPartitions)
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}
-		// debug.Fprintf(os.Stderr, "first checkpt is done\n")
+		if should_exit {
+			return &common.FnOutput{Success: true}
+		}
+		debug.Fprintf(os.Stderr, "first checkpt is done\n")
 		now := time.Now()
 		for {
 			req, err := h.rcm.GetReqChkMngrEnd(ctx)
 			if err != nil {
-				debug.Fprintf(os.Stderr, "GetReqChkMngrEnd err: %v\n", err)
+				debug.Fprintf(os.Stderr, "%v\n", err)
 				return common.GenErrFnOutput(err)
 			}
 			// debug.Fprintf(os.Stderr, "got req_chkmngr_end: %v\n", req)
@@ -140,10 +143,13 @@ func (h *ChkptManagerHandler) Chkpt(ctx context.Context, input *common.ChkptMngr
 				return common.GenErrFnOutput(err)
 			}
 			// debug.Fprintf(os.Stderr, "after genChkpt\n")
-			err = h.rcm.WaitForChkptFinish(ctx, input.FinalOutputTopicNames, input.FinalNumOutPartitions)
+			should_exit, err := h.rcm.WaitForChkptFinish(ctx, input.FinalOutputTopicNames, input.FinalNumOutPartitions)
 			if err != nil {
 				debug.Fprintf(os.Stderr, "wait for chkpt finish err: %v\n", err)
 				return common.GenErrFnOutput(err)
+			}
+			if should_exit {
+				break
 			}
 			// debug.Fprintf(os.Stderr, "after wait for chkpt finish\n")
 			now = time.Now()

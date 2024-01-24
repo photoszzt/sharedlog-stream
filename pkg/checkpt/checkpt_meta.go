@@ -2,6 +2,7 @@ package checkpt
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/redis_client"
@@ -35,11 +36,11 @@ func NewRedisChkptManager(ctx context.Context) (RedisChkptManager, error) {
 	}
 	err = rcm.rds[CHKPT_META_NODE].Set(ctx, REQ_CHKMNGR_ENDED, 0, 0).Err()
 	if err != nil {
-		return RedisChkptManager{}, err
+		return RedisChkptManager{}, fmt.Errorf("redis set REQ_CHKMNGR_ENDED: %v", err)
 	}
 	err = rcm.rds[CHKPT_META_NODE].Set(ctx, CHKPT_MNGR_ENDED, 0, 0).Err()
 	if err != nil {
-		return RedisChkptManager{}, err
+		return RedisChkptManager{}, fmt.Errorf("redis set CHKPT_MNGR_ENDED: %v", err)
 	}
 	return rcm, nil
 }
@@ -51,6 +52,9 @@ func (c *RedisChkptManager) ResetCheckPointCount(ctx context.Context, finalOutpu
 		}
 		return nil
 	})
+	if err != nil {
+		err = fmt.Errorf("ResetCheckPointCount: %v", err)
+	}
 	return err
 }
 
@@ -58,7 +62,7 @@ func (c *RedisChkptManager) WaitForChkptFinish(
 	ctx context.Context,
 	finalOutputTopicNames []string,
 	finalNumOutPartition []uint8,
-) error {
+) (bool, error) {
 	for {
 		allFinished := true
 		cmds, err := c.rds[CHKPT_META_NODE].Pipelined(ctx, func(pipe redis.Pipeliner) error {
@@ -68,14 +72,17 @@ func (c *RedisChkptManager) WaitForChkptFinish(
 			return nil
 		})
 		if err != nil {
-			return err
+			if err == redis.Nil {
+				continue
+			}
+			return false, fmt.Errorf("redis pipelined get: %v", err)
 		}
 		for idx, cmd := range cmds {
 			parNum := finalNumOutPartition[idx]
 			gotParStr := cmd.(*redis.StringCmd).Val()
 			gotPar, err := strconv.Atoi(gotParStr)
 			if err != nil {
-				return err
+				return false, err
 			}
 			if gotPar != int(parNum) {
 				allFinished = false
@@ -83,7 +90,18 @@ func (c *RedisChkptManager) WaitForChkptFinish(
 			}
 		}
 		if allFinished {
-			return nil
+			return false, nil
+		}
+		req, err := c.GetReqChkMngrEnd(ctx)
+		if err != nil {
+			return false, err
+		}
+		if req == 1 {
+			err = c.SetChkMngrEnded(ctx)
+			if err != nil {
+				return false, err
+			}
+			return true, nil
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
@@ -96,23 +114,42 @@ func (c *RedisChkptManager) FinishChkpt(ctx context.Context, finalOutParNames []
 		}
 		return nil
 	})
+	if err != nil {
+		err = fmt.Errorf("FinishChkpt: %v", err)
+	}
 	return err
 }
 
 func (c *RedisChkptManager) ReqChkMngrEnd(ctx context.Context) error {
 	debug.Fprintf(os.Stderr, "set %s to 1\n", REQ_CHKMNGR_ENDED)
-	return c.rds[CHKPT_META_NODE].Set(ctx, REQ_CHKMNGR_ENDED, 1, 0).Err()
+	err := c.rds[CHKPT_META_NODE].Set(ctx, REQ_CHKMNGR_ENDED, 1, 0).Err()
+	if err != nil {
+		err = fmt.Errorf("ReqChkMngrEnd: %v", err)
+	}
+	return err
 }
 
 func (c *RedisChkptManager) GetReqChkMngrEnd(ctx context.Context) (int, error) {
-	return c.rds[CHKPT_META_NODE].Get(ctx, REQ_CHKMNGR_ENDED).Int()
+	ret, err := c.rds[CHKPT_META_NODE].Get(ctx, REQ_CHKMNGR_ENDED).Int()
+	if err != nil {
+		err = fmt.Errorf("GetReqChkMngrEnd: %v", err)
+	}
+	return ret, err
 }
 
 func (c *RedisChkptManager) SetChkMngrEnded(ctx context.Context) error {
 	debug.Fprintf(os.Stderr, "set %s to 1\n", CHKPT_MNGR_ENDED)
-	return c.rds[CHKPT_META_NODE].Set(ctx, CHKPT_MNGR_ENDED, 1, 0).Err()
+	err := c.rds[CHKPT_META_NODE].Set(ctx, CHKPT_MNGR_ENDED, 1, 0).Err()
+	if err != nil {
+		err = fmt.Errorf("SetChkMngrEnded: %v", err)
+	}
+	return err
 }
 
 func (c *RedisChkptManager) GetChkMngrEnded(ctx context.Context) (int, error) {
-	return c.rds[CHKPT_META_NODE].Get(ctx, CHKPT_MNGR_ENDED).Int()
+	ret, err := c.rds[CHKPT_META_NODE].Get(ctx, CHKPT_MNGR_ENDED).Int()
+	if err != nil {
+		err = fmt.Errorf("GetChkMngrEnded: %v", err)
+	}
+	return ret, err
 }
