@@ -22,27 +22,31 @@ type RedisChkptManager struct {
 	rds []*redis.Client
 }
 
-func NewRedisChkptManager(ctx context.Context) (RedisChkptManager, error) {
+func NewRedisChkptManager(ctx context.Context) RedisChkptManager {
 	rcm := RedisChkptManager{
 		rds: redis_client.GetRedisClients(),
 	}
+	return rcm
+}
+
+func (c *RedisChkptManager) InitReqRes(ctx context.Context) error {
 	var err error
 	for {
-		err = rcm.rds[CHKPT_META_NODE].Ping(ctx).Err()
+		err = c.rds[CHKPT_META_NODE].Ping(ctx).Err()
 		if err == nil {
 			break
 		}
 		time.Sleep(time.Duration(100) * time.Millisecond)
 	}
-	err = rcm.rds[CHKPT_META_NODE].Set(ctx, REQ_CHKMNGR_ENDED, 0, 0).Err()
+	err = c.rds[CHKPT_META_NODE].Set(ctx, REQ_CHKMNGR_ENDED, 0, 0).Err()
 	if err != nil {
-		return RedisChkptManager{}, fmt.Errorf("redis set REQ_CHKMNGR_ENDED: %v", err)
+		return fmt.Errorf("redis set REQ_CHKMNGR_ENDED: %v", err)
 	}
-	err = rcm.rds[CHKPT_META_NODE].Set(ctx, CHKPT_MNGR_ENDED, 0, 0).Err()
+	err = c.rds[CHKPT_META_NODE].Set(ctx, CHKPT_MNGR_ENDED, 0, 0).Err()
 	if err != nil {
-		return RedisChkptManager{}, fmt.Errorf("redis set CHKPT_MNGR_ENDED: %v", err)
+		return fmt.Errorf("redis set CHKPT_MNGR_ENDED: %v", err)
 	}
-	return rcm, nil
+	return nil
 }
 
 func (c *RedisChkptManager) ResetCheckPointCount(ctx context.Context, finalOutputTopicNames []string) error {

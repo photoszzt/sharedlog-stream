@@ -19,9 +19,9 @@ import (
 // the sequence number of the checkpoint marker.
 // the source stream's record between the checkpoint marker
 // and its current tail should be ignored.
-//
+//  A_in                A_out/B_in               B_out
 // ┌───┬────┐  ┌───┐  ┌────┬────────┐  ┌───┐  ┌───┬────────┐
-// │   │    ├──┤ A ├──┤    │disgard ├──┤ B ├──┤   │disgard │
+// │|||│    ├──┤ A ├──┤||||│disgard ├──┤ B ├──┤|||│disgard │
 // └───┴────┘  └───┘  └────┴────────┘  └───┘  └───┴────────┘
 //  marker              marker                   marker
 
@@ -96,18 +96,14 @@ type ChkptMngr struct {
 	rcm    checkpt.RedisChkptManager
 }
 
-func NewChkptMngr(ctx context.Context, env types.Environment) (*ChkptMngr, error) {
-	var err error
+func NewChkptMngr(ctx context.Context, env types.Environment) *ChkptMngr {
 	ckptm := ChkptMngr{
 		prodId: commtypes.NewProducerId(),
 	}
 	ckptm.prodId.InitTaskId(env)
 	ckptm.prodId.TaskEpoch = 1
-	ckptm.rcm, err = checkpt.NewRedisChkptManager(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return &ckptm, nil
+	ckptm.rcm = checkpt.NewRedisChkptManager(ctx)
+	return &ckptm
 }
 
 func (em *ChkptMngr) GetCurrentEpoch() uint16             { return em.prodId.TaskEpoch }
@@ -118,10 +114,7 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 	init := false
 	paused := false
 	var finalOutTpNames []string
-	chkptMngr, err := NewChkptMngr(ctx, args.env)
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
+	chkptMngr := NewChkptMngr(ctx, args.env)
 	prodId := chkptMngr.GetProducerId()
 	fmt.Fprintf(os.Stderr, "[%d] prodId: %s\n", args.ectx.SubstreamNum(), prodId.String())
 	prodConsumerExactlyOnce(args, chkptMngr)

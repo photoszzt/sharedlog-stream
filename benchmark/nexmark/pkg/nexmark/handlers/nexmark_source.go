@@ -51,10 +51,7 @@ func (h *nexmarkSourceHandler) Call(ctx context.Context, input []byte) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
-	h.rcm, err = checkpt.NewRedisChkptManager(ctx)
-	if err != nil {
-		return nil, err
-	}
+	h.rcm = checkpt.NewRedisChkptManager(ctx)
 	output := h.eventGeneration(ctx, inputConfig)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {

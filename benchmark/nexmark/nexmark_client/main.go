@@ -1,15 +1,15 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
-	"sync"
-	"time"
-
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
+	"sync"
+	"time"
 
 	"github.com/rs/zerolog/log"
 )
@@ -125,7 +125,8 @@ func main() {
 			Local:          FLAGS_local,
 			WaitForEndMark: FLAGS_waitForEndMark,
 		}
-		err := common.Invoke(invokeFuncParam, baseQueryInput, common.InvokeSrcFunc(invokeSourceFunc_))
+		ctx := context.Background()
+		err := common.Invoke(ctx, invokeFuncParam, baseQueryInput, common.InvokeSrcFunc(invokeSourceFunc_))
 		if err != nil {
 			panic(err)
 		}

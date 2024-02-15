@@ -36,10 +36,7 @@ func (h *ChkptManagerHandler) Call(ctx context.Context, input []byte) ([]byte, e
 	if err != nil {
 		return nil, fmt.Errorf("json unmarshal: %v", err)
 	}
-	h.rcm, err = checkpt.NewRedisChkptManager(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("NewRedisChkptManager: %v", err)
-	}
+	h.rcm = checkpt.NewRedisChkptManager(ctx)
 	PrintChkptMngrInput(parsedInput)
 	output := h.Chkpt(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)

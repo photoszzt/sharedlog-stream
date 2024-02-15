@@ -1,9 +1,11 @@
 package common
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
+	"sharedlog-stream/pkg/checkpt"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sync"
@@ -271,7 +273,7 @@ func InvokeChkMngr(wg *sync.WaitGroup, client *http.Client, cmi *ChkptMngrInput,
 	}
 }
 
-func Invoke(invokeParam InvokeFuncParam,
+func Invoke(ctx context.Context, invokeParam InvokeFuncParam,
 	baseQueryInput *QueryInput,
 	invokeSourceFunc InvokeSrcFunc,
 ) error {
@@ -283,6 +285,15 @@ func Invoke(invokeParam InvokeFuncParam,
 	fmt.Fprintf(os.Stderr, "cliNodes: %+v\n", cliNodes)
 	fmt.Fprintf(os.Stderr, "inParamsMap: %+v\n", inParamsMap)
 	fmt.Fprintf(os.Stderr, "configScaleInput: %+v\n", configScaleInput)
+	rcm := checkpt.NewRedisChkptManager(ctx)
+	err = rcm.InitReqRes(ctx)
+	if err != nil {
+		return fmt.Errorf("rcm InitReqRes: %v", err)
+	}
+	err = rcm.ResetCheckPointCount(ctx, srcInvokeConfig.FinalTpNames)
+	if err != nil {
+		return fmt.Errorf("ResetCheckPointCount: %v", err)
+	}
 
 	timeout := time.Duration(baseQueryInput.Duration+120) * time.Second
 	if baseQueryInput.Duration == 0 {
