@@ -1,11 +1,9 @@
 package common
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"os"
-	"sharedlog-stream/pkg/checkpt"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sync"
@@ -273,7 +271,7 @@ func InvokeChkMngr(wg *sync.WaitGroup, client *http.Client, cmi *ChkptMngrInput,
 	}
 }
 
-func Invoke(ctx context.Context, invokeParam InvokeFuncParam,
+func Invoke(invokeParam InvokeFuncParam,
 	baseQueryInput *QueryInput,
 	invokeSourceFunc InvokeSrcFunc,
 ) error {
@@ -285,19 +283,10 @@ func Invoke(ctx context.Context, invokeParam InvokeFuncParam,
 	fmt.Fprintf(os.Stderr, "cliNodes: %+v\n", cliNodes)
 	fmt.Fprintf(os.Stderr, "inParamsMap: %+v\n", inParamsMap)
 	fmt.Fprintf(os.Stderr, "configScaleInput: %+v\n", configScaleInput)
-	rcm := checkpt.NewRedisChkptManager(ctx)
-	err = rcm.InitReqRes(ctx)
-	if err != nil {
-		return fmt.Errorf("rcm InitReqRes: %v", err)
-	}
-	err = rcm.ResetCheckPointCount(ctx, srcInvokeConfig.FinalTpNames)
-	if err != nil {
-		return fmt.Errorf("ResetCheckPointCount: %v", err)
-	}
 
-	timeout := time.Duration(baseQueryInput.Duration+120) * time.Second
+	timeout := time.Duration(baseQueryInput.Duration+20) * time.Second
 	if baseQueryInput.Duration == 0 {
-		timeout = time.Duration(240) * time.Second
+		timeout = time.Duration(200) * time.Second
 	}
 	client := &http.Client{
 		Transport: &http.Transport{
@@ -325,6 +314,7 @@ func Invoke(ctx context.Context, invokeParam InvokeFuncParam,
 		wg.Add(1)
 		go InvokeChkMngr(&wg, client, &chkMngrConfig, invokeParam.GatewayUrl, "chkptmngr",
 			invokeParam.Local)
+		time.Sleep(time.Duration(5) * time.Millisecond)
 	}
 
 	fmt.Fprintf(os.Stderr, "src instance: %d\n", srcInvokeConfig.NumSrcInstance)

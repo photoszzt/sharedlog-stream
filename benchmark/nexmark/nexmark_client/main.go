@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"net/http"
@@ -125,8 +124,7 @@ func main() {
 			Local:          FLAGS_local,
 			WaitForEndMark: FLAGS_waitForEndMark,
 		}
-		ctx := context.Background()
-		err := common.Invoke(ctx, invokeFuncParam, baseQueryInput, common.InvokeSrcFunc(invokeSourceFunc_))
+		err := common.Invoke(invokeFuncParam, baseQueryInput, common.InvokeSrcFunc(invokeSourceFunc_))
 		if err != nil {
 			panic(err)
 		}
