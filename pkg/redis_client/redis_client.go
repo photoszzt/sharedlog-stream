@@ -1,6 +1,7 @@
 package redis_client
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
@@ -14,6 +15,7 @@ func getRedisAddr() []string {
 
 func GetRedisClients() []*redis.Client {
 	addr_arr := getRedisAddr()
+	fmt.Fprintf(os.Stderr, "redis address is %v\n", addr_arr)
 	rdb_arr := make([]*redis.Client, len(addr_arr))
 	for i := 0; i < len(addr_arr); i++ {
 		rdb_arr[i] = redis.NewClient(&redis.Options{
