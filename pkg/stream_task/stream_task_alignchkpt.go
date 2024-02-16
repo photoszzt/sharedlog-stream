@@ -149,7 +149,7 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 			if len(ctrlRawMsgArr) == 1 {
 				debug.Fprintf(os.Stderr, "Get chkpt mark with logseq %x\n",
 					ctrlRawMsgArr[0].LogSeqNum)
-			} else {
+			} else if len(ctrlRawMsgArr) == 2 {
 				debug.Fprintf(os.Stderr, "Get chkpt mark with logseq %x and %x\n",
 					ctrlRawMsgArr[0].LogSeqNum, ctrlRawMsgArr[1].LogSeqNum)
 			}
