@@ -620,8 +620,8 @@ func forwardCtrlMsg(
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(os.Stderr, "%d forward %s to %s(%d)\n",
-				args.ectx.SubstreamNum(), name, sink.TopicName(), args.fixedOutParNum)
+			// fmt.Fprintf(os.Stderr, "%d forward %s to %s(%d)\n",
+			// 	args.ectx.SubstreamNum(), name, sink.TopicName(), args.fixedOutParNum)
 		} else {
 			parNums := make([]uint8, 0, sink.Stream().NumPartition())
 			for par := uint8(0); par < sink.Stream().NumPartition(); par++ {
@@ -631,8 +631,8 @@ func forwardCtrlMsg(
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(os.Stderr, "%d forward %s to %s(%v)\n",
-				args.ectx.SubstreamNum(), name, sink.TopicName(), parNums)
+			// fmt.Fprintf(os.Stderr, "%d forward %s to %s(%v)\n",
+			// 	args.ectx.SubstreamNum(), name, sink.TopicName(), parNums)
 		}
 	}
 	return nil
