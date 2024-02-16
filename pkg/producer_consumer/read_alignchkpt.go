@@ -92,7 +92,7 @@ func (ndc *AlignChkptConsumer) ReadNext(ctx context.Context, parNum uint8) (*com
 					// continue
 				}
 				if len(ndc.producerMarked) == 0 {
-					ndc.firstChkptMarkerSeqNum = 0
+					ndc.firstChkptMarkerSeqNum = rawMsg.LogSeqNum
 				}
 				ndc.producerMarked.Add(epochMark.ProdIndex)
 				if len(ndc.producerMarked) == int(ndc.numSrcProducer) {
