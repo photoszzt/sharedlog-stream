@@ -54,7 +54,7 @@ func SetKVStoreChkpt[K, V any](
 				return err
 			}
 			fmt.Fprintf(os.Stderr, "kv snapshot size: %d, store snapshot at %x\n", len(out), tpLogoff[0].LogOff)
-			return rs.StoreAlignChkpt(ctx, out, tpLogoff)
+			return rs.StoreAlignChkpt(ctx, out, tpLogoff, kvstore.Name())
 		})
 }
 
@@ -87,7 +87,7 @@ func SetWinStoreChkpt[K, V any](
 				return err
 			}
 			fmt.Fprintf(os.Stderr, "win snapshot size: %d, store snapshot at %x\n", len(out), tpLogOff[0].LogOff)
-			return rs.StoreAlignChkpt(ctx, out, tpLogOff)
+			return rs.StoreAlignChkpt(ctx, out, tpLogOff, winStore.Name())
 		})
 }
 
@@ -150,8 +150,8 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 				debug.Fprintf(os.Stderr, "Get chkpt mark with logseq %x\n",
 					ctrlRawMsgArr[0].LogSeqNum)
 			} else if len(ctrlRawMsgArr) == 2 {
-				debug.Fprintf(os.Stderr, "Get chkpt mark with logseq %x and %x\n",
-					ctrlRawMsgArr[0].LogSeqNum, ctrlRawMsgArr[1].LogSeqNum)
+				debug.Fprintf(os.Stderr, "Get chkpt mark with logseq %v\n",
+					ctrlRawMsgArr)
 			}
 			err := checkpoint(ctx, t, args, ctrlRawMsgArr, &chkptMngr.rcm, finalOutTpNames)
 			if err != nil {

@@ -7,6 +7,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/redis_client"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,32 +27,38 @@ func NewRedisSnapshotStore(createSnapshot bool) RedisSnapshotStore {
 	}
 }
 
-func (rs *RedisSnapshotStore) StoreAlignChkpt(ctx context.Context, snapshot []byte, srcLogOff []commtypes.TpLogOff) error {
+func (rs *RedisSnapshotStore) StoreAlignChkpt(ctx context.Context, snapshot []byte, srcLogOff []commtypes.TpLogOff, storeName string) error {
 	var keys []string
 	for _, tpLogOff := range srcLogOff {
 		idx := hashfuncs.NameHash(tpLogOff.Tp) % uint64(len(rs.rdb_arr))
-		err := rs.rdb_arr[idx].Set(ctx, tpLogOff.Tp, tpLogOff.LogOff, 0).Err()
+		err := rs.rdb_arr[idx].RPush(ctx, tpLogOff.Tp, tpLogOff.LogOff).Err()
 		if err != nil {
 			return err
 		}
 		keys = append(keys, fmt.Sprintf("%s_%#x", tpLogOff.Tp, tpLogOff.LogOff))
 	}
+	keys = append(keys, storeName)
 	key := strings.Join(keys, "-")
 	idx := hashfuncs.NameHash(key) % uint64(len(rs.rdb_arr))
 	fmt.Fprintf(os.Stderr, "store snapshot key: %s at redis[%d]\n", key, idx)
 	return rs.rdb_arr[idx].Set(ctx, key, snapshot, 0).Err()
 }
 
-func (rs *RedisSnapshotStore) GetAlignChkpt(ctx context.Context, srcs []string) ([]byte, error) {
+func (rs *RedisSnapshotStore) GetAlignChkpt(ctx context.Context, srcs []string, storeName string) ([]byte, error) {
 	var keys []string
 	for _, tp := range srcs {
 		idx := hashfuncs.NameHash(tp) % uint64(len(rs.rdb_arr))
-		logOff, err := rs.rdb_arr[idx].Get(ctx, tp).Uint64()
+		logOffStrs, err := rs.rdb_arr[idx].LRange(ctx, tp, -1, -1).Result()
+		if err != nil {
+			return nil, err
+		}
+		logOff, err := strconv.Atoi(logOffStrs[0])
 		if err != nil {
 			return nil, err
 		}
 		keys = append(keys, fmt.Sprintf("%s_%#x", tp, logOff))
 	}
+	keys = append(keys, storeName)
 	key := strings.Join(keys, "-")
 	idx := hashfuncs.NameHash(key) % uint64(len(rs.rdb_arr))
 	fmt.Fprintf(os.Stderr, "get snapshot key: %s at redis[%d]\n", key, idx)
