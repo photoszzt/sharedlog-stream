@@ -12,7 +12,8 @@
             "InputTopicNames": ["nexmark_src"],
             "OutputTopicName": ["q2_out"],
             "Final": true,
-            "NodeConstraint": "5,6,7,8"
+            "NodeConstraint": "5,6,7,8",
+            "NumSrcProducer": [1]
         }
     ],
     "StreamParam": {

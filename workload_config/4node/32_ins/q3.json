@@ -11,7 +11,8 @@
             "NumInstance": 32,
             "InputTopicNames": ["nexmark_src"],
             "OutputTopicName": ["q3_aucsBySellerID_out", "q3_personsByID_out"],
-            "NodeConstraint": "5,6,7,8"
+            "NodeConstraint": "5,6,7,8",
+            "NumSrcProducer": [1]
         },
         {
             "funcName": "q3JoinTable",
@@ -19,13 +20,15 @@
             "InputTopicNames": ["q3_aucsBySellerID_out", "q3_personsByID_out"],
             "OutputTopicName": ["q3_out"],
             "Final": true,
-            "NodeConstraint": "5,6,7,8"
+            "NodeConstraint": "5,6,7,8",
+            "NumSrcProducer": [32, 32]
         }
     ],
     "StreamParam": {
         "nexmark_src": 32,
         "q3_aucsBySellerID_out": 32,
         "q3_personsByID_out": 32,
+        "changelog": 32,
         "q3_out": 32
     }
 }

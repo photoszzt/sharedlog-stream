@@ -18,7 +18,8 @@
                 "q46_aucsByID",
                 "q46_bidsByAucID"
             ],
-            "NodeConstraint": "5,6,7,8"
+            "NodeConstraint": "5,6,7,8",
+            "NumSrcProducer": [1]
         },
         {
             "funcName": "q6JoinStream",
@@ -30,7 +31,8 @@
             "OutputTopicName": [
                 "q6_aucIDSeller"
             ],
-            "NodeConstraint": "5,6,7,8"
+            "NodeConstraint": "5,6,7,8",
+            "NumSrcProducer": [16, 16]
         },
         {
             "funcName": "q6MaxBid",
@@ -41,7 +43,8 @@
             "OutputTopicName": [
                 "q6_maxBids"
             ],
-            "NodeConstraint": "5,6,7,8"
+            "NodeConstraint": "5,6,7,8",
+            "NumSrcProducer": [1]
         },
         {
             "funcName": "q6Avg",
@@ -53,6 +56,7 @@
                 "q6_out"
             ],
             "Final": true,
+            "NumSrcProducer": [16],
             "NodeConstraint": "5,6,7,8"
         }
     ],
@@ -62,6 +66,7 @@
         "q46_bidsByAucID": 16,
         "q6_aucIDSeller": 16,
         "q6_maxBids": 16,
+        "changelog": 16,
         "q6_out": 16
     }
 }
