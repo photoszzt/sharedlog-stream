@@ -274,7 +274,7 @@ func SetupSkipMapStreamStreamJoin[K comparable, VLeft, VRight, VR any](
 			return nil, nil, nil, nil, err
 		}
 		toRightTab, rightTab, err = ToInMemSkipMapWindowTableG(
-			winStoreParamForJoin[K, VRight](mpLeft.StoreName(), compare, jw, gua),
+			winStoreParamForJoin[K, VRight](mpRight.StoreName(), compare, jw, gua),
 			mpRight.ParNum(), mpRight.SerdeFormat(), mpRight.MessageSerde())
 		if err != nil {
 			return nil, nil, nil, nil, err
