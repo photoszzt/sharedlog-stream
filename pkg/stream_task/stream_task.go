@@ -552,7 +552,7 @@ func prodConsumerExactlyOnce(args *StreamTaskArgs,
 	debug.Assert(args.env != nil, "env should be filled")
 	debug.Assert(args.ectx != nil, "program args should be filled")
 	for _, src := range args.ectx.Consumers() {
-		if !src.IsInitialSource() {
+		if !src.IsInitialSource() || args.guarantee == exactly_once_intr.ALIGN_CHKPT {
 			src.ConfigExactlyOnce(args.guarantee)
 		}
 	}
