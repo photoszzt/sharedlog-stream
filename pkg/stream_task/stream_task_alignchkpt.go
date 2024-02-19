@@ -151,18 +151,18 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
 				fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
 				return handleCtrlMsg(ctx, ctrlRawMsgArr, t, args, &warmupCheck, rs)
 			}
-			if len(ctrlRawMsgArr) == 1 {
-				debug.Fprintf(os.Stderr, "Get chkpt mark with logseq %x, seq %v, first chkpt mark %v\n",
-					ctrlRawMsgArr, ctrlRawMsgArr[0].LogSeqNum, ctrlRawMsgArr[0].FirstChkptMarkSeq)
-			} else if len(ctrlRawMsgArr) == 2 {
-				debug.Fprintf(os.Stderr, "Get chkpt mark with logseq %x\n",
-					ctrlRawMsgArr)
-				for i := 0; i < len(ctrlRawMsgArr); i++ {
-					debug.Assert(ctrlRawMsgArr[i] != nil, "ctrlRawMsgArr should not contain nil msg")
-					debug.Fprintf(os.Stderr, "[%v] ctrl mark log seq %v, first mark seq %v\n",
-						i, ctrlRawMsgArr[i].LogSeqNum, ctrlRawMsgArr[i].FirstChkptMarkSeq)
-				}
-			}
+			// if len(ctrlRawMsgArr) == 1 {
+			// 	debug.Fprintf(os.Stderr, "Get chkpt mark with logseq %x, seq %v, first chkpt mark %v\n",
+			// 		ctrlRawMsgArr, ctrlRawMsgArr[0].LogSeqNum, ctrlRawMsgArr[0].FirstChkptMarkSeq)
+			// } else if len(ctrlRawMsgArr) == 2 {
+			// 	debug.Fprintf(os.Stderr, "Get chkpt mark with logseq %x\n",
+			// 		ctrlRawMsgArr)
+			// 	for i := 0; i < len(ctrlRawMsgArr); i++ {
+			// 		debug.Assert(ctrlRawMsgArr[i] != nil, "ctrlRawMsgArr should not contain nil msg")
+			// 		debug.Fprintf(os.Stderr, "[%v] ctrl mark log seq %v, first mark seq %v\n",
+			// 			i, ctrlRawMsgArr[i].LogSeqNum, ctrlRawMsgArr[i].FirstChkptMarkSeq)
+			// 	}
+			// }
 			err := checkpoint(ctx, t, args, ctrlRawMsgArr, rs, &chkptMngr.rcm, finalOutTpNames)
 			if err != nil {
 				return common.GenErrFnOutput(err)

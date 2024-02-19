@@ -49,10 +49,12 @@ func (c *RedisChkptManager) InitReqRes(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("redis set REQ_CHKMNGR_ENDED: %v", err)
 	}
+	fmt.Fprintf(os.Stderr, "set %s to 0\n", REQ_CHKMNGR_ENDED)
 	err = c.rds[CHKPT_META_NODE].Set(ctx, CHKPT_MNGR_ENDED, 0, 0).Err()
 	if err != nil {
 		return fmt.Errorf("redis set CHKPT_MNGR_ENDED: %v", err)
 	}
+	fmt.Fprintf(os.Stderr, "set %s to 0\n", CHKPT_MNGR_ENDED)
 	return nil
 }
 

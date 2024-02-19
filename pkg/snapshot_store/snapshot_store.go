@@ -43,7 +43,7 @@ func (rs *RedisSnapshotStore) StoreSrcLogoff(ctx context.Context,
 		bg.Go(func() error {
 			return rs.rdb_arr[idx].RPush(ctx, tpLogOff.Tp, tpLogOff.LogOff).Err()
 		})
-		debug.Fprintf(os.Stderr, "store src tpoff %s:%d at redis[%d]\n",
+		debug.Fprintf(os.Stderr, "store src tpoff %s:%#x at redis[%d]\n",
 			tpLogOff.Tp, tpLogOff.LogOff, idx)
 	}
 	return bg.Wait()
