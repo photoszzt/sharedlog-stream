@@ -144,7 +144,7 @@ func ExecuteApp(ctx context.Context,
 			return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, streamTaskArgs.ectx.CurEpoch())
 		}
 		streamTaskArgs.ectx.SetRecordFinishFunc(recordFinish)
-		ret = processAlignChkpt(ctx, t, streamTaskArgs)
+		ret = processAlignChkpt(ctx, t, streamTaskArgs, &rs)
 		debug.Fprintf(os.Stderr, "align chkpt ret: %v\n", ret)
 	} else {
 		fmt.Fprintf(os.Stderr, "unrecognized guarantee: %v\n", streamTaskArgs.guarantee)
@@ -221,6 +221,7 @@ func handleCtrlMsg(
 	t *StreamTask,
 	args *StreamTaskArgs,
 	warmupCheck *stats.Warmup,
+	rs *snapshot_store.RedisSnapshotStore,
 ) *common.FnOutput {
 	if ctrlRawMsgArr[0].Mark == commtypes.SCALE_FENCE {
 		ret := handleScaleEpochAndBytes(ctx, ctrlRawMsgArr[0], args)
@@ -257,18 +258,9 @@ func handleCtrlMsg(
 				})
 			}
 			// the last checkpoint will be wait here.
-			createChkpt(args, tpLogOff, nil)
-			for _, kv := range args.kvs {
-				err = kv.WaitForAllSnapshot()
-				if err != nil {
-					return common.GenErrFnOutput(fmt.Errorf("KV WaitForAllSnapshot failed: %v", err))
-				}
-			}
-			for _, wsc := range args.wscs {
-				err = wsc.WaitForAllSnapshot()
-				if err != nil {
-					return common.GenErrFnOutput(fmt.Errorf("Win WaitForAllSnapshot failed: %v", err))
-				}
+			err := createChkpt(ctx, args, tpLogOff, nil, rs)
+			if err != nil {
+				return common.GenErrFnOutput(err)
 			}
 		}
 		t.SetEndDuration(ctrlRawMsgArr[0].StartTime)
@@ -341,24 +333,42 @@ func flushStreams(ctx context.Context,
 	return flushed, nil
 }
 
-func createSnapshot(args *StreamTaskArgs, tplogOff []commtypes.TpLogOff) {
+func createSnapshot(ctx context.Context, args *StreamTaskArgs, tplogOff []commtypes.TpLogOff) {
 	for _, kvchangelog := range args.kvChangelogs {
-		kvchangelog.Snapshot(tplogOff, nil)
+		kvchangelog.Snapshot(ctx, tplogOff, nil, false)
 	}
 	for _, wschangelog := range args.windowStoreChangelogs {
-		wschangelog.Snapshot(tplogOff, nil)
+		wschangelog.Snapshot(ctx, tplogOff, nil, false)
 	}
 }
 
-func createChkpt(args *StreamTaskArgs, tplogOff []commtypes.TpLogOff,
+func createChkpt(ctx context.Context, args *StreamTaskArgs, tplogOff []commtypes.TpLogOff,
 	chkptMeta []commtypes.ChkptMetaData,
-) {
+	rs *snapshot_store.RedisSnapshotStore,
+) error {
+	// no stores
+	if len(args.kvs) == 0 && len(args.wscs) == 0 {
+		return rs.StoreSrcLogoff(ctx, tplogOff)
+	}
 	for _, kv := range args.kvs {
-		kv.Snapshot(tplogOff, chkptMeta)
+		kv.Snapshot(ctx, tplogOff, chkptMeta, true)
 	}
 	for _, wsc := range args.wscs {
-		wsc.Snapshot(tplogOff, chkptMeta)
+		wsc.Snapshot(ctx, tplogOff, chkptMeta, true)
 	}
+	for _, kv := range args.kvs {
+		err := kv.WaitForAllSnapshot()
+		if err != nil {
+			return fmt.Errorf("KV WaitForAllSnapshot failed: %v", err)
+		}
+	}
+	for _, wsc := range args.wscs {
+		err := wsc.WaitForAllSnapshot()
+		if err != nil {
+			return fmt.Errorf("Win WaitForAllSnapshot failed: %v", err)
+		}
+	}
+	return nil
 }
 
 func updateReturnMetric(ret *common.FnOutput, warmupChecker *stats.Warmup,
