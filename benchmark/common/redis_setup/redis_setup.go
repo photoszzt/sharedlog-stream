@@ -3,6 +3,8 @@ package redis_setup
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/checkpt"
 
@@ -19,14 +21,29 @@ func NewRedisSetupHandler(env types.Environment) types.FuncHandler {
 	}
 }
 
-func (h *RedisSetup) Call(ctx context.Context, input []byte) ([]byte, error) {
-	ret := &common.FnOutput{Success: true}
+func (h *RedisSetup) Setup(ctx context.Context, input *common.RedisSetupInput) *common.FnOutput {
 	rcm := checkpt.NewRedisChkptManager()
 	err := rcm.InitReqRes(ctx)
 	if err != nil {
-		ret = common.GenErrFnOutput(err)
+		return common.GenErrFnOutput(err)
 	}
-	encodedOutput, err := json.Marshal(ret)
+	err = rcm.ResetCheckPointCount(ctx, input.FinalOutputTopicNames)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	return &common.FnOutput{Success: true}
+}
+
+func (h *RedisSetup) Call(ctx context.Context, input []byte) ([]byte, error) {
+	parsedInput := &common.RedisSetupInput{}
+	err := json.Unmarshal(input, parsedInput)
+	if err != nil {
+		return nil, fmt.Errorf("json unmarshal: %v", err)
+	}
+	fmt.Fprintf(os.Stderr, "RedisSetupInput:\n")
+	fmt.Fprintf(os.Stderr, "\tFinalOutputTopicNames: %v\n", parsedInput.FinalOutputTopicNames)
+	output := h.Setup(ctx, parsedInput)
+	encodedOutput, err := json.Marshal(output)
 	if err != nil {
 		panic(err)
 	}

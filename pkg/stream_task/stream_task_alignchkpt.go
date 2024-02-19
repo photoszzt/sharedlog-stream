@@ -104,7 +104,7 @@ func NewChkptMngr(ctx context.Context, env types.Environment,
 	}
 	ckptm.prodId.InitTaskId(env)
 	ckptm.prodId.TaskEpoch = 1
-	ckptm.rcm = checkpt.NewRedisChkptManagerFromClients(rs.GetRedisClients())
+	ckptm.rcm = checkpt.NewRedisChkptManager()
 	return &ckptm
 }
 

@@ -272,7 +272,7 @@ func InvokeChkMngr(wg *sync.WaitGroup, client *http.Client, cmi *ChkptMngrInput,
 	}
 }
 
-func InvokeRedisSetup(client *http.Client, faas_gateway string, local bool) {
+func InvokeRedisSetup(client *http.Client, rsi *RedisSetupInput, faas_gateway string, local bool) {
 	var response FnOutput
 	appName := "redisSetup"
 	url := BuildFunctionUrl(faas_gateway, appName)
@@ -281,7 +281,7 @@ func InvokeRedisSetup(client *http.Client, faas_gateway string, local bool) {
 	if local {
 		constraint = ""
 	}
-	if err := JsonPostRequest(client, url, constraint, nil, &response); err != nil {
+	if err := JsonPostRequest(client, url, constraint, rsi, &response); err != nil {
 		log.Error().Msgf("%s request failed: %v", appName, err)
 	} else if !response.Success {
 		log.Error().Msgf("%s request failed: %s", appName, response.Message)
@@ -318,7 +318,9 @@ func Invoke(invokeParam InvokeFuncParam,
 		&scaleResponse, "scale", invokeParam.Local)
 	var wg sync.WaitGroup
 	if exactly_once_intr.GuaranteeMth(baseQueryInput.GuaranteeMth) == exactly_once_intr.ALIGN_CHKPT {
-		InvokeRedisSetup(client, invokeParam.GatewayUrl, invokeParam.Local)
+		InvokeRedisSetup(client, &RedisSetupInput{
+			FinalOutputTopicNames: srcInvokeConfig.FinalTpNames,
+		}, invokeParam.GatewayUrl, invokeParam.Local)
 		chkMngrConfig := ChkptMngrInput{
 			SrcTopicName:          srcInvokeConfig.TopicName,
 			FinalOutputTopicNames: srcInvokeConfig.FinalTpNames,

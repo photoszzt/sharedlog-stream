@@ -81,6 +81,10 @@ func (c *ConfigScaleInput) Clone() ConfigScaleInput {
 	}
 }
 
+type RedisSetupInput struct {
+	FinalOutputTopicNames []string `json:"outTpNames"`
+}
+
 type ChkptMngrInput struct {
 	SrcTopicName string `json:"srcTpName"`
 	// final stage's output partition and partition number
