@@ -5,6 +5,7 @@ import (
 	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/chkpt_manager"
+	"sharedlog-stream/benchmark/common/redis_setup"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/handlers"
 
 	configscale "sharedlog-stream/benchmark/common/config_scale"
@@ -85,6 +86,8 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return handlers.NewLastEmptyQuery(env, funcName), nil
 	case "chkptmngr":
 		return chkpt_manager.NewChkptManager(env), nil
+	case "redisSetup":
+		return redis_setup.NewRedisSetupHandler(env), nil
 	default:
 		return nil, fmt.Errorf("unknown function name %v", funcName)
 	}

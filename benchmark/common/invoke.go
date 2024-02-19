@@ -254,10 +254,11 @@ func ParseFunctionOutputs(outputMap map[string][]FnOutput, statDir string) {
 type InvokeSrcFunc func(client *http.Client, srcInvokeConfig SrcInvokeConfig, response *FnOutput, wg *sync.WaitGroup, warmup bool)
 
 func InvokeChkMngr(wg *sync.WaitGroup, client *http.Client, cmi *ChkptMngrInput,
-	faas_gateway string, appName string, local bool,
+	faas_gateway string, local bool,
 ) {
 	defer wg.Done()
 	var response FnOutput
+	appName := "chkptmngr"
 	url := BuildFunctionUrl(faas_gateway, appName)
 	fmt.Fprintf(os.Stderr, "chkptmngr url is %s\n", url)
 	constraint := "1"
@@ -265,6 +266,22 @@ func InvokeChkMngr(wg *sync.WaitGroup, client *http.Client, cmi *ChkptMngrInput,
 		constraint = ""
 	}
 	if err := JsonPostRequest(client, url, constraint, cmi, &response); err != nil {
+		log.Error().Msgf("%s request failed: %v", appName, err)
+	} else if !response.Success {
+		log.Error().Msgf("%s request failed: %s", appName, response.Message)
+	}
+}
+
+func InvokeRedisSetup(client *http.Client, faas_gateway string, local bool) {
+	var response FnOutput
+	appName := "redisSetup"
+	url := BuildFunctionUrl(faas_gateway, appName)
+	fmt.Fprintf(os.Stderr, "redis_setup url is %s\n", url)
+	constraint := "1"
+	if local {
+		constraint = ""
+	}
+	if err := JsonPostRequest(client, url, constraint, nil, &response); err != nil {
 		log.Error().Msgf("%s request failed: %v", appName, err)
 	} else if !response.Success {
 		log.Error().Msgf("%s request failed: %s", appName, response.Message)
@@ -301,6 +318,7 @@ func Invoke(invokeParam InvokeFuncParam,
 		&scaleResponse, "scale", invokeParam.Local)
 	var wg sync.WaitGroup
 	if exactly_once_intr.GuaranteeMth(baseQueryInput.GuaranteeMth) == exactly_once_intr.ALIGN_CHKPT {
+		InvokeRedisSetup(client, invokeParam.GatewayUrl, invokeParam.Local)
 		chkMngrConfig := ChkptMngrInput{
 			SrcTopicName:          srcInvokeConfig.TopicName,
 			FinalOutputTopicNames: srcInvokeConfig.FinalTpNames,
@@ -312,7 +330,7 @@ func Invoke(invokeParam InvokeFuncParam,
 			SerdeFormat:           baseQueryInput.SerdeFormat,
 		}
 		wg.Add(1)
-		go InvokeChkMngr(&wg, client, &chkMngrConfig, invokeParam.GatewayUrl, "chkptmngr",
+		go InvokeChkMngr(&wg, client, &chkMngrConfig, invokeParam.GatewayUrl,
 			invokeParam.Local)
 		time.Sleep(time.Duration(5) * time.Millisecond)
 	}
