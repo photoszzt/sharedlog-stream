@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/redis_client"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 
 	"cs.utexas.edu/zjia/faas/types"
 	"github.com/go-redis/redis/v9"
+	"golang.org/x/sync/errgroup"
 )
 
 type RedisSnapshotStore struct {
@@ -27,7 +29,29 @@ func NewRedisSnapshotStore(createSnapshot bool) RedisSnapshotStore {
 	}
 }
 
-func (rs *RedisSnapshotStore) StoreAlignChkpt(ctx context.Context, snapshot []byte, srcLogOff []commtypes.TpLogOff, storeName string) error {
+func (rs *RedisSnapshotStore) GetRedisClients() []*redis.Client {
+	debug.Assert(len(rs.rdb_arr) != 0, "rdb arr should not be empty")
+	return rs.rdb_arr
+}
+
+func (rs *RedisSnapshotStore) StoreSrcLogoff(ctx context.Context,
+	srcLogOff []commtypes.TpLogOff,
+) error {
+	bg, ctx := errgroup.WithContext(ctx)
+	for _, tpLogOff := range srcLogOff {
+		idx := hashfuncs.NameHash(tpLogOff.Tp) % uint64(len(rs.rdb_arr))
+		bg.Go(func() error {
+			return rs.rdb_arr[idx].RPush(ctx, tpLogOff.Tp, tpLogOff.LogOff).Err()
+		})
+		debug.Fprintf(os.Stderr, "store src tpoff %s:%d at redis[%d]\n",
+			tpLogOff.Tp, tpLogOff.LogOff, idx)
+	}
+	return bg.Wait()
+}
+
+func (rs *RedisSnapshotStore) StoreAlignChkpt(ctx context.Context, snapshot []byte,
+	srcLogOff []commtypes.TpLogOff, storeName string,
+) error {
 	var keys []string
 	for _, tpLogOff := range srcLogOff {
 		idx := hashfuncs.NameHash(tpLogOff.Tp) % uint64(len(rs.rdb_arr))
@@ -40,7 +64,7 @@ func (rs *RedisSnapshotStore) StoreAlignChkpt(ctx context.Context, snapshot []by
 	keys = append(keys, storeName)
 	key := strings.Join(keys, "-")
 	idx := hashfuncs.NameHash(key) % uint64(len(rs.rdb_arr))
-	fmt.Fprintf(os.Stderr, "store snapshot key: %s at redis[%d]\n", key, idx)
+	debug.Fprintf(os.Stderr, "store snapshot key: %s at redis[%d]\n", key, idx)
 	return rs.rdb_arr[idx].Set(ctx, key, snapshot, 0).Err()
 }
 
@@ -61,7 +85,7 @@ func (rs *RedisSnapshotStore) GetAlignChkpt(ctx context.Context, srcs []string, 
 	keys = append(keys, storeName)
 	key := strings.Join(keys, "-")
 	idx := hashfuncs.NameHash(key) % uint64(len(rs.rdb_arr))
-	fmt.Fprintf(os.Stderr, "get snapshot key: %s at redis[%d]\n", key, idx)
+	debug.Fprintf(os.Stderr, "get snapshot key: %s at redis[%d]\n", key, idx)
 	return rs.rdb_arr[idx].Get(ctx, key).Bytes()
 }
 
