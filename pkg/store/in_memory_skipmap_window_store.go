@@ -402,7 +402,9 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) WaitForAllSnapshot() error {
 }
 
 // not thread-safe
-func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot(tpLogoff []commtypes.TpLogOff, chkptMeta []commtypes.ChkptMetaData) {
+func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot(ctx context.Context,
+	tpLogoff []commtypes.TpLogOff, chkptMeta []commtypes.ChkptMetaData, resetBg bool,
+) {
 	debug.Assert(s.bgErrG != nil, "bgErr should not be nil")
 	debug.Assert(s.snapshotCallback != nil, "snapshotCallback should not be nil")
 	l := 0
@@ -413,6 +415,9 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot(tpLogoff []commtypes.TpLogO
 	}
 	// outBin := make([][]byte, 0, l)
 	out := make([]commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V], 0, l)
+	if chkptMeta != nil || resetBg {
+		s.bgErrG, s.bgCtx = errgroup.WithContext(ctx)
+	}
 	if s.retainDuplicates {
 		// cpyBeg := time.Now()
 		s.storeWithDup.Range(func(ts int64, kvmap *skipmap.FuncMap[VersionedKeyG[K], V]) bool {

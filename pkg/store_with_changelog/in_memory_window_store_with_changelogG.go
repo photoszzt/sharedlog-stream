@@ -274,8 +274,8 @@ func (s *InMemoryWindowStoreWithChangelogG[K, V]) SubstreamNum() uint8 {
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]) error) {
 }
 
-func (s *InMemoryWindowStoreWithChangelogG[K, V]) Snapshot(tplogOff []commtypes.TpLogOff, chkptMeta []commtypes.ChkptMetaData) {
-	s.windowStore.Snapshot(tplogOff, chkptMeta)
+func (s *InMemoryWindowStoreWithChangelogG[K, V]) Snapshot(ctx context.Context, tplogOff []commtypes.TpLogOff, chkptMeta []commtypes.ChkptMetaData, resetBg bool) {
+	s.windowStore.Snapshot(ctx, tplogOff, chkptMeta, resetBg)
 }
 
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) WaitForAllSnapshot() error {

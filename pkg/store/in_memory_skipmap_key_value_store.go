@@ -163,7 +163,9 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) Range(ctx context.Context,
 
 // not thread-safe
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) Snapshot(
-	tpLogOff []commtypes.TpLogOff, unprocessed []commtypes.ChkptMetaData,
+	ctx context.Context,
+	tpLogOff []commtypes.TpLogOff, meta []commtypes.ChkptMetaData,
+	resetBg bool,
 ) {
 	debug.Assert(st.bgErrG != nil, "snapshot callback is not set")
 	// cpyBeg := time.Now()
@@ -176,8 +178,11 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) Snapshot(
 		out = append(out, p)
 		return true
 	})
+	if meta != nil || resetBg {
+		st.bgErrG, st.bgCtx = errgroup.WithContext(ctx)
+	}
 	st.bgErrG.Go(func() error {
-		return st.snapshotCallback(st.bgCtx, tpLogOff, unprocessed, out)
+		return st.snapshotCallback(st.bgCtx, tpLogOff, meta, out)
 	})
 }
 

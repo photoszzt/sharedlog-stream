@@ -298,7 +298,7 @@ func (s *SegmentedWindowStoreG[K, V]) SetWinSnapshotCallback(ctx context.Context
 	s.snapshotCallback = f
 }
 
-func (s *SegmentedWindowStoreG[K, V]) Snapshot(tplogoff []commtypes.TpLogOff, chkptMeta []commtypes.ChkptMetaData) {
+func (s *SegmentedWindowStoreG[K, V]) Snapshot(ctx context.Context, tplogoff []commtypes.TpLogOff, chkptMeta []commtypes.ChkptMetaData, resetBg bool) {
 	panic("not implemented")
 }
 
