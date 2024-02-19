@@ -146,13 +146,8 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 				fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
 				return handleCtrlMsg(ctx, ctrlRawMsgArr, t, args, &warmupCheck)
 			}
-			if len(ctrlRawMsgArr) == 1 {
-				debug.Fprintf(os.Stderr, "Get chkpt mark with logseq %x\n",
-					ctrlRawMsgArr[0].LogSeqNum)
-			} else if len(ctrlRawMsgArr) == 2 {
-				debug.Fprintf(os.Stderr, "Get chkpt mark with logseq %v\n",
-					ctrlRawMsgArr)
-			}
+			debug.Fprintf(os.Stderr, "Get chkpt mark with logseq %x\n",
+				ctrlRawMsgArr)
 			err := checkpoint(ctx, t, args, ctrlRawMsgArr, &chkptMngr.rcm, finalOutTpNames)
 			if err != nil {
 				return common.GenErrFnOutput(err)

@@ -86,12 +86,18 @@ func PrepareTaskWithJoin[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR any]
 			) (*common.FnOutput, []*commtypes.RawMsgAndSeq) {
 				if leftManager.GotEndMark() && rightManager.GotEndMark() {
 					debug.Fprintf(os.Stderr, "join proc got end mark\n")
+					debug.Assert(leftManager.ctrlMsg != nil, "left manager ctrl msg should not be nil")
+					debug.Assert(rightManager.ctrlMsg != nil, "right manager ctrl msg should not be nil")
 					return nil, []*commtypes.RawMsgAndSeq{leftManager.ctrlMsg, rightManager.ctrlMsg}
 				} else if leftManager.GotScaleFence() && rightManager.GotScaleFence() {
 					debug.Fprintf(os.Stderr, "join proc got scale fence\n")
+					debug.Assert(leftManager.ctrlMsg != nil, "left manager ctrl msg should not be nil")
+					debug.Assert(rightManager.ctrlMsg != nil, "right manager ctrl msg should not be nil")
 					return nil, []*commtypes.RawMsgAndSeq{leftManager.ctrlMsg, rightManager.ctrlMsg}
 				} else if leftManager.GotChkptMark() && rightManager.GotChkptMark() {
 					debug.Fprintf(os.Stderr, "join proc got all checkpt mark\n")
+					debug.Assert(leftManager.ctrlMsg != nil, "left manager ctrl msg should not be nil")
+					debug.Assert(rightManager.ctrlMsg != nil, "right manager ctrl msg should not be nil")
 					return nil, []*commtypes.RawMsgAndSeq{leftManager.ctrlMsg, rightManager.ctrlMsg}
 				}
 				return handleJoinErrReturn(), nil
