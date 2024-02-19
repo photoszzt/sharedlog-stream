@@ -3,9 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sharedlog-stream/benchmark/common"
-	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/proc_interface"
@@ -83,9 +81,7 @@ func (h *query2Handler) Query2(ctx context.Context, sp *common.QueryInput) *comm
 	task := stream_task.NewStreamTaskBuilder().MarkFinalStage().
 		AppProcessFunc(stream_task.CommonAppProcessFunc[string, *ntypes.Event](filterProc.Process, h.msgSerde)).
 		Build()
-	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
-	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).
+	streamTaskArgs, err := streamArgsBuilder(h.env, &ectx, sp).
 		FixedOutParNum(sp.ParNum).
 		Build()
 	if err != nil {

@@ -3,9 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sharedlog-stream/benchmark/common"
-	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/optional"
@@ -93,10 +91,7 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 		AppProcessFunc(
 			stream_task.CommonAppProcessFunc(filterProc.Process, h.inMsgSerde)).
 		Build()
-	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName,
-		sp.InputTopicNames[0], sp.ParNum, sp.OutputTopicNames[0])
-	builder := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)
-	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp, builder).Build()
+	streamTaskArgs, err := streamArgsBuilder(h.env, &ectx, sp).Build()
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
