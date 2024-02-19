@@ -116,8 +116,8 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 				jm.runLock.Unlock()
 				continue
 			} else if rawMsgSeq.Mark == commtypes.CHKPT_MARK {
-				jm.gotChkptMark.Store(true)
 				jm.ctrlMsg = rawMsgSeq
+				jm.gotChkptMark.Store(true)
 				jm.runLock.Unlock()
 				return
 			} else {
