@@ -96,13 +96,15 @@ type ChkptMngr struct {
 	rcm    checkpt.RedisChkptManager
 }
 
-func NewChkptMngr(ctx context.Context, env types.Environment) *ChkptMngr {
+func NewChkptMngr(ctx context.Context, env types.Environment,
+	rs *snapshot_store.RedisSnapshotStore,
+) *ChkptMngr {
 	ckptm := ChkptMngr{
 		prodId: commtypes.NewProducerId(),
 	}
 	ckptm.prodId.InitTaskId(env)
 	ckptm.prodId.TaskEpoch = 1
-	ckptm.rcm = checkpt.NewRedisChkptManager(ctx)
+	ckptm.rcm = checkpt.NewRedisChkptManagerFromClients(rs.GetRedisClients())
 	return &ckptm
 }
 
@@ -110,11 +112,13 @@ func (em *ChkptMngr) GetCurrentEpoch() uint16             { return em.prodId.Tas
 func (em *ChkptMngr) GetCurrentTaskId() uint64            { return em.prodId.TaskId }
 func (em *ChkptMngr) GetProducerId() commtypes.ProducerId { return em.prodId }
 
-func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.FnOutput {
+func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
+	rs *snapshot_store.RedisSnapshotStore,
+) *common.FnOutput {
 	init := false
 	paused := false
 	var finalOutTpNames []string
-	chkptMngr := NewChkptMngr(ctx, args.env)
+	chkptMngr := NewChkptMngr(ctx, args.env, rs)
 	prodId := chkptMngr.GetProducerId()
 	fmt.Fprintf(os.Stderr, "[%d] prodId: %s\n", args.ectx.SubstreamNum(), prodId.String())
 	prodConsumerExactlyOnce(args, chkptMngr)
@@ -142,13 +146,24 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs)
 				return ret_err
 			}
 			paused = true
+			debug.Assert(ctrlRawMsgArr[0] != nil, "ctrlRawMsgArr should have at least one element")
 			if ctrlRawMsgArr[0].Mark != commtypes.CHKPT_MARK {
 				fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
-				return handleCtrlMsg(ctx, ctrlRawMsgArr, t, args, &warmupCheck)
+				return handleCtrlMsg(ctx, ctrlRawMsgArr, t, args, &warmupCheck, rs)
 			}
-			debug.Fprintf(os.Stderr, "Get chkpt mark with logseq %x\n",
-				ctrlRawMsgArr)
-			err := checkpoint(ctx, t, args, ctrlRawMsgArr, &chkptMngr.rcm, finalOutTpNames)
+			if len(ctrlRawMsgArr) == 1 {
+				debug.Fprintf(os.Stderr, "Get chkpt mark with logseq %x, seq %v, first chkpt mark %v\n",
+					ctrlRawMsgArr, ctrlRawMsgArr[0].LogSeqNum, ctrlRawMsgArr[0].FirstChkptMarkSeq)
+			} else if len(ctrlRawMsgArr) == 2 {
+				debug.Fprintf(os.Stderr, "Get chkpt mark with logseq %x\n",
+					ctrlRawMsgArr)
+				for i := 0; i < len(ctrlRawMsgArr); i++ {
+					debug.Assert(ctrlRawMsgArr[i] != nil, "ctrlRawMsgArr should not contain nil msg")
+					debug.Fprintf(os.Stderr, "[%v] ctrl mark log seq %v, first mark seq %v\n",
+						i, ctrlRawMsgArr[i].LogSeqNum, ctrlRawMsgArr[i].FirstChkptMarkSeq)
+				}
+			}
+			err := checkpoint(ctx, t, args, ctrlRawMsgArr, rs, &chkptMngr.rcm, finalOutTpNames)
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}
@@ -161,6 +176,7 @@ func checkpoint(
 	t *StreamTask,
 	args *StreamTaskArgs,
 	ctrlRawMsgArr []*commtypes.RawMsgAndSeq,
+	rs *snapshot_store.RedisSnapshotStore,
 	rcm *checkpt.RedisChkptManager,
 	finalOutTpNames []string,
 ) error {
@@ -191,7 +207,10 @@ func checkpoint(
 	if err != nil {
 		return err
 	}
-	createChkpt(args, tpLogOff, chkptMeta)
+	err = createChkpt(ctx, args, tpLogOff, chkptMeta, rs)
+	if err != nil {
+		return err
+	}
 	if t.isFinalStage {
 		err = rcm.FinishChkpt(ctx, finalOutTpNames)
 		if err != nil {
