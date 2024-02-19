@@ -37,13 +37,14 @@ func (h *ChkptManagerHandler) Call(ctx context.Context, input []byte) ([]byte, e
 		return nil, fmt.Errorf("json unmarshal: %v", err)
 	}
 	h.rcm = checkpt.NewRedisChkptManager(ctx)
-	err = h.rcm.InitReqRes(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("rcm InitReqRes: %v", err)
-	}
 	err = h.rcm.ResetCheckPointCount(ctx, parsedInput.FinalOutputTopicNames)
 	if err != nil {
-		return nil, fmt.Errorf("ResetCheckPointCount: %v", err)
+		ret := common.GenErrFnOutput(fmt.Errorf("ResetCheckPointCount: %v", err))
+		encodedOutput, err := json.Marshal(ret)
+		if err != nil {
+			panic(err)
+		}
+		return common.CompressData(encodedOutput), nil
 	}
 	PrintChkptMngrInput(parsedInput)
 	output := h.Chkpt(ctx, parsedInput)
