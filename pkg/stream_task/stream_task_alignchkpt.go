@@ -53,7 +53,7 @@ func SetKVStoreChkpt[K, V any](
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(os.Stderr, "kv snapshot size: %d, store snapshot at %x\n", len(out), tpLogoff[0].LogOff)
+			// fmt.Fprintf(os.Stderr, "kv snapshot size: %d, store snapshot at %x\n", len(out), tpLogoff[0].LogOff)
 			return rs.StoreAlignChkpt(ctx, out, tpLogoff, kvstore.Name())
 		})
 }
@@ -86,7 +86,7 @@ func SetWinStoreChkpt[K, V any](
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(os.Stderr, "win snapshot size: %d, store snapshot at %x\n", len(out), tpLogOff[0].LogOff)
+			// fmt.Fprintf(os.Stderr, "win snapshot size: %d, store snapshot at %x\n", len(out), tpLogOff[0].LogOff)
 			return rs.StoreAlignChkpt(ctx, out, tpLogOff, winStore.Name())
 		})
 }
