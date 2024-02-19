@@ -22,9 +22,16 @@ type RedisChkptManager struct {
 	rds []*redis.Client
 }
 
-func NewRedisChkptManager(ctx context.Context) RedisChkptManager {
+func NewRedisChkptManager() RedisChkptManager {
 	rcm := RedisChkptManager{
 		rds: redis_client.GetRedisClients(),
+	}
+	return rcm
+}
+
+func NewRedisChkptManagerFromClients(rds []*redis.Client) RedisChkptManager {
+	rcm := RedisChkptManager{
+		rds: rds,
 	}
 	return rcm
 }

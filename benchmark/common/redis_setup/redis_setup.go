@@ -21,7 +21,7 @@ func NewRedisSetupHandler(env types.Environment) types.FuncHandler {
 
 func (h *RedisSetup) Call(ctx context.Context, input []byte) ([]byte, error) {
 	ret := &common.FnOutput{Success: true}
-	rcm := checkpt.NewRedisChkptManager(ctx)
+	rcm := checkpt.NewRedisChkptManager()
 	err := rcm.InitReqRes(ctx)
 	if err != nil {
 		ret = common.GenErrFnOutput(err)

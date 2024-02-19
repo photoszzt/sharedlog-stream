@@ -36,7 +36,7 @@ func (h *ChkptManagerHandler) Call(ctx context.Context, input []byte) ([]byte, e
 	if err != nil {
 		return nil, fmt.Errorf("json unmarshal: %v", err)
 	}
-	h.rcm = checkpt.NewRedisChkptManager(ctx)
+	h.rcm = checkpt.NewRedisChkptManager()
 	err = h.rcm.ResetCheckPointCount(ctx, parsedInput.FinalOutputTopicNames)
 	if err != nil {
 		ret := common.GenErrFnOutput(fmt.Errorf("ResetCheckPointCount: %v", err))
