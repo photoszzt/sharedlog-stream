@@ -85,7 +85,7 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 			if ret_err := track(ctx, cm, args.ectx.Consumers(), args.ectx.SubstreamNum()); ret_err != nil {
 				return ret_err
 			}
-			return handleCtrlMsg(ctx, ctrlRawMsgArr, t, args, &warmupCheck)
+			return handleCtrlMsg(ctx, ctrlRawMsgArr, t, args, &warmupCheck, nil)
 		}
 		// if warmupCheck.AfterWarmup() {
 		// 	elapsed := time.Since(procStart)

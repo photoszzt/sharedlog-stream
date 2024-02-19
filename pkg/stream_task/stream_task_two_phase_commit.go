@@ -198,7 +198,7 @@ func processWithTransaction(
 				return err_out
 			}
 			fmt.Fprintf(os.Stderr, "finish final commit\n")
-			return handleCtrlMsg(ctx, ctrlRawMsgArr, meta.t, meta.args, &warmupCheck)
+			return handleCtrlMsg(ctx, ctrlRawMsgArr, meta.t, meta.args, &warmupCheck, nil)
 		}
 		// if warmupCheck.AfterWarmup() {
 		// 	elapsed := time.Since(procStart)
@@ -269,7 +269,7 @@ func commitTransaction(ctx context.Context,
 	}
 	// debug.Fprintf(os.Stderr, "committed transaction\n")
 	if env_config.CREATE_SNAPSHOT && meta.args.snapshotEvery != 0 && time.Since(*snapshotTimer) > meta.args.snapshotEvery {
-		createSnapshot(meta.args, []commtypes.TpLogOff{{LogOff: logOff}})
+		createSnapshot(ctx, meta.args, []commtypes.TpLogOff{{LogOff: logOff}})
 		*snapshotTimer = time.Now()
 	}
 	cElapsed := stats.Elapsed(cBeg).Microseconds()

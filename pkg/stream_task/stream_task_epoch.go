@@ -230,7 +230,7 @@ func pausedFlushMark(
 	setLastMarkSeq(logOff, meta.args)
 	if env_config.CREATE_SNAPSHOT && meta.args.snapshotEvery != 0 && time.Since(*snapshotTimer) > meta.args.snapshotEvery {
 		snStart := time.Now()
-		createSnapshot(meta.args, []commtypes.TpLogOff{{LogOff: logOff}})
+		createSnapshot(ctx, meta.args, []commtypes.TpLogOff{{LogOff: logOff}})
 		elapsed := time.Since(snStart)
 		*snapshotTime = append(*snapshotTime, elapsed.Microseconds())
 		*snapshotTimer = time.Now()
@@ -367,7 +367,7 @@ func processInEpoch(
 			// markPartUs.PrintRemainingStats()
 			// execIntrMs.PrintRemainingStats()
 			// thisAndLastCmtMs.PrintRemainingStats()
-			return handleCtrlMsg(ctx, ctrlRawMsgArr, meta.t, meta.args, &warmupCheck)
+			return handleCtrlMsg(ctx, ctrlRawMsgArr, meta.t, meta.args, &warmupCheck, nil)
 		}
 	}
 }
@@ -402,7 +402,7 @@ func finalMark(
 	fmt.Fprintf(os.Stderr, "[%d] final mark seqNum: %#x\n", meta.args.ectx.SubstreamNum(), logOff)
 	if env_config.CREATE_SNAPSHOT && meta.args.snapshotEvery != 0 && !exitDueToFailTest {
 		snStart := time.Now()
-		createSnapshot(meta.args, []commtypes.TpLogOff{{LogOff: logOff}})
+		createSnapshot(dctx, meta.args, []commtypes.TpLogOff{{LogOff: logOff}})
 		for _, kv := range meta.args.kvChangelogs {
 			err = kv.WaitForAllSnapshot()
 			if err != nil {
