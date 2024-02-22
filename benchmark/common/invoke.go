@@ -301,10 +301,12 @@ func Invoke(invokeParam InvokeFuncParam,
 	fmt.Fprintf(os.Stderr, "inParamsMap: %+v\n", inParamsMap)
 	fmt.Fprintf(os.Stderr, "configScaleInput: %+v\n", configScaleInput)
 
-	timeout := time.Duration(baseQueryInput.Duration+20) * time.Second
-	if baseQueryInput.Duration == 0 {
-		timeout = time.Duration(200) * time.Second
+	to := baseQueryInput.Duration + 20
+	if to < 300 {
+		to = 300
 	}
+
+	timeout := time.Duration(to) * time.Second
 	client := &http.Client{
 		Transport: &http.Transport{
 			IdleConnTimeout: 30 * time.Second,

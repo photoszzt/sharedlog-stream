@@ -11,6 +11,7 @@ import (
 	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/store"
+	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -104,7 +105,7 @@ func NewChkptMngr(ctx context.Context, env types.Environment,
 	}
 	ckptm.prodId.InitTaskId(env)
 	ckptm.prodId.TaskEpoch = 1
-	ckptm.rcm = checkpt.NewRedisChkptManager()
+	ckptm.rcm = checkpt.NewRedisChkptManagerFromClients(rs.GetRedisClients())
 	return &ckptm
 }
 
@@ -126,6 +127,8 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
 		args.warmup, args.flushEvery, args.waitEndMark)
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
 	warmupCheck.StartWarmup()
+	alignChkptTime := stats.NewStatsCollector[int64](fmt.Sprintf("alignChkpt_%d", args.ectx.SubstreamNum()),
+		stats.DEFAULT_COLLECT_DURATION)
 	for _, tp := range args.ectx.Producers() {
 		finalOutTpNames = append(finalOutTpNames, tp.TopicName())
 	}
@@ -163,10 +166,13 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
 			// 			i, ctrlRawMsgArr[i].LogSeqNum, ctrlRawMsgArr[i].FirstChkptMarkSeq)
 			// 	}
 			// }
+			s := time.Now()
 			err := checkpoint(ctx, t, args, ctrlRawMsgArr, rs, &chkptMngr.rcm, finalOutTpNames)
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}
+			elapsed := time.Since(s)
+			alignChkptTime.AddSample(elapsed.Microseconds())
 		}
 	}
 }
