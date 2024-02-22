@@ -152,6 +152,7 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
 			debug.Assert(ctrlRawMsgArr[0] != nil, "ctrlRawMsgArr should have at least one element")
 			if ctrlRawMsgArr[0].Mark != commtypes.CHKPT_MARK {
 				fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
+				alignChkptTime.PrintRemainingStats()
 				return handleCtrlMsg(ctx, ctrlRawMsgArr, t, args, &warmupCheck, rs)
 			}
 			// if len(ctrlRawMsgArr) == 1 {
