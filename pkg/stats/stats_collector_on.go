@@ -18,7 +18,8 @@ func (c *ConcurrentStatsCollector[E]) AddSample(sample E) {
 
 func (c *StatsCollector[E]) AddSample(sample E) {
 	c.data = append(c.data, sample)
-	if uint32(len(c.data)) >= c.min_report_samples && c.report_timer.Check() {
+	rt_check := c.report_timer.Check()
+	if uint32(len(c.data)) >= c.min_report_samples && rt_check {
 		slices.Sort(c.data)
 		p50 := POf(c.data, 0.5)
 		p90 := POf(c.data, 0.9)

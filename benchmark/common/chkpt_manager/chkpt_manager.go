@@ -87,7 +87,7 @@ func (h *ChkptManagerHandler) Chkpt(ctx context.Context, input *common.ChkptMngr
 	if guarantee == exactly_once_intr.ALIGN_CHKPT {
 		serdeFormat := commtypes.SerdeFormat(input.SerdeFormat)
 		chkptEveryMs := time.Duration(input.ChkptEveryMs) * time.Millisecond
-		chkptTimes := stats.NewStatsCollector[int64]("chkptElapsed", stats.DEFAULT_COLLECT_DURATION)
+		chkptTimes := stats.NewStatsCollector[int64]("e2eChkptElapsed(ms)", stats.DEFAULT_COLLECT_DURATION)
 		h.epochMarkerSerde, err = commtypes.GetEpochMarkerSerdeG(serdeFormat)
 		if err != nil {
 			return common.GenErrFnOutput(err)
@@ -156,6 +156,7 @@ func (h *ChkptManagerHandler) Chkpt(ctx context.Context, input *common.ChkptMngr
 			// debug.Fprintf(os.Stderr, "after wait for chkpt finish\n")
 			now = time.Now()
 		}
+		chkptTimes.PrintRemainingStats()
 	}
 	debug.Fprintf(os.Stderr, "chkptmngr exits with success\n")
 	return &common.FnOutput{Success: true}

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"golang.org/x/exp/constraints"
-	"golang.org/x/exp/slices"
 )
 
 const (
@@ -79,19 +78,21 @@ func NewPrintLogStatsCollector[E constraints.Ordered](tag string) PrintLogStatsC
 
 func (c *PrintLogStatsCollector[E]) PrintRemainingStats() {
 	if len(c.data) > 0 {
-		fmt.Fprintf(os.Stderr, "%s: %v\n", c.tag, c.data)
+		fmt.Fprintf(os.Stderr, "%s (%d samples): data=%v\n", c.tag, len(c.data), c.data)
 	}
 }
 
 func (c *StatsCollector[E]) PrintRemainingStats() {
 	if len(c.data) > 0 {
-		slices.Sort(c.data)
-		p50 := POf(c.data, 0.5)
-		p90 := POf(c.data, 0.9)
-		p99 := POf(c.data, 0.99)
 		duration := c.report_timer.Mark()
-		fmt.Fprintf(os.Stderr, "%s stats (%d samples): dur=%v, p50=%v, p90=%v, p99=%v\n",
-			c.tag, len(c.data), duration, p50, p90, p99)
-		c.data = make([]E, 0)
+		fmt.Fprintf(os.Stderr, "%s (%d samples): dur=%v, data=%v\n", c.tag, len(c.data), duration, c.data)
+		// slices.Sort(c.data)
+		// p50 := POf(c.data, 0.5)
+		// p90 := POf(c.data, 0.9)
+		// p99 := POf(c.data, 0.99)
+		// duration := c.report_timer.Mark()
+		// fmt.Fprintf(os.Stderr, "%s stats (%d samples): dur=%v, p50=%v, p90=%v, p99=%v\n",
+		// 	c.tag, len(c.data), duration, p50, p90, p99)
+		// c.data = make([]E, 0)
 	}
 }

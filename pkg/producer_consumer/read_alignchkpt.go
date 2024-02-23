@@ -43,7 +43,7 @@ func NewAlignChkptConsumer(
 		epochMarkerSerde: epochMarkerSerde,
 		msgBuffer:        msgBuffer,
 		producerMarked:   make(data_structure.Uint8Set),
-		alignTime: stats.NewStatsCollector[int64](fmt.Sprintf("alignTime_%d", instanceId),
+		alignTime: stats.NewStatsCollector[int64](fmt.Sprintf("WaitAlignTime_%d(ms)", instanceId),
 			stats.DEFAULT_COLLECT_DURATION),
 		currentSnapshotId: 0,
 		numSrcProducer:    numSrcProducer,

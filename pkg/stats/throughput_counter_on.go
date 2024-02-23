@@ -10,7 +10,8 @@ import (
 
 func (c *ThroughputCounter) Tick(count uint64) {
 	c.count += count
-	if c.count > c.last_count && c.report_timer.Check() {
+	rt_check := c.report_timer.Check()
+	if c.count > c.last_count && rt_check {
 		duration := c.report_timer.Mark()
 		tp := float64(c.count-c.last_count) / duration.Seconds()
 		fmt.Fprintf(os.Stderr, "%s counter: dur=%v, value=%v, rate=%v per second\n", c.tag, duration, c.count, tp)
@@ -22,7 +23,8 @@ func (c *ConcurrentThroughputCounter) Tick(count uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.count += count
-	if c.count > c.last_count && c.report_timer.Check() {
+	rt_check := c.report_timer.Check()
+	if c.count > c.last_count && rt_check {
 		duration := c.report_timer.Mark()
 		tp := float64(c.count-c.last_count) / duration.Seconds()
 		c.last_count = c.count
