@@ -11,6 +11,7 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/txn_data"
 	"time"
 
@@ -86,6 +87,7 @@ func (h *ChkptManagerHandler) Chkpt(ctx context.Context, input *common.ChkptMngr
 	if guarantee == exactly_once_intr.ALIGN_CHKPT {
 		serdeFormat := commtypes.SerdeFormat(input.SerdeFormat)
 		chkptEveryMs := time.Duration(input.ChkptEveryMs) * time.Millisecond
+		chkptTimes := stats.NewStatsCollector[int64]("chkptElapsed", stats.DEFAULT_COLLECT_DURATION)
 		h.epochMarkerSerde, err = commtypes.GetEpochMarkerSerdeG(serdeFormat)
 		if err != nil {
 			return common.GenErrFnOutput(err)
@@ -134,6 +136,7 @@ func (h *ChkptManagerHandler) Chkpt(ctx context.Context, input *common.ChkptMngr
 				return common.GenErrFnOutput(err)
 			}
 			// debug.Fprintf(os.Stderr, "after reset chkpt count\n")
+			startChkpt := time.Now()
 			err = h.genChkpt(ctx, input)
 			if err != nil {
 				debug.Fprintf(os.Stderr, "gen chkpt err: %v\n", err)
@@ -145,6 +148,8 @@ func (h *ChkptManagerHandler) Chkpt(ctx context.Context, input *common.ChkptMngr
 				debug.Fprintf(os.Stderr, "wait for chkpt finish err: %v\n", err)
 				return common.GenErrFnOutput(err)
 			}
+			el := time.Since(startChkpt)
+			chkptTimes.AddSample(el.Milliseconds())
 			if should_exit {
 				break
 			}

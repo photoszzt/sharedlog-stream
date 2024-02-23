@@ -302,8 +302,8 @@ func Invoke(invokeParam InvokeFuncParam,
 	fmt.Fprintf(os.Stderr, "configScaleInput: %+v\n", configScaleInput)
 
 	to := baseQueryInput.Duration + 20
-	if to < 300 {
-		to = 300
+	if to < 450 {
+		to = 450
 	}
 
 	timeout := time.Duration(to) * time.Second

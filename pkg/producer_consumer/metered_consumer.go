@@ -122,6 +122,9 @@ func (s *MeteredConsumer) OutputRemainingStats() {
 	if s.consumer.emc != nil {
 		s.consumer.emc.OutputRemainingStats()
 	}
+	if s.consumer.acc != nil {
+		s.consumer.acc.OutputRemainingStats()
+	}
 	// s.msgBatchTime.PrintRemainingStats()
 }
 

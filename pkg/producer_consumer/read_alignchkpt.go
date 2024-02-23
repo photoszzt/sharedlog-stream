@@ -7,6 +7,8 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/data_structure"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/stats"
+	"time"
 
 	"github.com/gammazero/deque"
 )
@@ -17,6 +19,8 @@ type AlignChkptConsumer struct {
 	epochMarkerSerde       commtypes.SerdeG[commtypes.EpochMarker]
 	msgBuffer              []*deque.Deque[*commtypes.RawMsg]
 	producerMarked         data_structure.Uint8Set
+	alignTime              stats.StatsCollector[int64]
+	alignStart             time.Time
 	currentSnapshotId      int64
 	firstChkptMarkerSeqNum uint64
 	numSrcProducer         uint8
@@ -34,11 +38,13 @@ func NewAlignChkptConsumer(
 		msgBuffer[i] = deque.New[*commtypes.RawMsg]()
 	}
 	return &AlignChkptConsumer{
-		stream:            stream,
-		curReadMsgSeqNum:  make(map[commtypes.ProducerId]data_structure.Uint64Set),
-		epochMarkerSerde:  epochMarkerSerde,
-		msgBuffer:         msgBuffer,
-		producerMarked:    make(data_structure.Uint8Set),
+		stream:           stream,
+		curReadMsgSeqNum: make(map[commtypes.ProducerId]data_structure.Uint64Set),
+		epochMarkerSerde: epochMarkerSerde,
+		msgBuffer:        msgBuffer,
+		producerMarked:   make(data_structure.Uint8Set),
+		alignTime: stats.NewStatsCollector[int64](fmt.Sprintf("alignTime_%d", instanceId),
+			stats.DEFAULT_COLLECT_DURATION),
 		currentSnapshotId: 0,
 		numSrcProducer:    numSrcProducer,
 		instanceId:        instanceId,
@@ -46,6 +52,7 @@ func NewAlignChkptConsumer(
 }
 
 func (ndc *AlignChkptConsumer) OutputRemainingStats() {
+	ndc.alignTime.PrintRemainingStats()
 }
 
 func (ndc *AlignChkptConsumer) ReadNext(ctx context.Context, parNum uint8) (*commtypes.RawMsg, error) {
@@ -93,6 +100,7 @@ func (ndc *AlignChkptConsumer) ReadNext(ctx context.Context, parNum uint8) (*com
 				}
 				if len(ndc.producerMarked) == 0 {
 					ndc.firstChkptMarkerSeqNum = rawMsg.LogSeqNum
+					ndc.alignStart = time.Now()
 				}
 				ndc.producerMarked.Add(epochMark.ProdIndex)
 				if len(ndc.producerMarked) == int(ndc.numSrcProducer) {
@@ -104,6 +112,7 @@ func (ndc *AlignChkptConsumer) ReadNext(ctx context.Context, parNum uint8) (*com
 					}
 					rawMsg.UnprocessSeq = unprocessed
 					rawMsg.FirstChkptMarkSeq = ndc.firstChkptMarkerSeqNum
+					ndc.alignTime.AddSample(time.Since(ndc.alignStart).Milliseconds())
 					// got all checkpoint marker
 					return rawMsg, nil
 				} else {
