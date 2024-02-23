@@ -127,7 +127,7 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
 		args.warmup, args.flushEvery, args.waitEndMark)
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
 	warmupCheck.StartWarmup()
-	alignChkptTime := stats.NewStatsCollector[int64](fmt.Sprintf("alignChkpt_%d(ms)", args.ectx.SubstreamNum()),
+	alignChkptTime := stats.NewStatsCollector[int64](fmt.Sprintf("createChkpt_%d(ms)", args.ectx.SubstreamNum()),
 		stats.DEFAULT_COLLECT_DURATION)
 	for _, tp := range args.ectx.Producers() {
 		finalOutTpNames = append(finalOutTpNames, tp.TopicName())

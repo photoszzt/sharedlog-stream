@@ -47,6 +47,14 @@ type StreamTask struct {
 	isFinalStage   bool
 }
 
+func (t *StreamTask) PrintRemainingStats() {
+	t.flushStageTime.PrintRemainingStats()
+	t.flushAtLeastOne.PrintRemainingStats()
+	t.commitTxnAPITime.PrintRemainingStats()
+	t.sendOffsetTime.PrintRemainingStats()
+	t.txnCommitTime.PrintRemainingStats()
+}
+
 func (t *StreamTask) SetEndDuration(startTimeMs int64) {
 	t.endDuration = time.Since(time.UnixMilli(startTimeMs))
 }
@@ -545,12 +553,16 @@ func setOffsetOnStream(offsetMap map[string]uint64,
 	}
 }
 
-func prodConsumerExactlyOnce(args *StreamTaskArgs,
-	rem exactly_once_intr.ReadOnlyExactlyOnceManager,
-) {
+func checkStreamArgs(args *StreamTaskArgs) {
 	debug.Assert(len(args.ectx.Consumers()) >= 1, "Srcs should be filled")
 	debug.Assert(args.env != nil, "env should be filled")
 	debug.Assert(args.ectx != nil, "program args should be filled")
+}
+
+func prodConsumerExactlyOnce(args *StreamTaskArgs,
+	rem exactly_once_intr.ReadOnlyExactlyOnceManager,
+) {
+	checkStreamArgs(args)
 	for _, src := range args.ectx.Consumers() {
 		if !src.IsInitialSource() || args.guarantee == exactly_once_intr.ALIGN_CHKPT {
 			src.ConfigExactlyOnce(args.guarantee)
@@ -565,9 +577,7 @@ func trackStreamAndConfigureExactlyOnce(args *StreamTaskArgs,
 	rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	trackStream func(name string, stream *sharedlog_stream.ShardedSharedLogStream),
 ) {
-	debug.Assert(len(args.ectx.Consumers()) >= 1, "Srcs should be filled")
-	debug.Assert(args.env != nil, "env should be filled")
-	debug.Assert(args.ectx != nil, "program args should be filled")
+	checkStreamArgs(args)
 	for _, src := range args.ectx.Consumers() {
 		if !src.IsInitialSource() {
 			src.ConfigExactlyOnce(args.guarantee)

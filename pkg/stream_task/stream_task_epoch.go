@@ -307,7 +307,7 @@ func processInEpoch(
 				}
 				fmt.Fprintf(os.Stderr, "{epoch mark time: %v}\n", epochMarkTime)
 				fmt.Fprintf(os.Stderr, "epoch_mark_times: %d\n", meta.t.epochMarkTimes)
-				meta.t.flushStageTime.PrintRemainingStats()
+				meta.t.PrintRemainingStats()
 				// execIntrMs.PrintRemainingStats()
 				// thisAndLastCmtMs.PrintRemainingStats()
 				updateReturnMetric(ret, &warmupCheck,
@@ -331,6 +331,7 @@ func processInEpoch(
 			if exitDueToFailTest {
 				ret = &common.FnOutput{Success: true, Message: common_errors.ErrReturnDueToTest.Error()}
 			}
+			meta.t.PrintRemainingStats()
 			// markPartUs.PrintRemainingStats()
 			// execIntrMs.PrintRemainingStats()
 			// thisAndLastCmtMs.PrintRemainingStats()
@@ -364,6 +365,7 @@ func processInEpoch(
 			if r != nil {
 				return r
 			}
+			meta.t.PrintRemainingStats()
 			// markPartUs.PrintRemainingStats()
 			// execIntrMs.PrintRemainingStats()
 			// thisAndLastCmtMs.PrintRemainingStats()
@@ -436,8 +438,7 @@ func finalMark(
 	}
 	fmt.Fprintf(os.Stderr, "[%d] {epoch mark time: %v}\n", meta.args.ectx.SubstreamNum(), epochMarkTime)
 	fmt.Fprintf(os.Stderr, "[%d] epoch_mark_times: %d\n", meta.args.ectx.SubstreamNum(), meta.t.epochMarkTimes)
-	meta.t.flushStageTime.PrintRemainingStats()
-	meta.t.flushAtLeastOne.PrintRemainingStats()
+	meta.t.PrintRemainingStats()
 	return nil
 }
 

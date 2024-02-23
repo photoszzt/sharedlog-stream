@@ -32,16 +32,16 @@ func NewStreamTaskBuilder() BuildStreamTask {
 			resumeFunc:       nil,
 			initFunc:         nil,
 			HandleErrFunc:    nil,
+			flushStageTime:   stats.NewPrintLogStatsCollector[int64]("flushStage"),
+			flushAtLeastOne:  stats.NewPrintLogStatsCollector[int64]("flushAtLeastOne"),
 			commitTxnAPITime: stats.NewPrintLogStatsCollector[int64]("commitTxnAPITime"),
 			sendOffsetTime:   stats.NewPrintLogStatsCollector[int64]("sendOffsetTime"),
 			txnCommitTime:    stats.NewPrintLogStatsCollector[int64]("txnCommitTime"),
 
 			// markEpochTime:    stats.NewStatsCollector[int64]("markEpochTime", stats.DEFAULT_COLLECT_DURATION),
 			// markEpochPrepare: stats.NewStatsCollector[int64]("markEpochPrepare", stats.DEFAULT_COLLECT_DURATION),
-			flushStageTime:  stats.NewPrintLogStatsCollector[int64]("flushStage"),
-			flushAtLeastOne: stats.NewPrintLogStatsCollector[int64]("flushAtLeastOne"),
-			epochMarkTimes:  0,
-			isFinalStage:    false,
+			epochMarkTimes: 0,
+			isFinalStage:   false,
 		},
 	}
 }

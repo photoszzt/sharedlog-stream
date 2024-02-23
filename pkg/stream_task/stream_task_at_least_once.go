@@ -13,9 +13,7 @@ import (
 )
 
 func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.FnOutput {
-	debug.Assert(len(args.ectx.Consumers()) >= 1, "Srcs should be filled")
-	debug.Assert(args.env != nil, "env should be filled")
-	debug.Assert(args.ectx != nil, "program args should be filled")
+	checkStreamArgs(args)
 	// latencies := stats.NewInt64Collector("latPerIter", stats.DEFAULT_COLLECT_DURATION)
 	cm, err := consume_seq_num_manager.NewConsumeSeqManager(args.env, args.serdeFormat,
 		args.transactionalId, args.bufMaxSize)

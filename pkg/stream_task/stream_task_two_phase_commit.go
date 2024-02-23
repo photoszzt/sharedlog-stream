@@ -283,10 +283,7 @@ func commitTransaction(ctx context.Context,
 	}
 	if shouldExit {
 		ret := &common.FnOutput{Success: true, Message: "exit"}
-		meta.t.txnCommitTime.PrintRemainingStats()
-		meta.t.commitTxnAPITime.PrintRemainingStats()
-		meta.t.flushStageTime.PrintRemainingStats()
-		meta.t.sendOffsetTime.PrintRemainingStats()
+		meta.t.PrintRemainingStats()
 		return ret
 	}
 	return nil
