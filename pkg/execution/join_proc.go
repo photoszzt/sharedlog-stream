@@ -84,8 +84,8 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 				if procArgs.CurEpoch() < rawMsgSeq.ScaleEpoch {
 					consumer.SrcProducerGotScaleFence(rawMsgSeq.ProdIdx)
 					if consumer.AllProducerScaleFenced() {
-						jm.gotScaleFence.Store(true)
 						jm.ctrlMsg = rawMsgSeq
+						jm.gotScaleFence.Store(true)
 						jm.runLock.Unlock()
 						return
 					} else {
@@ -101,11 +101,11 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 				elapsed := time.Since(jWStart)
 				fmt.Fprintf(os.Stderr, "[id=%s] joinProc done, elapsed %v\n", id, elapsed)
 				if consumer.AllProducerEnded() {
+					jm.ctrlMsg = rawMsgSeq
 					jm.gotEndMark.Store(true)
 					// fmt.Fprintf(os.Stderr, "[id=%s] %s %d ends, start time: %d\n",
 					// 	id, consumer.TopicName(), procArgs.SubstreamNum(), jm.startTimeMs)
 					// fmt.Fprintf(os.Stderr, "[id=%s] %s(%d) ends, elapsed: %v\n", id, consumer.TopicName(), procArgs.SubstreamNum(), elapsed)
-					jm.ctrlMsg = rawMsgSeq
 					jm.runLock.Unlock()
 					return
 				} else {
@@ -117,6 +117,7 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 				continue
 			} else if rawMsgSeq.Mark == commtypes.CHKPT_MARK {
 				jm.ctrlMsg = rawMsgSeq
+				jm.gotChkptTime = time.Now()
 				jm.gotChkptMark.Store(true)
 				jm.runLock.Unlock()
 				return
