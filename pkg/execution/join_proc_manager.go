@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/pkg/utils/syncutils"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 type JoinWorkerFunc[KIn, VIn, KOut, VOut any] func(c context.Context, m commtypes.MessageG[KIn, VIn]) ([]commtypes.MessageG[KOut, VOut], error)
@@ -18,6 +19,7 @@ type JoinProcManager struct {
 	done            chan struct{}
 	flushAndCollect chan struct{}
 	ctrlMsg         *commtypes.RawMsgAndSeq
+	gotChkptTime    time.Time
 	gotEndMark      atomic.Bool
 	gotScaleFence   atomic.Bool
 	gotChkptMark    atomic.Bool

@@ -53,9 +53,6 @@ func PrepareTaskWithJoin[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR any]
 	lctx := context.WithValue(ctx, commtypes.CTXID{}, "left")
 	rctx := context.WithValue(ctx, commtypes.CTXID{}, "right")
 
-	pauseTime := stats.NewStatsCollector[int64]("join_pause_us", stats.DEFAULT_COLLECT_DURATION)
-	resumeTime := stats.NewStatsCollector[int64]("join_resume_us", stats.DEFAULT_COLLECT_DURATION)
-
 	handleJoinErrReturn := func() *common.FnOutput {
 		var out1 *common.FnOutput
 		var out2 *common.FnOutput
@@ -98,6 +95,8 @@ func PrepareTaskWithJoin[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR any]
 					debug.Fprintf(os.Stderr, "join proc got all checkpt mark\n")
 					debug.Assert(leftManager.ctrlMsg != nil, "left manager ctrl msg should not be nil")
 					debug.Assert(rightManager.ctrlMsg != nil, "right manager ctrl msg should not be nil")
+					dur_between := leftManager.gotChkptTime.Sub(rightManager.gotChkptTime).Abs().Milliseconds()
+					procArgs.chkPtBtwTime.AddSample(dur_between)
 					return nil, []*commtypes.RawMsgAndSeq{leftManager.ctrlMsg, rightManager.ctrlMsg}
 				}
 				return handleJoinErrReturn(), nil
@@ -121,7 +120,7 @@ func PrepareTaskWithJoin[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR any]
 					rightManager.LockRunlock()
 				}
 				elapsed := stats.Elapsed(pStart)
-				pauseTime.AddSample(elapsed.Microseconds())
+				procArgs.pauseFuncTime.AddSample(elapsed.Microseconds())
 				return nil
 			}).
 		ResumeFunc(
@@ -140,7 +139,7 @@ func PrepareTaskWithJoin[KInL, VInL, KOutL, VOutL, KInR, VInR, KOutR, VOutR any]
 					rightManager.UnlockRunlock()
 				}
 				elapsed := stats.Elapsed(rStart)
-				resumeTime.AddSample(elapsed.Microseconds())
+				procArgs.resumeFuncTime.AddSample(elapsed.Microseconds())
 				// debug.Fprintf(os.Stderr, "done resume func\n")
 			})
 	if isFinalStage {
