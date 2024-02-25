@@ -12,6 +12,12 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	DEFAULT_AVG_PERSON_SIZE = 200
+	DEFAULT_AVG_AUC_SIZE    = 500
+	DEFAULT_AVG_BID_SIZE    = 100
+)
+
 // entry with slashes is assigned to NexMarkConfig
 type NexMarkConfigInput struct {
 	TopicName              string        `json:"topic_name"`
@@ -20,9 +26,9 @@ type NexMarkConfigInput struct {
 	EventsNum              uint64        `json:"events_num"`  //
 	RatePeriod             time.Duration `json:"rate_period"` //
 	FinalOutTpNames        []string      `json:"finOutTpNs,omitempty"`
-	BidAvgSize             uint32        `json:"bid_avg_size"`     //
 	FirstEventRate         uint32        `json:"first_event_rate"` //
 	NextEventRate          uint32        `json:"next_event_rate"`  //
+	BidAvgSize             uint32        `json:"bid_avg_size"`     //
 	PersonAvgSize          uint32        `json:"person_avg_size"`  //
 	AuctionAvgSize         uint32        `json:"auction_avg_size"` //
 	Duration               uint32        `json:"duration"`
@@ -53,9 +59,9 @@ func NewNexMarkConfigInput(topicName string, serdeFormat commtypes.SerdeFormat) 
 		RateLimited:            false,
 		FirstEventRate:         100,
 		NextEventRate:          100,
-		PersonAvgSize:          200,
-		AuctionAvgSize:         500,
-		BidAvgSize:             100,
+		PersonAvgSize:          DEFAULT_AVG_PERSON_SIZE,
+		AuctionAvgSize:         DEFAULT_AVG_AUC_SIZE,
+		BidAvgSize:             DEFAULT_AVG_BID_SIZE,
 		PersonProportion:       1,
 		AuctionProportion:      3,
 		BidProportion:          46,
@@ -110,6 +116,9 @@ func (gp *GeneratorParams) InvokeSourceFunc(client *http.Client,
 	response *common.FnOutput, wg *sync.WaitGroup, warmup bool,
 ) {
 	defer wg.Done()
+	avgAucBytes := DEFAULT_AVG_AUC_SIZE + srcInvokeConfig.AdditionalBytes
+	avgBidBytes := DEFAULT_AVG_BID_SIZE + srcInvokeConfig.AdditionalBytes
+	avgPersonBytes := DEFAULT_AVG_PERSON_SIZE + srcInvokeConfig.AdditionalBytes
 	nexmarkConfig := NewNexMarkConfigInput(srcInvokeConfig.TopicName, gp.SerdeFormat)
 	nexmarkConfig.FinalOutTpNames = srcInvokeConfig.FinalTpNames
 	nexmarkConfig.Duration = gp.Duration
@@ -125,6 +134,9 @@ func (gp *GeneratorParams) InvokeSourceFunc(client *http.Client,
 	nexmarkConfig.BufMaxSize = gp.BufMaxSize
 	nexmarkConfig.GuaranteeMth = gp.GuaranteeMth
 	nexmarkConfig.CommitEveryMs = gp.CommitMs
+	nexmarkConfig.AuctionAvgSize = uint32(avgAucBytes)
+	nexmarkConfig.BidAvgSize = uint32(avgBidBytes)
+	nexmarkConfig.PersonAvgSize = uint32(avgPersonBytes)
 	url := common.BuildFunctionUrl(gp.FaasGateway, "source")
 	fmt.Printf("func source url is %v\n", url)
 	if err := common.JsonPostRequest(client, url, srcInvokeConfig.NodeConstraint, nexmarkConfig, response); err != nil {

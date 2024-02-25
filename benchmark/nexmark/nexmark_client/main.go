@@ -30,6 +30,7 @@ var (
 	FLAGS_local           bool
 	FLAGS_flush_ms        int
 	FLAGS_src_flush_ms    int
+	FLAGS_additionalBytes int
 	FLAGS_dump_dir        string
 	FLAGS_test_src        string
 	FLAGS_fail_spec       string
@@ -73,6 +74,7 @@ func main() {
 	flag.IntVar(&FLAGS_warmup_time, "warmup_time", 0, "warmup time")
 	flag.IntVar(&FLAGS_flush_ms, "flushms", 10, "flush the buffer every ms; for exactly once, please see commit_everyMs and commit_niter. They determine the flush interval. ")
 	flag.IntVar(&FLAGS_src_flush_ms, "src_flushms", 5, "src flush ms")
+	flag.IntVar(&FLAGS_additionalBytes, "extraBytes", 0, "additional bytes for bid, auc and person records")
 	flag.UintVar(&FLAGS_snapshot_everyS, "snapshot_everyS", 0, "snapshot every s")
 	flag.UintVar(&FLAGS_buf_max_size, "buf_max_size", 131072, "sink buffer max size")
 
@@ -124,7 +126,8 @@ func main() {
 			Local:          FLAGS_local,
 			WaitForEndMark: FLAGS_waitForEndMark,
 		}
-		err := common.Invoke(invokeFuncParam, baseQueryInput, common.InvokeSrcFunc(invokeSourceFunc_))
+		err := common.Invoke(invokeFuncParam, baseQueryInput, common.InvokeSrcFunc(invokeSourceFunc_),
+			FLAGS_additionalBytes)
 		if err != nil {
 			panic(err)
 		}

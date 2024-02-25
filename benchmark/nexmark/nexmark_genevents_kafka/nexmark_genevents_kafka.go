@@ -6,14 +6,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strconv"
-	"time"
-
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/kafka_utils"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/generator"
-
 	"sharedlog-stream/pkg/commtypes"
+	"strconv"
+	"time"
 
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 
@@ -32,6 +30,7 @@ var (
 	FLAGS_srcInstance     int
 	FLAGS_port            int
 	FLAGS_flushms         int
+	FLAGS_additionalBytes int
 	FLAGS_disableBatching bool
 )
 
@@ -51,6 +50,7 @@ func main() {
 	flag.IntVar(&FLAGS_port, "port", 8080, "port to listen")
 	flag.IntVar(&FLAGS_flushms, "flushms", 100, "flush inverval in ms")
 	flag.BoolVar(&FLAGS_disableBatching, "disableBatching", false, "disable batching")
+	flag.IntVar(&FLAGS_additionalBytes, "extraBytes", 0, "additional bytes")
 	flag.Parse()
 
 	var serdeFormat commtypes.SerdeFormat
@@ -76,9 +76,14 @@ func main() {
 			panic(err)
 		}
 	}
-	fmt.Fprintf(os.Stderr, "duration: %d, events_nm: %d, serde: %s, nPar: %d, sourceInstances: %d, tps: %d, port: %d, flushMs: %d, instanceID: %d\n",
+	aucBytes := ntypes.DEFAULT_AVG_AUC_SIZE + FLAGS_additionalBytes
+	bidBytes := ntypes.DEFAULT_AVG_BID_SIZE + FLAGS_additionalBytes
+	personBytes := ntypes.DEFAULT_AVG_PERSON_SIZE + FLAGS_additionalBytes
+	fmt.Fprintf(os.Stderr, "duration: %d, events_nm: %d, serde: %s, nPar: %d, sourceInstances: %d, "+
+		"tps: %d, port: %d, flushMs: %d, instanceID: %d, avgAucBytes: %d, avgBidBytes: %d, avgPersonBytes: %d\n",
 		FLAGS_duration, FLAGS_events_num, FLAGS_serdeFormat, FLAGS_numPartition,
-		FLAGS_srcInstance, FLAGS_tps, FLAGS_port, FLAGS_flushms, instanceId)
+		FLAGS_srcInstance, FLAGS_tps, FLAGS_port, FLAGS_flushms, instanceId,
+		aucBytes, bidBytes, personBytes)
 
 	ctx := context.Background()
 
@@ -95,6 +100,9 @@ func main() {
 	nexmarkConfigInput.EventsNum = uint64(FLAGS_events_num)
 	nexmarkConfigInput.NumOutPartition = uint8(FLAGS_numPartition)
 	nexmarkConfigInput.NumSrcInstance = uint8(FLAGS_srcInstance)
+	nexmarkConfigInput.BidAvgSize = uint32(bidBytes)
+	nexmarkConfigInput.PersonAvgSize = uint32(personBytes)
+	nexmarkConfigInput.AuctionAvgSize = uint32(aucBytes)
 	nexmarkConfig, err := ntypes.ConvertToNexmarkConfiguration(nexmarkConfigInput)
 	if err != nil {
 		log.Fatal().Msgf("Failed to convert to nexmark configuration: %s", err)

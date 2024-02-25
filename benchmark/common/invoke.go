@@ -18,6 +18,7 @@ type SrcInvokeConfig struct {
 	TopicName       string
 	AppId           string
 	NodeConstraint  string
+	AdditionalBytes int
 	ScaleEpoch      uint16
 	NumOutPartition uint8
 	InstanceID      uint8
@@ -30,6 +31,7 @@ func (c *SrcInvokeConfig) Clone() SrcInvokeConfig {
 		TopicName:       c.TopicName,
 		AppId:           c.AppId,
 		NodeConstraint:  c.NodeConstraint,
+		AdditionalBytes: c.AdditionalBytes,
 		ScaleEpoch:      c.ScaleEpoch,
 		NumOutPartition: c.NumOutPartition,
 		InstanceID:      c.InstanceID,
@@ -291,11 +293,13 @@ func InvokeRedisSetup(client *http.Client, rsi *RedisSetupInput, faas_gateway st
 func Invoke(invokeParam InvokeFuncParam,
 	baseQueryInput *QueryInput,
 	invokeSourceFunc InvokeSrcFunc,
+	additionalBytes int,
 ) error {
 	srcInvokeConfig, cliNodes, inParamsMap, configScaleInput, finalOutPars, err := ParseInvokeParam(invokeParam, baseQueryInput)
 	if err != nil {
 		return err
 	}
+	srcInvokeConfig.AdditionalBytes = additionalBytes
 	fmt.Fprintf(os.Stderr, "srcInvokeConfig: %+v\n", srcInvokeConfig)
 	fmt.Fprintf(os.Stderr, "cliNodes: %+v\n", cliNodes)
 	fmt.Fprintf(os.Stderr, "inParamsMap: %+v\n", inParamsMap)
