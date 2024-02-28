@@ -118,14 +118,14 @@ func SetupWinStoreWithChanglogSnap[K, VLeft, VRight any](
 	stream_task.SetupSnapshotCallbackFunc,
 ) {
 	setupSnapFunc := stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment,
-		serdeFormat commtypes.SerdeFormat, rs *snapshot_store.RedisSnapshotStore,
+		serdeFormat commtypes.SerdeFormat, rs snapshot_store.SnapshotStore,
 	) error {
 		payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
 		if err != nil {
 			return err
 		}
-		stream_task.SetWinStoreWithChangelogSnapshot(ctx, env, rs, leftTab, payloadSerde)
-		stream_task.SetWinStoreWithChangelogSnapshot(ctx, env, rs, rightTab, payloadSerde)
+		stream_task.SetWinStoreWithChangelogSnapshot(ctx, env, rs.(*snapshot_store.RedisSnapshotStore), leftTab, payloadSerde)
+		stream_task.SetWinStoreWithChangelogSnapshot(ctx, env, rs.(*snapshot_store.RedisSnapshotStore), rightTab, payloadSerde)
 		return nil
 	})
 	return &store.WinStoreOps{
@@ -144,14 +144,14 @@ func SetupWinStore[K, VLeft, VRight any](
 	stream_task.SetupSnapshotCallbackFunc,
 ) {
 	setupSnapFunc := stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment,
-		serdeFormat commtypes.SerdeFormat, rs *snapshot_store.RedisSnapshotStore,
+		serdeFormat commtypes.SerdeFormat, rs snapshot_store.SnapshotStore,
 	) error {
 		chkptSerde, err := commtypes.GetCheckpointSerdeG(serdeFormat)
 		if err != nil {
 			return err
 		}
-		stream_task.SetWinStoreChkpt(ctx, rs, leftTab, chkptSerde)
-		stream_task.SetWinStoreChkpt(ctx, rs, rightTab, chkptSerde)
+		stream_task.SetWinStoreChkpt(ctx, rs.(*snapshot_store.MinioChkptStore), leftTab, chkptSerde)
+		stream_task.SetWinStoreChkpt(ctx, rs.(*snapshot_store.MinioChkptStore), rightTab, chkptSerde)
 		return nil
 	})
 	return &store.WinStoreOps{

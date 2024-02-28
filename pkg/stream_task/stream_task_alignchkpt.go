@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
+	"github.com/go-redis/redis/v9"
 )
 
 // when restoring the checkpoint, it's reading from
@@ -28,7 +29,7 @@ import (
 
 func SetKVStoreChkpt[K, V any](
 	ctx context.Context,
-	rs *snapshot_store.RedisSnapshotStore,
+	mc *snapshot_store.MinioChkptStore,
 	kvstore store.CoreKeyValueStoreG[K, V],
 	chkptSerde commtypes.SerdeG[commtypes.Checkpoint],
 ) {
@@ -55,13 +56,13 @@ func SetKVStoreChkpt[K, V any](
 				return err
 			}
 			// fmt.Fprintf(os.Stderr, "kv snapshot size: %d, store snapshot at %x\n", len(out), tpLogoff[0].LogOff)
-			return rs.StoreAlignChkpt(ctx, out, tpLogoff, kvstore.Name())
+			return mc.StoreAlignChkpt(ctx, out, tpLogoff, kvstore.Name())
 		})
 }
 
 func SetWinStoreChkpt[K, V any](
 	ctx context.Context,
-	rs *snapshot_store.RedisSnapshotStore,
+	mc *snapshot_store.MinioChkptStore,
 	winStore store.CoreWindowStoreG[K, V],
 	chkptSerde commtypes.SerdeG[commtypes.Checkpoint],
 ) {
@@ -88,7 +89,7 @@ func SetWinStoreChkpt[K, V any](
 				return err
 			}
 			// fmt.Fprintf(os.Stderr, "win snapshot size: %d, store snapshot at %x\n", len(out), tpLogOff[0].LogOff)
-			return rs.StoreAlignChkpt(ctx, out, tpLogOff, winStore.Name())
+			return mc.StoreAlignChkpt(ctx, out, tpLogOff, winStore.Name())
 		})
 }
 
@@ -98,14 +99,14 @@ type ChkptMngr struct {
 }
 
 func NewChkptMngr(ctx context.Context, env types.Environment,
-	rs *snapshot_store.RedisSnapshotStore,
+	rc []*redis.Client,
 ) *ChkptMngr {
 	ckptm := ChkptMngr{
 		prodId: commtypes.NewProducerId(),
 	}
 	ckptm.prodId.InitTaskId(env)
 	ckptm.prodId.TaskEpoch = 1
-	ckptm.rcm = checkpt.NewRedisChkptManagerFromClients(rs.GetRedisClients())
+	ckptm.rcm = checkpt.NewRedisChkptManagerFromClients(rc)
 	return &ckptm
 }
 
@@ -114,12 +115,12 @@ func (em *ChkptMngr) GetCurrentTaskId() uint64            { return em.prodId.Tas
 func (em *ChkptMngr) GetProducerId() commtypes.ProducerId { return em.prodId }
 
 func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
-	rs *snapshot_store.RedisSnapshotStore,
+	rc []*redis.Client, mc *snapshot_store.MinioChkptStore,
 ) *common.FnOutput {
 	init := false
 	paused := false
 	var finalOutTpNames []string
-	chkptMngr := NewChkptMngr(ctx, args.env, rs)
+	chkptMngr := NewChkptMngr(ctx, args.env, rc)
 	prodId := chkptMngr.GetProducerId()
 	fmt.Fprintf(os.Stderr, "[%d] prodId: %s\n", args.ectx.SubstreamNum(), prodId.String())
 	prodConsumerExactlyOnce(args, chkptMngr)
@@ -153,7 +154,7 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
 			if ctrlRawMsgArr[0].Mark != commtypes.CHKPT_MARK {
 				fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
 				alignChkptTime.PrintRemainingStats()
-				return handleCtrlMsg(ctx, ctrlRawMsgArr, t, args, &warmupCheck, rs)
+				return handleCtrlMsg(ctx, ctrlRawMsgArr, t, args, &warmupCheck, mc)
 			}
 			// if len(ctrlRawMsgArr) == 1 {
 			// 	debug.Fprintf(os.Stderr, "Get chkpt mark with logseq %x, seq %v, first chkpt mark %v\n",
@@ -168,7 +169,7 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
 			// 	}
 			// }
 			s := time.Now()
-			err := checkpoint(ctx, t, args, ctrlRawMsgArr, rs, &chkptMngr.rcm, finalOutTpNames)
+			err := checkpoint(ctx, t, args, ctrlRawMsgArr, mc, &chkptMngr.rcm, finalOutTpNames)
 			if err != nil {
 				return common.GenErrFnOutput(err)
 			}
@@ -183,7 +184,7 @@ func checkpoint(
 	t *StreamTask,
 	args *StreamTaskArgs,
 	ctrlRawMsgArr []*commtypes.RawMsgAndSeq,
-	rs *snapshot_store.RedisSnapshotStore,
+	mc *snapshot_store.MinioChkptStore,
 	rcm *checkpt.RedisChkptManager,
 	finalOutTpNames []string,
 ) error {
@@ -214,7 +215,7 @@ func checkpoint(
 	if err != nil {
 		return err
 	}
-	err = createChkpt(ctx, args, tpLogOff, chkptMeta, rs)
+	err = createChkpt(ctx, args, tpLogOff, chkptMeta, mc)
 	if err != nil {
 		return err
 	}

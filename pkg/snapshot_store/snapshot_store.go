@@ -17,6 +17,20 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+type SnapshotStore interface {
+	StoreSrcLogoff(ctx context.Context, srcLogOff []commtypes.TpLogOff) error
+	StoreAlignChkpt(ctx context.Context, snapshot []byte,
+		srcLogOff []commtypes.TpLogOff, storeName string,
+	) error
+	GetAlignChkpt(ctx context.Context, srcs []string, storeName string) ([]byte, error)
+	StoreSnapshot(ctx context.Context, env types.Environment,
+		snapshot []byte, changelogTpName string, logOff uint64,
+	) error
+	GetSnapshot(ctx context.Context, changelogTpName string, logOff uint64) ([]byte, error)
+}
+
+var _ = SnapshotStore(&RedisSnapshotStore{})
+
 type RedisSnapshotStore struct {
 	rdb_arr []*redis.Client
 }
@@ -53,19 +67,28 @@ func (rs *RedisSnapshotStore) StoreAlignChkpt(ctx context.Context, snapshot []by
 	srcLogOff []commtypes.TpLogOff, storeName string,
 ) error {
 	var keys []string
+	bg, ctx := errgroup.WithContext(ctx)
+	l := uint64(len(rs.rdb_arr))
 	for _, tpLogOff := range srcLogOff {
-		idx := hashfuncs.NameHash(tpLogOff.Tp) % uint64(len(rs.rdb_arr))
-		err := rs.rdb_arr[idx].RPush(ctx, tpLogOff.Tp, tpLogOff.LogOff).Err()
-		if err != nil {
-			return err
-		}
 		keys = append(keys, fmt.Sprintf("%s_%#x", tpLogOff.Tp, tpLogOff.LogOff))
 	}
 	keys = append(keys, storeName)
 	key := strings.Join(keys, "-")
 	idx := hashfuncs.NameHash(key) % uint64(len(rs.rdb_arr))
 	debug.Fprintf(os.Stderr, "store snapshot key: %s at redis[%d]\n", key, idx)
-	return rs.rdb_arr[idx].Set(ctx, key, snapshot, time.Duration(5)*time.Second).Err()
+	err := rs.rdb_arr[idx].Set(ctx, key, snapshot, time.Duration(5)*time.Second).Err()
+	if err != nil {
+		return err
+	}
+	for _, tpLogOff := range srcLogOff {
+		idx := hashfuncs.NameHash(tpLogOff.Tp) % l
+		tp := tpLogOff.Tp
+		logOff := tpLogOff.LogOff
+		bg.Go(func() error {
+			return rs.rdb_arr[idx].RPush(ctx, tp, logOff).Err()
+		})
+	}
+	return bg.Wait()
 }
 
 func (rs *RedisSnapshotStore) GetAlignChkpt(ctx context.Context, srcs []string, storeName string) ([]byte, error) {
@@ -93,19 +116,19 @@ func (rs *RedisSnapshotStore) StoreSnapshot(ctx context.Context, env types.Envir
 	snapshot []byte, changelogTpName string, logOff uint64,
 ) error {
 	var uint64Serde commtypes.Uint16Serde
+	key := fmt.Sprintf("%s_%#x", changelogTpName, logOff)
+	idx := hashfuncs.NameHash(key) % uint64(len(rs.rdb_arr))
+	fmt.Fprintf(os.Stderr, "store snapshot key: %s at redis[%d]\n", key, idx)
+	err := rs.rdb_arr[idx].Set(ctx, key, snapshot, time.Duration(60)*time.Second).Err()
+	if err != nil {
+		return err
+	}
 	hasData := uint16(1)
 	enc, err := uint64Serde.Encode(hasData)
 	if err != nil {
 		return err
 	}
-	err = env.SharedLogSetAuxData(ctx, logOff, enc)
-	if err != nil {
-		return err
-	}
-	key := fmt.Sprintf("%s_%#x", changelogTpName, logOff)
-	idx := hashfuncs.NameHash(key) % uint64(len(rs.rdb_arr))
-	fmt.Fprintf(os.Stderr, "store snapshot key: %s at redis[%d]\n", key, idx)
-	return rs.rdb_arr[idx].Set(ctx, key, snapshot, time.Duration(60)*time.Second).Err()
+	return env.SharedLogSetAuxData(ctx, logOff, enc)
 }
 
 func (rs *RedisSnapshotStore) GetSnapshot(ctx context.Context, changelogTpName string, logOff uint64) ([]byte, error) {

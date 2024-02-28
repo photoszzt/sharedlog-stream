@@ -127,14 +127,16 @@ func SetupTableTableJoinWithSkipmap[K comparable, VLeft, VRight, VR any](
 		setupSnapFunc = stream_task.SetupSnapshotCallbackFunc(
 			func(ctx context.Context, env types.Environment,
 				serdeFormat commtypes.SerdeFormat,
-				rs *snapshot_store.RedisSnapshotStore,
+				rs snapshot_store.SnapshotStore,
 			) error {
 				chkptSerde, err := commtypes.GetCheckpointSerdeG(serdeFormat)
 				if err != nil {
 					return err
 				}
-				stream_task.SetKVStoreChkpt[K, commtypes.ValueTimestampG[VLeft]](ctx, rs, leftTab, chkptSerde)
-				stream_task.SetKVStoreChkpt[K, commtypes.ValueTimestampG[VRight]](ctx, rs, rightTab, chkptSerde)
+				stream_task.SetKVStoreChkpt[K, commtypes.ValueTimestampG[VLeft]](ctx,
+					rs.(*snapshot_store.MinioChkptStore), leftTab, chkptSerde)
+				stream_task.SetKVStoreChkpt[K, commtypes.ValueTimestampG[VRight]](ctx,
+					rs.(*snapshot_store.MinioChkptStore), rightTab, chkptSerde)
 				return nil
 			})
 	} else {
@@ -155,16 +157,16 @@ func SetupTableTableJoinWithSkipmap[K comparable, VLeft, VRight, VR any](
 			},
 		}
 		setupSnapFunc = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
-			rs *snapshot_store.RedisSnapshotStore,
+			rs snapshot_store.SnapshotStore,
 		) error {
 			payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
 			if err != nil {
 				return err
 			}
 			stream_task.SetKVStoreWithChangelogSnapshot[K, commtypes.ValueTimestampG[VLeft]](
-				ctx, env, rs, leftTabCl, payloadSerde)
+				ctx, env, rs.(*snapshot_store.RedisSnapshotStore), leftTabCl, payloadSerde)
 			stream_task.SetKVStoreWithChangelogSnapshot[K, commtypes.ValueTimestampG[VRight]](
-				ctx, env, rs, rightTabCl, payloadSerde)
+				ctx, env, rs.(*snapshot_store.RedisSnapshotStore), rightTabCl, payloadSerde)
 			return nil
 		})
 		leftTab = leftTabCl
