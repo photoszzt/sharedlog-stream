@@ -134,9 +134,9 @@ func SetupTableTableJoinWithSkipmap[K comparable, VLeft, VRight, VR any](
 					return err
 				}
 				stream_task.SetKVStoreChkpt[K, commtypes.ValueTimestampG[VLeft]](ctx,
-					rs.(*snapshot_store.MinioChkptStore), leftTab, chkptSerde)
+					rs.(*snapshot_store.RedisSnapshotStore), leftTab, chkptSerde)
 				stream_task.SetKVStoreChkpt[K, commtypes.ValueTimestampG[VRight]](ctx,
-					rs.(*snapshot_store.MinioChkptStore), rightTab, chkptSerde)
+					rs.(*snapshot_store.RedisSnapshotStore), rightTab, chkptSerde)
 				return nil
 			})
 	} else {

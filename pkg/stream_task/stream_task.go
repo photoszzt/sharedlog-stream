@@ -79,7 +79,7 @@ func ExecuteApp(ctx context.Context,
 	outputRemainingStats func(),
 ) *common.FnOutput {
 	var ret *common.FnOutput
-	var mc *snapshot_store.MinioChkptStore
+	// var mc *snapshot_store.MinioChkptStore
 	var rs snapshot_store.RedisSnapshotStore
 	var snap_store snapshot_store.SnapshotStore
 	if streamTaskArgs.guarantee == exactly_once_intr.TWO_PHASE_COMMIT ||
@@ -88,19 +88,20 @@ func ExecuteApp(ctx context.Context,
 		streamTaskArgs.guarantee == exactly_once_intr.ALIGN_CHKPT {
 		create := env_config.CREATE_SNAPSHOT
 		if streamTaskArgs.guarantee == exactly_once_intr.ALIGN_CHKPT {
-			var err error
+			// var err error
 			create = true
-			mc, err = snapshot_store.NewMinioChkptStore()
-			if err != nil {
-				return common.GenErrFnOutput(err)
-			}
+			// mc, err = snapshot_store.NewMinioChkptStore()
+			// if err != nil {
+			// 	return common.GenErrFnOutput(err)
+			// }
 		}
 		rs = snapshot_store.NewRedisSnapshotStore(create)
-		if streamTaskArgs.guarantee == exactly_once_intr.ALIGN_CHKPT {
-			snap_store = mc
-		} else {
-			snap_store = &rs
-		}
+		snap_store = &rs
+		// if streamTaskArgs.guarantee == exactly_once_intr.ALIGN_CHKPT {
+		// 	snap_store = mc
+		// } else {
+		// 	snap_store = &rs
+		// }
 		err := setupSnapshotCallback(ctx, streamTaskArgs.env, streamTaskArgs.serdeFormat, snap_store)
 		if err != nil {
 			return common.GenErrFnOutput(err)
@@ -164,7 +165,7 @@ func ExecuteApp(ctx context.Context,
 			return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, streamTaskArgs.ectx.CurEpoch())
 		}
 		streamTaskArgs.ectx.SetRecordFinishFunc(recordFinish)
-		ret = processAlignChkpt(ctx, t, streamTaskArgs, rs.GetRedisClients(), mc)
+		ret = processAlignChkpt(ctx, t, streamTaskArgs, rs.GetRedisClients(), &rs)
 		debug.Fprintf(os.Stderr, "align chkpt ret: %v\n", ret)
 	} else {
 		fmt.Fprintf(os.Stderr, "unrecognized guarantee: %v\n", streamTaskArgs.guarantee)
@@ -241,7 +242,8 @@ func handleCtrlMsg(
 	t *StreamTask,
 	args *StreamTaskArgs,
 	warmupCheck *stats.Warmup,
-	rs *snapshot_store.MinioChkptStore,
+	// rs *snapshot_store.MinioChkptStore,
+	rs *snapshot_store.RedisSnapshotStore,
 ) *common.FnOutput {
 	if ctrlRawMsgArr[0].Mark == commtypes.SCALE_FENCE {
 		ret := handleScaleEpochAndBytes(ctx, ctrlRawMsgArr[0], args)
@@ -364,7 +366,8 @@ func createSnapshot(ctx context.Context, args *StreamTaskArgs, tplogOff []commty
 
 func createChkpt(ctx context.Context, args *StreamTaskArgs, tplogOff []commtypes.TpLogOff,
 	chkptMeta []commtypes.ChkptMetaData,
-	mc *snapshot_store.MinioChkptStore,
+	// mc *snapshot_store.MinioChkptStore,
+	mc *snapshot_store.RedisSnapshotStore,
 ) error {
 	// no stores
 	if len(args.kvs) == 0 && len(args.wscs) == 0 {

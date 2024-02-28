@@ -7,7 +7,6 @@ import (
 	"os"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/checkpt"
-	"sharedlog-stream/pkg/snapshot_store"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -32,14 +31,14 @@ func (h *RedisSetup) Setup(ctx context.Context, input *common.RedisSetupInput) *
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	mcs, err := snapshot_store.NewMinioChkptStore()
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
-	err = mcs.CreateWorkloadBucket(ctx)
-	if err != nil {
-		return common.GenErrFnOutput(err)
-	}
+	// mcs, err := snapshot_store.NewMinioChkptStore()
+	// if err != nil {
+	// 	return common.GenErrFnOutput(err)
+	// }
+	// err = mcs.CreateWorkloadBucket(ctx)
+	// if err != nil {
+	// 	return common.GenErrFnOutput(err)
+	// }
 	return &common.FnOutput{Success: true}
 }
 

@@ -29,7 +29,8 @@ import (
 
 func SetKVStoreChkpt[K, V any](
 	ctx context.Context,
-	mc *snapshot_store.MinioChkptStore,
+	// mc *snapshot_store.MinioChkptStore,
+	mc *snapshot_store.RedisSnapshotStore,
 	kvstore store.CoreKeyValueStoreG[K, V],
 	chkptSerde commtypes.SerdeG[commtypes.Checkpoint],
 ) {
@@ -62,7 +63,8 @@ func SetKVStoreChkpt[K, V any](
 
 func SetWinStoreChkpt[K, V any](
 	ctx context.Context,
-	mc *snapshot_store.MinioChkptStore,
+	// mc *snapshot_store.MinioChkptStore,
+	mc *snapshot_store.RedisSnapshotStore,
 	winStore store.CoreWindowStoreG[K, V],
 	chkptSerde commtypes.SerdeG[commtypes.Checkpoint],
 ) {
@@ -115,7 +117,9 @@ func (em *ChkptMngr) GetCurrentTaskId() uint64            { return em.prodId.Tas
 func (em *ChkptMngr) GetProducerId() commtypes.ProducerId { return em.prodId }
 
 func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
-	rc []*redis.Client, mc *snapshot_store.MinioChkptStore,
+	rc []*redis.Client,
+	mc *snapshot_store.RedisSnapshotStore,
+	// mc *snapshot_store.MinioChkptStore,
 ) *common.FnOutput {
 	init := false
 	paused := false
@@ -184,7 +188,8 @@ func checkpoint(
 	t *StreamTask,
 	args *StreamTaskArgs,
 	ctrlRawMsgArr []*commtypes.RawMsgAndSeq,
-	mc *snapshot_store.MinioChkptStore,
+	// mc *snapshot_store.MinioChkptStore,
+	mc *snapshot_store.RedisSnapshotStore,
 	rcm *checkpt.RedisChkptManager,
 	finalOutTpNames []string,
 ) error {

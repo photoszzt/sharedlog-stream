@@ -85,7 +85,7 @@ func GetWinStore[K comparable, V any](
 					return err
 				}
 				stream_task.SetWinStoreChkpt[K, commtypes.ValueTimestampG[V]](ctx,
-					rs.(*snapshot_store.MinioChkptStore), cachedStore, chkptSerde)
+					rs.(*snapshot_store.RedisSnapshotStore), cachedStore, chkptSerde)
 				return nil
 			})
 		wsos = &store.WinStoreOps{

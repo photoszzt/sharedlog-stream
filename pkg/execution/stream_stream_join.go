@@ -150,8 +150,8 @@ func SetupWinStore[K, VLeft, VRight any](
 		if err != nil {
 			return err
 		}
-		stream_task.SetWinStoreChkpt(ctx, rs.(*snapshot_store.MinioChkptStore), leftTab, chkptSerde)
-		stream_task.SetWinStoreChkpt(ctx, rs.(*snapshot_store.MinioChkptStore), rightTab, chkptSerde)
+		stream_task.SetWinStoreChkpt(ctx, rs.(*snapshot_store.RedisSnapshotStore), leftTab, chkptSerde)
+		stream_task.SetWinStoreChkpt(ctx, rs.(*snapshot_store.RedisSnapshotStore), rightTab, chkptSerde)
 		return nil
 	})
 	return &store.WinStoreOps{

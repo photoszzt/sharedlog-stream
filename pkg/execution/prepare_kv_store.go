@@ -68,7 +68,7 @@ func GetKVStore[K comparable, V any](
 			}
 			stream_task.SetKVStoreChkpt[K, commtypes.ValueTimestampG[V]](
 				ctx,
-				mc.(*snapshot_store.MinioChkptStore), cachedStore, chkptSerde)
+				mc.(*snapshot_store.RedisSnapshotStore), cachedStore, chkptSerde)
 			return nil
 		}
 		kvos = &store.KVStoreOps{
