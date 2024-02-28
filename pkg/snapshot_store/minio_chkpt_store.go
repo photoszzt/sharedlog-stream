@@ -1,0 +1,106 @@
+package snapshot_store
+
+import (
+	"bytes"
+	"context"
+	"encoding/binary"
+	"fmt"
+	"os"
+	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/hashfuncs"
+	"strings"
+
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
+	"golang.org/x/sync/errgroup"
+)
+
+type MinioChkptStore struct {
+	minioClients []*minio.Client
+}
+
+const (
+	accessKey       = "Q3AM3UQ867SPQQA43P2F"
+	secretAccessKey = "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG"
+)
+
+func NewMinioChkptStore() (*MinioChkptStore, error) {
+	raw_addr := os.Getenv("MINIO_ADDR")
+	addr_arr := strings.Split(raw_addr, ",")
+	fmt.Fprintf(os.Stderr, "minio addr is %v\n", addr_arr)
+	mcs := make([]*minio.Client, len(addr_arr))
+	for i := 0; i < len(addr_arr); i++ {
+		mc, err := minio.New(addr_arr[i], &minio.Options{
+			Creds:  credentials.NewStaticV4(accessKey, secretAccessKey, ""),
+			Secure: true,
+		})
+		if err != nil {
+			return nil, err
+		}
+		mcs[i] = mc
+	}
+	return &MinioChkptStore{
+		minioClients: mcs,
+	}, nil
+}
+
+const CHKPT_BUCKET_NAME = "workload"
+
+func (mc *MinioChkptStore) CreateWorkloadBucket(ctx context.Context) error {
+	for i := 0; i < len(mc.minioClients); i++ {
+		err := mc.minioClients[i].MakeBucket(ctx, CHKPT_BUCKET_NAME, minio.MakeBucketOptions{})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (mc *MinioChkptStore) StoreSrcLogoff(ctx context.Context, srcLogOff []commtypes.TpLogOff) error {
+	bg, ctx := errgroup.WithContext(ctx)
+	for _, tpLogOff := range srcLogOff {
+		idx := hashfuncs.NameHash(tpLogOff.Tp) % uint64(len(mc.minioClients))
+		bg.Go(func() error {
+			bs := make([]byte, 8)
+			binary.LittleEndian.PutUint64(bs, tpLogOff.LogOff)
+			_, err := mc.minioClients[idx].PutObject(ctx, CHKPT_BUCKET_NAME, tpLogOff.Tp, bytes.NewReader(bs), int64(len(bs)), minio.PutObjectOptions{})
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+		debug.Fprintf(os.Stderr, "store src tpoff %s:%#x at minio[%d]\n",
+			tpLogOff.Tp, tpLogOff.LogOff, idx)
+	}
+	return bg.Wait()
+}
+
+func (mc *MinioChkptStore) StoreAlignChkpt(ctx context.Context, snapshot []byte,
+	srcLogOff []commtypes.TpLogOff, storeName string,
+) error {
+	var keys []string
+	bg, ctx := errgroup.WithContext(ctx)
+	l := uint64(len(mc.minioClients))
+	for _, tpLogOff := range srcLogOff {
+		idx := hashfuncs.NameHash(tpLogOff.Tp) % l
+		bg.Go(func() error {
+			bs := make([]byte, 8)
+			binary.LittleEndian.PutUint64(bs, tpLogOff.LogOff)
+			_, err := mc.minioClients[idx].PutObject(ctx, CHKPT_BUCKET_NAME, tpLogOff.Tp,
+				bytes.NewReader(bs), int64(len(bs)), minio.PutObjectOptions{})
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+		keys = append(keys, fmt.Sprintf("%s_%#x", tpLogOff.Tp, tpLogOff.LogOff))
+	}
+	keys = append(keys, storeName)
+	key := strings.Join(keys, "-")
+	idx := hashfuncs.NameHash(key) % l
+	debug.Fprintf(os.Stderr, "store snapshot key: %s at minio[%d]\n", key, idx)
+	_, err := mc.minioClients[idx].PutObject(ctx, CHKPT_BUCKET_NAME, key, bytes.NewReader(snapshot),
+		int64(len(snapshot)), minio.PutObjectOptions{})
+	return err
+}
