@@ -294,6 +294,7 @@ func Invoke(invokeParam InvokeFuncParam,
 	baseQueryInput *QueryInput,
 	invokeSourceFunc InvokeSrcFunc,
 	additionalBytes int,
+	fixedMaxDur uint32,
 ) error {
 	srcInvokeConfig, cliNodes, inParamsMap, configScaleInput, finalOutPars, err := ParseInvokeParam(invokeParam, baseQueryInput)
 	if err != nil {
@@ -306,8 +307,8 @@ func Invoke(invokeParam InvokeFuncParam,
 	fmt.Fprintf(os.Stderr, "configScaleInput: %+v\n", configScaleInput)
 
 	to := baseQueryInput.Duration + 20
-	if to < 450 {
-		to = 450
+	if to < fixedMaxDur {
+		to = fixedMaxDur
 	}
 
 	timeout := time.Duration(to) * time.Second

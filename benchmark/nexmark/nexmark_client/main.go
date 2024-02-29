@@ -98,6 +98,7 @@ func main() {
 	fmt.Fprintf(os.Stderr, "wait for last: %v, sink max_buf_size: %v\n", FLAGS_waitForEndMark, FLAGS_buf_max_size)
 	switch FLAGS_app_name {
 	case "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "windowedAvg":
+		fixedMaxDur := uint32(0)
 		serdeFormat := common.StringToSerdeFormat(FLAGS_serdeFormat)
 		baseQueryInput := NewQueryInput(serdeFormat)
 		gp := ntypes.GeneratorParams{
@@ -126,8 +127,11 @@ func main() {
 			Local:          FLAGS_local,
 			WaitForEndMark: FLAGS_waitForEndMark,
 		}
+		if FLAGS_app_name == "q7" {
+			fixedMaxDur = uint32(450)
+		}
 		err := common.Invoke(invokeFuncParam, baseQueryInput, common.InvokeSrcFunc(invokeSourceFunc_),
-			FLAGS_additionalBytes)
+			FLAGS_additionalBytes, fixedMaxDur)
 		if err != nil {
 			panic(err)
 		}
