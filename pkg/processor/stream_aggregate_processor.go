@@ -2,6 +2,8 @@ package processor
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/store"
@@ -32,6 +34,7 @@ func NewStreamAggregateProcessorG[K, V, VA any](
 		name:        name,
 		useCache:    useCache,
 	}
+	fmt.Fprintf(os.Stderr, "StreamAggregateProc useCache: %v\n", useCache)
 	p.BaseProcessorG.ProcessingFuncG = p.ProcessAndReturn
 	if useCache {
 		store.SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[commtypes.ValueTimestampG[VA]]]) error {

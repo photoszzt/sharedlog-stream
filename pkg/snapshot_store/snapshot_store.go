@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/redis_client"
+	"sharedlog-stream/pkg/stats"
 	"strconv"
 	"strings"
 	"time"
@@ -32,12 +33,16 @@ type SnapshotStore interface {
 var _ = SnapshotStore(&RedisSnapshotStore{})
 
 type RedisSnapshotStore struct {
-	rdb_arr []*redis.Client
+	rdb_arr  []*redis.Client
+	snapSize stats.StatsCollector[int]
 }
 
 func NewRedisSnapshotStore(createSnapshot bool) RedisSnapshotStore {
 	if createSnapshot {
-		return RedisSnapshotStore{rdb_arr: redis_client.GetRedisClients()}
+		return RedisSnapshotStore{
+			rdb_arr:  redis_client.GetRedisClients(),
+			snapSize: stats.NewStatsCollector[int]("redisStore", stats.DEFAULT_COLLECT_DURATION),
+		}
 	} else {
 		return RedisSnapshotStore{}
 	}
@@ -76,6 +81,7 @@ func (rs *RedisSnapshotStore) StoreAlignChkpt(ctx context.Context, snapshot []by
 	key := strings.Join(keys, "-")
 	idx := hashfuncs.NameHash(key) % uint64(len(rs.rdb_arr))
 	debug.Fprintf(os.Stderr, "store snapshot key: %s at redis[%d]\n", key, idx)
+	rs.snapSize.AddSample(len(snapshot))
 	err := rs.rdb_arr[idx].Set(ctx, key, snapshot, time.Duration(5)*time.Second).Err()
 	if err != nil {
 		return err
@@ -123,6 +129,7 @@ func (rs *RedisSnapshotStore) StoreSnapshot(ctx context.Context, env types.Envir
 	if err != nil {
 		return err
 	}
+	rs.snapSize.AddSample(len(snapshot))
 	hasData := uint16(1)
 	enc, err := uint64Serde.Encode(hasData)
 	if err != nil {

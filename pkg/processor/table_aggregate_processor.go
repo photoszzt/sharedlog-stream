@@ -185,6 +185,8 @@ func (p *TableAggregateProcessorG[K, V, VA]) ProcessAndReturn(ctx context.Contex
 		NewVal: newAgg,
 		OldVal: oldAgg,
 	})
-	return []commtypes.MessageG[K, commtypes.ChangeG[VA]]{{Key: msg.Key, Value: change,
-		TimestampMs: newTs, StartProcTime: msg.StartProcTime}}, nil
+	return []commtypes.MessageG[K, commtypes.ChangeG[VA]]{{
+		Key: msg.Key, Value: change,
+		TimestampMs: newTs, StartProcTime: msg.StartProcTime,
+	}}, nil
 }
