@@ -8,7 +8,6 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
@@ -123,8 +122,8 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 		return common.GenErrFnOutput(err)
 	}
 	ectx := processor.NewExecutionContext(srcs, sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum)
-	gua := exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)
-	useCache := benchutil.UseCache(h.useCache, gua)
+	// gua := exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)
+	// useCache := benchutil.UseCache(h.useCache, gua)
 	aggStore, builder, snapfunc, err := setupKVStoreForAgg(ctx, h.env, sp,
 		&execution.KVStoreParam[ntypes.StartEndTime, uint64]{
 			Compare: compareStartEndTime,
@@ -132,7 +131,7 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 				StoreName: "q7MaxBidByWinKVStore",
 				SizeOfK:   ntypes.SizeOfStartEndTime,
 				SizeOfV:   commtypes.SizeOfUint64,
-				UseCache:  useCache,
+				UseCache:  h.useCache,
 			},
 		}, &ectx, h.msgSerde)
 	if err != nil {
@@ -150,7 +149,7 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 						return optional.Some(v.Bid.Price)
 					}
 					return agg
-				}), useCache))
+				}), h.useCache))
 	toStreamProc := processor.NewTableToStreamProcessorG[ntypes.StartEndTime, uint64]()
 	mapProc := processor.NewStreamMapProcessorG[ntypes.StartEndTime, uint64, uint64, ntypes.StartEndTime]("remapKV",
 		processor.MapperFuncG[ntypes.StartEndTime, uint64, uint64, ntypes.StartEndTime](

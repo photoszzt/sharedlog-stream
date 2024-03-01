@@ -25,7 +25,6 @@ func getCachingWindowStore(ctx context.Context) *CachingWindowStoreG[string, str
 		func(k commtypes.KeyAndWindowStartTsG[string]) int64 {
 			return int64(len(k.Key) + 8)
 		}, commtypes.SizeOfString, maxCacheSize)
-	cachingStore.SetFlushCallbackFunc(func(ctx context.Context) error { return nil })
 	return cachingStore
 }
 

@@ -71,9 +71,23 @@ func GetWinStore[K comparable, V any](
 	err error,
 ) {
 	if p.GuaranteeMth == exactly_once_intr.ALIGN_CHKPT {
-		cachedStore, err = GetInMemorySkipMapWindowStore(p, mp.ParNum(), mp.SerdeFormat(), mp.MessageSerde())
+		countWindowStore, err := GetInMemorySkipMapWindowStore(p, mp.ParNum(), mp.SerdeFormat(), mp.MessageSerde())
 		if err != nil {
 			return nil, nil, nil, err
+		}
+		if p.UseCache {
+			sizeOfVTs := commtypes.ValueTimestampGSize[V]{
+				ValSizeFunc: p.SizeOfV,
+			}
+			sizeOfKeyTs := commtypes.KeyAndWindowStartTsGSize[K]{
+				KeySizeFunc: p.SizeOfK,
+			}
+			cachedStore = store.NewCachingWindowStoreG[K, commtypes.ValueTimestampG[V]](
+				ctx, p.JoinWindow.MaxSize(), countWindowStore,
+				sizeOfKeyTs.SizeOfKeyAndWindowStartTs,
+				sizeOfVTs.SizeOfValueTimestamp, p.MaxCacheBytes)
+		} else {
+			cachedStore = countWindowStore
 		}
 		f = stream_task.SetupSnapshotCallbackFunc(
 			func(ctx context.Context, env types.Environment,
@@ -105,11 +119,10 @@ func GetWinStore[K comparable, V any](
 			sizeOfKeyTs := commtypes.KeyAndWindowStartTsGSize[K]{
 				KeySizeFunc: p.SizeOfK,
 			}
-			cacheStore := store.NewCachingWindowStoreG[K, commtypes.ValueTimestampG[V]](
+			aggStore = store.NewCachingWindowStoreBackedByChangelogG[K, commtypes.ValueTimestampG[V]](
 				ctx, p.JoinWindow.MaxSize(), countWindowStore,
 				sizeOfKeyTs.SizeOfKeyAndWindowStartTs,
 				sizeOfVTs.SizeOfValueTimestamp, p.MaxCacheBytes)
-			aggStore = cacheStore
 		} else {
 			aggStore = countWindowStore
 		}

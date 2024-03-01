@@ -3,27 +3,24 @@ package store
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/optional"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
 )
 
 type CachingKeyValueStoreG[K comparable, V any] struct {
-	wrappedStore      KeyValueStoreBackedByChangelogG[K, V]
+	wrappedStore      CoreKeyValueStoreG[K, V]
 	cache             *Cache[K, V]
-	flushCallbackFunc func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[V]]) error
+	flushCallbackFunc KVStoreCacheFlushCallbackFunc[K, V]
 	name              string
 }
 
 var (
-	_ CoreKeyValueStoreG[int, int]              = (*CachingKeyValueStoreG[int, int])(nil)
-	_ KeyValueStoreBackedByChangelogG[int, int] = (*CachingKeyValueStoreG[int, int])(nil)
-	_ CachedKeyValueStore[int, int]             = (*CachingKeyValueStoreG[int, int])(nil)
+	_ CoreKeyValueStoreG[int, int]  = (*CachingKeyValueStoreG[int, int])(nil)
+	_ CachedKeyValueStore[int, int] = (*CachingKeyValueStoreG[int, int])(nil)
 )
 
-func NewCachingKeyValueStoreG[K comparable, V any](ctx context.Context,
-	store KeyValueStoreBackedByChangelogG[K, V],
+func NewCachingKeyValueStore[K comparable, V any](ctx context.Context,
+	store CoreKeyValueStoreG[K, V],
 	sizeOfK func(K) int64,
 	sizeOfV func(V) int64,
 	maxCacheBytes int64,
@@ -33,41 +30,7 @@ func NewCachingKeyValueStoreG[K comparable, V any](ctx context.Context,
 		wrappedStore: store,
 	}
 	c.cache = NewCache(func(entries []LRUElement[K, V]) error {
-		for _, entry := range entries {
-			newVal := entry.entry.value
-			oldVal, ok, err := store.Get(ctx, entry.key)
-			if err != nil {
-				return err
-			}
-			if newVal.IsSome() || ok {
-				var change commtypes.ChangeG[V]
-				if ok {
-					change = commtypes.ChangeG[V]{
-						OldVal: optional.Some(oldVal),
-						NewVal: newVal,
-					}
-				} else {
-					change = commtypes.ChangeG[V]{
-						OldVal: optional.None[V](),
-						NewVal: newVal,
-					}
-				}
-				err = c.wrappedStore.Put(ctx, entry.key, entry.entry.value, entry.entry.tm)
-				if err != nil {
-					return err
-				}
-				err = c.flushCallbackFunc(ctx, commtypes.MessageG[K, commtypes.ChangeG[V]]{
-					Key:           optional.Some(entry.key),
-					Value:         optional.Some(change),
-					TimestampMs:   entry.entry.tm.RecordTsMs,
-					StartProcTime: entry.entry.tm.StartProcTs,
-				})
-				if err != nil {
-					return err
-				}
-			}
-		}
-		return nil
+		return CommonKVStoreCacheFlushCallback(ctx, entries, c.wrappedStore, c.flushCallbackFunc)
 	}, sizeOfK, sizeOfV, maxCacheBytes)
 	return c
 }
@@ -90,7 +53,7 @@ func (c *CachingKeyValueStoreG[K, V]) Get(ctx context.Context, key K) (V, bool, 
 	}
 }
 
-func (c *CachingKeyValueStoreG[K, V]) SetFlushCallback(flushCallbackFunc func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[V]]) error) {
+func (c *CachingKeyValueStoreG[K, V]) SetCacheFlushCallback(flushCallbackFunc KVStoreCacheFlushCallbackFunc[K, V]) {
 	c.flushCallbackFunc = flushCallbackFunc
 }
 
@@ -160,10 +123,6 @@ func (c *CachingKeyValueStoreG[K, V]) Delete(ctx context.Context, key K) error {
 	return c.cache.put(key, LRUEntry[V]{value: optional.None[V]()})
 }
 func (c *CachingKeyValueStoreG[K, V]) TableType() TABLE_TYPE { return IN_MEM }
-func (c *CachingKeyValueStoreG[K, V]) SetTrackParFunc(f exactly_once_intr.TrackProdSubStreamFunc) {
-	c.wrappedStore.SetTrackParFunc(f)
-}
-
 func (c *CachingKeyValueStoreG[K, V]) PutWithoutPushToChangelog(ctx context.Context, key commtypes.KeyT, value commtypes.ValueT) error {
 	return c.wrappedStore.PutWithoutPushToChangelog(ctx, key, value)
 }
@@ -171,45 +130,6 @@ func (c *CachingKeyValueStoreG[K, V]) PutWithoutPushToChangelog(ctx context.Cont
 func (c *CachingKeyValueStoreG[K, V]) Flush(ctx context.Context) (uint32, error) {
 	c.cache.flush(nil)
 	return c.wrappedStore.Flush(ctx)
-}
-
-func (c *CachingKeyValueStoreG[K, V]) ChangelogIsSrc() bool {
-	return c.wrappedStore.ChangelogIsSrc()
-}
-
-func (c *CachingKeyValueStoreG[K, V]) ChangelogTopicName() string {
-	return c.wrappedStore.ChangelogTopicName()
-}
-
-func (c *CachingKeyValueStoreG[K, V]) ConsumeOneLogEntry(ctx context.Context, parNum uint8) (int, error) {
-	return c.wrappedStore.ConsumeOneLogEntry(ctx, parNum)
-}
-
-func (c *CachingKeyValueStoreG[K, V]) ConfigureExactlyOnce(
-	rem exactly_once_intr.ReadOnlyExactlyOnceManager,
-	guarantee exactly_once_intr.GuaranteeMth,
-) {
-	c.wrappedStore.ConfigureExactlyOnce(rem, guarantee)
-}
-
-func (c *CachingKeyValueStoreG[K, V]) Stream() sharedlog_stream.Stream {
-	return c.wrappedStore.Stream()
-}
-
-func (c *CachingKeyValueStoreG[K, V]) GetInitialProdSeqNum() uint64 {
-	return c.wrappedStore.GetInitialProdSeqNum()
-}
-
-func (c *CachingKeyValueStoreG[K, V]) ResetInitialProd() {
-	c.wrappedStore.ResetInitialProd()
-}
-
-func (c *CachingKeyValueStoreG[K, V]) SetLastMarkerSeq(lastMarkerSeq uint64) {
-	c.wrappedStore.SetLastMarkerSeq(lastMarkerSeq)
-}
-
-func (c *CachingKeyValueStoreG[K, V]) SubstreamNum() uint8 {
-	return c.wrappedStore.SubstreamNum()
 }
 
 func (c *CachingKeyValueStoreG[K, V]) Snapshot(ctx context.Context, tpLogOff []commtypes.TpLogOff,
@@ -226,16 +146,8 @@ func (c *CachingKeyValueStoreG[K, V]) SetSnapshotCallback(ctx context.Context, f
 	c.wrappedStore.SetSnapshotCallback(ctx, f)
 }
 
-func (c *CachingKeyValueStoreG[K, V]) SetFlushCallbackFunc(f exactly_once_intr.FlushCallbackFunc) {
-	c.wrappedStore.SetFlushCallbackFunc(f)
-}
-
 func (c *CachingKeyValueStoreG[K, V]) RestoreFromSnapshot(snapshot [][]byte) error {
 	return c.wrappedStore.RestoreFromSnapshot(snapshot)
-}
-
-func (c *CachingKeyValueStoreG[K, V]) FindLastEpochMetaWithAuxData(ctx context.Context, parNum uint8) (auxData []byte, metaSeqNum uint64, err error) {
-	return c.wrappedStore.FindLastEpochMetaWithAuxData(ctx, parNum)
 }
 
 func (c *CachingKeyValueStoreG[K, V]) BuildKeyMeta(ctx context.Context, kms map[string][]txn_data.KeyMaping) error {

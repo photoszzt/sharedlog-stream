@@ -83,6 +83,7 @@ type OnlyUpdateInMemWinStoreG[K, V any] interface {
 
 type WindowStoreOp interface {
 	OnlyUpdateInMemWinStore
+	Flush(ctx context.Context) (uint32, error)
 	Snapshot(ctx context.Context, tplogOff []commtypes.TpLogOff, chkptMeta []commtypes.ChkptMetaData, resetBg bool)
 	WaitForAllSnapshot() error
 	RestoreFromSnapshot(ctx context.Context, snapshot [][]byte) error

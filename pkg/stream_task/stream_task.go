@@ -345,6 +345,18 @@ func flushStreams(ctx context.Context,
 		}
 		flushed += f
 	}
+	for _, kv := range args.kvs {
+		_, err := kv.Flush(ctx)
+		if err != nil {
+			return 0, fmt.Errorf("kv flush: %v", err)
+		}
+	}
+	for _, ws := range args.wscs {
+		_, err := ws.Flush(ctx)
+		if err != nil {
+			return 0, fmt.Errorf("ws flush: %v", err)
+		}
+	}
 	for _, sink := range args.ectx.Producers() {
 		f, err := sink.Flush(ctx)
 		if err != nil {
@@ -514,11 +526,11 @@ func updateFuncs(streamTaskArgs *StreamTaskArgs,
 	streamTaskArgs.ectx.SetRecordFinishFunc(recordFinish)
 	for _, kvchangelog := range streamTaskArgs.kvChangelogs {
 		kvchangelog.SetTrackParFunc(trackParFunc)
-		kvchangelog.SetFlushCallbackFunc(flushCallbackFunc)
+		kvchangelog.SetStreamFlushCallbackFunc(flushCallbackFunc)
 	}
 	for _, wschangelog := range streamTaskArgs.windowStoreChangelogs {
 		wschangelog.SetTrackParFunc(trackParFunc)
-		wschangelog.SetFlushCallbackFunc(flushCallbackFunc)
+		wschangelog.SetStreamFlushCallbackFunc(flushCallbackFunc)
 	}
 }
 

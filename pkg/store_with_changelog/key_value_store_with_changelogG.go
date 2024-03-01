@@ -20,7 +20,10 @@ type KeyValueStoreWithChangelogG[K, V any] struct {
 	// changelogProduce *stats.ConcurrentStatsCollector[int64]
 }
 
-var _ = store.KeyValueStoreBackedByChangelogG[int, int](&KeyValueStoreWithChangelogG[int, int]{})
+var (
+	_ = store.KeyValueStoreBackedByChangelogG[int, int](&KeyValueStoreWithChangelogG[int, int]{})
+	_ = store.CachedKeyValueStoreBackedByChangelogG[int, int](&KeyValueStoreWithChangelogG[int, int]{})
+)
 
 func NewKeyValueStoreWithChangelogG[K, V any](mp *MaterializeParam[K, V],
 	store store.CoreKeyValueStoreG[K, V],
@@ -179,7 +182,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) SetTrackParFunc(trackParFunc exactl
 	st.trackFunc = trackParFunc
 }
 
-func (st *KeyValueStoreWithChangelogG[K, V]) SetFlushCallbackFunc(cb exactly_once_intr.FlushCallbackFunc) {
+func (st *KeyValueStoreWithChangelogG[K, V]) SetStreamFlushCallbackFunc(cb exactly_once_intr.FlushCallbackFunc) {
 	st.changelogManager.producer.SetFlushCallback(cb)
 }
 
@@ -246,8 +249,8 @@ func (st *KeyValueStoreWithChangelogG[K, V]) SubstreamNum() uint8 {
 	return st.kvstore.GetInstanceId()
 }
 
-func (st *KeyValueStoreWithChangelogG[K, V]) SetFlushCallback(
-	func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[V]]) error) {
+func (st *KeyValueStoreWithChangelogG[K, V]) SetCacheFlushCallback(
+	store.KVStoreCacheFlushCallbackFunc[K, V]) {
 }
 
 func (st *KeyValueStoreWithChangelogG[K, V]) Snapshot(

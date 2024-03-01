@@ -4,10 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"sharedlog-stream/benchmark/common"
-	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
@@ -90,8 +88,8 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	gua := exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)
-	useCache := benchutil.UseCache(h.useCache, gua)
+	// gua := exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)
+	// useCache := benchutil.UseCache(h.useCache, gua)
 	aggStore, builder, snapfunc, err := setupKVStoreForAgg(ctx, h.env, sp,
 		&execution.KVStoreParam[ntypes.AuctionIdSeller, ntypes.PriceTime]{
 			Compare: ntypes.AuctionIdSellerLess,
@@ -100,7 +98,7 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 				SizeOfK:       ntypes.SizeOfAuctionIdSeller,
 				SizeOfV:       ntypes.SizeOfPriceTime,
 				MaxCacheBytes: q5SizePerStore,
-				UseCache:      useCache,
+				UseCache:      h.useCache,
 			},
 		}, &ectx, h.msgSerde)
 	if err != nil {
@@ -121,7 +119,7 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 					} else {
 						return agg
 					}
-				}), useCache))
+				}), h.useCache))
 	groupByProc := processor.NewTableGroupByMapProcessorG[ntypes.AuctionIdSeller, ntypes.PriceTime, uint64, ntypes.PriceTime]("changeKey",
 		processor.MapperFuncG[ntypes.AuctionIdSeller, ntypes.PriceTime, uint64, ntypes.PriceTime](
 			func(key optional.Option[ntypes.AuctionIdSeller], value optional.Option[ntypes.PriceTime]) (optional.Option[uint64], optional.Option[ntypes.PriceTime], error) {

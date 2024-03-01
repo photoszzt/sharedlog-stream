@@ -12,7 +12,7 @@ type StoreBackedByChangelog interface {
 		guarantee exactly_once_intr.GuaranteeMth)
 	ChangelogTopicName() string
 	Stream() sharedlog_stream.Stream
-	SetFlushCallbackFunc(cb exactly_once_intr.FlushCallbackFunc)
+	SetStreamFlushCallbackFunc(cb exactly_once_intr.FlushCallbackFunc)
 }
 
 type RestoreFromChangelog interface {

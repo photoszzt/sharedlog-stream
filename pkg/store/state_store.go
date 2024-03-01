@@ -20,12 +20,16 @@ type ProduceRangeRecording interface {
 	SetLastMarkerSeq(lastMarkerSeq uint64)
 }
 
+type KVStoreCacheFlushCallbackFunc[K any, V any] func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[V]]) error
+
 type CachedKeyValueStore[K, V any] interface {
 	CoreKeyValueStoreG[K, V]
-	SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[V]]) error)
+	SetCacheFlushCallback(KVStoreCacheFlushCallbackFunc[K, V])
 }
+
+type WindowStoreCacheFlushCallbackFunc[K any, V any] func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]) error
 
 type CachedWindowStateStore[K, V any] interface {
 	CoreWindowStoreG[K, V]
-	SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]) error)
+	SetCacheFlushCallback(WindowStoreCacheFlushCallbackFunc[K, V])
 }

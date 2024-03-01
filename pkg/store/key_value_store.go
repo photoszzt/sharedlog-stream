@@ -48,6 +48,7 @@ type OnlyUpdateInMemStoreG[K, V any] interface {
 
 type KeyValueStoreOp interface {
 	OnlyUpdateInMemStore
+	Flush(ctx context.Context) (uint32, error)
 	Snapshot(context.Context, []commtypes.TpLogOff, []commtypes.ChkptMetaData, bool)
 	WaitForAllSnapshot() error
 	RestoreFromSnapshot(snapshot [][]byte) error

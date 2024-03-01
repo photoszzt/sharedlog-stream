@@ -53,7 +53,10 @@ type InMemorySkipMapWindowStoreG[K, V any] struct {
 	insId                       uint8
 }
 
-var _ = CoreWindowStoreG[int, int](&InMemorySkipMapWindowStoreG[int, int]{})
+var (
+	_ = CoreWindowStoreG[int, int](&InMemorySkipMapWindowStoreG[int, int]{})
+	_ = CachedWindowStateStore[int, int](&InMemorySkipMapWindowStoreG[int, int]{})
+)
 
 func NewInMemorySkipMapWindowStore[K, V any](name string, retentionPeriod int64,
 	windowSize int64, retainDuplicates bool, compareFunc CompareFuncG[K],
@@ -531,10 +534,12 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) removeExpiredSegments() {
 	}
 }
 
-func (s *InMemorySkipMapWindowStoreG[K, V]) SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]) error) {
+func (s *InMemorySkipMapWindowStoreG[K, V]) SetCacheFlushCallback(
+	WindowStoreCacheFlushCallbackFunc[K, V]) {
 }
 
-func (s *InMemorySkipMapWindowStoreG[K, V]) SetFlushCallbackFunc(exactly_once_intr.FlushCallbackFunc) {
+func (s *InMemorySkipMapWindowStoreG[K, V]) SetStreamFlushCallbackFunc(
+	exactly_once_intr.FlushCallbackFunc) {
 }
 
 func (s *InMemorySkipMapWindowStoreG[K, V]) BuildKeyMeta(kms map[string][]txn_data.KeyMaping) error {

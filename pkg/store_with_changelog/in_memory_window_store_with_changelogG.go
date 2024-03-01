@@ -50,7 +50,10 @@ func createChangelogManagerAndUpdateMsgSerde[K, V any](mp *MaterializeParam[K, V
 	return changelogManager, msgSerde, nil
 }
 
-var _ = store.WindowStoreBackedByChangelogG[int, string](&InMemoryWindowStoreWithChangelogG[int, string]{})
+var (
+	_ = store.WindowStoreBackedByChangelogG[int, string](&InMemoryWindowStoreWithChangelogG[int, string]{})
+	_ = store.CachedWindowStoreBackedByChangelogG[int, string](&InMemoryWindowStoreWithChangelogG[int, string]{})
+)
 
 func NewInMemoryWindowStoreWithChangelogG[K, V any](
 	windowStore store.CoreWindowStoreG[K, V],
@@ -203,7 +206,7 @@ func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetTrackParFunc(trackParFunc e
 	s.trackFunc = trackParFunc
 }
 
-func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetFlushCallbackFunc(cb exactly_once_intr.FlushCallbackFunc) {
+func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetStreamFlushCallbackFunc(cb exactly_once_intr.FlushCallbackFunc) {
 	s.changelogManager.producer.SetFlushCallback(cb)
 }
 
@@ -271,7 +274,7 @@ func (s *InMemoryWindowStoreWithChangelogG[K, V]) SubstreamNum() uint8 {
 	return s.parNum
 }
 
-func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetFlushCallback(func(ctx context.Context, msg commtypes.MessageG[commtypes.WindowedKeyG[K], commtypes.ChangeG[V]]) error) {
+func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetCacheFlushCallback(store.WindowStoreCacheFlushCallbackFunc[K, V]) {
 }
 
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) Snapshot(ctx context.Context, tplogOff []commtypes.TpLogOff, chkptMeta []commtypes.ChkptMetaData, resetBg bool) {

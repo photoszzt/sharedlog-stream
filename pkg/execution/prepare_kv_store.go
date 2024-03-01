@@ -54,10 +54,21 @@ func GetKVStore[K comparable, V any](
 	err error,
 ) {
 	if p.GuaranteeMth == exactly_once_intr.ALIGN_CHKPT {
+		var aggStore store.CachedKeyValueStore[K, commtypes.ValueTimestampG[V]]
 		st, err := GetInMemorySkipMapKVStore(
 			p, mp.ParNum(), mp.SerdeFormat(), mp.MessageSerde())
 		if err != nil {
 			return nil, nil, nil, err
+		}
+		if p.UseCache {
+			sizeOfVTs := commtypes.ValueTimestampGSize[V]{
+				ValSizeFunc: p.SizeOfV,
+			}
+			cacheStore := store.NewCachingKeyValueStore[K, commtypes.ValueTimestampG[V]](
+				ctx, st, p.SizeOfK, sizeOfVTs.SizeOfValueTimestamp, p.MaxCacheBytes)
+			aggStore = cacheStore
+		} else {
+			aggStore = st
 		}
 		f = func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
 			mc snapshot_store.SnapshotStore,
@@ -72,7 +83,7 @@ func GetKVStore[K comparable, V any](
 			return nil
 		}
 		kvos = &store.KVStoreOps{
-			Kvo: []store.KeyValueStoreOp{st},
+			Kvo: []store.KeyValueStoreOp{aggStore},
 		}
 		return st, kvos, f, nil
 	} else {
@@ -85,7 +96,7 @@ func GetKVStore[K comparable, V any](
 			sizeOfVTs := commtypes.ValueTimestampGSize[V]{
 				ValSizeFunc: p.SizeOfV,
 			}
-			cacheStore := store.NewCachingKeyValueStoreG[K, commtypes.ValueTimestampG[V]](
+			cacheStore := store.NewCachingKeyValueStoreBackedByChangelogG[K, commtypes.ValueTimestampG[V]](
 				ctx, kvstore, p.SizeOfK, sizeOfVTs.SizeOfValueTimestamp, p.MaxCacheBytes)
 			aggStore = cacheStore
 		} else {

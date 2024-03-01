@@ -206,8 +206,8 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) Flush(ctx context.Context) (uint3
 	return 0, nil
 }
 
-func (st *InMemorySkipmapKeyValueStoreG[K, V]) SetFlushCallback(
-	func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[V]]) error) {
+func (st *InMemorySkipmapKeyValueStoreG[K, V]) SetCacheFlushCallback(
+	KVStoreCacheFlushCallbackFunc[K, V]) {
 }
 
 func (st *InMemorySkipmapKeyValueStoreG[K, V]) BuildKeyMeta(ctx context.Context, kms map[string][]txn_data.KeyMaping) error {

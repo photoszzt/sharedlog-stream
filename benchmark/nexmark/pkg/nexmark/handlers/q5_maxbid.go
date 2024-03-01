@@ -9,7 +9,6 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
@@ -136,8 +135,8 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 	}
 	ectx := processor.NewExecutionContext(srcs,
 		sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum)
-	gua := exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)
-	useCache := benchutil.UseCache(h.useCache, gua)
+	// gua := exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)
+	// useCache := benchutil.UseCache(h.useCache, gua)
 	aggStore, builder, snapfunc, err := setupKVStoreForAgg(ctx, h.env, sp,
 		&execution.KVStoreParam[ntypes.StartEndTime, uint64]{
 			Compare: compareStartEndTime,
@@ -146,7 +145,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 				SizeOfK:       ntypes.SizeOfStartEndTime,
 				SizeOfV:       commtypes.SizeOfUint64,
 				MaxCacheBytes: q5SizePerStore,
-				UseCache:      useCache,
+				UseCache:      h.useCache,
 			},
 		}, &ectx, h.msgSerde)
 	if err != nil {
@@ -164,7 +163,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 						return optional.Some(v.Count)
 					}
 					return agg
-				}), useCache))
+				}), h.useCache))
 	stJoin := processor.NewMeteredProcessorG[ntypes.StartEndTime, ntypes.AuctionIdCount, ntypes.StartEndTime, ntypes.AuctionIdCntMax](
 		processor.NewStreamTableJoinProcessorG[ntypes.StartEndTime, ntypes.AuctionIdCount, uint64, ntypes.AuctionIdCntMax](aggStore,
 			processor.ValueJoinerWithKeyFuncG[ntypes.StartEndTime, ntypes.AuctionIdCount, uint64, ntypes.AuctionIdCntMax](

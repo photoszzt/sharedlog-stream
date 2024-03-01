@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
@@ -131,7 +130,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	useCache := benchutil.UseCache(h.useCache, exactly_once_intr.GuaranteeMth(sp.GuaranteeMth))
+	// useCache := benchutil.UseCache(h.useCache, exactly_once_intr.GuaranteeMth(sp.GuaranteeMth))
 	aggStore, builder, snapfunc, err := setupKVStoreForAgg(ctx, h.env, sp,
 		&execution.KVStoreParam[ntypes.AuctionIdCategory, uint64]{
 			Compare: ntypes.AuctionIdCategoryLess,
@@ -140,7 +139,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 				SizeOfK:       ntypes.SizeOfAuctionIdCategory,
 				SizeOfV:       commtypes.SizeOfUint64,
 				MaxCacheBytes: q4SizePerStore,
-				UseCache:      useCache,
+				UseCache:      h.useCache,
 			},
 		},
 		&ectx, h.msgSerde)
@@ -161,7 +160,7 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 					} else {
 						return aggregate
 					}
-				}), useCache))
+				}), h.useCache))
 	groupByProc := processor.NewTableGroupByMapProcessorG[ntypes.AuctionIdCategory, uint64, uint64, uint64]("changeKey",
 		processor.MapperFuncG[ntypes.AuctionIdCategory, uint64, uint64, uint64](
 			func(key optional.Option[ntypes.AuctionIdCategory], value optional.Option[uint64]) (optional.Option[uint64], optional.Option[uint64], error) {
