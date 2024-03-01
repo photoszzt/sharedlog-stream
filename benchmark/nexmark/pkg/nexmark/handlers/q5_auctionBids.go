@@ -9,7 +9,6 @@ import (
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
@@ -99,7 +98,7 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	useCache := benchutil.UseCache(h.useCache, exactly_once_intr.GuaranteeMth(sp.GuaranteeMth))
+	// useCache := benchutil.UseCache(h.useCache, exactly_once_intr.GuaranteeMth(sp.GuaranteeMth))
 	cachedStore, builder, setSnapCallbackFunc, err := setupWinStoreForAgg(
 		ctx, h.env, sp, &execution.WinStoreParam[uint64, uint64]{
 			CmpFunc:    store.IntegerCompare[uint64],
@@ -109,7 +108,7 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 				SizeOfK:       commtypes.SizeOfUint64,
 				SizeOfV:       commtypes.SizeOfUint64,
 				MaxCacheBytes: q5SizePerStore,
-				UseCache:      useCache,
+				UseCache:      h.useCache,
 			},
 		}, ectx, h.msgSerde)
 	if err != nil {
@@ -121,7 +120,7 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 		processor.AggregatorFuncG[uint64, *ntypes.Event, uint64](func(key uint64, value *ntypes.Event, aggregate optional.Option[uint64]) optional.Option[uint64] {
 			val := aggregate.Unwrap()
 			return optional.Some(val + 1)
-		}), hopWindow, useCache))
+		}), hopWindow, h.useCache))
 	return countProc, builder, setSnapCallbackFunc, nil
 }
 
