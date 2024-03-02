@@ -38,6 +38,7 @@ func NewStreamAggregateProcessorG[K, V, VA any](
 	p.BaseProcessorG.ProcessingFuncG = p.ProcessAndReturn
 	if useCache {
 		store.SetCacheFlushCallback(func(ctx context.Context, msg commtypes.MessageG[K, commtypes.ChangeG[commtypes.ValueTimestampG[VA]]]) error {
+			fmt.Fprintf(os.Stderr, "StreamAgg cache flush cb\n")
 			change := msg.Value.Unwrap()
 			oldVal := optional.Map(change.OldVal, func(oldVal commtypes.ValueTimestampG[VA]) VA {
 				return oldVal.Value
