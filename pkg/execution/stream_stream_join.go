@@ -266,7 +266,7 @@ func SetupSkipMapStreamStreamJoin[K comparable, VLeft, VRight, VR any](
 	var setupSnapFunc stream_task.SetupSnapshotCallbackFunc
 	var err error
 	var wsos *store.WinStoreOps
-	if gua == exactly_once_intr.ALIGN_CHKPT {
+	if gua == exactly_once_intr.ALIGN_CHKPT || gua == exactly_once_intr.NO_GUARANTEE {
 		toLeftTab, leftTab, err = ToInMemSkipMapWindowTableG(
 			winStoreParamForJoin[K, VLeft](mpLeft.StoreName(), compare, jw, gua),
 			mpLeft.ParNum(), mpLeft.SerdeFormat(), mpLeft.MessageSerde())

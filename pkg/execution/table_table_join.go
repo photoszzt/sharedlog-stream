@@ -110,7 +110,7 @@ func SetupTableTableJoinWithSkipmap[K comparable, VLeft, VRight, VR any](
 	var leftTab store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[VLeft]]
 	var rightTab store.CoreKeyValueStoreG[K, commtypes.ValueTimestampG[VRight]]
 
-	if gua == exactly_once_intr.ALIGN_CHKPT {
+	if gua == exactly_once_intr.ALIGN_CHKPT || gua == exactly_once_intr.NO_GUARANTEE {
 		toLeftTab, leftTab, err = ToInMemSkipmapKVTable(mpLeft.StoreName(), less,
 			mpLeft.ParNum(), mpLeft.SerdeFormat(), mpLeft.MessageSerde(), gua)
 		if err != nil {

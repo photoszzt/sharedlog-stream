@@ -70,7 +70,7 @@ func GetWinStore[K comparable, V any](
 	f stream_task.SetupSnapshotCallbackFunc,
 	err error,
 ) {
-	if p.GuaranteeMth == exactly_once_intr.ALIGN_CHKPT {
+	if p.GuaranteeMth == exactly_once_intr.ALIGN_CHKPT || p.GuaranteeMth == exactly_once_intr.NO_GUARANTEE {
 		countWindowStore, err := GetInMemorySkipMapWindowStore(p, mp.ParNum(), mp.SerdeFormat(), mp.MessageSerde())
 		if err != nil {
 			return nil, nil, nil, err
