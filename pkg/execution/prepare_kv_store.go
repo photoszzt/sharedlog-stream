@@ -53,7 +53,7 @@ func GetKVStore[K comparable, V any](
 	f stream_task.SetupSnapshotCallbackFunc,
 	err error,
 ) {
-	if p.GuaranteeMth == exactly_once_intr.ALIGN_CHKPT {
+	if p.GuaranteeMth == exactly_once_intr.ALIGN_CHKPT || p.GuaranteeMth == exactly_once_intr.NO_GUARANTEE {
 		st, err := GetInMemorySkipMapKVStore(
 			p, mp.ParNum(), mp.SerdeFormat(), mp.MessageSerde())
 		if err != nil {
