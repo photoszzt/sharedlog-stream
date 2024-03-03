@@ -126,10 +126,9 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
 	var finalOutTpNames []string
 	chkptMngr := NewChkptMngr(ctx, args.env, rc)
 	prodId := chkptMngr.GetProducerId()
-	fmt.Fprintf(os.Stderr, "[%d] prodId: %s\n", args.ectx.SubstreamNum(), prodId.String())
+	fmt.Fprintf(os.Stderr, "[%d] prodId: %s, warmup time: %v, flush every: %v, waitEndMark: %v\n",
+		args.ectx.SubstreamNum(), prodId.String(), args.warmup, args.flushEvery, args.waitEndMark)
 	prodConsumerExactlyOnce(args, chkptMngr)
-	debug.Fprintf(os.Stderr, "warmup time: %v, flush every: %v, waitEndMark: %v\n",
-		args.warmup, args.flushEvery, args.waitEndMark)
 	warmupCheck := stats.NewWarmupChecker(args.warmup)
 	warmupCheck.StartWarmup()
 	alignChkptTime := stats.NewStatsCollector[int64](fmt.Sprintf("createChkpt_%d(ms)", args.ectx.SubstreamNum()),
@@ -137,8 +136,18 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
 	for _, tp := range args.ectx.Producers() {
 		finalOutTpNames = append(finalOutTpNames, tp.TopicName())
 	}
+	ticker := time.NewTicker(args.flushEvery)
+	defer ticker.Stop()
 	for {
 		warmupCheck.Check()
+		select {
+		case <-ticker.C:
+			ret_err := timedFlushStreams(ctx, t, args)
+			if ret_err != nil {
+				return ret_err
+			}
+		default:
+		}
 		if !init || paused {
 			resumeAndInit(t, args, &init, &paused)
 		}
@@ -160,18 +169,6 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
 				alignChkptTime.PrintRemainingStats()
 				return handleCtrlMsg(ctx, ctrlRawMsgArr, t, args, &warmupCheck, mc)
 			}
-			// if len(ctrlRawMsgArr) == 1 {
-			// 	debug.Fprintf(os.Stderr, "Get chkpt mark with logseq %x, seq %v, first chkpt mark %v\n",
-			// 		ctrlRawMsgArr, ctrlRawMsgArr[0].LogSeqNum, ctrlRawMsgArr[0].FirstChkptMarkSeq)
-			// } else if len(ctrlRawMsgArr) == 2 {
-			// 	debug.Fprintf(os.Stderr, "Get chkpt mark with logseq %x\n",
-			// 		ctrlRawMsgArr)
-			// 	for i := 0; i < len(ctrlRawMsgArr); i++ {
-			// 		debug.Assert(ctrlRawMsgArr[i] != nil, "ctrlRawMsgArr should not contain nil msg")
-			// 		debug.Fprintf(os.Stderr, "[%v] ctrl mark log seq %v, first mark seq %v\n",
-			// 			i, ctrlRawMsgArr[i].LogSeqNum, ctrlRawMsgArr[i].FirstChkptMarkSeq)
-			// 	}
-			// }
 			s := time.Now()
 			err := checkpoint(ctx, t, args, ctrlRawMsgArr, mc, &chkptMngr.rcm, finalOutTpNames)
 			if err != nil {

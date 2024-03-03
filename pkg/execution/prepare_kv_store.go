@@ -54,7 +54,6 @@ func GetKVStore[K comparable, V any](
 	err error,
 ) {
 	if p.GuaranteeMth == exactly_once_intr.ALIGN_CHKPT {
-		var aggStore store.CachedKeyValueStore[K, commtypes.ValueTimestampG[V]]
 		st, err := GetInMemorySkipMapKVStore(
 			p, mp.ParNum(), mp.SerdeFormat(), mp.MessageSerde())
 		if err != nil {
@@ -64,11 +63,10 @@ func GetKVStore[K comparable, V any](
 			sizeOfVTs := commtypes.ValueTimestampGSize[V]{
 				ValSizeFunc: p.SizeOfV,
 			}
-			cacheStore := store.NewCachingKeyValueStore[K, commtypes.ValueTimestampG[V]](
+			cachedStore = store.NewCachingKeyValueStore[K, commtypes.ValueTimestampG[V]](
 				ctx, st, p.SizeOfK, sizeOfVTs.SizeOfValueTimestamp, p.MaxCacheBytes)
-			aggStore = cacheStore
 		} else {
-			aggStore = st
+			cachedStore = st
 		}
 		f = func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
 			mc snapshot_store.SnapshotStore,
@@ -83,9 +81,8 @@ func GetKVStore[K comparable, V any](
 			return nil
 		}
 		kvos = &store.KVStoreOps{
-			Kvo: []store.KeyValueStoreOp{aggStore},
+			Kvo: []store.KeyValueStoreOp{cachedStore},
 		}
-		return st, kvos, f, nil
 	} else {
 		var aggStore store.CachedKeyValueStoreBackedByChangelogG[K, commtypes.ValueTimestampG[V]]
 		kvstore, err := store_with_changelog.CreateInMemorySkipmapKVTableWithChangelogG(mp, p.Compare)
@@ -96,12 +93,12 @@ func GetKVStore[K comparable, V any](
 			sizeOfVTs := commtypes.ValueTimestampGSize[V]{
 				ValSizeFunc: p.SizeOfV,
 			}
-			cacheStore := store.NewCachingKeyValueStoreBackedByChangelogG[K, commtypes.ValueTimestampG[V]](
+			aggStore = store.NewCachingKeyValueStoreBackedByChangelogG[K, commtypes.ValueTimestampG[V]](
 				ctx, kvstore, p.SizeOfK, sizeOfVTs.SizeOfValueTimestamp, p.MaxCacheBytes)
-			aggStore = cacheStore
 		} else {
 			aggStore = kvstore
 		}
+		cachedStore = aggStore
 		kvos = &store.KVStoreOps{
 			Kvc: map[string]store.KeyValueStoreOpWithChangelog{
 				aggStore.ChangelogTopicName(): aggStore,
@@ -119,8 +116,8 @@ func GetKVStore[K comparable, V any](
 				rs.(*snapshot_store.RedisSnapshotStore), aggStore, payloadSerde)
 			return nil
 		}
-		return aggStore, kvos, f, nil
 	}
+	return cachedStore, kvos, f, nil
 }
 
 func StreamArgsSetKVStore(
