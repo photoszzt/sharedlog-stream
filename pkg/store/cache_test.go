@@ -187,6 +187,43 @@ func TestShouldEvictEldestEntry(t *testing.T) {
 	}
 }
 
+func TestFlushTwice(t *testing.T) {
+	flushed := make([]LRUElement[int, int], 0)
+	cache := NewCache(func(entries []LRUElement[int, int]) error {
+		flushed = append(flushed, entries...)
+		return nil
+	}, func(k int) int64 { return 4 }, func(v int) int64 { return 4 }, 2048)
+	err := cache.put(0, LRUEntry[int]{value: optional.Some(10), isDirty: true})
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+	err = cache.put(1, LRUEntry[int]{value: optional.Some(20), isDirty: false})
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+	err = cache.put(2, LRUEntry[int]{value: optional.Some(30), isDirty: true})
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+	err = cache.flush(nil)
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+	if cache.len() != 3 {
+		t.Errorf("expected cache still contains 3 element, got %v", cache.len())
+	}
+	if len(flushed) != 2 {
+		t.Errorf("expected flushing 3 elements, got %v", len(flushed))
+	}
+	err = cache.flush(nil)
+	if err != nil {
+		t.Errorf("expected nil, got %v", err)
+	}
+	if len(flushed) != 2 {
+		t.Errorf("snd flush should not add new elements, got %v elements", len(flushed))
+	}
+}
+
 func TestShouldFlushDirtEntriesOnEviction(t *testing.T) {
 	flushed := make([]LRUElement[int, int], 0)
 	cache := NewCache(func(entries []LRUElement[int, int]) error {
