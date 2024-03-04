@@ -306,7 +306,7 @@ func Invoke(invokeParam InvokeFuncParam,
 	fmt.Fprintf(os.Stderr, "inParamsMap: %+v\n", inParamsMap)
 	fmt.Fprintf(os.Stderr, "configScaleInput: %+v\n", configScaleInput)
 
-	to := baseQueryInput.Duration + 20
+	to := baseQueryInput.Duration + 60
 	if to < fixedMaxDur {
 		to = fixedMaxDur
 	}
