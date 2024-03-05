@@ -128,10 +128,11 @@ func (h *q7MaxBid) q7MaxBidByPrice(ctx context.Context, sp *common.QueryInput) *
 		&execution.KVStoreParam[ntypes.StartEndTime, uint64]{
 			Compare: compareStartEndTime,
 			CommonStoreParam: execution.CommonStoreParam[ntypes.StartEndTime, uint64]{
-				StoreName: "q7MaxBidByWinKVStore",
-				SizeOfK:   ntypes.SizeOfStartEndTime,
-				SizeOfV:   commtypes.SizeOfUint64,
-				UseCache:  h.useCache,
+				StoreName:     "q7MaxBidByWinKVStore",
+				SizeOfK:       ntypes.SizeOfStartEndTime,
+				SizeOfV:       commtypes.SizeOfUint64,
+				MaxCacheBytes: q5SizePerStore,
+				UseCache:      h.useCache,
 			},
 		}, &ectx, h.msgSerde)
 	if err != nil {

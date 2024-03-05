@@ -123,6 +123,7 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
 ) *common.FnOutput {
 	init := false
 	paused := false
+	// gotNoData := 0
 	var finalOutTpNames []string
 	chkptMngr := NewChkptMngr(ctx, args.env, rc)
 	prodId := chkptMngr.GetProducerId()
@@ -154,6 +155,7 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
 		ret, ctrlRawMsgArr := t.appProcessFunc(ctx, t, args.ectx)
 		if ret != nil {
 			if ret.Success {
+				// gotNoData += 1
 				continue
 			}
 			return ret
@@ -165,6 +167,7 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
 			paused = true
 			debug.Assert(ctrlRawMsgArr[0] != nil, "ctrlRawMsgArr should have at least one element")
 			if ctrlRawMsgArr[0].Mark != commtypes.CHKPT_MARK {
+				// fmt.Fprintf(os.Stderr, "exit due to ctrlMsg, gotNoDataCount: %v\n", gotNoData)
 				fmt.Fprintf(os.Stderr, "exit due to ctrlMsg\n")
 				alignChkptTime.PrintRemainingStats()
 				return handleCtrlMsg(ctx, ctrlRawMsgArr, t, args, &warmupCheck, mc)
