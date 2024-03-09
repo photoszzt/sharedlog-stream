@@ -68,7 +68,7 @@ func SetWinStoreWithChangelogSnapshot[K, V any](
 func SetupManagersForEpoch(ctx context.Context,
 	args *StreamTaskArgs, rs *snapshot_store.RedisSnapshotStore,
 ) (*epoch_manager.EpochManager, *control_channel.ControlChannelManager, error) {
-	em, err := epoch_manager.NewEpochManager(args.env, args.transactionalId, args.serdeFormat)
+	em, err := epoch_manager.NewEpochManager(args.env, args.transactionalId, args.serdeFormat, args.ectx)
 	if err != nil {
 		return nil, nil, err
 	}

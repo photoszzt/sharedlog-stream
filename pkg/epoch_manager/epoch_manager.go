@@ -30,6 +30,7 @@ type EpochManager struct {
 	env                   types.Environment
 	currentTopicSubstream *skipmap.StringMap[*skipset.Uint32Set]
 	epochLog              *sharedlog_stream.SharedLogStream
+	tpHashes              map[string]uint64
 	epochMngrName         string
 	prodId                commtypes.ProducerId
 	epochLogMarkerTag     uint64
@@ -37,6 +38,7 @@ type EpochManager struct {
 
 func NewEpochManager(env types.Environment, epochMngrName string,
 	serdeFormat commtypes.SerdeFormat,
+	ectx processor.ExecutionContext,
 ) (*EpochManager, error) {
 	log, err := sharedlog_stream.NewSharedLogStream(env,
 		EPOCH_LOG_TOPIC_NAME+"_"+epochMngrName, serdeFormat)
@@ -47,6 +49,10 @@ func NewEpochManager(env types.Environment, epochMngrName string,
 	if err != nil {
 		return nil, err
 	}
+	tpHashes := make(map[string]uint64)
+	for _, p := range ectx.Producers() {
+		tpHashes[p.Stream().TopicName()] = p.Stream().TopicNameHash()
+	}
 	return &EpochManager{
 		epochMngrName:         epochMngrName,
 		env:                   env,
@@ -55,6 +61,7 @@ func NewEpochManager(env types.Environment, epochMngrName string,
 		epochLog:              log,
 		epochMetaSerde:        epochMetaSerde,
 		epochLogMarkerTag:     txn_data.MarkerTag(log.TopicNameHash(), 0),
+		tpHashes:              make(map[string]uint64),
 	}, nil
 }
 
@@ -131,6 +138,7 @@ func (em *EpochManager) SyncToRecentNoRead(ctx context.Context) (uint64, error) 
 	return off, nil
 }
 
+// multiple goroutines might call this function
 func (em *EpochManager) AddTopicSubstream(
 	topic string, substreamNum uint8,
 ) error {
@@ -148,10 +156,6 @@ func GenEpochMarker(
 ) (commtypes.EpochMarker, error) {
 	outputRanges := make(map[string][]commtypes.ProduceRange)
 	for _, producer := range ectx.Producers() {
-		// err := producer.Flush(ctx)
-		// if err != nil {
-		// 	return commtypes.EpochMarker{}, err
-		// }
 		topicName := producer.TopicName()
 		parSet, ok := em.currentTopicSubstream.Load(producer.TopicName())
 		if ok {
@@ -168,10 +172,6 @@ func GenEpochMarker(
 	}
 	for _, kvTab := range kvTabs {
 		if !kvTab.ChangelogIsSrc() {
-			// err := kvTab.FlushChangelog(ctx)
-			// if err != nil {
-			// 	return commtypes.EpochMarker{}, err
-			// }
 			ranges := []commtypes.ProduceRange{
 				{
 					SubStreamNum: kvTab.SubstreamNum(),
@@ -182,10 +182,6 @@ func GenEpochMarker(
 		}
 	}
 	for _, winTab := range winTabs {
-		// err := winTab.FlushChangelog(ctx)
-		// if err != nil {
-		// 	return commtypes.EpochMarker{}, err
-		// }
 		ranges := []commtypes.ProduceRange{
 			{
 				SubStreamNum: winTab.SubstreamNum(),
@@ -214,7 +210,12 @@ func (em *EpochManager) GenTagsAndTopicsForEpochMarker() ([]uint64, []string) {
 	em.currentTopicSubstream.Range(func(tp string, parSet *skipset.Uint32Set) bool {
 		// debug.Fprintf(os.Stderr, "tpSubstream tp: %s, parSet: %v\n", tp, parSet)
 		additionalTopic = append(additionalTopic, tp)
-		nameHash := hashfuncs.NameHash(tp)
+
+		nameHash, ok := em.tpHashes[tp]
+		if !ok {
+			nameHash = hashfuncs.NameHash(tp)
+			em.tpHashes[tp] = nameHash
+		}
 		parSet.Range(func(sub uint32) bool {
 			tag := sharedlog_stream.NameHashWithPartition(nameHash, uint8(sub))
 			// debug.Fprintf(os.Stderr, "marker with tag: 0x%x\n", tag)
