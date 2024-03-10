@@ -18,6 +18,7 @@ import (
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/transaction"
+	"sync/atomic"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -330,20 +331,22 @@ func pauseTimedFlushStreams(
 func flushStreams(ctx context.Context,
 	args *StreamTaskArgs,
 ) (uint32, error) {
-	flushed := uint32(0)
+	var flushed atomic.Uint32
+	flushed.Store(0)
+	bgGrp, bgCtx := errgroup.WithContext(ctx)
 	for _, kvchangelog := range args.kvChangelogs {
 		f, err := kvchangelog.Flush(ctx)
 		if err != nil {
 			return 0, fmt.Errorf("kv flush: %v", err)
 		}
-		flushed += f
+		flushed.Add(f)
 	}
 	for _, wschangelog := range args.windowStoreChangelogs {
 		f, err := wschangelog.Flush(ctx)
 		if err != nil {
 			return 0, fmt.Errorf("ws flush: %v", err)
 		}
-		flushed += f
+		flushed.Add(f)
 	}
 	for _, kv := range args.kvs {
 		_, err := kv.Flush(ctx)
@@ -357,14 +360,32 @@ func flushStreams(ctx context.Context,
 			return 0, fmt.Errorf("ws flush: %v", err)
 		}
 	}
-	for _, sink := range args.ectx.Producers() {
-		f, err := sink.Flush(ctx)
+	procs := args.ectx.Producers()
+	procs_len := len(procs)
+	if procs_len > 1 {
+		for _, sink := range procs {
+			s := sink
+			bgGrp.Go(func() error {
+				f, err := s.Flush(bgCtx)
+				if err != nil {
+					return fmt.Errorf("sink flush: %v", err)
+				}
+				flushed.Add(f)
+				return nil
+			})
+		}
+		err := bgGrp.Wait()
+		if err != nil {
+			return 0, err
+		}
+	} else if procs_len == 1 {
+		f, err := procs[0].Flush(bgCtx)
 		if err != nil {
 			return 0, fmt.Errorf("sink flush: %v", err)
 		}
-		flushed += f
+		flushed.Add(f)
 	}
-	return flushed, nil
+	return flushed.Load(), nil
 }
 
 func createSnapshot(ctx context.Context, args *StreamTaskArgs, tplogOff []commtypes.TpLogOff) {
