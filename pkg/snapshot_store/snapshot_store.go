@@ -48,6 +48,10 @@ func NewRedisSnapshotStore(createSnapshot bool) RedisSnapshotStore {
 	}
 }
 
+func (rs *RedisSnapshotStore) PrintRemainingStats() {
+	rs.snapSize.PrintRemainingStats()
+}
+
 func (rs *RedisSnapshotStore) GetRedisClients() []*redis.Client {
 	debug.Assert(len(rs.rdb_arr) != 0, "rdb arr should not be empty")
 	return rs.rdb_arr
