@@ -68,7 +68,7 @@ func SetWinStoreWithChangelogSnapshot[K, V any](
 func SetupManagersForEpoch(ctx context.Context,
 	args *StreamTaskArgs, rs *snapshot_store.RedisSnapshotStore,
 ) (*epoch_manager.EpochManager, *control_channel.ControlChannelManager, error) {
-	em, err := epoch_manager.NewEpochManager(args.env, args.transactionalId, args.serdeFormat, args.ectx)
+	em, err := epoch_manager.NewEpochManager(args.env, args.transactionalId, args.serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -259,7 +259,9 @@ func processInEpoch(
 	meta *epochProcessMeta,
 ) *common.FnOutput {
 	trackStreamAndConfigureExactlyOnce(meta.args, meta.em,
-		func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {})
+		func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {
+			meta.em.RecordTpHashes(name, stream)
+		})
 
 	// execIntrMs := stats.NewPrintLogStatsCollector[int64]("execIntrMs")
 	// thisAndLastCmtMs := stats.NewPrintLogStatsCollector[int64]("thisAndLastCmtMs")

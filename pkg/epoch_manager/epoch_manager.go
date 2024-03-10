@@ -38,7 +38,6 @@ type EpochManager struct {
 
 func NewEpochManager(env types.Environment, epochMngrName string,
 	serdeFormat commtypes.SerdeFormat,
-	ectx processor.ExecutionContext,
 ) (*EpochManager, error) {
 	log, err := sharedlog_stream.NewSharedLogStream(env,
 		EPOCH_LOG_TOPIC_NAME+"_"+epochMngrName, serdeFormat)
@@ -48,10 +47,6 @@ func NewEpochManager(env types.Environment, epochMngrName string,
 	epochMetaSerde, err := commtypes.GetEpochMarkerSerdeG(serdeFormat)
 	if err != nil {
 		return nil, err
-	}
-	tpHashes := make(map[string]uint64)
-	for _, p := range ectx.Producers() {
-		tpHashes[p.Stream().TopicName()] = p.Stream().TopicNameHash()
 	}
 	return &EpochManager{
 		epochMngrName:         epochMngrName,
@@ -63,6 +58,10 @@ func NewEpochManager(env types.Environment, epochMngrName string,
 		epochLogMarkerTag:     txn_data.MarkerTag(log.TopicNameHash(), 0),
 		tpHashes:              make(map[string]uint64),
 	}, nil
+}
+
+func (em *EpochManager) RecordTpHashes(tpName string, stream *sharedlog_stream.ShardedSharedLogStream) {
+	em.tpHashes[tpName] = stream.TopicNameHash()
 }
 
 var _ = exactly_once_intr.ReadOnlyExactlyOnceManager(&EpochManager{})
@@ -159,7 +158,7 @@ func GenEpochMarker(
 		topicName := producer.TopicName()
 		parSet, ok := em.currentTopicSubstream.Load(producer.TopicName())
 		if ok {
-			ranges := make([]commtypes.ProduceRange, 0, 4)
+			ranges := make([]commtypes.ProduceRange, 0, 32)
 			parSet.Range(func(par uint32) bool {
 				ranges = append(ranges, commtypes.ProduceRange{
 					SubStreamNum: uint8(par),
