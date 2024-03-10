@@ -8,6 +8,8 @@ const (
 	LogTagReserveBits = 3
 
 	PartitionBits = 8
+	PartitionMask = uint64(math.MaxUint64) - (1<<PartitionBits - 1)
+	TagAndParMask = uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
 )
 
 const (
@@ -25,36 +27,29 @@ const (
 )
 
 func FenceTag(nameHash uint64, parNum uint8) uint64 {
-	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
-	return nameHash&mask + uint64(parNum)<<LogTagReserveBits + Fence
+	return nameHash&TagAndParMask + uint64(parNum)<<LogTagReserveBits + Fence
 }
 
 func ScaleFenceTag(nameHash uint64, parNum uint8) uint64 {
-	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
-	return nameHash&mask + uint64(parNum)<<LogTagReserveBits + ScaleFenceLowBits
+	return nameHash&TagAndParMask + uint64(parNum)<<LogTagReserveBits + ScaleFenceLowBits
 }
 
 func MarkerTag(nameHash uint64, par uint8) uint64 {
-	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
-	return nameHash&mask + uint64(par)<<LogTagReserveBits + MarkLowBits
+	return nameHash&TagAndParMask + uint64(par)<<LogTagReserveBits + MarkLowBits
 }
 
 func CtrlMetaTag(nameHash uint64, par uint8) uint64 {
-	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
-	return nameHash&mask + uint64(par)<<LogTagReserveBits + CtrlMetaLowBits
+	return nameHash&TagAndParMask + uint64(par)<<LogTagReserveBits + CtrlMetaLowBits
 }
 
 func TxnAbortTag(nameHash uint64, par uint8) uint64 {
-	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
-	return nameHash&mask + uint64(par)<<LogTagReserveBits + AbortLowBits
+	return nameHash&TagAndParMask + uint64(par)<<LogTagReserveBits + AbortLowBits
 }
 
 func TxnPreCommitTag(nameHash uint64, par uint8) uint64 {
-	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
-	return nameHash&mask + uint64(par)<<LogTagReserveBits + PreCommitLowBits
+	return nameHash&TagAndParMask + uint64(par)<<LogTagReserveBits + PreCommitLowBits
 }
 
 func ChkptTag(nameHash uint64, par uint8) uint64 {
-	mask := uint64(math.MaxUint64) - (1<<(PartitionBits+LogTagReserveBits) - 1)
-	return nameHash&mask + uint64(par)<<LogTagReserveBits + ChkptLowBits
+	return nameHash&TagAndParMask + uint64(par)<<LogTagReserveBits + ChkptLowBits
 }

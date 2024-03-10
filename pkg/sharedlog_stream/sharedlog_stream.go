@@ -5,7 +5,6 @@ package sharedlog_stream
 import (
 	"context"
 	"fmt"
-	"math"
 	"sharedlog-stream/pkg/bits"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
@@ -67,8 +66,7 @@ type SharedLogStream struct {
 }
 
 func NameHashWithPartition(nameHash uint64, par uint8) uint64 {
-	mask := uint64(math.MaxUint64) - (1<<txn_data.PartitionBits - 1)
-	return (nameHash & mask) + uint64(par)
+	return (nameHash & txn_data.PartitionMask) + uint64(par)
 }
 
 type StreamLogEntry struct {
