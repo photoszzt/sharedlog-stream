@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-redis/redis/v9"
 )
@@ -19,9 +20,11 @@ func GetRedisClients() []*redis.Client {
 	rdb_arr := make([]*redis.Client, len(addr_arr))
 	for i := 0; i < len(addr_arr); i++ {
 		rdb_arr[i] = redis.NewClient(&redis.Options{
-			Addr:     addr_arr[i],
-			Password: "", // no password set
-			DB:       0,  // use default DB
+			Addr:            addr_arr[i],
+			Password:        "", // no password set
+			DB:              0,  // use default DB
+			MaxRetries:      10,
+			MaxRetryBackoff: time.Duration(4096) * time.Millisecond,
 		})
 	}
 	return rdb_arr
