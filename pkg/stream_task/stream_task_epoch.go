@@ -180,6 +180,7 @@ func checkForTimeout(
 	args *StreamTaskArgs,
 	warmupCheck *stats.Warmup,
 	timeoutPrintOnce *sync.Once,
+	lastPrint *time.Time,
 ) (time.Duration, bool) {
 	cur_elapsed := warmupCheck.ElapsedSinceInitial()
 	timeout := args.duration != 0 && cur_elapsed >= args.duration
@@ -190,8 +191,10 @@ func checkForTimeout(
 				fmt.Fprintf(os.Stderr, "%s msgCnt %d, ctrlCnt %d, epochCnt %d, logEntry %d\n",
 					src.Name(), src.GetCount(), src.NumCtrlMsg(), src.NumEpoch(), src.NumLogEntry())
 			}
+			*lastPrint = time.Now()
 		})
-		if cur_elapsed-args.duration > 20*time.Second {
+		print_elapsed := time.Since(*lastPrint)
+		if print_elapsed > 20*time.Second {
 			fmt.Fprintf(os.Stderr, "timeout after %v\n", cur_elapsed)
 			for _, src := range args.ectx.Consumers() {
 				fmt.Fprintf(os.Stderr, "%s msgCnt %d, ctrlCnt %d, epochCnt %d, logEntry %d\n",
@@ -273,6 +276,7 @@ func processInEpoch(
 	// latencies := stats.NewInt64Collector("latPerIter", stats.DEFAULT_COLLECT_DURATION)
 	markTimer := time.Now()
 	snapshotTimer := time.Now()
+	var lastPrint time.Time
 	var once sync.Once
 	warmupCheck := stats.NewWarmupChecker(meta.args.warmup)
 	fmt.Fprintf(os.Stderr, "commit every(ms): %v, waitEndMark: %v, fixed output parNum: %d, snapshot every(s): %v, sink buf max: %v\n",
@@ -322,7 +326,7 @@ func processInEpoch(
 			markTimer = time.Now()
 		}
 		// Exit routine
-		cur_elapsed, timeout := checkForTimeout(meta.args, &warmupCheck, &timeoutPrintOnce)
+		cur_elapsed, timeout := checkForTimeout(meta.args, &warmupCheck, &timeoutPrintOnce, &lastPrint)
 		exitDueToFailTest := testForFail && cur_elapsed >= failAfter
 		if (!meta.args.waitEndMark && timeout) || exitDueToFailTest {
 			r := finalMark(ctx, meta, snapshotTime, epochMarkTime, exitDueToFailTest)
