@@ -334,22 +334,20 @@ func pauseTimedFlushStreams(
 func flushStreams(ctx context.Context,
 	args *StreamTaskArgs,
 ) (uint32, error) {
-	var flushed atomic.Uint32
-	flushed.Store(0)
-	bgGrp, bgCtx := errgroup.WithContext(ctx)
+	ser_flushed := uint32(0)
 	for _, kvchangelog := range args.kvChangelogs {
 		f, err := kvchangelog.Flush(ctx)
 		if err != nil {
 			return 0, fmt.Errorf("kv flush: %v", err)
 		}
-		flushed.Add(f)
+		ser_flushed += f
 	}
 	for _, wschangelog := range args.windowStoreChangelogs {
 		f, err := wschangelog.Flush(ctx)
 		if err != nil {
 			return 0, fmt.Errorf("ws flush: %v", err)
 		}
-		flushed.Add(f)
+		ser_flushed += f
 	}
 	for _, kv := range args.kvs {
 		_, err := kv.Flush(ctx)
@@ -366,6 +364,9 @@ func flushStreams(ctx context.Context,
 	procs := args.ectx.Producers()
 	procs_len := len(procs)
 	if procs_len > 1 {
+		var flushed atomic.Uint32
+		flushed.Store(0)
+		bgGrp, bgCtx := errgroup.WithContext(ctx)
 		for _, sink := range procs {
 			s := sink
 			bgGrp.Go(func() error {
@@ -381,14 +382,15 @@ func flushStreams(ctx context.Context,
 		if err != nil {
 			return 0, err
 		}
+		ser_flushed += flushed.Load()
 	} else if procs_len == 1 {
-		f, err := procs[0].Flush(bgCtx)
+		f, err := procs[0].Flush(ctx)
 		if err != nil {
 			return 0, fmt.Errorf("sink flush: %v", err)
 		}
-		flushed.Add(f)
+		ser_flushed += f
 	}
-	return flushed.Load(), nil
+	return ser_flushed, nil
 }
 
 func createSnapshot(ctx context.Context, args *StreamTaskArgs, tplogOff []commtypes.TpLogOff) {
