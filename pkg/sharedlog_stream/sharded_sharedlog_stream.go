@@ -6,8 +6,10 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sync"
+	"sync/atomic"
 
 	"cs.utexas.edu/zjia/faas/types"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/xerrors"
 )
 
@@ -340,32 +342,35 @@ func (s *ShardedSharedLogStream) BufPushNoLock(ctx context.Context, payload []by
 func (s *ShardedSharedLogStream) FlushNoLock(ctx context.Context,
 	producerId commtypes.ProducerId,
 ) (uint32, error) {
-	// var flushed atomic.Uint32
-	// flushed.Store(0)
-	// bgGrp, bgCtx := errgroup.WithContext(ctx)
-	// for i := uint8(0); i < s.numPartitions; i++ {
-	// 	idx := i
-	// 	bgGrp.Go(func() error {
-	// 		f, err := s.subSharedLogStreams[idx].FlushNoLock(bgCtx, producerId)
-	// 		flushed.Add(f)
-	// 		return err
-	// 	})
-	// }
-	// err := bgGrp.Wait()
-	// if err != nil {
-	// 	return 0, err
-	// }
-	// return flushed.Load(), nil
-
-	flushed := uint32(0)
+	var flushed atomic.Uint32
+	flushed.Store(0)
+	bgGrp, bgCtx := errgroup.WithContext(ctx)
 	for i := uint8(0); i < s.numPartitions; i++ {
-		f, err := s.subSharedLogStreams[i].FlushNoLock(ctx, producerId)
-		if err != nil {
-			return 0, err
-		}
-		flushed += f
+		idx := i
+		bgGrp.Go(func() error {
+			f, err := s.subSharedLogStreams[idx].FlushNoLock(bgCtx, producerId)
+			if err != nil {
+				return err
+			}
+			flushed.Add(f)
+			return nil
+		})
 	}
-	return flushed, nil
+	err := bgGrp.Wait()
+	if err != nil {
+		return 0, err
+	}
+	return flushed.Load(), nil
+
+	// flushed := uint32(0)
+	// for i := uint8(0); i < s.numPartitions; i++ {
+	// 	f, err := s.subSharedLogStreams[i].FlushNoLock(ctx, producerId)
+	// 	if err != nil {
+	// 		return 0, err
+	// 	}
+	// 	flushed += f
+	// }
+	// return flushed, nil
 }
 
 func (s *ShardedSharedLogStream) PushWithTag(ctx context.Context, payload []byte, parNum uint8, tags []uint64,
