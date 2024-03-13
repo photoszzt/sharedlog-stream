@@ -18,7 +18,6 @@ import (
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/transaction"
-	"sync/atomic"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -361,35 +360,42 @@ func flushStreams(ctx context.Context,
 			return 0, fmt.Errorf("ws flush: %v", err)
 		}
 	}
-	procs := args.ectx.Producers()
-	procs_len := len(procs)
-	if procs_len > 1 {
-		var flushed atomic.Uint32
-		flushed.Store(0)
-		bgGrp, bgCtx := errgroup.WithContext(ctx)
-		for _, sink := range procs {
-			s := sink
-			bgGrp.Go(func() error {
-				f, err := s.Flush(bgCtx)
-				if err != nil {
-					return fmt.Errorf("sink flush: %v", err)
-				}
-				flushed.Add(f)
-				return nil
-			})
-		}
-		err := bgGrp.Wait()
-		if err != nil {
-			return 0, err
-		}
-		ser_flushed += flushed.Load()
-	} else if procs_len == 1 {
-		f, err := procs[0].Flush(ctx)
+	for _, p := range args.ectx.Producers() {
+		f, err := p.Flush(ctx)
 		if err != nil {
 			return 0, fmt.Errorf("sink flush: %v", err)
 		}
 		ser_flushed += f
 	}
+	// procs := args.ectx.Producers()
+	// procs_len := len(procs)
+	// if procs_len > 1 {
+	// 	var flushed atomic.Uint32
+	// 	flushed.Store(0)
+	// 	bgGrp, bgCtx := errgroup.WithContext(ctx)
+	// 	for _, sink := range procs {
+	// 		s := sink
+	// 		bgGrp.Go(func() error {
+	// 			f, err := s.Flush(bgCtx)
+	// 			if err != nil {
+	// 				return fmt.Errorf("sink flush: %v", err)
+	// 			}
+	// 			flushed.Add(f)
+	// 			return nil
+	// 		})
+	// 	}
+	// 	err := bgGrp.Wait()
+	// 	if err != nil {
+	// 		return 0, err
+	// 	}
+	// 	ser_flushed += flushed.Load()
+	// } else if procs_len == 1 {
+	// 	f, err := procs[0].Flush(ctx)
+	// 	if err != nil {
+	// 		return 0, fmt.Errorf("sink flush: %v", err)
+	// 	}
+	// 	ser_flushed += f
+	// }
 	return ser_flushed, nil
 }
 
