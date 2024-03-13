@@ -41,6 +41,10 @@ type StreamTask struct {
 	commitTxnAPITime stats.PrintLogStatsCollector[int64]
 	sendOffsetTime   stats.PrintLogStatsCollector[int64]
 	txnCommitTime    stats.PrintLogStatsCollector[int64]
+	markPartUs       stats.PrintLogStatsCollector[int64]
+	epochMarkTime    stats.PrintLogStatsCollector[int64]
+	markEpochPrepare stats.PrintLogStatsCollector[int64]
+	markEpochAppend  stats.PrintLogStatsCollector[int64]
 
 	endDuration    time.Duration
 	epochMarkTimes uint32
@@ -53,6 +57,10 @@ func (t *StreamTask) PrintRemainingStats() {
 	t.commitTxnAPITime.PrintRemainingStats()
 	t.sendOffsetTime.PrintRemainingStats()
 	t.txnCommitTime.PrintRemainingStats()
+	t.markPartUs.PrintRemainingStats()
+	t.epochMarkTime.PrintRemainingStats()
+	t.markEpochPrepare.PrintRemainingStats()
+	t.markEpochAppend.PrintRemainingStats()
 }
 
 func (t *StreamTask) SetEndDuration(startTimeMs int64) {

@@ -197,6 +197,7 @@ func processWithTransaction(
 				fmt.Fprintf(os.Stderr, "commitTransaction err: %v\n", err_out.Message)
 				return err_out
 			}
+			meta.t.PrintRemainingStats()
 			fmt.Fprintf(os.Stderr, "finish final commit\n")
 			return handleCtrlMsg(ctx, ctrlRawMsgArr, meta.t, meta.args, &warmupCheck, nil)
 		}
@@ -282,9 +283,7 @@ func commitTransaction(ctx context.Context,
 		meta.t.flushAtLeastOne.AddSample(flushTime)
 	}
 	if shouldExit {
-		ret := &common.FnOutput{Success: true, Message: "exit"}
-		meta.t.PrintRemainingStats()
-		return ret
+		return &common.FnOutput{Success: true, Message: "exit"}
 	}
 	return nil
 }
