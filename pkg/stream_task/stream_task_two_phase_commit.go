@@ -224,10 +224,12 @@ func commitTransaction(ctx context.Context,
 	}
 	// debug.Fprintf(os.Stderr, "paused\n")
 
+	waitPrev := stats.TimerBegin()
 	err := meta.tm.EnsurePrevTxnFinAndAppendMeta(ctx)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	waitAndStart := stats.Elapsed(waitPrev).Microseconds()
 	// debug.Fprintf(os.Stderr, "waited prev txn fin\n")
 
 	flushAllStart := stats.TimerBegin()
@@ -282,6 +284,7 @@ func commitTransaction(ctx context.Context,
 	if f > 0 {
 		meta.t.flushAtLeastOne.AddSample(flushTime)
 	}
+	meta.t.waitPrevTxn.AddSample(waitAndStart)
 	if shouldExit {
 		return &common.FnOutput{Success: true, Message: "exit"}
 	}
