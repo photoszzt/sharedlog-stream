@@ -79,6 +79,7 @@ func NewPrintLogStatsCollector[E constraints.Ordered](tag string) PrintLogStatsC
 func (c *PrintLogStatsCollector[E]) PrintRemainingStats() {
 	if len(c.data) > 0 {
 		fmt.Fprintf(os.Stderr, "%s (%d samples): data=%v\n", c.tag, len(c.data), c.data)
+		c.data = make([]E, 0)
 	}
 }
 
@@ -93,6 +94,6 @@ func (c *StatsCollector[E]) PrintRemainingStats() {
 		// duration := c.report_timer.Mark()
 		// fmt.Fprintf(os.Stderr, "%s stats (%d samples): dur=%v, p50=%v, p90=%v, p99=%v\n",
 		// 	c.tag, len(c.data), duration, p50, p90, p99)
-		// c.data = make([]E, 0)
+		c.data = make([]E, 0)
 	}
 }
