@@ -42,6 +42,7 @@ func NewStreamTaskBuilder() BuildStreamTask {
 
 			markEpochAppend:  stats.NewPrintLogStatsCollector[int64]("appendEpochMark(us)"),
 			markEpochPrepare: stats.NewPrintLogStatsCollector[int64]("markEpochPrepare(us)"),
+			markerSize:       stats.NewPrintLogStatsCollector[int]("epochMarkerSize(B)"),
 			epochMarkTimes:   0,
 			isFinalStage:     false,
 		},

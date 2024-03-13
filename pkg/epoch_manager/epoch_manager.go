@@ -75,11 +75,11 @@ func (em *EpochManager) GetProducerId() commtypes.ProducerId { return em.prodId 
 
 func (em *EpochManager) appendToEpochLog(ctx context.Context,
 	meta commtypes.EpochMarker, tags []uint64, additionalTopic []string,
-) (uint64, error) {
+) (uint64, int, error) {
 	debug.Assert(meta.Mark != commtypes.EMPTY, "mark should not be empty")
 	encoded, err := em.epochMetaSerde.Encode(meta)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	// debug.Fprintf(os.Stderr, "encoded epochMeta: %v\n", string(encoded))
 	debug.Assert(tags != nil, "tags should not be null")
@@ -94,7 +94,7 @@ func (em *EpochManager) appendToEpochLog(ctx context.Context,
 	// 	debug.Fprintf(os.Stderr, "%s:0x%x", s, c)
 	// }
 	// debug.Fprint(os.Stderr, "\n")
-	return off, err
+	return off, len(encoded), err
 }
 
 func (em *EpochManager) SyncToRecent(ctx context.Context) ([]commtypes.RawMsg, error) {
@@ -228,7 +228,7 @@ func (em *EpochManager) GenTagsAndTopicsForEpochMarker() ([]uint64, []string) {
 
 func (em *EpochManager) MarkEpoch(ctx context.Context,
 	epochMeta commtypes.EpochMarker, tags []uint64, additionalTopic []string,
-) (uint64, error) {
+) (uint64, int, error) {
 	// debug.Fprintf(os.Stderr, "epochMeta to push: %+v\n", epochMeta)
 	return em.appendToEpochLog(ctx, epochMeta, tags, additionalTopic)
 }
@@ -263,7 +263,7 @@ func (em *EpochManager) Init(ctx context.Context) (*commtypes.EpochMarker, *comm
 		sharedlog_stream.NameHashWithPartition(elHash, 0),
 		txn_data.FenceTag(elHash, 0),
 	}
-	_, err = em.appendToEpochLog(ctx, meta, tags, nil)
+	_, _, err = em.appendToEpochLog(ctx, meta, tags, nil)
 	if err != nil {
 		return nil, nil, err
 	}

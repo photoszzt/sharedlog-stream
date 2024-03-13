@@ -45,6 +45,7 @@ type StreamTask struct {
 	epochMarkTime    stats.PrintLogStatsCollector[int64]
 	markEpochPrepare stats.PrintLogStatsCollector[int64]
 	markEpochAppend  stats.PrintLogStatsCollector[int64]
+	markerSize       stats.PrintLogStatsCollector[int]
 
 	endDuration    time.Duration
 	epochMarkTimes uint32
@@ -61,6 +62,7 @@ func (t *StreamTask) PrintRemainingStats() {
 	t.epochMarkTime.PrintRemainingStats()
 	t.markEpochPrepare.PrintRemainingStats()
 	t.markEpochAppend.PrintRemainingStats()
+	t.markerSize.PrintRemainingStats()
 }
 
 func (t *StreamTask) SetEndDuration(startTimeMs int64) {

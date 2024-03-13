@@ -484,12 +484,13 @@ func markEpoch(ctx context.Context,
 	prepareTime := stats.Elapsed(prepareStart).Microseconds()
 
 	mStart := stats.TimerBegin()
-	logOff, err = meta.em.MarkEpoch(ctx, epochMarker, epochMarkerTags, epochMarkerTopics)
+	logOff, markerSize, err := meta.em.MarkEpoch(ctx, epochMarker, epochMarkerTags, epochMarkerTopics)
 	if err != nil {
 		return 0, false, fmt.Errorf("MarkEpoch: %v", err)
 	}
 	epoch_manager.CleanupState(meta.em, meta.args.ectx.Producers(), meta.args.kvChangelogs, meta.args.windowStoreChangelogs)
 	mElapsed := stats.Elapsed(mStart).Microseconds()
+	meta.t.markerSize.AddSample(markerSize)
 	meta.t.markEpochAppend.AddSample(mElapsed)
 	meta.t.markEpochPrepare.AddSample(prepareTime)
 	return logOff, false, nil
