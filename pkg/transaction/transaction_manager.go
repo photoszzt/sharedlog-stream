@@ -47,8 +47,8 @@ type TransactionManager struct {
 	tranCompleteMarkerTag uint64
 	txnLogTag             uint64
 	txnFenceTag           uint64
-	hasWaitForLastTxn     uint32
-	addedNewTpPar         uint32
+	hasWaitForLastTxn     atomic.Bool
+	addedNewTpPar         atomic.Bool
 	serdeFormat           commtypes.SerdeFormat
 }
 
@@ -72,9 +72,9 @@ func NewTransactionManager(ctx context.Context,
 		txnFenceTag:           txn_data.FenceTag(log.TopicNameHash(), 0),
 		serdeFormat:           serdeFormat,
 		env:                   env,
-		addedNewTpPar:         0,
-		hasWaitForLastTxn:     0,
 	}
+	tm.addedNewTpPar.Store(false)
+	tm.hasWaitForLastTxn.Store(false)
 	tm.bgErrg, tm.bgCtx = errgroup.WithContext(ctx)
 	err = tm.setupSerde(serdeFormat)
 	if err != nil {
@@ -322,7 +322,7 @@ func (tc *TransactionManager) AddTopicSubstream(topic string, subStreamNum uint8
 		parSet.Add(uint32(subStreamNum))
 	}
 	if needToAppendToLog {
-		atomic.StoreUint32(&tc.addedNewTpPar, 1)
+		tc.hasWaitForLastTxn.Store(true)
 	}
 	return nil
 }
@@ -433,7 +433,7 @@ func (tc *TransactionManager) FindLastConsumedSeqNum(ctx context.Context, topicT
 }
 
 func (tc *TransactionManager) EnsurePrevTxnFinAndAppendMeta(ctx context.Context) error {
-	if env_config.ASYNC_SECOND_PHASE && atomic.LoadUint32(&tc.hasWaitForLastTxn) == 0 {
+	if env_config.ASYNC_SECOND_PHASE && !tc.hasWaitForLastTxn.Load() {
 		// fmt.Fprintf(os.Stderr, "waiting for previous txn to finish\n")
 		err := tc.bgErrg.Wait()
 		if err != nil {
@@ -441,7 +441,7 @@ func (tc *TransactionManager) EnsurePrevTxnFinAndAppendMeta(ctx context.Context)
 		}
 		// fmt.Fprintf(os.Stderr, "previous txn finished\n")
 	}
-	if atomic.LoadUint32(&tc.addedNewTpPar) == 1 {
+	if tc.addedNewTpPar.Load() {
 		// debug.Fprintf(os.Stderr, "appending tp par to txn log\n")
 		tps := make([]txn_data.TopicPartition, 0, tc.currentTopicSubstream.Len())
 		tc.currentTopicSubstream.Range(func(key string, value *skipset.Uint32Set) bool {
@@ -464,7 +464,7 @@ func (tc *TransactionManager) EnsurePrevTxnFinAndAppendMeta(ctx context.Context)
 		if err != nil {
 			return err
 		}
-		atomic.StoreUint32(&tc.addedNewTpPar, 0)
+		tc.addedNewTpPar.Store(false)
 		// debug.Fprintf(os.Stderr, "done appending tp par to txn log\n")
 	}
 	return nil
@@ -523,7 +523,7 @@ func (tc *TransactionManager) CommitTransaction(ctx context.Context) (uint64, bo
 	if err != nil {
 		return 0, false, err
 	}
-	tc.hasWaitForLastTxn = 1
+	tc.hasWaitForLastTxn.Store(true)
 	return logOff, false, nil
 }
 
@@ -573,14 +573,14 @@ func (tc *TransactionManager) CommitTransactionAsyncComplete(ctx context.Context
 	}
 	tps := tc.collectTopicSubstreams()
 	tc.cleanupState()
-	tc.hasWaitForLastTxn = 0
+	tc.hasWaitForLastTxn.Store(false)
 	tc.bgErrg.Go(func() error {
 		// second phase of the commit
 		err = tc.completeTransaction(tc.bgCtx, commtypes.EPOCH_END, txn_data.COMPLETE_COMMIT, tps)
 		if err != nil {
 			return err
 		}
-		atomic.StoreUint32(&tc.hasWaitForLastTxn, 1)
+		tc.hasWaitForLastTxn.Store(true)
 		return nil
 	})
 	return logOff, false, nil
@@ -611,5 +611,5 @@ func (tc *TransactionManager) AbortTransaction(ctx context.Context) error {
 func (tc *TransactionManager) cleanupState() {
 	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
 	tc.currentTopicSubstream = skipmap.NewString[*skipset.Uint32Set]()
-	atomic.StoreUint32(&tc.addedNewTpPar, 0)
+	tc.addedNewTpPar.Store(false)
 }
