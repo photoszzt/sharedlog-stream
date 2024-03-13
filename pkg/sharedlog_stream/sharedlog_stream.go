@@ -49,9 +49,11 @@ func SyncToRecentMeta() LogEntryMeta {
 	return LogEntryMeta(meta)
 }
 
-var SingleDataRecordMeta = StreamEntryMeta(false, false)
-var ControlRecordMeta = StreamEntryMeta(true, false)
-var ArrRecordMeta = StreamEntryMeta(false, true)
+var (
+	SingleDataRecordMeta = StreamEntryMeta(false, false)
+	ControlRecordMeta    = StreamEntryMeta(true, false)
+	ArrRecordMeta        = StreamEntryMeta(false, true)
+)
 
 type SharedLogStream struct {
 	mux syncutils.RWMutex
@@ -62,7 +64,7 @@ type SharedLogStream struct {
 	// current read position in forward direction
 	cursor             uint64
 	tail               uint64 // protected by mux
-	curAppendMsgSeqNum uint64
+	curAppendMsgSeqNum atomic.Uint64
 }
 
 func NameHashWithPartition(nameHash uint64, par uint8) uint64 {
@@ -104,15 +106,15 @@ func decodeStreamLogEntry(logEntry *types.LogEntry) *StreamLogEntry {
 }
 
 func NewSharedLogStream(env types.Environment, topicName string, serdeFormat commtypes.SerdeFormat) (*SharedLogStream, error) {
-	return &SharedLogStream{
+	s := &SharedLogStream{
 		env:           env,
 		topicName:     topicName,
 		topicNameHash: hashfuncs.NameHash(topicName),
 		cursor:        0,
 		tail:          0,
-
-		curAppendMsgSeqNum: 0,
-	}, nil
+	}
+	s.curAppendMsgSeqNum.Store(0)
+	return s, nil
 }
 
 func (s *SharedLogStream) NumPartition() uint8 {
@@ -120,7 +122,7 @@ func (s *SharedLogStream) NumPartition() uint8 {
 }
 
 func (s *SharedLogStream) SetAppendMsgSeqNum(val uint64) {
-	s.curAppendMsgSeqNum = val
+	s.curAppendMsgSeqNum.Store(val)
 }
 
 func (s *SharedLogStream) TopicNameHash() uint64 {
@@ -154,8 +156,8 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context,
 		InjTsMs:   nowMs,
 	}
 	// TODO: need to deal with sequence number overflow
-	atomic.AddUint64(&s.curAppendMsgSeqNum, 1)
-	logEntry.MsgSeqNum = s.curAppendMsgSeqNum
+	msgSeq := s.curAppendMsgSeqNum.Add(1)
+	logEntry.MsgSeqNum = msgSeq
 	encoded, err := logEntry.MarshalMsg(nil)
 	if err != nil {
 		return 0, err
