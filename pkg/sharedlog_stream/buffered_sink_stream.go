@@ -173,15 +173,15 @@ func (s *BufferedSinkStream) updateProdSeqNum(
 func (s *BufferedSinkStream) Push(ctx context.Context, payload []byte, parNum uint8,
 	meta LogEntryMeta, producerId commtypes.ProducerId,
 ) (uint64, error) {
-	seqNum, err := s.Stream.Push(ctx, payload, parNum, meta, producerId)
+	tags := []uint64{NameHashWithPartition(s.Stream.topicNameHash, parNum)}
+	seqNum, err := s.Stream.PushWithTag(ctx, payload, parNum, tags, nil, meta, producerId)
 	if err != nil {
 		return 0, err
 	}
-	tag := NameHashWithPartition(s.Stream.topicNameHash, parNum)
-	err = s.updateProdSeqNum(ctx, seqNum, parNum, tag, producerId, true)
+	err = s.updateProdSeqNum(ctx, seqNum, parNum, tags[0], producerId, true)
 	if err != nil {
 		return 0, fmt.Errorf("updateProdSeqNum(%s[%d]): %v, appended seqNum: %#x, prodId: %s, tag %#x",
-			s.Stream.topicName, s.parNum, err, seqNum, producerId.String(), tag)
+			s.Stream.topicName, s.parNum, err, seqNum, producerId.String(), tags[0])
 	}
 	return seqNum, nil
 }
