@@ -105,10 +105,9 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
 				h.FlushTimer = time.Now()
 			}
 			for _, i := range msg.Partitions {
+				nameHashTag := NameHashWithPartition(tpNameHash, i)
 				if msg.Mark == commtypes.SCALE_FENCE {
-					fmt.Fprintf(os.Stderr, "generate scale fence for partition %d\n", i)
 					scale_fence_tag := txn_data.ScaleFenceTag(tpNameHash, i)
-					nameHashTag := NameHashWithPartition(tpNameHash, i)
 					_, err := h.Stream.PushWithTag(ctx, msg.Payload, i, []uint64{nameHashTag, scale_fence_tag}, nil,
 						StreamEntryMeta(true, false), producerId)
 					if err != nil {
@@ -116,22 +115,21 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
 						h.MsgErrChan <- err
 						return
 					}
+					// fmt.Fprintf(os.Stderr, "generate scale fence for partition %d at %x\n", i, off)
 					h.produceCount += 1
 					h.ctrlCount += 1
 				} else if msg.Mark == commtypes.STREAM_END {
-					tag := NameHashWithPartition(tpNameHash, i)
-					fmt.Fprintf(os.Stderr, "generate stream end mark with tag: %x\n", tag)
-					_, err := h.Stream.Push(ctx, msg.Payload, i, StreamEntryMeta(true, false), producerId)
+					_, err := h.Stream.PushWithTag(ctx, msg.Payload, i, []uint64{nameHashTag}, nil, StreamEntryMeta(true, false), producerId)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "[ERROR] push err: %v\n", err)
 						h.MsgErrChan <- err
 						return
 					}
+					// fmt.Fprintf(os.Stderr, "generate stream end mark for par %d at %x\n", i, off)
 					h.produceCount += 1
 					h.ctrlCount += 1
 				} else if msg.Mark == commtypes.CHKPT_MARK {
 					chkpt_tag := txn_data.ChkptTag(tpNameHash, i)
-					nameHashTag := NameHashWithPartition(tpNameHash, i)
 					_, err := h.Stream.PushWithTag(ctx, msg.Payload, i, []uint64{nameHashTag, chkpt_tag}, nil,
 						ControlRecordMeta, producerId)
 					if err != nil {
@@ -139,6 +137,7 @@ func (h *StreamPush) AsyncStreamPush(ctx context.Context, wg *sync.WaitGroup,
 						h.MsgErrChan <- err
 						return
 					}
+					// fmt.Fprintf(os.Stderr, "generate chkpt mark with tag for par %d at %x\n", i, off)
 					h.produceCount += 1
 					h.ctrlCount += 1
 				}
