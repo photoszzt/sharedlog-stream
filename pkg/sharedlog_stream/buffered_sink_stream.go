@@ -131,16 +131,43 @@ func (s *BufferedSinkStream) bufPushAutoFlushGoroutineSafe(
 	if err != nil {
 		return err
 	}
-	err = s.updateProdSeqNum(ctx, seqNum, s.parNum, tags[0], producerId, false)
-	if err != nil {
-		return fmt.Errorf("updateProdSeqNum(%s[%d]): %v, appended seqNum: %#x, prodId: %s, tag %#x",
-			s.Stream.topicName, s.parNum, err, seqNum, producerId.String(), tags[0])
+	if s.guarantee == exactly_once_intr.EPOCH_MARK && !s.initProdIsSet.Load() {
+		if lock {
+			err = s.updateProdSeqNumLocked(ctx, seqNum, s.parNum, tags[0], producerId)
+			if err != nil {
+				return fmt.Errorf("updateProdSeqNum(%s[%d]): %v, appended seqNum: %#x, prodId: %s, tag %#x",
+					s.Stream.topicName, s.parNum, err, seqNum, producerId.String(), tags[0])
+			}
+		} else {
+			s.initialProdInEpoch = seqNum
+			s.initProdIsSet.Store(true)
+		}
 	}
 	s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
 	s.sinkBuffer = append(s.sinkBuffer, payload)
 	s.currentSize = payload_size
 	flushElapsed := time.Since(tBeg).Microseconds()
 	s.bufPushFlushStats.AddSample(flushElapsed)
+	return nil
+}
+
+func (s *BufferedSinkStream) updateProdSeqNumLocked(
+	ctx context.Context,
+	appendedSeq uint64,
+	parNum uint8,
+	tag uint64,
+	prodId commtypes.ProducerId,
+) error {
+	// multiple goroutine can append to the same sink;
+	// read from the log the first sequence number
+	r, err := s.Stream.ReadFromSeqNumWithTag(ctx, s.lastMarkerSeq+1, appendedSeq, parNum, tag, prodId)
+	if err != nil {
+		return fmt.Errorf("ReadFromSeqNumWithTag: %v, from: %#x",
+			err, s.lastMarkerSeq+1)
+	}
+	s.initialProdInEpoch = r.LogSeqNum
+	// debug.Fprintf(os.Stderr, "update initial prod in epoch: %#x\n", s.initialProdInEpoch)
+	s.initProdIsSet.Store(true)
 	return nil
 }
 
@@ -264,10 +291,18 @@ func (s *BufferedSinkStream) flushGoroutineSafe(ctx context.Context,
 	if err != nil {
 		return 0, err
 	}
-	err = s.updateProdSeqNum(ctx, seqNum, s.parNum, tags[0], producerId, false)
-	if err != nil {
-		return 0, fmt.Errorf("updateProdSeqNum(%s[%d]): %v, appended seqNum: %#x, prodId: %s, tag %#x",
-			s.Stream.topicName, s.parNum, err, seqNum, producerId.String(), tags[0])
+	if s.guarantee == exactly_once_intr.EPOCH_MARK && !s.initProdIsSet.Load() {
+		// there're multiple threads append to the same sink stream
+		if lock {
+			err = s.updateProdSeqNumLocked(ctx, seqNum, s.parNum, tags[0], producerId)
+			if err != nil {
+				return 0, fmt.Errorf("updateProdSeqNum(%s[%d]): %v, appended seqNum: %#x, prodId: %s, tag %#x",
+					s.Stream.topicName, s.parNum, err, seqNum, producerId.String(), tags[0])
+			}
+		} else {
+			s.initialProdInEpoch = seqNum
+			s.initProdIsSet.Store(true)
+		}
 	}
 	s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
 	s.currentSize = 0
