@@ -322,7 +322,7 @@ func (tc *TransactionManager) AddTopicSubstream(topic string, subStreamNum uint8
 		parSet.Add(uint32(subStreamNum))
 	}
 	if needToAppendToLog {
-		tc.hasWaitForLastTxn.Store(true)
+		tc.addedNewTpPar.Store(true)
 	}
 	return nil
 }
