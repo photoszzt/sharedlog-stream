@@ -196,7 +196,7 @@ func ExecuteApp(ctx context.Context,
 			src.Name(), src.GetCount(), src.NumCtrlMsg(), src.NumEpoch(), src.NumLogEntry())
 	}
 	for _, sink := range streamTaskArgs.ectx.Producers() {
-		// sink.OutputRemainingStats()
+		sink.OutputRemainingStats()
 		ret.Counts[sink.Name()] = sink.GetCount()
 		// ret.Counts[sink.Name()+"_ctrl"] = uint64(sink.NumCtrlMsg())
 		fmt.Fprintf(os.Stderr, "%s msgCnt %d, ctrlCnt %d\n",
