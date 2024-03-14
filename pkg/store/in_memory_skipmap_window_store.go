@@ -567,3 +567,5 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) SetInstanceId(id uint8) {
 func (s *InMemorySkipMapWindowStoreG[K, V]) GetInstanceId() uint8 {
 	return s.insId
 }
+
+func (s *InMemorySkipMapWindowStoreG[K, V]) OutputRemainingStats() {}

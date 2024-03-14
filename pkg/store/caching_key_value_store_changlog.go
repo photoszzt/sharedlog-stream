@@ -258,3 +258,5 @@ func (c *CachingKeyValueStoreBackedByChangelogG[K, V]) SetInstanceId(id uint8) {
 func (c *CachingKeyValueStoreBackedByChangelogG[K, V]) GetInstanceId() uint8 {
 	return c.wrappedStore.GetInstanceId()
 }
+
+func (c *CachingKeyValueStoreBackedByChangelogG[K, V]) OutputRemainingStats() {}

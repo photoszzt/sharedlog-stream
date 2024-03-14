@@ -72,6 +72,10 @@ func (cm *ChangelogManager[K, V]) ChangelogIsSrc() bool {
 	return cm.changelogIsSrc
 }
 
+func (cm *ChangelogManager[K, V]) OutputRemainingStats() {
+	cm.producer.OutputRemainingStats()
+}
+
 func (cm *ChangelogManager[K, V]) TopicName() string {
 	return cm.restoreConsumers[0].TopicName()
 }

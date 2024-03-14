@@ -13,6 +13,7 @@ type StoreBackedByChangelog interface {
 	ChangelogTopicName() string
 	Stream() sharedlog_stream.Stream
 	SetStreamFlushCallbackFunc(cb exactly_once_intr.FlushCallbackFunc)
+	OutputRemainingStats()
 }
 
 type RestoreFromChangelog interface {

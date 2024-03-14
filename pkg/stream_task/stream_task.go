@@ -185,6 +185,12 @@ func ExecuteApp(ctx context.Context,
 	}
 	outputRemainingStats()
 	rs.PrintRemainingStats()
+	for _, kvc := range streamTaskArgs.kvChangelogs {
+		kvc.OutputRemainingStats()
+	}
+	for _, wsc := range streamTaskArgs.windowStoreChangelogs {
+		wsc.OutputRemainingStats()
+	}
 	for _, src := range streamTaskArgs.ectx.Consumers() {
 		src.OutputRemainingStats()
 		ret.Counts[src.Name()] = src.GetCount()

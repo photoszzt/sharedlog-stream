@@ -242,3 +242,7 @@ func (c *CachingWindowStoreBackedByChangelogG[K, V]) SetInstanceId(id uint8) {
 func (c *CachingWindowStoreBackedByChangelogG[K, V]) GetInstanceId() uint8 {
 	return c.wrappedStore.GetInstanceId()
 }
+
+func (c *CachingWindowStoreBackedByChangelogG[K, V]) OutputRemainingStats() {
+	c.wrappedStore.OutputRemainingStats()
+}

@@ -89,6 +89,10 @@ func (st *InMemoryWindowStoreWithChangelogG[K, V]) ChangelogManager() *Changelog
 	return st.changelogManager
 }
 
+func (st *InMemoryWindowStoreWithChangelogG[K, V]) OutputRemainingStats() {
+	st.changelogManager.OutputRemainingStats()
+}
+
 func (st *InMemoryWindowStoreWithChangelogG[K, V]) Flush(ctx context.Context) (uint32, error) {
 	return st.changelogManager.Flush(ctx)
 }

@@ -53,6 +53,10 @@ func NewKeyValueStoreWithChangelogG[K, V any](mp *MaterializeParam[K, V],
 	}, nil
 }
 
+func (st *KeyValueStoreWithChangelogG[K, V]) OutputRemainingStats() {
+	st.changelogManager.OutputRemainingStats()
+}
+
 func (st *KeyValueStoreWithChangelogG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeFormat, keySerde commtypes.SerdeG[K], valSerde commtypes.SerdeG[V]) error {
 	return nil
 }
