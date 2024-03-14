@@ -220,7 +220,7 @@ func pausedFlushMark(
 	}
 
 	flushAllStart := stats.TimerBegin()
-	f, err := flushStreams(ctx, meta.args)
+	f, err := flushStreams(ctx, meta.t, meta.args)
 	if err != nil {
 		return false, common.GenErrFnOutput(fmt.Errorf("flushStreams: %v", err))
 	}
@@ -388,7 +388,7 @@ func finalMark(
 		}
 	}
 	flushAllStart := stats.TimerBegin()
-	f, err := flushStreams(dctx, meta.args)
+	f, err := flushStreams(dctx, meta.t, meta.args)
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("flushStreams failed: %v", err))
 	}

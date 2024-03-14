@@ -47,6 +47,9 @@ type StreamTask struct {
 	markEpochAppend  stats.PrintLogStatsCollector[int64]
 	waitPrevTxn      stats.PrintLogStatsCollector[int64]
 	markerSize       stats.PrintLogStatsCollector[int]
+	producerFlush    stats.PrintLogStatsCollector[int64]
+	kvcFlush         stats.PrintLogStatsCollector[int64]
+	wscFlush         stats.PrintLogStatsCollector[int64]
 
 	endDuration    time.Duration
 	epochMarkTimes uint32
@@ -65,6 +68,9 @@ func (t *StreamTask) PrintRemainingStats() {
 	t.markEpochAppend.PrintRemainingStats()
 	t.waitPrevTxn.PrintRemainingStats()
 	t.markerSize.PrintRemainingStats()
+	t.producerFlush.PrintRemainingStats()
+	t.kvcFlush.PrintRemainingStats()
+	t.wscFlush.PrintRemainingStats()
 }
 
 func (t *StreamTask) SetEndDuration(startTimeMs int64) {
@@ -323,7 +329,7 @@ func timedFlushStreams(
 	args *StreamTaskArgs,
 ) *common.FnOutput {
 	flushAllStart := stats.TimerBegin()
-	f, ret_err := flushStreams(ctx, args)
+	f, ret_err := flushStreams(ctx, t, args)
 	if ret_err != nil {
 		return common.GenErrFnOutput(ret_err)
 	}
@@ -349,9 +355,11 @@ func pauseTimedFlushStreams(
 }
 
 func flushStreams(ctx context.Context,
+	t *StreamTask,
 	args *StreamTaskArgs,
 ) (uint32, error) {
 	ser_flushed := uint32(0)
+	kvcBeg := stats.TimerBegin()
 	for _, kvchangelog := range args.kvChangelogs {
 		f, err := kvchangelog.Flush(ctx)
 		if err != nil {
@@ -359,12 +367,19 @@ func flushStreams(ctx context.Context,
 		}
 		ser_flushed += f
 	}
+	if len(args.kvChangelogs) != 0 {
+		t.kvcFlush.AddSample(stats.Elapsed(kvcBeg).Microseconds())
+	}
+	wscBeg := stats.TimerBegin()
 	for _, wschangelog := range args.windowStoreChangelogs {
 		f, err := wschangelog.Flush(ctx)
 		if err != nil {
 			return 0, fmt.Errorf("ws flush: %v", err)
 		}
 		ser_flushed += f
+	}
+	if len(args.windowStoreChangelogs) != 0 {
+		t.wscFlush.AddSample(stats.Elapsed(wscBeg).Microseconds())
 	}
 	for _, kv := range args.kvs {
 		_, err := kv.Flush(ctx)
@@ -378,6 +393,7 @@ func flushStreams(ctx context.Context,
 			return 0, fmt.Errorf("ws flush: %v", err)
 		}
 	}
+	pBeg := time.Now()
 	for _, p := range args.ectx.Producers() {
 		f, err := p.Flush(ctx)
 		if err != nil {
@@ -385,6 +401,8 @@ func flushStreams(ctx context.Context,
 		}
 		ser_flushed += f
 	}
+	pElapsed := time.Since(pBeg).Microseconds()
+	t.producerFlush.AddSample(pElapsed)
 	// procs := args.ectx.Producers()
 	// procs_len := len(procs)
 	// if procs_len > 1 {

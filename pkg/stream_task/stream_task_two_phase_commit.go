@@ -233,7 +233,7 @@ func commitTransaction(ctx context.Context,
 	// debug.Fprintf(os.Stderr, "waited prev txn fin\n")
 
 	flushAllStart := stats.TimerBegin()
-	f, err := flushStreams(ctx, meta.args)
+	f, err := flushStreams(ctx, meta.t, meta.args)
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("flushStreams: %v", err))
 	}
