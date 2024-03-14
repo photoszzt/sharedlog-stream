@@ -102,10 +102,11 @@ func (sls *ShardedSharedLogStreamProducer) ProduceCtrlMsg(ctx context.Context, m
 			return 0, err
 		}
 	}
+	tpNameHash := sls.Stream().TopicNameHash()
 	if msg.Mark == commtypes.SCALE_FENCE {
 		for _, parNum := range parNums {
-			scale_fence_tag := txn_data.ScaleFenceTag(sls.Stream().TopicNameHash(), parNum)
-			nameTag := sharedlog_stream.NameHashWithPartition(sls.Stream().TopicNameHash(), parNum)
+			scale_fence_tag := txn_data.ScaleFenceTag(tpNameHash, parNum)
+			nameTag := sharedlog_stream.NameHashWithPartition(tpNameHash, parNum)
 			_, err := sls.pushWithTag(ctx, msg.Payload, parNum, []uint64{scale_fence_tag, nameTag},
 				nil, sharedlog_stream.ControlRecordMeta)
 			if err != nil {
@@ -125,8 +126,8 @@ func (sls *ShardedSharedLogStreamProducer) ProduceCtrlMsg(ctx context.Context, m
 		return len(parNums), nil
 	} else if msg.Mark == commtypes.CHKPT_MARK {
 		for _, parNum := range parNums {
-			chkpt_tag := txn_data.ChkptTag(sls.Stream().TopicNameHash(), parNum)
-			nameTag := sharedlog_stream.NameHashWithPartition(sls.Stream().TopicNameHash(), parNum)
+			chkpt_tag := txn_data.ChkptTag(tpNameHash, parNum)
+			nameTag := sharedlog_stream.NameHashWithPartition(tpNameHash, parNum)
 			_, err := sls.pushWithTag(ctx, msg.Payload, parNum, []uint64{chkpt_tag, nameTag},
 				nil, sharedlog_stream.ControlRecordMeta)
 			if err != nil {
