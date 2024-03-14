@@ -31,9 +31,10 @@ type BufferedSinkStream struct {
 	payloadArrSerde commtypes.SerdeG[commtypes.PayloadArr]
 	Stream          *SharedLogStream
 
-	flushBufferStats stats.PrintLogStatsCollector[int64]
-	bufferEntryStats stats.StatsCollector[int]
-	bufferSizeStats  stats.StatsCollector[int]
+	flushBufferStats  stats.PrintLogStatsCollector[int64]
+	bufPushFlushStats stats.PrintLogStatsCollector[int64]
+	bufferEntryStats  stats.StatsCollector[int]
+	bufferSizeStats   stats.StatsCollector[int]
 
 	initialProdInEpoch   uint64
 	lastMarkerSeq        uint64
@@ -58,6 +59,7 @@ func NewBufferedSinkStream(stream *SharedLogStream, parNum uint8, bufMaxSize uin
 		bufferSizeStats: stats.NewStatsCollector[int](fmt.Sprintf("%s_bufSize_%v", stream.topicName, parNum),
 			stats.DEFAULT_COLLECT_DURATION),
 		flushBufferStats:     stats.NewPrintLogStatsCollector[int64](fmt.Sprintf("%s_flushBuf_%v", stream.topicName, parNum)),
+		bufPushFlushStats:    stats.NewPrintLogStatsCollector[int64](fmt.Sprintf("%s_bufPushFlush_%v", stream.topicName, parNum)),
 		sink_buffer_max_size: int(bufMaxSize),
 		lastMarkerSeq:        0,
 	}
@@ -69,6 +71,7 @@ func (s *BufferedSinkStream) OutputRemainingStats() {
 	s.bufferEntryStats.PrintRemainingStats()
 	s.bufferSizeStats.PrintRemainingStats()
 	s.flushBufferStats.PrintRemainingStats()
+	s.bufPushFlushStats.PrintRemainingStats()
 }
 
 func (s *BufferedSinkStream) SetLastMarkerSeq(seq uint64) {
@@ -110,6 +113,7 @@ func (s *BufferedSinkStream) bufPushAutoFlushGoroutineSafe(
 	}
 	s.bufferEntryStats.AddSample(len(s.sinkBuffer))
 	s.bufferSizeStats.AddSample(s.currentSize)
+	tBeg := time.Now()
 	payloadArr := commtypes.PayloadArr{
 		Payloads: s.sinkBuffer,
 	}
@@ -135,6 +139,8 @@ func (s *BufferedSinkStream) bufPushAutoFlushGoroutineSafe(
 	s.sinkBuffer = make([][]byte, 0, SINK_BUFFER_MAX_ENTRY)
 	s.sinkBuffer = append(s.sinkBuffer, payload)
 	s.currentSize = payload_size
+	flushElapsed := time.Since(tBeg).Microseconds()
+	s.bufPushFlushStats.AddSample(flushElapsed)
 	return nil
 }
 
