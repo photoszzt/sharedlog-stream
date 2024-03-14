@@ -104,6 +104,7 @@ func GetWinStore[K comparable, V any](
 			})
 		wsos = &store.WinStoreOps{
 			Wsos: []store.WindowStoreOp{cachedStore},
+			Wsc:  nil,
 		}
 	} else {
 		countWindowStore, err := store_with_changelog.CreateInMemSkipMapWindowTableWithChangelogG(
@@ -131,6 +132,7 @@ func GetWinStore[K comparable, V any](
 			Wsc: map[string]store.WindowStoreOpWithChangelog{
 				countWindowStore.ChangelogTopicName(): aggStore,
 			},
+			Wsos: nil,
 		}
 		f = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment,
 			serdeFormat commtypes.SerdeFormat,

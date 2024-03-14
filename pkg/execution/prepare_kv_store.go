@@ -82,6 +82,7 @@ func GetKVStore[K comparable, V any](
 		}
 		kvos = &store.KVStoreOps{
 			Kvo: []store.KeyValueStoreOp{cachedStore},
+			Kvc: nil,
 		}
 	} else {
 		var aggStore store.CachedKeyValueStoreBackedByChangelogG[K, commtypes.ValueTimestampG[V]]
@@ -103,6 +104,7 @@ func GetKVStore[K comparable, V any](
 			Kvc: map[string]store.KeyValueStoreOpWithChangelog{
 				aggStore.ChangelogTopicName(): aggStore,
 			},
+			Kvo: nil,
 		}
 		f = func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
 			rs snapshot_store.SnapshotStore,
