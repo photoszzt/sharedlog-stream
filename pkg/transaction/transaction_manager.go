@@ -13,6 +13,7 @@ import (
 	"sharedlog-stream/pkg/env_config"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/txn_data"
 	"sync/atomic"
 
@@ -50,6 +51,8 @@ type TransactionManager struct {
 	hasWaitForLastTxn     atomic.Bool
 	addedNewTpPar         atomic.Bool
 	serdeFormat           commtypes.SerdeFormat
+	waitPrevTxn           stats.PrintLogStatsCollector[int64]
+	appendTxnMeta         stats.PrintLogStatsCollector[int64]
 }
 
 func NewTransactionManager(ctx context.Context,
@@ -72,6 +75,8 @@ func NewTransactionManager(ctx context.Context,
 		txnFenceTag:           txn_data.FenceTag(log.TopicNameHash(), 0),
 		serdeFormat:           serdeFormat,
 		env:                   env,
+		waitPrevTxn:           stats.NewPrintLogStatsCollector[int64]("waitPrevTxn2pc"),
+		appendTxnMeta:         stats.NewPrintLogStatsCollector[int64]("appendTxnMeta2pc"),
 	}
 	tm.addedNewTpPar.Store(false)
 	tm.hasWaitForLastTxn.Store(false)
@@ -81,6 +86,11 @@ func NewTransactionManager(ctx context.Context,
 		return nil, err
 	}
 	return tm, nil
+}
+
+func (tm *TransactionManager) OutputRemainingStats() {
+	tm.waitPrevTxn.PrintRemainingStats()
+	tm.appendTxnMeta.PrintRemainingStats()
 }
 
 func (tm *TransactionManager) GetCurrentEpoch() uint16             { return tm.prodId.TaskEpoch }
@@ -435,14 +445,17 @@ func (tc *TransactionManager) FindLastConsumedSeqNum(ctx context.Context, topicT
 func (tc *TransactionManager) EnsurePrevTxnFinAndAppendMeta(ctx context.Context) error {
 	if env_config.ASYNC_SECOND_PHASE && !tc.hasWaitForLastTxn.Load() {
 		// fmt.Fprintf(os.Stderr, "waiting for previous txn to finish\n")
+		tBeg := stats.TimerBegin()
 		err := tc.bgErrg.Wait()
 		if err != nil {
 			return err
 		}
+		tc.waitPrevTxn.AddSample(stats.Elapsed(tBeg).Microseconds())
 		// fmt.Fprintf(os.Stderr, "previous txn finished\n")
 	}
 	if tc.addedNewTpPar.Load() {
 		// debug.Fprintf(os.Stderr, "appending tp par to txn log\n")
+		tBeg := stats.TimerBegin()
 		tps := make([]txn_data.TopicPartition, 0, tc.currentTopicSubstream.Len())
 		tc.currentTopicSubstream.Range(func(key string, value *skipset.Uint32Set) bool {
 			pars := make([]uint8, 0, value.Len())
@@ -466,6 +479,7 @@ func (tc *TransactionManager) EnsurePrevTxnFinAndAppendMeta(ctx context.Context)
 		}
 		tc.addedNewTpPar.Store(false)
 		// debug.Fprintf(os.Stderr, "done appending tp par to txn log\n")
+		tc.appendTxnMeta.AddSample(stats.Elapsed(tBeg).Microseconds())
 	}
 	return nil
 }
