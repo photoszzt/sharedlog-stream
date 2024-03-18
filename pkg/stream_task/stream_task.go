@@ -796,7 +796,8 @@ func loadSnapshot(ctx context.Context,
 				return err
 			}
 			for kvchTp, kvchangelog := range args.kvChangelogs {
-				snapArr, err := rs.GetSnapshot(ctx, kvchTp, auxMetaSeq)
+				tp := fmt.Sprintf("%s-%d", kvchTp, args.ectx.SubstreamNum())
+				snapArr, err := rs.GetSnapshot(ctx, tp, auxMetaSeq)
 				if err != nil {
 					return fmt.Errorf("[ERR] RedisGetSnapshot: tp=%s, seq=%#x, err=%v", kvchTp, auxMetaSeq, err)
 				}
@@ -813,7 +814,8 @@ func loadSnapshot(ctx context.Context,
 				}
 			}
 			for wscTp, wsc := range args.windowStoreChangelogs {
-				snapArr, err := rs.GetSnapshot(ctx, wscTp, auxMetaSeq)
+				tp := fmt.Sprintf("%s-%d", wscTp, args.ectx.SubstreamNum())
+				snapArr, err := rs.GetSnapshot(ctx, tp, auxMetaSeq)
 				if err != nil {
 					return fmt.Errorf("[ERR] RedisGetSnapshot: tp=%s, seq=%#x, err=%v", wscTp, auxMetaSeq, err)
 				}
