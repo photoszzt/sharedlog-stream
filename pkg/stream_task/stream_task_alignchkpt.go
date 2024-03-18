@@ -197,7 +197,7 @@ func checkpoint(
 	var chkptMeta []commtypes.ChkptMetaData
 	for idx, c := range args.ectx.Consumers() {
 		tlo := commtypes.TpLogOff{
-			Tp:     c.Stream().TopicName(),
+			Tp:     fmt.Sprintf("%s-%d", c.Stream().TopicName(), args.ectx.SubstreamNum()),
 			LogOff: ctrlRawMsgArr[idx].FirstChkptMarkSeq,
 		}
 		tpLogOff = append(tpLogOff, tlo)

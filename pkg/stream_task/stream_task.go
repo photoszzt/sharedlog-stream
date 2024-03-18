@@ -302,7 +302,7 @@ func handleCtrlMsg(
 			// there's no record after this record.
 			for idx, c := range args.ectx.Consumers() {
 				tpLogOff = append(tpLogOff, commtypes.TpLogOff{
-					Tp:     c.Stream().TopicName(),
+					Tp:     fmt.Sprintf("%s-%d", c.Stream().TopicName(), args.ectx.SubstreamNum()),
 					LogOff: ctrlRawMsgArr[idx].LogSeqNum,
 				})
 			}
