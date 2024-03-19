@@ -88,6 +88,8 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 		return chkpt_manager.NewChkptManager(env), nil
 	case "redisSetup":
 		return redis_setup.NewRedisSetupHandler(env), nil
+	case "fanout":
+		return handlers.NewFanout(env, funcName), nil
 	default:
 		return nil, fmt.Errorf("unknown function name %v", funcName)
 	}

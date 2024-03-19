@@ -97,7 +97,7 @@ func main() {
 	}
 	fmt.Fprintf(os.Stderr, "wait for last: %v, sink max_buf_size: %v\n", FLAGS_waitForEndMark, FLAGS_buf_max_size)
 	switch FLAGS_app_name {
-	case "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "windowedAvg":
+	case "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "windowedAvg", "fanout":
 		fixedMaxDur := uint32(0)
 		serdeFormat := common.StringToSerdeFormat(FLAGS_serdeFormat)
 		baseQueryInput := NewQueryInput(serdeFormat)
