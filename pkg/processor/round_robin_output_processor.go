@@ -24,11 +24,12 @@ func NewRoundRobinOutputProcessorG[KIn, VIn any](processTimeTag string,
 	msgGSerdeG commtypes.MessageGSerdeG[KIn, VIn],
 ) *RoundRobinOutputProcessorG[KIn, VIn] {
 	r := &RoundRobinOutputProcessorG[KIn, VIn]{
-		name:           "to" + producer.TopicName(),
 		producer:       producer,
-		curSubstream:   0,
-		BaseProcessorG: BaseProcessorG[KIn, VIn, any, any]{},
+		ectx:           ectx,
 		msgGSerdeG:     msgGSerdeG,
+		name:           "to" + producer.TopicName(),
+		BaseProcessorG: BaseProcessorG[KIn, VIn, any, any]{},
+		curSubstream:   0,
 	}
 	r.BaseProcessorG.ProcessingFuncG = r.ProcessAndReturn
 	return r
