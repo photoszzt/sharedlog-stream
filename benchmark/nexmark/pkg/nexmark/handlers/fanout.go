@@ -64,6 +64,7 @@ func (h *fanoutHandler) fanout(ctx context.Context, sp *common.QueryInput) *comm
 	}
 	srcs[0].SetInitialSource(true)
 	sinks[0].MarkFinalOutput()
+	sinks[0].SetName("fanoutSink")
 	ectx := processor.NewExecutionContextFromComponents(proc_interface.NewBaseSrcsSinks(srcs, sinks),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum))
 	outProc := processor.NewRoundRobinOutputProcessorG("rbProc", &ectx, sinks[0], h.msgSerde)
@@ -71,7 +72,6 @@ func (h *fanoutHandler) fanout(ctx context.Context, sp *common.QueryInput) *comm
 		AppProcessFunc(stream_task.CommonAppProcessFunc[string, *ntypes.Event](outProc.Process, h.msgSerde)).
 		Build()
 	streamTaskArgs, err := streamArgsBuilder(h.env, &ectx, sp).
-		FixedOutParNum(sp.ParNum).
 		Build()
 	if err != nil {
 		return common.GenErrFnOutput(err)
