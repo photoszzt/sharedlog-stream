@@ -87,7 +87,11 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, streamTaskArgs.ectx.CurEpoch())
 	}
 	flushCallbackFunc := func(ctx context.Context) error {
-		return tm.EnsurePrevTxnFinAndAppendMeta(ctx)
+		waitPrev := stats.TimerBegin()
+		err := tm.EnsurePrevTxnFinAndAppendMeta(ctx)
+		waitAndStart := stats.Elapsed(waitPrev).Microseconds()
+		t.waitPrevTxn.AddSample(waitAndStart)
+		return err
 	}
 	updateFuncs(streamTaskArgs,
 		trackParFunc, recordFinish, flushCallbackFunc)
