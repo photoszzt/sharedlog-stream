@@ -199,13 +199,16 @@ func ExecuteApp(ctx context.Context,
 	}
 	for _, src := range streamTaskArgs.ectx.Consumers() {
 		src.OutputRemainingStats()
+		fmt.Fprintf(os.Stderr, "%s msgCnt %d, ctrlCnt %d, epochCnt %d, logEntry %d\n",
+			src.Name(), src.GetCount(), src.NumCtrlMsg(), src.NumEpoch(), src.NumLogEntry())
+		if ret.Counts == nil {
+			ret.Counts = make(map[string]uint64)
+		}
 		ret.Counts[src.Name()] = src.GetCount()
 		ret.Counts[src.Name()+"_ctrl"] = uint64(src.NumCtrlMsg())
 		ret.Counts[src.Name()+"_epoch"] = uint64(src.NumEpoch())
 		ret.Counts[src.Name()+"_data"] = src.GetCount() - uint64(src.NumCtrlMsg()) - uint64(src.NumEpoch())
 		ret.Counts[src.Name()+"_logEntry"] = src.NumLogEntry()
-		fmt.Fprintf(os.Stderr, "%s msgCnt %d, ctrlCnt %d, epochCnt %d, logEntry %d\n",
-			src.Name(), src.GetCount(), src.NumCtrlMsg(), src.NumEpoch(), src.NumLogEntry())
 	}
 	for _, sink := range streamTaskArgs.ectx.Producers() {
 		sink.OutputRemainingStats()
