@@ -29,6 +29,15 @@ const (
 	TRANSACTION_LOG_TOPIC_NAME = "__transaction_log"
 )
 
+type WaitOrAppendedMeta uint8
+
+const (
+	None = iota
+	WaitPrev
+	AppendedNewPar
+	WaitAndAppend
+)
+
 // assume each transactional_id correspond to one output partition
 // transaction manager is not goroutine safe, it's assumed to be used by
 // only one stream task and only one goroutine could update it
@@ -442,18 +451,25 @@ func (tc *TransactionManager) FindLastConsumedSeqNum(ctx context.Context, topicT
 	return offsetRecord.Offset, nil
 }
 
-func (tc *TransactionManager) EnsurePrevTxnFinAndAppendMeta(ctx context.Context) error {
+func (tc *TransactionManager) EnsurePrevTxnFinAndAppendMeta(ctx context.Context) (WaitOrAppendedMeta, error) {
+	var waited WaitOrAppendedMeta = None
 	if env_config.ASYNC_SECOND_PHASE && !tc.hasWaitForLastTxn.Load() {
 		// fmt.Fprintf(os.Stderr, "waiting for previous txn to finish\n")
 		tBeg := stats.TimerBegin()
 		err := tc.bgErrg.Wait()
 		if err != nil {
-			return err
+			return None, err
 		}
 		tc.waitPrevTxn.AddSample(stats.Elapsed(tBeg).Microseconds())
+		waited = WaitPrev
 		// fmt.Fprintf(os.Stderr, "previous txn finished\n")
 	}
 	if tc.addedNewTpPar.Load() {
+		if waited == None {
+			waited = AppendedNewPar
+		} else {
+			waited = WaitAndAppend
+		}
 		// debug.Fprintf(os.Stderr, "appending tp par to txn log\n")
 		tBeg := stats.TimerBegin()
 		tps := make([]txn_data.TopicPartition, 0, tc.currentTopicSubstream.Len())
@@ -475,13 +491,13 @@ func (tc *TransactionManager) EnsurePrevTxnFinAndAppendMeta(ctx context.Context)
 		}
 		_, err := tc.appendToTransactionLog(ctx, txnMeta, []uint64{tc.txnLogTag})
 		if err != nil {
-			return err
+			return None, err
 		}
 		tc.addedNewTpPar.Store(false)
 		// debug.Fprintf(os.Stderr, "done appending tp par to txn log\n")
 		tc.appendTxnMeta.AddSample(stats.Elapsed(tBeg).Microseconds())
 	}
-	return nil
+	return waited, nil
 }
 
 // second phase of the 2-phase commit protocol

@@ -36,20 +36,29 @@ type StreamTask struct {
 	initFunc       func(task *StreamTask)
 	HandleErrFunc  func() error
 
-	flushStageTime   stats.PrintLogStatsCollector[int64]
-	flushAtLeastOne  stats.PrintLogStatsCollector[int64]
-	commitTxnAPITime stats.PrintLogStatsCollector[int64]
-	sendOffsetTime   stats.PrintLogStatsCollector[int64]
-	txnCommitTime    stats.PrintLogStatsCollector[int64]
-	markPartUs       stats.PrintLogStatsCollector[int64]
-	epochMarkTime    stats.PrintLogStatsCollector[int64]
-	markEpochPrepare stats.PrintLogStatsCollector[int64]
-	markEpochAppend  stats.PrintLogStatsCollector[int64]
-	waitPrevTxn      stats.PrintLogStatsCollector[int64]
-	markerSize       stats.PrintLogStatsCollector[int]
-	producerFlush    stats.PrintLogStatsCollector[int64]
-	kvcFlush         stats.PrintLogStatsCollector[int64]
-	wscFlush         stats.PrintLogStatsCollector[int64]
+	flushStageTime    stats.PrintLogStatsCollector[int64]
+	flushAtLeastOne   stats.PrintLogStatsCollector[int64]
+	commitTxnAPITime  stats.PrintLogStatsCollector[int64]
+	sendOffsetTime    stats.PrintLogStatsCollector[int64]
+	txnCommitTime     stats.PrintLogStatsCollector[int64]
+	markPartUs        stats.PrintLogStatsCollector[int64]
+	epochMarkTime     stats.PrintLogStatsCollector[int64]
+	markEpochPrepare  stats.PrintLogStatsCollector[int64]
+	markEpochAppend   stats.PrintLogStatsCollector[int64]
+	waitPrevTxnInCmt  stats.PrintLogStatsCollector[int64]
+	waitPrevTxnInPush stats.PrintLogStatsCollector[int64]
+	markerSize        stats.PrintLogStatsCollector[int]
+	producerFlush     stats.PrintLogStatsCollector[int64]
+	kvcFlush          stats.PrintLogStatsCollector[int64]
+	wscFlush          stats.PrintLogStatsCollector[int64]
+
+	txnCounter                 stats.Counter
+	waitedInCmtCounter         stats.Counter
+	waitedInPushCounter        stats.Counter
+	appendedMetaInCmtCounter   stats.Counter
+	appendedMetaInPushCounter  stats.Counter
+	waitAndAppendInCmtCounter  stats.Counter
+	waitAndAppendInPushCounter stats.Counter
 
 	endDuration    time.Duration
 	epochMarkTimes uint32
@@ -66,11 +75,35 @@ func (t *StreamTask) PrintRemainingStats() {
 	t.epochMarkTime.PrintRemainingStats()
 	t.markEpochPrepare.PrintRemainingStats()
 	t.markEpochAppend.PrintRemainingStats()
-	t.waitPrevTxn.PrintRemainingStats()
+	t.waitPrevTxnInCmt.PrintRemainingStats()
+	t.waitPrevTxnInPush.PrintRemainingStats()
 	t.markerSize.PrintRemainingStats()
 	t.producerFlush.PrintRemainingStats()
 	t.kvcFlush.PrintRemainingStats()
 	t.wscFlush.PrintRemainingStats()
+	if t.txnCounter.GetCount() != 0 {
+		t.txnCounter.Report()
+		t.waitedInCmtCounter.Report()
+		t.waitedInPushCounter.Report()
+		t.appendedMetaInCmtCounter.Report()
+		t.appendedMetaInPushCounter.Report()
+		t.waitAndAppendInCmtCounter.Report()
+		t.waitAndAppendInPushCounter.Report()
+
+		total := float64(t.txnCounter.GetCount())
+		waitedInCmt := float64(t.waitedInCmtCounter.GetCount())
+		appendedInCmt := float64(t.appendedMetaInCmtCounter.GetCount())
+		waitAndAppendInCmt := float64(t.waitAndAppendInCmtCounter.GetCount())
+
+		waitedInPush := float64(t.waitedInPushCounter.GetCount())
+		appendedInPush := float64(t.appendedMetaInPushCounter.GetCount())
+		waitAndAppendInPush := float64(t.waitAndAppendInPushCounter.GetCount())
+
+		fmt.Fprintf(os.Stderr,
+			"waitedInCmt: %v, appendedInCmt: %v, waitAndAppendInCmt: %v, waitedInPush: %v, appendedInPush: %v, waitAndAppendInPush: %v\n",
+			waitedInCmt/total, appendedInCmt/total, waitAndAppendInCmt/total,
+			waitedInPush/total, appendedInPush/total, waitAndAppendInPush/total)
+	}
 }
 
 func (t *StreamTask) SetEndDuration(startTimeMs int64) {

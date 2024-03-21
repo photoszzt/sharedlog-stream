@@ -88,9 +88,16 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 	}
 	flushCallbackFunc := func(ctx context.Context) error {
 		waitPrev := stats.TimerBegin()
-		err := tm.EnsurePrevTxnFinAndAppendMeta(ctx)
+		waited, err := tm.EnsurePrevTxnFinAndAppendMeta(ctx)
 		waitAndStart := stats.Elapsed(waitPrev).Microseconds()
-		t.waitPrevTxn.AddSample(waitAndStart)
+		if waited == transaction.WaitPrev {
+			t.waitedInPushCounter.Tick(1)
+		} else if waited == transaction.AppendedNewPar {
+			t.appendedMetaInPushCounter.Tick(1)
+		} else if waited == transaction.WaitAndAppend {
+			t.waitAndAppendInPushCounter.Tick(1)
+		}
+		t.waitPrevTxnInPush.AddSample(waitAndStart)
 		return err
 	}
 	updateFuncs(streamTaskArgs,
@@ -230,13 +237,12 @@ func commitTransaction(ctx context.Context,
 	// debug.Fprintf(os.Stderr, "paused\n")
 
 	waitPrev := stats.TimerBegin()
-	err := meta.tm.EnsurePrevTxnFinAndAppendMeta(ctx)
+	waited, err := meta.tm.EnsurePrevTxnFinAndAppendMeta(ctx)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
 	waitAndStart := stats.Elapsed(waitPrev).Microseconds()
 	// debug.Fprintf(os.Stderr, "waited prev txn fin\n")
-
 	flushAllStart := stats.TimerBegin()
 	f, err := flushStreams(ctx, meta.t, meta.args)
 	if err != nil {
@@ -282,6 +288,15 @@ func commitTransaction(ctx context.Context,
 	}
 	cElapsed := stats.Elapsed(cBeg).Microseconds()
 	commitTxnElapsed := stats.Elapsed(commitTxnBeg).Microseconds()
+	meta.t.txnCounter.Tick(1)
+	if waited == transaction.WaitPrev {
+		meta.t.waitedInCmtCounter.Tick(1)
+	} else if waited == transaction.AppendedNewPar {
+		meta.t.appendedMetaInCmtCounter.Tick(1)
+	} else if waited == transaction.WaitAndAppend {
+		meta.t.waitAndAppendInCmtCounter.Tick(1)
+	}
+
 	meta.t.txnCommitTime.AddSample(commitTxnElapsed)
 	meta.t.commitTxnAPITime.AddSample(cElapsed)
 	meta.t.flushStageTime.AddSample(flushTime)
@@ -289,7 +304,7 @@ func commitTransaction(ctx context.Context,
 	if f > 0 {
 		meta.t.flushAtLeastOne.AddSample(flushTime)
 	}
-	meta.t.waitPrevTxn.AddSample(waitAndStart)
+	meta.t.waitPrevTxnInCmt.AddSample(waitAndStart)
 	if shouldExit {
 		return &common.FnOutput{Success: true, Message: "exit"}
 	}
