@@ -62,6 +62,7 @@ type TransactionManager struct {
 	serdeFormat           commtypes.SerdeFormat
 	waitPrevTxn           stats.PrintLogStatsCollector[int64]
 	appendTxnMeta         stats.PrintLogStatsCollector[int64]
+	txnSndPhase           stats.PrintLogStatsCollector[int64]
 }
 
 func NewTransactionManager(ctx context.Context,
@@ -86,6 +87,7 @@ func NewTransactionManager(ctx context.Context,
 		env:                   env,
 		waitPrevTxn:           stats.NewPrintLogStatsCollector[int64]("waitPrevTxn2pc"),
 		appendTxnMeta:         stats.NewPrintLogStatsCollector[int64]("appendTxnMeta2pc"),
+		txnSndPhase:           stats.NewPrintLogStatsCollector[int64]("txnSndPhase"),
 	}
 	tm.addedNewTpPar.Store(false)
 	tm.hasWaitForLastTxn.Store(false)
@@ -100,6 +102,7 @@ func NewTransactionManager(ctx context.Context,
 func (tm *TransactionManager) OutputRemainingStats() {
 	tm.waitPrevTxn.PrintRemainingStats()
 	tm.appendTxnMeta.PrintRemainingStats()
+	tm.txnSndPhase.PrintRemainingStats()
 }
 
 func (tm *TransactionManager) GetCurrentEpoch() uint16             { return tm.prodId.TaskEpoch }
@@ -506,6 +509,7 @@ func (tc *TransactionManager) completeTransaction(ctx context.Context,
 	trState txn_data.TransactionState,
 	topicSubStreams map[string]data_structure.Uint32Set,
 ) error {
+	tBeg := stats.TimerBegin()
 	err := tc.appendTxnMarkerToStreams(ctx, trMark, topicSubStreams)
 	if err != nil {
 		return err
@@ -516,6 +520,8 @@ func (tc *TransactionManager) completeTransaction(ctx context.Context,
 	}
 	_, err = tc.appendToTransactionLog(ctx, txnMd, []uint64{tc.txnLogTag, tc.tranCompleteMarkerTag})
 	debug.Fprintf(os.Stderr, "appended txn complete to streams\n")
+	el := stats.Elapsed(tBeg).Microseconds()
+	tc.txnSndPhase.AddSample(el)
 	return err
 }
 
