@@ -325,7 +325,8 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 			})
 		}
 	}
-	return bg.Wait()
+	err = bg.Wait()
+	return err
 }
 
 func (tc *TransactionManager) checkTopicExistsInTopicStream(topic string) bool {
@@ -466,6 +467,7 @@ func (tc *TransactionManager) EnsurePrevTxnFinAndAppendMeta(ctx context.Context)
 		}
 		tc.waitPrevTxn.AddSample(stats.Elapsed(tBeg).Microseconds())
 		waited = WaitPrev
+		tc.bgErrg, tc.bgCtx = errgroup.WithContext(ctx)
 		// fmt.Fprintf(os.Stderr, "previous txn finished\n")
 	}
 	if tc.addedNewTpPar.Load() {
