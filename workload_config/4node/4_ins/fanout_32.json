@@ -18,6 +18,6 @@
     ],
     "StreamParam": {
         "nexmark_src": 4,
-        "fanout_out": 16
+        "fanout_out": 32
     }
 }
