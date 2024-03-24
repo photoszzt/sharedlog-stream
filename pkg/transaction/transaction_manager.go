@@ -308,6 +308,7 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 		return err
 	}
 	producerId := tc.prodId
+	bg, bgCtx := errgroup.WithContext(ctx)
 	for tp, parSet := range topicSubstreams {
 		stream := tc.topicStreams[tp]
 		topicNameHash := stream.TopicNameHash()
@@ -315,16 +316,16 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 			parNum := uint8(par)
 			tag := txn_data.MarkerTag(topicNameHash, parNum)
 			tag2 := sharedlog_stream.NameHashWithPartition(topicNameHash, parNum)
-			_, err := stream.PushWithTag(ctx, encoded, parNum, []uint64{tag, tag2},
-				nil, sharedlog_stream.ControlRecordMeta, producerId)
-			// debug.Fprintf(os.Stderr, "append marker %#v to stream %s off %x tag %x\n",
-			// 	marker, stream.TopicName(), off, tag)
-			if err != nil {
+			bg.Go(func() error {
+				_, err := stream.PushWithTag(bgCtx, encoded, parNum, []uint64{tag, tag2},
+					nil, sharedlog_stream.ControlRecordMeta, producerId)
+				// debug.Fprintf(os.Stderr, "append marker %#v to stream %s off %x tag %x\n",
+				// 	marker, stream.TopicName(), off, tag)
 				return err
-			}
+			})
 		}
 	}
-	return nil
+	return bg.Wait()
 }
 
 func (tc *TransactionManager) checkTopicExistsInTopicStream(topic string) bool {
