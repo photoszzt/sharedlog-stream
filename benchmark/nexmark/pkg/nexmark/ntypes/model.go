@@ -76,7 +76,7 @@ const (
 )
 
 type Fanout struct {
-	Test int `json:"test" msg:"test"`
+	DateTime int64 `json:"dateTime" msg:"dateTime"`
 }
 
 type Event struct {
@@ -174,6 +174,11 @@ func (e *Event) ExtractEventTime() (int64, error) {
 			return 0, fmt.Errorf("new auction should not be nil")
 		}
 		return e.NewAuction.DateTime, nil
+	case FANOUT:
+		if e.FanoutTest == nil {
+			return 0, fmt.Errorf("fanout test should not be nil")
+		}
+		return e.FanoutTest.DateTime, nil
 	default:
 		return 0, fmt.Errorf("failed to recognize event type")
 	}

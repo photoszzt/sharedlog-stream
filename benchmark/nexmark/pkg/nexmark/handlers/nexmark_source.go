@@ -82,7 +82,7 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 			Key: optional.None[string](),
 			Value: optional.Some(&ntypes.Event{
 				FanoutTest: &ntypes.Fanout{
-					Test: 1,
+					DateTime: nextEvent.EventTimestamp,
 				},
 				Etype: ntypes.FANOUT,
 			}),
