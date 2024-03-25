@@ -711,15 +711,56 @@ func (z *Event) DecodeMsg(dc *msgp.Reader) (err error) {
 					return
 				}
 			}
+		case "fo":
+			if dc.IsNil() {
+				err = dc.ReadNil()
+				if err != nil {
+					err = msgp.WrapError(err, "FanoutTest")
+					return
+				}
+				z.FanoutTest = nil
+			} else {
+				if z.FanoutTest == nil {
+					z.FanoutTest = new(Fanout)
+				}
+				var zb0002 uint32
+				zb0002, err = dc.ReadMapHeader()
+				if err != nil {
+					err = msgp.WrapError(err, "FanoutTest")
+					return
+				}
+				for zb0002 > 0 {
+					zb0002--
+					field, err = dc.ReadMapKeyPtr()
+					if err != nil {
+						err = msgp.WrapError(err, "FanoutTest")
+						return
+					}
+					switch msgp.UnsafeString(field) {
+					case "test":
+						z.FanoutTest.Test, err = dc.ReadInt()
+						if err != nil {
+							err = msgp.WrapError(err, "FanoutTest", "Test")
+							return
+						}
+					default:
+						err = dc.Skip()
+						if err != nil {
+							err = msgp.WrapError(err, "FanoutTest")
+							return
+						}
+					}
+				}
+			}
 		case "etype":
 			{
-				var zb0002 uint8
-				zb0002, err = dc.ReadUint8()
+				var zb0003 uint8
+				zb0003, err = dc.ReadUint8()
 				if err != nil {
 					err = msgp.WrapError(err, "Etype")
 					return
 				}
-				z.Etype = EType(zb0002)
+				z.Etype = EType(zb0003)
 			}
 		default:
 			err = dc.Skip()
@@ -735,8 +776,8 @@ func (z *Event) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *Event) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
-	zb0001Len := uint32(4)
-	var zb0001Mask uint8 /* 4 bits */
+	zb0001Len := uint32(5)
+	var zb0001Mask uint8 /* 5 bits */
 	_ = zb0001Mask
 	if z.NewPerson == nil {
 		zb0001Len--
@@ -749,6 +790,10 @@ func (z *Event) EncodeMsg(en *msgp.Writer) (err error) {
 	if z.Bid == nil {
 		zb0001Len--
 		zb0001Mask |= 0x4
+	}
+	if z.FanoutTest == nil {
+		zb0001Len--
+		zb0001Mask |= 0x8
 	}
 	// variable map header, size zb0001Len
 	err = en.Append(0x80 | uint8(zb0001Len))
@@ -815,6 +860,31 @@ func (z *Event) EncodeMsg(en *msgp.Writer) (err error) {
 			}
 		}
 	}
+	if (zb0001Mask & 0x8) == 0 { // if not empty
+		// write "fo"
+		err = en.Append(0xa2, 0x66, 0x6f)
+		if err != nil {
+			return
+		}
+		if z.FanoutTest == nil {
+			err = en.WriteNil()
+			if err != nil {
+				return
+			}
+		} else {
+			// map header, size 1
+			// write "test"
+			err = en.Append(0x81, 0xa4, 0x74, 0x65, 0x73, 0x74)
+			if err != nil {
+				return
+			}
+			err = en.WriteInt(z.FanoutTest.Test)
+			if err != nil {
+				err = msgp.WrapError(err, "FanoutTest", "Test")
+				return
+			}
+		}
+	}
 	// write "etype"
 	err = en.Append(0xa5, 0x65, 0x74, 0x79, 0x70, 0x65)
 	if err != nil {
@@ -832,8 +902,8 @@ func (z *Event) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *Event) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(4)
-	var zb0001Mask uint8 /* 4 bits */
+	zb0001Len := uint32(5)
+	var zb0001Mask uint8 /* 5 bits */
 	_ = zb0001Mask
 	if z.NewPerson == nil {
 		zb0001Len--
@@ -846,6 +916,10 @@ func (z *Event) MarshalMsg(b []byte) (o []byte, err error) {
 	if z.Bid == nil {
 		zb0001Len--
 		zb0001Mask |= 0x4
+	}
+	if z.FanoutTest == nil {
+		zb0001Len--
+		zb0001Mask |= 0x8
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -889,6 +963,18 @@ func (z *Event) MarshalMsg(b []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Bid")
 				return
 			}
+		}
+	}
+	if (zb0001Mask & 0x8) == 0 { // if not empty
+		// string "fo"
+		o = append(o, 0xa2, 0x66, 0x6f)
+		if z.FanoutTest == nil {
+			o = msgp.AppendNil(o)
+		} else {
+			// map header, size 1
+			// string "test"
+			o = append(o, 0x81, 0xa4, 0x74, 0x65, 0x73, 0x74)
+			o = msgp.AppendInt(o, z.FanoutTest.Test)
 		}
 	}
 	// string "etype"
@@ -966,15 +1052,55 @@ func (z *Event) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+		case "fo":
+			if msgp.IsNil(bts) {
+				bts, err = msgp.ReadNilBytes(bts)
+				if err != nil {
+					return
+				}
+				z.FanoutTest = nil
+			} else {
+				if z.FanoutTest == nil {
+					z.FanoutTest = new(Fanout)
+				}
+				var zb0002 uint32
+				zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "FanoutTest")
+					return
+				}
+				for zb0002 > 0 {
+					zb0002--
+					field, bts, err = msgp.ReadMapKeyZC(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "FanoutTest")
+						return
+					}
+					switch msgp.UnsafeString(field) {
+					case "test":
+						z.FanoutTest.Test, bts, err = msgp.ReadIntBytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "FanoutTest", "Test")
+							return
+						}
+					default:
+						bts, err = msgp.Skip(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "FanoutTest")
+							return
+						}
+					}
+				}
+			}
 		case "etype":
 			{
-				var zb0002 uint8
-				zb0002, bts, err = msgp.ReadUint8Bytes(bts)
+				var zb0003 uint8
+				zb0003, bts, err = msgp.ReadUint8Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Etype")
 					return
 				}
-				z.Etype = EType(zb0002)
+				z.Etype = EType(zb0003)
 			}
 		default:
 			bts, err = msgp.Skip(bts)
@@ -1007,6 +1133,12 @@ func (z *Event) Msgsize() (s int) {
 		s += msgp.NilSize
 	} else {
 		s += z.Bid.Msgsize()
+	}
+	s += 3
+	if z.FanoutTest == nil {
+		s += msgp.NilSize
+	} else {
+		s += 1 + 5 + msgp.IntSize
 	}
 	s += 6 + msgp.Uint8Size
 	return
@@ -1155,6 +1287,109 @@ func (z *Events) Msgsize() (s int) {
 	for za0001 := range z.EventsArr {
 		s += z.EventsArr[za0001].Msgsize()
 	}
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *Fanout) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "test":
+			z.Test, err = dc.ReadInt()
+			if err != nil {
+				err = msgp.WrapError(err, "Test")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z Fanout) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 1
+	// write "test"
+	err = en.Append(0x81, 0xa4, 0x74, 0x65, 0x73, 0x74)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt(z.Test)
+	if err != nil {
+		err = msgp.WrapError(err, "Test")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z Fanout) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 1
+	// string "test"
+	o = append(o, 0x81, 0xa4, 0x74, 0x65, 0x73, 0x74)
+	o = msgp.AppendInt(o, z.Test)
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *Fanout) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "test":
+			z.Test, bts, err = msgp.ReadIntBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Test")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z Fanout) Msgsize() (s int) {
+	s = 1 + 5 + msgp.IntSize
 	return
 }
 

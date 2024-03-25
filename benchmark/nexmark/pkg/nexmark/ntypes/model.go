@@ -7,7 +7,6 @@ package ntypes
 import (
 	"encoding/json"
 	"fmt"
-
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -73,12 +72,18 @@ const (
 	PERSON  EType = 0
 	AUCTION EType = 1
 	BID     EType = 2
+	FANOUT  EType = 3
 )
+
+type Fanout struct {
+	Test int `json:"test" msg:"test"`
+}
 
 type Event struct {
 	NewPerson  *Person  `json:"newPerson,omitempty" msg:"newPerson,omitempty"`
 	NewAuction *Auction `json:"newAuction,omitempty" msg:"newAuction,omitempty"`
 	Bid        *Bid     `json:"bid,omitempty" msg:"bid,omitempty"`
+	FanoutTest *Fanout  `json:"fo,omitempty" msg:"fo,omitempty"`
 	Etype      EType    `json:"etype" msg:"etype"`
 }
 

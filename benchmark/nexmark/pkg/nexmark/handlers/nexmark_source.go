@@ -66,20 +66,33 @@ type nexmarkSrcProcArgs struct {
 	msgChan           chan sharedlog_stream.PayloadToPush
 	parNumArr         []uint8
 	latencies         stats.StatsCollector[int64]
+	appId             string
 	idx               int
 }
 
 func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProcArgs) *common.FnOutput {
 	procStart := stats.TimerBegin()
+	var msg commtypes.MessageG[string, *ntypes.Event]
 	nextEvent, err := args.eventGenerator.NextEvent(ctx, args.channel_url_cache)
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("next event failed: %v\n", err))
 	}
-
-	// fmt.Fprintf(os.Stderr, "gen event with ts: %v\n", nextEvent.EventTimestamp)
-	msg := commtypes.MessageG[string, *ntypes.Event]{
-		Key:   optional.None[string](),
-		Value: optional.Some(nextEvent.Event),
+	if args.appId == "fanout" {
+		msg = commtypes.MessageG[string, *ntypes.Event]{
+			Key: optional.None[string](),
+			Value: optional.Some(&ntypes.Event{
+				FanoutTest: &ntypes.Fanout{
+					Test: 1,
+				},
+				Etype: ntypes.FANOUT,
+			}),
+		}
+	} else {
+		// fmt.Fprintf(os.Stderr, "gen event with ts: %v\n", nextEvent.EventTimestamp)
+		msg = commtypes.MessageG[string, *ntypes.Event]{
+			Key:   optional.None[string](),
+			Value: optional.Some(nextEvent.Event),
+		}
 	}
 	msgEncoded, err := h.msgSerde.Encode(msg)
 	if err != nil {
@@ -214,6 +227,7 @@ func (h *nexmarkSourceHandler) getProcArgs(inputConfig *ntypes.NexMarkConfigInpu
 			stats.DEFAULT_COLLECT_DURATION),
 		msgChan:   h.streamPusher.MsgChan,
 		parNumArr: substreamIdxOut,
+		appId:     inputConfig.AppId,
 	}
 }
 
