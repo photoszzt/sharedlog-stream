@@ -235,8 +235,13 @@ func commitTransaction(ctx context.Context,
 		*paused = true
 	}
 	// debug.Fprintf(os.Stderr, "paused\n")
-
 	waitPrev := stats.TimerBegin()
+	for _, src := range meta.args.ectx.Consumers() {
+		if err := meta.tm.AddTopicTrackConsumedSeqs(src.TopicName(), meta.args.ectx.SubstreamNum()); err != nil {
+			return common.GenErrFnOutput(err)
+		}
+	}
+
 	waited, err := meta.tm.EnsurePrevTxnFinAndAppendMeta(ctx)
 	if err != nil {
 		return common.GenErrFnOutput(err)
@@ -252,11 +257,6 @@ func commitTransaction(ctx context.Context,
 	// debug.Fprintf(os.Stderr, "flushed\n")
 
 	offsetBeg := stats.TimerBegin()
-	for _, src := range meta.args.ectx.Consumers() {
-		if err := meta.tm.AddTopicTrackConsumedSeqs(src.TopicName(), meta.args.ectx.SubstreamNum()); err != nil {
-			return common.GenErrFnOutput(err)
-		}
-	}
 	offsetRecords := transaction.CollectOffsetRecords(meta.args.ectx.Consumers())
 	err = meta.tm.AppendConsumedSeqNum(ctx, offsetRecords, meta.args.ectx.SubstreamNum())
 	if err != nil {

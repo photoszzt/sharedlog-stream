@@ -15,6 +15,7 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/txn_data"
+	"sync"
 	"sync/atomic"
 
 	"cs.utexas.edu/zjia/faas/protocol"
@@ -42,6 +43,7 @@ const (
 // transaction manager is not goroutine safe, it's assumed to be used by
 // only one stream task and only one goroutine could update it
 type TransactionManager struct {
+	mu                    sync.Mutex // protect flush callback
 	offsetRecordSerde     commtypes.SerdeG[txn_data.OffsetRecord]
 	env                   types.Environment
 	bgCtx                 context.Context
@@ -458,6 +460,8 @@ func (tc *TransactionManager) FindLastConsumedSeqNum(ctx context.Context, topicT
 
 func (tc *TransactionManager) EnsurePrevTxnFinAndAppendMeta(ctx context.Context) (WaitOrAppendedMeta, error) {
 	var waited WaitOrAppendedMeta = None
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
 	if env_config.ASYNC_SECOND_PHASE && !tc.hasWaitForLastTxn.Load() {
 		// fmt.Fprintf(os.Stderr, "waiting for previous txn to finish\n")
 		tBeg := stats.TimerBegin()
@@ -517,12 +521,12 @@ func (tc *TransactionManager) completeTransaction(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	debug.Fprintf(os.Stderr, "appended txn marker to streams\n")
+	// debug.Fprintf(os.Stderr, "appended txn marker to streams\n")
 	txnMd := txn_data.TxnMetadata{
 		State: trState,
 	}
 	_, err = tc.appendToTransactionLog(ctx, txnMd, []uint64{tc.txnLogTag, tc.tranCompleteMarkerTag})
-	debug.Fprintf(os.Stderr, "appended txn complete to streams\n")
+	// debug.Fprintf(os.Stderr, "appended txn complete to streams\n")
 	el := stats.Elapsed(tBeg).Microseconds()
 	tc.txnSndPhase.AddSample(el)
 	return err

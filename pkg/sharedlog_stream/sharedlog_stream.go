@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	kBlockingReadTimeout = 50 * time.Millisecond
+	kBlockingReadTimeout = 5 * time.Millisecond
 )
 
 type LogEntryMeta uint8
