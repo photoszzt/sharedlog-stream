@@ -227,13 +227,13 @@ func commitTransaction(ctx context.Context,
 	snapshotTimer *time.Time,
 ) *common.FnOutput {
 	// debug.Fprintf(os.Stderr, "about to pause\n")
-	commitTxnBeg := stats.TimerBegin()
 	if meta.t.pauseFunc != nil {
 		if ret := meta.t.pauseFunc(meta.args.guarantee); ret != nil {
 			return ret
 		}
 		*paused = true
 	}
+	commitTxnBeg := stats.TimerBegin()
 	// debug.Fprintf(os.Stderr, "paused\n")
 	waitPrev := stats.TimerBegin()
 	for _, src := range meta.args.ectx.Consumers() {

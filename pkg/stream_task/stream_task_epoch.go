@@ -213,7 +213,6 @@ func pausedFlushMark(
 	snapshotTime *[]int64, snapshotTimer *time.Time,
 	paused *bool,
 ) (bool, *common.FnOutput) {
-	markBegin := time.Now()
 	if meta.t.pauseFunc != nil {
 		if ret := meta.t.pauseFunc(meta.args.guarantee); ret != nil {
 			return false, ret
@@ -221,6 +220,7 @@ func pausedFlushMark(
 		*paused = true
 	}
 
+	markBegin := time.Now()
 	flushAllStart := stats.TimerBegin()
 	f, err := flushStreams(ctx, meta.t, meta.args)
 	if err != nil {
