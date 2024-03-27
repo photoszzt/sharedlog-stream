@@ -743,6 +743,12 @@ func (z *Event) DecodeMsg(dc *msgp.Reader) (err error) {
 							err = msgp.WrapError(err, "FanoutTest", "DateTime")
 							return
 						}
+					case "extra":
+						z.FanoutTest.Extra, err = dc.ReadString()
+						if err != nil {
+							err = msgp.WrapError(err, "FanoutTest", "Extra")
+							return
+						}
 					default:
 						err = dc.Skip()
 						if err != nil {
@@ -872,15 +878,25 @@ func (z *Event) EncodeMsg(en *msgp.Writer) (err error) {
 				return
 			}
 		} else {
-			// map header, size 1
+			// map header, size 2
 			// write "dateTime"
-			err = en.Append(0x81, 0xa8, 0x64, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65)
+			err = en.Append(0x82, 0xa8, 0x64, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65)
 			if err != nil {
 				return
 			}
 			err = en.WriteInt64(z.FanoutTest.DateTime)
 			if err != nil {
 				err = msgp.WrapError(err, "FanoutTest", "DateTime")
+				return
+			}
+			// write "extra"
+			err = en.Append(0xa5, 0x65, 0x78, 0x74, 0x72, 0x61)
+			if err != nil {
+				return
+			}
+			err = en.WriteString(z.FanoutTest.Extra)
+			if err != nil {
+				err = msgp.WrapError(err, "FanoutTest", "Extra")
 				return
 			}
 		}
@@ -971,10 +987,13 @@ func (z *Event) MarshalMsg(b []byte) (o []byte, err error) {
 		if z.FanoutTest == nil {
 			o = msgp.AppendNil(o)
 		} else {
-			// map header, size 1
+			// map header, size 2
 			// string "dateTime"
-			o = append(o, 0x81, 0xa8, 0x64, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65)
+			o = append(o, 0x82, 0xa8, 0x64, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65)
 			o = msgp.AppendInt64(o, z.FanoutTest.DateTime)
+			// string "extra"
+			o = append(o, 0xa5, 0x65, 0x78, 0x74, 0x72, 0x61)
+			o = msgp.AppendString(o, z.FanoutTest.Extra)
 		}
 	}
 	// string "etype"
@@ -1083,6 +1102,12 @@ func (z *Event) UnmarshalMsg(bts []byte) (o []byte, err error) {
 							err = msgp.WrapError(err, "FanoutTest", "DateTime")
 							return
 						}
+					case "extra":
+						z.FanoutTest.Extra, bts, err = msgp.ReadStringBytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "FanoutTest", "Extra")
+							return
+						}
 					default:
 						bts, err = msgp.Skip(bts)
 						if err != nil {
@@ -1138,7 +1163,7 @@ func (z *Event) Msgsize() (s int) {
 	if z.FanoutTest == nil {
 		s += msgp.NilSize
 	} else {
-		s += 1 + 9 + msgp.Int64Size
+		s += 1 + 9 + msgp.Int64Size + 6 + msgp.StringPrefixSize + len(z.FanoutTest.Extra)
 	}
 	s += 6 + msgp.Uint8Size
 	return
@@ -1314,6 +1339,12 @@ func (z *Fanout) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "DateTime")
 				return
 			}
+		case "extra":
+			z.Extra, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "Extra")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -1327,9 +1358,9 @@ func (z *Fanout) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z Fanout) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 1
+	// map header, size 2
 	// write "dateTime"
-	err = en.Append(0x81, 0xa8, 0x64, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65)
+	err = en.Append(0x82, 0xa8, 0x64, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65)
 	if err != nil {
 		return
 	}
@@ -1338,16 +1369,29 @@ func (z Fanout) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "DateTime")
 		return
 	}
+	// write "extra"
+	err = en.Append(0xa5, 0x65, 0x78, 0x74, 0x72, 0x61)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.Extra)
+	if err != nil {
+		err = msgp.WrapError(err, "Extra")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z Fanout) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 1
+	// map header, size 2
 	// string "dateTime"
-	o = append(o, 0x81, 0xa8, 0x64, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65)
+	o = append(o, 0x82, 0xa8, 0x64, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65)
 	o = msgp.AppendInt64(o, z.DateTime)
+	// string "extra"
+	o = append(o, 0xa5, 0x65, 0x78, 0x74, 0x72, 0x61)
+	o = msgp.AppendString(o, z.Extra)
 	return
 }
 
@@ -1375,6 +1419,12 @@ func (z *Fanout) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "DateTime")
 				return
 			}
+		case "extra":
+			z.Extra, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Extra")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -1389,7 +1439,7 @@ func (z *Fanout) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z Fanout) Msgsize() (s int) {
-	s = 1 + 9 + msgp.Int64Size
+	s = 1 + 9 + msgp.Int64Size + 6 + msgp.StringPrefixSize + len(z.Extra)
 	return
 }
 

@@ -80,12 +80,11 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 	if args.appId == "fanout" {
 		msg = commtypes.MessageG[string, *ntypes.Event]{
 			Key: optional.None[string](),
-			Value: optional.Some(&ntypes.Event{
-				FanoutTest: &ntypes.Fanout{
+			Value: optional.Some(ntypes.NewFanoutEvent(
+				&ntypes.Fanout{
 					DateTime: nextEvent.EventTimestamp,
-				},
-				Etype: ntypes.FANOUT,
-			}),
+					Extra:    generator.NextExactString(args.eventGenerator.Random, 1016),
+				})),
 		}
 	} else {
 		// fmt.Fprintf(os.Stderr, "gen event with ts: %v\n", nextEvent.EventTimestamp)

@@ -76,7 +76,8 @@ const (
 )
 
 type Fanout struct {
-	DateTime int64 `json:"dateTime" msg:"dateTime"`
+	DateTime int64  `json:"dateTime" msg:"dateTime"`
+	Extra    string `msg:"extra" json:"extra"`
 }
 
 type Event struct {
@@ -91,11 +92,22 @@ type Events struct {
 	EventsArr []Event `json:"events"`
 }
 
+func NewFanoutEvent(newFanout *Fanout) *Event {
+	return &Event{
+		NewPerson:  nil,
+		NewAuction: nil,
+		Bid:        nil,
+		FanoutTest: newFanout,
+		Etype:      FANOUT,
+	}
+}
+
 func NewPersonEvent(newPerson *Person) *Event {
 	return &Event{
 		NewPerson:  newPerson,
 		NewAuction: nil,
 		Bid:        nil,
+		FanoutTest: nil,
 		Etype:      PERSON,
 	}
 }
@@ -105,6 +117,7 @@ func NewAuctionEvnet(newAuction *Auction) *Event {
 		NewPerson:  nil,
 		NewAuction: newAuction,
 		Bid:        nil,
+		FanoutTest: nil,
 		Etype:      AUCTION,
 	}
 }
@@ -114,6 +127,7 @@ func NewBidEvent(bid *Bid) *Event {
 		NewPerson:  nil,
 		NewAuction: nil,
 		Bid:        bid,
+		FanoutTest: nil,
 		Etype:      BID,
 	}
 }

@@ -73,6 +73,21 @@ func (ng *NexmarkGenerator) HasNext() bool {
 	return ng.EventsCountSoFar < ng.Config.MaxEvents
 }
 
+func (ng *NexmarkGenerator) NextFanoutEvent() (*NextEvent, error) {
+	if ng.WallclockBaseTime < 0 {
+		ng.WallclockBaseTime = time.Now().UnixMilli()
+	}
+	eventTimestamp := ng.Config.TimestampForEvent(ng.Config.NextEventNumber(ng.EventsCountSoFar))
+	adjustedEventTimestamp := ng.Config.TimestampForEvent(ng.Config.NextAdjustedEventNumber(ng.EventsCountSoFar))
+	watermark := ng.Config.TimestampForEvent(ng.Config.NextEventNumberForWatermark(ng.EventsCountSoFar))
+	wallclockTimestamp := ng.WallclockBaseTime + (int64(eventTimestamp) - int64(ng.Config.BaseTime))
+	event := ntypes.NewFanoutEvent(&ntypes.Fanout{
+		DateTime: adjustedEventTimestamp,
+	})
+	ng.EventsCountSoFar += 1
+	return NewNextEvent(wallclockTimestamp, adjustedEventTimestamp, event, watermark), nil
+}
+
 func (ng *NexmarkGenerator) NextEvent(ctx context.Context, bidUrlCache map[uint32]*ChannelUrl) (*NextEvent, error) {
 	if ng.WallclockBaseTime < 0 {
 		ng.WallclockBaseTime = time.Now().UnixMilli()
