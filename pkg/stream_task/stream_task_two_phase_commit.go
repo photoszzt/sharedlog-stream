@@ -97,7 +97,9 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 		} else if waited == transaction.WaitAndAppend {
 			t.waitAndAppendInPushCounter.Tick(1)
 		}
-		t.waitPrevTxnInPush.AddSample(waitAndStart)
+		if waited != transaction.None {
+			t.waitPrevTxnInPush.AddSample(waitAndStart)
+		}
 		return err
 	}
 	updateFuncs(streamTaskArgs,
@@ -296,6 +298,9 @@ func commitTransaction(ctx context.Context,
 	} else if waited == transaction.WaitAndAppend {
 		meta.t.waitAndAppendInCmtCounter.Tick(1)
 	}
+	if waited != transaction.None {
+		meta.t.waitPrevTxnInCmt.AddSample(waitAndStart)
+	}
 
 	meta.t.txnCommitTime.AddSample(commitTxnElapsed)
 	meta.t.commitTxnAPITime.AddSample(cElapsed)
@@ -304,7 +309,6 @@ func commitTransaction(ctx context.Context,
 	if f > 0 {
 		meta.t.flushAtLeastOne.AddSample(flushTime)
 	}
-	meta.t.waitPrevTxnInCmt.AddSample(waitAndStart)
 	if shouldExit {
 		return &common.FnOutput{Success: true, Message: "exit"}
 	}
