@@ -257,8 +257,7 @@ func commitTransaction(ctx context.Context,
 	// debug.Fprintf(os.Stderr, "flushed\n")
 
 	offsetBeg := stats.TimerBegin()
-	offsetRecords := transaction.CollectOffsetRecords(meta.args.ectx.Consumers())
-	err = meta.tm.AppendConsumedSeqNum(ctx, offsetRecords, meta.args.ectx.SubstreamNum())
+	err = meta.tm.AppendConsumedSeqNum(ctx, meta.args.ectx.Consumers(), meta.args.ectx.SubstreamNum())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] append offset failed: %v\n", err)
 		return common.GenErrFnOutput(fmt.Errorf("append offset failed: %v\n", err))

@@ -405,8 +405,21 @@ func GetOffset(ctx context.Context, tm *TransactionManager,
 	return offset, nil
 }
 
-func CollectOffsetRecords(consumers []*producer_consumer.MeteredConsumer) map[string]txn_data.OffsetRecord {
-	ret := make(map[string]txn_data.OffsetRecord)
+// func CollectOffsetRecords(consumers []*producer_consumer.MeteredConsumer) map[string]txn_data.OffsetRecord {
+// 	ret := make(map[string]txn_data.OffsetRecord)
+// 	for _, consumer := range consumers {
+// 		topic := consumer.TopicName()
+// 		offset := consumer.CurrentConsumedSeqNum()
+// 		offsetTopic := con_types.OffsetTopic(topic)
+// 		offsetRecord := txn_data.OffsetRecord{
+// 			Offset: offset,
+// 		}
+// 		ret[offsetTopic] = offsetRecord
+// 	}
+// 	return ret
+// }
+
+func (tc *TransactionManager) AppendConsumedSeqNum(ctx context.Context, consumers []*producer_consumer.MeteredConsumer, parNum uint8) error {
 	for _, consumer := range consumers {
 		topic := consumer.TopicName()
 		offset := consumer.CurrentConsumedSeqNum()
@@ -414,13 +427,6 @@ func CollectOffsetRecords(consumers []*producer_consumer.MeteredConsumer) map[st
 		offsetRecord := txn_data.OffsetRecord{
 			Offset: offset,
 		}
-		ret[offsetTopic] = offsetRecord
-	}
-	return ret
-}
-
-func (tc *TransactionManager) AppendConsumedSeqNum(ctx context.Context, encodedOffsetRecord map[string]txn_data.OffsetRecord, parNum uint8) error {
-	for offsetTopic, offsetRecord := range encodedOffsetRecord {
 		offsetLog := tc.topicStreams[offsetTopic]
 
 		encoded, err := tc.offsetRecordSerde.Encode(offsetRecord)
