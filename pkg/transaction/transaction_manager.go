@@ -107,7 +107,7 @@ func (tm *TransactionManager) OutputRemainingStats() {
 	tm.txnSndPhase.PrintRemainingStats()
 }
 
-func (tm *TransactionManager) GetCurrentEpoch() uint16             { return tm.prodId.TaskEpoch }
+func (tm *TransactionManager) GetCurrentEpoch() uint32             { return tm.prodId.TaskEpoch }
 func (tm *TransactionManager) GetCurrentTaskId() uint64            { return tm.prodId.TaskId }
 func (tm *TransactionManager) GetProducerId() commtypes.ProducerId { return tm.prodId }
 
@@ -249,7 +249,7 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) (*InitTxnRet,
 	} else {
 		tc.prodId = recentCompleteTxn.ProdId
 	}
-	if recentTxnMeta != nil && recentCompleteTxn.ProdId.TaskEpoch == math.MaxUint16 {
+	if recentTxnMeta != nil && recentCompleteTxn.ProdId.TaskEpoch == math.MaxUint32 {
 		tc.prodId.InitTaskId(tc.env)
 		tc.prodId.TaskEpoch = 0
 	}

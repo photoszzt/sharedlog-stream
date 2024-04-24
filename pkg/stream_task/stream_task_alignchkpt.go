@@ -112,7 +112,7 @@ func NewChkptMngr(ctx context.Context, env types.Environment,
 	return &ckptm
 }
 
-func (em *ChkptMngr) GetCurrentEpoch() uint16             { return em.prodId.TaskEpoch }
+func (em *ChkptMngr) GetCurrentEpoch() uint32             { return em.prodId.TaskEpoch }
 func (em *ChkptMngr) GetCurrentTaskId() uint64            { return em.prodId.TaskId }
 func (em *ChkptMngr) GetProducerId() commtypes.ProducerId { return em.prodId }
 

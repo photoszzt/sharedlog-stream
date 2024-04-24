@@ -120,7 +120,7 @@ func (z *StreamLogEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 		case "te":
-			z.TaskEpoch, err = dc.ReadUint16()
+			z.TaskEpoch, err = dc.ReadUint32()
 			if err != nil {
 				err = msgp.WrapError(err, "TaskEpoch")
 				return
@@ -251,7 +251,7 @@ func (z *StreamLogEntry) EncodeMsg(en *msgp.Writer) (err error) {
 		if err != nil {
 			return
 		}
-		err = en.WriteUint16(z.TaskEpoch)
+		err = en.WriteUint32(z.TaskEpoch)
 		if err != nil {
 			err = msgp.WrapError(err, "TaskEpoch")
 			return
@@ -337,7 +337,7 @@ func (z *StreamLogEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	if (zb0001Mask & 0x20) == 0 { // if not empty
 		// string "te"
 		o = append(o, 0xa2, 0x74, 0x65)
-		o = msgp.AppendUint16(o, z.TaskEpoch)
+		o = msgp.AppendUint32(o, z.TaskEpoch)
 	}
 	if (zb0001Mask & 0x40) == 0 { // if not empty
 		// string "meta"
@@ -409,7 +409,7 @@ func (z *StreamLogEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "te":
-			z.TaskEpoch, bts, err = msgp.ReadUint16Bytes(bts)
+			z.TaskEpoch, bts, err = msgp.ReadUint32Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "TaskEpoch")
 				return
@@ -438,6 +438,6 @@ func (z *StreamLogEntry) Msgsize() (s int) {
 	for za0001 := range z.TopicName {
 		s += msgp.StringPrefixSize + len(z.TopicName[za0001])
 	}
-	s += 8 + msgp.BytesPrefixSize + len(z.Payload) + 8 + msgp.Int64Size + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size + 3 + msgp.Uint16Size + 5 + msgp.Uint8Size
+	s += 8 + msgp.BytesPrefixSize + len(z.Payload) + 8 + msgp.Int64Size + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size + 3 + msgp.Uint32Size + 5 + msgp.Uint8Size
 	return
 }

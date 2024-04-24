@@ -19,7 +19,7 @@ const (
 )
 
 type ReadOnlyExactlyOnceManager interface {
-	GetCurrentEpoch() uint16
+	GetCurrentEpoch() uint32
 	GetCurrentTaskId() uint64
 	GetProducerId() commtypes.ProducerId
 }

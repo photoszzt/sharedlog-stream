@@ -77,7 +77,7 @@ type StreamLogEntry struct {
 	InjTsMs   int64    `msg:"injTsMs,omitempty"`
 	TaskId    uint64   `msg:"tid,omitempty"`
 	MsgSeqNum uint64   `msg:"mseq,omitempty"`
-	TaskEpoch uint16   `msg:"te,omitempty"`
+	TaskEpoch uint32   `msg:"te,omitempty"`
 	Meta      uint8    `msg:"meta,omitempty"`
 }
 

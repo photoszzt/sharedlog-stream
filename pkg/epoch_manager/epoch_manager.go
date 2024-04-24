@@ -69,7 +69,7 @@ var _ = exactly_once_intr.ReadOnlyExactlyOnceManager(&EpochManager{})
 func (em *EpochManager) GetEpochManagerName() string {
 	return em.epochMngrName
 }
-func (em *EpochManager) GetCurrentEpoch() uint16             { return em.prodId.TaskEpoch }
+func (em *EpochManager) GetCurrentEpoch() uint32             { return em.prodId.TaskEpoch }
 func (em *EpochManager) GetCurrentTaskId() uint64            { return em.prodId.TaskId }
 func (em *EpochManager) GetProducerId() commtypes.ProducerId { return em.prodId }
 

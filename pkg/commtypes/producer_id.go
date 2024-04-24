@@ -10,7 +10,7 @@ var EmptyProducerId = ProducerId{TaskEpoch: 0, TaskId: 0}
 
 type ProducerId struct {
 	TaskId    uint64
-	TaskEpoch uint16
+	TaskEpoch uint32
 }
 
 var (
@@ -35,7 +35,7 @@ func NewProducerId() ProducerId {
 	}
 }
 
-func (tg *ProducerId) GetCurrentEpoch() uint16 {
+func (tg *ProducerId) GetCurrentEpoch() uint32 {
 	return tg.TaskEpoch
 }
 
