@@ -682,6 +682,24 @@ func findOffsetFromOffsetPairs(topicName string, offsetPairs []*remote_txn_rpc.O
 	return 0, common_errors.ErrTopicNotFound
 }
 
+func updateStreamCursor(offsetPairs []*remote_txn_rpc.OffsetPair, args *StreamTaskArgs) error {
+	if len(offsetPairs) != 0 {
+		for _, src := range args.ectx.Consumers() {
+			offset, err := findOffsetFromOffsetPairs(src.TopicName(), offsetPairs)
+			if err != nil {
+				return err
+			}
+			resetTo := offset + 1
+			if offset == 0 {
+				resetTo = offset
+			}
+			debug.Fprintf(os.Stderr, "%s offset restores to %x\n", src.TopicName(), resetTo)
+			src.SetCursor(resetTo, args.ectx.SubstreamNum())
+		}
+	}
+	return nil
+}
+
 func checkStreamArgs(args *StreamTaskArgs) {
 	debug.Assert(len(args.ectx.Consumers()) >= 1, "Srcs should be filled")
 	debug.Assert(args.env != nil, "env should be filled")
