@@ -19,7 +19,6 @@ import (
 
 func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 	streamTaskArgs *StreamTaskArgs, rs *snapshot_store.RedisSnapshotStore,
-	setupSnapshotCallback SetupSnapshotCallbackFunc,
 ) (*transaction.TransactionManager, *control_channel.ControlChannelManager, error) {
 	debug.Fprint(os.Stderr, "setup transaction and control manager\n")
 	tm, err := transaction.NewTransactionManager(ctx, streamTaskArgs.env,
