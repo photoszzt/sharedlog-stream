@@ -11,7 +11,6 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
-	commtypes "sharedlog-stream/pkg/commtypes"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -23,7 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type RemoteTxnMngrClient interface {
-	Init(ctx context.Context, in *InitArg, opts ...grpc.CallOption) (*commtypes.ProdId, error)
+	Init(ctx context.Context, in *InitArg, opts ...grpc.CallOption) (*InitReply, error)
 }
 
 type remoteTxnMngrClient struct {
@@ -34,8 +33,8 @@ func NewRemoteTxnMngrClient(cc grpc.ClientConnInterface) RemoteTxnMngrClient {
 	return &remoteTxnMngrClient{cc}
 }
 
-func (c *remoteTxnMngrClient) Init(ctx context.Context, in *InitArg, opts ...grpc.CallOption) (*commtypes.ProdId, error) {
-	out := new(commtypes.ProdId)
+func (c *remoteTxnMngrClient) Init(ctx context.Context, in *InitArg, opts ...grpc.CallOption) (*InitReply, error) {
+	out := new(InitReply)
 	err := c.cc.Invoke(ctx, "/remote_txn_rpc.RemoteTxnMngr/Init", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -47,7 +46,7 @@ func (c *remoteTxnMngrClient) Init(ctx context.Context, in *InitArg, opts ...grp
 // All implementations must embed UnimplementedRemoteTxnMngrServer
 // for forward compatibility
 type RemoteTxnMngrServer interface {
-	Init(context.Context, *InitArg) (*commtypes.ProdId, error)
+	Init(context.Context, *InitArg) (*InitReply, error)
 	mustEmbedUnimplementedRemoteTxnMngrServer()
 }
 
@@ -55,7 +54,7 @@ type RemoteTxnMngrServer interface {
 type UnimplementedRemoteTxnMngrServer struct {
 }
 
-func (UnimplementedRemoteTxnMngrServer) Init(context.Context, *InitArg) (*commtypes.ProdId, error) {
+func (UnimplementedRemoteTxnMngrServer) Init(context.Context, *InitArg) (*InitReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Init not implemented")
 }
 func (UnimplementedRemoteTxnMngrServer) mustEmbedUnimplementedRemoteTxnMngrServer() {}

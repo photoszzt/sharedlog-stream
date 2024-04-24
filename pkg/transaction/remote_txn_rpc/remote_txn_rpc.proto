@@ -7,19 +7,22 @@ package remote_txn_rpc;
 import "pkg/commtypes/producer_state.proto";
 
 service RemoteTxnMngr {
-  rpc Init(InitArg) returns (producer_state.ProdId) {}
+  rpc Init(InitArg) returns (InitReply) {}
 }
 
-message InputTopicInfo {
+message StreamInfo {
   string topicName = 1;
   uint32 numPartition = 2;
-  uint32 bufMaxSize = 3;
 }
 
 message InitArg {
   string TransactionalId = 1;
   uint32 SubstreamNum = 2; // which substream this task processes
-  repeated InputTopicInfo InputTopicInfos = 3;
+  uint32 BufMaxSize = 3;
+  repeated StreamInfo InputStreamInfos = 4;
+  repeated StreamInfo OutputStreamInfos = 5;
+  repeated StreamInfo KVChangelogInfos = 6;
+  repeated StreamInfo WinChangelogInfos = 7;
 }
 
 message InitReply {

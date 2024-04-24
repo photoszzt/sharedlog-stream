@@ -40,7 +40,7 @@ func (s *RemoteTxnManager) Init(ctx context.Context, in *remote_txn_rpc.InitArg)
 	for _, inputTopicInfo := range in.InputTopicInfos {
 		inputTopicName := inputTopicInfo.GetTopicName()
 		err := tm.CreateOffsetTopic(inputTopicName,
-			uint8(inputTopicInfo.GetNumPartition()), inputTopicInfo.GetBufMaxSize())
+			uint8(inputTopicInfo.GetNumPartition()), in.GetBufMaxSize())
 		if err != nil {
 			return nil, err
 		}
