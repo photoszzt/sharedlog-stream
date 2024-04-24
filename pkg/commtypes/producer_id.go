@@ -13,8 +13,10 @@ type ProducerId struct {
 	TaskEpoch uint16
 }
 
-var _ = fmt.Stringer(&ProducerId{})
-var _ = fmt.GoStringer(&ProducerId{})
+var (
+	_ = fmt.Stringer(&ProducerId{})
+	_ = fmt.GoStringer(&ProducerId{})
+)
 
 func (p *ProducerId) String() string {
 	return fmt.Sprintf("ProducerId: {TaskId: %#x, TaskEpoch: %#x}",
@@ -47,6 +49,7 @@ func (tg *ProducerId) GetProducerId() ProducerId {
 		TaskEpoch: tg.TaskEpoch,
 	}
 }
+
 func (tg *ProducerId) InitTaskId(env types.Environment) {
 	for tg.TaskId == 0 {
 		tg.TaskId = env.GenerateUniqueID()
