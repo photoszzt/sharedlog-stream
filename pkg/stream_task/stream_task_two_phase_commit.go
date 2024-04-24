@@ -54,7 +54,7 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 			fmt.Fprintf(os.Stderr, "load snapshot took %v\n", loadSnapElapsed)
 		}
 		restoreSsBeg := time.Now()
-		err = restoreStateStore(ctx, streamTaskArgs, offsetMap)
+		err = restoreStateStore(ctx, streamTaskArgs)
 		if err != nil {
 			return nil, nil, err
 		}

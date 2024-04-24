@@ -14,7 +14,6 @@ import (
 func RestoreChangelogKVStateStore(
 	ctx context.Context,
 	kvchangelog store.KeyValueStoreOpWithChangelog,
-	consumedOffset uint64,
 	parNum uint8,
 ) error {
 	count := 0

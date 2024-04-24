@@ -18,6 +18,7 @@ import (
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_restore"
 	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/transaction/remote_txn_rpc"
 	"time"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -522,10 +523,8 @@ func updateReturnMetric(ret *common.FnOutput, warmupChecker *stats.Warmup,
 	fmt.Fprintf(os.Stderr, "[%d]duration: %f s, uts: %d\n", instanceID, ret.Duration, time.Now().UnixMilli())
 }
 
-// for key value table, it's possible that the changelog is the source stream of the task
-// and restore should make sure that it restores to the previous offset and don't read over
 func restoreKVStore(ctx context.Context,
-	args *StreamTaskArgs, offsetMap map[string]uint64,
+	args *StreamTaskArgs,
 ) error {
 	substreamNum := args.ectx.SubstreamNum()
 	if env_config.PARALLEL_RESTORE {
@@ -533,13 +532,13 @@ func restoreKVStore(ctx context.Context,
 		for _, kvchangelog := range args.kvChangelogs {
 			kvc := kvchangelog
 			g.Go(func() error {
-				return restoreOneKVStore(ectx, kvc, substreamNum, offsetMap)
+				return restoreOneKVStore(ectx, kvc, substreamNum)
 			})
 		}
 		return g.Wait()
 	} else {
 		for _, kvchangelog := range args.kvChangelogs {
-			err := restoreOneKVStore(ctx, kvchangelog, substreamNum, offsetMap)
+			err := restoreOneKVStore(ctx, kvchangelog, substreamNum)
 			if err != nil {
 				return err
 			}
@@ -549,19 +548,10 @@ func restoreKVStore(ctx context.Context,
 }
 
 func restoreOneKVStore(ctx context.Context, kvchangelog store.KeyValueStoreOpWithChangelog,
-	substreamNum uint8, offsetMap map[string]uint64,
+	substreamNum uint8,
 ) error {
-	topic := kvchangelog.ChangelogTopicName()
-	offset := uint64(0)
-	ok := false
-	if kvchangelog.ChangelogIsSrc() {
-		offset, ok = offsetMap[topic]
-		if !ok {
-			return nil
-		}
-	}
 	err := store_restore.RestoreChangelogKVStateStore(ctx, kvchangelog,
-		offset, substreamNum)
+		substreamNum)
 	if err != nil {
 		return fmt.Errorf("RestoreKVStateStore failed: %v", err)
 	}
@@ -592,9 +582,9 @@ func restoreChangelogBackedWindowStore(ctx context.Context,
 	}
 }
 
-func restoreStateStore(ctx context.Context, args *StreamTaskArgs, offsetMap map[string]uint64) error {
+func restoreStateStore(ctx context.Context, args *StreamTaskArgs) error {
 	if args.kvChangelogs != nil {
-		err := restoreKVStore(ctx, args, offsetMap)
+		err := restoreKVStore(ctx, args)
 		if err != nil {
 			return err
 		}

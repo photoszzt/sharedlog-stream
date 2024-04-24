@@ -196,7 +196,7 @@ func (cmm *ControlChannelManager) restoreFunc(
 				return fmt.Errorf("cmmLoadSnapshotToKV: %v", err)
 			}
 		}
-		err := store_restore.RestoreChangelogKVStateStore(bgCtx, kvc, 0, work.parNum)
+		err := store_restore.RestoreChangelogKVStateStore(bgCtx, kvc, work.parNum)
 		if err != nil {
 			return fmt.Errorf("cmmRestoreChangelogKVStateStore: %v", err)
 		}

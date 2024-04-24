@@ -25,7 +25,7 @@ func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.F
 	if err != nil && !common_errors.IsStreamEmptyError(err) {
 		return common.GenErrFnOutput(err)
 	}
-	err = restoreStateStore(ctx, args, offsetMap)
+	err = restoreStateStore(ctx, args)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

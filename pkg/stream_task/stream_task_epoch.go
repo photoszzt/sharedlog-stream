@@ -141,7 +141,7 @@ func SetupManagersForEpoch(ctx context.Context,
 		}
 		lastMark = auxMetaSeq
 		restoreSsBeg := time.Now()
-		err = restoreStateStore(ctx, args, offsetMap)
+		err = restoreStateStore(ctx, args)
 		if err != nil {
 			return nil, nil, err
 		}
