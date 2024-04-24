@@ -26,16 +26,16 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 	if err != nil {
 		return nil, nil, fmt.Errorf("NewTransactionManager failed: %v", err)
 	}
-	recentTxnMeta, recentCompleteTxn, err := tm.InitTransaction(ctx)
+	initRet, err := tm.InitTransaction(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("InitTransaction failed: %v", err)
 	}
-	configChangelogExactlyOnce(tm, streamTaskArgs)
-	err = createOffsetTopic(tm, streamTaskArgs)
+	configChangelogExactlyOnce(tm, streamTaskArgs) // txn client
+	err = createOffsetTopic(tm, streamTaskArgs)    // txn mngr
 	if err != nil {
 		return nil, nil, err
 	}
-	if recentTxnMeta != nil {
+	if initRet.HasRecentTxnMeta {
 		debug.Fprint(os.Stderr, "start restore\n")
 		restoreBeg := time.Now()
 		offsetMap, err := getOffsetMap(ctx, tm, streamTaskArgs)
@@ -43,11 +43,10 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 			return nil, nil, err
 		}
 		debug.Fprintf(os.Stderr, "got offset map: %v\n", offsetMap)
-		auxData := recentCompleteTxn.AuxData
-		auxMetaSeq := recentCompleteTxn.LogSeqNum
+		// TODO: the most recent completed txn might not have a snapshot
 		if env_config.CREATE_SNAPSHOT {
 			loadSnapBeg := time.Now()
-			err = loadSnapshot(ctx, streamTaskArgs, auxData, auxMetaSeq, rs)
+			err = loadSnapshot(ctx, streamTaskArgs, initRet.RecentTxnAuxData, initRet.RecentTxnLogSeq, rs)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -284,6 +283,7 @@ func commitTransaction(ctx context.Context,
 	}
 	// debug.Fprintf(os.Stderr, "committed transaction\n")
 	if env_config.CREATE_SNAPSHOT && meta.args.snapshotEvery != 0 && time.Since(*snapshotTimer) > meta.args.snapshotEvery {
+		// auxdata is set to precommit
 		createSnapshot(ctx, meta.args, []commtypes.TpLogOff{{LogOff: logOff}})
 		*snapshotTimer = time.Now()
 	}

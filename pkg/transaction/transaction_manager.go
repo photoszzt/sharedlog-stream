@@ -230,11 +230,17 @@ func (tc *TransactionManager) loadAndFixTransaction(ctx context.Context, mostRec
 	return nil
 }
 
+type InitTxnRet struct {
+	HasRecentTxnMeta bool
+	RecentTxnAuxData []byte
+	RecentTxnLogSeq  uint64
+}
+
 // call at the beginning of function. Expected to execute in a single thread
-func (tc *TransactionManager) InitTransaction(ctx context.Context) (*txn_data.TxnMetadata, *commtypes.RawMsg, error) {
+func (tc *TransactionManager) InitTransaction(ctx context.Context) (*InitTxnRet, error) {
 	recentTxnMeta, recentCompleteTxn, err := tc.getMostRecentTransactionState(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("getMostRecentTransactionState failed: %v", err)
+		return nil, fmt.Errorf("getMostRecentTransactionState failed: %v", err)
 	}
 	// debug.Fprintf(os.Stderr, "Init transaction: Transition to %s\n", tc.currentStatus)
 	if recentTxnMeta == nil {
@@ -254,17 +260,22 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) (*txn_data.Tx
 	tags := []uint64{tc.txnLogTag, tc.txnFenceTag}
 	_, err = tc.appendToTransactionLog(ctx, txnMeta, tags)
 	if err != nil {
-		return nil, nil, fmt.Errorf("appendToTransactionLog failed: %v", err)
+		return nil, fmt.Errorf("appendToTransactionLog failed: %v", err)
+	}
+
+	ret := &InitTxnRet{
+		HasRecentTxnMeta: recentTxnMeta != nil,
 	}
 
 	if recentTxnMeta != nil {
 		err = tc.loadAndFixTransaction(ctx, recentTxnMeta)
 		if err != nil {
-			return nil, nil, fmt.Errorf("loadTransactinoFromLog failed: %v", err)
+			return nil, fmt.Errorf("loadTransactinoFromLog failed: %v", err)
 		}
+		ret.RecentTxnLogSeq = recentCompleteTxn.LogSeqNum
+		ret.RecentTxnAuxData = recentCompleteTxn.AuxData
 	}
-
-	return recentTxnMeta, recentCompleteTxn, nil
+	return ret, nil
 }
 
 func (tc *TransactionManager) appendToTransactionLog(ctx context.Context,
