@@ -683,6 +683,15 @@ func setOffsetOnStream(offsetMap map[string]uint64,
 	}
 }
 
+func findOffsetFromOffsetPairs(topicName string, offsetPairs []*remote_txn_rpc.OffsetPair) (uint64, error) {
+	for _, p := range offsetPairs {
+		if p.TopicName == topicName {
+			return p.Offset, nil
+		}
+	}
+	return 0, common_errors.ErrTopicNotFound
+}
+
 func checkStreamArgs(args *StreamTaskArgs) {
 	debug.Assert(len(args.ectx.Consumers()) >= 1, "Srcs should be filled")
 	debug.Assert(args.env != nil, "env should be filled")

@@ -16,6 +16,7 @@ var (
 	ErrReturnDueToTest             = xerrors.New("return due to test")
 	ErrReachCutoffPos              = xerrors.New("reach cutoff pos")
 	ErrChkptMarkerInvalidGuarantee = xerrors.New("Got checkpoint marker but guarantee is not checkpoint")
+	ErrTopicNotFound               = xerrors.New("Topic not found")
 )
 
 func IsStreamEmptyError(err error) bool {
