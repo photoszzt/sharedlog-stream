@@ -3,7 +3,8 @@ GO_FILES?=$$(find . -name '*.go' |grep -v deps)
 default: lat_tp_handler_debug lat_tp_handler sharedlog_bench_client dump_stream \
 	nexmark_kafka_test_src kafka_consume_bench kafka_produce_bench nexmark \
 	nexmark_stats nexmark_debug nexmark_gen_data_by_spec nexmark_client \
-	nexmark_genevents_kafka nexmark_scale kafka_tran_process sharedlog_protocol_lat
+	nexmark_genevents_kafka nexmark_scale kafka_tran_process sharedlog_protocol_lat \
+	remote_txn_mngr
 
 .PHONY: golangci-lint
 golangci-lint:
@@ -38,6 +39,20 @@ nexmark_debug:
 nexmark_client:
 	mkdir -p ./bin
 	GO111MODULE=on go build -o bin/nexmark_client ./benchmark/nexmark/nexmark_client
+
+.PHONY: remote_txn_mngr
+remote_txn_mngr:
+	mkdir -p ./bin
+	GO111MODULE=on go build -o bin/remote_txn_mngr ./remote_txn_manager/
+
+.PHONY: gen_proto
+gen_proto:
+	protoc --go_out=. --go_opt=paths=source_relative --proto_path=. \
+	--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+	./pkg/commtypes/producer_state.proto
+	protoc --go_out=. --go_opt=paths=source_relative --proto_path=. \
+    --go-grpc_out=. --go-grpc_opt=paths=source_relative \
+    ./pkg/transaction/remote_txn_rpc/remote_txn_rpc.proto
 
 .PHONY: nexmark_scale
 nexmark_scale:
