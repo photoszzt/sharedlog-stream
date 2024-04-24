@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"sharedlog-stream/benchmark/common"
@@ -18,8 +19,7 @@ func init() {
 	common.SetLogLevelFromEnv()
 }
 
-type emptyFuncHanlder struct {
-}
+type emptyFuncHanlder struct{}
 
 func (h *emptyFuncHanlder) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return nil, nil
@@ -27,6 +27,10 @@ func (h *emptyFuncHanlder) Call(ctx context.Context, input []byte) ([]byte, erro
 
 func (f *emptyFuncHandlerFactory) New(env types.Environment, funcName string) (types.FuncHandler, error) {
 	return &emptyFuncHanlder{}, nil
+}
+
+func (f *emptyFuncHandlerFactory) GrpcNew(env types.Environment, service string) (types.GrpcFuncHandler, error) {
+	return nil, fmt.Errorf("not implemented")
 }
 
 func main() {
@@ -39,12 +43,11 @@ func main() {
 	if err != nil {
 		log.Fatal("[FATAL] Failed to parse FAAS_CLIENT_ID")
 	}
-	w, err := worker.NewFuncWorker(uint16(funcId), uint16(clientId), nil)
+	w, err := worker.NewFuncWorker(uint16(funcId), uint16(clientId), &emptyFuncHandlerFactory{})
 	if err != nil {
 		log.Fatal("[FATAL] Failed to create FuncWorker: ", err)
 	}
 	go func(w *worker.FuncWorker) {
 		w.Run()
 	}(w)
-
 }
