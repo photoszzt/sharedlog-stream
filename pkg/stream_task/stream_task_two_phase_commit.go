@@ -78,8 +78,8 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 	if err != nil {
 		return nil, nil, err
 	}
-	trackParFunc := func(topicName string, substreamId uint8) error {
-		return tm.AddTopicSubstream(topicName, substreamId)
+	trackParFunc := func(topicName string, substreamId uint8) {
+		tm.AddTopicSubstream(topicName, substreamId)
 	}
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
 		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, streamTaskArgs.ectx.CurEpoch())
@@ -237,9 +237,7 @@ func commitTransaction(ctx context.Context,
 	// debug.Fprintf(os.Stderr, "paused\n")
 	waitPrev := stats.TimerBegin()
 	for _, src := range meta.args.ectx.Consumers() {
-		if err := meta.tm.AddTopicTrackConsumedSeqs(src.TopicName(), meta.args.ectx.SubstreamNum()); err != nil {
-			return common.GenErrFnOutput(err)
-		}
+		meta.tm.AddTopicTrackConsumedSeqs(src.TopicName(), meta.args.ectx.SubstreamNum())
 	}
 
 	waited, err := meta.tm.EnsurePrevTxnFinAndAppendMeta(ctx)
