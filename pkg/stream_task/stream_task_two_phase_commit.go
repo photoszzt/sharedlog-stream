@@ -20,6 +20,7 @@ import (
 func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 	streamTaskArgs *StreamTaskArgs, rs *snapshot_store.RedisSnapshotStore,
 ) (*transaction.TransactionManager, *control_channel.ControlChannelManager, error) {
+	checkStreamArgs(streamTaskArgs)
 	debug.Fprint(os.Stderr, "setup transaction and control manager\n")
 	tm, err := transaction.NewTransactionManager(ctx, streamTaskArgs.env,
 		streamTaskArgs.transactionalId, streamTaskArgs.serdeFormat)
@@ -30,8 +31,11 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 	if err != nil {
 		return nil, nil, fmt.Errorf("InitTransaction failed: %v", err)
 	}
-	configChangelogExactlyOnce(tm, streamTaskArgs) // txn client
-	err = createOffsetTopic(tm, streamTaskArgs)    // txn mngr
+	trackStream := func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {
+		tm.RecordTopicStreams(name, stream)
+	}
+	configChangelogExactlyOnce(tm, streamTaskArgs, trackStream)
+	err = createOffsetTopicTrackSource(tm, streamTaskArgs) // txn mngr
 	if err != nil {
 		return nil, nil, err
 	}
@@ -103,6 +107,8 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 	updateFuncs(streamTaskArgs,
 		trackParFunc, recordFinish, flushCallbackFunc)
 	for _, p := range streamTaskArgs.ectx.Producers() {
+		p.ConfigExactlyOnce(tm, streamTaskArgs.guarantee)
+		tm.RecordTopicStreams(p.TopicName(), p.Stream().(*sharedlog_stream.ShardedSharedLogStream))
 		p.SetFlushCallback(flushCallbackFunc)
 	}
 	return tm, cmm, nil
@@ -119,10 +125,10 @@ func processWithTransaction(
 	ctx context.Context,
 	meta *txnProcessMeta,
 ) *common.FnOutput {
-	trackStreamAndConfigureExactlyOnce(meta.args, meta.tm,
-		func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {
-			meta.tm.RecordTopicStreams(name, stream)
-		})
+	// trackStreamAndConfigureExactlyOnce(meta.args, meta.tm,
+	// 	func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {
+	// 		meta.tm.RecordTopicStreams(name, stream)
+	// 	})
 	// latencies := stats.NewStatsCollector[int64]("latPerIter", stats.DEFAULT_COLLECT_DURATION)
 	hasProcessData := false
 	paused := false

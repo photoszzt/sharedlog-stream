@@ -601,12 +601,15 @@ func restoreStateStore(ctx context.Context, args *StreamTaskArgs) error {
 func configChangelogExactlyOnce(
 	rem exactly_once_intr.ReadOnlyExactlyOnceManager,
 	args *StreamTaskArgs,
+	trackStream func(name string, stream *sharedlog_stream.ShardedSharedLogStream),
 ) {
 	for _, kvchangelog := range args.kvChangelogs {
 		kvchangelog.ConfigureExactlyOnce(rem, args.guarantee)
+		trackStream(kvchangelog.ChangelogTopicName(), kvchangelog.Stream().(*sharedlog_stream.ShardedSharedLogStream))
 	}
 	for _, wschangelog := range args.windowStoreChangelogs {
 		wschangelog.ConfigureExactlyOnce(rem, args.guarantee)
+		trackStream(wschangelog.ChangelogTopicName(), wschangelog.Stream().(*sharedlog_stream.ShardedSharedLogStream))
 	}
 }
 
@@ -627,7 +630,7 @@ func updateFuncs(streamTaskArgs *StreamTaskArgs,
 	}
 }
 
-func createOffsetTopic(tm *transaction.TransactionManager, args *StreamTaskArgs,
+func createOffsetTopicTrackSource(tm *transaction.TransactionManager, args *StreamTaskArgs,
 ) error {
 	for _, src := range args.ectx.Consumers() {
 		inputTopicName := src.TopicName()
@@ -635,6 +638,10 @@ func createOffsetTopic(tm *transaction.TransactionManager, args *StreamTaskArgs,
 		if err != nil {
 			return err
 		}
+		if !src.IsInitialSource() {
+			src.ConfigExactlyOnce(args.guarantee)
+		}
+		tm.RecordTopicStreams(inputTopicName, src.Stream().(*sharedlog_stream.ShardedSharedLogStream))
 	}
 	return nil
 }
@@ -720,30 +727,22 @@ func prodConsumerExactlyOnce(args *StreamTaskArgs,
 	}
 }
 
-func trackStreamAndConfigureExactlyOnce(args *StreamTaskArgs,
-	rem exactly_once_intr.ReadOnlyExactlyOnceManager,
-	trackStream func(name string, stream *sharedlog_stream.ShardedSharedLogStream),
-) {
-	checkStreamArgs(args)
-	for _, src := range args.ectx.Consumers() {
-		if !src.IsInitialSource() {
-			src.ConfigExactlyOnce(args.guarantee)
-		}
-		trackStream(src.TopicName(),
-			src.Stream().(*sharedlog_stream.ShardedSharedLogStream))
-	}
-	for _, sink := range args.ectx.Producers() {
-		sink.ConfigExactlyOnce(rem, args.guarantee)
-		trackStream(sink.TopicName(), sink.Stream().(*sharedlog_stream.ShardedSharedLogStream))
-	}
-
-	for _, kvchangelog := range args.kvChangelogs {
-		trackStream(kvchangelog.ChangelogTopicName(), kvchangelog.Stream().(*sharedlog_stream.ShardedSharedLogStream))
-	}
-	for _, winchangelog := range args.windowStoreChangelogs {
-		trackStream(winchangelog.ChangelogTopicName(), winchangelog.Stream().(*sharedlog_stream.ShardedSharedLogStream))
-	}
-}
+// func trackStreamAndConfigureExactlyOnce(args *StreamTaskArgs,
+// 	rem exactly_once_intr.ReadOnlyExactlyOnceManager,
+// 	trackStream func(name string, stream *sharedlog_stream.ShardedSharedLogStream),
+// ) {
+// 	for _, src := range args.ectx.Consumers() {
+// 		if !src.IsInitialSource() {
+// 			src.ConfigExactlyOnce(args.guarantee)
+// 		}
+// 		trackStream(src.TopicName(),
+// 			src.Stream().(*sharedlog_stream.ShardedSharedLogStream))
+// 	}
+// 	for _, sink := range args.ectx.Producers() {
+// 		sink.ConfigExactlyOnce(rem, args.guarantee)
+// 		trackStream(sink.TopicName(), sink.Stream().(*sharedlog_stream.ShardedSharedLogStream))
+// 	}
+// }
 
 func resumeAndInit(t *StreamTask, args *StreamTaskArgs, init *bool, paused *bool) {
 	if *paused && t.resumeFunc != nil {

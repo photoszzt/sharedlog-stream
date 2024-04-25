@@ -70,6 +70,7 @@ func SetWinStoreWithChangelogSnapshot[K, V any](
 func SetupManagersForEpoch(ctx context.Context,
 	args *StreamTaskArgs, rs *snapshot_store.RedisSnapshotStore,
 ) (*epoch_manager.EpochManager, *control_channel.ControlChannelManager, error) {
+	checkStreamArgs(args)
 	em, err := epoch_manager.NewEpochManager(args.env, args.transactionalId, args.serdeFormat)
 	if err != nil {
 		return nil, nil, err
@@ -95,7 +96,10 @@ func SetupManagersForEpoch(ctx context.Context,
 	initEmElapsed := time.Since(initEmStart)
 	fmt.Fprintf(os.Stderr, "[%d] Init EpochManager took %v, task epoch %#x, task id %#x\n",
 		args.ectx.SubstreamNum(), initEmElapsed, em.GetCurrentEpoch(), em.GetCurrentTaskId())
-	configChangelogExactlyOnce(em, args)
+	trackStream := func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {
+		em.RecordTpHashes(name, stream)
+	}
+	configChangelogExactlyOnce(em, args, trackStream)
 	lastMark := uint64(0)
 	if recentMeta != nil {
 		restoreBeg := time.Now()
@@ -153,7 +157,24 @@ func SetupManagersForEpoch(ctx context.Context,
 	}
 	fmt.Fprintf(os.Stderr, "[%d] %s down restore, epoch: %d ts: %d\n",
 		args.ectx.SubstreamNum(), args.ectx.FuncName(), args.ectx.CurEpoch(), time.Now().UnixMilli())
-	setLastMarkSeq(lastMark, args)
+	for _, src := range args.ectx.Consumers() {
+		if !src.IsInitialSource() {
+			src.ConfigExactlyOnce(args.guarantee)
+		}
+		trackStream(src.TopicName(),
+			src.Stream().(*sharedlog_stream.ShardedSharedLogStream))
+	}
+	for _, p := range args.ectx.Producers() {
+		p.SetLastMarkerSeq(lastMark)
+		p.ConfigExactlyOnce(em, args.guarantee)
+		trackStream(p.TopicName(), p.Stream().(*sharedlog_stream.ShardedSharedLogStream))
+	}
+	for _, kvs := range args.kvChangelogs {
+		kvs.SetLastMarkerSeq(lastMark)
+	}
+	for _, ws := range args.windowStoreChangelogs {
+		ws.SetLastMarkerSeq(lastMark)
+	}
 	trackParFunc := func(
 		topicName string, substreamId uint8,
 	) {
@@ -265,10 +286,10 @@ func processInEpoch(
 	ctx context.Context,
 	meta *epochProcessMeta,
 ) *common.FnOutput {
-	trackStreamAndConfigureExactlyOnce(meta.args, meta.em,
-		func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {
-			meta.em.RecordTpHashes(name, stream)
-		})
+	// trackStreamAndConfigureExactlyOnce(meta.args, meta.em,
+	// 	func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {
+	// 		meta.em.RecordTpHashes(name, stream)
+	// 	})
 
 	// execIntrMs := stats.NewPrintLogStatsCollector[int64]("execIntrMs")
 	// thisAndLastCmtMs := stats.NewPrintLogStatsCollector[int64]("thisAndLastCmtMs")
