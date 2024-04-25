@@ -3,6 +3,7 @@ package transaction
 import (
 	"context"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/transaction/remote_txn_rpc"
 	"sync"
 
@@ -37,9 +38,15 @@ func (s *RemoteTxnManager) Init(ctx context.Context, in *remote_txn_rpc.InitArg)
 		return nil, err
 	}
 	var offsetPairs []*remote_txn_rpc.OffsetPair
-	for _, inputTopicInfo := range in.InputTopicInfos {
+	for _, inputTopicInfo := range in.InputStreamInfos {
 		inputTopicName := inputTopicInfo.GetTopicName()
-		err := tm.CreateOffsetTopic(inputTopicName,
+		stream, err := sharedlog_stream.NewShardedSharedLogStream(s.env, inputTopicName,
+			uint8(inputTopicInfo.NumPartition), s.serdeFormat, in.GetBufMaxSize())
+		if err != nil {
+			return nil, err
+		}
+		tm.RecordTopicStreams(inputTopicName, stream)
+		err = tm.CreateOffsetTopic(inputTopicName,
 			uint8(inputTopicInfo.GetNumPartition()), in.GetBufMaxSize())
 		if err != nil {
 			return nil, err
@@ -55,6 +62,30 @@ func (s *RemoteTxnManager) Init(ctx context.Context, in *remote_txn_rpc.InitArg)
 				Offset:    offset,
 			})
 		}
+	}
+	for _, outStreamInfo := range in.OutputStreamInfos {
+		stream, err := sharedlog_stream.NewShardedSharedLogStream(s.env, outStreamInfo.GetTopicName(),
+			uint8(outStreamInfo.NumPartition), s.serdeFormat, in.GetBufMaxSize())
+		if err != nil {
+			return nil, err
+		}
+		tm.RecordTopicStreams(outStreamInfo.GetTopicName(), stream)
+	}
+	for _, kvsInfo := range in.KVChangelogInfos {
+		stream, err := sharedlog_stream.NewShardedSharedLogStream(s.env, kvsInfo.GetTopicName(),
+			uint8(kvsInfo.GetNumPartition()), s.serdeFormat, in.GetBufMaxSize())
+		if err != nil {
+			return nil, err
+		}
+		tm.RecordTopicStreams(kvsInfo.GetTopicName(), stream)
+	}
+	for _, wsInfo := range in.WinChangelogInfos {
+		stream, err := sharedlog_stream.NewShardedSharedLogStream(s.env, wsInfo.GetTopicName(),
+			uint8(wsInfo.GetNumPartition()), s.serdeFormat, in.GetBufMaxSize())
+		if err != nil {
+			return nil, err
+		}
+		tm.RecordTopicStreams(wsInfo.GetTopicName(), stream)
 	}
 	s.mu.Lock()
 	s.tm_map[in.TransactionalId] = tm

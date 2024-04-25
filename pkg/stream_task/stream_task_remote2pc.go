@@ -27,6 +27,39 @@ func GetRemoteTxnMngrAddr() []string {
 	return strings.Split(raw_addr, ",")
 }
 
+func prepareInitArg(args *StreamTaskArgs) *remote_txn_rpc.InitArg {
+	arg := remote_txn_rpc.InitArg{
+		TransactionalId: args.transactionalId,
+		SubstreamNum:    uint32(args.ectx.SubstreamNum()),
+		BufMaxSize:      args.bufMaxSize,
+	}
+	for _, c := range args.ectx.Consumers() {
+		arg.InputStreamInfos = append(arg.InputStreamInfos, &remote_txn_rpc.StreamInfo{
+			TopicName:    c.TopicName(),
+			NumPartition: uint32(c.Stream().NumPartition()),
+		})
+	}
+	for _, c := range args.ectx.Producers() {
+		arg.OutputStreamInfos = append(arg.OutputStreamInfos, &remote_txn_rpc.StreamInfo{
+			TopicName:    c.TopicName(),
+			NumPartition: uint32(c.Stream().NumPartition()),
+		})
+	}
+	for _, kvc := range args.kvChangelogs {
+		arg.KVChangelogInfos = append(arg.KVChangelogInfos, &remote_txn_rpc.StreamInfo{
+			TopicName:    kvc.ChangelogTopicName(),
+			NumPartition: uint32(kvc.Stream().NumPartition()),
+		})
+	}
+	for _, wsc := range args.windowStoreChangelogs {
+		arg.WinChangelogInfos = append(arg.WinChangelogInfos, &remote_txn_rpc.StreamInfo{
+			TopicName:    wsc.ChangelogTopicName(),
+			NumPartition: uint32(wsc.Stream().NumPartition()),
+		})
+	}
+	return &arg
+}
+
 func setupManagerForRemote2pc(ctx context.Context, args *StreamTaskArgs, rs *snapshot_store.RedisSnapshotStore,
 ) (*transaction.RemoteTxnManagerClient, *control_channel.ControlChannelManager, error) {
 	var opts []grpc.DialOption
@@ -39,18 +72,8 @@ func setupManagerForRemote2pc(ctx context.Context, args *StreamTaskArgs, rs *sna
 	}
 	client := transaction.NewRemoteTxnManagerClient(conn)
 
-	arg := remote_txn_rpc.InitArg{
-		TransactionalId: args.transactionalId,
-		SubstreamNum:    uint32(args.ectx.SubstreamNum()),
-		BufMaxSize:      args.bufMaxSize,
-	}
-	for _, c := range args.ectx.Consumers() {
-		arg.InputTopicInfos = append(arg.InputTopicInfos, &remote_txn_rpc.InputTopicInfo{
-			TopicName:    c.TopicName(),
-			NumPartition: uint32(c.Stream().NumPartition()),
-		})
-	}
-	initReply, err := client.Init(ctx, &arg)
+	arg := prepareInitArg(args)
+	initReply, err := client.Init(ctx, arg)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -93,9 +116,8 @@ func setupManagerForRemote2pc(ctx context.Context, args *StreamTaskArgs, rs *sna
 	if err != nil {
 		return nil, nil, err
 	}
-	trackParFunc := func(topicName string, substreamId uint8) error {
+	trackParFunc := func(topicName string, substreamId uint8) {
 		// TODO: rpc
-		return nil
 	}
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
 		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, args.ectx.CurEpoch())
