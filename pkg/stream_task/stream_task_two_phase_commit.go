@@ -44,15 +44,15 @@ func setupManagersFor2pc(ctx context.Context, t *StreamTask,
 		}
 		debug.Fprintf(os.Stderr, "got offset map: %v\n", offsetMap)
 		// TODO: the most recent completed txn might not have a snapshot
-		if env_config.CREATE_SNAPSHOT {
-			loadSnapBeg := time.Now()
-			err = loadSnapshot(ctx, streamTaskArgs, initRet.RecentTxnAuxData, initRet.RecentTxnLogSeq, rs)
-			if err != nil {
-				return nil, nil, err
-			}
-			loadSnapElapsed := time.Since(loadSnapBeg)
-			fmt.Fprintf(os.Stderr, "load snapshot took %v\n", loadSnapElapsed)
-		}
+		// if env_config.CREATE_SNAPSHOT {
+		// 	loadSnapBeg := time.Now()
+		// 	err = loadSnapshot(ctx, streamTaskArgs, initRet.RecentTxnAuxData, initRet.RecentTxnLogSeq, rs)
+		// 	if err != nil {
+		// 		return nil, nil, err
+		// 	}
+		// 	loadSnapElapsed := time.Since(loadSnapBeg)
+		// 	fmt.Fprintf(os.Stderr, "load snapshot took %v\n", loadSnapElapsed)
+		// }
 		restoreSsBeg := time.Now()
 		err = restoreStateStore(ctx, streamTaskArgs)
 		if err != nil {
