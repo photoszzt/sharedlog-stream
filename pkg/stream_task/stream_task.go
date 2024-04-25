@@ -766,10 +766,7 @@ func initAfterMarkOrCommit(t *StreamTask, args *StreamTaskArgs,
 		sinks := args.ectx.Producers()
 		debug.Assert(len(sinks) == 1, "fixed out param is only usable when there's only one output stream")
 		// debug.Fprintf(os.Stderr, "%s tracking substream %d\n", sinks[0].TopicName(), args.fixedOutParNum)
-		if err := tracker.AddTopicSubstream(sinks[0].TopicName(), uint8(args.fixedOutParNum)); err != nil {
-			debug.Fprintf(os.Stderr, "[ERROR] track topic partition failed: %v\n", err)
-			return fmt.Errorf("track topic partition failed: %v\n", err)
-		}
+		tracker.AddTopicSubstream(sinks[0].TopicName(), uint8(args.fixedOutParNum))
 	}
 	resumeAndInit(t, args, init, paused)
 	return nil

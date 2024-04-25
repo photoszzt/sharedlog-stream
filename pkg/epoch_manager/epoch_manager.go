@@ -140,10 +140,9 @@ func (em *EpochManager) SyncToRecentNoRead(ctx context.Context) (uint64, error) 
 // multiple goroutines might call this function
 func (em *EpochManager) AddTopicSubstream(
 	topic string, substreamNum uint8,
-) error {
+) {
 	parSet, _ := em.currentTopicSubstream.LoadOrStore(topic, skipset.NewUint32())
 	parSet.Add(uint32(substreamNum))
-	return nil
 }
 
 func GenEpochMarker(

@@ -31,21 +31,20 @@ type ExactlyOnceManagerLogMonitor interface {
 }
 
 type TopicSubstreamTracker interface {
-	AddTopicSubstream(name string, subNum uint8) error
+	AddTopicSubstream(name string, subNum uint8)
 }
 
 type TrackProdSubStreamFunc func(
 	topicName string,
 	substreamId uint8,
-) error
+)
 
 type FlushCallbackFunc func(ctx context.Context) error
 
 func DefaultTrackProdSubstreamFunc(
 	topicName string,
 	substreamId uint8,
-) error {
-	return nil
+) {
 }
 
 type RecordPrevInstanceFinishFunc func(ctx context.Context, appId string, instanceID uint8) error

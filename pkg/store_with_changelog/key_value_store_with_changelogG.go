@@ -98,10 +98,6 @@ func (st *KeyValueStoreWithChangelogG[K, V]) Put(ctx context.Context, key K, val
 	if !ok {
 		return nil
 	}
-	err = st.trackFunc(st.changelogManager.TopicName(), st.kvstore.GetInstanceId())
-	if err != nil {
-		return err
-	}
 	err = st.changelogManager.produce(ctx, msgSer, st.kvstore.GetInstanceId())
 	// elapsed := stats.Elapsed(pStart).Microseconds()
 	// st.changelogProduce.AddSample(elapsed)
@@ -184,6 +180,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) TableType() store.TABLE_TYPE {
 
 func (st *KeyValueStoreWithChangelogG[K, V]) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 	st.trackFunc = trackParFunc
+	st.trackFunc(st.changelogManager.TopicName(), st.kvstore.GetInstanceId())
 }
 
 func (st *KeyValueStoreWithChangelogG[K, V]) SetStreamFlushCallbackFunc(cb exactly_once_intr.FlushCallbackFunc) {

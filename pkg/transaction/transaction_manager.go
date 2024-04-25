@@ -348,7 +348,7 @@ func (tc *TransactionManager) checkTopicExistsInTopicStream(topic string) bool {
 }
 
 // this function could be called by multiple goroutine.
-func (tc *TransactionManager) AddTopicSubstream(topic string, subStreamNum uint8) error {
+func (tc *TransactionManager) AddTopicSubstream(topic string, subStreamNum uint8) {
 	debug.Assert(tc.checkTopicExistsInTopicStream(topic), fmt.Sprintf("topic %s's stream should be tracked", topic))
 	// debug.Fprintf(os.Stderr, "tracking topic %s par %v\n", topic, partitions)
 	parSet, loaded := tc.currentTopicSubstream.LoadOrStore(topic, skipset.NewUint32())
@@ -361,7 +361,6 @@ func (tc *TransactionManager) AddTopicSubstream(topic string, subStreamNum uint8
 	if needToAppendToLog {
 		tc.addedNewTpPar.Store(true)
 	}
-	return nil
 }
 
 func (tc *TransactionManager) CreateOffsetTopic(topicToTrack string, numPartition uint8, bufMaxSize uint32) error {
@@ -386,9 +385,9 @@ func (tc *TransactionManager) RecordTopicStreams(topicToTrack string, stream *sh
 	debug.Fprintf(os.Stderr, "tracking stream %s, stream ptr %v\n", topicToTrack, stream)
 }
 
-func (tc *TransactionManager) AddTopicTrackConsumedSeqs(topicToTrack string, partition uint8) error {
+func (tc *TransactionManager) AddTopicTrackConsumedSeqs(topicToTrack string, partition uint8) {
 	offsetTopic := con_types.OffsetTopic(topicToTrack)
-	return tc.AddTopicSubstream(offsetTopic, partition)
+	tc.AddTopicSubstream(offsetTopic, partition)
 }
 
 // finding the last commited marker and gets the marker's seq number

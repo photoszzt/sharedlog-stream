@@ -2,7 +2,6 @@ package processor
 
 import (
 	"context"
-	"fmt"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/producer_consumer"
 )
@@ -54,10 +53,7 @@ func (p *RoundRobinOutputProcessorG[KIn, VIn]) ProcessAndReturn(ctx context.Cont
 	if ok {
 		par := p.curSubstream
 		p.curSubstream = (p.curSubstream + 1) % p.producer.Stream().NumPartition()
-		err = p.ectx.TrackParFunc()(p.producer.TopicName(), par)
-		if err != nil {
-			return nil, fmt.Errorf("track substream failed: %v", err)
-		}
+		p.ectx.TrackParFunc()(p.producer.TopicName(), par)
 		err = p.producer.ProduceData(ctx, msgSer, par)
 		return nil, err
 	} else {

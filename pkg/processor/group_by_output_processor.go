@@ -2,7 +2,6 @@ package processor
 
 import (
 	"context"
-	"fmt"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/producer_consumer"
@@ -63,10 +62,7 @@ func (g *GroupByOutputProcessorG[KIn, VIn]) ProcessAndReturn(ctx context.Context
 	if ok {
 		hash := g.byteSliceHasher.HashSum64(msgSer.KeyEnc)
 		par := uint8(hash % uint64(g.producer.Stream().NumPartition()))
-		err = g.ectx.TrackParFunc()(g.producer.TopicName(), par)
-		if err != nil {
-			return nil, fmt.Errorf("track substream failed: %v", err)
-		}
+		g.ectx.TrackParFunc()(g.producer.TopicName(), par)
 		err = g.producer.ProduceData(ctx, msgSer, par)
 		return nil, err
 	} else {

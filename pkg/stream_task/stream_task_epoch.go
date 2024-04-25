@@ -156,8 +156,8 @@ func SetupManagersForEpoch(ctx context.Context,
 	setLastMarkSeq(lastMark, args)
 	trackParFunc := func(
 		topicName string, substreamId uint8,
-	) error {
-		return em.AddTopicSubstream(topicName, substreamId)
+	) {
+		em.AddTopicSubstream(topicName, substreamId)
 	}
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
 		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, args.ectx.CurEpoch())

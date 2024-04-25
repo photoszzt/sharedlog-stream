@@ -114,10 +114,6 @@ func (st *InMemoryWindowStoreWithChangelogG[K, V]) Put(ctx context.Context,
 	}
 	msgSer, ok := msgSerOp.Take()
 	if ok {
-		err = st.trackFunc(st.changelogManager.TopicName(), st.parNum)
-		if err != nil {
-			return err
-		}
 		err := st.changelogManager.produce(ctx, msgSer, st.parNum)
 		if err != nil {
 			return err
@@ -208,6 +204,7 @@ func (s *InMemoryWindowStoreWithChangelogG[K, V]) TableType() store.TABLE_TYPE {
 
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetTrackParFunc(trackParFunc exactly_once_intr.TrackProdSubStreamFunc) {
 	s.trackFunc = trackParFunc
+	s.trackFunc(s.changelogManager.TopicName(), s.parNum)
 }
 
 func (s *InMemoryWindowStoreWithChangelogG[K, V]) SetStreamFlushCallbackFunc(cb exactly_once_intr.FlushCallbackFunc) {
