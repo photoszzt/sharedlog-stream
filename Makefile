@@ -53,6 +53,9 @@ gen_proto:
 	protoc --go_out=. --go_opt=paths=source_relative --proto_path=. \
     --go-grpc_out=. --go-grpc_opt=paths=source_relative \
     ./pkg/transaction/remote_txn_rpc/remote_txn_rpc.proto
+	protoc --go_out=. --go_opt=paths=source_relative --proto_path=. \
+    --go-grpc_out=. --go-grpc_opt=paths=source_relative \
+    ./pkg/txn_data/txn_meta.proto
 
 .PHONY: nexmark_scale
 nexmark_scale:

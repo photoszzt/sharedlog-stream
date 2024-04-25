@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+option go_package = "sharedlog-stream/pkg/txn_data";
+
+package txn_data;
+
+message TpParMsg {
+  string Topic = 1;
+  repeated uint32 ParNum = 2;
+}
+
+message TxnMetaMsg {
+  uint32 State = 1;
+  repeated TpParMsg TopicPartitions = 2;
+}
