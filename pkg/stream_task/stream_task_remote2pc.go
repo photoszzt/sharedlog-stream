@@ -131,7 +131,7 @@ func setupManagerForRemote2pc(ctx context.Context, args *StreamTaskArgs, rs *sna
 	for _, p := range args.ectx.Producers() {
 		p.SetFlushCallback(flushCallbackFunc)
 	}
-	return &client, cmm, nil
+	return client, cmm, nil
 }
 
 type rtxnProcessMeta struct {
