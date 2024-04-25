@@ -117,7 +117,7 @@ func setupManagerForRemote2pc(ctx context.Context, args *StreamTaskArgs, rs *sna
 		return nil, nil, err
 	}
 	trackParFunc := func(topicName string, substreamId uint8) {
-		// TODO: rpc
+		client.AddTopicSubstream(topicName, substreamId)
 	}
 	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
 		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, args.ectx.CurEpoch())
