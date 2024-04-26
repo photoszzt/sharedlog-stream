@@ -5,9 +5,12 @@ option go_package = "sharedlog-stream/pkg/transaction/remote_txn_rpc";
 package remote_txn_rpc;
 
 import "pkg/commtypes/producer_state.proto";
+import "pkg/txn_data/txn_meta.proto";
+import "google/protobuf/empty.proto";
 
 service RemoteTxnMngr {
   rpc Init(InitArg) returns (InitReply) {}
+  rpc AppendTpPar(txn_data.TxnMetaMsg) returns (google.protobuf.Empty) {}
 }
 
 message StreamInfo {

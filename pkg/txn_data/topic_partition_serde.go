@@ -5,11 +5,15 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 )
 
-type TopicPartitionJSONSerde struct{}
-type TopicPartitionJSONSerdeG struct{}
+type (
+	TopicPartitionJSONSerde  struct{}
+	TopicPartitionJSONSerdeG struct{}
+)
 
-var _ = commtypes.Serde(TopicPartitionJSONSerde{})
-var _ = commtypes.SerdeG[TopicPartition](TopicPartitionJSONSerdeG{})
+var (
+	_ = commtypes.Serde(TopicPartitionJSONSerde{})
+	_ = commtypes.SerdeG[*TopicPartition](TopicPartitionJSONSerdeG{})
+)
 
 func (s TopicPartitionJSONSerde) Encode(value interface{}) ([]byte, error) {
 	tp := value.(*TopicPartition)
@@ -17,36 +21,41 @@ func (s TopicPartitionJSONSerde) Encode(value interface{}) ([]byte, error) {
 }
 
 func (s TopicPartitionJSONSerde) Decode(value []byte) (interface{}, error) {
-	tp := TopicPartition{}
+	tp := &TopicPartition{}
 	if err := json.Unmarshal(value, &tp); err != nil {
 		return nil, err
 	}
 	return tp, nil
 }
 
-func (s TopicPartitionJSONSerdeG) Encode(value TopicPartition) ([]byte, error) {
+func (s TopicPartitionJSONSerdeG) Encode(value *TopicPartition) ([]byte, error) {
 	return json.Marshal(&value)
 }
 
-func (s TopicPartitionJSONSerdeG) Decode(value []byte) (TopicPartition, error) {
+func (s TopicPartitionJSONSerdeG) Decode(value []byte) (*TopicPartition, error) {
 	tp := TopicPartition{}
 	if err := json.Unmarshal(value, &tp); err != nil {
-		return TopicPartition{}, err
+		return nil, err
 	}
-	return tp, nil
+	return &tp, nil
 }
 
-type TopicPartitionMsgpSerde struct{}
-type TopicPartitionMsgpSerdeG struct{}
+type (
+	TopicPartitionMsgpSerde  struct{}
+	TopicPartitionMsgpSerdeG struct{}
+)
 
-var _ = commtypes.Serde(TopicPartitionMsgpSerde{})
-var _ = commtypes.SerdeG[TopicPartition](TopicPartitionMsgpSerdeG{})
+var (
+	_ = commtypes.Serde(TopicPartitionMsgpSerde{})
+	_ = commtypes.SerdeG[*TopicPartition](TopicPartitionMsgpSerdeG{})
+)
 
 func (s TopicPartitionMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	tp := value.(*TopicPartition)
 	return tp.UnmarshalMsg(nil)
 }
-func (s TopicPartitionMsgpSerdeG) Encode(value TopicPartition) ([]byte, error) {
+
+func (s TopicPartitionMsgpSerdeG) Encode(value *TopicPartition) ([]byte, error) {
 	return value.UnmarshalMsg(nil)
 }
 
@@ -55,13 +64,13 @@ func (s TopicPartitionMsgpSerde) Decode(value []byte) (interface{}, error) {
 	if _, err := tp.UnmarshalMsg(value); err != nil {
 		return nil, err
 	}
-	return tp, nil
+	return &tp, nil
 }
 
-func (s TopicPartitionMsgpSerdeG) Decode(value []byte) (TopicPartition, error) {
+func (s TopicPartitionMsgpSerdeG) Decode(value []byte) (*TopicPartition, error) {
 	tp := TopicPartition{}
 	if _, err := tp.UnmarshalMsg(value); err != nil {
-		return TopicPartition{}, err
+		return nil, err
 	}
-	return tp, nil
+	return &tp, nil
 }

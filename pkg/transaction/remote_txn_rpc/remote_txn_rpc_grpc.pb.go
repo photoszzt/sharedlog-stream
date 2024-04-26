@@ -11,6 +11,8 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
+	txn_data "sharedlog-stream/pkg/txn_data"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -23,6 +25,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type RemoteTxnMngrClient interface {
 	Init(ctx context.Context, in *InitArg, opts ...grpc.CallOption) (*InitReply, error)
+	AppendTpPar(ctx context.Context, in *txn_data.TxnMetaMsg, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type remoteTxnMngrClient struct {
@@ -42,11 +45,21 @@ func (c *remoteTxnMngrClient) Init(ctx context.Context, in *InitArg, opts ...grp
 	return out, nil
 }
 
+func (c *remoteTxnMngrClient) AppendTpPar(ctx context.Context, in *txn_data.TxnMetaMsg, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, "/remote_txn_rpc.RemoteTxnMngr/AppendTpPar", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RemoteTxnMngrServer is the server API for RemoteTxnMngr service.
 // All implementations must embed UnimplementedRemoteTxnMngrServer
 // for forward compatibility
 type RemoteTxnMngrServer interface {
 	Init(context.Context, *InitArg) (*InitReply, error)
+	AppendTpPar(context.Context, *txn_data.TxnMetaMsg) (*emptypb.Empty, error)
 	mustEmbedUnimplementedRemoteTxnMngrServer()
 }
 
@@ -56,6 +69,9 @@ type UnimplementedRemoteTxnMngrServer struct {
 
 func (UnimplementedRemoteTxnMngrServer) Init(context.Context, *InitArg) (*InitReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Init not implemented")
+}
+func (UnimplementedRemoteTxnMngrServer) AppendTpPar(context.Context, *txn_data.TxnMetaMsg) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AppendTpPar not implemented")
 }
 func (UnimplementedRemoteTxnMngrServer) mustEmbedUnimplementedRemoteTxnMngrServer() {}
 
@@ -88,6 +104,24 @@ func _RemoteTxnMngr_Init_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RemoteTxnMngr_AppendTpPar_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(txn_data.TxnMetaMsg)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RemoteTxnMngrServer).AppendTpPar(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/remote_txn_rpc.RemoteTxnMngr/AppendTpPar",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RemoteTxnMngrServer).AppendTpPar(ctx, req.(*txn_data.TxnMetaMsg))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RemoteTxnMngr_ServiceDesc is the grpc.ServiceDesc for RemoteTxnMngr service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -98,6 +132,10 @@ var RemoteTxnMngr_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Init",
 			Handler:    _RemoteTxnMngr_Init_Handler,
+		},
+		{
+			MethodName: "AppendTpPar",
+			Handler:    _RemoteTxnMngr_AppendTpPar_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

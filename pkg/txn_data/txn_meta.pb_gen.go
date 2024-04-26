@@ -31,23 +31,10 @@ func (z *TopicPartition) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 		case "parnum":
-			var zb0002 uint32
-			zb0002, err = dc.ReadArrayHeader()
+			z.ParNum, err = dc.ReadBytes(z.ParNum)
 			if err != nil {
 				err = msgp.WrapError(err, "ParNum")
 				return
-			}
-			if cap(z.ParNum) >= int(zb0002) {
-				z.ParNum = (z.ParNum)[:zb0002]
-			} else {
-				z.ParNum = make([]uint8, zb0002)
-			}
-			for za0001 := range z.ParNum {
-				z.ParNum[za0001], err = dc.ReadUint8()
-				if err != nil {
-					err = msgp.WrapError(err, "ParNum", za0001)
-					return
-				}
 			}
 		default:
 			err = dc.Skip()
@@ -78,17 +65,10 @@ func (z *TopicPartition) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteArrayHeader(uint32(len(z.ParNum)))
+	err = en.WriteBytes(z.ParNum)
 	if err != nil {
 		err = msgp.WrapError(err, "ParNum")
 		return
-	}
-	for za0001 := range z.ParNum {
-		err = en.WriteUint8(z.ParNum[za0001])
-		if err != nil {
-			err = msgp.WrapError(err, "ParNum", za0001)
-			return
-		}
 	}
 	return
 }
@@ -102,10 +82,7 @@ func (z *TopicPartition) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendString(o, z.Topic)
 	// string "parnum"
 	o = append(o, 0xa6, 0x70, 0x61, 0x72, 0x6e, 0x75, 0x6d)
-	o = msgp.AppendArrayHeader(o, uint32(len(z.ParNum)))
-	for za0001 := range z.ParNum {
-		o = msgp.AppendUint8(o, z.ParNum[za0001])
-	}
+	o = msgp.AppendBytes(o, z.ParNum)
 	return
 }
 
@@ -134,23 +111,10 @@ func (z *TopicPartition) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "parnum":
-			var zb0002 uint32
-			zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			z.ParNum, bts, err = msgp.ReadBytesBytes(bts, z.ParNum)
 			if err != nil {
 				err = msgp.WrapError(err, "ParNum")
 				return
-			}
-			if cap(z.ParNum) >= int(zb0002) {
-				z.ParNum = (z.ParNum)[:zb0002]
-			} else {
-				z.ParNum = make([]uint8, zb0002)
-			}
-			for za0001 := range z.ParNum {
-				z.ParNum[za0001], bts, err = msgp.ReadUint8Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "ParNum", za0001)
-					return
-				}
 			}
 		default:
 			bts, err = msgp.Skip(bts)
@@ -166,6 +130,6 @@ func (z *TopicPartition) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *TopicPartition) Msgsize() (s int) {
-	s = 1 + 6 + msgp.StringPrefixSize + len(z.Topic) + 7 + msgp.ArrayHeaderSize + (len(z.ParNum) * (msgp.Uint8Size))
+	s = 1 + 6 + msgp.StringPrefixSize + len(z.Topic) + 7 + msgp.BytesPrefixSize + len(z.ParNum)
 	return
 }

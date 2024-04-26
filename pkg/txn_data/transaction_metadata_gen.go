@@ -86,13 +86,25 @@ func (z *TxnMetadata) DecodeMsg(dc *msgp.Reader) (err error) {
 			if cap(z.TopicPartitions) >= int(zb0002) {
 				z.TopicPartitions = (z.TopicPartitions)[:zb0002]
 			} else {
-				z.TopicPartitions = make([]TopicPartition, zb0002)
+				z.TopicPartitions = make([]*TopicPartition, zb0002)
 			}
 			for za0001 := range z.TopicPartitions {
-				err = z.TopicPartitions[za0001].DecodeMsg(dc)
-				if err != nil {
-					err = msgp.WrapError(err, "TopicPartitions", za0001)
-					return
+				if dc.IsNil() {
+					err = dc.ReadNil()
+					if err != nil {
+						err = msgp.WrapError(err, "TopicPartitions", za0001)
+						return
+					}
+					z.TopicPartitions[za0001] = nil
+				} else {
+					if z.TopicPartitions[za0001] == nil {
+						z.TopicPartitions[za0001] = new(TopicPartition)
+					}
+					err = z.TopicPartitions[za0001].DecodeMsg(dc)
+					if err != nil {
+						err = msgp.WrapError(err, "TopicPartitions", za0001)
+						return
+					}
 				}
 			}
 		case "st":
@@ -150,10 +162,17 @@ func (z *TxnMetadata) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 		for za0001 := range z.TopicPartitions {
-			err = z.TopicPartitions[za0001].EncodeMsg(en)
-			if err != nil {
-				err = msgp.WrapError(err, "TopicPartitions", za0001)
-				return
+			if z.TopicPartitions[za0001] == nil {
+				err = en.WriteNil()
+				if err != nil {
+					return
+				}
+			} else {
+				err = z.TopicPartitions[za0001].EncodeMsg(en)
+				if err != nil {
+					err = msgp.WrapError(err, "TopicPartitions", za0001)
+					return
+				}
 			}
 		}
 	}
@@ -197,10 +216,14 @@ func (z *TxnMetadata) MarshalMsg(b []byte) (o []byte, err error) {
 		o = append(o, 0xa2, 0x74, 0x70)
 		o = msgp.AppendArrayHeader(o, uint32(len(z.TopicPartitions)))
 		for za0001 := range z.TopicPartitions {
-			o, err = z.TopicPartitions[za0001].MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "TopicPartitions", za0001)
-				return
+			if z.TopicPartitions[za0001] == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o, err = z.TopicPartitions[za0001].MarshalMsg(o)
+				if err != nil {
+					err = msgp.WrapError(err, "TopicPartitions", za0001)
+					return
+				}
 			}
 		}
 	}
@@ -240,13 +263,24 @@ func (z *TxnMetadata) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			if cap(z.TopicPartitions) >= int(zb0002) {
 				z.TopicPartitions = (z.TopicPartitions)[:zb0002]
 			} else {
-				z.TopicPartitions = make([]TopicPartition, zb0002)
+				z.TopicPartitions = make([]*TopicPartition, zb0002)
 			}
 			for za0001 := range z.TopicPartitions {
-				bts, err = z.TopicPartitions[za0001].UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "TopicPartitions", za0001)
-					return
+				if msgp.IsNil(bts) {
+					bts, err = msgp.ReadNilBytes(bts)
+					if err != nil {
+						return
+					}
+					z.TopicPartitions[za0001] = nil
+				} else {
+					if z.TopicPartitions[za0001] == nil {
+						z.TopicPartitions[za0001] = new(TopicPartition)
+					}
+					bts, err = z.TopicPartitions[za0001].UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "TopicPartitions", za0001)
+						return
+					}
 				}
 			}
 		case "st":
@@ -275,7 +309,11 @@ func (z *TxnMetadata) UnmarshalMsg(bts []byte) (o []byte, err error) {
 func (z *TxnMetadata) Msgsize() (s int) {
 	s = 1 + 3 + msgp.ArrayHeaderSize
 	for za0001 := range z.TopicPartitions {
-		s += z.TopicPartitions[za0001].Msgsize()
+		if z.TopicPartitions[za0001] == nil {
+			s += msgp.NilSize
+		} else {
+			s += z.TopicPartitions[za0001].Msgsize()
+		}
 	}
 	s += 3 + msgp.Uint32Size
 	return

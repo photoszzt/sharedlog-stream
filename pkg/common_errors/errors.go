@@ -17,6 +17,7 @@ var (
 	ErrReachCutoffPos              = xerrors.New("reach cutoff pos")
 	ErrChkptMarkerInvalidGuarantee = xerrors.New("Got checkpoint marker but guarantee is not checkpoint")
 	ErrTopicNotFound               = xerrors.New("Topic not found")
+	ErrStaleProducer               = xerrors.New("Stale producer")
 )
 
 func IsStreamEmptyError(err error) bool {

@@ -2,12 +2,15 @@ package transaction
 
 import (
 	"context"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/transaction/remote_txn_rpc"
+	"sharedlog-stream/pkg/txn_data"
 	"sync"
 
 	"cs.utexas.edu/zjia/faas/types"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 type RemoteTxnManager struct {
@@ -98,4 +101,23 @@ func (s *RemoteTxnManager) Init(ctx context.Context, in *remote_txn_rpc.InitArg)
 		},
 		OffsetPairs: offsetPairs,
 	}, nil
+}
+
+func (s *RemoteTxnManager) AppendTpPar(ctx context.Context, in *txn_data.TxnMetaMsg) (*emptypb.Empty, error) {
+	s.mu.Lock()
+	prodId := s.prod_id_map[in.TransactionalId]
+	if prodId.TaskEpoch != in.ProdId.GetTaskEpoch() || prodId.TaskId != in.ProdId.GetTaskId() {
+		return nil, common_errors.ErrStaleProducer
+	}
+	tm := s.tm_map[in.TransactionalId]
+	s.mu.Unlock()
+	txnMeta := txn_data.TxnMetadata{
+		State:           txn_data.TransactionState(in.State),
+		TopicPartitions: in.TopicPartitions,
+	}
+	_, err := tm.appendToTransactionLog(ctx, txnMeta, []uint64{tm.txnLogTag})
+	if err != nil {
+		return nil, err
+	}
+	return &emptypb.Empty{}, nil
 }

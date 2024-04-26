@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/consume_seq_num_manager/con_types"
-	"sharedlog-stream/pkg/data_structure"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/env_config"
 	"sharedlog-stream/pkg/producer_consumer"
@@ -48,7 +47,7 @@ type TransactionManager struct {
 	env                   types.Environment
 	bgCtx                 context.Context
 	txnMdSerde            commtypes.SerdeG[txn_data.TxnMetadata]
-	topicPartitionSerde   commtypes.SerdeG[txn_data.TopicPartition]
+	topicPartitionSerde   commtypes.SerdeG[*txn_data.TopicPartition]
 	txnMarkerSerde        commtypes.SerdeG[commtypes.EpochMarker]
 	transactionLog        *sharedlog_stream.SharedLogStream
 	bgErrg                *errgroup.Group
@@ -128,7 +127,7 @@ func (tc *TransactionManager) setupSerde(serdeFormat commtypes.SerdeFormat) erro
 	return nil
 }
 
-func (tc *TransactionManager) loadCurrentTopicPartitions(lastTopicPartitions []txn_data.TopicPartition) {
+func (tc *TransactionManager) loadCurrentTopicPartitions(lastTopicPartitions []*txn_data.TopicPartition) {
 	for _, tp := range lastTopicPartitions {
 		pars, _ := tc.currentTopicSubstream.LoadOrStore(tp.Topic, skipset.NewUint32())
 		for _, par := range tp.ParNum {
@@ -140,7 +139,7 @@ func (tc *TransactionManager) loadCurrentTopicPartitions(lastTopicPartitions []t
 func (tc *TransactionManager) getMostRecentTransactionState(ctx context.Context) (mostRecentTxnMetadata *txn_data.TxnMetadata, rawMsg *commtypes.RawMsg, err error) {
 	// debug.Fprintf(os.Stderr, "load transaction log\n")
 	mostRecentTxnMetadata = &txn_data.TxnMetadata{
-		TopicPartitions: make([]txn_data.TopicPartition, 0),
+		TopicPartitions: make([]*txn_data.TopicPartition, 0),
 		State:           txn_data.EMPTY,
 	}
 
@@ -295,23 +294,25 @@ func (tc *TransactionManager) appendToTransactionLog(ctx context.Context,
 	}
 }
 
-func (tc *TransactionManager) collectTopicSubstreams() map[string]data_structure.Uint32Set {
-	topicSubstreams := make(map[string]data_structure.Uint32Set)
+func (tc *TransactionManager) collectTopicSubstreams() []*txn_data.TopicPartition {
+	topicSubstreams := make([]*txn_data.TopicPartition, 0, tc.currentTopicSubstream.Len())
 	tc.currentTopicSubstream.Range(func(tp string, parSet *skipset.Uint32Set) bool {
-		if _, ok := topicSubstreams[tp]; !ok {
-			topicSubstreams[tp] = data_structure.NewUint32SetSized(parSet.Len())
+		tpPar := &txn_data.TopicPartition{
+			Topic:  tp,
+			ParNum: make([]byte, 0, parSet.Len()),
 		}
 		parSet.Range(func(par uint32) bool {
-			topicSubstreams[tp].Add(par)
+			tpPar.ParNum = append(tpPar.ParNum, uint8(par))
 			return true
 		})
+		topicSubstreams = append(topicSubstreams, tpPar)
 		return true
 	})
 	return topicSubstreams
 }
 
 func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, marker commtypes.EpochMark,
-	topicSubstreams map[string]data_structure.Uint32Set,
+	topicSubstreams []*txn_data.TopicPartition,
 ) error {
 	tm := commtypes.EpochMarker{
 		Mark: marker,
@@ -322,10 +323,10 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 	}
 	producerId := tc.prodId
 	bg, bgCtx := errgroup.WithContext(ctx)
-	for tp, parSet := range topicSubstreams {
-		stream := tc.topicStreams[tp]
+	for _, tpParNum := range topicSubstreams {
+		stream := tc.topicStreams[tpParNum.Topic]
 		topicNameHash := stream.TopicNameHash()
-		for par := range parSet {
+		for par := range tpParNum.ParNum {
 			parNum := uint8(par)
 			tag := txn_data.MarkerTag(topicNameHash, parNum)
 			tag2 := sharedlog_stream.NameHashWithPartition(topicNameHash, parNum)
@@ -498,14 +499,14 @@ func (tc *TransactionManager) EnsurePrevTxnFinAndAppendMeta(ctx context.Context)
 		}
 		// debug.Fprintf(os.Stderr, "appending tp par to txn log\n")
 		tBeg := stats.TimerBegin()
-		tps := make([]txn_data.TopicPartition, 0, tc.currentTopicSubstream.Len())
+		tps := make([]*txn_data.TopicPartition, 0, tc.currentTopicSubstream.Len())
 		tc.currentTopicSubstream.Range(func(key string, value *skipset.Uint32Set) bool {
 			pars := make([]uint8, 0, value.Len())
 			value.Range(func(par uint32) bool {
 				pars = append(pars, uint8(par))
 				return true
 			})
-			tps = append(tps, txn_data.TopicPartition{
+			tps = append(tps, &txn_data.TopicPartition{
 				Topic:  key,
 				ParNum: pars,
 			})
@@ -530,7 +531,7 @@ func (tc *TransactionManager) EnsurePrevTxnFinAndAppendMeta(ctx context.Context)
 func (tc *TransactionManager) completeTransaction(ctx context.Context,
 	trMark commtypes.EpochMark,
 	trState txn_data.TransactionState,
-	topicSubStreams map[string]data_structure.Uint32Set,
+	topicSubStreams []*txn_data.TopicPartition,
 ) error {
 	tBeg := stats.TimerBegin()
 	err := tc.appendTxnMarkerToStreams(ctx, trMark, topicSubStreams)
