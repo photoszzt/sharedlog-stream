@@ -27,7 +27,7 @@ func GetRemoteTxnMngrAddr() []string {
 	return strings.Split(raw_addr, ",")
 }
 
-func prepareInitArg(args *StreamTaskArgs) *remote_txn_rpc.InitArg {
+func prepareInit(rtm_client *transaction.RemoteTxnManagerClient, args *StreamTaskArgs) *remote_txn_rpc.InitArg {
 	arg := remote_txn_rpc.InitArg{
 		TransactionalId: args.transactionalId,
 		SubstreamNum:    uint32(args.ectx.SubstreamNum()),
@@ -38,30 +38,37 @@ func prepareInitArg(args *StreamTaskArgs) *remote_txn_rpc.InitArg {
 			TopicName:    c.TopicName(),
 			NumPartition: uint32(c.Stream().NumPartition()),
 		})
+		if !c.IsInitialSource() {
+			c.ConfigExactlyOnce(args.guarantee)
+		}
 	}
 	for _, c := range args.ectx.Producers() {
 		arg.OutputStreamInfos = append(arg.OutputStreamInfos, &remote_txn_rpc.StreamInfo{
 			TopicName:    c.TopicName(),
 			NumPartition: uint32(c.Stream().NumPartition()),
 		})
+		c.ConfigExactlyOnce(rtm_client, args.guarantee)
 	}
 	for _, kvc := range args.kvChangelogs {
 		arg.KVChangelogInfos = append(arg.KVChangelogInfos, &remote_txn_rpc.StreamInfo{
 			TopicName:    kvc.ChangelogTopicName(),
 			NumPartition: uint32(kvc.Stream().NumPartition()),
 		})
+		kvc.ConfigureExactlyOnce(rtm_client, args.guarantee)
 	}
 	for _, wsc := range args.windowStoreChangelogs {
 		arg.WinChangelogInfos = append(arg.WinChangelogInfos, &remote_txn_rpc.StreamInfo{
 			TopicName:    wsc.ChangelogTopicName(),
 			NumPartition: uint32(wsc.Stream().NumPartition()),
 		})
+		wsc.ConfigureExactlyOnce(rtm_client, args.guarantee)
 	}
 	return &arg
 }
 
 func setupManagerForRemote2pc(ctx context.Context, args *StreamTaskArgs, rs *snapshot_store.RedisSnapshotStore,
 ) (*transaction.RemoteTxnManagerClient, *control_channel.ControlChannelManager, error) {
+	checkStreamArgs(args)
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	rmngr_addr := GetRemoteTxnMngrAddr()
@@ -72,7 +79,7 @@ func setupManagerForRemote2pc(ctx context.Context, args *StreamTaskArgs, rs *sna
 	}
 	client := transaction.NewRemoteTxnManagerClient(conn)
 
-	arg := prepareInitArg(args)
+	arg := prepareInit(client, args)
 	initReply, err := client.Init(ctx, arg)
 	if err != nil {
 		return nil, nil, err
@@ -145,15 +152,6 @@ func processWithRTxnMngr(
 	ctx context.Context,
 	meta *rtxnProcessMeta,
 ) *common.FnOutput {
-	checkStreamArgs(meta.args)
-	for _, src := range meta.args.ectx.Consumers() {
-		if !src.IsInitialSource() {
-			src.ConfigExactlyOnce(meta.args.guarantee)
-		}
-	}
-	for _, sink := range meta.args.ectx.Producers() {
-		sink.ConfigExactlyOnce(meta.rtm_client, meta.args.guarantee)
-	}
 	hasProcessData := false
 	paused := false
 	commitTimer := time.Now()
@@ -177,7 +175,7 @@ func processWithRTxnMngr(
 
 		// should commit
 		if shouldCommitByTime && hasProcessData {
-			err_out := commitTransaction(ctx, meta, &paused, false, &snapshotTimer)
+			err_out := commitTxnRemote(ctx, meta, &paused, false, &snapshotTimer)
 			if err_out != nil {
 				fmt.Fprintf(os.Stderr, "commitTransaction err: %v\n", err_out.Message)
 				return err_out
@@ -192,7 +190,7 @@ func processWithRTxnMngr(
 		if !meta.args.waitEndMark && timeout {
 			// elapsed := time.Since(procStart)
 			// latencies.AddSample(elapsed.Microseconds())
-			err_out := commitTransaction(ctx, meta, &paused, true, &snapshotTimer)
+			err_out := commitTxnRemote(ctx, meta, &paused, true, &snapshotTimer)
 			if err_out != nil {
 				fmt.Fprintf(os.Stderr, "commitTransaction err: %v\n", err_out.Message)
 				return err_out
@@ -206,7 +204,7 @@ func processWithRTxnMngr(
 		// begin new transaction
 		if !hasProcessData && (!init || paused) {
 			// debug.Fprintf(os.Stderr, "fixedOutParNum: %d\n", args.fixedOutParNum)
-			err := initAfterMarkOrCommit(meta.t, meta.args, meta.tm, &init, &paused)
+			err := initAfterMarkOrCommit(meta.t, meta.args, meta.rtm_client, &init, &paused)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "[ERROR] initAfterMarkOrCommit failed: %v\n", err)
 				return common.GenErrFnOutput(err)
@@ -221,7 +219,7 @@ func processWithRTxnMngr(
 				continue
 			} else {
 				if hasProcessData {
-					if err := meta.tm.AbortTransaction(ctx); err != nil {
+					if err := meta.rtm_client.AbortTransaction(ctx); err != nil {
 						return common.GenErrFnOutput(fmt.Errorf("abort failed: %v\n", err))
 					}
 				}
@@ -233,7 +231,7 @@ func processWithRTxnMngr(
 		}
 		if ctrlRawMsgArr != nil {
 			fmt.Fprintf(os.Stderr, "got ctrl msg, exp finish\n")
-			err_out := commitTransaction(ctx, meta, &paused, true, &snapshotTimer)
+			err_out := commitTxnRemote(ctx, meta, &paused, true, &snapshotTimer)
 			if err_out != nil {
 				fmt.Fprintf(os.Stderr, "commitTransaction err: %v\n", err_out.Message)
 				return err_out
