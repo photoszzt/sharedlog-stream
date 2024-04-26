@@ -26,7 +26,7 @@ message InitArg {
 }
 
 message InitReply {
-  producer_state.ProdId prodId = 1;
+  commtypes.ProdId prodId = 1;
   repeated OffsetPair offsetPairs = 2;
 }
 

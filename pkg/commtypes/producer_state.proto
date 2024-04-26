@@ -2,7 +2,7 @@ syntax = "proto3";
 
 option go_package = "sharedlog-stream/pkg/commtypes";
 
-package producer_state;
+package commtypes;
 
 message ProdId {
   uint64 task_id = 1;
