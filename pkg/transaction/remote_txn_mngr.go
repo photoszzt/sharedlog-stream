@@ -121,3 +121,25 @@ func (s *RemoteTxnManager) AppendTpPar(ctx context.Context, in *txn_data.TxnMeta
 	}
 	return &emptypb.Empty{}, nil
 }
+
+func (s *RemoteTxnManager) AbortTxn(ctx context.Context, in *txn_data.TxnMetaMsg) (*emptypb.Empty, error) {
+	s.mu.Lock()
+	prodId := s.prod_id_map[in.TransactionalId]
+	if prodId.TaskEpoch != in.ProdId.GetTaskEpoch() || prodId.TaskId != in.ProdId.GetTaskId() {
+		return nil, common_errors.ErrStaleProducer
+	}
+	tm := s.tm_map[in.TransactionalId]
+	s.mu.Unlock()
+	txnMd := txn_data.TxnMetadata{
+		State: txn_data.PREPARE_ABORT,
+	}
+	_, err := tm.appendToTransactionLog(ctx, txnMd, []uint64{tm.txnLogTag})
+	if err != nil {
+		return nil, err
+	}
+	err = tm.completeTransaction(ctx, commtypes.ABORT, txn_data.COMPLETE_ABORT, in.TopicPartitions)
+	if err != nil {
+		return nil, err
+	}
+	return &emptypb.Empty{}, nil
+}

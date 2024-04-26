@@ -26,6 +26,8 @@ const _ = grpc.SupportPackageIsVersion7
 type RemoteTxnMngrClient interface {
 	Init(ctx context.Context, in *InitArg, opts ...grpc.CallOption) (*InitReply, error)
 	AppendTpPar(ctx context.Context, in *txn_data.TxnMetaMsg, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	AbortTxn(ctx context.Context, in *txn_data.TxnMetaMsg, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	CommitTxnAsyncComplete(ctx context.Context, in *txn_data.TxnMetaMsg, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type remoteTxnMngrClient struct {
@@ -54,12 +56,32 @@ func (c *remoteTxnMngrClient) AppendTpPar(ctx context.Context, in *txn_data.TxnM
 	return out, nil
 }
 
+func (c *remoteTxnMngrClient) AbortTxn(ctx context.Context, in *txn_data.TxnMetaMsg, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, "/remote_txn_rpc.RemoteTxnMngr/AbortTxn", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *remoteTxnMngrClient) CommitTxnAsyncComplete(ctx context.Context, in *txn_data.TxnMetaMsg, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, "/remote_txn_rpc.RemoteTxnMngr/CommitTxnAsyncComplete", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RemoteTxnMngrServer is the server API for RemoteTxnMngr service.
 // All implementations must embed UnimplementedRemoteTxnMngrServer
 // for forward compatibility
 type RemoteTxnMngrServer interface {
 	Init(context.Context, *InitArg) (*InitReply, error)
 	AppendTpPar(context.Context, *txn_data.TxnMetaMsg) (*emptypb.Empty, error)
+	AbortTxn(context.Context, *txn_data.TxnMetaMsg) (*emptypb.Empty, error)
+	CommitTxnAsyncComplete(context.Context, *txn_data.TxnMetaMsg) (*emptypb.Empty, error)
 	mustEmbedUnimplementedRemoteTxnMngrServer()
 }
 
@@ -72,6 +94,12 @@ func (UnimplementedRemoteTxnMngrServer) Init(context.Context, *InitArg) (*InitRe
 }
 func (UnimplementedRemoteTxnMngrServer) AppendTpPar(context.Context, *txn_data.TxnMetaMsg) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AppendTpPar not implemented")
+}
+func (UnimplementedRemoteTxnMngrServer) AbortTxn(context.Context, *txn_data.TxnMetaMsg) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AbortTxn not implemented")
+}
+func (UnimplementedRemoteTxnMngrServer) CommitTxnAsyncComplete(context.Context, *txn_data.TxnMetaMsg) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CommitTxnAsyncComplete not implemented")
 }
 func (UnimplementedRemoteTxnMngrServer) mustEmbedUnimplementedRemoteTxnMngrServer() {}
 
@@ -122,6 +150,42 @@ func _RemoteTxnMngr_AppendTpPar_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RemoteTxnMngr_AbortTxn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(txn_data.TxnMetaMsg)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RemoteTxnMngrServer).AbortTxn(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/remote_txn_rpc.RemoteTxnMngr/AbortTxn",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RemoteTxnMngrServer).AbortTxn(ctx, req.(*txn_data.TxnMetaMsg))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RemoteTxnMngr_CommitTxnAsyncComplete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(txn_data.TxnMetaMsg)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RemoteTxnMngrServer).CommitTxnAsyncComplete(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/remote_txn_rpc.RemoteTxnMngr/CommitTxnAsyncComplete",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RemoteTxnMngrServer).CommitTxnAsyncComplete(ctx, req.(*txn_data.TxnMetaMsg))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RemoteTxnMngr_ServiceDesc is the grpc.ServiceDesc for RemoteTxnMngr service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -136,6 +200,14 @@ var RemoteTxnMngr_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AppendTpPar",
 			Handler:    _RemoteTxnMngr_AppendTpPar_Handler,
+		},
+		{
+			MethodName: "AbortTxn",
+			Handler:    _RemoteTxnMngr_AbortTxn_Handler,
+		},
+		{
+			MethodName: "CommitTxnAsyncComplete",
+			Handler:    _RemoteTxnMngr_CommitTxnAsyncComplete_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

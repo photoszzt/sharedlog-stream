@@ -11,6 +11,9 @@ import "google/protobuf/empty.proto";
 service RemoteTxnMngr {
   rpc Init(InitArg) returns (InitReply) {}
   rpc AppendTpPar(txn_data.TxnMetaMsg) returns (google.protobuf.Empty) {}
+  rpc AbortTxn(txn_data.TxnMetaMsg) returns (google.protobuf.Empty) {}
+  rpc CommitTxnAsyncComplete(txn_data.TxnMetaMsg)
+      returns (google.protobuf.Empty) {}
 }
 
 message StreamInfo {
