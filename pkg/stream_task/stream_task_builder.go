@@ -26,7 +26,7 @@ type BuildStreamTask interface {
 }
 
 func NewStreamTaskBuilder() BuildStreamTask {
-	return &StreamTaskBuilder{
+	t := &StreamTaskBuilder{
 		task: &StreamTask{
 			pauseFunc:        nil,
 			resumeFunc:       nil,
@@ -52,15 +52,19 @@ func NewStreamTaskBuilder() BuildStreamTask {
 
 			txnCounter:                 stats.NewCounter("txnCount"),
 			waitedInCmtCounter:         stats.NewCounter("waitedPrevTxnInCmtCount"),
-			waitedInPushCounter:        stats.NewCounter("waitedPrevTxnInPushCount"),
+			waitedInPushCounter:        stats.NewAtomicCounter("waitedPrevTxnInPushCount"),
 			appendedMetaInCmtCounter:   stats.NewCounter("appendedMetaInCmtCount"),
-			appendedMetaInPushCounter:  stats.NewCounter("appendedMetaInPushCount"),
+			appendedMetaInPushCounter:  stats.NewAtomicCounter("appendedMetaInPushCount"),
 			waitAndAppendInCmtCounter:  stats.NewCounter("waitAndAppendMetaInCmtCount"),
-			waitAndAppendInPushCounter: stats.NewCounter("waitAndAppendMetaInPushCount"),
+			waitAndAppendInPushCounter: stats.NewAtomicCounter("waitAndAppendMetaInPushCount"),
 			epochMarkTimes:             0,
 			isFinalStage:               false,
 		},
 	}
+	t.task.waitedInPushCounter.InitCounter()
+	t.task.appendedMetaInPushCounter.InitCounter()
+	t.task.waitAndAppendInPushCounter.InitCounter()
+	return t
 }
 
 func (b *StreamTaskBuilder) AppProcessFunc(process ProcessFunc) BuildStreamTask {

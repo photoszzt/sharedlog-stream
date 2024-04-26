@@ -6,7 +6,6 @@ package stats
 import (
 	"fmt"
 	"os"
-	"sync/atomic"
 )
 
 func (c *Counter) Tick(count uint32) {
@@ -18,5 +17,9 @@ func (c *Counter) Report() {
 }
 
 func (c *AtomicCounter) Tick(count uint32) {
-	atomic.AddUint64(&c.count, uint64(count))
+	c.count.Add(uint64(count))
+}
+
+func (c *AtomicCounter) Report() {
+	fmt.Fprintf(os.Stderr, "{%s_count: %d}\n", c.tag, c.count.Load())
 }

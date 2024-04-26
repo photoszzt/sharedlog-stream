@@ -20,16 +20,19 @@ func (c *Counter) GetCount() uint64 {
 
 type AtomicCounter struct {
 	tag   string
-	count uint64
+	count atomic.Uint64
 }
 
 func NewAtomicCounter(tag string) AtomicCounter {
 	return AtomicCounter{
-		tag:   tag,
-		count: 0,
+		tag: tag,
 	}
 }
 
+func (c *AtomicCounter) InitCounter() {
+	c.count.Store(0)
+}
+
 func (c *AtomicCounter) GetCount() uint64 {
-	return atomic.LoadUint64(&c.count)
+	return c.count.Load()
 }

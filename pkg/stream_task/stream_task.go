@@ -55,11 +55,11 @@ type StreamTask struct {
 
 	txnCounter                 stats.Counter
 	waitedInCmtCounter         stats.Counter
-	waitedInPushCounter        stats.Counter
+	waitedInPushCounter        stats.AtomicCounter
 	appendedMetaInCmtCounter   stats.Counter
-	appendedMetaInPushCounter  stats.Counter
+	appendedMetaInPushCounter  stats.AtomicCounter
 	waitAndAppendInCmtCounter  stats.Counter
-	waitAndAppendInPushCounter stats.Counter
+	waitAndAppendInPushCounter stats.AtomicCounter
 
 	endDuration    time.Duration
 	epochMarkTimes uint32
