@@ -51,12 +51,12 @@ gen_proto:
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
 		./pkg/commtypes/producer_state.proto
 	protoc --go_out=. --go_opt=paths=source_relative --proto_path=. \
-    --go-grpc_out=. --go-grpc_opt=paths=source_relative \
-    ./pkg/txn_data/txn_meta.proto
+		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+		./pkg/txn_data/txn_meta.proto
 	protoc-go-inject-tag -input=./pkg/txn_data/txn_meta.pb.go
 	protoc --go_out=. --go_opt=paths=source_relative --proto_path=. \
-    --go-grpc_out=. --go-grpc_opt=paths=source_relative \
-    ./pkg/transaction/remote_txn_rpc/remote_txn_rpc.proto
+		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+		./pkg/transaction/remote_txn_rpc/remote_txn_rpc.proto
 	go generate ./...
 
 .PHONY: nexmark_scale
