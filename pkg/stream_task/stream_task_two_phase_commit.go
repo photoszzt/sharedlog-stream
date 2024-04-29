@@ -17,6 +17,39 @@ import (
 	"time"
 )
 
+func SetupManagersFor2pcTest(ctx context.Context, streamTaskArgs *StreamTaskArgs) (*transaction.TransactionManager, error) {
+	tm, err := transaction.NewTransactionManager(ctx, streamTaskArgs.env,
+		streamTaskArgs.transactionalId, streamTaskArgs.serdeFormat)
+	if err != nil {
+		return nil, err
+	}
+	initRet, err := tm.InitTransaction(ctx)
+	if err != nil {
+		return nil, err
+	}
+	trackStream := func(name string, stream *sharedlog_stream.ShardedSharedLogStream) {
+		tm.RecordTopicStreams(name, stream)
+	}
+	configChangelogExactlyOnce(tm, streamTaskArgs, trackStream)
+	err = createOffsetTopicTrackSource(tm, streamTaskArgs) // txn mngr
+	if err != nil {
+		return nil, err
+	}
+	if initRet.HasRecentTxnMeta {
+		offsetMap, err := getOffsetMap(ctx, tm, streamTaskArgs)
+		if err != nil {
+			return nil, err
+		}
+		err = restoreStateStore(ctx, streamTaskArgs)
+		if err != nil {
+			return nil, err
+		}
+		setOffsetOnStream(offsetMap, streamTaskArgs)
+	}
+	setupFuncsFor2pcTest(tm, streamTaskArgs)
+	return tm, nil
+}
+
 func SetupManagersFor2pc(ctx context.Context, t *StreamTask,
 	streamTaskArgs *StreamTaskArgs, rs *snapshot_store.RedisSnapshotStore,
 ) (*transaction.TransactionManager, *control_channel.ControlChannelManager, error) {
@@ -112,6 +145,26 @@ func SetupManagersFor2pc(ctx context.Context, t *StreamTask,
 		p.SetFlushCallback(flushCallbackFunc)
 	}
 	return tm, cmm, nil
+}
+
+func setupFuncsFor2pcTest(tm *transaction.TransactionManager, args *StreamTaskArgs) {
+	trackParFunc := func(topicName string, substreamId uint8) {
+		tm.AddTopicSubstream(topicName, substreamId)
+	}
+	recordFinish := func(ctx context.Context, funcName string, instanceID uint8) error {
+		return nil
+	}
+	flushCallbackFunc := func(ctx context.Context) error {
+		_, err := tm.EnsurePrevTxnFinAndAppendMeta(ctx)
+		return err
+	}
+	updateFuncs(args,
+		trackParFunc, recordFinish, flushCallbackFunc)
+	for _, p := range args.ectx.Producers() {
+		p.ConfigExactlyOnce(tm, args.guarantee)
+		tm.RecordTopicStreams(p.TopicName(), p.Stream().(*sharedlog_stream.ShardedSharedLogStream))
+		p.SetFlushCallback(flushCallbackFunc)
+	}
 }
 
 type txnProcessMeta struct {

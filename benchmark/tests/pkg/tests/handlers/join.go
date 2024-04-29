@@ -13,11 +13,13 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/execution"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/store"
+	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
 	"time"
 
@@ -64,112 +66,124 @@ func (h *joinHandler) tests(ctx context.Context, sp *test_types.TestInput) *comm
 	}
 }
 
-func getSrcSink(
-	ctx context.Context,
-	flush time.Duration,
-	stream1 *sharedlog_stream.ShardedSharedLogStream,
-	stream2 *sharedlog_stream.ShardedSharedLogStream,
-	outputStream *sharedlog_stream.ShardedSharedLogStream,
-) (*producer_consumer.ShardedSharedLogStreamConsumer, /* src1 */
-	*producer_consumer.ShardedSharedLogStreamConsumer, /* src2 */
-	*producer_consumer.ShardedSharedLogStreamProducer,
-	error,
-) {
-	src1Config := &producer_consumer.StreamConsumerConfig{
-		Timeout:     common.SrcConsumeTimeout,
-		SerdeFormat: commtypes.JSON,
+func (h *joinHandler) getSrcSink(ctx context.Context, sp *common.TestParam,
+) ([]*producer_consumer.MeteredConsumer, []producer_consumer.MeteredProducerIntr, error) {
+	srcStreams, sinkStreams, err := benchutil.GetShardedInputOutputStreamsTest(ctx, h.env, sp)
+	if err != nil {
+		panic(err)
 	}
-	src2Config := &producer_consumer.StreamConsumerConfig{
-		Timeout:     common.SrcConsumeTimeout,
-		SerdeFormat: commtypes.JSON,
+	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
+	timeout := time.Duration(10) * time.Millisecond
+	srcConfig := &producer_consumer.StreamConsumerConfig{
+		Timeout:     timeout,
+		SerdeFormat: serdeFormat,
 	}
 	outConfig := &producer_consumer.StreamSinkConfig{
-		FlushDuration: flush,
+		FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+		Format:        serdeFormat,
 	}
-	src1, err := producer_consumer.NewShardedSharedLogStreamConsumer(stream1, src1Config, 1, 0)
+	warmup := time.Duration(0) * time.Second
+	consumer1, err := producer_consumer.NewShardedSharedLogStreamConsumer(srcStreams[0],
+		srcConfig, 1, 0)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
-	src2, err := producer_consumer.NewShardedSharedLogStreamConsumer(stream2, src2Config, 1, 0)
+	consumer2, err := producer_consumer.NewShardedSharedLogStreamConsumer(srcStreams[1],
+		srcConfig, 1, 0)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
-	sink := producer_consumer.NewShardedSharedLogStreamProducer(outputStream, outConfig)
-	return src1, src2, sink, nil
+	src1 := producer_consumer.NewMeteredConsumer(consumer1, warmup)
+	src2 := producer_consumer.NewMeteredConsumer(consumer2, warmup)
+	sink, err := producer_consumer.NewConcurrentMeteredSyncProducer(
+		producer_consumer.NewShardedSharedLogStreamProducer(sinkStreams[0], outConfig), warmup)
+	if err != nil {
+		return nil, nil, err
+	}
+	src1.SetInitialSource(false)
+	src2.SetInitialSource(false)
+	src1.SetName("src1")
+	src2.SetName("src2")
+	return []*producer_consumer.MeteredConsumer{src1, src2}, []producer_consumer.MeteredProducerIntr{sink}, nil
+}
+
+func getMaterializedParam[K, V any](storeName string,
+	kvMsgSerde commtypes.MessageGSerdeG[K, V],
+	env types.Environment,
+	sp *common.TestParam,
+) (*store_with_changelog.MaterializeParam[K, V], error) {
+	return store_with_changelog.NewMaterializeParamBuilder[K, V]().
+		MessageSerde(kvMsgSerde).
+		StoreName(storeName).
+		ParNum(0).
+		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
+		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
+			Env:           env,
+			NumPartition:  1,
+			TimeOut:       common.SrcConsumeTimeout,
+			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
+		}).BufMaxSize(sp.BufMaxSize).Build()
 }
 
 func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	default_buf_size := uint32(128 * 1024)
-	srcStream1, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "src1", 1, commtypes.JSON, default_buf_size)
-	if err != nil {
-		panic(err)
+	sp := &common.TestParam{
+		InStreamParam: []common.TestStreamParam{
+			{TopicName: "src1", NumPartition: 1},
+			{TopicName: "src2", NumPartition: 1},
+		},
+		OutStreamParam: []common.TestStreamParam{
+			{TopicName: "sink", NumPartition: 1},
+		},
+		AppId:         "testStreamStreamJoinMem",
+		CommitEveryMs: 100,
+		FlushMs:       100,
+		BufMaxSize:    default_buf_size,
+		SerdeFormat:   uint8(commtypes.JSON),
 	}
-	srcStream2, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "src2", 1, commtypes.JSON, default_buf_size)
-	if err != nil {
-		panic(err)
-	}
-	sinkStream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "sink", 1, commtypes.JSON, default_buf_size)
-	if err != nil {
-		panic(err)
-	}
-	inMsgSerde := commtypes.MessageGJSONSerdeG[int, strTs]{
-		KeySerde: commtypes.IntSerdeG{},
-		ValSerde: strTsJSONSerdeG{},
-	}
-	outMsgSerde := commtypes.MessageGJSONSerdeG[int, string]{
-		KeySerde: commtypes.IntSerdeG{},
-		ValSerde: commtypes.StringSerdeG{},
-	}
-	src1, src2, sink, err := getSrcSink(ctx, common.FlushDuration,
-		srcStream1, srcStream2, sinkStream)
+	srcs, sinks, err := h.getSrcSink(ctx, sp)
+	msgSerde, err := processor.MsgSerdeWithValueTsG(commtypes.JSON, commtypes.IntSerdeG{}, commtypes.StringSerdeG{})
 	if err != nil {
 		panic(err)
 	}
 
-	joinWindows, err := processor.NewJoinWindowsWithGrace(time.Duration(50)*time.Millisecond,
+	joinWindows, err := commtypes.NewJoinWindowsWithGrace(time.Duration(50)*time.Millisecond,
 		time.Duration(50)*time.Millisecond)
 	if err != nil {
 		panic(err)
 	}
-	toWinTab1, winTab1, err := processor.ToInMemWindowTable("tab1", joinWindows, store.IntIntrCompare)
-	if err != nil {
-		panic(err)
-	}
-	toWinTab2, winTab2, err := processor.ToInMemWindowTable("tab2", joinWindows, store.IntIntrCompare)
-	if err != nil {
-		panic(err)
-	}
-	joiner := processor.ValueJoinerWithKeyTsFunc(
-		func(readOnlyKey interface{},
-			leftValue interface{}, rightValue interface{}, leftTs int64, rightTs int64,
-		) interface{} {
+	joiner := processor.ValueJoinerWithKeyTsFuncG[int, string, string, string](
+		func(readOnlyKey int,
+			leftValue string, rightValue string, leftTs int64, rightTs int64,
+		) optional.Option[string] {
 			debug.Fprintf(os.Stderr, "left val: %v, ts: %d, right val: %v, ts: %d\n", leftValue, leftTs, rightValue, rightTs)
-			return fmt.Sprintf("%s+%s", leftValue.(strTs).Val, rightValue.(strTs).Val)
+			return optional.Some(fmt.Sprintf("%s+%s", leftValue, rightValue))
 		})
-	sharedTimeTracker := processor.NewTimeTracker()
-	oneJoinTwoProc := processor.NewStreamStreamJoinProcessor("oneJoinTwo", winTab2, joinWindows, joiner, false, true, sharedTimeTracker)
-	twoJoinOneProc := processor.NewStreamStreamJoinProcessor("twoJoinOne", winTab1, joinWindows, processor.ReverseValueJoinerWithKeyTs(joiner), false, false, sharedTimeTracker)
-	oneJoinTwo := func(ctx context.Context, m commtypes.Message, sink *producer_consumer.ShardedSharedLogStreamProducer,
+	oneMp, err := getMaterializedParam[int, string]("oneStore", msgSerde, h.env, sp)
+	if err != nil {
+		panic(err)
+	}
+	twoMp, err := getMaterializedParam[int, string]("twoStore", msgSerde, h.env, sp)
+	if err != nil {
+		panic(err)
+	}
+	oneJoinTwoProc, twoJoinOneProc, wsos, setupSnapCallbackFunc, err := execution.SetupSkipMapStreamStreamJoin(
+		oneMp, twoMp, store.IntegerCompare[int], joiner, joinWindows,
+		exactly_once_intr.TWO_PHASE_COMMIT,
+	)
+	oneJoinTwo := func(ctx context.Context, m commtypes.MessageG[int, string], sink *producer_consumer.ShardedSharedLogStreamProducer,
 		trackParFunc exactly_once_intr.TrackProdSubStreamFunc,
 	) error {
-		_, err := toWinTab1.ProcessAndReturn(ctx, m)
-		if err != nil {
-			return err
-		}
-		joinedMsgs, err := oneJoinTwoProc.ProcessAndReturn(ctx, m)
+		joinedMsgs, err := oneJoinTwoProc(ctx, m)
 		if err != nil {
 			return err
 		}
 		return pushMsgsToSink(ctx, sink, joinedMsgs, trackParFunc)
 	}
-	twoJoinOne := func(ctx context.Context, m commtypes.Message, sink *producer_consumer.ShardedSharedLogStreamProducer,
+	twoJoinOne := func(ctx context.Context, m commtypes.MessageG[int, string], sink *producer_consumer.ShardedSharedLogStreamProducer,
 		trackParFunc exactly_once_intr.TrackProdSubStreamFunc,
 	) error {
-		_, err := toWinTab2.ProcessAndReturn(ctx, m)
-		if err != nil {
-			return err
-		}
-		joinedMsgs, err := twoJoinOneProc.ProcessAndReturn(ctx, m)
+		joinedMsgs, err := twoJoinOneProc(ctx, m)
 		if err != nil {
 			return err
 		}
@@ -177,108 +191,79 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	}
 
 	payloadArrSerde := sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG
-	streamTaskArgs := benchutil.UpdateStreamTaskArgs(&common.QueryInput{},
+	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(&common.QueryInput{},
 		stream_task.NewStreamTaskArgsBuilder(h.env, nil, "joinTestMem")).Build()
-	tm, err := stream_task.SetupTransactionManager(ctx, streamTaskArgs)
 	if err != nil {
 		panic(err)
 	}
-	trackParFunc := func(ctx context.Context,
-		kBytes []byte,
-		topicName string,
-		substreamId uint8,
-	) error {
-		err := tm.AddTopicSubstream(ctx, topicName, substreamId)
-		if err != nil {
-			return err
-		}
-		return err
+	tm, err := stream_task.SetupManagersFor2pcTest(ctx, streamTaskArgs)
+	if err != nil {
+		panic(err)
 	}
 	expected_keys := []int{0, 1, 2, 3}
 
-	tm.RecordTopicStreams(src1.TopicName(), srcStream1)
-
-	if err = tm.BeginTransaction(ctx); err != nil {
-		panic(err)
-	}
-	if err = tm.AddTopicSubstream(ctx, srcStream1.TopicName(), 0); err != nil {
-		panic(err)
-	}
+	srcStream1 := srcs[0].Stream().(*sharedlog_stream.ShardedSharedLogStream)
+	srcStream2 := srcs[1].Stream().(*sharedlog_stream.ShardedSharedLogStream)
 	for i := 0; i < 2; i++ {
 		err := pushMsgToStream(ctx, expected_keys[i],
-			strTs{Val: fmt.Sprintf("A%d", expected_keys[i]), Ts: 0},
-			inMsgSerde, srcStream1, tm.GetProducerId())
+			commtypes.ValueTimestampG[string]{Value: fmt.Sprintf("A%d", expected_keys[i]), Timestamp: 0},
+			msgSerde, srcs[0].Stream().(*sharedlog_stream.ShardedSharedLogStream), tm.GetProducerId())
 		if err != nil {
 			panic(err)
 		}
 	}
 
-	if err = tm.CommitTransaction(ctx); err != nil {
+	if _, _, err = tm.CommitTransaction(ctx); err != nil {
 		panic(err)
 	}
 
-	got, err := readMsgs[int, strTs](ctx, inMsgSerde, payloadArrSerde, commtypes.JSON, srcStream1)
+	got, err := readMsgs[int, string](ctx, msgSerde, payloadArrSerde, commtypes.JSON, srcStream1)
 	if err != nil {
 		panic(err)
 	}
-	expected := []commtypes.Message{
-		{Key: 0, Value: strTs{Val: "A0", Ts: 0}, Timestamp: 0},
-		{Key: 1, Value: strTs{Val: "A1", Ts: 0}, Timestamp: 0},
+	expected := []commtypes.MessageG[int, string]{
+		{Key: optional.Some(0), Value: optional.Some("A0"), TimestampMs: 0},
+		{Key: optional.Some(1), Value: optional.Some("A1"), TimestampMs: 0},
 	}
 	if !reflect.DeepEqual(expected, got) {
 		panic(fmt.Sprintf("should equal. expected: %v, got: %v", expected, got))
 	}
 	srcStream1.SetCursor(0, 0)
 
-	tm.RecordTopicStreams(src2.TopicName(), srcStream2)
-	if err = tm.BeginTransaction(ctx); err != nil {
-		panic(err)
-	}
-	if err = tm.AddTopicSubstream(ctx, srcStream2.TopicName(), 0); err != nil {
-		panic(err)
-	}
+	tm.AddTopicSubstream(srcStream2.TopicName(), 0)
 	for i := 0; i < 2; i++ {
 		err := pushMsgToStream(ctx, expected_keys[i],
-			strTs{Val: fmt.Sprintf("a%d", expected_keys[i]), Ts: 0},
-			inMsgSerde, srcStream2, tm.GetProducerId())
+			commtypes.ValueTimestampG[string]{Value: fmt.Sprintf("a%d", expected_keys[i]), Timestamp: 0},
+			msgSerde, srcStream2, tm.GetProducerId())
 		if err != nil {
 			panic(err)
 		}
 	}
-	if err = tm.CommitTransaction(ctx); err != nil {
+	if _, _, err = tm.CommitTransaction(ctx); err != nil {
 		panic(err)
 	}
 
-	got, err = readMsgs[int, strTs](ctx, inMsgSerde, payloadArrSerde, commtypes.JSON, srcStream2)
+	got, err = readMsgs[int, string](ctx, msgSerde, payloadArrSerde, commtypes.JSON, srcStream2)
 	if err != nil {
 		panic(err)
 	}
-	expected = []commtypes.Message{
-		{Key: 0, Value: strTs{Val: "a0", Ts: 0}, Timestamp: 0},
-		{Key: 1, Value: strTs{Val: "a1", Ts: 0}, Timestamp: 0},
+	expected = []commtypes.MessageG[int, commtypes.ValueTimestampG[string]]{
+		{Key: optional.Some(0), Value: optional.Some(commtypes.ValueTimestampG[string]{Value: "a0", Timestamp: 0}), TimestampMs: 0},
+		{Key: optional.Some(1), Value: optional.Some(commtypes.ValueTimestampG[string]{Value: "a1", Timestamp: 0}), TimestampMs: 0},
 	}
 	if !reflect.DeepEqual(expected, got) {
 		panic(fmt.Sprintf("should equal. expected: %v, got: %v", expected, got))
 	}
 	srcStream2.SetCursor(0, 0)
 
-	tm.RecordTopicStreams(src1.TopicName(), srcStream1)
-	tm.RecordTopicStreams(src2.TopicName(), srcStream2)
-	tm.RecordTopicStreams(sinkStream.TopicName(), sinkStream)
-	if err = tm.BeginTransaction(ctx); err != nil {
-		panic(err)
-	}
-	if err = tm.AddTopicSubstream(ctx, sinkStream.TopicName(), 0); err != nil {
-		panic(err)
-	}
-	if err = tm.AddTopicSubstream(ctx, srcStream1.TopicName(), 0); err != nil {
-		panic(err)
-	}
-	if err = tm.AddTopicSubstream(ctx, srcStream2.TopicName(), 0); err != nil {
-		panic(err)
-	}
-	joinProc(ctx, src1, sink, outMsgSerde, trackParFunc, oneJoinTwo)
-	joinProc(ctx, src2, sink, outMsgSerde, trackParFunc, twoJoinOne)
+	tm.RecordTopicStreams(srcs[0].TopicName(), srcStream1)
+	tm.RecordTopicStreams(srcs[1].TopicName(), srcStream2)
+	tm.RecordTopicStreams(sinks[0].TopicName(), sinks[0].Stream().(*sharedlog_stream.ShardedSharedLogStream))
+	tm.AddTopicSubstream(sinks[0].TopicName(), 0)
+	tm.AddTopicSubstream(srcStream1.TopicName(), 0)
+	tm.AddTopicSubstream(srcStream2.TopicName(), 0)
+	joinProc(ctx, src1, sink, msgSerde, trackParFunc, oneJoinTwo)
+	joinProc(ctx, src2, sink, msgSerde, trackParFunc, twoJoinOne)
 	if err = tm.CommitTransaction(ctx); err != nil {
 		panic(err)
 	}
@@ -286,9 +271,9 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	expected_join := []commtypes.Message{
-		{Key: 0, Value: "A0+a0", Timestamp: 0},
-		{Key: 1, Value: "A1+a1", Timestamp: 0},
+	expected_join := []commtypes.MessageG[int, string]{
+		{Key: optional.Some(0), Value: optional.Some("A0+a0"), TimestampMs: 0},
+		{Key: optional.Some(1), Value: optional.Some("A1+a1"), TimestampMs: 0},
 	}
 	if !reflect.DeepEqual(expected_join, got) {
 		panic(fmt.Sprintf("should equal. expected: %v, got: %v", expected_join, got))
@@ -299,11 +284,10 @@ func joinProc(ctx context.Context,
 	src *producer_consumer.ShardedSharedLogStreamConsumer,
 	sink *producer_consumer.ShardedSharedLogStreamProducer,
 	inMsgSerde commtypes.MessageGSerdeG[int, string],
-	trackParFunc func(ctx context.Context,
-		kBytes []byte,
+	trackParFunc func(
 		topicName string,
 		substreamId uint8,
-	) error,
+	),
 	runner func(ctx context.Context, m commtypes.MessageG[int, string], sink *producer_consumer.ShardedSharedLogStreamProducer,
 		trackParFunc exactly_once_intr.TrackProdSubStreamFunc,
 	) error,
@@ -344,12 +328,12 @@ func readMsgs[K, V any](ctx context.Context,
 	log *sharedlog_stream.ShardedSharedLogStream,
 ) ([]commtypes.MessageG[K, V], error) {
 	ret := make([]commtypes.MessageG[K, V], 0)
-	tac, err := producer_consumer.NewTransactionAwareConsumer(log, serdeFormat)
+	tac, err := producer_consumer.NewShardedSharedLogStreamConsumer(log, serdeFormat)
 	if err != nil {
 		return nil, err
 	}
 	for {
-		msg, err := tac.ReadNext(ctx, 0)
+		msg, err := tac.Consume(ctx, 0)
 		if common_errors.IsStreamEmptyError(err) {
 			return ret, nil
 		} else if err != nil {
@@ -374,10 +358,10 @@ func readMsgs[K, V any](ctx context.Context,
 	}
 }
 
-func pushMsgToStream(ctx context.Context, key int, val strTs, msgSerde commtypes.MessageGSerdeG[int, strTs],
+func pushMsgToStream(ctx context.Context, key int, val commtypes.ValueTimestampG[string], msgSerde commtypes.MessageGSerdeG[int, commtypes.ValueTimestampG[string]],
 	log *sharedlog_stream.ShardedSharedLogStream, producerId commtypes.ProducerId,
 ) error {
-	msg := commtypes.MessageG[int, strTs]{Key: optional.Some(key), Value: optional.Some(val)}
+	msg := commtypes.MessageG[int, commtypes.ValueTimestampG[string]]{Key: optional.Some(key), Value: optional.Some(val)}
 	encoded, err := msgSerde.Encode(msg)
 	if err != nil {
 		return err
@@ -392,18 +376,13 @@ func pushMsgToStream(ctx context.Context, key int, val strTs, msgSerde commtypes
 	return nil
 }
 
-func pushMsgsToSink(ctx context.Context, sink producer_consumer.Producer,
-	msgs []commtypes.Message, trackParFunc exactly_once_intr.TrackProdSubStreamFunc,
+func pushMsgsToSink[K, V any](ctx context.Context, sink producer_consumer.Producer,
+	msgs []commtypes.MessageG[K, V], trackParFunc exactly_once_intr.TrackProdSubStreamFunc,
 ) error {
 	for _, msg := range msgs {
-		key := msg.Key.(int)
-		kBytes, err := sink.KeyEncoder().Encode(key)
+		kBytes, err := sink.KeyEncoder().Encode(msg.Key)
 		if err != nil {
 			return err
-		}
-		err = trackParFunc(ctx, kBytes, sink.TopicName(), 0)
-		if err != nil {
-			return fmt.Errorf("add topic partition failed: %v", err)
 		}
 		err = sink.Produce(ctx, msg, 0, false)
 		if err != nil {

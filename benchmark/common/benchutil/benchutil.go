@@ -56,6 +56,31 @@ func GetShardedInputOutputStreams(ctx context.Context,
 	return inputStream, output_streams, nil
 }
 
+func GetShardedInputOutputStreamsTest(ctx context.Context,
+	env types.Environment, input *common.TestParam,
+) ([]*sharedlog_stream.ShardedSharedLogStream, []*sharedlog_stream.ShardedSharedLogStream, error) {
+	serdeFormat := commtypes.SerdeFormat(input.SerdeFormat)
+	var input_streams []*sharedlog_stream.ShardedSharedLogStream
+	for _, param := range input.InStreamParam {
+		inputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, param.TopicName,
+			param.NumPartition, serdeFormat, input.BufMaxSize)
+		if err != nil {
+			return nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
+		}
+		input_streams = append(input_streams, inputStream)
+	}
+	var output_streams []*sharedlog_stream.ShardedSharedLogStream
+	for _, param := range input.OutStreamParam {
+		outputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, param.TopicName,
+			param.NumPartition, serdeFormat, input.BufMaxSize)
+		if err != nil {
+			return nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
+		}
+		output_streams = append(output_streams, outputStream)
+	}
+	return input_streams, output_streams, nil
+}
+
 func UseCache(useCache bool, gua exactly_once_intr.GuaranteeMth) bool {
 	c := useCache
 	if gua == exactly_once_intr.ALIGN_CHKPT {

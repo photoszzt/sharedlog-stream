@@ -6,13 +6,14 @@ import (
 	"os"
 	"reflect"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/epoch_manager"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/producer_consumer"
-	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream_task"
 
 	"cs.utexas.edu/zjia/faas/types"
@@ -42,30 +43,43 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 	serdeFormat commtypes.SerdeFormat, topicName string,
 ) {
 	debug.Fprintf(os.Stderr, "single produce consume epoch test\n")
-	stream1, err := sharedlog_stream.NewShardedSharedLogStream(h.env, topicName, 1, serdeFormat)
+	default_max_buf := uint32(32 * 1024)
+	srcStreams, sinkStreams, err := benchutil.GetShardedInputOutputStreamsTest(ctx, h.env, &common.TestParam{
+		InStreamParam: []common.TestStreamParam{
+			{TopicName: topicName, NumPartition: 1},
+		},
+		OutStreamParam: []common.TestStreamParam{
+			{TopicName: topicName, NumPartition: 1},
+		},
+		AppId:         "testStreamStreamJoinMem",
+		CommitEveryMs: 100,
+		FlushMs:       100,
+		BufMaxSize:    default_max_buf,
+		SerdeFormat:   uint8(commtypes.JSON),
+	})
 	if err != nil {
 		panic(err)
 	}
-
-	msgSerde, err := commtypes.GetMsgSerdeG[int, string](serdeFormat, commtypes.IntSerdeG{}, commtypes.StringSerdeG{})
-	if err != nil {
-		panic(err)
-	}
-	produceSinkConfig := &producer_consumer.StreamSinkConfig[int, string]{
-		MsgSerde:      msgSerde,
+	produceSinkConfig := &producer_consumer.StreamSinkConfig{
 		FlushDuration: common.FlushDuration,
+		Format:        serdeFormat,
 	}
-	meteredProducer := producer_consumer.NewMeteredProducer(producer_consumer.NewShardedSharedLogStreamProducer(stream1, produceSinkConfig), 0)
+	meteredProducer, err := producer_consumer.NewMeteredProducer(
+		producer_consumer.NewShardedSharedLogStreamProducer(sinkStreams[0],
+			produceSinkConfig), 0)
+	if err != nil {
+		panic(err)
+	}
 	em1, trackParFunc1, err := getEpochManager(ctx, h.env,
 		"prod1_single"+serdeFormat.String(), serdeFormat)
 	if err != nil {
 		panic(err)
 	}
 	meteredProducer.ConfigExactlyOnce(em1, exactly_once_intr.EPOCH_MARK)
-	msgForTm1 := []commtypes.Message{
+	msgForTm1 := []commtypes.MessageG[int, string]{
 		{
-			Key:   1,
-			Value: "tm1_a",
+			Key:   optional.Some(1),
+			Value: optional.Some("tm1_a"),
 		},
 	}
 	err = pushMsgsToSink(ctx, meteredProducer, msgForTm1, trackParFunc1)
@@ -83,7 +97,7 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 	if err != nil {
 		panic(err)
 	}
-	err = meteredProducer.Flush(ctx)
+	_, err = meteredProducer.Flush(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -97,23 +111,15 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 		panic(err)
 	}
 
-	srcConfig := &producer_consumer.StreamConsumerConfigG[int, string]{
+	srcConfig := &producer_consumer.StreamConsumerConfig{
 		Timeout:     common.SrcConsumeTimeout,
-		MsgSerde:    msgSerde,
 		SerdeFormat: commtypes.JSON,
 	}
-	stream1ForRead, err := sharedlog_stream.NewShardedSharedLogStream(h.env, topicName, 1, serdeFormat)
+	src1, err := producer_consumer.NewShardedSharedLogStreamConsumer(srcStreams[0], srcConfig, 1, 0)
 	if err != nil {
 		panic(err)
 	}
-	src1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1ForRead, srcConfig, 1, 0)
-	if err != nil {
-		panic(err)
-	}
-	err = src1.ConfigExactlyOnce(exactly_once_intr.EPOCH_MARK)
-	if err != nil {
-		panic(err)
-	}
+	src1.ConfigExactlyOnce(exactly_once_intr.EPOCH_MARK)
 	got, err := readMsgsEpoch(ctx, src1)
 	if err != nil {
 		panic(err)
@@ -195,7 +201,9 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 	}
 }
 
-func readMsgsEpoch[KIn, VIn any](ctx context.Context, consumer *producer_consumer.ShardedSharedLogStreamConsumer[KIn, VIn]) ([]commtypes.Message, error) {
+func readMsgsEpoch[KIn, VIn any](ctx context.Context,
+	consumer *producer_consumer.ShardedSharedLogStreamConsumer,
+) ([]commtypes.Message, error) {
 	ret := make([]commtypes.Message, 0)
 	for {
 		gotMsgs, err := consumer.Consume(ctx, 0)
@@ -204,8 +212,8 @@ func readMsgsEpoch[KIn, VIn any](ctx context.Context, consumer *producer_consume
 		} else if err != nil {
 			return ret, err
 		}
-		msgAndSeq := gotMsgs.Msgs
-		if msgAndSeq.MsgArr != nil {
+		commtypes.DecodeRawMsgSeqG(gotMsgs)
+		if gotMsgs.MsgArr != nil {
 			ret = append(ret, msgAndSeq.MsgArr...)
 		} else {
 			ret = append(ret, msgAndSeq.Msg)

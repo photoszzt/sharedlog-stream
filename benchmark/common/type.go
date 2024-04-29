@@ -175,3 +175,18 @@ type TranProcessBenchParam struct {
 	SerdeFormat   uint8  `json:"serdeFormat"`
 	NumPartition  uint8  `json:"numPartition"`
 }
+
+type TestStreamParam struct {
+	TopicName    string
+	NumPartition uint8
+}
+
+type TestParam struct {
+	InStreamParam  []TestStreamParam `json:"inTopicNames"`
+	OutStreamParam []TestStreamParam `json:"outTopicNames"`
+	AppId          string            `json:"appId"`
+	CommitEveryMs  uint64            `json:"commEveryMs,omitempty"`
+	FlushMs        uint32            `json:"flushMs,omitempty"`
+	BufMaxSize     uint32            `json:"bufMaxSize,omitempty"`
+	SerdeFormat    uint8             `json:"serdeFormat"`
+}
