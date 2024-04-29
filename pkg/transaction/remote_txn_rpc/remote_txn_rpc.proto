@@ -12,9 +12,10 @@ service RemoteTxnMngr {
   rpc Init(InitArg) returns (InitReply) {}
   rpc AppendTpPar(txn_data.TxnMetaMsg) returns (google.protobuf.Empty) {}
   rpc AbortTxn(txn_data.TxnMetaMsg) returns (google.protobuf.Empty) {}
-  rpc CommitTxnAsyncComplete(txn_data.TxnMetaMsg)
-      returns (google.protobuf.Empty) {}
+  rpc CommitTxnAsyncComplete(txn_data.TxnMetaMsg) returns (CommitReply) {}
 }
+
+message CommitReply { uint64 logOffset = 1; }
 
 message StreamInfo {
   string topicName = 1;

@@ -143,3 +143,32 @@ func (s *RemoteTxnManager) AbortTxn(ctx context.Context, in *txn_data.TxnMetaMsg
 	}
 	return &emptypb.Empty{}, nil
 }
+
+func (s *RemoteTxnManager) CommitTxnAsyncComplete(ctx context.Context, in *txn_data.TxnMetaMsg) (*remote_txn_rpc.CommitReply, error) {
+	s.mu.Lock()
+	prodId := s.prod_id_map[in.TransactionalId]
+	if prodId.TaskEpoch != in.ProdId.GetTaskEpoch() || prodId.TaskId != in.ProdId.GetTaskId() {
+		return nil, common_errors.ErrStaleProducer
+	}
+	tm := s.tm_map[in.TransactionalId]
+	s.mu.Unlock()
+	txnMd := txn_data.TxnMetadata{
+		State: txn_data.PREPARE_COMMIT,
+	}
+	logOff, err := tm.appendToTransactionLog(ctx, txnMd, []uint64{tm.txnLogTag})
+	if err != nil {
+		return nil, err
+	}
+	tm.bgErrg.Go(func() error {
+		// second phase of the commit
+		err = tm.completeTransaction(tm.bgCtx, commtypes.EPOCH_END, txn_data.COMPLETE_COMMIT, in.TopicPartitions)
+		if err != nil {
+			return err
+		}
+		tm.hasWaitForLastTxn.Store(true)
+		return nil
+	})
+	return &remote_txn_rpc.CommitReply{
+		LogOffset: logOff,
+	}, nil
+}

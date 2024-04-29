@@ -27,7 +27,7 @@ type RemoteTxnMngrClient interface {
 	Init(ctx context.Context, in *InitArg, opts ...grpc.CallOption) (*InitReply, error)
 	AppendTpPar(ctx context.Context, in *txn_data.TxnMetaMsg, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	AbortTxn(ctx context.Context, in *txn_data.TxnMetaMsg, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	CommitTxnAsyncComplete(ctx context.Context, in *txn_data.TxnMetaMsg, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	CommitTxnAsyncComplete(ctx context.Context, in *txn_data.TxnMetaMsg, opts ...grpc.CallOption) (*CommitReply, error)
 }
 
 type remoteTxnMngrClient struct {
@@ -65,8 +65,8 @@ func (c *remoteTxnMngrClient) AbortTxn(ctx context.Context, in *txn_data.TxnMeta
 	return out, nil
 }
 
-func (c *remoteTxnMngrClient) CommitTxnAsyncComplete(ctx context.Context, in *txn_data.TxnMetaMsg, opts ...grpc.CallOption) (*emptypb.Empty, error) {
-	out := new(emptypb.Empty)
+func (c *remoteTxnMngrClient) CommitTxnAsyncComplete(ctx context.Context, in *txn_data.TxnMetaMsg, opts ...grpc.CallOption) (*CommitReply, error) {
+	out := new(CommitReply)
 	err := c.cc.Invoke(ctx, "/remote_txn_rpc.RemoteTxnMngr/CommitTxnAsyncComplete", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -81,7 +81,7 @@ type RemoteTxnMngrServer interface {
 	Init(context.Context, *InitArg) (*InitReply, error)
 	AppendTpPar(context.Context, *txn_data.TxnMetaMsg) (*emptypb.Empty, error)
 	AbortTxn(context.Context, *txn_data.TxnMetaMsg) (*emptypb.Empty, error)
-	CommitTxnAsyncComplete(context.Context, *txn_data.TxnMetaMsg) (*emptypb.Empty, error)
+	CommitTxnAsyncComplete(context.Context, *txn_data.TxnMetaMsg) (*CommitReply, error)
 	mustEmbedUnimplementedRemoteTxnMngrServer()
 }
 
@@ -98,7 +98,7 @@ func (UnimplementedRemoteTxnMngrServer) AppendTpPar(context.Context, *txn_data.T
 func (UnimplementedRemoteTxnMngrServer) AbortTxn(context.Context, *txn_data.TxnMetaMsg) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AbortTxn not implemented")
 }
-func (UnimplementedRemoteTxnMngrServer) CommitTxnAsyncComplete(context.Context, *txn_data.TxnMetaMsg) (*emptypb.Empty, error) {
+func (UnimplementedRemoteTxnMngrServer) CommitTxnAsyncComplete(context.Context, *txn_data.TxnMetaMsg) (*CommitReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CommitTxnAsyncComplete not implemented")
 }
 func (UnimplementedRemoteTxnMngrServer) mustEmbedUnimplementedRemoteTxnMngrServer() {}
