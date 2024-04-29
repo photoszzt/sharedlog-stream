@@ -53,7 +53,7 @@ func (h *q4JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, e
 	return common.CompressData(encodedOutput), nil
 }
 
-func (h *q4JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
+func (h *q4JoinStreamHandler) getSrcSink(sp *common.QueryInput,
 ) ([]*producer_consumer.MeteredConsumer, []producer_consumer.MeteredProducerIntr, error) {
 	stream1, stream2, outputStream, err := getInOutStreams(h.env, sp)
 	if err != nil {
@@ -61,11 +61,7 @@ func (h *q4JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	timeout := time.Duration(10) * time.Millisecond
-	auctionsConfig := &producer_consumer.StreamConsumerConfig{
-		Timeout:     timeout,
-		SerdeFormat: serdeFormat,
-	}
-	personsConfig := &producer_consumer.StreamConsumerConfig{
+	srcConfig := &producer_consumer.StreamConsumerConfig{
 		Timeout:     timeout,
 		SerdeFormat: serdeFormat,
 	}
@@ -74,11 +70,11 @@ func (h *q4JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 		Format:        serdeFormat,
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
-	consumer1, err := producer_consumer.NewShardedSharedLogStreamConsumer(stream1, auctionsConfig, sp.NumSubstreamProducer[0], sp.ParNum)
+	consumer1, err := producer_consumer.NewShardedSharedLogStreamConsumer(stream1, srcConfig, sp.NumSubstreamProducer[0], sp.ParNum)
 	if err != nil {
 		return nil, nil, err
 	}
-	consumer2, err := producer_consumer.NewShardedSharedLogStreamConsumer(stream2, personsConfig, sp.NumSubstreamProducer[1], sp.ParNum)
+	consumer2, err := producer_consumer.NewShardedSharedLogStreamConsumer(stream2, srcConfig, sp.NumSubstreamProducer[1], sp.ParNum)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -168,7 +164,7 @@ func (h *q4JoinStreamHandler) Q4JoinStream(ctx context.Context, sp *common.Query
 	if fn_out != nil {
 		return fn_out
 	}
-	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
+	srcs, sinks_arr, err := h.getSrcSink(sp)
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("getSrcSink err: %v\n", err))
 	}

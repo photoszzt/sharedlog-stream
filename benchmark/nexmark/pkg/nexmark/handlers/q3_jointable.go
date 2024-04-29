@@ -78,7 +78,7 @@ func getInOutStreams(
 	return inputStream1, inputStream2, outputStream, nil
 }
 
-func (h *q3JoinTableHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
+func (h *q3JoinTableHandler) getSrcSink(sp *common.QueryInput,
 ) ([]*producer_consumer.MeteredConsumer, []producer_consumer.MeteredProducerIntr, error) {
 	stream1, stream2, outputStream, err := getInOutStreams(h.env, sp)
 	if err != nil {
@@ -178,7 +178,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 	if fn_out != nil {
 		return fn_out
 	}
-	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
+	srcs, sinks_arr, err := h.getSrcSink(sp)
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("getSrcSink err: %v\n", err))
 	}

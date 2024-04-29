@@ -51,7 +51,6 @@ func (h *q7JoinMaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 }
 
 func (h *q7JoinMaxBid) getSrcSink(
-	ctx context.Context,
 	sp *common.QueryInput,
 ) ([]*producer_consumer.MeteredConsumer, []producer_consumer.MeteredProducerIntr, error) {
 	stream1, stream2, outputStream, err := getInOutStreams(h.env, sp)
@@ -61,19 +60,17 @@ func (h *q7JoinMaxBid) getSrcSink(
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	timeout := time.Duration(4) * time.Millisecond
 	warmup := time.Duration(sp.WarmupS) * time.Second
+	srcConfig := producer_consumer.StreamConsumerConfig{
+		Timeout:     timeout,
+		SerdeFormat: serdeFormat,
+	}
 	consumer1, err := producer_consumer.NewShardedSharedLogStreamConsumer(stream1,
-		&producer_consumer.StreamConsumerConfig{
-			Timeout:     timeout,
-			SerdeFormat: serdeFormat,
-		}, sp.NumSubstreamProducer[0], sp.ParNum)
+		&srcConfig, sp.NumSubstreamProducer[0], sp.ParNum)
 	if err != nil {
 		return nil, nil, err
 	}
 	consumer2, err := producer_consumer.NewShardedSharedLogStreamConsumer(stream2,
-		&producer_consumer.StreamConsumerConfig{
-			Timeout:     timeout,
-			SerdeFormat: serdeFormat,
-		}, sp.NumSubstreamProducer[1], sp.ParNum)
+		&srcConfig, sp.NumSubstreamProducer[1], sp.ParNum)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -173,7 +170,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 	if fn_out != nil {
 		return fn_out
 	}
-	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
+	srcs, sinks_arr, err := h.getSrcSink(sp)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

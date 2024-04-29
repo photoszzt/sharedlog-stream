@@ -48,7 +48,7 @@ func (h *q6JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, e
 	return common.CompressData(encodedOutput), nil
 }
 
-func (h *q6JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryInput,
+func (h *q6JoinStreamHandler) getSrcSink(sp *common.QueryInput,
 ) ([]*producer_consumer.MeteredConsumer, []producer_consumer.MeteredProducerIntr, error) {
 	stream1, stream2, outputStream, err := getInOutStreams(h.env, sp)
 	if err != nil {
@@ -56,11 +56,7 @@ func (h *q6JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	}
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
 	timeout := time.Duration(10) * time.Millisecond
-	src1Config := &producer_consumer.StreamConsumerConfig{
-		Timeout:     timeout,
-		SerdeFormat: serdeFormat,
-	}
-	src2Config := &producer_consumer.StreamConsumerConfig{
+	srcConfig := &producer_consumer.StreamConsumerConfig{
 		Timeout:     timeout,
 		SerdeFormat: serdeFormat,
 	}
@@ -70,12 +66,12 @@ func (h *q6JoinStreamHandler) getSrcSink(ctx context.Context, sp *common.QueryIn
 	}
 	warmup := time.Duration(sp.WarmupS) * time.Second
 	consumer1, err := producer_consumer.NewShardedSharedLogStreamConsumer(stream1,
-		src1Config, sp.NumSubstreamProducer[0], sp.ParNum)
+		srcConfig, sp.NumSubstreamProducer[0], sp.ParNum)
 	if err != nil {
 		return nil, nil, err
 	}
 	consumer2, err := producer_consumer.NewShardedSharedLogStreamConsumer(stream2,
-		src2Config, sp.NumSubstreamProducer[1], sp.ParNum)
+		srcConfig, sp.NumSubstreamProducer[1], sp.ParNum)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -166,7 +162,7 @@ func (h *q6JoinStreamHandler) Q6JoinStream(ctx context.Context, sp *common.Query
 	if fn_out != nil {
 		return fn_out
 	}
-	srcs, sinks_arr, err := h.getSrcSink(ctx, sp)
+	srcs, sinks_arr, err := h.getSrcSink(sp)
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("getSrcSink err: %v\n", err))
 	}
