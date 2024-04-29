@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-func setupManagersFor2pc(ctx context.Context, t *StreamTask,
+func SetupManagersFor2pc(ctx context.Context, t *StreamTask,
 	streamTaskArgs *StreamTaskArgs, rs *snapshot_store.RedisSnapshotStore,
 ) (*transaction.TransactionManager, *control_channel.ControlChannelManager, error) {
 	checkStreamArgs(streamTaskArgs)

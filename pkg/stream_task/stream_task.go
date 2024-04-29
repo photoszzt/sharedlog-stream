@@ -165,7 +165,7 @@ func ExecuteApp(ctx context.Context,
 			args: streamTaskArgs,
 		}
 		var err error
-		meta.tm, meta.cmm, err = setupManagersFor2pc(ctx, t, streamTaskArgs, &rs)
+		meta.tm, meta.cmm, err = SetupManagersFor2pc(ctx, t, streamTaskArgs, &rs)
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}
