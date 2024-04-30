@@ -66,7 +66,7 @@ func prepareInit(rtm_client *transaction.RemoteTxnManagerClient, args *StreamTas
 	return &arg
 }
 
-func setupManagerForRemote2pc(ctx context.Context, args *StreamTaskArgs, rs *snapshot_store.RedisSnapshotStore,
+func SetupManagerForRemote2pc(ctx context.Context, args *StreamTaskArgs, rs *snapshot_store.RedisSnapshotStore,
 ) (*transaction.RemoteTxnManagerClient, *control_channel.ControlChannelManager, error) {
 	checkStreamArgs(args)
 	var opts []grpc.DialOption
