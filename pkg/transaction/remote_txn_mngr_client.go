@@ -25,7 +25,7 @@ type RemoteTxnManagerClient struct {
 	currentTopicSubstream *skipmap.StringMap[*skipset.Uint32Set]
 	TransactionalId       string
 	addedNewTpPar         atomic.Bool
-	appendTxnMeta         stats.PrintLogStatsCollector[int64]
+	waitAndappendTxnMeta  stats.PrintLogStatsCollector[int64]
 }
 
 func NewRemoteTxnManagerClient(cc grpc.ClientConnInterface) *RemoteTxnManagerClient {
@@ -45,6 +45,23 @@ func (tm *RemoteTxnManagerClient) GetProducerId() commtypes.ProducerId { return 
 func (tm *RemoteTxnManagerClient) UpdateProducerId(prodId *commtypes.ProdId) {
 	tm.prodId.TaskId = prodId.TaskId
 	tm.prodId.TaskEpoch = prodId.TaskEpoch
+}
+
+func (tc *RemoteTxnManagerClient) collectTopicSubstreams() []*txn_data.TopicPartition {
+	topicSubstreams := make([]*txn_data.TopicPartition, 0, tc.currentTopicSubstream.Len())
+	tc.currentTopicSubstream.Range(func(tp string, parSet *skipset.Uint32Set) bool {
+		tpPar := &txn_data.TopicPartition{
+			Topic:  tp,
+			ParNum: make([]byte, 0, parSet.Len()),
+		}
+		parSet.Range(func(par uint32) bool {
+			tpPar.ParNum = append(tpPar.ParNum, uint8(par))
+			return true
+		})
+		topicSubstreams = append(topicSubstreams, tpPar)
+		return true
+	})
+	return topicSubstreams
 }
 
 func (tc *RemoteTxnManagerClient) AddTopicSubstream(topic string, subStreamNum uint8) {
@@ -69,11 +86,21 @@ func (tc *RemoteTxnManagerClient) AddTopicTrackConsumedSeqs(topicToTrack string,
 func (tc *RemoteTxnManagerClient) EnsurePrevTxnFinAndAppendMeta(ctx context.Context) error {
 	tc.mu.Lock()
 	defer tc.mu.Unlock()
+	sendRequest := false
+	tBeg := stats.TimerBegin()
+	txnMeta := txn_data.TxnMetaMsg{
+		TransactionalId: tc.TransactionalId,
+		ProdId: &commtypes.ProdId{
+			TaskEpoch: tc.prodId.TaskEpoch,
+			TaskId:    tc.prodId.TaskId,
+		},
+		State: uint32(txn_data.BEGIN),
+	}
 	if env_config.ASYNC_SECOND_PHASE {
-		// TODO: rpc wait for prev finish
+		sendRequest = true
 	}
 	if tc.addedNewTpPar.Load() {
-		tBeg := stats.TimerBegin()
+		sendRequest = true
 		tps := make([]*txn_data.TopicPartition, 0, tc.currentTopicSubstream.Len())
 		tc.currentTopicSubstream.Range(func(key string, value *skipset.Uint32Set) bool {
 			pars := make([]byte, 0, value.Len())
@@ -87,24 +114,53 @@ func (tc *RemoteTxnManagerClient) EnsurePrevTxnFinAndAppendMeta(ctx context.Cont
 			})
 			return true
 		})
-		txnMeta := txn_data.TxnMetaMsg{
-			TransactionalId: tc.TransactionalId,
-			ProdId: &commtypes.ProdId{
-				TaskEpoch: tc.prodId.TaskEpoch,
-				TaskId:    tc.prodId.TaskId,
-			},
-			State:           uint32(txn_data.BEGIN),
-			TopicPartitions: tps,
-		}
+		txnMeta.TopicPartitions = tps
+	}
+	if sendRequest {
 		_, err := tc.AppendTpPar(ctx, &txnMeta)
 		if err != nil {
 			return err
 		}
-		tc.appendTxnMeta.AddSample(stats.Elapsed(tBeg).Microseconds())
 	}
+	tc.waitAndappendTxnMeta.AddSample(stats.Elapsed(tBeg).Microseconds())
 	return nil
 }
 
+func (tc *RemoteTxnManagerClient) cleanupState() {
+	// debug.Fprintf(os.Stderr, "Transition to %s\n", tc.currentStatus)
+	tc.currentTopicSubstream = skipmap.NewString[*skipset.Uint32Set]()
+	tc.addedNewTpPar.Store(false)
+}
+
 func (tc *RemoteTxnManagerClient) AbortTransaction(ctx context.Context) error {
-	return nil
+	tps := tc.collectTopicSubstreams()
+	tc.cleanupState()
+	txnMeta := txn_data.TxnMetaMsg{
+		TransactionalId: tc.TransactionalId,
+		ProdId: &commtypes.ProdId{
+			TaskEpoch: tc.prodId.TaskEpoch,
+			TaskId:    tc.prodId.TaskId,
+		},
+		TopicPartitions: tps,
+	}
+	_, err := tc.AbortTxn(ctx, &txnMeta)
+	return err
+}
+
+func (tc *RemoteTxnManagerClient) CommitTransactionAsyncComplete(ctx context.Context) (uint64, error) {
+	tps := tc.collectTopicSubstreams()
+	tc.cleanupState()
+	txnMeta := txn_data.TxnMetaMsg{
+		TransactionalId: tc.TransactionalId,
+		ProdId: &commtypes.ProdId{
+			TaskEpoch: tc.prodId.TaskEpoch,
+			TaskId:    tc.prodId.TaskId,
+		},
+		TopicPartitions: tps,
+	}
+	ret, err := tc.CommitTxnAsyncComplete(ctx, &txnMeta)
+	if err != nil {
+		return 0, err
+	}
+	return ret.LogOffset, err
 }
