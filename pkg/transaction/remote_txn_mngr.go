@@ -107,6 +107,7 @@ func (s *RemoteTxnManager) AppendTpPar(ctx context.Context, in *txn_data.TxnMeta
 	s.mu.Lock()
 	prodId := s.prod_id_map[in.TransactionalId]
 	if prodId.TaskEpoch != in.ProdId.GetTaskEpoch() || prodId.TaskId != in.ProdId.GetTaskId() {
+		s.mu.Unlock()
 		return nil, common_errors.ErrStaleProducer
 	}
 	tm := s.tm_map[in.TransactionalId]
@@ -126,6 +127,7 @@ func (s *RemoteTxnManager) AbortTxn(ctx context.Context, in *txn_data.TxnMetaMsg
 	s.mu.Lock()
 	prodId := s.prod_id_map[in.TransactionalId]
 	if prodId.TaskEpoch != in.ProdId.GetTaskEpoch() || prodId.TaskId != in.ProdId.GetTaskId() {
+		s.mu.Unlock()
 		return nil, common_errors.ErrStaleProducer
 	}
 	tm := s.tm_map[in.TransactionalId]
@@ -148,6 +150,7 @@ func (s *RemoteTxnManager) CommitTxnAsyncComplete(ctx context.Context, in *txn_d
 	s.mu.Lock()
 	prodId := s.prod_id_map[in.TransactionalId]
 	if prodId.TaskEpoch != in.ProdId.GetTaskEpoch() || prodId.TaskId != in.ProdId.GetTaskId() {
+		s.mu.Unlock()
 		return nil, common_errors.ErrStaleProducer
 	}
 	tm := s.tm_map[in.TransactionalId]
