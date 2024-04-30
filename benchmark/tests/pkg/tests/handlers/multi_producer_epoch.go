@@ -8,11 +8,12 @@ import (
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
+	"sharedlog-stream/pkg/epoch_manager"
 	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/optional"
+	"sharedlog-stream/pkg/proc_interface"
+	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
-	"sharedlog-stream/pkg/sharedlog_stream"
-	"sharedlog-stream/pkg/stream_task"
 )
 
 func (h *produceConsumeHandler) testMultiProducerEpoch(
@@ -21,35 +22,34 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(
 	topicName string,
 ) {
 	debug.Fprintf(os.Stderr, "multi producer epoch test\n")
-	stream1, err := sharedlog_stream.NewShardedSharedLogStream(h.env, topicName, 1, serdeFormat)
+	default_max_buf := uint32(32 * 1024)
+	sp := &common.TestParam{
+		InStreamParam: []common.TestStreamParam{
+			{TopicName: topicName, NumPartition: 1},
+		},
+		OutStreamParam: []common.TestStreamParam{
+			{TopicName: topicName, NumPartition: 1},
+			{TopicName: topicName, NumPartition: 1},
+		},
+		AppId:         "testStreamStreamJoinMem",
+		CommitEveryMs: 100,
+		FlushMs:       100,
+		BufMaxSize:    default_max_buf,
+		SerdeFormat:   uint8(serdeFormat),
+	}
+	srcs, sinks, err := getSrcSink(ctx, sp, h.env)
 	if err != nil {
 		panic(err)
 	}
-
-	stream2, err := sharedlog_stream.NewShardedSharedLogStream(h.env, topicName, 1, serdeFormat)
-	if err != nil {
-		panic(err)
-	}
-
-	msgSerde, err := commtypes.GetMsgSerdeG[int, string](serdeFormat,
+	meteredProducer1 := sinks[0]
+	meteredProducer2 := sinks[1]
+	msgSerde, err := commtypes.GetMsgGSerdeG[int, string](serdeFormat,
 		commtypes.IntSerdeG{},
 		commtypes.StringSerdeG{},
 	)
 	if err != nil {
 		panic(err)
 	}
-	meteredProducer1 := producer_consumer.NewMeteredProducer(
-		producer_consumer.NewShardedSharedLogStreamProducer(stream1,
-			&producer_consumer.StreamSinkConfig[int, string]{
-				MsgSerde:      msgSerde,
-				FlushDuration: common.FlushDuration,
-			}), 0)
-	meteredProducer2 := producer_consumer.NewMeteredProducer(
-		producer_consumer.NewShardedSharedLogStreamProducer(stream2,
-			&producer_consumer.StreamSinkConfig[int, string]{
-				MsgSerde:      msgSerde,
-				FlushDuration: common.FlushDuration,
-			}), 0)
 	em1, trackParFunc1, err := getEpochManager(ctx, h.env,
 		"prod1_multi"+serdeFormat.String(), serdeFormat)
 	if err != nil {
@@ -64,99 +64,78 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(
 	meteredProducer2.ConfigExactlyOnce(em2, exactly_once_intr.EPOCH_MARK)
 
 	// producer1 push 1 msg to sink
-	msgForTm1 := []commtypes.Message{
-		{
-			Key:   1,
-			Value: "tm1_a",
-		},
+	msgForTm1 := []commtypes.MessageG[int, string]{
+		{Key: optional.Some(1), Value: optional.Some("tm1_a")},
 	}
-	err = pushMsgsToSink(ctx, meteredProducer1, msgForTm1, trackParFunc1)
+	err = pushMsgsToSink(ctx, meteredProducer1, msgForTm1)
 	if err != nil {
 		panic(err)
 	}
 	meteredProducer1.Flush(ctx)
 
 	// then producer2 produce 1 msg to sink
-	msgForTm2 := []commtypes.Message{
-		{
-			Key:   2,
-			Value: "tm2_a",
-		},
+	msgForTm2 := []commtypes.MessageG[int, string]{
+		{Key: optional.Some(2), Value: optional.Some("tm2_a")},
 	}
-	err = pushMsgsToSink(ctx, meteredProducer2, msgForTm2, trackParFunc2)
+	err = pushMsgsToSink(ctx, meteredProducer2, msgForTm2)
 	if err != nil {
 		panic(err)
 	}
 	meteredProducer2.Flush(ctx)
 
 	// producer1 push 1 msg to sink
-	msgForTm1 = []commtypes.Message{
-		{
-			Key:   3,
-			Value: "tm1_b",
-		},
+	msgForTm1 = []commtypes.MessageG[int, string]{
+		{Key: optional.Some(3), Value: optional.Some("tm1_b")},
 	}
-	err = pushMsgsToSink(ctx, meteredProducer1, msgForTm1, trackParFunc1)
+	err = pushMsgsToSink(ctx, meteredProducer1, msgForTm1)
 	if err != nil {
 		panic(err)
 	}
 	meteredProducer1.Flush(ctx)
 
 	// producer1 mark
+	trackParFunc1(sinks[0].TopicName(), 0)
 	producers1 := []producer_consumer.MeteredProducerIntr{meteredProducer1}
-	epochMarker1, epochMarkerTags1, epochMarkerTopics1, err := stream_task.CaptureEpochStateAndCleanupExplicit(ctx, em1, nil, producers1, nil, nil)
+	ectx1 := processor.NewExecutionContextFromComponents(proc_interface.NewBaseSrcsSinks(nil, producers1),
+		proc_interface.NewBaseProcArgs("multiProdConsumeEpoch", 1, 0))
+	epochMarker1, err := epoch_manager.GenEpochMarker(ctx, em1, &ectx1,
+		nil, nil)
 	if err != nil {
 		panic(err)
 	}
-	err = em1.MarkEpoch(ctx, epochMarker1, epochMarkerTags1, epochMarkerTopics1)
+	epochMarkerTags1, epochMarkerTopics1 := em1.GenTagsAndTopicsForEpochMarker()
+	_, _, err = em1.MarkEpoch(ctx, epochMarker1, epochMarkerTags1, epochMarkerTopics1)
 	if err != nil {
 		panic(err)
 	}
 
 	// producer2 outputs two message
-	msgForTm2 = []commtypes.Message{
-		{
-			Key:   4,
-			Value: "tm2_b",
-		},
-		{
-			Key:   5,
-			Value: "tm2_c",
-		},
+	msgForTm2 = []commtypes.MessageG[int, string]{
+		{Key: optional.Some(4), Value: optional.Some("tm2_b")},
+		{Key: optional.Some(5), Value: optional.Some("tm2_c")},
 	}
-	err = pushMsgsToSink(ctx, meteredProducer2, msgForTm2, trackParFunc2)
+	err = pushMsgsToSink(ctx, meteredProducer2, msgForTm2)
 	if err != nil {
 		panic(err)
 	}
 	meteredProducer2.Flush(ctx)
+	trackParFunc2(sinks[1].TopicName(), 0)
 	producers2 := []producer_consumer.MeteredProducerIntr{meteredProducer2}
-	epochMarker2, epochMarkerTags2, epochMarkerTopics2, err := stream_task.CaptureEpochStateAndCleanupExplicit(ctx, em2, nil, producers2, nil, nil)
+	ectx2 := processor.NewExecutionContextFromComponents(proc_interface.NewBaseSrcsSinks(nil, producers2),
+		proc_interface.NewBaseProcArgs("multiProdConsumeEpoch2", 1, 0))
+	epochMarker2, err := epoch_manager.GenEpochMarker(ctx, em2, &ectx2,
+		nil, nil)
 	if err != nil {
 		panic(err)
 	}
-	err = em2.MarkEpoch(ctx, epochMarker2, epochMarkerTags2, epochMarkerTopics2)
+	epochMarkerTags2, epochMarkerTopics2 := em2.GenTagsAndTopicsForEpochMarker()
+	_, _, err = em2.MarkEpoch(ctx, epochMarker2, epochMarkerTags2, epochMarkerTopics2)
 	if err != nil {
 		panic(err)
 	}
 
-	srcConfig := &producer_consumer.StreamConsumerConfigG[int, string]{
-		Timeout:     common.SrcConsumeTimeout,
-		MsgSerde:    msgSerde,
-		SerdeFormat: commtypes.JSON,
-	}
-	stream1ForRead, err := sharedlog_stream.NewShardedSharedLogStream(h.env, topicName, 1, serdeFormat)
-	if err != nil {
-		panic(err)
-	}
-	src1, err := producer_consumer.NewShardedSharedLogStreamConsumerG(stream1ForRead, srcConfig, 1, 0)
-	if err != nil {
-		panic(err)
-	}
-	err = src1.ConfigExactlyOnce(exactly_once_intr.EPOCH_MARK)
-	if err != nil {
-		panic(err)
-	}
-	got, err := readMsgsEpoch(ctx, src1)
+	srcs[0].ConfigExactlyOnce(exactly_once_intr.EPOCH_MARK)
+	got, err := readMsgsEpoch(ctx, srcs[0], msgSerde)
 	if err != nil {
 		panic(err)
 	}

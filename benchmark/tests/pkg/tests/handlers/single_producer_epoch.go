@@ -98,7 +98,7 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 	if err != nil {
 		panic(err)
 	}
-	srcs, sinks, err := getJoinSrcSink(ctx, sp, h.env)
+	srcs, sinks, err := getSrcSink(ctx, sp, h.env)
 	if err != nil {
 		panic(err)
 	}
@@ -110,10 +110,11 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 		panic(err)
 	}
 	sinks[0].ConfigExactlyOnce(em1, exactly_once_intr.EPOCH_MARK)
+	trackParFunc1(sinks[0].TopicName(), 0)
 	msgForTm1 := []commtypes.MessageG[int, string]{
 		{Key: optional.Some(1), Value: optional.Some("tm1_a")},
 	}
-	err = pushMsgsToSink(ctx, sinks[0], msgForTm1, trackParFunc1)
+	err = pushMsgsToSink(ctx, sinks[0], msgForTm1)
 	if err != nil {
 		panic(err)
 	}
@@ -121,7 +122,7 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 	msgForTm2 := []commtypes.MessageG[int, string]{
 		{Key: optional.Some(2), Value: optional.Some("tm2_a")},
 	}
-	err = pushMsgsToSink(ctx, sinks[0], msgForTm2, trackParFunc1)
+	err = pushMsgsToSink(ctx, sinks[0], msgForTm2)
 	if err != nil {
 		panic(err)
 	}
@@ -155,6 +156,7 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 
 	debug.Fprintf(os.Stderr, "single producer produces two epochs\n")
 	// two epochs
+	trackParFunc1(sinks[0].TopicName(), 0)
 	msgForTm1 = []commtypes.MessageG[int, string]{
 		{
 			Key:   optional.Some(3),
@@ -165,7 +167,7 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 			Value: optional.Some("tm1_d"),
 		},
 	}
-	err = pushMsgsToSink(ctx, sinks[0], msgForTm1, trackParFunc1)
+	err = pushMsgsToSink(ctx, sinks[0], msgForTm1)
 	if err != nil {
 		panic(err)
 	}
@@ -184,7 +186,7 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 		{Key: optional.Some(5), Value: optional.Some("tm1_e")},
 		{Key: optional.Some(6), Value: optional.Some("tm1_f")},
 	}
-	err = pushMsgsToSink(ctx, sinks[0], msgForTm1, trackParFunc1)
+	err = pushMsgsToSink(ctx, sinks[0], msgForTm1)
 	if err != nil {
 		panic(err)
 	}
