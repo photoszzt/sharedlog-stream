@@ -4,12 +4,15 @@ import (
 	"context"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/env_config"
 	"sharedlog-stream/pkg/sharedlog_stream"
+	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/transaction/remote_txn_rpc"
 	"sharedlog-stream/pkg/txn_data"
 	"sync"
 
 	"cs.utexas.edu/zjia/faas/types"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -112,6 +115,15 @@ func (s *RemoteTxnManager) AppendTpPar(ctx context.Context, in *txn_data.TxnMeta
 	}
 	tm := s.tm_map[in.TransactionalId]
 	s.mu.Unlock()
+	if env_config.ASYNC_SECOND_PHASE && !tm.hasWaitForLastTxn.Load() {
+		tBeg := stats.TimerBegin()
+		err := tm.bgErrg.Wait()
+		if err != nil {
+			return nil, err
+		}
+		tm.waitPrevTxn.AddSample(stats.Elapsed(tBeg).Microseconds())
+		tm.bgErrg, tm.bgCtx = errgroup.WithContext(ctx)
+	}
 	txnMeta := txn_data.TxnMetadata{
 		State:           txn_data.TransactionState(in.State),
 		TopicPartitions: in.TopicPartitions,
