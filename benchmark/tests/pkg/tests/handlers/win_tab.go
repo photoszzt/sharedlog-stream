@@ -26,7 +26,7 @@ func NewWinTabTestsHandler(env types.Environment) types.FuncHandler {
 }
 
 func getWindowStoreWithChangelog(env types.Environment, retainDuplicates bool) *store_with_changelog.InMemoryWindowStoreWithChangelog[uint32, string] {
-	msgSerde := commtypes.MessageJSONSerdeG[uint32, string]{
+	msgSerde := commtypes.MessageGJSONSerdeG[uint32, string]{
 		KeySerde: commtypes.Uint32SerdeG{},
 		ValSerde: commtypes.StringSerdeG{},
 	}
@@ -53,7 +53,7 @@ func getWindowStoreWithChangelog(env types.Environment, retainDuplicates bool) *
 	if err != nil {
 		panic(err)
 	}
-	store, err := store_with_changelog.NewInMemoryWindowStoreWithChangelogForTest(
+	store, err := store_with_changelog.NewInMemoryWindowStoreWithChangelogG(
 		store.TEST_RETENTION_PERIOD, store.TEST_WINDOW_SIZE, retainDuplicates, compareFunc,
 		mp,
 	)

@@ -9,6 +9,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream_task"
@@ -159,27 +160,12 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(
 	if err != nil {
 		panic(err)
 	}
-	expected_msgs := []commtypes.Message{
-		{
-			Key:   1,
-			Value: "tm1_a",
-		},
-		{
-			Key:   2,
-			Value: "tm2_a",
-		},
-		{
-			Key:   3,
-			Value: "tm1_b",
-		},
-		{
-			Key:   4,
-			Value: "tm2_b",
-		},
-		{
-			Key:   5,
-			Value: "tm2_c",
-		},
+	expected_msgs := []commtypes.MessageG[int, string]{
+		{Key: optional.Some(1), Value: optional.Some("tm1_a")},
+		{Key: optional.Some(2), Value: optional.Some("tm2_a")},
+		{Key: optional.Some(3), Value: optional.Some("tm1_b")},
+		{Key: optional.Some(4), Value: optional.Some("tm2_b")},
+		{Key: optional.Some(5), Value: optional.Some("tm2_c")},
 	}
 	if !reflect.DeepEqual(expected_msgs, got) {
 		panic(fmt.Sprintf("should equal. expected: %v, got: %v", expected_msgs, got))

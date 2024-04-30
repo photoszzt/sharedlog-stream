@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -21,7 +22,7 @@ func getProduceTransactionManager(
 	ctx context.Context, env types.Environment, transactionalID string,
 	sink *producer_consumer.ShardedSharedLogStreamProducer,
 	sp *common.QueryInput,
-) (*transaction.TransactionManager, exactly_once_intr.TrackProdSubStreamFunc) {
+) *transaction.TransactionManager {
 	p, err := producer_consumer.NewMeteredProducer(sink, 0)
 	if err != nil {
 		panic(err)
@@ -34,22 +35,11 @@ func getProduceTransactionManager(
 	if err != nil {
 		panic(err)
 	}
-	tm1, err := stream_task.SetupManagersFor2pc(ctx, args1)
+	tm1, err := stream_task.SetupManagersFor2pcTest(ctx, args1)
 	if err != nil {
 		panic(err)
 	}
-	trackParFunc1 := func(ctx context.Context,
-		kBytes []byte,
-		topicName string,
-		substreamId uint8,
-	) error {
-		err := tm1.AddTopicSubstream(ctx, topicName, substreamId)
-		if err != nil {
-			return err
-		}
-		return err
-	}
-	return tm1, trackParFunc1
+	return tm1
 }
 
 /*
@@ -120,8 +110,8 @@ func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 	produceSink := producer_consumer.NewShardedSharedLogStreamProducer(stream1, produceSinkConfig)
 	produceSinkCopy := producer_consumer.NewShardedSharedLogStreamProducer(stream1Copy, produceSinkConfig)
 
-	tm1, trackParFunc1 := getProduceTransactionManager(ctx, h.env, "prod1", produceSink, sp)
-	tm2, trackParFunc2 := getProduceTransactionManager(ctx, h.env, "prod2", produceSinkCopy, sp)
+	tm1 := getProduceTransactionManager(ctx, h.env, "prod1", produceSink, sp)
+	tm2 := getProduceTransactionManager(ctx, h.env, "prod2", produceSinkCopy, sp)
 	tm1.RecordTopicStreams(stream1.TopicName(), stream1)
 	tm2.RecordTopicStreams(stream1Copy.TopicName(), stream1Copy)
 	produceSink.ConfigExactlyOnce(tm1, exactly_once_intr.TWO_PHASE_COMMIT)
@@ -131,68 +121,53 @@ func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 	h.beginTransaction(ctx, tm2, stream1Copy)
 
 	// producer1 push 1 msg to sink
-	msgForTm1 := []commtypes.Message{
-		{
-			Key:   1,
-			Value: "tm1_a",
-		},
+	msgForTm1 := []commtypes.MessageG[int, string]{
+		{Key: optional.Some(1), Value: optional.Some("tm1_a")},
 	}
-	err = pushMsgsToSink(ctx, produceSink, msgForTm1, trackParFunc1)
+	err = pushMsgsToSink(ctx, produceSink, msgForTm1)
 	if err != nil {
 		panic(err)
 	}
 	produceSink.Flush(ctx)
 
 	// then producer2 produce 1 msg to sink
-	msgForTm2 := []commtypes.Message{
-		{
-			Key:   2,
-			Value: "tm2_a",
-		},
+	msgForTm2 := []commtypes.MessageG[int, string]{
+		{Key: optional.Some(2), Value: optional.Some("tm2_a")},
 	}
-	err = pushMsgsToSink(ctx, produceSinkCopy, msgForTm2, trackParFunc2)
+	err = pushMsgsToSink(ctx, produceSinkCopy, msgForTm2)
 	if err != nil {
 		panic(err)
 	}
 	produceSinkCopy.Flush(ctx)
 
 	// producer1 push 1 msg to sink
-	msgForTm1 = []commtypes.Message{
-		{
-			Key:   3,
-			Value: "tm1_b",
-		},
+	msgForTm1 = []commtypes.MessageG[int, string]{
+		{Key: optional.Some(3), Value: optional.Some("tm1_b")},
 	}
-	err = pushMsgsToSink(ctx, produceSink, msgForTm1, trackParFunc1)
+	err = pushMsgsToSink(ctx, produceSink, msgForTm1)
 	if err != nil {
 		panic(err)
 	}
 	produceSink.Flush(ctx)
 
 	// producer1 commits
-	if err = tm1.CommitTransaction(ctx); err != nil {
+	if _, _, err = tm1.CommitTransaction(ctx); err != nil {
 		panic(err)
 	}
 
 	// producer2 outputs two message
-	msgForTm2 = []commtypes.Message{
-		{
-			Key:   4,
-			Value: "tm2_b",
-		},
-		{
-			Key:   5,
-			Value: "tm2_c",
-		},
+	msgForTm2 = []commtypes.MessageG[int, string]{
+		{Key: optional.Some(4), Value: optional.Some("tm2_b")},
+		{Key: optional.Some(5), Value: optional.Some("tm2_c")},
 	}
-	err = pushMsgsToSink(ctx, produceSinkCopy, msgForTm2, trackParFunc2)
+	err = pushMsgsToSink(ctx, produceSinkCopy, msgForTm2)
 	if err != nil {
 		panic(err)
 	}
 	produceSinkCopy.Flush(ctx)
 
 	// producer2 commits
-	if err = tm2.CommitTransaction(ctx); err != nil {
+	if _, _, err = tm2.CommitTransaction(ctx); err != nil {
 		panic(err)
 	}
 
@@ -216,27 +191,12 @@ func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
-	expected_msgs := []commtypes.Message{
-		{
-			Key:   1,
-			Value: "tm1_a",
-		},
-		{
-			Key:   2,
-			Value: "tm2_a",
-		},
-		{
-			Key:   3,
-			Value: "tm1_b",
-		},
-		{
-			Key:   4,
-			Value: "tm2_b",
-		},
-		{
-			Key:   5,
-			Value: "tm2_c",
-		},
+	expected_msgs := []commtypes.MessageG[int, string]{
+		{Key: optional.Some(1), Value: optional.Some("tm1_a")},
+		{Key: optional.Some(2), Value: optional.Some("tm2_a")},
+		{Key: optional.Some(3), Value: optional.Some("tm1_b")},
+		{Key: optional.Some(4), Value: optional.Some("tm2_b")},
+		{Key: optional.Some(5), Value: optional.Some("tm2_c")},
 	}
 	if !reflect.DeepEqual(expected_msgs, got) {
 		panic(fmt.Sprintf("should equal. expected: %v, got: %v", expected_msgs, got))
