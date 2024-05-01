@@ -89,11 +89,6 @@ tests_debug:
 	mkdir -p ./bin
 	GO111MODULE=on go build -tags debug -o bin/tests_handler_debug ./benchmark/tests/tests_handler
 
-.PHONY: tests_client
-tests_client:
-	mkdir -p ./bin
-	GO111MODULE=on go build -o bin/tests_client ./benchmark/tests/tests_client
-
 .PHONY: kafka_produce_bench
 kafka_produce_bench:
 	mkdir -p ./bin
