@@ -2,15 +2,25 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/transaction"
+	"sharedlog-stream/pkg/transaction/remote_txn_rpc"
 	"strconv"
 
 	ipc "cs.utexas.edu/zjia/faas/ipc"
 	"cs.utexas.edu/zjia/faas/types"
 	"cs.utexas.edu/zjia/faas/worker"
+	"google.golang.org/grpc"
+)
+
+var (
+	FLAGS_port        int
+	FLAGS_serdeFormat string
 )
 
 type emptyFuncHandlerFactory struct{}
@@ -34,6 +44,10 @@ func (f *emptyFuncHandlerFactory) GrpcNew(env types.Environment, service string)
 }
 
 func main() {
+	flag.IntVar(&FLAGS_port, "port", 50051, "The server port")
+	flag.StringVar(&FLAGS_serdeFormat, "serde", "json", "serde format: json or msgp")
+	flag.Parse()
+	serdeFormat := common.GetSerdeFormat(FLAGS_serdeFormat)
 	ipc.SetRootPathForIpc(os.Getenv("FAAS_ROOT_PATH_FOR_IPC"))
 	funcId, err := strconv.Atoi(os.Getenv("FAAS_FUNC_ID"))
 	if err != nil {
@@ -50,4 +64,14 @@ func main() {
 	go func(w *worker.FuncWorker) {
 		w.Run()
 	}(w)
+	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", FLAGS_port))
+	if err != nil {
+		log.Fatalf("failed to listen %v: %v", FLAGS_port, err)
+	}
+	grpcServer := grpc.NewServer()
+	remote_txn_rpc.RegisterRemoteTxnMngrServer(grpcServer, transaction.NewRemoteTxnManager(w, serdeFormat))
+	err = grpcServer.Serve(lis)
+	if err != nil {
+		log.Fatalf("failed to serve grpc server: %v", err)
+	}
 }

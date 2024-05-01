@@ -26,12 +26,12 @@ type RemoteTxnManager struct {
 	prod_id_map map[string]commtypes.ProducerId
 }
 
-func NewRemoteTxnManager(env types.Environment, serdeFormat commtypes.SerdeFormat) (*RemoteTxnManager, error) {
+func NewRemoteTxnManager(env types.Environment, serdeFormat commtypes.SerdeFormat) *RemoteTxnManager {
 	tm := &RemoteTxnManager{
 		env:         env,
 		serdeFormat: serdeFormat,
 	}
-	return tm, nil
+	return tm
 }
 
 func (s *RemoteTxnManager) Init(ctx context.Context, in *remote_txn_rpc.InitArg) (*remote_txn_rpc.InitReply, error) {
