@@ -256,5 +256,54 @@ func commitTxnRemote(ctx context.Context,
 		}
 		*paused = true
 	}
+	commitTxnBeg := stats.TimerBegin()
+	// debug.Fprintf(os.Stderr, "paused\n")
+	waitPrev := stats.TimerBegin()
+	// for _, src := range meta.args.ectx.Consumers() {
+	// 	meta.rtm_client.AddTopicTrackConsumedSeqs(src.TopicName(), meta.args.ectx.SubstreamNum())
+	// }
+	err := meta.rtm_client.EnsurePrevTxnFinAndAppendMeta(ctx)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	waitAndStart := stats.Elapsed(waitPrev).Microseconds()
+
+	flushAllStart := stats.TimerBegin()
+	f, err := flushStreams(ctx, meta.t, meta.args)
+	if err != nil {
+		return common.GenErrFnOutput(fmt.Errorf("flushStreams: %v", err))
+	}
+	flushTime := stats.Elapsed(flushAllStart).Microseconds()
+
+	offsetBeg := stats.TimerBegin()
+	err = meta.rtm_client.AppendConsumedSeqNum(ctx, meta.args.ectx.Consumers(), meta.args.ectx.SubstreamNum())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] append offset failed: %v\n", err)
+		return common.GenErrFnOutput(fmt.Errorf("append offset failed: %v\n", err))
+	}
+	sendOffsetElapsed := stats.Elapsed(offsetBeg).Microseconds()
+
+	var logOff uint64
+	cBeg := stats.TimerBegin()
+	logOff, err = meta.rtm_client.CommitTransactionAsyncComplete(ctx)
+	if err != nil {
+		return common.GenErrFnOutput(err)
+	}
+	if env_config.CREATE_SNAPSHOT && meta.args.snapshotEvery != 0 && time.Since(*snapshotTimer) > meta.args.snapshotEvery {
+		// auxdata is set to precommit
+		createSnapshot(ctx, meta.args, []commtypes.TpLogOff{{LogOff: logOff}})
+		*snapshotTimer = time.Now()
+	}
+	cElapsed := stats.Elapsed(cBeg).Microseconds()
+	commitTxnElapsed := stats.Elapsed(commitTxnBeg).Microseconds()
+	meta.t.waitPrevTxnInCmt.AddSample(waitAndStart)
+	meta.t.txnCounter.Tick(1)
+	meta.t.txnCommitTime.AddSample(commitTxnElapsed)
+	meta.t.commitTxnAPITime.AddSample(cElapsed)
+	meta.t.flushStageTime.AddSample(flushTime)
+	meta.t.sendOffsetTime.AddSample(sendOffsetElapsed)
+	if f > 0 {
+		meta.t.flushAtLeastOne.AddSample(flushTime)
+	}
 	return nil
 }

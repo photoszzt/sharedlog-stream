@@ -6,6 +6,7 @@ import (
 	"sharedlog-stream/pkg/consume_seq_num_manager/con_types"
 	"sharedlog-stream/pkg/env_config"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"sharedlog-stream/pkg/producer_consumer"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/transaction/remote_txn_rpc"
 	"sharedlog-stream/pkg/txn_data"
@@ -81,6 +82,28 @@ func (tc *RemoteTxnManagerClient) AddTopicSubstream(topic string, subStreamNum u
 func (tc *RemoteTxnManagerClient) AddTopicTrackConsumedSeqs(topicToTrack string, partition uint8) {
 	offsetTopic := con_types.OffsetTopic(topicToTrack)
 	tc.AddTopicSubstream(offsetTopic, partition)
+}
+
+func (tc *RemoteTxnManagerClient) AppendConsumedSeqNum(ctx context.Context, consumers []*producer_consumer.MeteredConsumer, parNum uint8) error {
+	arg := remote_txn_rpc.ConsumedOffsets{
+		TransactionalId: tc.TransactionalId,
+		ProdId: &commtypes.ProdId{
+			TaskEpoch: tc.prodId.TaskEpoch,
+			TaskId:    tc.prodId.TaskId,
+		},
+		ParNum: uint32(parNum),
+	}
+	for _, consumer := range consumers {
+		topic := consumer.TopicName()
+		offset := consumer.CurrentConsumedSeqNum()
+		offsetTopic := con_types.OffsetTopic(topic)
+		arg.OffsetPairs = append(arg.OffsetPairs, &remote_txn_rpc.OffsetPair{
+			TopicName: offsetTopic,
+			Offset:    offset,
+		})
+	}
+	_, err := tc.AppendConsumedOffset(ctx, &arg)
+	return err
 }
 
 func (tc *RemoteTxnManagerClient) EnsurePrevTxnFinAndAppendMeta(ctx context.Context) error {

@@ -158,6 +158,48 @@ func (s *RemoteTxnManager) AbortTxn(ctx context.Context, in *txn_data.TxnMetaMsg
 	return &emptypb.Empty{}, nil
 }
 
+func (s *RemoteTxnManager) AppendConsumedOffset(ctx context.Context, in *remote_txn_rpc.ConsumedOffsets) (*emptypb.Empty, error) {
+	s.mu.Lock()
+	prodId := s.prod_id_map[in.TransactionalId]
+	if prodId.TaskEpoch != in.ProdId.GetTaskEpoch() || prodId.TaskId != in.ProdId.GetTaskId() {
+		s.mu.Unlock()
+		return nil, common_errors.ErrStaleProducer
+	}
+	tm := s.tm_map[in.TransactionalId]
+	s.mu.Unlock()
+	var tps []*txn_data.TopicPartition
+	for _, op := range in.OffsetPairs {
+		tps = append(tps, &txn_data.TopicPartition{
+			Topic:  op.TopicName,
+			ParNum: []byte{uint8(in.ParNum)},
+		})
+	}
+	txnMeta := txn_data.TxnMetadata{
+		State:           txn_data.BEGIN,
+		TopicPartitions: tps,
+	}
+	_, err := tm.appendToTransactionLog(ctx, txnMeta, []uint64{tm.txnLogTag})
+	if err != nil {
+		return nil, err
+	}
+	for _, op := range in.OffsetPairs {
+		offsetLog := tm.topicStreams[op.TopicName]
+		offsetRecord := txn_data.OffsetRecord{
+			Offset: op.Offset,
+		}
+		encoded, err := tm.offsetRecordSerde.Encode(offsetRecord)
+		if err != nil {
+			return nil, err
+		}
+		_, err = offsetLog.Push(ctx, encoded, uint8(in.ParNum), sharedlog_stream.SingleDataRecordMeta,
+			tm.prodId)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &emptypb.Empty{}, nil
+}
+
 func (s *RemoteTxnManager) CommitTxnAsyncComplete(ctx context.Context, in *txn_data.TxnMetaMsg) (*remote_txn_rpc.CommitReply, error) {
 	s.mu.Lock()
 	prodId := s.prod_id_map[in.TransactionalId]
