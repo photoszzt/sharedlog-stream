@@ -114,7 +114,7 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 	msgForTm1 := []commtypes.MessageG[int, string]{
 		{Key: optional.Some(1), Value: optional.Some("tm1_a")},
 	}
-	err = pushMsgsToSink(ctx, sinks[0], msgForTm1)
+	err = pushMsgsToSink(ctx, sinks[0], msgForTm1, msgSerde)
 	if err != nil {
 		panic(err)
 	}
@@ -122,7 +122,7 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 	msgForTm2 := []commtypes.MessageG[int, string]{
 		{Key: optional.Some(2), Value: optional.Some("tm2_a")},
 	}
-	err = pushMsgsToSink(ctx, sinks[0], msgForTm2)
+	err = pushMsgsToSink(ctx, sinks[0], msgForTm2, msgSerde)
 	if err != nil {
 		panic(err)
 	}
@@ -167,7 +167,7 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 			Value: optional.Some("tm1_d"),
 		},
 	}
-	err = pushMsgsToSink(ctx, sinks[0], msgForTm1)
+	err = pushMsgsToSink(ctx, sinks[0], msgForTm1, msgSerde)
 	if err != nil {
 		panic(err)
 	}
@@ -186,7 +186,7 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 		{Key: optional.Some(5), Value: optional.Some("tm1_e")},
 		{Key: optional.Some(6), Value: optional.Some("tm1_f")},
 	}
-	err = pushMsgsToSink(ctx, sinks[0], msgForTm1)
+	err = pushMsgsToSink(ctx, sinks[0], msgForTm1, msgSerde)
 	if err != nil {
 		panic(err)
 	}

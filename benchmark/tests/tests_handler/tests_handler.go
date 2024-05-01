@@ -14,8 +14,8 @@ func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.
 	switch funcName {
 	case "wintest":
 		return handlers.NewWinTabTestsHandler(env), nil
-	case "restore":
-		return handlers.NewTableRestoreHandler(env), nil
+		// case "restore":
+		//	return handlers.NewTableRestoreHandler(env), nil
 	case "join":
 		return handlers.NewJoinHandler(env), nil
 	case "prodConsume":

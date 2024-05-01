@@ -67,7 +67,7 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(
 	msgForTm1 := []commtypes.MessageG[int, string]{
 		{Key: optional.Some(1), Value: optional.Some("tm1_a")},
 	}
-	err = pushMsgsToSink(ctx, meteredProducer1, msgForTm1)
+	err = pushMsgsToSink(ctx, meteredProducer1, msgForTm1, msgSerde)
 	if err != nil {
 		panic(err)
 	}
@@ -77,7 +77,7 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(
 	msgForTm2 := []commtypes.MessageG[int, string]{
 		{Key: optional.Some(2), Value: optional.Some("tm2_a")},
 	}
-	err = pushMsgsToSink(ctx, meteredProducer2, msgForTm2)
+	err = pushMsgsToSink(ctx, meteredProducer2, msgForTm2, msgSerde)
 	if err != nil {
 		panic(err)
 	}
@@ -87,7 +87,7 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(
 	msgForTm1 = []commtypes.MessageG[int, string]{
 		{Key: optional.Some(3), Value: optional.Some("tm1_b")},
 	}
-	err = pushMsgsToSink(ctx, meteredProducer1, msgForTm1)
+	err = pushMsgsToSink(ctx, meteredProducer1, msgForTm1, msgSerde)
 	if err != nil {
 		panic(err)
 	}
@@ -114,7 +114,7 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(
 		{Key: optional.Some(4), Value: optional.Some("tm2_b")},
 		{Key: optional.Some(5), Value: optional.Some("tm2_c")},
 	}
-	err = pushMsgsToSink(ctx, meteredProducer2, msgForTm2)
+	err = pushMsgsToSink(ctx, meteredProducer2, msgForTm2, msgSerde)
 	if err != nil {
 		panic(err)
 	}

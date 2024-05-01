@@ -89,9 +89,9 @@ func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 		panic(err)
 	}
 
-	msgSerdes := commtypes.MessageGJSONSerdeG[int, string]{
-		KeySerde: commtypes.IntSerdeG{},
-		ValSerde: commtypes.StringSerdeG{},
+	msgSerdes, err := commtypes.GetMsgGSerdeG[int, string](commtypes.JSON, commtypes.IntSerdeG{}, commtypes.StringSerdeG{})
+	if err != nil {
+		panic(err)
 	}
 	produceSinkConfig := &producer_consumer.StreamSinkConfig{
 		Format:        commtypes.JSON,
@@ -124,7 +124,7 @@ func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 	msgForTm1 := []commtypes.MessageG[int, string]{
 		{Key: optional.Some(1), Value: optional.Some("tm1_a")},
 	}
-	err = pushMsgsToSink(ctx, produceSink, msgForTm1)
+	err = pushMsgsToSink(ctx, produceSink, msgForTm1, msgSerdes)
 	if err != nil {
 		panic(err)
 	}
@@ -134,7 +134,7 @@ func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 	msgForTm2 := []commtypes.MessageG[int, string]{
 		{Key: optional.Some(2), Value: optional.Some("tm2_a")},
 	}
-	err = pushMsgsToSink(ctx, produceSinkCopy, msgForTm2)
+	err = pushMsgsToSink(ctx, produceSinkCopy, msgForTm2, msgSerdes)
 	if err != nil {
 		panic(err)
 	}
@@ -144,7 +144,7 @@ func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 	msgForTm1 = []commtypes.MessageG[int, string]{
 		{Key: optional.Some(3), Value: optional.Some("tm1_b")},
 	}
-	err = pushMsgsToSink(ctx, produceSink, msgForTm1)
+	err = pushMsgsToSink(ctx, produceSink, msgForTm1, msgSerdes)
 	if err != nil {
 		panic(err)
 	}
@@ -160,7 +160,7 @@ func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 		{Key: optional.Some(4), Value: optional.Some("tm2_b")},
 		{Key: optional.Some(5), Value: optional.Some("tm2_c")},
 	}
-	err = pushMsgsToSink(ctx, produceSinkCopy, msgForTm2)
+	err = pushMsgsToSink(ctx, produceSinkCopy, msgForTm2, msgSerdes)
 	if err != nil {
 		panic(err)
 	}

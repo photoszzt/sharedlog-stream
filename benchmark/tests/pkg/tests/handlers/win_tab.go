@@ -25,20 +25,12 @@ func NewWinTabTestsHandler(env types.Environment) types.FuncHandler {
 	}
 }
 
-func getWindowStoreWithChangelog(env types.Environment, retainDuplicates bool) *store_with_changelog.InMemoryWindowStoreWithChangelog[uint32, string] {
+func getWindowStoreWithChangelog(env types.Environment, retainDuplicates bool) *store_with_changelog.InMemoryWindowStoreWithChangelogG[uint32, string] {
 	msgSerde := commtypes.MessageGJSONSerdeG[uint32, string]{
 		KeySerde: commtypes.Uint32SerdeG{},
 		ValSerde: commtypes.StringSerdeG{},
 	}
 	storeName := "test1"
-	var compareFunc store.CompareFunc
-	if !retainDuplicates {
-		compareFunc = store.Uint32IntrCompare
-	} else {
-		compareFunc = store.CompareFunc(func(a, b interface{}) int {
-			return store.CompareIntrWithVersionedKey(a, b, store.Uint32IntrCompare)
-		})
-	}
 	mp, err := store_with_changelog.NewMaterializeParamBuilder[uint32, string]().
 		MessageSerde(msgSerde).
 		StoreName(storeName).
@@ -49,13 +41,17 @@ func getWindowStoreWithChangelog(env types.Environment, retainDuplicates bool) *
 			NumPartition:  1,
 			TimeOut:       common.SrcConsumeTimeout,
 			FlushDuration: time.Duration(5) * time.Millisecond,
-		}).Build()
+		}).
+		BufMaxSize(32 * 1024).
+		Build()
 	if err != nil {
 		panic(err)
 	}
-	store, err := store_with_changelog.NewInMemoryWindowStoreWithChangelogG(
-		store.TEST_RETENTION_PERIOD, store.TEST_WINDOW_SIZE, retainDuplicates, compareFunc,
-		mp,
+	winTab := store.NewInMemorySkipMapWindowStore[uint32, string](mp.StoreName(),
+		store.TEST_RETENTION_PERIOD, store.TEST_WINDOW_SIZE, retainDuplicates, store.IntegerCompare[uint32],
+	)
+	store, err := store_with_changelog.NewInMemoryWindowStoreWithChangelogG[uint32, string](
+		winTab, mp,
 	)
 	if err != nil {
 		panic(err)
@@ -79,7 +75,7 @@ func (wt *winTabTestsHandler) Call(ctx context.Context, input []byte) ([]byte, e
 
 func (wt *winTabTestsHandler) WinTests(ctx context.Context, sp *test_types.TestInput) *common.FnOutput {
 	t := &tests.MockTesting{}
-	var winstore *store_with_changelog.InMemoryWindowStoreWithChangelog[uint32, string]
+	var winstore *store_with_changelog.InMemoryWindowStoreWithChangelogG[uint32, string]
 	if sp.TestName != "TestPutSameKeyTs" {
 		winstore = getWindowStoreWithChangelog(wt.env, false)
 	} else {
@@ -87,23 +83,23 @@ func (wt *winTabTestsHandler) WinTests(ctx context.Context, sp *test_types.TestI
 	}
 	switch sp.TestName {
 	case "TestGetAndRange":
-		store.GetAndRangeTest(ctx, winstore, t)
+		store.GetAndRangeTestG(ctx, winstore, t)
 	case "TestShouldGetAllNonDeletedMsgs":
-		store.ShouldGetAllNonDeletedMsgsTest(ctx, winstore, t)
+		store.ShouldGetAllNonDeletedMsgsTestG(ctx, winstore, t)
 	case "TestExpiration":
-		store.ExpirationTest(ctx, winstore, t)
+		store.ExpirationTestG(ctx, winstore, t)
 	case "TestShouldGetAll":
-		store.ShouldGetAllTest(ctx, winstore, t)
+		store.ShouldGetAllTestG(ctx, winstore, t)
 	case "TestShouldGetAllReturnTimestampOrdered":
-		store.ShouldGetAllReturnTimestampOrderedTest(ctx, winstore, t)
+		store.ShouldGetAllReturnTimestampOrderedTestG(ctx, winstore, t)
 	case "TestFetchRange":
-		store.FetchRangeTest(ctx, winstore, t)
+		store.FetchRangeTestG(ctx, winstore, t)
 	case "TestPutAndFetchBefore":
-		store.PutAndFetchBeforeTest(ctx, winstore, t)
+		store.PutAndFetchBeforeTestG(ctx, winstore, t)
 	case "TestPutAndFetchAfter":
-		store.PutAndFetchAfterTest(ctx, winstore, t)
+		store.PutAndFetchAfterTestG(ctx, winstore, t)
 	case "TestPutSameKeyTs":
-		store.PutSameKeyTsTest(ctx, winstore, t)
+		store.PutSameKeyTsTestG(ctx, winstore, t)
 	default:
 		return &common.FnOutput{
 			Success: false,
