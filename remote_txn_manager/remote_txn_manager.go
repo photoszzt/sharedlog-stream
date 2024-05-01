@@ -38,14 +38,14 @@ func (f *emptyFuncHandlerFactory) GrpcNew(env types.Environment, service string)
 }
 
 func main() {
+	var port int
+	var err error
 	serde := os.Getenv("RTX_SERDE_FORMAT")
 	if serde == "" {
 		serde = "msgp"
 		log.Printf("serdeFormat default to msgp")
 	}
-	var port int
-	var err error
-	portStr := os.Getenv("RTC_PORT")
+	portStr := os.Getenv("RTX_PORT")
 	if portStr == "" {
 		port = 50051
 	} else {
@@ -55,6 +55,7 @@ func main() {
 		}
 	}
 	serdeFormat := common.GetSerdeFormat(serde)
+	log.Printf("[INFO] port %v, serdeFormat %v(%v)\n", port, serde, serdeFormat)
 	ipc.SetRootPathForIpc(os.Getenv("FAAS_ROOT_PATH_FOR_IPC"))
 	funcId, err := strconv.Atoi(os.Getenv("FAAS_FUNC_ID"))
 	if err != nil {
