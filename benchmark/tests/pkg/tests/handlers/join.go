@@ -190,7 +190,6 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		return pushMsgsToSink(ctx, sink, joinedMsgs, outMsgSerde)
 	}
 
-	payloadArrSerde := sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG
 	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(&common.QueryInput{},
 		stream_task.NewStreamTaskArgsBuilder(h.env, nil, "joinTestMem")).Build()
 	if err != nil {
@@ -217,7 +216,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		panic(err)
 	}
 
-	got, err := readMsgs[int, commtypes.ValueTimestampG[string]](ctx, msgSerde, payloadArrSerde, commtypes.JSON, srcStream1)
+	got, err := readMsgs[int, commtypes.ValueTimestampG[string]](ctx, msgSerde, commtypes.JSON, srcStream1)
 	if err != nil {
 		panic(err)
 	}
@@ -243,7 +242,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		panic(err)
 	}
 
-	got, err = readMsgs[int, commtypes.ValueTimestampG[string]](ctx, msgSerde, payloadArrSerde, commtypes.JSON, srcStream2)
+	got, err = readMsgs[int, commtypes.ValueTimestampG[string]](ctx, msgSerde, commtypes.JSON, srcStream2)
 	if err != nil {
 		panic(err)
 	}
@@ -268,7 +267,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	if _, _, err = tm.CommitTransaction(ctx); err != nil {
 		panic(err)
 	}
-	_, err = readMsgs[int, string](ctx, outMsgSerde, payloadArrSerde, commtypes.JSON, sinkStream)
+	_, err = readMsgs[int, string](ctx, outMsgSerde, commtypes.JSON, sinkStream)
 	if err != nil {
 		panic(err)
 	}
@@ -319,7 +318,6 @@ func joinProc(ctx context.Context,
 
 func readMsgs[K, V any](ctx context.Context,
 	msgSerde commtypes.MessageGSerdeG[K, V],
-	payloadArrSerde commtypes.SerdeG[commtypes.PayloadArr],
 	serdeFormat commtypes.SerdeFormat,
 	log *sharedlog_stream.ShardedSharedLogStream,
 ) ([]commtypes.MessageG[K, V], error) {

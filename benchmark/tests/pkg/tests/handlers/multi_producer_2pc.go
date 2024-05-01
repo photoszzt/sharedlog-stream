@@ -186,8 +186,7 @@ func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 		panic(err)
 	}
 	src1.ConfigExactlyOnce(exactly_once_intr.TWO_PHASE_COMMIT)
-	payloadArrSerde := sharedlog_stream.DEFAULT_PAYLOAD_ARR_SERDEG
-	got, err := readMsgs[int, string](ctx, msgSerdes, payloadArrSerde, commtypes.JSON, stream1ForRead)
+	got, err := readMsgs[int, string](ctx, msgSerdes, commtypes.JSON, stream1ForRead)
 	if err != nil {
 		panic(err)
 	}
