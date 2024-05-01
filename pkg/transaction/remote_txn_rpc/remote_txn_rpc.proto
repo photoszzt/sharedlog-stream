@@ -13,6 +13,14 @@ service RemoteTxnMngr {
   rpc AppendTpPar(txn_data.TxnMetaMsg) returns (google.protobuf.Empty) {}
   rpc AbortTxn(txn_data.TxnMetaMsg) returns (google.protobuf.Empty) {}
   rpc CommitTxnAsyncComplete(txn_data.TxnMetaMsg) returns (CommitReply) {}
+  rpc AppendConsumedOffset(ConsumedOffsets) returns (google.protobuf.Empty) {}
+}
+
+message ConsumedOffsets {
+  string transactionalId = 1;
+  commtypes.ProdId prodId = 2;
+  uint32 parNum = 3;
+  repeated OffsetPair offsetPairs = 4;
 }
 
 message CommitReply { uint64 logOffset = 1; }
