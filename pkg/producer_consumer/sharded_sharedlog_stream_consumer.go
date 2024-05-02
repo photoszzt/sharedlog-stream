@@ -127,10 +127,13 @@ func (s *ShardedSharedLogStreamConsumer) AllProducerScaleFenced() bool {
 func (s *ShardedSharedLogStreamConsumer) ConfigExactlyOnce(
 	guarantee exactly_once_intr.GuaranteeMth,
 ) {
-	debug.Assert(guarantee == exactly_once_intr.TWO_PHASE_COMMIT || guarantee == exactly_once_intr.EPOCH_MARK || guarantee == exactly_once_intr.ALIGN_CHKPT,
-		"configure exactly once should specify 2pc or epoch mark or align checkpoint")
+	debug.Assert(guarantee == exactly_once_intr.TWO_PHASE_COMMIT ||
+		guarantee == exactly_once_intr.EPOCH_MARK ||
+		guarantee == exactly_once_intr.REMOTE_2PC ||
+		guarantee == exactly_once_intr.ALIGN_CHKPT,
+		"configure exactly once should specify 2pc or epoch mark or align checkpoint or remote_2pc")
 	s.guarantee = guarantee
-	if s.guarantee == exactly_once_intr.TWO_PHASE_COMMIT {
+	if s.guarantee == exactly_once_intr.TWO_PHASE_COMMIT || s.guarantee == exactly_once_intr.REMOTE_2PC {
 		s.tac = NewTransactionAwareConsumer(s.stream, s.epochMarkerSerde)
 	} else if s.guarantee == exactly_once_intr.EPOCH_MARK {
 		s.emc = NewEpochMarkConsumer(s.TopicName(), s.stream, s.epochMarkerSerde)
@@ -161,7 +164,7 @@ func (s *ShardedSharedLogStreamConsumer) SetCursor(cursor uint64, parNum uint8) 
 }
 
 func (s *ShardedSharedLogStreamConsumer) readNext(ctx context.Context, parNum uint8) (*commtypes.RawMsg, error) {
-	if s.guarantee == exactly_once_intr.TWO_PHASE_COMMIT {
+	if s.guarantee == exactly_once_intr.TWO_PHASE_COMMIT || s.guarantee == exactly_once_intr.REMOTE_2PC {
 		return s.tac.ReadNext(ctx, parNum)
 	} else if s.guarantee == exactly_once_intr.EPOCH_MARK {
 		return s.emc.ReadNext(ctx, parNum)

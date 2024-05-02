@@ -197,7 +197,8 @@ func (s *ShardedSharedLogStreamProducer) FlushNoLock(ctx context.Context) (uint3
 }
 
 func (s *ShardedSharedLogStreamProducer) flushNoLock(ctx context.Context) (uint32, error) {
-	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK || s.guarantee == eo_intr.ALIGN_CHKPT {
+	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK ||
+		s.guarantee == eo_intr.ALIGN_CHKPT || s.guarantee == eo_intr.REMOTE_2PC {
 		return s.stream.FlushNoLock(ctx, s.eom.GetProducerId())
 	} else {
 		return s.stream.FlushNoLock(ctx, commtypes.EmptyProducerId)
@@ -205,7 +206,8 @@ func (s *ShardedSharedLogStreamProducer) flushNoLock(ctx context.Context) (uint3
 }
 
 func (s *ShardedSharedLogStreamProducer) flush(ctx context.Context) (uint32, error) {
-	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK || s.guarantee == eo_intr.ALIGN_CHKPT {
+	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK ||
+		s.guarantee == eo_intr.ALIGN_CHKPT || s.guarantee == eo_intr.REMOTE_2PC {
 		return s.stream.Flush(ctx, s.eom.GetProducerId())
 	} else {
 		return s.stream.Flush(ctx, commtypes.EmptyProducerId)
@@ -213,7 +215,8 @@ func (s *ShardedSharedLogStreamProducer) flush(ctx context.Context) (uint32, err
 }
 
 func (s *ShardedSharedLogStreamProducer) push(ctx context.Context, payload []byte, parNumber uint8, meta sharedlog_stream.LogEntryMeta) (uint64, error) {
-	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK || s.guarantee == eo_intr.ALIGN_CHKPT {
+	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK ||
+		s.guarantee == eo_intr.ALIGN_CHKPT || s.guarantee == eo_intr.REMOTE_2PC {
 		return s.stream.Push(ctx, payload, parNumber, meta, s.eom.GetProducerId())
 	} else {
 		return s.stream.Push(ctx, payload, parNumber, meta, commtypes.EmptyProducerId)
@@ -223,7 +226,8 @@ func (s *ShardedSharedLogStreamProducer) push(ctx context.Context, payload []byt
 func (s *ShardedSharedLogStreamProducer) pushWithTag(ctx context.Context, payload []byte, parNumber uint8, tag []uint64,
 	additionalTopic []string, meta sharedlog_stream.LogEntryMeta,
 ) (uint64, error) {
-	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK || s.guarantee == eo_intr.ALIGN_CHKPT {
+	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK ||
+		s.guarantee == eo_intr.ALIGN_CHKPT || s.guarantee == eo_intr.REMOTE_2PC {
 		return s.stream.PushWithTag(ctx, payload, parNumber, tag, additionalTopic, meta, s.eom.GetProducerId())
 	} else {
 		return s.stream.PushWithTag(ctx, payload, parNumber, tag, additionalTopic, meta, commtypes.EmptyProducerId)
@@ -231,7 +235,8 @@ func (s *ShardedSharedLogStreamProducer) pushWithTag(ctx context.Context, payloa
 }
 
 func (s *ShardedSharedLogStreamProducer) bufpush(ctx context.Context, payload []byte, parNum uint8) error {
-	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK || s.guarantee == eo_intr.ALIGN_CHKPT {
+	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK ||
+		s.guarantee == eo_intr.ALIGN_CHKPT || s.guarantee == eo_intr.REMOTE_2PC {
 		return s.stream.BufPush(ctx, payload, parNum, s.eom.GetProducerId(), s.flushCallback)
 	} else {
 		return s.stream.BufPush(ctx, payload, parNum, commtypes.EmptyProducerId, s.flushCallback)
@@ -239,7 +244,8 @@ func (s *ShardedSharedLogStreamProducer) bufpush(ctx context.Context, payload []
 }
 
 func (s *ShardedSharedLogStreamProducer) bufpushNoLock(ctx context.Context, payload []byte, parNum uint8) error {
-	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK || s.guarantee == eo_intr.ALIGN_CHKPT {
+	if s.guarantee == eo_intr.TWO_PHASE_COMMIT || s.guarantee == eo_intr.EPOCH_MARK || s.guarantee == eo_intr.ALIGN_CHKPT ||
+		s.guarantee == eo_intr.REMOTE_2PC {
 		return s.stream.BufPushNoLock(ctx, payload, parNum, s.eom.GetProducerId(), s.flushCallback)
 	} else {
 		return s.stream.BufPushNoLock(ctx, payload, parNum, commtypes.EmptyProducerId, s.flushCallback)
