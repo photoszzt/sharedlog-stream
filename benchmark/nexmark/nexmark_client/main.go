@@ -80,7 +80,8 @@ func main() {
 
 	flag.Uint64Var(&FLAGS_commit_everyMs, "comm_everyMS", 10, "commit a transaction every (ms)")
 
-	flag.StringVar(&FLAGS_guarantee, "guarantee", "alo", "none(no protocol), alo(at least once epoch), align_chkpt(aligned checkpoint), 2pc(two phase commit) or epoch(epoch marking)")
+	flag.StringVar(&FLAGS_guarantee, "guarantee", "alo",
+		"none(no protocol), alo(at least once epoch), align_chkpt(aligned checkpoint), 2pc(two phase commit), remote_2pc(2 phase commit that talks to txn manager) or epoch(epoch marking)")
 	flag.BoolVar(&FLAGS_local, "local", false, "local mode without setting node constraint")
 	flag.BoolVar(&FLAGS_waitForEndMark, "waitForLast", false, "wait for the final mark of input; used in measuring throughput")
 
@@ -91,7 +92,7 @@ func main() {
 	}
 	if FLAGS_guarantee != "alo" && FLAGS_guarantee != "2pc" &&
 		FLAGS_guarantee != "epoch" && FLAGS_guarantee != "none" &&
-		FLAGS_guarantee != "align_chkpt" {
+		FLAGS_guarantee != "align_chkpt" && FLAGS_guarantee != "remote_2pc" {
 		fmt.Fprintf(os.Stderr, "expected guarantee is none, alo, 2pc and epoch")
 		return
 	}
