@@ -7,9 +7,9 @@ import (
 	"os"
 	"path"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/store"
 	"sync"
 	"time"
@@ -39,12 +39,7 @@ var (
 
 func NewQueryInput(serdeFormat commtypes.SerdeFormat, duration uint32) *common.QueryInput {
 	table_type := store.IN_MEM
-	guarantee := exactly_once_intr.AT_LEAST_ONCE
-	if FLAGS_guarantee == "2pc" {
-		guarantee = exactly_once_intr.TWO_PHASE_COMMIT
-	} else if FLAGS_guarantee == "epoch" {
-		guarantee = exactly_once_intr.EPOCH_MARK
-	}
+	guarantee := benchutil.GetGuarantee(FLAGS_guarantee)
 	return &common.QueryInput{
 		Duration:       duration,
 		GuaranteeMth:   uint8(guarantee),

@@ -5,24 +5,15 @@ import (
 	"fmt"
 	"os"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/benchmark/common/benchutil"
 	"sharedlog-stream/pkg/commtypes"
-	"sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/store"
 )
 
 func NewQueryInput(serdeFormat commtypes.SerdeFormat) *common.QueryInput {
 	table_type := store.IN_MEM
 	fmt.Fprintf(os.Stderr, "warmup: %d\n", FLAGS_warmup_time)
-	guarantee := exactly_once_intr.AT_LEAST_ONCE
-	if FLAGS_guarantee == "2pc" {
-		guarantee = exactly_once_intr.TWO_PHASE_COMMIT
-	} else if FLAGS_guarantee == "epoch" {
-		guarantee = exactly_once_intr.EPOCH_MARK
-	} else if FLAGS_guarantee == "none" {
-		guarantee = exactly_once_intr.NO_GUARANTEE
-	} else if FLAGS_guarantee == "align_chkpt" {
-		guarantee = exactly_once_intr.ALIGN_CHKPT
-	}
+	guarantee := benchutil.GetGuarantee(FLAGS_guarantee)
 	var failSpec commtypes.FailSpec
 	if FLAGS_fail_spec != "" {
 		specBytes, err := os.ReadFile(FLAGS_fail_spec)

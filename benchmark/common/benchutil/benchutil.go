@@ -88,3 +88,19 @@ func UseCache(useCache bool, gua exactly_once_intr.GuaranteeMth) bool {
 	}
 	return c
 }
+
+func GetGuarantee(guarantee_str string) exactly_once_intr.GuaranteeMth {
+	guarantee := exactly_once_intr.AT_LEAST_ONCE
+	if guarantee_str == "2pc" {
+		guarantee = exactly_once_intr.TWO_PHASE_COMMIT
+	} else if guarantee_str == "epoch" {
+		guarantee = exactly_once_intr.EPOCH_MARK
+	} else if guarantee_str == "none" {
+		guarantee = exactly_once_intr.NO_GUARANTEE
+	} else if guarantee_str == "align_chkpt" {
+		guarantee = exactly_once_intr.ALIGN_CHKPT
+	} else if guarantee_str == "remote_2pc" {
+		guarantee = exactly_once_intr.REMOTE_2PC
+	}
+	return guarantee
+}
