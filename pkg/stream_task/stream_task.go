@@ -137,6 +137,7 @@ func ExecuteApp(ctx context.Context,
 	if streamTaskArgs.guarantee == exactly_once_intr.TWO_PHASE_COMMIT ||
 		streamTaskArgs.guarantee == exactly_once_intr.EPOCH_MARK ||
 		streamTaskArgs.guarantee == exactly_once_intr.AT_LEAST_ONCE ||
+		streamTaskArgs.guarantee == exactly_once_intr.REMOTE_2PC ||
 		streamTaskArgs.guarantee == exactly_once_intr.ALIGN_CHKPT {
 		create := env_config.CREATE_SNAPSHOT
 		if streamTaskArgs.guarantee == exactly_once_intr.ALIGN_CHKPT {
@@ -159,12 +160,12 @@ func ExecuteApp(ctx context.Context,
 			return common.GenErrFnOutput(err)
 		}
 	}
+	var err error
 	if streamTaskArgs.guarantee == exactly_once_intr.TWO_PHASE_COMMIT {
 		meta := txnProcessMeta{
 			t:    t,
 			args: streamTaskArgs,
 		}
-		var err error
 		meta.tm, meta.cmm, err = SetupManagersFor2pc(ctx, t, streamTaskArgs, &rs)
 		if err != nil {
 			return common.GenErrFnOutput(err)
@@ -174,12 +175,25 @@ func ExecuteApp(ctx context.Context,
 		debug.Fprint(os.Stderr, "begin transaction processing\n")
 		ret = processWithTransaction(ctx, &meta)
 		debug.Fprintf(os.Stderr, "2pc ret: %v\n", ret)
+	} else if streamTaskArgs.guarantee == exactly_once_intr.REMOTE_2PC {
+		meta := rtxnProcessMeta{
+			t:    t,
+			args: streamTaskArgs,
+		}
+		meta.rtm_client, meta.cmm, err = SetupManagerForRemote2pc(ctx, streamTaskArgs, &rs)
+		if err != nil {
+			return common.GenErrFnOutput(err)
+		}
+		prodId := meta.rtm_client.GetProducerId()
+		fmt.Fprintf(os.Stderr, "[%d] prodId: %s\n", meta.args.ectx.SubstreamNum(), prodId.String())
+		debug.Fprint(os.Stderr, "begin remote 2pc processing\n")
+		ret = processWithRTxnMngr(ctx, &meta)
+		debug.Fprintf(os.Stderr, "remote 2pc ret: %v\n", ret)
 	} else if streamTaskArgs.guarantee == exactly_once_intr.EPOCH_MARK {
 		meta := epochProcessMeta{
 			t:    t,
 			args: streamTaskArgs,
 		}
-		var err error
 		meta.em, meta.cmm, err = SetupManagersForEpoch(ctx, streamTaskArgs, &rs)
 		if err != nil {
 			return common.GenErrFnOutput(err)
