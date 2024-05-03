@@ -9,7 +9,6 @@ import (
 	"sharedlog-stream/pkg/control_channel"
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/env_config"
-	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/snapshot_store"
 	"sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/transaction"
@@ -66,7 +65,7 @@ func prepareInit(rtm_client *transaction.RemoteTxnManagerClient, args *StreamTas
 	return &arg
 }
 
-func SetupManagerForRemote2pc(ctx context.Context, args *StreamTaskArgs, rs *snapshot_store.RedisSnapshotStore,
+func SetupManagerForRemote2pc(ctx context.Context, t *StreamTask, args *StreamTaskArgs, rs *snapshot_store.RedisSnapshotStore,
 ) (*transaction.RemoteTxnManagerClient, *control_channel.ControlChannelManager, error) {
 	checkStreamArgs(args)
 	var opts []grpc.DialOption
@@ -130,8 +129,11 @@ func SetupManagerForRemote2pc(ctx context.Context, args *StreamTaskArgs, rs *sna
 		return cmm.RecordPrevInstanceFinish(ctx, funcName, instanceID, args.ectx.CurEpoch())
 	}
 	flushCallbackFunc := func(ctx context.Context) error {
-		// TODO: rpc: txn client contact manager for progress
-		return nil
+		waitPrev := stats.TimerBegin()
+		err := client.EnsurePrevTxnFinAndAppendMeta(ctx)
+		waitAndStart := stats.Elapsed(waitPrev).Microseconds()
+		t.waitPrevTxnInPush.AddSample(waitAndStart)
+		return err
 	}
 	updateFuncs(args,
 		trackParFunc, recordFinish, flushCallbackFunc)
