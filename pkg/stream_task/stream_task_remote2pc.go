@@ -72,17 +72,23 @@ func SetupManagerForRemote2pc(ctx context.Context, t *StreamTask, args *StreamTa
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	rmngr_addr := GetRemoteTxnMngrAddr()
 	idx := uint64(args.ectx.SubstreamNum()) % uint64(len(rmngr_addr))
+	debug.Fprintf(os.Stderr, "remote txn manager addr: %v, connecting to %v\n",
+		rmngr_addr, rmngr_addr[idx])
 	conn, err := grpc.Dial(rmngr_addr[idx], opts...)
 	if err != nil {
 		return nil, nil, err
 	}
 	client := transaction.NewRemoteTxnManagerClient(conn, args.transactionalId)
+	debug.Fprintf(os.Stderr, "[%d] remote txn manager client setup done\n",
+		args.ectx.SubstreamNum())
 
 	arg := prepareInit(client, args)
+	debug.Fprintf(os.Stderr, "[%d] done prepare init\n", args.ectx.SubstreamNum())
 	initReply, err := client.Init(ctx, arg)
 	if err != nil {
 		return nil, nil, err
 	}
+	debug.Fprintf(os.Stderr, "[%d] done init transaction manager\n", args.ectx.SubstreamNum())
 	client.UpdateProducerId(initReply.ProdId)
 	if len(initReply.OffsetPairs) != 0 {
 		restoreBeg := time.Now()
