@@ -30,6 +30,8 @@ func NewRemoteTxnManager(env types.Environment, serdeFormat commtypes.SerdeForma
 	tm := &RemoteTxnManager{
 		env:         env,
 		serdeFormat: serdeFormat,
+		tm_map:      make(map[string]*TransactionManager),
+		prod_id_map: make(map[string]commtypes.ProducerId),
 	}
 	return tm
 }
