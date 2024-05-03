@@ -72,7 +72,7 @@ func SetupManagerForRemote2pc(ctx context.Context, args *StreamTaskArgs, rs *sna
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	rmngr_addr := GetRemoteTxnMngrAddr()
-	idx := hashfuncs.NameHash(args.transactionalId) % uint64(len(rmngr_addr))
+	idx := uint64(args.ectx.SubstreamNum()) % uint64(len(rmngr_addr))
 	conn, err := grpc.Dial(rmngr_addr[idx], opts...)
 	if err != nil {
 		return nil, nil, err
