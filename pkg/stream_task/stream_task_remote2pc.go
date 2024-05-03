@@ -76,7 +76,7 @@ func SetupManagerForRemote2pc(ctx context.Context, t *StreamTask, args *StreamTa
 	if err != nil {
 		return nil, nil, err
 	}
-	client := transaction.NewRemoteTxnManagerClient(conn)
+	client := transaction.NewRemoteTxnManagerClient(conn, args.transactionalId)
 
 	arg := prepareInit(client, args)
 	initReply, err := client.Init(ctx, arg)

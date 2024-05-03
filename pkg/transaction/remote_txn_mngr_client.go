@@ -29,10 +29,12 @@ type RemoteTxnManagerClient struct {
 	waitAndappendTxnMeta  stats.PrintLogStatsCollector[int64]
 }
 
-func NewRemoteTxnManagerClient(cc grpc.ClientConnInterface) *RemoteTxnManagerClient {
+func NewRemoteTxnManagerClient(cc grpc.ClientConnInterface, transactionalId string) *RemoteTxnManagerClient {
 	c := &RemoteTxnManagerClient{
 		RemoteTxnMngrClient:   remote_txn_rpc.NewRemoteTxnMngrClient(cc),
 		currentTopicSubstream: skipmap.NewString[*skipset.Uint32Set](),
+		TransactionalId:       transactionalId,
+		waitAndappendTxnMeta:  stats.NewPrintLogStatsCollector[int64]("waitAndappendTxnMeta"),
 	}
 	c.addedNewTpPar.Store(false)
 	return c
