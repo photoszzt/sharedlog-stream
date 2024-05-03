@@ -44,10 +44,12 @@ func (s *RemoteTxnManager) Init(ctx context.Context, in *remote_txn_rpc.InitArg)
 	if err != nil {
 		return nil, err
 	}
+	debug.Fprint(os.Stderr, "init 1\n")
 	initRet, err := tm.InitTransaction(ctx)
 	if err != nil {
 		return nil, err
 	}
+	debug.Fprint(os.Stderr, "init 2\n")
 	var offsetPairs []*remote_txn_rpc.OffsetPair
 	for _, inputTopicInfo := range in.InputStreamInfos {
 		inputTopicName := inputTopicInfo.GetTopicName()
@@ -74,6 +76,7 @@ func (s *RemoteTxnManager) Init(ctx context.Context, in *remote_txn_rpc.InitArg)
 			})
 		}
 	}
+	debug.Fprint(os.Stderr, "init 3\n")
 	for _, outStreamInfo := range in.OutputStreamInfos {
 		stream, err := sharedlog_stream.NewShardedSharedLogStream(s.env, outStreamInfo.GetTopicName(),
 			uint8(outStreamInfo.NumPartition), s.serdeFormat, in.GetBufMaxSize())
@@ -82,6 +85,7 @@ func (s *RemoteTxnManager) Init(ctx context.Context, in *remote_txn_rpc.InitArg)
 		}
 		tm.RecordTopicStreams(outStreamInfo.GetTopicName(), stream)
 	}
+	debug.Fprint(os.Stderr, "init 4\n")
 	for _, kvsInfo := range in.KVChangelogInfos {
 		stream, err := sharedlog_stream.NewShardedSharedLogStream(s.env, kvsInfo.GetTopicName(),
 			uint8(kvsInfo.GetNumPartition()), s.serdeFormat, in.GetBufMaxSize())
@@ -90,6 +94,7 @@ func (s *RemoteTxnManager) Init(ctx context.Context, in *remote_txn_rpc.InitArg)
 		}
 		tm.RecordTopicStreams(kvsInfo.GetTopicName(), stream)
 	}
+	debug.Fprint(os.Stderr, "init 5\n")
 	for _, wsInfo := range in.WinChangelogInfos {
 		stream, err := sharedlog_stream.NewShardedSharedLogStream(s.env, wsInfo.GetTopicName(),
 			uint8(wsInfo.GetNumPartition()), s.serdeFormat, in.GetBufMaxSize())
@@ -98,6 +103,7 @@ func (s *RemoteTxnManager) Init(ctx context.Context, in *remote_txn_rpc.InitArg)
 		}
 		tm.RecordTopicStreams(wsInfo.GetTopicName(), stream)
 	}
+	debug.Fprint(os.Stderr, "init 6\n")
 	s.mu.Lock()
 	s.tm_map[in.TransactionalId] = tm
 	s.prod_id_map[in.TransactionalId] = tm.prodId
