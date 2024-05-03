@@ -4,7 +4,7 @@ default: lat_tp_handler_debug lat_tp_handler sharedlog_bench_client dump_stream 
 	nexmark_kafka_test_src kafka_consume_bench kafka_produce_bench nexmark \
 	nexmark_stats nexmark_debug nexmark_gen_data_by_spec nexmark_client \
 	nexmark_genevents_kafka nexmark_scale kafka_tran_process sharedlog_protocol_lat \
-	remote_txn_mngr tests_client tests_handler
+	remote_txn_mngr remote_txn_mngr_debug tests_client tests_handler
 
 .PHONY: golangci-lint
 golangci-lint:
@@ -54,6 +54,11 @@ nexmark_client:
 remote_txn_mngr:
 	mkdir -p ./bin
 	GO111MODULE=on go build -o bin/remote_txn_mngr ./remote_txn_manager/
+
+.PHONY: remote_txn_mngr
+remote_txn_mngr_debug:
+	mkdir -p ./bin
+	GO111MODULE=on go build -tags "debug" -o bin/remote_txn_mngr_debug ./remote_txn_manager/
 
 .PHONY: gen_proto
 gen_proto:
