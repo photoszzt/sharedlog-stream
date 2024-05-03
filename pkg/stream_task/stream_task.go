@@ -134,6 +134,7 @@ func ExecuteApp(ctx context.Context,
 	// var mc *snapshot_store.MinioChkptStore
 	var rs snapshot_store.RedisSnapshotStore
 	var snap_store snapshot_store.SnapshotStore
+	var err error
 	if streamTaskArgs.guarantee == exactly_once_intr.TWO_PHASE_COMMIT ||
 		streamTaskArgs.guarantee == exactly_once_intr.EPOCH_MARK ||
 		streamTaskArgs.guarantee == exactly_once_intr.AT_LEAST_ONCE ||
@@ -155,12 +156,12 @@ func ExecuteApp(ctx context.Context,
 		// } else {
 		// 	snap_store = &rs
 		// }
-		err := setupSnapshotCallback(ctx, streamTaskArgs.env, streamTaskArgs.serdeFormat, snap_store)
+		err = setupSnapshotCallback(ctx, streamTaskArgs.env, streamTaskArgs.serdeFormat, snap_store)
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}
+		debug.Fprintf(os.Stderr, "[%d] done setup snapshot\n", streamTaskArgs.ectx.SubstreamNum())
 	}
-	var err error
 	if streamTaskArgs.guarantee == exactly_once_intr.TWO_PHASE_COMMIT {
 		meta := txnProcessMeta{
 			t:    t,
@@ -180,7 +181,7 @@ func ExecuteApp(ctx context.Context,
 			t:    t,
 			args: streamTaskArgs,
 		}
-		meta.rtm_client, meta.cmm, err = SetupManagerForRemote2pc(ctx, streamTaskArgs, &rs)
+		meta.rtm_client, meta.cmm, err = SetupManagerForRemote2pc(ctx, t, streamTaskArgs, &rs)
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}
