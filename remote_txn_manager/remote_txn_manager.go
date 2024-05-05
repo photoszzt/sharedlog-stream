@@ -38,7 +38,7 @@ func (f *emptyFuncHandlerFactory) New(env types.Environment, funcName string) (t
 	}
 	portStr := os.Getenv("RTX_PORT")
 	if portStr == "" {
-		port = 50052
+		port = 5050
 	} else {
 		port, err = strconv.Atoi(portStr)
 		if err != nil {
@@ -47,7 +47,7 @@ func (f *emptyFuncHandlerFactory) New(env types.Environment, funcName string) (t
 	}
 	serdeFormat := common.GetSerdeFormat(serde)
 	log.Printf("[INFO] port %v, serdeFormat %v\n", port, serdeFormat)
-	lis, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		log.Fatalf("failed to listen %v: %v", port, err)
 	}
