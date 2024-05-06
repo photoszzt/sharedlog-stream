@@ -6,6 +6,7 @@ import (
 	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/exactly_once_intr"
+	"strconv"
 	"sync"
 	"time"
 
@@ -48,28 +49,32 @@ type InvokeFuncParam struct {
 	WaitForEndMark bool
 }
 
+type InvokeParams struct {
+	SrcInvokeConfig  *SrcInvokeConfig
+	CliNodes         []*ClientNode
+	InParamsMap      map[string][]*QueryInput
+	ConfigScaleInput *ConfigScaleInput
+	FinalOutPars     []uint8
+}
+
 func ParseInvokeParam(invokeParam InvokeFuncParam, baseQueryInput *QueryInput,
 ) (
-	*SrcInvokeConfig,
-	[]*ClientNode,
-	map[string][]*QueryInput,
-	*ConfigScaleInput,
-	[]uint8,
-	error,
+	params *InvokeParams,
+	err error,
 ) {
 	byteVal, err := os.ReadFile(invokeParam.ConfigFile)
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, err
 	}
 	jsonParsed, err := gabs.ParseJSON(byteVal)
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, err
 	}
 	funcParam := jsonParsed.S("FuncParam").Children()
 	streamParam := jsonParsed.S("StreamParam").ChildrenMap()
 
 	var cliNodes []*ClientNode
-	var srcInvokeConfig SrcInvokeConfig
+	srcInvokeConfig := &SrcInvokeConfig{}
 	scaleConfig := make(map[string]uint8)
 	inParamsMap := make(map[string][]*QueryInput)
 	funcNames := make([]string, 0)
@@ -153,14 +158,20 @@ func ParseInvokeParam(invokeParam InvokeFuncParam, baseQueryInput *QueryInput,
 		scaleConfig[tp] = uint8(subs.Data().(float64))
 	}
 	srcInvokeConfig.NumOutPartition = uint8(streamParam[srcInvokeConfig.TopicName].Data().(float64))
-	configScaleInput := ConfigScaleInput{
+	configScaleInput := &ConfigScaleInput{
 		Config:      scaleConfig,
 		FuncNames:   funcNames,
 		SerdeFormat: baseQueryInput.SerdeFormat,
 		AppId:       baseQueryInput.AppId,
 		BufMaxSize:  baseQueryInput.BufMaxSize,
 	}
-	return &srcInvokeConfig, cliNodes, inParamsMap, &configScaleInput, finalOutPars, nil
+	return &InvokeParams{
+		SrcInvokeConfig:  srcInvokeConfig,
+		CliNodes:         cliNodes,
+		InParamsMap:      inParamsMap,
+		ConfigScaleInput: configScaleInput,
+		FinalOutPars:     finalOutPars,
+	}, nil
 }
 
 func InvokeSrc(wg *sync.WaitGroup, client *http.Client,
@@ -255,6 +266,24 @@ func ParseFunctionOutputs(outputMap map[string][]FnOutput, statDir string) {
 
 type InvokeSrcFunc func(client *http.Client, srcInvokeConfig SrcInvokeConfig, response *FnOutput, wg *sync.WaitGroup, warmup bool)
 
+func InvokeRTxnMngr(client *http.Client, faas_gateway string, local bool, rtxnNodeIdStart int) {
+	var response FnOutput
+	appName := "remoteTxnMngr"
+	url := BuildFunctionUrl(faas_gateway, appName)
+	fmt.Fprintf(os.Stderr, "chkptmngr url is %s\n", url)
+	constraint := ""
+	for i := rtxnNodeIdStart; i < rtxnNodeIdStart+4; i++ {
+		if !local {
+			constraint = strconv.Itoa(i)
+		}
+		if err := JsonPostRequest(client, url, constraint, nil, &response); err != nil {
+			log.Error().Msgf("%s request failed: %v", appName, err)
+		} else if !response.Success {
+			log.Error().Msgf("%s request failed: %s", appName, response.Message)
+		}
+	}
+}
+
 func InvokeChkMngr(wg *sync.WaitGroup, client *http.Client, cmi *ChkptMngrInput,
 	faas_gateway string, local bool,
 ) {
@@ -296,15 +325,15 @@ func Invoke(invokeParam InvokeFuncParam,
 	additionalBytes int,
 	fixedMaxDur uint32,
 ) error {
-	srcInvokeConfig, cliNodes, inParamsMap, configScaleInput, finalOutPars, err := ParseInvokeParam(invokeParam, baseQueryInput)
+	params, err := ParseInvokeParam(invokeParam, baseQueryInput)
 	if err != nil {
 		return err
 	}
-	srcInvokeConfig.AdditionalBytes = additionalBytes
-	fmt.Fprintf(os.Stderr, "srcInvokeConfig: %+v\n", srcInvokeConfig)
-	fmt.Fprintf(os.Stderr, "cliNodes: %+v\n", cliNodes)
-	fmt.Fprintf(os.Stderr, "inParamsMap: %+v\n", inParamsMap)
-	fmt.Fprintf(os.Stderr, "configScaleInput: %+v\n", configScaleInput)
+	params.SrcInvokeConfig.AdditionalBytes = additionalBytes
+	fmt.Fprintf(os.Stderr, "srcInvokeConfig: %+v\n", params.SrcInvokeConfig)
+	fmt.Fprintf(os.Stderr, "cliNodes: %+v\n", params.CliNodes)
+	fmt.Fprintf(os.Stderr, "inParamsMap: %+v\n", params.InParamsMap)
+	fmt.Fprintf(os.Stderr, "configScaleInput: %+v\n", params.ConfigScaleInput)
 
 	to := baseQueryInput.Duration + 60
 	if to < fixedMaxDur {
@@ -318,23 +347,23 @@ func Invoke(invokeParam InvokeFuncParam,
 		},
 		Timeout: timeout,
 	}
-	configScaleInput.Bootstrap = true
-	configScaleInput.ScaleEpoch = 1
+	params.ConfigScaleInput.Bootstrap = true
+	params.ConfigScaleInput.ScaleEpoch = 1
 	var scaleResponse FnOutput
-	InvokeConfigScale(client, configScaleInput, invokeParam.GatewayUrl,
+	InvokeConfigScale(client, params.ConfigScaleInput, invokeParam.GatewayUrl,
 		&scaleResponse, "scale", invokeParam.Local)
 	var wg sync.WaitGroup
 	if exactly_once_intr.GuaranteeMth(baseQueryInput.GuaranteeMth) == exactly_once_intr.ALIGN_CHKPT {
 		InvokeRedisSetup(client, &RedisSetupInput{
-			FinalOutputTopicNames: srcInvokeConfig.FinalTpNames,
+			FinalOutputTopicNames: params.SrcInvokeConfig.FinalTpNames,
 		}, invokeParam.GatewayUrl, invokeParam.Local)
 		chkMngrConfig := ChkptMngrInput{
-			SrcTopicName:          srcInvokeConfig.TopicName,
-			FinalOutputTopicNames: srcInvokeConfig.FinalTpNames,
-			FinalNumOutPartitions: finalOutPars,
+			SrcTopicName:          params.SrcInvokeConfig.TopicName,
+			FinalOutputTopicNames: params.SrcInvokeConfig.FinalTpNames,
+			FinalNumOutPartitions: params.FinalOutPars,
 			ChkptEveryMs:          baseQueryInput.CommitEveryMs,
 			BufMaxSize:            baseQueryInput.BufMaxSize,
-			SrcNumPart:            srcInvokeConfig.NumOutPartition,
+			SrcNumPart:            params.SrcInvokeConfig.NumOutPartition,
 			GuaranteeMth:          baseQueryInput.GuaranteeMth,
 			SerdeFormat:           baseQueryInput.SerdeFormat,
 		}
@@ -342,15 +371,17 @@ func Invoke(invokeParam InvokeFuncParam,
 		go InvokeChkMngr(&wg, client, &chkMngrConfig, invokeParam.GatewayUrl,
 			invokeParam.Local)
 		time.Sleep(time.Duration(5) * time.Millisecond)
+	} else if exactly_once_intr.GuaranteeMth(baseQueryInput.GuaranteeMth) == exactly_once_intr.REMOTE_2PC {
+		InvokeRTxnMngr(client, invokeParam.GatewayUrl, invokeParam.Local, 9)
 	}
 
-	fmt.Fprintf(os.Stderr, "src instance: %d\n", srcInvokeConfig.NumSrcInstance)
+	fmt.Fprintf(os.Stderr, "src instance: %d\n", params.SrcInvokeConfig.NumSrcInstance)
 
-	sourceOutput := InvokeSrc(&wg, client, srcInvokeConfig, invokeSourceFunc, 1)
+	sourceOutput := InvokeSrc(&wg, client, params.SrcInvokeConfig, invokeSourceFunc, 1)
 
 	time.Sleep(time.Duration(1) * time.Millisecond)
 
-	outputMap := InvokeFunctions(&wg, client, cliNodes, inParamsMap, 1)
+	outputMap := InvokeFunctions(&wg, client, params.CliNodes, params.InParamsMap, 1)
 	fmt.Fprintf(os.Stderr, "Waiting for all client to return\n")
 	wg.Wait()
 

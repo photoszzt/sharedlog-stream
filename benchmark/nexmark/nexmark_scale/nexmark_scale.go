@@ -96,7 +96,7 @@ func main() {
 	}
 	totTime := FLAGS_durBeforeScale + FLAGS_durAfterScale
 	baseQueryInput := NewQueryInput(serdeFormat, uint32(FLAGS_durBeforeScale))
-	srcInvokeConfig, cliNodes, inParamsMap, configScaleInput, _, err := common.ParseInvokeParam(
+	params, err := common.ParseInvokeParam(
 		invokeFuncParam, baseQueryInput)
 	if err != nil {
 		panic(err)
@@ -110,7 +110,7 @@ func main() {
 		Timeout: timeout,
 	}
 	scaleEpoch := uint16(1)
-	configScaleInputInit := configScaleInput.Clone()
+	configScaleInputInit := params.ConfigScaleInput.Clone()
 	configScaleInputInit.Bootstrap = true
 	configScaleInputInit.ScaleEpoch = scaleEpoch
 	var scaleResponse common.FnOutput
@@ -128,8 +128,8 @@ func main() {
 		WaitForEndMark: FLAGS_waitForEndMark,
 		BufMaxSize:     uint32(FLAGS_buf_max_size),
 	}
-	srcOutput := common.InvokeSrc(&wg, client, srcInvokeConfig, gp.InvokeSourceFunc, scaleEpoch)
-	beforeScaleOutput := common.InvokeFunctions(&wg, client, cliNodes, inParamsMap, scaleEpoch)
+	srcOutput := common.InvokeSrc(&wg, client, params.SrcInvokeConfig, gp.InvokeSourceFunc, scaleEpoch)
+	beforeScaleOutput := common.InvokeFunctions(&wg, client, params.CliNodes, params.InParamsMap, scaleEpoch)
 
 	time.Sleep(time.Duration(FLAGS_durBeforeScale) * time.Second)
 	scaleAt := time.Now()
@@ -143,17 +143,18 @@ func main() {
 		WaitForEndMark: FLAGS_waitForEndMark,
 	}
 	baseQueryInputForScale := NewQueryInput(serdeFormat, uint32(FLAGS_durAfterScale))
-	_, cliNodesForScale, inParamsMapForScale, configScaleInput2, _, err := common.ParseInvokeParam(
+	paramsForScale, err := common.ParseInvokeParam(
 		invokeFuncParamScale, baseQueryInputForScale)
 	if err != nil {
 		panic(err)
 	}
 	scaleEpoch += 1
-	configScaleInput2.ScaleEpoch = scaleEpoch
+	paramsForScale.ConfigScaleInput.ScaleEpoch = scaleEpoch
 	var scaleOut2 common.FnOutput
-	common.InvokeConfigScale(client, configScaleInput2, invokeFuncParam.GatewayUrl,
+	common.InvokeConfigScale(client, paramsForScale.ConfigScaleInput, invokeFuncParam.GatewayUrl,
 		&scaleOut2, "scale", invokeFuncParam.Local)
-	afterScaleOutput := common.InvokeFunctions(&wg, client, cliNodesForScale, inParamsMapForScale, scaleEpoch)
+	afterScaleOutput := common.InvokeFunctions(&wg, client, paramsForScale.CliNodes, paramsForScale.InParamsMap,
+		scaleEpoch)
 	wg.Wait()
 	common.ParseSrcOutput(srcOutput, FLAGS_stat_dir)
 	statsBeforeScale := path.Join(FLAGS_stat_dir, "beforeScale")
