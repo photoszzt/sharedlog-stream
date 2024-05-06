@@ -1,3 +1,6 @@
+// clang-format off
+//go:generate msgp
+// clang-format on
 syntax = "proto3";
 
 option go_package = "sharedlog-stream/pkg/transaction/remote_txn_rpc";
@@ -17,35 +20,37 @@ service RemoteTxnMngr {
 }
 
 message ConsumedOffsets {
-  string transactionalId = 1;
-  commtypes.ProdId prodId = 2;
-  uint32 parNum = 3;
-  repeated OffsetPair offsetPairs = 4;
+  string transactionalId = 1;          // @gotags: msg:"txn_id,omitempty"
+  commtypes.ProdId prodId = 2;         // @gotags: msg:"prodId,omitempty"
+  uint32 parNum = 3;                   // @gotags: msg:"parNum,omitempty"
+  repeated OffsetPair offsetPairs = 4; // @gotags: msg:"offPairs,omitempty"
 }
 
-message CommitReply { uint64 logOffset = 1; }
+message CommitReply {
+  uint64 logOffset = 1; // @gotags: msg:"logOff,omitempty"
+}
 
 message StreamInfo {
-  string topicName = 1;
-  uint32 numPartition = 2;
+  string topicName = 1;    // @gotags: msg:"tpN,omitempty"
+  uint32 numPartition = 2; // @gotags: msg:"numPar,omitempty"
 }
 
 message InitArg {
-  string TransactionalId = 1;
-  uint32 SubstreamNum = 2; // which substream this task processes
-  uint32 BufMaxSize = 3;
-  repeated StreamInfo InputStreamInfos = 4;
-  repeated StreamInfo OutputStreamInfos = 5;
-  repeated StreamInfo KVChangelogInfos = 6;
-  repeated StreamInfo WinChangelogInfos = 7;
+  string TransactionalId = 1; // @gotags: msg:"txn_id,omitempty"
+  uint32 SubstreamNum = 2;    // @gotags: msg:"substreamNum,omitempty"
+  uint32 BufMaxSize = 3;      // @gotags: msg:"bufMax,omitempty"
+  repeated StreamInfo InputStreamInfos = 4;  // @gotags: msg:"inInfo,omitempty"
+  repeated StreamInfo OutputStreamInfos = 5; // @gotags: msg:"outInfo,omitempty"
+  repeated StreamInfo KVChangelogInfos = 6;  // @gotags: msg:"kvcInfo,omitempty"
+  repeated StreamInfo WinChangelogInfos = 7; // @gotags: msg:"wcInfo,omitempty"
 }
 
 message InitReply {
-  commtypes.ProdId prodId = 1;
-  repeated OffsetPair offsetPairs = 2;
+  commtypes.ProdId prodId = 1;         // @gotags: msg:"prodId,omitempty"
+  repeated OffsetPair offsetPairs = 2; // @gotags: msg:"offPairs,omitempty"
 }
 
 message OffsetPair {
-  string topicName = 1;
-  uint64 offset = 2;
+  string topicName = 1; // @gotags: msg:"tpName,omitempty"
+  uint64 offset = 2;    // @gotags: msg:"off,omitempty"
 }
