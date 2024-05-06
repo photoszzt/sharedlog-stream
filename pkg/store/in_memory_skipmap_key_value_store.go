@@ -20,14 +20,14 @@ type (
 	KVSnapshotCallback[K, V any] func(ctx context.Context,
 		tpLogOff []commtypes.TpLogOff,
 		chkptMeta []commtypes.ChkptMetaData,
-		snapshot []commtypes.KeyValuePair[K, V]) error
+		snapshot []*commtypes.KeyValuePair[K, V]) error
 )
 
 type InMemorySkipmapKeyValueStoreG[K, V any] struct {
 	store            *skipmap.FuncMap[K, V]
 	bgCtx            context.Context
 	bgErrG           *errgroup.Group
-	kvPairSerde      commtypes.SerdeG[commtypes.KeyValuePair[K, V]]
+	kvPairSerde      commtypes.SerdeG[*commtypes.KeyValuePair[K, V]]
 	keySerde         commtypes.SerdeG[K]
 	snapshotCallback KVSnapshotCallback[K, V]
 	name             string
@@ -64,7 +64,7 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) SetKVSerde(serdeFormat commtypes.
 	return err
 }
 
-func (st *InMemorySkipmapKeyValueStoreG[K, V]) GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[K, V]] {
+func (st *InMemorySkipmapKeyValueStoreG[K, V]) GetKVSerde() commtypes.SerdeG[*commtypes.KeyValuePair[K, V]] {
 	return st.kvPairSerde
 }
 
@@ -169,9 +169,9 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) Snapshot(
 ) {
 	debug.Assert(st.bgErrG != nil, "snapshot callback is not set")
 	// cpyBeg := time.Now()
-	out := make([]commtypes.KeyValuePair[K, V], 0, st.store.Len())
+	out := make([]*commtypes.KeyValuePair[K, V], 0, st.store.Len())
 	st.store.Range(func(key K, value V) bool {
-		p := commtypes.KeyValuePair[K, V]{
+		p := &commtypes.KeyValuePair[K, V]{
 			Key:   key,
 			Value: value,
 		}

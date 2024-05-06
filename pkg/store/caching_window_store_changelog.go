@@ -219,7 +219,7 @@ func (s *CachingWindowStoreBackedByChangelogG[K, V]) SetKVSerde(serdeFormat comm
 	return nil
 }
 
-func (s *CachingWindowStoreBackedByChangelogG[K, V]) GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]] {
+func (s *CachingWindowStoreBackedByChangelogG[K, V]) GetKVSerde() commtypes.SerdeG[*commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]] {
 	return s.wrappedStore.GetKVSerde()
 }
 

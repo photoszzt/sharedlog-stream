@@ -31,7 +31,7 @@ type WinSnapshotCallback[K, V any] func(
 	ctx context.Context,
 	tplogOff []commtypes.TpLogOff,
 	chkptMeta []commtypes.ChkptMetaData,
-	snapshot []commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]) error
+	snapshot []*commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]) error
 
 type InMemorySkipMapWindowStoreG[K, V any] struct {
 	mux                         sync.RWMutex
@@ -39,7 +39,7 @@ type InMemorySkipMapWindowStoreG[K, V any] struct {
 	storeWithDup                *skipmap.Int64Map[*skipmap.FuncMap[VersionedKeyG[K], V]]
 	compareFunc                 CompareFuncG[K]
 	compareFuncWithVersionedKey CompareFuncG[VersionedKeyG[K]]
-	kvPairSerdeG                commtypes.SerdeG[commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]]
+	kvPairSerdeG                commtypes.SerdeG[*commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]]
 	keySerdeG                   commtypes.SerdeG[K]
 	snapshotCallback            WinSnapshotCallback[K, V]
 	bgErrG                      *errgroup.Group
@@ -104,7 +104,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) SetKVSerde(serdeFormat commtypes.Ser
 	return err
 }
 
-func (s *InMemorySkipMapWindowStoreG[K, V]) GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]] {
+func (s *InMemorySkipMapWindowStoreG[K, V]) GetKVSerde() commtypes.SerdeG[*commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]] {
 	return s.kvPairSerdeG
 }
 
@@ -417,7 +417,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot(ctx context.Context,
 		l = s.storeNoDup.Len()
 	}
 	// outBin := make([][]byte, 0, l)
-	out := make([]commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V], 0, l)
+	out := make([]*commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V], 0, l)
 	if chkptMeta != nil || resetBg {
 		s.bgErrG, s.bgCtx = errgroup.WithContext(ctx)
 	}
@@ -425,7 +425,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot(ctx context.Context,
 		// cpyBeg := time.Now()
 		s.storeWithDup.Range(func(ts int64, kvmap *skipmap.FuncMap[VersionedKeyG[K], V]) bool {
 			kvmap.Range(func(k VersionedKeyG[K], v V) bool {
-				p := commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]{
+				p := &commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]{
 					Key:   commtypes.KeyAndWindowStartTsG[K]{Key: k.Key, WindowStartTs: ts},
 					Value: v,
 				}
@@ -441,7 +441,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) Snapshot(ctx context.Context,
 		// cpyBeg := time.Now()
 		s.storeNoDup.Range(func(ts int64, kvmap *skipmap.FuncMap[K, V]) bool {
 			kvmap.Range(func(k K, v V) bool {
-				p := commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]{
+				p := &commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]{
 					Key:   commtypes.KeyAndWindowStartTsG[K]{Key: k, WindowStartTs: ts},
 					Value: v,
 				}

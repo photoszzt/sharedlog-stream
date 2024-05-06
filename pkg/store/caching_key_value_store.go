@@ -39,7 +39,7 @@ func (c *CachingKeyValueStoreG[K, V]) SetKVSerde(serdeFormat commtypes.SerdeForm
 	return c.wrappedStore.SetKVSerde(serdeFormat, keySerde, valSerde)
 }
 
-func (c *CachingKeyValueStoreG[K, V]) GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[K, V]] {
+func (c *CachingKeyValueStoreG[K, V]) GetKVSerde() commtypes.SerdeG[*commtypes.KeyValuePair[K, V]] {
 	return c.wrappedStore.GetKVSerde()
 }
 func (c *CachingKeyValueStoreG[K, V]) Name() string { return c.name }

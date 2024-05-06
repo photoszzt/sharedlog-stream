@@ -61,7 +61,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) SetKVSerde(serdeFormat commtypes.Se
 	return nil
 }
 
-func (st *KeyValueStoreWithChangelogG[K, V]) GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[K, V]] {
+func (st *KeyValueStoreWithChangelogG[K, V]) GetKVSerde() commtypes.SerdeG[*commtypes.KeyValuePair[K, V]] {
 	return st.kvstore.GetKVSerde()
 }
 

@@ -38,7 +38,7 @@ func SetKVStoreChkpt[K, V any](
 		func(ctx context.Context,
 			tpLogoff []commtypes.TpLogOff,
 			chkptMeta []commtypes.ChkptMetaData,
-			snapshot []commtypes.KeyValuePair[K, V],
+			snapshot []*commtypes.KeyValuePair[K, V],
 		) error {
 			kvPairSerdeG := kvstore.GetKVSerde()
 			outBin := make([][]byte, 0, len(snapshot))
@@ -72,7 +72,7 @@ func SetWinStoreChkpt[K, V any](
 		func(ctx context.Context,
 			tpLogOff []commtypes.TpLogOff,
 			chkptMeta []commtypes.ChkptMetaData,
-			snapshot []commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V],
+			snapshot []*commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V],
 		) error {
 			kvPairSerdeG := winStore.GetKVSerde()
 			outBin := make([][]byte, 0, len(snapshot))

@@ -47,7 +47,7 @@ type CoreWindowStoreG[K, V any] interface {
 		origKeySerde commtypes.SerdeG[K],
 		valSerde commtypes.SerdeG[V],
 	) error
-	GetKVSerde() commtypes.SerdeG[commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]]
+	GetKVSerde() commtypes.SerdeG[*commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V]]
 	RestoreFromSnapshot(ctx context.Context, snapshot [][]byte) error
 	OnlyUpdateInMemWinStoreG[K, V]
 	BuildKeyMeta(kms map[string][]txn_data.KeyMaping) error

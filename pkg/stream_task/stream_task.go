@@ -278,7 +278,7 @@ func ExecuteApp(ctx context.Context,
 
 func encodeKVSnapshot[K, V any](
 	kvstore store.CoreKeyValueStoreG[K, V],
-	snapshot []commtypes.KeyValuePair[K, V],
+	snapshot []*commtypes.KeyValuePair[K, V],
 	payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
 ) ([]byte, error) {
 	kvPairSerdeG := kvstore.GetKVSerde()
@@ -297,7 +297,7 @@ func encodeKVSnapshot[K, V any](
 
 func encodeWinSnapshot[K, V any](
 	winStore store.CoreWindowStoreG[K, V],
-	snapshot []commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V],
+	snapshot []*commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V],
 	payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
 ) ([]byte, error) {
 	kvPairSerdeG := winStore.GetKVSerde()
