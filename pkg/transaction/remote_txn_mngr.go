@@ -47,6 +47,14 @@ func (s *RemoteTxnManagerServer) AppendConsumedOffset(ctx context.Context, in *r
 	return &emptypb.Empty{}, err
 }
 
+func (s *RemoteTxnManagerServer) CommitTxnAsyncComplete(ctx context.Context, in *txn_data.TxnMetaMsg) (*remote_txn_rpc.CommitReply, error) {
+	return s.RemoteTxnManager.CommitTxnAsyncComplete(ctx, in)
+}
+
+func (s *RemoteTxnManagerServer) Init(ctx context.Context, in *remote_txn_rpc.InitArg) (*remote_txn_rpc.InitReply, error) {
+	return s.RemoteTxnManager.Init(ctx, in)
+}
+
 func NewRemoteTxnManagerServer(env types.Environment, serdeFormat commtypes.SerdeFormat) *RemoteTxnManagerServer {
 	return &RemoteTxnManagerServer{
 		RemoteTxnManager: RemoteTxnManager{
