@@ -112,7 +112,12 @@ func (s ChangeGMsgpSerdeG[V]) Encode(value ChangeG[V]) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return c.MarshalMsg(nil)
+	b := PopBuffer()
+	buf := *b
+	ret, err := c.MarshalMsg(buf[:0])
+	PushBuffer(&c.NewValSerialized)
+	PushBuffer(&c.OldValSerialized)
+	return ret, err
 }
 
 func (s ChangeGMsgpSerdeG[V]) Decode(value []byte) (ChangeG[V], error) {

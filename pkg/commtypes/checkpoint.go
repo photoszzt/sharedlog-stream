@@ -55,7 +55,9 @@ func (s CheckpointPtrJSONSerdeG) Decode(value []byte) (*Checkpoint, error) {
 }
 
 func (s CheckpointMsgpSerdeG) Encode(v Checkpoint) ([]byte, error) {
-	return v.MarshalMsg(nil)
+	b := PopBuffer()
+	buf := *b
+	return v.MarshalMsg(buf[:0])
 }
 
 func (s CheckpointMsgpSerdeG) Decode(value []byte) (Checkpoint, error) {

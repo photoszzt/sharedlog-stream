@@ -26,8 +26,11 @@ type EpochMarkerMsgpSerdeG struct{}
 var _ = SerdeG[EpochMarker](EpochMarkerMsgpSerdeG{})
 
 func (s EpochMarkerMsgpSerdeG) Encode(value EpochMarker) ([]byte, error) {
-	return value.MarshalMsg(nil)
+	b := PopBuffer()
+	buf := *b
+	return value.MarshalMsg(buf[:0])
 }
+
 func (s EpochMarkerMsgpSerdeG) Decode(value []byte) (EpochMarker, error) {
 	em := EpochMarker{}
 	if _, err := em.UnmarshalMsg(value); err != nil {

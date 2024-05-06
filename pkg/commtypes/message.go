@@ -5,12 +5,28 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/utils"
+	sync "sync"
 	"time"
 )
 
 const (
 	END_OF_STREAM_KEY = "__end_stream"
 )
+
+var bytesPool = sync.Pool{
+	New: func() interface{} {
+		s := make([]byte, 0)
+		return &s
+	},
+}
+
+func PopBuffer() *[]byte {
+	return bytesPool.Get().(*[]byte)
+}
+
+func PushBuffer(b *[]byte) {
+	bytesPool.Put(b)
+}
 
 type Punctuate struct{}
 

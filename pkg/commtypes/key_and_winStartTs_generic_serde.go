@@ -89,7 +89,11 @@ func (s KeyAndWindowStartTsMsgpSerdeG[K]) Encode(value KeyAndWindowStartTsG[K]) 
 	if kw == nil {
 		return nil, nil
 	}
-	return kw.MarshalMsg(nil)
+	b := PopBuffer()
+	buf := *b
+	ret, err := kw.MarshalMsg(buf[:0])
+	PushBuffer(&kw.KeySerialized)
+	return ret, err
 }
 
 func (s KeyAndWindowStartTsMsgpSerdeG[K]) Decode(value []byte) (KeyAndWindowStartTsG[K], error) {
