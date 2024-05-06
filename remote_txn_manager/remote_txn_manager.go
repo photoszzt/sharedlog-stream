@@ -47,7 +47,7 @@ func (f *emptyFuncHandlerFactory) New(env types.Environment, funcName string) (t
 			}, nil
 		}
 		grpcServer := grpc.NewServer()
-		remote_txn_rpc.RegisterRemoteTxnMngrServer(grpcServer, transaction.NewRemoteTxnManager(env, f.serdeFormat))
+		remote_txn_rpc.RegisterRemoteTxnMngrServer(grpcServer, transaction.NewRemoteTxnManagerServer(env, f.serdeFormat))
 		go func() {
 			err = grpcServer.Serve(lis)
 			if err != nil {
