@@ -24,14 +24,14 @@ var RTxnFuncName = "remoteTxnMngr"
 
 type RTxnRpcClient struct {
 	client         *http.Client
-	faas_gateway   string
 	funcUrl        string
 	nodeConstraint string
 	readBuffer     []byte
+	serdeFormat    commtypes.SerdeFormat // serdeFormat for log
 	serde          commtypes.SerdeG[*RTxnArg]
 }
 
-func NewRTxnRpcClient(faas_gateway string, nodeConstraint string) RTxnRpcClient {
+func NewRTxnRpcClient(faas_gateway string, nodeConstraint string, serdeFormat commtypes.SerdeFormat) RTxnRpcClient {
 	return RTxnRpcClient{
 		client: &http.Client{
 			Transport: &http.Transport{
@@ -39,10 +39,10 @@ func NewRTxnRpcClient(faas_gateway string, nodeConstraint string) RTxnRpcClient 
 			},
 			Timeout: time.Duration(5) * time.Second,
 		},
-		faas_gateway:   faas_gateway,
 		funcUrl:        fmt.Sprintf("http://%s/function/%s", faas_gateway, RTxnFuncName),
 		nodeConstraint: nodeConstraint,
 		readBuffer:     make([]byte, 0, 1024),
+		serdeFormat:    serdeFormat,
 		serde:          GetRTxnArgSerdeG(),
 	}
 }
@@ -83,14 +83,14 @@ func postRequest[V msgp.Decodable](client *http.Client, url, nodeConstraint stri
 		return fmt.Errorf("Non-OK response: %d", resp.StatusCode)
 	}
 	reader := msgp.NewReader(resp.Body)
-	response.DecodeMsg(reader)
-	return nil
+	return response.DecodeMsg(reader)
 }
 
 func (c *RTxnRpcClient) Init(ctx context.Context, in *InitArg) (*InitReply, error) {
 	arg := &RTxnArg{
-		RpcType: Init,
-		Init:    in,
+		RpcType:     Init,
+		SerdeFormat: c.serdeFormat,
+		Init:        in,
 	}
 	ret, err := c.serde.Encode(arg)
 	defer func() {
@@ -109,8 +109,9 @@ func (c *RTxnRpcClient) Init(ctx context.Context, in *InitArg) (*InitReply, erro
 
 func (c *RTxnRpcClient) AppendTpPar(ctx context.Context, in *txn_data.TxnMetaMsg) error {
 	arg := &RTxnArg{
-		RpcType: AppendTpPar,
-		MetaMsg: in,
+		RpcType:     AppendTpPar,
+		SerdeFormat: c.serdeFormat,
+		MetaMsg:     in,
 	}
 	ret, err := c.serde.Encode(arg)
 	defer func() {
@@ -125,8 +126,9 @@ func (c *RTxnRpcClient) AppendTpPar(ctx context.Context, in *txn_data.TxnMetaMsg
 
 func (c *RTxnRpcClient) AbortTxn(ctx context.Context, in *txn_data.TxnMetaMsg) error {
 	arg := &RTxnArg{
-		RpcType: AbortTxn,
-		MetaMsg: in,
+		RpcType:     AbortTxn,
+		SerdeFormat: c.serdeFormat,
+		MetaMsg:     in,
 	}
 	ret, err := c.serde.Encode(arg)
 	defer func() {
@@ -141,8 +143,9 @@ func (c *RTxnRpcClient) AbortTxn(ctx context.Context, in *txn_data.TxnMetaMsg) e
 
 func (c *RTxnRpcClient) CommitTxnAsyncComplete(ctx context.Context, in *txn_data.TxnMetaMsg) (*CommitReply, error) {
 	arg := &RTxnArg{
-		RpcType: CommitTxnAsync,
-		MetaMsg: in,
+		RpcType:     CommitTxnAsync,
+		SerdeFormat: c.serdeFormat,
+		MetaMsg:     in,
 	}
 	ret, err := c.serde.Encode(arg)
 	defer func() {
@@ -162,6 +165,7 @@ func (c *RTxnRpcClient) CommitTxnAsyncComplete(ctx context.Context, in *txn_data
 func (c *RTxnRpcClient) AppendConsumedOffset(ctx context.Context, in *ConsumedOffsets) error {
 	arg := &RTxnArg{
 		RpcType:     AppendConsumedOff,
+		SerdeFormat: c.serdeFormat,
 		ConsumedOff: in,
 	}
 	ret, err := c.serde.Encode(arg)

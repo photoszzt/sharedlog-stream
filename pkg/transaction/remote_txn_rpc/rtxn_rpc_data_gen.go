@@ -36,6 +36,12 @@ func (z *RTxnArg) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 				z.RpcType = RTxnRpcType(zb0002)
 			}
+		case "serdeFormat":
+			err = z.SerdeFormat.DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, "SerdeFormat")
+				return
+			}
 		case "initArg":
 			if dc.IsNil() {
 				err = dc.ReadNil()
@@ -104,20 +110,20 @@ func (z *RTxnArg) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *RTxnArg) EncodeMsg(en *msgp.Writer) (err error) {
 	// omitempty: check for empty values
-	zb0001Len := uint32(4)
-	var zb0001Mask uint8 /* 4 bits */
+	zb0001Len := uint32(5)
+	var zb0001Mask uint8 /* 5 bits */
 	_ = zb0001Mask
 	if z.Init == nil {
 		zb0001Len--
-		zb0001Mask |= 0x2
+		zb0001Mask |= 0x4
 	}
 	if z.MetaMsg == nil {
 		zb0001Len--
-		zb0001Mask |= 0x4
+		zb0001Mask |= 0x8
 	}
 	if z.ConsumedOff == nil {
 		zb0001Len--
-		zb0001Mask |= 0x8
+		zb0001Mask |= 0x10
 	}
 	// variable map header, size zb0001Len
 	err = en.Append(0x80 | uint8(zb0001Len))
@@ -137,7 +143,17 @@ func (z *RTxnArg) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "RpcType")
 		return
 	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
+	// write "serdeFormat"
+	err = en.Append(0xab, 0x73, 0x65, 0x72, 0x64, 0x65, 0x46, 0x6f, 0x72, 0x6d, 0x61, 0x74)
+	if err != nil {
+		return
+	}
+	err = z.SerdeFormat.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "SerdeFormat")
+		return
+	}
+	if (zb0001Mask & 0x4) == 0 { // if not empty
 		// write "initArg"
 		err = en.Append(0xa7, 0x69, 0x6e, 0x69, 0x74, 0x41, 0x72, 0x67)
 		if err != nil {
@@ -156,7 +172,7 @@ func (z *RTxnArg) EncodeMsg(en *msgp.Writer) (err error) {
 			}
 		}
 	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
+	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// write "txnMeta"
 		err = en.Append(0xa7, 0x74, 0x78, 0x6e, 0x4d, 0x65, 0x74, 0x61)
 		if err != nil {
@@ -175,7 +191,7 @@ func (z *RTxnArg) EncodeMsg(en *msgp.Writer) (err error) {
 			}
 		}
 	}
-	if (zb0001Mask & 0x8) == 0 { // if not empty
+	if (zb0001Mask & 0x10) == 0 { // if not empty
 		// write "cOff"
 		err = en.Append(0xa4, 0x63, 0x4f, 0x66, 0x66)
 		if err != nil {
@@ -201,20 +217,20 @@ func (z *RTxnArg) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *RTxnArg) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(4)
-	var zb0001Mask uint8 /* 4 bits */
+	zb0001Len := uint32(5)
+	var zb0001Mask uint8 /* 5 bits */
 	_ = zb0001Mask
 	if z.Init == nil {
 		zb0001Len--
-		zb0001Mask |= 0x2
+		zb0001Mask |= 0x4
 	}
 	if z.MetaMsg == nil {
 		zb0001Len--
-		zb0001Mask |= 0x4
+		zb0001Mask |= 0x8
 	}
 	if z.ConsumedOff == nil {
 		zb0001Len--
-		zb0001Mask |= 0x8
+		zb0001Mask |= 0x10
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -224,7 +240,14 @@ func (z *RTxnArg) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "rpcType"
 	o = append(o, 0xa7, 0x72, 0x70, 0x63, 0x54, 0x79, 0x70, 0x65)
 	o = msgp.AppendUint8(o, uint8(z.RpcType))
-	if (zb0001Mask & 0x2) == 0 { // if not empty
+	// string "serdeFormat"
+	o = append(o, 0xab, 0x73, 0x65, 0x72, 0x64, 0x65, 0x46, 0x6f, 0x72, 0x6d, 0x61, 0x74)
+	o, err = z.SerdeFormat.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "SerdeFormat")
+		return
+	}
+	if (zb0001Mask & 0x4) == 0 { // if not empty
 		// string "initArg"
 		o = append(o, 0xa7, 0x69, 0x6e, 0x69, 0x74, 0x41, 0x72, 0x67)
 		if z.Init == nil {
@@ -237,7 +260,7 @@ func (z *RTxnArg) MarshalMsg(b []byte) (o []byte, err error) {
 			}
 		}
 	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
+	if (zb0001Mask & 0x8) == 0 { // if not empty
 		// string "txnMeta"
 		o = append(o, 0xa7, 0x74, 0x78, 0x6e, 0x4d, 0x65, 0x74, 0x61)
 		if z.MetaMsg == nil {
@@ -250,7 +273,7 @@ func (z *RTxnArg) MarshalMsg(b []byte) (o []byte, err error) {
 			}
 		}
 	}
-	if (zb0001Mask & 0x8) == 0 { // if not empty
+	if (zb0001Mask & 0x10) == 0 { // if not empty
 		// string "cOff"
 		o = append(o, 0xa4, 0x63, 0x4f, 0x66, 0x66)
 		if z.ConsumedOff == nil {
@@ -293,6 +316,12 @@ func (z *RTxnArg) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 				z.RpcType = RTxnRpcType(zb0002)
+			}
+		case "serdeFormat":
+			bts, err = z.SerdeFormat.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "SerdeFormat")
+				return
 			}
 		case "initArg":
 			if msgp.IsNil(bts) {
@@ -359,7 +388,7 @@ func (z *RTxnArg) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *RTxnArg) Msgsize() (s int) {
-	s = 1 + 8 + msgp.Uint8Size + 8
+	s = 1 + 8 + msgp.Uint8Size + 12 + z.SerdeFormat.Msgsize() + 8
 	if z.Init == nil {
 		s += msgp.NilSize
 	} else {
