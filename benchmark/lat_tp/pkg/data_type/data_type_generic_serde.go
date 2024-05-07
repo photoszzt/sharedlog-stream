@@ -24,7 +24,9 @@ type PayloadTsMsgpSerdeG struct{}
 var _ commtypes.SerdeG[PayloadTs] = PayloadTsMsgpSerdeG{}
 
 func (s PayloadTsMsgpSerdeG) Encode(value PayloadTs) ([]byte, error) {
-	return value.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return value.MarshalMsg(buf[:0])
 }
 
 func (s PayloadTsMsgpSerdeG) Decode(value []byte) (PayloadTs, error) {
