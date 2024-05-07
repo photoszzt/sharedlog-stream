@@ -28,7 +28,9 @@ type AuctionIdCountMsgpSerdeG struct{}
 var _ = commtypes.SerdeG[AuctionIdCount](AuctionIdCountMsgpSerdeG{})
 
 func (e AuctionIdCountMsgpSerdeG) Encode(value AuctionIdCount) ([]byte, error) {
-	return value.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return value.MarshalMsg(buf[:0])
 }
 
 func (d AuctionIdCountMsgpSerdeG) Decode(value []byte) (AuctionIdCount, error) {

@@ -27,7 +27,9 @@ type BidAndMaxMsgpSerdeG struct{}
 var _ = commtypes.SerdeG[BidAndMax](BidAndMaxMsgpSerdeG{})
 
 func (s BidAndMaxMsgpSerdeG) Encode(value BidAndMax) ([]byte, error) {
-	return value.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return value.MarshalMsg(buf[:0])
 }
 
 func (s BidAndMaxMsgpSerdeG) Decode(value []byte) (BidAndMax, error) {

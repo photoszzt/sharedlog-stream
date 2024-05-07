@@ -27,7 +27,9 @@ type PriceTimePtrMsgpSerdeG struct{}
 var _ = commtypes.SerdeG[PriceTime](PriceTimePtrMsgpSerdeG{})
 
 func (s PriceTimePtrMsgpSerdeG) Encode(value PriceTime) ([]byte, error) {
-	return value.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return value.MarshalMsg(buf[:0])
 }
 
 func (s PriceTimePtrMsgpSerdeG) Decode(value []byte) (PriceTime, error) {

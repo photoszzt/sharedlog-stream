@@ -28,7 +28,9 @@ type StartEndTimeMsgpSerdeG struct{}
 var _ = commtypes.SerdeG[StartEndTime](StartEndTimeMsgpSerdeG{})
 
 func (e StartEndTimeMsgpSerdeG) Encode(value StartEndTime) ([]byte, error) {
-	return value.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return value.MarshalMsg(buf[:0])
 }
 
 func (d StartEndTimeMsgpSerdeG) Decode(value []byte) (StartEndTime, error) {

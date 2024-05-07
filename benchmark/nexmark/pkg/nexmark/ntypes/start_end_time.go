@@ -6,7 +6,6 @@ package ntypes
 import (
 	"encoding/json"
 	"fmt"
-
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -86,7 +85,9 @@ func (e StartEndTimeMsgpSerde) Encode(value interface{}) ([]byte, error) {
 		seTmp := value.(StartEndTime)
 		se = &seTmp
 	}
-	return se.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return se.MarshalMsg(buf[:0])
 }
 
 func (d StartEndTimeMsgpSerde) Decode(value []byte) (interface{}, error) {

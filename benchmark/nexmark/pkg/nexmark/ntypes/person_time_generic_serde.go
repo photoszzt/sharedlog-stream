@@ -28,7 +28,9 @@ type PersonTimeMsgpSerdeG struct{}
 var _ = commtypes.SerdeG[PersonTime](PersonTimeMsgpSerdeG{})
 
 func (e PersonTimeMsgpSerdeG) Encode(value PersonTime) ([]byte, error) {
-	return value.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return value.MarshalMsg(buf[:0])
 }
 
 func (d PersonTimeMsgpSerdeG) Decode(value []byte) (PersonTime, error) {

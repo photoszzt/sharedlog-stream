@@ -77,7 +77,9 @@ var _ = commtypes.Serde(PriceTimeMsgpSerde{})
 
 func (s PriceTimeMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	pt := CastToPriceTimePtr(value)
-	return pt.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return pt.MarshalMsg(buf[:0])
 }
 
 func (s PriceTimeMsgpSerde) Decode(value []byte) (interface{}, error) {

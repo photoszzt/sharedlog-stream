@@ -6,8 +6,10 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 )
 
-type BidPriceJSONSerdeG struct{}
-type BidPriceMsgpSerdeG struct{}
+type (
+	BidPriceJSONSerdeG struct{}
+	BidPriceMsgpSerdeG struct{}
+)
 
 var _ = commtypes.SerdeG[BidPrice](BidPriceJSONSerdeG{})
 
@@ -26,7 +28,9 @@ func (s BidPriceJSONSerdeG) Decode(value []byte) (BidPrice, error) {
 var _ = commtypes.SerdeG[BidPrice](BidPriceMsgpSerdeG{})
 
 func (s BidPriceMsgpSerdeG) Encode(value BidPrice) ([]byte, error) {
-	return value.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return value.MarshalMsg(buf[:0])
 }
 
 func (s BidPriceMsgpSerdeG) Decode(value []byte) (BidPrice, error) {

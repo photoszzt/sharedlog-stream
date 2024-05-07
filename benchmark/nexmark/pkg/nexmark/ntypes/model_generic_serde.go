@@ -11,7 +11,9 @@ type EventMsgpSerdeG struct{}
 var _ = commtypes.EncoderG[*Event](EventMsgpSerdeG{})
 
 func (e EventMsgpSerdeG) Encode(value *Event) ([]byte, error) {
-	return value.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return value.MarshalMsg(buf[:0])
 }
 
 type EventJSONSerdeG struct{}

@@ -27,7 +27,9 @@ type SumAndCountMsgpSerdeG struct{}
 var _ = commtypes.SerdeG[SumAndCount](SumAndCountMsgpSerdeG{})
 
 func (s SumAndCountMsgpSerdeG) Encode(value SumAndCount) ([]byte, error) {
-	return value.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return value.MarshalMsg(buf[:0])
 }
 
 func (s SumAndCountMsgpSerdeG) Decode(value []byte) (SumAndCount, error) {

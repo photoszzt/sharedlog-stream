@@ -20,8 +20,10 @@ func SizeOfBidPricePtrIn(k *BidPrice) int64 {
 	return 8
 }
 
-type BidPriceJSONSerde struct{}
-type BidPriceMsgpSerde struct{}
+type (
+	BidPriceJSONSerde struct{}
+	BidPriceMsgpSerde struct{}
+)
 
 var _ = commtypes.Serde(BidPriceJSONSerde{})
 
@@ -42,7 +44,9 @@ var _ = commtypes.Serde(BidPriceMsgpSerde{})
 
 func (s BidPriceMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	bp := value.(*BidPrice)
-	return bp.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return bp.MarshalMsg(buf[:0])
 }
 
 func (s BidPriceMsgpSerde) Decode(value []byte) (interface{}, error) {

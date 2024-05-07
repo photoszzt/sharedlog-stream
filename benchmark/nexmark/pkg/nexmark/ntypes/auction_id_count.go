@@ -6,7 +6,6 @@ package ntypes
 import (
 	"encoding/json"
 	"fmt"
-
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
@@ -50,7 +49,9 @@ var _ = commtypes.Serde(AuctionIdCountMsgpSerde{})
 
 func (e AuctionIdCountMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	se := value.(*AuctionIdCount)
-	return se.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return se.MarshalMsg(buf[:0])
 }
 
 func (d AuctionIdCountMsgpSerde) Decode(value []byte) (interface{}, error) {

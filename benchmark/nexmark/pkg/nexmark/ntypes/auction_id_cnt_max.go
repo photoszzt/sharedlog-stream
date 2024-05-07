@@ -50,7 +50,9 @@ var _ = commtypes.Serde(AuctionIdCntMaxMsgpSerde{})
 
 func (s AuctionIdCntMaxMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	ai := value.(*AuctionIdCntMax)
-	return ai.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return ai.MarshalMsg(buf[:0])
 }
 
 func (s AuctionIdCntMaxMsgpSerde) Decode(value []byte) (interface{}, error) {

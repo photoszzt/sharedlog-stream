@@ -52,7 +52,9 @@ var _ = commtypes.Serde(BidAndMaxMsgpSerde{})
 
 func (s BidAndMaxMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	bm := value.(*BidAndMax)
-	return bm.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return bm.MarshalMsg(buf[:0])
 }
 
 func (s BidAndMaxMsgpSerde) Decode(value []byte) (interface{}, error) {

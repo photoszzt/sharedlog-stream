@@ -138,7 +138,9 @@ var _ = commtypes.Encoder(EventMsgpSerde{})
 
 func (e EventMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	event := value.(*Event)
-	return event.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return event.MarshalMsg(buf[:0])
 }
 
 type EventJSONSerde struct{}

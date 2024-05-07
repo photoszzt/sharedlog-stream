@@ -76,7 +76,9 @@ func (s AuctionIdCategoryMsgpSerde) Encode(value interface{}) ([]byte, error) {
 		aicTmp := value.(AuctionIdCategory)
 		aic = &aicTmp
 	}
-	return aic.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return aic.MarshalMsg(buf[:0])
 }
 
 func (s AuctionIdCategoryMsgpSerde) Decode(value []byte) (interface{}, error) {

@@ -77,7 +77,9 @@ var _ = commtypes.Serde(AuctionIdSellerMsgpSerde{})
 
 func (s AuctionIdSellerMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	v := CastToAuctionIdSeller(value)
-	return v.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return v.MarshalMsg(buf[:0])
 }
 
 func (s AuctionIdSellerMsgpSerde) Decode(value []byte) (interface{}, error) {

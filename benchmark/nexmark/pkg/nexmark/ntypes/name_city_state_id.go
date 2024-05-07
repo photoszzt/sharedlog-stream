@@ -51,7 +51,9 @@ var _ = commtypes.Serde(NameCityStateIdMsgpSerde{})
 
 func (s NameCityStateIdMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	ncsi := value.(*NameCityStateId)
-	return ncsi.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return ncsi.MarshalMsg(buf[:0])
 }
 
 func (s NameCityStateIdMsgpSerde) Decode(value []byte) (interface{}, error) {

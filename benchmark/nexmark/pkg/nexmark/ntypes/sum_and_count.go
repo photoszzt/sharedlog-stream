@@ -51,7 +51,9 @@ var _ = commtypes.Serde(SumAndCountMsgpSerde{})
 
 func (s SumAndCountMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	val := value.(*SumAndCount)
-	return val.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return val.MarshalMsg(buf[:0])
 }
 
 func (s SumAndCountMsgpSerde) Decode(value []byte) (interface{}, error) {
