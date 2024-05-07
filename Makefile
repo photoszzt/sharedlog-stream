@@ -60,6 +60,16 @@ remote_txn_mngr_grpc_debug:
 	mkdir -p ./bin
 	GO111MODULE=on go build -tags "debug" -o bin/remote_txn_mngr_grpc_debug ./remote_txn_manager/grpc
 
+.PHONY: remote_txn_mngr_boki
+remote_txn_mngr_boki:
+	mkdir -p ./bin
+	GO111MODULE=on go build -o bin/remote_txn_mngr_boki ./remote_txn_manager/boki_call
+
+.PHONY: remote_txn_mngr_boki_debug
+remote_txn_mngr_boki_debug:
+	mkdir -p ./bin
+	GO111MODULE=on go build -tags "debug" -o bin/remote_txn_mngr_boki_debug ./remote_txn_manager/boki_call
+
 .PHONY: gen_proto
 gen_proto:
 	protoc --go_out=. --go_opt=paths=source_relative --proto_path=. \
