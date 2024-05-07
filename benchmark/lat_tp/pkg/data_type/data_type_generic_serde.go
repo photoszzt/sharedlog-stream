@@ -5,7 +5,9 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 )
 
-type PayloadTsJsonSerdeG struct{}
+type PayloadTsJsonSerdeG struct {
+	commtypes.DefaultJSONSerde
+}
 
 var _ commtypes.SerdeG[PayloadTs] = PayloadTsJsonSerdeG{}
 
@@ -19,7 +21,9 @@ func (s PayloadTsJsonSerdeG) Decode(data []byte) (PayloadTs, error) {
 	return value, err
 }
 
-type PayloadTsMsgpSerdeG struct{}
+type PayloadTsMsgpSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
 
 var _ commtypes.SerdeG[PayloadTs] = PayloadTsMsgpSerdeG{}
 
