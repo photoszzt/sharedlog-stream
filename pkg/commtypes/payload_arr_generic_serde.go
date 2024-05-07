@@ -30,7 +30,9 @@ type PayloadArrMsgpSerdeG struct {
 var _ = SerdeG[PayloadArr](PayloadArrMsgpSerdeG{})
 
 func (s PayloadArrMsgpSerdeG) Encode(value PayloadArr) ([]byte, error) {
-	return value.MarshalMsg(nil)
+	b := PopBuffer()
+	buf := *b
+	return value.MarshalMsg(buf[:0])
 }
 
 func (s PayloadArrMsgpSerdeG) Decode(value []byte) (PayloadArr, error) {

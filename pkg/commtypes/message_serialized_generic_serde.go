@@ -178,7 +178,9 @@ func (s MessageGMsgpSerdeG[K, V]) EncodeWithKVBytes(kBytes []byte, vBytes []byte
 		InjTMs:      inj,
 		TimestampMs: ts,
 	}
-	return msgSer.MarshalMsg(nil)
+	b := PopBuffer()
+	buf := *b
+	return msgSer.MarshalMsg(buf[:0])
 }
 func (s MessageGMsgpSerdeG[K, V]) EncodeKey(key K) ([]byte, error)   { return s.keySerde.Encode(key) }
 func (s MessageGMsgpSerdeG[K, V]) EncodeVal(key V) ([]byte, error)   { return s.valSerde.Encode(key) }
@@ -229,7 +231,9 @@ func (s MessageGJSONSerdeG[K, V]) EncodeWithKVBytes(kBytes []byte, vBytes []byte
 		InjTMs:      inj,
 		TimestampMs: ts,
 	}
-	return msgSer.MarshalMsg(nil)
+	b := PopBuffer()
+	buf := *b
+	return msgSer.MarshalMsg(buf[:0])
 }
 func (s MessageGJSONSerdeG[K, V]) EncodeKey(key K) ([]byte, error)   { return s.KeySerde.Encode(key) }
 func (s MessageGJSONSerdeG[K, V]) EncodeVal(value V) ([]byte, error) { return s.ValSerde.Encode(value) }
