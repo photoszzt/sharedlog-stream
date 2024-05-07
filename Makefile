@@ -50,15 +50,15 @@ nexmark_client:
 	mkdir -p ./bin
 	GO111MODULE=on go build -o bin/nexmark_client ./benchmark/nexmark/nexmark_client
 
-.PHONY: remote_txn_mngr
-remote_txn_mngr:
+.PHONY: remote_txn_mngr_grpc
+remote_txn_mngr_grpc:
 	mkdir -p ./bin
-	GO111MODULE=on go build -o bin/remote_txn_mngr ./remote_txn_manager/
+	GO111MODULE=on go build -o bin/remote_txn_mngr_grpc ./remote_txn_manager/grpc
 
-.PHONY: remote_txn_mngr
-remote_txn_mngr_debug:
+.PHONY: remote_txn_mngr_grpc_debug
+remote_txn_mngr_grpc_debug:
 	mkdir -p ./bin
-	GO111MODULE=on go build -tags "debug" -o bin/remote_txn_mngr_debug ./remote_txn_manager/
+	GO111MODULE=on go build -tags "debug" -o bin/remote_txn_mngr_grpc_debug ./remote_txn_manager/grpc
 
 .PHONY: gen_proto
 gen_proto:
