@@ -6,8 +6,12 @@ import (
 )
 
 type (
-	TopicPartitionJSONSerde  struct{}
-	TopicPartitionJSONSerdeG struct{}
+	TopicPartitionJSONSerde struct {
+		commtypes.DefaultJSONSerde
+	}
+	TopicPartitionJSONSerdeG struct {
+		commtypes.DefaultJSONSerde
+	}
 )
 
 var (
@@ -41,8 +45,12 @@ func (s TopicPartitionJSONSerdeG) Decode(value []byte) (*TopicPartition, error) 
 }
 
 type (
-	TopicPartitionMsgpSerde  struct{}
-	TopicPartitionMsgpSerdeG struct{}
+	TopicPartitionMsgpSerde struct {
+		commtypes.DefaultMsgpSerde
+	}
+	TopicPartitionMsgpSerdeG struct {
+		commtypes.DefaultMsgpSerde
+	}
 )
 
 var (
@@ -52,11 +60,15 @@ var (
 
 func (s TopicPartitionMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	tp := value.(*TopicPartition)
-	return tp.UnmarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return tp.MarshalMsg(buf[:0])
 }
 
 func (s TopicPartitionMsgpSerdeG) Encode(value *TopicPartition) ([]byte, error) {
-	return value.UnmarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return value.MarshalMsg(buf[:0])
 }
 
 func (s TopicPartitionMsgpSerde) Decode(value []byte) (interface{}, error) {

@@ -5,11 +5,19 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 )
 
-type TxnMetadataJSONSerde struct{}
-type TxnMetadataJSONSerdeG struct{}
+type (
+	TxnMetadataJSONSerde struct {
+		commtypes.DefaultJSONSerde
+	}
+	TxnMetadataJSONSerdeG struct {
+		commtypes.DefaultJSONSerde
+	}
+)
 
-var _ = commtypes.Serde(TxnMetadataJSONSerde{})
-var _ = commtypes.SerdeG[TxnMetadata](TxnMetadataJSONSerdeG{})
+var (
+	_ = commtypes.Serde(TxnMetadataJSONSerde{})
+	_ = commtypes.SerdeG[TxnMetadata](TxnMetadataJSONSerdeG{})
+)
 
 func (s TxnMetadataJSONSerde) Encode(value interface{}) ([]byte, error) {
 	tm := value.(*TxnMetadata)
@@ -36,15 +44,25 @@ func (s TxnMetadataJSONSerdeG) Decode(value []byte) (TxnMetadata, error) {
 	return tm, nil
 }
 
-type TxnMetadataMsgpSerde struct{}
-type TxnMetadataMsgpSerdeG struct{}
+type (
+	TxnMetadataMsgpSerde struct {
+		commtypes.DefaultMsgpSerde
+	}
+	TxnMetadataMsgpSerdeG struct {
+		commtypes.DefaultMsgpSerde
+	}
+)
 
-var _ = commtypes.Serde(TxnMetadataMsgpSerde{})
-var _ = commtypes.SerdeG[TxnMetadata](TxnMetadataMsgpSerdeG{})
+var (
+	_ = commtypes.Serde(TxnMetadataMsgpSerde{})
+	_ = commtypes.SerdeG[TxnMetadata](TxnMetadataMsgpSerdeG{})
+)
 
 func (s TxnMetadataMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	tm := value.(*TxnMetadata)
-	return tm.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return tm.MarshalMsg(buf[:0])
 }
 
 func (s TxnMetadataMsgpSerdeG) Encode(value TxnMetadata) ([]byte, error) {

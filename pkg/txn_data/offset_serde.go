@@ -6,11 +6,19 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 )
 
-type OffsetRecordJSONSerde struct{}
-type OffsetRecordJSONSerdeG struct{}
+type (
+	OffsetRecordJSONSerde struct {
+		commtypes.DefaultJSONSerde
+	}
+	OffsetRecordJSONSerdeG struct {
+		commtypes.DefaultJSONSerde
+	}
+)
 
-var _ = commtypes.Serde(OffsetRecordJSONSerde{})
-var _ = commtypes.SerdeG[OffsetRecord](OffsetRecordJSONSerdeG{})
+var (
+	_ = commtypes.Serde(OffsetRecordJSONSerde{})
+	_ = commtypes.SerdeG[OffsetRecord](OffsetRecordJSONSerdeG{})
+)
 
 func (s OffsetRecordJSONSerde) Encode(value interface{}) ([]byte, error) {
 	or := value.(*OffsetRecord)
@@ -37,15 +45,25 @@ func (s OffsetRecordJSONSerdeG) Decode(value []byte) (OffsetRecord, error) {
 	return or, nil
 }
 
-type OffsetRecordMsgpSerde struct{}
-type OffsetRecordMsgpSerdeG struct{}
+type (
+	OffsetRecordMsgpSerde struct {
+		commtypes.DefaultMsgpSerde
+	}
+	OffsetRecordMsgpSerdeG struct {
+		commtypes.DefaultMsgpSerde
+	}
+)
 
-var _ = commtypes.Serde(OffsetRecordMsgpSerde{})
-var _ = commtypes.SerdeG[OffsetRecord](OffsetRecordMsgpSerdeG{})
+var (
+	_ = commtypes.Serde(OffsetRecordMsgpSerde{})
+	_ = commtypes.SerdeG[OffsetRecord](OffsetRecordMsgpSerdeG{})
+)
 
 func (s OffsetRecordMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	or := value.(*OffsetRecord)
-	return or.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return or.MarshalMsg(buf[:0])
 }
 
 func (s OffsetRecordMsgpSerdeG) Encode(value OffsetRecord) ([]byte, error) {

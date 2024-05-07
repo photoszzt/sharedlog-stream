@@ -6,11 +6,17 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 )
 
-type ControlMetadataJSONSerde struct{}
-type ControlMetadataJSONSerdeG struct{}
+type ControlMetadataJSONSerde struct {
+	commtypes.DefaultJSONSerde
+}
+type ControlMetadataJSONSerdeG struct {
+	commtypes.DefaultJSONSerde
+}
 
-var _ = commtypes.Serde(ControlMetadataJSONSerde{})
-var _ = commtypes.SerdeG[ControlMetadata](ControlMetadataJSONSerdeG{})
+var (
+	_ = commtypes.Serde(ControlMetadataJSONSerde{})
+	_ = commtypes.SerdeG[ControlMetadata](ControlMetadataJSONSerdeG{})
+)
 
 func (s ControlMetadataJSONSerde) Encode(value interface{}) ([]byte, error) {
 	rf := value.(ControlMetadata)
@@ -37,15 +43,25 @@ func (s ControlMetadataJSONSerdeG) Decode(value []byte) (ControlMetadata, error)
 	return rf, nil
 }
 
-type ControlMetadataMsgpSerde struct{}
-type ControlMetadataMsgpSerdeG struct{}
+type (
+	ControlMetadataMsgpSerde struct {
+		commtypes.DefaultMsgpSerde
+	}
+	ControlMetadataMsgpSerdeG struct {
+		commtypes.DefaultMsgpSerde
+	}
+)
 
-var _ = commtypes.Serde(ControlMetadataMsgpSerde{})
-var _ = commtypes.SerdeG[ControlMetadata](ControlMetadataMsgpSerdeG{})
+var (
+	_ = commtypes.Serde(ControlMetadataMsgpSerde{})
+	_ = commtypes.SerdeG[ControlMetadata](ControlMetadataMsgpSerdeG{})
+)
 
 func (s ControlMetadataMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	rf := value.(*ControlMetadata)
-	return rf.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return rf.MarshalMsg(buf[:0])
 }
 
 func (s ControlMetadataMsgpSerde) Decode(value []byte) (interface{}, error) {
