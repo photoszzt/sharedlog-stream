@@ -6,7 +6,9 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 )
 
-type BidAndMaxJSONSerdeG struct{}
+type BidAndMaxJSONSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
 
 var _ = commtypes.SerdeG[BidAndMax](BidAndMaxJSONSerdeG{})
 
@@ -22,7 +24,9 @@ func (s BidAndMaxJSONSerdeG) Decode(value []byte) (BidAndMax, error) {
 	return bm, nil
 }
 
-type BidAndMaxMsgpSerdeG struct{}
+type BidAndMaxMsgpSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
 
 var _ = commtypes.SerdeG[BidAndMax](BidAndMaxMsgpSerdeG{})
 

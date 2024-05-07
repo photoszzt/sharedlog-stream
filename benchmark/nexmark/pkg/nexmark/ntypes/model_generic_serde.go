@@ -6,7 +6,12 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 )
 
-type EventMsgpSerdeG struct{}
+type EventMsgpSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
+type EventJSONSerdeG struct {
+	commtypes.DefaultJSONSerde
+}
 
 var _ = commtypes.EncoderG[*Event](EventMsgpSerdeG{})
 
@@ -15,8 +20,6 @@ func (e EventMsgpSerdeG) Encode(value *Event) ([]byte, error) {
 	buf := *b
 	return value.MarshalMsg(buf[:0])
 }
-
-type EventJSONSerdeG struct{}
 
 var _ = commtypes.EncoderG[*Event](EventJSONSerdeG{})
 

@@ -44,7 +44,9 @@ func AuctionIdCategoryLess(a, b AuctionIdCategory) bool {
 	return CompareAuctionIdCategory(&a, &b) < 0
 }
 
-type AuctionIdCategoryJSONSerde struct{}
+type AuctionIdCategoryJSONSerde struct {
+	commtypes.DefaultJSONSerde
+}
 
 var _ = commtypes.Serde(AuctionIdCategoryJSONSerde{})
 
@@ -66,7 +68,9 @@ func (s AuctionIdCategoryJSONSerde) Decode(value []byte) (interface{}, error) {
 	return v, nil
 }
 
-type AuctionIdCategoryMsgpSerde struct{}
+type AuctionIdCategoryMsgpSerde struct {
+	commtypes.DefaultMsgpSerde
+}
 
 var _ = commtypes.Serde(AuctionIdCategoryMsgpSerde{})
 

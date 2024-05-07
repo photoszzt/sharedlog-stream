@@ -53,7 +53,13 @@ func (se StartEndTime) String() string {
 	return fmt.Sprintf("%d %d", se.StartTimeMs, se.EndTimeMs)
 }
 
-type StartEndTimeJSONSerde struct{}
+type StartEndTimeJSONSerde struct {
+	commtypes.DefaultJSONSerde
+}
+
+type StartEndTimeMsgpSerde struct {
+	commtypes.DefaultMsgpSerde
+}
 
 var _ = commtypes.Serde(StartEndTimeJSONSerde{})
 
@@ -74,8 +80,6 @@ func (d StartEndTimeJSONSerde) Decode(value []byte) (interface{}, error) {
 	}
 	return se, nil
 }
-
-type StartEndTimeMsgpSerde struct{}
 
 var _ = commtypes.Serde(StartEndTimeMsgpSerde{})
 

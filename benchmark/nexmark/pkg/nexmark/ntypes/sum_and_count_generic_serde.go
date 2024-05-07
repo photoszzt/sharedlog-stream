@@ -6,7 +6,13 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 )
 
-type SumAndCountJSONSerdeG struct{}
+type SumAndCountJSONSerdeG struct {
+	commtypes.DefaultJSONSerde
+}
+
+type SumAndCountMsgpSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
 
 var _ = commtypes.SerdeG[SumAndCount](SumAndCountJSONSerdeG{})
 
@@ -21,8 +27,6 @@ func (s SumAndCountJSONSerdeG) Decode(value []byte) (SumAndCount, error) {
 	}
 	return sc, nil
 }
-
-type SumAndCountMsgpSerdeG struct{}
 
 var _ = commtypes.SerdeG[SumAndCount](SumAndCountMsgpSerdeG{})
 

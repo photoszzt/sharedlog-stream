@@ -6,7 +6,9 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 )
 
-type AuctionIdCntMaxJSONSerdeG struct{}
+type AuctionIdCntMaxJSONSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
 
 var _ = commtypes.SerdeG[AuctionIdCntMax](AuctionIdCntMaxJSONSerdeG{})
 
@@ -23,7 +25,9 @@ func (s AuctionIdCntMaxJSONSerdeG) Decode(value []byte) (AuctionIdCntMax, error)
 	return ai, nil
 }
 
-type AuctionIdCntMaxMsgpSerdeG struct{}
+type AuctionIdCntMaxMsgpSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
 
 var _ = commtypes.SerdeG[AuctionIdCntMax](AuctionIdCntMaxMsgpSerdeG{})
 

@@ -27,7 +27,12 @@ func (pt PersonTime) String() string {
 		pt.Name, pt.ID, pt.StartTime)
 }
 
-type PersonTimeJSONSerde struct{}
+type PersonTimeJSONSerde struct {
+	commtypes.DefaultJSONSerde
+}
+type PersonTimeMsgpSerde struct {
+	commtypes.DefaultMsgpSerde
+}
 
 var _ = commtypes.Serde(PersonTimeJSONSerde{})
 
@@ -48,8 +53,6 @@ func (d PersonTimeJSONSerde) Decode(value []byte) (interface{}, error) {
 	}
 	return se, nil
 }
-
-type PersonTimeMsgpSerde struct{}
 
 var _ = commtypes.Serde(PersonTimeMsgpSerde{})
 

@@ -6,7 +6,9 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 )
 
-type AuctionIdSellerJSONSerdeG struct{}
+type AuctionIdSellerJSONSerdeG struct {
+	commtypes.DefaultJSONSerde
+}
 
 var _ = commtypes.SerdeG[AuctionIdSeller](AuctionIdSellerJSONSerdeG{})
 
@@ -23,7 +25,9 @@ func (s AuctionIdSellerJSONSerdeG) Decode(value []byte) (AuctionIdSeller, error)
 	return v, nil
 }
 
-type AuctionIdSellerMsgpSerdeG struct{}
+type AuctionIdSellerMsgpSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
 
 var _ = commtypes.SerdeG[AuctionIdSeller](AuctionIdSellerMsgpSerdeG{})
 

@@ -53,7 +53,9 @@ func CastToAuctionIdSeller(value interface{}) *AuctionIdSeller {
 	return val
 }
 
-type AuctionIdSellerJSONSerde struct{}
+type AuctionIdSellerJSONSerde struct {
+	commtypes.DefaultJSONSerde
+}
 
 var _ = commtypes.Serde(AuctionIdSellerJSONSerde{})
 
@@ -71,7 +73,9 @@ func (s AuctionIdSellerJSONSerde) Decode(value []byte) (interface{}, error) {
 	return v, nil
 }
 
-type AuctionIdSellerMsgpSerde struct{}
+type AuctionIdSellerMsgpSerde struct {
+	commtypes.DefaultMsgpSerde
+}
 
 var _ = commtypes.Serde(AuctionIdSellerMsgpSerde{})
 

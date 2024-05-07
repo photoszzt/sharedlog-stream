@@ -28,7 +28,13 @@ func SizeOfSumAndCountPtr(k *SumAndCount) int64 {
 	return 16
 }
 
-type SumAndCountJSONSerde struct{}
+type SumAndCountJSONSerde struct {
+	commtypes.DefaultJSONSerde
+}
+
+type SumAndCountMsgpSerde struct {
+	commtypes.DefaultMsgpSerde
+}
 
 var _ = commtypes.Serde(SumAndCountJSONSerde{})
 
@@ -44,8 +50,6 @@ func (s SumAndCountJSONSerde) Decode(value []byte) (interface{}, error) {
 	}
 	return sc, nil
 }
-
-type SumAndCountMsgpSerde struct{}
 
 var _ = commtypes.Serde(SumAndCountMsgpSerde{})
 

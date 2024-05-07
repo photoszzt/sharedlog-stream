@@ -25,7 +25,9 @@ func (aic AuctionIdCount) String() string {
 	return fmt.Sprintf("AuctionIdCount: {AucId: %d, Count: %d}", aic.AucId, aic.Count)
 }
 
-type AuctionIdCountJSONSerde struct{}
+type AuctionIdCountJSONSerde struct {
+	commtypes.DefaultJSONSerde
+}
 
 var _ = commtypes.Serde(AuctionIdCountJSONSerde{})
 
@@ -43,7 +45,9 @@ func (d AuctionIdCountJSONSerde) Decode(value []byte) (interface{}, error) {
 	return se, nil
 }
 
-type AuctionIdCountMsgpSerde struct{}
+type AuctionIdCountMsgpSerde struct {
+	commtypes.DefaultMsgpSerde
+}
 
 var _ = commtypes.Serde(AuctionIdCountMsgpSerde{})
 

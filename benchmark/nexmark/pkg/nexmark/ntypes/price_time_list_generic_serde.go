@@ -6,7 +6,13 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 )
 
-type PriceTimeListJSONSerdeG struct{}
+type PriceTimeListJSONSerdeG struct {
+	commtypes.DefaultJSONSerde
+}
+
+type PriceTimeListMsgpSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
 
 var _ = commtypes.SerdeG[PriceTimeList](PriceTimeListJSONSerdeG{})
 
@@ -22,8 +28,6 @@ func (s PriceTimeListJSONSerdeG) Decode(value []byte) (PriceTimeList, error) {
 	}
 	return ptl, nil
 }
-
-type PriceTimeListMsgpSerdeG struct{}
 
 var _ = commtypes.SerdeG[PriceTimeList](PriceTimeListMsgpSerdeG{})
 

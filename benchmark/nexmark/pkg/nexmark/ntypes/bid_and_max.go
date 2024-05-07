@@ -29,7 +29,9 @@ func (bm BidAndMax) String() string {
 		bm.Price, bm.Auction, bm.Bidder, bm.BidTs, bm.WStartMs, bm.WEndMs)
 }
 
-type BidAndMaxJSONSerde struct{}
+type BidAndMaxJSONSerde struct {
+	commtypes.DefaultJSONSerde
+}
 
 var _ = commtypes.Serde(BidAndMaxJSONSerde{})
 
@@ -46,7 +48,9 @@ func (s BidAndMaxJSONSerde) Decode(value []byte) (interface{}, error) {
 	return bm, nil
 }
 
-type BidAndMaxMsgpSerde struct{}
+type BidAndMaxMsgpSerde struct {
+	commtypes.DefaultMsgpSerde
+}
 
 var _ = commtypes.Serde(BidAndMaxMsgpSerde{})
 

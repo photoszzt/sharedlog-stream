@@ -26,7 +26,9 @@ func (aicm AuctionIdCntMax) String() string {
 		aicm.AucId, aicm.Count, aicm.MaxCnt)
 }
 
-type AuctionIdCntMaxJSONSerde struct{}
+type AuctionIdCntMaxJSONSerde struct {
+	commtypes.DefaultJSONSerde
+}
 
 var _ = commtypes.Serde(AuctionIdCntMaxJSONSerde{})
 
@@ -44,7 +46,9 @@ func (s AuctionIdCntMaxJSONSerde) Decode(value []byte) (interface{}, error) {
 	return ai, nil
 }
 
-type AuctionIdCntMaxMsgpSerde struct{}
+type AuctionIdCntMaxMsgpSerde struct {
+	commtypes.DefaultMsgpSerde
+}
 
 var _ = commtypes.Serde(AuctionIdCntMaxMsgpSerde{})
 

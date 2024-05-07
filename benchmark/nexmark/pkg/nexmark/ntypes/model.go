@@ -132,7 +132,12 @@ func NewBidEvent(bid *Bid) *Event {
 	}
 }
 
-type EventMsgpSerde struct{}
+type EventMsgpSerde struct {
+	commtypes.DefaultMsgpSerde
+}
+type EventJSONSerde struct {
+	commtypes.DefaultJSONSerde
+}
 
 var _ = commtypes.Encoder(EventMsgpSerde{})
 
@@ -142,8 +147,6 @@ func (e EventMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	buf := *b
 	return event.MarshalMsg(buf[:0])
 }
-
-type EventJSONSerde struct{}
 
 var _ = commtypes.Encoder(EventJSONSerde{})
 

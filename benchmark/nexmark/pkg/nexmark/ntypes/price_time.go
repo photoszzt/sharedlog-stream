@@ -54,7 +54,12 @@ func CastToPriceTimePtr(value interface{}) *PriceTime {
 	return pt
 }
 
-type PriceTimeJSONSerde struct{}
+type PriceTimeJSONSerde struct {
+	commtypes.DefaultJSONSerde
+}
+type PriceTimeMsgpSerde struct {
+	commtypes.DefaultJSONSerde
+}
 
 var _ = commtypes.Serde(PriceTimeJSONSerde{})
 
@@ -70,8 +75,6 @@ func (s PriceTimeJSONSerde) Decode(value []byte) (interface{}, error) {
 	}
 	return pt, nil
 }
-
-type PriceTimeMsgpSerde struct{}
 
 var _ = commtypes.Serde(PriceTimeMsgpSerde{})
 

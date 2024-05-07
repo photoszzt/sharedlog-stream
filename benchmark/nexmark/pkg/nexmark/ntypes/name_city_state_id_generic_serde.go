@@ -6,7 +6,12 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 )
 
-type NameCityStateIdJSONSerdeG struct{}
+type NameCityStateIdJSONSerdeG struct {
+	commtypes.DefaultJSONSerde
+}
+type NameCityStateIdMsgpSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
 
 var _ = commtypes.SerdeG[NameCityStateId](NameCityStateIdJSONSerdeG{})
 
@@ -21,8 +26,6 @@ func (s NameCityStateIdJSONSerdeG) Decode(value []byte) (NameCityStateId, error)
 	}
 	return ncsi, nil
 }
-
-type NameCityStateIdMsgpSerdeG struct{}
 
 var _ = commtypes.SerdeG[NameCityStateId](NameCityStateIdMsgpSerdeG{})
 

@@ -28,7 +28,12 @@ func (ncsi NameCityStateId) String() string {
 		ncsi.Name, ncsi.City, ncsi.State, ncsi.ID)
 }
 
-type NameCityStateIdJSONSerde struct{}
+type NameCityStateIdJSONSerde struct {
+	commtypes.DefaultJSONSerde
+}
+type NameCityStateIdMsgpSerde struct {
+	commtypes.DefaultMsgpSerde
+}
 
 var _ = commtypes.Serde(NameCityStateIdJSONSerde{})
 
@@ -44,8 +49,6 @@ func (s NameCityStateIdJSONSerde) Decode(value []byte) (interface{}, error) {
 	}
 	return ncsi, nil
 }
-
-type NameCityStateIdMsgpSerde struct{}
 
 var _ = commtypes.Serde(NameCityStateIdMsgpSerde{})
 

@@ -21,8 +21,12 @@ func SizeOfBidPricePtrIn(k *BidPrice) int64 {
 }
 
 type (
-	BidPriceJSONSerde struct{}
-	BidPriceMsgpSerde struct{}
+	BidPriceJSONSerde struct {
+		commtypes.DefaultMsgpSerde
+	}
+	BidPriceMsgpSerde struct {
+		commtypes.DefaultMsgpSerde
+	}
 )
 
 var _ = commtypes.Serde(BidPriceJSONSerde{})

@@ -29,7 +29,9 @@ func (ab AuctionBid) String() string {
 		ab.BidDateTime, ab.AucDateTime, ab.AucExpires, ab.BidPrice, ab.AucCategory)
 }
 
-type AuctionBidJSONSerde struct{}
+type AuctionBidJSONSerde struct {
+	commtypes.DefaultJSONSerde
+}
 
 var _ = commtypes.Serde(AuctionBidJSONSerde{})
 
@@ -46,7 +48,9 @@ func (s AuctionBidJSONSerde) Decode(value []byte) (interface{}, error) {
 	return &ab, nil
 }
 
-type AuctionBidMsgpSerde struct{}
+type AuctionBidMsgpSerde struct {
+	commtypes.DefaultMsgpSerde
+}
 
 var _ = commtypes.Serde(AuctionBidMsgpSerde{})
 

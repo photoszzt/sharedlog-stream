@@ -7,8 +7,12 @@ import (
 )
 
 type (
-	BidPriceJSONSerdeG struct{}
-	BidPriceMsgpSerdeG struct{}
+	BidPriceJSONSerdeG struct {
+		commtypes.DefaultJSONSerde
+	}
+	BidPriceMsgpSerdeG struct {
+		commtypes.DefaultMsgpSerde
+	}
 )
 
 var _ = commtypes.SerdeG[BidPrice](BidPriceJSONSerdeG{})

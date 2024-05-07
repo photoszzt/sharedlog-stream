@@ -6,7 +6,13 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 )
 
-type StartEndTimeJSONSerdeG struct{}
+type StartEndTimeJSONSerdeG struct {
+	commtypes.DefaultJSONSerde
+}
+
+type StartEndTimeMsgpSerdeG struct {
+	commtypes.DefaultMsgpSerde
+}
 
 var _ = commtypes.SerdeG[StartEndTime](StartEndTimeJSONSerdeG{})
 
@@ -22,8 +28,6 @@ func (d StartEndTimeJSONSerdeG) Decode(value []byte) (StartEndTime, error) {
 	}
 	return se, nil
 }
-
-type StartEndTimeMsgpSerdeG struct{}
 
 var _ = commtypes.SerdeG[StartEndTime](StartEndTimeMsgpSerdeG{})
 
