@@ -17,7 +17,7 @@ var (
 	_ = commtypes.SerdeG[*RTxnReply](RTxnReplyMsgpSerdeG{})
 )
 
-func (e RTxnReplyMsgpSerdeG) Encode(value *RTxnArg) ([]byte, error) {
+func (e RTxnReplyMsgpSerdeG) Encode(value *RTxnReply) ([]byte, error) {
 	b := commtypes.PopBuffer()
 	buf := *b
 	return value.MarshalMsg(buf[:0])

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/tinylib/msgp/msgp"
+	"golang.org/x/xerrors"
 )
 
 type RemoteTxnClient interface {
@@ -89,7 +90,7 @@ func postRequest[V msgp.Decodable](client *http.Client, url, nodeConstraint stri
 func (c *RTxnRpcClient) Init(ctx context.Context, in *InitArg) (*InitReply, error) {
 	arg := &RTxnArg{
 		RpcType:     Init,
-		SerdeFormat: c.serdeFormat,
+		SerdeFormat: uint8(c.serdeFormat),
 		Init:        in,
 	}
 	ret, err := c.serde.Encode(arg)
@@ -99,18 +100,22 @@ func (c *RTxnRpcClient) Init(ctx context.Context, in *InitArg) (*InitReply, erro
 	if err != nil {
 		return nil, err
 	}
-	reply := InitReply{}
+	reply := RTxnReply{}
 	err = postRequest(c.client, c.funcUrl, c.nodeConstraint, ret, &reply)
 	if err != nil {
 		return nil, err
 	}
-	return &reply, nil
+	if reply.Success {
+		return reply.InitReply, nil
+	} else {
+		return nil, xerrors.New(reply.Message)
+	}
 }
 
 func (c *RTxnRpcClient) AppendTpPar(ctx context.Context, in *txn_data.TxnMetaMsg) error {
 	arg := &RTxnArg{
 		RpcType:     AppendTpPar,
-		SerdeFormat: c.serdeFormat,
+		SerdeFormat: uint8(c.serdeFormat),
 		MetaMsg:     in,
 	}
 	ret, err := c.serde.Encode(arg)
@@ -120,14 +125,22 @@ func (c *RTxnRpcClient) AppendTpPar(ctx context.Context, in *txn_data.TxnMetaMsg
 	if err != nil {
 		return err
 	}
-	err = postReqOnly(c.client, c.funcUrl, c.nodeConstraint, ret)
-	return err
+	reply := RTxnReply{}
+	err = postRequest(c.client, c.funcUrl, c.nodeConstraint, ret, &reply)
+	if err != nil {
+		return err
+	}
+	if reply.Success {
+		return nil
+	} else {
+		return xerrors.New(reply.Message)
+	}
 }
 
 func (c *RTxnRpcClient) AbortTxn(ctx context.Context, in *txn_data.TxnMetaMsg) error {
 	arg := &RTxnArg{
 		RpcType:     AbortTxn,
-		SerdeFormat: c.serdeFormat,
+		SerdeFormat: uint8(c.serdeFormat),
 		MetaMsg:     in,
 	}
 	ret, err := c.serde.Encode(arg)
@@ -137,14 +150,22 @@ func (c *RTxnRpcClient) AbortTxn(ctx context.Context, in *txn_data.TxnMetaMsg) e
 	if err != nil {
 		return err
 	}
-	err = postReqOnly(c.client, c.funcUrl, c.nodeConstraint, ret)
-	return err
+	reply := RTxnReply{}
+	err = postRequest(c.client, c.funcUrl, c.nodeConstraint, ret, &reply)
+	if err != nil {
+		return err
+	}
+	if reply.Success {
+		return nil
+	} else {
+		return xerrors.New(reply.Message)
+	}
 }
 
 func (c *RTxnRpcClient) CommitTxnAsyncComplete(ctx context.Context, in *txn_data.TxnMetaMsg) (*CommitReply, error) {
 	arg := &RTxnArg{
 		RpcType:     CommitTxnAsync,
-		SerdeFormat: c.serdeFormat,
+		SerdeFormat: uint8(c.serdeFormat),
 		MetaMsg:     in,
 	}
 	ret, err := c.serde.Encode(arg)
@@ -154,18 +175,22 @@ func (c *RTxnRpcClient) CommitTxnAsyncComplete(ctx context.Context, in *txn_data
 	if err != nil {
 		return nil, err
 	}
-	reply := CommitReply{}
+	reply := RTxnReply{}
 	err = postRequest(c.client, c.funcUrl, c.nodeConstraint, ret, &reply)
 	if err != nil {
 		return nil, err
 	}
-	return &reply, nil
+	if reply.Success {
+		return reply.CommitReply, nil
+	} else {
+		return nil, xerrors.New(reply.Message)
+	}
 }
 
 func (c *RTxnRpcClient) AppendConsumedOffset(ctx context.Context, in *ConsumedOffsets) error {
 	arg := &RTxnArg{
 		RpcType:     AppendConsumedOff,
-		SerdeFormat: c.serdeFormat,
+		SerdeFormat: uint8(c.serdeFormat),
 		ConsumedOff: in,
 	}
 	ret, err := c.serde.Encode(arg)
@@ -175,5 +200,14 @@ func (c *RTxnRpcClient) AppendConsumedOffset(ctx context.Context, in *ConsumedOf
 	if err != nil {
 		return err
 	}
-	return postReqOnly(c.client, c.funcUrl, c.nodeConstraint, ret)
+	reply := RTxnReply{}
+	err = postRequest(c.client, c.funcUrl, c.nodeConstraint, ret, &reply)
+	if err != nil {
+		return err
+	}
+	if reply.Success {
+		return nil
+	} else {
+		return xerrors.New(reply.Message)
+	}
 }
