@@ -135,12 +135,18 @@ func valTsSerToValueTs(vtsSer *ValueTimestampSerialized, valSerde Serde) (ValueT
 
 type ValueTimestampJSONSerde struct {
 	ValJSONSerde Serde
+	DefaultJSONSerde
 }
 
 var _ = Serde(ValueTimestampJSONSerde{})
 
 func (s ValueTimestampJSONSerde) Encode(value interface{}) ([]byte, error) {
 	vs, err := convertToValueTsSer(value, s.ValJSONSerde)
+	defer func() {
+		if s.ValJSONSerde.UsedBufferPool() && vs.ValueSerialized != nil {
+			PushBuffer(&vs.ValueSerialized)
+		}
+	}()
 	if err != nil {
 		return nil, err
 	}
@@ -162,18 +168,26 @@ func (s ValueTimestampJSONSerde) Decode(value []byte) (interface{}, error) {
 }
 
 type ValueTimestampMsgpSerde struct {
+	DefaultMsgpSerde
 	ValMsgpSerde Serde
 }
 
 func (s ValueTimestampMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	vs, err := convertToValueTsSer(value, s.ValMsgpSerde)
+	defer func() {
+		if s.ValMsgpSerde.UsedBufferPool() && vs.ValueSerialized != nil {
+			PushBuffer(&vs.ValueSerialized)
+		}
+	}()
 	if err != nil {
 		return nil, err
 	}
 	if vs == nil {
 		return nil, nil
 	}
-	return vs.MarshalMsg(nil)
+	b := PopBuffer()
+	buf := *b
+	return vs.MarshalMsg(buf[:0])
 }
 
 func (s ValueTimestampMsgpSerde) Decode(value []byte) (interface{}, error) {

@@ -8,7 +8,9 @@ type PayloadArr struct {
 	Payloads [][]byte `json:"parr,omitempty" msg:"parr,omitempty"`
 }
 
-type PayloadArrJSONSerde struct{}
+type PayloadArrJSONSerde struct {
+	DefaultJSONSerde
+}
 
 var _ = Serde(PayloadArrJSONSerde{})
 
@@ -28,13 +30,17 @@ func (s PayloadArrJSONSerde) Decode(value []byte) (interface{}, error) {
 	return v, nil
 }
 
-type PayloadArrMsgpSerde struct{}
+type PayloadArrMsgpSerde struct {
+	DefaultMsgpSerde
+}
 
 var _ = Serde(PayloadArrMsgpSerde{})
 
 func (s PayloadArrMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	val := value.(*PayloadArr)
-	return val.MarshalMsg(nil)
+	b := PopBuffer()
+	buf := *b
+	return val.MarshalMsg(buf[:0])
 }
 
 func (s PayloadArrMsgpSerde) Decode(value []byte) (interface{}, error) {

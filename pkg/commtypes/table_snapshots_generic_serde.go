@@ -17,7 +17,9 @@ func GetTableSnapshotsSerde(serdeFormat SerdeFormat) (SerdeG[TableSnapshots], er
 	}
 }
 
-type TableSnapshotsJSONSerde struct{}
+type TableSnapshotsJSONSerde struct {
+	DefaultJSONSerde
+}
 
 var _ = fmt.Stringer(TableSnapshotsJSONSerde{})
 
@@ -39,7 +41,9 @@ func (s TableSnapshotsJSONSerde) Decode(v []byte) (TableSnapshots, error) {
 	return t, nil
 }
 
-type TableSnapshotsMsgpSerde struct{}
+type TableSnapshotsMsgpSerde struct {
+	DefaultMsgpSerde
+}
 
 var _ = fmt.Stringer(TableSnapshotsMsgpSerde{})
 
@@ -50,7 +54,9 @@ func (s TableSnapshotsMsgpSerde) String() string {
 var _ SerdeG[TableSnapshots] = TableSnapshotsMsgpSerde{}
 
 func (s TableSnapshotsMsgpSerde) Encode(v TableSnapshots) ([]byte, error) {
-	return v.MarshalMsg(nil)
+	b := PopBuffer()
+	buf := *b
+	return v.MarshalMsg(buf[:0])
 }
 
 func (s TableSnapshotsMsgpSerde) Decode(v []byte) (TableSnapshots, error) {

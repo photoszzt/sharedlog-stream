@@ -5,7 +5,14 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 )
 
-type OffsetMarkerJSONSerdeG struct{}
+type (
+	OffsetMarkerJSONSerdeG struct {
+		DefaultJSONSerde
+	}
+	OffsetMarkerMsgpSerdeG struct {
+		DefaultMsgpSerde
+	}
+)
 
 var _ = SerdeG[OffsetMarker](OffsetMarkerJSONSerdeG{})
 
@@ -21,12 +28,12 @@ func (s OffsetMarkerJSONSerdeG) Decode(value []byte) (OffsetMarker, error) {
 	return om, nil
 }
 
-type OffsetMarkerMsgpSerdeG struct{}
-
 var _ = SerdeG[OffsetMarker](OffsetMarkerMsgpSerdeG{})
 
 func (s OffsetMarkerMsgpSerdeG) Encode(value OffsetMarker) ([]byte, error) {
-	return value.MarshalMsg(nil)
+	b := PopBuffer()
+	buf := *b
+	return value.MarshalMsg(buf[:0])
 }
 
 func (s OffsetMarkerMsgpSerdeG) Decode(value []byte) (OffsetMarker, error) {

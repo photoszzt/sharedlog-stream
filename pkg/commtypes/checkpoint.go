@@ -19,9 +19,15 @@ type Checkpoint struct {
 }
 
 type (
-	CheckpointJSONSerdeG    struct{}
-	CheckpointPtrJSONSerdeG struct{}
-	CheckpointMsgpSerdeG    struct{}
+	CheckpointJSONSerdeG struct {
+		DefaultJSONSerde
+	}
+	CheckpointPtrJSONSerdeG struct {
+		DefaultJSONSerde
+	}
+	CheckpointMsgpSerdeG struct {
+		DefaultMsgpSerde
+	}
 )
 
 var (

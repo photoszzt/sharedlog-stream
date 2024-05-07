@@ -92,6 +92,7 @@ func decodeToMsg(msgSer *MessageSerialized, keySerde Serde, valSerde Serde) (int
 }
 
 type MessageMsgpSerde struct {
+	DefaultMsgpSerde
 	keySerde Serde
 	valSerde Serde
 }
@@ -100,24 +101,48 @@ var _ MessageSerde = &MessageMsgpSerde{}
 
 func (s MessageMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	msgSer, err := convertToMsgSer(value, s.keySerde, s.valSerde)
+	defer func() {
+		if msgSer != nil {
+			if s.keySerde.UsedBufferPool() && msgSer.KeyEnc != nil {
+				PushBuffer(&msgSer.KeyEnc)
+			}
+			if s.valSerde.UsedBufferPool() && msgSer.ValueEnc != nil {
+				PushBuffer(&msgSer.ValueEnc)
+			}
+		}
+	}()
 	if err != nil {
 		return nil, err
 	}
 	if msgSer == nil {
 		return nil, nil
 	}
-	return msgSer.MarshalMsg(nil)
+	b := PopBuffer()
+	buf := *b
+	return msgSer.MarshalMsg(buf[:0])
 }
 
 func (s MessageMsgpSerde) EncodeAndRtnKVBin(value interface{}) ([]byte, []byte /* kEnc */, []byte /* vEnc */, error) {
 	msgSer, err := convertToMsgSer(value, s.keySerde, s.valSerde)
+	defer func() {
+		if msgSer != nil {
+			if s.keySerde.UsedBufferPool() && msgSer.KeyEnc != nil {
+				PushBuffer(&msgSer.KeyEnc)
+			}
+			if s.valSerde.UsedBufferPool() && msgSer.ValueEnc != nil {
+				PushBuffer(&msgSer.ValueEnc)
+			}
+		}
+	}()
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	if msgSer == nil {
 		return nil, nil, nil, nil
 	}
-	msgEnc, err := msgSer.MarshalMsg(nil)
+	b := PopBuffer()
+	buf := *b
+	msgEnc, err := msgSer.MarshalMsg(buf[:0])
 	return msgEnc, msgSer.KeyEnc, msgSer.ValueEnc, err
 }
 
@@ -150,6 +175,7 @@ func (s MessageMsgpSerde) Decode(value []byte) (interface{}, error) {
 }
 
 type MessageJSONSerde struct {
+	DefaultJSONSerde
 	KeySerde Serde
 	ValSerde Serde
 }
@@ -157,15 +183,26 @@ type MessageJSONSerde struct {
 var _ MessageSerde = MessageJSONSerde{}
 
 func (s MessageJSONSerde) Encode(value interface{}) ([]byte, error) {
-	msg, err := convertToMsgSer(value, s.KeySerde, s.ValSerde)
+	msgSer, err := convertToMsgSer(value, s.KeySerde, s.ValSerde)
+	defer func() {
+		if msgSer != nil {
+			if s.KeySerde.UsedBufferPool() && msgSer.KeyEnc != nil {
+				PushBuffer(&msgSer.KeyEnc)
+			}
+			if s.ValSerde.UsedBufferPool() && msgSer.ValueEnc != nil {
+				PushBuffer(&msgSer.ValueEnc)
+			}
+		}
+	}()
 	if err != nil {
 		return nil, err
 	}
-	if msg == nil {
+	if msgSer == nil {
 		return nil, nil
 	}
-	return json.Marshal(msg)
+	return json.Marshal(msgSer)
 }
+
 func (s MessageJSONSerde) EncodeAndRtnKVBin(value interface{}) ([]byte, []byte /* kEnc */, []byte /* vEnc */, error) {
 	msg, err := convertToMsgSer(value, s.KeySerde, s.ValSerde)
 	if err != nil {

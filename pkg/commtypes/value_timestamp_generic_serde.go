@@ -8,6 +8,7 @@ import (
 )
 
 type ValueTimestampJSONSerdeG struct {
+	DefaultMsgpSerde
 	ValJSONSerde Serde
 }
 
@@ -15,6 +16,11 @@ var _ = SerdeG[ValueTimestamp](ValueTimestampJSONSerdeG{})
 
 func (s ValueTimestampJSONSerdeG) Encode(value ValueTimestamp) ([]byte, error) {
 	vs, err := valTsToValueTsSer(value, s.ValJSONSerde)
+	defer func() {
+		if s.ValJSONSerde.UsedBufferPool() && vs.ValueSerialized != nil {
+			PushBuffer(&vs.ValueSerialized)
+		}
+	}()
 	if err != nil {
 		return nil, err
 	}
@@ -36,18 +42,24 @@ func (s ValueTimestampJSONSerdeG) Decode(value []byte) (ValueTimestamp, error) {
 }
 
 type ValueTimestampMsgpSerdeG struct {
+	DefaultMsgpSerde
 	ValMsgpSerde Serde
 }
 
 func (s ValueTimestampMsgpSerdeG) Encode(value ValueTimestamp) ([]byte, error) {
 	vs, err := valTsToValueTsSer(value, s.ValMsgpSerde)
+	defer func() {
+		if s.ValMsgpSerde.UsedBufferPool() && vs.ValueSerialized != nil {
+			PushBuffer(&vs.ValueSerialized)
+		}
+	}()
 	if err != nil {
 		return nil, err
 	}
 	if vs == nil {
 		return nil, nil
 	}
-	b := commtypes.PopBuffer()
+	b := PopBuffer()
 	buf := *b
 	return vs.MarshalMsg(buf[:0])
 }
@@ -170,11 +182,17 @@ func (s ValueTimestampGSize[V]) SizeOfValueTimestamp(v ValueTimestampG[V]) int64
 }
 
 type ValueTimestampGJSONSerdeG[V any] struct {
+	DefaultJSONSerde
 	ValJSONSerde SerdeG[V]
 }
 
 func (s ValueTimestampGJSONSerdeG[V]) Encode(value ValueTimestampG[V]) ([]byte, error) {
 	vs, err := valTsGToValueTsSer(value, s.ValJSONSerde)
+	defer func() {
+		if s.ValJSONSerde.UsedBufferPool() && vs.ValueSerialized != nil {
+			PushBuffer(&vs.ValueSerialized)
+		}
+	}()
 	if err != nil {
 		return nil, err
 	}
@@ -196,18 +214,26 @@ func (s ValueTimestampGJSONSerdeG[V]) Decode(value []byte) (ValueTimestampG[V], 
 }
 
 type ValueTimestampGMsgpSerdeG[V any] struct {
+	DefaultMsgpSerde
 	ValMsgpSerde SerdeG[V]
 }
 
 func (s ValueTimestampGMsgpSerdeG[V]) Encode(value ValueTimestampG[V]) ([]byte, error) {
 	vs, err := valTsGToValueTsSer(value, s.ValMsgpSerde)
+	defer func() {
+		if s.ValMsgpSerde.UsedBufferPool() && vs.ValueSerialized != nil {
+			PushBuffer(&vs.ValueSerialized)
+		}
+	}()
 	if err != nil {
 		return nil, err
 	}
 	if vs == nil {
 		return nil, nil
 	}
-	return vs.MarshalMsg(nil)
+	b := PopBuffer()
+	buf := *b
+	return vs.MarshalMsg(buf[:0])
 }
 
 func (s ValueTimestampGMsgpSerdeG[V]) Decode(value []byte) (ValueTimestampG[V], error) {

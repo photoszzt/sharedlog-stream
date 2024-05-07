@@ -109,6 +109,7 @@ func changeSerToChange(val *ChangeSerialized, valSerde Serde) (Change, error) {
 }
 
 type ChangeJSONSerde struct {
+	DefaultJSONSerde
 	ValJSONSerde Serde
 }
 
@@ -116,6 +117,16 @@ var _ = Serde(&ChangeJSONSerde{})
 
 func (s ChangeJSONSerde) Encode(value interface{}) ([]byte, error) {
 	c, err := convertToChangeSer(value, s.ValJSONSerde)
+	defer func() {
+		if s.ValJSONSerde.UsedBufferPool() {
+			if c.NewValSerialized != nil {
+				PushBuffer(&c.NewValSerialized)
+			}
+			if c.OldValSerialized != nil {
+				PushBuffer(&c.OldValSerialized)
+			}
+		}
+	}()
 	if err != nil {
 		return nil, err
 	}
@@ -131,6 +142,7 @@ func (s ChangeJSONSerde) Decode(value []byte) (interface{}, error) {
 }
 
 type ChangeMsgpSerde struct {
+	DefaultMsgpSerde
 	ValMsgpSerde Serde
 }
 
@@ -138,10 +150,22 @@ var _ = Serde(ChangeMsgpSerde{})
 
 func (s ChangeMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	c, err := convertToChangeSer(value, s.ValMsgpSerde)
+	defer func() {
+		if s.ValMsgpSerde.UsedBufferPool() {
+			if c.NewValSerialized != nil {
+				PushBuffer(&c.NewValSerialized)
+			}
+			if c.OldValSerialized != nil {
+				PushBuffer(&c.OldValSerialized)
+			}
+		}
+	}()
 	if err != nil {
 		return nil, err
 	}
-	return c.MarshalMsg(nil)
+	b := PopBuffer()
+	buf := *b
+	return c.MarshalMsg(buf[:0])
 }
 
 func (s ChangeMsgpSerde) Decode(value []byte) (interface{}, error) {

@@ -2,14 +2,19 @@ package remote_txn_rpc
 
 import commtypes "sharedlog-stream/pkg/commtypes"
 
-type RTxnArgJSONSerdeG struct{}
-
-type RTxnArgMsgpSerdeG struct{}
+type (
+	RTxnArgJSONSerdeG struct{}
+	RTxnArgMsgpSerdeG struct {
+		commtypes.DefaultMsgpSerde
+	}
+)
 
 var _ = commtypes.SerdeG[*RTxnArg](RTxnArgMsgpSerdeG{})
 
 func (e RTxnArgMsgpSerdeG) Encode(value *RTxnArg) ([]byte, error) {
-	return value.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return value.MarshalMsg(buf[:0])
 }
 
 func (emd RTxnArgMsgpSerdeG) Decode(value []byte) (*RTxnArg, error) {

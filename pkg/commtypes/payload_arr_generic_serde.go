@@ -5,7 +5,9 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 )
 
-type PayloadArrJSONSerdeG struct{}
+type PayloadArrJSONSerdeG struct {
+	DefaultJSONSerde
+}
 
 var _ = SerdeG[PayloadArr](PayloadArrJSONSerdeG{})
 
@@ -21,7 +23,9 @@ func (s PayloadArrJSONSerdeG) Decode(value []byte) (PayloadArr, error) {
 	return v, nil
 }
 
-type PayloadArrMsgpSerdeG struct{}
+type PayloadArrMsgpSerdeG struct {
+	DefaultMsgpSerde
+}
 
 var _ = SerdeG[PayloadArr](PayloadArrMsgpSerdeG{})
 

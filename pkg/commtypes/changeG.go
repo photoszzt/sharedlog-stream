@@ -34,6 +34,7 @@ func NewChangeG[V any](newVal, oldVal V) ChangeG[V] {
 
 type ChangeGJSONSerdeG[V any] struct {
 	ValJSONSerde SerdeG[V]
+	DefaultJSONSerdeG[V]
 }
 
 func changeGToChangeSer[V any](value ChangeG[V], valSerde SerdeG[V]) (*ChangeSerialized, error) {
@@ -87,6 +88,16 @@ var _ = SerdeG[ChangeG[int]](ChangeGJSONSerdeG[int]{})
 
 func (s ChangeGJSONSerdeG[V]) Encode(value ChangeG[V]) ([]byte, error) {
 	c, err := changeGToChangeSer(value, s.ValJSONSerde)
+	defer func() {
+		if s.ValJSONSerde.UsedBufferPool() {
+			if c.NewValSerialized != nil {
+				PushBuffer(&c.NewValSerialized)
+			}
+			if c.OldValSerialized != nil {
+				PushBuffer(&c.OldValSerialized)
+			}
+		}
+	}()
 	if err != nil {
 		return nil, err
 	}
@@ -102,6 +113,7 @@ func (s ChangeGJSONSerdeG[V]) Decode(value []byte) (ChangeG[V], error) {
 }
 
 type ChangeGMsgpSerdeG[V any] struct {
+	DefaultMsgpSerdeG[V]
 	ValMsgpSerde SerdeG[V]
 }
 
@@ -109,15 +121,22 @@ var _ = SerdeG[ChangeG[int]](ChangeGMsgpSerdeG[int]{})
 
 func (s ChangeGMsgpSerdeG[V]) Encode(value ChangeG[V]) ([]byte, error) {
 	c, err := changeGToChangeSer(value, s.ValMsgpSerde)
+	defer func() {
+		if s.ValMsgpSerde.UsedBufferPool() {
+			if c.NewValSerialized != nil {
+				PushBuffer(&c.NewValSerialized)
+			}
+			if c.OldValSerialized != nil {
+				PushBuffer(&c.OldValSerialized)
+			}
+		}
+	}()
 	if err != nil {
 		return nil, err
 	}
 	b := PopBuffer()
 	buf := *b
-	ret, err := c.MarshalMsg(buf[:0])
-	PushBuffer(&c.NewValSerialized)
-	PushBuffer(&c.OldValSerialized)
-	return ret, err
+	return c.MarshalMsg(buf[:0])
 }
 
 func (s ChangeGMsgpSerdeG[V]) Decode(value []byte) (ChangeG[V], error) {

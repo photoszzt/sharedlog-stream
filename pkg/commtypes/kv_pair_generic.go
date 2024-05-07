@@ -46,10 +46,19 @@ func KVPairSerToKVPairG[K, V any](value KeyValueSerrialized, keySerde SerdeG[K],
 type KeyValuePairJSONSerdeG[K, V any] struct {
 	keySerde SerdeG[K]
 	valSerde SerdeG[V]
+	DefaultMsgpSerde
 }
 
 func (s KeyValuePairJSONSerdeG[K, V]) Encode(v *KeyValuePair[K, V]) ([]byte, error) {
 	kvser, err := KVPairToKVPairSer(v, s.keySerde, s.valSerde)
+	defer func() {
+		if s.keySerde.UsedBufferPool() && kvser.KeyEnc != nil {
+			PushBuffer(&kvser.KeyEnc)
+		}
+		if s.valSerde.UsedBufferPool() && kvser.ValueEnc != nil {
+			PushBuffer(&kvser.ValueEnc)
+		}
+	}()
 	if err != nil {
 		return nil, err
 	}
@@ -66,19 +75,30 @@ func (s KeyValuePairJSONSerdeG[K, V]) Decode(v []byte) (*KeyValuePair[K, V], err
 }
 
 type KeyValuePairMsgpSerdeG[K, V any] struct {
+	DefaultMsgpSerde
 	keySerde SerdeG[K]
 	valSerde SerdeG[V]
 }
 
-func (s *KeyValuePairMsgpSerdeG[K, V]) Encode(v *KeyValuePair[K, V]) ([]byte, error) {
+func (s KeyValuePairMsgpSerdeG[K, V]) Encode(v *KeyValuePair[K, V]) ([]byte, error) {
 	kvser, err := KVPairToKVPairSer(v, s.keySerde, s.valSerde)
+	defer func() {
+		if s.keySerde.UsedBufferPool() && kvser.KeyEnc != nil {
+			PushBuffer(&kvser.KeyEnc)
+		}
+		if s.valSerde.UsedBufferPool() && kvser.ValueEnc != nil {
+			PushBuffer(&kvser.ValueEnc)
+		}
+	}()
 	if err != nil {
 		return nil, err
 	}
-	return kvser.MarshalMsg(nil)
+	b := PopBuffer()
+	buf := *b
+	return kvser.MarshalMsg(buf[:0])
 }
 
-func (s *KeyValuePairMsgpSerdeG[K, V]) Decode(v []byte) (*KeyValuePair[K, V], error) {
+func (s KeyValuePairMsgpSerdeG[K, V]) Decode(v []byte) (*KeyValuePair[K, V], error) {
 	var kvser KeyValueSerrialized
 	_, err := kvser.UnmarshalMsg(v)
 	if err != nil {
@@ -90,15 +110,16 @@ func (s *KeyValuePairMsgpSerdeG[K, V]) Decode(v []byte) (*KeyValuePair[K, V], er
 func GetKeyValuePairSerdeG[K, V any](format SerdeFormat, keySerde SerdeG[K], valSerde SerdeG[V]) (SerdeG[*KeyValuePair[K, V]], error) {
 	switch format {
 	case JSON:
-		return KeyValuePairJSONSerdeG[K, V]{keySerde, valSerde}, nil
+		return KeyValuePairJSONSerdeG[K, V]{keySerde: keySerde, valSerde: valSerde}, nil
 	case MSGP:
-		return &KeyValuePairMsgpSerdeG[K, V]{keySerde, valSerde}, nil
+		return KeyValuePairMsgpSerdeG[K, V]{keySerde: keySerde, valSerde: valSerde}, nil
 	default:
 		return nil, common_errors.ErrUnrecognizedSerdeFormat
 	}
 }
 
 type KeyValuePairsJSONSerdeG[K, V any] struct {
+	DefaultJSONSerde
 	payloadEnc PayloadArrJSONSerdeG
 	s          KeyValuePairJSONSerdeG[K, V]
 }
@@ -134,6 +155,7 @@ func (s KeyValuePairsJSONSerdeG[K, V]) Decode(v []byte) (KeyValuePairs[K, V], er
 }
 
 type KeyValuePairsMsgpSerdeG[K, V any] struct {
+	DefaultMsgpSerde
 	payloadEnc PayloadArrMsgpSerdeG
 	s          KeyValuePairMsgpSerdeG[K, V]
 }

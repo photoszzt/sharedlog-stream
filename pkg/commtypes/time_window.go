@@ -37,7 +37,9 @@ func (w *TimeWindow) Overlap(other Window) (bool, error) {
 	return w.Start() < other.End() && other.Start() < w.End(), nil
 }
 
-type TimeWindowJSONSerde struct{}
+type TimeWindowJSONSerde struct {
+	DefaultJSONSerde
+}
 
 func (s TimeWindowJSONSerde) Encode(value interface{}) ([]byte, error) {
 	tw := value.(*TimeWindow)
@@ -52,11 +54,15 @@ func (s TimeWindowJSONSerde) Decode(value []byte) (interface{}, error) {
 	return tw, nil
 }
 
-type TimeWindowMsgpSerde struct{}
+type TimeWindowMsgpSerde struct {
+	DefaultMsgpSerde
+}
 
 func (s TimeWindowMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	tw := value.(*TimeWindow)
-	return tw.MarshalMsg(nil)
+	b := PopBuffer()
+	buf := *b
+	return tw.MarshalMsg(buf[:0])
 }
 
 func (s TimeWindowMsgpSerde) Decode(value []byte) (interface{}, error) {

@@ -5,7 +5,9 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 )
 
-type EpochMarkerJSONSerdeG struct{}
+type EpochMarkerJSONSerdeG struct {
+	DefaultJSONSerde
+}
 
 var _ = SerdeG[EpochMarker](EpochMarkerJSONSerdeG{})
 
@@ -21,7 +23,9 @@ func (s EpochMarkerJSONSerdeG) Decode(value []byte) (EpochMarker, error) {
 	return em, nil
 }
 
-type EpochMarkerMsgpSerdeG struct{}
+type EpochMarkerMsgpSerdeG struct {
+	DefaultMsgpSerde
+}
 
 var _ = SerdeG[EpochMarker](EpochMarkerMsgpSerdeG{})
 

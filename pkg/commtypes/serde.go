@@ -9,6 +9,29 @@ import (
 	"golang.org/x/xerrors"
 )
 
+func Require(old []byte, extra int) []byte {
+	l := len(old)
+	c := cap(old)
+	r := l + extra
+	if c >= r {
+		return old
+	} else if l == 0 {
+		return make([]byte, 0, extra)
+	}
+	// the new size is the greater
+	// of double the old capacity
+	// and the sum of the old length
+	// and the number of new bytes
+	// necessary.
+	c <<= 1
+	if c < r {
+		c = r
+	}
+	n := make([]byte, l, c)
+	copy(n, old)
+	return n
+}
+
 var (
 	sizeNot8 = xerrors.New("size of value to deserialized is not 8")
 	sizeNot4 = xerrors.New("size of value to deserialized is not 4")
@@ -22,6 +45,22 @@ const (
 	JSON SerdeFormat = 0
 	MSGP SerdeFormat = 1
 )
+
+type DefaultJSONSerde struct{}
+
+func (DefaultJSONSerde) UsedBufferPool() bool { return false }
+
+type DefaultMsgpSerde struct{}
+
+func (DefaultMsgpSerde) UsedBufferPool() bool { return true }
+
+type DefaultJSONSerdeG[V any] struct{}
+
+func (DefaultJSONSerdeG[V]) UsedBufferPool() bool { return false }
+
+type DefaultMsgpSerdeG[V any] struct{}
+
+func (DefaultMsgpSerdeG[V]) UsedBufferPool() bool { return true }
 
 type Encoder interface {
 	Encode(interface{}) ([]byte, error)
@@ -54,18 +93,24 @@ func (df DecoderFunc) Decode(b []byte) (interface{}, error) {
 type Serde interface {
 	Encoder
 	Decoder
+	UsedBufferPool() bool
 }
 
 type SerdeG[V any] interface {
 	EncoderG[V]
 	DecoderG[V]
+	UsedBufferPool() bool
 }
 
-type Float64Encoder struct{}
-type Float64EncoderG struct{}
+type (
+	Float64Encoder  struct{}
+	Float64EncoderG struct{}
+)
 
-var _ = Encoder(Float64Encoder{})
-var _ = EncoderG[float64](Float64EncoderG{})
+var (
+	_ = Encoder(Float64Encoder{})
+	_ = EncoderG[float64](Float64EncoderG{})
+)
 
 func (e Float64Encoder) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
@@ -73,23 +118,31 @@ func (e Float64Encoder) Encode(value interface{}) ([]byte, error) {
 	}
 	v := value.(float64)
 	bits := math.Float64bits(v)
-	bs := make([]byte, 8)
+	b := PopBuffer()
+	bs := *b
+	bs = Require(bs[:0], 8)
 	binary.BigEndian.PutUint64(bs, bits)
 	return bs, nil
 }
 
 func (e Float64EncoderG) Encode(value float64) ([]byte, error) {
 	bits := math.Float64bits(value)
-	bs := make([]byte, 8)
+	b := PopBuffer()
+	bs := *b
+	bs = Require(bs[:0], 8)
 	binary.BigEndian.PutUint64(bs, bits)
 	return bs, nil
 }
 
-type Float64Decoder struct{}
-type Float64DecoderG struct{}
+type (
+	Float64Decoder  struct{}
+	Float64DecoderG struct{}
+)
 
-var _ = Decoder(Float64Decoder{})
-var _ = DecoderG[float64](Float64DecoderG{})
+var (
+	_ = Decoder(Float64Decoder{})
+	_ = DecoderG[float64](Float64DecoderG{})
+)
 
 func (e Float64Decoder) Decode(value []byte) (interface{}, error) {
 	if value == nil {
@@ -123,14 +176,23 @@ type Float64SerdeG struct {
 	Float64DecoderG
 }
 
-var _ = Serde(Float64Serde{})
-var _ = SerdeG[float64](Float64SerdeG{})
+func (Float64SerdeG) UsedBufferPool() bool { return true }
+func (Float64Serde) UsedBufferPool() bool  { return true }
 
-type Float32Encoder struct{}
-type Float32EncoderG struct{}
+var (
+	_ = Serde(Float64Serde{})
+	_ = SerdeG[float64](Float64SerdeG{})
+)
 
-var _ = Encoder(Float32Encoder{})
-var _ = EncoderG[float32](Float32EncoderG{})
+type (
+	Float32Encoder  struct{}
+	Float32EncoderG struct{}
+)
+
+var (
+	_ = Encoder(Float32Encoder{})
+	_ = EncoderG[float32](Float32EncoderG{})
+)
 
 func (e Float32Encoder) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
@@ -138,23 +200,31 @@ func (e Float32Encoder) Encode(value interface{}) ([]byte, error) {
 	}
 	v := value.(float32)
 	bits := math.Float32bits(v)
-	bs := make([]byte, 4)
+	b := PopBuffer()
+	bs := *b
+	bs = Require(bs[:0], 4)
 	binary.BigEndian.PutUint32(bs, bits)
 	return bs, nil
 }
 
 func (e Float32EncoderG) Encode(value float32) ([]byte, error) {
 	bits := math.Float32bits(value)
-	bs := make([]byte, 4)
+	b := PopBuffer()
+	bs := *b
+	bs = Require(bs[:0], 4)
 	binary.BigEndian.PutUint32(bs, bits)
 	return bs, nil
 }
 
-type Float32Decoder struct{}
-type Float32DecoderG struct{}
+type (
+	Float32Decoder  struct{}
+	Float32DecoderG struct{}
+)
 
-var _ = Decoder(Float32Decoder{})
-var _ = DecoderG[float32](Float32DecoderG{})
+var (
+	_ = Decoder(Float32Decoder{})
+	_ = DecoderG[float32](Float32DecoderG{})
+)
 
 func (e Float32Decoder) Decode(value []byte) (interface{}, error) {
 	if value == nil {
@@ -188,36 +258,53 @@ type Float32SerdeG struct {
 	Float32DecoderG
 }
 
-var _ = Serde(Float32Serde{})
-var _ = SerdeG[float32](Float32SerdeG{})
+var (
+	_ = Serde(Float32Serde{})
+	_ = SerdeG[float32](Float32SerdeG{})
+)
 
-type Uint64Encoder struct{}
-type Uint64EncoderG struct{}
+func (Float32SerdeG) UsedBufferPool() bool { return true }
+func (Float32Serde) UsedBufferPool() bool  { return true }
 
-var _ = Encoder(Uint64Encoder{})
-var _ = EncoderG[uint64](Uint64EncoderG{})
+type (
+	Uint64Encoder  struct{}
+	Uint64EncoderG struct{}
+)
+
+var (
+	_ = Encoder(Uint64Encoder{})
+	_ = EncoderG[uint64](Uint64EncoderG{})
+)
 
 func (e Uint64Encoder) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
 		return nil, nil
 	}
 	v := value.(uint64)
-	bs := make([]byte, 8)
+	b := PopBuffer()
+	bs := *b
+	bs = Require(bs[:0], 8)
 	binary.BigEndian.PutUint64(bs, v)
 	return bs, nil
 }
 
 func (e Uint64EncoderG) Encode(value uint64) ([]byte, error) {
-	bs := make([]byte, 8)
+	b := PopBuffer()
+	bs := *b
+	bs = Require(bs[:0], 8)
 	binary.BigEndian.PutUint64(bs, value)
 	return bs, nil
 }
 
-type Uint64Decoder struct{}
-type Uint64DecoderG struct{}
+type (
+	Uint64Decoder  struct{}
+	Uint64DecoderG struct{}
+)
 
-var _ = Decoder(Uint64Decoder{})
-var _ = DecoderG[uint64](Uint64DecoderG{})
+var (
+	_ = Decoder(Uint64Decoder{})
+	_ = DecoderG[uint64](Uint64DecoderG{})
+)
 
 func (d Uint64Decoder) Decode(value []byte) (interface{}, error) {
 	if value == nil {
@@ -251,36 +338,53 @@ type Uint64SerdeG struct {
 	Uint64DecoderG
 }
 
-var _ = Serde(Uint64Serde{})
-var _ = SerdeG[uint64](Uint64SerdeG{})
+func (Uint64SerdeG) UsedBufferPool() bool { return true }
+func (Uint64Serde) UsedBufferPool() bool  { return true }
 
-type Int64Encoder struct{}
-type Int64EncoderG struct{}
+var (
+	_ = Serde(Uint64Serde{})
+	_ = SerdeG[uint64](Uint64SerdeG{})
+)
 
-var _ = Encoder(Int64Encoder{})
-var _ = EncoderG[int64](Int64EncoderG{})
+type (
+	Int64Encoder  struct{}
+	Int64EncoderG struct{}
+)
+
+var (
+	_ = Encoder(Int64Encoder{})
+	_ = EncoderG[int64](Int64EncoderG{})
+)
 
 func (e Int64Encoder) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
 		return nil, nil
 	}
 	v := value.(int64)
-	bs := make([]byte, 8)
+	b := PopBuffer()
+	bs := *b
+	bs = Require(bs[:0], 8)
 	binary.BigEndian.PutUint64(bs, uint64(v))
 	return bs, nil
 }
 
 func (e Int64EncoderG) Encode(value int64) ([]byte, error) {
-	bs := make([]byte, 8)
+	b := PopBuffer()
+	bs := *b
+	bs = Require(bs[:0], 8)
 	binary.BigEndian.PutUint64(bs, uint64(value))
 	return bs, nil
 }
 
-type Int64Decoder struct{}
-type Int64DecoderG struct{}
+type (
+	Int64Decoder  struct{}
+	Int64DecoderG struct{}
+)
 
-var _ = Decoder(Int64Decoder{})
-var _ = DecoderG[int64](Int64DecoderG{})
+var (
+	_ = Decoder(Int64Decoder{})
+	_ = DecoderG[int64](Int64DecoderG{})
+)
 
 func (d Int64Decoder) Decode(value []byte) (interface{}, error) {
 	if value == nil {
@@ -314,21 +418,32 @@ type Int64SerdeG struct {
 	Int64DecoderG
 }
 
-var _ = Serde(Int64Serde{})
-var _ = SerdeG[int64](Int64SerdeG{})
+func (Int64SerdeG) UsedBufferPool() bool { return true }
+func (Int64Serde) UsedBufferPool() bool  { return true }
 
-type Uint32Encoder struct{}
-type Uint32EncoderG struct{}
+var (
+	_ = Serde(Int64Serde{})
+	_ = SerdeG[int64](Int64SerdeG{})
+)
 
-var _ = Encoder(Uint32Encoder{})
-var _ = EncoderG[uint32](Uint32EncoderG{})
+type (
+	Uint32Encoder  struct{}
+	Uint32EncoderG struct{}
+)
+
+var (
+	_ = Encoder(Uint32Encoder{})
+	_ = EncoderG[uint32](Uint32EncoderG{})
+)
 
 func (e Uint32Encoder) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
 		return nil, nil
 	}
 	v := value.(uint32)
-	bs := make([]byte, 4)
+	b := PopBuffer()
+	bs := *b
+	bs = Require(bs[:0], 4)
 	binary.BigEndian.PutUint32(bs, v)
 	return bs, nil
 }
@@ -339,11 +454,15 @@ func (e Uint32EncoderG) Encode(value uint32) ([]byte, error) {
 	return bs, nil
 }
 
-type Uint32Decoder struct{}
-type Uint32DecoderG struct{}
+type (
+	Uint32Decoder  struct{}
+	Uint32DecoderG struct{}
+)
 
-var _ = Decoder(Uint32Decoder{})
-var _ = DecoderG[uint32](Uint32DecoderG{})
+var (
+	_ = Decoder(Uint32Decoder{})
+	_ = DecoderG[uint32](Uint32DecoderG{})
+)
 
 func (e Uint32Decoder) Decode(value []byte) (interface{}, error) {
 	if value == nil {
@@ -377,36 +496,53 @@ type Uint32SerdeG struct {
 	Uint32DecoderG
 }
 
-var _ = Serde(Uint32Serde{})
-var _ = SerdeG[uint32](Uint32SerdeG{})
+var (
+	_ = Serde(Uint32Serde{})
+	_ = SerdeG[uint32](Uint32SerdeG{})
+)
 
-type Int32Encoder struct{}
-type Int32EncoderG struct{}
+func (Uint32SerdeG) UsedBufferPool() bool { return true }
+func (Uint32Serde) UsedBufferPool() bool  { return true }
 
-var _ = Encoder(Int32Encoder{})
-var _ = EncoderG[int32](Int32EncoderG{})
+type (
+	Int32Encoder  struct{}
+	Int32EncoderG struct{}
+)
+
+var (
+	_ = Encoder(Int32Encoder{})
+	_ = EncoderG[int32](Int32EncoderG{})
+)
 
 func (e Int32Encoder) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
 		return nil, nil
 	}
 	v := value.(int32)
-	bs := make([]byte, 4)
+	b := PopBuffer()
+	bs := *b
+	bs = Require(bs[:0], 4)
 	binary.BigEndian.PutUint32(bs, uint32(v))
 	return bs, nil
 }
 
 func (e Int32EncoderG) Encode(value int32) ([]byte, error) {
-	bs := make([]byte, 4)
+	b := PopBuffer()
+	bs := *b
+	bs = Require(bs[:0], 4)
 	binary.BigEndian.PutUint32(bs, uint32(value))
 	return bs, nil
 }
 
-type Int32Decoder struct{}
-type Int32DecoderG struct{}
+type (
+	Int32Decoder  struct{}
+	Int32DecoderG struct{}
+)
 
-var _ = Decoder(Int32Decoder{})
-var _ = DecoderG[int32](Int32DecoderG{})
+var (
+	_ = Decoder(Int32Decoder{})
+	_ = DecoderG[int32](Int32DecoderG{})
+)
 
 func (e Int32Decoder) Decode(value []byte) (interface{}, error) {
 	if value == nil {
@@ -440,27 +576,43 @@ type Int32SerdeG struct {
 	Int32DecoderG
 }
 
-var _ = Serde(Int32Serde{})
-var _ = SerdeG[int32](Int32SerdeG{})
+var (
+	_ = Serde(Int32Serde{})
+	_ = SerdeG[int32](Int32SerdeG{})
+)
 
-type IntSerde struct{}
-type IntSerdeG struct{}
+func (Int32SerdeG) UsedBufferPool() bool { return true }
+func (Int32Serde) UsedBufferPool() bool  { return true }
 
-var _ = SerdeG[int](IntSerdeG{})
-var _ = Serde(IntSerde{})
+type (
+	IntSerde  struct{}
+	IntSerdeG struct{}
+)
+
+var (
+	_ = SerdeG[int](IntSerdeG{})
+	_ = Serde(IntSerde{})
+)
+
+func (IntSerdeG) UsedBufferPool() bool { return true }
+func (IntSerde) UsedBufferPool() bool  { return true }
 
 func (s IntSerde) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
 		return nil, nil
 	}
 	v := value.(int)
-	bs := make([]byte, 4)
+	b := PopBuffer()
+	bs := *b
+	bs = Require(bs[:0], 4)
 	binary.BigEndian.PutUint32(bs, uint32(v))
 	return bs, nil
 }
 
 func (s IntSerdeG) Encode(value int) ([]byte, error) {
-	bs := make([]byte, 4)
+	b := PopBuffer()
+	bs := *b
+	bs = Require(bs[:0], 4)
 	binary.BigEndian.PutUint32(bs, uint32(value))
 	return bs, nil
 }
@@ -487,33 +639,41 @@ func (s IntSerdeG) Decode(value []byte) (int, error) {
 	return int(bits), nil
 }
 
-type Uint16Encoder struct{}
-type Uint16EncoderG struct{}
+type (
+	Uint16Encoder  struct{}
+	Uint16EncoderG struct{}
+)
 
-var _ = Encoder(Uint16Encoder{})
-var _ = EncoderG[uint16](Uint16EncoderG{})
+var (
+	_ = Encoder(Uint16Encoder{})
+	_ = EncoderG[uint16](Uint16EncoderG{})
+)
 
 func (e Uint16Encoder) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
 		return nil, nil
 	}
 	v := value.(uint16)
-	bs := make([]byte, 2)
+	bs := make([]byte, 0, 2)
 	binary.BigEndian.PutUint16(bs, v)
 	return bs, nil
 }
 
 func (e Uint16EncoderG) Encode(value uint16) ([]byte, error) {
-	bs := make([]byte, 2)
+	bs := make([]byte, 0, 2)
 	binary.BigEndian.PutUint16(bs, value)
 	return bs, nil
 }
 
-type Uint16Decoder struct{}
-type Uint16DecoderG struct{}
+type (
+	Uint16Decoder  struct{}
+	Uint16DecoderG struct{}
+)
 
-var _ = Decoder(Uint16Decoder{})
-var _ = DecoderG[uint16](Uint16DecoderG{})
+var (
+	_ = Decoder(Uint16Decoder{})
+	_ = DecoderG[uint16](Uint16DecoderG{})
+)
 
 func (e Uint16Decoder) Decode(value []byte) (interface{}, error) {
 	if value == nil {
@@ -547,36 +707,49 @@ type Uint16SerdeG struct {
 	Uint16DecoderG
 }
 
-var _ = Serde(Uint16Serde{})
-var _ = SerdeG[uint16](Uint16SerdeG{})
+var (
+	_ = Serde(Uint16Serde{})
+	_ = SerdeG[uint16](Uint16SerdeG{})
+)
 
-type Int16Encoder struct{}
-type Int16EncoderG struct{}
+func (Uint16SerdeG) UsedBufferPool() bool { return false }
+func (Uint16Serde) UsedBufferPool() bool  { return false }
 
-var _ = Encoder(Int16Encoder{})
-var _ = EncoderG[int16](Int16EncoderG{})
+type (
+	Int16Encoder  struct{}
+	Int16EncoderG struct{}
+)
+
+var (
+	_ = Encoder(Int16Encoder{})
+	_ = EncoderG[int16](Int16EncoderG{})
+)
 
 func (e Int16Encoder) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
 		return nil, nil
 	}
 	v := value.(int16)
-	bs := make([]byte, 2)
+	bs := make([]byte, 0, 2)
 	binary.BigEndian.PutUint16(bs, uint16(v))
 	return bs, nil
 }
 
 func (e Int16EncoderG) Encode(value int16) ([]byte, error) {
-	bs := make([]byte, 2)
+	bs := make([]byte, 0, 2)
 	binary.BigEndian.PutUint16(bs, uint16(value))
 	return bs, nil
 }
 
-type Int16Decoder struct{}
-type Int16DecoderG struct{}
+type (
+	Int16Decoder  struct{}
+	Int16DecoderG struct{}
+)
 
-var _ = Decoder(Int16Decoder{})
-var _ = DecoderG[int16](Int16DecoderG{})
+var (
+	_ = Decoder(Int16Decoder{})
+	_ = DecoderG[int16](Int16DecoderG{})
+)
 
 func (e Int16Decoder) Decode(value []byte) (interface{}, error) {
 	if value == nil {
@@ -610,14 +783,23 @@ type Int16SerdeG struct {
 	Int16DecoderG
 }
 
-var _ = Serde(Int16Serde{})
-var _ = SerdeG[int16](Int16SerdeG{})
+func (Int16SerdeG) UsedBufferPool() bool { return false }
+func (Int16Serde) UsedBufferPool() bool  { return false }
 
-type Uint8Encoder struct{}
-type Uint8EncoderG struct{}
+var (
+	_ = Serde(Int16Serde{})
+	_ = SerdeG[int16](Int16SerdeG{})
+)
 
-var _ = Encoder(Uint8Encoder{})
-var _ = EncoderG[uint8](Uint8EncoderG{})
+type (
+	Uint8Encoder  struct{}
+	Uint8EncoderG struct{}
+)
+
+var (
+	_ = Encoder(Uint8Encoder{})
+	_ = EncoderG[uint8](Uint8EncoderG{})
+)
 
 func (e Uint8Encoder) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
@@ -635,11 +817,15 @@ func (e Uint8EncoderG) Encode(value uint8) ([]byte, error) {
 	return bs, nil
 }
 
-type Uint8Decoder struct{}
-type Uint8DecoderG struct{}
+type (
+	Uint8Decoder  struct{}
+	Uint8DecoderG struct{}
+)
 
-var _ = Decoder(Uint8Decoder{})
-var _ = DecoderG[uint8](Uint8DecoderG{})
+var (
+	_ = Decoder(Uint8Decoder{})
+	_ = DecoderG[uint8](Uint8DecoderG{})
+)
 
 func (e Uint8Decoder) Decode(value []byte) (interface{}, error) {
 	if value == nil {
@@ -671,14 +857,23 @@ type Uint8SerdeG struct {
 	Uint8DecoderG
 }
 
-var _ = Serde(Uint8Serde{})
-var _ = SerdeG[uint8](Uint8SerdeG{})
+var (
+	_ = Serde(Uint8Serde{})
+	_ = SerdeG[uint8](Uint8SerdeG{})
+)
 
-type Int8Encoder struct{}
-type Int8EncoderG struct{}
+func (Uint8SerdeG) UsedBufferPool() bool { return false }
+func (Uint8Serde) UsedBufferPool() bool  { return false }
 
-var _ = Encoder(Int8Encoder{})
-var _ = EncoderG[int8](Int8EncoderG{})
+type (
+	Int8Encoder  struct{}
+	Int8EncoderG struct{}
+)
+
+var (
+	_ = Encoder(Int8Encoder{})
+	_ = EncoderG[int8](Int8EncoderG{})
+)
 
 func (e Int8Encoder) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
@@ -696,11 +891,15 @@ func (e Int8EncoderG) Encode(value int8) ([]byte, error) {
 	return bs, nil
 }
 
-type Int8Decoder struct{}
-type Int8DecoderG struct{}
+type (
+	Int8Decoder  struct{}
+	Int8DecoderG struct{}
+)
 
-var _ = Decoder(Int8Decoder{})
-var _ = DecoderG[int8](Int8DecoderG{})
+var (
+	_ = Decoder(Int8Decoder{})
+	_ = DecoderG[int8](Int8DecoderG{})
+)
 
 func (e Int8Decoder) Decode(value []byte) (interface{}, error) {
 	if value == nil {
@@ -732,14 +931,23 @@ type Int8SerdeG struct {
 	Int8DecoderG
 }
 
-var _ = Serde(Int8Serde{})
-var _ = SerdeG[int8](Int8SerdeG{})
+var (
+	_ = Serde(Int8Serde{})
+	_ = SerdeG[int8](Int8SerdeG{})
+)
 
-type StringEncoder struct{}
-type StringEncoderG struct{}
+func (Int8SerdeG) UsedBufferPool() bool { return false }
+func (Int8Serde) UsedBufferPool() bool  { return false }
 
-var _ = Encoder(StringEncoder{})
-var _ = EncoderG[string](StringEncoderG{})
+type (
+	StringEncoder  struct{}
+	StringEncoderG struct{}
+)
+
+var (
+	_ = Encoder(StringEncoder{})
+	_ = EncoderG[string](StringEncoderG{})
+)
 
 func (e StringEncoder) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
@@ -753,11 +961,15 @@ func (e StringEncoderG) Encode(value string) ([]byte, error) {
 	return []byte(value), nil
 }
 
-type StringDecoder struct{}
-type StringDecoderG struct{}
+type (
+	StringDecoder  struct{}
+	StringDecoderG struct{}
+)
 
-var _ = Decoder(StringDecoder{})
-var _ = DecoderG[string](StringDecoderG{})
+var (
+	_ = Decoder(StringDecoder{})
+	_ = DecoderG[string](StringDecoderG{})
+)
 
 func (d StringDecoder) Decode(value []byte) (interface{}, error) {
 	if value == nil {
@@ -783,8 +995,13 @@ type StringSerdeG struct {
 	StringDecoderG
 }
 
-var _ = Serde(StringSerde{})
-var _ = SerdeG[string](StringSerdeG{})
+var (
+	_ = Serde(StringSerde{})
+	_ = SerdeG[string](StringSerdeG{})
+)
+
+func (StringSerdeG) UsedBufferPool() bool { return false }
+func (StringSerde) UsedBufferPool() bool  { return false }
 
 type OptionalValSerde[V any] struct {
 	valSerde SerdeG[V]
@@ -793,6 +1010,8 @@ type OptionalValSerde[V any] struct {
 func NewOptionalValSerde[V any](valSerde SerdeG[V]) SerdeG[optional.Option[V]] {
 	return OptionalValSerde[V]{valSerde: valSerde}
 }
+
+func (s OptionalValSerde[V]) UsedBufferPool() bool { return s.valSerde.UsedBufferPool() }
 
 var _ = SerdeG[optional.Option[int]](OptionalValSerde[int]{})
 

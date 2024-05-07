@@ -11,7 +11,9 @@ type OffsetMarker struct {
 	ConSeqNums map[string]uint64 `json:"offset" msg:"offset"`
 }
 
-type OffsetMarkerJSONSerde struct{}
+type OffsetMarkerJSONSerde struct {
+	DefaultJSONSerde
+}
 
 var _ = Serde(OffsetMarkerJSONSerde{})
 
@@ -31,7 +33,9 @@ func (s OffsetMarkerJSONSerde) Decode(value []byte) (interface{}, error) {
 	return om, nil
 }
 
-type OffsetMarkerMsgpSerde struct{}
+type OffsetMarkerMsgpSerde struct {
+	DefaultMsgpSerde
+}
 
 var _ = Serde(OffsetMarkerMsgpSerde{})
 
@@ -40,7 +44,9 @@ func (s OffsetMarkerMsgpSerde) Encode(value interface{}) ([]byte, error) {
 		return nil, nil
 	}
 	om := value.(*OffsetMarker)
-	return om.MarshalMsg(nil)
+	b := PopBuffer()
+	buf := *b
+	return om.MarshalMsg(buf[:0])
 }
 
 func (s OffsetMarkerMsgpSerde) Decode(value []byte) (interface{}, error) {

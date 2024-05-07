@@ -7,25 +7,32 @@ import (
 	"sharedlog-stream/pkg/optional"
 )
 
-type MessageSerializedJSONSerdeG struct{}
+type MessageSerializedJSONSerdeG struct {
+	DefaultJSONSerde
+}
 
 var _ SerdeG[MessageSerialized] = MessageSerializedJSONSerdeG{}
 
 func (s MessageSerializedJSONSerdeG) Encode(value MessageSerialized) ([]byte, error) {
 	return json.Marshal(value)
 }
+
 func (s MessageSerializedJSONSerdeG) Decode(data []byte) (MessageSerialized, error) {
 	var msg MessageSerialized
 	err := json.Unmarshal(data, &msg)
 	return msg, err
 }
 
-type MessageSerializedMsgpSerdeG struct{}
+type MessageSerializedMsgpSerdeG struct {
+	DefaultMsgpSerde
+}
 
 var _ SerdeG[MessageSerialized] = MessageSerializedMsgpSerdeG{}
 
 func (s MessageSerializedMsgpSerdeG) Encode(value MessageSerialized) ([]byte, error) {
-	return value.MarshalMsg(nil)
+	b := PopBuffer()
+	buf := *b
+	return value.MarshalMsg(buf[:0])
 }
 
 func (s MessageSerializedMsgpSerdeG) Decode(data []byte) (MessageSerialized, error) {
@@ -123,6 +130,7 @@ func MsgGToMsgSer[K, V any](value MessageG[K, V], keySerde SerdeG[K], valSerde S
 }
 
 type MessageGMsgpSerdeG[K, V any] struct {
+	DefaultMsgpSerde
 	keySerde SerdeG[K]
 	valSerde SerdeG[V]
 }
@@ -138,8 +146,18 @@ func (s MessageGMsgpSerdeG[K, V]) Encode(val MessageG[K, V]) ([]byte, error) {
 	if !ok {
 		return nil, nil
 	}
-	return msgSer.MarshalMsg(nil)
+	b := PopBuffer()
+	buf := *b
+	ret, err := msgSer.MarshalMsg(buf[:0])
+	if s.keySerde.UsedBufferPool() && msgSer.KeyEnc != nil {
+		PushBuffer(&msgSer.KeyEnc)
+	}
+	if s.valSerde.UsedBufferPool() && msgSer.ValueEnc != nil {
+		PushBuffer(&msgSer.ValueEnc)
+	}
+	return ret, err
 }
+
 func (s MessageGMsgpSerdeG[K, V]) Decode(value []byte) (MessageG[K, V], error) {
 	if len(value) == 0 {
 		return MessageG[K, V]{}, nil
@@ -152,6 +170,7 @@ func (s MessageGMsgpSerdeG[K, V]) Decode(value []byte) (MessageG[K, V], error) {
 	}
 	return MsgSerToMsgG(&msgSer, s.keySerde, s.valSerde)
 }
+
 func (s MessageGMsgpSerdeG[K, V]) EncodeWithKVBytes(kBytes []byte, vBytes []byte, inj int64, ts int64) ([]byte, error) {
 	msgSer := &MessageSerialized{
 		KeyEnc:      kBytes,
@@ -168,6 +187,7 @@ func (s MessageGMsgpSerdeG[K, V]) GetKeySerdeG() SerdeG[K]           { return s.
 func (s MessageGMsgpSerdeG[K, V]) GetValSerdeG() SerdeG[V]           { return s.valSerde }
 
 type MessageGJSONSerdeG[K, V any] struct {
+	DefaultJSONSerde
 	KeySerde SerdeG[K]
 	ValSerde SerdeG[V]
 }
@@ -183,6 +203,14 @@ func (s MessageGJSONSerdeG[K, V]) Encode(value MessageG[K, V]) ([]byte, error) {
 	if !ok {
 		return nil, nil
 	}
+	defer func() {
+		if s.KeySerde.UsedBufferPool() && msgSer.KeyEnc != nil {
+			PushBuffer(&msgSer.KeyEnc)
+		}
+		if s.ValSerde.UsedBufferPool() && msgSer.ValueEnc != nil {
+			PushBuffer(&msgSer.ValueEnc)
+		}
+	}()
 	return json.Marshal(msgSer)
 }
 
@@ -193,6 +221,7 @@ func (s MessageGJSONSerdeG[K, V]) Decode(value []byte) (MessageG[K, V], error) {
 	}
 	return MsgSerToMsgG(&msgSer, s.KeySerde, s.ValSerde)
 }
+
 func (s MessageGJSONSerdeG[K, V]) EncodeWithKVBytes(kBytes []byte, vBytes []byte, inj int64, ts int64) ([]byte, error) {
 	msgSer := &MessageSerialized{
 		KeyEnc:      kBytes,

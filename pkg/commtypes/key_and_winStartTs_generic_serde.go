@@ -8,6 +8,7 @@ import (
 
 type KeyAndWindowStartTsJSONSerdeG[K any] struct {
 	KeyJSONSerde SerdeG[K]
+	DefaultJSONSerde
 }
 
 type KeyAndWindowStartTsG[K any] struct {
@@ -58,6 +59,11 @@ func serToKeyAndWindowStartTs[K any](kwSer *KeyAndWindowStartTsSerialized, keySe
 
 func (s KeyAndWindowStartTsJSONSerdeG[K]) Encode(value KeyAndWindowStartTsG[K]) ([]byte, error) {
 	kw, err := kwsToKwsSer(value, s.KeyJSONSerde)
+	defer func() {
+		if s.KeyJSONSerde.UsedBufferPool() && kw != nil && kw.KeySerialized != nil {
+			PushBuffer(&kw.KeySerialized)
+		}
+	}()
 	if err != nil {
 		return nil, err
 	}
@@ -77,12 +83,18 @@ func (s KeyAndWindowStartTsJSONSerdeG[K]) Decode(value []byte) (KeyAndWindowStar
 
 type KeyAndWindowStartTsMsgpSerdeG[K any] struct {
 	KeyMsgpSerde SerdeG[K]
+	DefaultMsgpSerde
 }
 
 var _ = SerdeG[KeyAndWindowStartTsG[int]](KeyAndWindowStartTsMsgpSerdeG[int]{})
 
 func (s KeyAndWindowStartTsMsgpSerdeG[K]) Encode(value KeyAndWindowStartTsG[K]) ([]byte, error) {
 	kw, err := kwsToKwsSer(value, s.KeyMsgpSerde)
+	defer func() {
+		if s.KeyMsgpSerde.UsedBufferPool() && kw != nil && kw.KeySerialized != nil {
+			PushBuffer(&kw.KeySerialized)
+		}
+	}()
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +104,6 @@ func (s KeyAndWindowStartTsMsgpSerdeG[K]) Encode(value KeyAndWindowStartTsG[K]) 
 	b := PopBuffer()
 	buf := *b
 	ret, err := kw.MarshalMsg(buf[:0])
-	PushBuffer(&kw.KeySerialized)
 	return ret, err
 }
 
