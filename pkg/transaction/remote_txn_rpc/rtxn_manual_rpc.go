@@ -93,6 +93,9 @@ func (c *RTxnRpcClient) Init(ctx context.Context, in *InitArg) (*InitReply, erro
 		Init:    in,
 	}
 	ret, err := c.serde.Encode(arg)
+	defer func() {
+		commtypes.PushBuffer(&ret)
+	}()
 	if err != nil {
 		return nil, err
 	}
@@ -110,10 +113,14 @@ func (c *RTxnRpcClient) AppendTpPar(ctx context.Context, in *txn_data.TxnMetaMsg
 		MetaMsg: in,
 	}
 	ret, err := c.serde.Encode(arg)
+	defer func() {
+		commtypes.PushBuffer(&ret)
+	}()
 	if err != nil {
 		return err
 	}
-	return postReqOnly(c.client, c.funcUrl, c.nodeConstraint, ret)
+	err = postReqOnly(c.client, c.funcUrl, c.nodeConstraint, ret)
+	return err
 }
 
 func (c *RTxnRpcClient) AbortTxn(ctx context.Context, in *txn_data.TxnMetaMsg) error {
@@ -122,10 +129,14 @@ func (c *RTxnRpcClient) AbortTxn(ctx context.Context, in *txn_data.TxnMetaMsg) e
 		MetaMsg: in,
 	}
 	ret, err := c.serde.Encode(arg)
+	defer func() {
+		commtypes.PushBuffer(&ret)
+	}()
 	if err != nil {
 		return err
 	}
-	return postReqOnly(c.client, c.funcUrl, c.nodeConstraint, ret)
+	err = postReqOnly(c.client, c.funcUrl, c.nodeConstraint, ret)
+	return err
 }
 
 func (c *RTxnRpcClient) CommitTxnAsyncComplete(ctx context.Context, in *txn_data.TxnMetaMsg) (*CommitReply, error) {
@@ -134,6 +145,9 @@ func (c *RTxnRpcClient) CommitTxnAsyncComplete(ctx context.Context, in *txn_data
 		MetaMsg: in,
 	}
 	ret, err := c.serde.Encode(arg)
+	defer func() {
+		commtypes.PushBuffer(&ret)
+	}()
 	if err != nil {
 		return nil, err
 	}
@@ -151,6 +165,9 @@ func (c *RTxnRpcClient) AppendConsumedOffset(ctx context.Context, in *ConsumedOf
 		ConsumedOff: in,
 	}
 	ret, err := c.serde.Encode(arg)
+	defer func() {
+		commtypes.PushBuffer(&ret)
+	}()
 	if err != nil {
 		return err
 	}
