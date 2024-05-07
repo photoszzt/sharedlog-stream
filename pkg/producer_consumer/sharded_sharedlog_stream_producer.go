@@ -155,6 +155,9 @@ func (sls *ShardedSharedLogStreamProducer) ProduceData(ctx context.Context, msgS
 				return err
 			}
 			_, err := sls.push(ctx, bytes, parNum, sharedlog_stream.StreamEntryMeta(false, false))
+			if sls.msgSerSerde.UsedBufferPool() && bytes != nil {
+				commtypes.PushBuffer(&bytes)
+			}
 			return err
 		}
 	}
@@ -175,6 +178,9 @@ func (sls *ShardedSharedLogStreamProducer) ProduceDataNoLock(ctx context.Context
 				return err
 			}
 			_, err := sls.push(ctx, bytes, parNum, sharedlog_stream.StreamEntryMeta(false, false))
+			if sls.msgSerSerde.UsedBufferPool() && bytes != nil {
+				commtypes.PushBuffer(&bytes)
+			}
 			return err
 		}
 	}

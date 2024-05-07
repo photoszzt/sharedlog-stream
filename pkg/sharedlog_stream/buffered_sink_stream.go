@@ -131,6 +131,9 @@ func (s *BufferedSinkStream) bufPushAutoFlushGoroutineSafe(
 	if err != nil {
 		return err
 	}
+	if s.payloadArrSerde.UsedBufferPool() && payloads != nil {
+		commtypes.PushBuffer(&payloads)
+	}
 	if s.guarantee == exactly_once_intr.EPOCH_MARK && !s.initProdIsSet.Load() {
 		if lock {
 			err = s.updateProdSeqNumLocked(ctx, seqNum, s.parNum, tags[0], producerId)
@@ -290,6 +293,9 @@ func (s *BufferedSinkStream) flushGoroutineSafe(ctx context.Context,
 		tags, nil, ArrRecordMeta, producerId)
 	if err != nil {
 		return 0, err
+	}
+	if s.payloadArrSerde.UsedBufferPool() && payloads != nil {
+		commtypes.PushBuffer(&payloads)
 	}
 	if s.guarantee == exactly_once_intr.EPOCH_MARK && !s.initProdIsSet.Load() {
 		// there're multiple threads append to the same sink stream
