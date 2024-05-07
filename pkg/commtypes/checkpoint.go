@@ -1,5 +1,5 @@
 //go:generate msgp
-//msgp:ignore CheckpointJSONSerdeG CheckpointMsgpSerdeG
+//msgp:ignore CheckpointJSONSerdeG CheckpointMsgpSerdeG CheckpointPtrJSONSerdeG
 package commtypes
 
 import (
