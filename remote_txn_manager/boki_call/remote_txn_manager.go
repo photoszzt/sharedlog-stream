@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/transaction/remote_txn_rpc"
@@ -19,7 +21,39 @@ func init() {
 }
 
 type mngrFuncHanlder struct {
-	env types.Environment
+	replySerde commtypes.SerdeG[*remote_txn_rpc.RTxnReply]
+	env        types.Environment
+}
+
+func (h *mngrFuncHanlder) EncodeReply(reply *remote_txn_rpc.RTxnReply) []byte {
+	ret, err := h.replySerde.Encode(reply)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return ret
+}
+
+func (h *mngrFuncHanlder) GenErrOut(err error) []byte {
+	reply := &remote_txn_rpc.RTxnReply{
+		Success: false,
+		Message: err.Error(),
+	}
+	ret, err := h.replySerde.Encode(reply)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return ret
+}
+
+func (h *mngrFuncHanlder) GenEmptySucc() []byte {
+	reply := &remote_txn_rpc.RTxnReply{
+		Success: true,
+	}
+	ret, err := h.replySerde.Encode(reply)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return ret
 }
 
 func (h *mngrFuncHanlder) Call(ctx context.Context, input []byte) ([]byte, error) {
@@ -32,13 +66,51 @@ func (h *mngrFuncHanlder) Call(ctx context.Context, input []byte) ([]byte, error
 	switch in.RpcType {
 	case remote_txn_rpc.Init:
 		ret, err := r.Init(ctx, in.Init)
+		if err != nil {
+			return h.GenErrOut(err), nil
+		}
+		reply := &remote_txn_rpc.RTxnReply{
+			Success:   true,
+			InitReply: ret,
+		}
+		return h.EncodeReply(reply), nil
+	case remote_txn_rpc.CommitTxnAsync:
+		ret, err := r.CommitTxnAsyncComplete(ctx, in.MetaMsg)
+		if err != nil {
+			return h.GenErrOut(err), nil
+		}
+		reply := &remote_txn_rpc.RTxnReply{
+			Success:     true,
+			CommitReply: ret,
+		}
+		return h.EncodeReply(reply), nil
+	case remote_txn_rpc.AppendTpPar:
+		err := r.AppendTpPar(ctx, in.MetaMsg)
+		if err != nil {
+			return h.GenErrOut(err), nil
+		}
+		return h.GenEmptySucc(), nil
+	case remote_txn_rpc.AppendConsumedOff:
+		err := r.AppendConsumedOffset(ctx, in.ConsumedOff)
+		if err != nil {
+			return h.GenErrOut(err), nil
+		}
+		return h.GenEmptySucc(), nil
+	case remote_txn_rpc.AbortTxn:
+		err := r.AbortTxn(ctx, in.MetaMsg)
+		if err != nil {
+			return h.GenErrOut(err), nil
+		}
+		return h.GenEmptySucc(), nil
+	default:
+		return nil, common_errors.ErrInvalidTxnMngrRpc
 	}
-	return nil, nil
 }
 
 func (f *mngrFuncHandlerFactory) New(env types.Environment, funcName string) (types.FuncHandler, error) {
 	return &mngrFuncHanlder{
-		env: env,
+		env:        env,
+		replySerde: remote_txn_rpc.GetRTxnReplySerdeG(),
 	}, nil
 }
 

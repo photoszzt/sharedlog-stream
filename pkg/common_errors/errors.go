@@ -18,6 +18,7 @@ var (
 	ErrChkptMarkerInvalidGuarantee = xerrors.New("Got checkpoint marker but guarantee is not checkpoint")
 	ErrTopicNotFound               = xerrors.New("Topic not found")
 	ErrStaleProducer               = xerrors.New("Stale producer")
+	ErrInvalidTxnMngrRpc           = xerrors.New("Unrecognized txn rpc type")
 )
 
 func IsStreamEmptyError(err error) bool {
