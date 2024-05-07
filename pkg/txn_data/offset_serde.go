@@ -49,7 +49,9 @@ func (s OffsetRecordMsgpSerde) Encode(value interface{}) ([]byte, error) {
 }
 
 func (s OffsetRecordMsgpSerdeG) Encode(value OffsetRecord) ([]byte, error) {
-	return value.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return value.MarshalMsg(buf[:0])
 }
 
 func (s OffsetRecordMsgpSerde) Decode(value []byte) (interface{}, error) {

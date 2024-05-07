@@ -47,7 +47,9 @@ func (s ValueTimestampMsgpSerdeG) Encode(value ValueTimestamp) ([]byte, error) {
 	if vs == nil {
 		return nil, nil
 	}
-	return vs.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return vs.MarshalMsg(buf[:0])
 }
 
 func (s ValueTimestampMsgpSerdeG) Decode(value []byte) (ValueTimestamp, error) {

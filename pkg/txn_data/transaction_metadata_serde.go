@@ -48,7 +48,9 @@ func (s TxnMetadataMsgpSerde) Encode(value interface{}) ([]byte, error) {
 }
 
 func (s TxnMetadataMsgpSerdeG) Encode(value TxnMetadata) ([]byte, error) {
-	return value.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return value.MarshalMsg(buf[:0])
 }
 
 func (s TxnMetadataMsgpSerde) Decode(value []byte) (interface{}, error) {

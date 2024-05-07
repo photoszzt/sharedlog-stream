@@ -57,7 +57,9 @@ func (s ControlMetadataMsgpSerde) Decode(value []byte) (interface{}, error) {
 }
 
 func (s ControlMetadataMsgpSerdeG) Encode(value ControlMetadata) ([]byte, error) {
-	return value.MarshalMsg(nil)
+	b := commtypes.PopBuffer()
+	buf := *b
+	return value.MarshalMsg(buf[:0])
 }
 
 func (s ControlMetadataMsgpSerdeG) Decode(value []byte) (ControlMetadata, error) {
