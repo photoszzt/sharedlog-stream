@@ -115,7 +115,7 @@ type ChangeJSONSerde struct {
 
 var _ = Serde(&ChangeJSONSerde{})
 
-func (s ChangeJSONSerde) Encode(value interface{}) ([]byte, error) {
+func (s *ChangeJSONSerde) Encode(value interface{}) ([]byte, error) {
 	c, err := convertToChangeSer(value, s.ValJSONSerde)
 	defer func() {
 		if s.ValJSONSerde.UsedBufferPool() {
@@ -133,7 +133,7 @@ func (s ChangeJSONSerde) Encode(value interface{}) ([]byte, error) {
 	return json.Marshal(c)
 }
 
-func (s ChangeJSONSerde) Decode(value []byte) (interface{}, error) {
+func (s *ChangeJSONSerde) Decode(value []byte) (interface{}, error) {
 	val := ChangeSerialized{}
 	if err := json.Unmarshal(value, &val); err != nil {
 		return nil, err
@@ -146,9 +146,9 @@ type ChangeMsgpSerde struct {
 	ValMsgpSerde Serde
 }
 
-var _ = Serde(ChangeMsgpSerde{})
+var _ = Serde(&ChangeMsgpSerde{})
 
-func (s ChangeMsgpSerde) Encode(value interface{}) ([]byte, error) {
+func (s *ChangeMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	c, err := convertToChangeSer(value, s.ValMsgpSerde)
 	defer func() {
 		if s.ValMsgpSerde.UsedBufferPool() {
@@ -168,7 +168,7 @@ func (s ChangeMsgpSerde) Encode(value interface{}) ([]byte, error) {
 	return c.MarshalMsg(buf[:0])
 }
 
-func (s ChangeMsgpSerde) Decode(value []byte) (interface{}, error) {
+func (s *ChangeMsgpSerde) Decode(value []byte) (interface{}, error) {
 	val := ChangeSerialized{}
 	if _, err := val.UnmarshalMsg(value); err != nil {
 		return nil, err
@@ -178,11 +178,11 @@ func (s ChangeMsgpSerde) Decode(value []byte) (interface{}, error) {
 
 func GetChangeSerde(serdeFormat SerdeFormat, valSerde Serde) (Serde, error) {
 	if serdeFormat == JSON {
-		return ChangeJSONSerde{
+		return &ChangeJSONSerde{
 			ValJSONSerde: valSerde,
 		}, nil
 	} else if serdeFormat == MSGP {
-		return ChangeMsgpSerde{
+		return &ChangeMsgpSerde{
 			ValMsgpSerde: valSerde,
 		}, nil
 	} else {

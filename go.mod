@@ -1,6 +1,6 @@
 module sharedlog-stream
 
-go 1.18
+go 1.20
 
 require (
 	cs.utexas.edu/zjia/faas v0.0.0

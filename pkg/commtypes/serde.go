@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"math"
 	"sharedlog-stream/pkg/optional"
+	"unsafe"
 
 	"golang.org/x/xerrors"
 )
@@ -46,21 +47,56 @@ const (
 	MSGP SerdeFormat = 1
 )
 
+type DefaultEncoder struct {
+	BufPtr *[]byte
+}
 type DefaultJSONSerde struct{}
 
-func (DefaultJSONSerde) UsedBufferPool() bool { return false }
+func (*DefaultJSONSerde) UsedBufferPool() bool { return false }
+func (*DefaultJSONSerde) Encode(interface{}) ([]byte, error) {
+	panic("unimplemented")
+}
 
-type DefaultMsgpSerde struct{}
+func (*DefaultJSONSerde) Decode([]byte) (interface{}, error) {
+	panic("unimplemented")
+}
 
-func (DefaultMsgpSerde) UsedBufferPool() bool { return true }
+type DefaultMsgpSerde struct {
+	BufPtr *[]byte
+}
+
+func (*DefaultMsgpSerde) UsedBufferPool() bool { return true }
+func (*DefaultMsgpSerde) Encode(interface{}) ([]byte, error) {
+	panic("unimplemented")
+}
+
+func (*DefaultMsgpSerde) Decode([]byte) (interface{}, error) {
+	panic("unimplemented")
+}
 
 type DefaultJSONSerdeG[V any] struct{}
 
-func (DefaultJSONSerdeG[V]) UsedBufferPool() bool { return false }
+func (*DefaultJSONSerdeG[V]) UsedBufferPool() bool { return false }
+func (*DefaultJSONSerdeG[V]) Encode(V) ([]byte, error) {
+	panic("unimplemented")
+}
 
-type DefaultMsgpSerdeG[V any] struct{}
+func (*DefaultJSONSerdeG[V]) Decode([]byte) (V, error) {
+	panic("unimplemented")
+}
 
-func (DefaultMsgpSerdeG[V]) UsedBufferPool() bool { return true }
+type DefaultMsgpSerdeG[V any] struct {
+	BufPtr *[]byte
+}
+
+func (*DefaultMsgpSerdeG[V]) UsedBufferPool() bool { return true }
+func (*DefaultMsgpSerdeG[V]) Encode(V) ([]byte, error) {
+	panic("unimplemented")
+}
+
+func (*DefaultMsgpSerdeG[V]) Decode([]byte) (V, error) {
+	panic("unimplemented")
+}
 
 type Encoder interface {
 	Encode(interface{}) ([]byte, error)
@@ -103,34 +139,38 @@ type SerdeG[V any] interface {
 }
 
 type (
-	Float64Encoder  struct{}
-	Float64EncoderG struct{}
+	Float64Encoder struct {
+		DefaultEncoder
+	}
+	Float64EncoderG struct {
+		DefaultEncoder
+	}
 )
 
 var (
-	_ = Encoder(Float64Encoder{})
-	_ = EncoderG[float64](Float64EncoderG{})
+	_ = Encoder(&Float64Encoder{})
+	_ = EncoderG[float64](&Float64EncoderG{})
 )
 
-func (e Float64Encoder) Encode(value interface{}) ([]byte, error) {
+func (e *Float64Encoder) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
 		return nil, nil
 	}
 	v := value.(float64)
 	bits := math.Float64bits(v)
-	b := PopBuffer()
-	bs := *b
+	e.BufPtr = PopBuffer()
+	bs := *e.BufPtr
 	bs = Require(bs[:0], 8)
-	binary.BigEndian.PutUint64(bs, bits)
+	bs = binary.BigEndian.AppendUint64(bs, bits)
 	return bs, nil
 }
 
-func (e Float64EncoderG) Encode(value float64) ([]byte, error) {
+func (e *Float64EncoderG) Encode(value float64) ([]byte, error) {
 	bits := math.Float64bits(value)
-	b := PopBuffer()
-	bs := *b
+	e.BufPtr = PopBuffer()
+	bs := *e.BufPtr
 	bs = Require(bs[:0], 8)
-	binary.BigEndian.PutUint64(bs, bits)
+	bs = binary.BigEndian.AppendUint64(bs, bits)
 	return bs, nil
 }
 
@@ -140,11 +180,11 @@ type (
 )
 
 var (
-	_ = Decoder(Float64Decoder{})
-	_ = DecoderG[float64](Float64DecoderG{})
+	_ = Decoder(&Float64Decoder{})
+	_ = DecoderG[float64](&Float64DecoderG{})
 )
 
-func (e Float64Decoder) Decode(value []byte) (interface{}, error) {
+func (e *Float64Decoder) Decode(value []byte) (interface{}, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -155,7 +195,7 @@ func (e Float64Decoder) Decode(value []byte) (interface{}, error) {
 	return math.Float64frombits(bits), nil
 }
 
-func (e Float64DecoderG) Decode(value []byte) (float64, error) {
+func (e *Float64DecoderG) Decode(value []byte) (float64, error) {
 	if value == nil {
 		return 0, nil
 	}
@@ -180,39 +220,43 @@ func (Float64SerdeG) UsedBufferPool() bool { return true }
 func (Float64Serde) UsedBufferPool() bool  { return true }
 
 var (
-	_ = Serde(Float64Serde{})
-	_ = SerdeG[float64](Float64SerdeG{})
+	_ = Serde(&Float64Serde{})
+	_ = SerdeG[float64](&Float64SerdeG{})
 )
 
 type (
-	Float32Encoder  struct{}
-	Float32EncoderG struct{}
+	Float32Encoder struct {
+		DefaultEncoder
+	}
+	Float32EncoderG struct {
+		DefaultEncoder
+	}
 )
 
 var (
-	_ = Encoder(Float32Encoder{})
-	_ = EncoderG[float32](Float32EncoderG{})
+	_ = Encoder(&Float32Encoder{})
+	_ = EncoderG[float32](&Float32EncoderG{})
 )
 
-func (e Float32Encoder) Encode(value interface{}) ([]byte, error) {
+func (e *Float32Encoder) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
 		return nil, nil
 	}
 	v := value.(float32)
 	bits := math.Float32bits(v)
-	b := PopBuffer()
-	bs := *b
+	e.BufPtr = PopBuffer()
+	bs := *e.BufPtr
 	bs = Require(bs[:0], 4)
-	binary.BigEndian.PutUint32(bs, bits)
+	bs = binary.BigEndian.AppendUint32(bs, bits)
 	return bs, nil
 }
 
-func (e Float32EncoderG) Encode(value float32) ([]byte, error) {
+func (e *Float32EncoderG) Encode(value float32) ([]byte, error) {
 	bits := math.Float32bits(value)
-	b := PopBuffer()
-	bs := *b
+	e.BufPtr = PopBuffer()
+	bs := *e.BufPtr
 	bs = Require(bs[:0], 4)
-	binary.BigEndian.PutUint32(bs, bits)
+	bs = binary.BigEndian.AppendUint32(bs, bits)
 	return bs, nil
 }
 
@@ -259,38 +303,42 @@ type Float32SerdeG struct {
 }
 
 var (
-	_ = Serde(Float32Serde{})
-	_ = SerdeG[float32](Float32SerdeG{})
+	_ = Serde(&Float32Serde{})
+	_ = SerdeG[float32](&Float32SerdeG{})
 )
 
 func (Float32SerdeG) UsedBufferPool() bool { return true }
 func (Float32Serde) UsedBufferPool() bool  { return true }
 
 type (
-	Uint64Encoder  struct{}
-	Uint64EncoderG struct{}
+	Uint64Encoder struct {
+		DefaultEncoder
+	}
+	Uint64EncoderG struct {
+		DefaultEncoder
+	}
 )
 
 var (
-	_ = Encoder(Uint64Encoder{})
-	_ = EncoderG[uint64](Uint64EncoderG{})
+	_ = Encoder(&Uint64Encoder{})
+	_ = EncoderG[uint64](&Uint64EncoderG{})
 )
 
-func (e Uint64Encoder) Encode(value interface{}) ([]byte, error) {
+func (e *Uint64Encoder) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
 		return nil, nil
 	}
 	v := value.(uint64)
-	b := PopBuffer()
-	bs := *b
+	e.BufPtr = PopBuffer()
+	bs := *e.BufPtr
 	bs = Require(bs[:0], 8)
-	binary.BigEndian.PutUint64(bs, v)
+	bs = binary.BigEndian.AppendUint64(bs, v)
 	return bs, nil
 }
 
-func (e Uint64EncoderG) Encode(value uint64) ([]byte, error) {
-	b := PopBuffer()
-	bs := *b
+func (e *Uint64EncoderG) Encode(value uint64) ([]byte, error) {
+	e.BufPtr = PopBuffer()
+	bs := *e.BufPtr
 	bs = Require(bs[:0], 8)
 	bs = binary.BigEndian.AppendUint64(bs, value)
 	return bs, nil
@@ -342,37 +390,41 @@ func (Uint64SerdeG) UsedBufferPool() bool { return true }
 func (Uint64Serde) UsedBufferPool() bool  { return true }
 
 var (
-	_ = Serde(Uint64Serde{})
-	_ = SerdeG[uint64](Uint64SerdeG{})
+	_ = Serde(&Uint64Serde{})
+	_ = SerdeG[uint64](&Uint64SerdeG{})
 )
 
 type (
-	Int64Encoder  struct{}
-	Int64EncoderG struct{}
+	Int64Encoder struct {
+		DefaultEncoder
+	}
+	Int64EncoderG struct {
+		DefaultEncoder
+	}
 )
 
 var (
-	_ = Encoder(Int64Encoder{})
-	_ = EncoderG[int64](Int64EncoderG{})
+	_ = Encoder(&Int64Encoder{})
+	_ = EncoderG[int64](&Int64EncoderG{})
 )
 
-func (e Int64Encoder) Encode(value interface{}) ([]byte, error) {
+func (e *Int64Encoder) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
 		return nil, nil
 	}
 	v := value.(int64)
-	b := PopBuffer()
-	bs := *b
+	e.BufPtr = PopBuffer()
+	bs := *e.BufPtr
 	bs = Require(bs[:0], 8)
-	binary.BigEndian.PutUint64(bs, uint64(v))
+	bs = binary.BigEndian.AppendUint64(bs, uint64(v))
 	return bs, nil
 }
 
-func (e Int64EncoderG) Encode(value int64) ([]byte, error) {
-	b := PopBuffer()
-	bs := *b
+func (e *Int64EncoderG) Encode(value int64) ([]byte, error) {
+	e.BufPtr = PopBuffer()
+	bs := *e.BufPtr
 	bs = Require(bs[:0], 8)
-	binary.BigEndian.PutUint64(bs, uint64(value))
+	bs = binary.BigEndian.AppendUint64(bs, uint64(value))
 	return bs, nil
 }
 
@@ -422,35 +474,41 @@ func (Int64SerdeG) UsedBufferPool() bool { return true }
 func (Int64Serde) UsedBufferPool() bool  { return true }
 
 var (
-	_ = Serde(Int64Serde{})
-	_ = SerdeG[int64](Int64SerdeG{})
+	_ = Serde(&Int64Serde{})
+	_ = SerdeG[int64](&Int64SerdeG{})
 )
 
 type (
-	Uint32Encoder  struct{}
-	Uint32EncoderG struct{}
+	Uint32Encoder struct {
+		DefaultEncoder
+	}
+	Uint32EncoderG struct {
+		DefaultEncoder
+	}
 )
 
 var (
-	_ = Encoder(Uint32Encoder{})
-	_ = EncoderG[uint32](Uint32EncoderG{})
+	_ = Encoder(&Uint32Encoder{})
+	_ = EncoderG[uint32](&Uint32EncoderG{})
 )
 
-func (e Uint32Encoder) Encode(value interface{}) ([]byte, error) {
+func (e *Uint32Encoder) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
 		return nil, nil
 	}
 	v := value.(uint32)
-	b := PopBuffer()
-	bs := *b
+	e.BufPtr = PopBuffer()
+	bs := *e.BufPtr
 	bs = Require(bs[:0], 4)
-	binary.BigEndian.PutUint32(bs, v)
+	bs = binary.BigEndian.AppendUint32(bs, v)
 	return bs, nil
 }
 
-func (e Uint32EncoderG) Encode(value uint32) ([]byte, error) {
-	bs := make([]byte, 4)
-	binary.BigEndian.PutUint32(bs, value)
+func (e *Uint32EncoderG) Encode(value uint32) ([]byte, error) {
+	e.BufPtr = PopBuffer()
+	bs := *e.BufPtr
+	bs = Require(bs[:0], 4)
+	bs = binary.BigEndian.AppendUint32(bs, value)
 	return bs, nil
 }
 
@@ -497,40 +555,44 @@ type Uint32SerdeG struct {
 }
 
 var (
-	_ = Serde(Uint32Serde{})
-	_ = SerdeG[uint32](Uint32SerdeG{})
+	_ = Serde(&Uint32Serde{})
+	_ = SerdeG[uint32](&Uint32SerdeG{})
 )
 
 func (Uint32SerdeG) UsedBufferPool() bool { return true }
 func (Uint32Serde) UsedBufferPool() bool  { return true }
 
 type (
-	Int32Encoder  struct{}
-	Int32EncoderG struct{}
+	Int32Encoder struct {
+		DefaultEncoder
+	}
+	Int32EncoderG struct {
+		DefaultEncoder
+	}
 )
 
 var (
-	_ = Encoder(Int32Encoder{})
-	_ = EncoderG[int32](Int32EncoderG{})
+	_ = Encoder(&Int32Encoder{})
+	_ = EncoderG[int32](&Int32EncoderG{})
 )
 
-func (e Int32Encoder) Encode(value interface{}) ([]byte, error) {
+func (e *Int32Encoder) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
 		return nil, nil
 	}
 	v := value.(int32)
-	b := PopBuffer()
-	bs := *b
+	e.BufPtr = PopBuffer()
+	bs := *e.BufPtr
 	bs = Require(bs[:0], 4)
-	binary.BigEndian.PutUint32(bs, uint32(v))
+	bs = binary.BigEndian.AppendUint32(bs, uint32(v))
 	return bs, nil
 }
 
-func (e Int32EncoderG) Encode(value int32) ([]byte, error) {
-	b := PopBuffer()
-	bs := *b
+func (e *Int32EncoderG) Encode(value int32) ([]byte, error) {
+	e.BufPtr = PopBuffer()
+	bs := *e.BufPtr
 	bs = Require(bs[:0], 4)
-	binary.BigEndian.PutUint32(bs, uint32(value))
+	bs = binary.BigEndian.AppendUint32(bs, uint32(value))
 	return bs, nil
 }
 
@@ -577,43 +639,47 @@ type Int32SerdeG struct {
 }
 
 var (
-	_ = Serde(Int32Serde{})
-	_ = SerdeG[int32](Int32SerdeG{})
+	_ = Serde(&Int32Serde{})
+	_ = SerdeG[int32](&Int32SerdeG{})
 )
 
 func (Int32SerdeG) UsedBufferPool() bool { return true }
 func (Int32Serde) UsedBufferPool() bool  { return true }
 
 type (
-	IntSerde  struct{}
-	IntSerdeG struct{}
+	IntSerde struct {
+		DefaultEncoder
+	}
+	IntSerdeG struct {
+		DefaultEncoder
+	}
 )
 
 var (
-	_ = SerdeG[int](IntSerdeG{})
-	_ = Serde(IntSerde{})
+	_ = SerdeG[int](&IntSerdeG{})
+	_ = Serde(&IntSerde{})
 )
 
 func (IntSerdeG) UsedBufferPool() bool { return true }
 func (IntSerde) UsedBufferPool() bool  { return true }
 
-func (s IntSerde) Encode(value interface{}) ([]byte, error) {
+func (s *IntSerde) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
 		return nil, nil
 	}
 	v := value.(int)
-	b := PopBuffer()
-	bs := *b
+	s.BufPtr = PopBuffer()
+	bs := *s.BufPtr
 	bs = Require(bs[:0], 4)
-	binary.BigEndian.PutUint32(bs, uint32(v))
+	bs = binary.BigEndian.AppendUint32(bs, uint32(v))
 	return bs, nil
 }
 
-func (s IntSerdeG) Encode(value int) ([]byte, error) {
-	b := PopBuffer()
-	bs := *b
+func (s *IntSerdeG) Encode(value int) ([]byte, error) {
+	s.BufPtr = PopBuffer()
+	bs := *s.BufPtr
 	bs = Require(bs[:0], 4)
-	binary.BigEndian.PutUint32(bs, uint32(value))
+	bs = binary.BigEndian.AppendUint32(bs, uint32(value))
 	return bs, nil
 }
 
@@ -655,13 +721,13 @@ func (e Uint16Encoder) Encode(value interface{}) ([]byte, error) {
 	}
 	v := value.(uint16)
 	bs := make([]byte, 0, 2)
-	binary.BigEndian.PutUint16(bs, v)
+	bs = binary.BigEndian.AppendUint16(bs, v)
 	return bs, nil
 }
 
 func (e Uint16EncoderG) Encode(value uint16) ([]byte, error) {
 	bs := make([]byte, 0, 2)
-	binary.BigEndian.PutUint16(bs, value)
+	bs = binary.BigEndian.AppendUint16(bs, value)
 	return bs, nil
 }
 
@@ -731,13 +797,13 @@ func (e Int16Encoder) Encode(value interface{}) ([]byte, error) {
 	}
 	v := value.(int16)
 	bs := make([]byte, 0, 2)
-	binary.BigEndian.PutUint16(bs, uint16(v))
+	bs = binary.BigEndian.AppendUint16(bs, uint16(v))
 	return bs, nil
 }
 
 func (e Int16EncoderG) Encode(value int16) ([]byte, error) {
 	bs := make([]byte, 0, 2)
-	binary.BigEndian.PutUint16(bs, uint16(value))
+	bs = binary.BigEndian.AppendUint16(bs, uint16(value))
 	return bs, nil
 }
 
@@ -858,12 +924,12 @@ type Uint8SerdeG struct {
 }
 
 var (
-	_ = Serde(Uint8Serde{})
-	_ = SerdeG[uint8](Uint8SerdeG{})
+	_ = Serde(&Uint8Serde{})
+	_ = SerdeG[uint8](&Uint8SerdeG{})
 )
 
-func (Uint8SerdeG) UsedBufferPool() bool { return false }
-func (Uint8Serde) UsedBufferPool() bool  { return false }
+func (*Uint8SerdeG) UsedBufferPool() bool { return false }
+func (*Uint8Serde) UsedBufferPool() bool  { return false }
 
 type (
 	Int8Encoder  struct{}
@@ -871,11 +937,11 @@ type (
 )
 
 var (
-	_ = Encoder(Int8Encoder{})
-	_ = EncoderG[int8](Int8EncoderG{})
+	_ = Encoder(&Int8Encoder{})
+	_ = EncoderG[int8](&Int8EncoderG{})
 )
 
-func (e Int8Encoder) Encode(value interface{}) ([]byte, error) {
+func (e *Int8Encoder) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -885,7 +951,7 @@ func (e Int8Encoder) Encode(value interface{}) ([]byte, error) {
 	return bs, nil
 }
 
-func (e Int8EncoderG) Encode(value int8) ([]byte, error) {
+func (e *Int8EncoderG) Encode(value int8) ([]byte, error) {
 	bs := make([]byte, 1)
 	bs[0] = uint8(value)
 	return bs, nil
@@ -897,11 +963,11 @@ type (
 )
 
 var (
-	_ = Decoder(Int8Decoder{})
-	_ = DecoderG[int8](Int8DecoderG{})
+	_ = Decoder(&Int8Decoder{})
+	_ = DecoderG[int8](&Int8DecoderG{})
 )
 
-func (e Int8Decoder) Decode(value []byte) (interface{}, error) {
+func (e *Int8Decoder) Decode(value []byte) (interface{}, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -911,7 +977,7 @@ func (e Int8Decoder) Decode(value []byte) (interface{}, error) {
 	return int8(value[0]), nil
 }
 
-func (e Int8DecoderG) Decode(value []byte) (int8, error) {
+func (e *Int8DecoderG) Decode(value []byte) (int8, error) {
 	if value == nil {
 		return 0, nil
 	}
@@ -932,12 +998,31 @@ type Int8SerdeG struct {
 }
 
 var (
-	_ = Serde(Int8Serde{})
-	_ = SerdeG[int8](Int8SerdeG{})
+	_ = Serde(&Int8Serde{})
+	_ = SerdeG[int8](&Int8SerdeG{})
 )
 
-func (Int8SerdeG) UsedBufferPool() bool { return false }
-func (Int8Serde) UsedBufferPool() bool  { return false }
+func (*Int8SerdeG) UsedBufferPool() bool { return false }
+func (*Int8Serde) UsedBufferPool() bool  { return false }
+
+// From gvisor: https://cs.opensource.google/gvisor/gvisor/+/master:pkg/gohacks/string_go120_unsafe.go;l=23-39
+// ImmutableBytesFromString is equivalent to []byte(s), except that it uses the
+// same memory backing s instead of making a heap-allocated copy. This is only
+// valid if the returned slice is never mutated.
+func ImmutableBytesFromString(s string) []byte {
+	b := unsafe.StringData(s)
+	return unsafe.Slice(b, len(s))
+}
+
+// StringFromImmutableBytes is equivalent to string(bs), except that it uses
+// the same memory backing bs instead of making a heap-allocated copy. This is
+// only valid if bs is never mutated after StringFromImmutableBytes returns.
+func StringFromImmutableBytes(bs []byte) string {
+	if len(bs) == 0 {
+		return ""
+	}
+	return unsafe.String(&bs[0], len(bs))
+}
 
 type (
 	StringEncoder  struct{}
@@ -945,20 +1030,20 @@ type (
 )
 
 var (
-	_ = Encoder(StringEncoder{})
-	_ = EncoderG[string](StringEncoderG{})
+	_ = Encoder(&StringEncoder{})
+	_ = EncoderG[string](&StringEncoderG{})
 )
 
-func (e StringEncoder) Encode(value interface{}) ([]byte, error) {
+func (e *StringEncoder) Encode(value interface{}) ([]byte, error) {
 	if value == nil {
 		return nil, nil
 	}
 	v := value.(string)
-	return []byte(v), nil
+	return ImmutableBytesFromString(v), nil
 }
 
-func (e StringEncoderG) Encode(value string) ([]byte, error) {
-	return []byte(value), nil
+func (e *StringEncoderG) Encode(value string) ([]byte, error) {
+	return ImmutableBytesFromString(value), nil
 }
 
 type (
@@ -967,22 +1052,22 @@ type (
 )
 
 var (
-	_ = Decoder(StringDecoder{})
-	_ = DecoderG[string](StringDecoderG{})
+	_ = Decoder(&StringDecoder{})
+	_ = DecoderG[string](&StringDecoderG{})
 )
 
-func (d StringDecoder) Decode(value []byte) (interface{}, error) {
+func (d *StringDecoder) Decode(value []byte) (interface{}, error) {
 	if value == nil {
 		return nil, nil
 	}
-	return string(value), nil
+	return StringFromImmutableBytes(value), nil
 }
 
-func (d StringDecoderG) Decode(value []byte) (string, error) {
+func (d *StringDecoderG) Decode(value []byte) (string, error) {
 	if value == nil {
 		return "", nil
 	}
-	return string(value), nil
+	return StringFromImmutableBytes(value), nil
 }
 
 type StringSerde struct {
@@ -996,26 +1081,26 @@ type StringSerdeG struct {
 }
 
 var (
-	_ = Serde(StringSerde{})
-	_ = SerdeG[string](StringSerdeG{})
+	_ = Serde(&StringSerde{})
+	_ = SerdeG[string](&StringSerdeG{})
 )
 
-func (StringSerdeG) UsedBufferPool() bool { return false }
-func (StringSerde) UsedBufferPool() bool  { return false }
+func (*StringSerdeG) UsedBufferPool() bool { return false }
+func (*StringSerde) UsedBufferPool() bool  { return false }
 
 type OptionalValSerde[V any] struct {
 	valSerde SerdeG[V]
 }
 
 func NewOptionalValSerde[V any](valSerde SerdeG[V]) SerdeG[optional.Option[V]] {
-	return OptionalValSerde[V]{valSerde: valSerde}
+	return &OptionalValSerde[V]{valSerde: valSerde}
 }
 
-func (s OptionalValSerde[V]) UsedBufferPool() bool { return s.valSerde.UsedBufferPool() }
+func (s *OptionalValSerde[V]) UsedBufferPool() bool { return s.valSerde.UsedBufferPool() }
 
-var _ = SerdeG[optional.Option[int]](OptionalValSerde[int]{})
+var _ = SerdeG[optional.Option[int]](&OptionalValSerde[int]{})
 
-func (s OptionalValSerde[V]) Encode(value optional.Option[V]) ([]byte, error) {
+func (s *OptionalValSerde[V]) Encode(value optional.Option[V]) ([]byte, error) {
 	v, ok := value.Take()
 	if ok {
 		return s.valSerde.Encode(v)
@@ -1024,7 +1109,7 @@ func (s OptionalValSerde[V]) Encode(value optional.Option[V]) ([]byte, error) {
 	}
 }
 
-func (s OptionalValSerde[V]) Decode(val []byte) (optional.Option[V], error) {
+func (s *OptionalValSerde[V]) Decode(val []byte) (optional.Option[V], error) {
 	if val == nil {
 		return optional.None[V](), nil
 	} else {
