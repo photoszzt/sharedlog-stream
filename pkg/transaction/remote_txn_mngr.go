@@ -159,7 +159,8 @@ func (s *RemoteTxnManager) Init(ctx context.Context, in *remote_txn_rpc.InitArg)
 }
 
 func (s *RemoteTxnManager) AppendTpPar(ctx context.Context, in *txn_data.TxnMetaMsg) error {
-	debug.Fprintf(os.Stderr, "handle AppendTpPar with input: %v\n", in)
+	debug.Fprintf(os.Stderr, "handle AppendTpPar taskId %#x, taskEpoch %#x, transactionalId %v, state %v, tps %v\n",
+		in.ProdId.TaskId, in.ProdId.TaskEpoch, in.TransactionalId, in.State, in.TopicPartitions)
 	s.mu.Lock()
 	prodId := s.prod_id_map[in.TransactionalId]
 	if prodId.TaskEpoch != in.ProdId.GetTaskEpoch() || prodId.TaskId != in.ProdId.GetTaskId() {
@@ -190,7 +191,8 @@ func (s *RemoteTxnManager) AppendTpPar(ctx context.Context, in *txn_data.TxnMeta
 }
 
 func (s *RemoteTxnManager) AbortTxn(ctx context.Context, in *txn_data.TxnMetaMsg) error {
-	debug.Fprintf(os.Stderr, "handle AbortTxn with input: %v\n", in)
+	debug.Fprintf(os.Stderr, "handle AbortTxn taskId %#x, taskEpoch %#x, transactionalId %v, state %v, tps %v\n",
+		in.ProdId.TaskId, in.ProdId.TaskEpoch, in.TransactionalId, in.State, in.TopicPartitions)
 	s.mu.Lock()
 	prodId := s.prod_id_map[in.TransactionalId]
 	if prodId.TaskEpoch != in.ProdId.GetTaskEpoch() || prodId.TaskId != in.ProdId.GetTaskId() {
@@ -215,7 +217,8 @@ func (s *RemoteTxnManager) AbortTxn(ctx context.Context, in *txn_data.TxnMetaMsg
 }
 
 func (s *RemoteTxnManager) AppendConsumedOffset(ctx context.Context, in *remote_txn_rpc.ConsumedOffsets) error {
-	debug.Fprintf(os.Stderr, "handle AppendConsumedOffset with input: %v\n", in)
+	debug.Fprintf(os.Stderr, "handle AppendConsumedOffset taskId: %#x, taskEpoch: %#x, transactionalId %v, state %v, tps %v\n",
+		in.ProdId.TaskId, in.ProdId.TaskEpoch, in.TransactionalId, in.OffsetPairs)
 	s.mu.Lock()
 	prodId := s.prod_id_map[in.TransactionalId]
 	if prodId.TaskEpoch != in.ProdId.GetTaskEpoch() || prodId.TaskId != in.ProdId.GetTaskId() {
@@ -259,7 +262,8 @@ func (s *RemoteTxnManager) AppendConsumedOffset(ctx context.Context, in *remote_
 }
 
 func (s *RemoteTxnManager) CommitTxnAsyncComplete(ctx context.Context, in *txn_data.TxnMetaMsg) (*remote_txn_rpc.CommitReply, error) {
-	debug.Fprintf(os.Stderr, "handle CommitTxnAsyncComplete with input: %v\n", in)
+	debug.Fprintf(os.Stderr, "handle CommitTxnAsyncComplete taskId %#x, taskEpoch %#x, transactionalId %v, state %v, tps %v\n",
+		in.ProdId.TaskId, in.ProdId.TaskEpoch, in.TransactionalId, in.State, in.TopicPartitions)
 	s.mu.Lock()
 	prodId := s.prod_id_map[in.TransactionalId]
 	if prodId.TaskEpoch != in.ProdId.GetTaskEpoch() || prodId.TaskId != in.ProdId.GetTaskId() {

@@ -103,8 +103,10 @@ func SetupManagerForRemote2pc(ctx context.Context, t *StreamTask, args *StreamTa
 	if err != nil {
 		return nil, nil, err
 	}
-	debug.Fprintf(os.Stderr, "[%d] done init transaction manager\n", args.ectx.SubstreamNum())
 	client.UpdateProducerId(initReply.ProdId)
+	prodId := client.GetProducerId()
+	debug.Fprintf(os.Stderr, "[%d] done init transaction manager, got task id: %#x, task epoch: %#x\n",
+		args.ectx.SubstreamNum(), prodId.TaskId, prodId.TaskEpoch)
 	if len(initReply.OffsetPairs) != 0 {
 		restoreBeg := time.Now()
 		// if env_config.CREATE_SNAPSHOT {
