@@ -48,25 +48,6 @@ func NewRTxnRpcClient(faas_gateway string, nodeConstraint string, serdeFormat co
 	}
 }
 
-func postReqOnly(client *http.Client, url, nodeConstraint string, request []byte) error {
-	req, err := http.NewRequest("POST", url, bytes.NewReader(request))
-	if err != nil {
-		return err
-	}
-	if nodeConstraint != "" {
-		req.Header.Add("X-Faas-Node-Constraint", nodeConstraint)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("Non-OK response: %d", resp.StatusCode)
-	}
-	return nil
-}
-
 func postRequest[V msgp.Decodable](client *http.Client, url, nodeConstraint string, request []byte, response V) error {
 	req, err := http.NewRequest("POST", url, bytes.NewReader(request))
 	if err != nil {
