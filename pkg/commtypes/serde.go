@@ -292,7 +292,7 @@ func (e Uint64EncoderG) Encode(value uint64) ([]byte, error) {
 	b := PopBuffer()
 	bs := *b
 	bs = Require(bs[:0], 8)
-	binary.BigEndian.PutUint64(bs, value)
+	bs = binary.BigEndian.AppendUint64(bs, value)
 	return bs, nil
 }
 
