@@ -371,9 +371,10 @@ func Invoke(invokeParam InvokeFuncParam,
 		go InvokeChkMngr(&wg, client, &chkMngrConfig, invokeParam.GatewayUrl,
 			invokeParam.Local)
 		time.Sleep(time.Duration(5) * time.Millisecond)
-	} else if exactly_once_intr.GuaranteeMth(baseQueryInput.GuaranteeMth) == exactly_once_intr.REMOTE_2PC {
-		InvokeRTxnMngr(client, invokeParam.GatewayUrl, invokeParam.Local, 9)
 	}
+	// else if exactly_once_intr.GuaranteeMth(baseQueryInput.GuaranteeMth) == exactly_once_intr.REMOTE_2PC {
+	// 	InvokeRTxnMngr(client, invokeParam.GatewayUrl, invokeParam.Local, 9)
+	// }
 
 	fmt.Fprintf(os.Stderr, "src instance: %d\n", params.SrcInvokeConfig.NumSrcInstance)
 

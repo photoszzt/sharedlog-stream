@@ -26,7 +26,7 @@ func GetRemoteTxnMngrAddr() []string {
 	return strings.Split(raw_addr, ",")
 }
 
-func prepareInit(rtm_client *transaction.RemoteTxnManagerClient, args *StreamTaskArgs) *remote_txn_rpc.InitArg {
+func prepareInit(rtm_client *transaction.RemoteTxnMngrClientBoki, args *StreamTaskArgs) *remote_txn_rpc.InitArg {
 	arg := remote_txn_rpc.InitArg{
 		TransactionalId: args.transactionalId,
 		SubstreamNum:    uint32(args.ectx.SubstreamNum()),
@@ -65,20 +65,35 @@ func prepareInit(rtm_client *transaction.RemoteTxnManagerClient, args *StreamTas
 	return &arg
 }
 
-func SetupManagerForRemote2pc(ctx context.Context, t *StreamTask, args *StreamTaskArgs, rs *snapshot_store.RedisSnapshotStore,
-) (*transaction.RemoteTxnManagerClient, *control_channel.ControlChannelManager, error) {
-	checkStreamArgs(args)
+func prepareGrpc(instance uint8) (*grpc.ClientConn, error) {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	rmngr_addr := GetRemoteTxnMngrAddr()
-	idx := uint64(args.ectx.SubstreamNum()) % uint64(len(rmngr_addr))
+	idx := uint64(instance) % uint64(len(rmngr_addr))
 	debug.Fprintf(os.Stderr, "remote txn manager addr: %v, connecting to %v\n",
 		rmngr_addr, rmngr_addr[idx])
-	conn, err := grpc.Dial(rmngr_addr[idx], opts...)
-	if err != nil {
-		return nil, nil, err
-	}
-	client := transaction.NewRemoteTxnManagerClient(conn, args.transactionalId)
+	return grpc.Dial(rmngr_addr[idx], opts...)
+}
+
+func getNodeConstraint(instance uint8) string {
+	raw_addr := os.Getenv("RTXN_MNGR_NODES")
+	nodes := strings.Split(raw_addr, ",")
+	idx := uint64(instance) % uint64(len(nodes))
+	debug.Fprintf(os.Stderr, "remote txn manager nodes: %v, choose %v\n",
+		nodes, nodes[idx])
+	return nodes[idx]
+}
+
+func SetupManagerForRemote2pc(ctx context.Context, t *StreamTask, args *StreamTaskArgs, rs *snapshot_store.RedisSnapshotStore,
+) (*transaction.RemoteTxnMngrClientBoki, *control_channel.ControlChannelManager, error) {
+	checkStreamArgs(args)
+	// conn, err := prepareGrpc(args.ectx.SubstreamNum())
+	// if err != nil {
+	// 	return nil, nil, err
+	// }
+	// client := transaction.NewRemoteTxnMngrClientGrpc(conn, args.transactionalId)
+	node := getNodeConstraint(args.ectx.SubstreamNum())
+	client := transaction.NewRemoteTxnMngrClientBoki(args.faas_gateway, node, args.serdeFormat, args.transactionalId)
 	debug.Fprintf(os.Stderr, "[%d] remote txn manager client setup done\n",
 		args.ectx.SubstreamNum())
 
@@ -151,7 +166,7 @@ func SetupManagerForRemote2pc(ctx context.Context, t *StreamTask, args *StreamTa
 
 type rtxnProcessMeta struct {
 	t          *StreamTask
-	rtm_client *transaction.RemoteTxnManagerClient
+	rtm_client *transaction.RemoteTxnMngrClientBoki
 	cmm        *control_channel.ControlChannelManager
 	args       *StreamTaskArgs
 }
