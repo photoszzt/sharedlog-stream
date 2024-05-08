@@ -24,6 +24,7 @@ func UpdateStreamTaskArgs(sp *common.QueryInput, argsBuilder stream_task.SetGuar
 		Duration(sp.Duration).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
 		BufMaxSize(sp.BufMaxSize).
+		FaasGateway(sp.FaasGateway).
 		WaitEndMark(sp.WaitForEndMark)
 	if sp.TestParams != nil {
 		ret.TestParams(sp.TestParams)

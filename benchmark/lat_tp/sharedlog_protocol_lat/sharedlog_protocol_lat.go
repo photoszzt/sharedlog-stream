@@ -61,6 +61,7 @@ func main() {
 		FlushMs:       uint32(FLAGS_commit_everyMs),
 		AppId:         "protocol-lat",
 		BufMaxSize:    uint32(FLAGS_buf_max_size),
+		FaasGateway:   FLAGS_faas_gateway,
 	}
 	client := &http.Client{
 		Transport: &http.Transport{

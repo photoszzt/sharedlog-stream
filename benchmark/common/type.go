@@ -15,6 +15,7 @@ const (
 type QueryInput struct {
 	TestParams            map[string]commtypes.FailParam `json:"testParams,omitempty"`
 	AppId                 string                         `json:"aid"`
+	FaasGateway           string                         `json:"gateway"`
 	NumOutPartitions      []uint8                        `json:"numOutPartition,omitempty"`
 	NumSubstreamProducer  []uint8                        `json:"numSubstreamProducer,omitempty"`
 	OutputTopicNames      []string                       `json:"outputTopicName,omitempty"`
@@ -39,6 +40,7 @@ func (q *QueryInput) Clone() QueryInput {
 	return QueryInput{
 		TestParams:           q.TestParams,
 		AppId:                q.AppId,
+		FaasGateway:          q.FaasGateway,
 		NumOutPartitions:     q.NumOutPartitions,
 		NumSubstreamProducer: q.NumSubstreamProducer,
 		OutputTopicNames:     q.OutputTopicNames,
@@ -168,6 +170,7 @@ type TranProcessBenchParam struct {
 	InTopicName   string `json:"inTopicName"`
 	OutTopicName  string `json:"outTopicName"`
 	AppId         string `json:"appId"`
+	FaasGateway   string `json:"gateway"`
 	CommitEveryMs uint64 `json:"commEveryMs,omitempty"`
 	Duration      uint32 `json:"duration,omitempty"`
 	BufMaxSize    uint32 `json:"bufMaxSize,omitempty"`

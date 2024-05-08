@@ -21,6 +21,7 @@ type StreamTaskArgs struct {
 	testParams            map[string]commtypes.FailParam
 	appId                 string
 	transactionalId       string
+	faas_gateway          string
 	flushEvery            time.Duration
 	// exactly once: commitEvery overwrites flushEvery if commitEvery < flushEvery
 	commitEvery              time.Duration
@@ -89,7 +90,11 @@ type SetSerdeFormat interface {
 }
 
 type SetBufMaxSize interface {
-	BufMaxSize(uint32) BuildStreamTaskArgs
+	BufMaxSize(uint32) SetFaasGateway
+}
+
+type SetFaasGateway interface {
+	FaasGateway(string) BuildStreamTaskArgs
 }
 
 type BuildStreamTaskArgs interface {
@@ -144,8 +149,13 @@ func (args *StreamTaskArgsBuilder) SerdeFormat(serdeFormat commtypes.SerdeFormat
 	return args
 }
 
-func (args *StreamTaskArgsBuilder) BufMaxSize(bufMaxSize uint32) BuildStreamTaskArgs {
+func (args *StreamTaskArgsBuilder) BufMaxSize(bufMaxSize uint32) SetFaasGateway {
 	args.stArgs.bufMaxSize = bufMaxSize
+	return args
+}
+
+func (args *StreamTaskArgsBuilder) FaasGateway(gateway string) BuildStreamTaskArgs {
+	args.stArgs.faas_gateway = gateway
 	return args
 }
 

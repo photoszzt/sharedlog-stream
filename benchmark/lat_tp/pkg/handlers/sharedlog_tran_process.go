@@ -120,6 +120,7 @@ func (h *sharedlogTranProcessHandler) sharedlogTranProcess(ctx context.Context, 
 		Duration(sp.Duration).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
 		BufMaxSize(sp.BufMaxSize).
+		FaasGateway(sp.FaasGateway).
 		WaitEndMark(false).FixedOutParNum(0).Build()
 	if err != nil {
 		return common.GenErrFnOutput(err)
