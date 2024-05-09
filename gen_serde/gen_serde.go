@@ -122,6 +122,7 @@ func main() {
 	gen_serde("control_meta", "ControlMetadata", txn_path, "txn_data", false)
 	gen_serde("offset_record", "OffsetRecord", txn_path, "txn_data", false)
 	gen_serde_ptr("topic_partition", "TopicPartition", txn_path, "txn_data", false)
+	gen_serde("txn_metadata", "TxnMetadata", txn_path, "txn_data", false)
 }
 
 //go:embed serde.tmpl
