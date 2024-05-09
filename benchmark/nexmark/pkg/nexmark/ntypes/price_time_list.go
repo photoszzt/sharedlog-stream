@@ -3,10 +3,7 @@
 package ntypes
 
 import (
-	"encoding/json"
 	"fmt"
-	"sharedlog-stream/pkg/common_errors"
-	"sharedlog-stream/pkg/commtypes"
 )
 
 type PriceTimeSlice []PriceTime
@@ -57,57 +54,4 @@ func castToPriceTimeListPtr(value interface{}) *PriceTimeList {
 		ptl = &ptlTmp
 	}
 	return ptl
-}
-
-type PriceTimeListJSONSerde struct {
-	commtypes.DefaultJSONSerde
-}
-
-type PriceTimeListMsgpSerde struct {
-	commtypes.DefaultMsgpSerde
-}
-
-var _ = commtypes.Serde(PriceTimeListJSONSerde{})
-
-func (s PriceTimeListJSONSerde) Encode(value interface{}) ([]byte, error) {
-	ptl := castToPriceTimeListPtr(value)
-	return json.Marshal(ptl)
-}
-
-func (s PriceTimeListJSONSerde) Decode(value []byte) (interface{}, error) {
-	ptl := PriceTimeList{}
-	err := json.Unmarshal(value, &ptl)
-	if err != nil {
-		return nil, err
-	}
-	return ptl, nil
-}
-
-var _ = commtypes.Serde(PriceTimeListMsgpSerde{})
-
-func (s PriceTimeListMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	ptl := castToPriceTimeListPtr(value)
-	b := commtypes.PopBuffer()
-	buf := *b
-	return ptl.MarshalMsg(buf[:0])
-}
-
-func (s PriceTimeListMsgpSerde) Decode(value []byte) (interface{}, error) {
-	ptl := PriceTimeList{}
-	_, err := ptl.UnmarshalMsg(value)
-	if err != nil {
-		return nil, err
-	}
-	return ptl, nil
-}
-
-func GetPriceTimeListSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
-	switch serdeFormat {
-	case commtypes.JSON:
-		return PriceTimeListJSONSerde{}, nil
-	case commtypes.MSGP:
-		return PriceTimeListMsgpSerde{}, nil
-	default:
-		return nil, common_errors.ErrUnrecognizedSerdeFormat
-	}
 }

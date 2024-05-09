@@ -9,38 +9,41 @@ import (
 type NameCityStateIdJSONSerdeG struct {
 	commtypes.DefaultJSONSerde
 }
+
+var _ = commtypes.SerdeG[NameCityStateId](NameCityStateIdJSONSerdeG{})
+
+func (s NameCityStateIdJSONSerdeG) Encode(value NameCityStateId) ([]byte, *[]byte, error) {
+	r, err := json.Marshal(value)
+	return r, nil, err
+}
+
+func (s NameCityStateIdJSONSerdeG) Decode(value []byte) (NameCityStateId, error) {
+	v := NameCityStateId{}
+	if err := json.Unmarshal(value, &v); err != nil {
+		return NameCityStateId{}, err
+	}
+	return v, nil
+}
+
 type NameCityStateIdMsgpSerdeG struct {
 	commtypes.DefaultMsgpSerde
 }
 
-var _ = commtypes.SerdeG[NameCityStateId](NameCityStateIdJSONSerdeG{})
-
-func (s NameCityStateIdJSONSerdeG) Encode(value NameCityStateId) ([]byte, error) {
-	return json.Marshal(&value)
-}
-
-func (s NameCityStateIdJSONSerdeG) Decode(value []byte) (NameCityStateId, error) {
-	ncsi := NameCityStateId{}
-	if err := json.Unmarshal(value, &ncsi); err != nil {
-		return NameCityStateId{}, err
-	}
-	return ncsi, nil
-}
-
 var _ = commtypes.SerdeG[NameCityStateId](NameCityStateIdMsgpSerdeG{})
 
-func (s NameCityStateIdMsgpSerdeG) Encode(value NameCityStateId) ([]byte, error) {
+func (s NameCityStateIdMsgpSerdeG) Encode(value NameCityStateId) ([]byte, *[]byte, error) {
 	b := commtypes.PopBuffer()
 	buf := *b
-	return value.MarshalMsg(buf[:0])
+	r, err := value.MarshalMsg(buf[:0])
+	return r, b, err
 }
 
 func (s NameCityStateIdMsgpSerdeG) Decode(value []byte) (NameCityStateId, error) {
-	ncsi := NameCityStateId{}
-	if _, err := ncsi.UnmarshalMsg(value); err != nil {
+	v := NameCityStateId{}
+	if _, err := v.UnmarshalMsg(value); err != nil {
 		return NameCityStateId{}, err
 	}
-	return ncsi, nil
+	return v, nil
 }
 
 func GetNameCityStateIdSerdeG(serdeFormat commtypes.SerdeFormat) (commtypes.SerdeG[NameCityStateId], error) {

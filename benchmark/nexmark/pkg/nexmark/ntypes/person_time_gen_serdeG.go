@@ -9,40 +9,41 @@ import (
 type PersonTimeJSONSerdeG struct {
 	commtypes.DefaultJSONSerde
 }
+
+var _ = commtypes.SerdeG[PersonTime](PersonTimeJSONSerdeG{})
+
+func (s PersonTimeJSONSerdeG) Encode(value PersonTime) ([]byte, *[]byte, error) {
+	r, err := json.Marshal(value)
+	return r, nil, err
+}
+
+func (s PersonTimeJSONSerdeG) Decode(value []byte) (PersonTime, error) {
+	v := PersonTime{}
+	if err := json.Unmarshal(value, &v); err != nil {
+		return PersonTime{}, err
+	}
+	return v, nil
+}
+
 type PersonTimeMsgpSerdeG struct {
 	commtypes.DefaultMsgpSerde
 }
 
-var _ = commtypes.SerdeG[PersonTime](PersonTimeJSONSerdeG{})
-
-func (e PersonTimeJSONSerdeG) Encode(value PersonTime) ([]byte, error) {
-	return json.Marshal(&value)
-}
-
-func (d PersonTimeJSONSerdeG) Decode(value []byte) (PersonTime, error) {
-	se := PersonTime{}
-	err := json.Unmarshal(value, &se)
-	if err != nil {
-		return PersonTime{}, err
-	}
-	return se, nil
-}
-
 var _ = commtypes.SerdeG[PersonTime](PersonTimeMsgpSerdeG{})
 
-func (e PersonTimeMsgpSerdeG) Encode(value PersonTime) ([]byte, error) {
+func (s PersonTimeMsgpSerdeG) Encode(value PersonTime) ([]byte, *[]byte, error) {
 	b := commtypes.PopBuffer()
 	buf := *b
-	return value.MarshalMsg(buf[:0])
+	r, err := value.MarshalMsg(buf[:0])
+	return r, b, err
 }
 
-func (d PersonTimeMsgpSerdeG) Decode(value []byte) (PersonTime, error) {
-	se := PersonTime{}
-	_, err := se.UnmarshalMsg(value)
-	if err != nil {
+func (s PersonTimeMsgpSerdeG) Decode(value []byte) (PersonTime, error) {
+	v := PersonTime{}
+	if _, err := v.UnmarshalMsg(value); err != nil {
 		return PersonTime{}, err
 	}
-	return se, nil
+	return v, nil
 }
 
 func GetPersonTimeSerdeG(serdeFormat commtypes.SerdeFormat) (commtypes.SerdeG[PersonTime], error) {

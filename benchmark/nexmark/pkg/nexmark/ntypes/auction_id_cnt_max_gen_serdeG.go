@@ -7,22 +7,22 @@ import (
 )
 
 type AuctionIdCntMaxJSONSerdeG struct {
-	commtypes.DefaultMsgpSerde
+	commtypes.DefaultJSONSerde
 }
 
 var _ = commtypes.SerdeG[AuctionIdCntMax](AuctionIdCntMaxJSONSerdeG{})
 
-func (s AuctionIdCntMaxJSONSerdeG) Encode(value AuctionIdCntMax) ([]byte, error) {
-	return json.Marshal(&value)
+func (s AuctionIdCntMaxJSONSerdeG) Encode(value AuctionIdCntMax) ([]byte, *[]byte, error) {
+	r, err := json.Marshal(value)
+	return r, nil, err
 }
 
 func (s AuctionIdCntMaxJSONSerdeG) Decode(value []byte) (AuctionIdCntMax, error) {
-	ai := AuctionIdCntMax{}
-	err := json.Unmarshal(value, &ai)
-	if err != nil {
+	v := AuctionIdCntMax{}
+	if err := json.Unmarshal(value, &v); err != nil {
 		return AuctionIdCntMax{}, err
 	}
-	return ai, nil
+	return v, nil
 }
 
 type AuctionIdCntMaxMsgpSerdeG struct {
@@ -31,19 +31,19 @@ type AuctionIdCntMaxMsgpSerdeG struct {
 
 var _ = commtypes.SerdeG[AuctionIdCntMax](AuctionIdCntMaxMsgpSerdeG{})
 
-func (s AuctionIdCntMaxMsgpSerdeG) Encode(value AuctionIdCntMax) ([]byte, error) {
+func (s AuctionIdCntMaxMsgpSerdeG) Encode(value AuctionIdCntMax) ([]byte, *[]byte, error) {
 	b := commtypes.PopBuffer()
 	buf := *b
-	return value.MarshalMsg(buf[:0])
+	r, err := value.MarshalMsg(buf[:0])
+	return r, b, err
 }
 
 func (s AuctionIdCntMaxMsgpSerdeG) Decode(value []byte) (AuctionIdCntMax, error) {
-	ai := AuctionIdCntMax{}
-	_, err := ai.UnmarshalMsg(value)
-	if err != nil {
+	v := AuctionIdCntMax{}
+	if _, err := v.UnmarshalMsg(value); err != nil {
 		return AuctionIdCntMax{}, err
 	}
-	return ai, nil
+	return v, nil
 }
 
 func GetAuctionIdCntMaxSerdeG(serdeFormat commtypes.SerdeFormat) (commtypes.SerdeG[AuctionIdCntMax], error) {

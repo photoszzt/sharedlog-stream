@@ -10,38 +10,40 @@ type SumAndCountJSONSerdeG struct {
 	commtypes.DefaultJSONSerde
 }
 
+var _ = commtypes.SerdeG[SumAndCount](SumAndCountJSONSerdeG{})
+
+func (s SumAndCountJSONSerdeG) Encode(value SumAndCount) ([]byte, *[]byte, error) {
+	r, err := json.Marshal(value)
+	return r, nil, err
+}
+
+func (s SumAndCountJSONSerdeG) Decode(value []byte) (SumAndCount, error) {
+	v := SumAndCount{}
+	if err := json.Unmarshal(value, &v); err != nil {
+		return SumAndCount{}, err
+	}
+	return v, nil
+}
+
 type SumAndCountMsgpSerdeG struct {
 	commtypes.DefaultMsgpSerde
 }
 
-var _ = commtypes.SerdeG[SumAndCount](SumAndCountJSONSerdeG{})
-
-func (s SumAndCountJSONSerdeG) Encode(value SumAndCount) ([]byte, error) {
-	return json.Marshal(&value)
-}
-
-func (s SumAndCountJSONSerdeG) Decode(value []byte) (SumAndCount, error) {
-	sc := SumAndCount{}
-	if err := json.Unmarshal(value, &sc); err != nil {
-		return SumAndCount{}, err
-	}
-	return sc, nil
-}
-
 var _ = commtypes.SerdeG[SumAndCount](SumAndCountMsgpSerdeG{})
 
-func (s SumAndCountMsgpSerdeG) Encode(value SumAndCount) ([]byte, error) {
+func (s SumAndCountMsgpSerdeG) Encode(value SumAndCount) ([]byte, *[]byte, error) {
 	b := commtypes.PopBuffer()
 	buf := *b
-	return value.MarshalMsg(buf[:0])
+	r, err := value.MarshalMsg(buf[:0])
+	return r, b, err
 }
 
 func (s SumAndCountMsgpSerdeG) Decode(value []byte) (SumAndCount, error) {
-	sc := SumAndCount{}
-	if _, err := sc.UnmarshalMsg(value); err != nil {
+	v := SumAndCount{}
+	if _, err := v.UnmarshalMsg(value); err != nil {
 		return SumAndCount{}, err
 	}
-	return sc, nil
+	return v, nil
 }
 
 func GetSumAndCountSerdeG(serdeFormat commtypes.SerdeFormat) (commtypes.SerdeG[SumAndCount], error) {

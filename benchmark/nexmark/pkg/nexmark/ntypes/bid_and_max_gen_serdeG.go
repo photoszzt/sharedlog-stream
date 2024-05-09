@@ -7,21 +7,22 @@ import (
 )
 
 type BidAndMaxJSONSerdeG struct {
-	commtypes.DefaultMsgpSerde
+	commtypes.DefaultJSONSerde
 }
 
 var _ = commtypes.SerdeG[BidAndMax](BidAndMaxJSONSerdeG{})
 
-func (s BidAndMaxJSONSerdeG) Encode(value BidAndMax) ([]byte, error) {
-	return json.Marshal(&value)
+func (s BidAndMaxJSONSerdeG) Encode(value BidAndMax) ([]byte, *[]byte, error) {
+	r, err := json.Marshal(value)
+	return r, nil, err
 }
 
 func (s BidAndMaxJSONSerdeG) Decode(value []byte) (BidAndMax, error) {
-	bm := BidAndMax{}
-	if err := json.Unmarshal(value, &bm); err != nil {
+	v := BidAndMax{}
+	if err := json.Unmarshal(value, &v); err != nil {
 		return BidAndMax{}, err
 	}
-	return bm, nil
+	return v, nil
 }
 
 type BidAndMaxMsgpSerdeG struct {
@@ -30,18 +31,19 @@ type BidAndMaxMsgpSerdeG struct {
 
 var _ = commtypes.SerdeG[BidAndMax](BidAndMaxMsgpSerdeG{})
 
-func (s BidAndMaxMsgpSerdeG) Encode(value BidAndMax) ([]byte, error) {
+func (s BidAndMaxMsgpSerdeG) Encode(value BidAndMax) ([]byte, *[]byte, error) {
 	b := commtypes.PopBuffer()
 	buf := *b
-	return value.MarshalMsg(buf[:0])
+	r, err := value.MarshalMsg(buf[:0])
+	return r, b, err
 }
 
 func (s BidAndMaxMsgpSerdeG) Decode(value []byte) (BidAndMax, error) {
-	bm := BidAndMax{}
-	if _, err := bm.UnmarshalMsg(value); err != nil {
+	v := BidAndMax{}
+	if _, err := v.UnmarshalMsg(value); err != nil {
 		return BidAndMax{}, err
 	}
-	return bm, nil
+	return v, nil
 }
 
 func GetBidAndMaxSerdeG(serdeFormat commtypes.SerdeFormat) (commtypes.SerdeG[BidAndMax], error) {

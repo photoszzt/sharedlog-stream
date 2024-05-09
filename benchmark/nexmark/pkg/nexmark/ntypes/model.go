@@ -5,10 +5,7 @@
 package ntypes
 
 import (
-	"encoding/json"
 	"fmt"
-	"sharedlog-stream/pkg/common_errors"
-	"sharedlog-stream/pkg/commtypes"
 )
 
 type Auction struct {
@@ -132,50 +129,6 @@ func NewBidEvent(bid *Bid) *Event {
 	}
 }
 
-type EventMsgpSerde struct {
-	commtypes.DefaultMsgpSerde
-}
-type EventJSONSerde struct {
-	commtypes.DefaultJSONSerde
-}
-
-var _ = commtypes.Encoder(EventMsgpSerde{})
-
-func (e EventMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	event := value.(*Event)
-	b := commtypes.PopBuffer()
-	buf := *b
-	return event.MarshalMsg(buf[:0])
-}
-
-var _ = commtypes.Encoder(EventJSONSerde{})
-
-func (e EventJSONSerde) Encode(value interface{}) ([]byte, error) {
-	event := value.(*Event)
-	return json.Marshal(event)
-}
-
-var _ = commtypes.Decoder(EventMsgpSerde{})
-
-func (emd EventMsgpSerde) Decode(value []byte) (interface{}, error) {
-	e := Event{}
-	_, err := e.UnmarshalMsg(value)
-	if err != nil {
-		return nil, err
-	}
-	return &e, nil
-}
-
-var _ = commtypes.Decoder(EventJSONSerde{})
-
-func (ejd EventJSONSerde) Decode(value []byte) (interface{}, error) {
-	e := &Event{}
-	if err := json.Unmarshal(value, e); err != nil {
-		return nil, err
-	}
-	return e, nil
-}
-
 func (e *Event) ExtractEventTime() (int64, error) {
 	switch e.Etype {
 	case PERSON:
@@ -200,15 +153,5 @@ func (e *Event) ExtractEventTime() (int64, error) {
 		return e.FanoutTest.DateTime, nil
 	default:
 		return 0, fmt.Errorf("failed to recognize event type")
-	}
-}
-
-func GetEventSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
-	if serdeFormat == commtypes.JSON {
-		return EventJSONSerde{}, nil
-	} else if serdeFormat == commtypes.MSGP {
-		return EventMsgpSerde{}, nil
-	} else {
-		return nil, common_errors.ErrUnrecognizedSerdeFormat
 	}
 }

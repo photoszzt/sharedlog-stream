@@ -10,40 +10,40 @@ type StartEndTimeJSONSerdeG struct {
 	commtypes.DefaultJSONSerde
 }
 
+var _ = commtypes.SerdeG[StartEndTime](StartEndTimeJSONSerdeG{})
+
+func (s StartEndTimeJSONSerdeG) Encode(value StartEndTime) ([]byte, *[]byte, error) {
+	r, err := json.Marshal(value)
+	return r, nil, err
+}
+
+func (s StartEndTimeJSONSerdeG) Decode(value []byte) (StartEndTime, error) {
+	v := StartEndTime{}
+	if err := json.Unmarshal(value, &v); err != nil {
+		return StartEndTime{}, err
+	}
+	return v, nil
+}
+
 type StartEndTimeMsgpSerdeG struct {
 	commtypes.DefaultMsgpSerde
 }
 
-var _ = commtypes.SerdeG[StartEndTime](StartEndTimeJSONSerdeG{})
-
-func (e StartEndTimeJSONSerdeG) Encode(value StartEndTime) ([]byte, error) {
-	return json.Marshal(&value)
-}
-
-func (d StartEndTimeJSONSerdeG) Decode(value []byte) (StartEndTime, error) {
-	se := StartEndTime{}
-	err := json.Unmarshal(value, &se)
-	if err != nil {
-		return StartEndTime{}, err
-	}
-	return se, nil
-}
-
 var _ = commtypes.SerdeG[StartEndTime](StartEndTimeMsgpSerdeG{})
 
-func (e StartEndTimeMsgpSerdeG) Encode(value StartEndTime) ([]byte, error) {
+func (s StartEndTimeMsgpSerdeG) Encode(value StartEndTime) ([]byte, *[]byte, error) {
 	b := commtypes.PopBuffer()
 	buf := *b
-	return value.MarshalMsg(buf[:0])
+	r, err := value.MarshalMsg(buf[:0])
+	return r, b, err
 }
 
-func (d StartEndTimeMsgpSerdeG) Decode(value []byte) (StartEndTime, error) {
-	se := StartEndTime{}
-	_, err := se.UnmarshalMsg(value)
-	if err != nil {
+func (s StartEndTimeMsgpSerdeG) Decode(value []byte) (StartEndTime, error) {
+	v := StartEndTime{}
+	if _, err := v.UnmarshalMsg(value); err != nil {
 		return StartEndTime{}, err
 	}
-	return se, nil
+	return v, nil
 }
 
 func GetStartEndTimeSerdeG(serdeFormat commtypes.SerdeFormat) (commtypes.SerdeG[StartEndTime], error) {

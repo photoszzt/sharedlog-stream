@@ -12,47 +12,46 @@ type AuctionIdCategoryJSONSerdeG struct {
 
 var _ = commtypes.SerdeG[AuctionIdCategory](AuctionIdCategoryJSONSerdeG{})
 
-func (s AuctionIdCategoryJSONSerdeG) Encode(value AuctionIdCategory) ([]byte, error) {
-	return json.Marshal(&value)
+func (s AuctionIdCategoryJSONSerdeG) Encode(value AuctionIdCategory) ([]byte, *[]byte, error) {
+	r, err := json.Marshal(value)
+	return r, nil, err
 }
 
 func (s AuctionIdCategoryJSONSerdeG) Decode(value []byte) (AuctionIdCategory, error) {
 	v := AuctionIdCategory{}
-	err := json.Unmarshal(value, &v)
-	if err != nil {
+	if err := json.Unmarshal(value, &v); err != nil {
 		return AuctionIdCategory{}, err
 	}
 	return v, nil
 }
 
 type AuctionIdCategoryMsgpSerdeG struct {
-	commtypes.DefaultJSONSerde
+	commtypes.DefaultMsgpSerde
 }
 
 var _ = commtypes.SerdeG[AuctionIdCategory](AuctionIdCategoryMsgpSerdeG{})
 
-func (s AuctionIdCategoryMsgpSerdeG) Encode(value AuctionIdCategory) ([]byte, error) {
+func (s AuctionIdCategoryMsgpSerdeG) Encode(value AuctionIdCategory) ([]byte, *[]byte, error) {
 	b := commtypes.PopBuffer()
 	buf := *b
-	return value.MarshalMsg(buf[:0])
+	r, err := value.MarshalMsg(buf[:0])
+	return r, b, err
 }
 
 func (s AuctionIdCategoryMsgpSerdeG) Decode(value []byte) (AuctionIdCategory, error) {
-	aic := AuctionIdCategory{}
-	_, err := aic.UnmarshalMsg(value)
-	if err != nil {
+	v := AuctionIdCategory{}
+	if _, err := v.UnmarshalMsg(value); err != nil {
 		return AuctionIdCategory{}, err
 	}
-	return aic, nil
+	return v, nil
 }
 
 func GetAuctionIdCategorySerdeG(serdeFormat commtypes.SerdeFormat) (commtypes.SerdeG[AuctionIdCategory], error) {
-	switch serdeFormat {
-	case commtypes.JSON:
+	if serdeFormat == commtypes.JSON {
 		return AuctionIdCategoryJSONSerdeG{}, nil
-	case commtypes.MSGP:
+	} else if serdeFormat == commtypes.MSGP {
 		return AuctionIdCategoryMsgpSerdeG{}, nil
-	default:
+	} else {
 		return nil, common_errors.ErrUnrecognizedSerdeFormat
 	}
 }

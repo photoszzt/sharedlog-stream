@@ -4,9 +4,7 @@
 package ntypes
 
 import (
-	"encoding/json"
 	"fmt"
-	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 )
 
@@ -51,66 +49,4 @@ func (se *StartEndTime) ExtractEventTime() (int64, error) {
 
 func (se StartEndTime) String() string {
 	return fmt.Sprintf("%d %d", se.StartTimeMs, se.EndTimeMs)
-}
-
-type StartEndTimeJSONSerde struct {
-	commtypes.DefaultJSONSerde
-}
-
-type StartEndTimeMsgpSerde struct {
-	commtypes.DefaultMsgpSerde
-}
-
-var _ = commtypes.Serde(StartEndTimeJSONSerde{})
-
-func (e StartEndTimeJSONSerde) Encode(value interface{}) ([]byte, error) {
-	se, ok := value.(*StartEndTime)
-	if !ok {
-		seTmp := value.(StartEndTime)
-		se = &seTmp
-	}
-	return json.Marshal(se)
-}
-
-func (d StartEndTimeJSONSerde) Decode(value []byte) (interface{}, error) {
-	se := StartEndTime{}
-	err := json.Unmarshal(value, &se)
-	if err != nil {
-		return nil, err
-	}
-	return se, nil
-}
-
-var _ = commtypes.Serde(StartEndTimeMsgpSerde{})
-
-func (e StartEndTimeMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	se, ok := value.(*StartEndTime)
-	if !ok {
-		seTmp := value.(StartEndTime)
-		se = &seTmp
-	}
-	b := commtypes.PopBuffer()
-	buf := *b
-	return se.MarshalMsg(buf[:0])
-}
-
-func (d StartEndTimeMsgpSerde) Decode(value []byte) (interface{}, error) {
-	se := StartEndTime{}
-	_, err := se.UnmarshalMsg(value)
-	if err != nil {
-		return nil, err
-	}
-	return se, nil
-}
-
-func GetStartEndTimeSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
-	var seSerde commtypes.Serde
-	if serdeFormat == commtypes.JSON {
-		seSerde = StartEndTimeJSONSerde{}
-	} else if serdeFormat == commtypes.MSGP {
-		seSerde = StartEndTimeMsgpSerde{}
-	} else {
-		return nil, common_errors.ErrUnrecognizedSerdeFormat
-	}
-	return seSerde, nil
 }

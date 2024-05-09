@@ -3,10 +3,7 @@
 package ntypes
 
 import (
-	"encoding/json"
 	"fmt"
-	"sharedlog-stream/pkg/common_errors"
-	"sharedlog-stream/pkg/commtypes"
 )
 
 type BidAndMax struct {
@@ -27,54 +24,4 @@ var _ = fmt.Stringer(BidAndMax{})
 func (bm BidAndMax) String() string {
 	return fmt.Sprintf("BidAndMax: {Price: %d, Auction: %d, Bidder: %d, BidTs: %d, WinStartMs: %d, WinEndMs: %d}",
 		bm.Price, bm.Auction, bm.Bidder, bm.BidTs, bm.WStartMs, bm.WEndMs)
-}
-
-type BidAndMaxJSONSerde struct {
-	commtypes.DefaultJSONSerde
-}
-
-var _ = commtypes.Serde(BidAndMaxJSONSerde{})
-
-func (s BidAndMaxJSONSerde) Encode(value interface{}) ([]byte, error) {
-	bm := value.(*BidAndMax)
-	return json.Marshal(bm)
-}
-
-func (s BidAndMaxJSONSerde) Decode(value []byte) (interface{}, error) {
-	bm := BidAndMax{}
-	if err := json.Unmarshal(value, &bm); err != nil {
-		return nil, err
-	}
-	return bm, nil
-}
-
-type BidAndMaxMsgpSerde struct {
-	commtypes.DefaultMsgpSerde
-}
-
-var _ = commtypes.Serde(BidAndMaxMsgpSerde{})
-
-func (s BidAndMaxMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	bm := value.(*BidAndMax)
-	b := commtypes.PopBuffer()
-	buf := *b
-	return bm.MarshalMsg(buf[:0])
-}
-
-func (s BidAndMaxMsgpSerde) Decode(value []byte) (interface{}, error) {
-	bm := BidAndMax{}
-	if _, err := bm.UnmarshalMsg(value); err != nil {
-		return nil, err
-	}
-	return bm, nil
-}
-
-func GetBidAndMaxSerde(serdeFormat commtypes.SerdeFormat) (commtypes.Serde, error) {
-	if serdeFormat == commtypes.JSON {
-		return BidAndMaxJSONSerde{}, nil
-	} else if serdeFormat == commtypes.MSGP {
-		return BidAndMaxMsgpSerde{}, nil
-	} else {
-		return nil, common_errors.ErrUnrecognizedSerdeFormat
-	}
 }

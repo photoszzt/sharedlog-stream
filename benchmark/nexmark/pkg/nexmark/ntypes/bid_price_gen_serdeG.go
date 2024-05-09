@@ -6,43 +6,44 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 )
 
-type (
-	BidPriceJSONSerdeG struct {
-		commtypes.DefaultJSONSerde
-	}
-	BidPriceMsgpSerdeG struct {
-		commtypes.DefaultMsgpSerde
-	}
-)
+type BidPriceJSONSerdeG struct {
+	commtypes.DefaultJSONSerde
+}
 
 var _ = commtypes.SerdeG[BidPrice](BidPriceJSONSerdeG{})
 
-func (s BidPriceJSONSerdeG) Encode(value BidPrice) ([]byte, error) {
-	return json.Marshal(&value)
+func (s BidPriceJSONSerdeG) Encode(value BidPrice) ([]byte, *[]byte, error) {
+	r, err := json.Marshal(value)
+	return r, nil, err
 }
 
 func (s BidPriceJSONSerdeG) Decode(value []byte) (BidPrice, error) {
-	bp := BidPrice{}
-	if err := json.Unmarshal(value, &bp); err != nil {
+	v := BidPrice{}
+	if err := json.Unmarshal(value, &v); err != nil {
 		return BidPrice{}, err
 	}
-	return bp, nil
+	return v, nil
+}
+
+type BidPriceMsgpSerdeG struct {
+	commtypes.DefaultMsgpSerde
 }
 
 var _ = commtypes.SerdeG[BidPrice](BidPriceMsgpSerdeG{})
 
-func (s BidPriceMsgpSerdeG) Encode(value BidPrice) ([]byte, error) {
+func (s BidPriceMsgpSerdeG) Encode(value BidPrice) ([]byte, *[]byte, error) {
 	b := commtypes.PopBuffer()
 	buf := *b
-	return value.MarshalMsg(buf[:0])
+	r, err := value.MarshalMsg(buf[:0])
+	return r, b, err
 }
 
 func (s BidPriceMsgpSerdeG) Decode(value []byte) (BidPrice, error) {
-	bp := BidPrice{}
-	if _, err := bp.UnmarshalMsg(value); err != nil {
+	v := BidPrice{}
+	if _, err := v.UnmarshalMsg(value); err != nil {
 		return BidPrice{}, err
 	}
-	return bp, nil
+	return v, nil
 }
 
 func GetBidPriceSerdeG(serdeFormat commtypes.SerdeFormat) (commtypes.SerdeG[BidPrice], error) {
