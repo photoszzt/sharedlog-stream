@@ -26,7 +26,7 @@ func (s PayloadArrJSONSerde) Decode(value []byte) (interface{}, error) {
 	if err := json.Unmarshal(value, &v); err != nil {
 		return nil, err
 	}
-	return &v, nil
+	return v, nil
 }
 
 type PayloadArrMsgpSerde struct {
@@ -52,7 +52,7 @@ func (s PayloadArrMsgpSerde) Decode(value []byte) (interface{}, error) {
 	if _, err := v.UnmarshalMsg(value); err != nil {
 		return nil, err
 	}
-	return &v, nil
+	return v, nil
 }
 
 func GetPayloadArrSerde(serdeFormat SerdeFormat) (Serde, error) {

@@ -26,7 +26,7 @@ func (s EpochMarkerJSONSerde) Decode(value []byte) (interface{}, error) {
 	if err := json.Unmarshal(value, &v); err != nil {
 		return nil, err
 	}
-	return &v, nil
+	return v, nil
 }
 
 type EpochMarkerMsgpSerde struct {
@@ -52,7 +52,7 @@ func (s EpochMarkerMsgpSerde) Decode(value []byte) (interface{}, error) {
 	if _, err := v.UnmarshalMsg(value); err != nil {
 		return nil, err
 	}
-	return &v, nil
+	return v, nil
 }
 
 func GetEpochMarkerSerde(serdeFormat SerdeFormat) (Serde, error) {

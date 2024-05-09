@@ -9,43 +9,43 @@ type TableSnapshotsJSONSerdeG struct {
 	DefaultJSONSerde
 }
 
-var _ = SerdeG[*TableSnapshots](TableSnapshotsJSONSerdeG{})
+var _ = SerdeG[TableSnapshots](TableSnapshotsJSONSerdeG{})
 
-func (s TableSnapshotsJSONSerdeG) Encode(value *TableSnapshots) ([]byte, *[]byte, error) {
+func (s TableSnapshotsJSONSerdeG) Encode(value TableSnapshots) ([]byte, *[]byte, error) {
 	r, err := json.Marshal(value)
 	return r, nil, err
 }
 
-func (s TableSnapshotsJSONSerdeG) Decode(value []byte) (*TableSnapshots, error) {
+func (s TableSnapshotsJSONSerdeG) Decode(value []byte) (TableSnapshots, error) {
 	v := TableSnapshots{}
 	if err := json.Unmarshal(value, &v); err != nil {
-		return nil, err
+		return TableSnapshots{}, err
 	}
-	return &v, nil
+	return v, nil
 }
 
 type TableSnapshotsMsgpSerdeG struct {
 	DefaultMsgpSerde
 }
 
-var _ = SerdeG[*TableSnapshots](TableSnapshotsMsgpSerdeG{})
+var _ = SerdeG[TableSnapshots](TableSnapshotsMsgpSerdeG{})
 
-func (s TableSnapshotsMsgpSerdeG) Encode(value *TableSnapshots) ([]byte, *[]byte, error) {
+func (s TableSnapshotsMsgpSerdeG) Encode(value TableSnapshots) ([]byte, *[]byte, error) {
 	b := PopBuffer()
 	buf := *b
 	r, err := value.MarshalMsg(buf[:0])
 	return r, b, err
 }
 
-func (s TableSnapshotsMsgpSerdeG) Decode(value []byte) (*TableSnapshots, error) {
+func (s TableSnapshotsMsgpSerdeG) Decode(value []byte) (TableSnapshots, error) {
 	v := TableSnapshots{}
 	if _, err := v.UnmarshalMsg(value); err != nil {
-		return nil, err
+		return TableSnapshots{}, err
 	}
-	return &v, nil
+	return v, nil
 }
 
-func GetTableSnapshotsSerdeG(serdeFormat SerdeFormat) (SerdeG[*TableSnapshots], error) {
+func GetTableSnapshotsSerdeG(serdeFormat SerdeFormat) (SerdeG[TableSnapshots], error) {
 	if serdeFormat == JSON {
 		return TableSnapshotsJSONSerdeG{}, nil
 	} else if serdeFormat == MSGP {

@@ -110,10 +110,10 @@ func main() {
 	gen_serde_ptr("auction_bid", "AuctionBid", ntypes_path, "ntypes", false)
 
 	commtypes_path := "../pkg/commtypes/"
-	gen_serde_ptr("checkpoint", "Checkpoint", commtypes_path, "commtypes", true)
-	gen_serde_ptr("epoch_meta", "EpochMarker", commtypes_path, "commtypes", true)
-	gen_serde_ptr("payload_arr", "PayloadArr", commtypes_path, "commtypes", true)
-	gen_serde_ptr("table_snapshots", "TableSnapshots", commtypes_path, "commtypes", true)
+	gen_serde("checkpoint", "Checkpoint", commtypes_path, "commtypes", true)
+	gen_serde("epoch_meta", "EpochMarker", commtypes_path, "commtypes", true)
+	gen_serde("payload_arr", "PayloadArr", commtypes_path, "commtypes", true)
+	gen_serde("table_snapshots", "TableSnapshots", commtypes_path, "commtypes", true)
 }
 
 //go:embed serde.tmpl

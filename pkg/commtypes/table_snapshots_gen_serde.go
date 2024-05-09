@@ -26,7 +26,7 @@ func (s TableSnapshotsJSONSerde) Decode(value []byte) (interface{}, error) {
 	if err := json.Unmarshal(value, &v); err != nil {
 		return nil, err
 	}
-	return &v, nil
+	return v, nil
 }
 
 type TableSnapshotsMsgpSerde struct {
@@ -52,7 +52,7 @@ func (s TableSnapshotsMsgpSerde) Decode(value []byte) (interface{}, error) {
 	if _, err := v.UnmarshalMsg(value); err != nil {
 		return nil, err
 	}
-	return &v, nil
+	return v, nil
 }
 
 func GetTableSnapshotsSerde(serdeFormat SerdeFormat) (Serde, error) {
