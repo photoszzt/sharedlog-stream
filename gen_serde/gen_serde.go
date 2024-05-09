@@ -20,6 +20,10 @@ type Variant struct {
 	// Path is the file path into which the generator will emit the code for this
 	// variant.
 	Path string
+
+	ExtraImports string
+
+	CommtypesPrefix string
 }
 
 func generate(v *Variant, code string) {
@@ -36,7 +40,10 @@ func generate(v *Variant, code string) {
 		log.Fatal("template Execute:", err)
 	}
 
-	os.WriteFile(v.Path, out.Bytes(), 0644)
+	err = os.WriteFile(v.Path, out.Bytes(), 0644)
+	if err != nil {
+		log.Fatal("os.WriteFile:", err)
+	}
 
 	formatted, err := format.Source(out.Bytes())
 	if err != nil {
@@ -49,42 +56,64 @@ func generate(v *Variant, code string) {
 	}
 }
 
-func gen_ntypes(fname string, typeName string) {
-	nexmark_path := "../benchmark/nexmark/pkg/nexmark/ntypes/"
+func gen_serde(fname, typeName, dirpath, packageName string, inCommtypes bool) {
 	start_end := &Variant{
-		PackageName: "ntypes",
+		PackageName: packageName,
 		TypeName:    typeName,
-		Path:        fmt.Sprintf("%s/%s_gen_serde.go", nexmark_path, fname),
+		Path:        fmt.Sprintf("%s/%s_gen_serde.go", dirpath, fname),
+	}
+	if inCommtypes {
+		start_end.ExtraImports = ""
+		start_end.CommtypesPrefix = ""
+	} else {
+		start_end.ExtraImports = "\"sharedlog-stream/pkg/commtypes\""
+		start_end.CommtypesPrefix = "commtypes."
 	}
 	generate(start_end, serde)
-	start_end.Path = fmt.Sprintf("%s/%s_gen_serdeG.go", nexmark_path, fname)
+	start_end.Path = fmt.Sprintf("%s/%s_gen_serdeG.go", dirpath, fname)
 	generate(start_end, serdeG)
 }
 
-func main() {
-	gen_ntypes("start_end_time", "StartEndTime")
-	gen_ntypes("sum_and_count", "SumAndCount")
-	gen_ntypes("price_time_list", "PriceTimeList")
-	gen_ntypes("price_time", "PriceTime")
-	gen_ntypes("person_time", "PersonTime")
-	gen_ntypes("name_city_state_id", "NameCityStateId")
-	gen_ntypes("bid_price", "BidPrice")
-	gen_ntypes("bid_and_max", "BidAndMax")
-	gen_ntypes("auction_id_seller", "AuctionIdSeller")
-	gen_ntypes("auction_id_count", "AuctionIdCount")
-	gen_ntypes("auction_id_cnt_max", "AuctionIdCntMax")
-	gen_ntypes("auction_id_category", "AuctionIdCategory")
-
-	nexmark_path := "../benchmark/nexmark/pkg/nexmark/ntypes/"
-	fname := "auction_bid"
-	auction_bid := &Variant{
-		PackageName: "ntypes",
-		TypeName:    "AuctionBid",
-		Path:        fmt.Sprintf("%s/%s_gen_serde.go", nexmark_path, fname),
+func gen_serde_ptr(fname, typeName, dirpath, packageName string, inCommtypes bool) {
+	start_end := &Variant{
+		PackageName: packageName,
+		TypeName:    typeName,
+		Path:        fmt.Sprintf("%s/%s_gen_serde.go", dirpath, fname),
 	}
-	generate(auction_bid, serde_ptr)
-	auction_bid.Path = fmt.Sprintf("%s/%s_gen_serdeG.go", nexmark_path, fname)
-	generate(auction_bid, serdeG_ptr)
+	if inCommtypes {
+		start_end.ExtraImports = ""
+		start_end.CommtypesPrefix = ""
+	} else {
+		start_end.ExtraImports = "\"sharedlog-stream/pkg/commtypes\""
+		start_end.CommtypesPrefix = "commtypes."
+	}
+	generate(start_end, serde_ptr)
+	start_end.Path = fmt.Sprintf("%s/%s_gen_serdeG.go", dirpath, fname)
+	generate(start_end, serdeG_ptr)
+}
+
+func main() {
+	ntypes_path := "../benchmark/nexmark/pkg/nexmark/ntypes/"
+	gen_serde("start_end_time", "StartEndTime", ntypes_path, "ntypes", false)
+	gen_serde("sum_and_count", "SumAndCount", ntypes_path, "ntypes", false)
+	gen_serde("price_time_list", "PriceTimeList", ntypes_path, "ntypes", false)
+	gen_serde("price_time", "PriceTime", ntypes_path, "ntypes", false)
+	gen_serde("person_time", "PersonTime", ntypes_path, "ntypes", false)
+	gen_serde("name_city_state_id", "NameCityStateId", ntypes_path, "ntypes", false)
+	gen_serde("bid_price", "BidPrice", ntypes_path, "ntypes", false)
+	gen_serde("bid_and_max", "BidAndMax", ntypes_path, "ntypes", false)
+	gen_serde("auction_id_seller", "AuctionIdSeller", ntypes_path, "ntypes", false)
+	gen_serde("auction_id_count", "AuctionIdCount", ntypes_path, "ntypes", false)
+	gen_serde("auction_id_cnt_max", "AuctionIdCntMax", ntypes_path, "ntypes", false)
+	gen_serde("auction_id_category", "AuctionIdCategory", ntypes_path, "ntypes", false)
+	gen_serde_ptr("event", "Event", ntypes_path, "ntypes", false)
+	gen_serde_ptr("auction_bid", "AuctionBid", ntypes_path, "ntypes", false)
+
+	commtypes_path := "../pkg/commtypes/"
+	gen_serde_ptr("checkpoint", "Checkpoint", commtypes_path, "commtypes", true)
+	gen_serde_ptr("epoch_meta", "EpochMarker", commtypes_path, "commtypes", true)
+	gen_serde_ptr("payload_arr", "PayloadArr", commtypes_path, "commtypes", true)
+	gen_serde_ptr("table_snapshots", "TableSnapshots", commtypes_path, "commtypes", true)
 }
 
 //go:embed serde.tmpl

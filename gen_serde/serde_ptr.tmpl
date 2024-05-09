@@ -2,14 +2,15 @@ package {{.PackageName}}
 
 import (
 	"encoding/json"
-	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/common_errors"
+	{{.ExtraImports}}
 )
 
 type {{.TypeName}}JSONSerde struct {
-	commtypes.DefaultJSONSerde
+	{{.CommtypesPrefix}}DefaultJSONSerde
 }
 
-var _ = commtypes.Serde({{.TypeName}}JSONSerde{})
+var _ = {{.CommtypesPrefix}}Serde({{.TypeName}}JSONSerde{})
 
 func (s {{.TypeName}}JSONSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	v, ok := value.(*{{.TypeName}})
@@ -30,10 +31,10 @@ func (s {{.TypeName}}JSONSerde) Decode(value []byte) (interface{}, error) {
 }
 
 type {{.TypeName}}MsgpSerde struct {
-	commtypes.DefaultMsgpSerde
+	{{.CommtypesPrefix}}DefaultMsgpSerde
 }
 
-var _ = commtypes.Serde({{.TypeName}}MsgpSerde{})
+var _ = {{.CommtypesPrefix}}Serde({{.TypeName}}MsgpSerde{})
 
 func (s {{.TypeName}}MsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	v, ok := value.(*{{.TypeName}})
@@ -41,7 +42,7 @@ func (s {{.TypeName}}MsgpSerde) Encode(value interface{}) ([]byte, *[]byte, erro
 		vTmp := value.({{.TypeName}})
 		v = &vTmp
 	}
-	b := commtypes.PopBuffer()
+	b := {{.CommtypesPrefix}}PopBuffer()
 	buf := *b
 	r, err := v.MarshalMsg(buf[:0])
 	return r, b, err
@@ -53,4 +54,15 @@ func (s {{.TypeName}}MsgpSerde) Decode(value []byte) (interface{}, error) {
 		return nil, err
 	}
 	return &v, nil
+}
+
+func Get{{.TypeName}}Serde(serdeFormat {{.CommtypesPrefix}}SerdeFormat) ({{.CommtypesPrefix}}Serde, error) {
+	switch serdeFormat {
+	case {{.CommtypesPrefix}}JSON:
+		return {{.TypeName}}JSONSerde{}, nil
+	case {{.CommtypesPrefix}}MSGP:
+		return {{.TypeName}}MsgpSerde{}, nil
+	default:
+		return nil, common_errors.ErrUnrecognizedSerdeFormat
+	}
 }
