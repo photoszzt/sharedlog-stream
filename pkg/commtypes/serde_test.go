@@ -4,16 +4,14 @@ import (
 	"encoding/binary"
 	"math"
 	"testing"
+
+	"golang.org/x/exp/constraints"
 )
 
 const float64EqualityThreshold = 1e-9
 
-func almostEqualFloat32(a, b float32) bool {
+func almostEqual[V constraints.Float](a, b V) bool {
 	return math.Abs(float64(a-b)) <= float64EqualityThreshold
-}
-
-func almostEqualFloat64(a, b float64) bool {
-	return math.Abs(a-b) <= float64EqualityThreshold
 }
 
 func BenchmarkPooledSerdeUint64(b *testing.B) {
@@ -22,12 +20,12 @@ func BenchmarkPooledSerdeUint64(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ret, err := s.Encode(a)
+		ret, buf, err := s.Encode(a)
 		if err != nil {
 			b.Fatal(err)
 		}
-		*s.BufPtr = ret
-		PushBuffer(s.BufPtr)
+		*buf = ret
+		PushBuffer(buf)
 	}
 }
 
@@ -45,176 +43,140 @@ func BenchmarkPooledSerdeUint64_2(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodeFloat32(t *testing.T) {
-	a := float32(0.25)
-	s := Float32Serde{}
-	b, err := s.Encode(a)
+func GenTestEncodeDecodeFloat[V constraints.Float](v V, t *testing.T, serdeG SerdeG[V], serde Serde) {
+	bts, buf, err := serdeG.Encode(v)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ret, err := s.Decode(b)
+	ret, err := serdeG.Decode(bts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !almostEqualFloat32(a, ret.(float32)) {
+	if !almostEqual(v, ret) {
 		t.Fatal("encode and decode doesn't give same value")
+	}
+	if serdeG.UsedBufferPool() {
+		*buf = bts
+		PushBuffer(buf)
 	}
 
-	ss := Float32SerdeG{}
-	b, err = ss.Encode(a)
+	bts, buf, err = serde.Encode(v)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ret1, err := ss.Decode(b)
+	r, err := serde.Decode(bts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !almostEqualFloat32(a, ret1) {
+	if !almostEqual(v, r.(V)) {
 		t.Fatal("encode and decode doesn't give same value")
 	}
+	if serde.UsedBufferPool() {
+		*buf = bts
+		PushBuffer(buf)
+	}
+}
+
+func GenTestEncodeDecode[V comparable](v V, t *testing.T, serdeG SerdeG[V], serde Serde) {
+	bts, buf, err := serdeG.Encode(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ret, err := serdeG.Decode(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v != ret {
+		t.Fatal("encode and decode doesn't give same value")
+	}
+	if serdeG.UsedBufferPool() {
+		*buf = bts
+		PushBuffer(buf)
+	}
+
+	bts, buf, err = serde.Encode(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := serde.Decode(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v != r.(V) {
+		t.Fatal("encode and decode doesn't give same value")
+	}
+	if serde.UsedBufferPool() {
+		*buf = bts
+		PushBuffer(buf)
+	}
+}
+
+func TestEncodeDecodeFloat32(t *testing.T) {
+	a := float32(0.25)
+	s := Serde(Float32Serde{})
+	ss := SerdeG[float32](Float32SerdeG{})
+	GenTestEncodeDecodeFloat(a, t, ss, s)
 }
 
 func TestEncodeDecodeFloat64(t *testing.T) {
 	a := float64(0.25)
-	s := Float64Serde{}
-	b, err := s.Encode(a)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ret, err := s.Decode(b)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !almostEqualFloat64(a, ret.(float64)) {
-		t.Fatal("encode and decode doesn't give same value")
-	}
-
-	ss := Float64SerdeG{}
-	b, err = ss.Encode(a)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ret1, err := ss.Decode(b)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !almostEqualFloat64(a, ret1) {
-		t.Fatal("encode and decode doesn't give same value")
-	}
+	s := Serde(Float64Serde{})
+	ss := SerdeG[float64](Float64SerdeG{})
+	GenTestEncodeDecodeFloat(a, t, ss, s)
 }
 
 func TestEncodeDecodeUint64(t *testing.T) {
 	a := uint64(100000)
-	s := Uint64Serde{}
-	b, err := s.Encode(a)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ret, err := s.Decode(b)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if a != ret.(uint64) {
-		t.Fatal("encode and decode doesn't give same value")
-	}
-
-	ss := Uint64SerdeG{}
-	b, err = ss.Encode(a)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ret1, err := ss.Decode(b)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if a != ret1 {
-		t.Fatal("encode and decode doesn't give same value")
-	}
+	s := Serde(Uint64Serde{})
+	ss := SerdeG[uint64](Uint64SerdeG{})
+	GenTestEncodeDecode(a, t, ss, s)
 }
 
 func TestEncodeDecodeUint32(t *testing.T) {
 	a := uint32(100000)
 	s := Uint32Serde{}
-	b, err := s.Encode(a)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ret, err := s.Decode(b)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if a != ret.(uint32) {
-		t.Fatal("encode and decode doesn't give same value")
-	}
-
 	ss := Uint32SerdeG{}
-	b, err = ss.Encode(a)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ret1, err := ss.Decode(b)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if a != ret1 {
-		t.Fatal("encode and decode doesn't give same value")
-	}
+	GenTestEncodeDecode[uint32](a, t, ss, s)
 }
 
 func TestEncodeDecodeUint16(t *testing.T) {
 	a := uint16(1111)
 	s := Uint16Serde{}
-	b, err := s.Encode(a)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ret, err := s.Decode(b)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if a != ret.(uint16) {
-		t.Fatal("encode and decode doesn't give same value")
-	}
-
 	ss := Uint16SerdeG{}
-	b, err = ss.Encode(a)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ret1, err := ss.Decode(b)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if a != ret1 {
-		t.Fatal("encode and decode doesn't give same value")
-	}
+	GenTestEncodeDecode[uint16](a, t, ss, s)
 }
 
 func TestEncodeDecodeUint8(t *testing.T) {
 	a := uint8(111)
 	s := Uint8Serde{}
-	b, err := s.Encode(a)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ret, err := s.Decode(b)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if a != ret.(uint8) {
-		t.Fatal("encode and decode doesn't give same value")
-	}
-
 	ss := Uint8SerdeG{}
-	b, err = ss.Encode(a)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ret1, err := ss.Decode(b)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if a != ret1 {
-		t.Fatal("encode and decode doesn't give same value")
-	}
+	GenTestEncodeDecode[uint8](a, t, ss, s)
+}
+
+func TestEncodeDecodeInt64(t *testing.T) {
+	a := int64(-100000)
+	s := Int64Serde{}
+	ss := Int64SerdeG{}
+	GenTestEncodeDecode[int64](a, t, ss, s)
+}
+
+func TestEncodeDecodeInt32(t *testing.T) {
+	a := int32(-100000)
+	s := Int32Serde{}
+	ss := Int32SerdeG{}
+	GenTestEncodeDecode[int32](a, t, ss, s)
+}
+
+func TestEncodeDecodeInt16(t *testing.T) {
+	a := int16(-1111)
+	s := Int16Serde{}
+	ss := Int16SerdeG{}
+	GenTestEncodeDecode[int16](a, t, ss, s)
+}
+
+func TestEncodeDecodeInt8(t *testing.T) {
+	a := int8(-111)
+	s := Int8Serde{}
+	ss := Int8SerdeG{}
+	GenTestEncodeDecode[int8](a, t, ss, s)
 }
