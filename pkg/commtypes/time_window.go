@@ -3,8 +3,6 @@
 package commtypes
 
 import (
-	"encoding/json"
-	"fmt"
 	"math"
 
 	"github.com/rs/zerolog/log"
@@ -37,43 +35,6 @@ func (w *TimeWindow) Overlap(other Window) (bool, error) {
 	return w.Start() < other.End() && other.Start() < w.End(), nil
 }
 
-type TimeWindowJSONSerde struct {
-	DefaultJSONSerde
-}
-
-func (s TimeWindowJSONSerde) Encode(value interface{}) ([]byte, error) {
-	tw := value.(*TimeWindow)
-	return json.Marshal(tw)
-}
-
-func (s TimeWindowJSONSerde) Decode(value []byte) (interface{}, error) {
-	tw := TimeWindow{}
-	if err := json.Unmarshal(value, &tw); err != nil {
-		return nil, err
-	}
-	return tw, nil
-}
-
-type TimeWindowMsgpSerde struct {
-	DefaultMsgpSerde
-}
-
-func (s TimeWindowMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	tw := value.(*TimeWindow)
-	b := PopBuffer()
-	buf := *b
-	return tw.MarshalMsg(buf[:0])
-}
-
-func (s TimeWindowMsgpSerde) Decode(value []byte) (interface{}, error) {
-	tw := TimeWindow{}
-	_, err := tw.UnmarshalMsg(value)
-	if err != nil {
-		return nil, err
-	}
-	return tw, nil
-}
-
 func TimeWindowForSize(startMs int64, windowSize int64) (*TimeWindow, error) {
 	endMs := startMs + windowSize
 	if endMs < 0 {
@@ -81,17 +42,4 @@ func TimeWindowForSize(startMs int64, windowSize int64) (*TimeWindow, error) {
 		endMs = math.MaxInt64
 	}
 	return NewTimeWindow(startMs, endMs)
-}
-
-func GetTimeWindowSerde(serdeFormat SerdeFormat) (Serde, error) {
-	var twSerde Serde
-	if serdeFormat == JSON {
-		twSerde = TimeWindowJSONSerde{}
-		return twSerde, nil
-	} else if serdeFormat == MSGP {
-		twSerde = TimeWindowMsgpSerde{}
-		return twSerde, nil
-	} else {
-		return nil, fmt.Errorf("unrecognized serde format: %v", serdeFormat)
-	}
 }
