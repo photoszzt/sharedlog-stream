@@ -32,55 +32,53 @@ func CastToChangePtr(value interface{}) *Change {
 	return v
 }
 
-func convertToChangeSer(value interface{}, valSerde Serde) (*ChangeSerialized, error) {
+func convertToChangeSer(value interface{}, valSerde Serde) (c *ChangeSerialized, newBuf *[]byte, oldBuf *[]byte, err error) {
 	if value == nil {
-		return nil, nil
+		return nil, nil, nil, nil
 	}
 	val := CastToChangePtr(value)
 	if val == nil {
-		return nil, nil
+		return nil, nil, nil, nil
 	}
 	var newValEnc, oldValEnc []byte
-	var err error
 	if !utils.IsNil(val.NewVal) {
-		newValEnc, err = valSerde.Encode(val.NewVal)
+		newValEnc, newBuf, err = valSerde.Encode(val.NewVal)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 	}
 	if !utils.IsNil(val.OldVal) {
-		oldValEnc, err = valSerde.Encode(val.OldVal)
+		oldValEnc, oldBuf, err = valSerde.Encode(val.OldVal)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 	}
-	c := &ChangeSerialized{
+	c = &ChangeSerialized{
 		NewValSerialized: newValEnc,
 		OldValSerialized: oldValEnc,
 	}
-	return c, nil
+	return c, newBuf, oldBuf, nil
 }
 
-func changeToChangeSer(value Change, valSerde Serde) (*ChangeSerialized, error) {
+func changeToChangeSer(value Change, valSerde Serde) (c *ChangeSerialized, newBuf *[]byte, oldBuf *[]byte, err error) {
 	var newValEnc, oldValEnc []byte
-	var err error
 	if !utils.IsNil(value.NewVal) {
-		newValEnc, err = valSerde.Encode(value.NewVal)
+		newValEnc, newBuf, err = valSerde.Encode(value.NewVal)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 	}
 	if !utils.IsNil(value.OldVal) {
-		oldValEnc, err = valSerde.Encode(value.OldVal)
+		oldValEnc, oldBuf, err = valSerde.Encode(value.OldVal)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 	}
-	c := &ChangeSerialized{
+	c = &ChangeSerialized{
 		NewValSerialized: newValEnc,
 		OldValSerialized: oldValEnc,
 	}
-	return c, nil
+	return c, newBuf, oldBuf, nil
 }
 
 func decodeToChange(val *ChangeSerialized, valSerde Serde) (interface{}, error) {
@@ -113,27 +111,30 @@ type ChangeJSONSerde struct {
 	ValJSONSerde Serde
 }
 
-var _ = Serde(&ChangeJSONSerde{})
+var _ = Serde(ChangeJSONSerde{})
 
-func (s *ChangeJSONSerde) Encode(value interface{}) ([]byte, error) {
-	c, err := convertToChangeSer(value, s.ValJSONSerde)
+func (s ChangeJSONSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
+	c, newBuf, oldBuf, err := convertToChangeSer(value, s.ValJSONSerde)
 	defer func() {
-		if s.ValJSONSerde.UsedBufferPool() {
-			if c.NewValSerialized != nil {
-				PushBuffer(&c.NewValSerialized)
+		if s.ValJSONSerde.UsedBufferPool() && c != nil {
+			if c.NewValSerialized != nil && newBuf != nil {
+				*newBuf = c.NewValSerialized
+				PushBuffer(newBuf)
 			}
-			if c.OldValSerialized != nil {
-				PushBuffer(&c.OldValSerialized)
+			if c.OldValSerialized != nil && oldBuf != nil {
+				*oldBuf = c.OldValSerialized
+				PushBuffer(oldBuf)
 			}
 		}
 	}()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return json.Marshal(c)
+	r, err := json.Marshal(c)
+	return r, nil, err
 }
 
-func (s *ChangeJSONSerde) Decode(value []byte) (interface{}, error) {
+func (s ChangeJSONSerde) Decode(value []byte) (interface{}, error) {
 	val := ChangeSerialized{}
 	if err := json.Unmarshal(value, &val); err != nil {
 		return nil, err
@@ -146,29 +147,32 @@ type ChangeMsgpSerde struct {
 	ValMsgpSerde Serde
 }
 
-var _ = Serde(&ChangeMsgpSerde{})
+var _ = Serde(ChangeMsgpSerde{})
 
-func (s *ChangeMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	c, err := convertToChangeSer(value, s.ValMsgpSerde)
+func (s ChangeMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
+	c, newBuf, oldBuf, err := convertToChangeSer(value, s.ValMsgpSerde)
 	defer func() {
 		if s.ValMsgpSerde.UsedBufferPool() {
-			if c.NewValSerialized != nil {
-				PushBuffer(&c.NewValSerialized)
+			if c.NewValSerialized != nil && newBuf != nil {
+				*newBuf = c.NewValSerialized
+				PushBuffer(newBuf)
 			}
 			if c.OldValSerialized != nil {
-				PushBuffer(&c.OldValSerialized)
+				*oldBuf = c.OldValSerialized
+				PushBuffer(oldBuf)
 			}
 		}
 	}()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	b := PopBuffer()
 	buf := *b
-	return c.MarshalMsg(buf[:0])
+	r, err := c.MarshalMsg(buf[:0])
+	return r, b, err
 }
 
-func (s *ChangeMsgpSerde) Decode(value []byte) (interface{}, error) {
+func (s ChangeMsgpSerde) Decode(value []byte) (interface{}, error) {
 	val := ChangeSerialized{}
 	if _, err := val.UnmarshalMsg(value); err != nil {
 		return nil, err
