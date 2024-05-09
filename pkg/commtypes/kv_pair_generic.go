@@ -13,19 +13,19 @@ type KeyValuePair[K, V any] struct {
 
 type KeyValuePairs[K, V any] []*KeyValuePair[K, V]
 
-func KVPairToKVPairSer[K, V any](value *KeyValuePair[K, V], keySerde SerdeG[K], valSerde SerdeG[V]) (KeyValueSerrialized, error) {
-	kenc, err := keySerde.Encode(value.Key)
+func KVPairToKVPairSer[K, V any](value *KeyValuePair[K, V], keySerde SerdeG[K], valSerde SerdeG[V]) (KeyValueSerrialized, *[]byte, *[]byte, error) {
+	kenc, kbuf, err := keySerde.Encode(value.Key)
 	if err != nil {
-		return KeyValueSerrialized{}, fmt.Errorf("fail to encode key: %v", err)
+		return KeyValueSerrialized{}, nil, nil, fmt.Errorf("fail to encode key: %v", err)
 	}
-	venc, err := valSerde.Encode(value.Value)
+	venc, vbuf, err := valSerde.Encode(value.Value)
 	if err != nil {
-		return KeyValueSerrialized{}, fmt.Errorf("fail encode val: %v", err)
+		return KeyValueSerrialized{}, nil, nil, fmt.Errorf("fail encode val: %v", err)
 	}
 	return KeyValueSerrialized{
 		KeyEnc:   kenc,
 		ValueEnc: venc,
-	}, nil
+	}, kbuf, vbuf, nil
 }
 
 func KVPairSerToKVPairG[K, V any](value KeyValueSerrialized, keySerde SerdeG[K], valSerde SerdeG[V]) (*KeyValuePair[K, V], error) {
@@ -49,20 +49,23 @@ type KeyValuePairJSONSerdeG[K, V any] struct {
 	DefaultMsgpSerde
 }
 
-func (s KeyValuePairJSONSerdeG[K, V]) Encode(v *KeyValuePair[K, V]) ([]byte, error) {
-	kvser, err := KVPairToKVPairSer(v, s.keySerde, s.valSerde)
+func (s KeyValuePairJSONSerdeG[K, V]) Encode(v *KeyValuePair[K, V]) ([]byte, *[]byte, error) {
+	kvser, kbuf, vbuf, err := KVPairToKVPairSer(v, s.keySerde, s.valSerde)
 	defer func() {
 		if s.keySerde.UsedBufferPool() && kvser.KeyEnc != nil {
-			PushBuffer(&kvser.KeyEnc)
+			*kbuf = kvser.KeyEnc
+			PushBuffer(kbuf)
 		}
 		if s.valSerde.UsedBufferPool() && kvser.ValueEnc != nil {
-			PushBuffer(&kvser.ValueEnc)
+			*vbuf = kvser.ValueEnc
+			PushBuffer(vbuf)
 		}
 	}()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return json.Marshal(kvser)
+	r, err := json.Marshal(kvser)
+	return r, nil, err
 }
 
 func (s KeyValuePairJSONSerdeG[K, V]) Decode(v []byte) (*KeyValuePair[K, V], error) {
@@ -80,22 +83,25 @@ type KeyValuePairMsgpSerdeG[K, V any] struct {
 	valSerde SerdeG[V]
 }
 
-func (s KeyValuePairMsgpSerdeG[K, V]) Encode(v *KeyValuePair[K, V]) ([]byte, error) {
-	kvser, err := KVPairToKVPairSer(v, s.keySerde, s.valSerde)
+func (s KeyValuePairMsgpSerdeG[K, V]) Encode(v *KeyValuePair[K, V]) ([]byte, *[]byte, error) {
+	kvser, kbuf, vbuf, err := KVPairToKVPairSer(v, s.keySerde, s.valSerde)
 	defer func() {
 		if s.keySerde.UsedBufferPool() && kvser.KeyEnc != nil {
-			PushBuffer(&kvser.KeyEnc)
+			*kbuf = kvser.KeyEnc
+			PushBuffer(kbuf)
 		}
 		if s.valSerde.UsedBufferPool() && kvser.ValueEnc != nil {
-			PushBuffer(&kvser.ValueEnc)
+			*vbuf = kvser.ValueEnc
+			PushBuffer(vbuf)
 		}
 	}()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	b := PopBuffer()
 	buf := *b
-	return kvser.MarshalMsg(buf[:0])
+	r, err := kvser.MarshalMsg(buf[:0])
+	return r, b, err
 }
 
 func (s KeyValuePairMsgpSerdeG[K, V]) Decode(v []byte) (*KeyValuePair[K, V], error) {
@@ -124,14 +130,14 @@ type KeyValuePairsJSONSerdeG[K, V any] struct {
 	s          KeyValuePairJSONSerdeG[K, V]
 }
 
-func (s KeyValuePairsJSONSerdeG[K, V]) Encode(v KeyValuePairs[K, V]) ([]byte, error) {
+func (s KeyValuePairsJSONSerdeG[K, V]) Encode(v KeyValuePairs[K, V]) ([]byte, *[]byte, error) {
 	payloadArr := PayloadArr{
 		Payloads: make([][]byte, 0, len(v)),
 	}
 	for _, kv := range v {
-		enc, err := s.s.Encode(kv)
+		enc, b, err := s.s.Encode(kv)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		payloadArr.Payloads = append(payloadArr.Payloads, enc)
 	}
@@ -160,7 +166,7 @@ type KeyValuePairsMsgpSerdeG[K, V any] struct {
 	s          KeyValuePairMsgpSerdeG[K, V]
 }
 
-func (s KeyValuePairsMsgpSerdeG[K, V]) Encode(v KeyValuePairs[K, V]) ([]byte, error) {
+func (s KeyValuePairsMsgpSerdeG[K, V]) Encode(v KeyValuePairs[K, V]) ([]byte, *[]byte, error) {
 	payloadArr := PayloadArr{
 		Payloads: make([][]byte, 0, len(v)),
 	}

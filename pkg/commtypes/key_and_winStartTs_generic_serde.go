@@ -30,16 +30,16 @@ func (kwTs KeyAndWindowStartTsG[K]) String() string {
 
 var _ SerdeG[KeyAndWindowStartTsG[int]] = KeyAndWindowStartTsJSONSerdeG[int]{}
 
-func kwsToKwsSer[K any](value KeyAndWindowStartTsG[K], keySerde SerdeG[K]) (*KeyAndWindowStartTsSerialized, error) {
-	kenc, err := keySerde.Encode(value.Key)
+func kwsToKwsSer[K any](value KeyAndWindowStartTsG[K], keySerde SerdeG[K]) (*KeyAndWindowStartTsSerialized, *[]byte, error) {
+	kenc, buf, err := keySerde.Encode(value.Key)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	kw := &KeyAndWindowStartTsSerialized{
 		KeySerialized: kenc,
 		WindowStartTs: value.WindowStartTs,
 	}
-	return kw, nil
+	return kw, buf, nil
 }
 
 func serToKeyAndWindowStartTs[K any](kwSer *KeyAndWindowStartTsSerialized, keySerde SerdeG[K]) (KeyAndWindowStartTsG[K], error) {
@@ -57,20 +57,22 @@ func serToKeyAndWindowStartTs[K any](kwSer *KeyAndWindowStartTsSerialized, keySe
 	}, nil
 }
 
-func (s KeyAndWindowStartTsJSONSerdeG[K]) Encode(value KeyAndWindowStartTsG[K]) ([]byte, error) {
-	kw, err := kwsToKwsSer(value, s.KeyJSONSerde)
+func (s KeyAndWindowStartTsJSONSerdeG[K]) Encode(value KeyAndWindowStartTsG[K]) ([]byte, *[]byte, error) {
+	kw, buf, err := kwsToKwsSer(value, s.KeyJSONSerde)
 	defer func() {
 		if s.KeyJSONSerde.UsedBufferPool() && kw != nil && kw.KeySerialized != nil {
-			PushBuffer(&kw.KeySerialized)
+			*buf = kw.KeySerialized
+			PushBuffer(buf)
 		}
 	}()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if kw == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
-	return json.Marshal(kw)
+	r, err := json.Marshal(kw)
+	return r, nil, err
 }
 
 func (s KeyAndWindowStartTsJSONSerdeG[K]) Decode(value []byte) (KeyAndWindowStartTsG[K], error) {
@@ -88,23 +90,24 @@ type KeyAndWindowStartTsMsgpSerdeG[K any] struct {
 
 var _ = SerdeG[KeyAndWindowStartTsG[int]](KeyAndWindowStartTsMsgpSerdeG[int]{})
 
-func (s KeyAndWindowStartTsMsgpSerdeG[K]) Encode(value KeyAndWindowStartTsG[K]) ([]byte, error) {
-	kw, err := kwsToKwsSer(value, s.KeyMsgpSerde)
+func (s KeyAndWindowStartTsMsgpSerdeG[K]) Encode(value KeyAndWindowStartTsG[K]) ([]byte, *[]byte, error) {
+	kw, kbuf, err := kwsToKwsSer(value, s.KeyMsgpSerde)
 	defer func() {
 		if s.KeyMsgpSerde.UsedBufferPool() && kw != nil && kw.KeySerialized != nil {
-			PushBuffer(&kw.KeySerialized)
+			*kbuf = kw.KeySerialized
+			PushBuffer(kbuf)
 		}
 	}()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if kw == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	b := PopBuffer()
 	buf := *b
 	ret, err := kw.MarshalMsg(buf[:0])
-	return ret, err
+	return ret, b, err
 }
 
 func (s KeyAndWindowStartTsMsgpSerdeG[K]) Decode(value []byte) (KeyAndWindowStartTsG[K], error) {
