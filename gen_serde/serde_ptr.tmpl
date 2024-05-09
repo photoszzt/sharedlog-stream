@@ -1,0 +1,56 @@
+package {{.PackageName}}
+
+import (
+	"encoding/json"
+	"sharedlog-stream/pkg/commtypes"
+)
+
+type {{.TypeName}}JSONSerde struct {
+	commtypes.DefaultJSONSerde
+}
+
+var _ = commtypes.Serde({{.TypeName}}JSONSerde{})
+
+func (s {{.TypeName}}JSONSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
+	v, ok := value.(*{{.TypeName}})
+	if !ok {
+		vTmp := value.({{.TypeName}})
+		v = &vTmp
+	}
+	r, err := json.Marshal(v)
+	return r, nil, err
+}
+
+func (s {{.TypeName}}JSONSerde) Decode(value []byte) (interface{}, error) {
+	v := {{.TypeName}}{}
+	if err := json.Unmarshal(value, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+type {{.TypeName}}MsgpSerde struct {
+	commtypes.DefaultMsgpSerde
+}
+
+var _ = commtypes.Serde({{.TypeName}}MsgpSerde{})
+
+func (s {{.TypeName}}MsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
+	v, ok := value.(*{{.TypeName}})
+	if !ok {
+		vTmp := value.({{.TypeName}})
+		v = &vTmp
+	}
+	b := commtypes.PopBuffer()
+	buf := *b
+	r, err := v.MarshalMsg(buf[:0])
+	return r, b, err
+}
+
+func (s {{.TypeName}}MsgpSerde) Decode(value []byte) (interface{}, error) {
+	v := {{.TypeName}}{}
+	if _, err := v.UnmarshalMsg(value); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
