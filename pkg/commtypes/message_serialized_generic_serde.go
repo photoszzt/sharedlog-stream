@@ -7,50 +7,6 @@ import (
 	"sharedlog-stream/pkg/optional"
 )
 
-type MessageSerializedJSONSerdeG struct {
-	DefaultJSONSerde
-}
-
-var _ SerdeG[MessageSerialized] = MessageSerializedJSONSerdeG{}
-
-func (s MessageSerializedJSONSerdeG) Encode(value MessageSerialized) ([]byte, error) {
-	return json.Marshal(value)
-}
-
-func (s MessageSerializedJSONSerdeG) Decode(data []byte) (MessageSerialized, error) {
-	var msg MessageSerialized
-	err := json.Unmarshal(data, &msg)
-	return msg, err
-}
-
-type MessageSerializedMsgpSerdeG struct {
-	DefaultMsgpSerde
-}
-
-var _ SerdeG[MessageSerialized] = MessageSerializedMsgpSerdeG{}
-
-func (s MessageSerializedMsgpSerdeG) Encode(value MessageSerialized) ([]byte, error) {
-	b := PopBuffer()
-	buf := *b
-	return value.MarshalMsg(buf[:0])
-}
-
-func (s MessageSerializedMsgpSerdeG) Decode(data []byte) (MessageSerialized, error) {
-	var msg MessageSerialized
-	_, err := msg.UnmarshalMsg(data)
-	return msg, err
-}
-
-func GetMessageSerializedSerdeG(serdeFormat SerdeFormat) SerdeG[MessageSerialized] {
-	if serdeFormat == JSON {
-		return MessageSerializedJSONSerdeG{}
-	} else if serdeFormat == MSGP {
-		return MessageSerializedMsgpSerdeG{}
-	} else {
-		return nil
-	}
-}
-
 type MessageSerdeG[K, V any] interface {
 	SerdeG[Message]
 	EncodeWithKVBytes(kBytes []byte, vBytes []byte, inj int64, ts int64) ([]byte, error)
