@@ -123,6 +123,10 @@ func main() {
 	gen_serde("offset_record", "OffsetRecord", txn_path, "txn_data", false)
 	gen_serde_ptr("topic_partition", "TopicPartition", txn_path, "txn_data", false)
 	gen_serde("txn_metadata", "TxnMetadata", txn_path, "txn_data", false)
+
+	rtxn_rpc_path := "../pkg/transaction/remote_txn_rpc/"
+	gen_serde_ptr("rtxn_arg", "RTxnArg", rtxn_rpc_path, "remote_txn_rpc", false)
+	gen_serde_ptr("rtxn_reply", "RTxnReply", rtxn_rpc_path, "remote_txn_rpc", false)
 }
 
 //go:embed serde.tmpl
