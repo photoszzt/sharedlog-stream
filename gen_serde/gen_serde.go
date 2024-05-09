@@ -127,6 +127,9 @@ func main() {
 	rtxn_rpc_path := "../pkg/transaction/remote_txn_rpc/"
 	gen_serde_ptr("rtxn_arg", "RTxnArg", rtxn_rpc_path, "remote_txn_rpc", false)
 	gen_serde_ptr("rtxn_reply", "RTxnReply", rtxn_rpc_path, "remote_txn_rpc", false)
+
+	lat_tp_path := "../benchmark/lat_tp/pkg/data_type/"
+	gen_serde("payload_ts", "PayloadTs", lat_tp_path, "datatype", false)
 }
 
 //go:embed serde.tmpl
