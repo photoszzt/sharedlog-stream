@@ -5,43 +5,44 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 )
 
-type (
-	OffsetMarkerJSONSerdeG struct {
-		DefaultJSONSerde
-	}
-	OffsetMarkerMsgpSerdeG struct {
-		DefaultMsgpSerde
-	}
-)
+type OffsetMarkerJSONSerdeG struct {
+	DefaultJSONSerde
+}
 
 var _ = SerdeG[OffsetMarker](OffsetMarkerJSONSerdeG{})
 
-func (s OffsetMarkerJSONSerdeG) Encode(value OffsetMarker) ([]byte, error) {
-	return json.Marshal(&value)
+func (s OffsetMarkerJSONSerdeG) Encode(value OffsetMarker) ([]byte, *[]byte, error) {
+	r, err := json.Marshal(value)
+	return r, nil, err
 }
 
 func (s OffsetMarkerJSONSerdeG) Decode(value []byte) (OffsetMarker, error) {
-	om := OffsetMarker{}
-	if err := json.Unmarshal(value, &om); err != nil {
+	v := OffsetMarker{}
+	if err := json.Unmarshal(value, &v); err != nil {
 		return OffsetMarker{}, err
 	}
-	return om, nil
+	return v, nil
+}
+
+type OffsetMarkerMsgpSerdeG struct {
+	DefaultMsgpSerde
 }
 
 var _ = SerdeG[OffsetMarker](OffsetMarkerMsgpSerdeG{})
 
-func (s OffsetMarkerMsgpSerdeG) Encode(value OffsetMarker) ([]byte, error) {
+func (s OffsetMarkerMsgpSerdeG) Encode(value OffsetMarker) ([]byte, *[]byte, error) {
 	b := PopBuffer()
 	buf := *b
-	return value.MarshalMsg(buf[:0])
+	r, err := value.MarshalMsg(buf[:0])
+	return r, b, err
 }
 
 func (s OffsetMarkerMsgpSerdeG) Decode(value []byte) (OffsetMarker, error) {
-	om := OffsetMarker{}
-	if _, err := om.UnmarshalMsg(value); err != nil {
+	v := OffsetMarker{}
+	if _, err := v.UnmarshalMsg(value); err != nil {
 		return OffsetMarker{}, err
 	}
-	return om, nil
+	return v, nil
 }
 
 func GetOffsetMarkerSerdeG(serdeFormat SerdeFormat) (SerdeG[OffsetMarker], error) {
@@ -49,6 +50,7 @@ func GetOffsetMarkerSerdeG(serdeFormat SerdeFormat) (SerdeG[OffsetMarker], error
 		return OffsetMarkerJSONSerdeG{}, nil
 	} else if serdeFormat == MSGP {
 		return OffsetMarkerMsgpSerdeG{}, nil
+	} else {
+		return nil, common_errors.ErrUnrecognizedSerdeFormat
 	}
-	return nil, common_errors.ErrUnrecognizedSerdeFormat
 }

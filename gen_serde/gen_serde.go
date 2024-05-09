@@ -114,6 +114,7 @@ func main() {
 	gen_serde("epoch_meta", "EpochMarker", commtypes_path, "commtypes", true)
 	gen_serde("payload_arr", "PayloadArr", commtypes_path, "commtypes", true)
 	gen_serde("table_snapshots", "TableSnapshots", commtypes_path, "commtypes", true)
+	gen_serde("offset_marker", "OffsetMarker", commtypes_path, "commtypes", true)
 }
 
 //go:embed serde.tmpl
