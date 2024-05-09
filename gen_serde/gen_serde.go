@@ -117,9 +117,11 @@ func main() {
 	gen_serde("offset_marker", "OffsetMarker", commtypes_path, "commtypes", true)
 	gen_serde("message_serialized", "MessageSerialized", commtypes_path, "commtypes", true)
 	gen_serde("time_window", "TimeWindow", commtypes_path, "commtypes", true)
+
 	txn_path := "../pkg/txn_data/"
 	gen_serde("control_meta", "ControlMetadata", txn_path, "txn_data", false)
 	gen_serde("offset_record", "OffsetRecord", txn_path, "txn_data", false)
+	gen_serde_ptr("topic_partition", "TopicPartition", txn_path, "txn_data", false)
 }
 
 //go:embed serde.tmpl
