@@ -16,8 +16,8 @@ const (
 )
 
 type RTxnArg struct {
-	RpcType     RTxnRpcType          `json:"rpcType" msg:"rpcType"`
-	SerdeFormat uint8                `json:"serdeFormat" msg:"serdeFormat"`
+	RpcType     RTxnRpcType          `json:"rpcType,omitempty" msg:"rpcType,omitempty"`
+	SerdeFormat uint8                `json:"serdeFormat,omitempty" msg:"serdeFormat,omitempty"`
 	Init        *InitArg             `json:"initArg,omitempty" msg:"initArg,omitempty"`
 	MetaMsg     *txn_data.TxnMetaMsg `json:"txnMeta,omitempty" msg:"txnMeta,omitempty"`
 	ConsumedOff *ConsumedOffsets     `json:"cOff,omitempty" msg:"cOff,omitempty"`

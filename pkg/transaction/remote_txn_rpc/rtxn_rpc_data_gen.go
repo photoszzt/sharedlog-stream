@@ -113,6 +113,14 @@ func (z *RTxnArg) EncodeMsg(en *msgp.Writer) (err error) {
 	zb0001Len := uint32(5)
 	var zb0001Mask uint8 /* 5 bits */
 	_ = zb0001Mask
+	if z.RpcType == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x1
+	}
+	if z.SerdeFormat == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
 	if z.Init == nil {
 		zb0001Len--
 		zb0001Mask |= 0x4
@@ -133,25 +141,29 @@ func (z *RTxnArg) EncodeMsg(en *msgp.Writer) (err error) {
 	if zb0001Len == 0 {
 		return
 	}
-	// write "rpcType"
-	err = en.Append(0xa7, 0x72, 0x70, 0x63, 0x54, 0x79, 0x70, 0x65)
-	if err != nil {
-		return
+	if (zb0001Mask & 0x1) == 0 { // if not empty
+		// write "rpcType"
+		err = en.Append(0xa7, 0x72, 0x70, 0x63, 0x54, 0x79, 0x70, 0x65)
+		if err != nil {
+			return
+		}
+		err = en.WriteUint8(uint8(z.RpcType))
+		if err != nil {
+			err = msgp.WrapError(err, "RpcType")
+			return
+		}
 	}
-	err = en.WriteUint8(uint8(z.RpcType))
-	if err != nil {
-		err = msgp.WrapError(err, "RpcType")
-		return
-	}
-	// write "serdeFormat"
-	err = en.Append(0xab, 0x73, 0x65, 0x72, 0x64, 0x65, 0x46, 0x6f, 0x72, 0x6d, 0x61, 0x74)
-	if err != nil {
-		return
-	}
-	err = en.WriteUint8(z.SerdeFormat)
-	if err != nil {
-		err = msgp.WrapError(err, "SerdeFormat")
-		return
+	if (zb0001Mask & 0x2) == 0 { // if not empty
+		// write "serdeFormat"
+		err = en.Append(0xab, 0x73, 0x65, 0x72, 0x64, 0x65, 0x46, 0x6f, 0x72, 0x6d, 0x61, 0x74)
+		if err != nil {
+			return
+		}
+		err = en.WriteUint8(z.SerdeFormat)
+		if err != nil {
+			err = msgp.WrapError(err, "SerdeFormat")
+			return
+		}
 	}
 	if (zb0001Mask & 0x4) == 0 { // if not empty
 		// write "initArg"
@@ -220,6 +232,14 @@ func (z *RTxnArg) MarshalMsg(b []byte) (o []byte, err error) {
 	zb0001Len := uint32(5)
 	var zb0001Mask uint8 /* 5 bits */
 	_ = zb0001Mask
+	if z.RpcType == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x1
+	}
+	if z.SerdeFormat == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
 	if z.Init == nil {
 		zb0001Len--
 		zb0001Mask |= 0x4
@@ -237,12 +257,16 @@ func (z *RTxnArg) MarshalMsg(b []byte) (o []byte, err error) {
 	if zb0001Len == 0 {
 		return
 	}
-	// string "rpcType"
-	o = append(o, 0xa7, 0x72, 0x70, 0x63, 0x54, 0x79, 0x70, 0x65)
-	o = msgp.AppendUint8(o, uint8(z.RpcType))
-	// string "serdeFormat"
-	o = append(o, 0xab, 0x73, 0x65, 0x72, 0x64, 0x65, 0x46, 0x6f, 0x72, 0x6d, 0x61, 0x74)
-	o = msgp.AppendUint8(o, z.SerdeFormat)
+	if (zb0001Mask & 0x1) == 0 { // if not empty
+		// string "rpcType"
+		o = append(o, 0xa7, 0x72, 0x70, 0x63, 0x54, 0x79, 0x70, 0x65)
+		o = msgp.AppendUint8(o, uint8(z.RpcType))
+	}
+	if (zb0001Mask & 0x2) == 0 { // if not empty
+		// string "serdeFormat"
+		o = append(o, 0xab, 0x73, 0x65, 0x72, 0x64, 0x65, 0x46, 0x6f, 0x72, 0x6d, 0x61, 0x74)
+		o = msgp.AppendUint8(o, z.SerdeFormat)
+	}
 	if (zb0001Mask & 0x4) == 0 { // if not empty
 		// string "initArg"
 		o = append(o, 0xa7, 0x69, 0x6e, 0x69, 0x74, 0x41, 0x72, 0x67)
