@@ -43,13 +43,13 @@ func SetKVStoreChkpt[K, V any](
 			kvPairSerdeG := kvstore.GetKVSerde()
 			outBin := make([][]byte, 0, len(snapshot))
 			for _, kv := range snapshot {
-				bin, err := kvPairSerdeG.Encode(kv)
+				bin, _, err := kvPairSerdeG.Encode(kv)
 				if err != nil {
 					return err
 				}
 				outBin = append(outBin, bin)
 			}
-			out, err := chkptSerde.Encode(commtypes.Checkpoint{
+			out, buf, err := chkptSerde.Encode(commtypes.Checkpoint{
 				KvArr:     outBin,
 				ChkptMeta: chkptMeta,
 			})
@@ -57,7 +57,19 @@ func SetKVStoreChkpt[K, V any](
 				return err
 			}
 			// fmt.Fprintf(os.Stderr, "kv snapshot size: %d, store snapshot at %x\n", len(out), tpLogoff[0].LogOff)
-			return mc.StoreAlignChkpt(ctx, out, tpLogoff, kvstore.Name())
+			err = mc.StoreAlignChkpt(ctx, out, tpLogoff, kvstore.Name())
+			if chkptSerde.UsedBufferPool() && buf != nil {
+				*buf = out
+				commtypes.PushBuffer(buf)
+			}
+			if kvPairSerdeG.UsedBufferPool() {
+				buf2 := new([]byte)
+				for _, p := range outBin {
+					*buf2 = p
+					commtypes.PushBuffer(buf)
+				}
+			}
+			return err
 		})
 }
 
@@ -77,13 +89,13 @@ func SetWinStoreChkpt[K, V any](
 			kvPairSerdeG := winStore.GetKVSerde()
 			outBin := make([][]byte, 0, len(snapshot))
 			for _, kv := range snapshot {
-				bin, err := kvPairSerdeG.Encode(kv)
+				bin, _, err := kvPairSerdeG.Encode(kv)
 				if err != nil {
 					return err
 				}
 				outBin = append(outBin, bin)
 			}
-			out, err := chkptSerde.Encode(commtypes.Checkpoint{
+			out, buf, err := chkptSerde.Encode(commtypes.Checkpoint{
 				KvArr:     outBin,
 				ChkptMeta: chkptMeta,
 			})
@@ -91,7 +103,19 @@ func SetWinStoreChkpt[K, V any](
 				return err
 			}
 			// fmt.Fprintf(os.Stderr, "win snapshot size: %d, store snapshot at %x\n", len(out), tpLogOff[0].LogOff)
-			return mc.StoreAlignChkpt(ctx, out, tpLogOff, winStore.Name())
+			err = mc.StoreAlignChkpt(ctx, out, tpLogOff, winStore.Name())
+			if chkptSerde.UsedBufferPool() && buf != nil {
+				*buf = out
+				commtypes.PushBuffer(buf)
+			}
+			if kvPairSerdeG.UsedBufferPool() {
+				buf2 := new([]byte)
+				for _, p := range outBin {
+					*buf2 = p
+					commtypes.PushBuffer(buf)
+				}
+			}
+			return err
 		})
 }
 
@@ -211,7 +235,13 @@ func checkpoint(
 		Mark:      commtypes.CHKPT_MARK,
 		ProdIndex: args.ectx.SubstreamNum(),
 	}
-	encoded, err := args.epochMarkerSerde.Encode(epochMarker)
+	encoded, b, err := args.epochMarkerSerde.Encode(epochMarker)
+	defer func() {
+		if args.epochMarkerSerde.UsedBufferPool() && b != nil {
+			*b = encoded
+			commtypes.PushBuffer(b)
+		}
+	}()
 	if err != nil {
 		return err
 	}

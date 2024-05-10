@@ -35,7 +35,13 @@ func SetKVStoreWithChangelogSnapshot[K, V any](
 			unprocessed []commtypes.ChkptMetaData,
 			snapshot []*commtypes.KeyValuePair[K, V],
 		) error {
-			out, err := encodeKVSnapshot[K, V](kvstore, snapshot, payloadSerde)
+			out, b, err := encodeKVSnapshot[K, V](kvstore, snapshot, payloadSerde)
+			defer func() {
+				if payloadSerde.UsedBufferPool() && b != nil {
+					*b = out
+					commtypes.PushBuffer(b)
+				}
+			}()
 			if err != nil {
 				return err
 			}
@@ -57,7 +63,13 @@ func SetWinStoreWithChangelogSnapshot[K, V any](
 			chkptMeta []commtypes.ChkptMetaData,
 			snapshot []*commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V],
 		) error {
-			out, err := encodeWinSnapshot[K, V](winStore, snapshot, payloadSerde)
+			out, b, err := encodeWinSnapshot[K, V](winStore, snapshot, payloadSerde)
+			defer func() {
+				if payloadSerde.UsedBufferPool() && b != nil {
+					*b = out
+					commtypes.PushBuffer(b)
+				}
+			}()
 			if err != nil {
 				return err
 			}

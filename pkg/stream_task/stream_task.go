@@ -318,7 +318,7 @@ func handleCtrlMsg(
 			Mark:      commtypes.STREAM_END,
 			ProdIndex: args.ectx.SubstreamNum(),
 		}
-		encoded, err := args.epochMarkerSerde.Encode(epochMarker)
+		encoded, b, err := args.epochMarkerSerde.Encode(epochMarker)
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}
@@ -326,6 +326,10 @@ func handleCtrlMsg(
 		err = forwardCtrlMsg(ctx, ctrlRawMsgArr[0], args, "stream end mark")
 		if err != nil {
 			return common.GenErrFnOutput(err)
+		}
+		if args.epochMarkerSerde.UsedBufferPool() && b != nil {
+			*b = encoded
+			commtypes.PushBuffer(b)
 		}
 		if args.guarantee == exactly_once_intr.ALIGN_CHKPT {
 			var tpLogOff []commtypes.TpLogOff
@@ -804,7 +808,13 @@ func handleScaleEpochAndBytes(ctx context.Context, msg *commtypes.RawMsgAndSeq,
 		Mark:       commtypes.SCALE_FENCE,
 		ProdIndex:  args.ectx.SubstreamNum(),
 	}
-	encoded, err := args.epochMarkerSerde.Encode(epochMarker)
+	encoded, b, err := args.epochMarkerSerde.Encode(epochMarker)
+	defer func() {
+		if args.epochMarkerSerde.UsedBufferPool() && b != nil {
+			*b = encoded
+			commtypes.PushBuffer(b)
+		}
+	}()
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

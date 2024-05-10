@@ -26,7 +26,7 @@ type mngrFuncHanlder struct {
 }
 
 func (h *mngrFuncHanlder) EncodeReply(reply *remote_txn_rpc.RTxnReply) []byte {
-	ret, err := h.replySerde.Encode(reply)
+	ret, _, err := h.replySerde.Encode(reply)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func (h *mngrFuncHanlder) GenErrOut(err error) []byte {
 		Success: false,
 		Message: err.Error(),
 	}
-	ret, err := h.replySerde.Encode(reply)
+	ret, _, err := h.replySerde.Encode(reply)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func (h *mngrFuncHanlder) GenEmptySucc() []byte {
 	reply := &remote_txn_rpc.RTxnReply{
 		Success: true,
 	}
-	ret, err := h.replySerde.Encode(reply)
+	ret, _, err := h.replySerde.Encode(reply)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -108,9 +108,10 @@ func (h *mngrFuncHanlder) Call(ctx context.Context, input []byte) ([]byte, error
 }
 
 func (f *mngrFuncHandlerFactory) New(env types.Environment, funcName string) (types.FuncHandler, error) {
+	s, _ := remote_txn_rpc.GetRTxnReplySerdeG(commtypes.MSGP)
 	return &mngrFuncHanlder{
 		env:        env,
-		replySerde: remote_txn_rpc.GetRTxnReplySerdeG(),
+		replySerde: s,
 	}, nil
 }
 
