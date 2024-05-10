@@ -10,25 +10,28 @@ type WindowedKeyJSONSerdeG struct {
 
 var _ = SerdeG[WindowedKey](WindowedKeyJSONSerdeG{})
 
-func (s WindowedKeyJSONSerdeG) Encode(value WindowedKey) ([]byte, error) {
-	wk, err := winKeyToWindowedKeySer(value, s.KeyJSONSerde, s.WindowJSONSerde)
+func (s WindowedKeyJSONSerdeG) Encode(value WindowedKey) ([]byte, *[]byte, error) {
+	wk, kbuf, wbuf, err := winKeyToWindowedKeySer(value, s.KeyJSONSerde, s.WindowJSONSerde)
 	defer func() {
 		if wk != nil {
 			if s.KeyJSONSerde.UsedBufferPool() && wk.KeySerialized != nil {
-				PushBuffer(&wk.KeySerialized)
+				*kbuf = wk.KeySerialized
+				PushBuffer(kbuf)
 			}
 			if s.WindowJSONSerde.UsedBufferPool() && wk.WindowSerialized != nil {
-				PushBuffer(&wk.WindowSerialized)
+				*wbuf = wk.WindowSerialized
+				PushBuffer(wbuf)
 			}
 		}
 	}()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if wk == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
-	return json.Marshal(&wk)
+	r, err := json.Marshal(&wk)
+	return r, nil, err
 }
 
 func (s WindowedKeyJSONSerdeG) Decode(value []byte) (WindowedKey, error) {
@@ -47,27 +50,30 @@ type WindowedKeyMsgpSerdeG struct {
 
 var _ = SerdeG[WindowedKey](WindowedKeyMsgpSerdeG{})
 
-func (s WindowedKeyMsgpSerdeG) Encode(value WindowedKey) ([]byte, error) {
-	wk, err := winKeyToWindowedKeySer(value, s.KeyMsgpSerde, s.WindowMsgpSerde)
+func (s WindowedKeyMsgpSerdeG) Encode(value WindowedKey) ([]byte, *[]byte, error) {
+	wk, kbuf, wbuf, err := winKeyToWindowedKeySer(value, s.KeyMsgpSerde, s.WindowMsgpSerde)
 	defer func() {
 		if wk != nil {
 			if s.KeyMsgpSerde.UsedBufferPool() && wk.KeySerialized != nil {
-				PushBuffer(&wk.KeySerialized)
+				*kbuf = wk.KeySerialized
+				PushBuffer(kbuf)
 			}
 			if s.WindowMsgpSerde.UsedBufferPool() && wk.WindowSerialized != nil {
-				PushBuffer(&wk.WindowSerialized)
+				*wbuf = wk.WindowSerialized
+				PushBuffer(wbuf)
 			}
 		}
 	}()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if wk == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	b := PopBuffer()
 	buf := *b
-	return wk.MarshalMsg(buf[:0])
+	r, err := wk.MarshalMsg(buf[:0])
+	return r, b, err
 }
 
 func (s WindowedKeyMsgpSerdeG) Decode(value []byte) (WindowedKey, error) {

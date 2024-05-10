@@ -66,41 +66,41 @@ func CastToValTsPtr(value interface{}) *ValueTimestamp {
 	return v
 }
 
-func convertToValueTsSer(value interface{}, valSerde Serde) (*ValueTimestampSerialized, error) {
+func convertToValueTsSer(value interface{}, valSerde Serde) (vser *ValueTimestampSerialized, vbuf *[]byte, err error) {
 	if value == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	v := CastToValTsPtr(value)
 	if v == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	var enc []byte
-	var err error
 	if !utils.IsNil(v.Value) {
-		enc, err = valSerde.Encode(v.Value)
+		enc, vbuf, err = valSerde.Encode(v.Value)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-	return &ValueTimestampSerialized{
+	vser = &ValueTimestampSerialized{
 		Timestamp:       v.Timestamp,
 		ValueSerialized: enc,
-	}, nil
+	}
+	return vser, vbuf, nil
 }
 
-func valTsToValueTsSer(value ValueTimestamp, valSerde Serde) (*ValueTimestampSerialized, error) {
+func valTsToValueTsSer(value ValueTimestamp, valSerde Serde) (vser *ValueTimestampSerialized, vbuf *[]byte, err error) {
 	var enc []byte
-	var err error
 	if !utils.IsNil(value.Value) {
-		enc, err = valSerde.Encode(value.Value)
+		enc, vbuf, err = valSerde.Encode(value.Value)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-	return &ValueTimestampSerialized{
+	vser = &ValueTimestampSerialized{
 		Timestamp:       value.Timestamp,
 		ValueSerialized: enc,
-	}, nil
+	}
+	return vser, vbuf, nil
 }
 
 func decodeToValueTs(vtsSer *ValueTimestampSerialized, valSerde Serde) (interface{}, error) {
@@ -140,20 +140,22 @@ type ValueTimestampJSONSerde struct {
 
 var _ = Serde(ValueTimestampJSONSerde{})
 
-func (s ValueTimestampJSONSerde) Encode(value interface{}) ([]byte, error) {
-	vs, err := convertToValueTsSer(value, s.ValJSONSerde)
+func (s ValueTimestampJSONSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
+	vs, vbuf, err := convertToValueTsSer(value, s.ValJSONSerde)
 	defer func() {
-		if s.ValJSONSerde.UsedBufferPool() && vs.ValueSerialized != nil {
-			PushBuffer(&vs.ValueSerialized)
+		if s.ValJSONSerde.UsedBufferPool() && vbuf != nil {
+			*vbuf = vs.ValueSerialized
+			PushBuffer(vbuf)
 		}
 	}()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if vs == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
-	return json.Marshal(vs)
+	r, err := json.Marshal(vs)
+	return r, nil, err
 }
 
 func (s ValueTimestampJSONSerde) Decode(value []byte) (interface{}, error) {
@@ -172,22 +174,24 @@ type ValueTimestampMsgpSerde struct {
 	ValMsgpSerde Serde
 }
 
-func (s ValueTimestampMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	vs, err := convertToValueTsSer(value, s.ValMsgpSerde)
+func (s ValueTimestampMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
+	vs, vbuf, err := convertToValueTsSer(value, s.ValMsgpSerde)
 	defer func() {
-		if s.ValMsgpSerde.UsedBufferPool() && vs.ValueSerialized != nil {
-			PushBuffer(&vs.ValueSerialized)
+		if s.ValMsgpSerde.UsedBufferPool() && vbuf != nil {
+			*vbuf = vs.ValueSerialized
+			PushBuffer(vbuf)
 		}
 	}()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if vs == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	b := PopBuffer()
 	buf := *b
-	return vs.MarshalMsg(buf[:0])
+	r, err := vs.MarshalMsg(buf[:0])
+	return r, b, err
 }
 
 func (s ValueTimestampMsgpSerde) Decode(value []byte) (interface{}, error) {

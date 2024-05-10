@@ -17,9 +17,9 @@ type WindowedKeySerialized struct {
 	WindowSerialized []byte `json:"ws" msg:"ws"`
 }
 
-func convertToWindowedKeySer(value interface{}, keySerde Serde, windowSerde Serde) (*WindowedKeySerialized, error) {
+func convertToWindowedKeySer(value interface{}, keySerde Serde, windowSerde Serde) (wk *WindowedKeySerialized, kbuf, wbuf *[]byte, err error) {
 	if value == nil {
-		return nil, nil
+		return nil, nil, nil, nil
 	}
 	v, ok := value.(*WindowedKey)
 	if !ok {
@@ -27,55 +27,53 @@ func convertToWindowedKeySer(value interface{}, keySerde Serde, windowSerde Serd
 		v = &vtmp
 	}
 	if v == nil {
-		return nil, nil
+		return nil, nil, nil, nil
 	}
-	var err error
 	var kenc, wenc []byte = nil, nil
 	if !utils.IsNil(v.Key) {
-		kenc, err = keySerde.Encode(v.Key)
+		kenc, kbuf, err = keySerde.Encode(v.Key)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 	}
 	if !utils.IsNil(v.Window) {
-		wenc, err = windowSerde.Encode(v.Window)
+		wenc, wbuf, err = windowSerde.Encode(v.Window)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 	}
 	if kenc == nil && wenc == nil {
-		return nil, nil
+		return nil, nil, nil, nil
 	}
-	wk := &WindowedKeySerialized{
+	wk = &WindowedKeySerialized{
 		KeySerialized:    kenc,
 		WindowSerialized: wenc,
 	}
-	return wk, nil
+	return wk, kbuf, wbuf, nil
 }
 
-func winKeyToWindowedKeySer(value WindowedKey, keySerde Serde, windowSerde Serde) (*WindowedKeySerialized, error) {
-	var err error
+func winKeyToWindowedKeySer(value WindowedKey, keySerde Serde, windowSerde Serde) (wk *WindowedKeySerialized, kbuf, wbuf *[]byte, err error) {
 	var kenc, wenc []byte = nil, nil
 	if !utils.IsNil(value.Key) {
-		kenc, err = keySerde.Encode(value.Key)
+		kenc, kbuf, err = keySerde.Encode(value.Key)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 	}
 	if !utils.IsNil(value.Window) {
-		wenc, err = windowSerde.Encode(value.Window)
+		wenc, wbuf, err = windowSerde.Encode(value.Window)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 	}
 	if kenc == nil && wenc == nil {
-		return nil, nil
+		return nil, nil, nil, nil
 	}
-	wk := &WindowedKeySerialized{
+	wk = &WindowedKeySerialized{
 		KeySerialized:    kenc,
 		WindowSerialized: wenc,
 	}
-	return wk, nil
+	return wk, kbuf, wbuf, nil
 }
 
 func decodeToWindowedKey(wkSer *WindowedKeySerialized, keySerde Serde, windowSerde Serde) (interface{}, error) {
@@ -128,25 +126,28 @@ type WindowedKeyJSONSerde struct {
 
 var _ = Serde(WindowedKeyJSONSerde{})
 
-func (s WindowedKeyJSONSerde) Encode(value interface{}) ([]byte, error) {
-	wk, err := convertToWindowedKeySer(value, s.KeyJSONSerde, s.WindowJSONSerde)
+func (s WindowedKeyJSONSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
+	wk, kbuf, wbuf, err := convertToWindowedKeySer(value, s.KeyJSONSerde, s.WindowJSONSerde)
 	defer func() {
 		if wk != nil {
-			if s.KeyJSONSerde.UsedBufferPool() && wk.KeySerialized != nil {
-				PushBuffer(&wk.KeySerialized)
+			if s.KeyJSONSerde.UsedBufferPool() && kbuf != nil {
+				*kbuf = wk.KeySerialized
+				PushBuffer(kbuf)
 			}
-			if s.WindowJSONSerde.UsedBufferPool() && wk.WindowSerialized != nil {
-				PushBuffer(&wk.WindowSerialized)
+			if s.WindowJSONSerde.UsedBufferPool() && wbuf != nil {
+				*wbuf = wk.WindowSerialized
+				PushBuffer(wbuf)
 			}
 		}
 	}()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if wk == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
-	return json.Marshal(&wk)
+	r, err := json.Marshal(&wk)
+	return r, nil, err
 }
 
 func (s WindowedKeyJSONSerde) Decode(value []byte) (interface{}, error) {
@@ -165,27 +166,30 @@ type WindowedKeyMsgpSerde struct {
 
 var _ = Serde(WindowedKeyMsgpSerde{})
 
-func (s WindowedKeyMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	wk, err := convertToWindowedKeySer(value, s.KeyMsgpSerde, s.WindowMsgpSerde)
+func (s WindowedKeyMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
+	wk, kbuf, wbuf, err := convertToWindowedKeySer(value, s.KeyMsgpSerde, s.WindowMsgpSerde)
 	defer func() {
 		if wk != nil {
-			if s.KeyMsgpSerde.UsedBufferPool() && wk.KeySerialized != nil {
+			if s.KeyMsgpSerde.UsedBufferPool() && kbuf != nil {
+				*kbuf = wk.KeySerialized
 				PushBuffer(&wk.KeySerialized)
 			}
-			if s.WindowMsgpSerde.UsedBufferPool() && wk.WindowSerialized != nil {
+			if s.WindowMsgpSerde.UsedBufferPool() && wbuf != nil {
+				*wbuf = wk.WindowSerialized
 				PushBuffer(&wk.WindowSerialized)
 			}
 		}
 	}()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if wk == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	b := PopBuffer()
 	buf := *b
-	return wk.MarshalMsg(buf[:0])
+	r, err := wk.MarshalMsg(buf[:0])
+	return r, b, err
 }
 
 func (s WindowedKeyMsgpSerde) Decode(value []byte) (interface{}, error) {
