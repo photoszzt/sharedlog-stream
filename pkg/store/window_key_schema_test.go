@@ -142,7 +142,7 @@ func TestShouldExtractKeyBytesFromBinary(t *testing.T) {
 	wks := &WindowKeySchema{}
 	key := "a"
 	s := commtypes.StringSerde{}
-	kBytes, err := s.Encode(key)
+	kBytes, _, err := s.Encode(key)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -158,7 +158,7 @@ func TestShouldExtractStartTimeFromBinary(t *testing.T) {
 	wks := &WindowKeySchema{}
 	key := "a"
 	s := commtypes.StringSerde{}
-	kBytes, err := s.Encode(key)
+	kBytes, _, err := s.Encode(key)
 	if err != nil {
 		t.Fatal(err.Error())
 	}

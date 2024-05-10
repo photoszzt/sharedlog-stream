@@ -64,11 +64,11 @@ func putKV(ctx context.Context, key string, window *commtypes.TimeWindow, value 
 		Key:    key,
 		Window: window,
 	}
-	wkBytes, err := kSerde.Encode(wk)
+	wkBytes, _, err := kSerde.Encode(wk)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	vBytes, err := vSerde.Encode(value)
+	vBytes, _, err := vSerde.Encode(value)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func ShouldPutAndFetch(ctx context.Context, byteStore store.SegmentedBytesStore,
 	putKV(ctx, key, windows[2], 100, kSerde, vSerde, byteStore, t)
 
 	strSerde := commtypes.StringSerde{}
-	kBytes, err := strSerde.Encode(key)
+	kBytes, _, err := strSerde.Encode(key)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
