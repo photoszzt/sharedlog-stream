@@ -58,12 +58,13 @@ type TransactionManager struct {
 	tranCompleteMarkerTag uint64
 	txnLogTag             uint64
 	txnFenceTag           uint64
-	hasWaitForLastTxn     atomic.Bool
-	addedNewTpPar         atomic.Bool
-	serdeFormat           commtypes.SerdeFormat
 	waitPrevTxn           stats.PrintLogStatsCollector[int64]
 	appendTxnMeta         stats.PrintLogStatsCollector[int64]
 	txnSndPhase           stats.PrintLogStatsCollector[int64]
+	hasWaitForLastTxn     atomic.Bool
+	addedNewTpPar         atomic.Bool
+	serdeFormat           commtypes.SerdeFormat
+	txnMdSerdeUseBuf      bool
 }
 
 func NewTransactionManager(ctx context.Context,
@@ -97,6 +98,7 @@ func NewTransactionManager(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
+	tm.txnMdSerdeUseBuf = tm.txnMdSerde.UsedBufferPool()
 	return tm, nil
 }
 
@@ -283,18 +285,24 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) (*InitTxnRet,
 func (tc *TransactionManager) appendToTransactionLog(ctx context.Context,
 	tm txn_data.TxnMetadata, tags []uint64,
 ) (uint64, error) {
-	encoded, err := tc.txnMdSerde.Encode(tm)
+	encoded, b, err := tc.txnMdSerde.Encode(tm)
 	if err != nil {
 		return 0, fmt.Errorf("txnMdSerde enc err: %v", tm)
 	}
 	prodId := tc.prodId
+	var r uint64
 	if tags != nil {
-		return tc.transactionLog.PushWithTag(ctx, encoded, 0, tags, nil,
+		r, err = tc.transactionLog.PushWithTag(ctx, encoded, 0, tags, nil,
 			sharedlog_stream.SingleDataRecordMeta, prodId)
 	} else {
-		return tc.transactionLog.Push(ctx, encoded, 0,
+		r, err = tc.transactionLog.Push(ctx, encoded, 0,
 			sharedlog_stream.SingleDataRecordMeta, prodId)
 	}
+	if tc.txnMdSerdeUseBuf && b != nil {
+		*b = encoded
+		commtypes.PushBuffer(b)
+	}
+	return r, err
 }
 
 func (tc *TransactionManager) collectTopicSubstreams() []*txn_data.TopicPartition {
@@ -320,7 +328,7 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 	tm := commtypes.EpochMarker{
 		Mark: marker,
 	}
-	encoded, err := tc.txnMarkerSerde.Encode(tm)
+	encoded, b, err := tc.txnMarkerSerde.Encode(tm)
 	if err != nil {
 		return err
 	}
@@ -343,6 +351,10 @@ func (tc *TransactionManager) appendTxnMarkerToStreams(ctx context.Context, mark
 		}
 	}
 	err = bg.Wait()
+	if tc.txnMarkerSerde.UsedBufferPool() {
+		*b = encoded
+		commtypes.PushBuffer(b)
+	}
 	return err
 }
 
@@ -432,7 +444,7 @@ func (tc *TransactionManager) AppendConsumedSeqNum(ctx context.Context, consumer
 		}
 		offsetLog := tc.topicStreams[offsetTopic]
 
-		encoded, err := tc.offsetRecordSerde.Encode(offsetRecord)
+		encoded, b, err := tc.offsetRecordSerde.Encode(offsetRecord)
 		if err != nil {
 			return err
 		}
@@ -440,6 +452,10 @@ func (tc *TransactionManager) AppendConsumedSeqNum(ctx context.Context, consumer
 			tc.prodId)
 		if err != nil {
 			return err
+		}
+		if tc.offsetRecordSerde.UsedBufferPool() {
+			*b = encoded
+			commtypes.PushBuffer(b)
 		}
 		// debug.Fprintf(os.Stderr, "consumed offset 0x%x for %s\n", offsetRecord.Offset, offsetTopic)
 	}

@@ -242,19 +242,32 @@ func (s *RemoteTxnManager) AppendConsumedOffset(ctx context.Context, in *remote_
 	if err != nil {
 		return err
 	}
+	ofUseBuf := tm.offsetRecordSerde.UsedBufferPool()
 	for _, op := range in.OffsetPairs {
 		offsetLog := tm.topicStreams[op.TopicName]
 		offsetRecord := txn_data.OffsetRecord{
 			Offset: op.Offset,
 		}
-		encoded, err := tm.offsetRecordSerde.Encode(offsetRecord)
+		encoded, b, err := tm.offsetRecordSerde.Encode(offsetRecord)
 		if err != nil {
+			if ofUseBuf && b != nil {
+				*b = encoded
+				commtypes.PushBuffer(b)
+			}
 			return err
 		}
 		_, err = offsetLog.Push(ctx, encoded, uint8(in.ParNum), sharedlog_stream.SingleDataRecordMeta,
 			tm.prodId)
 		if err != nil {
+			if ofUseBuf && b != nil {
+				*b = encoded
+				commtypes.PushBuffer(b)
+			}
 			return err
+		}
+		if ofUseBuf && b != nil {
+			*b = encoded
+			commtypes.PushBuffer(b)
 		}
 	}
 	debug.Fprint(os.Stderr, "done AppendConsumedOffset\n")
