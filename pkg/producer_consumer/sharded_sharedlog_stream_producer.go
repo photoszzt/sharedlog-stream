@@ -3,13 +3,14 @@ package producer_consumer
 import (
 	"context"
 	"fmt"
-	"log"
 	"sharedlog-stream/pkg/commtypes"
 	eo_intr "sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 type StreamSinkConfig struct {
@@ -35,7 +36,9 @@ func NewShardedSharedLogStreamProducer(stream *sharedlog_stream.ShardedSharedLog
 	config *StreamSinkConfig,
 ) *ShardedSharedLogStreamProducer {
 	msgSerSerde, err := commtypes.GetMessageSerializedSerdeG(config.Format)
-	log.Fatal(err)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Fail to get msg serialized serdeG")
+	}
 	return &ShardedSharedLogStreamProducer{
 		// msgSerde:      config.MsgSerde,
 		msgSerSerde:   msgSerSerde,
