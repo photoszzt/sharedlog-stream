@@ -201,12 +201,14 @@ func procMsgWithSink[KIn, VIn, KOut, VOut any](ctx context.Context,
 		debug.Fprintf(os.Stderr, "[ERROR] %s return runner: %v\n", ctx.Value("id"), err)
 		return err
 	}
+	kUseBuf := outMsgSerde.GetKeySerdeG().UsedBufferPool()
+	vUseBuf := outMsgSerde.GetValSerdeG().UsedBufferPool()
 	// debug.Fprintf(os.Stderr, "[id=%s] after runner\n", id)
 	for _, msg := range msgs {
 		// procTime := time.Since(msg.StartProcTime)
 		// procArgs.procLat.AddSample(procTime.Nanoseconds())
 		// debug.Fprintf(os.Stderr, "k %v, v %v, ts %d\n", msg.Key, msg.Value, msg.Timestamp)
-		msgSerOp, err := commtypes.MsgGToMsgSer(msg, outMsgSerde.GetKeySerdeG(), outMsgSerde.GetValSerdeG())
+		msgSerOp, kbuf, vbuf, err := commtypes.MsgGToMsgSer(msg, outMsgSerde.GetKeySerdeG(), outMsgSerde.GetValSerdeG())
 		if err != nil {
 			return err
 		}
@@ -216,6 +218,14 @@ func procMsgWithSink[KIn, VIn, KOut, VOut any](ctx context.Context,
 			if err != nil {
 				debug.Fprintf(os.Stderr, "[ERROR] %s return push to sink: %v\n", ctx.Value("id"), err)
 				return err
+			}
+			if kUseBuf && kbuf != nil {
+				*kbuf = msgSer.KeyEnc
+				commtypes.PushBuffer(kbuf)
+			}
+			if vUseBuf && vbuf != nil {
+				*vbuf = msgSer.ValueEnc
+				commtypes.PushBuffer(vbuf)
 			}
 		}
 	}
