@@ -1,6 +1,4 @@
 //go:generate msgp
-//go:generate stringer type=AuctionBid
-//msgp:ignore AuctionBidJSONSerde AuctionBidMsgpSerde AuctionBidMsgpSerdeG AuctionBidJSONSerdeG
 package ntypes
 
 import (
