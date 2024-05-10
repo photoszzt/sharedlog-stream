@@ -47,7 +47,7 @@ func generate(v *Variant, code string) {
 
 	formatted, err := format.Source(out.Bytes())
 	if err != nil {
-		println(string(out.Bytes()))
+		println(out.String())
 		log.Fatal("format:", err)
 	}
 
@@ -56,40 +56,46 @@ func generate(v *Variant, code string) {
 	}
 }
 
-func gen_serde(fname, typeName, dirpath, packageName string, inCommtypes bool) {
-	start_end := &Variant{
+func default_variant(fname, typeName, dirpath, packageName string, inCommtypes bool) *Variant {
+	v := &Variant{
 		PackageName: packageName,
 		TypeName:    typeName,
 		Path:        fmt.Sprintf("%s/%s_gen_serde.go", dirpath, fname),
 	}
 	if inCommtypes {
-		start_end.ExtraImports = ""
-		start_end.CommtypesPrefix = ""
+		v.ExtraImports = ""
+		v.CommtypesPrefix = ""
 	} else {
-		start_end.ExtraImports = "\"sharedlog-stream/pkg/commtypes\""
-		start_end.CommtypesPrefix = "commtypes."
+		v.ExtraImports = "\"sharedlog-stream/pkg/commtypes\""
+		v.CommtypesPrefix = "commtypes."
 	}
-	generate(start_end, serde)
-	start_end.Path = fmt.Sprintf("%s/%s_gen_serdeG.go", dirpath, fname)
-	generate(start_end, serdeG)
+	return v
+}
+
+func gen_serde_test(fname, typeName, dirpath, packageName string, inCommtypes bool) {
+	v := default_variant(fname, typeName, dirpath, packageName, inCommtypes)
+	v.Path = fmt.Sprintf("%s/%s_gen_serde_test.go", dirpath, fname)
+	generate(v, serde_test)
+}
+
+func gen_serde_ptr_test(fname, typeName, dirpath, packageName string, inCommtypes bool) {
+	v := default_variant(fname, typeName, dirpath, packageName, inCommtypes)
+	v.Path = fmt.Sprintf("%s/%s_gen_serde_ptr_test.go", dirpath, fname)
+	generate(v, serde_ptr_test)
+}
+
+func gen_serde(fname, typeName, dirpath, packageName string, inCommtypes bool) {
+	v := default_variant(fname, typeName, dirpath, packageName, inCommtypes)
+	generate(v, serde)
+	v.Path = fmt.Sprintf("%s/%s_gen_serdeG.go", dirpath, fname)
+	generate(v, serdeG)
 }
 
 func gen_serde_ptr(fname, typeName, dirpath, packageName string, inCommtypes bool) {
-	start_end := &Variant{
-		PackageName: packageName,
-		TypeName:    typeName,
-		Path:        fmt.Sprintf("%s/%s_gen_serde.go", dirpath, fname),
-	}
-	if inCommtypes {
-		start_end.ExtraImports = ""
-		start_end.CommtypesPrefix = ""
-	} else {
-		start_end.ExtraImports = "\"sharedlog-stream/pkg/commtypes\""
-		start_end.CommtypesPrefix = "commtypes."
-	}
-	generate(start_end, serde_ptr)
-	start_end.Path = fmt.Sprintf("%s/%s_gen_serdeG.go", dirpath, fname)
-	generate(start_end, serdeG_ptr)
+	v := default_variant(fname, typeName, dirpath, packageName, inCommtypes)
+	generate(v, serde_ptr)
+	v.Path = fmt.Sprintf("%s/%s_gen_serdeG.go", dirpath, fname)
+	generate(v, serdeG_ptr)
 }
 
 func main() {
@@ -109,6 +115,18 @@ func main() {
 	gen_serde_ptr("event", "Event", ntypes_path, "ntypes", false)
 	gen_serde_ptr("auction_bid", "AuctionBid", ntypes_path, "ntypes", false)
 
+	gen_serde_test("start_end_time", "StartEndTime", ntypes_path, "ntypes", false)
+	gen_serde_test("sum_and_count", "SumAndCount", ntypes_path, "ntypes", false)
+	gen_serde_test("price_time", "PriceTime", ntypes_path, "ntypes", false)
+	gen_serde_test("person_time", "PersonTime", ntypes_path, "ntypes", false)
+	gen_serde_test("name_city_state_id", "NameCityStateId", ntypes_path, "ntypes", false)
+	gen_serde_test("bid_price", "BidPrice", ntypes_path, "ntypes", false)
+	gen_serde_test("bid_and_max", "BidAndMax", ntypes_path, "ntypes", false)
+	gen_serde_test("auction_id_seller", "AuctionIdSeller", ntypes_path, "ntypes", false)
+	gen_serde_test("auction_id_count", "AuctionIdCount", ntypes_path, "ntypes", false)
+	gen_serde_test("auction_id_cnt_max", "AuctionIdCntMax", ntypes_path, "ntypes", false)
+	gen_serde_test("auction_id_category", "AuctionIdCategory", ntypes_path, "ntypes", false)
+
 	commtypes_path := "../pkg/commtypes/"
 	gen_serde("checkpoint", "Checkpoint", commtypes_path, "commtypes", true)
 	gen_serde("epoch_meta", "EpochMarker", commtypes_path, "commtypes", true)
@@ -117,12 +135,15 @@ func main() {
 	gen_serde("offset_marker", "OffsetMarker", commtypes_path, "commtypes", true)
 	gen_serde("message_serialized", "MessageSerialized", commtypes_path, "commtypes", true)
 	gen_serde("time_window", "TimeWindow", commtypes_path, "commtypes", true)
+	gen_serde_test("time_window", "TimeWindow", commtypes_path, "commtypes", true)
 
 	txn_path := "../pkg/txn_data/"
 	gen_serde("control_meta", "ControlMetadata", txn_path, "txn_data", false)
 	gen_serde("offset_record", "OffsetRecord", txn_path, "txn_data", false)
 	gen_serde_ptr("topic_partition", "TopicPartition", txn_path, "txn_data", false)
 	gen_serde("txn_metadata", "TxnMetadata", txn_path, "txn_data", false)
+
+	gen_serde_test("offset_record", "OffsetRecord", txn_path, "txn_data", false)
 
 	rtxn_rpc_path := "../pkg/transaction/remote_txn_rpc/"
 	gen_serde_ptr("rtxn_arg", "RTxnArg", rtxn_rpc_path, "remote_txn_rpc", false)
@@ -143,3 +164,9 @@ var serdeG string
 
 //go:embed serdeG_ptr.tmpl
 var serdeG_ptr string
+
+//go:embed serde_ptr_test.tmpl
+var serde_ptr_test string
+
+//go:embed serde_test.tmpl
+var serde_test string

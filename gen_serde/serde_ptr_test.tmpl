@@ -1,0 +1,16 @@
+package {{.PackageName}}
+
+import (
+	"testing"
+	{{.ExtraImports}}
+)
+
+func TestSerde{{.TypeName}}(t *testing.T) {
+  v := &{{.TypeName}}{}
+  jsonSerdeG := {{.TypeName}}JSONSerdeG{}
+  jsonSerde := {{.TypeName}}JSONSerde{}
+  {{.CommtypesPrefix}}GenTestEncodeDecode[*{{.TypeName}}](v, t, jsonSerdeG, jsonSerde)
+  msgSerdeG := {{.TypeName}}MsgpSerdeG{}
+  msgSerde := {{.TypeName}}MsgpSerde{}
+  {{.CommtypesPrefix}}GenTestEncodeDecode[*{{.TypeName}}](v, t, msgSerdeG, msgSerde)
+}

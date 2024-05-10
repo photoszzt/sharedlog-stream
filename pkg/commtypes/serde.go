@@ -5,8 +5,10 @@ import (
 	"encoding/binary"
 	"math"
 	"sharedlog-stream/pkg/optional"
+	"testing"
 	"unsafe"
 
+	"golang.org/x/exp/constraints"
 	"golang.org/x/xerrors"
 )
 
@@ -1114,5 +1116,79 @@ func (s *OptionalValSerde[V]) Decode(val []byte) (optional.Option[V], error) {
 			return optional.None[V](), err
 		}
 		return optional.Some(v), nil
+	}
+}
+
+const float64EqualityThreshold = 1e-9
+
+func almostEqual[V constraints.Float](a, b V) bool {
+	return math.Abs(float64(a-b)) <= float64EqualityThreshold
+}
+
+func GenTestEncodeDecodeFloat[V constraints.Float](v V, t *testing.T, serdeG SerdeG[V], serde Serde) {
+	bts, buf, err := serdeG.Encode(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ret, err := serdeG.Decode(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !almostEqual(v, ret) {
+		t.Fatal("encode and decode doesn't give same value")
+	}
+	if serdeG.UsedBufferPool() {
+		*buf = bts
+		PushBuffer(buf)
+	}
+
+	bts, buf, err = serde.Encode(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := serde.Decode(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !almostEqual(v, r.(V)) {
+		t.Fatal("encode and decode doesn't give same value")
+	}
+	if serde.UsedBufferPool() {
+		*buf = bts
+		PushBuffer(buf)
+	}
+}
+
+func GenTestEncodeDecode[V comparable](v V, t *testing.T, serdeG SerdeG[V], serde Serde) {
+	bts, buf, err := serdeG.Encode(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ret, err := serdeG.Decode(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v != ret {
+		t.Fatal("encode and decode doesn't give same value")
+	}
+	if serdeG.UsedBufferPool() {
+		*buf = bts
+		PushBuffer(buf)
+	}
+
+	bts, buf, err = serde.Encode(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := serde.Decode(bts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v != r.(V) {
+		t.Fatal("encode and decode doesn't give same value")
+	}
+	if serde.UsedBufferPool() {
+		*buf = bts
+		PushBuffer(buf)
 	}
 }
