@@ -145,7 +145,7 @@ func (mc *MinioChkptStore) GetAlignChkpt(ctx context.Context, srcs []string, sto
 func (mc *MinioChkptStore) StoreSnapshot(ctx context.Context, env types.Environment,
 	snapshot []byte, changelogTpName string, logOff uint64,
 ) error {
-	var uint64Serde commtypes.Uint16Serde
+	var uint16Serde commtypes.Uint16Serde
 	key := fmt.Sprintf("%s_%#x", changelogTpName, logOff)
 	l := uint64(len(mc.minioClients))
 	idx := hashfuncs.NameHash(key) % l
@@ -156,7 +156,7 @@ func (mc *MinioChkptStore) StoreSnapshot(ctx context.Context, env types.Environm
 		return err
 	}
 	hasData := uint16(1)
-	enc, err := uint64Serde.Encode(hasData)
+	enc, _, err := uint16Serde.Encode(hasData)
 	if err != nil {
 		return err
 	}

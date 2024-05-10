@@ -125,7 +125,7 @@ func (rs *RedisSnapshotStore) GetAlignChkpt(ctx context.Context, srcs []string, 
 func (rs *RedisSnapshotStore) StoreSnapshot(ctx context.Context, env types.Environment,
 	snapshot []byte, changelogTpName string, logOff uint64,
 ) error {
-	var uint64Serde commtypes.Uint16Serde
+	var uint16Serde commtypes.Uint16Serde
 	key := fmt.Sprintf("%s_%#x", changelogTpName, logOff)
 	idx := hashfuncs.NameHash(key) % uint64(len(rs.rdb_arr))
 	fmt.Fprintf(os.Stderr, "store snapshot key: %s at redis[%d]\n", key, idx)
@@ -135,7 +135,7 @@ func (rs *RedisSnapshotStore) StoreSnapshot(ctx context.Context, env types.Envir
 	}
 	rs.snapSize.AddSample(len(snapshot))
 	hasData := uint16(1)
-	enc, err := uint64Serde.Encode(hasData)
+	enc, _, err := uint16Serde.Encode(hasData)
 	if err != nil {
 		return err
 	}
