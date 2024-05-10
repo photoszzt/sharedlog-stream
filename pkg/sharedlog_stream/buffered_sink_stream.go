@@ -117,7 +117,7 @@ func (s *BufferedSinkStream) bufPushAutoFlushGoroutineSafe(
 	payloadArr := commtypes.PayloadArr{
 		Payloads: s.sinkBuffer,
 	}
-	payloads, err := s.payloadArrSerde.Encode(payloadArr)
+	payloads, b, err := s.payloadArrSerde.Encode(payloadArr)
 	if err != nil {
 		return err
 	}
@@ -131,8 +131,9 @@ func (s *BufferedSinkStream) bufPushAutoFlushGoroutineSafe(
 	if err != nil {
 		return err
 	}
-	if s.payloadArrSerde.UsedBufferPool() && payloads != nil {
-		commtypes.PushBuffer(&payloads)
+	if s.payloadArrSerde.UsedBufferPool() && b != nil {
+		*b = payloads
+		commtypes.PushBuffer(b)
 	}
 	if s.guarantee == exactly_once_intr.EPOCH_MARK && !s.initProdIsSet.Load() {
 		if lock {
@@ -284,7 +285,7 @@ func (s *BufferedSinkStream) flushGoroutineSafe(ctx context.Context,
 	payloadArr := commtypes.PayloadArr{
 		Payloads: s.sinkBuffer,
 	}
-	payloads, err := s.payloadArrSerde.Encode(payloadArr)
+	payloads, b, err := s.payloadArrSerde.Encode(payloadArr)
 	if err != nil {
 		return 0, err
 	}
@@ -294,8 +295,9 @@ func (s *BufferedSinkStream) flushGoroutineSafe(ctx context.Context,
 	if err != nil {
 		return 0, err
 	}
-	if s.payloadArrSerde.UsedBufferPool() && payloads != nil {
-		commtypes.PushBuffer(&payloads)
+	if s.payloadArrSerde.UsedBufferPool() && b != nil {
+		*b = payloads
+		commtypes.PushBuffer(b)
 	}
 	if s.guarantee == exactly_once_intr.EPOCH_MARK && !s.initProdIsSet.Load() {
 		// there're multiple threads append to the same sink stream

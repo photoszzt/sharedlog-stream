@@ -174,7 +174,8 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context,
 	s.tail = seqNum + 1
 	s.mux.Unlock()
 
-	commtypes.PushBuffer(&encoded)
+	*b = encoded
+	commtypes.PushBuffer(b)
 	// verify that push is successful
 
 	// debug.Fprintf(os.Stderr, "push to %s tag: ", s.topicName)
