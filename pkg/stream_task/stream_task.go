@@ -280,38 +280,18 @@ func encodeKVSnapshot[K, V any](
 	kvstore store.CoreKeyValueStoreG[K, V],
 	snapshot []*commtypes.KeyValuePair[K, V],
 	payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
-) ([]byte, error) {
+) ([]byte, *[]byte, error) {
 	kvPairSerdeG := kvstore.GetKVSerde()
-	outBin := make([][]byte, 0, len(snapshot))
-	for _, kv := range snapshot {
-		bin, err := kvPairSerdeG.Encode(kv)
-		if err != nil {
-			return nil, err
-		}
-		outBin = append(outBin, bin)
-	}
-	return payloadSerde.Encode(commtypes.PayloadArr{
-		Payloads: outBin,
-	})
+	return commtypes.EncodeKVPairs(snapshot, payloadSerde, kvPairSerdeG)
 }
 
 func encodeWinSnapshot[K, V any](
 	winStore store.CoreWindowStoreG[K, V],
 	snapshot []*commtypes.KeyValuePair[commtypes.KeyAndWindowStartTsG[K], V],
 	payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
-) ([]byte, error) {
+) ([]byte, *[]byte, error) {
 	kvPairSerdeG := winStore.GetKVSerde()
-	outBin := make([][]byte, 0, len(snapshot))
-	for _, kv := range snapshot {
-		bin, err := kvPairSerdeG.Encode(kv)
-		if err != nil {
-			return nil, err
-		}
-		outBin = append(outBin, bin)
-	}
-	return payloadSerde.Encode(commtypes.PayloadArr{
-		Payloads: outBin,
-	})
+	return commtypes.EncodeKVPairs(snapshot, payloadSerde, kvPairSerdeG)
 }
 
 func handleCtrlMsg(

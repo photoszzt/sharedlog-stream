@@ -175,6 +175,30 @@ type KeyValuePairsMsgpSerdeG[K, V any] struct {
 	s          KeyValuePairMsgpSerdeG[K, V]
 }
 
+func EncodeKVPairs[K, V any](kvs KeyValuePairs[K, V], payloadSerde SerdeG[PayloadArr],
+	kvSerde SerdeG[*KeyValuePair[K, V]],
+) ([]byte, *[]byte, error) {
+	payloadArr := PayloadArr{
+		Payloads: make([][]byte, 0, len(kvs)),
+	}
+	for _, kv := range kvs {
+		enc, _, err := kvSerde.Encode(kv)
+		if err != nil {
+			return nil, nil, err
+		}
+		payloadArr.Payloads = append(payloadArr.Payloads, enc)
+	}
+	r, b, err := payloadSerde.Encode(payloadArr)
+	if kvSerde.UsedBufferPool() {
+		buf := new([]byte)
+		for _, p := range payloadArr.Payloads {
+			*buf = p
+			PushBuffer(buf)
+		}
+	}
+	return r, b, err
+}
+
 func (s KeyValuePairsMsgpSerdeG[K, V]) Encode(v KeyValuePairs[K, V]) ([]byte, *[]byte, error) {
 	payloadArr := PayloadArr{
 		Payloads: make([][]byte, 0, len(v)),
