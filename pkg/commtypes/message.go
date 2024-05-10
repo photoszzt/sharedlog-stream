@@ -33,9 +33,9 @@ type Punctuate struct{}
 type MessageSerde interface {
 	Serde
 	SerdeG[interface{}]
-	EncodeAndRtnKVBin(value interface{}) ([]byte, []byte /* kEnc */, []byte /* vEnc */, error)
-	EncodeKey(key interface{}) ([]byte, error)
-	EncodeVal(val interface{}) ([]byte, error)
+	EncodeAndRtnKVBin(value interface{}) ([]byte, []byte /* kEnc */, []byte /* vEnc */, *[]byte, error)
+	EncodeKey(key interface{}) ([]byte, *[]byte, error)
+	EncodeVal(val interface{}) ([]byte, *[]byte, error)
 	DecodeVal(value []byte) (interface{}, error)
 }
 

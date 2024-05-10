@@ -10,8 +10,8 @@ import (
 type MessageSerdeG[K, V any] interface {
 	SerdeG[Message]
 	EncodeWithKVBytes(kBytes []byte, vBytes []byte, inj int64, ts int64) ([]byte, error)
-	EncodeKey(key K) ([]byte, error)
-	EncodeVal(key V) ([]byte, error)
+	EncodeKey(key K) ([]byte, *[]byte, error)
+	EncodeVal(key V) ([]byte, *[]byte, error)
 	DecodeVal(value []byte) (V, error)
 	GetKeySerdeG() SerdeG[K]
 	GetValSerdeG() SerdeG[V]
@@ -19,9 +19,9 @@ type MessageSerdeG[K, V any] interface {
 
 type MessageGSerdeG[K, V any] interface {
 	SerdeG[MessageG[K, V]]
-	EncodeWithKVBytes(kBytes []byte, vBytes []byte, inj int64, ts int64) ([]byte, error)
-	EncodeKey(key K) ([]byte, error)
-	EncodeVal(key V) ([]byte, error)
+	EncodeWithKVBytes(kBytes []byte, vBytes []byte, inj int64, ts int64) ([]byte, *[]byte, error)
+	EncodeKey(key K) ([]byte, *[]byte, error)
+	EncodeVal(key V) ([]byte, *[]byte, error)
 	DecodeVal(value []byte) (V, error)
 	GetKeySerdeG() SerdeG[K]
 	GetValSerdeG() SerdeG[V]
