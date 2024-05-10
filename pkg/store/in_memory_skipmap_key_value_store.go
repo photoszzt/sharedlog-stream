@@ -214,7 +214,7 @@ func (st *InMemorySkipmapKeyValueStoreG[K, V]) BuildKeyMeta(ctx context.Context,
 	kms[st.Name()] = make([]txn_data.KeyMaping, 0)
 	hasher := hashfuncs.ByteSliceHasher{}
 	return st.Range(ctx, optional.None[K](), optional.None[K](), func(k K, v V) error {
-		kBytes, err := st.keySerde.Encode(k)
+		kBytes, _, err := st.keySerde.Encode(k)
 		if err != nil {
 			return err
 		}

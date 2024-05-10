@@ -546,7 +546,7 @@ func (s *InMemorySkipMapWindowStoreG[K, V]) BuildKeyMeta(kms map[string][]txn_da
 	kms[s.Name()] = make([]txn_data.KeyMaping, 0)
 	hasher := hashfuncs.ByteSliceHasher{}
 	return s.IterAll(func(ts int64, key K, value V) error {
-		kBytes, err := s.keySerdeG.Encode(key)
+		kBytes, _, err := s.keySerdeG.Encode(key)
 		if err != nil {
 			return err
 		}

@@ -64,7 +64,7 @@ func (rws *SegmentedWindowStoreG[K, V]) Put(ctx context.Context, key K, value op
 	if !(value.IsNone() && rws.retainDuplicates) {
 		rws.updateSeqnumForDups()
 		var err error
-		kBytes, err := rws.keySerde.Encode(key)
+		kBytes, _, err := rws.keySerde.Encode(key)
 		if err != nil {
 			return err
 		}
@@ -77,7 +77,7 @@ func (rws *SegmentedWindowStoreG[K, V]) Put(ctx context.Context, key K, value op
 		var vBytes []byte
 		v, ok := value.Take()
 		if ok {
-			vBytes, err = rws.valSerde.Encode(v)
+			vBytes, _, err = rws.valSerde.Encode(v)
 			if err != nil {
 				return err
 			}
@@ -88,7 +88,7 @@ func (rws *SegmentedWindowStoreG[K, V]) Put(ctx context.Context, key K, value op
 }
 
 func (rws *SegmentedWindowStoreG[K, V]) PutWithoutPushToChangelogG(ctx context.Context, key K, value optional.Option[V], windowStartTs int64) error {
-	kBytes, err := rws.keySerde.Encode(key)
+	kBytes, _, err := rws.keySerde.Encode(key)
 	if err != nil {
 		return err
 	}
@@ -99,7 +99,7 @@ func (rws *SegmentedWindowStoreG[K, V]) PutWithoutPushToChangelogG(ctx context.C
 	var vBytes []byte
 	v, ok := value.Take()
 	if ok {
-		vBytes, err = rws.valSerde.Encode(v)
+		vBytes, _, err = rws.valSerde.Encode(v)
 		if err != nil {
 			return err
 		}
