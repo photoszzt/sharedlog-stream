@@ -15,6 +15,8 @@ type GroupByOutputProcessorG[KIn, VIn any] struct {
 	name       string
 	msgGSerdeG commtypes.MessageGSerdeG[KIn, VIn]
 	BaseProcessorG[KIn, VIn, any, any]
+	kUseBuf bool
+	vUseBuf bool
 	// procTimeStats stats.PrintLogStatsCollector[int64]
 }
 
@@ -29,6 +31,8 @@ func NewGroupByOutputProcessorG[KIn, VIn any](procTimeTag string, producer produ
 		ectx:            ectx,
 		byteSliceHasher: hashfuncs.ByteSliceHasher{},
 		msgGSerdeG:      msgGSerdeG,
+		kUseBuf:         msgGSerdeG.GetKeySerdeG().UsedBufferPool(),
+		vUseBuf:         msgGSerdeG.GetValSerdeG().UsedBufferPool(),
 		// procTimeStats:   stats.NewPrintLogStatsCollector[int64](procTimeTag),
 	}
 	// for i := uint8(0); i < numPartition; i++ {
@@ -54,7 +58,7 @@ func (g *GroupByOutputProcessorG[KIn, VIn]) ProcessAndReturn(ctx context.Context
 	// }
 	// procTime := time.Since(msg.StartProcTime)
 	// g.procTimeStats.AddSample(procTime.Nanoseconds())
-	msgSerOp, err := commtypes.MsgGToMsgSer(msg, g.msgGSerdeG.GetKeySerdeG(), g.msgGSerdeG.GetValSerdeG())
+	msgSerOp, kbuf, vbuf, err := commtypes.MsgGToMsgSer(msg, g.msgGSerdeG.GetKeySerdeG(), g.msgGSerdeG.GetValSerdeG())
 	if err != nil {
 		return nil, err
 	}
@@ -64,6 +68,14 @@ func (g *GroupByOutputProcessorG[KIn, VIn]) ProcessAndReturn(ctx context.Context
 		par := uint8(hash % uint64(g.producer.Stream().NumPartition()))
 		g.ectx.TrackParFunc()(g.producer.TopicName(), par)
 		err = g.producer.ProduceData(ctx, msgSer, par)
+		if g.kUseBuf && msgSer.KeyEnc != nil && kbuf != nil {
+			*kbuf = msgSer.KeyEnc
+			commtypes.PushBuffer(kbuf)
+		}
+		if g.vUseBuf && msgSer.ValueEnc != nil && vbuf != nil {
+			*vbuf = msgSer.ValueEnc
+			commtypes.PushBuffer(vbuf)
+		}
 		return nil, err
 	} else {
 		return nil, nil

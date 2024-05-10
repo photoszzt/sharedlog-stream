@@ -13,6 +13,8 @@ type RoundRobinOutputProcessorG[KIn, VIn any] struct {
 	name       string
 	BaseProcessorG[KIn, VIn, any, any]
 	curSubstream uint8
+	kUseBuf      bool
+	vUseBuf      bool
 }
 
 var _ ProcessorG[int, int, any, any] = &RoundRobinOutputProcessorG[int, int]{}
@@ -29,6 +31,8 @@ func NewRoundRobinOutputProcessorG[KIn, VIn any](processTimeTag string,
 		name:           "to" + producer.TopicName(),
 		BaseProcessorG: BaseProcessorG[KIn, VIn, any, any]{},
 		curSubstream:   0,
+		kUseBuf:        msgGSerdeG.GetKeySerdeG().UsedBufferPool(),
+		vUseBuf:        msgGSerdeG.GetValSerdeG().UsedBufferPool(),
 	}
 	r.BaseProcessorG.ProcessingFuncG = r.ProcessAndReturn
 	return r
@@ -45,7 +49,7 @@ func (p *RoundRobinOutputProcessorG[KIn, VIn]) Name() string {
 func (p *RoundRobinOutputProcessorG[KIn, VIn]) ProcessAndReturn(ctx context.Context,
 	msg commtypes.MessageG[KIn, VIn],
 ) ([]commtypes.MessageG[any, any], error) {
-	msgSerOp, err := commtypes.MsgGToMsgSer(msg, p.msgGSerdeG.GetKeySerdeG(), p.msgGSerdeG.GetValSerdeG())
+	msgSerOp, kbuf, vbuf, err := commtypes.MsgGToMsgSer(msg, p.msgGSerdeG.GetKeySerdeG(), p.msgGSerdeG.GetValSerdeG())
 	if err != nil {
 		return nil, err
 	}
@@ -55,6 +59,14 @@ func (p *RoundRobinOutputProcessorG[KIn, VIn]) ProcessAndReturn(ctx context.Cont
 		p.curSubstream = (p.curSubstream + 1) % p.producer.Stream().NumPartition()
 		p.ectx.TrackParFunc()(p.producer.TopicName(), par)
 		err = p.producer.ProduceData(ctx, msgSer, par)
+		if p.kUseBuf && msgSer.KeyEnc != nil && kbuf != nil {
+			*kbuf = msgSer.KeyEnc
+			commtypes.PushBuffer(kbuf)
+		}
+		if p.vUseBuf && msgSer.ValueEnc != nil && vbuf != nil {
+			*vbuf = msgSer.ValueEnc
+			commtypes.PushBuffer(vbuf)
+		}
 		return nil, err
 	} else {
 		return nil, nil

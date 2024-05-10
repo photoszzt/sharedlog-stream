@@ -13,6 +13,8 @@ type FixedSubstreamOutputProcessorG[KIn, VIn any] struct {
 	// procTimeStats stats.PrintLogStatsCollector[int64]
 	BaseProcessorG[KIn, VIn, any, any]
 	fixedSubstream uint8
+	kUseBuf        bool
+	vUseBuf        bool
 }
 
 var _ ProcessorG[int, int, any, any] = &FixedSubstreamOutputProcessorG[int, int]{}
@@ -28,6 +30,8 @@ func NewFixedSubstreamOutputProcessorG[KIn, VIn any](processTimeTag string,
 		BaseProcessorG: BaseProcessorG[KIn, VIn, any, any]{},
 		msgGSerdeG:     msgGSerdeG,
 		// procTimeStats:  stats.NewPrintLogStatsCollector[int64](processTimeTag),
+		kUseBuf: msgGSerdeG.GetKeySerdeG().UsedBufferPool(),
+		vUseBuf: msgGSerdeG.GetValSerdeG().UsedBufferPool(),
 	}
 	r.BaseProcessorG.ProcessingFuncG = r.ProcessAndReturn
 	return r
@@ -46,7 +50,7 @@ func (p *FixedSubstreamOutputProcessorG[KIn, VIn]) ProcessAndReturn(ctx context.
 ) ([]commtypes.MessageG[any, any], error) {
 	// procTime := time.Since(msg.StartProcTime)
 	// p.procTimeStats.AddSample(procTime.Nanoseconds())
-	msgSerOp, err := commtypes.MsgGToMsgSer(msg, p.msgGSerdeG.GetKeySerdeG(), p.msgGSerdeG.GetValSerdeG())
+	msgSerOp, kbuf, vbuf, err := commtypes.MsgGToMsgSer(msg, p.msgGSerdeG.GetKeySerdeG(), p.msgGSerdeG.GetValSerdeG())
 	if err != nil {
 		return nil, err
 	}
@@ -55,6 +59,14 @@ func (p *FixedSubstreamOutputProcessorG[KIn, VIn]) ProcessAndReturn(ctx context.
 		err := p.producer.ProduceData(ctx, msgSer, p.fixedSubstream)
 		if err != nil {
 			return nil, err
+		}
+		if p.kUseBuf && msgSer.KeyEnc != nil && kbuf != nil {
+			*kbuf = msgSer.KeyEnc
+			commtypes.PushBuffer(kbuf)
+		}
+		if p.vUseBuf && msgSer.ValueEnc != nil && vbuf != nil {
+			*vbuf = msgSer.ValueEnc
+			commtypes.PushBuffer(vbuf)
 		}
 	}
 	return nil, nil
