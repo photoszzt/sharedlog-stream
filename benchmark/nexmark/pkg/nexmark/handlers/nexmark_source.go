@@ -93,7 +93,7 @@ func (h *nexmarkSourceHandler) process(ctx context.Context, args *nexmarkSrcProc
 			Value: optional.Some(nextEvent.Event),
 		}
 	}
-	msgEncoded, err := h.msgSerde.Encode(msg)
+	msgEncoded, _, err := h.msgSerde.Encode(msg)
 	if err != nil {
 		return common.GenErrFnOutput(fmt.Errorf("msg serialization failed: %v", err))
 	}
@@ -280,7 +280,7 @@ func (h *nexmarkSourceHandler) propagateScaleFence(m *txn_data.ControlMetadata, 
 		Mark:       commtypes.SCALE_FENCE,
 		ScaleEpoch: m.Epoch,
 	}
-	encoded, err := h.epochMarkerSerde.Encode(txnMarker)
+	encoded, _, err := h.epochMarkerSerde.Encode(txnMarker)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -423,7 +423,7 @@ func (h *nexmarkSourceHandler) genEndMark(startTime time.Time, parNum uint8,
 		StartTime: startTime.UnixMilli(),
 		ProdIndex: parNum,
 	}
-	encoded, err := h.epochMarkerSerde.Encode(marker)
+	encoded, _, err := h.epochMarkerSerde.Encode(marker)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -444,7 +444,7 @@ func (h *nexmarkSourceHandler) genFirstChkpt(ctx context.Context,
 		StartTime: 1,
 		ProdIndex: parNum,
 	}
-	encoded, err := h.epochMarkerSerde.Encode(marker)
+	encoded, _, err := h.epochMarkerSerde.Encode(marker)
 	if err != nil {
 		return err
 	}

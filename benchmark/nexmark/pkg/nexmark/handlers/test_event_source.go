@@ -64,12 +64,13 @@ func (h *testEventSource) eventGeneration(ctx context.Context, sp *common.TestSo
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
+	useBuf := msgSerde.UsedBufferPool()
 	for _, event := range events.EventsArr {
 		msg := commtypes.Message{
 			Key:   nil,
 			Value: &event,
 		}
-		msgEncoded, err := msgSerde.Encode(&msg)
+		msgEncoded, b, err := msgSerde.Encode(&msg)
 		if err != nil {
 			return common.GenErrFnOutput(fmt.Errorf("msg serialization failed: %v", err))
 		}
@@ -77,6 +78,10 @@ func (h *testEventSource) eventGeneration(ctx context.Context, sp *common.TestSo
 			commtypes.EmptyProducerId)
 		if err != nil {
 			return common.GenErrFnOutput(err)
+		}
+		if useBuf && b != nil {
+			*b = msgEncoded
+			commtypes.PushBuffer(b)
 		}
 	}
 	return &common.FnOutput{Success: true}

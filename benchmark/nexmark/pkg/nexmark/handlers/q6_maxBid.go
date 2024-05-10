@@ -51,7 +51,7 @@ func (h *q6MaxBid) setupSerde(serdeFormat commtypes.SerdeFormat) *common.FnOutpu
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	asSerde, err := ntypes.GetAuctionIDSellerSerdeG(serdeFormat)
+	asSerde, err := ntypes.GetAuctionIdSellerSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

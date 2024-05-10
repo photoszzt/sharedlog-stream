@@ -102,7 +102,7 @@ func (h *q6JoinStreamHandler) setupSerde(serdeFormat commtypes.SerdeFormat) *com
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	asSerde, err := ntypes.GetAuctionIDSellerSerdeG(serdeFormat)
+	asSerde, err := ntypes.GetAuctionIdSellerSerdeG(serdeFormat)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
