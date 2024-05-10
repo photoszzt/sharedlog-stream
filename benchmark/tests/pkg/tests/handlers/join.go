@@ -360,7 +360,13 @@ func pushMsgToStream(ctx context.Context, key int, val commtypes.ValueTimestampG
 	log *sharedlog_stream.ShardedSharedLogStream, producerId commtypes.ProducerId,
 ) error {
 	msg := commtypes.MessageG[int, commtypes.ValueTimestampG[string]]{Key: optional.Some(key), Value: optional.Some(val)}
-	encoded, err := msgSerde.Encode(msg)
+	encoded, b, err := msgSerde.Encode(msg)
+	defer func() {
+		if msgSerde.UsedBufferPool() && b != nil {
+			*b = encoded
+			commtypes.PushBuffer(b)
+		}
+	}()
 	if err != nil {
 		return err
 	}
@@ -378,8 +384,10 @@ func pushMsgsToSink[K, V any](ctx context.Context, sink producer_consumer.Produc
 	msgs []commtypes.MessageG[K, V],
 	outMsgSerde commtypes.MessageGSerdeG[K, V],
 ) error {
+	kUseBuf := outMsgSerde.GetKeySerdeG().UsedBufferPool()
+	vUseBuf := outMsgSerde.GetValSerdeG().UsedBufferPool()
 	for _, msg := range msgs {
-		msgSerOp, err := commtypes.MsgGToMsgSer(msg, outMsgSerde.GetKeySerdeG(), outMsgSerde.GetValSerdeG())
+		msgSerOp, kbuf, vbuf, err := commtypes.MsgGToMsgSer(msg, outMsgSerde.GetKeySerdeG(), outMsgSerde.GetValSerdeG())
 		if err != nil {
 			return err
 		}
@@ -388,6 +396,14 @@ func pushMsgsToSink[K, V any](ctx context.Context, sink producer_consumer.Produc
 			err = sink.ProduceData(ctx, msgSer, 0)
 			if err != nil {
 				return err
+			}
+			if kUseBuf && kbuf != nil {
+				*kbuf = msgSer.KeyEnc
+				commtypes.PushBuffer(kbuf)
+			}
+			if vUseBuf && vbuf != nil {
+				*vbuf = msgSer.ValueEnc
+				commtypes.PushBuffer(vbuf)
 			}
 		}
 	}
