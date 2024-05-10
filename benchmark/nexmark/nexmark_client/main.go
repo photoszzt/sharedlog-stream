@@ -51,7 +51,7 @@ func invokeTestSrcFunc(client *http.Client, srcInvokeConfig common.SrcInvokeConf
 	url := common.BuildFunctionUrl(FLAGS_faas_gateway, "testSrc")
 	fmt.Printf("func source url is %v\n", url)
 	if err := common.JsonPostRequest(client, url, srcInvokeConfig.NodeConstraint, &src, response); err != nil {
-		log.Error().Msgf("source request failed: %v", err)
+		log.Error().Err(err).Msg("source request failed")
 	} else if !response.Success {
 		log.Error().Msgf("source request failed: %s", response.Message)
 	}

@@ -140,7 +140,7 @@ func (gp *GeneratorParams) InvokeSourceFunc(client *http.Client,
 	url := common.BuildFunctionUrl(gp.FaasGateway, "source")
 	fmt.Printf("func source url is %v\n", url)
 	if err := common.JsonPostRequest(client, url, srcInvokeConfig.NodeConstraint, nexmarkConfig, response); err != nil {
-		log.Error().Msgf("source request failed: %v", err)
+		log.Error().Err(err).Msg("source request failed")
 	} else if !response.Success {
 		log.Error().Msgf("source request failed: %s", response.Message)
 	}

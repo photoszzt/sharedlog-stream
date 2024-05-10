@@ -3,12 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/transaction"
 	"sharedlog-stream/pkg/transaction/remote_txn_rpc"
+
+	"github.com/rs/zerolog/log"
 
 	"cs.utexas.edu/zjia/faas"
 	"cs.utexas.edu/zjia/faas/types"
@@ -28,7 +29,7 @@ type mngrFuncHanlder struct {
 func (h *mngrFuncHanlder) EncodeReply(reply *remote_txn_rpc.RTxnReply) []byte {
 	ret, _, err := h.replySerde.Encode(reply)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("replySerde encode fail")
 	}
 	return ret
 }
@@ -40,7 +41,7 @@ func (h *mngrFuncHanlder) GenErrOut(err error) []byte {
 	}
 	ret, _, err := h.replySerde.Encode(reply)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("replySerde encode fail")
 	}
 	return ret
 }
@@ -51,7 +52,7 @@ func (h *mngrFuncHanlder) GenEmptySucc() []byte {
 	}
 	ret, _, err := h.replySerde.Encode(reply)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err).Msg("replySerde encode fail")
 	}
 	return ret
 }

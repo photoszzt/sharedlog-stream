@@ -17,7 +17,7 @@ func InvokeFunc(client *http.Client, response *FnOutput,
 	defer wg.Done()
 	url := BuildFunctionUrl(gateway, funcName)
 	if err := JsonPostRequest(client, url, "", request, response); err != nil {
-		log.Error().Msgf("%s request failed: %v", funcName, err)
+		log.Error().Err(err).Msgf("%s request failed", funcName)
 	} else if !response.Success {
 		log.Error().Msgf("%s request failed: %s", funcName, response.Message)
 	}
@@ -39,7 +39,7 @@ func GetSerdeFormat(fmtStr string) commtypes.SerdeFormat {
 func JsonPostRequest(client *http.Client, url string, nodeConstraint string, request interface{}, response interface{}) error {
 	encoded, err := json.Marshal(request)
 	if err != nil {
-		log.Fatal().Msgf("failed to encode JSON request: %v", err)
+		log.Fatal().Err(err).Msg("failed to encode JSON request")
 		return fmt.Errorf("failed to encode JSON request: %v", err)
 	}
 	fmt.Printf("encoded json is %v, node constraint is %s\n", string(encoded), nodeConstraint)
@@ -63,7 +63,7 @@ func JsonPostRequest(client *http.Client, url string, nodeConstraint string, req
 		return err
 	}
 	if err := json.NewDecoder(reader).Decode(response); err != nil {
-		log.Fatal().Msgf("failed to decode JSON response: %v", err)
+		log.Fatal().Err(err).Msg("failed to decode JSON response")
 		return fmt.Errorf("failed to decode JSON response: %v", err)
 	}
 	return nil
