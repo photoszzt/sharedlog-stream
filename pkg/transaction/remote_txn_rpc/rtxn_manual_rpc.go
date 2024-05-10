@@ -39,7 +39,7 @@ func NewRTxnRpcClient(faas_gateway string, nodeConstraint string, serdeFormat co
 			Transport: &http.Transport{
 				IdleConnTimeout: 30 * time.Second,
 			},
-			Timeout: time.Duration(5) * time.Second,
+			Timeout: time.Duration(10) * time.Second,
 		},
 		funcUrl:        fmt.Sprintf("http://%s/function/%s", faas_gateway, RTxnFuncName),
 		nodeConstraint: nodeConstraint,

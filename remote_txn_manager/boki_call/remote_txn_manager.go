@@ -24,12 +24,13 @@ func init() {
 type mngrFuncHanlder struct {
 	replySerde commtypes.SerdeG[*remote_txn_rpc.RTxnReply]
 	env        types.Environment
+	r          *transaction.RemoteTxnManager
 }
 
 func (h *mngrFuncHanlder) EncodeReply(reply *remote_txn_rpc.RTxnReply) []byte {
 	ret, _, err := h.replySerde.Encode(reply)
 	if err != nil {
-		log.Fatal().Err(err).Msg("replySerde encode fail")
+		log.Error().Err(err).Msg("replySerde encode fail")
 	}
 	return ret
 }
@@ -41,7 +42,7 @@ func (h *mngrFuncHanlder) GenErrOut(err error) []byte {
 	}
 	ret, _, err := h.replySerde.Encode(reply)
 	if err != nil {
-		log.Fatal().Err(err).Msg("replySerde encode fail")
+		log.Error().Err(err).Msg("replySerde encode fail")
 	}
 	return ret
 }
@@ -52,7 +53,7 @@ func (h *mngrFuncHanlder) GenEmptySucc() []byte {
 	}
 	ret, _, err := h.replySerde.Encode(reply)
 	if err != nil {
-		log.Fatal().Err(err).Msg("replySerde encode fail")
+		log.Error().Err(err).Msg("replySerde encode fail")
 	}
 	return ret
 }
@@ -63,10 +64,10 @@ func (h *mngrFuncHanlder) Call(ctx context.Context, input []byte) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
-	r := transaction.NewRemoteTxnManager(h.env, commtypes.SerdeFormat(in.SerdeFormat))
 	switch in.RpcType {
 	case remote_txn_rpc.Init:
-		ret, err := r.Init(ctx, in.Init)
+		h.r.UpdateSerdeFormat(commtypes.SerdeFormat(in.SerdeFormat))
+		ret, err := h.r.Init(ctx, in.Init)
 		if err != nil {
 			return h.GenErrOut(err), nil
 		}
@@ -76,7 +77,7 @@ func (h *mngrFuncHanlder) Call(ctx context.Context, input []byte) ([]byte, error
 		}
 		return h.EncodeReply(reply), nil
 	case remote_txn_rpc.CommitTxnAsync:
-		ret, err := r.CommitTxnAsyncComplete(ctx, in.MetaMsg)
+		ret, err := h.r.CommitTxnAsyncComplete(ctx, in.MetaMsg)
 		if err != nil {
 			return h.GenErrOut(err), nil
 		}
@@ -86,19 +87,19 @@ func (h *mngrFuncHanlder) Call(ctx context.Context, input []byte) ([]byte, error
 		}
 		return h.EncodeReply(reply), nil
 	case remote_txn_rpc.AppendTpPar:
-		err := r.AppendTpPar(ctx, in.MetaMsg)
+		err := h.r.AppendTpPar(ctx, in.MetaMsg)
 		if err != nil {
 			return h.GenErrOut(err), nil
 		}
 		return h.GenEmptySucc(), nil
 	case remote_txn_rpc.AppendConsumedOff:
-		err := r.AppendConsumedOffset(ctx, in.ConsumedOff)
+		err := h.r.AppendConsumedOffset(ctx, in.ConsumedOff)
 		if err != nil {
 			return h.GenErrOut(err), nil
 		}
 		return h.GenEmptySucc(), nil
 	case remote_txn_rpc.AbortTxn:
-		err := r.AbortTxn(ctx, in.MetaMsg)
+		err := h.r.AbortTxn(ctx, in.MetaMsg)
 		if err != nil {
 			return h.GenErrOut(err), nil
 		}
@@ -113,6 +114,7 @@ func (f *mngrFuncHandlerFactory) New(env types.Environment, funcName string) (ty
 	return &mngrFuncHanlder{
 		env:        env,
 		replySerde: s,
+		r:          transaction.NewRemoteTxnManager(env),
 	}, nil
 }
 

@@ -2,6 +2,7 @@ package transaction
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
@@ -14,6 +15,7 @@ import (
 	"sync"
 
 	"cs.utexas.edu/zjia/faas/types"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -74,14 +76,17 @@ type RemoteTxnManager struct {
 	prod_id_map map[string]commtypes.ProducerId
 }
 
-func NewRemoteTxnManager(env types.Environment, serdeFormat commtypes.SerdeFormat) *RemoteTxnManager {
+func NewRemoteTxnManager(env types.Environment) *RemoteTxnManager {
 	tm := &RemoteTxnManager{
 		env:         env,
-		serdeFormat: serdeFormat,
 		tm_map:      make(map[string]*TransactionManager),
 		prod_id_map: make(map[string]commtypes.ProducerId),
 	}
 	return tm
+}
+
+func (s *RemoteTxnManager) UpdateSerdeFormat(serdeFormat commtypes.SerdeFormat) {
+	s.serdeFormat = serdeFormat
 }
 
 func (s *RemoteTxnManager) Init(ctx context.Context, in *remote_txn_rpc.InitArg) (*remote_txn_rpc.InitReply, error) {
@@ -146,7 +151,10 @@ func (s *RemoteTxnManager) Init(ctx context.Context, in *remote_txn_rpc.InitArg)
 	}
 	s.mu.Lock()
 	s.tm_map[in.TransactionalId] = tm
-	s.prod_id_map[in.TransactionalId] = tm.prodId
+	s.prod_id_map[in.TransactionalId] = commtypes.ProducerId{
+		TaskId:    tm.prodId.TaskId,
+		TaskEpoch: tm.prodId.TaskEpoch,
+	}
 	s.mu.Unlock()
 	debug.Fprintf(os.Stderr, "[%d] done init %s\n", in.SubstreamNum, in.TransactionalId)
 	return &remote_txn_rpc.InitReply{
@@ -160,11 +168,14 @@ func (s *RemoteTxnManager) Init(ctx context.Context, in *remote_txn_rpc.InitArg)
 
 func (s *RemoteTxnManager) AppendTpPar(ctx context.Context, in *txn_data.TxnMetaMsg) error {
 	debug.Fprintf(os.Stderr, "handle AppendTpPar taskId %#x, taskEpoch %#x, transactionalId %v, state %v, tps %v\n",
-		in.ProdId.TaskId, in.ProdId.TaskEpoch, in.TransactionalId, in.State, in.TopicPartitions)
+		in.ProdId.GetTaskId(), in.ProdId.GetTaskEpoch(), in.TransactionalId, in.State, in.TopicPartitions)
 	s.mu.Lock()
 	prodId := s.prod_id_map[in.TransactionalId]
 	if prodId.TaskEpoch != in.ProdId.GetTaskEpoch() || prodId.TaskId != in.ProdId.GetTaskId() {
 		s.mu.Unlock()
+		log.Error().Uint64("recorded task id", prodId.TaskId).Uint32("recorded task epoch", prodId.TaskEpoch).Msg("stale producer")
+		fmt.Fprintf(os.Stderr, "stale producer recorded task id %#x, task epoch: %#x, got task id %#x, task epoch %#x\n",
+			prodId.TaskId, prodId.TaskEpoch, in.ProdId.GetTaskId(), in.ProdId.GetTaskEpoch())
 		return common_errors.ErrStaleProducer
 	}
 	tm := s.tm_map[in.TransactionalId]
@@ -197,6 +208,7 @@ func (s *RemoteTxnManager) AbortTxn(ctx context.Context, in *txn_data.TxnMetaMsg
 	prodId := s.prod_id_map[in.TransactionalId]
 	if prodId.TaskEpoch != in.ProdId.GetTaskEpoch() || prodId.TaskId != in.ProdId.GetTaskId() {
 		s.mu.Unlock()
+		log.Error().Msgf("recorded producer task id: %#x, task epoch: %#x", prodId.TaskId, prodId.TaskEpoch)
 		return common_errors.ErrStaleProducer
 	}
 	tm := s.tm_map[in.TransactionalId]
@@ -223,6 +235,7 @@ func (s *RemoteTxnManager) AppendConsumedOffset(ctx context.Context, in *remote_
 	prodId := s.prod_id_map[in.TransactionalId]
 	if prodId.TaskEpoch != in.ProdId.GetTaskEpoch() || prodId.TaskId != in.ProdId.GetTaskId() {
 		s.mu.Unlock()
+		log.Error().Msgf("recorded producer task id: %#x, task epoch: %#x", prodId.TaskId, prodId.TaskEpoch)
 		return common_errors.ErrStaleProducer
 	}
 	tm := s.tm_map[in.TransactionalId]
@@ -281,6 +294,7 @@ func (s *RemoteTxnManager) CommitTxnAsyncComplete(ctx context.Context, in *txn_d
 	prodId := s.prod_id_map[in.TransactionalId]
 	if prodId.TaskEpoch != in.ProdId.GetTaskEpoch() || prodId.TaskId != in.ProdId.GetTaskId() {
 		s.mu.Unlock()
+		log.Error().Msgf("recorded producer task id: %#x, task epoch: %#x", prodId.TaskId, prodId.TaskEpoch)
 		return nil, common_errors.ErrStaleProducer
 	}
 	tm := s.tm_map[in.TransactionalId]

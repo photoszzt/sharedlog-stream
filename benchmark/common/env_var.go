@@ -5,18 +5,13 @@ import (
 	"os"
 
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 func SetLogLevelFromEnv() {
 	logLevel := os.Getenv("LOG_LEVEL")
 	if level, err := zerolog.ParseLevel(logLevel); err == nil {
 		zerolog.SetGlobalLevel(level)
-	} else {
-		zerolog.SetGlobalLevel(zerolog.WarnLevel)
 	}
-
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 }
 
 func CheckCacheConfig() bool {
