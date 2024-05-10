@@ -23,6 +23,7 @@ import (
 type RemoteTxnManagerServer struct {
 	remote_txn_rpc.UnimplementedRemoteTxnMngrServer
 	RemoteTxnManager
+	env types.Environment
 }
 
 func (r *RemoteTxnManagerServer) AppendTpPar(ctx context.Context, in *txn_data.TxnMetaMsg) (*emptypb.Empty, error) {
@@ -54,13 +55,12 @@ func (s *RemoteTxnManagerServer) CommitTxnAsyncComplete(ctx context.Context, in 
 }
 
 func (s *RemoteTxnManagerServer) Init(ctx context.Context, in *remote_txn_rpc.InitArg) (*remote_txn_rpc.InitReply, error) {
-	return s.RemoteTxnManager.Init(ctx, in)
+	return s.RemoteTxnManager.Init(ctx, s.env, in)
 }
 
 func NewRemoteTxnManagerServer(env types.Environment, serdeFormat commtypes.SerdeFormat) *RemoteTxnManagerServer {
 	return &RemoteTxnManagerServer{
 		RemoteTxnManager: RemoteTxnManager{
-			env:         env,
 			serdeFormat: serdeFormat,
 			tm_map:      make(map[string]*TransactionManager),
 			prod_id_map: make(map[string]commtypes.ProducerId),
@@ -69,16 +69,14 @@ func NewRemoteTxnManagerServer(env types.Environment, serdeFormat commtypes.Serd
 }
 
 type RemoteTxnManager struct {
-	env         types.Environment
-	serdeFormat commtypes.SerdeFormat
 	mu          sync.Mutex // guard tm_map
+	serdeFormat commtypes.SerdeFormat
 	tm_map      map[string]*TransactionManager
 	prod_id_map map[string]commtypes.ProducerId
 }
 
-func NewRemoteTxnManager(env types.Environment) *RemoteTxnManager {
+func NewRemoteTxnManager() *RemoteTxnManager {
 	tm := &RemoteTxnManager{
-		env:         env,
 		tm_map:      make(map[string]*TransactionManager),
 		prod_id_map: make(map[string]commtypes.ProducerId),
 	}
@@ -89,9 +87,9 @@ func (s *RemoteTxnManager) UpdateSerdeFormat(serdeFormat commtypes.SerdeFormat) 
 	s.serdeFormat = serdeFormat
 }
 
-func (s *RemoteTxnManager) Init(ctx context.Context, in *remote_txn_rpc.InitArg) (*remote_txn_rpc.InitReply, error) {
+func (s *RemoteTxnManager) Init(ctx context.Context, env types.Environment, in *remote_txn_rpc.InitArg) (*remote_txn_rpc.InitReply, error) {
 	debug.Fprintf(os.Stderr, "handle Init with input: %v\n", in)
-	tm, err := NewTransactionManager(ctx, s.env, in.TransactionalId, s.serdeFormat)
+	tm, err := NewTransactionManager(ctx, env, in.TransactionalId, s.serdeFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +100,7 @@ func (s *RemoteTxnManager) Init(ctx context.Context, in *remote_txn_rpc.InitArg)
 	var offsetPairs []*remote_txn_rpc.OffsetPair
 	for _, inputTopicInfo := range in.InputStreamInfos {
 		inputTopicName := inputTopicInfo.GetTopicName()
-		stream, err := sharedlog_stream.NewShardedSharedLogStream(s.env, inputTopicName,
+		stream, err := sharedlog_stream.NewShardedSharedLogStream(env, inputTopicName,
 			uint8(inputTopicInfo.NumPartition), s.serdeFormat, in.GetBufMaxSize())
 		if err != nil {
 			return nil, err
@@ -126,7 +124,7 @@ func (s *RemoteTxnManager) Init(ctx context.Context, in *remote_txn_rpc.InitArg)
 		}
 	}
 	for _, outStreamInfo := range in.OutputStreamInfos {
-		stream, err := sharedlog_stream.NewShardedSharedLogStream(s.env, outStreamInfo.GetTopicName(),
+		stream, err := sharedlog_stream.NewShardedSharedLogStream(env, outStreamInfo.GetTopicName(),
 			uint8(outStreamInfo.NumPartition), s.serdeFormat, in.GetBufMaxSize())
 		if err != nil {
 			return nil, err
@@ -134,7 +132,7 @@ func (s *RemoteTxnManager) Init(ctx context.Context, in *remote_txn_rpc.InitArg)
 		tm.RecordTopicStreams(outStreamInfo.GetTopicName(), stream)
 	}
 	for _, kvsInfo := range in.KVChangelogInfos {
-		stream, err := sharedlog_stream.NewShardedSharedLogStream(s.env, kvsInfo.GetTopicName(),
+		stream, err := sharedlog_stream.NewShardedSharedLogStream(env, kvsInfo.GetTopicName(),
 			uint8(kvsInfo.GetNumPartition()), s.serdeFormat, in.GetBufMaxSize())
 		if err != nil {
 			return nil, err
@@ -142,7 +140,7 @@ func (s *RemoteTxnManager) Init(ctx context.Context, in *remote_txn_rpc.InitArg)
 		tm.RecordTopicStreams(kvsInfo.GetTopicName(), stream)
 	}
 	for _, wsInfo := range in.WinChangelogInfos {
-		stream, err := sharedlog_stream.NewShardedSharedLogStream(s.env, wsInfo.GetTopicName(),
+		stream, err := sharedlog_stream.NewShardedSharedLogStream(env, wsInfo.GetTopicName(),
 			uint8(wsInfo.GetNumPartition()), s.serdeFormat, in.GetBufMaxSize())
 		if err != nil {
 			return nil, err

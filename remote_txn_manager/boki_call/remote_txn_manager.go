@@ -21,10 +21,11 @@ func init() {
 	common.SetLogLevelFromEnv()
 }
 
+var r = transaction.NewRemoteTxnManager()
+
 type mngrFuncHanlder struct {
 	replySerde commtypes.SerdeG[*remote_txn_rpc.RTxnReply]
 	env        types.Environment
-	r          *transaction.RemoteTxnManager
 }
 
 func (h *mngrFuncHanlder) EncodeReply(reply *remote_txn_rpc.RTxnReply) []byte {
@@ -66,8 +67,8 @@ func (h *mngrFuncHanlder) Call(ctx context.Context, input []byte) ([]byte, error
 	}
 	switch in.RpcType {
 	case remote_txn_rpc.Init:
-		h.r.UpdateSerdeFormat(commtypes.SerdeFormat(in.SerdeFormat))
-		ret, err := h.r.Init(ctx, in.Init)
+		r.UpdateSerdeFormat(commtypes.SerdeFormat(in.SerdeFormat))
+		ret, err := r.Init(ctx, h.env, in.Init)
 		if err != nil {
 			return h.GenErrOut(err), nil
 		}
@@ -77,7 +78,7 @@ func (h *mngrFuncHanlder) Call(ctx context.Context, input []byte) ([]byte, error
 		}
 		return h.EncodeReply(reply), nil
 	case remote_txn_rpc.CommitTxnAsync:
-		ret, err := h.r.CommitTxnAsyncComplete(ctx, in.MetaMsg)
+		ret, err := r.CommitTxnAsyncComplete(ctx, in.MetaMsg)
 		if err != nil {
 			return h.GenErrOut(err), nil
 		}
@@ -87,19 +88,19 @@ func (h *mngrFuncHanlder) Call(ctx context.Context, input []byte) ([]byte, error
 		}
 		return h.EncodeReply(reply), nil
 	case remote_txn_rpc.AppendTpPar:
-		err := h.r.AppendTpPar(ctx, in.MetaMsg)
+		err := r.AppendTpPar(ctx, in.MetaMsg)
 		if err != nil {
 			return h.GenErrOut(err), nil
 		}
 		return h.GenEmptySucc(), nil
 	case remote_txn_rpc.AppendConsumedOff:
-		err := h.r.AppendConsumedOffset(ctx, in.ConsumedOff)
+		err := r.AppendConsumedOffset(ctx, in.ConsumedOff)
 		if err != nil {
 			return h.GenErrOut(err), nil
 		}
 		return h.GenEmptySucc(), nil
 	case remote_txn_rpc.AbortTxn:
-		err := h.r.AbortTxn(ctx, in.MetaMsg)
+		err := r.AbortTxn(ctx, in.MetaMsg)
 		if err != nil {
 			return h.GenErrOut(err), nil
 		}
@@ -114,7 +115,6 @@ func (f *mngrFuncHandlerFactory) New(env types.Environment, funcName string) (ty
 	return &mngrFuncHanlder{
 		env:        env,
 		replySerde: s,
-		r:          transaction.NewRemoteTxnManager(env),
 	}, nil
 }
 
