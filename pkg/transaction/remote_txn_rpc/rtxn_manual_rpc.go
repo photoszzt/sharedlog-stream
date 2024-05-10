@@ -33,6 +33,7 @@ type RTxnRpcClient struct {
 }
 
 func NewRTxnRpcClient(faas_gateway string, nodeConstraint string, serdeFormat commtypes.SerdeFormat) RTxnRpcClient {
+	s, _ := GetRTxnArgSerdeG(commtypes.MSGP)
 	return RTxnRpcClient{
 		client: &http.Client{
 			Transport: &http.Transport{
@@ -44,7 +45,7 @@ func NewRTxnRpcClient(faas_gateway string, nodeConstraint string, serdeFormat co
 		nodeConstraint: nodeConstraint,
 		readBuffer:     make([]byte, 0, 1024),
 		serdeFormat:    serdeFormat,
-		serde:          GetRTxnArgSerdeG(),
+		serde:          s,
 	}
 }
 
@@ -74,9 +75,10 @@ func (c *RTxnRpcClient) Init(ctx context.Context, in *InitArg) (*InitReply, erro
 		SerdeFormat: uint8(c.serdeFormat),
 		Init:        in,
 	}
-	ret, err := c.serde.Encode(arg)
+	ret, b, err := c.serde.Encode(arg)
 	defer func() {
-		commtypes.PushBuffer(&ret)
+		*b = ret
+		commtypes.PushBuffer(b)
 	}()
 	if err != nil {
 		return nil, err
@@ -99,9 +101,10 @@ func (c *RTxnRpcClient) AppendTpPar(ctx context.Context, in *txn_data.TxnMetaMsg
 		SerdeFormat: uint8(c.serdeFormat),
 		MetaMsg:     in,
 	}
-	ret, err := c.serde.Encode(arg)
+	ret, b, err := c.serde.Encode(arg)
 	defer func() {
-		commtypes.PushBuffer(&ret)
+		*b = ret
+		commtypes.PushBuffer(b)
 	}()
 	if err != nil {
 		return err
@@ -124,9 +127,10 @@ func (c *RTxnRpcClient) AbortTxn(ctx context.Context, in *txn_data.TxnMetaMsg) e
 		SerdeFormat: uint8(c.serdeFormat),
 		MetaMsg:     in,
 	}
-	ret, err := c.serde.Encode(arg)
+	ret, b, err := c.serde.Encode(arg)
 	defer func() {
-		commtypes.PushBuffer(&ret)
+		*b = ret
+		commtypes.PushBuffer(b)
 	}()
 	if err != nil {
 		return err
@@ -149,9 +153,10 @@ func (c *RTxnRpcClient) CommitTxnAsyncComplete(ctx context.Context, in *txn_data
 		SerdeFormat: uint8(c.serdeFormat),
 		MetaMsg:     in,
 	}
-	ret, err := c.serde.Encode(arg)
+	ret, b, err := c.serde.Encode(arg)
 	defer func() {
-		commtypes.PushBuffer(&ret)
+		*b = ret
+		commtypes.PushBuffer(b)
 	}()
 	if err != nil {
 		return nil, err
@@ -174,8 +179,9 @@ func (c *RTxnRpcClient) AppendConsumedOffset(ctx context.Context, in *ConsumedOf
 		SerdeFormat: uint8(c.serdeFormat),
 		ConsumedOff: in,
 	}
-	ret, err := c.serde.Encode(arg)
+	ret, b, err := c.serde.Encode(arg)
 	defer func() {
+		*b = ret
 		commtypes.PushBuffer(&ret)
 	}()
 	if err != nil {
