@@ -652,14 +652,14 @@ type (
 )
 
 var (
-	_ = SerdeG[int](&IntSerdeG{})
-	_ = Serde(&IntSerde{})
+	_ = SerdeG[int](IntSerdeG{})
+	_ = Serde(IntSerde{})
 )
 
 func (IntSerdeG) UsedBufferPool() bool { return true }
 func (IntSerde) UsedBufferPool() bool  { return true }
 
-func (s *IntSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
+func (s IntSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	if value == nil {
 		return nil, nil, nil
 	}
@@ -671,7 +671,7 @@ func (s *IntSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	return bs, b, nil
 }
 
-func (s *IntSerdeG) Encode(value int) ([]byte, *[]byte, error) {
+func (s IntSerdeG) Encode(value int) ([]byte, *[]byte, error) {
 	b := PopBuffer()
 	bs := *b
 	bs = Require(bs[:0], 4)
@@ -1030,7 +1030,7 @@ var (
 	_ = EncoderG[string](&StringEncoderG{})
 )
 
-func (e *StringEncoder) Encode(value interface{}) ([]byte, *[]byte, error) {
+func (e StringEncoder) Encode(value interface{}) ([]byte, *[]byte, error) {
 	if value == nil {
 		return nil, nil, nil
 	}
@@ -1038,7 +1038,7 @@ func (e *StringEncoder) Encode(value interface{}) ([]byte, *[]byte, error) {
 	return ImmutableBytesFromString(v), nil, nil
 }
 
-func (e *StringEncoderG) Encode(value string) ([]byte, *[]byte, error) {
+func (e StringEncoderG) Encode(value string) ([]byte, *[]byte, error) {
 	return ImmutableBytesFromString(value), nil, nil
 }
 
@@ -1052,14 +1052,14 @@ var (
 	_ = DecoderG[string](&StringDecoderG{})
 )
 
-func (d *StringDecoder) Decode(value []byte) (interface{}, error) {
+func (d StringDecoder) Decode(value []byte) (interface{}, error) {
 	if value == nil {
 		return nil, nil
 	}
 	return StringFromImmutableBytes(value), nil
 }
 
-func (d *StringDecoderG) Decode(value []byte) (string, error) {
+func (d StringDecoderG) Decode(value []byte) (string, error) {
 	if value == nil {
 		return "", nil
 	}
@@ -1077,12 +1077,12 @@ type StringSerdeG struct {
 }
 
 var (
-	_ = Serde(&StringSerde{})
-	_ = SerdeG[string](&StringSerdeG{})
+	_ = Serde(StringSerde{})
+	_ = SerdeG[string](StringSerdeG{})
 )
 
-func (*StringSerdeG) UsedBufferPool() bool { return false }
-func (*StringSerde) UsedBufferPool() bool  { return false }
+func (StringSerdeG) UsedBufferPool() bool { return false }
+func (StringSerde) UsedBufferPool() bool  { return false }
 
 type OptionalValSerde[V any] struct {
 	valSerde SerdeG[V]
