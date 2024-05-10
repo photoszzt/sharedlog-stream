@@ -25,9 +25,9 @@ func (m *MessageSerialized) ExtractInjectTimeMs() int64 {
 	return m.InjTMs
 }
 
-func convertToMsgSer(value interface{}, keySerde Serde, valSerde Serde) (*MessageSerialized, error) {
+func convertToMsgSer(value interface{}, keySerde Serde, valSerde Serde) (msg *MessageSerialized, kbuf *[]byte, vbuf *[]byte, err error) {
 	if value == nil {
-		return nil, nil
+		return nil, nil, nil, nil
 	}
 	v, ok := value.(*Message)
 	if !ok {
@@ -35,35 +35,34 @@ func convertToMsgSer(value interface{}, keySerde Serde, valSerde Serde) (*Messag
 		v = &vtmp
 	}
 	if v == nil {
-		return nil, nil
+		return nil, nil, nil, nil
 	}
-	var err error
 
 	var kenc []byte
 	if !utils.IsNil(v.Key) {
-		kenc, err = keySerde.Encode(v.Key)
+		kenc, kbuf, err = keySerde.Encode(v.Key)
 		if err != nil {
-			return nil, fmt.Errorf("fail to encode key: %v", err)
+			return nil, nil, nil, fmt.Errorf("fail to encode key: %v", err)
 		}
 	}
 
 	var venc []byte
 	if !utils.IsNil(v.Value) {
-		venc, err = valSerde.Encode(v.Value)
+		venc, vbuf, err = valSerde.Encode(v.Value)
 		if err != nil {
-			return nil, fmt.Errorf("fail encode val: %v", err)
+			return nil, nil, nil, fmt.Errorf("fail encode val: %v", err)
 		}
 	}
 	if kenc == nil && venc == nil {
-		return nil, nil
+		return nil, nil, nil, nil
 	}
-	msg := &MessageSerialized{
+	msg = &MessageSerialized{
 		KeyEnc:      kenc,
 		ValueEnc:    venc,
 		InjTMs:      v.InjT,
 		TimestampMs: v.Timestamp,
 	}
-	return msg, nil
+	return msg, kbuf, vbuf, nil
 }
 
 func decodeToMsg(msgSer *MessageSerialized, keySerde Serde, valSerde Serde) (interface{}, error) {
@@ -97,58 +96,65 @@ type MessageMsgpSerde struct {
 	valSerde Serde
 }
 
-var _ MessageSerde = &MessageMsgpSerde{}
+var _ MessageSerde = MessageMsgpSerde{}
 
-func (s MessageMsgpSerde) Encode(value interface{}) ([]byte, error) {
-	msgSer, err := convertToMsgSer(value, s.keySerde, s.valSerde)
+func (s MessageMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
+	msgSer, kbuf, vbuf, err := convertToMsgSer(value, s.keySerde, s.valSerde)
 	defer func() {
 		if msgSer != nil {
-			if s.keySerde.UsedBufferPool() && msgSer.KeyEnc != nil {
-				PushBuffer(&msgSer.KeyEnc)
+			if s.keySerde.UsedBufferPool() && kbuf != nil {
+				*kbuf = msgSer.KeyEnc
+				PushBuffer(kbuf)
 			}
-			if s.valSerde.UsedBufferPool() && msgSer.ValueEnc != nil {
-				PushBuffer(&msgSer.ValueEnc)
+			if s.valSerde.UsedBufferPool() && vbuf != nil {
+				*vbuf = msgSer.ValueEnc
+				PushBuffer(vbuf)
 			}
 		}
 	}()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if msgSer == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	b := PopBuffer()
 	buf := *b
-	return msgSer.MarshalMsg(buf[:0])
+	r, err := msgSer.MarshalMsg(buf[:0])
+	return r, b, err
 }
 
-func (s MessageMsgpSerde) EncodeAndRtnKVBin(value interface{}) ([]byte, []byte /* kEnc */, []byte /* vEnc */, error) {
-	msgSer, err := convertToMsgSer(value, s.keySerde, s.valSerde)
+func (s MessageMsgpSerde) EncodeAndRtnKVBin(value interface{}) (msgEnc []byte, kenc []byte /* kEnc */, venc []byte /* vEnc */, b *[]byte, err error) {
+	msgSer, kbuf, vbuf, err := convertToMsgSer(value, s.keySerde, s.valSerde)
 	defer func() {
 		if msgSer != nil {
-			if s.keySerde.UsedBufferPool() && msgSer.KeyEnc != nil {
-				PushBuffer(&msgSer.KeyEnc)
+			if s.keySerde.UsedBufferPool() && kbuf != nil {
+				*kbuf = msgSer.KeyEnc
+				PushBuffer(kbuf)
 			}
-			if s.valSerde.UsedBufferPool() && msgSer.ValueEnc != nil {
-				PushBuffer(&msgSer.ValueEnc)
+			if s.valSerde.UsedBufferPool() && vbuf != nil {
+				*vbuf = msgSer.ValueEnc
+				PushBuffer(vbuf)
 			}
 		}
 	}()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	if msgSer == nil {
-		return nil, nil, nil, nil
+		return nil, nil, nil, nil, nil
 	}
-	b := PopBuffer()
+	b = PopBuffer()
 	buf := *b
-	msgEnc, err := msgSer.MarshalMsg(buf[:0])
-	return msgEnc, msgSer.KeyEnc, msgSer.ValueEnc, err
+	msgEnc, err = msgSer.MarshalMsg(buf[:0])
+	kenc = msgSer.KeyEnc
+	venc = msgSer.ValueEnc
+	return msgEnc, kenc, venc, b, err
 }
 
-func (s MessageMsgpSerde) EncodeKey(key interface{}) ([]byte, error) {
+func (s MessageMsgpSerde) EncodeKey(key interface{}) ([]byte, *[]byte, error) {
 	if key == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	return s.keySerde.Encode(key)
 }
@@ -157,9 +163,9 @@ func (s MessageMsgpSerde) DecodeVal(val []byte) (interface{}, error) {
 	return s.valSerde.Decode(val)
 }
 
-func (s MessageMsgpSerde) EncodeVal(value interface{}) ([]byte, error) {
+func (s MessageMsgpSerde) EncodeVal(value interface{}) ([]byte, *[]byte, error) {
 	if value == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	return s.valSerde.Encode(value)
 }
@@ -182,44 +188,59 @@ type MessageJSONSerde struct {
 
 var _ MessageSerde = MessageJSONSerde{}
 
-func (s MessageJSONSerde) Encode(value interface{}) ([]byte, error) {
-	msgSer, err := convertToMsgSer(value, s.KeySerde, s.ValSerde)
+func (s MessageJSONSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
+	msgSer, kbuf, vbuf, err := convertToMsgSer(value, s.KeySerde, s.ValSerde)
 	defer func() {
 		if msgSer != nil {
 			if s.KeySerde.UsedBufferPool() && msgSer.KeyEnc != nil {
-				PushBuffer(&msgSer.KeyEnc)
+				*kbuf = msgSer.KeyEnc
+				PushBuffer(kbuf)
 			}
 			if s.ValSerde.UsedBufferPool() && msgSer.ValueEnc != nil {
-				PushBuffer(&msgSer.ValueEnc)
+				*vbuf = msgSer.ValueEnc
+				PushBuffer(vbuf)
 			}
 		}
 	}()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if msgSer == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
-	return json.Marshal(msgSer)
+	r, err := json.Marshal(msgSer)
+	return r, nil, err
 }
 
-func (s MessageJSONSerde) EncodeAndRtnKVBin(value interface{}) ([]byte, []byte /* kEnc */, []byte /* vEnc */, error) {
-	msg, err := convertToMsgSer(value, s.KeySerde, s.ValSerde)
+func (s MessageJSONSerde) EncodeAndRtnKVBin(value interface{}) ([]byte, []byte /* kEnc */, []byte /* vEnc */, *[]byte, error) {
+	msgSer, kbuf, vbuf, err := convertToMsgSer(value, s.KeySerde, s.ValSerde)
+	defer func() {
+		if msgSer != nil {
+			if s.KeySerde.UsedBufferPool() && msgSer.KeyEnc != nil {
+				*kbuf = msgSer.KeyEnc
+				PushBuffer(kbuf)
+			}
+			if s.ValSerde.UsedBufferPool() && msgSer.ValueEnc != nil {
+				*vbuf = msgSer.ValueEnc
+				PushBuffer(vbuf)
+			}
+		}
+	}()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
-	if msg == nil {
-		return nil, nil, nil, nil
+	if msgSer == nil {
+		return nil, nil, nil, nil, nil
 	}
-	msgEnc, err := json.Marshal(msg)
-	return msgEnc, msg.KeyEnc, msg.ValueEnc, err
+	msgEnc, err := json.Marshal(msgSer)
+	return msgEnc, msgSer.KeyEnc, msgSer.ValueEnc, nil, err
 }
 
-func (s MessageJSONSerde) EncodeKey(key interface{}) ([]byte, error) {
+func (s MessageJSONSerde) EncodeKey(key interface{}) ([]byte, *[]byte, error) {
 	return s.KeySerde.Encode(key)
 }
 
-func (s MessageJSONSerde) EncodeVal(value interface{}) ([]byte, error) {
+func (s MessageJSONSerde) EncodeVal(value interface{}) ([]byte, *[]byte, error) {
 	return s.ValSerde.Encode(value)
 }
 

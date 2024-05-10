@@ -53,36 +53,34 @@ func MsgSerToMsgG[K, V any](msgSer *MessageSerialized, keySerde SerdeG[K], valSe
 	return msg, nil
 }
 
-func MsgGToMsgSer[K, V any](value MessageG[K, V], keySerde SerdeG[K], valSerde SerdeG[V]) (optional.Option[MessageSerialized], error) {
-	var err error
-
+func MsgGToMsgSer[K, V any](value MessageG[K, V], keySerde SerdeG[K], valSerde SerdeG[V]) (msg optional.Option[MessageSerialized], kbuf, vbuf *[]byte, err error) {
 	var kenc []byte
 	k, ok := value.Key.Take()
 	if ok {
-		kenc, err = keySerde.Encode(k)
+		kenc, kbuf, err = keySerde.Encode(k)
 		if err != nil {
-			return optional.None[MessageSerialized](), fmt.Errorf("fail to encode key: %v", err)
+			return optional.None[MessageSerialized](), nil, nil, fmt.Errorf("fail to encode key: %v", err)
 		}
 	}
 
 	var venc []byte
 	v, ok := value.Value.Take()
 	if ok {
-		venc, err = valSerde.Encode(v)
+		venc, vbuf, err = valSerde.Encode(v)
 		if err != nil {
-			return optional.None[MessageSerialized](), fmt.Errorf("fail encode val: %v", err)
+			return optional.None[MessageSerialized](), nil, nil, fmt.Errorf("fail encode val: %v", err)
 		}
 	}
 	if kenc == nil && venc == nil {
-		return optional.None[MessageSerialized](), nil
+		return optional.None[MessageSerialized](), nil, nil, nil
 	}
-	msg := optional.Some(MessageSerialized{
+	msg = optional.Some(MessageSerialized{
 		KeyEnc:      kenc,
 		ValueEnc:    venc,
 		InjTMs:      value.InjTMs,
 		TimestampMs: value.TimestampMs,
 	})
-	return msg, nil
+	return msg, kbuf, vbuf, nil
 }
 
 type MessageGMsgpSerdeG[K, V any] struct {
@@ -93,25 +91,27 @@ type MessageGMsgpSerdeG[K, V any] struct {
 
 var _ MessageGSerdeG[int, int] = MessageGMsgpSerdeG[int, int]{}
 
-func (s MessageGMsgpSerdeG[K, V]) Encode(val MessageG[K, V]) ([]byte, error) {
-	msgSerOp, err := MsgGToMsgSer(val, s.keySerde, s.valSerde)
+func (s MessageGMsgpSerdeG[K, V]) Encode(val MessageG[K, V]) ([]byte, *[]byte, error) {
+	msgSerOp, kbuf, vbuf, err := MsgGToMsgSer(val, s.keySerde, s.valSerde)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	msgSer, ok := msgSerOp.Take()
 	if !ok {
-		return nil, nil
+		return nil, nil, nil
 	}
 	b := PopBuffer()
 	buf := *b
 	ret, err := msgSer.MarshalMsg(buf[:0])
-	if s.keySerde.UsedBufferPool() && msgSer.KeyEnc != nil {
-		PushBuffer(&msgSer.KeyEnc)
+	if s.keySerde.UsedBufferPool() && kbuf != nil {
+		*kbuf = msgSer.KeyEnc
+		PushBuffer(kbuf)
 	}
-	if s.valSerde.UsedBufferPool() && msgSer.ValueEnc != nil {
-		PushBuffer(&msgSer.ValueEnc)
+	if s.valSerde.UsedBufferPool() && vbuf != nil {
+		*vbuf = msgSer.ValueEnc
+		PushBuffer(vbuf)
 	}
-	return ret, err
+	return ret, b, err
 }
 
 func (s MessageGMsgpSerdeG[K, V]) Decode(value []byte) (MessageG[K, V], error) {
@@ -127,7 +127,7 @@ func (s MessageGMsgpSerdeG[K, V]) Decode(value []byte) (MessageG[K, V], error) {
 	return MsgSerToMsgG(&msgSer, s.keySerde, s.valSerde)
 }
 
-func (s MessageGMsgpSerdeG[K, V]) EncodeWithKVBytes(kBytes []byte, vBytes []byte, inj int64, ts int64) ([]byte, error) {
+func (s MessageGMsgpSerdeG[K, V]) EncodeWithKVBytes(kBytes []byte, vBytes []byte, inj int64, ts int64) ([]byte, *[]byte, error) {
 	msgSer := &MessageSerialized{
 		KeyEnc:      kBytes,
 		ValueEnc:    vBytes,
@@ -136,10 +136,17 @@ func (s MessageGMsgpSerdeG[K, V]) EncodeWithKVBytes(kBytes []byte, vBytes []byte
 	}
 	b := PopBuffer()
 	buf := *b
-	return msgSer.MarshalMsg(buf[:0])
+	r, err := msgSer.MarshalMsg(buf[:0])
+	return r, b, err
 }
-func (s MessageGMsgpSerdeG[K, V]) EncodeKey(key K) ([]byte, error)   { return s.keySerde.Encode(key) }
-func (s MessageGMsgpSerdeG[K, V]) EncodeVal(key V) ([]byte, error)   { return s.valSerde.Encode(key) }
+
+func (s MessageGMsgpSerdeG[K, V]) EncodeKey(key K) ([]byte, *[]byte, error) {
+	return s.keySerde.Encode(key)
+}
+
+func (s MessageGMsgpSerdeG[K, V]) EncodeVal(key V) ([]byte, *[]byte, error) {
+	return s.valSerde.Encode(key)
+}
 func (s MessageGMsgpSerdeG[K, V]) DecodeVal(value []byte) (V, error) { return s.valSerde.Decode(value) }
 func (s MessageGMsgpSerdeG[K, V]) GetKeySerdeG() SerdeG[K]           { return s.keySerde }
 func (s MessageGMsgpSerdeG[K, V]) GetValSerdeG() SerdeG[V]           { return s.valSerde }
@@ -152,24 +159,27 @@ type MessageGJSONSerdeG[K, V any] struct {
 
 var _ MessageGSerdeG[int, int] = MessageGJSONSerdeG[int, int]{}
 
-func (s MessageGJSONSerdeG[K, V]) Encode(value MessageG[K, V]) ([]byte, error) {
-	msgSerOp, err := MsgGToMsgSer(value, s.KeySerde, s.ValSerde)
+func (s MessageGJSONSerdeG[K, V]) Encode(value MessageG[K, V]) ([]byte, *[]byte, error) {
+	msgSerOp, kbuf, vbuf, err := MsgGToMsgSer(value, s.KeySerde, s.ValSerde)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	msgSer, ok := msgSerOp.Take()
 	if !ok {
-		return nil, nil
+		return nil, nil, nil
 	}
 	defer func() {
-		if s.KeySerde.UsedBufferPool() && msgSer.KeyEnc != nil {
-			PushBuffer(&msgSer.KeyEnc)
+		if s.KeySerde.UsedBufferPool() && kbuf != nil {
+			*kbuf = msgSer.KeyEnc
+			PushBuffer(kbuf)
 		}
-		if s.ValSerde.UsedBufferPool() && msgSer.ValueEnc != nil {
-			PushBuffer(&msgSer.ValueEnc)
+		if s.ValSerde.UsedBufferPool() && vbuf != nil {
+			*vbuf = msgSer.ValueEnc
+			PushBuffer(vbuf)
 		}
 	}()
-	return json.Marshal(msgSer)
+	r, err := json.Marshal(msgSer)
+	return r, nil, err
 }
 
 func (s MessageGJSONSerdeG[K, V]) Decode(value []byte) (MessageG[K, V], error) {
@@ -180,7 +190,7 @@ func (s MessageGJSONSerdeG[K, V]) Decode(value []byte) (MessageG[K, V], error) {
 	return MsgSerToMsgG(&msgSer, s.KeySerde, s.ValSerde)
 }
 
-func (s MessageGJSONSerdeG[K, V]) EncodeWithKVBytes(kBytes []byte, vBytes []byte, inj int64, ts int64) ([]byte, error) {
+func (s MessageGJSONSerdeG[K, V]) EncodeWithKVBytes(kBytes []byte, vBytes []byte, inj int64, ts int64) ([]byte, *[]byte, error) {
 	msgSer := &MessageSerialized{
 		KeyEnc:      kBytes,
 		ValueEnc:    vBytes,
@@ -189,10 +199,17 @@ func (s MessageGJSONSerdeG[K, V]) EncodeWithKVBytes(kBytes []byte, vBytes []byte
 	}
 	b := PopBuffer()
 	buf := *b
-	return msgSer.MarshalMsg(buf[:0])
+	r, err := msgSer.MarshalMsg(buf[:0])
+	return r, b, err
 }
-func (s MessageGJSONSerdeG[K, V]) EncodeKey(key K) ([]byte, error)   { return s.KeySerde.Encode(key) }
-func (s MessageGJSONSerdeG[K, V]) EncodeVal(value V) ([]byte, error) { return s.ValSerde.Encode(value) }
+
+func (s MessageGJSONSerdeG[K, V]) EncodeKey(key K) ([]byte, *[]byte, error) {
+	return s.KeySerde.Encode(key)
+}
+
+func (s MessageGJSONSerdeG[K, V]) EncodeVal(value V) ([]byte, *[]byte, error) {
+	return s.ValSerde.Encode(value)
+}
 func (s MessageGJSONSerdeG[K, V]) DecodeVal(value []byte) (V, error) { return s.ValSerde.Decode(value) }
 func (s MessageGJSONSerdeG[K, V]) GetKeySerdeG() SerdeG[K]           { return s.KeySerde }
 func (s MessageGJSONSerdeG[K, V]) GetValSerdeG() SerdeG[V]           { return s.ValSerde }
