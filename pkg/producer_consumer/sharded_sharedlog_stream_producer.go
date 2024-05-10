@@ -3,6 +3,7 @@ package producer_consumer
 import (
 	"context"
 	"fmt"
+	"log"
 	"sharedlog-stream/pkg/commtypes"
 	eo_intr "sharedlog-stream/pkg/exactly_once_intr"
 	"sharedlog-stream/pkg/sharedlog_stream"
@@ -33,7 +34,8 @@ var _ = Producer(&ShardedSharedLogStreamProducer{})
 func NewShardedSharedLogStreamProducer(stream *sharedlog_stream.ShardedSharedLogStream,
 	config *StreamSinkConfig,
 ) *ShardedSharedLogStreamProducer {
-	msgSerSerde := commtypes.GetMessageSerializedSerdeG(config.Format)
+	msgSerSerde, err := commtypes.GetMessageSerializedSerdeG(config.Format)
+	log.Fatal(err)
 	return &ShardedSharedLogStreamProducer{
 		// msgSerde:      config.MsgSerde,
 		msgSerSerde:   msgSerSerde,
@@ -142,7 +144,7 @@ func (sls *ShardedSharedLogStreamProducer) ProduceCtrlMsg(ctx context.Context, m
 }
 
 func (sls *ShardedSharedLogStreamProducer) ProduceData(ctx context.Context, msgSer commtypes.MessageSerialized, parNum uint8) error {
-	bytes, err := sls.msgSerSerde.Encode(msgSer)
+	bytes, b, err := sls.msgSerSerde.Encode(msgSer)
 	if err != nil {
 		return err
 	}
@@ -155,8 +157,9 @@ func (sls *ShardedSharedLogStreamProducer) ProduceData(ctx context.Context, msgS
 				return err
 			}
 			_, err := sls.push(ctx, bytes, parNum, sharedlog_stream.StreamEntryMeta(false, false))
-			if sls.msgSerSerde.UsedBufferPool() && bytes != nil {
-				commtypes.PushBuffer(&bytes)
+			if sls.msgSerSerde.UsedBufferPool() && b != nil {
+				*b = bytes
+				commtypes.PushBuffer(b)
 			}
 			return err
 		}
@@ -165,7 +168,7 @@ func (sls *ShardedSharedLogStreamProducer) ProduceData(ctx context.Context, msgS
 }
 
 func (sls *ShardedSharedLogStreamProducer) ProduceDataNoLock(ctx context.Context, msgSer commtypes.MessageSerialized, parNum uint8) error {
-	bytes, err := sls.msgSerSerde.Encode(msgSer)
+	bytes, b, err := sls.msgSerSerde.Encode(msgSer)
 	if err != nil {
 		return err
 	}
@@ -178,8 +181,9 @@ func (sls *ShardedSharedLogStreamProducer) ProduceDataNoLock(ctx context.Context
 				return err
 			}
 			_, err := sls.push(ctx, bytes, parNum, sharedlog_stream.StreamEntryMeta(false, false))
-			if sls.msgSerSerde.UsedBufferPool() && bytes != nil {
-				commtypes.PushBuffer(&bytes)
+			if sls.msgSerSerde.UsedBufferPool() && b != nil {
+				*b = bytes
+				commtypes.PushBuffer(b)
 			}
 			return err
 		}
