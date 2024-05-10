@@ -83,7 +83,7 @@ func (h *sharedlogTranProcessHandler) getMsgSerde(sf uint8) *common.FnOutput {
 	if serdeFormat == commtypes.MSGP {
 		payloadTsSerde = datatype.PayloadTsMsgpSerdeG{}
 	} else {
-		payloadTsSerde = datatype.PayloadTsJsonSerdeG{}
+		payloadTsSerde = datatype.PayloadTsJSONSerdeG{}
 	}
 	h.msgSerde, err = commtypes.GetMsgGSerdeG[string](serdeFormat, commtypes.StringSerdeG{}, payloadTsSerde)
 	if err != nil {

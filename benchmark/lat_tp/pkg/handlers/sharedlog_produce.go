@@ -55,6 +55,7 @@ func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context
 	timeGapUs := time.Duration(1000000/sp.Tps) * time.Microsecond
 	startTime := time.Now()
 	next := time.Now()
+	useBuf := ptSerde.UsedBufferPool()
 
 	for {
 		// select {
@@ -72,7 +73,7 @@ func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context
 			Payload: content,
 			Ts:      next.UnixMicro(),
 		}
-		encoded, err := ptSerde.Encode(&pt)
+		encoded, b, err := ptSerde.Encode(&pt)
 		if err != nil {
 			commtypes.PushBuffer(&encoded)
 			return common.GenErrFnOutput(err)
@@ -87,7 +88,10 @@ func (h *sharedlogProduceBenchHandler) sharedlogProduceBench(ctx context.Context
 			commtypes.PushBuffer(&encoded)
 			return common.GenErrFnOutput(err)
 		}
-		commtypes.PushBuffer(&encoded)
+		if useBuf {
+			*b = encoded
+			commtypes.PushBuffer(b)
+		}
 		// streamPusher.MsgChan <- sharedlog_stream.PayloadToPush{Payload: encoded, Partitions: []uint8{uint8(parNum)}, IsControl: false}
 		// elapsed := time.Since(procStart)
 		// latencies = append(latencies, int(elapsed.Microseconds()))

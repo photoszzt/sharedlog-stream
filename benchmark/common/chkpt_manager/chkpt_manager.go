@@ -61,6 +61,7 @@ func PrintChkptMngrInput(c *common.ChkptMngrInput) {
 
 func (h *ChkptManagerHandler) genChkpt(ctx context.Context, input *common.ChkptMngrInput) error {
 	tpNameHash := h.srcStream.TopicNameHash()
+	useBuf := h.epochMarkerSerde.UsedBufferPool()
 	for i := uint8(0); i < input.SrcNumPart; i++ {
 		chkpt_tag := txn_data.ChkptTag(tpNameHash, i)
 		nameHashTag := sharedlog_stream.NameHashWithPartition(tpNameHash, i)
@@ -68,7 +69,7 @@ func (h *ChkptManagerHandler) genChkpt(ctx context.Context, input *common.ChkptM
 			Mark:      commtypes.CHKPT_MARK,
 			ProdIndex: i,
 		}
-		encoded, err := h.epochMarkerSerde.Encode(marker)
+		encoded, b, err := h.epochMarkerSerde.Encode(marker)
 		if err != nil {
 			return err
 		}
@@ -76,6 +77,10 @@ func (h *ChkptManagerHandler) genChkpt(ctx context.Context, input *common.ChkptM
 			sharedlog_stream.ControlRecordMeta, commtypes.EmptyProducerId)
 		if err != nil {
 			return err
+		}
+		if useBuf {
+			*b = encoded
+			commtypes.PushBuffer(b)
 		}
 	}
 	return nil

@@ -84,7 +84,7 @@ func main() {
 				Payload: content,
 				Ts:      next.UnixMicro(),
 			}
-			encoded, err := ptSerde.Encode(&payloadTs)
+			encoded, _, err := ptSerde.Encode(&payloadTs)
 			if err != nil {
 				panic(err)
 			}
