@@ -121,7 +121,13 @@ func (rws *SegmentedWindowStoreG[K, V]) PutWithoutPushToChangelog(
 func (rws *SegmentedWindowStoreG[K, V]) Get(ctx context.Context, key K, windowStartTimestamp int64) (V, bool, error) {
 	var v V
 	var err error
-	kBytes, err := rws.keySerde.Encode(key)
+	kBytes, b, err := rws.keySerde.Encode(key)
+	defer func() {
+		if rws.keySerde.UsedBufferPool() && b != nil {
+			*b = kBytes
+			commtypes.PushBuffer(b)
+		}
+	}()
 	if err != nil {
 		return v, false, err
 	}
@@ -151,11 +157,17 @@ func (rws *SegmentedWindowStoreG[K, V]) Fetch(ctx context.Context, key K, timeFr
 	tsFrom := timeFrom.UnixMilli()
 	tsTo := timeTo.UnixMilli()
 	var err error
-	kBytes, err := rws.keySerde.Encode(key)
+	kBytes, b, err := rws.keySerde.Encode(key)
+	defer func() {
+		if rws.keySerde.UsedBufferPool() && b != nil {
+			*b = kBytes
+			commtypes.PushBuffer(b)
+		}
+	}()
 	if err != nil {
 		return err
 	}
-	return rws.bytesStore.Fetch(ctx, kBytes, tsFrom, tsTo, func(ts int64, kBytes, vBytes []byte) error {
+	err = rws.bytesStore.Fetch(ctx, kBytes, tsFrom, tsTo, func(ts int64, kBytes, vBytes []byte) error {
 		k, err := rws.keySerde.Decode(kBytes)
 		if err != nil {
 			return err
@@ -166,6 +178,7 @@ func (rws *SegmentedWindowStoreG[K, V]) Fetch(ctx context.Context, key K, timeFr
 		}
 		return iterFunc(ts, k, v)
 	})
+	return err
 }
 
 func (rws *SegmentedWindowStoreG[K, V]) FetchWithKeyRange(ctx context.Context, keyFrom K, keyTo K, timeFrom time.Time, timeTo time.Time,
@@ -174,15 +187,30 @@ func (rws *SegmentedWindowStoreG[K, V]) FetchWithKeyRange(ctx context.Context, k
 	tsFrom := timeFrom.UnixMilli()
 	tsTo := timeTo.UnixMilli()
 	var err error
-	kFromBytes, err := rws.keySerde.Encode(keyFrom)
+	useBuf := rws.keySerde.UsedBufferPool()
+	kFromBytes, b1, err := rws.keySerde.Encode(keyFrom)
 	if err != nil {
+		if useBuf && b1 != nil {
+			*b1 = kFromBytes
+			commtypes.PushBuffer(b1)
+		}
 		return err
 	}
-	kToBytes, err := rws.keySerde.Encode(keyTo)
+	kToBytes, b2, err := rws.keySerde.Encode(keyTo)
 	if err != nil {
+		if useBuf {
+			if b1 != nil {
+				*b1 = kFromBytes
+				commtypes.PushBuffer(b1)
+			}
+			if b2 != nil {
+				*b2 = kFromBytes
+				commtypes.PushBuffer(b2)
+			}
+		}
 		return err
 	}
-	return rws.bytesStore.FetchWithKeyRange(ctx, kFromBytes, kToBytes, tsFrom, tsTo,
+	err = rws.bytesStore.FetchWithKeyRange(ctx, kFromBytes, kToBytes, tsFrom, tsTo,
 		func(ts int64, kBytes, vBytes []byte) error {
 			k, err := rws.keySerde.Decode(kBytes)
 			if err != nil {
@@ -194,6 +222,17 @@ func (rws *SegmentedWindowStoreG[K, V]) FetchWithKeyRange(ctx context.Context, k
 			}
 			return iterFunc(ts, k, v)
 		})
+	if useBuf {
+		if b1 != nil {
+			*b1 = kFromBytes
+			commtypes.PushBuffer(b1)
+		}
+		if b2 != nil {
+			*b2 = kFromBytes
+			commtypes.PushBuffer(b2)
+		}
+	}
+	return err
 }
 
 func (rws *SegmentedWindowStoreG[K, V]) FetchAll(ctx context.Context, timeFrom time.Time, timeTo time.Time,
