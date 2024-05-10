@@ -69,7 +69,7 @@ func main() {
 		stats_arr := make([]string, 0, 128)
 		go kafka_utils.ProcessReturnEvents(p, &replies, stats_arr)
 		for _, event := range events.EventsArr {
-			encoded, err := eventSerde.Encode(&event)
+			encoded, _, err := eventSerde.Encode(&event)
 			if err != nil {
 				panic(err)
 			}

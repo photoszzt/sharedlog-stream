@@ -54,17 +54,17 @@ func main() {
 	flag.Parse()
 
 	var serdeFormat commtypes.SerdeFormat
-	var valueEncoder commtypes.Encoder
+	var valueEncoder commtypes.SerdeG[*ntypes.Event]
 	if FLAGS_serdeFormat == "json" {
 		serdeFormat = commtypes.JSON
-		valueEncoder = ntypes.EventJSONSerde{}
+		valueEncoder = ntypes.EventJSONSerdeG{}
 	} else if FLAGS_serdeFormat == "msgp" {
 		serdeFormat = commtypes.MSGP
-		valueEncoder = ntypes.EventMsgpSerde{}
+		valueEncoder = ntypes.EventMsgpSerdeG{}
 	} else {
 		log.Error().Msgf("serde format is not recognized; default back to JSON")
 		serdeFormat = commtypes.JSON
-		valueEncoder = ntypes.EventJSONSerde{}
+		valueEncoder = ntypes.EventJSONSerdeG{}
 	}
 
 	iid_str := os.Getenv("IID")
@@ -148,7 +148,7 @@ func main() {
 			if err != nil {
 				log.Fatal().Msgf("next event failed: %s", err)
 			}
-			encoded, err := valueEncoder.Encode(nextEvent.Event)
+			encoded, _, err := valueEncoder.Encode(nextEvent.Event)
 			if err != nil {
 				log.Fatal().Msgf("event serialization failed: %s", err)
 			}
