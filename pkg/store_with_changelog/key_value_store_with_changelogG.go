@@ -18,6 +18,8 @@ type KeyValueStoreWithChangelogG[K, V any] struct {
 	trackFunc        exactly_once_intr.TrackProdSubStreamFunc
 	changelogManager *ChangelogManager[K, V]
 	// changelogProduce *stats.ConcurrentStatsCollector[int64]
+	kUseBuf bool
+	vUseBuf bool
 }
 
 var (
@@ -50,6 +52,8 @@ func NewKeyValueStoreWithChangelogG[K, V any](mp *MaterializeParam[K, V],
 		changelogManager: changelogManager,
 		// changelogProduce: stats.NewConcurrentStatsCollector[int64](mp.storeName+"-clProd",
 		// 	stats.DEFAULT_COLLECT_DURATION),
+		kUseBuf: mp.msgSerde.GetKeySerdeG().UsedBufferPool(),
+		vUseBuf: mp.msgSerde.GetValSerdeG().UsedBufferPool(),
 	}, nil
 }
 
@@ -90,11 +94,21 @@ func (st *KeyValueStoreWithChangelogG[K, V]) Put(ctx context.Context, key K, val
 		Value: value,
 	}
 	// pStart := stats.TimerBegin()
-	msgSerOp, err := commtypes.MsgGToMsgSer(msg, st.msgSerde.GetKeySerdeG(), st.msgSerde.GetValSerdeG())
+	msgSerOp, kbuf, vbuf, err := commtypes.MsgGToMsgSer(msg, st.msgSerde.GetKeySerdeG(), st.msgSerde.GetValSerdeG())
 	if err != nil {
 		return err
 	}
 	msgSer, ok := msgSerOp.Take()
+	defer func() {
+		if st.kUseBuf && kbuf != nil {
+			*kbuf = msgSer.KeyEnc
+			commtypes.PushBuffer(kbuf)
+		}
+		if st.vUseBuf && vbuf != nil {
+			*vbuf = msgSer.ValueEnc
+			commtypes.PushBuffer(vbuf)
+		}
+	}()
 	if !ok {
 		return nil
 	}
@@ -112,7 +126,7 @@ func (st *KeyValueStoreWithChangelogG[K, V]) BuildKeyMeta(ctx context.Context, k
 	kms[st.changelogManager.TopicName()] = make([]txn_data.KeyMaping, 0)
 	hasher := hashfuncs.ByteSliceHasher{}
 	return st.kvstore.Range(ctx, optional.None[K](), optional.None[K](), func(k K, v V) error {
-		kBytes, err := st.msgSerde.GetKeySerdeG().Encode(k)
+		kBytes, _, err := st.msgSerde.GetKeySerdeG().Encode(k)
 		if err != nil {
 			return err
 		}
@@ -150,11 +164,21 @@ func (st *KeyValueStoreWithChangelogG[K, V]) Delete(ctx context.Context, key K) 
 		Key:   optional.Some(key),
 		Value: optional.None[V](),
 	}
-	msgSerOp, err := commtypes.MsgGToMsgSer(msg, st.msgSerde.GetKeySerdeG(), st.msgSerde.GetValSerdeG())
+	msgSerOp, kbuf, vbuf, err := commtypes.MsgGToMsgSer(msg, st.msgSerde.GetKeySerdeG(), st.msgSerde.GetValSerdeG())
 	if err != nil {
 		return err
 	}
 	msgSer, ok := msgSerOp.Take()
+	defer func() {
+		if st.kUseBuf && kbuf != nil {
+			*kbuf = msgSer.KeyEnc
+			commtypes.PushBuffer(kbuf)
+		}
+		if st.vUseBuf && vbuf != nil {
+			*vbuf = msgSer.ValueEnc
+			commtypes.PushBuffer(vbuf)
+		}
+	}()
 	if ok {
 		err := st.changelogManager.produce(ctx, msgSer, st.kvstore.GetInstanceId())
 		if err != nil {

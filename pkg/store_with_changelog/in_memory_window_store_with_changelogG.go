@@ -22,6 +22,8 @@ type InMemoryWindowStoreWithChangelogG[K, V any] struct {
 	trackFunc        exactly_once_intr.TrackProdSubStreamFunc
 	changelogManager *ChangelogManager[commtypes.KeyAndWindowStartTsG[K], V]
 	parNum           uint8
+	kUseBuf          bool
+	vUseBuf          bool
 }
 
 func createChangelogManagerAndUpdateMsgSerde[K, V any](mp *MaterializeParam[K, V]) (
@@ -78,6 +80,8 @@ func NewInMemoryWindowStoreWithChangelogG[K, V any](
 		// changeLogProduce: stats.NewConcurrentInt64Collector(mp.storeName+"-clProd", stats.DEFAULT_COLLECT_DURATION),
 		// storePutLatency: stats.NewConcurrentInt64Collector(mp.storeName+"-storePutLatency", stats.DEFAULT_COLLECT_DURATION),
 		// trackFuncLat: stats.NewConcurrentStatsCollector[int64](mp.storeName+"-trackFuncLat", stats.DEFAULT_COLLECT_DURATION),
+		kUseBuf: msgSerde.GetKeySerdeG().UsedBufferPool(),
+		vUseBuf: msgSerde.GetValSerdeG().UsedBufferPool(),
 	}, nil
 }
 
@@ -108,11 +112,21 @@ func (st *InMemoryWindowStoreWithChangelogG[K, V]) Put(ctx context.Context,
 		Key:   optional.Some(keyTs),
 		Value: value,
 	}
-	msgSerOp, err := commtypes.MsgGToMsgSer(msg, st.msgSerde.GetKeySerdeG(), st.msgSerde.GetValSerdeG())
+	msgSerOp, kbuf, vbuf, err := commtypes.MsgGToMsgSer(msg, st.msgSerde.GetKeySerdeG(), st.msgSerde.GetValSerdeG())
 	if err != nil {
 		return err
 	}
 	msgSer, ok := msgSerOp.Take()
+	defer func() {
+		if st.kUseBuf && kbuf != nil {
+			*kbuf = msgSer.KeyEnc
+			commtypes.PushBuffer(kbuf)
+		}
+		if st.vUseBuf && vbuf != nil {
+			*vbuf = msgSer.ValueEnc
+			commtypes.PushBuffer(vbuf)
+		}
+	}()
 	if ok {
 		err := st.changelogManager.produce(ctx, msgSer, st.parNum)
 		if err != nil {
@@ -133,7 +147,7 @@ func (st *InMemoryWindowStoreWithChangelogG[K, V]) BuildKeyMeta(kms map[string][
 	kms[st.changelogManager.TopicName()] = make([]txn_data.KeyMaping, 0)
 	hasher := hashfuncs.ByteSliceHasher{}
 	return st.windowStore.IterAll(func(ts int64, key K, value V) error {
-		kBytes, err := st.originKeySerde.Encode(key)
+		kBytes, _, err := st.originKeySerde.Encode(key)
 		if err != nil {
 			return err
 		}
