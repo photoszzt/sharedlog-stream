@@ -19,6 +19,7 @@ type ConsumeSeqManager struct {
 	offsetMarkerSerde  commtypes.SerdeG[commtypes.OffsetMarker]
 	offsetLog          *sharedlog_stream.ShardedSharedLogStream
 	offsetLogMarkerTag uint64
+	useBuf             bool
 }
 
 func NewConsumeSeqManager(env types.Environment, serdeFormat commtypes.SerdeFormat,
@@ -37,6 +38,7 @@ func NewConsumeSeqManager(env types.Environment, serdeFormat commtypes.SerdeForm
 		offsetMarkerSerde:  offsetMarkerSerde,
 		offsetLog:          off,
 		offsetLogMarkerTag: txn_data.MarkerTag(off.TopicNameHash(), 0),
+		useBuf:             offsetMarkerSerde.UsedBufferPool(),
 	}, nil
 }
 
@@ -72,7 +74,13 @@ func (cm *ConsumeSeqManager) Track(ctx context.Context, offsetMarkers map[string
 	offsetMarker := commtypes.OffsetMarker{
 		ConSeqNums: offsetMarkers,
 	}
-	encoded, err := cm.offsetMarkerSerde.Encode(offsetMarker)
+	encoded, b, err := cm.offsetMarkerSerde.Encode(offsetMarker)
+	defer func() {
+		if cm.useBuf && b != nil {
+			*b = encoded
+			commtypes.PushBuffer(b)
+		}
+	}()
 	if err != nil {
 		return err
 	}

@@ -34,6 +34,7 @@ type EpochManager struct {
 	epochMngrName         string
 	prodId                commtypes.ProducerId
 	epochLogMarkerTag     uint64
+	useBuf                bool
 }
 
 func NewEpochManager(env types.Environment, epochMngrName string,
@@ -57,6 +58,7 @@ func NewEpochManager(env types.Environment, epochMngrName string,
 		epochMetaSerde:        epochMetaSerde,
 		epochLogMarkerTag:     txn_data.MarkerTag(log.TopicNameHash(), 0),
 		tpHashes:              make(map[string]uint64),
+		useBuf:                epochMetaSerde.UsedBufferPool(),
 	}, nil
 }
 
@@ -77,7 +79,13 @@ func (em *EpochManager) appendToEpochLog(ctx context.Context,
 	meta commtypes.EpochMarker, tags []uint64, additionalTopic []string,
 ) (uint64, int, error) {
 	debug.Assert(meta.Mark != commtypes.EMPTY, "mark should not be empty")
-	encoded, err := em.epochMetaSerde.Encode(meta)
+	encoded, b, err := em.epochMetaSerde.Encode(meta)
+	defer func() {
+		if em.useBuf && b != nil {
+			*b = encoded
+			commtypes.PushBuffer(b)
+		}
+	}()
 	if err != nil {
 		return 0, 0, err
 	}

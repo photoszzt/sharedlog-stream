@@ -330,7 +330,13 @@ func (cmm *ControlChannelManager) RestoreMappingAndWaitForPrevTask(
 }
 
 func (cmm *ControlChannelManager) appendToControlLog(ctx context.Context, cm txn_data.ControlMetadata) error {
-	msg_encoded, err := cmm.ctrlMetaSerde.Encode(cm)
+	msg_encoded, b, err := cmm.ctrlMetaSerde.Encode(cm)
+	defer func() {
+		if cmm.ctrlMetaSerde.UsedBufferPool() && b != nil {
+			*b = msg_encoded
+			commtypes.PushBuffer(b)
+		}
+	}()
 	if err != nil {
 		return err
 	}
