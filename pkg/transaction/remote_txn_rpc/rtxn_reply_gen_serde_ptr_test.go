@@ -1,15 +1,15 @@
-package {{.PackageName}}
+package remote_txn_rpc
 
 import (
 	"reflect"
+	"sharedlog-stream/pkg/commtypes"
 	"testing"
-	{{.ExtraImports}}
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
-func GenTestEncodeDecode{{.TypeName}}(v *{{.TypeName}}, t *testing.T, serdeG {{.CommtypesPrefix}}SerdeG[*{{.TypeName}}], serde {{.CommtypesPrefix}}Serde) {
+func GenTestEncodeDecodeRTxnReply(v *RTxnReply, t *testing.T, serdeG commtypes.SerdeG[*RTxnReply], serde commtypes.Serde) {
 	vl := reflect.ValueOf(v)
 	var opts cmp.Options
 	if vl.Comparable() {
@@ -17,7 +17,7 @@ func GenTestEncodeDecode{{.TypeName}}(v *{{.TypeName}}, t *testing.T, serdeG {{.
 			cmpopts.EquateComparable(),
 		)
 	}
-	opts = append(opts, cmpopts.IgnoreUnexported({{.TypeName}}{}))
+	opts = append(opts, cmpopts.IgnoreUnexported(RTxnReply{}))
 
 	bts, buf, err := serdeG.Encode(v)
 	if err != nil {
@@ -32,7 +32,7 @@ func GenTestEncodeDecode{{.TypeName}}(v *{{.TypeName}}, t *testing.T, serdeG {{.
 	}
 	if serdeG.UsedBufferPool() {
 		*buf = bts
-		{{.CommtypesPrefix}}PushBuffer(buf)
+		commtypes.PushBuffer(buf)
 	}
 
 	bts, buf, err = serde.Encode(v)
@@ -48,16 +48,16 @@ func GenTestEncodeDecode{{.TypeName}}(v *{{.TypeName}}, t *testing.T, serdeG {{.
 	}
 	if serde.UsedBufferPool() {
 		*buf = bts
-		{{.CommtypesPrefix}}PushBuffer(buf)
+		commtypes.PushBuffer(buf)
 	}
 }
 
-func TestSerde{{.TypeName}}(t *testing.T) {
-  v := &{{.TypeName}}{}
-  jsonSerdeG := {{.TypeName}}JSONSerdeG{}
-  jsonSerde := {{.TypeName}}JSONSerde{}
-  GenTestEncodeDecode{{.TypeName}}(v, t, jsonSerdeG, jsonSerde)
-  msgSerdeG := {{.TypeName}}MsgpSerdeG{}
-  msgSerde := {{.TypeName}}MsgpSerde{}
-  GenTestEncodeDecode{{.TypeName}}(v, t, msgSerdeG, msgSerde)
+func TestSerdeRTxnReply(t *testing.T) {
+	v := &RTxnReply{}
+	jsonSerdeG := RTxnReplyJSONSerdeG{}
+	jsonSerde := RTxnReplyJSONSerde{}
+	GenTestEncodeDecodeRTxnReply(v, t, jsonSerdeG, jsonSerde)
+	msgSerdeG := RTxnReplyMsgpSerdeG{}
+	msgSerde := RTxnReplyMsgpSerde{}
+	GenTestEncodeDecodeRTxnReply(v, t, msgSerdeG, msgSerde)
 }

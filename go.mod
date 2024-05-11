@@ -10,6 +10,7 @@ require (
 	github.com/gammazero/deque v0.2.1
 	github.com/go-redis/redis/v9 v9.0.0-beta.2
 	github.com/google/btree v1.1.2
+	github.com/google/go-cmp v0.6.0
 	github.com/minio/minio-go/v7 v7.0.67
 	github.com/rs/zerolog v1.26.1
 	github.com/spaolacci/murmur3 v1.1.0

@@ -118,6 +118,7 @@ func main() {
 	gen_serde_test("start_end_time", "StartEndTime", ntypes_path, "ntypes", false)
 	gen_serde_test("sum_and_count", "SumAndCount", ntypes_path, "ntypes", false)
 	gen_serde_test("price_time", "PriceTime", ntypes_path, "ntypes", false)
+	gen_serde_test("price_time_list", "PriceTimeList", ntypes_path, "ntypes", false)
 	gen_serde_test("person_time", "PersonTime", ntypes_path, "ntypes", false)
 	gen_serde_test("name_city_state_id", "NameCityStateId", ntypes_path, "ntypes", false)
 	gen_serde_test("bid_price", "BidPrice", ntypes_path, "ntypes", false)
@@ -126,6 +127,8 @@ func main() {
 	gen_serde_test("auction_id_count", "AuctionIdCount", ntypes_path, "ntypes", false)
 	gen_serde_test("auction_id_cnt_max", "AuctionIdCntMax", ntypes_path, "ntypes", false)
 	gen_serde_test("auction_id_category", "AuctionIdCategory", ntypes_path, "ntypes", false)
+	gen_serde_ptr_test("event", "Event", ntypes_path, "ntypes", false)
+	gen_serde_ptr_test("auction_bid", "AuctionBid", ntypes_path, "ntypes", false)
 
 	commtypes_path := "../pkg/commtypes/"
 	gen_serde("checkpoint", "Checkpoint", commtypes_path, "commtypes", true)
@@ -135,7 +138,14 @@ func main() {
 	gen_serde("offset_marker", "OffsetMarker", commtypes_path, "commtypes", true)
 	gen_serde("message_serialized", "MessageSerialized", commtypes_path, "commtypes", true)
 	gen_serde("time_window", "TimeWindow", commtypes_path, "commtypes", true)
-	gen_serde_test("time_window", "TimeWindow", commtypes_path, "commtypes", true)
+
+	gen_serde_test("checkpoint", "Checkpoint", commtypes_path, "commtypes", true)
+	gen_serde_test("epoch_meta", "EpochMarker", commtypes_path, "commtypes", true)
+	gen_serde_test("payload_arr", "PayloadArr", commtypes_path, "commtypes", true)
+	// gen_serde_test("table_snapshots", "TableSnapshots", commtypes_path, "commtypes", true)
+	// gen_serde_test("offset_marker", "OffsetMarker", commtypes_path, "commtypes", true)
+	gen_serde_test("message_serialized", "MessageSerialized", commtypes_path, "commtypes", true)
+	// gen_serde_test("time_window", "TimeWindow", commtypes_path, "commtypes", true)
 
 	txn_path := "../pkg/txn_data/"
 	gen_serde("control_meta", "ControlMetadata", txn_path, "txn_data", false)
@@ -143,14 +153,22 @@ func main() {
 	gen_serde_ptr("topic_partition", "TopicPartition", txn_path, "txn_data", false)
 	gen_serde("txn_metadata", "TxnMetadata", txn_path, "txn_data", false)
 
+	// gen_serde_test("control_meta", "ControlMetadata", txn_path, "txn_data", false)
 	gen_serde_test("offset_record", "OffsetRecord", txn_path, "txn_data", false)
+	gen_serde_ptr_test("topic_partition", "TopicPartition", txn_path, "txn_data", false)
+	gen_serde_test("txn_metadata", "TxnMetadata", txn_path, "txn_data", false)
 
 	rtxn_rpc_path := "../pkg/transaction/remote_txn_rpc/"
 	gen_serde_ptr("rtxn_arg", "RTxnArg", rtxn_rpc_path, "remote_txn_rpc", false)
 	gen_serde_ptr("rtxn_reply", "RTxnReply", rtxn_rpc_path, "remote_txn_rpc", false)
 
+	gen_serde_ptr_test("rtxn_arg", "RTxnArg", rtxn_rpc_path, "remote_txn_rpc", false)
+	gen_serde_ptr_test("rtxn_reply", "RTxnReply", rtxn_rpc_path, "remote_txn_rpc", false)
+
 	lat_tp_path := "../benchmark/lat_tp/pkg/data_type/"
 	gen_serde("payload_ts", "PayloadTs", lat_tp_path, "datatype", false)
+
+	gen_serde_test("payload_ts", "PayloadTs", lat_tp_path, "datatype", false)
 }
 
 //go:embed serde.tmpl

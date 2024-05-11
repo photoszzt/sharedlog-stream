@@ -4,10 +4,13 @@ package commtypes
 import (
 	"encoding/binary"
 	"math"
+	"reflect"
 	"sharedlog-stream/pkg/optional"
 	"testing"
 	"unsafe"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"golang.org/x/exp/constraints"
 	"golang.org/x/xerrors"
 )
@@ -1159,7 +1162,18 @@ func GenTestEncodeDecodeFloat[V constraints.Float](v V, t *testing.T, serdeG Ser
 	}
 }
 
-func GenTestEncodeDecode[V comparable](v V, t *testing.T, serdeG SerdeG[V], serde Serde) {
+func GenTestEncodeDecode[V any](v V, t *testing.T, serdeG SerdeG[V], serde Serde) {
+	vl := reflect.ValueOf(v)
+	var opts cmp.Options
+	if vl.Comparable() {
+		opts = append(opts,
+			cmpopts.EquateComparable(),
+		)
+	}
+	if vl.Kind() == reflect.Struct {
+		opts = append(opts, cmpopts.IgnoreUnexported(v))
+	}
+
 	bts, buf, err := serdeG.Encode(v)
 	if err != nil {
 		t.Fatal(err)
@@ -1168,7 +1182,7 @@ func GenTestEncodeDecode[V comparable](v V, t *testing.T, serdeG SerdeG[V], serd
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v != ret {
+	if !cmp.Equal(v, ret, opts...) {
 		t.Fatal("encode and decode doesn't give same value")
 	}
 	if serdeG.UsedBufferPool() {
@@ -1184,7 +1198,7 @@ func GenTestEncodeDecode[V comparable](v V, t *testing.T, serdeG SerdeG[V], serd
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v != r.(V) {
+	if !cmp.Equal(v, r.(V), opts...) {
 		t.Fatal("encode and decode doesn't give same value")
 	}
 	if serde.UsedBufferPool() {
