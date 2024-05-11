@@ -3,3 +3,4 @@ bin
 .vscode/*.log
 *_stats/
 *_stat
+gen_serde/gen_serde
