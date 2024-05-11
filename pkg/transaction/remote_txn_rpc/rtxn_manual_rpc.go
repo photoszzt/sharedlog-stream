@@ -36,9 +36,6 @@ func NewRTxnRpcClient(faas_gateway string, nodeConstraint string, serdeFormat co
 	s, _ := GetRTxnArgSerdeG(commtypes.MSGP)
 	return RTxnRpcClient{
 		client: &http.Client{
-			Transport: &http.Transport{
-				IdleConnTimeout: 30 * time.Second,
-			},
 			Timeout: time.Duration(10) * time.Second,
 		},
 		funcUrl:        fmt.Sprintf("http://%s/function/%s", faas_gateway, RTxnFuncName),
@@ -77,8 +74,10 @@ func (c *RTxnRpcClient) Init(ctx context.Context, in *InitArg) (*InitReply, erro
 	}
 	ret, b, err := c.serde.Encode(arg)
 	defer func() {
-		*b = ret
-		commtypes.PushBuffer(b)
+		if b != nil {
+			*b = ret
+			commtypes.PushBuffer(b)
+		}
 	}()
 	if err != nil {
 		return nil, err
@@ -103,8 +102,10 @@ func (c *RTxnRpcClient) AppendTpPar(ctx context.Context, in *txn_data.TxnMetaMsg
 	}
 	ret, b, err := c.serde.Encode(arg)
 	defer func() {
-		*b = ret
-		commtypes.PushBuffer(b)
+		if b != nil {
+			*b = ret
+			commtypes.PushBuffer(b)
+		}
 	}()
 	if err != nil {
 		return err
@@ -129,8 +130,10 @@ func (c *RTxnRpcClient) AbortTxn(ctx context.Context, in *txn_data.TxnMetaMsg) e
 	}
 	ret, b, err := c.serde.Encode(arg)
 	defer func() {
-		*b = ret
-		commtypes.PushBuffer(b)
+		if b != nil {
+			*b = ret
+			commtypes.PushBuffer(b)
+		}
 	}()
 	if err != nil {
 		return err
@@ -155,8 +158,10 @@ func (c *RTxnRpcClient) CommitTxnAsyncComplete(ctx context.Context, in *txn_data
 	}
 	ret, b, err := c.serde.Encode(arg)
 	defer func() {
-		*b = ret
-		commtypes.PushBuffer(b)
+		if b != nil {
+			*b = ret
+			commtypes.PushBuffer(b)
+		}
 	}()
 	if err != nil {
 		return nil, err
@@ -181,8 +186,10 @@ func (c *RTxnRpcClient) AppendConsumedOffset(ctx context.Context, in *ConsumedOf
 	}
 	ret, b, err := c.serde.Encode(arg)
 	defer func() {
-		*b = ret
-		commtypes.PushBuffer(&ret)
+		if b != nil {
+			*b = ret
+			commtypes.PushBuffer(&ret)
+		}
 	}()
 	if err != nil {
 		return err
