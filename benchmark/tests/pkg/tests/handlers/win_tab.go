@@ -25,7 +25,7 @@ func NewWinTabTestsHandler(env types.Environment) types.FuncHandler {
 	}
 }
 
-func getWindowStoreWithChangelog(env types.Environment, retainDuplicates bool) *store_with_changelog.InMemoryWindowStoreWithChangelogG[uint32, string] {
+func getWindowStoreWithChangelog(retainDuplicates bool) *store_with_changelog.InMemoryWindowStoreWithChangelogG[uint32, string] {
 	msgSerde := commtypes.MessageGJSONSerdeG[uint32, string]{
 		KeySerde: commtypes.Uint32SerdeG{},
 		ValSerde: commtypes.StringSerdeG{},
@@ -37,7 +37,6 @@ func getWindowStoreWithChangelog(env types.Environment, retainDuplicates bool) *
 		ParNum(0).
 		SerdeFormat(commtypes.JSON).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
-			Env:           env,
 			NumPartition:  1,
 			TimeOut:       common.SrcConsumeTimeout,
 			FlushDuration: time.Duration(5) * time.Millisecond,
@@ -77,9 +76,9 @@ func (wt *winTabTestsHandler) WinTests(ctx context.Context, sp *test_types.TestI
 	t := &tests.MockTesting{}
 	var winstore *store_with_changelog.InMemoryWindowStoreWithChangelogG[uint32, string]
 	if sp.TestName != "TestPutSameKeyTs" {
-		winstore = getWindowStoreWithChangelog(wt.env, false)
+		winstore = getWindowStoreWithChangelog(false)
 	} else {
-		winstore = getWindowStoreWithChangelog(wt.env, true)
+		winstore = getWindowStoreWithChangelog(true)
 	}
 	switch sp.TestName {
 	case "TestGetAndRange":

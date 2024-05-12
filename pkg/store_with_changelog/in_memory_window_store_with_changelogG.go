@@ -30,7 +30,7 @@ func createChangelogManagerAndUpdateMsgSerde[K, V any](mp *MaterializeParam[K, V
 	*ChangelogManager[commtypes.KeyAndWindowStartTsG[K], V],
 	commtypes.MessageGSerdeG[commtypes.KeyAndWindowStartTsG[K], V], error,
 ) {
-	changelog, err := CreateChangelog(mp.changelogParam.Env,
+	changelog, err := CreateChangelog(
 		mp.storeName, mp.changelogParam.NumPartition,
 		mp.serdeFormat, mp.bufMaxSize)
 	if err != nil {

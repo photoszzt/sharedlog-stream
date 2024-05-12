@@ -42,6 +42,7 @@ func (h *q7JoinMaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	output := h.q7JoinMaxBid(ctx, sp)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -53,7 +54,7 @@ func (h *q7JoinMaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 func (h *q7JoinMaxBid) getSrcSink(
 	sp *common.QueryInput,
 ) ([]*producer_consumer.MeteredConsumer, []producer_consumer.MeteredProducerIntr, error) {
-	stream1, stream2, outputStream, err := getInOutStreams(h.env, sp)
+	stream1, stream2, outputStream, err := getInOutStreams(sp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -146,12 +147,12 @@ func (h *q7JoinMaxBid) setupJoin(sp *common.QueryInput) (
 			})
 		})
 	bMp, err := getMaterializedParam[uint64, *ntypes.Event](
-		"q7BidByPriceTab", h.inMsgSerde1, h.env, sp)
+		"q7BidByPriceTab", h.inMsgSerde1, sp)
 	if err != nil {
 		return nil, nil, nil, nil, common.GenErrFnOutput(err)
 	}
 	maxBMp, err := getMaterializedParam[uint64, ntypes.StartEndTime](
-		"q7MaxBidByPriceTab", h.inMsgSerde2, h.env, sp)
+		"q7MaxBidByPriceTab", h.inMsgSerde2, sp)
 	if err != nil {
 		return nil, nil, nil, nil, common.GenErrFnOutput(err)
 	}
@@ -232,7 +233,7 @@ func (h *q7JoinMaxBid) q7JoinMaxBid(ctx context.Context, sp *common.QueryInput) 
 		ctx, bJoinM, mJoinB, proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum), true,
 		msgPairLeft, msgPairRight, "subG2")
-	builder := streamArgsBuilderForJoin(h.env, procArgs, sp)
+	builder := streamArgsBuilderForJoin(procArgs, sp)
 	builder = execution.StreamArgsSetWinStore(wsos, builder,
 		exactly_once_intr.GuaranteeMth(sp.GuaranteeMth))
 	streamTaskArgs, err := builder.

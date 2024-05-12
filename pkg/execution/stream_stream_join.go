@@ -12,8 +12,6 @@ import (
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/utils"
-
-	"cs.utexas.edu/zjia/faas/types"
 )
 
 /*
@@ -117,15 +115,15 @@ func SetupWinStoreWithChanglogSnap[K, VLeft, VRight any](
 	*store.WinStoreOps,
 	stream_task.SetupSnapshotCallbackFunc,
 ) {
-	setupSnapFunc := stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment,
+	setupSnapFunc := stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context,
 		serdeFormat commtypes.SerdeFormat, rs snapshot_store.SnapshotStore,
 	) error {
 		payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
 		if err != nil {
 			return err
 		}
-		stream_task.SetWinStoreWithChangelogSnapshot(ctx, env, rs.(*snapshot_store.RedisSnapshotStore), leftTab, payloadSerde)
-		stream_task.SetWinStoreWithChangelogSnapshot(ctx, env, rs.(*snapshot_store.RedisSnapshotStore), rightTab, payloadSerde)
+		stream_task.SetWinStoreWithChangelogSnapshot(ctx, rs.(*snapshot_store.RedisSnapshotStore), leftTab, payloadSerde)
+		stream_task.SetWinStoreWithChangelogSnapshot(ctx, rs.(*snapshot_store.RedisSnapshotStore), rightTab, payloadSerde)
 		return nil
 	})
 	return &store.WinStoreOps{
@@ -143,7 +141,7 @@ func SetupWinStore[K, VLeft, VRight any](
 	*store.WinStoreOps,
 	stream_task.SetupSnapshotCallbackFunc,
 ) {
-	setupSnapFunc := stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment,
+	setupSnapFunc := stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context,
 		serdeFormat commtypes.SerdeFormat, rs snapshot_store.SnapshotStore,
 	) error {
 		chkptSerde, err := commtypes.GetCheckpointSerdeG(serdeFormat)

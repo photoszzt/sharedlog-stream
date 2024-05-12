@@ -8,8 +8,6 @@ import (
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
-
-	"cs.utexas.edu/zjia/faas/types"
 )
 
 type WinStoreParam[K comparable, V any] struct {
@@ -90,7 +88,7 @@ func GetWinStore[K comparable, V any](
 			cachedStore = countWindowStore
 		}
 		f = stream_task.SetupSnapshotCallbackFunc(
-			func(ctx context.Context, env types.Environment,
+			func(ctx context.Context,
 				serdeFormat commtypes.SerdeFormat,
 				rs snapshot_store.SnapshotStore,
 			) error {
@@ -134,7 +132,7 @@ func GetWinStore[K comparable, V any](
 			},
 			Wsos: nil,
 		}
-		f = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment,
+		f = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context,
 			serdeFormat commtypes.SerdeFormat,
 			rs snapshot_store.SnapshotStore,
 		) error {
@@ -142,7 +140,7 @@ func GetWinStore[K comparable, V any](
 			if err != nil {
 				return err
 			}
-			stream_task.SetWinStoreWithChangelogSnapshot[K, commtypes.ValueTimestampG[V]](ctx, env,
+			stream_task.SetWinStoreWithChangelogSnapshot[K, commtypes.ValueTimestampG[V]](ctx,
 				rs.(*snapshot_store.RedisSnapshotStore), aggStore, payloadSerde)
 			return nil
 		})

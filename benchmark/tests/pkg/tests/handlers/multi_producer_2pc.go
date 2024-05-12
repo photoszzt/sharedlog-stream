@@ -14,12 +14,10 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream_task"
 	"sharedlog-stream/pkg/transaction"
-
-	"cs.utexas.edu/zjia/faas/types"
 )
 
 func getProduceTransactionManager(
-	ctx context.Context, env types.Environment, transactionalID string,
+	ctx context.Context, transactionalID string,
 	sink *producer_consumer.ShardedSharedLogStreamProducer,
 	sp *common.QueryInput,
 ) *transaction.TransactionManager {
@@ -30,7 +28,7 @@ func getProduceTransactionManager(
 	ectx := processor.NewExecutionContext([]*producer_consumer.MeteredConsumer{},
 		[]producer_consumer.MeteredProducerIntr{p},
 		"prodConsume", sp.ScaleEpoch, sp.ParNum)
-	args1, err := benchutil.UpdateStreamTaskArgs(sp, stream_task.NewStreamTaskArgsBuilder(env,
+	args1, err := benchutil.UpdateStreamTaskArgs(sp, stream_task.NewStreamTaskArgsBuilder(
 		&ectx, transactionalID)).Build()
 	if err != nil {
 		panic(err)
@@ -80,11 +78,11 @@ func (h *produceConsumeHandler) beginTransaction(ctx context.Context,
 func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 	// two producer push to the same stream
 	default_buf_max := uint32(32 * 1024)
-	stream1, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "test", 1, commtypes.JSON, default_buf_max)
+	stream1, err := sharedlog_stream.NewShardedSharedLogStream("test", 1, commtypes.JSON, default_buf_max)
 	if err != nil {
 		panic(err)
 	}
-	stream1Copy, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "test", 1, commtypes.JSON, default_buf_max)
+	stream1Copy, err := sharedlog_stream.NewShardedSharedLogStream("test", 1, commtypes.JSON, default_buf_max)
 	if err != nil {
 		panic(err)
 	}
@@ -110,8 +108,8 @@ func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 	produceSink := producer_consumer.NewShardedSharedLogStreamProducer(stream1, produceSinkConfig)
 	produceSinkCopy := producer_consumer.NewShardedSharedLogStreamProducer(stream1Copy, produceSinkConfig)
 
-	tm1 := getProduceTransactionManager(ctx, h.env, "prod1", produceSink, sp)
-	tm2 := getProduceTransactionManager(ctx, h.env, "prod2", produceSinkCopy, sp)
+	tm1 := getProduceTransactionManager(ctx, "prod1", produceSink, sp)
+	tm2 := getProduceTransactionManager(ctx, "prod2", produceSinkCopy, sp)
 	tm1.RecordTopicStreams(stream1.TopicName(), stream1)
 	tm2.RecordTopicStreams(stream1Copy.TopicName(), stream1Copy)
 	produceSink.ConfigExactlyOnce(tm1, exactly_once_intr.TWO_PHASE_COMMIT)
@@ -171,7 +169,7 @@ func (h *produceConsumeHandler) testMultiProducer2pc(ctx context.Context) {
 		panic(err)
 	}
 
-	stream1ForRead, err := sharedlog_stream.NewShardedSharedLogStream(h.env, "test", 1, commtypes.JSON, default_buf_max)
+	stream1ForRead, err := sharedlog_stream.NewShardedSharedLogStream("test", 1, commtypes.JSON, default_buf_max)
 	if err != nil {
 		panic(err)
 	}

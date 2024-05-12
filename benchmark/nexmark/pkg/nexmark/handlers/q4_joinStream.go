@@ -44,6 +44,7 @@ func (h *q4JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, e
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	output := h.Q4JoinStream(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -55,7 +56,7 @@ func (h *q4JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, e
 
 func (h *q4JoinStreamHandler) getSrcSink(sp *common.QueryInput,
 ) ([]*producer_consumer.MeteredConsumer, []producer_consumer.MeteredProducerIntr, error) {
-	stream1, stream2, outputStream, err := getInOutStreams(h.env, sp)
+	stream1, stream2, outputStream, err := getInOutStreams(sp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -140,12 +141,12 @@ func (h *q4JoinStreamHandler) setupQ4Join(sp *common.QueryInput) (
 			})
 		})
 	aucMp, err := getMaterializedParam[uint64, *ntypes.Event](
-		"q4AuctionsByIDStore", h.msgSerde, h.env, sp)
+		"q4AuctionsByIDStore", h.msgSerde, sp)
 	if err != nil {
 		return nil, nil, nil, nil, common.GenErrFnOutput(err)
 	}
 	bidMp, err := getMaterializedParam[uint64, *ntypes.Event](
-		"q4BidsByAuctionIDStore", h.msgSerde, h.env, sp)
+		"q4BidsByAuctionIDStore", h.msgSerde, sp)
 	if err != nil {
 		return nil, nil, nil, nil, common.GenErrFnOutput(err)
 	}
@@ -236,7 +237,7 @@ func (h *q4JoinStreamHandler) Q4JoinStream(ctx context.Context, sp *common.Query
 		ctx, aJoinB, bJoinA, proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum), false,
 		msgSerdePair, msgSerdePair, "subG2")
-	builder := streamArgsBuilderForJoin(h.env, procArgs, sp)
+	builder := streamArgsBuilderForJoin(procArgs, sp)
 	builder = execution.StreamArgsSetWinStore(wsos, builder,
 		exactly_once_intr.GuaranteeMth(sp.GuaranteeMth))
 	streamTaskArgs, err := builder.

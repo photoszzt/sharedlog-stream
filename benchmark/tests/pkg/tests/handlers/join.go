@@ -42,6 +42,7 @@ func (h *joinHandler) Call(ctx context.Context, input []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	output := h.tests(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -66,9 +67,9 @@ func (h *joinHandler) tests(ctx context.Context, sp *test_types.TestInput) *comm
 	}
 }
 
-func getJoinSrcSink(ctx context.Context, sp *common.TestParam, env types.Environment,
+func getJoinSrcSink(ctx context.Context, sp *common.TestParam,
 ) ([]*producer_consumer.MeteredConsumer, []producer_consumer.MeteredProducerIntr, error) {
-	srcStreams, sinkStreams, err := benchutil.GetShardedInputOutputStreamsTest(ctx, env, sp)
+	srcStreams, sinkStreams, err := benchutil.GetShardedInputOutputStreamsTest(ctx, sp)
 	if err != nil {
 		panic(err)
 	}
@@ -116,7 +117,6 @@ func getMaterializedParam[K, V any](storeName string,
 		ParNum(0).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
-			Env:           env,
 			NumPartition:  1,
 			TimeOut:       common.SrcConsumeTimeout,
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
@@ -139,7 +139,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 		BufMaxSize:    default_buf_size,
 		SerdeFormat:   uint8(commtypes.JSON),
 	}
-	srcs, sinks, err := getJoinSrcSink(ctx, sp, h.env)
+	srcs, sinks, err := getJoinSrcSink(ctx, sp)
 	msgSerde, err := processor.MsgSerdeWithValueTsG[int, string](commtypes.JSON, commtypes.IntSerdeG{}, commtypes.StringSerdeG{})
 	if err != nil {
 		panic(err)
@@ -191,7 +191,7 @@ func (h *joinHandler) testStreamStreamJoinMem(ctx context.Context) {
 	}
 
 	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(&common.QueryInput{},
-		stream_task.NewStreamTaskArgsBuilder(h.env, nil, "joinTestMem")).Build()
+		stream_task.NewStreamTaskArgsBuilder(nil, "joinTestMem")).Build()
 	if err != nil {
 		panic(err)
 	}

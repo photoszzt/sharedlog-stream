@@ -98,7 +98,7 @@ func (h *ChkptManagerHandler) Chkpt(ctx context.Context, input *common.ChkptMngr
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}
-		h.srcStream, err = sharedlog_stream.NewShardedSharedLogStream(h.env,
+		h.srcStream, err = sharedlog_stream.NewShardedSharedLogStream(
 			input.SrcTopicName,
 			input.SrcNumPart,
 			serdeFormat, input.BufMaxSize)

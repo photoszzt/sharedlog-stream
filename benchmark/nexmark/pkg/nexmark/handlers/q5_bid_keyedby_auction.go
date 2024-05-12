@@ -33,6 +33,7 @@ func (h *bidByAuction) Call(ctx context.Context, input []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	output := h.processBidKeyedByAuction(ctx, sp)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -65,7 +66,7 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 	if fn_out != nil {
 		return fn_out
 	}
-	srcs, sinks, err := getSrcSinkUint64Key(ctx, h.env, sp)
+	srcs, sinks, err := getSrcSinkUint64Key(ctx, sp)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -91,7 +92,7 @@ func (h *bidByAuction) processBidKeyedByAuction(ctx context.Context,
 		AppProcessFunc(
 			stream_task.CommonAppProcessFunc(filterProc.Process, h.inMsgSerde)).
 		Build()
-	streamTaskArgs, err := streamArgsBuilder(h.env, &ectx, sp).Build()
+	streamTaskArgs, err := streamArgsBuilder(&ectx, sp).Build()
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

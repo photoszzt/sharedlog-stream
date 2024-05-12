@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"cs.utexas.edu/zjia/faas/protocol"
-	"cs.utexas.edu/zjia/faas/types"
 	"golang.org/x/xerrors"
 )
 
@@ -174,11 +173,11 @@ func (cm *ChangelogManager[K, V]) Consume(ctx context.Context, parNum uint8) (*c
 	return commtypes.DecodeRawMsgSeqG(rawMsg, cm.msgSerde)
 }
 
-func CreateChangelog(env types.Environment, tabName string,
+func CreateChangelog(tabName string,
 	numPartition uint8, serdeFormat commtypes.SerdeFormat,
 	bufMaxSize uint32,
 ) (*sharedlog_stream.ShardedSharedLogStream, error) {
 	changelog_name := tabName + "-changelog"
-	return sharedlog_stream.NewShardedSharedLogStream(env, changelog_name, numPartition,
+	return sharedlog_stream.NewShardedSharedLogStream(changelog_name, numPartition,
 		serdeFormat, bufMaxSize)
 }

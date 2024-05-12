@@ -46,6 +46,7 @@ func (h *q4MaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	output := h.Q4MaxBid(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -54,8 +55,8 @@ func (h *q4MaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 	return common.CompressData(encodedOutput), nil
 }
 
-func getExecutionCtxSingleSrcSinkMiddle(ctx context.Context, env types.Environment, funcName string, sp *common.QueryInput) (processor.BaseExecutionContext, error) {
-	inputStream, outputStreams, err := benchutil.GetShardedInputOutputStreams(ctx, env, sp)
+func getExecutionCtxSingleSrcSinkMiddle(ctx context.Context, funcName string, sp *common.QueryInput) (processor.BaseExecutionContext, error) {
+	inputStream, outputStreams, err := benchutil.GetShardedInputOutputStreams(ctx, sp)
 	if err != nil {
 		return processor.BaseExecutionContext{}, err
 	}
@@ -126,12 +127,12 @@ func (h *q4MaxBid) Q4MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	if fn_out != nil {
 		return fn_out
 	}
-	ectx, err := getExecutionCtxSingleSrcSinkMiddle(ctx, h.env, h.funcName, sp)
+	ectx, err := getExecutionCtxSingleSrcSinkMiddle(ctx, h.funcName, sp)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
 	// useCache := benchutil.UseCache(h.useCache, exactly_once_intr.GuaranteeMth(sp.GuaranteeMth))
-	aggStore, builder, snapfunc, err := setupKVStoreForAgg(ctx, h.env, sp,
+	aggStore, builder, snapfunc, err := setupKVStoreForAgg(ctx, sp,
 		&execution.KVStoreParam[ntypes.AuctionIdCategory, uint64]{
 			Compare: ntypes.AuctionIdCategoryLess,
 			CommonStoreParam: execution.CommonStoreParam[ntypes.AuctionIdCategory, uint64]{

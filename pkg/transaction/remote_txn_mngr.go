@@ -27,6 +27,7 @@ type RemoteTxnManagerServer struct {
 }
 
 func (r *RemoteTxnManagerServer) AppendTpPar(ctx context.Context, in *txn_data.TxnMetaMsg) (*emptypb.Empty, error) {
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, r.env)
 	err := r.RemoteTxnManager.AppendTpPar(ctx, in)
 	if err != nil {
 		return nil, err
@@ -35,6 +36,7 @@ func (r *RemoteTxnManagerServer) AppendTpPar(ctx context.Context, in *txn_data.T
 }
 
 func (s *RemoteTxnManagerServer) AbortTxn(ctx context.Context, in *txn_data.TxnMetaMsg) (*emptypb.Empty, error) {
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, s.env)
 	err := s.RemoteTxnManager.AbortTxn(ctx, in)
 	if err != nil {
 		return nil, err
@@ -43,6 +45,7 @@ func (s *RemoteTxnManagerServer) AbortTxn(ctx context.Context, in *txn_data.TxnM
 }
 
 func (s *RemoteTxnManagerServer) AppendConsumedOffset(ctx context.Context, in *remote_txn_rpc.ConsumedOffsets) (*emptypb.Empty, error) {
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, s.env)
 	err := s.RemoteTxnManager.AppendConsumedOffset(ctx, in)
 	if err != nil {
 		return nil, err
@@ -51,11 +54,13 @@ func (s *RemoteTxnManagerServer) AppendConsumedOffset(ctx context.Context, in *r
 }
 
 func (s *RemoteTxnManagerServer) CommitTxnAsyncComplete(ctx context.Context, in *txn_data.TxnMetaMsg) (*remote_txn_rpc.CommitReply, error) {
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, s.env)
 	return s.RemoteTxnManager.CommitTxnAsyncComplete(ctx, in)
 }
 
 func (s *RemoteTxnManagerServer) Init(ctx context.Context, in *remote_txn_rpc.InitArg) (*remote_txn_rpc.InitReply, error) {
-	return s.RemoteTxnManager.Init(ctx, s.env, in)
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, s.env)
+	return s.RemoteTxnManager.Init(ctx, in)
 }
 
 func NewRemoteTxnManagerServer(env types.Environment, serdeFormat commtypes.SerdeFormat) *RemoteTxnManagerServer {
@@ -65,6 +70,7 @@ func NewRemoteTxnManagerServer(env types.Environment, serdeFormat commtypes.Serd
 			tm_map:      make(map[string]*TransactionManager),
 			prod_id_map: make(map[string]commtypes.ProducerId),
 		},
+		env: env,
 	}
 }
 
@@ -87,9 +93,9 @@ func (s *RemoteTxnManager) UpdateSerdeFormat(serdeFormat commtypes.SerdeFormat) 
 	s.serdeFormat = serdeFormat
 }
 
-func (s *RemoteTxnManager) Init(ctx context.Context, env types.Environment, in *remote_txn_rpc.InitArg) (*remote_txn_rpc.InitReply, error) {
+func (s *RemoteTxnManager) Init(ctx context.Context, in *remote_txn_rpc.InitArg) (*remote_txn_rpc.InitReply, error) {
 	debug.Fprintf(os.Stderr, "handle Init with input: %v\n", in)
-	tm, err := NewTransactionManager(ctx, env, in.TransactionalId, s.serdeFormat)
+	tm, err := NewTransactionManager(ctx, in.TransactionalId, s.serdeFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +106,7 @@ func (s *RemoteTxnManager) Init(ctx context.Context, env types.Environment, in *
 	var offsetPairs []*remote_txn_rpc.OffsetPair
 	for _, inputTopicInfo := range in.InputStreamInfos {
 		inputTopicName := inputTopicInfo.GetTopicName()
-		stream, err := sharedlog_stream.NewShardedSharedLogStream(env, inputTopicName,
+		stream, err := sharedlog_stream.NewShardedSharedLogStream(inputTopicName,
 			uint8(inputTopicInfo.NumPartition), s.serdeFormat, in.GetBufMaxSize())
 		if err != nil {
 			return nil, err
@@ -124,7 +130,7 @@ func (s *RemoteTxnManager) Init(ctx context.Context, env types.Environment, in *
 		}
 	}
 	for _, outStreamInfo := range in.OutputStreamInfos {
-		stream, err := sharedlog_stream.NewShardedSharedLogStream(env, outStreamInfo.GetTopicName(),
+		stream, err := sharedlog_stream.NewShardedSharedLogStream(outStreamInfo.GetTopicName(),
 			uint8(outStreamInfo.NumPartition), s.serdeFormat, in.GetBufMaxSize())
 		if err != nil {
 			return nil, err
@@ -132,7 +138,7 @@ func (s *RemoteTxnManager) Init(ctx context.Context, env types.Environment, in *
 		tm.RecordTopicStreams(outStreamInfo.GetTopicName(), stream)
 	}
 	for _, kvsInfo := range in.KVChangelogInfos {
-		stream, err := sharedlog_stream.NewShardedSharedLogStream(env, kvsInfo.GetTopicName(),
+		stream, err := sharedlog_stream.NewShardedSharedLogStream(kvsInfo.GetTopicName(),
 			uint8(kvsInfo.GetNumPartition()), s.serdeFormat, in.GetBufMaxSize())
 		if err != nil {
 			return nil, err
@@ -140,7 +146,7 @@ func (s *RemoteTxnManager) Init(ctx context.Context, env types.Environment, in *
 		tm.RecordTopicStreams(kvsInfo.GetTopicName(), stream)
 	}
 	for _, wsInfo := range in.WinChangelogInfos {
-		stream, err := sharedlog_stream.NewShardedSharedLogStream(env, wsInfo.GetTopicName(),
+		stream, err := sharedlog_stream.NewShardedSharedLogStream(wsInfo.GetTopicName(),
 			uint8(wsInfo.GetNumPartition()), s.serdeFormat, in.GetBufMaxSize())
 		if err != nil {
 			return nil, err

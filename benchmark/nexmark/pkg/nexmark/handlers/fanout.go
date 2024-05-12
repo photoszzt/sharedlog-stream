@@ -32,6 +32,7 @@ func (h *fanoutHandler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	output := h.fanout(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -58,7 +59,7 @@ func (h *fanoutHandler) fanout(ctx context.Context, sp *common.QueryInput) *comm
 	if fn_out != nil {
 		return fn_out
 	}
-	srcs, sinks, err := getSrcSink(ctx, h.env, sp)
+	srcs, sinks, err := getSrcSink(ctx, sp)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -71,7 +72,7 @@ func (h *fanoutHandler) fanout(ctx context.Context, sp *common.QueryInput) *comm
 	task := stream_task.NewStreamTaskBuilder().MarkFinalStage().
 		AppProcessFunc(stream_task.CommonAppProcessFunc[string, *ntypes.Event](outProc.Process, h.msgSerde)).
 		Build()
-	streamTaskArgs, err := streamArgsBuilder(h.env, &ectx, sp).
+	streamTaskArgs, err := streamArgsBuilder(&ectx, sp).
 		Build()
 	if err != nil {
 		return common.GenErrFnOutput(err)

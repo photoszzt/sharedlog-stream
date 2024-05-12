@@ -40,12 +40,12 @@ func (h *sharedlogConsumeBenchHandler) Call(ctx context.Context, input []byte) (
 }
 
 func (h *sharedlogConsumeBenchHandler) sharedlogConsumeBench(ctx context.Context, sp *common.BenchSourceParam) *common.FnOutput {
-	stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, sp.TopicName, sp.NumOutPartition,
+	stream, err := sharedlog_stream.NewShardedSharedLogStream(sp.TopicName, sp.NumOutPartition,
 		commtypes.SerdeFormat(sp.SerdeFormat), sp.BufMaxSize)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	cm, err := consume_seq_num_manager.NewConsumeSeqManager(h.env, commtypes.MSGP, "sharedlogConsumeBench", sp.BufMaxSize)
+	cm, err := consume_seq_num_manager.NewConsumeSeqManager(commtypes.MSGP, "sharedlogConsumeBench", sp.BufMaxSize)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

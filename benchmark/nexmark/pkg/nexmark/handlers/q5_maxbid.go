@@ -47,6 +47,7 @@ func (h *q5MaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	output := h.processQ5MaxBid(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -57,7 +58,7 @@ func (h *q5MaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 
 func (h *q5MaxBid) getSrcSink(ctx context.Context, sp *common.QueryInput,
 ) ([]*producer_consumer.MeteredConsumer, []producer_consumer.MeteredProducerIntr, error) {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, sp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -137,7 +138,7 @@ func (h *q5MaxBid) processQ5MaxBid(ctx context.Context, sp *common.QueryInput) *
 		sinks_arr, h.funcName, sp.ScaleEpoch, sp.ParNum)
 	// gua := exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)
 	// useCache := benchutil.UseCache(h.useCache, gua)
-	aggStore, builder, snapfunc, err := setupKVStoreForAgg(ctx, h.env, sp,
+	aggStore, builder, snapfunc, err := setupKVStoreForAgg(ctx, sp,
 		&execution.KVStoreParam[ntypes.StartEndTime, uint64]{
 			Compare: compareStartEndTime,
 			CommonStoreParam: execution.CommonStoreParam[ntypes.StartEndTime, uint64]{

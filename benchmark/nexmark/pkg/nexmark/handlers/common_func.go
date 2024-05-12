@@ -17,8 +17,6 @@ import (
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
 	"time"
-
-	"cs.utexas.edu/zjia/faas/types"
 )
 
 func only_bid(key optional.Option[string], value optional.Option[*ntypes.Event]) (bool, error) {
@@ -32,7 +30,6 @@ func compareStartEndTime(a, b ntypes.StartEndTime) bool {
 
 func getMaterializedParam[K, V any](storeName string,
 	kvMsgSerde commtypes.MessageGSerdeG[K, V],
-	env types.Environment,
 	sp *common.QueryInput,
 ) (*store_with_changelog.MaterializeParam[K, V], error) {
 	return store_with_changelog.NewMaterializeParamBuilder[K, V]().
@@ -41,7 +38,6 @@ func getMaterializedParam[K, V any](storeName string,
 		ParNum(sp.ParNum).
 		SerdeFormat(commtypes.SerdeFormat(sp.SerdeFormat)).
 		ChangelogManagerParam(commtypes.CreateChangelogManagerParam{
-			Env:           env,
 			NumPartition:  sp.NumChangelogPartition,
 			TimeOut:       common.SrcConsumeTimeout,
 			FlushDuration: time.Duration(sp.FlushMs) * time.Millisecond,
@@ -49,29 +45,26 @@ func getMaterializedParam[K, V any](storeName string,
 }
 
 func streamArgsBuilder(
-	env types.Environment,
 	ectx *processor.BaseExecutionContext,
 	sp *common.QueryInput,
 ) stream_task.BuildStreamTaskArgs {
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", ectx.FuncName(), sp.InputTopicNames[0],
 		sp.ParNum, sp.OutputTopicNames[0])
 	return benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(env, ectx, transactionalID))
+		stream_task.NewStreamTaskArgsBuilder(ectx, transactionalID))
 }
 
 func streamArgsBuilderForJoin(
-	env types.Environment,
 	ectx processor.ExecutionContext,
 	sp *common.QueryInput,
 ) stream_task.BuildStreamTaskArgs {
 	transactionalID := fmt.Sprintf("%s-%d", ectx.FuncName(), sp.ParNum)
 	return benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(env, ectx, transactionalID))
+		stream_task.NewStreamTaskArgsBuilder(ectx, transactionalID))
 }
 
 func setupKVStoreForAgg[K comparable, V any](
 	ctx context.Context,
-	env types.Environment,
 	sp *common.QueryInput,
 	p *execution.KVStoreParam[K, V],
 	ectx *processor.BaseExecutionContext,
@@ -84,7 +77,7 @@ func setupKVStoreForAgg[K comparable, V any](
 ) {
 	p.CommonStoreParam.GuaranteeMth = exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)
 	mp, err := getMaterializedParam[K, commtypes.ValueTimestampG[V]](
-		p.StoreName, msgSerde, env, sp)
+		p.StoreName, msgSerde, sp)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -92,14 +85,13 @@ func setupKVStoreForAgg[K comparable, V any](
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	builder := streamArgsBuilder(env, ectx, sp)
+	builder := streamArgsBuilder(ectx, sp)
 	builder = execution.StreamArgsSetKVStore(kvos, builder, p.GuaranteeMth)
 	return store, builder, f, nil
 }
 
 func setupWinStoreForAgg[K comparable, V any](
 	ctx context.Context,
-	env types.Environment,
 	sp *common.QueryInput,
 	p *execution.WinStoreParam[K, V],
 	ectx *processor.BaseExecutionContext,
@@ -113,7 +105,7 @@ func setupWinStoreForAgg[K comparable, V any](
 	p.RetainDuplicates = false
 	p.CommonStoreParam.GuaranteeMth = exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)
 	mp, err := getMaterializedParam[K, commtypes.ValueTimestampG[V]](
-		p.StoreName, msgSerde, env, sp)
+		p.StoreName, msgSerde, sp)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -121,14 +113,14 @@ func setupWinStoreForAgg[K comparable, V any](
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	builder := streamArgsBuilder(env, ectx, sp)
+	builder := streamArgsBuilder(ectx, sp)
 	builder = execution.StreamArgsSetWinStore(wsos, builder, p.GuaranteeMth)
 	return store, builder, f, nil
 }
 
-func getSrcSink(ctx context.Context, env types.Environment, sp *common.QueryInput,
+func getSrcSink(ctx context.Context, sp *common.QueryInput,
 ) ([]*producer_consumer.MeteredConsumer, []producer_consumer.MeteredProducerIntr, error) {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, env, sp)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, sp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -157,10 +149,9 @@ func getSrcSink(ctx context.Context, env types.Environment, sp *common.QueryInpu
 
 func getSrcSinkUint64Key(
 	ctx context.Context,
-	env types.Environment,
 	sp *common.QueryInput,
 ) ([]*producer_consumer.MeteredConsumer, []producer_consumer.MeteredProducerIntr, error) {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, env, sp)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, sp)
 	if err != nil {
 		return nil, nil, err
 	}

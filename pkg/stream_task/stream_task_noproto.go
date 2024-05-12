@@ -12,7 +12,6 @@ import (
 
 func processNoProto(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.FnOutput {
 	debug.Assert(len(args.ectx.Consumers()) >= 1, "Srcs should be filled")
-	debug.Assert(args.env != nil, "env should be filled")
 	debug.Assert(args.ectx != nil, "program args should be filled")
 	args.ectx.StartWarmup()
 	if t.initFunc != nil {

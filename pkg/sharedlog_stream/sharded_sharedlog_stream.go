@@ -8,7 +8,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"cs.utexas.edu/zjia/faas/types"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/xerrors"
 )
@@ -25,7 +24,7 @@ type SizableShardedSharedLogStream struct {
 	bufMaxSize          uint32
 }
 
-func NewSizableShardedSharedLogStream(env types.Environment, topicName string, numPartitions uint8,
+func NewSizableShardedSharedLogStream(topicName string, numPartitions uint8,
 	serdeFormat commtypes.SerdeFormat, bufMaxSize uint32,
 ) (*SizableShardedSharedLogStream, error) {
 	if numPartitions == 0 {
@@ -33,7 +32,7 @@ func NewSizableShardedSharedLogStream(env types.Environment, topicName string, n
 	}
 	streams := make([]*BufferedSinkStream, 0, numPartitions)
 	for i := uint8(0); i < numPartitions; i++ {
-		s, err := NewSharedLogStream(env, topicName, serdeFormat)
+		s, err := NewSharedLogStream(topicName, serdeFormat)
 		if err != nil {
 			return nil, err
 		}
@@ -211,7 +210,7 @@ var _ = Stream(&ShardedSharedLogStream{})
 
 var ErrZeroParNum = xerrors.New("Shards must be positive")
 
-func NewShardedSharedLogStream(env types.Environment, topicName string, numPartitions uint8,
+func NewShardedSharedLogStream(topicName string, numPartitions uint8,
 	serdeFormat commtypes.SerdeFormat, bufMaxSize uint32,
 ) (*ShardedSharedLogStream, error) {
 	if numPartitions == 0 {
@@ -219,7 +218,7 @@ func NewShardedSharedLogStream(env types.Environment, topicName string, numParti
 	}
 	streams := make([]*BufferedSinkStream, 0, numPartitions)
 	for i := uint8(0); i < numPartitions; i++ {
-		s, err := NewSharedLogStream(env, topicName, serdeFormat)
+		s, err := NewSharedLogStream(topicName, serdeFormat)
 		if err != nil {
 			return nil, err
 		}
@@ -263,7 +262,7 @@ func (s *ShardedSharedLogStream) GetInitialProdSeqNum(substreamNum uint8) uint64
 	return s.subSharedLogStreams[substreamNum].GetInitialProdSeqNum()
 }
 
-func (s *SizableShardedSharedLogStream) ScaleSubstreams(env types.Environment, scaleTo uint8) error {
+func (s *SizableShardedSharedLogStream) ScaleSubstreams(scaleTo uint8) error {
 	if scaleTo == 0 {
 		return fmt.Errorf("updated number of substreams should be larger and equal to one")
 	}
@@ -271,7 +270,7 @@ func (s *SizableShardedSharedLogStream) ScaleSubstreams(env types.Environment, s
 	if scaleTo > s.numPartitions {
 		numAdd := scaleTo - s.numPartitions
 		for i := uint8(0); i < numAdd; i++ {
-			subs, err := NewSharedLogStream(env, s.topicName, s.serdeFormat)
+			subs, err := NewSharedLogStream(s.topicName, s.serdeFormat)
 			if err != nil {
 				s.mux.Unlock()
 				return err

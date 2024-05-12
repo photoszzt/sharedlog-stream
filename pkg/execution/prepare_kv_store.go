@@ -8,8 +8,6 @@ import (
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
-
-	"cs.utexas.edu/zjia/faas/types"
 )
 
 type CommonStoreParam[K comparable, V any] struct {
@@ -68,7 +66,7 @@ func GetKVStore[K comparable, V any](
 		} else {
 			cachedStore = st
 		}
-		f = func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
+		f = func(ctx context.Context, serdeFormat commtypes.SerdeFormat,
 			mc snapshot_store.SnapshotStore,
 		) error {
 			chkptSerde, err := commtypes.GetCheckpointSerdeG(serdeFormat)
@@ -106,7 +104,7 @@ func GetKVStore[K comparable, V any](
 			},
 			Kvo: nil,
 		}
-		f = func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
+		f = func(ctx context.Context, serdeFormat commtypes.SerdeFormat,
 			rs snapshot_store.SnapshotStore,
 		) error {
 			payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
@@ -114,7 +112,7 @@ func GetKVStore[K comparable, V any](
 				return err
 			}
 			stream_task.SetKVStoreWithChangelogSnapshot[K, commtypes.ValueTimestampG[V]](
-				ctx, env,
+				ctx,
 				rs.(*snapshot_store.RedisSnapshotStore), aggStore, payloadSerde)
 			return nil
 		}

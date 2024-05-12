@@ -44,7 +44,6 @@ const (
 type TransactionManager struct {
 	mu                    sync.Mutex // protect flush callback
 	offsetRecordSerde     commtypes.SerdeG[txn_data.OffsetRecord]
-	env                   types.Environment
 	bgCtx                 context.Context
 	txnMdSerde            commtypes.SerdeG[txn_data.TxnMetadata]
 	topicPartitionSerde   commtypes.SerdeG[*txn_data.TopicPartition]
@@ -68,11 +67,10 @@ type TransactionManager struct {
 }
 
 func NewTransactionManager(ctx context.Context,
-	env types.Environment,
 	transactional_id string,
 	serdeFormat commtypes.SerdeFormat,
 ) (*TransactionManager, error) {
-	log, err := sharedlog_stream.NewSharedLogStream(env, TRANSACTION_LOG_TOPIC_NAME+"_"+transactional_id, serdeFormat)
+	log, err := sharedlog_stream.NewSharedLogStream(TRANSACTION_LOG_TOPIC_NAME+"_"+transactional_id, serdeFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +84,6 @@ func NewTransactionManager(ctx context.Context,
 		txnLogTag:             sharedlog_stream.NameHashWithPartition(log.TopicNameHash(), 0),
 		txnFenceTag:           txn_data.FenceTag(log.TopicNameHash(), 0),
 		serdeFormat:           serdeFormat,
-		env:                   env,
 		waitPrevTxn:           stats.NewPrintLogStatsCollector[int64]("waitPrevTxn2pc"),
 		appendTxnMeta:         stats.NewPrintLogStatsCollector[int64]("appendTxnMeta2pc"),
 		txnSndPhase:           stats.NewPrintLogStatsCollector[int64]("txnSndPhase"),
@@ -246,15 +243,16 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) (*InitTxnRet,
 	if err != nil {
 		return nil, fmt.Errorf("getMostRecentTransactionState failed: %v", err)
 	}
+	env := ctx.Value(commtypes.ENVID{}).(types.Environment)
 	// debug.Fprintf(os.Stderr, "Init transaction: Transition to %s\n", tc.currentStatus)
 	if recentTxnMeta == nil {
-		tc.prodId.InitTaskId(tc.env)
+		tc.prodId.InitTaskId(env)
 		tc.prodId.TaskEpoch = 0
 	} else {
 		tc.prodId = recentCompleteTxn.ProdId
 	}
 	if recentTxnMeta != nil && recentCompleteTxn.ProdId.TaskEpoch == math.MaxUint32 {
-		tc.prodId.InitTaskId(tc.env)
+		tc.prodId.InitTaskId(env)
 		tc.prodId.TaskEpoch = 0
 	}
 	tc.prodId.TaskEpoch += 1
@@ -387,7 +385,7 @@ func (tc *TransactionManager) CreateOffsetTopic(topicToTrack string, numPartitio
 		// already exists
 		return nil
 	}
-	off, err := sharedlog_stream.NewShardedSharedLogStream(tc.env, offsetTopic, numPartition, tc.serdeFormat, bufMaxSize)
+	off, err := sharedlog_stream.NewShardedSharedLogStream(offsetTopic, numPartition, tc.serdeFormat, bufMaxSize)
 	if err != nil {
 		return err
 	}

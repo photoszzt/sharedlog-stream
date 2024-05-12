@@ -26,6 +26,7 @@ func (h *ConfigScaleHandler) Call(ctx context.Context, input []byte) ([]byte, er
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	output := h.ConfigScale(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -35,7 +36,7 @@ func (h *ConfigScaleHandler) Call(ctx context.Context, input []byte) ([]byte, er
 }
 
 func (h *ConfigScaleHandler) ConfigScale(ctx context.Context, input *common.ConfigScaleInput) *common.FnOutput {
-	cmm, err := control_channel.NewControlChannelManager(h.env, input.AppId,
+	cmm, err := control_channel.NewControlChannelManager(input.AppId,
 		commtypes.SerdeFormat(input.SerdeFormat), input.BufMaxSize, input.ScaleEpoch-1, 0)
 	if err != nil {
 		return common.GenErrFnOutput(err)

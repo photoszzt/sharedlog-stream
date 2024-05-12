@@ -10,8 +10,6 @@ import (
 	"sharedlog-stream/pkg/sharedlog_stream"
 	"sharedlog-stream/pkg/stream_task"
 	"time"
-
-	"cs.utexas.edu/zjia/faas/types"
 )
 
 func UpdateStreamTaskArgs(sp *common.QueryInput, argsBuilder stream_task.SetGuarantee) stream_task.BuildStreamTaskArgs {
@@ -36,18 +34,17 @@ func UpdateStreamTaskArgs(sp *common.QueryInput, argsBuilder stream_task.SetGuar
 }
 
 func GetShardedInputOutputStreams(ctx context.Context,
-	env types.Environment,
 	input *common.QueryInput,
 ) (*sharedlog_stream.ShardedSharedLogStream, []*sharedlog_stream.ShardedSharedLogStream, error) {
 	serdeFormat := commtypes.SerdeFormat(input.SerdeFormat)
-	inputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[0], input.NumInPartition,
+	inputStream, err := sharedlog_stream.NewShardedSharedLogStream(input.InputTopicNames[0], input.NumInPartition,
 		serdeFormat, input.BufMaxSize)
 	if err != nil {
 		return nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
 	}
 	var output_streams []*sharedlog_stream.ShardedSharedLogStream
 	for idx, name := range input.OutputTopicNames {
-		outputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, name, input.NumOutPartitions[idx],
+		outputStream, err := sharedlog_stream.NewShardedSharedLogStream(name, input.NumOutPartitions[idx],
 			serdeFormat, input.BufMaxSize)
 		if err != nil {
 			return nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
@@ -58,12 +55,12 @@ func GetShardedInputOutputStreams(ctx context.Context,
 }
 
 func GetShardedInputOutputStreamsTest(ctx context.Context,
-	env types.Environment, input *common.TestParam,
+	input *common.TestParam,
 ) ([]*sharedlog_stream.ShardedSharedLogStream, []*sharedlog_stream.ShardedSharedLogStream, error) {
 	serdeFormat := commtypes.SerdeFormat(input.SerdeFormat)
 	var input_streams []*sharedlog_stream.ShardedSharedLogStream
 	for _, param := range input.InStreamParam {
-		inputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, param.TopicName,
+		inputStream, err := sharedlog_stream.NewShardedSharedLogStream(param.TopicName,
 			param.NumPartition, serdeFormat, input.BufMaxSize)
 		if err != nil {
 			return nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
@@ -72,7 +69,7 @@ func GetShardedInputOutputStreamsTest(ctx context.Context,
 	}
 	var output_streams []*sharedlog_stream.ShardedSharedLogStream
 	for _, param := range input.OutStreamParam {
-		outputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, param.TopicName,
+		outputStream, err := sharedlog_stream.NewShardedSharedLogStream(param.TopicName,
 			param.NumPartition, serdeFormat, input.BufMaxSize)
 		if err != nil {
 			return nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)

@@ -40,6 +40,7 @@ func (h *q8GroupByHandler) Call(ctx context.Context, input []byte) ([]byte, erro
 		return nil, err
 	}
 	fmt.Fprintf(os.Stderr, "inputParam: %+v\n", parsedInput)
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	output := h.Q8GroupBy(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -51,7 +52,7 @@ func (h *q8GroupByHandler) Call(ctx context.Context, input []byte) ([]byte, erro
 func (h *q8GroupByHandler) getExecutionCtx(ctx context.Context, sp *common.QueryInput,
 ) (processor.BaseExecutionContext, error) {
 	var sinks []producer_consumer.MeteredProducerIntr
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, sp)
 	if err != nil {
 		return processor.BaseExecutionContext{}, err
 	}
@@ -151,7 +152,7 @@ func (h *q8GroupByHandler) Q8GroupBy(ctx context.Context, sp *common.QueryInput)
 	transactionalID := fmt.Sprintf("%s-%s-%d",
 		h.funcName, sp.InputTopicNames[0], sp.ParNum)
 	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).
+		stream_task.NewStreamTaskArgsBuilder(&ectx, transactionalID)).
 		Build()
 	if err != nil {
 		return common.GenErrFnOutput(err)

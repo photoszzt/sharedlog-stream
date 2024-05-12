@@ -133,7 +133,7 @@ func SetupManagerForRemote2pc(ctx context.Context, t *StreamTask, args *StreamTa
 		restoreElapsed := time.Since(restoreBeg)
 		fmt.Fprintf(os.Stderr, "down restore, elapsed: %v\n", restoreElapsed)
 	}
-	cmm, err := control_channel.NewControlChannelManager(args.env, args.appId,
+	cmm, err := control_channel.NewControlChannelManager(args.appId,
 		commtypes.SerdeFormat(args.serdeFormat), args.bufMaxSize,
 		args.ectx.CurEpoch(), args.ectx.SubstreamNum())
 	if err != nil {

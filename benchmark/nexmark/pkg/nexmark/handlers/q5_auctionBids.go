@@ -44,6 +44,7 @@ func (h *q5AuctionBids) Call(ctx context.Context, input []byte) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	output := h.processQ5AuctionBids(ctx, sp)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -54,7 +55,7 @@ func (h *q5AuctionBids) Call(ctx context.Context, input []byte) ([]byte, error) 
 
 func (h *q5AuctionBids) getSrcSink(ctx context.Context, sp *common.QueryInput,
 ) ([]*producer_consumer.MeteredConsumer, []producer_consumer.MeteredProducerIntr, error) {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, sp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -100,7 +101,7 @@ func (h *q5AuctionBids) getCountAggProc(ctx context.Context, sp *common.QueryInp
 	}
 	// useCache := benchutil.UseCache(h.useCache, exactly_once_intr.GuaranteeMth(sp.GuaranteeMth))
 	cachedStore, builder, setSnapCallbackFunc, err := setupWinStoreForAgg(
-		ctx, h.env, sp, &execution.WinStoreParam[uint64, uint64]{
+		ctx, sp, &execution.WinStoreParam[uint64, uint64]{
 			CmpFunc:    store.IntegerCompare[uint64],
 			JoinWindow: hopWindow,
 			CommonStoreParam: execution.CommonStoreParam[uint64, uint64]{

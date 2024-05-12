@@ -18,13 +18,10 @@ import (
 	"sharedlog-stream/pkg/txn_data"
 	"sync"
 	"time"
-
-	"cs.utexas.edu/zjia/faas/types"
 )
 
 func SetKVStoreWithChangelogSnapshot[K, V any](
 	ctx context.Context,
-	env types.Environment,
 	rs *snapshot_store.RedisSnapshotStore,
 	kvstore store.KeyValueStoreBackedByChangelogG[K, V],
 	payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
@@ -47,13 +44,12 @@ func SetKVStoreWithChangelogSnapshot[K, V any](
 			}
 			fmt.Fprintf(os.Stderr, "kv snapshot size: %d, store snapshot at %x\n", len(out), tpLogoff[0].LogOff)
 			tp := fmt.Sprintf("%s-%d", kvstore.ChangelogTopicName(), kvstore.SubstreamNum())
-			return rs.StoreSnapshot(ctx, env, out, tp, tpLogoff[0].LogOff)
+			return rs.StoreSnapshot(ctx, out, tp, tpLogoff[0].LogOff)
 		})
 }
 
 func SetWinStoreWithChangelogSnapshot[K, V any](
 	ctx context.Context,
-	env types.Environment,
 	rs *snapshot_store.RedisSnapshotStore,
 	winStore store.WindowStoreBackedByChangelogG[K, V],
 	payloadSerde commtypes.SerdeG[commtypes.PayloadArr],
@@ -75,7 +71,7 @@ func SetWinStoreWithChangelogSnapshot[K, V any](
 			}
 			fmt.Fprintf(os.Stderr, "win snapshot size: %d, store snapshot at %x\n", len(out), tpLogOff[0].LogOff)
 			tp := fmt.Sprintf("%s-%d", winStore.ChangelogTopicName(), winStore.SubstreamNum())
-			return rs.StoreSnapshot(ctx, env, out, tp, tpLogOff[0].LogOff)
+			return rs.StoreSnapshot(ctx, out, tp, tpLogOff[0].LogOff)
 		})
 }
 
@@ -83,11 +79,11 @@ func SetupManagersForEpoch(ctx context.Context,
 	args *StreamTaskArgs, rs *snapshot_store.RedisSnapshotStore,
 ) (*epoch_manager.EpochManager, *control_channel.ControlChannelManager, error) {
 	checkStreamArgs(args)
-	em, err := epoch_manager.NewEpochManager(args.env, args.transactionalId, args.serdeFormat)
+	em, err := epoch_manager.NewEpochManager(args.transactionalId, args.serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
-	cmm, err := control_channel.NewControlChannelManager(args.env, args.appId,
+	cmm, err := control_channel.NewControlChannelManager(args.appId,
 		args.serdeFormat, args.bufMaxSize, args.ectx.CurEpoch(), args.ectx.SubstreamNum())
 	if err != nil {
 		return nil, nil, err

@@ -43,6 +43,7 @@ func (h *q3JoinTableHandler) Call(ctx context.Context, input []byte) ([]byte, er
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	output := h.Query3JoinTable(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -53,24 +54,23 @@ func (h *q3JoinTableHandler) Call(ctx context.Context, input []byte) ([]byte, er
 }
 
 func getInOutStreams(
-	env types.Environment,
 	input *common.QueryInput,
 ) (*sharedlog_stream.ShardedSharedLogStream, /* auction */
 	*sharedlog_stream.ShardedSharedLogStream, /* person */
 	*sharedlog_stream.ShardedSharedLogStream, /* output */
 	error,
 ) {
-	inputStream1, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[0],
+	inputStream1, err := sharedlog_stream.NewShardedSharedLogStream(input.InputTopicNames[0],
 		input.NumInPartition, commtypes.SerdeFormat(input.SerdeFormat), input.BufMaxSize)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
 	}
-	inputStream2, err := sharedlog_stream.NewShardedSharedLogStream(env, input.InputTopicNames[1], input.NumInPartition,
+	inputStream2, err := sharedlog_stream.NewShardedSharedLogStream(input.InputTopicNames[1], input.NumInPartition,
 		commtypes.SerdeFormat(input.SerdeFormat), input.BufMaxSize)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for input stream failed: %v", err)
 	}
-	outputStream, err := sharedlog_stream.NewShardedSharedLogStream(env, input.OutputTopicNames[0], input.NumOutPartitions[0],
+	outputStream, err := sharedlog_stream.NewShardedSharedLogStream(input.OutputTopicNames[0], input.NumOutPartitions[0],
 		commtypes.SerdeFormat(input.SerdeFormat), input.BufMaxSize)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("NewSharedlogStream for output stream failed: %v", err)
@@ -80,7 +80,7 @@ func getInOutStreams(
 
 func (h *q3JoinTableHandler) getSrcSink(sp *common.QueryInput,
 ) ([]*producer_consumer.MeteredConsumer, []producer_consumer.MeteredProducerIntr, error) {
-	stream1, stream2, outputStream, err := getInOutStreams(h.env, sp)
+	stream1, stream2, outputStream, err := getInOutStreams(sp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -160,11 +160,11 @@ func (h *q3JoinTableHandler) setupQ3Join(sp *common.QueryInput) (
 			// debug.Fprintf(os.Stderr, "join outputs: %v\n", ncsi)
 			return optional.Some(ncsi)
 		})
-	mpAuc, err := getMaterializedParam[uint64, commtypes.ValueTimestampG[*ntypes.Event]]("q3AuctionsBySellerIDStore", h.storeMsgSerde, h.env, sp)
+	mpAuc, err := getMaterializedParam[uint64, commtypes.ValueTimestampG[*ntypes.Event]]("q3AuctionsBySellerIDStore", h.storeMsgSerde, sp)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	mpPer, err := getMaterializedParam[uint64, commtypes.ValueTimestampG[*ntypes.Event]]("q3PersonsByIDStore", h.storeMsgSerde, h.env, sp)
+	mpPer, err := getMaterializedParam[uint64, commtypes.ValueTimestampG[*ntypes.Event]]("q3PersonsByIDStore", h.storeMsgSerde, sp)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -226,7 +226,7 @@ func (h *q3JoinTableHandler) Query3JoinTable(ctx context.Context, sp *common.Que
 		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum),
 		true, msgSerdePair, msgSerdePair, "subG2")
-	builder := streamArgsBuilderForJoin(h.env, procArgs, sp)
+	builder := streamArgsBuilderForJoin(procArgs, sp)
 	builder = execution.StreamArgsSetKVStore(kvos, builder, exactly_once_intr.GuaranteeMth(sp.GuaranteeMth))
 	streamTaskArgs, err := builder.
 		FixedOutParNum(sp.ParNum).

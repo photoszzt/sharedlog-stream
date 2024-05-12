@@ -24,7 +24,7 @@ type SnapshotStore interface {
 		srcLogOff []commtypes.TpLogOff, storeName string,
 	) error
 	GetAlignChkpt(ctx context.Context, srcs []string, storeName string) ([]byte, error)
-	StoreSnapshot(ctx context.Context, env types.Environment,
+	StoreSnapshot(ctx context.Context,
 		snapshot []byte, changelogTpName string, logOff uint64,
 	) error
 	GetSnapshot(ctx context.Context, changelogTpName string, logOff uint64) ([]byte, error)
@@ -122,10 +122,11 @@ func (rs *RedisSnapshotStore) GetAlignChkpt(ctx context.Context, srcs []string, 
 	return rs.rdb_arr[idx].Get(ctx, key).Bytes()
 }
 
-func (rs *RedisSnapshotStore) StoreSnapshot(ctx context.Context, env types.Environment,
+func (rs *RedisSnapshotStore) StoreSnapshot(ctx context.Context,
 	snapshot []byte, changelogTpName string, logOff uint64,
 ) error {
 	var uint16Serde commtypes.Uint16Serde
+	env := ctx.Value(commtypes.ENVID{}).(types.Environment)
 	key := fmt.Sprintf("%s_%#x", changelogTpName, logOff)
 	idx := hashfuncs.NameHash(key) % uint64(len(rs.rdb_arr))
 	fmt.Fprintf(os.Stderr, "store snapshot key: %s at redis[%d]\n", key, idx)

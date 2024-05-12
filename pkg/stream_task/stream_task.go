@@ -21,7 +21,6 @@ import (
 	"sharedlog-stream/pkg/transaction/remote_txn_rpc"
 	"time"
 
-	"cs.utexas.edu/zjia/faas/types"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -115,10 +114,10 @@ func (t *StreamTask) GetEndDuration() time.Duration {
 	return t.endDuration
 }
 
-type SetupSnapshotCallbackFunc func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
+type SetupSnapshotCallbackFunc func(ctx context.Context, serdeFormat commtypes.SerdeFormat,
 	rs snapshot_store.SnapshotStore) error
 
-func EmptySetupSnapshotCallback(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
+func EmptySetupSnapshotCallback(ctx context.Context, serdeFormat commtypes.SerdeFormat,
 	rs snapshot_store.SnapshotStore,
 ) error {
 	return nil
@@ -156,7 +155,7 @@ func ExecuteApp(ctx context.Context,
 		// } else {
 		// 	snap_store = &rs
 		// }
-		err = setupSnapshotCallback(ctx, streamTaskArgs.env, streamTaskArgs.serdeFormat, snap_store)
+		err = setupSnapshotCallback(ctx, streamTaskArgs.serdeFormat, snap_store)
 		if err != nil {
 			return common.GenErrFnOutput(err)
 		}
@@ -214,7 +213,7 @@ func ExecuteApp(ctx context.Context,
 		debug.Fprintf(os.Stderr, "unsafe ret: %v\n", ret)
 	} else if streamTaskArgs.guarantee == exactly_once_intr.ALIGN_CHKPT {
 		debug.Fprintf(os.Stderr, "begin align checkpoint processing\n")
-		cmm, err := control_channel.NewControlChannelManager(streamTaskArgs.env,
+		cmm, err := control_channel.NewControlChannelManager(
 			streamTaskArgs.appId,
 			streamTaskArgs.serdeFormat, streamTaskArgs.bufMaxSize,
 			streamTaskArgs.ectx.CurEpoch(), streamTaskArgs.ectx.SubstreamNum())
@@ -708,7 +707,6 @@ func updateStreamCursor(offsetPairs []*remote_txn_rpc.OffsetPair, args *StreamTa
 
 func checkStreamArgs(args *StreamTaskArgs) {
 	debug.Assert(len(args.ectx.Consumers()) >= 1, "Srcs should be filled")
-	debug.Assert(args.env != nil, "env should be filled")
 	debug.Assert(args.ectx != nil, "program args should be filled")
 }
 

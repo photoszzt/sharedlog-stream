@@ -15,7 +15,7 @@ import (
 func process(ctx context.Context, t *StreamTask, args *StreamTaskArgs) *common.FnOutput {
 	checkStreamArgs(args)
 	// latencies := stats.NewInt64Collector("latPerIter", stats.DEFAULT_COLLECT_DURATION)
-	cm, err := consume_seq_num_manager.NewConsumeSeqManager(args.env, args.serdeFormat,
+	cm, err := consume_seq_num_manager.NewConsumeSeqManager(args.serdeFormat,
 		args.transactionalId, args.bufMaxSize)
 	if err != nil {
 		return common.GenErrFnOutput(err)

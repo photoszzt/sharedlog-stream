@@ -37,7 +37,7 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(
 		BufMaxSize:    default_max_buf,
 		SerdeFormat:   uint8(serdeFormat),
 	}
-	srcs, sinks, err := getSrcSink(ctx, sp, h.env)
+	srcs, sinks, err := getSrcSink(ctx, sp)
 	if err != nil {
 		panic(err)
 	}
@@ -50,12 +50,12 @@ func (h *produceConsumeHandler) testMultiProducerEpoch(
 	if err != nil {
 		panic(err)
 	}
-	em1, trackParFunc1, err := getEpochManager(ctx, h.env,
+	em1, trackParFunc1, err := getEpochManager(ctx,
 		"prod1_multi"+serdeFormat.String(), serdeFormat)
 	if err != nil {
 		panic(err)
 	}
-	em2, trackParFunc2, err := getEpochManager(ctx, h.env,
+	em2, trackParFunc2, err := getEpochManager(ctx,
 		"prod2_multi"+serdeFormat.String(), serdeFormat)
 	if err != nil {
 		panic(err)

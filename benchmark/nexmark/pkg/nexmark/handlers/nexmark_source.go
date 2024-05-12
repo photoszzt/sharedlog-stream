@@ -51,6 +51,7 @@ func (h *nexmarkSourceHandler) Call(ctx context.Context, input []byte) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	h.rcm = checkpt.NewRedisChkptManager()
 	output := h.eventGeneration(ctx, inputConfig)
 	encodedOutput, err := json.Marshal(output)
@@ -203,7 +204,7 @@ func (h *nexmarkSourceHandler) setupGeneratorConfig(inputConfig *ntypes.NexMarkC
 }
 
 func (h *nexmarkSourceHandler) getStreamPublisher(inputConfig *ntypes.NexMarkConfigInput) *common.FnOutput {
-	stream, err := sharedlog_stream.NewSizableShardedSharedLogStream(h.env, inputConfig.TopicName,
+	stream, err := sharedlog_stream.NewSizableShardedSharedLogStream(inputConfig.TopicName,
 		inputConfig.NumOutPartition,
 		commtypes.SerdeFormat(inputConfig.SerdeFormat), inputConfig.BufMaxSize)
 	if err != nil {
@@ -271,7 +272,7 @@ func (h *nexmarkSourceHandler) propagateScaleFence(m *txn_data.ControlMetadata, 
 	for len(h.streamPusher.MsgChan) > 0 {
 		time.Sleep(time.Duration(100) * time.Microsecond)
 	}
-	err := h.streamPusher.Stream.ScaleSubstreams(h.env, numSubstreams)
+	err := h.streamPusher.Stream.ScaleSubstreams(numSubstreams)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -315,7 +316,7 @@ func (h *nexmarkSourceHandler) eventGeneration(
 	if fn_out != nil {
 		return fn_out
 	}
-	cmm, err := control_channel.NewControlChannelManager(h.env, inputConfig.AppId,
+	cmm, err := control_channel.NewControlChannelManager(inputConfig.AppId,
 		commtypes.SerdeFormat(inputConfig.SerdeFormat), inputConfig.BufMaxSize, 0, inputConfig.ParNum)
 	if err != nil {
 		return common.GenErrFnOutput(err)

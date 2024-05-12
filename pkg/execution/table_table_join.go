@@ -11,8 +11,6 @@ import (
 	"sharedlog-stream/pkg/store"
 	"sharedlog-stream/pkg/store_with_changelog"
 	"sharedlog-stream/pkg/stream_task"
-
-	"cs.utexas.edu/zjia/faas/types"
 )
 
 /*
@@ -125,7 +123,7 @@ func SetupTableTableJoinWithSkipmap[K comparable, VLeft, VRight, VR any](
 			Kvo: []store.KeyValueStoreOp{leftTab, rightTab},
 		}
 		setupSnapFunc = stream_task.SetupSnapshotCallbackFunc(
-			func(ctx context.Context, env types.Environment,
+			func(ctx context.Context,
 				serdeFormat commtypes.SerdeFormat,
 				rs snapshot_store.SnapshotStore,
 			) error {
@@ -156,7 +154,7 @@ func SetupTableTableJoinWithSkipmap[K comparable, VLeft, VRight, VR any](
 				rightTabCl.ChangelogTopicName(): rightTabCl,
 			},
 		}
-		setupSnapFunc = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, env types.Environment, serdeFormat commtypes.SerdeFormat,
+		setupSnapFunc = stream_task.SetupSnapshotCallbackFunc(func(ctx context.Context, serdeFormat commtypes.SerdeFormat,
 			rs snapshot_store.SnapshotStore,
 		) error {
 			payloadSerde, err := commtypes.GetPayloadArrSerdeG(serdeFormat)
@@ -164,9 +162,9 @@ func SetupTableTableJoinWithSkipmap[K comparable, VLeft, VRight, VR any](
 				return err
 			}
 			stream_task.SetKVStoreWithChangelogSnapshot[K, commtypes.ValueTimestampG[VLeft]](
-				ctx, env, rs.(*snapshot_store.RedisSnapshotStore), leftTabCl, payloadSerde)
+				ctx, rs.(*snapshot_store.RedisSnapshotStore), leftTabCl, payloadSerde)
 			stream_task.SetKVStoreWithChangelogSnapshot[K, commtypes.ValueTimestampG[VRight]](
-				ctx, env, rs.(*snapshot_store.RedisSnapshotStore), rightTabCl, payloadSerde)
+				ctx, rs.(*snapshot_store.RedisSnapshotStore), rightTabCl, payloadSerde)
 			return nil
 		})
 		leftTab = leftTabCl

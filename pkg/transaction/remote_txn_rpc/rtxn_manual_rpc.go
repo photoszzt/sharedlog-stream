@@ -7,7 +7,6 @@ import (
 	"net/http"
 	commtypes "sharedlog-stream/pkg/commtypes"
 	txn_data "sharedlog-stream/pkg/txn_data"
-	"time"
 
 	"github.com/tinylib/msgp/msgp"
 	"golang.org/x/xerrors"
@@ -35,9 +34,7 @@ type RTxnRpcClient struct {
 func NewRTxnRpcClient(faas_gateway string, nodeConstraint string, serdeFormat commtypes.SerdeFormat) RTxnRpcClient {
 	s, _ := GetRTxnArgSerdeG(commtypes.MSGP)
 	return RTxnRpcClient{
-		client: &http.Client{
-			Timeout: time.Duration(10) * time.Second,
-		},
+		client:         &http.Client{},
 		funcUrl:        fmt.Sprintf("http://%s/function/%s", faas_gateway, RTxnFuncName),
 		nodeConstraint: nodeConstraint,
 		readBuffer:     make([]byte, 0, 1024),

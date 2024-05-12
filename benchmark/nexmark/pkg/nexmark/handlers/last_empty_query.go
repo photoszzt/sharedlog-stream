@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"sharedlog-stream/benchmark/common"
+	"sharedlog-stream/pkg/commtypes"
 
 	"cs.utexas.edu/zjia/faas/types"
 )
@@ -26,6 +27,7 @@ func (q *lastQueryEmpty) Call(ctx context.Context, input []byte) ([]byte, error)
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, q.env)
 	output := q.queryEmpty(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -56,6 +58,7 @@ func (q *subG2Empty) Call(ctx context.Context, input []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, q.env)
 	output := q.queryEmpty(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -86,6 +89,7 @@ func (q *subG3Empty) Call(ctx context.Context, input []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, q.env)
 	output := q.queryEmpty(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {

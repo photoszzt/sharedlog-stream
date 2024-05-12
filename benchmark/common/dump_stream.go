@@ -9,7 +9,6 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/sharedlog_stream"
 
-	"cs.utexas.edu/zjia/faas/types"
 	"golang.org/x/xerrors"
 )
 
@@ -22,8 +21,8 @@ type DumpOutputStreamConfig struct {
 	NumPartitions uint8
 }
 
-func DumpOutputStream(ctx context.Context, env types.Environment, args DumpOutputStreamConfig) error {
-	log, err := sharedlog_stream.NewShardedSharedLogStream(env, args.TopicName, args.NumPartitions,
+func DumpOutputStream(ctx context.Context, args DumpOutputStreamConfig) error {
+	log, err := sharedlog_stream.NewShardedSharedLogStream(args.TopicName, args.NumPartitions,
 		args.SerdeFormat, args.BufMaxSize)
 	if err != nil {
 		return err

@@ -33,6 +33,7 @@ func (h *initQueryEmpty) Call(ctx context.Context, input []byte) ([]byte, error)
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	output := h.queryEmpty(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -45,7 +46,7 @@ func emptyFunc(ctx context.Context, sp *common.QueryInput,
 	funcName string, env types.Environment, subGraphTag string,
 	initial bool, last bool,
 ) *common.FnOutput {
-	srcs, sinks, err := getSrcSink(ctx, env, sp)
+	srcs, sinks, err := getSrcSink(ctx, sp)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -71,7 +72,7 @@ func emptyFunc(ctx context.Context, sp *common.QueryInput,
 		AppProcessFunc(stream_task.CommonAppProcessFunc(outProc.Process, msgSerde)).
 		Build()
 	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(env, &ectx,
+		stream_task.NewStreamTaskArgsBuilder(&ectx,
 			fmt.Sprintf("%s-%s-%d-%s", funcName, sp.InputTopicNames[0],
 				sp.ParNum, sp.OutputTopicNames[0]))).
 		FixedOutParNum(sp.ParNum).

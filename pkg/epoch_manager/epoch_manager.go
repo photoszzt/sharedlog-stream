@@ -27,7 +27,6 @@ const (
 
 type EpochManager struct {
 	epochMetaSerde        commtypes.SerdeG[commtypes.EpochMarker]
-	env                   types.Environment
 	currentTopicSubstream *skipmap.StringMap[*skipset.Uint32Set]
 	epochLog              *sharedlog_stream.SharedLogStream
 	tpHashes              map[string]uint64
@@ -37,10 +36,10 @@ type EpochManager struct {
 	useBuf                bool
 }
 
-func NewEpochManager(env types.Environment, epochMngrName string,
+func NewEpochManager(epochMngrName string,
 	serdeFormat commtypes.SerdeFormat,
 ) (*EpochManager, error) {
-	log, err := sharedlog_stream.NewSharedLogStream(env,
+	log, err := sharedlog_stream.NewSharedLogStream(
 		EPOCH_LOG_TOPIC_NAME+"_"+epochMngrName, serdeFormat)
 	if err != nil {
 		return nil, err
@@ -51,7 +50,6 @@ func NewEpochManager(env types.Environment, epochMngrName string,
 	}
 	return &EpochManager{
 		epochMngrName:         epochMngrName,
-		env:                   env,
 		prodId:                commtypes.NewProducerId(),
 		currentTopicSubstream: skipmap.NewString[*skipset.Uint32Set](),
 		epochLog:              log,
@@ -241,6 +239,7 @@ func (em *EpochManager) MarkEpoch(ctx context.Context,
 }
 
 func (em *EpochManager) Init(ctx context.Context) (*commtypes.EpochMarker, *commtypes.RawMsg, error) {
+	env := ctx.Value(commtypes.ENVID{}).(types.Environment)
 	off, err := em.SyncToRecentNoRead(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -251,14 +250,14 @@ func (em *EpochManager) Init(ctx context.Context) (*commtypes.EpochMarker, *comm
 		return nil, nil, err
 	}
 	if recentMeta == nil {
-		em.prodId.InitTaskId(em.env)
+		em.prodId.InitTaskId(env)
 		em.prodId.TaskEpoch = 0
 	} else {
 		em.prodId.TaskEpoch = metaMsg.ProdId.TaskEpoch
 		em.prodId.TaskId = metaMsg.ProdId.TaskId
 	}
 	if recentMeta != nil && metaMsg.ProdId.TaskEpoch == math.MaxUint16 {
-		em.prodId.InitTaskId(em.env)
+		em.prodId.InitTaskId(env)
 		em.prodId.TaskEpoch = 0
 	}
 	em.prodId.TaskEpoch += 1

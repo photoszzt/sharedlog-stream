@@ -65,10 +65,11 @@ func (h *mngrFuncHanlder) Call(ctx context.Context, input []byte) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	switch in.RpcType {
 	case remote_txn_rpc.Init:
 		r.UpdateSerdeFormat(commtypes.SerdeFormat(in.SerdeFormat))
-		ret, err := r.Init(ctx, h.env, in.Init)
+		ret, err := r.Init(ctx, in.Init)
 		if err != nil {
 			return h.GenErrOut(err), nil
 		}

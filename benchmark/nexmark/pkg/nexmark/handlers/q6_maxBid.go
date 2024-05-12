@@ -38,6 +38,7 @@ func (h *q6MaxBid) Call(ctx context.Context, input []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	output := h.Q6MaxBid(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -84,13 +85,13 @@ func (h *q6MaxBid) Q6MaxBid(ctx context.Context, sp *common.QueryInput) *common.
 	if fn_out != nil {
 		return fn_out
 	}
-	ectx, err := getExecutionCtxSingleSrcSinkMiddle(ctx, h.env, h.funcName, sp)
+	ectx, err := getExecutionCtxSingleSrcSinkMiddle(ctx, h.funcName, sp)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
 	// gua := exactly_once_intr.GuaranteeMth(sp.GuaranteeMth)
 	// useCache := benchutil.UseCache(h.useCache, gua)
-	aggStore, builder, snapfunc, err := setupKVStoreForAgg(ctx, h.env, sp,
+	aggStore, builder, snapfunc, err := setupKVStoreForAgg(ctx, sp,
 		&execution.KVStoreParam[ntypes.AuctionIdSeller, ntypes.PriceTime]{
 			Compare: ntypes.AuctionIdSellerLess,
 			CommonStoreParam: execution.CommonStoreParam[ntypes.AuctionIdSeller, ntypes.PriceTime]{

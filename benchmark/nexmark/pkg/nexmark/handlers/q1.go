@@ -34,6 +34,7 @@ func (h *query1Handler) Call(ctx context.Context, input []byte) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	output := h.Query1(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -66,7 +67,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 	if fn_out != nil {
 		return fn_out
 	}
-	srcs, sinks, err := getSrcSink(ctx, h.env, sp)
+	srcs, sinks, err := getSrcSink(ctx, sp)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -85,7 +86,7 @@ func (h *query1Handler) Query1(ctx context.Context, sp *common.QueryInput) *comm
 	task := stream_task.NewStreamTaskBuilder().MarkFinalStage().
 		AppProcessFunc(stream_task.CommonAppProcessFunc[string, *ntypes.Event](filterProc.Process, h.msgSerde)).
 		Build()
-	streamTaskArgs, err := streamArgsBuilder(h.env, &ectx, sp).
+	streamTaskArgs, err := streamArgsBuilder(&ectx, sp).
 		FixedOutParNum(sp.ParNum).
 		Build()
 	if err != nil {

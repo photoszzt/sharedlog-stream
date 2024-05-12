@@ -124,12 +124,13 @@ type ChkptMngr struct {
 	rcm    checkpt.RedisChkptManager
 }
 
-func NewChkptMngr(ctx context.Context, env types.Environment,
+func NewChkptMngr(ctx context.Context,
 	rc []*redis.Client,
 ) *ChkptMngr {
 	ckptm := ChkptMngr{
 		prodId: commtypes.NewProducerId(),
 	}
+	env := ctx.Value(commtypes.ENVID{}).(types.Environment)
 	ckptm.prodId.InitTaskId(env)
 	ckptm.prodId.TaskEpoch = 1
 	ckptm.rcm = checkpt.NewRedisChkptManagerFromClients(rc)
@@ -149,7 +150,7 @@ func processAlignChkpt(ctx context.Context, t *StreamTask, args *StreamTaskArgs,
 	paused := false
 	// gotNoData := 0
 	var finalOutTpNames []string
-	chkptMngr := NewChkptMngr(ctx, args.env, rc)
+	chkptMngr := NewChkptMngr(ctx, rc)
 	prodId := chkptMngr.GetProducerId()
 	fmt.Fprintf(os.Stderr, "[%d] prodId: %s, warmup time: %v, flush every: %v, waitEndMark: %v\n",
 		args.ectx.SubstreamNum(), prodId.String(), args.warmup, args.flushEvery, args.waitEndMark)

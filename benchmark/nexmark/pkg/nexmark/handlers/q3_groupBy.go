@@ -47,9 +47,9 @@ func (h *q3GroupByHandler) Call(ctx context.Context, input []byte) ([]byte, erro
 	return common.CompressData(encodedOutput), nil
 }
 
-func getExecutionCtx(ctx context.Context, env types.Environment, sp *common.QueryInput, funcName string,
+func getExecutionCtx(ctx context.Context, sp *common.QueryInput, funcName string,
 ) (processor.BaseExecutionContext, error) {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, env, sp)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, sp)
 	if err != nil {
 		return processor.BaseExecutionContext{}, err
 	}
@@ -106,7 +106,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 	if fn_out != nil {
 		return fn_out
 	}
-	ectx, err := getExecutionCtx(ctx, h.env, sp, h.funcName)
+	ectx, err := getExecutionCtx(ctx, sp, h.funcName)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -148,7 +148,7 @@ func (h *q3GroupByHandler) Q3GroupBy(ctx context.Context, sp *common.QueryInput)
 			}, h.inMsgSerde)).
 		Build()
 	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,
+		stream_task.NewStreamTaskArgsBuilder(&ectx,
 			fmt.Sprintf("%s-%s-%d", h.funcName, sp.InputTopicNames[0], sp.ParNum))).Build()
 	if err != nil {
 		return common.GenErrFnOutput(err)

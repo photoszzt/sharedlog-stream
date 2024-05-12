@@ -8,7 +8,6 @@ import (
 	"sharedlog-stream/pkg/txn_data"
 
 	"cs.utexas.edu/zjia/faas/protocol"
-	"cs.utexas.edu/zjia/faas/types"
 )
 
 const (
@@ -22,14 +21,14 @@ type ConsumeSeqManager struct {
 	useBuf             bool
 }
 
-func NewConsumeSeqManager(env types.Environment, serdeFormat commtypes.SerdeFormat,
+func NewConsumeSeqManager(serdeFormat commtypes.SerdeFormat,
 	conSeqMngrName string, bufMaxSize uint32,
 ) (*ConsumeSeqManager, error) {
 	offsetMarkerSerde, err := commtypes.GetOffsetMarkerSerdeG(serdeFormat)
 	if err != nil {
 		return nil, err
 	}
-	off, err := sharedlog_stream.NewShardedSharedLogStream(env,
+	off, err := sharedlog_stream.NewShardedSharedLogStream(
 		CONSUMER_OFFSET_LOG_TOPIC_NAME+"_"+conSeqMngrName, 1, serdeFormat, bufMaxSize)
 	if err != nil {
 		return nil, err

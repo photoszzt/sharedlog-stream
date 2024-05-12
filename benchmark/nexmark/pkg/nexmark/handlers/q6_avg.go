@@ -35,7 +35,7 @@ func NewQ6Avg(env types.Environment, funcName string) *q6Avg {
 }
 
 func (h *q6Avg) getExecutionCtx(ctx context.Context, sp *common.QueryInput) (processor.BaseExecutionContext, error) {
-	inputStream, outputStreams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	inputStream, outputStreams, err := benchutil.GetShardedInputOutputStreams(ctx, sp)
 	if err != nil {
 		return processor.BaseExecutionContext{}, err
 	}
@@ -70,6 +70,7 @@ func (h *q6Avg) Call(ctx context.Context, input []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	output := h.Q6Avg(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -116,7 +117,7 @@ func (h *q6Avg) Q6Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
-	kvstore, builder, snapfunc, err := setupKVStoreForAgg(ctx, h.env, sp,
+	kvstore, builder, snapfunc, err := setupKVStoreForAgg(ctx, sp,
 		&execution.KVStoreParam[uint64, ntypes.PriceTimeList]{
 			Compare: store.Uint64LessFunc,
 			CommonStoreParam: execution.CommonStoreParam[uint64, ntypes.PriceTimeList]{

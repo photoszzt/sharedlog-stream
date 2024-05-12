@@ -47,7 +47,7 @@ func (h *sharedlogTranDataGenHandler) sharedlogProduceBench(ctx context.Context,
 	numEvents := sp.NumEvents
 	duration := time.Duration(sp.Duration) * time.Second
 	nEmitEvent := uint32(0)
-	stream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, sp.TopicName,
+	stream, err := sharedlog_stream.NewShardedSharedLogStream(sp.TopicName,
 		sp.NumOutPartition, commtypes.SerdeFormat(sp.SerdeFormat), sp.BufMaxSize)
 	if err != nil {
 		return common.GenErrFnOutput(err)

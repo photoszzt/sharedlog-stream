@@ -44,6 +44,7 @@ func (h *q8JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, e
 		return nil, err
 	}
 	fmt.Fprintf(os.Stderr, "inputParam: %+v\n", parsedInput)
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	output := h.Query8JoinStream(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -55,7 +56,7 @@ func (h *q8JoinStreamHandler) Call(ctx context.Context, input []byte) ([]byte, e
 
 func (h *q8JoinStreamHandler) getSrcSink(sp *common.QueryInput,
 ) ([]*producer_consumer.MeteredConsumer, []producer_consumer.MeteredProducerIntr, error) {
-	stream1, stream2, outputStream, err := getInOutStreams(h.env, sp)
+	stream1, stream2, outputStream, err := getInOutStreams(sp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -141,12 +142,12 @@ func (h *q8JoinStreamHandler) setupJoin(sp *common.QueryInput) (
 			})
 		})
 	aucMp, err := getMaterializedParam[uint64, *ntypes.Event](
-		"q8AuctionsBySellerIDWinTab", h.msgSerde, h.env, sp)
+		"q8AuctionsBySellerIDWinTab", h.msgSerde, sp)
 	if err != nil {
 		return nil, nil, nil, nil, common.GenErrFnOutput(err)
 	}
 	perMp, err := getMaterializedParam[uint64, *ntypes.Event](
-		"q8PersonsByIDWinTab", h.msgSerde, h.env, sp)
+		"q8PersonsByIDWinTab", h.msgSerde, sp)
 	if err != nil {
 		return nil, nil, nil, nil, common.GenErrFnOutput(err)
 	}
@@ -180,7 +181,7 @@ func (h *q8JoinStreamHandler) Query8JoinStream(ctx context.Context, sp *common.Q
 		proc_interface.NewBaseSrcsSinks(srcs, sinks_arr),
 		proc_interface.NewBaseProcArgs(h.funcName, sp.ScaleEpoch, sp.ParNum), true,
 		msgSerdePair, msgSerdePair, "subG2")
-	builder := streamArgsBuilderForJoin(h.env, procArgs, sp)
+	builder := streamArgsBuilderForJoin(procArgs, sp)
 	builder = execution.StreamArgsSetWinStore(wsos, builder,
 		exactly_once_intr.GuaranteeMth(sp.GuaranteeMth))
 	streamTaskArgs, err := builder.

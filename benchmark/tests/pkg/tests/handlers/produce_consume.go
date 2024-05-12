@@ -29,6 +29,7 @@ func (h *produceConsumeHandler) Call(ctx context.Context, input []byte) ([]byte,
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	output := h.tests(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {

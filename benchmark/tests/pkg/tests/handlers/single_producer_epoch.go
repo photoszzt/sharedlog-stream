@@ -18,14 +18,13 @@ import (
 	"sharedlog-stream/pkg/producer_consumer"
 	"time"
 
-	"cs.utexas.edu/zjia/faas/types"
 	"golang.org/x/xerrors"
 )
 
-func getEpochManager(ctx context.Context, env types.Environment,
+func getEpochManager(ctx context.Context,
 	transactionalID string, serdeFormat commtypes.SerdeFormat,
 ) (*epoch_manager.EpochManager, exactly_once_intr.TrackProdSubStreamFunc, error) {
-	em, err := epoch_manager.NewEpochManager(env, transactionalID, serdeFormat)
+	em, err := epoch_manager.NewEpochManager(transactionalID, serdeFormat)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -41,9 +40,9 @@ func getEpochManager(ctx context.Context, env types.Environment,
 	return em, trackParFunc, nil
 }
 
-func getSrcSink(ctx context.Context, sp *common.TestParam, env types.Environment,
+func getSrcSink(ctx context.Context, sp *common.TestParam,
 ) ([]*producer_consumer.MeteredConsumer, []producer_consumer.MeteredProducerIntr, error) {
-	srcStreams, sinkStreams, err := benchutil.GetShardedInputOutputStreamsTest(ctx, env, sp)
+	srcStreams, sinkStreams, err := benchutil.GetShardedInputOutputStreamsTest(ctx, sp)
 	if err != nil {
 		panic(err)
 	}
@@ -98,13 +97,13 @@ func (h *produceConsumeHandler) testSingleProduceConsumeEpoch(ctx context.Contex
 	if err != nil {
 		panic(err)
 	}
-	srcs, sinks, err := getSrcSink(ctx, sp, h.env)
+	srcs, sinks, err := getSrcSink(ctx, sp)
 	if err != nil {
 		panic(err)
 	}
 	ectx := processor.NewExecutionContextFromComponents(proc_interface.NewBaseSrcsSinks(srcs, sinks),
 		proc_interface.NewBaseProcArgs("singleProdConsumeEpoch", 1, 0))
-	em1, trackParFunc1, err := getEpochManager(ctx, h.env,
+	em1, trackParFunc1, err := getEpochManager(ctx,
 		"prod1_single"+serdeFormat.String(), serdeFormat)
 	if err != nil {
 		panic(err)

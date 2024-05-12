@@ -46,12 +46,12 @@ func (h *sharedlogTranProcessHandler) Call(ctx context.Context, input []byte) ([
 func (h *sharedlogTranProcessHandler) getSrcSink(sp *common.TranProcessBenchParam,
 ) ([]*producer_consumer.MeteredConsumer, []producer_consumer.MeteredProducerIntr, *common.FnOutput) {
 	serdeFormat := commtypes.SerdeFormat(sp.SerdeFormat)
-	inStream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, sp.InTopicName,
+	inStream, err := sharedlog_stream.NewShardedSharedLogStream(sp.InTopicName,
 		sp.NumPartition, serdeFormat, sp.BufMaxSize)
 	if err != nil {
 		return nil, nil, common.GenErrFnOutput(err)
 	}
-	outStream, err := sharedlog_stream.NewShardedSharedLogStream(h.env, sp.OutTopicName,
+	outStream, err := sharedlog_stream.NewShardedSharedLogStream(sp.OutTopicName,
 		sp.NumPartition, serdeFormat, sp.BufMaxSize)
 	if err != nil {
 		return nil, nil, common.GenErrFnOutput(err)
@@ -109,7 +109,7 @@ func (h *sharedlogTranProcessHandler) sharedlogTranProcess(ctx context.Context, 
 	task := stream_task.NewStreamTaskBuilder().MarkFinalStage().
 		AppProcessFunc(stream_task.CommonAppProcessFunc(outProc.Process, h.msgSerde)).
 		Build()
-	streamTaskArgs, err := stream_task.NewStreamTaskArgsBuilder(h.env, &ectx,
+	streamTaskArgs, err := stream_task.NewStreamTaskArgsBuilder(&ectx,
 		fmt.Sprintf("tranProcess-%s-%d-%s", sp.InTopicName,
 			0, sp.OutTopicName)).
 		Guarantee(exactly_once_intr.EPOCH_MARK).

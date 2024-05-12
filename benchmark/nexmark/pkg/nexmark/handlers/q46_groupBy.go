@@ -35,6 +35,7 @@ func (h *q46GroupByHandler) Call(ctx context.Context, input []byte) ([]byte, err
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	output := h.Q46GroupBy(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -65,7 +66,7 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 	if fn_out != nil {
 		return fn_out
 	}
-	ectx, err := getExecutionCtx(ctx, h.env, sp, h.funcName)
+	ectx, err := getExecutionCtx(ctx, sp, h.funcName)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -109,7 +110,7 @@ func (h *q46GroupByHandler) Q46GroupBy(ctx context.Context, sp *common.QueryInpu
 		Build()
 	transactionalID := fmt.Sprintf("%s-%s-%d", h.funcName, sp.InputTopicNames[0], sp.ParNum)
 	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).Build()
+		stream_task.NewStreamTaskArgsBuilder(&ectx, transactionalID)).Build()
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

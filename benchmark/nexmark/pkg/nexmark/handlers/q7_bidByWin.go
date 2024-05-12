@@ -39,6 +39,7 @@ func (h *q7BidByWin) Call(ctx context.Context, input []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	output := h.q7BidByWin(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -77,7 +78,7 @@ func (h *q7BidByWin) procMsg(ctx context.Context, msg commtypes.Message, argsTmp
 
 func (h *q7BidByWin) getSrcSink(ctx context.Context, sp *common.QueryInput,
 ) ([]*producer_consumer.MeteredConsumer, []producer_consumer.MeteredProducerIntr, error) {
-	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	input_stream, output_streams, err := benchutil.GetShardedInputOutputStreams(ctx, sp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -169,7 +170,7 @@ func (h *q7BidByWin) q7BidByWin(ctx context.Context, sp *common.QueryInput) *com
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, sp.InputTopicNames[0],
 		sp.ParNum, sp.OutputTopicNames[0])
 	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(sp,
-		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).Build()
+		stream_task.NewStreamTaskArgsBuilder(&ectx, transactionalID)).Build()
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

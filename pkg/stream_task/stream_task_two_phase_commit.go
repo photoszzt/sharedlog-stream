@@ -18,7 +18,7 @@ import (
 )
 
 func SetupManagersFor2pcTest(ctx context.Context, streamTaskArgs *StreamTaskArgs) (*transaction.TransactionManager, error) {
-	tm, err := transaction.NewTransactionManager(ctx, streamTaskArgs.env,
+	tm, err := transaction.NewTransactionManager(ctx,
 		streamTaskArgs.transactionalId, streamTaskArgs.serdeFormat)
 	if err != nil {
 		return nil, err
@@ -55,7 +55,7 @@ func SetupManagersFor2pc(ctx context.Context, t *StreamTask,
 ) (*transaction.TransactionManager, *control_channel.ControlChannelManager, error) {
 	checkStreamArgs(streamTaskArgs)
 	debug.Fprint(os.Stderr, "setup transaction and control manager\n")
-	tm, err := transaction.NewTransactionManager(ctx, streamTaskArgs.env,
+	tm, err := transaction.NewTransactionManager(ctx,
 		streamTaskArgs.transactionalId, streamTaskArgs.serdeFormat)
 	if err != nil {
 		return nil, nil, fmt.Errorf("NewTransactionManager failed: %v", err)
@@ -103,7 +103,7 @@ func SetupManagersFor2pc(ctx context.Context, t *StreamTask,
 		fmt.Fprintf(os.Stderr, "down restore, elapsed: %v\n", restoreElapsed)
 	}
 
-	cmm, err := control_channel.NewControlChannelManager(streamTaskArgs.env, streamTaskArgs.appId,
+	cmm, err := control_channel.NewControlChannelManager(streamTaskArgs.appId,
 		commtypes.SerdeFormat(streamTaskArgs.serdeFormat), streamTaskArgs.bufMaxSize,
 		streamTaskArgs.ectx.CurEpoch(), streamTaskArgs.ectx.SubstreamNum())
 	if err != nil {

@@ -57,7 +57,6 @@ var (
 
 type SharedLogStream struct {
 	mux syncutils.RWMutex
-	env types.Environment
 	// txnMarkerSerde commtypes.Serde
 	topicName     string
 	topicNameHash uint64
@@ -105,9 +104,8 @@ func decodeStreamLogEntry(logEntry *types.LogEntry) *StreamLogEntry {
 	return &streamLogEntry
 }
 
-func NewSharedLogStream(env types.Environment, topicName string, serdeFormat commtypes.SerdeFormat) (*SharedLogStream, error) {
+func NewSharedLogStream(topicName string, serdeFormat commtypes.SerdeFormat) (*SharedLogStream, error) {
 	s := &SharedLogStream{
-		env:           env,
 		topicName:     topicName,
 		topicNameHash: hashfuncs.NameHash(topicName),
 		cursor:        0,
@@ -142,6 +140,7 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context,
 	payload []byte, parNum uint8, tags []uint64, additionalTopicNames []string,
 	meta LogEntryMeta, producerId commtypes.ProducerId,
 ) (uint64, error) {
+	env := ctx.Value(commtypes.ENVID{}).(types.Environment)
 	topics := []string{s.topicName}
 	if additionalTopicNames != nil {
 		topics = append(topics, additionalTopicNames...)
@@ -166,7 +165,7 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context,
 	}
 
 	s.mux.Lock()
-	seqNum, err := s.env.SharedLogAppend(ctx, tags, encoded)
+	seqNum, err := env.SharedLogAppend(ctx, tags, encoded)
 	if err != nil {
 		commtypes.PushBuffer(&encoded)
 		return 0, err
@@ -186,7 +185,7 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context,
 	/*
 		// debug.Fprintf(os.Stderr, "append val %s with tag: %x to topic %s par %d, seqNum: %x\n",
 		// 	string(payload), tags[0], s.topicName, parNum, seqNum)
-		logEntryRead, err := s.env.SharedLogReadNext(ctx, tags[0], seqNum)
+		logEntryRead, err := env.SharedLogReadNext(ctx, tags[0], seqNum)
 		if err != nil {
 			return 0, err
 		}
@@ -197,7 +196,7 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context,
 			return 0, fmt.Errorf("log data mismatch")
 		}
 
-		logEntryRead, err = s.env.SharedLogReadPrev(ctx, tags[0], seqNum+1)
+		logEntryRead, err = env.SharedLogReadPrev(ctx, tags[0], seqNum+1)
 		if err != nil {
 			return 0, err
 		}
@@ -271,12 +270,13 @@ func (s *SharedLogStream) ReadNextWithTagUntil(ctx context.Context, parNum uint8
 		s.tail = maxSeqNum + 1
 		s.mux.Unlock()
 	}
+	env := ctx.Value(commtypes.ENVID{}).(types.Environment)
 	seqNum := s.cursor
 	logEntries := make([]commtypes.RawMsg, 0, 3)
 	for seqNum <= maxSeqNum {
 		newCtx, cancel := context.WithTimeout(ctx, kBlockingReadTimeout)
 		defer cancel()
-		logEntry, err := s.env.SharedLogReadNextBlock(newCtx, tag, seqNum)
+		logEntry, err := env.SharedLogReadNextBlock(newCtx, tag, seqNum)
 		// debug.Fprintf(os.Stderr, "after read next block\n")
 		if err != nil {
 			return nil, err
@@ -315,10 +315,11 @@ func (s *SharedLogStream) ReadFromSeqNumWithTag(ctx context.Context, from uint64
 ) (*commtypes.RawMsg, error) {
 	// fmt.Fprintf(os.Stderr, "ReadFromSeqNumWithTag %s[%d] tag %#x, from %#x, prodId %s\n",
 	// 	s.topicName, parNum, tag, from, prodId.String())
+	env := ctx.Value(commtypes.ENVID{}).(types.Environment)
 	for from <= appendedSeq {
 		newCtx, cancel := context.WithTimeout(ctx, kBlockingReadTimeout)
 		defer cancel()
-		logEntry, err := s.env.SharedLogReadNextBlock(newCtx, tag, from)
+		logEntry, err := env.SharedLogReadNextBlock(newCtx, tag, from)
 		if err != nil {
 			return nil, err
 		}
@@ -363,6 +364,7 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 			return nil, common_errors.ErrStreamEmpty
 		}
 	}
+	env := ctx.Value(commtypes.ENVID{}).(types.Environment)
 	seqNumInSharedLog := s.cursor
 	// debug.Fprintf(os.Stderr, "cursor: 0x%x, tail: 0x%x\n", s.cursor, s.tail)
 	for seqNumInSharedLog < s.tail {
@@ -370,7 +372,7 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 		// 	tag, seqNumInSharedLog, s.tail)
 		newCtx, cancel := context.WithTimeout(ctx, kBlockingReadTimeout)
 		defer cancel()
-		logEntry, err := s.env.SharedLogReadNextBlock(newCtx, tag, seqNumInSharedLog)
+		logEntry, err := env.SharedLogReadNextBlock(newCtx, tag, seqNumInSharedLog)
 		// debug.Fprintf(os.Stderr, "after read next block\n")
 		if err != nil {
 			return nil, err
@@ -406,10 +408,11 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 func (s *SharedLogStream) readPrevWithTimeout(ctx context.Context, tag uint64, seqNum uint64) (*types.LogEntry, error) {
 	maxRetryTimes := 100
 	idx := 0
+	env := ctx.Value(commtypes.ENVID{}).(types.Environment)
 	for {
 		newCtx, cancel := context.WithTimeout(ctx, kBlockingReadTimeout)
 		defer cancel()
-		logEntry, err := s.env.SharedLogReadPrev(newCtx, tag, seqNum)
+		logEntry, err := env.SharedLogReadPrev(newCtx, tag, seqNum)
 		if err != nil {
 			return nil, err
 		}

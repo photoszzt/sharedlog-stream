@@ -37,7 +37,7 @@ func NewQ4Avg(env types.Environment, funcName string) *q4Avg {
 
 func (h *q4Avg) getExecutionCtx(ctx context.Context, sp *common.QueryInput,
 ) (processor.BaseExecutionContext, error) {
-	inputStream, outputStreams, err := benchutil.GetShardedInputOutputStreams(ctx, h.env, sp)
+	inputStream, outputStreams, err := benchutil.GetShardedInputOutputStreams(ctx, sp)
 	if err != nil {
 		return processor.BaseExecutionContext{}, err
 	}
@@ -74,6 +74,7 @@ func (h *q4Avg) Call(ctx context.Context, input []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	output := h.Q4Avg(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -118,7 +119,7 @@ func (h *q4Avg) Q4Avg(ctx context.Context, sp *common.QueryInput) *common.FnOutp
 		return common.GenErrFnOutput(err)
 	}
 	kvstore, builder, snapfunc, err := setupKVStoreForAgg[uint64, ntypes.SumAndCount](
-		ctx, h.env, sp,
+		ctx, sp,
 		&execution.KVStoreParam[uint64, ntypes.SumAndCount]{
 			Compare: store.Uint64LessFunc,
 			CommonStoreParam: execution.CommonStoreParam[uint64, ntypes.SumAndCount]{

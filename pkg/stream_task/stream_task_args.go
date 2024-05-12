@@ -7,13 +7,10 @@ import (
 	"sharedlog-stream/pkg/processor"
 	"sharedlog-stream/pkg/store"
 	"time"
-
-	"cs.utexas.edu/zjia/faas/types"
 )
 
 type StreamTaskArgs struct {
 	ectx                  processor.ExecutionContext
-	env                   types.Environment
 	windowStoreChangelogs map[string]store.WindowStoreOpWithChangelog
 	kvChangelogs          map[string]store.KeyValueStoreOpWithChangelog
 	kvs                   []store.KeyValueStoreOp
@@ -41,14 +38,13 @@ type StreamTaskArgsBuilder struct {
 	stArgs *StreamTaskArgs
 }
 
-func NewStreamTaskArgsBuilder(env types.Environment,
+func NewStreamTaskArgsBuilder(
 	ectx processor.ExecutionContext,
 	transactionalID string,
 ) SetGuarantee {
 	return &StreamTaskArgsBuilder{
 		stArgs: &StreamTaskArgs{
 			ectx:                     ectx,
-			env:                      env,
 			transactionalId:          transactionalID,
 			fixedOutParNum:           -1,
 			guarantee:                exactly_once_intr.AT_LEAST_ONCE,

@@ -35,6 +35,7 @@ func (h *q7BidByPrice) Call(ctx context.Context, input []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, commtypes.ENVID{}, h.env)
 	output := h.q7BidByPrice(ctx, parsedInput)
 	encodedOutput, err := json.Marshal(output)
 	if err != nil {
@@ -65,7 +66,7 @@ func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInpu
 	if fn_out != nil {
 		return fn_out
 	}
-	srcs, sinks_arr, err := getSrcSinkUint64Key(ctx, h.env, input)
+	srcs, sinks_arr, err := getSrcSinkUint64Key(ctx, input)
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}
@@ -93,7 +94,7 @@ func (h *q7BidByPrice) q7BidByPrice(ctx context.Context, input *common.QueryInpu
 	transactionalID := fmt.Sprintf("%s-%s-%d-%s", h.funcName, input.InputTopicNames[0],
 		input.ParNum, input.OutputTopicNames[0])
 	streamTaskArgs, err := benchutil.UpdateStreamTaskArgs(input,
-		stream_task.NewStreamTaskArgsBuilder(h.env, &ectx, transactionalID)).Build()
+		stream_task.NewStreamTaskArgsBuilder(&ectx, transactionalID)).Build()
 	if err != nil {
 		return common.GenErrFnOutput(err)
 	}

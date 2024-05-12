@@ -16,7 +16,6 @@ import (
 	// "sharedlog-stream/pkg/stats"
 	"sharedlog-stream/pkg/txn_data"
 
-	"cs.utexas.edu/zjia/faas/types"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -49,19 +48,19 @@ func (cm *ControlChannelManager) CurrentEpoch() uint16 {
 	return cm.currentEpoch
 }
 
-func NewControlChannelManager(env types.Environment,
+func NewControlChannelManager(
 	app_id string,
 	serdeFormat commtypes.SerdeFormat,
 	bufMaxSize uint32,
 	epoch uint16,
 	instanceID uint8,
 ) (*ControlChannelManager, error) {
-	logForRead, err := sharedlog_stream.NewShardedSharedLogStream(env, CONTROL_LOG_TOPIC_NAME+"_"+app_id, 1,
+	logForRead, err := sharedlog_stream.NewShardedSharedLogStream(CONTROL_LOG_TOPIC_NAME+"_"+app_id, 1,
 		serdeFormat, bufMaxSize)
 	if err != nil {
 		return nil, err
 	}
-	logForWrite, err := sharedlog_stream.NewShardedSharedLogStream(env,
+	logForWrite, err := sharedlog_stream.NewShardedSharedLogStream(
 		CONTROL_LOG_TOPIC_NAME+"_"+app_id, 1, serdeFormat, bufMaxSize)
 	if err != nil {
 		return nil, err
