@@ -142,10 +142,10 @@ func main() {
 	gen_serde_test("checkpoint", "Checkpoint", commtypes_path, "commtypes", true)
 	gen_serde_test("epoch_meta", "EpochMarker", commtypes_path, "commtypes", true)
 	gen_serde_test("payload_arr", "PayloadArr", commtypes_path, "commtypes", true)
-	// gen_serde_test("table_snapshots", "TableSnapshots", commtypes_path, "commtypes", true)
-	// gen_serde_test("offset_marker", "OffsetMarker", commtypes_path, "commtypes", true)
+	gen_serde_test("table_snapshots", "TableSnapshots", commtypes_path, "commtypes", true)
+	gen_serde_test("offset_marker", "OffsetMarker", commtypes_path, "commtypes", true)
 	gen_serde_test("message_serialized", "MessageSerialized", commtypes_path, "commtypes", true)
-	// gen_serde_test("time_window", "TimeWindow", commtypes_path, "commtypes", true)
+	gen_serde_test("time_window", "TimeWindow", commtypes_path, "commtypes", true)
 
 	txn_path := "../pkg/txn_data/"
 	gen_serde("control_meta", "ControlMetadata", txn_path, "txn_data", false)
@@ -153,7 +153,7 @@ func main() {
 	gen_serde_ptr("topic_partition", "TopicPartition", txn_path, "txn_data", false)
 	gen_serde("txn_metadata", "TxnMetadata", txn_path, "txn_data", false)
 
-	// gen_serde_test("control_meta", "ControlMetadata", txn_path, "txn_data", false)
+	gen_serde_test("control_meta", "ControlMetadata", txn_path, "txn_data", false)
 	gen_serde_test("offset_record", "OffsetRecord", txn_path, "txn_data", false)
 	gen_serde_ptr_test("topic_partition", "TopicPartition", txn_path, "txn_data", false)
 	gen_serde_test("txn_metadata", "TxnMetadata", txn_path, "txn_data", false)

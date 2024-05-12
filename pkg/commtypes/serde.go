@@ -1171,7 +1171,7 @@ func GenTestEncodeDecode[V any](v V, t *testing.T, serdeG SerdeG[V], serde Serde
 		)
 	}
 	if vl.Kind() == reflect.Struct {
-		opts = append(opts, cmpopts.IgnoreUnexported(v))
+		opts = append(opts, cmpopts.IgnoreUnexported(v), cmpopts.EquateEmpty())
 	}
 
 	bts, buf, err := serdeG.Encode(v)
@@ -1183,6 +1183,7 @@ func GenTestEncodeDecode[V any](v V, t *testing.T, serdeG SerdeG[V], serde Serde
 		t.Fatal(err)
 	}
 	if !cmp.Equal(v, ret, opts...) {
+		t.Logf("serdeG input %v, decoded %v\n", v, ret)
 		t.Fatal("encode and decode doesn't give same value")
 	}
 	if serdeG.UsedBufferPool() {
@@ -1199,6 +1200,7 @@ func GenTestEncodeDecode[V any](v V, t *testing.T, serdeG SerdeG[V], serde Serde
 		t.Fatal(err)
 	}
 	if !cmp.Equal(v, r.(V), opts...) {
+		t.Logf("serde input %v, decoded %v\n", v, ret)
 		t.Fatal("encode and decode doesn't give same value")
 	}
 	if serde.UsedBufferPool() {

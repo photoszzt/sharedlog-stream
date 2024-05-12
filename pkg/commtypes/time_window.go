@@ -13,6 +13,10 @@ type TimeWindow struct {
 	BaseWindow
 }
 
+func (t TimeWindow) Equal(b TimeWindow) bool {
+	return t.StartTs == b.StartTs && t.EndTs == b.EndTs
+}
+
 var (
 	_              = Window(&TimeWindow{})
 	notATimeWindow = xerrors.New("The window is not a TimeWindow")
