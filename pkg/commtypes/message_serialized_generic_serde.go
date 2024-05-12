@@ -100,7 +100,7 @@ func (s MessageGMsgpSerdeG[K, V]) Encode(val MessageG[K, V]) ([]byte, *[]byte, e
 	if !ok {
 		return nil, nil, nil
 	}
-	b := PopBuffer()
+	b := PopBuffer(msgSer.Msgsize())
 	buf := *b
 	ret, err := msgSer.MarshalMsg(buf[:0])
 	if s.keySerde.UsedBufferPool() && kbuf != nil {
@@ -134,7 +134,7 @@ func (s MessageGMsgpSerdeG[K, V]) EncodeWithKVBytes(kBytes []byte, vBytes []byte
 		InjTMs:      inj,
 		TimestampMs: ts,
 	}
-	b := PopBuffer()
+	b := PopBuffer(msgSer.Msgsize())
 	buf := *b
 	r, err := msgSer.MarshalMsg(buf[:0])
 	return r, b, err
@@ -197,7 +197,7 @@ func (s MessageGJSONSerdeG[K, V]) EncodeWithKVBytes(kBytes []byte, vBytes []byte
 		InjTMs:      inj,
 		TimestampMs: ts,
 	}
-	b := PopBuffer()
+	b := PopBuffer(msgSer.Msgsize())
 	buf := *b
 	r, err := msgSer.MarshalMsg(buf[:0])
 	return r, b, err

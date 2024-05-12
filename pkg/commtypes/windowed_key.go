@@ -186,7 +186,7 @@ func (s WindowedKeyMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error)
 	if wk == nil {
 		return nil, nil, nil
 	}
-	b := PopBuffer()
+	b := PopBuffer(wk.Msgsize())
 	buf := *b
 	r, err := wk.MarshalMsg(buf[:0])
 	return r, b, err

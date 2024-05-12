@@ -5,7 +5,6 @@ import (
 	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/utils"
-	sync "sync"
 	"time"
 )
 
@@ -13,15 +12,10 @@ const (
 	END_OF_STREAM_KEY = "__end_stream"
 )
 
-var bytesPool = sync.Pool{
-	New: func() interface{} {
-		s := make([]byte, 0)
-		return &s
-	},
-}
+var bytesPool = NewSharedBufferPool()
 
-func PopBuffer() *[]byte {
-	return bytesPool.Get().(*[]byte)
+func PopBuffer(size int) *[]byte {
+	return bytesPool.Get(size)
 }
 
 func PushBuffer(b *[]byte) {

@@ -32,7 +32,7 @@ type OffsetRecordMsgpSerdeG struct {
 var _ = commtypes.SerdeG[OffsetRecord](OffsetRecordMsgpSerdeG{})
 
 func (s OffsetRecordMsgpSerdeG) Encode(value OffsetRecord) ([]byte, *[]byte, error) {
-	b := commtypes.PopBuffer()
+	b := commtypes.PopBuffer(value.Msgsize())
 	buf := *b
 	r, err := value.MarshalMsg(buf[:0])
 	return r, b, err

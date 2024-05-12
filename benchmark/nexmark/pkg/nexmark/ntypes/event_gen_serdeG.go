@@ -32,7 +32,7 @@ type EventMsgpSerdeG struct {
 var _ = commtypes.SerdeG[*Event](EventMsgpSerdeG{})
 
 func (s EventMsgpSerdeG) Encode(value *Event) ([]byte, *[]byte, error) {
-	b := commtypes.PopBuffer()
+	b := commtypes.PopBuffer(value.Msgsize())
 	buf := *b
 	r, err := value.MarshalMsg(buf[:0])
 	return r, b, err

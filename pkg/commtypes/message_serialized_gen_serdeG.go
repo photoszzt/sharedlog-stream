@@ -31,7 +31,7 @@ type MessageSerializedMsgpSerdeG struct {
 var _ = SerdeG[MessageSerialized](MessageSerializedMsgpSerdeG{})
 
 func (s MessageSerializedMsgpSerdeG) Encode(value MessageSerialized) ([]byte, *[]byte, error) {
-	b := PopBuffer()
+	b := PopBuffer(value.Msgsize())
 	buf := *b
 	r, err := value.MarshalMsg(buf[:0])
 	return r, b, err

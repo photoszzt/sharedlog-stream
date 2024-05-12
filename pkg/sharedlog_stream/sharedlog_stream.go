@@ -158,7 +158,7 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context,
 	// TODO: need to deal with sequence number overflow
 	msgSeq := s.curAppendMsgSeqNum.Add(1)
 	logEntry.MsgSeqNum = msgSeq
-	b := commtypes.PopBuffer()
+	b := commtypes.PopBuffer(logEntry.Msgsize())
 	buf := *b
 	encoded, err := logEntry.MarshalMsg(buf[:0])
 	if err != nil {

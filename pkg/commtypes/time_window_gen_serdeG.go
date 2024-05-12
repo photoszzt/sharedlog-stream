@@ -31,7 +31,7 @@ type TimeWindowMsgpSerdeG struct {
 var _ = SerdeG[TimeWindow](TimeWindowMsgpSerdeG{})
 
 func (s TimeWindowMsgpSerdeG) Encode(value TimeWindow) ([]byte, *[]byte, error) {
-	b := PopBuffer()
+	b := PopBuffer(value.Msgsize())
 	buf := *b
 	r, err := value.MarshalMsg(buf[:0])
 	return r, b, err

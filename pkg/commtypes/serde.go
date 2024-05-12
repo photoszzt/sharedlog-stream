@@ -159,7 +159,7 @@ func (e Float64Encoder) Encode(value interface{}) ([]byte, *[]byte, error) {
 	}
 	v := value.(float64)
 	bits := math.Float64bits(v)
-	b := PopBuffer()
+	b := PopBuffer(8)
 	bs := *b
 	bs = Require(bs[:0], 8)
 	bs = binary.BigEndian.AppendUint64(bs, bits)
@@ -168,7 +168,7 @@ func (e Float64Encoder) Encode(value interface{}) ([]byte, *[]byte, error) {
 
 func (e Float64EncoderG) Encode(value float64) ([]byte, *[]byte, error) {
 	bits := math.Float64bits(value)
-	b := PopBuffer()
+	b := PopBuffer(8)
 	bs := *b
 	bs = Require(bs[:0], 8)
 	bs = binary.BigEndian.AppendUint64(bs, bits)
@@ -245,7 +245,7 @@ func (e Float32Encoder) Encode(value interface{}) ([]byte, *[]byte, error) {
 	}
 	v := value.(float32)
 	bits := math.Float32bits(v)
-	b := PopBuffer()
+	b := PopBuffer(8)
 	bs := *b
 	bs = Require(bs[:0], 4)
 	bs = binary.BigEndian.AppendUint32(bs, bits)
@@ -254,7 +254,7 @@ func (e Float32Encoder) Encode(value interface{}) ([]byte, *[]byte, error) {
 
 func (e Float32EncoderG) Encode(value float32) ([]byte, *[]byte, error) {
 	bits := math.Float32bits(value)
-	b := PopBuffer()
+	b := PopBuffer(8)
 	bs := *b
 	bs = Require(bs[:0], 4)
 	bs = binary.BigEndian.AppendUint32(bs, bits)
@@ -330,7 +330,7 @@ func (e Uint64Encoder) Encode(value interface{}) ([]byte, *[]byte, error) {
 		return nil, nil, nil
 	}
 	v := value.(uint64)
-	b := PopBuffer()
+	b := PopBuffer(8)
 	bs := *b
 	bs = Require(bs[:0], 8)
 	bs = binary.BigEndian.AppendUint64(bs, v)
@@ -338,7 +338,7 @@ func (e Uint64Encoder) Encode(value interface{}) ([]byte, *[]byte, error) {
 }
 
 func (e Uint64EncoderG) Encode(value uint64) ([]byte, *[]byte, error) {
-	b := PopBuffer()
+	b := PopBuffer(8)
 	bs := *b
 	bs = Require(bs[:0], 8)
 	bs = binary.BigEndian.AppendUint64(bs, value)
@@ -414,7 +414,7 @@ func (e Int64Encoder) Encode(value interface{}) ([]byte, *[]byte, error) {
 		return nil, nil, nil
 	}
 	v := value.(int64)
-	b := PopBuffer()
+	b := PopBuffer(8)
 	bs := *b
 	bs = Require(bs[:0], 8)
 	bs = binary.BigEndian.AppendUint64(bs, uint64(v))
@@ -422,7 +422,7 @@ func (e Int64Encoder) Encode(value interface{}) ([]byte, *[]byte, error) {
 }
 
 func (e Int64EncoderG) Encode(value int64) ([]byte, *[]byte, error) {
-	b := PopBuffer()
+	b := PopBuffer(8)
 	bs := *b
 	bs = Require(bs[:0], 8)
 	bs = binary.BigEndian.AppendUint64(bs, uint64(value))
@@ -498,7 +498,7 @@ func (e Uint32Encoder) Encode(value interface{}) ([]byte, *[]byte, error) {
 		return nil, nil, nil
 	}
 	v := value.(uint32)
-	b := PopBuffer()
+	b := PopBuffer(4)
 	bs := *b
 	bs = Require(bs[:0], 4)
 	bs = binary.BigEndian.AppendUint32(bs, v)
@@ -506,7 +506,7 @@ func (e Uint32Encoder) Encode(value interface{}) ([]byte, *[]byte, error) {
 }
 
 func (e Uint32EncoderG) Encode(value uint32) ([]byte, *[]byte, error) {
-	b := PopBuffer()
+	b := PopBuffer(4)
 	bs := *b
 	bs = Require(bs[:0], 4)
 	bs = binary.BigEndian.AppendUint32(bs, value)
@@ -582,7 +582,7 @@ func (e Int32Encoder) Encode(value interface{}) ([]byte, *[]byte, error) {
 		return nil, nil, nil
 	}
 	v := value.(int32)
-	b := PopBuffer()
+	b := PopBuffer(4)
 	bs := *b
 	bs = Require(bs[:0], 4)
 	bs = binary.BigEndian.AppendUint32(bs, uint32(v))
@@ -590,7 +590,7 @@ func (e Int32Encoder) Encode(value interface{}) ([]byte, *[]byte, error) {
 }
 
 func (e Int32EncoderG) Encode(value int32) ([]byte, *[]byte, error) {
-	b := PopBuffer()
+	b := PopBuffer(4)
 	bs := *b
 	bs = Require(bs[:0], 4)
 	bs = binary.BigEndian.AppendUint32(bs, uint32(value))
@@ -669,7 +669,7 @@ func (s IntSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 		return nil, nil, nil
 	}
 	v := value.(int)
-	b := PopBuffer()
+	b := PopBuffer(4)
 	bs := *b
 	bs = Require(bs[:0], 4)
 	bs = binary.BigEndian.AppendUint32(bs, uint32(v))
@@ -677,7 +677,7 @@ func (s IntSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 }
 
 func (s IntSerdeG) Encode(value int) ([]byte, *[]byte, error) {
-	b := PopBuffer()
+	b := PopBuffer(4)
 	bs := *b
 	bs = Require(bs[:0], 4)
 	bs = binary.BigEndian.AppendUint32(bs, uint32(value))

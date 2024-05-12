@@ -31,7 +31,7 @@ type CheckpointMsgpSerdeG struct {
 var _ = SerdeG[Checkpoint](CheckpointMsgpSerdeG{})
 
 func (s CheckpointMsgpSerdeG) Encode(value Checkpoint) ([]byte, *[]byte, error) {
-	b := PopBuffer()
+	b := PopBuffer(value.Msgsize())
 	buf := *b
 	r, err := value.MarshalMsg(buf[:0])
 	return r, b, err

@@ -31,7 +31,7 @@ type TableSnapshotsMsgpSerdeG struct {
 var _ = SerdeG[TableSnapshots](TableSnapshotsMsgpSerdeG{})
 
 func (s TableSnapshotsMsgpSerdeG) Encode(value TableSnapshots) ([]byte, *[]byte, error) {
-	b := PopBuffer()
+	b := PopBuffer(value.Msgsize())
 	buf := *b
 	r, err := value.MarshalMsg(buf[:0])
 	return r, b, err

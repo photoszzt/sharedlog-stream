@@ -138,7 +138,7 @@ func (s ChangeGMsgpSerdeG[V]) Encode(value ChangeG[V]) ([]byte, *[]byte, error) 
 	if err != nil {
 		return nil, nil, err
 	}
-	b := PopBuffer()
+	b := PopBuffer(c.Msgsize())
 	buf := *b
 	r, err := c.MarshalMsg(buf[:0])
 	return r, b, err

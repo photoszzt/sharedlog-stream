@@ -25,7 +25,7 @@ func BenchmarkPooledSerdeUint64_2(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		b := PopBuffer()
+		b := PopBuffer(8)
 		bs := *b
 		bs = Require(bs[:0], 8)
 		bs = binary.BigEndian.AppendUint64(bs, a)

@@ -31,7 +31,7 @@ type OffsetMarkerMsgpSerdeG struct {
 var _ = SerdeG[OffsetMarker](OffsetMarkerMsgpSerdeG{})
 
 func (s OffsetMarkerMsgpSerdeG) Encode(value OffsetMarker) ([]byte, *[]byte, error) {
-	b := PopBuffer()
+	b := PopBuffer(value.Msgsize())
 	buf := *b
 	r, err := value.MarshalMsg(buf[:0])
 	return r, b, err

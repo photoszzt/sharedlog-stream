@@ -32,7 +32,7 @@ type NameCityStateIdMsgpSerdeG struct {
 var _ = commtypes.SerdeG[NameCityStateId](NameCityStateIdMsgpSerdeG{})
 
 func (s NameCityStateIdMsgpSerdeG) Encode(value NameCityStateId) ([]byte, *[]byte, error) {
-	b := commtypes.PopBuffer()
+	b := commtypes.PopBuffer(value.Msgsize())
 	buf := *b
 	r, err := value.MarshalMsg(buf[:0])
 	return r, b, err

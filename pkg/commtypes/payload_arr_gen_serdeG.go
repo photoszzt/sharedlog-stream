@@ -31,7 +31,7 @@ type PayloadArrMsgpSerdeG struct {
 var _ = SerdeG[PayloadArr](PayloadArrMsgpSerdeG{})
 
 func (s PayloadArrMsgpSerdeG) Encode(value PayloadArr) ([]byte, *[]byte, error) {
-	b := PopBuffer()
+	b := PopBuffer(value.Msgsize())
 	buf := *b
 	r, err := value.MarshalMsg(buf[:0])
 	return r, b, err

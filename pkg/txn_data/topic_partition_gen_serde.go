@@ -42,7 +42,7 @@ func (s TopicPartitionMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, err
 		vTmp := value.(TopicPartition)
 		v = &vTmp
 	}
-	b := commtypes.PopBuffer()
+	b := commtypes.PopBuffer(v.Msgsize())
 	buf := *b
 	r, err := v.MarshalMsg(buf[:0])
 	return r, b, err

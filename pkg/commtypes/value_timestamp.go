@@ -188,7 +188,7 @@ func (s ValueTimestampMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, err
 	if vs == nil {
 		return nil, nil, nil
 	}
-	b := PopBuffer()
+	b := PopBuffer(vs.Msgsize())
 	buf := *b
 	r, err := vs.MarshalMsg(buf[:0])
 	return r, b, err

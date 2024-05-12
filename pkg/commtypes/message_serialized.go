@@ -118,7 +118,7 @@ func (s MessageMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) {
 	if msgSer == nil {
 		return nil, nil, nil
 	}
-	b := PopBuffer()
+	b := PopBuffer(msgSer.Msgsize())
 	buf := *b
 	r, err := msgSer.MarshalMsg(buf[:0])
 	return r, b, err
@@ -144,7 +144,7 @@ func (s MessageMsgpSerde) EncodeAndRtnKVBin(value interface{}) (msgEnc []byte, k
 	if msgSer == nil {
 		return nil, nil, nil, nil, nil
 	}
-	b = PopBuffer()
+	b = PopBuffer(msgSer.Msgsize())
 	buf := *b
 	msgEnc, err = msgSer.MarshalMsg(buf[:0])
 	kenc = msgSer.KeyEnc

@@ -41,7 +41,7 @@ func (s CheckpointMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) 
 		vTmp := value.(Checkpoint)
 		v = &vTmp
 	}
-	b := PopBuffer()
+	b := PopBuffer(v.Msgsize())
 	buf := *b
 	r, err := v.MarshalMsg(buf[:0])
 	return r, b, err

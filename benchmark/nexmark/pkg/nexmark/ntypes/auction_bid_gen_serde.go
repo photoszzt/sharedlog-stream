@@ -42,7 +42,7 @@ func (s AuctionBidMsgpSerde) Encode(value interface{}) ([]byte, *[]byte, error) 
 		vTmp := value.(AuctionBid)
 		v = &vTmp
 	}
-	b := commtypes.PopBuffer()
+	b := commtypes.PopBuffer(v.Msgsize())
 	buf := *b
 	r, err := v.MarshalMsg(buf[:0])
 	return r, b, err

@@ -32,7 +32,7 @@ type TxnMetadataMsgpSerdeG struct {
 var _ = commtypes.SerdeG[TxnMetadata](TxnMetadataMsgpSerdeG{})
 
 func (s TxnMetadataMsgpSerdeG) Encode(value TxnMetadata) ([]byte, *[]byte, error) {
-	b := commtypes.PopBuffer()
+	b := commtypes.PopBuffer(value.Msgsize())
 	buf := *b
 	r, err := value.MarshalMsg(buf[:0])
 	return r, b, err

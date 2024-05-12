@@ -32,7 +32,7 @@ type {{.TypeName}}MsgpSerdeG struct {
 var _ = {{.CommtypesPrefix}}SerdeG[*{{.TypeName}}]({{.TypeName}}MsgpSerdeG{})
 
 func (s {{.TypeName}}MsgpSerdeG) Encode(value *{{.TypeName}}) ([]byte, *[]byte, error) {
-	b := {{.CommtypesPrefix}}PopBuffer()
+	b := {{.CommtypesPrefix}}PopBuffer(value.Msgsize())
 	buf := *b
 	r, err := value.MarshalMsg(buf[:0])
 	return r, b, err
