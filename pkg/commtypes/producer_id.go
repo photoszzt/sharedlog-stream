@@ -55,3 +55,11 @@ func (tg *ProducerId) InitTaskId(env types.Environment) {
 		tg.TaskId = env.GenerateUniqueID()
 	}
 }
+
+func EqualProdId(a, b *ProdId) bool {
+	if a != nil && b != nil {
+		return a.TaskEpoch == b.TaskEpoch && a.TaskId == b.TaskId
+	} else {
+		return a == nil && b == nil
+	}
+}
