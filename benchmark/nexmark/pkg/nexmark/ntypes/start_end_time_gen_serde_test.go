@@ -23,3 +23,14 @@ func TestSerdeStartEndTime(t *testing.T) {
 	commtypes.GenTestEncodeDecode[StartEndTime](v, t, jsonSerdeG, jsonSerde)
 	commtypes.GenTestEncodeDecode[StartEndTime](v, t, msgSerdeG, msgSerde)
 }
+
+func BenchmarkSerdeStartEndTime(b *testing.B) {
+	faker := gofakeit.New(3)
+	var v StartEndTime
+	err := faker.Struct(&v)
+	if err != nil {
+		b.Fatal(err)
+	}
+	msgSerdeG := StartEndTimeMsgpSerdeG{}
+	commtypes.GenBenchmarkPooledSerde(v, b, msgSerdeG)
+}

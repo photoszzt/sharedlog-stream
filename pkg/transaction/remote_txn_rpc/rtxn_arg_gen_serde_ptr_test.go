@@ -70,3 +70,14 @@ func TestSerdeRTxnArg(t *testing.T) {
 	GenTestEncodeDecodeRTxnArg(v, t, jsonSerdeG, jsonSerde)
 	GenTestEncodeDecodeRTxnArg(v, t, msgSerdeG, msgSerde)
 }
+
+func BenchmarkSerdeRTxnArg(b *testing.B) {
+	faker := gofakeit.New(3)
+	var v RTxnArg
+	err := faker.Struct(&v)
+	if err != nil {
+		b.Fatal(err)
+	}
+	msgSerdeG := RTxnArgMsgpSerdeG{}
+	commtypes.GenBenchmarkPooledSerde(&v, b, msgSerdeG)
+}

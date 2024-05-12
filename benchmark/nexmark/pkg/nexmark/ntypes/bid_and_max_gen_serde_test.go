@@ -23,3 +23,14 @@ func TestSerdeBidAndMax(t *testing.T) {
 	commtypes.GenTestEncodeDecode[BidAndMax](v, t, jsonSerdeG, jsonSerde)
 	commtypes.GenTestEncodeDecode[BidAndMax](v, t, msgSerdeG, msgSerde)
 }
+
+func BenchmarkSerdeBidAndMax(b *testing.B) {
+	faker := gofakeit.New(3)
+	var v BidAndMax
+	err := faker.Struct(&v)
+	if err != nil {
+		b.Fatal(err)
+	}
+	msgSerdeG := BidAndMaxMsgpSerdeG{}
+	commtypes.GenBenchmarkPooledSerde(v, b, msgSerdeG)
+}

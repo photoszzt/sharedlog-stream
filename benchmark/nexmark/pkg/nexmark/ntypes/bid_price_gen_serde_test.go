@@ -23,3 +23,14 @@ func TestSerdeBidPrice(t *testing.T) {
 	commtypes.GenTestEncodeDecode[BidPrice](v, t, jsonSerdeG, jsonSerde)
 	commtypes.GenTestEncodeDecode[BidPrice](v, t, msgSerdeG, msgSerde)
 }
+
+func BenchmarkSerdeBidPrice(b *testing.B) {
+	faker := gofakeit.New(3)
+	var v BidPrice
+	err := faker.Struct(&v)
+	if err != nil {
+		b.Fatal(err)
+	}
+	msgSerdeG := BidPriceMsgpSerdeG{}
+	commtypes.GenBenchmarkPooledSerde(v, b, msgSerdeG)
+}

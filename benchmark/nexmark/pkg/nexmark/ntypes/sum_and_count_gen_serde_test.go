@@ -23,3 +23,14 @@ func TestSerdeSumAndCount(t *testing.T) {
 	commtypes.GenTestEncodeDecode[SumAndCount](v, t, jsonSerdeG, jsonSerde)
 	commtypes.GenTestEncodeDecode[SumAndCount](v, t, msgSerdeG, msgSerde)
 }
+
+func BenchmarkSerdeSumAndCount(b *testing.B) {
+	faker := gofakeit.New(3)
+	var v SumAndCount
+	err := faker.Struct(&v)
+	if err != nil {
+		b.Fatal(err)
+	}
+	msgSerdeG := SumAndCountMsgpSerdeG{}
+	commtypes.GenBenchmarkPooledSerde(v, b, msgSerdeG)
+}

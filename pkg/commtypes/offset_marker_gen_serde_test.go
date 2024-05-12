@@ -22,3 +22,14 @@ func TestSerdeOffsetMarker(t *testing.T) {
 	GenTestEncodeDecode[OffsetMarker](v, t, jsonSerdeG, jsonSerde)
 	GenTestEncodeDecode[OffsetMarker](v, t, msgSerdeG, msgSerde)
 }
+
+func BenchmarkSerdeOffsetMarker(b *testing.B) {
+	faker := gofakeit.New(3)
+	var v OffsetMarker
+	err := faker.Struct(&v)
+	if err != nil {
+		b.Fatal(err)
+	}
+	msgSerdeG := OffsetMarkerMsgpSerdeG{}
+	GenBenchmarkPooledSerde(v, b, msgSerdeG)
+}

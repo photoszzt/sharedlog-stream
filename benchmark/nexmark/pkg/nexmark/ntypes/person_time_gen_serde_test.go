@@ -23,3 +23,14 @@ func TestSerdePersonTime(t *testing.T) {
 	commtypes.GenTestEncodeDecode[PersonTime](v, t, jsonSerdeG, jsonSerde)
 	commtypes.GenTestEncodeDecode[PersonTime](v, t, msgSerdeG, msgSerde)
 }
+
+func BenchmarkSerdePersonTime(b *testing.B) {
+	faker := gofakeit.New(3)
+	var v PersonTime
+	err := faker.Struct(&v)
+	if err != nil {
+		b.Fatal(err)
+	}
+	msgSerdeG := PersonTimeMsgpSerdeG{}
+	commtypes.GenBenchmarkPooledSerde(v, b, msgSerdeG)
+}

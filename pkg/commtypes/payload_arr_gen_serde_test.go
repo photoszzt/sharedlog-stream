@@ -22,3 +22,14 @@ func TestSerdePayloadArr(t *testing.T) {
 	GenTestEncodeDecode[PayloadArr](v, t, jsonSerdeG, jsonSerde)
 	GenTestEncodeDecode[PayloadArr](v, t, msgSerdeG, msgSerde)
 }
+
+func BenchmarkSerdePayloadArr(b *testing.B) {
+	faker := gofakeit.New(3)
+	var v PayloadArr
+	err := faker.Struct(&v)
+	if err != nil {
+		b.Fatal(err)
+	}
+	msgSerdeG := PayloadArrMsgpSerdeG{}
+	GenBenchmarkPooledSerde(v, b, msgSerdeG)
+}

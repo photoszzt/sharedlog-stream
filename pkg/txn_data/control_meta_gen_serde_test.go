@@ -23,3 +23,14 @@ func TestSerdeControlMetadata(t *testing.T) {
 	commtypes.GenTestEncodeDecode[ControlMetadata](v, t, jsonSerdeG, jsonSerde)
 	commtypes.GenTestEncodeDecode[ControlMetadata](v, t, msgSerdeG, msgSerde)
 }
+
+func BenchmarkSerdeControlMetadata(b *testing.B) {
+	faker := gofakeit.New(3)
+	var v ControlMetadata
+	err := faker.Struct(&v)
+	if err != nil {
+		b.Fatal(err)
+	}
+	msgSerdeG := ControlMetadataMsgpSerdeG{}
+	commtypes.GenBenchmarkPooledSerde(v, b, msgSerdeG)
+}

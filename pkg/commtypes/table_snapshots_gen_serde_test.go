@@ -22,3 +22,14 @@ func TestSerdeTableSnapshots(t *testing.T) {
 	GenTestEncodeDecode[TableSnapshots](v, t, jsonSerdeG, jsonSerde)
 	GenTestEncodeDecode[TableSnapshots](v, t, msgSerdeG, msgSerde)
 }
+
+func BenchmarkSerdeTableSnapshots(b *testing.B) {
+	faker := gofakeit.New(3)
+	var v TableSnapshots
+	err := faker.Struct(&v)
+	if err != nil {
+		b.Fatal(err)
+	}
+	msgSerdeG := TableSnapshotsMsgpSerdeG{}
+	GenBenchmarkPooledSerde(v, b, msgSerdeG)
+}

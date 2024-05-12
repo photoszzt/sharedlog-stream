@@ -23,3 +23,14 @@ func TestSerdeAuctionIdSeller(t *testing.T) {
 	commtypes.GenTestEncodeDecode[AuctionIdSeller](v, t, jsonSerdeG, jsonSerde)
 	commtypes.GenTestEncodeDecode[AuctionIdSeller](v, t, msgSerdeG, msgSerde)
 }
+
+func BenchmarkSerdeAuctionIdSeller(b *testing.B) {
+	faker := gofakeit.New(3)
+	var v AuctionIdSeller
+	err := faker.Struct(&v)
+	if err != nil {
+		b.Fatal(err)
+	}
+	msgSerdeG := AuctionIdSellerMsgpSerdeG{}
+	commtypes.GenBenchmarkPooledSerde(v, b, msgSerdeG)
+}

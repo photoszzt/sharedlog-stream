@@ -70,3 +70,14 @@ func TestSerdeEvent(t *testing.T) {
 	GenTestEncodeDecodeEvent(v, t, jsonSerdeG, jsonSerde)
 	GenTestEncodeDecodeEvent(v, t, msgSerdeG, msgSerde)
 }
+
+func BenchmarkSerdeEvent(b *testing.B) {
+	faker := gofakeit.New(3)
+	var v Event
+	err := faker.Struct(&v)
+	if err != nil {
+		b.Fatal(err)
+	}
+	msgSerdeG := EventMsgpSerdeG{}
+	commtypes.GenBenchmarkPooledSerde(&v, b, msgSerdeG)
+}

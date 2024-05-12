@@ -22,3 +22,14 @@ func TestSerdeCheckpoint(t *testing.T) {
 	GenTestEncodeDecode[Checkpoint](v, t, jsonSerdeG, jsonSerde)
 	GenTestEncodeDecode[Checkpoint](v, t, msgSerdeG, msgSerde)
 }
+
+func BenchmarkSerdeCheckpoint(b *testing.B) {
+	faker := gofakeit.New(3)
+	var v Checkpoint
+	err := faker.Struct(&v)
+	if err != nil {
+		b.Fatal(err)
+	}
+	msgSerdeG := CheckpointMsgpSerdeG{}
+	GenBenchmarkPooledSerde(v, b, msgSerdeG)
+}

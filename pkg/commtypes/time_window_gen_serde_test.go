@@ -22,3 +22,14 @@ func TestSerdeTimeWindow(t *testing.T) {
 	GenTestEncodeDecode[TimeWindow](v, t, jsonSerdeG, jsonSerde)
 	GenTestEncodeDecode[TimeWindow](v, t, msgSerdeG, msgSerde)
 }
+
+func BenchmarkSerdeTimeWindow(b *testing.B) {
+	faker := gofakeit.New(3)
+	var v TimeWindow
+	err := faker.Struct(&v)
+	if err != nil {
+		b.Fatal(err)
+	}
+	msgSerdeG := TimeWindowMsgpSerdeG{}
+	GenBenchmarkPooledSerde(v, b, msgSerdeG)
+}

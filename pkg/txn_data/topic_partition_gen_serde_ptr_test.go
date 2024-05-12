@@ -70,3 +70,14 @@ func TestSerdeTopicPartition(t *testing.T) {
 	GenTestEncodeDecodeTopicPartition(v, t, jsonSerdeG, jsonSerde)
 	GenTestEncodeDecodeTopicPartition(v, t, msgSerdeG, msgSerde)
 }
+
+func BenchmarkSerdeTopicPartition(b *testing.B) {
+	faker := gofakeit.New(3)
+	var v TopicPartition
+	err := faker.Struct(&v)
+	if err != nil {
+		b.Fatal(err)
+	}
+	msgSerdeG := TopicPartitionMsgpSerdeG{}
+	commtypes.GenBenchmarkPooledSerde(&v, b, msgSerdeG)
+}

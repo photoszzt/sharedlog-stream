@@ -23,3 +23,14 @@ func TestSerdePayloadTs(t *testing.T) {
 	commtypes.GenTestEncodeDecode[PayloadTs](v, t, jsonSerdeG, jsonSerde)
 	commtypes.GenTestEncodeDecode[PayloadTs](v, t, msgSerdeG, msgSerde)
 }
+
+func BenchmarkSerdePayloadTs(b *testing.B) {
+	faker := gofakeit.New(3)
+	var v PayloadTs
+	err := faker.Struct(&v)
+	if err != nil {
+		b.Fatal(err)
+	}
+	msgSerdeG := PayloadTsMsgpSerdeG{}
+	commtypes.GenBenchmarkPooledSerde(v, b, msgSerdeG)
+}

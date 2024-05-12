@@ -23,3 +23,14 @@ func TestSerdeNameCityStateId(t *testing.T) {
 	commtypes.GenTestEncodeDecode[NameCityStateId](v, t, jsonSerdeG, jsonSerde)
 	commtypes.GenTestEncodeDecode[NameCityStateId](v, t, msgSerdeG, msgSerde)
 }
+
+func BenchmarkSerdeNameCityStateId(b *testing.B) {
+	faker := gofakeit.New(3)
+	var v NameCityStateId
+	err := faker.Struct(&v)
+	if err != nil {
+		b.Fatal(err)
+	}
+	msgSerdeG := NameCityStateIdMsgpSerdeG{}
+	commtypes.GenBenchmarkPooledSerde(v, b, msgSerdeG)
+}

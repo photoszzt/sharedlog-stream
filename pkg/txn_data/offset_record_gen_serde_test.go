@@ -23,3 +23,14 @@ func TestSerdeOffsetRecord(t *testing.T) {
 	commtypes.GenTestEncodeDecode[OffsetRecord](v, t, jsonSerdeG, jsonSerde)
 	commtypes.GenTestEncodeDecode[OffsetRecord](v, t, msgSerdeG, msgSerde)
 }
+
+func BenchmarkSerdeOffsetRecord(b *testing.B) {
+	faker := gofakeit.New(3)
+	var v OffsetRecord
+	err := faker.Struct(&v)
+	if err != nil {
+		b.Fatal(err)
+	}
+	msgSerdeG := OffsetRecordMsgpSerdeG{}
+	commtypes.GenBenchmarkPooledSerde(v, b, msgSerdeG)
+}

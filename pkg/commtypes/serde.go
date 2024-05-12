@@ -1162,6 +1162,19 @@ func GenTestEncodeDecodeFloat[V constraints.Float](v V, t *testing.T, serdeG Ser
 	}
 }
 
+func GenBenchmarkPooledSerde[V any](v V, b *testing.B, serdeG SerdeG[V]) {
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		ret, buf, err := serdeG.Encode(v)
+		if err != nil {
+			b.Fatal(err)
+		}
+		*buf = ret
+		PushBuffer(buf)
+	}
+}
+
 func GenTestEncodeDecode[V any](v V, t *testing.T, serdeG SerdeG[V], serde Serde) {
 	vl := reflect.ValueOf(v)
 	var opts cmp.Options

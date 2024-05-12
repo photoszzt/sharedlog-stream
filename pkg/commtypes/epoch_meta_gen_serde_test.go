@@ -22,3 +22,14 @@ func TestSerdeEpochMarker(t *testing.T) {
 	GenTestEncodeDecode[EpochMarker](v, t, jsonSerdeG, jsonSerde)
 	GenTestEncodeDecode[EpochMarker](v, t, msgSerdeG, msgSerde)
 }
+
+func BenchmarkSerdeEpochMarker(b *testing.B) {
+	faker := gofakeit.New(3)
+	var v EpochMarker
+	err := faker.Struct(&v)
+	if err != nil {
+		b.Fatal(err)
+	}
+	msgSerdeG := EpochMarkerMsgpSerdeG{}
+	GenBenchmarkPooledSerde(v, b, msgSerdeG)
+}
