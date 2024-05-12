@@ -5,6 +5,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"testing"
 
+	"github.com/brianvoe/gofakeit/v7"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
@@ -53,11 +54,19 @@ func GenTestEncodeDecodeAuctionBid(v *AuctionBid, t *testing.T, serdeG commtypes
 }
 
 func TestSerdeAuctionBid(t *testing.T) {
+	faker := gofakeit.New(3)
 	v := &AuctionBid{}
 	jsonSerdeG := AuctionBidJSONSerdeG{}
 	jsonSerde := AuctionBidJSONSerde{}
-	GenTestEncodeDecodeAuctionBid(v, t, jsonSerdeG, jsonSerde)
 	msgSerdeG := AuctionBidMsgpSerdeG{}
 	msgSerde := AuctionBidMsgpSerde{}
+	GenTestEncodeDecodeAuctionBid(v, t, jsonSerdeG, jsonSerde)
+	GenTestEncodeDecodeAuctionBid(v, t, msgSerdeG, msgSerde)
+
+	err := faker.Struct(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	GenTestEncodeDecodeAuctionBid(v, t, jsonSerdeG, jsonSerde)
 	GenTestEncodeDecodeAuctionBid(v, t, msgSerdeG, msgSerde)
 }

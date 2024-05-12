@@ -5,6 +5,7 @@ import (
 	"testing"
 	{{.ExtraImports}}
 
+	"github.com/brianvoe/gofakeit/v7"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
@@ -53,11 +54,19 @@ func GenTestEncodeDecode{{.TypeName}}(v *{{.TypeName}}, t *testing.T, serdeG {{.
 }
 
 func TestSerde{{.TypeName}}(t *testing.T) {
+  faker := gofakeit.New(3)
   v := &{{.TypeName}}{}
   jsonSerdeG := {{.TypeName}}JSONSerdeG{}
   jsonSerde := {{.TypeName}}JSONSerde{}
-  GenTestEncodeDecode{{.TypeName}}(v, t, jsonSerdeG, jsonSerde)
   msgSerdeG := {{.TypeName}}MsgpSerdeG{}
   msgSerde := {{.TypeName}}MsgpSerde{}
+  GenTestEncodeDecode{{.TypeName}}(v, t, jsonSerdeG, jsonSerde)
+  GenTestEncodeDecode{{.TypeName}}(v, t, msgSerdeG, msgSerde)
+
+	err := faker.Struct(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+  GenTestEncodeDecode{{.TypeName}}(v, t, jsonSerdeG, jsonSerde)
   GenTestEncodeDecode{{.TypeName}}(v, t, msgSerdeG, msgSerde)
 }

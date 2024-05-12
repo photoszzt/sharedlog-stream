@@ -5,6 +5,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"testing"
 
+	"github.com/brianvoe/gofakeit/v7"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
@@ -53,11 +54,19 @@ func GenTestEncodeDecodeEvent(v *Event, t *testing.T, serdeG commtypes.SerdeG[*E
 }
 
 func TestSerdeEvent(t *testing.T) {
+	faker := gofakeit.New(3)
 	v := &Event{}
 	jsonSerdeG := EventJSONSerdeG{}
 	jsonSerde := EventJSONSerde{}
-	GenTestEncodeDecodeEvent(v, t, jsonSerdeG, jsonSerde)
 	msgSerdeG := EventMsgpSerdeG{}
 	msgSerde := EventMsgpSerde{}
+	GenTestEncodeDecodeEvent(v, t, jsonSerdeG, jsonSerde)
+	GenTestEncodeDecodeEvent(v, t, msgSerdeG, msgSerde)
+
+	err := faker.Struct(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	GenTestEncodeDecodeEvent(v, t, jsonSerdeG, jsonSerde)
 	GenTestEncodeDecodeEvent(v, t, msgSerdeG, msgSerde)
 }

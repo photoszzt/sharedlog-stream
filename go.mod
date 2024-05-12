@@ -1,10 +1,13 @@
 module sharedlog-stream
 
-go 1.20
+go 1.22
+
+toolchain go1.22.3
 
 require (
 	cs.utexas.edu/zjia/faas v0.0.0
 	github.com/Jeffail/gabs/v2 v2.6.1
+	github.com/brianvoe/gofakeit/v7 v7.0.3
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/confluentinc/confluent-kafka-go v1.8.2
 	github.com/gammazero/deque v0.2.1

@@ -1,16 +1,25 @@
 package ntypes
 
 import (
-	"sharedlog-stream/pkg/commtypes"
 	"testing"
+
+	"github.com/brianvoe/gofakeit/v7"
+	"sharedlog-stream/pkg/commtypes"
 )
 
 func TestSerdeBidPrice(t *testing.T) {
+	faker := gofakeit.New(3)
 	v := BidPrice{}
 	jsonSerdeG := BidPriceJSONSerdeG{}
 	jsonSerde := BidPriceJSONSerde{}
-	commtypes.GenTestEncodeDecode[BidPrice](v, t, jsonSerdeG, jsonSerde)
 	msgSerdeG := BidPriceMsgpSerdeG{}
 	msgSerde := BidPriceMsgpSerde{}
+	commtypes.GenTestEncodeDecode[BidPrice](v, t, jsonSerdeG, jsonSerde)
+	commtypes.GenTestEncodeDecode[BidPrice](v, t, msgSerdeG, msgSerde)
+	err := faker.Struct(&v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commtypes.GenTestEncodeDecode[BidPrice](v, t, jsonSerdeG, jsonSerde)
 	commtypes.GenTestEncodeDecode[BidPrice](v, t, msgSerdeG, msgSerde)
 }

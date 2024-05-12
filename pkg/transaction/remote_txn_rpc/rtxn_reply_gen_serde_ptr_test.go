@@ -5,6 +5,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"testing"
 
+	"github.com/brianvoe/gofakeit/v7"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
@@ -53,11 +54,19 @@ func GenTestEncodeDecodeRTxnReply(v *RTxnReply, t *testing.T, serdeG commtypes.S
 }
 
 func TestSerdeRTxnReply(t *testing.T) {
+	faker := gofakeit.New(3)
 	v := &RTxnReply{}
 	jsonSerdeG := RTxnReplyJSONSerdeG{}
 	jsonSerde := RTxnReplyJSONSerde{}
-	GenTestEncodeDecodeRTxnReply(v, t, jsonSerdeG, jsonSerde)
 	msgSerdeG := RTxnReplyMsgpSerdeG{}
 	msgSerde := RTxnReplyMsgpSerde{}
+	GenTestEncodeDecodeRTxnReply(v, t, jsonSerdeG, jsonSerde)
+	GenTestEncodeDecodeRTxnReply(v, t, msgSerdeG, msgSerde)
+
+	err := faker.Struct(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	GenTestEncodeDecodeRTxnReply(v, t, jsonSerdeG, jsonSerde)
 	GenTestEncodeDecodeRTxnReply(v, t, msgSerdeG, msgSerde)
 }

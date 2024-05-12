@@ -1,16 +1,25 @@
 package ntypes
 
 import (
-	"sharedlog-stream/pkg/commtypes"
 	"testing"
+
+	"github.com/brianvoe/gofakeit/v7"
+	"sharedlog-stream/pkg/commtypes"
 )
 
 func TestSerdeAuctionIdCntMax(t *testing.T) {
+	faker := gofakeit.New(3)
 	v := AuctionIdCntMax{}
 	jsonSerdeG := AuctionIdCntMaxJSONSerdeG{}
 	jsonSerde := AuctionIdCntMaxJSONSerde{}
-	commtypes.GenTestEncodeDecode[AuctionIdCntMax](v, t, jsonSerdeG, jsonSerde)
 	msgSerdeG := AuctionIdCntMaxMsgpSerdeG{}
 	msgSerde := AuctionIdCntMaxMsgpSerde{}
+	commtypes.GenTestEncodeDecode[AuctionIdCntMax](v, t, jsonSerdeG, jsonSerde)
+	commtypes.GenTestEncodeDecode[AuctionIdCntMax](v, t, msgSerdeG, msgSerde)
+	err := faker.Struct(&v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commtypes.GenTestEncodeDecode[AuctionIdCntMax](v, t, jsonSerdeG, jsonSerde)
 	commtypes.GenTestEncodeDecode[AuctionIdCntMax](v, t, msgSerdeG, msgSerde)
 }

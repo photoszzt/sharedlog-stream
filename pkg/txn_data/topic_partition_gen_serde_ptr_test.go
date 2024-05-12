@@ -5,6 +5,7 @@ import (
 	"sharedlog-stream/pkg/commtypes"
 	"testing"
 
+	"github.com/brianvoe/gofakeit/v7"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
@@ -53,11 +54,19 @@ func GenTestEncodeDecodeTopicPartition(v *TopicPartition, t *testing.T, serdeG c
 }
 
 func TestSerdeTopicPartition(t *testing.T) {
+	faker := gofakeit.New(3)
 	v := &TopicPartition{}
 	jsonSerdeG := TopicPartitionJSONSerdeG{}
 	jsonSerde := TopicPartitionJSONSerde{}
-	GenTestEncodeDecodeTopicPartition(v, t, jsonSerdeG, jsonSerde)
 	msgSerdeG := TopicPartitionMsgpSerdeG{}
 	msgSerde := TopicPartitionMsgpSerde{}
+	GenTestEncodeDecodeTopicPartition(v, t, jsonSerdeG, jsonSerde)
+	GenTestEncodeDecodeTopicPartition(v, t, msgSerdeG, msgSerde)
+
+	err := faker.Struct(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	GenTestEncodeDecodeTopicPartition(v, t, jsonSerdeG, jsonSerde)
 	GenTestEncodeDecodeTopicPartition(v, t, msgSerdeG, msgSerde)
 }
