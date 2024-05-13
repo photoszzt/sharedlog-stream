@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/kafka_utils"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/generator"
 	"sharedlog-stream/pkg/commtypes"
@@ -33,10 +32,6 @@ var (
 	FLAGS_additionalBytes int
 	FLAGS_disableBatching bool
 )
-
-func init() {
-	common.SetLogLevelFromEnv()
-}
 
 func main() {
 	flag.IntVar(&FLAGS_events_num, "events_num", 100000000, "events.num param for nexmark")

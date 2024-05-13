@@ -22,10 +22,6 @@ import (
 
 type emptyFuncHandlerFactory struct{}
 
-func init() {
-	common.SetLogLevelFromEnv()
-}
-
 type emptyFuncHanlder struct {
 	env types.Environment
 }

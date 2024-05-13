@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sharedlog-stream/pkg/stats"
 	"sort"
 	"time"
 
-	"sharedlog-stream/benchmark/common"
 	datatype "sharedlog-stream/benchmark/lat_tp/pkg/data_type"
-	"sharedlog-stream/pkg/stats"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 )
@@ -23,10 +22,6 @@ var (
 	FLAGS_warmup       int
 	FLAGS_warmupEvents int
 )
-
-func init() {
-	common.SetLogLevelFromEnv()
-}
 
 func main() {
 	flag.StringVar(&FLAGS_broker, "broker", "127.0.0.1", "")

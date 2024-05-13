@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"sharedlog-stream/benchmark/common"
 	configscale "sharedlog-stream/benchmark/common/config_scale"
 	"sharedlog-stream/benchmark/lat_tp/pkg/handlers"
 
@@ -10,12 +9,7 @@ import (
 	"cs.utexas.edu/zjia/faas/types"
 )
 
-type funcHandlerFactory struct {
-}
-
-func init() {
-	common.SetLogLevelFromEnv()
-}
+type funcHandlerFactory struct{}
 
 func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.FuncHandler, error) {
 	switch funcName {

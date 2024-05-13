@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/kafka_utils"
 	datatype "sharedlog-stream/benchmark/lat_tp/pkg/data_type"
 	"time"
@@ -23,10 +22,6 @@ var (
 	FLAGS_tps          int
 	FLAGS_payloadFile  string
 )
-
-func init() {
-	common.SetLogLevelFromEnv()
-}
 
 func main() {
 	flag.IntVar(&FLAGS_events_num, "events_num", 100000000, "number of events")
@@ -95,9 +90,6 @@ func main() {
 			p.ProduceChannel() <- &kafka.Message{
 				TopicPartition: kafka.TopicPartition{Topic: &FLAGS_topicName, Partition: int32(parNum)},
 				Value:          encoded,
-			}
-			if err != nil {
-				panic(err)
 			}
 			idx += 1
 		}

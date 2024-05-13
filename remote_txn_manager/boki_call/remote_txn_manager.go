@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/transaction"
@@ -16,10 +15,6 @@ import (
 )
 
 type mngrFuncHandlerFactory struct{}
-
-func init() {
-	common.SetLogLevelFromEnv()
-}
 
 var r = transaction.NewRemoteTxnManager()
 

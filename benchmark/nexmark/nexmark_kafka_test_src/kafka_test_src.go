@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/kafka_utils"
 	ntypes "sharedlog-stream/benchmark/nexmark/pkg/nexmark/ntypes"
 	"sharedlog-stream/pkg/commtypes"
@@ -20,10 +19,6 @@ var (
 	FLAGS_port        int
 	FLAGS_input_fname string
 )
-
-func init() {
-	common.SetLogLevelFromEnv()
-}
 
 func main() {
 	flag.StringVar(&FLAGS_broker, "broker", "127.0.0.1", "")

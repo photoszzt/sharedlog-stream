@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/chkpt_manager"
 	"sharedlog-stream/benchmark/common/redis_setup"
 	"sharedlog-stream/benchmark/nexmark/pkg/nexmark/handlers"
@@ -17,10 +16,6 @@ import (
 )
 
 type funcHandlerFactory struct{}
-
-func init() {
-	common.SetLogLevelFromEnv()
-}
 
 func (f *funcHandlerFactory) New(env types.Environment, funcName string) (types.FuncHandler, error) {
 	// go func() {

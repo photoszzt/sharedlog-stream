@@ -6,12 +6,10 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"sort"
-	"time"
-
-	"sharedlog-stream/benchmark/common"
 	"sharedlog-stream/benchmark/common/kafka_utils"
 	"sharedlog-stream/pkg/stats"
+	"sort"
+	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 )
@@ -23,10 +21,6 @@ var (
 	FLAGS_duration     int
 	FLAGS_events_num   int
 )
-
-func init() {
-	common.SetLogLevelFromEnv()
-}
 
 func main() {
 	flag.StringVar(&FLAGS_broker, "broker", "127.0.0.1", "")
