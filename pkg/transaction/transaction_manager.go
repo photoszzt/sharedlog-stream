@@ -244,6 +244,7 @@ func (tc *TransactionManager) InitTransaction(ctx context.Context) (*InitTxnRet,
 		return nil, fmt.Errorf("getMostRecentTransactionState failed: %v", err)
 	}
 	env := ctx.Value(commtypes.ENVID{}).(types.Environment)
+	debug.Assert(env != nil, "env should be set")
 	// debug.Fprintf(os.Stderr, "Init transaction: Transition to %s\n", tc.currentStatus)
 	if recentTxnMeta == nil {
 		tc.prodId.InitTaskId(env)

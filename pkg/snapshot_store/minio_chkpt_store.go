@@ -147,6 +147,7 @@ func (mc *MinioChkptStore) StoreSnapshot(ctx context.Context,
 ) error {
 	var uint16Serde commtypes.Uint16Serde
 	env := ctx.Value(commtypes.ENVID{}).(types.Environment)
+	debug.Assert(env != nil, "env should be set")
 	key := fmt.Sprintf("%s_%#x", changelogTpName, logOff)
 	l := uint64(len(mc.minioClients))
 	idx := hashfuncs.NameHash(key) % l

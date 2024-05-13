@@ -8,6 +8,7 @@ import (
 	"sharedlog-stream/pkg/bits"
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/hashfuncs"
 	"sharedlog-stream/pkg/txn_data"
 	"sharedlog-stream/pkg/utils/syncutils"
@@ -141,6 +142,7 @@ func (s *SharedLogStream) PushWithTag(ctx context.Context,
 	meta LogEntryMeta, producerId commtypes.ProducerId,
 ) (uint64, error) {
 	env := ctx.Value(commtypes.ENVID{}).(types.Environment)
+	debug.Assert(env != nil, "env should be set")
 	topics := []string{s.topicName}
 	if additionalTopicNames != nil {
 		topics = append(topics, additionalTopicNames...)
@@ -271,6 +273,7 @@ func (s *SharedLogStream) ReadNextWithTagUntil(ctx context.Context, parNum uint8
 		s.mux.Unlock()
 	}
 	env := ctx.Value(commtypes.ENVID{}).(types.Environment)
+	debug.Assert(env != nil, "env should be set")
 	seqNum := s.cursor
 	logEntries := make([]commtypes.RawMsg, 0, 3)
 	for seqNum <= maxSeqNum {
@@ -316,6 +319,7 @@ func (s *SharedLogStream) ReadFromSeqNumWithTag(ctx context.Context, from uint64
 	// fmt.Fprintf(os.Stderr, "ReadFromSeqNumWithTag %s[%d] tag %#x, from %#x, prodId %s\n",
 	// 	s.topicName, parNum, tag, from, prodId.String())
 	env := ctx.Value(commtypes.ENVID{}).(types.Environment)
+	debug.Assert(env != nil, "env should be set")
 	for from <= appendedSeq {
 		newCtx, cancel := context.WithTimeout(ctx, kBlockingReadTimeout)
 		defer cancel()
@@ -365,6 +369,7 @@ func (s *SharedLogStream) ReadNextWithTag(ctx context.Context, parNum uint8, tag
 		}
 	}
 	env := ctx.Value(commtypes.ENVID{}).(types.Environment)
+	debug.Assert(env != nil, "env should be set")
 	seqNumInSharedLog := s.cursor
 	// debug.Fprintf(os.Stderr, "cursor: 0x%x, tail: 0x%x\n", s.cursor, s.tail)
 	for seqNumInSharedLog < s.tail {
@@ -409,6 +414,7 @@ func (s *SharedLogStream) readPrevWithTimeout(ctx context.Context, tag uint64, s
 	maxRetryTimes := 100
 	idx := 0
 	env := ctx.Value(commtypes.ENVID{}).(types.Environment)
+	debug.Assert(env != nil, "env should be set")
 	for {
 		newCtx, cancel := context.WithTimeout(ctx, kBlockingReadTimeout)
 		defer cancel()

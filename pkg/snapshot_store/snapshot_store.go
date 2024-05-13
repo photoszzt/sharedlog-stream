@@ -127,6 +127,7 @@ func (rs *RedisSnapshotStore) StoreSnapshot(ctx context.Context,
 ) error {
 	var uint16Serde commtypes.Uint16Serde
 	env := ctx.Value(commtypes.ENVID{}).(types.Environment)
+	debug.Assert(env != nil, "env should be set")
 	key := fmt.Sprintf("%s_%#x", changelogTpName, logOff)
 	idx := hashfuncs.NameHash(key) % uint64(len(rs.rdb_arr))
 	fmt.Fprintf(os.Stderr, "store snapshot key: %s at redis[%d]\n", key, idx)

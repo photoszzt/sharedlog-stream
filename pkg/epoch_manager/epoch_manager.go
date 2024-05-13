@@ -240,6 +240,7 @@ func (em *EpochManager) MarkEpoch(ctx context.Context,
 
 func (em *EpochManager) Init(ctx context.Context) (*commtypes.EpochMarker, *commtypes.RawMsg, error) {
 	env := ctx.Value(commtypes.ENVID{}).(types.Environment)
+	debug.Assert(env != nil, "env should be set")
 	off, err := em.SyncToRecentNoRead(ctx)
 	if err != nil {
 		return nil, nil, err

@@ -8,11 +8,10 @@ import (
 	"sharedlog-stream/pkg/common_errors"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/debug"
-
-	// "sharedlog-stream/pkg/producer_consumer"
-
 	"sync"
 	"time"
+
+	// "sharedlog-stream/pkg/producer_consumer"
 
 	"golang.org/x/xerrors"
 )
@@ -25,6 +24,7 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 	msgSerdePair MsgSerdePair[KIn, VIn, KOut, VOut],
 ) {
 	id := ctx.Value(commtypes.CTXID{}).(string)
+	debug.Assert(id != "", "id should not be empty")
 	defer wg.Done()
 	// debug.Fprintf(os.Stderr, "[id=%s, ts=%d] joinProc start running\n",
 	// 	id, time.Now().UnixMilli())
@@ -102,9 +102,9 @@ func joinProcLoop[KIn, VIn, KOut, VOut any](
 				if consumer.AllProducerEnded() {
 					jm.ctrlMsg = rawMsgSeq
 					jm.gotEndMark.Store(true)
-					// fmt.Fprintf(os.Stderr, "[id=%s] %s %d ends, start time: %d\n",
+					// debug.Fprintf(os.Stderr, "[id=%s] %s %d ends, start time: %d\n",
 					// 	id, consumer.TopicName(), procArgs.SubstreamNum(), jm.startTimeMs)
-					// fmt.Fprintf(os.Stderr, "[id=%s] %s(%d) ends, elapsed: %v\n", id, consumer.TopicName(), procArgs.SubstreamNum(), elapsed)
+					// debug.Fprintf(os.Stderr, "[id=%s] %s(%d) ends, elapsed: %v\n", id, consumer.TopicName(), procArgs.SubstreamNum(), elapsed)
 					jm.runLock.Unlock()
 					return
 				} else {

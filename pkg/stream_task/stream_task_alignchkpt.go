@@ -131,6 +131,7 @@ func NewChkptMngr(ctx context.Context,
 		prodId: commtypes.NewProducerId(),
 	}
 	env := ctx.Value(commtypes.ENVID{}).(types.Environment)
+	debug.Assert(env != nil, "env should be set")
 	ckptm.prodId.InitTaskId(env)
 	ckptm.prodId.TaskEpoch = 1
 	ckptm.rcm = checkpt.NewRedisChkptManagerFromClients(rc)
