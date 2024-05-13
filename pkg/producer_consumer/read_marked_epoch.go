@@ -6,6 +6,7 @@ import (
 	"os"
 	"sharedlog-stream/pkg/commtypes"
 	"sharedlog-stream/pkg/data_structure"
+	"sharedlog-stream/pkg/debug"
 	"sharedlog-stream/pkg/optional"
 	"sharedlog-stream/pkg/sharedlog_stream"
 
@@ -104,6 +105,7 @@ func (emc *EpochMarkConsumer) ReadNext(ctx context.Context, parNum uint8) (*comm
 					ranges = make(map[uint8]commtypes.SeqRangeSet)
 				}
 				markRanges := epochMark.OutputRanges[emc.stream.TopicName()]
+				// fmt.Fprintf(os.Stderr, "Epoch markedRanges: %v\n", epochMark.OutputRanges)
 				for _, r := range markRanges {
 					if _, ok := ranges[r.SubStreamNum]; !ok {
 						ranges[r.SubStreamNum] = commtypes.NewSeqRangeSet()
@@ -177,11 +179,12 @@ func (emc *EpochMarkConsumer) checkMsgQueue(msgQueue *deque.Deque[*commtypes.Raw
 
 func (emc *EpochMarkConsumer) checkMsgStatus(rawMsg *commtypes.RawMsg, parNum uint8) MsgStatus {
 	ranges, ok := emc.marked[rawMsg.ProdId]
-	if !ok {
+	if !ok || len(ranges[parNum]) == 0 {
 		// fmt.Fprintf(os.Stderr, "no ranges for rawMsg %+v\n", rawMsg.FormatMsgMeta())
 		return NOT_MARK
 	}
 	markedRange := ranges[parNum]
+	// fmt.Fprintf(os.Stderr, "ranges: %v, marked ranges: %v, parNum: %d\n", ranges, markedRange, parNum)
 	minStart := optional.None[uint64]()
 	for r := range markedRange {
 		if minStart.IsNone() {
@@ -195,6 +198,7 @@ func (emc *EpochMarkConsumer) checkMsgStatus(rawMsg *commtypes.RawMsg, parNum ui
 			return MARKED
 		}
 	}
+	debug.Assert(minStart.IsSome(), "should have a min start")
 	mStart := minStart.Unwrap()
 	if rawMsg.LogSeqNum < mStart {
 		fmt.Fprintf(os.Stderr, "rawMsg logSeq %#x < markedRange start %#x, parnum %d\n",
